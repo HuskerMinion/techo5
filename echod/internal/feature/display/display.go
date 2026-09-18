@@ -976,6 +976,7 @@ func (d *Display) Start(context.Context) error {
 	d.mu.Lock()
 	d.booting, d.started = true, time.Now()
 	d.mu.Unlock()
+	d.settleScreen(dev)
 	slog.Info("screen open", "fb", dev.String())
 	return nil
 }

@@ -915,6 +915,7 @@ func (d *Display) Start(context.Context) error {
 	}
 	d.dev = dev
 	d.r = newRoundRenderer(dev.Canvas())
+	d.settleScreen(dev)
 	slog.Info("screen open", "fb", dev.String())
 	return nil
 }
