@@ -10,34 +10,28 @@ import (
 	"log/slog"
 	"math"
 	"strings"
-	"sync"
 	"time"
 
 	"golang.org/x/image/font"
 	"golang.org/x/image/font/gofont/gobold"
 	"golang.org/x/image/font/gofont/goregular"
 	"golang.org/x/image/font/opentype"
-	"golang.org/x/image/math/fixed"
 
 	"github.com/HuskerMinion/techo5/echod/internal/config"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/alarm"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/btaudio"
-	"github.com/HuskerMinion/techo5/echod/internal/feature/phone"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/home"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/media"
+	"github.com/HuskerMinion/techo5/echod/internal/feature/phone"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/security"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/timer"
 )
 
-// The palette is TECHO5's: walnut ground, amber accent, cream text.
-var (
-	walnut = color.RGBA{0x1c, 0x15, 0x11, 0xff}
-	amber  = color.RGBA{0xe9, 0xa2, 0x3b, 0xff}
-	cream  = color.RGBA{0xe8, 0xdc, 0xc8, 0xff}
-	dim    = color.RGBA{0x8a, 0x7d, 0x6c, 0xff}
-	ember  = color.RGBA{0x3a, 0x2c, 0x22, 0xff}
-	shade  = color.RGBA{0x00, 0x00, 0x00, 0x90} // a translucent strip for text over a picture
-)
+// The palette (walnut ground, amber accent, cream text, dim text, ember rules) is in sheet_widgets.go,
+// shared with the Spot's settings screen; the theme in force sets it.
+
+// shade is a translucent strip for text over a picture.
+var shade = color.RGBA{0x00, 0x00, 0x00, 0x90}
 
 // scene is one frame's worth of facts.
 type scene struct {
@@ -121,13 +115,10 @@ type scene struct {
 	slideshowOverlay     string
 }
 
-const sheetVolumeSteps = media.VolumeSteps
-
 // renderer draws scenes onto one canvas. Faces are made once: parsing a font is cheap, but
 // building a face at each size is not something to do per frame.
 type renderer struct {
-	dst    *image.RGBA
-	w, h   int
+	paint            // the canvas, its size, and the settings screen's tap zones
 	clock  font.Face // the big time
 	big    font.Face // a large reading, like today's temperature
 	ampm   font.Face
@@ -137,24 +128,17 @@ type renderer struct {
 	tiny   font.Face
 	margin int
 
-	// zones are where taps mean something on the settings screen last drawn, read by the touch
-	// goroutine under zmu; pending is the frame being drawn. base keeps the screen's unchanging part.
-	zmu     sync.Mutex
-	zones   []zone
-	pending []zone
+	// base keeps the settings screen's unchanging part.
 	base    *image.RGBA
 	baseKey baseKey
 
 	// shell keeps what every category of the settings screen shares, for as long as the theme holds.
 	shell    *image.RGBA
 	shellKey baseKey
-
-	// cardMax and pickMax are how far the card and an open list could scroll in the last frame.
-	cardMax, pickMax int
 }
 
 func newRenderer(dst *image.RGBA) *renderer {
-	r := &renderer{dst: dst, w: dst.Rect.Dx(), h: dst.Rect.Dy(), margin: 40}
+	r := &renderer{paint: paint{dst: dst, w: dst.Rect.Dx(), h: dst.Rect.Dy()}, margin: 40}
 	bold, err := opentype.Parse(gobold.TTF)
 	if err != nil {
 		slog.Error("parsing the bold font failed", "err", err)
@@ -444,42 +428,4 @@ func (r *renderer) footer(s scene) {
 	if right != "" {
 		r.text(r.tiny, right, r.w-r.margin-r.width(r.tiny, right), y, dim)
 	}
-}
-
-func (r *renderer) text(face font.Face, s string, x, baseline int, c color.Color) {
-	if face == nil {
-		return
-	}
-	d := &font.Drawer{Dst: r.dst, Src: image.NewUniform(c), Face: face, Dot: fixed.P(x, baseline)}
-	d.DrawString(s)
-}
-
-func (r *renderer) width(face font.Face, s string) int {
-	if face == nil {
-		return 0
-	}
-	return (&font.Drawer{Face: face}).MeasureString(s).Ceil()
-}
-
-// wrap breaks text into lines no wider than maxW, on spaces; a single word wider than the line is
-// left to overflow rather than split.
-func (r *renderer) wrap(face font.Face, s string, maxW int) []string {
-	var lines []string
-	var line string
-	for _, word := range strings.Fields(s) {
-		try := word
-		if line != "" {
-			try = line + " " + word
-		}
-		if line != "" && r.width(face, try) > maxW {
-			lines = append(lines, line)
-			line = word
-			continue
-		}
-		line = try
-	}
-	if line != "" {
-		lines = append(lines, line)
-	}
-	return lines
 }

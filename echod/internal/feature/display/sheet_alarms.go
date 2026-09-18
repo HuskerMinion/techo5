@@ -1,4 +1,4 @@
-//go:build !dot && !spot
+//go:build !dot
 
 package display
 
@@ -18,15 +18,15 @@ import (
 // repeatNames are the Repeat list's choices, in the order of repeats.
 var repeatNames = []string{"Once", "Every day", "Weekdays", "Weekends"}
 
-func alarmsCard(s scene) cardView {
-	if s.draft != nil {
-		return alarmEditorCard(s, *s.draft)
+func alarmsCard(sv sheetView) cardView {
+	if sv.draft != nil {
+		return alarmEditorCard(sv, *sv.draft)
 	}
 	v := cardView{
 		title: categoryTitles[catAlarms], blurb: categoryBlurbs[catAlarms],
 		actions: []headerAction{{id: "add", label: "+ Add alarm", style: btnPrimary}},
 	}
-	for _, row := range alarmRows(s.alarms) {
+	for _, row := range alarmRows(sv.alarms) {
 		switch {
 		case row.snoozed != nil:
 			v.rows = append(v.rows, settingRow{id: "snoozed", label: "Snoozed until " + clockText(row.snoozed.At),
@@ -43,7 +43,7 @@ func alarmsCard(s scene) cardView {
 			f := row.followed
 			label, when := "Not set", "In Home Assistant"
 			if !f.At.IsZero() {
-				label, when = clockText(f.At), dayWord(f.At, s.now)
+				label, when = clockText(f.At), dayWord(f.At, sv.now)
 			}
 			if !f.Armed {
 				when = "Off"
@@ -56,7 +56,7 @@ func alarmsCard(s scene) cardView {
 		v.rows = append(v.rows, settingRow{label: "No alarms yet", sub: "Add one here, or from Home Assistant", kind: ctlValue})
 	}
 	return v.withRows(
-		settingRow{id: "snooze", label: "Snooze length", kind: ctlStepper, value: fmt.Sprintf("%d min", s.snooze)},
+		settingRow{id: "snooze", label: "Snooze length", kind: ctlStepper, value: fmt.Sprintf("%d min", sv.snooze)},
 		settingRow{id: "alarmsound", label: "Alarm sound", sub: "Plays once when you choose it", kind: ctlChoice, value: alarm.Get().Sound()},
 	)
 }
@@ -68,7 +68,7 @@ func (v cardView) withRows(rows ...settingRow) cardView {
 
 // alarmEditorCard is one alarm being set. Its heading says when it will ring, so a change reads
 // back at once.
-func alarmEditorCard(s scene, d alarmDraft) cardView {
+func alarmEditorCard(sv sheetView, d alarmDraft) cardView {
 	a := d.alarm
 	title := "Edit alarm"
 	if d.isNew {
@@ -91,7 +91,7 @@ func alarmEditorCard(s scene, d alarmDraft) cardView {
 	}
 	if !d.isNew {
 		del := settingRow{id: "e.delete", label: "Delete alarm", sub: "Asks twice", kind: ctlDanger, button: "Delete"}
-		if !d.deleteArm.IsZero() && s.now.Sub(d.deleteArm) < restartWindow {
+		if !d.deleteArm.IsZero() && sv.now.Sub(d.deleteArm) < restartWindow {
 			del.sub, del.button = "Tap again to delete it", "Confirm"
 		}
 		v.rows = append(v.rows, del)
@@ -135,6 +135,8 @@ func dayWord(t, now time.Time) string {
 // actionTap is a button in the card's header.
 func (d *Display) actionTap(id string) {
 	switch id {
+	case "back":
+		d.sheetBack()
 	case "coloursdone":
 		d.mu.Lock()
 		d.colours, d.cardScroll = false, 0

@@ -20,7 +20,6 @@ package display
 import (
 	"context"
 	"errors"
-	"fmt"
 	"image"
 	"log/slog"
 	"math"
@@ -111,23 +110,9 @@ type Display struct {
 	sheet      bool
 	restartArm time.Time
 
-	// cat is the settings screen's open category; picker is the row whose list of choices is open
-	// over it, or empty.
-	cat    category
-	picker string
-
-	// cardScroll and pickScroll are how far the card and an open list are scrolled, in pixels;
-	// openedBy is where the swipe that opened the screen started, so its last notches are ignored.
-	cardScroll, pickScroll int
-	openedBy               image.Point
-
-	// checking is an update check asked for from the screen, still out; colours is the custom
-	// colours editor open on the Display card.
-	checking bool
-	colours  bool
-
-	// folder is the slideshow's folder list, as far as it has been opened.
-	folder folderView
+	// sheetCtl is where the settings screen is: the open category, a list open over it, how far each
+	// is scrolled, and the editors.
+	sheetCtl
 
 	// drawer is Cameras and Radio, in from the right over the clock: drawerTab is which,
 	// drawerScroll how far its list is scrolled, and drawerPick a list of choices open over it.
@@ -163,9 +148,7 @@ type Display struct {
 	// radar is the rain map in place of the forecast, while the weather page is up.
 	radar bool
 
-	// draft is the alarm open in the Alarms card's editor; ringPreview shows the ringing page silently
-	// until then.
-	draft       *alarmDraft
+	// ringPreview shows the ringing page silently until then.
 	ringPreview time.Time
 
 	// demoUntil puts placeholders where the sheet shows the owner's details (name, network,
@@ -689,19 +672,9 @@ func (d *Display) night(now time.Time, on bool, view voice.State) bool {
 // nightIdle is how long the panel stays lit after a finger or a turn during the night.
 const nightIdle = 90 * time.Second
 
-// nightPresets are the Screen off at night list's choices.
-var nightPresets = []string{"", "22-6", "23-6", "0-7", "21-7", "23-8"}
-
-func nightHours(v string) (from, to int, ok bool) {
-	if _, err := fmt.Sscanf(v, "%d-%d", &from, &to); err != nil || from < 0 || from > 23 || to < 0 || to > 23 || from == to {
-		return 0, 0, false
-	}
-	return from, to, true
-}
-
 // inNight is whether now falls in the window, which may cross midnight.
 func inNight(v string, now time.Time) bool {
-	from, to, ok := nightHours(v)
+	from, to, ok := nightWindow(v)
 	if !ok {
 		return false
 	}

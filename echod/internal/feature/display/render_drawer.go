@@ -82,7 +82,7 @@ func (r *renderer) drawer(s scene) {
 
 	pickMax := 0
 	if s.drawerPick != "" {
-		if p, ok := pickerFor(s.drawerPick, s); ok {
+		if p, ok := pickerFor(s.drawerPick, s.view()); ok {
 			pickMax = r.picker(p, s.pickScroll)
 		}
 	}

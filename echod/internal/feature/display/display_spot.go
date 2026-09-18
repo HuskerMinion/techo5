@@ -70,11 +70,10 @@ const (
 	// volumeShow is how long the level stays up after it last moved.
 	volumeShow = 2 * time.Second
 
-	// menuIdle closes a ring menu nobody is touching; jogIdle ends a jog wheel's value the same way;
-	// restartWindow is how long the first tap on Restart waits for the second.
-	menuIdle      = 6 * time.Second
-	jogIdle       = 3 * time.Second
-	restartWindow = 4 * time.Second
+	// menuIdle closes a ring menu nobody is touching; jogIdle ends a jog wheel's value the same way.
+	// (restartWindow, how long the first tap on Restart waits for the second, is shared with the Show.)
+	menuIdle = 6 * time.Second
+	jogIdle  = 3 * time.Second
 
 	// dialFrame is the redraw while the dial turns; dialEase how much of the way to its rest it moves
 	// each frame.
@@ -137,6 +136,13 @@ type Display struct {
 	restartArm time.Time
 	forgetArm  time.Time
 
+	// sheetOpen is the settings screen up in place of the Settings dial, sheetGrid its six categories
+	// rather than one of them; sheetCtl is where in it.
+	sheetOpen bool
+	sheetGrid bool
+	sheetAt   time.Time // the last touch on it, for closing it when left alone
+	sheetCtl
+
 	// wasNight is whether the last backlight was set for the night, so the change of hour relights.
 	wasNight bool
 
@@ -162,6 +168,10 @@ type Display struct {
 	contactTop int
 	// slowSaid is when a slow frame was last logged.
 	slowSaid time.Time
+
+	// demoUntil puts placeholders where the settings screen shows the owner's details, for
+	// screenshots that are going to be published.
+	demoUntil time.Time
 
 	poke chan struct{}
 
@@ -421,6 +431,13 @@ func (d *Display) gesture(g touch.Gesture) {
 	if d.callGesture(g) || d.ringGesture(g) {
 		return
 	}
+	d.mu.Lock()
+	sheet := d.sheetOpen
+	d.mu.Unlock()
+	if sheet {
+		d.sheetGesture(g)
+		return
+	}
 	if open {
 		d.menuGesture(g)
 		return
@@ -486,6 +503,10 @@ func (d *Display) openMenu(mode menuMode, id itemID) {
 	// face and the lists have none, and need their swipes and taps as they are.
 	touch.Get().SetFollow(mode != modeWeather && mode != modeContacts)
 }
+
+// followFingers has the touch screen follow every moving finger (Hold, Drag, Release) rather than
+// report swipes: for turning the ring, and for dragging the settings screen's pages.
+func (d *Display) followFingers(on bool) { touch.Get().SetFollow(on) }
 
 // closeMenu takes the menu off the screen. Called with d.mu held.
 func (d *Display) closeMenu() {
@@ -759,7 +780,7 @@ func (d *Display) act(id itemID) {
 			d.locked(d.closeMenu)
 		}
 	case itemSettings:
-		d.locked(func() { d.openMenu(modeSettings, itemBrightness) })
+		d.locked(d.openSettings)
 	case itemSleep:
 		d.locked(d.closeMenu)
 		d.mu.Lock()
@@ -972,6 +993,11 @@ func (d *Display) frame() time.Duration {
 			d.closeMenu()
 		}
 	}
+	if d.sheetOpen && !d.dragging && d.draft == nil && now.Sub(d.sheetAt) > sheetIdle {
+		d.sheetOpen, d.picker = false, ""
+		d.followFingers(false)
+	}
+	sheetOpen, sheetGrid := d.sheetOpen, d.sheetGrid
 	turning := false
 	if d.menuOpen && !d.spinning {
 		if diff := d.menuRest - d.menuRot; math.Abs(diff) > 0.002 {
@@ -1000,6 +1026,8 @@ func (d *Display) frame() time.Duration {
 		radioSel:     d.radioSel,
 		cameraSel:    d.cameraSel,
 		radarOn:      d.radar,
+		sheetOpen:    sheetOpen,
+		sheetGrid:    sheetGrid,
 	}
 	quiet := d.quiet
 	if !d.volAt.IsZero() && now.Sub(d.volAt) < volumeShow {
@@ -1020,6 +1048,9 @@ func (d *Display) frame() time.Duration {
 	s.muted, _ = mute.Get().Muted()
 	s.playing, s.paused = media.Get().Playing()
 	s.maxVolume = config.VolumeSteps
+	if s.sheetOpen {
+		s.sheet = d.sheetView(now)
+	}
 	if !s.showVolume {
 		s.volume = media.Get().Volume()
 	}
@@ -1087,7 +1118,7 @@ func (d *Display) frame() time.Duration {
 	// through to clockFace. Background mode rides along with it; Screensaver only takes over once it
 	// has held for the configured wait, tracked by how long it has run continuously.
 	boring := s.phase == "idle" && s.call.Phase == phone.Idle && !s.ringing.any() && !s.showVolume &&
-		!s.showCamera && !s.nowPlaying && !s.menuOpen
+		!s.showCamera && !s.nowPlaying && !s.menuOpen && !s.sheetOpen
 	if boring {
 		s.slideshow = home.Get().SlideshowBackground()
 	}
@@ -1135,6 +1166,8 @@ func (d *Display) frame() time.Duration {
 		return activeFrame
 	case s.menuOpen && s.menuMode == modeWeather && s.radarOn:
 		return radarStep
+	case s.sheetOpen:
+		return dialFrame // a finger dragging the page is followed smoothly
 	case s.phase == "listening" || s.phase == "thinking" || s.phase == "replying" || s.showVolume || s.menuOpen || s.btPairing || s.call.Phase != phone.Idle || s.ringing.any():
 		return activeFrame
 	default:

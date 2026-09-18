@@ -181,26 +181,6 @@ func swatch(role, i int) color.RGBA {
 	return hsl(float64(i-2)*30, s, l)
 }
 
-// shift lightens (positive) or darkens (negative) a colour by d per channel.
-func shift(c color.RGBA, d int) color.RGBA {
-	f := func(v uint8) uint8 {
-		n := int(v) + d
-		if n < 0 {
-			n = 0
-		}
-		if n > 255 {
-			n = 255
-		}
-		return uint8(n)
-	}
-	return color.RGBA{f(c.R), f(c.G), f(c.B), c.A}
-}
-
-// dark reports whether the theme is a dark one, which decides which way bevels catch the light.
-func dark() bool {
-	return int(walnut.R)+int(walnut.G)+int(walnut.B) < 384
-}
-
 // bevel draws a box with depth: a fill, a lit top and left edge, a shaded bottom and right edge,
 // and a soft shadow under it. raised false sinks the box instead.
 func (r *renderer) bevel(rect image.Rectangle, fill color.RGBA, raised bool) {
@@ -222,4 +202,26 @@ func (r *renderer) bevel(rect image.Rectangle, fill color.RGBA, raised bool) {
 	draw.Draw(r.dst, image.Rect(rect.Min.X, rect.Min.Y, rect.Min.X+2, rect.Max.Y), image.NewUniform(light), image.Point{}, draw.Src)
 	draw.Draw(r.dst, image.Rect(rect.Min.X, rect.Max.Y-2, rect.Max.X, rect.Max.Y), image.NewUniform(shadow), image.Point{}, draw.Src)
 	draw.Draw(r.dst, image.Rect(rect.Max.X-2, rect.Min.Y, rect.Max.X, rect.Max.Y), image.NewUniform(shadow), image.Point{}, draw.Src)
+}
+
+// swatchStrip draws a ctlSwatches row's colours for one role of the theme, the one in force ringed in
+// the text colour; a tap on one picks it.
+func (r *paint) swatchStrip(row settingRow, right, cy, top int) {
+	const d, gap = 28, 6
+	x0 := right - swatchCount*d - (swatchCount-1)*gap
+	in := current().colors[row.role]
+	for i := range swatchCount {
+		c := swatch(row.role, i)
+		cx, cyf := float64(x0+i*(d+gap)+d/2), float64(cy)
+		r.aaDisc(cx, cyf+1.5, d/2, lerp(c, color.RGBA{0, 0, 0, 255}, 0.5)) // a little depth under it
+		r.aaDisc(cx, cyf, d/2, c)
+		r.aaRing(cx, cyf, d/2-0.5, 1, 0, 2*math.Pi, lerp(c, color.RGBA{255, 255, 255, 255}, 0.25))
+		if c == in {
+			r.aaRing(cx, cyf, d/2+4, 2.4, 0, 2*math.Pi, cream)
+		}
+		if row.id != "" {
+			x := x0 + i*(d+gap)
+			r.addZone(zone{r: image.Rect(x-gap/2, top, x+d+gap/2, top+rowH), kind: zoneRow, id: row.id, part: partDay, opt: i})
+		}
+	}
 }

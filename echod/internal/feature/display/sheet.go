@@ -1,4 +1,4 @@
-//go:build !dot && !spot
+//go:build !dot
 
 package display
 
@@ -6,10 +6,8 @@ import (
 	"context"
 	"fmt"
 	"image"
-	"image/color"
 	"log/slog"
 	"math"
-	"strconv"
 	"strings"
 	"time"
 
@@ -29,7 +27,6 @@ import (
 	"github.com/HuskerMinion/techo5/echod/internal/hardware/touch"
 	"github.com/HuskerMinion/techo5/echod/internal/lib/safe"
 	"github.com/HuskerMinion/techo5/echod/internal/lib/wake"
-	"github.com/HuskerMinion/techo5/echod/internal/lib/wifi"
 	"github.com/HuskerMinion/techo5/echod/internal/update"
 )
 
@@ -37,49 +34,42 @@ import (
 // and what a tap on any of it does. The renderer records where each control landed as it draws, so
 // a tap is matched to the frame on the screen rather than to geometry worked out a second time.
 
-// settingsScreen draws the settings screen for the scene's category.
-func (r *renderer) settingsScreen(s scene) {
-	st := s.sheet
-	var pick *pickerView
-	if st.picker != "" {
-		if p, ok := pickerFor(st.picker, s); ok {
-			pick = &p
-		}
-	}
-	r.settingsPage(st.cat, categoryCard(s), pick, st.pickScroll)
-}
-
 // categoryCard is the card for the open category.
-func categoryCard(s scene) cardView {
-	st := s.sheet
+func categoryCard(sv sheetView) cardView {
+	st := sv.st
 	var v cardView
+	if dv, ok := deviceCard(sv); ok {
+		v = dv
+		v.scroll = st.cardScroll
+		return v
+	}
 	switch {
 	case st.cat == catAlarms:
-		v = alarmsCard(s)
-	case st.cat == catDisplay && st.colours:
-		v = coloursCard()
+		v = alarmsCard(sv)
 	default:
-		rows, note := categoryRows(s)
+		rows, note := categoryRows(sv)
 		v = cardView{title: categoryTitles[st.cat], blurb: categoryBlurbs[st.cat], rows: rows, note: note}
 	}
+	v.rows = adaptRows(v.rows, sv)
 	v.scroll = st.cardScroll
 	return v
 }
 
 // categoryRows is the open category's rows, and a note to show when it has none.
-func categoryRows(s scene) (rows []settingRow, note string) {
-	st := s.sheet
+func categoryRows(sv sheetView) (rows []settingRow, note string) {
+	st := sv.st
 	switch st.cat {
 	case catDisplay:
 		rows := []settingRow{
 			{id: "brightness", label: "Brightness", kind: ctlStepper, value: fmt.Sprintf("%d%%", st.brightness)},
 			{id: "auto", label: "Auto-brightness", sub: "Follows the room's light", kind: ctlToggle, on: st.auto},
-			{id: "night", label: "Screen off at night", kind: ctlChoice, value: nightText(st.night)},
-			{id: "theme", label: "Theme", kind: ctlChoice, value: current().name},
-			{id: "colours", label: "Custom colours", sub: "Make the theme your own", kind: ctlButton, button: "Edit"},
-			{id: "clock", label: "Clock format", kind: ctlChoice, value: clockOptions[clockIndex()]},
-			{id: "slideshow", label: "Slideshow", sub: "Photos from Home Assistant", kind: ctlChoice, value: slideshowOptions[slideshowIndex()]},
+			{id: "night", label: nightRowLabel, kind: ctlChoice, value: nightText(st.night)},
 		}
+		rows = append(rows, themeRows()...)
+		rows = append(rows,
+			settingRow{id: "clock", label: "Clock format", kind: ctlChoice, value: clockOptions[clockIndex()]},
+			settingRow{id: "slideshow", label: "Slideshow", sub: "Photos from Home Assistant", kind: ctlChoice, value: slideshowOptions[slideshowIndex()]},
+		)
 		if slideshowIndex() != 0 {
 			rows = append(rows, slideshowRows(st.demo)...)
 		}
@@ -99,19 +89,19 @@ func categoryRows(s scene) (rows []settingRow, note string) {
 			{id: "sendspin", label: "Music Assistant player", sub: "Play music in sync with other rooms", kind: ctlToggle, on: st.sendspin},
 		}, ""
 	case catConnections:
-		return connectionRows(s), ""
+		return connectionRows(sv), ""
 	case catSecurity:
-		return securityRows(s), ""
+		return securityRows(sv), ""
 	case catGeneral:
-		return generalRows(s), ""
+		return generalRows(sv), ""
 	}
 	return nil, ""
 }
 
 // securityRows are the Privacy & Security card's: how the device can be reached, and how it reaches
 // Home Assistant.
-func securityRows(s scene) []settingRow {
-	sec, st := s.security, s.sheet
+func securityRows(sv sheetView) []settingRow {
+	sec, st := sv.security, sv.st
 	var rows []settingRow
 	if !sec.SSHAvailable {
 		rows = append(rows, settingRow{label: "SSH", kind: ctlValue, value: "Not managed here"})
@@ -150,8 +140,8 @@ func securityRows(s scene) []settingRow {
 }
 
 // generalRows are the General card's: the device's name, weather, updates, what it is, and Restart.
-func generalRows(s scene) []settingRow {
-	st := s.sheet
+func generalRows(sv sheetView) []settingRow {
+	st := sv.st
 	fw := firmware.Get()
 	updates := settingRow{id: "updates", label: "Updates", sub: "This is " + st.version, kind: ctlChoice,
 		value: capitalize(fw.Channel().Label()), button: "Check now"}
@@ -169,14 +159,14 @@ func generalRows(s scene) []settingRow {
 		{label: "Name", sub: "Set in Home Assistant", kind: ctlValue, value: st.name},
 		{id: "weather", label: "Weather", sub: "Shown with the clock", kind: ctlChoice, value: st.weather, button: "Show"},
 		updates,
-		{label: "About", kind: ctlValue, value: "Echo Show 5 · slot " + st.slot},
+		{label: "About", kind: ctlValue, value: deviceModel + " · slot " + st.slot},
 		restart,
 	}
 }
 
 // connectionRows are the Connections card's: Wi-Fi, Bluetooth audio, and the Bluetooth proxy.
-func connectionRows(s scene) []settingRow {
-	st, bt := s.sheet, s.bt
+func connectionRows(sv sheetView) []settingRow {
+	st, bt := sv.st, sv.bt
 	wifiRow := settingRow{label: "Wi-Fi", sub: st.address, kind: ctlValue, value: st.wifiName}
 	if st.wifiOK {
 		wifiRow.id, wifiRow.kind, wifiRow.button = "wifi", ctlButton, "Change"
@@ -205,19 +195,6 @@ func connectionRows(s scene) []settingRow {
 	}
 	return append(rows, settingRow{id: "btproxy", label: "Bluetooth proxy", sub: "Lets Home Assistant hear nearby devices",
 		kind: ctlToggle, on: st.btProxy})
-}
-
-// coloursCard is the custom colours editor: a strip of colours for each role of the theme. A tap
-// on one makes the theme Custom with that colour.
-func coloursCard() cardView {
-	v := cardView{
-		title: "Custom colours", blurb: "Tap a colour for each part; the theme becomes Custom",
-		actions: []headerAction{{id: "coloursdone", label: "Done", style: btnPrimary}},
-	}
-	for role := range roles {
-		v.rows = append(v.rows, settingRow{id: "role:" + strconv.Itoa(role), label: roleNames[role], kind: ctlSwatches, role: role})
-	}
-	return v
 }
 
 // catByName is a category from its rail name or card title in any case, for /screen.png?sheet= and
@@ -264,7 +241,7 @@ func slideshowIndex() int {
 
 // nightText is a night window as the clock would say it: "10 PM – 6 AM", or "Never".
 func nightText(v string) string {
-	from, to, ok := nightHours(v)
+	from, to, ok := nightWindow(v)
 	if !ok {
 		return "Never"
 	}
@@ -280,7 +257,7 @@ func hourText(h int) string {
 }
 
 // pickerFor is the list of choices a row opens.
-func pickerFor(id string, s scene) (pickerView, bool) {
+func pickerFor(id string, sv sheetView) (pickerView, bool) {
 	switch id {
 	case "alarmsound":
 		p := pickerView{title: "Alarm sound", opts: speaker.AlarmSounds(), cur: -1}
@@ -292,41 +269,22 @@ func pickerFor(id string, s scene) (pickerView, bool) {
 		return p, true
 	case "e.repeat":
 		p := pickerView{title: "Repeat", opts: repeatNames, cur: -1}
-		if s.draft != nil {
+		if sv.draft != nil {
 			for i, days := range repeats {
-				if days == s.draft.alarm.Days {
+				if days == sv.draft.alarm.Days {
 					p.cur = i
 				}
 			}
 		}
 		return p, true
 	case "night":
-		p := pickerView{title: "Screen off at night", cur: -1}
-		cur := config.Get().Screen.Night
+		p := pickerView{title: nightRowLabel, cur: -1}
+		cur := sv.st.night
 		for i, n := range nightPresets {
 			p.opts = append(p.opts, nightText(n))
 			if n == cur {
 				p.cur = i
 			}
-		}
-		return p, true
-	case "theme":
-		p := pickerView{title: "Theme", cur: -1}
-		name := config.Get().Screen.Theme
-		for i, t := range themes {
-			p.opts = append(p.opts, t.name)
-			p.swatches = append(p.swatches, [2]color.RGBA{t.colors[roleGround], t.colors[roleAccent]})
-			if t.name == current().name && name != customName {
-				p.cur = i
-			}
-		}
-		// Custom, once there is one to go back to.
-		if c, ok := savedCustom(); ok {
-			if name == customName {
-				p.cur = len(p.opts)
-			}
-			p.opts = append(p.opts, customName)
-			p.swatches = append(p.swatches, [2]color.RGBA{c.colors[roleGround], c.colors[roleAccent]})
 		}
 		return p, true
 	case "wakeword":
@@ -350,7 +308,7 @@ func pickerFor(id string, s scene) (pickerView, bool) {
 		return p, true
 	case "weather":
 		_, names, cur := home.Get().WeatherChoices()
-		if s.sheet.demo {
+		if sv.st.demo {
 			// Weather entities are often named for the street they are on.
 			n := 0
 			for i := 2; i < len(names); i++ {
@@ -373,22 +331,13 @@ func pickerFor(id string, s scene) (pickerView, bool) {
 		}
 		return p, true
 	case "folder":
-		return folderPicker(s.sheet.folder, s.sheet.demo), true
-	case "radiosource":
-		p := pickerView{title: "Stations", cur: -1}
-		for i, src := range home.RadioSources() {
-			p.opts = append(p.opts, home.SourceLabel(src))
-			if src == s.radio.Source {
-				p.cur = i
-			}
-		}
-		return p, len(p.opts) > 0
+		return folderPicker(sv.st.folder, sv.st.demo), true
 	case "clock":
 		return pickerView{title: "Clock format", opts: clockOptions, cur: clockIndex()}, true
 	case "slideshow":
 		return pickerView{title: "Slideshow", opts: slideshowOptions, cur: slideshowIndex()}, true
 	}
-	return pickerView{}, false
+	return devicePicker(id, sv)
 }
 
 // choose puts the i'th choice of a row's list in force.
@@ -398,15 +347,6 @@ func (d *Display) choose(id string, i int) {
 		if i < len(nightPresets) {
 			if err := config.Set().Screen().Night(nightPresets[i]); err != nil {
 				slog.Warn("saving the night setting failed", "err", err)
-			}
-		}
-	case "theme":
-		switch {
-		case i < len(themes):
-			d.SetTheme(themes[i].name)
-		case i == len(themes):
-			if err := config.Set().Screen().Theme(customName); err != nil {
-				slog.Warn("saving the theme failed", "err", err)
 			}
 		}
 	case "clock":
@@ -449,6 +389,8 @@ func (d *Display) choose(id string, i int) {
 		if i < len(slideshowModes) {
 			home.Get().ChooseSlideshowMode(slideshowModes[i])
 		}
+	default:
+		d.deviceChoose(id, i)
 	}
 }
 
@@ -460,7 +402,7 @@ func (d *Display) nextTap(x, y int) {
 	}
 	switch z.kind {
 	case zoneDone:
-		d.showSheet(false)
+		d.closeSheet()
 	case zoneCat:
 		d.mu.Lock()
 		d.cat, d.picker, d.restartArm, d.draft, d.colours = z.cat, "", time.Time{}, nil, false
@@ -488,10 +430,7 @@ func (d *Display) rowTap(id string, p part, opt int) {
 	if d.alarmRowTap(id, p, opt) {
 		return
 	}
-	if n, ok := strings.CutPrefix(id, "role:"); ok {
-		if role, err := strconv.Atoi(n); err == nil && role >= 0 && role < roles && p == partDay && opt < swatchCount {
-			setRole(role, swatch(role, opt))
-		}
+	if d.deviceRowTap(id, p, opt) {
 		return
 	}
 	switch id {
@@ -538,10 +477,12 @@ func (d *Display) rowTap(id string, p part, opt int) {
 		security.Get().SetScreen(!config.Get().Security.Screen)
 	case "weather":
 		if p == partExtra {
-			d.ShowWeather(false)
+			d.showForecast()
 			return
 		}
 		d.openPicker(id)
+	case "updatecheck":
+		d.rowTap("updates", partExtra, opt)
 	case "updates":
 		switch {
 		case p != partExtra:
@@ -560,12 +501,7 @@ func (d *Display) rowTap(id string, p part, opt int) {
 		d.mu.Unlock()
 		if armed {
 			slog.Warn("restart asked for from the screen")
-			restart()
-		}
-	case "wifi":
-		if wifi.Available() {
-			d.showSheet(false)
-			d.openWifi()
+			restartNow()
 		}
 	case "bt":
 		bt := btaudio.Get()
@@ -576,7 +512,7 @@ func (d *Display) rowTap(id string, p part, opt int) {
 			bt.Reconnect()
 		}
 	case "pair":
-		d.showSheet(false)
+		d.closeSheet()
 		btaudio.Get().SetPairing(true)
 	case "btproxy":
 		p := bluetooth.Get()
@@ -589,11 +525,7 @@ func (d *Display) rowTap(id string, p part, opt int) {
 	case "subfolders":
 		_, _, subfolders := home.Get().SlideshowSettings()
 		home.Get().SetSlideshowSubfolders(!subfolders)
-	case "colours":
-		d.mu.Lock()
-		d.colours, d.cardScroll = true, 0
-		d.mu.Unlock()
-	case "night", "theme", "clock", "slideshow", "wakeword", "waketone":
+	case "night", "clock", "slideshow", "wakeword", "waketone":
 		d.openPicker(id)
 	}
 }
@@ -612,7 +544,7 @@ func (d *Display) OpenList(id string) bool {
 		d.openFolder(photosRoot, nil)
 		return true
 	}
-	if _, ok := pickerFor(id, scene{}); !ok {
+	if _, ok := pickerFor(id, sheetView{}); !ok {
 		return false
 	}
 	d.openPicker(id)

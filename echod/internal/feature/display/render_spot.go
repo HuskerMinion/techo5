@@ -126,10 +126,15 @@ type roundScene struct {
 	slideshow            *image.RGBA
 	slideshowScreensaver *image.RGBA
 	slideshowOverlay     string
+
+	// sheetOpen is the settings screen up, sheetGrid its six categories rather than one; sheet what
+	// it shows.
+	sheetOpen, sheetGrid bool
+	sheet                sheetView
 }
 
 type roundRenderer struct {
-	dst                              *image.RGBA
+	paint                            // the canvas, and the settings screen's tap zones
 	clock, title, body, small, label font.Face
 	tiny                             font.Face
 }
@@ -151,7 +156,7 @@ func newRoundRenderer(dst *image.RGBA) *roundRenderer {
 		return fc
 	}
 	return &roundRenderer{
-		dst:   dst,
+		paint: paint{dst: dst, w: side, h: side, fc: spotFaces(), round: true},
 		clock: face(bold, 104),
 		title: face(bold, 34),
 		body:  face(regular, 26),
@@ -170,6 +175,10 @@ func (r *roundRenderer) draw(s roundScene) {
 	}
 	if s.ringing.any() {
 		r.ringFace(s)
+		return
+	}
+	if s.sheetOpen {
+		r.sheetFace(s)
 		return
 	}
 	r.rim(s)

@@ -75,7 +75,7 @@ func TestEveryCardDraws(t *testing.T) {
 	for name, s := range cases {
 		r := testRenderer()
 		r.settingsScreen(s)
-		v := categoryCard(s)
+		v := categoryCard(s.view())
 		if len(v.rows) == 0 {
 			t.Errorf("%s: no rows", name)
 			continue

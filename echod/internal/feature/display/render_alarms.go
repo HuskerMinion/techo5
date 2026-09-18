@@ -12,11 +12,6 @@ import (
 	"github.com/HuskerMinion/techo5/echod/internal/feature/timer"
 )
 
-// clockTime is an hour and minute the way the clock shows the time.
-func clockTime(hour, minute int) string {
-	return clockText(time.Date(2000, 1, 1, hour, minute, 0, 0, time.UTC))
-}
-
 // countdown is a timer's time left: 4:05, or 1:02:05 past an hour.
 func countdown(left time.Duration) string {
 	secs := int(left.Round(time.Second).Seconds())
@@ -103,11 +98,4 @@ func (r *renderer) timersLine(s scene, y int) {
 		draw.Draw(r.dst, image.Rect(x, y+10, x+full, y+14), image.NewUniform(ember), image.Point{}, draw.Src)
 		draw.Draw(r.dst, image.Rect(x, y+10, x+int(float64(full)*frac), y+14), image.NewUniform(amber), image.Point{}, draw.Src)
 	}
-}
-
-func cmpOr(a, b string) string {
-	if a != "" {
-		return a
-	}
-	return b
 }
