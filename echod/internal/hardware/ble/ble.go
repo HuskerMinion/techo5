@@ -41,11 +41,14 @@ type Advertisement struct {
 	Data        []byte
 }
 
-// Addr is the address as a big-endian integer.
+// Addr is the address as the integer Home Assistant takes, first byte of the printed address most
+// significant (12:34:… is 0x1234…). Address holds it the other way round, least significant byte
+// first, as the controller reports it; read in that order, every device would reach Home Assistant
+// under its address reversed, as a device nothing else has ever seen.
 func (a Advertisement) Addr() uint64 {
 	var v uint64
-	for _, b := range a.Address {
-		v = v<<8 | uint64(b)
+	for i := len(a.Address) - 1; i >= 0; i-- {
+		v = v<<8 | uint64(a.Address[i])
 	}
 	return v
 }
