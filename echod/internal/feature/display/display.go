@@ -85,6 +85,7 @@ const (
 type Display struct {
 	light *esphome.Light
 	auto  *esphome.Switch
+	clock *esphome.Select
 
 	mu      sync.Mutex
 	on      bool
@@ -184,6 +185,7 @@ func build() *Display {
 	}
 	d.light.OnCommand = d.command
 	d.auto.OnCommand = func(on bool) { d.setAuto(on, true) }
+	d.clock = clockSelect(d.wake)
 	voice.Changed.Listen(d.changed)
 	media.Get().OnVolume.Listen(d.volumeMoved)
 	ambient.Get().Lux.Listen(d.lux)
@@ -227,11 +229,12 @@ func build() *Display {
 
 func (d *Display) Name() string { return "screen" }
 
-func (d *Display) Entities() []esphome.Entity { return []esphome.Entity{d.light, d.auto} }
+func (d *Display) Entities() []esphome.Entity { return []esphome.Entity{d.light, d.auto, d.clock} }
 
 // Restore lights the panel the way it was left. Before the framebuffer is opened: the backlight is
 // its own device.
 func (d *Display) Restore(c config.Config) {
+	setClock24(d.clock, c.Screen.Clock24)
 	d.setAuto(c.Screen.Auto, false)
 	d.apply(c.Screen.On, c.Screen.Brightness, false)
 }

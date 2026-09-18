@@ -42,7 +42,23 @@ var (
 	colReplying   = color.RGBA{60, 203, 127, 255}
 	colMuted      = color.RGBA{229, 72, 77, 255}
 	colTimer      = color.RGBA{255, 176, 32, 255}
+
+	// colAccent is the Show's Ember accent, for the AM/PM beside the time as the Show sets it.
+	colAccent = color.RGBA{0xf0, 0x5a, 0x3c, 255}
 )
+
+// ampmGap is the space between the time and its AM/PM.
+const ampmGap = 10
+
+// timeLine draws the time centred on the face at baseline, with its AM/PM beside it in the accent
+// the way the Show sets it; on a 24-hour clock the time stands alone.
+func (r *roundRenderer) timeLine(now time.Time, baseline int) {
+	hm := clockHM(now)
+	r.centred(r.clock, hm, baseline, colText)
+	if s := clockSuffix(now); s != "" {
+		r.text(r.title, s, centre+r.width(r.clock, hm)/2+ampmGap, baseline, colAccent)
+	}
+}
 
 type roundScene struct {
 	now          time.Time
@@ -213,12 +229,10 @@ func (r *roundRenderer) rim(s roundScene) {
 
 func (r *roundRenderer) clockFace(s roundScene) {
 	now := s.now
-	hm := now.Format("3:04")
-	r.centred(r.clock, hm, 240, colText)
-	r.centred(r.small, strings.ToUpper(now.Format("PM")), 290, colDim)
-	r.centred(r.small, now.Format("Monday, January 2"), 330, colDim)
+	r.timeLine(now, 240)
+	r.centred(r.small, now.Format("Monday, January 2"), 290, colDim)
 
-	line := 372
+	line := 332
 	if weatherLine(s.weather) != "" {
 		r.clockWeather(s.weather, line)
 		line += 38

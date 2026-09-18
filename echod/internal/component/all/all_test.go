@@ -91,6 +91,7 @@ var registered = []string{
 	"room_reaction",
 	"screen",
 	"screen_auto_brightness",
+	"screen_clock_format",
 	"screen_web_access",
 	"segment_1",
 	"segment_10",

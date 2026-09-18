@@ -40,7 +40,7 @@ func (r *renderer) cameraView(s scene, v home.CameraView) {
 	// Corners on a dark strip so they read over any picture.
 	draw.Draw(r.dst, image.Rect(0, 0, r.w, 44), image.NewUniform(shade), image.Point{}, draw.Over)
 	r.text(r.small, v.Name, r.margin, 32, cream)
-	t := s.now.Format("3:04")
+	t := clockHM(s.now)
 	r.text(r.small, t, r.w-r.margin-r.width(r.small, t), 32, dim)
 	left := time.Until(v.Until).Round(time.Second)
 	hint := "tap to close"

@@ -17,6 +17,9 @@ type Screen struct {
 
 	// Welcomed is the first-run card having been seen and put away.
 	Welcomed bool `json:"welcomed,omitempty"`
+
+	// Clock24 shows times on the screen as 15:04 instead of 3:04 PM.
+	Clock24 bool `json:"clock_24,omitempty"`
 }
 
 // DefaultTheme is the palette a new device comes up in.
@@ -62,6 +65,10 @@ func (w ScreenWriter) Night(v string) error {
 
 func (w ScreenWriter) Welcomed(v bool) error {
 	return w.st.Update(func(c *Config) { c.Screen.Welcomed = v })
+}
+
+func (w ScreenWriter) Clock24(v bool) error {
+	return w.st.Update(func(c *Config) { c.Screen.Clock24 = v })
 }
 
 // Custom saves a palette and makes it the theme.

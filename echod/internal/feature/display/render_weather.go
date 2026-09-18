@@ -148,7 +148,7 @@ func (r *renderer) radarPage(s scene) {
 	shade := func(rect image.Rectangle) {
 		draw.Draw(r.dst, rect, image.NewUniform(color.RGBA{0, 0, 0, 150}), image.Point{}, draw.Over)
 	}
-	label := "Radar  " + f.At.Local().Format("3:04 PM")
+	label := "Radar  " + clockText(f.At.Local())
 	if i == n-1 {
 		label += "  (latest)"
 	}

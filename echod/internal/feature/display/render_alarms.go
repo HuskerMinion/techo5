@@ -15,7 +15,7 @@ import (
 
 // clockTime is an hour and minute the way the clock shows the time.
 func clockTime(hour, minute int) string {
-	return time.Date(2000, 1, 1, hour, minute, 0, 0, time.UTC).Format("3:04 PM")
+	return clockText(time.Date(2000, 1, 1, hour, minute, 0, 0, time.UTC))
 }
 
 // countdown is a timer's time left: 4:05, or 1:02:05 past an hour.
@@ -38,7 +38,7 @@ func (r *renderer) alarmsTab(s scene) {
 	for i, row := range rows[start:end] {
 		switch {
 		case row.snoozed != nil:
-			top := r.row(i, "Snoozed until "+row.snoozed.At.Format("3:04 PM"), amber)
+			top := r.row(i, "Snoozed until "+clockText(row.snoozed.At), amber)
 			r.value(top, row.snoozed.Label, 1)
 			r.button(top, 2, "Cancel", false)
 		case row.local != nil:
@@ -60,7 +60,7 @@ func (r *renderer) alarmsTab(s scene) {
 			label := cmpOr(f.Label, f.Entity)
 			when := "not set in Home Assistant"
 			if !f.At.IsZero() {
-				when = f.At.Format("3:04 PM") + " · from Home Assistant"
+				when = clockText(f.At) + " · from Home Assistant"
 			}
 			if !f.Armed {
 				when = "off in Home Assistant"
@@ -165,12 +165,16 @@ func (r *renderer) ringingPage(s scene) {
 	}
 	r.text(r.title, title, (r.w-r.width(r.title, title))/2, 80, amber)
 
-	hour := s.now.Format("3:04")
-	ampm := s.now.Format("PM")
+	hour := clockHM(s.now)
+	ampm := clockSuffix(s.now)
+	gap := 18
+	if ampm == "" {
+		gap = 0
+	}
 	hw, aw := r.width(r.clock, hour), r.width(r.ampm, ampm)
-	x := (r.w - hw - 18 - aw) / 2
+	x := (r.w - hw - gap - aw) / 2
 	r.text(r.clock, hour, x, 290, cream)
-	r.text(r.ampm, ampm, x+hw+18, 290, amber)
+	r.text(r.ampm, ampm, x+hw+gap, 290, amber)
 
 	y0, y1 := ringButtonsTop, r.h-30
 	stop := image.Rect(r.margin, y0, r.w-r.margin, y1)

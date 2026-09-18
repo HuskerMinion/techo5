@@ -6,7 +6,6 @@ import (
 	"image"
 	"image/color"
 	"image/draw"
-	"strings"
 
 	"github.com/HuskerMinion/techo5/echod/internal/config"
 )
@@ -40,11 +39,10 @@ func (r *roundRenderer) slideshowScreensaverFace(s roundScene) {
 // label. big is the normal size (clockFace's own layout); otherwise a small one near the top.
 func (r *roundRenderer) screensaverClock(s roundScene, big bool) {
 	if !big {
-		r.centred(r.small, s.now.Format("3:04 PM"), 60, colText)
+		r.centred(r.small, clockText(s.now), 60, colText)
 		return
 	}
 	now := s.now
-	r.centred(r.clock, now.Format("3:04"), 240, colText)
-	r.centred(r.small, strings.ToUpper(now.Format("PM")), 290, colDim)
-	r.centred(r.small, now.Format("Monday, January 2"), 330, colDim)
+	r.timeLine(now, 240)
+	r.centred(r.small, now.Format("Monday, January 2"), 290, colDim)
 }

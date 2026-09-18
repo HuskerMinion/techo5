@@ -262,11 +262,14 @@ func (r *renderer) volumeBar(s scene) {
 // optional suffix appended to the date line (an alarm note, on the ordinary idle page). Shared by
 // bigClock and the screensaver's normal-size overlay, which wants the clock alone.
 func (r *renderer) timeAndDate(now time.Time, base int, dateSuffix string) {
-	hour := now.Format("3:04")
-	ampm := now.Format("PM")
+	hour := clockHM(now)
+	ampm := clockSuffix(now)
 	hw := r.width(r.clock, hour)
 	aw := r.width(r.ampm, ampm)
 	gap := 18
+	if ampm == "" {
+		gap = 0
+	}
 	x := (r.w - hw - gap - aw) / 2
 	r.text(r.clock, hour, x, base, cream)
 	r.text(r.ampm, ampm, x+hw+gap, base, amber)
@@ -294,7 +297,7 @@ func (r *renderer) bigClock(s scene) {
 		if next.Snoozed {
 			what = "Snoozed until"
 		}
-		suffix = "  ·  " + what + " " + next.At.Format("3:04 PM")
+		suffix = "  ·  " + what + " " + clockText(next.At)
 	}
 	r.timeAndDate(s.now, base, suffix)
 	if timers {
@@ -336,7 +339,7 @@ func conditionWords(c string) string {
 
 // cornerClock keeps the time in view while words have the screen.
 func (r *renderer) cornerClock(s scene) {
-	t := s.now.Format("3:04 PM")
+	t := clockText(s.now)
 	r.text(r.small, t, r.w-r.margin-r.width(r.small, t), r.margin+26, dim)
 }
 
