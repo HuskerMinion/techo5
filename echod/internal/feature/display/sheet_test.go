@@ -235,3 +235,29 @@ func TestSheetWords(t *testing.T) {
 		}
 	}
 }
+
+// Changing category repaints the parts of the screen that depend on it; the rest is kept. On the
+// Show this is what a tap on the rail waits for.
+func BenchmarkCategorySwitch(b *testing.B) {
+	r := testRenderer()
+	scenes := make([]scene, categories)
+	for c := range scenes {
+		scenes[c] = sheetScene(category(c))
+	}
+	r.settingsScreen(scenes[0])
+	b.ResetTimer()
+	for i := range b.N {
+		r.settingsScreen(scenes[(i+1)%len(scenes)])
+	}
+}
+
+// Opening a list over the card: the long Theme list, in columns.
+func BenchmarkPickerOpen(b *testing.B) {
+	r := testRenderer()
+	s := sheetScene(catDisplay)
+	s.sheet.picker = "theme"
+	b.ResetTimer()
+	for range b.N {
+		r.settingsScreen(s)
+	}
+}

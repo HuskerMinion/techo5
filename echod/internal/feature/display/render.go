@@ -145,6 +145,10 @@ type renderer struct {
 	base    *image.RGBA
 	baseKey baseKey
 
+	// shell keeps what every category of the settings screen shares, for as long as the theme holds.
+	shell    *image.RGBA
+	shellKey baseKey
+
 	// cardMax and pickMax are how far the card and an open list could scroll in the last frame.
 	cardMax, pickMax int
 }

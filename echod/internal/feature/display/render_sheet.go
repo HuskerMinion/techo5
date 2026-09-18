@@ -332,7 +332,7 @@ func (r *renderer) settingsBase(sel category, title, blurb string) {
 		return
 	}
 	fc := faces()
-	r.vgradient(r.dst.Bounds(), shift(walnut, 7), shift(walnut, -3))
+	r.settingsShell()
 
 	// The rail: each category a label with its icon, the chosen one raised in the accent.
 	for c := category(0); c < categories; c++ {
@@ -343,11 +343,39 @@ func (r *renderer) settingsBase(sel category, title, blurb string) {
 			r.roundShadow(pill, 14, 14, 5, shadowAlpha())
 			r.roundFill(pill, 14, shift(amber, 16), shift(amber, -16))
 			r.roundHighlight(pill, 14)
+			// The card floats above the rail: its shadow falls across the raised one's end, which the
+			// kept shell (drawn before the rail) cannot hold, so that sliver is laid on again here.
+			px0, py0, px1, py1 := rectF(pill)
+			r.roundShadowIn(nextCard(r.w, r.h), cardRad, 22, 8, shadowAlpha(), pill.Inset(-1), func(x, y int) float64 {
+				return clamp01(0.5 - rrDist(float64(x)+0.5, float64(y)+0.5, px0, py0, px1, py1, 14))
+			})
 			fg, face = onAccent(), fc.navBold
 		}
 		r.icon(c, 12+30, top+navH/2, fg)
 		r.text(face, categoryNames[c], 12+58, top+navH/2+9, fg)
 	}
+	card := nextCard(r.w, r.h)
+	r.text(fc.header, title, card.Min.X+rowIn, card.Min.Y+46, cream)
+	r.text(fc.sub, blurb, card.Min.X+rowIn, card.Min.Y+72, dim)
+	r.rule(card.Min.X+22, card.Max.X-22, card.Min.Y+headerH-2, 1)
+
+	if r.base == nil || r.base.Rect != r.dst.Rect {
+		r.base = image.NewRGBA(r.dst.Rect)
+	}
+	copy(r.base.Pix, r.dst.Pix)
+	r.baseKey = key
+}
+
+// settingsShell paints what every category shares, the ground, Done and the empty card, from a copy
+// kept until the theme changes: its gradients and the card's shadow are most of the drawing.
+func (r *renderer) settingsShell() {
+	key := baseKey{g: walnut, a: amber, t: cream, d: dim, rl: ember, w: r.w, h: r.h}
+	if r.shell != nil && r.shellKey == key {
+		copy(r.dst.Pix, r.shell.Pix)
+		return
+	}
+	fc := faces()
+	r.vgradient(r.dst.Bounds(), shift(walnut, 7), shift(walnut, -3))
 	done := image.Rect(12, r.h-66, railW-10, r.h-16)
 	r.roundShadow(done, 25, 8, 3, shadowAlpha()*0.6)
 	r.roundFill(done, 25, surface(3), surface(2))
@@ -359,15 +387,12 @@ func (r *renderer) settingsBase(sel category, title, blurb string) {
 	r.roundShadow(card, cardRad, 22, 8, shadowAlpha())
 	r.roundFill(card, cardRad, surface(2), surface(1))
 	r.roundHighlight(card, cardRad)
-	r.text(fc.header, title, card.Min.X+rowIn, card.Min.Y+46, cream)
-	r.text(fc.sub, blurb, card.Min.X+rowIn, card.Min.Y+72, dim)
-	r.rule(card.Min.X+22, card.Max.X-22, card.Min.Y+headerH-2, 1)
 
-	if r.base == nil || r.base.Rect != r.dst.Rect {
-		r.base = image.NewRGBA(r.dst.Rect)
+	if r.shell == nil || r.shell.Rect != r.dst.Rect {
+		r.shell = image.NewRGBA(r.dst.Rect)
 	}
-	copy(r.base.Pix, r.dst.Pix)
-	r.baseKey = key
+	copy(r.shell.Pix, r.dst.Pix)
+	r.shellKey = key
 }
 
 // pickRows is how many choices a long list shows at once, and pickScrollOver how many choices make
@@ -767,7 +792,9 @@ func onAccent() color.RGBA {
 
 // ---- anti-aliased drawing ------------------------------------------------------------------------
 
-func clamp01(v float64) float64 { return math.Max(0, math.Min(1, v)) }
+// clamp01 and rrDist use the built-in min and max: math.Min and math.Max handle NaN and signed
+// zeros, which these never see, at several times the cost, and they run for every pixel drawn.
+func clamp01(v float64) float64 { return max(0, min(1, v)) }
 
 func lerp(a, b color.RGBA, t float64) color.RGBA {
 	f := func(x, y uint8) uint8 { return uint8(float64(x) + (float64(y)-float64(x))*t + 0.5) }
@@ -793,7 +820,8 @@ func (r *renderer) blendAt(x, y int, c color.RGBA, a float64) {
 func rrDist(px, py, x0, y0, x1, y1, rad float64) float64 {
 	qx := math.Abs(px-(x0+x1)/2) - ((x1-x0)/2 - rad)
 	qy := math.Abs(py-(y0+y1)/2) - ((y1-y0)/2 - rad)
-	return math.Hypot(math.Max(qx, 0), math.Max(qy, 0)) + math.Min(math.Max(qx, qy), 0) - rad
+	ox, oy := max(qx, 0), max(qy, 0)
+	return math.Sqrt(ox*ox+oy*oy) + min(max(qx, qy), 0) - rad
 }
 
 func rectF(b image.Rectangle) (float64, float64, float64, float64) {
@@ -802,21 +830,40 @@ func rectF(b image.Rectangle) (float64, float64, float64, float64) {
 
 func (r *renderer) vgradient(b image.Rectangle, top, bottom color.RGBA) {
 	for y := b.Min.Y; y < b.Max.Y; y++ {
-		c := lerp(top, bottom, float64(y-b.Min.Y)/float64(max(b.Dy()-1, 1)))
-		for x := b.Min.X; x < b.Max.X; x++ {
-			r.blendAt(x, y, c, 1)
-		}
+		r.span(y, b.Min.X, b.Max.X, lerp(top, bottom, float64(y-b.Min.Y)/float64(max(b.Dy()-1, 1))))
+	}
+}
+
+// span paints x0 up to x1 on row y in c, solid.
+func (r *renderer) span(y, x0, x1 int, c color.RGBA) {
+	if y < r.dst.Rect.Min.Y || y >= r.dst.Rect.Max.Y {
+		return
+	}
+	x0, x1 = max(x0, r.dst.Rect.Min.X), min(x1, r.dst.Rect.Max.X)
+	if x0 >= x1 {
+		return
+	}
+	row := r.dst.Pix[r.dst.PixOffset(x0, y):r.dst.PixOffset(x1, y)]
+	for i := 0; i < len(row); i += 4 {
+		row[i], row[i+1], row[i+2], row[i+3] = c.R, c.G, c.B, 255
 	}
 }
 
 // roundFill fills a rounded rectangle with a vertical gradient from top to bottom.
 func (r *renderer) roundFill(b image.Rectangle, rad float64, top, bottom color.RGBA) {
 	x0, y0, x1, y1 := rectF(b)
-	for y := b.Min.Y - 1; y <= b.Max.Y; y++ {
+	// Only the corners are worked out a pixel at a time; between them each row is solid. The rows
+	// just outside the top and bottom edges are left alone: no pixel centre there is covered.
+	corner := min(int(math.Ceil(rad))+1, b.Dx()/2)
+	for y := b.Min.Y; y < b.Max.Y; y++ {
 		c := lerp(top, bottom, clamp01((float64(y)-y0)/(y1-y0)))
-		for x := b.Min.X - 1; x <= b.Max.X; x++ {
+		for x := b.Min.X - 1; x < b.Min.X+corner; x++ {
 			r.blendAt(x, y, c, clamp01(0.5-rrDist(float64(x)+0.5, float64(y)+0.5, x0, y0, x1, y1, rad)))
 		}
+		for x := b.Max.X - corner; x <= b.Max.X; x++ {
+			r.blendAt(x, y, c, clamp01(0.5-rrDist(float64(x)+0.5, float64(y)+0.5, x0, y0, x1, y1, rad)))
+		}
+		r.span(y, b.Min.X+corner, b.Max.X-corner, c)
 	}
 }
 
@@ -849,16 +896,32 @@ func (r *renderer) roundHighlight(b image.Rectangle, rad float64) {
 	}
 }
 
-// roundShadow is the soft shadow a rounded rectangle casts, blur pixels wide and dropped dy.
+// roundShadow is the soft shadow a rounded rectangle casts, blur pixels wide and dropped dy. The
+// rectangle is always filled over it after, so the shadow under its solid middle is not drawn.
 func (r *renderer) roundShadow(b image.Rectangle, rad, blur float64, dy int, alpha float64) {
+	r.roundShadowIn(b, rad, blur, dy, alpha, r.dst.Rect, nil)
+}
+
+// roundShadowIn is roundShadow drawn only inside clip, and where mask is given, only as much as it
+// says at each pixel (0 to 1): the shadow laid on one thing drawn after it.
+func (r *renderer) roundShadowIn(b image.Rectangle, rad, blur float64, dy int, alpha float64, clip image.Rectangle, mask func(x, y int) float64) {
 	x0, y0, x1, y1 := rectF(b.Add(image.Pt(0, dy)))
 	pad := int(blur) + 1
 	black := color.RGBA{0, 0, 0, 255}
-	for y := b.Min.Y + dy - pad; y < b.Max.Y+dy+pad; y++ {
-		for x := b.Min.X - pad; x < b.Max.X+pad; x++ {
+	covered := b.Inset(int(rad) + 2)
+	area := image.Rect(b.Min.X-pad, b.Min.Y+dy-pad, b.Max.X+pad, b.Max.Y+dy+pad).Intersect(clip)
+	for y := area.Min.Y; y < area.Max.Y; y++ {
+		for x := area.Min.X; x < area.Max.X; x++ {
+			if y >= covered.Min.Y && y < covered.Max.Y && x == covered.Min.X {
+				x = covered.Max.X // jump the covered middle of the row
+			}
 			d := rrDist(float64(x)+0.5, float64(y)+0.5, x0, y0, x1, y1, rad)
 			f := 1 - clamp01((d+blur*0.3)/(blur*1.3))
-			r.blendAt(x, y, black, alpha*f*f)
+			a := alpha * f * f
+			if mask != nil {
+				a *= mask(x, y)
+			}
+			r.blendAt(x, y, black, a)
 		}
 	}
 }
