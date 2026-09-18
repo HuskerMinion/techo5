@@ -6,6 +6,9 @@ import (
 	"image"
 	"image/draw"
 	"log/slog"
+	"math/rand/v2"
+	"path"
+	"strings"
 	"time"
 
 	esphome "github.com/ygelfand/go-esphome-device"
@@ -33,6 +36,13 @@ const (
 	SlideshowFrame = 80 * time.Millisecond
 )
 
+// slideshowMaxFolders and slideshowMaxPhotos bound how much of a library one look gathers, so
+// picking the top of a very large one still starts in reasonable time and memory.
+const (
+	slideshowMaxFolders = 1000
+	slideshowMaxPhotos  = 20000
+)
+
 // slideshowRetries is how many children are tried, in one advance, before giving up for this
 // round: a library will have the odd broken or unreachable file, and that shouldn't stall the
 // whole slideshow.
@@ -47,8 +57,8 @@ const slideshowIdleDefault = 5 * time.Minute
 // The mode select's options, as shown; slideshowModeFor and slideshowLabelFor translate to and
 // from config.Slideshow's stored value.
 const (
-	slideshowOff             = "Off"
-	slideshowBackgroundLabel = "Background"
+	slideshowOff              = "Off"
+	slideshowBackgroundLabel  = "Background"
 	slideshowScreensaverLabel = "Screensaver"
 )
 
@@ -99,6 +109,24 @@ func (f *Feature) buildSlideshowSelect() {
 		},
 		Min: 1, Max: 60, Step: 1, Unit: "min",
 		Mode: esphome.NumberBox,
+	}
+	f.slideshowShuffleSw = &esphome.Switch{
+		Base: esphome.Base{
+			ObjectID: "slideshow_shuffle",
+			Name:     "Slideshow shuffle",
+			Icon:     "mdi:shuffle-variant",
+			Category: esphome.CategoryConfig,
+		},
+		OnCommand: func(on bool) { f.SetSlideshowShuffle(on) },
+	}
+	f.slideshowSubfoldersSw = &esphome.Switch{
+		Base: esphome.Base{
+			ObjectID: "slideshow_subfolders",
+			Name:     "Slideshow includes subfolders",
+			Icon:     "mdi:folder-multiple-image",
+			Category: esphome.CategoryConfig,
+		},
+		OnCommand: func(on bool) { f.SetSlideshowSubfolders(on) },
 	}
 	f.slideshowIdleNum.OnCommand = func(v float32) {
 		f.slideshowIdleNum.Set(v)
@@ -182,21 +210,58 @@ func (f *Feature) ChooseSlideshowOverlay(overlay string) {
 	f.Changed.Emit(struct{}{})
 }
 
-// slideshowSource sets which media source to step through, from the home_slideshow action.
-func (f *Feature) slideshowSource(source string) {
-	cur := config.Get().Home.Slideshow
-	if cur.Source == source {
-		return
-	}
-	cur.Source = source
-	if err := config.Set().Home().Slideshow(cur); err != nil {
-		slog.Warn("home: saving the slideshow source failed", "err", err)
-		return
-	}
+// SetSlideshowSource sets which media source to show photos from, from the home_slideshow action or
+// the screen's folder list.
+func (f *Feature) SetSlideshowSource(source string) {
+	f.changeSlideshow(func(s *config.Slideshow) { s.Source = source })
 	slog.Info("home: slideshow source", "source", source)
+}
+
+// SetSlideshowShuffle shows the photos shuffled, or in the source's own order.
+func (f *Feature) SetSlideshowShuffle(on bool) {
+	f.changeSlideshow(func(s *config.Slideshow) { s.InOrder = !on })
+	f.slideshowShuffleSw.Set(on)
+}
+
+// SetSlideshowSubfolders includes the photos in the source's subfolders, or only its own.
+func (f *Feature) SetSlideshowSubfolders(on bool) {
+	f.changeSlideshow(func(s *config.Slideshow) { s.TopOnly = !on })
+	f.slideshowSubfoldersSw.Set(on)
+}
+
+// changeSlideshow saves a change to what the slideshow shows and has the photos gathered again.
+func (f *Feature) changeSlideshow(change func(*config.Slideshow)) {
+	cur := config.Get().Home.Slideshow
+	next := cur
+	change(&next)
+	if next == cur {
+		return
+	}
+	if err := config.Set().Home().Slideshow(next); err != nil {
+		slog.Warn("home: saving the slideshow failed", "err", err)
+		return
+	}
 	f.mu.Lock()
-	f.slideshow = slideshowState{} // the old source's browsed children no longer apply
+	if next.Source == "" {
+		f.slideshow = slideshowState{} // nothing to show: the last photo goes too
+	} else {
+		shown := f.slideshow.image
+		f.slideshow = slideshowState{image: shown, prev: shown, at: time.Now().Add(-slideshowEvery)} // due now
+	}
 	f.mu.Unlock()
+	f.Changed.Emit(struct{}{})
+}
+
+// SlideshowSettings is what the slideshow shows from: the source, and whether it shuffles and
+// includes subfolders.
+func (f *Feature) SlideshowSettings() (source string, shuffle, subfolders bool) {
+	s := config.Get().Home.Slideshow
+	return s.Source, !s.InOrder, !s.TopOnly
+}
+
+// BrowseFolder lists one media source folder, for the screen's folder list.
+func (f *Feature) BrowseFolder(ctx context.Context, id string) (hass.Media, error) {
+	return hass.Get().Browse(ctx, id)
 }
 
 // slideshowLoop advances the slideshow while Background mode is on. Run from Feature.Run.
@@ -228,7 +293,7 @@ func (f *Feature) advanceSlideshow() {
 		return
 	}
 	for try := 0; try < slideshowRetries; try++ {
-		id, ok := f.nextSlideshowChild(h.Source)
+		id, ok := f.nextSlideshowChild(h)
 		if !ok {
 			return // nothing to show, or the source failed to browse
 		}
@@ -246,36 +311,80 @@ func (f *Feature) advanceSlideshow() {
 	slog.Warn("home: slideshow", "err", "no photo fetched after retries")
 }
 
-// nextSlideshowChild is the next playable child's id to try, browsing the source again when the
-// list is stale or was exhausted.
-func (f *Feature) nextSlideshowChild(source string) (string, bool) {
+// nextSlideshowChild is the next photo's id to try, gathering the source again when the list is
+// stale or empty. A shuffled list is shuffled afresh each time round.
+func (f *Feature) nextSlideshowChild(h config.Slideshow) (string, bool) {
 	f.mu.Lock()
 	stale := time.Since(f.slideshow.browsed) > browseEvery || len(f.slideshow.children) == 0
 	f.mu.Unlock()
 	if stale {
-		m, err := hass.Get().Browse(context.Background(), source)
+		photos, err := gatherSlideshow(h)
 		if err != nil {
-			slog.Warn("home: browsing the slideshow source", "source", source, "err", err)
+			slog.Warn("home: browsing the slideshow source", "source", h.Source, "err", err)
 			return "", false
 		}
-		var playable []hass.Media
-		for _, c := range m.Children {
-			if c.CanPlay {
-				playable = append(playable, c)
-			}
+		if !h.InOrder {
+			rand.Shuffle(len(photos), func(i, j int) { photos[i], photos[j] = photos[j], photos[i] })
 		}
+		slog.Info("home: slideshow photos", "count", len(photos), "subfolders", !h.TopOnly, "shuffled", !h.InOrder)
 		f.mu.Lock()
-		f.slideshow.children, f.slideshow.browsed, f.slideshow.idx = playable, time.Now(), 0
+		f.slideshow.children, f.slideshow.browsed, f.slideshow.idx = photos, time.Now(), 0
 		f.mu.Unlock()
 	}
 	f.mu.Lock()
 	defer f.mu.Unlock()
-	if len(f.slideshow.children) == 0 {
+	n := len(f.slideshow.children)
+	if n == 0 {
 		return "", false
 	}
-	id := f.slideshow.children[f.slideshow.idx%len(f.slideshow.children)].ID
+	if f.slideshow.idx >= n {
+		f.slideshow.idx = 0
+		if !h.InOrder {
+			c := f.slideshow.children
+			rand.Shuffle(n, func(i, j int) { c[i], c[j] = c[j], c[i] })
+		}
+	}
+	id := f.slideshow.children[f.slideshow.idx].ID
 	f.slideshow.idx++
 	return id, true
+}
+
+// gatherSlideshow lists the photos a slideshow shows: the source's own and, unless TopOnly, those of
+// every folder under it, over one connection and within slideshowMaxFolders and slideshowMaxPhotos.
+func gatherSlideshow(h config.Slideshow) ([]hass.Media, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+	defer cancel()
+	folders := slideshowMaxFolders
+	if h.TopOnly {
+		folders = 1
+	}
+	var photos []hass.Media
+	err := hass.Get().BrowseTree(ctx, h.Source, folders, func(m hass.Media) bool {
+		for _, c := range m.Children {
+			if c.CanPlay && isPhoto(c) {
+				photos = append(photos, c)
+			}
+		}
+		return len(photos) < slideshowMaxPhotos
+	})
+	return photos, err
+}
+
+// isPhoto is whether a playable entry is a picture rather than a video or a sound, going by the
+// type Home Assistant gives it, or failing that its name.
+func isPhoto(m hass.Media) bool {
+	k := strings.ToLower(m.Kind)
+	if strings.HasPrefix(k, "image") {
+		return true
+	}
+	if k != "" && k != "application/octet-stream" {
+		return false
+	}
+	switch strings.ToLower(path.Ext(m.ID)) {
+	case ".jpg", ".jpeg", ".png", ".gif", ".webp", ".bmp":
+		return true
+	}
+	return false
 }
 
 // fetchSlideshowImage resolves, fetches and crops one photo to the panel, full-bleed.
@@ -292,7 +401,7 @@ func fetchSlideshowImage(id string) (*image.RGBA, error) {
 	if err != nil {
 		return nil, err
 	}
-	return cropToFill(src, slideshowW, slideshowH), nil
+	return cropToFill(upright(src, exifOrientation(b)), slideshowW, slideshowH), nil
 }
 
 // cropToFill scales src to cover w×h exactly, cropping whichever side runs long — the same rule
@@ -395,7 +504,7 @@ func (f *Feature) slideshowAction() *esphome.Action {
 		Name: "home_slideshow",
 		Args: []esphome.Arg{{Name: "source", Type: esphome.ArgString}},
 		Run: func(c esphome.Call) (any, error) {
-			f.slideshowSource(c.String("source"))
+			f.SetSlideshowSource(c.String("source"))
 			return nil, nil
 		},
 	}

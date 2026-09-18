@@ -71,7 +71,7 @@ func categoryRows(s scene) (rows []settingRow, note string) {
 	st := s.sheet
 	switch st.cat {
 	case catDisplay:
-		return []settingRow{
+		rows := []settingRow{
 			{id: "brightness", label: "Brightness", kind: ctlStepper, value: fmt.Sprintf("%d%%", st.brightness)},
 			{id: "auto", label: "Auto-brightness", sub: "Follows the room's light", kind: ctlToggle, on: st.auto},
 			{id: "night", label: "Screen off at night", kind: ctlChoice, value: nightText(st.night)},
@@ -79,7 +79,11 @@ func categoryRows(s scene) (rows []settingRow, note string) {
 			{id: "colours", label: "Custom colours", sub: "Make the theme your own", kind: ctlButton, button: "Edit"},
 			{id: "clock", label: "Clock format", kind: ctlChoice, value: clockOptions[clockIndex()]},
 			{id: "slideshow", label: "Slideshow", sub: "Photos from Home Assistant", kind: ctlChoice, value: slideshowOptions[slideshowIndex()]},
-		}, ""
+		}
+		if slideshowIndex() != 0 {
+			rows = append(rows, slideshowRows(st.demo)...)
+		}
+		return rows, ""
 	case catSound:
 		mic := "Listening"
 		if st.muted {
@@ -368,6 +372,8 @@ func pickerFor(id string, s scene) (pickerView, bool) {
 			}
 		}
 		return p, true
+	case "folder":
+		return folderPicker(s.sheet.folder, s.sheet.demo), true
 	case "radiosource":
 		p := pickerView{title: "Stations", cur: -1}
 		for i, src := range home.RadioSources() {
@@ -429,6 +435,8 @@ func (d *Display) choose(id string, i int) {
 			firmware.Get().SetChannel(chans[i].Label())
 			d.checkUpdates()
 		}
+	case "folder":
+		d.folderChoice(i)
 	case "alarmsound":
 		if names := speaker.AlarmSounds(); i < len(names) {
 			alarm.Get().SetSound(names[i], true)
@@ -573,6 +581,14 @@ func (d *Display) rowTap(id string, p part, opt int) {
 	case "btproxy":
 		p := bluetooth.Get()
 		safe.Go("bluetooth proxy from the screen", func() { p.SetEnabled(!p.Enabled()) })
+	case "photofolder":
+		d.openFolder(photosRoot, nil)
+	case "shuffle":
+		_, shuffle, _ := home.Get().SlideshowSettings()
+		home.Get().SetSlideshowShuffle(!shuffle)
+	case "subfolders":
+		_, _, subfolders := home.Get().SlideshowSettings()
+		home.Get().SetSlideshowSubfolders(!subfolders)
 	case "colours":
 		d.mu.Lock()
 		d.colours, d.cardScroll = true, 0
@@ -592,6 +608,10 @@ func (d *Display) openPicker(id string) {
 // OpenList opens the settings screen's list of choices for a row, by its id, for a look from afar
 // (/screen.png?list=); it reports whether the row has one.
 func (d *Display) OpenList(id string) bool {
+	if id == "folder" {
+		d.openFolder(photosRoot, nil)
+		return true
+	}
 	if _, ok := pickerFor(id, scene{}); !ok {
 		return false
 	}

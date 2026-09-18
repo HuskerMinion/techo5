@@ -6,4 +6,5 @@ package all
 var notOnThisDevice = []string{
 	"camera_web_access", "screen", "screen_auto_brightness", "screen_clock_format", "screen_web_access",
 	"slideshow_mode", "slideshow_screensaver_idle", "slideshow_screensaver_overlay",
+	"slideshow_shuffle", "slideshow_subfolders",
 }

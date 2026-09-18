@@ -112,6 +112,8 @@ var registered = []string{
 	"slideshow_mode",
 	"slideshow_screensaver_idle",
 	"slideshow_screensaver_overlay",
+	"slideshow_shuffle",
+	"slideshow_subfolders",
 	"speaker",
 	"speaker_eq",
 	"stop_word_sensitivity",

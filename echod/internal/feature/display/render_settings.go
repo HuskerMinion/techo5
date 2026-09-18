@@ -39,9 +39,10 @@ type settings struct {
 	wifiName    string // the network joined, or what the Wi-Fi is doing
 	wifiOK      bool   // Wi-Fi is managed here, so it can be changed
 	btProxy     bool
-	checking    bool // an update check from the screen is out
-	colours     bool // the custom colours editor is open
-	demo        bool // placeholders for the owner's details, for published screenshots
+	checking    bool       // an update check from the screen is out
+	colours     bool       // the custom colours editor is open
+	demo        bool       // placeholders for the owner's details, for published screenshots
+	folder      folderView // the slideshow folder list, while it is open
 	name        string
 	version     string
 	slot        string

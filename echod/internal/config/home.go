@@ -30,9 +30,15 @@ type Home struct {
 // step through, and how it shows on screen. Empty Mode is off.
 type Slideshow struct {
 	// Source is a media source id, like media-source://immich/album-id or a local media source's
-	// folder — whatever Home Assistant's browse API accepts. Its children are stepped through in
-	// order.
+	// folder — whatever Home Assistant's browse API accepts. Its photos, and those in the folders
+	// under it unless TopOnly, are shown in a shuffled order unless InOrder.
 	Source string `json:"source,omitempty"`
+
+	// TopOnly leaves out the photos in the source's subfolders; InOrder shows them in the source's
+	// own order instead of shuffled. Both off is the default: a library of year and event folders
+	// picked at its top shows all of it, mixed.
+	TopOnly bool `json:"top_only,omitempty"`
+	InOrder bool `json:"in_order,omitempty"`
 
 	// Mode is SlideshowBackground (behind the ordinary idle page, always on), SlideshowScreensaver
 	// (full screen, after IdleMinutes idle), or empty for off.
@@ -91,13 +97,13 @@ func (h Home) WeatherEntity() string {
 // The radio page's lists.
 const (
 	RadioFavorites = "favorites"
-	RadioLocal      = "local"
-	RadioPopular    = "popular"
+	RadioLocal     = "local"
+	RadioPopular   = "popular"
 )
 
 // The slideshow's display modes.
 const (
-	SlideshowBackground  = "background" // behind the ordinary idle page, always on
+	SlideshowBackground  = "background"  // behind the ordinary idle page, always on
 	SlideshowScreensaver = "screensaver" // full screen, after idle
 )
 

@@ -101,7 +101,11 @@ type Feature struct {
 	slideshowSel        *esphome.Select
 	slideshowOverlaySel *esphome.Select
 	slideshowIdleNum    *esphome.Number
-	slideshow           slideshowState
+
+	// slideshowShuffleSw and slideshowSubfoldersSw are how the photos are picked from the source.
+	slideshowShuffleSw    *esphome.Switch
+	slideshowSubfoldersSw *esphome.Switch
+	slideshow             slideshowState
 }
 
 // forecastEvery is how often the forecast is refreshed while there is a weather entity.
@@ -242,6 +246,8 @@ func (f *Feature) Restore(c config.Config) {
 			idle = int(slideshowIdleDefault / time.Minute)
 		}
 		f.slideshowIdleNum.Set(float32(idle))
+		f.slideshowShuffleSw.Set(!c.Home.Slideshow.InOrder)
+		f.slideshowSubfoldersSw.Set(!c.Home.Slideshow.TopOnly)
 	}
 	f.want(c.Home)
 }

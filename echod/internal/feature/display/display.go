@@ -34,11 +34,11 @@ import (
 	"github.com/HuskerMinion/techo5/echod/internal/config"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/alarm"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/btaudio"
-	"github.com/HuskerMinion/techo5/echod/internal/feature/phone"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/hastate"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/home"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/media"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/mute"
+	"github.com/HuskerMinion/techo5/echod/internal/feature/phone"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/security"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/timer"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/voice"
@@ -125,6 +125,9 @@ type Display struct {
 	// colours editor open on the Display card.
 	checking bool
 	colours  bool
+
+	// folder is the slideshow's folder list, as far as it has been opened.
+	folder folderView
 
 	// drawer is Cameras and Radio, in from the right over the clock: drawerTab is which,
 	// drawerScroll how far its list is scrolled, and drawerPick a list of choices open over it.

@@ -208,11 +208,15 @@ not a new bug. Fully reverted after.
 - ~~**M2** — Screensaver mode on the Show.~~ Done and live-tested 2026-09-17 — see Progress above.
 - ~~**M3** — Spot's round-screen variant (crop-to-fill) for both modes.~~ Done and live-tested
   2026-09-17 on Kitchen — see Progress above.
-- **M4** — mode select, overlay select and idle-wait number are done (M2, above); still open: a
-  proper source *picker* (today's `home_slideshow` action takes a raw media-source id, not a
-  friendly list — likely a select populated the way `home_cameras`/weather sources are), a
-  configurable interval and order/shuffle (currently `slideshowEvery` is a fixed constant), user
-  docs.
+- **M4** — mode select, overlay select and idle-wait number are done (M2, above). **Done
+  2026-09-18 (Show v0.7.2):** a folder picker on the Show's settings screen (Display → Photo
+  folder: tap through Home Assistant's media folders, Use this folder at each level); subfolders
+  included by default, gathered breadth first over one websocket (`hass.Client.BrowseTree`,
+  within 1000 folders and 20000 photos, again hourly), shuffled by default, both switchable on the
+  screen and in Home Assistant (`slideshow_subfolders`, `slideshow_shuffle`); EXIF orientation
+  honoured, so portrait photos stand up. Still open: the same picker on the Spot's screen, a
+  configurable interval (`slideshowEvery` is a fixed constant), leaving folders out of a
+  whole-library pick (a library can hold scanned paperwork), user docs.
 
 ## Home Assistant changes needed (for the Home Assistant session)
 
