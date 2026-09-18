@@ -188,19 +188,20 @@ Then:
 
 - **Time zone**: nothing to set. The unit starts on UTC and takes Home Assistant's zone as soon as it
   connects, and keeps it from then on.
-- **Wake word**: the default is "Alexa". Change it on the device (swipe down from the top, Device tab,
-  Wake word, Next) or in Home Assistant; the other follows.
+- **Wake word**: the default is "Alexa". Change it on the device (swipe down from the top, Sound,
+  Wake word) or in Home Assistant; the other follows.
 - **Home Assistant token** (optional, for the forecast page, local radio stations and the list of
   weather sources): create a long-lived access token on your Home Assistant profile page, then run
   the `esphome.<device>_home_assistant` action with `url` (like `http://192.168.1.20:8123`) and
   `token`.
 - **Weather**: Home Assistant's own forecast by default. To show another weather entity, use the
-  Device tab (Weather, Next), the "Weather source" select, or `esphome.<device>_home_weather`.
-- **Radio**: with the token, the Radio tab lists stations near home and popular ones, from the Radio
+  settings screen (General, Weather), the "Weather source" select, or `esphome.<device>_home_weather`.
+- **Radio**: with the token, the drawer (swipe in from the right edge of the clock, Radio) lists
+  stations near home and popular ones, from the Radio
   Browser integration Home Assistant sets up on its own (add it under Devices & services if it is
   missing). Your own favorites can be wired with `esphome.<device>_home_radio`.
-- **Security**: SSH, and the camera and screen pages on port 8181, have switches on the Security tab
-  and in Home Assistant. SSH keys only come from Home Assistant (`esphome.<device>_ssh_keys`).
+- **Security**: SSH, and the camera and screen pages on port 8181, have switches on the settings
+  screen (Privacy) and in Home Assistant. SSH keys only come from Home Assistant (`esphome.<device>_ssh_keys`).
 - **Updates**: the firmware update entity installs new releases into the other slot, reboots, and
   falls back if the new slot does not settle.
 - The old Android integrations for the unit (ShowAssist, the View Assist companion) can be deleted.

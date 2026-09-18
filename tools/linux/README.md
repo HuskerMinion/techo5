@@ -217,10 +217,10 @@ of a core on worst-case noise, nothing while nothing plays.
 
 The daemon paints everything (hardware/screen, feature/display): the clock,
 the conversation, a splash at boot. A swipe down from the top edge opens the
-settings sheet — Bluetooth (opens the pairing page), brightness (tap to step
-25/50/75/100), auto-brightness, microphone mute, wake word, volume, about
-(name, version, slot, address) and a two-tap restart. Vertical swipes anywhere
-else are the volume; a tap is the action button.
+settings screen: Display, Sound, Alarms, Connections, Privacy and General down
+the left, each one's settings on a card beside them. A swipe left from the
+right edge brings in Cameras and Radio. Vertical swipes anywhere else are the
+volume; a tap is the action button.
 
 ## Camera
 
@@ -230,7 +230,7 @@ The camera is driven from userspace through the ISP driver's register windows; t
 they are in the history before 2026-09-16 evening.) `hardware/camera` streams on demand with
 auto-exposure and `feature/camera` serves
 the ESPHome camera entity Home Assistant creates on its own, plus `http://<device>:8181/camera.jpg`
-and `/camera.mjpeg` while Camera web access is on. `/screen.png[?sheet=<tab>&theme=<name>]` on the
+and `/camera.mjpeg` while Camera web access is on. `/screen.png[?sheet=<category>&list=<row>&theme=<name>]` on the
 same port, while Screen web access is on, is a screenshot of the panel, for checking layouts from a
 PC. With both off the port is closed.
 

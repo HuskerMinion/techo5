@@ -45,6 +45,42 @@ var (
 	}
 )
 
+// alarmSounds are what an alarm can ring with, in the order they are offered; the first is the
+// default. Each is one round of the pattern, repeated while the alarm rings, so each stays well
+// under the two seconds between rounds. Beeps is the timer's own, which alarms always used.
+var alarmSounds = []struct {
+	name  string
+	notes []Note
+}{
+	{"Beeps", ToneTimer},
+	{"Chimes", []Note{{Freq: 523, Ms: 90}, {Freq: 659, Ms: 90}, {Freq: 784, Ms: 90}, {Freq: 1047, Ms: 320}}},
+	{"Bells", []Note{{Freq: 1319, Ms: 320}, {Ms: 80}, {Freq: 1047, Ms: 520}}},
+	{"Gentle", []Note{{Freq: 587, Ms: 240}, {Ms: 140}, {Freq: 740, Ms: 360}}},
+	{"Pulse", []Note{
+		{Freq: 988, Ms: 70}, {Ms: 50}, {Freq: 988, Ms: 70}, {Ms: 50},
+		{Freq: 988, Ms: 70}, {Ms: 50}, {Freq: 988, Ms: 70},
+	}},
+}
+
+// AlarmSounds lists the alarm sounds' names in the order they are offered.
+func AlarmSounds() []string {
+	names := make([]string, len(alarmSounds))
+	for i, s := range alarmSounds {
+		names[i] = s.name
+	}
+	return names
+}
+
+// AlarmSound is one round of the named alarm sound; an unknown name is the first.
+func AlarmSound(name string) []Note {
+	for _, s := range alarmSounds {
+		if s.name == name {
+			return s.notes
+		}
+	}
+	return alarmSounds[0].notes
+}
+
 // wakeTones is what a detection can sound like. They are told apart by shape rather than pitch, so
 // two wake words set to different ones are distinguishable without knowing which is which.
 var wakeTones = map[config.Tone][]Note{

@@ -16,14 +16,14 @@ import (
 // Themes: five colours make the whole screen — the ground, the accent, the text, a dim text and
 // the rules and boxes. The palette lives in package variables the renderer reads on every frame,
 // so switching is a matter of assigning them; the choice is saved with the screen settings. A
-// preset is picked by name; a colour changed on the Theme tab makes the theme "Custom", saved as
+// preset is picked by name; a colour changed in the custom colours editor makes the theme "Custom", saved as
 // its five colours.
 type theme struct {
 	name   string
 	colors [roles]color.RGBA
 }
 
-// The five roles, in the order the Theme tab lists them.
+// The five roles, in the order the custom colours editor lists them.
 const (
 	roleGround = iota
 	roleAccent
@@ -86,26 +86,23 @@ func current() theme {
 	return themes[themeIndex(sc.Theme)]
 }
 
+// savedCustom is the custom palette saved, whether or not it is in force.
+func savedCustom() (theme, bool) {
+	p := config.Get().Screen.Palette
+	t := theme{name: customName}
+	for i, hex := range [roles]string{p.Ground, p.Accent, p.Text, p.Dim, p.Rules} {
+		c, err := parseHex(hex)
+		if err != nil {
+			return theme{}, false
+		}
+		t.colors[i] = c
+	}
+	return t, true
+}
+
 // applyTheme sets the palette the renderer draws with. Called from the display's goroutine only.
 func applyTheme(t theme) {
 	walnut, amber, cream, dim, ember = t.colors[roleGround], t.colors[roleAccent], t.colors[roleText], t.colors[roleDim], t.colors[roleRules]
-}
-
-// stepTheme moves to the next (or previous) preset and saves it.
-func stepTheme(by int) {
-	sc := config.Get().Screen
-	i := themeIndex(sc.Theme)
-	if sc.Theme == customName {
-		i = -1 // Custom sits before the first preset
-		if by < 0 {
-			i = len(themes)
-		}
-	}
-	i = ((i+by)%len(themes) + len(themes)) % len(themes)
-	if err := config.Set().Screen().Theme(themes[i].name); err != nil {
-		slog.Warn("saving the theme failed", "err", err)
-	}
-	slog.Info("theme", "name", themes[i].name)
 }
 
 // setRole changes one colour of the palette in force and saves the result as Custom.
@@ -225,48 +222,4 @@ func (r *renderer) bevel(rect image.Rectangle, fill color.RGBA, raised bool) {
 	draw.Draw(r.dst, image.Rect(rect.Min.X, rect.Min.Y, rect.Min.X+2, rect.Max.Y), image.NewUniform(light), image.Point{}, draw.Src)
 	draw.Draw(r.dst, image.Rect(rect.Min.X, rect.Max.Y-2, rect.Max.X, rect.Max.Y), image.NewUniform(shadow), image.Point{}, draw.Src)
 	draw.Draw(r.dst, image.Rect(rect.Max.X-2, rect.Min.Y, rect.Max.X, rect.Max.Y), image.NewUniform(shadow), image.Point{}, draw.Src)
-}
-
-// The Theme tab: a preset row with previous and next, then a strip of swatches per role; a tap
-// on a swatch makes the theme Custom with that colour.
-const (
-	themeRowPreset = 0
-	themeRowRole   = 1   // roles rows follow, one each
-	swatchLeft     = 214 // from the start of the row: past the label and the colour in force
-)
-
-// swatchAt maps an x on a role row to a swatch index, or -1.
-func (r *renderer) swatchAt(x int) int {
-	x0 := r.sheetLeft() + swatchLeft
-	w := (r.w - sheetPad - x0) / swatchCount
-	if x < x0 || x >= x0+w*swatchCount {
-		return -1
-	}
-	return (x - x0) / w
-}
-
-func (r *renderer) themeTab(s scene) {
-	t := current()
-	top := r.row(themeRowPreset, "Preset", cream)
-	r.value(top, t.name, 2)
-	r.button(top, 1, "‹", false)
-	r.button(top, 2, "›", false)
-
-	x0 := r.sheetLeft() + swatchLeft
-	w := (r.w - sheetPad - x0) / swatchCount
-	for role := 0; role < roles; role++ {
-		top := r.row(themeRowRole+role, roleNames[role], cream)
-		// The colour in force, as a swatch beside the name.
-		cur := image.Rect(r.sheetLeft()+148, top+8, r.sheetLeft()+148+56, top+sheetRowHeight-8)
-		r.bevel(cur, t.colors[role], false)
-		for i := 0; i < swatchCount; i++ {
-			c := swatch(role, i)
-			rect := image.Rect(x0+i*w+2, top+7, x0+(i+1)*w-2, top+sheetRowHeight-7)
-			r.bevel(rect, c, true)
-			if c == t.colors[role] {
-				draw.Draw(r.dst, rect.Inset(6), image.NewUniform(t.colors[roleText]), image.Point{}, draw.Src)
-			}
-		}
-	}
-	r.note(themeRowRole+roles, "Tap a swatch to make the theme your own; ‹ › walk the presets")
 }

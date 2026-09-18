@@ -88,6 +88,10 @@ type Alarms struct {
 	snooze *esphome.Button
 	claim  *led.Claim
 
+	// sound and snoozeFor are the ring's settings in Home Assistant; the screen sets them too.
+	sound     *esphome.Select
+	snoozeFor *esphome.Number
+
 	wake chan struct{}
 
 	mu      sync.Mutex
@@ -119,6 +123,17 @@ func build() *Alarms {
 		}
 	}}
 	a.snooze = &esphome.Button{Base: esphome.Base{ObjectID: "alarm_snooze", Name: "Snooze alarm", Icon: "mdi:alarm-snooze"}, OnPress: func() { a.Snooze() }}
+	a.sound = &esphome.Select{
+		Base:      esphome.Base{ObjectID: "alarm_sound", Name: "Alarm sound", Icon: "mdi:alarm-bell", Category: esphome.CategoryConfig},
+		Options:   speaker.AlarmSounds(),
+		OnCommand: func(v string) { a.SetSound(v, false) },
+	}
+	a.snoozeFor = &esphome.Number{
+		Base: esphome.Base{ObjectID: "alarm_snooze_length", Name: "Snooze length", Icon: "mdi:alarm-snooze", Category: esphome.CategoryConfig},
+		Min:  config.MinSnoozeMinutes, Max: config.MaxSnoozeMinutes, Step: 1, Unit: "min",
+		Mode: esphome.NumberBox,
+	}
+	a.snoozeFor.OnCommand = func(v float32) { a.SetSnooze(int(v)) }
 	hastate.Get().Changed.Listen(func(u hastate.Update) {
 		if a.follows(u.Entity) {
 			a.poke()
@@ -129,9 +144,56 @@ func build() *Alarms {
 
 func (a *Alarms) Name() string { return "alarms" }
 
-func (a *Alarms) Entities() []esphome.Entity { return []esphome.Entity{a.next, a.stop, a.snooze} }
+func (a *Alarms) Entities() []esphome.Entity {
+	return []esphome.Entity{a.next, a.stop, a.snooze, a.sound, a.snoozeFor}
+}
 
-func (a *Alarms) Restore(c config.Config) { a.followHelpers(c.Alarms.Follow) }
+func (a *Alarms) Restore(c config.Config) {
+	a.sound.Set(soundName(c.Alarms.Sound))
+	a.snoozeFor.Set(float32(c.Alarms.Snooze()))
+	a.followHelpers(c.Alarms.Follow)
+}
+
+// soundName is the alarm sound in force: the saved one, or the default for none or an unknown one.
+func soundName(saved string) string {
+	names := speaker.AlarmSounds()
+	if slices.Contains(names, saved) {
+		return saved
+	}
+	return names[0]
+}
+
+// Sound is the name of what alarms ring with.
+func (a *Alarms) Sound() string { return soundName(config.Get().Alarms.Sound) }
+
+// SetSound chooses what alarms ring with; preview plays one round of it, for someone choosing on the
+// screen who wants to hear it.
+func (a *Alarms) SetSound(name string, preview bool) {
+	if !slices.Contains(speaker.AlarmSounds(), name) {
+		slog.Warn("unknown alarm sound", "value", name)
+		return
+	}
+	if err := config.Set().Alarms().Sound(name); err != nil {
+		slog.Error("saving the alarm sound failed", "err", err)
+		return
+	}
+	a.sound.Set(name)
+	slog.Info("alarm sound", "name", name)
+	if preview && !a.Ringing() {
+		speaker.Sound().Interject(func(p *speaker.Player) { p.Chime(level, speaker.AlarmSound(name)...) })
+	}
+}
+
+// SetSnooze sets how many minutes Snooze puts an alarm off.
+func (a *Alarms) SetSnooze(minutes int) {
+	minutes = min(max(minutes, config.MinSnoozeMinutes), config.MaxSnoozeMinutes)
+	if err := config.Set().Alarms().SnoozeMinutes(minutes); err != nil {
+		slog.Error("saving the snooze length failed", "err", err)
+		return
+	}
+	a.snoozeFor.Set(float32(minutes))
+	slog.Info("snooze length", "minutes", minutes)
+}
 
 func (a *Alarms) poke() {
 	select {
@@ -249,8 +311,9 @@ func (a *Alarms) ring(ctx context.Context) {
 	defer sound.Backgrounds().Duck(false)
 
 	over := time.After(ringFor)
+	notes := speaker.AlarmSound(a.Sound())
 	for {
-		sound.Interject(func(p *speaker.Player) { p.Chime(level, speaker.ToneTimer...) })
+		sound.Interject(func(p *speaker.Player) { p.Chime(level, notes...) })
 		select {
 		case <-ctx.Done():
 			return

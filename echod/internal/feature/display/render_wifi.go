@@ -12,7 +12,7 @@ import (
 )
 
 // The Wi-Fi pages: a list of the networks the radio hears with a Connect button each, and a
-// keyboard for the passphrase. They open from the Device tab, and on their own when a device has
+// keyboard for the passphrase. They open from the Connections card, and on their own when a device has
 // no address a while after boot — a fresh unit, or one carried to another house.
 
 // wifiState is what the pages show.
@@ -289,7 +289,7 @@ func (r *renderer) key(rect image.Rectangle, label string, lit bool) {
 	r.text(face, label, rect.Min.X+(rect.Dx()-r.width(face, label))/2, rect.Min.Y+rect.Dy()/2+12, ink)
 }
 
-// wifiSummary is the Device tab's line for the connection.
+// wifiSummary is a line for the connection.
 func wifiSummary(st wifi.Status) string {
 	switch {
 	case st.Connected && st.Address != "":

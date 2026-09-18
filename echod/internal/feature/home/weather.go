@@ -112,8 +112,26 @@ func (f *Feature) NextWeather() {
 }
 
 // WeatherSource is the chosen source as the sheet says it: its name when Home Assistant gave one.
-func (f *Feature) WeatherSource() string {
-	entity := config.Get().Home.WeatherEntity()
+func (f *Feature) WeatherSource() string { return f.weatherName(config.Get().Home.WeatherEntity()) }
+
+// WeatherChoices is what the screen's weather list offers, as the select does: each source's entity
+// ("" for none) and its name, with the index of the one in force, or -1.
+func (f *Feature) WeatherChoices() (entities, names []string, cur int) {
+	cur = -1
+	chosen := chosenOption(config.Get().Home)
+	for i, o := range f.weatherSel.Options {
+		e := optionEntity(o)
+		entities = append(entities, e)
+		names = append(names, f.weatherName(e))
+		if o == chosen {
+			cur = i
+		}
+	}
+	return entities, names, cur
+}
+
+// weatherName is a weather entity as the screen names it: its name when Home Assistant gave one.
+func (f *Feature) weatherName(entity string) string {
 	if entity == "" {
 		return weatherNone
 	}

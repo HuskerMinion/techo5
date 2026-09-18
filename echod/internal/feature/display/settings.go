@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/HuskerMinion/techo5/echod/internal/config"
+	"github.com/HuskerMinion/techo5/echod/internal/feature/bluetooth"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/home"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/media"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/mute"
@@ -22,9 +23,9 @@ import (
 
 // gather collects what the settings sheet shows. Cheap enough per frame: a few reads and one
 // interface listing.
-func (d *Display) gather(s scene, restartArm time.Time, tab int) settings {
+func (d *Display) gather(s scene, restartArm time.Time) settings {
 	d.mu.Lock()
-	st := settings{tab: tab, page: d.page, brightness: d.ceiling, auto: d.autoOn, now: s.now, restartArm: restartArm}
+	st := settings{cat: d.cat, picker: d.picker, cardScroll: d.cardScroll, pickScroll: d.pickScroll, checking: d.checking, colours: d.colours, brightness: d.ceiling, auto: d.autoOn, now: s.now, restartArm: restartArm}
 	d.mu.Unlock()
 	if st.brightness == 0 {
 		st.brightness = config.DefaultScreenBrightness
@@ -49,7 +50,13 @@ func (d *Display) gather(s scene, restartArm time.Time, tab int) settings {
 	st.night = config.Get().Screen.Night
 	d.mu.Lock()
 	st.wifi = wifiSummary(d.wifi.status)
+	st.wifiName = cmpOr(d.wifi.status.SSID, "Not connected")
+	if ws := d.wifi.status; !ws.Connected && ws.SSID != "" && ws.State != "" {
+		st.wifiName = ws.SSID + " · " + ws.State
+	}
 	d.mu.Unlock()
+	st.wifiOK = wifi.Available()
+	st.btProxy = bluetooth.Get().Enabled()
 	if !wifi.Available() {
 		st.wifi = st.address
 	}

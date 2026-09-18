@@ -137,6 +137,9 @@ func (b *Proxy) Handle(ctx context.Context, conn *esphome.Conn, msg proto.Messag
 }
 
 // Enabled reports whether the user has asked for the proxy.
+// SetEnabled turns the proxy on or off as Home Assistant's switch would, for the screen.
+func (b *Proxy) SetEnabled(on bool) { b.enable.OnCommand(on) }
+
 func (b *Proxy) Enabled() bool { return config.Get().Bluetooth.Proxy }
 
 // Reports is how many advertisements the radio has heard, for diagnostics.

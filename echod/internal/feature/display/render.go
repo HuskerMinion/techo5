@@ -10,6 +10,7 @@ import (
 	"log/slog"
 	"math"
 	"strings"
+	"sync"
 	"time"
 
 	"golang.org/x/image/font"
@@ -60,7 +61,7 @@ type scene struct {
 	// sheet is the settings sheet, drawn instead of everything else while showSheet is set.
 	showSheet bool
 	sheet     settings
-	// security feeds the sheet's Security tab.
+	// security feeds the settings screen's Privacy & Security card.
 	security security.State
 
 	// call is the phone: while one rings, is placed or is up, its page is over everything.
@@ -70,7 +71,7 @@ type scene struct {
 	ring   ringState
 	snooze int
 
-	// alarms feeds the Alarms tab and the next alarm on the clock; draft is the editor's alarm, when
+	// alarms feeds the Alarms card and the next alarm on the clock; draft is the editor's alarm, when
 	// one is open. timers are the running timers, soonest first.
 	alarms alarm.View
 	draft  *alarmDraft
@@ -80,7 +81,7 @@ type scene struct {
 	showWifi bool
 	wifi     wifiState
 
-	// radio feeds the sheet's Radio tab and the now-playing screen; weather is on the clock when known.
+	// radio feeds the drawer's Radio side and the now-playing screen; weather is on the clock when known.
 	radio   home.Radio
 	weather home.Weather
 
@@ -93,7 +94,19 @@ type scene struct {
 	radar      home.RadarView
 	nowPlaying bool
 
-	// showCamera is a live camera view, over everything but the sheet; cameras feeds the sheet's tab.
+	// showDrawer is Cameras and Radio, in from the right over the idle page: drawerTab is which,
+	// drawerScroll how far its list is scrolled, drawerPick a list of choices open over it, and
+	// pickScroll how far that list is scrolled.
+	showDrawer   bool
+	drawerTab    int
+	drawerScroll int
+	drawerPick   string
+	pickScroll   int
+
+	// demo puts placeholders in for the owner's details, for screenshots that will be published.
+	demo bool
+
+	// showCamera is a live camera view, over everything but the sheet; cameras feeds the drawer.
 	showCamera bool
 	camera     home.CameraView
 	cameras    []config.Camera
@@ -124,8 +137,16 @@ type renderer struct {
 	tiny   font.Face
 	margin int
 
-	// labelEnd is where the last settings row's label ends, so its value keeps clear of it.
-	labelEnd int
+	// zones are where taps mean something on the settings screen last drawn, read by the touch
+	// goroutine under zmu; pending is the frame being drawn. base keeps the screen's unchanging part.
+	zmu     sync.Mutex
+	zones   []zone
+	pending []zone
+	base    *image.RGBA
+	baseKey baseKey
+
+	// cardMax and pickMax are how far the card and an open list could scroll in the last frame.
+	cardMax, pickMax int
 }
 
 func newRenderer(dst *image.RGBA) *renderer {
@@ -187,7 +208,7 @@ func (r *renderer) draw(s scene) {
 		return
 	}
 	if s.showSheet {
-		r.settingsPage(s)
+		r.settingsScreen(s)
 		if s.showVolume {
 			r.volumeBar(s)
 		}
@@ -238,6 +259,9 @@ func (r *renderer) draw(s scene) {
 		}
 	}
 	r.footer(s)
+	if s.showDrawer {
+		r.drawer(s)
+	}
 	if s.showVolume {
 		r.volumeBar(s)
 	}

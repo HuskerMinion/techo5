@@ -68,12 +68,12 @@ Straight from the device's own screen.
 |---|---|
 | ![Clock with weather and the next alarm](docs/screenshots/clock.png) | ![An alarm ringing, with Stop and Snooze](docs/screenshots/ringing.png) |
 | **Clock**, weather and the next alarm | **Alarm ringing**, big enough to hit half awake |
-| ![Settings: Device tab](docs/screenshots/settings-device.png) | ![Settings: Alarms tab](docs/screenshots/settings-alarms.png) |
-| **Settings**: volume, brightness, Wi-Fi, wake word | **Alarms**: set on the device, no app needed |
-| ![Alarm editor](docs/screenshots/alarm-editor.png) | ![Settings: Security tab](docs/screenshots/settings-security.png) |
-| **Alarm editor** with day chips | **Security**: every open door has a switch |
-| ![Settings: Theme tab](docs/screenshots/settings-theme.png) | |
-| **Themes**: presets or your own colours | |
+| ![Settings: Display](docs/screenshots/settings-display.png) | ![Settings: Sound & Voice](docs/screenshots/settings-sound.png) |
+| **Settings** by category: brightness, night hours, theme, clock | **Sound & Voice**: volume, microphone, wake word and its sound |
+| ![Alarm editor](docs/screenshots/alarm-editor.png) | ![Settings: Privacy & Security](docs/screenshots/settings-privacy.png) |
+| **Alarms** set on the device, no app needed | **Privacy**: every open door has a switch |
+| ![Theme list](docs/screenshots/settings-theme.png) | ![Radio drawer](docs/screenshots/drawer-radio.png) |
+| **Themes**: presets or your own colours | **Cameras and Radio**, a swipe in from the right |
 
 ## Stock vs TECHO5
 

@@ -577,6 +577,18 @@ session.
    first boot = rescue initramfs on the FireOS kernel flashed to recovery, then
    the slot store on its system partition. The Wi-Fi driver loading is the
    unknown that decides it.
+12. **Settings screen by category** (2026-09-18): the tabbed sheet became six
+   categories (Display, Sound & Voice, Alarms & Timers, Connections, Privacy &
+   Security, General) on a rail, each on a card with soft shadows, switches,
+   − / + steppers and pills that open a list of choices. Settings that were
+   Home Assistant only (clock format, slideshow, wake sensitivity and sound,
+   Bluetooth proxy, update channel) are on the screen too, plus two new ones:
+   the alarm sound and the snooze length (also in Home Assistant). Taps are
+   matched to where each control was drawn in the frame on the screen; long
+   cards and lists scroll with a swipe. Cameras and Radio moved to a drawer
+   brought in by a swipe from the right edge. Placeholder mode for published
+   screenshots also hides weather and station names, which give away where a
+   device is.
 
 ## Ground rules
 

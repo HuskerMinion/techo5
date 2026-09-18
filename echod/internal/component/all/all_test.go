@@ -17,6 +17,8 @@ import (
 // costs nothing at build time and shows up as an entity quietly missing from Home Assistant.
 var registered = []string{
 	"alarm_snooze",
+	"alarm_snooze_length",
+	"alarm_sound",
 	"alarm_stop",
 	"ble_advertisements",
 	"bluetooth_audio",

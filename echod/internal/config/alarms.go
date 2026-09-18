@@ -16,6 +16,9 @@ type Alarms struct {
 
 	// SnoozeMinutes is how long Snooze puts an alarm off.
 	SnoozeMinutes int `json:"snooze_minutes,omitempty"`
+
+	// Sound is what an alarm rings with, by name; empty is the first of the speaker's alarm sounds.
+	Sound string `json:"sound,omitempty"`
 }
 
 // Alarm is one alarm set on the device.
@@ -29,7 +32,11 @@ type Alarm struct {
 	On    bool   `json:"on"`
 }
 
-const DefaultSnoozeMinutes = 9
+const (
+	DefaultSnoozeMinutes = 9
+	MinSnoozeMinutes     = 1
+	MaxSnoozeMinutes     = 30
+)
 
 // Snooze is the snooze length, with the default for a device that never set one.
 func (a Alarms) Snooze() int {
@@ -111,6 +118,17 @@ func (w AlarmsWriter) Delete(id string) error {
 	return w.st.Update(func(c *Config) {
 		c.Alarms.List = slices.DeleteFunc(c.Alarms.List, func(x Alarm) bool { return x.ID == id })
 	})
+}
+
+// SnoozeMinutes sets the snooze length, held between MinSnoozeMinutes and MaxSnoozeMinutes.
+func (w AlarmsWriter) SnoozeMinutes(n int) error {
+	n = min(max(n, MinSnoozeMinutes), MaxSnoozeMinutes)
+	return w.st.Update(func(c *Config) { c.Alarms.SnoozeMinutes = n })
+}
+
+// Sound sets what alarms ring with, by name.
+func (w AlarmsWriter) Sound(name string) error {
+	return w.st.Update(func(c *Config) { c.Alarms.Sound = name })
 }
 
 func (w AlarmsWriter) Follow(entities []string) error {

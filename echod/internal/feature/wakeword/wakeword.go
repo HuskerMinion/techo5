@@ -259,6 +259,20 @@ func deliveries() []config.Delivery {
 	return []config.Delivery{config.DeliveryWhole, config.DeliveryStream}
 }
 
+// SetThreshold sets slot n's wake word sensitivity as Home Assistant would, for the screen.
+func (w *WakeWord) SetThreshold(n int, v float64) {
+	if n >= 0 && n < len(w.slots) {
+		w.slots[n].threshold.OnCommand(float32(v))
+	}
+}
+
+// SetTone sets slot n's wake word tone by its label as Home Assistant would, for the screen.
+func (w *WakeWord) SetTone(n int, label string) {
+	if n >= 0 && n < len(w.slots) {
+		w.slots[n].tone.OnCommand(label)
+	}
+}
+
 func (w *WakeWord) Name() string { return "wake word settings" }
 
 func (w *WakeWord) Entities() []esphome.Entity {

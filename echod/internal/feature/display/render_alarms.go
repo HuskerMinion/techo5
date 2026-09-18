@@ -9,7 +9,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/HuskerMinion/techo5/echod/internal/config"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/timer"
 )
 
@@ -25,122 +24,6 @@ func countdown(left time.Duration) string {
 		return fmt.Sprintf("%d:%02d:%02d", secs/3600, secs/60%60, secs%60)
 	}
 	return fmt.Sprintf("%d:%02d", secs/60, secs%60)
-}
-
-// alarmsTab is the list of alarms, or the editor while one is open.
-func (r *renderer) alarmsTab(s scene) {
-	if s.draft != nil {
-		r.alarmEditor(s, *s.draft)
-		return
-	}
-	rows := alarmRows(s.alarms)
-	start, end, more := pageOf(len(rows), s.sheet.page)
-	for i, row := range rows[start:end] {
-		switch {
-		case row.snoozed != nil:
-			top := r.row(i, "Snoozed until "+clockText(row.snoozed.At), amber)
-			r.value(top, row.snoozed.Label, 1)
-			r.button(top, 2, "Cancel", false)
-		case row.local != nil:
-			a := row.local
-			label := clockTime(a.Hour, a.Minute)
-			if a.Label != "" {
-				label += "  " + a.Label
-			}
-			c := cream
-			if !a.On {
-				c = dim
-			}
-			top := r.row(i, label, c)
-			r.value(top, config.DaysLabel(a.Days), 2)
-			r.button(top, 1, "Edit", false)
-			r.button(top, 2, onOff(a.On), a.On)
-		case row.followed != nil:
-			f := row.followed
-			label := cmpOr(f.Label, f.Entity)
-			when := "not set in Home Assistant"
-			if !f.At.IsZero() {
-				when = clockText(f.At) + " · from Home Assistant"
-			}
-			if !f.Armed {
-				when = "off in Home Assistant"
-			}
-			c := cream
-			if !f.Armed || f.At.IsZero() {
-				c = dim
-			}
-			top := r.row(i, label, c)
-			r.value(top, when, 0)
-		case row.add:
-			top := r.row(i, "Add an alarm", cream)
-			r.value(top, "rings without Home Assistant", 1)
-			r.button(top, 2, "Add", false)
-		}
-	}
-	if more {
-		r.moreRow(len(rows), s.sheet.page)
-	}
-	if n := end - start; !more && n < sheetRows-1 {
-		r.note(n, "Home Assistant can set them too: alarm_set, alarm_delete, and alarms_follow for its own helpers.")
-	}
-}
-
-// alarmEditor is one alarm being set: hour, minute, days, then save, delete and back.
-func (r *renderer) alarmEditor(s scene, d alarmDraft) {
-	a := d.alarm
-	top := r.row(editRowHour, "Hour", cream)
-	r.value(top, clockTime(a.Hour, a.Minute), 2)
-	r.button(top, 1, "−", false)
-	r.button(top, 2, "+", false)
-
-	top = r.row(editRowMinute, "Minute", cream)
-	r.value(top, fmt.Sprintf(":%02d", a.Minute), 2)
-	r.button(top, 1, "−", false)
-	r.button(top, 2, "+", false)
-
-	top = r.row(editRowDays, "Days", cream)
-	x0, w := r.dayChips()
-	for i, name := range []string{"S", "M", "T", "W", "T", "F", "S"} {
-		on := a.Days&(1<<i) != 0
-		rect := image.Rect(x0+i*w+4, top+(sheetRowHeight-buttonH)/2, x0+(i+1)*w-4, top+(sheetRowHeight+buttonH)/2)
-		fill, ink := shift(ember, 12), cream
-		if on {
-			fill, ink = amber, walnut
-		}
-		r.bevel(rect, fill, true)
-		r.text(r.tiny, name, rect.Min.X+(rect.Dx()-r.width(r.tiny, name))/2, rect.Min.Y+29, ink)
-	}
-
-	top = r.row(editRowRepeat, "Repeat", cream)
-	r.value(top, config.DaysLabel(a.Days), 1)
-	r.button(top, 2, "Next", false)
-
-	top = r.row(editRowSave, "Save", cream)
-	if d.isNew {
-		r.value(top, "a new alarm, on", 1)
-	} else {
-		r.value(top, "keeps it on", 1)
-	}
-	r.button(top, 2, "Save", true)
-
-	top = r.row(editRowDelete, map[bool]string{true: "Cancel", false: "Delete"}[d.isNew], cream)
-	switch {
-	case d.isNew:
-		r.value(top, "leave without saving", 1)
-		r.button(top, 2, "Cancel", false)
-	case !d.deleteArm.IsZero() && s.now.Sub(d.deleteArm) < restartWindow:
-		r.value(top, "tap again to delete it", 1)
-		r.button(top, 2, "Confirm", true)
-	default:
-		r.value(top, "asks twice", 1)
-		r.button(top, 2, "Delete", false)
-	}
-
-	if !d.isNew {
-		top = r.row(editRowBack, "Back", cream)
-		r.value(top, "leave without saving", 1)
-		r.button(top, 2, "Back", false)
-	}
 }
 
 // ringButtonsTop is where the ringing page's buttons start.

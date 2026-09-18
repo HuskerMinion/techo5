@@ -64,6 +64,10 @@ func (f *Feature) registerScreen(mux *http.ServeMux) {
 			display.Get().EditNewAlarm()
 			time.Sleep(700 * time.Millisecond)
 		}
+		if list := r.URL.Query().Get("list"); list != "" && display.Get().OpenList(list) {
+			// A settings row's list of choices, open over the screen.
+			time.Sleep(700 * time.Millisecond)
+		}
 		if r.URL.Query().Get("ring") == "preview" {
 			// The ringing page, silent, for a look.
 			display.Get().PreviewRing(10 * time.Second)

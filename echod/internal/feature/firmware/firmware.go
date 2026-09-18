@@ -165,6 +165,19 @@ func (u *Firmware) Settled(event, status string) {
 	u.events.Trigger(event)
 }
 
+// Offered is the version the last check found to install, or "" when there is nothing newer.
+func (u *Firmware) Offered() string {
+	u.mu.Lock()
+	defer u.mu.Unlock()
+	if u.found.Version == "" || u.found.Version == layout.Version || !u.found.Serves() {
+		return ""
+	}
+	return u.found.Version
+}
+
+// SetChannel follows another stream, by its label, as Home Assistant's select would.
+func (u *Firmware) SetChannel(label string) { u.channel.OnCommand(label) }
+
 // Channel is the stream this device follows, as last chosen.
 func (u *Firmware) Channel() update.Channel {
 	saved := config.Get().Update.Channel

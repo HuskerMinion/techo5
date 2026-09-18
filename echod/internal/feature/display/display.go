@@ -40,14 +40,11 @@ import (
 	"github.com/HuskerMinion/techo5/echod/internal/feature/media"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/mute"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/security"
-	"github.com/HuskerMinion/techo5/echod/internal/feature/sendspin"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/timer"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/voice"
 	"github.com/HuskerMinion/techo5/echod/internal/hardware/ambient"
 	"github.com/HuskerMinion/techo5/echod/internal/hardware/screen"
 	"github.com/HuskerMinion/techo5/echod/internal/hardware/touch"
-	"github.com/HuskerMinion/techo5/echod/internal/lib/safe"
-	"github.com/HuskerMinion/techo5/echod/internal/lib/wake"
 	"github.com/HuskerMinion/techo5/echod/internal/lib/wifi"
 	"github.com/HuskerMinion/techo5/echod/internal/service"
 )
@@ -114,9 +111,27 @@ type Display struct {
 	sheet      bool
 	restartArm time.Time
 
-	// tab is the sheet's open tab; page is how far down its list, when the list does not fit.
-	tab  int
-	page int
+	// cat is the settings screen's open category; picker is the row whose list of choices is open
+	// over it, or empty.
+	cat    category
+	picker string
+
+	// cardScroll and pickScroll are how far the card and an open list are scrolled, in pixels;
+	// openedBy is where the swipe that opened the screen started, so its last notches are ignored.
+	cardScroll, pickScroll int
+	openedBy               image.Point
+
+	// checking is an update check asked for from the screen, still out; colours is the custom
+	// colours editor open on the Display card.
+	checking bool
+	colours  bool
+
+	// drawer is Cameras and Radio, in from the right over the clock: drawerTab is which,
+	// drawerScroll how far its list is scrolled, and drawerPick a list of choices open over it.
+	drawer       bool
+	drawerTab    int
+	drawerScroll int
+	drawerPick   string
 
 	// touchedAt is the last finger on the panel; nightDark is the screen having been put out by the
 	// night schedule rather than by anyone.
@@ -145,7 +160,7 @@ type Display struct {
 	// radar is the rain map in place of the forecast, while the weather page is up.
 	radar bool
 
-	// draft is the alarm open in the Alarms tab's editor; ringPreview shows the ringing page silently
+	// draft is the alarm open in the Alarms card's editor; ringPreview shows the ringing page silently
 	// until then.
 	draft       *alarmDraft
 	ringPreview time.Time
@@ -496,7 +511,17 @@ func (d *Display) gesture(g touch.Gesture) {
 		return
 	}
 
-	// The settings sheet: tabs, rows and buttons do things, the bar at the bottom closes it.
+	// The drawer, Cameras and Radio: while it is in, every finger is its.
+	d.mu.Lock()
+	drawerIn := d.drawer
+	d.mu.Unlock()
+	if drawerIn {
+		d.drawerGesture(g)
+		d.wake()
+		return
+	}
+
+	// The settings screen: taps land on what it drew, vertical swipes scroll it.
 	d.mu.Lock()
 	sheet := d.sheet
 	d.mu.Unlock()
@@ -504,8 +529,15 @@ func (d *Display) gesture(g touch.Gesture) {
 		// Vertical swipes do nothing here: the swipe that opened the sheet keeps reporting notches
 		// until the finger lifts, and those must not turn into volume steps. The Volume row has
 		// buttons instead.
-		if g.Kind == touch.Tap && d.r != nil {
-			d.sheetTap(d.r.sheetHit(g.X, g.Y))
+		switch {
+		case d.r == nil:
+		case g.Kind == touch.Tap:
+			d.mu.Lock()
+			d.openedBy = image.Point{-1, -1}
+			d.mu.Unlock()
+			d.nextTap(g.X, g.Y)
+		case g.Kind == touch.SwipeUp || g.Kind == touch.SwipeDown:
+			d.sheetSwipe(g)
 		}
 		d.wake()
 		return
@@ -546,11 +578,22 @@ func (d *Display) gesture(g touch.Gesture) {
 			return
 		}
 		voice.Get().Action()
+	case touch.SwipeLeft:
+		// From the right edge it brings the drawer in, on the tab it was last on.
+		if d.r != nil && g.X >= d.r.w-drawerEdge {
+			d.mu.Lock()
+			tab := d.drawerTab
+			d.mu.Unlock()
+			d.openDrawer(tab)
+		}
 	case touch.SwipeUp:
 		media.Get().Adjust(+1)
 	case touch.SwipeDown:
 		// From the top edge it is the sheet; anywhere else it is the volume.
 		if g.Y < topEdge {
+			d.mu.Lock()
+			d.openedBy = image.Pt(g.X, g.Y)
+			d.mu.Unlock()
 			d.showSheet(true)
 			return
 		}
@@ -582,86 +625,10 @@ const radioCueFor = 20 * time.Second
 func (d *Display) showSheet(on bool) {
 	d.mu.Lock()
 	d.sheet = on
-	d.restartArm = time.Time{}
+	d.restartArm, d.picker, d.cardScroll, d.pickScroll, d.colours = time.Time{}, "", 0, 0, false
 	d.mu.Unlock()
 	slog.Info("settings sheet", "open", on)
 	d.wake()
-}
-
-// sheetTap is a finger on the settings sheet.
-func (d *Display) sheetTap(h hit) {
-	if h.done {
-		d.showSheet(false)
-		return
-	}
-	if h.tab >= 0 {
-		d.mu.Lock()
-		d.tab, d.page, d.restartArm, d.draft = h.tab, 0, time.Time{}, nil
-		d.mu.Unlock()
-		if h.tab == tabCameras {
-			go home.Get().Prewarm()
-		}
-		return
-	}
-	if h.row < 0 {
-		return
-	}
-	d.mu.Lock()
-	tab, page := d.tab, d.page
-	d.mu.Unlock()
-	switch tab {
-	case tabDevice:
-		d.deviceTap(h)
-	case tabBluetooth:
-		d.bluetoothTap(h)
-	case tabCameras:
-		cams := home.Get().Cameras()
-		i, ok := d.listTap(len(cams), page, h.row)
-		if ok {
-			d.showSheet(false)
-			home.Get().ShowCamera(cams[i].Entity, camListShow)
-		}
-	case tabTheme:
-		switch {
-		case h.row == themeRowPreset && h.button == 1:
-			stepTheme(-1)
-		case h.row == themeRowPreset && h.button == 2:
-			stepTheme(+1)
-		case h.row >= themeRowRole && h.row < themeRowRole+roles && d.r != nil:
-			if i := d.r.swatchAt(h.x); i >= 0 {
-				setRole(h.row-themeRowRole, swatch(h.row-themeRowRole, i))
-			}
-		}
-	case tabSecurity:
-		d.securityTap(h)
-	case tabAlarms:
-		d.alarmsTap(h, page)
-	case tabRadio:
-		d.radioTap(h, page)
-	}
-}
-
-// radioTap is a row of the Radio tab: the list to show, or a station of it.
-func (d *Display) radioTap(h hit, page int) {
-	if h.row == radioRowSource {
-		if h.button == 2 {
-			d.mu.Lock()
-			d.page = 0
-			d.mu.Unlock()
-			home.Get().NextRadioSource()
-		}
-		return
-	}
-	rows := radioList(home.Get().Radio())
-	i, ok := d.listTapIn(len(rows), page, h.row-1, sheetRows-1)
-	if !ok {
-		return
-	}
-	if rows[i] == "■ Stop" {
-		home.Get().Stop()
-		return
-	}
-	home.Get().Play(rows[i])
 }
 
 // ShowWeather puts the weather page up, the forecast or the rain map, as a question would.
@@ -670,164 +637,6 @@ func (d *Display) ShowWeather(radar bool) {
 	d.weatherUntil, d.radar, d.sheet = time.Now().Add(weatherShow), radar, false
 	d.mu.Unlock()
 	d.wake()
-}
-
-// securityTap is a row of the Security tab. Only the On/Off buttons act; keys are not changed here.
-func (d *Display) securityTap(h hit) {
-	if h.button != 2 {
-		return
-	}
-	sec := security.Get()
-	c := config.Get().Security
-	switch h.row {
-	case secRowSSH:
-		sec.SetSSH(!c.SSH)
-	case secRowCamera:
-		sec.SetCamera(!c.Camera)
-	case secRowScreen:
-		sec.SetScreen(!c.Screen)
-	case secRowSendspin:
-		sp := sendspin.Get()
-		sp.SetEnabled(!sp.Enabled())
-	}
-}
-
-// nextWakeWord is the installed wake word after the one in the first slot, in the order the
-// library lists them, wrapping round; empty when nothing is installed.
-func nextWakeWord() string {
-	models := wake.Lib().Ours()
-	if len(models) == 0 {
-		return ""
-	}
-	cur := config.Get().Wake.Slot(0).ID
-	for i, m := range models {
-		if m.ID == cur {
-			return models[(i+1)%len(models)].ID
-		}
-	}
-	return models[0].ID
-}
-
-// listTap maps a row of a paged list to the item it shows; the More row turns the page instead.
-func (d *Display) listTap(n, page, row int) (int, bool) { return d.listTapIn(n, page, row, sheetRows) }
-
-// listTapIn is listTap for a list given only the last rows of the tab, row counted from its first.
-func (d *Display) listTapIn(n, page, row, rows int) (int, bool) {
-	start, end, more := pageIn(n, page, rows)
-	if row < 0 {
-		return 0, false
-	}
-	if more && row == rows-1 {
-		d.mu.Lock()
-		d.page++
-		d.mu.Unlock()
-		return 0, false
-	}
-	if start+row >= end {
-		return 0, false
-	}
-	return start + row, true
-}
-
-// deviceTap is a row of the Device tab: the buttons act, the rest of the row does nothing.
-func (d *Display) deviceTap(h hit) {
-	switch h.row {
-	case rowVolume:
-		switch h.button {
-		case 1:
-			media.Get().Adjust(-1)
-		case 2:
-			media.Get().Adjust(+1)
-		}
-	case rowBrightness:
-		pct := d.ceilingOrDefault()
-		switch h.button {
-		case 1:
-			pct -= 25
-		case 2:
-			pct += 25
-		default:
-			return
-		}
-		if pct < 25 {
-			pct = 25
-		}
-		if pct > 100 {
-			pct = 100
-		}
-		d.apply(true, pct, true)
-	case rowAuto:
-		if h.button == 2 {
-			d.mu.Lock()
-			on := d.autoOn
-			d.mu.Unlock()
-			d.setAuto(!on, true)
-		}
-	case rowWake:
-		if h.button == 2 {
-			if next := nextWakeWord(); next != "" {
-				safe.Go("wake word from the sheet", func() { voice.Get().ChooseWakeWord(next) })
-			}
-		}
-	case rowMic:
-		if h.button == 2 {
-			mute.Get().Toggle()
-		}
-	case rowWifi:
-		if h.button == 2 && wifi.Available() {
-			d.showSheet(false)
-			d.openWifi()
-		}
-	case rowNight:
-		if h.button == 2 {
-			if err := config.Set().Screen().Night(nextNight(config.Get().Screen.Night)); err != nil {
-				slog.Warn("saving the night setting failed", "err", err)
-			}
-		}
-	case rowWeather:
-		switch h.button {
-		case 1:
-			d.ShowWeather(false)
-		case 2:
-			safe.Go("weather source from the sheet", home.Get().NextWeather)
-		}
-	case rowAbout:
-		if h.button != 2 {
-			return
-		}
-		d.mu.Lock()
-		armed := !d.restartArm.IsZero() && time.Since(d.restartArm) < restartWindow
-		if !armed {
-			d.restartArm = time.Now()
-		}
-		d.mu.Unlock()
-		if armed {
-			slog.Warn("restart asked for from the screen")
-			restart()
-		}
-	}
-}
-
-// bluetoothTap is a row of the Bluetooth tab.
-func (d *Display) bluetoothTap(h hit) {
-	bt := btaudio.Get()
-	st := bt.State()
-	switch h.row {
-	case btRowDevice:
-		if h.button != 2 {
-			return
-		}
-		if st.Connected != "" {
-			bt.Disconnect()
-		} else if st.Remembered != "" {
-			bt.Reconnect()
-		}
-	case btRowPair:
-		if h.button == 2 {
-			d.showSheet(false)
-			bt.SetPairing(true)
-		}
-	}
 }
 
 func (d *Display) ceilingOrDefault() int {
@@ -877,26 +686,8 @@ func (d *Display) night(now time.Time, on bool, view voice.State) bool {
 // nightIdle is how long the panel stays lit after a finger or a turn during the night.
 const nightIdle = 90 * time.Second
 
-// nightPresets are the choices the Device tab cycles through.
+// nightPresets are the Screen off at night list's choices.
 var nightPresets = []string{"", "22-6", "23-6", "0-7", "21-7", "23-8"}
-
-func nextNight(cur string) string {
-	for i, p := range nightPresets {
-		if p == cur {
-			return nightPresets[(i+1)%len(nightPresets)]
-		}
-	}
-	return nightPresets[1]
-}
-
-// nightLabel is what the row shows for a setting.
-func nightLabel(v string) string {
-	from, to, ok := nightHours(v)
-	if !ok {
-		return "never"
-	}
-	return fmt.Sprintf("%02d:00 to %02d:00", from, to)
-}
 
 func nightHours(v string) (from, to int, ok bool) {
 	if _, err := fmt.Sscanf(v, "%d-%d", &from, &to); err != nil || from < 0 || from > 23 || to < 0 || to > 23 || from == to {
@@ -1139,12 +930,24 @@ func (d *Display) OpenSheet(name string) bool {
 		d.showSheet(false)
 		return true
 	}
-	tab, ok := tabByName(name)
+	switch strings.ToLower(name) {
+	case "cameras":
+		d.showSheet(false)
+		d.openDrawer(drawerCameras)
+		return true
+	case "radio":
+		d.showSheet(false)
+		d.openDrawer(drawerRadio)
+		return true
+	}
+	cat, ok := catByName(name)
 	if !ok {
 		return false
 	}
+	d.closeDrawer()
 	d.mu.Lock()
-	d.sheet, d.tab, d.page, d.restartArm = true, tab, 0, time.Time{}
+	d.sheet, d.cat, d.picker, d.restartArm = true, cat, "", time.Time{}
+	d.draft, d.cardScroll, d.pickScroll = nil, 0, 0
 	d.mu.Unlock()
 	d.wake()
 	return true
@@ -1271,7 +1074,7 @@ func (d *Display) frame() time.Duration {
 	d.mu.Lock()
 	s.showSheet = d.sheet
 	s.showWifi, s.wifi = d.wifiOpen, d.wifi
-	restartArm, tab := d.restartArm, d.tab
+	restartArm := d.restartArm
 	wifiAt := d.wifiAt
 	d.mu.Unlock()
 	if (s.showSheet || s.showWifi) && now.Sub(wifiAt) > 5*time.Second && wifi.Available() {
@@ -1281,11 +1084,8 @@ func (d *Display) frame() time.Duration {
 		go d.refreshWifi()
 	}
 	if s.showSheet {
-		s.sheet = d.gather(s, restartArm, tab)
-		if tab == tabCameras {
-			s.cameras = home.Get().Cameras()
-		}
-		if tab == tabSecurity {
+		s.sheet = d.gather(s, restartArm)
+		if d.cat == catSecurity {
 			s.security = security.Get().State()
 		}
 		d.mu.Lock()
@@ -1293,12 +1093,13 @@ func (d *Display) frame() time.Duration {
 		d.mu.Unlock()
 		if demo {
 			s.sheet.name, s.sheet.wifi, s.sheet.address = "Kitchen", "HomeWiFi  ·  192.168.1.50", "192.168.1.50"
+			s.sheet.wifiName, s.sheet.weather, s.sheet.demo = "HomeWiFi", "Home", true
 			for i := range s.security.Keys {
 				s.security.Keys[i] = "laptop"
 			}
 		}
 		d.mu.Lock()
-		if d.draft != nil && tab == tabAlarms {
+		if d.draft != nil && d.cat == catAlarms {
 			c := *d.draft
 			s.draft = &c
 		}
@@ -1306,7 +1107,16 @@ func (d *Display) frame() time.Duration {
 	}
 	s.camera, s.showCamera = home.Get().Camera()
 	s.nowPlaying = (s.phase == "idle") && d.nowPlaying()
-	if (s.showSheet && tab == tabRadio) || s.nowPlaying {
+	d.mu.Lock()
+	s.showDrawer, s.drawerTab, s.drawerScroll, s.drawerPick, s.pickScroll = d.drawer && !s.showSheet && !s.showCamera, d.drawerTab, d.drawerScroll, d.drawerPick, d.pickScroll
+	d.mu.Unlock()
+	d.mu.Lock()
+	s.demo = now.Before(d.demoUntil)
+	d.mu.Unlock()
+	if s.showDrawer && s.drawerTab == drawerCameras {
+		s.cameras = home.Get().Cameras()
+	}
+	if (s.showDrawer && s.drawerTab == drawerRadio) || s.nowPlaying {
 		s.radio = home.Get().Radio()
 	}
 	s.weather = home.Get().Weather()
@@ -1354,7 +1164,7 @@ func (d *Display) frame() time.Duration {
 	if ring.any() || call.Phase != phone.Idle {
 		return 500 * time.Millisecond
 	}
-	if s.bt.Pairing || s.showSheet || s.showWifi {
+	if s.bt.Pairing || s.showSheet || s.showWifi || s.showDrawer {
 		return 500 * time.Millisecond
 	}
 	if s.showRadar && len(s.radar.Frames) > 1 {
