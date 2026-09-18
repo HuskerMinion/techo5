@@ -6,6 +6,7 @@ type Screen struct {
 	On         bool `json:"on"`
 	Brightness int  `json:"brightness"`
 	Auto       bool `json:"auto"`
+	Time24h    bool `json:"time_24h,omitempty"`
 
 	// Night is when the screen goes dark on its own, as "22-6" (from 22:00 to 06:00); empty
 	// never. A tap wakes it for a while.
@@ -50,6 +51,10 @@ func (w ScreenWriter) Brightness(v int) error {
 
 func (w ScreenWriter) Auto(v bool) error {
 	return w.st.Update(func(c *Config) { c.Screen.Auto = v })
+}
+
+func (w ScreenWriter) Time24h(v bool) error {
+	return w.st.Update(func(c *Config) { c.Screen.Time24h = v })
 }
 
 func (w ScreenWriter) Theme(v string) error {

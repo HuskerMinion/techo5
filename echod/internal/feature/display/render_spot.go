@@ -63,6 +63,7 @@ type roundScene struct {
 	timerRinging                       bool
 	brightness                         int // percent
 	autoOn                             bool
+	time24h                            bool
 	nightFrom, nightTo                 int // hours
 	restartArmed                       bool
 	infoName, infoAddress, infoVersion string
@@ -213,12 +214,19 @@ func (r *roundRenderer) rim(s roundScene) {
 
 func (r *roundRenderer) clockFace(s roundScene) {
 	now := s.now
-	hm := now.Format("3:04")
-	r.centred(r.clock, hm, 240, colText)
-	r.centred(r.small, strings.ToUpper(now.Format("PM")), 290, colDim)
-	r.centred(r.small, now.Format("Monday, January 2"), 330, colDim)
-
 	line := 372
+	if s.time24h {
+		hm := now.Format("15:04")
+		r.centred(r.clock, hm, 240, colText)
+		r.centred(r.small, now.Format("Monday, January 2"), 300, colDim)
+		line = 344
+	} else {
+		hm := now.Format("3:04")
+		r.centred(r.clock, hm, 240, colText)
+		r.centred(r.small, strings.ToUpper(now.Format("PM")), 290, colDim)
+		r.centred(r.small, now.Format("Monday, January 2"), 330, colDim)
+	}
+
 	if weatherLine(s.weather) != "" {
 		r.clockWeather(s.weather, line)
 		line += 38

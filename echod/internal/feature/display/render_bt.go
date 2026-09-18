@@ -38,7 +38,11 @@ func (r *renderer) btRowAt(y int) int {
 
 func (r *renderer) pairingPage(s scene) {
 	r.text(r.body, "Bluetooth", r.margin, 52, amber)
-	t := s.now.Format("3:04")
+	clockFmt := "3:04"
+	if s.time24h {
+		clockFmt = "15:04"
+	}
+	t := s.now.Format(clockFmt)
 	r.text(r.small, t, r.w-r.margin-r.width(r.small, t), 52, dim)
 	hint := s.bt.Status
 	if hint == "" {

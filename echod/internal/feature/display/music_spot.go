@@ -133,7 +133,11 @@ func pickStation(sel int) {
 // logo) in the middle, then the station, the song and the artist.
 func (r *roundRenderer) nowPlayingFace(s roundScene) {
 	rd := s.radio
-	r.centred(r.title, s.now.Format("3:04 PM"), 84, colText)
+	timeFmt := "3:04 PM"
+	if s.time24h {
+		timeFmt = "15:04"
+	}
+	r.centred(r.title, s.now.Format(timeFmt), 84, colText)
 	r.centred(r.small, s.now.Format("Monday, January 2"), 114, colDim)
 
 	const artY, artR = 200.0, 72.0
@@ -368,7 +372,11 @@ func (r *roundRenderer) radarFace(s roundScene) {
 	r.ringAt(centre, centre, 6, 10, 0, 2*math.Pi, color.RGBA{0, 0, 0, 200})
 	r.ringAt(centre, centre, 7, 9, 0, 2*math.Pi, colRadar)
 
-	label := "Radar " + f.At.Local().Format("3:04")
+	clockFmt := "3:04"
+	if s.time24h {
+		clockFmt = "15:04"
+	}
+	label := "Radar " + f.At.Local().Format(clockFmt)
 	if i == n-1 {
 		label += " (latest)"
 	}

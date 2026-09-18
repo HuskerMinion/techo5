@@ -40,11 +40,20 @@ func (r *roundRenderer) slideshowScreensaverFace(s roundScene) {
 // label. big is the normal size (clockFace's own layout); otherwise a small one near the top.
 func (r *roundRenderer) screensaverClock(s roundScene, big bool) {
 	if !big {
-		r.centred(r.small, s.now.Format("3:04 PM"), 60, colText)
+		timeFmt := "3:04 PM"
+		if s.time24h {
+			timeFmt = "15:04"
+		}
+		r.centred(r.small, s.now.Format(timeFmt), 60, colText)
 		return
 	}
 	now := s.now
-	r.centred(r.clock, now.Format("3:04"), 240, colText)
-	r.centred(r.small, strings.ToUpper(now.Format("PM")), 290, colDim)
-	r.centred(r.small, now.Format("Monday, January 2"), 330, colDim)
+	if s.time24h {
+		r.centred(r.clock, now.Format("15:04"), 240, colText)
+		r.centred(r.small, now.Format("Monday, January 2"), 300, colDim)
+	} else {
+		r.centred(r.clock, now.Format("3:04"), 240, colText)
+		r.centred(r.small, strings.ToUpper(now.Format("PM")), 290, colDim)
+		r.centred(r.small, now.Format("Monday, January 2"), 330, colDim)
+	}
 }

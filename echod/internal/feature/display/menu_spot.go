@@ -468,7 +468,11 @@ func (r *roundRenderer) dial(s roundScene) {
 		r.ringAt(x, y, chosenRing+6, chosenRing+9, -0.3*math.Pi, 0.55*math.Pi, accent)
 		r.icon(it.id, s, x, y, 22, 3.2, it.colour)
 
-		header := s.now.Format("3:04")
+		clockFmt := "3:04"
+		if s.time24h {
+			clockFmt = "15:04"
+		}
+		header := s.now.Format(clockFmt)
 		switch s.menuMode {
 		case modeSettings:
 			header = "SETTINGS"

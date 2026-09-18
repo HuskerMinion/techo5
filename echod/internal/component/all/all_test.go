@@ -90,6 +90,7 @@ var registered = []string{
 	"room_level",
 	"room_reaction",
 	"screen",
+	"screen_24h_time",
 	"screen_auto_brightness",
 	"screen_web_access",
 	"segment_1",

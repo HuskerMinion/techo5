@@ -48,6 +48,7 @@ type scene struct {
 	playing bool
 	paused  bool
 	muted   bool
+	time24h bool
 
 	// volume is shown while it moves: the step out of media.VolumeSteps.
 	volume     int
@@ -261,15 +262,22 @@ func (r *renderer) volumeBar(s scene) {
 // timeAndDate draws the hour, AM/PM and date centred, with the hour's baseline at base and an
 // optional suffix appended to the date line (an alarm note, on the ordinary idle page). Shared by
 // bigClock and the screensaver's normal-size overlay, which wants the clock alone.
-func (r *renderer) timeAndDate(now time.Time, base int, dateSuffix string) {
+func (r *renderer) timeAndDate(now time.Time, base int, dateSuffix string, time24h bool) {
 	hour := now.Format("3:04")
 	ampm := now.Format("PM")
+	gap := 18
+	if time24h {
+		hour = now.Format("15:04")
+		ampm = ""
+		gap = 0
+	}
 	hw := r.width(r.clock, hour)
 	aw := r.width(r.ampm, ampm)
-	gap := 18
 	x := (r.w - hw - gap - aw) / 2
 	r.text(r.clock, hour, x, base, cream)
-	r.text(r.ampm, ampm, x+hw+gap, base, amber)
+	if ampm != "" {
+		r.text(r.ampm, ampm, x+hw+gap, base, amber)
+	}
 
 	date := now.Format("Monday, January 2") + dateSuffix
 	r.text(r.small, date, (r.w-r.width(r.small, date))/2, base+70, dim)
@@ -294,9 +302,13 @@ func (r *renderer) bigClock(s scene) {
 		if next.Snoozed {
 			what = "Snoozed until"
 		}
-		suffix = "  ·  " + what + " " + next.At.Format("3:04 PM")
+		alarmFmt := "3:04 PM"
+		if s.time24h {
+			alarmFmt = "15:04"
+		}
+		suffix = "  ·  " + what + " " + next.At.Format(alarmFmt)
 	}
-	r.timeAndDate(s.now, base, suffix)
+	r.timeAndDate(s.now, base, suffix, s.time24h)
 	if timers {
 		r.timersLine(s, base+128)
 	}
@@ -336,7 +348,11 @@ func conditionWords(c string) string {
 
 // cornerClock keeps the time in view while words have the screen.
 func (r *renderer) cornerClock(s scene) {
-	t := s.now.Format("3:04 PM")
+	timeFmt := "3:04 PM"
+	if s.time24h {
+		timeFmt = "15:04"
+	}
+	t := s.now.Format(timeFmt)
 	r.text(r.small, t, r.w-r.margin-r.width(r.small, t), r.margin+26, dim)
 }
 

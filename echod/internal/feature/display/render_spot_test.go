@@ -99,6 +99,8 @@ func TestRoundScenesDraw(t *testing.T) {
 		"menu-camera":         {now: at, phase: "idle", cameraLive: true, menuOpen: true, menuMode: modeMain, menuSel: 5, menuRot: restFor(5, len(mainItems))},
 		"bt-pairing":          {now: at, phase: "idle", btAvailable: true, btPairing: true, weather: sky},
 		"clock":               {now: at, phase: "idle", volume: 12, maxVolume: 30},
+		"clock-24h":           {now: at, phase: "idle", time24h: true, volume: 12, maxVolume: 30},
+		"clock-weather-24h":   {now: at, phase: "idle", time24h: true, weather: sky, timers: []timer.Countdown{{Left: 272 * time.Second, Total: 600 * time.Second, Active: true}}},
 		"clock-timer":         {now: at, phase: "idle", timers: []timer.Countdown{{Name: "pasta", Left: 4*time.Minute + 32*time.Second, Total: 10 * time.Minute, Active: true}}},
 		"muted":               {now: at, phase: "idle", muted: true},
 		"listening":           {now: at, phase: "listening"},

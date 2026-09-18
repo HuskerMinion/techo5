@@ -104,7 +104,11 @@ func (r *roundRenderer) weatherFace(s roundScene) {
 		big = fmt.Sprintf("%.0f°", days[0].High)
 	}
 
-	r.centred(r.label, s.now.Format("3:04"), 62, colDim)
+	clockFmt := "3:04"
+	if s.time24h {
+		clockFmt = "15:04"
+	}
+	r.centred(r.label, s.now.Format(clockFmt), 62, colDim)
 	if cond == "" && big == "" {
 		r.weatherIcon("cloudy", centre, 170, 44)
 		r.centred(r.title, "No weather yet", 272, colText)

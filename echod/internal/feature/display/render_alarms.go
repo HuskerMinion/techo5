@@ -14,7 +14,10 @@ import (
 )
 
 // clockTime is an hour and minute the way the clock shows the time.
-func clockTime(hour, minute int) string {
+func clockTime(hour, minute int, time24h bool) string {
+	if time24h {
+		return fmt.Sprintf("%02d:%02d", hour, minute)
+	}
 	return time.Date(2000, 1, 1, hour, minute, 0, 0, time.UTC).Format("3:04 PM")
 }
 
@@ -33,17 +36,21 @@ func (r *renderer) alarmsTab(s scene) {
 		r.alarmEditor(s, *s.draft)
 		return
 	}
+	alarmFmt := "3:04 PM"
+	if s.time24h {
+		alarmFmt = "15:04"
+	}
 	rows := alarmRows(s.alarms)
 	start, end, more := pageOf(len(rows), s.sheet.page)
 	for i, row := range rows[start:end] {
 		switch {
 		case row.snoozed != nil:
-			top := r.row(i, "Snoozed until "+row.snoozed.At.Format("3:04 PM"), amber)
+			top := r.row(i, "Snoozed until "+row.snoozed.At.Format(alarmFmt), amber)
 			r.value(top, row.snoozed.Label, 1)
 			r.button(top, 2, "Cancel", false)
 		case row.local != nil:
 			a := row.local
-			label := clockTime(a.Hour, a.Minute)
+			label := clockTime(a.Hour, a.Minute, s.time24h)
 			if a.Label != "" {
 				label += "  " + a.Label
 			}
@@ -60,7 +67,7 @@ func (r *renderer) alarmsTab(s scene) {
 			label := cmpOr(f.Label, f.Entity)
 			when := "not set in Home Assistant"
 			if !f.At.IsZero() {
-				when = f.At.Format("3:04 PM") + " · from Home Assistant"
+				when = f.At.Format(alarmFmt) + " · from Home Assistant"
 			}
 			if !f.Armed {
 				when = "off in Home Assistant"
@@ -89,7 +96,7 @@ func (r *renderer) alarmsTab(s scene) {
 func (r *renderer) alarmEditor(s scene, d alarmDraft) {
 	a := d.alarm
 	top := r.row(editRowHour, "Hour", cream)
-	r.value(top, clockTime(a.Hour, a.Minute), 2)
+	r.value(top, clockTime(a.Hour, a.Minute, s.time24h), 2)
 	r.button(top, 1, "−", false)
 	r.button(top, 2, "+", false)
 
@@ -167,10 +174,18 @@ func (r *renderer) ringingPage(s scene) {
 
 	hour := s.now.Format("3:04")
 	ampm := s.now.Format("PM")
+	gap := 18
+	if s.time24h {
+		hour = s.now.Format("15:04")
+		ampm = ""
+		gap = 0
+	}
 	hw, aw := r.width(r.clock, hour), r.width(r.ampm, ampm)
-	x := (r.w - hw - 18 - aw) / 2
+	x := (r.w - hw - gap - aw) / 2
 	r.text(r.clock, hour, x, 290, cream)
-	r.text(r.ampm, ampm, x+hw+18, 290, amber)
+	if ampm != "" {
+		r.text(r.ampm, ampm, x+hw+gap, 290, amber)
+	}
 
 	y0, y1 := ringButtonsTop, r.h-30
 	stop := image.Rect(r.margin, y0, r.w-r.margin, y1)

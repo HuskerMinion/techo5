@@ -127,7 +127,11 @@ func (r *renderer) wifiPage(s scene) {
 		return
 	}
 	r.text(r.body, "Wi-Fi", r.margin, 52, amber)
-	t := s.now.Format("3:04")
+	clockFmt := "3:04"
+	if s.time24h {
+		clockFmt = "15:04"
+	}
+	t := s.now.Format(clockFmt)
 	r.text(r.small, t, r.w-r.margin-r.width(r.small, t), 52, dim)
 	line := "Not connected"
 	if w.status.Connected {

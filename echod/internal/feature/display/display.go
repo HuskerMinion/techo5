@@ -83,13 +83,15 @@ const (
 )
 
 type Display struct {
-	light *esphome.Light
-	auto  *esphome.Switch
+	light   *esphome.Light
+	auto    *esphome.Switch
+	time24h *esphome.Switch
 
 	mu      sync.Mutex
 	on      bool
 	ceiling int // percent Home Assistant asked for
 	autoOn  bool
+	is24h   bool
 	level   float64 // backlight actually applied, 0..BacklightMax, as a running average
 	view    voice.State
 	viewAt  time.Time
@@ -178,12 +180,21 @@ func build() *Display {
 				Category: esphome.CategoryConfig,
 			},
 		},
+		time24h: &esphome.Switch{
+			Base: esphome.Base{
+				ObjectID: "screen_24h_time",
+				Name:     "Screen 24-hour time",
+				Icon:     "mdi:clock-digital",
+				Category: esphome.CategoryConfig,
+			},
+		},
 		poke:  make(chan struct{}, 1),
 		shots: make(chan chan *image.RGBA, 4),
 		view:  voice.State{Phase: "idle"},
 	}
 	d.light.OnCommand = d.command
 	d.auto.OnCommand = func(on bool) { d.setAuto(on, true) }
+	d.time24h.OnCommand = func(on bool) { d.setTime24h(on, true) }
 	voice.Changed.Listen(d.changed)
 	media.Get().OnVolume.Listen(d.volumeMoved)
 	ambient.Get().Lux.Listen(d.lux)
@@ -227,13 +238,28 @@ func build() *Display {
 
 func (d *Display) Name() string { return "screen" }
 
-func (d *Display) Entities() []esphome.Entity { return []esphome.Entity{d.light, d.auto} }
+func (d *Display) Entities() []esphome.Entity { return []esphome.Entity{d.light, d.auto, d.time24h} }
 
 // Restore lights the panel the way it was left. Before the framebuffer is opened: the backlight is
 // its own device.
 func (d *Display) Restore(c config.Config) {
+	d.setTime24h(c.Screen.Time24h, false)
 	d.setAuto(c.Screen.Auto, false)
 	d.apply(c.Screen.On, c.Screen.Brightness, false)
+}
+
+func (d *Display) setTime24h(on bool, save bool) {
+	d.mu.Lock()
+	d.is24h = on
+	d.mu.Unlock()
+	d.time24h.Set(on)
+	d.wake()
+	if save {
+		if err := config.Set().Screen().Time24h(on); err != nil {
+			slog.Error("saving the 24-hour time setting failed", "err", err)
+		}
+		slog.Info("screen 24-hour time", "on", on)
+	}
 }
 
 // command is Home Assistant changing the light. A bare "on" carries no brightness; the last one stays.
@@ -1266,6 +1292,7 @@ func (d *Display) frame() time.Duration {
 	}
 	s.bt = btaudio.Get().State()
 	d.mu.Lock()
+	s.time24h = d.is24h
 	s.showSheet = d.sheet
 	s.showWifi, s.wifi = d.wifiOpen, d.wifi
 	restartArm, tab := d.restartArm, d.tab

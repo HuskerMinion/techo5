@@ -99,8 +99,12 @@ func (r *roundRenderer) ringFace(s roundScene) {
 		title = strings.ToUpper(st.alarm.Label)
 	}
 	r.centred(r.label, clip(r.label, r, title, 330), 130, colRing)
-	r.centred(r.clock, s.now.Format("3:04"), 262, colText)
-	r.centred(r.small, strings.ToUpper(s.now.Format("PM")), 306, colDim)
+	if s.time24h {
+		r.centred(r.clock, s.now.Format("15:04"), 272, colText)
+	} else {
+		r.centred(r.clock, s.now.Format("3:04"), 262, colText)
+		r.centred(r.small, strings.ToUpper(s.now.Format("PM")), 306, colDim)
+	}
 
 	r.centred(r.title, "Tap to stop", 372, colText)
 	if st.alarm != nil {
