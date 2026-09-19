@@ -36,6 +36,15 @@ func inputControls(adc string) map[string]uint32 {
 	}
 }
 
+// Rewire points the converter at its microphones again and restores the gain. The 1st gen Echo Show 5
+// takes the microphone chip's power down while the mute latch is engaged, so it comes back in its
+// reset state, muted, and stays silent after the button releases the latch unless this runs again
+// (seen on a unit 2026-09-19). Writing the same values costs nothing where nothing moved.
+func Rewire() {
+	routeInputs()
+	applyGain(config.Get().Microphone.Gain)
+}
+
 // routeInputs applies inputControls to every ADC.
 func routeInputs() {
 	m, err := alsa.OpenMixer(Card)

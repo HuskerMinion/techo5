@@ -18,6 +18,7 @@ import (
 	"github.com/HuskerMinion/techo5/echod/internal/config"
 	"github.com/HuskerMinion/techo5/echod/internal/hardware/buttons"
 	"github.com/HuskerMinion/techo5/echod/internal/hardware/led"
+	"github.com/HuskerMinion/techo5/echod/internal/hardware/mic"
 	"github.com/HuskerMinion/techo5/echod/internal/hardware/privacy"
 	"github.com/HuskerMinion/techo5/echod/internal/hardware/speaker"
 )
@@ -212,6 +213,12 @@ func (m *Mute) settled(asked bool) {
 
 	m.sw.Set(muted)
 	m.show(component.ChosenEffect(m.ring))
+
+	// A latch that has just been released may have taken the microphone chip down with it, which
+	// brings it back muted (hardware/mic.Rewire).
+	if !muted {
+		mic.Rewire()
+	}
 
 	if !asked {
 		return
