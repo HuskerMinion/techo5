@@ -220,8 +220,8 @@ is built on, runs on the unlocked Dot's Fire OS 6 with its own installer, and is
 2. **Allow it to perform Home Assistant actions.** On the device's ESPHome entry → Configure, turn on
    **Allow the device to perform Home Assistant actions**. The radio favorites, phone call events and
    some screen features need it.
-3. **Pick a wake word** on the device's Assist satellite (Okay Nabu, Hey Jarvis, Hey Mycroft, and
-   Alexa on the Show and Spot).
+3. **Pick a wake word** on the device's Assist satellite: Okay Nabu, Hey Jarvis, Hey Mycroft, Alexa,
+   and eight more (Computer, Jarvis, Home Assistant and others), the same on every device.
 4. **Updates** from then on come from Home Assistant's update card: signed releases install into the
    spare slot and roll back on their own if they don't come up healthy.
 5. **Optional:**

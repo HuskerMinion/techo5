@@ -46,9 +46,17 @@ if [ ! -e /data/misc/techo5/timezone ] || [ ! -e /data/misc/techo5/localtime ]; 
 	echo "$zone" > /data/misc/techo5/timezone
 fi
 mkdir -p -m 700 /data/misc/techo5/ssh
-# A fresh unit gets the wake word models the image carries.
-if [ -d /usr/share/techo5/models ] && [ -z "$(ls -A /data/misc/techo5/models 2>/dev/null)" ]; then
-	cp /usr/share/techo5/models/* /data/misc/techo5/models/ && log "wake word models installed from the image"
+# The wake word models the image carries, any this unit does not have yet: a fresh unit gets them
+# all, and one set up before a model joined the image gets it at its next update, so every unit
+# offers the same words. Nothing on the unit is replaced or removed (a purged one comes back here).
+if [ -d /usr/share/techo5/models ]; then
+	mkdir -p /data/misc/techo5/models
+	n=0
+	for f in /usr/share/techo5/models/*; do
+		[ -e "/data/misc/techo5/models/${f##*/}" ] && continue
+		cp "$f" /data/misc/techo5/models/ && n=$((n + 1))
+	done
+	[ $n -gt 0 ] && log "wake word models: $n files added from the image"
 fi
 : > /run/boot.log
 

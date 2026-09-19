@@ -602,7 +602,7 @@ func (d *Diag) board() {
 	available, _ := r.Memory()
 	set(d.memory, available)
 
-	set(d.lux, r.Lux(d.luxPath))
+	set(d.lux, roomLux(r, d.luxPath))
 }
 
 // reading picks one thermal zone out of what was found.
