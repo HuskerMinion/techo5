@@ -168,12 +168,13 @@ func (m *Mute) Set(muted bool) {
 }
 
 // Toggle is the button on top of the device. Where the hardware has already acted on the press, the
-// press is only news: what follows is the same either way.
+// press is only news: what follows is the same either way. Whether it has can depend on which way
+// the press goes, and the switch still holds the state from before it.
 func (m *Mute) Toggle() {
 	if m.line == nil {
 		return
 	}
-	if !m.line.HardwareToggles() {
+	if !m.line.HardwareActs(m.sw.Get()) {
 		if _, err := m.line.Toggle(); err != nil {
 			slog.Error("toggling mute failed", "err", err)
 			return

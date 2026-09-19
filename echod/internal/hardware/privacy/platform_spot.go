@@ -24,7 +24,7 @@ func (s software) Toggle() (bool, error) {
 }
 
 // The press is only news to the key driver, so the daemon toggles.
-func (software) HardwareToggles() bool { return false }
+func (software) HardwareActs(bool) bool { return false }
 
 func (software) Lag() time.Duration { return 0 }
 

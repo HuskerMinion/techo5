@@ -13,7 +13,7 @@ func TestSoftwareMuteIsWhatTheCaptureReads(t *testing.T) {
 	}
 	t.Cleanup(func() { _ = m.Set(false) })
 
-	if m.HardwareToggles() {
+	if m.HardwareActs(false) || m.HardwareActs(true) {
 		t.Fatal("a software mute must be toggled by the daemon, not reported as already toggled")
 	}
 	if SoftwareCut() {
