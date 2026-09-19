@@ -77,6 +77,9 @@ t5_wifi_conf() {
 # seconds; association is allowed WIFI_WAIT seconds (60).
 t5_wifi_up() {
 	mod=$1; conf=$2; IP=
+	# A module must match the running kernel; retain the vendor path for 4.9.
+	kernel_mod=/lib/modules/$(uname -r)/extra/mt76x8_wlan.ko
+	[ -f "$kernel_mod" ] && mod=$kernel_mod
 	if ! ip link show wlan0 >/dev/null 2>&1; then
 		[ -e "$mod" ] || { log "wifi: driver not found at $mod"; return 1; }
 		insmod "$mod" 2>/tmp/insmod.err || { log "wifi: insmod failed: $(cat /tmp/insmod.err)"; return 1; }
@@ -221,27 +224,30 @@ t5_dropbear() {
 # /dev/vhci this quietly does nothing, so an older boot image keeps working.
 t5_bt_up() {
 	mod=$1; logdir=${2:-/tmp}
-	[ -e /dev/vhci ] || { log "bt: no /dev/vhci (kernel without Bluetooth); skipping"; return 1; }
-	# BT_UART (device.conf): a Broadcom controller on a tty, which btbridge patches and brings up itself
-	# (the Echo Spot); otherwise the MediaTek driver module and its /dev/stpbt.
-	if [ -n "${BT_UART:-}" ]; then
-		[ -e "$BT_UART" ] || { log "bt: no $BT_UART"; return 1; }
-	elif [ ! -e /dev/stpbt ]; then
-		[ -e "$mod" ] || { log "bt: driver not found at $mod"; return 1; }
-		insmod "$mod" 2>/tmp/insmod-bt.err || { log "bt: insmod failed: $(cat /tmp/insmod-bt.err)"; return 1; }
-		n=0; while [ $n -lt 10 ] && [ ! -e /dev/stpbt ]; do sleep 1; n=$((n+1)); done
-		[ -e /dev/stpbt ] || { log "bt: driver loaded but no /dev/stpbt"; return 1; }
+	# btmtksdio exposes a native HCI controller on mainline.
+	if [ ! -d /sys/class/bluetooth/hci0 ]; then
+		[ -e /dev/vhci ] || { log "bt: no /dev/vhci (kernel without Bluetooth); skipping"; return 1; }
+		# BT_UART (device.conf): a Broadcom controller on a tty, which btbridge patches and brings up itself
+		# (the Echo Spot); otherwise the MediaTek driver module and its /dev/stpbt.
+		if [ -n "${BT_UART:-}" ]; then
+			[ -e "$BT_UART" ] || { log "bt: no $BT_UART"; return 1; }
+		elif [ ! -e /dev/stpbt ]; then
+			[ -e "$mod" ] || { log "bt: driver not found at $mod"; return 1; }
+			insmod "$mod" 2>/tmp/insmod-bt.err || { log "bt: insmod failed: $(cat /tmp/insmod-bt.err)"; return 1; }
+			n=0; while [ $n -lt 10 ] && [ ! -e /dev/stpbt ]; do sleep 1; n=$((n+1)); done
+			[ -e /dev/stpbt ] || { log "bt: driver loaded but no /dev/stpbt"; return 1; }
+		fi
+		command -v btbridge >/dev/null || { log "bt: no btbridge"; return 1; }
+		# The factory address from IDME; the firmware otherwise comes up with a random one.
+		addr=$(tr -d '\n\0' < /proc/idme/bt_mac_addr 2>/dev/null)
+		if [ -n "${BT_UART:-}" ]; then
+			(while true; do btbridge -uart "$BT_UART" ${BT_HCD:+-hcd "$BT_HCD"} ${BT_BAUD:+-baud "$BT_BAUD"} ${addr:+-bdaddr "$addr"} >> "$logdir/btbridge.log" 2>&1; sleep 2; done) &
+		else
+			(while true; do btbridge ${addr:+-bdaddr "$addr"} >> "$logdir/btbridge.log" 2>&1; sleep 2; done) &
+		fi
+		n=0; while [ $n -lt 20 ] && [ ! -d /sys/class/bluetooth/hci0 ]; do sleep 1; n=$((n+1)); done
+		[ -d /sys/class/bluetooth/hci0 ] || { log "bt: bridge up but no hci0"; return 1; }
 	fi
-	command -v btbridge >/dev/null || { log "bt: no btbridge"; return 1; }
-	# The factory address from IDME; the firmware otherwise comes up with a random one.
-	addr=$(tr -d '\n\0' < /proc/idme/bt_mac_addr 2>/dev/null)
-	if [ -n "${BT_UART:-}" ]; then
-		(while true; do btbridge -uart "$BT_UART" ${BT_HCD:+-hcd "$BT_HCD"} ${BT_BAUD:+-baud "$BT_BAUD"} ${addr:+-bdaddr "$addr"} >> "$logdir/btbridge.log" 2>&1; sleep 2; done) &
-	else
-		(while true; do btbridge ${addr:+-bdaddr "$addr"} >> "$logdir/btbridge.log" 2>&1; sleep 2; done) &
-	fi
-	n=0; while [ $n -lt 20 ] && [ ! -d /sys/class/bluetooth/hci0 ]; do sleep 1; n=$((n+1)); done
-	[ -d /sys/class/bluetooth/hci0 ] || { log "bt: bridge up but no hci0"; return 1; }
 	# Pairings and bluez-alsa's state must survive reboots and slot changes: keep
 	# them on userdata (the root is read-only).
 	mkdir -p /run/dbus /data/misc/techo5/bluetooth /data/misc/techo5/bluealsa

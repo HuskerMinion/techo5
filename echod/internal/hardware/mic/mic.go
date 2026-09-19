@@ -15,6 +15,7 @@ import (
 	"github.com/HuskerMinion/techo5/echod/internal/component"
 	"github.com/HuskerMinion/techo5/echod/internal/config"
 	"github.com/HuskerMinion/techo5/echod/internal/hardware/privacy"
+	"github.com/HuskerMinion/techo5/echod/internal/layout"
 	"github.com/HuskerMinion/techo5/echod/internal/lib/alsa"
 	"github.com/HuskerMinion/techo5/echod/internal/lib/audio"
 	"github.com/HuskerMinion/techo5/echod/internal/lib/denoise"
@@ -189,14 +190,11 @@ func Acquire() (*Source, error) {
 }
 
 func (s *Source) open() error {
-	pcm, err := alsa.Open(Card, CaptureDevice, alsa.Config{
-		Channels:   Channels,
-		Rate:       Rate,
-		Format:     alsa.FormatS24_3LE,
-		Bits:       Bits,
-		PeriodSize: period,
-		Periods:    periods,
-	})
+	card, device, cfg, err := captureDevice()
+	if err != nil {
+		return err
+	}
+	pcm, err := alsa.Open(card, device, cfg)
 	if err != nil {
 		return fmt.Errorf("mic: opening capture: %w", err)
 	}
@@ -466,4 +464,21 @@ func Mono(raw []byte) []int16 {
 		out[i] = int16(audio.DecodeS24LE3(raw[o:o+3]) >> 8)
 	}
 	return out
+}
+
+func captureDevice() (int, int, alsa.Config, error) {
+	cfg := alsa.Config{Channels: Channels, Rate: Rate, Format: alsa.FormatS24_3LE,
+		Bits: Bits, PeriodSize: period, Periods: periods}
+	if layout.Board == "cronos" {
+		card, device, found, err := alsa.FindPCM("mt8163cronos", "Microphones", true)
+		if err != nil {
+			return 0, 0, cfg, fmt.Errorf("mic: selecting capture: %w", err)
+		}
+		if found {
+			// Match the FPGA's complete ring; application frames remain 20 ms.
+			cfg.PeriodSize, cfg.Periods = 257, 10
+			return card, device, cfg, nil
+		}
+	}
+	return Card, CaptureDevice, cfg, nil
 }

@@ -12,3 +12,4 @@ tools/*.sh text eol=lf
 *.ps1 text eol=crlf
 *.png binary
 *.tflite binary
+custom-kernel/**/*.patch -whitespace

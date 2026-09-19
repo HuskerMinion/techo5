@@ -62,3 +62,23 @@ echod (dependency)
 echod (dependency)
   github.com/hajimehoshi/go-mp3 — Apache License 2.0
   MP3 decoding for announcements Home Assistant serves unconverted.
+
+custom-kernel/7.2.6/
+  MT8163 kernel support for the Echo Show 5 (cronos), based on the linux-mtk
+  mt8163/7.0 branch and adapted to Linux 7.2.6. The platform patch retains
+  upstream copyright and license notices; patches/ and config/ contain the
+  board adaptations under the licenses declared in each file.
+
+  wifi-amazon/ is a pinned submodule of
+  https://github.com/amazon-oss/android_kernel_amazon_mt76x8-wifi.
+  Its dual GPLv2/BSD notices remain in the upstream source headers.
+
+  sources/amazon-kernel/ is a pinned submodule of
+  https://github.com/amazon-oss/android_kernel_amazon_mt8163.
+  It supplies vendor codec build inputs and hardware reference sources under
+  their upstream licenses. Local adaptations are stored separately as patches.
+
+  initramfs/firmware/ contains the regulatory database with its ISC notice,
+  MT7668 Bluetooth firmware, FPGA bitstreams, and the amplifier configuration.
+  Device-specific boot images, bootloader dumps, and rescue archives are local
+  build inputs and are not included in the source changes.

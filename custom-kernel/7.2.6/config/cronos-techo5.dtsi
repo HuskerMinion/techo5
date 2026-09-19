@@ -1,0 +1,375 @@
+// SPDX-License-Identifier: GPL-2.0-only OR MIT
+/*
+ * TECHO5 additions for the Echo Show 5 (2021, cronos) on top of linux-mtk's mt8163-amazon-cronos.dtsi:
+ * the MT7668 Wi-Fi/Bluetooth combo on the MSDC2 SDIO controller, and the Goodix touch controller.
+ * Values from Amazon's 4.9 cronos.dtsi (android_kernel_amazon_mt8163, cronos/lineage-18.1).
+ */
+
+/ {
+	/* MT7668 PMU enable, EINT10: the combo chip's power. Amazon's tree asserts it 500 ms before use. */
+	wifi_3v3: regulator-wifi {
+		compatible = "regulator-fixed";
+		regulator-name = "wifi_3v3";
+		regulator-min-microvolt = <3300000>;
+		regulator-max-microvolt = <3300000>;
+		gpio = <&pio 32 GPIO_ACTIVE_HIGH>;
+		enable-active-high;
+		startup-delay-us = <500000>;
+		regulator-boot-on;
+	};
+};
+
+&mmc2 {
+	pinctrl-names = "default", "state_uhs";
+	pinctrl-0 = <&mmc2_pins_default>;
+	pinctrl-1 = <&mmc2_pins_uhs>;
+	bus-width = <4>;
+	max-frequency = <50000000>;
+	cap-sd-highspeed;
+	cap-sdio-irq;
+	keep-power-in-suspend;
+	non-removable;
+	no-mmc;
+	no-sd;
+	vmmc-supply = <&wifi_3v3>;
+	vqmmc-supply = <&mt6323_vio18_reg>;
+	assigned-clocks = <&topckgen CLK_TOP_MSDC30_2_SEL>;
+	assigned-clock-parents = <&topckgen CLK_TOP_MSDCPLL_D2>;
+	status = "okay";
+};
+
+&i2c2 {
+	clock-frequency = <300000>;
+	pinctrl-names = "default";
+	pinctrl-0 = <&i2c2_pins_default>;
+	status = "okay";
+
+	/* Goodix GT9xx at 0x5d, reset pio 123, interrupt pio 122; the input device is "goodix-ts" on 4.9
+	   (the FocalTech node in Amazon's tree is for other builds). Mainline's driver reads the exact part
+	   from the chip; gt911 is the generic GT9xx binding. The Goodix analog supply is VMCH. */
+	touchscreen@5d {
+		compatible = "goodix,gt911";
+		reg = <0x5d>;
+		interrupt-parent = <&pio>;
+		interrupts = <123 IRQ_TYPE_EDGE_FALLING>;
+		irq-gpios = <&pio 122 GPIO_ACTIVE_HIGH>;
+		reset-gpios = <&pio 123 GPIO_ACTIVE_HIGH>;
+		AVDD28-supply = <&mt6323_vmch_reg>;
+		VDDIO-supply = <&mt6323_vio18_reg>;
+	};
+};
+
+/* The pvt_4_1 board uses a TAS5805M on I2C2 with the MONO_MINI tuning.
+ * PVDD is board-fixed; GPIO 35 releases power-down when driven high.
+ */
+&afe {
+	status = "okay";
+};
+
+/ {
+	tas5805m_pvdd: regulator-tas5805m-pvdd {
+		compatible = "regulator-fixed";
+		regulator-name = "tas5805m_pvdd";
+		regulator-always-on;
+		regulator-boot-on;
+	};
+};
+
+&i2c2 {
+	amplifier: amplifier@2c {
+		compatible = "ti,tas5805m";
+		reg = <0x2c>;
+		pdn-gpios = <&pio 35 GPIO_ACTIVE_HIGH>;
+		pvdd-supply = <&tas5805m_pvdd>;
+		#sound-dai-cells = <0>;
+	};
+};
+
+/*
+ * The microphones. The TLV320AIC3101 ADC (i2c0 0x18, second address 0x19, enable pio 24, supply vibr)
+ * clocks from the AFE's I2S1 MCLK on pin 6 and drives I2S into an iCE40 FPGA on the SPI controller,
+ * which packs mic L/R and the playback loopback into 4-channel frames (Amazon's cronos.dtsi:
+ * spi@0 "amzn-mtk,spi-audio-pltfm", reset pio 51, CDONE pio 49, ADC reset pio 24, mic enable pio 46).
+ * The FPGA's bitstream comes from the unit's 4.9 kernel (tools/extract-fpga-fw.py).
+ */
+&i2c0 {
+	adc: adc@18 {
+		compatible = "ti,tlv320aic3101";
+		reg = <0x18>;
+		clocks = <&clk26m>;
+		clock-names = "mclk";
+		vibr-supply = <&mt6323_vibr_reg>;
+		disable_reset = <1>;		/* the FPGA driver pulses the reset line */
+		#sound-dai-cells = <0>;
+	};
+};
+
+&mt6323_vibr_reg {
+	regulator-min-microvolt = <3000000>;
+	regulator-max-microvolt = <3000000>;
+	regulator-always-on;
+	regulator-boot-on;
+};
+
+/* FPGA VCCIO2, as configured by Amazon's cronos.dtsi. VCCIO0 is fixed 1.8 V (VCN18). */
+&mt6323_vcamaf_reg {
+	regulator-min-microvolt = <1800000>;
+	regulator-max-microvolt = <1800000>;
+};
+
+&spi {
+	pinctrl-names = "default";
+	pinctrl-0 = <&spi_pins_default>;
+	status = "okay";
+
+	audio_fpga: fpga@0 {
+		compatible = "amazon,cronos-audio-fpga";
+		reg = <0>;
+		spi-max-frequency = <50000000>;
+		vcc-supply = <&mt6323_vcamd_reg>;
+		vcamaf-supply = <&mt6323_vcamaf_reg>;
+		vcn18-supply = <&mt6323_vcn18_reg>;
+		reset-gpios = <&pio 51 GPIO_ACTIVE_LOW>;	/* CRESET, low = in reset */
+		cdone-gpios = <&pio 49 GPIO_ACTIVE_HIGH>;
+		adc-reset-gpios = <&pio 24 GPIO_ACTIVE_LOW>;
+		mic-enable-gpios = <&pio 46 GPIO_ACTIVE_HIGH>;
+		pinctrl-names = "default", "cs-low", "i2s-off", "i2s-on";
+		pinctrl-0 = <&fpga_pins_default>;
+		pinctrl-1 = <&fpga_pins_cs_low>;
+		pinctrl-2 = <&aud_pins_i2s1_gpio>;
+		pinctrl-3 = <&aud_pins_i2s1>;
+	};
+};
+
+/ {
+	sound {
+		compatible = "amazon,cronos-audio";
+		model = "mt8163-cronos";
+		mediatek,platform = <&afe>;
+		pinctrl-names = "default";
+		pinctrl-0 = <&aud_pins_default>;
+
+		dai-link-i2s1 {
+			link-name = "I2S1_BE";
+			codec {
+				sound-dai = <&amplifier>;
+			};
+		};
+
+		dai-link-spi {
+			link-name = "SPI_Capture";
+			codec {
+				sound-dai = <&adc>;
+			};
+		};
+	};
+};
+
+/* VGP2 supports 2.8 V, not the 3.3 V used by VGP1 and VGP3. */
+&mt6323_vgp2_reg {
+	regulator-min-microvolt = <2800000>;
+	regulator-max-microvolt = <2800000>;
+};
+
+/* cpufreq's cooling device needs these; the thermal zone in mt8163.dtsi refers to cpu0 */
+&cpu0 { #cooling-cells = <2>; };
+&cpu1 { #cooling-cells = <2>; };
+&cpu2 { #cooling-cells = <2>; };
+&cpu3 { #cooling-cells = <2>; };
+
+&mt6323_vgp1_reg {
+	regulator-min-microvolt = <3300000>;
+	regulator-max-microvolt = <3300000>;
+	regulator-always-on;
+	regulator-boot-on;
+};
+
+&pio {
+	/* Amazon's aud_pins_default (I2S0 in and I2S3 out on the PCM pins) plus its audi2s1-mode1 (I2S1
+	   out on pins 72-74, 8 mA) and aud_adc_mclk (the ADC's 24.576 MHz on pin 6), all in one state. */
+	aud_pins_default: aud-default-pins {
+		pins_i2s0_i2s3 {
+			pinmux = <MT8163_PIN_18_PCM_CLK__FUNC_I2S0_BCK0>,
+				 <MT8163_PIN_19_PCM_SYNC__FUNC_I2S0_LRCK>,
+				 <MT8163_PIN_20_PCM_RX__FUNC_I2S0_DI>,
+				 <MT8163_PIN_21_PCM_TX__FUNC_I2S3_DO>;
+		};
+
+		pins_mclk {
+			pinmux = <MT8163_PIN_6_PWRAP_SPI0_CSN2__FUNC_I2S1_MCK>;
+		};
+	};
+
+	/* I2S1 out on pins 72-74, to the amplifier and the FPGA: GPIO while the FPGA is programmed
+	   (Amazon's audi2s1-mode0), the I2S function after (audi2s1-mode1, 8 mA). */
+	aud_pins_i2s1_gpio: aud-i2s1-gpio-pins {
+		pins {
+			pinmux = <MT8163_PIN_72_I2S_DATA_IN__FUNC_GPIO72>,
+				 <MT8163_PIN_73_I2S_LRCK__FUNC_GPIO73>,
+				 <MT8163_PIN_74_I2S_BCK__FUNC_GPIO74>;
+		};
+	};
+
+	aud_pins_i2s1: aud-i2s1-pins {
+		pins {
+			pinmux = <MT8163_PIN_72_I2S_DATA_IN__FUNC_I2S1_DO>,
+				 <MT8163_PIN_73_I2S_LRCK__FUNC_I2S1_LRCK>,
+				 <MT8163_PIN_74_I2S_BCK__FUNC_I2S1_BCK>;
+			drive-strength = <MTK_DRIVE_8mA>;
+		};
+	};
+
+	/* the controller's clock and data pins; the chip select belongs to the FPGA node below, which
+	   needs to drive it by hand once */
+	spi_pins_default: spi-pins {
+		pins {
+			pinmux = <MT8163_PIN_54_SPI_CK__FUNC_SPI_CLK>,
+				 <MT8163_PIN_55_SPI_MI__FUNC_SPI_MI>,
+				 <MT8163_PIN_56_SPI_MO__FUNC_SPI_MO>;
+			bias-disable;
+			drive-strength = <4>;
+			input-schmitt-enable;
+		};
+	};
+
+	/* the FPGA node's own states: the chip select back as the controller's, or a GPIO held low for
+	   the iCE40's reset pulse (its SS must be low when CRESET rises) */
+	fpga_pins_default: fpga-default-pins {
+		pins {
+			pinmux = <MT8163_PIN_53_SPI_CS__FUNC_SPI_CSB>;
+			bias-disable;
+			drive-strength = <4>;
+			input-schmitt-enable;
+		};
+	};
+
+	fpga_pins_cs_low: fpga-cs-low-pins {
+		pins {
+			pinmux = <MT8163_PIN_53_SPI_CS__FUNC_GPIO53>;
+			output-low;
+		};
+	};
+
+	i2c2_pins_default: i2c2-pins {
+		pins {
+			pinmux = <MT8163_PIN_77_SDA2__FUNC_SDA2_0>,
+				 <MT8163_PIN_78_SCL2__FUNC_SCL2_0>;
+			bias-disable;
+		};
+	};
+
+	/* No input-enable on the MSDC2 pads: neither MediaTek's 4.9 pinctrl nor this tree has IES bits for
+	   pins 85-90, so the setting fails with -EINVAL and the host never probes. Amazon's DT sets none. */
+	mmc2_pins_default: mmc2-default-pins {
+		pins_cmd_dat {
+			pinmux = <MT8163_PIN_87_MSDC2_DAT0__FUNC_MSDC2_DAT0>,
+				 <MT8163_PIN_88_MSDC2_DAT1__FUNC_MSDC2_DAT1>,
+				 <MT8163_PIN_89_MSDC2_DAT2__FUNC_MSDC2_DAT2>,
+				 <MT8163_PIN_90_MSDC2_DAT3__FUNC_MSDC2_DAT3>,
+				 <MT8163_PIN_85_MSDC2_CMD__FUNC_MSDC2_CMD>;
+			drive-strength = <MTK_DRIVE_6mA>;
+			bias-pull-up = <MTK_PUPD_SET_R1R0_01>;
+		};
+
+		pins_clk {
+			pinmux = <MT8163_PIN_86_MSDC2_CLK__FUNC_MSDC2_CLK>;
+			drive-strength = <MTK_DRIVE_10mA>;
+			bias-pull-down = <MTK_PUPD_SET_R1R0_10>;
+		};
+
+		/* EINT6: the combo chip's own power enable, high while the bus is used. */
+		pins_dev_power {
+			pinmux = <MT8163_PIN_28_EINT6__FUNC_GPIO28>;
+			output-high;
+		};
+	};
+
+	mmc2_pins_uhs: mmc2-uhs-pins {
+		pins_cmd_dat {
+			pinmux = <MT8163_PIN_87_MSDC2_DAT0__FUNC_MSDC2_DAT0>,
+				 <MT8163_PIN_88_MSDC2_DAT1__FUNC_MSDC2_DAT1>,
+				 <MT8163_PIN_89_MSDC2_DAT2__FUNC_MSDC2_DAT2>,
+				 <MT8163_PIN_90_MSDC2_DAT3__FUNC_MSDC2_DAT3>;
+			drive-strength = <MTK_DRIVE_6mA>;
+			bias-pull-up = <MTK_PUPD_SET_R1R0_01>;
+		};
+
+		pins_cmd {
+			pinmux = <MT8163_PIN_85_MSDC2_CMD__FUNC_MSDC2_CMD>;
+			drive-strength = <MTK_DRIVE_8mA>;
+			bias-pull-up = <MTK_PUPD_SET_R1R0_01>;
+		};
+
+		pins_clk {
+			pinmux = <MT8163_PIN_86_MSDC2_CLK__FUNC_MSDC2_CLK>;
+			drive-strength = <MTK_DRIVE_6mA>;
+			bias-pull-down = <MTK_PUPD_SET_R1R0_10>;
+		};
+
+		pins_dev_power {
+			pinmux = <MT8163_PIN_28_EINT6__FUNC_GPIO28>;
+			output-high;
+		};
+	};
+};
+
+/ {
+	gpio-privacy {
+		compatible = "amazon,cronos-privacy";
+		enable-gpios = <&pio 27 GPIO_ACTIVE_HIGH>;
+		state-gpios = <&pio 48 GPIO_ACTIVE_LOW>;
+		button-gpios = <&pio 47 GPIO_ACTIVE_LOW>;
+	};
+};
+
+&pio {
+	camera_clk: camera-clock-pins {
+		pins {
+			pinmux = <MT8163_PIN_119_CMMCLK__FUNC_CMMCLK>,
+				 <MT8163_PIN_101_RDN0__FUNC_RDN0>,
+				 <MT8163_PIN_102_RDP0__FUNC_RDP0>,
+				 <MT8163_PIN_105_RCN__FUNC_RCN>,
+				 <MT8163_PIN_106_RCP__FUNC_RCP>;
+			bias-disable;
+		};
+	};
+};
+
+&mt6323_vcama_reg {
+	regulator-min-microvolt = <2800000>;
+	regulator-max-microvolt = <2800000>;
+};
+
+&mt6323_vcamio_reg {
+	regulator-min-microvolt = <1800000>;
+	regulator-max-microvolt = <1800000>;
+};
+
+&{/soc} {
+	camera@15004000 {
+		compatible = "amazon,cronos-camera";
+		reg = <0 0x15004000 0 0x4000>,
+		      <0 0x15008000 0 0x4000>,
+		      <0 0x10217000 0 0x3000>;
+		clocks = <&imgsys CLK_IMG_CAM_SMI>, <&imgsys CLK_IMG_CAM_CAM>,
+			 <&imgsys CLK_IMG_SEN_TG>, <&imgsys CLK_IMG_SEN_CAM>;
+		clock-names = "smi", "cam", "tg", "sen";
+		assigned-clocks = <&topckgen CLK_TOP_CAMTG_SEL>;
+		assigned-clock-parents = <&topckgen CLK_TOP_UNIV_48M>;
+		power-domains = <&spm MT8163_POWER_DOMAIN_ISP>;
+		iommus = <&iommu M4U_PORT_CAM_IMGO>;
+		mediatek,larb = <&larb2>;
+		sensor-bus = <&i2c0>;
+		reset-gpios = <&pio 22 GPIO_ACTIVE_LOW>;
+		standby-gpios = <&pio 23 GPIO_ACTIVE_LOW>;
+		avdd-supply = <&mt6323_vcama_reg>;
+		iovdd-supply = <&mt6323_vcamio_reg>;
+		pinctrl-names = "default";
+		pinctrl-0 = <&camera_clk>;
+	};
+};
+
+/* The thermal controller shares the AUXADC analog front end. */
+&auxadc {
+	status = "okay";
+};

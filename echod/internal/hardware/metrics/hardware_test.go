@@ -165,3 +165,36 @@ func TestLuxFallsBackToTheVendorDriver(t *testing.T) {
 		t.Errorf("Lux() = %v, want 8", got)
 	}
 }
+
+func TestMainlineTemperatures(t *testing.T) {
+	for _, radio := range []string{"Temperature = 47\n", "Temperature = invalid\n", "Temperature = 999\n", ""} {
+		t.Run(radio, func(t *testing.T) {
+			root := t.TempDir()
+			for path, body := range map[string]string{
+				"sys/class/thermal/thermal_zone2/type": "cpu-thermal\n",
+				"sys/class/thermal/thermal_zone2/temp": "50219\n",
+				"proc/net/wlan/get_temperature":        radio,
+			} {
+				full := filepath.Join(root, path)
+				if err := os.MkdirAll(filepath.Dir(full), 0755); err != nil {
+					t.Fatal(err)
+				}
+				if err := os.WriteFile(full, []byte(body), 0644); err != nil {
+					t.Fatal(err)
+				}
+			}
+			got := (Reader{Root: root}).Temperatures()
+			if got["mtktscpu"] != 50.219 {
+				t.Fatalf("CPU: %v", got)
+			}
+			temp, known := got["mtktswmt"]
+			if radio == "Temperature = 47\n" {
+				if !known || temp != 47 {
+					t.Fatalf("radio: %v", got)
+				}
+			} else if known {
+				t.Fatalf("invalid radio reading published: %v", got)
+			}
+		})
+	}
+}

@@ -1,0 +1,6 @@
+[submodule "custom-kernel/7.2.6/wifi-amazon"]
+	path = custom-kernel/7.2.6/wifi-amazon
+	url = https://github.com/amazon-oss/android_kernel_amazon_mt76x8-wifi.git
+[submodule "custom-kernel/7.2.6/sources/amazon-kernel"]
+	path = custom-kernel/7.2.6/sources/amazon-kernel
+	url = https://github.com/amazon-oss/android_kernel_amazon_mt8163.git

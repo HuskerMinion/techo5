@@ -20,8 +20,8 @@ IS_WINDOWS = os.name == 'nt'
 IS_MACOS = sys.platform == 'darwin'
 
 # Alpine's base image, pinned: boot images' initramfs is built on it.
-ALPINE_URL = 'https://dl-cdn.alpinelinux.org/alpine/v3.24/releases/armv7/alpine-minirootfs-3.24.1-armv7.tar.gz'
-ALPINE_SHA256 = '50942d567e6ee422c16cb46d5c282ed9d8adc9007c2a483faf4148a18c64ce32'
+ALPINE_URL = 'https://dl-cdn.alpinelinux.org/alpine/v3.24/releases/armv7/alpine-minirootfs-3.24.2-armv7.tar.gz'
+ALPINE_SHA256 = '5552f1ef2398cee46ef2cf733f8f1258f39a77ad065dfd47282fc0df9fe1976c'
 
 # The USB serial consoles: TECHO5 Linux on the Show 5 and the Spot (Linux Foundation ids, told apart by
 # the serial number on the kernel command line), and on the Dot (Google ids, with the unit's serial

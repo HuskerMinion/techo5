@@ -58,7 +58,7 @@ done
 echo "== mkimage"
 export MSYS_NO_PATHCONV=1
 R=$(W "$ROOT"); I=$(W "$INPUTS")
-mini=$(ls "$INPUTS"/alpine-minirootfs-*-armv7.tar.gz | head -1)
+mini=$INPUTS/alpine-minirootfs-3.24.2-armv7.tar.gz
 kern=(); [ -n "$KERNEL" ] && kern=(--kernel "$(W "$KERNEL")")
 key=(--copy "$I/techo5_ed25519.pub=/root/.ssh/authorized_keys"); [ -n "$NOKEY" ] && key=()
 "$PY" "$R/tools/linux/mkimage.py" --kernel-image "$(W "$KERNEL_IMAGE")" "${kern[@]}" \

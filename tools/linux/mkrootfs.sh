@@ -43,7 +43,7 @@ R=$WORK/root
 rm -rf "$R"
 mkdir -p "$R"
 
-mini=$(ls "$IN"/inputs/alpine-minirootfs-*-armv7.tar.gz | head -1)
+mini=$IN/inputs/alpine-minirootfs-3.24.2-armv7.tar.gz
 say "base: $(basename "$mini")"
 tar -xzf "$mini" -C "$R"
 
@@ -69,7 +69,8 @@ if [ -e "$IN/inputs/vendor.tar.gz" ]; then
 	tar -xzf "$IN/inputs/vendor.tar.gz" -C "$R" vendor
 	# The Wi-Fi driver the device boots with (etc/techo5/device.conf in the overlay; the Show's by default).
 	WIFI_MODULE=/vendor/lib/modules/mt76x8_wlan.ko
-	[ -r "$IN/overlay/etc/techo5/device.conf" ] && WIFI_MODULE=$(sed -n 's/^WIFI_MODULE=//p' "$IN/overlay/etc/techo5/device.conf" | tr -d '"')
+	[ -r "$IN/overlay/etc/techo5/device.conf" ] && WIFI_MODULE=$(sed -n 's/^WIFI_MODULE=//p' "$IN/overlay/etc/techo5/device.conf" | tr -d '
+"')
 	[ -e "$R$WIFI_MODULE" ] || { echo "mkrootfs: vendor tree has no $WIFI_MODULE" >&2; exit 1; }
 else
 	say "no vendor tree: the unit's own is mounted at /vendor"
@@ -89,6 +90,11 @@ say "overlay"
 find "$R/etc/techo5" "$R/usr/local/sbin" "$R/lib/techo5-lib.sh" "$R/etc/inittab" "$R/etc/profile.d/techo5.sh" "$R/etc/hostname" "$R/etc/motd" \
 	-type f -exec sed -i 's/\r$//' {} +
 chmod 755 "$R"/etc/techo5/*.sh "$R"/usr/local/sbin/*
+
+# Optional mainline modules and firmware, built from the same kernel as boot.
+if [ -f "$IN/inputs/kernel.tar.gz" ]; then
+	tar -xzf "$IN/inputs/kernel.tar.gz" -C "$R"
+fi
 
 # State that must survive an image change lives on userdata.
 rm -rf "$R/etc/dropbear"
@@ -114,7 +120,7 @@ ln -s /data/misc/techo5/timezone "$R/etc/timezone"
 mkdir -p "$R/store" "$R/data" "$R/run" "$R/proc" "$R/sys" "$R/dev" "$R/tmp" "$R/newroot"
 chmod 1777 "$R/tmp"
 # The daemon's own version line comes from running it, which on a host goes through QEMU.
-echo "techo5 rootfs $VERSION built $(date -u '+%Y-%m-%dT%H:%MZ'), daemon $("$R/usr/local/bin/techo5" --version 2>/dev/null | head -1)" > "$R/etc/techo5-release"
+echo "techo5 rootfs $VERSION" > "$R/etc/techo5-release"
 
 say "packing"
 rm -f "$OUT"

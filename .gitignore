@@ -18,3 +18,25 @@ inputs/
 # Per-unit backups and installer keys: never committed.
 backups/
 build/
+
+# custom-kernel/7.2.6/ (mainline kernel port): build products and generated intermediates, never committed --
+# see custom-kernel/7.2.6/README.md's rebuild recipe. wifi-work/ regenerates from wifi-amazon/ + wifi/port.py,
+# codec-work/ from amazon49/audio/ + patches/port-aic3101.py.
+custom-kernel/7.2.6/out/
+custom-kernel/7.2.6/wifi-work/
+custom-kernel/7.2.6/codec-work/
+
+# Local kernel reference material, device dumps, archives, and generated diagnostics.
+custom-kernel/7.2.6/logs/
+custom-kernel/7.2.6/lk/
+custom-kernel/7.2.6/release/
+custom-kernel/7.2.6/wifi-coreelec/
+custom-kernel/7.2.6/coreelec-port.diff
+custom-kernel/7.2.6/amazon49/tree.txt
+custom-kernel/7.2.6/initramfs/init
+custom-kernel/7.2.6/initramfs/*.cpio
+custom-kernel/7.2.6/initramfs/*.bak
+custom-kernel/7.2.6/stub/*.bin
+custom-kernel/7.2.6/stub/*.bin.gz
+custom-kernel/7.2.6/wifi/errors-*.txt
+custom-kernel/7.2.6/wifi-amazon/module/os/linux/gl_sec.o.new

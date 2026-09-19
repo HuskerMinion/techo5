@@ -7,7 +7,7 @@ don't need this: they use the release.
     python3 tools/fetch-inputs.py --device dot --dot ../techo5-dot --out ../techo5-dot/inputs
 
 What it fetches, over HTTPS from Alpine's CDN and GitHub:
-  alpine-minirootfs-3.24.1-armv7.tar.gz   Alpine's base image (pinned sha256)
+  alpine-minirootfs-3.24.2-armv7.tar.gz   Alpine's base image (pinned sha256)
   busybox.static                          from Alpine v3.24's busybox-static (armv7)
   apk.static                              apk-tools-static 2.14 (v3.22, x86_64), for the root filesystem build
   models/                                 okay_nabu, hey_jarvis, hey_mycroft, alexa, from esphome/micro-wake-word-models;

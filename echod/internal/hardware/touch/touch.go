@@ -17,6 +17,7 @@ import (
 	"time"
 
 	"github.com/HuskerMinion/techo5/echod/internal/component"
+	"github.com/HuskerMinion/techo5/echod/internal/layout"
 	"github.com/HuskerMinion/techo5/echod/internal/lib/hook"
 	"github.com/HuskerMinion/techo5/echod/internal/lib/input"
 	"github.com/HuskerMinion/techo5/echod/internal/service"
@@ -122,6 +123,9 @@ func (s *Screen) Touched() bool {
 // Start opens the controller's node and reads its coordinate ranges.
 func (s *Screen) Start(context.Context) error {
 	dev, err := input.Find(deviceName)
+	if err != nil && layout.Board == "cronos" {
+		dev, err = input.Find("Goodix Capacitive TouchScreen")
+	}
 	if err != nil {
 		return fmt.Errorf("touch: %w", err)
 	}
@@ -171,7 +175,10 @@ func (s *Screen) Run(ctx context.Context) error {
 	slot := 0
 	var f *finger
 	// per-slot positions arrive before the slot's tracking id is known to be ours, so keep them all
-	type pos struct{ x, y int32 }
+	type pos struct {
+		x, y         int32
+		seenX, seenY bool
+	}
 	slots := map[int]*pos{}
 
 	for {
@@ -193,14 +200,14 @@ func (s *Screen) Run(ctx context.Context) error {
 			case absMTSlot:
 				slot = int(e.Value)
 			case absMTPositionX:
-				p.x = e.Value
+				p.x, p.seenX = e.Value, true
 				if f != nil && f.slot == slot {
 					s.mu.Lock()
 					f.x, f.seenX = int(e.Value), true
 					s.mu.Unlock()
 				}
 			case absMTPositionY:
-				p.y = e.Value
+				p.y, p.seenY = e.Value, true
 				if f != nil && f.slot == slot {
 					s.mu.Lock()
 					f.y, f.seenY = int(e.Value), true
@@ -260,6 +267,16 @@ func (s *Screen) Run(ctx context.Context) error {
 				continue
 			}
 			s.mu.Lock()
+			// Evdev only sends coordinates that changed. A new contact may reuse
+			// either axis from the slot's previous contact.
+			if p := slots[f.slot]; p != nil {
+				if !f.seenX && p.seenX {
+					f.x, f.seenX = int(p.x), true
+				}
+				if !f.seenY && p.seenY {
+					f.y, f.seenY = int(p.y), true
+				}
+			}
 			if f.sx < 0 && f.seenX && f.seenY {
 				f.sx, f.sy = f.x, f.y
 			}

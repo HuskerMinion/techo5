@@ -3,10 +3,8 @@
 // Package ambient is the Echo Show's light sensor: how bright the room is, for a screen that
 // should not glare at night.
 //
-// The board's sensor sits behind MediaTek's hwmsensor framework rather than IIO: it has to be
-// switched on through /sys/class/misc/m_alsps_misc and then reports lux as ABS_X events on the
-// input device named m_alsps_input, every alsdelay nanoseconds. (The IIO device on this board is
-// the auxadc, which is why metrics.LuxPath finds nothing.)
+// Vendor kernels report lux through MediaTek's input device. Mainline exposes
+// the JSA1214 through IIO, with raw readings converted using its reported scale.
 package ambient
 
 import (
@@ -18,6 +16,7 @@ import (
 	"time"
 
 	"github.com/HuskerMinion/techo5/echod/internal/component"
+	"github.com/HuskerMinion/techo5/echod/internal/hardware/metrics"
 	"github.com/HuskerMinion/techo5/echod/internal/lib/hook"
 	"github.com/HuskerMinion/techo5/echod/internal/lib/input"
 	"github.com/HuskerMinion/techo5/echod/internal/service"
@@ -45,7 +44,8 @@ type Sensor struct {
 	last float64
 	at   time.Time
 
-	dev *input.Device
+	dev     *input.Device
+	luxPath string
 }
 
 var (
@@ -69,6 +69,16 @@ func (s *Sensor) Current() (lux float64, at time.Time, ok bool) {
 
 // Start switches the sensor on and opens its input node.
 func (s *Sensor) Start(context.Context) error {
+	if _, err := os.Stat(misc); os.IsNotExist(err) {
+		s.luxPath = metrics.Reader{}.LuxPath()
+		if s.luxPath == "" {
+			return fmt.Errorf("ambient: no supported light sensor")
+		}
+		slog.Info("light sensor on", "device", s.luxPath, "period", period)
+		return nil
+	} else if err != nil {
+		return fmt.Errorf("ambient: finding the sensor: %w", err)
+	}
 	if err := os.WriteFile(misc+"/alsdelay", []byte(fmt.Sprint(period.Nanoseconds())), 0o644); err != nil {
 		return fmt.Errorf("ambient: setting the report period: %w", err)
 	}
@@ -85,6 +95,10 @@ func (s *Sensor) Start(context.Context) error {
 }
 
 func (s *Sensor) Close() error {
+	if s.luxPath != "" {
+		s.luxPath = ""
+		return nil
+	}
 	_ = os.WriteFile(misc+"/alsactive", []byte("0"), 0o644)
 	if s.dev == nil {
 		return nil
@@ -97,6 +111,9 @@ func (s *Sensor) Close() error {
 // Run reads until ctx is cancelled. The read blocks in the kernel, so cancellation closes the node
 // from the side and lets the read fail.
 func (s *Sensor) Run(ctx context.Context) error {
+	if s.luxPath != "" {
+		return s.poll(ctx)
+	}
 	dev := s.dev
 	stop := context.AfterFunc(ctx, func() { _ = dev.Close() })
 	defer stop()
@@ -112,10 +129,33 @@ func (s *Sensor) Run(ctx context.Context) error {
 		if e.Type != input.EvAbs || e.Code != 0 { // ABS_X carries the lux
 			continue
 		}
-		lux := float64(e.Value)
-		s.mu.Lock()
-		s.last, s.at = lux, time.Now()
-		s.mu.Unlock()
-		s.Lux.Emit(lux)
+		s.emit(float64(e.Value))
+	}
+}
+
+func (s *Sensor) emit(lux float64) {
+	s.mu.Lock()
+	s.last, s.at = lux, time.Now()
+	s.mu.Unlock()
+	s.Lux.Emit(lux)
+}
+
+func (s *Sensor) poll(ctx context.Context) error {
+	ticker := time.NewTicker(period)
+	defer ticker.Stop()
+	for {
+		if ctx.Err() != nil {
+			return nil
+		}
+		reading := (metrics.Reader{}).Lux(s.luxPath)
+		if !reading.Known {
+			return fmt.Errorf("ambient: reading %s", s.luxPath)
+		}
+		s.emit(reading.Value)
+		select {
+		case <-ctx.Done():
+			return nil
+		case <-ticker.C:
+		}
 	}
 }

@@ -651,3 +651,5 @@ func (f *Frame) Full() *image.RGBA {
 	}
 	return f.RGBA
 }
+
+func Available() bool { return availableVendor() }

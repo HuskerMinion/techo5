@@ -21,10 +21,14 @@ const (
 	pgaMax    = 119
 )
 
-
 // routeInputs points every ADC at the differential input its microphones are wired to.
 func routeInputs() {
-	m, err := alsa.OpenMixer(Card)
+	card, _, _, err := captureDevice()
+	if err != nil {
+		slog.Error("selecting microphone mixer failed", "err", err)
+		return
+	}
+	m, err := alsa.OpenMixer(card)
 	if err != nil {
 		slog.Error("opening the mixer failed", "err", err)
 		return
@@ -48,7 +52,12 @@ func routeInputs() {
 // applyGain sets the analog gain on every ADC. A microphone that cannot be turned up is worth a log
 // and nothing more: the array still works, quietly.
 func applyGain(db int) {
-	m, err := alsa.OpenMixer(Card)
+	card, _, _, err := captureDevice()
+	if err != nil {
+		slog.Error("selecting microphone mixer failed", "err", err)
+		return
+	}
+	m, err := alsa.OpenMixer(card)
 	if err != nil {
 		slog.Error("opening the mixer failed", "err", err)
 		return
