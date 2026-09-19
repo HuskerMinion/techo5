@@ -1,6 +1,10 @@
 #!/usr/bin/env python3
 """Install TECHO5 on an Echo Show 5 (2nd gen, cronos) running LineageOS 18.1, in one command.
 
+The 1st gen (checkers) is experimental: it runs the same kernel commit on LineageOS 18.1 from
+2026-09-04 on, and installs with --boot, a boot image built for it (its kernel with Bluetooth), since
+releases carry the 2nd gen's only.
+
     python3 tools/install-show.py --serial <serial> --name Kitchen --dry-run
     python3 tools/install-show.py --serial <serial> --name Kitchen
 
@@ -118,12 +122,16 @@ def main():
     if state != 'device':
         fail("adb does not see %s running LineageOS (state '%s'): turn on USB debugging and accept this computer" % (a.serial, state))
     dev = adb.sh('getprop ro.product.device')
-    if dev != 'cronos':
-        fail("%s reports '%s', not cronos (an Echo Show 5 2nd gen)" % (a.serial, dev))
+    if dev not in ('cronos', 'checkers'):
+        fail("%s reports '%s', not an Echo Show 5 (cronos, 2nd gen; checkers, 1st gen)" % (a.serial, dev))
+    if dev == 'checkers' and not a.boot:
+        # A release's boot image carries the 2nd gen's kernel and device trees: on a 1st gen it would
+        # not bring the screen or the Wi-Fi up. Only a boot image built for it may go on.
+        fail('the Echo Show 5 1st gen is experimental: give --boot the boot image built for it')
     kr = adb.sh('uname -r')
     if kr != KERNEL_RELEASE:
         fail('%s runs kernel %s, not %s: install the LineageOS 18.1 build the getting started guide links' % (a.serial, kr, KERNEL_RELEASE))
-    note('cronos, LineageOS kernel %s' % kr)
+    note('%s, LineageOS kernel %s' % (dev, kr))
 
     # ------------------------------------------------------------------------------------ 2. backup
     step('backup')

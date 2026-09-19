@@ -1,5 +1,5 @@
 #!/bin/bash
-# build-kernel.sh — build the cronos kernel (LineageOS 18.1 tree, 4.9.337
+# build-kernel.sh — build the Echo Show 5 kernel (LineageOS 18.1 tree, 4.9.337
 # arm64) with Bluetooth added, at the exact commit the LineageOS boot image
 # was built from so its vendor modules (mt76x8_wlan.ko, mt76x8_bt.ko; built
 # with CONFIG_MODVERSIONS) still load. Run inside WSL/Linux.
@@ -13,7 +13,9 @@
 # CROSS_COMPILE (an aarch64 GCC; Arm's 8.3-2019.03 release builds it cleanly:
 # developer.arm.com/-/media/Files/downloads/gnu-a/8.3-2019.03/binrel/
 # gcc-arm-8.3-2019.03-x86_64-aarch64-linux-gnu.tar.xz, no root needed),
-# KOUT (build directory; keep it outside the source tree).
+# KOUT (build directory; keep it outside the source tree), DEFCONFIG (cronos_defconfig, the 2nd gen;
+# checkers_defconfig for the 1st gen, which runs the same commit with its own device trees; give it
+# a KOUT of its own).
 #
 # Afterwards: delete amzn,mic-downmix from the appended device trees the way
 # patch-dtb.py does, then build-image.sh KERNEL=<Image.gz-dtb> (see README.md).
@@ -22,6 +24,7 @@ set -euo pipefail
 KSRC=${KSRC:-$HOME/kernel}
 KCOMMIT=${KCOMMIT:-8d928c5176cc}
 KOUT=${KOUT:-$HOME/kout}
+DEFCONFIG=${DEFCONFIG:-cronos_defconfig}
 CROSS_COMPILE=${CROSS_COMPILE:-$HOME/toolchain/gcc-arm-8.3-2019.03-x86_64-aarch64-linux-gnu/bin/aarch64-linux-gnu-}
 OUT=
 while [ $# -gt 0 ]; do
@@ -50,7 +53,7 @@ export KBUILD_BUILD_USER=${KBUILD_BUILD_USER:-techo5} KBUILD_BUILD_HOST=${KBUILD
 export TZ=UTC # the build date in the version string, without the builder's zone
 export ARCH=arm64 CROSS_COMPILE
 mkdir -p "$KOUT"
-make -s O="$KOUT" cronos_defconfig
+make -s O="$KOUT" "$DEFCONFIG"
 # Bluetooth core + BR/EDR + LE, RFCOMM (serial profiles), the virtual HCI
 # driver btbridge feeds, and HCI UART/H4 as the alternative transport.
 scripts/config --file "$KOUT/.config" \
