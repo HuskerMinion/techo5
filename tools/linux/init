@@ -15,10 +15,7 @@
 #     broken unit is still reachable and still answers. Without a network it
 #     reboots after 15 minutes so an unattended unit never stays stuck.
 #
-# Breadcrumbs go to the spare area of the MISC partition (tools/linux/readmisc.sh)
-# and a boot log to userdata; everything is logged to the kernel log, which
-# pstore keeps across a reboot. The interpreter is the static busybox so PID 1
-# does not depend on the dynamic loader.
+# The static interpreter keeps rescue available without a dynamic loader.
 
 BB=/bin/busybox.static
 MISC=/dev/mmcblk0p8          # static node from the initramfs, major 179
@@ -27,15 +24,8 @@ DATA_DEV=/dev/mmcblk0p16     # userdata: daemon state, logs, Wi-Fi credentials
 STAY_MINUTES=${STAY_MINUTES:-15}
 
 exec > /dev/kmsg 2>&1
-CRUMB=0
-crumb() {
-	# one 512-byte block per stage, starting at MISC byte offset 4096
-	CRUMB=$((CRUMB+1))
-	echo "techo5 crumb $CRUMB: $*"
-	printf 'TECHO5 %02d %s\n' "$CRUMB" "$*" | $BB dd of=$MISC bs=512 seek=$((7+CRUMB)) count=1 conv=notrunc,sync 2>/dev/null
-}
-log() { crumb "$*"; }
-crumb "init started, kernel $($BB uname -r) $($BB uname -m)"
+log() { echo "techo5-init: $*"; }
+log "init started, kernel $($BB uname -r) $($BB uname -m)"
 
 $BB mount -t proc proc /proc
 $BB mount -t sysfs sysfs /sys
@@ -52,8 +42,8 @@ $BB mount -t tmpfs tmpfs /tmp
 $BB mdev -s
 $BB mknod -m 600 /dev/mmcblk0p8 b 179 8 2>/dev/null
 [ -e /dev/fb0 ] && $BB ln -sf /dev/fb0 /dev/graphics/fb0
-echo 7 4 1 7 > /proc/sys/kernel/printk
-crumb "dev populated: $($BB ls /dev | $BB wc -l) nodes, fb0=$([ -e /dev/fb0 ] && echo yes || echo no)"
+echo 3 4 1 3 > /proc/sys/kernel/printk
+log "dev populated: $($BB ls /dev | $BB wc -l) nodes, fb0=$([ -e /dev/fb0 ] && echo yes || echo no)"
 
 export PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 . /lib/techo5-lib.sh
@@ -62,10 +52,10 @@ export PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 if mount -t ext4 -o noatime $DATA_DEV /data 2>/dev/null; then
 	mkdir -p /data/techo5-linux
 	LOGDIR=/data/techo5-linux
-	crumb "userdata mounted"
+	log "userdata mounted"
 else
 	LOGDIR=/tmp
-	crumb "userdata mount failed"
+	log "userdata mount failed"
 fi
 
 # --- The system partition: a TECHO5 store, or still a LineageOS system.
@@ -73,75 +63,60 @@ MODE=none
 if mount -t ext4 -o noatime $STORE_DEV /store 2>/dev/null; then
 	if [ -e /store/.techo5-store ]; then
 		MODE=store
-		crumb "store mounted: active=$(cat /store/active 2>/dev/null) a=$(cat /store/slots/a.state 2>/dev/null) b=$(cat /store/slots/b.state 2>/dev/null)"
+		log "store mounted: active=$(cat /store/active 2>/dev/null) a=$(cat /store/slots/a.state 2>/dev/null) b=$(cat /store/slots/b.state 2>/dev/null)"
 	else
 		umount /store
-		mount -t ext4 -o ro,noatime $STORE_DEV /android 2>/dev/null && MODE=android && crumb "android system mounted (no store)"
+		mount -t ext4 -o ro,noatime $STORE_DEV /android 2>/dev/null && MODE=android && log "android system mounted (no store)"
 	fi
 else
-	crumb "system partition mount failed"
+	log "system partition mount failed"
 fi
-
-snapshot() {
-	{
-		echo "=== $(date) uptime $(cut -d' ' -f1 /proc/uptime) mode $MODE"
-		echo "--- dmesg tail"; dmesg | tail -60
-		echo "--- ip"; ip addr 2>&1
-		echo "--- mounts"; cat /proc/mounts
-		echo "--- mem"; head -3 /proc/meminfo
-	} > /tmp/snapshot 2>&1
-	cp /tmp/snapshot $LOGDIR/rescue.log 2>/dev/null
-	# also into MISC at byte offset 64 KiB, up to 120 KiB, so it survives without any filesystem
-	head -c 122880 /tmp/snapshot | dd of=$MISC bs=512 seek=128 conv=notrunc 2>/dev/null
-	sync
-}
 
 # --- Normal path: hand over to a slot.
 boot_slot() {
 	slot=$1
 	root=/store/slots/$slot
-	[ -x $root/sbin/init ] || [ -L $root/sbin/init ] || { crumb "slot $slot has no /sbin/init"; return 1; }
-	mount --bind $root /newroot || { crumb "bind mount of slot $slot failed"; return 1; }
+	if [ -f /etc/techo5/kernel-release ] &&
+	   [ ! -f "$root/lib/modules/$(uname -r)/extra/mt76x8_wlan.ko" ]; then
+		log "slot $slot has no matching kernel modules; staying in rescue"
+		return 1
+	fi
+	[ -x $root/sbin/init ] || [ -L $root/sbin/init ] || { log "slot $slot has no /sbin/init"; return 1; }
+	mount --bind $root /newroot || { log "bind mount of slot $slot failed"; return 1; }
 	mkdir -p /run/techo5
 	echo $slot > /run/techo5/slot
 	sync
 	# The store stays read-only under the running system; the root shares the flag.
-	mount -o remount,ro /store 2>/dev/null || crumb "store remount ro failed"
-	crumb "switching root to slot $slot ($(cat $root/etc/techo5-release 2>/dev/null))"
+	mount -o remount,ro /store 2>/dev/null || log "store remount ro failed"
+	log "switching root to slot $slot ($(cat $root/etc/techo5-release 2>/dev/null))"
 	# Nothing from the initramfs may keep running: its files are about to go.
 	kill -9 -1 2>/dev/null
 	for m in store data run tmp dev sys proc; do
 		mkdir -p /newroot/$m
-		mount --move /$m /newroot/$m || crumb "moving /$m failed"
+		mount --move /$m /newroot/$m || log "moving /$m failed"
 	done
 	exec $BB switch_root /newroot /sbin/init
-	crumb "switch_root failed"
+	log "switch_root failed"
 	return 1
 }
 
 if [ $MODE = store ]; then
 	if [ -e /store/rescue ]; then
 		rm -f /store/rescue; sync
-		crumb "rescue marker found: staying in the initramfs this boot"
+		log "rescue marker found: staying in the initramfs this boot"
 	elif slot=$(STORE=/store slotctl next 2>/tmp/slotctl.err); then
-		crumb "slotctl: $(tr '\n' ' ' < /tmp/slotctl.err)"
+		log "slotctl: $(tr '\n' ' ' < /tmp/slotctl.err)"
 		boot_slot "$slot"
 		# only reached when the hand-over failed
 		mount -o remount,rw /store 2>/dev/null
 		umount /newroot 2>/dev/null
 	else
-		crumb "slotctl: $(tr '\n' ' ' < /tmp/slotctl.err)"
+		log "slotctl: $(tr '\n' ' ' < /tmp/slotctl.err)"
 	fi
 fi
 
 # --- Rescue environment.
-crumb "rescue mode ($MODE)"
-snapshot
-
-# Panel: the test screen with the clock ticking, as proof of life.
-if [ -x /usr/local/bin/fbprobe ]; then
-	/usr/local/bin/fbprobe -hold 1000h > /tmp/fbprobe.log 2>&1 &
-fi
+log "rescue mode ($MODE)"
 
 # Root shell on USB serial.
 t5_usb_acm
@@ -162,9 +137,9 @@ for d in /store/slots/$(cat /store/active 2>/dev/null) /store/slots/a /store/slo
 done
 if [ -n "$VENDOR" ]; then
 	ln -sfn $VENDOR /vendor
-	crumb "vendor tree: $VENDOR"
+	log "vendor tree: $VENDOR"
 else
-	crumb "no vendor tree found; no Wi-Fi"
+	log "no vendor tree found; no Wi-Fi"
 fi
 
 IP=
@@ -180,7 +155,7 @@ network_up() {
 	[ -e /tmp/network-up ] && return 0
 	[ -n "$IP" ] || return 1
 	: > /tmp/network-up
-	crumb "network: $IP"
+	log "network: $IP"
 	# Keys only, even here: the key built into this boot image plus the ones Home Assistant gave
 	# the device (userdata). No password logins — an empty root password would let in anyone on
 	# the network while a unit sits in rescue.
@@ -194,7 +169,7 @@ network_up() {
 	if [ -s /root/.ssh/authorized_keys ]; then
 		t5_dropbear $LOGDIR/dropbear -s
 	else
-		crumb "ssh: no key in the image or on userdata; USB serial console only"
+		log "ssh: no key in the image or on userdata; USB serial console only"
 	fi
 	t5_ntp
 
@@ -205,32 +180,29 @@ network_up() {
 		[ -x "$f" ] && { DAEMON=$f; break; }
 	done
 	if [ -n "$DAEMON" ]; then
-		killall fbprobe 2>/dev/null
 		mkdir -p /data/misc/techo5/models
 		(setsid $DAEMON run >> $LOGDIR/techo5.log 2>&1 &)
 		sleep 3
 		if pidof techo5 >/dev/null; then
-			crumb "daemon running from $DAEMON (pid $(pidof techo5)); staying up"
+			log "daemon running from $DAEMON (pid $(pidof techo5)); staying up"
 		else
-			crumb "daemon failed to start: $(tail -2 $LOGDIR/techo5.log | tr '\n' ' ')"
+			log "daemon failed to start: $(tail -2 $LOGDIR/techo5.log | tr '\n' ' ')"
 		fi
 	fi
 	touch /tmp/stay
 }
 network_up
 
-snapshot
-crumb "rescue ready; reboot in ${STAY_MINUTES} min unless /tmp/stay exists"
+log "rescue ready; reboot in ${STAY_MINUTES} min unless /tmp/stay exists"
 
 i=0
 while true; do
 	sleep 30
 	i=$((i+1))
 	[ -e /tmp/network-up ] || { IP=$(t5_ip); network_up; }
-	snapshot
 	[ -e /tmp/stay ] && continue
 	if [ $((i*30)) -ge $((STAY_MINUTES*60)) ]; then
-		crumb "no network after ${STAY_MINUTES} min; rebooting"
+		log "no network after ${STAY_MINUTES} min; rebooting"
 		sync
 		umount /store /android /data 2>/dev/null
 		$BB reboot -f

@@ -590,6 +590,23 @@ session.
    screenshots also hides weather and station names, which give away where a
    device is.
 
+## M5 — Mainline kernel and Alpine Linux (Show 5)
+
+The [mainline kernel option](../custom-kernel/7.2.6/README.md) builds Linux 7.2.6
+with MT8163 platform support and an Alpine 3.24.2 armv7 root filesystem. The port
+covers CPU cores, storage, USB console, Wi-Fi, display, touch, ambient light,
+thermal management, speaker playback, and microphone capture. The application
+uses the mainline identity, audio, backlight, touch, and light-sensor interfaces.
+
+Matching kernel modules and firmware are packaged with each root filesystem.
+Slot installation retains A/B trials and persistent application state. The boot
+partition remains shared: selecting an older root filesystem does not restore
+its kernel. An incompatible slot falls back to the rescue environment.
+`CONFIG_COMPAT` supports the armv7 userspace. Dot and Spot retain their platforms.
+
+The OV02B10 camera pipeline and hardware privacy control still require mainline
+integration. Native Bluetooth uses btmtksdio with the existing BlueZ services.
+
 ## Ground rules
 
 - Everything stays local; no cloud services.

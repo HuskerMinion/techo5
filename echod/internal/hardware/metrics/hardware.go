@@ -44,6 +44,20 @@ func (r Reader) Temperatures() map[string]float64 {
 		}
 		out[name] = milli / 1000
 	}
+	if _, exists := out["mtktscpu"]; !exists {
+		if temp, ok := out["cpu-thermal"]; ok {
+			out["mtktscpu"] = temp
+		}
+	}
+	if _, exists := out["mtktswmt"]; !exists {
+		if raw, err := text(r.path("proc/net/wlan/get_temperature")); err == nil {
+			if key, value, ok := strings.Cut(raw, "="); ok && strings.TrimSpace(key) == "Temperature" {
+				if temp, err := strconv.ParseFloat(strings.TrimSpace(value), 64); err == nil && temp >= -40 && temp <= 150 {
+					out["mtktswmt"] = temp
+				}
+			}
+		}
+	}
 	return out
 }
 

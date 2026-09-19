@@ -177,6 +177,7 @@ func (m *mmio) unmap() {
 
 // device is the open camera: file descriptors, register windows, the frame buffers.
 type device struct {
+	v4l2           bool
 	isp, sens, ion int
 	cam, sen, mipi *mmio
 	buf            []byte
@@ -190,6 +191,9 @@ type device struct {
 }
 
 func open() (*device, error) {
+	if path := mainlineCameraPath(); path != "" {
+		return openV4L2(path)
+	}
 	d := &device{isp: -1, sens: -1, ion: -1}
 	var err error
 	if d.isp, err = syscall.Open("/dev/camera-isp", syscall.O_RDWR, 0); err != nil {
@@ -265,6 +269,10 @@ func open() (*device, error) {
 // setFeature is KDIMGSENSORIOC_X_FEATURECONCTROL with one integer parameter. The kernel is 64-bit
 // and reads the parameter as an unsigned long, so eight bytes go over.
 func (d *device) setFeature(id uint32, v uint64) {
+	if d.v4l2 {
+		d.v4l2Feature(id, v)
+		return
+	}
 	var para [8]byte
 	for i := range para {
 		para[i] = byte(v >> (8 * i))
@@ -338,6 +346,10 @@ func (d *device) autoExpose(bayer []byte) {
 }
 
 func (d *device) close() {
+	if d.v4l2 {
+		syscall.Close(d.isp)
+		return
+	}
 	if d.cam != nil {
 		d.cam.mask(regTgVfCon, 1, 0) // view finder off
 	}
@@ -535,6 +547,10 @@ func teardownCSI2(s, ana *mmio) {
 // with interrupts masked; on every tick the DMA is aimed at the next slot, so the one it just
 // left is whole and stays untouched for slots-1 more periods.
 func (d *device) stream(stop chan struct{}, frame func(bayer []byte)) {
+	if d.v4l2 {
+		d.streamV4L2(stop, frame)
+		return
+	}
 	cam := d.cam
 	cur := 0
 	cam.wr(regImgoBase, d.mva)

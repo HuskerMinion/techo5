@@ -197,7 +197,9 @@ func blit(mem []byte, img *image.RGBA, line, panelW, panelH int, v varInfo) {
 			pixel |= uint32(r) << v.Red[0]
 			pixel |= uint32(g) << v.Green[0]
 			pixel |= uint32(b) << v.Blue[0]
-			pixel |= uint32(a) << v.Transp[0]
+			if v.Transp[1] > 0 { // no transparency channel (DRM fbdev's XRGB8888): alpha would land on blue
+				pixel |= uint32(a) << v.Transp[0]
+			}
 			binary.LittleEndian.PutUint32(mem[off:], pixel)
 		}
 	}

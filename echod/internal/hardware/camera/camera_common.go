@@ -66,7 +66,7 @@ const (
 )
 
 // Available reports whether this device has the camera nodes.
-func Available() bool {
+func availableVendor() bool {
 	for _, p := range []string{"/dev/camera-isp", "/dev/kd_camera_hw", "/dev/ion", "/proc/m4u"} {
 		if _, err := os.Stat(p); err != nil {
 			return false
@@ -81,10 +81,16 @@ func (c *Camera) Acquire() (release func(), err error) {
 	if !Available() {
 		return nil, errors.New("no camera on this device")
 	}
-	if m, err := privacy.Microphone(); err == nil {
-		if muted, err := m.Get(); err == nil && muted {
-			return nil, errors.New("privacy is on")
-		}
+	m, err := privacy.Microphone()
+	if err != nil {
+		return nil, err
+	}
+	muted, err := m.Get()
+	if err != nil {
+		return nil, err
+	}
+	if muted {
+		return nil, errors.New("privacy is on")
 	}
 	c.mu.Lock()
 	defer c.mu.Unlock()
@@ -262,10 +268,10 @@ const mutePoll = 300 * time.Millisecond
 func isMuted() bool {
 	m, err := privacy.Microphone()
 	if err != nil {
-		return false
+		return true
 	}
 	muted, err := m.Get()
-	return err == nil && muted
+	return err != nil || muted
 }
 
 func (c *Camera) emit(f *Frame) {

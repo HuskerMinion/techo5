@@ -78,7 +78,10 @@ class Cpio:
     def add_tar(self, path, skip_dotfiles=False):
         with tarfile.open(path, "r:*") as tf:
             for m in tf:
-                name = m.name.lstrip("./").strip("/")
+                name = m.name
+                while name.startswith("./"):
+                    name = name[2:]
+                name = name.strip("/")
                 if not name:
                     continue
                 if skip_dotfiles and name.startswith("."):
