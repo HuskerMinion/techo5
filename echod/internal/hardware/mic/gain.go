@@ -21,8 +21,22 @@ const (
 	pgaMax    = 119
 )
 
+// inputControls points one ADC at the differential input its microphones are wired to, and takes its
+// two channel mutes off. The 2nd gen comes up with those mutes already off and the 1st gen (checkers)
+// comes up with them on, which silences the microphones however the rest is routed (seen on a unit
+// 2026-09-19: everything else below already matched). Writing them costs nothing where they are off.
+func inputControls(adc string) map[string]uint32 {
+	return map[string]uint32{
+		fmt.Sprintf("ADC_%s DIF1_L Input Gain", adc):                          0,
+		fmt.Sprintf("ADC_%s DIF1_R Input Gain", adc):                          0,
+		fmt.Sprintf("ADC_%[1]s Left Ip Select ADC_%[1]s DIF1_L switch", adc):  1,
+		fmt.Sprintf("ADC_%[1]s Right Ip Select ADC_%[1]s DIF1_R switch", adc): 1,
+		fmt.Sprintf("ADC_%s Left Mute", adc):                                  0,
+		fmt.Sprintf("ADC_%s Right Mute", adc):                                 0,
+	}
+}
 
-// routeInputs points every ADC at the differential input its microphones are wired to.
+// routeInputs applies inputControls to every ADC.
 func routeInputs() {
 	m, err := alsa.OpenMixer(Card)
 	if err != nil {
@@ -32,12 +46,7 @@ func routeInputs() {
 	defer m.Close()
 
 	for _, adc := range adcs {
-		for name, v := range map[string]uint32{
-			fmt.Sprintf("ADC_%s DIF1_L Input Gain", adc):                          0,
-			fmt.Sprintf("ADC_%s DIF1_R Input Gain", adc):                          0,
-			fmt.Sprintf("ADC_%[1]s Left Ip Select ADC_%[1]s DIF1_L switch", adc):  1,
-			fmt.Sprintf("ADC_%[1]s Right Ip Select ADC_%[1]s DIF1_R switch", adc): 1,
-		} {
+		for name, v := range inputControls(adc) {
 			if err := m.SetInt(name, v); err != nil {
 				slog.Error("routing the microphone input failed", "control", name, "err", err)
 			}
