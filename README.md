@@ -22,7 +22,8 @@
   <a href="#install">Install</a> ·
   <a href="#under-the-hood">Under the hood</a> ·
   <a href="#standing-on-shoulders">Credits</a> ·
-  <a href="https://github.com/HuskerMinion/techo5-dot">TECHO5 Dot</a>
+  <a href="https://github.com/HuskerMinion/techo5-dot">TECHO5 Dot</a> ·
+  <a href="https://github.com/HuskerMinion/techo5-spot">TECHO5 Spot</a>
 </p>
 
 ---
@@ -49,7 +50,7 @@ slot system, phone calls, and a minimal Alpine root filesystem in place of Andro
 |---|---|
 | 🐧 **Real Linux, no Android** | The Show boots straight into a minimal Alpine Linux root filesystem. No Android framework, no Google services, no app store: one daemon drives the microphones, speaker, screen, camera and radios directly. |
 | 🚫 **No Alexa, no Amazon account, no Amazon cloud** | Your voice goes only to *your* Home Assistant, over its encrypted ESPHome API. The Show reaches the internet just for what you use: update checks against this repo, network time, radio streams with their song and cover lookups, and the rain radar map. Voice and control keep working with the internet down, as long as your Home Assistant pipeline is local. |
-| 🎙️ **Wake word on the device** | microWakeWord runs locally: "Alexa", "Okay Nabu", "Hey Jarvis" or "Hey Mycroft", chosen on the screen or in Home Assistant. Echo cancellation keeps it listening over music. |
+| 🎙️ **Wake word on the device** | microWakeWord runs locally: twelve wake words, "Alexa", "Okay Nabu", "Hey Jarvis", "Hey Mycroft", "Computer" and more, chosen on the screen or in Home Assistant. Echo cancellation keeps it listening over music. |
 | 🔐 **Secure by default** | SSH is keys-only and off until you turn it on; keys arrive only through Home Assistant. The camera and screen web pages start closed. No password logins, not even in rescue. |
 | 🔄 **Updates that can't brick it** | Releases install over the air from Home Assistant's update card into the spare of two root filesystem slots, boot on trial, and fall back on their own if the new one doesn't settle. |
 | 📺 **A screen that's actually useful** | Clock and weather, the conversation as it happens, now playing with song and cover art, forecasts and a live rain radar, live Home Assistant cameras, timers and alarms, Wi-Fi setup, 13 themes. |
@@ -82,7 +83,7 @@ Straight from the device's own screen.
 | Operating system | Fire OS (Android) | Alpine Linux, one daemon |
 | Voice assistant | Alexa, in Amazon's cloud | Home Assistant Assist, with any pipeline you run |
 | Where your voice goes | Amazon | Your Home Assistant, encrypted |
-| Wake word | "Alexa", processed for Amazon | On the device: Alexa, Okay Nabu, Hey Jarvis, Hey Mycroft |
+| Wake word | "Alexa", processed for Amazon | On the device: Alexa, Okay Nabu, Hey Jarvis, Hey Mycroft and eight more |
 | Screen | Alexa cards and ads | Clock, weather, now playing, cameras, timers, alarms, settings |
 | Music | Amazon Music and skills | Home Assistant radio lists with cover art, Music Assistant (Sendspin), Home Assistant media |
 | Timers and alarms | Alexa | Home Assistant timers on screen; alarms that ring without Home Assistant |
@@ -122,6 +123,9 @@ Assistant. Every step by hand, and the fixes for what can go wrong: **[docs/inst
 > **Status:** in daily use on two Echo Show 5 units. It's a hobby project, not a product: keep your
 > backups, and expect rough edges.
 
+**Coming:** the Echo Show 5 1st gen (2019, `checkers`) is in progress, and the Echo Show 8 1st gen
+(2019) is planned. Nothing to install yet; watch this repository for news.
+
 ## Under the hood
 
 | Layer | What |
@@ -139,11 +143,12 @@ Assistant. Every step by hand, and the fixes for what can go wrong: **[docs/inst
   (`tools/fetch-inputs.py`), and the daemon, kernel, boot image and root filesystem builds, for each OS.
 - [tools/linux/README.md](tools/linux/README.md): the image tooling in detail.
 
-## Sister project
+## Sister projects
 
 **[TECHO5 Dot](https://github.com/HuskerMinion/techo5-dot)** does the same for the Echo Dot 2nd
 generation: Linux in place of Fire OS, all seven microphones, Bluetooth speaker mode, signed
-updates. Both run the same daemon source, built per device.
+updates. **[TECHO5 Spot](https://github.com/HuskerMinion/techo5-spot)** does it for the Echo Spot
+(1st gen), on its round screen. All three run the same daemon source, built per device.
 
 ## Standing on shoulders
 
