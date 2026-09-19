@@ -76,12 +76,7 @@ type roundScene struct {
 	menuSel      int     // the chosen item, at or turning to the top
 	menuRot      float64 // the dial's rotation, radians clockwise
 
-	timerRinging                       bool
-	brightness                         int // percent
-	autoOn                             bool
-	nightFrom, nightTo                 int // hours
-	restartArmed                       bool
-	infoName, infoAddress, infoVersion string
+	timerRinging bool
 
 	weather  home.Weather
 	forecast forecastDays
@@ -98,10 +93,7 @@ type roundScene struct {
 	showCamera bool
 	cameraLive bool // the sensor is running
 
-	btAvailable, btPairing    bool
-	btConnected, btRemembered string
-	btStatus                  string
-	forgetArmed               bool
+	btPairing bool
 
 	// call is the phone: while one rings, is placed or is up, its face is over everything.
 	call phone.State

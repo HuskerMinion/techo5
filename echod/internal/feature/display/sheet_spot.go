@@ -168,7 +168,7 @@ func init() {
 	// The Spot's own colours, with its listening blue as the accent.
 	walnut, amber, cream, dim, ember = colBackground, colListening, colText, colDim, colTrack
 	// Empty is the default night here (defaultNight), so Never needs a value of its own, which
-	// nightHours and inNight read as no night; the default is offered as a choice of its own.
+	// inNight reads as no night; the default is offered as a choice of its own.
 	nightPresets = []string{"off", defaultNight, "22-6", "23-6", "0-7", "21-7", "23-8"}
 	categoryBlurbs[catDisplay] = "Brightness, night, clock and photos"
 	categoryBlurbs[catSecurity] = "Remote access and security"

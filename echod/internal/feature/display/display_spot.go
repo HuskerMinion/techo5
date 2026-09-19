@@ -54,7 +54,6 @@ import (
 	"github.com/HuskerMinion/techo5/echod/internal/hardware/camera"
 	"github.com/HuskerMinion/techo5/echod/internal/hardware/screen"
 	"github.com/HuskerMinion/techo5/echod/internal/hardware/touch"
-	"github.com/HuskerMinion/techo5/echod/internal/layout"
 	"github.com/HuskerMinion/techo5/echod/internal/service"
 )
 
@@ -120,8 +119,8 @@ type Display struct {
 	// menuOpen is the ring menu on the screen, menuMode what it shows; menuSel the item at (or turning
 	// to) the top; menuRot the dial's rotation now and menuRest where it is heading; menuAt the last
 	// touch; spinning a finger turning it, spinAngle its last direction from the centre; jogTurn how
-	// far a jog wheel has turned towards its next step; nightFrom and nightTo the hours being set;
-	// restartArm the first tap on Restart.
+	// far a jog wheel has turned towards its next step; restartArm the first tap on Restart and
+	// forgetArm on Forget, on the settings screen.
 	menuOpen   bool
 	menuMode   menuMode
 	menuSel    int
@@ -131,8 +130,6 @@ type Display struct {
 	spinning   bool
 	spinAngle  float64
 	jogTurn    float64
-	nightFrom  int
-	nightTo    int
 	restartArm time.Time
 	forgetArm  time.Time
 
@@ -549,19 +546,7 @@ func (d *Display) menuGesture(g touch.Gesture) {
 		case touch.Release:
 			d.spinning, d.jogTurn = false, 0
 		case touch.Tap:
-			if mode == modeBrightness && onAutoBox(g.X, g.Y) {
-				on := !d.autoOn
-				d.mu.Unlock()
-				d.setAuto(on, true)
-				d.wake()
-				return
-			}
 			d.finishJog(mode)
-		}
-
-	case mode == modeInfo:
-		if g.Kind == touch.Tap || g.Kind == touch.Release {
-			d.openMenu(modeSettings, itemInfo)
 		}
 
 	case mode == modeWeather:
@@ -692,42 +677,16 @@ func (d *Display) jogBy(mode menuMode, steps int) {
 	switch mode {
 	case modeVolume:
 		media.Get().Adjust(steps)
-	case modeBrightness:
-		pct := min(max(d.ceilingOrDefault()+5*steps, 0), 100)
-		d.apply(true, pct, true)
-	case modeNightFrom:
-		d.mu.Lock()
-		d.nightFrom = ((d.nightFrom+steps)%24 + 24) % 24
-		d.mu.Unlock()
-	case modeNightTo:
-		d.mu.Lock()
-		d.nightTo = ((d.nightTo+steps)%24 + 24) % 24
-		d.mu.Unlock()
 	}
 }
 
-// finishJog is a tap on a jog wheel: back to the dial it came from, or on to the night's end, or saved.
+// finishJog is a tap on a jog wheel: back to the dial it came from.
 // Called with d.mu held.
 func (d *Display) finishJog(mode menuMode) {
 	d.spinning, d.jogTurn = false, 0
 	switch mode {
 	case modeVolume:
 		d.openMenu(modeMain, itemVolume)
-	case modeBrightness:
-		d.openMenu(modeSettings, itemBrightness)
-	case modeNightFrom:
-		d.menuMode, d.menuAt = modeNightTo, time.Now()
-	case modeNightTo:
-		v := fmt.Sprintf("%d-%d", d.nightFrom, d.nightTo)
-		d.openMenu(modeSettings, itemNight)
-		go func() {
-			if err := config.Set().Screen().Night(v); err != nil {
-				slog.Error("saving the night hours failed", "err", err)
-				return
-			}
-			slog.Info("night hours", "set", v)
-			d.relight(true)
-		}()
 	}
 }
 
@@ -787,67 +746,6 @@ func (d *Display) act(id itemID) {
 		ceiling := d.ceiling
 		d.mu.Unlock()
 		d.apply(false, ceiling, true)
-	case itemBrightness:
-		d.locked(func() { d.openMenu(modeBrightness, "") })
-	case itemNight:
-		from, to := nightHours()
-		d.locked(func() {
-			d.nightFrom, d.nightTo = from, to
-			d.openMenu(modeNightFrom, "")
-		})
-	case itemAuto:
-		d.mu.Lock()
-		on := d.autoOn
-		d.mu.Unlock()
-		d.setAuto(!on, true)
-	case itemInfo:
-		d.locked(func() { d.openMenu(modeInfo, "") })
-	case itemRestart:
-		d.mu.Lock()
-		armed := !d.restartArm.IsZero() && time.Since(d.restartArm) < restartWindow
-		if !armed {
-			d.restartArm = time.Now()
-		}
-		d.mu.Unlock()
-		if armed {
-			slog.Warn("restart asked for from the screen")
-			restartDevice()
-		}
-	case itemBack:
-		d.locked(func() {
-			if d.menuMode == modeBluetooth {
-				d.openMenu(modeSettings, itemBluetooth)
-				return
-			}
-			d.openMenu(modeMain, itemSettings)
-		})
-	case itemBluetooth:
-		d.locked(func() { d.openMenu(modeBluetooth, itemBTPair) })
-	case itemBTPair:
-		bt := btaudio.Get()
-		on := !bt.Pairing()
-		go bt.SetPairing(on)
-		if on {
-			// Pairing picks the strongest speaker it hears on its own; the rim pulses meanwhile.
-			d.locked(d.closeMenu)
-		}
-	case itemBTConnect:
-		if btaudio.Get().State().Connected != "" {
-			go btaudio.Get().Disconnect()
-		} else {
-			go btaudio.Get().Reconnect()
-		}
-	case itemBTForget:
-		d.mu.Lock()
-		armed := !d.forgetArm.IsZero() && time.Since(d.forgetArm) < restartWindow
-		d.forgetArm = time.Time{}
-		if !armed {
-			d.forgetArm = time.Now()
-		}
-		d.mu.Unlock()
-		if armed {
-			go btaudio.Get().Forget()
-		}
 	}
 }
 
@@ -855,18 +753,6 @@ func (d *Display) locked(f func()) {
 	d.mu.Lock()
 	defer d.mu.Unlock()
 	f()
-}
-
-// nightHours is the night as configured, or the default.
-func nightHours() (from, to int) {
-	v := config.Get().Screen.Night
-	if v == "" {
-		v = defaultNight
-	}
-	if _, err := fmt.Sscanf(v, "%d-%d", &from, &to); err != nil {
-		fmt.Sscanf(defaultNight, "%d-%d", &from, &to)
-	}
-	return from, to
 }
 
 // restartDevice reboots; the slot store and the daemon's state are on disk already.
@@ -1009,25 +895,19 @@ func (d *Display) frame() time.Duration {
 	}
 	on, view, at := d.on, d.view, d.viewAt
 	s := roundScene{
-		now:          now,
-		phase:        view.Phase,
-		heard:        view.Heard,
-		reply:        view.Reply,
-		menuOpen:     d.menuOpen,
-		menuMode:     d.menuMode,
-		menuSel:      d.menuSel,
-		menuRot:      d.menuRot,
-		brightness:   d.ceiling,
-		autoOn:       d.autoOn,
-		nightFrom:    d.nightFrom,
-		nightTo:      d.nightTo,
-		restartArmed: !d.restartArm.IsZero() && now.Sub(d.restartArm) < restartWindow,
-		forgetArmed:  !d.forgetArm.IsZero() && now.Sub(d.forgetArm) < restartWindow,
-		radioSel:     d.radioSel,
-		cameraSel:    d.cameraSel,
-		radarOn:      d.radar,
-		sheetOpen:    sheetOpen,
-		sheetGrid:    sheetGrid,
+		now:       now,
+		phase:     view.Phase,
+		heard:     view.Heard,
+		reply:     view.Reply,
+		menuOpen:  d.menuOpen,
+		menuMode:  d.menuMode,
+		menuSel:   d.menuSel,
+		menuRot:   d.menuRot,
+		radioSel:  d.radioSel,
+		cameraSel: d.cameraSel,
+		radarOn:   d.radar,
+		sheetOpen: sheetOpen,
+		sheetGrid: sheetGrid,
 	}
 	quiet := d.quiet
 	if !d.volAt.IsZero() && now.Sub(d.volAt) < volumeShow {
@@ -1080,7 +960,7 @@ func (d *Display) frame() time.Duration {
 	s.camera, s.showCamera = home.Get().Camera()
 	s.cameraLive = camera.Get().Running()
 	bt := btaudio.Get().State()
-	s.btAvailable, s.btPairing, s.btConnected, s.btRemembered, s.btStatus = bt.Available, bt.Pairing, bt.Connected, bt.Remembered, bt.Status
+	s.btPairing = bt.Pairing
 	if s.menuOpen && s.menuMode == modeWeather {
 		s.forecast = home.Get().Forecast()
 		if s.radarOn {
@@ -1095,22 +975,6 @@ func (d *Display) frame() time.Duration {
 			d.mu.Lock()
 			d.radioSel = s.radioSel
 			d.mu.Unlock()
-		}
-	}
-	if s.menuOpen {
-		if s.menuMode != modeNightFrom && s.menuMode != modeNightTo {
-			s.nightFrom, s.nightTo = nightHours()
-		}
-		if s.menuMode == modeInfo {
-			s.infoName = config.Get().Device.Name
-			if s.infoName == "" {
-				s.infoName = layout.DefaultName
-			}
-			s.infoAddress = deviceAddress()
-			s.infoVersion = layout.Version
-			if slot := bootedSlot(); slot != "" {
-				s.infoVersion += " · slot " + slot
-			}
 		}
 	}
 
