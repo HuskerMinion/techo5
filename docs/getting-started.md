@@ -150,6 +150,26 @@ loops. Every command runs the same on Windows, Linux and macOS once the Dot is u
    *Check:* the installer ends with the Dot healthy and its Home Assistant port answering.
 7. **Add it to Home Assistant**: see [After installing](#after-installing-every-device).
 
+### Going back to TWRP or Fire OS
+
+TECHO5 Dot lives in the Dot's recovery partition, where TWRP was, and asks for recovery on every
+boot, so holding + at power-on starts TECHO5, not TWRP, and flashing Fire OS again changes neither.
+The installer keeps the way back:
+
+- **While TECHO5 runs** (SSH switched on in Home Assistant): `to-twrp --yes` puts the Dot's own TWRP
+  back and reboots into it. From TWRP, `adb shell sh /cache/techo5/back-to-linux.sh` returns to
+  TECHO5.
+- **From amonet's fastboot mode** (see the unlock thread), with the `backups/<serial>/` folder the
+  installer made:
+  ```
+  fastboot -s <serial> flash recovery backups/<serial>/recovery.img
+  fastboot -s <serial> flash misc backups/<serial>/misc.img
+  fastboot -s <serial> reboot
+  ```
+  The first puts TWRP back; the second puts back the boot setting from before the install, so the
+  Dot stops going straight to recovery. Then hold + at power-on for TWRP, or power on normally for
+  Fire OS.
+
 Prefer to keep Fire OS? [EchoLocal](https://github.com/ygelfand/echolocal), the project TECHO5's daemon
 is built on, runs on the unlocked Dot's Fire OS 6 with its own installer, and is the gentler path.
 
@@ -194,7 +214,9 @@ is built on, runs on the unlocked Dot's Fire OS 6 with its own installer, and is
 ## After installing (every device)
 
 1. **Add it.** Home Assistant discovers it as an ESPHome device (Settings → Devices & services).
-   Paste the encryption key the installer printed.
+   Paste the encryption key the installer printed. It's also saved in
+   `backups/<serial>/home-assistant.key` (a Show or Spot installed before 2026-09-19:
+   `backups/<serial>/api.psk`); keep that folder.
 2. **Allow it to perform Home Assistant actions.** On the device's ESPHome entry → Configure, turn on
    **Allow the device to perform Home Assistant actions**. The radio favorites, phone call events and
    some screen features need it.
@@ -242,8 +264,9 @@ is built on, runs on the unlocked Dot's Fire OS 6 with its own installer, and is
 
 - **Before TECHO5 is installed:** each XDA thread has an unbrick section. Don't improvise with
   bootloader images; that is how Echos get hard-bricked.
-- **After:** every TECHO5 device keeps TWRP, and falls back to its previous slot, and then to a
-  rescue environment with a USB serial console, if a boot doesn't come up healthy. Each
+- **After:** every TECHO5 device falls back to its previous slot, and then to a rescue environment
+  with a USB serial console, if a boot doesn't come up healthy. The Show and Spot keep TWRP; the
+  Dot keeps a copy of it (see [Going back to TWRP or Fire OS](#going-back-to-twrp-or-fire-os)). Each
   repository's docs describe the way back to LineageOS or Fire OS.
 - Ask in the project's GitHub issues, with the device, the step and what it printed.
 

@@ -15,13 +15,14 @@
   (GOOS=linux GOARCH=arm GOARM=7 CGO_ENABLED=0 go build -o bin/echod-arm ./cmd/echod, run inside echod/).
 
 .EXAMPLE
-  .\tools\install-cronos.ps1 -Serial G000000000000000 -Name "Bench Show" -KeyFile .\bench.psk
+  .\tools\install-cronos.ps1 -Serial G000000000000000 -Name "Bench Show"
 #>
 param(
     [Parameter(Mandatory)][string]$Serial,
     [Parameter(Mandatory)][string]$Name,
-    # Where the API encryption key is kept on the PC. Created if missing; Home Assistant asks for it.
-    [Parameter(Mandatory)][string]$KeyFile,
+    # Where the API encryption key is kept on the PC (default backups\<serial>\home-assistant.key, as
+    # the other installers). Created if missing; Home Assistant asks for it.
+    [string]$KeyFile,
     [string]$Adb = 'adb',
     [string]$Binary = (Join-Path $PSScriptRoot '..\bin\echod-arm'),
     [string]$Rc = (Join-Path $PSScriptRoot 'init\techo5.rc'),
@@ -46,6 +47,8 @@ if ($id -notmatch '^uid=0') { throw "adb is not root ($id); turn on Rooted debug
 Write-Host "   cronos, adb root ok, LineageOS $((Sh 'getprop ro.build.display.id').Trim())"
 
 Write-Host "== key"
+if (-not $KeyFile) { $KeyFile = Join-Path $PSScriptRoot "..\backups\$Serial\home-assistant.key" }
+New-Item -ItemType Directory -Force (Split-Path $KeyFile) | Out-Null
 if (Test-Path $KeyFile) {
     $psk = (Get-Content $KeyFile -Raw).Trim()
 } else {

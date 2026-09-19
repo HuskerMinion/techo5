@@ -19,8 +19,9 @@ root filesystem are downloaded and checked. Each step is checked before the next
                an SSH key (--ssh-key) are written
   7. watch     the first boot from slot a to a running daemon
 
-The Home Assistant key is kept in backups/<serial>/api.psk and reused on a later run, so Home Assistant
-keeps the device. Undo: TWRP stays in recovery; flash the LineageOS zip and the LineageOS boot image.
+The Home Assistant key is kept in backups/<serial>/home-assistant.key (api.psk on a unit installed
+before that name) and reused on a later run, so Home Assistant keeps the device. Undo: TWRP stays in
+recovery; flash the LineageOS zip and the LineageOS boot image.
 """
 import argparse
 import os
@@ -39,6 +40,14 @@ WIFI_MODULE = 'vendor/lib/modules/mt76x8_wlan.ko'
 
 def quote(s):
     return "'" + s.replace("'", "'\\''") + "'"
+
+
+def default_key_file(backup):
+    """backups/<serial>/home-assistant.key, as on the Dot; a unit installed while it was api.psk keeps
+    that file, so a later run reuses the key Home Assistant already has."""
+    new = os.path.join(backup, 'home-assistant.key')
+    old = os.path.join(backup, 'api.psk')
+    return old if os.path.exists(old) and not os.path.exists(new) else new
 
 
 def show_version(tag):
@@ -72,7 +81,7 @@ def main():
     ap.add_argument('--serial', required=True, help="the unit's adb serial (adb devices)")
     ap.add_argument('--name', required=True, help='the name Home Assistant shows, e.g. Kitchen')
     ap.add_argument('--release', default='latest', help='a release tag, or latest')
-    ap.add_argument('--key-file', help='where the Home Assistant key is kept (default backups/<serial>/api.psk)')
+    ap.add_argument('--key-file', help='where the Home Assistant key is kept (default backups/<serial>/home-assistant.key)')
     ap.add_argument('--ssh-key', help='an SSH public key the unit accepts from the start (SSH is switched on)')
     ap.add_argument('--boot', help='a boot image you built (docs/building.md) instead of the release\'s')
     ap.add_argument('--rootfs', help='a root filesystem you built instead of the release\'s')
@@ -85,7 +94,7 @@ def main():
     a = ap.parse_args()
 
     backup = os.path.join(a.backups, a.serial)
-    key_file = a.key_file or os.path.join(backup, 'api.psk')
+    key_file = a.key_file or default_key_file(backup)
     adb = Adb(a.serial, a.adb)
     fastboot = Fastboot(a.serial, a.fastboot)
     console = Console(a.serial, CONSOLE_TECHO5)
