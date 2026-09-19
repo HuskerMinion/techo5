@@ -27,18 +27,49 @@ import (
 	"unsafe"
 
 	"golang.org/x/sys/unix"
+
+	"github.com/HuskerMinion/techo5/echod/internal/layout"
 )
 
+// sensorSpec is what differs between the two Echo Show 5 generations. Everything else — the
+// imgsensor driver that powers the sensor and writes its register table, the CSI-2 receiver, the
+// timing generator, the DMA, the picture pipeline — is the same on both.
+//
+// The 2nd gen (cronos) has an OmniVision OV02B10: 1600x1200 at about 14 frames a second, the first
+// pixel of each Bayer cell red. The 1st gen (checkers) has an OV9734: 1280x720 at up to 30, the
+// first pixel blue, and its own exposure limits (framelength 802 lines less a margin of 4, shutter
+// from 1 line; both from the driver in the kernel source). The gain scale and its 15.5x ceiling are
+// the same on both, and both use one MIPI lane with an 85 ns settle.
+type sensorSpec struct {
+	w, h       int  // what the sensor hands over
+	outW, outH int  // one pixel per Bayer cell: the live view and the stream
+	minShut    int  // shortest exposure the driver takes, in lines
+	frameLines int  // shutter lines that fit a frame at the sensor's own rate
+	blueFirst  bool // the first pixel of each cell is blue, not red
+}
+
+func pickSensor(checkers bool) sensorSpec {
+	if checkers {
+		return sensorSpec{w: 1280, h: 720, outW: 640, outH: 360, minShut: 1, frameLines: 798, blueFirst: true}
+	}
+	return sensorSpec{w: 1600, h: 1200, outW: 800, outH: 600, minShut: 4, frameLines: 1200}
+}
+
+var sensor = pickSensor(layout.Checkers())
+
 // Width and Height are the frames handed out.
-const Width, Height = 800, 600
+var Width, Height = sensor.outW, sensor.outH
 
 // ---- the hardware ----
 
-const (
-	sensorW, sensorH = 1600, 1200
+var (
+	sensorW, sensorH = sensor.w, sensor.h
 	bytesPerLine     = sensorW * 10 / 8 // packed 10-bit Bayer: four pixels in five bytes
 	frameBytes       = bytesPerLine * sensorH
-	slots            = 3 // DMA targets in rotation: a finished frame rests two periods
+)
+
+const (
+	slots = 3 // DMA targets in rotation: a finished frame rests two periods
 
 	sensMagic   = 'i'
 	nrOpen      = 0
@@ -281,15 +312,19 @@ func (d *device) setFeature(id uint32, v uint64) {
 // first — up to a frame at the sensor's rate — then gain, then longer shutters at the cost of
 // frame rate, then the rest of the gain.
 const (
-	aeTarget   = 290 // mean of the 10-bit frame to aim for: a lit room, no clipping to speak of
-	aeDelay    = 3   // frames between changes: a new exposure takes two frames to show
-	aeMinShut  = 4
-	aeFrame    = 1200 // shutter lines that fit a frame at the sensor's own rate
+	aeTarget   = 290  // mean of the 10-bit frame to aim for: a lit room, no clipping to speak of
+	aeDelay    = 3    // frames between changes: a new exposure takes two frames to show
 	aeMaxShut  = 4000 // beyond this the frame rate drops under 5 a second
 	aeMinGain  = 64   // 1x
 	aeMidGain  = 384  // 6x, before trading frame rate
 	aeMaxGain  = 992  // the driver's ceiling, 15.5x
 	aeDeadband = 6    // no change inside target ± this
+)
+
+// The shortest exposure the sensor takes and the lines that fit one of its frames: its own.
+var (
+	aeMinShut = sensor.minShut
+	aeFrame   = sensor.frameLines
 )
 
 func (d *device) autoExpose(bayer []byte) {
@@ -316,7 +351,7 @@ func (d *device) autoExpose(bayer []byte) {
 	case want <= float64(aeFrame*aeMinGain):
 		shutter, gain = int(want/aeMinGain), aeMinGain
 	case want <= float64(aeFrame*aeMidGain):
-		shutter, gain = aeFrame, int(want/aeFrame)
+		shutter, gain = aeFrame, int(want)/aeFrame
 	case want <= float64(aeMaxShut*aeMidGain):
 		shutter, gain = int(want/aeMidGain), aeMidGain
 	default:
@@ -454,9 +489,9 @@ func (d *device) setupISP() {
 	cam.wr(regImgoFbc, 0)
 	cam.wr(regImgoBase, d.mva)
 	cam.wr(regImgoOfst, 0)
-	cam.wr(regImgoXsize, bytesPerLine-1)
-	cam.wr(regImgoYsize, sensorH-1)
-	cam.wr(regImgoStride, bytesPerLine)
+	cam.wr(regImgoXsize, uint32(bytesPerLine-1))
+	cam.wr(regImgoYsize, uint32(sensorH-1))
+	cam.wr(regImgoStride, uint32(bytesPerLine))
 	cam.wr(regCtlImgoSize, uint32(sensorW)<<16|uint32(sensorH))
 	if cam.rd(regImgoCon) == 0 {
 		cam.wr(regImgoCon, 0x80000040)
@@ -596,7 +631,7 @@ func unpackLine(line []byte, dst []uint16) {
 	}
 }
 
-// convert turns one packed frame into an 800x600 RGBA picture: one pixel per RGGB cell (the
+// convert turns one packed frame into a half-size RGBA picture: one pixel per Bayer cell (the
 // two greens summed), grey-world white balance, the darkest 0.1% at black (within reason), the top
 // percentile at white, gamma 1/1.8 or steeper for a backlit frame. The tone it settled on comes back for Full.
 func convert(raw []byte) (*image.RGBA, tone) {
@@ -613,6 +648,9 @@ func convert(raw []byte) (*image.RGBA, tone) {
 			r := row0[2*x]
 			g := row0[2*x+1] + row1[2*x]
 			b := row1[2*x+1]
+			if sensor.blueFirst {
+				r, b = b, r
+			}
 			i := (y*Width + x) * 3
 			cells[i], cells[i+1], cells[i+2] = r<<1, g, b<<1
 			sumR += uint64(r)
@@ -730,6 +768,9 @@ func (f *Frame) Full() *image.RGBA {
 				b = c
 				g = (at(x-1, y) + at(x+1, y) + at(x, y-1) + at(x, y+1)) / 4
 				r = (at(x-1, y-1) + at(x+1, y-1) + at(x-1, y+1) + at(x+1, y+1)) / 4
+			}
+			if sensor.blueFirst {
+				r, b = b, r
 			}
 			// The tables run on the 11-bit scale of a summed green pair; single samples double up.
 			j := (y*w + x) * 4
