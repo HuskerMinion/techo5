@@ -1,12 +1,15 @@
 package config
 
+import "slices"
+
 // Home is what the device shows and reaches for in Home Assistant beyond its own entities: a
 // weather entity for the clock screen, and the radio — the selects whose options are the
 // stations, the text that names what is playing, and the script that plays one. All of it is
 // set from Home Assistant through the device's actions, so nothing here is baked in.
 type Home struct {
 	// Weather is a weather.* entity shown on the idle screen. Empty is DefaultWeather, the forecast
-	// every Home Assistant sets up on its own; WeatherOff shows none.
+	// every Home Assistant sets up on its own, or, when Home Assistant listed weather entities and
+	// that is not among them, the first it listed; WeatherOff shows none.
 	Weather string `json:"weather,omitempty"`
 
 	// WeatherSources are the weather entities Home Assistant listed last, offered as choices.
@@ -87,6 +90,10 @@ const WeatherOff = "none"
 func (h Home) WeatherEntity() string {
 	switch h.Weather {
 	case "":
+		// An installation whose own forecast was removed or renamed still shows a forecast.
+		if len(h.WeatherSources) > 0 && !slices.Contains(h.WeatherSources, DefaultWeather) {
+			return h.WeatherSources[0]
+		}
 		return DefaultWeather
 	case WeatherOff:
 		return ""

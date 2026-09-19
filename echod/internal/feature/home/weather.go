@@ -47,10 +47,14 @@ func (f *Feature) Entities() []esphome.Entity {
 	return []esphome.Entity{f.weatherSel}
 }
 
-// weatherOptions is what the select offers: none, Home Assistant's forecast, the one chosen, and
-// every weather entity Home Assistant listed when it was last asked.
+// weatherOptions is what the select offers: none, Home Assistant's forecast (unless Home Assistant
+// listed its weather entities without it), the one chosen, and every weather entity Home Assistant
+// listed when it was last asked.
 func weatherOptions(h config.Home) []string {
-	opts := []string{weatherNone, config.DefaultWeather}
+	opts := []string{weatherNone}
+	if len(h.WeatherSources) == 0 || slices.Contains(h.WeatherSources, config.DefaultWeather) {
+		opts = append(opts, config.DefaultWeather)
+	}
 	add := func(id string) {
 		if id != "" && !slices.Contains(opts, id) {
 			opts = append(opts, id)
@@ -99,6 +103,9 @@ func (f *Feature) ChooseWeather(entity string) {
 	f.mu.Lock()
 	f.forecast = nil
 	f.mu.Unlock()
+	// An entity from the home_weather action may not be offered yet: a value outside the options
+	// shows as unknown in Home Assistant. The reconnect below sends the new options.
+	f.weatherSel.Options = weatherOptions(config.Get().Home)
 	f.weatherSel.Set(chosenOption(config.Get().Home))
 	// A new entity's state is only sent once Home Assistant is asked for it again.
 	f.rewire()

@@ -22,4 +22,16 @@ func TestWeatherOptions(t *testing.T) {
 	if chosenOption(config.Home{}) != config.DefaultWeather {
 		t.Error("a new device does not show Home Assistant's forecast")
 	}
+	// A Home Assistant without its own forecast: not offered, and the first listed shows instead.
+	none := config.Home{WeatherSources: []string{"weather.a", "weather.b"}}
+	if got := weatherOptions(none); !slices.Equal(got, []string{weatherNone, "weather.a", "weather.b"}) {
+		t.Errorf("without its own forecast: options = %v", got)
+	}
+	if chosenOption(none) != "weather.a" {
+		t.Errorf("without its own forecast: shows %q", chosenOption(none))
+	}
+	// An entity chosen by the action is offered even before Home Assistant lists it.
+	if got := weatherOptions(config.Home{Weather: "weather.a"}); !slices.Contains(got, "weather.a") {
+		t.Errorf("the chosen entity is not offered: %v", got)
+	}
 }

@@ -23,7 +23,8 @@ Android, with one Go daemon, `echod`, doing everything the device does:
   A ringing timer or alarm takes the whole screen, lights a dark one, and offers Stop and Snooze
   (9 minutes unless changed); the alarm sound (Beeps, Chimes, Bells, Gentle or Pulse) and the snooze
   length are set on the Alarms card or in Home Assistant; the stop word, the action button and Home Assistant's Stop/Snooze buttons work too.
-- **Weather**: a new device shows Home Assistant's own forecast (`weather.forecast_home`); any other
+- **Weather**: a new device shows Home Assistant's own forecast (`weather.forecast_home`), or, when
+  Home Assistant has none, the first weather entity it lists; any other
   weather entity is chosen on the settings screen (General, Weather), with the "Weather source"
   select, or with the `home_weather` action, and stays chosen. The forecast page (after a weather
   question, or Show beside Weather) has a Radar button: RainViewer's radar over an OpenStreetMap map centred on
