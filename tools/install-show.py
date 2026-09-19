@@ -28,8 +28,8 @@ import re
 import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from techo5lib import (CONSOLE_TECHO5, Adb, Console, Fastboot, Release, default_dir, fail, md5,  # noqa: E402
-                       need, new_api_key, note, run_main, step, valid_api_key, wait_for)
+from techo5lib import (CONSOLE_TECHO5, Adb, Console, Fastboot, Release, default_dir, fail, fetch_json,  # noqa: E402
+                       md5, need, new_api_key, note, run_main, step, valid_api_key, wait_for)
 
 REPO = 'HuskerMinion/techo5'
 # The LineageOS kernel commit TECHO5's kernel is rebuilt from: the vendor modules only load on it.
@@ -39,6 +39,32 @@ WIFI_MODULE = 'vendor/lib/modules/mt76x8_wlan.ko'
 
 def quote(s):
     return "'" + s.replace("'", "'\\''") + "'"
+
+
+def show_version(tag):
+    m = re.match(r'^v(\d+)\.(\d+)\.(\d+)$', tag)
+    return tuple(int(x) for x in m.groups()) if m else None
+
+
+def boot_image(rel, work):
+    """The release's boot image, or, when it carries none (the boot image changes rarely, so most
+    releases don't), the one from the newest earlier Show release that does."""
+    name = 'techo5-boot-%s.img' % rel.version
+    if name in rel.sums:
+        return rel.asset(name)
+    want = show_version(rel.version)
+    try:
+        releases = fetch_json('https://api.github.com/repos/%s/releases?per_page=100' % REPO)
+    except Exception as e:
+        fail('release %s has no boot image, and the list of earlier releases could not be read: %s'
+             % (rel.version, e))
+    for r in releases:
+        v = show_version(r['tag_name'])
+        name = 'techo5-boot-%s.img' % r['tag_name']
+        if v and want and v < want and any(x['name'] == name for x in r['assets']):
+            note('release %s has no boot image of its own; using %s\'s' % (rel.version, r['tag_name']))
+            return Release(REPO, r['tag_name'], work).asset(name)
+    fail('no release up to %s has a boot image' % rel.version)
 
 
 def main():
@@ -129,7 +155,7 @@ def main():
         boot = os.path.abspath(a.boot)
         note('boot image: your own, %s' % boot)
     else:
-        boot = rel.asset('techo5-boot-%s.img' % version)
+        boot = boot_image(rel, a.work)
         note('boot image %s checked' % os.path.basename(boot))
     if a.dry_run:
         print('\nDry run: TECHO5 %s downloaded and checked in %s; nothing written to the unit.' % (version, rel.dir))
