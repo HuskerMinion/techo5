@@ -336,6 +336,8 @@ func pickerFor(id string, sv sheetView) (pickerView, bool) {
 		return pickerView{title: "Clock format", opts: clockOptions, cur: clockIndex()}, true
 	case "slideshow":
 		return pickerView{title: "Slideshow", opts: slideshowOptions, cur: slideshowIndex()}, true
+	case "photoevery":
+		return pickerView{title: "Time per photo", opts: everyOptions, cur: everyIndex()}, true
 	}
 	return devicePicker(id, sv)
 }
@@ -388,6 +390,10 @@ func (d *Display) choose(id string, i int) {
 	case "slideshow":
 		if i < len(slideshowModes) {
 			home.Get().ChooseSlideshowMode(slideshowModes[i])
+		}
+	case "photoevery":
+		if i < len(everyDurations) {
+			home.Get().SetSlideshowEvery(everyDurations[i])
 		}
 	default:
 		d.deviceChoose(id, i)
@@ -525,7 +531,7 @@ func (d *Display) rowTap(id string, p part, opt int) {
 	case "subfolders":
 		_, _, subfolders := home.Get().SlideshowSettings()
 		home.Get().SetSlideshowSubfolders(!subfolders)
-	case "night", "clock", "slideshow", "wakeword", "waketone":
+	case "night", "clock", "slideshow", "photoevery", "wakeword", "waketone":
 		d.openPicker(id)
 	}
 }

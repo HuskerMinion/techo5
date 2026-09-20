@@ -37,12 +37,12 @@ func (f *Feature) buildWeatherSelect() {
 	}
 }
 
-// Entities is the weather source select, plus the slideshow selects and idle number on a device
-// with a screen to show them on.
+// Entities is the weather source select, plus the slideshow's own on a device with a screen to show
+// them on.
 func (f *Feature) Entities() []esphome.Entity {
 	if hasScreen {
 		return []esphome.Entity{f.weatherSel, f.slideshowSel, f.slideshowOverlaySel, f.slideshowIdleNum,
-			f.slideshowShuffleSw, f.slideshowSubfoldersSw}
+			f.slideshowEveryNum, f.slideshowShuffleSw, f.slideshowSubfoldersSw, f.slideshowFolderTxt}
 	}
 	return []esphome.Entity{f.weatherSel}
 }

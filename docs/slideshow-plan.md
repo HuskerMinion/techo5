@@ -214,9 +214,13 @@ not a new bug. Fully reverted after.
   included by default, gathered breadth first over one websocket (`hass.Client.BrowseTree`,
   within 1000 folders and 20000 photos, again hourly), shuffled by default, both switchable on the
   screen and in Home Assistant (`slideshow_subfolders`, `slideshow_shuffle`); EXIF orientation
-  honoured, so portrait photos stand up. Still open: the same picker on the Spot's screen, a
-  configurable interval (`slideshowEvery` is a fixed constant), leaving folders out of a
-  whole-library pick (a library can hold scanned paperwork), user docs.
+  honoured, so portrait photos stand up. **Done 2026-09-20:** how long a photo stays up is a setting
+  too - Time per photo on the settings screen (15 seconds to an hour) and `slideshow_interval` in
+  Home Assistant, which takes any number of seconds from 5 to 3600; `slideshow_folder` names the
+  chosen folder there, since it is picked on the screen. Also that day: three looks in a row that
+  find nothing and the device waits fifteen minutes and says why on the screen instead of asking
+  every thirty seconds for ever. Still open: the folder picker on the Spot's screen, leaving folders
+  out of a whole-library pick (a library can hold scanned paperwork), user docs.
 
 ## Home Assistant changes needed (for the Home Assistant session)
 

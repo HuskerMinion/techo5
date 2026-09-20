@@ -55,6 +55,10 @@ type Slideshow struct {
 	// IdleMinutes is how long Screensaver mode waits for, zero for the default
 	// (SlideshowIdleDefault). Unused in Background mode.
 	IdleMinutes int `json:"idle_minutes,omitempty"`
+
+	// EverySeconds is how long one photo stays up before the next, zero for the default
+	// (slideshowEvery, a minute).
+	EverySeconds int `json:"every_seconds,omitempty"`
 }
 
 // Camera is one camera on the screen's list.

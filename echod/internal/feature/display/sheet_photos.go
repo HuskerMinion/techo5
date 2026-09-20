@@ -39,9 +39,28 @@ func slideshowRows(demo bool) []settingRow {
 	}
 	return []settingRow{
 		{id: "photofolder", label: "Photo folder", kind: ctlChoice, value: folder},
+		{id: "photoevery", label: "Time per photo", kind: ctlChoice, value: everyOptions[everyIndex()]},
 		{id: "shuffle", label: "Shuffle photos", kind: ctlToggle, on: shuffle},
 		{id: "subfolders", label: "Include subfolders", sub: "Every folder inside the one chosen", kind: ctlToggle, on: subfolders},
 	}
+}
+
+// The Time per photo row's choices. everyIndex is the one in force, the nearest below a value set
+// from Home Assistant, which takes any number of seconds.
+var (
+	everyOptions   = []string{"15 seconds", "30 seconds", "1 minute", "2 minutes", "5 minutes", "15 minutes", "1 hour"}
+	everyDurations = []time.Duration{15 * time.Second, 30 * time.Second, time.Minute, 2 * time.Minute, 5 * time.Minute, 15 * time.Minute, time.Hour}
+)
+
+func everyIndex() int {
+	d := home.Get().SlideshowEvery()
+	i := 0
+	for j, o := range everyDurations {
+		if o <= d {
+			i = j
+		}
+	}
+	return i
 }
 
 // folderLabel is a media source id as the Photo folder row names it: its last folder.

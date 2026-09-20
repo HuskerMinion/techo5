@@ -7,6 +7,7 @@ import (
 	"image/draw"
 	"log/slog"
 	"math/rand/v2"
+	"net/url"
 	"path"
 	"strings"
 	"time"
@@ -26,8 +27,21 @@ import (
 // neither knows nor cares which backend (Immich, a network share, anything else Home Assistant can
 // browse) a source came from. See docs/slideshow-plan.md; Show and Spot only (see screen.go).
 
-// slideshowEvery is how long one photo stays up before the next is fetched.
-const slideshowEvery = time.Minute
+// slideshowEvery is how long one photo stays up before the next is fetched when nothing is set, and
+// slideshowEveryMin/Max bound what may be.
+const (
+	slideshowEvery    = time.Minute
+	slideshowEveryMin = 5 * time.Second
+	slideshowEveryMax = time.Hour
+)
+
+// slideshowInterval is how long a photo stays up, as configured.
+func slideshowInterval(h config.Slideshow) time.Duration {
+	if h.EverySeconds <= 0 {
+		return slideshowEvery
+	}
+	return min(max(time.Duration(h.EverySeconds)*time.Second, slideshowEveryMin), slideshowEveryMax)
+}
 
 // slideshowFade is how long a new photo takes to cross-fade in over the last one; SlideshowFrame is
 // how often the display should redraw while it does, for a smooth blend rather than a jump cut.
@@ -132,6 +146,14 @@ func (f *Feature) buildSlideshowSelect() {
 		Min: 1, Max: 60, Step: 1, Unit: "min",
 		Mode: esphome.NumberBox,
 	}
+	f.slideshowFolderTxt = &esphome.TextSensor{
+		Base: esphome.Base{
+			ObjectID: "slideshow_folder",
+			Name:     "Slideshow folder",
+			Icon:     "mdi:folder-image",
+			Category: esphome.CategoryDiagnostic,
+		},
+	}
 	f.slideshowShuffleSw = &esphome.Switch{
 		Base: esphome.Base{
 			ObjectID: "slideshow_shuffle",
@@ -149,6 +171,24 @@ func (f *Feature) buildSlideshowSelect() {
 			Category: esphome.CategoryConfig,
 		},
 		OnCommand: func(on bool) { f.SetSlideshowSubfolders(on) },
+	}
+	f.slideshowEveryNum = &esphome.Number{
+		Base: esphome.Base{
+			ObjectID: "slideshow_interval",
+			Name:     "Slideshow time per photo",
+			Icon:     "mdi:timer-outline",
+			Category: esphome.CategoryConfig,
+		},
+		Min: float64(slideshowEveryMin / time.Second), Max: float64(slideshowEveryMax / time.Second), Step: 5, Unit: "s",
+		Mode: esphome.NumberBox,
+	}
+	f.slideshowEveryNum.OnCommand = func(v float32) {
+		f.slideshowEveryNum.Set(v)
+		s := config.Get().Home.Slideshow
+		s.EverySeconds = int(v)
+		if err := config.Set().Home().Slideshow(s); err != nil {
+			slog.Warn("home: saving the slideshow interval failed", "err", err)
+		}
 	}
 	f.slideshowIdleNum.OnCommand = func(v float32) {
 		f.slideshowIdleNum.Set(v)
@@ -268,9 +308,10 @@ func (f *Feature) changeSlideshow(change func(*config.Slideshow)) {
 		f.slideshow = slideshowState{} // nothing to show: the last photo goes too
 	} else {
 		shown := f.slideshow.image
-		f.slideshow = slideshowState{image: shown, prev: shown, at: time.Now().Add(-slideshowEvery)} // due now
+		f.slideshow = slideshowState{image: shown, prev: shown, at: time.Now().Add(-slideshowEveryMax)} // due now
 	}
 	f.mu.Unlock()
+	f.slideshowFolderTxt.Set(slideshowFolderName(next.Source))
 	f.Changed.Emit(struct{}{})
 }
 
@@ -279,6 +320,18 @@ func (f *Feature) changeSlideshow(change func(*config.Slideshow)) {
 func (f *Feature) SlideshowSettings() (source string, shuffle, subfolders bool) {
 	s := config.Get().Home.Slideshow
 	return s.Source, !s.InOrder, !s.TopOnly
+}
+
+// SlideshowEvery is how long a photo stays up, and SetSlideshowEvery changes it; both are in play on
+// the screen's Time per photo row as well as Home Assistant's number.
+func (f *Feature) SlideshowEvery() time.Duration {
+	return slideshowInterval(config.Get().Home.Slideshow)
+}
+
+func (f *Feature) SetSlideshowEvery(d time.Duration) {
+	d = min(max(d, slideshowEveryMin), slideshowEveryMax)
+	f.changeSlideshow(func(s *config.Slideshow) { s.EverySeconds = int(d / time.Second) })
+	f.slideshowEveryNum.Set(float32(d / time.Second))
 }
 
 // BrowseFolder lists one media source folder, for the screen's folder list.
@@ -309,7 +362,7 @@ func (f *Feature) advanceSlideshow() {
 		return
 	}
 	f.mu.Lock()
-	due := f.slideshow.image == nil || time.Since(f.slideshow.at) >= slideshowEvery
+	due := f.slideshow.image == nil || time.Since(f.slideshow.at) >= slideshowInterval(h)
 	f.mu.Unlock()
 	if !due {
 		return
@@ -409,6 +462,23 @@ func (f *Feature) SlideshowTrouble() string {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	return f.slideshow.trouble
+}
+
+// slideshowFolderName is the chosen source as Home Assistant should show it: the last folder of the
+// media source id, which is what the screen's Photo folder row names too.
+func slideshowFolderName(id string) string {
+	if id == "" {
+		return "None chosen"
+	}
+	rest := strings.TrimRight(strings.TrimPrefix(id, "media-source://"), "/")
+	name := rest[strings.LastIndex(rest, "/")+1:]
+	if u, err := url.PathUnescape(name); err == nil {
+		name = u
+	}
+	if name == "" || name == "media_source" {
+		return "All photos"
+	}
+	return name
 }
 
 // gatherSlideshow lists the photos a slideshow shows: the source's own and, unless TopOnly, those of

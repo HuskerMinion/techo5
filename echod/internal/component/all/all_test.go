@@ -109,6 +109,8 @@ var registered = []string{
 	"segment_9",
 	"sendspin",
 	"sendspin_state",
+	"slideshow_folder",
+	"slideshow_interval",
 	"slideshow_mode",
 	"slideshow_screensaver_idle",
 	"slideshow_screensaver_overlay",

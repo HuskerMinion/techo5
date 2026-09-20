@@ -102,6 +102,11 @@ type Feature struct {
 	slideshowOverlaySel *esphome.Select
 	slideshowIdleNum    *esphome.Number
 
+	// slideshowEveryNum is how long one photo stays up; slideshowFolderTxt names the folder the
+	// photos come from, which is picked on the screen or with the home_slideshow action.
+	slideshowEveryNum  *esphome.Number
+	slideshowFolderTxt *esphome.TextSensor
+
 	// slideshowShuffleSw and slideshowSubfoldersSw are how the photos are picked from the source.
 	slideshowShuffleSw    *esphome.Switch
 	slideshowSubfoldersSw *esphome.Switch
@@ -246,6 +251,8 @@ func (f *Feature) Restore(c config.Config) {
 			idle = int(slideshowIdleDefault / time.Minute)
 		}
 		f.slideshowIdleNum.Set(float32(idle))
+		f.slideshowEveryNum.Set(float32(slideshowInterval(c.Home.Slideshow) / time.Second))
+		f.slideshowFolderTxt.Set(slideshowFolderName(c.Home.Slideshow.Source))
 		f.slideshowShuffleSw.Set(!c.Home.Slideshow.InOrder)
 		f.slideshowSubfoldersSw.Set(!c.Home.Slideshow.TopOnly)
 	}
