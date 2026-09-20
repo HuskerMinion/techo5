@@ -219,8 +219,10 @@ not a new bug. Fully reverted after.
   Home Assistant, which takes any number of seconds from 5 to 3600; `slideshow_folder` names the
   chosen folder there, since it is picked on the screen. Also that day: three looks in a row that
   find nothing and the device waits fifteen minutes and says why on the screen instead of asking
-  every thirty seconds for ever. Still open: the folder picker on the Spot's screen, leaving folders
-  out of a whole-library pick (a library can hold scanned paperwork), user docs.
+  every thirty seconds for ever. (The folder picker was never Show-only: `sheet_photos.go` is built for
+  both screens, so the Spot has had Photo folder and now Time per photo too - an earlier note here said
+  otherwise and was wrong.) Still open: leaving folders out of a whole-library pick (a library can hold
+  scanned paperwork), user docs.
 
 ## Home Assistant changes needed (for the Home Assistant session)
 
