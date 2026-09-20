@@ -144,6 +144,46 @@ Three answers to the same problem, cheapest first:
    being an access point and try the real network again. It pairs with the setup page in M3, since
    both want the same small web server.
 
+## Talking to the other devices in the house
+
+Two features, one shape apart.
+
+**Announce to all** is one-way and short: a message plays in every room. Live audio to six devices at
+once is a lot of streams for something nobody talks back to, so record the clip on the device that is
+speaking, push it to each of the others, and let them play it behind a chime. A moment's delay before
+it starts and nothing to go wrong after; a device that is asleep, busy or on a call takes it when it
+can, or refuses and says so.
+
+**Intercom** is two-way and one-to-one, and most of it already exists. The phone feature runs a full
+SIP stack with SRTP, and SIP needs no provider: one device can invite another by address with no
+registrar in the middle. Today's "calls between your own devices" go out to the provider and back,
+which is the wrong shape for two devices ten feet apart — the same stack pointed at the LAN is a
+house intercom that works with the internet down.
+
+**Both want the devices to know each other.** They already advertise themselves over mDNS for Home
+Assistant and for multi-room audio; a third record, or a flag on an existing one, is enough to build
+the list without Home Assistant being asked.
+
+**The part to get right is trust.** A device that plays audio it was sent is a device anything on the
+network can make talk. A secret shared by the house, written at install and again from the setup
+page, held by every device and required on both ends. Nothing plays from a peer that cannot show it.
+Beyond that: a name for each device that the announcement says it came from, a way to refuse
+(Do Not Disturb), and a limit on how often a peer may interrupt.
+
+**What this does not need:** Home Assistant, the internet, or an account. That is the point of it.
+
+## The phone, once Home Assistant is gone
+
+Worth writing down, because it is better than expected. The SIP account is the daemon's own — it is
+kept in its own file and registers with the provider directly, with no Home Assistant in the path —
+and contacts are a file on the device, so an unpaired device **still rings for incoming calls and can
+still call the names it already has** from the screen.
+
+What it cannot do alone is provisioning: the account (`phone_account`) and the contact list
+(`phone_contacts`) are both set by Home Assistant actions, and dialing by voice needs a pipeline.
+Signing in and editing contacts therefore belong on the setup page — a SIP password is the worst
+thing anyone will ever type on a five-inch screen.
+
 ## M5 — What it then says on the tin
 
 If M1 to M4 land, the pitch changes: *a local clock radio with alarms and timers, which becomes a
