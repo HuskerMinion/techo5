@@ -178,6 +178,12 @@ TECHO5 exists because of these projects and the people behind them.
   the hardware.
 - The BQ Aquaris E10 GPL source release: MediaTek's ISP register map for this chip generation, which
   let the camera run from userspace.
+- [@Empty2k12](https://github.com/Empty2k12): the first hardware findings from an Echo Show 5 1st gen
+  (`checkers`), including the recipe that made its speaker play, in
+  [pull request #2](https://github.com/HuskerMinion/techo5/pull/2).
+- [@JonGilmore](https://github.com/JonGilmore): every 1st gen build tested on a real unit, two days of
+  it. The microphones, the mute latch cutting their power, the camera and the spoken replies were all
+  found or confirmed from what he reported.
 
 **What runs on the device**
 - [microWakeWord](https://github.com/kahrendt/microWakeWord) (Kevin Ahrendt), the
