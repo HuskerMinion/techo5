@@ -36,13 +36,22 @@ func inputControls(adc string) map[string]uint32 {
 	}
 }
 
-// Rewire points the converter at its microphones again and restores the gain. The 1st gen Echo Show 5
-// takes the microphone chip's power down while the mute latch is engaged, so it comes back in its
-// reset state, muted, and stays silent after the button releases the latch unless this runs again
-// (seen on a unit 2026-09-19).
+// Rewire gives the capture device back, which the supervised service reopens a moment later: open()
+// prepares the stream again and applies the routing and the gain to a converter that is listening.
+//
+// The 1st gen Echo Show 5 takes the microphone chip down with the mute latch, so it comes back in its
+// reset state when the button releases the latch: muted, and with the stream it was handing over
+// dead. Rewriting its controls was not enough on a unit (2026-09-20) — the stream has to be opened
+// again — and on the 2nd gen, where nothing was lost, this costs one reopen.
 func Rewire() {
-	routeInputs()
-	applyGain(config.Get().Microphone.Gain)
+	if !resetsOnMute() {
+		return
+	}
+	if err := Get().Close(); err != nil {
+		slog.Warn("handing the capture device back failed", "err", err)
+		return
+	}
+	slog.Info("capture: reopening after the mute came off")
 }
 
 // routeInputs applies inputControls to every ADC. Each control is written twice, the other way first:

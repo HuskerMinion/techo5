@@ -2,6 +2,8 @@
 
 package mic
 
+import "github.com/HuskerMinion/techo5/echod/internal/layout"
+
 // The Echo Show 5 2nd gen (cronos) capture path: two microphones into a TLV320AIC3101, through an
 // FPGA on SPI into Amazon's amzn-mt-spi-pcm driver, opening as 16 kHz, S24_3LE, 4 channels — ch0
 // and ch1 the two microphones, ch2 and ch3 the playback loopback, left then right. The two are
@@ -37,3 +39,7 @@ const MediaService = "vendor.audio-hal"
 // VendorBeamformer is off: the coefficient sets the daemon reads (lib/subband) are the Dot's, and
 // the Echo Show 5's vendor partition holds a different one.
 const VendorBeamformer = false
+
+// resetsOnMute is whether the mute latch takes the converter down with it, so that the stream has to
+// be opened again once the button releases it. The 1st gen Echo Show 5 does; the 2nd gen does not.
+func resetsOnMute() bool { return layout.Checkers() }

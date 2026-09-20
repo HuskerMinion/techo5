@@ -215,8 +215,9 @@ func (m *Mute) settled(asked bool) {
 	m.show(component.ChosenEffect(m.ring))
 
 	// A latch that has just been released may have taken the microphone chip down with it, which
-	// brings it back muted (hardware/mic.Rewire).
-	if !muted {
+	// brings it back muted and its stream dead (hardware/mic.Rewire). Only on a real change: at
+	// start-up the capture device has just been opened.
+	if asked && !muted {
 		mic.Rewire()
 	}
 
