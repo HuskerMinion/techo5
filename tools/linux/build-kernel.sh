@@ -15,7 +15,9 @@
 # gcc-arm-8.3-2019.03-x86_64-aarch64-linux-gnu.tar.xz, no root needed),
 # KOUT (build directory; keep it outside the source tree), DEFCONFIG (cronos_defconfig, the 2nd gen;
 # checkers_defconfig for the 1st gen, which runs the same commit with its own device trees; give it
-# a KOUT of its own).
+# a KOUT of its own), PATCHES (a directory of *.patch applied for this build and taken out again
+# afterwards whatever happens; the release string is then pinned as KPATCHED does, since the vendor
+# modules check it).
 #
 # Afterwards: delete amzn,mic-downmix from the appended device trees the way
 # patch-dtb.py does, then build-image.sh KERNEL=<Image.gz-dtb> (see README.md).
@@ -25,6 +27,7 @@ KSRC=${KSRC:-$HOME/kernel}
 KCOMMIT=${KCOMMIT:-8d928c5176cc}
 KOUT=${KOUT:-$HOME/kout}
 DEFCONFIG=${DEFCONFIG:-cronos_defconfig}
+PATCHES=${PATCHES:-}
 CROSS_COMPILE=${CROSS_COMPILE:-$HOME/toolchain/gcc-arm-8.3-2019.03-x86_64-aarch64-linux-gnu/bin/aarch64-linux-gnu-}
 OUT=
 while [ $# -gt 0 ]; do
@@ -35,6 +38,23 @@ while [ $# -gt 0 ]; do
 done
 
 cd "$KSRC"
+if [ -n "$PATCHES" ]; then
+	set -- "$PATCHES"/*.patch
+	[ -e "$1" ] || { echo "no patches in $PATCHES" >&2; exit 1; }
+	[ -z "$(git status --porcelain)" ] || { echo "kernel tree is not clean; patches need a clean tree" >&2; exit 1; }
+	# Out again however this ends, so the tree is never left carrying them.
+	trap 'cd "$KSRC" && rm -f .scmversion && git checkout -- . && echo "patches removed"' EXIT
+	# A patched tree is a dirty tree, and scripts/setlocalversion marks one with a trailing "+".
+	# The vendor modules are built against the release string and refuse to load against anything
+	# else, so an empty .scmversion takes the mark off and KPATCHED pins the rest of the string.
+	: > .scmversion
+	for p in "$@"; do
+		git apply --check "$p" || { echo "patch does not apply: $p" >&2; exit 1; }
+		git apply "$p"
+		echo "applied $(basename "$p")"
+	done
+	KPATCHED=1
+fi
 # KPATCHED=1 allows a tree with local changes (the camera sensor patches on a branch): the
 # release string is then pinned by hand to what the vendor modules were built against.
 head=$(git rev-parse --short=12 HEAD)
