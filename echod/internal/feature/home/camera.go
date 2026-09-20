@@ -256,10 +256,11 @@ func (f *Feature) snapshot(entity string) (*image.RGBA, error) {
 }
 
 // MatchCamera finds a camera named in what was heard: "show the front door", "show me the deck
-// camera". Empty when nothing matches.
+// camera", or the German "zeig die Haustür". Empty when nothing matches.
 func (f *Feature) MatchCamera(heard string) string {
 	h := strings.ToLower(heard)
-	if !strings.Contains(h, "show") && !strings.Contains(h, "camera") {
+	if !strings.Contains(h, "show") && !strings.Contains(h, "camera") &&
+		!strings.Contains(h, "zeig") && !strings.Contains(h, "kamera") {
 		return ""
 	}
 	best, bestLen := "", 0
