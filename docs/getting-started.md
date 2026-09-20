@@ -18,11 +18,12 @@ The model number is on the bottom of the device, or in the Alexa app under the d
 | **Echo Show 5, 2nd gen** (2021) | `cronos` | AEOCN | [TECHO5](https://github.com/HuskerMinion/techo5) | Moderate: the unlock and LineageOS by hand, then a one-command installer |
 | **Echo Dot, 2nd gen** (2016) | `biscuit` | RS03QR | [TECHO5 Dot](https://github.com/HuskerMinion/techo5-dot) | Moderate: the unlock and Fire OS steps by hand, then a one-command installer |
 | **Echo Spot, 1st gen** (2017) | `rook` | VN94DQ | [TECHO5 Spot](https://github.com/HuskerMinion/techo5-spot) | Moderate: the unlock and LineageOS by hand, then a one-command installer |
-| **Echo Show 5, 1st gen** (2019) | `checkers` | — | Coming: in progress | Not yet: a first test build is being prepared |
+| **Echo Show 5, 1st gen** (2019) | `checkers` | — | [TECHO5](https://github.com/HuskerMinion/techo5), experimental | Harder: as the 2nd gen, plus a boot image built for it (`docs/building.md`) and `--boot` on the installer |
 | **Echo Show 8, 1st gen** (2019) | — | — | Coming: planned | Not yet: work starts when test units arrive |
 
-The Show 5 1st gen and Show 8 1st gen are coming, with nothing to install yet and no dates. Other
-Echos (the Dot 3rd gen and later, and so on) are **not** supported.
+The Show 5 1st gen runs everything TECHO5 does, tested on one unit, but it needs a boot image built for
+it rather than one from a release. The Show 8 1st gen is planned, with nothing to install yet and no
+dates. Other Echos (the Dot 3rd gen and later, and so on) are **not** supported.
 
 ## What every device needs
 

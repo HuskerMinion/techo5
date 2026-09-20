@@ -123,8 +123,10 @@ Assistant. Every step by hand, and the fixes for what can go wrong: **[docs/inst
 > **Status:** in daily use on two Echo Show 5 units. It's a hobby project, not a product: keep your
 > backups, and expect rough edges.
 
-**Coming:** the Echo Show 5 1st gen (2019, `checkers`) is in progress, and the Echo Show 8 1st gen
-(2019) is planned. Nothing to install yet; watch this repository for news.
+**Echo Show 5 1st gen (2019, `checkers`): experimental.** Everything works on the one unit it has been
+tested on — screen, touch, speaker, microphones, wake word, camera, the mute button and voice — but it
+needs a boot image built for it, so it is not a one-command install yet. The Echo Show 8 1st gen (2019)
+is planned.
 
 ## Under the hood
 
