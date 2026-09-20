@@ -37,7 +37,7 @@ The same daemon runs on three more Echo devices, each from its own repository:
 | Device | Repository | Status |
 |---|---|---|
 | **Echo Show 5, 2nd gen** (2021, `cronos`) | this one | In daily use |
-| **Echo Show 5, 1st gen** (2019, `checkers`) | this one, same binary | Experimental: everything works on the unit it was tested on, but it needs a boot image built for it |
+| **Echo Show 5, 1st gen** (2019, `checkers`) | this one, same binary; the hardware notes are in [techo5-checkers](https://github.com/HuskerMinion/techo5-checkers) | Experimental: everything works on the unit it was tested on, but it needs a boot image built for it |
 | **Echo Spot, 1st gen** (2017, `rook`) | [TECHO5 Spot](https://github.com/HuskerMinion/techo5-spot) | In daily use |
 | **Echo Dot, 2nd gen** (2016, `biscuit`) | [TECHO5 Dot](https://github.com/HuskerMinion/techo5-dot) | In daily use |
 
