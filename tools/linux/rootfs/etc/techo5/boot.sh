@@ -46,6 +46,17 @@ if [ ! -e /data/misc/techo5/timezone ] || [ ! -e /data/misc/techo5/localtime ]; 
 	echo "$zone" > /data/misc/techo5/timezone
 fi
 mkdir -p -m 700 /data/misc/techo5/ssh
+# The kernel keeps its last words in RAM across a restart (pstore). Mounting it makes them readable,
+# and a copy on userdata outlives the next boot; a power cut clears the RAM, so this only catches a
+# device that restarted itself.
+if mount -t pstore pstore /sys/fs/pstore 2>/dev/null || [ -d /sys/fs/pstore ]; then
+	for f in /sys/fs/pstore/*; do
+		[ -e "$f" ] || continue
+		mkdir -p /data/techo5-linux/crash
+		cp "$f" "/data/techo5-linux/crash/$(date +%Y%m%d-%H%M%S)-${f##*/}" 2>/dev/null &&
+			log "kernel crash record kept: ${f##*/}" && rm -f "$f"
+	done
+fi
 # The wake word models the image carries, any this unit does not have yet: a fresh unit gets them
 # all, and one set up before a model joined the image gets it at its next update, so every unit
 # offers the same words. Nothing on the unit is replaced or removed (a purged one comes back here).
