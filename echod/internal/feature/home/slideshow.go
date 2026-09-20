@@ -62,8 +62,8 @@ const (
 
 // The lines the screen shows while the slideshow has no photo. Short: they sit in the footer.
 const (
-	slideshowUnreadable = "photos: the folder could not be read"
-	slideshowEmpty      = "photos: the folder has no pictures"
+	slideshowUnreadable = "photos: folder unreadable"
+	slideshowEmpty      = "photos: folder is empty"
 )
 
 // slideshowIdleDefault is how long Screensaver mode waits for when IdleMinutes is unset.

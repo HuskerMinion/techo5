@@ -119,6 +119,9 @@ type roundScene struct {
 	slideshowScreensaver *image.RGBA
 	slideshowOverlay     string
 
+	// slideshowTrouble is why the slideshow has no photo, once it has given up looking.
+	slideshowTrouble string
+
 	// sheetOpen is the settings screen up, sheetGrid its six categories rather than one; sheet what
 	// it shows.
 	sheetOpen, sheetGrid bool
@@ -241,6 +244,10 @@ func (r *roundRenderer) clockFace(s roundScene) {
 	if len(s.timers) > 0 {
 		t := s.timers[0]
 		r.centred(r.body, "Timer "+clockDuration(t.Left), line, colTimer)
+		line += 34
+	}
+	if s.slideshowTrouble != "" {
+		r.centred(r.small, s.slideshowTrouble, line, colDim)
 		line += 34
 	}
 	switch {
