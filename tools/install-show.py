@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
-"""Install TECHO5 on an Echo Show 5 (2nd gen, cronos) running LineageOS 18.1, in one command.
+"""Install TECHO5 on an Echo Show 5 (1st gen, checkers; 2nd gen, cronos) running LineageOS 18.1, in one command.
 
-The 1st gen (checkers) is experimental: it runs the same kernel commit on LineageOS 18.1 from
-2026-09-04 on, and installs with --boot, a boot image built for it (its kernel with Bluetooth), since
-releases carry the 2nd gen's only.
+Both generations install the same way and run the same daemon, which tells them apart at run time.
+The 1st gen (checkers) runs the same kernel commit on LineageOS 18.1 from 2026-09-04 on, and takes its
+own boot image from the release, since its kernel and device tree are not the 2nd gen's.
 
     python3 tools/install-show.py --serial <serial> --name Kitchen --dry-run
     python3 tools/install-show.py --serial <serial> --name Kitchen
@@ -12,7 +12,7 @@ Windows, Linux and macOS alike; needs Python 3, adb and fastboot. Nothing is bui
 image (LineageOS's kernel rebuilt with Bluetooth, and TECHO5's rescue environment, with no SSH key) and
 root filesystem are downloaded and checked. Each step is checked before the next:
 
-  1. checks    adb sees the unit as cronos on the LineageOS kernel TECHO5's is built from
+  1. checks    adb sees the unit as cronos or checkers on the LineageOS kernel TECHO5's is built from
   2. backup    with Rooted debugging on, LineageOS's boot image into backups/<serial>/ (the way back)
   3. release   the boot image and root filesystem, checked against their checksums
   4. push      the root filesystem onto the unit's storage, checked by md5
@@ -59,10 +59,16 @@ def show_version(tag):
     return tuple(int(x) for x in m.groups()) if m else None
 
 
-def boot_image(rel, work):
-    """The release's boot image, or, when it carries none (the boot image changes rarely, so most
-    releases don't), the one from the newest earlier Show release that does."""
-    name = 'techo5-boot-%s.img' % rel.version
+def boot_name(dev, tag):
+    """What a release calls the boot image for this generation: each has its own kernel and device
+    tree, so a 1st gen unit needs the one built for it."""
+    return 'techo5-boot-checkers-%s.img' % tag if dev == 'checkers' else 'techo5-boot-%s.img' % tag
+
+
+def boot_image(rel, work, dev):
+    """The release's boot image for this generation, or, when it carries none (the boot image changes
+    rarely, so most releases don't), the one from the newest earlier Show release that does."""
+    name = boot_name(dev, rel.version)
     if name in rel.sums:
         return rel.asset(name)
     want = show_version(rel.version)
@@ -73,11 +79,11 @@ def boot_image(rel, work):
              % (rel.version, e))
     for r in releases:
         v = show_version(r['tag_name'])
-        name = 'techo5-boot-%s.img' % r['tag_name']
+        name = boot_name(dev, r['tag_name'])
         if v and want and v < want and any(x['name'] == name for x in r['assets']):
             note('release %s has no boot image of its own; using %s\'s' % (rel.version, r['tag_name']))
             return Release(REPO, r['tag_name'], work).asset(name)
-    fail('no release up to %s has a boot image' % rel.version)
+    fail('no release up to %s has a boot image for the %s' % (rel.version, dev))
 
 
 def main():
@@ -124,10 +130,6 @@ def main():
     dev = adb.sh('getprop ro.product.device')
     if dev not in ('cronos', 'checkers'):
         fail("%s reports '%s', not an Echo Show 5 (cronos, 2nd gen; checkers, 1st gen)" % (a.serial, dev))
-    if dev == 'checkers' and not a.boot:
-        # A release's boot image carries the 2nd gen's kernel and device trees: on a 1st gen it would
-        # not bring the screen or the Wi-Fi up. Only a boot image built for it may go on.
-        fail('the Echo Show 5 1st gen is experimental: give --boot the boot image built for it')
     kr = adb.sh('uname -r')
     if kr != KERNEL_RELEASE:
         fail('%s runs kernel %s, not %s: install the LineageOS 18.1 build the getting started guide links' % (a.serial, kr, KERNEL_RELEASE))
@@ -172,7 +174,7 @@ def main():
         boot = os.path.abspath(a.boot)
         note('boot image: your own, %s' % boot)
     else:
-        boot = boot_image(rel, a.work)
+        boot = boot_image(rel, a.work, dev)
         note('boot image %s checked' % os.path.basename(boot))
     if a.dry_run:
         print('\nDry run: TECHO5 %s downloaded and checked in %s; nothing written to the unit.' % (version, rel.dir))

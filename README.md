@@ -37,7 +37,7 @@ The same daemon runs on three more Echo devices, each from its own repository:
 | Device | Repository | Status |
 |---|---|---|
 | **Echo Show 5, 2nd gen** (2021, `cronos`) | this one | In daily use |
-| **Echo Show 5, 1st gen** (2019, `checkers`) | this one, same binary; the hardware notes are in [techo5-checkers](https://github.com/HuskerMinion/techo5-checkers) | Experimental: everything works on the unit it was tested on, but it needs a boot image built for it |
+| **Echo Show 5, 1st gen** (2019, `checkers`) | this one, same binary; the hardware notes are in [techo5-checkers](https://github.com/HuskerMinion/techo5-checkers) | Working, tested end to end on one unit |
 | **Echo Spot, 1st gen** (2017, `rook`) | [TECHO5 Spot](https://github.com/HuskerMinion/techo5-spot) | In daily use |
 | **Echo Dot, 2nd gen** (2016, `biscuit`) | [TECHO5 Dot](https://github.com/HuskerMinion/techo5-dot) | In daily use |
 
@@ -113,11 +113,12 @@ Straight from the device's own screen.
 Show 5, Dot or Spot, with the unlock guides linked, what to check after each step, and notes for
 Windows, Linux and macOS.
 
-You need a Show 5 2nd gen **unlocked with
+You need a Show 5 **unlocked and running LineageOS 18.1** — 2nd gen with
 [amonet-cronos](https://xdaforums.com/t/unlock-root-twrp-unbrick-amazon-echo-show-5-2nd-gen-2021-cronos.4772596/)
-and running
-[LineageOS 18.1](https://xdaforums.com/t/rom-unofficial-11-cronos-lineageos-18-1-for-the-amazon-echo-show-5-2021.4772598/)**,
-a USB cable, a computer (Windows, Linux or macOS) with Python 3, `adb` and `fastboot`, and Home
+and [this ROM](https://xdaforums.com/t/rom-unofficial-11-cronos-lineageos-18-1-for-the-amazon-echo-show-5-2021.4772598/),
+1st gen with
+[amonet-checkers](https://xdaforums.com/t/unlock-root-twrp-unbrick-amazon-echo-show-5-1st-gen-2019-checkers.4762900/)
+and R0rt1z2's `checkers` build of the same LineageOS — a USB cable, a computer (Windows, Linux or macOS) with Python 3, `adb` and `fastboot`, and Home
 Assistant. Each [release](https://github.com/HuskerMinion/techo5/releases/latest) carries everything
 else: the boot image (with Bluetooth) and the root filesystem. Nothing is built.
 
@@ -134,10 +135,12 @@ Assistant. Every step by hand, and the fixes for what can go wrong: **[docs/inst
 > **Status:** in daily use on two Echo Show 5 units. It's a hobby project, not a product: keep your
 > backups, and expect rough edges.
 
-**Echo Show 5 1st gen (2019, `checkers`): experimental.** Everything works on the one unit it has been
-tested on — screen, touch, speaker, microphones, wake word, camera, the mute button and voice — but it
-needs a boot image built for it, so it is not a one-command install yet. The Echo Show 8 1st gen (2019)
-is planned.
+**Echo Show 5 1st gen (2019, `checkers`)** installs with the same command: the installer sees which
+generation it is talking to and takes that unit's boot image from the release. Everything works on it —
+screen, touch, speaker, microphones, wake word, camera, the mute button and voice — tested end to end,
+though so far on one unit rather than the two years of daily use behind the 2nd gen. The hardware notes
+are in [techo5-checkers](https://github.com/HuskerMinion/techo5-checkers). The Echo Show 8 1st gen
+(2019) is planned.
 
 ## Under the hood
 

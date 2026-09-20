@@ -18,12 +18,13 @@ The model number is on the bottom of the device, or in the Alexa app under the d
 | **Echo Show 5, 2nd gen** (2021) | `cronos` | AEOCN | [TECHO5](https://github.com/HuskerMinion/techo5) | Moderate: the unlock and LineageOS by hand, then a one-command installer |
 | **Echo Dot, 2nd gen** (2016) | `biscuit` | RS03QR | [TECHO5 Dot](https://github.com/HuskerMinion/techo5-dot) | Moderate: the unlock and Fire OS steps by hand, then a one-command installer |
 | **Echo Spot, 1st gen** (2017) | `rook` | VN94DQ | [TECHO5 Spot](https://github.com/HuskerMinion/techo5-spot) | Moderate: the unlock and LineageOS by hand, then a one-command installer |
-| **Echo Show 5, 1st gen** (2019) | `checkers` | — | [TECHO5](https://github.com/HuskerMinion/techo5), experimental | Harder: as the 2nd gen, plus a boot image built for it (`docs/building.md`) and `--boot` on the installer |
+| **Echo Show 5, 1st gen** (2019) | `checkers` | — | [TECHO5](https://github.com/HuskerMinion/techo5) | Moderate: the unlock and LineageOS by hand, then the same one-command installer |
 | **Echo Show 8, 1st gen** (2019) | — | — | Coming: planned | Not yet: work starts when test units arrive |
 
-The Show 5 1st gen runs everything TECHO5 does, tested on one unit, but it needs a boot image built for
-it rather than one from a release. The Show 8 1st gen is planned, with nothing to install yet and no
-dates. Other Echos (the Dot 3rd gen and later, and so on) are **not** supported.
+Both generations of the Show 5 install with the same command and run the same build, which tells them
+apart when it starts; the installer picks each one's boot image out of the release. The 1st gen has been
+tested end to end, though on one unit so far. The Show 8 1st gen is planned, with nothing to install yet
+and no dates. Other Echos (the Dot 3rd gen and later, and so on) are **not** supported.
 
 ## What every device needs
 
@@ -54,18 +55,26 @@ images from your own unit's backup. You need Python 3, the Android platform tool
 Check with `python3 --version` and `adb version`. The unlock threads on XDA also need a (free) XDA
 account to download attachments.
 
-## Echo Show 5 (2nd gen)
+## Echo Show 5 (1st and 2nd gen)
 
-1. **Unlock it with amonet-cronos.** Follow
+The steps are the same for both; where they differ, the 1st gen (`checkers`) is called out.
+
+1. **Unlock it with amonet.** On a 2nd gen, follow
    [[UNLOCK][ROOT][TWRP][UNBRICK] Echo Show 5 2nd Gen (cronos)](https://xdaforums.com/t/unlock-root-twrp-unbrick-amazon-echo-show-5-2nd-gen-2021-cronos.4772596/)
    on XDA (source: [R0rt1z2/amonet, branch mt8163-cronos](https://github.com/R0rt1z2/amonet/tree/mt8163-cronos)).
    In short: with the Show on mains power, hold all three buttons until the screen says
    `=> FASTBOOT mode`, connect USB, and run the fastbrick step from the thread. It reboots into TWRP
    on its own; don't interrupt it.
+   On a **1st gen**, the same thing with the `checkers` tools:
+   [[UNLOCK][ROOT][TWRP][UNBRICK] Echo Show 5 1st Gen (checkers)](https://xdaforums.com/t/unlock-root-twrp-unbrick-amazon-echo-show-5-1st-gen-2019-checkers.4762900/)
+   (amonet branch `mt8163-checkers`). A unit fresh out of the box may have shipped with firmware too
+   new to unlock, so read the version before letting it reach the internet.
    *Check:* the Show boots into TWRP.
 2. **Install LineageOS 18.1.** Follow
    [[ROM][UNOFFICIAL][11][cronos] LineageOS 18.1 for the Echo Show 5 (2021)](https://xdaforums.com/t/rom-unofficial-11-cronos-lineageos-18-1-for-the-amazon-echo-show-5-2021.4772598/).
-   Use a current build (0.4 or later; earlier ones lose audio after a few days).
+   Use a current build (0.4 or later; earlier ones lose audio after a few days). A **1st gen** takes
+   R0rt1z2's `checkers` build of the same LineageOS, dated 2026-09-04 or later: TECHO5's kernel is
+   rebuilt from that source, and the installer checks the version before it does anything.
    *Check:* LineageOS boots.
 3. **Prepare LineageOS:** join your Wi-Fi, then in Settings → About → tap Build number seven times,
    and in Developer options turn on **USB debugging**.
