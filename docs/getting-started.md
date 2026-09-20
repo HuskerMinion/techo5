@@ -233,6 +233,20 @@ is built on, runs on the unlocked Dot's Fire OS 6 with its own installer, and is
    - multi-room audio through [Music Assistant](https://www.music-assistant.io/) (each device is a
      Sendspin player).
 
+### If Home Assistant does not find it
+
+Home Assistant finds these devices over mDNS, the same way it finds ESPHome boards.
+
+- **A different subnet or VLAN.** mDNS does not cross subnets on its own. Either put Home Assistant
+  and the device on the same one, or set up an mDNS reflector on the router for `_esphomelib._tcp`
+  (and `_sendspin._tcp` for multi-room audio).
+- **Home Assistant in Docker.** A container on the default bridge network never sees mDNS, so nothing
+  is discovered. Run it with `network_mode: host` (Docker Compose) or `--network host`; macvlan works
+  too.
+- **Add it by hand instead.** Settings → Devices & services → ESPHome → Add device, then the device's
+  address, port 6053, and the encryption key from `backups/<serial>/`. This works without mDNS, as
+  long as Home Assistant can reach the address.
+
 ## Windows, Linux or macOS
 
 | Step | Windows | Linux | macOS |
