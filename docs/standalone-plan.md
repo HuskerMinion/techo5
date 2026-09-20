@@ -92,9 +92,11 @@ The shape:
   and in Home Assistant where there is one.
 - **It turns itself off again.** A setup page that is on for fifteen minutes after you ask for it is
   a different risk from one that is on for a year.
-- **A code shown on the device's own screen** to get in. Not a password to remember; a six-digit
-  number on the panel, proving whoever is configuring it is standing in front of it. Rate-limited,
-  and a new one each time the page is turned on.
+- **A press on the device to get in.** The page says *press the button on your device*, and the
+  press authorizes that browser for the session. Physical presence proven, nothing to read, type or
+  remember — and unlike a code shown on the panel it works on a Dot, which has no panel. (A code on
+  the screen can stay as a second way in on a device that has one.) One press, one session, and it
+  expires with the page.
 - **Plain HTTP on the LAN.** No certificate that would be worth the trouble on a device with no name.
   Say so plainly in the docs rather than implying it is private.
 - **It writes only what it says it writes**: radio favorites, the time zone, the name, maybe the
@@ -183,6 +185,26 @@ What it cannot do alone is provisioning: the account (`phone_account`) and the c
 (`phone_contacts`) are both set by Home Assistant actions, and dialing by voice needs a pipeline.
 Signing in and editing contacts therefore belong on the setup page — a SIP password is the worst
 thing anyone will ever type on a five-inch screen.
+
+## The Dot, which has no screen
+
+Every part of this is hardest on a Dot: no screen, no touch, four buttons and a light ring. It is
+also the device most worth solving, being cheap enough to put one in every room.
+
+- **Getting on the network.** The only route is Bluetooth provisioning. A Show or a Spot joins a
+  network from its own screen; a Dot can only be told over USB at install. This is the whole argument
+  for Improv over a hotspot.
+- **The setup page is not a convenience here, it is the only interface.** Alarms, the time zone,
+  radio favorites, the SIP account: on a Dot there is nowhere else to set any of them. That argues
+  for building the page earlier than its place in the order below.
+- **Four buttons and a ring.** Action is the one free input: a long press to talk to a default peer,
+  or to start and stop the first radio favorite, with the ring showing which. Modest, but it covers
+  the two things anyone does daily without an app.
+- **Announcing and the intercom suit it best of all.** Speaker, microphones, one per room, and
+  nothing anybody needs to look at. A Dot by a bed is the most natural thing in this whole plan.
+- **What it will not do standalone** is take a spoken command, because that is a Home Assistant
+  pipeline. A Dot with no Home Assistant is an intercom endpoint, an alarm clock and a radio — not a
+  voice assistant.
 
 ## M5 — What it then says on the tin
 
