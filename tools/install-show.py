@@ -80,10 +80,19 @@ def boot_image(rel, work, dev):
     for r in releases:
         v = show_version(r['tag_name'])
         name = boot_name(dev, r['tag_name'])
-        if v and want and v < want and any(x['name'] == name for x in r['assets']):
-            note('release %s has no boot image of its own; using %s\'s' % (rel.version, r['tag_name']))
-            return Release(REPO, r['tag_name'], work).asset(name)
-    fail('no release up to %s has a boot image for the %s' % (rel.version, dev))
+        if not (v and want and v < want and any(x['name'] == name for x in r['assets'])):
+            continue
+        # An image is only usable when that release's SHA256SUMS carries its checksum: an asset
+        # attached any other way cannot be checked, so it is passed over rather than trusted.
+        earlier = Release(REPO, r['tag_name'], work)
+        if name not in earlier.sums:
+            note('release %s has %s but no checksum for it; looking further back' % (r['tag_name'], name))
+            continue
+        note('release %s has no boot image of its own; using %s\'s' % (rel.version, r['tag_name']))
+        return earlier.asset(name)
+    fail('no release up to %s carries a boot image for the %s with a checksum in its SHA256SUMS. '
+         'This is a packaging fault on our side, not something to fix at your end: please report it.'
+         % (rel.version, dev))
 
 
 def main():
