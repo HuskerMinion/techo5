@@ -26,7 +26,7 @@ func (driver) Get() (bool, error) { return reads(state, "1") }
 
 // The driver's own handler runs before the key event is emitted, so the state has already changed by
 // the time echod sees the press. Writing then would be racing the transition that has just happened.
-func (driver) HardwareToggles() bool { return true }
+func (driver) HardwareActs(bool) bool { return true }
 
 // Cutting the microphones is reported around 300ms after the press that asked for it, while releasing
 // them lands at once. Measured against the key event on 6.5.7.4.

@@ -12,7 +12,7 @@ import (
 // to act on and the value reads back as soon as it is written.
 type line struct{ *gpio.Mute }
 
-func (line) HardwareToggles() bool { return false }
+func (line) HardwareActs(bool) bool { return false }
 
 func (line) Lag() time.Duration { return 0 }
 

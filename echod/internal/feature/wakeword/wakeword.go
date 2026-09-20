@@ -267,6 +267,23 @@ func (w *WakeWord) SetThreshold(n int, v float64) {
 }
 
 // SetTone sets slot n's wake word tone by its label as Home Assistant would, for the screen.
+// FallBackToStream puts a slot on streamed delivery, for a reply Home Assistant served at a url the
+// device could not fetch: the download is the default because it cannot gap, but a device that cannot
+// reach that url is silent every turn, and the streamed copy of the same reply always arrives over the
+// connection the device already has. The setting is saved and shown in Home Assistant, so it is clear
+// why replies sound different from then on.
+func (w *WakeWord) FallBackToStream(n int) {
+	if n < 0 || n >= len(w.slots) {
+		return
+	}
+	if Delivery(n) == config.DeliveryStream {
+		return
+	}
+	slog.Warn("the reply could not be fetched from Home Assistant; this wake word moves to streamed delivery",
+		"slot", n+1)
+	w.slots[n].delivery.OnCommand(config.DeliveryStream.Label())
+}
+
 func (w *WakeWord) SetTone(n int, label string) {
 	if n >= 0 && n < len(w.slots) {
 		w.slots[n].tone.OnCommand(label)

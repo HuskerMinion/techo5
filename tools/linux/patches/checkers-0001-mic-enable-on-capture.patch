@@ -1,0 +1,84 @@
+diff --git a/drivers/misc/gating.c b/drivers/misc/gating.c
+index 1624ae0a7378..2920673bca8a 100644
+--- a/drivers/misc/gating.c
++++ b/drivers/misc/gating.c
+@@ -53,6 +53,7 @@ struct gating_priv {
+ };
+ 
+ static struct srcu_notifier_head *priv_nh;
++static struct gating_priv *gating_hw_priv;
+ 
+ int register_gating_state_notifier(struct notifier_block *nb)
+ {
+@@ -79,6 +80,21 @@ static enum gating_state __gating_state(struct gating_priv *priv)
+ 	return value;
+ }
+ 
++/*
++ * gating_hw_state is the latch as the state pin reports it, for a driver that has to know whether
++ * the microphones are cut before it powers them: the notifier tells a listener what changed, and
++ * the button release that clears the latch does not always produce a notification.
++ */
++int gating_hw_state(void)
++{
++	if (!gating_hw_priv)
++		return -ENODEV;
++
++	return __gating_state(gating_hw_priv);
++}
++EXPORT_SYMBOL(gating_hw_state);
++
++
+ static int __set_gating_state(struct gating_priv *priv, int enable)
+ {
+ 	int i = 0;
+@@ -439,6 +455,7 @@ static int gating_probe(struct platform_device *pdev)
+ 	mutex_init(&priv->mutex);
+ 
+ 	platform_set_drvdata(pdev, priv);
++	gating_hw_priv = priv;
+ 
+ 	priv->state_gpio = devm_gpiod_get(dev, "state", GPIOD_IN);
+ 	ret = PTR_ERR_OR_ZERO(priv->state_gpio);
+diff --git a/include/misc/gating.h b/include/misc/gating.h
+index 7f42ea1f4a44..deb730035c24 100644
+--- a/include/misc/gating.h
++++ b/include/misc/gating.h
+@@ -25,4 +25,10 @@ enum gating_state {
+ /* register a srcu notifier call by providing a notifier block */
+ int register_gating_state_notifier(struct notifier_block *nb);
+ 
++/* the latch as the hardware reports it now: GATED, UNGATED, or -ENODEV before the driver is up.
++ * Reading the pin is the only truth available to another driver: the notifier says what changed,
++ * and a change that is missed is never repeated.
++ */
++int gating_hw_state(void);
++
+ #endif
+diff --git a/sound/soc/mediatek/mt_soc_audio_8163_amzn/mt_soc_machine.c b/sound/soc/mediatek/mt_soc_audio_8163_amzn/mt_soc_machine.c
+index a06faad62933..0f3f7f65c437 100644
+--- a/sound/soc/mediatek/mt_soc_audio_8163_amzn/mt_soc_machine.c
++++ b/sound/soc/mediatek/mt_soc_audio_8163_amzn/mt_soc_machine.c
+@@ -532,6 +532,22 @@ static int tlv3101_hw_params(struct snd_pcm_substream *substream,
+ 		return -EINVAL;
+ 	}
+ 
++#ifdef CONFIG_GATING
++	/*
++	 * The privacy latch cuts power to the microphone path, and the button that releases it only
++	 * feeds the notifier when the state pin has already changed by the time the release is
++	 * handled. When it has not, nothing ever switches the microphones back on and capture reads
++	 * silence with the FPGA reporting revision 0 (seen on an Echo Show 5 1st gen, 2026-09-20).
++	 *
++	 * Opening a capture stream is the moment somebody wants the microphones, so the pin is put
++	 * back then. The hardware state decides, so a unit that is still muted stays muted: privacy
++	 * is the latch's, not this driver's.
++	 */
++	if (substream->stream == SNDRV_PCM_STREAM_CAPTURE &&
++			gating_hw_state() == UNGATED)
++		AudDrv_GPIO_MIC_Enable_Select(true);
++#endif
++
+ 	if (mt_soc_mclk_freq == AIC31XX_FREQ_24576000) {
+ 		snd_soc_dai_set_pll(codec_dai, AIC3101_PLL_BCLK,
+ 			AIC3101_PLL_ADC_FS_CLKIN_MCLK,

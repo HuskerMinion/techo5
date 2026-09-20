@@ -18,6 +18,7 @@ import (
 	"github.com/HuskerMinion/techo5/echod/internal/config"
 	"github.com/HuskerMinion/techo5/echod/internal/hardware/buttons"
 	"github.com/HuskerMinion/techo5/echod/internal/hardware/led"
+	"github.com/HuskerMinion/techo5/echod/internal/hardware/mic"
 	"github.com/HuskerMinion/techo5/echod/internal/hardware/privacy"
 	"github.com/HuskerMinion/techo5/echod/internal/hardware/speaker"
 )
@@ -168,12 +169,13 @@ func (m *Mute) Set(muted bool) {
 }
 
 // Toggle is the button on top of the device. Where the hardware has already acted on the press, the
-// press is only news: what follows is the same either way.
+// press is only news: what follows is the same either way. Whether it has can depend on which way
+// the press goes, and the switch still holds the state from before it.
 func (m *Mute) Toggle() {
 	if m.line == nil {
 		return
 	}
-	if !m.line.HardwareToggles() {
+	if !m.line.HardwareActs(m.sw.Get()) {
 		if _, err := m.line.Toggle(); err != nil {
 			slog.Error("toggling mute failed", "err", err)
 			return
@@ -211,6 +213,13 @@ func (m *Mute) settled(asked bool) {
 
 	m.sw.Set(muted)
 	m.show(component.ChosenEffect(m.ring))
+
+	// A latch that has just been released may have taken the microphone chip down with it, which
+	// brings it back muted and its stream dead (hardware/mic.Rewire). Only on a real change: at
+	// start-up the capture device has just been opened.
+	if asked && !muted {
+		mic.Rewire()
+	}
 
 	if !asked {
 		return

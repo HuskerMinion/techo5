@@ -35,3 +35,32 @@ func TestGainForStep(t *testing.T) {
 		}
 	}
 }
+
+// The 2nd gen's start is its one safe-mode write, as before; the 1st gen's is the RT5616's routing
+// with the amplifier switch Off (active low) and both of LOUT_CTRL1's mutes cleared.
+func TestShowInit(t *testing.T) {
+	if got := showInit(false); len(got) != 1 || got[0].name != "Speaker Safe Mode A" || got[0].level != 0 {
+		t.Errorf("2nd gen: %+v", got)
+	}
+	want := map[string]bool{"Ext_Speaker_Amp_Switch": false, "OUT Playback Switch": false, "OUT Channel Switch": false,
+		"LOUT MIX OUTVOL L Switch": false, "LOUT MIX OUTVOL R Switch": false}
+	for _, k := range showInit(true) {
+		if k.name == "Speaker Safe Mode A" {
+			t.Error("1st gen: the 2nd gen's safe mode control is not on this board")
+		}
+		if k.name == "Ext_Speaker_Amp_Switch" && k.value != "Off" {
+			t.Errorf("1st gen: the amplifier switch is active low and must be Off, got %q", k.value)
+		}
+		if _, ok := want[k.name]; ok {
+			want[k.name] = k.name == "Ext_Speaker_Amp_Switch" || k.level == 1
+		}
+	}
+	for name, ok := range want {
+		if !ok {
+			t.Errorf("1st gen: %s missing or not set", name)
+		}
+	}
+	if AmpSwitch != "" {
+		t.Error("AmpSwitch must stay empty: switching it resets the 2nd gen's amplifier and silences the 1st gen's")
+	}
+}

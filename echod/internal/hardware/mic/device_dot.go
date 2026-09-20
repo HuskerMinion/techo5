@@ -33,3 +33,6 @@ const MediaService = "media"
 // VendorBeamformer offers the vendor's own beamformer when its coefficients are on the vendor
 // partition: the sets the daemon reads (lib/subband) are the Dot's.
 const VendorBeamformer = true
+
+// resetsOnMute is false: the mute here leaves the converter alone.
+func resetsOnMute() bool { return false }
