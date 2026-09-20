@@ -248,6 +248,27 @@ Home Assistant finds these devices over mDNS, the same way it finds ESPHome boar
   address, port 6053, and the encryption key from `backups/<serial>/`. This works without mDNS, as
   long as Home Assistant can reach the address.
 
+### If it listens but does not answer out loud
+
+The device wakes, the screen shows the answer, and nothing is spoken. That is almost always the voice
+pipeline rather than the device: Home Assistant is replying in text only.
+
+1. **Settings → Voice assistants**, and open the pipeline this device uses. That is the one marked
+   Preferred, unless you picked another one in the device's Assistant list.
+2. Look at **Text-to-speech**. If it says None, choose an engine (Piper, Home Assistant Cloud, Google
+   Translate), press Update, and ask the device something again.
+3. **Still silent with an engine set?** Try Home Assistant's speech straight at the device: Settings →
+   Developer tools → Actions, search for `tts.speak`, put your text-to-speech entity in as the target,
+   the device's media player entity in Media player entity, type a message and press Perform action.
+   - If it speaks, the pipeline is what is wrong: back to step 2.
+   - If it stays silent, the device's own log says whether any audio arrived. Turn SSH on and read
+     `/data/techo5-linux/techo5.log`, or open an issue with the last 60 lines of it.
+4. **Reply delivery.** The device has a Reply delivery setting: *Whole file* fetches the reply and
+   plays it, *Streamed* plays it as it arrives. Whole file is the default because it survives a slow
+   network better, but it needs to be able to reach the address Home Assistant gives it for the audio.
+   Where it cannot, the device falls back to the streamed copy on its own (releases from 2026-09-20
+   on), and setting Reply delivery to **Streamed** makes that permanent.
+
 ## Windows, Linux or macOS
 
 | Step | Windows | Linux | macOS |
