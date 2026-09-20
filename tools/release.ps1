@@ -126,4 +126,15 @@ $args = @($args[0..2]) + $sumsFile + @($args[3..($args.Count - 1)])
 if ($Prerelease) { $args += '--prerelease' }
 & gh @args
 if ($LASTEXITCODE -ne 0) { throw 'gh release create failed' }
+
+# Every asset but SHA256SUMS itself has to be in SHA256SUMS. An installer will not use a file it
+# cannot check, so an asset that is missing from it is published but unusable — which is exactly what
+# happened to the 1st gen Show's boot image on v0.7.6, uploaded by hand after the release was made.
+# The names come back from the release itself, so a later upload by hand is caught by re-running this.
+$published = @(& gh release view $Version --repo $repo --json assets -q '.assets[].name')
+$listed = @(Get-Content $sumsFile | ForEach-Object { ($_ -split '\s+', 2)[1].Trim() })
+$missing = @($published | Where-Object { $_ -ne 'SHA256SUMS' -and $listed -notcontains $_ })
+if ($missing) {
+    throw "published, but these assets have no checksum in SHA256SUMS and no installer will use them: $($missing -join ', ')"
+}
 Write-Host "published: https://github.com/$repo/releases/tag/$Version"
