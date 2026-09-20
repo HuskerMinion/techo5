@@ -45,7 +45,7 @@ func (s scene) view() sheetView {
 func themeRows() []settingRow {
 	return []settingRow{
 		{id: "theme", label: "Theme", kind: ctlChoice, value: current().name},
-		{id: "colours", label: "Custom colours", sub: "Make the theme your own", kind: ctlButton, button: "Edit"},
+		{id: "colours", label: "Custom colors", sub: "Make the theme your own", kind: ctlButton, button: "Edit"},
 	}
 }
 
@@ -61,7 +61,7 @@ func deviceCard(sv sheetView) (cardView, bool) {
 // on one makes the theme Custom with that colour.
 func coloursCard() cardView {
 	v := cardView{
-		title: "Custom colours", blurb: "Tap a colour for each part; the theme becomes Custom",
+		title: "Custom colors", blurb: "Tap a color for each part; the theme becomes Custom",
 		actions: []headerAction{{id: "coloursdone", label: "Done", style: btnPrimary}},
 	}
 	for role := range roles {
