@@ -21,16 +21,25 @@
   <a href="#stock-vs-techo5">Stock vs TECHO5</a> ·
   <a href="#install">Install</a> ·
   <a href="#under-the-hood">Under the hood</a> ·
-  <a href="#standing-on-shoulders">Credits</a> ·
+  <a href="#made-possible-by">Credits</a> ·
   <a href="https://github.com/HuskerMinion/techo5-dot">TECHO5 Dot</a> ·
   <a href="https://github.com/HuskerMinion/techo5-spot">TECHO5 Spot</a>
 </p>
 
 ---
 
-**TECHO5** (Tech Echo 5) is open firmware for the **Amazon Echo Show 5, 2nd generation** (2021,
-`cronos`). It replaces Android and Alexa with a small Alpine Linux image and one Go daemon, turning
-the Show into a fast, private Home Assistant voice satellite with a touch screen of its own.
+**TECHO5** (Tech Echo 5) is open firmware for the **Amazon Echo Show 5**. It replaces Android and
+Alexa with a small Alpine Linux image and one Go daemon, turning the Show into a fast, private Home
+Assistant voice satellite with a touch screen of its own.
+
+The same daemon runs on three more Echo devices, each from its own repository:
+
+| Device | Repository | Status |
+|---|---|---|
+| **Echo Show 5, 2nd gen** (2021, `cronos`) | this one | In daily use |
+| **Echo Show 5, 1st gen** (2019, `checkers`) | this one, same binary | Experimental: everything works on the unit it was tested on, but it needs a boot image built for it |
+| **Echo Spot, 1st gen** (2017, `rook`) | [TECHO5 Spot](https://github.com/HuskerMinion/techo5-spot) | In daily use |
+| **Echo Dot, 2nd gen** (2016, `biscuit`) | [TECHO5 Dot](https://github.com/HuskerMinion/techo5-dot) | In daily use |
 
 ## Built on EchoLocal
 
@@ -67,14 +76,16 @@ Straight from the device's own screen.
 
 | | |
 |---|---|
-| ![Clock with weather and the next alarm](docs/screenshots/clock.png) | ![An alarm ringing, with Stop and Snooze](docs/screenshots/ringing.png) |
-| **Clock**, weather and the next alarm | **Alarm ringing**, big enough to hit half awake |
+| ![Clock with weather over a photo](docs/screenshots/clock.png) | ![An alarm ringing, with Stop and Snooze](docs/screenshots/ringing.png) |
+| **Clock**, weather and your own photos behind it | **Alarm ringing**, big enough to hit half awake |
 | ![Settings: Display](docs/screenshots/settings-display.png) | ![Settings: Sound & Voice](docs/screenshots/settings-sound.png) |
 | **Settings** by category: brightness, night hours, theme, clock | **Sound & Voice**: volume, microphone, wake word and its sound |
 | ![Alarm editor](docs/screenshots/alarm-editor.png) | ![Settings: Privacy & Security](docs/screenshots/settings-privacy.png) |
 | **Alarms** set on the device, no app needed | **Privacy**: every open door has a switch |
-| ![Theme list](docs/screenshots/settings-theme.png) | ![Radio drawer](docs/screenshots/drawer-radio.png) |
-| **Themes**: presets or your own colours | **Cameras and Radio**, a swipe in from the right |
+| ![Theme list](docs/screenshots/settings-theme.png) | ![Settings: Connections](docs/screenshots/settings-connections.png) |
+| **Themes**: presets or your own colors | **Connections**: Wi-Fi, Bluetooth and the Home Assistant proxy |
+| ![Weather with a five day forecast](docs/screenshots/weather.png) | ![The cameras drawer](docs/screenshots/drawer-cameras.png) |
+| **Weather** now and for the week, with the rain radar a tap away | **Cameras and Radio**, a swipe in from the right |
 
 ## Stock vs TECHO5
 
@@ -152,7 +163,7 @@ generation: Linux in place of Fire OS, all seven microphones, Bluetooth speaker 
 updates. **[TECHO5 Spot](https://github.com/HuskerMinion/techo5-spot)** does it for the Echo Spot
 (1st gen), on its round screen. All three run the same daemon source, built per device.
 
-## Standing on shoulders
+## Made possible by
 
 TECHO5 exists because of these projects and the people behind them.
 
