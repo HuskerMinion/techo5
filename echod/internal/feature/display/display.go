@@ -1115,6 +1115,9 @@ func (d *Display) frame() time.Duration {
 		!s.showWifi && !s.showSheet && !s.showCamera && !s.showRadar && !s.showWeather && !s.nowPlaying
 	if boring {
 		s.slideshow = home.Get().SlideshowBackground()
+		if s.slideshow == nil {
+			s.slideshowTrouble = home.Get().SlideshowTrouble()
+		}
 	}
 	d.mu.Lock()
 	if !boring {

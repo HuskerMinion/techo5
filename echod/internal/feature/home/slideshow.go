@@ -51,6 +51,21 @@ const slideshowRetries = 5
 // browseEvery is how long a browsed child list is trusted before Home Assistant is asked again.
 const browseEvery = time.Hour
 
+// slideshowGiveUp is how many looks in a row may come back with nothing before the screen says so
+// rather than the device going on trying quietly, and slideshowWaitAfter is how long it then leaves
+// between looks: a folder that was renamed or unshared is not going to be there thirty seconds
+// later, and a large library is expensive to walk.
+const (
+	slideshowGiveUp    = 3
+	slideshowWaitAfter = 15 * time.Minute
+)
+
+// The lines the screen shows while the slideshow has no photo. Short: they sit in the footer.
+const (
+	slideshowUnreadable = "photos: the folder could not be read"
+	slideshowEmpty      = "photos: the folder has no pictures"
+)
+
 // slideshowIdleDefault is how long Screensaver mode waits for when IdleMinutes is unset.
 const slideshowIdleDefault = 5 * time.Minute
 
@@ -77,6 +92,13 @@ type slideshowState struct {
 	image *image.RGBA
 	prev  *image.RGBA // what was showing before image, faded out while at is within slideshowFade
 	at    time.Time   // when image took over, for both slideshowEvery and the fade
+
+	// trouble is why there is no photo, for the screen to show; empty while all is well. fails
+	// counts the looks that came back with nothing in a row, and waitUntil holds the next look off
+	// once there have been slideshowGiveUp of them.
+	trouble   string
+	fails     int
+	waitUntil time.Time
 }
 
 func (f *Feature) buildSlideshowSelect() {
@@ -316,11 +338,21 @@ func (f *Feature) advanceSlideshow() {
 func (f *Feature) nextSlideshowChild(h config.Slideshow) (string, bool) {
 	f.mu.Lock()
 	stale := time.Since(f.slideshow.browsed) > browseEvery || len(f.slideshow.children) == 0
+	waiting := stale && time.Now().Before(f.slideshow.waitUntil)
 	f.mu.Unlock()
+	if waiting {
+		return "", false // given up for now; the screen is saying why
+	}
 	if stale {
 		photos, err := gatherSlideshow(h)
 		if err != nil {
 			slog.Warn("home: browsing the slideshow source", "source", h.Source, "err", err)
+			f.slideshowNothing(slideshowUnreadable)
+			return "", false
+		}
+		if len(photos) == 0 {
+			slog.Warn("home: slideshow photos", "source", h.Source, "count", 0, "subfolders", !h.TopOnly)
+			f.slideshowNothing(slideshowEmpty)
 			return "", false
 		}
 		if !h.InOrder {
@@ -329,6 +361,7 @@ func (f *Feature) nextSlideshowChild(h config.Slideshow) (string, bool) {
 		slog.Info("home: slideshow photos", "count", len(photos), "subfolders", !h.TopOnly, "shuffled", !h.InOrder)
 		f.mu.Lock()
 		f.slideshow.children, f.slideshow.browsed, f.slideshow.idx = photos, time.Now(), 0
+		f.slideshow.trouble, f.slideshow.fails, f.slideshow.waitUntil = "", 0, time.Time{}
 		f.mu.Unlock()
 	}
 	f.mu.Lock()
@@ -347,6 +380,35 @@ func (f *Feature) nextSlideshowChild(h config.Slideshow) (string, bool) {
 	id := f.slideshow.children[f.slideshow.idx].ID
 	f.slideshow.idx++
 	return id, true
+}
+
+// slideshowNothing records a look that came back with nothing. After slideshowGiveUp of them in a
+// row the device stops looking for a while and the screen says why, so a folder that was renamed,
+// moved or unshared is visible instead of being retried quietly for ever.
+func (f *Feature) slideshowNothing(why string) {
+	f.mu.Lock()
+	f.slideshow.fails++
+	give := f.slideshow.fails >= slideshowGiveUp
+	if give {
+		f.slideshow.trouble, f.slideshow.waitUntil = why, time.Now().Add(slideshowWaitAfter)
+	}
+	f.mu.Unlock()
+	if give {
+		slog.Warn("home: slideshow", "err", why, "waiting", slideshowWaitAfter)
+		f.Changed.Emit(struct{}{})
+	}
+}
+
+// SlideshowTrouble is the line the screen shows when the slideshow has given up looking: why there
+// is no photo. Empty while the slideshow is off, working, or still trying.
+func (f *Feature) SlideshowTrouble() string {
+	mode := config.Get().Home.Slideshow.Mode
+	if mode != config.SlideshowBackground && mode != config.SlideshowScreensaver {
+		return ""
+	}
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return f.slideshow.trouble
 }
 
 // gatherSlideshow lists the photos a slideshow shows: the source's own and, unless TopOnly, those of

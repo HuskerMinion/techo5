@@ -113,6 +113,10 @@ type scene struct {
 	// (the idle wait has already been checked); slideshowOverlay is its clock/date size.
 	slideshowScreensaver *image.RGBA
 	slideshowOverlay     string
+
+	// slideshowTrouble is why the slideshow has no photo, once it has given up looking; it sits in
+	// the footer so a folder that went away is visible rather than silently retried.
+	slideshowTrouble string
 }
 
 // renderer draws scenes onto one canvas. Faces are made once: parsing a font is cheap, but
@@ -409,8 +413,11 @@ func (r *renderer) words(heard, reply string, top int) {
 // footer is the bottom edge: what is playing, and whether the microphones are cut.
 func (r *renderer) footer(s scene) {
 	y := r.h - 24
-	if s.muted {
+	switch {
+	case s.muted:
 		r.text(r.tiny, "microphone off", r.margin, y, amber)
+	case s.slideshowTrouble != "":
+		r.text(r.tiny, s.slideshowTrouble, r.margin, y, dim)
 	}
 	var right string
 	switch {
