@@ -158,6 +158,8 @@ func generalRows(sv sheetView) []settingRow {
 	return []settingRow{
 		{label: "Name", sub: "Set in Home Assistant", kind: ctlValue, value: st.name},
 		{id: "weather", label: "Weather", sub: "Shown with the clock", kind: ctlChoice, value: st.weather, button: "Show"},
+		{id: "screenlang", label: "Screen language", sub: "What this screen listens for, not what the assistant speaks",
+			kind: ctlChoice, value: langOptions[langIndex()]},
 		updates,
 		{label: "About", kind: ctlValue, value: deviceModel + " · slot " + st.slot},
 		restart,
@@ -334,6 +336,8 @@ func pickerFor(id string, sv sheetView) (pickerView, bool) {
 		return folderPicker(sv.st.folder, sv.st.demo), true
 	case "clock":
 		return pickerView{title: "Clock format", opts: clockOptions, cur: clockIndex()}, true
+	case "screenlang":
+		return pickerView{title: "Screen language", opts: langOptions, cur: langIndex()}, true
 	case "slideshow":
 		return pickerView{title: "Slideshow", opts: slideshowOptions, cur: slideshowIndex()}, true
 	case "photoevery":
@@ -394,6 +398,12 @@ func (d *Display) choose(id string, i int) {
 	case "photoevery":
 		if i < len(everyDurations) {
 			home.Get().SetSlideshowEvery(everyDurations[i])
+		}
+	case "screenlang":
+		if i < len(langCodes) {
+			if err := config.Set().Screen().Language(langCodes[i]); err != nil {
+				slog.Warn("saving the screen language failed", "err", err)
+			}
 		}
 	default:
 		d.deviceChoose(id, i)
@@ -531,7 +541,7 @@ func (d *Display) rowTap(id string, p part, opt int) {
 	case "subfolders":
 		_, _, subfolders := home.Get().SlideshowSettings()
 		home.Get().SetSlideshowSubfolders(!subfolders)
-	case "night", "clock", "slideshow", "photoevery", "wakeword", "waketone":
+	case "night", "clock", "slideshow", "photoevery", "screenlang", "wakeword", "waketone":
 		d.openPicker(id)
 	}
 }

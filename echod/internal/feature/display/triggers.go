@@ -2,53 +2,74 @@
 
 package display
 
-import "strings"
+import (
+	"log/slog"
 
-// What the screen listens for in a turn's transcript, for both screens: the Show's pages and the
-// Spot's faces react to the same sentences, so the words live here once rather than in each.
-//
-// The assistant itself is not involved. Home Assistant answers the question whatever language it is
-// in; these decide only whether a page comes up beside the answer, so a word matched here that was
-// meant for something else costs a page, not a reply.
-//
-// Every language is matched at once rather than the pipeline's own. That is a stopgap: the words of
-// one language can collide with another's, and the lists grow with each language added. Keyed tables,
-// chosen by the pipeline's language, are the way out of it.
-var (
-	// weatherWords bring up the forecast; radarWords the rain map instead of it. The German stems
-	// regn and schnei carry regnet, regnerisch, schneit and schneien.
-	weatherWords = []string{
-		"weather", "forecast", "temperature", "rain", "snow", "how hot", "how cold", "storm", "radar", "weather map",
-		"wetter", "vorhersage", "temperatur", "regen", "regn", "schnee", "schnei", "sturm", "gewitter",
-		"wie warm", "wie kalt", "sonnig", "bewölkt",
-	}
-	radarWords = []string{
-		"radar", "rain map", "weather map",
-		"regenkarte", "wetterkarte", "niederschlagskarte",
-	}
+	esphome "github.com/ygelfand/go-esphome-device"
 
-	// goHomeWords take whatever is up back down to the clock.
-	goHomeWords = []string{
-		"go home", "home screen", "main screen",
-		"startbildschirm", "hauptbildschirm", "zurück zur uhr", "zeig die uhr",
-	}
+	"github.com/HuskerMinion/techo5/echod/internal/config"
+	"github.com/HuskerMinion/techo5/echod/internal/lib/triggers"
 )
 
-// containsAny is whether h holds any of the words.
-func containsAny(h string, words ...string) bool {
-	for _, w := range words {
-		if strings.Contains(h, w) {
-			return true
+// What the screen listens for, for both screens: the Show's pages and the Spot's faces react to the
+// same sentences, so the words live in lib/triggers once rather than in each. Which language's words
+// are used is the Screen language setting; unset, every language is matched.
+
+// The Screen language row's choices. Match all is first, and is what a device comes up in.
+var (
+	langOptions = []string{"Match all", "English", "Deutsch", "Español", "Français", "Italiano", "Nederlands"}
+	langCodes   = []string{triggers.MatchAll, "en", "de", "es", "fr", "it", "nl"}
+)
+
+func langIndex() int {
+	cur := config.Get().Screen.Language
+	for i, c := range langCodes {
+		if c == cur {
+			return i
 		}
 	}
-	return false
+	return 0
+}
+
+// langSelect is Home Assistant's side of the same setting; the screen's row and this one show each
+// other's changes, since both read the config.
+func langSelect() *esphome.Select {
+	s := &esphome.Select{
+		Base: esphome.Base{
+			ObjectID: "screen_language",
+			Name:     "Screen language",
+			Icon:     "mdi:translate",
+			Category: esphome.CategoryConfig,
+		},
+		Options: langOptions,
+	}
+	s.OnCommand = func(v string) {
+		for i, o := range langOptions {
+			if o == v {
+				if err := config.Set().Screen().Language(langCodes[i]); err != nil {
+					slog.Error("saving the screen language failed", "err", err)
+					return
+				}
+				s.Set(v)
+				return
+			}
+		}
+	}
+	s.Set(langOptions[langIndex()])
+	return s
 }
 
 // aboutWeather is whether what was heard asked about the weather.
-func aboutWeather(heard string) bool { return containsAny(strings.ToLower(heard), weatherWords...) }
+func aboutWeather(heard string) bool {
+	return triggers.AboutWeather(heard, config.Get().Screen.Language)
+}
 
 // aboutRadar is whether what was heard asked for the rain map rather than the forecast.
-func aboutRadar(heard string) bool { return containsAny(strings.ToLower(heard), radarWords...) }
+func aboutRadar(heard string) bool {
+	return triggers.AboutRadar(heard, config.Get().Screen.Language)
+}
 
 // aboutGoingHome is whether what was heard asked for the clock back.
-func aboutGoingHome(heard string) bool { return containsAny(strings.ToLower(heard), goHomeWords...) }
+func aboutGoingHome(heard string) bool {
+	return triggers.AboutGoingHome(heard, config.Get().Screen.Language)
+}

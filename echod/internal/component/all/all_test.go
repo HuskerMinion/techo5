@@ -94,6 +94,7 @@ var registered = []string{
 	"screen",
 	"screen_auto_brightness",
 	"screen_clock_format",
+	"screen_language",
 	"screen_web_access",
 	"segment_1",
 	"segment_10",

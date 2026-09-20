@@ -20,6 +20,11 @@ type Screen struct {
 
 	// Clock24 shows times on the screen as 15:04 instead of 3:04 PM.
 	Clock24 bool `json:"clock_24,omitempty"`
+
+	// Language is which words the screen listens for in a turn — "en", "de", "es", "fr", "it",
+	// "nl" — empty for all of them. It has nothing to do with what the assistant understands or
+	// says, which is Home Assistant's pipeline; it decides only which pages a sentence brings up.
+	Language string `json:"language,omitempty"`
 }
 
 // DefaultTheme is the palette a new device comes up in.
@@ -69,6 +74,10 @@ func (w ScreenWriter) Welcomed(v bool) error {
 
 func (w ScreenWriter) Clock24(v bool) error {
 	return w.st.Update(func(c *Config) { c.Screen.Clock24 = v })
+}
+
+func (w ScreenWriter) Language(v string) error {
+	return w.st.Update(func(c *Config) { c.Screen.Language = v })
 }
 
 // Custom saves a palette and makes it the theme.

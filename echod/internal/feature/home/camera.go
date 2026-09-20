@@ -14,6 +14,7 @@ import (
 	"github.com/HuskerMinion/techo5/echod/internal/config"
 	"github.com/HuskerMinion/techo5/echod/internal/hardware/camera"
 	"github.com/HuskerMinion/techo5/echod/internal/lib/hass"
+	"github.com/HuskerMinion/techo5/echod/internal/lib/triggers"
 )
 
 // The cameras page: "show the front door" puts a camera's live view up for a while, a tap takes it
@@ -256,13 +257,14 @@ func (f *Feature) snapshot(entity string) (*image.RGBA, error) {
 }
 
 // MatchCamera finds a camera named in what was heard: "show the front door", "show me the deck
-// camera", or the German "zeig die Haustür". Empty when nothing matches.
+// camera", the German "zeig die Haustür". The sentence has to ask for a camera at all (lib/triggers,
+// in the screen's language) and then name one; the names are the owner's own, in whatever language
+// they wrote them in Home Assistant. Empty when nothing matches.
 func (f *Feature) MatchCamera(heard string) string {
-	h := strings.ToLower(heard)
-	if !strings.Contains(h, "show") && !strings.Contains(h, "camera") &&
-		!strings.Contains(h, "zeig") && !strings.Contains(h, "kamera") {
+	if !triggers.AboutCamera(heard, config.Get().Screen.Language) {
 		return ""
 	}
+	h := strings.ToLower(heard)
 	best, bestLen := "", 0
 	for _, c := range f.Cameras() {
 		n := strings.ToLower(c.Name)
