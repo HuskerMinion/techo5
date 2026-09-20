@@ -39,13 +39,17 @@ func inputControls(adc string) map[string]uint32 {
 // Rewire points the converter at its microphones again and restores the gain. The 1st gen Echo Show 5
 // takes the microphone chip's power down while the mute latch is engaged, so it comes back in its
 // reset state, muted, and stays silent after the button releases the latch unless this runs again
-// (seen on a unit 2026-09-19). Writing the same values costs nothing where nothing moved.
+// (seen on a unit 2026-09-19).
 func Rewire() {
 	routeInputs()
 	applyGain(config.Get().Microphone.Gain)
 }
 
-// routeInputs applies inputControls to every ADC.
+// routeInputs applies inputControls to every ADC. Each control is written twice, the other way first:
+// the driver keeps what it last wrote and skips a write that changes nothing, so after the chip has
+// been through its reset — which the 1st gen Echo Show 5's mute latch does — asking for the value the
+// driver already believes in would leave the hardware where the reset put it, muted (a unit stayed
+// deaf after the button released the latch until this was written the long way, 2026-09-20).
 func routeInputs() {
 	m, err := alsa.OpenMixer(Card)
 	if err != nil {
@@ -56,6 +60,8 @@ func routeInputs() {
 
 	for _, adc := range adcs {
 		for name, v := range inputControls(adc) {
+			// Every one of these is a switch or a one-bit gain, so the other way is 1 - v.
+			_ = m.SetInt(name, 1-v)
 			if err := m.SetInt(name, v); err != nil {
 				slog.Error("routing the microphone input failed", "control", name, "err", err)
 			}
@@ -76,6 +82,9 @@ func applyGain(db int) {
 	steps := min(max(float64(db)/pgaStepDB, 0), pgaMax)
 	for _, adc := range adcs {
 		name := fmt.Sprintf(pgaControls, adc)
+		// A step away first, for the same reason routeInputs writes the other way: a converter that
+		// has been through its reset is not where the driver last left it.
+		_ = m.SetInt(name, uint32(max(steps-1, 0)))
 		if err := m.SetInt(name, uint32(steps)); err != nil {
 			slog.Error("setting the microphone gain failed", "control", name, "err", err)
 			return

@@ -24,3 +24,15 @@ func TestInputControls(t *testing.T) {
 		}
 	}
 }
+
+// routeInputs writes each control the other way first, as 1 - v, so every one of them has to be a
+// switch: a value of 0 or 1.
+func TestInputControlsAreSwitches(t *testing.T) {
+	for _, adc := range adcs {
+		for name, v := range inputControls(adc) {
+			if v > 1 {
+				t.Errorf("%s = %d: routeInputs writes 1 - v first, which only works for a switch", name, v)
+			}
+		}
+	}
+}
