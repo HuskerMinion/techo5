@@ -6,7 +6,6 @@ import (
 	"image"
 	"image/color"
 	"math"
-	"strings"
 	"time"
 
 	"github.com/HuskerMinion/techo5/echod/internal/feature/home"
@@ -44,12 +43,6 @@ func stepCamera(current string, by int) {
 	}
 	i = ((i+by)%len(cams) + len(cams)) % len(cams)
 	home.Get().ShowCamera(cams[i].Entity, cameraStep)
-}
-
-// aboutGoingHome is "go home", "home screen", "main screen": whatever is up comes down.
-func aboutGoingHome(heard string) bool {
-	h := strings.ToLower(heard)
-	return strings.Contains(h, "go home") || strings.Contains(h, "home screen") || strings.Contains(h, "main screen")
 }
 
 // cameraView fills the circle with the camera's latest frame.

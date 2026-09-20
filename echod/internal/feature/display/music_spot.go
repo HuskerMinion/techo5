@@ -43,12 +43,6 @@ var (
 	colRadar = color.RGBA{64, 214, 230, 255}
 )
 
-// aboutRadar is whether what was heard asked for the rain map rather than the forecast.
-func aboutRadar(heard string) bool {
-	h := strings.ToLower(heard)
-	return strings.Contains(h, "radar") || strings.Contains(h, "rain map") || strings.Contains(h, "weather map")
-}
-
 // radioRows is the station list as the ring shows it: a stop row first while anything plays.
 func radioRows(rd home.Radio, active bool) []string {
 	if !active {

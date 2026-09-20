@@ -356,9 +356,7 @@ func (d *Display) changed(s voice.State) {
 		}
 		// "Go home": whatever page is up comes down, back to the clock, and music stops rather than
 		// holding the now-playing page.
-		if h := strings.ToLower(s.Heard); containsAny(h,
-			"go home", "home screen", "main screen",
-			"startbildschirm", "hauptbildschirm", "zurück zur uhr", "zeig die uhr") {
+		if aboutGoingHome(s.Heard) {
 			d.weatherArmed, d.weatherUntil = false, time.Time{}
 			d.sheet, d.quiet = false, true
 			go home.Get().HideCamera()
@@ -377,31 +375,6 @@ func (d *Display) changed(s voice.State) {
 	}
 	d.mu.Unlock()
 	d.wake()
-}
-
-// containsAny is whether h holds any of the words.
-func containsAny(h string, words ...string) bool {
-	for _, w := range words {
-		if strings.Contains(h, w) {
-			return true
-		}
-	}
-	return false
-}
-
-// aboutRadar is whether what was heard asked for the rain map rather than the forecast.
-func aboutRadar(heard string) bool {
-	return containsAny(strings.ToLower(heard),
-		"radar", "rain map", "weather map",
-		"regenkarte", "wetterkarte", "niederschlagskarte")
-}
-
-// aboutWeather is whether what was heard asked about the weather.
-func aboutWeather(heard string) bool {
-	return containsAny(strings.ToLower(heard),
-		"weather", "forecast", "temperature", "rain", "snow", "how hot", "how cold", "radar", "storm",
-		"wetter", "vorhersage", "temperatur", "regen", "regn", "schnee", "schnei", "sturm", "gewitter",
-		"wie warm", "wie kalt", "sonnig", "bewölkt")
 }
 
 // volumeMoved is the level changing on purpose; the screen shows it for a moment.
