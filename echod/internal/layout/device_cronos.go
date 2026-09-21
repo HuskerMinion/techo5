@@ -35,6 +35,12 @@ const (
 
 	// DefaultName is the fallback display name when a device has none recorded.
 	DefaultName = "Echo Show"
+
+	// LogPath is where techo5-run sends the daemon's output, and BootLog what the boot script kept
+	// of its own run. Both are what a diagnostics bundle reads.
+	LogPath = "/data/techo5-linux/techo5.log"
+	BootLog = "/run/boot.log"
+
 )
 
 var AnimationScripts = []string{}

@@ -30,6 +30,12 @@ const (
 
 	// DefaultName is the fallback display name when a device has none recorded.
 	DefaultName = "Echo Spot"
+
+	// LogPath is where the init script sends the daemon's output, and BootLog what the boot script
+	// kept of its own run.
+	LogPath = "/data/techo5-linux/techo5.log"
+	BootLog = "/run/boot.log"
+
 )
 
 var AnimationScripts = []string{}

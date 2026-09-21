@@ -37,6 +37,12 @@ const (
 
 	// DefaultName is the fallback display name when a device has none recorded.
 	DefaultName = "Echo Dot"
+
+	// LogPath is where techo5-run sends the daemon's output. The Dot's boot script logs to the
+	// kernel ring rather than a file of its own, so BootLog is empty and a bundle reads dmesg for it.
+	LogPath = "/data/techo5-linux/echod.log"
+	BootLog = ""
+
 )
 
 var AnimationScripts = []string{StartAnimation, StopAnimation}

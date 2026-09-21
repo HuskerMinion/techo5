@@ -63,15 +63,20 @@ func Bundle() string {
 		"model: " + layout.Model,
 		"board: " + layout.Board,
 		"version: " + layout.VersionString(),
-		"slot: " + readTrim(layout.StateDir+"/slot"),
+		"slot: " + readTrim("/run/techo5/slot"),
 		"uptime: " + uptime(),
 		"go: " + runtime.Version(),
 	}, "\n"))
 
 	section("settings", settingsSummary(c))
 	section("network", networkSummary(ctx))
-	section("daemon log (last "+fmt.Sprint(logTail)+" lines)", tail(layout.StateDir+"/techo5.log", logTail))
-	section("boot log", tail("/run/boot.log", 120))
+	// The log is where this device's own start script puts it, which is not the same file on all of
+	// them, and not under StateDir on any: an empty log section is the one thing a bundle cannot be
+	// missing, since it is what somebody asked for the bundle to see.
+	section("daemon log (last "+fmt.Sprint(logTail)+" lines)", tail(layout.LogPath, logTail))
+	if layout.BootLog != "" {
+		section("boot log", tail(layout.BootLog, 120))
+	}
 	section("kernel crash records", crashList())
 	section("kernel messages", tail("", 0))
 
@@ -85,11 +90,9 @@ func settingsSummary(c config.Config) string {
 	add("wake words: %d configured", len(c.Wake.Words))
 	add("volume: %d", c.Speaker.Volume)
 	add("microphone muted: %t", c.Microphone.Muted)
-	add("screen: on=%t brightness=%d auto=%t night=%q language=%q",
-		c.Screen.On, c.Screen.Brightness, c.Screen.Auto, c.Screen.Night, c.Screen.Language)
+	out = append(out, screenSettings(c)...)
 	add("alarms: %d set, %d followed, sunrise=%d min", len(c.Alarms.List), len(c.Alarms.Follow), c.Alarms.SunriseMinutes)
 	add("radio: source=%q own=%d favorites wired=%t", c.Home.RadioSource, len(c.Home.Radio.Own), c.Home.Radio.Configured())
-	add("slideshow: mode=%q every=%ds subfolders=%t", c.Home.Slideshow.Mode, c.Home.Slideshow.EverySeconds, !c.Home.Slideshow.TopOnly)
 	add("security: ssh=%t camera_web=%t screen_web=%t", c.Security.SSH, c.Security.Camera, c.Security.Screen)
 	add("updates: channel=%q", c.Update.Channel)
 	return strings.Join(out, "\n")
