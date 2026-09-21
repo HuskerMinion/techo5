@@ -50,7 +50,8 @@ func (m *Stream) PlayPCM(name string, src PCMSource, rate, channels int) {
 		if err != nil && ctx.Err() == nil {
 			slog.Warn("received audio ended", "from", name, "err", err)
 		}
-		m.finished(t)
+		// A phone that stopped sending is not a stream to put back on: it is somebody walking away.
+		m.finished(t, false)
 	})
 }
 

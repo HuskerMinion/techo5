@@ -52,6 +52,9 @@ type Stream struct {
 	out     *speaker.Player
 	changed func()
 
+	// ended says a track stopped of its own accord, for whoever put it on to decide what that means.
+	ended func(item string)
+
 	// bg is the queue of things that play for minutes. A track joins it while it has something to
 	// play and leaves when it stops, so whatever it interrupted carries on afterwards.
 	bg *speaker.Arbiter
@@ -101,8 +104,8 @@ type track struct {
 //
 // It joins rather than registers: a track is one of several things that play for minutes, and it only
 // takes the speaker while it has something to play.
-func NewStream(sound *speaker.Driver, out *speaker.Player, changed func()) *Stream {
-	return &Stream{out: out, changed: changed, gain: 1, target: 1, bg: sound.Backgrounds()}
+func NewStream(sound *speaker.Driver, out *speaker.Player, changed func(), ended func(string)) *Stream {
+	return &Stream{out: out, changed: changed, ended: ended, gain: 1, target: 1, bg: sound.Backgrounds()}
 }
 
 // rampSamples is how many interleaved samples a full move between silence and full level takes, so
@@ -177,7 +180,8 @@ func (m *Stream) Play(url string) {
 		if err != nil && ctx.Err() == nil {
 			slog.Error("playing media failed", "err", err)
 		}
-		m.finished(t)
+		// Cancelled means stopped or replaced, which is somebody's doing and nobody's to undo.
+		m.finished(t, ctx.Err() == nil)
 	})
 }
 
@@ -204,7 +208,7 @@ func (m *Stream) PlayNoise(sounds ...string) {
 		if err != nil && ctx.Err() == nil {
 			slog.Error("playing noise failed", "err", err)
 		}
-		m.finished(t)
+		m.finished(t, false)
 	})
 }
 
@@ -426,7 +430,7 @@ func (m *Stream) replay() {
 }
 
 // finished clears the track once it has played out, unless it has already been replaced.
-func (m *Stream) finished(t *track) {
+func (m *Stream) finished(t *track, itself bool) {
 	m.mu.Lock()
 	if m.track != t {
 		m.mu.Unlock()
@@ -438,7 +442,10 @@ func (m *Stream) finished(t *track) {
 
 	m.bg.Gave(m)
 
-	slog.Info("media finished", "item", t.item)
+	slog.Info("media finished", "item", t.item, "by itself", itself)
+	if itself && t.item != "" && len(t.sounds) == 0 && m.ended != nil {
+		m.ended(t.item)
+	}
 	m.changed()
 }
 

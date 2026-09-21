@@ -88,6 +88,11 @@ type Player struct {
 	// OnPlay fires with the URL whenever a track (not an announcement) is started, so a screen can
 	// find out what it is.
 	OnPlay hook.Hook[string]
+
+	// OnEnd fires when a track stops of its own accord, with the URL that ended. A track that was
+	// stopped or replaced does not fire: the difference is the whole use of it, since a radio stream
+	// that ends by itself has been dropped and one that was stopped was stopped by somebody.
+	OnEnd hook.Hook[string]
 }
 
 var (
@@ -267,7 +272,7 @@ func build() *Player {
 		}
 		p.applyTone()
 	}
-	p.stream = NewStream(speaker.Sound(), speaker.Get(), p.refresh)
+	p.stream = NewStream(speaker.Sound(), speaker.Get(), p.refresh, p.OnEnd.Emit)
 
 	// Volume acts on every tap and on every repeat, so a held button ramps.
 	buttons.Get().Events.Listen(func(e buttons.Event) {

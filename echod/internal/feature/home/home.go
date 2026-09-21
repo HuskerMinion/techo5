@@ -81,12 +81,22 @@ type Feature struct {
 	lists radioLists
 
 	// radar is the rain map; see radar.go.
-	radar    radarState
-	url      string // the stream playing, from the media player
-	urlName  string // its station name once found
-	forecast []hass.Day
-	fetched  time.Time
-	poke     chan struct{}
+	radar   radarState
+	url     string // the stream playing, from the media player
+	urlName string // its station name once found
+
+	// asked is the last station this device asked to play and askedAt when, which is what a dropped
+	// stream is put back on with.
+	asked   string
+	askedAt time.Time
+
+	// resumed counts how many times a dropped stream has been put back on lately, and resumedAt when
+	// the last of those was, so a station that will not stay up is eventually left off (resume.go).
+	resumed   int
+	resumedAt time.Time
+	forecast  []hass.Day
+	fetched   time.Time
+	poke      chan struct{}
 
 	// meta is what the playing station is playing, for the now-playing screen; metaPoke asks for
 	// a refresh when the station changes.
@@ -169,6 +179,7 @@ func Get() *Feature {
 		shared.buildSlideshowSelect()
 		hastate.Get().Changed.Listen(func(hastate.Update) { shared.Changed.Emit(struct{}{}) })
 		media.Get().OnPlay.Listen(shared.played)
+		media.Get().OnEnd.Listen(shared.ended)
 	})
 	return shared
 }
@@ -460,6 +471,12 @@ func favoriteNames(h config.Radio) []string {
 // Play plays a station of the list shown on this device: a favorite through Home Assistant's
 // script, a Radio Browser station through the device's own player entity.
 func (f *Feature) Play(station string) {
+	// What was asked for, in the words the lists use, so a stream that drops can be asked for again:
+	// the name worked out from a URL afterwards is often the stream's host, which no list has.
+	f.mu.Lock()
+	f.asked, f.askedAt = station, time.Now()
+	f.mu.Unlock()
+
 	source := radioSource()
 	// Favorites with nothing in them show the stations near home instead (Radio).
 	if source == config.RadioFavorites && len(favoriteNames(config.Get().Home.Radio)) == 0 {

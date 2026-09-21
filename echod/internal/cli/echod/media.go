@@ -53,7 +53,7 @@ func newMediaCmd() *cobra.Command {
 
 			out := cmd.OutOrStdout()
 			sound := speaker.NewDriver(p)
-			player := media.NewStream(sound, p, func() {})
+			player := media.NewStream(sound, p, func() {}, nil)
 
 			player.Play(args[0])
 
