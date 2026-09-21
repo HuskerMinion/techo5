@@ -5,6 +5,7 @@ package display
 import (
 	"log/slog"
 	"strings"
+	"time"
 
 	"github.com/HuskerMinion/techo5/echod/internal/feature/timezone"
 )
@@ -16,7 +17,7 @@ import (
 // followHA is the first choice in the region list: give the zone back to Home Assistant. common is
 // the second, a short list that saves swiping through the 174 zones under America to reach Denver.
 const (
-	followHA = "Follow Home Assistant"
+	followHA = "Home Assistant"
 	common   = "Common"
 )
 
@@ -56,12 +57,30 @@ func zoneSub() string {
 }
 
 // zoneShort is a zone as the row says it: the city, with the region behind it dropped, since the row
-// has no space for "America/Indiana/Indianapolis". A POSIX rule is shown as it is.
+// has no space for "America/Indiana/Indianapolis".
+//
+// What Home Assistant sends is not a name at all but the rule itself — "MST7MDT,M3.2.0,M11.1.0" —
+// and printed whole it is wider than the row has, which squeezed the label down to "T…" on the Spot
+// and told nobody anything either way. A rule is shown as what the clock is keeping by it: MDT.
 func zoneShort(zone string) string {
+	if isRule(zone) {
+		if name, _ := time.Now().Zone(); name != "" {
+			return name
+		}
+		if i := strings.IndexAny(zone, ",0123456789+-"); i > 0 {
+			return zone[:i]
+		}
+	}
 	if i := strings.LastIndex(zone, "/"); i >= 0 {
 		zone = zone[i+1:]
 	}
 	return strings.ReplaceAll(zone, "_", " ")
+}
+
+// isRule tells a POSIX rule from the name of a zone. A name has a region and a city with a slash
+// between them; a rule has the abbreviations and the offset run together, and no slash anywhere.
+func isRule(zone string) bool {
+	return zone != "" && !strings.Contains(zone, "/") && strings.ContainsAny(zone, "0123456789")
 }
 
 // zonePicker lists one region's zones, or the common ones, which are written as they are.
