@@ -46,6 +46,10 @@ type session struct {
 	lastTS int64
 	opened bool
 	muted  bool
+
+	// meta is the track the server last described, and what a message that only changes part of it
+	// is merged onto.
+	meta metadata
 }
 
 func newSession(conn *websocket.Conn, o *out, bg *speaker.Arbiter, name string, report func(string)) *session {
@@ -62,8 +66,9 @@ func newSession(conn *websocket.Conn, o *out, bg *speaker.Arbiter, name string, 
 
 		Version: protocolVersion,
 
-		// Nothing is activated that is not claimed here.
-		SupportedRoles: []string{"player@v1"},
+		// Nothing is activated that is not claimed here. Metadata is claimed so the room can say what
+		// it is playing; the controller role is not, so this device sends no commands of its own.
+		SupportedRoles: []string{"player@v1", "metadata@v1"},
 
 		// The factory mac: survives a reinstall, a rename and a new address.
 		ClientID: mac,
@@ -138,9 +143,9 @@ func (s *session) run(ctx context.Context) error {
 		case g := <-s.client.GroupUpdate:
 			s.grouped(g)
 
-		// Nothing acts on these, but an undrained channel blocks the reader.
+		// Nothing acts on the artwork, but an undrained channel blocks the reader.
 		case st := <-s.client.ServerState:
-			slog.Info("sendspin server state", "state", st)
+			s.noticed(st)
 		case <-s.client.ArtworkChunks:
 		}
 	}
@@ -267,6 +272,19 @@ func (s *session) heard(chunk protocol.AudioChunk) {
 			"drift_ms", drift*1000/speaker.Rate,
 			"corrected", corrected)
 	}
+}
+
+// noticed takes what the server says about the track. Only the player and metadata roles are
+// claimed, so the rest of the message is not this device's to act on.
+func (s *session) noticed(st protocol.ServerStateMessage) {
+	if st.Metadata == nil {
+		return
+	}
+	if !s.meta.merge(st.Metadata) {
+		return
+	}
+	slog.Info("sendspin now playing",
+		"title", s.meta.title, "artist", s.meta.artist, "album", s.meta.album)
 }
 
 func (s *session) told(cmd protocol.PlayerCommand) {
