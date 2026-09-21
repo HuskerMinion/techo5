@@ -12,6 +12,7 @@ import (
 	_ "github.com/HuskerMinion/techo5/echod/internal/android/setup"
 	_ "github.com/HuskerMinion/techo5/echod/internal/feature/activity"
 	_ "github.com/HuskerMinion/techo5/echod/internal/feature/alarm"
+	_ "github.com/HuskerMinion/techo5/echod/internal/feature/announce"
 	_ "github.com/HuskerMinion/techo5/echod/internal/feature/api"
 	_ "github.com/HuskerMinion/techo5/echod/internal/feature/bluetooth"
 	_ "github.com/HuskerMinion/techo5/echod/internal/feature/btaudio"
