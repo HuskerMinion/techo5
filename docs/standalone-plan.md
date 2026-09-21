@@ -250,6 +250,39 @@ Each of these stands on its own and none of them blocks anything else.
   that one person can cut a release; the cheapest thing that helps is a path from "I changed a file"
   to "I tested it on my own unit" that does not depend on asking.
 
+## Useful beyond standing alone
+
+Ideas that are not about Home Assistant being absent, but are worth the room here rather than being
+lost in a conversation.
+
+- **A diagnostics bundle, redacted as it is made.** One press collects the log, the state and the
+  hardware readings into a file with addresses, SSIDs, serials and keys already replaced by
+  placeholders. Twice in two days a stranger has been asked to paste a log with their serial removed,
+  which puts the work and the risk on them. This is what makes helping someone cheap, and it keeps
+  the no-personal-data rule by construction rather than by remembering.
+- **A sleep timer for the radio.** Off in thirty minutes. Every clock radio since 1975 has one and it
+  is an afternoon's work.
+- **A red clock at night.** Below some brightness the clock turns deep red instead of dim white:
+  readable at three in the morning without ruining night vision.
+- **Hearing the smoke alarm.** The microphones are already listening with echo cancellation and a
+  wake-word engine is already running; the T3 pattern is distinctive. A device that tells a phone the
+  alarm is sounding while nobody is home is the best reason yet to put one in a relative's house.
+  **It must never be described as a safety device**, and a model that does not cry wolf is real work,
+  not a weekend.
+- **"Help" as a wake word of its own.** The help call already alerts phones and dials people in turn,
+  but it takes a pipeline to start. A local model means it works with the internet down and Home
+  Assistant off — the same audience as the alarm above, and far easier to build.
+- **Copying a device's settings onto another.** Themes, alarms, cameras, radio favorites, wake word,
+  night hours: export from one, restore onto a replacement. Every reinstall pays for it, and so does
+  anyone whose unit dies.
+- **Going back to the previous version from the screen.** The A/B slots already hold the last good
+  root filesystem and `slotctl` can switch them. A button for it means a bad update does not need a
+  serial console and a PC.
+- **Presence from hardware that is already running.** The BLE proxy sees phones, the camera sees
+  motion, the microphones hear a room. An occupancy sensor published to Home Assistant, computed
+  locally, with no extra hardware and nothing leaving the house.
+- **The screen waking as someone approaches**, off the same signal. No utility at all; people love it.
+
 ## Non-goals
 
 - Reimplementing Home Assistant on the device. Weather, cameras, media libraries and voice stay
