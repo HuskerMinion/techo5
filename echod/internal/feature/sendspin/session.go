@@ -28,6 +28,12 @@ const (
 	syncTimeout = 500 * time.Millisecond
 )
 
+// changeGrace is how long a stream's end is held back before the room is told nothing is playing. The
+// server ends one stream and starts the next a moment later, and a skip that flashed the clock on the way
+// through was worse than the wait: if the next stream starts inside this window, it takes the room, and
+// the held-back release no longer matches and does nothing.
+const changeGrace = 2 * time.Second
+
 // protocolVersion: the library exports no constant and does not default it. Zero is refused.
 const protocolVersion = 1
 
@@ -59,6 +65,12 @@ type session struct {
 	// takes is what the server says it will take from the controller role, so a button the server
 	// would ignore is not pressed. It is written once, on the read loop, and read from whoever asks.
 	takes atomic.Value // map[string]bool
+
+	// asked is the last transport this session sent, which is how a pause is told from a stop: the
+	// server says "stopped" for both, and one of them was asked for by the room. It is written from
+	// whoever asked - the touch driver, or Home Assistant's read loop - and read on the session's own,
+	// so it is an atomic like every other field here that two goroutines can reach.
+	asked atomic.Value // string
 
 	// live is false once this connection is finished. The media player outlives the session and keeps
 	// the transport hook, so anything asked after that is dropped rather than written to a dead client.
@@ -237,28 +249,38 @@ func (s *session) cleared() {
 // grouped only reports, and says what the stream is doing so the room's controls can match it. Stopping
 // is stream/end's job, which the server sends on stop as well as on skip and seek. Fields are deltas, so
 // an absent state means unchanged.
+// askedFor is the last transport the room asked for, empty when it has not asked anything.
+func (s *session) askedFor() string {
+	v, _ := s.asked.Load().(string)
+	return v
+}
+
 func (s *session) grouped(g protocol.GroupUpdate) {
 	if g.PlaybackState == nil {
 		return
 	}
-	media.Get().RemoteState(*g.PlaybackState)
-	switch *g.PlaybackState {
-	case "playing", "paused":
-		// Something is on, whether or not this connection saw the stream start.
-		if s.claim == 0 {
-			s.claim = media.Get().External()
-		}
-	case "stopped":
-		s.letGo()
+	state := *g.PlaybackState
+	switch {
+	case state == "playing":
+		// The server is playing, so nothing is held any more.
+		s.asked.Store("")
+		media.Get().RemoteState(state)
+	case state == "paused":
+		// Paused on the server's side too: the room keeps the track and offers play.
+		s.asked.Store("pause")
+		media.Get().RemoteState(state)
+	case state == "stopped" && s.askedFor() != "pause":
+		media.Get().RemoteState(state)
+		s.releaseSoon()
 	}
-	slog.Info("sendspin group", "state", *g.PlaybackState, "queued_ms", s.out.queuedMs())
+	slog.Info("sendspin group", "state", state, "queued_ms", s.out.queuedMs())
 }
 
 // ended drops what is held: the spec has stream/end stop output and clear buffers, and the server sends
 // it on stop, skip and seek. A track running into the next one keeps the stream and says nothing.
 func (s *session) ended() {
 	if s.dec == nil {
-		s.letGo()
+		s.releaseSoon()
 		return
 	}
 	s.dec.close()
@@ -267,16 +289,51 @@ func (s *session) ended() {
 	s.out.close()
 	s.bg.Gave(s.out)
 	s.report(stateJoined)
-	s.letGo()
+	s.releaseSoon()
 }
 
-// letGo gives the room back, unless something newer has taken it. The server may start the next stream
-// before it gets round to ending this one, and the room's name belongs to the newer stream.
-func (s *session) letGo() {
-	if s.claim != 0 {
-		media.Get().LetGo(s.claim)
-		s.claim = 0
+// releaseSoon gives the room back when a stream ends inside a live session. A stream's end is what a
+// skip and a pause both look like from here, so the release is held back far enough that a skip does not
+// flash the clock on the way through.
+func (s *session) releaseSoon() { s.release(false) }
+
+// giveBack gives the room up because the connection is going. Nothing else from this session is coming
+// to take it, so there is nothing to hold it against - including a pause the room asked for, which would
+// otherwise keep the room for the life of the daemon.
+func (s *session) giveBack() { s.release(true) }
+
+// released is what an end gives up: the claim, and how long the release is held for. Zero means nothing
+// goes back. A pause the room asked for keeps the room - the track stays on the screen with play
+// offered, which is how a stop has always been kept here, and the server has no word for a pause that
+// keeps the track - and only the connection going overrides that. It touches nothing, so what a skip, a
+// pause and a disconnect each mean is decided in one place rather than in whichever way the connection
+// happened to end.
+func (s *session) released(now bool) (claim uint64, after time.Duration) {
+	if s.claim == 0 {
+		return 0, 0
 	}
+	if !now && s.askedFor() == "pause" {
+		return 0, 0
+	}
+	if now {
+		return s.claim, 0
+	}
+	return s.claim, changeGrace
+}
+
+// release acts on it. The claim goes either way, so a newer claim that arrived in between is the one that
+// stands: LetGo only gives back what the caller still holds.
+func (s *session) release(now bool) {
+	c, after := s.released(now)
+	if c == 0 {
+		return
+	}
+	s.claim = 0
+	if after == 0 {
+		media.Get().LetGo(c)
+		return
+	}
+	time.AfterFunc(after, func() { media.Get().LetGo(c) })
 }
 
 // heard plays a chunk as it arrives.
@@ -365,6 +422,19 @@ func (s *session) asks(t media.Transport) {
 	if takes, ok := s.takes.Load().(map[string]bool); ok && !takes[name] {
 		slog.Debug("sendspin transport", "command", name, "taken", false)
 		return
+	}
+	s.asked.Store(name)
+	switch name {
+	case "pause":
+		// The server reports a pause as a stop, so what the room shows is settled here instead: the
+		// track stays, and the button offers play.
+		media.Get().RemoteState("paused")
+	case "play", "next", "previous":
+		media.Get().RemoteState("playing")
+	case "stop":
+		// The opposite of a pause: the room is not playing, and saying so here keeps the screen from
+		// offering play for a track that is on its way out while the release is held back.
+		media.Get().RemoteState("stopped")
 	}
 	payload := map[string]any{
 		"controller": map[string]any{"command": name},
@@ -465,6 +535,12 @@ drain:
 
 func (s *session) finish() {
 	s.live.Store(false)
+	// No hold outlives the connection: whatever the room was showing for this server goes with it. Given
+	// back before the teardown rather than after it, because ended() releases what is left of a stream
+	// and with the claim still there that release is the held-back one a skip needs - two seconds late
+	// for a connection that has already gone.
+	s.giveBack()
+	s.asked.Store("")
 	s.ended()
 	s.client.Close()
 }
