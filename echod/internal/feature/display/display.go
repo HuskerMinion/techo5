@@ -430,6 +430,21 @@ func (d *Display) gesture(g touch.Gesture) {
 		return
 	}
 
+	// A browser asking to be let in: its page takes every tap, and only the answers decide.
+	if setup.Get().Waiting() {
+		if g.Kind == touch.Tap {
+			w := 0
+			if d.r != nil {
+				w = d.r.w
+			}
+			if allow, answered := askTap(g.X, g.Y, w); answered {
+				setup.Get().Answer(allow)
+			}
+		}
+		d.wake()
+		return
+	}
+
 	// The first-run card: any tap puts it away for good.
 	if !config.Get().Screen.Welcomed {
 		if g.Kind == touch.Tap {

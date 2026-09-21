@@ -181,6 +181,12 @@ func (r *roundRenderer) draw(s roundScene) {
 		r.ringFace(s)
 		return
 	}
+	// A browser waiting to be let in: the answer is a tap here, since this device has no button for
+	// it. Under a call and under a ringing alarm, both of which are somebody already being answered.
+	if s.setupAsking {
+		r.setupAskFace(s)
+		return
+	}
 	if s.sheetOpen {
 		r.sheetFace(s)
 		return
@@ -266,7 +272,7 @@ func (r *roundRenderer) clockFace(s roundScene) {
 	}
 	switch {
 	case s.setupAsking:
-		r.centred(r.label, "PRESS TO ALLOW SETUP", 118, colMuted)
+		r.centred(r.label, "A BROWSER IS ASKING", 118, colMuted)
 	case s.muted:
 		r.centred(r.label, "MICROPHONE OFF", 118, colMuted)
 	case s.btPairing:

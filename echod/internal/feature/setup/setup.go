@@ -253,6 +253,24 @@ func (f *Feature) press() bool {
 	return true
 }
 
+// Answer is the press on a device whose press is a tap: yes lets the browser in, no sends it away
+// at once rather than leaving it to time out. Refusing counts like any unanswered asking, so a
+// browser that keeps asking and keeps being refused runs into the same cool-off.
+func (f *Feature) Answer(allow bool) bool {
+	if allow {
+		return f.press()
+	}
+	f.mu.Lock()
+	had := f.waiting != ""
+	f.waiting, f.waitingEnd = "", time.Time{}
+	f.mu.Unlock()
+	if had {
+		slog.Info("setup page: a browser was refused at the device")
+		f.Changed.Emit(struct{}{})
+	}
+	return had
+}
+
 // await starts a browser waiting to be let in and hands back the cookie it will hold if the press
 // comes. Only one browser waits at a time: a second is refused, so that whoever presses knows which
 // browser they are letting in. Asking over and over without a press stops being allowed for a while.

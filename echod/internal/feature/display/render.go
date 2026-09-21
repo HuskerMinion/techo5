@@ -194,6 +194,12 @@ func (r *renderer) draw(s scene) {
 		r.ringingPage(s)
 		return
 	}
+	// A browser waiting to be let in: the answer is a tap here, since this device has no button for
+	// it. Under a call and under a ringing alarm, both of which are somebody already being answered.
+	if s.setupAsking {
+		r.setupAskPage(s)
+		return
+	}
 	if s.bt.Pairing {
 		r.pairingPage(s)
 		if s.showVolume {
@@ -389,6 +395,14 @@ func (r *renderer) cornerClock(s scene) {
 	r.text(r.small, t, r.w-r.margin-r.width(r.small, t), r.margin+26, dim)
 }
 
+// cornerClockDated is the corner clock with the day under it, for a screen somebody looks at for
+// minutes rather than glances at: while music plays the big clock is gone, and the date went with it.
+func (r *renderer) cornerClockDated(s scene) {
+	r.cornerClock(s)
+	d := s.now.Format("Mon, Jan 2")
+	r.text(r.tiny, d, r.w-r.margin-r.width(r.tiny, d), r.margin+54, dim)
+}
+
 // status is a phase title with an indicator that breathes while the device waits.
 func (r *renderer) status(s scene, title string, breathe bool) {
 	r.cornerClock(s)
@@ -445,7 +459,7 @@ func (r *renderer) footer(s scene) {
 	y := r.h - 24
 	switch {
 	case s.setupAsking:
-		r.text(r.tiny, "setup: press the action button to allow it", r.margin, y, amber)
+		r.text(r.tiny, "setup: a browser is asking to be let in", r.margin, y, amber)
 	case s.muted:
 		r.text(r.tiny, "microphone off", r.margin, y, amber)
 	case s.slideshowTrouble != "":

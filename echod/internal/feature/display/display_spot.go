@@ -439,6 +439,16 @@ func (d *Display) gesture(g touch.Gesture) {
 	if d.callGesture(g) || d.ringGesture(g) {
 		return
 	}
+	// A browser asking to be let in: its face takes every tap, and only the two answers decide.
+	if setup.Get().Waiting() {
+		if g.Kind == touch.Tap {
+			if allow, answered := askTapSpot(g.Y); answered {
+				setup.Get().Answer(allow)
+			}
+		}
+		d.wake()
+		return
+	}
 	d.mu.Lock()
 	sheet := d.sheetOpen
 	d.mu.Unlock()
