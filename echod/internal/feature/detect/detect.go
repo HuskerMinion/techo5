@@ -30,9 +30,10 @@ func init() {
 // Detect is the engine as the device runs it: the wake words the user chose, loaded into it, and the
 // ring saying so until they can hear.
 type Detect struct {
-	engine *Engine
-	busy   *wakeBusy
-	stop   *esphome.Number
+	engine   *Engine
+	busy     *wakeBusy
+	stop     *esphome.Number
+	announce *esphome.Number
 
 	// ducker gets the music out of the way after an utterance that nearly fired; see nearmiss.go.
 	ducker *ducker
@@ -52,13 +53,20 @@ func Get() *Detect {
 const playingSlack = 0.10
 
 func newDetect() *Detect {
-	// Sized to reach the stop word's reserved index. The slots between it and Home Assistant's are never
-	// loaded, and an unloaded slot is one comparison a frame.
-	e := New(StopSlot+1, mic.Get())
+	// Declared before the engine, because what a detection does is decided here and the closures
+	// below are what does it.
+	var d *Detect
+
+	// Sized to reach the highest reserved index. The slots between those and Home Assistant's are
+	// never loaded, and an unloaded slot is one comparison a frame.
+	e := New(AnnounceSlot+1, mic.Get())
 
 	e.Threshold = func(slot int) float64 {
 		if slot == StopSlot {
 			return config.Get().Wake.Stop.Threshold
+		}
+		if slot == AnnounceSlot {
+			return config.Get().Wake.Announce.Threshold
 		}
 		t := wakeword.Threshold(slot)
 		// While the speaker plays and the canceller runs, what reaches the detector is the residual
@@ -82,13 +90,20 @@ func newDetect() *Detect {
 			voice.Get().Interrupt()
 			return
 		}
+		// The announce word opens the microphone for the house rather than for an assistant: no
+		// pipeline, nothing sent to Home Assistant, and nothing that stops working when it is down.
+		if slot == AnnounceSlot {
+			d.announceHeard()
+			return
+		}
 		voice.Get().Start(slot)
 	}
 
-	d := &Detect{engine: e, busy: newWakeBusy(led.Get().Busy(), e.Ready)}
+	d = &Detect{engine: e, busy: newWakeBusy(led.Get().Busy(), e.Ready)}
 	d.ducker = newDucker()
 	d.ducker.watch(e)
 	d.stop = newStopEntity(d)
+	d.announce = newAnnounceEntity(d)
 	e.OnReady = d.busy.scored
 
 	// The engine loads on every start, including a restart. Home Assistant only pushes a selection when
@@ -98,6 +113,7 @@ func newDetect() *Detect {
 		turn := voice.Get()
 		turn.SetActiveWakeWords(d.load(turn.ActiveWakeWords()))
 		d.loadStop()
+		d.loadAnnounce()
 		return nil
 	}
 

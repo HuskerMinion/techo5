@@ -95,11 +95,15 @@ func newStopEntity(d *Detect) *esphome.Number {
 	return n
 }
 
-func (d *Detect) Entities() []esphome.Entity { return []esphome.Entity{d.stop} }
+func (d *Detect) Entities() []esphome.Entity { return []esphome.Entity{d.stop, d.announce} }
 
 // Restore only publishes the value. Loading the model is Start's, through the engine's Load, so that a
 // restart and a first boot take the same path.
 func (d *Detect) Restore(c config.Config) {
 	d.stop.Set(float32(c.Wake.Stop.Threshold))
 	slog.Info("restored", "what", d.stop.ObjectID, "using", c.Wake.Stop.Threshold)
+
+	d.announce.Set(float32(c.Wake.Announce.Threshold))
+	slog.Info("restored", "what", d.announce.ObjectID, "using", c.Wake.Announce.Threshold,
+		"listening", c.Wake.Announce.Listening())
 }
