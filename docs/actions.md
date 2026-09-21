@@ -500,3 +500,52 @@ Takes no parameters.
 ```yaml
 action: esphome.office_phone_hangup
 ```
+
+## Announce to the house
+
+In YAML, refer to this action as `esphome.<node>_announce_house`.
+
+Says something on every other TECHO5 device in the house. What it does depends on whether you
+give it words:
+
+- **With `text`**, it speaks those words. Devices with a screen show them; a Dot chimes and stays
+  quiet, since it has no way to read them aloud.
+- **With no `text`**, it opens the device's microphone, plays a tone, and sends what is said as
+  audio. That is the announcement people mean: your own voice in every room, recorded on one
+  device and played on the others.
+
+The recording ends when you stop talking, or at fifteen seconds, or when somebody taps the screen
+of the device that is listening. One that nobody spoke into is dropped rather than sent as a chime
+and silence.
+
+> **Good to know**
+>
+> Announcements go device to device over the local network, not through Home Assistant, so this
+> action is a way to start one rather than a route the audio takes. They keep working with Home
+> Assistant switched off; this action is simply not available then.
+>
+> Every device needs the same **house word** set on its setup page. A device with no word set
+> neither sends announcements nor takes them, and this action will say so in the log rather than
+> failing.
+>
+> Quiet hours are respected: inside them an announcement is shown and not sounded. Alarms, timers
+> and calls are not announcements and are not affected.
+
+### text (Optional)
+
+*string*
+
+What to say. Leave it out, or pass an empty string, to record instead.
+
+```yaml
+action: esphome.office_announce_house
+data:
+  text: "dinner is ready"
+```
+
+```yaml
+# No text: opens the microphone and sends what is said.
+action: esphome.office_announce_house
+data:
+  text: ""
+```
