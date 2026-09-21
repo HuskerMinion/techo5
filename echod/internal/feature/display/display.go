@@ -618,9 +618,16 @@ func (d *Display) gesture(g touch.Gesture) {
 	}
 }
 
-// nowPlaying is whether the idle screen should be the radio's: something playing or paused, and
-// the radio wired up so the page has a name to show.
+// nowPlaying is whether the idle screen should be what is playing rather than the clock: something
+// on the speaker, and a name to put on the page.
+//
+// A stream this player did not start says so itself - Music Assistant over Sendspin - and it is the
+// reason the page exists at all, so it is asked first: its audio never passes through this player's own
+// stream, which is what Playing() reports on.
 func (d *Display) nowPlaying() bool {
+	if media.Get().ExternalPlaying() {
+		return true
+	}
 	if !home.Get().Radio().Configured {
 		return false
 	}
