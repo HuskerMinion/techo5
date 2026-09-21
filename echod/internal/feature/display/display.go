@@ -633,15 +633,22 @@ func (d *Display) gesture(g touch.Gesture) {
 		}
 		media.Get().Adjust(-1)
 	case touch.SwipeRight:
-		// On the now-playing page a swipe puts it away until the track changes. It is the only gesture
-		// left on that page, and the one that cannot be taken for play or pause.
-		if d.nowPlaying() {
-			rd := home.Get().Radio()
-			d.mu.Lock()
-			d.away, d.awayTrack, d.awayStation = true, rd.Title, rd.Now
-			d.mu.Unlock()
-			d.wake()
+		// Right puts the now-playing page away until the track changes. It is the one gesture left on that
+		// page that cannot be taken for play or pause, which a tap there has to be. It is not the drawer's
+		// way out: the drawer has closed on this swipe since long before there was a page to put away,
+		// because while it is in every finger belongs to drawerGesture.
+		d.mu.Lock()
+		sheet, idle := d.sheet, d.view.Phase == "idle"
+		d.mu.Unlock()
+		_, camera := home.Get().Camera()
+		if sheet || camera || !idle || !d.nowPlaying() {
+			return
 		}
+		rd := home.Get().Radio()
+		d.mu.Lock()
+		d.away, d.awayTrack, d.awayStation = true, rd.Title, rd.Now
+		d.mu.Unlock()
+		d.wake()
 	}
 }
 
