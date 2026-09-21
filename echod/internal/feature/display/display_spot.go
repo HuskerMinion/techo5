@@ -463,6 +463,16 @@ func (d *Display) gesture(g touch.Gesture) {
 		d.wake()
 		return
 	}
+	// One that arrived takes the face too, so it needs the same way out. A tap puts it away: it has
+	// already been heard by the time anybody is touching the screen, and until this there was no way
+	// past it but to wait.
+	if _, showing := announce.Get().Showing(); showing {
+		if g.Kind == touch.Tap {
+			go announce.Get().Dismiss()
+		}
+		d.wake()
+		return
+	}
 	d.mu.Lock()
 	sheet := d.sheetOpen
 	d.mu.Unlock()

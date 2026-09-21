@@ -41,9 +41,6 @@ func init() {
 }
 
 const (
-	// shows is how long an announcement stays on the screen.
-	shows = 45 * time.Second
-
 	// sendWait bounds telling one device, so a device that is off does not hold up the rest.
 	sendWait = 4 * time.Second
 
@@ -301,6 +298,21 @@ func (f *Feature) Cancel() {
 	f.mu.Unlock()
 	if cancel != nil {
 		cancel()
+	}
+}
+
+// Dismiss takes the announcement off the screen now.
+//
+// It is the way out of one. On a device with a strip an announcement can be waited out, but on a
+// round face it has the whole screen, and forty-five seconds of not being able to reach anything is
+// a long time to wait for something that has already been said.
+func (f *Feature) Dismiss() {
+	f.mu.Lock()
+	showing := time.Now().Before(f.until)
+	f.until = time.Time{}
+	f.mu.Unlock()
+	if showing {
+		f.Changed.Emit(struct{}{})
 	}
 }
 

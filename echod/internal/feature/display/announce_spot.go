@@ -22,11 +22,12 @@ func (r *roundRenderer) announceFace(s roundScene) {
 	r.centred(r.title, clip(r.title, r, who, 360), 210, colText)
 
 	if m.Text == "" {
-		r.centred(r.small, "playing", 260, colDim)
+		r.centred(r.small, "playing", 258, colDim)
+		r.centred(r.small, "tap to dismiss", 300, colDim)
 		return
 	}
 	// Two lines at most: the voice carries it, and a circle has no room for a paragraph.
-	y := 262
+	y := 258
 	for i, line := range r.wrap(r.body, m.Text, 330) {
 		if i == 2 {
 			break
@@ -34,6 +35,9 @@ func (r *roundRenderer) announceFace(s roundScene) {
 		r.centred(r.body, line, y, colDim)
 		y += 34
 	}
+	// The way out, said on the face. Without it this face owns the screen until it times out, and
+	// there is nothing on it to suggest otherwise.
+	r.centred(r.small, "tap to dismiss", y+16, colDim)
 }
 
 // recordingFace is this device's microphone open for one.
