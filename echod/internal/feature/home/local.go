@@ -8,7 +8,6 @@ import (
 
 	"github.com/HuskerMinion/techo5/echod/internal/component"
 	"github.com/HuskerMinion/techo5/echod/internal/config"
-	"github.com/HuskerMinion/techo5/echod/internal/layout"
 	"github.com/HuskerMinion/techo5/echod/internal/lib/hass"
 )
 
@@ -183,14 +182,6 @@ func stationsOf(m hass.Media, source string) []station {
 		}
 	}
 	return out
-}
-
-// speakerEntity is this device's media player in Home Assistant.
-func speakerEntity() string {
-	if s := config.Get().Home.Radio.Speaker; s != "" {
-		return s
-	}
-	return "media_player." + layout.EntitySlug(config.Get().Device.Name) + "_speaker"
 }
 
 // playListed plays a Radio Browser station by its name in the list shown; false when it is not one.

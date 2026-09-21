@@ -231,8 +231,8 @@ func (f *Feature) settingsPage(w http.ResponseWriter, token, saved, renamed, pro
 		fmt.Fprint(w, `<p class="ok">Saved.</p>`)
 	}
 	if renamed != "" {
-		fmt.Fprint(w, `<p class="ok">Renamed. The device is restarting; find it again at its new name
-		 in a minute or so, and add it to Home Assistant afresh if it was there before.</p>`)
+		fmt.Fprint(w, `<p class="ok">Renamed. The device is restarting and will be back in a minute or
+		 so. Home Assistant keeps it as the same device, under its old entity ids.</p>`)
 	}
 	if problem != "" {
 		fmt.Fprintf(w, `<p class="bad">%s</p>`, html.EscapeString(strings.ReplaceAll(problem, "+", " ")))
@@ -323,9 +323,13 @@ func (f *Feature) wifiSection(w http.ResponseWriter, token string, scan bool) {
 	 <p><button type="submit">Add network</button></p></form></fieldset>`)
 }
 
-// nameSection renames the device, behind the warning and the box that has to be ticked. The warning
-// is not decoration: Home Assistant names every entity after this, so a rename leaves automations
-// looking for something that no longer exists.
+// nameSection renames the device, behind what it does and the box that has to be ticked.
+//
+// What it does was worth checking rather than assuming: Home Assistant keys its entities on the
+// device's MAC address (unique ids read "a8:e6:21:77:3f:ae/0/media_player/Speaker"), so a renamed
+// device is the same device to it and keeps the entity ids it was given. Automations go on working.
+// What changes is what Home Assistant shows, and the entity ids then no longer look like the name —
+// which is confusing enough to warn about, and reason to rename in Home Assistant as well.
 func nameSection(w http.ResponseWriter, token string) {
 	name := deviceName()
 	fmt.Fprintf(w, `<fieldset><legend>Name</legend>
@@ -333,18 +337,18 @@ func nameSection(w http.ResponseWriter, token string) {
 	 <input type="hidden" name="token" value="%s"><input type="hidden" name="what" value="name">
 	 <label for="name">This device is called</label>
 	 <input id="name" name="name" value="%s" maxlength="31" autocomplete="off">
-	 <p class="bad"><strong>Home Assistant knows this device by its name.</strong> Renaming it renames
-	  every entity it has — <code>%s</code> becomes <code>%s</code> — and any automation, script or
-	  dashboard using the old names stops finding them. Nothing here can put that back for you.</p>
+	 <p class="bad"><strong>Home Assistant keeps the entity ids it already gave this device.</strong>
+	  It knows the device by its address, not its name, so <code>%s</code> stays as it is and your
+	  automations keep working — but it will no longer look like the new name, and Home Assistant will
+	  go on showing the old one in places until you rename the device there too.</p>
 	 <p class="note">On a device that does not use Home Assistant, none of that applies: the name is
 	  only what the screen says. Naming a device before you hand it to somebody is what this is for.</p>
 	 <p><label><input type="checkbox" name="understood" value="yes" style="width:auto">
-	  I understand this renames every entity in Home Assistant</label></p>
+	  I understand the entity ids in Home Assistant do not change with it</label></p>
 	 <p class="note">The device restarts to announce the new name, and this page goes with it.</p>
 	 <p><button type="submit">Rename and restart</button></p></form></fieldset>`,
 		html.EscapeString(token), html.EscapeString(name),
-		html.EscapeString("media_player."+layout.EntitySlug(name)+"_speaker"),
-		html.EscapeString("media_player."+layout.EntitySlug("new name")+"_speaker"))
+		html.EscapeString("media_player."+layout.EntitySlug(name)+"_speaker"))
 }
 
 func lock(secured bool) string {

@@ -12,14 +12,15 @@ import (
 	"github.com/HuskerMinion/techo5/echod/internal/lib/safe"
 )
 
-// Renaming a device. The name is not a label: Home Assistant knows the device by it, and every
-// entity it has is named after it, so a rename turns media_player.kitchen_speaker into
-// media_player.study_speaker and every automation naming the old one stops finding it. Nothing here
-// can undo that, so the page says it plainly and the change is refused unless whoever is asking has
-// said they understand.
+// Renaming a device.
 //
-// On a device that has never met a Home Assistant there is nothing to break, and naming one before
-// it is handed to somebody is exactly what this is for.
+// Home Assistant keys its entities on the device's MAC address, so a renamed device is the same
+// device to it: the entity ids it was given stay, and automations naming them keep working. What
+// changes is what Home Assistant shows, and that the entity ids stop looking like the name — enough
+// to be told about, which is what the box on the page is for.
+//
+// On a device that has never met a Home Assistant there is nothing to think about at all, and naming
+// one before it is handed to somebody is exactly what this is for.
 
 // nameLimit is what the installer allows too: one line, short enough for the screen.
 const nameLimit = 31
@@ -38,7 +39,7 @@ func rename(to string, acknowledged bool) string {
 	case to == config.Get().Device.Name:
 		return "that is already its name"
 	case !acknowledged:
-		return "tick the box to say you understand what renaming does to Home Assistant"
+		return "tick the box to say you know the entity ids in Home Assistant do not change with it"
 	}
 	if err := os.WriteFile(layout.NamePath, []byte(to+"\n"), 0o644); err != nil {
 		return "could not write the name: " + err.Error()
