@@ -586,12 +586,22 @@ func (d *Display) gesture(g touch.Gesture) {
 			return
 		}
 		if idle && d.nowPlaying() {
-			// The now-playing screen: a tap is play/pause.
-			if playing, _ := media.Get().Playing(); playing {
-				media.Get().Pause()
-			} else {
-				media.Get().Resume()
+			// The now-playing screen: each button does what it says, and a tap anywhere else is
+			// play/pause, because that is what a hand put on a screen like this means.
+			if d.r != nil {
+				back, _, next := d.r.transportButtons()
+				at := image.Pt(g.X, g.Y)
+				switch {
+				case at.In(back):
+					media.Get().Transport(media.TransportPrevious)
+				case at.In(next):
+					media.Get().Transport(media.TransportNext)
+				default:
+					media.Get().Transport(media.TransportToggle)
+				}
+				return
 			}
+			media.Get().Transport(media.TransportToggle)
 			return
 		}
 		voice.Get().Action()
@@ -1088,13 +1098,17 @@ func (d *Display) frame() time.Duration {
 		s.phase, s.heard, s.reply = "idle", "", ""
 	}
 	s.playing, s.paused = media.Get().Playing()
-	// A stream this player is only carrying is still what the room is doing: the screen names it and
-	// says it is playing, though the audio never passes through this player's own stream. Both, not
+	// A stream this player is only carrying is still what the room is doing: the screen names it, and
+	// says what it is doing, though the audio never passes through this player's own stream. Both, not
 	// just playing: the page tests paused first, so a station left paused underneath would label
-	// somebody else's track as Paused. Nothing here can tell a carried pause from a carried play yet,
-	// so it is playing until something knows better.
+	// somebody else's track as Paused.
 	if media.Get().ExternalPlaying() {
-		s.playing, s.paused = true, false
+		if playing, paused := media.Get().RemotePlaying(); playing || paused {
+			s.playing, s.paused = playing, paused
+		} else {
+			// The server has not said yet, so it is playing until it does.
+			s.playing, s.paused = true, false
+		}
 	}
 	s.muted, _ = mute.Get().Muted()
 	if !volAt.IsZero() && now.Sub(volAt) < volumeShow {

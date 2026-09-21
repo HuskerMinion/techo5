@@ -59,25 +59,75 @@ func (r *renderer) nowPlaying(s scene) {
 		r.text(r.body, sub, r.margin, y+6, dim)
 	}
 
-	// A rule, then a drawn play or pause mark with what a tap does, well clear of it.
+	// A rule, then the three buttons: back, play or pause, and forward. What they do belongs to whoever
+	// is playing, so a stream Music Assistant is carrying is paused and skipped by the server.
 	draw.Draw(r.dst, image.Rect(r.margin, r.h-84, r.w-r.margin, r.h-81), image.NewUniform(ember), image.Point{}, draw.Src)
-	hint := "tap to pause"
-	x, top := r.margin+6, r.h-62
+	back, play, next := r.transportButtons()
+	r.control(back, r.markBack)
 	if s.paused {
-		hint = "tap to play"
-		// A triangle, drawn as rows.
-		for i := 0; i < 36; i++ {
-			half := i
-			if i > 18 {
-				half = 36 - i
-			}
-			draw.Draw(r.dst, image.Rect(x, top+i, x+half*3/2+1, top+i+1), image.NewUniform(amber), image.Point{}, draw.Src)
-		}
+		r.control(play, r.markPlay)
 	} else {
-		draw.Draw(r.dst, image.Rect(x, top, x+11, top+36), image.NewUniform(amber), image.Point{}, draw.Src)
-		draw.Draw(r.dst, image.Rect(x+19, top, x+30, top+36), image.NewUniform(amber), image.Point{}, draw.Src)
+		r.control(play, r.markPause)
 	}
-	r.text(r.small, hint, r.margin+80, r.h-32, dim)
+	r.control(next, r.markNext)
+}
+
+// transportButtons are the three soft buttons at the foot of the now-playing screen: back, play or pause,
+// and forward. They are laid out from the middle so they sit under the text wherever it ends, and from
+// the panel's own size, because this page is drawn on the Show 8 as well: a width that fits the Show 5 is
+// a third of a wider screen with the marks stranded in the corner of it.
+func (r *renderer) transportButtons() (back, play, next image.Rectangle) {
+	w, h, gap := r.s(96), r.s(54), r.s(14)
+	x := (r.w - (3*w + 2*gap)) / 2
+	y := r.h - r.s(26) - h
+	back = image.Rect(x, y, x+w, y+h)
+	play = image.Rect(x+w+gap, y, x+2*w+gap, y+h)
+	next = image.Rect(x+2*(w+gap), y, x+3*w+2*gap, y+h)
+	return back, play, next
+}
+
+// control paints one of the three, with its mark in the middle.
+func (r *renderer) control(b image.Rectangle, mark func(x, top int)) {
+	r.bevel(b, shift(ember, 16), true)
+	mark(b.Min.X+b.Dx()/2-r.s(18), b.Min.Y+r.s(9))
+}
+
+// The marks are 36 rows high from x and top at the Show 5's width, drawn as rows the way this panel has
+// always drawn its play mark. Sizes go through s() so a wider panel gets marks to match its buttons.
+
+func (r *renderer) markBack(x, top int) {
+	r.markTriangle(x+r.s(14), top, r.s(30), false)
+	r.markBar(x, top)
+}
+
+func (r *renderer) markNext(x, top int) {
+	r.markTriangle(x, top, r.s(30), true)
+	r.markBar(x+r.s(44), top)
+}
+
+func (r *renderer) markPlay(x, top int) { r.markTriangle(x, top, r.s(36), true) }
+
+func (r *renderer) markPause(x, top int) {
+	r.markBar(x, top)
+	r.markBar(x+r.s(19), top)
+}
+
+func (r *renderer) markBar(x, top int) {
+	mark := image.Rect(x, top, x+r.s(11), top+r.s(36))
+	draw.Draw(r.dst, mark, image.NewUniform(amber), image.Point{}, draw.Src)
+}
+
+// markTriangle draws a triangle pointing right or left, widest in the middle.
+func (r *renderer) markTriangle(x, top, size int, right bool) {
+	for i := 0; i < size; i++ {
+		half := min(i, size-1-i)
+		w := half*3/2 + 1
+		x0 := x
+		if !right {
+			x0 = x + (size/2)*3/2 + 1 - w
+		}
+		draw.Draw(r.dst, image.Rect(x0, top+i, x0+w, top+i+1), image.NewUniform(amber), image.Point{}, draw.Src)
+	}
 }
 
 // background paints the picture behind the now-playing text, toned down so the text reads.
