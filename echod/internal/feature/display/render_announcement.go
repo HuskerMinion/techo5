@@ -2,7 +2,12 @@
 
 package display
 
-import "image"
+import (
+	"image"
+	"strings"
+
+	"golang.org/x/image/font"
+)
 
 // An announcement arriving, and this device recording one.
 //
@@ -19,9 +24,9 @@ const (
 	announceBar   = 132
 	announceInset = 28
 
-	// wordsGap is the space between the name of the room an announcement came from and the words it
-	// carried, when it carried any.
-	wordsGap = 28
+	// ellipsis marks a message that did not fit, so a sentence that stops reads as one that was cut
+	// rather than one that ended there.
+	ellipsis = "…"
 )
 
 // announcementStrip is the arriving announcement, along the bottom where it covers least.
@@ -38,22 +43,20 @@ func (r *renderer) announcementStrip(s scene) {
 	r.roundFill(box, cardRad, surface(4), surface(2))
 	r.roundHighlight(box, cardRad)
 
-	r.text(r.tiny, "ANNOUNCEMENT", box.Min.X+rowIn, box.Min.Y+40, amber)
-	r.text(r.title, who, box.Min.X+rowIn, box.Min.Y+84, cream)
+	r.text(r.tiny, "ANNOUNCEMENT", box.Min.X+rowIn, box.Min.Y+34, amber)
 
-	if m.Text != "" {
-		// After the name, not at a fixed offset from the edge. The offset was 300 and "Laundry Room"
-		// is wider than that, so the words were drawn straight through the name of the room they came
-		// from — exactly the two things this strip exists to say.
-		x := box.Min.X + rowIn + r.width(r.title, who) + wordsGap
-		// One line: the voice carries the rest, and a wall of text on a strip nobody asked for is
-		// worse than a sentence that stops.
-		words := m.Text
-		for len(words) > 0 && x+r.width(r.body, words) > box.Max.X-rowIn {
-			words = words[:len(words)-1]
-		}
-		r.text(r.body, words, x, box.Min.Y+84, dim)
+	if m.Text == "" {
+		// Nothing to read: the name has the strip to itself, set where it sits when it is the only
+		// thing here rather than pinned to where it goes when it shares.
+		r.text(r.title, who, box.Min.X+rowIn, box.Min.Y+88, cream)
+		return
 	}
+
+	// The room on its line and the words on theirs. Beside each other they were fighting over the
+	// same inches — a name as ordinary as "Laundry Room" left almost nothing for the message — and
+	// the message is the half somebody has to read rather than recognise.
+	r.text(r.title, who, box.Min.X+rowIn, box.Min.Y+72, cream)
+	r.text(r.body, clipText(r, r.body, m.Text, box.Dx()-2*rowIn), box.Min.X+rowIn, box.Min.Y+112, dim)
 }
 
 // recordingStrip says this device's microphone is open and where what it hears is going. It is the
@@ -83,4 +86,28 @@ func (r *renderer) recordingStrip(s scene) {
 func onAnnounceStrip(x, y, w, h int) bool {
 	top := h - announceBar - announceInset
 	return x >= announceInset && x <= w-announceInset && y >= top && y <= h-announceInset
+}
+
+// clipText is as much of s as fits in width, with an ellipsis when that is not all of it.
+//
+// A voice announcement carries its own message and the words are the footnote, so one line is the
+// right amount of room. An automation sending a paragraph gets the start of it and a mark saying
+// there was more, which beats both a wall of text and a sentence that simply stops.
+func clipText(r *renderer, f font.Face, s string, width int) string {
+	if r.width(f, s) <= width {
+		return s
+	}
+	run := []rune(s)
+	for len(run) > 0 {
+		run = run[:len(run)-1]
+		// Cut back to a space where there is one near the end, so the last word is whole.
+		cut := string(run)
+		if r.width(f, cut+ellipsis) <= width {
+			if i := strings.LastIndex(strings.TrimRight(cut, " "), " "); i > len(cut)-12 && i > 0 {
+				cut = cut[:i]
+			}
+			return strings.TrimRight(cut, " ") + ellipsis
+		}
+	}
+	return ellipsis
 }

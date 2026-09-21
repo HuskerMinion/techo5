@@ -51,6 +51,10 @@ func TestShowScenesDraw(t *testing.T) {
 		// edge, so a name wider than that was drawn straight through by them.
 		"announcement-long": {now: at, phase: "idle", weather: sky, showAnnouncement: true,
 			announcement: announce.Message{From: "Laundry Room", Text: "the washing is finished"}},
+		// As long as an automation is allowed to send, to see where it stops.
+		"announcement-longest": {now: at, phase: "idle", weather: sky, showAnnouncement: true,
+			announcement: announce.Message{From: "Laundry Room",
+				Text: "the washing machine has finished its cycle and the door is unlocked now"}},
 		"announce-recording": {now: at, phase: "idle", weather: sky, announceRecording: true, announcePeers: 3},
 		"announce-drawer": {now: at, phase: "idle", weather: sky, showDrawer: true,
 			drawerTab: drawerAnnounce, announceReady: true, announcePeers: 3},
