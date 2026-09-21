@@ -8,6 +8,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"net"
 	"os"
 	"os/exec"
@@ -167,10 +168,26 @@ func Join(ctx context.Context, ssid, passphrase string) error {
 	if _, err := cli(ctx, "reconfigure"); err != nil {
 		return err
 	}
+	// Say which one, rather than leave it to be chosen. The supplicant picks among the networks it has
+	// by signal and priority and not by the order they are written in, so on a router that carries
+	// several names - which is most of them now - it will simply go back to the one already joined,
+	// and the wait below would time out on a network nobody ever tried to reach. select_network puts
+	// the others aside until this one has been attempted.
+	if id, err := networkID(ctx, ssid); err != nil {
+		slog.Warn("wifi: could not single out the network asked for; leaving the choice to the supplicant",
+			"ssid", ssid, "err", err)
+	} else if _, err := cli(ctx, "select_network", id); err != nil {
+		return err
+	}
 	deadline := time.Now().Add(40 * time.Second)
 	for time.Now().Before(deadline) {
 		st := Current(ctx)
 		if st.Connected && st.SSID == ssid {
+			// Everything else comes back now that this one has been joined: the way home is only kept
+			// by being usable, and a device carried back to it should find it without being told again.
+			if _, err := cli(ctx, "enable_network", "all"); err != nil {
+				slog.Warn("wifi: the other saved networks are disabled until the next restart", "err", err)
+			}
 			renewLease()
 			for i := 0; i < 20 && address() == ""; i++ {
 				time.Sleep(time.Second)
@@ -183,12 +200,28 @@ func Join(ctx context.Context, ssid, passphrase string) error {
 		case <-time.After(time.Second):
 		}
 	}
-	// Back to what worked.
+	// Back to what worked. The reconfigure re-reads the file, which undoes the select above with it.
 	if len(old) > 0 {
 		_ = os.WriteFile(Conf, old, 0o600)
-		_, _ = cli(ctx, "reconfigure")
 	}
+	_, _ = cli(ctx, "reconfigure")
 	return fmt.Errorf("wifi: could not join %q (%s)", ssid, Current(ctx).State)
+}
+
+// networkID is the supplicant's own number for a saved network, which is what select_network takes.
+// list_networks is a tab separated table: id, ssid, bssid, flags.
+func networkID(ctx context.Context, ssid string) (string, error) {
+	out, err := cli(ctx, "list_networks")
+	if err != nil {
+		return "", err
+	}
+	for _, line := range strings.Split(out, "\n") {
+		f := strings.Split(line, "\t")
+		if len(f) >= 2 && f[1] == ssid {
+			return f[0], nil
+		}
+	}
+	return "", fmt.Errorf("wifi: %q is not among the saved networks", ssid)
 }
 
 // renewLease pokes udhcpc for a new lease on the new network.
