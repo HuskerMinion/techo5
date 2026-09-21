@@ -33,7 +33,8 @@ const failureFlash = 1500 * time.Millisecond
 var failureColor = led.Color{R: 0xC0, G: 0x00, B: 0x00}
 
 // Feedback owns the settings for what these occasions look like. What they sound like is not a
-// setting: the tones are short and few, and telling them apart is the point of them.
+// setting: the tones are short and few, and telling them apart is the point of them. Quiet hours are
+// the one thing that takes a tone away, and what the occasion shows stays on the ring.
 type Feedback struct {
 	failure *esphome.Select
 }
@@ -75,8 +76,13 @@ func (f *Feedback) Restore(c config.Config) {
 // The ring runs on its own claim above whatever is happening, so ending the thing that failed cannot
 // take the indication away with it. Which animation is the user's choice, and None is one of the
 // answers: some rooms would rather the ring stayed out of it.
+//
+// In quiet hours the ring still shows and the tone is left out, which is the one thing about a
+// failure that can wait until morning.
 func Failure() {
-	speaker.Sound().Chime(speaker.ToneTrouble)
+	if !config.Quiet() {
+		speaker.Sound().Chime(speaker.ToneTrouble)
+	}
 
 	name := config.Get().Ring.Trouble
 	if name == "" {
@@ -87,5 +93,9 @@ func Failure() {
 }
 
 // Cancelled is a request dropped on purpose, which is neither a failure nor an answer. It only
-// sounds: the ring is already showing the turn ending.
-func Cancelled() { speaker.Sound().Chime(speaker.ToneCancel) }
+// sounds: the ring is already showing the turn ending, so in quiet hours it leaves nothing behind.
+func Cancelled() {
+	if !config.Quiet() {
+		speaker.Sound().Chime(speaker.ToneCancel)
+	}
+}
