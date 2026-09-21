@@ -190,7 +190,7 @@ func speakerEntity() string {
 	if s := config.Get().Home.Radio.Speaker; s != "" {
 		return s
 	}
-	return "media_player." + layout.Slug(config.Get().Device.Name) + "_speaker"
+	return "media_player." + layout.EntitySlug(config.Get().Device.Name) + "_speaker"
 }
 
 // playListed plays a Radio Browser station by its name in the list shown; false when it is not one.

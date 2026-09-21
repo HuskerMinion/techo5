@@ -79,7 +79,8 @@ func (f *Feature) index(w http.ResponseWriter, r *http.Request) {
 		f.lockedPage(w)
 		return
 	}
-	f.settingsPage(w, token, r.URL.Query().Get("saved"), r.URL.Query().Get("problem"), r.URL.Query().Get("scan") != "")
+	f.settingsPage(w, token, r.URL.Query().Get("saved"), r.URL.Query().Get("renamed"),
+		r.URL.Query().Get("problem"), r.URL.Query().Get("scan") != "")
 }
 
 // wait starts this browser waiting for a press and gives it the cookie the press will let in.
@@ -141,6 +142,7 @@ func (f *Feature) save(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var problem string
+	var renamed bool
 	switch r.PostFormValue("what") {
 	case "wifi":
 		ssid := strings.TrimSpace(r.PostFormValue("ssid"))
@@ -154,6 +156,11 @@ func (f *Feature) save(w http.ResponseWriter, r *http.Request) {
 			problem = "could not forget " + ssid + ": " + err.Error()
 		} else {
 			slog.Info("setup page: a network was forgotten", "ssid", ssid)
+		}
+	case "name":
+		problem = rename(r.PostFormValue("name"), r.PostFormValue("understood") == "yes")
+		if problem == "" {
+			renamed = true
 		}
 	case "timezone":
 		zone := strings.TrimSpace(r.PostFormValue("zone"))
@@ -172,6 +179,9 @@ func (f *Feature) save(w http.ResponseWriter, r *http.Request) {
 	}
 
 	to := "/setup?saved=1"
+	if renamed {
+		to = "/setup?renamed=1"
+	}
 	if problem != "" {
 		slog.Warn("setup page: a change was refused", "problem", problem)
 		to = "/setup?problem=" + urlQuery(problem)
@@ -214,11 +224,15 @@ func (f *Feature) lockedPage(w http.ResponseWriter) {
 	 itself when it is left alone.</p>`)
 }
 
-func (f *Feature) settingsPage(w http.ResponseWriter, token, saved, problem string, scan bool) {
+func (f *Feature) settingsPage(w http.ResponseWriter, token, saved, renamed, problem string, scan bool) {
 	fmt.Fprint(w, pageHead)
 	fmt.Fprintf(w, `<h1>%s</h1><p class="sub">Setup</p>`, html.EscapeString(deviceName()))
 	if saved != "" {
 		fmt.Fprint(w, `<p class="ok">Saved.</p>`)
+	}
+	if renamed != "" {
+		fmt.Fprint(w, `<p class="ok">Renamed. The device is restarting; find it again at its new name
+		 in a minute or so, and add it to Home Assistant afresh if it was there before.</p>`)
 	}
 	if problem != "" {
 		fmt.Fprintf(w, `<p class="bad">%s</p>`, html.EscapeString(strings.ReplaceAll(problem, "+", " ")))
@@ -242,10 +256,10 @@ func (f *Feature) settingsPage(w http.ResponseWriter, token, saved, problem stri
 	 which zone it shows.</p><p><button type="submit">Save</button></p></fieldset></form>`)
 
 	f.wifiSection(w, token, scan)
+	nameSection(w, token)
 
 	fmt.Fprint(w, `<p class="note">Radio stations and the phone account belong here too and are still
-	 to come. The device's name is set when it is installed, because Home Assistant knows it by that
-	 name. This page never touches SSH keys, the Home Assistant key, or the software the device
+	 to come. This page never touches SSH keys, the Home Assistant key, or the software the device
 	 runs.</p>`)
 }
 
@@ -307,6 +321,30 @@ func (f *Feature) wifiSection(w http.ResponseWriter, token string, scan bool) {
 	  nothing changes here until the device is taken there. If it is a network in range, the device
 	  moves to it — and this page goes with it, so you will have to find it again at its new address.</p>
 	 <p><button type="submit">Add network</button></p></form></fieldset>`)
+}
+
+// nameSection renames the device, behind the warning and the box that has to be ticked. The warning
+// is not decoration: Home Assistant names every entity after this, so a rename leaves automations
+// looking for something that no longer exists.
+func nameSection(w http.ResponseWriter, token string) {
+	name := deviceName()
+	fmt.Fprintf(w, `<fieldset><legend>Name</legend>
+	 <form method="post" action="/setup/save">
+	 <input type="hidden" name="token" value="%s"><input type="hidden" name="what" value="name">
+	 <label for="name">This device is called</label>
+	 <input id="name" name="name" value="%s" maxlength="31" autocomplete="off">
+	 <p class="bad"><strong>Home Assistant knows this device by its name.</strong> Renaming it renames
+	  every entity it has — <code>%s</code> becomes <code>%s</code> — and any automation, script or
+	  dashboard using the old names stops finding them. Nothing here can put that back for you.</p>
+	 <p class="note">On a device that does not use Home Assistant, none of that applies: the name is
+	  only what the screen says. Naming a device before you hand it to somebody is what this is for.</p>
+	 <p><label><input type="checkbox" name="understood" value="yes" style="width:auto">
+	  I understand this renames every entity in Home Assistant</label></p>
+	 <p class="note">The device restarts to announce the new name, and this page goes with it.</p>
+	 <p><button type="submit">Rename and restart</button></p></form></fieldset>`,
+		html.EscapeString(token), html.EscapeString(name),
+		html.EscapeString("media_player."+layout.EntitySlug(name)+"_speaker"),
+		html.EscapeString("media_player."+layout.EntitySlug("new name")+"_speaker"))
 }
 
 func lock(secured bool) string {

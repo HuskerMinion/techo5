@@ -230,3 +230,21 @@ func TestAPressClearsTheRun(t *testing.T) {
 		t.Errorf("%d tries still counted against the browser after a press", run)
 	}
 }
+
+// Renaming is refused until the box saying what it does to Home Assistant has been ticked, and a
+// name that is no good is refused whatever the box says.
+func TestRenamingNeedsTheBoxTicked(t *testing.T) {
+	if got := rename("Study", false); got == "" {
+		t.Error("renamed without the box ticked")
+	} else if !strings.Contains(got, "tick the box") {
+		t.Errorf("refused with %q, want it to say the box has to be ticked", got)
+	}
+	for _, bad := range []string{"", "   ", "a name that is very much too long to fit on the screen"} {
+		if got := rename(bad, true); got == "" {
+			t.Errorf("accepted %q as a name", bad)
+		}
+	}
+	if got := rename("Two\nLines", true); got == "" {
+		t.Error("accepted a name with a newline in it")
+	}
+}

@@ -227,8 +227,8 @@ func Color(productID2, serial string) string {
 	}
 }
 
-// Slug turns a display name into a node name: an mDNS hostname, and the prefix Home Assistant
-// builds entity ids from. "Living Room" becomes "living-room".
+// Slug turns a display name into a node name: the mDNS hostname and the ESPHome node's own name.
+// "Living Room" becomes "living-room". It is not what an entity id is built from — see EntitySlug.
 func Slug(name string) string {
 	var b strings.Builder
 	dash := false
