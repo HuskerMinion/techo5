@@ -1128,12 +1128,17 @@ func (d *Display) frame() time.Duration {
 	// has held for the configured wait, tracked by how long it has run continuously.
 	boring := s.phase == "idle" && call.Phase == phone.Idle && !ring.any() && !s.bt.Pairing &&
 		!s.showWifi && !s.showSheet && !s.showCamera && !s.showRadar && !s.showWeather && !s.nowPlaying
+	// A browser waiting to be let in is a page of its own, over whatever is on the screen: asking for
+	// the setup page is done from the settings screen, so the answer has to reach somebody who is
+	// still standing in it. It was set only on the idle page once, and the press could not be given
+	// without leaving settings first.
+	s.setupAsking = setup.Get().Waiting()
+
 	if boring {
 		s.slideshow = home.Get().SlideshowBackground()
 		if s.slideshow == nil {
 			s.slideshowTrouble = home.Get().SlideshowTrouble()
 		}
-		s.setupAsking = setup.Get().Waiting()
 		s.sunrise, s.sunriseFace = sunriseProgress(now), config.Get().Alarms.SunriseFace
 	}
 	d.mu.Lock()
