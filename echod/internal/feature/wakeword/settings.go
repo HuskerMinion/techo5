@@ -16,10 +16,22 @@ func saved(slot int) config.WakeWord { return config.Get().Wake.Slot(slot) }
 // Threshold is the score a slot's detection has to reach.
 func Threshold(slot int) float64 { return saved(slot).Threshold }
 
+// toneFor is what a turn on this slot sounds like. A follow-up sounds like the wake word that started
+// the conversation unless the slot gives it a tone of its own, and a tone of its own may be None.
+// Quiet hours are taken away by Tones, which is the one question the turn asks before it makes any
+// sound at all.
+func toneFor(slot int, followUp bool) config.Tone {
+	w := saved(slot)
+	if followUp && w.FollowUpTone != "" {
+		return w.FollowUpTone
+	}
+	return w.Tone
+}
+
 // Chime sounds a detection in whatever the slot is set to.
-func Chime(slot int) {
-	if Tones(slot) {
-		speaker.Sound().Chime(speaker.WakeTone(saved(slot).Tone))
+func Chime(slot int, followUp bool) {
+	if Tones(slot, followUp) {
+		speaker.Sound().Chime(speaker.WakeTone(toneFor(slot, followUp)))
 	}
 }
 
@@ -27,18 +39,21 @@ func Chime(slot int) {
 func ThinkingEffect(slot int) string { return saved(slot).ThinkingEffect }
 func ReplyingEffect(slot int) string { return saved(slot).ReplyingEffect }
 
-// Tones reports whether the slot makes a sound when it fires, now: a slot set to no tone does not, and
-// neither does any slot in quiet hours. The ring is still shown either way.
+// Tones reports whether the turn makes a sound as it opens, now: a slot set to no tone does not,
+// neither does a follow-up on a slot told not to chime, and neither does any slot in quiet hours. The
+// ring is still shown either way.
 //
 // The turn asks this three times — whether to chime, whether the microphone's history belongs at the
 // front of it, and whether to hold the microphone back while the tone sounds — and the three have to
-// agree. Nobody waits for a tone that is not coming, so a quiet turn sends the history instead, which
-// is what carries somebody running straight on from the wake word into their request.
-func Tones(slot int) bool { return saved(slot).Tone != config.ToneNone && !config.Quiet() }
+// agree. Nobody waits for a tone that is not coming, so a turn that is silent sends the history
+// instead, which is what carries somebody running straight on into their request.
+func Tones(slot int, followUp bool) bool {
+	return toneFor(slot, followUp) != config.ToneNone && !config.Quiet()
+}
 
 // ChimeLength is how long that sound lasts.
-func ChimeLength(slot int) time.Duration {
-	return speaker.Length(speaker.WakeTone(saved(slot).Tone))
+func ChimeLength(slot int, followUp bool) time.Duration {
+	return speaker.Length(speaker.WakeTone(toneFor(slot, followUp)))
 }
 
 // Delivery is how a slot's reply should reach the device.
