@@ -307,6 +307,11 @@ func (d *Display) relight(jump bool) {
 		}
 		target = math.Max(target, floor)
 	}
+	// The light before an alarm takes the backlight over while it runs: it starts under anything the
+	// room would otherwise ask for and ends at the screen's own brightness.
+	if p := sunriseProgress(time.Now()); p > 0 && d.on {
+		target = float64(d.ceiling) * screen.BacklightMax / 100 * sunriseLevel(p)
+	}
 	if jump || d.level == 0 {
 		d.level = target
 	} else {
@@ -632,7 +637,8 @@ func (d *Display) night(now time.Time, on bool, view voice.State) bool {
 	d.mu.Unlock()
 	switch {
 	case in && on:
-		busy := view.Phase != "idle" || now.Sub(touched) < nightIdle || now.Sub(d.viewAt) < nightIdle || d.ringing(now).any() || phone.Get().Busy()
+		busy := view.Phase != "idle" || now.Sub(touched) < nightIdle || now.Sub(d.viewAt) < nightIdle ||
+			d.ringing(now).any() || phone.Get().Busy() || sunriseProgress(now) > 0
 		if playing, _ := media.Get().Playing(); playing || busy {
 			return false
 		}
@@ -977,6 +983,12 @@ func (d *Display) frame() time.Duration {
 	call := phone.Get().State()
 	if (ring.any() || call.Phase != phone.Idle) && !on {
 		// A ring or a call lights a dark panel, night or not: its page is how it is answered or stopped.
+		d.apply(true, d.ceilingOrDefault(), false)
+		on = true
+	}
+	if !on && sunriseProgress(now) > 0 {
+		// The light before an alarm: the panel comes on dim and rises, so the room is lit before the
+		// sound starts. relight decides how much of the screen's brightness it is using.
 		d.apply(true, d.ceilingOrDefault(), false)
 		on = true
 	}

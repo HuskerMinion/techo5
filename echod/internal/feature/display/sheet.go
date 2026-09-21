@@ -351,6 +351,8 @@ func pickerFor(id string, sv sheetView) (pickerView, bool) {
 		return pickerView{title: "New timer", opts: timerLabels, cur: -1}, true
 	case "sleep":
 		return pickerView{title: "Sleep timer", opts: sleepLabels(), cur: sleepIndex()}, true
+	case "sunrise":
+		return pickerView{title: "Wake with light", opts: sunriseLabels(), cur: sunriseIndex()}, true
 	case "timezone":
 		p := pickerView{title: "Time zone", opts: append([]string{followHA, common}, timezone.Regions()...), cur: -1}
 		if !timezone.Get().SetHere() {
@@ -428,6 +430,8 @@ func (d *Display) choose(id string, i int) {
 		}
 	case "sleep":
 		chooseSleep(i)
+	case "sunrise":
+		chooseSunrise(i)
 	case "timezone":
 		if i == 0 {
 			if err := timezone.Get().Follow(); err != nil {
@@ -590,7 +594,8 @@ func (d *Display) rowTap(id string, p part, opt int) {
 	case "subfolders":
 		_, _, subfolders := home.Get().SlideshowSettings()
 		home.Get().SetSlideshowSubfolders(!subfolders)
-	case "night", "clock", "slideshow", "photoevery", "screenlang", "newtimer", "sleep", "timezone", "wakeword", "waketone":
+	case "night", "clock", "slideshow", "photoevery", "screenlang", "newtimer", "sleep", "sunrise",
+		"timezone", "wakeword", "waketone":
 		d.openPicker(id)
 	}
 }

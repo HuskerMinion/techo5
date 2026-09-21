@@ -19,6 +19,11 @@ type Alarms struct {
 
 	// Sound is what an alarm rings with, by name; empty is the first of the speaker's alarm sounds.
 	Sound string `json:"sound,omitempty"`
+
+	// SunriseMinutes is how long before an alarm the screen starts to light, nothing for not at all.
+	// The light comes up from almost nothing to the brightness the screen is set to, so the room is
+	// lit before the sound starts.
+	SunriseMinutes int `json:"sunrise_minutes,omitempty"`
 }
 
 // Alarm is one alarm set on the device.
@@ -127,6 +132,10 @@ func (w AlarmsWriter) SnoozeMinutes(n int) error {
 }
 
 // Sound sets what alarms ring with, by name.
+func (w AlarmsWriter) SunriseMinutes(n int) error {
+	return w.st.Update(func(c *Config) { c.Alarms.SunriseMinutes = n })
+}
+
 func (w AlarmsWriter) Sound(name string) error {
 	return w.st.Update(func(c *Config) { c.Alarms.Sound = name })
 }

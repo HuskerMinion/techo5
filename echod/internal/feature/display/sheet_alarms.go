@@ -58,6 +58,7 @@ func alarmsCard(sv sheetView) cardView {
 	}
 	v.rows = append(v.rows, timerRows(sv)...)
 	return v.withRows(
+		settingRow{id: "sunrise", label: "Wake with light", sub: sunriseSub(), kind: ctlChoice, value: sunriseValue()},
 		settingRow{id: "snooze", label: "Snooze length", kind: ctlStepper, value: fmt.Sprintf("%d min", sv.snooze)},
 		settingRow{id: "alarmsound", label: "Alarm sound", sub: "Plays once when you choose it", kind: ctlChoice, value: alarm.Get().Sound()},
 	)
