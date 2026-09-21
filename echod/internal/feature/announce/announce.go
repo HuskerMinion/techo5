@@ -270,7 +270,7 @@ func (f *Feature) Speak(ctx context.Context) {
 	}()
 	f.Changed.Emit(struct{}{})
 
-	voice := record(ctx, finish)
+	voice := level(record(ctx, finish))
 	speaker.Sound().Interject(func(p *speaker.Player) { p.Chime(promptLevel, confirm...) })
 	if len(voice) == 0 {
 		slog.Info("nothing was said, so nothing was announced")

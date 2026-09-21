@@ -3,6 +3,7 @@ package announce
 import (
 	"context"
 	"log/slog"
+	"math"
 	"time"
 
 	"github.com/HuskerMinion/techo5/echod/internal/hardware/mic"
@@ -121,4 +122,77 @@ func trim(said []int16) []int16 {
 		return nil
 	}
 	return said[:end]
+}
+
+// How a recording is levelled before it is sent.
+//
+// The live gain in front of the microphone is set for what speech recognition needs, not for
+// playing back in another room: a clip can leave here peaking forty decibels below full scale, which
+// is perfectly good for a recognizer and far too quiet to hear over a kitchen. It adapts slowly too,
+// so the first seconds of a short recording are the quietest part of it.
+//
+// None of that matters once the whole clip is in hand. The peak and the loudness are exactly
+// measurable, so the gain is worked out in one go rather than estimated as it goes.
+const (
+	// wantRMS is how loud the result should be on average, and ceiling how close to full scale its
+	// loudest sample may come. Speech peaks well above its own average, so both are needed: the
+	// average is what carries across a room and the peak is what clips.
+	wantRMS = -20.0
+	ceiling = -3.0
+
+	// mostLift bounds it. A recording of an empty room is mostly noise, and enough gain would make
+	// that noise sound like a fault; anything needing more than this was too quiet to save.
+	mostLift = 30.0
+)
+
+// level brings a recording up to something that can be heard in another room.
+func level(said []int16) []int16 {
+	if len(said) == 0 {
+		return said
+	}
+
+	var peak float64
+	var sum float64
+	for _, s := range said {
+		v := float64(s)
+		if a := math.Abs(v); a > peak {
+			peak = a
+		}
+		sum += v * v
+	}
+	if peak == 0 {
+		return said
+	}
+	rms := math.Sqrt(sum / float64(len(said)))
+
+	const full = 32767.0
+	gain := math.Pow(10, mostLift/20)
+	if rms > 0 {
+		gain = math.Min(gain, full*math.Pow(10, wantRMS/20)/rms)
+	}
+	// The peak decides what the gain can actually be, whatever the average asks for. This is also the
+	// one case where the gain comes out below one, for a recording that arrived too hot to play.
+	gain = math.Min(gain, full*math.Pow(10, ceiling/20)/peak)
+
+	if gain >= 0.999 && gain <= 1.001 {
+		return said
+	}
+	slog.Info("announcement levelled",
+		"gain_db", math.Round(20*math.Log10(gain)*10)/10,
+		"was_peak_dbfs", math.Round(20*math.Log10(peak/full)*10)/10,
+		"was_rms_dbfs", math.Round(20*math.Log10(math.Max(rms, 1)/full)*10)/10)
+
+	for i, s := range said {
+		v := float64(s) * gain
+		// Clamped rather than wrapped: a sample over the top is a click in every room, and the gain
+		// above should already have made this unreachable.
+		switch {
+		case v > full:
+			v = full
+		case v < -full:
+			v = -full
+		}
+		said[i] = int16(v)
+	}
+	return said
 }
