@@ -46,3 +46,4 @@ func (c *Camera) Snapshot(ctx context.Context) (*Frame, error) { return nil, err
 func (c *Camera) Last() *Frame                                 { return nil }
 func (c *Camera) Running() bool                                { return false }
 func (f *Frame) Full() *image.RGBA                             { return f.RGBA }
+func (f *Frame) Image() *image.RGBA                            { return f.RGBA }

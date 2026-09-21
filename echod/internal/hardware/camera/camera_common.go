@@ -20,14 +20,36 @@ import (
 // OV02B10, camera_spot.go for the Spot's GC0312) supply open, the device's stream and autoExpose,
 // convert and Frame.Full, and the tone a frame was levelled with.
 
-// Frame is one picture.
+// Frame is one picture. Nothing is developed until somebody asks: the sensor hands over more
+// frames than anything on the network or the screen keeps up with, and a frame that is dropped
+// should cost no more than the copy that kept it.
 type Frame struct {
-	Seq  uint64
-	At   time.Time
-	RGBA *image.RGBA // Width x Height
+	Seq uint64
+	At  time.Time
 
-	raw  []byte // the sensor's frame as it came, for Full
-	tone tone   // white balance and level, as the half-size picture used them
+	mu    sync.Mutex
+	raw   []byte // the sensor's frame as it came
+	rgba  *image.RGBA
+	tone  tone
+	toned bool
+}
+
+// Image is the frame as a Width x Height picture, developed once however many ask for it.
+func (f *Frame) Image() *image.RGBA {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if f.rgba == nil && f.raw != nil {
+		f.rgba = render(f.raw, f.level())
+	}
+	return f.rgba
+}
+
+// level is the tone the frame was measured at, with f.mu held.
+func (f *Frame) level() tone {
+	if !f.toned {
+		f.tone, f.toned = stats(f.raw), true
+	}
+	return f.tone
 }
 
 // Camera is the device. Get returns the one instance.
@@ -196,7 +218,7 @@ func (c *Camera) run(stop, stopped chan struct{}) {
 	defer close(stopped)
 	for {
 		if isMuted() {
-			c.emit(&Frame{At: time.Now(), RGBA: image.NewRGBA(image.Rect(0, 0, Width, Height))})
+			c.emit(&Frame{At: time.Now(), rgba: image.NewRGBA(image.Rect(0, 0, Width, Height))})
 			slog.Info("camera held off: muted")
 			for isMuted() {
 				select {
@@ -241,7 +263,6 @@ func (c *Camera) run(stop, stopped chan struct{}) {
 			}
 			f := &Frame{At: time.Now(), raw: make([]byte, len(bayer))}
 			copy(f.raw, bayer)
-			f.RGBA, f.tone = convert(f.raw)
 			c.emit(f)
 		})
 		<-watched

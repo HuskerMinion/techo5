@@ -44,11 +44,11 @@ func TestLevels(t *testing.T) {
 	for i := 0; i < sensorW*40; i++ {
 		raw[i] = 200
 	}
-	tn := levels(raw)
+	tn := stats(raw)
 	if tn.white < 150 {
 		t.Errorf("white point %d, want the bright rows near it", tn.white)
 	}
-	if dark := levels(rggb(2, 2, 2)); dark.white-dark.black < 24 {
+	if dark := stats(rggb(2, 2, 2)); dark.white-dark.black < 24 {
 		t.Errorf("a black frame spans %d..%d, want at least 24 levels", dark.black, dark.white)
 	}
 }

@@ -202,7 +202,8 @@ func (f *Feature) localFrames() {
 		}
 		select {
 		case fr := <-frames:
-			xdraw.ApproxBiLinear.Scale(dst, dst.Bounds(), fr.RGBA, fr.RGBA.Bounds(), xdraw.Src, nil)
+			src := fr.Image()
+			xdraw.ApproxBiLinear.Scale(dst, dst.Bounds(), src, src.Bounds(), xdraw.Src, nil)
 			shown := image.NewRGBA(dst.Bounds())
 			copy(shown.Pix, dst.Pix)
 			f.mu.Lock()

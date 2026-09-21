@@ -28,7 +28,7 @@ func pack(value func(x, y int) uint16) []byte {
 func TestPackRoundTrips(t *testing.T) {
 	raw := pack(func(x, y int) uint16 { return uint16((x*7 + y*13) % 1024) })
 	px := make([]uint16, sensorW)
-	for _, y := range []int{0, 1, 599, 1199} {
+	for _, y := range []int{0, 1, sensorH / 2, sensorH - 1} {
 		unpackLine(raw[y*bytesPerLine:(y+1)*bytesPerLine], px)
 		for x := 0; x < sensorW; x++ {
 			if want := uint16((x*7 + y*13) % 1024); px[x] != want {
@@ -45,12 +45,14 @@ func TestMeterFlatScene(t *testing.T) {
 	}
 }
 
-// backlit is a bright window across the top half, a dim face in the middle, a room around it.
+// backlit is a bright window across the top half, a dim face in the middle, a room around it,
+// in eighths and twelfths of whichever sensor this build has.
 func backlit(x, y int) uint16 {
+	fx, fy := x*8/sensorW, y*12/sensorH
 	switch {
-	case x > 600 && x < 1000 && y > 400 && y < 900:
+	case fx >= 3 && fx < 5 && fy >= 4 && fy < 9:
 		return 120 // the face
-	case y < 600:
+	case fy < 6:
 		return 1010 // the window
 	default:
 		return 200
@@ -121,7 +123,7 @@ func TestConvertLiftsABacklitFace(t *testing.T) {
 	if tn.gamma >= gammaNormal {
 		t.Fatalf("gamma %.3f, want steeper than normal for a backlit frame", tn.gamma)
 	}
-	face := img.RGBAAt(400, 320).G // the middle of the face, in the 800x600 picture
+	face := img.RGBAAt(Width/2, Height*8/15).G // the middle of the face
 	old := tone{gainR: tn.gainR, gainB: tn.gainB, white: tn.white, gamma: gammaNormal}
 	oldFace := old.tables()[1][240]
 	t.Logf("face green %d, with the fixed curve %d; gamma %.3f white %d gains %.2f %.2f", face, oldFace, tn.gamma, tn.white, tn.gainR, tn.gainB)

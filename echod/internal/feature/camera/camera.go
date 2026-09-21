@@ -62,7 +62,7 @@ func (f *Feature) register() {
 func cameraOpen() bool { return config.Get().Security.Camera && camera.Available() }
 
 func encode(f *camera.Frame) ([]byte, error) {
-	return encodeImage(f.RGBA)
+	return encodeImage(f.Image())
 }
 
 // encodeFull is a still at the sensor's own size.
