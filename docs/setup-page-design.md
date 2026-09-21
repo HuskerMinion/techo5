@@ -114,9 +114,26 @@ Every write is logged as what changed, never with a secret's value.
 - **A session ends seven minutes after the last request**, so typing keeps it alive and an abandoned
   page closes itself.
 
-## Still open
+- **The page shows what is set now**, including a SIP username when there is one. Getting this far
+  took a press on the device, so the page may say what it is editing. A password is never shown.
+- **A Dot out of the box has to be able to join a network by itself.** The page needs a network to be
+  reachable, so this is Bluetooth provisioning (or a hotspot), and it is the piece that makes a fresh
+  Dot usable by somebody who was handed one. Until it is built, a Dot's first network still comes
+  from the installer over USB.
 
-1. **Should the page show the current values of anything sensitive?** Showing a SIP username is
-   convenient; showing it to whoever is on the network is a choice. The password is never shown.
-2. **Where does a fresh Dot with no network stand?** The page needs a network to be reachable;
-   Bluetooth provisioning is the answer, and it is a separate piece of work.
+## Built so far
+
+- The web port is its own feature, so a Dot has one at all.
+- Setup mode: off by default, opened from Privacy on the screen, from Home Assistant, or by holding
+  the action button; closes seven minutes after the last request, or an hour after opening.
+- A press on the device lets one waiting browser in. Asking five times with no press stops being
+  allowed for ten minutes. The screen and the Spot's face say when a browser is asking.
+- The page writes the **time zone** and **Wi-Fi**: it scans, adds a network keeping the ones already
+  saved, and forgets one on request.
+
+## Still to build
+
+- Radio favorites and the SIP account, which arrive with the local radio (M2).
+- The device's name: it is set at install because Home Assistant knows the device by it, so changing
+  it is more than a form field.
+- Bluetooth provisioning, for the Dot that has no network yet.
