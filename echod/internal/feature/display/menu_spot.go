@@ -458,6 +458,16 @@ func (r *roundRenderer) icon(id itemID, s roundScene, x, y, u, w float64, c colo
 			r.line(x+0.62*u*math.Sin(a), y-0.62*u*math.Cos(a), x+0.95*u*math.Sin(a), y-0.95*u*math.Cos(a), w*1.6, c)
 		}
 		r.ringAt(x, y, 0.62*u-w/2, 0.62*u+w/2, 0, 2*math.Pi, c)
+	case itemAnnounce:
+		// A mast putting something out. The mic belongs to Talk and Mute and the speaker to Volume,
+		// so this is neither: announcing is the one thing here that leaves the device.
+		r.line(x, y-0.46*u, x-0.42*u, y+0.92*u, w, c)
+		r.line(x, y-0.46*u, x+0.42*u, y+0.92*u, w, c)
+		r.line(x-0.26*u, y+0.38*u, x+0.26*u, y+0.38*u, w, c)
+		r.ringAt(x, y-0.46*u, 0, 0.13*u, 0, 2*math.Pi, c)
+		for _, rad := range []float64{0.5, 0.8} {
+			r.ringAt(x, y-0.46*u, rad*u-w/2, rad*u+w/2, 1.68*math.Pi, 2.32*math.Pi, c)
+		}
 	case itemSleep:
 		r.moonIcon(x, y, u, w, c)
 	}
