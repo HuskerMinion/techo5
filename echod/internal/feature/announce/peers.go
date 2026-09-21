@@ -51,8 +51,12 @@ func Peers() []Peer {
 }
 
 // Run advertises this device and keeps the list of the others.
+//
+// The advertiser is started once however many times Run is called. Run is supervised and restarts
+// on an error, and the advertiser outlives it — it stops with ctx, not with Run — so starting one
+// per call stacked up a second and a third registration of the same device on the network.
 func (f *Feature) Run(ctx context.Context) error {
-	go f.advertise(ctx)
+	f.once.Do(func() { go f.advertise(ctx) })
 	for {
 		f.browse(ctx)
 		select {
@@ -129,14 +133,17 @@ func (f *Feature) browse(ctx context.Context) {
 
 	look, cancel := context.WithTimeout(ctx, browseFor)
 	defer cancel()
+	// Browse owns the channel: it blocks until the look ends and closes it on the way out. Closing it
+	// here as well is a second close, which panics, and the panic landed before the list below was
+	// ever assigned — so every device decided it was the only one in the house and played its own
+	// announcements to itself. The supervisor caught it and restarted the feature every few seconds,
+	// which is why nothing looked broken from outside.
 	if err := zeroconf.Browse(look, service, domain, found); err != nil {
-		slog.Debug("announce: looking for the other devices failed", "err", err)
-		close(found)
+		slog.Warn("announce: looking for the other devices failed", "err", err)
+		closeQuietly(found)
 		<-done
 		return
 	}
-	<-look.Done()
-	close(found)
 	<-done
 
 	peers.Lock()
@@ -146,6 +153,17 @@ func (f *Feature) browse(ctx context.Context) {
 	if len(heard) != was {
 		slog.Info("announce: other devices in the house", "count", len(heard))
 	}
+}
+
+// closeQuietly closes a channel that may already be closed.
+//
+// It is only for the failing Browse above. Browse closes the channel when it got far enough to own
+// it and leaves it open when it did not — a socket it could not bind — and which of those happened
+// is not visible from out here. Leaving it open strands the goroutine reading it; closing it blind
+// is the panic this whole feature was losing itself to.
+func closeQuietly(ch chan *zeroconf.ServiceEntry) {
+	defer func() { _ = recover() }()
+	close(ch)
 }
 
 func nameOf(e *zeroconf.ServiceEntry) string {

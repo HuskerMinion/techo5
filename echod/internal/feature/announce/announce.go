@@ -78,6 +78,9 @@ type Message struct {
 type Feature struct {
 	action *esphome.Action
 
+	// once guards the advertiser, which outlives any one call to Run.
+	once sync.Once
+
 	mu    sync.Mutex
 	last  Message
 	until time.Time
@@ -86,6 +89,11 @@ type Feature struct {
 	// screen and the ring to say so: a microphone that is open and does not look it is the thing
 	// people mind most.
 	recording bool
+
+	// cancel throws the recording in progress away and finish ends it and keeps it. Both are nil
+	// when nothing is being recorded, so Finish and Cancel are safe to call at any time.
+	cancel context.CancelFunc
+	finish chan struct{}
 
 	// Changed fires when something arrives or stops showing, or when this device starts or stops
 	// recording one, so the screen redraws and the ring follows.
@@ -238,9 +246,16 @@ func (f *Feature) Speak(ctx context.Context) {
 		return
 	}
 
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
+	finish := make(chan struct{})
+
 	f.mu.Lock()
 	busy := f.recording
-	f.recording = true
+	if !busy {
+		f.recording = true
+		f.cancel, f.finish = cancel, finish
+	}
 	f.mu.Unlock()
 	if busy {
 		slog.Info("already recording an announcement")
@@ -249,18 +264,44 @@ func (f *Feature) Speak(ctx context.Context) {
 	defer func() {
 		f.mu.Lock()
 		f.recording = false
+		f.cancel, f.finish = nil, nil
 		f.mu.Unlock()
 		f.Changed.Emit(struct{}{})
 	}()
 	f.Changed.Emit(struct{}{})
 
-	voice := record(ctx)
+	voice := record(ctx, finish)
 	speaker.Sound().Interject(func(p *speaker.Player) { p.Chime(promptLevel, confirm...) })
 	if len(voice) == 0 {
 		slog.Info("nothing was said, so nothing was announced")
 		return
 	}
 	f.send(Message{Voice: voice})
+}
+
+// Finish ends the recording now and sends what was said, for somebody who has said their piece and
+// does not want to stand there waiting to be timed out. Cancel ends it and throws it away.
+//
+// Both do nothing when nothing is being recorded. Between them they are the way off the recording
+// screen: without one there was none, and the only way out was to stop talking and wait.
+func (f *Feature) Finish() {
+	f.mu.Lock()
+	ch := f.finish
+	f.finish = nil // a second Finish would close a closed channel
+	f.mu.Unlock()
+	if ch != nil {
+		close(ch)
+	}
+}
+
+// Cancel stops the recording and keeps none of it.
+func (f *Feature) Cancel() {
+	f.mu.Lock()
+	cancel := f.cancel
+	f.mu.Unlock()
+	if cancel != nil {
+		cancel()
+	}
 }
 
 // Recording is whether this device is taking an announcement now, for the screen and the ring to say
