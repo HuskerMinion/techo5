@@ -91,6 +91,7 @@ func categoryRows(sv sheetView) (rows []settingRow, note string) {
 				value: fmt.Sprintf("%.2f", config.Get().Wake.Slot(0).Threshold)},
 			{id: "waketone", label: "Wake sound", kind: ctlChoice, value: config.Get().Wake.Slot(0).Tone.Label()},
 			{id: "sleep", label: "Sleep timer", sub: sleepSub(), kind: ctlChoice, value: sleepValue()},
+			{id: "quiet", label: "Quiet hours", sub: quietSub(), kind: ctlChoice, value: quietValue()},
 			{id: "bass", label: "Bass", sub: toneSub(), kind: ctlStepper, value: toneValue(config.Get().Speaker.Bass)},
 			{id: "treble", label: "Treble", kind: ctlStepper, value: toneValue(config.Get().Speaker.Treble)},
 			{id: "sendspin", label: "Music Assistant player", sub: "Play music in sync with other rooms", kind: ctlToggle, on: st.sendspin},
@@ -354,6 +355,8 @@ func pickerFor(id string, sv sheetView) (pickerView, bool) {
 		return pickerView{title: "New timer", opts: timerLabels, cur: -1}, true
 	case "sleep":
 		return pickerView{title: "Sleep timer", opts: sleepLabels(), cur: sleepIndex()}, true
+	case "quiet":
+		return pickerView{title: "Quiet hours", opts: quietLabels(), cur: quietIndex()}, true
 	case "sunrise":
 		return pickerView{title: "Wake with light", opts: sunriseLabels(), cur: sunriseIndex()}, true
 	case "timezone":
@@ -433,6 +436,8 @@ func (d *Display) choose(id string, i int) {
 		}
 	case "sleep":
 		chooseSleep(i)
+	case "quiet":
+		chooseQuiet(i)
 	case "sunrise":
 		chooseSunrise(i)
 	case "timezone":

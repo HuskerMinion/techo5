@@ -56,6 +56,7 @@ type Player struct {
 	// asp is the driver's tuning: on applies it, off sends the signal as it came.
 	asp          *esphome.Switch
 	bass, treble *esphome.Number
+	quiet        *esphome.Select
 
 	// nearMiss ducks a playing track for a few seconds after a wake word that nearly fired, so the
 	// next try is heard; see feature/detect/nearmiss.go.
@@ -194,11 +195,12 @@ func build() *Player {
 			},
 		},
 	}
+	p.quiet = newQuiet()
 	p.layers = noiseLayers()
 
 	// The player itself stays on the device: it is what people reach for. These are how it behaves.
 	bases := []*esphome.Base{&p.resampling.Base, &p.onTurn.Base, &p.duck.Base, &p.jack.Base, &p.asp.Base,
-		&p.bass.Base, &p.treble.Base, &p.nearMiss.Base}
+		&p.bass.Base, &p.treble.Base, &p.quiet.Base, &p.nearMiss.Base}
 	for _, sel := range p.layers {
 		bases = append(bases, &sel.Base)
 	}
@@ -301,7 +303,8 @@ func build() *Player {
 func (p *Player) Name() string { return "media player" }
 
 func (p *Player) Entities() []esphome.Entity {
-	out := []esphome.Entity{p.mp, p.jack, p.resampling, p.onTurn, p.duck, p.asp, p.bass, p.treble, p.nearMiss, p.sleep.sel}
+	out := []esphome.Entity{p.mp, p.jack, p.resampling, p.onTurn, p.duck, p.asp, p.bass, p.treble,
+		p.quiet, p.nearMiss, p.sleep.sel}
 	for _, sel := range p.layers {
 		out = append(out, sel)
 	}
@@ -329,6 +332,7 @@ func (p *Player) Restore(c config.Config) {
 	p.asp.Set(settled)
 	slog.Info("restored", "what", p.asp.ObjectID, "using", settled, "asked", want)
 
+	restoreQuiet(p.quiet, c)
 	p.bass.Set(float32(c.Speaker.Bass))
 	p.treble.Set(float32(c.Speaker.Treble))
 	p.applyTone()

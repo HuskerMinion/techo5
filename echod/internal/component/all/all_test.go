@@ -82,6 +82,7 @@ var registered = []string{
 	"phone_hangup",
 	"phone_peer",
 	"purge_cache",
+	"quiet_hours",
 	"radio_temperature",
 	"reply_buffer_1",
 	"reply_buffer_2",
