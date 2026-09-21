@@ -49,11 +49,11 @@ Rules that go with it:
 - **A press is not a login.** It cannot be replayed: the pending request has a nonce, it expires with
   the sixty seconds, and it is forgotten once used.
 - **Setup mode is off by default**, turned on from the device's own screen (Settings → Privacy), from
-  Home Assistant where there is one, and — on a Dot — by holding the action button, since there is
-  nowhere else to ask.
-- **It turns itself off.** Fifteen minutes from being switched on, or five from the last request,
-  whichever is sooner. A page left open for a year is a different thing from a page open while you
-  set a device up.
+  Home Assistant, and — on a Dot — by holding the action button, since there is nowhere else to ask.
+  The Home Assistant switch is deliberate: a Dot across the house is otherwise a walk. An automation
+  can therefore open the page, but not get into it, because the press still gates entry.
+- **It turns itself off** seven minutes after the last request — typing counts, so a page being used
+  stays open — and in any case an hour after it was switched on.
 
 ## What it may write, and what it may never touch
 
@@ -105,16 +105,18 @@ Every write is logged as what changed, never with a secret's value.
 - **Too many attempts** to authorize are refused for a while, and the refusal is logged.
 - **A restart forgets sessions.** That is a feature, not a limitation worth fixing.
 
-## Open questions
+## Decided
 
-1. **Does the setup switch need to be in Home Assistant at all?** It is genuinely useful for a Dot
-   across the house. It is also a way to open the page from an automation, which is exactly what the
-   press is meant to prevent — the press still gates entry, so it may be fine.
-2. **How long should a session last** when the page is being used for a long job, like typing in a
-   dozen radio stations? Five minutes idle may be too short and rude.
-3. **Should the page show the current values of anything sensitive?** Showing a SIP username is
+- **The switch is in Home Assistant as well as on the device.** A Dot across the house is otherwise a
+  walk to reach.
+- **A Dot opens setup by holding the action button.** It has no screen to ask from. Anyone in the room
+  can hold it, which is the same trust a device on a shelf already carries.
+- **A session ends seven minutes after the last request**, so typing keeps it alive and an abandoned
+  page closes itself.
+
+## Still open
+
+1. **Should the page show the current values of anything sensitive?** Showing a SIP username is
    convenient; showing it to whoever is on the network is a choice. The password is never shown.
-4. **Does a Dot get the hold-to-open shortcut?** It is the only way in on a device with no screen,
-   and it is also a button anyone can hold.
-5. **Where does a fresh Dot with no network stand?** The page needs a network; Bluetooth
-   provisioning is the answer, and it is a separate piece of work.
+2. **Where does a fresh Dot with no network stand?** The page needs a network to be reachable;
+   Bluetooth provisioning is the answer, and it is a separate piece of work.
