@@ -24,6 +24,9 @@ type Alarms struct {
 	// The light comes up from almost nothing to the brightness the screen is set to, so the room is
 	// lit before the sound starts.
 	SunriseMinutes int `json:"sunrise_minutes,omitempty"`
+
+	// SunriseFace draws the sun with a face on it, which is a matter of taste rather than of waking up.
+	SunriseFace bool `json:"sunrise_face,omitempty"`
 }
 
 // Alarm is one alarm set on the device.
@@ -134,6 +137,10 @@ func (w AlarmsWriter) SnoozeMinutes(n int) error {
 // Sound sets what alarms ring with, by name.
 func (w AlarmsWriter) SunriseMinutes(n int) error {
 	return w.st.Update(func(c *Config) { c.Alarms.SunriseMinutes = n })
+}
+
+func (w AlarmsWriter) SunriseFace(on bool) error {
+	return w.st.Update(func(c *Config) { c.Alarms.SunriseFace = on })
 }
 
 func (w AlarmsWriter) Sound(name string) error {

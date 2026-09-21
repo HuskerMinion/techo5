@@ -121,6 +121,11 @@ type scene struct {
 	// setupAsking is a browser waiting to be let into the setup page. It is said on the screen so
 	// that a request for a press is never something only the browser knows about.
 	setupAsking bool
+
+	// sunrise is how far the light before an alarm has come, 0 to 1, and sunriseFace whether the sun
+	// is drawn with a face on it.
+	sunrise     float64
+	sunriseFace bool
 }
 
 // renderer draws scenes onto one canvas. Faces are made once: parsing a font is cheap, but
@@ -243,7 +248,11 @@ func (r *renderer) draw(s scene) {
 		r.cornerClock(s)
 		r.words(s.heard, s.reply, 70)
 	default:
-		if s.slideshowScreensaver != nil {
+		if s.sunrise > 0 {
+			// The light before an alarm takes the whole screen: the panel is the lamp in the room, and
+			// a screen filled with warm colour is worth more than the backlight on its own.
+			r.sunrisePage(s, s.sunrise, s.sunriseFace)
+		} else if s.slideshowScreensaver != nil {
 			r.slideshowScreensaverPage(s)
 		} else if s.nowPlaying {
 			r.nowPlaying(s)

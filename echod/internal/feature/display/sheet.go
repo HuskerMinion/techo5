@@ -538,6 +538,10 @@ func (d *Display) rowTap(id string, p part, opt int) {
 		security.Get().SetCamera(!config.Get().Security.Camera)
 	case "screenweb":
 		security.Get().SetScreen(!config.Get().Security.Screen)
+	case "sunface":
+		if err := config.Set().Alarms().SunriseFace(!config.Get().Alarms.SunriseFace); err != nil {
+			slog.Warn("saving the sun's face failed", "err", err)
+		}
 	case "setuppage":
 		if setup.Get().On() {
 			setup.Get().Close()

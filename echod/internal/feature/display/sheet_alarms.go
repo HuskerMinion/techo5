@@ -57,8 +57,15 @@ func alarmsCard(sv sheetView) cardView {
 		v.rows = append(v.rows, settingRow{label: "No alarms yet", sub: "Add one here, or from Home Assistant", kind: ctlValue})
 	}
 	v.rows = append(v.rows, timerRows(sv)...)
+	rows := []settingRow{
+		{id: "sunrise", label: "Wake with light", sub: sunriseSub(), kind: ctlChoice, value: sunriseValue()},
+	}
+	if config.Get().Alarms.SunriseMinutes > 0 {
+		rows = append(rows, settingRow{id: "sunface", label: "Sun with a face",
+			sub: "A face on it, for whoever has to look at it", kind: ctlToggle, on: config.Get().Alarms.SunriseFace})
+	}
+	v.rows = append(v.rows, rows...)
 	return v.withRows(
-		settingRow{id: "sunrise", label: "Wake with light", sub: sunriseSub(), kind: ctlChoice, value: sunriseValue()},
 		settingRow{id: "snooze", label: "Snooze length", kind: ctlStepper, value: fmt.Sprintf("%d min", sv.snooze)},
 		settingRow{id: "alarmsound", label: "Alarm sound", sub: "Plays once when you choose it", kind: ctlChoice, value: alarm.Get().Sound()},
 	)
