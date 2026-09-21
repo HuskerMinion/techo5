@@ -198,15 +198,74 @@ Then:
   `token`.
 - **Weather**: Home Assistant's own forecast by default. To show another weather entity, use the
   settings screen (General, Weather), the "Weather source" select, or `esphome.<device>_home_weather`.
-- **Radio**: with the token, the drawer (swipe in from the right edge of the clock, Radio) lists
-  stations near home and popular ones, from the Radio
-  Browser integration Home Assistant sets up on its own (add it under Devices & services if it is
-  missing). Your own favorites can be wired with `esphome.<device>_home_radio`.
+- **Radio**: three ways to get stations onto the device, none of which needs the others. See
+  [Radio](#radio) below.
 - **Security**: SSH, and the camera and screen pages on port 8181, have switches on the settings
   screen (Privacy) and in Home Assistant. SSH keys only come from Home Assistant (`esphome.<device>_ssh_keys`).
 - **Updates**: the firmware update entity installs new releases into the other slot, reboots, and
   falls back if the new slot does not settle.
 - The old Android integrations for the unit (ShowAssist, the View Assist companion) can be deleted.
+
+## Radio
+
+There are three places a station can come from. Any of them works on its own.
+
+**1. Radio Browser (needs the Home Assistant token).** On a Show, swipe in from the right edge of
+the clock and choose Radio; on a Spot, turn the dial to Radio. The device lists stations near home
+and popular ones, from the Radio Browser integration Home Assistant sets up by itself. If it is
+missing, add it under Devices & services. "Near home" is worked out from the location set in Home
+Assistant, so set that if the list looks like somebody else's country.
+
+**2. Stations kept on the device (needs nothing at all).** Open the setup page (Settings, Privacy,
+Setup page) and add a station as a name and the address of its stream. The device plays these
+itself, so they work with Home Assistant switched off, which is the point of them. Only an `http` or
+`https` address is kept. They appear under Radio as "On this device", beside the lists that need
+Home Assistant.
+
+  On a Dot these can be typed on the setup page but not yet started: the radio page belongs to the
+  screen, and a Dot has none. Ask it for music through Home Assistant until that is fixed.
+
+**3. Your own favorites in Home Assistant.** If you already have an input_select of stations and a
+script that plays one, wire them up with the `esphome.<device>_home_radio` action:
+
+| Argument | What it is |
+|---|---|
+| `stations` | `input_select` entities whose options are station names, comma separated, listed in that order |
+| `now` | an entity whose state names the station playing, shown on the screen while it plays |
+| `service` | the script that plays a station, e.g. `script.radio_play_on_speaker` |
+| `field` | the script's station argument (default `station`) |
+| `speaker_field` | the script's argument for which speaker to play on |
+| `speaker` | this device's media player entity, if the device should not work it out itself |
+
+The device calls that script with the station name and its own media player entity, and the script
+decides what to play. A script of two lines is enough:
+
+```yaml
+radio_play_on_speaker:
+  fields:
+    station: {}
+    speaker: {}
+  variables:
+    urls:
+      "KXYZ 101.1": "https://stream.example.org/kxyz"
+      "The Mountain": "https://stream.example.org/mountain"
+  sequence:
+    - action: media_player.play_media
+      target: { entity_id: "{{ speaker }}" }
+      data:
+        media_content_type: music
+        media_content_id: "{{ urls[station] }}"
+```
+
+**Nothing to set up for the audio itself.** Home Assistant transcodes a stream for the device
+through its own ESPHome proxy, which is part of that integration: the URLs in the log with
+`/api/esphome/ffmpeg_proxy/` in them are its doing, and there is nothing to install or configure.
+
+**If the stream is dropped.** Those proxy streams end by themselves sometimes: after five minutes,
+or thirteen, with no pattern. The device notices and asks for the station again three seconds later.
+It will do that three times in ten minutes and then leave it off, since a station that will not stay
+up is not going to. The log says `the stream ended by itself, putting it back on`. Music starting
+again on its own is this, not a fault.
 
 ## Troubleshooting
 
