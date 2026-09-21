@@ -90,6 +90,12 @@ type Player struct {
 	stale  atomic.Bool
 	mono   []float32
 
+	// tone is the listener's own shelves, waiting to be picked up: the chain belongs to the write
+	// loop, so a setting changed from anywhere else is left here and applied there. applied is what
+	// the chain is carrying now, and is the write loop's alone.
+	tone    atomic.Value // asp.Tone
+	applied asp.Tone
+
 	// fed is whether the last block had anything in it, and belongs to the write loop alone.
 	fed bool
 
@@ -435,6 +441,10 @@ func (p *Player) fill(buf []byte) {
 	// dial is picks the one it meant.
 	if tuned {
 		p.chain.Volume(float64(p.step.Load()) / VolumeSteps)
+		if want, ok := p.tone.Load().(asp.Tone); ok && want != p.applied {
+			p.chain.SetTone(want)
+			p.applied = want
+		}
 	}
 
 	gain := p.Volume()
@@ -581,6 +591,16 @@ func (p *Player) SetASP(on bool) bool {
 	}
 	p.on.Store(on)
 	return on
+}
+
+// SetTone hands the write loop the listener's own shelves. It is the tuning's own stage, so it does
+// nothing on a device playing untuned — there is no chain to put it in.
+func (p *Player) SetTone(t asp.Tone) { p.tone.Store(t) }
+
+// Tone is what the shelves are set to.
+func (p *Player) Tone() asp.Tone {
+	t, _ := p.tone.Load().(asp.Tone)
+	return t
 }
 
 // ASP reports whether the driver tuning is being applied.

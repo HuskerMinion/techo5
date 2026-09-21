@@ -154,6 +154,7 @@ func (t *Tuning) Bucket(of float64) int {
 // envelopes, so it belongs to whoever is playing and is not safe for concurrent use.
 type Chain struct {
 	tuning *Tuning
+	tone   *tone
 	fir    *fir
 	comp   *mbclState
 }
@@ -172,7 +173,7 @@ func (t *Tuning) Chain(block int) (*Chain, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &Chain{tuning: t, fir: newFIR(t.filters, block), comp: comp}, nil
+	return &Chain{tuning: t, tone: newTone(Tone{}, Rate), fir: newFIR(t.filters, block), comp: comp}, nil
 }
 
 // Volume tells the chain what fraction of full volume is playing, so it uses the filter the vendor
@@ -180,9 +181,14 @@ func (t *Tuning) Chain(block int) (*Chain, error) {
 // more treble, which is the loudness compensation the tuning exists for.
 func (c *Chain) Volume(of float64) { c.fir.use(c.tuning.Bucket(of)) }
 
+// SetTone puts the listener's own shelves in front of the tuning, or takes them out. It is called
+// between blocks, from whoever owns the chain.
+func (c *Chain) SetTone(t Tone) { c.tone = newTone(t, Rate) }
+
 // Process applies the tuning to one block in place. Samples are full scale at ±1, which is what the
 // compressor's thresholds are in dB of.
 func (c *Chain) Process(x []float32) {
+	c.tone.process(x)
 	c.fir.process(x)
 	c.comp.process(x)
 }
@@ -191,6 +197,7 @@ func (c *Chain) Process(x []float32) {
 // though it were the first. A chain that stopped being used has a history of whatever was playing
 // then, and starting from silence is better than smearing that across what is playing now.
 func (c *Chain) Reset() {
+	c.tone.reset()
 	c.fir.reset()
 	c.comp.reset()
 }

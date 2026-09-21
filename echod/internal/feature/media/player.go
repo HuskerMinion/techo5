@@ -21,6 +21,7 @@ import (
 	"github.com/HuskerMinion/techo5/echod/internal/hardware/buttons"
 	"github.com/HuskerMinion/techo5/echod/internal/hardware/led"
 	"github.com/HuskerMinion/techo5/echod/internal/hardware/speaker"
+	"github.com/HuskerMinion/techo5/echod/internal/lib/asp"
 	"github.com/HuskerMinion/techo5/echod/internal/lib/hook"
 	"github.com/HuskerMinion/techo5/echod/internal/lib/noise"
 	"github.com/HuskerMinion/techo5/echod/internal/lib/safe"
@@ -53,7 +54,8 @@ type Player struct {
 	duck       *esphome.Number
 
 	// asp is the driver's tuning: on applies it, off sends the signal as it came.
-	asp *esphome.Switch
+	asp          *esphome.Switch
+	bass, treble *esphome.Number
 
 	// nearMiss ducks a playing track for a few seconds after a wake word that nearly fired, so the
 	// next try is heard; see feature/detect/nearmiss.go.
@@ -158,6 +160,26 @@ func build() *Player {
 				Category: esphome.CategoryConfig,
 			},
 		},
+		bass: &esphome.Number{
+			Base: esphome.Base{
+				ObjectID: "bass",
+				Name:     "Bass",
+				Icon:     "mdi:tune-vertical",
+				Category: esphome.CategoryConfig,
+			},
+			Min: -asp.ToneRange, Max: asp.ToneRange, Step: 1, Unit: "dB",
+			Mode: esphome.NumberBox,
+		},
+		treble: &esphome.Number{
+			Base: esphome.Base{
+				ObjectID: "treble",
+				Name:     "Treble",
+				Icon:     "mdi:tune-vertical",
+				Category: esphome.CategoryConfig,
+			},
+			Min: -asp.ToneRange, Max: asp.ToneRange, Step: 1, Unit: "dB",
+			Mode: esphome.NumberBox,
+		},
 		nearMiss: &esphome.Switch{
 			Base: esphome.Base{
 				ObjectID: "duck_on_near_miss",
@@ -171,7 +193,7 @@ func build() *Player {
 
 	// The player itself stays on the device: it is what people reach for. These are how it behaves.
 	bases := []*esphome.Base{&p.resampling.Base, &p.onTurn.Base, &p.duck.Base, &p.jack.Base, &p.asp.Base,
-		&p.nearMiss.Base}
+		&p.bass.Base, &p.treble.Base, &p.nearMiss.Base}
 	for _, sel := range p.layers {
 		bases = append(bases, &sel.Base)
 	}
@@ -229,6 +251,22 @@ func build() *Player {
 			slog.Error("saving the ducking level failed", "err", err)
 		}
 	}
+	// The tone control is the tuning's own stage, so what it is set to is kept whether or not the
+	// tuning is on: a device that cannot tune today still remembers what somebody asked for.
+	p.bass.OnCommand = func(v float32) {
+		p.bass.Set(v)
+		if err := config.Set().Speaker().Bass(float64(v)); err != nil {
+			slog.Error("saving a setting failed", "setting", p.bass.ObjectID, "err", err)
+		}
+		p.applyTone()
+	}
+	p.treble.OnCommand = func(v float32) {
+		p.treble.Set(v)
+		if err := config.Set().Speaker().Treble(float64(v)); err != nil {
+			slog.Error("saving a setting failed", "setting", p.treble.ObjectID, "err", err)
+		}
+		p.applyTone()
+	}
 	p.stream = NewStream(speaker.Sound(), speaker.Get(), p.refresh)
 
 	// Volume acts on every tap and on every repeat, so a held button ramps.
@@ -258,7 +296,7 @@ func build() *Player {
 func (p *Player) Name() string { return "media player" }
 
 func (p *Player) Entities() []esphome.Entity {
-	out := []esphome.Entity{p.mp, p.jack, p.resampling, p.onTurn, p.duck, p.asp, p.nearMiss, p.sleep.sel}
+	out := []esphome.Entity{p.mp, p.jack, p.resampling, p.onTurn, p.duck, p.asp, p.bass, p.treble, p.nearMiss, p.sleep.sel}
 	for _, sel := range p.layers {
 		out = append(out, sel)
 	}
@@ -285,6 +323,17 @@ func (p *Player) Restore(c config.Config) {
 	settled := speaker.Get().SetASP(want)
 	p.asp.Set(settled)
 	slog.Info("restored", "what", p.asp.ObjectID, "using", settled, "asked", want)
+
+	p.bass.Set(float32(c.Speaker.Bass))
+	p.treble.Set(float32(c.Speaker.Treble))
+	p.applyTone()
+	slog.Info("restored", "what", "tone", "bass", c.Speaker.Bass, "treble", c.Speaker.Treble)
+}
+
+// applyTone hands the speaker what the two numbers say.
+func (p *Player) applyTone() {
+	c := config.Get().Speaker
+	speaker.Get().SetTone(asp.Tone{Bass: c.Bass, Treble: c.Treble})
 }
 
 // onTurns is what music may do about a turn.

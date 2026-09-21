@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/HuskerMinion/techo5/echod/internal/config"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/media"
 )
 
@@ -81,4 +82,21 @@ func chooseSleep(i int) {
 		return
 	}
 	media.Get().Sleep().Set(sleepChoices[i])
+}
+
+// toneValue is a shelf as the row shows it: plain zero rather than "0 dB", since flat is the tuning
+// as it was made and not an adjustment of nothing.
+func toneValue(db float64) string {
+	if db == 0 {
+		return "Flat"
+	}
+	return fmt.Sprintf("%+.0f dB", db)
+}
+
+// toneSub says what the pair of them are for, on the first of the two rows.
+func toneSub() string {
+	if !config.Get().Speaker.ASPWanted() {
+		return "Needs Speaker EQ, which is off"
+	}
+	return "Adjusts the speaker tuning to the room"
 }

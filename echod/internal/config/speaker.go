@@ -11,6 +11,11 @@ type Speaker struct {
 	// quiet.go for what that does and does not cover.
 	QuietHours string `json:"quiet_hours,omitempty"`
 
+	// Bass and Treble are the listener's own shelves in dB, zero for the tuning as the vendor left
+	// it. They apply only while the tuning is on, since they are a stage of it (lib/asp/tone.go).
+	Bass   float64 `json:"bass,omitempty"`
+	Treble float64 `json:"treble,omitempty"`
+
 	// ASPChosen is whether anybody ever set ASP themselves. Without it a saved false cannot be told
 	// from a device that was never able to tune: every unit that ran a build whose tuning would not
 	// load had false written back to it by the settling below, and would stay untuned for ever after
@@ -48,6 +53,14 @@ func (w SpeakerWriter) Resampling(v Resampling) error {
 
 func (w SpeakerWriter) QuietHours(v string) error {
 	return w.st.Update(func(c *Config) { c.Speaker.QuietHours = v })
+}
+
+func (w SpeakerWriter) Bass(v float64) error {
+	return w.st.Update(func(c *Config) { c.Speaker.Bass = v })
+}
+
+func (w SpeakerWriter) Treble(v float64) error {
+	return w.st.Update(func(c *Config) { c.Speaker.Treble = v })
 }
 
 // ASPWanted is what the tuning should be set to: what somebody chose, or the default until somebody
