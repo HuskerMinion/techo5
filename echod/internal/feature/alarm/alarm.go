@@ -88,6 +88,11 @@ type Alarms struct {
 	snooze *esphome.Button
 	claim  *led.Claim
 
+	// sun is the ring while the light before an alarm comes up, under a ringing alarm and over
+	// everything quieter; lighting is whether it is showing anything.
+	sun      *led.Claim
+	lighting bool
+
 	// sound and snoozeFor are the ring's settings in Home Assistant; the screen sets them too.
 	sound     *esphome.Select
 	snoozeFor *esphome.Number
@@ -114,6 +119,7 @@ func build() *Alarms {
 	a := &Alarms{
 		next:  &esphome.TextSensor{Base: esphome.Base{ObjectID: "next_alarm", Name: "Next alarm", Icon: "mdi:alarm"}},
 		claim: led.Get().Claim(led.PriorityAlarm),
+		sun:   led.Get().Claim(led.PriorityTimer),
 		wake:  make(chan struct{}, 1),
 	}
 	a.stop = &esphome.Button{Base: esphome.Base{ObjectID: "alarm_stop", Name: "Stop alarm", Icon: "mdi:alarm-off"}, OnPress: func() {
@@ -231,6 +237,10 @@ func (a *Alarms) Run(ctx context.Context) error {
 		wait := look
 		if _, at, ok := soonest(a.sources(now), now); ok && time.Until(at) < wait {
 			wait = max(time.Until(at), 50*time.Millisecond)
+		}
+		// The light before an alarm is repainted often enough that it rises rather than steps.
+		if a.sunriseRing(now) {
+			wait = min(wait, sunriseEvery)
 		}
 		select {
 		case <-ctx.Done():

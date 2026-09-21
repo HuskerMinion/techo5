@@ -5,7 +5,6 @@ package display
 import (
 	"fmt"
 	"log/slog"
-	"math"
 	"time"
 
 	"github.com/HuskerMinion/techo5/echod/internal/config"
@@ -19,37 +18,12 @@ import (
 // runs. Nothing about the alarm itself changes: this is the light before it, and the alarm rings as
 // it always did.
 
-// sunriseFloor is where the ramp starts, as a fraction of the screen's brightness: enough to see the
-// clock in a dark room and not enough to wake anybody by itself.
-const sunriseFloor = 0.02
+// The curve and the window are the alarm feature's, so that a device with a ring and no screen lights
+// the room the same way (feature/alarm/sunrise.go).
 
-// sunriseProgress is how far into the light we are: 0 outside it, rising to 1 as the alarm's time
-// arrives. A snoozed alarm does not light the room again — it was already light the first time.
-func sunriseProgress(now time.Time) float64 {
-	mins := config.Get().Alarms.SunriseMinutes
-	if mins <= 0 {
-		return 0
-	}
-	next := alarm.Get().View(now).Next
-	if next == nil || next.Snoozed {
-		return 0
-	}
-	window := time.Duration(mins) * time.Minute
-	left := next.At.Sub(now)
-	if left <= 0 || left > window {
-		return 0
-	}
-	return 1 - float64(left)/float64(window)
-}
+func sunriseProgress(now time.Time) float64 { return alarm.Get().SunriseProgress(now) }
 
-// sunriseLevel is the fraction of the screen's brightness the ramp asks for, eased so that most of
-// the change happens near the end rather than the moment it starts.
-func sunriseLevel(progress float64) float64 {
-	if progress <= 0 {
-		return 0
-	}
-	return sunriseFloor + (1-sunriseFloor)*math.Pow(math.Min(progress, 1), 2)
-}
+func sunriseLevel(progress float64) float64 { return alarm.SunriseLevel(progress) }
 
 // The Wake with light row's choices.
 var sunriseChoices = []int{0, 5, 10, 15, 20, 30}
