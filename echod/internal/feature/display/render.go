@@ -19,6 +19,7 @@ import (
 
 	"github.com/HuskerMinion/techo5/echod/internal/config"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/alarm"
+	"github.com/HuskerMinion/techo5/echod/internal/feature/announce"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/btaudio"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/home"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/media"
@@ -118,6 +119,17 @@ type scene struct {
 	// the footer so a folder that went away is visible rather than silently retried.
 	slideshowTrouble string
 
+	// announceReady is whether this house has a word set, without which announcements go nowhere;
+	// announceRecording whether this device has its microphone open for one now; announcePeers how
+	// many other devices are listening for them.
+	announceReady     bool
+	announceRecording bool
+	announcePeers     int
+
+	// announcement is one that arrived and is still being shown, with showAnnouncement saying so.
+	announcement     announce.Message
+	showAnnouncement bool
+
 	// setupAsking is a browser waiting to be let into the setup page. It is said on the screen so
 	// that a request for a press is never something only the browser knows about.
 	setupAsking bool
@@ -214,6 +226,18 @@ func (r *renderer) draw(s scene) {
 		}
 		return
 	}
+	// The two strips sit over whatever is on the screen rather than taking it: the clock, the music
+	// and the photos all carry on behind them. A call and a ringing alarm are above them, since both
+	// are waiting on somebody.
+	defer func() {
+		switch {
+		case s.announceRecording:
+			r.recordingStrip(s)
+		case s.showAnnouncement:
+			r.announcementStrip(s)
+		}
+	}()
+
 	if s.showSheet {
 		r.settingsScreen(s)
 		if s.showVolume {

@@ -41,6 +41,7 @@ import (
 	"github.com/HuskerMinion/techo5/echod/internal/component"
 	"github.com/HuskerMinion/techo5/echod/internal/config"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/alarm"
+	"github.com/HuskerMinion/techo5/echod/internal/feature/announce"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/btaudio"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/hastate"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/home"
@@ -723,6 +724,9 @@ func (d *Display) act(id itemID) {
 	case itemTalk:
 		d.locked(d.closeMenu)
 		voice.Get().Action()
+	case itemAnnounce:
+		d.locked(d.closeMenu)
+		go announce.Get().Speak(context.Background())
 	case itemCall:
 		d.locked(func() {
 			d.openMenu(modeContacts, "")
@@ -1009,6 +1013,10 @@ func (d *Display) frame() time.Duration {
 	// still standing in it. It was set only on the idle page once, and the press could not be given
 	// without leaving settings first.
 	s.setupAsking = setup.Get().Waiting()
+	s.announceReady = config.Get().Home.HouseWord != ""
+	s.announceRecording = announce.Get().Recording()
+	s.announcePeers = len(announce.Peers())
+	s.announcement, s.showAnnouncement = announce.Get().Showing()
 
 	if boring {
 		s.slideshow = home.Get().SlideshowBackground()

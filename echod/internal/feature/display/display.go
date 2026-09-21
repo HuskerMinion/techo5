@@ -32,6 +32,7 @@ import (
 	"github.com/HuskerMinion/techo5/echod/internal/component"
 	"github.com/HuskerMinion/techo5/echod/internal/config"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/alarm"
+	"github.com/HuskerMinion/techo5/echod/internal/feature/announce"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/btaudio"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/hastate"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/home"
@@ -1133,6 +1134,14 @@ func (d *Display) frame() time.Duration {
 	// still standing in it. It was set only on the idle page once, and the press could not be given
 	// without leaving settings first.
 	s.setupAsking = setup.Get().Waiting()
+
+	// The announcement state is read every frame like the setup page's, for the same reason: the
+	// drawer's button, the page an arriving one puts up and the line that says this microphone is
+	// open all have to be right wherever the screen happens to be.
+	s.announceReady = config.Get().Home.HouseWord != ""
+	s.announceRecording = announce.Get().Recording()
+	s.announcePeers = len(announce.Peers())
+	s.announcement, s.showAnnouncement = announce.Get().Showing()
 
 	if boring {
 		s.slideshow = home.Get().SlideshowBackground()

@@ -87,8 +87,13 @@ type Feature struct {
 	// people mind most.
 	recording bool
 
-	// Changed fires when something arrives or stops showing, so the screen redraws.
+	// Changed fires when something arrives or stops showing, or when this device starts or stops
+	// recording one, so the screen redraws and the ring follows.
 	Changed hook.Hook[struct{}]
+
+	// Arrived fires once for each announcement taken, carrying it, for anything that wants the event
+	// rather than the state: the ring's flash, and anything later that wants to keep them.
+	Arrived hook.Hook[Message]
 }
 
 var (
@@ -168,6 +173,8 @@ func (f *Feature) show(m Message) {
 	f.mu.Lock()
 	f.last, f.until = m, time.Now().Add(shows)
 	f.mu.Unlock()
+
+	f.Arrived.Emit(m)
 
 	quiet := config.Quiet()
 	slog.Info("announcement", "from", m.From, "words", m.Text != "", "seconds", seconds(m.Voice), "quiet", quiet)

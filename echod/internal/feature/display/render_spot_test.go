@@ -14,6 +14,7 @@ import (
 
 	"github.com/HuskerMinion/techo5/echod/internal/config"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/alarm"
+	"github.com/HuskerMinion/techo5/echod/internal/feature/announce"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/home"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/phone"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/timer"
@@ -107,6 +108,12 @@ func TestRoundScenesDraw(t *testing.T) {
 		"menu-timers":       {now: at, phase: "idle", menuOpen: true, menuMode: modeMain, menuSel: 6, menuRot: restFor(6, len(mainItems)) + 0.3, timers: []timer.Countdown{{Left: 272 * time.Second, Total: 600 * time.Second, Active: true}}},
 		"jog-volume":        {now: at, phase: "idle", menuOpen: true, menuMode: modeVolume, volume: 14, maxVolume: 30},
 		"setup-ask":         {now: at, phase: "idle", setupAsking: true},
+		"announcement":      {now: at, phase: "idle", showAnnouncement: true, announcement: announce.Message{From: "Terry's Desk", Text: "dinner is ready, come down"}},
+		"announcement-voice": {now: at, phase: "idle", showAnnouncement: true,
+			announcement: announce.Message{From: "Laundry Room"}},
+		"announce-recording": {now: at, phase: "idle", announceRecording: true, announcePeers: 3},
+		"menu-announce": {now: at, phase: "idle", menuOpen: true, menuMode: modeMain,
+			menuSel: 8, menuRot: restFor(8, len(mainItems)), announceReady: true, announcePeers: 3},
 		"settings-general":  spotScene(catGeneral),
 		"settings-tzpick":   spotPicker(catGeneral, "timezone"),
 		"settings-tzcommon": spotPicker(catGeneral, "timezone:Common"),

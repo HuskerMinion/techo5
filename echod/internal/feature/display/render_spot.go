@@ -18,6 +18,7 @@ import (
 	"golang.org/x/image/math/fixed"
 
 	"github.com/HuskerMinion/techo5/echod/internal/config"
+	"github.com/HuskerMinion/techo5/echod/internal/feature/announce"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/home"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/phone"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/timer"
@@ -122,6 +123,15 @@ type roundScene struct {
 	// slideshowTrouble is why the slideshow has no photo, once it has given up looking.
 	slideshowTrouble string
 
+	// announceReady is whether this house has a word set, announceRecording whether this device is
+	// taking an announcement now, announcePeers how many others are listening, and announcement one
+	// that arrived and is still showing.
+	announceReady     bool
+	announceRecording bool
+	announcePeers     int
+	announcement      announce.Message
+	showAnnouncement  bool
+
 	// setupAsking is a browser waiting to be let into the setup page, said on the face so that a
 	// request for a press is never something only the browser knows about.
 	setupAsking bool
@@ -185,6 +195,16 @@ func (r *roundRenderer) draw(s roundScene) {
 	// it. Under a call and under a ringing alarm, both of which are somebody already being answered.
 	if s.setupAsking {
 		r.setupAskFace(s)
+		return
+	}
+	// This device taking an announcement, then one that arrived: both take the face, since a circle
+	// has no corner to put them in. Under a call and under a ringing alarm, which wait on somebody.
+	if s.announceRecording {
+		r.recordingFace(s)
+		return
+	}
+	if s.showAnnouncement {
+		r.announceFace(s)
 		return
 	}
 	if s.sheetOpen {

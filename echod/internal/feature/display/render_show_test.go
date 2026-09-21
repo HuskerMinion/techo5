@@ -11,6 +11,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/HuskerMinion/techo5/echod/internal/feature/announce"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/home"
 	"github.com/HuskerMinion/techo5/echod/internal/lib/hass"
 )
@@ -42,6 +43,13 @@ func TestShowScenesDraw(t *testing.T) {
 			radio: home.Radio{Now: "KXYZ 101.1", Title: "Take It Easy", Artist: "Eagles"}},
 		"weather":   {now: at, phase: "idle", weather: sky, forecast: week, showWeather: true},
 		"setup-ask": {now: at, phase: "idle", weather: sky, setupAsking: true},
+		"announcement": {now: at, phase: "idle", weather: sky, showAnnouncement: true,
+			announcement: announce.Message{From: "Kitchen", Text: "dinner is ready"}},
+		"announcement-voice": {now: at, phase: "idle", weather: sky, showAnnouncement: true,
+			announcement: announce.Message{From: "Laundry Room"}},
+		"announce-recording": {now: at, phase: "idle", weather: sky, announceRecording: true, announcePeers: 3},
+		"announce-drawer": {now: at, phase: "idle", weather: sky, showDrawer: true,
+			drawerTab: drawerAnnounce, announceReady: true, announcePeers: 3},
 		"settings-sound": {now: at, phase: "idle", showSheet: true,
 			sheet: settings{cat: catSound, volume: 15, wakeWord: "Okay Nabu"}},
 		"settings-sound-tone": {now: at, phase: "idle", showSheet: true,

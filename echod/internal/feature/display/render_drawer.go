@@ -22,11 +22,12 @@ const (
 	// drawerEdge is how far from the right edge a leftward swipe has to start to open the drawer.
 	drawerEdge = 240
 
-	drawerCameras = 0
-	drawerRadio   = 1
+	drawerCameras  = 0
+	drawerRadio    = 1
+	drawerAnnounce = 2
 )
 
-var drawerTabs = []string{"Cameras", "Radio"}
+var drawerTabs = []string{"Cameras", "Radio", "Announce"}
 
 func (r *renderer) drawer(s scene) {
 	fc := faces()
@@ -40,10 +41,10 @@ func (r *renderer) drawer(s scene) {
 	r.roundHighlight(panel, cardRad)
 
 	// Cameras | Radio, a segmented switch with the open one raised.
-	seg := image.Rect(panel.Min.X+22, panel.Min.Y+18, panel.Min.X+22+320, panel.Min.Y+64)
+	seg := image.Rect(panel.Min.X+22, panel.Min.Y+18, panel.Min.X+22+400, panel.Min.Y+64)
 	r.roundFill(seg, 23, surface(1), surface(1))
 	r.roundStroke(seg, 23, 1, ember)
-	half := seg.Dx() / 2
+	half := seg.Dx() / len(drawerTabs)
 	for i, name := range drawerTabs {
 		b := image.Rect(seg.Min.X+i*half+4, seg.Min.Y+4, seg.Min.X+(i+1)*half-4, seg.Max.Y-4)
 		fg, face := lerp(dim, cream, 0.3), fc.nav
@@ -95,6 +96,9 @@ func (r *renderer) drawer(s scene) {
 
 // drawerRows are the open tab's rows, and a note to show when it has none.
 func drawerRows(s scene) ([]settingRow, string) {
+	if s.drawerTab == drawerAnnounce {
+		return announceRows(s)
+	}
 	if s.drawerTab == drawerCameras {
 		if len(s.cameras) == 0 {
 			return nil, "No cameras yet. Add them with the home_cameras action in Home Assistant."

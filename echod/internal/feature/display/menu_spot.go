@@ -57,6 +57,7 @@ const (
 	itemWeather  itemID = "weather"
 	itemCamera   itemID = "camera"
 	itemTimers   itemID = "timers"
+	itemAnnounce itemID = "announce"
 	itemSettings itemID = "settings"
 	itemSleep    itemID = "sleep"
 )
@@ -76,6 +77,7 @@ var mainItems = []menuItem{
 	{itemWeather, color.RGBA{255, 196, 64, 255}},
 	{itemCamera, color.RGBA{60, 203, 127, 255}},
 	{itemTimers, color.RGBA{255, 176, 32, 255}},
+	{itemAnnounce, color.RGBA{255, 122, 89, 255}},
 	{itemSettings, color.RGBA{176, 150, 255, 255}},
 	{itemSleep, color.RGBA{120, 140, 255, 255}},
 }
@@ -231,6 +233,8 @@ func itemName(s roundScene, id itemID) string {
 		return "Camera"
 	case itemTimers:
 		return "Timers"
+	case itemAnnounce:
+		return "Announce"
 	case itemSettings:
 		return "Settings"
 	case itemSleep:
@@ -249,6 +253,16 @@ func itemHint(s roundScene, id itemID) string {
 	switch id {
 	case itemTalk:
 		return "tap to ask"
+	case itemAnnounce:
+		switch {
+		case s.announceRecording:
+			return "speak now"
+		case !s.announceReady:
+			return "needs a house word"
+		case s.announcePeers > 0:
+			return "heard on " + devicesText(s.announcePeers)
+		}
+		return "say it in every room"
 	case itemCall:
 		switch {
 		case !s.phoneReady:

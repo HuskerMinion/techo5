@@ -106,6 +106,8 @@ func (d *Display) drawerRowTap(id string) {
 		return
 	}
 	switch kind {
+	case "announce":
+		d.announceTap()
 	case "cam":
 		if cams := home.Get().Cameras(); i < len(cams) {
 			d.closeDrawer()
