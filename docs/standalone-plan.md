@@ -6,7 +6,47 @@ could work without Home Assistant at all — a clock radio with timers and alarm
 Show is worth reflashing to someone who does not run Home Assistant, and so that an outage leaves a
 useful device rather than a clock.
 
-Nothing here is started. It is written to be argued with.
+It was written to be argued with, and it was. What follows is the plan as it stands after that
+argument and after most of it shipped; **Where this stands** says which parts are done, which are
+half-done, and which were dropped on purpose.
+
+## Where this stands
+
+Checked in the code, 2026-09-21, against releases v0.7.11 / v0.4.8 / v0.5.8.
+
+**Done and released.** M1 timers, M2 radio without Home Assistant (stations kept on the device), M3
+the setup page, M4 the time zone. With them: multi-network Wi-Fi, renaming, the diagnostics bundle,
+the sleep timer, and the sunrise alarm on all three devices. A Dot can also start and stop the radio
+kept on it with two taps of the action button, and any device can play a station from the setup page
+before it is saved.
+
+**Half-done, and the worst state to leave anything in.** `feature/announce` is written — the
+endpoint, the house word, mDNS discovery, the chime, the quiet-hours check — and **nothing imports
+it**, so its registration never runs and none of it is reachable. It has no way in either: nothing
+sends an announcement, nothing shows one arriving, and the house word cannot be set. **Quiet hours**
+are in the same state by dependency: `config.Quiet()` exists and announce is its only reader, so
+today they are two functions nobody calls. Finishing announce is what makes both real, and it is
+first in the order below.
+
+**Also unfinished:** the setup page still says the phone account belongs on it and it is not there,
+which is where a SIP password should be typed rather than on a five-inch screen. The first-run card
+exists but only dismisses itself; it does not yet offer *set this up on its own*.
+
+**Dropped on purpose, so nobody starts them again without asking.**
+
+- *The time or the weather on a button press.* The screen already says both, and the narrow case it
+  was for — a dead pipeline, or somebody who cannot read the screen — did not carry it.
+- *Presence published to Home Assistant.* The sensing underneath is still wanted for the screen
+  waking as somebody approaches; what was dropped is the occupancy entity.
+- *The vendor beamformer on a Show or a Spot.* Not an unfinished port: the Show's two microphones sit
+  too close together for beamforming to buy anything (porting-plan.md, "averaging or beamforming mics
+  this close buys nothing"), so one mic with AEC and NS is the end state there. The vendor's
+  beamformer is the Dot's array, and the Dot uses it.
+
+**The order agreed for what is left:** announce, then the intercom (which reuses announce's peers and
+trust), the red clock at night, rollback from the screen, Bluetooth audio as a sink, the screen
+waking as somebody approaches, a BLE button as local control, Bluetooth provisioning for the Dot,
+M5, then "Help" as a wake word, and the smoke alarm last as research rather than a feature.
 
 ## What already stands alone
 
@@ -229,7 +269,8 @@ Each of these stands on its own and none of them blocks anything else.
 - **A first-run screen.** Today a device comes up expecting Home Assistant. If any of this lands,
   first boot should offer *set this up on its own* beside *connect it to Home Assistant*, and the
   installer should be able to skip printing a key nobody is going to paste anywhere.
-- **The time, or the weather, on a button press.** No pipeline, no wake word, no cloud: press the
+- ~~**The time, or the weather, on a button press.**~~ **Dropped.** The screen says both already.
+  No pipeline, no wake word, no cloud: press the
   action button and hear it. The device has no speech of its own — the alarm sounds are synthesized
   notes, not recordings — so this means either a handful of clips built into the image or a small
   local voice. Useful to anyone who cannot read the screen, and it works during an outage.
@@ -278,10 +319,11 @@ lost in a conversation.
 - **Going back to the previous version from the screen.** The A/B slots already hold the last good
   root filesystem and `slotctl` can switch them. A button for it means a bad update does not need a
   serial console and a PC.
-- **Presence from hardware that is already running.** The BLE proxy sees phones, the camera sees
-  motion, the microphones hear a room. An occupancy sensor published to Home Assistant, computed
-  locally, with no extra hardware and nothing leaving the house.
-- **The screen waking as someone approaches**, off the same signal. No utility at all; people love it.
+- ~~**Presence from hardware that is already running.**~~ **Dropped as an entity.** The BLE proxy
+  sees phones, the camera sees motion, the microphones hear a room; what was not wanted is an
+  occupancy sensor published to Home Assistant. The sensing itself is still needed, for:
+- **The screen waking as someone approaches**, off that same signal. No utility at all; people love
+  it. **In.** A Show or a Spot only — a Dot has no screen to wake.
 
 ## Non-goals
 
