@@ -3,6 +3,7 @@ package detect
 import (
 	"context"
 	"log/slog"
+	"time"
 
 	esphome "github.com/ygelfand/go-esphome-device"
 
@@ -70,10 +71,34 @@ func (d *Detect) loadAnnounce() {
 		"phrase", assets.AnnouncePhrase, "threshold", config.Get().Wake.Announce.Threshold)
 }
 
+// minGap is the least time between two announcements the wake word started.
+//
+// It is a circuit breaker rather than a considered interval. Devices in earshot of each other feed
+// each other: one announces, the others hear it, and whatever reasoning says that cannot happen has
+// now been wrong twice on real hardware. A house cannot talk to itself faster than this no matter
+// which of those arguments turns out to be wrong again, and fifteen seconds is longer than a
+// recording can run, so it costs nothing anybody would notice.
+//
+// Only the wake word is held back. The button on the screen and the action Home Assistant calls are
+// somebody asking on purpose, and being told to wait would be an answer to a question they did not
+// ask.
+const minGap = 15 * time.Second
+
 // heard is what the announce word does when it fires: open the microphone and send what is said to
 // the rest of the house. The recording, the tone that says it is listening and the sending are all
 // announce's own — this only decides that it should start.
 func (d *Detect) announceHeard() {
+	d.mu.Lock()
+	since := time.Since(d.lastAnnounce)
+	if since < minGap {
+		d.mu.Unlock()
+		slog.Info("announce word ignored: one was started here a moment ago",
+			"ago", since.Round(time.Second), "gap", minGap)
+		return
+	}
+	d.lastAnnounce = time.Now()
+	d.mu.Unlock()
+
 	if announce.Get().Recording() {
 		return // already listening; saying it twice does not start a second one
 	}

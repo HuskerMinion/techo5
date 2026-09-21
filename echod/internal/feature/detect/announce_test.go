@@ -3,6 +3,7 @@ package detect
 import (
 	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/HuskerMinion/techo5/echod/internal/config"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/detect/assets"
@@ -74,3 +75,23 @@ func TestTheModelIsThereToLoad(t *testing.T) {
 		t.Errorf("second call gave %s, want %s", again, path)
 	}
 }
+
+// The wake word cannot start announcements back to back.
+//
+// This is a circuit breaker, not a considered interval. Devices in earshot feed each other, and the
+// reasoning that said they could not has been wrong on real hardware twice: once when they answered
+// their own playback, and again after the hold-off that was supposed to stop it. A house cannot talk
+// to itself faster than this whichever argument turns out to be wrong next.
+func TestTheWakeWordCannotRepeatStraightAway(t *testing.T) {
+	if minGap < 5*time.Second {
+		t.Errorf("minGap is %v, which is not long enough to break a loop", minGap)
+	}
+	// Longer than a recording can run, so it never cuts off something somebody meant.
+	if minGap < longestRecording {
+		t.Errorf("minGap %v is shorter than a recording, so one could start inside another", minGap)
+	}
+}
+
+// longestRecording mirrors announce's ceiling; a copy, because importing it here for one number
+// would be a dependency for a test.
+const longestRecording = 15 * time.Second

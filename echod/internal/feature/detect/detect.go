@@ -35,6 +35,10 @@ type Detect struct {
 	stop     *esphome.Number
 	announce *esphome.Number
 
+	// mu guards lastAnnounce, which is when the wake word last started one. See minGap.
+	mu           sync.Mutex
+	lastAnnounce time.Time
+
 	// ducker gets the music out of the way after an utterance that nearly fired; see nearmiss.go.
 	ducker *ducker
 }
