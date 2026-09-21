@@ -446,6 +446,20 @@ func (d *Display) gesture(g touch.Gesture) {
 		return
 	}
 
+	// The microphone open for an announcement: the strip along the bottom is the way to end it, a tap
+	// sending what was said and a hold throwing it away. Only the strip — the rest of the screen is
+	// the clock and the music, which an announcement deliberately does not take over.
+	if announce.Get().Recording() && d.r != nil && onAnnounceStrip(g.X, g.Y, d.r.w, d.r.h) {
+		switch g.Kind {
+		case touch.Tap:
+			go announce.Get().Finish()
+		case touch.Hold:
+			go announce.Get().Cancel()
+		}
+		d.wake()
+		return
+	}
+
 	// The first-run card: any tap puts it away for good.
 	if !config.Get().Screen.Welcomed {
 		if g.Kind == touch.Tap {

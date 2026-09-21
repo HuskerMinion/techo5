@@ -47,7 +47,11 @@ var (
 // record plays the prompt, takes what is said, and hands it back at the microphone's rate. It
 // returns nothing when there was nothing to hear, which is somebody pressing the button and walking
 // away, and is not an announcement.
-func record(ctx context.Context) []int16 {
+//
+// It ends on whichever comes first: somebody stopping talking, the ceiling, a finish (the screen
+// saying that is the end of it) or ctx (the screen throwing it away). Finishing keeps what was
+// said; cancelling does not, which is the difference between changing your mind and being done.
+func record(ctx context.Context, finish <-chan struct{}) []int16 {
 	speaker.Sound().Interject(func(p *speaker.Player) { p.Chime(promptLevel, prompt...) })
 
 	frames, stop := mic.Get().Listen("announce")
@@ -63,6 +67,8 @@ func record(ctx context.Context) []int16 {
 		select {
 		case <-ctx.Done():
 			return nil
+		case <-finish:
+			return trim(said)
 		case <-deadline.C:
 			slog.Info("announcement recording reached the ceiling", "seconds", longest.Seconds())
 			return trim(said)

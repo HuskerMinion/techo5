@@ -45,7 +45,9 @@ func (r *roundRenderer) recordingFace(s roundScene) {
 	if s.announcePeers > 0 {
 		to = "heard on " + devicesText(s.announcePeers)
 	}
-	r.centred(r.small, to, 258, colDim)
+	r.centred(r.small, to, 254, colDim)
+	// The way out, said on the face: without it the only way off this screen was to wait.
+	r.centred(r.small, "tap to send · hold to cancel", 288, colDim)
 
 	// A ring just inside the bezel while it listens, so the state reads from across the room rather
 	// than only up close.

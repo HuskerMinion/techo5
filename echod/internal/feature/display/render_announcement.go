@@ -66,4 +66,13 @@ func (r *renderer) recordingStrip(s scene) {
 		to = "Goes to " + devicesText(s.announcePeers)
 	}
 	r.text(r.body, to, box.Min.X+rowIn+300, box.Min.Y+84, dim)
+	// The way out, said on the strip that owns it.
+	r.text(r.tiny, "TAP TO SEND  ·  HOLD TO CANCEL", box.Min.X+rowIn, box.Min.Y+112, dim)
+}
+
+// onAnnounceStrip is whether a finger landed on the strip, which is the only part of the screen an
+// announcement owns.
+func onAnnounceStrip(x, y, w, h int) bool {
+	top := h - announceBar - announceInset
+	return x >= announceInset && x <= w-announceInset && y >= top && y <= h-announceInset
 }

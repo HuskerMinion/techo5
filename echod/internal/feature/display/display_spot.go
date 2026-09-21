@@ -450,6 +450,19 @@ func (d *Display) gesture(g touch.Gesture) {
 		d.wake()
 		return
 	}
+	// The microphone open for an announcement: its face takes every gesture, because a face nobody
+	// can leave is one you have to wait out. A tap is "that is all of it" and sends what was said; a
+	// hold throws it away.
+	if announce.Get().Recording() {
+		switch g.Kind {
+		case touch.Tap:
+			go announce.Get().Finish()
+		case touch.Hold:
+			go announce.Get().Cancel()
+		}
+		d.wake()
+		return
+	}
 	d.mu.Lock()
 	sheet := d.sheetOpen
 	d.mu.Unlock()
