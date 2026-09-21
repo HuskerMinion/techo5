@@ -119,8 +119,10 @@ func TestCardScrolls(t *testing.T) {
 	r := testRenderer()
 	r.settingsScreen(s)
 	cardMax, _ := r.scrollLimits()
-	if want := 12*rowH - (r.h - 2*cardIn - headerH - 8); cardMax != want {
-		t.Fatalf("12 rows scroll %d, want %d", cardMax, want)
+	// However many rows the card has ended up with — alarms, the timers, and the settings under them.
+	rows := len(alarmsCard(s.view()).rows)
+	if want := rows*rowH - (r.h - 2*cardIn - headerH - 8); cardMax != want {
+		t.Fatalf("%d rows scroll %d, want %d", rows, cardMax, want)
 	}
 
 	s.sheet.cardScroll = cardMax + 500 // held to the end

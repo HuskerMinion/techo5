@@ -10,6 +10,7 @@ import (
 
 	"github.com/HuskerMinion/techo5/echod/internal/config"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/alarm"
+	"github.com/HuskerMinion/techo5/echod/internal/feature/timer"
 )
 
 // The settings screen's Alarms & Timers card: the alarms, then how they ring. A tap on an alarm opens
@@ -55,6 +56,7 @@ func alarmsCard(sv sheetView) cardView {
 	if len(v.rows) == 0 {
 		v.rows = append(v.rows, settingRow{label: "No alarms yet", sub: "Add one here, or from Home Assistant", kind: ctlValue})
 	}
+	v.rows = append(v.rows, timerRows(sv)...)
 	return v.withRows(
 		settingRow{id: "snooze", label: "Snooze length", kind: ctlStepper, value: fmt.Sprintf("%d min", sv.snooze)},
 		settingRow{id: "alarmsound", label: "Alarm sound", sub: "Plays once when you choose it", kind: ctlChoice, value: alarm.Get().Sound()},
@@ -65,6 +67,51 @@ func (v cardView) withRows(rows ...settingRow) cardView {
 	v.rows = append(v.rows, rows...)
 	return v
 }
+
+// timerRows are the Alarms & Timers card's timers: what is counting down now, then a row that sets
+// one. A timer set here can be stopped here; one from Home Assistant is stopped where it was set, so
+// it is shown and left alone.
+func timerRows(sv sheetView) []settingRow {
+	var rows []settingRow
+	for _, c := range sv.timers {
+		if !c.Active {
+			continue
+		}
+		where := "From Home Assistant"
+		if c.Local {
+			where = "Set here"
+		}
+		if c.Name != "" && c.Name != "Timer" {
+			where += " · " + c.Name
+		}
+		row := settingRow{id: "timer:" + c.ID, label: timerLeft(c.Left), sub: where, bold: true, kind: ctlValue, value: "Running"}
+		if c.Local {
+			row.kind, row.button, row.value = ctlButton, "Stop", ""
+		}
+		rows = append(rows, row)
+	}
+	// The row that sets one goes under whatever is already counting down.
+	return append(rows, settingRow{id: "newtimer", label: "New timer",
+		sub: "Rings from this device itself", kind: ctlButton, button: "Set"})
+}
+
+// timerLeft is how long a timer has to run, as the row says it: minutes and seconds under an hour,
+// hours and minutes over it.
+func timerLeft(d time.Duration) string {
+	d = d.Round(time.Second)
+	if d >= time.Hour {
+		return fmt.Sprintf("%d:%02d:%02d", int(d/time.Hour), int(d/time.Minute)%60, int(d/time.Second)%60)
+	}
+	return fmt.Sprintf("%d:%02d", int(d/time.Minute), int(d/time.Second)%60)
+}
+
+// The New timer row's choices.
+var (
+	timerLengths = []time.Duration{time.Minute, 2 * time.Minute, 3 * time.Minute, 5 * time.Minute,
+		10 * time.Minute, 15 * time.Minute, 20 * time.Minute, 30 * time.Minute, 45 * time.Minute, time.Hour}
+	timerLabels = []string{"1 minute", "2 minutes", "3 minutes", "5 minutes", "10 minutes", "15 minutes",
+		"20 minutes", "30 minutes", "45 minutes", "1 hour"}
+)
 
 // alarmEditorCard is one alarm being set. Its heading says when it will ring, so a change reads
 // back at once.
@@ -188,6 +235,11 @@ func (d *Display) editDraft(f func(*alarmDraft)) {
 // alarmRowTap is a tap on one of the Alarms card's rows, or the editor's; it reports whether the row
 // was one of theirs.
 func (d *Display) alarmRowTap(id string, p part, opt int) bool {
+	if key, ok := strings.CutPrefix(id, "timer:"); ok {
+		// Only the device's own stop here; Home Assistant's row has no button to tap.
+		timer.Get().Cancel(key)
+		return true
+	}
 	if key, ok := strings.CutPrefix(id, "alarm:"); ok {
 		for _, a := range config.Get().Alarms.List {
 			if a.ID != key {

@@ -24,6 +24,7 @@ import (
 	"github.com/HuskerMinion/techo5/echod/internal/feature/mute"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/security"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/sendspin"
+	"github.com/HuskerMinion/techo5/echod/internal/feature/timer"
 	"github.com/HuskerMinion/techo5/echod/internal/hardware/touch"
 	"github.com/HuskerMinion/techo5/echod/internal/layout"
 	"github.com/HuskerMinion/techo5/echod/internal/lib/wake"
@@ -457,7 +458,8 @@ func (d *Display) sheetView(now time.Time) sheetView {
 	if st.demo {
 		st.name, st.address, st.weather = "Kitchen", "192.168.1.50", "Home"
 	}
-	sv := sheetView{st: st, bt: btaudio.Get().State(), draft: draft, snooze: c.Alarms.Snooze(), now: now}
+	sv := sheetView{st: st, bt: btaudio.Get().State(), draft: draft, snooze: c.Alarms.Snooze(), now: now,
+		timers: timer.Get().List(now)}
 	switch st.cat {
 	case catAlarms:
 		sv.alarms = alarm.Get().View(now)

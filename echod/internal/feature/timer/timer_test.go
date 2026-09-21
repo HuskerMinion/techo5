@@ -232,3 +232,79 @@ func started(id string, seconds uint32) esphome.TimerEvent {
 		IsActive:     true,
 	}
 }
+
+// A timer set on the device is the same timer from here on: it counts down, it is listed, and it
+// rings from this clock rather than waiting to be told.
+func TestATimerSetHereCountsDownAndRings(t *testing.T) {
+	ts := build()
+	t.Cleanup(func() { ts.Stop() })
+
+	id := ts.Start("pasta", 10*time.Minute)
+	if id == "" {
+		t.Fatal("no timer started")
+	}
+	now := time.Now()
+	list := ts.List(now.Add(4 * time.Minute))
+	if len(list) != 1 {
+		t.Fatalf("listing %d timers, want 1", len(list))
+	}
+	if !list[0].Local {
+		t.Error("a timer set here is not marked as the device's own, so the screen cannot offer to stop it")
+	}
+	if got := list[0].Left.Round(time.Second); got != 6*time.Minute {
+		t.Errorf("%v left after four minutes of ten, want 6m", got)
+	}
+
+	ts.ripe(now.Add(9 * time.Minute))
+	if ts.Ringing() {
+		t.Fatal("ringing with a minute still to run")
+	}
+	ts.ripe(now.Add(10 * time.Minute))
+	if !ts.Ringing() {
+		t.Fatal("not ringing after it ran out")
+	}
+	if len(ts.held) != 0 {
+		t.Errorf("holding %d timers, want none: a finished one is gone", len(ts.held))
+	}
+}
+
+// Cancel is for the device's own timers. Home Assistant's are cancelled where they were set, and it
+// says so itself, so a tap here must not make the two disagree.
+func TestOnlyTheDevicesOwnTimersAreCancelledHere(t *testing.T) {
+	ts := build()
+	ts.Event(started("kettle", 180))
+	id := ts.Start("pasta", time.Minute)
+
+	if ts.Cancel("kettle") {
+		t.Error("cancelled a Home Assistant timer from the device")
+	}
+	if len(ts.held) != 2 {
+		t.Fatalf("holding %d timers, want both", len(ts.held))
+	}
+	if !ts.Cancel(id) {
+		t.Error("did not cancel the device's own timer")
+	}
+	if len(ts.held) != 1 {
+		t.Errorf("holding %d timers, want Home Assistant's alone", len(ts.held))
+	}
+}
+
+// One alarm covers however many timers went off, whoever set them.
+func TestOneRingCoversTimersFromBothSides(t *testing.T) {
+	ts := build()
+	t.Cleanup(func() { ts.Stop() })
+
+	now := time.Now()
+	ts.Start("pasta", time.Minute)
+	ts.ripe(now.Add(2 * time.Minute))
+	first, _ := ts.RingingName()
+
+	ts.Event(esphome.TimerEvent{
+		Type:    api.VoiceAssistantTimerEvent_VOICE_ASSISTANT_TIMER_FINISHED,
+		TimerID: "kettle",
+		Name:    "kettle",
+	})
+	if name, _ := ts.RingingName(); name != first {
+		t.Errorf("the ringing changed to %q when a second timer finished, want the first to hold", name)
+	}
+}

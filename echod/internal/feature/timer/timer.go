@@ -13,6 +13,7 @@ import (
 	"log/slog"
 	"math"
 	"slices"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -72,20 +73,23 @@ type Timers struct {
 	Changed hook.Hook[struct{}]
 }
 
-// Countdown is a timer as the screen shows it.
+// Countdown is a timer as the screen shows it. Local is one of the device's own, which the screen
+// may cancel; Home Assistant's are cancelled where they were set.
 type Countdown struct {
+	ID     string
 	Name   string
 	Left   time.Duration
 	Total  time.Duration
 	Active bool
+	Local  bool
 }
 
 // List is every timer, soonest running first and paused ones after.
 func (t *Timers) List(now time.Time) []Countdown {
 	t.mu.Lock()
 	out := make([]Countdown, 0, len(t.held))
-	for _, c := range t.held {
-		out = append(out, Countdown{Name: c.name, Left: c.remaining(now), Total: c.total, Active: c.active})
+	for id, c := range t.held {
+		out = append(out, Countdown{ID: id, Name: c.name, Left: c.remaining(now), Total: c.total, Active: c.active, Local: c.local})
 	}
 	t.mu.Unlock()
 	slices.SortFunc(out, func(a, b Countdown) int {
@@ -115,6 +119,10 @@ type timer struct {
 	left   time.Duration
 	at     time.Time
 	active bool
+
+	// local is a timer set on the device rather than by Home Assistant: it finishes here, from this
+	// clock, so it runs with Home Assistant away.
+	local bool
 }
 
 func (t *timer) remaining(now time.Time) time.Duration {
@@ -172,6 +180,7 @@ func (t *Timers) Run(ctx context.Context) error {
 			return ctx.Err()
 		case <-time.After(refresh):
 		}
+		t.ripe(time.Now())
 		t.show()
 	}
 }
@@ -180,6 +189,77 @@ func (t *Timers) counting() bool {
 	t.mu.Lock()
 	defer t.mu.Unlock()
 	return t.soonest(time.Now()) != nil
+}
+
+// localPrefix marks the ids of timers set on the device. Home Assistant's ids are its own and never
+// look like this.
+const localPrefix = "local:"
+
+// Start sets a timer of the device's own and returns its id. It counts down, shows and rings exactly
+// as one from Home Assistant does, because from here on it is the same timer.
+func (t *Timers) Start(name string, d time.Duration) string {
+	if d <= 0 {
+		return ""
+	}
+	id := localPrefix + strconv.FormatInt(time.Now().UnixNano(), 36)
+	t.mu.Lock()
+	t.held[id] = &timer{name: name, total: d, left: d, at: time.Now(), active: true, local: true}
+	t.mu.Unlock()
+	slog.Info("timer set here", "name", name, "for", d)
+
+	select {
+	case t.woke <- struct{}{}:
+	default:
+	}
+	t.show()
+	t.publish()
+	t.Changed.Emit(struct{}{})
+	return id
+}
+
+// Cancel drops one of the device's own timers. Home Assistant's are left alone: they are cancelled
+// where they were set, and it would tell us about that itself.
+func (t *Timers) Cancel(id string) bool {
+	if !strings.HasPrefix(id, localPrefix) {
+		return false
+	}
+	t.mu.Lock()
+	_, had := t.held[id]
+	delete(t.held, id)
+	t.mu.Unlock()
+	if !had {
+		return false
+	}
+	t.show()
+	t.publish()
+	t.Changed.Emit(struct{}{})
+	return true
+}
+
+// ripe finishes any of the device's own timers that have run out, since nothing else will tell us.
+// Home Assistant sends an event for its own, which is why only local ones are looked at here.
+func (t *Timers) ripe(now time.Time) {
+	t.mu.Lock()
+	var done []string
+	for id, c := range t.held {
+		if c.local && c.active && c.remaining(now) <= 0 {
+			done = append(done, id)
+		}
+	}
+	t.mu.Unlock()
+	for _, id := range done {
+		t.mu.Lock()
+		name := ""
+		if c := t.held[id]; c != nil {
+			name = c.name
+		}
+		delete(t.held, id)
+		t.mu.Unlock()
+		slog.Info("timer finished here", "name", name)
+		t.startRinging(cmp.Or(name, "Timer"))
+		t.publish()
+		t.Changed.Emit(struct{}{})
+	}
 }
 
 // Event is a timer event from Home Assistant.
@@ -289,13 +369,21 @@ func (t *Timers) forget(id string) {
 // many of them went off.
 func (t *Timers) finished(e esphome.TimerEvent) {
 	t.mu.Lock()
+	delete(t.held, e.TimerID)
+	t.mu.Unlock()
+	t.startRinging(cmp.Or(e.Name, "Timer"))
+}
+
+// startRinging rings for a timer that has run out, or joins the ringing already going: one alarm
+// covers however many of them went off, whoever set them.
+func (t *Timers) startRinging(name string) {
+	t.mu.Lock()
 	defer t.mu.Unlock()
 
-	delete(t.held, e.TimerID)
 	if t.stop != nil {
 		return
 	}
-	t.rang = cmp.Or(e.Name, "Timer")
+	t.rang = name
 
 	var ctx context.Context
 	ctx, t.stop = context.WithCancel(context.Background())

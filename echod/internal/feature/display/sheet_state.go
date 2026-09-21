@@ -13,6 +13,7 @@ import (
 	"github.com/HuskerMinion/techo5/echod/internal/feature/home"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/media"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/security"
+	"github.com/HuskerMinion/techo5/echod/internal/feature/timer"
 )
 
 // sheetVolumeSteps is how many steps the Volume row counts.
@@ -88,6 +89,9 @@ type sheetView struct {
 	snooze   int
 	now      time.Time
 	radio    home.Radio
+
+	// timers are what is counting down, the device's own and Home Assistant's alike, soonest first.
+	timers []timer.Countdown
 }
 
 // alarmDraft is an alarm being set in the Alarms card's editor: a new one, or a copy of one being changed.

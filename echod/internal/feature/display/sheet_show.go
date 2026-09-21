@@ -38,7 +38,7 @@ func (r *renderer) settingsScreen(s scene) {
 // view is what the scene gives the settings cards.
 func (s scene) view() sheetView {
 	return sheetView{st: s.sheet, security: s.security, bt: s.bt, alarms: s.alarms, draft: s.draft,
-		snooze: s.snooze, now: s.now, radio: s.radio}
+		snooze: s.snooze, now: s.now, radio: s.radio, timers: s.timers}
 }
 
 // themeRows are the Display card's rows for the theme.

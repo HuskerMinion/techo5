@@ -21,6 +21,7 @@ import (
 	"github.com/HuskerMinion/techo5/echod/internal/feature/mute"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/security"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/sendspin"
+	"github.com/HuskerMinion/techo5/echod/internal/feature/timer"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/voice"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/wakeword"
 	"github.com/HuskerMinion/techo5/echod/internal/hardware/speaker"
@@ -338,6 +339,8 @@ func pickerFor(id string, sv sheetView) (pickerView, bool) {
 		return pickerView{title: "Clock format", opts: clockOptions, cur: clockIndex()}, true
 	case "screenlang":
 		return pickerView{title: "Screen language", opts: langOptions, cur: langIndex()}, true
+	case "newtimer":
+		return pickerView{title: "New timer", opts: timerLabels, cur: -1}, true
 	case "slideshow":
 		return pickerView{title: "Slideshow", opts: slideshowOptions, cur: slideshowIndex()}, true
 	case "photoevery":
@@ -398,6 +401,10 @@ func (d *Display) choose(id string, i int) {
 	case "photoevery":
 		if i < len(everyDurations) {
 			home.Get().SetSlideshowEvery(everyDurations[i])
+		}
+	case "newtimer":
+		if i < len(timerLengths) {
+			timer.Get().Start("Timer", timerLengths[i])
 		}
 	case "screenlang":
 		if i < len(langCodes) {
@@ -541,7 +548,7 @@ func (d *Display) rowTap(id string, p part, opt int) {
 	case "subfolders":
 		_, _, subfolders := home.Get().SlideshowSettings()
 		home.Get().SetSlideshowSubfolders(!subfolders)
-	case "night", "clock", "slideshow", "photoevery", "screenlang", "wakeword", "waketone":
+	case "night", "clock", "slideshow", "photoevery", "screenlang", "newtimer", "wakeword", "waketone":
 		d.openPicker(id)
 	}
 }
