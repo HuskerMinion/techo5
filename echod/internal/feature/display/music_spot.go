@@ -128,7 +128,7 @@ func pickStation(sel int) {
 func (r *roundRenderer) nowPlayingFace(s roundScene) {
 	rd := s.radio
 	r.centred(r.title, clockText(s.now), 84, colText)
-	r.centred(r.small, s.now.Format("Monday, January 2"), 114, colDim)
+	r.dateWeather(s.weather, s.now, 114)
 
 	const artY, artR = 200.0, 72.0
 	r.discAt(centre, artY, artR+3, color.RGBA{44, 50, 60, 255})

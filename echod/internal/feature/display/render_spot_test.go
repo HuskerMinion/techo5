@@ -79,7 +79,7 @@ func TestRoundScenesDraw(t *testing.T) {
 		"weather":           {now: at, phase: "idle", weather: sky, forecast: week, menuOpen: true, menuMode: modeWeather},
 		"weather-now":       {now: at, phase: "idle", weather: home.Weather{Condition: "clear-night", Temp: "58°"}, menuOpen: true, menuMode: modeWeather},
 		"weather-none":      {now: at, phase: "idle", menuOpen: true, menuMode: modeWeather},
-		"nowplaying":        {now: at, phase: "idle", nowPlaying: true, playing: true, radio: home.Radio{Now: "KXYZ 101.1", Title: "Take It Easy", Artist: "Eagles", Art: testPicture(), Thumb: testPicture()}},
+		"nowplaying":        {now: at, phase: "idle", nowPlaying: true, playing: true, weather: sky, radio: home.Radio{Now: "KXYZ 101.1", Title: "Take It Easy", Artist: "Eagles", Art: testPicture(), Thumb: testPicture()}},
 		"nowplaying-logo":   {now: at, phase: "idle", nowPlaying: true, playing: true, radio: home.Radio{Now: "Morning News 850", Logo: true, Thumb: testPicture()}},
 		"cameras":           {now: at, phase: "idle", showCamera: true, camera: home.CameraView{Entity: "camera.deck", Name: "Deck", Frame: testPicture()}, menuOpen: true, menuMode: modeCameras, menuSel: 1, menuRot: restFor(1, 3), cameras: []config.Camera{{Entity: home.LocalCamera, Name: "This Spot"}, {Entity: "camera.deck", Name: "Deck"}, {Entity: "camera.front_door", Name: "Front door"}}},
 		"contacts":          {now: at, phase: "idle", menuOpen: true, menuMode: modeContacts, phoneReady: true, contacts: []phone.Contact{{Name: "Alex", Number: "15551234567"}, {Name: "Sam", Number: "15557654321"}, {Name: "Kitchen", Number: "106"}, {Name: "Garage", Number: "103"}, {Name: "Laundry Room", Number: "101"}, {Name: "Bathroom", Number: "102"}, {Name: "Office", Number: "104"}}, contactTop: 1},

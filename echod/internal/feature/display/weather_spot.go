@@ -223,3 +223,28 @@ func (r *roundRenderer) cloud(x, y, u float64, c color.RGBA) {
 
 // forecastDays is the scene's copy of the forecast.
 type forecastDays = []hass.Day
+
+// dateWeather is the line under the time while something is playing: the day, and the temperature
+// with its icon when there is one. The face has no corner to put the weather in the way the Show
+// does, and no room between the date and the picture for a line of its own, so the two share one —
+// which is also the reading somebody glances at, rather than the words for it.
+func (r *roundRenderer) dateWeather(w home.Weather, when time.Time, baseline int) {
+	if w.Temp == "" {
+		r.centred(r.small, when.Format("Monday, January 2"), baseline, colDim)
+		return
+	}
+	// Sharing the line costs the long day and month: written out, the two together reach the bezel,
+	// and a round screen has less room the further from the middle a line sits.
+	const u, gap = 11.0, 8
+	line := w.Temp + "  ·  " + when.Format("Mon, Jan 2")
+	tw := r.width(r.small, line)
+	icon := 0
+	if conditionWords(w.Condition) != "" {
+		icon = int(2*u) + gap
+	}
+	left := centre - (tw+icon)/2
+	if icon > 0 {
+		r.weatherIcon(w.Condition, float64(left)+u, float64(baseline)-7, u)
+	}
+	r.text(r.small, line, left+icon, baseline, colDim)
+}

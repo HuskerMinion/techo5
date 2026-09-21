@@ -333,18 +333,35 @@ func (r *renderer) bigClock(s scene) {
 		r.timersLine(s, base+128)
 	}
 
-	// The weather, top left, when Home Assistant has told us where to look.
-	if w := s.weather; w.Temp != "" || w.Condition != "" {
-		line := w.Temp
-		if c := conditionWords(w.Condition); c != "" {
-			if line != "" {
-				line += "  ·  "
-			}
-			line += c
-		}
-		r.text(r.small, line, r.margin, r.margin+26, dim)
-	}
+	r.weatherCorner(s)
 }
+
+// weatherCorner is the weather where it has always been, top left, with the drawing of it that the
+// forecast page has had all along. The icon is read before the words are: a glance at the corner of
+// a clock is not reading, and the screen already knew how to draw it.
+func (r *renderer) weatherCorner(s scene) {
+	w := s.weather
+	if w.Temp == "" && w.Condition == "" {
+		return
+	}
+	line := w.Temp
+	if c := conditionWords(w.Condition); c != "" {
+		if line != "" {
+			line += "  ·  "
+		}
+		line += c
+	}
+	x := r.margin
+	if w.Condition != "" && conditionWords(w.Condition) != "" {
+		r.weatherIcon(w.Condition, r.margin+weatherMark/2, r.margin+15, weatherMark)
+		x += weatherMark + 14
+	}
+	r.text(r.small, line, x, r.margin+26, dim)
+}
+
+// weatherMark is how big the corner's icon is: the height of the line it sits beside, so it reads as
+// part of it rather than as a picture somebody put there.
+const weatherMark = 46
 
 // conditionWords turns Home Assistant's weather state into words for the screen.
 func conditionWords(c string) string {

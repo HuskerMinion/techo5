@@ -20,16 +20,7 @@ func (r *renderer) nowPlaying(s scene) {
 	r.background(rd)
 
 	r.cornerClock(s)
-	if w := s.weather; w.Temp != "" || w.Condition != "" {
-		line := w.Temp
-		if c := conditionWords(w.Condition); c != "" {
-			if line != "" {
-				line += "  ·  "
-			}
-			line += c
-		}
-		r.text(r.small, line, r.margin, r.margin+26, dim)
-	}
+	r.weatherCorner(s)
 
 	station := rd.Now
 	if station == "" {
