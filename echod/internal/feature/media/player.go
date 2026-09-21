@@ -76,6 +76,10 @@ type Player struct {
 
 	external atomic.Bool
 
+	// extTrack is what a remote says it is playing: a phone over Bluetooth, or Music Assistant over
+	// Sendspin. The stream is the remote's business; this is only what to call it.
+	extTrack atomic.Value // remoteTrack
+
 	// stoppedAt counts stops, so the timer that ends a stopped track knows whether a later stop or a
 	// play has come since.
 	stoppedAt atomic.Uint64
@@ -478,10 +482,30 @@ func (p *Player) Sounding(on bool) {
 	p.refresh()
 }
 
+// remoteTrack is a name for what is playing that this player did not choose.
+type remoteTrack struct{ Title, Artist, Album string }
+
 // External marks the speaker as busy with something this player did not start.
 func (p *Player) External(on bool) {
 	p.external.Store(on)
 	p.refresh()
+}
+
+// ExternalPlaying reports whether something this player did not start is using the speaker, which is
+// what the screen asks before it says what the room is playing.
+func (p *Player) ExternalPlaying() bool { return p.external.Load() }
+
+// ExternalTrack takes what a remote says it is playing, so the room can name it. An empty title means
+// the remote has stopped naming anything.
+func (p *Player) ExternalTrack(title, artist, album string) {
+	p.extTrack.Store(remoteTrack{Title: title, Artist: artist, Album: album})
+	p.refresh()
+}
+
+// Track is what a remote last said it was playing, whether or not it still is.
+func (p *Player) Track() (title, artist, album string) {
+	t, _ := p.extTrack.Load().(remoteTrack)
+	return t.Title, t.Artist, t.Album
 }
 
 // Playing reports what the track is doing, which is what decides whether a turn has anything to take

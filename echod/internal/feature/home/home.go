@@ -430,6 +430,19 @@ func (f *Feature) Radio() Radio {
 		f.mu.Unlock()
 	}
 	r.Playing, _ = media.Get().Playing()
+
+	// Something this player did not start is using the speaker - a phone over Bluetooth, or Music
+	// Assistant over Sendspin - and it names itself. The page is about what the room is playing, not
+	// about which part of the device started it, so what it says wins over the radio's.
+	if media.Get().ExternalPlaying() {
+		r.Title, r.Artist, r.Album = media.Get().Track()
+		r.Now = media.Get().Receiving()
+		if r.Now == "" {
+			r.Now = "Music Assistant"
+		}
+		r.Music = true
+	}
+
 	f.mu.Lock()
 	r.Chosen = f.chosen
 	r.Now = f.urlName
