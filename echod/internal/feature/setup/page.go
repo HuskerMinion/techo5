@@ -15,6 +15,7 @@ import (
 	"github.com/HuskerMinion/techo5/echod/internal/feature/home"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/media"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/timezone"
+	"github.com/HuskerMinion/techo5/echod/internal/feature/web"
 	"github.com/HuskerMinion/techo5/echod/internal/layout"
 	"github.com/HuskerMinion/techo5/echod/internal/lib/wifi"
 )
@@ -194,6 +195,8 @@ func (f *Feature) save(w http.ResponseWriter, r *http.Request) {
 		default:
 			problem = saveStations(r)
 		}
+	case "house":
+		problem = saveHouse(r.PostFormValue("word"))
 	case "timezone":
 		zone := strings.TrimSpace(r.PostFormValue("zone"))
 		switch {
@@ -292,6 +295,7 @@ func (f *Feature) settingsPage(w http.ResponseWriter, token, saved, renamed, pro
 	 which zone it shows.</p><p><button type="submit">Save</button></p></fieldset></form>`)
 
 	diagnosticsSection(w)
+	houseSection(w, token)
 	stationsSection(w, token)
 	f.wifiSection(w, token, scan)
 	nameSection(w, token)
@@ -492,6 +496,45 @@ func nameSection(w http.ResponseWriter, token string) {
 	 <p><button type="submit">Rename and restart</button></p></form></fieldset>`,
 		html.EscapeString(token), html.EscapeString(name),
 		html.EscapeString("media_player."+layout.EntitySlug(name)+"_speaker"))
+}
+
+// houseSection is the word the devices in one house share.
+//
+// It is the whole of the security on announcements: a device takes one from anything on the network
+// that knows the word, and ignores everything else. That is the right size for the thing — an
+// announcement is a voice in a room, not a door — but it does mean the word is worth typing rather
+// than leaving as something guessable, and it means the same word has to go on every device here.
+func houseSection(w http.ResponseWriter, token string) {
+	word := config.Get().Home.HouseWord
+	fmt.Fprintf(w, `<fieldset><legend>Announcements</legend>
+	 <form method="post" action="/setup/save">
+	 <input type="hidden" name="token" value="%s"><input type="hidden" name="what" value="house">
+	 <label for="word">House word</label>
+	 <input id="word" name="word" value="%s" maxlength="63" autocomplete="off">
+	 <p class="note">Type the <strong>same word on every device in this house</strong>. They then find
+	  each other on the network, and speaking to one plays it on the others. Anything that does not
+	  have the word is ignored.</p>
+	 <p class="note">Leave it empty to turn announcements off here: the device stops advertising itself
+	  and stops taking them.</p>
+	 <p><button type="submit">Save</button></p></form></fieldset>`,
+		html.EscapeString(token), html.EscapeString(word))
+}
+
+// saveHouse keeps the word, and then tells the web feature to look again: the port announcements
+// arrive on is only listening while the word is set, and without the nudge it opens on that
+// feature's own next look, up to a minute later. The first announcement after setup is exactly the
+// one somebody is standing there waiting for.
+func saveHouse(v string) string {
+	word := strings.TrimSpace(v)
+	if strings.ContainsAny(word, "\r\n") {
+		return "a house word is one word on one line"
+	}
+	if err := config.Set().Home().HouseWord(word); err != nil {
+		return "could not save it: " + err.Error()
+	}
+	slog.Info("setup page: the house word was set", "set", word != "")
+	web.Wake()
+	return ""
 }
 
 func lock(secured bool) string {
