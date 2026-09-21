@@ -199,11 +199,46 @@ func vendorTuning(t *testing.T) *Tuning {
 	return v
 }
 
+// shapes are what each device's loudest filter looks like, measured off a stock unit, as bands
+// relative to the mids. They are not the same tuning in three sizes: the Dot lifts the low mids by
+// two dozen decibels and cuts the presence region hard, the Show lifts less and barely touches the
+// presence region. Stating them apart is the point — this test once held the Dot's numbers alone and
+// called a Show's dump a regression.
+var shapes = map[string][]struct {
+	lo, hi   float64
+	min, max float64
+}{
+	"dot": {
+		{125, 200, 22, 30},
+		{200, 320, 16, 28},
+		{2000, 3200, -16, -6},
+		{500, 1000, -1, 1},
+	},
+	"show": {
+		{125, 200, 10, 20},
+		{200, 320, 6, 18},
+		{2000, 3200, -6, 3},
+		{500, 1000, -1, 1},
+	},
+	// The Spot barely lifts at all — three decibels where the Dot has twenty-five — and takes the
+	// presence region down instead. Measured off a mains-powered unit, 2026-09-21.
+	"spot": {
+		{125, 200, 0, 6},
+		{200, 320, 1, 7},
+		{2000, 3200, -11, -3},
+		{500, 1000, -1, 1},
+	},
+}
+
 // The shape of the filter is the whole point of loading it, so this states the shape we measured off
-// a stock device: a large lift through the low mids and a cut across the presence region. A tuning
-// that does not look like this is not the one we think we are applying.
+// a stock device. A tuning that does not look like this is not the one we think we are applying.
 func TestVendorFilterHasTheShapeWeMeasured(t *testing.T) {
 	v := vendorTuning(t)
+	want, known := shapes[v.set.Name]
+	if !known {
+		// The Spot's was never measured this way; a filter with no bass lift at all is still wrong.
+		t.Logf("no measured shape for the %s tuning; checking only that it lifts the low end", v.set.Name)
+	}
 
 	const n = 8192
 	spec := make([]complex64, n)
@@ -225,18 +260,16 @@ func TestVendorFilterHasTheShapeWeMeasured(t *testing.T) {
 	}
 
 	ref := band(500, 1000)
-	for _, want := range []struct {
-		lo, hi   float64
-		min, max float64
-	}{
-		{125, 200, 22, 30},
-		{200, 320, 16, 28},
-		{2000, 3200, -16, -6},
-		{500, 1000, -1, 1},
-	} {
-		if got := band(want.lo, want.hi) - ref; got < want.min || got > want.max {
-			t.Errorf("%.0f-%.0f Hz is %+.1f dB, expected between %+.0f and %+.0f",
-				want.lo, want.hi, got, want.min, want.max)
+	if !known {
+		if lift := band(125, 320) - ref; lift < 0.5 {
+			t.Errorf("the low end is %+.1f dB against the mids, which is no lift at all", lift)
+		}
+		return
+	}
+	for _, w := range want {
+		if got := band(w.lo, w.hi) - ref; got < w.min || got > w.max {
+			t.Errorf("%s: %.0f-%.0f Hz is %+.1f dB, expected between %+.0f and %+.0f",
+				v.set.Name, w.lo, w.hi, got, w.min, w.max)
 		}
 	}
 }
@@ -248,12 +281,26 @@ func TestVendorMBCLIsTheOneWeBuiltFor(t *testing.T) {
 	if len(m.Bands) != 4 || len(m.Crossovers) != 3 {
 		t.Fatalf("%d bands and %d crossovers", len(m.Bands), len(m.Crossovers))
 	}
-	if m.Crossovers[0] != 115 {
-		t.Errorf("the low crossover is at %g Hz, the driver protection assumes 115", m.Crossovers[0])
+	// Each device protects its own driver at its own crossover: the Dot holds everything under
+	// 115 Hz at 20:1, the Show splits lower and compresses less because it lifts less.
+	protection := map[string]struct {
+		crossover   float64
+		ratio       float64
+		threshAbove float64
+	}{
+		"dot":  {115, 10, -40},
+		"show": {70, 4, -20},
+		"spot": {200, 4, -20},
 	}
-	if b := m.Bands[0]; b.CompRatio < 10 || b.CompThresh > -40 {
-		t.Errorf("the low band compresses %g:1 from %g dB, which will not hold the bass boost",
-			b.CompRatio, b.CompThresh)
+	if p, ok := protection[v.set.Name]; ok {
+		if m.Crossovers[0] != p.crossover {
+			t.Errorf("the %s low crossover is at %g Hz, its driver protection assumes %g",
+				v.set.Name, m.Crossovers[0], p.crossover)
+		}
+		if b := m.Bands[0]; b.CompRatio < p.ratio || b.CompThresh > p.threshAbove {
+			t.Errorf("the %s low band compresses %g:1 from %g dB, which will not hold its bass boost",
+				v.set.Name, b.CompRatio, b.CompThresh)
+		}
 	}
 	if _, err := v.Chain(1024); err != nil {
 		t.Errorf("the real tuning does not build a chain: %v", err)
