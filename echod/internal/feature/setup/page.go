@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/HuskerMinion/techo5/echod/internal/config"
+	"github.com/HuskerMinion/techo5/echod/internal/feature/home"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/timezone"
 	"github.com/HuskerMinion/techo5/echod/internal/layout"
 	"github.com/HuskerMinion/techo5/echod/internal/lib/wifi"
@@ -162,6 +163,8 @@ func (f *Feature) save(w http.ResponseWriter, r *http.Request) {
 		if problem == "" {
 			renamed = true
 		}
+	case "stations":
+		problem = saveStations(r)
 	case "timezone":
 		zone := strings.TrimSpace(r.PostFormValue("zone"))
 		switch {
@@ -255,6 +258,7 @@ func (f *Feature) settingsPage(w http.ResponseWriter, token, saved, renamed, pro
 	fmt.Fprint(w, `</select><p class="note">The device's clock keeps time on its own; this is only
 	 which zone it shows.</p><p><button type="submit">Save</button></p></fieldset></form>`)
 
+	stationsSection(w, token)
 	f.wifiSection(w, token, scan)
 	nameSection(w, token)
 
@@ -321,6 +325,62 @@ func (f *Feature) wifiSection(w http.ResponseWriter, token string, scan bool) {
 	  nothing changes here until the device is taken there. If it is a network in range, the device
 	  moves to it — and this page goes with it, so you will have to find it again at its new address.</p>
 	 <p><button type="submit">Add network</button></p></form></fieldset>`)
+}
+
+// stationsSection is the radio stations kept on the device: a name and the address of the stream,
+// which is the thing nobody wants to type on the device's own screen and the reason this page earns
+// its place. They play without Home Assistant, which is the only radio a device on its own has.
+func stationsSection(w http.ResponseWriter, token string) {
+	list := home.OwnStations()
+	fmt.Fprintf(w, `<fieldset><legend>Radio stations on this device</legend>
+	 <form method="post" action="/setup/save">
+	 <input type="hidden" name="token" value="%s"><input type="hidden" name="what" value="stations">`,
+		html.EscapeString(token))
+	// One more row than there are stations, so there is always somewhere to add one; clearing a
+	// name takes that station out.
+	for i := 0; i <= len(list) && i < config.MaxOwnStations; i++ {
+		var st config.Station
+		if i < len(list) {
+			st = list[i]
+		}
+		fmt.Fprintf(w, `<label for="n%d">Name</label>
+		 <input id="n%d" name="name" value="%s" maxlength="40" autocomplete="off" placeholder="Station name">
+		 <label for="u%d">Stream address</label>
+		 <input id="u%d" name="url" value="%s" autocomplete="off" placeholder="https://…">`,
+			i, i, html.EscapeString(st.Name), i, i, html.EscapeString(st.URL))
+	}
+	fmt.Fprint(w, `<p class="note">Saving does not play them: a stream that does not work says so when
+	 you try it, on the device. Clear a name to take a station out. They show on the device under
+	 Radio, as "On this device".</p>
+	 <p><button type="submit">Save stations</button></p></form></fieldset>`)
+}
+
+// saveStations takes the rows the form posted, in the order they were in. Names and addresses come
+// back as two lists of the same length, one row each.
+func saveStations(r *http.Request) string {
+	names, urls := r.PostForm["name"], r.PostForm["url"]
+	if len(names) != len(urls) {
+		return "that form did not arrive whole"
+	}
+	var list []config.Station
+	for i := range names {
+		name, u := strings.TrimSpace(names[i]), strings.TrimSpace(urls[i])
+		switch {
+		case name == "" && u == "":
+			continue // an empty row is one that was never filled in, or one being taken out
+		case name == "":
+			return "a station needs a name as well as an address"
+		case u == "":
+			return name + " has no stream address"
+		case !strings.HasPrefix(u, "http://") && !strings.HasPrefix(u, "https://"):
+			return name + "'s address has to start with http:// or https://"
+		}
+		list = append(list, config.Station{Name: name, URL: u})
+	}
+	if err := home.SetOwnStations(list); err != nil {
+		return "could not save them: " + err.Error()
+	}
+	return ""
 }
 
 // nameSection renames the device, behind what it does and the box that has to be ticked.

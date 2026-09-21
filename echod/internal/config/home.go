@@ -75,6 +75,10 @@ type Radio struct {
 	// Now is an entity whose state names the station playing, shown while the player runs.
 	Now string `json:"now,omitempty"`
 
+	// Own are stations kept on the device: a name and the address of the stream, played by the
+	// device itself. Nothing about them needs Home Assistant, which is the point of them.
+	Own []Station `json:"own,omitempty"`
+
 	// Service is the script that plays a station, called with Field = station name and
 	// SpeakerField = Speaker (this device's media player entity in Home Assistant).
 	Service      string `json:"service,omitempty"`
@@ -82,6 +86,15 @@ type Radio struct {
 	SpeakerField string `json:"speaker_field,omitempty"`
 	Speaker      string `json:"speaker,omitempty"`
 }
+
+// Station is one of the device's own radio stations.
+type Station struct {
+	Name string `json:"name"`
+	URL  string `json:"url"`
+}
+
+// MaxOwnStations is as many as the device keeps: a short list somebody typed, not a library.
+const MaxOwnStations = 20
 
 // DefaultWeather is Home Assistant's own forecast (Met.no), which a new installation sets up for its
 // home location.
@@ -110,6 +123,10 @@ const (
 	RadioFavorites = "favorites"
 	RadioLocal     = "local"
 	RadioPopular   = "popular"
+
+	// RadioOwn are the stations kept on the device itself, played straight from their stream
+	// address. They are the only ones a device without Home Assistant can play.
+	RadioOwn = "own"
 )
 
 // The slideshow's display modes.

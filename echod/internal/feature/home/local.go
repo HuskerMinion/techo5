@@ -49,6 +49,9 @@ func RadioSources() []string {
 	if config.Get().Home.Radio.Configured() {
 		out = append(out, config.RadioFavorites)
 	}
+	if len(config.Get().Home.Radio.Own) > 0 {
+		out = append(out, config.RadioOwn)
+	}
 	if hass.Get().Ready() {
 		out = append(out, config.RadioLocal, config.RadioPopular)
 	}
@@ -114,6 +117,8 @@ func SourceLabel(source string) string {
 		return "Local stations"
 	case config.RadioPopular:
 		return "Popular worldwide"
+	case config.RadioOwn:
+		return "On this device"
 	}
 	return source
 }

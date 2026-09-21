@@ -403,7 +403,12 @@ func (f *Feature) Radio() Radio {
 	if r.Source == config.RadioFavorites && len(r.Stations) == 0 && r.Sources > 1 {
 		r.Source = config.RadioLocal
 	}
-	if r.Source != config.RadioFavorites {
+	if r.Source == config.RadioOwn {
+		for _, st := range OwnStations() {
+			r.Stations = append(r.Stations, st.Name)
+		}
+	}
+	if r.Source != config.RadioFavorites && r.Source != config.RadioOwn {
 		f.fetchList(r.Source)
 		f.mu.Lock()
 		l := f.list(r.Source)
@@ -459,6 +464,13 @@ func (f *Feature) Play(station string) {
 	// Favorites with nothing in them show the stations near home instead (Radio).
 	if source == config.RadioFavorites && len(favoriteNames(config.Get().Home.Radio)) == 0 {
 		source = config.RadioLocal
+	}
+	if source == config.RadioOwn {
+		if f.playOwn(station) {
+			f.Changed.Emit(struct{}{})
+			f.pokeMeta()
+		}
+		return
 	}
 	if source != config.RadioFavorites {
 		if f.playListed(source, station) {

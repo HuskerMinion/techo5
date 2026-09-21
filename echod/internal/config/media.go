@@ -41,7 +41,6 @@ const (
 
 	// Far enough down that a reply wins, not so far that the track sounds stopped.
 	DefaultDuckDB = -15
-
 )
 
 func defaultMedia() Media {

@@ -432,6 +432,11 @@ func (p *Player) Resume() { p.stream.Unpause() }
 // Stop ends the track, as Home Assistant's stop does.
 func (p *Player) Stop() { p.stream.Stop() }
 
+// PlayURL starts a stream the device already knows the address of — one of its own radio stations —
+// without Home Assistant resolving anything first. It is the same track as any other: a turn ducks
+// it, the buttons set its level, and the media player reports it.
+func (p *Player) PlayURL(url string) { p.stream.Play(url) }
+
 // PlayReceived plays audio a remote is sending (a phone using the device as a Bluetooth speaker) as a
 // track: it replaces what was playing, and a turn ducks or pauses it like anything else.
 func (p *Player) PlayReceived(name string, src PCMSource, rate, channels int) {
