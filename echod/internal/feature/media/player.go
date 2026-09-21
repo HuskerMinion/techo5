@@ -74,7 +74,8 @@ type Player struct {
 	// playing: its mapper has no case for announcing and raises on it.
 	speaking atomic.Bool
 
-	external atomic.Bool
+	// remote is the speaker lent to something this player did not start, and who is holding it now.
+	remote claim
 
 	// extTrack is what a remote says it is playing: a phone over Bluetooth, or Music Assistant over
 	// Sendspin. The stream is the remote's business; this is only what to call it.
@@ -485,15 +486,74 @@ func (p *Player) Sounding(on bool) {
 // remoteTrack is a name for what is playing that this player did not choose.
 type remoteTrack struct{ Title, Artist, Album string }
 
-// External marks the speaker as busy with something this player did not start.
-func (p *Player) External(on bool) {
-	p.external.Store(on)
+// claim is the speaker lent to something this player did not start. Claims are handed out in order and
+// only the newest one is honoured, because the server decides the order: Music Assistant ends one stream
+// and starts the next in whichever order it likes, and the session being torn down must not free what
+// the session taking over is holding.
+//
+// A mutex rather than a pair of atomics, because the two move together: holding and the number are one
+// fact, and a store that lands between another goroutine's two reads makes a claim that nobody honours.
+// With `held` stored before `newest` was taken, an older `letGo` read the older number, matched it, and
+// cleared a hold the newer taker had just set - the room then shows nothing playing until the next
+// stream. The claim is once per stream rather than once per frame, so the lock costs nothing.
+type claim struct {
+	mu     sync.Mutex
+	held   bool
+	newest uint64
+}
+
+// take makes the speaker the caller's, and returns what it has to give back.
+func (c *claim) take() uint64 {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	c.newest++
+	c.held = true
+	return c.newest
+}
+
+// letGo gives the speaker back if the caller is still the one holding it, and reports whether it was. A
+// claim already given back is holding nothing, so letting go of it twice is not a second pass, and a
+// claim older than the one holding the speaker is not this caller's to give back.
+func (c *claim) letGo(n uint64) bool {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	if !c.held || c.newest != n {
+		return false
+	}
+	c.held = false
+	return true
+}
+
+func (c *claim) playing() bool {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	return c.held
+}
+
+// External marks the speaker as busy with something this player did not start, and returns the claim on
+// it. Music Assistant ends one stream and starts the next in either order, and a session on its way out
+// used to clear the mark that the session taking over had just set - which is why the first track after
+// a connection looked right and every later one was named as nothing.
+func (p *Player) External() uint64 {
+	n := p.remote.take()
 	p.refresh()
+	return n
+}
+
+// LetGo gives the speaker back, if the claim is still the one holding it. An older claim does nothing:
+// something newer has it.
+func (p *Player) LetGo(n uint64) {
+	if p.remote.letGo(n) {
+		p.refresh()
+	}
 }
 
 // ExternalPlaying reports whether something this player did not start is using the speaker, which is
 // what the screen asks before it says what the room is playing.
-func (p *Player) ExternalPlaying() bool { return p.external.Load() }
+func (p *Player) ExternalPlaying() bool { return p.remote.playing() }
 
 // ExternalTrack takes what a remote says it is playing, so the room can name it. An empty title means
 // the remote has stopped naming anything.
@@ -556,7 +616,7 @@ func (p *Player) state() esphome.MediaPlayerState {
 	playing, paused := p.stream.Playing()
 
 	switch {
-	case playing || p.speaking.Load() || p.external.Load():
+	case playing || p.speaking.Load() || p.remote.playing():
 		return esphome.MediaPlayerPlaying
 	case paused:
 		return esphome.MediaPlayerPaused

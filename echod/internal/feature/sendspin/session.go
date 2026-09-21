@@ -50,6 +50,10 @@ type session struct {
 	// meta is the track the server last described, and what a message that only changes part of it
 	// is merged onto.
 	meta metadata
+
+	// claim is this session's hold on the room's now-playing state, given back when it is done. It is
+	// what stops a session that is finishing from clearing what the next one has just set.
+	claim uint64
 }
 
 func newSession(conn *websocket.Conn, o *out, bg *speaker.Arbiter, name string, report func(string)) *session {
@@ -153,9 +157,6 @@ func (s *session) run(ctx context.Context) error {
 
 // began builds the decoder for the negotiated format and takes the speaker.
 func (s *session) began(start protocol.StreamStart) {
-	// Somebody else's stream, which is what the screen says the room is playing rather than what
-	// this player chose.
-	media.Get().External(true)
 	if start.Player == nil {
 		return
 	}
@@ -187,15 +188,19 @@ func (s *session) began(start protocol.StreamStart) {
 	s.opened = true
 	if first {
 		s.bg.Took(s.out)
+		// Somebody else's stream, which is what the screen says the room is playing rather than what
+		// this player chose. Taken here rather than at the top: a stream whose codec we do not offer
+		// returns above, and a claim taken for it would have the room showing a track that was never
+		// heard until the server gets round to ending it.
+		s.claim = media.Get().External()
 		s.report(statePlaying)
-		media.Get().External(true)
 	}
 	slog.Info("sendspin stream", "codec", p.Codec, "rate", p.SampleRate, "ch", p.Channels, "bits", p.BitDepth)
 }
 
-// cleared drops what has not been heard, both what is still coded and what is queued.
+// cleared drops what has not been heard, both what is still coded and what is queued. It says nothing
+// about the room: a clear is a seek, and the stream carries on after it.
 func (s *session) cleared() {
-	media.Get().External(false)
 	drained := 0
 	for {
 		select {
@@ -221,8 +226,8 @@ func (s *session) grouped(g protocol.GroupUpdate) {
 // ended drops what is held: the spec has stream/end stop output and clear buffers, and the server sends
 // it on stop, skip and seek. A track running into the next one keeps the stream and says nothing.
 func (s *session) ended() {
-	media.Get().External(false)
 	if s.dec == nil {
+		s.letGo()
 		return
 	}
 	s.dec.close()
@@ -231,7 +236,16 @@ func (s *session) ended() {
 	s.out.close()
 	s.bg.Gave(s.out)
 	s.report(stateJoined)
-	media.Get().External(false)
+	s.letGo()
+}
+
+// letGo gives the room back, unless something newer has taken it. The server may start the next stream
+// before it gets round to ending this one, and the room's name belongs to the newer stream.
+func (s *session) letGo() {
+	if s.claim != 0 {
+		media.Get().LetGo(s.claim)
+		s.claim = 0
+	}
 }
 
 // heard plays a chunk as it arrives.
