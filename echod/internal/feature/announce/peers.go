@@ -3,6 +3,7 @@ package announce
 import (
 	"context"
 	"log/slog"
+	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -28,6 +29,10 @@ const (
 
 	// advertiseRetry is how long to wait before trying again, while the network is still coming up.
 	advertiseRetry = 3 * time.Second
+
+	// forgetAfter is how long a device may go unheard before it stops being one of the others. It is
+	// several looks' worth: missing one is ordinary and missing three in a row is gone.
+	forgetAfter = 3*browseEvery + browseFor
 )
 
 // Peer is another device in the house.
@@ -37,17 +42,30 @@ type Peer struct {
 	Port    int
 }
 
-var peers struct {
-	sync.Mutex
-	list []Peer
-	at   time.Time
+// known is one device and when it was last heard from.
+type known struct {
+	Peer
+	at time.Time
 }
 
-// Peers is the other devices last heard from, without this one.
+var peers struct {
+	sync.Mutex
+	// by lowercase name, so a device that answers twice in one look is still one device.
+	by map[string]known
+}
+
+// Peers is the other devices in the house.
 func Peers() []Peer {
 	peers.Lock()
 	defer peers.Unlock()
-	return append([]Peer(nil), peers.list...)
+
+	out := make([]Peer, 0, len(peers.by))
+	for _, k := range peers.by {
+		out = append(out, k.Peer)
+	}
+	// A stable order, so the log and the screen do not reshuffle the house every couple of minutes.
+	slices.SortFunc(out, func(a, b Peer) int { return strings.Compare(a.Name, b.Name) })
+	return out
 }
 
 // Run advertises this device and keeps the list of the others.
@@ -146,12 +164,30 @@ func (f *Feature) browse(ctx context.Context) {
 	}
 	<-done
 
+	now := time.Now()
 	peers.Lock()
-	was := len(peers.list)
-	peers.list, peers.at = heard, time.Now()
+	was := len(peers.by)
+	if peers.by == nil {
+		peers.by = map[string]known{}
+	}
+	for _, p := range heard {
+		peers.by[strings.ToLower(p.Name)] = known{Peer: p, at: now}
+	}
+	// A device is forgotten only after it has missed several looks in a row, not after one. A look
+	// lasts three seconds and a device that is busy, or whose answer is lost the way multicast loses
+	// things, misses one now and then: dropping it for that made the house flap between one device
+	// and two, and an announcement sent in the gap quietly did not reach it.
+	for name, k := range peers.by {
+		if now.Sub(k.at) > forgetAfter {
+			delete(peers.by, name)
+			slog.Info("announce: a device has gone quiet", "name", k.Name, "silent_for", now.Sub(k.at).Round(time.Second))
+		}
+	}
+	count := len(peers.by)
 	peers.Unlock()
-	if len(heard) != was {
-		slog.Info("announce: other devices in the house", "count", len(heard))
+
+	if count != was {
+		slog.Info("announce: other devices in the house", "count", count, "answered_this_look", len(heard))
 	}
 }
 
