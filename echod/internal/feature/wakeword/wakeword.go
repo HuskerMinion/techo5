@@ -42,16 +42,17 @@ type WakeWord struct {
 type slot struct {
 	wake *esphome.Button
 
-	threshold *esphome.Number
-	tone      *esphome.Select
-	effect    *esphome.Select
-	thinking  *esphome.Select
-	replying  *esphome.Select
-	delivery  *esphome.Select
-	buffer    *esphome.Number
-	followUp  *esphome.Number
-	maxListen *esphome.Number
-	maxThink  *esphome.Number
+	threshold    *esphome.Number
+	tone         *esphome.Select
+	effect       *esphome.Select
+	thinking     *esphome.Select
+	replying     *esphome.Select
+	delivery     *esphome.Select
+	buffer       *esphome.Number
+	followUp     *esphome.Number
+	followUpTone *esphome.Select
+	maxListen    *esphome.Number
+	maxThink     *esphome.Number
 }
 
 var (
@@ -160,6 +161,15 @@ func newSlot(n int) slot {
 			Min: 0, Max: 30, Step: 1, Unit: "s",
 			Mode: esphome.NumberBox,
 		},
+		followUpTone: &esphome.Select{
+			Base: esphome.Base{
+				ObjectID: fmt.Sprintf("follow_up_tone_%d", n+1),
+				Name:     "Follow-up tone",
+				Icon:     "mdi:music-note",
+				Category: esphome.CategoryConfig,
+			},
+			Options: append([]string{component.EffectDefault}, config.Labels(speaker.WakeTones())...),
+		},
 		maxListen: &esphome.Number{
 			Base: esphome.Base{
 				ObjectID: fmt.Sprintf("max_listen_%d", n+1),
@@ -182,11 +192,12 @@ func newSlot(n int) slot {
 		},
 	}
 
-	// All eleven on a page of their own.
+	// All twelve on a page of their own.
 	for _, b := range []*esphome.Base{
 		&s.wake.Base, &s.threshold.Base, &s.tone.Base, &s.effect.Base,
 		&s.thinking.Base, &s.replying.Base, &s.delivery.Base,
-		&s.buffer.Base, &s.followUp.Base, &s.maxListen.Base, &s.maxThink.Base,
+		&s.buffer.Base, &s.followUp.Base, &s.followUpTone.Base,
+		&s.maxListen.Base, &s.maxThink.Base,
 	} {
 		b.DeviceID = on
 	}
@@ -239,6 +250,17 @@ func newSlot(n int) slot {
 			slog.Error("saving the follow-up time failed", "slot", n+1, "err", err)
 		}
 	}
+	s.followUpTone.OnCommand = func(label string) {
+		tone, ok := followUpToneFor(label)
+		if !ok {
+			slog.Warn("unknown follow-up tone", "slot", n+1, "value", label)
+			return
+		}
+		s.followUpTone.Set(followUpToneLabel(tone))
+		if err := config.Set().Wake(n).FollowUpTone(tone); err != nil {
+			slog.Error("saving the follow-up tone failed", "slot", n+1, "err", err)
+		}
+	}
 	s.maxListen.OnCommand = func(v float32) {
 		s.maxListen.Set(v)
 		if err := config.Set().Wake(n).MaxListen(int(v)); err != nil {
@@ -257,6 +279,24 @@ func newSlot(n int) slot {
 // deliveries is how a reply can arrive, in the order it is offered.
 func deliveries() []config.Delivery {
 	return []config.Delivery{config.DeliveryWhole, config.DeliveryStream}
+}
+
+// followUpToneFor is what the select's label means as a setting: Default is the wake word's own tone,
+// which is stored as nothing, and every other label is the tone it names.
+func followUpToneFor(label string) (config.Tone, bool) {
+	if label == component.EffectDefault {
+		return "", true
+	}
+	return config.ByLabel(speaker.WakeTones(), label)
+}
+
+// followUpToneLabel is what the select shows for a stored tone: Default for the empty one, which is
+// the wake word's own.
+func followUpToneLabel(tone config.Tone) string {
+	if tone == "" {
+		return component.EffectDefault
+	}
+	return tone.Label()
 }
 
 // SetThreshold sets slot n's wake word sensitivity as Home Assistant would, for the screen.
@@ -296,7 +336,7 @@ func (w *WakeWord) Entities() []esphome.Entity {
 	var ents []esphome.Entity
 	for _, s := range w.slots {
 		ents = append(ents, s.wake, s.threshold, s.tone, s.effect, s.thinking, s.replying,
-			s.delivery, s.buffer, s.followUp, s.maxListen, s.maxThink)
+			s.delivery, s.buffer, s.followUp, s.followUpTone, s.maxListen, s.maxThink)
 	}
 	return ents
 }
@@ -317,6 +357,7 @@ func (w *WakeWord) Restore(c config.Config) {
 		s.delivery.Set(saved.Delivery.Label())
 		s.buffer.Set(float32(saved.Buffer))
 		s.followUp.Set(float32(saved.FollowUp))
+		s.followUpTone.Set(followUpToneLabel(saved.FollowUpTone))
 		s.maxListen.Set(float32(saved.MaxListen))
 		s.maxThink.Set(float32(saved.MaxThink))
 	}
