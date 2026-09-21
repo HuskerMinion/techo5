@@ -53,10 +53,14 @@ const (
 	// it starts.
 	AnnounceOff = 1.0
 
-	// DefaultAnnounceThreshold is where it sits once somebody turns it on. Measured: at 0.5 the model
-	// finds 96% of the phrase said by voices it never trained on, and 5% of a set of deliberately
-	// confusable phrases reach it. Higher trades the first for the second.
-	DefaultAnnounceThreshold = 0.5
+	// DefaultAnnounceThreshold is where it sits once somebody turns it on.
+	//
+	// High, because the scores are in two heaps rather than spread: a real saying of the phrase lands
+	// near the top and almost nothing else does, so the usual trade hardly applies here. Measured
+	// through the engine, against voices the model never trained on: at 0.5 it misses 4% of the
+	// phrase and 21.6% of deliberately confusable sayings reach it; at 0.9 it misses 5.3% and 3.4%
+	// reach it. Six times fewer false wakes for one percentage point of misses.
+	DefaultAnnounceThreshold = 0.9
 )
 
 func defaultAnnounce() Announce {

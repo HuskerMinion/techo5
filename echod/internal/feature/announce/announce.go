@@ -92,6 +92,10 @@ type Feature struct {
 	cancel context.CancelFunc
 	finish chan struct{}
 
+	// quietUntil is when this device last had an announcement coming out of it, plus a moment. See
+	// JustPlayed.
+	quietUntil time.Time
+
 	// Changed fires when something arrives or stops showing, or when this device starts or stops
 	// recording one, so the screen redraws and the ring follows.
 	Changed hook.Hook[struct{}]
@@ -196,6 +200,10 @@ func (f *Feature) show(m Message) {
 // sound is the chime and then the voice, under one claim on the speaker so that stopping an
 // announcement stops all of it, and so that whatever was playing is put back afterwards.
 func (f *Feature) sound(m Message) {
+	f.mu.Lock()
+	f.quietUntil = time.Now().Add(shows) // a ceiling; the real one is set when it finishes
+	f.mu.Unlock()
+
 	claim := speaker.Sound().Claim("announcement", func(ctx context.Context, p *speaker.Player) error {
 		p.Chime(chimeLevel, announceTone...)
 		if len(m.Voice) == 0 {
@@ -211,9 +219,35 @@ func (f *Feature) sound(m Message) {
 		return nil
 	})
 	<-claim.Done()
+
+	f.mu.Lock()
+	f.quietUntil = time.Now().Add(afterPlaying)
+	f.mu.Unlock()
+
 	if err := claim.Err(); err != nil {
 		slog.Warn("playing an announcement failed", "from", m.From, "err", err)
 	}
+}
+
+// afterPlaying is how long the wake word stays deaf once an announcement has finished coming out of
+// this device.
+//
+// Devices hear each other. Three of them on one desk, a foot apart, will each pick up whatever the
+// others play at close to the level of somebody speaking, and the echo canceller is no help: it
+// knows this device's own output, not the one next to it. Without this, one announcement played in
+// a room full of devices is heard by all of them, wakes the ones listening for the word, and is
+// announced back - which plays again, and so on, until somebody holds a mute button.
+const afterPlaying = 3 * time.Second
+
+// JustPlayed reports whether an announcement is coming out of this device now, or did a moment ago.
+//
+// It is what the wake word asks before acting, and it is about this device's own speaker only. A
+// device that hears the one next to it is a different problem, and the answer to that one is that
+// the word is hard to say by accident rather than that everything is timed.
+func (f *Feature) JustPlayed() bool {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return time.Now().Before(f.quietUntil)
 }
 
 // chimeTail is the gap between the chime and the voice: enough for one to finish, short enough that

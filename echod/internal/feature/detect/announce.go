@@ -45,6 +45,10 @@ func announceModel() (wake.Model, error) {
 
 // loadAnnounce puts the announce word in, or takes it out when it is switched off.
 func (d *Detect) loadAnnounce() {
+	if !announceWordAvailable {
+		d.engine.Clear(AnnounceSlot)
+		return
+	}
 	if !config.Get().Wake.Announce.Listening() {
 		d.engine.Clear(AnnounceSlot)
 		slog.Info("announce word off")
@@ -72,6 +76,13 @@ func (d *Detect) loadAnnounce() {
 func (d *Detect) announceHeard() {
 	if announce.Get().Recording() {
 		return // already listening; saying it twice does not start a second one
+	}
+	// Not while one is coming out of this device, or just did. The speaker is a foot from the
+	// microphone and an announcement is speech: without this the device answers its own playback,
+	// announces that, and the house talks to itself until somebody mutes it.
+	if announce.Get().JustPlayed() {
+		slog.Debug("announce word ignored: an announcement is playing here")
+		return
 	}
 	slog.Info("announce word heard")
 	safe.Go("announce word", func() { announce.Get().Speak(context.Background()) })
