@@ -101,6 +101,12 @@ func (d *Display) showsNowPlaying() bool {
 	if playing, paused := media.Get().Playing(); playing || paused {
 		return true
 	}
+	// A stream this player is only carrying is still what the room is doing, so the face is its as
+	// much as the radio's: the state it draws was already being worked out and only this gate was
+	// missing, because a carried stream never satisfies Playing().
+	if media.Get().ExternalPlaying() {
+		return true
+	}
 	d.mu.Lock()
 	defer d.mu.Unlock()
 	return time.Since(d.radioCue) < radioCueFor

@@ -403,7 +403,9 @@ func (f *Feature) Radio() Radio {
 	sources := RadioSources()
 	r := Radio{Configured: len(sources) > 0, Source: radioSource(), Sources: len(sources)}
 	if !r.Configured {
-		return r
+		// No list to show, but the page is shown for a carried stream all the same, and it has to name
+		// what is playing: the same last word the configured path ends with.
+		return carried(r)
 	}
 	t := hastate.Get()
 	if r.Source == config.RadioFavorites {
@@ -430,19 +432,6 @@ func (f *Feature) Radio() Radio {
 		f.mu.Unlock()
 	}
 	r.Playing, _ = media.Get().Playing()
-
-	// Something this player did not start is using the speaker - a phone over Bluetooth, or Music
-	// Assistant over Sendspin - and it names itself. The page is about what the room is playing, not
-	// about which part of the device started it, so what it says wins over the radio's.
-	if media.Get().ExternalPlaying() {
-		r.Title, r.Artist, r.Album = media.Get().Track()
-		r.Now = media.Get().Receiving()
-		if r.Now == "" {
-			r.Now = "Music Assistant"
-		}
-		r.Music = true
-	}
-
 	f.mu.Lock()
 	r.Chosen = f.chosen
 	r.Now = f.urlName
@@ -456,6 +445,28 @@ func (f *Feature) Radio() Radio {
 			r.Now = ""
 		}
 	}
+
+	return carried(r)
+}
+
+// carried puts what a remote is playing on the page, over whatever this device chose. It is the last
+// word wherever the page is built: everything before it says what this device picked, and that is what
+// the room is playing only when nothing else is.
+//
+// Receiving() is not the name of it. That names a phone over Bluetooth, which is a stream of this
+// player's own rather than a remote's; the only thing that takes the speaker this way is Sendspin, and
+// what runs the server it talks to here is Music Assistant, so that is what the page calls it.
+func carried(r Radio) Radio {
+	if !media.Get().ExternalPlaying() {
+		return r
+	}
+	trackTitle, trackArtist, trackAlbum := media.Get().Track()
+	r.Playing, r.Now = true, "Music Assistant"
+	r.Title, r.Artist, r.Album = trackTitle, trackArtist, trackAlbum
+	// The page draws a stand-in of its own for a track with no picture, so the last station's cover
+	// and logo must not be left behind somebody else's.
+	r.Art, r.Thumb, r.Logo = nil, nil, false
+	r.Music = true
 	return r
 }
 

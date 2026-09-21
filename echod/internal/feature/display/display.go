@@ -1088,6 +1088,14 @@ func (d *Display) frame() time.Duration {
 		s.phase, s.heard, s.reply = "idle", "", ""
 	}
 	s.playing, s.paused = media.Get().Playing()
+	// A stream this player is only carrying is still what the room is doing: the screen names it and
+	// says it is playing, though the audio never passes through this player's own stream. Both, not
+	// just playing: the page tests paused first, so a station left paused underneath would label
+	// somebody else's track as Paused. Nothing here can tell a carried pause from a carried play yet,
+	// so it is playing until something knows better.
+	if media.Get().ExternalPlaying() {
+		s.playing, s.paused = true, false
+	}
 	s.muted, _ = mute.Get().Muted()
 	if !volAt.IsZero() && now.Sub(volAt) < volumeShow {
 		s.volume, s.showVolume = volume, true

@@ -975,6 +975,14 @@ func (d *Display) frame() time.Duration {
 	}
 	s.muted, _ = mute.Get().Muted()
 	s.playing, s.paused = media.Get().Playing()
+	// A stream this player is only carrying is still what the room is doing: the face names it and
+	// says it is playing, though the audio never passes through this player's own stream. Both, not
+	// just playing: the face tests paused first, so a station left paused underneath would label
+	// somebody else's track as Paused. Nothing here can tell a carried pause from a carried play yet,
+	// so it is playing until something knows better.
+	if media.Get().ExternalPlaying() {
+		s.playing, s.paused = true, false
+	}
 	s.maxVolume = config.VolumeSteps
 	if s.sheetOpen {
 		s.sheet = d.sheetView(now)
