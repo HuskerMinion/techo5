@@ -12,30 +12,26 @@ package camera
 import (
 	"bytes"
 	"context"
-	"errors"
 	"fmt"
 	"image"
 	"image/jpeg"
 	"log/slog"
-	"net"
 	"net/http"
 	"strconv"
 	"time"
 
 	"github.com/HuskerMinion/techo5/echod/internal/component"
 	"github.com/HuskerMinion/techo5/echod/internal/config"
-	"github.com/HuskerMinion/techo5/echod/internal/feature/security"
+	"github.com/HuskerMinion/techo5/echod/internal/feature/web"
 	"github.com/HuskerMinion/techo5/echod/internal/hardware/camera"
 )
 
 func init() {
 	component.Register(component.Network, Get(), component.Order(70))
+	Get().register()
 }
 
 const (
-	// Port is where the pictures are served: http://<device>:8181/camera.jpg and /camera.mjpeg.
-	Port = 8181
-
 	// quality is the JPEG quality for both.
 	quality = 85
 
@@ -51,76 +47,18 @@ func Get() *Feature { return shared }
 
 func (f *Feature) Name() string { return "camera" }
 
-func (f *Feature) Run(ctx context.Context) error {
-	if !camera.Available() {
-		<-ctx.Done()
-		return nil
+// register puts the camera's pages on the device's web port (feature/web), which is open while any
+// of its pages is switched on and shut when none is. A device with no camera registers nothing here
+// and still has the port for the pages it does have.
+func (f *Feature) register() {
+	if camera.Available() {
+		web.Handle("/camera.jpg", "Camera", cameraOpen, f.snapshot)
+		web.Handle("/camera.mjpeg", "", cameraOpen, f.stream)
 	}
-	mux := http.NewServeMux()
-	mux.HandleFunc("/camera.jpg", allowed(cameraOpen, f.snapshot))
-	mux.HandleFunc("/camera.mjpeg", allowed(cameraOpen, f.stream))
-	f.registerScreen(mux)
-	mux.HandleFunc("/", allowed(cameraOpen, func(w http.ResponseWriter, r *http.Request) {
-		fmt.Fprintln(w, "TECHO5 camera: /camera.jpg (snapshot), /camera.mjpeg (stream)")
-	}))
-
-	changed := make(chan struct{}, 1)
-	defer security.Get().Changed.Listen(func(struct{}) {
-		select {
-		case changed <- struct{}{}:
-		default:
-		}
-	})()
-
-	// The port is only open while one of the pages is switched on: closed, it is not there to find.
-	var srv *http.Server
-	defer func() {
-		if srv != nil {
-			_ = srv.Close()
-		}
-	}()
-	for {
-		c := config.Get().Security
-		switch want := c.Camera || c.Screen; {
-		case want && srv == nil:
-			ln, err := net.Listen("tcp", ":"+strconv.Itoa(Port))
-			if err != nil {
-				slog.Error("web port", "port", Port, "err", err)
-				break
-			}
-			srv = &http.Server{Handler: mux, ReadHeaderTimeout: 10 * time.Second}
-			go func(srv *http.Server) {
-				if err := srv.Serve(ln); err != nil && !errors.Is(err, http.ErrServerClosed) {
-					slog.Error("web port", "err", err)
-				}
-			}(srv)
-			slog.Info("web port open", "port", Port, "camera", c.Camera, "screen", c.Screen)
-		case !want && srv != nil:
-			_ = srv.Close() // streams in progress end here too
-			srv = nil
-			slog.Info("web port closed", "port", Port)
-		}
-		select {
-		case <-ctx.Done():
-			return nil
-		case <-changed:
-		case <-time.After(time.Minute): // a port that failed to open is tried again
-		}
-	}
+	f.registerScreen()
 }
 
 func cameraOpen() bool { return config.Get().Security.Camera }
-
-// allowed serves a page only while its switch is on; otherwise the page is not there.
-func allowed(open func() bool, h http.HandlerFunc) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		if !open() {
-			http.NotFound(w, r)
-			return
-		}
-		h(w, r)
-	}
-}
 
 func encode(f *camera.Frame) ([]byte, error) {
 	return encodeImage(f.RGBA)

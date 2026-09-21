@@ -10,6 +10,7 @@ import (
 
 	"github.com/HuskerMinion/techo5/echod/internal/config"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/display"
+	"github.com/HuskerMinion/techo5/echod/internal/feature/web"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/home"
 )
 
@@ -19,8 +20,8 @@ import (
 // details behind placeholders, and ?theme= switches the palette,
 // so the sheet and the themes can be looked at without a finger on the device. Off unless the
 // Screen web access switch is on: the options change what the device is doing.
-func (f *Feature) registerScreen(mux *http.ServeMux) {
-	mux.HandleFunc("/screen.png", allowed(screenOpen, func(w http.ResponseWriter, r *http.Request) {
+func (f *Feature) registerScreen() {
+	web.Handle("/screen.png", "Screen", screenOpen, func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Query().Get("demo") != "" {
 			// Placeholders for the name, network, address and key names, for screenshots to publish.
 			display.Get().Demo(20 * time.Second)
@@ -83,7 +84,7 @@ func (f *Feature) registerScreen(mux *http.ServeMux) {
 		w.Header().Set("Content-Type", "image/png")
 		w.Header().Set("Cache-Control", "no-store")
 		png.Encode(w, img)
-	}))
+	})
 }
 
 func screenOpen() bool { return config.Get().Security.Screen }
