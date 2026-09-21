@@ -319,6 +319,12 @@ func (d *Display) relight(jump bool) {
 		}
 		target = backlightMin + (screen.BacklightMax-backlightMin)*math.Min(math.Max(pct, 0), 100)/100
 	}
+	// The light before an alarm takes the backlight over while it runs: it starts under whatever the
+	// room would otherwise ask for and ends at the face's own brightness.
+	if p := sunriseProgress(time.Now()); p > 0 && d.on {
+		full := backlightMin + (screen.BacklightMax-backlightMin)*float64(min(max(d.ceiling, 0), 100))/100
+		target = backlightMin + (full-backlightMin)*sunriseLevel(p)
+	}
 	if jump || d.level == 0 {
 		d.level = target
 	} else {
@@ -994,6 +1000,7 @@ func (d *Display) frame() time.Duration {
 			s.slideshowTrouble = home.Get().SlideshowTrouble()
 		}
 		s.setupAsking = setup.Get().Waiting()
+		s.sunrise, s.sunriseFace = sunriseProgress(now), config.Get().Alarms.SunriseFace
 	}
 	d.mu.Lock()
 	if !boring {

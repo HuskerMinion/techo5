@@ -126,6 +126,11 @@ type roundScene struct {
 	// request for a press is never something only the browser knows about.
 	setupAsking bool
 
+	// sunrise is how far the light before an alarm has come, 0 to 1, and sunriseFace whether the sun
+	// is drawn with a face on it.
+	sunrise     float64
+	sunriseFace bool
+
 	// sheetOpen is the settings screen up, sheetGrid its six categories rather than one; sheet what
 	// it shows.
 	sheetOpen, sheetGrid bool
@@ -194,6 +199,11 @@ func (r *roundRenderer) draw(s roundScene) {
 	case s.slideshowScreensaver != nil:
 		r.slideshowScreensaverFace(s)
 	default:
+		if s.sunrise > 0 {
+			// The light before an alarm takes the whole face: the panel is the lamp in the room.
+			r.sunriseFace(s, s.sunrise, s.sunriseFace)
+			break
+		}
 		if s.slideshow != nil {
 			r.slideshowBackground(s.slideshow)
 		}
