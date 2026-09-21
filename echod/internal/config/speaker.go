@@ -10,6 +10,12 @@ type Speaker struct {
 	// QuietHours is when the device makes no sound of its own, as "22-7", empty for never. See
 	// quiet.go for what that does and does not cover.
 	QuietHours string `json:"quiet_hours,omitempty"`
+
+	// ASPChosen is whether anybody ever set ASP themselves. Without it a saved false cannot be told
+	// from a device that was never able to tune: every unit that ran a build whose tuning would not
+	// load had false written back to it by the settling below, and would stay untuned for ever after
+	// the tuning started working. Unset means the default applies.
+	ASPChosen bool `json:"asp_chosen,omitempty"`
 }
 
 const (
@@ -44,8 +50,20 @@ func (w SpeakerWriter) QuietHours(v string) error {
 	return w.st.Update(func(c *Config) { c.Speaker.QuietHours = v })
 }
 
+// ASPWanted is what the tuning should be set to: what somebody chose, or the default until somebody
+// does. It is what they asked for, never what the device managed, so a device that could not tune
+// yesterday tunes today without anybody touching it.
+func (s Speaker) ASPWanted() bool {
+	if !s.ASPChosen {
+		return DefaultASP
+	}
+	return s.ASP
+}
+
+// ASP records what somebody asked for, and that they asked. What the device managed is not saved:
+// see ASPWanted.
 func (w SpeakerWriter) ASP(v bool) error {
-	return w.st.Update(func(c *Config) { c.Speaker.ASP = v })
+	return w.st.Update(func(c *Config) { c.Speaker.ASP, c.Speaker.ASPChosen = v, true })
 }
 
 // Resampling is how the 16 kHz voice a pipeline sends is stretched to the 48 kHz the codec takes.

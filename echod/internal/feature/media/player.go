@@ -183,11 +183,14 @@ func build() *Player {
 	component.Bind(p.resampling, speaker.Resamplings(), speaker.Get().SetResampling,
 		config.Set().Speaker().Resampling)
 
-	// The speaker settles this: a device whose tuning would not load stays off however it is set.
+	// The speaker settles this: a device whose tuning would not load stays off however it is set. What
+	// is saved is what was asked, not what it managed — a device that cannot tune today may be able to
+	// tomorrow, when its coefficients arrive or a release learns its tuning, and writing the settled
+	// false back would leave it untuned for ever with nobody having chosen that.
 	p.asp.OnCommand = func(want bool) {
 		settled := speaker.Get().SetASP(want)
 		p.asp.Set(settled)
-		if err := config.Set().Speaker().ASP(settled); err != nil {
+		if err := config.Set().Speaker().ASP(want); err != nil {
 			slog.Error("saving a setting failed", "setting", p.asp.ObjectID, "err", err)
 		}
 		slog.Info("setting changed", "setting", p.asp.ObjectID, "using", settled, "asked", want)
@@ -278,9 +281,10 @@ func (p *Player) Restore(c config.Config) {
 	p.duck.Set(float32(c.Media.DuckDB))
 	slog.Info("restored", "what", p.duck.ObjectID, "using", c.Media.DuckDB)
 
-	settled := speaker.Get().SetASP(c.Speaker.ASP)
+	want := c.Speaker.ASPWanted()
+	settled := speaker.Get().SetASP(want)
 	p.asp.Set(settled)
-	slog.Info("restored", "what", p.asp.ObjectID, "using", settled, "asked", c.Speaker.ASP)
+	slog.Info("restored", "what", p.asp.ObjectID, "using", settled, "asked", want)
 }
 
 // onTurns is what music may do about a turn.
