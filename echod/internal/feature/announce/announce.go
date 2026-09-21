@@ -17,9 +17,7 @@ package announce
 import (
 	"bytes"
 	"context"
-	"encoding/json"
 	"fmt"
-	"io"
 	"log/slog"
 	"net"
 	"net/http"
@@ -32,6 +30,7 @@ import (
 	"github.com/HuskerMinion/techo5/echod/internal/component"
 	"github.com/HuskerMinion/techo5/echod/internal/config"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/web"
+	"github.com/HuskerMinion/techo5/echod/internal/hardware/mic"
 	"github.com/HuskerMinion/techo5/echod/internal/hardware/speaker"
 	"github.com/HuskerMinion/techo5/echod/internal/lib/hook"
 	"github.com/HuskerMinion/techo5/echod/internal/lib/safe"
@@ -62,10 +61,18 @@ const (
 // announceTone is what an announcement arrives with: two notes rising, distinct from the alarm's.
 var announceTone = []speaker.Note{{Freq: 659, Ms: 90}, {Freq: 988, Ms: 160}}
 
-// Message is an announcement as it arrives.
+// Message is an announcement as it arrives: who it came from, what was said, and the saying of it.
+//
+// Audio is the point and text is the trimming. A device with a screen shows the words when there are
+// any, and every device plays the voice — which is what makes this work on a Dot, where there is
+// nothing to read. An announcement from an automation has text and no voice; one spoken into a
+// device has voice and, when Home Assistant heard it too, text as well.
 type Message struct {
 	From string `json:"from"`
 	Text string `json:"text"`
+
+	// Voice is what was said, at the microphone's rate, empty for an announcement nobody spoke.
+	Voice []int16 `json:"-"`
 }
 
 type Feature struct {
@@ -74,6 +81,11 @@ type Feature struct {
 	mu    sync.Mutex
 	last  Message
 	until time.Time
+
+	// recording is whether this device has its microphone open for an announcement now, for the
+	// screen and the ring to say so: a microphone that is open and does not look it is the thing
+	// people mind most.
+	recording bool
 
 	// Changed fires when something arrives or stops showing, so the screen redraws.
 	Changed hook.Hook[struct{}]
@@ -90,8 +102,15 @@ func Get() *Feature {
 		shared.action = &esphome.Action{
 			Name: "announce_house",
 			Args: []esphome.Arg{{Name: "text", Type: esphome.ArgString}},
+			// With words, it says them: an automation telling the house the washing is done. With
+			// none, it opens the microphone and sends whoever is standing here, which is what a
+			// person means by announcing and what an intent for "announce" should call.
 			Run: func(c esphome.Call) (any, error) {
-				safe.Go("announce", func() { shared.Say(c.String("text")) })
+				if text := strings.TrimSpace(c.String("text")); text != "" {
+					safe.Go("announce", func() { shared.Say(text) })
+					return nil, nil
+				}
+				safe.Go("announce", func() { shared.Speak(context.Background()) })
 				return nil, nil
 			},
 		}
@@ -129,13 +148,13 @@ func (f *Feature) receive(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "post an announcement", http.StatusMethodNotAllowed)
 		return
 	}
-	var m Message
-	if err := json.NewDecoder(io.LimitReader(r.Body, 4<<10)).Decode(&m); err != nil {
+	m, err := decode(r)
+	if err != nil {
 		http.Error(w, "that was not an announcement", http.StatusBadRequest)
 		return
 	}
 	m.From, m.Text = clip(m.From, 40), clip(m.Text, maxText)
-	if m.Text == "" {
+	if m.Text == "" && len(m.Voice) == 0 {
 		http.Error(w, "an announcement says something", http.StatusBadRequest)
 		return
 	}
@@ -151,18 +170,104 @@ func (f *Feature) show(m Message) {
 	f.mu.Unlock()
 
 	quiet := config.Quiet()
-	slog.Info("announcement", "from", m.From, "quiet", quiet)
-	if !quiet {
-		speaker.Sound().Interject(func(p *speaker.Player) { p.Chime(chimeLevel, announceTone...) })
-	}
+	slog.Info("announcement", "from", m.From, "words", m.Text != "", "seconds", seconds(m.Voice), "quiet", quiet)
 	f.Changed.Emit(struct{}{})
+
+	// In quiet hours it is shown and not heard. The screen holds it for its forty-five seconds either
+	// way, which is how somebody walking past at midnight finds out what they missed.
+	if quiet {
+		return
+	}
+	safe.Go("announcement", func() { f.sound(m) })
+}
+
+// sound is the chime and then the voice, under one claim on the speaker so that stopping an
+// announcement stops all of it, and so that whatever was playing is put back afterwards.
+func (f *Feature) sound(m Message) {
+	claim := speaker.Sound().Claim("announcement", func(ctx context.Context, p *speaker.Player) error {
+		p.Chime(chimeLevel, announceTone...)
+		if len(m.Voice) == 0 {
+			return nil
+		}
+		// The chime is still leaving the driver, and the two running together would be a chord.
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-time.After(chimeTail):
+		}
+		p.PlayVoice(m.Voice)
+		return nil
+	})
+	<-claim.Done()
+	if err := claim.Err(); err != nil {
+		slog.Warn("playing an announcement failed", "from", m.From, "err", err)
+	}
+}
+
+// chimeTail is the gap between the chime and the voice: enough for one to finish, short enough that
+// the two are heard as one event.
+const chimeTail = 400 * time.Millisecond
+
+// seconds is how long a clip runs, for the log.
+func seconds(voice []int16) float64 {
+	if len(voice) == 0 {
+		return 0
+	}
+	return float64(len(voice)) / float64(mic.Rate)
 }
 
 // Say tells every other device in the house, and shows it here as well so the room it was sent from
-// can see that it went.
-func (f *Feature) Say(text string) {
-	text = clip(strings.TrimSpace(text), maxText)
-	if text == "" {
+// can see that it went. Text with no voice is an automation talking; the screens show it and the
+// Dots chime and say nothing, which is the honest result of sending words to a device that cannot
+// read them aloud.
+func (f *Feature) Say(text string) { f.send(Message{Text: clip(strings.TrimSpace(text), maxText)}) }
+
+// Speak records whoever is standing at this device and sends that, which is the announcement people
+// mean: a voice in every room, with nothing typed and nothing understood by anybody in between. A
+// recording nobody spoke into is dropped rather than sent as a chime and silence.
+func (f *Feature) Speak(ctx context.Context) {
+	if config.Get().Home.HouseWord == "" {
+		slog.Warn("nothing announced: this house has no word set, so nobody would take it")
+		return
+	}
+
+	f.mu.Lock()
+	busy := f.recording
+	f.recording = true
+	f.mu.Unlock()
+	if busy {
+		slog.Info("already recording an announcement")
+		return
+	}
+	defer func() {
+		f.mu.Lock()
+		f.recording = false
+		f.mu.Unlock()
+		f.Changed.Emit(struct{}{})
+	}()
+	f.Changed.Emit(struct{}{})
+
+	voice := record(ctx)
+	speaker.Sound().Interject(func(p *speaker.Player) { p.Chime(promptLevel, confirm...) })
+	if len(voice) == 0 {
+		slog.Info("nothing was said, so nothing was announced")
+		return
+	}
+	f.send(Message{Voice: voice})
+}
+
+// Recording is whether this device is taking an announcement now, for the screen and the ring to say
+// so: a microphone that is open and does not look it is the thing people mind most.
+func (f *Feature) Recording() bool {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return f.recording
+}
+
+// send pushes one to every peer at once and shows it here. Every device is told in parallel, so the
+// house hears it together rather than room by room down a list.
+func (f *Feature) send(m Message) {
+	if m.Text == "" && len(m.Voice) == 0 {
 		return
 	}
 	word := config.Get().Home.HouseWord
@@ -170,29 +275,26 @@ func (f *Feature) Say(text string) {
 		slog.Warn("nothing announced: this house has no word set, so nobody would take it")
 		return
 	}
-	me := config.Get().Device.Name
-	body, err := json.Marshal(Message{From: me, Text: text})
-	if err != nil {
-		return
-	}
+	m.From = config.Get().Device.Name
+	body, headers := encode(m)
 
 	peers := Peers()
-	slog.Info("announcing", "text", text, "to", len(peers))
+	slog.Info("announcing", "text", m.Text, "seconds", seconds(m.Voice), "to", len(peers))
 	var wg sync.WaitGroup
 	for _, p := range peers {
 		wg.Add(1)
 		go func(p Peer) {
 			defer wg.Done()
-			if err := post(p, word, body); err != nil {
+			if err := post(p, word, body, headers); err != nil {
 				slog.Warn("announcement not delivered", "to", p.Name, "err", err)
 			}
 		}(p)
 	}
 	wg.Wait()
-	f.show(Message{From: me, Text: text})
+	f.show(m)
 }
 
-func post(p Peer, word string, body []byte) error {
+func post(p Peer, word string, body []byte, headers map[string]string) error {
 	ctx, cancel := context.WithTimeout(context.Background(), sendWait)
 	defer cancel()
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost,
@@ -201,7 +303,9 @@ func post(p Peer, word string, body []byte) error {
 		return err
 	}
 	req.Header.Set(header, word)
-	req.Header.Set("Content-Type", "application/json")
+	for k, v := range headers {
+		req.Header.Set(k, v)
+	}
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		return err
