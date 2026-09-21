@@ -61,7 +61,19 @@ const (
 	// as it happens. It comes after that press's Hold, so whatever the hold started is still going
 	// and is the listener's to undo. Devices where longHoldAfter is zero never report one.
 	LongHold Kind = "long_hold"
+
+	// DoubleTap is a second tap within doubleTap of the first, and comes after both of their Taps
+	// rather than instead of them. The first tap has already acted by then - the action button starts
+	// listening the moment it is let go, because a talk button that waits to see whether a second tap
+	// is coming feels broken - so a listener for this undoes what the first one started, the way the
+	// conversation already undoes the turn a hold began on its way to something longer.
+	DoubleTap Kind = "double_tap"
 )
+
+// doubleTap is how close the second tap has to be. Long enough for a deliberate double tap on a
+// button people press with one finger, short enough that two separate presses are not mistaken for
+// one gesture.
+const doubleTap = 400 * time.Millisecond
 
 // LongHolds reports whether this device reports LongHold at all.
 func LongHolds() bool { return longHoldAfter > 0 }
@@ -87,6 +99,9 @@ type Controller struct {
 
 	mu      sync.Mutex
 	devices []*input.Device
+
+	// tapped is when each button last reported a Tap, for recognising the second of a pair.
+	tapped map[Name]time.Time
 }
 
 var (
@@ -190,6 +205,29 @@ func (h *held) stop() {
 
 func (c *Controller) emit(name Name, kind Kind) {
 	c.Events.Emit(Event{Name: name, Kind: kind})
+
+	// A second tap is a gesture of its own, reported after the tap that completed it. Volume repeats
+	// while it is held and its taps are steps rather than gestures, so it is left out.
+	if kind != Tap || repeats(name) {
+		return
+	}
+	now := time.Now()
+	c.mu.Lock()
+	if c.tapped == nil {
+		c.tapped = map[Name]time.Time{}
+	}
+	last := c.tapped[name]
+	// The pair is spent either way: three taps are a double and then a single, not two doubles.
+	c.tapped[name] = now
+	if !last.IsZero() && now.Sub(last) <= doubleTap {
+		c.tapped[name] = time.Time{}
+	}
+	pair := !last.IsZero() && now.Sub(last) <= doubleTap
+	c.mu.Unlock()
+
+	if pair {
+		c.Events.Emit(Event{Name: name, Kind: DoubleTap})
+	}
 }
 
 func (c *Controller) watch(ctx context.Context, d *input.Device) error {

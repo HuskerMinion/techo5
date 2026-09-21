@@ -132,6 +132,14 @@ func (v *Voice) Start(slot int) { v.turn.Start(slot) }
 // is.
 func (v *Voice) Busy() bool { return v.turn.Busy() }
 
+// Cancel stops a turn that is running, for a gesture that turned out to mean something else: the
+// second tap of a double, the way a long hold already undoes the turn its hold began.
+func (v *Voice) Cancel() {
+	if v.turn.Busy() {
+		v.turn.Cancel()
+	}
+}
+
 // Action is the action button: it gives up on whatever is happening, or starts something if nothing
 // is. Cancelling is the more useful half — it is the way out of a turn that is waiting on a pipeline
 // that is not going to answer.

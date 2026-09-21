@@ -6,12 +6,14 @@ import (
 	"html"
 	"log/slog"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 
 	"github.com/HuskerMinion/techo5/echod/internal/config"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/diag"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/home"
+	"github.com/HuskerMinion/techo5/echod/internal/feature/media"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/timezone"
 	"github.com/HuskerMinion/techo5/echod/internal/layout"
 	"github.com/HuskerMinion/techo5/echod/internal/lib/wifi"
@@ -182,7 +184,16 @@ func (f *Feature) save(w http.ResponseWriter, r *http.Request) {
 			renamed = true
 		}
 	case "stations":
-		problem = saveStations(r)
+		// Play and Stop are buttons in the same form as Save, so that a row can be tried with what is
+		// typed in it rather than only with what was last kept. Neither of them saves anything.
+		switch {
+		case r.PostFormValue("stop") != "":
+			media.Get().Stop()
+		case r.PostFormValue("play") != "":
+			problem = playRow(r)
+		default:
+			problem = saveStations(r)
+		}
 	case "timezone":
 		zone := strings.TrimSpace(r.PostFormValue("zone"))
 		switch {
@@ -224,6 +235,10 @@ const pageHead = `<!doctype html><html lang="en"><meta charset="utf-8">
  select,input{font:inherit;width:100%;padding:.5rem;border-radius:8px;border:1px solid #4a372e;background:#241813;color:inherit}
  button{font:inherit;padding:.55rem 1.1rem;border:0;border-radius:999px;background:#ff7043;color:#1a110d;font-weight:600;cursor:pointer}
  .note{color:#b59c8f;font-size:.9rem} .ok{color:#8bc34a} .bad{color:#ff8a65}
+ /* Play and Stop are beside the thing they act on, so they are quieter than Save, which is the
+    button this page is really for. */
+ button.quiet{background:#241813;color:#f2e6df;border:1px solid #4a372e;font-weight:500;padding:.35rem .9rem}
+ .playing{color:#8bc34a;display:flex;align-items:center;gap:.7rem;flex-wrap:wrap}
 </style>`
 
 func (f *Feature) lockedPage(w http.ResponseWriter) {
@@ -376,17 +391,55 @@ func stationsSection(w http.ResponseWriter, token string) {
 		fmt.Fprintf(w, `<label for="n%d">Name</label>
 		 <input id="n%d" name="name" value="%s" maxlength="40" autocomplete="off" placeholder="Station name">
 		 <label for="u%d">Stream address</label>
-		 <input id="u%d" name="url" value="%s" autocomplete="off" placeholder="https://…">`,
-			i, i, html.EscapeString(st.Name), i, i, html.EscapeString(st.URL))
+		 <input id="u%d" name="url" value="%s" autocomplete="off" placeholder="https://…">
+		 <p><button type="submit" name="play" value="%d" class="quiet">Play this one</button></p>`,
+			i, i, html.EscapeString(st.Name), i, i, html.EscapeString(st.URL), i)
 	}
-	fmt.Fprint(w, `<p class="note">Saving does not play them: a stream that does not work says so when
-	 you try it, on the device. Clear a name to take a station out. They show on the device under
+
+	// What the device is doing, because a page with play buttons and no answer is a remote control
+	// with no display — and on a Dot it is the only place this can be seen at all.
+	if station, playing := home.Get().NowPlaying(); playing {
+		if station == "" {
+			station = "something"
+		}
+		fmt.Fprintf(w, `<p class="playing">Playing %s
+		 <button type="submit" name="stop" value="1" class="quiet">Stop</button></p>`,
+			html.EscapeString(station))
+	}
+
+	fmt.Fprint(w, `<p class="note">Play uses what is typed in the row, saved or not, so an address can
+	 be tried before it is kept. Clear a name to take a station out. They show on the device under
 	 Radio, as "On this device".</p>
 	 <p><button type="submit">Save stations</button></p></form></fieldset>`)
 }
 
 // saveStations takes the rows the form posted, in the order they were in. Names and addresses come
 // back as two lists of the same length, one row each.
+// playRow plays the row whose Play button was pressed, with the name and address as they stand in
+// the form. A row with nothing in it is a press on the spare row at the bottom, which is somebody
+// asking for nothing.
+func playRow(r *http.Request) string {
+	i, err := strconv.Atoi(r.PostFormValue("play"))
+	names, urls := r.PostForm["name"], r.PostForm["url"]
+	if err != nil || i < 0 || i >= len(names) || i >= len(urls) {
+		return "that row is not one of these"
+	}
+	name, u := strings.TrimSpace(names[i]), strings.TrimSpace(urls[i])
+	switch {
+	case name == "" && u == "":
+		return "fill the row in first"
+	case u == "":
+		return name + " has no stream address"
+	}
+	if name == "" {
+		name = "that stream"
+	}
+	if !home.Get().PlayStream(name, u) {
+		return name + "'s address has to start with http:// or https://"
+	}
+	return ""
+}
+
 func saveStations(r *http.Request) string {
 	names, urls := r.PostForm["name"], r.PostForm["url"]
 	if len(names) != len(urls) {
