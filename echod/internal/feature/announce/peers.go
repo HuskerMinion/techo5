@@ -104,6 +104,7 @@ func (f *Feature) browse(ctx context.Context) {
 	found := make(chan *zeroconf.ServiceEntry, 16)
 	var heard []Peer
 	done := make(chan struct{})
+	seen := map[string]bool{}
 	go func() {
 		defer close(done)
 		me := config.Get().Device.Name
@@ -116,6 +117,12 @@ func (f *Feature) browse(ctx context.Context) {
 			if addr == "" {
 				continue
 			}
+			// One device answers more than once - two interfaces, or a record repeated as the
+			// browse runs - and a peer listed twice is an announcement played twice in one room.
+			if seen[strings.ToLower(name)] {
+				continue
+			}
+			seen[strings.ToLower(name)] = true
 			heard = append(heard, Peer{Name: name, Address: addr, Port: e.Port})
 		}
 	}()
