@@ -15,7 +15,8 @@ What it fetches, over HTTPS from Alpine's CDN and GitHub:
                                            home_assistant, from fwartner/home-assistant-wakewords-collection
   show, spot: apks/, apks312/             tools/linux/packages.txt; the wpa_supplicant 2.9 set from Alpine v3.12
   spot:       apks/libgcc                 mkfs.ext4 needs it in the Spot's rescue initramfs
-  dot:        apks-dot/, apks-bt-dot/     techo5-dot's tools/linux/packages-rescue.txt and packages-bt.txt
+  dot:        apks-dot/, apks-bt-dot/,    techo5-dot's tools/linux/packages-rescue.txt, packages-bt.txt and
+              apks-rootfs-dot/            packages-rootfs.txt (the last only unpacked into the root filesystem)
 
 A package list names exact versions. Alpine keeps only the newest build of each package, so when a listed
 one is gone the newest is taken and the script says so (docs/building.md, "Package versions").
@@ -153,6 +154,9 @@ def main():
             fail('no techo5-dot checkout at %s: pass --dot' % a.dot)
         get_list(os.path.join(lists, 'packages-rescue.txt'), os.path.join(out, 'apks-dot'), out)
         get_list(os.path.join(lists, 'packages-bt.txt'), os.path.join(out, 'apks-bt-dot'), out)
+        # Kept apart from apks-dot: the rescue initramfs unpacks everything in that directory and is
+        # flashed to a partition of a fixed size, so what only the running system needs goes here.
+        get_list(os.path.join(lists, 'packages-rootfs.txt'), os.path.join(out, 'apks-rootfs-dot'), out)
     for f in os.listdir(tmp):
         os.remove(os.path.join(tmp, f))
     os.rmdir(tmp)
