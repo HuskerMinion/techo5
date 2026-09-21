@@ -33,7 +33,10 @@ func announceRows(s scene) ([]settingRow, string) {
 		}}, ""
 	}
 
-	sub := "Heard in every room here"
+	// None found is said plainly. It read "Heard in every room here" before, which is a promise the
+	// device cannot keep when it has not found anybody - and that is exactly the state somebody is
+	// in while they are working out why nothing arrives.
+	sub := "No other devices found yet"
 	if s.announcePeers > 0 {
 		sub = fmt.Sprintf("Heard on %s", devicesText(s.announcePeers))
 	}

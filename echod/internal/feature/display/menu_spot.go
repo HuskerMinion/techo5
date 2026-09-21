@@ -262,7 +262,7 @@ func itemHint(s roundScene, id itemID) string {
 		case s.announcePeers > 0:
 			return "heard on " + devicesText(s.announcePeers)
 		}
-		return "say it in every room"
+		return "no other devices found"
 	case itemCall:
 		switch {
 		case !s.phoneReady:
