@@ -51,14 +51,15 @@ func (f *Feature) Name() string { return "camera" }
 // of its pages is switched on and shut when none is. A device with no camera registers nothing here
 // and still has the port for the pages it does have.
 func (f *Feature) register() {
-	if camera.Available() {
-		web.Handle("/camera.jpg", "Camera", cameraOpen, f.snapshot)
-		web.Handle("/camera.mjpeg", "", cameraOpen, f.stream)
-	}
+	web.Handle("/camera.jpg", "Camera", cameraOpen, f.snapshot)
+	web.Handle("/camera.mjpeg", "", cameraOpen, f.stream)
 	f.registerScreen()
 }
 
-func cameraOpen() bool { return config.Get().Security.Camera }
+// cameraOpen is the switch and the hardware together, asked at the moment of the request: the device
+// nodes are looked for then rather than when the daemon starts, since this runs before the rest of
+// the daemon has touched anything.
+func cameraOpen() bool { return config.Get().Security.Camera && camera.Available() }
 
 func encode(f *camera.Frame) ([]byte, error) {
 	return encodeImage(f.RGBA)
