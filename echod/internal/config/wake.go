@@ -7,11 +7,6 @@ type Wake struct {
 	// Stop is the device's own word for interrupting what it is saying. It is not one of the slots
 	// above: Home Assistant does not choose it, and it opens no pipeline.
 	Stop Stop `json:"stop"`
-
-	// Announce is the word that opens the microphone for a house announcement. Like Stop it is the
-	// device's own and not one of the slots: it starts no conversation and needs no pipeline, which
-	// is the point of it — announcing works with Home Assistant switched off.
-	Announce Announce `json:"announce"`
 }
 
 // Stop is the interrupting word.
@@ -36,39 +31,6 @@ func defaultStop() Stop {
 
 // Listening reports whether the stop word is being listened for.
 func (s Stop) Listening() bool { return s.Threshold < StopOff }
-
-// Announce is the word that starts a house announcement.
-type Announce struct {
-	// Threshold is the score it has to reach. At AnnounceOff the word is not listened for and the
-	// model is left unloaded, which is the switch: there is no separate one.
-	//
-	// It starts off. A wake word nobody asked for is a device that acts on something said near it,
-	// and the phrase is short enough to appear inside ordinary sentences - "house announcement" is
-	// the obvious one, since the word it listens for is the start of it.
-	Threshold float64 `json:"threshold"`
-}
-
-const (
-	// AnnounceOff is a threshold no score can reach, which is how the word is turned off, and where
-	// it starts.
-	AnnounceOff = 1.0
-
-	// DefaultAnnounceThreshold is where it sits once somebody turns it on.
-	//
-	// High, because the scores are in two heaps rather than spread: a real saying of the phrase lands
-	// near the top and almost nothing else does, so the usual trade hardly applies here. Measured
-	// through the engine, against voices the model never trained on: at 0.5 it misses 4% of the
-	// phrase and 21.6% of deliberately confusable sayings reach it; at 0.9 it misses 5.3% and 3.4%
-	// reach it. Six times fewer false wakes for one percentage point of misses.
-	DefaultAnnounceThreshold = 0.9
-)
-
-func defaultAnnounce() Announce {
-	return Announce{Threshold: AnnounceOff}
-}
-
-// Listening reports whether the announce word is being listened for.
-func (a Announce) Listening() bool { return a.Threshold < AnnounceOff }
 
 // WakeWord is one slot: which wake word listens there and how it behaves when it fires. An empty ID
 // is the slot switched off, which is also how detection is turned off altogether.
@@ -174,13 +136,6 @@ type StopWriter struct{ st *Store }
 
 func (w StopWriter) Threshold(v float64) error {
 	return w.st.Update(func(c *Config) { c.Wake.Stop.Threshold = v })
-}
-
-// AnnounceWriter is the announce word, which belongs to no slot either.
-type AnnounceWriter struct{ st *Store }
-
-func (w AnnounceWriter) Threshold(v float64) error {
-	return w.st.Update(func(c *Config) { c.Wake.Announce.Threshold = v })
 }
 
 type WakeWriter struct {

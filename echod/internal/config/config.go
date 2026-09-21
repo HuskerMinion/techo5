@@ -56,7 +56,7 @@ func Defaults() Config {
 
 		// Only the stop word. The slots are absent until something chooses one, and Slot fills in the
 		// defaults for whichever have not been.
-		Wake: Wake{Words: defaultWords(), Stop: defaultStop(), Announce: defaultAnnounce()},
+		Wake: Wake{Words: defaultWords(), Stop: defaultStop()},
 	}
 }
 
@@ -94,9 +94,6 @@ func (w Writer) Wake(slot int) WakeWriter { return WakeWriter{st: w.st, slot: sl
 
 // Stop is the stop word, which is not a slot.
 func (w Writer) Stop() StopWriter { return StopWriter(w) }
-
-// Announce is the announce word, which is not a slot either.
-func (w Writer) Announce() AnnounceWriter { return AnnounceWriter(w) }
 
 func errSlot(n int) error { return fmt.Errorf("config: wake slot %d", n) }
 
