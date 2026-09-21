@@ -22,14 +22,22 @@ import (
 var patterns = []struct {
 	name string
 	re   *regexp.Regexp
+
+	// inner says the value is the first group rather than the whole match, for a pattern that has to
+	// see what is either side of a thing in order to know what it is.
+	inner bool
 }{
-	{"key", regexp.MustCompile(`(?i)\b(?:psk|token|secret|password|passphrase|api[_-]?key)\s*[:=]\s*"?([^\s",}]{6,})"?`)},
-	{"mac", regexp.MustCompile(`\b(?:[0-9A-Fa-f]{2}:){5}[0-9A-Fa-f]{2}\b`)},
-	{"ipv6", regexp.MustCompile(`\b(?:[0-9A-Fa-f]{1,4}:){4,7}[0-9A-Fa-f]{1,4}\b`)},
-	{"ip", regexp.MustCompile(`\b(?:\d{1,3}\.){3}\d{1,3}\b`)},
-	{"email", regexp.MustCompile(`\b[\w.+-]+@[\w-]+\.[\w.-]+\b`)},
-	{"phone", regexp.MustCompile(`\b\+?\d{10,15}\b`)},
-	{"url", regexp.MustCompile(`\b(?:https?)://[^\s"'<>]+`)},
+	{"key", regexp.MustCompile(`(?i)\b(?:psk|token|secret|password|passphrase|api[_-]?key)\s*[:=]\s*"?([^\s",}]{6,})"?`), false},
+	{"mac", regexp.MustCompile(`\b(?:[0-9A-Fa-f]{2}:){5}[0-9A-Fa-f]{2}\b`), false},
+	{"ipv6", regexp.MustCompile(`\b(?:[0-9A-Fa-f]{1,4}:){4,7}[0-9A-Fa-f]{1,4}\b`), false},
+	{"ip", regexp.MustCompile(`\b(?:\d{1,3}\.){3}\d{1,3}\b`), false},
+	{"email", regexp.MustCompile(`\b[\w.+-]+@[\w-]+\.[\w.-]+\b`), false},
+	// A telephone number, and not the tail of a number that merely holds ten digits: a rate of
+	// 49.98765432109876 has a run of digits after the point that this used to take for a phone, which
+	// left a log reading "per_second=49.<phone-130>" line after line and nothing in it worth reading.
+	// The match takes in what is either side of the number so it can tell; only the number goes.
+	{"phone", regexp.MustCompile(`(?:^|[^\d.+-])(\+?\d{10,15})(?:$|[^\d.])`), true},
+	{"url", regexp.MustCompile(`\b(?:https?)://[^\s"'<>]+`), false},
 }
 
 // Redactor takes text and gives it back with the private parts replaced. Values it is told about —
@@ -76,6 +84,13 @@ func (r *Redactor) Text(s string) string {
 			switch match {
 			case "127.0.0.1", "0.0.0.0", "255.255.255.255", "::1":
 				return match
+			}
+			// A pattern that had to take in what surrounds a value to recognise it gives back what
+			// surrounds it untouched.
+			if p.inner {
+				if at := p.re.FindStringSubmatchIndex(match); len(at) >= 4 && at[2] >= 0 {
+					return match[:at[2]] + r.placeholder(p.name, match[at[2]:at[3]]) + match[at[3]:]
+				}
 			}
 			return r.placeholder(p.name, match)
 		})
