@@ -59,6 +59,9 @@ type Player struct {
 	// next try is heard; see feature/detect/nearmiss.go.
 	nearMiss *esphome.Switch
 
+	// sleep stops what is playing after a while, the way a clock radio does.
+	sleep *sleeper
+
 	// layers are sounds the device makes on its own, for as long as they are left set. More than one,
 	// because a bed with a texture over it — crickets under wind — is worth having and the native API
 	// has no entity that holds more than one value.
@@ -97,6 +100,7 @@ func Get() *Player {
 
 func build() *Player {
 	p := &Player{
+		sleep: newSleeper(),
 		mp: &esphome.MediaPlayer{
 			Base: esphome.Base{ObjectID: "speaker", Name: "Speaker", Icon: "mdi:speaker"},
 			Features: esphome.MediaPlayerFeatureVolumeSet |
@@ -251,7 +255,7 @@ func build() *Player {
 func (p *Player) Name() string { return "media player" }
 
 func (p *Player) Entities() []esphome.Entity {
-	out := []esphome.Entity{p.mp, p.jack, p.resampling, p.onTurn, p.duck, p.asp, p.nearMiss}
+	out := []esphome.Entity{p.mp, p.jack, p.resampling, p.onTurn, p.duck, p.asp, p.nearMiss, p.sleep.sel}
 	for _, sel := range p.layers {
 		out = append(out, sel)
 	}
@@ -431,6 +435,9 @@ func (p *Player) Resume() { p.stream.Unpause() }
 
 // Stop ends the track, as Home Assistant's stop does.
 func (p *Player) Stop() { p.stream.Stop() }
+
+// Sleep is the sleep timer: what is playing stops after a while.
+func (p *Player) Sleep() *sleeper { return p.sleep }
 
 // PlayURL starts a stream the device already knows the address of — one of its own radio stations —
 // without Home Assistant resolving anything first. It is the same track as any other: a turn ducks

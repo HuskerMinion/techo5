@@ -89,6 +89,7 @@ func categoryRows(sv sheetView) (rows []settingRow, note string) {
 			{id: "wakesens", label: "Wake word sensitivity", sub: "Higher wakes by mistake less often", kind: ctlStepper,
 				value: fmt.Sprintf("%.2f", config.Get().Wake.Slot(0).Threshold)},
 			{id: "waketone", label: "Wake sound", kind: ctlChoice, value: config.Get().Wake.Slot(0).Tone.Label()},
+			{id: "sleep", label: "Sleep timer", sub: sleepSub(), kind: ctlChoice, value: sleepValue()},
 			{id: "sendspin", label: "Music Assistant player", sub: "Play music in sync with other rooms", kind: ctlToggle, on: st.sendspin},
 		}, ""
 	case catConnections:
@@ -348,6 +349,8 @@ func pickerFor(id string, sv sheetView) (pickerView, bool) {
 		return pickerView{title: "Screen language", opts: langOptions, cur: langIndex()}, true
 	case "newtimer":
 		return pickerView{title: "New timer", opts: timerLabels, cur: -1}, true
+	case "sleep":
+		return pickerView{title: "Sleep timer", opts: sleepLabels(), cur: sleepIndex()}, true
 	case "timezone":
 		p := pickerView{title: "Time zone", opts: append([]string{followHA, common}, timezone.Regions()...), cur: -1}
 		if !timezone.Get().SetHere() {
@@ -423,6 +426,8 @@ func (d *Display) choose(id string, i int) {
 		if i < len(timerLengths) {
 			timer.Get().Start("Timer", timerLengths[i])
 		}
+	case "sleep":
+		chooseSleep(i)
 	case "timezone":
 		if i == 0 {
 			if err := timezone.Get().Follow(); err != nil {
@@ -585,7 +590,7 @@ func (d *Display) rowTap(id string, p part, opt int) {
 	case "subfolders":
 		_, _, subfolders := home.Get().SlideshowSettings()
 		home.Get().SetSlideshowSubfolders(!subfolders)
-	case "night", "clock", "slideshow", "photoevery", "screenlang", "newtimer", "timezone", "wakeword", "waketone":
+	case "night", "clock", "slideshow", "photoevery", "screenlang", "newtimer", "sleep", "timezone", "wakeword", "waketone":
 		d.openPicker(id)
 	}
 }

@@ -111,6 +111,7 @@ var registered = []string{
 	"sendspin",
 	"sendspin_state",
 	"setup_page",
+	"sleep_timer",
 	"slideshow_folder",
 	"slideshow_interval",
 	"slideshow_mode",
