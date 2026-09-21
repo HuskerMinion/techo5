@@ -22,6 +22,7 @@ import (
 	"github.com/HuskerMinion/techo5/echod/internal/feature/security"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/sendspin"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/timer"
+	"github.com/HuskerMinion/techo5/echod/internal/feature/timezone"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/voice"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/wakeword"
 	"github.com/HuskerMinion/techo5/echod/internal/hardware/speaker"
@@ -159,6 +160,7 @@ func generalRows(sv sheetView) []settingRow {
 	return []settingRow{
 		{label: "Name", sub: "Set in Home Assistant", kind: ctlValue, value: st.name},
 		{id: "weather", label: "Weather", sub: "Shown with the clock", kind: ctlChoice, value: st.weather, button: "Show"},
+		{id: "timezone", label: "Time zone", sub: zoneSub(), kind: ctlChoice, value: zoneValue()},
 		{id: "screenlang", label: "Screen language", sub: "What this screen listens for, not what the assistant speaks",
 			kind: ctlChoice, value: langOptions[langIndex()]},
 		updates,
@@ -261,6 +263,9 @@ func hourText(h int) string {
 
 // pickerFor is the list of choices a row opens.
 func pickerFor(id string, sv sheetView) (pickerView, bool) {
+	if region, ok := strings.CutPrefix(id, "tzzone:"); ok {
+		return zonePicker(region), true
+	}
 	switch id {
 	case "alarmsound":
 		p := pickerView{title: "Alarm sound", opts: speaker.AlarmSounds(), cur: -1}
@@ -341,6 +346,12 @@ func pickerFor(id string, sv sheetView) (pickerView, bool) {
 		return pickerView{title: "Screen language", opts: langOptions, cur: langIndex()}, true
 	case "newtimer":
 		return pickerView{title: "New timer", opts: timerLabels, cur: -1}, true
+	case "timezone":
+		p := pickerView{title: "Time zone", opts: append([]string{followHA, common}, timezone.Regions()...), cur: -1}
+		if !timezone.Get().SetHere() {
+			p.cur = 0
+		}
+		return p, len(p.opts) > 1
 	case "slideshow":
 		return pickerView{title: "Slideshow", opts: slideshowOptions, cur: slideshowIndex()}, true
 	case "photoevery":
@@ -351,6 +362,10 @@ func pickerFor(id string, sv sheetView) (pickerView, bool) {
 
 // choose puts the i'th choice of a row's list in force.
 func (d *Display) choose(id string, i int) {
+	if region, ok := strings.CutPrefix(id, "tzzone:"); ok {
+		chooseZone(region, i)
+		return
+	}
 	switch id {
 	case "night":
 		if i < len(nightPresets) {
@@ -405,6 +420,20 @@ func (d *Display) choose(id string, i int) {
 	case "newtimer":
 		if i < len(timerLengths) {
 			timer.Get().Start("Timer", timerLengths[i])
+		}
+	case "timezone":
+		if i == 0 {
+			if err := timezone.Get().Follow(); err != nil {
+				slog.Warn("following Home Assistant's time zone failed", "err", err)
+			}
+			return
+		}
+		if i == 1 {
+			d.openPicker("tzzone:" + common)
+			return
+		}
+		if regions := timezone.Regions(); i-2 < len(regions) {
+			d.openPicker("tzzone:" + regions[i-2])
 		}
 	case "screenlang":
 		if i < len(langCodes) {
@@ -548,7 +577,7 @@ func (d *Display) rowTap(id string, p part, opt int) {
 	case "subfolders":
 		_, _, subfolders := home.Get().SlideshowSettings()
 		home.Get().SetSlideshowSubfolders(!subfolders)
-	case "night", "clock", "slideshow", "photoevery", "screenlang", "newtimer", "wakeword", "waketone":
+	case "night", "clock", "slideshow", "photoevery", "screenlang", "newtimer", "timezone", "wakeword", "waketone":
 		d.openPicker(id)
 	}
 }

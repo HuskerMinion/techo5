@@ -329,9 +329,15 @@ func (r *paint) rowList(card, list image.Rectangle, rows []settingRow, scroll in
 	if maxScroll > 0 {
 		r.restore(under, image.Rect(card.Min.X, 0, card.Max.X, list.Min.Y-1))
 		r.restore(under, image.Rect(card.Min.X, list.Max.Y, card.Max.X, r.h))
-		for i := mark; i < len(r.pending); i++ {
-			r.pending[i].r = r.pending[i].r.Intersect(list)
+		// A row half off the end of the list keeps only the part inside it; one clipped away
+		// entirely is dropped, since a zone with no area is a tap target nobody can hit.
+		kept := r.pending[:mark]
+		for _, z := range r.pending[mark:] {
+			if z.r = z.r.Intersect(list); !z.r.Empty() {
+				kept = append(kept, z)
+			}
 		}
+		r.pending = kept
 		r.scrollHints(list, scroll, maxScroll, bg)
 	}
 	return maxScroll

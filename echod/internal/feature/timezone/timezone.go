@@ -10,9 +10,11 @@ package timezone
 
 import (
 	"context"
+	"io/fs"
 	"log/slog"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"time"
 
@@ -33,6 +35,11 @@ var (
 	nameFile = layout.StateDir + "/timezone"
 	linkFile = layout.StateDir + "/localtime"
 	zoneinfo = "/usr/share/zoneinfo"
+
+	// hereFile, while it exists, says the zone was chosen on the device. Home Assistant's own zone is
+	// then left alone rather than applied over it, so a choice made on the screen holds — including
+	// on a device that has never met a Home Assistant, where nothing else would ever set one.
+	hereFile = layout.StateDir + "/timezone-set-here"
 )
 
 type Zone struct{}
@@ -52,6 +59,9 @@ func (z *Zone) Handle(ctx context.Context, c *esphome.Conn, msg proto.Message) e
 			slog.Debug("asking home assistant for the time", "err", err)
 		}
 	case *api.GetTimeResponse:
+		if z.SetHere() {
+			return nil // chosen on the device; Home Assistant does not override that
+		}
 		if err := z.apply(m.GetTimezone()); err != nil {
 			slog.Warn("time zone from home assistant not applied", "zone", m.GetTimezone(), "err", err)
 		}
@@ -66,6 +76,79 @@ func (z *Zone) Current() string {
 		return ""
 	}
 	return strings.TrimSpace(string(b))
+}
+
+// SetHere is whether the zone in force was chosen on the device rather than taken from Home
+// Assistant.
+func (z *Zone) SetHere() bool {
+	_, err := os.Stat(hereFile)
+	return err == nil
+}
+
+// Choose applies a zone picked on the device and remembers that it was picked here, so Home
+// Assistant's zone no longer replaces it.
+func (z *Zone) Choose(zone string) error {
+	if err := z.apply(zone); err != nil {
+		return err
+	}
+	if err := os.WriteFile(hereFile, []byte(zone+"\n"), 0o644); err != nil {
+		return err
+	}
+	slog.Info("time zone chosen on the device", "zone", zone)
+	return nil
+}
+
+// Follow gives the zone back to Home Assistant: its next answer sets it, and one arrives on every
+// connection.
+func (z *Zone) Follow() error {
+	if err := os.Remove(hereFile); err != nil && !os.IsNotExist(err) {
+		return err
+	}
+	slog.Info("time zone follows home assistant again")
+	return nil
+}
+
+// Regions are the groups the zone database is arranged in — America, Europe, Asia and the rest —
+// for a screen that cannot list six hundred zones at once. Empty when the image carries no database.
+func Regions() []string {
+	entries, err := os.ReadDir(zoneinfo)
+	if err != nil {
+		return nil
+	}
+	var out []string
+	for _, e := range entries {
+		if e.IsDir() && e.Name() != "posix" && e.Name() != "right" {
+			out = append(out, e.Name())
+		}
+	}
+	sort.Strings(out)
+	return out
+}
+
+// Zones are the zones in one region, by the name they are known by ("Denver", not
+// "America/Denver"). A region with zones of its own inside it lists those too, as "Indiana/Knox".
+func Zones(region string) []string {
+	if !valid(region) {
+		return nil
+	}
+	var out []string
+	root := filepath.Join(zoneinfo, region)
+	err := filepath.WalkDir(root, func(path string, d fs.DirEntry, err error) error {
+		if err != nil || d.IsDir() {
+			return err
+		}
+		name, err := filepath.Rel(root, path)
+		if err != nil {
+			return nil
+		}
+		out = append(out, filepath.ToSlash(name))
+		return nil
+	})
+	if err != nil {
+		return nil
+	}
+	sort.Strings(out)
+	return out
 }
 
 // apply makes zone the device's zone: a POSIX rule, or a zone name this image has. Nothing is written
