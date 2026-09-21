@@ -151,6 +151,13 @@ type Display struct {
 	// radar is the rain map in place of the forecast, while the weather page is up.
 	radar bool
 
+	// away is the now-playing page put away by a swipe, and awayTrack/awayStation are what was playing
+	// when it went: the next track brings it back, so a dismissal costs nothing and never strands the
+	// buttons.
+	away        bool
+	awayTrack   string
+	awayStation string
+
 	// ringPreview shows the ringing page silently until then.
 	ringPreview time.Time
 
@@ -625,7 +632,32 @@ func (d *Display) gesture(g touch.Gesture) {
 			return
 		}
 		media.Get().Adjust(-1)
+	case touch.SwipeRight:
+		// On the now-playing page a swipe puts it away until the track changes. It is the only gesture
+		// left on that page, and the one that cannot be taken for play or pause.
+		if d.nowPlaying() {
+			rd := home.Get().Radio()
+			d.mu.Lock()
+			d.away, d.awayTrack, d.awayStation = true, rd.Title, rd.Now
+			d.mu.Unlock()
+			d.wake()
+		}
 	}
+}
+
+// putAway is whether the now-playing page is staying out of the way. A swipe puts it away and it stays
+// away only for the track it was put away on: a dismissal is temporary without needing a timer, and the
+// page comes back for the next song. Nothing playing at all clears it, so what comes next is not hidden
+// by a gesture made about something else.
+func (d *Display) putAway(rd home.Radio, wanted bool) bool {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+
+	if !wanted || !d.away || rd.Title != d.awayTrack || rd.Now != d.awayStation {
+		d.away, d.awayTrack, d.awayStation = false, "", ""
+		return false
+	}
+	return true
 }
 
 // nowPlaying is whether the idle screen should be what is playing rather than the clock: something
@@ -1153,7 +1185,9 @@ func (d *Display) frame() time.Duration {
 		d.mu.Unlock()
 	}
 	s.camera, s.showCamera = home.Get().Camera()
-	s.nowPlaying = (s.phase == "idle") && d.nowPlaying()
+	// Whether the idle screen wants to be what is playing. It is asked even when the page has been put
+	// away, because the track is what brings it back, so the radio is read either way.
+	wants := (s.phase == "idle") && d.nowPlaying()
 	d.mu.Lock()
 	s.showDrawer, s.drawerTab, s.drawerScroll, s.drawerPick, s.pickScroll = d.drawer && !s.showSheet && !s.showCamera, d.drawerTab, d.drawerScroll, d.drawerPick, d.pickScroll
 	d.mu.Unlock()
@@ -1163,9 +1197,10 @@ func (d *Display) frame() time.Duration {
 	if s.showDrawer && s.drawerTab == drawerCameras {
 		s.cameras = home.Get().Cameras()
 	}
-	if (s.showDrawer && s.drawerTab == drawerRadio) || s.nowPlaying {
+	if (s.showDrawer && s.drawerTab == drawerRadio) || wants {
 		s.radio = home.Get().Radio()
 	}
+	s.nowPlaying = wants && !d.putAway(s.radio, wants)
 	s.weather = home.Get().Weather()
 	d.mu.Lock()
 	s.showWeather = (s.phase == "idle" || s.phase == "lingering") && now.Before(d.weatherUntil)
