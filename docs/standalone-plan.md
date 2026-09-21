@@ -217,6 +217,39 @@ installer printing an encryption key and waiting to be paired. A standalone path
 that skips the key, and a first-run screen that offers *set this up on its own* beside *connect it to
 Home Assistant*.
 
+## Worth doing, in no particular milestone
+
+Each of these stands on its own and none of them blocks anything else.
+
+- **Sunrise alarm.** The screen has brightness control and the alarm already rings from the device's
+  own clock; fading the panel up over the quarter hour before it is a small change and the best
+  reason yet to put one of these by a bed. Nothing about it needs Home Assistant or the internet.
+- **Do Not Disturb hours.** Alarms ring, nothing else makes a sound. It is also what an announcement
+  from another device has to respect, so the two are worth designing together.
+- **A first-run screen.** Today a device comes up expecting Home Assistant. If any of this lands,
+  first boot should offer *set this up on its own* beside *connect it to Home Assistant*, and the
+  installer should be able to skip printing a key nobody is going to paste anywhere.
+- **The time, or the weather, on a button press.** No pipeline, no wake word, no cloud: press the
+  action button and hear it. The device has no speech of its own — the alarm sounds are synthesized
+  notes, not recordings — so this means either a handful of clips built into the image or a small
+  local voice. Useful to anyone who cannot read the screen, and it works during an outage.
+- **A Bluetooth button as local control.** The BLE radio is already scanning for Home Assistant's
+  proxy, so acting on a particular button locally is nearly free: stop the alarm, make an
+  announcement, start the radio. A physical button by a bed beats talking to a screen, and it is the
+  cheapest accessibility win in this document.
+- **Audio from a phone, into the device.** Today the device is a Bluetooth *source* — it plays to
+  earbuds. As a *sink*, a phone plays through it, which is what anyone who owned an Echo expects. It
+  is a well-trodden path with bluez-alsa, but the daemon owns the speaker, so it means ducking around
+  alarms, announcements and voice.
+- **A Dot-only build, if memory ever gets tight.** One binary serves all three devices, so a Dot
+  carries the screen, camera and slideshow code and never runs a line of it. 512 MB of RAM is half
+  the Show's, and the intercom is the first feature to add a continuous audio path on top of
+  everything else. Measure before assuming; the lever exists if it is needed.
+- **How to build and test a change, written down for someone else.** Two contributors arrived in two
+  days and one of them found a bug nobody here could have. The single biggest risk to this project is
+  that one person can cut a release; the cheapest thing that helps is a path from "I changed a file"
+  to "I tested it on my own unit" that does not depend on asking.
+
 ## Non-goals
 
 - Reimplementing Home Assistant on the device. Weather, cameras, media libraries and voice stay
@@ -225,6 +258,10 @@ Home Assistant*.
   screen; it is not a second front end for the device.
 - Cloud anything. No account, no telemetry, and no phoning an IP geolocation service unless the owner
   asked for it.
+- **A music player**: local files, playlists, libraries, a streaming service. It sounds obvious and
+  it is a swamp — codecs, artwork, licensing, a library nobody wants to manage on a five-inch screen.
+  Radio gives most of what people actually want for a fraction of it, and Music Assistant already
+  does the rest through Home Assistant.
 
 ## Order, and why
 
