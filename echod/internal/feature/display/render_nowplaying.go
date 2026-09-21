@@ -19,7 +19,7 @@ func (r *renderer) nowPlaying(s scene) {
 	rd := s.radio
 	r.background(rd)
 
-	r.cornerClock(s)
+	r.cornerClockDated(s)
 	r.weatherCorner(s)
 
 	station := rd.Now

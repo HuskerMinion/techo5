@@ -105,6 +105,12 @@ func TestRoundScenesDraw(t *testing.T) {
 		"menu":              {now: at, phase: "idle", volume: 12, menuOpen: true, menuMode: modeMain, menuSel: 0, menuRot: restFor(0, len(mainItems))},
 		"menu-timers":       {now: at, phase: "idle", menuOpen: true, menuMode: modeMain, menuSel: 6, menuRot: restFor(6, len(mainItems)) + 0.3, timers: []timer.Countdown{{Left: 272 * time.Second, Total: 600 * time.Second, Active: true}}},
 		"jog-volume":        {now: at, phase: "idle", menuOpen: true, menuMode: modeVolume, volume: 14, maxVolume: 30},
+		"setup-ask":         {now: at, phase: "idle", setupAsking: true},
+		"settings-general":  spotScene(catGeneral),
+		"settings-tzpick":   spotPicker(catGeneral, "timezone"),
+		"settings-tzcommon": spotPicker(catGeneral, "timezone:Common"),
+		"settings-sound":    spotScene(catSound),
+		"settings-privacy":  spotScene(catSecurity),
 	}
 	dir := os.Getenv("SPOT_PREVIEW")
 	for name, s := range scenes {
@@ -122,4 +128,11 @@ func TestRoundScenesDraw(t *testing.T) {
 		}
 		f.Close()
 	}
+}
+
+// spotPicker is a settings card with one row's list of choices open.
+func spotPicker(cat category, row string) roundScene {
+	sc := spotScene(cat)
+	sc.sheet.st.picker = row
+	return sc
 }
