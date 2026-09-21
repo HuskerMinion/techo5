@@ -176,6 +176,38 @@ func TestHoldingTheActionButtonOpensIt(t *testing.T) {
 	}
 }
 
+// On the Dot the same press goes on to be Bluetooth pairing, and somebody reaching for pairing has
+// not asked for a page on the network.
+func TestAPressThatBecomesSomethingElseTakesThePageBack(t *testing.T) {
+	f := build()
+	f.button(buttons.Event{Name: buttons.Action, Kind: buttons.Hold})
+	if !f.On() {
+		t.Fatal("the hold did not open it")
+	}
+	f.button(buttons.Event{Name: buttons.Action, Kind: buttons.LongHold})
+	if f.On() {
+		t.Error("the page stayed open after the press turned out to be the longer one")
+	}
+
+	// A page opened any other way is not somebody's press to take back.
+	f.Open()
+	f.button(buttons.Event{Name: buttons.Action, Kind: buttons.LongHold})
+	if !f.On() {
+		t.Error("a long hold closed a page it did not open")
+	}
+}
+
+// A page being used is a page somebody meant to open, however the press ended.
+func TestUsingThePageKeepsItThroughTheLongerHold(t *testing.T) {
+	f := build()
+	f.button(buttons.Event{Name: buttons.Action, Kind: buttons.Hold})
+	f.used()
+	f.button(buttons.Event{Name: buttons.Action, Kind: buttons.LongHold})
+	if !f.On() {
+		t.Error("a page somebody was using was taken down")
+	}
+}
+
 func first(s string) string {
 	if i := strings.Index(s, "<h1>"); i >= 0 {
 		s = s[i:]

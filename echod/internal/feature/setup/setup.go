@@ -63,6 +63,10 @@ type Feature struct {
 	openUntil time.Time
 	openedAt  time.Time
 
+	// heldOpen is whether the press being made right now is what opened the page, so that a press that
+	// goes on to mean something else can take it back down (button).
+	heldOpen bool
+
 	// waiting is the browser asking to be let in: its nonce, and when it gives up. Only one at a
 	// time, so a press can never let in a browser the presser did not mean.
 	waiting    string
@@ -156,6 +160,7 @@ func (f *Feature) Close() {
 	was := f.on(time.Now())
 	f.openUntil, f.openedAt = time.Time{}, time.Time{}
 	f.waiting, f.waitingEnd = "", time.Time{}
+	f.heldOpen = false
 	clear(f.live)
 	f.mu.Unlock()
 
@@ -173,6 +178,8 @@ func (f *Feature) used() {
 	f.mu.Lock()
 	if f.on(now) {
 		f.openUntil = now.Add(idle)
+		// Somebody is on the page, so the press that opened it meant this after all.
+		f.heldOpen = false
 	}
 	f.mu.Unlock()
 }
@@ -187,6 +194,12 @@ func (f *Feature) Waiting() bool {
 
 // button is the action button: a hold opens the page on a device that has no other way to ask, and a
 // tap answers a browser that is waiting to be let in.
+//
+// A longer hold on the Dot is Bluetooth pairing, and every one of those passes through this hold on
+// its way there. Opening the page for somebody who was reaching for pairing puts a device on the
+// network that nobody asked to put there, so the page is taken down again when the same press turns
+// out to have been the longer one. Only a press that opened it is undone: a page already up, or one
+// opened any other way, is left alone.
 func (f *Feature) button(e buttons.Event) {
 	if e.Name != buttons.Action {
 		return
@@ -196,6 +209,18 @@ func (f *Feature) button(e buttons.Event) {
 		if !f.On() {
 			slog.Info("setup page opened by holding the action button")
 			f.Open()
+			f.mu.Lock()
+			f.heldOpen = true
+			f.mu.Unlock()
+		}
+	case buttons.LongHold:
+		f.mu.Lock()
+		held := f.heldOpen
+		f.heldOpen = false
+		f.mu.Unlock()
+		if held {
+			slog.Info("setup page closed again: the press went on to be something else")
+			f.Close()
 		}
 	case buttons.Tap:
 		f.press()

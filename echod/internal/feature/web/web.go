@@ -15,6 +15,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"html"
 	"log/slog"
 	"net"
 	"net/http"
@@ -106,21 +107,30 @@ func (f *Feature) mux() *http.ServeMux {
 			http.NotFound(w, r)
 			return
 		}
-		var on []string
+		var on []page
 		for _, p := range pages {
 			if p.label != "" && p.open() {
-				on = append(on, p.label+": "+p.path)
+				on = append(on, p)
 			}
 		}
 		if len(on) == 0 {
 			http.NotFound(w, r)
 			return
 		}
-		sort.Strings(on)
-		fmt.Fprintln(w, "TECHO5")
-		for _, line := range on {
-			fmt.Fprintln(w, line)
+		// Whoever typed the address wanted the one thing this port is open for. A Dot's setup page is
+		// always that: an index of one is a list somebody has to read and then type the rest of.
+		if len(on) == 1 {
+			http.Redirect(w, r, on[0].path, http.StatusSeeOther)
+			return
 		}
+		sort.Slice(on, func(i, j int) bool { return on[i].label < on[j].label })
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		fmt.Fprint(w, "<!doctype html><meta name=viewport content=\"width=device-width,initial-scale=1\">"+
+			"<title>TECHO5</title><h1>TECHO5</h1><ul>")
+		for _, p := range on {
+			fmt.Fprintf(w, `<li><a href="%s">%s</a></li>`, p.path, html.EscapeString(p.label))
+		}
+		fmt.Fprint(w, "</ul>")
 	})
 	return m
 }
