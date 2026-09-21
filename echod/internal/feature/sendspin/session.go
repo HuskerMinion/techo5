@@ -5,6 +5,7 @@ import (
 	"encoding/base64"
 	"log/slog"
 	"math"
+	"sync/atomic"
 	"time"
 
 	"github.com/Sendspin/sendspin-go/pkg/protocol"
@@ -54,6 +55,14 @@ type session struct {
 	// claim is this session's hold on the room's now-playing state, given back when it is done. It is
 	// what stops a session that is finishing from clearing what the next one has just set.
 	claim uint64
+
+	// takes is what the server says it will take from the controller role, so a button the server
+	// would ignore is not pressed. It is written once, on the read loop, and read from whoever asks.
+	takes atomic.Value // map[string]bool
+
+	// live is false once this connection is finished. The media player outlives the session and keeps
+	// the transport hook, so anything asked after that is dropped rather than written to a dead client.
+	live atomic.Bool
 }
 
 func newSession(conn *websocket.Conn, o *out, bg *speaker.Arbiter, name string, report func(string)) *session {
@@ -71,8 +80,10 @@ func newSession(conn *websocket.Conn, o *out, bg *speaker.Arbiter, name string, 
 		Version: protocolVersion,
 
 		// Nothing is activated that is not claimed here. Metadata is claimed so the room can say what
-		// it is playing; the controller role is not, so this device sends no commands of its own.
-		SupportedRoles: []string{"player@v1", "metadata@v1"},
+		// it is playing, and the controller role so the room can ask for the track's own controls:
+		// next, previous, play and pause are the server's to carry out, and both the screen and Home
+		// Assistant reach them through this.
+		SupportedRoles: []string{"player@v1", "metadata@v1", "controller@v1"},
 
 		// The factory mac: survives a reinstall, a rename and a new address.
 		ClientID: mac,
@@ -105,6 +116,15 @@ func (s *session) run(ctx context.Context) error {
 	if err := s.client.Start(); err != nil {
 		return err
 	}
+	s.live.Store(true)
+
+	// The media player is a singleton and outlives this session, so the listener has to come off with
+	// the connection: one left behind pins this whole session - client, socket, decoder, output - for
+	// the life of the daemon, and every reconnect adds another. `live` still says whether writing to
+	// this one is worth anything, because Emit copies the listener list before it runs them, so a call
+	// can arrive after the cancel.
+	cancelTransport := media.Get().OnTransport.Listen(s.asks)
+	defer cancelTransport()
 
 	s.reported()
 	s.out.use(s.clock)
@@ -214,11 +234,22 @@ func (s *session) cleared() {
 	}
 }
 
-// grouped only reports. Stopping is stream/end's job, which the server sends on stop as well as on skip
-// and seek. Fields are deltas, so an absent state means unchanged.
+// grouped only reports, and says what the stream is doing so the room's controls can match it. Stopping
+// is stream/end's job, which the server sends on stop as well as on skip and seek. Fields are deltas, so
+// an absent state means unchanged.
 func (s *session) grouped(g protocol.GroupUpdate) {
 	if g.PlaybackState == nil {
 		return
+	}
+	media.Get().RemoteState(*g.PlaybackState)
+	switch *g.PlaybackState {
+	case "playing", "paused":
+		// Something is on, whether or not this connection saw the stream start.
+		if s.claim == 0 {
+			s.claim = media.Get().External()
+		}
+	case "stopped":
+		s.letGo()
 	}
 	slog.Info("sendspin group", "state", *g.PlaybackState, "queued_ms", s.out.queuedMs())
 }
@@ -296,6 +327,9 @@ func (s *session) heard(chunk protocol.AudioChunk) {
 // noticed takes what the server says about the track. Only the player and metadata roles are
 // claimed, so the rest of the message is not this device's to act on.
 func (s *session) noticed(st protocol.ServerStateMessage) {
+	if st.Controller != nil {
+		s.took(st.Controller)
+	}
 	if st.Metadata == nil {
 		return
 	}
@@ -305,6 +339,41 @@ func (s *session) noticed(st protocol.ServerStateMessage) {
 	media.Get().ExternalTrack(s.meta.title, s.meta.artist, s.meta.album)
 	slog.Info("sendspin now playing",
 		"title", s.meta.title, "artist", s.meta.artist, "album", s.meta.album)
+}
+
+// took records what the controller role may ask the server for. The server decides whether to act on a
+// command, so a command it does not list is a button that would do nothing.
+func (s *session) took(c *protocol.ControllerState) {
+	takes := make(map[string]bool, len(c.SupportedCommands))
+	for _, name := range c.SupportedCommands {
+		takes[name] = true
+	}
+	s.takes.Store(takes)
+	slog.Info("sendspin controller", "commands", c.SupportedCommands)
+}
+
+// asks carries a track's own controls to the server. It runs on whatever asked — a tap on the screen, a
+// button in Home Assistant — so it does no more than write one message.
+func (s *session) asks(t media.Transport) {
+	if !s.live.Load() {
+		return
+	}
+	name := t.Command()
+	if name == "" {
+		return
+	}
+	if takes, ok := s.takes.Load().(map[string]bool); ok && !takes[name] {
+		slog.Debug("sendspin transport", "command", name, "taken", false)
+		return
+	}
+	payload := map[string]any{
+		"controller": map[string]any{"command": name},
+	}
+	if err := s.client.Send("client/command", payload); err != nil {
+		slog.Warn("sendspin transport", "command", name, "err", err)
+		return
+	}
+	slog.Info("sendspin transport", "command", name)
 }
 
 func (s *session) told(cmd protocol.PlayerCommand) {
@@ -395,6 +464,7 @@ drain:
 }
 
 func (s *session) finish() {
+	s.live.Store(false)
 	s.ended()
 	s.client.Close()
 }
