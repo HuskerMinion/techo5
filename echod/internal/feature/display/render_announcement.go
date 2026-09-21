@@ -43,20 +43,22 @@ func (r *renderer) announcementStrip(s scene) {
 	r.roundFill(box, cardRad, surface(4), surface(2))
 	r.roundHighlight(box, cardRad)
 
-	r.text(r.tiny, "ANNOUNCEMENT", box.Min.X+rowIn, box.Min.Y+34, amber)
-
 	if m.Text == "" {
-		// Nothing to read: the name has the strip to itself, set where it sits when it is the only
-		// thing here rather than pinned to where it goes when it shares.
-		r.text(r.title, who, box.Min.X+rowIn, box.Min.Y+88, cream)
+		// Nothing to read, so the room is the whole of it and is set large.
+		r.text(r.tiny, "ANNOUNCEMENT", box.Min.X+rowIn, box.Min.Y+40, amber)
+		r.text(r.title, who, box.Min.X+rowIn, box.Min.Y+92, cream)
 		return
 	}
 
-	// The room on its line and the words on theirs. Beside each other they were fighting over the
-	// same inches — a name as ordinary as "Laundry Room" left almost nothing for the message — and
-	// the message is the half somebody has to read rather than recognise.
-	r.text(r.title, who, box.Min.X+rowIn, box.Min.Y+72, cream)
-	r.text(r.body, clipText(r, r.body, m.Text, box.Dx()-2*rowIn), box.Min.X+rowIn, box.Min.Y+112, dim)
+	// With words, the room joins the heading and the message takes the line below.
+	//
+	// Three stacked sizes did not fit in the strip: the room set in the big face crowded the heading
+	// above it and the message below, all in a hundred and thirty pixels. The room is context — it
+	// says who, and whoever is reading already knows the rooms in their own house — while the message
+	// is the part that has to be read, so the message keeps the large face and the width.
+	head := "ANNOUNCEMENT  ·  " + strings.ToUpper(who)
+	r.text(r.tiny, clipText(r, r.tiny, head, box.Dx()-2*rowIn), box.Min.X+rowIn, box.Min.Y+44, amber)
+	r.text(r.body, clipText(r, r.body, m.Text, box.Dx()-2*rowIn), box.Min.X+rowIn, box.Min.Y+100, cream)
 }
 
 // recordingStrip says this device's microphone is open and where what it hears is going. It is the
