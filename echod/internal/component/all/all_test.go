@@ -110,6 +110,7 @@ var registered = []string{
 	"segment_9",
 	"sendspin",
 	"sendspin_state",
+	"setup_page",
 	"slideshow_folder",
 	"slideshow_interval",
 	"slideshow_mode",

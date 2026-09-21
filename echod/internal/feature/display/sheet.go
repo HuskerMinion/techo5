@@ -21,6 +21,7 @@ import (
 	"github.com/HuskerMinion/techo5/echod/internal/feature/mute"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/security"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/sendspin"
+	"github.com/HuskerMinion/techo5/echod/internal/feature/setup"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/timer"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/timezone"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/voice"
@@ -138,6 +139,7 @@ func securityRows(sv sheetView) []settingRow {
 	return append(rows,
 		settingRow{id: "camweb", label: "Camera on the network", sub: "No login", kind: ctlToggle, on: sec.Camera},
 		settingRow{id: "screenweb", label: "Screen on the network", sub: "No login", kind: ctlToggle, on: sec.Screen},
+		setupRow(),
 		link, certs)
 }
 
@@ -527,6 +529,12 @@ func (d *Display) rowTap(id string, p part, opt int) {
 		security.Get().SetCamera(!config.Get().Security.Camera)
 	case "screenweb":
 		security.Get().SetScreen(!config.Get().Security.Screen)
+	case "setuppage":
+		if setup.Get().On() {
+			setup.Get().Close()
+			return
+		}
+		setup.Get().Open()
 	case "weather":
 		if p == partExtra {
 			d.showForecast()
