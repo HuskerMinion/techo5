@@ -28,6 +28,44 @@ func measure(s []int16) (peakDBFS, rmsDBFS float64) {
 	return 20 * math.Log10(math.Max(peak, 1)/full), 20 * math.Log10(math.Max(rms, 1)/full)
 }
 
+// A real clip off the Show, with the crest factor that defeated the first attempt at this: it peaked
+// at -13.3 dBFS on one transient while its average sat at -31.8, so a gain bounded by the peak could
+// only lift it ten decibels and left it quiet. The average is what carries across a room.
+func TestALoudPeakDoesNotHoldTheWholeClipDown(t *testing.T) {
+	// A clip whose peak is far above its own average: a quiet sine with one short burst in it.
+	said := tone(750, 16000) // about -32 dBFS average
+	for i := 8000; i < 8080; i++ {
+		said[i] = 7100 // one transient at about -13 dBFS
+	}
+
+	_, wasRMS := measure(said)
+	got := level(said)
+	nowPeak, nowRMS := measure(got)
+
+	if nowRMS < wantRMS-3 {
+		t.Errorf("average reached %.1f dBFS, want near the %.1f target", nowRMS, wantRMS)
+	}
+	if nowPeak > 0 {
+		t.Errorf("peak %.1f dBFS is at or over full scale", nowPeak)
+	}
+	t.Logf("average %.1f -> %.1f dBFS (target %.1f), peak now %.1f dBFS", wasRMS, nowRMS, wantRMS, nowPeak)
+}
+
+// Nothing may reach the rail, whatever the gain: a sample at the rail is a click in every room.
+func TestNothingReachesTheRail(t *testing.T) {
+	said := tone(600, 16000)
+	for i := range said {
+		if i%400 == 0 {
+			said[i] = 12000
+		}
+	}
+	for i, v := range level(said) {
+		if v >= 32767 || v <= -32767 {
+			t.Fatalf("sample %d hit the rail at %d", i, v)
+		}
+	}
+}
+
 // The recording that started all of this: a real one off a Dot, peaking forty decibels below full
 // scale. Good enough for a recognizer, far too quiet to hear in another room over anything at all.
 func TestAQuietRecordingIsBroughtUp(t *testing.T) {
@@ -41,8 +79,8 @@ func TestAQuietRecordingIsBroughtUp(t *testing.T) {
 	if nowPeak <= wasPeak+10 {
 		t.Errorf("peak went from %.1f to %.1f dBFS, want it lifted well clear", wasPeak, nowPeak)
 	}
-	if nowPeak > ceiling+0.5 {
-		t.Errorf("peak %.1f dBFS is over the ceiling of %.1f", nowPeak, ceiling)
+	if nowPeak > 0 {
+		t.Errorf("peak %.1f dBFS is at or over full scale", nowPeak)
 	}
 	// It cannot reach the target from that far down without more lift than is allowed, and that
 	// bound is deliberate: the rest of the way would be room noise.
@@ -59,8 +97,8 @@ func TestALoudRecordingIsNotPushedIntoClipping(t *testing.T) {
 	got := level(said)
 	peak, _ := measure(got)
 
-	if peak > ceiling+0.5 {
-		t.Errorf("peak %.1f dBFS is over the ceiling of %.1f", peak, ceiling)
+	if peak > 0 {
+		t.Errorf("peak %.1f dBFS is at or over full scale", peak)
 	}
 	for _, v := range got {
 		if v == math.MaxInt16 || v == math.MinInt16 {

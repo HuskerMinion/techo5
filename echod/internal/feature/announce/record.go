@@ -134,11 +134,20 @@ func trim(said []int16) []int16 {
 // None of that matters once the whole clip is in hand. The peak and the loudness are exactly
 // measurable, so the gain is worked out in one go rather than estimated as it goes.
 const (
-	// wantRMS is how loud the result should be on average, and ceiling how close to full scale its
-	// loudest sample may come. Speech peaks well above its own average, so both are needed: the
-	// average is what carries across a room and the peak is what clips.
-	wantRMS = -20.0
-	ceiling = -3.0
+	// wantRMS is how loud the result should be on average. The average is what carries across a
+	// room: a clip can sit at the very top of the scale on one transient and still be too quiet to
+	// hear, which is exactly what the first attempt at this produced.
+	//
+	// It is set near ordinary programme material, so an announcement is about as loud as the music it
+	// interrupts rather than noticeably under it.
+	wantRMS = -16.0
+
+	// knee is where peaks start being folded rather than passed, as a fraction of full scale. Speech
+	// peaks twelve to eighteen decibels above its own average, so letting the loudest sample decide
+	// the gain throws away everything the average needed; instead the gain serves the average and the
+	// few samples that then overshoot are rounded off here. Below the knee nothing is touched at all,
+	// which is the great majority of every clip.
+	knee = 0.7
 
 	// mostLift bounds it. A recording of an empty room is mostly noise, and enough gain would make
 	// that noise sound like a fault; anything needing more than this was too quiet to save.
@@ -170,9 +179,12 @@ func level(said []int16) []int16 {
 	if rms > 0 {
 		gain = math.Min(gain, full*math.Pow(10, wantRMS/20)/rms)
 	}
-	// The peak decides what the gain can actually be, whatever the average asks for. This is also the
-	// one case where the gain comes out below one, for a recording that arrived too hot to play.
-	gain = math.Min(gain, full*math.Pow(10, ceiling/20)/peak)
+	// Only a clip that arrived too hot to play is turned down, and then by the peak.
+	if peak*gain > full {
+		if down := full / peak; down < 1 {
+			gain = math.Min(gain, down)
+		}
+	}
 
 	if gain >= 0.999 && gain <= 1.001 {
 		return said
@@ -183,16 +195,27 @@ func level(said []int16) []int16 {
 		"was_rms_dbfs", math.Round(20*math.Log10(math.Max(rms, 1)/full)*10)/10)
 
 	for i, s := range said {
-		v := float64(s) * gain
-		// Clamped rather than wrapped: a sample over the top is a click in every room, and the gain
-		// above should already have made this unreachable.
-		switch {
-		case v > full:
-			v = full
-		case v < -full:
-			v = -full
-		}
-		said[i] = int16(v)
+		said[i] = fold(float64(s) * gain)
 	}
 	return said
+}
+
+// fold applies the gain's result to one sample, rounding off anything above the knee instead of
+// letting it clip. Below the knee it is arithmetic and nothing else; above it, the remaining
+// headroom is spread over everything louder, so a plosive that would have been a click becomes a
+// plosive. Nothing can reach the rail, so nothing wraps.
+func fold(v float64) int16 {
+	const full = 32767.0
+	const t = knee * full
+
+	a := math.Abs(v)
+	if a <= t {
+		return int16(v)
+	}
+	over := math.Tanh((a - t) / (full - t))
+	out := t + (full-t)*over
+	if v < 0 {
+		return int16(-out)
+	}
+	return int16(out)
 }
