@@ -41,6 +41,16 @@ The same daemon runs on three more Echo devices, each from its own repository:
 | **Echo Spot, 1st gen** (2017, `rook`) | [TECHO5 Spot](https://github.com/HuskerMinion/techo5-spot) | In daily use |
 | **Echo Dot, 2nd gen** (2016, `biscuit`) | [TECHO5 Dot](https://github.com/HuskerMinion/techo5-dot) | In daily use |
 
+<p align="center">
+  <img src="docs/screenshots/sunrise-show.gif" alt="The screen turning into a sunrise over the twenty minutes before an alarm: a dark red sky warming through orange to a pale gold, a sun climbing into it, the time readable throughout" width="560">
+</p>
+
+<p align="center">
+  <em><strong>Waking to light.</strong> For up to half an hour before an alarm the screen becomes a
+  dawn, on a curve that does most of its work near the end. Every frame here is drawn by the code
+  the device draws with.</em>
+</p>
+
 ## Built on EchoLocal
 
 TECHO5 started from **[EchoLocal](https://github.com/ygelfand/echolocal)** by Yuri Gelfand (MIT),
@@ -64,7 +74,7 @@ slot system, phone calls, and a minimal Alpine root filesystem in place of Andro
 | 🔄 **Updates that can't brick it** | Releases install over the air from Home Assistant's update card into the spare of two root filesystem slots, boot on trial, and fall back on their own if the new one doesn't settle. |
 | 📺 **A screen that's actually useful** | Clock and weather, the conversation as it happens, now playing with song and cover art, forecasts and a live rain radar, live Home Assistant cameras, timers and alarms, Wi-Fi setup, 13 themes. |
 | 📻 **Weather and radio with no setup** | A new Show uses the forecast every Home Assistant has, and lists the radio stations near home from Home Assistant's Radio Browser. Pick another weather entity (your own station, say) on the screen, and keep your own favorite stations too. |
-| ⏰ **Alarms that ring on their own** | Set on the screen, by Home Assistant, or followed from its helpers; they ring from the Show's own clock even when Home Assistant is down. Snooze included. |
+| ⏰ **Alarms that ring on their own** | Set on the screen, by Home Assistant, or followed from its helpers; they ring from the Show's own clock even when Home Assistant is down. Snooze included, and the screen can wake you with a sunrise before the sound. |
 | 🎧 **Bluetooth, rebuilt** | Earbuds and speakers over A2DP, plus a Home Assistant Bluetooth proxy, on a kernel rebuilt with Bluetooth from the LineageOS source. |
 | 📞 **A speakerphone again** | Calls through your own SIP provider: "call Alex" by voice, calls that ring on the screen, calls between your own devices, and a help call that alerts your phones and dials people in turn. Encrypted end to end to the provider, and off until you sign it in. [docs/phone.md](docs/phone.md) |
 | 📷 **A camera you control** | The front camera becomes a Home Assistant camera entity, off unless something is watching, and physically off while the mute button is engaged. |
@@ -86,6 +96,14 @@ Straight from the device's own screen.
 | **Themes**: presets or your own colors | **Connections**: Wi-Fi, Bluetooth and the Home Assistant proxy |
 | ![Weather with a five day forecast](docs/screenshots/weather.png) | ![The cameras drawer](docs/screenshots/drawer-cameras.png) |
 | **Weather** now and for the week, with the rain radar a tap away | **Cameras and Radio**, a swipe in from the right |
+
+<p align="center">
+  <img src="docs/screenshots/sunrise-spot.gif" alt="The sunrise before an alarm on the Echo Spot's round face: the circle warming from dark red through orange to gold, a sun climbing from the bottom" width="300">
+</p>
+
+<p align="center">
+  <em>The <strong>Echo Spot</strong> takes the same twenty minutes across its round face.</em>
+</p>
 
 ## Stock vs TECHO5
 
