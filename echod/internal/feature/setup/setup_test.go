@@ -185,3 +185,48 @@ func first(s string) string {
 	}
 	return s
 }
+
+// Asking over and over with nobody pressing anything stops being allowed for a while.
+func TestAskingForeverIsRefusedForAWhile(t *testing.T) {
+	f := build()
+	f.Open()
+	for i := 0; i < tries; i++ {
+		f.mu.Lock()
+		f.waitingEnd = time.Now().Add(-time.Second) // as if that one had run out unanswered
+		f.mu.Unlock()
+		f.await()
+	}
+	if !f.ShutOut() {
+		t.Fatal("still letting a browser ask after five tries with no press")
+	}
+	if _, ok := f.await(); ok {
+		t.Error("a browser was allowed to ask while shut out")
+	}
+
+	w := httptest.NewRecorder()
+	f.serve(w, httptest.NewRequest(http.MethodPost, "/setup/wait", nil))
+	if w.Code != http.StatusTooManyRequests {
+		t.Errorf("asking while shut out got %d, want too many requests", w.Code)
+	}
+}
+
+// A press clears the run, so somebody who mistypes their way through a few attempts and then presses
+// is not locked out afterwards.
+func TestAPressClearsTheRun(t *testing.T) {
+	f := build()
+	f.Open()
+	for i := 0; i < tries-2; i++ {
+		f.mu.Lock()
+		f.waitingEnd = time.Now().Add(-time.Second)
+		f.mu.Unlock()
+		f.await()
+	}
+	f.button(buttons.Event{Name: buttons.Action, Kind: buttons.Tap})
+
+	f.mu.Lock()
+	run := f.unanswered
+	f.mu.Unlock()
+	if run != 0 {
+		t.Errorf("%d tries still counted against the browser after a press", run)
+	}
+}

@@ -21,13 +21,14 @@ const (
 	iface   = "wlan0"
 	ctrlDir = "/run/wpa"
 
-	// Conf is the supplicant's configuration on the data partition (boot.sh writes it there).
-	Conf = "/data/techo5-linux/wpa_supplicant.conf"
-
 	// SetupFlag, while present, tells the boot scripts' network keeper that someone is setting the
 	// network up, so it does not reboot the device for being offline.
 	SetupFlag = "/run/techo5/wifi-setup"
 )
+
+// Conf is the supplicant's configuration on the data partition (boot.sh writes it there). A variable
+// rather than a constant so that a test can write one somewhere harmless.
+var Conf = "/data/techo5-linux/wpa_supplicant.conf"
 
 // Network is one the radio can hear.
 type Network struct {
@@ -148,15 +149,16 @@ func Join(ctx context.Context, ssid, passphrase string) error {
 		return errors.New("wifi: a passphrase is 8 to 63 characters")
 	}
 	old, _ := os.ReadFile(Conf)
-	var b strings.Builder
-	b.WriteString("ctrl_interface=" + ctrlDir + "\nupdate_config=0\nnetwork={\n\tssid=\"" + escape(ssid) + "\"\n")
-	if passphrase == "" {
-		b.WriteString("\tkey_mgmt=NONE\n")
-	} else {
-		b.WriteString("\tpsk=\"" + escape(passphrase) + "\"\n")
+	// The new one goes first, since it is the one just asked for, and any older entry for the same
+	// name goes, so a corrected passphrase replaces the one that was wrong. The rest are kept: a
+	// device set up on one network still joins the network it is taken to.
+	kept := []string{block(ssid, passphrase)}
+	for _, b := range blocks(string(old)) {
+		if ssidOf(b) != ssid {
+			kept = append(kept, b)
+		}
 	}
-	b.WriteString("}\n")
-	if err := os.WriteFile(Conf, []byte(b.String()), 0o600); err != nil {
+	if err := os.WriteFile(Conf, []byte(conf(kept)), 0o600); err != nil {
 		return err
 	}
 	if len(old) > 0 {

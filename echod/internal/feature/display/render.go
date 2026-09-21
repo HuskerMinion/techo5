@@ -117,6 +117,10 @@ type scene struct {
 	// slideshowTrouble is why the slideshow has no photo, once it has given up looking; it sits in
 	// the footer so a folder that went away is visible rather than silently retried.
 	slideshowTrouble string
+
+	// setupAsking is a browser waiting to be let into the setup page. It is said on the screen so
+	// that a request for a press is never something only the browser knows about.
+	setupAsking bool
 }
 
 // renderer draws scenes onto one canvas. Faces are made once: parsing a font is cheap, but
@@ -414,6 +418,8 @@ func (r *renderer) words(heard, reply string, top int) {
 func (r *renderer) footer(s scene) {
 	y := r.h - 24
 	switch {
+	case s.setupAsking:
+		r.text(r.tiny, "setup: press the action button to allow it", r.margin, y, amber)
 	case s.muted:
 		r.text(r.tiny, "microphone off", r.margin, y, amber)
 	case s.slideshowTrouble != "":

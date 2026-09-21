@@ -122,6 +122,10 @@ type roundScene struct {
 	// slideshowTrouble is why the slideshow has no photo, once it has given up looking.
 	slideshowTrouble string
 
+	// setupAsking is a browser waiting to be let into the setup page, said on the face so that a
+	// request for a press is never something only the browser knows about.
+	setupAsking bool
+
 	// sheetOpen is the settings screen up, sheetGrid its six categories rather than one; sheet what
 	// it shows.
 	sheetOpen, sheetGrid bool
@@ -251,6 +255,8 @@ func (r *roundRenderer) clockFace(s roundScene) {
 		line += 34
 	}
 	switch {
+	case s.setupAsking:
+		r.centred(r.label, "PRESS TO ALLOW SETUP", 118, colMuted)
 	case s.muted:
 		r.centred(r.label, "MICROPHONE OFF", 118, colMuted)
 	case s.btPairing:

@@ -12,6 +12,7 @@ import (
 	"github.com/HuskerMinion/techo5/echod/internal/config"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/timezone"
 	"github.com/HuskerMinion/techo5/echod/internal/layout"
+	"github.com/HuskerMinion/techo5/echod/internal/lib/wifi"
 )
 
 // The page itself: one document served from the binary, no framework and nothing fetched from the
@@ -78,7 +79,7 @@ func (f *Feature) index(w http.ResponseWriter, r *http.Request) {
 		f.lockedPage(w)
 		return
 	}
-	f.settingsPage(w, token, r.URL.Query().Get("saved"), r.URL.Query().Get("problem"))
+	f.settingsPage(w, token, r.URL.Query().Get("saved"), r.URL.Query().Get("problem"), r.URL.Query().Get("scan") != "")
 }
 
 // wait starts this browser waiting for a press and gives it the cookie the press will let in.
@@ -89,6 +90,11 @@ func (f *Feature) wait(w http.ResponseWriter, r *http.Request) {
 	}
 	token, ok := f.await()
 	if !ok {
+		if f.ShutOut() {
+			http.Error(w, "too many tries without a press on the device; try again in a few minutes",
+				http.StatusTooManyRequests)
+			return
+		}
 		http.Error(w, "another browser is already waiting for a press; try again in a minute", http.StatusConflict)
 		return
 	}
@@ -136,6 +142,19 @@ func (f *Feature) save(w http.ResponseWriter, r *http.Request) {
 
 	var problem string
 	switch r.PostFormValue("what") {
+	case "wifi":
+		ssid := strings.TrimSpace(r.PostFormValue("ssid"))
+		if other := strings.TrimSpace(r.PostFormValue("other")); other != "" {
+			ssid = other
+		}
+		problem = joinWifi(r.Context(), ssid, r.PostFormValue("passphrase"))
+	case "forget":
+		ssid := strings.TrimSpace(r.PostFormValue("ssid"))
+		if err := wifi.Forget(r.Context(), ssid); err != nil {
+			problem = "could not forget " + ssid + ": " + err.Error()
+		} else {
+			slog.Info("setup page: a network was forgotten", "ssid", ssid)
+		}
 	case "timezone":
 		zone := strings.TrimSpace(r.PostFormValue("zone"))
 		switch {
@@ -195,7 +214,7 @@ func (f *Feature) lockedPage(w http.ResponseWriter) {
 	 itself when it is left alone.</p>`)
 }
 
-func (f *Feature) settingsPage(w http.ResponseWriter, token, saved, problem string) {
+func (f *Feature) settingsPage(w http.ResponseWriter, token, saved, problem string, scan bool) {
 	fmt.Fprint(w, pageHead)
 	fmt.Fprintf(w, `<h1>%s</h1><p class="sub">Setup</p>`, html.EscapeString(deviceName()))
 	if saved != "" {
@@ -222,9 +241,96 @@ func (f *Feature) settingsPage(w http.ResponseWriter, token, saved, problem stri
 	fmt.Fprint(w, `</select><p class="note">The device's clock keeps time on its own; this is only
 	 which zone it shows.</p><p><button type="submit">Save</button></p></fieldset></form>`)
 
+	f.wifiSection(w, token, scan)
+
 	fmt.Fprint(w, `<p class="note">Radio stations and the phone account belong here too and are still
-	 to come. This page never touches SSH keys, the Home Assistant key, or the software the device
+	 to come. The device's name is set when it is installed, because Home Assistant knows it by that
+	 name. This page never touches SSH keys, the Home Assistant key, or the software the device
 	 runs.</p>`)
+}
+
+// wifiSection is the networks: what the device is on, what it remembers, and how to add another.
+// Adding one does not drop the network it is on, so a device can be given the network it is going to
+// while it is still on the one it is at.
+func (f *Feature) wifiSection(w http.ResponseWriter, token string, scan bool) {
+	if !wifi.Available() {
+		return
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 12*time.Second)
+	defer cancel()
+	st := wifi.Current(ctx)
+
+	fmt.Fprint(w, `<fieldset><legend>Wi-Fi</legend>`)
+	switch {
+	case st.Connected:
+		fmt.Fprintf(w, `<p>On <strong>%s</strong>, at %s.</p>`, html.EscapeString(st.SSID), html.EscapeString(st.Address))
+	default:
+		fmt.Fprintf(w, `<p class="bad">Not on a network (%s).</p>`, html.EscapeString(st.State))
+	}
+
+	if saved := wifi.Saved(); len(saved) > 0 {
+		fmt.Fprint(w, `<p class="note">Remembered, in the order it tries them:</p><ul>`)
+		for _, ssid := range saved {
+			fmt.Fprintf(w, `<li>%s <form method="post" action="/setup/save" style="display:inline">
+			 <input type="hidden" name="token" value="%s"><input type="hidden" name="what" value="forget">
+			 <input type="hidden" name="ssid" value="%s">
+			 <button type="submit">Forget</button></form></li>`,
+				html.EscapeString(ssid), html.EscapeString(token), html.EscapeString(ssid))
+		}
+		fmt.Fprint(w, `</ul>`)
+	}
+
+	fmt.Fprintf(w, `<form method="post" action="/setup/save">
+	 <input type="hidden" name="token" value="%s"><input type="hidden" name="what" value="wifi">
+	 <label for="ssid">Network</label><select id="ssid" name="ssid">`, html.EscapeString(token))
+	if scan {
+		nets, err := wifi.Scan(ctx)
+		if err != nil {
+			fmt.Fprint(w, `<option value="">(the scan failed)</option>`)
+		}
+		for _, n := range nets {
+			fmt.Fprintf(w, `<option value="%s">%s%s</option>`,
+				html.EscapeString(n.SSID), html.EscapeString(n.SSID), lock(n.Secured))
+		}
+	} else {
+		fmt.Fprint(w, `<option value="">(not scanned yet)</option>`)
+	}
+	fmt.Fprint(w, `</select>`)
+	if !scan {
+		fmt.Fprint(w, `<p><a href="/setup?scan=1">Scan for networks</a> — it takes a few seconds.</p>`)
+	}
+	fmt.Fprint(w, `<label for="other">…or a name it did not find</label>
+	 <input id="other" name="other" autocomplete="off" placeholder="Network name">
+	 <label for="passphrase">Passphrase</label>
+	 <input id="passphrase" name="passphrase" type="password" autocomplete="new-password">
+	 <p class="note">The networks it already remembers are kept. If the one you add is somewhere else,
+	  nothing changes here until the device is taken there. If it is a network in range, the device
+	  moves to it — and this page goes with it, so you will have to find it again at its new address.</p>
+	 <p><button type="submit">Add network</button></p></form></fieldset>`)
+}
+
+func lock(secured bool) string {
+	if secured {
+		return " 🔒"
+	}
+	return ""
+}
+
+// joinWifi adds a network and reports what went wrong, if anything. The library puts the old
+// configuration back when the new network never comes up, so a wrong passphrase does not strand it.
+func joinWifi(ctx context.Context, ssid, passphrase string) string {
+	if ssid == "" {
+		return "no network was named"
+	}
+	wifi.SettingUp(true)
+	defer wifi.SettingUp(false)
+	ctx, cancel := context.WithTimeout(ctx, 70*time.Second)
+	defer cancel()
+	if err := wifi.Join(ctx, ssid, passphrase); err != nil {
+		return err.Error()
+	}
+	slog.Info("setup page: a network was added", "ssid", ssid)
+	return ""
 }
 
 func selected(on bool) string {

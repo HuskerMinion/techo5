@@ -46,6 +46,12 @@ const (
 	// sessions is how many browsers may be let in at once. A setup page is used by one person at a
 	// device; this is a bound, not a feature.
 	sessions = 4
+
+	// tries is how many times a browser may ask and not be answered by a press before asking is
+	// refused for coolOff. Somebody at the device presses within the minute; anything else is either
+	// a mistake or a machine, and both can wait.
+	tries   = 5
+	coolOff = 10 * time.Minute
 )
 
 type Feature struct {
@@ -64,6 +70,11 @@ type Feature struct {
 
 	// live are the sessions let in, by their cookie, each with when it was last used.
 	live map[string]time.Time
+
+	// unanswered counts the askings that no press answered, and shutUntil is when asking is allowed
+	// again once there have been too many.
+	unanswered int
+	shutUntil  time.Time
 
 	// Changed fires when the page opens or closes, or when a browser starts or stops waiting, so the
 	// screen can say what is going on.
@@ -212,25 +223,42 @@ func (f *Feature) press() bool {
 	}
 	f.live[f.waiting] = now
 	f.waiting, f.waitingEnd = "", time.Time{}
+	f.unanswered = 0 // a press clears the run
 	slog.Info("setup page: a browser was let in by a press on the device")
 	return true
 }
 
 // await starts a browser waiting to be let in and hands back the cookie it will hold if the press
 // comes. Only one browser waits at a time: a second is refused, so that whoever presses knows which
-// browser they are letting in.
+// browser they are letting in. Asking over and over without a press stops being allowed for a while.
 func (f *Feature) await() (token string, ok bool) {
 	now := time.Now()
 	f.mu.Lock()
 	defer f.mu.Unlock()
-	if !f.on(now) {
+	if !f.on(now) || now.Before(f.shutUntil) {
 		return "", false
 	}
 	if f.waiting != "" && now.Before(f.waitingEnd) {
 		return "", false
 	}
+	// Every asking counts until a press clears the run, so a browser cannot sit there asking.
+	f.unanswered++
+	if f.unanswered >= tries {
+		f.shutUntil = now.Add(coolOff)
+		f.waiting, f.waitingEnd = "", time.Time{}
+		slog.Warn("setup page: too many askings with no press; not asking again for a while",
+			"tries", f.unanswered, "for", coolOff)
+		return "", false
+	}
 	f.waiting, f.waitingEnd = newToken(), now.Add(pressWait)
 	return f.waiting, true
+}
+
+// ShutOut is whether asking is refused for the moment, for the page to say why.
+func (f *Feature) ShutOut() bool {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return time.Now().Before(f.shutUntil)
 }
 
 // letIn is whether this cookie is a session that has been let in, and keeps it alive.
