@@ -7,33 +7,51 @@ import "github.com/HuskerMinion/techo5/echod/internal/lib/fft"
 // Nothing is buffered ahead, and the filter is minimum phase — its largest tap is its first — so this
 // costs the playback path no latency.
 type fir struct {
-	f     *fft.FFT
-	h     []complex64
-	work  []complex64
+	f *fft.FFT
+
+	// hs holds every bucket's filter, already transformed; h is the one in use. The overlap-save
+	// tail is input history rather than filtered output, so changing which filter is used mid-stream
+	// is clean and costs nothing.
+	hs   [][]complex64
+	h    []complex64
+	work []complex64
+
 	tail  []float32
 	block int
 }
 
-// newFIR sizes the transform for a filter of len(taps) against blocks of block samples. The transform
-// has to hold one block plus the filter's overlap, rounded up to a power of two.
-func newFIR(taps []float32, block int) *fir {
+// newFIR sizes the transform for filters of len(taps[0]) against blocks of block samples, and
+// transforms each of them once. The transform has to hold one block plus the filter's overlap,
+// rounded up to a power of two.
+func newFIR(filters [][]float32, block int) *fir {
 	n := 1
-	for n < block+len(taps)-1 {
+	for n < block+len(filters[0])-1 {
 		n <<= 1
 	}
 
 	f := &fir{
 		f:     fft.New(n),
-		h:     make([]complex64, n),
 		work:  make([]complex64, n),
 		tail:  make([]float32, n-block),
 		block: block,
 	}
-	for i, t := range taps {
-		f.h[i] = complex(t, 0)
+	for _, taps := range filters {
+		h := make([]complex64, n)
+		for i, t := range taps {
+			h[i] = complex(t, 0)
+		}
+		f.f.Forward(h)
+		f.hs = append(f.hs, h)
 	}
-	f.f.Forward(f.h)
+	f.h = f.hs[len(f.hs)-1] // the loudest bucket until something says otherwise
 	return f
+}
+
+// use picks which bucket's filter the next blocks are convolved with.
+func (f *fir) use(i int) {
+	if i >= 0 && i < len(f.hs) {
+		f.h = f.hs[i]
+	}
 }
 
 func (f *fir) reset() { clear(f.tail) }

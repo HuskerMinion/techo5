@@ -6,6 +6,10 @@ type Speaker struct {
 	Volume     int        `json:"volume"`
 	Resampling Resampling `json:"resampling"`
 	ASP        bool       `json:"asp"`
+
+	// QuietHours is when the device makes no sound of its own, as "22-7", empty for never. See
+	// quiet.go for what that does and does not cover.
+	QuietHours string `json:"quiet_hours,omitempty"`
 }
 
 const (
@@ -34,6 +38,10 @@ func (w SpeakerWriter) Volume(v int) error {
 
 func (w SpeakerWriter) Resampling(v Resampling) error {
 	return w.st.Update(func(c *Config) { c.Speaker.Resampling = v })
+}
+
+func (w SpeakerWriter) QuietHours(v string) error {
+	return w.st.Update(func(c *Config) { c.Speaker.QuietHours = v })
 }
 
 func (w SpeakerWriter) ASP(v bool) error {

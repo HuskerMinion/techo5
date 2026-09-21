@@ -10,7 +10,6 @@ import (
 	"github.com/HuskerMinion/techo5/echod/internal/lib/alsa"
 )
 
-
 const (
 	acquireRetry    = 250 * time.Millisecond
 	acquireAttempts = 8

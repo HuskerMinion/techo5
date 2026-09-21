@@ -10,7 +10,7 @@ package asp
 
 import (
 	"fmt"
-	"math"
+	"os"
 	"path/filepath"
 )
 
@@ -20,57 +20,118 @@ const VendorDir = "/vendor/etc/audio-algorithms"
 // Rate is the rate the tuning was designed at, which is also the only rate the playback codec takes.
 const Rate = 48000
 
-// taps is the length of the tuning filter. A file of any other length is a tuning we do not know.
-const taps = 1024
+// The filter lengths the tunings use. A file of any other length is a tuning we do not know.
+const (
+	tapsLong  = 1024 // Dot and Show
+	tapsShort = 512  // Spot
+)
 
-// eqFiles are the vendor's volume-dependent EQ, with the volume boundary each one reaches up to. The
-// six hold one filter shape and differ only in the gain in front of it, which is half of how the
-// device gets louder; the attenuation in the volume curve is the other half.
-var eqFiles = []struct {
-	upTo float64
-	name string
-}{
-	{0.5, "EQ_50.cfg"},
-	{0.6, "EQ_60.cfg"},
-	{0.7, "EQ_70.cfg"},
-	{0.8, "EQ_80.cfg"},
-	{0.9, "EQ_90.cfg"},
-	{1.0, "EQ_100.cfg"},
+// A Set is one firmware's tuning: the volume-dependent EQ files with the volume each reaches up to,
+// and the compressor that sits under them. Each device's AFE.cfg names its own, and they are not the
+// same design — the Dot's six files are one filter at six gains, while the Show's four are four
+// different shapes, because there the quieter buckets carry more bass and treble rather than less of
+// everything. One filter per bucket covers both, so that is what is loaded.
+type Set struct {
+	Name string
+	EQ   []Bucket
+	MBCL string
+
+	// Taps is how long each filter is, which is not the same on every device.
+	Taps int
 }
 
-// mbclFile is the compressor and limiter that sits under the tuning.
-const mbclFile = "MBCL.cfg"
+// Bucket is one EQ file and the fraction of full volume it reaches up to.
+type Bucket struct {
+	UpTo float64
+	Name string
+}
+
+// The sets, from each firmware's own AFE.cfg. Dot: "Hardware Definition" → biscuit. Show: "Cronos"
+// on the 2nd gen and "Checkers" on the 1st, which declare the same four files and the same
+// compressor — read off both.
+var (
+	Dot = Set{
+		Name: "dot",
+		EQ: []Bucket{
+			{0.5, "EQ_50.cfg"}, {0.6, "EQ_60.cfg"}, {0.7, "EQ_70.cfg"},
+			{0.8, "EQ_80.cfg"}, {0.9, "EQ_90.cfg"}, {1.0, "EQ_100.cfg"},
+		},
+		MBCL: "MBCL.cfg",
+		Taps: tapsLong,
+	}
+
+	// Show is both generations of Echo Show 5. Its MBCL is chosen by speaker power mode rather than
+	// volume, and a mains-powered unit is in the top pair, which is MBCL_default.cfg. The bare
+	// MBCL.cfg beside it is not referenced by AFE.cfg and has every ratio at zero — loading that one
+	// because the name matches the Dot's would put the bass lift on the driver with nothing holding
+	// it down.
+	Show = Set{
+		Name: "show",
+		EQ: []Bucket{
+			{0.4, "EQ_40.cfg"}, {0.6, "EQ_60.cfg"}, {0.8, "EQ_80.cfg"}, {1.0, "EQ_100.cfg"},
+		},
+		MBCL: "MBCL_default.cfg",
+		Taps: tapsLong,
+	}
+
+	// Spot ("Rook") is a third design again: one filter for every volume ("Volume Boundary": [100]),
+	// half the length of the others, and a compressor chosen by speaker power mode and by whether
+	// what is playing is audio or video. A mains-powered unit playing audio is MBCL_2W_Audio.cfg.
+	Spot = Set{
+		Name: "spot",
+		EQ:   []Bucket{{1.0, "EQ.cfg"}},
+		MBCL: "MBCL_2W_Audio.cfg",
+		Taps: tapsShort,
+	}
+)
+
+// SetFor is the tuning a directory holds, told apart by a file only one of them has. The Spot is
+// last because its EQ.cfg sits beside the others' files on some units.
+func SetFor(dir string) (Set, bool) {
+	for _, c := range []struct {
+		marker string
+		set    Set
+	}{
+		{"EQ_40.cfg", Show},
+		{"EQ_50.cfg", Dot},
+		{"EQ.cfg", Spot},
+	} {
+		if _, err := os.Stat(filepath.Join(dir, c.marker)); err == nil {
+			return c.set, true
+		}
+	}
+	return Set{}, false
+}
 
 // Tuning is a loaded tuning, shared and read-only. Chain turns it into something that can process.
 type Tuning struct {
-	taps  []float32
-	gains []float64 // what each bucket puts in front of taps, linear, in eqFiles order
-	mbcl  mbcl
+	set     Set
+	filters [][]float32 // one filter per bucket, in Set.EQ order
+	mbcl    mbcl
 }
 
-// Load reads a tuning out of a directory, normally VendorDir.
+// Load reads the tuning a directory holds, normally VendorDir: whichever set it is, with a filter
+// for each of its volume buckets.
 func Load(dir string) (*Tuning, error) {
-	t := &Tuning{}
-	for _, e := range eqFiles {
-		h, err := readFloats(filepath.Join(dir, e.name), taps)
+	set, ok := SetFor(dir)
+	if !ok {
+		return nil, fmt.Errorf("asp: %s holds no tuning we know", dir)
+	}
+	return LoadSet(dir, set)
+}
+
+// LoadSet reads one named set, for a test that has files of its own.
+func LoadSet(dir string, set Set) (*Tuning, error) {
+	t := &Tuning{set: set}
+	for _, e := range set.EQ {
+		h, err := readFloats(filepath.Join(dir, e.Name), set.Taps)
 		if err != nil {
 			return nil, err
 		}
-		if t.taps == nil {
-			t.taps, t.gains = h, []float64{1}
-			continue
-		}
-
-		// The filter is taken from the first file and the rest are read for their gain alone, so this
-		// insists they really are the same filter: a set that is not would need a filter each.
-		g, err := scaleOf(t.taps, h)
-		if err != nil {
-			return nil, fmt.Errorf("%s: %w", e.name, err)
-		}
-		t.gains = append(t.gains, g)
+		t.filters = append(t.filters, h)
 	}
 
-	m, err := readMBCL(filepath.Join(dir, mbclFile))
+	m, err := readMBCL(filepath.Join(dir, set.MBCL))
 	if err != nil {
 		return nil, err
 	}
@@ -78,43 +139,23 @@ func Load(dir string) (*Tuning, error) {
 	return t, nil
 }
 
-// scaleOf reports how much bigger b is than a, and refuses anything that is not a scaled copy of it.
-func scaleOf(a, b []float32) (float64, error) {
-	var ab, aa float64
-	for i := range a {
-		ab += float64(a[i]) * float64(b[i])
-		aa += float64(a[i]) * float64(a[i])
-	}
-	g := ab / aa
-
-	var off, tot float64
-	for i := range a {
-		d := float64(b[i]) - g*float64(a[i])
-		off += d * d
-		tot += float64(b[i]) * float64(b[i])
-	}
-	if off/tot > 1e-9 {
-		return 0, fmt.Errorf("a different filter, not the same one %.2f dB louder", 20*math.Log10(g))
-	}
-	return g, nil
-}
-
-// Makeup is the gain the vendor puts in front of the filter at this fraction of full volume: the
-// first bucket the volume reaches up to, and the last of them for anything above the rest.
-func (t *Tuning) Makeup(of float64) float64 {
-	for i, e := range eqFiles {
-		if of <= e.upTo {
-			return t.gains[i]
+// Bucket is which filter a fraction of full volume uses: the first one the volume reaches up to, and
+// the last of them for anything above the rest.
+func (t *Tuning) Bucket(of float64) int {
+	for i, e := range t.set.EQ {
+		if of <= e.UpTo {
+			return i
 		}
 	}
-	return t.gains[len(t.gains)-1]
+	return len(t.set.EQ) - 1
 }
 
 // Chain is a tuning applied to one stream. It holds the filter history and the compressor's
 // envelopes, so it belongs to whoever is playing and is not safe for concurrent use.
 type Chain struct {
-	fir  *fir
-	comp *mbclState
+	tuning *Tuning
+	fir    *fir
+	comp   *mbclState
 }
 
 // Chain builds the processing state for a stream of the given block size. Every call to Process must
@@ -124,15 +165,20 @@ func (t *Tuning) Chain(block int) (*Chain, error) {
 		return nil, fmt.Errorf("asp: a block is %d samples", block)
 	}
 	if t.mbcl.Bypass {
-		return nil, fmt.Errorf("asp: %s asks to be bypassed", mbclFile)
+		return nil, fmt.Errorf("asp: %s asks to be bypassed", t.set.MBCL)
 	}
 
 	comp, err := newMBCL(t.mbcl, Rate)
 	if err != nil {
 		return nil, err
 	}
-	return &Chain{fir: newFIR(t.taps, block), comp: comp}, nil
+	return &Chain{tuning: t, fir: newFIR(t.filters, block), comp: comp}, nil
 }
+
+// Volume tells the chain what fraction of full volume is playing, so it uses the filter the vendor
+// meant for it. The quieter buckets are not the same shape turned down: they carry more bass and
+// more treble, which is the loudness compensation the tuning exists for.
+func (c *Chain) Volume(of float64) { c.fir.use(c.tuning.Bucket(of)) }
 
 // Process applies the tuning to one block in place. Samples are full scale at ±1, which is what the
 // compressor's thresholds are in dB of.

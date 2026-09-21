@@ -167,6 +167,8 @@ const AmpSwitch = ""
 // (see initSequence), and speech has its own normaliser.
 const OutputBoost = 1.0
 
-// DriverTuning is off: lib/asp reads the Dot's tuning files. The Echo Show 5's vendor partition holds a
-// different set, so it plays as it always has, without that stage.
-const DriverTuning = false
+// DriverTuning applies the vendor driver's volume-dependent EQ and limiter (lib/asp), read from the
+// unit's own vendor partition. Both generations of Show 5 declare the same four filters and the same
+// compressor in their AFE.cfg ("Cronos" and "Checkers"), which lib/asp knows as asp.Show; a unit
+// whose files are missing or are a set we do not know says so and plays untuned.
+const DriverTuning = true

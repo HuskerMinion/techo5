@@ -430,12 +430,11 @@ func (p *Player) fill(buf []byte) {
 	// The tuning is for the driver, so the line-out is left with what it was sent.
 	tuned := mono && p.chain != nil && p.on.Load() && drain
 
-	// The vendor's volume is two halves: the gain its EQ bucket carries, in front of the tuning, and
-	// the curve's attenuation after it. Without this half the tuning runs at its quietest calibration
-	// however far up the dial it is.
-	makeup := float32(1)
+	// The vendor tunes by volume: each bucket has a filter of its own, and on the Show the quiet ones
+	// carry more bass and treble rather than simply less of everything. Telling the chain where the
+	// dial is picks the one it meant.
 	if tuned {
-		makeup = float32(p.tuning.Makeup(float64(p.step.Load()) / VolumeSteps))
+		p.chain.Volume(float64(p.step.Load()) / VolumeSteps)
 	}
 
 	gain := p.Volume()
@@ -458,7 +457,7 @@ func (p *Player) fill(buf []byte) {
 			r = l
 		}
 		if tuned {
-			p.mono[j] = float32(clamp(l)) / full * makeup
+			p.mono[j] = float32(clamp(l)) / full
 			continue
 		}
 		binary.LittleEndian.PutUint16(buf[i*2:], uint16(limit(float32(l)*OutputBoost*gain)))

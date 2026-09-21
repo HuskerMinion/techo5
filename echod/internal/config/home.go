@@ -27,6 +27,11 @@ type Home struct {
 
 	// Slideshow is the idle photo slideshow's source and display mode.
 	Slideshow Slideshow `json:"slideshow"`
+
+	// HouseWord is what the devices in one house share so that they will take announcements from
+	// each other and from nothing else. Empty means this device takes none: a device that makes a
+	// noise in a bedroom should do nothing until somebody has said it may.
+	HouseWord string `json:"house_word,omitempty"`
 }
 
 // Slideshow is how the idle screen's photo slideshow is wired: a Home Assistant media source to
@@ -156,6 +161,10 @@ func (w HomeWriter) Weather(entity string) error {
 
 func (w HomeWriter) Radio(r Radio) error {
 	return w.st.Update(func(c *Config) { c.Home.Radio = r })
+}
+
+func (w HomeWriter) HouseWord(v string) error {
+	return w.st.Update(func(c *Config) { c.Home.HouseWord = v })
 }
 
 func (w HomeWriter) WeatherSources(ids []string) error {

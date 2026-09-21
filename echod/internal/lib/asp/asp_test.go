@@ -45,7 +45,7 @@ func TestFIRMatchesDirectConvolution(t *testing.T) {
 
 	got := make([]float32, len(x))
 	copy(got, x)
-	f := newFIR(h, block)
+	f := newFIR([][]float32{h}, block)
 	for i := 0; i < len(got); i += block {
 		f.process(got[i : i+block])
 	}
@@ -111,7 +111,7 @@ func cmagf(c complex64) float64 {
 // Whatever the compressor does above it, the chain is the last thing before the DAC and nothing may
 // leave it above full scale.
 func TestFullBandLimiterHoldsCeiling(t *testing.T) {
-	tuning := &Tuning{taps: unitTaps(), mbcl: testMBCL()}
+	tuning := &Tuning{set: Dot, filters: [][]float32{unitTaps()}, mbcl: testMBCL()}
 	c, err := tuning.Chain(512)
 	if err != nil {
 		t.Fatal(err)
@@ -136,7 +136,7 @@ func TestFullBandLimiterHoldsCeiling(t *testing.T) {
 // The band below 115 Hz is compressed 20:1 from -50 dB, which is what keeps the tuning's bass boost
 // off the driver. A change that quietly stopped doing that would not be audible until something broke.
 func TestLowBandIsHeldDown(t *testing.T) {
-	tuning := &Tuning{taps: unitTaps(), mbcl: testMBCL()}
+	tuning := &Tuning{set: Dot, filters: [][]float32{unitTaps()}, mbcl: testMBCL()}
 	c, err := tuning.Chain(512)
 	if err != nil {
 		t.Fatal(err)
@@ -207,7 +207,7 @@ func TestVendorFilterHasTheShapeWeMeasured(t *testing.T) {
 
 	const n = 8192
 	spec := make([]complex64, n)
-	for i, c := range v.taps {
+	for i, c := range v.filters[len(v.filters)-1] {
 		spec[i] = complex(c, 0)
 	}
 	fft.New(n).Forward(spec)
@@ -262,7 +262,7 @@ func TestVendorMBCLIsTheOneWeBuiltFor(t *testing.T) {
 
 func TestLoadRejectsAWrongLengthFilter(t *testing.T) {
 	dir := t.TempDir()
-	if err := os.WriteFile(filepath.Join(dir, eqFiles[0].name), []byte("1.0,\n2.0,\n"), 0o600); err != nil {
+	if err := os.WriteFile(filepath.Join(dir, Dot.EQ[0].Name), []byte("1.0,\n2.0,\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := Load(dir); err == nil {

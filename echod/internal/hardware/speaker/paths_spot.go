@@ -152,6 +152,8 @@ const AmpSwitch = "Ext_Speaker_Amp_Switch"
 // OutputBoost is make-up gain on everything the speaker plays. Unity until measured.
 const OutputBoost = 1.0
 
-// DriverTuning is off: lib/asp reads the Dot's tuning files. The Echo Spot's vendor partition holds a
-// different set, so it plays as it always has, without that stage.
-const DriverTuning = false
+// DriverTuning applies the vendor driver's EQ and limiter (lib/asp), read from the unit's own vendor
+// partition. The Spot ("Rook") has one filter for every volume rather than a set of them, half the
+// length of the other devices', and a compressor chosen by power mode — lib/asp knows it as asp.Spot.
+// A unit whose files are missing says so and plays untuned.
+const DriverTuning = true
