@@ -3,6 +3,7 @@
 package display
 
 import (
+	"fmt"
 	"image"
 	"image/png"
 	"math"
@@ -112,6 +113,16 @@ func TestRoundScenesDraw(t *testing.T) {
 		"settings-sound":    spotScene(catSound),
 		"settings-privacy":  spotScene(catSecurity),
 	}
+	// The light before an alarm on the round face, frame by frame.
+	wake := at.Add(20 * time.Minute)
+	for i := 0; i <= 20; i++ {
+		p := float64(i) / 20
+		scenes[fmt.Sprintf("sunrise-%02d", i)] = roundScene{
+			now: wake.Add(-time.Duration((1-p)*20) * time.Minute), phase: "idle",
+			sunrise: p, sunriseFace: true,
+		}
+	}
+
 	dir := os.Getenv("SPOT_PREVIEW")
 	for name, s := range scenes {
 		img := image.NewRGBA(image.Rect(0, 0, side, side))

@@ -3,6 +3,7 @@
 package display
 
 import (
+	"fmt"
 	"image"
 	"image/png"
 	"os"
@@ -45,6 +46,17 @@ func TestShowScenesDraw(t *testing.T) {
 			sheet: settings{cat: catSound, volume: 15, wakeWord: "Okay Nabu"}},
 		"settings-sound-tone": {now: at, phase: "idle", showSheet: true,
 			sheet: settings{cat: catSound, volume: 15, wakeWord: "Okay Nabu", cardScroll: 210}},
+	}
+
+	// The light before an alarm, frame by frame: the same curve the panel follows, with the sun's
+	// face on, for looking at away from a device at six in the morning.
+	wake := at.Add(20 * time.Minute)
+	for i := 0; i <= 20; i++ {
+		p := float64(i) / 20
+		scenes[fmt.Sprintf("sunrise-%02d", i)] = scene{
+			now: wake.Add(-time.Duration((1-p)*20) * time.Minute), phase: "idle",
+			sunrise: p, sunriseFace: true,
+		}
 	}
 
 	dir := os.Getenv("SHOW_PREVIEW")
