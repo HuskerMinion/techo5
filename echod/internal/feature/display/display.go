@@ -460,6 +460,16 @@ func (d *Display) gesture(g touch.Gesture) {
 		return
 	}
 
+	// One that arrived: a tap on the strip puts it away, the same as on the round face. It does not
+	// have to be put away here — the clock and the music are carrying on behind it and it goes by
+	// itself — but having to wait out something already heard is the same annoyance on any screen.
+	if _, showing := announce.Get().Showing(); showing && g.Kind == touch.Tap &&
+		d.r != nil && onAnnounceStrip(g.X, g.Y, d.r.w, d.r.h) {
+		go announce.Get().Dismiss()
+		d.wake()
+		return
+	}
+
 	// The first-run card: any tap puts it away for good.
 	if !config.Get().Screen.Welcomed {
 		if g.Kind == touch.Tap {

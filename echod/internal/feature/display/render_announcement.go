@@ -4,6 +4,7 @@ package display
 
 import (
 	"image"
+	"image/color"
 	"strings"
 
 	"golang.org/x/image/font"
@@ -27,6 +28,9 @@ const (
 	// ellipsis marks a message that did not fit, so a sentence that stops reads as one that was cut
 	// rather than one that ended there.
 	ellipsis = "…"
+
+	// dismissHint is the way out, said on the strip that owns it.
+	dismissHint = "TAP TO DISMISS"
 )
 
 // announcementStrip is the arriving announcement, along the bottom where it covers least.
@@ -43,6 +47,10 @@ func (r *renderer) announcementStrip(s scene) {
 	r.roundFill(box, cardRad, surface(4), surface(2))
 	r.roundHighlight(box, cardRad)
 
+	// The way out, on the right of the heading rather than on a line of its own: the strip is a
+	// hundred and thirty pixels and the message has first claim on them.
+	r.rightText(r.tiny, dismissHint, box.Max.X-rowIn, box.Min.Y+40, dim)
+
 	if m.Text == "" {
 		// Nothing to read, so the room is the whole of it and is set large.
 		r.text(r.tiny, "ANNOUNCEMENT", box.Min.X+rowIn, box.Min.Y+40, amber)
@@ -57,7 +65,9 @@ func (r *renderer) announcementStrip(s scene) {
 	// says who, and whoever is reading already knows the rooms in their own house — while the message
 	// is the part that has to be read, so the message keeps the large face and the width.
 	head := "ANNOUNCEMENT  ·  " + strings.ToUpper(who)
-	r.text(r.tiny, clipText(r, r.tiny, head, box.Dx()-2*rowIn), box.Min.X+rowIn, box.Min.Y+44, amber)
+	// The heading stops short of the hint on its right.
+	room := box.Dx() - 2*rowIn - r.width(r.tiny, dismissHint) - 24
+	r.text(r.tiny, clipText(r, r.tiny, head, room), box.Min.X+rowIn, box.Min.Y+44, amber)
 	r.text(r.body, clipText(r, r.body, m.Text, box.Dx()-2*rowIn), box.Min.X+rowIn, box.Min.Y+100, cream)
 }
 
@@ -112,4 +122,9 @@ func clipText(r *renderer, f font.Face, s string, width int) string {
 		}
 	}
 	return ellipsis
+}
+
+// rightText draws s ending at x rather than starting there.
+func (r *renderer) rightText(f font.Face, s string, x, y int, c color.Color) {
+	r.text(f, s, x-r.width(f, s), y, c)
 }
