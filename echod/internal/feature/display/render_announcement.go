@@ -18,6 +18,10 @@ const (
 	// announceBar is how tall the strip is, and announceInset how far in from the edges it sits.
 	announceBar   = 132
 	announceInset = 28
+
+	// wordsGap is the space between the name of the room an announcement came from and the words it
+	// carried, when it carried any.
+	wordsGap = 28
 )
 
 // announcementStrip is the arriving announcement, along the bottom where it covers least.
@@ -38,13 +42,17 @@ func (r *renderer) announcementStrip(s scene) {
 	r.text(r.title, who, box.Min.X+rowIn, box.Min.Y+84, cream)
 
 	if m.Text != "" {
+		// After the name, not at a fixed offset from the edge. The offset was 300 and "Laundry Room"
+		// is wider than that, so the words were drawn straight through the name of the room they came
+		// from — exactly the two things this strip exists to say.
+		x := box.Min.X + rowIn + r.width(r.title, who) + wordsGap
 		// One line: the voice carries the rest, and a wall of text on a strip nobody asked for is
 		// worse than a sentence that stops.
 		words := m.Text
-		for len(words) > 0 && r.width(r.body, words) > box.Dx()-2*rowIn-300 {
+		for len(words) > 0 && x+r.width(r.body, words) > box.Max.X-rowIn {
 			words = words[:len(words)-1]
 		}
-		r.text(r.body, words, box.Min.X+rowIn+300, box.Min.Y+84, dim)
+		r.text(r.body, words, x, box.Min.Y+84, dim)
 	}
 }
 

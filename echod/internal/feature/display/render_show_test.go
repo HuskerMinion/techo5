@@ -47,6 +47,10 @@ func TestShowScenesDraw(t *testing.T) {
 			announcement: announce.Message{From: "Kitchen", Text: "dinner is ready"}},
 		"announcement-voice": {now: at, phase: "idle", weather: sky, showAnnouncement: true,
 			announcement: announce.Message{From: "Laundry Room"}},
+		// A long room name with words as well. The words used to start at a fixed offset from the
+		// edge, so a name wider than that was drawn straight through by them.
+		"announcement-long": {now: at, phase: "idle", weather: sky, showAnnouncement: true,
+			announcement: announce.Message{From: "Laundry Room", Text: "the washing is finished"}},
 		"announce-recording": {now: at, phase: "idle", weather: sky, announceRecording: true, announcePeers: 3},
 		"announce-drawer": {now: at, phase: "idle", weather: sky, showDrawer: true,
 			drawerTab: drawerAnnounce, announceReady: true, announcePeers: 3},
