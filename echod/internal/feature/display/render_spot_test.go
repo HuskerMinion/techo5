@@ -112,6 +112,10 @@ func TestRoundScenesDraw(t *testing.T) {
 		"announcement-voice": {now: at, phase: "idle", showAnnouncement: true,
 			announcement: announce.Message{From: "Laundry Room"}},
 		"announce-recording": {now: at, phase: "idle", announceRecording: true, announcePeers: 3},
+		// Muted while an announcement has the face: the one place the state was invisible, and the
+		// one time somebody is reaching for the button.
+		"announcement-muted": {now: at, phase: "idle", muted: true, showAnnouncement: true,
+			announcement: announce.Message{From: "Laundry Room"}},
 		"menu-announce": {now: at, phase: "idle", menuOpen: true, menuMode: modeMain,
 			menuSel: 8, menuRot: restFor(8, len(mainItems)), announceReady: true, announcePeers: 3},
 		"settings-general":  spotScene(catGeneral),

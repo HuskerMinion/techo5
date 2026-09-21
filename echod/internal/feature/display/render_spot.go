@@ -183,6 +183,13 @@ func newRoundRenderer(dst *image.RGBA) *roundRenderer {
 func (r *roundRenderer) draw(s roundScene) {
 	draw.Draw(r.dst, r.dst.Rect, image.NewUniform(colBackground), image.Point{}, draw.Src)
 
+	// Muted is drawn last, over whatever the face turns out to be: see mutedRim.
+	defer func() {
+		if s.muted {
+			r.mutedRim()
+		}
+	}()
+
 	if s.call.Phase != phone.Idle {
 		r.callFace(s)
 		return
@@ -245,10 +252,22 @@ func (r *roundRenderer) draw(s roundScene) {
 
 // rim is the status ring: red while muted, the conversation's colour while one runs, the soonest
 // timer's time left, or a quiet track.
+// mutedRim says the microphones are cut, over the top of anything.
+//
+// This device has no mute light - its button is the keypad's power key and there is no lamp behind
+// it - so the rim is the only place the state can be seen at all. It used to be drawn with the rest
+// of the rim, which meant it disappeared behind a call, a ringing alarm, the settings sheet and an
+// announcement: every face that takes the whole circle. An announcement was the worst of them,
+// because a house full of devices announcing at each other is exactly when somebody reaches for the
+// mute button and wants to know whether it took.
+func (r *roundRenderer) mutedRim() {
+	r.arc(rimIn, rimOut, 0, 2*math.Pi, colMuted)
+}
+
 func (r *roundRenderer) rim(s roundScene) {
 	switch {
 	case s.muted:
-		r.arc(rimIn, rimOut, 0, 2*math.Pi, colMuted)
+		r.mutedRim()
 	case s.phase == "listening":
 		pulse := 0.55 + 0.45*math.Sin(float64(s.now.UnixMilli())/180)
 		r.arc(rimIn, rimOut, 0, 2*math.Pi, fade(colListening, pulse))
