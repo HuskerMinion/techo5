@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/HuskerMinion/techo5/echod/internal/config"
+	"github.com/HuskerMinion/techo5/echod/internal/feature/diag"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/home"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/timezone"
 	"github.com/HuskerMinion/techo5/echod/internal/layout"
@@ -58,9 +59,26 @@ func (f *Feature) serve(w http.ResponseWriter, r *http.Request) {
 		f.state(w, r)
 	case "/setup/save":
 		f.save(w, r)
+	case "/setup/diagnostics.txt":
+		f.diagnostics(w, r)
 	default:
 		http.NotFound(w, r)
 	}
+}
+
+// diagnostics hands over everything worth having when something is wrong, with the addresses, names,
+// keys and serial numbers already replaced — so that somebody can send it to an issue without
+// reading it line by line first. Behind the press, like everything else here.
+func (f *Feature) diagnostics(w http.ResponseWriter, r *http.Request) {
+	if _, in := f.session(r); !in {
+		http.Error(w, "not let in", http.StatusForbidden)
+		return
+	}
+	slog.Info("setup page: diagnostics collected")
+	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+	w.Header().Set("Cache-Control", "no-store")
+	w.Header().Set("Content-Disposition", `attachment; filename="techo5-diagnostics.txt"`)
+	fmt.Fprint(w, diag.Bundle())
 }
 
 // session is the cookie this request carries, and whether it has been let in.
@@ -258,6 +276,7 @@ func (f *Feature) settingsPage(w http.ResponseWriter, token, saved, renamed, pro
 	fmt.Fprint(w, `</select><p class="note">The device's clock keeps time on its own; this is only
 	 which zone it shows.</p><p><button type="submit">Save</button></p></fieldset></form>`)
 
+	diagnosticsSection(w)
 	stationsSection(w, token)
 	f.wifiSection(w, token, scan)
 	nameSection(w, token)
@@ -325,6 +344,17 @@ func (f *Feature) wifiSection(w http.ResponseWriter, token string, scan bool) {
 	  nothing changes here until the device is taken there. If it is a network in range, the device
 	  moves to it — and this page goes with it, so you will have to find it again at its new address.</p>
 	 <p><button type="submit">Add network</button></p></form></fieldset>`)
+}
+
+// diagnosticsSection offers the bundle. It is first because somebody who came here to ask for help
+// should not have to read past the radio stations to find it.
+func diagnosticsSection(w http.ResponseWriter) {
+	fmt.Fprint(w, `<fieldset><legend>Something wrong?</legend>
+	 <p><a href="/setup/diagnostics.txt">Download diagnostics</a> — what this device knows about
+	  itself, the last of its log, and what it is set to.</p>
+	 <p class="note">Addresses, network names, keys and serial numbers are replaced before you get it,
+	  so it can go straight into an issue. Worth a look before you send it all the same.</p>
+	 </fieldset>`)
 }
 
 // stationsSection is the radio stations kept on the device: a name and the address of the stream,

@@ -248,3 +248,25 @@ func TestRenamingNeedsTheBoxTicked(t *testing.T) {
 		t.Error("accepted a name with a newline in it")
 	}
 }
+
+// The diagnostics are behind the press like everything else: a browser that has not been let in
+// cannot have the device's log by asking for it.
+func TestDiagnosticsNeedThePressToo(t *testing.T) {
+	f := build()
+	f.Open()
+	if code := get(f, "/setup/diagnostics.txt", nil).Code; code != http.StatusForbidden {
+		t.Errorf("diagnostics with no session got %d, want them refused", code)
+	}
+	c := ask(t, f)
+	if code := get(f, "/setup/diagnostics.txt", c).Code; code != http.StatusForbidden {
+		t.Errorf("diagnostics while only waiting got %d, want them refused", code)
+	}
+	f.button(buttons.Event{Name: buttons.Action, Kind: buttons.Tap})
+	w := get(f, "/setup/diagnostics.txt", c)
+	if w.Code != http.StatusOK {
+		t.Fatalf("diagnostics after the press got %d", w.Code)
+	}
+	if !strings.Contains(w.Body.String(), "TECHO5 diagnostics") {
+		t.Errorf("that does not look like the bundle: %q", first(w.Body.String()))
+	}
+}
