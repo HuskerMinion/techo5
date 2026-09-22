@@ -163,9 +163,9 @@ are in [techo5-checkers](https://github.com/HuskerMinion/techo5-checkers).
 **Echo Show 8 1st gen (2019, `crown`)** installs with the same command as well. Its screen, touch,
 speaker, four microphones, wake word, camera, lens cover and mute latch all work, and it takes slot
 updates like the others. It is the newest of the three and has been through far less use than either
-Show 5, so treat it as such. Two things worth knowing first: the model number C7H6N3 is printed on both
-generations of Show 8, so check the year before buying second-hand, and cycling the mute latch stops
-the camera until the unit is rebooted.
+Show 5, so treat it as such. Two things worth knowing first: a seller's model number does not tell the
+two Show 8 generations apart, so go by the year when buying second-hand, and cycling the mute latch
+stops the camera until the unit is rebooted.
 
 ## Under the hood
 
