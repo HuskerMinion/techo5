@@ -58,6 +58,39 @@ func TestAShow8IsNotMistakenForADot(t *testing.T) {
 	}
 }
 
+// And the other way round, which is the dangerous direction. EQ_30.cfg is checked before the Dot's
+// marker, so anything else carrying one would be tuned as a Show 8 - and a Show 5 1st gen does carry
+// one, unreferenced, beside the EQ_40 its own firmware names. The Show 8 is the one with no
+// EQ_60.cfg, and that is what tells it apart from a device that merely has some of its files.
+//
+// It matters because the sets do not fail safe into each other: a Dot taken for a Show 8 asks for
+// MBCL_default.cfg, which it does not ship, and plays with no compressor at all.
+func TestADeviceCarryingAStrayEQ30IsStillItself(t *testing.T) {
+	for _, c := range []struct {
+		what  string
+		files []string
+		want  string
+	}{
+		// Read off a unit: the Show 5 1st gen's directory, which holds EQ_30, EQ_70 and EQ_90 that
+		// its own AFE.cfg never references.
+		{"a Show 5 1st gen", []string{"EQ.cfg", "EQ_30.cfg", "EQ_40.cfg", "EQ_60.cfg", "EQ_70.cfg", "EQ_80.cfg", "EQ_90.cfg", "EQ_100.cfg"}, "show"},
+		// A Dot shipping a stray EQ_30.cfg. Whether any does is not known, and this is here so that
+		// it does not matter.
+		{"a Dot with a stray EQ_30", []string{"EQ_30.cfg", "EQ_50.cfg", "EQ_60.cfg", "EQ_70.cfg", "EQ_80.cfg", "EQ_90.cfg", "EQ_100.cfg"}, "dot"},
+		{"a Spot with a stray EQ_30", []string{"EQ.cfg", "EQ_30.cfg", "EQ_60.cfg"}, "spot"},
+	} {
+		dir := t.TempDir()
+		for _, f := range c.files {
+			if err := os.WriteFile(filepath.Join(dir, f), []byte("0.0,\n"), 0o600); err != nil {
+				t.Fatal(err)
+			}
+		}
+		if set, ok := SetFor(dir); !ok || set.Name != c.want {
+			t.Errorf("%s loaded %q, want %q", c.what, set.Name, c.want)
+		}
+	}
+}
+
 // The Show's quieter buckets are not its loudest one turned down — they carry more bass and treble —
 // so which bucket the volume is in decides which filter runs, not how much gain goes in front of one.
 func TestTheVolumePicksItsOwnFilter(t *testing.T) {

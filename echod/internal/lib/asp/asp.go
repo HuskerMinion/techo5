@@ -105,21 +105,36 @@ var (
 	}
 )
 
-// SetFor is the tuning a directory holds, told apart by a file only one of them has. The Spot is
-// last because its EQ.cfg sits beside the others' files on some units.
+// SetFor is the tuning a directory holds, told apart by a file only one of them has, and where no
+// single file will do, by one that has to be there together with one that must not. The Spot is last
+// because its EQ.cfg sits beside the others' files on some units.
+//
+// These directories hold more than the tuning in use: a Show 5 1st gen ships EQ_30.cfg, EQ_70.cfg
+// and EQ_90.cfg that its own AFE.cfg never references. So a marker is only evidence when nothing
+// else on the device could have put that file there, and picking the wrong set is not a small
+// mistake — it loads the wrong compressor, or none, and puts a bass lift on the driver with nothing
+// holding it down.
 func SetFor(dir string) (Set, bool) {
+	has := func(name string) bool {
+		_, err := os.Stat(filepath.Join(dir, name))
+		return err == nil
+	}
 	for _, c := range []struct {
 		marker string
+		absent string // when set, the marker only counts if this file is not there
 		set    Set
 	}{
-		{"EQ_40.cfg", Show},
+		{marker: "EQ_40.cfg", set: Show},
 		// Before the Dot's, because the Show 8 has an EQ_50.cfg too and would otherwise be taken for
-		// one. EQ_30.cfg is the Show 8's alone.
-		{"EQ_30.cfg", Crown},
-		{"EQ_50.cfg", Dot},
-		{"EQ.cfg", Spot},
+		// one. EQ_30.cfg alone is not enough to say Show 8: the Show 5 1st gen ships one as well, and
+		// a Dot that shipped one would be tuned as a Show 8 and then asked for an EQ_60.cfg. What no
+		// Show 8 has is EQ_60.cfg - its firmware names EQ_30, EQ_50, EQ_70 and EQ_100 - and the Dot
+		// and both Show 5 generations all have one.
+		{marker: "EQ_30.cfg", absent: "EQ_60.cfg", set: Crown},
+		{marker: "EQ_50.cfg", set: Dot},
+		{marker: "EQ.cfg", set: Spot},
 	} {
-		if _, err := os.Stat(filepath.Join(dir, c.marker)); err == nil {
+		if has(c.marker) && (c.absent == "" || !has(c.absent)) {
 			return c.set, true
 		}
 	}
