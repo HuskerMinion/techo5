@@ -58,6 +58,10 @@ type Source struct {
 	// wake model is streaming, so a missing frame corrupts its state rather than just losing audio.
 	dropped atomic.Uint64
 
+	// rewiring says the next read failure is the handover in Rewire rather than a fault, so Run can
+	// ask for a restart instead of reporting a crash. See the comment on service.ErrRestart.
+	rewiring atomic.Bool
+
 	history history
 
 	// mixer is read by the reader and replaced from Home Assistant, both under mu.
@@ -327,6 +331,11 @@ func (s *Source) Run(ctx context.Context) error {
 					slog.Warn("capture overrun", "times", overruns)
 				}
 				continue
+			}
+			// The device was handed back on purpose and this read died with it, so ask to be
+			// started again rather than reporting the handover as a failure.
+			if s.rewiring.Swap(false) {
+				return fmt.Errorf("%w: the capture device was handed back after the mute came off", service.ErrRestart)
 			}
 			return err
 		}

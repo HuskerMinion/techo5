@@ -136,6 +136,16 @@ func run(ctx context.Context, svc Service) (err error) {
 	return svc.Run(ctx)
 }
 
+// ErrRestart is a service asking to be started again. It is not a fault: the supervisor restarts it
+// from the shortest delay, without walking the backoff up and without an error in the log.
+//
+// It exists because some services stop on purpose. The capture service is the one that does: on a
+// board whose mute latch resets the microphone chip, the daemon hands the capture device back so the
+// stream can be opened again, and the read already waiting in the kernel fails as the descriptor
+// goes. That read error is the mechanism working, not a crash, and reporting it as a crash both
+// misleads whoever reads the log and counts against a service that is behaving.
+var ErrRestart = errors.New("restart requested")
+
 // supervise runs one service, restarting it if that is its policy.
 func (g *Group) supervise(ctx context.Context, e *entry) {
 	wait := e.policy.backoff
@@ -165,15 +175,24 @@ func (g *Group) supervise(ctx context.Context, e *entry) {
 			return
 		}
 
+		// Asked for rather than fallen over: see ErrRestart.
+		asked := errors.Is(err, ErrRestart)
+
 		// A service that stayed up a good while is having a bad moment rather than a bad life, so it
-		// starts again from the shortest delay.
-		if ran >= e.policy.steady {
+		// starts again from the shortest delay. So does one that asked to be restarted.
+		if asked || ran >= e.policy.steady {
 			wait = e.policy.backoff
 		}
 
-		e.set(StateRetrying, err)
-		slog.Error("service failed, restarting", "service", e.svc.Name(),
-			"err", err, "ran", ran.Round(time.Millisecond), "in", wait)
+		if asked {
+			e.set(StateRetrying, nil)
+			slog.Info("service restarting as asked", "service", e.svc.Name(),
+				"ran", ran.Round(time.Millisecond), "in", wait)
+		} else {
+			e.set(StateRetrying, err)
+			slog.Error("service failed, restarting", "service", e.svc.Name(),
+				"err", err, "ran", ran.Round(time.Millisecond), "in", wait)
+		}
 
 		if !e.reacquire(ctx, &wait) {
 			e.set(StateStopped, nil)

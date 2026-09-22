@@ -47,7 +47,12 @@ func Rewire() {
 	if !resetsOnMute() {
 		return
 	}
-	if err := Get().Close(); err != nil {
+	// Say so before the close, so the read waiting in the kernel knows why it is about to fail and
+	// asks the supervisor for a restart instead of reporting a crash.
+	src := Get()
+	src.rewiring.Store(true)
+	if err := src.Close(); err != nil {
+		src.rewiring.Store(false)
 		slog.Warn("handing the capture device back failed", "err", err)
 		return
 	}

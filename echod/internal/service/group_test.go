@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"errors"
+	"fmt"
 	"sync"
 	"testing"
 	"time"
@@ -357,6 +358,58 @@ func TestFailedReacquireDoesNotRun(t *testing.T) {
 	}
 	if runs != 2 {
 		t.Errorf("ran %d times, want 2: one per acquire that worked", runs)
+	}
+
+	cancel()
+	<-done
+}
+
+// A service that asks to be restarted is started again, and the supervisor does not record it as
+// having failed: its status carries no error while it waits, which is what tells a reader (and the
+// diagnostics that surface it) that nothing went wrong. The capture service does this every time the
+// mute button releases the microphone chip.
+func TestRestartOnRequestIsNotAFailure(t *testing.T) {
+	var attempts int
+	var mu sync.Mutex
+
+	svc := &fake{name: "asker"}
+	svc.run = func(ctx context.Context) error {
+		mu.Lock()
+		attempts++
+		n := attempts
+		mu.Unlock()
+
+		if n < 3 {
+			return fmt.Errorf("%w: handed the device back", ErrRestart)
+		}
+		<-ctx.Done()
+		return nil
+	}
+
+	g := New()
+	g.Add(svc, Restart(5*time.Millisecond, time.Hour)) // a steady window it can never reach
+
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan error, 1)
+	go func() { done <- g.Run(ctx) }()
+
+	deadline := time.Now().Add(2 * time.Second)
+	for {
+		if s := statusOf(g, "asker"); s.State == StateRunning && s.Restarts >= 2 {
+			break
+		}
+		if s := statusOf(g, "asker"); s.State == StateRetrying && s.Err != nil {
+			t.Fatalf("a requested restart was recorded as a failure: %v", s.Err)
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("never settled: %+v", statusOf(g, "asker"))
+		}
+		time.Sleep(time.Millisecond)
+	}
+
+	starts, runs, closes := svc.counts()
+	if starts < 3 || runs < 3 || closes < 2 {
+		t.Errorf("starts=%d runs=%d closes=%d, want at least 3/3/2", starts, runs, closes)
 	}
 
 	cancel()
