@@ -76,6 +76,50 @@ func TestATransportForACarriedStreamGoesToTheRemote(t *testing.T) {
 	}
 }
 
+// A session going away takes its claim with it, and the last thing it played with it too: with nothing
+// left to ask, a transport belongs to this player's own stream again.
+//
+// Without that it was reachable: a station paused underneath, Music Assistant plays and then drops.
+// `finish()` had already removed the only OnTransport listener, so every button — the screen's, Home
+// Assistant's, the Spot's — went out to a hook with nobody listening on it and did nothing at all, and
+// the station could not be resumed from anywhere until something started a local stream again.
+func TestATransportGoesBackToThisPlayerWhenTheSessionIsGone(t *testing.T) {
+	for _, tc := range []struct {
+		name       string
+		session    bool
+		wantRemote bool
+	}{
+		{"a remote that played, with its session still there", true, true},
+		{"the same remote, with the session gone", false, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			// A station paused underneath is the state that bites: there is something here to resume.
+			s := localStream(true)
+			p := &Player{stream: s}
+			p.remoteLast.Store(true)
+			if !tc.session {
+				p.RemoteGone()
+			}
+
+			var heard []Transport
+			cancel := p.OnTransport.Listen(func(tr Transport) { heard = append(heard, tr) })
+			defer cancel()
+
+			p.Transport(TransportToggle)
+
+			if got := len(heard) > 0; got != tc.wantRemote {
+				t.Fatalf("the remote heard %v, want the command to be the remote's: %v", heard, tc.wantRemote)
+			}
+			if tc.wantRemote {
+				return
+			}
+			if _, paused := s.Playing(); paused {
+				t.Error("the station underneath was not resumed")
+			}
+		})
+	}
+}
+
 // Home Assistant's stop is not the screen's stop, and the difference is who is asking rather than what
 // the stream is: an automation with nobody in the room gets a pause, which keeps the track.
 func TestTheScreensStopIsAStop(t *testing.T) {

@@ -658,6 +658,17 @@ func (p *Player) LetGo(n uint64) {
 	}
 }
 
+// RemoteGone is a session ending: the remote that was playing is not there any more, so a transport goes
+// back to this player's own stream rather than out to a hook with nobody listening on it.
+//
+// Deliberately not part of LetGo. Giving the speaker back is what a skip does in the middle of a
+// connection, and the session that started the next track is still there to be asked — that hold is what
+// changeGrace is for. Only the connection going means there is nothing left to ask, which is also why it
+// is called after the listener has been removed rather than before.
+func (p *Player) RemoteGone() {
+	p.remoteLast.Store(false)
+}
+
 // ExternalPlaying reports whether something this player did not start is using the speaker, which is
 // what the screen asks before it says what the room is playing.
 func (p *Player) ExternalPlaying() bool { return p.remote.playing() }
