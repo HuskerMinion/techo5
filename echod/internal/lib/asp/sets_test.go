@@ -35,7 +35,7 @@ func TestSetForPicksTheDevicesOwnTuning(t *testing.T) {
 	}
 }
 
-// The Show 8 ships an EQ_50.cfg as well as its own EQ_30.cfg, and the Dot is recognised by EQ_50.
+// The Show 8 ships an EQ_50.cfg as well as its own EQ_30.cfg, and the Dot is recognized by EQ_50.
 // A directory holding both has to come out as the Show 8, or it loads the Dot's six buckets, asks
 // for an EQ_60.cfg that is not there, and plays untuned. That is what it did before crown's set
 // existed, so the ordering is the fix and this is what holds it in place.

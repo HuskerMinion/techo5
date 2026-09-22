@@ -762,8 +762,8 @@ const (
 // danger is the color of an action to think twice about, whatever the theme.
 var danger = color.RGBA{0xe5, 0x48, 0x4d, 0xff}
 
-// roundButton fills a rounded button in one colour, lit and shadowed the way every raised thing on
-// these screens is. Separate from buttonFace because a few answers carry a colour of their own that
+// roundButton fills a rounded button in one color, lit and shadowed the way every raised thing on
+// these screens is. Separate from buttonFace because a few answers carry a color of their own that
 // means something — the phone's red and green — rather than taking the theme's accent.
 func (r *paint) roundButton(b image.Rectangle, rad float64, fill color.RGBA) {
 	r.roundShadow(b, rad, 8, 3, shadowAlpha()*0.8)
@@ -771,7 +771,7 @@ func (r *paint) roundButton(b image.Rectangle, rad float64, fill color.RGBA) {
 	r.roundHighlight(b, rad)
 }
 
-// buttonFace draws a button's shape and returns the colour its label should be drawn in.
+// buttonFace draws a button's shape and returns the color its label should be drawn in.
 //
 // Size and radius are the caller's, because a button is the same thing whether it is the pill on a
 // settings row or one of the two large answers on the setup page. Drawing them from one place is

@@ -110,7 +110,7 @@ func (c *Cover) Close() error {
 	return dev.Close()
 }
 
-// Run follows the shutter until ctx is cancelled. The read blocks in the kernel, so cancellation
+// Run follows the shutter until ctx is canceled. The read blocks in the kernel, so cancellation
 // closes the node from the side and lets the read fail, as the light sensor does.
 func (c *Cover) Run(ctx context.Context) error {
 	c.mu.Lock()

@@ -106,7 +106,7 @@ func (r *renderer) weatherButton() image.Rectangle {
 	return image.Rect(r.w-r.margin-r.s(150), r.h-r.s(100), r.w-r.margin, r.h-r.s(52))
 }
 
-// weatherToggle is that button drawn, with its label centred in it. The box is scaled along with the
+// weatherToggle is that button drawn, with its label centered in it. The box is scaled along with the
 // type: it used to be a fixed 150 wide, so on a Show 8 the label grew and the box did not, and
 // "Forecast" ran out of both ends of it.
 func (r *renderer) weatherToggle(label string) {
