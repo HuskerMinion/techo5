@@ -157,8 +157,14 @@ Assistant. Every step by hand, and the fixes for what can go wrong: **[docs/inst
 generation it is talking to and takes that unit's boot image from the release. Everything works on it —
 screen, touch, speaker, microphones, wake word, camera, the mute button and voice — tested end to end,
 though so far on one unit rather than the two years of daily use behind the 2nd gen. The hardware notes
-are in [techo5-checkers](https://github.com/HuskerMinion/techo5-checkers). The Echo Show 8 1st gen
-(2019) is planned.
+are in [techo5-checkers](https://github.com/HuskerMinion/techo5-checkers).
+
+**Echo Show 8 1st gen (2019, `crown`)** installs with the same command as well. Its screen, touch,
+speaker, four microphones, wake word, camera, lens cover and mute latch all work, and it takes slot
+updates like the others. It is the newest of the three and has been through far less use than either
+Show 5, so treat it as such. Two things worth knowing first: the model number C7H6N3 is printed on both
+generations of Show 8, so check the year before buying second-hand, and cycling the mute latch stops
+the camera until the unit is rebooted.
 
 ## Under the hood
 

@@ -74,7 +74,8 @@ If more than one Android or fastboot device is plugged in, pass `-s <serial>` to
 The boot image is the kernel plus the small rescue environment that sets a unit up. Two ways:
 
 - **From a release (simplest).** Download `techo5-boot-<version>.img` — on an Echo Show 5 1st gen
-  (checkers), `techo5-boot-checkers-<version>.img`, which is built against that generation's own
+  (checkers), `techo5-boot-checkers-<version>.img`, and on an Echo Show 8 (crown),
+  `techo5-boot-crown-<version>.img`, each built against that board's own
   kernel and device tree — from the same
   [release](https://github.com/HuskerMinion/techo5/releases) as the root filesystem. The boot image
   changes rarely, so most releases don't carry one; when yours doesn't, take it from the newest

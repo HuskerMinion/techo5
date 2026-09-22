@@ -19,12 +19,16 @@ The model number is on the bottom of the device, or in the Alexa app under the d
 | **Echo Dot, 2nd gen** (2016) | `biscuit` | RS03QR | [TECHO5 Dot](https://github.com/HuskerMinion/techo5-dot) | Moderate: the unlock and Fire OS steps by hand, then a one-command installer |
 | **Echo Spot, 1st gen** (2017) | `rook` | VN94DQ | [TECHO5 Spot](https://github.com/HuskerMinion/techo5-spot) | Moderate: the unlock and LineageOS by hand, then a one-command installer |
 | **Echo Show 5, 1st gen** (2019) | `checkers` | — | [TECHO5](https://github.com/HuskerMinion/techo5) | Moderate: the unlock and LineageOS by hand, then the same one-command installer |
-| **Echo Show 8, 1st gen** (2019) | — | — | Coming: planned | Not yet: work starts when test units arrive |
+| **Echo Show 8, 1st gen** (2019) | `crown` | C7H6N3 | [TECHO5](https://github.com/HuskerMinion/techo5) | Moderate: the unlock and LineageOS by hand, then the same one-command installer |
 
-Both generations of the Show 5 install with the same command and run the same build, which tells them
-apart when it starts; the installer picks each one's boot image out of the release. The 1st gen has been
-tested end to end, though on one unit so far. The Show 8 1st gen is planned, with nothing to install yet
-and no dates. Other Echos (the Dot 3rd gen and later, and so on) are **not** supported.
+All three Shows install with the same command and run the same build, which tells them apart when it
+starts; the installer picks each one's boot image out of the release. The Show 5 1st gen has been tested
+end to end, though on one unit so far. The Show 8 is newer still: it has been through an install, a slot
+update and a reboot on one unit, with the screen, microphones, wake word, speaker, camera, lens cover
+and mute latch all working, and nothing else has run on it for long. Two things a Show 8 owner should
+know before starting: the model number C7H6N3 is printed on both generations, so check the year, and
+cycling the mute latch stops the camera until the unit is rebooted — the daemon says so when it happens.
+Other Echos (the Dot 3rd gen and later, and so on) are **not** supported.
 
 ## What every device needs
 

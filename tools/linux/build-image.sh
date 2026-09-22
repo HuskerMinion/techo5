@@ -16,7 +16,9 @@ set -euo pipefail
 
 ROOT=$(cd "$(dirname "$0")/../.." && pwd)
 INPUTS=${TECHO5_INPUTS:-$ROOT/inputs}
-# The unit's own LineageOS boot image (its kernel and header); never published.
+# The unit's own LineageOS boot image (its kernel and header); never published. Per board, not just
+# per unit: the header, load addresses and command line are taken from this file, so a 1st gen Show 5
+# or an Echo Show 8 needs its own here rather than the 2nd gen's default.
 KERNEL_IMAGE=${KERNEL_IMAGE:-$INPUTS/boot-lineage-18.1-20260904-cronos.img}
 # KERNEL=Image.gz-dtb: a kernel built from source replaces the one in KERNEL_IMAGE
 # (its header, load addresses and command line still come from KERNEL_IMAGE).

@@ -13,11 +13,15 @@
 # CROSS_COMPILE (an aarch64 GCC; Arm's 8.3-2019.03 release builds it cleanly:
 # developer.arm.com/-/media/Files/downloads/gnu-a/8.3-2019.03/binrel/
 # gcc-arm-8.3-2019.03-x86_64-aarch64-linux-gnu.tar.xz, no root needed),
-# KOUT (build directory; keep it outside the source tree), DEFCONFIG (cronos_defconfig, the 2nd gen;
-# checkers_defconfig for the 1st gen, which runs the same commit with its own device trees; give it
-# a KOUT of its own), PATCHES (a directory of *.patch applied for this build and taken out again
-# afterwards whatever happens; the release string is then pinned as KPATCHED does, since the vendor
-# modules check it).
+# KOUT (build directory; keep it outside the source tree), DEFCONFIG (cronos_defconfig, the 2nd gen
+# Show 5; checkers_defconfig for the 1st gen and crown_defconfig for the Echo Show 8, both of which
+# run the same commit with their own device trees; give each a KOUT of its own), PATCHES (a directory
+# of *.patch applied for this build and taken out again afterwards whatever happens; the release
+# string is then pinned as KPATCHED does, since the vendor modules check it).
+#
+# The Show 8 wants PATCHES=tools/linux/patches, whose one patch puts the microphone pin back when a
+# capture stream opens. Its name says checkers; the code it touches (drivers/misc/gating.c,
+# include/misc/gating.h, mt_soc_machine.c) is board-generic and the Show 8 has the same mute latch.
 #
 # Afterwards: delete amzn,mic-downmix from the appended device trees the way
 # patch-dtb.py does, then build-image.sh KERNEL=<Image.gz-dtb> (see README.md).
