@@ -66,8 +66,18 @@ type Camera struct {
 	stopped chan struct{}
 	idle    *time.Timer
 	last    *Frame
-	err     error // why the last start failed, for callers waiting on a frame
+	err     error // why a start failed, for callers waiting on a frame. See errFrom.
 	seq     uint64
+
+	// errFrom says which start err came from: the stopped channel of the run that failed to open.
+	// An error belongs to the start that produced it and to nobody else. A Snapshot arriving while
+	// the sensor is already running used to read err straight off the camera on its first tick and
+	// hand back whatever a start minutes ago had failed with, without ever giving the healthy stream
+	// it was actually waiting on a chance to produce a frame - the camera that "fails, then works
+	// next time". A waiter notes the run it is waiting on and looks at err only when this matches, so
+	// an old failure is simply not its business. Each run has its own stopped channel, so the channel
+	// is the run's name.
+	errFrom chan struct{}
 
 	// stopping is the stopped channel of a run that is on its way out: running is already clear,
 	// but the goroutine still owns the sensor until it closes. Acquire waits on it. See idleStop.
@@ -165,7 +175,10 @@ func (c *Camera) Acquire() (release func(), err error) {
 	}
 	if !c.running {
 		c.running = true
-		c.err = nil
+		// The new run has a stopped channel of its own, so nothing can mistake the last run's error
+		// for this one's; dropping it here is only so a dead error is not kept alive for the life of
+		// the process.
+		c.err, c.errFrom = nil, nil
 		c.stop = make(chan struct{})
 		c.stopped = make(chan struct{})
 		run := c.owner
@@ -217,8 +230,10 @@ func (c *Camera) Snapshot(ctx context.Context) (*Frame, error) {
 		return nil, err
 	}
 	defer release()
+	// The run this snapshot is waiting on: Acquire either started it or joined one that was already
+	// going, and either way it is the only start whose failure is this caller's to hear about.
 	c.mu.Lock()
-	after := c.seq
+	after, mine := c.seq, c.stopped
 	c.mu.Unlock()
 	got := make(chan *Frame, 1)
 	cancel := c.Frames.Listen(func(f *Frame) {
@@ -239,22 +254,27 @@ func (c *Camera) Snapshot(ctx context.Context) (*Frame, error) {
 		case f := <-got:
 			return f, nil
 		case <-ctx.Done():
-			c.mu.Lock()
-			err := c.err
-			c.mu.Unlock()
-			if err != nil {
+			if err := c.startErr(mine); err != nil {
 				return nil, err
 			}
 			return nil, ctx.Err()
 		case <-tick.C:
-			c.mu.Lock()
-			err := c.err
-			c.mu.Unlock()
-			if err != nil {
+			if err := c.startErr(mine); err != nil {
 				return nil, err
 			}
 		}
 	}
+}
+
+// startErr is why the start named by stopped failed, or nil. Anything left over from an earlier
+// start is somebody else's error and reads as nil here.
+func (c *Camera) startErr(stopped chan struct{}) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if stopped == nil || c.errFrom != stopped {
+		return nil
+	}
+	return c.err
 }
 
 // Running reports whether the sensor is powered: something holds it, or it is lingering after the
@@ -292,19 +312,11 @@ func (c *Camera) run(stop, stopped chan struct{}) {
 		}
 		d, err := open()
 		if err != nil {
-			c.mu.Lock()
-			c.err = err
-			c.running = false
-			// EIO here is the sensor believing it is still powered after the latch cut it, which no
-			// amount of asking again will change. Said once, loudly, rather than at every poll.
-			if errors.Is(err, syscall.EIO) {
-				c.wedged = ErrNeedsReboot
-				c.mu.Unlock()
+			if c.startFailed(err, stopped) {
 				slog.Error("camera will not open again until this device is rebooted",
 					"err", err, "why", "the microphone latch cut the sensor's power behind its driver")
 				return
 			}
-			c.mu.Unlock()
 			slog.Error("camera start", "err", err)
 			return
 		}
@@ -346,6 +358,37 @@ func (c *Camera) run(stop, stopped chan struct{}) {
 		default: // muted: round again, to wait for the unmute
 		}
 	}
+}
+
+// startFailed books a start that could not open the sensor, for the run named by stopped, and says
+// whether the camera is now wedged for the rest of the boot.
+//
+// The error is filed against that run and no other, so a caller waiting on a later start is not
+// handed this one's failure. The stop is handed to stopping as well: clearing running on its own
+// leaves users where it was, and the next Acquire, seeing somebody still holding a camera that is
+// not running, would start a second run while this one is still between here and the defer
+// close(stopped) at the top of run. A failed open owns no hardware, so nothing is at stake today;
+// a start that got as far as the ISP before giving up would be a second pair of hands on the
+// sensor, which is what took the camera out in #17.
+//
+// Waiting on stopping cannot hang: every path out of a failed open returns, and run closes stopped
+// on the way out whatever happened, so an Acquire waiting on it is always let go. Only one run
+// exists at a time, since Acquire will not start another until stopping has closed and been
+// cleared, so this never puts some other run's channel in the way; and idleStop, the only other
+// writer, turns back as soon as it sees running clear.
+func (c *Camera) startFailed(err error, stopped chan struct{}) (wedged bool) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.err, c.errFrom = err, stopped
+	c.running = false
+	c.stopping = stopped
+	// EIO here is the sensor believing it is still powered after the latch cut it, which no amount
+	// of asking again will change. Said once, loudly, rather than at every poll.
+	if errors.Is(err, syscall.EIO) {
+		c.wedged = ErrNeedsReboot
+		return true
+	}
+	return false
 }
 
 // mutePoll is how often a running camera checks the mute.
