@@ -263,7 +263,7 @@ def main():
     if a.ramdisk_addr is not None:
         struct.pack_into("<I", hdr, 20, a.ramdisk_addr)
     size = write_bootimg(hdr, kernel, rd, ps, a.output, a.cmdline_append)
-    print(f"initramfs: {len(names)} entries, {len(raw)} bytes raw, {len(rd)} bytes gzip")
+    print(f"initramfs: {len(names)} entries, {len(raw)} bytes raw, {len(rd)} bytes {a.compress}")
     print(f"kernel: {len(kernel)} bytes; image: {size} bytes ({size / a.max_size:.0%} of {a.max_size})")
     if size > a.max_size:
         sys.exit("image does not fit the partition")
