@@ -2,6 +2,9 @@ package wifi
 
 import (
 	"context"
+	"crypto/pbkdf2"
+	"crypto/sha1"
+	"encoding/hex"
 	"os"
 	"strings"
 )
@@ -56,81 +59,89 @@ func conf(networks []string) string {
 }
 
 // block is one network= stanza.
+//
+// Both values go in as hex, which is the one form wpa_supplicant reads back exactly as it was
+// written. A quoted value is not: the supplicant takes the text between the first quote on the line
+// and the last one and copies it out as it stands, without looking at backslashes, so a passphrase
+// written as "pass\"word" reaches the radio with the backslash still in it and a correct password is
+// refused by the access point and reported here as the wrong one. Hex has nowhere for that to happen,
+// it is what the Dot's wifi-set has always written, and it leaves the file with no quotes in it at
+// all, which is one less thing for the reader below to get wrong.
 func block(ssid, passphrase string) string {
 	var b strings.Builder
-	b.WriteString("network={\n\tssid=\"" + escape(ssid) + "\"\n")
+	b.WriteString("network={\n\tssid=" + hex.EncodeToString([]byte(ssid)) + "\n")
 	if passphrase == "" {
 		b.WriteString("\tkey_mgmt=NONE\n")
 	} else {
-		b.WriteString("\tpsk=\"" + escape(passphrase) + "\"\n")
+		b.WriteString("\tpsk=" + psk(ssid, passphrase) + "\n")
 	}
 	b.WriteString("}\n")
 	return b.String()
 }
 
+// psk is the key WPA makes of a passphrase and a network name: PBKDF2 over HMAC-SHA1, 4096 rounds,
+// the name as the salt, 32 bytes out (IEEE 802.11i). It is the same key the supplicant would derive
+// from the passphrase itself, so this is the same network said in a form nothing has to unquote — and
+// the passphrase does not have to be kept on the device to say it.
+func psk(ssid, passphrase string) string {
+	key, err := pbkdf2.Key(sha1.New, passphrase, []byte(ssid), 4096, 32)
+	if err != nil {
+		// Only the round count and the key length can be wrong here and both are written above, so
+		// this does not happen. If it ever did, a network joined by its passphrase beats one not
+		// joined at all: quoted, which is verbatim to the last quote and so needs no escaping.
+		return `"` + passphrase + `"`
+	}
+	return hex.EncodeToString(key)
+}
+
 // blocks splits a configuration into its network= stanzas, each kept exactly as written, so one this
-// code did not write survives being read and put back. Quoted values are stepped over rather than
-// searched, since a name may hold a brace or an escaped quote of its own.
+// code did not write survives being read and put back. A line at a time, which is how the supplicant
+// itself reads the file: a stanza opens on a line that is "network={" and closes on a line that is
+// "}". Nothing here counts quotes, so a name that holds one cannot swallow the rest of the file.
 func blocks(s string) []string {
 	var out []string
-	for {
-		i := strings.Index(s, "network={")
-		if i < 0 {
-			return out
-		}
-		s = s[i:]
-		end := closingBrace(s[len("network={"):])
-		if end < 0 {
-			return out
-		}
-		end += len("network={")
-		out = append(out, s[:end+1]+"\n")
-		s = s[end+1:]
-	}
-}
-
-// closingBrace is where the stanza's } is, counting from the character after its {, or -1 when the
-// file ends first. Anything inside quotes is skipped, escapes and all.
-func closingBrace(s string) int {
-	inQuotes := false
-	for i := 0; i < len(s); i++ {
-		switch s[i] {
-		case '\\':
-			if inQuotes {
-				i++ // whatever follows a backslash is part of the value
+	var cur []string
+	for _, line := range strings.Split(s, "\n") {
+		if cur == nil {
+			if strings.TrimSpace(line) == "network={" {
+				cur = []string{line}
 			}
-		case '"':
-			inQuotes = !inQuotes
-		case '}':
-			if !inQuotes {
-				return i
-			}
+			continue
+		}
+		cur = append(cur, line)
+		if strings.TrimSpace(line) == "}" {
+			out = append(out, strings.Join(cur, "\n")+"\n")
+			cur = nil
 		}
 	}
-	return -1
+	return out
 }
 
-// ssidOf is the name in a stanza, empty when there is none to read. The closing quote is the first
-// one that is not escaped.
+// ssidOf is the name in a stanza, empty when there is none to read. Hex, as block writes it, or a
+// quoted string in one written by hand or by an older version of this file — and what the supplicant
+// makes of a quoted string is the text between the first quote and the last, with nothing taken out.
 func ssidOf(blockText string) string {
-	i := strings.Index(blockText, "ssid=\"")
-	if i < 0 {
+	v := setting(blockText, "ssid")
+	if strings.HasPrefix(v, `"`) {
+		if i := strings.LastIndex(v, `"`); i > 0 {
+			return v[1:i]
+		}
 		return ""
 	}
-	rest := blockText[i+len("ssid=\""):]
-	for j := 0; j < len(rest); j++ {
-		switch rest[j] {
-		case '\\':
-			j++
-		case '"':
-			return unescape(rest[:j])
-		}
+	if b, err := hex.DecodeString(v); err == nil && len(b) > 0 {
+		return string(b)
 	}
 	return ""
 }
 
-// unescape undoes escape, for a name read back out of the file.
-func unescape(s string) string {
-	s = strings.ReplaceAll(s, `\"`, `"`)
-	return strings.ReplaceAll(s, `\`, `\`)
+// setting is what one key is set to in a stanza, empty when it is not there. A line at a time, so
+// that looking for ssid does not find bssid instead.
+func setting(blockText, key string) string {
+	for _, line := range strings.Split(blockText, "\n") {
+		k, v, ok := strings.Cut(strings.TrimSpace(line), "=")
+		if ok && k == key {
+			return strings.TrimSpace(v)
+		}
+	}
+	return ""
 }

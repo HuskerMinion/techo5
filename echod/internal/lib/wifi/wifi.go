@@ -59,7 +59,26 @@ func cli(ctx context.Context, args ...string) (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("wpa_cli %s: %w: %s", args[0], err, strings.TrimSpace(string(out)))
 	}
+	// wpa_cli exits 0 whether the supplicant did the thing or refused it: a refusal is the word FAIL
+	// on a line of its own in the reply. Without reading that, a select_network the supplicant turned
+	// down looks like a success here and the join is left to time out, which the person at the screen
+	// is told was a network that would not take their passphrase.
+	if bad := refusal(string(out)); bad != "" {
+		return "", fmt.Errorf("wpa_cli %s: %s", args[0], bad)
+	}
 	return string(out), nil
+}
+
+// refusal is the supplicant's FAIL reply in a wpa_cli reply, empty when there is none. A line of its
+// own, so that a network named FAIL in a table of results is not mistaken for one.
+func refusal(out string) string {
+	for _, line := range strings.Split(out, "\n") {
+		line = strings.TrimSpace(line)
+		if line == "FAIL" || strings.HasPrefix(line, "FAIL-") {
+			return line
+		}
+	}
+	return ""
 }
 
 // Current is the connection state.
@@ -77,7 +96,7 @@ func Current(ctx context.Context) Status {
 		}
 		switch k {
 		case "ssid":
-			st.SSID = v
+			st.SSID = decodeName(v)
 		case "wpa_state":
 			st.State = strings.ToLower(v)
 			st.Connected = v == "COMPLETED"
@@ -145,6 +164,11 @@ func Scan(ctx context.Context) ([]Network, error) {
 func Join(ctx context.Context, ssid, passphrase string) error {
 	if ssid == "" {
 		return errors.New("wifi: no network named")
+	}
+	// A name is at most 32 bytes on the air, and it is also the salt the key below is derived with:
+	// a longer one is not a network anything could join, so it is refused here rather than written.
+	if len(ssid) > 32 {
+		return errors.New("wifi: a network name is at most 32 characters")
 	}
 	if passphrase != "" && (len(passphrase) < 8 || len(passphrase) > 63) {
 		return errors.New("wifi: a passphrase is 8 to 63 characters")
@@ -223,7 +247,7 @@ func networkID(ctx context.Context, ssid string) (string, error) {
 	}
 	for _, line := range strings.Split(out, "\n") {
 		f := strings.Split(line, "\t")
-		if len(f) >= 2 && f[1] == ssid {
+		if len(f) >= 2 && decodeName(f[1]) == ssid {
 			return f[0], nil
 		}
 	}
@@ -245,8 +269,45 @@ func renewLease() {
 	}
 }
 
-func escape(s string) string {
-	return strings.NewReplacer(`\`, `\\`, `"`, `\"`).Replace(s)
+// decodeName undoes the escaping wpa_cli puts on a network name on the way out. The supplicant prints
+// a name through printf_encode, which spells a backslash, a quote, the whitespace characters and
+// anything unprintable as an escape, while the name this code holds is the plain text: the two have to
+// be brought to the same form before they are compared. Without this a name with a quote or a
+// backslash in it never matches the one just asked for, so Join waits out its forty seconds on a
+// network that is in fact already joined and then reports it could not be joined.
+func decodeName(s string) string {
+	if !strings.Contains(s, `\`) {
+		return s
+	}
+	var b strings.Builder
+	for i := 0; i < len(s); i++ {
+		if s[i] != '\\' || i+1 == len(s) {
+			b.WriteByte(s[i])
+			continue
+		}
+		i++
+		switch s[i] {
+		case 'n':
+			b.WriteByte('\n')
+		case 'r':
+			b.WriteByte('\r')
+		case 't':
+			b.WriteByte('\t')
+		case 'e':
+			b.WriteByte(0x1b)
+		case 'x':
+			v, err := strconv.ParseUint(s[min(i+1, len(s)):min(i+3, len(s))], 16, 8)
+			if err != nil {
+				b.WriteByte('x')
+				continue
+			}
+			b.WriteByte(byte(v))
+			i += 2
+		default:
+			b.WriteByte(s[i]) // \\ and \" stand for themselves
+		}
+	}
+	return b.String()
 }
 
 // oneLine is whether a value can go in the configuration file at all. The file is read a line at a
@@ -258,7 +319,7 @@ func escape(s string) string {
 // network the person never named. Carriage returns and the other control characters go with it, for
 // the same reason and because the supplicant would not read them back as typed either.
 //
-// The quote and the backslash are escape's business, not this one.
+// The quote and the backslash need no such care: block writes both values in hex.
 func oneLine(s string) bool {
 	for _, r := range s {
 		if r < 0x20 || r == 0x7f {

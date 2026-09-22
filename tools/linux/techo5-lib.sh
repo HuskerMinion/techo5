@@ -52,7 +52,79 @@ t5_usb_acm() {
 	[ -e /dev/ttyGS0 ] || mdev -s
 }
 
-# t5_wifi_conf <file>: write a wpa_supplicant configuration from the network
+# t5_wifi_store_records <xml>: the networks in an Android WifiConfigStore, three
+# lines each on stdout - S:<name>, K:<key management>, P:<key> - with the name
+# and the key still in the form Android wrote them (a quoted string, or hex for
+# a name Android could not spell). P: is empty for a network with no key.
+#
+# Android's store is a record per network and the fields have to be read a record
+# at a time. Taking the first <string name="SSID"> in the file together with the
+# first <string name="PreSharedKey"> pairs the name of one network with the
+# passphrase of another as soon as an open network is saved ahead of the secured
+# one - the unit then cannot associate, spends its boot attempts on a network
+# that was never real, and lands in rescue.
+#
+# The sed ahead of awk puts every element on its own line, because Android has
+# written that file both pretty printed and all on one line.
+t5_wifi_store_records() {
+	sed 's|><|>\n<|g' "$1" | awk '
+	function unent(s) {
+		gsub(/&quot;/, "\"", s); gsub(/&apos;/, "\047", s)
+		gsub(/&lt;/, "<", s); gsub(/&gt;/, ">", s)
+		gsub(/&amp;/, "\\&", s)
+		return s
+	}
+	function val(s) { sub(/^[^>]*>/, "", s); sub(/<\/string>.*$/, "", s); return unent(s) }
+	/<Network>/ { inrec = 1; ssid = ""; key = ""; kind = "" }
+	inrec && /<string name="SSID">/          { ssid = val($0) }
+	inrec && /<string name="PreSharedKey">/  { key  = val($0) }
+	inrec && /<string name="ConfigKey">/     { kind = val($0); sub(/^.*"/, "", kind) }
+	/<\/Network>/ {
+		if (inrec && ssid != "") { print "S:" ssid; print "K:" kind; print "P:" key }
+		inrec = 0
+	}'
+}
+
+# t5_wifi_from_store <xml>: a whole wpa_supplicant configuration on stdout, one
+# network= stanza per network Android saved, in the order Android had them, so
+# the unit joins whichever of them it can hear.
+#
+# A name goes in as hex: that is the one form wpa_supplicant reads back exactly
+# as it was written, and it is the form echod's wifi package writes, which
+# rewrites this same file when somebody picks a network on the screen. A key is
+# Android's own text and already in the supplicant's own syntax - a quoted
+# passphrase, or the 64 hex digits of a key - so it is passed through as it
+# stands. A network with no key is an open one and says so; anything else with
+# no key wants a certificate or a WEP key this cannot supply, and is left out.
+t5_wifi_from_store() {
+	printf 'ctrl_interface=/run/wpa\nupdate_config=0\n'
+	t5_wifi_store_records "$1" | while IFS= read -r rec; do
+		case "$rec" in
+		S:*) name=${rec#S:}; continue ;;
+		K:*) kind=${rec#K:}; continue ;;
+		P:*) key=${rec#P:} ;;
+		*)   continue ;;
+		esac
+		case "$name" in
+		'"'*'"')
+			bare=${name#\"}; bare=${bare%\"}
+			hexname=$(printf %s "$bare" | od -An -v -tx1 | tr -d ' \n')
+			;;
+		*)
+			# Android keeps a name it cannot spell as text in hex already.
+			hexname=$name
+			;;
+		esac
+		printf %s "$hexname" | grep -Eq '^([0-9a-fA-F]{2}){1,32}$' || continue
+		if [ -n "$key" ]; then
+			printf 'network={\n\tssid=%s\n\tpsk=%s\n}\n' "$hexname" "$key"
+		elif [ "$kind" = NONE ] || [ "$kind" = OWE ]; then
+			printf 'network={\n\tssid=%s\n\tkey_mgmt=NONE\n}\n' "$hexname"
+		fi
+	done
+}
+
+# t5_wifi_conf <file>: write a wpa_supplicant configuration from the networks
 # Android had saved on userdata, unless <file> exists already. Nothing is typed
 # and nothing leaves the device.
 t5_wifi_conf() {
@@ -61,14 +133,18 @@ t5_wifi_conf() {
 	xml=/data/misc/apexdata/com.android.wifi/WifiConfigStore.xml   # Android 11
 	[ -r "$xml" ] || xml=/data/misc/wifi/WifiConfigStore.xml         # older Android
 	[ -r "$xml" ] || { log "wifi: no configuration at $out and no Android store to take one from"; return 1; }
-	xmlval() { sed -n "s/.*<string name=\"$1\">\(.*\)<\/string>.*/\1/p" "$xml" | head -1 | sed 's/&quot;//g; s/&amp;/\&/g; s/&lt;/</g; s/&gt;/>/g'; }
-	ssid=$(xmlval SSID); psk=$(xmlval PreSharedKey)
-	[ -n "$ssid" ] && [ -n "$psk" ] || { log "wifi: no PSK network in $xml"; return 1; }
 	mkdir -p "$(dirname "$out")"
 	umask 077
-	printf 'ctrl_interface=/run/wpa\nupdate_config=0\nnetwork={\n\tssid="%s"\n\tpsk="%s"\n}\n' "$ssid" "$psk" > "$out"
+	t5_wifi_from_store "$xml" > "$out.tmp"
 	umask 022
-	log "wifi: configuration written from Android's saved network '$ssid'"
+	n=$(grep -c '^network={' "$out.tmp" 2>/dev/null)
+	if [ "${n:-0}" -lt 1 ]; then
+		rm -f "$out.tmp"
+		log "wifi: none of Android's saved networks in $xml is one this can join"
+		return 1
+	fi
+	mv -f "$out.tmp" "$out"
+	log "wifi: configuration written from $n of Android's saved networks"
 }
 
 # t5_ipv6_private <interface>: keep this device's IPv6 addresses from spelling out its MAC.
