@@ -98,13 +98,27 @@ func newMBCL(m mbcl, rate int) (*mbclState, error) {
 		inGain: float32(dbToLinear(m.InVol)),
 	}
 
+	// A band may ask for no compression, and some firmware says so with a ratio of zero rather than
+	// one. The Echo Show 8 compresses its lower two bands at 3:1 and leaves the upper two alone, in
+	// all three of its playback profiles; its VOIP profile sets all four, so the zeros there are a
+	// choice and not an omission.
+	//
+	// One is the identity: the reduction below works out as (1 - 1/ratio), which is exactly zero at
+	// 1:1, so clamping is the whole of the bypass and the inner loop needs no special case. Zero
+	// itself cannot be let through, because 1/0 is an infinity and the band would ask for infinite
+	// gain. Each band's limiter runs either way, and that is what actually holds the tuning's bass
+	// lift down.
+	compressed := 0
 	for _, b := range m.Bands {
-		if b.CompRatio < 1 {
-			return nil, fmt.Errorf("asp: this tuning has a compression ratio of %g", b.CompRatio)
+		ratio := b.CompRatio
+		if ratio < 1 {
+			ratio = 1
+		} else {
+			compressed++
 		}
 		s.bands = append(s.bands, &bandState{
 			compThreshDB:  b.CompThresh,
-			compRatio:     b.CompRatio,
+			compRatio:     ratio,
 			compGainMinDB: b.CompGainMin,
 			compGain:      float32(dbToLinear(b.CompInVol)),
 			limGain:       float32(dbToLinear(b.LimInVol)),
@@ -112,6 +126,14 @@ func newMBCL(m mbcl, rate int) (*mbclState, error) {
 			relCo:         smoothing(millis(b.LimRelease), rate),
 			lim:           newLimiter(b.LimThresh, millis(b.LimRelease), rate),
 		})
+	}
+
+	// A file whose every band is uncompressed is the one this check was written for: the Show 5's
+	// MBCL.cfg sits beside the files its AFE.cfg names, is referenced by none of them, and has every
+	// ratio at zero. Loading it because the name matched would put the tuning's bass lift on the
+	// driver with nothing compressing it at all.
+	if compressed == 0 {
+		return nil, fmt.Errorf("asp: this tuning compresses none of its %d bands", len(m.Bands))
 	}
 	return s, nil
 }
