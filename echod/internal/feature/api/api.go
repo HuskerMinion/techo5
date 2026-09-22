@@ -6,7 +6,9 @@ package api
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"io/fs"
 	"log/slog"
 	"net"
 	"os"
@@ -223,10 +225,20 @@ func (a *API) Reconnect() {
 // Noise with the reserved zero key — so Home Assistant can push a real one, which is what
 // `echoctl install --zero-psk` leaves behind. echod never invents a key: one that appeared on
 // first boot would be unknown to Home Assistant and nobody would be told it changed.
+//
+// Only a key that is not there means unprovisioned. A key that is there and cannot be read —
+// permissions, a bad block on the flash, a directory where the file should be — is a device that has
+// been paired, and coming up on the zero key would drop authentication for everyone on the network
+// without anyone asking for it or being told. So every other error goes back to the caller: Start
+// fails, the supervisor logs it and leaves the api service down, and a device that is unreachable is
+// the complaint that gets the key looked at. An open one is not.
 func loadPSK(path string) (*esphome.PSK, error) {
 	b, err := os.ReadFile(path)
-	if err != nil {
+	if errors.Is(err, fs.ErrNotExist) {
 		return esphome.Unprovisioned(), nil
+	}
+	if err != nil {
+		return nil, fmt.Errorf("api: key at %s: %w", path, err)
 	}
 	k, err := esphome.ParsePSK(strings.TrimSpace(string(b)))
 	if err != nil {

@@ -12,6 +12,7 @@ package redact
 
 import (
 	"fmt"
+	"net/netip"
 	"regexp"
 	"sort"
 	"strings"
@@ -29,7 +30,15 @@ var patterns = []struct {
 }{
 	{"key", regexp.MustCompile(`(?i)\b(?:psk|token|secret|password|passphrase|api[_-]?key)\s*[:=]\s*"?([^\s",}]{6,})"?`), false},
 	{"mac", regexp.MustCompile(`\b(?:[0-9A-Fa-f]{2}:){5}[0-9A-Fa-f]{2}\b`), false},
-	{"ipv6", regexp.MustCompile(`\b(?:[0-9A-Fa-f]{1,4}:){4,7}[0-9A-Fa-f]{1,4}\b`), false},
+	// An address is matched loosely and then confirmed with the parser, because the shapes Go actually
+	// prints are not the eight written-out groups: it compresses the longest run of zeros, so a global
+	// address reads 2601:abc:def::1 and a link-local fe80::1%wlan0, and a delegated prefix reads
+	// 2601:abc:def::/56. A pattern strict enough to describe all of that is unreadable, and a pattern
+	// loose enough to catch it takes in timestamps and hex dumps along with it. So the shape only says
+	// where to look, and net/netip says whether it is really an address; anything it refuses is left
+	// exactly as it was. The match takes in the character before the value because an address may begin
+	// with a colon, which is no word boundary; only the value goes.
+	{"ipv6", regexp.MustCompile(`(?:^|[^0-9A-Fa-f:.])((?:[0-9A-Fa-f]{0,4}:){2,7}(?:[0-9A-Fa-f]{1,4}\b)?(?:%[0-9A-Za-z_.-]+)?(?:/\d{1,3})?)`), true},
 	{"ip", regexp.MustCompile(`\b(?:\d{1,3}\.){3}\d{1,3}\b`), false},
 	{"email", regexp.MustCompile(`\b[\w.+-]+@[\w-]+\.[\w.-]+\b`), false},
 	// A telephone number, and not the tail of a number that merely holds ten digits: a rate of
@@ -80,22 +89,42 @@ func (r *Redactor) Text(s string) string {
 					return match[:i+1] + " <key>"
 				}
 			}
+			// A pattern that had to take in what surrounds a value to recognize it gives back what
+			// surrounds it untouched.
+			before, value, after := "", match, ""
+			if p.inner {
+				at := p.re.FindStringSubmatchIndex(match)
+				if len(at) < 4 || at[2] < 0 {
+					return match
+				}
+				before, value, after = match[:at[2]], match[at[2]:at[3]], match[at[3]:]
+			}
 			// Localhost and the unspecified address say nothing about anybody.
-			switch match {
+			switch value {
 			case "127.0.0.1", "0.0.0.0", "255.255.255.255", "::1":
 				return match
 			}
-			// A pattern that had to take in what surrounds a value to recognise it gives back what
-			// surrounds it untouched.
-			if p.inner {
-				if at := p.re.FindStringSubmatchIndex(match); len(at) >= 4 && at[2] >= 0 {
-					return match[:at[2]] + r.placeholder(p.name, match[at[2]:at[3]]) + match[at[3]:]
-				}
+			// The loose address shape also fits a timestamp, a duration and a line of hex, so what is
+			// not an address is put back the way it came.
+			if p.name == "ipv6" && !isIPv6(value) {
+				return match
 			}
-			return r.placeholder(p.name, match)
+			return before + r.placeholder(p.name, value) + after
 		})
 	}
 	return s
+}
+
+// isIPv6 says whether the text really is an address, or a prefix: the parser is the only honest
+// answer to a question a regular expression cannot ask. A prefix counts because a delegated /56 names
+// the household as surely as an address inside it does.
+func isIPv6(s string) bool {
+	if strings.Contains(s, "/") {
+		p, err := netip.ParsePrefix(s)
+		return err == nil && p.Addr().Is6()
+	}
+	a, err := netip.ParseAddr(s)
+	return err == nil && a.Is6()
 }
 
 // placeholder is the same stand-in every time for the same value, numbered so that two different

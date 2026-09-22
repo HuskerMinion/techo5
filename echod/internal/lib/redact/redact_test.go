@@ -72,3 +72,61 @@ func TestShortValuesAreLeftAlone(t *testing.T) {
 		t.Errorf("a one-letter name was replaced through the text: %q", out)
 	}
 }
+
+// Every shape Go prints an address in, because the compressed ones are the ones a device actually
+// logs: the household's delegated prefix is in all of them, and the bundle says addresses are gone.
+func TestAddressesInEveryShapeGo(t *testing.T) {
+	for _, in := range []string{
+		"global 2601:abc:def::1",
+		"link local fe80::1%eth0",
+		"delegated 2601:abc:def::/56",
+		"written out 2601:0abc:0def:0001:0002:0003:0004:0005",
+		"mixed case FE80::AB:CD",
+	} {
+		out := New().Text(in)
+		if !strings.Contains(out, "<ipv6-") {
+			t.Errorf("%q kept its address: %s", in, out)
+		}
+		for _, leak := range []string{"2601", "fe80", "FE80"} {
+			if strings.Contains(out, leak) {
+				t.Errorf("%q still shows %s: %s", in, leak, out)
+			}
+		}
+	}
+}
+
+// And the things that merely look like an address are left alone, because a bundle nobody can read is
+// no safer than one nobody should send.
+func TestThingsThatOnlyLookLikeAddresses(t *testing.T) {
+	for _, line := range []string{
+		"I [ 13.30] alarm at 03:02:11 tomorrow",
+		"I [ 13.31] woke after 1h2m3.5s, next in 250ms",
+		"I [ 13.32] note: the thing is this: it takes a while",
+		"I [ 13.33] ratio 12:34 and 1:2:3 are not addresses",
+	} {
+		if got := New().Text(line); got != line {
+			t.Errorf("a line that holds no address was changed:\n old: %s\n new: %s", line, got)
+		}
+	}
+}
+
+// The unspecified and loopback addresses say nothing about anybody, so they stay and the line still
+// says where something was listening.
+func TestLoopbackStays(t *testing.T) {
+	line := "I [ 13.34] serving on ::1 and 127.0.0.1"
+	if got := New().Text(line); got != line {
+		t.Errorf("loopback was replaced, which helps nobody:\n old: %s\n new: %s", line, got)
+	}
+}
+
+// A MAC address has its own rule and keeps it: it must not be read as an address and must not be left
+// behind either.
+func TestAMACIsStillAMAC(t *testing.T) {
+	out := New().Text("bluetooth up address=A0:D0:DC:06:9D:3E")
+	if strings.Contains(out, "A0:D0:DC") {
+		t.Errorf("a mac survived: %s", out)
+	}
+	if !strings.Contains(out, "<mac-1>") {
+		t.Errorf("a mac was taken for something else: %s", out)
+	}
+}
