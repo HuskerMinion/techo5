@@ -27,7 +27,7 @@ func TestNumbersWorthHidingStillGo(t *testing.T) {
 	for _, c := range []struct{ in, gone string }{
 		{"phone: contact Alex number=15551234567 ok", "15551234567"},
 		{"calling +15557654321 now", "+15557654321"},
-		{"sip:15551112222@denver2.voip.ms", "15551112222"},
+		{"sip:15551112222@sip.example.net", "15551112222"},
 	} {
 		got := New().Text(c.in)
 		if strings.Contains(got, c.gone) {

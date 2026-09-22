@@ -53,7 +53,7 @@ var patterns = []struct {
 // the device's name, its Wi-Fi, its serial — are taken out wherever they appear, whatever shape they
 // are in; the patterns above catch the rest.
 type Redactor struct {
-	// known are exact strings to replace, longest first so "Terry's Desk" goes before "Terry".
+	// known are exact strings to replace, longest first so "Guest's Desk" goes before "Guest".
 	known []struct{ value, with string }
 
 	// seen keeps one placeholder per value, so the same address reads the same twice.

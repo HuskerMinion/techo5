@@ -9,25 +9,25 @@ import (
 // serial numbers. This test is the list, and it is the point of the package.
 func TestTheThingsThatMustNotGetOut(t *testing.T) {
 	r := New()
-	r.Known("device", "Terry's Desk")
+	r.Known("device", "Guest's Desk")
 	r.Known("wifi", "HomeNet-5G")
-	r.Known("serial", "G0911B0593450T7T")
+	r.Known("serial", "G000AA0000000000")
 
 	in := strings.Join([]string{
-		`I [12.34] wifi joined ssid="HomeNet-5G" addrs=192.168.200.96`,
-		`I [12.40] bluetooth up address=A0:D0:DC:06:9D:3E`,
-		`I [12.55] home assistant http://192.168.34.155:8123 token=eyJhbGciOiJIUzI1NiJ9.abc`,
-		`I [13.02] this device is Terry's Desk (G0911B0593450T7T)`,
-		`I [13.10] ipv6 2606:8e80:5066:7e01:aae6:21ff:fe77:3fae`,
+		`I [12.34] wifi joined ssid="HomeNet-5G" addrs=192.0.2.96`,
+		`I [12.40] bluetooth up address=aa:bb:cc:dd:ee:ff`,
+		`I [12.55] home assistant http://198.51.100.155:8123 token=eyJhbGciOiJIUzI1NiJ9.abc`,
+		`I [13.02] this device is Guest's Desk (G000AA0000000000)`,
+		`I [13.10] ipv6 2001:db8:5066:7e01:aae6:21ff:fe77:3fae`,
 		`I [13.20] phone registered peer=+15551234567 psk="s3cretpassphrase"`,
 		`I [13.30] serving on 127.0.0.1:8899`,
 	}, "\n")
 
 	out := r.Text(in)
 	for _, leak := range []string{
-		"HomeNet-5G", "192.168.200.96", "A0:D0:DC:06:9D:3E", "192.168.34.155",
-		"eyJhbGciOiJIUzI1NiJ9", "Terry's Desk", "G0911B0593450T7T",
-		"2606:8e80", "+15551234567", "s3cretpassphrase",
+		"HomeNet-5G", "192.0.2.96", "aa:bb:cc:dd:ee:ff", "198.51.100.155",
+		"eyJhbGciOiJIUzI1NiJ9", "Guest's Desk", "G000AA0000000000",
+		"2001:db8", "+15551234567", "s3cretpassphrase",
 	} {
 		if strings.Contains(out, leak) {
 			t.Errorf("%q is still in the text:\n%s", leak, out)
@@ -122,8 +122,8 @@ func TestLoopbackStays(t *testing.T) {
 // A MAC address has its own rule and keeps it: it must not be read as an address and must not be left
 // behind either.
 func TestAMACIsStillAMAC(t *testing.T) {
-	out := New().Text("bluetooth up address=A0:D0:DC:06:9D:3E")
-	if strings.Contains(out, "A0:D0:DC") {
+	out := New().Text("bluetooth up address=aa:bb:cc:dd:ee:ff")
+	if strings.Contains(out, "aa:bb:cc") {
 		t.Errorf("a mac survived: %s", out)
 	}
 	if !strings.Contains(out, "<mac-1>") {
