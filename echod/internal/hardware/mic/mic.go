@@ -153,6 +153,11 @@ func (s *Source) Name() string { return "capture" }
 
 // Start takes the capture device, off Android if it got there first, the same way the speaker does.
 func (s *Source) Start(context.Context) error {
+	// Before the device is opened, so that a unit whose mute is the daemon's own is already cutting
+	// when the first frame arrives. The mute feature restores the same value later in the Device
+	// phase; this is only about the frames captured before it gets there. See privacy.Seed.
+	privacy.Seed(config.Get().Microphone.Muted)
+
 	err := s.open()
 	if err == nil || !errors.Is(err, alsa.ErrBusy) {
 		return err

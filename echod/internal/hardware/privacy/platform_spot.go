@@ -37,3 +37,7 @@ func (noLED) Bright() (bool, error) { return true, nil }
 func platformMute() (Mute, error) { return software{}, nil }
 
 func platformLight() (LED, error) { return noLED{}, nil }
+
+// The Spot's cut is the daemon's own, so a mute saved from last time has to be in force before
+// capture opens rather than when the mute feature starts. See privacy.Seed.
+func seedSoftwareCut(muted bool) { softwareCut.Store(muted) }

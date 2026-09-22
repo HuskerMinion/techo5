@@ -26,3 +26,13 @@ func TestHardwareActs(t *testing.T) {
 		t.Error("1st gen, muted: the button has released the latch; acting would mute again")
 	}
 }
+
+// Seeding does nothing where the hardware holds the microphones. It matters that this stays a no-op:
+// unmuting a Show writes the latch and never touches this flag, so a Show that seeded it true would
+// keep handing on silence after the owner unmuted, with the hardware saying the microphones are live.
+func TestSeedingDoesNothingOnABoardWhoseHardwareCuts(t *testing.T) {
+	Seed(true)
+	if SoftwareCut() {
+		t.Error("a Show seeded the software cut, which nothing on a Show ever clears")
+	}
+}

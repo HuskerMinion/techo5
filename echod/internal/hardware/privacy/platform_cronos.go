@@ -129,3 +129,7 @@ func reads(path, value string) (bool, error) {
 	}
 	return strings.TrimSpace(string(b)) == value, nil
 }
+
+// Nothing to seed: the hardware holds the microphones, and the saved state reaches the latch through
+// the mute feature. See privacy.Seed.
+func seedSoftwareCut(bool) {}

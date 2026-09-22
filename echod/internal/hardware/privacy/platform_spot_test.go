@@ -29,3 +29,22 @@ func TestSoftwareMuteIsWhatTheCaptureReads(t *testing.T) {
 		t.Fatalf("after Toggle: now %v, err %v, SoftwareCut %v", now, err, SoftwareCut())
 	}
 }
+
+// A Spot left muted and powered on must be cutting before the first frame is captured, not from
+// whenever the mute feature starts: capture is a Hardware-phase component and the mute feature a
+// Device-phase one, and everything in between used to be handed on for real.
+func TestASavedMuteIsInForceBeforeCaptureOpens(t *testing.T) {
+	t.Cleanup(func() { softwareCut.Store(false) })
+
+	softwareCut.Store(false)
+	Seed(true)
+	if !SoftwareCut() {
+		t.Error("a Spot that was muted last time captured for real until the mute feature started")
+	}
+
+	// And the other way, so a seed can never leave a unit deaf that was not muted.
+	Seed(false)
+	if SoftwareCut() {
+		t.Error("a Spot that was not muted was seeded as muted")
+	}
+}

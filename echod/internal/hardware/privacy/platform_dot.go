@@ -20,3 +20,7 @@ func platformLight() (LED, error) {
 	}
 	return exportedLED()
 }
+
+// Nothing to seed: the hardware holds the microphones, and the saved state reaches the latch through
+// the mute feature. See privacy.Seed.
+func seedSoftwareCut(bool) {}

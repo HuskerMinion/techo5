@@ -51,3 +51,16 @@ var softwareCut atomic.Bool
 // SoftwareCut reports whether the capture source must hand on silence because a software-only mute
 // is on. It is always false where the hardware cuts the microphones itself.
 func SoftwareCut() bool { return softwareCut.Load() }
+
+// Seed puts the saved mute in force before the first frame is captured, on a device whose mute is
+// the daemon's own.
+//
+// The mute feature restores what was saved, but it is a Device-phase component and capture is a
+// Hardware-phase one, so every frame between the two was handed on for real: on a Spot left muted
+// and powered on, the pre-roll history and wake detection heard the room for that window, and a wake
+// word spoken in it started a turn on a device its owner believed was deaf. Short, and every boot.
+//
+// Only where the cut is software. On a Show or a Dot the hardware holds the microphones and nothing
+// reads this; setting it there would be worse than useless, because unmuting writes the latch rather
+// than this flag and the frames would stay silent afterwards.
+func Seed(muted bool) { seedSoftwareCut(muted) }
