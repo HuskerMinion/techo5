@@ -248,6 +248,17 @@ is built on, runs on the unlocked Dot's Fire OS 6 with its own installer, and is
    - multi-room audio through [Music Assistant](https://www.music-assistant.io/) (each device is a
      Sendspin player).
 
+   **What multi-room audio trusts.** The Sendspin player is on from the first boot and takes a
+   connection from anything on the network, with no key and no pairing — that is what lets Music
+   Assistant find a device and play to it with nothing to set up. It also means a program on your
+   Wi-Fi can play audio into the room and set the volume without being invited. It cannot listen: the
+   microphones are not part of it, and nothing it sends reaches Home Assistant.
+
+   That is a deliberate choice for a device on a home network, not an oversight, and it is the one
+   thing here that trusts the network rather than a key. If your Wi-Fi has guests on it, or anything
+   you would not hand a speaker to, turn the player off per device with the Sendspin switch in Home
+   Assistant.
+
 ### If Home Assistant does not find it
 
 Home Assistant finds these devices over mDNS, the same way it finds ESPHome boards.
