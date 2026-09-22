@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"regexp"
 	"runtime"
 	"time"
 )
@@ -20,7 +21,7 @@ import (
 // where Home Assistant truncates before comparing.
 type Manifest struct {
 	// Version is what a device reports as available, and what Home Assistant ranks against what it is
-	// running.
+	// running. ValidVersion is that rule, and a manifest breaking it is refused rather than offered.
 	Version string `json:"version"`
 
 	// URL, SHA256 and Size are the arm64 build. An echod that reads only these is arm64 by
@@ -130,11 +131,35 @@ func (m Manifest) flat() Binary {
 	return Binary{URL: m.URL, SHA256: m.SHA256, Size: m.Size}
 }
 
+// versionPattern is the shape Home Assistant can rank: dotted numerals, optionally a prerelease
+// (-beta.4), optionally build detail after the underscore Home Assistant truncates at before it
+// compares. The leading v is optional because the releases predating the tags carry none and
+// AwesomeVersion ranks either — what it cannot rank is a name with anything else in front of the
+// numbers, and a tag name (dot-v0.5.10) is exactly that.
+var versionPattern = regexp.MustCompile(`^v?\d+\.\d+\.\d+(-[0-9A-Za-z.]+)?(_[0-9A-Za-z.-]+)?$`)
+
+// ValidVersion reports whether a version is one Home Assistant can rank against what a device is
+// running. It is exported so the release tooling can refuse a bad version before it measures or writes
+// anything, rather than publishing a manifest every device would then have to throw away.
+//
+// A version Home Assistant cannot rank is worse than a missing one: it does not compare the two
+// strings for order, it offers the update whenever they differ, so the card comes on and never goes
+// off however many times somebody installs it.
+func ValidVersion(version string) error {
+	switch {
+	case version == "":
+		return errors.New("update: the manifest names no version")
+	case !versionPattern.MatchString(version):
+		return fmt.Errorf("update: %q is not a version Home Assistant can rank; it has to be vX.Y.Z, optionally -prerelease and _build detail", version)
+	}
+	return nil
+}
+
 // Valid reports whether the manifest describes something installable, which is checked both where one
 // is written and where one is read. It does not ask whether this device is served — For does that.
 func (m Manifest) Valid() error {
-	if m.Version == "" {
-		return errors.New("update: the manifest names no version")
+	if err := ValidVersion(m.Version); err != nil {
+		return err
 	}
 
 	if flat := m.flat(); flat != (Binary{}) {

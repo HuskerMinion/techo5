@@ -14,6 +14,8 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"regexp"
+	"strings"
 
 	"github.com/HuskerMinion/techo5/echod/internal/update"
 )
@@ -33,7 +35,7 @@ func main() {
 		// The Echo Spot likewise ("arm-spot", internal/update/arch_spot.go).
 		armSpot    = flag.String("arm-spot", "", "the Echo Spot build (-tags spot), hashed and measured")
 		rootfsSpot = flag.String("rootfs-arm-spot", "", "the Echo Spot rootfs tarball, hashed and measured")
-		out       = flag.String("out", "", "where to write the manifest, or stdout")
+		out        = flag.String("out", "", "where to write the manifest, or stdout")
 		// Devices believe a manifest only with the release key's signature beside it
 		// (internal/update/trust.go), so a release without one offers nothing.
 		signKey = flag.String("sign-key", "", "the release signing key file; writes <out>.sig next to the manifest")
@@ -78,9 +80,34 @@ func sign(out, keyFile string) error {
 	return os.WriteFile(out+".sig", []byte(sig), 0o644)
 }
 
+// tagName is the mistake this guard exists for. A device's tag says which device the build is for
+// (dot-vX.Y.Z, spot-vX.Y.Z; see .github/workflows/build.yml), and the binary built from it is stamped
+// with the version alone. Handing the tag to -version publishes a manifest saying dot-v0.5.10 beside
+// binaries that report v0.5.10, and Home Assistant offers an update whenever the two strings differ —
+// so every Dot and Spot in the field ends up with a card it can never clear.
+var tagName = regexp.MustCompile(`^(dot|spot)-v`)
+
+// checkVersion refuses a version before anything is measured or written, so a bad one costs a line of
+// output rather than a published release.
+//
+// A tag's prefix is refused rather than stripped. Stripping it would be the easier fix, but silently
+// accepting a tag is how this shipped in the first place: the release would go out looking correct,
+// and nothing would tell whoever ran it that the two names had drifted apart. Refusing puts the
+// correction where the tag and the version are both in front of somebody.
+func checkVersion(version string) error {
+	if tagName.MatchString(version) {
+		_, v, _ := strings.Cut(version, "-")
+		return fmt.Errorf("mkmanifest: -version %s is a tag name, not a version; the binaries this release ships are stamped %s, so pass -version %s", version, v, v)
+	}
+	return update.ValidVersion(version)
+}
+
 func run(m update.Manifest, from string, builds map[string]string, rootfses map[string]string, out string) error {
 	if m.Version == "" || from == "" || (builds["arm64"] == "" && builds["arm"] == "" && builds["arm-dot"] == "" && builds["arm-spot"] == "") {
 		return fmt.Errorf("mkmanifest: -version, -from and at least one of -arm64/-arm/-arm-dot/-arm-spot are required")
+	}
+	if err := checkVersion(m.Version); err != nil {
+		return err
 	}
 
 	m.Binaries = make(map[string]update.Binary, len(builds))

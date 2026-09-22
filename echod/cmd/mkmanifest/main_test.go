@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/HuskerMinion/techo5/echod/internal/update"
@@ -91,6 +92,47 @@ func TestEachArchitectureGetsItsOwnBuild(t *testing.T) {
 
 	if now.Binaries["arm64"].SHA256 == now.Binaries["arm"].SHA256 {
 		t.Error("both architectures were measured as the same file")
+	}
+}
+
+// The tag says which device a build is for (dot-vX.Y.Z), the binary built from it is stamped with the
+// version alone, and Home Assistant offers an update whenever the two differ. Passing the tag here is
+// what put a permanent update card on every Dot and Spot, so a release stops at this point rather than
+// writing a manifest no device can ever clear.
+func TestARunRefusesATagName(t *testing.T) {
+	for version, want := range map[string]bool{
+		"v0.7.13":          true,
+		"v0.4.10-beta.4":   true,
+		"0.5.10":           true,
+		"v0.5.10_20260922": true,
+		"dot-v0.5.10":      false,
+		"spot-v0.4.10":     false,
+		"":                 false,
+		"v0.5":             false,
+	} {
+		dir := t.TempDir()
+		build := filepath.Join(dir, "echod-arm")
+		if err := os.WriteFile(build, []byte("thirty two"), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		out := filepath.Join(dir, "manifest.json")
+
+		err := run(update.Manifest{Version: version}, "https://example/download",
+			map[string]string{"arm": build}, nil, out)
+		switch {
+		case want && err != nil:
+			t.Errorf("%q was refused: %v", version, err)
+			continue
+		case !want && err == nil:
+			t.Errorf("%q was accepted, and a release would publish it", version)
+		case strings.HasPrefix(version, "dot-") || strings.HasPrefix(version, "spot-"):
+			if !strings.Contains(err.Error(), "tag name") {
+				t.Errorf("%q was refused without saying a tag name was passed: %v", version, err)
+			}
+		}
+		if _, statErr := os.Stat(out); want == (statErr != nil) {
+			t.Errorf("%q: manifest written %v, wanted %v", version, statErr == nil, want)
+		}
 	}
 }
 
