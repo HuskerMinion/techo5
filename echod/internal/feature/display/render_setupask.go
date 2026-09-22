@@ -12,7 +12,7 @@ package display
 //
 // The two answers are drawn by the same code as every other button on these devices, buttonFace in
 // sheet_widgets.go, so they are rounded and lit the way the Spot's are. They used to be square
-// bevelled boxes and looked like they had come from a different program.
+// beveled boxes and looked like they had come from a different program.
 
 func (r *renderer) setupAskPage(s scene) {
 	r.text(r.title, "Setup page", r.margin, r.s(96), amber)

@@ -775,7 +775,7 @@ func (r *paint) roundButton(b image.Rectangle, rad float64, fill color.RGBA) {
 //
 // Size and radius are the caller's, because a button is the same thing whether it is the pill on a
 // settings row or one of the two large answers on the setup page. Drawing them from one place is
-// what keeps them looking like the same control: the Show's answers used to be square bevelled
+// what keeps them looking like the same control: the Show's answers used to be square beveled
 // boxes and looked like they belonged to another program.
 func (r *paint) buttonFace(b image.Rectangle, rad float64, style buttonStyle) color.RGBA {
 	switch style {
