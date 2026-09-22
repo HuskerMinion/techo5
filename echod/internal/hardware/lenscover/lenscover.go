@@ -8,6 +8,10 @@
 // this package does is say which way it is, so the camera can decline rather than stream a picture
 // of the inside of a shutter, and so Home Assistant can show it.
 //
+// Which devices have one is decided by the board (hasShutter), not by what the kernel advertises.
+// The capability bitmap is not evidence: a Show 5 reports the same switch on the same node with no
+// shutter behind it.
+//
 // The kernel reports it as SW_CAMERA_LENS_COVER on an EV_SW device — gpio-499 behind gpio-keys on a
 // Show 8. A switch is not a button: it holds a position, and the kernel sends nothing until it
 // moves, so the state has to be read once at start with EVIOCGSW and then followed.
@@ -81,10 +85,17 @@ func (c *Cover) Covered() bool {
 
 // Start finds the shutter and reads which way it is now.
 func (c *Cover) Start(context.Context) error {
+	// Asked of the board before the kernel, because the kernel's answer is not trustworthy here: a
+	// Show 5 advertises this switch on gpio-keys without having a shutter behind it. See hasShutter.
+	if !hasShutter() {
+		slog.Info("no camera lens cover on this device")
+		return nil
+	}
 	dev, err := find()
 	if err != nil {
-		// Not a failure: only one device in the family has a shutter, and the rest carry on without.
-		slog.Info("no camera lens cover on this device")
+		// A board that should have one but does not answer: carry on uncovered rather than refusing
+		// to start, because a camera that works is better than no device.
+		slog.Warn("this board has a lens cover but no input device reports one", "err", err)
 		return nil
 	}
 	covered, err := dev.Switch(swCameraLensCover)

@@ -15,6 +15,7 @@ func TestTheLensCoverBitIsFoundInTheCapabilityBitmap(t *testing.T) {
 		want bool
 	}{
 		{"a Show 8's gpio-keys, lens cover only", "200", true},
+		{"a Show 5's gpio-keys, which is the same bitmap", "200", true},
 		{"the same with the volume keys' bits too", "201", true},
 		{"a device with no switches at all", "0", false},
 		{"a headphone jack but no lens cover", "4", false},
@@ -52,5 +53,23 @@ func TestAShutterReportsItsPosition(t *testing.T) {
 	c.covered = false
 	if !c.Present() || c.Covered() {
 		t.Error("an open shutter did not report itself")
+	}
+}
+
+// The capability bitmap cannot tell a Show 8 from a Show 5, which is the whole reason the shutter is
+// decided by the board instead.
+//
+// Measured on units 2026-09-22: both report caps.sw=200 on event6 gpio-keys. The Show 5 has no
+// shutter behind it and its switch read false, so nothing was blocked, but a device reading the
+// other way would have refused the camera with nothing in the log but "the lens cover is closed".
+// If this test ever fails because the two bitmaps differ, the board gate could be reconsidered — but
+// not before measuring both generations again.
+func TestTheBitmapCannotTellTheBoardsApart(t *testing.T) {
+	const show8, show5 = "200", "200"
+	if !capsHaveLensCover(show8) || !capsHaveLensCover(show5) {
+		t.Fatal("the measured bitmaps stopped matching the lens cover bit")
+	}
+	if show8 != show5 {
+		t.Error("the two boards no longer advertise the same switches; re-measure before trusting the bitmap")
 	}
 }
