@@ -9,6 +9,7 @@ package firmware
 
 import (
 	"context"
+	"errors"
 	"log/slog"
 	"sync"
 
@@ -266,6 +267,15 @@ func (u *Firmware) Install(ctx context.Context) {
 	// Home Assistant learns nothing from the command it sent — the update entity has no way to say an
 	// install failed, and the card just goes back to offering it. So the failure has to arrive as state,
 	// and on the ring for somebody standing in front of the device.
+	// A second press while the first install is still downloading is not a failure and must not be
+	// reported as one. The update card gives no sign that anything is happening on a slow link, so
+	// pressing it again is the natural thing to do - and the device answered by flashing the failure
+	// pattern on the ring and telling Home Assistant the update had failed, while it was in fact
+	// downloading perfectly well.
+	if errors.Is(err, update.ErrInstalling) {
+		slog.Info("install already running; the second request was ignored", "version", found.Version)
+		return
+	}
 	if err != nil {
 		slog.Error("installing an update failed", "version", found.Version, "err", err)
 		u.publish(found)

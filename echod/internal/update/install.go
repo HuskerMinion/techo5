@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"io"
 	"log/slog"
@@ -27,6 +28,11 @@ var installing sync.Mutex
 // Install replaces this binary with the one the manifest describes for this architecture and asks for
 // a restart.
 //
+// ErrInstalling says an install is already running, which is what a second press of the button
+// gets. It is not a failure: the first install is still going, and the caller should say nothing
+// rather than report the update as failed.
+var ErrInstalling = errors.New("update: an install is already running")
+
 // Nothing is written to /system until the download has been fetched whole and its hash checked. What
 // this replaces is kept as echod.prev, which is what the boot hook restores if the new one never gets
 // far enough to be believed.
@@ -34,7 +40,7 @@ var installing sync.Mutex
 // progress is called with a fraction as the download runs, for whoever is watching in Home Assistant.
 func Install(ctx context.Context, m Manifest, progress func(float32)) error {
 	if !installing.TryLock() {
-		return fmt.Errorf("update: an install is already running")
+		return ErrInstalling
 	}
 	defer installing.Unlock()
 
