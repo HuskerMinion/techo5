@@ -41,6 +41,17 @@ import (
 // first pixel blue, and its own exposure limits (framelength 802 lines less a margin of 4, shutter
 // from 1 line; both from the driver in the kernel source). The gain scale and its 15.5x ceiling are
 // the same on both, and both use one MIPI lane with an 85 ns settle.
+//
+// The Show 8 (crown) has the OV9734 as well, so it takes the same profile. Its own kernel says so
+// while powering the camera up, read off a unit 2026-09-22:
+//
+//	[kdSetDriver] :[0][1][1][ov9734_mipi_raw][32]
+//	[PowerON]pinSetIdx:0, currSensorName: ov9734_mipi_raw
+//
+// Worth recording why this needed saying at all: while a Show 8 was still being read as a 1st gen
+// Show 5, it picked the right sensor by accident. Telling the boards apart is what turned that into
+// a choice someone had to make, and the symptom of making it wrongly is a camera that opens, streams
+// nothing, and times out.
 type sensorSpec struct {
 	w, h       int  // what the sensor hands over
 	outW, outH int  // one pixel per Bayer cell: the live view and the stream
@@ -49,14 +60,17 @@ type sensorSpec struct {
 	blueFirst  bool // the first pixel of each cell is blue, not red
 }
 
-func pickSensor(checkers bool) sensorSpec {
-	if checkers {
+// hasOV9734 is whether this board carries the OV9734 rather than the OV02B10.
+func hasOV9734() bool { return layout.Checkers() || layout.Crown() }
+
+func pickSensor(ov9734 bool) sensorSpec {
+	if ov9734 {
 		return sensorSpec{w: 1280, h: 720, outW: 640, outH: 360, minShut: 1, frameLines: 798, blueFirst: true}
 	}
 	return sensorSpec{w: 1600, h: 1200, outW: 800, outH: 600, minShut: 4, frameLines: 1200}
 }
 
-var sensor = pickSensor(layout.Checkers())
+var sensor = pickSensor(hasOV9734())
 
 // Width and Height are the frames handed out.
 var Width, Height = sensor.outW, sensor.outH
