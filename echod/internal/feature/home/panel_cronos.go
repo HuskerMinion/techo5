@@ -17,6 +17,14 @@ var (
 
 	// slideshowW and H are the panel's own size, the same thing by a different name.
 	slideshowW, slideshowH = panelSize()
+
+	// radarW and H are the size the rain map is composited at. The radar page draws it one to one,
+	// so this has to be the panel or the map does not fill the screen.
+	radarW, radarH = panelSize()
+
+	// artW and artH are the size a now-playing background picture is fitted to. The page draws it at
+	// one to one, so this has to be the panel.
+	artW, artH = panelSize()
 )
 
 func panelSize() (w, h int) {

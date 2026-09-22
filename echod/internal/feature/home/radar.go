@@ -26,12 +26,16 @@ import (
 // the screen, centred on Home Assistant's home zone. Both are free to use with credit, which the page
 // shows; OpenStreetMap's tile policy also asks for an identifying User-Agent and light use, so the map
 // is fetched once for a location, two tiles at a time, and kept. RainViewer's free tiles stop at zoom 7,
-// so the radar is drawn from zoom 7 at twice the size over a zoom 8 map: about 450 km across. The
-// last frames play as a loop, so the rain's direction shows.
+// so the radar is drawn from zoom 7 at twice the size over a zoom 8 map. The last frames play as a
+// loop, so the rain's direction shows.
+//
+// The picture is built at the panel's own size (radarW and radarH, in the panel_*.go files), because
+// the page draws it at one to one: an image smaller than the screen leaves the rest of the screen
+// empty, which is what a Show 8 got while this was fixed at the Show 5's 960x480. A wider panel
+// therefore sees more country rather than a stretched map — about 450 km across on a Show 5 and
+// about 600 on a Show 8.
 
 const (
-	radarW, radarH = 960, 480
-
 	mapZoom   = 8
 	radarZoom = 7
 	tileSize  = 256

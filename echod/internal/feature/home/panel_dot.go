@@ -16,4 +16,12 @@ const (
 	// slideshowW and H are the panel's own size, the same thing by a different name.
 	slideshowW = 960
 	slideshowH = 480
+
+	// radarW and H are the rain map's size. Unreachable here for the same reason as the rest.
+	radarW = 960
+	radarH = 480
+
+	// artW and artH are the now-playing background picture's size. Unreachable here, like the rest.
+	artW = 960
+	artH = 480
 )

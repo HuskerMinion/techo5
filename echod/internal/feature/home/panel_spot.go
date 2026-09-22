@@ -16,4 +16,13 @@ const (
 	// then again to the panel's actual square when drawn).
 	slideshowW = 480
 	slideshowH = 480
+
+	// radarW and H are the rain map's size. The Spot's round face crops a landscape map rather than
+	// filling itself with one, so this stays the 960x480 it has always been fetched at.
+	radarW = 960
+	radarH = 480
+
+	// artW and artH are the now-playing background picture's size. The round face crops this landscape picture, so it stays what it has always been.
+	artW = 960
+	artH = 480
 )

@@ -26,11 +26,14 @@ import (
 const (
 	metaEvery = 15 * time.Second
 
-	// artW and artH are the panel; pictures are made to fit it once, when they arrive. thumbSide is
-	// the square the same picture is also made into, for a screen that shows it as a picture rather
-	// than behind the words (the Spot's round one).
-	artW, artH = 960, 480
-	thumbSide  = 240
+	// thumbSide is the square a picture is also made into, for a screen that shows it as a picture
+	// rather than behind the words (the Spot's round one).
+	//
+	// artW and artH — the size the background picture is made to fit — live in the panel_*.go files,
+	// because they are the panel and the panel is not the same on every device. The now-playing page
+	// draws the picture at one to one, so a picture built at the Show 5's 960x480 covered only the
+	// top left of a Show 8 and left the rest bare.
+	thumbSide = 240
 )
 
 // meta is the state the poller keeps.
@@ -186,9 +189,11 @@ func fetchArt(ctx context.Context, u string, logo bool) (*image.RGBA, *image.RGB
 	}
 	var target image.Rectangle
 	if logo {
-		// Fit on the right half, clear of the text, with room around it.
-		const left, right = 500, artW - 40
-		h := artH - 140
+		// Fit on the right half, clear of the text, with room around it. These were 500, artW-40 and
+		// artH-140 when the panel was always 960x480; they are the same fractions of whatever panel
+		// this is, so the logo stays clear of the words on a wider screen too.
+		left, right := artW*500/960, artW-artW*40/960
+		h := artH * 340 / 480
 		w := sw * h / sh
 		if w > right-left {
 			w = right - left
