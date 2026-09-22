@@ -20,6 +20,7 @@ import (
 	"github.com/HuskerMinion/techo5/echod/internal/hardware/led"
 	"github.com/HuskerMinion/techo5/echod/internal/hardware/mic"
 	"github.com/HuskerMinion/techo5/echod/internal/hardware/privacy"
+	"github.com/HuskerMinion/techo5/echod/internal/lib/hook"
 	"github.com/HuskerMinion/techo5/echod/internal/hardware/speaker"
 )
 
@@ -49,6 +50,10 @@ type Mute struct {
 	// immediately: being muted has no next occurrence to wait for, it is already happening.
 	ring  *esphome.Select
 	claim *led.Claim
+
+	// Changed fires when the microphones are actually cut or brought back, with the new state. It is
+	// what lets the detector stop running models over silence.
+	Changed hook.Hook[bool]
 }
 
 var (
@@ -229,6 +234,8 @@ func (m *Mute) settled(asked bool) {
 		slog.Error("saving mute state failed", "err", err)
 	}
 	slog.Info("microphone mute", "muted", muted)
+
+	m.Changed.Emit(muted)
 
 	if muted {
 		speaker.Sound().Chime(speaker.ToneMute)

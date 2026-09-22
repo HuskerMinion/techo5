@@ -11,6 +11,7 @@ import (
 	"github.com/HuskerMinion/techo5/echod/internal/component"
 	"github.com/HuskerMinion/techo5/echod/internal/config"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/diag"
+	"github.com/HuskerMinion/techo5/echod/internal/feature/mute"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/phone"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/voice"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/wakeword"
@@ -89,6 +90,10 @@ func newDetect() *Detect {
 	d.ducker = newDucker()
 	d.ducker.watch(e)
 	d.stop = newStopEntity(d)
+
+	// A cut microphone hands on silence, and running the models over it is work that cannot find
+	// anything. The engines go down with the microphones and come back with them.
+	mute.Get().Changed.Listen(e.Quiet)
 	e.OnReady = d.busy.scored
 
 	// The engine loads on every start, including a restart. Home Assistant only pushes a selection when
@@ -98,6 +103,11 @@ func newDetect() *Detect {
 		turn := voice.Get()
 		turn.SetActiveWakeWords(d.load(turn.ActiveWakeWords()))
 		d.loadStop()
+		// A device that was muted when it was switched off comes back muted, and the hook below only
+		// fires on a change, so the state has to be read once here as well.
+		if muted, err := mute.Get().Muted(); err == nil {
+			e.Quiet(muted)
+		}
 		return nil
 	}
 

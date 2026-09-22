@@ -57,6 +57,9 @@ type Engine struct {
 	spent map[wake.Kind]time.Duration
 	slots []slot
 
+	// quiet is the microphones being cut: the backends are dropped while it holds. See Quiet.
+	quiet bool
+
 	// Threshold is asked for every score, so a change in Home Assistant takes effect at once. It is
 	// per slot because the models disagree on scale.
 	Threshold func(slot int) float64
@@ -347,6 +350,11 @@ func (e *Engine) score(frame []int16, source *mic.Source) {
 	e.mu.Lock()
 	defer e.mu.Unlock()
 
+	// Nothing to hear and nothing to do. See Quiet.
+	if e.quiet {
+		return
+	}
+
 	// Always feed. These are streaming models: a gap in the input is a gap in their history, and the
 	// next utterance gets scored from a cold state. The refractory below suppresses reporting, not
 	// audio. An engine only exists while a slot needs it, so nothing loaded feeds nothing.
@@ -440,4 +448,52 @@ func (e *Engine) judge(n int, s *slot, score float64, now time.Time, source *mic
 	if e.OnDetect != nil {
 		safe.Go("wake detected", func() { e.OnDetect(n) })
 	}
+}
+
+// Quiet drops the engines while the microphones are cut, and builds them again when they come back.
+//
+// A cut microphone hands on silence, so nothing can be detected in it — but the models were still
+// being run over that silence, frame after frame, which on a Dot is a third of the time it has.
+// Reported as "muting does not disable wake word detection", and the reporter was right about what
+// the CPU was doing even though nothing could ever have fired.
+//
+// The slots are kept. What is dropped is the engines under them, which is where both the work and
+// the streaming state live, so coming back is the same cold start as a wake word freshly chosen
+// rather than a window holding audio from before the mute and audio from after it, spliced.
+func (e *Engine) Quiet(on bool) {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+
+	if on == e.quiet {
+		return
+	}
+	e.quiet = on
+
+	if on {
+		for k, b := range e.backends {
+			b.close()
+			delete(e.backends, k)
+		}
+		slog.Info("wake words stopped: the microphones are cut")
+		return
+	}
+
+	var back []string
+	for i := range e.slots {
+		s := e.slots[i]
+		if !s.loaded {
+			continue
+		}
+		b, err := e.engineFor(s.model.Kind)
+		if err != nil {
+			slog.Error("wake word engine unavailable after unmute", "id", s.model.ID, "err", err)
+			continue
+		}
+		if err := b.load(s.model); err != nil {
+			slog.Error("reloading a wake word after unmute failed", "id", s.model.ID, "err", err)
+			continue
+		}
+		back = append(back, s.model.ID)
+	}
+	slog.Info("wake words listening again", "active", back)
 }
