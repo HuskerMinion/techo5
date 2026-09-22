@@ -2,6 +2,7 @@ package tflite
 
 import (
 	"encoding/binary"
+	"errors"
 	"fmt"
 	"math"
 )
@@ -18,9 +19,22 @@ type Tensor struct {
 	Const bool
 }
 
+// maxElements caps what one tensor may be asked to hold. The models this runs are a few hundred
+// thousand elements at their largest, so anything past this is a shape a file made up rather than one
+// a converter wrote — either directly, or through a RESHAPE whose target comes out of a constant. The
+// cap keeps a made-up shape a refusal instead of an allocation nobody can take back.
+const maxElements = 1 << 26
+
+// count is how many elements a shape describes. A shape that is not one — a negative dimension, or a
+// product past maxElements — panics with what it was, which New and Invoke turn into an error. Checking
+// it here rather than at every resize is the same trade Parse makes: the model is about to be refused,
+// so the cost of finding out is not worth spreading over every kernel.
 func count(shape []int) int {
 	n := 1
 	for _, d := range shape {
+		if d < 0 || (d != 0 && n > maxElements/d) {
+			panic(fmt.Sprintf("shape %v is not a size this runs", shape))
+		}
 		n *= d
 	}
 	return n
@@ -66,9 +80,27 @@ type Interpreter struct {
 }
 
 // New prepares the model's first subgraph for execution.
-func New(m *Model) (*Interpreter, error) {
+//
+// A model file is not a trustworthy document: it arrives over the network, and Parse only proves that
+// its flatbuffer can be read, not that what it says is coherent. A model with no subgraph, an operator
+// reading a tensor one past the end of the table, or a shape with a negative dimension all parse
+// cleanly and then panic in here or in a kernel, on whatever goroutine was loading wake words. The
+// checks below name the structural ones; the recover catches the rest, the same trade Parse makes.
+func New(m *Model) (in *Interpreter, err error) {
+	defer func() {
+		if r := recover(); r != nil {
+			in, err = nil, fmt.Errorf("tflite: malformed model: %v", r)
+		}
+	}()
+
+	if len(m.Subgraphs) == 0 {
+		return nil, errors.New("tflite: model has no subgraphs")
+	}
 	g := m.Subgraphs[0]
-	in := &Interpreter{model: m, graph: g, tensors: make([]*Tensor, len(g.Tensors))}
+	if err := checkIndices(g); err != nil {
+		return nil, err
+	}
+	in = &Interpreter{model: m, graph: g, tensors: make([]*Tensor, len(g.Tensors))}
 
 	for i, d := range g.Tensors {
 		t := &Tensor{Name: d.Name, Type: d.Type, Shape: append([]int(nil), d.Shape...)}
@@ -95,6 +127,36 @@ func New(m *Model) (*Interpreter, error) {
 		}
 	}
 	return in, nil
+}
+
+// checkIndices makes sure every tensor a subgraph names exists. Invoke looks these up without bounds
+// checks of its own, once per operator per audio frame, so they are settled here instead.
+func checkIndices(g *Subgraph) error {
+	n := len(g.Tensors)
+	for _, i := range g.Inputs {
+		if i < 0 || i >= n {
+			return fmt.Errorf("tflite: subgraph input is tensor %d, which does not exist", i)
+		}
+	}
+	for _, i := range g.Outputs {
+		if i < 0 || i >= n {
+			return fmt.Errorf("tflite: subgraph output is tensor %d, which does not exist", i)
+		}
+	}
+	for j, o := range g.Ops {
+		for _, i := range o.Inputs {
+			// An optional input, such as a missing bias, is encoded as index -1.
+			if i < -1 || i >= n {
+				return fmt.Errorf("tflite: op %d (%s) reads tensor %d, which does not exist", j, o.Op, i)
+			}
+		}
+		for _, i := range o.Outputs {
+			if i < 0 || i >= n {
+				return fmt.Errorf("tflite: op %d (%s) writes tensor %d, which does not exist", j, o.Op, i)
+			}
+		}
+	}
+	return nil
 }
 
 func decode(t *Tensor, raw []byte) error {
@@ -146,7 +208,18 @@ func (in *Interpreter) ResizeInput(i int, shape []int) {
 }
 
 // Invoke runs every operator in order, recomputing shapes as it goes.
-func (in *Interpreter) Invoke() error {
+//
+// Shapes are recomputed from what the model says, including constants a RESHAPE or a FILL reads its
+// target out of, so a file can still name a size or an operand count no kernel expects after New has
+// checked everything that is checkable up front. That lands as an index or an allocation rather than an
+// error, and this is the last frame that can turn it back into one.
+func (in *Interpreter) Invoke() (err error) {
+	defer func() {
+		if r := recover(); r != nil {
+			err = fmt.Errorf("tflite: malformed model: %v", r)
+		}
+	}()
+
 	for i, o := range in.graph.Ops {
 		ins := make([]*Tensor, len(o.Inputs))
 		for j, idx := range o.Inputs {

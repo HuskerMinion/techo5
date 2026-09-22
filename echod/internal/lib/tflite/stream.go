@@ -39,7 +39,16 @@ type stage struct {
 
 // NewStream prepares incremental evaluation of a model. window is the input row count the model
 // was built for, and the shape of every intermediate tensor is derived from it.
-func NewStream(m *Model, window []int) (*Stream, error) {
+func NewStream(m *Model, window []int) (s *Stream, err error) {
+	// Same reasoning as New: the shapes and operand counts read below are the model's own word for
+	// them, and a file that says something no converter would say lands as an index rather than an
+	// error. What is worth naming is named; the rest comes back through here.
+	defer func() {
+		if r := recover(); r != nil {
+			s, err = nil, fmt.Errorf("tflite: malformed model: %v", r)
+		}
+	}()
+
 	in, err := New(m)
 	if err != nil {
 		return nil, err
@@ -50,12 +59,18 @@ func NewStream(m *Model, window []int) (*Stream, error) {
 	}
 
 	g := m.Subgraphs[0]
-	s := &Stream{}
+	if len(g.Inputs) == 0 || len(g.Outputs) == 0 {
+		return nil, fmt.Errorf("tflite: model has no input or no output to stream")
+	}
+	s = &Stream{}
 	prev := g.Inputs[0]
 
 	for i, o := range g.Ops {
 		if len(o.Inputs) == 0 || o.Inputs[0] != prev {
 			return nil, fmt.Errorf("tflite: op %d (%s) does not continue the chain", i, o.Op)
+		}
+		if len(o.Outputs) == 0 {
+			return nil, fmt.Errorf("tflite: op %d (%s) writes nothing", i, o.Op)
 		}
 		x, y := in.Tensor(o.Inputs[0]), in.Tensor(o.Outputs[0])
 		if len(x.Shape) != 4 || len(y.Shape) != 4 {
@@ -71,6 +86,9 @@ func NewStream(m *Model, window []int) (*Stream, error) {
 			out:      &Tensor{Type: Float32},
 		}
 		st.rowSize = st.width * st.channels
+		if st.rowSize < 1 {
+			return nil, fmt.Errorf("tflite: op %d (%s) reads a row of %d values", i, o.Op, st.rowSize)
+		}
 
 		for _, idx := range o.Inputs[1:] {
 			if idx < 0 {

@@ -77,8 +77,9 @@ type mix struct {
 }
 
 // What this build can do, in the order it is offered. The vendor's own beamformer is in the list
-// only when its coefficients are there to read, and reading them waits until something asks: they
-// are 460 KB of text on the vendor partition, and the mix may never be chosen.
+// only when its coefficients are there to read — 460 KB of text on the vendor partition. Building
+// the list reads them, and it is built once per boot, since the microphone component asks for
+// Mixings() as it binds; the once is so that it is read once, not once per caller.
 var mixes = sync.OnceValue(func() []mix {
 	out := []mix{
 		{config.MixCenter, func() Mixer { return Center{} }},

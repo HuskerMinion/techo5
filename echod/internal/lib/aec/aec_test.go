@@ -4,6 +4,7 @@ import (
 	"math"
 	"math/rand/v2"
 	"strconv"
+	"sync"
 	"testing"
 )
 
@@ -282,5 +283,56 @@ func TestRejectsBadConfigAndLengths(t *testing.T) {
 	}
 	if _, err := c.Process(make([]int16, 10), make([]int16, 11)); err != ErrLength {
 		t.Fatalf("mismatched lengths gave %v, want ErrLength", err)
+	}
+}
+
+// The switch is thrown from somewhere else. The conversation turns learning off the moment it starts
+// listening to somebody, on its own goroutine, while the capture loop is reading the flag once per
+// sample. Under the race detector this is the test that says so; without it, it still says the filter
+// keeps working while the flag moves under it.
+func TestAdaptingCanBeSwitchedWhileProcessing(t *testing.T) {
+	c, err := New(Config{Taps: 128, Mu: 0.5})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	ref := noiseAt(32000, 8000, 5)
+	h := make([]float64, 20)
+	for k := range h {
+		h[k] = 0.4 * math.Exp(-float64(k)/8)
+	}
+	echo := echoed(ref, h)
+
+	done := make(chan struct{})
+	var flips sync.WaitGroup
+	flips.Add(1)
+	go func() {
+		defer flips.Done()
+		for on := false; ; on = !on {
+			select {
+			case <-done:
+				return
+			default:
+			}
+			c.SetAdapting(on)
+			_ = c.Adapting()
+		}
+	}()
+
+	for j := 0; j+frame <= len(echo); j += frame {
+		out, err := c.Process(echo[j:j+frame], ref[j:j+frame])
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(out) != frame {
+			t.Fatalf("got %d samples back, want %d", len(out), frame)
+		}
+	}
+	close(done)
+	flips.Wait()
+
+	c.SetAdapting(true)
+	if !c.Adapting() {
+		t.Error("the last setting did not stick")
 	}
 }

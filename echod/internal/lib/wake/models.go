@@ -109,8 +109,15 @@ func kindOf(path string) Kind {
 		return KindMicroWakeWord
 	}
 
+	// Parse proves the file can be read, not that it says anything sensible: a model with no subgraph,
+	// or one whose input names a tensor that is not in its table, reads cleanly and then indexes out of
+	// range here. A file that cannot answer the question is the same as one that answers "not
+	// openWakeWord" — the engine that loads it reports the failure properly a moment later.
+	if len(m.Subgraphs) == 0 {
+		return KindMicroWakeWord
+	}
 	g := m.Subgraphs[0]
-	if len(g.Inputs) == 0 {
+	if len(g.Inputs) == 0 || g.Inputs[0] < 0 || g.Inputs[0] >= len(g.Tensors) {
 		return KindMicroWakeWord
 	}
 	shape := g.Tensors[g.Inputs[0]].Shape

@@ -280,7 +280,7 @@ func (r *renderer) draw(s scene) {
 	default:
 		if s.sunrise > 0 {
 			// The light before an alarm takes the whole screen: the panel is the lamp in the room, and
-			// a screen filled with warm colour is worth more than the backlight on its own.
+			// a screen filled with warm color is worth more than the backlight on its own.
 			r.sunrisePage(s, s.sunrise, s.sunriseFace)
 		} else if s.slideshowScreensaver != nil {
 			r.slideshowScreensaverPage(s)

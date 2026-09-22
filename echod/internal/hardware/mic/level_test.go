@@ -360,3 +360,53 @@ func levelAfter(l *leveler, dbfs float64, frames int) float64 {
 	settle(l, dbfs, frames)
 	return float64(math.Float32frombits(l.level.Load()))
 }
+
+// The floor a diagnostic reads is the floor the reader has. It is updated once a frame on the capture
+// goroutine and asked for from whichever goroutine is answering Home Assistant or drawing a page, so it
+// is published rather than read out of the reader's own state. This is that copy following the room and
+// being safe to take while the room is still being measured.
+func TestFloorIsPublishedForOtherGoroutines(t *testing.T) {
+	l := newLeveler()
+	s := &Source{leveler: l}
+
+	// A quiet room first, so the floor has somewhere to come down to.
+	for range 400 {
+		l.apply(speech(-70))
+	}
+	quiet := s.Floor()
+	if quiet > -40 {
+		t.Errorf("a quiet room reads a floor of %.1f dB", quiet)
+	}
+
+	// Then a loud one, read from another goroutine throughout.
+	done := make(chan struct{})
+	reads := make(chan float64, 1)
+	go func() {
+		var last float64
+		for {
+			select {
+			case <-done:
+				reads <- last
+				return
+			default:
+			}
+			last = s.Floor()
+		}
+	}()
+
+	for range 2000 {
+		l.apply(speech(-20))
+	}
+	close(done)
+	<-reads
+
+	if loud := s.Floor(); loud <= quiet {
+		t.Errorf("the floor did not follow the room: %.1f dB quiet, %.1f dB loud", quiet, loud)
+	}
+
+	// And forgetting puts it back where it starts, through the same copy.
+	l.forget()
+	if back := s.Floor(); back != 0 {
+		t.Errorf("after forgetting the floor is %.1f dB, want full scale", back)
+	}
+}

@@ -120,7 +120,7 @@ func TestHaveRecognisesWhatIsInstalled(t *testing.T) {
 		t.Fatalf("Adopt: %v", err)
 	}
 	if !Have(dir, offer) {
-		t.Error("an adopted model is not recognised")
+		t.Error("an adopted model is not recognized")
 	}
 
 	// The same id offered with different contents is a different model.

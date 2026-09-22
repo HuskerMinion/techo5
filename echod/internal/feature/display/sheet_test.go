@@ -68,9 +68,9 @@ func TestEveryCardDraws(t *testing.T) {
 	editor := sheetScene(catAlarms)
 	editor.draft = &alarmDraft{alarm: editor.alarms.Local[0]}
 	cases["alarm editor"] = editor
-	colours := sheetScene(catDisplay)
-	colours.sheet.colours = true
-	cases["custom colours"] = colours
+	colors := sheetScene(catDisplay)
+	colors.sheet.colors = true
+	cases["custom colors"] = colors
 
 	for name, s := range cases {
 		r := testRenderer()

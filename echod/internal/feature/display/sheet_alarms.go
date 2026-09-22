@@ -192,9 +192,9 @@ func (d *Display) actionTap(id string) {
 	switch id {
 	case "back":
 		d.sheetBack()
-	case "coloursdone":
+	case "colorsdone":
 		d.mu.Lock()
-		d.colours, d.cardScroll = false, 0
+		d.colors, d.cardScroll = false, 0
 		d.mu.Unlock()
 	case "add":
 		d.EditNewAlarm()

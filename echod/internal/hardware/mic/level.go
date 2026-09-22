@@ -117,10 +117,13 @@ type leveler struct {
 	bandRMS, bandFloor float32
 
 	// published is the gain, for anything outside the reader that wants to log it. level is how loud
-	// the room is, for anything that wants to show it.
-	published atomic.Uint32
-	level     atomic.Uint32
-	clipped   atomic.Uint64
+	// the room is, for anything that wants to show it. bandPublished is bandFloor, copied out for the
+	// same reason: the reader updates it every frame and diagnostics ask for it from its own
+	// goroutine, so the float itself is the reader's alone and this is what anyone else reads.
+	published     atomic.Uint32
+	bandPublished atomic.Uint32
+	level         atomic.Uint32
+	clipped       atomic.Uint64
 }
 
 // forget throws away what has been learned, so switching leveling off and on again is a way out of
@@ -131,7 +134,10 @@ func (l *leveler) forget() {
 	l.publish()
 }
 
-func (l *leveler) publish() { l.published.Store(math.Float32bits(l.gain)) }
+func (l *leveler) publish() {
+	l.published.Store(math.Float32bits(l.gain))
+	l.bandPublished.Store(math.Float32bits(l.bandFloor))
+}
 
 func newLeveler() *leveler {
 	frame := float64(FrameSamples) / float64(Rate)
@@ -206,6 +212,7 @@ func (l *leveler) observe(frame []int16) (rms, peak float32) {
 	least := float32(math.Float32frombits(l.least.Load()))
 	l.floor = follow(l.floor, rms, l.floorDown, l.floorUp, least)
 	l.bandFloor = follow(l.bandFloor, l.bandRMS, l.floorDown, l.floorUp, least)
+	l.bandPublished.Store(math.Float32bits(l.bandFloor))
 
 	l.publishLevel(l.bandRMS)
 	return rms, peak
@@ -349,7 +356,7 @@ func (s *Source) SetSensitivity(db int) {
 // Against this package's own full scale, not audio.DBFS: the leveler works in the int16 the frames are
 // narrowed to, and that helper is against 24 bit.
 func (s *Source) Floor() float64 {
-	return 20 * math.Log10(float64(s.leveler.bandFloor)/fullScale)
+	return 20 * math.Log10(float64(math.Float32frombits(s.leveler.bandPublished.Load()))/fullScale)
 }
 
 // Peak is the most the level reached since the last time it was asked, and asking resets it.

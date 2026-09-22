@@ -56,14 +56,14 @@ func (r *roundRenderer) sunriseFace(s roundScene, p float64, face bool) {
 	r.centred(r.small, s.now.Format("Monday, January 2"), 250, ink)
 }
 
-// lerpRGB mixes two colours, t from 0 (a) to 1 (b).
+// lerpRGB mixes two colors, t from 0 (a) to 1 (b).
 func lerpRGB(a, b color.RGBA, t float64) color.RGBA {
 	t = math.Min(math.Max(t, 0), 1)
 	mix := func(x, y uint8) uint8 { return uint8(float64(x) + (float64(y)-float64(x))*t) }
 	return color.RGBA{mix(a.R, b.R), mix(a.G, b.G), mix(a.B, b.B), 255}
 }
 
-// softly is a colour at a given alpha, left as it is rather than premultiplied: this renderer mixes
+// softly is a color at a given alpha, left as it is rather than premultiplied: this renderer mixes
 // with the alpha itself (blend), where the Show's draws through Go's image library and wants the
 // channels scaled. Premultiplying for this one turns a glow into a shadow.
 func softly(c color.RGBA, a uint8) color.RGBA {

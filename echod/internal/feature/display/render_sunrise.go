@@ -12,7 +12,7 @@ import (
 // The sunrise page: what the screen shows while the light before an alarm comes up.
 //
 // The panel is the only lamp in the room, so what is drawn matters more than the number the
-// backlight is set to: a screen filled with warm colour puts out far more light than a clock on a
+// backlight is set to: a screen filled with warm color puts out far more light than a clock on a
 // black background at the same brightness. The sky warms from the dark red of the first minute
 // through orange to a pale gold, a sun climbs into it on the same curve as the light, and the time
 // stays readable the whole way, because the first thing anybody does is squint at it.
@@ -50,7 +50,7 @@ func (r *renderer) sunriseSun(p float64, face bool) {
 	cx := r.w / 2
 	body := lerpRGB(color.RGBA{219, 74, 28, 255}, color.RGBA{255, 246, 205, 255}, p)
 
-	// A soft edge: rings of the sun's colour, each a little wider and fainter than the last, so it
+	// A soft edge: rings of the sun's color, each a little wider and fainter than the last, so it
 	// sits in the sky rather than being cut out of it.
 	for i := 6; i > 0; i-- {
 		r.disc(cx, cy, rad+i*rad/8, faded(body, uint8(18+8*i)))
@@ -60,7 +60,7 @@ func (r *renderer) sunriseSun(p float64, face bool) {
 	if !face {
 		return
 	}
-	// The face, in the sun's own colour darkened, so it is there without being a cartoon on a lamp.
+	// The face, in the sun's own color darkened, so it is there without being a cartoon on a lamp.
 	ink := color.RGBA{uint8(float64(body.R) * 0.35), uint8(float64(body.G) * 0.25), uint8(float64(body.B) * 0.2), 255}
 	eye := max(rad/9, 3)
 	r.disc(cx-rad/3, cy-rad/4, eye, ink)
@@ -94,14 +94,14 @@ func (r *renderer) sunriseClock(s scene, p float64) {
 	r.text(r.small, date, (r.w-r.width(r.small, date))/2, base+64, ink)
 }
 
-// faded is a colour at a given alpha, premultiplied — which is what Go's RGBA holds, so dimming the
-// alpha alone leaves a colour that is not the one that was asked for.
+// faded is a color at a given alpha, premultiplied — which is what Go's RGBA holds, so dimming the
+// alpha alone leaves a color that is not the one that was asked for.
 func faded(c color.RGBA, a uint8) color.RGBA {
 	f := float64(a) / 255
 	return color.RGBA{uint8(float64(c.R) * f), uint8(float64(c.G) * f), uint8(float64(c.B) * f), a}
 }
 
-// lerpRGB mixes two colours, t from 0 (a) to 1 (b).
+// lerpRGB mixes two colors, t from 0 (a) to 1 (b).
 func lerpRGB(a, b color.RGBA, t float64) color.RGBA {
 	t = math.Min(math.Max(t, 0), 1)
 	mix := func(x, y uint8) uint8 { return uint8(float64(x) + (float64(y)-float64(x))*t) }

@@ -221,7 +221,7 @@ func (r *roundRenderer) discImage(img *image.RGBA, cx, cy, rad float64) {
 			sx := min(max(int(offX+(float64(x)+0.5-(cx-rad))*inv), 0), sw-1)
 			k := sy*img.Stride + sx*4
 			j := (y*side + x) * 4
-			// Over the ground (premultiplied): a logo's transparent corners keep the face's colour.
+			// Over the ground (premultiplied): a logo's transparent corners keep the face's color.
 			a := uint32(img.Pix[k+3])
 			for c := 0; c < 3; c++ {
 				r.dst.Pix[j+c] = uint8(min(uint32(img.Pix[k+c])+uint32(r.dst.Pix[j+c])*(255-a)/255, 255))

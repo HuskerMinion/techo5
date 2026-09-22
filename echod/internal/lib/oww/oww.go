@@ -118,6 +118,11 @@ func (e *Engine) Load(id string, model []byte) (*Classifier, error) {
 		return nil, fmt.Errorf("oww: %s: %w", id, err)
 	}
 
+	// A classifier with no input at all parses and builds; asking for its first one is what would
+	// index past the end. The models come from outside, so this is a refusal like the shape below.
+	if len(m.Subgraphs[0].Inputs) == 0 {
+		return nil, fmt.Errorf("oww: %s: the model has no input", id)
+	}
 	shape := in.Input(0).Shape
 	if len(shape) != 3 || shape[2] != embedDims {
 		return nil, fmt.Errorf("oww: %s: input shape %v is not a %d-wide embedding window", id, shape, embedDims)

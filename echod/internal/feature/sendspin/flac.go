@@ -9,6 +9,7 @@ import (
 	"github.com/mewkiz/flac"
 
 	"github.com/HuskerMinion/techo5/echod/internal/hardware/speaker"
+	"github.com/HuskerMinion/techo5/echod/internal/lib/safe"
 )
 
 // chunkFeed is the reader the parser pulls from. feed hands over one chunk and returns only once the
@@ -105,13 +106,26 @@ func newFLACDecoder(header []byte) (decoder, error) {
 		done: make(chan struct{}),
 	}
 
-	go d.parse(header)
+	// safe.Go rather than a bare go: everything this goroutine touches came off a socket an
+	// unauthenticated sender on the LAN opened, and a panic on one of its goroutines takes the whole
+	// daemon with it. parse refuses what it can name; the recover is for what it cannot.
+	safe.Go("sendspin flac parser", func() { d.parse(header) })
 	return d, nil
 }
 
 func (d *flacDecoder) parse(header []byte) {
 	defer close(d.done)
 	defer d.feed.stop()
+
+	// The checks below name the ways a frame is known to lie, but the parser underneath indexes plenty
+	// else the stream told it, so anything left over is recorded as a failed stream on the way past.
+	// The panic is passed on rather than swallowed, because safe.Go is what logs it with its stack.
+	defer func() {
+		if r := recover(); r != nil {
+			d.failed(fmt.Errorf("sendspin: flac: malformed stream: %v", r))
+			panic(r)
+		}
+	}()
 
 	stream, err := flac.New(io.MultiReader(bytes.NewReader(header), d.feed))
 	if err != nil {
@@ -124,6 +138,11 @@ func (d *flacDecoder) parse(header []byte) {
 	channels := int(stream.Info.NChannels)
 	shift := int(stream.Info.BitsPerSample) - speaker.Bits
 
+	if channels <= 0 {
+		d.failed(fmt.Errorf("sendspin: flac header says %d channels", channels))
+		return
+	}
+
 	for {
 		// Any error ends this: end of stream, or the feed closed because the decoder was let go.
 		frame, err := stream.ParseNext()
@@ -131,8 +150,27 @@ func (d *flacDecoder) parse(header []byte) {
 			return
 		}
 
-		pcm := make([]int16, int(frame.BlockSize)*channels)
-		for i := range int(frame.BlockSize) {
+		// STREAMINFO and the frame header each carry a channel count, and nothing in the parser
+		// makes them agree: a sender can say eight channels up front and then send a mono frame.
+		// Laying the frame out by the header's count would index subframes that were never parsed,
+		// which is a panic on a goroutine, from a peer that never authenticated. The same goes for
+		// a subframe holding fewer samples than the block size claims. Either one ends the stream.
+		block := int(frame.BlockSize)
+		if len(frame.Subframes) < channels {
+			d.failed(fmt.Errorf("sendspin: flac frame has %d channels, the stream said %d",
+				len(frame.Subframes), channels))
+			return
+		}
+		for c := range channels {
+			if len(frame.Subframes[c].Samples) < block {
+				d.failed(fmt.Errorf("sendspin: flac channel %d has %d samples, the frame said %d",
+					c, len(frame.Subframes[c].Samples), block))
+				return
+			}
+		}
+
+		pcm := make([]int16, block*channels)
+		for i := range block {
 			for c := range channels {
 				s := frame.Subframes[c].Samples[i]
 				if shift > 0 {

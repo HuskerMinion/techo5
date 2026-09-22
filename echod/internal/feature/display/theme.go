@@ -13,17 +13,17 @@ import (
 	"github.com/HuskerMinion/techo5/echod/internal/config"
 )
 
-// Themes: five colours make the whole screen — the ground, the accent, the text, a dim text and
+// Themes: five colors make the whole screen — the ground, the accent, the text, a dim text and
 // the rules and boxes. The palette lives in package variables the renderer reads on every frame,
 // so switching is a matter of assigning them; the choice is saved with the screen settings. A
-// preset is picked by name; a colour changed in the custom colours editor makes the theme "Custom", saved as
-// its five colours.
+// preset is picked by name; a color changed in the custom colors editor makes the theme "Custom", saved as
+// its five colors.
 type theme struct {
 	name   string
 	colors [roles]color.RGBA
 }
 
-// The five roles, in the order the custom colours editor lists them.
+// The five roles, in the order the custom colors editor lists them.
 const (
 	roleGround = iota
 	roleAccent
@@ -105,7 +105,7 @@ func applyTheme(t theme) {
 	walnut, amber, cream, dim, ember = t.colors[roleGround], t.colors[roleAccent], t.colors[roleText], t.colors[roleDim], t.colors[roleRules]
 }
 
-// setRole changes one colour of the palette in force and saves the result as Custom.
+// setRole changes one color of the palette in force and saves the result as Custom.
 func setRole(role int, c color.RGBA) {
 	t := current()
 	t.colors[role] = c
@@ -126,7 +126,7 @@ func parseHex(s string) (color.RGBA, error) {
 	return color.RGBA{r, g, b, 0xff}, nil
 }
 
-// hsl makes a colour from hue (degrees), saturation and lightness (0..1).
+// hsl makes a color from hue (degrees), saturation and lightness (0..1).
 func hsl(h, s, l float64) color.RGBA {
 	c := (1 - math.Abs(2*l-1)) * s
 	hp := math.Mod(h, 360) / 60
@@ -204,8 +204,8 @@ func (r *renderer) bevel(rect image.Rectangle, fill color.RGBA, raised bool) {
 	draw.Draw(r.dst, image.Rect(rect.Max.X-2, rect.Min.Y, rect.Max.X, rect.Max.Y), image.NewUniform(shadow), image.Point{}, draw.Src)
 }
 
-// swatchStrip draws a ctlSwatches row's colours for one role of the theme, the one in force ringed in
-// the text colour; a tap on one picks it.
+// swatchStrip draws a ctlSwatches row's colors for one role of the theme, the one in force ringed in
+// the text color; a tap on one picks it.
 func (r *paint) swatchStrip(row settingRow, right, cy, top int) {
 	const d, gap = 28, 6
 	x0 := right - swatchCount*d - (swatchCount-1)*gap

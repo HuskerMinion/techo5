@@ -37,7 +37,7 @@ import (
 // deviceModel is what the About row calls this device.
 const deviceModel = "Echo Spot"
 
-// themeRows are none: the Spot has its own colours and no themes.
+// themeRows are none: the Spot has its own colors and no themes.
 func themeRows() []settingRow { return nil }
 
 // deviceCard, devicePicker, deviceChoose and deviceRowTap are the Show's own cards, lists and rows;
@@ -64,7 +64,7 @@ func (d *Display) deviceRowTap(id string, _ part, _ int) bool {
 	return true
 }
 
-// swatchStrip is the custom colours row, which the Spot has no use for.
+// swatchStrip is the custom colors row, which the Spot has no use for.
 func (r *paint) swatchStrip(settingRow, int, int, int) {}
 
 // openSettings puts the settings screen up on its six categories. Called with d.mu held.
@@ -166,7 +166,7 @@ func adaptRows(rows []settingRow, sv sheetView) []settingRow {
 }
 
 func init() {
-	// The Spot's own colours, with its listening blue as the accent.
+	// The Spot's own colors, with its listening blue as the accent.
 	walnut, amber, cream, dim, ember = colBackground, colListening, colText, colDim, colTrack
 	// Empty is the default night here (defaultNight), so Never needs a value of its own, which
 	// inNight reads as no night; the default is offered as a choice of its own.

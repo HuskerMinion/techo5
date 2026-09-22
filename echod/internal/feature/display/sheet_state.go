@@ -37,11 +37,11 @@ type sheetCtl struct {
 	dragScroll int
 	dragging   bool
 
-	// checking is an update check asked for from the screen, still out; colours the custom colours
+	// checking is an update check asked for from the screen, still out; colors the custom colors
 	// editor open on the Display card; folder the slideshow's folder list, as far as it has been
 	// opened; draft the alarm open in the Alarms card's editor.
 	checking bool
-	colours  bool
+	colors   bool
 	folder   folderView
 	draft    *alarmDraft
 }
@@ -64,7 +64,7 @@ type settings struct {
 	wifiOK      bool   // Wi-Fi is managed here, so it can be changed
 	btProxy     bool
 	checking    bool       // an update check from the screen is out
-	colours     bool       // the custom colours editor is open
+	colors      bool       // the custom colors editor is open
 	demo        bool       // placeholders for the owner's details, for published screenshots
 	folder      folderView // the slideshow folder list, while it is open
 	name        string

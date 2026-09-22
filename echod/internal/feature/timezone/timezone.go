@@ -5,7 +5,8 @@
 // the answer carries Home Assistant's zone as a POSIX rule ("MST7MDT,M3.2.0,M11.1.0"), or as a zone
 // name from a Home Assistant that sends one. A zone that differs from the one in force is written to
 // userdata — a zoneinfo file built from the rule, or a link to the named zone — so it holds across
-// reboots, slot changes and Home Assistant being away, and is applied to the running daemon at once.
+// reboots, slot changes and Home Assistant being away, and the daemon restarts to pick it up. That
+// last part is why nothing here touches time.Local: see apply.
 package timezone
 
 import (
@@ -24,6 +25,7 @@ import (
 
 	"github.com/HuskerMinion/techo5/echod/internal/component"
 	"github.com/HuskerMinion/techo5/echod/internal/layout"
+	"github.com/HuskerMinion/techo5/echod/internal/update"
 )
 
 func init() {
@@ -198,9 +200,20 @@ func (z *Zone) apply(zone string) error {
 	if err := os.WriteFile(nameFile, []byte(zone+"\n"), 0o644); err != nil {
 		return err
 	}
-	time.Local = loc
+	// The zone is now on userdata, which is where the process reads it from: /etc/localtime links to
+	// the file just written, and the time package resolves that once, on its own, the first time
+	// anything asks for local time. So the way to apply it to a running daemon is to be a new one.
+	//
+	// Assigning time.Local here instead is what this used to do, and it is a data race with the whole
+	// standard library: every Format, every Date, every log line reads that pointer without
+	// synchronization, on every goroutine, and there is no lock to take. Routing the daemon's clock
+	// through this package rather than time.Local would be the other way out, but local time is read
+	// in seventy-odd files and the zone changes perhaps once in a device's life. A restart is the
+	// cheap, correct one, and it is the same unwind an update uses, so the speaker and the ring are
+	// put down properly rather than cut off.
 	name, offset := time.Now().In(loc).Zone()
-	slog.Info("time zone from home assistant", "zone", zone, "now", name, "offset_h", float64(offset)/3600)
+	slog.Info("time zone changed, restarting", "zone", zone, "now", name, "offset_h", float64(offset)/3600)
+	update.Restart("time zone " + zone)
 	return nil
 }
 

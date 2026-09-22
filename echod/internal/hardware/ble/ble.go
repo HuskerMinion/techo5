@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"log/slog"
 	"sync"
+	"sync/atomic"
 	"syscall"
 )
 
@@ -66,7 +67,9 @@ type Radio struct {
 	// held carries an unfinished H4 event between synchronous startup commands.
 	held []byte
 
-	reports uint64
+	// reports is counted on the reader's goroutine, which holds nothing, and read by diagnostics on
+	// theirs, so it is atomic rather than under mu. The bluez scanner counts its own the same way.
+	reports atomic.Uint64
 }
 
 var (
@@ -95,11 +98,7 @@ func (r *Radio) Running() bool {
 }
 
 // Reports is how many LE events have arrived.
-func (r *Radio) Reports() uint64 {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	return r.reports
-}
+func (r *Radio) Reports() uint64 { return r.reports.Load() }
 
 // Start opens the controller until Stop. Reports arrive on the reader's goroutine when scan is true.
 // Active asks for scan responses, which transmits rather than only listening. Advertisement is raw
@@ -291,7 +290,7 @@ func (r *Radio) parse(b []byte, found func(Advertisement)) ([]byte, error) {
 		}
 
 		if event[1] == evtLEMeta {
-			r.reports++
+			r.reports.Add(1)
 			reports(event[3:], found)
 		}
 		b = remainder

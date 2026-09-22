@@ -175,17 +175,36 @@ func (g *Group) supervise(ctx context.Context, e *entry) {
 		slog.Error("service failed, restarting", "service", e.svc.Name(),
 			"err", err, "ran", ran.Round(time.Millisecond), "in", wait)
 
-		select {
-		case <-ctx.Done():
+		if !e.reacquire(ctx, &wait) {
 			e.set(StateStopped, nil)
 			return
-		case <-time.After(wait):
+		}
+		e.countRestart()
+		slog.Info("service restarted", "service", e.svc.Name(), "restarts", e.status().Restarts)
+	}
+}
+
+// reacquire waits out the backoff and starts the service again, going round once more for as long as
+// Start keeps failing. It reports false only when the context ended, and the caller then stops.
+//
+// Looping here rather than falling back into supervise is the point: a service whose Start failed has
+// not got its device, its socket or its listener back, so Run would be called on a half-built service
+// and reach a nil field on its first line. That panic is caught by run's recover, which makes a
+// failed acquire look like a service that crashed and gets it counted as a restart — a restart policy
+// standing in for the thing not being available yet. Waiting for an acquire that works keeps the
+// backoff honest and the logs readable.
+func (e *entry) reacquire(ctx context.Context, wait *time.Duration) bool {
+	for {
+		select {
+		case <-ctx.Done():
+			return false
+		case <-time.After(*wait):
 		}
 
-		if next := wait * 2; next <= e.policy.maxBackoff {
-			wait = next
+		if next := *wait * 2; next <= e.policy.maxBackoff {
+			*wait = next
 		} else {
-			wait = e.policy.maxBackoff
+			*wait = e.policy.maxBackoff
 		}
 
 		// Let go of whatever it was holding before asking for it again: the point of a restart is
@@ -197,8 +216,7 @@ func (g *Group) supervise(ctx context.Context, e *entry) {
 			slog.Error("service could not be reacquired", "service", e.svc.Name(), "err", err)
 			continue
 		}
-		e.countRestart()
-		slog.Info("service restarted", "service", e.svc.Name(), "restarts", e.status().Restarts)
+		return true
 	}
 }
 

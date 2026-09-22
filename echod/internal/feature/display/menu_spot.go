@@ -13,7 +13,7 @@ import (
 )
 
 // The ring menu is a dial: the items sit on a circle, the one at the top is chosen, drawn larger in
-// its own colour, and named in the middle. While it is open a finger dragged round the ring turns it;
+// its own color, and named in the middle. While it is open a finger dragged round the ring turns it;
 // letting go snaps it to the nearest item; a tap on an item does it, and a tap in the middle does the
 // one at the top.
 //
@@ -63,8 +63,8 @@ const (
 )
 
 type menuItem struct {
-	id     itemID
-	colour color.RGBA
+	id    itemID
+	color color.RGBA
 }
 
 // mainItems go clockwise from the top.
@@ -350,11 +350,11 @@ func (r *roundRenderer) dial(s roundScene) {
 		it := items[s.menuSel]
 		x, y := itemPos(s.menuSel, n, s.menuRot)
 		r.discAt(x, y, chosenRing, colIconGround)
-		r.ringAt(x, y, chosenRing-3.5, chosenRing, 0, 2*math.Pi, it.colour)
-		accent := it.colour
+		r.ringAt(x, y, chosenRing-3.5, chosenRing, 0, 2*math.Pi, it.color)
+		accent := it.color
 		accent.A = 150
 		r.ringAt(x, y, chosenRing+6, chosenRing+9, -0.3*math.Pi, 0.55*math.Pi, accent)
-		r.icon(it.id, s, x, y, 22, 3.2, it.colour)
+		r.icon(it.id, s, x, y, 22, 3.2, it.color)
 
 		header := clockHM(s.now)
 		switch s.menuMode {
@@ -503,7 +503,7 @@ func (r *roundRenderer) sunIcon(x, y, u, w float64, c color.RGBA) {
 	}
 }
 
-// moonIcon is a filled crescent: a disc with the background's colour taken out of it up and to the
+// moonIcon is a filled crescent: a disc with the background's color taken out of it up and to the
 // right. Icons sit on a near-black ground, which is what bite is.
 func (r *roundRenderer) moonIcon(x, y, u, w float64, c color.RGBA) {
 	r.discAt(x, y, 0.8*u, c)

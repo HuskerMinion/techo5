@@ -20,10 +20,10 @@ import (
 // The settings screen's parts, shared by the Show and the Spot: its categories, rows and their
 // controls, lists of choices, scrolling, the zones taps are matched to, and the anti-aliased shapes
 // they are drawn from. Every shape is a rounded rectangle, circle or stroke with soft shadows,
-// drawn from the five palette colours, so it follows whichever theme is in force.
+// drawn from the five palette colors, so it follows whichever theme is in force.
 
 // The palette the settings screen draws with: the ground, the accent, text, dim text and rules. The
-// Show sets them from its theme (applyTheme); the Spot from its own colours.
+// Show sets them from its theme (applyTheme); the Spot from its own colors.
 var (
 	walnut = color.RGBA{0x1c, 0x15, 0x11, 0xff}
 	amber  = color.RGBA{0xe9, 0xa2, 0x3b, 0xff}
@@ -97,7 +97,7 @@ func (r *paint) wrap(face font.Face, s string, maxW int) []string {
 	return lines
 }
 
-// shift lightens (positive) or darkens (negative) a colour by d per channel.
+// shift lightens (positive) or darkens (negative) a color by d per channel.
 func shift(c color.RGBA, d int) color.RGBA {
 	f := func(v uint8) uint8 {
 		n := int(v) + d
@@ -120,7 +120,7 @@ func dark() bool {
 // The settings screen regrouped by category: a rail of categories on the left with the chosen one
 // raised out of it, and that category's settings on a card floating over the ground. Every shape is
 // an anti-aliased rounded rectangle, circle or stroke with soft shadows, drawn from the theme's five
-// colours, so it follows whichever theme is chosen.
+// colors, so it follows whichever theme is chosen.
 
 type category int
 
@@ -159,7 +159,7 @@ const (
 	ctlButton                      // an action
 	ctlDanger                      // an action to think twice about
 	ctlDays                        // the seven days of the week, each on or off
-	ctlSwatches                    // a strip of colours for one role of the theme
+	ctlSwatches                    // a strip of colors for one role of the theme
 )
 
 type settingRow struct {
@@ -184,7 +184,7 @@ const (
 	partPlus              // a stepper's +
 	partExtra             // the second button a choice can carry (Updates' Check now)
 	partRow               // the row itself, away from its control, on a row with rowTap
-	partDay               // a day of ctlDays, or a colour of ctlSwatches; the zone's opt is which
+	partDay               // a day of ctlDays, or a color of ctlSwatches; the zone's opt is which
 )
 
 type zoneKind int
@@ -311,7 +311,7 @@ func (r *paint) scrollLimits() (card, pick int) {
 // rowList draws rows down list, inside card, scrolled up by scroll pixels, and returns how far they
 // can scroll. Rows are drawn whole, then what lies above and below the list inside the card's width
 // is put back from under (the frame as it was before the rows), which clips them without clipping
-// every primitive; bg is the card's colour at the list's edges, for the fades.
+// every primitive; bg is the card's color at the list's edges, for the fades.
 func (r *paint) rowList(card, list image.Rectangle, rows []settingRow, scroll int, bg color.RGBA, under []uint8) int {
 	maxScroll := max(len(rows)*rowH-list.Dy(), 0)
 	scroll = min(max(scroll, 0), maxScroll)
@@ -712,7 +712,7 @@ const (
 	btnDanger                       // an action to think twice about
 )
 
-// danger is the colour of an action to think twice about, whatever the theme.
+// danger is the color of an action to think twice about, whatever the theme.
 var danger = color.RGBA{0xe5, 0x48, 0x4d, 0xff}
 
 // pillButton draws an action ending at right and returns its left edge.
@@ -795,7 +795,7 @@ func shadowAlpha() float64 {
 	return 0.22
 }
 
-// onAccent is text that reads on the accent: the ground on a light accent, the text colour on a dark one.
+// onAccent is text that reads on the accent: the ground on a light accent, the text color on a dark one.
 func onAccent() color.RGBA {
 	if 0.299*float64(amber.R)+0.587*float64(amber.G)+0.114*float64(amber.B) > 128 {
 		return shift(walnut, -8)
@@ -939,7 +939,7 @@ func (r *paint) roundShadowIn(b image.Rectangle, rad, blur float64, dy int, alph
 	}
 }
 
-// rule is a thin horizontal line in the rules colour.
+// rule is a thin horizontal line in the rules color.
 func (r *paint) rule(x0, x1, y int, alpha float64) {
 	for x := x0; x < x1; x++ {
 		r.blendAt(x, y, ember, alpha)

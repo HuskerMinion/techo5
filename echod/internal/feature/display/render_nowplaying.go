@@ -83,8 +83,8 @@ func (r *renderer) nowPlaying(s scene) {
 // background paints the picture behind the now-playing text, toned down so the text reads.
 func (r *renderer) background(rd home.Radio) {
 	if rd.Art != nil {
-		// Over the ground, so a logo's empty surround stays the theme's colour; then a wash of the
-		// ground colour: covers stay recognisable, logos sit back, text stays legible.
+		// Over the ground, so a logo's empty surround stays the theme's color; then a wash of the
+		// ground color: covers stay recognisable, logos sit back, text stays legible.
 		draw.Draw(r.dst, r.dst.Rect, rd.Art, rd.Art.Bounds().Min, draw.Over)
 		alpha := uint8(150)
 		if rd.Logo {

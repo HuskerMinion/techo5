@@ -1,7 +1,7 @@
 // Package aec removes the echo of what a device is playing from what its microphone hears, given a
 // reference of the playback.
 //
-// It is a normalised least-mean-squares adaptive filter: it learns the path from the speaker back
+// It is a normalized least-mean-squares adaptive filter: it learns the path from the speaker back
 // into the microphone and subtracts its prediction. The path has to be reasonably stationary, so the
 // microphone it runs on should be a fixed one rather than the output of a beamformer that steers.
 //
@@ -17,12 +17,13 @@ import (
 	"errors"
 	"fmt"
 	"math"
+	"sync/atomic"
 
 	"github.com/HuskerMinion/techo5/echod/internal/lib/vec"
 )
 
 const (
-	// full is int16 full scale. Samples are normalised on the way in so the constants below are
+	// full is int16 full scale. Samples are normalized on the way in so the constants below are
 	// absolute levels rather than depending on the caller's units.
 	full = 32768
 
@@ -55,7 +56,8 @@ type Config struct {
 }
 
 // Canceller is one microphone's filter. It is stateful and streaming: frames have to be given to it
-// in order, and it is not safe for concurrent use.
+// in order, and it is not safe for concurrent use. SetAdapting and Adapting are the exception, so
+// that the switch can be thrown from whatever goroutine noticed somebody talking.
 type Canceller struct {
 	mu   float32
 	taps int
@@ -70,7 +72,10 @@ type Canceller struct {
 	pow   float32
 	since int
 
-	adapting bool
+	// adapting is atomic because it is the one field a caller changes from elsewhere. The
+	// conversation turns learning off the moment it starts listening to somebody, from its own
+	// goroutine, while the capture loop is reading it once per sample in step.
+	adapting atomic.Bool
 
 	sumD, sumE float64
 
@@ -86,13 +91,14 @@ func New(cfg Config) (*Canceller, error) {
 		return nil, fmt.Errorf("aec: mu must be between 0 and 2, got %v", cfg.Mu)
 	}
 
-	return &Canceller{
-		mu:       float32(cfg.Mu),
-		taps:     cfg.Taps,
-		w:        make([]float32, cfg.Taps),
-		hist:     make([]float32, 2*cfg.Taps),
-		adapting: true,
-	}, nil
+	c := &Canceller{
+		mu:   float32(cfg.Mu),
+		taps: cfg.Taps,
+		w:    make([]float32, cfg.Taps),
+		hist: make([]float32, 2*cfg.Taps),
+	}
+	c.adapting.Store(true)
+	return c, nil
 }
 
 // ErrLength is returned when the microphone and reference frames are not the same length.
@@ -151,7 +157,7 @@ func (c *Canceller) step(x, d float32) float32 {
 	// SIMD. Hand unrolling them in Go measured no faster than plain loops on a Cortex-A53.
 	e := d - vec.Dot(c.w, win)
 
-	if c.adapting && c.pow > quiet*float32(n) {
+	if c.adapting.Load() && c.pow > quiet*float32(n) {
 		g := c.mu * e / (c.pow + reg*float32(n))
 		vec.AXPY(c.w, g, win)
 	}
@@ -165,10 +171,10 @@ func (c *Canceller) step(x, d float32) float32 {
 // SetAdapting stops or resumes learning while still cancelling with what it has. Freezing is what to
 // do when someone is talking over the playback: the filter cannot tell their voice from an echo it
 // has predicted badly, and would corrupt itself trying to cancel it.
-func (c *Canceller) SetAdapting(on bool) { c.adapting = on }
+func (c *Canceller) SetAdapting(on bool) { c.adapting.Store(on) }
 
 // Adapting reports whether it is learning.
-func (c *Canceller) Adapting() bool { return c.adapting }
+func (c *Canceller) Adapting() bool { return c.adapting.Load() }
 
 // ERLE is the echo return loss enhancement over roughly the last erleTau samples: how much quieter
 // the output is than the microphone was. It measures whatever the filter removed, so it is only

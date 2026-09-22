@@ -9,6 +9,7 @@ import (
 
 	"github.com/zserge/microwakeword"
 
+	"github.com/HuskerMinion/techo5/echod/internal/lib/oww"
 	"github.com/HuskerMinion/techo5/echod/internal/lib/wake"
 )
 
@@ -214,6 +215,46 @@ func TestMicroLoadSurvivesDamagedModels(t *testing.T) {
 			}()
 			if err := b.load(m); err == nil && !bytes.Equal(data, good) {
 				t.Logf("%s: parsed without error (the damage missed anything the parser reads)", name)
+			}
+		}()
+	}
+}
+
+// The openWakeWord backend needs the same guard the micro one has, for the same reason: the model is a
+// file from outside, and the interpreter builds a graph out of the indices and shapes it supplies. A
+// file that cannot be made into a classifier is an error from load, never a panic out of it.
+func TestOWWLoadSurvivesDamagedModels(t *testing.T) {
+	good, err := os.ReadFile("assets/stop.tflite")
+	if err != nil {
+		t.Skip("no model to damage:", err)
+	}
+	front, err := oww.New()
+	if err != nil {
+		t.Skip("no front end:", err)
+	}
+
+	dir := t.TempDir()
+	damaged := map[string][]byte{
+		"whole":     good, // not an openWakeWord classifier at all, which is its own refusal
+		"truncated": good[:len(good)/3],
+		"flipped":   func() []byte { b := bytes.Clone(good); b[4], b[5], b[6], b[7] = 0xff, 0xff, 0xff, 0x7f; return b }(),
+		"zeroed":    make([]byte, len(good)),
+		"empty":     nil,
+	}
+	for name, data := range damaged {
+		path := filepath.Join(dir, name+".tflite")
+		if err := os.WriteFile(path, data, 0o644); err != nil {
+			t.Fatal(err)
+		}
+		b := &owwBackend{front: front, scores: map[string]float64{}}
+		func() {
+			defer func() {
+				if r := recover(); r != nil {
+					t.Errorf("%s: load panicked: %v", name, r)
+				}
+			}()
+			if err := b.load(wake.Model{ID: name, Path: path}); err == nil {
+				t.Errorf("%s: loaded as a classifier", name)
 			}
 		}()
 	}

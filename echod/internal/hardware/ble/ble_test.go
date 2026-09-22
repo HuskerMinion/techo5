@@ -121,3 +121,49 @@ func commandComplete(opcode uint16, status byte) []byte {
 	binary.LittleEndian.PutUint16(event[4:], opcode)
 	return event
 }
+
+// The advertisement counter is written by the reader goroutine, which holds no lock, and read by
+// diagnostics on theirs. It is counted atomically for that reason, and this is the count coming out
+// right with somebody reading it the whole time — the race detector has the rest to say about it.
+func TestReportsAreCountedForAnotherGoroutine(t *testing.T) {
+	r := &Radio{fd: -1}
+	if got := r.Reports(); got != 0 {
+		t.Fatalf("a fresh radio has seen %d reports", got)
+	}
+
+	// One LE Meta event with no advertisement in it: the count is of events, not devices.
+	event := []byte{h4Event, evtLEMeta, 2, leAdvertisingReport, 0}
+
+	done := make(chan struct{})
+	read := make(chan uint64, 1)
+	go func() {
+		var last uint64
+		for {
+			select {
+			case <-done:
+				read <- last
+				return
+			default:
+			}
+			last = r.Reports()
+		}
+	}()
+
+	const events = 500
+	var held []byte
+	for range events {
+		var err error
+		held, err = r.parse(append(held, event...), func(Advertisement) {})
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+	close(done)
+	if seen := <-read; seen > events {
+		t.Errorf("a reader saw %d reports, more than the %d that arrived", seen, events)
+	}
+
+	if got := r.Reports(); got != events {
+		t.Errorf("counted %d reports, want %d", got, events)
+	}
+}

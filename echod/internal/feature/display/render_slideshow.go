@@ -10,7 +10,7 @@ import (
 	"github.com/HuskerMinion/techo5/echod/internal/config"
 )
 
-// slideshowWash is the theme's ground colour, translucent, over a photo — the same technique the
+// slideshowWash is the theme's ground color, translucent, over a photo — the same technique the
 // now-playing screen uses for cover art (render_nowplaying.go's background): the photo stays
 // recognisable, and the clock and date drawn over it stay legible.
 const slideshowWash = 130

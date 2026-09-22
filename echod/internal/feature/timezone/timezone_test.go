@@ -5,6 +5,8 @@ import (
 	"path/filepath"
 	"testing"
 	"time"
+
+	"github.com/HuskerMinion/techo5/echod/internal/update"
 )
 
 func TestValid(t *testing.T) {
@@ -18,9 +20,10 @@ func TestValid(t *testing.T) {
 	}
 }
 
-// A zone from Home Assistant lands on userdata as a name and a link into zoneinfo, and takes effect in
-// the running process; one this image does not have changes nothing.
+// A zone from Home Assistant lands on userdata as a name and a link into zoneinfo, and asks for the
+// restart that puts it in force; one this image does not have changes nothing.
 func TestApply(t *testing.T) {
+	saved := time.Local.String()
 	if _, err := time.LoadLocation("Europe/Berlin"); err != nil {
 		t.Skip("no zoneinfo on this machine:", err)
 	}
@@ -30,8 +33,7 @@ func TestApply(t *testing.T) {
 	}
 	dir := t.TempDir()
 	nameFile, linkFile, zoneinfo = filepath.Join(dir, "timezone"), filepath.Join(dir, "localtime"), system
-	saved := time.Local
-	defer func() { time.Local = saved }()
+	drainRestarts()
 
 	z := &Zone{}
 	if err := z.apply("Europe/Berlin"); err != nil {
@@ -43,8 +45,13 @@ func TestApply(t *testing.T) {
 	if target, err := os.Readlink(linkFile); err != nil || target != filepath.Join(system, "Europe/Berlin") {
 		t.Errorf("link = %q, %v", target, err)
 	}
-	if time.Local.String() != "Europe/Berlin" {
-		t.Errorf("time.Local = %s", time.Local)
+	// The new zone is in force once the process is a new one, so what a successful apply leaves behind
+	// is a restart request. time.Local is not touched: reassigning it races every goroutine reading it.
+	if why := restartAsked(); why != "time zone Europe/Berlin" {
+		t.Errorf("restart asked for %q", why)
+	}
+	if time.Local.String() != saved {
+		t.Errorf("time.Local was changed to %s", time.Local)
 	}
 
 	if err := z.apply("Nowhere/Atlantis!"); err == nil {
@@ -63,8 +70,7 @@ func TestApply(t *testing.T) {
 func TestApplyPOSIXRule(t *testing.T) {
 	dir := t.TempDir()
 	nameFile, linkFile, zoneinfo = filepath.Join(dir, "timezone"), filepath.Join(dir, "localtime"), filepath.Join(dir, "no-zoneinfo")
-	saved := time.Local
-	defer func() { time.Local = saved }()
+	drainRestarts()
 
 	z := &Zone{}
 	rule := "MST7MDT,M3.2.0,M11.1.0"
@@ -98,8 +104,8 @@ func TestApplyPOSIXRule(t *testing.T) {
 			t.Errorf("%s: %s %d, want %s %d", tc.when, name, offset, tc.name, tc.offset)
 		}
 	}
-	if name, _ := time.Date(2026, 7, 1, 0, 0, 0, 0, time.UTC).In(time.Local).Zone(); name != "MDT" {
-		t.Errorf("time.Local in July is %s", name)
+	if why := restartAsked(); why != "time zone "+rule {
+		t.Errorf("restart asked for %q", why)
 	}
 
 	for _, bad := range []string{"garbage", "MST7MDT;rm -rf /", "M3.2.0"} {
@@ -112,5 +118,23 @@ func TestApplyPOSIXRule(t *testing.T) {
 	}
 	if err := z.apply("UTC0"); err != nil {
 		t.Errorf("UTC0: %v", err)
+	}
+}
+
+// drainRestarts empties the restart channel so a test sees only its own request, and restartAsked
+// takes the one that is there. The channel holds one: update.Restart drops the rest.
+func drainRestarts() {
+	select {
+	case <-update.Wanted():
+	default:
+	}
+}
+
+func restartAsked() string {
+	select {
+	case why := <-update.Wanted():
+		return why
+	default:
+		return ""
 	}
 }

@@ -644,7 +644,7 @@ const radioCueFor = 20 * time.Second
 func (d *Display) showSheet(on bool) {
 	d.mu.Lock()
 	d.sheet = on
-	d.restartArm, d.picker, d.cardScroll, d.pickScroll, d.colours = time.Time{}, "", 0, 0, false
+	d.restartArm, d.picker, d.cardScroll, d.pickScroll, d.colors = time.Time{}, "", 0, 0, false
 	d.mu.Unlock()
 	slog.Info("settings sheet", "open", on)
 	d.wake()
@@ -673,11 +673,11 @@ func (d *Display) ceilingOrDefault() int {
 func (d *Display) night(now time.Time, on bool, view voice.State) bool {
 	in := inNight(config.Get().Screen.Night, now)
 	d.mu.Lock()
-	dark, touched := d.nightDark, d.touchedAt
+	dark, touched, viewAt := d.nightDark, d.touchedAt, d.viewAt
 	d.mu.Unlock()
 	switch {
 	case in && on:
-		busy := view.Phase != "idle" || now.Sub(touched) < nightIdle || now.Sub(d.viewAt) < nightIdle ||
+		busy := view.Phase != "idle" || now.Sub(touched) < nightIdle || now.Sub(viewAt) < nightIdle ||
 			d.ringing(now).any() || phone.Get().Busy() || sunriseProgress(now) > 0
 		if playing, _ := media.Get().Playing(); playing || busy {
 			return false
@@ -1102,7 +1102,10 @@ func (d *Display) frame() time.Duration {
 	}
 	if s.showSheet {
 		s.sheet = d.gather(s, restartArm)
-		if d.cat == catSecurity {
+		// The category gather already took under the lock, rather than d.cat again: the sheet is
+		// opened on a category from whatever goroutine took the tap or the voice command, and
+		// reading it unlocked here is a race that would also let the frame disagree with itself.
+		if s.sheet.cat == catSecurity {
 			s.security = security.Get().State()
 		}
 		d.mu.Lock()

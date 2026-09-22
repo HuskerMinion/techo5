@@ -476,7 +476,7 @@ func (d *Display) nextTap(x, y int) {
 		d.closeSheet()
 	case zoneCat:
 		d.mu.Lock()
-		d.cat, d.picker, d.restartArm, d.draft, d.colours = z.cat, "", time.Time{}, nil, false
+		d.cat, d.picker, d.restartArm, d.draft, d.colors = z.cat, "", time.Time{}, nil, false
 		d.cardScroll, d.pickScroll = 0, 0
 		d.mu.Unlock()
 	case zoneAction:

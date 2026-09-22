@@ -19,6 +19,9 @@ type fake struct {
 	order    *[]string
 	startErr error
 
+	// start, when set, is what Start does, so a test can make re-acquiring fail for a while.
+	start func() error
+
 	// run is what Run does. Returning an error looks like breaking.
 	run func(ctx context.Context) error
 }
@@ -31,8 +34,12 @@ func (f *fake) Start(ctx context.Context) error {
 	if f.order != nil {
 		*f.order = append(*f.order, "start:"+f.name)
 	}
-	err := f.startErr
+	err, start := f.startErr, f.start
 	f.mu.Unlock()
+
+	if start != nil {
+		return start()
+	}
 	return err
 }
 
@@ -285,4 +292,73 @@ func statusOf(g *Group, name string) Status {
 		}
 	}
 	return Status{}
+}
+
+// A service whose re-acquire fails is not run.
+//
+// Run on a service that never got its device back reaches a field nothing filled in — a nil server, a
+// nil handle — and panics on its first line. That panic is caught, so a device that is simply not
+// there yet reads as a service crashing in a loop, and the backoff is spent on Run rather than on the
+// acquire that is actually failing. Every Run has to be paired with a Start that worked.
+func TestFailedReacquireDoesNotRun(t *testing.T) {
+	const refusals = 3
+
+	var mu sync.Mutex
+	var acquired, refused int
+
+	svc := &fake{name: "device"}
+	svc.start = func() error {
+		mu.Lock()
+		defer mu.Unlock()
+		if acquired == 1 && refused < refusals {
+			refused++
+			return errors.New("device busy")
+		}
+		acquired++
+		return nil
+	}
+	svc.run = func(ctx context.Context) error {
+		mu.Lock()
+		n, r := acquired, refused
+		mu.Unlock()
+
+		if n == 1 {
+			return errors.New("broke") // the first life ends, and the restart begins
+		}
+		if r != refusals {
+			t.Errorf("ran after %d of %d refusals", r, refusals)
+		}
+		<-ctx.Done()
+		return nil
+	}
+
+	g := New()
+	g.Add(svc, Restart(5*time.Millisecond, 10*time.Millisecond))
+
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan error, 1)
+	go func() { done <- g.Run(ctx) }()
+
+	deadline := time.Now().Add(2 * time.Second)
+	for {
+		if s := statusOf(g, "device"); s.State == StateRunning && s.Restarts >= 1 {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("never came back: %+v", statusOf(g, "device"))
+		}
+		time.Sleep(time.Millisecond)
+	}
+
+	// Two acquires that worked, so two runs, and the refusals in between cost nothing but time.
+	starts, runs, _ := svc.counts()
+	if starts != 2+refusals {
+		t.Errorf("started %d times, want %d", starts, 2+refusals)
+	}
+	if runs != 2 {
+		t.Errorf("ran %d times, want 2: one per acquire that worked", runs)
+	}
+
+	cancel()
+	<-done
 }

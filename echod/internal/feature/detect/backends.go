@@ -99,13 +99,24 @@ type owwBackend struct {
 	scores map[string]float64
 }
 
-func (b *owwBackend) load(m wake.Model) error {
+func (b *owwBackend) load(m wake.Model) (err error) {
+	// The same guard the micro backend needs, for the same reason: a model file is not a trustworthy
+	// document, and the interpreter builds a graph out of indices and shapes the file supplies. It
+	// turns what it can name into an error itself, and this is the backstop for whatever it cannot.
+	defer func() {
+		if r := recover(); r != nil {
+			err = fmt.Errorf("wake: loading %s: damaged model: %v", m.Path, r)
+		}
+	}()
+
 	model, err := os.ReadFile(m.Path)
 	if err != nil {
 		return fmt.Errorf("wake: reading %s: %w", m.Path, err)
 	}
-	_, err = b.front.Load(m.ID, model)
-	return err
+	if _, err := b.front.Load(m.ID, model); err != nil {
+		return fmt.Errorf("wake: loading %s: %w", m.Path, err)
+	}
+	return nil
 }
 
 func (b *owwBackend) unload(id string) {

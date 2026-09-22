@@ -13,7 +13,7 @@ import (
 	"github.com/HuskerMinion/techo5/echod/internal/lib/wifi"
 )
 
-// The Show's own parts of the settings screen: themes and their custom colours, the Wi-Fi pages, the
+// The Show's own parts of the settings screen: themes and their custom colors, the Wi-Fi pages, the
 // drawer's station lists, and how it closes, shows the forecast and restarts.
 
 // deviceModel is what the About row calls this device; nightRowLabel what the Display card calls the
@@ -45,24 +45,24 @@ func (s scene) view() sheetView {
 func themeRows() []settingRow {
 	return []settingRow{
 		{id: "theme", label: "Theme", kind: ctlChoice, value: current().name},
-		{id: "colours", label: "Custom colors", sub: "Make the theme your own", kind: ctlButton, button: "Edit"},
+		{id: "colors", label: "Custom colors", sub: "Make the theme your own", kind: ctlButton, button: "Edit"},
 	}
 }
 
-// deviceCard is a card of the Show's own in place of the category's: the custom colours editor.
+// deviceCard is a card of the Show's own in place of the category's: the custom colors editor.
 func deviceCard(sv sheetView) (cardView, bool) {
-	if sv.st.cat == catDisplay && sv.st.colours {
-		return coloursCard(), true
+	if sv.st.cat == catDisplay && sv.st.colors {
+		return colorsCard(), true
 	}
 	return cardView{}, false
 }
 
-// coloursCard is the custom colours editor: a strip of colours for each role of the theme. A tap
-// on one makes the theme Custom with that colour.
-func coloursCard() cardView {
+// colorsCard is the custom colors editor: a strip of colors for each role of the theme. A tap
+// on one makes the theme Custom with that color.
+func colorsCard() cardView {
 	v := cardView{
 		title: "Custom colors", blurb: "Tap a color for each part; the theme becomes Custom",
-		actions: []headerAction{{id: "coloursdone", label: "Done", style: btnPrimary}},
+		actions: []headerAction{{id: "colorsdone", label: "Done", style: btnPrimary}},
 	}
 	for role := range roles {
 		v.rows = append(v.rows, settingRow{id: "role:" + strconv.Itoa(role), label: roleNames[role], kind: ctlSwatches, role: role})
@@ -134,9 +134,9 @@ func (d *Display) deviceRowTap(id string, p part, opt int) bool {
 	switch id {
 	case "theme":
 		d.openPicker(id)
-	case "colours":
+	case "colors":
 		d.mu.Lock()
-		d.colours, d.cardScroll = true, 0
+		d.colors, d.cardScroll = true, 0
 		d.mu.Unlock()
 	case "wifi":
 		if wifi.Available() {

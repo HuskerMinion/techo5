@@ -250,7 +250,7 @@ func (r *roundRenderer) draw(s roundScene) {
 	}
 }
 
-// rim is the status ring: red while muted, the conversation's colour while one runs, the soonest
+// rim is the status ring: red while muted, the conversation's color while one runs, the soonest
 // timer's time left, or a quiet track.
 // mutedRim says the microphones are cut, over the top of anything.
 //
