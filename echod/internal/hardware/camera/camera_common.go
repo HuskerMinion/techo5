@@ -12,6 +12,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/HuskerMinion/techo5/echod/internal/hardware/lenscover"
 	"github.com/HuskerMinion/techo5/echod/internal/hardware/privacy"
 	"github.com/HuskerMinion/techo5/echod/internal/lib/hook"
 )
@@ -144,7 +145,9 @@ func Available() bool {
 }
 
 // Acquire starts the sensor if it is not running and keeps it running until release is called.
-// A muted device refuses: the mute button is the camera's off switch too.
+// A muted device refuses: the mute button is the camera's off switch too. So does one whose shutter
+// is closed, on the devices that have one — there is nothing behind it to photograph, and saying so
+// is more use than powering the sensor up to stream a picture of a piece of plastic.
 func (c *Camera) Acquire() (release func(), err error) {
 	if !Available() {
 		return nil, errors.New("no camera on this device")
@@ -153,6 +156,9 @@ func (c *Camera) Acquire() (release func(), err error) {
 		if muted, err := m.Get(); err == nil && muted {
 			return nil, errors.New("privacy is on")
 		}
+	}
+	if lenscover.Get().Covered() {
+		return nil, errors.New("the lens cover is closed")
 	}
 	c.mu.Lock()
 	defer c.mu.Unlock()

@@ -59,6 +59,7 @@ type Diag struct {
 	load        *esphome.Sensor
 	memory      *esphome.Sensor
 	lux         *esphome.Sensor
+	lensCover   *esphome.BinarySensor
 	roomLevel   *esphome.Sensor
 	roomFloor   *esphome.Sensor
 
@@ -125,6 +126,9 @@ func (d *Diag) Entities() []esphome.Entity {
 	// the Android daemon the unit falls back to, where it would open root adb to the network.
 	if layout.OnAndroid() {
 		out = append(out, d.adb)
+	}
+	if d.lensCover != nil {
+		out = append(out, d.lensCover)
 	}
 	return out
 }
@@ -538,6 +542,21 @@ func (d *Diag) hardware() {
 		Unit:        "lx",
 		DeviceClass: "illuminance",
 		StateClass:  esphome.StateClassMeasurement,
+	}
+
+	// The camera's physical shutter, on the one device that has one. A cover that cannot be seen is
+	// not reported at all: an entity that always says "open" would look like an assurance and be none.
+	if present, covered := lensCover(); present {
+		d.lensCover = &esphome.BinarySensor{
+			Base: esphome.Base{
+				ObjectID: "lens_cover", Name: "Lens cover", Icon: "mdi:camera-off",
+				Category: esphome.CategoryDiagnostic,
+			},
+			DeviceClass: "opening",
+		}
+		// Closed is the safe state, so the sensor reads the way a door does: open means uncovered.
+		d.lensCover.Set(!covered)
+		watchLensCover(func(covered bool) { d.lensCover.Set(!covered) })
 	}
 }
 

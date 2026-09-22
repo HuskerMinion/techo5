@@ -191,6 +191,36 @@ func (d *Device) Abs(code uint16) (AbsInfo, error) {
 	return info, nil
 }
 
+// Switch reads a switch's state now, with EVIOCGSW, rather than waiting for it to change.
+//
+// A switch is not a button: it reports a position that is already true when the daemon starts, and
+// the kernel sends nothing until it moves. A camera shutter that was closed before the daemon came
+// up would otherwise read as open until somebody touched it.
+//
+// The ioctl answers with a bitmap of every switch the device has, one bit per code, so the reply is
+// sized to hold the code being asked about and the bit picked out of it.
+func (d *Device) Switch(code uint16) (bool, error) {
+	bytes := int(code)/8 + 1
+	state := make([]byte, bytes)
+	// _IOR('E', 0x1b, len): the length travels in the request's size field.
+	req := uintptr(0x8000451b | uint32(bytes)<<16)
+	// Through the raw connection, for the reason Abs gives.
+	rc, err := d.f.SyscallConn()
+	if err != nil {
+		return false, fmt.Errorf("input: %s: %w", d.Path, err)
+	}
+	var errno syscall.Errno
+	if err := rc.Control(func(fd uintptr) {
+		_, _, errno = syscall.Syscall(syscall.SYS_IOCTL, fd, req, uintptr(unsafe.Pointer(&state[0])))
+	}); err != nil {
+		return false, fmt.Errorf("input: %s: %w", d.Path, err)
+	}
+	if errno != 0 {
+		return false, fmt.Errorf("input: EVIOCGSW %#x on %s: %w", code, d.Path, errno)
+	}
+	return state[code/8]&(1<<(code%8)) != 0, nil
+}
+
 // Find opens the one event node whose reported name matches, leaving every other node closed.
 func Find(name string) (*Device, error) {
 	paths, err := filepath.Glob("/dev/input/event*")
