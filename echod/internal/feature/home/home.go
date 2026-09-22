@@ -457,7 +457,7 @@ func (f *Feature) Radio() Radio {
 // player's own rather than a remote's; the only thing that takes the speaker this way is Sendspin, and
 // what runs the server it talks to here is Music Assistant, so that is what the page calls it.
 func carried(r Radio) Radio {
-	if !media.Get().ExternalPlaying() {
+	if !media.Get().Carried() {
 		return r
 	}
 	trackTitle, trackArtist, trackAlbum := media.Get().Track()
@@ -552,7 +552,7 @@ func askFor(label string) string {
 // Assistant's own stop is a different path and stays a pause (see media's command), because that arrives
 // from an automation with nobody necessarily in the room.
 func (f *Feature) Stop() {
-	if media.Get().ExternalPlaying() {
+	if media.Get().Carried() {
 		media.Get().Transport(media.TransportStop)
 	} else {
 		media.Get().Pause()

@@ -1159,11 +1159,12 @@ func (d *Display) frame() time.Duration {
 		s.phase, s.heard, s.reply = "idle", "", ""
 	}
 	s.playing, s.paused = media.Get().Playing()
-	// A stream this player is only carrying is still what the room is doing: the screen names it, and
-	// says what it is doing, though the audio never passes through this player's own stream. Both, not
-	// just playing: the page tests paused first, so a station left paused underneath would label
-	// somebody else's track as Paused.
-	if media.Get().ExternalPlaying() {
+	// A stream this player is carrying is the room's when it is what is being heard: the page names it,
+	// and says what it is doing, though the audio never passes through this player's own stream. Both,
+	// not just playing: the page tests paused first, so a station left paused underneath would label
+	// somebody else's track as Paused - and a remote merely holding the speaker, with a station playing
+	// underneath it, is not the room's at all (see media.Player.Carried).
+	if media.Get().Carried() {
 		if playing, paused := media.Get().RemotePlaying(); playing || paused {
 			s.playing, s.paused = playing, paused
 		} else {

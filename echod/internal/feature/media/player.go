@@ -538,11 +538,32 @@ func (t Transport) Command() string {
 	return ""
 }
 
+// remoteIsTheTrack is whether a transport command belongs to a remote rather than to this player's own
+// stream: what the room is hearing is theirs, or theirs was the last thing that played and this player
+// has nothing of its own to resume.
+//
+// It is not "a claim is held". A claim outlives a pause by design, and reading it as ownership is how a
+// paused Music Assistant took the radio's own play button: a tap on the station's page was resolved
+// against the remote's state, which said paused, so it asked Music Assistant to play while the station
+// underneath it went on playing and the two handed the speaker back and forth.
+func (p *Player) remoteIsTheTrack() bool {
+	if p.Carried() {
+		return true
+	}
+	if !p.remoteLast.Load() {
+		return false
+	}
+	// A remote that has stopped, with a queue still to resume and nothing of this player's on the screen
+	// to resume instead.
+	playing, paused := p.stream.Playing()
+	return !playing && !paused
+}
+
 // Transport asks for a track's own controls. When somebody else is playing, the command is theirs: this
 // player must not pause or skip underneath audio it is not playing. A play or pause with no opinion of
 // its own is settled against what the remote last said it was doing.
 func (p *Player) Transport(t Transport) {
-	if p.remote.playing() || p.remoteLast.Load() {
+	if p.remoteIsTheTrack() {
 		if t == TransportToggle {
 			if _, paused := p.RemotePlaying(); paused {
 				t = TransportPlay
@@ -673,6 +694,28 @@ func (p *Player) RemoteGone() {
 // what the screen asks before it says what the room is playing.
 func (p *Player) ExternalPlaying() bool { return p.remote.playing() }
 
+// Carried reports whether what the room is hearing is somebody else's: a remote holds the speaker and is
+// the thing playing.
+//
+// Holding the speaker is not the same as being what the room hears. Music Assistant leaves a track it
+// paused holding the speaker for as long as its queue waits there, so a station this device is playing
+// underneath it is the sound in the room - and reading the held claim as "the room is Music Assistant's"
+// hid the station's own now-playing page, left its Stop row stopping the wrong stream, and told Home
+// Assistant the radio was paused while it played. A remote that is playing is still what the room hears,
+// whatever this player is doing with its own stream.
+func (p *Player) Carried() bool {
+	if !p.remote.playing() {
+		return false
+	}
+	if playing, _ := p.RemotePlaying(); playing {
+		return true
+	}
+	// A remote that is paused, or that has not said yet, is what the room hears only when this player
+	// has nothing of its own playing.
+	playing, _ := p.stream.Playing()
+	return !playing
+}
+
 // ExternalTrack takes what a remote says it is playing, so the room can name it. An empty title means
 // the remote has stopped naming anything.
 func (p *Player) ExternalTrack(title, artist, album string) {
@@ -745,9 +788,11 @@ func (p *Player) refresh() {
 func (p *Player) state() esphome.MediaPlayerState {
 	playing, paused := p.stream.Playing()
 
-	// A stream this player is only carrying belongs to the remote, and what the remote says it is doing
-	// is the truth about the room: this player has nothing of its own to report about it.
-	if p.remote.playing() {
+	// A stream this player is carrying is somebody else's, and what the remote says it is doing is the
+	// truth about the room: this player has nothing of its own to report about it. A remote holding the
+	// speaker without playing is not that, or a station playing underneath a paused one would be
+	// reported to Home Assistant as paused.
+	if p.Carried() {
 		if remotePlaying, remotePaused := p.RemotePlaying(); remotePlaying || remotePaused {
 			playing, paused = remotePlaying, remotePaused
 		} else {

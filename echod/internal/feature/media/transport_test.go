@@ -37,40 +37,66 @@ func TestAToggleOnThisPlayersOwnStreamKnowsWhichWayItIsGoing(t *testing.T) {
 	}
 }
 
-// A stream this player is only carrying is somebody else's, so a transport goes to whoever is playing it
-// and never to the stream underneath: pausing this player's own stream would silence the wrong thing.
-func TestATransportForACarriedStreamGoesToTheRemote(t *testing.T) {
+// Where a transport goes is not "who holds the speaker". A claim outlives a pause by design, and reading
+// it as ownership is how a paused Music Assistant took the radio's own play button: a tap on the
+// station's page was resolved against the remote's state, so it asked Music Assistant to play while the
+// station underneath went on playing, and the two handed the speaker back and forth. What decides is
+// what the room is hearing - and, when a remote has stopped with a queue still to resume, which of them
+// this player has anything of its own to come back to.
+func TestATransportGoesToWhoeverHasTheTrack(t *testing.T) {
 	for _, tc := range []struct {
-		name string
-		t    Transport
-		want string
+		name       string
+		claimed    bool
+		remoteSays string
+		remoteLast bool
+		local      string // "", "playing" or "paused"
+		wantRemote bool
 	}{
-		{"play or pause", TransportToggle, "pause"},
-		{"next", TransportNext, "next"},
-		{"the stop the screen's row asks for", TransportStop, "stop"},
+		{"a remote playing over a station", true, "playing", false, "playing", true},
+		{"a remote playing alone", true, "playing", false, "", true},
+		{"a paused remote over a station this device is playing", true, "paused", false, "playing", false},
+		{"a paused remote with nothing of this device's playing", true, "paused", false, "", true},
+		{"a remote that stopped, with its queue to resume", false, "", true, "", true},
+		{"a remote that stopped over a station this device is playing", false, "", true, "playing", false},
+		{"a remote that stopped over a station paused here", false, "", true, "paused", false},
+		{"nothing remote, a station playing", false, "", false, "playing", false},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			s := localStream(false)
+			var s *Stream
+			switch tc.local {
+			case "playing":
+				s = localStream(false)
+			case "paused":
+				s = localStream(true)
+			default:
+				s = quietStream()
+			}
 			p := &Player{stream: s}
-			// What External() sets. The claim itself is claim_test.go's; this is only about where a
-			// command goes once somebody else has the speaker, and this player is playing its own
-			// stream throughout.
-			p.remoteLast.Store(true)
+			if tc.claimed {
+				p.remote.take()
+			}
+			if tc.remoteLast {
+				p.remoteLast.Store(true)
+			}
+			p.remoteState.Store(tc.remoteSays)
 
-			var got []Transport
-			cancel := p.OnTransport.Listen(func(tr Transport) { got = append(got, tr) })
+			var heard []Transport
+			cancel := p.OnTransport.Listen(func(tr Transport) { heard = append(heard, tr) })
 			defer cancel()
 
-			p.Transport(tc.t)
+			p.Transport(TransportToggle)
 
-			if len(got) != 1 {
-				t.Fatalf("the remote heard %d commands, want 1", len(got))
+			if got := len(heard) > 0; got != tc.wantRemote {
+				t.Fatalf("the remote heard %v, want the command to be the remote's: %v", heard, tc.wantRemote)
 			}
-			if name := got[0].Command(); name != tc.want {
-				t.Errorf("the remote heard %q, want %q", name, tc.want)
+			if tc.wantRemote {
+				return
 			}
-			if _, paused := s.Playing(); paused {
-				t.Error("a command for a carried stream paused this player's own stream")
+			// The local branch, and the station here is what the button is for: a playing one pauses and
+			// a paused one plays.
+			wantPaused := tc.local == "playing"
+			if _, paused := s.Playing(); paused != wantPaused {
+				t.Errorf("after the toggle paused = %v, want %v", paused, wantPaused)
 			}
 		})
 	}
