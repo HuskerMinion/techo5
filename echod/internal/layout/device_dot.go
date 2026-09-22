@@ -31,7 +31,7 @@ const (
 	// LogTag is echod's logcat tag: `adb logcat -s echolocal`.
 	LogTag = "echolocal"
 
-	Manufacturer = "EchoLocal"
+	Manufacturer = "TECHO5"
 	Model        = "Echo Dot 2 (biscuit)"
 	Board        = "biscuit"
 

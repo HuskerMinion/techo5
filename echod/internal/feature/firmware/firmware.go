@@ -300,7 +300,7 @@ func (u *Firmware) state(found update.Manifest) esphome.UpdateState {
 	return esphome.UpdateState{
 		CurrentVersion: layout.Version,
 		LatestVersion:  latest,
-		Title:          "EchoLocal (" + u.Channel().Label() + " channel)",
+		Title:          "TECHO5 (" + u.Channel().Label() + " channel)",
 		ReleaseSummary: found.Notes,
 		ReleaseURL:     found.ReleaseURL,
 	}
