@@ -152,7 +152,7 @@ rescue_screen() {
 	[ -x /usr/local/bin/fbprobe ] || return 0
 	killall fbprobe 2>/dev/null
 	/usr/local/bin/fbprobe -hold 1000h -title RESCUE -lines \
-"This device could not start its system.|Nothing is lost - your data is intact.|Connect USB and open the serial console.|See docs/install.md in the TECHO5 repo.|$1" \
+"This device could not start its system.|Nothing is lost - your data is intact.|Connect USB and open the serial console.|github.com/HuskerMinion/techo5|$1" \
 		> /tmp/fbprobe.log 2>&1 &
 }
 

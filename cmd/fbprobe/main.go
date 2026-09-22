@@ -34,15 +34,24 @@ import (
 	"golang.org/x/sys/unix"
 )
 
-// lineChars is how many characters fit on a line of the message screen.
+// fits is the message screen's text metrics for a panel of this width: how big to draw, how far in
+// to start, and how many characters then fit on a line.
 //
-// Measured, not calculated. The arithmetic says 42 - basicfont advances 7 pixels, scale 3 makes that
-// 21, the text starts 40 in and the frame's inner edge is at 948 - and the arithmetic is wrong:
-// rendering a counted ruler string shows 41 characters and no more. Two earlier goes at this screen
-// each lost the end of a sentence, which on a screen whose whole job is to tell somebody what to do
-// is the sentence you can least afford to lose. Anything longer is cut, so a line that is too long
-// looks too long instead of quietly losing its end.
-const lineChars = 41
+// basicfont advances 7 pixels a character, so a line is 7*scale wide per character and the margins
+// take the rest. The numbers are checked against a counted ruler string rather than trusted: a line
+// that is one character too long does not wrap, it runs off the panel, and the line it eats is the
+// one telling somebody what to do.
+//
+// A Show 5 is 960 across and takes scale 3; a Spot is 480 and would fit 19 characters at that size,
+// which is not a sentence, so it drops to scale 2 and a narrower margin. A Show 8 is 1280 and has
+// room to spare.
+func fits(w int) (scale, margin, chars int) {
+	scale, margin = 3, 40
+	if w < 720 {
+		scale, margin = 2, 20
+	}
+	return scale, margin, (w - 2*margin) / (7 * scale)
+}
 
 const (
 	fbDev = "/dev/graphics/fb0"
@@ -122,26 +131,25 @@ func compose(w, h int, bg color.RGBA, fill, title, lines string) (*image.RGBA, i
 	case title != "":
 		// Something to say, which on this device means the rescue environment saying so. The test
 		// image is not drawn: color bars beside an explanation read as a fault in the explanation.
-		//
-		// The numbers are worked to the panel rather than chosen: basicfont advances 7 pixels a
-		// character, so a line at scale 3 is 21 pixels a character and 920 usable pixels hold 43 of
-		// them. A line longer than that does not wrap, it runs off the edge - which is how the first
-		// version of this screen looked, and it cut off the sentence telling somebody what to do.
+		scale, margin, chars := fits(w)
+		step := 13*scale + 5             // a line, plus enough that the rows do not touch
+		top := 40 + 13*(scale+3) + scale // under the heading, which is drawn three sizes larger
+
 		frame(img, img.Bounds().Inset(8), 4, amber)
-		text(img, title, 40, 60, 6, amber) // 13*6 tall, so it ends well above the first line
+		text(img, title, margin, 40, scale+3, amber)
 		for i, l := range strings.Split(lines, "|") {
 			if l = strings.TrimSpace(l); l != "" {
-				if len(l) > lineChars {
-					l = l[:lineChars]
+				if len(l) > chars {
+					l = l[:chars]
 				}
-				text(img, l, 40, 170+i*44, 3, paper)
+				text(img, l, margin, top+i*step, scale, paper)
 			}
 		}
 		// Bottom left, clear of the lines and clear of the bottom edge, and still ticking: a clock
 		// that moves is how somebody in front of the device tells this screen from a frozen one.
-		clockAt = image.Rect(40, h-90, 300, h-18)
-		clockY, clockScale = h-70, 4
-		text(img, time.Now().Format("15:04:05"), 40, clockY, clockScale, paper)
+		clockAt = image.Rect(margin, h-90, margin+260, h-18)
+		clockY, clockScale = h-70, scale+1
+		text(img, time.Now().Format("15:04:05"), margin, clockY, clockScale, paper)
 
 	default:
 		// Color bars along the bottom, an amber frame, and text.
@@ -161,6 +169,8 @@ func compose(w, h int, bg color.RGBA, fill, title, lines string) (*image.RGBA, i
 func main() {
 	info := flag.Bool("info", false, "print framebuffer geometry and exit")
 	png := flag.String("png", "", "write what the panel would show to this file and exit (no device needed)")
+	pw := flag.Int("png-w", 960, "canvas width for -png (960 Show 5, 480 Spot, 1280 Show 8)")
+	ph := flag.Int("png-h", 480, "canvas height for -png")
 	fill := flag.String("fill", "", "fill with this rrggbb color only")
 	hold := flag.Duration("hold", 0, "keep repainting for this long (0 = paint once and exit)")
 	title := flag.String("title", "", "a heading to draw instead of the test image")
@@ -171,7 +181,7 @@ func main() {
 	// Before the device is opened, so this works on a workstation: it is how the rescue wording is
 	// read by somebody who is not standing in front of a unit.
 	if *png != "" {
-		img, _, _, _ := compose(960, 480, background(*fill), *fill, *title, *lines)
+		img, _, _, _ := compose(*pw, *ph, background(*fill), *fill, *title, *lines)
 		out, err := os.Create(*png)
 		if err != nil {
 			fatal("create %s: %v", *png, err)
@@ -180,7 +190,7 @@ func main() {
 		if err := pngenc.Encode(out, img); err != nil {
 			fatal("encode %s: %v", *png, err)
 		}
-		fmt.Printf("wrote %s (%dx%d)\n", *png, 960, 480)
+		fmt.Printf("wrote %s (%dx%d)\n", *png, *pw, *ph)
 		return
 	}
 
