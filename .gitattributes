@@ -9,6 +9,11 @@ tools/linux/readmisc.sh text eol=lf
 tools/linux/rootfs/** text eol=lf
 tools/linux/*.txt text eol=lf
 tools/*.sh text eol=lf
+# Kernel patches are fed to git apply inside WSL against an LF source tree, which
+# refuses a patch whose own lines end in CRLF: "patch does not apply", every hunk,
+# with nothing to say why. The blobs here are LF; without this rule a Windows
+# checkout hands out CRLF copies and build-kernel.sh PATCHES= cannot work at all.
+*.patch text eol=lf
 *.ps1 text eol=crlf
 *.png binary
 *.tflite binary
