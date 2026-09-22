@@ -131,6 +131,14 @@ screen. Open a root shell on it:
   ssh -i techo5_ed25519 root@<address>
   ```
 
+> **The released boot image carries no key, and rescue will not invent one.** It reads
+> `/data/misc/techo5/ssh/authorized_keys` off the unit's own storage and starts SSH only if that file
+> has something in it. On a unit that has never had a key put there — which is every unit being
+> installed for the first time — rescue has **no** network way in, and the USB serial console above is
+> the only way to reach it. That is deliberate: a published image with a key inside would be a key
+> everybody has. It does mean the serial cable is not a fallback, it is the route, so have one that
+> carries data before you flash.
+
 ## 4. Create the slot store and install
 
 In the rescue shell. `mkstore` is the step that erases LineageOS.
