@@ -197,6 +197,9 @@ func (f *Feature) Actions() []*esphome.Action {
 				return nil, err
 			}
 			slog.Info("ssh: authorized keys replaced", "count", len(keys))
+			// The keys are saved and this action has succeeded whatever follows. What it cannot
+			// promise on its own is that dropbear reads the file they went into.
+			ensureDropbearSees(keys)
 			if len(keys) == 0 && sshRunning() {
 				_ = stopSSH()
 			}

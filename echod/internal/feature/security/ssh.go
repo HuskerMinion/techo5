@@ -12,12 +12,21 @@ import (
 	"github.com/HuskerMinion/techo5/echod/internal/layout"
 )
 
-// Where SSH keeps what it needs. The image links /root/.ssh to KeysDir, so the keys live on
-// userdata, survive slot changes, and are never part of an image; the host keys are on userdata
-// for the same reason (/etc/dropbear links there).
+// Where SSH keeps what it needs. The keys live on userdata, survive slot changes, and are never
+// part of an image; the host keys are on userdata for the same reason (/etc/dropbear links there).
+//
+// KeysDir and HomeSSHDir are variables rather than constants so a test can point the pair at a
+// temporary directory and exercise the arrangement between them, which is the whole of rootssh.go.
+var (
+	KeysDir = layout.StateDir + "/ssh"
+
+	// HomeSSHDir is root's own .ssh, and the only place dropbear ever looks for an authorized key.
+	// Nothing in the daemon writes here: boot makes it a symlink to KeysDir on the Dot, and on the
+	// Show and the Spot a real directory holding the image's key, with KeysDir appended into it.
+	HomeSSHDir = "/root/.ssh"
+)
+
 const (
-	KeysDir  = layout.StateDir + "/ssh"
-	keysFile = KeysDir + "/authorized_keys"
 	hostKeys = "/data/techo5-linux/dropbear"
 	pidFile  = "/run/dropbear.pid"
 
@@ -25,6 +34,11 @@ const (
 	// daemon too, and has its own SSH server that this must not take away.
 	slotMarker = "/run/techo5/slot"
 )
+
+// keysFile is what the daemon writes; homeKeysFile is what dropbear reads. On a device where the
+// arrangement is intact they are the same file, and the point of checking is that nothing says so.
+func keysFile() string     { return filepath.Join(KeysDir, "authorized_keys") }
+func homeKeysFile() string { return filepath.Join(HomeSSHDir, "authorized_keys") }
 
 // sshAvailable reports whether the daemon manages SSH here: a slot boot of the Linux image.
 func sshAvailable() bool {
@@ -61,6 +75,10 @@ func sshRunning() bool { return sshPID() != 0 }
 // startSSH starts dropbear, which puts itself in the background. Keys only: -s turns password
 // logins off for every account.
 func startSSH() error {
+	// A device that booted with the chain from KeysDir to root's .ssh already broken would open the
+	// port and then refuse every key. Check and mend it here too, so it is reported and repaired
+	// without waiting for somebody to push a key at a device they can no longer reach.
+	ensureDropbearSees(readKeys())
 	if err := os.MkdirAll(hostKeys, 0o700); err != nil {
 		return err
 	}
@@ -82,7 +100,7 @@ func stopSSH() error {
 }
 
 func readKeys() []string {
-	b, err := os.ReadFile(keysFile)
+	b, err := os.ReadFile(keysFile())
 	if err != nil {
 		return nil
 	}
@@ -100,7 +118,7 @@ func writeKeys(keys []string) error {
 		return err
 	}
 	if len(keys) == 0 {
-		err := os.Remove(keysFile)
+		err := os.Remove(keysFile())
 		if errors.Is(err, os.ErrNotExist) {
 			return nil
 		}
@@ -110,5 +128,5 @@ func writeKeys(keys []string) error {
 	if err := os.WriteFile(tmp, []byte(strings.Join(keys, "\n")+"\n"), 0o600); err != nil {
 		return err
 	}
-	return os.Rename(tmp, keysFile)
+	return os.Rename(tmp, keysFile())
 }
