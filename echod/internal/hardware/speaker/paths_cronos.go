@@ -65,10 +65,21 @@ type kctl struct {
 //   - Two mutes share LOUT_CTRL1 (reg 03), OUT Playback Switch and OUT Channel Switch, both set
 //     out of reset; with only the first cleared everything looks routed and nothing plays. A
 //     switch at 1 is unmuted.
-var initSequence = showInit(layout.Checkers())
+//
+// The Show 8 (crown) has the same RT5616 on the same playback device, and the same sequence is
+// what it wants: checked a write at a time on a unit 2026-09-22, where LineageOS had left the
+// routing wired but OUT Playback Switch off and the amplifier switch On. Clearing the mute alone
+// was not enough; setting Ext_Speaker_Amp_Switch Off is what reached the room, so crown's amplifier
+// switch is active low as well and its separate amp_gpio is not the gate. A 1 kHz tone at 0.3 FS
+// then read -4 dBFS at the microphones, up from -53. See TECHO5-CROWN crown-port-notes.md.
+var initSequence = showInit(rt5616())
 
-func showInit(checkers bool) []kctl {
-	if !checkers {
+// rt5616 is whether the speaker is the Realtek codec and its GPIO amplifier rather than the
+// MAX98396: true on the 1st gen Show 5 and on the Show 8, false on the 2nd gen Show 5.
+func rt5616() bool { return layout.Checkers() || layout.Crown() }
+
+func showInit(rt5616 bool) []kctl {
+	if !rt5616 {
 		return []kctl{{name: "Speaker Safe Mode A", level: 0}}
 	}
 	return []kctl{

@@ -27,14 +27,23 @@ import (
 // latch: it only sends the key, and releases a latch that is set. Measured on a unit 2026-09-19
 // (techo5-checkers docs/hardware.md). So there a press with the microphones live is the
 // daemon's to act on, and a press while muted is only news.
+//
+// The Show 8 (crown) carries the same amazon-gating driver, with the same state and enable files
+// and no gpio-privacy at all; read off a unit 2026-09-22, where the latch sat at 0 and enable was
+// write-only, as on checkers. Whether its button also only releases has not been measured — that
+// needs a finger on the unit while a capture is open — so it is assumed to match the driver it
+// shares. If it turns out to set the latch itself, gating() is the one place to correct.
 var (
 	dir    = latchDir()
 	state  = dir + "/state"
 	enable = dir + "/enable"
 )
 
+// gating is whether the mute is Amazon's amazon-gating driver rather than gpio-privacy.
+func gating() bool { return layout.Checkers() || layout.Crown() }
+
 func latchDir() string {
-	if layout.Checkers() {
+	if gating() {
 		return "/sys/devices/platform/amazon-gating"
 	}
 	return "/sys/devices/platform/gpio-privacy"
@@ -52,9 +61,9 @@ type platform struct{}
 func (platform) Get() (bool, error) { return reads(state, "1") }
 
 // On the 2nd gen the button feeds the same latch, so by the time the key event arrives the state has
-// already changed, and acting on the press would toggle it straight back. The 1st gen's button only
-// releases: it has acted when the microphones were cut, and not when they were live.
-func (platform) HardwareActs(wasMuted bool) bool { return !layout.Checkers() || wasMuted }
+// already changed, and acting on the press would toggle it straight back. An amazon-gating button
+// only releases: it has acted when the microphones were cut, and not when they were live.
+func (platform) HardwareActs(wasMuted bool) bool { return !gating() || wasMuted }
 
 func (platform) Lag() time.Duration { return toggleLag }
 
