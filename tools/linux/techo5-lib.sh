@@ -71,6 +71,38 @@ t5_wifi_conf() {
 	log "wifi: configuration written from Android's saved network '$ssid'"
 }
 
+# t5_ipv6_private <interface>: keep this device's IPv6 addresses from spelling out its MAC.
+#
+# Linux builds an interface identifier out of the hardware address by default, so a global address
+# reads as the prefix the ISP handed out followed by the device's own MAC (EUI-64: the first octet's
+# universal bit flipped and ff:fe pushed through the middle). That address names the hardware, and
+# goes on naming it through every prefix the ISP ever changes - a satellite in somebody's house
+# should not be announcing which one it is. A random identifier says nothing and costs nothing:
+# nothing here is reached over IPv6, the daemon is found over IPv4 and mDNS.
+#
+# addr_gen_mode 3 is the random one and wants Linux 4.5; the Dot's 3.18 kernel has no addr_gen_mode
+# at all, so temporary addresses (RFC 4941) are set either way for anything the device itself starts,
+# and the kernel that can do no better says so in the log rather than quietly differing.
+#
+# Before the link comes up, because the identifier is chosen when the address is generated and an
+# address already there does not change.
+t5_ipv6_private() {
+	ifc=$1; mode=
+	for w in default "$ifc"; do
+		d=/proc/sys/net/ipv6/conf/$w
+		[ -d "$d" ] || continue
+		[ -e "$d/use_tempaddr" ] && echo 2 > "$d/use_tempaddr" 2>/dev/null
+		[ -e "$d/addr_gen_mode" ] || continue
+		echo 3 > "$d/addr_gen_mode" 2>/dev/null
+		mode=$(cat "$d/addr_gen_mode" 2>/dev/null)
+	done
+	case "$mode" in
+	3) log "ipv6: addresses take a random identifier, not this device's MAC" ;;
+	"") log "ipv6: this kernel has no addr_gen_mode; addresses carry this device's MAC" ;;
+	*) log "ipv6: addr_gen_mode stayed $mode; addresses may still carry this device's MAC" ;;
+	esac
+}
+
 # t5_wifi_up <module.ko> <wpa.conf>: load the vendor driver if wlan0 is not
 # there yet, associate, and take a DHCP lease (udhcpc stays running to renew
 # it). Sets IP. The vendor driver's first full scan alone takes several
@@ -90,6 +122,7 @@ t5_wifi_up() {
 	# and comes back: wlan0 exists before it can be opened, and bringing it up then fails with EBUSY,
 	# which leaves wpa_supplicant unable to start. Wait for the open to succeed. The Show's mt76x8 is
 	# up on the first try.
+	t5_ipv6_private wlan0
 	n=0; until ip link set wlan0 up 2>/tmp/ifup.err; do
 		n=$((n+1)); [ $n -ge 30 ] && { log "wifi: wlan0 would not come up: $(cat /tmp/ifup.err)"; return 1; }
 		sleep 1
