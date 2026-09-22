@@ -117,8 +117,9 @@ fastboot -s <serial> continue
 ```
 
 The unit boots the TECHO5 initramfs. With LineageOS still on `system` there is no slot store, so it
-stays in the **rescue environment**: it joins the Wi-Fi network Android saved and shows a test
-screen. Open a root shell on it:
+stays in the **rescue environment**: it joins the Wi-Fi network Android saved and puts **RESCUE** on
+the screen, with a ticking clock and a line saying why — at this point, "No slot store yet - normal
+at install", which is exactly where you should be. Open a root shell on it:
 
 - **USB serial console** (any boot image), at 115200 baud; press Enter for a `#` prompt:
   - Windows: a new "USB Serial Device (COMn)" in Device Manager; open it in PuTTY (connection type
@@ -299,7 +300,7 @@ again on its own is this, not a fault.
 | An update from Home Assistant fails with `context deadline exceeded` | The download was too slow, usually on 2.4 GHz next to the unit's own Bluetooth. Press Install again; from v0.2.5 the unit moves itself to the network's 5 GHz radio when one is in range. |
 | The screen shows "hacked fastboot" | A leftover `reboot bootloader` request: `fastboot -s <serial> continue`. |
 | No SSH after the switch to the slot | SSH is off unless step 5 was done: turn on the SSH switch in Home Assistant and send a key with the `ssh_keys` action, or use the USB serial console. |
-| The unit sits in rescue | No bootable slot. `slotctl status` shows why; the daemon still runs from a slot in rescue, so Home Assistant keeps working while you look. |
+| The unit sits in rescue | The screen says so: **RESCUE**, with the reason on the last line. No bootable slot. `slotctl status` shows why; the daemon still runs from a slot in rescue, so Home Assistant keeps working while you look. |
 
 To go back to LineageOS: boot TWRP from `recovery`, flash the LineageOS zip (which rewrites `system`)
 and the LineageOS boot image.

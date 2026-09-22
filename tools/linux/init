@@ -138,10 +138,32 @@ fi
 crumb "rescue mode ($MODE)"
 snapshot
 
-# Panel: the test screen with the clock ticking, as proof of life.
-if [ -x /usr/local/bin/fbprobe ]; then
-	/usr/local/bin/fbprobe -hold 1000h > /tmp/fbprobe.log 2>&1 &
-fi
+# Panel: say what has happened and what to do about it.
+#
+# This used to be the test screen - color bars, the word TECHO5 and a clock - which says nothing to
+# the person in front of the device. Somebody sat looking at it for ten minutes on a first install
+# before finding out that the unit was waiting on them, not broken (techo5-checkers issue #2). The
+# splash on a normally booted device now says what it is waiting for; this is the other half, for a
+# device that did not get that far.
+#
+# The clock still ticks, because a screen that moves is how you tell this from a frozen one. Lines
+# are 41 characters at most: fbprobe cuts what is longer rather than running it off the panel.
+rescue_screen() {
+	[ -x /usr/local/bin/fbprobe ] || return 0
+	killall fbprobe 2>/dev/null
+	/usr/local/bin/fbprobe -hold 1000h -title RESCUE -lines \
+"This device could not start its system.|Nothing is lost - your data is intact.|Connect USB and open the serial console.|See docs/install.md in the TECHO5 repo.|$1" \
+		> /tmp/fbprobe.log 2>&1 &
+}
+
+# What the last line says, from what was actually found. "No slot store yet" is the expected state
+# partway through an install and should not read like a fault.
+case "$MODE" in
+store)   WHY="No bootable slot; the store is intact." ;;
+android) WHY="No slot store yet - normal at install." ;;
+*)       WHY="No system partition could be read." ;;
+esac
+rescue_screen "$WHY"
 
 # Root shell on USB serial.
 t5_usb_acm
@@ -215,6 +237,9 @@ network_up() {
 			crumb "daemon failed to start: $(tail -2 $LOGDIR/techo5.log | tr '\n' ' ')"
 		fi
 	fi
+	# The daemon takes the panel when it starts, so this only matters when there is none: the screen
+	# is still ours, and now there is an address worth putting on it.
+	pidof techo5 >/dev/null || rescue_screen "SSH or look here: $IP"
 	touch /tmp/stay
 }
 network_up
