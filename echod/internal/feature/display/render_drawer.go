@@ -30,15 +30,15 @@ const (
 var drawerTabs = []string{"Cameras", "Radio", "Announce"}
 
 func (r *renderer) drawer(s scene) {
-	fc := faces()
+	fc := r.faces()
 	r.pending = r.pending[:0]
 	r.dimAll(0.55)
 
-	panel := image.Rect(r.w-cardIn-drawerW, cardIn, r.w-cardIn, r.h-cardIn)
+	panel := image.Rect(r.w-r.cardIn()-drawerW, r.cardIn(), r.w-r.cardIn(), r.h-r.cardIn())
 	r.addZone(zone{r: image.Rect(0, 0, panel.Min.X-4, r.h), kind: zoneDone}) // the dimmed clock closes it
-	r.roundShadow(panel, cardRad, 26, 8, shadowAlpha()*1.2)
-	r.roundFill(panel, cardRad, surface(3), surface(2))
-	r.roundHighlight(panel, cardRad)
+	r.roundShadow(panel, r.cardRad(), 26, 8, shadowAlpha()*1.2)
+	r.roundFill(panel, r.cardRad(), surface(3), surface(2))
+	r.roundHighlight(panel, r.cardRad())
 
 	// Cameras | Radio, a segmented switch with the open one raised.
 	seg := image.Rect(panel.Min.X+22, panel.Min.Y+18, panel.Min.X+22+400, panel.Min.Y+64)
@@ -67,14 +67,14 @@ func (r *renderer) drawer(s scene) {
 	r.aaLine(cx-7, cy-7, cx+7, cy+7, 2.6, cream)
 	r.aaLine(cx-7, cy+7, cx+7, cy-7, 2.6, cream)
 	r.addZone(zone{r: c.Inset(-10), kind: zoneDone})
-	r.rule(panel.Min.X+22, panel.Max.X-22, panel.Min.Y+headerH-2, 1)
+	r.rule(panel.Min.X+22, panel.Max.X-22, panel.Min.Y+r.headerH()-2, 1)
 
-	list := image.Rect(panel.Min.X, panel.Min.Y+headerH, panel.Max.X, panel.Max.Y-8)
+	list := image.Rect(panel.Min.X, panel.Min.Y+r.headerH(), panel.Max.X, panel.Max.Y-8)
 	rows, note := drawerRows(s)
 	if len(rows) == 0 && note != "" {
 		y := list.Min.Y + 50
-		for _, line := range r.wrap(fc.value, note, panel.Dx()-2*rowIn) {
-			r.text(fc.value, line, panel.Min.X+rowIn, y, dim)
+		for _, line := range r.wrap(fc.value, note, panel.Dx()-2*r.rowIn()) {
+			r.text(fc.value, line, panel.Min.X+r.rowIn(), y, dim)
 			y += 36
 		}
 	}

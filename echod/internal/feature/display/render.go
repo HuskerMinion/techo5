@@ -162,8 +162,14 @@ type renderer struct {
 	shellKey baseKey
 }
 
+// drawnFor is the panel width every fixed size in this package is written in: the Echo Show 5's, in
+// landscape. A wider panel scales them up rather than leaving the layout in one corner of it.
+const drawnFor = 960
+
 func newRenderer(dst *image.RGBA) *renderer {
-	r := &renderer{paint: paint{dst: dst, w: dst.Rect.Dx(), h: dst.Rect.Dy()}, margin: 40}
+	// Built in place: paint carries a mutex, so it must never be assembled elsewhere and copied in.
+	r := &renderer{paint: paint{dst: dst, w: dst.Rect.Dx(), h: dst.Rect.Dy(), sNum: dst.Rect.Dx(), sDen: drawnFor}}
+	r.margin = r.s(40)
 	bold, err := opentype.Parse(gobold.TTF)
 	if err != nil {
 		slog.Error("parsing the bold font failed", "err", err)
@@ -172,11 +178,12 @@ func newRenderer(dst *image.RGBA) *renderer {
 	if err != nil {
 		slog.Error("parsing the regular font failed", "err", err)
 	}
-	face := func(f *opentype.Font, size float64) font.Face {
+	// Sizes are points at 72 DPI, which makes them pixels, so they scale with everything else.
+	face := func(f *opentype.Font, size int) font.Face {
 		if f == nil {
 			return nil
 		}
-		fc, err := opentype.NewFace(f, &opentype.FaceOptions{Size: size, DPI: 72, Hinting: font.HintingFull})
+		fc, err := opentype.NewFace(f, &opentype.FaceOptions{Size: float64(r.s(size)), DPI: 72, Hinting: font.HintingFull})
 		if err != nil {
 			slog.Error("making a font face failed", "size", size, "err", err)
 			return nil
@@ -190,6 +197,10 @@ func newRenderer(dst *image.RGBA) *renderer {
 	r.body = face(regular, 42)
 	r.small = face(regular, 34)
 	r.tiny = face(regular, 26)
+	if r.scaled() {
+		fc := sheetFacesAt(r.s)
+		r.fc = &fc
+	}
 	return r
 }
 

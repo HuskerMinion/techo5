@@ -20,6 +20,10 @@ import (
 const (
 	showWide = 960
 	showHigh = 480
+
+	// The Echo Show 8's panel, which draws the same layout scaled.
+	show8Wide = 1280
+	show8High = 800
 )
 
 // Every scene draws without panicking; with SHOW_PREVIEW set to a directory, each is written there
@@ -76,21 +80,55 @@ func TestShowScenesDraw(t *testing.T) {
 	}
 
 	dir := os.Getenv("SHOW_PREVIEW")
-	for name, s := range scenes {
-		img := image.NewRGBA(image.Rect(0, 0, showWide, showHigh))
-		newRenderer(img).draw(s)
-		if dir == "" {
-			continue
+	// Both panels this build draws on. The Show 8 is not a second layout: it is this one scaled, and
+	// the point of drawing it here is that the scaling can be looked at without a device.
+	for _, panel := range []struct {
+		name       string
+		wide, high int
+	}{
+		{"", showWide, showHigh},
+		{"-show8", show8Wide, show8High},
+	} {
+		for name, s := range scenes {
+			img := image.NewRGBA(image.Rect(0, 0, panel.wide, panel.high))
+			newRenderer(img).draw(s)
+			if dir == "" {
+				continue
+			}
+			f, err := os.Create(filepath.Join(dir, name+panel.name+".png"))
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err := png.Encode(f, img); err != nil {
+				t.Fatal(err)
+			}
+			if err := f.Close(); err != nil {
+				t.Fatal(err)
+			}
 		}
-		f, err := os.Create(filepath.Join(dir, name+".png"))
-		if err != nil {
-			t.Fatal(err)
+	}
+}
+
+// A size written as a literal in this package is in the Show 5's pixels, and the Show 8 scales them.
+// These are the two ends of that: 4:3 across, so 40 becomes 53 and the clock's 230 becomes 307.
+func TestFixedSizesScaleToTheShow8(t *testing.T) {
+	show5 := &paint{w: showWide, h: showHigh, sNum: showWide, sDen: drawnFor}
+	show8 := &paint{w: show8Wide, h: show8High, sNum: show8Wide, sDen: drawnFor}
+
+	if show5.scaled() {
+		t.Error("the panel the layout was drawn for reports itself as scaled")
+	}
+	if !show8.scaled() {
+		t.Error("the Show 8 reports itself as unscaled")
+	}
+	for _, c := range []struct{ in, want int }{
+		{0, 0}, {1, 1}, {3, 4}, {40, 53}, {230, 307}, {-40, -53},
+	} {
+		if got := show5.s(c.in); got != c.in {
+			t.Errorf("a Show 5 scaled %d to %d; it must not scale at all", c.in, got)
 		}
-		if err := png.Encode(f, img); err != nil {
-			t.Fatal(err)
-		}
-		if err := f.Close(); err != nil {
-			t.Fatal(err)
+		if got := show8.s(c.in); got != c.want {
+			t.Errorf("a Show 8 scaled %d to %d, want %d", c.in, got, c.want)
 		}
 	}
 }

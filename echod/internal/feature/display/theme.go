@@ -221,7 +221,7 @@ func (r *paint) swatchStrip(row settingRow, right, cy, top int) {
 		}
 		if row.id != "" {
 			x := x0 + i*(d+gap)
-			r.addZone(zone{r: image.Rect(x-gap/2, top, x+d+gap/2, top+rowH), kind: zoneRow, id: row.id, part: partDay, opt: i})
+			r.addZone(zone{r: image.Rect(x-gap/2, top, x+d+gap/2, top+r.rowH()), kind: zoneRow, id: row.id, part: partDay, opt: i})
 		}
 	}
 }
