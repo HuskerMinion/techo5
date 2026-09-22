@@ -75,13 +75,18 @@ func (b *Beamformer) Mix(mics [][]int16) []int16 {
 	if len(mics) < b.g.Channels() {
 		return nil
 	}
-	b.out = b.out[:0]
 
 	for m, ch := range b.g.mics {
 		for _, s := range mics[ch] {
 			b.carry[m] = append(b.carry[m], float32(s))
 		}
 	}
+
+	// A fresh slice rather than a scratch buffer kept between calls: what this returns is fanned out
+	// to listeners that hold onto it (mic.broadcast), and one that is a frame behind would otherwise
+	// be reading audio this stream has already written over. It is one allocation per call, sized for
+	// the whole answer, against the bank's own work on the same samples.
+	b.out = make([]int16, 0, len(b.carry[0])/b.g.Hop*b.g.Hop)
 
 	at := 0
 	for len(b.carry[0])-at >= b.g.Hop {

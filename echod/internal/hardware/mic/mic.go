@@ -382,6 +382,19 @@ func (s *Source) broadcast(raw []byte) {
 		}
 	}
 
+	// From here the frame belongs to whoever is handed it, so it is copied out of whatever produced
+	// it. Both the canceller and the vendor beamformer return a buffer they overwrite on the next
+	// frame, and the denoiser and the leveler below work in place, so without this a listener holding
+	// a frame would find it turn into a later one: its channel is eight deep, and a wake engine a
+	// frame or two behind would score the newest frame twice over and never see what it missed. That
+	// is the wake word going unheard while music is playing, since cancelling is on by default.
+	//
+	// One buffer a frame, shared by every listener, because listeners only read what they are given.
+	// It is 640 bytes every 20 ms, next to the one Decode already allocates per microphone, so
+	// a pool or a ring would save nothing worth measuring — and a ring would have to be sized against
+	// how far behind a listener may fall, which is the thing this is fixing.
+	frame = append([]int16(nil), frame...)
+
 	s.findFacing(mics)
 
 	// After the echo canceller, so the estimator is not asked to learn the speaker as part of the

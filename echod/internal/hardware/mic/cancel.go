@@ -164,7 +164,10 @@ func (c *canceller) apply(raw []byte, mic []int16) []int16 {
 		c.best.Store(erle)
 	}
 
-	// Process reuses its buffer and listeners keep what they are handed, so this is copied out.
+	// The engines hand back a buffer of their own that the next block overwrites, and the caller runs
+	// the denoiser and the leveler over what this returns, so the block is moved somewhere they may
+	// write on. This buffer is reused as well: what apply returns is only good until the next call,
+	// and broadcast copies it before any listener keeps it.
 	if cap(c.mono) < len(out) {
 		c.mono = make([]int16, len(out))
 	}
