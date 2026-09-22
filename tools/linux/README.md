@@ -232,7 +232,8 @@ auto-exposure and `feature/camera` serves
 the ESPHome camera entity Home Assistant creates on its own, plus `http://<device>:8181/camera.jpg`
 and `/camera.mjpeg` while Camera web access is on. `/screen.png[?sheet=<category>&list=<row>&theme=<name>]` on the
 same port, while Screen web access is on, is a screenshot of the panel, for checking layouts from a
-PC. With both off the port is closed.
+PC; the parameters that put a page up first work the screen rather than read it, so they need a
+browser the setup page has let in. With both off the port is closed.
 
 ## Updates on the slots
 
