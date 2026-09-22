@@ -544,9 +544,19 @@ func askFor(label string) string {
 	return l
 }
 
-// Stop ends whatever the player is doing.
+// Stop ends whatever the player is doing, whoever is playing it.
+//
+// Every caller is a person asking - the Stop row on either panel, the action button, "go home" by voice -
+// so a stream this device did not start is asked to stop. The rule is who is asking, not what the stream
+// is: without this the row reaches a player that has nothing to pause, and the music plays on. Home
+// Assistant's own stop is a different path and stays a pause (see media's command), because that arrives
+// from an automation with nobody necessarily in the room.
 func (f *Feature) Stop() {
-	media.Get().Pause()
+	if media.Get().ExternalPlaying() {
+		media.Get().Transport(media.TransportStop)
+	} else {
+		media.Get().Pause()
+	}
 	f.mu.Lock()
 	f.chosen = ""
 	f.mu.Unlock()

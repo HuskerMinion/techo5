@@ -420,8 +420,15 @@ func (s *session) asks(t media.Transport) {
 		return
 	}
 	if takes, ok := s.takes.Load().(map[string]bool); ok && !takes[name] {
-		slog.Debug("sendspin transport", "command", name, "taken", false)
-		return
+		// A server that will not take a stop will take a pause, and a pause is the same request read
+		// kindly: somebody standing at the screen pressing Stop wants the room quiet, and a pause is
+		// the closest this server offers to that. Asking for nothing at all is what the row used to do.
+		if name == "stop" && takes["pause"] {
+			name = "pause"
+		} else {
+			slog.Debug("sendspin transport", "command", name, "taken", false)
+			return
+		}
 	}
 	s.asked.Store(name)
 	switch name {
