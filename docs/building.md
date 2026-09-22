@@ -141,6 +141,13 @@ only the newest build of each package, so an old version eventually disappears f
 Alpine 3.24 serves that day. Releases don't depend on this: everything a unit or the installer needs
 is published with the release, and the lists are brought up to date (and tested) before a release.
 
+What version arrives floats; what arrives unchecked does not. Every package `fetch-inputs.py` keeps has
+to match the checksum Alpine's index gives for it and the datahash inside the package itself, and the
+wake word models come from a commit pinned in the script, each file pinned to a sha256. Moving a model
+pin is a two-line edit at the top of `tools/fetch-inputs.py`; the script prints what a file now hashes
+to when it does not match, and techo5-dot's `tools/install-dot.py` carries the same pins for the models
+it puts on a Dot.
+
 ## Releases (maintainer)
 
 `tools/release.ps1` (Show 5), techo5-dot's `tools/release-dot.ps1` and techo5-spot's

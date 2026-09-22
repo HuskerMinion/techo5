@@ -82,7 +82,14 @@ class Cpio:
                 if not name:
                     continue
                 if skip_dotfiles and name.startswith("."):
-                    continue  # apk metadata: .PKGINFO, .SIGN.*, .post-install
+                    # apk metadata: .PKGINFO, .SIGN.*, .post-install. These are the package's own
+                    # bookkeeping, and an initramfs that is unpacked by the kernel rather than by apk
+                    # has no use for them, so they are left out on purpose. Dropping .SIGN.* is not a
+                    # signature check being skipped: nothing here ever verified one. The packages are
+                    # checked where they are fetched — tools/fetch-inputs.py matches each against the
+                    # checksum Alpine's index gives for it and against the package's own datahash —
+                    # so an --apk from somewhere else arrives with nothing vouching for it.
+                    continue
                 # apk archives may repeat a directory the rootfs already has
                 if m.isdir() and name in self.seen:
                     continue

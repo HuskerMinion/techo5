@@ -57,7 +57,17 @@ pkgs=$(sed 's/#.*//' "$IN/tools/packages-rootfs.txt" | tr '\n' ' ')
 say "apk add: $pkgs"
 $APK --root "$R" $arch --no-cache add $pkgs
 say "apk add (local): $(ls "$IN"/inputs/apks312/*.apk | xargs -n1 basename | tr '\n' ' ')"
-$APK --root "$R" $arch --no-cache add --allow-untrusted "$IN"/inputs/apks312/*.apk
+# Alpine 3.12's packages are signed by the -524d27bb key, which Alpine still ships for armv7 and which
+# the minirootfs puts in /etc/apk/keys, so apk verifies these like any other package and no
+# --allow-untrusted is needed. It stays as a fallback for a root whose keyring does not have that key
+# (a different base image, or a host apk pointed at its own keys) rather than as the normal path: an
+# unsigned install of four packages that go into every image is not something to do without noticing.
+# What they are is checked before they get here — fetch-inputs.py matches each one against Alpine's
+# package index and against the package's own datahash.
+if ! $APK --root "$R" $arch --no-cache add "$IN"/inputs/apks312/*.apk; then
+	say "warning: the v3.12 packages did not verify against $R/etc/apk/keys; installing them untrusted"
+	$APK --root "$R" $arch --no-cache add --allow-untrusted "$IN"/inputs/apks312/*.apk
+fi
 $APK --root "$R" $arch info -v | sort > "$R/etc/techo5-packages"
 
 # Vendor tree: Wi-Fi/BT modules, firmware (firmware_class.path=/vendor/firmware on
