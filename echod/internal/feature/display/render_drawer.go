@@ -16,16 +16,27 @@ import (
 // behind it. They are things to use rather than settings, so they sit apart from the settings screen,
 // drawn with its rows and controls.
 
+// The lengths here are the ones this drawer was drawn at on a Show 5, and they go through paint.s
+// so the panel it lands on decides the real size. The tab strip in particular was a fixed 400 wide
+// while its labels scaled with the type, so on a Show 8 "Cameras" and "Announce" grew out of their
+// pills.
 const (
-	drawerW = 560
+	drawerWBase = 560
 
-	// drawerEdge is how far from the right edge a leftward swipe has to start to open the drawer.
-	drawerEdge = 240
+	// drawerEdgeBase is how far from the right edge a leftward swipe has to start to open the drawer.
+	drawerEdgeBase = 240
+
+	// drawerSegBase is the width of the Cameras/Radio/Announce strip.
+	drawerSegBase = 400
 
 	drawerCameras  = 0
 	drawerRadio    = 1
 	drawerAnnounce = 2
 )
+
+func (p *paint) drawerW() int    { return p.s(drawerWBase) }
+func (p *paint) drawerEdge() int { return p.s(drawerEdgeBase) }
+func (p *paint) drawerSeg() int  { return p.s(drawerSegBase) }
 
 var drawerTabs = []string{"Cameras", "Radio", "Announce"}
 
@@ -34,48 +45,55 @@ func (r *renderer) drawer(s scene) {
 	r.pending = r.pending[:0]
 	r.dimAll(0.55)
 
-	panel := image.Rect(r.w-r.cardIn()-drawerW, r.cardIn(), r.w-r.cardIn(), r.h-r.cardIn())
-	r.addZone(zone{r: image.Rect(0, 0, panel.Min.X-4, r.h), kind: zoneDone}) // the dimmed clock closes it
+	panel := image.Rect(r.w-r.cardIn()-r.drawerW(), r.cardIn(), r.w-r.cardIn(), r.h-r.cardIn())
+	r.addZone(zone{r: image.Rect(0, 0, panel.Min.X-r.s(4), r.h), kind: zoneDone}) // the dimmed clock closes it
 	r.roundShadow(panel, r.cardRad(), 26, 8, shadowAlpha()*1.2)
 	r.roundFill(panel, r.cardRad(), surface(3), surface(2))
 	r.roundHighlight(panel, r.cardRad())
 
 	// Cameras | Radio, a segmented switch with the open one raised.
-	seg := image.Rect(panel.Min.X+22, panel.Min.Y+18, panel.Min.X+22+400, panel.Min.Y+64)
-	r.roundFill(seg, 23, surface(1), surface(1))
-	r.roundStroke(seg, 23, 1, ember)
+	pad := r.s(22)
+	seg := image.Rect(panel.Min.X+pad, panel.Min.Y+r.s(18), panel.Min.X+pad+r.drawerSeg(), panel.Min.Y+r.s(64))
+	segRad := r.sf(23)
+	r.roundFill(seg, segRad, surface(1), surface(1))
+	r.roundStroke(seg, segRad, r.sf(1), ember)
 	half := seg.Dx() / len(drawerTabs)
+	inset, tabRad := r.s(4), r.sf(19)
 	for i, name := range drawerTabs {
-		b := image.Rect(seg.Min.X+i*half+4, seg.Min.Y+4, seg.Min.X+(i+1)*half-4, seg.Max.Y-4)
+		b := image.Rect(seg.Min.X+i*half+inset, seg.Min.Y+inset, seg.Min.X+(i+1)*half-inset, seg.Max.Y-inset)
 		fg, face := lerp(dim, cream, 0.3), fc.nav
 		if i == s.drawerTab {
-			r.roundShadow(b, 19, 8, 3, shadowAlpha()*0.8)
-			r.roundFill(b, 19, shift(amber, 14), shift(amber, -14))
-			r.roundHighlight(b, 19)
+			r.roundShadow(b, tabRad, r.sf(8), r.s(3), shadowAlpha()*0.8)
+			r.roundFill(b, tabRad, shift(amber, 14), shift(amber, -14))
+			r.roundHighlight(b, tabRad)
 			fg, face = onAccent(), fc.navBold
 		}
-		r.text(face, name, b.Min.X+(b.Dx()-r.width(face, name))/2, b.Min.Y+b.Dy()/2+9, fg)
-		r.addZone(zone{r: image.Rect(seg.Min.X+i*half, seg.Min.Y-8, seg.Min.X+(i+1)*half, seg.Max.Y+8), kind: zoneTab, opt: i})
+		// No shrinking to fit here: the strip scales with the type, so a name that fits its pill on
+		// one panel fits it on the other. Shrinking instead of scaling was what made these look wrong.
+		r.text(face, name, b.Min.X+(b.Dx()-r.width(face, name))/2, b.Min.Y+b.Dy()/2+r.s(9), fg)
+		r.addZone(zone{r: image.Rect(seg.Min.X+i*half, seg.Min.Y-r.s(8), seg.Min.X+(i+1)*half, seg.Max.Y+r.s(8)), kind: zoneTab, opt: i})
 	}
 
 	// Close, a round button with an ×.
-	c := image.Rect(panel.Max.X-22-46, seg.Min.Y, panel.Max.X-22, seg.Max.Y)
-	r.roundShadow(c, 23, 6, 2, shadowAlpha()*0.5)
-	r.roundFill(c, 23, surface(7), surface(5))
-	r.roundHighlight(c, 23)
-	cx, cy := float64(c.Min.X+23), float64(c.Min.Y+23)
-	r.aaLine(cx-7, cy-7, cx+7, cy+7, 2.6, cream)
-	r.aaLine(cx-7, cy+7, cx+7, cy-7, 2.6, cream)
-	r.addZone(zone{r: c.Inset(-10), kind: zoneDone})
-	r.rule(panel.Min.X+22, panel.Max.X-22, panel.Min.Y+r.headerH()-2, 1)
+	side := r.s(46)
+	c := image.Rect(panel.Max.X-pad-side, seg.Min.Y, panel.Max.X-pad, seg.Max.Y)
+	r.roundShadow(c, segRad, r.sf(6), r.s(2), shadowAlpha()*0.5)
+	r.roundFill(c, segRad, surface(7), surface(5))
+	r.roundHighlight(c, segRad)
+	cx, cy := float64(c.Min.X)+float64(c.Dx())/2, float64(c.Min.Y)+float64(c.Dy())/2
+	arm, pen := r.sf(7), r.sf(26)/10 // 2.6 at the size this was drawn for
+	r.aaLine(cx-arm, cy-arm, cx+arm, cy+arm, pen, cream)
+	r.aaLine(cx-arm, cy+arm, cx+arm, cy-arm, pen, cream)
+	r.addZone(zone{r: c.Inset(-r.s(10)), kind: zoneDone})
+	r.rule(panel.Min.X+pad, panel.Max.X-pad, panel.Min.Y+r.headerH()-r.s(2), 1)
 
-	list := image.Rect(panel.Min.X, panel.Min.Y+r.headerH(), panel.Max.X, panel.Max.Y-8)
+	list := image.Rect(panel.Min.X, panel.Min.Y+r.headerH(), panel.Max.X, panel.Max.Y-r.s(8))
 	rows, note := drawerRows(s)
 	if len(rows) == 0 && note != "" {
-		y := list.Min.Y + 50
+		y := list.Min.Y + r.s(50)
 		for _, line := range r.wrap(fc.value, note, panel.Dx()-2*r.rowIn()) {
 			r.text(fc.value, line, panel.Min.X+r.rowIn(), y, dim)
-			y += 36
+			y += r.s(36)
 		}
 	}
 	under := slices.Clone(r.dst.Pix)

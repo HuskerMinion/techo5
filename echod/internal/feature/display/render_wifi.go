@@ -29,19 +29,33 @@ type wifiState struct {
 	err      string // why the last join failed
 }
 
+// The sizes below are the ones this page was drawn at on a Show 5. Everything that is a length goes
+// through paint.s, so the same layout comes out right on the Show 8's wider panel; wifiRows and
+// keyRows are counts of things rather than lengths, so they stay as they are.
 const (
-	wifiRowTop    = 118
-	wifiRowHeight = 44
-	wifiRows      = 6
-	wifiDoneBar   = 64
+	wifiRowTopBase    = 118
+	wifiRowHeightBase = 44
+	wifiRows          = 6
+	wifiDoneBarBase   = 64
 
-	keyTop    = 150
-	keyH      = 62
-	keyGap    = 6
-	keyW      = 88
-	keyRows   = 4
-	keyMargin = 13
+	keyTopBase    = 150
+	keyHBase      = 62
+	keyGapBase    = 6
+	keyWBase      = 88
+	keyRows       = 4
+	keyMarginBase = 13
 )
+
+func (p *paint) wifiRowTop() int    { return p.s(wifiRowTopBase) }
+func (p *paint) wifiRowHeight() int { return p.s(wifiRowHeightBase) }
+func (p *paint) wifiDoneBar() int   { return p.s(wifiDoneBarBase) }
+func (p *paint) keyTop() int        { return p.s(keyTopBase) }
+func (p *paint) keyH() int          { return p.s(keyHBase) }
+func (p *paint) keyGap() int        { return p.s(keyGapBase) }
+func (p *paint) keyW() int          { return p.s(keyWBase) }
+func (p *paint) keyMargin() int     { return p.s(keyMarginBase) }
+func (p *paint) buttonWide() int    { return p.s(buttonWideBase) }
+func (p *paint) buttonGap() int     { return p.s(buttonGapBase) }
 
 var (
 	keyRowsLetters = []string{"qwertyuiop", "asdfghjkl", "zxcvbnm"}
@@ -58,15 +72,16 @@ type wifiHit struct {
 
 func (r *renderer) wifiListHit(x, y int) wifiHit {
 	h := wifiHit{row: -1}
+	top, rowH := r.wifiRowTop(), r.wifiRowHeight()
 	switch {
-	case y >= r.h-wifiDoneBar:
+	case y >= r.h-r.wifiDoneBar():
 		if x < r.w/2 {
 			h.rescan = true
 		} else {
 			h.done = true
 		}
-	case y >= wifiRowTop && (y-wifiRowTop)/wifiRowHeight < wifiRows:
-		h.row = (y - wifiRowTop) / wifiRowHeight
+	case y >= top && (y-top)/rowH < wifiRows:
+		h.row = (y - top) / rowH
 	}
 	return h
 }
@@ -74,6 +89,7 @@ func (r *renderer) wifiListHit(x, y int) wifiHit {
 // keyAt maps a tap on the keyboard page to a key: a character, or "shift", "symbols", "space",
 // "backspace", "cancel", "join"; empty for nothing.
 func (r *renderer) keyAt(x, y int, symbols bool) string {
+	keyTop, keyH, keyGap, keyW, keyMargin := r.keyTop(), r.keyH(), r.keyGap(), r.keyW(), r.keyMargin()
 	if y < keyTop {
 		return ""
 	}
@@ -126,9 +142,9 @@ func (r *renderer) wifiPage(s scene) {
 		r.keyboardPage(s)
 		return
 	}
-	r.text(r.body, "Wi-Fi", r.margin, 52, amber)
+	r.text(r.body, "Wi-Fi", r.margin, r.s(52), amber)
 	t := clockHM(s.now)
-	r.text(r.small, t, r.w-r.margin-r.width(r.small, t), 52, dim)
+	r.text(r.small, t, r.w-r.margin-r.width(r.small, t), r.s(52), dim)
 	line := "Not connected"
 	if w.status.Connected {
 		line = "Connected to " + w.status.SSID
@@ -143,49 +159,51 @@ func (r *renderer) wifiPage(s scene) {
 	} else if w.err != "" {
 		line = w.err
 	}
-	r.text(r.tiny, line, r.margin, 92, dim)
+	r.text(r.tiny, line, r.margin, r.s(92), dim)
 
 	if len(w.nets) == 0 {
 		msg := "No networks heard yet"
 		if w.scanning {
 			msg = "Scanning" + "..."[:int(s.now.UnixMilli()/400%4)]
 		}
-		r.text(r.small, msg, r.margin, wifiRowTop+34, dim)
+		r.text(r.small, msg, r.margin, r.wifiRowTop()+r.s(34), dim)
 	}
+	rowTop, rowH := r.wifiRowTop(), r.wifiRowHeight()
+	btnW, btnGap := r.buttonWide(), r.buttonGap()
 	start, end, more := pageWith(len(w.nets), w.page, wifiRows)
 	for i, n := range w.nets[start:end] {
-		top := wifiRowTop + i*wifiRowHeight
-		draw.Draw(r.dst, image.Rect(r.margin, top+wifiRowHeight-1, r.w-r.margin, top+wifiRowHeight), image.NewUniform(ember), image.Point{}, draw.Src)
+		top := rowTop + i*rowH
+		draw.Draw(r.dst, image.Rect(r.margin, top+rowH-r.s(1), r.w-r.margin, top+rowH), image.NewUniform(ember), image.Point{}, draw.Src)
 		c := cream
 		if n.SSID == w.status.SSID && w.status.Connected {
 			c = amber
 		}
-		r.text(r.small, n.SSID, r.margin, top+31, c)
+		r.text(r.small, n.SSID, r.margin, top+r.s(31), c)
 		info := bars(n.Signal)
 		if n.Secured {
 			info += "  ·  locked"
 		}
-		r.text(r.tiny, info, r.w-r.margin-buttonWide-buttonGap-r.width(r.tiny, info), top+29, dim)
+		r.text(r.tiny, info, r.w-r.margin-btnW-btnGap-r.width(r.tiny, info), top+r.s(29), dim)
 		label := "Connect"
 		if n.SSID == w.status.SSID && w.status.Connected {
 			label = "Joined"
 		}
-		r.bevel(image.Rect(r.w-r.margin-buttonWide, top+7, r.w-r.margin, top+wifiRowHeight-7), shift(ember, 12), true)
-		r.text(r.tiny, label, r.w-r.margin-buttonWide+(buttonWide-r.width(r.tiny, label))/2, top+29, cream)
+		r.bevel(image.Rect(r.w-r.margin-btnW, top+r.s(7), r.w-r.margin, top+rowH-r.s(7)), shift(ember, 12), true)
+		r.text(r.tiny, label, r.w-r.margin-btnW+(btnW-r.width(r.tiny, label))/2, top+r.s(29), cream)
 	}
 	if more {
-		top := wifiRowTop + (wifiRows-1)*wifiRowHeight
-		r.text(r.small, "More", r.margin, top+31, dim)
-		r.bevel(image.Rect(r.w-r.margin-buttonWide, top+7, r.w-r.margin, top+wifiRowHeight-7), shift(ember, 12), true)
-		r.text(r.tiny, "Next", r.w-r.margin-buttonWide+(buttonWide-r.width(r.tiny, "Next"))/2, top+29, cream)
+		top := rowTop + (wifiRows-1)*rowH
+		r.text(r.small, "More", r.margin, top+r.s(31), dim)
+		r.bevel(image.Rect(r.w-r.margin-btnW, top+r.s(7), r.w-r.margin, top+rowH-r.s(7)), shift(ember, 12), true)
+		r.text(r.tiny, "Next", r.w-r.margin-btnW+(btnW-r.width(r.tiny, "Next"))/2, top+r.s(29), cream)
 	}
 
 	// The bar: rescan on the left, done on the right.
-	top := r.h - wifiDoneBar
+	top := r.h - r.wifiDoneBar()
 	draw.Draw(r.dst, image.Rect(0, top, r.w, r.h), image.NewUniform(ember), image.Point{}, draw.Src)
-	draw.Draw(r.dst, image.Rect(r.w/2-1, top+10, r.w/2+1, r.h-10), image.NewUniform(dim), image.Point{}, draw.Src)
-	r.text(r.body, "Rescan", (r.w/2-r.width(r.body, "Rescan"))/2, top+45, cream)
-	r.text(r.body, "Done", r.w/2+(r.w/2-r.width(r.body, "Done"))/2, top+45, cream)
+	draw.Draw(r.dst, image.Rect(r.w/2-r.s(1), top+r.s(10), r.w/2+r.s(1), r.h-r.s(10)), image.NewUniform(dim), image.Point{}, draw.Src)
+	r.text(r.body, "Rescan", (r.w/2-r.width(r.body, "Rescan"))/2, top+r.s(45), cream)
+	r.text(r.body, "Done", r.w/2+(r.w/2-r.width(r.body, "Done"))/2, top+r.s(45), cream)
 }
 
 // pageWith is pageOf for a page of rows rows: the list's slice, and whether a More row is needed.
@@ -219,10 +237,11 @@ func bars(dbm int) string {
 
 func (r *renderer) keyboardPage(s scene) {
 	w := s.wifi
+	keyTop, keyH, keyGap, keyW, keyMargin := r.keyTop(), r.keyH(), r.keyGap(), r.keyW(), r.keyMargin()
 	title := "Password for " + w.pick.SSID
-	r.text(r.small, title, r.margin, 46, amber)
+	r.text(r.small, title, r.margin, r.s(46), amber)
 	// The field.
-	field := image.Rect(r.margin, 66, r.w-r.margin, 126)
+	field := image.Rect(r.margin, r.s(66), r.w-r.margin, r.s(126))
 	r.bevel(field, shift(walnut, 8), false)
 	shown := w.text
 	if w.busy != "" {
@@ -230,7 +249,7 @@ func (r *renderer) keyboardPage(s scene) {
 	} else if w.err != "" {
 		shown = w.err
 	}
-	for r.width(r.small, shown+"|") > field.Dx()-30 && len(shown) > 1 {
+	for r.width(r.small, shown+"|") > field.Dx()-r.s(30) && len(shown) > 1 {
 		shown = shown[1:]
 	}
 	c := cream
@@ -239,7 +258,7 @@ func (r *renderer) keyboardPage(s scene) {
 	} else {
 		shown += "|"
 	}
-	r.text(r.small, shown, field.Min.X+15, 109, c)
+	r.text(r.small, shown, field.Min.X+r.s(15), r.s(109), c)
 
 	pitch := keyW + keyGap
 	for row := 0; row < 3; row++ {
@@ -283,10 +302,10 @@ func (r *renderer) key(rect image.Rectangle, label string, lit bool) {
 	}
 	r.bevel(rect, fill, true)
 	face := r.small
-	if r.width(face, label) > rect.Dx()-10 {
+	if r.width(face, label) > rect.Dx()-r.s(10) {
 		face = r.tiny
 	}
-	r.text(face, label, rect.Min.X+(rect.Dx()-r.width(face, label))/2, rect.Min.Y+rect.Dy()/2+12, ink)
+	r.text(face, label, rect.Min.X+(rect.Dx()-r.width(face, label))/2, rect.Min.Y+rect.Dy()/2+r.s(12), ink)
 }
 
 // wifiSummary is a line for the connection.

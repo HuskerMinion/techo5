@@ -82,16 +82,16 @@ func (r *renderer) sunriseClock(s scene, p float64) {
 	ampm := clockSuffix(s.now)
 	hw := r.width(r.clock, hour)
 	aw := r.width(r.ampm, ampm)
-	gap := 18
+	gap := r.s(18)
 	if ampm == "" {
 		gap = 0
 	}
 	x := (r.w - hw - gap - aw) / 2
-	base := r.h/2 - 56
+	base := r.h/2 - r.s(56)
 	r.text(r.clock, hour, x, base, ink)
 	r.text(r.ampm, ampm, x+hw+gap, base, ink)
 	date := s.now.Format("Monday, January 2")
-	r.text(r.small, date, (r.w-r.width(r.small, date))/2, base+64, ink)
+	r.text(r.small, date, (r.w-r.width(r.small, date))/2, base+r.s(64), ink)
 }
 
 // faded is a color at a given alpha, premultiplied — which is what Go's RGBA holds, so dimming the

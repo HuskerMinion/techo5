@@ -597,7 +597,7 @@ func (d *Display) gesture(g touch.Gesture) {
 		voice.Get().Action()
 	case touch.SwipeLeft:
 		// From the right edge it brings the drawer in, on the tab it was last on.
-		if d.r != nil && g.X >= d.r.w-drawerEdge {
+		if d.r != nil && g.X >= d.r.w-d.r.drawerEdge() {
 			d.mu.Lock()
 			tab := d.drawerTab
 			d.mu.Unlock()

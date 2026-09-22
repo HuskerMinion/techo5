@@ -85,6 +85,9 @@ func (p *paint) rowH() int        { return p.s(rowHBase) }
 func (p *paint) rowIn() int       { return p.s(rowInBase) }
 
 // scaled reports whether this screen differs from the one the layout was drawn for.
+// sf is s for the float sizes the rounded-shape helpers take: radii, blurs and stroke widths.
+func (p *paint) sf(n int) float64 { return float64(p.s(n)) }
+
 func (p *paint) scaled() bool { return p.sDen != 0 && p.sNum != p.sDen }
 
 // faces is the text sizes the settings parts draw with: the device's own, or the Show's.

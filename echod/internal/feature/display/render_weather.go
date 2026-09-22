@@ -103,13 +103,16 @@ const radarStep = 600 * time.Millisecond
 // weatherButton is the button at the foot of the weather page that turns between the forecast and
 // the rain map.
 func (r *renderer) weatherButton() image.Rectangle {
-	return image.Rect(r.w-r.margin-150, r.h-100, r.w-r.margin, r.h-52)
+	return image.Rect(r.w-r.margin-r.s(150), r.h-r.s(100), r.w-r.margin, r.h-r.s(52))
 }
 
+// weatherToggle is that button drawn, with its label centred in it. The box is scaled along with the
+// type: it used to be a fixed 150 wide, so on a Show 8 the label grew and the box did not, and
+// "Forecast" ran out of both ends of it.
 func (r *renderer) weatherToggle(label string) {
 	b := r.weatherButton()
 	r.bevel(b, shift(ember, 16), true)
-	r.text(r.small, label, b.Min.X+(b.Dx()-r.width(r.small, label))/2, b.Max.Y-15, cream)
+	r.text(r.small, label, b.Min.X+(b.Dx()-r.width(r.small, label))/2, b.Max.Y-r.s(15), cream)
 }
 
 // radarPage is the rain map filling the panel, the loop's time and the credits over it, and home
@@ -118,13 +121,13 @@ func (r *renderer) radarPage(s scene) {
 	v := s.radar
 	draw.Draw(r.dst, r.dst.Bounds(), image.NewUniform(walnut), image.Point{}, draw.Src)
 	if len(v.Frames) == 0 {
-		r.text(r.small, "Radar", r.margin, r.margin+26, amber)
+		r.text(r.small, "Radar", r.margin, r.margin+r.s(26), amber)
 		msg := "Loading the rain map…"
 		if !v.Loading && v.Problem != "" {
 			msg = "No rain map: " + v.Problem
 		}
 		for i, line := range r.wrap(r.body, msg, r.w-2*r.margin) {
-			r.text(r.body, line, r.margin, 200+i*44, dim)
+			r.text(r.body, line, r.margin, r.s(200)+i*r.s(44), dim)
 		}
 		r.weatherToggle("Forecast")
 		return
@@ -142,9 +145,9 @@ func (r *renderer) radarPage(s scene) {
 
 	// Home: a ring in the accent with a dark edge, readable over rain and map alike.
 	h := v.Home
-	r.ring(h, 9, walnut)
-	r.ring(h, 7, amber)
-	r.ring(h, 5, amber)
+	r.ring(h, r.s(9), walnut)
+	r.ring(h, r.s(7), amber)
+	r.ring(h, r.s(5), amber)
 
 	// The time of the frame, and the clock, on dark bands so they read over the map.
 	shade := func(rect image.Rectangle) {
@@ -154,13 +157,13 @@ func (r *renderer) radarPage(s scene) {
 	if i == n-1 {
 		label += "  (latest)"
 	}
-	shade(image.Rect(0, 0, r.w, r.margin+42))
-	r.text(r.small, label, r.margin, r.margin+26, amber)
+	shade(image.Rect(0, 0, r.w, r.margin+r.s(42)))
+	r.text(r.small, label, r.margin, r.margin+r.s(26), amber)
 	r.cornerClock(s)
 
 	credit := "Radar RainViewer  ·  Map © OpenStreetMap contributors"
-	shade(image.Rect(0, r.h-34, r.w, r.h))
-	r.text(r.tiny, credit, r.margin, r.h-10, dim)
+	shade(image.Rect(0, r.h-r.s(34), r.w, r.h))
+	r.text(r.tiny, credit, r.margin, r.h-r.s(10), dim)
 	r.weatherToggle("Forecast")
 }
 
