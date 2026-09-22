@@ -41,6 +41,11 @@ const (
 	// arcSpread is how far above and below the horizontal the arcs reach, in radians.
 	arcSpread = 38 * math.Pi / 180
 
+	// waitingAfter is when the splash starts saying what it is waiting for: long enough that a
+	// device which is already adopted is up and gone before it shows, short enough that nobody
+	// sits watching a screen that looks stuck.
+	waitingAfter = 12 * time.Second
+
 	// splashMin is the least the splash is shown, so a fast connection still shows the mark.
 	splashMin = 4 * time.Second
 )
@@ -86,6 +91,38 @@ func (r *renderer) drawSplash(s *splash, elapsed time.Duration) {
 	}
 	r.arcs(s, elapsed)
 	draw.Draw(r.dst, s.img.Bounds().Add(s.at), s.img, image.Point{}, draw.Over)
+	if elapsed >= waitingAfter {
+		r.splashWaiting(s)
+	}
+}
+
+// splashWaiting says what the splash is waiting for, once it has been up long enough that waiting is
+// the explanation.
+//
+// The mark stays until Home Assistant subscribes, which does not happen until somebody accepts the
+// device there. Between flashing a unit and adopting it that can be minutes, or as long as it takes
+// to walk to a computer, and the screen said nothing at all - so it reads as a device that has hung
+// on its first boot. Somebody sat in front of one for ten minutes before finding out that accepting
+// the ESPHome prompt was what freed it (techo5-checkers issue #2). It costs two lines to say so.
+//
+// Not said from the first frame: a device that is adopted already reaches Home Assistant in a couple
+// of seconds, and telling that owner to go and do something they did not need to do would be worse
+// than saying nothing.
+func (r *renderer) splashWaiting(s *splash) {
+	const (
+		what  = "Waiting for Home Assistant"
+		where = "Settings > Devices & services > ESPHome"
+	)
+	// Below the mark, which reaches within about seventy pixels of the bottom on this panel: the two
+	// lines go in what is left rather than over the wordmark. If a panel ever leaves less room than
+	// they need, they sit on the bottom edge instead of climbing onto the mark.
+	const gap, lead = 26, 32
+	y := s.at.Y + s.img.Bounds().Dy() + gap
+	if bottom := r.h - 6; y+lead > bottom {
+		y = bottom - lead
+	}
+	r.text(r.tiny, what, (r.w-r.width(r.tiny, what))/2, y, teal)
+	r.text(r.tiny, where, (r.w-r.width(r.tiny, where))/2, y+lead, dim)
 }
 
 // arcs draws arcCount rings expanding from the mark to both sides, each fading as it travels.
