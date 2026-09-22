@@ -34,7 +34,8 @@ import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from techo5lib import (CONSOLE_TECHO5, Adb, Console, Fastboot, Release, default_dir, fail, fetch_json,  # noqa: E402
-                       md5, need, new_api_key, note, run_main, step, valid_api_key, wait_for)
+                       md5, need, new_api_key, note, run_main, step, valid_api_key, wait_for,
+                       write_private)
 
 REPO = 'HuskerMinion/techo5'
 # The LineageOS kernel commit TECHO5's kernel is rebuilt from: the vendor modules only load on it.
@@ -205,8 +206,7 @@ def main():
         note('Home Assistant key: the existing one in %s' % key_file)
     else:
         psk = new_api_key()
-        with open(key_file, 'w') as f:
-            f.write(psk)
+        write_private(key_file, psk)
         note('Home Assistant key: new, in %s' % key_file)
 
     # ------------------------------------------------------------------------------------ 5. flash

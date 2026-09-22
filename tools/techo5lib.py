@@ -23,6 +23,12 @@ IS_MACOS = sys.platform == 'darwin'
 ALPINE_URL = 'https://dl-cdn.alpinelinux.org/alpine/v3.24/releases/armv7/alpine-minirootfs-3.24.1-armv7.tar.gz'
 ALPINE_SHA256 = '50942d567e6ee422c16cb46d5c282ed9d8adc9007c2a483faf4148a18c64ce32'
 
+# The public half of the key releases are signed with, the same one the daemon's updater trusts
+# (echod/internal/update/trust.go, releaseKey). An installer writes a root filesystem to a unit, so a
+# manifest is believed only when this key signed it: HTTPS alone would let anything that can present a
+# certificate this computer accepts hand the installer a root filesystem of its own.
+RELEASE_KEY = 'KVUuQUbhyKwPBbIneqFEvXYSI+3Hkfu/heCTy5YNVMk='
+
 # The USB serial consoles: TECHO5 Linux on the Show 5 and the Spot (Linux Foundation ids, told apart by
 # the serial number on the kernel command line), and on the Dot (Google ids, with the unit's serial
 # number as the USB serial).
@@ -143,6 +149,110 @@ def read_sums(text):
     return sums
 
 
+# ------------------------------------------------------------------------------------------ signatures
+
+# Ed25519 verification, written out here because these tools run on whatever Python 3 the machine
+# already has, with no pip install step, and the standard library has no ed25519. It is the check from
+# RFC 8032 section 5.1.7 and nothing else: decompress the key and R, then compare [S]B against
+# R + [h]A. Signing stays in Go (tools/release.ps1); only the maintainer's machine ever needs that.
+_P = 2 ** 255 - 19                                            # the field the curve lives in
+_L = 2 ** 252 + 27742317777372353535851937790883648493        # the order of the base point
+_D = -121665 * pow(121666, _P - 2, _P) % _P                   # the curve constant d
+_SQRT_M1 = pow(2, (_P - 1) // 4, _P)                          # a square root of -1, for recovering x
+
+
+def _recover_x(y, sign):
+    """The x that goes with a compressed point's y and sign bit, or None when there is no such point."""
+    if y >= _P:
+        return None
+    x2 = (y * y - 1) * pow(_D * y * y + 1, _P - 2, _P) % _P
+    if x2 == 0:
+        return None if sign else 0
+    x = pow(x2, (_P + 3) // 8, _P)
+    if (x * x - x2) % _P != 0:
+        x = x * _SQRT_M1 % _P
+    if (x * x - x2) % _P != 0:
+        return None
+    if x & 1 != sign:
+        x = _P - x
+    return x
+
+
+def _point_add(p, q):
+    """Two points added in extended coordinates (x, y, z, t), which keeps this division-free."""
+    a = (p[1] - p[0]) * (q[1] - q[0]) % _P
+    b = (p[1] + p[0]) * (q[1] + q[0]) % _P
+    c = 2 * p[3] * q[3] * _D % _P
+    d = 2 * p[2] * q[2] % _P
+    e, f, g, h = b - a, d - c, d + c, b + a
+    return (e * f % _P, g * h % _P, f * g % _P, e * h % _P)
+
+
+def _point_mul(n, p):
+    """The point p added to itself n times, by doubling and adding."""
+    out = (0, 1, 1, 0)  # the identity
+    while n > 0:
+        if n & 1:
+            out = _point_add(out, p)
+        p = _point_add(p, p)
+        n >>= 1
+    return out
+
+
+def _point_equal(p, q):
+    return (p[0] * q[2] - q[0] * p[2]) % _P == 0 and (p[1] * q[2] - q[1] * p[2]) % _P == 0
+
+
+def _point_decompress(b):
+    """A point back out of its 32 packed bytes, or None when those bytes are not on the curve."""
+    if len(b) != 32:
+        return None
+    n = int.from_bytes(b, 'little')
+    sign, y = n >> 255, n & ((1 << 255) - 1)
+    x = _recover_x(y, sign)
+    return None if x is None else (x, y, 1, x * y % _P)
+
+
+_G_Y = 4 * pow(5, _P - 2, _P) % _P
+_G = (_recover_x(_G_Y, 0), _G_Y, 1, _recover_x(_G_Y, 0) * _G_Y % _P)
+
+
+def ed25519_verify(public_key, message, signature):
+    """True when signature is public_key's ed25519 signature over message, all three as raw bytes."""
+    if len(public_key) != 32 or len(signature) != 64:
+        return False
+    a = _point_decompress(public_key)
+    r = _point_decompress(signature[:32])
+    if a is None or r is None:
+        return False
+    s = int.from_bytes(signature[32:], 'little')
+    if s >= _L:
+        return False
+    h = int.from_bytes(hashlib.sha512(signature[:32] + public_key + message).digest(), 'little') % _L
+    return _point_equal(_point_mul(s, _G), _point_add(r, _point_mul(h, a)))
+
+
+def verify_manifest(manifest, signature):
+    """Stops unless the release key signed these manifest bytes. The signature file holds base64 of the
+    64-byte signature over the manifest exactly as served, which is the form the daemon's updater
+    checks, so the two agree byte for byte about what was signed."""
+    try:
+        key = base64.b64decode(RELEASE_KEY, validate=True)
+    except Exception:
+        key = b''
+    if len(key) != 32:
+        fail('no usable release key in this copy of the tools; do not install from it')
+    try:
+        raw = base64.b64decode(signature.strip(), validate=True)
+    except Exception:
+        raw = b''
+    if len(raw) != 64:
+        fail('the release signature is malformed, so the manifest cannot be trusted; stopping')
+    if not ed25519_verify(key, manifest, raw):
+        fail('the release manifest is NOT signed by the release key: someone between you and GitHub '
+             'may have changed it. Nothing has been installed; stopping.')
+
+
 class Release:
     """A published release: its signed manifest, its SHA256SUMS, and checked downloads of its files."""
 
@@ -150,9 +260,22 @@ class Release:
         base = 'https://github.com/%s/releases' % repo
         self.dl = base + ('/latest/download' if tag == 'latest' else '/download/' + tag)
         try:
-            self.manifest = fetch_json(self.dl + '/manifest.json')
+            raw = fetch(self.dl + '/manifest.json')
         except Exception as e:
             fail('could not read the release manifest from %s: %s' % (self.dl, e))
+        try:
+            sig = fetch(self.dl + '/manifest.json.sig')
+        except Exception as e:
+            fail('could not read the release signature from %s/manifest.json.sig: %s; a release without '
+                 'its signature is not installed' % (self.dl, e))
+        # Checked before the manifest is parsed, the way the daemon's updater does it: until the release
+        # key has vouched for them these are bytes off the network and nothing more.
+        verify_manifest(raw, sig)
+        note('release manifest signed by the project key')
+        try:
+            self.manifest = json.loads(raw.decode('utf-8'))
+        except Exception as e:
+            fail('the release manifest from %s is not readable JSON: %s' % (self.dl, e))
         self.version = self.manifest['version']
         try:
             self.sums = read_sums(fetch(self.dl + '/SHA256SUMS').decode('ascii', 'replace'))
@@ -284,6 +407,15 @@ def wait_for(what, seconds, test, every=5):
 
 def new_api_key():
     return base64.b64encode(secrets.token_bytes(32)).decode('ascii')
+
+
+def write_private(path, text):
+    """Writes a secret to a file only its owner can read. The mode is set as the file is created, so
+    there is no moment where it sits on disk readable by everyone else on the machine. Windows mostly
+    ignores POSIX modes, where the file simply inherits the folder's permissions as before."""
+    fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+    with os.fdopen(fd, 'w') as f:
+        f.write(text)
 
 
 def valid_api_key(key):

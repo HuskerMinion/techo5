@@ -146,8 +146,9 @@ is published with the release, and the lists are brought up to date (and tested)
 `tools/release.ps1` (Show 5), techo5-dot's `tools/release-dot.ps1` and techo5-spot's
 `tools/release-spot.ps1` sign a manifest with the key in `TECHO5_SIGN_KEY` and publish with `gh`. They
 are PowerShell scripts for the maintainer's Windows machine. Devices only take a manifest signed by the
-project's key, so a fork publishing its own releases needs its own key and a daemon built with its
-public key (`echod/internal/update/trust.go`).
+project's key, and the installers check the same signature before they believe a manifest, so a fork
+publishing its own releases needs its own key, a daemon built with its public key
+(`echod/internal/update/trust.go`) and the same key in `tools/techo5lib.py` (`RELEASE_KEY`).
 
 `TECHO5_SIGN_KEY` never leaves the maintainer's machine — it is not a GitHub Actions secret, and the
 build itself does not need to happen locally to keep that true. Pushing a release tag runs

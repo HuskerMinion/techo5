@@ -37,7 +37,8 @@ and no dates. Other Echos (the Dot 3rd gen and later, and so on) are **not** sup
 ## Set up your computer (once)
 
 The installers are Python 3 scripts that work the same on Windows, Linux and macOS. Nothing is compiled:
-they download the signed release, check every file against its checksum, and build the Dot and Spot boot
+they download the release, check the manifest's signature against the project's key and every file
+against its checksum, and build the Dot and Spot boot
 images from your own unit's backup. You need Python 3, the Android platform tools (`adb` and
 `fastboot`) and `git`:
 
