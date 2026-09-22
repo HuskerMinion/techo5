@@ -32,12 +32,13 @@
 Alexa with a small Alpine Linux image and one Go daemon, turning the Show into a fast, private Home
 Assistant voice satellite with a touch screen of its own.
 
-The same daemon runs on three more Echo devices, each from its own repository:
+The same daemon runs on four more Echo devices, each from its own repository:
 
 | Device | Repository | Status |
 |---|---|---|
 | **Echo Show 5, 2nd gen** (2021, `cronos`) | this one | In daily use |
 | **Echo Show 5, 1st gen** (2019, `checkers`) | this one, same binary; the hardware notes are in [techo5-checkers](https://github.com/HuskerMinion/techo5-checkers) | Working, tested end to end on one unit |
+| **Echo Show 8, 1st gen** (2019, `crown`) | this one, same binary | Working on one unit, newest of the four |
 | **Echo Spot, 1st gen** (2017, `rook`) | [TECHO5 Spot](https://github.com/HuskerMinion/techo5-spot) | In daily use |
 | **Echo Dot, 2nd gen** (2016, `biscuit`) | [TECHO5 Dot](https://github.com/HuskerMinion/techo5-dot) | In daily use |
 
