@@ -2,6 +2,7 @@ package security
 
 import (
 	"errors"
+	"log/slog"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -99,12 +100,38 @@ func stopSSH() error {
 	return syscall.Kill(pid, syscall.SIGTERM)
 }
 
+// readKeys is what is already on the device, and it forgives what setting a key does not.
+//
+// parseKeys refuses a whole set on one bad line, which is right at the door: somebody is watching,
+// and the old keys stay untouched. It is wrong here. A file written before the checks got stricter
+// can hold a line nothing could log in with - a key pasted on top of its own type did exactly that
+// here - and failing the read would turn that into zero keys, which settleSSH reads as "nobody can
+// log in" and answers by not starting the server at all. One bad line would take SSH away from a
+// device that still has a good key in the same file, on an update, with nothing said about it.
+//
+// So every line is taken on its own: the good ones are kept and the rest are counted out loud.
 func readKeys() []string {
 	b, err := os.ReadFile(keysFile())
 	if err != nil {
 		return nil
 	}
-	keys, _ := parseKeys(string(b))
+	var keys []string
+	var dropped int
+	for _, line := range strings.Split(string(b), "\n") {
+		if strings.TrimSpace(line) == "" {
+			continue
+		}
+		one, err := parseKeys(line)
+		if err != nil || len(one) != 1 {
+			dropped++
+			continue
+		}
+		keys = append(keys, one[0])
+	}
+	if dropped > 0 {
+		slog.Warn("ssh: lines in the authorized keys file are not keys anything could log in with; the rest still work",
+			"kept", len(keys), "dropped", dropped, "file", keysFile())
+	}
 	return keys
 }
 

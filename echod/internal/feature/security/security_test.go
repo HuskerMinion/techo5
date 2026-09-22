@@ -1,6 +1,7 @@
 package security
 
 import (
+	"os"
 	"strings"
 	"testing"
 )
@@ -71,5 +72,27 @@ func TestAKeyWhoseInsideDoesNotMatchIsRefused(t *testing.T) {
 		if strings.Contains(err.Error(), "someone@desk") && !strings.Contains(err.Error(), "…") {
 			t.Errorf("%s: the error repeats the whole line: %v", what, err)
 		}
+	}
+}
+
+// A file already on a device can hold a line that is not a key - one was written here before the
+// checks got stricter. Reading must not answer that with nothing: settleSSH reads no keys as "nobody
+// can log in" and leaves the server down, so one bad line would take SSH off a device that still has
+// a good key sitting next to it, during an update, silently.
+func TestOneBadLineDoesNotCostTheGoodOnes(t *testing.T) {
+	dir := t.TempDir()
+	old := KeysDir
+	KeysDir = dir
+	t.Cleanup(func() { KeysDir = old })
+
+	good := "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIHD8TFGO3hxbn85EQV6PpKWtoA9r2RMDQwp1Z1MiR7KV someone@desk"
+	bad := "ssh-ed25519 ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIHD8TFGO3hxbn85EQV6PpKWtoA9r2RMDQwp1Z1MiR7KV someone@desk"
+	if err := os.WriteFile(keysFile(), []byte(bad+"\n"+good+"\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	keys := readKeys()
+	if len(keys) != 1 || keys[0] != good {
+		t.Fatalf("readKeys = %q, want the one key that works", keys)
 	}
 }

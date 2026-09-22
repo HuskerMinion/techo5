@@ -18,7 +18,7 @@ func TestTheThingsThatMustNotGetOut(t *testing.T) {
 		`I [12.40] bluetooth up address=aa:bb:cc:dd:ee:ff`,
 		`I [12.55] home assistant http://198.51.100.155:8123 token=eyJhbGciOiJIUzI1NiJ9.abc`,
 		`I [13.02] this device is Guest's Desk (G000AA0000000000)`,
-		`I [13.10] ipv6 2001:db8:5066:7e01:aae6:21ff:fe77:3fae`,
+		`I [13.10] ipv6 2001:db8:abcd:1234:5678:9abc:def0:1111`,
 		`I [13.20] phone registered peer=+15551234567 psk="s3cretpassphrase"`,
 		`I [13.30] serving on 127.0.0.1:8899`,
 	}, "\n")
