@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	neturl "net/url"
 	"os"
 	"path/filepath"
 	"strings"
@@ -186,22 +187,21 @@ func (c *Client) Fetch(path string) ([]byte, error) {
 }
 
 // FetchURL gets bytes from a URL a resolve returned: a path relative to Home Assistant, one of its
-// own absolute URLs, or an absolute URL an external source already signed. The token is sent
-// either way — needed for the first two, harmless for the third.
+// own absolute URLs, or an absolute URL an external source already signed. Only the first two get
+// the token. The third is a host the user does not run — Jellyfin, Plex, Synology Photos, a radio
+// directory, a cloud photo service — and the token is a long-lived one that opens the whole Home
+// Assistant API, so putting it on that request would hand the house to whoever answers it. Those
+// fetches go out bare, which is all they need: the source signed the URL itself.
 func (c *Client) FetchURL(url string) ([]byte, error) {
-	base := c.baseURL()
 	if strings.HasPrefix(url, "/") {
 		return c.do("GET", url, nil)
 	}
-	if rest, ok := strings.CutPrefix(url, base); ok {
+	if rest, ok := ownURL(c.baseURL(), url); ok {
 		return c.do("GET", rest, nil)
 	}
 	req, err := http.NewRequest("GET", url, nil)
 	if err != nil {
 		return nil, err
-	}
-	if token := c.token(); token != "" {
-		req.Header.Set("Authorization", "Bearer "+token)
 	}
 	resp, err := c.http.Do(req)
 	if err != nil {
@@ -218,17 +218,46 @@ func (c *Client) FetchURL(url string) ([]byte, error) {
 	return out, nil
 }
 
-// baseURL and token are the configured access, empty when none is set.
+// ownURL reports whether raw addresses the configured Home Assistant, and if so returns the part
+// after the base for do to send along with the token. It parses both sides instead of comparing
+// the strings: a prefix test has no boundary, so with a base of http://ha:8123 a URL like
+// http://ha:8123.evil.example/x reads as one of ours and the token walks out to a stranger's host.
+// Scheme and host compared as net/url splits them cannot be misread that way, and the path still
+// needs a / after the base so that a Home Assistant living under /ha does not lend the token to
+// /hacked.
+func ownURL(base, raw string) (string, bool) {
+	if base == "" {
+		return "", false
+	}
+	b, err := neturl.Parse(base)
+	if err != nil || b.Host == "" {
+		return "", false
+	}
+	u, err := neturl.Parse(raw)
+	if err != nil || !strings.EqualFold(u.Scheme, b.Scheme) || !strings.EqualFold(u.Host, b.Host) {
+		return "", false
+	}
+	rest, prefix := u.EscapedPath(), strings.TrimRight(b.EscapedPath(), "/")
+	if prefix != "" {
+		if rest != prefix && !strings.HasPrefix(rest, prefix+"/") {
+			return "", false
+		}
+		rest = strings.TrimPrefix(rest, prefix)
+	}
+	if rest == "" {
+		rest = "/"
+	}
+	if u.RawQuery != "" {
+		rest += "?" + u.RawQuery
+	}
+	return rest, true
+}
+
+// baseURL is the configured Home Assistant URL, empty when none is set.
 func (c *Client) baseURL() string {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	return c.acc.URL
-}
-
-func (c *Client) token() string {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	return c.acc.Token
 }
 
 // Entity is an entity's id and the name Home Assistant shows for it.
