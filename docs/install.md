@@ -11,11 +11,24 @@ firmware): releases don't carry it, so it is copied into the store before the pa
 `userdata` is kept (TECHO5 reads the Wi-Fi network Android saved from it), and TWRP stays in
 `recovery`, so LineageOS can be put back with TWRP and its zip.
 
+## Unlock the bootloader first
+
+**The bootloader has to be unlocked before any of this works.** Running LineageOS does not mean it
+is: the unlock is a separate exploit, with a shorting trick to get the device into BROM mode, not a
+`fastboot flashing unlock`. Without it the installer stops at the first write with
+
+```
+FAILED (remote: 'the command you input is restricted on locked hw')
+```
+
+- Show 5 **2nd gen** (cronos):
+  [amonet-cronos](https://xdaforums.com/t/unlock-root-twrp-unbrick-amazon-echo-show-5-2nd-gen-2021-cronos.4772596/)
+- Show 5 **1st gen** (checkers):
+  [amonet-checkers](https://xdaforums.com/t/unlock-root-twrp-unbrick-amazon-echo-show-5-1st-gen-2019-checkers.4762900/)
+
 ## What you need
 
-- An Echo Show 5 2nd gen already unlocked with
-  [amonet-cronos](https://xdaforums.com/t/unlock-root-twrp-unbrick-amazon-echo-show-5-2nd-gen-2021-cronos.4772596/)
-  and running
+- An Echo Show 5 2nd gen, **unlocked as above**, running
   [LineageOS 18.1](https://xdaforums.com/t/rom-unofficial-11-cronos-lineageos-18-1-for-the-amazon-echo-show-5-2021.4772598/),
   connected to your Wi-Fi in Android, with USB debugging on.
 - Its power adapter and a USB **data** cable to the PC. Keep it on mains power while flashing.
