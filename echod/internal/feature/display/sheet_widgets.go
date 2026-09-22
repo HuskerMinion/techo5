@@ -759,29 +759,40 @@ const (
 // danger is the color of an action to think twice about, whatever the theme.
 var danger = color.RGBA{0xe5, 0x48, 0x4d, 0xff}
 
+// buttonFace draws a button's shape and returns the colour its label should be drawn in.
+//
+// Size and radius are the caller's, because a button is the same thing whether it is the pill on a
+// settings row or one of the two large answers on the setup page. Drawing them from one place is
+// what keeps them looking like the same control: the Show's answers used to be square bevelled
+// boxes and looked like they belonged to another program.
+func (r *paint) buttonFace(b image.Rectangle, rad float64, style buttonStyle) color.RGBA {
+	switch style {
+	case btnPrimary:
+		r.roundShadow(b, rad, 8, 3, shadowAlpha()*0.8)
+		r.roundFill(b, rad, shift(amber, 14), shift(amber, -14))
+		r.roundHighlight(b, rad)
+		return onAccent()
+	case btnSecondary:
+		r.roundShadow(b, rad, 6, 2, shadowAlpha()*0.5)
+		r.roundFill(b, rad, surface(6), surface(4))
+		r.roundStroke(b, rad, 1, ember)
+		r.roundHighlight(b, rad)
+	case btnDanger:
+		r.roundFill(b, rad, surface(4), surface(3))
+		r.roundStroke(b, rad, 1.6, danger)
+		return danger
+	}
+	return cream
+}
+
 // pillButton draws an action ending at right and returns its left edge.
 func (r *paint) pillButton(right, cy int, label string, style buttonStyle) int {
 	fc := r.faces()
-	w := r.width(fc.button, label) + 44
-	b := image.Rect(right-w, cy-20, right, cy+20)
-	fg := cream
-	switch style {
-	case btnPrimary:
-		r.roundShadow(b, 20, 8, 3, shadowAlpha()*0.8)
-		r.roundFill(b, 20, shift(amber, 14), shift(amber, -14))
-		r.roundHighlight(b, 20)
-		fg = onAccent()
-	case btnSecondary:
-		r.roundShadow(b, 20, 6, 2, shadowAlpha()*0.5)
-		r.roundFill(b, 20, surface(6), surface(4))
-		r.roundStroke(b, 20, 1, ember)
-		r.roundHighlight(b, 20)
-	case btnDanger:
-		r.roundFill(b, 20, surface(4), surface(3))
-		r.roundStroke(b, 20, 1.6, danger)
-		fg = danger
-	}
-	r.text(fc.button, label, b.Min.X+22, cy+8, fg)
+	w := r.width(fc.button, label) + r.s(44)
+	half := r.s(20)
+	b := image.Rect(right-w, cy-half, right, cy+half)
+	fg := r.buttonFace(b, float64(half), style)
+	r.text(fc.button, label, b.Min.X+r.s(22), cy+r.s(8), fg)
 	return b.Min.X
 }
 
