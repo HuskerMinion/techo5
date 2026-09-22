@@ -527,13 +527,13 @@ type tone struct {
 
 // convert demosaics one RGGB frame to RGBA at full size.
 func convert(raw []byte) (*image.RGBA, tone) {
-	t := levels(raw)
-	return demosaic(raw, t), t
+	t := stats(raw)
+	return render(raw, t), t
 }
 
-// levels measures grey-world white balance on the 2x2 cells, and the black and white points from the
+// stats measures grey-world white balance on the 2x2 cells, and the black and white points from the
 // green histogram (0.2 % and 99.5 %).
-func levels(raw []byte) tone {
+func stats(raw []byte) tone {
 	var sumR, sumG, sumB uint64
 	var hist [256]int
 	n := 0
@@ -584,9 +584,9 @@ func (t tone) lut(gain float64) *[1024]uint8 {
 	return &l
 }
 
-// demosaic is bilinear on RGGB: each pixel's missing colours are averaged from its neighbours.
+// render is bilinear on RGGB: each pixel's missing colours are averaged from its neighbours.
 // Values carry two extra bits (times 4) into the lookups.
-func demosaic(raw []byte, t tone) *image.RGBA {
+func render(raw []byte, t tone) *image.RGBA {
 	w, h := sensorW, sensorH
 	lr, lg, lb := t.lut(t.gainR), t.lut(1), t.lut(t.gainB)
 	img := image.NewRGBA(image.Rect(0, 0, w, h))
@@ -644,10 +644,5 @@ func demosaic(raw []byte, t tone) *image.RGBA {
 	return img
 }
 
-// Full is the frame at full size: the same picture as RGBA, which is already the sensor's size.
-func (f *Frame) Full() *image.RGBA {
-	if f.RGBA == nil && f.raw != nil {
-		f.RGBA = demosaic(f.raw, f.tone)
-	}
-	return f.RGBA
-}
+// Full is the frame at full size: the same picture as Image, which is already the sensor's size.
+func (f *Frame) Full() *image.RGBA { return f.Image() }

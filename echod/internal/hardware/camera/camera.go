@@ -21,6 +21,7 @@ import (
 	"image"
 	"log/slog"
 	"math"
+	"sync"
 	"sync/atomic"
 	"syscall"
 	"time"
@@ -631,55 +632,68 @@ func unpackLine(line []byte, dst []uint16) {
 	}
 }
 
-// convert turns one packed frame into a half-size RGBA picture: one pixel per Bayer cell (the
-// two greens summed), grey-world white balance, the darkest 0.1% at black (within reason), the top
-// percentile at white, gamma 1/1.8 or steeper for a backlit frame. The tone it settled on comes back for Full.
+// convert turns one packed frame into a half-size RGBA picture and the tone it was levelled with.
 func convert(raw []byte) (*image.RGBA, tone) {
-	img := image.NewRGBA(image.Rect(0, 0, Width, Height))
-	cells := make([]uint16, Width*Height*3)
+	t := stats(raw)
+	return render(raw, t), t
+}
+
+// stats levels one frame: grey-world white balance, the darkest 0.1% at black (within reason), the
+// top percentile at white, gamma 1/1.8 or steeper for a backlit frame.
+func stats(raw []byte) tone { return sample(raw, statsStep) }
+
+// statsStep is how many cells the measurement moves on by. Levels and white balance come from a
+// sixteenth of the frame; sampling every cell measures the same picture for four times the work.
+const statsStep = 2
+
+func sample(raw []byte, step int) tone {
 	row0 := make([]uint16, sensorW)
 	row1 := make([]uint16, sensorW)
-	var sumR, sumG, sumB uint64
+	var sumR, sumG, sumB uint32
 	var hist, centre [2048]int
-	for y := 0; y < Height; y++ {
+	taken, middle := 0, 0
+	for y := 0; y < Height; y += step {
 		unpackLine(raw[(2*y)*bytesPerLine:(2*y+1)*bytesPerLine], row0)
 		unpackLine(raw[(2*y+1)*bytesPerLine:(2*y+2)*bytesPerLine], row1)
-		for x := 0; x < Width; x++ {
+		down := y >= Height/4 && y < Height*3/4
+		for x := 0; x < Width; x += step {
 			r := row0[2*x]
 			g := row0[2*x+1] + row1[2*x]
 			b := row1[2*x+1]
 			if sensor.blueFirst {
 				r, b = b, r
 			}
-			i := (y*Width + x) * 3
-			cells[i], cells[i+1], cells[i+2] = r<<1, g, b<<1
-			sumR += uint64(r)
-			sumG += uint64(g)
-			sumB += uint64(b)
+			sumR += uint32(r)
+			sumG += uint32(g)
+			sumB += uint32(b)
 			hist[g]++
-			if x >= Width/4 && x < Width*3/4 && y >= Height/4 && y < Height*3/4 {
+			taken++
+			if down && x >= Width/4 && x < Width*3/4 {
 				centre[g]++
+				middle++
 			}
 		}
 	}
-	n := float64(Width * Height)
+	n := float64(taken)
 	t := tone{gainR: 1, gainB: 1, white: 1, gamma: gammaNormal}
 	avgR, avgG, avgB := float64(sumR)*2/n, float64(sumG)/n, float64(sumB)*2/n
 	if avgR > 1 && avgB > 1 {
-		t.gainR, t.gainB = avgG/avgR, avgG/avgB
+		// Quantised so a steady scene keeps asking for the tables it already has.
+		t.gainR = math.Round(avgG/avgR*256) / 256
+		t.gainB = math.Round(avgG/avgB*256) / 256
 	}
 	seen, low := 0, -1
 	for v := 0; v < len(hist); v++ {
 		seen += hist[v]
-		if low < 0 && seen >= int(n)/1000 {
+		if low < 0 && seen >= taken/1000 {
 			low = v
 		}
-		if seen >= int(n)*99/100 {
+		if seen >= taken*99/100 {
 			t.white = v
 			break
 		}
 	}
-	median, half := 0, (Width/2)*(Height/2)/2
+	median, half := 0, middle/2
 	for v, seen := 0, 0; v < len(centre); v++ {
 		if seen += centre[v]; seen >= half {
 			median = v
@@ -691,19 +705,44 @@ func convert(raw []byte) (*image.RGBA, tone) {
 	}
 	t.gamma = gammaFor(median, t.white)
 	t.black = blackFor(low, t.white)
-	luts := t.tables()
-	for i, j := 0, 0; i < len(cells); i, j = i+3, j+4 {
-		img.Pix[j] = luts[0][cells[i]]
-		img.Pix[j+1] = luts[1][cells[i+1]]
-		img.Pix[j+2] = luts[2][cells[i+2]]
-		img.Pix[j+3] = 255
+	return t
+}
+
+// render paints the half-size picture: one pixel per Bayer cell, the two greens summed.
+func render(raw []byte, t tone) *image.RGBA {
+	img := image.NewRGBA(image.Rect(0, 0, Width, Height))
+	lut := t.tables()
+	row0 := make([]uint16, sensorW)
+	row1 := make([]uint16, sensorW)
+	for y := 0; y < Height; y++ {
+		unpackLine(raw[(2*y)*bytesPerLine:(2*y+1)*bytesPerLine], row0)
+		unpackLine(raw[(2*y+1)*bytesPerLine:(2*y+2)*bytesPerLine], row1)
+		pix := img.Pix[y*img.Stride:]
+		for x := 0; x < Width; x++ {
+			r := row0[2*x]
+			g := row0[2*x+1] + row1[2*x]
+			b := row1[2*x+1]
+			if sensor.blueFirst {
+				r, b = b, r
+			}
+			j := x * 4
+			pix[j] = lut[0][r<<1]
+			pix[j+1] = lut[1][g]
+			pix[j+2] = lut[2][b<<1]
+			pix[j+3] = 255
+		}
 	}
-	return img, t
+	return img
 }
 
 // tables are per-channel lookups from an 11-bit level to an 8-bit output: gain, scale to white,
 // gamma.
 func (t tone) tables() *[3][2048]uint8 {
+	lutCache.Lock()
+	defer lutCache.Unlock()
+	if lutCache.built != nil && lutCache.t == t {
+		return lutCache.built
+	}
 	var lut [3][2048]uint8
 	for ch, gain := range []float64{t.gainR, 1, t.gainB} {
 		for v := 0; v < 2048; v++ {
@@ -717,15 +756,24 @@ func (t tone) tables() *[3][2048]uint8 {
 			lut[ch][v] = uint8(math.Pow(f, t.gamma)*255 + 0.5)
 		}
 	}
+	lutCache.t, lutCache.built = t, &lut
 	return &lut
+}
+
+var lutCache struct {
+	sync.Mutex
+	t     tone
+	built *[3][2048]uint8
 }
 
 // Full demosaics the frame at the sensor's own 1600x1200: bilinear, each pixel's missing two
 // colours averaged from its neighbours, levelled the way the half-size picture was. It costs a
 // few hundred milliseconds on this SoC, so it is for stills, not the stream.
 func (f *Frame) Full() *image.RGBA {
+	f.mu.Lock()
+	defer f.mu.Unlock()
 	if f.raw == nil {
-		return f.RGBA
+		return f.rgba
 	}
 	w, h := sensorW, sensorH
 	px := make([]uint16, w*h)
@@ -745,7 +793,7 @@ func (f *Frame) Full() *image.RGBA {
 		}
 		return uint32(px[y*w+x])
 	}
-	luts := f.tone.tables()
+	luts := f.level().tables()
 	img := image.NewRGBA(image.Rect(0, 0, w, h))
 	for y := 0; y < h; y++ {
 		for x := 0; x < w; x++ {
