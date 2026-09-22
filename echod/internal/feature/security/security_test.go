@@ -6,20 +6,22 @@ import (
 )
 
 func TestParseKeys(t *testing.T) {
-	ed := "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIExample someone@desk"
-	rsa := "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQExample"
+	ed := "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIHD8TFGO3hxbn85EQV6PpKWtoA9r2RMDQwp1Z1MiR7KV someone@desk"
+	// No comment on the second one, so keyLabel has to fall back to the type. Both are real keys:
+	// what is inside a key is checked now, and a made-up body would be refused as it should be.
+	bare := "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIDekQK/lzJW2ohfEa2o8Sp7RjfCeYDVryU67akoQN5vZ"
 
-	keys, err := parseKeys("\r\n  " + ed + "  \r\n\n" + rsa + "\n")
+	keys, err := parseKeys("\r\n  " + ed + "  \r\n\n" + bare + "\n")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(keys) != 2 || keys[0] != ed || keys[1] != rsa {
+	if len(keys) != 2 || keys[0] != ed || keys[1] != bare {
 		t.Fatalf("keys = %q", keys)
 	}
 	if got := keyLabel(keys[0]); got != "someone@desk" {
 		t.Errorf("label = %q", got)
 	}
-	if got := keyLabel(keys[1]); got != "ssh-rsa" {
+	if got := keyLabel(keys[1]); got != "ssh-ed25519" {
 		t.Errorf("label without a comment = %q", got)
 	}
 
@@ -37,6 +39,37 @@ func TestParseKeys(t *testing.T) {
 			t.Errorf("accepted %q", bad)
 		} else if strings.Contains(err.Error(), "AAAA") && strings.Contains(bad, "PRIVATE") {
 			t.Errorf("error echoes key material: %v", err)
+		}
+	}
+}
+
+// A public key names its type twice: once in front and once inside the base64, and the one inside is
+// what a server reads. A line that gets those two wrong is stored, reported as installed, and then
+// silently refused at every login - which is exactly what happened when a key was pasted onto a line
+// that already carried its type, and cost an afternoon to find.
+func TestAKeyWhoseInsideDoesNotMatchIsRefused(t *testing.T) {
+	const good = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIClsDs7ssckQ2RBTOA+QAPp4hEpK2YfeUD4HRcOwDbUT someone@desk"
+
+	if keys, err := parseKeys(good); err != nil || len(keys) != 1 {
+		t.Fatalf("a real key was refused: %v (%d kept)", err, len(keys))
+	}
+
+	for what, line := range map[string]string{
+		"the type pasted in twice":     "ssh-ed25519 ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIClsDs7ssckQ2RBTOA+QAPp4hEpK2YfeUD4HRcOwDbUT someone@desk",
+		"a type that is not the key's": "ssh-rsa AAAAC3NzaC1lZDI1NTE5AAAAIClsDs7ssckQ2RBTOA+QAPp4hEpK2YfeUD4HRcOwDbUT someone@desk",
+		"not base64 at all":            "ssh-ed25519 not-a-key someone@desk",
+		"too short to name a type":     "ssh-ed25519 AAAA someone@desk",
+	} {
+		keys, err := parseKeys(line)
+		if err == nil {
+			t.Errorf("%s was accepted, and nothing could have logged in with it", what)
+			continue
+		}
+		if len(keys) != 0 {
+			t.Errorf("%s: refused but %d keys came back", what, len(keys))
+		}
+		if strings.Contains(err.Error(), "someone@desk") && !strings.Contains(err.Error(), "…") {
+			t.Errorf("%s: the error repeats the whole line: %v", what, err)
 		}
 	}
 }

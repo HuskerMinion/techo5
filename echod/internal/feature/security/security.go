@@ -9,6 +9,8 @@ package security
 
 import (
 	"context"
+	"encoding/base64"
+	"encoding/binary"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -241,9 +243,43 @@ func parseKeys(s string) ([]string, error) {
 		if !ok {
 			return nil, fmt.Errorf("ssh_keys: not a public key line: %.24q…", line)
 		}
+		inside, err := bodyType(fields[1])
+		if err != nil {
+			return nil, fmt.Errorf("ssh_keys: %v: %.24q…", err, line)
+		}
+		if inside != fields[0] {
+			return nil, fmt.Errorf("ssh_keys: the line says %s but the key in it is %s, so nothing could log in with it; a paste landing after the type it was already next to does this", fields[0], inside)
+		}
 		out = append(out, strings.Join(fields, " "))
 	}
 	return out, nil
+}
+
+// bodyType is the key type written inside the key itself.
+//
+// A public key line names its type twice: the word in front, and again in the first field of the
+// base64 blob, which is the one an SSH server actually reads. Checking only the word in front lets
+// through a line whose body is anything at all - "ssh-ed25519 ssh-ed25519 AAAA…" passes it, because
+// the first word is a real type and the second is where the key should have been. That exact line
+// was stored on a device here, reported to Home Assistant as installed, and then thrown away by
+// dropbear at every login, and the only symptom anybody could see was a refused password-less
+// login. A key nobody can log in with is not a key, and the moment to say so is while somebody is
+// looking at the screen they pasted it into.
+//
+// The blob is SSH's own wire format: a four-byte length, then that many bytes of type name.
+func bodyType(b64 string) (string, error) {
+	raw, err := base64.StdEncoding.DecodeString(b64)
+	if err != nil {
+		return "", errors.New("the key itself is not base64")
+	}
+	if len(raw) < 4 {
+		return "", errors.New("the key is too short to be one")
+	}
+	n := binary.BigEndian.Uint32(raw[:4])
+	if n == 0 || n > 64 || int(n) > len(raw)-4 {
+		return "", errors.New("the key does not start with a type")
+	}
+	return string(raw[4 : 4+n]), nil
 }
 
 // keyLabel is how a key is named on the screen.
