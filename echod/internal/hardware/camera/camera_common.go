@@ -69,6 +69,14 @@ type Camera struct {
 	err     error // why the last start failed, for callers waiting on a frame
 	seq     uint64
 
+	// stopping is the stopped channel of a run that is on its way out: running is already clear,
+	// but the goroutine still owns the sensor until it closes. Acquire waits on it. See idleStop.
+	stopping chan struct{}
+
+	// owner is what runs the sensor, so that a test can drive the lifecycle on a machine with no
+	// camera. Nil is the real thing, run.
+	owner func(stop, stopped chan struct{})
+
 	// wedged is the sensor having gone away in a manner nothing here can undo. See ErrNeedsReboot.
 	wedged error
 }
@@ -101,9 +109,13 @@ const (
 	frameWait = 6 * time.Second
 )
 
+// nodes are the device files the camera is driven through. It is a variable so that a test can
+// point it at something that exists everywhere and exercise the lifecycle off the device.
+var nodes = []string{"/dev/camera-isp", "/dev/kd_camera_hw", "/dev/ion", "/proc/m4u"}
+
 // Available reports whether this device has the camera nodes.
 func Available() bool {
-	for _, p := range []string{"/dev/camera-isp", "/dev/kd_camera_hw", "/dev/ion", "/proc/m4u"} {
+	for _, p := range nodes {
 		if _, err := os.Stat(p); err != nil {
 			return false
 		}
@@ -125,11 +137,27 @@ func (c *Camera) Acquire() (release func(), err error) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
+	// A stop that is under way still owns the sensor. idleStop clears running as soon as it has
+	// asked the run goroutine to finish, but that goroutine takes the best part of a mute poll to
+	// come out of the stream and close the ISP. Opening in that window puts the sensor in two
+	// hands at once, and the goroutine on its way out then tears CSI2 down underneath the new
+	// stream; if imgsensor answers the next open with EIO the camera is written off for the rest
+	// of the boot. So wait the stop out, with the lock dropped so it can finish.
+	for c.stopping != nil {
+		gone := c.stopping
+		c.mu.Unlock()
+		<-gone
+		c.mu.Lock()
+		if c.stopping == gone {
+			c.stopping = nil
+		}
+	}
+
 	// Once it is gone it is gone: opening again only produces the same error, and the caller is
 	// better told what would fix it than handed a bare I/O error every twenty seconds.
 	if c.wedged != nil {
 		return nil, c.wedged
-	}
+	}
 	c.users++
 	if c.idle != nil {
 		c.idle.Stop()
@@ -140,7 +168,11 @@ func (c *Camera) Acquire() (release func(), err error) {
 		c.err = nil
 		c.stop = make(chan struct{})
 		c.stopped = make(chan struct{})
-		go c.run(c.stop, c.stopped)
+		run := c.owner
+		if run == nil {
+			run = c.run
+		}
+		go run(c.stop, c.stopped)
 	}
 	var done sync.Once
 	return func() {
@@ -155,6 +187,10 @@ func (c *Camera) Acquire() (release func(), err error) {
 	}, nil
 }
 
+// idleStop powers the sensor down once nobody has wanted it for a while. It hands the stop to
+// stopping before it lets the lock go: clearing running is not enough, because the goroutine keeps
+// hold of the hardware until it returns, and an Acquire arriving meanwhile has to wait rather than
+// open a sensor that is still somebody else's.
 func (c *Camera) idleStop() {
 	c.mu.Lock()
 	if c.users != 0 || !c.running {
@@ -163,9 +199,15 @@ func (c *Camera) idleStop() {
 	}
 	stop, stopped := c.stop, c.stopped
 	c.running = false
+	c.stopping = stopped
 	c.mu.Unlock()
 	close(stop)
 	<-stopped
+	c.mu.Lock()
+	if c.stopping == stopped {
+		c.stopping = nil
+	}
+	c.mu.Unlock()
 }
 
 // Snapshot returns the next frame the sensor produces, starting it if need be.
