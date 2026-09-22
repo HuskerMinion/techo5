@@ -1,7 +1,6 @@
 package home
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -244,7 +243,7 @@ func mosaic(ctx context.Context, w, h, x0, y0, zoom, parallel int, url func(x, y
 			b, err := get(ctx, url(x, t.ty))
 			var img image.Image
 			if err == nil {
-				img, _, err = image.Decode(bytes.NewReader(b))
+				img, err = decodeWithin(b, maxArtPixels, "map tile")
 			}
 			mu.Lock()
 			defer mu.Unlock()

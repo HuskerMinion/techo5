@@ -8,4 +8,4 @@ import "errors"
 // points the paths somewhere it can already write.
 func remount(bool) error { return errors.New("update: remounting only works on the device") }
 
-func room(int64) error { return nil }
+func room(string, int64) error { return nil }

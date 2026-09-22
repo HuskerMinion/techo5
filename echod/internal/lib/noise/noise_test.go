@@ -75,7 +75,7 @@ func TestResonatorGainDoesNotDependOnPitch(t *testing.T) {
 		var low, high float32 = 1, 0
 
 		// From 400 Hz up, which is where the sounds place them. Lower than that a band this wide reaches
-		// past zero and there is no meaningful peak left to normalise.
+		// past zero and there is no meaningful peak left to normalize.
 		for _, freq := range []float32{400, 1600, 6400} {
 			r := newReson(freq, decay, rate)
 

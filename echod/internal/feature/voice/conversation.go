@@ -824,8 +824,8 @@ func (c *conversation) Cancel() { c.post(event{kind: evCancel}) }
 func (c *conversation) Busy() bool { return c.Phase() != phaseIdle }
 
 // audioSettings asks Home Assistant to condition the microphone audio before recognition. The
-// array's analogue gain already matches what the vendor's own recogniser ran with, and speech still
-// reaches the pipeline around -45 dBFS, which is some 20 dB below what a recogniser wants: the vendor
+// array's analog gain already matches what the vendor's own recognizer ran with, and speech still
+// reaches the pipeline around -45 dBFS, which is some 20 dB below what a recognizer wants: the vendor
 // made that up in its DSP, and this is the equivalent handled by the far end.
 //
 // Auto gain is a ceiling on how much the far end may apply, not a fixed boost, so it costs nothing
@@ -867,7 +867,7 @@ func (c *conversation) stream(ctx context.Context, slot int, followUp bool) {
 
 	buf := make([]byte, 0, mic.FrameSamples*2)
 
-	// Send what was already said before this turn began. The wake word can only be recognised after
+	// Send what was already said before this turn began. The wake word can only be recognized after
 	// it has been spoken, and people run straight on into the request, so the opening words exist only
 	// in the microphone's history. Subscribing first means no audio falls between the two.
 	//

@@ -7,7 +7,7 @@ import (
 
 // TestProbeMixer exercises the control ioctls against a real card, which is the only way to know
 // the structure layouts match the kernel's: a wrong size is rejected outright, and a wrong stride
-// reads a neighbouring value's high half. Reading is enough, and the control device tolerates
+// reads a neighboring value's high half. Reading is enough, and the control device tolerates
 // several openers, so this runs safely alongside echod. Set ALSA_PROBE=1 on the device.
 func TestProbeMixer(t *testing.T) {
 	if os.Getenv("ALSA_PROBE") == "" {

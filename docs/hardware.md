@@ -248,7 +248,7 @@ powers up again, so a control changed under a running daemon shows only after th
 closed and reopened. `Speaker Volume A` is not a usable gain: 5 and 8 sound identical and 14
 mutes the output.
 
-Speech from Home Assistant is normalised to −18 dBFS RMS before the volume curve
+Speech from Home Assistant is normalized to −18 dBFS RMS before the volume curve
 (`media.Normalize`/`SpeechGain`). The cronos volume curve is linear in dB: −45 dB at step 1,
 −24 dB at half the dial, −6 dB at the top (`paths_cronos.go`). Tuned by ear in a small room
 on 2026-09-15 across v0.1.1–v0.1.4; half the dial was judged "perfect" for conversation.
@@ -419,7 +419,7 @@ paints is compiled into LK itself. `lk-amonet-cronos.img` (MTK header, `LK`,
 single-image zlib bundles — `u32 count=1, u32 total, u32 offset=12, zlib(raw
 32-bit BGRA)` — and a data table of pointers to them (load address =
 `0x4BD00000` + file offset − 512): the "amazon" wordmark (315×170, drawn
-centred on black, file offset 335736, pointer at 383384), "Booting…" (315×170),
+centered on black, file offset 335736, pointer at 383384), "Booting…" (315×170),
 two battery pictures (408×216) and the full-screen over-temperature
 thermometer (960×480, landscape as stored; LK applies the panel rotation).
 LK knows each image's size from code, so a replacement must decompress to the
@@ -440,7 +440,7 @@ go into the kaeru copy in `expdb` (same LK layout, wordmark at the same
 offset), which kaeru's fastboot (reached via `rebootto bootloader`) can
 flash — and only *in place*: kaeru's stage-2 code sits right after the LK
 payload, so the header size must stay and the new bundle must fit the old
-6105-byte slot (`--in-place --colors 16`: 16 flat colours compress the full
+6105-byte slot (`--in-place --colors 16`: 16 flat colors compress the full
 315×170 mark to 5.5 KB). Done 2026-09-15; `fastboot flash expdb` accepted it. `swdl` (p11) holds an Android boot image (Amazon's recovery/download
 image).
 
@@ -468,7 +468,7 @@ and `productid2` read `0` on the unit seen.
   kernel output at all; the watchdog resets the unit (`bootreason
   wdt_by_pass_pwk`) and LK boots `boot` instead. Verified with a command-line
   marker. 64-bit images go in `boot`.
-- `reboot recovery` is signalled through the RTC spare register
+- `reboot recovery` is signaled through the RTC spare register
   (`rtc_mark_recovery` in the kernel log), not the MISC bootloader message;
   MISC stays zero. LK keeps a boot counter in idme (`/proc/idme/bootcount`) and
   after enough boots that never complete Android it parks in "hacked fastboot
@@ -493,7 +493,7 @@ and `productid2` read `0` on the unit seen.
   and cameraserver, Widevine and ClearKey DRM, CAS, `amazonthermal`,
   `vendor.power-amazon`, `securetime`, `kisd`, media codec services.
 
-## Network behaviour seen in the field
+## Network behavior seen in the field
 
 - The satellite app listens on TCP 10800 (VACA / ShowAssist) and advertises
   over mDNS. mDNS across subnets needs a reflector rule for `_esphomelib._tcp`

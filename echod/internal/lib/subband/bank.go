@@ -6,7 +6,7 @@ import "github.com/HuskerMinion/techo5/echod/internal/lib/fft"
 // prototype, folds them onto FFTLen by summing every FFTLen apart, and transforms; synthesis
 // transforms back, spreads the result over WindowLen, windows it again and overlap-adds. Hop is half
 // the transform, so the folds that go in come back out as overlaps, and a band can be filtered
-// without its neighbours aliasing into it.
+// without its neighbors aliasing into it.
 
 // analysis turns one microphone's samples into subbands, Hop samples at a time.
 type analysis struct {

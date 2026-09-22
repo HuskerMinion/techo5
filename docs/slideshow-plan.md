@@ -74,9 +74,9 @@ Two genuinely different looks were asked for, not one on/off toggle:
 - **Background** — the normal home page (clock, date, weather, timers) stays exactly as it is
   today, always in front; the photo just replaces the flat background it's currently drawn over.
   This maps directly onto how the renderer already works: `render.go`'s `draw()` starts every frame
-  by filling the whole screen with a flat colour (`walnut`) before drawing whatever page applies —
+  by filling the whole screen with a flat color (`walnut`) before drawing whatever page applies —
   in this mode, the idle/default page's fill would be the current slideshow photo instead of that
-  flat colour. No idle timeout applies here; it's just what the home page looks like, all the time,
+  flat color. No idle timeout applies here; it's just what the home page looks like, all the time,
   the same as it's always on when the screen itself is on.
 - **Screensaver** — a full-screen photo takes over after the idle timeout, the same teardown rule
   as the camera view (any tap, wake word, or other page ends it immediately). The clock/date
@@ -84,9 +84,9 @@ Two genuinely different looks were asked for, not one on/off toggle:
   - **Off** — photo only, nothing overlaid.
   - **Small** — the time alone, small, top right — this is `cornerClock`, which already exists and
     is already used while a reply lingers on screen, so it's a direct reuse, not new drawing code.
-    (Earlier draft of this doc said "top centre" with a date — that was wrong; `cornerClock` is
+    (Earlier draft of this doc said "top center" with a date — that was wrong; `cornerClock` is
     time-only, top-right, and M2 kept it exactly as it already was rather than changing it.)
-  - **Normal** — full-size clock and date, centred — this is `bigClock`, the same layout the
+  - **Normal** — full-size clock and date, centered — this is `bigClock`, the same layout the
     ordinary idle page already uses, just drawn over the photo instead of the flat background.
   Weather and timers stay off the screensaver regardless of overlay size; those belong to the
   Background mode / normal home page, not the photo-frame look.
@@ -109,7 +109,7 @@ local caching to disk, same as camera and radar.
 - **Fetch loop:** `home.Slideshow`, built like `home/camera.go`'s `CameraView` — asks Home
   Assistant for the next resolved media URL, fetches, decodes, and hands a scaled `*image.RGBA` to
   the display, regardless of which display mode is active.
-- **Display side:** in Background mode, `render.go`'s `draw()` swaps its opening flat-colour fill
+- **Display side:** in Background mode, `render.go`'s `draw()` swaps its opening flat-color fill
   for the current photo on the idle/default branch only (camera, weather, settings, calls, etc.
   keep their own full-screen pages exactly as now). In Screensaver mode, a new render path
   (`render_slideshow.go`, next to `render_camera.go`) takes the whole screen after the idle
@@ -129,14 +129,14 @@ Spot's own set of "something else is showing" flags: call, ringing, volume, came
 menu open). One real fix needed along the way: `cropToFill` was cropping every device's photo to
 `artW`/`artH` (960×480, the Show's landscape panel) regardless of device, which on the Spot would
 crop to landscape *then* get cropped again to the round 480×480 panel at draw time — cropping
-twice, off-centre. Added device-specific `slideshowW`/`slideshowH` constants (`panel_cronos.go`
+twice, off-center. Added device-specific `slideshowW`/`slideshowH` constants (`panel_cronos.go`
 960×480, `panel_spot.go` 480×480, the same per-device-file pattern `cameraFrameW`/`H` already uses)
 so the crop happens once, to the panel's actual shape. The screensaver's Normal/Small overlays
 reuse `clockFace`'s existing time+date lines via a new shared `screensaverClock` helper (stripped of
 weather/timers/status label, same as the Show's `timeAndDate` extraction did for `bigClock`) rather
 than duplicating layout code. Live-tested all four combinations (Background; Screensaver
 Normal/Small/Off) on Kitchen via the same bind-mount/revert process — all rendered correctly,
-including a properly-centred square crop-to-fill on the round panel. Fully reverted after.
+including a properly-centered square crop-to-fill on the round panel. Fully reverted after.
 
 **Live end-to-end test 2026-09-17**: deployed the built binary as a temporary test daemon on
 one of the Office Shows (bind-mount over `/usr/local/bin/techo5`, gone at reboot), pointed it at a
@@ -183,7 +183,7 @@ whole screen, with the same wash technique Background mode uses. Extracted a sha
 `timeAndDate(now, base, dateSuffix)` out of `bigClock` so the screensaver's Normal overlay reuses
 the exact same clock layout without also pulling in weather/timers/alarm, matching the "photo-frame
 look, not the ordinary idle page" design decision. `Small` overlay reuses `cornerClock` exactly as
-it already was — corrected an earlier draft of this doc that wrongly described it as top-centre
+it already was — corrected an earlier draft of this doc that wrongly described it as top-center
 with a date; it's time-only, top-right.
 
 Live-tested all three overlay states on an Office Show (same bind-mount/revert process as M1): the

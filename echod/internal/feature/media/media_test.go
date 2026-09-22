@@ -3,8 +3,11 @@ package media
 import (
 	"bufio"
 	"bytes"
+	"context"
 	"encoding/binary"
 	"io"
+	"net/http"
+	"net/http/httptest"
 	"strings"
 	"testing"
 
@@ -113,5 +116,35 @@ func TestHeaderRefusesAnOversizedChunk(t *testing.T) {
 	err := header(bufio.NewReader(bytes.NewReader(b.Bytes())))
 	if err == nil {
 		t.Fatal("accepted a chunk of a gigabyte")
+	}
+}
+
+// An announcement is a chime or a sentence. The url behind one is whatever Home Assistant handed
+// over — for an external media source, a host nobody here controls — and the body is held whole in
+// memory, so a stream that never ends has to be cut off rather than read.
+func TestFetchRefusesABodyLargerThanAnAnnouncement(t *testing.T) {
+	var served int64
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "audio/mpeg")
+		chunk := make([]byte, 1<<20)
+		for served < 4*mostAudio {
+			n, err := w.Write(chunk)
+			served += int64(n)
+			if err != nil {
+				return
+			}
+		}
+	}))
+	defer srv.Close()
+
+	_, err := Fetch(context.Background(), srv.URL+"/endless")
+	if err == nil {
+		t.Fatal("a body with no end to it was read and decoded")
+	}
+	if !strings.Contains(err.Error(), "more than") {
+		t.Errorf("%v, want something about the body being too large", err)
+	}
+	if served > 2*mostAudio {
+		t.Errorf("read %d bytes for a bound of %d", served, mostAudio)
 	}
 }

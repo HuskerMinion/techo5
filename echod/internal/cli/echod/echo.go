@@ -18,7 +18,7 @@ import (
 
 // maxLag is how far apart the reference and a microphone may be, in samples at the capture rate.
 // The loopback is sample-aligned with the microphones by construction, so the only delay is the
-// acoustic path — a metre is 47 samples at 16 kHz, and the enclosure is far smaller than that. The
+// acoustic path — a meter is 47 samples at 16 kHz, and the enclosure is far smaller than that. The
 // window is wide because being wrong about this is the thing the measurement is meant to catch.
 const maxLag = 800
 

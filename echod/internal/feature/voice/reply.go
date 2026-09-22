@@ -37,7 +37,7 @@ type stream struct {
 	splicesAt   uint64
 	underrunsAt uint64
 
-	// energy and samples are the reply's loudness so far, for the speech normaliser in flush.
+	// energy and samples are the reply's loudness so far, for the speech normalizer in flush.
 	energy  float64
 	samples int
 

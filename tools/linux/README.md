@@ -150,7 +150,7 @@ reboot
 ```
 
 Git Bash on Windows is the expected shell for the host scripts; they pass
-Windows paths to python and normalise line endings on the way to the device.
+Windows paths to python and normalize line endings on the way to the device.
 
 ## Why these choices
 

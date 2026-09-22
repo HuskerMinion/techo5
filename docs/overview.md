@@ -27,7 +27,7 @@ Android, with one Go daemon, `echod`, doing everything the device does:
   Home Assistant has none, the first weather entity it lists; any other
   weather entity is chosen on the settings screen (General, Weather), with the "Weather source"
   select, or with the `home_weather` action, and stays chosen. The forecast page (after a weather
-  question, or Show beside Weather) has a Radar button: RainViewer's radar over an OpenStreetMap map centred on
+  question, or Show beside Weather) has a Radar button: RainViewer's radar over an OpenStreetMap map centered on
   Home Assistant's home zone, the last hour as a loop. "Show the radar" asks for it directly.
 - **Radio**: the drawer's Radio side lists the stations, with a choice of list at the top. Favorites are the stations wired with
   `home_radio` (Home Assistant `input_select` lists played through a script). With a Home Assistant
@@ -36,7 +36,7 @@ Android, with one Go daemon, `echod`, doing everything the device does:
   with no setup. Stations play on the device's own speaker or on Bluetooth earbuds; song, artist and
   cover come from iHeartRadio or TuneIn behind the page.
 - **Camera**: the front camera as a Home Assistant camera entity (plus JPEG and MJPEG over HTTP
-  when switched on). Auto-exposure meters a centre-weighted zone grid, so a window behind somebody
+  when switched on). Auto-exposure meters a center-weighted zone grid, so a window behind somebody
   no longer sets it, and the tone curve finds black and lifts the middle of a backlit frame. Off
   unless something is looking, and off while the mute button is engaged.
 - **Phone calls** through a SIP provider (TLS and SRTP): placed from Home Assistant (`phone_call`) or
@@ -83,9 +83,10 @@ Android, with one Go daemon, `echod`, doing everything the device does:
 - **See the screen from the PC**: turn on Screen web access, then `http://<device>:8181/screen.png` with `?sheet=<category>`
   (or `cameras`/`radio` for the drawer), `?list=<row>` for a row's list of choices, `?theme=<name>`, `?radio=<station>`, `?wifi=list|keyboard` to put pages up first.
   The plain screenshot needs only the switch; the options that put those pages up change what the
-  device is doing, so they need a browser the setup page has let in — open the setup page in the same
+  device is doing, so they need a browser the setup page has let in â€” open the setup page in the same
   browser and press the button on the device first, or they answer 403.
-- **Logs**: `/data/techo5-linux/techo5.log` on the device; `dmesg` for the kernel.
+- **Logs**: `/data/techo5-linux/techo5.log` on the device (`echod.log` on the Dot); `dmesg` for the
+  kernel.
 - **Slots**: `slotctl status`, `slotctl install <tar.gz>`, `slotctl switch <a|b>`; a trial slot
   commits after five minutes of a healthy daemon.
 - **Release**: `tools/release.ps1 -Version vX.Y.Z -Notes "..." -Rootfs <tarball> [-Boot <image>]` builds the

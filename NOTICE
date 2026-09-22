@@ -36,7 +36,7 @@ echod
 echod (dependency)
   github.com/emiago/diago — Mozilla Public License 2.0
   SIP calls and their media (feature/phone). Used unmodified; its source is at
-  https://github.com/emiago/diago, as the licence requires for the binaries that include it.
+  https://github.com/emiago/diago, as the license requires for the binaries that include it.
 
 echod (dependency)
   github.com/emiago/sipgo — BSD 2-Clause License
@@ -48,7 +48,7 @@ echod (dependency)
   Copyright (c) 2016-2024, Eleftherios (Lefteris) Zafiris. All rights reserved.
   G.711 encoding and decoding for calls.
 
-  Both BSD 2-Clause licences: redistribution and use in source and binary forms, with or without
+  Both BSD 2-Clause licenses: redistribution and use in source and binary forms, with or without
   modification, are permitted provided that the copyright notice, this list of conditions and the
   following disclaimer are retained. THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND
   CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES ARE DISCLAIMED. IN NO EVENT SHALL THE
@@ -62,3 +62,52 @@ echod (dependency)
 echod (dependency)
   github.com/hajimehoshi/go-mp3 — Apache License 2.0
   MP3 decoding for announcements Home Assistant serves unconverted.
+
+Wake word models (embedded in the daemon)
+  The stop word, echod/internal/feature/detect/assets/stop.tflite — Apache License 2.0
+  microWakeWord, https://github.com/kahrendt/microWakeWord. Embedded because it is not a choice:
+  nothing selects it and a device without it would have no way to be interrupted.
+
+  The openWakeWord front end, echod/internal/lib/oww/assets/melspectrogram.tflite and
+  embedding_model.tflite — Apache License 2.0
+  openWakeWord, https://github.com/dscripka/openWakeWord, whose code is Apache-2.0. The embedding
+  model is Google's speech_embedding (https://tfhub.dev/google/speech_embedding/1, Apache-2.0),
+  re-implemented by openWakeWord; the melspectrogram model is a fixed-parameter implementation of
+  Torch's melspectrogram, not a trained model. openWakeWord's CC BY-NC-SA 4.0 terms cover its six
+  pre-trained wake words, which TECHO5 does not ship — the wake words below come from elsewhere.
+
+Wake word models (in the root filesystem, /usr/share/techo5/models)
+  okay_nabu, hey_jarvis, hey_mycroft, alexa — Apache License 2.0
+  esphome/micro-wake-word-models, https://github.com/esphome/micro-wake-word-models, at commit
+  05b65922cc433c9df13e98e32a7fe520758c837e. Fetched by tools/fetch-inputs.py.
+
+  computer, jarvis, hey_friday, glados, hal, terminator, marvin, home_assistant — MIT License
+  Copyright (c) 2023 Florian Wartner.
+  fwartner/home-assistant-wakewords-collection,
+  https://github.com/fwartner/home-assistant-wakewords-collection, at commit
+  8bcd2f20bb7b76c351b2eff871fa1ce873fe9be2. The repository is MIT-licensed as a whole. It is a
+  community collection: it records no separate license, author or training data for each model, so
+  MIT from the repository is all that can be said about them here.
+
+Linux kernel, https://git.kernel.org (GPL-2.0)
+  Releases ship a kernel inside the boot images techo5-boot-<version>.img (Echo Show 5 2nd gen,
+  cronos) and techo5-boot-checkers-<version>.img (1st gen, checkers): Linux 4.9.337 for arm64. It is
+  GPL-2.0, and this is where its source is.
+    - Source: github.com/amazon-oss/android_kernel_amazon_mt8163, branch cronos/lineage-18.1, at
+      commit 8d928c5176cc — the commit the LineageOS 18.1 boot image was built from (`uname -r` on
+      the unit is 4.9.337-g8d928c5176cc). One commit serves both generations; the 1st gen has its own
+      device trees in the same tree.
+    - Configuration: cronos_defconfig for the 2nd gen, checkers_defconfig for the 1st, from that
+      tree, with Bluetooth added. The resulting configurations are recorded in
+      docs/dumps/cronos-lineage-kernel-4.9.337.config (as LineageOS ships it) and
+      docs/dumps/cronos-techo5-kernel-4.9.337-bt.config (as TECHO5 builds it);
+      docs/dumps/cronos-twrp-kernel-4.9.77.config is the TWRP kernel's, for comparison. All three are
+      derived from that GPL-2.0 source and are GPL-2.0 themselves.
+    - Changes: tools/linux/patches/checkers-0001-mic-enable-on-capture.patch, applied for the 1st gen
+      build. It changes drivers/misc/gating.c, include/misc/gating.h and
+      sound/soc/mediatek/mt_soc_audio_8163_amzn/mt_soc_machine.c so that releasing the mute latch
+      brings the microphone path back, and is a modification of that GPL-2.0 source, so it is
+      GPL-2.0 too. The appended device trees then have amzn,mic-downmix removed (tools/linux/
+      patch-dtb.py).
+    - The script that does all of it is tools/linux/build-kernel.sh, and docs/building.md is how to
+      run it. A rebuild reproduces the shipped kernel.

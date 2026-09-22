@@ -4,11 +4,11 @@ import "math"
 
 const NameBrook = "Brook"
 
-// A bubble rings at Minnaert's frequency, 3.26 over its radius in metres, so three millimetres sounds
+// A bubble rings at Minnaert's frequency, 3.26 over its radius in meters, so three millimetres sounds
 // near a kilohertz. As it collapses the radius shrinks and the pitch rises, and that rise is what the
 // ear hears as water rather than as a bell.
 const (
-	// Radii in metres. Small: a millimetre rings at three kilohertz and four at eight hundred, and
+	// Radii in meters. Small: a millimetre rings at three kilohertz and four at eight hundred, and
 	// anything fatter than that is a plughole rather than a stream.
 	brookFine, brookFat = 0.0008, 0.004
 	minnaert            = 3.26

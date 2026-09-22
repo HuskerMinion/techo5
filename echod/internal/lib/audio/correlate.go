@@ -62,7 +62,7 @@ func Correlation(a, b []float64) float64 {
 //   - independent microphones correlate near zero, because each preamp's noise is its own
 //   - a channel that is a hardware sum of others correlates strongly with all of them
 //   - a true center mic correlates about equally with every perimeter mic, while a
-//     perimeter mic correlates most with its immediate neighbours
+//     perimeter mic correlates most with its immediate neighbors
 func CorrelationMatrix(w io.Writer, ch [][]float64) {
 	n := len(ch)
 
@@ -97,11 +97,11 @@ func MeanAbsCorrelation(ch [][]float64, i int) float64 {
 	return sum / float64(len(ch)-1)
 }
 
-// Topology summarises array structure from a correlation matrix, without assuming geometry.
+// Topology summarizes array structure from a correlation matrix, without assuming geometry.
 //
 // CenterSpread is the max-min range of a channel's correlations to the other perimeter
 // mics. A center mic is equidistant from all of them, so its spread is small; a perimeter
-// mic favours neighbours and so spreads wider.
+// mic favours neighbors and so spreads wider.
 //
 // ByDistance is mean correlation grouped by separation around the ring: 1 = adjacent,
 // 2 = two apart, 3 = opposite. For a ring of 6 at radius r the physical separations are
@@ -207,7 +207,7 @@ func SliceAll(ch [][]float64, start, n int) [][]float64 {
 }
 
 // SubSampleLag finds the cross-correlation peak between a and b to sub-sample precision by
-// fitting a parabola through the peak and its neighbours.
+// fitting a parabola through the peak and its neighbors.
 //
 // Sign convention: the returned lag is the raw correlation offset. If a is a delayed copy
 // of b the peak lands at a *negative* offset, so a more negative value means a arrived
@@ -239,7 +239,7 @@ func SubSampleLag(a, b []float64, maxLag int) (float64, float64) {
 	}
 	lag := float64(peak - maxLag)
 
-	// Parabolic interpolation needs a neighbour on each side.
+	// Parabolic interpolation needs a neighbor on each side.
 	if peak > 0 && peak < len(corr)-1 {
 		l, c, r := corr[peak-1], corr[peak], corr[peak+1]
 		if d := l - 2*c + r; d != 0 {

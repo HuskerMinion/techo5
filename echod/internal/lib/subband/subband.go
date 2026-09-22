@@ -52,7 +52,7 @@ type geometry struct {
 	// Fire OS 6 beamforms over four of the seven.
 	mics []int
 
-	// boostDB is the gain the vendor applies after the beamformer. The weights are not normalised,
+	// boostDB is the gain the vendor applies after the beamformer. The weights are not normalized,
 	// and without it the mix lands well below the center mic.
 	boostDB float64
 
@@ -93,7 +93,7 @@ var known = []geometry{
 		order:     "maet",
 		perGroup:  1,
 		// Four ring positions, and only their rotation about the ring is fixed: rotating the map
-		// rotates every beam with it, which is how this ordering was recognised as the right one.
+		// rotates every beam with it, which is how this ordering was recognized as the right one.
 		// AFE.cfg's "Channel Map": [1,2,4,5] counts channels in Amazon's order, not this array's.
 		mics:        []int{0, 3, 2, 1},
 		boostDB:     7.2,

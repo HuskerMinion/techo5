@@ -8,7 +8,10 @@ import (
 	"github.com/HuskerMinion/techo5/echod/internal/component"
 )
 
-// actions is every action this device offers Home Assistant, on every device.
+// actions is the actions that have to be there on every device, whatever the build tag. It is not
+// the whole list of actions the daemon offers: most of them are a feature's own business and come
+// and go with the device (the camera and slideshow ones are the Show's, and so on). What belongs
+// here is an action another device depends on finding.
 //
 // These are not entities, so TestEveryComponentStillRegisters cannot see them. A feature whose whole
 // interface is an action - announcements are one - can drop out of a build entirely and every other

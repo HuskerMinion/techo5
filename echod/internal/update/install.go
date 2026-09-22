@@ -41,6 +41,9 @@ func Install(ctx context.Context, m Manifest, progress func(float32)) error {
 	if err := m.Valid(); err != nil {
 		return err
 	}
+	if err := notOlder(m.Version, layout.Version); err != nil {
+		return err
+	}
 	if slotSystem() {
 		return installRootfs(ctx, m, progress)
 	}
@@ -52,13 +55,40 @@ func Install(ctx context.Context, m Manifest, progress func(float32)) error {
 	staged := filepath.Join(layout.StateDir, "echod.incoming")
 	defer os.Remove(staged)
 
+	// Both partitions are asked for the room before anything is fetched. The download lands on the
+	// state partition and is then copied into /system beside the binary it replaces, so the space has
+	// to be there twice over — and finding that out after sixteen megabytes have been written is
+	// finding it out with the device's storage already full.
+	if err := room(layout.StateDir, b.Size); err != nil {
+		return err
+	}
+	if err := room(mount, b.Size); err != nil {
+		return err
+	}
+
 	if err := download(ctx, b, staged, progress); err != nil {
 		return err
 	}
-	if err := room(b.Size); err != nil {
-		return err
-	}
 	return swap(staged, m.Version)
+}
+
+// notOlder refuses a manifest offering a version below the one this binary reports as running.
+//
+// A signature says who wrote a manifest, not when: an old release's manifest is signed just as well as
+// today's, so anything able to answer for the channel — a compromised release asset, a proxy, a name
+// server on the network — can serve last month's and have it believed. Without this, that walks a
+// device backwards onto a version whose holes are published in its own release notes.
+//
+// Home Assistant already ranks the two versions and leaves the update card off when what is offered is
+// older; this makes the same answer binding where the manifest actually arrives, rather than trusting a
+// card in an app that is not the thing being protected. Equal is allowed through — reinstalling what is
+// already running is a repair, not a downgrade — and a version neither side can rank is left alone,
+// since refusing there would strand a hand-built daemon that stamped something unusual.
+func notOlder(offered, running string) error {
+	if rank, ok := compareVersions(offered, running); ok && rank < 0 {
+		return fmt.Errorf("update: %s is older than the running %s, and an older release is not installed over a newer one", offered, running)
+	}
+	return nil
 }
 
 // download fetches the binary and proves it before it is allowed near /system. The hash is taken as the
@@ -88,9 +118,14 @@ func download(ctx context.Context, b Binary, to string, progress func(float32)) 
 	}
 	defer f.Close()
 
+	// One byte past what was offered is all that is read. The size in the manifest is what the room
+	// check was made against, and a server that keeps sending after it — a mirror serving the wrong
+	// file, or something aiming a stream of zeros at a device with a couple of gigabytes of flash —
+	// would otherwise write until the partition was full. The extra byte is what makes the length
+	// check below say "more than offered" rather than silently accepting a truncation.
 	sum := sha256.New()
 	written, err := io.Copy(io.MultiWriter(f, sum), &counter{
-		from: resp.Body, size: b.Size, report: progress,
+		from: io.LimitReader(resp.Body, b.Size+1), size: b.Size, report: progress,
 	})
 	if err != nil {
 		return fmt.Errorf("update: downloading %s: %w", b.URL, err)

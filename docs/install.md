@@ -73,11 +73,13 @@ If more than one Android or fastboot device is plugged in, pass `-s <serial>` to
 
 The boot image is the kernel plus the small rescue environment that sets a unit up. Two ways:
 
-- **From a release (simplest).** Download `techo5-boot-<version>.img` from the same
-  [release](https://github.com/HuskerMinion/techo5/releases) as the root filesystem, or, as it
-  changes rarely and most releases don't carry one, from the newest earlier release that does
-  (v0.4.2 for every release since, so far). It carries no
-  SSH key, so steps 4 and 5 are typed into the unit's **USB serial console**.
+- **From a release (simplest).** Download `techo5-boot-<version>.img` — on an Echo Show 5 1st gen
+  (checkers), `techo5-boot-checkers-<version>.img`, which is built against that generation's own
+  kernel and device tree — from the same
+  [release](https://github.com/HuskerMinion/techo5/releases) as the root filesystem. The boot image
+  changes rarely, so most releases don't carry one; when yours doesn't, take it from the newest
+  earlier release that does. It carries no SSH key, so steps 4 and 5 are typed into the unit's
+  **USB serial console**.
 - **Built yourself with your own SSH key**, to SSH into the rescue environment instead:
 
   ```

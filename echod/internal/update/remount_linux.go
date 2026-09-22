@@ -12,17 +12,19 @@ import (
 
 const blkroset = 0x125d
 
-// room refuses an install that would not fit. Both copies exist at once, and filling /system is a
-// worse outcome than not updating.
-func room(need int64) error {
+// room refuses an install that would not fit on the filesystem holding at. Both copies exist at once,
+// and filling /system — or the state partition the download is staged on — is a worse outcome than not
+// updating. A path that cannot be measured is not held against the install: the device is the only
+// thing that knows, and guessing no would block every update where it guessed wrong.
+func room(at string, need int64) error {
 	var fs syscall.Statfs_t
-	if err := syscall.Statfs(mount, &fs); err != nil {
+	if err := syscall.Statfs(at, &fs); err != nil {
 		return nil
 	}
 
 	free := int64(fs.Bavail) * int64(fs.Bsize)
 	if free < need {
-		return fmt.Errorf("update: %d bytes free on %s, need %d", free, mount, need)
+		return fmt.Errorf("update: %d bytes free on %s, need %d", free, at, need)
 	}
 	return nil
 }

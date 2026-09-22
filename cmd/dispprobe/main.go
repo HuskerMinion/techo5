@@ -216,7 +216,7 @@ func main() {
 			}
 			post()
 		}
-		fmt.Printf("posted %d frames, %d release fences never signalled\n", frameN, fenceTimeouts)
+		fmt.Printf("posted %d frames, %d release fences never signaled\n", frameN, fenceTimeouts)
 	}
 }
 

@@ -58,7 +58,7 @@ resolutions.
 
 ## Next
 
-1. Unmute (button), rerun `camprobe` — confirms the sensor initialises and streams MIPI.
+1. Unmute (button), rerun `camprobe` — confirms the sensor initializes and streams MIPI.
 2. Find the ISP 3.0 register map: MT6735/MT8127 kernel trees (`drivers/misc/mediatek/imgsensor`
    siblings, `mt6735/isp_reg.h`, `camera_isp_reg.h`), or the MT8163 libcamdrv headers. Needed:
    SENINF (CSI-2 lane config, mux to CAM), TG (`TG_SEN_MODE`, `TG_VF_CON`, grab window),
@@ -66,7 +66,7 @@ resolutions.
 3. With the map: `cmd/camprobe -frame`: `ISP_RESET`, program SENINF+TG+IMGO for the preview
    mode's size and Bayer format, enqueue a buffer (physical address — the `camera-sysram` /
    `ISP_BUFFER_CTRL` ring, or ION), `CAM_CTL_START`, wait `IMGO_DONE`, dequeue, dump the RAW10
-   frame, demosaic in Go (nearest-neighbour is enough for a first picture).
+   frame, demosaic in Go (nearest-neighbor is enough for a first picture).
 4. Then a still-capture action for the daemon and a "show me" page. Video would be after that.
 
 ## The register map is found (2026-09-15 late)
@@ -124,7 +124,7 @@ or `/dev/camera-sysram`; the driver tracks it in a ring per DMA and reports `bFi
 4. Program: FMT_SEL (TG1 raw 10-bit, scenario pass-1), DMA_EN.IMGO_EN, IMGO base/xsize/ysize/
    stride for the preview mode, TG grab window from the sensor's `GET_CROP_INFO`, TG_SEN_MODE
    CMOS_EN, then TG_VF_CON.VFDATA_EN=1; wait `IMGO_DONE`; VFDATA_EN=0.
-5. Dump the RAW10 buffer, unpack, nearest-neighbour demosaic, PNG. Then the daemon's
+5. Dump the RAW10 buffer, unpack, nearest-neighbor demosaic, PNG. Then the daemon's
    "take a picture" action and a page.
 
 ## Sensor alive (2026-09-16)

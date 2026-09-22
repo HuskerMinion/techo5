@@ -134,7 +134,7 @@ func (w AlarmsWriter) SnoozeMinutes(n int) error {
 	return w.st.Update(func(c *Config) { c.Alarms.SnoozeMinutes = n })
 }
 
-// Sound sets what alarms ring with, by name.
+// SunriseMinutes sets how long before an alarm the screen starts to light; nothing for not at all.
 func (w AlarmsWriter) SunriseMinutes(n int) error {
 	return w.st.Update(func(c *Config) { c.Alarms.SunriseMinutes = n })
 }
@@ -143,6 +143,7 @@ func (w AlarmsWriter) SunriseFace(on bool) error {
 	return w.st.Update(func(c *Config) { c.Alarms.SunriseFace = on })
 }
 
+// Sound sets what alarms ring with, by name.
 func (w AlarmsWriter) Sound(name string) error {
 	return w.st.Update(func(c *Config) { c.Alarms.Sound = name })
 }

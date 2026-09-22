@@ -458,9 +458,10 @@ func (b *Buffer) Free() error {
 }
 
 // Post shows the buffer on the given overlay layer and switches every other layer off. The
-// buffer's device address is handed to the overlay directly (DISP_BUFFER_MVA), so there is no
-// ion-fd import and no release fence: the CPU and the controller share the buffer, and the caller
-// paces itself with the vsync clock rather than a per-frame fence.
+// buffer's device address is handed to the overlay directly (DISP_BUFFER_MVA), so the driver never
+// imports the ion fd for the layer. Prepare still hands back a release fence, which is kept on the
+// buffer and closed on the next post; Buffer.Wait is what blocks on it, and a caller that paces
+// itself with the vsync clock instead can leave it alone.
 func (d *Display) Post(layer int, b *Buffer, format uint32) error {
 	if layer < 0 || layer >= Layers {
 		return fmt.Errorf("layer %d out of range", layer)

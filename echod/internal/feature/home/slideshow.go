@@ -1,7 +1,6 @@
 package home
 
 import (
-	"bytes"
 	"context"
 	"image"
 	"image/draw"
@@ -529,7 +528,7 @@ func fetchSlideshowImage(id string) (*image.RGBA, error) {
 	if err != nil {
 		return nil, err
 	}
-	src, _, err := image.Decode(bytes.NewReader(b))
+	src, err := decodeWithin(b, maxPhotoPixels, "slideshow photo "+id)
 	if err != nil {
 		return nil, err
 	}

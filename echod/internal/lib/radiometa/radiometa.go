@@ -10,6 +10,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"net/url"
 	"regexp"
@@ -112,8 +113,15 @@ func get(ctx context.Context, u string, into any) error {
 	if res.StatusCode != http.StatusOK {
 		return fmt.Errorf("radiometa: %s: %s", u, res.Status)
 	}
-	return json.NewDecoder(res.Body).Decode(into)
+	return json.NewDecoder(io.LimitReader(res.Body, maxReply)).Decode(into)
 }
+
+// maxReply is how much of a service's answer is decoded. A search result or a now-playing record is a
+// few kilobytes; a megabyte is far past anything these have ever returned. Neither service is ours and
+// neither promises anything, so the bound is what keeps a station's metadata host — or whatever has
+// taken its name today — from feeding a device with half a gigabyte until it dies. A reply cut off
+// here fails to parse, which is the same "no information" every other failure here comes to.
+const maxReply = 1 << 20
 
 var word = regexp.MustCompile(`[A-Za-z0-9.]+`)
 

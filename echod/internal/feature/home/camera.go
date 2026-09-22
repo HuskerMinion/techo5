@@ -1,9 +1,8 @@
 package home
 
 import (
-	"bytes"
 	"image"
-	"image/jpeg"
+	_ "image/jpeg" // Home Assistant serves camera snapshots as JPEG
 	"log/slog"
 	"strings"
 	"time"
@@ -243,7 +242,7 @@ func (f *Feature) snapshot(entity string) (*image.RGBA, error) {
 	if err != nil {
 		return nil, err
 	}
-	src, err := jpeg.Decode(bytes.NewReader(b))
+	src, err := decodeWithin(b, maxFramePixels, "camera "+entity)
 	if err != nil {
 		return nil, err
 	}

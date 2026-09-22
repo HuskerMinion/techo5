@@ -3,7 +3,7 @@
 // otherwise.
 //
 // The port is only listening while at least one of those is switched on. With all of them off there
-// is nothing on the network to find, which is the same behaviour the camera's own server had before
+// is nothing on the network to find, which is the same behavior the camera's own server had before
 // this became a place several features share.
 //
 // It lives on its own rather than inside the camera feature because a Dot has no camera, so that

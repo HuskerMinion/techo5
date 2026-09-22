@@ -224,8 +224,9 @@ func Open(card, device int, cfg Config) (*Capture, error) {
 // FrameBytes is the size of one interleaved frame across all channels.
 func (c *Capture) FrameBytes() int { return c.frameBytes }
 
-// Read fills buf with whole frames and returns the number of bytes read. On overrun the
-// stream is re-prepared and restarted, and the call reports how many bytes were lost.
+// Read fills buf with whole frames and returns the number of bytes read. On overrun the stream is
+// re-prepared and restarted and the call returns ErrOverrun; how much audio the ring dropped is not
+// something the driver tells us, so there is no count to report.
 func (c *Capture) Read(buf []byte) (int, error) {
 	frames := len(buf) / c.frameBytes
 	if frames == 0 {
