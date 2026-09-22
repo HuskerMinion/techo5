@@ -158,6 +158,12 @@ type Display struct {
 	awayTrack   string
 	awayStation string
 
+	// showingPlaying and showingPaused are what the last painted screen was: the now-playing page, and
+	// whether the music on it was paused. The touch handler acts on what is on the screen, rather than
+	// working the same thing out a second way and drifting from it.
+	showingPlaying bool
+	showingPaused  bool
+
 	// ringPreview shows the ringing page silently until then.
 	ringPreview time.Time
 
@@ -592,7 +598,23 @@ func (d *Display) gesture(g touch.Gesture) {
 			d.wake()
 			return
 		}
-		if idle && d.nowPlaying() {
+		// The footer's word for the music is the way back to the player screen: while the track is paused
+		// and the screen has been put away, a tap on it shows what is playing rather than starting it from
+		// a screen that is not showing what it is.
+		d.mu.Lock()
+		showing, pausedMusic, away := d.showingPlaying, d.showingPaused, d.away
+		d.mu.Unlock()
+		// And only when the page really is away: this is the way back to it, so taking a tap out of the
+		// bottom-right corner of the clock is worth it only when there is something to come back to.
+		if d.r != nil && idle && pausedMusic && !showing && away &&
+			image.Pt(g.X, g.Y).In(d.r.playingButton()) {
+			d.mu.Lock()
+			d.away, d.awayTrack, d.awayStation = false, "", ""
+			d.mu.Unlock()
+			d.wake()
+			return
+		}
+		if idle && showing {
 			// The now-playing screen: each button does what it says, and a tap anywhere else is
 			// play/pause, because that is what a hand put on a screen like this means.
 			if d.r != nil {
@@ -638,10 +660,10 @@ func (d *Display) gesture(g touch.Gesture) {
 		// way out: the drawer has closed on this swipe since long before there was a page to put away,
 		// because while it is in every finger belongs to drawerGesture.
 		d.mu.Lock()
-		sheet, idle := d.sheet, d.view.Phase == "idle"
+		sheet, showing, idle := d.sheet, d.showingPlaying, d.view.Phase == "idle"
 		d.mu.Unlock()
 		_, camera := home.Get().Camera()
-		if sheet || camera || !idle || !d.nowPlaying() {
+		if sheet || camera || !idle || !showing {
 			return
 		}
 		rd := home.Get().Radio()
@@ -1208,6 +1230,9 @@ func (d *Display) frame() time.Duration {
 		s.radio = home.Get().Radio()
 	}
 	s.nowPlaying = wants && !d.putAway(s.radio, wants)
+	d.mu.Lock()
+	d.showingPlaying, d.showingPaused = s.nowPlaying, s.paused
+	d.mu.Unlock()
 	s.weather = home.Get().Weather()
 	d.mu.Lock()
 	s.showWeather = (s.phase == "idle" || s.phase == "lingering") && now.Before(d.weatherUntil)
