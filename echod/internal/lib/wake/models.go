@@ -2,6 +2,7 @@ package wake
 
 import (
 	"encoding/json"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"strings"
@@ -9,6 +10,7 @@ import (
 	"github.com/zserge/microwakeword"
 
 	"github.com/HuskerMinion/techo5/echod/internal/lib/oww"
+	"github.com/HuskerMinion/techo5/echod/internal/lib/safename"
 	"github.com/HuskerMinion/techo5/echod/internal/lib/tflite"
 )
 
@@ -149,9 +151,19 @@ func load(dir, id string) Model {
 	if len(man.TrainedLanguages) > 0 {
 		m.Languages = man.TrainedLanguages
 	}
+	// The name in the manifest is the one part of it that becomes a path. A manifest is JSON fetched
+	// from Home Assistant, or dropped in the directory by hand, and this path is what Purge deletes
+	// and what the engine loads — so a manifest that names something outside the model directory is
+	// ignored and the model keeps the file named after its id, which is the file that is there.
 	if man.Model != "" {
-		m.Path = filepath.Join(dir, man.Model)
-		m.Config.ModelPath = m.Path
+		named, err := safename.Join(dir, man.Model)
+		if err != nil {
+			slog.Error("a wake word's manifest names a file outside the model directory; ignoring it",
+				"id", id, "model", man.Model)
+		} else {
+			m.Path = named
+			m.Config.ModelPath = m.Path
+		}
 	}
 
 	// Window and step describe the model. probability_cutoff is deliberately ignored: the

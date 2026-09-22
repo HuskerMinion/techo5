@@ -121,7 +121,8 @@ const StatePath = StateDir + "/state.json"
 const ModelDir = StateDir + "/models"
 
 // RecordingDir holds the kept turn audio, one WAV and one metadata file per turn, named by turn id.
-const RecordingDir = StateDir + "/recordings"
+// A variable rather than a constant so that a test can keep recordings somewhere harmless.
+var RecordingDir = StateDir + "/recordings"
 
 // MAC normalizes an address into the form Home Assistant compares against, and reports "" for
 // anything that would not identify a device. idme writes twelve hex digits with no separators.

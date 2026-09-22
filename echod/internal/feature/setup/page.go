@@ -52,7 +52,12 @@ func (f *Feature) Run(ctx context.Context) error {
 }
 
 func (f *Feature) serve(w http.ResponseWriter, r *http.Request) {
-	f.used()
+	// Only a browser that has been let in keeps the page open. Anything else on the network can ask
+	// for this path as often as it likes, and the idle time is there to close the page when the
+	// person who opened it has walked away — a scanner or a stale tab must not hold it open for them.
+	if _, in := f.session(r); in {
+		f.used()
+	}
 	switch strings.TrimSuffix(r.URL.Path, "/") {
 	case "/setup":
 		f.index(w, r)
@@ -82,6 +87,14 @@ func (f *Feature) diagnostics(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Cache-Control", "no-store")
 	w.Header().Set("Content-Disposition", `attachment; filename="techo5-diagnostics.txt"`)
 	fmt.Fprint(w, diag.Bundle())
+}
+
+// letInRequest is what the rest of the web port asks about a request: whether the browser making it
+// has been let in by a press on the device. Handed to web.Guard as this feature is built, so that a
+// page in another feature can put its own device-changing options behind the same press.
+func (f *Feature) letInRequest(r *http.Request) bool {
+	_, in := f.session(r)
+	return in
 }
 
 // session is the cookie this request carries, and whether it has been let in.
@@ -121,8 +134,12 @@ func (f *Feature) wait(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "another browser is already waiting for a press; try again in a minute", http.StatusConflict)
 		return
 	}
+	// The cookie covers the whole port, not just this page: the screenshot page asks the same
+	// question about its device-changing options, and a cookie scoped to /setup would never be sent
+	// there. Nothing else is served on this port, it cannot be read by script, and Strict keeps it
+	// off requests another site started.
 	http.SetCookie(w, &http.Cookie{
-		Name: cookieName, Value: token, Path: "/setup",
+		Name: cookieName, Value: token, Path: "/",
 		HttpOnly: true, SameSite: http.SameSiteStrictMode, MaxAge: int(life / time.Second),
 	})
 	f.Changed.Emit(struct{}{}) // the device says a browser is asking

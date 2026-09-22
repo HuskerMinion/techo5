@@ -129,3 +129,34 @@ func TestHaveRecognisesWhatIsInstalled(t *testing.T) {
 		t.Error("a model with another hash counts as installed")
 	}
 }
+
+// The id comes from Home Assistant: it is in the offer, and it comes back in the selection that asks
+// for a download. It names two files in the model directory, which the daemon reads as root, so an
+// id that is not a plain file name is refused rather than trimmed down to one.
+func TestAdoptRefusesAnIDThatLeavesTheModelDirectory(t *testing.T) {
+	for _, id := range []string{
+		"../../etc/cron.d/model",
+		"/etc/cron.d/model",
+		`C:\Windows\win.ini`,
+		"sub/model",
+		`sub\model`,
+		"..",
+		"",
+	} {
+		dir := t.TempDir()
+		_, offer := served(t, testConfig, []byte("this is not really a model"))
+		offer.ID = id
+
+		if _, err := Adopt(context.Background(), dir, offer); err == nil {
+			t.Errorf("%q was adopted as a model id", id)
+		}
+		if Have(dir, offer) {
+			t.Errorf("%q was reported as installed", id)
+		}
+
+		left, _ := os.ReadDir(dir)
+		if len(left) != 0 {
+			t.Errorf("%q left %d files in the model directory", id, len(left))
+		}
+	}
+}

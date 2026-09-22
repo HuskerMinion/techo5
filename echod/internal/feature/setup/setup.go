@@ -112,6 +112,9 @@ func Get() *Feature {
 		voice.OwnsPress(shared.TookPress)
 		web.Handle("/setup", "Setup", shared.On, shared.serve)
 		web.Handle("/setup/", "", shared.On, shared.serve)
+		// The press is the whole port's authorization, not only this page's: a screenshot is one
+		// thing to let the network have and driving the screen from it is another.
+		web.Guard(shared.letInRequest)
 	})
 	return shared
 }

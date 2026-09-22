@@ -26,6 +26,7 @@ import (
 	"github.com/HuskerMinion/techo5/echod/internal/config"
 	"github.com/HuskerMinion/techo5/echod/internal/hardware/mic"
 	"github.com/HuskerMinion/techo5/echod/internal/layout"
+	"github.com/HuskerMinion/techo5/echod/internal/lib/safename"
 )
 
 // Slots is how many assistants there are to keep recordings for. Named here rather than taken from the
@@ -190,6 +191,15 @@ func (s *Store) Opens(id string, slot int) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
+	// A turn with no id is one nothing is recording for; any other id that cannot name a file is
+	// wrong enough to say so, since the two files are named after it.
+	if !safename.OK(id) {
+		if id != "" {
+			slog.Error("a turn was not recorded: its id cannot name a file", "id", id)
+		}
+		s.open, s.buf = "", nil
+		return
+	}
 	if keeps(slot) <= 0 {
 		s.open, s.buf = "", nil
 		return
@@ -255,7 +265,14 @@ type Answer struct {
 
 // page reads the WAV and hands back one slice of it. The whole file is already a WAV, so the first
 // page opens as audio on its own and the rest append to it.
+//
+// The id comes in over the wire, in the call Home Assistant's card makes to play a turn back, so it
+// is whatever the caller cared to send: it names a file and it is checked before it does.
 func (s *Store) page(id string, page int) (*Answer, error) {
+	if !safename.OK(id) {
+		return nil, fmt.Errorf("%q is not a turn id", id)
+	}
+
 	whole, err := os.ReadFile(wavPath(id))
 	if err != nil {
 		return nil, fmt.Errorf("no recording for turn %s", id)
@@ -346,11 +363,20 @@ func keeps(slot int) int {
 	return max(words[slot].Recordings, 0)
 }
 
+// The modes below are owner-only, and are the modes the files are created with rather than modes
+// something tightens them to afterwards: between the two there is a moment when anything on the
+// device can open them. What is in them is the household talking in its own rooms, which nothing
+// else running here has any business reading.
+const (
+	dirMode  = 0o700
+	fileMode = 0o600
+)
+
 func write(id string, slot int, pcm []byte) error {
-	if err := os.MkdirAll(layout.RecordingDir, 0o755); err != nil {
+	if err := os.MkdirAll(layout.RecordingDir, dirMode); err != nil {
 		return err
 	}
-	if err := os.WriteFile(wavPath(id), wav(pcm), 0o644); err != nil {
+	if err := os.WriteFile(wavPath(id), wav(pcm), fileMode); err != nil {
 		return err
 	}
 
@@ -358,7 +384,7 @@ func write(id string, slot int, pcm []byte) error {
 	if err != nil {
 		return err
 	}
-	return os.WriteFile(metaPath(id), blob, 0o644)
+	return os.WriteFile(metaPath(id), blob, fileMode)
 }
 
 func remove(id string) {
@@ -369,7 +395,13 @@ func remove(id string) {
 	}
 }
 
+// readMeta reads a turn's sidecar. Ids reach this from a Home Assistant call as well as from the
+// directory listing, so the same check stands in front of the read.
 func readMeta(id string) (meta, error) {
+	if !safename.OK(id) {
+		return meta{}, fmt.Errorf("%q is not a turn id", id)
+	}
+
 	blob, err := os.ReadFile(metaPath(id))
 	if err != nil {
 		return meta{}, err

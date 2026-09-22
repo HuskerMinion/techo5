@@ -70,6 +70,22 @@ func Handle(path, label string, open func() bool, h http.HandlerFunc) {
 	f.pages = append(f.pages, page{path: path, label: label, open: open, h: h})
 }
 
+// letIn answers whether a request carries a session the setup page has let in, which is the only
+// authorization this port has: a press on the device, made by somebody standing at it.
+//
+// The setup page hands the check in rather than being imported here, because it is the page that
+// imports this package. It is handed in while the features are being built, before anything is
+// served, and never changed after that. A build without a setup page leaves it nil, and then
+// nothing on this port is authorized, which is the answer that refuses rather than allows.
+var letIn func(*http.Request) bool
+
+// Guard is how the setup page hands its session check in. Called once, as that feature is built.
+func Guard(check func(*http.Request) bool) { letIn = check }
+
+// LetIn reports whether this request comes from a browser the setup page has let in. Pages on this
+// port use it for anything that changes what the device is doing; reading needs only the switch.
+func LetIn(r *http.Request) bool { return letIn != nil && letIn(r) }
+
 // Wake has the port looked at again, for a switch that is not one of Home Assistant's — the setup
 // page closing itself after its idle time, say.
 func Wake() {

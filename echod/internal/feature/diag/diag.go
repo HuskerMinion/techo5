@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	esphome "github.com/ygelfand/go-esphome-device"
@@ -27,6 +28,10 @@ import (
 )
 
 func init() {
+	// Before anything is built, so that no request has yet gone out over the transport being
+	// replaced and nothing is reading the variable as it is written.
+	http.DefaultTransport = transport
+
 	component.Register(component.Network, Get(), component.Order(90))
 }
 
@@ -271,13 +276,57 @@ func (d *Diag) remote() {
 	d.address()
 }
 
-// insecureTLS applies to everything the device downloads: models, firmware and the audio Home
-// Assistant serves all go through the default transport.
+// Everything the device downloads goes through the default transport: wake word models, the audio
+// Home Assistant serves, the pictures a slideshow shows. So the switch that stops certificates being
+// checked has to reach all of it, and it used to by writing a new TLS configuration into the shared
+// transport — a field several goroutines were reading as they made requests, written with no lock,
+// and leaving the connections opened under the old setting in the pool for the next request to pick
+// up.
+//
+// What is installed instead is two transports of our own, one that checks certificates and one that
+// does not, and a flag saying which a request goes to. The flag is read once per request, neither
+// transport is ever written to after it is built, and turning the switch back off closes the
+// connections that were made while it was on, so nothing carries on over one of them.
+//
+// The updater is not part of this either way: it keeps its own client, because an update installs as
+// root and must be believed only when the release key signed it (update/trust.go).
+type tlsSwitch struct {
+	checking *http.Transport
+	skipping *http.Transport
+	skip     atomic.Bool
+}
+
+// transport is the default transport from here on. Nothing may assert http.DefaultTransport to
+// *http.Transport any more; it is this.
+var transport = newTLSSwitch()
+
+func newTLSSwitch() *tlsSwitch {
+	base, ok := http.DefaultTransport.(*http.Transport)
+	if !ok {
+		// Nothing has replaced it in any build of this daemon; a transport of our own rather than a
+		// panic if something ever does.
+		base = &http.Transport{Proxy: http.ProxyFromEnvironment}
+	}
+	skipping := base.Clone()
+	skipping.TLSClientConfig = &tls.Config{InsecureSkipVerify: true}
+	return &tlsSwitch{checking: base, skipping: skipping}
+}
+
+func (t *tlsSwitch) RoundTrip(r *http.Request) (*http.Response, error) {
+	if t.skip.Load() {
+		return t.skipping.RoundTrip(r)
+	}
+	return t.checking.RoundTrip(r)
+}
+
+// insecureTLS moves the switch. Called from the entity's command and from Restore.
 func insecureTLS(on bool) {
-	http.DefaultTransport.(*http.Transport).TLSClientConfig = &tls.Config{InsecureSkipVerify: on}
+	transport.skip.Store(on)
 	if on {
 		slog.Warn("certificates are not being checked")
+		return
 	}
+	transport.skipping.CloseIdleConnections()
 }
 
 // reachable opens or closes the adb port and moves the switch to match what the chain now says.

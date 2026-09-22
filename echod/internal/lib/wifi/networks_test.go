@@ -1,6 +1,7 @@
 package wifi
 
 import (
+	"context"
 	"os"
 	"strings"
 	"testing"
@@ -100,4 +101,24 @@ func readConf(t *testing.T) string {
 		t.Fatal(err)
 	}
 	return string(b)
+}
+
+// A name and a passphrase are written into wpa_supplicant.conf as quoted values, and that file is
+// read a line at a time: a newline inside one ends its line and everything after it is read as
+// configuration nobody asked for. The setup page takes whatever somebody types into the "other
+// network" box, so the value is refused here before anything is written.
+func TestJoinRefusesALineEndingInAValue(t *testing.T) {
+	withConf(t, "")
+
+	injected := "Home\nnetwork={\n\tssid=\"Theirs\"\n\tkey_mgmt=NONE\n}"
+	if err := Join(context.Background(), injected, "hunter2hunter"); err == nil {
+		t.Error("a network name carrying a line ending was written to the configuration")
+	}
+	if err := Join(context.Background(), "Home", "hunter2\rhunter"); err == nil {
+		t.Error("a passphrase carrying a carriage return was written to the configuration")
+	}
+
+	if _, err := os.Stat(Conf); !os.IsNotExist(err) {
+		t.Errorf("the configuration was written for a value that was refused: %v", err)
+	}
 }

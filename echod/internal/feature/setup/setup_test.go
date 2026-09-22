@@ -1,13 +1,16 @@
 package setup
 
 import (
+	"context"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/HuskerMinion/techo5/echod/internal/hardware/buttons"
+	"github.com/HuskerMinion/techo5/echod/internal/lib/wifi"
 )
 
 // ask is a browser asking to be let in: it posts to /setup/wait and keeps the cookie it is given.
@@ -333,5 +336,69 @@ func TestDiagnosticsNeedThePressToo(t *testing.T) {
 	}
 	if !strings.Contains(w.Body.String(), "TECHO5 diagnostics") {
 		t.Errorf("that does not look like the bundle: %q", first(w.Body.String()))
+	}
+}
+
+// The idle time is there to close the page when whoever opened it has walked away. Only a browser
+// that has been let in counts as somebody being there: anything else on the network could otherwise
+// hold the page open by asking for it, which is the opposite of what the timer is for.
+func TestOnlyALetInBrowserKeepsThePageOpen(t *testing.T) {
+	f := build()
+	f.Open()
+	c := ask(t, f)
+	f.button(buttons.Event{Name: buttons.Action, Kind: buttons.Tap})
+
+	// Wind the page back to a minute from closing, and see who can put it off.
+	soon := time.Now().Add(time.Minute)
+	f.mu.Lock()
+	f.openUntil = soon
+	f.mu.Unlock()
+
+	for _, path := range []string{"/setup", "/setup/state", "/setup/diagnostics.txt"} {
+		get(f, path, nil)
+	}
+	f.mu.Lock()
+	held := f.openUntil
+	f.mu.Unlock()
+	if !held.Equal(soon) {
+		t.Errorf("a request with no session put the closing time off to %v", held.Sub(soon))
+	}
+
+	get(f, "/setup", c)
+	f.mu.Lock()
+	held = f.openUntil
+	f.mu.Unlock()
+	if !held.After(soon) {
+		t.Error("the browser that was let in did not keep the page open")
+	}
+}
+
+// The cookie has to reach the whole port, not only this page: the screenshot page asks the same
+// question about the options that work the screen.
+func TestTheSessionCookieCoversThePort(t *testing.T) {
+	f := build()
+	f.Open()
+	if c := ask(t, f); c.Path != "/" {
+		t.Errorf("the session cookie is scoped to %q, want the whole port", c.Path)
+	}
+}
+
+// The "other network" field takes whatever somebody types, and it becomes a quoted value in
+// wpa_supplicant.conf. A newline in it would end that line and turn the rest into configuration of
+// its own, so it is refused before anything is written.
+func TestANetworkNameCannotCarryALineEnding(t *testing.T) {
+	dir := t.TempDir()
+	old := wifi.Conf
+	wifi.Conf = dir + "/wpa_supplicant.conf"
+	t.Cleanup(func() { wifi.Conf = old })
+
+	injected := "Home\nnetwork={\n\tssid=\"Theirs\"\n\tkey_mgmt=NONE\n}"
+
+	problem := joinWifi(context.Background(), injected, "hunter2hunter")
+	if problem == "" {
+		t.Fatal("a network name carrying a line ending was accepted")
+	}
+	if _, err := os.Stat(wifi.Conf); !os.IsNotExist(err) {
+		t.Errorf("the configuration was written for a name that was refused: %v", err)
 	}
 }

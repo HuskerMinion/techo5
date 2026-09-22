@@ -88,3 +88,47 @@ func TestPurgeWithNothingSelected(t *testing.T) {
 		t.Errorf("Installed found %d models in an emptied directory", len(left))
 	}
 }
+
+// Purge deletes what a manifest points at, and a manifest is JSON that came from Home Assistant or
+// was copied onto the device by hand. One naming a file outside the model directory is ignored, so
+// the purge can only ever delete inside it.
+func TestPurgeWillNotDeleteOutsideTheModelDirectory(t *testing.T) {
+	home := t.TempDir()
+	dir := filepath.Join(home, "models")
+	if err := os.Mkdir(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	outside := filepath.Join(home, "state.json")
+	if err := os.WriteFile(outside, []byte("the device's settings"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	put(t, dir, "glados", `{"wake_word":"GLaDOS","model":"../state.json"}`, 100)
+
+	Purge(dir, nil)
+
+	if _, err := os.Stat(outside); err != nil {
+		t.Errorf("a manifest naming ../state.json had it deleted: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(dir, "glados.tflite")); !os.IsNotExist(err) {
+		t.Error("the model itself survived the purge")
+	}
+}
+
+// The same manifest must not send the engine off to load something outside the directory either.
+func TestAManifestCannotNameAModelOutsideTheDirectory(t *testing.T) {
+	dir := t.TempDir()
+	put(t, dir, "glados", `{"wake_word":"GLaDOS","model":"../../etc/passwd"}`, 100)
+
+	models, err := Installed(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(models) != 1 {
+		t.Fatalf("%d models installed, want 1", len(models))
+	}
+	if want := filepath.Join(dir, "glados.tflite"); models[0].Path != want {
+		t.Errorf("model path is %q, want the file named after the id (%q)", models[0].Path, want)
+	}
+}

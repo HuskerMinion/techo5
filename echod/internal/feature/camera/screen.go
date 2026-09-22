@@ -10,18 +10,24 @@ import (
 
 	"github.com/HuskerMinion/techo5/echod/internal/config"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/display"
-	"github.com/HuskerMinion/techo5/echod/internal/feature/web"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/home"
+	"github.com/HuskerMinion/techo5/echod/internal/feature/web"
 )
 
 // registerScreen adds /screen.png: what the panel shows. ?sheet= opens the settings sheet on a
 // tab first (device, alarms, bluetooth, cameras, radio, theme, security; "off" closes it), ?alarm=new
 // opens the alarm editor, ?ring=preview shows the ringing page silently, ?demo=1 hides the owner's
 // details behind placeholders, and ?theme= switches the palette,
-// so the sheet and the themes can be looked at without a finger on the device. Off unless the
-// Screen web access switch is on: the options change what the device is doing.
+// so the sheet and the themes can be looked at without a finger on the device. The whole path is
+// off unless the Screen web access switch is on, and the options above need the setup page's press
+// as well: see driving.
 func (f *Feature) registerScreen() {
 	web.Handle("/screen.png", "Screen", screenOpen, func(w http.ResponseWriter, r *http.Request) {
+		if driving(r) && !web.LetIn(r) {
+			http.Error(w, "those options need a browser the setup page has let in",
+				http.StatusForbidden)
+			return
+		}
 		if r.URL.Query().Get("demo") != "" {
 			// Placeholders for the name, network, address and key names, for screenshots to publish.
 			display.Get().Demo(20 * time.Second)

@@ -14,6 +14,8 @@ import (
 	"time"
 
 	esphome "github.com/ygelfand/go-esphome-device"
+
+	"github.com/HuskerMinion/techo5/echod/internal/lib/safename"
 )
 
 // Models Home Assistant offers from its own custom_wake_words directory, which is how a wake word is
@@ -26,8 +28,17 @@ import (
 
 const fetchTimeout = 30 * time.Second
 
+// The id is Home Assistant's, not ours: it arrives in the offer and comes back in the selection,
+// and both are messages from whatever is on the other end of the connection. It names two files in
+// the model directory, which the daemon reads as root, so an id that is not a plain file name is
+// refused here — at the two doors everything else goes through — rather than repaired.
+
 // Have reports whether the offered model is already on disk and is the one being offered.
 func Have(dir string, o esphome.ExternalWakeWord) bool {
+	if !safename.OK(o.ID) {
+		return false
+	}
+
 	data, err := os.ReadFile(modelPath(dir, o.ID))
 	if err != nil {
 		return false
@@ -37,6 +48,9 @@ func Have(dir string, o esphome.ExternalWakeWord) bool {
 
 // Adopt downloads a model unless it is already there, and returns it ready to load.
 func Adopt(ctx context.Context, dir string, o esphome.ExternalWakeWord) (Model, error) {
+	if !safename.OK(o.ID) {
+		return Model{}, fmt.Errorf("wake: %q is not a name a model can be kept under", o.ID)
+	}
 	if Have(dir, o) {
 		return load(dir, o.ID), nil
 	}

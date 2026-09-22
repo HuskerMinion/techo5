@@ -149,6 +149,12 @@ func Join(ctx context.Context, ssid, passphrase string) error {
 	if passphrase != "" && (len(passphrase) < 8 || len(passphrase) > 63) {
 		return errors.New("wifi: a passphrase is 8 to 63 characters")
 	}
+	if !oneLine(ssid) {
+		return errors.New("wifi: a network name cannot hold a line ending")
+	}
+	if !oneLine(passphrase) {
+		return errors.New("wifi: a passphrase cannot hold a line ending")
+	}
 	old, _ := os.ReadFile(Conf)
 	// The new one goes first, since it is the one just asked for, and any older entry for the same
 	// name goes, so a corrected passphrase replaces the one that was wrong. The rest are kept: a
@@ -241,6 +247,25 @@ func renewLease() {
 
 func escape(s string) string {
 	return strings.NewReplacer(`\`, `\\`, `"`, `\"`).Replace(s)
+}
+
+// oneLine is whether a value can go in the configuration file at all. The file is read a line at a
+// time, so a newline inside a name or a passphrase ends the line it is on and everything after it is
+// read as configuration — a network somebody typed into the "other network" box on the setup page
+// could write settings nobody asked for. Nothing else in the file is under anyone's thumb, so this
+// is the one place the file can be written from, and a value carrying a line ending is refused here
+// rather than escaped: no name or passphrase has one, and a value this quietly rewrote would join a
+// network the person never named. Carriage returns and the other control characters go with it, for
+// the same reason and because the supplicant would not read them back as typed either.
+//
+// The quote and the backslash are escape's business, not this one.
+func oneLine(s string) bool {
+	for _, r := range s {
+		if r < 0x20 || r == 0x7f {
+			return false
+		}
+	}
+	return true
 }
 
 // SettingUp marks, or clears, the setup in progress for the boot scripts.
