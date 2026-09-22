@@ -9,6 +9,7 @@ import (
 	"log/slog"
 	"os"
 	"sync"
+	"syscall"
 	"time"
 
 	"github.com/HuskerMinion/techo5/echod/internal/hardware/privacy"
@@ -67,7 +68,20 @@ type Camera struct {
 	last    *Frame
 	err     error // why the last start failed, for callers waiting on a frame
 	seq     uint64
+
+	// wedged is the sensor having gone away in a manner nothing here can undo. See ErrNeedsReboot.
+	wedged error
 }
+
+// ErrNeedsReboot is the sensor refusing to open in a way that only a reboot clears.
+//
+// The mute latch cuts the camera's power without telling the sensor driver, which goes on believing
+// the sensor is powered; the power-down it runs before the next power-on then fails on VCAMD and
+// takes the open with it. Every open after that returns EIO, for the life of the boot. The fix
+// belongs in the kernel - amazon-gating cutting the camera behind imgsensor's back - and this is
+// only about not sitting in the failure: it was found as three and a half hours of the same error
+// every twenty seconds, one per still Home Assistant asked for.
+var ErrNeedsReboot = errors.New("the camera needs a reboot: the sensor did not come back after the microphone latch")
 
 var (
 	once   sync.Once
@@ -110,6 +124,12 @@ func (c *Camera) Acquire() (release func(), err error) {
 	}
 	c.mu.Lock()
 	defer c.mu.Unlock()
+
+	// Once it is gone it is gone: opening again only produces the same error, and the caller is
+	// better told what would fix it than handed a bare I/O error every twenty seconds.
+	if c.wedged != nil {
+		return nil, c.wedged
+	}
 	c.users++
 	if c.idle != nil {
 		c.idle.Stop()
@@ -230,11 +250,20 @@ func (c *Camera) run(stop, stopped chan struct{}) {
 		}
 		d, err := open()
 		if err != nil {
-			slog.Error("camera start", "err", err)
 			c.mu.Lock()
 			c.err = err
 			c.running = false
+			// EIO here is the sensor believing it is still powered after the latch cut it, which no
+			// amount of asking again will change. Said once, loudly, rather than at every poll.
+			if errors.Is(err, syscall.EIO) {
+				c.wedged = ErrNeedsReboot
+				c.mu.Unlock()
+				slog.Error("camera will not open again until this device is rebooted",
+					"err", err, "why", "the microphone latch cut the sensor's power behind its driver")
+				return
+			}
 			c.mu.Unlock()
+			slog.Error("camera start", "err", err)
 			return
 		}
 		c.setPowered(true)
@@ -302,4 +331,12 @@ func (c *Camera) setPowered(on bool) {
 	c.mu.Lock()
 	c.powered = on
 	c.mu.Unlock()
+}
+
+// Wedged is why the sensor cannot be opened at all, or nil. It is ErrNeedsReboot once the mute
+// latch has taken the sensor away, and nothing clears it but a reboot.
+func (c *Camera) Wedged() error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.wedged
 }
