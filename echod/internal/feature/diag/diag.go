@@ -544,20 +544,42 @@ func (d *Diag) hardware() {
 		StateClass:  esphome.StateClassMeasurement,
 	}
 
+}
+
+// Start builds the one entity that cannot be built with the others.
+//
+// Everything above is made in Get, which init calls, so it is all in place before anything starts.
+// The lens cover cannot be: its package does not know whether there is a shutter until it has opened
+// the input device, and that happens in the hardware phase, long after this package's init has run.
+// Asking at init got false on every device including the Show 8, so the sensor was never published
+// anywhere — the camera still refused a closed shutter, because that is read when the camera opens,
+// but Home Assistant was never told the cover existed.
+//
+// This runs in the network phase at order 90, after the hardware phase and before the api service at
+// order 99 collects the entity list.
+func (d *Diag) Start(context.Context) error {
+	// Start runs again on every restart; the entity is made once, because the list has been handed
+	// out by then and a fresh one would not be in it.
+	if d.lensCover != nil {
+		return nil
+	}
 	// The camera's physical shutter, on the one device that has one. A cover that cannot be seen is
 	// not reported at all: an entity that always says "open" would look like an assurance and be none.
-	if present, covered := lensCover(); present {
-		d.lensCover = &esphome.BinarySensor{
-			Base: esphome.Base{
-				ObjectID: "lens_cover", Name: "Lens cover", Icon: "mdi:camera-off",
-				Category: esphome.CategoryDiagnostic,
-			},
-			DeviceClass: "opening",
-		}
-		// Closed is the safe state, so the sensor reads the way a door does: open means uncovered.
-		d.lensCover.Set(!covered)
-		watchLensCover(func(covered bool) { d.lensCover.Set(!covered) })
+	present, covered := lensCover()
+	if !present {
+		return nil
 	}
+	d.lensCover = &esphome.BinarySensor{
+		Base: esphome.Base{
+			ObjectID: "lens_cover", Name: "Lens cover", Icon: "mdi:camera-off",
+			Category: esphome.CategoryDiagnostic,
+		},
+		DeviceClass: "opening",
+	}
+	// Closed is the safe state, so the sensor reads the way a door does: open means uncovered.
+	d.lensCover.Set(!covered)
+	watchLensCover(func(covered bool) { d.lensCover.Set(!covered) })
+	return nil
 }
 
 // Measure republishes what the disk holds. Called at start-up and after anything that adds to the cache
