@@ -19,7 +19,7 @@ const weatherShow = 30 * time.Second
 // weatherPage is today large on the left and the next days as columns on the right.
 func (r *renderer) weatherPage(s scene) {
 	r.cornerClock(s)
-	r.text(r.small, "Weather", r.margin, r.margin+26, amber)
+	r.text(r.small, "Weather", r.margin, r.margin+r.s(26), amber)
 
 	days := s.forecast
 	now := s.weather
@@ -28,51 +28,53 @@ func (r *renderer) weatherPage(s scene) {
 		cond = days[0].Condition
 	}
 	// The day's weather, large and faint, behind everything.
-	r.faded(40, func() { r.weatherIcon(cond, r.w/2, r.h/2+20, r.h*3/2) })
+	// Sized from the width, not the height: on the Show 5 both give 720, but a taller panel would
+	// grow this until it swallowed the page.
+	r.faded(40, func() { r.weatherIcon(cond, r.w/2, r.h/2+r.s(20), r.w*3/4) })
 
 	// Today: a big icon, the reading beside it, the day's range and rain beneath.
-	r.weatherIcon(cond, r.margin+80, 190, 150)
+	r.weatherIcon(cond, r.margin+r.s(80), r.s(190), r.s(150))
 	big := now.Temp
 	if big == "" && len(days) > 0 {
 		big = fmt.Sprintf("%.0f°", days[0].High)
 	}
-	r.text(r.big, big, r.margin+170, 225, cream)
-	r.text(r.body, conditionWords(cond), r.margin, 300, sunPale)
+	r.text(r.big, big, r.margin+r.s(170), r.s(225), cream)
+	r.text(r.body, conditionWords(cond), r.margin, r.s(300), sunPale)
 	if len(days) > 0 {
-		r.text(r.small, fmt.Sprintf("High %.0f°   Low %.0f°", days[0].High, days[0].Low), r.margin, 345, dim)
+		r.text(r.small, fmt.Sprintf("High %.0f°   Low %.0f°", days[0].High, days[0].Low), r.margin, r.s(345), dim)
 		if days[0].Rain >= 0 {
-			r.text(r.small, fmt.Sprintf("Rain %d%%", days[0].Rain), r.margin, 385, rainBlue)
+			r.text(r.small, fmt.Sprintf("Rain %d%%", days[0].Rain), r.margin, r.s(385), rainBlue)
 		}
 	}
 
 	// The next five days as columns, each with its own icon.
 	if len(days) > 1 {
-		left := r.w/2 + 10
+		left := r.w/2 + r.s(10)
 		cols := min(5, len(days)-1)
 		colW := (r.w - r.margin - left) / cols
 		for i := 0; i < cols; i++ {
 			d := days[i+1]
 			x := left + i*colW
 			// Each day in its own box.
-			r.box(image.Rect(x+3, 88, x+colW-3, 360), ember, 2)
+			r.box(image.Rect(x+r.s(3), r.s(88), x+colW-r.s(3), r.s(360)), ember, r.s(2))
 			name := d.When.Format("Mon")
 			if d.When.IsZero() {
 				name = fmt.Sprintf("+%d", i+1)
 			}
-			r.text(r.small, name, x+(colW-r.width(r.small, name))/2, 122, amber)
-			r.weatherIcon(d.Condition, x+colW/2, 178, min(colW-10, 68))
+			r.text(r.small, name, x+(colW-r.width(r.small, name))/2, r.s(122), amber)
+			r.weatherIcon(d.Condition, x+colW/2, r.s(178), min(colW-r.s(10), r.s(68)))
 			hi := fmt.Sprintf("%.0f°", d.High)
 			lo := fmt.Sprintf("%.0f°", d.Low)
-			r.text(r.body, hi, x+(colW-r.width(r.body, hi))/2, 262, cream)
-			r.text(r.small, lo, x+(colW-r.width(r.small, lo))/2, 300, dim)
+			r.text(r.body, hi, x+(colW-r.width(r.body, hi))/2, r.s(262), cream)
+			r.text(r.small, lo, x+(colW-r.width(r.small, lo))/2, r.s(300), dim)
 			if d.Rain > 0 {
 				p := fmt.Sprintf("%d%%", d.Rain)
-				r.text(r.tiny, p, x+(colW-r.width(r.tiny, p))/2, 338, rainBlue)
+				r.text(r.tiny, p, x+(colW-r.width(r.tiny, p))/2, r.s(338), rainBlue)
 			}
 		}
 	} else if len(days) == 0 {
 		msg := "No forecast yet: call the home_assistant action with a token"
-		r.text(r.tiny, msg, r.w/2-20, 200, dim)
+		r.text(r.tiny, msg, r.w/2-r.s(20), r.s(200), dim)
 	}
 	r.weatherToggle("Radar")
 }

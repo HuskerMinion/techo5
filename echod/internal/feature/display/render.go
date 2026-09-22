@@ -336,7 +336,7 @@ func (r *renderer) timeAndDate(now time.Time, base int, dateSuffix string) {
 	ampm := clockSuffix(now)
 	hw := r.width(r.clock, hour)
 	aw := r.width(r.ampm, ampm)
-	gap := 18
+	gap := r.s(18)
 	if ampm == "" {
 		gap = 0
 	}
@@ -345,20 +345,20 @@ func (r *renderer) timeAndDate(now time.Time, base int, dateSuffix string) {
 	r.text(r.ampm, ampm, x+hw+gap, base, amber)
 
 	date := now.Format("Monday, January 2") + dateSuffix
-	r.text(r.small, date, (r.w-r.width(r.small, date))/2, base+70, dim)
+	r.text(r.small, date, (r.w-r.width(r.small, date))/2, base+r.s(70), dim)
 }
 
 // bigClock is the idle screen: the time across the middle, the date beneath, and under that the running
 // timers. With timers the clock moves up to make room. The next alarm, when it is within a day, follows
 // the date.
 func (r *renderer) bigClock(s scene) {
-	base := r.h/2 + 60
+	base := r.h/2 + r.s(60)
 	timers := false
 	for _, t := range s.timers {
 		timers = timers || t.Active
 	}
 	if timers {
-		base -= 36
+		base -= r.s(36)
 	}
 
 	suffix := ""
@@ -371,7 +371,7 @@ func (r *renderer) bigClock(s scene) {
 	}
 	r.timeAndDate(s.now, base, suffix)
 	if timers {
-		r.timersLine(s, base+128)
+		r.timersLine(s, base+r.s(128))
 	}
 
 	r.weatherCorner(s)
