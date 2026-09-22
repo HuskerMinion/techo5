@@ -36,6 +36,12 @@ param(
     # missing from the signed manifest, and the installer will not use a boot image the release key
     # has not vouched for.
     [string]$CheckersBoot = '',
+    # The same again for the Echo Show 8 (crown), published as techo5-boot-crown-<version>.img. It
+    # runs the same kernel commit as both Show 5 generations but its own configuration and device
+    # trees, so it needs an image of its own; install-show.py looks for this name on a crown unit and
+    # falls back to the newest earlier release carrying one. Attach it here rather than by hand, for
+    # the reason above.
+    [string]$CrownBoot = '',
     # Pre-built binaries from the "Build release binaries" GitHub Actions workflow run for this release's
     # tag (git tag $Version; git push origin $Version). When both are given, the local build is skipped
     # and these are signed as-is, so the release ships exactly what CI attested — but only once
@@ -95,7 +101,8 @@ try {
     $noKey = "import gzip,lzma,struct,sys; b=open(sys.argv[1],'rb').read(); ks,_,rs=struct.unpack('<3I',b[8:20]); ps=struct.unpack('<I',b[36:40])[0]; r0=ps+((ks+ps-1)//ps)*ps; r=b[r0:r0+rs]; d=gzip.decompress(r) if r[:2]==b'\x1f\x8b' else lzma.decompress(r); sys.exit(1 if b'root/.ssh/authorized_keys'+bytes(1) in d else 0)"
     $bootAssets = @()
     foreach ($img in @(@{ Path = $Boot; Name = "techo5-boot-$Version.img" },
-                       @{ Path = $CheckersBoot; Name = "techo5-boot-checkers-$Version.img" })) {
+                       @{ Path = $CheckersBoot; Name = "techo5-boot-checkers-$Version.img" },
+                       @{ Path = $CrownBoot; Name = "techo5-boot-crown-$Version.img" })) {
         if (-not $img.Path) { continue }
         python -c $noKey $img.Path
         if ($LASTEXITCODE -ne 0) { throw "$($img.Path) carries an SSH key: build it with build-image.sh --no-key" }
