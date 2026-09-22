@@ -253,6 +253,20 @@ def main():
 
     # ------------------------------------------------------------------------------------ 6. store
     step('slot store')
+    # A store already on the unit means this is not a fresh install, and mkstore would reformat it.
+    # That is the one step here with nothing behind it: the vendor tree in the store is this unit's
+    # own, LineageOS is gone by now, and vendor.tar was deleted once it reached slot a - so erasing
+    # the store leaves the unit with no way to bring its Wi-Fi up and nothing to rebuild it from.
+    # Asked of the unit rather than assumed from how far this run has got, and not something --force
+    # can wave through: --force is there to skip a prompt, not to erase a store somebody is using.
+    if 'HAVE-STORE' in (console.run('test -e /store/.techo5-store && echo HAVE-STORE', 10) or ''):
+        fail('this unit already has a slot store, so it is already installed or part-installed.\n'
+             '   Erasing it would take this unit\'s vendor tree with it, and LineageOS is no longer\n'
+             '   there to rebuild it from. What the unit has:\n%s\n'
+             '   To update it, use Home Assistant or deploy-rootfs.sh --install.\n'
+             '   To start over from LineageOS, flash the backup at %s first.'
+             % (console.run('STORE=/store slotctl status', 30) or '   (slotctl status did not answer)',
+                los_boot))
     if not a.force:
         print("   Next: LineageOS's system partition (mmcblk0p12) is erased and becomes the slot store.")
         if input('   Type ERASE to go on: ').strip() != 'ERASE':
