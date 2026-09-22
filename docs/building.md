@@ -58,6 +58,12 @@ mkdir -p ~/apk && cp inputs/apk.static ~/apk/apk.static
 `inputs/boot-lineage-18.1-20260904-cronos.img`. The installer keeps one in `backups/<serial>/`, or with
 LineageOS running and Rooted debugging on: `adb pull /dev/block/mmcblk0p9 inputs/boot-lineage-18.1-20260904-cronos.img`.
 
+This one file is yours and stays yours. Every board needs its own — the header, the load addresses and
+the kernel command line in a boot image come from the one it was built against, so a Show 8's image has
+to start from a Show 8's. It is Amazon's, it is specific to your unit, and this project neither fetches
+it nor publishes it. `fetch-inputs.py` takes only what is public; the donor image is the one input you
+supply yourself, on every board.
+
 No vendor tree (LineageOS's Wi-Fi and Bluetooth drivers and firmware) is needed or published: each
 Show keeps its own in the slot store.
 
@@ -108,6 +114,22 @@ Its header lists the source checkout and the toolchain (Arm's GCC 8.3, downloade
 [tools/linux/README.md](../tools/linux/README.md) has the device tree edit that gives the daemon both
 microphones instead of their average (`patch-dtb.py`, which needs `python3 -m pip install fdt`).
 
+**Which configuration.** All three Shows build from the same kernel commit and differ only in
+`DEFCONFIG`, and each wants a `KOUT` of its own so one board's objects are not read as another's:
+
+| Board | `DEFCONFIG` | |
+|---|---|---|
+| Echo Show 5 2nd gen | `cronos_defconfig` | the default |
+| Echo Show 5 1st gen | `checkers_defconfig` | |
+| Echo Show 8 1st gen | `crown_defconfig` | plus `PATCHES=` the microphone patch below |
+
+The Show 8 needs `tools/linux/patches/checkers-0001-mic-enable-on-capture.patch`, which puts the
+microphone pin back when a capture stream opens and the mute latch reads ungated. Despite the name it
+is not a 1st gen Show 5 patch: it touches `drivers/misc/gating.c`, `include/misc/gating.h` and
+`mt_soc_machine.c`, which are board-generic, and the Show 8 has the same latch. `crown_defconfig` is in
+the Amazon kernel tree already, beside the others, at the same commit — it was diffed against a Show 8's
+own `/proc/config.gz`, 1341 options each side and no differences either way.
+
 ## 6. The boot image
 
 ```
@@ -116,6 +138,20 @@ KERNEL=inputs/Image.gz-dtb-bt bash tools/linux/build-image.sh -o build/techo5-bo
 
 `--no-key` is how releases are built: the rescue environment then accepts only SSH keys already on the
 unit. Put your public key at `inputs/techo5_ed25519.pub` and leave `--no-key` out to have it built in.
+
+`KERNEL_IMAGE` is the donor: your own unit's LineageOS boot image, which the new image takes its
+header, load addresses and command line from (step 2). It defaults to the 2nd gen Show 5's, so on a
+1st gen or a Show 8 point it at that unit's own:
+
+```
+KERNEL_IMAGE=inputs/boot-lineage-crown.img KERNEL=inputs/Image.gz-dtb-crown-bt \
+  bash tools/linux/build-image.sh -o build/techo5-boot-crown.img --no-key
+```
+
+**Build the image you are going to publish, and boot that one.** An image built with a key in it and
+the same image built `--no-key` are different files, and only the one you booted is known to work —
+`release.ps1` refuses an image carrying `root/.ssh/authorized_keys`, so the keyed one is not the one
+that ships.
 
 ## 7. Install your build
 
@@ -174,6 +210,17 @@ git tag v0.6.0 && git push origin v0.6.0                       # the Show; trigg
 gh run download -n techo5-v0.6.0 -D bin                        # once it finishes
 .\tools\release.ps1 -Version v0.6.0 -Notes "..." -PrebuiltArm bin\echod-arm -PrebuiltArmDot bin\echod-arm-dot
 ```
+
+All three Shows share the tag `vX.Y.Z` and the one `echod-arm`: which board a unit is settles itself at
+run time from the panel name in its kernel command line. What is per-board is the boot image, and each
+goes on the same release under its own name, `-Boot` for the 2nd gen Show 5, `-CheckersBoot` for the
+1st gen and `-CrownBoot` for the Show 8. Pass whichever changed; the installer takes the rest from the
+newest earlier release that carries them. A boot image is signed into the manifest and checksummed like
+everything else, and the script refuses one with an SSH key inside.
+
+Do not give the Show 8 a tag of its own. A `crown-v*` tag would not trigger the workflow, and
+`install-show.py` looks back through plain `vX.Y.Z` releases when a release carries no image for a
+board, so a separate prefix would make it stop finding them.
 
 For the root filesystem, `PREBUILT_DAEMON=bin/echod-arm tools/linux/deploy-rootfs.sh --out ... --version
 v0.6.0` puts that same attested binary in it. The Dot (`git tag dot-v0.5.3`, then techo5-dot's

@@ -32,14 +32,19 @@
 Alexa with a small Alpine Linux image and one Go daemon, turning the Show into a fast, private Home
 Assistant voice satellite with a touch screen of its own.
 
-The same daemon runs on three more Echo devices, each from its own repository:
+**Every Echo that can be unlocked now runs it.** The bootloader exploit these devices are opened with,
+[amonet](https://github.com/R0rt1z2/amonet), reaches five Amazon Echos. All five run the same daemon:
 
-| Device | Repository | Status |
-|---|---|---|
-| **Echo Show 5, 2nd gen** (2021, `cronos`) | this one | In daily use |
-| **Echo Show 5, 1st gen** (2019, `checkers`) | this one, same binary; the hardware notes are in [techo5-checkers](https://github.com/HuskerMinion/techo5-checkers) | Working, tested end to end on one unit |
-| **Echo Spot, 1st gen** (2017, `rook`) | [TECHO5 Spot](https://github.com/HuskerMinion/techo5-spot) | In daily use |
-| **Echo Dot, 2nd gen** (2016, `biscuit`) | [TECHO5 Dot](https://github.com/HuskerMinion/techo5-dot) | In daily use |
+| Device | Model | Repository | Status |
+|---|---|---|---|
+| **Echo Show 5, 2nd gen** (2021, `cronos`) | AEOCN | this one | In daily use |
+| **Echo Show 5, 1st gen** (2019, `checkers`) | AEOCH | this one, same binary; hardware notes in [techo5-checkers](https://github.com/HuskerMinion/techo5-checkers) | Working, tested end to end on one unit |
+| **Echo Show 8, 1st gen** (2019, `crown`) | AEOCW | this one, same binary | Working on one unit, the newest port |
+| **Echo Spot, 1st gen** (2017, `rook`) | VN94DQ | [TECHO5 Spot](https://github.com/HuskerMinion/techo5-spot) | In daily use |
+| **Echo Dot, 2nd gen** (2016, `biscuit`) | RS03QR | [TECHO5 Dot](https://github.com/HuskerMinion/techo5-dot) | In daily use |
+
+Every other device amonet opens is a Fire tablet. No Echo made after 2021 has a public unlock, so this
+is the whole family as it stands, not a roadmap.
 
 <p align="center">
   <img src="docs/screenshots/sunrise-show.gif" alt="The screen turning into a sunrise over the twenty minutes before an alarm: a dark red sky warming through orange to a pale gold, a sun climbing into it, the time readable throughout" width="560">
@@ -157,8 +162,14 @@ Assistant. Every step by hand, and the fixes for what can go wrong: **[docs/inst
 generation it is talking to and takes that unit's boot image from the release. Everything works on it —
 screen, touch, speaker, microphones, wake word, camera, the mute button and voice — tested end to end,
 though so far on one unit rather than the two years of daily use behind the 2nd gen. The hardware notes
-are in [techo5-checkers](https://github.com/HuskerMinion/techo5-checkers). The Echo Show 8 1st gen
-(2019) is planned.
+are in [techo5-checkers](https://github.com/HuskerMinion/techo5-checkers).
+
+**Echo Show 8 1st gen (2019, `crown`)** installs with the same command as well. Its screen, touch,
+speaker, four microphones, wake word, camera, lens cover and mute latch all work, and it takes slot
+updates like the others. It is the newest of the three and has been through far less use than either
+Show 5, so treat it as such. Two things worth knowing first: a seller's model number does not tell the
+two Show 8 generations apart, so go by the year when buying second-hand, and cycling the mute latch
+stops the camera until the unit is rebooted.
 
 ## Under the hood
 
