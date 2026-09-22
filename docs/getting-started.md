@@ -18,16 +18,17 @@ The model number is on the bottom of the device, or in the Alexa app under the d
 | **Echo Show 5, 2nd gen** (2021) | `cronos` | AEOCN | [TECHO5](https://github.com/HuskerMinion/techo5) | Moderate: the unlock and LineageOS by hand, then a one-command installer |
 | **Echo Dot, 2nd gen** (2016) | `biscuit` | RS03QR | [TECHO5 Dot](https://github.com/HuskerMinion/techo5-dot) | Moderate: the unlock and Fire OS steps by hand, then a one-command installer |
 | **Echo Spot, 1st gen** (2017) | `rook` | VN94DQ | [TECHO5 Spot](https://github.com/HuskerMinion/techo5-spot) | Moderate: the unlock and LineageOS by hand, then a one-command installer |
-| **Echo Show 5, 1st gen** (2019) | `checkers` | — | [TECHO5](https://github.com/HuskerMinion/techo5) | Moderate: the unlock and LineageOS by hand, then the same one-command installer |
-| **Echo Show 8, 1st gen** (2019) | `crown` | — | [TECHO5](https://github.com/HuskerMinion/techo5) | Moderate: the unlock and LineageOS by hand, then the same one-command installer |
+| **Echo Show 5, 1st gen** (2019) | `checkers` | AEOCH | [TECHO5](https://github.com/HuskerMinion/techo5) | Moderate: the unlock and LineageOS by hand, then the same one-command installer |
+| **Echo Show 8, 1st gen** (2019) | `crown` | AEOCW | [TECHO5](https://github.com/HuskerMinion/techo5) | Moderate: the unlock and LineageOS by hand, then the same one-command installer |
 
 All three Shows install with the same command and run the same build, which tells them apart when it
 starts; the installer picks each one's boot image out of the release. The Show 5 1st gen has been tested
 end to end, though on one unit so far. The Show 8 is newer still: it has been through an install, a slot
 update and a reboot on one unit, with the screen, microphones, wake word, speaker, camera, lens cover
 and mute latch all working, and nothing else has run on it for long. Two things a Show 8 owner should
-know before starting. A seller's model number does not tell the two Show 8 generations apart, so go by
-the year rather than the number when buying second-hand; the board a 1st gen reports is `crown`. And
+know before starting. the model number above is the one the unlock project lists for the
+1st gen, and a seller's own number may not tell the two generations apart, so go by the year as well
+when buying second-hand; the board a 1st gen reports is `crown`. And
 cycling the mute latch stops the camera until the unit is rebooted — the daemon says so when it happens.
 Other Echos (the Dot 3rd gen and later, and so on) are **not** supported.
 
