@@ -315,3 +315,150 @@ func TestNoKeysChecksNothing(t *testing.T) {
 		t.Errorf("logged something about nothing: %s", log)
 	}
 }
+
+// A key's comment is a person and the name of their machine, and this log is what the diagnostics
+// bundle carries out of the house. So the log says which key by its fingerprint, and the comment
+// stays on the device.
+func TestTheLogNamesAKeyWithoutNamingAnybody(t *testing.T) {
+	_, home, log := offDevice(t)
+	if err := os.MkdirAll(home, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	// A real directory holding somebody else's key, with nothing joining it to the daemon's file:
+	// the arrangement that makes the repair log the keys it cannot find.
+	if err := os.WriteFile(filepath.Join(home, "authorized_keys"), []byte(imageKey+"\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	ensureDropbearSees([]string{testKey})
+
+	if log.Len() == 0 {
+		t.Fatal("the missing key was not logged at all")
+	}
+	if strings.Contains(log.String(), "someone@desk") {
+		t.Errorf("a key's comment is in the log the bundle carries:\n%s", log)
+	}
+	if !strings.Contains(log.String(), "SHA256:") {
+		t.Errorf("the log does not say which key is missing:\n%s", log)
+	}
+}
+
+// The fingerprint is the one ssh-keygen -l prints, so somebody can hold it against their own key.
+func TestFingerprintIsTheOneSSHPrints(t *testing.T) {
+	// ssh-keygen -lf on this key prints SHA256:jBqp+DuLmg8Yrw5bk+ihtQCrJILp7i/pVD6XrbZQxtE.
+	const key = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIHD8TFGO3hxbn85EQV6PpKWtoA9r2RMDQwp1Z1MiR7KV someone@desk"
+	got := fingerprint(key)
+	if want := "ssh-ed25519 SHA256:jBqp+DuLmg8Yrw5bk+ihtQCrJILp7i/pVD6XrbZQxtE"; got != want {
+		t.Errorf("fingerprint = %q, want %q", got, want)
+	}
+	if got := fingerprint("ssh-ed25519 not-base64 someone@desk"); got != "ssh-ed25519" {
+		t.Errorf("an unreadable key said more than its type: %q", got)
+	}
+}
+
+// A key taken away in Home Assistant has to leave the file dropbear reads, or the revocation is no
+// revocation at all and whoever was removed can still log in. The key the image brought with it is
+// not the daemon's and stays where it is.
+func TestARevokedKeyLeavesTheFileDropbearReads(t *testing.T) {
+	_, home, log := offDevice(t)
+	if err := os.MkdirAll(home, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(home, "authorized_keys"), []byte(imageKey+"\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	push(t, testKey, testKey2)
+	push(t, testKey) // the second one taken away
+
+	got := homeLines(t)
+	want := []string{imageKey, testKey}
+	if strings.Join(got, "|") != strings.Join(want, "|") {
+		t.Fatalf("dropbear reads %q, want %q", got, want)
+	}
+	if !strings.Contains(log.String(), "they can still log in until it is rewritten") {
+		t.Errorf("the log does not say what was wrong:\n%s", log)
+	}
+}
+
+// Every key taken away at once, which is what an empty ssh_keys action asks for. The daemon's lines
+// all go and the image's stays, so the unit is still reachable by whoever built it.
+func TestRemovingEveryKeyLeavesTheImagesOwn(t *testing.T) {
+	_, home, _ := offDevice(t)
+	if err := os.MkdirAll(home, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(home, "authorized_keys"), []byte(imageKey+"\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	push(t, testKey, testKey2)
+	push(t)
+
+	if got := homeLines(t); len(got) != 1 || got[0] != imageKey {
+		t.Fatalf("dropbear reads %q, want the image's key on its own", got)
+	}
+	if _, err := os.Stat(managedFile()); !os.IsNotExist(err) {
+		t.Errorf("a record of the daemon's lines outlived the last of them: %v", err)
+	}
+}
+
+// Nothing on disk says which lines the daemon wrote, so a daemon with no record of its own may not
+// take anything away: a unit updating into this must not lose a key somebody put there by hand.
+func TestWithoutARecordNothingIsRemoved(t *testing.T) {
+	_, home, _ := offDevice(t)
+	if err := os.MkdirAll(home, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	body := imageKey + "\n" + testKey2 + "\n"
+	if err := os.WriteFile(filepath.Join(home, "authorized_keys"), []byte(body), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := writeKeys([]string{testKey}); err != nil {
+		t.Fatal(err)
+	}
+	ensureDropbearSees([]string{testKey})
+
+	got := homeLines(t)
+	want := []string{imageKey, testKey2, testKey}
+	if strings.Join(got, "|") != strings.Join(want, "|") {
+		t.Fatalf("dropbear reads %q, want %q: a daemon with no record removed a line", got, want)
+	}
+}
+
+// The update itself: a unit whose root .ssh already holds keys an older daemon appended, with no
+// record of them anywhere. The old set is still on userdata when the action arrives, so the record
+// is written from that and the very first removal after the update takes.
+func TestAUnitWithNoRecordAdoptsTheKeysItAlreadyPushed(t *testing.T) {
+	_, home, _ := offDevice(t)
+	if err := os.MkdirAll(home, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	body := imageKey + "\n" + testKey + "\n" + testKey2 + "\n"
+	if err := os.WriteFile(filepath.Join(home, "authorized_keys"), []byte(body), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	// What the older daemon left on userdata, which is the only record of the old set there is.
+	if err := writeKeys([]string{testKey, testKey2}); err != nil {
+		t.Fatal(err)
+	}
+
+	push(t, testKey)
+
+	got := homeLines(t)
+	want := []string{imageKey, testKey}
+	if strings.Join(got, "|") != strings.Join(want, "|") {
+		t.Fatalf("dropbear reads %q, want %q", got, want)
+	}
+}
+
+// push is the ssh_keys action's half of a key change, in the order the action does it: write the
+// record down while the old set is still readable, replace the keys, then mend root's own file.
+func push(t *testing.T, keys ...string) {
+	t.Helper()
+	adoptManaged()
+	if err := writeKeys(keys); err != nil {
+		t.Fatalf("writing the keys: %v", err)
+	}
+	ensureDropbearSees(keys)
+}

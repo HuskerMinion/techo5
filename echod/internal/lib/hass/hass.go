@@ -234,7 +234,8 @@ func ownURL(base, raw string) (string, bool) {
 		return "", false
 	}
 	u, err := neturl.Parse(raw)
-	if err != nil || !strings.EqualFold(u.Scheme, b.Scheme) || !strings.EqualFold(u.Host, b.Host) {
+	if err != nil || !strings.EqualFold(u.Scheme, b.Scheme) ||
+		!strings.EqualFold(hostPort(u), hostPort(b)) {
 		return "", false
 	}
 	rest, prefix := u.EscapedPath(), strings.TrimRight(b.EscapedPath(), "/")
@@ -251,6 +252,25 @@ func ownURL(base, raw string) (string, bool) {
 		rest += "?" + u.RawQuery
 	}
 	return rest, true
+}
+
+// hostPort is a URL's host with the port its scheme implies when the URL leaves it out, so that a
+// Home Assistant configured as http://ha and a URL of http://ha:80/... are recognized as the one host
+// they are; written as strings they are not equal, and the token would stay behind on a request that
+// then fails. It does not loosen the boundary ownURL exists for: host and port still come from the
+// parser and are compared whole, so a name that only starts like ours is still another host, and any
+// port other than the scheme's default is still another port.
+func hostPort(u *neturl.URL) string {
+	host, port := u.Hostname(), u.Port()
+	if port == "" {
+		switch strings.ToLower(u.Scheme) {
+		case "http":
+			port = "80"
+		case "https":
+			port = "443"
+		}
+	}
+	return host + ":" + port
 }
 
 // baseURL is the configured Home Assistant URL, empty when none is set.

@@ -22,8 +22,9 @@ var (
 	KeysDir = layout.StateDir + "/ssh"
 
 	// HomeSSHDir is root's own .ssh, and the only place dropbear ever looks for an authorized key.
-	// Nothing in the daemon writes here: boot makes it a symlink to KeysDir on the Dot, and on the
-	// Show and the Spot a real directory holding the image's key, with KeysDir appended into it.
+	// On a slot boot it is a symlink to KeysDir, put there by the rootfs itself; in the rescue
+	// environment it is a real directory that may hold the boot image's own key, with KeysDir's file
+	// appended into it at boot. rootssh.go is the whole of what the daemon does about the difference.
 	HomeSSHDir = "/root/.ssh"
 )
 
@@ -79,6 +80,7 @@ func startSSH() error {
 	// A device that booted with the chain from KeysDir to root's .ssh already broken would open the
 	// port and then refuse every key. Check and mend it here too, so it is reported and repaired
 	// without waiting for somebody to push a key at a device they can no longer reach.
+	adoptManaged()
 	ensureDropbearSees(readKeys())
 	if err := os.MkdirAll(hostKeys, 0o700); err != nil {
 		return err

@@ -195,6 +195,10 @@ func (f *Feature) Actions() []*esphome.Action {
 				slog.Warn("ssh: keys refused, the old ones stay", "err", err)
 				return nil, err
 			}
+			// Before the write, because this is the last moment anything knows which keys the
+			// device had: a unit with no record yet gets one from the old set, so that a key
+			// taken away in this very call is taken out of root's file too.
+			adoptManaged()
 			if err := writeKeys(keys); err != nil {
 				return nil, err
 			}

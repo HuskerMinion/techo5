@@ -37,9 +37,16 @@ var patterns = []struct {
 	// loose enough to catch it takes in timestamps and hex dumps along with it. So the shape only says
 	// where to look, and net/netip says whether it is really an address; anything it refuses is left
 	// exactly as it was. The match takes in the character before the value because an address may begin
-	// with a colon, which is no word boundary; only the value goes.
-	{"ipv6", regexp.MustCompile(`(?:^|[^0-9A-Fa-f:.])((?:[0-9A-Fa-f]{0,4}:){2,7}(?:[0-9A-Fa-f]{1,4}\b)?(?:%[0-9A-Za-z_.-]+)?(?:/\d{1,3})?)`), true},
-	{"ip", regexp.MustCompile(`\b(?:\d{1,3}\.){3}\d{1,3}\b`), false},
+	// with a colon, which is no word boundary; only the value goes. That character may not be a letter,
+	// a digit or anything else a name is made of, because otherwise the shape starts in the middle of a
+	// word: std::string ends in a "d::" that the parser is happy to call an address, and a bundle full
+	// of chewed-up C++ is no help to anybody.
+	{"ipv6", regexp.MustCompile(`(?:^|[^0-9A-Za-z:.%_])((?:[0-9A-Fa-f]{0,4}:){2,7}(?:[0-9A-Fa-f]{1,4}\b)?(?:%[0-9A-Za-z_.-]+)?(?:/\d{1,3})?)`), true},
+	// Four numbers with dots between them are confirmed by the parser too, for the same reason:
+	// 999.999.999.999 is not an address and neither is a version number. The shape runs past four parts
+	// on purpose so that 1.2.3.4.5 is offered whole and refused whole, rather than having its first four
+	// parts taken for an address; and the character before may not be a letter, so v1.2.3.4 stays put.
+	{"ip", regexp.MustCompile(`(?:^|[^0-9A-Za-z.])((?:\d{1,3}\.){3,}\d{1,3})`), true},
 	{"email", regexp.MustCompile(`\b[\w.+-]+@[\w-]+\.[\w.-]+\b`), false},
 	// A telephone number, and not the tail of a number that merely holds ten digits: a rate of
 	// 49.98765432109876 has a run of digits after the point that this used to take for a phone, which
@@ -101,12 +108,12 @@ func (r *Redactor) Text(s string) string {
 			}
 			// Localhost and the unspecified address say nothing about anybody.
 			switch value {
-			case "127.0.0.1", "0.0.0.0", "255.255.255.255", "::1":
+			case "127.0.0.1", "0.0.0.0", "255.255.255.255", "::1", "::":
 				return match
 			}
-			// The loose address shape also fits a timestamp, a duration and a line of hex, so what is
-			// not an address is put back the way it came.
-			if p.name == "ipv6" && !isIPv6(value) {
+			// The loose address shape also fits a timestamp, a duration, a version number and a line of
+			// hex, so what is not an address is put back the way it came.
+			if (p.name == "ipv6" && !isIP(value, 6)) || (p.name == "ip" && !isIP(value, 4)) {
 				return match
 			}
 			return before + r.placeholder(p.name, value) + after
@@ -115,16 +122,22 @@ func (r *Redactor) Text(s string) string {
 	return s
 }
 
-// isIPv6 says whether the text really is an address, or a prefix: the parser is the only honest
-// answer to a question a regular expression cannot ask. A prefix counts because a delegated /56 names
-// the household as surely as an address inside it does.
-func isIPv6(s string) bool {
+// isIP says whether the text really is an address of the given family, or a prefix in it: the parser
+// is the only honest answer to a question a regular expression cannot ask. A prefix counts because a
+// delegated /56 names the household as surely as an address inside it does.
+func isIP(s string, family int) bool {
+	is := func(a netip.Addr) bool {
+		if family == 4 {
+			return a.Is4()
+		}
+		return a.Is6()
+	}
 	if strings.Contains(s, "/") {
 		p, err := netip.ParsePrefix(s)
-		return err == nil && p.Addr().Is6()
+		return err == nil && is(p.Addr())
 	}
 	a, err := netip.ParseAddr(s)
-	return err == nil && a.Is6()
+	return err == nil && is(a)
 }
 
 // placeholder is the same stand-in every time for the same value, numbered so that two different

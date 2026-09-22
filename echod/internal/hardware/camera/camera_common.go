@@ -119,6 +119,16 @@ const (
 	frameWait = 6 * time.Second
 )
 
+// stopWait is how long Acquire gives a stop that is still on its way out. A stop takes the best part
+// of a mute poll, so this is many times what a healthy one needs and still short enough that a
+// caller is answered rather than left hanging. It is a variable so a test can drive a wedged stop
+// without sitting through it.
+var stopWait = 2 * time.Second
+
+// errStopStuck is a stop that has not finished in stopWait: the run goroutine is somewhere in the
+// driver that has not come back, and until it does the sensor is still in its hands.
+var errStopStuck = errors.New("the camera is still shutting down: the last stream has not let the sensor go")
+
 // nodes are the device files the camera is driven through. It is a variable so that a test can
 // point it at something that exists everywhere and exercise the lifecycle off the device.
 var nodes = []string{"/dev/camera-isp", "/dev/kd_camera_hw", "/dev/ion", "/proc/m4u"}
@@ -153,13 +163,38 @@ func (c *Camera) Acquire() (release func(), err error) {
 	// hands at once, and the goroutine on its way out then tears CSI2 down underneath the new
 	// stream; if imgsensor answers the next open with EIO the camera is written off for the rest
 	// of the boot. So wait the stop out, with the lock dropped so it can finish.
+	//
+	// The wait is bounded, because the run goroutine can be inside a driver call that never returns
+	// — an ioctl on a sensor the latch took away is the one that has been seen — and an unbounded
+	// wait would hang every caller of a camera that is never coming back, including the ones that
+	// used to be told no straight away. On expiry the answer is no rather than yes: refusing costs
+	// the caller a still, opening a sensor the old stream has not let go of costs the camera for the
+	// rest of the boot. A later Acquire waits again rather than being refused on sight, since a
+	// driver call that has not returned in stopWait may still return.
 	for c.stopping != nil {
 		gone := c.stopping
 		c.mu.Unlock()
-		<-gone
-		c.mu.Lock()
-		if c.stopping == gone {
-			c.stopping = nil
+		timer := time.NewTimer(stopWait)
+		select {
+		case <-gone:
+			timer.Stop()
+			c.mu.Lock()
+			if c.stopping == gone {
+				c.stopping = nil
+			}
+		case <-timer.C:
+			c.mu.Lock()
+			if c.stopping != gone {
+				break // some other stop took its place while this one was waited on
+			}
+			select {
+			case <-gone:
+				// It finished as the wait ran out. Calling that stuck would refuse a camera that
+				// is free again, so the close wins over the clock.
+				c.stopping = nil
+			default:
+				return nil, errStopStuck
+			}
 		}
 	}
 

@@ -103,6 +103,12 @@ func TestThingsThatOnlyLookLikeAddresses(t *testing.T) {
 		"I [ 13.31] woke after 1h2m3.5s, next in 250ms",
 		"I [ 13.32] note: the thing is this: it takes a while",
 		"I [ 13.33] ratio 12:34 and 1:2:3 are not addresses",
+		// Prose and code fragments go into a bundle too, and a colon pair in the middle of a name is
+		// not an address however willingly the parser reads one out of it.
+		"I [ 13.35] parse error in std::string, see std::vector<int>",
+		"I [ 13.36] the unspecified address is :: and it names nobody",
+		"I [ 13.37] 999.999.999.999 is not a host",
+		"I [ 13.38] running firmware v1.2.3.4 and payload 1.2.3.4.5",
 	} {
 		if got := New().Text(line); got != line {
 			t.Errorf("a line that holds no address was changed:\n old: %s\n new: %s", line, got)

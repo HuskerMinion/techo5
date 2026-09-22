@@ -270,3 +270,65 @@ func TestAFailedStartDoesNotLeaveASecondRunRacing(t *testing.T) {
 		t.Errorf("%d runs left going", live)
 	}
 }
+
+// The wait for a stop to finish is bounded, because the run goroutine can be inside a driver call
+// that never returns. An unbounded wait turned that into every caller hanging for the rest of the
+// boot, including the ones that used to be told no straight away. The answer on expiry is no: the
+// old stream still has the sensor, and opening it a second time is the very thing the wait is for.
+func TestAcquireGivesUpOnAStopThatNeverFinishes(t *testing.T) {
+	wedged := make(chan struct{}) // the driver call that has not come back
+	t.Cleanup(func() { close(wedged) })
+
+	var mu sync.Mutex
+	starts := 0
+	c := offDevice(t, func(stop, stopped chan struct{}) {
+		defer close(stopped)
+		mu.Lock()
+		starts++
+		mu.Unlock()
+		<-stop
+		<-wedged
+	})
+
+	was := stopWait
+	stopWait = 50 * time.Millisecond
+	t.Cleanup(func() { stopWait = was })
+
+	release, err := c.Acquire()
+	if err != nil {
+		t.Fatalf("acquire: %v", err)
+	}
+	release()
+	go c.idleStop() // never comes back: the run goroutine is in the driver
+
+	// The stop has to be under way before the acquire under test, or there is nothing to wait on.
+	for {
+		c.mu.Lock()
+		under := c.stopping != nil
+		c.mu.Unlock()
+		if under {
+			break
+		}
+		time.Sleep(time.Millisecond)
+	}
+
+	done := make(chan error, 1)
+	go func() {
+		_, err := c.Acquire()
+		done <- err
+	}()
+	select {
+	case err := <-done:
+		if !errors.Is(err, errStopStuck) {
+			t.Errorf("acquire during a wedged stop returned %v, want it to say the camera is still shutting down", err)
+		}
+	case <-time.After(10 * time.Second):
+		t.Fatal("acquire never came back from a stop that never finishes")
+	}
+
+	mu.Lock()
+	defer mu.Unlock()
+	if starts != 1 {
+		t.Errorf("the sensor was opened %d times, want the second open refused rather than raced", starts)
+	}
+}

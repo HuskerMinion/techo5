@@ -1,6 +1,8 @@
 package security
 
 import (
+	"crypto/sha256"
+	"encoding/base64"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -11,37 +13,59 @@ import (
 
 // Writing the keys is only half of letting somebody in. The daemon writes KeysDir/authorized_keys,
 // but dropbear never reads that path: it reads the home directory of the account logging in, which
-// is /root/.ssh/authorized_keys. Boot scripts are what join the two, and they do it differently per
-// device — the Dot makes /root/.ssh a symlink to KeysDir, the Show and the Spot keep it a real
-// directory holding the key baked into the image and append KeysDir's file into it at boot.
+// is /root/.ssh/authorized_keys. What joins the two is not the same on every boot, and it is the
+// root filesystem rather than the model that decides which:
+//
+//   - A slot boot runs the rootfs tools/linux/mkrootfs.sh builds, where /root/.ssh is a symlink to
+//     KeysDir. There is only ever one file, so the two cannot drift apart. This is the normal case
+//     on every unit, Dot, Show and Spot alike.
+//   - A boot that finds no usable slot stays in the initramfs as the rescue environment, where
+//     /root/.ssh is a real directory. The image may carry a key of its own in it, the one
+//     tools/linux/build-image.sh copies in (the image published with releases has none), and
+//     network_up in tools/linux/init appends KeysDir's file into that directory on each boot rather
+//     than linking the two. A unit whose symlink has been replaced by hand ends up the same shape.
 //
 // Nothing used to check that the join had worked, so a unit whose boot script had not run the way
 // it should logged "authorized keys replaced" and then refused every one of those keys, and the
 // only way back in was a USB serial console in the same room as the device. What follows reads the
 // file dropbear will really use, says loudly when the keys are not in it, and mends the join where
 // mending it cannot lose a key.
+//
+// The real directory can be added to but not replaced, because the key in it may be somebody's only
+// way into their own unit. Adding was all this ever did, though, which made a removal in Home
+// Assistant no removal at all: the key stayed in the file dropbear reads and went on working.
+// Nothing on disk says which lines the daemon put there, so the daemon writes down the ones it did
+// (managedFile) and rewrites exactly those — a line in the record and no longer in the key set goes,
+// a line in neither is somebody else's and stays where it is. A unit upgrading into this has no
+// record yet, and a daemon with no record removes nothing.
 
 // ensureDropbearSees checks the keys are in the file dropbear reads and repairs the arrangement
 // when they are not. It never returns an error and never fails a caller: the key write it follows
 // has already succeeded, and the keys are safe on userdata whatever happens here. Its whole output
 // is the log, which is what carries a broken device into the diagnostics bundle.
 func ensureDropbearSees(keys []string) {
-	if len(keys) == 0 {
-		return // nothing to look for; an empty set removes nobody from an image's own key either
-	}
-	missing, found, err := missingFromHome(keys)
-	if err == nil && len(missing) == 0 {
+	missing, found, revoked, err := compareHome(keys)
+	if len(missing) == 0 && len(revoked) == 0 && err == nil {
 		return
+	}
+
+	// Which of the two complaints it is. A file that has everything it should and something it
+	// should not is a removal that did not take, and saying the keys cannot be seen would send
+	// whoever reads the log looking for the wrong breakage.
+	what := "ssh: the keys were saved but dropbear cannot see them: it reads root's own authorized_keys, not the daemon's, and what joins the two is broken"
+	if len(missing) == 0 && err == nil {
+		what = "ssh: keys that were taken away are still in root's own authorized_keys, which is the file dropbear reads: they can still log in until it is rewritten"
 	}
 
 	attrs := []any{
 		"daemon_writes", keysFile(), "dropbear_reads", homeKeysFile(), "root_ssh", describeHome(),
 		"keys", len(keys), "missing", len(missing), "found_in_file", found, "missing_keys", labels(missing),
+		"revoked", len(revoked), "revoked_keys", labels(revoked),
 	}
 	if err != nil {
 		attrs = append(attrs, "err", err)
 	}
-	slog.Error("ssh: the keys were saved but dropbear cannot see them: it reads root's own authorized_keys, not the daemon's, and what joins the two is broken", attrs...)
+	slog.Error(what, attrs...)
 
 	how, err := repairHome(keys)
 	if err != nil {
@@ -49,20 +73,35 @@ func ensureDropbearSees(keys []string) {
 			"daemon_writes", keysFile(), "dropbear_reads", homeKeysFile(), "root_ssh", describeHome(), "repair", how, "err", err)
 		return
 	}
-	missing, found, err = missingFromHome(keys)
-	if err != nil || len(missing) > 0 {
+	missing, found, revoked, err = compareHome(keys)
+	if err != nil || len(missing) > 0 || len(revoked) > 0 {
 		attrs := []any{
 			"daemon_writes", keysFile(), "dropbear_reads", homeKeysFile(), "root_ssh", describeHome(),
-			"repair", how, "keys", len(keys), "missing", len(missing), "found_in_file", found,
+			"repair", how, "keys", len(keys), "missing", len(missing), "found_in_file", found, "revoked", len(revoked),
 		}
 		if err != nil {
 			attrs = append(attrs, "err", err)
 		}
-		slog.Error("ssh: repairing root's authorized_keys did not help, and the keys are still not in the file dropbear reads: nobody can log in with them", attrs...)
+		slog.Error("ssh: rewriting root's authorized_keys did not help, and it still does not hold the keys the device was given and no others", attrs...)
 		return
 	}
-	slog.Info("ssh: root's authorized_keys was not carrying the daemon's keys and has been repaired; dropbear can see them now",
+	slog.Info("ssh: root's authorized_keys was out of step with the keys the device was given and has been put right; dropbear reads the right set now",
 		"dropbear_reads", homeKeysFile(), "root_ssh", describeHome(), "repair", how, "keys", len(keys), "found_in_file", found)
+}
+
+// compareHome is the whole of what can be wrong with the file dropbear reads: keys the device was
+// given that are not in it, and keys the daemon put there that have been taken away since and are.
+//
+// An empty key set asks for nobody to be let in, not for a file full of keys, so nothing counts as
+// missing and a file that cannot be read is not a complaint either — a unit whose keys have all been
+// removed has nothing to say unless the daemon's own lines are still sitting in root's file.
+func compareHome(keys []string) (missing []string, found int, revoked []string, err error) {
+	revoked = revokedInHome(keys)
+	missing, found, err = missingFromHome(keys)
+	if len(keys) == 0 {
+		missing, err = nil, nil
+	}
+	return missing, found, revoked, err
 }
 
 // missingFromHome reads the file dropbear will use and reports which of the keys are not in it,
@@ -141,42 +180,217 @@ func linkHome() error {
 	return fixPerms(KeysDir)
 }
 
-// mergeHome is the Show and the Spot's arrangement: a real directory with a key built into the
-// image in it, which somebody may be the only way into their own device with. So the file is added
-// to and never replaced, and a key already in it is left where it is rather than written twice.
+// mergeHome is the real-directory arrangement: a file the daemon shares with whoever else writes to
+// it, which on a rescue boot is the image's own key and somebody's only way into their own unit. So
+// every line is kept unless the daemon can show it put that line there itself.
+//
+// Three things happen to a line, and which one depends only on the record (managedFile):
+//
+//   - a key the device has now is kept where it already is, or added at the end if it is not there;
+//     a second copy of it goes, because init appends the daemon's file into this one on every boot
+//     and the copies would otherwise pile up a boot at a time;
+//   - a key in the record that the device no longer has goes, which is what makes a removal in Home
+//     Assistant an actual removal rather than a line that quietly keeps working;
+//   - anything else — the image's key, a comment, a line somebody added by hand — is not the
+//     daemon's and is written back exactly as it was found.
+//
+// With no record nothing is in the second case, so a unit that has never been through here loses
+// nothing on the first pass and has a record afterwards.
 func mergeHome(keys []string) error {
 	b, err := os.ReadFile(homeKeysFile())
 	if err != nil && !errors.Is(err, os.ErrNotExist) {
 		return err
 	}
+	want := make(map[string]bool, len(keys))
+	for _, k := range keys {
+		want[normalizeKey(k)] = true
+	}
+	managed := make(map[string]bool)
+	if record, ok := managedKeys(); ok {
+		for _, k := range record {
+			managed[normalizeKey(k)] = true
+		}
+	}
+
 	var lines []string
-	have := make(map[string]bool)
+	kept := make(map[string]bool)
 	for _, line := range strings.Split(string(b), "\n") {
 		if strings.TrimSpace(line) == "" {
 			continue
 		}
+		n := normalizeKey(line)
+		switch {
+		case want[n]:
+			if kept[n] {
+				continue // the same key again, from a boot that appended it a second time
+			}
+			kept[n] = true
+		case managed[n]:
+			continue // the daemon wrote this line and the device has since been told to drop it
+		}
 		lines = append(lines, line)
-		have[normalizeKey(line)] = true
 	}
 	for _, k := range keys {
-		if have[normalizeKey(k)] {
+		n := normalizeKey(k)
+		if kept[n] {
 			continue
 		}
 		lines = append(lines, k)
-		have[normalizeKey(k)] = true
+		kept[n] = true
 	}
 
 	// Through a temporary file in the same directory, the way writeKeys does it: a half-written
 	// authorized_keys would lock out the very people this is trying to keep in.
+	var body []byte
+	if len(lines) > 0 {
+		body = []byte(strings.Join(lines, "\n") + "\n")
+	}
 	tmp := filepath.Join(HomeSSHDir, ".authorized_keys.new")
-	if err := os.WriteFile(tmp, []byte(strings.Join(lines, "\n")+"\n"), 0o600); err != nil {
+	if err := os.WriteFile(tmp, body, 0o600); err != nil {
 		return err
 	}
 	if err := os.Rename(tmp, homeKeysFile()); err != nil {
 		os.Remove(tmp)
 		return err
 	}
-	return fixPerms(HomeSSHDir)
+	if err := fixPerms(HomeSSHDir); err != nil {
+		return err
+	}
+
+	// Last, because the record is a claim about what is in the file and must not name lines that
+	// never got there. Failing to write it costs nothing today and a removal tomorrow, so it is said
+	// out loud rather than failed: the keys themselves are right either way.
+	if err := writeManaged(keys); err != nil {
+		slog.Warn("ssh: root's authorized_keys was rewritten but the daemon could not write down which lines are its own; a key taken away later may stay in the file",
+			"record", managedFile(), "err", err)
+	}
+	return nil
+}
+
+// managedFile is where the daemon writes down which lines of root's own authorized_keys are its
+// own. It sits beside the keys on userdata, because it has to outlive the image: the whole point is
+// to still know, after an update or a slot change, which lines may be taken away again.
+func managedFile() string { return filepath.Join(KeysDir, "root_authorized_keys") }
+
+// managedKeys is that record, and ok says whether there is one at all. No record is not an empty
+// record: it means nothing in root's file is known to be the daemon's, and nothing may be removed.
+func managedKeys() (keys []string, ok bool) {
+	b, err := os.ReadFile(managedFile())
+	if err != nil {
+		return nil, false
+	}
+	for _, line := range strings.Split(string(b), "\n") {
+		if line = strings.TrimSpace(line); line != "" {
+			keys = append(keys, line)
+		}
+	}
+	return keys, true
+}
+
+// writeManaged replaces the record, through a temporary file the way the keys themselves are
+// written. An empty set leaves no record, which is right: there is nothing of the daemon's left in
+// root's file to take away.
+func writeManaged(keys []string) error {
+	if len(keys) == 0 {
+		err := os.Remove(managedFile())
+		if errors.Is(err, os.ErrNotExist) {
+			return nil
+		}
+		return err
+	}
+	if err := os.MkdirAll(KeysDir, 0o700); err != nil {
+		return err
+	}
+	tmp := filepath.Join(KeysDir, ".root_authorized_keys.new")
+	if err := os.WriteFile(tmp, []byte(strings.Join(keys, "\n")+"\n"), 0o600); err != nil {
+		return err
+	}
+	if err := os.Rename(tmp, managedFile()); err != nil {
+		os.Remove(tmp)
+		return err
+	}
+	return nil
+}
+
+// revokedInHome is the lines the daemon put into root's own authorized_keys that the device no
+// longer has a key for and that are still in the file. Nothing else in there is the daemon's to
+// touch, so this is the whole of what a removal has left to do.
+func revokedInHome(keys []string) []string {
+	record, ok := managedKeys()
+	if !ok {
+		return nil
+	}
+	b, err := os.ReadFile(homeKeysFile())
+	if err != nil {
+		return nil
+	}
+	want := make(map[string]bool, len(keys))
+	for _, k := range keys {
+		want[normalizeKey(k)] = true
+	}
+	inHome := make(map[string]bool)
+	for _, line := range strings.Split(string(b), "\n") {
+		if n := normalizeKey(line); n != "" {
+			inHome[n] = true
+		}
+	}
+	var out []string
+	seen := make(map[string]bool)
+	for _, k := range record {
+		n := normalizeKey(k)
+		if want[n] || !inHome[n] || seen[n] {
+			continue
+		}
+		seen[n] = true
+		out = append(out, k)
+	}
+	return out
+}
+
+// adoptManaged writes the first record on a unit that was set up before there was one, so that the
+// first key taken away after an update is really taken away rather than the one after it.
+//
+// It claims only keys the daemon holds on userdata that are also in root's own file: either the
+// daemon put them there or boot appended them from the daemon's file, and either way they are the
+// daemon's to rewrite. A key the image brought with it is not on userdata and is never claimed. The
+// one line it can read wrong is an image key that somebody also pushed through Home Assistant, which
+// is the same key twice and goes when they ask for it to go.
+//
+// It has to run before the keys are replaced, because afterwards nothing remembers the old set.
+func adoptManaged() {
+	if _, err := os.Stat(managedFile()); err == nil {
+		return
+	}
+	fi, err := os.Lstat(HomeSSHDir)
+	if err != nil || fi.Mode()&os.ModeSymlink != 0 || !fi.IsDir() {
+		return // the symlink arrangement: one file, shared with nobody, nothing to write down
+	}
+	b, err := os.ReadFile(homeKeysFile())
+	if err != nil {
+		return
+	}
+	inHome := make(map[string]bool)
+	for _, line := range strings.Split(string(b), "\n") {
+		if n := normalizeKey(line); n != "" {
+			inHome[n] = true
+		}
+	}
+	var owned []string
+	for _, k := range readKeys() {
+		if inHome[normalizeKey(k)] {
+			owned = append(owned, k)
+		}
+	}
+	if len(owned) == 0 {
+		return
+	}
+	if err := writeManaged(owned); err != nil {
+		slog.Warn("ssh: the daemon could not write down which lines of root's authorized_keys are its own; a key taken away may stay in the file",
+			"record", managedFile(), "err", err)
+		return
+	}
+	slog.Info("ssh: wrote down which lines of root's authorized_keys are the daemon's, so a key taken away can be taken out of it",
+		"record", managedFile(), "keys", len(owned))
 }
 
 // fixPerms is what dropbear insists on before it will read a key at all: the directory and the file
@@ -222,12 +436,34 @@ func describeHome() string {
 // in its comment is a line somebody meant to change.
 func normalizeKey(line string) string { return strings.Join(strings.Fields(line), " ") }
 
-// labels names keys in a log the way the screen names them — the comment, or failing that the type.
-// Key material never goes in a log.
+// labels names keys in a log without naming anybody: the key's type and the same SHA256 fingerprint
+// ssh-keygen -l prints, so whoever reads it can tell which key is missing and hold it against their
+// own. The screen names a key by its comment instead, which is nearly always user@hostname — a person
+// and the name of their machine — and this log is what the diagnostics bundle carries out of the
+// house, where the first line promises names and addresses have been replaced. Key material never
+// goes in a log either; a fingerprint is a hash of the public half and identifies nobody.
 func labels(keys []string) []string {
 	var out []string
 	for _, k := range keys {
-		out = append(out, keyLabel(k))
+		out = append(out, fingerprint(k))
 	}
 	return out
+}
+
+// fingerprint is "<type> SHA256:<hash>" for a key line. A line whose body does not decode gets its
+// type alone: there is nothing to hash, and the rest of the line is the part that must not go.
+func fingerprint(k string) string {
+	fields := strings.Fields(k)
+	if len(fields) == 0 {
+		return "(empty)"
+	}
+	if len(fields) < 2 {
+		return fields[0]
+	}
+	raw, err := base64.StdEncoding.DecodeString(fields[1])
+	if err != nil {
+		return fields[0]
+	}
+	sum := sha256.Sum256(raw)
+	return fields[0] + " SHA256:" + base64.RawStdEncoding.EncodeToString(sum[:])
 }

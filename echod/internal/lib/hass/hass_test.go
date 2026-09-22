@@ -84,6 +84,13 @@ func TestOwnURL(t *testing.T) {
 		{"a path ours is a prefix of", "https://home.example/ha", "https://home.example/hacked/x", "", false},
 		{"the proxy path itself", "https://home.example/ha", "https://home.example/ha", "/", true},
 		{"a credential that names our host", "http://ha:8123", "http://ha:8123@evil.example/x", "", false},
+		// A port the scheme implies is the same host written out: spelling it either way must not
+		// decide whether the token goes.
+		{"the scheme's port spelled out", "http://ha", "http://ha:80/api/x", "/api/x", true},
+		{"the scheme's port left out", "http://ha:80", "http://ha/api/x", "/api/x", true},
+		{"https and its own port", "https://ha", "https://ha:443/api/x", "/api/x", true},
+		{"the other scheme's port", "https://ha", "https://ha:80/api/x", "", false},
+		{"a default port on another name", "http://ha", "http://ha.evil.example:80/x", "", false},
 		{"not a URL at all", "http://ha:8123", "::nonsense", "", false},
 	}
 	for _, tc := range cases {
