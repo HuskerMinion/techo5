@@ -71,6 +71,15 @@ func build() *Firmware {
 		OnCommand:   u.command,
 	}
 
+	// A stamp Home Assistant cannot rank is the one failure this entity cannot report: the card comes
+	// on, and nothing installed here ever clears it, because Home Assistant only asks whether the two
+	// strings differ. Nothing can be done about it from the device - the version was decided by
+	// whatever built this binary - so say so once, where the next person to wonder will look.
+	if err := update.ValidVersion(layout.Version); err != nil {
+		slog.Error("this build's version is not one Home Assistant can rank, so it will offer an update that never settles",
+			"running", layout.Version, "err", err)
+	}
+
 	// Up to date until a check says otherwise, rather than an entity with no versions in it.
 	u.publish(update.Manifest{Version: layout.Version})
 

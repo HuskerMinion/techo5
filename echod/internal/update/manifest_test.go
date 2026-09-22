@@ -3,6 +3,8 @@ package update
 import (
 	"strings"
 	"testing"
+
+	"github.com/HuskerMinion/techo5/echod/internal/layout"
 )
 
 // A release published before Binaries existed describes an arm64 build in its top-level fields, and an
@@ -60,6 +62,48 @@ func TestForTakesTheArchitectureTheDeviceRuns(t *testing.T) {
 		if b.URL != want {
 			t.Errorf("%s: offered %s, want %s", arch, b.URL, want)
 		}
+	}
+}
+
+// Home Assistant offers an update whenever the version it is told about differs from the one running,
+// not when it is newer, so a manifest naming something it cannot rank leaves a card on for good. A
+// device has to refuse such a manifest instead of offering it — which is what happened when a release
+// passed the git tag (dot-v0.5.10) where the version belongs.
+func TestValidRefusesAVersionHomeAssistantCannotRank(t *testing.T) {
+	binaries := map[string]Binary{"arm": {URL: "https://example/echod-arm", SHA256: strings.Repeat("a", 64), Size: 22 << 20}}
+
+	for version, want := range map[string]bool{
+		"v0.7.13":              true,
+		"v0.4.10-beta.4":       true,
+		"0.5.10":               true, // Releases before the tags carry no v, and AwesomeVersion ranks either.
+		"v0.5.10_20260922":     true, // Build detail, which Home Assistant truncates at the underscore.
+		"dot-v0.5.10":          false,
+		"spot-v0.4.10":         false,
+		"":                     false,
+		"v0.5":                 false,
+		"dev":                  false,
+		"TECHO5 v0.5.10":       false,
+		"v0.5.10 (deadbeef)":   false,
+		"refs/tags/dot-v0.5.1": false,
+	} {
+		err := Manifest{Version: version, Binaries: binaries}.Valid()
+		switch {
+		case want && err != nil:
+			t.Errorf("%q was refused: %v", version, err)
+		case !want && err == nil:
+			t.Errorf("%q was accepted, and would reach Home Assistant", version)
+		case !want && version != "" && !strings.Contains(err.Error(), version):
+			t.Errorf("%q was refused without saying which version: %v", version, err)
+		}
+	}
+}
+
+// The other half of the same trap: the version a device reports as running is stamped in at build
+// time, and an unstamped build falls back to layout.Version's default. If that default cannot be
+// ranked either, every hand-built daemon shows a card no install can clear.
+func TestTheDefaultVersionStampCanBeRanked(t *testing.T) {
+	if err := ValidVersion(layout.Version); err != nil {
+		t.Errorf("the default stamp %q would leave an update card on for good: %v", layout.Version, err)
 	}
 }
 
