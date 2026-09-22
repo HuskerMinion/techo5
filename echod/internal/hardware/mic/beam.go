@@ -50,9 +50,13 @@ type Beamformer struct {
 	// taps[b][m] is where microphone m is read for beam b: how many whole samples back, and how far
 	// between that sample and the one before it. Worked out once, because it is the innermost loop of the
 	// whole array — six beams times seven microphones times every sample — and none of it changes.
-	taps [Beams][Mics]tap
+	//
+	// Sized by maxMics rather than Mics: one build serves several screens whose arrays differ, so the
+	// count is only known at run time while the array has to be a size at compile time. Every loop
+	// below stops at Mics, so the spare rows are never read.
+	taps [Beams][maxMics]tap
 
-	hist  [Mics][delayLine]float32
+	hist  [maxMics][delayLine]float32
 	at    int
 	beam  int
 	votes int
@@ -158,7 +162,7 @@ func (b *Beamformer) sum(beam int) float32 {
 		oldest := b.hist[m][(b.at-t.back-1)&(delayLine-1)]
 		acc += older + (oldest-older)*t.frac
 	}
-	return acc / Mics
+	return acc / float32(Mics)
 }
 
 // steer moves to the loudest beam once it has won often enough in a row.

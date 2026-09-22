@@ -205,7 +205,7 @@ func playing(ref []int16) bool {
 // music the two measure within 12-17 dB of each other, which caps cancellation far above anything the
 // filter reaches, so a stereo reference would buy nothing.
 func referenceInto(raw []byte, dst []int16) {
-	const frameBytes = Channels * Bits / 8
+	frameBytes := Channels * Bits / 8
 
 	frames := min(len(raw)/frameBytes, len(dst))
 	for f := range frames {

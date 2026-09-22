@@ -124,7 +124,7 @@ func TestCancelledFramesAreNotTheSameBuffer(t *testing.T) {
 // level that says which frame this is, and the loopback either silent or carrying a tone loud enough
 // for the canceller to engage.
 func rawFrame(nth int, playing bool) []byte {
-	const frameBytes = Channels * Bits / 8
+	frameBytes := Channels * Bits / 8
 
 	raw := make([]byte, FrameSamples*frameBytes)
 	for f := range FrameSamples {

@@ -10,6 +10,10 @@ const (
 	// Mics is how many of the nine channels are microphones. ch7 and ch8 are the playback loopback.
 	Mics = 7
 
+	// maxMics is the largest Mics this build has to hold, so the beamformer can size its
+	// arrays at compile time. One device per build here, so it is Mics itself.
+	maxMics = 7
+
 	// RefFirst is the first loopback channel and Refs how many follow it, left then right.
 	RefFirst = 7
 	Refs     = 2

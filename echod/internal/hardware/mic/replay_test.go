@@ -75,7 +75,7 @@ func replay(t *testing.T, raw []byte, mixer Mixer) replayed {
 		t.Fatal("no canceller")
 	}
 
-	const frameBytes = Channels * Bits / 8
+	frameBytes := Channels * Bits / 8
 	period := FrameSamples * frameBytes
 	var out []int16
 	for off := 0; off+period <= len(raw); off += period {

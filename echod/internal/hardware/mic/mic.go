@@ -279,7 +279,7 @@ func Decode(raw []byte) [][]int16 { return decode(raw, 0, Mics) }
 func Reference(raw []byte) [][]int16 { return decode(raw, RefFirst, Refs) }
 
 func decode(raw []byte, first, n int) [][]int16 {
-	const frameBytes = Channels * Bits / 8
+	frameBytes := Channels * Bits / 8
 
 	frames := len(raw) / frameBytes
 	out := make([][]int16, n)
@@ -471,7 +471,7 @@ func (s *Source) Close() error {
 // Mono takes the center microphone alone, narrowed from 24 bits to 16. The beamformed mix is what
 // listeners get; this is for tools that need one microphone as it comes off the hardware.
 func Mono(raw []byte) []int16 {
-	const frameBytes = Channels * Bits / 8
+	frameBytes := Channels * Bits / 8
 
 	out := make([]int16, len(raw)/frameBytes)
 	for i := range out {
