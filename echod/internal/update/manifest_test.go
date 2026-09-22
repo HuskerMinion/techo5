@@ -128,3 +128,56 @@ func TestServesOnlyWhatThisDeviceCanInstall(t *testing.T) {
 		t.Error("a release carrying the Dot's build was not offered to it")
 	}
 }
+
+// Assets arrived after devices were in the field, so the compatibility runs both ways: a release
+// published before it exists carries none, and a daemon reading one must go on updating exactly as it
+// did. Nothing in the update path consults them — they are there for the installers.
+func TestAManifestFromBeforeAssetsIsUnaffected(t *testing.T) {
+	m := Manifest{
+		Version:  "0.7.14",
+		URL:      "https://example/echod-arm",
+		SHA256:   strings.Repeat("a", 64),
+		Size:     22 << 20,
+		Binaries: map[string]Binary{"arm": {URL: "https://example/echod-arm", SHA256: strings.Repeat("a", 64), Size: 22 << 20}},
+	}
+	if err := m.Valid(); err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := m.Asset("techo5-boot-v0.7.14.img"); ok {
+		t.Error("a release naming no assets answered for one")
+	}
+	if _, err := m.For("arm"); err != nil {
+		t.Errorf("the arm build is no longer offered: %v", err)
+	}
+}
+
+// And an entry that is there but half filled in is refused where the manifest is written, so a release
+// cannot publish cover an installer would take for real.
+func TestAHalfFilledAssetIsRefused(t *testing.T) {
+	base := Manifest{
+		Version:  "0.7.15",
+		URL:      "https://example/echod-arm",
+		SHA256:   strings.Repeat("a", 64),
+		Size:     22 << 20,
+		Binaries: map[string]Binary{"arm": {URL: "https://example/echod-arm", SHA256: strings.Repeat("a", 64), Size: 22 << 20}},
+	}
+	good := Binary{URL: "https://example/techo5-spot-rescue.tar", SHA256: strings.Repeat("b", 64), Size: 4096}
+
+	base.Assets = map[string]Binary{"techo5-spot-rescue.tar": good}
+	if err := base.Valid(); err != nil {
+		t.Fatalf("a complete asset entry was refused: %v", err)
+	}
+
+	for what, b := range map[string]Binary{
+		"no url":    {SHA256: good.SHA256, Size: good.Size},
+		"no sha256": {URL: good.URL, Size: good.Size},
+		"no size":   {URL: good.URL, SHA256: good.SHA256},
+	} {
+		base.Assets = map[string]Binary{"techo5-spot-rescue.tar": b}
+		if err := base.Valid(); err == nil {
+			t.Errorf("an asset entry with %s was accepted", what)
+		} else if !strings.Contains(err.Error(), "techo5-spot-rescue.tar") {
+			t.Errorf("%s: refused without naming the file: %v", what, err)
+		}
+	}
+}

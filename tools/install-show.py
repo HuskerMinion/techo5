@@ -14,7 +14,7 @@ root filesystem are downloaded and checked. Each step is checked before the next
 
   1. checks    adb sees the unit as cronos or checkers on the LineageOS kernel TECHO5's is built from
   2. backup    with Rooted debugging on, LineageOS's boot image into backups/<serial>/ (the way back)
-  3. release   the boot image and root filesystem, checked against their checksums
+  3. release   the boot image and root filesystem, checked against the release's signed manifest
   4. push      the root filesystem onto the unit's storage, checked by md5
   5. flash     the boot image, from the bootloader's fastboot
   6. store     over the USB serial console: this unit's own vendor tree (Wi-Fi and Bluetooth drivers,
@@ -70,7 +70,7 @@ def boot_image(rel, work, dev):
     """The release's boot image for this generation, or, when it carries none (the boot image changes
     rarely, so most releases don't), the one from the newest earlier Show release that does."""
     name = boot_name(dev, rel.version)
-    if name in rel.sums:
+    if rel.signed(name):
         return rel.asset(name)
     want = show_version(rel.version)
     try:
@@ -83,16 +83,21 @@ def boot_image(rel, work, dev):
         name = boot_name(dev, r['tag_name'])
         if not (v and want and v < want and any(x['name'] == name for x in r['assets'])):
             continue
-        # An image is only usable when that release's SHA256SUMS carries its checksum: an asset
-        # attached any other way cannot be checked, so it is passed over rather than trusted.
+        # An image is only usable when that release's signed manifest names it. A checksum in
+        # SHA256SUMS is not enough: nothing signs that file, so it proves only that whoever served the
+        # image also served the list. Releases made before the manifest covered boot images are passed
+        # over here rather than trusted, which is why the search keeps going.
         earlier = Release(REPO, r['tag_name'], work)
-        if name not in earlier.sums:
-            note('release %s has %s but no checksum for it; looking further back' % (r['tag_name'], name))
+        if not earlier.signed(name):
+            note('release %s has %s but does not name it in its signed manifest; looking further back'
+                 % (r['tag_name'], name))
             continue
         note('release %s has no boot image of its own; using %s\'s' % (rel.version, r['tag_name']))
         return earlier.asset(name)
-    fail('no release up to %s carries a boot image for the %s with a checksum in its SHA256SUMS. '
-         'This is a packaging fault on our side, not something to fix at your end: please report it.'
+    fail('no release up to %s names a boot image for the %s in its signed manifest, so this computer '
+         'has no way to tell the real one from a substitute. Releases before the manifest covered boot '
+         'images carry one only in SHA256SUMS, which nothing signs. Install from a newer release, or '
+         'build the boot image yourself (docs/building.md) and pass it with --boot.'
          % (rel.version, dev))
 
 

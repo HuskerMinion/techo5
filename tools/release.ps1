@@ -32,8 +32,9 @@ param(
     # The same, built for the Echo Show 5 1st gen (checkers), published as
     # techo5-boot-checkers-<version>.img. That generation's kernel and device tree are its own, so
     # install-show.py looks for this name on a checkers unit and falls back to the newest earlier
-    # release carrying one. Attach it here rather than by hand: an asset uploaded any other way is
-    # missing from SHA256SUMS, and the installer will not use a boot image it cannot check.
+    # release carrying one. Attach it here rather than by hand: an image uploaded any other way is
+    # missing from the signed manifest, and the installer will not use a boot image the release key
+    # has not vouched for.
     [string]$CheckersBoot = '',
     # Pre-built binaries from the "Build release binaries" GitHub Actions workflow run for this release's
     # tag (git tag $Version; git push origin $Version). When both are given, the local build is skipped
@@ -87,6 +88,22 @@ try {
         $env:GOOS = $null; $env:GOARCH = $null; $env:GOARM = $null; $env:CGO_ENABLED = $null
     }
 
+    # The boot images are named in the manifest, so they have to be under their published names before
+    # it is written. An image built without --no-key carries the builder's key in its initramfs; that
+    # must not ship. The check is for the file entry (its name ends in a NUL), not the init script that
+    # mentions it.
+    $noKey = "import gzip,lzma,struct,sys; b=open(sys.argv[1],'rb').read(); ks,_,rs=struct.unpack('<3I',b[8:20]); ps=struct.unpack('<I',b[36:40])[0]; r0=ps+((ks+ps-1)//ps)*ps; r=b[r0:r0+rs]; d=gzip.decompress(r) if r[:2]==b'\x1f\x8b' else lzma.decompress(r); sys.exit(1 if b'root/.ssh/authorized_keys'+bytes(1) in d else 0)"
+    $bootAssets = @()
+    foreach ($img in @(@{ Path = $Boot; Name = "techo5-boot-$Version.img" },
+                       @{ Path = $CheckersBoot; Name = "techo5-boot-checkers-$Version.img" })) {
+        if (-not $img.Path) { continue }
+        python -c $noKey $img.Path
+        if ($LASTEXITCODE -ne 0) { throw "$($img.Path) carries an SSH key: build it with build-image.sh --no-key" }
+        $named = Join-Path $bin $img.Name
+        Copy-Item $img.Path $named -Force
+        $bootAssets += $named
+    }
+
     Write-Host "== manifest"
     $from = "https://github.com/$repo/releases/download/$Version"
     $mk = @('run', './cmd/mkmanifest', '-version', $Version, '-title', "TECHO5 $Version", '-notes', $Notes,
@@ -95,6 +112,9 @@ try {
         '-out', (Join-Path $bin 'manifest.json'), '-sign-key', $SignKey)
     if ($Rootfs) { $mk += @('-rootfs-arm', $Rootfs) }
     if ($DotRootfs) { $mk += @('-rootfs-arm-dot', $DotRootfs) }
+    # Under the signature, not just in SHA256SUMS: install-show.py writes a boot image to a unit, and
+    # nothing signs SHA256SUMS, so whatever could serve a substituted list could serve the image too.
+    foreach ($a in $bootAssets) { $mk += @('-asset', $a) }
     & $Go @mk
     if ($LASTEXITCODE -ne 0) { throw 'mkmanifest failed' }
     Get-Content (Join-Path $bin 'manifest.json')
@@ -105,19 +125,10 @@ $args = @('release', 'create', $Version, (Join-Path $bin 'echod-arm'), (Join-Pat
     (Join-Path $bin 'manifest.json.sig'), '--repo', $repo, '--title', $Version, '--notes', $Notes)
 if ($Rootfs) { $args += $Rootfs }
 if ($DotRootfs) { $args += $DotRootfs }
-# An image built without --no-key carries the builder's key in its initramfs; that must not ship.
-# The check is for the file entry (its name ends in a NUL), not the init script that mentions it.
-$noKey = "import gzip,lzma,struct,sys; b=open(sys.argv[1],'rb').read(); ks,_,rs=struct.unpack('<3I',b[8:20]); ps=struct.unpack('<I',b[36:40])[0]; r0=ps+((ks+ps-1)//ps)*ps; r=b[r0:r0+rs]; d=gzip.decompress(r) if r[:2]==b'\x1f\x8b' else lzma.decompress(r); sys.exit(1 if b'root/.ssh/authorized_keys'+bytes(1) in d else 0)"
-foreach ($img in @(@{ Path = $Boot; Name = "techo5-boot-$Version.img" },
-                   @{ Path = $CheckersBoot; Name = "techo5-boot-checkers-$Version.img" })) {
-    if (-not $img.Path) { continue }
-    python -c $noKey $img.Path
-    if ($LASTEXITCODE -ne 0) { throw "$($img.Path) carries an SSH key: build it with build-image.sh --no-key" }
-    $named = Join-Path $bin $img.Name
-    Copy-Item $img.Path $named -Force
-    $args += $named
-}
-# SHA256SUMS: what tools/install-show.ps1 checks the boot image against (the manifest covers the rest).
+$args += $bootAssets
+# SHA256SUMS: for checking a download by hand. No installer reads it — the signed manifest covers
+# every file one of them fetches, and an unsigned list of checksums is no check against whoever served
+# the files it describes.
 $files = @($args | Where-Object { $_ -is [string] -and (Test-Path -LiteralPath $_ -PathType Leaf) })
 $sums = $files | ForEach-Object { "$((Get-FileHash -Algorithm SHA256 $_).Hash.ToLower())  $(Split-Path -Leaf $_)" }
 $sumsFile = Join-Path $bin 'SHA256SUMS'
@@ -127,14 +138,20 @@ if ($Prerelease) { $args += '--prerelease' }
 & gh @args
 if ($LASTEXITCODE -ne 0) { throw 'gh release create failed' }
 
-# Every asset but SHA256SUMS itself has to be in SHA256SUMS. An installer will not use a file it
-# cannot check, so an asset that is missing from it is published but unusable — which is exactly what
-# happened to the 1st gen Show's boot image on v0.7.6, uploaded by hand after the release was made.
-# The names come back from the release itself, so a later upload by hand is caught by re-running this.
+# Every boot image published has to be named in the signed manifest. An installer will not use a boot
+# image the manifest does not cover, so one that is missing from it is published but unusable — which
+# is exactly what happened to the 1st gen Show's boot image on v0.7.6, uploaded by hand after the
+# release was made. The names come back from the release itself, so an upload by hand is caught by
+# re-running this. SHA256SUMS is checked too, so what people verify by hand stays complete.
 $published = @(& gh release view $Version --repo $repo --json assets -q '.assets[].name')
+$named = @((Get-Content (Join-Path $bin 'manifest.json') -Raw | ConvertFrom-Json).assets.PSObject.Properties.Name)
+$unsigned = @($published | Where-Object { $_ -like 'techo5-boot-*' -and $named -notcontains $_ })
+if ($unsigned) {
+    throw "published, but these boot images are not named in the signed manifest and no installer will use them: $($unsigned -join ', ')"
+}
 $listed = @(Get-Content $sumsFile | ForEach-Object { ($_ -split '\s+', 2)[1].Trim() })
 $missing = @($published | Where-Object { $_ -ne 'SHA256SUMS' -and $listed -notcontains $_ })
 if ($missing) {
-    throw "published, but these assets have no checksum in SHA256SUMS and no installer will use them: $($missing -join ', ')"
+    throw "published, but these assets have no checksum in SHA256SUMS: $($missing -join ', ')"
 }
 Write-Host "published: https://github.com/$repo/releases/tag/$Version"

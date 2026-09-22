@@ -140,15 +140,6 @@ def download_checked(url, out, sha256):
     os.replace(partial, out)
 
 
-def read_sums(text):
-    sums = {}
-    for line in text.splitlines():
-        m = re.match(r'^([0-9a-f]{64})\s+\*?(\S+)', line)
-        if m:
-            sums[m.group(2)] = m.group(1)
-    return sums
-
-
 # ------------------------------------------------------------------------------------------ signatures
 
 # Ed25519 verification, written out here because these tools run on whatever Python 3 the machine
@@ -254,10 +245,17 @@ def verify_manifest(manifest, signature):
 
 
 class Release:
-    """A published release: its signed manifest, its SHA256SUMS, and checked downloads of its files."""
+    """A published release: its signed manifest, and downloads checked against it.
+
+    Everything this hands back is named in the manifest, and the manifest is believed only with the
+    release key's signature over it. The release also publishes SHA256SUMS, and this deliberately does
+    not read it: nothing signs that file, so whatever could serve a substituted manifest could serve a
+    substituted SHA256SUMS and a payload to match. It is there for people to check a download by hand,
+    not for an installer to trust."""
 
     def __init__(self, repo, tag, workdir):
         base = 'https://github.com/%s/releases' % repo
+        self.repo, self.tag = repo, tag
         self.dl = base + ('/latest/download' if tag == 'latest' else '/download/' + tag)
         try:
             raw = fetch(self.dl + '/manifest.json')
@@ -277,12 +275,12 @@ class Release:
         except Exception as e:
             fail('the release manifest from %s is not readable JSON: %s' % (self.dl, e))
         self.version = self.manifest['version']
-        try:
-            self.sums = read_sums(fetch(self.dl + '/SHA256SUMS').decode('ascii', 'replace'))
-        except Exception:
-            self.sums = {}
         self.dir = os.path.join(workdir, 'release-%s-%s' % (repo.split('/')[-1], self.version))
         os.makedirs(self.dir, exist_ok=True)
+
+    def name(self):
+        """How to say which release this is, in a message somebody has to act on."""
+        return '%s %s (%s)' % (self.repo, self.tag, self.version)
 
     def rootfs(self, arch):
         entry = (self.manifest.get('rootfs') or {}).get(arch)
@@ -292,11 +290,27 @@ class Release:
         download_checked(entry['url'], out, entry['sha256'])
         return out
 
+    def signed(self, name):
+        """The manifest's entry for one of the release's files, or None when it names none. A release
+        published before the manifest covered this file answers None, and so does one that never
+        carried the file at all; the caller has to tell somebody which release it was either way."""
+        return (self.manifest.get('assets') or {}).get(name)
+
     def asset(self, name):
-        if name not in self.sums:
-            fail('release %s has no %s in SHA256SUMS; pick another release' % (self.version, name))
+        """One of the release's files, downloaded and checked against the signed manifest.
+
+        This refuses rather than falling back on SHA256SUMS. These files are a kernel and a boot image
+        that go onto a unit, and a rescue bundle this computer unpacks and runs scripts out of, so an
+        unsigned checksum is no check at all: it would have to come down the same connection as the
+        file it vouches for."""
+        entry = self.signed(name)
+        if not entry:
+            fail('release %s does not name %s in its signed manifest, so there is nothing to check a '
+                 'download of it against. Releases made before the manifest covered this file list it '
+                 'only in SHA256SUMS, which nothing signs. Install from a release that names it, or '
+                 'build the file yourself and pass it in.' % (self.name(), name))
         out = os.path.join(self.dir, name)
-        download_checked(self.dl + '/' + name, out, self.sums[name])
+        download_checked(entry['url'], out, entry['sha256'])
         return out
 
 

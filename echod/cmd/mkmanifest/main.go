@@ -35,11 +35,16 @@ func main() {
 		// The Echo Spot likewise ("arm-spot", internal/update/arch_spot.go).
 		armSpot    = flag.String("arm-spot", "", "the Echo Spot build (-tags spot), hashed and measured")
 		rootfsSpot = flag.String("rootfs-arm-spot", "", "the Echo Spot rootfs tarball, hashed and measured")
-		out        = flag.String("out", "", "where to write the manifest, or stdout")
+		// Everything else the release publishes that an installer downloads: boot images, kernels,
+		// rescue bundles. Named here so the signature over the manifest covers them too; see
+		// update.Manifest.Assets for why the release's SHA256SUMS is not enough.
+		assets assetFiles
+		out    = flag.String("out", "", "where to write the manifest, or stdout")
 		// Devices believe a manifest only with the release key's signature beside it
 		// (internal/update/trust.go), so a release without one offers nothing.
 		signKey = flag.String("sign-key", "", "the release signing key file; writes <out>.sig next to the manifest")
 	)
+	flag.Var(&assets, "asset", "another file this release publishes, hashed and measured under its own name; repeat for each")
 	flag.StringVar(&m.Version, "version", "", "version as Home Assistant will compare it")
 	flag.StringVar(&m.Title, "title", "", "title for Home Assistant's update card")
 	flag.StringVar(&m.Notes, "notes", "", "release notes, shown on the card")
@@ -48,7 +53,7 @@ func main() {
 
 	builds := map[string]string{"arm64": *arm64, "arm": *arm, "arm-dot": *armDot, "arm-spot": *armSpot}
 	rootfses := map[string]string{"arm": *rootfs, "arm-dot": *rootfsDot, "arm-spot": *rootfsSpot}
-	if err := run(m, *from, builds, rootfses, *out); err != nil {
+	if err := run(m, *from, builds, rootfses, assets, *out); err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}
@@ -58,6 +63,22 @@ func main() {
 			os.Exit(1)
 		}
 	}
+}
+
+// assetFiles collects the repeated -asset flag. A file is named in the manifest under its base name,
+// which is the name the release publishes it under and the name an installer asks for, so the two
+// cannot drift: a file has to be copied to its published name before it is passed here, and all three
+// release scripts already do that.
+type assetFiles []string
+
+func (a *assetFiles) String() string { return strings.Join(*a, ",") }
+
+func (a *assetFiles) Set(path string) error {
+	if path == "" {
+		return fmt.Errorf("mkmanifest: -asset needs a file")
+	}
+	*a = append(*a, path)
+	return nil
 }
 
 // sign writes the detached signature over the manifest exactly as written.
@@ -102,7 +123,7 @@ func checkVersion(version string) error {
 	return update.ValidVersion(version)
 }
 
-func run(m update.Manifest, from string, builds map[string]string, rootfses map[string]string, out string) error {
+func run(m update.Manifest, from string, builds map[string]string, rootfses map[string]string, assets []string, out string) error {
 	if m.Version == "" || from == "" || (builds["arm64"] == "" && builds["arm"] == "" && builds["arm-dot"] == "" && builds["arm-spot"] == "") {
 		return fmt.Errorf("mkmanifest: -version, -from and at least one of -arm64/-arm/-arm-dot/-arm-spot are required")
 	}
@@ -139,6 +160,24 @@ func run(m update.Manifest, from string, builds map[string]string, rootfses map[
 		}
 		m.Rootfs[arch] = b
 	}
+	for _, path := range assets {
+		name := filepath.Base(path)
+		if _, seen := m.Assets[name]; seen {
+			// Two files with the same base name would quietly overwrite each other here, and the
+			// installer would then check one download against the other's hash and refuse it.
+			return fmt.Errorf("mkmanifest: -asset %s was given twice under the name %s", path, name)
+		}
+		b, err := measure(path)
+		if err != nil {
+			return err
+		}
+		b.URL = from + "/" + name
+		if m.Assets == nil {
+			m.Assets = make(map[string]update.Binary, len(assets))
+		}
+		m.Assets[name] = b
+	}
+
 	flat, ok := m.Binaries["arm64"]
 	if !ok {
 		flat = m.Binaries["arm"]

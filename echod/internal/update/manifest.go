@@ -37,6 +37,20 @@ type Manifest struct {
 	// keyed the same way. A manifest without one leaves those devices where they are.
 	Rootfs map[string]Binary `json:"rootfs,omitempty"`
 
+	// Assets is everything else a release ships that somebody's computer downloads and then runs or
+	// writes to a unit, keyed by the file name the release publishes it under: the Show's boot images,
+	// the Dot's and the Spot's Bluetooth kernels, the Spot's rescue bundle, the Dot's rescue packages.
+	//
+	// The daemon reads none of these — the installers do. They are named here because this is the one
+	// file in a release that carries a signature, and until they were, the installers had nothing but
+	// the release's SHA256SUMS to check them against. That file is plain text with nothing over it, so
+	// anything able to serve a different manifest could serve a matching SHA256SUMS beside it, and the
+	// Spot's installer unpacks the rescue bundle and runs scripts out of it on the user's own machine.
+	//
+	// Keyed by name rather than by architecture because these are not per-device builds a unit chooses
+	// between: they are named files an installer asks for, and the name is what it has to go on.
+	Assets map[string]Binary `json:"assets,omitempty"`
+
 	Title      string `json:"title,omitempty"`
 	Notes      string `json:"notes,omitempty"`
 	ReleaseURL string `json:"release_url,omitempty"`
@@ -175,7 +189,29 @@ func (m Manifest) Valid() error {
 			return err
 		}
 	}
+
+	// An asset entry that is half filled in is worse than none at all: an installer would take it for
+	// cover it does not give. A manifest carrying no assets at all is fine — every release published
+	// before they were named here is one, and the installers say so plainly rather than guessing.
+	for name, b := range m.Assets {
+		switch {
+		case b.URL == "":
+			return fmt.Errorf("update: the %s named by %s has no url", name, m.Version)
+		case len(b.SHA256) != 64:
+			return fmt.Errorf("update: the %s named by %s has no usable sha256", name, m.Version)
+		case b.Size <= 0:
+			return fmt.Errorf("update: the %s named by %s gives no size", name, m.Version)
+		}
+	}
 	return nil
+}
+
+// Asset is the signed description of one of a release's named files, for whoever is about to download
+// it. The second result is false when this release names no such file, which is not an error here: it
+// is what every release published before Assets existed looks like, and the caller decides what to say.
+func (m Manifest) Asset(name string) (Binary, bool) {
+	b, ok := m.Assets[name]
+	return b, ok
 }
 
 func (b Binary) valid(version, arch string) error {
