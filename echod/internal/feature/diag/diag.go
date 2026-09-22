@@ -519,11 +519,16 @@ func (d *Diag) hardware() {
 		StateClass:  esphome.StateClassMeasurement,
 	}
 
+	// Where the room's brightness is read from. A file under iio or an als_lux is preferred when the
+	// board has one; the Shows and the Spot do not, and report through the input device the screen's
+	// auto-brightness already reads, which roomLux takes instead. So an empty path here is the normal
+	// case on most of these devices and says nothing about whether there is a sensor — it used to be
+	// logged as "no light sensor found", which was alarming and wrong on every board that has one.
 	d.luxPath = metrics.Reader{}.LuxPath()
 	if d.luxPath == "" {
-		slog.Warn("no light sensor found")
+		slog.Info("room brightness comes from the light sensor service; no lux file on this board")
 	} else {
-		slog.Info("light sensor", "at", d.luxPath)
+		slog.Info("room brightness", "at", d.luxPath)
 	}
 	d.lux = &esphome.Sensor{
 		Base: esphome.Base{

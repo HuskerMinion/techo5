@@ -17,6 +17,7 @@ func TestSetForPicksTheDevicesOwnTuning(t *testing.T) {
 		want   string
 	}{
 		{"EQ_40.cfg", "show"}, // both generations of Show 5
+		{"EQ_30.cfg", "crown"},
 		{"EQ_50.cfg", "dot"},
 		{"EQ.cfg", "spot"},
 	} {
@@ -31,6 +32,29 @@ func TestSetForPicksTheDevicesOwnTuning(t *testing.T) {
 	}
 	if _, ok := SetFor(t.TempDir()); ok {
 		t.Error("an empty directory was taken for a tuning")
+	}
+}
+
+// The Show 8 ships an EQ_50.cfg as well as its own EQ_30.cfg, and the Dot is recognised by EQ_50.
+// A directory holding both has to come out as the Show 8, or it loads the Dot's six buckets, asks
+// for an EQ_60.cfg that is not there, and plays untuned. That is what it did before crown's set
+// existed, so the ordering is the fix and this is what holds it in place.
+func TestAShow8IsNotMistakenForADot(t *testing.T) {
+	dir := t.TempDir()
+	for _, f := range []string{"EQ_30.cfg", "EQ_50.cfg", "EQ_70.cfg", "EQ_100.cfg"} {
+		if err := os.WriteFile(filepath.Join(dir, f), []byte("0.0,\n"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	set, ok := SetFor(dir)
+	if !ok || set.Name != "crown" {
+		t.Fatalf("the Show 8's own files loaded %q, want crown", set.Name)
+	}
+	// Every file its buckets name has to be one the firmware actually ships.
+	for _, b := range set.EQ {
+		if _, err := os.Stat(filepath.Join(dir, b.Name)); err != nil {
+			t.Errorf("bucket up to %.1f wants %s, which a Show 8 does not carry", b.UpTo, b.Name)
+		}
 	}
 }
 

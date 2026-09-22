@@ -74,6 +74,26 @@ var (
 		Taps: tapsLong,
 	}
 
+	// Crown is the Echo Show 8, whose AFE.cfg calls itself "Crown". Four buckets and the same
+	// compressor arrangement as the Show 5 — mains-powered lands on MBCL_default.cfg — but its own
+	// files and its own boundaries, which the firmware states outright rather than leaving them to be
+	// read off the file names:
+	//
+	//	"External Coefficients" : [ "EQ_30.cfg","EQ_50.cfg","EQ_70.cfg","EQ_100.cfg" ],
+	//	"Volume Boundary"       : [ 30, 50, 70,100 ]
+	//
+	// Read off a unit 2026-09-22. Until this existed a Show 8 fell through to the Dot's set, because
+	// it has an EQ_50.cfg and no EQ_40.cfg, and then asked for an EQ_60.cfg it does not ship: the
+	// daemon reported the tuning as unavailable and played untuned.
+	Crown = Set{
+		Name: "crown",
+		EQ: []Bucket{
+			{0.3, "EQ_30.cfg"}, {0.5, "EQ_50.cfg"}, {0.7, "EQ_70.cfg"}, {1.0, "EQ_100.cfg"},
+		},
+		MBCL: "MBCL_default.cfg",
+		Taps: tapsLong,
+	}
+
 	// Spot ("Rook") is a third design again: one filter for every volume ("Volume Boundary": [100]),
 	// half the length of the others, and a compressor chosen by speaker power mode and by whether
 	// what is playing is audio or video. A mains-powered unit playing audio is MBCL_2W_Audio.cfg.
@@ -93,6 +113,9 @@ func SetFor(dir string) (Set, bool) {
 		set    Set
 	}{
 		{"EQ_40.cfg", Show},
+		// Before the Dot's, because the Show 8 has an EQ_50.cfg too and would otherwise be taken for
+		// one. EQ_30.cfg is the Show 8's alone.
+		{"EQ_30.cfg", Crown},
 		{"EQ_50.cfg", Dot},
 		{"EQ.cfg", Spot},
 	} {
