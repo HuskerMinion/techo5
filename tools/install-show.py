@@ -1,9 +1,11 @@
 #!/usr/bin/env python3
-"""Install TECHO5 on an Echo Show 5 (1st gen, checkers; 2nd gen, cronos) running LineageOS 18.1, in one command.
+"""Install TECHO5 on an Echo Show running LineageOS 18.1, in one command.
 
-Both generations install the same way and run the same daemon, which tells them apart at run time.
-The 1st gen (checkers) runs the same kernel commit on LineageOS 18.1 from 2026-09-04 on, and takes its
-own boot image from the release, since its kernel and device tree are not the 2nd gen's.
+Three boards install the same way and run the same daemon, which tells them apart at run time from the
+panel the bootloader names in the kernel command line: the Echo Show 5 2nd gen (cronos), the Show 5
+1st gen (checkers) and the Show 8 1st gen (crown). All three run the same kernel commit, and the
+partitions this script writes are numbered the same on each. Each board takes its own boot image from
+the release, since the kernel configuration and the device trees differ.
 
     python3 tools/install-show.py --serial <serial> --name Kitchen --dry-run
     python3 tools/install-show.py --serial <serial> --name Kitchen
@@ -12,7 +14,7 @@ Windows, Linux and macOS alike; needs Python 3, adb and fastboot. Nothing is bui
 image (LineageOS's kernel rebuilt with Bluetooth, and TECHO5's rescue environment, with no SSH key) and
 root filesystem are downloaded and checked. Each step is checked before the next:
 
-  1. checks    adb sees the unit as cronos or checkers on the LineageOS kernel TECHO5's is built from
+  1. checks    adb sees the unit as one of the three boards, on the LineageOS kernel TECHO5's is built from
   2. backup    with Rooted debugging on, LineageOS's boot image into backups/<serial>/ (the way back)
   3. release   the boot image and root filesystem, checked against the release's signed manifest
   4. push      the root filesystem onto the unit's storage, checked by md5
@@ -39,8 +41,19 @@ from techo5lib import (CONSOLE_TECHO5, Adb, Console, Fastboot, Release, default_
 
 REPO = 'HuskerMinion/techo5'
 # The LineageOS kernel commit TECHO5's kernel is rebuilt from: the vendor modules only load on it.
+# All three boards run this same commit, which is why one daemon and one installer serve them.
 KERNEL_RELEASE = '4.9.337-g8d928c5176cc'
 WIFI_MODULE = 'vendor/lib/modules/mt76x8_wlan.ko'
+
+# The boards this installs on, as `getprop ro.product.device` reports them. They share the SoC, the
+# kernel commit, the partition numbers this script writes (MISC p8, boot p9, system p12) and the
+# daemon binary; they differ in the panel, the microphone array, the speaker codec and the mute
+# driver, which the daemon settles at run time from the board name in the kernel command line.
+BOARDS = {
+    'cronos': 'Echo Show 5 2nd gen',
+    'checkers': 'Echo Show 5 1st gen',
+    'crown': 'Echo Show 8 1st gen',
+}
 
 
 def quote(s):
@@ -61,9 +74,10 @@ def show_version(tag):
 
 
 def boot_name(dev, tag):
-    """What a release calls the boot image for this generation: each has its own kernel and device
-    tree, so a 1st gen unit needs the one built for it."""
-    return 'techo5-boot-checkers-%s.img' % tag if dev == 'checkers' else 'techo5-boot-%s.img' % tag
+    """What a release calls the boot image for this board: each has its own kernel configuration and
+    device trees, so a 1st gen Show 5 or a Show 8 needs the one built for it. The 2nd gen Show 5 is
+    the unqualified name, because it was the first."""
+    return 'techo5-boot-%s.img' % tag if dev == 'cronos' else 'techo5-boot-%s-%s.img' % (dev, tag)
 
 
 def boot_image(rel, work, dev):
@@ -143,8 +157,9 @@ def main():
     if state != 'device':
         fail("adb does not see %s running LineageOS (state '%s'): turn on USB debugging and accept this computer" % (a.serial, state))
     dev = adb.sh('getprop ro.product.device')
-    if dev not in ('cronos', 'checkers'):
-        fail("%s reports '%s', not an Echo Show 5 (cronos, 2nd gen; checkers, 1st gen)" % (a.serial, dev))
+    if dev not in BOARDS:
+        fail("%s reports '%s', which is none of: %s"
+             % (a.serial, dev, ', '.join('%s (%s)' % (b, n) for b, n in BOARDS.items())))
     kr = adb.sh('uname -r')
     if kr != KERNEL_RELEASE:
         fail('%s runs kernel %s, not %s: install the LineageOS 18.1 build the getting started guide links' % (a.serial, kr, KERNEL_RELEASE))
