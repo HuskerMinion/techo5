@@ -54,6 +54,32 @@ func Get() *Voice {
 	return shared
 }
 
+// owner is asked whether the press of the action button happening now belongs to something other
+// than the assistant. It is registered rather than called for, because the only thing that owns a
+// press — the setup page, which a press on the device lets a browser into — sits above this package
+// and cannot be imported from here.
+var owner struct {
+	mu sync.Mutex
+	fn func() bool
+}
+
+// OwnsPress registers something that may own a press of the action button. While it says it does,
+// the press starts no turn: on a device with no screen the press that answers the setup page arrives
+// here as an ordinary tap, and there is nothing else to tell the button apart.
+func OwnsPress(fn func() bool) {
+	owner.mu.Lock()
+	defer owner.mu.Unlock()
+	owner.fn = fn
+}
+
+// pressOwned is whether the press now being handled is somebody else's.
+func pressOwned() bool {
+	owner.mu.Lock()
+	fn := owner.fn
+	owner.mu.Unlock()
+	return fn != nil && fn()
+}
+
 // build makes the satellite and the conversation together: the satellite's callbacks are the
 // conversation's inputs, and the conversation answers back through it.
 //
@@ -90,6 +116,12 @@ func build() *Voice {
 		}
 		switch e.Kind {
 		case buttons.Tap:
+			// The press may not be the assistant's at all: the setup page lets a browser in on a press on
+			// the device, and on a device with no screen there is nothing else to say so. A press meant
+			// for a settings page must not put the microphone on the network.
+			if pressOwned() {
+				return
+			}
 			v.Action()
 		case buttons.Hold:
 			v.ActionHold()

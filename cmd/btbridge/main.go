@@ -11,8 +11,9 @@
 // Each read on either side returns one whole H4 packet (type byte first);
 // each write must be one whole packet. The vendor driver's read returns 0
 // bytes when its queue is empty instead of blocking, so that side is polled
-// with select(2) and a short timeout. On any error the bridge exits after a
-// pause so init's respawn does not spin.
+// with select(2) and a short timeout, and it is never asked for more than it
+// will give (read.go). A read that fails waits before the next one; anything
+// else ends the bridge after a pause, so init's respawn does not spin.
 package main
 
 import (
@@ -104,16 +105,35 @@ func vhciToStp(vhci *os.File, stp int) error {
 // driver has nothing queued. What a read returns is framed into whole packets
 // first (h4.go): the Echo Dot's driver does not keep packet boundaries.
 func stpToVhci(stp int, vhci *os.File, maxPage int) error {
-	buf := make([]byte, 65536)
+	buf := make([]byte, readSize)
 	var framer h4Framer
+	var runs backoff
 	dropped := 0
 	for {
 		n, err := syscall.Read(stp, buf)
-		if err == syscall.EINTR || err == syscall.EAGAIN {
+		if err == syscall.EINTR {
+			continue
+		}
+		if err == syscall.EAGAIN {
+			// Nothing queued, said the other way round: the same as a read of no bytes.
+			wait(stp)
 			continue
 		}
 		if err != nil {
-			return fmt.Errorf("stp: read: %w", err)
+			// Not fatal on its own — a driver refusing this read may take the next — but asking again
+			// at once is what filled a Dot's kernel log and kept its cores awake, so this waits.
+			pause, report, giveUp := runs.fail(err)
+			if giveUp {
+				return fmt.Errorf("stp: read: %w (%d times in a row)", err, giveUpAfter)
+			}
+			if report {
+				fmt.Fprintf(os.Stderr, "btbridge: stp: read: %v (waiting; said once for the run)\n", err)
+			}
+			time.Sleep(pause)
+			continue
+		}
+		if refused := runs.ok(); refused > 0 {
+			fmt.Fprintf(os.Stderr, "btbridge: stp: reading again after %d refused\n", refused)
 		}
 		if n == 0 {
 			wait(stp)
@@ -183,7 +203,7 @@ func setBdaddr(stp int, hexaddr string) error {
 	if err := writeAll(stp, cmd); err != nil {
 		return err
 	}
-	buf := make([]byte, 512)
+	buf := make([]byte, readSize)
 	deadline := time.Now().Add(2 * time.Second)
 	for time.Now().Before(deadline) {
 		n, err := syscall.Read(stp, buf)

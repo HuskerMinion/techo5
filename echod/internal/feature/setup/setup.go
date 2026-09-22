@@ -22,6 +22,7 @@ import (
 	esphome "github.com/ygelfand/go-esphome-device"
 
 	"github.com/HuskerMinion/techo5/echod/internal/component"
+	"github.com/HuskerMinion/techo5/echod/internal/feature/voice"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/web"
 	"github.com/HuskerMinion/techo5/echod/internal/hardware/buttons"
 	"github.com/HuskerMinion/techo5/echod/internal/lib/hook"
@@ -42,6 +43,13 @@ const (
 	// with no screen to ask from.
 	pressWait = 60 * time.Second
 	holdOpen  = buttons.LongPress
+
+	// pressGrace is how long after the page has taken a press it still says the press was its own.
+	// The button's listeners run in no fixed order, so whoever asks whether a press belonged to the
+	// page may well be asking after the page has already answered it and stopped waiting. Every
+	// listener sees the same press in the same instant, so this only has to outlast that instant, and
+	// has to be far short of anybody's next press.
+	pressGrace = 50 * time.Millisecond
 
 	// sessions is how many browsers may be let in at once. A setup page is used by one person at a
 	// device; this is a bound, not a feature.
@@ -72,6 +80,10 @@ type Feature struct {
 	waiting    string
 	waitingEnd time.Time
 
+	// took is when a press was last taken by the page, so that the rest of the button's listeners can
+	// be told the press was not theirs even though the waiting is already over by the time they ask.
+	took time.Time
+
 	// live are the sessions let in, by their cookie, each with when it was last used.
 	live map[string]time.Time
 
@@ -94,6 +106,10 @@ func Get() *Feature {
 	once.Do(func() {
 		shared = build()
 		buttons.Get().Events.Listen(shared.button)
+		// The press that lets a browser in is not also a question for the assistant. A screen consumes
+		// it in the "let it in?" card it is a tap on; a device with no screen has only the button, so the
+		// conversation has to be told that this press is already spoken for.
+		voice.OwnsPress(shared.TookPress)
 		web.Handle("/setup", "Setup", shared.On, shared.serve)
 		web.Handle("/setup/", "", shared.On, shared.serve)
 	})
@@ -192,6 +208,23 @@ func (f *Feature) Waiting() bool {
 	return f.waiting != "" && time.Now().Before(f.waitingEnd)
 }
 
+// TookPress reports whether the press being handled now belongs to the setup page rather than to
+// whatever the action button usually does. Everything else listening to that button asks this before
+// acting: a press made to let a browser in is not also a question for the assistant, and on a device
+// with no screen there is nothing else to tell the button so.
+//
+// It is true while a browser is waiting and for pressGrace after the press was taken, because the
+// listeners run in no fixed order and this may be asked either side of the page answering.
+func (f *Feature) TookPress() bool {
+	now := time.Now()
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if f.waiting != "" && now.Before(f.waitingEnd) {
+		return true
+	}
+	return !f.took.IsZero() && now.Sub(f.took) < pressGrace
+}
+
 // button is the action button: a hold opens the page on a device that has no other way to ask, and a
 // tap answers a browser that is waiting to be let in.
 //
@@ -248,6 +281,7 @@ func (f *Feature) press() bool {
 	}
 	f.live[f.waiting] = now
 	f.waiting, f.waitingEnd = "", time.Time{}
+	f.took = now
 	f.unanswered = 0 // a press clears the run
 	slog.Info("setup page: a browser was let in by a press on the device")
 	return true

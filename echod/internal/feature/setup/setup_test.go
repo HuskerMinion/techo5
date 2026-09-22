@@ -197,6 +197,39 @@ func TestAPressThatBecomesSomethingElseTakesThePageBack(t *testing.T) {
 	}
 }
 
+// The press that lets a browser in is the page's and nobody else's. On a Dot it was also handled as
+// an ordinary tap, which started a voice turn nobody asked for and sent fifteen seconds of the room
+// to Home Assistant because somebody opened a settings page. What the conversation asks before it
+// treats a tap as a question is this, and it has to answer the same whichever listener runs first:
+// the button's listeners are in no fixed order, so the asking may come either side of the press
+// being taken.
+func TestThePressThatLetsABrowserInIsNotAlsoAQuestion(t *testing.T) {
+	f := build()
+	f.Open()
+	if f.TookPress() {
+		t.Error("the page claimed a press with no browser waiting: the button would stop talking")
+	}
+
+	ask(t, f)
+	if !f.TookPress() {
+		t.Error("a press with a browser waiting was not the page's")
+	}
+
+	// The press itself, as the conversation's listener would see it if it ran second.
+	f.button(buttons.Event{Name: buttons.Action, Kind: buttons.Tap})
+	if !f.TookPress() {
+		t.Error("the press was not the page's once the page had already taken it")
+	}
+
+	// And once the moment has passed the button is the assistant's again.
+	f.mu.Lock()
+	f.took = time.Now().Add(-pressGrace - time.Millisecond)
+	f.mu.Unlock()
+	if f.TookPress() {
+		t.Error("the page went on claiming presses after the one it was answered by")
+	}
+}
+
 // A page being used is a page somebody meant to open, however the press ended.
 func TestUsingThePageKeepsItThroughTheLongerHold(t *testing.T) {
 	f := build()
