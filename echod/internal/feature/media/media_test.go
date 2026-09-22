@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync/atomic"
 	"testing"
 
 	"github.com/HuskerMinion/techo5/echod/internal/hardware/speaker"
@@ -123,13 +124,17 @@ func TestHeaderRefusesAnOversizedChunk(t *testing.T) {
 // over — for an external media source, a host nobody here controls — and the body is held whole in
 // memory, so a stream that never ends has to be cut off rather than read.
 func TestFetchRefusesABodyLargerThanAnAnnouncement(t *testing.T) {
-	var served int64
+	// Counted atomically: the handler runs on the server's own goroutine and the assertions below
+	// run on the test's, and the read happens while the handler may still be writing - Fetch returns
+	// as soon as it has read enough to refuse, which is the point of the test, so the handler is
+	// still going round its loop. A plain int64 here is a real data race and the detector says so.
+	var served atomic.Int64
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "audio/mpeg")
 		chunk := make([]byte, 1<<20)
-		for served < 4*mostAudio {
+		for served.Load() < 4*mostAudio {
 			n, err := w.Write(chunk)
-			served += int64(n)
+			served.Add(int64(n))
 			if err != nil {
 				return
 			}
@@ -144,7 +149,7 @@ func TestFetchRefusesABodyLargerThanAnAnnouncement(t *testing.T) {
 	if !strings.Contains(err.Error(), "more than") {
 		t.Errorf("%v, want something about the body being too large", err)
 	}
-	if served > 2*mostAudio {
-		t.Errorf("read %d bytes for a bound of %d", served, mostAudio)
+	if n := served.Load(); n > 2*mostAudio {
+		t.Errorf("read %d bytes for a bound of %d", n, mostAudio)
 	}
 }
