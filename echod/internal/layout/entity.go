@@ -4,8 +4,8 @@ import "strings"
 
 // EntitySlug is the prefix Home Assistant builds this device's entity ids from. It slugifies a
 // friendly name its own way: everything that is not a letter or a digit becomes an underscore, and
-// repeats collapse — "Terry's Desk" is "terry_s_desk", so its media player is
-// media_player.terry_s_desk_speaker.
+// repeats collapse — "Guest's Desk" is "guest_s_desk", so its media player is
+// media_player.guest_s_desk_speaker.
 //
 // Slug, with its dashes, is the node name and the mDNS host: a different thing for a different
 // purpose. Using one where the other belongs names an entity that does not exist, which is silent,

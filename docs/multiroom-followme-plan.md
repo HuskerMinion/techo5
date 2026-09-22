@@ -81,8 +81,8 @@ Phone-based room presence is realistic here because the infrastructure already e
 wired together yet:
 
 - **Bluetooth proxy coverage already exists.** Home Assistant already sees five standalone ESPHome
-  Bluetooth/BLE proxies (`bluetooth-proxy-garage`, `bluetooth-proxy-shed`,
-  `bluetooth-proxy-front-room`, `ble-proxy-mailbox`, `ble-proxy-back-deck`) — presumably already
+  Bluetooth/BLE proxies (one per room, named
+  `bluetooth-proxy-<room>` and `ble-proxy-<room>`) — presumably already
   placed for exactly this kind of tracking. These relay every BLE advertisement they hear, with
   signal strength, to Home Assistant.
 - **Every TECHO5 device is also a Bluetooth proxy** (`feature/bluetooth`, `esphome.BluetoothProxy`

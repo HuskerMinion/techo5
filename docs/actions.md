@@ -386,7 +386,7 @@ value removes every key and turns SSH off if it's running.
 action: esphome.office_ssh_keys
 data:
   keys: |
-    ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIExample don@torrent
+    ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIExample you@your-pc
 ```
 
 ## Sign a device in to a SIP account

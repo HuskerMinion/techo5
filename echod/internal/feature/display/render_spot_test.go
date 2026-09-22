@@ -108,7 +108,7 @@ func TestRoundScenesDraw(t *testing.T) {
 		"menu-timers":       {now: at, phase: "idle", menuOpen: true, menuMode: modeMain, menuSel: 6, menuRot: restFor(6, len(mainItems)) + 0.3, timers: []timer.Countdown{{Left: 272 * time.Second, Total: 600 * time.Second, Active: true}}},
 		"jog-volume":        {now: at, phase: "idle", menuOpen: true, menuMode: modeVolume, volume: 14, maxVolume: 30},
 		"setup-ask":         {now: at, phase: "idle", setupAsking: true},
-		"announcement":      {now: at, phase: "idle", showAnnouncement: true, announcement: announce.Message{From: "Terry's Desk", Text: "dinner is ready, come down"}},
+		"announcement":      {now: at, phase: "idle", showAnnouncement: true, announcement: announce.Message{From: "Guest's Desk", Text: "dinner is ready, come down"}},
 		"announcement-voice": {now: at, phase: "idle", showAnnouncement: true,
 			announcement: announce.Message{From: "Laundry Room"}},
 		"announce-recording": {now: at, phase: "idle", announceRecording: true, announcePeers: 3},

@@ -473,7 +473,7 @@ func saveStations(r *http.Request) string {
 // nameSection renames the device, behind what it does and the box that has to be ticked.
 //
 // What it does was worth checking rather than assuming: Home Assistant keys its entities on the
-// device's MAC address (unique ids read "a8:e6:21:77:3f:ae/0/media_player/Speaker"), so a renamed
+// device's MAC address (unique ids read "a1:b2:c3:d4:e5:f6/0/media_player/Speaker"), so a renamed
 // device is the same device to it and keeps the entity ids it was given. Automations go on working.
 // What changes is what Home Assistant shows, and the entity ids then no longer look like the name —
 // which is confusing enough to warn about, and reason to rename in Home Assistant as well.

@@ -12,7 +12,7 @@ import (
 // somebody typed them, and a name with a space or an accent in it.
 func TestAVoiceSurvivesTheTrip(t *testing.T) {
 	sent := Message{
-		From:  "Terry's Desk",
+		From:  "Guest's Desk",
 		Text:  "dinner is ready — come down",
 		Voice: []int16{0, 1, -1, 32767, -32768, 1234, -4321},
 	}
