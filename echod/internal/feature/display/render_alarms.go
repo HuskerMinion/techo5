@@ -21,9 +21,6 @@ func countdown(left time.Duration) string {
 	return fmt.Sprintf("%d:%02d", secs/60, secs%60)
 }
 
-// ringButtonsTop is where the ringing page's buttons start.
-const ringButtonsTop = 330
-
 // ringingPage is over everything while a timer or an alarm sounds: what it is, the time, and buttons
 // big enough to hit half awake.
 func (r *renderer) ringingPage(s scene) {
@@ -41,30 +38,31 @@ func (r *renderer) ringingPage(s scene) {
 	case st.alarm != nil && st.alarm.Label != "":
 		title = st.alarm.Label
 	}
-	r.text(r.title, title, (r.w-r.width(r.title, title))/2, 80, amber)
+	r.text(r.title, title, (r.w-r.width(r.title, title))/2, r.s(80), amber)
 
 	hour := clockHM(s.now)
 	ampm := clockSuffix(s.now)
-	gap := 18
+	gap := r.s(18)
 	if ampm == "" {
 		gap = 0
 	}
 	hw, aw := r.width(r.clock, hour), r.width(r.ampm, ampm)
 	x := (r.w - hw - gap - aw) / 2
-	r.text(r.clock, hour, x, 290, cream)
-	r.text(r.ampm, ampm, x+hw+gap, 290, amber)
+	r.text(r.clock, hour, x, r.s(290), cream)
+	r.text(r.ampm, ampm, x+hw+gap, r.s(290), amber)
 
-	y0, y1 := ringButtonsTop, r.h-30
-	stop := image.Rect(r.margin, y0, r.w-r.margin, y1)
+	left, right := r.actionHalves()
+	rad := float64(r.s(actionRadius))
+	mid := (left.Min.Y + left.Max.Y) / 2
+	stop := image.Rect(left.Min.X, left.Min.Y, right.Max.X, left.Max.Y)
 	if st.snoozable {
-		stop.Max.X = r.w/2 - 12
-		snooze := image.Rect(r.w/2+12, y0, r.w-r.margin, y1)
-		r.bevel(snooze, shift(ember, 16), true)
+		stop = left
 		label := fmt.Sprintf("Snooze %d min", s.snooze)
-		r.text(r.body, label, snooze.Min.X+(snooze.Dx()-r.width(r.body, label))/2, y0+72, cream)
+		fg := r.buttonFace(right, rad, btnSecondary)
+		r.text(r.body, label, right.Min.X+(right.Dx()-r.width(r.body, label))/2, mid+r.s(14), fg)
 	}
-	r.bevel(stop, amber, true)
-	r.text(r.title, "Stop", stop.Min.X+(stop.Dx()-r.width(r.title, "Stop"))/2, y0+76, walnut)
+	fg := r.buttonFace(stop, rad, btnPrimary)
+	r.text(r.title, "Stop", stop.Min.X+(stop.Dx()-r.width(r.title, "Stop"))/2, mid+r.s(16), fg)
 }
 
 // timersLine is under the date on the clock while timers run: the soonest, and how many more.

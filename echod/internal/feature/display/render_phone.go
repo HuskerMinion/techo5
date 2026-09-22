@@ -15,7 +15,7 @@ import (
 
 // The call page: over everything while a call rings, is placed or is up. A title, who it is with, how
 // long it has lasted, and the buttons: Decline and Answer while ringing, Hang up otherwise.
-const callButtonsTop = ringButtonsTop
+// The call's answers sit where every other page's do; see actionBand.
 
 // answerGreen and declineRed are the call buttons whatever the theme: every phone uses them, and a
 // call is the one page where a wrong tap cannot be taken back.
@@ -55,25 +55,25 @@ func (r *renderer) callPage(s scene) {
 		r.text(r.body, line, (r.w-r.width(r.body, line))/2, 290, dim)
 	}
 
-	y0, y1 := callButtonsTop, r.h-30
+	decline, answer := r.actionHalves()
+	rad := float64(r.s(actionRadius))
+	mid := (decline.Min.Y + decline.Max.Y) / 2
 	if st.Phase == phone.Ringing {
-		decline := image.Rect(r.margin, y0, r.w/2-12, y1)
-		answer := image.Rect(r.w/2+12, y0, r.w-r.margin, y1)
-		r.bevel(decline, declineRed, true)
-		r.bevel(answer, answerGreen, true)
-		r.text(r.title, "Decline", decline.Min.X+(decline.Dx()-r.width(r.title, "Decline"))/2, y0+76, color.White)
-		r.text(r.title, "Answer", answer.Min.X+(answer.Dx()-r.width(r.title, "Answer"))/2, y0+76, color.White)
+		r.roundButton(decline, rad, declineRed)
+		r.roundButton(answer, rad, answerGreen)
+		r.text(r.title, "Decline", decline.Min.X+(decline.Dx()-r.width(r.title, "Decline"))/2, mid+r.s(16), color.White)
+		r.text(r.title, "Answer", answer.Min.X+(answer.Dx()-r.width(r.title, "Answer"))/2, mid+r.s(16), color.White)
 		return
 	}
-	hang := image.Rect(r.margin, y0, r.w-r.margin, y1)
-	r.bevel(hang, declineRed, true)
-	r.text(r.title, "Hang up", hang.Min.X+(hang.Dx()-r.width(r.title, "Hang up"))/2, y0+76, color.White)
+	hang := image.Rect(decline.Min.X, decline.Min.Y, answer.Max.X, decline.Max.Y)
+	r.roundButton(hang, rad, declineRed)
+	r.text(r.title, "Hang up", hang.Min.X+(hang.Dx()-r.width(r.title, "Hang up"))/2, mid+r.s(16), color.White)
 }
 
 // callTap is a finger on the call page: the left half of the buttons declines or hangs up, the right
 // half answers a call that is ringing.
 func (d *Display) callTap(x, y int, st phone.State) {
-	if d.r == nil || y < callButtonsTop-20 {
+	if d.r == nil || !d.r.actionDecided(y) {
 		return
 	}
 	if st.Phase == phone.Ringing && x >= d.r.w/2 {

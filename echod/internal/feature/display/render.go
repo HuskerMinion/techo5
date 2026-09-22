@@ -162,6 +162,39 @@ type renderer struct {
 	shellKey baseKey
 }
 
+// The two large answers at the foot of a page that demands one: Stop and Snooze, Decline and
+// Answer, Not now and Allow. All three pages put them in the same place, so a finger learns one
+// position, and all three draw them with the same rounded button. In the Show 5's pixels.
+const (
+	actionGap    = 24  // between the two
+	actionBottom = 30  // under them
+	actionHeight = 120 // how tall they are
+	actionReach  = 20  // above them, a tap still decides nothing
+	actionRadius = 28  // rounded enough to read as a button at this size
+)
+
+// actionBand is the top and bottom of those answers. Anchored to the foot of the screen rather than
+// measured from the top, so a taller panel sets them under the words instead of stretching them
+// down the page.
+func (r *renderer) actionBand() (y0, y1 int) {
+	y1 = r.h - r.s(actionBottom)
+	return y1 - r.s(actionHeight), y1
+}
+
+// actionHalves splits the band into the two answers, left and right.
+func (r *renderer) actionHalves() (left, right image.Rectangle) {
+	y0, y1 := r.actionBand()
+	half := r.s(actionGap) / 2
+	return image.Rect(r.margin, y0, r.w/2-half, y1), image.Rect(r.w/2+half, y0, r.w-r.margin, y1)
+}
+
+// actionDecided is whether a tap this far down the screen is an answer at all. A tap on the words
+// above decides nothing, so reading a page cannot answer it.
+func (r *renderer) actionDecided(y int) bool {
+	y0, _ := r.actionBand()
+	return y >= y0-r.s(actionReach)
+}
+
 // drawnFor is the panel width every fixed size in this package is written in: the Echo Show 5's, in
 // landscape. A wider panel scales them up rather than leaving the layout in one corner of it.
 const drawnFor = 960

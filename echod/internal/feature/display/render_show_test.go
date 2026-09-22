@@ -11,8 +11,10 @@ import (
 	"testing"
 	"time"
 
+	"github.com/HuskerMinion/techo5/echod/internal/feature/alarm"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/announce"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/home"
+	"github.com/HuskerMinion/techo5/echod/internal/feature/phone"
 	"github.com/HuskerMinion/techo5/echod/internal/lib/hass"
 )
 
@@ -62,6 +64,13 @@ func TestShowScenesDraw(t *testing.T) {
 		"announce-recording": {now: at, phase: "idle", weather: sky, announceRecording: true, announcePeers: 3},
 		"announce-drawer": {now: at, phase: "idle", weather: sky, showDrawer: true,
 			drawerTab: drawerAnnounce, announceReady: true, announcePeers: 3},
+		// The three pages that put two large answers at the foot of the screen. They are the only
+		// thing on those pages somebody has to press, so how they look is worth a picture.
+		"ringing-alarm": {now: at, phase: "idle",
+			ring: ringState{alarm: &alarm.Ring{Label: "Wake up"}, snoozable: true}, snooze: 9},
+		"ringing-timer": {now: at, phase: "idle", ring: ringState{timer: "Pasta"}},
+		"call-ringing":  {now: at, phase: "idle", call: phone.State{Phase: phone.Ringing, Peer: "104"}},
+		"call-talking":  {now: at, phase: "idle", call: phone.State{Phase: phone.Talking, Peer: "104", Since: at.Add(-90 * time.Second)}},
 		"settings-sound": {now: at, phase: "idle", showSheet: true,
 			sheet: settings{cat: catSound, volume: 15, wakeWord: "Okay Nabu"}},
 		"settings-sound-tone": {now: at, phase: "idle", showSheet: true,

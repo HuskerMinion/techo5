@@ -48,7 +48,7 @@ func (d *Display) PreviewRing(for_ time.Duration) {
 // ringTap is a finger on the ringing page: Stop on the left half of the buttons, Snooze on the right
 // when there is one to snooze.
 func (d *Display) ringTap(x, y int, st ringState) {
-	if d.r == nil || y < ringButtonsTop-20 {
+	if d.r == nil || !d.r.actionDecided(y) {
 		return
 	}
 	d.mu.Lock()

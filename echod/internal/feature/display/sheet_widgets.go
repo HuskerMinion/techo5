@@ -759,6 +759,15 @@ const (
 // danger is the color of an action to think twice about, whatever the theme.
 var danger = color.RGBA{0xe5, 0x48, 0x4d, 0xff}
 
+// roundButton fills a rounded button in one colour, lit and shadowed the way every raised thing on
+// these screens is. Separate from buttonFace because a few answers carry a colour of their own that
+// means something — the phone's red and green — rather than taking the theme's accent.
+func (r *paint) roundButton(b image.Rectangle, rad float64, fill color.RGBA) {
+	r.roundShadow(b, rad, 8, 3, shadowAlpha()*0.8)
+	r.roundFill(b, rad, shift(fill, 14), shift(fill, -14))
+	r.roundHighlight(b, rad)
+}
+
 // buttonFace draws a button's shape and returns the colour its label should be drawn in.
 //
 // Size and radius are the caller's, because a button is the same thing whether it is the pill on a
@@ -768,9 +777,7 @@ var danger = color.RGBA{0xe5, 0x48, 0x4d, 0xff}
 func (r *paint) buttonFace(b image.Rectangle, rad float64, style buttonStyle) color.RGBA {
 	switch style {
 	case btnPrimary:
-		r.roundShadow(b, rad, 8, 3, shadowAlpha()*0.8)
-		r.roundFill(b, rad, shift(amber, 14), shift(amber, -14))
-		r.roundHighlight(b, rad)
+		r.roundButton(b, rad, amber)
 		return onAccent()
 	case btnSecondary:
 		r.roundShadow(b, rad, 6, 2, shadowAlpha()*0.5)
