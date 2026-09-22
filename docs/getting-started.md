@@ -66,6 +66,10 @@ The steps are the same for both; where they differ, the 1st gen (`checkers`) is 
    In short: with the Show on mains power, hold all three buttons until the screen says
    `=> FASTBOOT mode`, connect USB, and run the fastbrick step from the thread. It reboots into TWRP
    on its own; don't interrupt it.
+   **Use amonet v2.0.1 or later.** An older one can leave the bootloader still locked while
+   everything else looks like it worked, and the first sign is the installer being refused with
+   `the command you input is restricted on locked hw` when it writes the boot image. That is the
+   bootloader talking, not the installer (techo5 issue #19).
    On a **1st gen**, the same thing with the `checkers` tools:
    [[UNLOCK][ROOT][TWRP][UNBRICK] Echo Show 5 1st Gen (checkers)](https://xdaforums.com/t/unlock-root-twrp-unbrick-amazon-echo-show-5-1st-gen-2019-checkers.4762900/)
    (amonet branch `mt8163-checkers`). A unit fresh out of the box may have shipped with firmware too
