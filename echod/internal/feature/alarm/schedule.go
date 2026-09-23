@@ -16,6 +16,10 @@ type source struct {
 	days  uint8     // repeating weekdays; with none it rings once, at once if set, else the next hour:min
 	once  time.Time // a fixed moment, for helpers with a date and for snoozes
 	local bool      // set on the device, so ringing a one-off turns it off
+
+	// remind is a reminder, said once rather than rung, and ringOn the other devices it goes to.
+	remind bool
+	ringOn []string
 }
 
 // next is the first time at or after from that s rings, and false if it never will again.

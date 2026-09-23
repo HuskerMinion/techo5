@@ -21,6 +21,8 @@ import (
 const (
 	fromHeader = "X-Techo5-From"
 	textHeader = "X-Techo5-Text"
+	kindHeader = "X-Techo5-Kind"
+	idHeader   = "X-Techo5-Id"
 
 	// audioType says what the body is, for anything that looks.
 	audioType = "audio/L16; rate=16000; channels=1"
@@ -37,6 +39,10 @@ func encode(m Message) (body []byte, headers map[string]string) {
 		textHeader:     url.QueryEscape(m.Text),
 		"Content-Type": audioType,
 	}
+	if m.Kind != "" {
+		headers[kindHeader] = url.QueryEscape(m.Kind)
+		headers[idHeader] = url.QueryEscape(m.ID)
+	}
 	if len(m.Voice) == 0 {
 		return nil, headers
 	}
@@ -52,6 +58,8 @@ func decode(r *http.Request) (Message, error) {
 	m := Message{
 		From: unescape(r.Header.Get(fromHeader)),
 		Text: unescape(r.Header.Get(textHeader)),
+		Kind: unescape(r.Header.Get(kindHeader)),
+		ID:   clip(unescape(r.Header.Get(idHeader)), 64),
 	}
 	raw, err := io.ReadAll(io.LimitReader(r.Body, mostAudio))
 	if err != nil {

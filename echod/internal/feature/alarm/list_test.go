@@ -2,6 +2,7 @@ package alarm
 
 import (
 	"encoding/json"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -16,7 +17,7 @@ func TestListingCarriesIdsAndNextTimes(t *testing.T) {
 	v := View{
 		Local: []config.Alarm{
 			{ID: "a1", Hour: 6, Minute: 45, Days: config.DaysWeekdays, Label: "Wake up", On: true},
-			{ID: "a2", Hour: 14, Minute: 30, Label: "Take the medication", On: true},
+			{ID: "a2", Hour: 14, Minute: 30, Label: "Take the medication", On: true, Remind: true, RingOn: []string{"Kitchen"}},
 			{ID: "a3", Hour: 9, Minute: 0, Days: config.DaysWeekends, On: false},
 		},
 		Followed: []Followed{{Entity: "input_datetime.school", Label: "School run", Armed: true}},
@@ -29,12 +30,13 @@ func TestListingCarriesIdsAndNextTimes(t *testing.T) {
 		t.Errorf("nothing is ringing, got %+v", l.Ringing)
 	}
 	want := []ListedAlarm{
-		{ID: "a1", Time: "06:45", Days: "weekdays", Label: "Wake up", On: true, Next: "2026-09-24T06:45:00-05:00"},
-		{ID: "a2", Time: "14:30", Days: "once", Label: "Take the medication", On: true, Next: "2026-09-23T14:30:00-05:00"},
-		{ID: "a3", Time: "09:00", Days: "weekends", On: false, Next: ""},
+		{ID: "a1", Time: "06:45", Days: "weekdays", Label: "Wake up", On: true, Next: "2026-09-24T06:45:00-05:00", RingOn: []string{}},
+		{ID: "a2", Time: "14:30", Days: "once", Label: "Take the medication", On: true, Next: "2026-09-23T14:30:00-05:00",
+			Reminder: true, RingOn: []string{"Kitchen"}},
+		{ID: "a3", Time: "09:00", Days: "weekends", On: false, Next: "", RingOn: []string{}},
 	}
 	for i, w := range want {
-		if l.Alarms[i] != w {
+		if !reflect.DeepEqual(l.Alarms[i], w) {
 			t.Errorf("alarm %d = %+v, want %+v", i, l.Alarms[i], w)
 		}
 	}

@@ -21,6 +21,7 @@ import (
 	"log/slog"
 	"net"
 	"net/http"
+	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -70,7 +71,19 @@ type Message struct {
 
 	// Voice is what was said, at the microphone's rate, empty for an announcement nobody spoke.
 	Voice []int16 `json:"-"`
+
+	// Kind is empty for an announcement. KindReminder and KindReminderStopped carry a reminder between
+	// devices instead, with ID naming which one; they go to Reminded and ReminderStopped rather than
+	// the screen. A device too old to know a kind shows the words as an announcement, which is the
+	// right fallback for a reminder.
+	Kind string `json:"-"`
+	ID   string `json:"-"`
 }
+
+const (
+	KindReminder        = "reminder"
+	KindReminderStopped = "reminder-stopped"
+)
 
 type Feature struct {
 	action *esphome.Action
@@ -99,6 +112,12 @@ type Feature struct {
 	// Arrived fires once for each announcement taken, carrying it, for anything that wants the event
 	// rather than the state: the ring's flash, and anything later that wants to keep them.
 	Arrived hook.Hook[Message]
+
+	// Reminded fires for a reminder another device sent here, and ReminderStopped for one stopped
+	// elsewhere. Neither is an announcement: quiet hours do not apply and nothing is shown by this
+	// package, since what a reminder does is the reminder's business.
+	Reminded        hook.Hook[Message]
+	ReminderStopped hook.Hook[Message]
 }
 
 var (
@@ -164,6 +183,20 @@ func (f *Feature) receive(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	m.From, m.Text = clip(m.From, 40), clip(m.Text, maxText)
+	switch m.Kind {
+	case KindReminder:
+		if m.Text == "" || m.ID == "" {
+			http.Error(w, "a reminder says something", http.StatusBadRequest)
+			return
+		}
+		f.Reminded.Emit(m)
+		w.WriteHeader(http.StatusNoContent)
+		return
+	case KindReminderStopped:
+		f.ReminderStopped.Emit(m)
+		w.WriteHeader(http.StatusNoContent)
+		return
+	}
 	if m.Text == "" && len(m.Voice) == 0 {
 		http.Error(w, "an announcement says something", http.StatusBadRequest)
 		return
@@ -336,22 +369,61 @@ func (f *Feature) send(m Message) {
 		return
 	}
 	m.From = config.Get().Device.Name
-	body, headers := encode(m)
-
 	peers := Peers()
 	slog.Info("announcing", "text", m.Text, "seconds", seconds(m.Voice), "to", len(peers))
+	deliver(word, peers, m)
+	f.show(m)
+}
+
+// SendTo carries a reminder, or its stopping, to the devices named, or to every one for nil. It is
+// not shown here: the sender already has the reminder. Names are matched however they are cased, and
+// one that is not in the house is logged and skipped.
+func (f *Feature) SendTo(names []string, m Message) {
+	word := config.Get().Home.HouseWord
+	if word == "" {
+		slog.Warn("reminder not sent to other devices: this house has no word set", "kind", m.Kind)
+		return
+	}
+	to := pick(Peers(), names)
+	slog.Info("sending to other devices", "kind", m.Kind, "id", m.ID, "to", len(to))
+	deliver(word, to, m)
+}
+
+// pick is the peers named, or all of them for nil.
+func pick(all []Peer, names []string) []Peer {
+	if names == nil {
+		return all
+	}
+	var out []Peer
+	for _, n := range names {
+		i := slices.IndexFunc(all, func(p Peer) bool { return strings.EqualFold(p.Name, strings.TrimSpace(n)) })
+		if i < 0 {
+			slog.Warn("no device of that name in the house", "name", n)
+			continue
+		}
+		if !slices.Contains(out, all[i]) {
+			out = append(out, all[i])
+		}
+	}
+	return out
+}
+
+// deliver posts m to every one of to at once, so the house hears it together rather than room by
+// room down a list.
+func deliver(word string, to []Peer, m Message) {
+	m.From = config.Get().Device.Name
+	body, headers := encode(m)
 	var wg sync.WaitGroup
-	for _, p := range peers {
+	for _, p := range to {
 		wg.Add(1)
 		go func(p Peer) {
 			defer wg.Done()
 			if err := post(p, word, body, headers); err != nil {
-				slog.Warn("announcement not delivered", "to", p.Name, "err", err)
+				slog.Warn("not delivered", "to", p.Name, "kind", m.Kind, "err", err)
 			}
 		}(p)
 	}
 	wg.Wait()
-	f.show(m)
 }
 
 func post(p Peer, word string, body []byte, headers map[string]string) error {

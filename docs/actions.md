@@ -85,6 +85,63 @@ data:
   label: Wake up
 ```
 
+## Set a reminder
+
+In YAML, refer to this action as `esphome.<node>_reminder_set`.
+
+Sets a reminder: at its time the device chimes, says the label out loud once, and leaves it on the
+screen until somebody taps it or presses **Stop ringing**. It can go off on other devices in the
+house as well, and stopping it on any one of them stops it on all of them. Reminders sound during
+quiet hours, like alarms. Answers with the new reminder's `id` if called with a `response_variable`.
+
+> **Good to know**
+>
+> The device can't turn words into speech itself, so it asks Home Assistant to say the label, in the
+> voice your assistant already uses. That needs **Allow the device to perform Home Assistant
+> actions** turned on for each device (see [getting started](getting-started.md)). Without it, or
+> with Home Assistant down, a reminder still chimes and shows its label; it just isn't spoken.
+>
+> Going off on other devices uses the same device-to-device link as announcements, so every device
+> needs the same **house word** set on its setup page. A device that hasn't been updated yet shows
+> the reminder as an announcement instead.
+
+### time (Required)
+
+*string*
+
+A time of day, in the same formats as `alarm_set`'s `time`, or a time from now: `in 20 minutes`,
+`1 hour and 30 minutes`, `1h30m`. A time from now is rounded up to the next whole minute and
+happens once.
+
+### days (Optional)
+
+*string*
+
+Same as `alarm_set`'s `days`. Leave it out, or use `once`, for a time from now.
+
+### label (Required)
+
+*string*
+
+What to say, such as `Take the medication`. A reminder with nothing to say is refused.
+
+### ring_on (Optional)
+
+*string*
+
+Other devices it goes off on too, by the names they have in TECHO5, comma-separated
+(`Kitchen, Office`), or `everywhere` for every device in the house. Left blank, it goes off only on
+this device. It always goes off on this device as well.
+
+```yaml
+action: esphome.office_reminder_set
+data:
+  time: "in 20 minutes"
+  label: Take the pasta off
+  ring_on: Kitchen
+response_variable: set
+```
+
 ## Delete an alarm
 
 In YAML, refer to this action as `esphome.<node>_alarm_delete`.
@@ -115,7 +172,7 @@ data:
 
 In YAML, refer to this action as `esphome.<node>_alarm_delete_id`.
 
-Deletes exactly one device alarm, picked by the ID `alarms_list` gives it. Use this when two alarms
+Deletes exactly one device alarm or reminder, picked by the ID `alarms_list` gives it. Use this when two alarms
 share a time and you want only one of them gone. Fails if there is no alarm with that ID.
 
 ### id (Required)
@@ -157,6 +214,8 @@ alarms:
     label: Wake up
     "on": true
     next: "2026-09-24T06:45:00-05:00"
+    reminder: false      # true for one set with reminder_set
+    ring_on: []          # the other devices a reminder goes off on
 snoozed: []              # each {label, at}
 followed: []             # each {entity, label, armed, next}
 timers:

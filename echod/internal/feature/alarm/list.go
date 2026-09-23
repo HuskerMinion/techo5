@@ -30,6 +30,10 @@ type ListedAlarm struct {
 	Label string `json:"label"`
 	On    bool   `json:"on"`
 	Next  string `json:"next"` // RFC 3339, empty when it is off or will not ring again
+
+	// Reminder is one said once rather than rung, and RingOn the other devices it goes to.
+	Reminder bool     `json:"reminder"`
+	RingOn   []string `json:"ring_on"`
 }
 
 type ListedSnooze struct {
@@ -71,7 +75,7 @@ func listing(now time.Time, v View, timers []timer.Countdown) Listing {
 		}
 		l.Alarms = append(l.Alarms, ListedAlarm{
 			ID: al.ID, Time: fmt.Sprintf("%02d:%02d", al.Hour, al.Minute), Days: config.DaysLabel(al.Days),
-			Label: al.Label, On: al.On, Next: next,
+			Label: al.Label, On: al.On, Next: next, Reminder: al.Remind, RingOn: append([]string{}, al.RingOn...),
 		})
 	}
 	for _, s := range v.Snoozed {

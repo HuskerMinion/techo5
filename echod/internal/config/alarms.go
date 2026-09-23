@@ -47,7 +47,18 @@ type Alarm struct {
 	Days  uint8  `json:"days,omitempty"`
 	Label string `json:"label,omitempty"`
 	On    bool   `json:"on"`
+
+	// Remind makes it a reminder rather than an alarm: its label is said once and left on the screen,
+	// instead of a ring that goes on until somebody stops it.
+	Remind bool `json:"remind,omitempty"`
+
+	// RingOn is the other devices a reminder goes to, by name, or RingEverywhere for all of them. It
+	// always goes off here as well.
+	RingOn []string `json:"ring_on,omitempty"`
 }
+
+// RingEverywhere in RingOn sends a reminder to every device in the house.
+const RingEverywhere = "everywhere"
 
 // Snooze is one alarm put off until At. Key is the alarm it came from, so a snooze that fires can be
 // told apart from the alarm's own next time.
@@ -130,6 +141,7 @@ type AlarmsWriter struct{ st *Store }
 
 // Put adds an alarm, or replaces the one with its ID.
 func (w AlarmsWriter) Put(a Alarm) error {
+	a.RingOn = slices.Clone(a.RingOn)
 	return w.st.Update(func(c *Config) {
 		if i := slices.IndexFunc(c.Alarms.List, func(x Alarm) bool { return x.ID == a.ID }); i >= 0 {
 			c.Alarms.List[i] = a

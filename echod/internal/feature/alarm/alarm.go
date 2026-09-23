@@ -22,6 +22,7 @@ import (
 	"github.com/HuskerMinion/techo5/echod/internal/component"
 	"github.com/HuskerMinion/techo5/echod/internal/config"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/hastate"
+	"github.com/HuskerMinion/techo5/echod/internal/feature/remind"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/ring"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/timer"
 	"github.com/HuskerMinion/techo5/echod/internal/hardware/led"
@@ -299,7 +300,8 @@ func (a *Alarms) sources(now time.Time) []source {
 	var out []source
 	for _, al := range c.List {
 		if al.On {
-			out = append(out, source{key: al.ID, label: al.Label, hour: al.Hour, min: al.Minute, days: al.Days, local: true})
+			out = append(out, source{key: al.ID, label: al.Label, hour: al.Hour, min: al.Minute, days: al.Days, local: true,
+				remind: al.Remind, ringOn: al.RingOn})
 		}
 	}
 	for _, f := range a.followed(now) {
@@ -329,6 +331,11 @@ func (a *Alarms) fire(s source, now time.Time) {
 				slog.Warn("turning off a one-off alarm failed", "err", err)
 			}
 		}
+	}
+	// A reminder is said, not rung: nothing here holds it open, and it cannot be snoozed.
+	if s.remind {
+		remind.Get().Fire(s.label, s.ringOn)
+		return
 	}
 	a.mu.Lock()
 	before := len(a.snoozed)
@@ -525,13 +532,62 @@ func (a *Alarms) Set(hour, minute int, days uint8, label string) (config.Alarm, 
 		return config.Alarm{}, fmt.Errorf("alarms: %d:%02d is not a time of day", hour, minute)
 	}
 	for _, al := range config.Get().Alarms.List {
-		if al.Hour == hour && al.Minute == minute && al.Days == days && al.Label == label {
+		if !al.Remind && al.Hour == hour && al.Minute == minute && al.Days == days && al.Label == label {
 			al.On = true
 			return al, a.Put(al)
 		}
 	}
 	al := config.Alarm{ID: strconv.FormatInt(time.Now().UnixNano(), 36), Hour: hour, Minute: minute, Days: days, Label: label, On: true}
 	return al, a.Put(al)
+}
+
+// SetReminder adds a reminder, said once at that time on those days, here and on ringOn; or turns on
+// the one already set for that time, those days and those words, with ringOn now.
+func (a *Alarms) SetReminder(hour, minute int, days uint8, label string, ringOn []string) (config.Alarm, error) {
+	label = strings.TrimSpace(label)
+	if label == "" {
+		return config.Alarm{}, fmt.Errorf("reminders: a reminder needs something to say")
+	}
+	if hour < 0 || hour > 23 || minute < 0 || minute > 59 {
+		return config.Alarm{}, fmt.Errorf("reminders: %d:%02d is not a time of day", hour, minute)
+	}
+	for _, al := range config.Get().Alarms.List {
+		if al.Remind && al.Hour == hour && al.Minute == minute && al.Days == days && al.Label == label {
+			al.On, al.RingOn = true, ringOn
+			return al, a.Put(al)
+		}
+	}
+	al := config.Alarm{ID: strconv.FormatInt(time.Now().UnixNano(), 36), Hour: hour, Minute: minute, Days: days,
+		Label: label, On: true, Remind: true, RingOn: ringOn}
+	return al, a.Put(al)
+}
+
+// reminderTime reads when a reminder goes off: a time of day, or a time from now ("in 20 minutes"),
+// which is rounded up to the next whole minute, since a reminder is kept as a time of day.
+func reminderTime(s string, now time.Time) (hour, minute int, fromNow bool, err error) {
+	if hour, minute, err = parseClock(s); err == nil {
+		return hour, minute, false, nil
+	}
+	d, derr := timer.ParseDuration(s)
+	if derr != nil {
+		return 0, 0, false, fmt.Errorf("reminders: %q is neither a time of day nor a time from now", s)
+	}
+	at := now.Add(d)
+	if at.Truncate(time.Minute) != at {
+		at = at.Truncate(time.Minute).Add(time.Minute)
+	}
+	return at.Hour(), at.Minute(), true, nil
+}
+
+// devices reads a list of device names, comma-separated.
+func devices(s string) []string {
+	var out []string
+	for _, n := range strings.Split(s, ",") {
+		if n = strings.TrimSpace(n); n != "" {
+			out = append(out, n)
+		}
+	}
+	return out
 }
 
 // Put saves an alarm on the device as given.
@@ -557,6 +613,34 @@ func (a *Alarms) Delete(id string) error {
 // Actions are for Home Assistant: voice sentences and automations set alarms with them.
 func (a *Alarms) Actions() []*esphome.Action {
 	return []*esphome.Action{
+		{
+			Name: "reminder_set",
+			Args: []esphome.Arg{
+				{Name: "time", Type: esphome.ArgString}, {Name: "days", Type: esphome.ArgString},
+				{Name: "label", Type: esphome.ArgString}, {Name: "ring_on", Type: esphome.ArgString},
+			},
+			Answers: true,
+			Run: func(c esphome.Call) (any, error) {
+				hour, minute, fromNow, err := reminderTime(c.String("time"), time.Now())
+				if err != nil {
+					return nil, err
+				}
+				days, err := config.ParseDays(c.String("days"))
+				if err != nil {
+					return nil, err
+				}
+				if fromNow && days != config.DaysOnce {
+					return nil, fmt.Errorf("reminders: a time from now happens once; give a time of day to repeat it")
+				}
+				al, err := a.SetReminder(hour, minute, days, c.String("label"), devices(c.String("ring_on")))
+				if err != nil {
+					return nil, err
+				}
+				slog.Info("reminder set from home assistant", "time", fmt.Sprintf("%d:%02d", al.Hour, al.Minute),
+					"days", config.DaysLabel(al.Days), "label", al.Label, "ring_on", al.RingOn)
+				return map[string]string{"id": al.ID}, nil
+			},
+		},
 		{
 			Name: "alarm_set",
 			Args: []esphome.Arg{{Name: "time", Type: esphome.ArgString}, {Name: "days", Type: esphome.ArgString}, {Name: "label", Type: esphome.ArgString}},

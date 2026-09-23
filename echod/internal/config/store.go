@@ -106,6 +106,9 @@ func (st *Store) Get() Config {
 	c := st.c
 	c.Wake.Words = slices.Clone(st.c.Wake.Words)
 	c.Alarms.List = slices.Clone(st.c.Alarms.List)
+	for i := range c.Alarms.List {
+		c.Alarms.List[i].RingOn = slices.Clone(c.Alarms.List[i].RingOn)
+	}
 	c.Alarms.Follow = slices.Clone(st.c.Alarms.Follow)
 	c.Alarms.Snoozed = slices.Clone(st.c.Alarms.Snoozed)
 	c.Timers.Local = slices.Clone(st.c.Timers.Local)
