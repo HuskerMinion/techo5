@@ -33,9 +33,6 @@ const (
 
 	// radarStep is how long each frame of the rain map's loop shows; the newest holds for three.
 	radarStep = 600 * time.Millisecond
-
-	// radioTitleBelow is where the station list's name ends: a tap above it changes list.
-	radioTitleBelow = 175
 )
 
 var (
@@ -209,25 +206,6 @@ func (r *roundRenderer) nowPlayingFace(s roundScene) {
 	} else {
 		r.line(centre-7, by-11, centre-7, by+11, 6, colText)
 		r.line(centre+7, by-11, centre+7, by+11, 6, colText)
-	}
-}
-
-// shadeCircle darkens the inside of the rim, so text reads over a picture.
-func (r *roundRenderer) shadeCircle(alpha uint8) {
-	rr := float64(rimIn) * float64(rimIn)
-	k := 255 - uint32(alpha)
-	for y := 0; y < side; y++ {
-		dy := float64(y) + 0.5 - centre
-		for x := 0; x < side; x++ {
-			dx := float64(x) + 0.5 - centre
-			if dx*dx+dy*dy > rr {
-				continue
-			}
-			j := (y*side + x) * 4
-			for c := 0; c < 3; c++ {
-				r.dst.Pix[j+c] = uint8(uint32(r.dst.Pix[j+c]) * k / 255)
-			}
-		}
 	}
 }
 

@@ -134,65 +134,6 @@ func pickCamera(sel int) {
 	home.Get().ShowCamera(cams[sel].Entity, cameraStep)
 }
 
-// cameraList is every camera by name, all at once: a tap on one shows it, and the one showing is
-// green. No turning, so what is chosen is never under the finger.
-func (r *roundRenderer) cameraList(s roundScene) {
-	names := make([]string, len(s.cameras))
-	current := -1
-	for i, c := range s.cameras {
-		names[i] = c.Name
-		if c.Entity == s.camera.Entity {
-			current = i
-		}
-	}
-	r.pickList("CAMERAS", names, current, colCameraOn, "No cameras")
-}
-
-// listTop and listRow place n rows of a pick list in the circle: as tall as fits, centred.
-func listGeometry(n int) (top, row int) {
-	row = 40
-	if n > 8 {
-		row = 300 / n
-	}
-	top = centre - n*row/2 + 18
-	return top, row
-}
-
-// listRowAt is which row of n a tap at y is on, or -1.
-func listRowAt(y, n int) int {
-	top, row := listGeometry(n)
-	i := (y - (top - row/2 - 8)) / row
-	if y < top-row/2-8 || i < 0 || i >= n {
-		return -1
-	}
-	return i
-}
-
-// pickList draws a title and rows to tap.
-func (r *roundRenderer) pickList(title string, names []string, current int, col color.RGBA, empty string) {
-	r.clear()
-	top, row := listGeometry(len(names))
-	r.centred(r.label, title, top-row/2-18, col)
-	if len(names) == 0 {
-		r.paragraph(r.body, empty, 240, colDim, 3)
-		return
-	}
-	face := r.body
-	if row < 34 {
-		face = r.small
-	}
-	for i, n := range names {
-		y := top + i*row
-		c := colText
-		if i == current {
-			c = col
-			w := r.width(face, n)
-			r.line(float64(centre-w/2-16), float64(y-8), float64(centre+w/2+16), float64(y-8), float64(row-6), color.RGBA{30, 36, 44, 255})
-		}
-		r.centred(face, clip(face, r, n, 330), y, c)
-	}
-}
-
 // discImage draws img inside a circle of radius rad at (cx, cy), scaled to cover it.
 func (r *roundRenderer) discImage(img *image.RGBA, cx, cy, rad float64) {
 	sw, sh := img.Bounds().Dx(), img.Bounds().Dy()

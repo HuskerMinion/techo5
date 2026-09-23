@@ -6,8 +6,6 @@ import (
 	"fmt"
 	"image"
 	"image/draw"
-
-	"github.com/HuskerMinion/techo5/echod/internal/feature/btaudio"
 )
 
 // The pairing page: a title, a line saying what to do, the devices the scan has found as rows a
@@ -81,12 +79,4 @@ func (r *renderer) pairingPage(s scene) {
 	draw.Draw(r.dst, image.Rect(0, top, r.w, r.h), image.NewUniform(ember), image.Point{}, draw.Src)
 	label := "Done"
 	r.text(r.body, label, (r.w-r.width(r.body, label))/2, top+45, cream)
-}
-
-// btFooter is what the footer says for a connected device.
-func btFooter(s btaudio.State) string {
-	if s.Connected == "" {
-		return ""
-	}
-	return "BT " + s.Connected
 }

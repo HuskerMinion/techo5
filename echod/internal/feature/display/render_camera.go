@@ -13,11 +13,6 @@ import (
 // The camera view: the latest frame centered on the panel, the camera's name and the time in the
 // corners, and a hint that a tap closes it. Below it, the cameras page: a list, like the radio's.
 const (
-	camRowTop    = 92
-	camRowHeight = 44
-	camRows      = 7
-	camDoneBar   = 64
-
 	// camListShow is how long a camera picked from the list stays up; cameraVoiceShow one asked
 	// for by voice.
 	camListShow     = 60 * time.Second

@@ -79,21 +79,6 @@ func (r *renderer) weatherPage(s scene) {
 	r.weatherToggle("Radar")
 }
 
-// shortCondition is a word that fits a column.
-func shortCondition(c string) string {
-	switch c {
-	case "partlycloudy":
-		return "Part cloudy"
-	case "lightning-rainy", "lightning":
-		return "Storms"
-	case "clear-night":
-		return "Clear"
-	case "pouring":
-		return "Heavy rain"
-	}
-	return conditionWords(c)
-}
-
 // forecastDays is a type alias for the scene.
 type forecastDays = []hass.Day
 

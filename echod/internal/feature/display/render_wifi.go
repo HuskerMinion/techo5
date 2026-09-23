@@ -67,7 +67,6 @@ type wifiHit struct {
 	row    int // a network row, or -1
 	rescan bool
 	done   bool
-	more   bool
 }
 
 func (r *renderer) wifiListHit(x, y int) wifiHit {

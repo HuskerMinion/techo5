@@ -58,10 +58,9 @@ var (
 
 // splash is the mark, scaled once, and where its arcs are centered on the canvas.
 type splash struct {
-	img      *image.RGBA
-	at       image.Point // top-left on the canvas
-	cx, cy   float64     // arc center on the canvas
-	loadedAt time.Time
+	img    *image.RGBA
+	at     image.Point // top-left on the canvas
+	cx, cy float64     // arc center on the canvas
 }
 
 func newSplash(w, h int) *splash {
