@@ -395,6 +395,12 @@ func (a *Alarms) fire(s source, now time.Time) {
 		if spent {
 			saveSnoozes(saved)
 		}
+		// Folded into the ring already sounding, which may be one somebody silenced: this alarm is a
+		// new reason to ring and is owed a chime of its own, and its words if it has any.
+		ring.Again()
+		if s.label != "" {
+			safe.Go("alarm label", func() { sayOverRing(s.label) })
+		}
 		return
 	}
 	a.ringing = &Ring{Key: strings.TrimPrefix(s.key, "snooze:"), Label: s.label, At: now}
