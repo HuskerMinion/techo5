@@ -69,7 +69,18 @@ func TestShowScenesDraw(t *testing.T) {
 		"ringing-alarm": {now: at, phase: "idle",
 			ring: ringState{alarm: &alarm.Ring{Label: "Wake up"}, snoozable: true}, snooze: 9},
 		"ringing-timer": {now: at, phase: "idle", ring: ringState{timer: "Pasta"}},
-		"call-ringing":  {now: at, phase: "idle", call: phone.State{Phase: phone.Ringing, Peer: "104"}},
+		// Muted, on the pages the header has to carry it onto. The ringing one is why the header
+		// exists: an alarm sounding on a device that cannot hear "stop" used to look exactly like one
+		// that could.
+		"muted-clock": {now: at, phase: "idle", weather: sky, muted: true},
+		"muted-ringing-alarm": {now: at, phase: "idle", muted: true,
+			ring: ringState{alarm: &alarm.Ring{Label: "Wake up"}, snoozable: true}, snooze: 9},
+		"muted-call": {now: at, phase: "idle", muted: true,
+			call: phone.State{Phase: phone.Talking, Peer: "104", Since: at.Add(-90 * time.Second)}},
+		// Muted while a browser is asking to be let in. The footer used to show one of these instead
+		// of the other; now they are on different edges and neither hides the other.
+		"muted-setup-ask": {now: at, phase: "idle", weather: sky, muted: true, setupAsking: true},
+		"call-ringing":    {now: at, phase: "idle", call: phone.State{Phase: phone.Ringing, Peer: "104"}},
 		"call-talking":  {now: at, phase: "idle", call: phone.State{Phase: phone.Talking, Peer: "104", Since: at.Add(-90 * time.Second)}},
 		"settings-sound": {now: at, phase: "idle", showSheet: true,
 			sheet: settings{cat: catSound, volume: 15, wakeWord: "Okay Nabu"}},

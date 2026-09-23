@@ -242,6 +242,10 @@ func newRenderer(dst *image.RGBA) *renderer {
 func (r *renderer) draw(s scene) {
 	draw.Draw(r.dst, r.dst.Rect, image.NewUniform(walnut), image.Point{}, draw.Src)
 
+	// Registered first so it runs last: the header goes over every page, including the ones below
+	// that return early.
+	defer r.header(s)
+
 	if s.call.Phase != phone.Idle {
 		r.callPage(s)
 		return
@@ -522,14 +526,59 @@ func (r *renderer) words(heard, reply string, top int) {
 	}
 }
 
-// footer is the bottom edge: what is playing, and whether the microphones are cut.
+// headerH is the strip at the very top of the panel that the header keeps itself inside.
+//
+// Most pages begin their own content at the margin — the weather corner, the corner clock, the
+// ringing page's title all start there — so the header sits above them and no page has to make room
+// for it. Two pages do draw this high: the weather page's art and the settings sheet's card. The
+// weather page is drawn over, which is what the pill is for; the sheet is left alone entirely.
+const headerH = 36
+
+// header is the top edge: what is true of the device whatever page is showing.
+//
+// It is drawn last and over everything, including a call and a ringing alarm. Those are not
+// exceptions to tell somebody about a cut microphone — they are the moments it matters most, since a
+// ringing alarm that cannot hear "stop" looks exactly like one that can.
+//
+// The strip is filled before the words are drawn, so the line stays readable over a photo, a camera
+// view or a sunrise. On an ordinary page that fill is the background and nothing shows but the words.
+func (r *renderer) header(s scene) {
+	// The settings sheet is the one page that says this better itself: it has a Microphone row,
+	// reading "Muted" or "Listening", with the switch that changes it. A strip over the top of the
+	// sheet would say the same thing worse and cut the top off its card.
+	if s.showSheet {
+		return
+	}
+
+	// The microphone is the only thing here so far. It is a switch so the next one has somewhere
+	// obvious to go, and so two of them can never overprint each other.
+	var line string
+	switch {
+	case s.muted:
+		line = "microphone off"
+	default:
+		return
+	}
+
+	// A pill behind the words rather than a band across the panel. The weather page and the sunrise
+	// draw art that reaches the top edge, and a full-width fill cuts a slot through it; a pill only
+	// takes the space the words need, and on a plain page it is the background and does not show.
+	w := r.width(r.tiny, line)
+	pad := r.s(14)
+	x := (r.w - w) / 2
+	r.roundButton(image.Rect(x-pad, r.s(4), x+w+pad, r.s(32)), float64(r.s(14)), walnut)
+	r.text(r.tiny, line, x, r.s(25), amber)
+}
+
+// footer is the bottom edge: what is playing, and what the page underneath is having trouble with.
+//
+// The microphone used to be here. It moved to the header, because the footer is drawn by two of the
+// pages and the microphone is true on all of them.
 func (r *renderer) footer(s scene) {
 	y := r.h - 24
 	switch {
 	case s.setupAsking:
 		r.text(r.tiny, "setup: a browser is asking to be let in", r.margin, y, amber)
-	case s.muted:
-		r.text(r.tiny, "microphone off", r.margin, y, amber)
 	case s.slideshowTrouble != "":
 		r.text(r.tiny, s.slideshowTrouble, r.margin, y, dim)
 	}
