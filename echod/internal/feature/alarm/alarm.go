@@ -22,6 +22,7 @@ import (
 	"github.com/HuskerMinion/techo5/echod/internal/component"
 	"github.com/HuskerMinion/techo5/echod/internal/config"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/hastate"
+	"github.com/HuskerMinion/techo5/echod/internal/feature/ring"
 	"github.com/HuskerMinion/techo5/echod/internal/hardware/led"
 	"github.com/HuskerMinion/techo5/echod/internal/hardware/speaker"
 	"github.com/HuskerMinion/techo5/echod/internal/lib/hook"
@@ -320,10 +321,17 @@ func (a *Alarms) ring(ctx context.Context) {
 	sound.Backgrounds().Duck(true)
 	defer sound.Backgrounds().Duck(false)
 
+	defer ring.Sounding()()
+
 	over := time.After(ringFor)
 	notes := speaker.AlarmSound(a.Sound())
 	for {
-		sound.Interject(func(p *speaker.Player) { p.Chime(level, notes...) })
+		// A near miss on the stop word hushes the chime for a moment. The alarm ducks the radio so it
+		// can be heard; this is the one thing that ducks the alarm, so the word that stops it can be
+		// heard too. The LED goes on pulsing through the gap, so the alarm stays obviously alive.
+		if !ring.Hushed() {
+			sound.Interject(func(p *speaker.Player) { p.Chime(level, notes...) })
+		}
 		select {
 		case <-ctx.Done():
 			return

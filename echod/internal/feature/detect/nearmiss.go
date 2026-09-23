@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/HuskerMinion/techo5/echod/internal/config"
+	"github.com/HuskerMinion/techo5/echod/internal/feature/ring"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/voice"
 	"github.com/HuskerMinion/techo5/echod/internal/hardware/speaker"
 	"github.com/HuskerMinion/techo5/echod/internal/lib/safe"
@@ -30,6 +31,12 @@ const (
 	// nearMissQuiet is how long after a duck before another near miss may start one, so a room that
 	// keeps nearly triggering does not hold the music down for ever.
 	nearMissQuiet = 6 * time.Second
+
+	// ringHushQuiet is the same idea for a ring, and it matters more: music held down is an
+	// annoyance, where an alarm held down is the failure this whole plan exists to prevent. Three
+	// times the hush, so at most a third of a ringing alarm can be quiet however hard a noisy room
+	// tries.
+	ringHushQuiet = 3 * ring.HushFor
 )
 
 // ducker holds a playing track down for a while after a near miss.
@@ -43,15 +50,21 @@ type ducker struct {
 	until time.Time
 	again time.Time
 
+	// ringAgain is the earliest a new ring hush may start. The hush's own end is kept by the ring,
+	// which expires it by itself, so there is no deadline to track here — only a floor on how often.
+	ringAgain time.Time
+
 	// stop ends the current duck early enough to be extended, kept so a second near miss inside a duck
 	// pushes the end out rather than leaving two timers racing to undo it.
 	stop interface{ Reset(time.Duration) bool }
 
-	// enabled, playing, busy and duck are the world; now and after are the clock.
+	// enabled, playing, busy, duck, ringing and hush are the world; now and after are the clock.
 	enabled func() bool
 	playing func() bool
 	busy    func() bool
 	duck    func(bool)
+	ringing func() bool
+	hush    func()
 	now     func() time.Time
 	after   func(time.Duration, func()) interface{ Reset(time.Duration) bool }
 }
@@ -64,6 +77,8 @@ func newDucker() *ducker {
 		playing: func() bool { return speaker.Sound().Backgrounds().Playing() != nil },
 		busy:    func() bool { return voice.Get().Busy() },
 		duck:    func(on bool) { speaker.Sound().Backgrounds().Duck(on) },
+		ringing: ring.IsSounding,
+		hush:    ring.Hush,
 		now:     time.Now,
 		after: func(d time.Duration, f func()) interface{ Reset(time.Duration) bool } {
 			return time.AfterFunc(d, f)
@@ -73,6 +88,13 @@ func newDucker() *ducker {
 
 // heard is called on every near miss.
 func (d *ducker) heard(slot int, peak float64) {
+	// A ring is handled first and on its own terms. It is the stop word only, because that is the
+	// word somebody says at a ringing alarm, and it is not gated on the media setting: that setting
+	// is about music getting out of the way, where this is about an alarm being stoppable at all.
+	if slot == StopSlot && d.ringing() {
+		d.hushRing(peak)
+	}
+
 	if !d.enabled() || !d.playing() {
 		return
 	}
@@ -102,6 +124,24 @@ func (d *ducker) heard(slot int, peak float64) {
 	slog.Info("near miss over playback, ducking so the next try is heard",
 		"slot", slot+1, "peak", peak, "for", nearMissDuck)
 	d.duck(true)
+}
+
+// hushRing holds the chime back so the next try at the stop word lands in a gap, no more often than
+// ringHushQuiet.
+func (d *ducker) hushRing(peak float64) {
+	now := d.now()
+
+	d.mu.Lock()
+	if now.Before(d.ringAgain) {
+		d.mu.Unlock()
+		return
+	}
+	d.ringAgain = now.Add(ringHushQuiet)
+	d.mu.Unlock()
+
+	slog.Info("near miss on the stop word over a ring, hushing the chime so the next try is heard",
+		"peak", peak, "for", ring.HushFor)
+	d.hush()
 }
 
 // restore puts the level back, unless a turn is holding it down: a near miss that becomes a real

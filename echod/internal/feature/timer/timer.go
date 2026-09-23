@@ -22,6 +22,7 @@ import (
 	"github.com/ygelfand/go-esphome-device/api"
 
 	"github.com/HuskerMinion/techo5/echod/internal/component"
+	"github.com/HuskerMinion/techo5/echod/internal/feature/ring"
 	"github.com/HuskerMinion/techo5/echod/internal/hardware/led"
 	"github.com/HuskerMinion/techo5/echod/internal/hardware/speaker"
 	"github.com/HuskerMinion/techo5/echod/internal/lib/hook"
@@ -408,9 +409,15 @@ func (t *Timers) ring(ctx context.Context) {
 	sound.Backgrounds().Duck(true)
 	defer sound.Backgrounds().Duck(false)
 
+	defer ring.Sounding()()
+
 	over := time.After(ringFor)
 	for {
-		sound.Interject(func(p *speaker.Player) { p.Chime(alarmLevel, speaker.ToneTimer...) })
+		// A near miss on the stop word hushes the chime for a moment, so the word that stops it is
+		// said into a gap rather than over the tone. The LED goes on pulsing through it.
+		if !ring.Hushed() {
+			sound.Interject(func(p *speaker.Player) { p.Chime(alarmLevel, speaker.ToneTimer...) })
+		}
 
 		select {
 		case <-ctx.Done():

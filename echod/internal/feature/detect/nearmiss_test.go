@@ -24,6 +24,8 @@ type deck struct {
 	playing bool
 	busy    bool
 	on      bool
+	ringing bool
+	hushes  int
 }
 
 func newDeck() *deck {
@@ -33,6 +35,8 @@ func newDeck() *deck {
 		playing: func() bool { return k.playing },
 		busy:    func() bool { return k.busy },
 		duck:    func(on bool) { k.ducked = append(k.ducked, on) },
+		ringing: func() bool { return k.ringing },
+		hush:    func() { k.hushes++ },
 		now:     func() time.Time { return k.clock },
 		after: func(_ time.Duration, f func()) interface{ Reset(time.Duration) bool } {
 			k.timer = &fakeTimer{fire: f}
