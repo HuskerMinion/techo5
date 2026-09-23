@@ -1,19 +1,16 @@
 Speech at controlled noise levels, with the reference implementation's output beside it.
 
-    in_SNR5_sp01.wav   sp01 mixed with noise at 5 dB SNR
-    out_SNR5_sp01.wav  what mmse_log_spu.py makes of it
-    in_SNR15_sp01.wav  the same at 15 dB
-    out_SNR15_sp01.wav
+    in_SNR5.wav    speech mixed with noise at 5 dB SNR
+    out_SNR5.wav   what mmse_log_spu.py makes of it
+    in_SNR15.wav   the same at 15 dB
+    out_SNR15.wav
 
-The four files came from github.com/vipchengrui/traditional-speech-enhancement, whose code is MIT
-and which follows Loizou, Speech Enhancement: Theory and Practice. Mono, 16-bit, 8 kHz.
+All of it is made here, by gen.py, and is this project's own. The speech is espeak-ng reading a few
+requests; the noise is pink noise and a low hum from a fixed seed. The out_ files are the reference
+implementation, mmse_log_spu.py from github.com/vipchengrui/traditional-speech-enhancement (MIT, which
+follows Loizou, Speech Enhancement: Theory and Practice), fetched at a pinned commit and run as it is.
+Mono, 16-bit, 8 kHz.
 
-Licensing, plainly: the MIT license on that repository covers its code. It says nothing about these
-audio files, and the files carry no metadata. The name sp01 at 5 and 15 dB SNR, 8 kHz mono, is the
-naming of NOIZEUS (Philipos C. Loizou, UT Dallas, https://ecs.utdallas.edu/loizou/speech/noizeus/),
-a corpus published for research with a request to cite Hu and Loizou (2007) and no redistribution
-terms stated anywhere we can find. So we cannot say these are ours to redistribute.
-
-They are here only because the denoiser has to be checked against the reference implementation on
-the same input. If that is not good enough, the fix is to generate our own: any speech recording we
-own, mixed with noise at those two SNRs, run through mmse_log_spu.py to make the out_ files.
+The denoiser has to be checked against that reference on the same input, which is why its output is
+kept beside each input. python3 gen.py (Linux or WSL, with espeak-ng, numpy and scipy) makes all four
+again.

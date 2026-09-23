@@ -47,7 +47,7 @@ func TestStreamPassesSilence(t *testing.T) {
 // speech, since that is what the estimator distinguishes: a steady tone is noise by its definition,
 // and correctly removed.
 func TestStreamAgreesWithTheBlockPath(t *testing.T) {
-	noisy, rate := wav(t, "in_SNR5_sp01.wav")
+	noisy, rate := wav(t, "in_SNR5.wav")
 	want := process(New(rate), noisy)
 
 	s := NewStream(rate)

@@ -100,8 +100,8 @@ func rmsDB(x []int16) float64 {
 // the test that says the algorithm was transcribed rather than approximated.
 func TestMatchesTheReference(t *testing.T) {
 	for _, snr := range []string{"5", "15"} {
-		noisy, rate := wav(t, "in_SNR"+snr+"_sp01.wav")
-		want, _ := wav(t, "out_SNR"+snr+"_sp01.wav")
+		noisy, rate := wav(t, "in_SNR"+snr+".wav")
+		want, _ := wav(t, "out_SNR"+snr+".wav")
 
 		got := process(New(rate), noisy)
 		if len(got) != len(want) {
@@ -135,7 +135,7 @@ func TestMatchesTheReference(t *testing.T) {
 
 func TestNoiseIsReduced(t *testing.T) {
 	for _, snr := range []string{"5", "15"} {
-		noisy, rate := wav(t, "in_SNR"+snr+"_sp01.wav")
+		noisy, rate := wav(t, "in_SNR"+snr+".wav")
 		got := process(New(rate), noisy)
 
 		before, after := rmsDB(noisy), rmsDB(got)
@@ -147,7 +147,7 @@ func TestNoiseIsReduced(t *testing.T) {
 }
 
 func TestForgetClearsTheEstimate(t *testing.T) {
-	noisy, rate := wav(t, "in_SNR5_sp01.wav")
+	noisy, rate := wav(t, "in_SNR5.wav")
 	f := New(rate)
 	process(f, noisy)
 
