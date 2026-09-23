@@ -107,6 +107,8 @@ func (st *Store) Get() Config {
 	c.Wake.Words = slices.Clone(st.c.Wake.Words)
 	c.Alarms.List = slices.Clone(st.c.Alarms.List)
 	c.Alarms.Follow = slices.Clone(st.c.Alarms.Follow)
+	c.Alarms.Snoozed = slices.Clone(st.c.Alarms.Snoozed)
+	c.Timers.Local = slices.Clone(st.c.Timers.Local)
 	return c
 }
 

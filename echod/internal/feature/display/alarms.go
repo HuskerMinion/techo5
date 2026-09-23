@@ -78,6 +78,11 @@ func (d *Display) ringTap(x, y int, st ringState) {
 	ring.End()
 }
 
+// stopRing ends whatever is sounding, and reports whether there was anything. It lives here so that
+// display.go can stop a ring without importing this package's ring, which would be shadowed by the
+// local ringState the frame loop calls the same thing.
+func (d *Display) stopRing() bool { return ring.End() }
+
 // ringSnoozeAt reports whether a finger means Snooze rather than Stop: only inside the buttons, and
 // only on the Snooze one, and only when there is something that can be snoozed.
 //

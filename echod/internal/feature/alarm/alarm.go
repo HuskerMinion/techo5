@@ -168,6 +168,30 @@ func (a *Alarms) Restore(c config.Config) {
 	a.sound.Set(soundName(c.Alarms.Sound))
 	a.snoozeFor.Set(float32(c.Alarms.Snooze()))
 	a.followHelpers(c.Alarms.Follow)
+
+	// The snoozes come back as they were. One whose moment has already passed is not rung — the
+	// scheduler's first window is a few microseconds wide, so nothing restored can be due in it, and
+	// that is deliberate: a device that screams every time it boots would be worse than one that
+	// misses a snooze. It is said out loud rather than dropped in silence, which is what used to
+	// happen to every snooze a restart met.
+	now := time.Now()
+	var live []source
+	for _, s := range c.Alarms.Snoozed {
+		if !s.At.After(now) {
+			slog.Info("a snooze was missed while the device was off",
+				"alarm", s.Label, "was due", s.At.Format(time.RFC3339))
+			continue
+		}
+		live = append(live, source{key: s.Key, label: s.Label, once: s.At})
+	}
+
+	a.mu.Lock()
+	a.snoozed = live
+	a.mu.Unlock()
+
+	if len(live) != len(c.Alarms.Snoozed) {
+		saveSnoozes(snoozeList(live))
+	}
 }
 
 // soundName is the alarm sound in force: the saved one, or the default for none or an unknown one.
@@ -228,6 +252,13 @@ func (a *Alarms) Run(ctx context.Context) error {
 			for _, s := range due(a.sources(now), last, now) {
 				a.fire(s, now)
 			}
+			// After firing, because a snooze due in this very window has just rung and pruned
+			// itself. What is left with its moment behind it is one the stale window refused, or
+			// one the clock jumped over: it will never ring, since next() reports nothing for a
+			// one-off already past, and nothing else ever removed it. It used to sit there for
+			// good, with the settings sheet drawing "Snoozed until" and a time in the past — an
+			// alarm promised to somebody that was never coming.
+			a.pruneSnoozes(now)
 		}
 		last = now
 
@@ -300,15 +331,26 @@ func (a *Alarms) fire(s source, now time.Time) {
 		}
 	}
 	a.mu.Lock()
+	before := len(a.snoozed)
 	a.snoozed = slices.DeleteFunc(a.snoozed, func(x source) bool { return x.key == s.key })
+	// A snooze that rings is spent, so the saved copy must go with it or a restart would bring it
+	// back. Taken under the lock and written outside it: saving marshals and fsyncs the whole file.
+	spent, saved := len(a.snoozed) != before, snoozeList(a.snoozed)
 	if a.ringing != nil {
 		a.mu.Unlock()
+		if spent {
+			saveSnoozes(saved)
+		}
 		return
 	}
 	a.ringing = &Ring{Key: strings.TrimPrefix(s.key, "snooze:"), Label: s.label, At: now}
 	ctx, cancel := context.WithCancel(context.Background())
 	a.silence = cancel
 	a.mu.Unlock()
+
+	if spent {
+		saveSnoozes(saved)
+	}
 
 	a.Changed.Emit(struct{}{})
 	safe.Go("alarm", func() { a.ring(ctx) })
@@ -378,6 +420,46 @@ func (a *Alarms) Stop() bool {
 	return true
 }
 
+// pruneSnoozes drops the snoozes whose moment has gone by without them ringing, and says so.
+//
+// The trace is the point. A snooze lost this way used to leave nothing at all: not a log line, not a
+// removal, not a change on the screen.
+func (a *Alarms) pruneSnoozes(now time.Time) {
+	a.mu.Lock()
+	live, missed := splitSnoozes(a.snoozed, now)
+	a.snoozed = live
+	saved := snoozeList(live)
+	a.mu.Unlock()
+
+	if len(missed) == 0 {
+		return
+	}
+	for _, s := range missed {
+		slog.Info("a snooze passed without ringing",
+			"alarm", s.label, "was due", s.once.Format(time.RFC3339), "late by", now.Sub(s.once).Round(time.Second))
+	}
+	saveSnoozes(saved)
+	a.Changed.Emit(struct{}{})
+}
+
+// snoozeList is the snoozes as they are saved. Call it with the lock held.
+func snoozeList(snoozed []source) []config.Snooze {
+	out := make([]config.Snooze, 0, len(snoozed))
+	for _, s := range snoozed {
+		out = append(out, config.Snooze{Key: s.key, Label: s.label, At: s.once})
+	}
+	return out
+}
+
+// saveSnoozes writes the snoozes down so a restart between pressing Snooze and the alarm coming back
+// does not lose it. Called when one is made, rings or is dropped, and never on a tick: every set
+// marshals the whole config and fsyncs it.
+func saveSnoozes(list []config.Snooze) {
+	if err := config.Set().Alarms().Snoozed(list); err != nil {
+		slog.Warn("saving the snoozes failed", "err", err)
+	}
+}
+
 // CancelSnoozes drops every snoozed alarm, and reports whether there was one.
 func (a *Alarms) CancelSnoozes() bool {
 	a.mu.Lock()
@@ -387,6 +469,7 @@ func (a *Alarms) CancelSnoozes() bool {
 	if n == 0 {
 		return false
 	}
+	saveSnoozes(nil)
 	slog.Info("snoozes cancelled", "count", n)
 	a.poke()
 	a.Changed.Emit(struct{}{})
@@ -404,8 +487,10 @@ func (a *Alarms) Snooze() bool {
 	minutes := config.Get().Alarms.Snooze()
 	at := time.Now().Add(time.Duration(minutes) * time.Minute).Truncate(time.Second)
 	a.snoozed = append(a.snoozed, source{key: "snooze:" + r.Key, label: r.Label, once: at})
+	saved := snoozeList(a.snoozed)
 	a.mu.Unlock()
 
+	saveSnoozes(saved)
 	slog.Info("alarm snoozed", "minutes", minutes)
 	silence()
 	a.poke()

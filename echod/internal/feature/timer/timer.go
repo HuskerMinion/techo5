@@ -23,6 +23,7 @@ import (
 	"github.com/ygelfand/go-esphome-device/api"
 
 	"github.com/HuskerMinion/techo5/echod/internal/component"
+	"github.com/HuskerMinion/techo5/echod/internal/config"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/ring"
 	"github.com/HuskerMinion/techo5/echod/internal/hardware/led"
 	"github.com/HuskerMinion/techo5/echod/internal/hardware/speaker"
@@ -249,6 +250,71 @@ func (t *Timers) counting() bool {
 // look like this.
 const localPrefix = "local:"
 
+// localList is the device's own timers as they are saved, with an absolute finish time rather than a
+// duration left: a duration left means nothing once the process has stopped. Call it with the lock
+// held.
+func localList(held map[string]*timer, now time.Time) []config.LocalTimer {
+	var out []config.LocalTimer
+	for id, c := range held {
+		if !c.local {
+			continue
+		}
+		saved := config.LocalTimer{ID: id, Name: c.name, Total: c.total}
+		if c.active {
+			saved.Finish = now.Add(c.remaining(now))
+		} else {
+			saved.Left = c.left
+		}
+		out = append(out, saved)
+	}
+	slices.SortFunc(out, func(a, b config.LocalTimer) int { return strings.Compare(a.ID, b.ID) })
+	return out
+}
+
+// saveLocal writes the device's own timers down. Called when one is set, cancelled or finishes, and
+// never on a tick: every set marshals the whole config and fsyncs it.
+func saveLocal(list []config.LocalTimer) {
+	if err := config.Set().Timers().Local(list); err != nil {
+		slog.Warn("saving the timers failed", "err", err)
+	}
+}
+
+// Restore brings back the timers the device set itself.
+//
+// One that finished while the device was off does not ring. A crash loop would otherwise be a device
+// that screams every time it boots, and a timer whose moment went by unheard is not made right by
+// sounding an hour later — it is said out loud instead, which is more than it used to get.
+func (t *Timers) Restore(c config.Config) {
+	now := time.Now()
+	var live []config.LocalTimer
+
+	t.mu.Lock()
+	for _, s := range c.Timers.Local {
+		switch {
+		case !s.Finish.IsZero() && !s.Finish.After(now):
+			slog.Info("a timer finished while the device was off",
+				"name", s.Name, "was due", s.Finish.Format(time.RFC3339))
+			continue
+		case !s.Finish.IsZero():
+			t.held[s.ID] = &timer{name: s.Name, total: s.Total, left: s.Finish.Sub(now), at: now, active: true, local: true}
+		default:
+			t.held[s.ID] = &timer{name: s.Name, total: s.Total, left: s.Left, at: now, local: true}
+		}
+		live = append(live, s)
+	}
+	t.mu.Unlock()
+
+	if len(live) != len(c.Timers.Local) {
+		saveLocal(live)
+	}
+	if len(live) > 0 {
+		slog.Info("timers restored", "count", len(live))
+		t.show()
+		t.publish()
+		t.Changed.Emit(struct{}{})
+	}
+}
+
 // Start sets a timer of the device's own and returns its id. It counts down, shows and rings exactly
 // as one from Home Assistant does, because from here on it is the same timer.
 func (t *Timers) Start(name string, d time.Duration) string {
@@ -257,8 +323,12 @@ func (t *Timers) Start(name string, d time.Duration) string {
 	}
 	id := localPrefix + strconv.FormatInt(time.Now().UnixNano(), 36)
 	t.mu.Lock()
-	t.held[id] = &timer{name: name, total: d, left: d, at: time.Now(), active: true, local: true}
+	now := time.Now()
+	t.held[id] = &timer{name: name, total: d, left: d, at: now, active: true, local: true}
+	saved := localList(t.held, now)
 	t.mu.Unlock()
+
+	saveLocal(saved)
 	slog.Info("timer set here", "name", name, "for", d)
 
 	select {
@@ -280,10 +350,12 @@ func (t *Timers) Cancel(id string) bool {
 	t.mu.Lock()
 	_, had := t.held[id]
 	delete(t.held, id)
+	saved := localList(t.held, time.Now())
 	t.mu.Unlock()
 	if !had {
 		return false
 	}
+	saveLocal(saved)
 	t.show()
 	t.publish()
 	t.Changed.Emit(struct{}{})
@@ -308,7 +380,9 @@ func (t *Timers) ripe(now time.Time) {
 			name = c.name
 		}
 		delete(t.held, id)
+		saved := localList(t.held, now)
 		t.mu.Unlock()
+		saveLocal(saved)
 		slog.Info("timer finished here", "name", name)
 		t.startRinging(cmp.Or(name, "Timer"))
 		t.publish()
@@ -362,12 +436,21 @@ func (t *Timers) publish() {
 // nothing. Whatever is already ringing carries on, since that no longer depends on Home Assistant.
 func (t *Timers) Forget() {
 	t.mu.Lock()
-	n := len(t.held)
-	t.held = map[string]*timer{}
+	n := 0
+	// The device's own timers stay. They finish from this clock and are meant to run with Home
+	// Assistant away — that is what makes them local — so dropping them because Home Assistant
+	// stopped listening threw away the one kind that was still counting down to something real.
+	for id, c := range t.held {
+		if c.local {
+			continue
+		}
+		delete(t.held, id)
+		n++
+	}
 	t.mu.Unlock()
 
 	if n > 0 {
-		slog.Info("timers forgotten", "count", n)
+		slog.Info("Home Assistant's timers forgotten", "count", n)
 	}
 	t.show()
 	t.publish()
