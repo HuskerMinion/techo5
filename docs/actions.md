@@ -177,41 +177,88 @@ mode: queued
 
 ```yaml
 alias: TECHO5 - set a reminder by voice
+description: 'Home Assistant has no reminders of its own, so it hands "remind me..." to the TECHO5 device that heard it. The sentence is taken apart here: a time however it is written, or a length of time, days and weekly/daily, and the words.'
 triggers:
-  - trigger: conversation
-    id: at
-    command:
-      - "remind me to {what} at {time}"
-      - "remind me at {time} to {what}"
-      - "set a reminder (for|at) {time} to {what}"
-  - trigger: conversation
-    id: in
-    command:
-      - "remind me in {time} to {what}"
-      - "remind me to {what} in {time}"
-      - "set a reminder in {time} to {what}"
+- trigger: conversation
+  command:
+  - remind me {rest}
+  - set [a|an] [new] [weekly|daily|recurring] reminder {rest}
+  - (create|add|make) [a|an] [new] [weekly|daily|recurring] reminder {rest}
 conditions:
-  - "{{ device_entities(trigger.device_id) | select('search', 'stop_alarm') | list | count > 0 }}"
+- condition: template
+  value_template: '{{ device_entities(trigger.device_id) | select(''search'', ''stop_alarm'') | list | count > 0 }}'
 actions:
-  - variables:
-      when: "{{ ('in ' if trigger.id == 'in' else '') ~ trigger.slots.time }}"
-      what: "{{ trigger.slots.what | trim }}"
-  - action: "esphome.{{ device_attr(trigger.device_id, 'name') | slugify }}_reminder_set"
-    data: {time: "{{ when }}", days: "", label: "{{ what }}", ring_on: ""}
+- variables:
+    p: |2-
+
+      {%- set raw = (trigger.slots.rest | default('')) | replace('A.M.','am') | replace('a.m.','am') | replace('P.M.','pm') | replace('p.m.','pm') | replace('A.M','am') | replace('a.m','am') | replace('P.M','pm') | replace('p.m','pm') | replace('AM','am') | replace('PM','pm') -%}
+      {%- set whole = (trigger.sentence ~ ' ' ~ raw) | lower -%}
+      {%- set clock = (raw | regex_findall('(?i)(?:^|[^0-9])([0-9]{1,2}(?:[.:-][0-9]{2})? ?(?:am|pm)|[0-9]{1,2}[.:-][0-9]{2}|noon|midnight)(?=[^0-9a-z]|$)') | first) if raw | regex_search('(?i)(?:^|[^0-9])([0-9]{1,2}(?:[.:-][0-9]{2})? ?(?:am|pm)|[0-9]{1,2}[.:-][0-9]{2}|noon|midnight)(?=[^0-9a-z]|$)') else '' -%}
+      {%- set span = (raw | regex_findall('(?i)(?:^|[^a-z0-9])((?:[0-9]+|an?|one|two|three|four|five|ten|fifteen|twenty|thirty|half an?) ?(?:seconds?|secs?|minutes?|mins?|hours?|hrs?))(?=[^a-z]|$)') | first) if raw | regex_search('(?i)(?:^|[^a-z0-9])((?:[0-9]+|an?|one|two|three|four|five|ten|fifteen|twenty|thirty|half an?) ?(?:seconds?|secs?|minutes?|mins?|hours?|hrs?))(?=[^a-z]|$)') else '' -%}
+      {%- set ns = namespace(days=[]) -%}
+      {%- for d in ['monday','tuesday','wednesday','thursday','friday','saturday','sunday'] if d in whole -%}{%- set ns.days = ns.days + [d] -%}{%- endfor -%}
+      {%- set repeat = 'weekly' in whole or 'every ' in whole or 'each ' in whole -%}
+      {%- set days = 'daily' if ('daily' in whole or 'every day' in whole or 'each day' in whole) else ('weekdays' if 'weekday' in whole else ('weekends' if 'weekend' in whole else (ns.days | join(',') if ns.days and repeat else ''))) -%}
+      {%- set when = (clock | replace('.', ':') | replace('-', ':')) if clock else ('in ' ~ span if span else '') -%}
+      {%- set cut = raw -%}
+      {%- if clock -%}{%- set cut = cut | replace(clock, ' ') -%}{%- endif -%}
+      {%- if span -%}{%- set cut = cut | replace(span, ' ') -%}{%- endif -%}
+      {%- set label = cut
+        | regex_replace('(?i)(^|[ ,])(?:on |every |each )?(?:mondays?|tuesdays?|wednesdays?|thursdays?|fridays?|saturdays?|sundays?|weekdays?|weekends?|day)(?=[ ,.!?]|$)', ' ')
+        | regex_replace('(?i)(^|[ ,])(?:weekly|daily|every week|each week)(?=[ ,.!?]|$)', ' ')
+        | regex_replace('(?i)(^|[ ])(?:at|for|in|after|by|on)(?=[ ]*([.,!?]|$))', ' ')
+        | regex_replace('(?i)(^|[ ])(?:at|for|in|after|by|on) (?=(at|for|in|after|by|on|to) )', ' ')
+        | regex_replace('[ ]+', ' ') | trim
+        | regex_replace('^[.,!?;: ]+', '') | regex_replace('[.,!?;: ]+$', '')
+        | regex_replace('(?i)^(?:(?:at|for|in|by|on) )+', '')
+        | regex_replace('(?i)^(?:to|that|for|about|of) ', '') | trim -%}
+      {%- set label = label | regex_replace('(?i) (?:at|for|in|by|on)$', '') | trim -%}
+      {{ {'when': when, 'days': days, 'label': label, 'oneoff': (ns.days | count > 0 and not repeat)} }}
+- choose:
+  - conditions:
+    - condition: template
+      value_template: '{{ p.oneoff }}'
+    sequence:
+    - set_conversation_response: I can't set a one-time reminder for a particular day yet. Say weekly, or every Tuesday, to repeat it, or give just a time for the next time it comes round.
+  - conditions:
+    - condition: template
+      value_template: '{{ p.when == '''' }}'
+    sequence:
+    - set_conversation_response: What time should I remind you? Try at 7:30 PM, or in 20 minutes.
+  - conditions:
+    - condition: template
+      value_template: '{{ p.label == '''' }}'
+    sequence:
+    - set_conversation_response: What should I remind you about?
+  default:
+  - action: esphome.{{ device_attr(trigger.device_id, 'name') | slugify }}_reminder_set
+    data:
+      time: '{{ p.when }}'
+      days: '{{ p.days }}'
+      label: '{{ p.label }}'
+      ring_on: ''
     response_variable: set
     continue_on_error: true
-  - if: "{{ set is defined and set.id is defined }}"
+  - if:
+    - condition: template
+      value_template: '{{ set is defined and set.id is defined }}'
     then:
-      - set_conversation_response: >-
-          OK, I'll remind you to {{ what }}
-          {{ (when if trigger.id == 'in' else 'at ' ~ when) | regex_replace('\.$', '') }}.
+    - set_conversation_response: 'OK, I''ll remind you to {{ p.label }} {{ p.when if p.when.startswith(''in '') else ''at '' ~ p.when }}{{ {''daily'': '' every day'', ''weekdays'': '' on weekdays'', ''weekends'': '' on weekends'', '''': ''''}.get(p.days, '' every '' ~ (p.days | replace('','', '', '') | title)) }}.'
     else:
-      - set_conversation_response: "Sorry, I couldn't set that reminder. Try a time like 7:30 PM, or in 20 minutes."
+    - set_conversation_response: Sorry, I couldn't set that reminder. Try a time like 7:30 PM, or in 20 minutes.
 mode: queued
 ```
 
 Both find the device that heard the sentence, so one of each covers every TECHO5 device in the house,
-and a speaker that is not a TECHO5 device is left alone. The reminder's action name comes from the
+and a speaker that is not a TECHO5 device is left alone.
+
+The reminder automation takes the whole sentence apart itself, because speech to text is not
+consistent about how it writes a time: "8.14am", "8.14 a.m." and "8-18 AM" all turn up. It takes a
+time of day or a length of time ("for 3 minutes", "in 20 minutes"), days with "weekly", "every" or
+"daily" ("every weekday", "weekly ... on Wednesday"), and the words to say, and it answers with what
+it set. It also catches "set a reminder...", which Home Assistant would otherwise take as a timer. A
+one-time reminder on a particular day ("for Tuesday at 6 PM") is not something the device can hold
+yet, and it says so. The reminder's action name comes from the
 device's name in Home Assistant (`esphome.<name>_reminder_set`); if you renamed the device there,
 put its action name in by hand.
 

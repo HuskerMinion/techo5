@@ -103,6 +103,8 @@ func TestFromHelper(t *testing.T) {
 func TestParseClock(t *testing.T) {
 	for in, want := range map[string][2]int{
 		"7:30": {7, 30}, "07:30": {7, 30}, "19:05:00": {19, 5}, "7:30 pm": {19, 30}, "7:30 P.M.": {19, 30}, "6am": {6, 0}, "12 am": {0, 0},
+		// As speech to text writes them.
+		"8.14am": {8, 14}, "8.14 a.m.": {8, 14}, "8-18 AM": {8, 18}, "8.30": {8, 30}, "11.30 p.m.": {23, 30},
 	} {
 		h, m, err := parseClock(in)
 		if err != nil || h != want[0] || m != want[1] {

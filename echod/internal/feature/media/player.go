@@ -86,7 +86,8 @@ type Player struct {
 	// remoteState is what the server says the stream it is sending is doing: playing, paused or
 	// stopped. It is the only account of whether a carried stream is paused, because the audio never
 	// passes through this player.
-	remoteState atomic.Value // string
+	remoteState atomic.Value  // string
+	remoteGen   atomic.Uint64 // counts RemoteState, so a pause's timeout knows whether it still stands
 
 	// extTrack is what a remote says it is playing: a phone over Bluetooth, or Music Assistant over
 	// Sendspin. The stream is the remote's business; this is only what to call it.
@@ -616,9 +617,39 @@ func (p *Player) Transport(t Transport) {
 
 // RemoteState takes what the server says the stream it is sending is doing: "playing", "paused" or
 // "stopped".
+//
+// A pause left that way for stoppedFor becomes a stop, as this player's own paused track is ended then.
+// The server reports a pause as a stop, and sends only what changes, so a queue stopped from the app
+// after a pause says nothing at all here - and without this the screen and Home Assistant went on
+// saying "paused", or worse "playing", for as long as the connection lasted.
 func (p *Player) RemoteState(state string) {
 	p.remoteState.Store(state)
+	n := p.remoteGen.Add(1)
+	if state == "paused" {
+		time.AfterFunc(stoppedFor, func() {
+			if p.remoteGen.Load() == n {
+				slog.Info("a remote left paused this long is taken as stopped", "after", stoppedFor)
+				p.RemoteState("stopped")
+			}
+		})
+	}
 	p.refresh()
+}
+
+// CarriedState is what a carried stream is doing, for whatever has to show or report it: what the
+// remote said, and playing until it has said anything. A remote that said it stopped is not playing,
+// however long it goes on holding the speaker.
+func (p *Player) CarriedState() (playing, paused bool) {
+	state, _ := p.remoteState.Load().(string)
+	switch state {
+	case "playing":
+		return true, false
+	case "paused":
+		return false, true
+	case "stopped":
+		return false, false
+	}
+	return true, false
 }
 
 // RemotePlaying reports what the remote last said, for the controls that have to choose between play
@@ -703,6 +734,9 @@ func (p *Player) LetGo(n uint64) {
 // is called after the listener has been removed rather than before.
 func (p *Player) RemoteGone() {
 	p.remoteLast.Store(false)
+	// What the last session said about its stream is not what the next one's first stream is doing.
+	p.remoteState.Store("")
+	p.remoteGen.Add(1)
 }
 
 // ExternalPlaying reports whether something this player did not start is using the speaker, which is
@@ -808,11 +842,7 @@ func (p *Player) state() esphome.MediaPlayerState {
 	// speaker without playing is not that, or a station playing underneath a paused one would be
 	// reported to Home Assistant as paused.
 	if p.Carried() {
-		if remotePlaying, remotePaused := p.RemotePlaying(); remotePlaying || remotePaused {
-			playing, paused = remotePlaying, remotePaused
-		} else {
-			playing, paused = true, false
-		}
+		playing, paused = p.CarriedState()
 	}
 
 	switch {

@@ -11,6 +11,7 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"regexp"
 	"slices"
 	"strconv"
 	"strings"
@@ -782,8 +783,14 @@ func (a *Alarms) Actions() []*esphome.Action {
 }
 
 // parseClock reads "7:30", "07:30", "19:30:00", "7:30 pm" or "7pm".
+// clockSep is an hour and minute separated by a dot or a dash rather than a colon.
+var clockSep = regexp.MustCompile(`^(\d{1,2})[.-](\d{2})(\D|$)`)
+
 func parseClock(s string) (hour, minute int, err error) {
-	s = strings.ToLower(strings.ReplaceAll(strings.TrimSpace(s), ".", ""))
+	// Speech to text writes 8:14 as "8.14" or "8-14" as often as with a colon, and the dots in "a.m."
+	// go with the ones between the hour and the minute unless those are taken first.
+	s = clockSep.ReplaceAllString(strings.TrimSpace(s), "$1:$2$3")
+	s = strings.ToLower(strings.ReplaceAll(s, ".", ""))
 	for _, layout := range []string{"15:04", "15:04:05", "3:04 pm", "3:04pm", "3 pm", "3pm"} {
 		if t, e := time.Parse(layout, s); e == nil {
 			return t.Hour(), t.Minute(), nil

@@ -781,7 +781,7 @@ func (d *Display) act(id itemID) {
 		mute.Get().Toggle()
 	case itemMusic:
 		rd := home.Get().Radio()
-		playing, paused := media.Get().Playing()
+		playing, paused := musicState()
 		rows := radioRows(rd, playing || paused)
 		sel := 0
 		for i, row := range rows {
@@ -996,20 +996,12 @@ func (d *Display) frame() time.Duration {
 		s.phase, s.heard, s.reply = "idle", "", ""
 	}
 	s.muted, _ = mute.Get().Muted()
-	s.playing, s.paused = media.Get().Playing()
 	// A stream this player is carrying is the room's when it is what is being heard: the face names it,
 	// and says what it is doing, though the audio never passes through this player's own stream. Both,
 	// not just playing: the face tests paused first, so a station left paused underneath would label
 	// somebody else's track as Paused - and a remote merely holding the speaker, with a station playing
 	// underneath it, is not the room's at all (see media.Player.Carried).
-	if media.Get().Carried() {
-		if playing, paused := media.Get().RemotePlaying(); playing || paused {
-			s.playing, s.paused = playing, paused
-		} else {
-			// The server has not said yet, so it is playing until it does.
-			s.playing, s.paused = true, false
-		}
-	}
+	s.playing, s.paused = musicState()
 	s.maxVolume = config.VolumeSteps
 	if s.sheetOpen {
 		s.sheet = d.sheetView(now)

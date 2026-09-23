@@ -388,7 +388,9 @@ func (d *Display) changed(s voice.State) {
 			d.sheet, d.quiet = false, true
 			go home.Get().HideCamera()
 			go func() {
-				if playing, paused := media.Get().Playing(); playing || paused {
+				// Music Assistant's stream is carried, not this player's, so Playing never says it:
+				// asked of the speaker as well, as the Spot's stop already is.
+				if playing, paused := media.Get().Playing(); playing || paused || media.Get().ExternalPlaying() {
 					home.Get().Stop()
 					media.Get().Stop()
 				}
@@ -1195,12 +1197,7 @@ func (d *Display) frame() time.Duration {
 	// somebody else's track as Paused - and a remote merely holding the speaker, with a station playing
 	// underneath it, is not the room's at all (see media.Player.Carried).
 	if media.Get().Carried() {
-		if playing, paused := media.Get().RemotePlaying(); playing || paused {
-			s.playing, s.paused = playing, paused
-		} else {
-			// The server has not said yet, so it is playing until it does.
-			s.playing, s.paused = true, false
-		}
+		s.playing, s.paused = media.Get().CarriedState()
 	}
 	s.muted, _ = mute.Get().Muted()
 	if !volAt.IsZero() && now.Sub(volAt) < volumeShow {
