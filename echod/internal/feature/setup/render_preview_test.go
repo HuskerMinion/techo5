@@ -4,6 +4,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/HuskerMinion/techo5/echod/internal/config"
@@ -17,6 +18,7 @@ func TestRenderSetupPage(t *testing.T) {
 	if out == "" {
 		t.Skip("set SETUP_PREVIEW to a file to write the page")
 	}
+	config.Use(filepath.Join(t.TempDir(), "state.json"))
 	if err := home.SetOwnStations([]config.Station{
 		{Name: "KXYZ 101.1", URL: "https://stream.example.org/kxyz"},
 		{Name: "The Mountain", URL: "https://stream.example.org/mountain"},
