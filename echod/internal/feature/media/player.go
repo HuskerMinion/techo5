@@ -75,7 +75,22 @@ type Player struct {
 	// playing: its mapper has no case for announcing and raises on it.
 	speaking atomic.Bool
 
-	external atomic.Bool
+	// remote is the speaker lent to something this player did not start, and who is holding it now.
+	remote claim
+
+	// remoteLast is whether the last thing the room heard came from a remote. A paused stream ends, so
+	// the mark comes off while the track is still the remote's to resume: this is what sends a play back
+	// to it rather than to a stream this player is not playing.
+	remoteLast atomic.Bool
+
+	// remoteState is what the server says the stream it is sending is doing: playing, paused or
+	// stopped. It is the only account of whether a carried stream is paused, because the audio never
+	// passes through this player.
+	remoteState atomic.Value // string
+
+	// extTrack is what a remote says it is playing: a phone over Bluetooth, or Music Assistant over
+	// Sendspin. The stream is the remote's business; this is only what to call it.
+	extTrack atomic.Value // remoteTrack
 
 	// stoppedAt counts stops, so the timer that ends a stopped track knows whether a later stop or a
 	// play has come since.
@@ -90,6 +105,11 @@ type Player struct {
 	// OnPlay fires with the URL whenever a track (not an announcement) is started, so a screen can
 	// find out what it is.
 	OnPlay hook.Hook[string]
+
+	// OnTransport fires when a track's own controls are asked for — the screen's buttons, or Home
+	// Assistant — so that whoever is playing the track hears. It is not an instruction to this player:
+	// see Transport.
+	OnTransport hook.Hook[Transport]
 
 	// OnEnd fires when a track stops of its own accord, with the URL that ended. A track that was
 	// stopped or replaced does not fire: the difference is the whole use of it, since a radio stream
@@ -418,6 +438,7 @@ func (p *Player) command(c esphome.MediaCommand) {
 		if c.Announcement {
 			p.announce(c.MediaURL)
 		} else {
+			p.ours()
 			p.stream.Play(c.MediaURL)
 			p.OnPlay.Emit(c.MediaURL)
 		}
@@ -438,8 +459,9 @@ func (p *Player) command(c esphome.MediaCommand) {
 	case esphome.MediaPlayerStop:
 		// Stop is what people say to a speaker to make it quiet, and what Home Assistant sends for it:
 		// kept as a pause, so the screen still shows what was playing and play picks it up again. A
-		// track left stopped that long is really over.
-		p.stream.Pause()
+		// track left stopped that long is really over. A track somebody else is playing is theirs to
+		// stop, so the remote is asked to pause it instead.
+		p.Transport(TransportPause)
 		n := p.stoppedAt.Add(1)
 		time.AfterFunc(stoppedFor, func() {
 			if _, paused := p.stream.Playing(); paused && p.stoppedAt.Load() == n {
@@ -447,16 +469,11 @@ func (p *Player) command(c esphome.MediaCommand) {
 			}
 		})
 	case esphome.MediaPlayerPause:
-		p.stream.Pause()
+		p.Transport(TransportPause)
 	case esphome.MediaPlayerPlay:
-		p.stoppedAt.Add(1)
-		p.stream.Unpause()
+		p.Transport(TransportPlay)
 	case esphome.MediaPlayerToggle:
-		if playing, _ := p.stream.Playing(); playing {
-			p.stream.Pause()
-		} else {
-			p.stream.Unpause()
-		}
+		p.Transport(TransportToggle)
 	}
 }
 
@@ -493,10 +510,238 @@ func (p *Player) Sounding(on bool) {
 	p.refresh()
 }
 
-// External marks the speaker as busy with something this player did not start.
-func (p *Player) External(on bool) {
-	p.external.Store(on)
+// remoteTrack is a name for what is playing that this player did not choose.
+type remoteTrack struct{ Title, Artist, Album string }
+
+// Transport is a track's own controls, which belong to whoever is playing it. A stream this player is
+// only carrying is somebody else's — Music Assistant plays it — so these go to the remote rather than
+// to a stream that is not what is in the room.
+type Transport int
+
+const (
+	TransportPlay Transport = iota
+	TransportPause
+
+	// TransportToggle is the screen's one button: play or pause, decided against what the remote says
+	// it is doing rather than against this player's own stream.
+	TransportToggle
+
+	TransportNext
+	TransportPrevious
+
+	// TransportStop is the Stop row on the screen: somebody standing in front of the device, saying
+	// they want the music off in this room. It is deliberately not what Home Assistant's `stop` does -
+	// see command - because the rule is who is asking, not what the stream is.
+	TransportStop
+)
+
+// Command is the word the controller role uses for each of these, which is also what a server lists in
+// the commands it will take. Toggle has no word of its own: it is settled here, before it is sent.
+func (t Transport) Command() string {
+	switch t {
+	case TransportPlay:
+		return "play"
+	case TransportPause:
+		return "pause"
+	case TransportNext:
+		return "next"
+	case TransportPrevious:
+		return "previous"
+	case TransportStop:
+		return "stop"
+	}
+	return ""
+}
+
+// remoteIsTheTrack is whether a transport command belongs to a remote rather than to this player's own
+// stream: what the room is hearing is theirs, or theirs was the last thing that played and this player
+// has nothing of its own to resume.
+//
+// It is not "a claim is held". A claim outlives a pause by design, and reading it as ownership is how a
+// paused Music Assistant took the radio's own play button: a tap on the station's page was resolved
+// against the remote's state, which said paused, so it asked Music Assistant to play while the station
+// underneath it went on playing and the two handed the speaker back and forth.
+func (p *Player) remoteIsTheTrack() bool {
+	if p.Carried() {
+		return true
+	}
+	if !p.remoteLast.Load() {
+		return false
+	}
+	// A remote that has stopped, with a queue still to resume and nothing of this player's on the screen
+	// to resume instead.
+	playing, paused := p.stream.Playing()
+	return !playing && !paused
+}
+
+// Transport asks for a track's own controls. When somebody else is playing, the command is theirs: this
+// player must not pause or skip underneath audio it is not playing. A play or pause with no opinion of
+// its own is settled against what the remote last said it was doing.
+func (p *Player) Transport(t Transport) {
+	if p.remoteIsTheTrack() {
+		if t == TransportToggle {
+			if _, paused := p.RemotePlaying(); paused {
+				t = TransportPlay
+			} else {
+				t = TransportPause
+			}
+		}
+		p.OnTransport.Emit(t)
+		return
+	}
+
+	switch t {
+	case TransportPlay:
+		p.stoppedAt.Add(1)
+		p.Resume()
+	case TransportPause:
+		p.Pause()
+	case TransportToggle:
+		// The screen's one button, and what it means is settled against what is playing, the way it was
+		// before there was a remote to ask. Without this a second tap pauses what is already paused and
+		// there is no way back to playing from the screen at all.
+		if playing, _ := p.Playing(); playing {
+			p.Pause()
+		} else {
+			p.stoppedAt.Add(1)
+			p.Resume()
+		}
+	case TransportStop:
+		p.Stop()
+	case TransportNext, TransportPrevious:
+		// Nothing to skip to: the tracks this player has are its own stations, and it plays one
+		// stream at a time.
+	}
+}
+
+// RemoteState takes what the server says the stream it is sending is doing: "playing", "paused" or
+// "stopped".
+func (p *Player) RemoteState(state string) {
+	p.remoteState.Store(state)
 	p.refresh()
+}
+
+// RemotePlaying reports what the remote last said, for the controls that have to choose between play
+// and pause.
+func (p *Player) RemotePlaying() (playing, paused bool) {
+	state, _ := p.remoteState.Load().(string)
+	return state == "playing", state == "paused"
+}
+
+// claim is the speaker lent to something this player did not start. Claims are handed out in order and
+// only the newest one is honoured, because the server decides the order: Music Assistant ends one stream
+// and starts the next in whichever order it likes, and the session being torn down must not free what
+// the session taking over is holding.
+//
+// A mutex rather than a pair of atomics, because the two move together: holding and the number are one
+// fact, and a store that lands between another goroutine's two reads makes a claim that nobody honours.
+// With `held` stored before `newest` was taken, an older `letGo` read the older number, matched it, and
+// cleared a hold the newer taker had just set - the room then shows nothing playing until the next
+// stream. The claim is once per stream rather than once per frame, so the lock costs nothing.
+type claim struct {
+	mu     sync.Mutex
+	held   bool
+	newest uint64
+}
+
+// take makes the speaker the caller's, and returns what it has to give back.
+func (c *claim) take() uint64 {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	c.newest++
+	c.held = true
+	return c.newest
+}
+
+// letGo gives the speaker back if the caller is still the one holding it, and reports whether it was. A
+// claim already given back is holding nothing, so letting go of it twice is not a second pass, and a
+// claim older than the one holding the speaker is not this caller's to give back.
+func (c *claim) letGo(n uint64) bool {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	if !c.held || c.newest != n {
+		return false
+	}
+	c.held = false
+	return true
+}
+
+func (c *claim) playing() bool {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	return c.held
+}
+
+// External marks the speaker as busy with something this player did not start, and returns the claim on
+// it. Music Assistant ends one stream and starts the next in either order, and a session on its way out
+// used to clear the mark that the session taking over had just set - which is why the first track after
+// a connection looked right and every later one was named as nothing.
+func (p *Player) External() uint64 {
+	p.remoteLast.Store(true)
+	n := p.remote.take()
+	p.refresh()
+	return n
+}
+
+// LetGo gives the speaker back, if the claim is still the one holding it. An older claim does nothing:
+// something newer has it.
+func (p *Player) LetGo(n uint64) {
+	if p.remote.letGo(n) {
+		p.refresh()
+	}
+}
+
+// RemoteGone is a session ending: the remote that was playing is not there any more, so a transport goes
+// back to this player's own stream rather than out to a hook with nobody listening on it.
+//
+// Deliberately not part of LetGo. Giving the speaker back is what a skip does in the middle of a
+// connection, and the session that started the next track is still there to be asked — that hold is what
+// changeGrace is for. Only the connection going means there is nothing left to ask, which is also why it
+// is called after the listener has been removed rather than before.
+func (p *Player) RemoteGone() {
+	p.remoteLast.Store(false)
+}
+
+// ExternalPlaying reports whether something this player did not start is using the speaker, which is
+// what the screen asks before it says what the room is playing.
+func (p *Player) ExternalPlaying() bool { return p.remote.playing() }
+
+// Carried reports whether what the room is hearing is somebody else's: a remote holds the speaker and is
+// the thing playing.
+//
+// Holding the speaker is not the same as being what the room hears. Music Assistant leaves a track it
+// paused holding the speaker for as long as its queue waits there, so a station this device is playing
+// underneath it is the sound in the room - and reading the held claim as "the room is Music Assistant's"
+// hid the station's own now-playing page, left its Stop row stopping the wrong stream, and told Home
+// Assistant the radio was paused while it played. A remote that is playing is still what the room hears,
+// whatever this player is doing with its own stream.
+func (p *Player) Carried() bool {
+	if !p.remote.playing() {
+		return false
+	}
+	if playing, _ := p.RemotePlaying(); playing {
+		return true
+	}
+	// A remote that is paused, or that has not said yet, is what the room hears only when this player
+	// has nothing of its own playing.
+	playing, _ := p.stream.Playing()
+	return !playing
+}
+
+// ExternalTrack takes what a remote says it is playing, so the room can name it. An empty title means
+// the remote has stopped naming anything.
+func (p *Player) ExternalTrack(title, artist, album string) {
+	p.extTrack.Store(remoteTrack{Title: title, Artist: artist, Album: album})
+	p.refresh()
+}
+
+// Track is what a remote last said it was playing, whether or not it still is.
+func (p *Player) Track() (title, artist, album string) {
+	t, _ := p.extTrack.Load().(remoteTrack)
+	return t.Title, t.Artist, t.Album
 }
 
 // Playing reports what the track is doing, which is what decides whether a turn has anything to take
@@ -519,11 +764,23 @@ func (p *Player) Sleep() *sleeper { return p.sleep }
 // PlayURL starts a stream the device already knows the address of — one of its own radio stations —
 // without Home Assistant resolving anything first. It is the same track as any other: a turn ducks
 // it, the buttons set its level, and the media player reports it.
-func (p *Player) PlayURL(url string) { p.stream.Play(url) }
+func (p *Player) PlayURL(url string) {
+	p.ours()
+	p.stream.Play(url)
+}
+
+// ours marks what is about to play as this player's own, so a play or a pause goes to its own stream
+// rather than to a remote that has let go. Every path that starts local audio has to say so: remoteLast
+// is what decides where a transport command goes, and one left set sends the pause to a session that is
+// gone, which is a dead pause button on a phone over Bluetooth.
+func (p *Player) ours() {
+	p.remoteLast.Store(false)
+}
 
 // PlayReceived plays audio a remote is sending (a phone using the device as a Bluetooth speaker) as a
 // track: it replaces what was playing, and a turn ducks or pauses it like anything else.
 func (p *Player) PlayReceived(name string, src PCMSource, rate, channels int) {
+	p.ours()
 	p.stream.PlayPCM(name, src, rate, channels)
 }
 
@@ -546,8 +803,20 @@ func (p *Player) refresh() {
 func (p *Player) state() esphome.MediaPlayerState {
 	playing, paused := p.stream.Playing()
 
+	// A stream this player is carrying is somebody else's, and what the remote says it is doing is the
+	// truth about the room: this player has nothing of its own to report about it. A remote holding the
+	// speaker without playing is not that, or a station playing underneath a paused one would be
+	// reported to Home Assistant as paused.
+	if p.Carried() {
+		if remotePlaying, remotePaused := p.RemotePlaying(); remotePlaying || remotePaused {
+			playing, paused = remotePlaying, remotePaused
+		} else {
+			playing, paused = true, false
+		}
+	}
+
 	switch {
-	case playing || p.speaking.Load() || p.external.Load():
+	case playing || p.speaking.Load():
 		return esphome.MediaPlayerPlaying
 	case paused:
 		return esphome.MediaPlayerPaused

@@ -61,21 +61,19 @@ func currentStation(rd home.Radio) string {
 	return rd.Chosen
 }
 
-// stopMusic ends what plays, radio or otherwise, so the face goes back to the clock.
+// stopMusic ends what plays, radio or otherwise, so the face goes back to the clock. The gate used to be
+// this player's own stream, which a carried one never satisfies: the row did nothing at all while Music
+// Assistant was playing. What "stop" means for whoever has the music is home's to decide.
 func stopMusic() {
-	if playing, paused := media.Get().Playing(); playing || paused {
-		home.Get().Stop()
-		media.Get().Stop()
-	}
+	home.Get().Stop()
+	media.Get().Stop()
 }
 
-// togglePlay is a tap on now playing.
+// togglePlay is a tap on now playing. It goes the way the Show's tap goes, which is the only way it can
+// work for a carried stream: this player's own stream is not what is playing, so asking it to pause
+// would do nothing at all.
 func togglePlay() {
-	if playing, _ := media.Get().Playing(); playing {
-		media.Get().Pause()
-	} else {
-		media.Get().Resume()
-	}
+	media.Get().Transport(media.TransportToggle)
 }
 
 // stepStation plays the station after (or before) the one playing, round the current list.
@@ -99,6 +97,12 @@ func stepStation(by int) {
 // station Home Assistant just named that is still on its way.
 func (d *Display) showsNowPlaying() bool {
 	if playing, paused := media.Get().Playing(); playing || paused {
+		return true
+	}
+	// A stream this player is only carrying is still what the room is doing, so the face is its as
+	// much as the radio's: the state it draws was already being worked out and only this gate was
+	// missing, because a carried stream never satisfies Playing().
+	if media.Get().ExternalPlaying() {
 		return true
 	}
 	d.mu.Lock()

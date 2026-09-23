@@ -585,6 +585,23 @@ func (r *renderer) header(s scene) {
 	r.text(r.tiny, line, x, r.s(25), amber)
 }
 
+// playingWord is what the footer says about the music: empty when nothing is playing.
+func playingWord(s scene) string {
+	switch {
+	case s.playing:
+		return "♪ playing"
+	case s.paused:
+		return "♪ paused"
+	}
+	return ""
+}
+
+// playingButton is where the footer's word for the music sits: the right end of the bottom edge. The
+// whole of it is the target, because the word moves when a connected device is named beside it.
+func (r *renderer) playingButton() image.Rectangle {
+	return image.Rect(r.w-r.s(280), r.h-r.s(42), r.w, r.h-r.s(4))
+}
+
 // footer is the bottom edge: what is playing, and what the page underneath is having trouble with.
 //
 // The microphone used to be here. It moved to the header, because the footer is drawn by two of the
@@ -599,13 +616,7 @@ func (r *renderer) footer(s scene) {
 	case s.slideshowTrouble != "":
 		r.text(r.tiny, s.slideshowTrouble, r.margin, y, dim)
 	}
-	var right string
-	switch {
-	case s.playing:
-		right = "♪ playing"
-	case s.paused:
-		right = "♪ paused"
-	}
+	right := playingWord(s)
 	if s.bt.Connected != "" {
 		if right != "" {
 			right += "  ·  "

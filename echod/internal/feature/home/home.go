@@ -403,7 +403,9 @@ func (f *Feature) Radio() Radio {
 	sources := RadioSources()
 	r := Radio{Configured: len(sources) > 0, Source: radioSource(), Sources: len(sources)}
 	if !r.Configured {
-		return r
+		// No list to show, but the page is shown for a carried stream all the same, and it has to name
+		// what is playing: the same last word the configured path ends with.
+		return carried(r)
 	}
 	t := hastate.Get()
 	if r.Source == config.RadioFavorites {
@@ -443,6 +445,28 @@ func (f *Feature) Radio() Radio {
 			r.Now = ""
 		}
 	}
+
+	return carried(r)
+}
+
+// carried puts what a remote is playing on the page, over whatever this device chose. It is the last
+// word wherever the page is built: everything before it says what this device picked, and that is what
+// the room is playing only when nothing else is.
+//
+// Receiving() is not the name of it. That names a phone over Bluetooth, which is a stream of this
+// player's own rather than a remote's; the only thing that takes the speaker this way is Sendspin, and
+// what runs the server it talks to here is Music Assistant, so that is what the page calls it.
+func carried(r Radio) Radio {
+	if !media.Get().Carried() {
+		return r
+	}
+	trackTitle, trackArtist, trackAlbum := media.Get().Track()
+	r.Playing, r.Now = true, "Music Assistant"
+	r.Title, r.Artist, r.Album = trackTitle, trackArtist, trackAlbum
+	// The page draws a stand-in of its own for a track with no picture, so the last station's cover
+	// and logo must not be left behind somebody else's.
+	r.Art, r.Thumb, r.Logo = nil, nil, false
+	r.Music = true
 	return r
 }
 
@@ -520,9 +544,19 @@ func askFor(label string) string {
 	return l
 }
 
-// Stop ends whatever the player is doing.
+// Stop ends whatever the player is doing, whoever is playing it.
+//
+// Every caller is a person asking - the Stop row on either panel, the action button, "go home" by voice -
+// so a stream this device did not start is asked to stop. The rule is who is asking, not what the stream
+// is: without this the row reaches a player that has nothing to pause, and the music plays on. Home
+// Assistant's own stop is a different path and stays a pause (see media's command), because that arrives
+// from an automation with nobody necessarily in the room.
 func (f *Feature) Stop() {
-	media.Get().Pause()
+	if media.Get().Carried() {
+		media.Get().Transport(media.TransportStop)
+	} else {
+		media.Get().Pause()
+	}
 	f.mu.Lock()
 	f.chosen = ""
 	f.mu.Unlock()
