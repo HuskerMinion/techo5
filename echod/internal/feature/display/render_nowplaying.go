@@ -42,26 +42,26 @@ func (r *renderer) nowPlaying(s scene) {
 		label += "  ·  " + station
 		headline, sub = rd.Title, rd.Artist
 	}
-	r.text(r.small, label, r.margin, 150, amber)
+	r.text(r.small, label, r.margin, r.s(150), amber)
 	face := r.title
 	if r.width(face, headline) > r.w-2*r.margin {
 		face = r.body
 	}
-	y := 225
+	y := r.s(225)
 	for i, line := range r.wrap(face, headline, r.w-2*r.margin) {
 		if i == 2 {
 			break
 		}
 		r.text(face, line, r.margin, y, cream)
-		y += 56
+		y += r.s(56)
 	}
 	if sub != "" {
-		r.text(r.body, sub, r.margin, y+6, dim)
+		r.text(r.body, sub, r.margin, y+r.s(6), dim)
 	}
 
 	// A rule, then the three buttons: back, play or pause, and forward. What they do belongs to whoever
 	// is playing, so a stream Music Assistant is carrying is paused and skipped by the server.
-	draw.Draw(r.dst, image.Rect(r.margin, r.h-84, r.w-r.margin, r.h-81), image.NewUniform(ember), image.Point{}, draw.Src)
+	draw.Draw(r.dst, image.Rect(r.margin, r.h-r.s(84), r.w-r.margin, r.h-r.s(81)), image.NewUniform(ember), image.Point{}, draw.Src)
 	back, play, next := r.transportButtons()
 	r.control(back, r.markBack)
 	if s.paused {

@@ -499,20 +499,20 @@ func (r *renderer) cornerClock(s scene) {
 func (r *renderer) cornerClockDated(s scene) {
 	r.cornerClock(s)
 	d := s.now.Format("Mon, Jan 2")
-	r.text(r.tiny, d, r.w-r.margin-r.width(r.tiny, d), r.margin+54, dim)
+	r.text(r.tiny, d, r.w-r.margin-r.width(r.tiny, d), r.margin+r.s(54), dim)
 }
 
 // status is a phase title with an indicator that breathes while the device waits.
 func (r *renderer) status(s scene, title string, breathe bool) {
 	r.cornerClock(s)
-	r.text(r.title, title, r.margin, 120, amber)
+	r.text(r.title, title, r.margin, r.s(120), amber)
 	if breathe {
 		// A bar under the title, its length rising and falling with a period of 1.6 s.
 		t := float64(s.now.Sub(s.since).Milliseconds()) / 1600
 		f := 0.55 + 0.45*math.Sin(2*math.Pi*t)
 		full := r.w - 2*r.margin
-		draw.Draw(r.dst, image.Rect(r.margin, 140, r.margin+full, 146), image.NewUniform(ember), image.Point{}, draw.Src)
-		draw.Draw(r.dst, image.Rect(r.margin, 140, r.margin+int(float64(full)*f), 146), image.NewUniform(amber), image.Point{}, draw.Src)
+		draw.Draw(r.dst, image.Rect(r.margin, r.s(140), r.margin+full, r.s(146)), image.NewUniform(ember), image.Point{}, draw.Src)
+		draw.Draw(r.dst, image.Rect(r.margin, r.s(140), r.margin+int(float64(full)*f), r.s(146)), image.NewUniform(amber), image.Point{}, draw.Src)
 	}
 }
 

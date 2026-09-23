@@ -351,8 +351,13 @@ func (a *Alarms) sources(now time.Time) []source {
 	var out []source
 	for _, al := range c.List {
 		if al.On {
-			out = append(out, source{key: al.ID, label: al.Label, hour: al.Hour, min: al.Minute, days: al.Days, local: true,
-				remind: al.Remind, ringOn: al.RingOn, sunrise: c.SunriseFor(al)})
+			src := source{key: al.ID, label: al.Label, hour: al.Hour, min: al.Minute, days: al.Days, local: true,
+				remind: al.Remind, ringOn: al.RingOn, sunrise: c.SunriseFor(al)}
+			// A dated one-off is a fixed moment, the way a snooze is.
+			if at, ok := al.OnDate(); ok {
+				src.once = at
+			}
+			out = append(out, src)
 		}
 	}
 	for _, f := range a.followed(now) {
@@ -574,22 +579,32 @@ func (a *Alarms) View(now time.Time) View {
 
 // Set adds an alarm on the device, or turns on the one that already rings at that time on those days.
 func (a *Alarms) Set(hour, minute int, days uint8, label string) (config.Alarm, error) {
+	return a.SetOn(hour, minute, days, label, "")
+}
+
+// SetOn is Set for a one-off on a particular day (date as config.DateLayout, or none).
+func (a *Alarms) SetOn(hour, minute int, days uint8, label, date string) (config.Alarm, error) {
 	if hour < 0 || hour > 23 || minute < 0 || minute > 59 {
 		return config.Alarm{}, fmt.Errorf("alarms: %d:%02d is not a time of day", hour, minute)
 	}
 	for _, al := range config.Get().Alarms.List {
-		if !al.Remind && al.Hour == hour && al.Minute == minute && al.Days == days && al.Label == label {
+		if !al.Remind && al.Hour == hour && al.Minute == minute && al.Days == days && al.Label == label && al.Date == date {
 			al.On = true
 			return al, a.Put(al)
 		}
 	}
-	al := config.Alarm{ID: strconv.FormatInt(time.Now().UnixNano(), 36), Hour: hour, Minute: minute, Days: days, Label: label, On: true}
+	al := config.Alarm{ID: strconv.FormatInt(time.Now().UnixNano(), 36), Hour: hour, Minute: minute, Days: days, Label: label, On: true, Date: date}
 	return al, a.Put(al)
 }
 
 // SetReminder adds a reminder, said once at that time on those days, here and on ringOn; or turns on
 // the one already set for that time, those days and those words, with ringOn now.
 func (a *Alarms) SetReminder(hour, minute int, days uint8, label string, ringOn []string) (config.Alarm, error) {
+	return a.SetReminderOn(hour, minute, days, label, ringOn, "")
+}
+
+// SetReminderOn is SetReminder for a one-off on a particular day (date as config.DateLayout, or none).
+func (a *Alarms) SetReminderOn(hour, minute int, days uint8, label string, ringOn []string, date string) (config.Alarm, error) {
 	label = strings.TrimSpace(label)
 	if label == "" {
 		return config.Alarm{}, fmt.Errorf("reminders: a reminder needs something to say")
@@ -598,18 +613,44 @@ func (a *Alarms) SetReminder(hour, minute int, days uint8, label string, ringOn 
 		return config.Alarm{}, fmt.Errorf("reminders: %d:%02d is not a time of day", hour, minute)
 	}
 	for _, al := range config.Get().Alarms.List {
-		if al.Remind && al.Hour == hour && al.Minute == minute && al.Days == days && al.Label == label {
+		if al.Remind && al.Hour == hour && al.Minute == minute && al.Days == days && al.Label == label && al.Date == date {
 			al.On, al.RingOn = true, ringOn
 			return al, a.Put(al)
 		}
 	}
 	al := config.Alarm{ID: strconv.FormatInt(time.Now().UnixNano(), 36), Hour: hour, Minute: minute, Days: days,
-		Label: label, On: true, Remind: true, RingOn: ringOn}
+		Label: label, On: true, Remind: true, RingOn: ringOn, Date: date}
 	return al, a.Put(al)
 }
 
 // ReminderTime reads when a reminder goes off: a time of day, or a time from now ("in 20 minutes"),
 // which is rounded up to the next whole minute, since a reminder is kept as a time of day.
+// daysOrDate reads an action's days: the repeating days ParseDays reads, or a single day for a one-off
+// - "today", "tomorrow", or a date as 2026-09-29. A day whose hour:minute has already gone by is
+// refused rather than taken for next year.
+func daysOrDate(s string, hour, minute int, now time.Time) (days uint8, date string, err error) {
+	v := strings.ToLower(strings.TrimSpace(s))
+	var d time.Time
+	switch v {
+	case "today":
+		d = now
+	case "tomorrow":
+		d = now.AddDate(0, 0, 1)
+	default:
+		t, perr := time.ParseInLocation(config.DateLayout, v, now.Location())
+		if perr != nil {
+			days, err = config.ParseDays(s)
+			return days, "", err
+		}
+		d = t
+	}
+	at := time.Date(d.Year(), d.Month(), d.Day(), hour, minute, 0, 0, now.Location())
+	if !at.After(now) {
+		return 0, "", fmt.Errorf("alarms: %s at %d:%02d has already gone by", at.Format("Mon Jan 2"), hour, minute)
+	}
+	return config.DaysOnce, at.Format(config.DateLayout), nil
+}
+
 func ReminderTime(s string, now time.Time) (hour, minute int, fromNow bool, err error) {
 	if hour, minute, err = parseClock(s); err == nil {
 		return hour, minute, false, nil
@@ -676,14 +717,14 @@ func (a *Alarms) Actions() []*esphome.Action {
 				if err != nil {
 					return nil, err
 				}
-				days, err := config.ParseDays(c.String("days"))
+				days, date, err := daysOrDate(c.String("days"), hour, minute, time.Now())
 				if err != nil {
 					return nil, err
 				}
-				if fromNow && days != config.DaysOnce {
-					return nil, fmt.Errorf("reminders: a time from now happens once; give a time of day to repeat it")
+				if fromNow && (days != config.DaysOnce || date != "") {
+					return nil, fmt.Errorf("reminders: a time from now happens once; give a time of day for a day or to repeat it")
 				}
-				al, err := a.SetReminder(hour, minute, days, c.String("label"), devices(c.String("ring_on")))
+				al, err := a.SetReminderOn(hour, minute, days, c.String("label"), devices(c.String("ring_on")), date)
 				if err != nil {
 					return nil, err
 				}
@@ -700,11 +741,11 @@ func (a *Alarms) Actions() []*esphome.Action {
 				if err != nil {
 					return nil, err
 				}
-				days, err := config.ParseDays(c.String("days"))
+				days, date, err := daysOrDate(c.String("days"), hour, minute, time.Now())
 				if err != nil {
 					return nil, err
 				}
-				al, err := a.Set(hour, minute, days, strings.TrimSpace(c.String("label")))
+				al, err := a.SetOn(hour, minute, days, strings.TrimSpace(c.String("label")), date)
 				if err != nil {
 					return nil, err
 				}

@@ -121,7 +121,8 @@ of day instead.
 
 *string*
 
-Same as `alarm_set`'s `days`. Leave it out, or use `once`, for a time from now.
+Same as `alarm_set`'s `days`. Leave it out, or use `once`, for a time from now. For a one-off on a particular day, give the day instead: `today`, `tomorrow`, or a date written
+`2026-09-29`. A day whose time has already gone by is refused.
 
 ### label (Required)
 

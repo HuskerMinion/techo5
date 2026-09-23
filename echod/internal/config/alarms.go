@@ -69,6 +69,35 @@ type Alarm struct {
 	// default (Alarms.SunriseMinutes), which is what every alarm had before each could choose;
 	// SunriseOff is none for this alarm whatever the default says.
 	Sunrise int `json:"sunrise,omitempty"`
+
+	// Date is the day a one-off goes off, as DateLayout in the device's own time zone. Without one, a
+	// one-off goes off the next time the clock reaches Hour:Minute. Ignored for an alarm that repeats.
+	Date string `json:"date,omitempty"`
+}
+
+// DateLayout is how an alarm's date is written.
+const DateLayout = "2006-01-02"
+
+// OnDate is the moment a dated one-off goes off, in the device's own time zone, and false for an
+// alarm with no date or one that repeats.
+func (a Alarm) OnDate() (time.Time, bool) {
+	if a.Date == "" || a.Days != DaysOnce {
+		return time.Time{}, false
+	}
+	d, err := time.ParseInLocation(DateLayout, a.Date, time.Local)
+	if err != nil {
+		return time.Time{}, false
+	}
+	return time.Date(d.Year(), d.Month(), d.Day(), a.Hour, a.Minute, 0, 0, time.Local), true
+}
+
+// When is how an alarm's days read on a screen: its date for a dated one-off, as "Tue, Sep 29", and
+// DaysLabel otherwise.
+func (a Alarm) When() string {
+	if t, ok := a.OnDate(); ok {
+		return t.Format("Mon, Jan 2")
+	}
+	return DaysLabel(a.Days)
 }
 
 // RingEverywhere in RingOn sends a reminder to every device in the house.
@@ -186,6 +215,11 @@ type AlarmsWriter struct{ st *Store }
 // Put adds an alarm, or replaces the one with its ID.
 func (w AlarmsWriter) Put(a Alarm) error {
 	a.RingOn = slices.Clone(a.RingOn)
+	// A date belongs to a one-off only: an alarm set to repeat keeps none, or setting it back to once
+	// would bring back a day that was chosen for something else.
+	if a.Days != DaysOnce {
+		a.Date = ""
+	}
 	return w.st.Update(func(c *Config) {
 		if i := slices.IndexFunc(c.Alarms.List, func(x Alarm) bool { return x.ID == a.ID }); i >= 0 {
 			c.Alarms.List[i] = a
