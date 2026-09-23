@@ -138,6 +138,12 @@ func TestRoundScenesDraw(t *testing.T) {
 		"settings-tzcommon": spotPicker(catGeneral, "timezone:Common"),
 		"settings-sound":    spotScene(catSound),
 		"settings-privacy":  spotScene(catSecurity),
+		"settings-alarms":   spotScene(catAlarms),
+		"settings-alarms-end": func() roundScene {
+			s := spotScene(catAlarms)
+			s.sheet.st.cardScroll = 1000
+			return s
+		}(),
 	}
 	// The light before an alarm on the round face, frame by frame.
 	wake := at.Add(20 * time.Minute)

@@ -92,6 +92,7 @@ var registered = []string{
 	"replying_effect_2",
 	"ring",
 	"ring_muted",
+	"ring_volume",
 	"room_floor",
 	"room_level",
 	"room_reaction",

@@ -132,6 +132,10 @@ func adaptRows(rows []settingRow, sv sheetView) []settingRow {
 			row.value = ""
 		case row.id == "slideshow":
 			row.sub = "" // its choice needs the room
+		case row.id == "ringvol" && row.value == "Silent":
+			row.sub = "No sound at all"
+		case row.id == "ringvol":
+			row.sub = "Not the music's"
 		case row.id == "wakesens":
 			row.label = "Sensitivity"
 		case row.id == "sendspin":

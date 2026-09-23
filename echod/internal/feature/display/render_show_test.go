@@ -110,6 +110,10 @@ func TestShowScenesDraw(t *testing.T) {
 			sheet: settings{cat: catSound, volume: 15, wakeWord: "Okay Nabu"}},
 		"settings-sound-tone": {now: at, phase: "idle", showSheet: true,
 			sheet: settings{cat: catSound, volume: 15, wakeWord: "Okay Nabu", cardScroll: 210}},
+		"settings-alarms": {now: at, phase: "idle", showSheet: true, snooze: 9,
+			sheet: settings{cat: catAlarms}},
+		"settings-alarms-end": {now: at, phase: "idle", showSheet: true, snooze: 9,
+			sheet: settings{cat: catAlarms, cardScroll: 1000}},
 	}
 
 	// The light before an alarm, frame by frame: the same curve the panel follows, with the sun's

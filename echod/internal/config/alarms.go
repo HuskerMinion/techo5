@@ -36,6 +36,14 @@ type Alarms struct {
 
 	// SunriseFace draws the sun with a face on it, which is a matter of taste rather than of waking up.
 	SunriseFace bool `json:"sunrise_face,omitempty"`
+
+	// RingVolume is how loud alarms and timers ring, in the media volume's steps, and nothing else
+	// follows it. A ring used to go out at the media volume, so music left muted or turned right down
+	// made an alarm silent without anybody having chosen that. Zero is allowed and is silent: then
+	// somebody did choose it, and the screen says so.
+	//
+	// Unset until the device first runs with it; see Ring.
+	RingVolume *int `json:"ring_volume,omitempty"`
 }
 
 // Alarm is one alarm set on the device.
@@ -80,6 +88,20 @@ func (a Alarms) Snooze() int {
 		return DefaultSnoozeMinutes
 	}
 	return a.SnoozeMinutes
+}
+
+// Ring is how loud alarms and timers ring. Unset, it starts from the media volume the device is at
+// now, so nobody's alarm gets louder or quieter by itself when this setting arrives - unless that
+// volume is zero, which would carry exactly the silent alarm this exists to prevent, and then it is
+// the default volume instead.
+func (a Alarms) Ring(media int) int {
+	if a.RingVolume != nil {
+		return *a.RingVolume
+	}
+	if media <= 0 {
+		return DefaultVolume
+	}
+	return min(media, VolumeSteps)
 }
 
 // Named sets of days.
@@ -179,6 +201,12 @@ func (w AlarmsWriter) SunriseFace(on bool) error {
 }
 
 // Sound sets what alarms ring with, by name.
+// RingVolume sets how loud alarms and timers ring, 0 to VolumeSteps.
+func (w AlarmsWriter) RingVolume(n int) error {
+	n = min(max(n, 0), VolumeSteps)
+	return w.st.Update(func(c *Config) { c.Alarms.RingVolume = &n })
+}
+
 func (w AlarmsWriter) Sound(name string) error {
 	return w.st.Update(func(c *Config) { c.Alarms.Sound = name })
 }

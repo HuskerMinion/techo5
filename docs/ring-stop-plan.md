@@ -261,6 +261,15 @@ Both faces now say when a ring has been silenced and is waiting on an answer.
   during a call.
 - Do not let the boot splash gate the ringing page.
 
+**The engines are one bell now.** `feature/ring/bell.go` is the only thing on the device that rings:
+alarms and timers decide when and what for, and call `ring.Start`. One goroutine, one light, one
+duck, taken when the first ring starts and given back when the last one ends. The duck was a live
+fault, not tidiness: ducking is a switch rather than a count, so with an alarm and a timer ringing
+together the first to stop brought the music back up under the other. `Start` also counts as
+sounding before it returns, where the old loops only did once their goroutine got going. Callers
+that asked both engines separately - the stop word, the action button, Snooze on both screens - ask
+`ring` instead. The ring's own level (decision 1) is set here too.
+
 ## Decisions
 
 Settled 2026-09-23, except the fourth.
@@ -270,6 +279,17 @@ Settled 2026-09-23, except the fourth.
    ring mute for somebody who really wants one. Not a floor on the media volume: a floor overrides a
    deliberate mute, where an own level means the deliberate mute was never the alarm's to begin with.
    Applies to alarms and timers both - a timer nobody can hear is the same failure.
+
+   **Built.** `config.Alarms.RingVolume`, 0-30 in the media volume's steps, set by "Ring volume" in
+   Alarms & Timers on the Show and the Spot and by the `ring_volume` number in Home Assistant (the
+   only way on a Dot). The separate ring mute became the bottom of the same range: at zero the row
+   reads "Silent" and says alarms and timers will make no sound. The first start writes down the
+   media volume it started from, or 15 if that was zero, so nobody's alarm changes by itself and no
+   device starts silent. Every sound goes through one gain after the speaker tuning, so the chime has
+   a queue of its own (`speaker.Player.Bell`): the output runs at the louder of the two levels and
+   the quieter lane is scaled down before the mix, which keeps the music at its own volume and a
+   muted one muted. On a Show the tuning's compressor works on the sum, so the music's share under a
+   ring is close rather than exact.
 2. **A button press silences, then offers a snooze.** Per principle 1: the first press stops the
    noise and offers "Snooze N min?" for a few seconds; ignoring the offer leaves it stopped, because
    a snooze nobody confirmed is the surprising outcome. **N is configurable** - in settings and on

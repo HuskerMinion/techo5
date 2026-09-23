@@ -56,10 +56,8 @@ func (d *Display) ringGesture(g touch.Gesture) bool {
 	case stop:
 		ring.End()
 	case snooze:
-		if st.alarm != nil {
-			alarm.Get().Snooze()
-		}
-		timer.Get().Stop()
+		// Accept snoozes what can be snoozed and stops the rest, which is a timer beside the alarm.
+		ring.Accept()
 	default:
 		return false
 	}
