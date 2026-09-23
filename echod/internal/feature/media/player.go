@@ -88,6 +88,7 @@ type Player struct {
 	// passes through this player.
 	remoteState atomic.Value  // string
 	remoteGen   atomic.Uint64 // counts RemoteState, so a pause's timeout knows whether it still stands
+	haFwdAt     atomic.Int64  // when a Home Assistant play or pause was last passed on to a remote (fromHA)
 
 	// extTrack is what a remote says it is playing: a phone over Bluetooth, or Music Assistant over
 	// Sendspin. The stream is the remote's business; this is only what to call it.
@@ -462,7 +463,7 @@ func (p *Player) command(c esphome.MediaCommand) {
 		// kept as a pause, so the screen still shows what was playing and play picks it up again. A
 		// track left stopped that long is really over. A track somebody else is playing is theirs to
 		// stop, so the remote is asked to pause it instead.
-		p.Transport(TransportPause)
+		p.fromHA(TransportPause)
 		n := p.stoppedAt.Add(1)
 		time.AfterFunc(stoppedFor, func() {
 			if _, paused := p.stream.Playing(); paused && p.stoppedAt.Load() == n {
@@ -470,11 +471,11 @@ func (p *Player) command(c esphome.MediaCommand) {
 			}
 		})
 	case esphome.MediaPlayerPause:
-		p.Transport(TransportPause)
+		p.fromHA(TransportPause)
 	case esphome.MediaPlayerPlay:
-		p.Transport(TransportPlay)
+		p.fromHA(TransportPlay)
 	case esphome.MediaPlayerToggle:
-		p.Transport(TransportToggle)
+		p.fromHA(TransportToggle)
 	}
 }
 
@@ -578,6 +579,44 @@ func (p *Player) remoteIsTheTrack() bool {
 // Transport asks for a track's own controls. When somebody else is playing, the command is theirs: this
 // player must not pause or skip underneath audio it is not playing. A play or pause with no opinion of
 // its own is settled against what the remote last said it was doing.
+// haEcho is how soon after passing one of Home Assistant's play or pause on to a remote another is
+// taken for an echo rather than a request.
+const haEcho = 1500 * time.Millisecond
+
+// fromHA is a play, pause or toggle from Home Assistant's media player.
+//
+// For this player's own stream it is Transport. For a remote's it is passed on only when it would change
+// what the remote is doing, and not again within haEcho. Music Assistant knows a TECHO5 device twice -
+// as the Sendspin player and as this Home Assistant media player - and it pauses one when the other
+// pauses: a pause passed on to it came back through Home Assistant, was passed on again, and the two
+// went round thousands of times a second, flickering the play button and flooding Music Assistant until
+// its clients dropped. The screen and the buttons still go straight to Transport: a finger is not an echo.
+func (p *Player) fromHA(t Transport) {
+	if !p.remoteIsTheTrack() {
+		p.Transport(t)
+		return
+	}
+	playing, paused := p.RemotePlaying()
+	if t == TransportToggle {
+		t = TransportPause
+		if paused {
+			t = TransportPlay
+		}
+	}
+	state, _ := p.remoteState.Load().(string)
+	if (t == TransportPause && (paused || state == "stopped")) || (t == TransportPlay && playing) {
+		slog.Debug("home assistant transport already so, not passed on", "transport", t, "remote", state)
+		return
+	}
+	now := time.Now().UnixNano()
+	if last := p.haFwdAt.Load(); last != 0 && time.Duration(now-last) < haEcho {
+		slog.Info("home assistant transport too soon after the last, taken for an echo", "transport", t)
+		return
+	}
+	p.haFwdAt.Store(now)
+	p.Transport(t)
+}
+
 func (p *Player) Transport(t Transport) {
 	if p.remoteIsTheTrack() {
 		if t == TransportToggle {

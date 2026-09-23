@@ -394,6 +394,14 @@ func (d *Display) changed(s voice.State) {
 					home.Get().Stop()
 					media.Get().Stop()
 				}
+				// And the page goes, as a swipe puts it away: Music Assistant keeps a stopped track
+				// as a paused one, and the page for a paused track is still a page. It comes back for
+				// the next track.
+				rd := home.Get().Radio()
+				d.mu.Lock()
+				d.away, d.awayTrack, d.awayStation = true, rd.Title, rd.Now
+				d.mu.Unlock()
+				d.wake()
 			}()
 			slog.Info("screen: home by voice")
 		}
