@@ -92,7 +92,7 @@ data:
 In YAML, refer to this action as `esphome.<node>_reminder_set`.
 
 Sets a reminder: at its time the device chimes, says the label out loud once, and leaves it on the
-screen until somebody taps it or presses **Stop ringing**. It can go off on other devices in the
+screen until somebody taps it or presses **Stop alarm or timer**. It can go off on other devices in the
 house as well, and stopping it on any one of them stops it on all of them. Reminders sound during
 quiet hours, like alarms. A Dot has no screen, so there it is the chime and the words, and nothing is
 left to dismiss afterwards. Answers with the new reminder's `id` if called with a `response_variable`.
@@ -269,7 +269,7 @@ Cancels one of the device's own timers, the ones started with `timer_start` or o
 Timers set by voice through Home Assistant's Assist are cancelled by voice, the same way they were
 set, and this action refuses them with a message saying so.
 
-To silence a timer that is already ringing, press the device's **Stop ringing** button entity
+To silence a timer that is already ringing, press the device's **Stop alarm or timer** button entity
 instead; it stops alarms and timers alike.
 
 ### id (Required)

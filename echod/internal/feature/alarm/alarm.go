@@ -128,7 +128,7 @@ func build() *Alarms {
 	}
 	// Stops whatever is ringing, a timer as much as an alarm. The object id stays "alarm_stop" from
 	// when it only stopped alarms, so automations that press it keep working.
-	a.stop = &esphome.Button{Base: esphome.Base{ObjectID: "alarm_stop", Name: "Stop ringing", Icon: "mdi:alarm-off"}, OnPress: func() {
+	a.stop = &esphome.Button{Base: esphome.Base{ObjectID: "alarm_stop", Name: "Stop alarm or timer", Icon: "mdi:alarm-off"}, OnPress: func() {
 		// From Home Assistant, stop also means a snoozed alarm is not wanted back - when nothing is
 		// sounding. Asked of the ring and not of End, which also takes down a reminder on the screen
 		// and would otherwise leave the snooze standing.

@@ -102,7 +102,7 @@ func init() {
 	// own came due. One sent to it before then went nowhere, without a sound or a log line.
 	Get()
 
-	// The Stop ringing button, and anything else that means "stop", takes a reminder down too.
+	// The Stop alarm or timer button, and anything else that means "stop", takes a reminder down too.
 	ring.Silences(func() bool { return Get().Stop() })
 }
 
