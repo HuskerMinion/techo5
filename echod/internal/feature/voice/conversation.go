@@ -18,6 +18,7 @@ import (
 	"github.com/HuskerMinion/techo5/echod/internal/feature/media"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/mute"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/recording"
+	"github.com/HuskerMinion/techo5/echod/internal/feature/ring"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/wakeword"
 	"github.com/HuskerMinion/techo5/echod/internal/hardware/led"
 	"github.com/HuskerMinion/techo5/echod/internal/hardware/mic"
@@ -326,6 +327,12 @@ func (c *conversation) handle(e event) {
 			c.log.Heard(e.text)
 			c.shown.Heard = e.text
 			Changed.Emit(c.shown)
+		}
+		// Home Assistant has no alarm of this device's to stop, so "stop the alarm" is acted on here,
+		// whatever it goes on to answer.
+		if ring.IsSounding() && stopsRing(e.text) {
+			slog.Info("heard a stop over a ring, ending it", "text", e.text)
+			ring.End()
 		}
 		c.turn.Heard(e.text)
 		if c.phase == phaseListening {

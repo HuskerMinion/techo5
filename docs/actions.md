@@ -146,6 +146,75 @@ data:
 response_variable: set
 ```
 
+## Stop a ring and set reminders by voice
+
+Home Assistant keeps no alarms or reminders of its own, so "stop the alarm" or "remind me to..." said
+to a TECHO5 device reaches Home Assistant with nothing there to act on, and it answers "OK" having
+done nothing. Two automations hand those sentences back to the device that heard them. Add each one
+in Settings > Automations & scenes > Create automation > Edit in YAML.
+
+The device stops a ring by itself as well, without these: while an alarm or timer rings, the wake
+word silences it, and a sentence that only asks to stop ("stop", "stop the alarm", "turn it off")
+ends it. The automation is what makes Home Assistant answer "Stopped." rather than "OK".
+
+```yaml
+alias: TECHO5 - stop alarm or timer by voice
+triggers:
+  - trigger: conversation
+    command:
+      - "stop [the] (alarm|timer)"
+      - "turn off [the] (alarm|timer)"
+      - "stop [the] ringing"
+conditions:
+  - "{{ device_entities(trigger.device_id) | select('search', 'stop_alarm') | list | count > 0 }}"
+actions:
+  - action: button.press
+    target:
+      entity_id: "{{ device_entities(trigger.device_id) | select('search', 'stop_alarm') | first }}"
+  - set_conversation_response: "Stopped."
+mode: queued
+```
+
+```yaml
+alias: TECHO5 - set a reminder by voice
+triggers:
+  - trigger: conversation
+    id: at
+    command:
+      - "remind me to {what} at {time}"
+      - "remind me at {time} to {what}"
+      - "set a reminder (for|at) {time} to {what}"
+  - trigger: conversation
+    id: in
+    command:
+      - "remind me in {time} to {what}"
+      - "remind me to {what} in {time}"
+      - "set a reminder in {time} to {what}"
+conditions:
+  - "{{ device_entities(trigger.device_id) | select('search', 'stop_alarm') | list | count > 0 }}"
+actions:
+  - variables:
+      when: "{{ ('in ' if trigger.id == 'in' else '') ~ trigger.slots.time }}"
+      what: "{{ trigger.slots.what | trim }}"
+  - action: "esphome.{{ device_attr(trigger.device_id, 'name') | slugify }}_reminder_set"
+    data: {time: "{{ when }}", days: "", label: "{{ what }}", ring_on: ""}
+    response_variable: set
+    continue_on_error: true
+  - if: "{{ set is defined and set.id is defined }}"
+    then:
+      - set_conversation_response: >-
+          OK, I'll remind you to {{ what }}
+          {{ (when if trigger.id == 'in' else 'at ' ~ when) | regex_replace('\.$', '') }}.
+    else:
+      - set_conversation_response: "Sorry, I couldn't set that reminder. Try a time like 7:30 PM, or in 20 minutes."
+mode: queued
+```
+
+Both find the device that heard the sentence, so one of each covers every TECHO5 device in the house,
+and a speaker that is not a TECHO5 device is left alone. The reminder's action name comes from the
+device's name in Home Assistant (`esphome.<name>_reminder_set`); if you renamed the device there,
+put its action name in by hand.
+
 ## Delete an alarm
 
 In YAML, refer to this action as `esphome.<node>_alarm_delete`.

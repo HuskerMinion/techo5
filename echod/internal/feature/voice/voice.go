@@ -158,7 +158,16 @@ func (v *Voice) Ready() bool { return v.vs.Subscribed() }
 // Start asks for a turn as if that slot's wake word had fired, which is how detection and the
 // buttons both reach a pipeline. What that means from the phase the conversation is already in is
 // the conversation's decision, not the caller's.
-func (v *Voice) Start(slot int) { v.turn.Start(slot) }
+//
+// A wake word said over a ringing alarm or timer silences it first, the way a button press does:
+// whoever says it at a ringing alarm wants it quiet, and should not have to know the one word that
+// stops it. The turn goes on, over a quiet room, and "stop" in it ends the ring (see stopsRing).
+func (v *Voice) Start(slot int) {
+	if ring.IsSounding() && ring.Silence() {
+		slog.Info("wake word over a ring, silencing it")
+	}
+	v.turn.Start(slot)
+}
 
 // Busy reports whether a turn is running, for anything that has to leave the speaker alone while one
 // is.

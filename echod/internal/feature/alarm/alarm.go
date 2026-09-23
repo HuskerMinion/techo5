@@ -431,6 +431,12 @@ const sayFor = 9 * time.Second
 // sayOverRing says what an alarm is for, with the chime held back so the words are heard. The ring's
 // first chime has already gone by then, which is what turns somebody's head; the words follow.
 func sayOverRing(label string) {
+	// A label that only says what it is adds nothing to the chime, and holding the chime back for it
+	// is nine seconds of an alarm not sounding.
+	switch strings.ToLower(strings.TrimSpace(label)) {
+	case "alarm", "an alarm", "the alarm", "wake up alarm", "timer", "reminder":
+		return
+	}
 	remind.Say(label)
 	for end := time.Now().Add(sayFor); time.Now().Before(end) && ring.IsSounding(); {
 		ring.Hush()
