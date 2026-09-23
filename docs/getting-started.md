@@ -305,6 +305,16 @@ pipeline rather than the device: Home Assistant is replying in text only.
    network better, but it needs to be able to reach the address Home Assistant gives it for the audio.
    Where it cannot, the device falls back to the streamed copy on its own (releases from 2026-09-20
    on), and setting Reply delivery to **Streamed** makes that permanent.
+5. **Home Assistant on HTTPS with its own certificate.** If Home Assistant's address is `https://` with
+   a self-signed certificate, or one issued for a different name than the one the device is given,
+   the device refuses the download and the log says `x509: certificate`. The fix that keeps checking
+   is to give Home Assistant a certificate for the name it is reached by (or set its internal URL,
+   Settings → System → Network, to the plain `http://` address on your network). Otherwise turn on
+   **Skip certificate checks**, a diagnostic switch on the device in Home Assistant. It covers what
+   the device downloads for Home Assistant and the screen (replies and announcements, wake word
+   models, slideshow pictures), which is why it is off by default; the device's Settings screen shows
+   *Certificate checks: Off* while it is on. Updates never use it: they always check GitHub's
+   certificate and the release signature.
 
 ## Windows, Linux or macOS
 
