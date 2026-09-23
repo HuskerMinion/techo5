@@ -90,16 +90,28 @@ func shorten(t *testing.T, retry, wait time.Duration) {
 // never tried again.
 func TestAKeyThatReadsLaterIsWaitedFor(t *testing.T) {
 	shorten(t, 10*time.Second, 5*time.Millisecond)
-	path := filepath.Join(t.TempDir(), "psk")
-	if err := os.Mkdir(path, 0o700); err != nil {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "psk")
+	// The key is a link, first to a directory - there and unreadable - then, in one rename, to the
+	// key. Removing the directory and writing the file in its place left a moment with nothing at the
+	// path, which is an unprovisioned device and rightly read as one: the test raced itself.
+	unreadable, key := filepath.Join(dir, "unreadable"), filepath.Join(dir, "key")
+	if err := os.Mkdir(unreadable, 0o700); err != nil {
 		t.Fatalf("setting up the test: %v", err)
+	}
+	if err := os.WriteFile(key, []byte(testKey+"\n"), 0o600); err != nil {
+		t.Fatalf("setting up the test: %v", err)
+	}
+	if err := os.Symlink(unreadable, path); err != nil {
+		t.Skipf("no symlinks here: %v", err)
 	}
 	go func() {
 		time.Sleep(50 * time.Millisecond)
-		if err := os.Remove(path); err != nil {
+		next := filepath.Join(dir, "psk.next")
+		if err := os.Symlink(key, next); err != nil {
 			return
 		}
-		_ = os.WriteFile(path, []byte(testKey+"\n"), 0o600)
+		_ = os.Rename(next, path)
 	}()
 
 	psk, err := waitForPSK(context.Background(), path)
