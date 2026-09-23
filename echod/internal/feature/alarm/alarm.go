@@ -96,6 +96,9 @@ type Alarms struct {
 
 	wake chan struct{}
 
+	// aliveAt is when the device last wrote down that it was running; the scheduler's alone.
+	aliveAt time.Time
+
 	mu      sync.Mutex
 	ringing *Ring
 	silence func()
@@ -171,17 +174,16 @@ func (a *Alarms) Restore(c config.Config) {
 		}
 	}
 
-	// The snoozes come back as they were. One whose moment has already passed is not rung — the
-	// scheduler's first window is a few microseconds wide, so nothing restored can be due in it, and
-	// that is deliberate: a device that screams every time it boots would be worse than one that
-	// misses a snooze. It is said out loud rather than dropped in silence, which is what used to
-	// happen to every snooze a restart met.
+	// The snoozes come back as they were. One whose moment passed more than ResumeWithin ago is not
+	// rung, deliberately: a device that screams every time it boots would be worse than one that
+	// misses a snooze. It is written down as missed and shown, rather than dropped in silence, which
+	// is what used to happen to every snooze a restart met.
 	now := time.Now()
 	var live []source
 	for _, s := range c.Alarms.Snoozed {
-		if !s.At.After(now) {
-			slog.Info("a snooze was missed while the device was off",
-				"alarm", s.Label, "was due", s.At.Format(time.RFC3339))
+		// One due in the last ResumeWithin is kept, and the scheduler's first look rings it.
+		if !s.At.After(now.Add(-ResumeWithin)) {
+			ring.Missed("snooze", s.Label, s.At)
 			continue
 		}
 		live = append(live, source{key: s.Key, label: s.Label, once: s.At})
@@ -263,11 +265,22 @@ func (a *Alarms) poke() {
 func (a *Alarms) Run(ctx context.Context) error {
 	last := time.Now()
 	published := ""
+	looked := false
 	for {
 		now := time.Now()
+		rang := false
+		if clockSet(now) && !looked {
+			// Once, and only with a clock worth trusting: what fell due while the device was off.
+			a.away(now)
+			looked = true
+		}
 		if clockSet(now) && clockSet(last) {
+			for _, m := range overdue(a.sources(now), last, now) {
+				a.missed(m)
+			}
 			for _, s := range due(a.sources(now), last, now) {
 				a.fire(s, now)
+				rang = true
 			}
 			// After firing, because a snooze due in this very window has just rung and pruned
 			// itself. What is left with its moment behind it is one the stale window refused, or
@@ -276,6 +289,7 @@ func (a *Alarms) Run(ctx context.Context) error {
 			// good, with the settings sheet drawing "Snoozed until" and a time in the past — an
 			// alarm promised to somebody that was never coming.
 			a.pruneSnoozes(now)
+			a.keepAlive(now, rang)
 		}
 		last = now
 
@@ -417,8 +431,7 @@ func (a *Alarms) pruneSnoozes(now time.Time) {
 		return
 	}
 	for _, s := range missed {
-		slog.Info("a snooze passed without ringing",
-			"alarm", s.label, "was due", s.once.Format(time.RFC3339), "late by", now.Sub(s.once).Round(time.Second))
+		ring.Missed("snooze", s.label, s.once)
 	}
 	saveSnoozes(saved)
 	a.Changed.Emit(struct{}{})

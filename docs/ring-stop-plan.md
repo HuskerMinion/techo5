@@ -125,7 +125,7 @@ so it can be heard. Nothing ever ducks the alarm.
 
 ## The work, in order
 
-R1 and R2 are built, along with decision 3's header. R3 onwards is still a plan.
+All built except R3, which was dropped. Each section says what was built and what it turned up.
 
 ### R1 - Make the stop word as easy to hear as every other word - BUILT
 
@@ -206,16 +206,15 @@ threshold; `OnDetect` would **start a conversation turn** on an unrecognised res
 `nearmiss.go`'s ring hush is keyed to the one index; and the config holds a single `Stop` struct with
 a single sensitivity entity. None of that is hard, but none of it is free either.
 
-### R4 - Any button stops a ring
+### R4 - Any button stops a ring - BUILT
 
 First press of volume-up, volume-down or mute silences a ring; it does not change the volume or the
 microphone that time. Every device family has all three buttons, so this is the only local stop that
 works with no screen and no microphone.
 
-Decision needed: does the first press **stop** or **snooze**? Stopping surprises somebody who
-reached over to turn a loud alarm down; snoozing means an ignored alarm comes back. Suggested: it
-silences and offers "Snooze 9 min?" for a few seconds, which separates the urgent act from the
-decision (principle 1).
+Built as decided (decision 2): the first press of any of them silences without ending the ring and
+offers the snooze for 8 s ("press again to snooze N min" on the screen); a second press takes it, and
+no answer stops the ring.
 
 ### R5 - The touch targets - BUILT
 
@@ -243,7 +242,7 @@ only showed most clearly:
 
 Both faces now say when a ring has been silenced and is waiting on an answer.
 
-### R6 - Survive a disruption
+### R6 - Survive a disruption - BUILT
 
 - Persist timers and snoozes as absolute finish times. Alarms already persist; timers and snoozes are
   memory-only and a restart loses both.
@@ -253,7 +252,19 @@ Both faces now say when a ring has been silenced and is waiting on an answer.
 - Fix the snooze that a forward clock jump drops silently (`feature/alarm/schedule.go:43-53`, the
   `stale` window) - it should leave a trace, not vanish.
 
-### R7 - The remaining holes
+Snoozes and the device's own timers persist as absolute times. **A missed ring leaves a trace**
+(principle 5): `ring.Missed` writes it down, the clock page says it for 12 hours ("Missed: timer
+"Pasta" at 2:03 PM yesterday" in the Show's footer, a shorter line under the Spot's clock) and the
+`missed_ring` sensor carries the latest to Home Assistant, which on a Dot is the only trace there is.
+What it catches: a snooze or timer that came due while the device was off, a snooze or alarm a clock
+jump carried past, and - new - **an alarm that came due while the device was off**, which used to
+leave nothing at all, since the scheduler starts from now. That needs to know when the device
+stopped, so it writes down that it is running (`config.KeepAlive`, a small file beside the state)
+every 10 minutes and whenever something rings. Anything due in the last 2 minutes before it came back
+still rings, so a restart for an update at 6:29 does not lose a 6:30 alarm; older than that is
+missed, never rung, and a missed one-off alarm is turned off as ringing it would have.
+
+### R7 - The remaining holes - BUILT
 
 - A timer stop for Home Assistant, or fold timers into `alarm_stop`. Consider unifying the two ring
   engines; the duplication is what let this gap exist.

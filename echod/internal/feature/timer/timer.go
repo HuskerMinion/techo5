@@ -45,6 +45,10 @@ const (
 
 var countdownColor = led.Color{R: 0xFF, G: 0x8C, B: 0x00}
 
+// resumeWithin is how late a timer of the device's own may still ring after a restart; the alarm's
+// ResumeWithin, and for the same reasons. Not imported: alarm imports this package.
+const resumeWithin = 2 * time.Minute
+
 // Timers is every timer Home Assistant has told this device about.
 type Timers struct {
 	countdown *led.Claim
@@ -223,13 +227,19 @@ func saveLocal(list []config.LocalTimer) {
 func (t *Timers) Restore(c config.Config) {
 	now := time.Now()
 	var live []config.LocalTimer
+	var resume string
 
 	t.mu.Lock()
 	for _, s := range c.Timers.Local {
 		switch {
 		case !s.Finish.IsZero() && !s.Finish.After(now):
-			slog.Info("a timer finished while the device was off",
-				"name", s.Name, "was due", s.Finish.Format(time.RFC3339))
+			// Just finished, as when a restart lands on it, rings; longer ago is written down and
+			// shown instead, or a device that crashes while ringing would ring on every start.
+			if now.Sub(s.Finish) <= resumeWithin {
+				resume = cmp.Or(s.Name, "Timer")
+			} else {
+				ring.Missed("timer", s.Name, s.Finish)
+			}
 			continue
 		case !s.Finish.IsZero():
 			t.held[s.ID] = &timer{name: s.Name, total: s.Total, left: s.Finish.Sub(now), at: now, active: true, local: true}
@@ -242,6 +252,10 @@ func (t *Timers) Restore(c config.Config) {
 
 	if len(live) != len(c.Timers.Local) {
 		saveLocal(live)
+	}
+	if resume != "" {
+		slog.Info("ringing a timer that finished as the device was starting", "name", resume)
+		t.startRinging(resume)
 	}
 	if len(live) > 0 {
 		slog.Info("timers restored", "count", len(live))

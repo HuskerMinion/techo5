@@ -86,18 +86,19 @@ func TestShowScenesDraw(t *testing.T) {
 		// Muted while a browser is asking to be let in. The footer used to show one of these instead
 		// of the other; now they are on different edges and neither hides the other.
 		"muted-setup-ask": {now: at, phase: "idle", weather: sky, muted: true, setupAsking: true},
-		"call-ringing": {now: at, phase: "idle", call: phone.State{Phase: phone.Ringing, Peer: "104"}},
+		"call-ringing":    {now: at, phase: "idle", call: phone.State{Phase: phone.Ringing, Peer: "104"}},
 		// A timer finishing during a call. This page is drawn over the ringing one, so without a
 		// line here the noise has nothing on screen to explain it, and the buttons below belong to
 		// the call.
 		"call-with-timer-ringing": {now: at, phase: "idle", snooze: 9,
 			call: phone.State{Phase: phone.Talking, Peer: "104", Since: at.Add(-90 * time.Second)},
 			ring: ringState{timer: "Pasta"}},
-		"call-talking":  {now: at, phase: "idle", call: phone.State{Phase: phone.Talking, Peer: "104", Since: at.Add(-90 * time.Second)}},
+		"call-talking": {now: at, phase: "idle", call: phone.State{Phase: phone.Talking, Peer: "104", Since: at.Add(-90 * time.Second)}},
 		"settings-sound": {now: at, phase: "idle", showSheet: true,
 			sheet: settings{cat: catSound, volume: 15, wakeWord: "Okay Nabu"}},
 		"settings-sound-tone": {now: at, phase: "idle", showSheet: true,
 			sheet: settings{cat: catSound, volume: 15, wakeWord: "Okay Nabu", cardScroll: 210}},
+		"clock-missed": {now: at, phase: "idle", missed: "Missed: timer \"Pasta\" at 2:03 PM yesterday · and 1 more"},
 		"settings-alarms": {now: at, phase: "idle", showSheet: true, snooze: 9,
 			sheet: settings{cat: catAlarms}},
 		"settings-alarms-end": {now: at, phase: "idle", showSheet: true, snooze: 9,

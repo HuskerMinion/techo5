@@ -228,6 +228,7 @@ func build() *Display {
 	security.Get().Changed.Listen(func(struct{}) { d.wake() })
 	alarm.Get().Changed.Listen(func(struct{}) { d.wake() })
 	timer.Get().Changed.Listen(func(struct{}) { d.wake() })
+	onMissed(d.wake)
 	home.Get().Changed.Listen(func(struct{}) { d.wake() })
 	return d
 }
@@ -1183,6 +1184,7 @@ func (d *Display) frame() time.Duration {
 	s.announceRecording = announce.Get().Recording()
 	s.announcePeers = len(announce.Peers())
 	s.announcement, s.showAnnouncement = announce.Get().Showing()
+	s.missed = missedNote(now, false)
 
 	if boring {
 		s.slideshow = home.Get().SlideshowBackground()

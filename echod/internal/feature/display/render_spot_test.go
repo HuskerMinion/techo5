@@ -76,19 +76,19 @@ func TestRoundScenesDraw(t *testing.T) {
 		week = append(week, hass.Day{When: at.AddDate(0, 0, i), Condition: c, High: float64(78 - 3*i), Low: float64(55 - 2*i), Rain: 10 * i})
 	}
 	scenes := map[string]roundScene{
-		"clock-weather":     {now: at, phase: "idle", weather: sky, timers: []timer.Countdown{{Left: 272 * time.Second, Total: 600 * time.Second, Active: true}}},
-		"menu-weather":      {now: at, phase: "idle", weather: sky, menuOpen: true, menuMode: modeMain, menuSel: 4, menuRot: restFor(4, len(mainItems))},
-		"weather":           {now: at, phase: "idle", weather: sky, forecast: week, menuOpen: true, menuMode: modeWeather},
-		"weather-now":       {now: at, phase: "idle", weather: home.Weather{Condition: "clear-night", Temp: "58°"}, menuOpen: true, menuMode: modeWeather},
-		"weather-none":      {now: at, phase: "idle", menuOpen: true, menuMode: modeWeather},
-		"nowplaying":        {now: at, phase: "idle", nowPlaying: true, playing: true, weather: sky, radio: home.Radio{Now: "KXYZ 101.1", Title: "Take It Easy", Artist: "Eagles", Art: testPicture(), Thumb: testPicture()}},
-		"nowplaying-logo":   {now: at, phase: "idle", nowPlaying: true, playing: true, radio: home.Radio{Now: "Morning News 850", Logo: true, Thumb: testPicture()}},
-		"cameras":           {now: at, phase: "idle", showCamera: true, camera: home.CameraView{Entity: "camera.deck", Name: "Deck", Frame: testPicture()}, menuOpen: true, menuMode: modeCameras, menuSel: 1, menuRot: restFor(1, 3), cameras: []config.Camera{{Entity: home.LocalCamera, Name: "This Spot"}, {Entity: "camera.deck", Name: "Deck"}, {Entity: "camera.front_door", Name: "Front door"}}},
-		"contacts":          {now: at, phase: "idle", menuOpen: true, menuMode: modeContacts, phoneReady: true, contacts: []phone.Contact{{Name: "Alex", Number: "15551234567"}, {Name: "Sam", Number: "15557654321"}, {Name: "Kitchen", Number: "106"}, {Name: "Garage", Number: "103"}, {Name: "Laundry Room", Number: "101"}, {Name: "Bathroom", Number: "102"}, {Name: "Office", Number: "104"}}, contactTop: 1},
-		"cameras-many":      {now: at, phase: "idle", showCamera: true, camera: home.CameraView{Entity: "camera.c3", Name: "Deck"}, menuOpen: true, menuMode: modeCameras, menuSel: 3, menuRot: restFor(3, 9), cameras: []config.Camera{{Entity: "local", Name: "This Spot"}, {Entity: "camera.c1", Name: "Front door"}, {Entity: "camera.c2", Name: "Garage side"}, {Entity: "camera.c3", Name: "Deck"}, {Entity: "camera.c4", Name: "Dining room"}, {Entity: "camera.c5", Name: "Garage inside"}, {Entity: "camera.c6", Name: "Shed front"}, {Entity: "camera.c7", Name: "Shed back"}, {Entity: "camera.c8", Name: "Garage front"}}},
-		"menu-call":         {now: at, phase: "idle", menuOpen: true, menuMode: modeMain, menuSel: 1, menuRot: restFor(1, len(mainItems)), phoneReady: true, contactCount: 4},
-		"ringing-alarm":     {now: at, phase: "idle", ringing: ringing{alarm: &alarm.Ring{Label: "Wake up", At: at}, snoozeIn: 9}},
-		"ringing-timer":     {now: at, phase: "idle", ringing: ringing{timer: "pasta", timerOn: true}},
+		"clock-weather":   {now: at, phase: "idle", weather: sky, timers: []timer.Countdown{{Left: 272 * time.Second, Total: 600 * time.Second, Active: true}}},
+		"menu-weather":    {now: at, phase: "idle", weather: sky, menuOpen: true, menuMode: modeMain, menuSel: 4, menuRot: restFor(4, len(mainItems))},
+		"weather":         {now: at, phase: "idle", weather: sky, forecast: week, menuOpen: true, menuMode: modeWeather},
+		"weather-now":     {now: at, phase: "idle", weather: home.Weather{Condition: "clear-night", Temp: "58°"}, menuOpen: true, menuMode: modeWeather},
+		"weather-none":    {now: at, phase: "idle", menuOpen: true, menuMode: modeWeather},
+		"nowplaying":      {now: at, phase: "idle", nowPlaying: true, playing: true, weather: sky, radio: home.Radio{Now: "KXYZ 101.1", Title: "Take It Easy", Artist: "Eagles", Art: testPicture(), Thumb: testPicture()}},
+		"nowplaying-logo": {now: at, phase: "idle", nowPlaying: true, playing: true, radio: home.Radio{Now: "Morning News 850", Logo: true, Thumb: testPicture()}},
+		"cameras":         {now: at, phase: "idle", showCamera: true, camera: home.CameraView{Entity: "camera.deck", Name: "Deck", Frame: testPicture()}, menuOpen: true, menuMode: modeCameras, menuSel: 1, menuRot: restFor(1, 3), cameras: []config.Camera{{Entity: home.LocalCamera, Name: "This Spot"}, {Entity: "camera.deck", Name: "Deck"}, {Entity: "camera.front_door", Name: "Front door"}}},
+		"contacts":        {now: at, phase: "idle", menuOpen: true, menuMode: modeContacts, phoneReady: true, contacts: []phone.Contact{{Name: "Alex", Number: "15551234567"}, {Name: "Sam", Number: "15557654321"}, {Name: "Kitchen", Number: "106"}, {Name: "Garage", Number: "103"}, {Name: "Laundry Room", Number: "101"}, {Name: "Bathroom", Number: "102"}, {Name: "Office", Number: "104"}}, contactTop: 1},
+		"cameras-many":    {now: at, phase: "idle", showCamera: true, camera: home.CameraView{Entity: "camera.c3", Name: "Deck"}, menuOpen: true, menuMode: modeCameras, menuSel: 3, menuRot: restFor(3, 9), cameras: []config.Camera{{Entity: "local", Name: "This Spot"}, {Entity: "camera.c1", Name: "Front door"}, {Entity: "camera.c2", Name: "Garage side"}, {Entity: "camera.c3", Name: "Deck"}, {Entity: "camera.c4", Name: "Dining room"}, {Entity: "camera.c5", Name: "Garage inside"}, {Entity: "camera.c6", Name: "Shed front"}, {Entity: "camera.c7", Name: "Shed back"}, {Entity: "camera.c8", Name: "Garage front"}}},
+		"menu-call":       {now: at, phase: "idle", menuOpen: true, menuMode: modeMain, menuSel: 1, menuRot: restFor(1, len(mainItems)), phoneReady: true, contactCount: 4},
+		"ringing-alarm":   {now: at, phase: "idle", ringing: ringing{alarm: &alarm.Ring{Label: "Wake up", At: at}, snoozeIn: 9}},
+		"ringing-timer":   {now: at, phase: "idle", ringing: ringing{timer: "pasta", timerOn: true}},
 		// Quieted by a button press and waiting to be told what that meant. It wears the ringing
 		// face while making no sound, so the face has to say which of the two it is.
 		"ringing-silenced": {now: at, phase: "idle",
@@ -129,6 +129,7 @@ func TestRoundScenesDraw(t *testing.T) {
 		"settings-tzcommon": spotPicker(catGeneral, "timezone:Common"),
 		"settings-sound":    spotScene(catSound),
 		"settings-privacy":  spotScene(catSecurity),
+		"clock-missed":      {now: at, phase: "idle", missed: "Missed: timer \"Pasta\" at 2:03 PM"},
 		"settings-alarms":   spotScene(catAlarms),
 		"settings-alarms-end": func() roundScene {
 			s := spotScene(catAlarms)

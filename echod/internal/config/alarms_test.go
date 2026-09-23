@@ -1,6 +1,10 @@
 package config
 
-import "testing"
+import (
+	"path/filepath"
+	"testing"
+	"time"
+)
 
 // Snooze length is held to what the screen and Home Assistant offer, whatever is asked for, and the
 // alarm sound is kept by name.
@@ -44,5 +48,20 @@ func TestRingVolume(t *testing.T) {
 		if got := st.Get().Alarms.Ring(3); got != c.want {
 			t.Errorf("ring volume set to %d reads %d, want %d", c.set, got, c.want)
 		}
+	}
+}
+
+// The record of the device running comes back as written, and none is none.
+func TestAlive(t *testing.T) {
+	Use(filepath.Join(t.TempDir(), "state.json"))
+	if _, ok := Alive(); ok {
+		t.Fatal("alive before anything was written")
+	}
+	when := time.Unix(1_790_000_000, 0)
+	if err := KeepAlive(when); err != nil {
+		t.Fatal(err)
+	}
+	if got, ok := Alive(); !ok || !got.Equal(when) {
+		t.Errorf("alive = %v %v, want %v", got, ok, when)
 	}
 }
