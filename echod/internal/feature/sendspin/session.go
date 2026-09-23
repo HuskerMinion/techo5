@@ -275,6 +275,16 @@ func (s *session) grouped(g protocol.GroupUpdate) {
 		// player it sees as stopped - one it sees as paused is sent a plain "unpause" that nothing
 		// here can act on, and the room says playing in silence. So the room says stopped, and play
 		// from Music Assistant or Home Assistant starts the queue again where it was.
+		//
+		// A stop from the server while it was playing, that nobody here asked for, is Music
+		// Assistant's own pause as often as a stop, and it is said as a pause first. Music Assistant
+		// keeps the place in the track when this player goes from playing to paused to stopped, as
+		// it does after a pause from the screen, and starts the track over when it goes straight
+		// from playing to stopped. Seen on a Show 5 against Music Assistant, not taken from its
+		// documents.
+		if playing, _ := media.Get().RemotePlaying(); playing && s.askedFor() != "pause" {
+			media.Get().RemoteState("paused")
+		}
 		s.asked.Store("")
 		media.Get().RemoteState(state)
 		s.releaseSoon()
