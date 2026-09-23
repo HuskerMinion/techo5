@@ -416,7 +416,15 @@ func (d *Display) gesture(g touch.Gesture) {
 	// A call: its page takes every tap.
 	if st := phone.Get().State(); st.Phase != phone.Idle {
 		if g.Kind == touch.Tap {
-			d.callTap(g.X, g.Y, st)
+			// Unless something is ringing behind it. The call keeps its buttons; the rest of the
+			// page stops the ring. Taps outside the buttons did nothing on this page before, so
+			// answering and hanging up are untouched — and a timer that finishes mid-call used to
+			// have no way out at all, since this page took every tap and the stop word was off.
+			if rs := d.ringing(time.Now()); rs.any() && d.r != nil && !d.r.actionDecided(g.Y) {
+				d.stopRing()
+			} else {
+				d.callTap(g.X, g.Y, st)
+			}
 		}
 		d.wake()
 		return
@@ -1056,6 +1064,14 @@ func (d *Display) frame() time.Duration {
 	if booting && now.Sub(started) >= splashMin && voice.Get().Ready() {
 		d.booting, booting = false, false
 		slog.Info("splash done", "after", now.Sub(started).Round(time.Millisecond))
+	}
+	// A ring ends the splash whatever else is or is not ready. Waiting on Home Assistant's voice
+	// pipeline has no timeout, so a device that never reaches it stays on the logo for ever — and an
+	// alarm going off behind a logo is a screen that will not say what is making the noise or where
+	// to press to stop it. Nothing the splash is waiting for is needed to draw a ringing page.
+	if booting && ring.any() {
+		d.booting, booting = false, false
+		slog.Info("splash cut short: something is ringing", "after", now.Sub(started).Round(time.Millisecond))
 	}
 	d.mu.Unlock()
 	if booting {

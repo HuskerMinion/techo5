@@ -35,6 +35,18 @@ func (r *renderer) callPage(s scene) {
 	}
 	r.text(r.title, title, (r.w-r.width(r.title, title))/2, 80, amber)
 
+	// Something ringing behind the call. It has to be said, because this page is drawn over the
+	// ringing one and the noise would otherwise have nothing on screen to explain it — and it has to
+	// say where to press, because the buttons below belong to the call.
+	if s.ring.any() {
+		what := "Alarm"
+		if s.ring.timer != "" && s.ring.alarm == nil {
+			what = "Timer"
+		}
+		note := what + " ringing · tap here to stop"
+		r.text(r.small, note, (r.w-r.width(r.small, note))/2, r.s(130), dim)
+	}
+
 	who := st.Peer
 	if who == "" {
 		who = "Unknown"

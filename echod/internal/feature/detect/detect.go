@@ -13,6 +13,7 @@ import (
 	"github.com/HuskerMinion/techo5/echod/internal/feature/diag"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/mute"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/phone"
+	"github.com/HuskerMinion/techo5/echod/internal/feature/ring"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/voice"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/wakeword"
 	"github.com/HuskerMinion/techo5/echod/internal/hardware/led"
@@ -91,6 +92,18 @@ func newDetect() *Detect {
 		// A call has the microphones and the speaker. The far end talking through the speaker is not
 		// someone in the room, and a turn would take the call's audio away mid-sentence.
 		if phone.Get().Busy() {
+			// A ring during a call is the one thing that still has to hear "stop". The call page
+			// takes every tap and Home Assistant cannot stop a timer, so without this a timer that
+			// finishes mid-call sounds for its full fifteen minutes with no way out at all.
+			//
+			// It ends the ring and nothing else: the call is not interrupted, and the word is not
+			// passed to the turn, because the far end talking through the speaker is not somebody in
+			// the room.
+			if slot == StopSlot && ring.IsSounding() {
+				slog.Info("stop word during a call, ending the ring")
+				ring.End()
+				return
+			}
 			slog.Debug("wake word ignored during a call", "slot", slot+1)
 			return
 		}
