@@ -74,8 +74,10 @@ if [ -n "${PREBUILT_DAEMON:-}" ]; then
 else
 	(cd "$ROOT/echod" && "$GO" build -tags "$BUILD_TAGS" -trimpath -ldflags "-s -w -X $pkg.Version=$VERSION -X $pkg.GitCommit=$commit -X $pkg.BuildDate=$date" -o "$ROOT/bin/echod-arm" ./cmd/echod)
 fi
+# audioprobe lives in the daemon's module so it shares the daemon's ALSA code rather than a copy of it.
 for c in fbprobe audioprobe rebootto btbridge; do
-	(cd "$ROOT" && "$GO" build -trimpath -ldflags "-s -w" -o "$ROOT/bin/$c-arm" "./cmd/$c")
+	m=$ROOT; [ -d "$ROOT/echod/cmd/$c" ] && m=$ROOT/echod
+	(cd "$m" && "$GO" build -trimpath -ldflags "-s -w" -o "$ROOT/bin/$c-arm" "./cmd/$c")
 done
 unset GOOS GOARCH GOARM CGO_ENABLED
 

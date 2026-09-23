@@ -13,7 +13,7 @@ red indicator from userspace, and the matching GPL kernel source drop.
 Step 1 — done: `cmd/audioprobe` (pure Go, `internal/alsa` from EchoLocal)
 captures and plays through the raw devices with no vendor HAL involvement.
 Channel map established: mic, mic copy, loopback L, loopback R. Build with
-`GOOS=linux GOARCH=arm GOARM=7 CGO_ENABLED=0 go build ./cmd/audioprobe`.
+`GOOS=linux GOARCH=arm GOARM=7 CGO_ENABLED=0 go build ./cmd/audioprobe` (from `echod/`, where it now lives).
 
 Step 2 — **working end to end** (2026-09-14). The daemon is vendored under `echod/` and builds
 for cronos (default) and the Dot (`-tags dot`). On the Show it captures, plays, detects the wake

@@ -19,7 +19,7 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/HuskerMinion/techo5/internal/alsa"
+	"github.com/HuskerMinion/techo5/echod/internal/lib/alsa"
 )
 
 // toneLevel is the tone amplitude, set from -level.

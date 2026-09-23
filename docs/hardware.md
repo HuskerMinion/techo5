@@ -145,7 +145,7 @@ This is the same shape EchoLocal drives on the Dot (S24_3LE capture, 48 kHz
 S16_LE stereo playback), so its raw-ioctl ALSA code should carry over with
 the device numbers and channel count changed.
 
-### Verified with `cmd/audioprobe` (raw ioctls, vendor HAL idle, satellite app stopped)
+### Verified with `echod/cmd/audioprobe` (raw ioctls, vendor HAL idle, satellite app stopped)
 
 - Capture opens at 320-frame periods × 8 and reads 3 s with no overruns.
   Playback opens at 768 × 4 and plays with no underruns. Both devices are
@@ -227,7 +227,7 @@ The DRAM path plays cleanly.
 
 **Workaround, required:** hold any other AFE PCM node open, unconfigured, before opening
 `pcmC0D23p` and for as long as it is open. `/dev/snd/pcmC0D1c` (MultiMedia1_Capture, unused
-on this device) works. `cmd/audioprobe -hold` and the daemon's speaker do this; the daemon's
+on this device) works. `echod/cmd/audioprobe -hold` and the daemon's speaker do this; the daemon's
 `tools play --hold` defaults to it. The driver source that explains the two paths is
 `sound/soc/mediatek/mt8163/mt_soc_pcm_dl1_i2s0Dl1.c` in any public MT8163 kernel tree.
 

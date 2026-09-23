@@ -43,8 +43,10 @@ PY=${PYTHON:-$( (python3 -c 1) >/dev/null 2>&1 && echo python3 || echo python )}
 
 echo "== building tools for armv7"
 export GOOS=linux GOARCH=arm GOARM=7 CGO_ENABLED=0
+# audioprobe lives in the daemon's module so it shares the daemon's ALSA code rather than a copy of it.
 for c in fbprobe audioprobe rebootto btbridge; do
-	(cd "$ROOT" && "$GO" build -trimpath -ldflags "-s -w" -o "$ROOT/bin/$c-arm" "./cmd/$c")
+	m=$ROOT; [ -d "$ROOT/echod/cmd/$c" ] && m=$ROOT/echod
+	(cd "$m" && "$GO" build -trimpath -ldflags "-s -w" -o "$ROOT/bin/$c-arm" "./cmd/$c")
 done
 unset GOOS GOARCH GOARM CGO_ENABLED
 
