@@ -94,13 +94,15 @@ The steps are the same for both; where they differ, the 1st gen (`checkers`) is 
    ```
    git clone https://github.com/HuskerMinion/techo5
    cd techo5
-   python3 tools/install-show.py --serial <serial> --name "Kitchen" --dry-run
-   python3 tools/install-show.py --serial <serial> --name "Kitchen"
+   python3 tools/install-show.py --dry-run
+   python3 tools/install-show.py
    ```
-   `<serial>` is what `adb devices` shows. The dry run downloads and checks the
-   [latest release](https://github.com/HuskerMinion/techo5/releases/latest) (boot image with Bluetooth,
-   root filesystem); the second run replaces LineageOS with TECHO5 (it asks before erasing) and waits
-   for the first boot. Turning on **Rooted debugging** first lets it keep a backup of LineageOS's boot
+   It finds the Show on its own (and asks which, if more than one is plugged in), asks what to call
+   it in Home Assistant, and asks once, with a summary, before anything is erased. The dry run
+   downloads and checks the [latest release](https://github.com/HuskerMinion/techo5/releases/latest)
+   (boot image with Bluetooth, root filesystem); the second run replaces LineageOS with TECHO5 and
+   waits for the first boot, saying what it is waiting for as it goes. For a script, every question
+   has a switch: `--serial <serial> --name "Kitchen" --force`. Turning on **Rooted debugging** first lets it keep a backup of LineageOS's boot
    image. Every step by hand, and troubleshooting: [docs/install.md](install.md).
    *Check:* the screen shows the TECHO5 clock.
 5. **Add it to Home Assistant**: see [After installing](#after-installing-every-device).
@@ -162,10 +164,12 @@ loops. Every command runs the same on Windows, Linux and macOS once the Dot is u
    ```
    git clone https://github.com/HuskerMinion/techo5-dot
    cd techo5-dot
-   python3 tools/install-dot.py --serial <serial> --dry-run
-   python3 tools/install-dot.py --serial <serial> --name "Kitchen"
+   python3 tools/install-dot.py --dry-run
+   python3 tools/install-dot.py
    ```
-   `<serial>` is what `adb devices` shows. The dry run checks the Dot, backs up every partition that
+   It finds the Dot on its own (and asks which, if more than one is plugged in), and asks what to call
+   it in Home Assistant when it has no name yet. For a script: `--serial <serial> --name "Kitchen"`.
+   The dry run checks the Dot, backs up every partition that
    boots it into `backups/<serial>/` (keep that folder: it's the way back), downloads and checks the
    release, and builds this Dot's boot image, writing nothing to the Dot. The second run installs, with
    Bluetooth, and waits for the first boot to report healthy. (The installer also works straight from
@@ -224,12 +228,13 @@ is built on, runs on the unlocked Dot's Fire OS 6 with its own installer, and is
    Keep `backups/<serial>/`: it's the way back to LineageOS and Fire OS.
 6. **Install TECHO5 Spot**, booted back into LineageOS with rooted debugging on:
    ```
-   python3 tools/install-spot.py --serial <serial> --name "Kitchen" --build-only
-   python3 tools/install-spot.py --serial <serial> --name "Kitchen"
+   python3 tools/install-spot.py --serial <serial> --build-only
+   python3 tools/install-spot.py
    ```
    The first run captures what it needs from this Spot, downloads and checks the release, and builds
-   the boot image, touching nothing else. The second replaces LineageOS with TECHO5 (it asks before
-   erasing), with Bluetooth, and waits for the first boot. `--logo` also replaces the bootloader's
+   the boot image, touching nothing else. The second finds the Spot, asks what to call it in Home
+   Assistant, asks once, with a summary, before anything is erased, then replaces LineageOS with TECHO5,
+   with Bluetooth, and waits for the first boot. For a script: `--serial <serial> --name "Kitchen" --force`. `--logo` also replaces the bootloader's
    Amazon picture (needs `python3 -m pip install pillow`).
    *Check:* the round screen shows the TECHO5 clock.
 7. **Add it to Home Assistant**: see below.

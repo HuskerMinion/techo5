@@ -148,10 +148,11 @@ else: the boot image (with Bluetooth) and the root filesystem. Nothing is built.
 ```
 git clone https://github.com/HuskerMinion/techo5
 cd techo5
-python3 tools/install-show.py --serial <adb serial> --name "Kitchen"
+python3 tools/install-show.py
 ```
 
-It downloads and checks the release, flashes the boot image, creates the slot store and installs over
+It finds the Show, asks what to call it and asks once before erasing anything (or takes
+`--serial`, `--name` and `--force` from a script), downloads and checks the release, flashes the boot image, creates the slot store and installs over
 the USB serial console, and prints where the Home Assistant key is kept. Later updates come from Home
 Assistant. Every step by hand, and the fixes for what can go wrong: **[docs/install.md](docs/install.md)**.
 

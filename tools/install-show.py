@@ -7,8 +7,12 @@ panel the bootloader names in the kernel command line: the Echo Show 5 2nd gen (
 partitions this script writes are numbered the same on each. Each board takes its own boot image from
 the release, since the kernel configuration and the device trees differ.
 
+    python3 tools/install-show.py
     python3 tools/install-show.py --serial <serial> --name Kitchen --dry-run
-    python3 tools/install-show.py --serial <serial> --name Kitchen
+    python3 tools/install-show.py --serial <serial> --name Kitchen --force
+
+Run with nothing, it finds the unit (asking which, when there are several), asks for a name, and asks
+once before anything is erased. Every question has a switch, for running it from a script.
 
 Windows, Linux and macOS alike; needs Python 3, adb and fastboot. Nothing is built: the release's boot
 image (LineageOS's kernel rebuilt with Bluetooth, and TECHO5's rescue environment, with no SSH key) and
@@ -35,9 +39,9 @@ import re
 import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from techo5lib import (CONSOLE_TECHO5, Adb, Console, Fastboot, Release, default_dir, fail, fetch_json,  # noqa: E402
-                       md5, need, new_api_key, note, run_main, step, valid_api_key, wait_for,
-                       write_private)
+from techo5lib import (CONSOLE_TECHO5, Adb, Console, Fastboot, Release, ask_name, check_serial_access,  # noqa: E402
+                       confirm, console_hint, default_dir, fail, fetch_json, md5, need, new_api_key, note,
+                       pick_unit, run_main, step, valid_api_key, wait_for, write_private)
 
 REPO = 'HuskerMinion/techo5'
 # The LineageOS kernel commit TECHO5's kernel is rebuilt from: the vendor modules only load on it.
@@ -117,8 +121,8 @@ def boot_image(rel, work, dev):
 
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument('--serial', required=True, help="the unit's adb serial (adb devices)")
-    ap.add_argument('--name', required=True, help='the name Home Assistant shows, e.g. Kitchen')
+    ap.add_argument('--serial', help="the unit's adb serial (adb devices); found, or asked for, when missing")
+    ap.add_argument('--name', help='the name Home Assistant shows, e.g. Kitchen; asked for when missing')
     ap.add_argument('--release', default='latest', help='a release tag, or latest')
     ap.add_argument('--key-file', help='where the Home Assistant key is kept (default backups/<serial>/home-assistant.key)')
     ap.add_argument('--ssh-key', help='an SSH public key the unit accepts from the start (SSH is switched on)')
@@ -132,18 +136,18 @@ def main():
     ap.add_argument('--fastboot', default='fastboot')
     a = ap.parse_args()
 
+    # ------------------------------------------------------------------------------------ 1. checks
+    step('checks')
+    need(a.adb, 'install the Android platform tools (adb and fastboot)')
+    need(a.fastboot, 'install the Android platform tools (adb and fastboot)')
+    a.serial = pick_unit(a.serial, a.adb, ('device',), 'Echo Show', consoles=(CONSOLE_TECHO5,))
     backup = os.path.join(a.backups, a.serial)
     key_file = a.key_file or default_key_file(backup)
     adb = Adb(a.serial, a.adb)
     fastboot = Fastboot(a.serial, a.fastboot)
     console = Console(a.serial, CONSOLE_TECHO5)
-
-    # ------------------------------------------------------------------------------------ 1. checks
-    step('checks')
-    need(a.adb, 'install the Android platform tools (adb and fastboot)')
-    need(a.fastboot, 'install the Android platform tools (adb and fastboot)')
-    if '\n' in a.name or len(a.name) > 31:
-        fail('the name must be one line of at most 31 characters')
+    if a.name is not None:
+        a.name = ask_name(a.name, '')
     pub = None
     if a.ssh_key:
         with open(os.path.expanduser(a.ssh_key)) as f:
@@ -155,7 +159,8 @@ def main():
             fail('no file at %s' % f)
     state = adb.state()
     if state != 'device':
-        fail("adb does not see %s running LineageOS (state '%s'): turn on USB debugging and accept this computer" % (a.serial, state))
+        fail("adb does not see %s running LineageOS (state '%s'): turn on USB debugging and accept this computer%s"
+             % (a.serial, state, console_hint((CONSOLE_TECHO5,))))
     dev = adb.sh('getprop ro.product.device')
     if dev not in BOARDS:
         fail("%s reports '%s', which is none of: %s"
@@ -164,6 +169,10 @@ def main():
     if kr != KERNEL_RELEASE:
         fail('%s runs kernel %s, not %s: install the LineageOS 18.1 build the getting started guide links' % (a.serial, kr, KERNEL_RELEASE))
     note('%s, LineageOS kernel %s' % (dev, kr))
+    a.name = ask_name(a.name, BOARDS[dev])
+    note("name in Home Assistant: '%s'" % a.name)
+    if not a.dry_run:
+        check_serial_access()
 
     # ------------------------------------------------------------------------------------ 2. backup
     step('backup')
@@ -230,6 +239,13 @@ def main():
         note('Home Assistant key: new, in %s' % key_file)
 
     # ------------------------------------------------------------------------------------ 5. flash
+    # Asked here, once, rather than halfway through the store: the flash is where the unit stops being
+    # a LineageOS unit, so this is the last moment a "no" leaves it as it was.
+    confirm(a.force, [
+        "About to install TECHO5 %s on %s (%s) as '%s'." % (version, a.serial, BOARDS[dev], a.name),
+        "This flashes TECHO5's boot image, then erases LineageOS's system partition (mmcblk0p12) to",
+        'make the slot store. The way back is in docs/install.md.',
+    ])
     step('flash the boot image')
     adb.reboot('bootloader')
     wait_for('fastboot', 90, fastboot.present, 3)
@@ -248,7 +264,7 @@ def main():
             fastboot.run('continue')
             nudged[0] = True
         return False
-    wait_for('the rescue console on USB', 300, rescue_up)
+    wait_for('the rescue console on USB', 300, rescue_up, hint=console.waiting_hint)
     note('rescue console on %s' % console.port)
 
     # ------------------------------------------------------------------------------------ 6. store
@@ -267,10 +283,6 @@ def main():
              '   To start over from LineageOS, flash the backup at %s first.'
              % (console.run('STORE=/store slotctl status', 30) or '   (slotctl status did not answer)',
                 los_boot))
-    if not a.force:
-        print("   Next: LineageOS's system partition (mmcblk0p12) is erased and becomes the slot store.")
-        if input('   Type ERASE to go on: ').strip() != 'ERASE':
-            fail('stopped before erasing; the unit stays in rescue (flash the LineageOS boot image to go back)')
     tar = '/data/media/0/Download/' + name
     # The vendor tree is this unit's own, from LineageOS: releases don't carry it. Kept on userdata
     # before the system partition is erased, then in the store.
@@ -319,7 +331,7 @@ def main():
             fastboot.run('continue')
             nudged[0] = True
         return False
-    wait_for('slot a with the daemon running', 300, slot_up)
+    wait_for('slot a with the daemon running', 300, slot_up, hint=console.waiting_hint)
     o = console.run('ip -4 addr show wlan0 | sed -n "s/.*inet \\([0-9.]*\\).*/\\1/p"; cat /etc/techo5-release', 8) or ''
     for line in o.split('\n'):
         note(line)

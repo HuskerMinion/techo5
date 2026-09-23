@@ -408,13 +408,167 @@ class Fastboot:
         return r.returncode, r.stdout.decode('utf-8', 'replace').strip()
 
 
-def wait_for(what, seconds, test, every=5):
-    deadline = time.time() + seconds
+def wait_for(what, seconds, test, every=5, hint=None):
+    """Waits for test to pass, saying so every half minute: a wait that prints nothing for minutes reads
+    as a hang, and gets stopped. hint, when given, says what is likely in the way, once it has been a
+    while and whenever that changes; it is also on the failure when the time runs out."""
+    start = time.time()
+    deadline, said, told = start + seconds, start, ''
     while time.time() < deadline:
         if test():
             return
         time.sleep(every)
-    fail('timed out after %d s waiting for %s' % (seconds, what))
+        now = time.time()
+        if now - said >= 30:
+            note('still waiting for %s (%d s of %d)' % (what, now - start, seconds))
+            said = now
+        if hint and now - start >= 30:
+            h = hint()
+            if h and h != told:
+                note(h)
+                told = h
+    msg = 'timed out after %d s waiting for %s' % (seconds, what)
+    h = hint() if hint else ''
+    fail(msg + ('\n   ' + h if h else ''))
+
+
+# ------------------------------------------------------------------------------------------ asking
+
+def interactive():
+    """Whether a person is at the terminal to answer. Nobody is when the output or input is piped, or
+    when TECHO5_NO_PROMPT is set, and then every question has to have been answered by a switch."""
+    return not os.environ.get('TECHO5_NO_PROMPT') and sys.stdin.isatty() and sys.stdout.isatty()
+
+
+def adb_devices(exe='adb'):
+    """The units adb sees now, as (serial, state, what the unit says it is)."""
+    r = subprocess.run(tool(exe) + ['devices', '-l'], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    out = []
+    for line in r.stdout.decode('utf-8', 'replace').splitlines()[1:]:
+        f = line.split()
+        if len(f) < 2 or f[0].startswith('*'):
+            continue
+        what = ' '.join(x.split(':', 1)[1] for x in f[2:] if x.startswith(('model:', 'device:')))
+        out.append((f[0], f[1], what))
+    return out
+
+
+def console_hint(ids_list):
+    """What to say when adb cannot see the unit but a TECHO5 console is on USB: a unit that is already
+    running TECHO5, or one an install left in the rescue environment. adb is gone by then, so asking for
+    USB debugging, as the adb error would, sends somebody looking in the wrong place."""
+    ports = [p for ids in ids_list for p, _ in list_consoles(ids)]
+    if not ports:
+        return ''
+    return ('\n   A TECHO5 console is on USB (%s): a unit already running TECHO5, or one left in the rescue\n'
+            '   environment by an install that stopped partway. adb cannot see a unit in that state. On that\n'
+            '   console, `STORE=/store slotctl status` says how far it got; the install guide (docs/install.md)\n'
+            '   has the rest of the steps by hand.' % ', '.join(ports))
+
+
+def pick_unit(given, exe, states, what, consoles=()):
+    """The serial to install on: the one given; the only suitable unit connected; or, with several, the
+    one a person picks from a list. states are the adb states a unit can be installed from."""
+    if given:
+        return given
+    units = adb_devices(exe)
+    ready = [u for u in units if u[1] in states]
+    if len(ready) == 1:
+        serial, _, desc = ready[0]
+        note('using the only %s connected: %s%s' % (what, serial, ' (%s)' % desc if desc else ''))
+        return serial
+    if not ready:
+        msg = 'no %s is connected over adb' % what
+        for serial, state, _ in units:
+            advice = ': accept this computer on the unit\'s screen' if state == 'unauthorized' else ''
+            msg += '\n   %s is there but %s%s' % (serial, state, advice)
+        fail(msg + '. Plug it in, turn on USB debugging, and check with `adb devices`.' + console_hint(consoles))
+    if not interactive():
+        fail('several units are connected; pass --serial with one of: %s' % ', '.join(u[0] for u in ready))
+    print('   Several units are connected:')
+    for i, (serial, state, desc) in enumerate(ready, 1):
+        print('     %d. %s  %s%s' % (i, serial, state, '  ' + desc if desc else ''))
+    while True:
+        choice = input('   Which one? [1-%d]: ' % len(ready)).strip()
+        if choice.isdigit() and 1 <= int(choice) <= len(ready):
+            return ready[int(choice) - 1][0]
+
+
+def ask_name(given, default):
+    """The name Home Assistant shows: the one given, else asked for, with a default Enter accepts. The
+    ESPHome API takes one line of at most 31 characters."""
+    def bad(n):
+        return '\n' in n or not n.strip() or len(n) > 31
+    if given is not None:
+        if bad(given):
+            fail('the name must be one line of 1 to 31 characters')
+        return given
+    if not interactive():
+        fail('--name is needed when nobody is at the terminal to ask')
+    while True:
+        n = input('   Name for this device in Home Assistant [%s]: ' % default).strip() or default
+        if not bad(n):
+            return n
+        print('   One line of at most 31 characters, please.')
+
+
+def confirm(force, lines, word='ERASE'):
+    """Asks once before something that cannot be undone from here, after saying what it is. --force
+    answers for somebody who is not there to; without it and without a person, it stops."""
+    if force:
+        return
+    if not interactive():
+        fail('nobody is at the terminal to confirm this; pass --force to go on without asking')
+    for line in lines:
+        print('   ' + line)
+    if input('   Type %s to go on: ' % word).strip() != word:
+        fail('stopped; nothing was changed on the unit')
+
+
+def serial_access_problems():
+    """On Linux, what is likely to stop this user opening a unit's USB serial console. Found before
+    anything is written, because an install that cannot reach the console after it has flashed leaves
+    the unit waiting in rescue."""
+    if IS_WINDOWS or IS_MACOS or os.geteuid() == 0:
+        return []
+    import grp
+    groups = set()
+    for g in os.getgroups():
+        try:
+            groups.add(grp.getgrgid(g).gr_name)
+        except KeyError:
+            pass
+    problems = []
+    if not groups & {'dialout', 'uucp'}:
+        problems.append("you are not in the 'dialout' group, which owns USB serial ports on most Linux systems:\n"
+                        '     sudo usermod -aG dialout $USER, then log out and back in')
+    if shutil.which('systemctl') and subprocess.run(['systemctl', 'is-active', '--quiet', 'ModemManager'],
+                                                    stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL).returncode == 0:
+        problems.append('ModemManager is running and can take the port first: sudo systemctl stop ModemManager\n'
+                        '     for the install')
+    return problems
+
+
+def check_serial_access(must=True):
+    """Says what serial_access_problems found, before anything is written, and asks whether to go on:
+    a udev rule can give the port to somebody not in dialout, so it is a question, not a refusal. With
+    must false (an install that only watches the console at the end), it says so and goes on.
+    TECHO5_SKIP_SERIAL_CHECK=1 skips it."""
+    if os.environ.get('TECHO5_SKIP_SERIAL_CHECK'):
+        return
+    problems = serial_access_problems()
+    if not problems:
+        return
+    note("the install uses the unit's USB serial console%s, and:" % (' once it has flashed' if must else ' to watch the first boot'))
+    for p in problems:
+        note('  - ' + p)
+    if not must:
+        note('the install goes on; only the check of the first boot may not be able to see the unit')
+        return
+    if not interactive():
+        fail('fix that first, or set TECHO5_SKIP_SERIAL_CHECK=1 if you know the port is yours')
+    if input('   Go on anyway? [y/N]: ').strip().lower() not in ('y', 'yes'):
+        fail('stopped before changing anything on the unit')
 
 
 # ------------------------------------------------------------------------------------------ keys, prompts
@@ -688,13 +842,33 @@ class Console:
 
     def __init__(self, serial, ids):
         self.serial, self.ids, self.port = serial, ids, None
+        # blocked is why the last port tried could not be opened, empty when it could. It used to be
+        # dropped, so a console that was there all along but not this user's to open (Linux's dialout
+        # group, or ModemManager holding it) looked the same as no console at all, for the whole wait.
+        self.blocked = ''
+
+    def _opened(self, port, e=None):
+        self.blocked = '' if e is None else '%s: %s' % (port, e.strerror or e)
 
     def _is_unit(self, port):
         try:
             out = console_exchange(port, 'grep -q androidboot.serialno=%s /proc/cmdline && echo IS-THE-UNIT' % self.serial, 3)
-        except OSError:
+        except OSError as e:
+            self._opened(port, e)
             return False
+        self._opened(port)
         return bool(out) and 'IS-THE-UNIT' in out
+
+    def waiting_hint(self):
+        """What is likely keeping the console from answering, for somebody watching the wait."""
+        if self.blocked:
+            return ("the unit's console is on USB but cannot be opened (%s). On Linux that is usually the 'dialout'\n"
+                    '   group or ModemManager (see docs/install.md); anywhere, another program holding the port, such as\n'
+                    '   a terminal left open on it. It can be fixed while this waits.' % self.blocked)
+        if not list_consoles(self.ids):
+            return ("no console from the unit has appeared on USB yet. Keep the USB cable in; the unit's screen shows\n"
+                    '   what it is doing (RESCUE when the rescue environment is up).')
+        return ''
 
     def find(self):
         ports = list_consoles(self.ids)
@@ -726,7 +900,10 @@ class Console:
                    'export PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin; ( %s ); fi'
                    % (self.serial, command))
         try:
-            return console_exchange(port, guarded, wait)
-        except OSError:
+            out = console_exchange(port, guarded, wait)
+        except OSError as e:
+            self._opened(port, e)
             self.port = None
             return None
+        self._opened(port)
+        return out

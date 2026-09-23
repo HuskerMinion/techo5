@@ -43,22 +43,34 @@ With Python 3, `adb`, `fastboot` and `git` (setup for each system:
 ```
 git clone https://github.com/HuskerMinion/techo5
 cd techo5
-python3 tools/install-show.py --serial <serial> --name "Kitchen" --dry-run   # download and check the release only
-python3 tools/install-show.py --serial <serial> --name "Kitchen"
+python3 tools/install-show.py --dry-run   # download and check the release only
+python3 tools/install-show.py
 ```
 
 On Windows, type `python` instead of `python3`.
 
+Run like that, it finds the Show (asking which, if several are plugged in), asks what to call it in
+Home Assistant, and shows a summary and asks once before the first step that can't be undone. From a
+script, give everything as switches instead: `--serial <serial> --name "Kitchen" --force`, and it asks
+nothing (it also asks nothing, and stops rather than guess, when its input or output isn't a terminal).
+
 It does steps 1 to 6 below: downloads the latest release and checks the boot image and root filesystem
 against their checksums, keeps LineageOS's boot image in `backups/<serial>/` when adb is root, flashes,
-creates the slot store over the USB serial console (it asks before erasing), provisions the name and
+creates the slot store over the USB serial console, provisions the name and
 the Home Assistant key (kept in `backups/<serial>/home-assistant.key`), and waits for the first boot.
 `--ssh-key ~/.ssh/id_ed25519.pub` also turns SSH on with your key. Then go to
 [step 7](#7-add-it-to-home-assistant).
 
 On Linux you may need to be in the `dialout` group for the serial console
 (`sudo usermod -aG dialout $USER`, then log in again), and ModemManager, if installed, should be
-stopped while installing (`sudo systemctl stop ModemManager`).
+stopped while installing (`sudo systemctl stop ModemManager`). The installer checks both before it
+changes anything and says so; if the console still can't be opened later, it says that too while it
+waits, and it can be fixed in another terminal without stopping the install.
+
+If an install stops partway, after the boot image was flashed, the unit is left in the rescue
+environment (its screen says RESCUE) and a re-run can't see it over adb; the installer says so. The
+unit isn't lost: the steps from [step 4](#4-create-the-slot-store-and-install) on can be done by hand
+on its USB serial console, and `STORE=/store slotctl status` there says how far it got.
 
 ## By hand
 
