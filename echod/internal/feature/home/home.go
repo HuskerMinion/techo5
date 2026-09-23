@@ -21,6 +21,7 @@ import (
 	"github.com/HuskerMinion/techo5/echod/internal/feature/media"
 	"github.com/HuskerMinion/techo5/echod/internal/lib/hass"
 	"github.com/HuskerMinion/techo5/echod/internal/lib/hook"
+	"github.com/HuskerMinion/techo5/echod/internal/lib/safe"
 )
 
 func init() {
@@ -180,6 +181,7 @@ func Get() *Feature {
 		hastate.Get().Changed.Listen(func(hastate.Update) { shared.Changed.Emit(struct{}{}) })
 		media.Get().OnPlay.Listen(shared.played)
 		media.Get().OnEnd.Listen(shared.ended)
+		media.Get().OnResumeRemote.Listen(func(struct{}) { safe.Go("resume music assistant", resumeMusicAssistant) })
 	})
 	return shared
 }
@@ -458,6 +460,14 @@ func (f *Feature) Radio() Radio {
 // what runs the server it talks to here is Music Assistant, so that is what the page calls it.
 func carried(r Radio) Radio {
 	if !media.Get().Carried() {
+		// A remote's track paused from here is still the page's, with play on it, after the remote
+		// has let it go.
+		if title, artist, album, ok := media.Get().Held(); ok {
+			r.Playing, r.Now = false, "Music Assistant"
+			r.Title, r.Artist, r.Album = title, artist, album
+			r.Art, r.Thumb, r.Logo = nil, nil, false
+			r.Music = true
+		}
 		return r
 	}
 	trackTitle, trackArtist, trackAlbum := media.Get().Track()

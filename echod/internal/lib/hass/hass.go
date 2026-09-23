@@ -309,6 +309,39 @@ func (c *Client) Entities(domain string) ([]Entity, error) {
 	return list, nil
 }
 
+// MusicAssistantFor finds Music Assistant's own media player for a device's media player: the one
+// whose active queue is it. Empty when there is none.
+func (c *Client) MusicAssistantFor(own string) (string, error) {
+	out, err := c.do("GET", "/api/states", nil)
+	if err != nil {
+		return "", err
+	}
+	var states []struct {
+		EntityID   string         `json:"entity_id"`
+		Attributes map[string]any `json:"attributes"`
+	}
+	if err := json.Unmarshal(out, &states); err != nil {
+		return "", err
+	}
+	for _, s := range states {
+		if !strings.HasPrefix(s.EntityID, "media_player.") || s.EntityID == own {
+			continue
+		}
+		app, _ := s.Attributes["app_id"].(string)
+		queue, _ := s.Attributes["active_queue"].(string)
+		if app == "music_assistant" && queue == own {
+			return s.EntityID, nil
+		}
+	}
+	return "", nil
+}
+
+// MediaPlay asks a media player to play again what it was playing.
+func (c *Client) MediaPlay(player string) error {
+	_, err := c.do("POST", "/api/services/media_player/media_play", map[string]any{"entity_id": player})
+	return err
+}
+
 // PlayMedia asks a media player to play something: a URL, or a media-source:// id that Home Assistant
 // resolves (and converts for the player) itself.
 func (c *Client) PlayMedia(player, id, kind string) error {

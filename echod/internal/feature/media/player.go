@@ -90,6 +90,11 @@ type Player struct {
 	remoteGen   atomic.Uint64 // counts RemoteState, so a pause's timeout knows whether it still stands
 	haFwdAt     atomic.Int64  // when a Home Assistant play or pause was last passed on to a remote (fromHA)
 
+	// held is a remote's track paused from here, kept for the screen. Music Assistant does not pause a
+	// Sendspin stream: it ends it and clears the track, so without this the page went back to the clock
+	// the moment somebody paused, with no play button to come back with.
+	held atomic.Value // heldTrack
+
 	// extTrack is what a remote says it is playing: a phone over Bluetooth, or Music Assistant over
 	// Sendspin. The stream is the remote's business; this is only what to call it.
 	extTrack atomic.Value // remoteTrack
@@ -107,6 +112,11 @@ type Player struct {
 	// OnPlay fires with the URL whenever a track (not an announcement) is started, so a screen can
 	// find out what it is.
 	OnPlay hook.Hook[string]
+
+	// OnResumeRemote fires when play is asked for on a remote's track that was paused from here and
+	// has since been let go. The remote has to be asked some other way than over its own connection -
+	// Music Assistant ignores a play from the player it ended - and what knows how lives elsewhere.
+	OnResumeRemote hook.Hook[struct{}]
 
 	// OnTransport fires when a track's own controls are asked for — the screen's buttons, or Home
 	// Assistant — so that whoever is playing the track hears. It is not an instruction to this player:
@@ -618,6 +628,19 @@ func (p *Player) fromHA(t Transport) {
 }
 
 func (p *Player) Transport(t Transport) {
+	// A remote's track paused from here and since let go: play asks for it back, stop forgets it.
+	if _, _, _, ok := p.Held(); ok {
+		switch t {
+		case TransportPlay, TransportToggle:
+			slog.Info("resuming a remote's paused track")
+			p.OnResumeRemote.Emit(struct{}{})
+			return
+		case TransportStop:
+			p.held.Store(heldTrack{})
+			p.refresh()
+			return
+		}
+	}
 	if p.remoteIsTheTrack() {
 		if t == TransportToggle {
 			if _, paused := p.RemotePlaying(); paused {
@@ -664,6 +687,9 @@ func (p *Player) Transport(t Transport) {
 func (p *Player) RemoteState(state string) {
 	p.remoteState.Store(state)
 	n := p.remoteGen.Add(1)
+	if state == "playing" {
+		p.held.Store(heldTrack{})
+	}
 	if state == "paused" {
 		time.AfterFunc(stoppedFor, func() {
 			if p.remoteGen.Load() == n {
@@ -809,6 +835,47 @@ func (p *Player) Carried() bool {
 func (p *Player) ExternalTrack(title, artist, album string) {
 	p.extTrack.Store(remoteTrack{Title: title, Artist: artist, Album: album})
 	p.refresh()
+}
+
+// heldTrack is a remote's track paused from here, and when.
+type heldTrack struct {
+	remoteTrack
+	at time.Time
+}
+
+// HoldRemote keeps the remote's track for the screen as it is paused from here. See held.
+func (p *Player) HoldRemote() {
+	t, _ := p.extTrack.Load().(remoteTrack)
+	if t.Title == "" {
+		return
+	}
+	p.held.Store(heldTrack{remoteTrack: t, at: time.Now()})
+}
+
+// Held is a remote's track paused from here and still worth offering to play: until something plays,
+// it is stopped, or stoppedFor goes by, as this player's own paused track is ended then.
+func (p *Player) Held() (title, artist, album string, ok bool) {
+	h, _ := p.held.Load().(heldTrack)
+	if h.at.IsZero() || time.Since(h.at) > stoppedFor {
+		return "", "", "", false
+	}
+	if playing, paused := p.stream.Playing(); playing || paused {
+		return "", "", "", false
+	}
+	return h.Title, h.Artist, h.Album, true
+}
+
+// ScreenState is what the room's music is doing, as a screen shows it: this player's own stream, a
+// remote's it is carrying, or a remote's paused from here and held.
+func (p *Player) ScreenState() (playing, paused bool) {
+	if p.Carried() {
+		return p.CarriedState()
+	}
+	playing, paused = p.Playing()
+	if _, _, _, ok := p.Held(); ok && !playing && !paused {
+		return false, true
+	}
+	return playing, paused
 }
 
 // Track is what a remote last said it was playing, whether or not it still is.

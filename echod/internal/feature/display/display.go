@@ -729,6 +729,9 @@ func (d *Display) nowPlaying() bool {
 	if media.Get().ExternalPlaying() {
 		return true
 	}
+	if _, _, _, ok := media.Get().Held(); ok {
+		return true
+	}
 	if !home.Get().Radio().Configured {
 		return false
 	}
@@ -1198,15 +1201,13 @@ func (d *Display) frame() time.Duration {
 		// A screen command: the screen it asked for is the answer, not the words.
 		s.phase, s.heard, s.reply = "idle", "", ""
 	}
-	s.playing, s.paused = media.Get().Playing()
 	// A stream this player is carrying is the room's when it is what is being heard: the page names it,
 	// and says what it is doing, though the audio never passes through this player's own stream. Both,
 	// not just playing: the page tests paused first, so a station left paused underneath would label
 	// somebody else's track as Paused - and a remote merely holding the speaker, with a station playing
-	// underneath it, is not the room's at all (see media.Player.Carried).
-	if media.Get().Carried() {
-		s.playing, s.paused = media.Get().CarriedState()
-	}
+	// underneath it, is not the room's at all (see media.Player.Carried). A remote's track paused from
+	// here and since let go is shown paused too (see media.Player.Held).
+	s.playing, s.paused = media.Get().ScreenState()
 	s.muted, _ = mute.Get().Muted()
 	if !volAt.IsZero() && now.Sub(volAt) < volumeShow {
 		s.volume, s.showVolume = volume, true

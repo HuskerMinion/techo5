@@ -67,13 +67,7 @@ func currentStation(rd home.Radio) string {
 // musicState is what the room's music is doing: this player's own stream, or the one it carries for
 // Music Assistant when that is what is being heard. The face is drawn from it and taps are matched
 // against it, so the rows a finger lands on are the rows on the screen.
-func musicState() (playing, paused bool) {
-	playing, paused = media.Get().Playing()
-	if media.Get().Carried() {
-		playing, paused = media.Get().CarriedState()
-	}
-	return playing, paused
-}
+func musicState() (playing, paused bool) { return media.Get().ScreenState() }
 
 func stopMusic() {
 	home.Get().Stop()
@@ -114,6 +108,9 @@ func (d *Display) showsNowPlaying() bool {
 	// much as the radio's: the state it draws was already being worked out and only this gate was
 	// missing, because a carried stream never satisfies Playing().
 	if media.Get().ExternalPlaying() {
+		return true
+	}
+	if _, _, _, ok := media.Get().Held(); ok {
 		return true
 	}
 	d.mu.Lock()

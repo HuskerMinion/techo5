@@ -440,8 +440,9 @@ func (s *session) asks(t media.Transport) {
 	s.asked.Store(name)
 	switch name {
 	case "pause":
-		// The server reports a pause as a stop, so what the room shows is settled here instead: the
-		// track stays, and the button offers play.
+		// The server reports a pause as a stop, and Music Assistant clears the track with it, so the
+		// track is kept for the screen here: the page stays, and its button offers play.
+		media.Get().HoldRemote()
 		media.Get().RemoteState("paused")
 	case "play", "next", "previous":
 		// Nothing is said until the server says it: a play the server ignores used to leave the room
