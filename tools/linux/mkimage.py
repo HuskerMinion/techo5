@@ -17,7 +17,6 @@ import gzip
 import hashlib
 import lzma
 import io
-import os
 import stat
 import struct
 import sys

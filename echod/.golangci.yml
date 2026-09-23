@@ -19,12 +19,12 @@ linters:
         - (net.Conn).Close
         - (*os.File).Close
         - (*github.com/ygelfand/go-esphome-device/mdns.Advertiser).Close
-        - (*github.com/ygelfand/echolocal/internal/input.Device).Close
-        - (*github.com/ygelfand/echolocal/internal/alsa.Mixer).Close
-        - (*github.com/ygelfand/echolocal/internal/alsa.Playback).Close
-        - (*github.com/ygelfand/echolocal/internal/speaker.Player).Close
-        - (*github.com/ygelfand/echolocal/internal/mic.Source).Close
-        - (*github.com/ygelfand/echolocal/internal/alog.Handler).Close
+        - (*github.com/HuskerMinion/techo5/echod/internal/lib/input.Device).Close
+        - (*github.com/HuskerMinion/techo5/echod/internal/lib/alsa.Mixer).Close
+        - (*github.com/HuskerMinion/techo5/echod/internal/lib/alsa.Playback).Close
+        - (*github.com/HuskerMinion/techo5/echod/internal/hardware/speaker.Player).Close
+        - (*github.com/HuskerMinion/techo5/echod/internal/hardware/mic.Source).Close
+        - (*github.com/HuskerMinion/techo5/echod/internal/android/logd.Handler).Close
         - fmt.Fprintf
         - fmt.Fprintln
 

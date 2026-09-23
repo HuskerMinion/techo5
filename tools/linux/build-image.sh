@@ -50,12 +50,20 @@ for c in fbprobe audioprobe rebootto btbridge; do
 done
 unset GOOS GOARCH GOARM CGO_ENABLED
 
+# The package file packages.txt lists, or else the version tools/fetch-inputs.py took in its place when
+# Alpine had dropped the listed one (it names the file for the version it fetched).
+apk_file() {
+	local name=${2%-*-r*.apk} have
+	[ -f "$1/$2" ] && { echo "$1/$2"; return; }
+	have=$(ls "$1/$name"-[0-9]*-r[0-9]*.apk 2>/dev/null | sort -V | tail -1)
+	echo "${have:-$1/$2}"
+}
 apks=()
 for a in $(sed 's/#.*//' "$ROOT/tools/linux/packages.txt"); do
 	case "$a" in
 	busybox-static-*) continue;;
-	wpa_supplicant-2.9*|libssl1.1*|libcrypto1.1*|libnl3-3.5*) apks+=(--apk "$(W "$INPUTS/apks312/$a")");;
-	*) apks+=(--apk "$(W "$INPUTS/apks/$a")");;
+	wpa_supplicant-2.9*|libssl1.1*|libcrypto1.1*|libnl3-3.5*) apks+=(--apk "$(W "$(apk_file "$INPUTS/apks312" "$a")")");;
+	*) apks+=(--apk "$(W "$(apk_file "$INPUTS/apks" "$a")")");;
 	esac
 done
 

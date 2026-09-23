@@ -176,12 +176,16 @@ def main():
 
     # ------------------------------------------------------------------------------------ 2. backup
     step('backup')
-    os.makedirs(backup, exist_ok=True)
     os.makedirs(a.work, exist_ok=True)
     los_boot = os.path.join(backup, 'boot-lineage.img')
     if os.path.exists(los_boot):
         note('LineageOS boot image already kept: %s' % los_boot)
+    elif a.dry_run:
+        # A dry run changes nothing: not adb's mode on the unit (adb root restarts adbd) and not this
+        # computer's backups. The real run takes the backup.
+        note('dry run: the LineageOS boot image backup is taken by the real run')
     else:
+        os.makedirs(backup, exist_ok=True)
         adb.root()
         if adb.sh('id').startswith('uid=0'):
             if not adb.pull('/dev/block/mmcblk0p9', los_boot + '.partial'):
