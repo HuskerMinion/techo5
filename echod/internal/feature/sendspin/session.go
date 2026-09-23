@@ -269,7 +269,13 @@ func (s *session) grouped(g protocol.GroupUpdate) {
 		// Paused on the server's side too: the room keeps the track and offers play.
 		s.asked.Store("pause")
 		media.Get().RemoteState(state)
-	case state == "stopped" && s.askedFor() != "pause":
+	case state == "stopped":
+		// A stop, even straight after a pause asked for here. Music Assistant does not pause a
+		// Sendspin stream: it ends it, clears the track and lets the output go, and it resumes only a
+		// player it sees as stopped - one it sees as paused is sent a plain "unpause" that nothing
+		// here can act on, and the room says playing in silence. So the room says stopped, and play
+		// from Music Assistant or Home Assistant starts the queue again where it was.
+		s.asked.Store("")
 		media.Get().RemoteState(state)
 		s.releaseSoon()
 	}
@@ -438,7 +444,8 @@ func (s *session) asks(t media.Transport) {
 		// track stays, and the button offers play.
 		media.Get().RemoteState("paused")
 	case "play", "next", "previous":
-		media.Get().RemoteState("playing")
+		// Nothing is said until the server says it: a play the server ignores used to leave the room
+		// and Home Assistant saying playing with no sound.
 	case "stop":
 		// The opposite of a pause: the room is not playing, and saying so here keeps the screen from
 		// offering play for a track that is on its way out while the release is held back.
