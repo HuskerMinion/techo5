@@ -50,3 +50,15 @@ func TestAPausedRemoteTrackIsHeldAndResumed(t *testing.T) {
 		t.Error("still held after stoppedFor")
 	}
 }
+
+// Music Assistant clears the track just before it says it stopped, so the hold takes the last track
+// it named.
+func TestAHoldTakesTheLastTrackNamed(t *testing.T) {
+	p := &Player{stream: &Stream{}, mp: &esphome.MediaPlayer{}}
+	p.ExternalTrack("Africa", "Toto", "Toto IV")
+	p.ExternalTrack("", "", "")
+	p.HoldRemote()
+	if title, artist, _, ok := p.Held(); !ok || title != "Africa" || artist != "Toto" {
+		t.Errorf("held %q by %q (%v), want the last track named", title, artist, ok)
+	}
+}

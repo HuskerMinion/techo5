@@ -72,6 +72,7 @@ func categoryRows(sv sheetView) (rows []settingRow, note string) {
 		rows = append(rows, themeRows()...)
 		rows = append(rows,
 			settingRow{id: "clock", label: "Clock format", kind: ctlChoice, value: clockOptions[clockIndex()]},
+			settingRow{id: "musicstrip", label: "Now playing", sub: "Full page, or a strip over the clock", kind: ctlChoice, value: stripOptionText()},
 			settingRow{id: "slideshow", label: "Slideshow", sub: "Photos from Home Assistant", kind: ctlChoice, value: slideshowOptions[slideshowIndex()]},
 		)
 		if slideshowIndex() != 0 {
@@ -356,6 +357,8 @@ func pickerFor(id string, sv sheetView) (pickerView, bool) {
 		return folderPicker(sv.st.folder, sv.st.demo), true
 	case "clock":
 		return pickerView{title: "Clock format", opts: clockOptions, cur: clockIndex()}, true
+	case "musicstrip":
+		return pickerView{title: "Now playing", opts: stripChoices(), cur: stripIndexShared()}, true
 	case "screenlang":
 		return pickerView{title: "Screen language", opts: langOptions, cur: langIndex()}, true
 	case "newtimer":
@@ -393,6 +396,8 @@ func (d *Display) choose(id string, i int) {
 				slog.Warn("saving the night setting failed", "err", err)
 			}
 		}
+	case "musicstrip":
+		d.setMusicStrip(i)
 	case "clock":
 		on := i == 1
 		if err := config.Set().Screen().Clock24(on); err != nil {
@@ -644,7 +649,7 @@ func (d *Display) rowTap(id string, p part, opt int) {
 	case "subfolders":
 		_, _, subfolders := home.Get().SlideshowSettings()
 		home.Get().SetSlideshowSubfolders(!subfolders)
-	case "night", "clock", "slideshow", "photoevery", "screenlang", "newtimer", "sleep", "sunrise",
+	case "night", "clock", "musicstrip", "slideshow", "photoevery", "screenlang", "newtimer", "sleep", "sunrise",
 		"timezone", "wakeword", "waketone":
 		d.openPicker(id)
 	}

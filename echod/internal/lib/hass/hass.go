@@ -336,6 +336,21 @@ func (c *Client) MusicAssistantFor(own string) (string, error) {
 	return "", nil
 }
 
+// Render has Home Assistant render a template and returns the text.
+func (c *Client) Render(template string) (string, error) {
+	out, err := c.do("POST", "/api/template", map[string]any{"template": template})
+	if err != nil {
+		return "", err
+	}
+	return strings.TrimSpace(string(out)), nil
+}
+
+// Call runs a Home Assistant action.
+func (c *Client) Call(domain, service string, data map[string]any) error {
+	_, err := c.do("POST", "/api/services/"+domain+"/"+service, data)
+	return err
+}
+
 // MediaPlay asks a media player to play again what it was playing.
 func (c *Client) MediaPlay(player string) error {
 	_, err := c.do("POST", "/api/services/media_player/media_play", map[string]any{"entity_id": player})

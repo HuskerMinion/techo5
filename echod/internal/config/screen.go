@@ -21,6 +21,10 @@ type Screen struct {
 	// Clock24 shows times on the screen as 15:04 instead of 3:04 PM.
 	Clock24 bool `json:"clock_24,omitempty"`
 
+	// MusicStrip is how many seconds music plays on the full now-playing page before the Show goes
+	// back to its clock with the music in a strip at the foot; none keeps the full page.
+	MusicStrip int `json:"music_strip,omitempty"`
+
 	// Language is which words the screen listens for in a turn — "en", "de", "es", "fr", "it",
 	// "nl" — empty for all of them. It has nothing to do with what the assistant understands or
 	// says, which is Home Assistant's pipeline; it decides only which pages a sentence brings up.
@@ -74,6 +78,10 @@ func (w ScreenWriter) Welcomed(v bool) error {
 
 func (w ScreenWriter) Clock24(v bool) error {
 	return w.st.Update(func(c *Config) { c.Screen.Clock24 = v })
+}
+
+func (w ScreenWriter) MusicStrip(seconds int) error {
+	return w.st.Update(func(c *Config) { c.Screen.MusicStrip = max(seconds, 0) })
 }
 
 func (w ScreenWriter) Language(v string) error {

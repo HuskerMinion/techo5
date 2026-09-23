@@ -70,6 +70,35 @@ func (r *renderer) nowPlaying(s scene) {
 		r.control(play, r.markPause)
 	}
 	r.control(next, r.markNext)
+
+	// Done, in the corner the buttons leave: the music ends and the screen goes back to the clock. A
+	// pause keeps this page up with play on it, and so does a stop from Music Assistant, which looks
+	// the same from here, so the page needs its own way out.
+	done := r.doneButton()
+	r.bevel(done, shift(ember, 16), true)
+	r.text(r.small, "Done", done.Min.X+(done.Dx()-r.width(r.small, "Done"))/2, done.Min.Y+done.Dy()/2+r.s(10), amber)
+
+	// The star saves what is playing to favorites, and fills in once it has.
+	fav := r.favButton()
+	r.bevel(fav, shift(ember, 16), true)
+	starColor := color.RGBA{0x9a, 0x8c, 0x7a, 0xff}
+	if s.faved {
+		starColor = amber
+	}
+	r.star(fav.Min.X+fav.Dx()/2, fav.Min.Y+fav.Dy()/2, r.s(17), starColor)
+}
+
+// favButton is the star, beside Done.
+func (r *renderer) favButton() image.Rectangle {
+	done := r.doneButton()
+	return image.Rect(done.Max.X+r.s(12), done.Min.Y, done.Max.X+r.s(12)+done.Dx(), done.Max.Y)
+}
+
+// doneButton is the now-playing screen's way out, at the foot on the left, level with the three.
+func (r *renderer) doneButton() image.Rectangle {
+	w, h := r.s(110), r.s(54)
+	y := r.h - r.s(26) - h
+	return image.Rect(r.margin, y, r.margin+w, y+h)
 }
 
 // transportButtons are the three soft buttons at the foot of the now-playing screen: back, play or pause,

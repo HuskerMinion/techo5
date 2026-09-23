@@ -136,6 +136,8 @@ func adaptRows(rows []settingRow, sv sheetView) []settingRow {
 			row.sub = "No sound at all"
 		case row.id == "ringvol":
 			row.sub = "Not the music's"
+		case row.id == "musicstrip":
+			continue // the strip is the Show's; the round face has no clock page under it to share
 		case row.id == "wakesens":
 			row.label = "Sensitivity"
 		case row.id == "sendspin":

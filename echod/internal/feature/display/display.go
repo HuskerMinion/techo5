@@ -159,6 +159,18 @@ type Display struct {
 	awayTrack   string
 	awayStation string
 
+	// strip is the music strip's setting in Home Assistant; stripKey/stripSince are the track the strip
+	// is timing and when it started, stripFullUntil a tap on the strip's song bringing the full page
+	// back, and showingStrip whether the last frame had it, for the touch handler.
+	strip          *esphome.Select
+	stripKey       string
+	stripSince     time.Time
+	stripFullUntil time.Time
+	showingStrip   bool
+
+	// favedKey is the track the star was last pressed for, so the star shows it was saved.
+	favedKey string
+
 	// showingPlaying and showingPaused are what the last painted screen was: the now-playing page, and
 	// whether the music on it was paused. The touch handler acts on what is on the screen, rather than
 	// working the same thing out a second way and drifting from it.
@@ -204,6 +216,7 @@ func build() *Display {
 	d.light.OnCommand = d.command
 	d.auto.OnCommand = func(on bool) { d.setAuto(on, true) }
 	d.clock = clockSelect(d.wake)
+	d.strip = stripSelect(d.wake)
 	d.lang = langSelect()
 	voice.Changed.Listen(d.changed)
 	media.Get().OnVolume.Listen(d.volumeMoved)
@@ -251,13 +264,14 @@ func build() *Display {
 func (d *Display) Name() string { return "screen" }
 
 func (d *Display) Entities() []esphome.Entity {
-	return []esphome.Entity{d.light, d.auto, d.clock, d.lang}
+	return []esphome.Entity{d.light, d.auto, d.clock, d.lang, d.strip}
 }
 
 // Restore lights the panel the way it was left. Before the framebuffer is opened: the backlight is
 // its own device.
 func (d *Display) Restore(c config.Config) {
 	setClock24(d.clock, c.Screen.Clock24)
+	d.strip.Set(stripOptions[stripIndex()])
 	d.setAuto(c.Screen.Auto, false)
 	d.apply(c.Screen.On, c.Screen.Brightness, false)
 }
@@ -387,22 +401,7 @@ func (d *Display) changed(s voice.State) {
 			d.weatherArmed, d.weatherUntil = false, time.Time{}
 			d.sheet, d.quiet = false, true
 			go home.Get().HideCamera()
-			go func() {
-				// Music Assistant's stream is carried, not this player's, so Playing never says it:
-				// asked of the speaker as well, as the Spot's stop already is.
-				if playing, paused := media.Get().Playing(); playing || paused || media.Get().ExternalPlaying() {
-					home.Get().Stop()
-					media.Get().Stop()
-				}
-				// And the page goes, as a swipe puts it away: Music Assistant keeps a stopped track
-				// as a paused one, and the page for a paused track is still a page. It comes back for
-				// the next track.
-				rd := home.Get().Radio()
-				d.mu.Lock()
-				d.away, d.awayTrack, d.awayStation = true, rd.Title, rd.Now
-				d.mu.Unlock()
-				d.wake()
-			}()
+			go d.endMusic()
 			slog.Info("screen: home by voice")
 		}
 	}
@@ -644,6 +643,33 @@ func (d *Display) gesture(g touch.Gesture) {
 			d.wake()
 			return
 		}
+		d.mu.Lock()
+		strip := d.showingStrip
+		d.mu.Unlock()
+		if idle && strip && d.r != nil && image.Pt(g.X, g.Y).In(d.r.stripRect()) {
+			// The strip: its buttons do what they say, the X ends the music, and the song brings the
+			// full page back for a while. Anywhere else on the strip is nothing, so a thumb that
+			// misses a button does not start a turn under it.
+			back, play, next, closeX := d.r.stripButtons()
+			at := image.Pt(g.X, g.Y)
+			switch {
+			case at.In(closeX):
+				go d.endMusic()
+			case at.In(back):
+				media.Get().Transport(media.TransportPrevious)
+			case at.In(play):
+				media.Get().Transport(media.TransportToggle)
+			case at.In(next):
+				media.Get().Transport(media.TransportNext)
+			case at.In(d.r.stripSong()):
+				d.mu.Lock()
+				d.stripFullUntil = time.Now().Add(stripFull)
+				d.away, d.awayTrack, d.awayStation = false, "", ""
+				d.mu.Unlock()
+				d.wake()
+			}
+			return
+		}
 		if idle && showing {
 			// The now-playing screen: each button does what it says, and a tap anywhere else is
 			// play/pause, because that is what a hand put on a screen like this means.
@@ -651,6 +677,10 @@ func (d *Display) gesture(g touch.Gesture) {
 				back, _, next := d.r.transportButtons()
 				at := image.Pt(g.X, g.Y)
 				switch {
+				case at.In(d.r.doneButton()):
+					go d.endMusic()
+				case at.In(d.r.favButton()):
+					go d.favorite()
 				case at.In(back):
 					media.Get().Transport(media.TransportPrevious)
 				case at.In(next):
@@ -702,6 +732,38 @@ func (d *Display) gesture(g touch.Gesture) {
 		d.mu.Unlock()
 		d.wake()
 	}
+}
+
+// favorite saves what is playing to favorites, and marks the star once it is saved.
+func (d *Display) favorite() {
+	rd := home.Get().Radio()
+	if err := home.Get().FavoriteNow(); err != nil {
+		slog.Warn("saving to favorites failed", "err", err)
+		return
+	}
+	d.mu.Lock()
+	d.favedKey = rd.Title + "\x00" + rd.Now
+	d.mu.Unlock()
+	d.wake()
+}
+
+// endMusic is "go home" and the now-playing screen's Done: the music stops, a held track is let go,
+// and the page goes back to the clock.
+func (d *Display) endMusic() {
+	// Music Assistant's stream is carried, not this player's, so Playing never says it: asked of the
+	// speaker as well, as the Spot's stop already is.
+	if playing, paused := media.Get().Playing(); playing || paused || media.Get().ExternalPlaying() {
+		home.Get().Stop()
+		media.Get().Stop()
+	}
+	media.Get().ForgetHeld()
+	// And the page goes, as a swipe puts it away: a track somebody else is holding paused is still a
+	// page. It comes back for the next track.
+	rd := home.Get().Radio()
+	d.mu.Lock()
+	d.away, d.awayTrack, d.awayStation = true, rd.Title, rd.Now
+	d.mu.Unlock()
+	d.wake()
 }
 
 // putAway is whether the now-playing page is staying out of the way. A swipe puts it away and it stays
@@ -1268,7 +1330,11 @@ func (d *Display) frame() time.Duration {
 	}
 	s.nowPlaying = wants && !d.putAway(s.radio, wants)
 	d.mu.Lock()
-	d.showingPlaying, d.showingPaused = s.nowPlaying, s.paused
+	if wants && d.stripDue(now, s.radio, s.nowPlaying) {
+		s.nowPlaying, s.strip = false, true
+	}
+	s.faved = d.favedKey != "" && d.favedKey == s.radio.Title+"\x00"+s.radio.Now
+	d.showingPlaying, d.showingPaused, d.showingStrip = s.nowPlaying, s.paused, s.strip
 	d.mu.Unlock()
 	s.weather = home.Get().Weather()
 	d.mu.Lock()

@@ -528,7 +528,13 @@ func (d *Display) gesture(g touch.Gesture) {
 	if d.showsNowPlaying() {
 		switch g.Kind {
 		case touch.Tap:
-			togglePlay()
+			if onDone(g.X, g.Y) {
+				go stopMusic()
+			} else if onStar(g.X, g.Y) {
+				go d.favoriteSpot()
+			} else {
+				togglePlay()
+			}
 			d.wake()
 			return
 		case touch.SwipeLeft:

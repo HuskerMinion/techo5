@@ -99,6 +99,10 @@ type Player struct {
 	// Sendspin. The stream is the remote's business; this is only what to call it.
 	extTrack atomic.Value // remoteTrack
 
+	// lastExt is the last track a remote named, kept when it stops naming one: Music Assistant clears
+	// the track just before it says it stopped, so what was playing has to come from here.
+	lastExt atomic.Value // remoteTrack
+
 	// stoppedAt counts stops, so the timer that ends a stopped track knows whether a later stop or a
 	// play has come since.
 	stoppedAt atomic.Uint64
@@ -834,6 +838,9 @@ func (p *Player) Carried() bool {
 // the remote has stopped naming anything.
 func (p *Player) ExternalTrack(title, artist, album string) {
 	p.extTrack.Store(remoteTrack{Title: title, Artist: artist, Album: album})
+	if title != "" {
+		p.lastExt.Store(remoteTrack{Title: title, Artist: artist, Album: album})
+	}
 	p.refresh()
 }
 
@@ -846,6 +853,9 @@ type heldTrack struct {
 // HoldRemote keeps the remote's track for the screen as it is paused from here. See held.
 func (p *Player) HoldRemote() {
 	t, _ := p.extTrack.Load().(remoteTrack)
+	if t.Title == "" {
+		t, _ = p.lastExt.Load().(remoteTrack)
+	}
 	if t.Title == "" {
 		return
 	}
@@ -863,6 +873,12 @@ func (p *Player) Held() (title, artist, album string, ok bool) {
 		return "", "", "", false
 	}
 	return h.Title, h.Artist, h.Album, true
+}
+
+// ForgetHeld lets a held track go: the music is over, whatever it was.
+func (p *Player) ForgetHeld() {
+	p.held.Store(heldTrack{})
+	p.refresh()
 }
 
 // ScreenState is what the room's music is doing, as a screen shows it: this player's own stream, a

@@ -123,6 +123,11 @@ type scene struct {
 	// missed is a ring that fell due while the device could not sound it, said in the footer.
 	missed string
 
+	// strip is the music in a strip at the foot of the clock page, rather than on its own page; faved
+	// is the star having been pressed for what is playing.
+	strip bool
+	faved bool
+
 	// announceReady is whether this house has a word set, without which announcements go nowhere;
 	// announceRecording whether this device has its microphone open for one now; announcePeers how
 	// many other devices are listening for them.
@@ -357,6 +362,9 @@ func (r *renderer) draw(s scene) {
 		}
 	}
 	r.footer(s)
+	if s.strip && s.phase == "idle" && s.sunrise == 0 {
+		r.musicStrip(s)
+	}
 	if s.showDrawer {
 		r.drawer(s)
 	}
@@ -411,6 +419,10 @@ func (r *renderer) bigClock(s scene) {
 	}
 	if timers {
 		base -= r.s(36)
+	}
+	if s.strip {
+		// The music strip takes the foot of the panel; the clock and date move up out of its way.
+		base -= r.s(30)
 	}
 
 	suffix := ""
@@ -588,6 +600,8 @@ func (r *renderer) header(s scene) {
 // playingWord is what the footer says about the music: empty when nothing is playing.
 func playingWord(s scene) string {
 	switch {
+	case s.strip:
+		return "" // the strip says it, and the footer is under it
 	case s.playing:
 		return "♪ playing"
 	case s.paused:

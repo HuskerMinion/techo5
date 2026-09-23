@@ -72,6 +72,17 @@ func musicState() (playing, paused bool) { return media.Get().ScreenState() }
 func stopMusic() {
 	home.Get().Stop()
 	media.Get().Stop()
+	media.Get().ForgetHeld()
+}
+
+// doneAt is the face's Done: left of play and pause, at the same height, where a thumb finds it.
+const doneX, doneY, doneR = centre - 88.0, 420.0, 25.0
+
+// onDone reports whether a tap at x, y is on Done.
+func onDone(x, y int) bool {
+	dx, dy := float64(x)-doneX, float64(y)-doneY
+	// The pill is two discs and the band between them; a little slack round it for a thumb.
+	return dx >= -(18+doneR+8) && dx <= 18+doneR+8 && dy >= -(doneR+8) && dy <= doneR+8
 }
 
 // togglePlay is a tap on now playing. It goes the way the Show's tap goes, which is the only way it can
@@ -177,7 +188,20 @@ func (r *roundRenderer) nowPlayingFace(s roundScene) {
 	} else {
 		r.centred(r.title, clip(r.title, r, station, 350), 344, colText)
 	}
-	// Play or pause at the bottom; a tap anywhere does the same.
+	// Done on the left: the music ends and the face goes back to the clock. A pause keeps this face up
+	// with play on it, and so does a stop from Music Assistant, which looks the same from here.
+	r.discAt(doneX-18, doneY, doneR, color.RGBA{36, 42, 52, 255})
+	r.discAt(doneX+18, doneY, doneR, color.RGBA{36, 42, 52, 255})
+	r.line(doneX-18, doneY, doneX+18, doneY, 2*doneR, color.RGBA{36, 42, 52, 255})
+	r.centred2(r.small, "Done", int(doneX), int(doneY)+6, colText)
+	// The star on the right saves what is playing to favorites, and fills in once it has.
+	r.discAt(starX, starY, starR, color.RGBA{36, 42, 52, 255})
+	starColor := color.RGBA{150, 158, 170, 255}
+	if spotStarFilled(rd) {
+		starColor = colMusic
+	}
+	r.starMark(starX, starY, 14, starColor)
+	// Play or pause at the bottom; a tap anywhere else does the same.
 	const by = 420.0
 	r.discAt(centre, by, 25, color.RGBA{36, 42, 52, 255})
 	if s.paused {

@@ -282,7 +282,11 @@ func (s *session) grouped(g protocol.GroupUpdate) {
 		// it does after a pause from the screen, and starts the track over when it goes straight
 		// from playing to stopped. Seen on a Show 5 against Music Assistant, not taken from its
 		// documents.
+		//
+		// And the track stays on the screen with play on it, as after a pause from the screen. A stop
+		// looks the same from here, so the page has a Done that ends it and goes home.
 		if playing, _ := media.Get().RemotePlaying(); playing && s.askedFor() != "pause" {
+			media.Get().HoldRemote()
 			media.Get().RemoteState("paused")
 		}
 		s.asked.Store("")
