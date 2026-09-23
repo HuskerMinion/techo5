@@ -113,14 +113,20 @@ so it can be heard. Nothing ever ducks the alarm.
 
 ## The work, in order
 
-### R1 - Make the stop word as easy to hear as every other word
+R1 and R2 are built, along with decision 3's header. R3 onwards is still a plan.
+
+### R1 - Make the stop word as easy to hear as every other word - BUILT
 
 One line: let `StopSlot` take `playingSlack` the way the other slots do, while the canceller runs.
 Nothing else in this plan is as cheap or as likely to matter.
 
 Test: a unit test on `Threshold(StopSlot)` with the canceller on and off.
 
-### R2 - Duck the ring for the stop word
+Built as `thresholdFor` in `feature/detect/detect.go`, pulled out of the closure so it is testable
+without the singletons the closure reaches for. `threshold_test.go` pins the stop word taking the
+same drop as slot 0, the floor, and the other slots keeping their own thresholds.
+
+### R2 - Duck the ring for the stop word - BUILT
 
 Give the ring loop a duck state it reads each time round, and drop or skip the chime for ~3 s when
 it is set. Trigger it from a near miss **on the stop slot** - the engine already reports near misses
@@ -133,6 +139,41 @@ The screen and the LED carry on through the quiet window, so the alarm stays obv
 
 Test: the ducker is deliberately built with the speaker and the clock injectable
 (`feature/detect/nearmiss.go:49-56`) precisely so this is testable with no hardware. Follow that.
+
+Built as a package, `feature/ring`, rather than a flag copied into both engines - R7 blames that
+duplication for the Home Assistant gap, so this is a first piece of the unification rather than a
+third copy. It holds two things:
+
+- `Sounding` / `IsSounding`, a **count** and not a flag, so an alarm and a timer going off together
+  do not have the first to finish report silence.
+- `Hush` / `Hushed`, a **deadline** and not an on/off. A hush nobody lifts expires by itself, so no
+  bug can leave an alarm permanently silent - which for this feature is the failure that matters.
+
+The ducker hushes on a near miss on the stop slot only, and **not** gated on `Media.DuckOnNearMiss`:
+that setting is about music getting out of the way, where this is about an alarm being stoppable at
+all. Rate limited to once per `3 x ring.HushFor`, so a room that keeps nearly saying it can quiet at
+most a third of a ringing alarm.
+
+### R3a - The header, from decision 3 - BUILT
+
+`header` in `feature/display/render.go`, deferred from the first line of `draw` so it runs last and
+lands on every page, including the ones that return early - the ringing page, the call page, pairing,
+wifi, setup, the camera and the radar, none of which the footer ever reached.
+
+Two things the pixels said that reading the code did not:
+
+- The claim that no page draws above the margin is **false**. The weather page's art and the settings
+  sheet's card both reach the top edge, so a band across the panel cuts a slot through them. It is a
+  pill behind the words instead, which takes only the space the words need and is the background
+  colour on a plain page.
+- The settings sheet is skipped on purpose. It already has a Microphone row reading "Muted" or
+  "Listening" with the switch beside it, which says it better than a line would, and a pill there
+  would cut the top off its card.
+
+Test: `header_test.go` compares the top strip muted against unmuted on every page - it must differ on
+all of them, and must **not** differ on the settings sheet. `SHOW_PREVIEW=<dir> go test -run
+TestShowScenesDraw` writes the pages as PNGs; the muted scenes were added to that set, and looking at
+them is what caught both points above.
 
 ### R3 - A second word: snooze
 
@@ -178,17 +219,34 @@ decision (principle 1).
   during a call.
 - Do not let the boot splash gate the ringing page.
 
-## Decisions needed before building
+## Decisions
 
-1. **Should a ring have a volume floor**, so an alarm cannot be silent because music was left muted?
-   An inaudible alarm is the one failure an alarm may not have; against that, a device muted on
-   purpose should probably stay muted. Suggested: a ring uses its own level rather than inheriting
-   the media volume, with its own explicit and visible mute.
-2. **Does a button press stop or snooze** (R4).
-3. **Should muting the microphone really disable the stop word?** It is defensible - a cut
-   microphone is a promise - but it silently removes voice control of an alarm, and nothing says so.
-4. **Are "reminders" wanted as a concept?** There is none in the code today. An alarm with a label
-   already is one, and a third ring engine would be a third thing to stop.
+Settled 2026-09-23, except the fourth.
+
+1. **A ring has its own level, not the media volume.** A ring no longer inherits the media volume, so
+   leaving music muted can never make an alarm silent, and there is a separate explicit and visible
+   ring mute for somebody who really wants one. Not a floor on the media volume: a floor overrides a
+   deliberate mute, where an own level means the deliberate mute was never the alarm's to begin with.
+   Applies to alarms and timers both - a timer nobody can hear is the same failure.
+2. **A button press silences, then offers a snooze.** Per principle 1: the first press stops the
+   noise and offers "Snooze N min?" for a few seconds; ignoring the offer leaves it stopped, because
+   a snooze nobody confirmed is the surprising outcome. **N is configurable** - in settings and on
+   the offer itself - rather than fixed at 9: five minutes and fifteen are both wanted.
+3. **Muting the microphone keeps cutting the microphone, and the screen says so.** The mute is a
+   promise and stays whole; what is missing is that nothing tells anybody. On a Show the
+   `microphone off` line **moves from the footer to a header**, so it is drawn on every page rather
+   than only the two the footer reaches — the ringing page among them, which said nothing at all
+   about mute. The Dot is left as it is: the mute button's own LED lights from the mute line itself,
+   which is the right signal and is not echod's to change.
+
+   Not quiet hours, which already exist (`config/quiet.go`) and already exempt a ring on purpose:
+   the setting says so to the user in as many words, "Alarms and timers always sound". Worth knowing
+   while reading this plan: **"quiet" means four unrelated things in this tree** - quiet hours, the
+   microphone cut, the media volume at zero, and `Engine.Quiet` tearing the wake backends down
+   because the microphone was cut.
+4. **Are "reminders" wanted as a concept?** Still open, and being looked at elsewhere. There is none
+   in the code today. An alarm with a label already is one, and a third ring engine would be a third
+   thing to stop - so if they are wanted they should land on one unified engine (R7), not beside two.
 
 ## What this plan is not
 
