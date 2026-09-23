@@ -75,7 +75,9 @@ matched by prefix: `mon,wed,fri`, `tue thu`.
 
 *string*
 
-Free text shown on the device's screen and in Home Assistant's next-alarm sensor.
+Free text shown on the device's screen and in Home Assistant's next-alarm sensor. When the alarm
+rings, the device also has Home Assistant say it out loud once (this needs **Allow the device to
+perform Home Assistant actions**; without it the alarm just rings).
 
 ```yaml
 action: esphome.office_alarm_set
