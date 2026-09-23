@@ -180,6 +180,12 @@ func (p *Phone) Say(samples []int16) bool {
 	}
 }
 
+// claim takes the line for a call, with p.mu held.
+func (p *Phone) claim(phase Phase, peer string, incoming bool) {
+	p.state.Phase, p.state.Peer, p.state.Incoming = phase, peer, incoming
+	p.state.Since = time.Now()
+}
+
 func (p *Phone) set(f func(s *State)) {
 	p.mu.Lock()
 	before := p.state
@@ -333,25 +339,30 @@ func (p *Phone) Call(number string) error {
 	if number == "" {
 		return errors.New("phone: no number to call")
 	}
+	ctx, cancel := context.WithCancel(context.Background())
+	// The line is checked idle and claimed in one step: checked and claimed apart, a call coming in
+	// between the two was let through as well, and one of the two was left ringing with nobody able
+	// to answer it.
 	p.mu.Lock()
 	l := p.line
-	busy := p.state.Phase != Idle
-	registered := p.state.Registered
-	p.mu.Unlock()
+	var err error
 	switch {
 	case l == nil:
-		return errors.New("phone: not set up")
-	case busy:
-		return errors.New("phone: already on a call")
-	case !registered:
-		return errors.New("phone: not signed in yet")
+		err = errors.New("phone: not set up")
+	case p.state.Phase != Idle:
+		err = errors.New("phone: already on a call")
+	case !p.state.Registered:
+		err = errors.New("phone: not signed in yet")
+	default:
+		p.end = cancel
+		p.claim(Dialing, number, false)
 	}
-
-	ctx, cancel := context.WithCancel(context.Background())
-	p.mu.Lock()
-	p.end = cancel
 	p.mu.Unlock()
-	p.set(func(s *State) { s.Phase, s.Peer, s.Incoming = Dialing, number, false })
+	if err != nil {
+		cancel()
+		return err
+	}
+	p.set(func(*State) {}) // tell Home Assistant and the lights
 	slog.Info("phone: calling", "number", number)
 	fire("dialing", p.State())
 
@@ -388,6 +399,7 @@ func (p *Phone) incoming(d *diago.DialogServerSession) {
 	ctx, cancel := context.WithCancel(context.Background())
 	if !busy {
 		p.answered, p.end = answered, cancel
+		p.claim(Ringing, caller, true) // in the same step as the check, as Call does
 	}
 	p.mu.Unlock()
 	defer cancel()
@@ -400,7 +412,7 @@ func (p *Phone) incoming(d *diago.DialogServerSession) {
 	if err := d.Ringing(); err != nil {
 		slog.Warn("phone: ringing", "err", err)
 	}
-	p.set(func(s *State) { s.Phase, s.Peer, s.Incoming = Ringing, caller, true })
+	p.set(func(*State) {})
 	slog.Info("phone: ringing", "from", caller)
 	fire("ringing", p.State())
 

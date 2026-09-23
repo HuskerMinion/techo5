@@ -501,18 +501,23 @@ func gatherSlideshow(h config.Slideshow) ([]hass.Media, error) {
 	return photos, err
 }
 
-// isPhoto is whether a playable entry is a picture rather than a video or a sound, going by the
-// type Home Assistant gives it, or failing that its name.
+// isPhoto is whether a playable entry is a picture the device can show, going by the type Home
+// Assistant gives it, or failing that its name. Only JPEG and PNG: those are the decoders built in,
+// and a GIF or a WebP would only be fetched to be skipped.
 func isPhoto(m hass.Media) bool {
 	k := strings.ToLower(m.Kind)
-	if strings.HasPrefix(k, "image") {
+	switch k {
+	case "image/jpeg", "image/jpg", "image/png":
 		return true
+	}
+	if strings.HasPrefix(k, "image") {
+		return false
 	}
 	if k != "" && k != "application/octet-stream" {
 		return false
 	}
 	switch strings.ToLower(path.Ext(m.ID)) {
-	case ".jpg", ".jpeg", ".png", ".gif", ".webp", ".bmp":
+	case ".jpg", ".jpeg", ".png":
 		return true
 	}
 	return false

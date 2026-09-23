@@ -293,6 +293,11 @@ func (d *Display) apply(on bool, pct int, save bool) {
 	pct = min(max(pct, 0), 100)
 	d.mu.Lock()
 	d.on, d.ceiling = on, pct
+	// Somebody chose this, so the night no longer owns the screen: without this, a screen switched off
+	// during the night was switched back on when the night ended.
+	if save {
+		d.nightDark = false
+	}
 	d.mu.Unlock()
 	d.relight(true)
 
@@ -631,11 +636,12 @@ func (d *Display) gesture(g touch.Gesture) {
 		// and the screen has been put away, a tap on it shows what is playing rather than starting it from
 		// a screen that is not showing what it is.
 		d.mu.Lock()
-		showing, pausedMusic, away := d.showingPlaying, d.showingPaused, d.away
+		showing, pausedMusic, away, inStrip := d.showingPlaying, d.showingPaused, d.away, d.showingStrip
 		d.mu.Unlock()
 		// And only when the page really is away: this is the way back to it, so taking a tap out of the
 		// bottom-right corner of the clock is worth it only when there is something to come back to.
-		if d.r != nil && idle && pausedMusic && !showing && away &&
+		// Not with the strip up, though: the word is not drawn then, and its corner is the strip's.
+		if d.r != nil && idle && pausedMusic && !showing && away && !inStrip &&
 			image.Pt(g.X, g.Y).In(d.r.playingButton()) {
 			d.mu.Lock()
 			d.away, d.awayTrack, d.awayStation = false, "", ""
@@ -1330,7 +1336,8 @@ func (d *Display) frame() time.Duration {
 	}
 	s.nowPlaying = wants && !d.putAway(s.radio, wants)
 	d.mu.Lock()
-	if wants && d.stripDue(now, s.radio, s.nowPlaying) {
+	// Not under the sunrise light, which draws no strip: taps on a strip nobody can see would still act.
+	if wants && d.stripDue(now, s.radio, s.nowPlaying) && sunriseProgress(now) == 0 {
 		s.nowPlaying, s.strip = false, true
 	}
 	s.faved = d.favedKey != "" && d.favedKey == s.radio.Title+"\x00"+s.radio.Now

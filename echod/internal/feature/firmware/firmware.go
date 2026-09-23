@@ -258,6 +258,12 @@ func (u *Firmware) Install(ctx context.Context) {
 	// The ring says it is working for the whole of it, which then hands over to the still frame the
 	// restart leaves behind — so the device is never silently busy from the moment somebody presses
 	// install to the moment the new binary is up.
+	// A second press is turned away before it says anything: setting the progress back to nothing here
+	// would put Home Assistant's bar back to empty halfway through the download already running.
+	if update.Installing() {
+		slog.Info("install already running; the second request was ignored", "version", found.Version)
+		return
+	}
 	working := led.Get().Busy().Start(led.WorkUpdate)
 	defer working.Done()
 

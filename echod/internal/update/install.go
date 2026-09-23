@@ -38,6 +38,15 @@ var ErrInstalling = errors.New("update: an install is already running")
 // far enough to be believed.
 //
 // progress is called with a fraction as the download runs, for whoever is watching in Home Assistant.
+// Installing is whether an install is running now.
+func Installing() bool {
+	if installing.TryLock() {
+		installing.Unlock()
+		return false
+	}
+	return true
+}
+
 func Install(ctx context.Context, m Manifest, progress func(float32)) error {
 	if !installing.TryLock() {
 		return ErrInstalling

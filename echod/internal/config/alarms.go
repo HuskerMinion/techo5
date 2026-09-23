@@ -220,6 +220,11 @@ func (w AlarmsWriter) Put(a Alarm) error {
 	if a.Days != DaysOnce {
 		a.Date = ""
 	}
+	// A dated one-off turned back on after its day has gone by is a plain one-off again: kept, its date
+	// is a moment in the past, and the list would show it on while nothing could ever ring it.
+	if at, ok := a.OnDate(); ok && a.On && !at.After(time.Now()) {
+		a.Date = ""
+	}
 	return w.st.Update(func(c *Config) {
 		if i := slices.IndexFunc(c.Alarms.List, func(x Alarm) bool { return x.ID == a.ID }); i >= 0 {
 			c.Alarms.List[i] = a

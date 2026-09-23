@@ -69,16 +69,38 @@ func TestAlive(t *testing.T) {
 // An alarm set to repeat keeps no date, so setting it back to once cannot bring an old day back.
 func TestARepeatingAlarmKeepsNoDate(t *testing.T) {
 	st := load(t)
-	if err := st.Set().Alarms().Put(Alarm{ID: "a", Hour: 7, Days: DaysWeekdays, Date: "2026-09-29", On: true}); err != nil {
+	later := time.Now().AddDate(0, 0, 6).Format(DateLayout)
+	if err := st.Set().Alarms().Put(Alarm{ID: "a", Hour: 7, Days: DaysWeekdays, Date: later, On: true}); err != nil {
 		t.Fatal(err)
 	}
 	if got := st.Get().Alarms.List[0].Date; got != "" {
 		t.Errorf("a repeating alarm kept the date %q", got)
 	}
-	if err := st.Set().Alarms().Put(Alarm{ID: "b", Hour: 7, Days: DaysOnce, Date: "2026-09-29", On: true}); err != nil {
+	if err := st.Set().Alarms().Put(Alarm{ID: "b", Hour: 7, Days: DaysOnce, Date: later, On: true}); err != nil {
 		t.Fatal(err)
 	}
-	if got := st.Get().Alarms.List[1].Date; got != "2026-09-29" {
+	if got := st.Get().Alarms.List[1].Date; got != later {
 		t.Errorf("a one-off lost its date: %q", got)
+	}
+}
+
+// A dated one-off rings once and is turned off with its date kept. Turned back on, the date is gone by,
+// and it has to become a plain one-off rather than an alarm that shows on and can never ring.
+func TestADatedOneOffTurnedBackOnLosesItsPastDate(t *testing.T) {
+	st := load(t)
+	gone := time.Now().AddDate(0, 0, -2).Format(DateLayout)
+	if err := st.Set().Alarms().Put(Alarm{ID: "a", Hour: 7, Days: DaysOnce, Date: gone, On: false}); err != nil {
+		t.Fatal(err)
+	}
+	if got := st.Get().Alarms.List[0].Date; got != gone {
+		t.Errorf("turning it off lost the date it rang on: %q", got)
+	}
+	al := st.Get().Alarms.List[0]
+	al.On = true
+	if err := st.Set().Alarms().Put(al); err != nil {
+		t.Fatal(err)
+	}
+	if got := st.Get().Alarms.List[0]; got.Date != "" {
+		t.Errorf("turned back on, it kept a date that has gone by: %q", got.Date)
 	}
 }

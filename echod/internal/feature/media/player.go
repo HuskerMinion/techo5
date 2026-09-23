@@ -100,8 +100,10 @@ type Player struct {
 	extTrack atomic.Value // remoteTrack
 
 	// lastExt is the last track a remote named, kept when it stops naming one: Music Assistant clears
-	// the track just before it says it stopped, so what was playing has to come from here.
-	lastExt atomic.Value // remoteTrack
+	// the track just before it says it stopped, so what was playing has to come from here. Only just
+	// before: a name kept longer is whatever played hours ago, and a stream that never named its track
+	// would be held and shown as that.
+	lastExt atomic.Value // lastTrack
 
 	// stoppedAt counts stops, so the timer that ends a stopped track knows whether a later stop or a
 	// play has come since.
@@ -839,10 +841,23 @@ func (p *Player) Carried() bool {
 func (p *Player) ExternalTrack(title, artist, album string) {
 	p.extTrack.Store(remoteTrack{Title: title, Artist: artist, Album: album})
 	if title != "" {
-		p.lastExt.Store(remoteTrack{Title: title, Artist: artist, Album: album})
+		p.lastExt.Store(lastTrack{remoteTrack: remoteTrack{Title: title, Artist: artist, Album: album}})
+	} else if l, _ := p.lastExt.Load().(lastTrack); l.Title != "" && l.clearedAt.IsZero() {
+		l.clearedAt = time.Now()
+		p.lastExt.Store(l)
 	}
 	p.refresh()
 }
+
+// lastTrack is the last track a remote named, and when it stopped naming it.
+type lastTrack struct {
+	remoteTrack
+	clearedAt time.Time
+}
+
+// lastFor is how long after a remote stops naming its track the name still stands for what it was
+// playing: the stop that follows the clearing comes straight after it.
+const lastFor = 10 * time.Second
 
 // heldTrack is a remote's track paused from here, and when.
 type heldTrack struct {
@@ -853,8 +868,8 @@ type heldTrack struct {
 // HoldRemote keeps the remote's track for the screen as it is paused from here. See held.
 func (p *Player) HoldRemote() {
 	t, _ := p.extTrack.Load().(remoteTrack)
-	if t.Title == "" {
-		t, _ = p.lastExt.Load().(remoteTrack)
+	if l, _ := p.lastExt.Load().(lastTrack); t.Title == "" && time.Since(l.clearedAt) < lastFor {
+		t = l.remoteTrack
 	}
 	if t.Title == "" {
 		return
@@ -885,7 +900,13 @@ func (p *Player) ForgetHeld() {
 // remote's it is carrying, or a remote's paused from here and held.
 func (p *Player) ScreenState() (playing, paused bool) {
 	if p.Carried() {
-		return p.CarriedState()
+		playing, paused = p.CarriedState()
+		// Just after a pause the claim on the speaker is still let go of slowly, and the remote says
+		// neither: the held track is what the screen should show, with play on it.
+		if _, _, _, ok := p.Held(); ok && !playing && !paused {
+			return false, true
+		}
+		return playing, paused
 	}
 	playing, paused = p.Playing()
 	if _, _, _, ok := p.Held(); ok && !playing && !paused {

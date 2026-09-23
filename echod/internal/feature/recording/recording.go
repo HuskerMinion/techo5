@@ -376,6 +376,10 @@ func write(id string, slot int, pcm []byte) error {
 	if err := os.MkdirAll(layout.RecordingDir, dirMode); err != nil {
 		return err
 	}
+	// MkdirAll leaves a folder that is already there as it is, and older builds made it open to all.
+	if err := os.Chmod(layout.RecordingDir, dirMode); err != nil {
+		return err
+	}
 	if err := os.WriteFile(wavPath(id), wav(pcm), fileMode); err != nil {
 		return err
 	}
