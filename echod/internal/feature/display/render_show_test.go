@@ -49,6 +49,11 @@ func TestShowScenesDraw(t *testing.T) {
 		"clock-no-weather": {now: at, phase: "idle"},
 		"nowplaying": {now: at, phase: "idle", nowPlaying: true, playing: true, weather: sky,
 			radio: home.Radio{Now: "KXYZ 101.1", Title: "Take It Easy", Artist: "Eagles"}},
+		// Music Assistant's track, carried over Sendspin: named, with the three buttons.
+		"nowplaying-music-assistant": {now: at, phase: "idle", nowPlaying: true, playing: true, weather: sky,
+			radio: home.Radio{Playing: true, Now: "Music Assistant", Title: "Some Jazz", Artist: "The Quartet", Music: true}},
+		"nowplaying-music-assistant-paused": {now: at, phase: "idle", nowPlaying: true, paused: true, weather: sky,
+			radio: home.Radio{Now: "Music Assistant", Title: "Some Jazz", Artist: "The Quartet", Music: true}},
 		"weather":   {now: at, phase: "idle", weather: sky, forecast: week, showWeather: true},
 		"setup-ask": {now: at, phase: "idle", weather: sky, setupAsking: true},
 		"announcement": {now: at, phase: "idle", weather: sky, showAnnouncement: true,

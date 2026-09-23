@@ -113,14 +113,21 @@ func TestATransportGoesBackToThisPlayerWhenTheSessionIsGone(t *testing.T) {
 	for _, tc := range []struct {
 		name       string
 		session    bool
+		station    bool // a station of this player's paused underneath, to resume
 		wantRemote bool
 	}{
-		{"a remote that played, with its session still there", true, true},
-		{"the same remote, with the session gone", false, false},
+		// With nothing of this player's to resume, a remote that played and is still there owns the
+		// buttons. (With a station paused underneath it does not: the station is what the screen
+		// offers to resume, since "a remote holding the speaker is not the remote playing".)
+		{"a remote that played, with its session still there", true, false, true},
+		{"the same remote, with the session gone", false, true, false},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			// A station paused underneath is the state that bites: there is something here to resume.
-			s := localStream(true)
+			s := &Stream{out: &speaker.Player{}, changed: func() {}}
+			if tc.station {
+				// A station paused underneath is the state that bites: there is something here to resume.
+				s = localStream(true)
+			}
 			p := &Player{stream: s}
 			p.remoteLast.Store(true)
 			if !tc.session {
