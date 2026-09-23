@@ -74,10 +74,22 @@ so it can be heard. Nothing ever ducks the alarm.
   the label, is dead (`feature/display/render.go:167-195`, `feature/display/alarms.go:51-57`). A
   press held longer than `tapHold` (500 ms) emits **no gesture at all**
   (`hardware/touch/touch.go:350-378`), so a deliberate half-asleep press does nothing.
+
+  Three things checked since, that make this worse than the paragraph above says. `310` is the Show
+  5's number, not a constant: the sizes scale, so on a Show 8 the live test is `y >= 573` and **72%**
+  of the panel is dead. The band has no upper bound and **no x bound**, so a tap in the side margins
+  decides as much as one on a button. And while a ring sounds the page returns for *every* gesture
+  kind (`feature/display/display.go:425-432`), so the volume swipe and the drawer are swallowed too.
 - **Touch, Spot**: the whole face is Stop, which is the right design - but a 450 ms press emits
   `Hold`, which `ringGesture` refuses, and control falls through to opening the ring menu underneath
   the ring face (`feature/display/display_spot.go:519-532`). If the panel goes dark after the ring
   starts, the first tap is spent lighting it.
+
+  Also checked: a swipe up or down while ringing falls past `ringGesture` to `media.Adjust(±1)`, so
+  it **changes the volume** on a face that says "Tap to stop". The menu reached by the `Hold` bug can
+  stop a ringing *timer* (`itemTimers`) but not an alarm. The dark-panel case is narrower than it
+  looks - `ringLights` relights on the ring's own `Changed` event - but it is edge-triggered, where
+  the Show relights defensively every frame, so a panel put to sleep after the ring began stays dark.
 - **Buttons**: **no button stops a ring on a Show or a Spot.** The Dot's action button is the only
   physical stop on any device, and it is swallowed while the setup page holds the press
   (`feature/voice/voice.go:76-81`) or during a call (`feature/phone/phone.go:158-168`).
@@ -175,13 +187,24 @@ all of them, and must **not** differ on the settings sheet. `SHOW_PREVIEW=<dir> 
 TestShowScenesDraw` writes the pages as PNGs; the muted scenes were added to that set, and looking at
 them is what caught both points above.
 
-### R3 - A second word: snooze
+### R3 - A second word: snooze - NOT DOING
 
-The stop word is a single always-loaded model, not language. "Snooze" can be another one, on the
-same mechanism, with no network and no Home Assistant. That gives the two things somebody actually
-needs at 6am, both working with everything else down.
+The stop word is a single always-loaded model, not language. "Snooze" could be another one, on the
+same mechanism, with no network and no Home Assistant.
 
-Decision needed: which words. "Stop" and "snooze" are the obvious pair.
+Dropped 2026-09-23. What it costs is the reason. Each microWakeWord model is a self-contained
+streaming model with its own feature front end, and **every one sees every frame**
+(`feature/detect/backends.go:47-79`) - which is exactly why "off" means unloaded rather than ignored
+(`feature/detect/stop.go:42-47`). A second always-loaded word is a permanent share of the frame
+budget on a Dot, spent on a short word that would be said over a ring, which is the condition the
+detector is worst at. R4 buys the same outcome for no per-frame cost.
+
+The single reserved slot is also assumed in six places, for whoever revisits this: the engine is
+sized `New(StopSlot+1, ...)` so a slot 101 fails the bounds check in `Use`/`Clear` and is **silently
+refused**; `thresholdFor` sends anything that is not `StopSlot` to Home Assistant's per-assistant
+threshold; `OnDetect` would **start a conversation turn** on an unrecognised reserved slot;
+`nearmiss.go`'s ring hush is keyed to the one index; and the config holds a single `Stop` struct with
+a single sensitivity entity. None of that is hard, but none of it is free either.
 
 ### R4 - Any button stops a ring
 
