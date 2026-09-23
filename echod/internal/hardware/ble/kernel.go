@@ -22,12 +22,18 @@ func viaKernel() bool {
 	return err == nil
 }
 
-// hciFilter is struct hci_filter; its masks are C longs, so uintptr keeps the layout on 32 and 64 bit.
+// hciFilter is what HCI_FILTER takes: the kernel copies it into its struct hci_ufilter, whose masks
+// are __u32 on every architecture (BlueZ's lib/hci.h uses uint32_t the same way). The kernel's
+// internal struct hci_filter has unsigned longs, but that is not the setsockopt ABI; uintptr fields
+// here would be right on 32-bit builds only.
 type hciFilter struct {
-	typeMask  uintptr
-	eventMask [2]uintptr
+	typeMask  uint32
+	eventMask [2]uint32
 	opcode    uint16
 }
+
+// sizeof(struct hci_ufilter) is 16; this fails to compile if the layout above drifts from it.
+var _ [0]struct{} = [unsafe.Sizeof(hciFilter{}) - 16]struct{}{}
 
 // openKernel opens a raw socket on hci0 that sees every event. Packets on it carry the H4 type byte
 // first, the same as the node, so everything after the open is shared. Reads time out after a second
@@ -37,8 +43,8 @@ func openKernel() (int, error) {
 	if err != nil {
 		return -1, fmt.Errorf("ble: hci socket: %w", err)
 	}
-	all := ^uintptr(0)
-	filter := hciFilter{typeMask: 1 << h4Event, eventMask: [2]uintptr{all, all}}
+	all := ^uint32(0)
+	filter := hciFilter{typeMask: 1 << h4Event, eventMask: [2]uint32{all, all}}
 	if _, _, errno := unix.Syscall6(unix.SYS_SETSOCKOPT, uintptr(fd), unix.SOL_HCI, hciFilterOpt,
 		uintptr(unsafe.Pointer(&filter)), unsafe.Sizeof(filter), 0); errno != 0 {
 		_ = unix.Close(fd)

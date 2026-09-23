@@ -20,6 +20,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"runtime"
 	"syscall"
 	"time"
 	"unsafe"
@@ -242,6 +243,17 @@ func checkLayouts() error {
 	return nil
 }
 
+// heapNew returns a new T that is certain to live on the heap, where it does not move. Converting
+// a pointer to uintptr does not make its object escape, so it is forced here: escape analysis
+// cannot see through the call to a function variable.
+func heapNew[T any]() *T {
+	p := new(T)
+	escape(unsafe.Pointer(p))
+	return p
+}
+
+var escape = func(unsafe.Pointer) {}
+
 func ioctl(f *os.File, req uintptr, arg unsafe.Pointer) error {
 	if _, _, e := syscall.Syscall(syscall.SYS_IOCTL, f.Fd(), req, uintptr(arg)); e != 0 {
 		return e
@@ -396,16 +408,24 @@ func (d *Display) NewBuffer(width, height int) (*Buffer, error) {
 // mapping, which is exactly what makes a posted layer stay dark: the driver's own import does the
 // same two steps and disables the layer when this comes back zero.
 func (b *Buffer) MVA() (uint32, error) {
-	cfg := ionMMData{MMCmd: ionMMConfigBuffer}
+	// The ion argument points at cfg and phys through a uint32 field, which the stack copier
+	// cannot update, so both are heap objects (heapNew) kept alive across their ioctl.
+	cfg := heapNew[ionMMData]()
+	cfg.MMCmd = ionMMConfigBuffer
 	cfg.Config = ionMMConfig{Handle: b.handle, ModuleID: moduleDispOvl0}
-	c := ionCustom{Cmd: ionCmdMultimedia, Arg: uint32(uintptr(unsafe.Pointer(&cfg)))}
-	if err := ioctl(b.d.ion, ionIOCCustom, unsafe.Pointer(&c)); err != nil {
+	c := ionCustom{Cmd: ionCmdMultimedia, Arg: uint32(uintptr(unsafe.Pointer(cfg)))}
+	err := ioctl(b.d.ion, ionIOCCustom, unsafe.Pointer(&c))
+	runtime.KeepAlive(cfg)
+	if err != nil {
 		return 0, fmt.Errorf("config buffer: %w", err)
 	}
-	phys := ionSysData{SysCmd: ionSysCmdGetPhys}
+	phys := heapNew[ionSysData]()
+	phys.SysCmd = ionSysCmdGetPhys
 	phys.Phys = ionSysGetPhys{Handle: b.handle}
-	c = ionCustom{Cmd: ionCmdSystem, Arg: uint32(uintptr(unsafe.Pointer(&phys)))}
-	if err := ioctl(b.d.ion, ionIOCCustom, unsafe.Pointer(&c)); err != nil {
+	c = ionCustom{Cmd: ionCmdSystem, Arg: uint32(uintptr(unsafe.Pointer(phys)))}
+	err = ioctl(b.d.ion, ionIOCCustom, unsafe.Pointer(&c))
+	runtime.KeepAlive(phys)
+	if err != nil {
 		return 0, fmt.Errorf("get phys: %w", err)
 	}
 	return phys.Phys.PhyAddr, nil

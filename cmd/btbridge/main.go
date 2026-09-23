@@ -23,6 +23,8 @@ import (
 	"strings"
 	"syscall"
 	"time"
+
+	"golang.org/x/sys/unix"
 )
 
 const vendorPkt = 0xff // HCI_VENDOR_PKT: vhci control packets, never forwarded
@@ -158,10 +160,18 @@ func stpToVhci(stp int, vhci *os.File, maxPage int) error {
 // wait blocks until the fd is readable or 50 ms pass, whichever comes first,
 // so a driver without a working poll still gets serviced promptly.
 func wait(fd int) {
-	var set syscall.FdSet
-	set.Bits[fd/32] |= 1 << (uint(fd) % 32)
-	tv := syscall.Timeval{Usec: 50000}
-	_, _ = syscall.Select(fd+1, &set, nil, nil, &tv)
+	_ = selectRead(fd, 50*time.Millisecond)
+}
+
+// selectRead is select(2) on one descriptor for reading. FdSet.Set picks the word by the platform's
+// own width (32-bit words on arm, 64-bit on arm64 and amd64), where indexing Bits by fd/32 was
+// right only on 32-bit builds.
+func selectRead(fd int, d time.Duration) bool {
+	var set unix.FdSet
+	set.Set(fd)
+	tv := unix.NsecToTimeval(d.Nanoseconds())
+	n, err := unix.Select(fd+1, &set, nil, nil, &tv)
+	return err == nil && n > 0
 }
 
 // fixSupportedCommands fills in the LE part of the controller's Read Local

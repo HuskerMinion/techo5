@@ -11,6 +11,7 @@ import (
 	"sync"
 	"syscall"
 	"time"
+	"unsafe"
 
 	"github.com/HuskerMinion/techo5/echod/internal/hardware/lenscover"
 	"github.com/HuskerMinion/techo5/echod/internal/hardware/privacy"
@@ -466,3 +467,19 @@ func (c *Camera) Wedged() error {
 	defer c.mu.Unlock()
 	return c.wedged
 }
+
+// heapNew returns a new T that is certain to live on the heap. The compat ioctls take pointers
+// as uint32 fields inside the argument struct, and a stack object behind such a field can move
+// when the stack grows without the field following it; heap objects do not move. Converting to
+// uintptr does not make an object escape, so it is forced here: escape analysis cannot see
+// through the call to a function variable.
+func heapNew[T any]() *T {
+	p := new(T)
+	escape(unsafe.Pointer(p))
+	return p
+}
+
+var escape = func(unsafe.Pointer) {}
+
+// ptr32 is the address of a heapNew object as the compat ioctl structures carry it.
+func ptr32[T any](p *T) uint32 { return uint32(uintptr(unsafe.Pointer(p))) }

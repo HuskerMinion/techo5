@@ -21,6 +21,7 @@ import (
 	"image"
 	"log/slog"
 	"math"
+	"runtime"
 	"sync"
 	"sync/atomic"
 	"syscall"
@@ -294,9 +295,12 @@ func open() (*device, error) {
 	setupCSI2(d.sen, d.mipi)
 
 	// Preview mode; the sensor's mode table ends with stream-on.
-	var window, config [256]byte
-	ctl := [4]uint32{sensorMain, 0, uint32(uintptr(unsafe.Pointer(&window[0]))), uint32(uintptr(unsafe.Pointer(&config[0])))}
-	if err := ioctl(d.sens, ioc(3, sensMagic, nrControl, 16), unsafe.Pointer(&ctl[0])); err != nil {
+	window, config := heapNew[[256]byte](), heapNew[[256]byte]()
+	ctl := [4]uint32{sensorMain, 0, ptr32(window), ptr32(config)}
+	err = ioctl(d.sens, ioc(3, sensMagic, nrControl, 16), unsafe.Pointer(&ctl[0]))
+	runtime.KeepAlive(window)
+	runtime.KeepAlive(config)
+	if err != nil {
 		d.close()
 		return nil, fmt.Errorf("sensor control: %w", err)
 	}
@@ -311,13 +315,16 @@ func open() (*device, error) {
 // setFeature is KDIMGSENSORIOC_X_FEATURECONCTROL with one integer parameter. The kernel is 64-bit
 // and reads the parameter as an unsigned long, so eight bytes go over.
 func (d *device) setFeature(id uint32, v uint64) {
-	var para [8]byte
+	para, size := heapNew[[8]byte](), heapNew[uint32]()
 	for i := range para {
 		para[i] = byte(v >> (8 * i))
 	}
-	size := uint32(len(para))
-	ctl := [4]uint32{sensorMain, id, uint32(uintptr(unsafe.Pointer(&para[0]))), uint32(uintptr(unsafe.Pointer(&size)))}
-	if err := ioctl(d.sens, ioc(3, sensMagic, nrFeature, 16), unsafe.Pointer(&ctl[0])); err != nil {
+	*size = uint32(len(para))
+	ctl := [4]uint32{sensorMain, id, ptr32(para), ptr32(size)}
+	err := ioctl(d.sens, ioc(3, sensMagic, nrFeature, 16), unsafe.Pointer(&ctl[0]))
+	runtime.KeepAlive(para)
+	runtime.KeepAlive(size)
+	if err != nil {
 		slog.Warn("camera: sensor feature", "id", id, "err", err)
 	}
 }
@@ -436,14 +443,20 @@ func (d *device) allocBuffers() error {
 	if err != nil {
 		return fmt.Errorf("mmap ion buffer: %w", err)
 	}
-	cfg := ionMMData{MMCmd: ionMMConfigBuffer, Config: ionMMConfig{Handle: a.Handle, ModuleID: m4uPortIMGO}}
-	c := ionCustom{Cmd: ionCmdMultimedia, Arg: uint32(uintptr(unsafe.Pointer(&cfg)))}
-	if err := ioctl(d.ion, ioc(3, 'I', 6, unsafe.Sizeof(c)), unsafe.Pointer(&c)); err != nil {
+	cfg := heapNew[ionMMData]()
+	*cfg = ionMMData{MMCmd: ionMMConfigBuffer, Config: ionMMConfig{Handle: a.Handle, ModuleID: m4uPortIMGO}}
+	c := ionCustom{Cmd: ionCmdMultimedia, Arg: ptr32(cfg)}
+	err = ioctl(d.ion, ioc(3, 'I', 6, unsafe.Sizeof(c)), unsafe.Pointer(&c))
+	runtime.KeepAlive(cfg)
+	if err != nil {
 		return fmt.Errorf("ion config buffer: %w", err)
 	}
-	phys := ionSysData{SysCmd: ionSysGetPhys, Phys: ionSysGetPhysP{Handle: a.Handle}}
-	c = ionCustom{Cmd: ionCmdSystem, Arg: uint32(uintptr(unsafe.Pointer(&phys)))}
-	if err := ioctl(d.ion, ioc(3, 'I', 6, unsafe.Sizeof(c)), unsafe.Pointer(&c)); err != nil {
+	phys := heapNew[ionSysData]()
+	*phys = ionSysData{SysCmd: ionSysGetPhys, Phys: ionSysGetPhysP{Handle: a.Handle}}
+	c = ionCustom{Cmd: ionCmdSystem, Arg: ptr32(phys)}
+	err = ioctl(d.ion, ioc(3, 'I', 6, unsafe.Sizeof(c)), unsafe.Pointer(&c))
+	runtime.KeepAlive(phys)
+	if err != nil {
 		return fmt.Errorf("ion get phys: %w", err)
 	}
 	if phys.Phys.PhyAddr == 0 {

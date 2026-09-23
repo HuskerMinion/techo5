@@ -279,9 +279,5 @@ func readable(fd int, d time.Duration) bool {
 	if d <= 0 {
 		return false
 	}
-	var set syscall.FdSet
-	set.Bits[fd/32] |= 1 << (uint(fd) % 32)
-	tv := syscall.NsecToTimeval(d.Nanoseconds())
-	n, err := syscall.Select(fd+1, &set, nil, nil, &tv)
-	return err == nil && n > 0
+	return selectRead(fd, d)
 }
