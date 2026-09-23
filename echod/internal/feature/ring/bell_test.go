@@ -13,6 +13,13 @@ type room struct {
 	mu      sync.Mutex
 	attends []bool
 	chimes  int
+	byLen   map[int]int // chimes by how many notes they had, to tell rings apart
+}
+
+func (r *room) heard(notes int) int {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return r.byLen[notes]
 }
 
 func (r *room) took() []bool {
@@ -33,13 +40,22 @@ func quietBell(t *testing.T, rings time.Duration) *room {
 	rm := &room{}
 	wasFor, wasEvery, wasChime, wasAttend := ringFor, ringEvery, chime, attend
 	ringFor, ringEvery = rings, 5*time.Millisecond
-	chime = func([]speaker.Note) { rm.mu.Lock(); rm.chimes++; rm.mu.Unlock() }
+	chime = func(n []speaker.Note) {
+		rm.mu.Lock()
+		rm.chimes++
+		if rm.byLen == nil {
+			rm.byLen = map[int]int{}
+		}
+		rm.byLen[len(n)]++
+		rm.mu.Unlock()
+	}
 	attend = func(on bool) { rm.mu.Lock(); rm.attends = append(rm.attends, on); rm.mu.Unlock() }
 	t.Cleanup(func() {
+		// Both: the bell stops before the last ring's ended and done have run.
 		waitFor(t, "the bell to stop", func() bool {
 			bell.mu.Lock()
 			defer bell.mu.Unlock()
-			return !bell.running
+			return !bell.running && !IsSounding()
 		})
 		ringFor, ringEvery, chime, attend = wasFor, wasEvery, wasChime, wasAttend
 		state.mu.Lock()
@@ -167,4 +183,61 @@ func TestAnUnansweredSilenceEndsEveryRing(t *testing.T) {
 	mu.Unlock()
 	nudge()
 	waitFor(t, "both rings to end", func() bool { return alarm.count() == 1 && timer.count() == 1 })
+}
+
+// A button silences what is ringing when it is pressed. A timer that finishes during the offer is a
+// new reason to make a noise: it sounds, and the offer running out ends only what it silenced.
+func TestARingStartedDuringTheOfferSounds(t *testing.T) {
+	rm := quietBell(t, time.Minute)
+	now := time.Now()
+	was := state.now
+	var mu sync.Mutex
+	state.now = func() time.Time { mu.Lock(); defer mu.Unlock(); return now }
+	t.Cleanup(func() { state.now = was })
+
+	alarmNotes := []speaker.Note{{Freq: 440, Ms: 1}}
+	timerNotes := []speaker.Note{{Freq: 880, Ms: 1}, {Freq: 880, Ms: 1}}
+	var alarm, timer ends
+	Start("alarm", alarmNotes, alarm.ended)
+	waitFor(t, "the alarm", func() bool { return rm.heard(1) > 0 })
+
+	Silence()
+	time.Sleep(4 * ringEvery)
+	stopTimer := Start("timer", timerNotes, timer.ended)
+	defer stopTimer()
+	waitFor(t, "the timer to sound over the silence", func() bool { return rm.heard(2) > 1 })
+	quiet := rm.heard(1)
+	time.Sleep(4 * ringEvery)
+	if rm.heard(1) != quiet {
+		t.Error("the silenced alarm chimed again")
+	}
+
+	mu.Lock()
+	now = now.Add(OfferFor)
+	mu.Unlock()
+	nudge()
+	waitFor(t, "the alarm to end", func() bool { return alarm.count() == 1 })
+	time.Sleep(4 * ringEvery)
+	if timer.count() != 0 {
+		t.Fatal("the offer running out ended a ring it never silenced")
+	}
+	before := rm.heard(2)
+	waitFor(t, "the timer still sounding", func() bool { return rm.heard(2) > before })
+}
+
+// Again: a new reason to ring un-silences a silenced ring.
+func TestAgainSoundsASilencedRing(t *testing.T) {
+	rm := quietBell(t, time.Minute)
+	var e ends
+	stop := Start("timer", []speaker.Note{{Freq: 880, Ms: 1}}, e.ended)
+	defer stop()
+	waitFor(t, "a chime", func() bool { return rm.rounds() > 0 })
+	Silence()
+	time.Sleep(4 * ringEvery)
+	quiet := rm.rounds()
+	Again()
+	if Offered() {
+		t.Error("the offer still stands after a new reason to ring")
+	}
+	waitFor(t, "the ring to sound again", func() bool { return rm.rounds() > quiet })
 }

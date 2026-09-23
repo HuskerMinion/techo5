@@ -134,14 +134,31 @@ func Snoozes(f func() bool) {
 // alive and unheard for OfferFor so that a second press can still snooze it — a ring that had
 // already ended would have nothing left to put off. If no answer comes, Lapsed goes true and the
 // ring loop ends itself.
+//
+// It silences the rings sounding now and only those: one that starts while the offer stands is a
+// new reason to make a noise, and it sounds.
 func Silence() bool {
 	state.mu.Lock()
-	defer state.mu.Unlock()
 	if state.sounding == 0 {
+		state.mu.Unlock()
 		return false
 	}
 	state.offer = state.now().Add(OfferFor)
+	state.mu.Unlock()
+
+	// Outside state.mu: the bell takes its own lock first and state.mu under it.
+	silenceBell()
 	return true
+}
+
+// lapsedDone clears an offer that ran out once the bell has ended what it silenced, so the rings
+// that started after it are not taken for silenced too.
+func lapsedDone() {
+	state.mu.Lock()
+	defer state.mu.Unlock()
+	if !state.offer.IsZero() && !state.now().Before(state.offer) {
+		state.offer = time.Time{}
+	}
 }
 
 // Offered reports whether a ring is silenced and waiting to be told what to do — what the screen

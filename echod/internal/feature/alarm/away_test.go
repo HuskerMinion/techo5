@@ -2,6 +2,7 @@ package alarm
 
 import (
 	"testing"
+	"time"
 
 	"github.com/HuskerMinion/techo5/echod/internal/config"
 )
@@ -46,8 +47,14 @@ func TestAClockJumpLeavesATrace(t *testing.T) {
 	snooze := source{key: "snooze:a", once: at(16, 6, 40)}
 	near := source{key: "near", hour: 7, min: 55, days: config.DaysEvery}
 
-	got := overdue([]source{alarm, snooze, near}, at(16, 6, 0), at(16, 8, 0))
+	got := overdue([]source{alarm, snooze, near}, at(16, 6, 0), time.Time{}, at(16, 8, 0))
 	if len(got) != 1 || got[0].s.key != "a" {
 		t.Errorf("overdue = %v, want the 6:30 alarm alone", got)
+	}
+
+	// A clock that came up behind the last record, then jumped: the 6:30 alarm rang before the
+	// record at 7:00, so it is not missed.
+	if got := overdue([]source{alarm}, at(16, 6, 0), at(16, 7, 0), at(16, 8, 0)); len(got) != 0 {
+		t.Errorf("overdue from before the record = %v, want nothing", got)
 	}
 }

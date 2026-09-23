@@ -96,8 +96,10 @@ type Alarms struct {
 
 	wake chan struct{}
 
-	// aliveAt is when the device last wrote down that it was running; the scheduler's alone.
+	// aliveAt is when the device last wrote down that it was running, and since the moment before
+	// this start that it last had; both the scheduler's alone.
 	aliveAt time.Time
+	since   time.Time
 
 	mu      sync.Mutex
 	ringing *Ring
@@ -265,17 +267,18 @@ func (a *Alarms) poke() {
 func (a *Alarms) Run(ctx context.Context) error {
 	last := time.Now()
 	published := ""
-	looked := false
+	looked, started, edited := false, time.Now(), false
 	for {
 		now := time.Now()
 		rang := false
 		if clockSet(now) && !looked {
 			// Once, and only with a clock worth trusting: what fell due while the device was off.
-			a.away(now)
-			looked = true
+			// A clock still behind the last record after an hour is not going to catch up, and
+			// the record is what is wrong: give up on it rather than never record again.
+			looked = a.away(now) || time.Since(started) > time.Hour
 		}
 		if clockSet(now) && clockSet(last) {
-			for _, m := range overdue(a.sources(now), last, now) {
+			for _, m := range overdue(a.sources(now), last, a.since, now) {
 				a.missed(m)
 			}
 			for _, s := range due(a.sources(now), last, now) {
@@ -289,7 +292,14 @@ func (a *Alarms) Run(ctx context.Context) error {
 			// good, with the settings sheet drawing "Snoozed until" and a time in the past — an
 			// alarm promised to somebody that was never coming.
 			a.pruneSnoozes(now)
-			a.keepAlive(now, rang)
+			// Not before the look: written from a clock still behind, the record would move back
+			// and make the look call rings missed that sounded.
+			if looked {
+				// An edited alarm is recorded too, or a one-off set just behind the last record
+				// would read as missed after a restart.
+				a.keepAlive(now, rang || edited)
+				edited = false
+			}
 		}
 		last = now
 
@@ -319,6 +329,7 @@ func (a *Alarms) Run(ctx context.Context) error {
 			a.Stop()
 			return nil
 		case <-a.wake:
+			edited = true
 		case <-time.After(wait):
 		}
 	}
