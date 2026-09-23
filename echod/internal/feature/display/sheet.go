@@ -138,7 +138,7 @@ func securityRows(sv sheetView) []settingRow {
 	if !sec.Encrypted {
 		link.sub, link.value = "Add the device in Home Assistant to encrypt it", "Not encrypted"
 	}
-	certs := settingRow{label: "Certificate checks", sub: "For updates and downloads", kind: ctlValue, value: "On"}
+	certs := settingRow{label: "Certificate checks", sub: "For downloads; updates always check", kind: ctlValue, value: "On"}
 	if st.insecureTLS {
 		certs.sub, certs.value = "Turned off in Home Assistant", "Off"
 	}
