@@ -246,15 +246,15 @@ func (s *session) cleared() {
 	}
 }
 
-// grouped only reports, and says what the stream is doing so the room's controls can match it. Stopping
-// is stream/end's job, which the server sends on stop as well as on skip and seek. Fields are deltas, so
-// an absent state means unchanged.
 // askedFor is the last transport the room asked for, empty when it has not asked anything.
 func (s *session) askedFor() string {
 	v, _ := s.asked.Load().(string)
 	return v
 }
 
+// grouped only reports, and says what the stream is doing so the room's controls can match it. Stopping
+// is stream/end's job, which the server sends on stop as well as on skip and seek. Fields are deltas, so
+// an absent state means unchanged.
 func (s *session) grouped(g protocol.GroupUpdate) {
 	if g.PlaybackState == nil {
 		return
@@ -381,8 +381,9 @@ func (s *session) heard(chunk protocol.AudioChunk) {
 	}
 }
 
-// noticed takes what the server says about the track. Only the player and metadata roles are
-// claimed, so the rest of the message is not this device's to act on.
+// noticed takes what the server says about the track, and which commands the controller role may send.
+// Only the player, metadata and controller roles are claimed, so the rest of the message is not this
+// device's to act on.
 func (s *session) noticed(st protocol.ServerStateMessage) {
 	if st.Controller != nil {
 		s.took(st.Controller)
