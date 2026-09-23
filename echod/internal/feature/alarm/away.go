@@ -63,7 +63,13 @@ func splitAway(sources []source, since, now time.Time) (resume []source, missed 
 
 // overdue is what a forward jump of the clock carried past without ringing: due in (last, now], but
 // later than the stale window lets ring. Snoozes are left to pruneSnoozes, which says so itself.
-func overdue(sources []source, last, now time.Time) []fellDue {
+//
+// Never from before since, the last moment the device knew it was running: a clock that came up
+// behind and then jumped would otherwise call the rings it did sound missed.
+func overdue(sources []source, last, since, now time.Time) []fellDue {
+	if since.After(last) {
+		last = since
+	}
 	var out []fellDue
 	for _, s := range sources {
 		if isSnooze(s) {
@@ -85,21 +91,33 @@ func kind(s source) string {
 	return "alarm"
 }
 
-// away looks at the time the device was not running, once the clock can be trusted: what fell due
-// in the last ResumeWithin rings now, and anything older is written down as missed.
-func (a *Alarms) away(now time.Time) {
+// away looks at the time the device was not running: what fell due in the last ResumeWithin rings
+// now, and anything older is written down as missed. It reports whether it has looked.
+//
+// A clock that reads before the last moment the device knew it was running is not trusted yet - a
+// device can come up on a clock that is plausible and behind - so it waits for a later one rather
+// than look at nothing and never look again.
+func (a *Alarms) away(now time.Time) bool {
 	since, ok := config.Alive()
-	if !ok || !since.Before(now) {
-		return
+	if !ok {
+		return true
 	}
+	if !since.Before(now) {
+		return false
+	}
+	a.since = since
 	resume, missed := splitAway(a.sources(now), since, now)
 	for _, m := range missed {
-		a.missed(m)
+		// A snooze is left to pruneSnoozes, which says so itself, or it would be said twice.
+		if !isSnooze(m.s) {
+			a.missed(m)
+		}
 	}
 	for _, s := range resume {
 		slog.Info("ringing what fell due while the device was away", "key", s.key)
 		a.fire(s, now)
 	}
+	return true
 }
 
 // missed writes down a ring that never sounded, and turns off a one-off alarm the way ringing it

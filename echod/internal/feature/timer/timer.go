@@ -28,6 +28,7 @@ import (
 	"github.com/HuskerMinion/techo5/echod/internal/hardware/led"
 	"github.com/HuskerMinion/techo5/echod/internal/hardware/speaker"
 	"github.com/HuskerMinion/techo5/echod/internal/lib/hook"
+	"github.com/HuskerMinion/techo5/echod/internal/lib/safe"
 )
 
 func init() {
@@ -60,11 +61,15 @@ type Timers struct {
 	// woke is how a new timer restarts the redraw, which stops while there is nothing counting down.
 	woke chan struct{}
 
-	mu    sync.Mutex
-	held  map[string]*timer
-	stop  func()
-	rang  string // the name of what is ringing, for the screen
-	shown []led.Color
+	mu   sync.Mutex
+	held map[string]*timer
+
+	// waiting is saved timers not yet restored, because the clock was not set when the device came
+	// up. Kept so a save meanwhile writes them back rather than dropping them.
+	waiting []config.LocalTimer
+	stop    func()
+	rang    string // the name of what is ringing, for the screen
+	shown   []led.Color
 
 	// Changed fires when a timer starts, changes, ends or rings, and when the ringing stops.
 	Changed hook.Hook[struct{}]
@@ -260,6 +265,19 @@ func localList(held map[string]*timer, now time.Time) []config.LocalTimer {
 	return out
 }
 
+// saved is what is written down: the timers held, and any still waiting for the clock to be
+// restored, which a save made meanwhile must not drop. Call it with the lock held.
+func (t *Timers) saved(now time.Time) []config.LocalTimer {
+	return append(localList(t.held, now), t.waiting...)
+}
+
+// clockSet reports whether the wall clock has been set: before NTP a device reads 1970. The alarm
+// scheduler's test, repeated here because alarm imports this package.
+func clockSet(now time.Time) bool { return now.Year() >= 2025 }
+
+// clockPoll is how often restoring timers looks for the clock to have been set.
+const clockPoll = 5 * time.Second
+
 // saveLocal writes the device's own timers down. Called when one is set, cancelled or finishes, and
 // never on a tick: every set marshals the whole config and fsyncs it.
 func saveLocal(list []config.LocalTimer) {
@@ -273,13 +291,40 @@ func saveLocal(list []config.LocalTimer) {
 // One that finished while the device was off does not ring. A crash loop would otherwise be a device
 // that screams every time it boots, and a timer whose moment went by unheard is not made right by
 // sounding an hour later — it is said out loud instead, which is more than it used to get.
+//
+// With the clock not yet set it waits for it: a finish time read against 1970 is a timer that runs
+// for fifty years, or one that finished while the device was off taken for one still to come.
 func (t *Timers) Restore(c config.Config) {
-	now := time.Now()
+	if len(c.Timers.Local) == 0 {
+		return
+	}
+	if !clockSet(time.Now()) {
+		t.mu.Lock()
+		t.waiting = c.Timers.Local
+		t.mu.Unlock()
+		slog.Info("timers wait for the clock before they are restored", "count", len(c.Timers.Local))
+		safe.Go("timers wait for the clock", func() {
+			for !clockSet(time.Now()) {
+				time.Sleep(clockPoll)
+			}
+			t.mu.Lock()
+			list := t.waiting
+			t.waiting = nil
+			t.mu.Unlock()
+			t.restore(list, time.Now())
+		})
+		return
+	}
+	t.restore(c.Timers.Local, time.Now())
+}
+
+// restore brings back saved timers against a clock that can be trusted.
+func (t *Timers) restore(list []config.LocalTimer, now time.Time) {
 	var live []config.LocalTimer
 	var resume string
 
 	t.mu.Lock()
-	for _, s := range c.Timers.Local {
+	for _, s := range list {
 		switch {
 		case !s.Finish.IsZero() && !s.Finish.After(now):
 			// Just finished, as when a restart lands on it, rings; longer ago is written down and
@@ -297,10 +342,12 @@ func (t *Timers) Restore(c config.Config) {
 		}
 		live = append(live, s)
 	}
+	// Everything held, not just what came back: timers may have been set while this waited.
+	saved := t.saved(now)
 	t.mu.Unlock()
 
-	if len(live) != len(c.Timers.Local) {
-		saveLocal(live)
+	if len(live) != len(list) {
+		saveLocal(saved)
 	}
 	if resume != "" {
 		slog.Info("ringing a timer that finished as the device was starting", "name", resume)
@@ -324,7 +371,7 @@ func (t *Timers) Start(name string, d time.Duration) string {
 	t.mu.Lock()
 	now := time.Now()
 	t.held[id] = &timer{name: name, total: d, left: d, at: now, active: true, local: true}
-	saved := localList(t.held, now)
+	saved := t.saved(now)
 	t.mu.Unlock()
 
 	saveLocal(saved)
@@ -349,7 +396,7 @@ func (t *Timers) Cancel(id string) bool {
 	t.mu.Lock()
 	_, had := t.held[id]
 	delete(t.held, id)
-	saved := localList(t.held, time.Now())
+	saved := t.saved(time.Now())
 	t.mu.Unlock()
 	if !had {
 		return false
@@ -379,7 +426,7 @@ func (t *Timers) ripe(now time.Time) {
 			name = c.name
 		}
 		delete(t.held, id)
-		saved := localList(t.held, now)
+		saved := t.saved(now)
 		t.mu.Unlock()
 		saveLocal(saved)
 		slog.Info("timer finished here", "name", name)
@@ -517,6 +564,9 @@ func (t *Timers) startRinging(name string) {
 	defer t.mu.Unlock()
 
 	if t.stop != nil {
+		// One ring covers them all, but a timer finishing into a ring somebody silenced is a new
+		// reason to make a noise, and it is owed one.
+		ring.Again()
 		return
 	}
 	t.rang = name

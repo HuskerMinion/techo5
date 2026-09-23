@@ -73,8 +73,13 @@ type ringer struct {
 	notes   []speaker.Note
 	until   time.Time // when it rings out
 	stopped bool
-	done    func() // its share of Sounding
-	ended   func()
+
+	// silenced is a ring a button quieted, waiting on the snooze offer. Per ring rather than for the
+	// whole bell, so one that starts during the offer still sounds rather than joining a silence
+	// nobody asked of it, and is not ended when the offer runs out.
+	silenced bool
+	done     func() // its share of Sounding
+	ended    func()
 }
 
 // Start rings: the chime every RingEvery, the light pulsing and the music ducked under it, until
@@ -108,6 +113,36 @@ func Start(what string, notes []speaker.Note, ended func()) (stop func()) {
 	}
 }
 
+// silenceBell quiets every ring sounding now.
+func silenceBell() {
+	bell.mu.Lock()
+	for _, r := range bell.rings {
+		r.silenced = true
+	}
+	bell.mu.Unlock()
+	nudge()
+}
+
+// Again is a new reason to ring arriving while a ring already sounds - a second timer finishing into
+// a silenced one, say. Every ring sounds again, for a full RingFor from now: the new reason is owed a
+// chime of its own, not a place in a silence somebody asked of the last one.
+func Again() {
+	state.mu.Lock()
+	state.offer = time.Time{}
+	state.mu.Unlock()
+
+	bell.mu.Lock()
+	until := time.Now().Add(ringFor)
+	for _, r := range bell.rings {
+		r.silenced = false
+		if until.After(r.until) {
+			r.until = until
+		}
+	}
+	bell.mu.Unlock()
+	nudge()
+}
+
 // Sample plays one round of a ring's chime as it would ring, for somebody choosing a sound or a level.
 func Sample(notes []speaker.Note) { chime(notes) }
 
@@ -127,22 +162,45 @@ func nudge() {
 // ringBell is the bell's loop. It runs while anything rings, and chimes every ring on it each
 // round: an alarm and a timer going off together are both heard, as they always were.
 func ringBell() {
+	// ending is a ring leaving the bell and why, read under the lock: stop may still be called on a
+	// ring after it has left.
+	type ending struct {
+		r   *ringer
+		why string
+	}
 	var next time.Time
 	for {
 		now := time.Now()
 		lapsed := Lapsed()
 
 		bell.mu.Lock()
-		var over []*ringer
+		var over []ending
 		bell.rings = slices.DeleteFunc(bell.rings, func(r *ringer) bool {
-			if r.stopped || lapsed || !now.Before(r.until) {
-				over = append(over, r)
-				return true
+			switch {
+			case r.stopped:
+				over = append(over, ending{r, ""})
+			case lapsed && r.silenced:
+				// A silenced ring whose offer ran out takes the answer it did not get, and stops.
+				over = append(over, ending{r, " silenced by a button and left unanswered, stopping"})
+			case !now.Before(r.until):
+				over = append(over, ending{r, " rang out"})
+			default:
+				return false
 			}
-			return false
+			return true
 		})
-		rings := slices.Clone(bell.rings)
-		last := len(rings) == 0
+		// What to chime and how long to wait, taken under the lock: Silence and Again change both.
+		var loud [][]speaker.Note
+		wait := time.Duration(-1)
+		for _, r := range bell.rings {
+			if !r.silenced {
+				loud = append(loud, r.notes)
+			}
+			if d := r.until.Sub(now); wait < 0 || d < wait {
+				wait = d
+			}
+		}
+		last := len(bell.rings) == 0
 		if last {
 			// Under the lock, so a ring started now finds the bell stopped and takes the room
 			// itself, rather than having this one give it back from under it.
@@ -151,38 +209,38 @@ func ringBell() {
 		}
 		bell.mu.Unlock()
 
-		for _, r := range over {
-			switch {
-			case r.stopped:
-			case lapsed:
-				// A silenced ring whose offer ran out takes the answer it did not get, and stops.
-				slog.Info(r.what + " silenced by a button and left unanswered, stopping")
+		if lapsed {
+			lapsedDone()
+		}
+		for _, e := range over {
+			switch e.why {
+			case "":
+			case " rang out":
+				slog.Info(e.r.what+e.why, "for", ringFor)
 			default:
-				slog.Info(r.what+" rang out", "for", ringFor)
+				slog.Info(e.r.what + e.why)
 			}
-			r.done()
-			r.ended()
+			// ended first: until it is called the ring is still sounding, as Start says.
+			e.r.ended()
+			e.r.done()
 		}
 		if last {
 			return
 		}
 
-		// Quiet covers both reasons the chime is held back: a near miss on the stop word, and a
-		// button press waiting on an answer. The light goes on pulsing through it, so the ring
-		// stays obviously alive while it is silent.
+		// A near miss on the stop word holds every chime back for a moment; a button press holds
+		// back only the rings it silenced. The light goes on pulsing through both, so the ring stays
+		// obviously alive while it is silent.
 		if !now.Before(next) {
-			if !Quiet() {
-				for _, r := range rings {
-					chime(r.notes)
+			if !Hushed() {
+				for _, notes := range loud {
+					chime(notes)
 				}
 			}
 			next = now.Add(ringEvery)
 		}
 
-		wait := next.Sub(now)
-		for _, r := range rings {
-			wait = min(wait, r.until.Sub(now))
-		}
+		wait = min(wait, next.Sub(now))
 		select {
 		case <-bell.wake:
 		case <-time.After(wait):
