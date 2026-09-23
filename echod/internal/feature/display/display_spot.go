@@ -48,6 +48,7 @@ import (
 	"github.com/HuskerMinion/techo5/echod/internal/feature/media"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/mute"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/phone"
+	"github.com/HuskerMinion/techo5/echod/internal/feature/remind"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/setup"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/timer"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/voice"
@@ -143,6 +144,14 @@ type Display struct {
 	sheetAt   time.Time // the last touch on it, for closing it when left alone
 	sheetCtl
 
+	// reminderID is the reminder on the face, so a new one starts at the top; reminderScroll how far
+	// its words are dragged up, and the drag's own start while a finger is on it.
+	reminderID         string
+	reminderScroll     int
+	reminderDragging   bool
+	reminderDragFrom   int
+	reminderDragScroll int
+
 	// wasNight is whether the last backlight was set for the night, so the change of hour relights.
 	wasNight bool
 
@@ -219,6 +228,7 @@ func build() *Display {
 	touch.Get().Gestures.Listen(d.gesture)
 	timer.Get().Changed.Listen(func(struct{}) { d.ringLights() })
 	alarm.Get().Changed.Listen(func(struct{}) { d.ringLights() })
+	remind.Get().Changed.Listen(func(struct{}) { d.reminderLights() })
 	home.Get().Changed.Listen(func(struct{}) { d.wake() })
 	hastate.Get().Changed.Listen(func(u hastate.Update) {
 		// Only a change means a station is starting; the first value is the one that played last.
@@ -467,6 +477,11 @@ func (d *Display) gesture(g touch.Gesture) {
 			go announce.Get().Cancel()
 		}
 		d.wake()
+		return
+	}
+	// A reminder takes the face, over an announcement, and every gesture on it is its.
+	if _, showing := remind.Get().Showing(); showing {
+		d.reminderGesture(g)
 		return
 	}
 	// One that arrived takes the face too, so it needs the same way out. A tap puts it away: it has
@@ -1046,6 +1061,13 @@ func (d *Display) frame() time.Duration {
 	s.announceRecording = announce.Get().Recording()
 	s.announcePeers = len(announce.Peers())
 	s.announcement, s.showAnnouncement = announce.Get().Showing()
+	s.reminder, s.showReminder = remind.Get().Showing()
+	if s.reminder.From != config.Get().Device.Name {
+		s.reminderFrom = s.reminder.From
+	}
+	d.mu.Lock()
+	s.reminderScroll = d.reminderScroll
+	d.mu.Unlock()
 
 	if boring {
 		s.slideshow = home.Get().SlideshowBackground()

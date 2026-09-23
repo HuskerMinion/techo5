@@ -39,6 +39,7 @@ import (
 	"github.com/HuskerMinion/techo5/echod/internal/feature/media"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/mute"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/phone"
+	"github.com/HuskerMinion/techo5/echod/internal/feature/remind"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/security"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/setup"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/timer"
@@ -227,6 +228,7 @@ func build() *Display {
 	phone.Get().Changed.Listen(func(phone.State) { d.wake() })
 	security.Get().Changed.Listen(func(struct{}) { d.wake() })
 	alarm.Get().Changed.Listen(func(struct{}) { d.wake() })
+	remind.Get().Changed.Listen(func(struct{}) { d.wake() })
 	timer.Get().Changed.Listen(func(struct{}) { d.wake() })
 	home.Get().Changed.Listen(func(struct{}) { d.wake() })
 	return d
@@ -472,6 +474,15 @@ func (d *Display) gesture(g touch.Gesture) {
 	if _, showing := announce.Get().Showing(); showing && g.Kind == touch.Tap &&
 		d.r != nil && onAnnounceStrip(g.X, g.Y, d.r.w, d.r.h) {
 		go announce.Get().Dismiss()
+		d.wake()
+		return
+	}
+
+	// A reminder: a tap on its card puts it away, here and on every device it went off on. Only the
+	// card, as with the strip, so a finger meant for the music behind it still reaches the music.
+	if _, showing := remind.Get().Showing(); showing && g.Kind == touch.Tap &&
+		d.r != nil && image.Pt(g.X, g.Y).In(d.r.reminderBox()) {
+		go remind.Get().Stop()
 		d.wake()
 		return
 	}
@@ -1183,6 +1194,10 @@ func (d *Display) frame() time.Duration {
 	s.announceRecording = announce.Get().Recording()
 	s.announcePeers = len(announce.Peers())
 	s.announcement, s.showAnnouncement = announce.Get().Showing()
+	s.reminder, s.showReminder = remind.Get().Showing()
+	if s.reminder.From != config.Get().Device.Name {
+		s.reminderFrom = s.reminder.From
+	}
 
 	if boring {
 		s.slideshow = home.Get().SlideshowBackground()

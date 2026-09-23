@@ -15,6 +15,7 @@ import (
 	"github.com/HuskerMinion/techo5/echod/internal/feature/announce"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/home"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/phone"
+	"github.com/HuskerMinion/techo5/echod/internal/feature/remind"
 	"github.com/HuskerMinion/techo5/echod/internal/lib/hass"
 )
 
@@ -62,6 +63,17 @@ func TestShowScenesDraw(t *testing.T) {
 			announcement: announce.Message{From: "Laundry Room",
 				Text: "the washing machine has finished its cycle and the door is unlocked now"}},
 		"announce-recording": {now: at, phase: "idle", weather: sky, announceRecording: true, announcePeers: 3},
+		"reminder": {now: at, phase: "idle", weather: sky, showReminder: true,
+			reminder: remind.Reminder{Label: "Take the medication"}},
+		"reminder-from-elsewhere": {now: at, phase: "idle", weather: sky, showReminder: true, reminderFrom: "Kitchen",
+			reminder: remind.Reminder{Label: "Check the boiling eggs — they've been on for 10 minutes now"}},
+		// Longer than three lines, to see the ellipsis rather than a sentence that stops.
+		"reminder-longest": {now: at, phase: "idle", weather: sky, showReminder: true, reminderFrom: "Laundry Room",
+			reminder: remind.Reminder{Label: "Move the washing to the dryer, then put the towels on the rack by the back door " +
+				"so they are dry by the time everybody is back from the pool this afternoon"}},
+		"reminder-and-announcement": {now: at, phase: "idle", weather: sky, showReminder: true,
+			reminder:         remind.Reminder{Label: "Take the trash out"},
+			showAnnouncement: true, announcement: announce.Message{From: "Kitchen", Text: "dinner is ready"}},
 		"announce-drawer": {now: at, phase: "idle", weather: sky, showDrawer: true,
 			drawerTab: drawerAnnounce, announceReady: true, announcePeers: 3},
 		// The three pages that put two large answers at the foot of the screen. They are the only
@@ -86,14 +98,14 @@ func TestShowScenesDraw(t *testing.T) {
 		// Muted while a browser is asking to be let in. The footer used to show one of these instead
 		// of the other; now they are on different edges and neither hides the other.
 		"muted-setup-ask": {now: at, phase: "idle", weather: sky, muted: true, setupAsking: true},
-		"call-ringing": {now: at, phase: "idle", call: phone.State{Phase: phone.Ringing, Peer: "104"}},
+		"call-ringing":    {now: at, phase: "idle", call: phone.State{Phase: phone.Ringing, Peer: "104"}},
 		// A timer finishing during a call. This page is drawn over the ringing one, so without a
 		// line here the noise has nothing on screen to explain it, and the buttons below belong to
 		// the call.
 		"call-with-timer-ringing": {now: at, phase: "idle", snooze: 9,
 			call: phone.State{Phase: phone.Talking, Peer: "104", Since: at.Add(-90 * time.Second)},
 			ring: ringState{timer: "Pasta"}},
-		"call-talking":  {now: at, phase: "idle", call: phone.State{Phase: phone.Talking, Peer: "104", Since: at.Add(-90 * time.Second)}},
+		"call-talking": {now: at, phase: "idle", call: phone.State{Phase: phone.Talking, Peer: "104", Since: at.Add(-90 * time.Second)}},
 		"settings-sound": {now: at, phase: "idle", showSheet: true,
 			sheet: settings{cat: catSound, volume: 15, wakeWord: "Okay Nabu"}},
 		"settings-sound-tone": {now: at, phase: "idle", showSheet: true,

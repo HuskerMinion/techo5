@@ -24,6 +24,7 @@ import (
 	"github.com/HuskerMinion/techo5/echod/internal/feature/home"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/media"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/phone"
+	"github.com/HuskerMinion/techo5/echod/internal/feature/remind"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/security"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/timer"
 )
@@ -129,6 +130,12 @@ type scene struct {
 	// announcement is one that arrived and is still being shown, with showAnnouncement saying so.
 	announcement     announce.Message
 	showAnnouncement bool
+
+	// reminder is one going off, with showReminder saying so; reminderFrom is the device it was set
+	// on when that was another one, and empty for this device's own.
+	reminder     remind.Reminder
+	showReminder bool
+	reminderFrom string
 
 	// setupAsking is a browser waiting to be let into the setup page. It is said on the screen so
 	// that a request for a press is never something only the browser knows about.
@@ -283,6 +290,11 @@ func (r *renderer) draw(s scene) {
 			r.recordingStrip(s)
 		case s.showAnnouncement:
 			r.announcementStrip(s)
+		}
+		// The card is in the middle and the strips along the bottom, so a reminder and an
+		// announcement can both be up at once.
+		if s.showReminder {
+			r.reminderCard(s)
 		}
 	}()
 

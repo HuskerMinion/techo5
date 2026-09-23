@@ -21,6 +21,7 @@ import (
 	"github.com/HuskerMinion/techo5/echod/internal/feature/announce"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/home"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/phone"
+	"github.com/HuskerMinion/techo5/echod/internal/feature/remind"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/timer"
 )
 
@@ -132,6 +133,13 @@ type roundScene struct {
 	announcement      announce.Message
 	showAnnouncement  bool
 
+	// reminder is one going off, with showReminder saying so; reminderFrom is the device it was set
+	// on when that was another one, and reminderScroll how far its words are dragged up.
+	reminder       remind.Reminder
+	showReminder   bool
+	reminderFrom   string
+	reminderScroll int
+
 	// setupAsking is a browser waiting to be let into the setup page, said on the face so that a
 	// request for a press is never something only the browser knows about.
 	setupAsking bool
@@ -151,6 +159,9 @@ type roundRenderer struct {
 	paint                            // the canvas, and the settings screen's tap zones
 	clock, title, body, small, label font.Face
 	tiny                             font.Face
+
+	// reminderMax is how far a reminder's words could scroll in the frame last drawn; under zmu.
+	reminderMax int
 }
 
 func newRoundRenderer(dst *image.RGBA) *roundRenderer {
@@ -208,6 +219,12 @@ func (r *roundRenderer) draw(s roundScene) {
 	// has no corner to put them in. Under a call and under a ringing alarm, which wait on somebody.
 	if s.announceRecording {
 		r.recordingFace(s)
+		return
+	}
+	// A reminder over an announcement: it was set for now, for somebody here, and it stays until it
+	// is dealt with, where an announcement goes by itself.
+	if s.showReminder {
+		r.reminderFace(s)
 		return
 	}
 	if s.showAnnouncement {
