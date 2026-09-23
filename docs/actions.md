@@ -114,7 +114,8 @@ left to dismiss afterwards. Answers with the new reminder's `id` if called with 
 
 A time of day, in the same formats as `alarm_set`'s `time`, or a time from now: `in 20 minutes`,
 `1 hour and 30 minutes`, `1h30m`. A time from now is rounded up to the next whole minute and
-happens once.
+happens once. It must be less than a day away: for tomorrow at the same time or later, give a time
+of day instead.
 
 ### days (Optional)
 
