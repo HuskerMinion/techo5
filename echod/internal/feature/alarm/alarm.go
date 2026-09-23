@@ -129,8 +129,12 @@ func build() *Alarms {
 	// Stops whatever is ringing, a timer as much as an alarm. The object id stays "alarm_stop" from
 	// when it only stopped alarms, so automations that press it keep working.
 	a.stop = &esphome.Button{Base: esphome.Base{ObjectID: "alarm_stop", Name: "Stop ringing", Icon: "mdi:alarm-off"}, OnPress: func() {
-		// From Home Assistant, stop also means a snoozed alarm is not wanted back.
-		if !ring.End() {
+		// From Home Assistant, stop also means a snoozed alarm is not wanted back - when nothing is
+		// sounding. Asked of the ring and not of End, which also takes down a reminder on the screen
+		// and would otherwise leave the snooze standing.
+		sounding := ring.IsSounding()
+		ring.End()
+		if !sounding {
 			a.CancelSnoozes()
 		}
 	}}
@@ -610,6 +614,11 @@ func ReminderTime(s string, now time.Time) (hour, minute int, fromNow bool, err 
 	at := now.Add(d)
 	if at.Truncate(time.Minute) != at {
 		at = at.Truncate(time.Minute).Add(time.Minute)
+	}
+	// It is kept as a time of day, which rings at its next occurrence: one a whole day ahead would
+	// ring today instead, a minute from now.
+	if !at.Add(-24 * time.Hour).Before(now) {
+		return 0, 0, false, fmt.Errorf("reminders: %q is a day or more from now; give a time of day instead", s)
 	}
 	return at.Hour(), at.Minute(), true, nil
 }

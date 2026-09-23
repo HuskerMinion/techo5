@@ -97,6 +97,11 @@ func Get() *Feature {
 }
 
 func init() {
+	// Built now rather than on first use: Get is what listens for reminders other devices send, and
+	// on a Dot, which has no screen to ask for it, nothing else would call it until a reminder of its
+	// own came due. One sent to it before then went nowhere, without a sound or a log line.
+	Get()
+
 	// The Stop ringing button, and anything else that means "stop", takes a reminder down too.
 	ring.Silences(func() bool { return Get().Stop() })
 }
@@ -104,6 +109,10 @@ func init() {
 // Fire is one of this device's own reminders coming due: it goes off here and on the devices in
 // ringOn (config.RingEverywhere for all of them).
 func (f *Feature) Fire(label string, ringOn []string) {
+	// A reminder is its words. One with none, however it came to be saved, still says something.
+	if strings.TrimSpace(label) == "" {
+		label = "Reminder"
+	}
 	r := Reminder{ID: newID(), Label: label, From: config.Get().Device.Name, At: time.Now()}
 	d := targets(ringOn, r.From)
 	f.show(r, d)

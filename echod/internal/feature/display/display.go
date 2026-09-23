@@ -696,7 +696,7 @@ func (d *Display) night(now time.Time, on bool, view voice.State) bool {
 	switch {
 	case in && on:
 		busy := view.Phase != "idle" || now.Sub(touched) < nightIdle || now.Sub(viewAt) < nightIdle ||
-			d.ringing(now).any() || phone.Get().Busy() || sunriseProgress(now) > 0
+			d.ringing(now).any() || phone.Get().Busy() || sunriseProgress(now) > 0 || reminderUp()
 		if playing, _ := media.Get().Playing(); playing || busy {
 			return false
 		}
@@ -1039,8 +1039,10 @@ func (d *Display) frame() time.Duration {
 	now := time.Now()
 	ring := d.ringing(now)
 	call := phone.Get().State()
-	if (ring.any() || call.Phase != phone.Idle) && !on {
-		// A ring or a call lights a dark panel, night or not: its page is how it is answered or stopped.
+	_, reminding := remind.Get().Showing()
+	if (ring.any() || reminding || call.Phase != phone.Idle) && !on {
+		// A ring, a reminder or a call lights a dark panel, night or not: its page is how it is
+		// answered or stopped, and a reminder is its words on the screen.
 		d.apply(true, d.ceilingOrDefault(), false)
 		on = true
 	}
@@ -1250,4 +1252,11 @@ func (d *Display) frame() time.Duration {
 		return time.Until(now.Truncate(idleFrame).Add(idleFrame))
 	}
 	return activeFrame
+}
+
+// reminderUp is whether a reminder is on the screen, which keeps the panel from going dark for the
+// night under it.
+func reminderUp() bool {
+	_, up := remind.Get().Showing()
+	return up
 }

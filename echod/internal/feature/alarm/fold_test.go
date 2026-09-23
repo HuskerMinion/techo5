@@ -16,7 +16,16 @@ func TestAnAlarmIntoASilencedRingIsHeard(t *testing.T) {
 	a := build()
 	now := time.Now()
 	a.fire(source{key: "first"}, now)
-	defer ring.End()
+	// Ended and waited out: the bell runs on its own goroutine and reads the config, which the next
+	// test swaps.
+	t.Cleanup(func() {
+		// a is this test's own, not the one ring.End reaches through Get, so it is stopped itself.
+		a.Stop()
+		ring.End()
+		for end := time.Now().Add(2 * time.Second); ring.IsSounding() && time.Now().Before(end); {
+			time.Sleep(time.Millisecond)
+		}
+	})
 
 	if !ring.Silence() || !ring.Offered() {
 		t.Fatal("the first alarm could not be silenced")

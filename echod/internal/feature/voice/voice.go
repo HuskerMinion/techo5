@@ -225,7 +225,9 @@ func (v *Voice) Interrupt() {
 // nothing to fall through to and simply does nothing.
 func (v *Voice) Stop() bool {
 	// Before the turn, because a timer or an alarm ringing over one is what the person is reaching for.
-	if ring.End() {
+	// Only while one sounds: ring.End also takes down a reminder left on the screen, and that must
+	// not stand in for stopping the music or a turn.
+	if ring.IsSounding() && ring.End() {
 		return true
 	}
 
@@ -244,7 +246,8 @@ func (v *Voice) Stop() bool {
 		media.Get().Pause()
 		return true
 	}
-	return false
+	// Last: a reminder left on the screen, with nothing else going on, is what the press was for.
+	return ring.End()
 }
 
 // ActionHold is holding the action button, which reaches the second assistant. Holding does not

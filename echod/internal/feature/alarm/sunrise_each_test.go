@@ -17,9 +17,9 @@ func TestEachAlarmHasItsOwnWakeLight(t *testing.T) {
 		return source{key: al.ID, hour: al.Hour, min: al.Minute, days: config.DaysEvery, remind: al.Remind, sunrise: c.SunriseFor(al)}
 	}
 
-	defaulted := src(config.Alarm{ID: "a", Hour: 6, Minute: 40})                             // 10 of 20 min left
-	own := src(config.Alarm{ID: "b", Hour: 6, Minute: 35, Sunrise: 10})                      // 5 of 10 left
-	off := src(config.Alarm{ID: "c", Hour: 6, Minute: 31, Sunrise: config.SunriseOff})       // none
+	defaulted := src(config.Alarm{ID: "a", Hour: 6, Minute: 40})                              // 10 of 20 min left
+	own := src(config.Alarm{ID: "b", Hour: 6, Minute: 35, Sunrise: 10})                       // 5 of 10 left
+	off := src(config.Alarm{ID: "c", Hour: 6, Minute: 31, Sunrise: config.SunriseOff})        // none
 	reminder := src(config.Alarm{ID: "d", Hour: 6, Minute: 31, Remind: true, Label: "Pills"}) // none
 
 	if got := sunriseAt([]source{defaulted}, now); got != 0.5 {

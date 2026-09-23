@@ -20,7 +20,8 @@ func TestAReminderTimeIsATimeOfDayOrATimeFromNow(t *testing.T) {
 		{"in 20 minutes", 14, 28, true}, // 14:27:30, rounded up so it is never early
 		{"in 30 seconds", 14, 8, true},  // exactly 14:08:00 needs no rounding
 		{"1h", 15, 8, true},
-		{"in 10 hours", 0, 8, true}, // past midnight: tomorrow's 00:08, which is the next one
+		{"in 10 hours", 0, 8, true},  // past midnight: tomorrow's 00:08, which is the next one
+		{"in 23 hours", 13, 8, true}, // tomorrow's 13:08; today's has gone by
 	} {
 		h, m, rel, err := ReminderTime(c.in, now)
 		if err != nil || h != c.hour || m != c.minute || rel != c.fromNow {
@@ -30,6 +31,12 @@ func TestAReminderTimeIsATimeOfDayOrATimeFromNow(t *testing.T) {
 	}
 	if _, _, _, err := ReminderTime("sometime", now); err == nil {
 		t.Error("an unreadable time should be refused")
+	}
+	// Kept as a time of day, a day ahead would ring today a minute from now.
+	for _, in := range []string{"in 24 hours", "1440"} {
+		if _, _, _, err := ReminderTime(in, now); err == nil {
+			t.Errorf("ReminderTime(%q) should be refused: it would ring today, not tomorrow", in)
+		}
 	}
 }
 
