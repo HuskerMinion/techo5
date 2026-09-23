@@ -83,3 +83,28 @@ func TestNightSeesAFreshConversationFromTheOtherGoroutine(t *testing.T) {
 		t.Error("the night schedule recorded the screen as dark")
 	}
 }
+
+// A screen the night put out, then switched off by hand, stays off when the night ends: the night only
+// puts back what it took.
+func TestTheNightDoesNotRelightAScreenSwitchedOffByHand(t *testing.T) {
+	config.Use(filepath.Join(t.TempDir(), "config.json"))
+	// A window that has already ended by now.
+	h := time.Now().Hour()
+	if err := config.Set().Screen().Night(fmt.Sprintf("%d-%d", (h+20)%24, (h+22)%24)); err != nil {
+		t.Fatal(err)
+	}
+	d := &Display{
+		poke: make(chan struct{}, 1),
+		view: voice.State{Phase: "idle"},
+		light: &esphome.Light{
+			Base:                esphome.Base{ObjectID: "screen", Name: "Screen", Icon: "mdi:monitor"},
+			SupportedColorModes: []esphome.ColorMode{esphome.ColorModeBrightness},
+		},
+	}
+	d.nightDark = true
+	d.apply(false, 50, true) // switched off by hand
+
+	if d.night(time.Now(), false, voice.State{Phase: "idle"}) {
+		t.Error("the end of the night switched on a screen somebody had switched off")
+	}
+}

@@ -25,6 +25,7 @@ import (
 	"strings"
 	"sync"
 	"time"
+	"unicode/utf8"
 
 	esphome "github.com/ygelfand/go-esphome-device"
 
@@ -452,6 +453,10 @@ func post(p Peer, word string, body []byte, headers map[string]string) error {
 func clip(s string, n int) string {
 	s = strings.TrimSpace(s)
 	if len(s) > n {
+		// Back to the start of a character, so a name is never cut through the middle of one.
+		for n > 0 && !utf8.RuneStart(s[n]) {
+			n--
+		}
 		return s[:n]
 	}
 	return s

@@ -191,9 +191,14 @@ func monoMP3(body []byte) ([]int16, wavFormat, error) {
 		return nil, f, fmt.Errorf("mp3: %w", err)
 	}
 	f.rate = d.SampleRate()
-	pcm, err := io.ReadAll(d)
+	// The same bound as the body, on what it decodes to: a few megabytes of MP3 are many more of
+	// samples, and go-mp3 always gives 16-bit stereo, which is the form mostAudio is counted in.
+	pcm, err := io.ReadAll(io.LimitReader(d, mostAudio+1))
 	if err != nil {
 		return nil, f, fmt.Errorf("mp3: %w", err)
+	}
+	if len(pcm) > mostAudio {
+		return nil, f, fmt.Errorf("mp3: more than %d bytes of samples for one announcement", mostAudio)
 	}
 	frames := len(pcm) / 4
 	mono := make([]int16, frames)

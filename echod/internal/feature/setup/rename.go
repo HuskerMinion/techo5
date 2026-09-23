@@ -4,12 +4,12 @@ import (
 	"log/slog"
 	"os"
 	"strings"
-	"syscall"
 	"time"
 
 	"github.com/HuskerMinion/techo5/echod/internal/config"
 	"github.com/HuskerMinion/techo5/echod/internal/layout"
 	"github.com/HuskerMinion/techo5/echod/internal/lib/safe"
+	"github.com/HuskerMinion/techo5/echod/internal/update"
 )
 
 // Renaming a device.
@@ -49,12 +49,11 @@ func rename(to string, acknowledged bool) string {
 
 	// Long enough for the page to answer, so whoever asked sees that it worked rather than a
 	// connection that died mid-request.
+	// The daemon restarts, not the device: the name is only the daemon's, and a reboot would bypass the
+	// supervisor and roll back an update still on trial.
 	safe.Go("restart after rename", func() {
 		time.Sleep(3 * time.Second)
-		syscall.Sync()
-		if err := syscall.Reboot(syscall.LINUX_REBOOT_CMD_RESTART); err != nil {
-			slog.Error("restart after rename failed", "err", err)
-		}
+		update.Restart("renamed")
 	})
 	return ""
 }

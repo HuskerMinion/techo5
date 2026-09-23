@@ -11,6 +11,7 @@ import (
 	"google.golang.org/protobuf/proto"
 
 	"github.com/HuskerMinion/techo5/echod/internal/hardware/camera"
+	"github.com/HuskerMinion/techo5/echod/internal/lib/safe"
 )
 
 // The ESPHome camera entity. The library has no camera domain, so this feature describes the
@@ -67,7 +68,7 @@ func (f *Feature) Handle(ctx context.Context, c *esphome.Conn, msg proto.Message
 		if m.GetStream() {
 			f.streamTo(c)
 		} else if m.GetSingle() {
-			go f.single(c)
+			safe.Go("camera entity: still", func() { f.single(c) })
 		}
 	}
 	return nil
@@ -123,12 +124,19 @@ func (f *Feature) streamTo(c *esphome.Conn) {
 	if running {
 		return
 	}
-	go f.pump(c)
+	safe.Go("camera entity: stream", func() { f.pump(c) })
 }
 
 // pump sends frames to c until its deadline passes or the connection is gone.
 func (f *Feature) pump(c *esphome.Conn) {
+	// Running out of time is checked and the entry removed in one step: done apart, a renewal landing
+	// between the two saw the stream still running, started nothing, and was then wiped, and the
+	// picture in Home Assistant froze.
+	expired := false
 	defer func() {
+		if expired {
+			return
+		}
 		streams.mu.Lock()
 		delete(streams.until, c)
 		streams.mu.Unlock()
@@ -150,9 +158,12 @@ func (f *Feature) pump(c *esphome.Conn) {
 	last := time.Time{}
 	for {
 		streams.mu.Lock()
-		until := streams.until[c]
+		if time.Now().After(streams.until[c]) {
+			delete(streams.until, c)
+			expired = true
+		}
 		streams.mu.Unlock()
-		if time.Now().After(until) {
+		if expired {
 			return
 		}
 		select {

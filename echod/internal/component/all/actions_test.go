@@ -20,14 +20,14 @@ var actions = []string{
 	"announce_house",
 }
 
-// Every action still registers.
+// The actions other devices depend on still register.
 //
 // announce_house did not, on the Dot. Nothing imported the announce package on a device with no
 // screen - its only importers were display files, all of them built for the Show and the Spot - so
 // its init never ran, the component never registered, and the Dot never advertised itself, never
 // took an announcement and never offered the action. It looked like a network fault for a whole
 // round of testing. Package all exists to stop exactly this, and announce was missing from it.
-func TestEveryActionStillRegisters(t *testing.T) {
+func TestTheCrossDeviceActionsStillRegister(t *testing.T) {
 	var got []string
 	for _, a := range component.Default().Actions() {
 		got = append(got, a.Name)

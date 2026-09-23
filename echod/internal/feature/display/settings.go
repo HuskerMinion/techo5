@@ -57,13 +57,13 @@ func (d *Display) gather(s scene, restartArm time.Time) settings {
 	d.mu.Unlock()
 	st.wifiOK = wifi.Available()
 	st.btProxy = bluetooth.Get().Enabled()
+	st.address = address()
 	if !wifi.Available() {
 		st.wifi = st.address
 	}
 	st.sendspin = sendspin.Get().Enabled()
 	st.insecureTLS = c.Diag.InsecureTLS
 	st.slot = slotName()
-	st.address = address()
 
 	return st
 }
