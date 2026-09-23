@@ -11,6 +11,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/HuskerMinion/techo5/echod/internal/config"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/alarm"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/announce"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/home"
@@ -114,6 +115,10 @@ func TestShowScenesDraw(t *testing.T) {
 			sheet: settings{cat: catAlarms}},
 		"settings-alarms-end": {now: at, phase: "idle", showSheet: true, snooze: 9,
 			sheet: settings{cat: catAlarms, cardScroll: 1000}},
+		// The editor with the alarm's own wake light, scrolled to it.
+		"settings-alarm-editor": {now: at, phase: "idle", showSheet: true, snooze: 9,
+			sheet: settings{cat: catAlarms, cardScroll: 1000}, draft: &alarmDraft{
+				alarm: config.Alarm{ID: "a", Hour: 6, Minute: 45, Days: config.DaysWeekdays, Label: "Wake up", Sunrise: 10, On: true}}},
 	}
 
 	// The light before an alarm, frame by frame: the same curve the panel follows, with the sun's

@@ -28,6 +28,7 @@ import (
 	"github.com/HuskerMinion/techo5/echod/internal/hardware/led"
 	"github.com/HuskerMinion/techo5/echod/internal/hardware/speaker"
 	"github.com/HuskerMinion/techo5/echod/internal/lib/hook"
+	"github.com/HuskerMinion/techo5/echod/internal/lib/safe"
 )
 
 func init() {
@@ -321,7 +322,7 @@ func (a *Alarms) sources(now time.Time) []source {
 	for _, al := range c.List {
 		if al.On {
 			out = append(out, source{key: al.ID, label: al.Label, hour: al.Hour, min: al.Minute, days: al.Days, local: true,
-				remind: al.Remind, ringOn: al.RingOn})
+				remind: al.Remind, ringOn: al.RingOn, sunrise: c.SunriseFor(al)})
 		}
 	}
 	for _, f := range a.followed(now) {
@@ -330,6 +331,7 @@ func (a *Alarms) sources(now time.Time) []source {
 		}
 		if s, ok := a.helperSource(f.Entity, now); ok {
 			s.label = f.Label
+			s.sunrise = max(c.SunriseMinutes, 0)
 			out = append(out, s)
 		}
 	}
@@ -381,6 +383,24 @@ func (a *Alarms) fire(s source, now time.Time) {
 	}
 
 	a.Changed.Emit(struct{}{})
+	if s.label != "" {
+		safe.Go("alarm label", func() { sayOverRing(s.label) })
+	}
+}
+
+// sayFor is how long the ring holds its chime back for an alarm's label: long enough for Home
+// Assistant to make the words and for them to be said, short enough that an alarm whose words never
+// come — Home Assistant down, or the device not allowed to ask — is soon audibly an alarm again.
+const sayFor = 9 * time.Second
+
+// sayOverRing says what an alarm is for, with the chime held back so the words are heard. The ring's
+// first chime has already gone by then, which is what turns somebody's head; the words follow.
+func sayOverRing(label string) {
+	remind.Say(label)
+	for end := time.Now().Add(sayFor); time.Now().Before(end) && ring.IsSounding(); {
+		ring.Hush()
+		time.Sleep(ring.HushFor / 2)
+	}
 }
 
 // rang is the bell telling the alarm its ring is over, however that came about.

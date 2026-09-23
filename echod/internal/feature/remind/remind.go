@@ -29,9 +29,6 @@ import (
 	"github.com/HuskerMinion/techo5/echod/internal/lib/safe"
 )
 
-// level is the chime's loudness: an alarm's, since a reminder set for a time is meant to be heard.
-const level = 0.6
-
 // tone is what a reminder arrives with: three notes rising, apart from the alarm's and an
 // announcement's two.
 var tone = []speaker.Note{{Freq: 523, Ms: 110}, {Freq: 659, Ms: 110}, {Freq: 784, Ms: 200}}
@@ -78,7 +75,9 @@ type Feature struct {
 	send  func(names []string, m announce.Message)
 }
 
-func playTone() { speaker.Sound().Interject(func(p *speaker.Player) { p.Chime(level, tone...) }) }
+// playTone is one round of the reminder's chime at the ring's own volume, which is what somebody set
+// for being fetched by something that goes off at a time.
+func playTone() { ring.Sample(tone) }
 
 var (
 	once   sync.Once
@@ -203,6 +202,10 @@ func targets(ringOn []string, self string) dest {
 func newID() string {
 	return layout.EntitySlug(config.Get().Device.Name) + "-" + strconv.FormatInt(time.Now().UnixNano(), 36)
 }
+
+// Say asks Home Assistant to say words on this device, for anything else that goes off with a label:
+// an alarm saying what it is for.
+func Say(words string) { sayThroughHA(words) }
 
 // sayThroughHA asks Home Assistant to say the label on this device. Its own chime is skipped, since
 // the reminder has just played one.

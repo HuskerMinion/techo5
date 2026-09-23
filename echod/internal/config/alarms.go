@@ -29,9 +29,10 @@ type Alarms struct {
 	// Sound is what an alarm rings with, by name; empty is the first of the speaker's alarm sounds.
 	Sound string `json:"sound,omitempty"`
 
-	// SunriseMinutes is how long before an alarm the screen starts to light, nothing for not at all.
-	// The light comes up from almost nothing to the brightness the screen is set to, so the room is
-	// lit before the sound starts.
+	// SunriseMinutes is how long before an alarm the screen starts to light, nothing for not at all:
+	// the default, for alarms that do not choose their own (Alarm.Sunrise) and for the Home Assistant
+	// helpers followed as alarms. The light comes up from almost nothing to the brightness the screen
+	// is set to, so the room is lit before the sound starts.
 	SunriseMinutes int `json:"sunrise_minutes,omitempty"`
 
 	// SunriseFace draws the sun with a face on it, which is a matter of taste rather than of waking up.
@@ -63,10 +64,31 @@ type Alarm struct {
 	// RingOn is the other devices a reminder goes to, by name, or RingEverywhere for all of them. It
 	// always goes off here as well.
 	RingOn []string `json:"ring_on,omitempty"`
+
+	// Sunrise is this alarm's wake light, in minutes before it rings. Nothing follows the device's
+	// default (Alarms.SunriseMinutes), which is what every alarm had before each could choose;
+	// SunriseOff is none for this alarm whatever the default says.
+	Sunrise int `json:"sunrise,omitempty"`
 }
 
 // RingEverywhere in RingOn sends a reminder to every device in the house.
 const RingEverywhere = "everywhere"
+
+// SunriseOff in Alarm.Sunrise turns an alarm's wake light off.
+const SunriseOff = -1
+
+// SunriseFor is how many minutes of light come before al, nothing for none. A reminder has none: it
+// is not somebody waking up, and a room lit for twenty minutes before "take the medication" at two
+// in the afternoon is the bug this replaced.
+func (a Alarms) SunriseFor(al Alarm) int {
+	switch {
+	case al.Remind || al.Sunrise < 0:
+		return 0
+	case al.Sunrise > 0:
+		return al.Sunrise
+	}
+	return max(a.SunriseMinutes, 0)
+}
 
 // Snooze is one alarm put off until At. Key is the alarm it came from, so a snooze that fires can be
 // told apart from the alarm's own next time.

@@ -64,7 +64,53 @@ func sunriseSub() string {
 	if sunriseProgress(time.Now()) > 0 {
 		return "The light is coming up now"
 	}
-	return "The screen lights the room before an alarm rings"
+	return "Before alarms that don't choose their own"
+}
+
+// anySunrise is whether any alarm will light the room, for whether the sun's face is worth a row.
+func anySunrise() bool {
+	c := config.Get().Alarms
+	for _, a := range c.List {
+		if c.SunriseFor(a) > 0 {
+			return true
+		}
+	}
+	return c.SunriseMinutes > 0
+}
+
+// alarmSunrise is the alarm editor's Wake with light: the default first, then none, then minutes.
+func alarmSunrise() (labels []string, values []int) {
+	def := "off"
+	if m := config.Get().Alarms.SunriseMinutes; m > 0 {
+		def = fmt.Sprintf("%d min", m)
+	}
+	labels, values = []string{"Same as the default (" + def + ")", "Off"}, []int{0, config.SunriseOff}
+	for _, m := range sunriseChoices[1:] {
+		labels, values = append(labels, fmt.Sprintf("%d minutes before", m)), append(values, m)
+	}
+	return labels, values
+}
+
+// alarmSunriseIndex is which of alarmSunrise an alarm has.
+func alarmSunriseIndex(a config.Alarm) int {
+	_, values := alarmSunrise()
+	for i, v := range values {
+		if v == a.Sunrise {
+			return i
+		}
+	}
+	return 0
+}
+
+// alarmSunriseValue is what the editor's row says for an alarm.
+func alarmSunriseValue(a config.Alarm) string {
+	switch {
+	case a.Sunrise < 0:
+		return "Off"
+	case a.Sunrise > 0:
+		return fmt.Sprintf("%d min", a.Sunrise)
+	}
+	return "Default"
 }
 
 func chooseSunrise(i int) {

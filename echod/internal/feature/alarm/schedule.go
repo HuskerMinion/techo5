@@ -20,6 +20,9 @@ type source struct {
 	// remind is a reminder, said once rather than rung, and ringOn the other devices it goes to.
 	remind bool
 	ringOn []string
+
+	// sunrise is how many minutes of light come before it, nothing for none.
+	sunrise int
 }
 
 // next is the first time at or after from that s rings, and false if it never will again.

@@ -61,7 +61,7 @@ func alarmsCard(sv sheetView) cardView {
 	rows := []settingRow{
 		{id: "sunrise", label: "Wake with light", sub: sunriseSub(), kind: ctlChoice, value: sunriseValue()},
 	}
-	if config.Get().Alarms.SunriseMinutes > 0 {
+	if anySunrise() {
 		rows = append(rows, settingRow{id: "sunface", label: "Sun with a face",
 			sub: "A face on it, for whoever has to look at it", kind: ctlToggle, on: config.Get().Alarms.SunriseFace})
 	}
@@ -157,6 +157,10 @@ func alarmEditorCard(sv sheetView, d alarmDraft) cardView {
 			{id: "e.days", label: "Days", kind: ctlDays, days: a.Days},
 		},
 	}
+	// A reminder is nobody waking up, so it has no light of its own to choose.
+	if !a.Remind {
+		v.rows = append(v.rows, settingRow{id: "e.sunrise", label: "Wake with light", kind: ctlChoice, value: alarmSunriseValue(a)})
+	}
 	if !d.isNew {
 		del := settingRow{id: "e.delete", label: "Delete alarm", sub: "Asks twice", kind: ctlDanger, button: "Delete"}
 		if !d.deleteArm.IsZero() && sv.now.Sub(d.deleteArm) < restartWindow {
@@ -224,7 +228,11 @@ func (d *Display) actionTap(id string) {
 		a.On = true
 		var err error
 		if dr.isNew {
-			_, err = alarm.Get().Set(a.Hour, a.Minute, a.Days, a.Label)
+			var al config.Alarm
+			if al, err = alarm.Get().Set(a.Hour, a.Minute, a.Days, a.Label); err == nil && al.Sunrise != a.Sunrise {
+				al.Sunrise = a.Sunrise
+				err = alarm.Get().Put(al)
+			}
 		} else {
 			err = alarm.Get().Put(a)
 		}
@@ -298,7 +306,7 @@ func (d *Display) alarmRowTap(id string, p part, opt int) bool {
 		case partPlus:
 			alarm.Get().SetRingVolume(n+1, true)
 		}
-	case "alarmsound", "e.repeat":
+	case "alarmsound", "e.repeat", "e.sunrise":
 		d.openPicker(id)
 	case "e.hour":
 		d.editDraft(func(dr *alarmDraft) {

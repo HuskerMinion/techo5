@@ -292,6 +292,13 @@ func pickerFor(id string, sv sheetView) (pickerView, bool) {
 			}
 		}
 		return p, true
+	case "e.sunrise":
+		labels, _ := alarmSunrise()
+		p := pickerView{title: "Wake with light", opts: labels, cur: 0}
+		if sv.draft != nil {
+			p.cur = alarmSunriseIndex(sv.draft.alarm)
+		}
+		return p, true
 	case "night":
 		p := pickerView{title: nightRowLabel, cur: -1}
 		cur := sv.st.night
@@ -421,6 +428,10 @@ func (d *Display) choose(id string, i int) {
 	case "e.repeat":
 		if i < len(repeats) {
 			d.editDraft(func(dr *alarmDraft) { dr.alarm.Days = repeats[i] })
+		}
+	case "e.sunrise":
+		if _, values := alarmSunrise(); i < len(values) {
+			d.editDraft(func(dr *alarmDraft) { dr.alarm.Sunrise = values[i] })
 		}
 	case "slideshow":
 		if i < len(slideshowModes) {

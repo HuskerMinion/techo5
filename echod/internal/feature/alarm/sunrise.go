@@ -4,7 +4,6 @@ import (
 	"math"
 	"time"
 
-	"github.com/HuskerMinion/techo5/echod/internal/config"
 	"github.com/HuskerMinion/techo5/echod/internal/hardware/led"
 )
 
@@ -22,23 +21,32 @@ const SunriseFloor = 0.02
 // nothing, often enough that the change is not a series of steps.
 const sunriseEvery = 2 * time.Second
 
-// SunriseProgress is how far into the light we are: 0 outside it, rising to 1 as the alarm's time
-// arrives. A snoozed alarm does not light the room again — it was already light the first time.
+// SunriseProgress is how far into the light we are: 0 outside it, rising to 1 as an alarm's time
+// arrives. Each alarm has its own window (config.Alarms.SunriseFor), so one with none does not light
+// the room for another's sake, and where two windows meet the further along wins. A snoozed alarm
+// does not light the room again — it was already light the first time — and a reminder never does.
 func (a *Alarms) SunriseProgress(now time.Time) float64 {
-	mins := config.Get().Alarms.SunriseMinutes
-	if mins <= 0 {
-		return 0
+	return sunriseAt(a.sources(now), now)
+}
+
+func sunriseAt(sources []source, now time.Time) float64 {
+	best := 0.0
+	for _, s := range sources {
+		if s.sunrise <= 0 {
+			continue
+		}
+		at, ok := s.next(now)
+		if !ok {
+			continue
+		}
+		window := time.Duration(s.sunrise) * time.Minute
+		left := at.Sub(now)
+		if left <= 0 || left > window {
+			continue
+		}
+		best = max(best, 1-float64(left)/float64(window))
 	}
-	next := a.View(now).Next
-	if next == nil || next.Snoozed {
-		return 0
-	}
-	window := time.Duration(mins) * time.Minute
-	left := next.At.Sub(now)
-	if left <= 0 || left > window {
-		return 0
-	}
-	return 1 - float64(left)/float64(window)
+	return best
 }
 
 // SunriseLevel is the fraction of full brightness the ramp asks for, eased so most of the change
