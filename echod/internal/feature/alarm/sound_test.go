@@ -3,6 +3,7 @@ package alarm
 import (
 	"testing"
 
+	"github.com/HuskerMinion/techo5/echod/internal/feature/ring"
 	"github.com/HuskerMinion/techo5/echod/internal/hardware/speaker"
 )
 
@@ -24,8 +25,8 @@ func TestAlarmSounds(t *testing.T) {
 		if len(notes) == 0 {
 			t.Errorf("%s has no notes", n)
 		}
-		if l := speaker.Length(notes); l >= ringEvery {
-			t.Errorf("%s lasts %v, not under the %v between rounds", n, l, ringEvery)
+		if l := speaker.Length(notes); l >= ring.RingEvery {
+			t.Errorf("%s lasts %v, not under the %v between rounds", n, l, ring.RingEvery)
 		}
 		if soundName(n) != n {
 			t.Errorf("soundName(%q) = %q", n, soundName(n))

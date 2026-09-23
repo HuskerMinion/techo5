@@ -17,9 +17,9 @@ import (
 
 	"github.com/HuskerMinion/techo5/echod/internal/component"
 	"github.com/HuskerMinion/techo5/echod/internal/config"
-	"github.com/HuskerMinion/techo5/echod/internal/feature/alarm"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/media"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/phone"
+	"github.com/HuskerMinion/techo5/echod/internal/feature/ring"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/timer"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/wakeword"
 	"github.com/HuskerMinion/techo5/echod/internal/hardware/buttons"
@@ -201,7 +201,7 @@ func (v *Voice) Action() {
 func (v *Voice) Interrupt() {
 	// "<wake word>, stop" over music: the stop word hears "stop" while the turn the wake word opened is
 	// still listening, and it is the music that was meant, not the question that has not been asked.
-	if v.turn.Phase() == phaseListening && !timer.Get().Ringing() && !alarm.Get().Ringing() {
+	if v.turn.Phase() == phaseListening && !ring.IsSounding() {
 		if playing, _ := media.Get().Playing(); playing {
 			slog.Info("stop word after the wake word: pausing the music")
 			v.turn.Cancel()
@@ -209,7 +209,7 @@ func (v *Voice) Interrupt() {
 			return
 		}
 	}
-	if !speaker.Sound().Busy() && !timer.Get().Ringing() && !alarm.Get().Ringing() {
+	if !speaker.Sound().Busy() && !ring.IsSounding() {
 		if playing, _ := media.Get().Playing(); !playing {
 			slog.Debug("stop word ignored, nothing to stop")
 			return
@@ -225,9 +225,7 @@ func (v *Voice) Interrupt() {
 // nothing to fall through to and simply does nothing.
 func (v *Voice) Stop() bool {
 	// Before the turn, because a timer or an alarm ringing over one is what the person is reaching for.
-	stopped := timer.Get().Stop()
-	stopped = alarm.Get().Stop() || stopped
-	if stopped {
+	if ring.End() {
 		return true
 	}
 

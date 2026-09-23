@@ -27,7 +27,6 @@ import (
 	"github.com/HuskerMinion/techo5/echod/internal/hardware/led"
 	"github.com/HuskerMinion/techo5/echod/internal/hardware/speaker"
 	"github.com/HuskerMinion/techo5/echod/internal/lib/hook"
-	"github.com/HuskerMinion/techo5/echod/internal/lib/safe"
 )
 
 func init() {
@@ -42,26 +41,13 @@ const (
 	// refresh is how often the countdown is redrawn. The frame is only sent when it changes, so a long
 	// timer costs nothing between segments.
 	refresh = 250 * time.Millisecond
-
-	// ringFor is how long a finished timer rings for if nobody stops it, and ringEvery how often the
-	// tone repeats within that.
-	ringFor   = 15 * time.Minute
-	ringEvery = 2 * time.Second
-
-	// alarmLevel is louder than the tones the device uses for feedback: this one is meant to fetch
-	// somebody from another room.
-	alarmLevel = 0.6
 )
 
-var (
-	countdownColor = led.Color{R: 0xFF, G: 0x8C, B: 0x00}
-	alarmColor     = led.Color{R: 0xFF, G: 0x40, B: 0x00}
-)
+var countdownColor = led.Color{R: 0xFF, G: 0x8C, B: 0x00}
 
 // Timers is every timer Home Assistant has told this device about.
 type Timers struct {
 	countdown *led.Claim
-	alarm     *led.Claim
 
 	// names is what is counting down, since the ring can only ever say that something is.
 	names *esphome.TextSensor
@@ -71,7 +57,7 @@ type Timers struct {
 
 	mu    sync.Mutex
 	held  map[string]*timer
-	stop  context.CancelFunc
+	stop  func()
 	rang  string // the name of what is ringing, for the screen
 	shown []led.Color
 
@@ -151,7 +137,6 @@ func Get() *Timers {
 func build() *Timers {
 	return &Timers{
 		countdown: led.Get().Claim(led.PriorityTimer),
-		alarm:     led.Get().Claim(led.PriorityAlarm),
 		names: &esphome.TextSensor{
 			Base: esphome.Base{
 				ObjectID: "timers",
@@ -472,54 +457,16 @@ func (t *Timers) startRinging(name string) {
 		return
 	}
 	t.rang = name
-
-	var ctx context.Context
-	ctx, t.stop = context.WithCancel(context.Background())
-	safe.Go("timer alarm", func() { t.ring(ctx) })
+	t.stop = ring.Start("timer", speaker.ToneTimer, t.rungOut)
 }
 
-// ring sounds until it is stopped or ringFor is up. Music is ducked rather than suspended: it is one
-// room of what may be a whole house, and the tone is audible over it.
-func (t *Timers) ring(ctx context.Context) {
-	defer func() {
-		t.mu.Lock()
-		t.stop, t.rang = nil, ""
-		t.mu.Unlock()
-		t.show()
-		t.Changed.Emit(struct{}{})
-	}()
-
-	t.alarm.Play(led.EffectPulse, alarmColor)
-	defer t.alarm.Clear()
-
-	sound := speaker.Sound()
-	sound.Backgrounds().Duck(true)
-	defer sound.Backgrounds().Duck(false)
-
-	defer ring.Sounding()()
-
-	over := time.After(ringFor)
-	for {
-		// A silenced ring whose offer ran out takes the answer it did not get, and stops.
-		if ring.Lapsed() {
-			slog.Info("timer silenced by a button and left unanswered, stopping")
-			return
-		}
-		// Quiet covers both reasons the chime is held back: a near miss on the stop word, and a
-		// button press waiting on an answer. The LED goes on pulsing through it.
-		if !ring.Quiet() {
-			sound.Interject(func(p *speaker.Player) { p.Chime(alarmLevel, speaker.ToneTimer...) })
-		}
-
-		select {
-		case <-ctx.Done():
-			return
-		case <-over:
-			slog.Info("timer rang out", "for", ringFor)
-			return
-		case <-time.After(ringEvery):
-		}
-	}
+// rungOut is the bell telling the timers their ring is over, however that came about.
+func (t *Timers) rungOut() {
+	t.mu.Lock()
+	t.stop, t.rang = nil, ""
+	t.mu.Unlock()
+	t.show()
+	t.Changed.Emit(struct{}{})
 }
 
 // show draws the soonest timer, or clears the ring when there is none. It sends nothing when the

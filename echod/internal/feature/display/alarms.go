@@ -69,10 +69,10 @@ func (d *Display) ringTap(x, y int, st ringState) {
 	d.mu.Unlock()
 
 	if ringSnoozeAt(x, d.r.w, st.snoozable, d.r.actionDecided(y)) {
-		if !alarm.Get().Snooze() {
+		// Accept snoozes what can be snoozed and stops the rest, which is a timer beside the alarm.
+		if !ring.Accept() {
 			slog.Debug("snooze with nothing ringing")
 		}
-		timer.Get().Stop()
 		return
 	}
 	ring.End()

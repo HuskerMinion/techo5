@@ -1,9 +1,10 @@
-// Package ring holds the state a sounding ring shares with the rest of the device: that one is
-// sounding at all, and that its chime should be held back for a moment so a word can be heard.
+// Package ring is the device's one bell, and the state a sounding ring shares with the rest of the
+// device: that one is sounding at all, and that its chime should be held back for a moment so a word
+// can be heard.
 //
-// It is a package of its own because there are two ring engines, in alarm and in timer, and anything
-// that has to be true of both has to live somewhere neither owns. Nothing here imports another
-// feature, so anything may import it.
+// Alarms and timers decide when something rings and what it is for; this package does the ringing,
+// in bell.go, so whatever has to be true of every ring is true in one place. Nothing here imports
+// another feature, so anything may import it.
 package ring
 
 import (

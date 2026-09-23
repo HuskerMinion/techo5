@@ -261,6 +261,15 @@ Both faces now say when a ring has been silenced and is waiting on an answer.
   during a call.
 - Do not let the boot splash gate the ringing page.
 
+**The engines are one bell now.** `feature/ring/bell.go` is the only thing on the device that rings:
+alarms and timers decide when and what for, and call `ring.Start`. One goroutine, one light, one
+duck, taken when the first ring starts and given back when the last one ends. The duck was a live
+fault, not tidiness: ducking is a switch rather than a count, so with an alarm and a timer ringing
+together the first to stop brought the music back up under the other. `Start` also counts as
+sounding before it returns, where the old loops only did once their goroutine got going. Callers
+that asked both engines separately - the stop word, the action button, Snooze on both screens - ask
+`ring` instead. This is also the one place the ring's own level (decision 1) has to go.
+
 ## Decisions
 
 Settled 2026-09-23, except the fourth.

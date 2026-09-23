@@ -2,7 +2,7 @@
 // helpers it follows as alarms. Both ring here, from the device's own clock, so an alarm set on the
 // device still goes off while Home Assistant is down.
 //
-// A ringing alarm sounds until it is stopped or snoozed, or for ringFor. Stop is the same stop as a
+// A ringing alarm sounds until it is stopped or snoozed, or for ring.RingFor. Stop is the same stop as a
 // timer's: the stop word, the action button, the screen, or Home Assistant's button.
 package alarm
 
@@ -26,7 +26,6 @@ import (
 	"github.com/HuskerMinion/techo5/echod/internal/hardware/led"
 	"github.com/HuskerMinion/techo5/echod/internal/hardware/speaker"
 	"github.com/HuskerMinion/techo5/echod/internal/lib/hook"
-	"github.com/HuskerMinion/techo5/echod/internal/lib/safe"
 )
 
 func init() {
@@ -40,19 +39,10 @@ func init() {
 }
 
 const (
-	// ringFor is how long an alarm sounds if nobody stops it, and ringEvery how often the tone repeats.
-	ringFor   = 15 * time.Minute
-	ringEvery = 2 * time.Second
-
-	// level is the chime's loudness: the timer's, meant to reach another room.
-	level = 0.6
-
 	// look is the longest the scheduler sleeps, so a clock set by NTP or a helper changed in Home
 	// Assistant is noticed within it.
 	look = 20 * time.Second
 )
-
-var ringColor = led.Color{R: 0xFF, G: 0x40, B: 0x00}
 
 // Ring is an alarm sounding now.
 type Ring struct {
@@ -93,7 +83,6 @@ type Alarms struct {
 	next   *esphome.TextSensor
 	stop   *esphome.Button
 	snooze *esphome.Button
-	claim  *led.Claim
 
 	// sun is the ring while the light before an alarm comes up, under a ringing alarm and over
 	// everything quieter; lighting is whether it is showing anything.
@@ -108,7 +97,7 @@ type Alarms struct {
 
 	mu      sync.Mutex
 	ringing *Ring
-	silence context.CancelFunc
+	silence func()
 	snoozed []source
 }
 
@@ -124,10 +113,9 @@ func Get() *Alarms {
 
 func build() *Alarms {
 	a := &Alarms{
-		next:  &esphome.TextSensor{Base: esphome.Base{ObjectID: "next_alarm", Name: "Next alarm", Icon: "mdi:alarm"}},
-		claim: led.Get().Claim(led.PriorityAlarm),
-		sun:   led.Get().Claim(led.PriorityTimer),
-		wake:  make(chan struct{}, 1),
+		next: &esphome.TextSensor{Base: esphome.Base{ObjectID: "next_alarm", Name: "Next alarm", Icon: "mdi:alarm"}},
+		sun:  led.Get().Claim(led.PriorityTimer),
+		wake: make(chan struct{}, 1),
 	}
 	a.stop = &esphome.Button{Base: esphome.Base{ObjectID: "alarm_stop", Name: "Stop alarm", Icon: "mdi:alarm-off"}, OnPress: func() {
 		// From Home Assistant, stop also means a snoozed alarm is not wanted back.
@@ -217,7 +205,7 @@ func (a *Alarms) SetSound(name string, preview bool) {
 	a.sound.Set(name)
 	slog.Info("alarm sound", "name", name)
 	if preview && !a.Ringing() {
-		speaker.Sound().Interject(func(p *speaker.Player) { p.Chime(level, speaker.AlarmSound(name)...) })
+		ring.Sample(speaker.AlarmSound(name))
 	}
 }
 
@@ -341,8 +329,9 @@ func (a *Alarms) fire(s source, now time.Time) {
 		return
 	}
 	a.ringing = &Ring{Key: strings.TrimPrefix(s.key, "snooze:"), Label: s.label, At: now}
-	ctx, cancel := context.WithCancel(context.Background())
-	a.silence = cancel
+	// Started under the lock, so there is no moment where an alarm is ringing and Stop finds
+	// nothing to stop. The bell calls rang from its own goroutine, never from here.
+	a.silence = ring.Start("alarm", speaker.AlarmSound(a.Sound()), a.rang)
 	a.mu.Unlock()
 
 	if spent {
@@ -350,51 +339,15 @@ func (a *Alarms) fire(s source, now time.Time) {
 	}
 
 	a.Changed.Emit(struct{}{})
-	safe.Go("alarm", func() { a.ring(ctx) })
 }
 
-func (a *Alarms) ring(ctx context.Context) {
-	defer func() {
-		a.mu.Lock()
-		a.ringing, a.silence = nil, nil
-		a.mu.Unlock()
-		a.Changed.Emit(struct{}{})
-		a.poke()
-	}()
-
-	a.claim.Play(led.EffectPulse, ringColor)
-	defer a.claim.Clear()
-
-	sound := speaker.Sound()
-	sound.Backgrounds().Duck(true)
-	defer sound.Backgrounds().Duck(false)
-
-	defer ring.Sounding()()
-
-	over := time.After(ringFor)
-	notes := speaker.AlarmSound(a.Sound())
-	for {
-		// A silenced ring whose offer ran out takes the answer it did not get, and stops.
-		if ring.Lapsed() {
-			slog.Info("alarm silenced by a button and left unanswered, stopping")
-			return
-		}
-		// Quiet covers both reasons the chime is held back: a near miss on the stop word, and a
-		// button press waiting on an answer. The alarm ducks the radio so it can be heard; this is
-		// the one thing that ducks the alarm. The LED goes on pulsing through it, so the alarm stays
-		// obviously alive while it is silent.
-		if !ring.Quiet() {
-			sound.Interject(func(p *speaker.Player) { p.Chime(level, notes...) })
-		}
-		select {
-		case <-ctx.Done():
-			return
-		case <-over:
-			slog.Info("alarm rang out", "for", ringFor)
-			return
-		case <-time.After(ringEvery):
-		}
-	}
+// rang is the bell telling the alarm its ring is over, however that came about.
+func (a *Alarms) rang() {
+	a.mu.Lock()
+	a.ringing, a.silence = nil, nil
+	a.mu.Unlock()
+	a.Changed.Emit(struct{}{})
+	a.poke()
 }
 
 // Ringing reports whether an alarm is sounding.
