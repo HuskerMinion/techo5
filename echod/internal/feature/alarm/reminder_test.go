@@ -22,13 +22,13 @@ func TestAReminderTimeIsATimeOfDayOrATimeFromNow(t *testing.T) {
 		{"1h", 15, 8, true},
 		{"in 10 hours", 0, 8, true}, // past midnight: tomorrow's 00:08, which is the next one
 	} {
-		h, m, rel, err := reminderTime(c.in, now)
+		h, m, rel, err := ReminderTime(c.in, now)
 		if err != nil || h != c.hour || m != c.minute || rel != c.fromNow {
-			t.Errorf("reminderTime(%q) = %d:%02d from now %v, %v; want %d:%02d from now %v",
+			t.Errorf("ReminderTime(%q) = %d:%02d from now %v, %v; want %d:%02d from now %v",
 				c.in, h, m, rel, err, c.hour, c.minute, c.fromNow)
 		}
 	}
-	if _, _, _, err := reminderTime("sometime", now); err == nil {
+	if _, _, _, err := ReminderTime("sometime", now); err == nil {
 		t.Error("an unreadable time should be refused")
 	}
 }

@@ -114,8 +114,8 @@ func (f *Feature) index(w http.ResponseWriter, r *http.Request) {
 		f.lockedPage(w)
 		return
 	}
-	f.settingsPage(w, token, r.URL.Query().Get("saved"), r.URL.Query().Get("renamed"),
-		r.URL.Query().Get("problem"), r.URL.Query().Get("scan") != "")
+	q := r.URL.Query()
+	f.settingsPage(w, token, tabOf(q.Get("tab")), q.Get("saved"), q.Get("renamed"), q.Get("problem"), q.Get("scan") != "")
 }
 
 // wait starts this browser waiting for a press and gives it the cookie the press will let in.
@@ -182,7 +182,7 @@ func (f *Feature) save(w http.ResponseWriter, r *http.Request) {
 
 	var problem string
 	var renamed bool
-	switch r.PostFormValue("what") {
+	switch what := r.PostFormValue("what"); what {
 	case "wifi":
 		ssid := strings.TrimSpace(r.PostFormValue("ssid"))
 		if other := strings.TrimSpace(r.PostFormValue("other")); other != "" {
@@ -227,44 +227,28 @@ func (f *Feature) save(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 	default:
-		problem = "nothing to save"
+		if !alarmSave(r, what, &problem) {
+			problem = "nothing to save"
+		}
 	}
 
-	to := "/setup?saved=1"
+	tab := r.PostFormValue("tab")
+	to := back(tab, "saved", "1")
 	if renamed {
-		to = "/setup?renamed=1"
+		to = back(tab, "renamed", "1")
 	}
 	if problem != "" {
 		slog.Warn("setup page: a change was refused", "problem", problem)
-		to = "/setup?problem=" + urlQuery(problem)
+		to = back(tab, "problem", problem)
 	}
 	http.Redirect(w, r, to, http.StatusSeeOther)
 }
 
-func urlQuery(s string) string { return strings.ReplaceAll(html.EscapeString(s), " ", "+") }
-
-const pageHead = `<!doctype html><html lang="en"><meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
-<title>TECHO5 setup</title>
-<style>
- body{font:16px/1.5 system-ui,sans-serif;max-width:34rem;margin:2rem auto;padding:0 1rem;background:#1a110d;color:#f2e6df}
- h1{font-size:1.4rem;margin:0 0 .2rem} p.sub{color:#b59c8f;margin:0 0 1.5rem}
- fieldset{border:1px solid #4a372e;border-radius:10px;margin:0 0 1rem;padding:1rem}
- legend{padding:0 .4rem;color:#ff7043}
- label{display:block;margin:.6rem 0 .2rem;color:#b59c8f}
- select,input{font:inherit;width:100%;padding:.5rem;border-radius:8px;border:1px solid #4a372e;background:#241813;color:inherit}
- button{font:inherit;padding:.55rem 1.1rem;border:0;border-radius:999px;background:#ff7043;color:#1a110d;font-weight:600;cursor:pointer}
- .note{color:#b59c8f;font-size:.9rem} .ok{color:#8bc34a} .bad{color:#ff8a65}
- /* Play and Stop are beside the thing they act on, so they are quieter than Save, which is the
-    button this page is really for. */
- button.quiet{background:#241813;color:#f2e6df;border:1px solid #4a372e;font-weight:500;padding:.35rem .9rem}
- .playing{color:#8bc34a;display:flex;align-items:center;gap:.7rem;flex-wrap:wrap}
-</style>`
-
 func (f *Feature) lockedPage(w http.ResponseWriter) {
 	waiting := f.Waiting()
-	fmt.Fprint(w, pageHead)
-	fmt.Fprintf(w, `<h1>%s</h1><p class="sub">Setup</p>`, html.EscapeString(deviceName()))
+	head(w)
+	fmt.Fprintf(w, `<div class="wrap"><h1>%s</h1><p class="sub">Setup</p>`, html.EscapeString(deviceName()))
+	defer fmt.Fprint(w, `</div>`)
 	if !waiting {
 		fmt.Fprint(w, `<form method="post" action="/setup/wait"><p>To change anything here, press the
 		 action button on the device. That is what proves you are standing in front of it.</p>
@@ -280,24 +264,56 @@ func (f *Feature) lockedPage(w http.ResponseWriter) {
 	 itself when it is left alone.</p>`)
 }
 
-func (f *Feature) settingsPage(w http.ResponseWriter, token, saved, renamed, problem string, scan bool) {
-	fmt.Fprint(w, pageHead)
-	fmt.Fprintf(w, `<h1>%s</h1><p class="sub">Setup</p>`, html.EscapeString(deviceName()))
+func (f *Feature) settingsPage(w http.ResponseWriter, token, tab, saved, renamed, problem string, scan bool) {
+	head(w)
+	fmt.Fprintf(w, `<div class="wrap"><h1>%s</h1><p class="sub">Setup</p><div class="layout">`, html.EscapeString(deviceName()))
+	nav(w, tab)
+	fmt.Fprint(w, `<section>`)
+	for _, t := range tabs {
+		if t.id == tab {
+			fmt.Fprintf(w, `<h2>%s</h2>`, html.EscapeString(t.title))
+		}
+	}
 	if saved != "" {
-		fmt.Fprint(w, `<p class="ok">Saved.</p>`)
+		fmt.Fprint(w, `<div class="banner ok">Saved.</div>`)
 	}
 	if renamed != "" {
-		fmt.Fprint(w, `<p class="ok">Renamed. The device is restarting and will be back in a minute or
-		 so. Home Assistant keeps it as the same device, under its old entity ids.</p>`)
+		fmt.Fprint(w, `<div class="banner ok">Renamed. The device is restarting and will be back in a minute or
+		 so. Home Assistant keeps it as the same device, under its old entity ids.</div>`)
 	}
 	if problem != "" {
-		fmt.Fprintf(w, `<p class="bad">%s</p>`, html.EscapeString(strings.ReplaceAll(problem, "+", " ")))
+		fmt.Fprintf(w, `<div class="banner bad">%s</div>`, html.EscapeString(problem))
 	}
 
+	switch tab {
+	case "sound":
+		houseSection(w, token)
+		stationsSection(w, token)
+	case "alarms":
+		alarmsSection(w, token)
+	case "connections":
+		if wifi.Available() {
+			f.wifiSection(w, token, scan)
+		} else {
+			fmt.Fprint(w, `<fieldset><legend>Wi-Fi</legend><p class="note" style="margin:0">This device's network
+			 is not one this page can change.</p></fieldset>`)
+		}
+	case "privacy":
+		privacySection(w)
+	case "general":
+		timezoneSection(w, token)
+		nameSection(w, token)
+		diagnosticsSection(w)
+	}
+	fmt.Fprint(w, `</section></div></div>`)
+}
+
+// timezoneSection is which zone the clock shows.
+func timezoneSection(w http.ResponseWriter, token string) {
 	cur := timezone.Get().Current()
-	fmt.Fprintf(w, `<form method="post" action="/setup/save"><fieldset><legend>Time zone</legend>
-	 <input type="hidden" name="token" value="%s"><input type="hidden" name="what" value="timezone">
-	 <label for="zone">Zone</label><select id="zone" name="zone">`, html.EscapeString(token))
+	fmt.Fprint(w, `<form method="post" action="/setup/save"><fieldset><legend>Time zone</legend>`)
+	hidden(w, token, "timezone", "general")
+	fmt.Fprint(w, `<label for="zone">Zone</label><select id="zone" name="zone">`)
 	fmt.Fprintf(w, `<option value=""%s>Follow Home Assistant</option>`, selected(!timezone.Get().SetHere()))
 	for _, region := range timezone.Regions() {
 		fmt.Fprintf(w, `<optgroup label="%s">`, html.EscapeString(region))
@@ -310,16 +326,27 @@ func (f *Feature) settingsPage(w http.ResponseWriter, token, saved, renamed, pro
 	}
 	fmt.Fprint(w, `</select><p class="note">The device's clock keeps time on its own; this is only
 	 which zone it shows.</p><p><button type="submit">Save</button></p></fieldset></form>`)
+}
 
-	diagnosticsSection(w)
-	houseSection(w, token)
-	stationsSection(w, token)
-	f.wifiSection(w, token, scan)
-	nameSection(w, token)
-
-	fmt.Fprint(w, `<p class="note">Radio stations and the phone account belong here too and are still
-	 to come. This page never touches SSH keys, the Home Assistant key, or the software the device
-	 runs.</p>`)
+// privacySection says what the device has open, and what this page will never do. It shows and does
+// not change: a web page that could open SSH would be a bigger hole than the convenience is worth, so
+// these stay on the device's own screen and in Home Assistant.
+func privacySection(w http.ResponseWriter) {
+	s := config.Get().Security
+	onOff := func(on bool) string {
+		if on {
+			return "<strong>on</strong>"
+		}
+		return "off"
+	}
+	fmt.Fprintf(w, `<fieldset><legend>What is switched on</legend>
+	 <p style="margin:0">SSH: %s · Camera on the network: %s · Screen on the network: %s</p>
+	 <p class="note">Shown here, not changed here. Change them on the device's own screen, or in Home
+	  Assistant.</p></fieldset>`, onOff(s.SSH), onOff(s.Camera), onOff(s.Screen))
+	fmt.Fprint(w, `<fieldset><legend>This page</legend>
+	 <p class="note" style="margin:0">It opens only after a press on the device, and closes itself when it
+	  is left alone. It is on your own network, without encryption. It never touches SSH keys, the Home
+	  Assistant key, or the software the device runs.</p></fieldset>`)
 }
 
 // wifiSection is the networks: what the device is on, what it remembers, and how to add another.
@@ -344,18 +371,17 @@ func (f *Feature) wifiSection(w http.ResponseWriter, token string, scan bool) {
 	if saved := wifi.Saved(); len(saved) > 0 {
 		fmt.Fprint(w, `<p class="note">Remembered, in the order it tries them:</p><ul>`)
 		for _, ssid := range saved {
-			fmt.Fprintf(w, `<li>%s <form method="post" action="/setup/save" style="display:inline">
-			 <input type="hidden" name="token" value="%s"><input type="hidden" name="what" value="forget">
-			 <input type="hidden" name="ssid" value="%s">
-			 <button type="submit">Forget</button></form></li>`,
-				html.EscapeString(ssid), html.EscapeString(token), html.EscapeString(ssid))
+			fmt.Fprintf(w, `<li>%s <form method="post" action="/setup/save" style="display:inline">`, html.EscapeString(ssid))
+			hidden(w, token, "forget", "connections")
+			fmt.Fprintf(w, `<input type="hidden" name="ssid" value="%s">
+			 <button type="submit" class="quiet">Forget</button></form></li>`, html.EscapeString(ssid))
 		}
 		fmt.Fprint(w, `</ul>`)
 	}
 
-	fmt.Fprintf(w, `<form method="post" action="/setup/save">
-	 <input type="hidden" name="token" value="%s"><input type="hidden" name="what" value="wifi">
-	 <label for="ssid">Network</label><select id="ssid" name="ssid">`, html.EscapeString(token))
+	fmt.Fprint(w, `<form method="post" action="/setup/save">`)
+	hidden(w, token, "wifi", "connections")
+	fmt.Fprint(w, `<label for="ssid">Network</label><select id="ssid" name="ssid">`)
 	if scan {
 		nets, err := wifi.Scan(ctx)
 		if err != nil {
@@ -370,7 +396,7 @@ func (f *Feature) wifiSection(w http.ResponseWriter, token string, scan bool) {
 	}
 	fmt.Fprint(w, `</select>`)
 	if !scan {
-		fmt.Fprint(w, `<p><a href="/setup?scan=1">Scan for networks</a> — it takes a few seconds.</p>`)
+		fmt.Fprint(w, `<p><a href="/setup?tab=connections&amp;scan=1">Scan for networks</a> — it takes a few seconds.</p>`)
 	}
 	fmt.Fprint(w, `<label for="other">…or a name it did not find</label>
 	 <input id="other" name="other" autocomplete="off" placeholder="Network name">
@@ -398,10 +424,8 @@ func diagnosticsSection(w http.ResponseWriter) {
 // its place. They play without Home Assistant, which is the only radio a device on its own has.
 func stationsSection(w http.ResponseWriter, token string) {
 	list := home.OwnStations()
-	fmt.Fprintf(w, `<fieldset><legend>Radio stations on this device</legend>
-	 <form method="post" action="/setup/save">
-	 <input type="hidden" name="token" value="%s"><input type="hidden" name="what" value="stations">`,
-		html.EscapeString(token))
+	fmt.Fprint(w, `<fieldset><legend>Radio stations on this device</legend><form method="post" action="/setup/save">`)
+	hidden(w, token, "stations", "sound")
 	// One more row than there are stations, so there is always somewhere to add one; clearing a
 	// name takes that station out.
 	for i := 0; i <= len(list) && i < config.MaxOwnStations; i++ {
@@ -496,10 +520,9 @@ func saveStations(r *http.Request) string {
 // which is confusing enough to warn about, and reason to rename in Home Assistant as well.
 func nameSection(w http.ResponseWriter, token string) {
 	name := deviceName()
-	fmt.Fprintf(w, `<fieldset><legend>Name</legend>
-	 <form method="post" action="/setup/save">
-	 <input type="hidden" name="token" value="%s"><input type="hidden" name="what" value="name">
-	 <label for="name">This device is called</label>
+	fmt.Fprint(w, `<fieldset><legend>Name</legend><form method="post" action="/setup/save">`)
+	hidden(w, token, "name", "general")
+	fmt.Fprintf(w, `<label for="name">This device is called</label>
 	 <input id="name" name="name" value="%s" maxlength="31" autocomplete="off">
 	 <p class="bad"><strong>Home Assistant keeps the entity ids it already gave this device.</strong>
 	  It knows the device by its address, not its name, so <code>%s</code> stays as it is and your
@@ -511,8 +534,7 @@ func nameSection(w http.ResponseWriter, token string) {
 	  I understand the entity ids in Home Assistant do not change with it</label></p>
 	 <p class="note">The device restarts to announce the new name, and this page goes with it.</p>
 	 <p><button type="submit">Rename and restart</button></p></form></fieldset>`,
-		html.EscapeString(token), html.EscapeString(name),
-		html.EscapeString("media_player."+layout.EntitySlug(name)+"_speaker"))
+		html.EscapeString(name), html.EscapeString("media_player."+layout.EntitySlug(name)+"_speaker"))
 }
 
 // houseSection is the word the devices in one house share.
@@ -523,18 +545,17 @@ func nameSection(w http.ResponseWriter, token string) {
 // than leaving as something guessable, and it means the same word has to go on every device here.
 func houseSection(w http.ResponseWriter, token string) {
 	word := config.Get().Home.HouseWord
-	fmt.Fprintf(w, `<fieldset><legend>Announcements</legend>
-	 <form method="post" action="/setup/save">
-	 <input type="hidden" name="token" value="%s"><input type="hidden" name="what" value="house">
-	 <label for="word">House word</label>
+	fmt.Fprint(w, `<fieldset><legend>Announcements</legend><form method="post" action="/setup/save">`)
+	hidden(w, token, "house", "sound")
+	fmt.Fprintf(w, `<label for="word">House word</label>
 	 <input id="word" name="word" value="%s" maxlength="63" autocomplete="off">
 	 <p class="note">Type the <strong>same word on every device in this house</strong>. They then find
 	  each other on the network, and speaking to one plays it on the others. Anything that does not
 	  have the word is ignored.</p>
 	 <p class="note">Leave it empty to turn announcements off here: the device stops advertising itself
-	  and stops taking them.</p>
+	  and stops taking them. Reminders set to go off on other devices use it too.</p>
 	 <p><button type="submit">Save</button></p></form></fieldset>`,
-		html.EscapeString(token), html.EscapeString(word))
+		html.EscapeString(word))
 }
 
 // saveHouse keeps the word, and then tells the web feature to look again: the port announcements

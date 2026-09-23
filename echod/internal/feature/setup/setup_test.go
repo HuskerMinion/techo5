@@ -54,12 +54,13 @@ func TestNobodyIsLetInWithoutAPress(t *testing.T) {
 	if body := get(f, "/setup", c).Body.String(); !strings.Contains(body, "Press the action button") {
 		t.Errorf("a browser waiting for the press is not told to make it: %q", first(body))
 	}
-	if strings.Contains(get(f, "/setup", c).Body.String(), "Time zone") {
+	// The settings' tabs are the sign of being in: every tab has them, and the locked page has none.
+	if strings.Contains(get(f, "/setup", c).Body.String(), `class="rail"`) {
 		t.Error("the settings are readable before anyone pressed anything")
 	}
 
 	f.button(buttons.Event{Name: buttons.Action, Kind: buttons.Tap})
-	if body := get(f, "/setup", c).Body.String(); !strings.Contains(body, "Time zone") {
+	if body := get(f, "/setup", c).Body.String(); !strings.Contains(body, `class="rail"`) {
 		t.Errorf("the press did not let the browser in: %q", first(body))
 	}
 }

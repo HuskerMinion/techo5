@@ -11,6 +11,7 @@ import (
 	"math"
 
 	"github.com/HuskerMinion/techo5/echod/internal/config"
+	"github.com/HuskerMinion/techo5/echod/internal/lib/palette"
 )
 
 // Themes: five colors make the whole screen — the ground, the accent, the text, a dim text and
@@ -41,21 +42,14 @@ func preset(name string, ground, accent, text, dim, rules uint32) theme {
 	return theme{name, [roles]color.RGBA{rgb(ground), rgb(accent), rgb(text), rgb(dim), rgb(rules)}}
 }
 
-var themes = []theme{
-	preset("Walnut", 0x1c1511, 0xe9a23b, 0xe8dcc8, 0x8a7d6c, 0x3a2c22),
-	preset("Slate", 0x141920, 0x5cb8ff, 0xe4eaf0, 0x7c8896, 0x27303b),
-	preset("Midnight", 0x080a10, 0x2ed9b8, 0xdde6e8, 0x6c7a80, 0x181e2a),
-	preset("Forest", 0x101a14, 0xd8b44a, 0xe6ecdc, 0x7d8c78, 0x223428),
-	preset("Plum", 0x1a101c, 0xf07ca8, 0xf0e4ec, 0x8c7488, 0x36243c),
-	preset("Ocean", 0x0a1622, 0x36c6e0, 0xdcecf4, 0x6e8896, 0x163040),
-	preset("Ember", 0x180c0a, 0xf05a3c, 0xf2e2da, 0x8e7068, 0x3a1c16),
-	preset("Mint", 0x0e1a18, 0x6ee7b7, 0xe2f2ec, 0x709088, 0x1c342e),
-	preset("Lavender", 0x14121e, 0xb69cff, 0xeae6f4, 0x8078a0, 0x2a2640),
-	preset("Graphite", 0x161616, 0xffffff, 0xe0e0e0, 0x8a8a8a, 0x303030),
-	preset("Cherry", 0x1c0a10, 0xff3b6b, 0xf4e0e6, 0x907080, 0x3c1824),
-	preset("Paper", 0xf2eadc, 0xb85c1e, 0x2a221c, 0x7a6e62, 0xd8ccb8),
-	preset("Linen", 0xf6f1e8, 0x2c6e9e, 0x1e2630, 0x6f7a86, 0xd9d1c4),
-}
+// themes are the presets, from lib/palette, where the setup page reads them too.
+var themes = func() []theme {
+	out := make([]theme, len(palette.Presets))
+	for i, p := range palette.Presets {
+		out[i] = preset(p.Name, p.Ground, p.Accent, p.Text, p.Dim, p.Rules)
+	}
+	return out
+}()
 
 const customName = "Custom"
 

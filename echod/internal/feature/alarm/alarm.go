@@ -567,9 +567,9 @@ func (a *Alarms) SetReminder(hour, minute int, days uint8, label string, ringOn 
 	return al, a.Put(al)
 }
 
-// reminderTime reads when a reminder goes off: a time of day, or a time from now ("in 20 minutes"),
+// ReminderTime reads when a reminder goes off: a time of day, or a time from now ("in 20 minutes"),
 // which is rounded up to the next whole minute, since a reminder is kept as a time of day.
-func reminderTime(s string, now time.Time) (hour, minute int, fromNow bool, err error) {
+func ReminderTime(s string, now time.Time) (hour, minute int, fromNow bool, err error) {
 	if hour, minute, err = parseClock(s); err == nil {
 		return hour, minute, false, nil
 	}
@@ -626,7 +626,7 @@ func (a *Alarms) Actions() []*esphome.Action {
 			},
 			Answers: true,
 			Run: func(c esphome.Call) (any, error) {
-				hour, minute, fromNow, err := reminderTime(c.String("time"), time.Now())
+				hour, minute, fromNow, err := ReminderTime(c.String("time"), time.Now())
 				if err != nil {
 					return nil, err
 				}
