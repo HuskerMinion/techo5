@@ -51,3 +51,15 @@ address=11:22:33:44:55:66`
 		t.Errorf("a line that is not about the link was kept: %q", all)
 	}
 }
+
+// The driver's lines can carry the access point's address and the device's own; neither is kept.
+func TestKernelEvidenceKeepsNoAddresses(t *testing.T) {
+	log := "[  12.3] wlan0: RSN: key handshake with 3c:22:fb:10:aa:01 (GTK) done, ip 10.1.2.3\n"
+	got := kernelEvidence(log, 8)
+	if len(got) != 1 {
+		t.Fatalf("kept %d lines, want 1", len(got))
+	}
+	if strings.Contains(got[0], "3c:22:fb:10:aa:01") || strings.Contains(got[0], "10.1.2.3") {
+		t.Errorf("an address was kept: %q", got[0])
+	}
+}

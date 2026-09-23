@@ -6,6 +6,8 @@ import (
 	"regexp"
 	"strings"
 	"time"
+
+	"github.com/HuskerMinion/techo5/echod/internal/lib/redact"
 )
 
 // Evidence is what is worth keeping about the link at the moment something is done to it: the
@@ -51,7 +53,9 @@ func kernelEvidence(log string, n int) []string {
 	var kept []string
 	for _, line := range strings.Split(log, "\n") {
 		if strings.Contains(line, "RSN") || strings.Contains(line, "netif_carrier") || strings.Contains(line, "GTK") {
-			kept = append(kept, "kernel: "+redactSSID(strings.TrimSpace(line)))
+			// The redactor as well as the name: the driver's lines can carry the access point's
+			// address and the device's own, and this goes to the log as it is.
+			kept = append(kept, "kernel: "+redact.New().Text(redactSSID(strings.TrimSpace(line))))
 		}
 	}
 	if len(kept) > n {
