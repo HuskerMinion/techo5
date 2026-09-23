@@ -142,12 +142,12 @@ func TestDuckingReachesTheOnesWaiting(t *testing.T) {
 	a.Took(group)
 	a.Took(track)
 
-	a.Duck(true)
+	a.Duck("turn", true)
 	if !group.quiet() || !track.quiet() {
 		t.Error("ducking a turn missed a producer")
 	}
 
-	a.Duck(false)
+	a.Duck("turn", false)
 	if group.quiet() || track.quiet() {
 		t.Error("the turn ended and something stayed quiet")
 	}
@@ -163,7 +163,7 @@ func TestOnlyTheProducerBeingHeardRescalesWhatIsQueued(t *testing.T) {
 	a.Took(group)
 	a.Took(track)
 
-	a.Duck(true)
+	a.Duck("turn", true)
 
 	if got := track.requeued(); got != 1 {
 		t.Errorf("the audible producer requeued %d times, want 1", got)
@@ -180,9 +180,9 @@ func TestNothingIsRescaledWhenTheTurnEnds(t *testing.T) {
 	track := &producer{}
 	a.Took(track)
 
-	a.Duck(true)
+	a.Duck("turn", true)
 	before := track.requeued()
-	a.Duck(false)
+	a.Duck("turn", false)
 
 	if got := track.requeued(); got != before {
 		t.Errorf("unducking requeued: %d then %d", before, got)
@@ -192,7 +192,7 @@ func TestNothingIsRescaledWhenTheTurnEnds(t *testing.T) {
 // A producer starting during a turn has to arrive already quiet, or it blares over the reply.
 func TestAProducerStartingMidTurnArrivesQuiet(t *testing.T) {
 	a := &Arbiter{}
-	a.Duck(true)
+	a.Duck("turn", true)
 
 	track := &producer{}
 	a.Took(track)
@@ -266,5 +266,23 @@ func TestARetakeAfterGivingBackDuringAHoldIsNotHeldTwice(t *testing.T) {
 	a.Resume()
 	if track.held() {
 		t.Errorf("the track never came back: %d suspends, %d resumes", track.suspends, track.resumes)
+	}
+}
+
+// Ducking is held while anyone asks for it: a ring ending in the middle of an answer leaves the music
+// down under the answer, and it comes back only when the last asker lets go.
+func TestDuckingLastsUntilTheLastAskerLetsGo(t *testing.T) {
+	a := &Arbiter{}
+	p := &producer{}
+	a.Took(p)
+	a.Duck("turn", true)
+	a.Duck("ring", true)
+	a.Duck("ring", false)
+	if !a.duck {
+		t.Fatal("one asker letting go brought the music up under the other")
+	}
+	a.Duck("turn", false)
+	if a.duck {
+		t.Error("the music stayed down after everyone let go")
 	}
 }

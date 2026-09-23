@@ -50,7 +50,7 @@ var (
 		}
 		step := Level()
 		speaker.Sound().Interject(func(p *speaker.Player) { p.Ringing(on, step) })
-		speaker.Sound().Backgrounds().Duck(on)
+		speaker.Sound().Backgrounds().Duck("ring", on)
 	}
 )
 

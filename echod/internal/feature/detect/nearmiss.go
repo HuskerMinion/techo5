@@ -76,7 +76,7 @@ func newDucker() *ducker {
 		// The arbiter, rather than the player: the question is whether anything of ours is audible.
 		playing: func() bool { return speaker.Sound().Backgrounds().Playing() != nil },
 		busy:    func() bool { return voice.Get().Busy() },
-		duck:    func(on bool) { speaker.Sound().Backgrounds().Duck(on) },
+		duck:    func(on bool) { speaker.Sound().Backgrounds().Duck("near miss", on) },
 		ringing: ring.IsSounding,
 		hush:    ring.Hush,
 		now:     time.Now,

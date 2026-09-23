@@ -2,9 +2,12 @@ package speaker
 
 import (
 	"context"
+	"fmt"
 	"log/slog"
 	"sync"
 	"time"
+
+	"github.com/HuskerMinion/techo5/echod/internal/config"
 )
 
 // Driver decides who gets to make a sound, the way led.Driver decides what the ring shows. It does
@@ -65,13 +68,36 @@ func (d *Driver) Yields(b Background) {
 // returns, and the claim ends once what it queued has played out. It must return when ctx is done,
 // which is what being silenced means.
 func (d *Driver) Claim(name string, play func(ctx context.Context, p *Player) error) *Claim {
+	return d.claim(name, false, play)
+}
+
+// ClaimSpeech is Claim for words: an answer or an announcement. Unless the listener set music to pause
+// for a turn, the background keeps playing under it, at whatever level it has been ducked to, rather
+// than standing aside until the words are done.
+func (d *Driver) ClaimSpeech(name string, play func(ctx context.Context, p *Player) error) *Claim {
+	return d.claim(name, config.Get().Media.OnTurn != config.OnTurnPause, play)
+}
+
+func (d *Driver) claim(name string, over bool, play func(ctx context.Context, p *Player) error) *Claim {
 	ctx, cancel := context.WithCancel(context.Background())
-	c := &Claim{name: name, cancel: cancel, done: make(chan struct{})}
+	c := &Claim{name: name, over: over, cancel: cancel, done: make(chan struct{})}
 
 	d.mu.Lock()
 	previous := d.now
 	d.now = c
 	d.mu.Unlock()
+
+	// Words over the background have it ducked while they last, under a name of their own so the claim
+	// that follows lets go of nothing but its own. A turn has usually ducked it already.
+	var bg *Arbiter
+	if over {
+		d.mu.Lock()
+		bg = d.arb // only one that exists: nothing to duck is nothing to make
+		d.mu.Unlock()
+	}
+	if bg != nil {
+		bg.Duck(c.duckName(), true)
+	}
 
 	// Before the errand queues anything, so the two never fight over the same audio.
 	d.settle()
@@ -79,6 +105,9 @@ func (d *Driver) Claim(name string, play func(ctx context.Context, p *Player) er
 
 	go func() {
 		defer close(c.done)
+		if bg != nil {
+			defer bg.Duck(c.duckName(), false)
+		}
 		defer d.release(c)
 
 		if err := play(ctx, d.p); err != nil {
@@ -108,7 +137,7 @@ func (d *Driver) release(c *Claim) {
 // change to now goes through here, so the two cannot drift apart.
 func (d *Driver) settle() {
 	d.mu.Lock()
-	want := d.now != nil
+	want := d.now != nil && !d.now.over
 	if want == d.yielded {
 		d.mu.Unlock()
 		return
@@ -190,6 +219,7 @@ func (d *Driver) await(ctx context.Context) time.Time {
 // Claim is a hold on the speaker.
 type Claim struct {
 	name   string
+	over   bool // sounds over the background rather than standing it down
 	cancel context.CancelFunc
 	done   chan struct{}
 
@@ -199,6 +229,9 @@ type Claim struct {
 	started  time.Time
 	finished time.Time
 }
+
+// duckName is what the claim asks the background to duck under.
+func (c *Claim) duckName() string { return fmt.Sprintf("%s %p", c.name, c) }
 
 // Started records that sound has begun, which is where a reply's timing starts counting from.
 func (c *Claim) Started() {

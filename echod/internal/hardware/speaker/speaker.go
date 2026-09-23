@@ -109,6 +109,11 @@ type Player struct {
 	mu      sync.Mutex
 	pending []int16 // interleaved stereo waiting to go out
 
+	// bed is a track's audio, queued apart from pending so an answer or an announcement can sound
+	// over it rather than after it: the two are summed as they go out, as a Source is. Same stereo,
+	// same media volume; a track ducks its own samples before they are queued.
+	bed []int16
+
 	// bell is a ring's chime, queued apart from everything else because it goes out at a level of
 	// its own: bellStep rather than the media volume. ringing holds that level for the whole of a
 	// ring rather than only while a chime sounds, so the music under it does not change tuning
@@ -429,6 +434,12 @@ func (p *Player) fill(buf []byte) {
 	if len(p.pending) == 0 {
 		p.pending = nil
 	}
+	bedTake := min(len(p.bed), period*Channels)
+	bed := p.bed[:bedTake]
+	p.bed = p.bed[bedTake:]
+	if len(p.bed) == 0 {
+		p.bed = nil
+	}
 	rang := min(len(p.bell), period*Channels)
 	bell := p.bell[:rang]
 	p.bell = p.bell[rang:]
@@ -457,7 +468,7 @@ func (p *Player) fill(buf []byte) {
 	// The write loop runs whether or not anything is playing, since the amplifier hisses when nothing
 	// drives the DAC, and tuning silence costs what tuning music costs. The block after the audio stops
 	// still goes through: that is the filter's own length, and it holds the tail.
-	fed := take > 0 || len(rendered) > 0 || rang > 0
+	fed := take > 0 || bedTake > 0 || len(rendered) > 0 || rang > 0
 	drain := fed || p.fed
 	p.fed = fed
 
@@ -499,6 +510,12 @@ func (p *Player) fill(buf []byte) {
 		}
 		if i+1 < len(chunk) {
 			r = int32(chunk[i+1])
+		}
+		if i < len(bed) {
+			l += int32(bed[i])
+		}
+		if i+1 < len(bed) {
+			r += int32(bed[i+1])
 		}
 		if i < len(rendered) {
 			l += int32(rendered[i])
@@ -865,4 +882,56 @@ func (p *Player) Close() error {
 		_ = hold.Close()
 	}
 	return err
+}
+
+// Bed is the Player's queue for a track, apart from the one replies and announcements use, so the two
+// sound together. It has the queue's own methods, and a track is written as if it had the speaker to
+// itself: Queued counts only the track, and draining one leaves the other alone.
+type Bed struct{ p *Player }
+
+// Bed is the track's queue.
+func (p *Player) Bed() *Bed { return &Bed{p: p} }
+
+// Play queues interleaved stereo samples, dropped as Player.Play drops them with no device.
+func (b *Bed) Play(samples []int16) {
+	p := b.p
+	if pb, _ := p.device(); pb == nil {
+		if n := p.deaf.Add(1); n == 1 || n%100 == 0 {
+			slog.Warn("audio dropped, no playback device", "times", n)
+		}
+		return
+	}
+	p.mu.Lock()
+	p.bed = append(p.bed, samples...)
+	p.mu.Unlock()
+}
+
+// Take empties the track's queue and hands back what had not been played.
+func (b *Bed) Take() []int16 {
+	b.p.mu.Lock()
+	defer b.p.mu.Unlock()
+	bed := b.p.bed
+	b.p.bed = nil
+	return bed
+}
+
+// Adjust rewrites the track's queue in place.
+func (b *Bed) Adjust(rewrite func([]int16)) {
+	b.p.mu.Lock()
+	defer b.p.mu.Unlock()
+	rewrite(b.p.bed)
+}
+
+// Queued is how many frames of the track are waiting.
+func (b *Bed) Queued() int {
+	b.p.mu.Lock()
+	defer b.p.mu.Unlock()
+	return len(b.p.bed) / Channels
+}
+
+// Drain discards the track's queue.
+func (b *Bed) Drain() {
+	b.p.mu.Lock()
+	b.p.bed = nil
+	b.p.mu.Unlock()
 }

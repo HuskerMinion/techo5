@@ -49,7 +49,7 @@ const frame = speaker.Channels * 2
 // It is the speaker driver's background: a reply or an announcement takes the speaker and this
 // yields, carrying on from where it was rather than starting again.
 type Stream struct {
-	out     *speaker.Player
+	out     *speaker.Bed // the track's own queue, so a reply can sound over it
 	changed func()
 
 	// ended says a track stopped of its own accord, for whoever put it on to decide what that means.
@@ -105,7 +105,7 @@ type track struct {
 // It joins rather than registers: a track is one of several things that play for minutes, and it only
 // takes the speaker while it has something to play.
 func NewStream(sound *speaker.Driver, out *speaker.Player, changed func(), ended func(string)) *Stream {
-	return &Stream{out: out, changed: changed, ended: ended, gain: 1, target: 1, bg: sound.Backgrounds()}
+	return &Stream{out: out.Bed(), changed: changed, ended: ended, gain: 1, target: 1, bg: sound.Backgrounds()}
 }
 
 // rampSamples is how many interleaved samples a full move between silence and full level takes, so

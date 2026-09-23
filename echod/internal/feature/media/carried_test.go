@@ -9,7 +9,7 @@ import (
 // quietStream is this player with no track of its own, which is what it has when a remote is the only
 // thing playing.
 func quietStream() *Stream {
-	return &Stream{out: &speaker.Player{}, changed: func() {}}
+	return &Stream{out: (&speaker.Player{}).Bed(), changed: func() {}}
 }
 
 // Whether the room is somebody else's is about what is being heard, not about who holds the speaker.

@@ -10,7 +10,7 @@ import (
 // playing beyond the one this puts on it. What the transport does to it is its own state, which is all
 // these tests are about.
 func localStream(paused bool) *Stream {
-	return &Stream{out: &speaker.Player{}, changed: func() {}, track: &track{item: "test"}, paused: paused}
+	return &Stream{out: (&speaker.Player{}).Bed(), changed: func() {}, track: &track{item: "test"}, paused: paused}
 }
 
 // A tap on the now-playing screen is a toggle, and it has to be settled against what is playing. The
@@ -123,7 +123,7 @@ func TestATransportGoesBackToThisPlayerWhenTheSessionIsGone(t *testing.T) {
 		{"the same remote, with the session gone", false, true, false},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			s := &Stream{out: &speaker.Player{}, changed: func() {}}
+			s := &Stream{out: (&speaker.Player{}).Bed(), changed: func() {}}
 			if tc.station {
 				// A station paused underneath is the state that bites: there is something here to resume.
 				s = localStream(true)

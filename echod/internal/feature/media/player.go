@@ -499,7 +499,7 @@ func (p *Player) command(c esphome.MediaCommand) {
 // doorbell or a spoken alert, not a track.
 func (p *Player) announce(url string) {
 	p.Sounding(true)
-	claim := speaker.Sound().Claim("announce", func(ctx context.Context, spk *speaker.Player) error {
+	claim := speaker.Sound().ClaimSpeech("announce", func(ctx context.Context, spk *speaker.Player) error {
 		samples, err := Fetch(ctx, url)
 		if err != nil {
 			return err

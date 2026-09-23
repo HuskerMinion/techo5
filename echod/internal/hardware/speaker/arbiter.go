@@ -24,6 +24,9 @@ type Arbiter struct {
 	stack []Producer // the last is the one being heard
 	held  bool       // the driver has stood the background down
 	duck  bool
+	// ducks is who wants the background quiet: a turn, a ring, an announcement. It stays down until
+	// the last of them lets go, so one ending does not bring the music back up under another.
+	ducks map[string]bool
 	// hold is the producer the hold stood down, so a retake by it during the same hold is not
 	// suspended a second time.
 	hold Producer
@@ -119,8 +122,25 @@ func (a *Arbiter) Resume() {
 	}
 }
 
-// Duck quietens everything, waiting producers included, so one resuming mid-turn comes back quiet.
-func (a *Arbiter) Duck(on bool) {
+// Duck asks for the background to be quiet, for why, or lets go of that ask. It is quiet while anyone
+// asks.
+func (a *Arbiter) Duck(why string, on bool) {
+	a.mu.Lock()
+	if a.ducks == nil {
+		a.ducks = map[string]bool{}
+	}
+	if on {
+		a.ducks[why] = true
+	} else {
+		delete(a.ducks, why)
+	}
+	want := len(a.ducks) > 0
+	a.mu.Unlock()
+	a.setDuck(want)
+}
+
+// setDuck quietens everything, waiting producers included, so one resuming mid-turn comes back quiet.
+func (a *Arbiter) setDuck(on bool) {
 	a.mu.Lock()
 	if a.duck == on {
 		a.mu.Unlock()

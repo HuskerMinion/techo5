@@ -230,7 +230,7 @@ func (f *Feature) show(m Message) {
 // sound is the chime and then the voice, under one claim on the speaker so that stopping an
 // announcement stops all of it, and so that whatever was playing is put back afterwards.
 func (f *Feature) sound(m Message) {
-	claim := speaker.Sound().Claim("announcement", func(ctx context.Context, p *speaker.Player) error {
+	claim := speaker.Sound().ClaimSpeech("announcement", func(ctx context.Context, p *speaker.Player) error {
 		p.Chime(chimeLevel, announceTone...)
 		if len(m.Voice) == 0 {
 			return nil

@@ -20,7 +20,7 @@ func (t *conversation) announce(a esphome.Announce) {
 	// One claim covers both urls, so silencing an announcement stops the whole thing rather than
 	// letting the second one start once the first has been drained.
 	t.player.Sounding(true)
-	claim := t.sound.Claim("announce", func(ctx context.Context, _ *speaker.Player) error {
+	claim := t.sound.ClaimSpeech("announce", func(ctx context.Context, _ *speaker.Player) error {
 		for _, url := range []string{a.PreannounceMediaID, a.MediaID} {
 			if url == "" {
 				continue

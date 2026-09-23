@@ -622,7 +622,7 @@ func (c *conversation) speak(url string) {
 		}
 	}
 
-	held := c.sound.Claim("reply", errand)
+	held := c.sound.ClaimSpeech("reply", errand)
 	safe.Go("reply", func() {
 		<-held.Done()
 
@@ -731,7 +731,7 @@ func (c *conversation) hold(on bool) {
 
 	// Every background, not just the track: a room playing along with the rest of the house is also
 	// something a reply has to be heard over, and it is not the media player's to quieten.
-	speaker.Sound().Backgrounds().Duck(on)
+	speaker.Sound().Backgrounds().Duck("turn", on)
 }
 
 // arm gives the current phase a limit; disarm removes it. Each phase sets its own, so a slow model
