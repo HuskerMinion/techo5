@@ -69,6 +69,9 @@ type Feature struct {
 	// Changed fires when a reminder comes up or goes away.
 	Changed hook.Hook[struct{}]
 
+	// keep is whether a reminder stays up once said (keeps, for this build).
+	keep bool
+
 	// chime, say and send are the sound, the speech and the other devices; replaced in tests.
 	chime func()
 	say   func(label string)
@@ -84,7 +87,7 @@ var (
 
 func Get() *Feature {
 	once.Do(func() {
-		shared = &Feature{chime: playTone, say: sayThroughHA, send: announce.Get().SendTo}
+		shared = &Feature{keep: keeps, chime: playTone, say: sayThroughHA, send: announce.Get().SendTo}
 		a := announce.Get()
 		a.Reminded.Listen(func(m announce.Message) {
 			shared.show(Reminder{ID: m.ID, Label: m.Text, From: m.From, At: time.Now()}, dest{})
@@ -115,11 +118,13 @@ func (f *Feature) Fire(label string, ringOn []string) {
 // show puts a reminder up, chimes, and has it said. One that arrives while another is showing takes
 // its place: the newer one is what somebody needs to hear now.
 func (f *Feature) show(r Reminder, sentTo dest) {
-	f.mu.Lock()
-	f.showing, f.sentTo = &r, sentTo
-	f.mu.Unlock()
 	slog.Info("reminder", "id", r.ID, "label", r.Label, "from", r.From)
-	f.Changed.Emit(struct{}{})
+	if f.keep {
+		f.mu.Lock()
+		f.showing, f.sentTo = &r, sentTo
+		f.mu.Unlock()
+		f.Changed.Emit(struct{}{})
+	}
 
 	// Quiet hours do not hold it back: it was set for this time on purpose, as an alarm is.
 	f.chime()

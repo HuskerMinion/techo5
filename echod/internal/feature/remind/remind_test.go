@@ -21,6 +21,7 @@ func fake(t *testing.T) (*Feature, chan string, chan sent) {
 	config.Use(filepath.Join(t.TempDir(), "state.json"))
 	said, out := make(chan string, 4), make(chan sent, 4)
 	f := &Feature{
+		keep:  true,
 		chime: func() {},
 		say:   func(label string) { said <- label },
 		send:  func(to []string, m announce.Message) { out <- sent{to, m} },
@@ -115,6 +116,33 @@ func TestStoppingAReminderFromElsewhereTellsTheHouse(t *testing.T) {
 	f.Stop()
 	if got := next(t, out); got.to != nil || got.m.ID != "kitchen-1" {
 		t.Errorf("stop sent %+v", got)
+	}
+}
+
+// On a device with no screen a reminder is its chime and its words: nothing stays up afterwards, so
+// there is nothing to put away, and it still goes to the other devices.
+func TestWithNoScreenAReminderIsSaidAndGone(t *testing.T) {
+	f, said, out := fake(t)
+	f.keep = false
+	f.Fire("Pasta", []string{"Kitchen"})
+
+	if got := next(t, said); got != "Pasta" {
+		t.Errorf("said %q", got)
+	}
+	if got := next(t, out); got.m.Kind != announce.KindReminder {
+		t.Errorf("sent %+v", got)
+	}
+	if _, ok := f.Showing(); ok {
+		t.Error("a reminder stayed up on a device with no screen")
+	}
+	if f.Stop() {
+		t.Error("Stop found something to stop")
+	}
+}
+
+func TestTheBuildSaysWhetherAReminderStays(t *testing.T) {
+	if Get().keep != keeps {
+		t.Errorf("keep is %v on a build whose keeps is %v", Get().keep, keeps)
 	}
 }
 

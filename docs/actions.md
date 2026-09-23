@@ -92,7 +92,8 @@ In YAML, refer to this action as `esphome.<node>_reminder_set`.
 Sets a reminder: at its time the device chimes, says the label out loud once, and leaves it on the
 screen until somebody taps it or presses **Stop ringing**. It can go off on other devices in the
 house as well, and stopping it on any one of them stops it on all of them. Reminders sound during
-quiet hours, like alarms. Answers with the new reminder's `id` if called with a `response_variable`.
+quiet hours, like alarms. A Dot has no screen, so there it is the chime and the words, and nothing is
+left to dismiss afterwards. Answers with the new reminder's `id` if called with a `response_variable`.
 
 > **Good to know**
 >
