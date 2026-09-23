@@ -33,7 +33,7 @@ func TestDialGeometry(t *testing.T) {
 				t.Errorf("n=%d rest for %d: top is %d", n, i, got)
 			}
 			x, y := itemPos(i, n, rot)
-			if math.Abs(x-centre) > 0.5 || math.Abs(y-(centre-dialR)) > 0.5 {
+			if math.Abs(x-center) > 0.5 || math.Abs(y-(center-dialR)) > 0.5 {
 				t.Errorf("n=%d item %d at rest is at %.1f,%.1f, not the top", n, i, x, y)
 			}
 			for j := range items {
@@ -47,8 +47,8 @@ func TestDialGeometry(t *testing.T) {
 			t.Errorf("n=%d snapping from 0 to %d turns %.2f rad, the long way", n, n-1, d)
 		}
 	}
-	if _, middle := dialHitAt(centre, centre, 0, len(mainItems)); !middle {
-		t.Error("the centre is not the middle")
+	if _, middle := dialHitAt(center, center, 0, len(mainItems)); !middle {
+		t.Error("the center is not the middle")
 	}
 }
 
@@ -99,25 +99,25 @@ func TestRoundScenesDraw(t *testing.T) {
 		"nowplaying-paused": {now: at, phase: "idle", nowPlaying: true, paused: true, radio: home.Radio{Chosen: "Morning News"}},
 		"nowplaying-music-assistant": {now: at, phase: "idle", nowPlaying: true, playing: true,
 			radio: home.Radio{Playing: true, Now: "Music Assistant", Title: "Some Jazz", Artist: "The Quartet", Music: true}},
-		"radio-list":        {now: at, phase: "idle", playing: true, menuOpen: true, menuMode: modeRadio, radioSel: 2, radio: home.Radio{Configured: true, Source: "local", Sources: 2, Now: "KXYZ 101.1", Stations: []string{"KAAA 90.1", "KXYZ 101.1", "The Mountain 99.5 Classic Rock and More", "KBBB 104.3"}}},
-		"radar-loading":     {now: at, phase: "idle", menuOpen: true, menuMode: modeWeather, radarOn: true, radar: home.RadarView{Loading: true}},
-		"radar":             {now: at, phase: "idle", menuOpen: true, menuMode: modeWeather, radarOn: true, radar: home.RadarView{Frames: []home.RadarFrame{{Image: testPicture(), At: at}}}},
-		"camera-none":       {now: at, phase: "idle", showCamera: true, camera: home.CameraView{Entity: "camera.front_door", Name: "Front door"}},
-		"camera":            {now: at, phase: "idle", showCamera: true, cameraLive: true, camera: home.CameraView{Entity: home.LocalCamera, Name: "This Spot", Frame: testPicture()}},
-		"menu-camera":       {now: at, phase: "idle", cameraLive: true, menuOpen: true, menuMode: modeMain, menuSel: 5, menuRot: restFor(5, len(mainItems))},
-		"bt-pairing":        {now: at, phase: "idle", btPairing: true, weather: sky},
-		"clock":             {now: at, phase: "idle", volume: 12, maxVolume: 30},
-		"clock-timer":       {now: at, phase: "idle", timers: []timer.Countdown{{Name: "pasta", Left: 4*time.Minute + 32*time.Second, Total: 10 * time.Minute, Active: true}}},
-		"muted":             {now: at, phase: "idle", muted: true},
-		"listening":         {now: at, phase: "listening"},
-		"thinking":          {now: at, phase: "thinking", heard: "what's the weather going to be like this afternoon"},
-		"replying":          {now: at, phase: "replying", heard: "what time is it", reply: "It's 2:07 PM. Have a great afternoon, and don't forget the pasta timer is still running in the kitchen."},
-		"volume":            {now: at, phase: "idle", volume: 18, maxVolume: 30, showVolume: true},
-		"menu":              {now: at, phase: "idle", volume: 12, menuOpen: true, menuMode: modeMain, menuSel: 0, menuRot: restFor(0, len(mainItems))},
-		"menu-timers":       {now: at, phase: "idle", menuOpen: true, menuMode: modeMain, menuSel: 6, menuRot: restFor(6, len(mainItems)) + 0.3, timers: []timer.Countdown{{Left: 272 * time.Second, Total: 600 * time.Second, Active: true}}},
-		"jog-volume":        {now: at, phase: "idle", menuOpen: true, menuMode: modeVolume, volume: 14, maxVolume: 30},
-		"setup-ask":         {now: at, phase: "idle", setupAsking: true},
-		"announcement":      {now: at, phase: "idle", showAnnouncement: true, announcement: announce.Message{From: "Guest's Desk", Text: "dinner is ready, come down"}},
+		"radio-list":    {now: at, phase: "idle", playing: true, menuOpen: true, menuMode: modeRadio, radioSel: 2, radio: home.Radio{Configured: true, Source: "local", Sources: 2, Now: "KXYZ 101.1", Stations: []string{"KAAA 90.1", "KXYZ 101.1", "The Mountain 99.5 Classic Rock and More", "KBBB 104.3"}}},
+		"radar-loading": {now: at, phase: "idle", menuOpen: true, menuMode: modeWeather, radarOn: true, radar: home.RadarView{Loading: true}},
+		"radar":         {now: at, phase: "idle", menuOpen: true, menuMode: modeWeather, radarOn: true, radar: home.RadarView{Frames: []home.RadarFrame{{Image: testPicture(), At: at}}}},
+		"camera-none":   {now: at, phase: "idle", showCamera: true, camera: home.CameraView{Entity: "camera.front_door", Name: "Front door"}},
+		"camera":        {now: at, phase: "idle", showCamera: true, cameraLive: true, camera: home.CameraView{Entity: home.LocalCamera, Name: "This Spot", Frame: testPicture()}},
+		"menu-camera":   {now: at, phase: "idle", cameraLive: true, menuOpen: true, menuMode: modeMain, menuSel: 5, menuRot: restFor(5, len(mainItems))},
+		"bt-pairing":    {now: at, phase: "idle", btPairing: true, weather: sky},
+		"clock":         {now: at, phase: "idle", volume: 12, maxVolume: 30},
+		"clock-timer":   {now: at, phase: "idle", timers: []timer.Countdown{{Name: "pasta", Left: 4*time.Minute + 32*time.Second, Total: 10 * time.Minute, Active: true}}},
+		"muted":         {now: at, phase: "idle", muted: true},
+		"listening":     {now: at, phase: "listening"},
+		"thinking":      {now: at, phase: "thinking", heard: "what's the weather going to be like this afternoon"},
+		"replying":      {now: at, phase: "replying", heard: "what time is it", reply: "It's 2:07 PM. Have a great afternoon, and don't forget the pasta timer is still running in the kitchen."},
+		"volume":        {now: at, phase: "idle", volume: 18, maxVolume: 30, showVolume: true},
+		"menu":          {now: at, phase: "idle", volume: 12, menuOpen: true, menuMode: modeMain, menuSel: 0, menuRot: restFor(0, len(mainItems))},
+		"menu-timers":   {now: at, phase: "idle", menuOpen: true, menuMode: modeMain, menuSel: 6, menuRot: restFor(6, len(mainItems)) + 0.3, timers: []timer.Countdown{{Left: 272 * time.Second, Total: 600 * time.Second, Active: true}}},
+		"jog-volume":    {now: at, phase: "idle", menuOpen: true, menuMode: modeVolume, volume: 14, maxVolume: 30},
+		"setup-ask":     {now: at, phase: "idle", setupAsking: true},
+		"announcement":  {now: at, phase: "idle", showAnnouncement: true, announcement: announce.Message{From: "Guest's Desk", Text: "dinner is ready, come down"}},
 		"announcement-voice": {now: at, phase: "idle", showAnnouncement: true,
 			announcement: announce.Message{From: "Laundry Room"}},
 		"reminder": {now: at, phase: "idle", showReminder: true,

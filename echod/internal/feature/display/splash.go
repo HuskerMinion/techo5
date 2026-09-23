@@ -27,9 +27,9 @@ const (
 	// logoScale is how much larger than the file the mark is drawn; the file is 330×276.
 	logoScale = 1.25
 
-	// arcCentre is where the signal radiates from, in the file's own pixels: the middle of the
+	// arcCenter is where the signal radiates from, in the file's own pixels: the middle of the
 	// arcs drawn on the mark.
-	arcCentreX, arcCentreY = 164, 105
+	arcCenterX, arcCenterY = 164, 105
 
 	// The pulse: arcs leave the mark at arcFrom pixels from the center and fade out by arcTo,
 	// arcCount of them in flight, one full sweep every arcPeriod.
@@ -76,8 +76,8 @@ func newSplash(w, h int) *splash {
 	at := image.Pt((w-sw)/2, (h-sh)/2)
 	return &splash{
 		img: img, at: at,
-		cx: float64(at.X) + arcCentreX*logoScale,
-		cy: float64(at.Y) + arcCentreY*logoScale,
+		cx: float64(at.X) + arcCenterX*logoScale,
+		cy: float64(at.Y) + arcCenterY*logoScale,
 	}
 }
 

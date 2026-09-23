@@ -120,21 +120,21 @@ func (r *roundRenderer) ringFace(s roundScene) {
 	case st.alarm != nil && st.alarm.Label != "":
 		title = strings.ToUpper(st.alarm.Label)
 	}
-	r.centred(r.label, clip(r.label, r, title, 330), 130, colRing)
+	r.centered(r.label, clip(r.label, r, title, 330), 130, colRing)
 	r.timeLine(s.now, 262)
 
 	// A silenced ring says so where it used to say what to do, because what to do has changed: the
 	// noise is already gone and the only question left is whether it comes back.
 	if st.silenced {
-		r.centred(r.title, "Silenced", 372, colText)
+		r.centered(r.title, "Silenced", 372, colText)
 		if st.alarm != nil {
-			r.centred(r.small, fmt.Sprintf("press again to snooze %d min", st.snoozeIn), 410, colDim)
+			r.centered(r.small, fmt.Sprintf("press again to snooze %d min", st.snoozeIn), 410, colDim)
 		}
 		return
 	}
 
-	r.centred(r.title, "Tap to stop", 372, colText)
+	r.centered(r.title, "Tap to stop", 372, colText)
 	if st.alarm != nil {
-		r.centred(r.small, fmt.Sprintf("swipe to snooze %d min", st.snoozeIn), 410, colDim)
+		r.centered(r.small, fmt.Sprintf("swipe to snooze %d min", st.snoozeIn), 410, colDim)
 	}
 }

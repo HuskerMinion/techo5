@@ -664,7 +664,7 @@ func sample(raw []byte, step int) tone {
 	row0 := make([]uint16, sensorW)
 	row1 := make([]uint16, sensorW)
 	var sumR, sumG, sumB uint32
-	var hist, centre [2048]int
+	var hist, center [2048]int
 	taken, middle := 0, 0
 	for y := 0; y < Height; y += step {
 		unpackLine(raw[(2*y)*bytesPerLine:(2*y+1)*bytesPerLine], row0)
@@ -683,7 +683,7 @@ func sample(raw []byte, step int) tone {
 			hist[g]++
 			taken++
 			if down && x >= Width/4 && x < Width*3/4 {
-				centre[g]++
+				center[g]++
 				middle++
 			}
 		}
@@ -708,8 +708,8 @@ func sample(raw []byte, step int) tone {
 		}
 	}
 	median, half := 0, middle/2
-	for v, seen := 0, 0; v < len(centre); v++ {
-		if seen += centre[v]; seen >= half {
+	for v, seen := 0, 0; v < len(center); v++ {
+		if seen += center[v]; seen >= half {
 			median = v
 			break
 		}

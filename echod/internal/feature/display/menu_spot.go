@@ -160,7 +160,7 @@ func restFor(i, n int) float64 { return -itemAngle(i, n) }
 // itemPos is where item i of n is on the screen with the dial turned by rot.
 func itemPos(i, n int, rot float64) (x, y float64) {
 	a := itemAngle(i, n) + rot
-	return centre + dialR*math.Sin(a), centre - dialR*math.Cos(a)
+	return center + dialR*math.Sin(a), center - dialR*math.Cos(a)
 }
 
 // topItem is the item of n nearest the top with the dial turned by rot.
@@ -175,7 +175,7 @@ func topItem(rot float64, n int) int {
 
 // dialHitAt says what a tap at x, y is on: the middle, an item of n (its index), or neither.
 func dialHitAt(x, y int, rot float64, n int) (item int, middle bool) {
-	if math.Hypot(float64(x-centre), float64(y-centre)) < dialHub {
+	if math.Hypot(float64(x-center), float64(y-center)) < dialHub {
 		return -1, true
 	}
 	best, bestD := -1, math.MaxFloat64
@@ -188,8 +188,8 @@ func dialHitAt(x, y int, rot float64, n int) (item int, middle bool) {
 	return best, false
 }
 
-// fingerAngle is the direction of x, y from the centre, clockwise from up.
-func fingerAngle(x, y int) float64 { return math.Atan2(float64(x-centre), -float64(y-centre)) }
+// fingerAngle is the direction of x, y from the center, clockwise from up.
+func fingerAngle(x, y int) float64 { return math.Atan2(float64(x-center), -float64(y-center)) }
 
 // wrapAngle brings a in (-π, π].
 func wrapAngle(a float64) float64 {
@@ -337,7 +337,7 @@ func (r *roundRenderer) dial(s roundScene) {
 	items := dialItems(s)
 	n := len(items)
 	r.dim(244)
-	r.ringAt(centre, centre, dialR-1, dialR+1, 0, 2*math.Pi, color.RGBA{62, 68, 78, 255})
+	r.ringAt(center, center, dialR-1, dialR+1, 0, 2*math.Pi, color.RGBA{62, 68, 78, 255})
 
 	for i, it := range items {
 		if i == s.menuSel {
@@ -361,9 +361,9 @@ func (r *roundRenderer) dial(s roundScene) {
 		case modeCameras:
 			header = "CAMERAS"
 		}
-		r.centred(r.label, header, 206, colDim)
-		r.centred(r.title, itemName(s, it.id), 252, colText)
-		r.centred(r.small, itemHint(s, it.id), 286, colDim)
+		r.centered(r.label, header, 206, colDim)
+		r.centered(r.title, itemName(s, it.id), 252, colText)
+		r.centered(r.small, itemHint(s, it.id), 286, colDim)
 	}
 }
 
@@ -383,18 +383,18 @@ func (r *roundRenderer) jog(s roundScene) {
 	frac = math.Min(math.Max(frac, 0), 1)
 	// The value round the ring, from the bottom-left to the bottom-right, with a knob at its end.
 	const from, span = 1.25 * math.Pi, 1.5 * math.Pi
-	r.ringAt(centre, centre, 186, 200, from, from+span, color.RGBA{44, 50, 60, 255})
-	r.ringAt(centre, centre, 186, 200, from, from+span*frac, col)
-	kx, ky := centre+193*math.Sin(from+span*frac), centre-193*math.Cos(from+span*frac)
+	r.ringAt(center, center, 186, 200, from, from+span, color.RGBA{44, 50, 60, 255})
+	r.ringAt(center, center, 186, 200, from, from+span*frac, col)
+	kx, ky := center+193*math.Sin(from+span*frac), center-193*math.Cos(from+span*frac)
 	r.discAt(kx, ky, 13, col)
 	r.discAt(kx, ky, 6, colBackground)
 
-	r.centred(r.label, title, 190, colDim)
-	r.centred(r.clock, value, 282, colText)
-	r.centred(r.small, hint, 330, colDim)
+	r.centered(r.label, title, 190, colDim)
+	r.centered(r.clock, value, 282, colText)
+	r.centered(r.small, hint, 330, colDim)
 }
 
-// icon draws one item's line icon, centred at x, y, u half its size, w the stroke width.
+// icon draws one item's line icon, centered at x, y, u half its size, w the stroke width.
 func (r *roundRenderer) icon(id itemID, s roundScene, x, y, u, w float64, c color.RGBA) {
 	if i := cameraOf(id); i >= 0 {
 		// A camera is its initials, so the ring says which is where before one is chosen.

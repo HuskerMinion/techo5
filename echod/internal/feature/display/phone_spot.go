@@ -68,7 +68,7 @@ func (r *roundRenderer) callFace(s roundScene) {
 	case phone.Talking:
 		title = "ON A CALL"
 	}
-	r.centred(r.label, title, 150, colCall)
+	r.centered(r.label, title, 150, colCall)
 
 	who := st.Peer
 	if who == "" {
@@ -81,18 +81,18 @@ func (r *roundRenderer) callFace(s roundScene) {
 			break
 		}
 	}
-	r.centred(face, who, 240, colText)
+	r.centered(face, who, 240, colText)
 
 	switch st.Phase {
 	case phone.Talking:
 		d := s.now.Sub(st.Since).Round(time.Second)
-		r.centred(r.body, fmt.Sprintf("%d:%02d", int(d.Minutes()), int(d.Seconds())%60), 290, colDim)
-		r.centred(r.small, "Tap to hang up", 370, colDim)
+		r.centered(r.body, fmt.Sprintf("%d:%02d", int(d.Minutes()), int(d.Seconds())%60), 290, colDim)
+		r.centered(r.small, "Tap to hang up", 370, colDim)
 	case phone.Ringing:
-		r.centred(r.small, "Tap to answer", 350, colText)
-		r.centred(r.small, "Swipe to decline", 385, colDim)
+		r.centered(r.small, "Tap to answer", 350, colText)
+		r.centered(r.small, "Swipe to decline", 385, colDim)
 	default:
-		r.centred(r.small, "Tap to hang up", 370, colDim)
+		r.centered(r.small, "Tap to hang up", 370, colDim)
 	}
 }
 
@@ -119,7 +119,7 @@ func contactTopFor(top, n int) int { return min(max(top, 0), max(n-contactRows, 
 // contactList is who the Call item offers: a tap calls them.
 func (r *roundRenderer) contactList(s roundScene) {
 	r.clear()
-	r.centred(r.label, "CALL", 84, colCall)
+	r.centered(r.label, "CALL", 84, colCall)
 	if len(s.contacts) == 0 {
 		msg := "No contacts yet: Home Assistant's phone_contacts action sets them"
 		if !s.phoneReady {
@@ -135,16 +135,16 @@ func (r *roundRenderer) contactList(s roundScene) {
 		if i == 0 || i == contactRows-1 {
 			w = 280 // the circle is narrower at the top and bottom rows
 		}
-		r.line(float64(centre-w/2), float64(y-12), float64(centre+w/2), float64(y-12), float64(contactRowH-10), color.RGBA{28, 34, 42, 255})
-		r.centred(r.title, clip(r.title, r, s.contacts[top+i].Name, w-30), y, colText)
+		r.line(float64(center-w/2), float64(y-12), float64(center+w/2), float64(y-12), float64(contactRowH-10), color.RGBA{28, 34, 42, 255})
+		r.centered(r.title, clip(r.title, r, s.contacts[top+i].Name, w-30), y, colText)
 	}
 	if top > 0 {
-		r.triangle(centre-16, 112, centre+16, 112, centre, 96, colCall)
+		r.triangle(center-16, 112, center+16, 112, center, 96, colCall)
 	}
 	if top+contactRows < len(s.contacts) {
-		r.triangle(centre-16, 438, centre+16, 438, centre, 454, colCall)
+		r.triangle(center-16, 438, center+16, 438, center, 454, colCall)
 	}
 	if len(s.contacts) > contactRows {
-		r.centred(r.tiny, "swipe for more", 426, colDim)
+		r.centered(r.tiny, "swipe for more", 426, colDim)
 	}
 }

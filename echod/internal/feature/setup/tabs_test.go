@@ -151,7 +151,7 @@ func TestAlarmsRemindersAndTimersFromThePage(t *testing.T) {
 	}
 	for _, tm := range timer.Get().List(time.Now()) {
 		if tm.ID == eggs {
-			t.Error("the timer is still running after it was cancelled")
+			t.Error("the timer is still running after it was canceled")
 		}
 	}
 

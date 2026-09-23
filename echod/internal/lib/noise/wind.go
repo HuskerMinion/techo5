@@ -30,7 +30,7 @@ var windSound = Sound{
 			air    lowpass
 			cut            = onePole(windAir, g.Rate)
 			band           = newReson((windLow+windHigh)/2, (windLoose+windTight)/2, g.Rate)
-			centre         = newWalk(windLow, windHigh, windWander, g.Rate)
+			center         = newWalk(windLow, windHigh, windWander, g.Rate)
 			ring           = newWalk(windLoose, windTight, windShape, g.Rate)
 			gust           = newWalk(windLull, windGust, windBreath, g.Rate)
 			level  float32 = 1
@@ -42,7 +42,7 @@ var windSound = Sound{
 				// The walks move every sample so they stay smooth; the filter is rebuilt at the control
 				// rate, since that is what costs a cosine and an exponential. The bed falls 3 dB an octave,
 				// so the emphasis is compensated for where it has wandered to.
-				f, r := centre.next(g), ring.next(g)
+				f, r := center.next(g), ring.next(g)
 				if n%ctrl == 0 {
 					band = newReson(f, r, g.Rate)
 					level = float32(math.Sqrt(float64(f / windLow * (r / windLoose))))

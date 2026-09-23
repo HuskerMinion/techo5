@@ -25,7 +25,7 @@ func spotScene(cat category) roundScene {
 // inCircle is whether a zone's middle is on the round panel, where a finger can reach it.
 func inCircle(r image.Rectangle) bool {
 	c := r.Min.Add(r.Max).Div(2)
-	return math.Hypot(float64(c.X-centre), float64(c.Y-centre)) < centre
+	return math.Hypot(float64(c.X-center), float64(c.Y-center)) < center
 }
 
 // The six categories are tiles to tap and Done closes; every page of every category draws a place to

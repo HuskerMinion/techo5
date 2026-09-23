@@ -21,13 +21,13 @@ const (
 )
 
 func (r *roundRenderer) setupAskFace(s roundScene) {
-	r.centred(r.title, "Setup page", 130, colText)
-	r.centred(r.small, "A browser is asking", 176, colDim)
-	r.centred(r.small, "to be let in", 206, colDim)
+	r.centered(r.title, "Setup page", 130, colText)
+	r.centered(r.small, "A browser is asking", 176, colDim)
+	r.centered(r.small, "to be let in", 206, colDim)
 
-	// pillButton is placed by its right edge; these are centred, so each is offset by half its own.
+	// pillButton is placed by its right edge; these are centered, so each is offset by half its own.
 	fc := r.faces()
-	right := func(label string) int { return centre + (r.paint.width(fc.button, label)+44)/2 }
+	right := func(label string) int { return center + (r.paint.width(fc.button, label)+44)/2 }
 	r.pillButton(right("Not now"), askNoY, "Not now", btnSecondary)
 	r.pillButton(right("Allow"), askYesY, "Allow", btnPrimary)
 }

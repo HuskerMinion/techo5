@@ -24,7 +24,7 @@ type Outcome string
 
 const (
 	Completed Outcome = "completed"
-	Cancelled Outcome = "cancelled"
+	Canceled  Outcome = "cancelled"
 	Timeout   Outcome = "timeout"
 	Failed    Outcome = "failed"
 )

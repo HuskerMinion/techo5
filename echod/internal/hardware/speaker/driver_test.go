@@ -61,7 +61,7 @@ func TestClaimTakesOverFromWhatWasPlaying(t *testing.T) {
 }
 
 // Silence is what the action button does, and it has to reach an errand that is still fetching rather
-// than playing: that is the reply that used to arrive after being cancelled.
+// than playing: that is the reply that used to arrive after being canceled.
 func TestSilenceStopsAClaimBeforeItPlays(t *testing.T) {
 	d := driver()
 

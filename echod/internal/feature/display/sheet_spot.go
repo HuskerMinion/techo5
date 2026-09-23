@@ -230,18 +230,18 @@ func (r *roundRenderer) sheetFace(s roundScene) {
 	r.zmu.Unlock()
 }
 
-// centredText writes s centered across the panel.
-func (r *roundRenderer) centredText(face font.Face, s string, baseline int, c color.RGBA) {
-	r.paint.text(face, s, centre-r.paint.width(face, s)/2, baseline, c)
+// centeredText writes s centered across the panel.
+func (r *roundRenderer) centeredText(face font.Face, s string, baseline int, c color.RGBA) {
+	r.paint.text(face, s, center-r.paint.width(face, s)/2, baseline, c)
 }
 
 // categoryTiles is the settings screen's first page: a tile for each category, the last one opened
 // raised in the accent, and Done.
 func (r *roundRenderer) categoryTiles(sel category) {
 	fc := r.faces()
-	r.centredText(fc.header, "Settings", 70, cream)
+	r.centeredText(fc.header, "Settings", 70, cream)
 	const tw, th, gap = 142, 96, 12
-	x0, y0 := centre-tw-gap/2, 96
+	x0, y0 := center-tw-gap/2, 96
 	for c := category(0); c < categories; c++ {
 		col, row := int(c)%2, int(c)/2
 		b := image.Rect(x0+col*(tw+gap), y0+row*(th+gap), x0+col*(tw+gap)+tw, y0+row*(th+gap)+th)
@@ -261,10 +261,10 @@ func (r *roundRenderer) categoryTiles(sel category) {
 		r.paint.text(fc.navBold, name, b.Min.X+(tw-r.paint.width(fc.navBold, name))/2, b.Min.Y+78, fg)
 		r.addZone(zone{r: b.Inset(-gap / 2), kind: zoneCat, cat: c})
 	}
-	done := image.Rect(centre-62, 424, centre+62, 460)
+	done := image.Rect(center-62, 424, center+62, 460)
 	r.roundFill(done, 18, surface(4), surface(3))
 	r.roundStroke(done, 18, 1, ember)
-	r.centredText(fc.button, "Done", 449, cream)
+	r.centeredText(fc.button, "Done", 449, cream)
 	r.addZone(zone{r: done.Inset(-8), kind: zoneDone})
 }
 
@@ -272,8 +272,8 @@ func (r *roundRenderer) categoryTiles(sel category) {
 // and its buttons at the foot. It returns how far the rows can scroll.
 func (r *roundRenderer) roundCard(v cardView) int {
 	fc := r.faces()
-	r.centredText(fc.header, r.fit(fc.header, v.title, 340), 66, cream)
-	r.centredText(fc.sub, r.fit(fc.sub, v.blurb, 330), 90, dim)
+	r.centeredText(fc.header, r.fit(fc.header, v.title, 340), 66, cream)
+	r.centeredText(fc.sub, r.fit(fc.sub, v.blurb, 330), 90, dim)
 	r.rule(90, 390, 104, 0.8)
 	r.cardButtons(v.actions)
 	under := slices.Clone(r.dst.Pix)
@@ -283,7 +283,7 @@ func (r *roundRenderer) roundCard(v cardView) int {
 	if len(v.rows) == 0 && v.note != "" {
 		y := list.Min.Y + 40
 		for _, line := range r.wrap(fc.value, v.note, 330) {
-			r.centredText(fc.value, line, y, dim)
+			r.centeredText(fc.value, line, y, dim)
 			y += 30
 		}
 	}
@@ -313,7 +313,7 @@ func (r *roundRenderer) cardButtons(actions []headerAction) {
 	for _, b := range buttons {
 		total += r.paint.width(fc.button, b.label) + 44 + gap
 	}
-	right := centre + total/2
+	right := center + total/2
 	for i := len(buttons) - 1; i >= 0; i-- {
 		b := buttons[i]
 		left := r.pillButton(right, spotButtonsY, b.label, b.style)
@@ -326,11 +326,11 @@ func (r *roundRenderer) cardButtons(actions []headerAction) {
 // scrolling under a dragged finger, with Back at the foot. It returns how far it can scroll.
 func (r *roundRenderer) roundList(p pickerView, scroll int) int {
 	fc := r.faces()
-	r.centredText(fc.header, r.fit(fc.header, p.title, 340), 66, cream)
+	r.centeredText(fc.header, r.fit(fc.header, p.title, 340), 66, cream)
 	r.cardButtons(nil)
 	under := slices.Clone(r.dst.Pix)
 
-	const optH, left, right = 54, centre - 160, centre + 160
+	const optH, left, right = 54, center - 160, center + 160
 	list := image.Rect(left-20, 90, right+20, spotListBottom)
 	maxScroll := max(len(p.opts)*optH-list.Dy(), 0)
 	scroll = min(max(scroll, 0), maxScroll)

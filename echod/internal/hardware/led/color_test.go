@@ -34,8 +34,8 @@ func TestArcGrowsBySegmentAndDimsTheLeadingOne(t *testing.T) {
 	}
 }
 
-// The volume arc is a meter: the colour comes from where a segment sits, so a step is always the
-// same colour and a glance says how loud it is about to be rather than how many segments are lit.
+// The volume arc is a meter: the color comes from where a segment sits, so a step is always the
+// same color and a glance says how loud it is about to be rather than how many segments are lit.
 func TestVolumeIsGreenLowAndRedHigh(t *testing.T) {
 	_, quiet := lit(Volume(0.25))
 	if quiet.G <= quiet.R {
@@ -47,7 +47,7 @@ func TestVolumeIsGreenLowAndRedHigh(t *testing.T) {
 		t.Errorf("full volume leads with %v, want red", loud)
 	}
 
-	// The same step keeps its colour whatever the level above it does.
+	// The same step keeps its color whatever the level above it does.
 	full := Volume(1)
 	for _, fraction := range []float64{0.25, 0.5, 0.75} {
 		frame := Volume(fraction)

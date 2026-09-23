@@ -271,7 +271,7 @@ func (c *conversation) post(e event) {
 // Phase is what it is doing, for anything outside that needs to know.
 func (c *conversation) Phase() phase { return phase(c.visible.Load()) }
 
-// Run owns the conversation until ctx is cancelled.
+// Run owns the conversation until ctx is canceled.
 func (c *conversation) Run(ctx context.Context) {
 	c.claim = c.leds.Claim(led.PriorityTurn)
 	defer c.claim.Release()
@@ -431,7 +431,7 @@ func (c *conversation) handle(e event) {
 		if e.code == errDuplicate {
 			slog.Info("another device answered first", "slot", c.slot+1, "message", e.msg)
 			c.clearPending()
-			c.idle("answered elsewhere", activity.Cancelled)
+			c.idle("answered elsewhere", activity.Canceled)
 			c.leds.Busy().Flash(led.WorkElsewhere, yieldFlash)
 			return
 		}
@@ -454,9 +454,9 @@ func (c *conversation) handle(e event) {
 		if c.phase == phaseIdle && !sounding {
 			return
 		}
-		slog.Info("cancelled", "phase", c.phase, "slot", c.slot+1, "sounding", sounding)
-		c.idle("cancelled", activity.Cancelled)
-		feedback.Cancelled()
+		slog.Info("canceled", "phase", c.phase, "slot", c.slot+1, "sounding", sounding)
+		c.idle("canceled", activity.Canceled)
+		feedback.Canceled()
 
 	case evTimeout:
 		c.clearPending()
@@ -466,7 +466,7 @@ func (c *conversation) handle(e event) {
 		// thinking means its pipeline is slower than the slot allows for.
 		if c.followUp && c.phase == phaseListening {
 			slog.Info("nothing followed", "slot", c.slot+1)
-			c.idle("nothing said", activity.Cancelled)
+			c.idle("nothing said", activity.Canceled)
 			return
 		}
 
@@ -511,7 +511,7 @@ func (c *conversation) start(n nextTurn) {
 		// Held back before the turn ends, so that ending it does not hand the speaker back to a track
 		// for the moment it takes the next turn to open.
 		c.pending = &nextTurn{slot: slot}
-		c.idle("interrupted", activity.Cancelled)
+		c.idle("interrupted", activity.Canceled)
 
 		// The stopped run has yet to close, and its last events are still on their way.
 		c.grace = time.NewTimer(graceStart)
@@ -600,7 +600,7 @@ func (c *conversation) think() {
 // speak moves to playing the reply. url is empty when it is arriving over the API instead.
 //
 // Either way it becomes one claim on the speaker, so silencing it stops the whole errand: a fetch
-// still downloading is abandoned rather than arriving to play into a cancelled turn, and a stream
+// still downloading is abandoned rather than arriving to play into a canceled turn, and a stream
 // still receiving stops taking chunks.
 func (c *conversation) speak(url string) {
 	c.stopStreaming()

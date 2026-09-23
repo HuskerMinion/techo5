@@ -117,7 +117,7 @@ func TestDoneIsIdempotent(t *testing.T) {
 	first()
 
 	if !IsSounding() {
-		t.Fatal("a second done call cancelled a ring that is still sounding")
+		t.Fatal("a second done call canceled a ring that is still sounding")
 	}
 	second()
 	if IsSounding() {

@@ -29,7 +29,7 @@ func (r *roundRenderer) sunriseFace(s roundScene, p float64, face bool) {
 
 	rad := float64(h) * (0.13 + 0.06*p)
 	cy := float64(h)*1.05 - float64(h)*0.38*p
-	cx := float64(centre)
+	cx := float64(center)
 	body := lerpRGB(color.RGBA{219, 74, 28, 255}, color.RGBA{255, 246, 205, 255}, p)
 	for i := 5; i > 0; i-- {
 		r.discAt(cx, cy, rad+float64(i)*rad/7, softly(body, uint8(20+8*i)))
@@ -49,11 +49,11 @@ func (r *roundRenderer) sunriseFace(s roundScene, p float64, face bool) {
 
 	ink := lerpRGB(color.RGBA{255, 236, 214, 255}, color.RGBA{58, 22, 10, 255}, math.Min(p*1.6, 1))
 	hm := clockHM(s.now)
-	r.centred(r.clock, hm, 200, ink)
+	r.centered(r.clock, hm, 200, ink)
 	if suffix := clockSuffix(s.now); suffix != "" {
-		r.text(r.title, suffix, centre+r.width(r.clock, hm)/2+ampmGap, 200, ink)
+		r.text(r.title, suffix, center+r.width(r.clock, hm)/2+ampmGap, 200, ink)
 	}
-	r.centred(r.small, s.now.Format("Monday, January 2"), 250, ink)
+	r.centered(r.small, s.now.Format("Monday, January 2"), 250, ink)
 }
 
 // lerpRGB mixes two colors, t from 0 (a) to 1 (b).

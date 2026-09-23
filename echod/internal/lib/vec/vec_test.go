@@ -29,7 +29,7 @@ func random(n int, seed uint64) []float32 {
 //
 // The error is measured against the size of the terms, not against the answer. A sum of random signed
 // products lands near zero however large the products were, and dividing by that says an implementation
-// is wildly wrong when what actually happened is that the terms cancelled: the rounding error a
+// is wildly wrong when what actually happened is that the terms canceled: the rounding error a
 // reordering causes is a property of what was added, not of what was left.
 func TestDotAgreesWithTheGoImplementation(t *testing.T) {
 	for _, n := range lengths {

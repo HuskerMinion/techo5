@@ -20,10 +20,10 @@ const reminderLineH = 46
 // reminderFace draws a reminder with its words scrolled up by scroll pixels, and records how far they
 // can scroll, for the drag.
 func (r *roundRenderer) reminderFace(s roundScene) {
-	r.centred(r.label, "REMINDER", 150, colAccent)
+	r.centered(r.label, "REMINDER", 150, colAccent)
 	top := 210
 	if s.reminderFrom != "" {
-		r.centred(r.small, clip(r.small, r, s.reminderFrom, 300), 196, colDim)
+		r.centered(r.small, clip(r.small, r, s.reminderFrom, 300), 196, colDim)
 		top = 220
 	}
 	// A little over two lines, so a third that fades out at the foot says there is more.
@@ -40,7 +40,7 @@ func (r *roundRenderer) reminderFace(s roundScene) {
 		if y+reminderLineH <= box.Min.Y || y >= box.Max.Y {
 			continue
 		}
-		r.centred(r.title, line, y+32, colText)
+		r.centered(r.title, line, y+32, colText)
 	}
 	hint := "tap to dismiss"
 	if maxScroll > 0 {
@@ -49,7 +49,7 @@ func (r *roundRenderer) reminderFace(s roundScene) {
 		r.scrollHints(box, scroll, maxScroll, colBackground)
 		hint = "tap to dismiss · drag for more"
 	}
-	r.centred(r.small, hint, box.Max.Y+30, colDim)
+	r.centered(r.small, hint, box.Max.Y+30, colDim)
 
 	r.zmu.Lock()
 	r.reminderMax = maxScroll

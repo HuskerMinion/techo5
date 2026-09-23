@@ -85,7 +85,7 @@ func TestListenerBehindKeepsEveryFrame(t *testing.T) {
 // wake word goes missing on while music is playing. What is checked is the buffers rather than the
 // samples: cancellation is adaptive, so what comes out of it is not something to predict, but two
 // frames that are the same buffer can only be one frame delivered twice.
-func TestCancelledFramesAreNotTheSameBuffer(t *testing.T) {
+func TestCanceledFramesAreNotTheSameBuffer(t *testing.T) {
 	s := testSource()
 	if s.cancel == nil {
 		t.Skip("no canceller in this build")

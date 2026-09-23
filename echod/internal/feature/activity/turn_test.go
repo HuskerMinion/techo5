@@ -112,7 +112,7 @@ func TestNoTurnIsSafeToMark(t *testing.T) {
 	turn.Listening()
 	turn.Heard("nothing")
 	turn.Replying("nothing")
-	turn.Ends(Cancelled)
+	turn.Ends(Canceled)
 
 	if turn.ID() != "" {
 		t.Errorf("id is %q, want empty", turn.ID())

@@ -25,20 +25,20 @@ func TestReplayMusicCancelsBetterOnTheAverage(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	centre := replay(t, raw, Center{})
+	center := replay(t, raw, Center{})
 	average := replay(t, raw, Average{})
 
 	for _, r := range []struct {
 		name string
 		got  replayed
-	}{{"centre mic", centre}, {"average of seven", average}} {
+	}{{"center mic", center}, {"average of seven", average}} {
 		t.Logf("%-17s residual after convergence %.1f dBFS, speech over it %.1f dB",
 			r.name, r.got.residual, r.got.speechOver)
 	}
 
-	if average.speechOver < centre.speechOver+3 {
-		t.Errorf("average hears speech over music %.1f dB above its residual, centre %.1f: want at least 3 dB better",
-			average.speechOver, centre.speechOver)
+	if average.speechOver < center.speechOver+3 {
+		t.Errorf("average hears speech over music %.1f dB above its residual, center %.1f: want at least 3 dB better",
+			average.speechOver, center.speechOver)
 	}
 }
 
@@ -62,7 +62,7 @@ func setReplayEngine(c *canceller) {
 }
 
 type replayed struct {
-	residual   float64 // mean power of the cancelled output with music alone, dBFS
+	residual   float64 // mean power of the canceled output with music alone, dBFS
 	speechOver float64 // talk-section speech frames against that residual, dB
 }
 
@@ -82,8 +82,8 @@ func replay(t *testing.T, raw []byte, mixer Mixer) replayed {
 		block := raw[off : off+period]
 		mics := Decode(block)
 		frame := mixer.Mix(mics)
-		if cancelled := c.apply(block, cancelInput(mixer, mics, frame)); cancelled != nil {
-			frame = cancelled
+		if canceled := c.apply(block, cancelInput(mixer, mics, frame)); canceled != nil {
+			frame = canceled
 		}
 		out = append(out, frame...)
 	}

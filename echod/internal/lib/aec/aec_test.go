@@ -224,7 +224,7 @@ func TestResetForgets(t *testing.T) {
 		}
 	}
 	if c.ERLE() <= 0 {
-		t.Fatal("nothing was cancelled before the reset")
+		t.Fatal("nothing was canceled before the reset")
 	}
 
 	c.Reset()
@@ -244,7 +244,7 @@ func TestResetForgets(t *testing.T) {
 		t.Fatal(err)
 	}
 	if out[0] != mic[0] {
-		t.Fatalf("the filter still cancelled the first sample after a reset: %d became %d", mic[0], out[0])
+		t.Fatalf("the filter still canceled the first sample after a reset: %d became %d", mic[0], out[0])
 	}
 }
 

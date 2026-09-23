@@ -21,7 +21,7 @@ func TestHomeAssistantCancelsOnlyTheDevicesOwnTimers(t *testing.T) {
 		t.Fatalf("cancelling %s: %v", pasta, err)
 	}
 	if _, ok := ts.held[pasta]; ok {
-		t.Error("the cancelled timer is still held")
+		t.Error("the canceled timer is still held")
 	}
 	if _, ok := ts.held[eggs]; !ok {
 		t.Error("cancelling one timer took another with it")

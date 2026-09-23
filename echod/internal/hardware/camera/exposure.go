@@ -14,8 +14,8 @@ const (
 	meterGroupStep     = 4   // five-byte groups between samples, 16 pixels
 	clipLevel          = 870 // a zone this bright is a light source rather than the scene
 	clipWeight         = 0.15
-	centreBoost        = 3.0  // how much more the middle counts than the edges
-	centreSpread       = 0.35 // of the frame's half-size, squared: how wide "the middle" is
+	centerBoost        = 3.0  // how much more the middle counts than the edges
+	centerSpread       = 0.35 // of the frame's half-size, squared: how wide "the middle" is
 )
 
 // meter is the frame's brightness on the 10-bit scale as the exposure loop should see it. A frame that is
@@ -48,7 +48,7 @@ func meter(bayer []byte) float64 {
 			mean := sum[zy][zx] / count[zy][zx]
 			cx := (float64(zx)+0.5)/zoneCols*2 - 1
 			cy := (float64(zy)+0.5)/zoneRows*2 - 1
-			w := 1 + centreBoost*math.Exp(-(cx*cx+cy*cy)/centreSpread)
+			w := 1 + centerBoost*math.Exp(-(cx*cx+cy*cy)/centerSpread)
 			if mean >= clipLevel {
 				w *= clipWeight
 			}

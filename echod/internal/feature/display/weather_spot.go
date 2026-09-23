@@ -67,7 +67,7 @@ func weatherLine(w home.Weather) string {
 	return words
 }
 
-// clockWeather draws the reading on the clock face, its icon before it, centred on baseline.
+// clockWeather draws the reading on the clock face, its icon before it, centered on baseline.
 func (r *roundRenderer) clockWeather(w home.Weather, baseline int) {
 	line := weatherLine(w)
 	if line == "" {
@@ -75,7 +75,7 @@ func (r *roundRenderer) clockWeather(w home.Weather, baseline int) {
 	}
 	const u, gap = 15.0, 12
 	tw := r.width(r.body, line)
-	left := centre - (tw+int(2*u)+gap)/2
+	left := center - (tw+int(2*u)+gap)/2
 	r.weatherIcon(w.Condition, float64(left)+u, float64(baseline)-9, u)
 	r.text(r.body, line, left+int(2*u)+gap, baseline, colText)
 }
@@ -93,10 +93,10 @@ func (r *roundRenderer) weatherFace(s roundScene) {
 		big = fmt.Sprintf("%.0f°", days[0].High)
 	}
 
-	r.centred(r.label, clockHM(s.now), 62, colDim)
+	r.centered(r.label, clockHM(s.now), 62, colDim)
 	if cond == "" && big == "" {
-		r.weatherIcon("cloudy", centre, 170, 44)
-		r.centred(r.title, "No weather yet", 272, colText)
+		r.weatherIcon("cloudy", center, 170, 44)
+		r.centered(r.title, "No weather yet", 272, colText)
 		r.paragraph(r.small, "Home Assistant has not sent a reading", 310, colDim, 2)
 		return
 	}
@@ -104,16 +104,16 @@ func (r *roundRenderer) weatherFace(s roundScene) {
 	// Today: the icon left of the reading, the words and the day's range under them.
 	tw := r.width(r.clock, big)
 	const iconU = 44.0
-	left := centre - (tw+int(2*iconU)+16)/2
+	left := center - (tw+int(2*iconU)+16)/2
 	r.weatherIcon(cond, float64(left)+iconU, 150, iconU)
 	r.text(r.clock, big, left+int(2*iconU)+16, 190, colText)
-	r.centred(r.body, conditionWords(cond), 232, colText)
+	r.centered(r.body, conditionWords(cond), 232, colText)
 	if len(days) > 0 {
 		today := fmt.Sprintf("High %.0f°  Low %.0f°", days[0].High, days[0].Low)
 		if days[0].Rain > 0 {
 			today += fmt.Sprintf("  Rain %d%%", days[0].Rain)
 		}
-		r.centred(r.small, today, 266, colDim)
+		r.centered(r.small, today, 266, colDim)
 	}
 
 	next := days
@@ -128,7 +128,7 @@ func (r *roundRenderer) weatherFace(s roundScene) {
 	cols := min(4, len(next))
 	for i := 0; i < cols; i++ {
 		d := next[i]
-		x := centre + (2*i-(cols-1))*44
+		x := center + (2*i-(cols-1))*44
 		name := d.When.Format("Mon")
 		if d.When.IsZero() {
 			name = fmt.Sprintf("+%d", i+1)
@@ -142,7 +142,7 @@ func (r *roundRenderer) weatherFace(s roundScene) {
 	}
 }
 
-// weatherIcon draws Home Assistant's condition as a small picture, centred at x, y, u half its size.
+// weatherIcon draws Home Assistant's condition as a small picture, centered at x, y, u half its size.
 func (r *roundRenderer) weatherIcon(cond string, x, y, u float64) {
 	w := math.Max(u*0.14, 2)
 	switch cond {
@@ -230,7 +230,7 @@ type forecastDays = []hass.Day
 // which is also the reading somebody glances at, rather than the words for it.
 func (r *roundRenderer) dateWeather(w home.Weather, when time.Time, baseline int) {
 	if w.Temp == "" {
-		r.centred(r.small, when.Format("Monday, January 2"), baseline, colDim)
+		r.centered(r.small, when.Format("Monday, January 2"), baseline, colDim)
 		return
 	}
 	// Sharing the line costs the long day and month: written out, the two together reach the bezel,
@@ -242,7 +242,7 @@ func (r *roundRenderer) dateWeather(w home.Weather, when time.Time, baseline int
 	if conditionWords(w.Condition) != "" {
 		icon = int(2*u) + gap
 	}
-	left := centre - (tw+icon)/2
+	left := center - (tw+icon)/2
 	if icon > 0 {
 		r.weatherIcon(w.Condition, float64(left)+u, float64(baseline)-7, u)
 	}

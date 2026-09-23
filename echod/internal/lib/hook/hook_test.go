@@ -36,7 +36,7 @@ func TestCancelStopsOneListener(t *testing.T) {
 		t.Errorf("the kept listener heard %d, want 2", kept)
 	}
 	if dropped != 1 {
-		t.Errorf("the cancelled listener heard %d, want 1", dropped)
+		t.Errorf("the canceled listener heard %d, want 1", dropped)
 	}
 	if n := h.Listeners(); n != 1 {
 		t.Errorf("%d listeners remain, want 1", n)

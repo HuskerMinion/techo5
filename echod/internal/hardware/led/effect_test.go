@@ -41,7 +41,7 @@ func built(t *testing.T, e Effect, base Color) Frame {
 	return frame
 }
 
-// Whatever else an effect does, it has to be twelve colours, it has to change, and it has to light
+// Whatever else an effect does, it has to be twelve colors, it has to change, and it has to light
 // something. A frame function that returns the wrong length fails the write for as long as the
 // effect is up, and one that never changes or never lights anything is a broken effect that looks
 // exactly like a ring nobody has asked for anything.
@@ -71,12 +71,12 @@ func TestEveryEffectAnimatesAndLightsTheRing(t *testing.T) {
 	}
 }
 
-// The catalogue says which colours an effect uses, and the two answers are worth holding to. An
-// effect that inherits may only dim the colour it was given: adding a channel of its own means Home
+// The catalogue says which colors an effect uses, and the two answers are worth holding to. An
+// effect that inherits may only dim the color it was given: adding a channel of its own means Home
 // Assistant asks for red and gets something that is not red, which is the one thing a light entity
-// promises. An effect with a palette must ignore the ring's colour completely, or the same name means
+// promises. An effect with a palette must ignore the ring's color completely, or the same name means
 // something different depending on what the light was last set to.
-func TestEffectsUseTheColoursTheCatalogueSaysTheyDo(t *testing.T) {
+func TestEffectsUseTheColorsTheCatalogueSaysTheyDo(t *testing.T) {
 	for _, e := range effects {
 		t.Run(e.Name, func(t *testing.T) {
 			red, blue := frames(built(t, e, Color{R: 255})), frames(built(t, e, Color{B: 255}))
@@ -84,7 +84,7 @@ func TestEffectsUseTheColoursTheCatalogueSaysTheyDo(t *testing.T) {
 			if len(e.Palette) > 0 {
 				for i := range red {
 					if !slices.Equal(red[i], blue[i]) {
-						t.Fatalf("frame %d differs with the ring's colour, but this effect has a palette", i)
+						t.Fatalf("frame %d differs with the ring's color, but this effect has a palette", i)
 					}
 				}
 				return
@@ -167,7 +167,7 @@ func TestEffectNamesAreUnique(t *testing.T) {
 }
 
 // A palette laid round the ring has to meet itself, and one laid along a gradient has to keep its
-// ends apart. Getting these the wrong way round is a seam where the hottest colour touches the
+// ends apart. Getting these the wrong way round is a seam where the hottest color touches the
 // coldest, which is exactly what the two samplers exist to avoid.
 func TestPaletteWrapsRoundAndClampsAlong(t *testing.T) {
 	p := Palette{{R: 255}, {G: 255}, {B: 255}}
@@ -176,10 +176,10 @@ func TestPaletteWrapsRoundAndClampsAlong(t *testing.T) {
 		t.Errorf("At(0) is %+v and At(1) is %+v, want the circle to close", got, want)
 	}
 	if got, want := p.At(1.0/3), p[1]; got != want {
-		t.Errorf("At(1/3) is %+v, want the second colour %+v", got, want)
+		t.Errorf("At(1/3) is %+v, want the second color %+v", got, want)
 	}
 	if got, want := p.At(-1.0/3), p[2]; got != want {
-		t.Errorf("At(-1/3) is %+v, want the last colour %+v", got, want)
+		t.Errorf("At(-1/3) is %+v, want the last color %+v", got, want)
 	}
 	// Half way between the first two, give or take where the division lands.
 	if mid := p.At(1.0 / 6); mid.R < 127 || mid.R > 128 || mid.G < 127 || mid.G > 128 || mid.B != 0 {
@@ -190,20 +190,20 @@ func TestPaletteWrapsRoundAndClampsAlong(t *testing.T) {
 		t.Errorf("Along(0) is %+v, want %+v", got, want)
 	}
 	if got, want := p.Along(1), p[2]; got != want {
-		t.Errorf("Along(1) is %+v, want the last colour %+v, not the first", got, want)
+		t.Errorf("Along(1) is %+v, want the last color %+v, not the first", got, want)
 	}
 	if got, want := p.Along(2), p[2]; got != want {
 		t.Errorf("Along(2) is %+v, want it held at the end %+v", got, want)
 	}
 
-	// One colour is what an inheriting effect gets, and neither sampler may turn it into anything
+	// One color is what an inheriting effect gets, and neither sampler may turn it into anything
 	// else however it is asked.
 	one := Palette{HomeAssistant}
 	if got := one.Along(0.7); got != HomeAssistant {
-		t.Errorf("Along on a single colour gave %+v, want %+v", got, HomeAssistant)
+		t.Errorf("Along on a single color gave %+v, want %+v", got, HomeAssistant)
 	}
 	if got := one.Nth(-5); got != HomeAssistant {
-		t.Errorf("Nth on a single colour gave %+v, want %+v", got, HomeAssistant)
+		t.Errorf("Nth on a single color gave %+v, want %+v", got, HomeAssistant)
 	}
 }
 
@@ -237,8 +237,8 @@ func TestHeartbeatThumpsTwiceThenRests(t *testing.T) {
 
 // The marquee only looks right if the gaps are even, including across the seam from segment 11 back
 // to segment 0, and if the whole pattern moves rather than one lamp hopping. Each lamp also has to
-// keep its colour as the pattern steps, or a wheel turns into a flicker of changing colours.
-func TestChaseKeepsEvenGapsAndStepsWithItsColours(t *testing.T) {
+// keep its color as the pattern steps, or a wheel turns into a flicker of changing colors.
+func TestChaseKeepsEvenGapsAndStepsWithItsColors(t *testing.T) {
 	const step = 110 * time.Millisecond
 	p := Palette{{R: 255}, {G: 255}, {B: 255}, {R: 255, G: 255}}
 	frame := chase(p)

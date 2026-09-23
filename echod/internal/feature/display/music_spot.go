@@ -73,7 +73,7 @@ func stopMusic() {
 }
 
 // doneAt is the face's Done: left of play and pause, at the same height, where a thumb finds it.
-const doneX, doneY, doneR = centre - 88.0, 420.0, 25.0
+const doneX, doneY, doneR = center - 88.0, 420.0, 25.0
 
 // onDone reports whether a tap at x, y is on Done.
 func onDone(x, y int) bool {
@@ -147,24 +147,24 @@ func pickStation(sel int) {
 // logo) in the middle, then the station, the song and the artist.
 func (r *roundRenderer) nowPlayingFace(s roundScene) {
 	rd := s.radio
-	r.centred(r.title, clockText(s.now), 84, colText)
+	r.centered(r.title, clockText(s.now), 84, colText)
 	r.dateWeather(s.weather, s.now, 114)
 
 	const artY, artR = 200.0, 72.0
-	r.discAt(centre, artY, artR+3, color.RGBA{44, 50, 60, 255})
+	r.discAt(center, artY, artR+3, color.RGBA{44, 50, 60, 255})
 	if rd.Thumb != nil {
 		if rd.Logo {
-			r.discAt(centre, artY, artR, color.RGBA{236, 240, 244, 255}) // a logo reads best on white
+			r.discAt(center, artY, artR, color.RGBA{236, 240, 244, 255}) // a logo reads best on white
 		}
-		r.discImage(rd.Thumb, centre, artY, artR)
+		r.discImage(rd.Thumb, center, artY, artR)
 	} else {
-		r.discAt(centre, artY, artR, color.RGBA{24, 28, 34, 255})
-		r.notesMark(centre, artY, 38, colMusic)
+		r.discAt(center, artY, artR, color.RGBA{24, 28, 34, 255})
+		r.notesMark(center, artY, 38, colMusic)
 	}
 	if s.paused {
 		// Paused: the picture dims under a play mark.
-		r.discAt(centre, artY, artR, color.RGBA{0, 0, 0, 140})
-		r.triangle(centre-16, artY-26, centre-16, artY+26, centre+28, artY, colText)
+		r.discAt(center, artY, artR, color.RGBA{0, 0, 0, 140})
+		r.triangle(center-16, artY-26, center-16, artY+26, center+28, artY, colText)
 	}
 
 	station := currentStation(rd)
@@ -176,21 +176,21 @@ func (r *roundRenderer) nowPlayingFace(s roundScene) {
 		label = "PAUSED"
 	}
 	label = clip(r.label, r, label+" · "+strings.ToUpper(station), 330)
-	r.centred(r.label, label, 304, colMusic)
+	r.centered(r.label, label, 304, colMusic)
 	if rd.Title != "" {
-		r.centred(r.title, clip(r.title, r, rd.Title, 350), 340, colText)
+		r.centered(r.title, clip(r.title, r, rd.Title, 350), 340, colText)
 		if rd.Artist != "" {
-			r.centred(r.body, clip(r.body, r, rd.Artist, 330), 370, colDim)
+			r.centered(r.body, clip(r.body, r, rd.Artist, 330), 370, colDim)
 		}
 	} else {
-		r.centred(r.title, clip(r.title, r, station, 350), 344, colText)
+		r.centered(r.title, clip(r.title, r, station, 350), 344, colText)
 	}
 	// Done on the left: the music ends and the face goes back to the clock. A pause keeps this face up
 	// with play on it, and so does a stop from Music Assistant, which looks the same from here.
 	r.discAt(doneX-18, doneY, doneR, color.RGBA{36, 42, 52, 255})
 	r.discAt(doneX+18, doneY, doneR, color.RGBA{36, 42, 52, 255})
 	r.line(doneX-18, doneY, doneX+18, doneY, 2*doneR, color.RGBA{36, 42, 52, 255})
-	r.centred2(r.small, "Done", int(doneX), int(doneY)+6, colText)
+	r.centered2(r.small, "Done", int(doneX), int(doneY)+6, colText)
 	// The star on the right saves what is playing to favorites, and fills in once it has.
 	r.discAt(starX, starY, starR, color.RGBA{36, 42, 52, 255})
 	starColor := color.RGBA{150, 158, 170, 255}
@@ -200,16 +200,16 @@ func (r *roundRenderer) nowPlayingFace(s roundScene) {
 	r.starMark(starX, starY, 14, starColor)
 	// Play or pause at the bottom; a tap anywhere else does the same.
 	const by = 420.0
-	r.discAt(centre, by, 25, color.RGBA{36, 42, 52, 255})
+	r.discAt(center, by, 25, color.RGBA{36, 42, 52, 255})
 	if s.paused {
-		r.triangle(centre-8, by-13, centre-8, by+13, centre+14, by, colText)
+		r.triangle(center-8, by-13, center-8, by+13, center+14, by, colText)
 	} else {
-		r.line(centre-7, by-11, centre-7, by+11, 6, colText)
-		r.line(centre+7, by-11, centre+7, by+11, 6, colText)
+		r.line(center-7, by-11, center-7, by+11, 6, colText)
+		r.line(center+7, by-11, center+7, by+11, 6, colText)
 	}
 }
 
-// notesMark is two beamed notes, centred at x, y, u half their size.
+// notesMark is two beamed notes, centered at x, y, u half their size.
 func (r *roundRenderer) notesMark(x, y, u float64, c color.RGBA) {
 	w := math.Max(u*0.12, 2.5)
 	r.discAt(x-0.55*u, y+0.55*u, 0.28*u, c)
@@ -228,7 +228,7 @@ func (r *roundRenderer) radioList(s roundScene) {
 
 	switch {
 	case len(rows) == 0 && rd.Loading:
-		r.centred(r.title, "Loading…", 250, colDim)
+		r.centered(r.title, "Loading…", 250, colDim)
 		return
 	case len(rows) == 0:
 		msg := "No stations"
@@ -249,9 +249,9 @@ func (r *roundRenderer) radioList(s roundScene) {
 		return rows[i]
 	}
 	cur := currentStation(rd)
-	r.centred(r.small, fmt.Sprintf("%d of %d", sel+1, len(rows)), 150, colDim)
+	r.centered(r.small, fmt.Sprintf("%d of %d", sel+1, len(rows)), 150, colDim)
 	if sel > 0 {
-		r.centred(r.body, clip(r.body, r, name(sel-1), 300), 200, colDim)
+		r.centered(r.body, clip(r.body, r, name(sel-1), 300), 200, colDim)
 	}
 	col := colText
 	if rows[sel] == stopRow {
@@ -261,13 +261,13 @@ func (r *roundRenderer) radioList(s roundScene) {
 	}
 	y := r.paragraph(r.title, name(sel), 262, col, 2)
 	if sel+1 < len(rows) {
-		r.centred(r.body, clip(r.body, r, name(sel+1), 300), max(y+14, 318), colDim)
+		r.centered(r.body, clip(r.body, r, name(sel+1), 300), max(y+14, 318), colDim)
 	}
 	hint := "turn · tap to play"
 	if rows[sel] == stopRow {
 		hint = "turn · tap to stop"
 	}
-	r.centred(r.small, hint, 392, colDim)
+	r.centered(r.small, hint, 392, colDim)
 
 	// Where in the list, round the ring.
 	const from, span = 1.25 * math.Pi, 1.5 * math.Pi
@@ -275,8 +275,8 @@ func (r *roundRenderer) radioList(s roundScene) {
 	if len(rows) > 1 {
 		frac = float64(sel) / float64(len(rows)-1)
 	}
-	r.ringAt(centre, centre, 196, 202, from, from+span, color.RGBA{44, 50, 60, 255})
-	kx, ky := centre+199*math.Sin(from+span*frac), centre-199*math.Cos(from+span*frac)
+	r.ringAt(center, center, 196, 202, from, from+span, color.RGBA{44, 50, 60, 255})
+	kx, ky := center+199*math.Sin(from+span*frac), center-199*math.Cos(from+span*frac)
 	r.discAt(kx, ky, 11, colMusic)
 }
 
@@ -285,7 +285,7 @@ func (r *roundRenderer) radioList(s roundScene) {
 func (r *roundRenderer) sourceButtons(rd home.Radio) {
 	sources := home.RadioSources()
 	if len(sources) < 2 {
-		r.centred(r.label, strings.ToUpper(home.SourceLabel(rd.Source)), 118, colMusic)
+		r.centered(r.label, strings.ToUpper(home.SourceLabel(rd.Source)), 118, colMusic)
 		return
 	}
 	for i, src := range sources {
@@ -294,10 +294,10 @@ func (r *roundRenderer) sourceButtons(rd home.Radio) {
 		cx := (x0 + x1) / 2
 		if src == rd.Source {
 			r.line(float64(x0+14), sourceY, float64(x1-14), sourceY, 30, colMusic)
-			r.centred2(r.label, name, cx, sourceY+7, colBackground)
+			r.centered2(r.label, name, cx, sourceY+7, colBackground)
 		} else {
 			r.line(float64(x0+14), sourceY, float64(x1-14), sourceY, 30, color.RGBA{36, 42, 52, 255})
-			r.centred2(r.label, name, cx, sourceY+7, colText)
+			r.centered2(r.label, name, cx, sourceY+7, colText)
 		}
 	}
 }
@@ -308,7 +308,7 @@ const sourceY = 120
 func sourceButton(i, n int) (x0, x1 int) {
 	const width = 360
 	w := width / n
-	x0 = centre - width/2 + i*w
+	x0 = center - width/2 + i*w
 	return x0, x0 + w
 }
 
@@ -354,13 +354,13 @@ func (r *roundRenderer) radarFace(s roundScene) {
 	r.clear()
 	v := s.radar
 	if len(v.Frames) == 0 {
-		r.centred(r.label, "RADAR", 150, colRadar)
+		r.centered(r.label, "RADAR", 150, colRadar)
 		msg := "Loading the rain map…"
 		if !v.Loading && v.Problem != "" {
 			msg = "No rain map: " + v.Problem
 		}
 		r.paragraph(r.body, msg, 240, colDim, 3)
-		r.centred(r.small, "swipe for the forecast", 400, colDim)
+		r.centered(r.small, "swipe for the forecast", 400, colDim)
 		return
 	}
 	n := len(v.Frames)
@@ -372,19 +372,19 @@ func (r *roundRenderer) radarFace(s roundScene) {
 	f := v.Frames[i]
 	r.coverCircle(f.Image, false)
 
-	// Home: the frame is centred on it, and the circle crops round the middle.
-	r.ringAt(centre, centre, 6, 10, 0, 2*math.Pi, color.RGBA{0, 0, 0, 200})
-	r.ringAt(centre, centre, 7, 9, 0, 2*math.Pi, colRadar)
+	// Home: the frame is centered on it, and the circle crops round the middle.
+	r.ringAt(center, center, 6, 10, 0, 2*math.Pi, color.RGBA{0, 0, 0, 200})
+	r.ringAt(center, center, 7, 9, 0, 2*math.Pi, colRadar)
 
 	label := "Radar " + clockHM(f.At.Local())
 	if i == n-1 {
 		label += " (latest)"
 	}
 	w := r.width(r.label, label)
-	r.line(float64(centre-w/2-10), 62, float64(centre+w/2+10), 62, 32, color.RGBA{0, 0, 0, 160})
-	r.centred(r.label, label, 69, colText)
+	r.line(float64(center-w/2-10), 62, float64(center+w/2+10), 62, 32, color.RGBA{0, 0, 0, 160})
+	r.centered(r.label, label, 69, colText)
 	credit := "RainViewer · © OpenStreetMap"
 	cw := r.width(r.tiny, credit)
-	r.line(float64(centre-cw/2-8), 420, float64(centre+cw/2+8), 420, 24, color.RGBA{0, 0, 0, 160})
-	r.centred(r.tiny, credit, 425, colDim)
+	r.line(float64(center-cw/2-8), 420, float64(center+cw/2+8), 420, 24, color.RGBA{0, 0, 0, 160})
+	r.centered(r.tiny, credit, 425, colDim)
 }

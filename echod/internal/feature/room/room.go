@@ -67,7 +67,7 @@ func build() *Reaction {
 
 	// The light's color is inherited, and the claim holds the color it was given rather than
 	// looking it up, so a change has to be handed over.
-	light.Get().OnColor(r.recolour)
+	light.Get().OnColor(r.recolor)
 	return r
 }
 
@@ -90,4 +90,4 @@ func (r *Reaction) show(name string) {
 	r.claim.React(name, r.base(), r.room)
 }
 
-func (r *Reaction) recolour() { r.show(config.Get().Ring.Reaction) }
+func (r *Reaction) recolor() { r.show(config.Get().Ring.Reaction) }

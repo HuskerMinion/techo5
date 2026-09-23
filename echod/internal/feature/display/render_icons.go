@@ -14,7 +14,7 @@ import (
 var (
 	sunGold   = color.RGBA{0xf2, 0xb1, 0x3c, 0xff}
 	sunPale   = color.RGBA{0xf7, 0xd0, 0x7a, 0xff}
-	cloudGrey = color.RGBA{0xb8, 0xc0, 0xc8, 0xff}
+	cloudGray = color.RGBA{0xb8, 0xc0, 0xc8, 0xff}
 	cloudDark = color.RGBA{0x7c, 0x86, 0x90, 0xff}
 	rainBlue  = color.RGBA{0x6f, 0xa8, 0xdc, 0xff}
 	snowWhite = color.RGBA{0xe8, 0xf0, 0xf8, 0xff}
@@ -114,7 +114,7 @@ func (r *renderer) bolt(cx, y, w int) {
 func (r *renderer) fog(cx, y, w int) {
 	for i := 0; i < 3; i++ {
 		yy := y - w/6 + i*(w/8)
-		r.stroke(cx-w/2, yy, cx+w/2, yy, max(w/18, 2), cloudGrey)
+		r.stroke(cx-w/2, yy, cx+w/2, yy, max(w/18, 2), cloudGray)
 	}
 }
 
@@ -128,11 +128,11 @@ func (r *renderer) weatherIcon(cond string, cx, cy, size int) {
 		r.moon(cx, cy, w/4)
 	case "partlycloudy":
 		r.sun(cx-w/6, cy-w/6, w/6)
-		r.cloud(cx+w/12, cy+w/4, w*3/4, cloudGrey)
+		r.cloud(cx+w/12, cy+w/4, w*3/4, cloudGray)
 	case "cloudy":
-		r.cloud(cx, cy+w/4, w, cloudGrey)
+		r.cloud(cx, cy+w/4, w, cloudGray)
 	case "rainy":
-		r.cloud(cx, cy+w/8, w*4/5, cloudGrey)
+		r.cloud(cx, cy+w/8, w*4/5, cloudGray)
 		r.drops(cx, cy+w/6, w*4/5, rainBlue, 3)
 	case "pouring":
 		r.cloud(cx, cy+w/8, w*4/5, cloudDark)
@@ -144,23 +144,23 @@ func (r *renderer) weatherIcon(cond string, cx, cy, size int) {
 			r.drops(cx+w/4, cy+w/6, w/2, rainBlue, 2)
 		}
 	case "snowy", "snowy-rainy":
-		r.cloud(cx, cy+w/8, w*4/5, cloudGrey)
+		r.cloud(cx, cy+w/8, w*4/5, cloudGray)
 		r.flakes(cx, cy+w/6, w*4/5)
 		if cond == "snowy-rainy" {
 			r.drops(cx+w/4, cy+w/6, w/3, rainBlue, 2)
 		}
 	case "fog":
-		r.cloud(cx, cy, w*3/4, cloudGrey)
+		r.cloud(cx, cy, w*3/4, cloudGray)
 		r.fog(cx, cy+w/4, w)
 	case "hail":
 		r.cloud(cx, cy+w/8, w*4/5, cloudDark)
 		r.flakes(cx, cy+w/6, w*4/5)
 	case "windy", "windy-variant":
-		r.cloud(cx, cy+w/8, w*3/4, cloudGrey)
+		r.cloud(cx, cy+w/8, w*3/4, cloudGray)
 		r.fog(cx+w/6, cy+w/3, w*3/4)
 	case "exceptional":
 		r.disc(cx, cy, w/4, boltGold)
 	default:
-		r.cloud(cx, cy+w/4, w, cloudGrey)
+		r.cloud(cx, cy+w/4, w, cloudGray)
 	}
 }

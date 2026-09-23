@@ -8,7 +8,7 @@ import (
 )
 
 // The ring goes from the deep red of the first minutes through orange to a warm white, and gets
-// brighter all the way: it is a sunrise, not a colour wheel.
+// brighter all the way: it is a sunrise, not a color wheel.
 func TestTheRingWarmsAsItRises(t *testing.T) {
 	start, middle, end := sunriseColor(0.02), sunriseColor(0.5), sunriseColor(1)
 

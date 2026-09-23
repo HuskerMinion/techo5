@@ -25,11 +25,11 @@ import (
 	"github.com/HuskerMinion/techo5/echod/internal/feature/timer"
 )
 
-// The round panel: everything is laid out from its centre, and nothing may sit where the circle
+// The round panel: everything is laid out from its center, and nothing may sit where the circle
 // cuts it off.
 const (
 	side   = 480
-	centre = side / 2
+	center = side / 2
 	rimOut = 236 // outer edge of the status ring
 	rimIn  = 222 // inner edge
 )
@@ -52,13 +52,13 @@ var (
 // ampmGap is the space between the time and its AM/PM.
 const ampmGap = 10
 
-// timeLine draws the time centred on the face at baseline, with its AM/PM beside it in the accent
+// timeLine draws the time centered on the face at baseline, with its AM/PM beside it in the accent
 // the way the Show sets it; on a 24-hour clock the time stands alone.
 func (r *roundRenderer) timeLine(now time.Time, baseline int) {
 	hm := clockHM(now)
-	r.centred(r.clock, hm, baseline, colText)
+	r.centered(r.clock, hm, baseline, colText)
 	if s := clockSuffix(now); s != "" {
-		r.text(r.title, s, centre+r.width(r.clock, hm)/2+ampmGap, baseline, colAccent)
+		r.text(r.title, s, center+r.width(r.clock, hm)/2+ampmGap, baseline, colAccent)
 	}
 }
 
@@ -313,7 +313,7 @@ func (r *roundRenderer) rim(s roundScene) {
 func (r *roundRenderer) clockFace(s roundScene) {
 	now := s.now
 	r.timeLine(now, 240)
-	r.centred(r.small, now.Format("Monday, January 2"), 290, colDim)
+	r.centered(r.small, now.Format("Monday, January 2"), 290, colDim)
 
 	line := 332
 	if weatherLine(s.weather) != "" {
@@ -322,27 +322,27 @@ func (r *roundRenderer) clockFace(s roundScene) {
 	}
 	if len(s.timers) > 0 {
 		t := s.timers[0]
-		r.centred(r.body, "Timer "+clockDuration(t.Left), line, colTimer)
+		r.centered(r.body, "Timer "+clockDuration(t.Left), line, colTimer)
 		line += 34
 	}
 	if s.missed != "" {
-		r.centred(r.small, s.missed, line, colTimer)
+		r.centered(r.small, s.missed, line, colTimer)
 		line += 34
 	}
 	if s.slideshowTrouble != "" {
-		r.centred(r.small, s.slideshowTrouble, line, colDim)
+		r.centered(r.small, s.slideshowTrouble, line, colDim)
 	}
 	switch {
 	case s.setupAsking:
-		r.centred(r.label, "A BROWSER IS ASKING", 118, colMuted)
+		r.centered(r.label, "A BROWSER IS ASKING", 118, colMuted)
 	case s.muted:
-		r.centred(r.label, "MICROPHONE OFF", 118, colMuted)
+		r.centered(r.label, "MICROPHONE OFF", 118, colMuted)
 	case s.btPairing:
-		r.centred(r.label, "BLUETOOTH PAIRING", 118, colBluetooth)
+		r.centered(r.label, "BLUETOOTH PAIRING", 118, colBluetooth)
 	case s.playing:
-		r.centred(r.label, "PLAYING", 118, colDim)
+		r.centered(r.label, "PLAYING", 118, colDim)
 	case s.paused:
-		r.centred(r.label, "PAUSED", 118, colDim)
+		r.centered(r.label, "PAUSED", 118, colDim)
 	}
 }
 
@@ -356,7 +356,7 @@ func (r *roundRenderer) conversation(s roundScene) {
 	}
 	y := 150
 	if title != "" {
-		r.centred(r.title, title, y, col)
+		r.centered(r.title, title, y, col)
 		y += 50
 	}
 	if s.heard != "" {
@@ -377,17 +377,17 @@ func (r *roundRenderer) volume(s roundScene) {
 	const from, span = 1.25 * math.Pi, 1.5 * math.Pi
 	r.arc(170, 190, from, from+span, colTrack)
 	r.arc(170, 190, from, from+span*frac, colListening)
-	r.centred(r.clock, fmt.Sprintf("%d", s.volume), 270, colText)
-	r.centred(r.small, "VOLUME", 320, colDim)
+	r.centered(r.clock, fmt.Sprintf("%d", s.volume), 270, colText)
+	r.centered(r.small, "VOLUME", 320, colDim)
 }
 
 // arc fills the ring between radii r0 and r1 from angle a0 to a1, clockwise from straight up, with
 // a one-pixel soft edge on both circles.
 func (r *roundRenderer) arc(r0, r1 float64, a0, a1 float64, c color.RGBA) {
-	r.ringAt(centre, centre, r0, r1, a0, a1, c)
+	r.ringAt(center, center, r0, r1, a0, a1, c)
 }
 
-// ringAt is arc about any centre.
+// ringAt is arc about any center.
 func (r *roundRenderer) ringAt(cx, cy, r0, r1 float64, a0, a1 float64, c color.RGBA) {
 	full := a1-a0 >= 2*math.Pi-1e-9
 	b := r.dst.Rect
@@ -526,20 +526,20 @@ func (r *roundRenderer) width(face font.Face, s string) int {
 	return font.MeasureString(face, s).Round()
 }
 
-// centred2 is centred about x rather than the middle of the panel.
-func (r *roundRenderer) centred2(face font.Face, s string, x, baseline int, c color.Color) {
+// centered2 is centered about x rather than the middle of the panel.
+func (r *roundRenderer) centered2(face font.Face, s string, x, baseline int, c color.Color) {
 	r.text(face, s, x-r.width(face, s)/2, baseline, c)
 }
 
-func (r *roundRenderer) centred(face font.Face, s string, baseline int, c color.Color) {
+func (r *roundRenderer) centered(face font.Face, s string, baseline int, c color.Color) {
 	if s == "" {
 		return
 	}
-	r.text(face, s, centre-r.width(face, s)/2, baseline, c)
+	r.text(face, s, center-r.width(face, s)/2, baseline, c)
 }
 
 // paragraph wraps s to the width of the circle at each line's height and draws up to maxLines,
-// centred. It returns the baseline after the last line.
+// centered. It returns the baseline after the last line.
 func (r *roundRenderer) paragraph(face font.Face, s string, baseline int, c color.Color, maxLines int) int {
 	lineH := face.Metrics().Height.Round() + 4
 	words := strings.Fields(s)
@@ -558,7 +558,7 @@ func (r *roundRenderer) paragraph(face font.Face, s string, baseline int, c colo
 		if n == maxLines-1 && len(words) > 0 {
 			line += "…"
 		}
-		r.centred(face, line, baseline, c)
+		r.centered(face, line, baseline, c)
 		baseline += lineH
 	}
 	return baseline
@@ -566,11 +566,11 @@ func (r *roundRenderer) paragraph(face font.Face, s string, baseline int, c colo
 
 // chord is the width of the circle at height y.
 func chord(y int) int {
-	dy := float64(y - centre)
-	if math.Abs(dy) >= centre {
+	dy := float64(y - center)
+	if math.Abs(dy) >= center {
 		return 0
 	}
-	return int(2 * math.Sqrt(float64(centre*centre)-dy*dy))
+	return int(2 * math.Sqrt(float64(center*center)-dy*dy))
 }
 
 func clockDuration(d time.Duration) string {

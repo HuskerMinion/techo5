@@ -77,7 +77,7 @@ func TestReplayWakeScores(t *testing.T) {
 		for _, fe := range []struct {
 			name  string
 			mixer Mixer
-		}{{"centre (old)", Center{}}, {"average of 7", Average{}}} {
+		}{{"center (old)", Center{}}, {"average of 7", Average{}}} {
 			trace := scoreWake(t, raw, fe.mixer, m)
 			line := fmt.Sprintf("  %-13s", fe.name)
 			for _, cut := range cutoffs {
@@ -222,8 +222,8 @@ func scoreWake(t *testing.T, raw []byte, mixer Mixer, m wake.Model) []float64 {
 		block := raw[off : off+period]
 		mics := Decode(block)
 		frame := mixer.Mix(mics)
-		if cancelled := c.apply(block, cancelInput(mixer, mics, frame)); cancelled != nil {
-			frame = cancelled
+		if canceled := c.apply(block, cancelInput(mixer, mics, frame)); canceled != nil {
+			frame = canceled
 		}
 		frame = append([]int16(nil), frame...)
 		if replayGain != 1 {

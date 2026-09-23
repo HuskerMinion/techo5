@@ -56,7 +56,7 @@ func (r *roundRenderer) cameraView(s roundScene) {
 		if v.Error != "" {
 			msg = "No picture"
 		}
-		r.centred(r.title, msg, 250, colDim)
+		r.centered(r.title, msg, 250, colDim)
 		if v.Error != "" {
 			r.paragraph(r.small, v.Error, 290, colDim, 2)
 		}
@@ -64,8 +64,8 @@ func (r *roundRenderer) cameraView(s roundScene) {
 	// The name on a dark band near the top, readable over any picture.
 	if v.Name != "" {
 		w := r.width(r.label, v.Name)
-		r.line(float64(centre-w/2-10), 62, float64(centre+w/2+10), 62, 32, color.RGBA{0, 0, 0, 150})
-		r.centred(r.label, v.Name, 69, colText)
+		r.line(float64(center-w/2-10), 62, float64(center+w/2+10), 62, 32, color.RGBA{0, 0, 0, 150})
+		r.centered(r.label, v.Name, 69, colText)
 	}
 }
 
@@ -82,14 +82,14 @@ func (r *roundRenderer) coverCircle(img *image.RGBA, mirror bool) {
 	rr := float64(rimIn) * float64(rimIn)
 	stride := img.Stride
 	for y := 0; y < side; y++ {
-		dy := float64(y) + 0.5 - centre
+		dy := float64(y) + 0.5 - center
 		sy := int(offY + (float64(y)+0.5)*inv)
 		if sy >= sh {
 			sy = sh - 1
 		}
 		row := img.Pix[sy*stride:]
 		for x := 0; x < side; x++ {
-			dx := float64(x) + 0.5 - centre
+			dx := float64(x) + 0.5 - center
 			if dx*dx+dy*dy > rr {
 				continue
 			}
@@ -111,8 +111,8 @@ func (r *roundRenderer) coverCircle(img *image.RGBA, mirror bool) {
 
 // cameraDot is the camera-in-use mark at the top of the rim.
 func (r *roundRenderer) cameraDot() {
-	r.discAt(centre, float64(centre-(rimIn+rimOut)/2), 9, colIconGround)
-	r.discAt(centre, float64(centre-(rimIn+rimOut)/2), 6, colCameraOn)
+	r.discAt(center, float64(center-(rimIn+rimOut)/2), 9, colIconGround)
+	r.discAt(center, float64(center-(rimIn+rimOut)/2), 6, colCameraOn)
 }
 
 // cameraIndex is where entity is on the camera list, or 0.

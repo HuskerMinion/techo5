@@ -10,11 +10,11 @@ import (
 	"testing"
 )
 
-// The Dot's light before an alarm, drawn as the device wears it: a ring of one colour, taken from
+// The Dot's light before an alarm, drawn as the device wears it: a ring of one color, taken from
 // sunriseColor at each point of the ramp. With RING_PREVIEW set to a directory it writes a frame per
 // step, which is the only way to look at this without standing in a dark room at six in the morning.
 //
-// It is a picture of the colours, not of the plastic: the ring is where the light comes out and the
+// It is a picture of the colors, not of the plastic: the ring is where the light comes out and the
 // glow around it is what a table under it does with that light.
 func TestSunriseRingDraws(t *testing.T) {
 	const (
@@ -30,7 +30,7 @@ func TestSunriseRingDraws(t *testing.T) {
 		p := float64(i) / steps
 		c := sunriseColor(p)
 		if c.R == 0 && c.G == 0 && c.B == 0 && p > 0 {
-			t.Errorf("progress %.2f gives no colour at all", p)
+			t.Errorf("progress %.2f gives no color at all", p)
 		}
 
 		img := image.NewRGBA(image.Rect(0, 0, side, side))

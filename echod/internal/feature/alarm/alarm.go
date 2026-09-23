@@ -528,7 +528,7 @@ func (a *Alarms) CancelSnoozes() bool {
 		return false
 	}
 	saveSnoozes(nil)
-	slog.Info("snoozes cancelled", "count", n)
+	slog.Info("snoozes canceled", "count", n)
 	a.poke()
 	a.Changed.Emit(struct{}{})
 	return true

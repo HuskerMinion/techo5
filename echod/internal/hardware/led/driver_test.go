@@ -287,7 +287,7 @@ func TestReleasedClaimIsInert(t *testing.T) {
 }
 
 // A room reaction is dark until something happens, so while it is dark the light underneath has to show
-// through: choosing to follow the room should not mean giving up the ring's own colour for the evenings
+// through: choosing to follow the room should not mean giving up the ring's own color for the evenings
 // nobody says anything.
 func TestARoomReactionShowsTheLightThroughItsSilence(t *testing.T) {
 	d := running(t)
@@ -345,7 +345,7 @@ func TestRepaintingWhatShowsThroughReachesTheRing(t *testing.T) {
 	// Nothing is claimed or released, and the claim on top does not move.
 	base.Paint(solid(red))
 	if got := waitFor(t, d.ring, red); got != red {
-		t.Errorf("after repainting underneath the ring shows %+v, want the new colour", got)
+		t.Errorf("after repainting underneath the ring shows %+v, want the new color", got)
 	}
 }
 

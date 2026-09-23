@@ -15,7 +15,7 @@ import (
 func (d *Display) setMusicStrip(i int) { setStrip(nil, i) }
 
 // The star on the round face, mirroring Done on the other side of play and pause.
-const starX, starY, starR = centre + 88.0, 420.0, 25.0
+const starX, starY, starR = center + 88.0, 420.0, 25.0
 
 // spotFaved is the track the star was last pressed for, so the star shows it was saved.
 var spotFaved atomic.Value // string

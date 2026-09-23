@@ -305,7 +305,7 @@ func decode(raw []byte, first, n int) [][]int16 {
 	return out
 }
 
-// Run reads until ctx is cancelled. It reads whether or not anyone is listening, because a stream
+// Run reads until ctx is canceled. It reads whether or not anyone is listening, because a stream
 // left unread overruns and the hardware ring is only 160 ms deep.
 func (s *Source) Run(ctx context.Context) error {
 	pcm := s.device()
@@ -387,12 +387,12 @@ func (s *Source) broadcast(raw []byte) {
 	mics := Decode(raw)
 	frame := s.mixer.Mix(mics)
 
-	// While something is playing, an echo cancelled fixed path replaces the mix (cancelInput): the filter
+	// While something is playing, an echo canceled fixed path replaces the mix (cancelInput): the filter
 	// learns a single acoustic path, and the beamformer would steer at the loudest thing in the room,
-	// which during playback is the speaker being cancelled.
+	// which during playback is the speaker being canceled.
 	if s.cancelling && s.cancel != nil {
-		if cancelled := s.cancel.apply(raw, cancelInput(s.mixer, mics, frame)); cancelled != nil {
-			frame = cancelled
+		if canceled := s.cancel.apply(raw, cancelInput(s.mixer, mics, frame)); canceled != nil {
+			frame = canceled
 		}
 	}
 

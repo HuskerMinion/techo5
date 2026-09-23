@@ -17,7 +17,7 @@ const (
 	blocks    = 200
 )
 
-// TestSlopes is what tells the colours apart, since getting a filter wrong yields something that still
+// TestSlopes is what tells the colors apart, since getting a filter wrong yields something that still
 // sounds like noise and nothing else here would notice.
 func TestSlopes(t *testing.T) {
 	for _, tc := range []struct {
@@ -122,7 +122,7 @@ func TestUnknownSoundsPlayNothing(t *testing.T) {
 	}
 }
 
-// slope fits dB against octave over the bands, which is the number that names a colour.
+// slope fits dB against octave over the bands, which is the number that names a color.
 func slope(fill Fill) float64 {
 	power := make([]float64, len(bands))
 	buf := make([]float32, blockSize)

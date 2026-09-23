@@ -167,7 +167,7 @@ func TestWaitingForAKeyEndsWhenTheDeviceIsStopping(t *testing.T) {
 	select {
 	case err := <-done:
 		if err == nil {
-			t.Error("a cancelled wait came back with a key")
+			t.Error("a canceled wait came back with a key")
 		}
 	case <-time.After(10 * time.Second):
 		t.Fatal("the wait for a key ignored the device being stopped")

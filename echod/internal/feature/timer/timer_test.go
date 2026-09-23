@@ -115,7 +115,7 @@ func TestAPausedTimerIsNotShownEvenWhenItIsTheSoonest(t *testing.T) {
 	}
 }
 
-func TestACancelledTimerIsForgotten(t *testing.T) {
+func TestACanceledTimerIsForgotten(t *testing.T) {
 	ts := build()
 	ts.Event(started("kettle", 180))
 
@@ -268,15 +268,15 @@ func TestATimerSetHereCountsDownAndRings(t *testing.T) {
 	}
 }
 
-// Cancel is for the device's own timers. Home Assistant's are cancelled where they were set, and it
+// Cancel is for the device's own timers. Home Assistant's are canceled where they were set, and it
 // says so itself, so a tap here must not make the two disagree.
-func TestOnlyTheDevicesOwnTimersAreCancelledHere(t *testing.T) {
+func TestOnlyTheDevicesOwnTimersAreCanceledHere(t *testing.T) {
 	ts := build()
 	ts.Event(started("kettle", 180))
 	id := ts.Start("pasta", time.Minute)
 
 	if ts.Cancel("kettle") {
-		t.Error("cancelled a Home Assistant timer from the device")
+		t.Error("canceled a Home Assistant timer from the device")
 	}
 	if len(ts.held) != 2 {
 		t.Fatalf("holding %d timers, want both", len(ts.held))

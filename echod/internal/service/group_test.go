@@ -74,7 +74,7 @@ func (f *fake) counts() (starts, runs, closes int) {
 	return f.starts, f.runs, f.closes
 }
 
-// blocks until cancelled, which is what most services do.
+// blocks until canceled, which is what most services do.
 func blocks(ctx context.Context) error {
 	<-ctx.Done()
 	return nil

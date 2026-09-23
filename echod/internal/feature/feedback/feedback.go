@@ -92,9 +92,9 @@ func Failure() {
 		led.Content{Effect: name, Base: failureColor}, failureFlash)
 }
 
-// Cancelled is a request dropped on purpose, which is neither a failure nor an answer. It only
+// Canceled is a request dropped on purpose, which is neither a failure nor an answer. It only
 // sounds: the ring is already showing the turn ending, so in quiet hours it leaves nothing behind.
-func Cancelled() {
+func Canceled() {
 	if !config.Quiet() {
 		speaker.Sound().Chime(speaker.ToneCancel)
 	}
