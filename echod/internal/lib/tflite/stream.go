@@ -154,7 +154,15 @@ func (s *Stream) Warmup() int { return s.warmup }
 
 // Write feeds rows and returns whatever came out, flat and oldest first. The returned slice is
 // reused by the next call.
-func (s *Stream) Write(rows []float32) ([]float32, error) {
+func (s *Stream) Write(rows []float32) (out []float32, err error) {
+	// The same last frame as Invoke: NewStream checks what it can up front, but a kernel still runs on
+	// the model's own shapes and constants, and a file that says something no converter would say lands
+	// as an index here, on the goroutine listening for the wake word, where a panic takes the daemon.
+	defer func() {
+		if r := recover(); r != nil {
+			out, err = nil, fmt.Errorf("tflite: malformed model: %v", r)
+		}
+	}()
 	cur := rows
 	for i := range s.stages {
 		out, err := s.stages[i].run(cur)

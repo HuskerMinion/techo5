@@ -12,11 +12,16 @@ import (
 	"os/exec"
 	"sync"
 	"sync/atomic"
+	"time"
 )
 
 // WebRTCHelper is the helper that runs WebRTC's echo canceller (tools/aec/techo5-aec.cpp); the
 // daemon feeds it blocks over pipes. Looked up on PATH and next to the daemon.
 const WebRTCHelper = "techo5-aec"
+
+// helperStall is how long a block may take before the helper is taken for hung. A block is 20 ms of
+// audio and normally comes back in a few; a second is far past anything a busy CPU explains.
+const helperStall = time.Second
 
 // external is WebRTC's canceller in a helper process. One block of microphone and one of loopback
 // go in; one block comes out, in order, so Process blocks for as long as the helper takes.
@@ -86,6 +91,14 @@ func (e *external) Process(mic, ref []int16) ([]int16, error) {
 		e.buf = make([]byte, 4*n)
 	}
 	b := e.buf[:4*n]
+	// A helper that is alive but no longer answering would hold this goroutine, and capture with it,
+	// in the Write or the Read below for good. Killing it closes its pipes, which ends either one.
+	stall := time.AfterFunc(helperStall, func() {
+		e.broken.Store(true)
+		slog.Warn("echo cancellation helper stopped answering; killing it", "after", helperStall)
+		_ = e.cmd.Process.Kill()
+	})
+	defer stall.Stop()
 	for i, v := range mic {
 		binary.LittleEndian.PutUint16(b[2*i:], uint16(v))
 	}
@@ -125,10 +138,11 @@ func (e *external) Healthy() bool { return !e.broken.Load() }
 
 // Close ends the helper.
 func (e *external) Close() {
-	e.mu.Lock()
-	defer e.mu.Unlock()
-	_ = e.in.Close()
+	// Kill first: a Process stuck on the helper holds the lock, and this is what lets it go.
 	if e.cmd.Process != nil {
 		_ = e.cmd.Process.Kill()
 	}
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	_ = e.in.Close()
 }

@@ -388,11 +388,25 @@ func (p *Player) Run(ctx context.Context) error {
 // send writes one period, putting the same buffer back after an underrun rather than refilling. fill
 // has already taken these frames off the queue, so starting over would play the period after them and
 // lose these.
+//
+// The driver may also take only part of it: a signal that lands mid-write, and the runtime sends one
+// to preempt goroutines, ends the write with however many frames had gone in. The rest follow.
 func (p *Player) send(ctx context.Context, to io.Writer, buf []byte) error {
 	for {
-		_, err := to.Write(buf)
+		n, err := to.Write(buf)
 		if err == nil {
-			return nil
+			if n >= len(buf) {
+				return nil
+			}
+			if n <= 0 {
+				// Nothing taken and nothing wrong would loop here for good.
+				return io.ErrShortWrite
+			}
+			buf = buf[n:]
+			continue
+		}
+		if errors.Is(err, syscall.EINTR) {
+			continue
 		}
 		if err != alsa.ErrUnderrun {
 			return err

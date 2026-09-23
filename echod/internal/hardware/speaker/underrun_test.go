@@ -4,7 +4,9 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"io"
 	"slices"
+	"syscall"
 	"testing"
 
 	"github.com/HuskerMinion/techo5/echod/internal/lib/alsa"
@@ -102,3 +104,50 @@ func TestAnythingOtherThanAnUnderrunIsReturned(t *testing.T) {
 type writerFunc func([]byte) (int, error)
 
 func (w writerFunc) Write(p []byte) (int, error) { return w(p) }
+
+// A write the driver cut short has to carry on from where it stopped, not drop the rest of the period.
+func TestAShortWriteSendsTheRest(t *testing.T) {
+	p := &Player{}
+	var got []byte
+	calls := 0
+	err := p.send(context.Background(), writerFunc(func(b []byte) (int, error) {
+		calls++
+		n := min(len(b), 4)
+		got = append(got, b[:n]...)
+		return n, nil
+	}), []byte{1, 2, 3, 4, 5, 6, 7, 8, 9, 10})
+
+	if err != nil {
+		t.Fatalf("send = %v", err)
+	}
+	if want := []byte{1, 2, 3, 4, 5, 6, 7, 8, 9, 10}; !slices.Equal(got, want) {
+		t.Errorf("played %v, want %v", got, want)
+	}
+	if calls != 3 {
+		t.Errorf("wrote %d times, want 3", calls)
+	}
+}
+
+func TestAnInterruptedWriteIsRetried(t *testing.T) {
+	p := &Player{}
+	calls := 0
+	err := p.send(context.Background(), writerFunc(func(b []byte) (int, error) {
+		calls++
+		if calls == 1 {
+			return 0, syscall.EINTR
+		}
+		return len(b), nil
+	}), []byte{1, 2})
+
+	if err != nil || calls != 2 {
+		t.Errorf("send = %v after %d writes, want nil after 2", err, calls)
+	}
+}
+
+func TestAWriterThatTakesNothingIsNotASpin(t *testing.T) {
+	p := &Player{}
+	err := p.send(context.Background(), writerFunc(func([]byte) (int, error) { return 0, nil }), []byte{1, 2})
+	if !errors.Is(err, io.ErrShortWrite) {
+		t.Errorf("send = %v, want io.ErrShortWrite", err)
+	}
+}

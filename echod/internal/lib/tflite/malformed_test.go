@@ -94,3 +94,22 @@ func TestNewStreamRefusesAModelThatMakesNoSense(t *testing.T) {
 		})
 	}
 }
+
+func TestStreamWriteTurnsAKernelPanicIntoAnError(t *testing.T) {
+	// A stage NewStream would not have built: its second operand is missing, which a kernel reads
+	// without asking. Write is on the wake word's goroutine, so this has to come back as an error.
+	s := &Stream{stages: []stage{{
+		op:       &OpDesc{Op: OpAdd, Inputs: []int{0, -1}, Outputs: []int{1}},
+		consts:   []*Tensor{nil},
+		out:      &Tensor{Type: Float32},
+		need:     1,
+		consume:  1,
+		rowSize:  2,
+		width:    1,
+		channels: 2,
+	}}}
+	out, err := s.Write([]float32{1, 2})
+	if err == nil || !strings.Contains(err.Error(), "malformed model") {
+		t.Fatalf("Write = %v, %v; want a malformed-model error", out, err)
+	}
+}
