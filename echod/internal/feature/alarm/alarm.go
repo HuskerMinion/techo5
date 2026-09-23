@@ -92,6 +92,7 @@ type Alarms struct {
 	// sound and snoozeFor are the ring's settings in Home Assistant; the screen sets them too.
 	sound     *esphome.Select
 	snoozeFor *esphome.Number
+	ringVol   *esphome.Number
 
 	wake chan struct{}
 
@@ -135,6 +136,12 @@ func build() *Alarms {
 		Mode: esphome.NumberBox,
 	}
 	a.snoozeFor.OnCommand = func(v float32) { a.SetSnooze(int(v)) }
+	a.ringVol = &esphome.Number{
+		Base: esphome.Base{ObjectID: "ring_volume", Name: "Ring volume", Icon: "mdi:bell-ring", Category: esphome.CategoryConfig},
+		Min:  0, Max: config.VolumeSteps, Step: 1,
+		Mode: esphome.NumberSlider,
+	}
+	a.ringVol.OnCommand = func(v float32) { a.SetRingVolume(int(v), false) }
 	hastate.Get().Changed.Listen(func(u hastate.Update) {
 		if a.follows(u.Entity) {
 			a.poke()
@@ -146,13 +153,23 @@ func build() *Alarms {
 func (a *Alarms) Name() string { return "alarms" }
 
 func (a *Alarms) Entities() []esphome.Entity {
-	return []esphome.Entity{a.next, a.stop, a.snooze, a.sound, a.snoozeFor}
+	return []esphome.Entity{a.next, a.stop, a.snooze, a.sound, a.snoozeFor, a.ringVol}
 }
 
 func (a *Alarms) Restore(c config.Config) {
 	a.sound.Set(soundName(c.Alarms.Sound))
 	a.snoozeFor.Set(float32(c.Alarms.Snooze()))
 	a.followHelpers(c.Alarms.Follow)
+
+	// The first start with a ring volume writes down the one it started from, so it stops following
+	// the media volume from here on: that it no longer follows is the whole point of it.
+	level := c.Alarms.Ring(c.Speaker.Volume)
+	a.ringVol.Set(float32(level))
+	if c.Alarms.RingVolume == nil {
+		if err := config.Set().Alarms().RingVolume(level); err != nil {
+			slog.Warn("saving the first ring volume failed", "err", err)
+		}
+	}
 
 	// The snoozes come back as they were. One whose moment has already passed is not rung — the
 	// scheduler's first window is a few microseconds wide, so nothing restored can be due in it, and
@@ -218,6 +235,21 @@ func (a *Alarms) SetSnooze(minutes int) {
 	}
 	a.snoozeFor.Set(float32(minutes))
 	slog.Info("snooze length", "minutes", minutes)
+}
+
+// SetRingVolume sets how loud alarms and timers ring, and plays one round of the alarm sound at it
+// when asked, so a level chosen on the screen is heard as it is chosen.
+func (a *Alarms) SetRingVolume(step int, preview bool) {
+	step = min(max(step, 0), config.VolumeSteps)
+	if err := config.Set().Alarms().RingVolume(step); err != nil {
+		slog.Error("saving the ring volume failed", "err", err)
+		return
+	}
+	a.ringVol.Set(float32(step))
+	slog.Info("ring volume", "step", step, "of", config.VolumeSteps)
+	if preview && !a.Ringing() {
+		ring.Sample(speaker.AlarmSound(a.Sound()))
+	}
 }
 
 func (a *Alarms) poke() {

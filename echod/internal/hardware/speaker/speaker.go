@@ -109,6 +109,14 @@ type Player struct {
 	mu      sync.Mutex
 	pending []int16 // interleaved stereo waiting to go out
 
+	// bell is a ring's chime, queued apart from everything else because it goes out at a level of
+	// its own: bellStep rather than the media volume. ringing holds that level for the whole of a
+	// ring rather than only while a chime sounds, so the music under it does not change tuning
+	// between one chime and the next. See fill.
+	bell     []int16
+	bellStep atomic.Int32
+	ringing  atomic.Bool
+
 	// written counts frames handed to the card, which is what a Source places audio against.
 	written atomic.Uint64
 
@@ -407,6 +415,12 @@ func (p *Player) fill(buf []byte) {
 	if len(p.pending) == 0 {
 		p.pending = nil
 	}
+	rang := min(len(p.bell), period*Channels)
+	bell := p.bell[:rang]
+	p.bell = p.bell[rang:]
+	if len(p.bell) == 0 {
+		p.bell = nil
+	}
 	p.mu.Unlock()
 
 	// The queue emptied part way through this buffer, so silence is spliced into whatever was
@@ -429,25 +443,41 @@ func (p *Player) fill(buf []byte) {
 	// The write loop runs whether or not anything is playing, since the amplifier hisses when nothing
 	// drives the DAC, and tuning silence costs what tuning music costs. The block after the audio stops
 	// still goes through: that is the filter's own length, and it holds the tail.
-	fed := take > 0 || len(rendered) > 0
+	fed := take > 0 || len(rendered) > 0 || rang > 0
 	drain := fed || p.fed
 	p.fed = fed
 
 	// The tuning is for the driver, so the line-out is left with what it was sent.
 	tuned := mono && p.chain != nil && p.on.Load() && drain
 
+	// There is one gain after the tuning, so two levels are made from it: the output goes at the
+	// louder of the two, and whichever lane is quieter is scaled down by the difference before the
+	// mix. The music comes out at the media volume either way, and a muted one stays muted under
+	// the alarm. On the tuned path the compressor narrows that difference a little, since it works
+	// on the sum; the lane that sets the output level is exact.
+	gain, step := p.Volume(), int(p.step.Load())
+	mediaK, bellK := float32(1), float32(0)
+	if rang > 0 || p.ringing.Load() {
+		bs := int(p.bellStep.Load())
+		bg := p.gainFor(bs)
+		if bg > gain {
+			mediaK, bellK, gain, step = gain/bg, 1, bg, bs
+		} else if gain > 0 {
+			bellK = bg / gain
+		}
+	}
+
 	// The vendor tunes by volume: each bucket has a filter of its own, and on the Show the quiet ones
 	// carry more bass and treble rather than simply less of everything. Telling the chain where the
 	// dial is picks the one it meant.
 	if tuned {
-		p.chain.Volume(float64(p.step.Load()) / VolumeSteps)
+		p.chain.Volume(float64(step) / VolumeSteps)
 		if want, ok := p.tone.Load().(asp.Tone); ok && want != p.applied {
 			p.chain.SetTone(want)
 			p.applied = want
 		}
 	}
 
-	gain := p.Volume()
 	for i, j := 0, 0; i < period*Channels; i, j = i+Channels, j+1 {
 		var l, r int32
 		if i < len(chunk) {
@@ -461,6 +491,17 @@ func (p *Player) fill(buf []byte) {
 		}
 		if i+1 < len(rendered) {
 			r += int32(rendered[i+1])
+		}
+		if mediaK != 1 || bellK != 0 {
+			var bl, br float32
+			if i < len(bell) {
+				bl = float32(bell[i])
+			}
+			if i+1 < len(bell) {
+				br = float32(bell[i+1])
+			}
+			l = int32(float32(l)*mediaK + bl*bellK)
+			r = int32(float32(r)*mediaK + br*bellK)
 		}
 		if mono {
 			l = (l + r) / 2
@@ -738,6 +779,43 @@ func (p *Player) SetVolume(step int) {
 		return
 	}
 	p.volume.Store(math.Float32bits(gainForStep(p.Output(), step)))
+}
+
+// gainFor is the linear gain for a step on whatever the audio is going to now.
+func (p *Player) gainFor(step int) float32 {
+	step = max(0, min(step, VolumeSteps))
+	if p.sink.Load() != nil {
+		return sinkGain(step)
+	}
+	return gainForStep(p.Output(), step)
+}
+
+// Bell mixes a ring's chime into the bell's own queue, to go out at step rather than at the media
+// volume. Dropped with no device, as Play drops.
+func (p *Player) Bell(step int, level float64, notes ...Note) {
+	if pb, _ := p.device(); pb == nil {
+		return
+	}
+	var out []int16
+	for _, n := range notes {
+		out = append(out, tone(n, level)...)
+	}
+	p.bellStep.Store(int32(max(0, min(step, VolumeSteps))))
+	p.mu.Lock()
+	p.bell = mix(p.bell, out)
+	p.mu.Unlock()
+}
+
+// Ringing holds the bell's level for as long as a ring lasts, and ending it drops any chime still
+// queued, so a ring stopped mid-chime goes quiet at once.
+func (p *Player) Ringing(on bool, step int) {
+	p.bellStep.Store(int32(max(0, min(step, VolumeSteps))))
+	p.ringing.Store(on)
+	if !on {
+		p.mu.Lock()
+		p.bell = nil
+		p.mu.Unlock()
+	}
 }
 
 // Step is the current volume step.

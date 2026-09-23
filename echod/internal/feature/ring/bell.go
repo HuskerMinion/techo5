@@ -6,6 +6,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/HuskerMinion/techo5/echod/internal/config"
 	"github.com/HuskerMinion/techo5/echod/internal/hardware/led"
 	"github.com/HuskerMinion/techo5/echod/internal/hardware/speaker"
 	"github.com/HuskerMinion/techo5/echod/internal/lib/safe"
@@ -32,7 +33,8 @@ var (
 	ringEvery = RingEvery
 
 	chime = func(notes []speaker.Note) {
-		speaker.Sound().Interject(func(p *speaker.Player) { p.Chime(level, notes...) })
+		step := Level()
+		speaker.Sound().Interject(func(p *speaker.Player) { p.Bell(step, level, notes...) })
 	}
 
 	light = sync.OnceValue(func() *led.Claim { return led.Get().Claim(led.PriorityAlarm) })
@@ -46,6 +48,8 @@ var (
 		} else {
 			light().Clear()
 		}
+		step := Level()
+		speaker.Sound().Interject(func(p *speaker.Player) { p.Ringing(on, step) })
 		speaker.Sound().Backgrounds().Duck(on)
 	}
 )
@@ -104,8 +108,14 @@ func Start(what string, notes []speaker.Note, ended func()) (stop func()) {
 	}
 }
 
-// Sample plays one round of a ring's chime as it would ring, for somebody choosing a sound.
+// Sample plays one round of a ring's chime as it would ring, for somebody choosing a sound or a level.
 func Sample(notes []speaker.Note) { chime(notes) }
+
+// Level is how loud a ring goes, in the media volume's steps: its own setting, not the media volume.
+func Level() int {
+	c := config.Get()
+	return c.Alarms.Ring(c.Speaker.Volume)
+}
 
 func nudge() {
 	select {

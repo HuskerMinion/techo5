@@ -10,6 +10,7 @@ import (
 
 	"github.com/HuskerMinion/techo5/echod/internal/config"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/alarm"
+	"github.com/HuskerMinion/techo5/echod/internal/feature/ring"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/timer"
 )
 
@@ -67,8 +68,20 @@ func alarmsCard(sv sheetView) cardView {
 	v.rows = append(v.rows, rows...)
 	return v.withRows(
 		settingRow{id: "snooze", label: "Snooze length", kind: ctlStepper, value: fmt.Sprintf("%d min", sv.snooze)},
+		ringVolumeRow(),
 		settingRow{id: "alarmsound", label: "Alarm sound", sub: "Plays once when you choose it", kind: ctlChoice, value: alarm.Get().Sound()},
 	)
+}
+
+// ringVolumeRow is how loud alarms and timers ring. At zero it says what that means in words, since a
+// silent alarm is the one setting on this card that can make somebody late.
+func ringVolumeRow() settingRow {
+	n := ring.Level()
+	if n == 0 {
+		return settingRow{id: "ringvol", label: "Ring volume", sub: "Alarms and timers will make no sound", kind: ctlStepper, value: "Silent"}
+	}
+	return settingRow{id: "ringvol", label: "Ring volume", sub: "Alarms and timers, not the music", kind: ctlStepper,
+		value: fmt.Sprintf("%d of %d", n, sheetVolumeSteps)}
 }
 
 func (v cardView) withRows(rows ...settingRow) cardView {
@@ -276,6 +289,14 @@ func (d *Display) alarmRowTap(id string, p part, opt int) bool {
 			alarm.Get().SetSnooze(n - 1)
 		case partPlus:
 			alarm.Get().SetSnooze(n + 1)
+		}
+	case "ringvol":
+		n := ring.Level()
+		switch p {
+		case partMinus:
+			alarm.Get().SetRingVolume(n-1, true)
+		case partPlus:
+			alarm.Get().SetRingVolume(n+1, true)
 		}
 	case "alarmsound", "e.repeat":
 		d.openPicker(id)
