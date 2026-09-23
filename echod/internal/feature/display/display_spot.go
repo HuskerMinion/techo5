@@ -230,6 +230,7 @@ func build() *Display {
 	alarm.Get().Changed.Listen(func(struct{}) { d.ringLights() })
 	remind.Get().Changed.Listen(func(struct{}) { d.reminderLights() })
 	home.Get().Changed.Listen(func(struct{}) { d.wake() })
+	onMissed(d.wake)
 	hastate.Get().Changed.Listen(func(u hastate.Update) {
 		// Only a change means a station is starting; the first value is the one that played last.
 		if u.First || u.Attribute != "" || u.Entity == "" || u.Entity != config.Get().Home.Radio.Now {
@@ -1068,6 +1069,7 @@ func (d *Display) frame() time.Duration {
 	d.mu.Lock()
 	s.reminderScroll = d.reminderScroll
 	d.mu.Unlock()
+	s.missed = missedNote(now, true)
 
 	if boring {
 		s.slideshow = home.Get().SlideshowBackground()

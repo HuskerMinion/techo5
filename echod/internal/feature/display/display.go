@@ -230,6 +230,7 @@ func build() *Display {
 	alarm.Get().Changed.Listen(func(struct{}) { d.wake() })
 	remind.Get().Changed.Listen(func(struct{}) { d.wake() })
 	timer.Get().Changed.Listen(func(struct{}) { d.wake() })
+	onMissed(d.wake)
 	home.Get().Changed.Listen(func(struct{}) { d.wake() })
 	return d
 }
@@ -1198,6 +1199,7 @@ func (d *Display) frame() time.Duration {
 	if s.reminder.From != config.Get().Device.Name {
 		s.reminderFrom = s.reminder.From
 	}
+	s.missed = missedNote(now, false)
 
 	if boring {
 		s.slideshow = home.Get().SlideshowBackground()

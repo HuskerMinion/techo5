@@ -138,6 +138,7 @@ func TestRoundScenesDraw(t *testing.T) {
 		"settings-tzcommon": spotPicker(catGeneral, "timezone:Common"),
 		"settings-sound":    spotScene(catSound),
 		"settings-privacy":  spotScene(catSecurity),
+		"clock-missed":      {now: at, phase: "idle", missed: "Missed: timer \"Pasta\" at 2:03 PM"},
 		"settings-alarms":   spotScene(catAlarms),
 		"settings-alarms-end": func() roundScene {
 			s := spotScene(catAlarms)

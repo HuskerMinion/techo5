@@ -124,6 +124,9 @@ type roundScene struct {
 	// slideshowTrouble is why the slideshow has no photo, once it has given up looking.
 	slideshowTrouble string
 
+	// missed is a ring that fell due while the device could not sound it, said under the clock.
+	missed string
+
 	// announceReady is whether this house has a word set, announceRecording whether this device is
 	// taking an announcement now, announcePeers how many others are listening, and announcement one
 	// that arrived and is still showing.
@@ -320,6 +323,10 @@ func (r *roundRenderer) clockFace(s roundScene) {
 	if len(s.timers) > 0 {
 		t := s.timers[0]
 		r.centred(r.body, "Timer "+clockDuration(t.Left), line, colTimer)
+		line += 34
+	}
+	if s.missed != "" {
+		r.centred(r.small, s.missed, line, colTimer)
 		line += 34
 	}
 	if s.slideshowTrouble != "" {

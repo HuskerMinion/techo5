@@ -120,6 +120,9 @@ type scene struct {
 	// the footer so a folder that went away is visible rather than silently retried.
 	slideshowTrouble string
 
+	// missed is a ring that fell due while the device could not sound it, said in the footer.
+	missed string
+
 	// announceReady is whether this house has a word set, without which announcements go nowhere;
 	// announceRecording whether this device has its microphone open for one now; announcePeers how
 	// many other devices are listening for them.
@@ -591,6 +594,8 @@ func (r *renderer) footer(s scene) {
 	switch {
 	case s.setupAsking:
 		r.text(r.tiny, "setup: a browser is asking to be let in", r.margin, y, amber)
+	case s.missed != "":
+		r.text(r.tiny, s.missed, r.margin, y, amber)
 	case s.slideshowTrouble != "":
 		r.text(r.tiny, s.slideshowTrouble, r.margin, y, dim)
 	}
