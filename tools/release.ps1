@@ -141,7 +141,9 @@ $sums = $files | ForEach-Object { "$((Get-FileHash -Algorithm SHA256 $_).Hash.To
 $sumsFile = Join-Path $bin 'SHA256SUMS'
 [IO.File]::WriteAllText($sumsFile, ($sums -join "`n") + "`n")
 $args = @($args[0..2]) + $sumsFile + @($args[3..($args.Count - 1)])
-if ($Prerelease) { $args += '--prerelease' }
+# A version with a suffix (-rc.1, -beta) is a prerelease whether or not -Prerelease was given: GitHub
+# otherwise makes it /releases/latest, which is what the installers and every unit's updater follow.
+if ($Prerelease -or $Version -match '-') { $args += '--prerelease' }
 & gh @args
 if ($LASTEXITCODE -ne 0) { throw 'gh release create failed' }
 
