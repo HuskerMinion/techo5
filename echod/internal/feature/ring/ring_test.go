@@ -13,7 +13,8 @@ func at(t *testing.T, clock *time.Time) {
 	t.Cleanup(func() {
 		state.now = was
 		state.mu.Lock()
-		state.sounding, state.until = 0, time.Time{}
+		state.sounding, state.until, state.offer = 0, time.Time{}, time.Time{}
+		state.silences, state.snoozes = nil, nil
 		state.mu.Unlock()
 	})
 }

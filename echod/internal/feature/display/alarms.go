@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/HuskerMinion/techo5/echod/internal/feature/alarm"
+	"github.com/HuskerMinion/techo5/echod/internal/feature/ring"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/timer"
 )
 
@@ -16,6 +17,11 @@ type ringState struct {
 	alarm     *alarm.Ring
 	preview   bool
 	snoozable bool
+
+	// silenced is a ring a button press quieted, waiting to be told whether that meant snooze. The
+	// page says so, because a silent ring with the same face on it looks like one that stopped, and
+	// somebody who walks away from it will find it ringing again in a moment.
+	silenced bool
 }
 
 func (r ringState) any() bool { return r.timer != "" || r.alarm != nil || r.preview }
@@ -28,6 +34,7 @@ func (d *Display) ringing(now time.Time) ringState {
 	}
 	st.alarm = alarm.Get().View(now).Ringing
 	st.snoozable = st.alarm != nil
+	st.silenced = ring.Offered()
 	d.mu.Lock()
 	if now.Before(d.ringPreview) && !st.any() {
 		st.preview, st.snoozable = true, true

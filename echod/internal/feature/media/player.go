@@ -18,6 +18,7 @@ import (
 
 	"github.com/HuskerMinion/techo5/echod/internal/component"
 	"github.com/HuskerMinion/techo5/echod/internal/config"
+	"github.com/HuskerMinion/techo5/echod/internal/feature/ring"
 	"github.com/HuskerMinion/techo5/echod/internal/hardware/buttons"
 	"github.com/HuskerMinion/techo5/echod/internal/hardware/led"
 	"github.com/HuskerMinion/techo5/echod/internal/hardware/speaker"
@@ -280,6 +281,20 @@ func build() *Player {
 	buttons.Get().Events.Listen(func(e buttons.Event) {
 		if e.Kind == buttons.Hold {
 			return
+		}
+		switch e.Name {
+		case buttons.VolumeUp, buttons.VolumeDown:
+			// A ring takes the press. Somebody reaching for a volume button over a ringing alarm
+			// wants it to stop, not to be one step quieter — and on a Show or a Spot there is no
+			// other button to reach for, so this is the only stop that works with no screen and no
+			// microphone. The level is left where it was, so the press costs nothing but the ring.
+			if ring.Offered() {
+				ring.Accept()
+				return
+			}
+			if ring.Silence() {
+				return
+			}
 		}
 		switch e.Name {
 		case buttons.VolumeUp:

@@ -40,6 +40,19 @@ func (r *renderer) ringingPage(s scene) {
 	}
 	r.text(r.title, title, (r.w-r.width(r.title, title))/2, r.s(80), amber)
 
+	// A silenced ring looks exactly like one that stopped, and it is not stopped: it comes back in a
+	// moment unless it is answered. So say both things — that it is silent, and what the next press
+	// will do with it.
+	if st.silenced {
+		note := "Silenced"
+		if st.snoozable {
+			note = fmt.Sprintf("Silenced · press again to snooze %d min", s.snooze)
+		}
+		// In the tiny face, on the one band that is clear: the title's descenders end around 92 and
+		// the clock's digits begin around 122, which a 34pt line does not fit inside and this does.
+		r.text(r.tiny, note, (r.w-r.width(r.tiny, note))/2, r.s(112), dim)
+	}
+
 	hour := clockHM(s.now)
 	ampm := clockSuffix(s.now)
 	gap := r.s(18)

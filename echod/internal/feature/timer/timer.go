@@ -31,6 +31,10 @@ import (
 
 func init() {
 	component.Register(component.Device, Get(), component.Order(31))
+
+	// Only a silence, and no snooze: a timer cannot be put off, so an offer accepted beside a
+	// ringing alarm stops the timer and snoozes the alarm, which is what somebody means.
+	ring.Silences(func() bool { return Get().Stop() })
 }
 
 const (
@@ -413,9 +417,14 @@ func (t *Timers) ring(ctx context.Context) {
 
 	over := time.After(ringFor)
 	for {
-		// A near miss on the stop word hushes the chime for a moment, so the word that stops it is
-		// said into a gap rather than over the tone. The LED goes on pulsing through it.
-		if !ring.Hushed() {
+		// A silenced ring whose offer ran out takes the answer it did not get, and stops.
+		if ring.Lapsed() {
+			slog.Info("timer silenced by a button and left unanswered, stopping")
+			return
+		}
+		// Quiet covers both reasons the chime is held back: a near miss on the stop word, and a
+		// button press waiting on an answer. The LED goes on pulsing through it.
+		if !ring.Quiet() {
 			sound.Interject(func(p *speaker.Player) { p.Chime(alarmLevel, speaker.ToneTimer...) })
 		}
 

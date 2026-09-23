@@ -69,6 +69,12 @@ func TestShowScenesDraw(t *testing.T) {
 		"ringing-alarm": {now: at, phase: "idle",
 			ring: ringState{alarm: &alarm.Ring{Label: "Wake up"}, snoozable: true}, snooze: 9},
 		"ringing-timer": {now: at, phase: "idle", ring: ringState{timer: "Pasta"}},
+		// Silenced by a button press and waiting to be told what that meant. It looks like a ring
+		// that stopped and is not one, so the page has to say so.
+		"ringing-silenced": {now: at, phase: "idle", snooze: 9,
+			ring: ringState{alarm: &alarm.Ring{Label: "Wake up"}, snoozable: true, silenced: true}},
+		"ringing-silenced-timer": {now: at, phase: "idle", snooze: 9,
+			ring: ringState{timer: "Pasta", silenced: true}},
 		// Muted, on the pages the header has to carry it onto. The ringing one is why the header
 		// exists: an alarm sounding on a device that cannot hear "stop" used to look exactly like one
 		// that could.

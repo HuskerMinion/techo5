@@ -16,6 +16,7 @@ import (
 
 	"github.com/HuskerMinion/techo5/echod/internal/component"
 	"github.com/HuskerMinion/techo5/echod/internal/config"
+	"github.com/HuskerMinion/techo5/echod/internal/feature/ring"
 	"github.com/HuskerMinion/techo5/echod/internal/hardware/buttons"
 	"github.com/HuskerMinion/techo5/echod/internal/hardware/led"
 	"github.com/HuskerMinion/techo5/echod/internal/hardware/mic"
@@ -197,6 +198,16 @@ func (m *Mute) pressed(e buttons.Event) {
 	}
 	switch e.Kind {
 	case buttons.Tap:
+		// A ring takes the press, and the microphone is left where it was. Cutting the microphone is
+		// the last thing somebody wants at a ringing alarm, since it would take the stop word with
+		// it — and on a device with no action button this is one of the three that can stop a ring.
+		if ring.Offered() {
+			ring.Accept()
+			return
+		}
+		if ring.Silence() {
+			return
+		}
 		m.Toggle()
 	case buttons.Hold:
 		speaker.Sound().Chime(speaker.ToneMuteHold)

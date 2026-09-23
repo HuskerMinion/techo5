@@ -31,6 +31,12 @@ import (
 
 func init() {
 	component.Register(component.Device, Get(), component.Order(32))
+
+	// So that anything meaning "stop the noise" can say so without knowing there are two ring
+	// engines. Registered here rather than lazily because Get is called on the line above, so by the
+	// time a button can be pressed this is already in place.
+	ring.Silences(func() bool { return Get().Stop() })
+	ring.Snoozes(func() bool { return Get().Snooze() })
 }
 
 const (
@@ -326,10 +332,16 @@ func (a *Alarms) ring(ctx context.Context) {
 	over := time.After(ringFor)
 	notes := speaker.AlarmSound(a.Sound())
 	for {
-		// A near miss on the stop word hushes the chime for a moment. The alarm ducks the radio so it
-		// can be heard; this is the one thing that ducks the alarm, so the word that stops it can be
-		// heard too. The LED goes on pulsing through the gap, so the alarm stays obviously alive.
-		if !ring.Hushed() {
+		// A silenced ring whose offer ran out takes the answer it did not get, and stops.
+		if ring.Lapsed() {
+			slog.Info("alarm silenced by a button and left unanswered, stopping")
+			return
+		}
+		// Quiet covers both reasons the chime is held back: a near miss on the stop word, and a
+		// button press waiting on an answer. The alarm ducks the radio so it can be heard; this is
+		// the one thing that ducks the alarm. The LED goes on pulsing through it, so the alarm stays
+		// obviously alive while it is silent.
+		if !ring.Quiet() {
 			sound.Interject(func(p *speaker.Player) { p.Chime(level, notes...) })
 		}
 		select {
