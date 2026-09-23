@@ -13,6 +13,7 @@ import (
 
 	"github.com/HuskerMinion/techo5/echod/internal/config"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/voice"
+	"github.com/HuskerMinion/techo5/echod/internal/hardware/touch"
 )
 
 // The night schedule asks when the conversation last moved, and the conversation is what answers.
@@ -106,5 +107,50 @@ func TestTheNightDoesNotRelightAScreenSwitchedOffByHand(t *testing.T) {
 
 	if d.night(time.Now(), false, voice.State{Phase: "idle"}) {
 		t.Error("the end of the night switched on a screen somebody had switched off")
+	}
+}
+
+// With the night light chosen, the night leaves the screen on at a glow rather than putting it out; the
+// first touch only brings it up, and after that the screen stays up while it is being used.
+func TestTheNightLightGlowsAndATouchBringsItUp(t *testing.T) {
+	config.Use(filepath.Join(t.TempDir(), "config.json"))
+	h := time.Now().Hour()
+	if err := config.Set().Screen().Night(fmt.Sprintf("%d-%d", (h+23)%24, (h+2)%24)); err != nil {
+		t.Fatal(err)
+	}
+	if err := config.Set().Screen().NightLight(true); err != nil {
+		t.Fatal(err)
+	}
+	d := &Display{
+		poke: make(chan struct{}, 1),
+		view: voice.State{Phase: "idle"},
+		light: &esphome.Light{
+			Base:                esphome.Base{ObjectID: "screen", Name: "Screen", Icon: "mdi:monitor"},
+			SupportedColorModes: []esphome.ColorMode{esphome.ColorModeBrightness},
+		},
+		on: true, ceiling: 60,
+	}
+	d.touchedAt = time.Now().Add(-time.Hour)
+	d.viewAt = time.Now().Add(-time.Hour)
+
+	if !d.night(time.Now(), true, voice.State{Phase: "idle"}) {
+		t.Fatal("the night did nothing to an idle screen")
+	}
+	d.mu.Lock()
+	glowing, on, dark := d.nightGlow, d.on, d.nightDark
+	d.mu.Unlock()
+	if !glowing || !on || dark {
+		t.Fatalf("want a glowing screen that is still on: glow=%v on=%v dark=%v", glowing, on, dark)
+	}
+
+	d.gesture(touch.Gesture{Kind: touch.Tap, X: 10, Y: 10})
+	d.mu.Lock()
+	glowing = d.nightGlow
+	d.mu.Unlock()
+	if glowing {
+		t.Fatal("a touch left the screen at the night light")
+	}
+	if d.night(time.Now(), true, voice.State{Phase: "idle"}) {
+		t.Error("the screen went back down while it was being used")
 	}
 }

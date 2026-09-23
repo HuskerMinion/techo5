@@ -11,6 +11,10 @@ type Screen struct {
 	// never. A tap wakes it for a while.
 	Night string `json:"night,omitempty"`
 
+	// NightLight keeps a Show's screen on at a faint glow through the night instead of putting it out;
+	// a touch brings it up to its brightness for a while.
+	NightLight bool `json:"night_light,omitempty"`
+
 	// Theme names the screen's palette; empty is the first one, "Custom" is Palette.
 	Theme   string  `json:"theme,omitempty"`
 	Palette Palette `json:"palette,omitempty"`
@@ -66,6 +70,10 @@ func (w ScreenWriter) Auto(v bool) error {
 
 func (w ScreenWriter) Theme(v string) error {
 	return w.st.Update(func(c *Config) { c.Screen.Theme = v })
+}
+
+func (w ScreenWriter) NightLight(v bool) error {
+	return w.st.Update(func(c *Config) { c.Screen.NightLight = v })
 }
 
 func (w ScreenWriter) Night(v string) error {

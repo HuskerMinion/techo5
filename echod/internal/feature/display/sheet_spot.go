@@ -120,6 +120,9 @@ func restartNow() { restartDevice() }
 // than going dark.
 const nightRowLabel = "Dim at night"
 
+// hasNightLight is the Show's choice of a night light or a dark screen; the Spot's night only dims.
+const hasNightLight = false
+
 // adaptRows fits the shared rows to the round card, which is narrower than the Show's: shorter
 // labels, a status under a row's name rather than beside its button, no second button beside a
 // choice (Weather's Show: the forecast is on the dial), and Updates as two rows, its channel and

@@ -1162,3 +1162,8 @@ func (d *Display) Screenshot() *image.RGBA {
 		return nil
 	}
 }
+
+// setAtNight and nightHoursChanged are the Show's night light and its Home Assistant selects; the
+// Spot's night only dims, and its hours are not in Home Assistant.
+func (d *Display) setAtNight(int)     {}
+func (d *Display) nightHoursChanged() {}

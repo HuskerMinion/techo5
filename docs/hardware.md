@@ -17,7 +17,7 @@ Items marked *unverified* have not been confirmed on a unit by this project.
 | Audio in | 4-mic array into a TI **TLV320AIC3101** ADC (I²C 0-0x18) |
 | Audio out | one speaker on a Maxim **MAX98396** class-D amp (I²C 2-0x3d, reset on `gpio-392`) |
 | Wi-Fi / BT | MediaTek **MT7668** SDIO combo (`mt76x8_wlan.ko`, `mt76x8_bt.ko`, firmware in `/vendor/firmware`) |
-| Sensors | ambient light + proximity (`alsps`, I²C 0-0x44), exposed as input `m_alsps_input` and Android "Light Sensor" |
+| Sensors | ambient light only: a Solteam **JSA1214** (`alsps`, I²C 0-0x44, kernel `CONFIG_MTK_JSA1214`), exposed as input `m_alsps_input` and Android "Light Sensor". The driver is Amazon's copy of Sensortek's stk3x1x and keeps its proximity attributes, but the chip has no proximity half: nothing ever reports one |
 | Camera | main + sub camera on I²C 0, mechanical lens cover on `gpio-499` (`SW_CAMERA_LENS_COVER`) |
 | Buttons | volume up (`gpio-393`), volume down (`gpio-394`), mic-mute (`gpio-404`) |
 | Bootloader | Amazon LK; stock build `77c8c2e-20211019_182552`, amonet replaces it with `44072a3-20240709_162755`; preloader `29ba1b5-20210311_160043` |
@@ -318,7 +318,7 @@ silent until reboot. `dumpsys audio` is safe.
 | `mtk-kpd` | event2 | none |
 | `goodix-ts` | event3 | multitouch |
 | `hwmdata` | event4 | REL_Y/REL_Z (sensor hub) |
-| `m_alsps_input` | event5 | ABS_X = lux, ABS_WHEEL = proximity |
+| `m_alsps_input` | event5 | ABS_X = lux (ABS_WHEEL is proximity in the framework, never sent: the chip has none) |
 | `gpio-keys` | event6 | `KEY_VOLUMEUP`, `KEY_VOLUMEDOWN`, `SW_CAMERA_LENS_COVER` |
 
 - Android's generic layout maps code 116 to POWER, so the mute button sleeps

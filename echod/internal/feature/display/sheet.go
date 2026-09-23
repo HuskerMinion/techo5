@@ -69,6 +69,10 @@ func categoryRows(sv sheetView) (rows []settingRow, note string) {
 			{id: "auto", label: "Auto-brightness", sub: "Follows the room's light", kind: ctlToggle, on: st.auto},
 			{id: "night", label: nightRowLabel, kind: ctlChoice, value: nightText(st.night)},
 		}
+		if hasNightLight && st.night != "" {
+			rows = append(rows, settingRow{id: "atnight", label: "At night", sub: "Dark, or a faint glow until touched",
+				kind: ctlChoice, value: atNightOptions[atNightIndex()]})
+		}
 		rows = append(rows, themeRows()...)
 		rows = append(rows,
 			settingRow{id: "clock", label: "Clock format", kind: ctlChoice, value: clockOptions[clockIndex()]},
@@ -300,6 +304,8 @@ func pickerFor(id string, sv sheetView) (pickerView, bool) {
 			p.cur = alarmSunriseIndex(sv.draft.alarm)
 		}
 		return p, true
+	case "atnight":
+		return pickerView{title: "At night", opts: atNightOptions, cur: atNightIndex()}, true
 	case "night":
 		p := pickerView{title: nightRowLabel, cur: -1}
 		cur := sv.st.night
@@ -390,11 +396,14 @@ func (d *Display) choose(id string, i int) {
 		return
 	}
 	switch id {
+	case "atnight":
+		d.setAtNight(i)
 	case "night":
 		if i < len(nightPresets) {
 			if err := config.Set().Screen().Night(nightPresets[i]); err != nil {
 				slog.Warn("saving the night setting failed", "err", err)
 			}
+			d.nightHoursChanged()
 		}
 	case "musicstrip":
 		d.setMusicStrip(i)
@@ -649,7 +658,7 @@ func (d *Display) rowTap(id string, p part, opt int) {
 	case "subfolders":
 		_, _, subfolders := home.Get().SlideshowSettings()
 		home.Get().SetSlideshowSubfolders(!subfolders)
-	case "night", "clock", "musicstrip", "slideshow", "photoevery", "screenlang", "newtimer", "sleep", "sunrise",
+	case "night", "atnight", "clock", "musicstrip", "slideshow", "photoevery", "screenlang", "newtimer", "sleep", "sunrise",
 		"timezone", "wakeword", "waketone":
 		d.openPicker(id)
 	}

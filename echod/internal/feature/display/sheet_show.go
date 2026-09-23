@@ -20,7 +20,11 @@ import (
 // night setting.
 const (
 	deviceModel   = "Echo Show 5"
-	nightRowLabel = "Screen off at night"
+	nightRowLabel = "Night hours"
+
+	// hasNightLight is whether the night can leave the screen as a night light rather than dark. The
+	// Spot's night only ever dims it.
+	hasNightLight = true
 )
 
 // settingsScreen draws the settings screen for the scene's category.

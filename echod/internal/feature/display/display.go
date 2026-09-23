@@ -73,6 +73,9 @@ const (
 	// floor is the dimmest an "on" backlight goes; below it the panel reads as off.
 	floor = 8
 
+	// glow is the backlight of the night light: the dimmest the panel shows anything at.
+	glow = floor
+
 	// Auto-brightness: the fraction of the ceiling the room's light allows, from darkFraction in the
 	// dark rising on a log curve to the full ceiling at brightLux. Applied through a running average
 	// so a passing shadow does not flicker the panel.
@@ -129,6 +132,13 @@ type Display struct {
 	// night schedule rather than by anyone.
 	touchedAt time.Time
 	nightDark bool
+
+	// nightGlow is the screen turned down to a night light by the night schedule, until a touch or
+	// the end of the night brings it back.
+	nightGlow bool
+
+	// nightHours and atNight are the night's settings in Home Assistant.
+	nightHours, atNight *esphome.Select
 
 	// slideshowIdleSince is when the screen last became the plain idle page (nothing else showing);
 	// zero while it is not. Screensaver mode waits for this to run long enough before taking over.
@@ -217,6 +227,8 @@ func build() *Display {
 	d.auto.OnCommand = func(on bool) { d.setAuto(on, true) }
 	d.clock = clockSelect(d.wake)
 	d.strip = stripSelect(d.wake)
+	d.nightHours = nightHoursSelect()
+	d.atNight = atNightSelect(d)
 	d.lang = langSelect()
 	voice.Changed.Listen(d.changed)
 	media.Get().OnVolume.Listen(d.volumeMoved)
@@ -264,7 +276,7 @@ func build() *Display {
 func (d *Display) Name() string { return "screen" }
 
 func (d *Display) Entities() []esphome.Entity {
-	return []esphome.Entity{d.light, d.auto, d.clock, d.lang, d.strip}
+	return []esphome.Entity{d.light, d.auto, d.clock, d.lang, d.strip, d.nightHours, d.atNight}
 }
 
 // Restore lights the panel the way it was left. Before the framebuffer is opened: the backlight is
@@ -272,6 +284,8 @@ func (d *Display) Entities() []esphome.Entity {
 func (d *Display) Restore(c config.Config) {
 	setClock24(d.clock, c.Screen.Clock24)
 	d.strip.Set(stripOptions[stripIndex()])
+	d.nightHours.Set(nightHoursText(c.Screen.Night))
+	d.atNight.Set(atNightOptions[atNightIndex()])
 	d.setAuto(c.Screen.Auto, false)
 	d.apply(c.Screen.On, c.Screen.Brightness, false)
 }
@@ -342,6 +356,9 @@ func (d *Display) relight(jump bool) {
 			}
 		}
 		target = math.Max(target, floor)
+		if d.nightGlow {
+			target = glow
+		}
 	}
 	// The light before an alarm takes the backlight over while it runs: it starts under anything the
 	// room would otherwise ask for and ends at the screen's own brightness.
@@ -441,6 +458,17 @@ func (d *Display) gesture(g touch.Gesture) {
 		if g.Kind == touch.Tap {
 			d.apply(true, d.ceilingOrDefault(), true)
 		}
+		return
+	}
+	// A night light's first touch only brings the screen up, as a dark screen's does: nobody can
+	// see what they are pressing on a screen this dim.
+	d.mu.Lock()
+	glowing := d.nightGlow
+	d.nightGlow = false
+	d.mu.Unlock()
+	if glowing {
+		d.relight(true)
+		d.wake()
 		return
 	}
 	// A call: its page takes every tap.
@@ -852,12 +880,44 @@ func (d *Display) night(now time.Time, on bool, view voice.State) bool {
 	d.mu.Lock()
 	dark, touched, viewAt := d.nightDark, d.touchedAt, d.viewAt
 	d.mu.Unlock()
+	if !in {
+		d.mu.Lock()
+		glowing := d.nightGlow
+		d.nightGlow = false
+		d.mu.Unlock()
+		if glowing {
+			slog.Info("screen: night over, night light off")
+			d.relight(true)
+		}
+	}
 	switch {
 	case in && on:
 		busy := view.Phase != "idle" || now.Sub(touched) < nightIdle || now.Sub(viewAt) < nightIdle ||
 			d.ringing(now).any() || phone.Get().Busy() || sunriseProgress(now) > 0 || reminderUp()
 		if playing, _ := media.Get().Playing(); playing || busy {
+			// Whatever keeps the screen up at night - a ring, a call, a turn, the light before an
+			// alarm - is seen at the screen's brightness, not the night light's.
+			d.mu.Lock()
+			glowing := d.nightGlow
+			d.nightGlow = false
+			d.mu.Unlock()
+			if glowing {
+				d.relight(true)
+				return true
+			}
 			return false
+		}
+		if config.Get().Screen.NightLight {
+			d.mu.Lock()
+			already := d.nightGlow
+			d.nightGlow = true
+			d.mu.Unlock()
+			if already {
+				return false
+			}
+			slog.Info("screen: night, down to a night light")
+			d.relight(true)
+			return true
 		}
 		slog.Info("screen: night, going dark")
 		d.mu.Lock()
