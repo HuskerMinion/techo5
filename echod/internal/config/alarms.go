@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"slices"
 	"strings"
+	"time"
 )
 
 // Alarms are the device's own alarms, and the Home Assistant helpers it follows as alarms.
@@ -16,6 +17,14 @@ type Alarms struct {
 
 	// SnoozeMinutes is how long Snooze puts an alarm off.
 	SnoozeMinutes int `json:"snooze_minutes,omitempty"`
+
+	// Snoozed is the alarms put off and not yet rung, as absolute times. A snooze used to live only
+	// in memory, so a restart between pressing Snooze and the alarm coming back lost it silently —
+	// and somebody who pressed Snooze has been told the alarm is coming back.
+	//
+	// An absolute time rather than a remaining duration, so it survives the device being off as well
+	// as the process restarting, and means the same thing whatever the clock did in between.
+	Snoozed []Snooze `json:"snoozed,omitempty"`
 
 	// Sound is what an alarm rings with, by name; empty is the first of the speaker's alarm sounds.
 	Sound string `json:"sound,omitempty"`
@@ -38,6 +47,14 @@ type Alarm struct {
 	Days  uint8  `json:"days,omitempty"`
 	Label string `json:"label,omitempty"`
 	On    bool   `json:"on"`
+}
+
+// Snooze is one alarm put off until At. Key is the alarm it came from, so a snooze that fires can be
+// told apart from the alarm's own next time.
+type Snooze struct {
+	Key   string    `json:"key"`
+	Label string    `json:"label,omitempty"`
+	At    time.Time `json:"at"`
 }
 
 const (
@@ -132,6 +149,12 @@ func (w AlarmsWriter) Delete(id string) error {
 func (w AlarmsWriter) SnoozeMinutes(n int) error {
 	n = min(max(n, MinSnoozeMinutes), MaxSnoozeMinutes)
 	return w.st.Update(func(c *Config) { c.Alarms.SnoozeMinutes = n })
+}
+
+// Snoozed replaces the list of alarms put off. It is written when one is made, fires or is dropped,
+// and never on a tick: the whole config is marshalled and fsynced on every set.
+func (w AlarmsWriter) Snoozed(list []Snooze) error {
+	return w.st.Update(func(c *Config) { c.Alarms.Snoozed = slices.Clone(list) })
 }
 
 // SunriseMinutes sets how long before an alarm the screen starts to light; nothing for not at all.

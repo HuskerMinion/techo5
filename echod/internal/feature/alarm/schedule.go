@@ -53,6 +53,26 @@ func due(sources []source, last, now time.Time) []source {
 	return out
 }
 
+// splitSnoozes divides snoozes into those still to come and those whose moment has gone by without
+// them ringing.
+//
+// A one-off whose time is past is not merely late, it is inert: next reports nothing for it ever
+// again, so due skips it, soonest skips it, and nothing removes it. It used to stay in the list for
+// good while the settings sheet drew "Snoozed until" and a time that had been and gone.
+//
+// Being late by itself is not the fault — due may ring something up to stale minutes late, and that
+// one prunes itself by firing. This runs after the firing, so what is left has genuinely missed.
+func splitSnoozes(snoozed []source, now time.Time) (live, missed []source) {
+	for _, s := range snoozed {
+		if s.once.IsZero() || s.once.After(now) {
+			live = append(live, s)
+			continue
+		}
+		missed = append(missed, s)
+	}
+	return live, missed
+}
+
 // soonest is the next ring among sources after now.
 func soonest(sources []source, now time.Time) (source, time.Time, bool) {
 	var best source
