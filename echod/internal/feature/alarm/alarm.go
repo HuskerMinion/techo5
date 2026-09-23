@@ -23,6 +23,7 @@ import (
 	"github.com/HuskerMinion/techo5/echod/internal/config"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/hastate"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/ring"
+	"github.com/HuskerMinion/techo5/echod/internal/feature/timer"
 	"github.com/HuskerMinion/techo5/echod/internal/hardware/led"
 	"github.com/HuskerMinion/techo5/echod/internal/hardware/speaker"
 	"github.com/HuskerMinion/techo5/echod/internal/lib/hook"
@@ -129,9 +130,11 @@ func build() *Alarms {
 		sun:   led.Get().Claim(led.PriorityTimer),
 		wake:  make(chan struct{}, 1),
 	}
-	a.stop = &esphome.Button{Base: esphome.Base{ObjectID: "alarm_stop", Name: "Stop alarm", Icon: "mdi:alarm-off"}, OnPress: func() {
+	// Stops whatever is ringing, a timer as much as an alarm. The object id stays "alarm_stop" from
+	// when it only stopped alarms, so automations that press it keep working.
+	a.stop = &esphome.Button{Base: esphome.Base{ObjectID: "alarm_stop", Name: "Stop ringing", Icon: "mdi:alarm-off"}, OnPress: func() {
 		// From Home Assistant, stop also means a snoozed alarm is not wanted back.
-		if !a.Stop() {
+		if !ring.End() {
 			a.CancelSnoozes()
 		}
 	}}
@@ -512,6 +515,29 @@ func (a *Alarms) Actions() []*esphome.Action {
 				}
 				slog.Info("alarms deleted from home assistant", "count", n)
 				return nil, nil
+			},
+		},
+		{
+			Name: "alarm_delete_id",
+			Args: []esphome.Arg{{Name: "id", Type: esphome.ArgString}},
+			Run: func(c esphome.Call) (any, error) {
+				id := strings.TrimSpace(c.String("id"))
+				if !slices.ContainsFunc(config.Get().Alarms.List, func(al config.Alarm) bool { return al.ID == id }) {
+					return nil, fmt.Errorf("alarms: no alarm %q on this device", id)
+				}
+				if err := a.Delete(id); err != nil {
+					return nil, err
+				}
+				slog.Info("alarm deleted from home assistant", "id", id)
+				return nil, nil
+			},
+		},
+		{
+			Name:    "alarms_list",
+			Answers: true,
+			Run: func(esphome.Call) (any, error) {
+				now := time.Now()
+				return listing(now, a.View(now), timer.Get().List(now)), nil
 			},
 		},
 		{

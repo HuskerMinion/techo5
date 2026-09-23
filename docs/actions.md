@@ -111,6 +111,117 @@ data:
   label: Wake up
 ```
 
+## Delete one alarm by its ID
+
+In YAML, refer to this action as `esphome.<node>_alarm_delete_id`.
+
+Deletes exactly one device alarm, picked by the ID `alarms_list` gives it. Use this when two alarms
+share a time and you want only one of them gone. Fails if there is no alarm with that ID.
+
+### id (Required)
+
+*string*
+
+An alarm's `id` from `alarms_list`.
+
+```yaml
+action: esphome.office_alarm_delete_id
+data:
+  id: "{{ listing.alarms[0].id }}"
+```
+
+## List alarms and timers
+
+In YAML, refer to this action as `esphome.<node>_alarms_list`.
+
+Answers with everything on the device that will or might ring: its own alarms, snoozed alarms,
+the Home Assistant helpers it follows, the timers counting down, and whatever is ringing right now.
+This action answers with data; call it with a `response_variable`.
+
+Takes no parameters.
+
+```yaml
+action: esphome.office_alarms_list
+response_variable: listing
+```
+
+The answer looks like this. Times are in the device's time zone; `next` is empty for an alarm that
+is off or will not ring again.
+
+```yaml
+ringing: null            # or {label: "Wake up", since: "2026-09-24T06:45:00-05:00"}
+alarms:
+  - id: "m1x2y3"
+    time: "06:45"
+    days: weekdays
+    label: Wake up
+    "on": true
+    next: "2026-09-24T06:45:00-05:00"
+snoozed: []              # each {label, at}
+followed: []             # each {entity, label, armed, next}
+timers:
+  - id: "local:n4k2"
+    label: Pasta
+    left_seconds: 272
+    total_seconds: 600
+    running: true
+    local: true          # false for a timer set by voice through Home Assistant
+```
+
+## Start a timer
+
+In YAML, refer to this action as `esphome.<node>_timer_start`.
+
+Starts a timer that belongs to the device: it counts down, shows and rings here, and keeps going
+with Home Assistant down. Answers with the new timer's `id`, for `timer_cancel`, if called with a
+`response_variable`; it works without one too.
+
+### duration (Required)
+
+*string*
+
+How long: `10 minutes`, `1 hour and 30 minutes`, `90 seconds`, `in 20 minutes`, `1h30m`,
+`00:10:00` (what Home Assistant's duration selector gives), `1:30` (hours and minutes), or a bare
+number, which is minutes. At most 24 hours.
+
+### label (Optional)
+
+*string*
+
+A name shown on the screen while it counts down and when it rings, such as `Pasta`.
+
+```yaml
+action: esphome.office_timer_start
+data:
+  duration: "10 minutes"
+  label: Pasta
+response_variable: started
+```
+
+## Cancel a timer
+
+In YAML, refer to this action as `esphome.<node>_timer_cancel`.
+
+Cancels one of the device's own timers, the ones started with `timer_start` or on its screen.
+Timers set by voice through Home Assistant's Assist are cancelled by voice, the same way they were
+set, and this action refuses them with a message saying so.
+
+To silence a timer that is already ringing, press the device's **Stop ringing** button entity
+instead; it stops alarms and timers alike.
+
+### id (Required)
+
+*string*
+
+A timer's `id`, from `timer_start`'s answer or `alarms_list`'s `timers`, or `all` to cancel every
+timer of the device's own.
+
+```yaml
+action: esphome.office_timer_cancel
+data:
+  id: "{{ started.id }}"
+```
+
 ## Follow Home Assistant helpers as alarms
 
 In YAML, refer to this action as `esphome.<node>_alarms_follow`.

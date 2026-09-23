@@ -10,6 +10,7 @@ package timer
 import (
 	"cmp"
 	"context"
+	"fmt"
 	"log/slog"
 	"math"
 	"slices"
@@ -167,6 +168,54 @@ func build() *Timers {
 func (t *Timers) Name() string { return "timers" }
 
 func (t *Timers) Entities() []esphome.Entity { return []esphome.Entity{t.names} }
+
+// Actions let Home Assistant set and cancel the device's own timers, which run and ring here with Home
+// Assistant away. Its own timers, set by voice through Assist, are cancelled the same way they were set.
+func (t *Timers) Actions() []*esphome.Action {
+	return []*esphome.Action{
+		{
+			Name:    "timer_start",
+			Args:    []esphome.Arg{{Name: "duration", Type: esphome.ArgString}, {Name: "label", Type: esphome.ArgString}},
+			Answers: true,
+			Run: func(c esphome.Call) (any, error) {
+				d, err := ParseDuration(c.String("duration"))
+				if err != nil {
+					return nil, err
+				}
+				return map[string]string{"id": t.Start(strings.TrimSpace(c.String("label")), d)}, nil
+			},
+		},
+		{
+			Name: "timer_cancel",
+			Args: []esphome.Arg{{Name: "id", Type: esphome.ArgString}},
+			Run: func(c esphome.Call) (any, error) {
+				return nil, t.cancelFromHA(strings.TrimSpace(c.String("id")))
+			},
+		},
+	}
+}
+
+// cancelFromHA cancels one of the device's own timers by id, or every one of them for "all".
+func (t *Timers) cancelFromHA(id string) error {
+	if id == "all" {
+		n := 0
+		for _, c := range t.List(time.Now()) {
+			if c.Local && t.Cancel(c.ID) {
+				n++
+			}
+		}
+		slog.Info("timers cancelled from home assistant", "count", n)
+		return nil
+	}
+	if id != "" && !strings.HasPrefix(id, localPrefix) {
+		return fmt.Errorf("timers: %q was set through Home Assistant; cancel it there", id)
+	}
+	if !t.Cancel(id) {
+		return fmt.Errorf("timers: no timer %q on this device", id)
+	}
+	slog.Info("timer cancelled from home assistant", "id", id)
+	return nil
+}
 
 // Run redraws the countdown while there is one, and waits to be woken while there is not.
 func (t *Timers) Run(ctx context.Context) error {
