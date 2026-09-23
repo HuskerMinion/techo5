@@ -491,7 +491,7 @@ func (d *device) autoExpose(raw []byte) {
 	}
 	ratio := math.Min(math.Max(float64(aeTarget)/float64(max(mean, 1)), 0.5), 2)
 	want := float64(d.shutter*d.gain) * ratio
-	shutter, gain := d.shutter, d.gain
+	var shutter, gain int
 	switch {
 	case want <= float64(aeFrame*aeMinGain):
 		shutter, gain = int(want/aeMinGain), aeMinGain

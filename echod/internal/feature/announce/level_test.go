@@ -60,7 +60,7 @@ func TestNothingReachesTheRail(t *testing.T) {
 		}
 	}
 	for i, v := range level(said) {
-		if v >= 32767 || v <= -32767 {
+		if v == math.MaxInt16 || v <= -math.MaxInt16 {
 			t.Fatalf("sample %d hit the rail at %d", i, v)
 		}
 	}

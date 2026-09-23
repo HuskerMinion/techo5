@@ -361,7 +361,7 @@ func (d *device) autoExpose(bayer []byte) {
 		ratio = 0.5
 	}
 	want := float64(d.shutter*d.gain) * ratio
-	shutter, gain := d.shutter, d.gain
+	var shutter, gain int
 	switch {
 	case want <= float64(aeFrame*aeMinGain):
 		shutter, gain = int(want/aeMinGain), aeMinGain

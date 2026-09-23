@@ -331,7 +331,6 @@ func (r *roundRenderer) clockFace(s roundScene) {
 	}
 	if s.slideshowTrouble != "" {
 		r.centred(r.small, s.slideshowTrouble, line, colDim)
-		line += 34
 	}
 	switch {
 	case s.setupAsking:

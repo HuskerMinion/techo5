@@ -204,8 +204,9 @@ func (m *Stream) PlayNoise(sounds ...string) {
 	slog.Info("playing noise", "sounds", sounds)
 
 	safe.Go("noise", func() {
+		// generate runs until something stops it; an error that is not the stop is a failure.
 		err := m.generate(ctx, t, fill)
-		if err != nil && ctx.Err() == nil {
+		if ctx.Err() == nil {
 			slog.Error("playing noise failed", "err", err)
 		}
 		m.finished(t, false)
