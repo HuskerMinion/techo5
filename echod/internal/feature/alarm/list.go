@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/HuskerMinion/techo5/echod/internal/config"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/timer"
 )
 
@@ -27,6 +26,7 @@ type ListedAlarm struct {
 	ID    string `json:"id"`
 	Time  string `json:"time"` // 24-hour "07:30"
 	Days  string `json:"days"`
+	Date  string `json:"date,omitempty"` // 2026-09-29 for a one-off on a particular day
 	Label string `json:"label"`
 	On    bool   `json:"on"`
 	Next  string `json:"next"` // RFC 3339, empty when it is off or will not ring again
@@ -69,12 +69,16 @@ func listing(now time.Time, v View, timers []timer.Countdown) Listing {
 	for _, al := range v.Local {
 		next := ""
 		if al.On {
-			if at, ok := (source{hour: al.Hour, min: al.Minute, days: al.Days}).next(now); ok {
+			src := source{hour: al.Hour, min: al.Minute, days: al.Days}
+			if at, ok := al.OnDate(); ok {
+				src.once = at
+			}
+			if at, ok := src.next(now); ok {
 				next = stamp(at)
 			}
 		}
 		l.Alarms = append(l.Alarms, ListedAlarm{
-			ID: al.ID, Time: fmt.Sprintf("%02d:%02d", al.Hour, al.Minute), Days: config.DaysLabel(al.Days),
+			ID: al.ID, Time: fmt.Sprintf("%02d:%02d", al.Hour, al.Minute), Days: al.When(), Date: al.Date,
 			Label: al.Label, On: al.On, Next: next, Reminder: al.Remind, RingOn: append([]string{}, al.RingOn...),
 		})
 	}

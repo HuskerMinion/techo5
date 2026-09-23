@@ -65,3 +65,20 @@ func TestAlive(t *testing.T) {
 		t.Errorf("alive = %v %v, want %v", got, ok, when)
 	}
 }
+
+// An alarm set to repeat keeps no date, so setting it back to once cannot bring an old day back.
+func TestARepeatingAlarmKeepsNoDate(t *testing.T) {
+	st := load(t)
+	if err := st.Set().Alarms().Put(Alarm{ID: "a", Hour: 7, Days: DaysWeekdays, Date: "2026-09-29", On: true}); err != nil {
+		t.Fatal(err)
+	}
+	if got := st.Get().Alarms.List[0].Date; got != "" {
+		t.Errorf("a repeating alarm kept the date %q", got)
+	}
+	if err := st.Set().Alarms().Put(Alarm{ID: "b", Hour: 7, Days: DaysOnce, Date: "2026-09-29", On: true}); err != nil {
+		t.Fatal(err)
+	}
+	if got := st.Get().Alarms.List[1].Date; got != "2026-09-29" {
+		t.Errorf("a one-off lost its date: %q", got)
+	}
+}

@@ -35,7 +35,7 @@ func alarmsCard(sv sheetView) cardView {
 				sub: cmpOr(row.snoozed.Label, "Alarm"), bold: true, kind: ctlButton, button: "Cancel"})
 		case row.local != nil:
 			a := row.local
-			sub := capitalize(config.DaysLabel(a.Days))
+			sub := capitalize(a.When())
 			if a.Label != "" {
 				sub += " · " + a.Label
 			}
@@ -146,6 +146,9 @@ func alarmEditorCard(sv sheetView, d alarmDraft) cardView {
 	blurb := "Rings at " + when + ", " + config.DaysLabel(a.Days)
 	if a.Days&config.DaysEvery == config.DaysOnce {
 		blurb = "Rings once, at " + when
+		if t, ok := a.OnDate(); ok {
+			blurb += ", " + t.Format("Monday, January 2")
+		}
 	}
 	v := cardView{
 		title: title, blurb: blurb,

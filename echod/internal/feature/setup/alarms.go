@@ -102,7 +102,7 @@ func alarmDrawer(w http.ResponseWriter, token string, a config.Alarm) {
 	if a.Remind {
 		kind, chip = "Reminder", "chip rem"
 	}
-	where := capitalize(config.DaysLabel(a.Days))
+	where := capitalize(a.When())
 	switch {
 	case a.Remind && len(a.RingOn) > 0:
 		where += " · here and " + strings.Join(a.RingOn, ", ")
