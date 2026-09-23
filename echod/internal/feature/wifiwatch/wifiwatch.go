@@ -47,12 +47,21 @@ type Watch struct {
 	joined      func(context.Context) bool
 	gatewayUp   func(context.Context) bool
 	reassociate func(context.Context) error
+	evidence    func(context.Context) []string
+	say         func(msg string, args ...any)
 
 	sawHA   bool      // Home Assistant has been connected at some point this boot
 	lostAt  time.Time // when it went away; zero while it is here
 	notTill time.Time // no reassociation before this
 	wait    time.Duration
+
+	// tried is when the last reassociation was, until what came of it has been said.
+	tried time.Time
 }
+
+// settle is how long after a reassociation Home Assistant has to be back before it is said that it
+// is not: a rejoin takes seconds, and Home Assistant's own reconnect up to a minute more.
+const settle = 2 * time.Minute
 
 func New() *Watch {
 	return &Watch{
@@ -64,7 +73,17 @@ func New() *Watch {
 			return gw != nil && wifi.Answers(ctx, gw)
 		},
 		reassociate: wifi.Reassociate,
+		evidence:    wifi.Evidence,
+		say:         func(msg string, args ...any) { slog.Warn(msg, args...) },
 		wait:        firstWait,
+	}
+}
+
+// record puts the link's evidence in the log, which is what a diagnostics download carries: enough
+// to show a rekey was the trigger without anybody having to catch it at the console.
+func (w *Watch) record(ctx context.Context, when string) {
+	for _, line := range w.evidence(ctx) {
+		w.say("wifi: evidence", "when", when, "line", line)
 	}
 }
 
@@ -92,11 +111,21 @@ func (w *Watch) Run(ctx context.Context) error {
 func (w *Watch) look(ctx context.Context) {
 	now := w.now()
 	if w.haConnected() {
+		if !w.tried.IsZero() {
+			w.say("wifi: recovered: Home Assistant is back after reassociating",
+				"after", now.Sub(w.tried).Round(time.Second))
+			w.tried = time.Time{}
+		}
 		w.sawHA, w.lostAt, w.wait = true, time.Time{}, firstWait
 		return
 	}
 	if !w.sawHA {
 		return // never connected this boot: a device without Home Assistant, or one still starting
+	}
+	if !w.tried.IsZero() && now.Sub(w.tried) >= settle {
+		w.say("wifi: still unreachable after reassociating", "after", now.Sub(w.tried).Round(time.Second))
+		w.record(ctx, "after")
+		w.tried = time.Time{}
 	}
 	if w.lostAt.IsZero() {
 		w.lostAt = now
@@ -110,11 +139,13 @@ func (w *Watch) look(ctx context.Context) {
 	if !w.joined(ctx) || !w.gatewayUp(ctx) {
 		return
 	}
-	slog.Warn("wifi: Home Assistant has been gone while the gateway still answers; reassociating",
+	w.say("wifi: Home Assistant has been gone while the gateway still answers; reassociating",
 		"gone", now.Sub(w.lostAt).Round(time.Second))
+	w.record(ctx, "before")
 	if err := w.reassociate(ctx); err != nil {
-		slog.Warn("wifi: reassociating failed", "err", err)
+		w.say("wifi: reassociating failed", "err", err)
 	}
+	w.tried = now
 	w.notTill = now.Add(w.wait)
 	w.wait = min(w.wait*2, mostWait)
 }

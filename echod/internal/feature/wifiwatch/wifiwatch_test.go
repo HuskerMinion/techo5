@@ -2,6 +2,7 @@ package wifiwatch
 
 import (
 	"context"
+	"strings"
 	"testing"
 	"time"
 )
@@ -12,6 +13,7 @@ type world struct {
 	ha, joined bool
 	gateway    bool
 	reassocs   int
+	said       []string
 }
 
 func (wd *world) watch() *Watch {
@@ -21,7 +23,57 @@ func (wd *world) watch() *Watch {
 		joined:      func(context.Context) bool { return wd.joined },
 		gatewayUp:   func(context.Context) bool { return wd.gateway },
 		reassociate: func(context.Context) error { wd.reassocs++; return nil },
-		wait:        firstWait,
+		evidence:    func(context.Context) []string { return []string{"supplicant: wpa_state=COMPLETED"} },
+		say: func(msg string, args ...any) {
+			for i := 0; i+1 < len(args); i += 2 {
+				if args[i] == "when" {
+					msg += " " + args[i+1].(string)
+				}
+			}
+			wd.said = append(wd.said, msg)
+		},
+		wait: firstWait,
+	}
+}
+
+// count is how many times the watcher said something starting with prefix.
+func (wd *world) count(prefix string) int {
+	n := 0
+	for _, s := range wd.said {
+		if strings.HasPrefix(s, prefix) {
+			n++
+		}
+	}
+	return n
+}
+
+// What came of a reassociation is said once, either way, so a diagnostics download can tell a rekey
+// that the watcher cured from one it did not.
+func TestItSaysWhetherTheReassociationWorked(t *testing.T) {
+	wd := start()
+	w := wd.watch()
+	wd.run(w, time.Minute)
+	wd.ha = false
+	wd.run(w, 4*time.Minute) // reassociates at 17:04
+	if wd.count("wifi: evidence before") != 1 {
+		t.Fatalf("no evidence recorded before reassociating: %q", wd.said)
+	}
+	wd.ha = true
+	wd.run(w, 2*time.Minute)
+	if wd.count("wifi: recovered") != 1 {
+		t.Errorf("recovery said %d times, want once: %q", wd.count("wifi: recovered"), wd.said)
+	}
+
+	wd = start()
+	w = wd.watch()
+	wd.run(w, time.Minute)
+	wd.ha = false
+	wd.run(w, 10*time.Minute)
+	if wd.count("wifi: still unreachable") != 1 || wd.count("wifi: evidence after") != 1 {
+		t.Errorf("a reassociation that did not help was not said once with its evidence: %q", wd.said)
+	}
+	if wd.count("wifi: recovered") != 0 {
+		t.Errorf("said it recovered when it did not: %q", wd.said)
 	}
 }
 
