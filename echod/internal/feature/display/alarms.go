@@ -52,22 +52,39 @@ func (d *Display) PreviewRing(for_ time.Duration) {
 	d.wake()
 }
 
-// ringTap is a finger on the ringing page: Stop on the left half of the buttons, Snooze on the right
-// when there is one to snooze.
+// ringTap is a finger on the ringing page. Inside the buttons it is what they say: Stop on the left,
+// Snooze on the right when there is one to snooze. Anywhere else on the panel it is Stop.
+//
+// The whole screen decides, the way the Spot's whole face already does. It used to be the buttons
+// and a little above them and nothing else — on a Show 5 that left the top 65% of the panel dead,
+// and on a Show 8 the same sizes scale to 72%, so most of a ringing alarm was a picture of two
+// buttons that did not work where somebody pressed. A tap on a ringing alarm has one obvious
+// meaning, and a screen that ignores it is worse than one that takes it.
 func (d *Display) ringTap(x, y int, st ringState) {
-	if d.r == nil || !d.r.actionDecided(y) {
+	if d.r == nil {
 		return
 	}
 	d.mu.Lock()
 	d.ringPreview = time.Time{}
 	d.mu.Unlock()
-	if st.snoozable && x >= d.r.w/2 {
+
+	if ringSnoozeAt(x, d.r.w, st.snoozable, d.r.actionDecided(y)) {
 		if !alarm.Get().Snooze() {
 			slog.Debug("snooze with nothing ringing")
 		}
 		timer.Get().Stop()
 		return
 	}
-	timer.Get().Stop()
-	alarm.Get().Stop()
+	ring.End()
+}
+
+// ringSnoozeAt reports whether a finger means Snooze rather than Stop: only inside the buttons, and
+// only on the Snooze one, and only when there is something that can be snoozed.
+//
+// Stop is the answer everywhere else, because it is the one that cannot be got wrong. An alarm
+// stopped by mistake is over and the person is awake to notice; an alarm snoozed by mistake is
+// silent and comes back in nine minutes, which is the failure that reads as the device ignoring
+// somebody.
+func ringSnoozeAt(x, w int, snoozable, inButtons bool) bool {
+	return snoozable && inButtons && x >= w/2
 }

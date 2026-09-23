@@ -89,6 +89,12 @@ func TestRoundScenesDraw(t *testing.T) {
 		"menu-call":         {now: at, phase: "idle", menuOpen: true, menuMode: modeMain, menuSel: 1, menuRot: restFor(1, len(mainItems)), phoneReady: true, contactCount: 4},
 		"ringing-alarm":     {now: at, phase: "idle", ringing: ringing{alarm: &alarm.Ring{Label: "Wake up", At: at}, snoozeIn: 9}},
 		"ringing-timer":     {now: at, phase: "idle", ringing: ringing{timer: "pasta", timerOn: true}},
+		// Quieted by a button press and waiting to be told what that meant. It wears the ringing
+		// face while making no sound, so the face has to say which of the two it is.
+		"ringing-silenced": {now: at, phase: "idle",
+			ringing: ringing{alarm: &alarm.Ring{Label: "Wake up", At: at}, snoozeIn: 9, silenced: true}},
+		"ringing-silenced-timer": {now: at, phase: "idle",
+			ringing: ringing{timer: "pasta", timerOn: true, silenced: true}},
 		"nowplaying-paused": {now: at, phase: "idle", nowPlaying: true, paused: true, radio: home.Radio{Chosen: "Morning News"}},
 		"radio-list":        {now: at, phase: "idle", playing: true, menuOpen: true, menuMode: modeRadio, radioSel: 2, radio: home.Radio{Configured: true, Source: "local", Sources: 2, Now: "KXYZ 101.1", Stations: []string{"KAAA 90.1", "KXYZ 101.1", "The Mountain 99.5 Classic Rock and More", "KBBB 104.3"}}},
 		"radar-loading":     {now: at, phase: "idle", menuOpen: true, menuMode: modeWeather, radarOn: true, radar: home.RadarView{Loading: true}},

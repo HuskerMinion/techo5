@@ -217,12 +217,31 @@ reached over to turn a loud alarm down; snoozing means an ignored alarm comes ba
 silences and offers "Snooze 9 min?" for a few seconds, which separates the urgent act from the
 decision (principle 1).
 
-### R5 - The touch targets
+### R5 - The touch targets - BUILT
 
 - Show: make the whole screen a stop target the way the Spot's already is, and accept `Hold` and
   `Release` as stops on both. Today a long press on a Show emits nothing at all.
 - Spot: take `Hold` in `ringGesture` rather than letting it fall through to the menu, and relight the
   panel for a ring rather than spending the first tap on it.
+
+Built as four changes, and the Show's long press turned out to be the general bug the ringing page
+only showed most clearly:
+
+- The long press is fixed in `hardware/touch`, not on the ringing page. `tapHold` disqualified a tap
+  only because a hold might mean something else - and on the Show nothing is reported for a hold, so
+  a still finger held past half a second emitted **nothing at all, anywhere on the device**. It is a
+  tap now wherever holds are not reported, which is a compile-time constant per board.
+- The Show's ringing page decides everywhere. Snooze stays exactly where the Snooze button is drawn;
+  Stop is the answer on the rest of the panel, because it is the one that cannot be got wrong - an
+  alarm stopped by mistake is over and the person is awake to notice, where one snoozed by mistake is
+  silent and comes back later, which reads as the device having ignored somebody.
+- The Spot takes `Hold` and `Release` as a slow tap. Both used to return "not mine" and fall to the
+  tail of the gesture chain, where `Hold` opens the ring menu **over** the ringing face.
+- A dark Spot with something ringing acts on the press as well as lighting the panel. A ring lights
+  the panel itself when it starts, so this is only reachable when the panel was put to sleep after
+  that - but that path exists, and it is reached through the `Hold` bug above.
+
+Both faces now say when a ring has been silenced and is waiting on an answer.
 
 ### R6 - Survive a disruption
 

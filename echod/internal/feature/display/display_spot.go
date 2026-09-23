@@ -434,7 +434,13 @@ func (d *Display) gesture(g touch.Gesture) {
 		if g.Kind == touch.Tap || g.Kind == touch.Hold {
 			d.apply(true, d.ceilingOrDefault(), true)
 		}
-		return
+		// Unless something is ringing, where spending the press on the backlight is the wrong trade:
+		// the person is reaching for a noise, not for a screen they cannot see. A ring lights the
+		// panel by itself when it starts (ringLights), so this is the panel having been put to sleep
+		// after that — from the menu — and the tap would otherwise be swallowed.
+		if !ringingNow(time.Now()).any() {
+			return
+		}
 	}
 
 	if d.callGesture(g) || d.ringGesture(g) {

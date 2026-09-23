@@ -366,7 +366,11 @@ func (s *Screen) lift(f *finger) {
 	dx, dy := x1-x0, y1-y0
 	held := time.Since(f.at)
 	switch {
-	case !f.swiped && abs(dx) <= tapMove && abs(dy) <= tapMove && held <= tapHold:
+	// A finger that stayed put is a tap. tapHold only disqualifies one where a hold means something
+	// else: on the Show nothing is reported for a hold, so a press held past half a second used to
+	// emit nothing at all, and a deliberate slow press — the kind somebody makes half asleep at a
+	// ringing alarm — did nothing anywhere on the device.
+	case !f.swiped && abs(dx) <= tapMove && abs(dy) <= tapMove && (held <= tapHold || !holdGestures):
 		s.Gestures.Emit(Gesture{Kind: Tap, X: x0, Y: y0})
 	case !f.swiped && abs(dx) >= swipeMin && abs(dx) > 2*abs(dy):
 		k := SwipeRight
