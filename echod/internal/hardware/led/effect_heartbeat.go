@@ -12,7 +12,7 @@ import (
 // How hard the beat is takes the palette as well as the brightness, rather than spreading it round
 // the ring: a heartbeat has no shape across the ring to spread anything over, and what it does have
 // is force. So the strong beat climbs to the top of the palette and the weaker one behind it does not
-// reach as far, which is the difference a colour can show and brightness alone cannot.
+// reach as far, which is the difference a color can show and brightness alone cannot.
 func heartbeat(p Palette) Frame {
 	const period = 1400 * time.Millisecond
 

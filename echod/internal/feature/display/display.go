@@ -1168,7 +1168,7 @@ func (d *Display) Close() error {
 	return err
 }
 
-// Run redraws the screen until ctx is cancelled: on the second while idle, faster while a turn is
+// Run redraws the screen until ctx is canceled: on the second while idle, faster while a turn is
 // on or the volume is showing, and at once when something changes.
 func (d *Display) Run(ctx context.Context) error {
 	for {

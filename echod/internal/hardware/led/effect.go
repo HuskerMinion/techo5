@@ -58,21 +58,21 @@ type Room struct {
 	Facing func() (float64, bool)
 }
 
-// Effect is one animation the ring can run: a motion paired with the colours it runs in. Keeping
-// them separate is what lets one motion appear both in the ring's own colour and in colours of its
+// Effect is one animation the ring can run: a motion paired with the colors it runs in. Keeping
+// them separate is what lets one motion appear both in the ring's own color and in colors of its
 // own.
 type Effect struct {
 	// Name is what Home Assistant shows and what the config stores, so renaming one reads back as an
 	// effect that does not exist and silently turns the animation off.
 	Name string
 
-	// Palette is the colours this pairing uses. Empty means it inherits: the ring's own colour, as
-	// one palette of one colour, so the frame function cannot tell the difference.
+	// Palette is the colors this pairing uses. Empty means it inherits: the ring's own color, as
+	// one palette of one color, so the frame function cannot tell the difference.
 	Palette Palette
 
 	// Kinds is where this one may be used. Zero takes the default for the list it is in, which is how
 	// thirty-odd entries avoid repeating the same answer: an entry only says anything here when it
-	// differs from its neighbours.
+	// differs from its neighbors.
 	Kinds Kinds
 
 	// New builds the motion from the palette. Exactly one of New and Senses is set.
@@ -84,10 +84,10 @@ type Effect struct {
 	Senses func(p Palette, r Room) Frame
 }
 
-// Effect names. A pairing that brings its own colours is named for the palette and the motion, so
-// that the list reads as what it is: the same handful of motions, in colours chosen for them.
+// Effect names. A pairing that brings its own colors is named for the palette and the motion, so
+// that the list reads as what it is: the same handful of motions, in colors chosen for them.
 const (
-	// Ambient, in the ring's colour.
+	// Ambient, in the ring's color.
 	EffectPulse        = "Pulse"
 	EffectHeartbeat    = "Heartbeat"
 	EffectRipple       = "Ripple"
@@ -106,7 +106,7 @@ const (
 	EffectRainbowTwinkle   = "Rainbow Twinkle"
 	EffectForestTwinkle    = "Forest Twinkle"
 
-	// Motion, in the ring's colour.
+	// Motion, in the ring's color.
 	EffectComet    = "Comet"
 	EffectChase    = "Chase"
 	EffectScanner  = "Scanner"
@@ -151,7 +151,7 @@ const (
 // effects is every pairing this build has, flattened in the order Home Assistant offers them, and
 // byName is the same by name. The lists they come from are in catalogue.go, and each motion is a file
 // of its own: adding one is a file and a line there, and giving an existing motion another set of
-// colours is only the line.
+// colors is only the line.
 var (
 	effects []Effect
 	byName  = map[string]Effect{}
@@ -220,7 +220,7 @@ func effect(name string, base Color, room Room) (Frame, error) {
 	return e.New(p), nil
 }
 
-// RunEffect animates until ctx is cancelled. under is what to show wherever this draws nothing, or nil
+// RunEffect animates until ctx is canceled. under is what to show wherever this draws nothing, or nil
 // to own the ring outright.
 func RunEffect(ctx context.Context, r *Ring, name string, base Color, room Room, under Frame) error {
 	frame, err := effect(name, base, room)
@@ -277,7 +277,7 @@ func reverse(frame Frame) Frame {
 	}
 }
 
-// play runs an animation for d, or until ctx is cancelled when d is zero.
+// play runs an animation for d, or until ctx is canceled when d is zero.
 func play(ctx context.Context, r *Ring, d time.Duration, frame Frame) error {
 	t := time.NewTicker(FrameInterval)
 	defer t.Stop()

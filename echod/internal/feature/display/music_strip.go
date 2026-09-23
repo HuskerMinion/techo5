@@ -165,7 +165,7 @@ func (r *renderer) clipTo(face font.Face, s string, w int) string {
 	return string(rs) + "…"
 }
 
-// star fills a five-pointed star centred at cx, cy with outer radius rad.
+// star fills a five-pointed star centered at cx, cy with outer radius rad.
 func (r *renderer) star(cx, cy, rad int, c color.Color) {
 	var pts [10][2]float64
 	for i := range pts {

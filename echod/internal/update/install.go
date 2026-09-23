@@ -180,7 +180,7 @@ func swap(staged, version string) error {
 	// The label decides whether init will start the service at all, and which firmware this is decides
 	// what it has to be. prev kept its own through the rename, so the answer is already on the device.
 	if err := copyLabel(prev, layout.Binary); err != nil {
-		slog.Warn("labelling the new binary failed", "err", err)
+		slog.Warn("labeling the new binary failed", "err", err)
 	}
 	slog.Warn("update installed, restarting into it", "version", version, "previous", prev)
 	return nil

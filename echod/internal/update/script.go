@@ -113,7 +113,7 @@ func write(path, content string) error {
 		return err
 	}
 	if out, err := exec.Command("chcon", layout.OurLabel, path).CombinedOutput(); err != nil {
-		slog.Warn("labelling a boot hook failed", "path", path, "err", err, "output", string(out))
+		slog.Warn("labeling a boot hook failed", "path", path, "err", err, "output", string(out))
 	}
 	return nil
 }

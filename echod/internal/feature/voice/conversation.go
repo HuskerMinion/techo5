@@ -111,7 +111,7 @@ type conversation struct {
 	source  *mic.Source
 	speaker *speaker.Player
 
-	// sound is who may make one. Everything audible goes through it, so cancelling is one call
+	// sound is who may make one. Everything audible goes through it, so canceling is one call
 	// wherever the sound came from.
 	sound  *speaker.Driver
 	player *media.Player
@@ -126,7 +126,7 @@ type conversation struct {
 
 	// visible is the phase, published for anything outside the loop that needs to ask. Only the loop
 	// writes it, and a reader tolerates being a moment out of date: the button uses it to choose
-	// between starting and cancelling, and posting either is safe whichever it picks.
+	// between starting and canceling, and posting either is safe whichever it picks.
 	visible atomic.Int32
 
 	// Below here belongs to the run goroutine alone.
@@ -449,7 +449,7 @@ func (c *conversation) handle(e event) {
 		sounding := c.sound.Busy()
 		c.sound.Silence()
 
-		// The track is left alone. Cancelling means the turn is over, and a turn ending is what puts
+		// The track is left alone. Canceling means the turn is over, and a turn ending is what puts
 		// music back up to where it was — whoever wanted the music itself gone said so somewhere else.
 		if c.phase == phaseIdle && !sounding {
 			return
@@ -726,7 +726,7 @@ func (c *conversation) hold(on bool) {
 
 	// Ducked music keeps playing under the whole turn, so the echo canceller has a live reference while
 	// somebody is talking — which is the one thing an adaptive filter must not learn from. Stop it
-	// learning for the duration; it goes on cancelling with what it already knows.
+	// learning for the duration; it goes on canceling with what it already knows.
 	mic.Get().SetAdapting(!on)
 
 	// Every background, not just the track: a room playing along with the rest of the house is also

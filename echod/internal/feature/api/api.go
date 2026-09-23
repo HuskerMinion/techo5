@@ -162,7 +162,7 @@ func subDevices(name string) []esphome.Device {
 	return out
 }
 
-// Run listens until ctx is cancelled, advertising over mDNS so Home Assistant finds the device
+// Run listens until ctx is canceled, advertising over mDNS so Home Assistant finds the device
 // without being told an address.
 func (a *API) Run(ctx context.Context) error {
 	safe.Go("logs", func() { a.pipeLogs(ctx) })

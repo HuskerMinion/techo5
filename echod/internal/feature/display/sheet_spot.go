@@ -197,7 +197,7 @@ var spotFaces = sync.OnceValue(func() *sheetFaces {
 
 // The round card's frame: rows between spotListTop and spotListBottom, their labels and controls
 // between spotCardLeft and spotCardRight (where the circle is wide enough for both), and its
-// buttons centred on spotButtonsY.
+// buttons centered on spotButtonsY.
 const (
 	spotListTop    = 106
 	spotListBottom = 404
@@ -230,7 +230,7 @@ func (r *roundRenderer) sheetFace(s roundScene) {
 	r.zmu.Unlock()
 }
 
-// centredText writes s centred across the panel.
+// centredText writes s centered across the panel.
 func (r *roundRenderer) centredText(face font.Face, s string, baseline int, c color.RGBA) {
 	r.paint.text(face, s, centre-r.paint.width(face, s)/2, baseline, c)
 }

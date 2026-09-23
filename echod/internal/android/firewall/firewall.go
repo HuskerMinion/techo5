@@ -41,7 +41,7 @@ var All = []string{API, ADB, Sendspin}
 // The interface is wlan0 throughout: this device has no other way in.
 const iface = "wlan0"
 
-// ready serialises the read-then-write pairs below.
+// ready serializes the read-then-write pairs below.
 var ready sync.Mutex
 
 func acceptRule(chain string, port int) []string {

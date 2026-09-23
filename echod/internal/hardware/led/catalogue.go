@@ -1,6 +1,6 @@
 package led
 
-// The catalogue: every pairing of a motion with the colours it runs in, in the order Home Assistant is
+// The catalog: every pairing of a motion with the colors it runs in, in the order Home Assistant is
 // offered them. Each motion is a file of its own next to this one; this is the table of contents, so
 // that what exists and what it is called are in one place rather than spread across the files that draw
 // them. Adding an effect is a file and a line here.
@@ -9,15 +9,15 @@ package led
 // the eye: a ring in the corner of a room is being looked at all evening, so an ambient effect is
 // judged by whether it can be ignored, not by how much is happening.
 var ambientEffects = []Effect{
-	// In the ring's own colour.
+	// In the ring's own color.
 	{Name: EffectPulse, New: breathe},
 	{Name: EffectHeartbeat, New: heartbeat},
 	{Name: EffectRipple, New: ripple},
 	{Name: EffectStandingWave, New: standing},
 	{Name: EffectTwinkle, New: twinkle},
 
-	// In colours of their own, where the colours are the point: a flame is not a shape, and an
-	// aurora in one colour is a ring that cannot make up its mind.
+	// In colors of their own, where the colors are the point: a flame is not a shape, and an
+	// aurora in one color is a ring that cannot make up its mind.
 	{Name: EffectCrimsonHeartbeat, Palette: crimson, New: heartbeat},
 	{Name: EffectAuroraPulse, Palette: aurora, New: breathe},
 	{Name: EffectCandle, Palette: flame, New: flicker},
@@ -34,7 +34,7 @@ var ambientEffects = []Effect{
 // are the ones a conversation runs, and they are the ones worth looking at for direction: the driver
 // can play any of them backwards, which is how listening and waiting are told apart.
 var motionEffects = []Effect{
-	// In the ring's own colour.
+	// In the ring's own color.
 	{Name: EffectComet, New: comet},
 	{Name: EffectChase, New: chase},
 	{Name: EffectScanner, New: scanner},
@@ -46,7 +46,7 @@ var motionEffects = []Effect{
 	{Name: EffectBounce, New: bounce},
 	{Name: EffectSpring, New: spring},
 
-	// In colours of their own.
+	// In colors of their own.
 	{Name: EffectRainbow, Palette: wheel, New: spin},
 	{Name: EffectFireComet, Palette: fire, New: comet},
 	{Name: EffectIceComet, Palette: ice, New: comet},
@@ -81,7 +81,7 @@ var roomEffects = []Effect{
 	{Name: EffectRoomFire, Palette: fire, Senses: roomFire},
 	{Name: EffectRoomSpin, Palette: wheel, Senses: roomSpin},
 
-	// Any motion in the catalogue can be a room effect, since all the room has to do is decide how
+	// Any motion in the catalog can be a room effect, since all the room has to do is decide how
 	// much of it shows. These are the ones worth offering rather than all of them.
 	{Name: EffectRoomAurora, Palette: aurora, Senses: byRoom(drift)},
 	{Name: EffectRoomTwinkle, Palette: wheel, Senses: byRoom(twinkle)},

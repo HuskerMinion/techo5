@@ -162,7 +162,7 @@ type finger struct {
 	holdTimer    *time.Timer // pending hold, stopped by movement or a lift
 }
 
-// Run reads until ctx is cancelled; the node is closed from the side to end the blocking read.
+// Run reads until ctx is canceled; the node is closed from the side to end the blocking read.
 func (s *Screen) Run(ctx context.Context) error {
 	dev := s.dev
 	stop := context.AfterFunc(ctx, func() { _ = dev.Close() })
@@ -348,7 +348,7 @@ func (s *Screen) moved(f *finger) {
 }
 
 // lift is the finger leaving: a tap if it barely moved and did not stay, a horizontal swipe if it
-// travelled sideways, nothing otherwise (its vertical notches already went out).
+// traveled sideways, nothing otherwise (its vertical notches already went out).
 func (s *Screen) lift(f *finger) {
 	if f.sx < 0 {
 		return

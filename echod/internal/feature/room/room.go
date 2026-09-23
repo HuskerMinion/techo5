@@ -2,7 +2,7 @@
 // not in the light's effect list. An effect there is an appearance Home Assistant set and can set
 // again; this is a standing instruction to show what the microphone hears until told otherwise.
 //
-// It holds its own claim above the light's resting colour, so choosing None reveals whatever the
+// It holds its own claim above the light's resting color, so choosing None reveals whatever the
 // light was set to without this having to remember or restore anything. A conversation, a volume
 // change or a failure covers it and gives it back on its own.
 package room
@@ -19,7 +19,7 @@ import (
 	"github.com/HuskerMinion/techo5/echod/internal/hardware/mic"
 )
 
-// After the light, whose colour it inherits.
+// After the light, whose color it inherits.
 func init() {
 	component.Register(component.Device, Get(), component.Order(20))
 }
@@ -28,8 +28,8 @@ type Reaction struct {
 	sel   *esphome.Select
 	claim *led.Claim
 
-	// room is what the effect may ask about the room, and base what colour to show it in. Both are
-	// read at the moment a frame is drawn rather than captured, so leveling and the light's colour
+	// room is what the effect may ask about the room, and base what color to show it in. Both are
+	// read at the moment a frame is drawn rather than captured, so leveling and the light's color
 	// stay live.
 	room led.Room
 	base func() led.Color
@@ -65,7 +65,7 @@ func build() *Reaction {
 
 	component.BindEffect(r.sel, led.Names(led.KindRoom), r.show, config.Set().Ring().Reaction)
 
-	// The light's colour is inherited, and the claim holds the colour it was given rather than
+	// The light's color is inherited, and the claim holds the color it was given rather than
 	// looking it up, so a change has to be handed over.
 	light.Get().OnColor(r.recolour)
 	return r

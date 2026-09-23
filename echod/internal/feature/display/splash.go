@@ -31,7 +31,7 @@ const (
 	// arcs drawn on the mark.
 	arcCentreX, arcCentreY = 164, 105
 
-	// The pulse: arcs leave the mark at arcFrom pixels from the centre and fade out by arcTo,
+	// The pulse: arcs leave the mark at arcFrom pixels from the center and fade out by arcTo,
 	// arcCount of them in flight, one full sweep every arcPeriod.
 	arcFrom   = 100.0
 	arcTo     = 380.0
@@ -56,11 +56,11 @@ var (
 	teal = color.RGBA{20, 147, 180, 255}
 )
 
-// splash is the mark, scaled once, and where its arcs are centred on the canvas.
+// splash is the mark, scaled once, and where its arcs are centered on the canvas.
 type splash struct {
 	img      *image.RGBA
 	at       image.Point // top-left on the canvas
-	cx, cy   float64     // arc centre on the canvas
+	cx, cy   float64     // arc center on the canvas
 	loadedAt time.Time
 }
 

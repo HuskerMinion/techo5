@@ -19,7 +19,7 @@ import (
 // sheetVolumeSteps is how many steps the Volume row counts.
 const sheetVolumeSteps = media.VolumeSteps
 
-// restartWindow is how long a second tap on Restart (or Delete, on an alarm, or Forget) is honoured
+// restartWindow is how long a second tap on Restart (or Delete, on an alarm, or Forget) is honored
 // after the first.
 const restartWindow = 4 * time.Second
 

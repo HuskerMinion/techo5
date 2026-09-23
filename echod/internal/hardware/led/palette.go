@@ -2,14 +2,14 @@ package led
 
 import "math"
 
-// Palette is the colours an effect draws from: either the one Home Assistant set on the ring, or
-// the effect's own. Asking a palette for a colour rather than dimming one it was handed is what
+// Palette is the colors an effect draws from: either the one Home Assistant set on the ring, or
+// the effect's own. Asking a palette for a color rather than dimming one it was handed is what
 // lets a single frame function serve both.
 //
 // Sampled either round the ring, where the ends have to meet, or along a gradient.
 type Palette []Color
 
-// At samples the palette as a circle, blending between neighbours and wrapping past the end, so a
+// At samples the palette as a circle, blending between neighbors and wrapping past the end, so a
 // gradient laid around the ring meets itself without a seam.
 func (p Palette) At(x float64) Color {
 	switch len(p) {
@@ -24,7 +24,7 @@ func (p Palette) At(x float64) Color {
 	return blend(p[i], p[(i+1)%len(p)], x-float64(i))
 }
 
-// Along samples it as a gradient with two ends, for a palette that runs from one colour to another
+// Along samples it as a gradient with two ends, for a palette that runs from one color to another
 // rather than round. Wrapping such a palette puts its ends next to each other, which on a flame is
 // the coldest red touching the hottest white.
 func (p Palette) Along(x float64) Color {
@@ -44,10 +44,10 @@ func (p Palette) Along(x float64) Color {
 // effect that fade: the trough between two crests, the tail behind a head, the edge of a beam.
 //
 // Both arguments say the same thing twice on purpose, because there are two ways to fade and only
-// one of them is available at a time. A palette of one colour has nowhere to go, so less light is the
+// one of them is available at a time. A palette of one color has nowhere to go, so less light is the
 // only fade it has, and it gets dim in full. A palette that already cools along its length would then
-// be dimming a colour that is dark to begin with, which leaves the far end black and throws away the
-// colours that were the reason for choosing it — so there, dim only takes the edge off.
+// be dimming a color that is dark to begin with, which leaves the far end black and throws away the
+// colors that were the reason for choosing it — so there, dim only takes the edge off.
 func (p Palette) Shade(x, dim float64) Color {
 	if len(p) > 1 {
 		dim = 0.5 + 0.5*dim
@@ -55,7 +55,7 @@ func (p Palette) Shade(x, dim float64) Color {
 	return scale(p.Along(x), dim)
 }
 
-// Nth picks one colour whole, for effects with countable parts — the lamps of a marquee, the arms of
+// Nth picks one color whole, for effects with countable parts — the lamps of a marquee, the arms of
 // a pinwheel — where blending between them would only muddy the count.
 func (p Palette) Nth(i int) Color {
 	if len(p) == 0 {
@@ -65,15 +65,15 @@ func (p Palette) Nth(i int) Color {
 }
 
 // The palettes effects come with. They are gathered here rather than sitting next to the animations
-// because choosing colours that work together on this ring is a different job from writing the
+// because choosing colors that work together on this ring is a different job from writing the
 // motion, and because a palette is worth reusing across several.
 
 // wheel is every hue, for effects that mean to show all of them. Six stops rather than a smooth
 // sweep because hue is piecewise linear between the primaries and secondaries, so six is exactly
-// enough for the blend to land on the same colours the wheel would.
+// enough for the blend to land on the same colors the wheel would.
 //
 // It sits at 0.6 of full scale, which is where the ring's rainbow has always been: these LEDs at
-// full on every channel are glaring rather than colourful.
+// full on every channel are glaring rather than colorful.
 var wheel = func() Palette {
 	p := make(Palette, 6)
 	for i := range p {
@@ -82,7 +82,7 @@ var wheel = func() Palette {
 	return p
 }()
 
-// flame is one colour, roughly a candle at 1900 K.
+// flame is one color, roughly a candle at 1900 K.
 var flame = Palette{{R: 0xFF, G: 0x93, B: 0x29}}
 
 // fire runs from the near-white at the base of a flame out through orange to the dull red at its
@@ -154,7 +154,7 @@ var forest = Palette{
 // alarm is the red of a fault, from the dark red it rests at up to the near-white at the top of a
 // pulse. Sampled along and darkest first, so an effect whose shape is how hard something is happening
 // climbs it. Red because nothing else on this device is: the splash is blue, the volume arc white,
-// and a colour used for one thing only needs no explaining.
+// and a color used for one thing only needs no explaining.
 var alarm = Palette{
 	{R: 0x30, G: 0x00, B: 0x00},
 	{R: 0xC0, G: 0x00, B: 0x00},
@@ -171,7 +171,7 @@ var vu = Palette{
 	{R: 0xFF, G: 0x10, B: 0x00},
 }
 
-// duo is two colours far enough apart to stay separate at a glance, for effects whose whole shape is
+// duo is two colors far enough apart to stay separate at a glance, for effects whose whole shape is
 // two of something. Sampled with Nth, never blended: the point is telling them apart.
 var duo = Palette{
 	{R: 0x00, G: 0xE0, B: 0xC0},

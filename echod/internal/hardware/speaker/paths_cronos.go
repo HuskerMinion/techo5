@@ -175,7 +175,7 @@ const AmpSwitch = ""
 
 // OutputBoost is make-up gain on everything the speaker plays, before the volume curve and the
 // limiter. Unity: the quiet output that once seemed to need it was the amplifier's safe mode
-// (see initSequence), and speech has its own normaliser.
+// (see initSequence), and speech has its own normalizer.
 const OutputBoost = 1.0
 
 // DriverTuning applies the vendor driver's volume-dependent EQ and limiter (lib/asp), read from the

@@ -2,7 +2,7 @@
 
 package layout
 
-// The Echo Dot 2 on Fire OS: echod lives under /system/app because that tree is labelled
+// The Echo Dot 2 on Fire OS: echod lives under /system/app because that tree is labeled
 // system_file, which keeps an init-started service in init's own domain, and it runs as Amazon's
 // ledcontroller service, which removes the only other writer of the LED ring and gets init's
 // supervision. /system is read-only once installed, so anything written after install goes on /data.

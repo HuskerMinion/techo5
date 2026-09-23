@@ -128,7 +128,7 @@ func (s *sleeper) Cancel() {
 	s.until, s.stop = time.Time{}, nil
 	s.mu.Unlock()
 	if was {
-		slog.Info("sleep timer cancelled")
+		slog.Info("sleep timer canceled")
 	}
 	s.sel.Set(sleepOff)
 }

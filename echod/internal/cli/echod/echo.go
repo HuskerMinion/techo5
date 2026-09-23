@@ -145,7 +145,7 @@ func report(w io.Writer, frames []byte) {
 	}
 
 	// One reference to correlate against: the speaker is mono into a single driver, so left and
-	// right carry the same programme and either would do. Their sum is what reached it.
+	// right carry the same program and either would do. Their sum is what reached it.
 	ref := make([]float64, len(refs[0]))
 	for i := range ref {
 		for c := range refs {

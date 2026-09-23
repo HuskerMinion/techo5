@@ -10,7 +10,7 @@ import (
 	"github.com/HuskerMinion/techo5/echod/internal/feature/home"
 )
 
-// The camera view: the latest frame centred on the panel, the camera's name and the time in the
+// The camera view: the latest frame centered on the panel, the camera's name and the time in the
 // corners, and a hint that a tap closes it. Below it, the cameras page: a list, like the radio's.
 const (
 	camRowTop    = 92

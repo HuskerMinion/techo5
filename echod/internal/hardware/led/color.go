@@ -5,7 +5,7 @@ import "math"
 // HomeAssistant is Home Assistant's brand blue.
 var HomeAssistant = Color{R: 0x18, G: 0xBC, B: 0xF2}
 
-// Solid is every segment in one colour.
+// Solid is every segment in one color.
 func Solid(c Color) []Color {
 	out := make([]Color, Segments)
 	for i := range out {
@@ -21,13 +21,13 @@ func Solid(c Color) []Color {
 // It fills from segment 11 so the arc grows across the front of the device.
 func Arc(fraction float64, c Color) []Color { return arcOf(fraction, Palette{c}) }
 
-// Volume is the level as an arc in the meter's colours: green while quiet, amber as it gets loud,
-// red at the top. Since arcOf takes the colour from where a segment sits rather than from how far
-// along the fill it is, the same step is always the same colour, and how loud the device is about to
+// Volume is the level as an arc in the meter's colors: green while quiet, amber as it gets loud,
+// red at the top. Since arcOf takes the color from where a segment sits rather than from how far
+// along the fill it is, the same step is always the same color, and how loud the device is about to
 // be can be read without counting segments.
 func Volume(fraction float64) []Color { return arcOf(fraction, vu) }
 
-// arcOf is the same arc in a palette's colours, laid along the fill rather than round the ring: the
+// arcOf is the same arc in a palette's colors, laid along the fill rather than round the ring: the
 // far end of the arc is the far end of the palette, so how full it is says something on its own.
 func arcOf(fraction float64, p Palette) []Color {
 	fraction = math.Max(0, math.Min(1, fraction))
@@ -45,13 +45,13 @@ func arcOf(fraction float64, p Palette) []Color {
 	return out
 }
 
-// scale dims a colour. The channels are linear brightness, so this is the whole of it.
+// scale dims a color. The channels are linear brightness, so this is the whole of it.
 func scale(c Color, f float64) Color {
 	clamp := func(v byte) byte { return byte(math.Round(math.Max(0, math.Min(255, float64(v)*f)))) }
 	return Color{R: clamp(c.R), G: clamp(c.G), B: clamp(c.B)}
 }
 
-// add lays one colour on top of another, holding at full scale. It is what two lights in the same
+// add lays one color on top of another, holding at full scale. It is what two lights in the same
 // place do, so effects with more than one thing moving add rather than assign: two dots crossing
 // brighten each other instead of one erasing the other for a frame.
 func add(a, b Color) Color {
@@ -64,7 +64,7 @@ func add(a, b Color) Color {
 	return Color{R: sum(a.R, b.R), G: sum(a.G, b.G), B: sum(a.B, b.B)}
 }
 
-// blend mixes two colours, f of the way from a to b. The channels are linear brightness, so there is
+// blend mixes two colors, f of the way from a to b. The channels are linear brightness, so there is
 // nothing to it but interpolation.
 func blend(a, b Color, f float64) Color {
 	f = math.Max(0, math.Min(1, f))

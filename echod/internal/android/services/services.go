@@ -176,7 +176,7 @@ func Disable(rc string, names map[string]bool) (string, []string) {
 
 // Domain is what the service echod takes over is given to run in. init refuses to start a service
 // whose executable produces no domain transition — "does not have a SELinux domain defined" — and our
-// binary is labelled system_file, which produces none. Naming the domain outright skips that, and this
+// binary is labeled system_file, which produces none. Naming the domain outright skips that, and this
 // one is unconfined, which echod needs before it can make the device permissive at all.
 const Domain = "u:r:su:s0"
 

@@ -143,7 +143,7 @@ func (v *Voice) Handle(ctx context.Context, c *esphome.Conn, msg proto.Message) 
 	return v.vs.Handle(ctx, c, msg)
 }
 
-// Run owns the conversation until ctx is cancelled. Nothing happens on a wake word until it is
+// Run owns the conversation until ctx is canceled. Nothing happens on a wake word until it is
 // running.
 func (v *Voice) Run(ctx context.Context) error {
 	v.turn.Run(ctx)
@@ -182,7 +182,7 @@ func (v *Voice) Cancel() {
 }
 
 // Action is the action button: it gives up on whatever is happening, or starts something if nothing
-// is. Cancelling is the more useful half — it is the way out of a turn that is waiting on a pipeline
+// is. Canceling is the more useful half — it is the way out of a turn that is waiting on a pipeline
 // that is not going to answer.
 func (v *Voice) Action() {
 	// A call ringing or up is what the button is for until it is over: it answers or hangs up.
@@ -229,7 +229,7 @@ func (v *Voice) Interrupt() {
 
 // Stop ends whatever the device is doing audibly, and reports whether there was anything to end.
 //
-// One ladder, because there is one meaning: a turn is cancelled, a sound is silenced, a track is
+// One ladder, because there is one meaning: a turn is canceled, a sound is silenced, a track is
 // stopped. The action button falls through to starting a turn when it returns false; a stop word has
 // nothing to fall through to and simply does nothing.
 func (v *Voice) Stop() bool {

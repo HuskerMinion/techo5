@@ -24,7 +24,7 @@ const (
 
 	// CancelOnMix runs the echo canceller on the mix rather than the center microphone. Measured on a
 	// Dot (techo5-dot docs/microphones.md, 2026-09-15): the average of seven with one canceller heard
-	// speech over music 5.4 dB better than the cancelled center microphone, at the same cost.
+	// speech over music 5.4 dB better than the canceled center microphone, at the same cost.
 	CancelOnMix = true
 )
 

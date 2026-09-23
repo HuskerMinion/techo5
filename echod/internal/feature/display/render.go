@@ -388,7 +388,7 @@ func (r *renderer) volumeBar(s scene) {
 	r.text(r.small, pct, r.w-r.margin-r.width(r.small, pct), top+38, cream)
 }
 
-// timeAndDate draws the hour, AM/PM and date centred, with the hour's baseline at base and an
+// timeAndDate draws the hour, AM/PM and date centered, with the hour's baseline at base and an
 // optional suffix appended to the date line (an alarm note, on the ordinary idle page). Shared by
 // bigClock and the screensaver's normal-size overlay, which wants the clock alone.
 func (r *renderer) timeAndDate(now time.Time, base int, dateSuffix string) {

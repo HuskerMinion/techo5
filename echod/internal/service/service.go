@@ -19,7 +19,7 @@ type Service interface {
 	// Name is how it appears in logs and diagnostics.
 	Name() string
 
-	// Run holds the service until ctx is cancelled. Returning nil means it finished or stopped
+	// Run holds the service until ctx is canceled. Returning nil means it finished or stopped
 	// cleanly; returning an error means it broke, and a restartable service is started again.
 	Run(ctx context.Context) error
 }

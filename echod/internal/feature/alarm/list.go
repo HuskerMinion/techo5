@@ -55,7 +55,7 @@ type ListedTimer struct {
 	Total   int    `json:"total_seconds"`
 	Running bool   `json:"running"`
 	// Local is a timer of the device's own, which timer_cancel can cancel. The others are Home
-	// Assistant's, cancelled where they were set.
+	// Assistant's, canceled where they were set.
 	Local bool `json:"local"`
 }
 

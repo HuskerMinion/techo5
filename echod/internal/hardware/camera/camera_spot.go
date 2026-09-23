@@ -11,7 +11,7 @@
 // pixel clock select doubles every sample), and both sync polarities at 0.
 //
 // Frames are 640x480 RGGB at about 30 a second. Every other one is demosaiced (bilinear) to RGBA with
-// grey-world white balance and levels; the sensor's automatic exposure is off in its init table, so
+// gray-world white balance and levels; the sensor's automatic exposure is off in its init table, so
 // the loop here sets shutter and gain.
 package camera
 
@@ -519,7 +519,7 @@ func (d *device) autoExpose(raw []byte) {
 
 // ---- conversion ----
 
-// tone is how a frame was levelled.
+// tone is how a frame was leveled.
 type tone struct {
 	gainR, gainB float64
 	black, white int // 8-bit raw levels mapped to black and white
@@ -531,7 +531,7 @@ func convert(raw []byte) (*image.RGBA, tone) {
 	return render(raw, t), t
 }
 
-// stats measures grey-world white balance on the 2x2 cells, and the black and white points from the
+// stats measures gray-world white balance on the 2x2 cells, and the black and white points from the
 // green histogram (0.2 % and 99.5 %).
 func stats(raw []byte) tone {
 	var sumR, sumG, sumB uint64
@@ -584,7 +584,7 @@ func (t tone) lut(gain float64) *[1024]uint8 {
 	return &l
 }
 
-// render is bilinear on RGGB: each pixel's missing colours are averaged from its neighbours.
+// render is bilinear on RGGB: each pixel's missing colors are averaged from its neighbors.
 // Values carry two extra bits (times 4) into the lookups.
 func render(raw []byte, t tone) *image.RGBA {
 	w, h := sensorW, sensorH

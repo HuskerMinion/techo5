@@ -62,7 +62,7 @@ func (g *Group) Add(svc Service, opts ...Option) {
 	})
 }
 
-// Run starts everything and blocks until ctx is cancelled and every service has stopped.
+// Run starts everything and blocks until ctx is canceled and every service has stopped.
 //
 // A required service that cannot be acquired is fatal: Run returns its error without starting what
 // follows, because a device missing something it cannot work without is better off restarting than

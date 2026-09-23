@@ -337,7 +337,7 @@ func (p *Player) apply(seq []kctl) {
 	}
 }
 
-// Run feeds the stream until ctx is cancelled, writing silence when nothing is queued.
+// Run feeds the stream until ctx is canceled, writing silence when nothing is queued.
 func (p *Player) Run(ctx context.Context) error {
 	pb, _ := p.device()
 	if pb == nil {

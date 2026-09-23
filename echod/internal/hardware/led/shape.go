@@ -9,7 +9,7 @@ import (
 // reason it is here rather than in the file of the effect that wants it.
 
 // around lays a palette round the ring at one brightness, which is what an effect that has no motion of
-// its own across the segments wants: with one colour it is the whole ring in that colour, with a palette
+// its own across the segments wants: with one color it is the whole ring in that color, with a palette
 // it is that palette spread evenly.
 func around(p Palette, f float64) []Color {
 	out := make([]Color, Segments)
@@ -30,7 +30,7 @@ func shaded(p Palette, f float64) []Color {
 	return out
 }
 
-// dot adds a glow centred on a fractional position round the ring. Added rather than assigned, so that
+// dot adds a glow centered on a fractional position round the ring. Added rather than assigned, so that
 // two dots crossing brighten each other for a frame instead of one erasing the other.
 func dot(out []Color, at float64, c Color, width float64) {
 	for i := range out {
@@ -44,7 +44,7 @@ func dot(out []Color, at float64, c Color, width float64) {
 }
 
 // ringDist is how far segment i is from a position on the ring, measured the short way round so that a
-// glow spans the seam between segment 11 and segment 0 like any other pair of neighbours.
+// glow spans the seam between segment 11 and segment 0 like any other pair of neighbors.
 func ringDist(i int, at float64) float64 {
 	d := math.Abs(float64(i) - math.Mod(math.Mod(at, Segments)+Segments, Segments))
 	return math.Min(d, Segments-d)
@@ -59,7 +59,7 @@ func wander(t, offset float64) float64 {
 	return (s/3 + 1) / 2
 }
 
-// hash mixes an integer into one that looks unrelated to its neighbours, so effects can be given
+// hash mixes an integer into one that looks unrelated to its neighbors, so effects can be given
 // per-segment variation without carrying any state.
 func hash(x uint32) uint32 {
 	x ^= x >> 16
@@ -71,7 +71,7 @@ func hash(x uint32) uint32 {
 }
 
 // level reads the room and keeps it inside 0 to 1, so an effect can trust what it is handed. A room with
-// nothing behind it cannot happen through the catalogue, which refuses to build one of these without a
+// nothing behind it cannot happen through the catalog, which refuses to build one of these without a
 // source, but it reads as quiet rather than as a panic.
 func level(r Room) float64 {
 	if r.Level == nil {

@@ -24,7 +24,7 @@ import (
 	"github.com/HuskerMinion/techo5/echod/internal/update"
 )
 
-// Run brings everything up and stays until ctx is cancelled.
+// Run brings everything up and stays until ctx is canceled.
 //
 // Hardware that cannot be taken is logged and left out: a device with no speaker still answers, and
 // nothing here is worth refusing to start over.

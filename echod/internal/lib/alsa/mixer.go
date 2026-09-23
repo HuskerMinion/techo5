@@ -92,7 +92,7 @@ type Control struct {
 }
 
 // Controls lists the card's controls. There is no cheap way to ask how many there are, so this
-// walks numids until the kernel stops recognising them.
+// walks numids until the kernel stops recognizing them.
 //
 // The walk costs one ioctl per control plus one per item name of every enumerated control, which
 // is over a second on this card, so the result is kept: the set does not change while the card

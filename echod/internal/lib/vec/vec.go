@@ -12,7 +12,7 @@ package vec
 
 // dotGo is the portable inner product.
 //
-// Four running sums rather than one because a single accumulator serialises: each addition would wait
+// Four running sums rather than one because a single accumulator serializes: each addition would wait
 // on the previous one to land, where four independent chains keep the pipeline fed. The tail is
 // whatever is left when the length is not a multiple of four.
 func dotGo(a, b []float32) float32 {

@@ -17,7 +17,7 @@ import (
 // This exists because the ring has one surface and several things with a legitimate claim on it: the
 // boot animation, a conversation, a volume change, a failure, and whatever Home Assistant set the
 // light to. Without an order they overwrite each other in whatever sequence the events happened to
-// arrive, and a failure indication ends up cancelled by the teardown of the thing that failed.
+// arrive, and a failure indication ends up canceled by the teardown of the thing that failed.
 type Priority int
 
 const (
@@ -25,7 +25,7 @@ const (
 	PriorityBase Priority = iota
 
 	// PriorityRoom is the ring reacting to the room, if that has been chosen. It sits over the light's
-	// resting colour because it is a resting appearance too and the user asked for this one, and under
+	// resting color because it is a resting appearance too and the user asked for this one, and under
 	// everything else because it is the least urgent thing the ring can be doing: it says nothing has
 	// happened, only that the room is here.
 	PriorityRoom
@@ -80,7 +80,7 @@ type Content struct {
 	Room Room
 
 	// Animate replaces both, for something with a timeline of its own such as the boot animation. It
-	// runs until the context is cancelled.
+	// runs until the context is canceled.
 	Animate func(ctx context.Context, r *Ring) error
 }
 
@@ -200,7 +200,7 @@ func (d *Driver) Claim(p Priority) *Claim {
 	return c
 }
 
-// Run drives the ring until ctx is cancelled. Nothing reaches the hardware without going through it.
+// Run drives the ring until ctx is canceled. Nothing reaches the hardware without going through it.
 func (d *Driver) Run(ctx context.Context) error {
 	for {
 		if ctx.Err() != nil {

@@ -118,7 +118,7 @@ func (r *renderer) fog(cx, y, w int) {
 	}
 }
 
-// weatherIcon draws Home Assistant's condition centred at cx, cy in a box about size across.
+// weatherIcon draws Home Assistant's condition centered at cx, cy in a box about size across.
 func (r *renderer) weatherIcon(cond string, cx, cy, size int) {
 	w := size
 	switch cond {

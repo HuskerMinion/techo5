@@ -15,7 +15,7 @@ const (
 	crickets = 3
 )
 
-// Levelled by its peak: this is mostly silence, and bringing the average up to where a steady sound
+// Leveled by its peak: this is mostly silence, and bringing the average up to where a steady sound
 // sits would mean chirps at nearly full scale.
 var cricketSound = Sound{
 	Name: NameCrickets,

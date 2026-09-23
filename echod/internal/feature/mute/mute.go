@@ -37,7 +37,7 @@ const (
 
 // mutedColor is what an inheriting animation runs in while the microphones are cut. Red, like the
 // button's own LED and like a failure: the device cannot hear, which is closer to being broken than
-// to being a colour someone chose.
+// to being a color someone chose.
 var mutedColor = led.Color{R: 0xC0, G: 0x00, B: 0x00}
 
 type Mute struct {

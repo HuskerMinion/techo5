@@ -7,7 +7,7 @@ import (
 
 // pinwheel turns four arms, ninety degrees apart. Four, because twelve divides by it: every arm
 // lands on a segment at the same moment, so the wheel looks rigid rather than flexing as it turns.
-// Each arm carries its own colour from the palette, and carries it round with it.
+// Each arm carries its own color from the palette, and carries it round with it.
 func pinwheel(p Palette) Frame {
 	const (
 		revolution = 1600 * time.Millisecond
@@ -24,7 +24,7 @@ func pinwheel(p Palette) Frame {
 		for i := range out {
 			// Which arm is nearest, and how far off it this segment is. The arms repeat every span
 			// segments, so the whole wheel is one distance measured within a single span — and the arm
-			// number comes from the same division, which is what keeps a colour with its arm.
+			// number comes from the same division, which is what keeps a color with its arm.
 			turns := (float64(i) - at) / span
 			arm := int(math.Round(turns))
 

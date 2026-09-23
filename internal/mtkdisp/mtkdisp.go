@@ -574,7 +574,7 @@ func Capture(width, height int) ([]byte, error) {
 }
 
 // Register peeking. The display manager lets a process map the display-subsystem register
-// window (physical 0x14007000-0x14018000 on MT8163: OVL0, OVL1, RDMA0, RDMA1, WDMA0, colour
+// window (physical 0x14007000-0x14018000 on MT8163: OVL0, OVL1, RDMA0, RDMA1, WDMA0, color
 // pipeline, DSI). Reading it shows what the hardware is actually scanning out, whatever the
 // driver's logs say — and the driver's logs are compiled out on this kernel.
 const (

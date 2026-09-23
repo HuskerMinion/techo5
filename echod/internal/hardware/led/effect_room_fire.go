@@ -10,7 +10,7 @@ import (
 //
 // The room sets how far up the flame the ring may reach and the flicker moves underneath that, which
 // is what keeps the two readable at once: a little noise is dim and dark red, a room full of talking is
-// bright and nearly white, and the difference is a colour rather than only a brightness.
+// bright and nearly white, and the difference is a color rather than only a brightness.
 func roomFire(p Palette, r Room) Frame {
 	const (
 		// What a silent room leaves burning. Embers have to be visible, or a quiet room looks like a

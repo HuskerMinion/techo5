@@ -12,7 +12,7 @@ import (
 
 // slideshowWash is the theme's ground color, translucent, over a photo — the same technique
 // render_slideshow.go's Show version uses, just this theme's color (colBackground) instead of
-// walnut: the photo stays recognisable, and the clock drawn over it stays legible.
+// walnut: the photo stays recognizable, and the clock drawn over it stays legible.
 const slideshowWash = 130
 
 // slideshowBackground draws a Background-mode photo full-bleed, then the wash over it.

@@ -9,7 +9,7 @@
 // map and the dead ends; cmd/camframe is the standalone version of this file.
 //
 // Frames arrive as 1600x1200 packed 10-bit Bayer at about 14 frames a second and are handed out
-// two ways: an 800x600 RGBA made on every frame (one pixel per Bayer cell, grey-world white
+// two ways: an 800x600 RGBA made on every frame (one pixel per Bayer cell, gray-world white
 // balance, a gamma curve) for the live view and the stream, and the packed frame itself, which
 // Full() demosaics to 1600x1200 on demand for stills. The sensor runs only while something holds
 // it (Acquire), and a little longer, so a run of snapshots does not restart it each time.
@@ -626,7 +626,7 @@ func (d *device) skip() bool { return false }
 
 // ---- conversion ----
 
-// tone is how a frame was levelled: white balance gains and the value that maps to white.
+// tone is how a frame was leveled: white balance gains and the value that maps to white.
 type tone struct {
 	gainR, gainB float64
 	white        int     // on the 11-bit scale of a summed green pair
@@ -646,13 +646,13 @@ func unpackLine(line []byte, dst []uint16) {
 	}
 }
 
-// convert turns one packed frame into a half-size RGBA picture and the tone it was levelled with.
+// convert turns one packed frame into a half-size RGBA picture and the tone it was leveled with.
 func convert(raw []byte) (*image.RGBA, tone) {
 	t := stats(raw)
 	return render(raw, t), t
 }
 
-// stats levels one frame: grey-world white balance, the darkest 0.1% at black (within reason), the
+// stats levels one frame: gray-world white balance, the darkest 0.1% at black (within reason), the
 // top percentile at white, gamma 1/1.8 or steeper for a backlit frame.
 func stats(raw []byte) tone { return sample(raw, statsStep) }
 
@@ -781,7 +781,7 @@ var lutCache struct {
 }
 
 // Full demosaics the frame at the sensor's own 1600x1200: bilinear, each pixel's missing two
-// colours averaged from its neighbours, levelled the way the half-size picture was. It costs a
+// colors averaged from its neighbors, leveled the way the half-size picture was. It costs a
 // few hundred milliseconds on this SoC, so it is for stills, not the stream.
 func (f *Frame) Full() *image.RGBA {
 	f.mu.Lock()

@@ -137,8 +137,8 @@ func (s *sinkState) push(buf []byte) {
 	if s.rate == Rate {
 		out = s.appendFrames(out, frames, 0, n)
 	} else {
-		// Walk the input at the ratio, interpolating between neighbours; the last frame of the
-		// previous period is the left neighbour of the first.
+		// Walk the input at the ratio, interpolating between neighbors; the last frame of the
+		// previous period is the left neighbor of the first.
 		step := float64(Rate) / float64(s.rate)
 		for s.pos < float64(n) {
 			i := int(s.pos)

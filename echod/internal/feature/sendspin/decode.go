@@ -109,7 +109,7 @@ func (d *pcmDecoder) decode(chunk []byte) ([]int16, error) {
 
 func (*pcmDecoder) close() error { return nil }
 
-// formats is what we can play, in preference order, which the spec has the server honour. FLAC leads
+// formats is what we can play, in preference order, which the spec has the server honor. FLAC leads
 // because it is the only lossless one this radio can afford — pcm is three times the bytes, on an
 // antenna already shared with BLE. Opus is the fallback that always arrives at 48 kHz whatever the
 // source was, and the speaker is 48 kHz only.

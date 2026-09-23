@@ -111,3 +111,12 @@ Linux kernel, https://git.kernel.org (GPL-2.0)
       patch-dtb.py).
     - The script that does all of it is tools/linux/build-kernel.sh, and docs/building.md is how to
       run it. A rebuild reproduces the shipped kernel.
+
+Test audio, echod/internal/lib/denoise/testdata (not shipped in any release)
+  in_SNR5_sp01.wav, in_SNR15_sp01.wav, out_SNR5_sp01.wav, out_SNR15_sp01.wav, taken from
+  https://github.com/vipchengrui/traditional-speech-enhancement, whose code is MIT. That license
+  says nothing about the audio. The naming (sp01 at 5 and 15 dB SNR, 8 kHz mono) is that of the
+  NOIZEUS corpus (Philipos C. Loizou, UT Dallas, https://ecs.utdallas.edu/loizou/speech/noizeus/),
+  published for research with a request to cite Hu and Loizou (2007) and no redistribution terms
+  that we can find. Their origin is not confirmed and they are not known to be ours to redistribute;
+  testdata/README says more, and how to replace them with recordings of our own.

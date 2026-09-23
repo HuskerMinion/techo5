@@ -33,8 +33,8 @@ type Light struct {
 	mu    sync.Mutex
 	frame []led.Color
 
-	// followers want to know when the colour changes, because they show something in it: the room
-	// reaction inherits the colour the same way an effect does, and its claim holds the colour it was
+	// followers want to know when the color changes, because they show something in it: the room
+	// reaction inherits the color the same way an effect does, and its claim holds the color it was
 	// last given rather than looking it up.
 	followers []func()
 }
@@ -66,7 +66,7 @@ func build() *Light {
 
 	// Start from white at full brightness so the first command has something to turn on. Nothing is
 	// shown yet: the claim stays empty until Home Assistant or a restore says otherwise, so the boot
-	// animation is not competing with a resting colour it would have to outrank.
+	// animation is not competing with a resting color it would have to outrank.
 	l.light.Set(esphome.LightState{
 		ColorMode:  esphome.ColorModeRGB,
 		Brightness: 1, Red: 1, Green: 1, Blue: 1,
@@ -99,10 +99,10 @@ func (l *Light) Entities() []esphome.Entity {
 	return out
 }
 
-// OnColor registers something to tell when the light's colour changes.
+// OnColor registers something to tell when the light's color changes.
 func (l *Light) OnColor(f func()) { l.followers = append(l.followers, f) }
 
-// Base is the colour Home Assistant set, which is what an effect someone else runs takes its colour
+// Base is the color Home Assistant set, which is what an effect someone else runs takes its color
 // from.
 func (l *Light) Base() led.Color { return colorOf(l.light.Get()) }
 
@@ -217,11 +217,11 @@ func offered(have []string, name string) string {
 	if name == "" || slices.Contains(have, name) {
 		return name
 	}
-	slog.Warn("no such effect, restoring a plain colour instead", "effect", name)
+	slog.Warn("no such effect, restoring a plain color instead", "effect", name)
 	return ""
 }
 
-// colorOf is the light's colour with its brightness folded in.
+// colorOf is the light's color with its brightness folded in.
 func colorOf(s esphome.LightState) led.Color {
 	return led.Color{
 		R: scale(s.Red, s.Brightness),
@@ -235,7 +235,7 @@ func scale(v, brightness float32) byte {
 }
 
 // usable fills in what a bare on command leaves out. Commands are partial and folded onto current
-// state, so "on" with no brightness or colour would otherwise light the ring black.
+// state, so "on" with no brightness or color would otherwise light the ring black.
 func usable(s esphome.LightState) esphome.LightState {
 	if !s.On {
 		return s

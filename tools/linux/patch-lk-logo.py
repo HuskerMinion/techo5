@@ -62,7 +62,7 @@ def pointer_sites(d, off):
 
 
 def key_out(img, tolerance):
-    """Make pixels close to the corner colour transparent: LK paints on black, and a mark drawn on
+    """Make pixels close to the corner color transparent: LK paints on black, and a mark drawn on
     its own dark ground would otherwise sit in a visible rectangle."""
     img = img.convert("RGBA")
     bg = img.getpixel((0, 0))[:3]
@@ -81,7 +81,7 @@ def key_out(img, tolerance):
 
 
 def fit(img, size):
-    """Scale img to fit size, centred on black, as RGBA."""
+    """Scale img to fit size, centered on black, as RGBA."""
     w, h = size
     img = img.convert("RGBA")
     scale = min(w / img.width, h / img.height)
@@ -103,10 +103,10 @@ def main():
     ap.add_argument("--check", action="store_true", help="only report what would be patched")
     ap.add_argument("--extract", metavar="PNG", help="also write the bundle's current image here")
     ap.add_argument("--key", type=int, default=0, metavar="TOL",
-                    help="key the image's corner colour (within TOL per channel) to black first")
+                    help="key the image's corner color (within TOL per channel) to black first")
     ap.add_argument("--preview", metavar="PNG", help="write the image as LK will draw it")
     ap.add_argument("--colors", type=int, default=0, metavar="N",
-                    help="quantize to N colours first (flat colours compress far better)")
+                    help="quantize to N colors first (flat colors compress far better)")
     ap.add_argument("--in-place", action="store_true",
                     help="overwrite the old bundle in its own slot instead of appending; the new "
                          "bundle must fit. Required for the kaeru copy in expdb, whose stage-2 code "

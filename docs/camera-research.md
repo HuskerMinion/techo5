@@ -250,7 +250,7 @@ as a camera entity; 10-bit output later.
 ## In the daemon (2026-09-16, later)
 
 `echod/internal/hardware/camera` is the streaming version of camframe: three DMA slots, the TG
-frame counter for sync, 800x600 RGBA out with grey-world white balance, sensor on only while
+frame counter for sync, 800x600 RGBA out with gray-world white balance, sensor on only while
 acquired (5 s linger), refused while the mute button is engaged. `feature/camera` serves
 `/camera.jpg` and `/camera.mjpeg` on port 8181 and is also the **ESPHome camera entity**: the
 library has no camera domain, so the feature sends `ListEntitiesCameraResponse` itself (a
@@ -308,6 +308,6 @@ OV02B10, `camera_spot.go` the Spot's. The Spot's path, found with a probe (`cmd/
   counter sync. The first DMA pass after a start can be empty: the first three frames are dropped.
 - Exposure is the daemon's (the init table turns the sensor's AEC off): SET_ESHUTTER (lines, 6..4095;
   longer than a frame slows the rate) and SET_GAIN (1/64), aiming the raw mean at 58. Every other frame
-  is demosaiced (bilinear, grey-world, 0.2/99.5 % levels, gamma 2.2): about 33 % of a core streaming.
+  is demosaiced (bilinear, gray-world, 0.2/99.5 % levels, gamma 2.2): about 33 % of a core streaming.
 - The Spot's mute is software, so `camera_common.go` checks it every 300 ms while the sensor runs: muted
   powers the sensor down and hands out one black frame; unmuted brings it back.

@@ -9,7 +9,7 @@ import (
 
 // Waking to light. For the minutes before an alarm, the device lights the room: on a screen the
 // whole panel becomes a sunrise (feature/display), and on a device with a light ring and no screen
-// the ring comes up instead — the same curve, the same colours, on the only lamp a Dot has.
+// the ring comes up instead — the same curve, the same colors, on the only lamp a Dot has.
 //
 // The alarm itself is untouched. This is the light before it.
 
@@ -58,7 +58,7 @@ func SunriseLevel(progress float64) float64 {
 	return SunriseFloor + (1-SunriseFloor)*math.Pow(math.Min(progress, 1), 2)
 }
 
-// sunriseColor is the ring's colour as the light comes up: the deep red of the first minutes, then
+// sunriseColor is the ring's color as the light comes up: the deep red of the first minutes, then
 // orange, then a warm white, scaled by how far up it is.
 func sunriseColor(progress float64) led.Color {
 	lvl := SunriseLevel(progress)

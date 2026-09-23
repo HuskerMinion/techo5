@@ -70,7 +70,7 @@ type Store struct {
 	slot int
 	buf  []byte
 
-	// disk serialises writing a recording against pruning, so a sweep cannot delete a turn in the
+	// disk serializes writing a recording against pruning, so a sweep cannot delete a turn in the
 	// instant between its two files being written.
 	disk sync.Mutex
 

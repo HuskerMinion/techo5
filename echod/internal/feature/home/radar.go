@@ -23,7 +23,7 @@ import (
 )
 
 // The rain map: RainViewer's radar over an OpenStreetMap map, darkened here to sit with the rest of
-// the screen, centred on Home Assistant's home zone. Both are free to use with credit, which the page
+// the screen, centered on Home Assistant's home zone. Both are free to use with credit, which the page
 // shows; OpenStreetMap's tile policy also asks for an identifying User-Agent and light use, so the map
 // is fetched once for a location, two tiles at a time, and kept. RainViewer's free tiles stop at zoom 7,
 // so the radar is drawn from zoom 7 at twice the size over a zoom 8 map. The last frames play as a

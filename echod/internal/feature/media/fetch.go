@@ -103,7 +103,7 @@ func Fetch(ctx context.Context, url string) ([]int16, error) {
 // plays, and each is brought to the same RMS target with peaks soft-limited. The dial scales from
 // there.
 const (
-	// speechTargetRMS is the level speech is normalised to, as a fraction of full scale (-18 dBFS).
+	// speechTargetRMS is the level speech is normalized to, as a fraction of full scale (-18 dBFS).
 	speechTargetRMS = 0.126
 	// speechMaxGain caps how far a very quiet clip is lifted, so silence and noise are not amplified
 	// without limit (+18 dB).
@@ -170,7 +170,7 @@ func Scale(in []int16, gain float64) []int16 {
 	return out
 }
 
-// isMP3 recognises what Home Assistant's tts_proxy serves when it does not convert: an MP3, with
+// isMP3 recognizes what Home Assistant's tts_proxy serves when it does not convert: an MP3, with
 // or without an ID3 tag in front.
 func isMP3(body []byte, contentType string) bool {
 	if strings.HasPrefix(contentType, "audio/mpeg") || strings.HasPrefix(contentType, "audio/mp3") {

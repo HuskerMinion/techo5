@@ -21,7 +21,7 @@ func copyLabel(from, to string) error {
 		return fmt.Errorf("update: reading the label of %s: %w", from, err)
 	}
 	if err := syscall.Setxattr(to, selinuxAttr, label[:n], 0); err != nil {
-		return fmt.Errorf("update: labelling %s: %w", to, err)
+		return fmt.Errorf("update: labeling %s: %w", to, err)
 	}
 	return nil
 }

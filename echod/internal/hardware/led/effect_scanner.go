@@ -8,7 +8,7 @@ import (
 // scanner sweeps an eye round the ring and back again. The glow around the head is symmetric, unlike
 // the comet's tail, so the turn at each end reads as the eye slowing and coming back rather than a
 // tail flipping to the other side. The palette runs outwards from the head, so a hot core with cool
-// edges is a matter of which colours it is given.
+// edges is a matter of which colors it is given.
 func scanner(p Palette) Frame {
 	const (
 		// One pass across the ring, so a there-and-back takes twice this.

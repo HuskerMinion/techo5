@@ -92,7 +92,7 @@ func timerDrawer(w http.ResponseWriter, token string, c timer.Countdown) {
 		fmt.Fprintf(w, `<input type="hidden" name="id" value="%s"><button type="submit" class="quiet">Cancel timer</button></form>`,
 			html.EscapeString(c.ID))
 	} else {
-		fmt.Fprint(w, `<p class="note">Set by voice through Home Assistant, so it is cancelled the same way.</p>`)
+		fmt.Fprint(w, `<p class="note">Set by voice through Home Assistant, so it is canceled the same way.</p>`)
 	}
 	fmt.Fprint(w, `</div></details>`)
 }

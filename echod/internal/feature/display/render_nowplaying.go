@@ -163,7 +163,7 @@ func (r *renderer) markTriangle(x, top, size int, right bool) {
 func (r *renderer) background(rd home.Radio) {
 	if rd.Art != nil {
 		// Over the ground, so a logo's empty surround stays the theme's color; then a wash of the
-		// ground color: covers stay recognisable, logos sit back, text stays legible.
+		// ground color: covers stay recognizable, logos sit back, text stays legible.
 		draw.Draw(r.dst, r.dst.Rect, rd.Art, rd.Art.Bounds().Min, draw.Over)
 		alpha := uint8(150)
 		if rd.Logo {

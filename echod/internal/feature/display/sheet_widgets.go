@@ -699,7 +699,7 @@ func (r *paint) controlWidth(row settingRow) int {
 	return 0
 }
 
-// toggle draws a switch ending at right, centred on cy, and returns its left edge.
+// toggle draws a switch ending at right, centered on cy, and returns its left edge.
 func (r *paint) toggle(right, cy int, on bool) int {
 	track := image.Rect(right-66, cy-17, right, cy+17)
 	if on {
@@ -806,7 +806,7 @@ func (r *paint) pillButton(right, cy int, label string, style buttonStyle) int {
 	return b.Min.X
 }
 
-// icon is a category's line drawing, about 26 pixels across, centred on (cx, cy).
+// icon is a category's line drawing, about 26 pixels across, centered on (cx, cy).
 func (r *paint) icon(c category, cx, cy int, col color.RGBA) {
 	x, y := float64(cx), float64(cy)
 	const w = 2.6
@@ -931,7 +931,7 @@ func (r *paint) span(y, x0, x1 int, c color.RGBA) {
 func (r *paint) roundFill(b image.Rectangle, rad float64, top, bottom color.RGBA) {
 	x0, y0, x1, y1 := rectF(b)
 	// Only the corners are worked out a pixel at a time; between them each row is solid. The rows
-	// just outside the top and bottom edges are left alone: no pixel centre there is covered.
+	// just outside the top and bottom edges are left alone: no pixel center there is covered.
 	corner := min(int(math.Ceil(rad))+1, b.Dx()/2)
 	for y := b.Min.Y; y < b.Max.Y; y++ {
 		c := lerp(top, bottom, clamp01((float64(y)-y0)/(y1-y0)))

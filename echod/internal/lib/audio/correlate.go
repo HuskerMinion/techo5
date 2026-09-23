@@ -101,7 +101,7 @@ func MeanAbsCorrelation(ch [][]float64, i int) float64 {
 //
 // CenterSpread is the max-min range of a channel's correlations to the other perimeter
 // mics. A center mic is equidistant from all of them, so its spread is small; a perimeter
-// mic favours neighbors and so spreads wider.
+// mic favors neighbors and so spreads wider.
 //
 // ByDistance is mean correlation grouped by separation around the ring: 1 = adjacent,
 // 2 = two apart, 3 = opposite. For a ring of 6 at radius r the physical separations are

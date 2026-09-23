@@ -30,7 +30,7 @@ type LocalTimer struct {
 
 type TimersWriter struct{ st *Store }
 
-// Local replaces the remembered timers. Written when one is set, cancelled or finishes, and never on
+// Local replaces the remembered timers. Written when one is set, canceled or finishes, and never on
 // a tick: every set marshals the whole config and fsyncs it.
 func (w TimersWriter) Local(list []LocalTimer) error {
 	return w.st.Update(func(c *Config) { c.Timers.Local = slices.Clone(list) })

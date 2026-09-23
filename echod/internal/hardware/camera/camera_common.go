@@ -20,7 +20,7 @@ import (
 // What every camera shares: users acquire the sensor, frames are handed out through a hook, and the
 // sensor stops a little after the last user lets go. The device files (camera.go for the Show's
 // OV02B10, camera_spot.go for the Spot's GC0312) supply open, the device's stream and autoExpose,
-// convert and Frame.Full, and the tone a frame was levelled with.
+// convert and Frame.Full, and the tone a frame was leveled with.
 
 // Frame is one picture. Nothing is developed until somebody asks: the sensor hands over more
 // frames than anything on the network or the screen keeps up with, and a frame that is dropped

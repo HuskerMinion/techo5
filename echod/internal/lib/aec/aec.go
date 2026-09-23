@@ -168,7 +168,7 @@ func (c *Canceller) step(x, d float32) float32 {
 	return e
 }
 
-// SetAdapting stops or resumes learning while still cancelling with what it has. Freezing is what to
+// SetAdapting stops or resumes learning while still canceling with what it has. Freezing is what to
 // do when someone is talking over the playback: the filter cannot tell their voice from an echo it
 // has predicted badly, and would corrupt itself trying to cancel it.
 func (c *Canceller) SetAdapting(on bool) { c.adapting.Store(on) }

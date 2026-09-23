@@ -122,7 +122,7 @@ type Display struct {
 
 	// menuOpen is the ring menu on the screen, menuMode what it shows; menuSel the item at (or turning
 	// to) the top; menuRot the dial's rotation now and menuRest where it is heading; menuAt the last
-	// touch; spinning a finger turning it, spinAngle its last direction from the centre; jogTurn how
+	// touch; spinning a finger turning it, spinAngle its last direction from the center; jogTurn how
 	// far a jog wheel has turned towards its next step; restartArm the first tap on Restart and
 	// forgetArm on Forget, on the settings screen.
 	menuOpen   bool
@@ -912,7 +912,7 @@ func (d *Display) Close() error {
 	return err
 }
 
-// Run redraws until ctx is cancelled: on the second while idle, faster while something moves.
+// Run redraws until ctx is canceled: on the second while idle, faster while something moves.
 func (d *Display) Run(ctx context.Context) error {
 	for {
 		wait := d.frame()

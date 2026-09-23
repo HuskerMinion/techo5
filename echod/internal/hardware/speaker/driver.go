@@ -11,7 +11,7 @@ import (
 // not touch the hardware: Player owns the device and the queue, and this owns who may fill it.
 //
 // One claim holds it at a time, and taking it silences whatever had it. A claim covers the whole
-// errand rather than just the audio, so cancelling a reply abandons the download instead of
+// errand rather than just the audio, so canceling a reply abandons the download instead of
 // dropping it once it arrives.
 type Driver struct {
 	p *Player

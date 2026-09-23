@@ -59,7 +59,7 @@ func (Center) fixedPath()  {}
 func (Average) fixedPath() {}
 
 // cancelInput is what the echo canceller reads for this frame. Where CancelOnMix, a fixed mix is
-// cancelled as it is, and a steered one falls back to the plain average, the fixed path nearest to it;
+// canceled as it is, and a steered one falls back to the plain average, the fixed path nearest to it;
 // otherwise it is the center microphone, whatever the mix.
 func cancelInput(m Mixer, mics [][]int16, mixed []int16) []int16 {
 	if !CancelOnMix {

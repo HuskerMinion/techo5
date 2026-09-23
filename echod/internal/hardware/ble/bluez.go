@@ -183,7 +183,7 @@ func fromDevice(d bluez.Device) (Advertisement, bool) {
 	return a, true
 }
 
-// uuid16 recognises the Bluetooth base UUID form of a 16-bit service.
+// uuid16 recognizes the Bluetooth base UUID form of a 16-bit service.
 func uuid16(u string) (uint16, bool) {
 	u = strings.ToLower(u)
 	if len(u) != 36 || !strings.HasSuffix(u, "-0000-1000-8000-00805f9b34fb") || !strings.HasPrefix(u, "0000") {

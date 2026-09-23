@@ -25,7 +25,7 @@ type Light struct {
 	Green      float32 `json:"green"`
 	Blue       float32 `json:"blue"`
 
-	// Effect is the animation by name, empty for a plain colour.
+	// Effect is the animation by name, empty for a plain color.
 	Effect string `json:"effect"`
 }
 

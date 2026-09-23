@@ -177,7 +177,7 @@ Two things the pixels said that reading the code did not:
 - The claim that no page draws above the margin is **false**. The weather page's art and the settings
   sheet's card both reach the top edge, so a band across the panel cuts a slot through them. It is a
   pill behind the words instead, which takes only the space the words need and is the background
-  colour on a plain page.
+  color on a plain page.
 - The settings sheet is skipped on purpose. It already has a Microphone row reading "Muted" or
   "Listening" with the switch beside it, which says it better than a line would, and a pill there
   would cut the top off its card.

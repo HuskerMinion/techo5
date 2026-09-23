@@ -434,7 +434,7 @@ session.
    DMA are programmed through the ISP driver's register mmap from the genuine
    MT8163 libcamdrv sources (saved outside the repo, see camera-research.md).
    IN THE DAEMON 2026-09-16: `hardware/camera` streams on demand (TG frame
-   counter for sync, three DMA slots, 800x600 RGBA with grey-world white
+   counter for sync, three DMA slots, 800x600 RGBA with gray-world white
    balance, sensor stops 5 s after the last user, refused while muted);
    `feature/camera` serves http://<device>:8181/camera.jpg and /camera.mjpeg
    for Home Assistant's Generic Camera / MJPEG IP Camera integrations; the

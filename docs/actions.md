@@ -382,7 +382,7 @@ response_variable: started
 In YAML, refer to this action as `esphome.<node>_timer_cancel`.
 
 Cancels one of the device's own timers, the ones started with `timer_start` or on its screen.
-Timers set by voice through Home Assistant's Assist are cancelled by voice, the same way they were
+Timers set by voice through Home Assistant's Assist are canceled by voice, the same way they were
 set, and this action refuses them with a message saying so.
 
 To silence a timer that is already ringing, press the device's **Stop alarm or timer** button entity

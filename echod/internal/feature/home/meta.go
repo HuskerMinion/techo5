@@ -158,7 +158,7 @@ func (f *Feature) refreshMeta(ctx context.Context) {
 }
 
 // fetchArt downloads a picture and lays it out for the panel: a cover is scaled to fill the
-// panel and cropped; a logo is scaled to fit and centred, since a cropped logo is no logo. The square
+// panel and cropped; a logo is scaled to fit and centered, since a cropped logo is no logo. The square
 // thumbnail follows the same rule.
 func fetchArt(ctx context.Context, u string, logo bool) (*image.RGBA, *image.RGBA, error) {
 	if u == "" {

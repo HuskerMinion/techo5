@@ -39,7 +39,7 @@ func Splash(ctx context.Context, r *Ring, ready func() bool) error {
 	return fadeOut(fade, r, 250*time.Millisecond)
 }
 
-// until animates frame until ready reports true, or ctx is cancelled.
+// until animates frame until ready reports true, or ctx is canceled.
 func until(ctx context.Context, r *Ring, frame Frame, ready func() bool) error {
 	t := time.NewTicker(FrameInterval)
 	defer t.Stop()
@@ -62,7 +62,7 @@ func until(ctx context.Context, r *Ring, frame Frame, ready func() bool) error {
 // segment. Holding each position and skipping the one between reads as stepping, where the comet
 // glides and has a tail: waiting should not look like a slow version of being ready.
 //
-// It is not in the catalogue. Boot is the one thing on the ring nobody chooses.
+// It is not in the catalog. Boot is the one thing on the ring nobody chooses.
 func walk(base Color) Frame {
 	return func(elapsed time.Duration) []Color {
 		out := make([]Color, Segments)

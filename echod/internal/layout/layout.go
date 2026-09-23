@@ -90,7 +90,7 @@ const (
 
 	// TrialProp marks that a process this boot already took an update and has not committed it.
 	// Deliberately not a persist property: it has to survive init restarting echod, which is what
-	// makes a second attempt recognisable, and it has to be forgotten across a reboot, which is what
+	// makes a second attempt recognizable, and it has to be forgotten across a reboot, which is what
 	// gives the boot hook its turn.
 	TrialProp = "echolocal.trial"
 

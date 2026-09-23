@@ -10,12 +10,12 @@ import (
 // Busy is the ring saying the device is working on something somebody is waiting on.
 //
 // A motion rather than a bar: the waits worth showing have no measurable progress, so a bar would
-// have to invent a number. The colour says which work.
+// have to invent a number. The color says which work.
 //
 // Several may run at once. The most recent shows, and the ring goes back to whatever was underneath
 // when the last finishes.
 
-// Work is a kind of thing the device does that is worth showing. The colours are what distinguishes
+// Work is a kind of thing the device does that is worth showing. The colors are what distinguishes
 // them, and they are provisional: the only way to choose them is to look at the ring.
 type Work int
 
@@ -39,8 +39,8 @@ var UpdateColor = Color{R: 0x00, G: 0xB0, B: 0xC0}
 // ever.
 const busyLimit = time.Minute
 
-// appearance is the motion and colour for a kind of work. One motion for all of them on purpose: it
-// means "working", and it is the colour that says at what.
+// appearance is the motion and color for a kind of work. One motion for all of them on purpose: it
+// means "working", and it is the color that says at what.
 func (w Work) appearance() (string, Color) {
 	switch w {
 	case WorkWakeWord:

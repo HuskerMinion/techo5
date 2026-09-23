@@ -5,7 +5,7 @@ import (
 	"time"
 )
 
-// pacman eats his way round the ring and starts again. What makes him recognisable is not the shape
+// pacman eats his way round the ring and starts again. What makes him recognizable is not the shape
 // of him, which twelve segments cannot draw, but that the ring ahead is dotted and the ring behind is
 // dark: something is being consumed rather than merely passing by.
 func pacman(p Palette) Frame {

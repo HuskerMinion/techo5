@@ -27,7 +27,7 @@ var client = &http.Client{
 	},
 }
 
-// clockSet is how an unset clock is recognised: this kernel starts in 1970 and NTP corrects it a
+// clockSet is how an unset clock is recognized: this kernel starts in 1970 and NTP corrects it a
 // little after boot. Certificates cannot be checked against a clock like that, so nothing is fetched.
 var clockSet = func() bool { return time.Now().Year() >= 2025 }
 

@@ -51,7 +51,7 @@ var (
 //
 // It ends on whichever comes first: somebody stopping talking, the ceiling, a finish (the screen
 // saying that is the end of it) or ctx (the screen throwing it away). Finishing keeps what was
-// said; cancelling does not, which is the difference between changing your mind and being done.
+// said; canceling does not, which is the difference between changing your mind and being done.
 func record(ctx context.Context, finish <-chan struct{}) []int16 {
 	speaker.Sound().Interject(func(p *speaker.Player) { p.Chime(promptLevel, prompt...) })
 
@@ -124,7 +124,7 @@ func trim(said []int16) []int16 {
 	return said[:end]
 }
 
-// How a recording is levelled before it is sent.
+// How a recording is leveled before it is sent.
 //
 // The live gain in front of the microphone is set for what speech recognition needs, not for
 // playing back in another room: a clip can leave here peaking forty decibels below full scale, which
@@ -138,7 +138,7 @@ const (
 	// room: a clip can sit at the very top of the scale on one transient and still be too quiet to
 	// hear, which is exactly what the first attempt at this produced.
 	//
-	// It is set near ordinary programme material, so an announcement is about as loud as the music it
+	// It is set near ordinary program material, so an announcement is about as loud as the music it
 	// interrupts rather than noticeably under it.
 	wantRMS = -16.0
 
@@ -189,7 +189,7 @@ func level(said []int16) []int16 {
 	if gain >= 0.999 && gain <= 1.001 {
 		return said
 	}
-	slog.Info("announcement levelled",
+	slog.Info("announcement leveled",
 		"gain_db", math.Round(20*math.Log10(gain)*10)/10,
 		"was_peak_dbfs", math.Round(20*math.Log10(peak/full)*10)/10,
 		"was_rms_dbfs", math.Round(20*math.Log10(math.Max(rms, 1)/full)*10)/10)

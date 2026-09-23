@@ -3,7 +3,7 @@ package led
 import "time"
 
 // comet runs a bright head clockwise with a decaying tail behind it. The palette runs along the tail
-// as well as down it: one colour simply fades, where a flame's colours cool from the head backwards
+// as well as down it: one color simply fades, where a flame's colors cool from the head backwards
 // the way a spark thrown off a fire does.
 func comet(p Palette) Frame {
 	// Two frames per segment, so the head advances evenly.

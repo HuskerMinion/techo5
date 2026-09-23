@@ -54,7 +54,7 @@ type Filter struct {
 	hop   int
 
 	window []float64
-	gain   float64 // overlap-add normalisation for this window
+	gain   float64 // overlap-add normalization for this window
 
 	// noise is the held noise power per bin, and clean the previous frame's estimate, which the
 	// decision-directed rule needs.

@@ -40,7 +40,7 @@ const refHold = Rate
 // The path it reads cannot move: the filter learns one path from the speaker, and the beamformer steers
 // at the loudest sound, which during playback is our own speaker. Steering into the echo is the opposite
 // of useful when the echo is what is being removed. A fixed combination of microphones is as fixed as one
-// microphone, though, because the microphones do not move: on the Dot, the average of seven cancelled
+// microphone, though, because the microphones do not move: on the Dot, the average of seven canceled
 // once measured exactly as well as seven cancellers averaged, and 5 dB better than the center microphone
 // alone. Which path it reads is cancelInput's choice.
 type canceller struct {
@@ -240,7 +240,7 @@ func (s *Source) SetCancelling(on bool) {
 }
 
 // SetCancelEngine chooses which canceller runs — "builtin" or "webrtc" — and reports what it
-// settled on. Serialised with the capture loop, since the engine is used from there.
+// settled on. Serialized with the capture loop, since the engine is used from there.
 func (s *Source) SetCancelEngine(name string) string {
 	if s.cancel == nil {
 		return "builtin"

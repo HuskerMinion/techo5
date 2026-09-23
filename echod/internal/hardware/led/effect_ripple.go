@@ -6,7 +6,7 @@ import (
 )
 
 // ripple runs two crests round the ring over a low glow, slowly enough to read as water. Two,
-// because a single crest travelling is a comet with soft edges; a second one opposite makes it read
+// because a single crest traveling is a comet with soft edges; a second one opposite makes it read
 // as a wave passing through the ring rather than something going round it.
 //
 // The palette is the depth of the water: a crest is drawn from the top of it and a trough from the

@@ -100,7 +100,7 @@ type Controller struct {
 	mu      sync.Mutex
 	devices []*input.Device
 
-	// tapped is when each button last reported a Tap, for recognising the second of a pair.
+	// tapped is when each button last reported a Tap, for recognizing the second of a pair.
 	tapped map[Name]time.Time
 }
 
@@ -150,7 +150,7 @@ func (c *Controller) Close() error {
 	return nil
 }
 
-// Run reads until ctx is cancelled, or until a node fails. A failure is returned rather than logged
+// Run reads until ctx is canceled, or until a node fails. A failure is returned rather than logged
 // so the supervisor reopens the nodes: a device that has gone away and come back is the usual reason,
 // and a reader that has quietly exited leaves the device with dead buttons.
 func (c *Controller) Run(ctx context.Context) error {

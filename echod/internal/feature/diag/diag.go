@@ -358,7 +358,7 @@ func (d *Diag) address() {
 	d.ip.Set(strings.Join(ips, ", "))
 }
 
-// identity is what the device is rather than what it is doing. The shell colour comes off the factory
+// identity is what the device is rather than what it is doing. The shell color comes off the factory
 // idme partition, which never changes, so it is read once here rather than sampled.
 func (d *Diag) identity() {
 	d.color = &esphome.TextSensor{

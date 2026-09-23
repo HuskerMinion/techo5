@@ -10,7 +10,7 @@ import (
 )
 
 // Wiring a Home Assistant select to a setting, which several features do the same way: one to a
-// closed set of values, one to the catalogue of ring animations.
+// closed set of values, one to the catalog of ring animations.
 
 // Bind wires a select to an enumerated setting: the options are the values' labels, and choosing one
 // applies it and stores whatever the device settled on.
@@ -69,7 +69,7 @@ func SettleEffect(sel *esphome.Select, name string) string {
 	return name
 }
 
-// BindEffect offers the catalogue on a select and saves what is chosen. apply is for a choice
+// BindEffect offers the catalog on a select and saves what is chosen. apply is for a choice
 // something has to be told about as it happens, such as the room reaction, which holds a claim; it
 // is nil for the rest, where whoever shows the animation looks the name up when the moment comes.
 func BindEffect(sel *esphome.Select, choices []string, apply func(string), save func(string) error) {
@@ -109,7 +109,7 @@ func RestoreEffect(sel *esphome.Select, saved string, apply func(string), save f
 // choice of its own: an override nobody set and one set to show nothing are different answers.
 const EffectDefault = "Default"
 
-// BindOverride offers the catalogue with Default ahead of None, for a setting that overrides
+// BindOverride offers the catalog with Default ahead of None, for a setting that overrides
 // something else. Default is stored empty, so an override nobody touched stays out of the way.
 func BindOverride(sel *esphome.Select, choices []string, save func(string) error) {
 	sel.Options = append([]string{EffectDefault, EffectNone}, choices...)

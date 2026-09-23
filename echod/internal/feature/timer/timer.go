@@ -1,7 +1,7 @@
 // Package timer is a kitchen timer: Home Assistant keeps the timers, the device counts them down on
 // the ring and rings when one finishes.
 //
-// Home Assistant sends an event when a timer starts, is changed, is cancelled or finishes, and
+// Home Assistant sends an event when a timer starts, is changed, is canceled or finishes, and
 // nothing in between — so the countdown here is local arithmetic against a monotonic clock, corrected
 // whenever an event arrives. A finished timer is dropped at that end, so the ringing is entirely this
 // device's to start and to stop.
@@ -76,7 +76,7 @@ type Timers struct {
 }
 
 // Countdown is a timer as the screen shows it. Local is one of the device's own, which the screen
-// may cancel; Home Assistant's are cancelled where they were set.
+// may cancel; Home Assistant's are canceled where they were set.
 type Countdown struct {
 	ID     string
 	Name   string
@@ -165,7 +165,7 @@ func (t *Timers) Name() string { return "timers" }
 func (t *Timers) Entities() []esphome.Entity { return []esphome.Entity{t.names} }
 
 // Actions let Home Assistant set and cancel the device's own timers, which run and ring here with Home
-// Assistant away. Its own timers, set by voice through Assist, are cancelled the same way they were set.
+// Assistant away. Its own timers, set by voice through Assist, are canceled the same way they were set.
 func (t *Timers) Actions() []*esphome.Action {
 	return []*esphome.Action{
 		{
@@ -199,7 +199,7 @@ func (t *Timers) cancelFromHA(id string) error {
 				n++
 			}
 		}
-		slog.Info("timers cancelled from home assistant", "count", n)
+		slog.Info("timers canceled from home assistant", "count", n)
 		return nil
 	}
 	if id != "" && !strings.HasPrefix(id, localPrefix) {
@@ -208,7 +208,7 @@ func (t *Timers) cancelFromHA(id string) error {
 	if !t.Cancel(id) {
 		return fmt.Errorf("timers: no timer %q on this device", id)
 	}
-	slog.Info("timer cancelled from home assistant", "id", id)
+	slog.Info("timer canceled from home assistant", "id", id)
 	return nil
 }
 
@@ -278,7 +278,7 @@ func clockSet(now time.Time) bool { return now.Year() >= 2025 }
 // clockPoll is how often restoring timers looks for the clock to have been set.
 const clockPoll = 5 * time.Second
 
-// saveLocal writes the device's own timers down. Called when one is set, cancelled or finishes, and
+// saveLocal writes the device's own timers down. Called when one is set, canceled or finishes, and
 // never on a tick: every set marshals the whole config and fsyncs it.
 func saveLocal(list []config.LocalTimer) {
 	if err := config.Set().Timers().Local(list); err != nil {
@@ -387,7 +387,7 @@ func (t *Timers) Start(name string, d time.Duration) string {
 	return id
 }
 
-// Cancel drops one of the device's own timers. Home Assistant's are left alone: they are cancelled
+// Cancel drops one of the device's own timers. Home Assistant's are left alone: they are canceled
 // where they were set, and it would tell us about that itself.
 func (t *Timers) Cancel(id string) bool {
 	if !strings.HasPrefix(id, localPrefix) {

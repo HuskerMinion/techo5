@@ -94,7 +94,7 @@ func (s *Sensor) Close() error {
 	return err
 }
 
-// Run reads until ctx is cancelled. The read blocks in the kernel, so cancellation closes the node
+// Run reads until ctx is canceled. The read blocks in the kernel, so cancellation closes the node
 // from the side and lets the read fail.
 func (s *Sensor) Run(ctx context.Context) error {
 	dev := s.dev

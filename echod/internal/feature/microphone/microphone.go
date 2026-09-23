@@ -1,5 +1,5 @@
 // Package microphone is the array's tuning knobs: how the seven microphones are combined, how hard
-// they are driven, and whether the mix is levelled before anything listens to it.
+// they are driven, and whether the mix is leveled before anything listens to it.
 package microphone
 
 import (

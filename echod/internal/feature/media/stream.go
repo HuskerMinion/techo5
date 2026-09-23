@@ -180,7 +180,7 @@ func (m *Stream) Play(url string) {
 		if err != nil && ctx.Err() == nil {
 			slog.Error("playing media failed", "err", err)
 		}
-		// Cancelled means stopped or replaced, which is somebody's doing and nobody's to undo.
+		// Canceled means stopped or replaced, which is somebody's doing and nobody's to undo.
 		m.finished(t, ctx.Err() == nil)
 	})
 }

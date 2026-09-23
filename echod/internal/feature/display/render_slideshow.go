@@ -12,7 +12,7 @@ import (
 
 // slideshowWash is the theme's ground color, translucent, over a photo — the same technique the
 // now-playing screen uses for cover art (render_nowplaying.go's background): the photo stays
-// recognisable, and the clock and date drawn over it stay legible.
+// recognizable, and the clock and date drawn over it stay legible.
 const slideshowWash = 130
 
 // slideshowBackground draws a Background-mode photo full-bleed, then the wash over it.

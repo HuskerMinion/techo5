@@ -382,7 +382,7 @@ func (s *Source) broadcast(raw []byte) {
 	// Everything downstream reads the same single channel, whichever way it was made: wake detection
 	// and what Home Assistant transcribes should never disagree about what was heard.
 	//
-	// The recent history is kept whether or not anyone is listening: a wake word is only recognised
+	// The recent history is kept whether or not anyone is listening: a wake word is only recognized
 	// once it has been said, so by the time a turn starts, the words after it are already past.
 	mics := Decode(raw)
 	frame := s.mixer.Mix(mics)

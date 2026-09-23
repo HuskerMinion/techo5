@@ -729,12 +729,12 @@ func (p *Player) RemotePlaying() (playing, paused bool) {
 }
 
 // claim is the speaker lent to something this player did not start. Claims are handed out in order and
-// only the newest one is honoured, because the server decides the order: Music Assistant ends one stream
+// only the newest one is honored, because the server decides the order: Music Assistant ends one stream
 // and starts the next in whichever order it likes, and the session being torn down must not free what
 // the session taking over is holding.
 //
 // A mutex rather than a pair of atomics, because the two move together: holding and the number are one
-// fact, and a store that lands between another goroutine's two reads makes a claim that nobody honours.
+// fact, and a store that lands between another goroutine's two reads makes a claim that nobody honors.
 // With `held` stored before `newest` was taken, an older `letGo` read the older number, matched it, and
 // cleared a hold the newer taker had just set - the room then shows nothing playing until the next
 // stream. The claim is once per stream rather than once per frame, so the lock costs nothing.

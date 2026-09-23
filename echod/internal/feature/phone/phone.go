@@ -359,7 +359,7 @@ func (p *Phone) Call(number string) error {
 		defer cancel()
 		// The call's media lives on the context it was placed with, so that context must outlast the
 		// call: a timeout on it would cut the audio the moment the call was answered. Nobody answering
-		// is limited by cancelling the whole call instead.
+		// is limited by canceling the whole call instead.
 		unanswered := time.AfterFunc(dialFor, cancel)
 		d, err := l.dial(ctx, number)
 		unanswered.Stop()
