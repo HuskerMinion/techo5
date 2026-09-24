@@ -23,6 +23,7 @@ import (
 	"github.com/HuskerMinion/techo5/echod/internal/hardware/led"
 	"github.com/HuskerMinion/techo5/echod/internal/hardware/mic"
 	"github.com/HuskerMinion/techo5/echod/internal/hardware/speaker"
+	"github.com/HuskerMinion/techo5/echod/internal/lib/endpoint"
 	"github.com/HuskerMinion/techo5/echod/internal/lib/safe"
 	"github.com/HuskerMinion/techo5/echod/internal/lib/wake"
 )
@@ -884,6 +885,24 @@ func (c *conversation) stream(ctx context.Context, slot int, followUp bool) {
 	if wakeword.Tones(slot, followUp) {
 		pre = nil
 	}
+
+	// Shadow end-of-speech: the device's own view of when the speaker finished, beside the pipeline's,
+	// logged and not yet acted on. It hears what is sent - the history too - since that is what it was
+	// measured on. See package endpoint for why the pipeline's detector alone is not enough.
+	ep := endpoint.New(endpoint.Default)
+	var sent int
+	var endpointAt float64
+	see := func(frame []int16) {
+		sent += len(frame)
+		if endpointAt == 0 && ep.Feed(frame) {
+			endpointAt = float64(sent) / float64(mic.Rate)
+			slog.Info("end of speech heard here, not acted on", "slot", slot+1,
+				"spoke_s", math.Round(float64(ep.EndedAt())/float64(mic.Rate)*10)/10,
+				"at_s", math.Round(endpointAt*10)/10)
+		}
+	}
+	see(pre)
+
 	if len(pre) > 0 {
 		for _, s := range pre {
 			buf = append(buf, byte(s), byte(s>>8))
@@ -915,6 +934,7 @@ func (c *conversation) stream(ctx context.Context, slot int, followUp bool) {
 		slog.Info("sent audio",
 			"slot", slot+1,
 			"seconds", float64(samples)/float64(mic.Rate),
+			"endpoint_s", math.Round(endpointAt*10)/10,
 			"peak", peak,
 			"peakdbfs", math.Round(20*math.Log10(max(float64(peak), 1)/32768)*10)/10,
 			"rms", math.Round(rms),
@@ -951,6 +971,7 @@ func (c *conversation) stream(ctx context.Context, slot int, followUp bool) {
 			recording.Get().Frame(buf)
 
 			c.sendAudio(buf)
+			see(frame)
 		}
 	}
 }
