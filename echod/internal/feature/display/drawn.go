@@ -15,17 +15,8 @@ import (
 	"github.com/HuskerMinion/techo5/echod/internal/lib/mdi"
 )
 
-// The drawn dashboard: the house room by room, each thing in it a tile with Home Assistant's icon,
-// its name and what it is doing. A tap on a tile does what the tile says; vertical swipes scroll.
-
-// Tile layout, in the sizes the rest of the package is written in (a Show 5 in landscape).
-const (
-	tileCols   = 3
-	tileH      = 92
-	tileGap    = 14
-	roomTop    = 30 // above a room's name
-	roomTitleH = 46 // the name's line, down to its tiles
-)
+// The drawn dashboard's touch: a tap on a tile or a row does what it says, a finger moving up or down
+// scrolls, and one moving along a tile with a level slides the level. Its drawing is drawn_cards.go.
 
 // dashTile is a tile where the page last drew it, for a tap to find.
 type dashTile struct {
@@ -82,76 +73,6 @@ func (r *renderer) iconFace(size int) font.Face {
 	return fc
 }
 
-func (r *renderer) drawnDashboard(s scene) {
-	v := s.drawn
-	fc := r.faces()
-	if len(v.Blocks) == 0 {
-		msg := v.Problem
-		if msg == "" {
-			msg = "Loading the dashboard…"
-		}
-		r.text(r.small, msg, (r.w-r.width(r.small, msg))/2, r.h/2, dim)
-		r.dashTiles, r.dashContent = nil, 0
-		return
-	}
-
-	left, right := r.margin, r.w-r.margin
-	gap := r.s(tileGap)
-	tw := (right - left - gap*(tileCols-1)) / tileCols
-	th := r.s(tileH)
-	rad := r.sf(18)
-	y := -s.dashScroll
-	var tiles []dashTile
-	visible := func(top, bottom int) bool { return bottom > 0 && top < r.h }
-
-	for _, b := range v.Blocks {
-		if b.Heading != "" {
-			y += r.s(roomTop)
-			base := y + r.s(roomTitleH) - r.s(14)
-			if visible(y, base+r.s(10)) {
-				name := b.Heading
-				if b.Right != "" {
-					name = r.fit(fc.header, name, right-left-r.width(fc.value, b.Right)-r.s(20))
-					r.text(fc.value, b.Right, right-r.width(fc.value, b.Right), base, dim)
-				} else {
-					name = r.fit(fc.header, name, right-left)
-				}
-				r.text(fc.header, name, left, base, cream)
-			}
-			y += r.s(roomTitleH)
-		} else {
-			y += gap
-		}
-		for _, para := range b.Text {
-			for _, line := range r.wrapLines(fc.label, para, right-left) {
-				y += r.s(34)
-				if visible(y-r.s(30), y+r.s(8)) {
-					r.text(fc.label, line, left, y, cream)
-				}
-			}
-			y += r.s(10)
-		}
-		for i, t := range b.Tiles {
-			col := i % tileCols
-			if col == 0 && i > 0 {
-				y += th + gap
-			}
-			box := image.Rect(left+col*(tw+gap), y, left+col*(tw+gap)+tw, y+th)
-			if visible(box.Min.Y, box.Max.Y) {
-				r.tile(box, rad, t, s.dashAdjust)
-				if t.Tap != nil || t.Adjust != nil {
-					tiles = append(tiles, dashTile{r: box, action: t.Tap, adjust: t.Adjust})
-				}
-			}
-		}
-		if len(b.Tiles) > 0 {
-			y += th
-		}
-	}
-	r.dashTiles = tiles
-	r.dashContent = y + s.dashScroll + r.s(roomTop)
-}
-
 // wrapLines breaks text into lines no wider than w.
 func (r *renderer) wrapLines(face font.Face, text string, w int) []string {
 	var lines []string
@@ -172,61 +93,6 @@ func (r *renderer) wrapLines(face font.Face, text string, w int) []string {
 		lines = append(lines, r.fit(face, line, w))
 	}
 	return lines
-}
-
-// tile draws one thing: its icon on the left, lit in the accent when it is on, its name, and what it
-// is doing underneath.
-func (r *renderer) tile(b image.Rectangle, rad float64, t dashboard.Tile, adj dashAdjusting) {
-	fc := r.faces()
-	top, bottom := surface(3), surface(2)
-	if t.On {
-		top, bottom = shift(surface(3), 10), shift(surface(2), 10)
-	}
-	r.roundFill(b, rad, top, bottom)
-
-	// A level: a bar along the foot of the tile showing where it is, which is also the sign that a
-	// finger can slide it. While one does, the whole tile fills to the level instead.
-	sliding := t.Adjust != nil && adj.entity == t.Adjust.Entity
-	if a := t.Adjust; a != nil && a.Max > a.Min {
-		v := a.Value
-		if sliding {
-			v = adj.value
-		}
-		frac := min(max((v-a.Min)/(a.Max-a.Min), 0), 1)
-		if sliding {
-			fill := image.Rect(b.Min.X, b.Min.Y, b.Min.X+int(float64(b.Dx())*frac), b.Max.Y)
-			if fill.Dx() > 0 {
-				r.roundFill(fill, rad, lerp(surface(3), amber, 0.35), lerp(surface(2), amber, 0.35))
-			}
-			t.Value = a.Label(v)
-		} else if frac > 0 && t.On {
-			inset := r.s(14)
-			bar := image.Rect(b.Min.X+inset, b.Max.Y-r.s(7), b.Min.X+inset+int(float64(b.Dx()-2*inset)*frac), b.Max.Y-r.s(4))
-			if bar.Dx() > 0 {
-				r.roundFill(bar, r.sf(2), amber, amber)
-			}
-		}
-	}
-	r.roundHighlight(b, rad)
-
-	pad := r.s(18)
-	iconSize := 40
-	ic := dim
-	if t.On {
-		ic = amber
-	}
-	if t.Gone {
-		ic = lerp(dim, walnut, 0.5)
-	}
-	if face := r.iconFace(iconSize); face != nil {
-		if g, ok := mdi.Rune(t.Icon); ok {
-			r.text(face, string(g), b.Min.X+pad, b.Min.Y+b.Dy()/2+r.s(iconSize)/2-r.s(2), ic)
-		}
-	}
-	x := b.Min.X + pad + r.s(iconSize) + r.s(14)
-	room := b.Max.X - pad - x
-	r.text(fc.label, r.fit(fc.label, t.Name, room), x, b.Min.Y+b.Dy()/2-r.s(4), cream)
-	r.text(fc.sub, r.fit(fc.sub, t.Value, room), x, b.Min.Y+b.Dy()/2+r.s(26), dim)
 }
 
 // fit is s cut to width w with an ellipsis, when it does not fit whole.

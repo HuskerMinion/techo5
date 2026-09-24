@@ -6,7 +6,9 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"image"
 	"log/slog"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -15,8 +17,9 @@ import (
 	"github.com/HuskerMinion/techo5/echod/internal/lib/hass"
 )
 
-// A drawn dashboard is blocks in a column - headings, grids of tiles, text - built from what Home
-// Assistant says and rebuilt whenever any of it changes. Where the blocks come from is a source: the
+// A drawn dashboard is sections laid out in columns, as Home Assistant lays out its own, each a stack
+// of blocks: headings, grids of tiles, cards of rows, text, graphs, gauges, pictures. It is built from
+// what Home Assistant says and rebuilt whenever any of it changes. Where it comes from is a source: the
 // Rooms dashboard, or one of Home Assistant's own dashboards read card by card.
 
 // Tile is one thing on the page: an icon, a name, and what it is doing.
@@ -30,6 +33,8 @@ type Tile struct {
 	// Adjust is a level a finger sliding along the tile sets: a light's brightness, a cover's
 	// position, a thermostat's temperature.
 	Adjust *Adjust
+	// Switch draws a row's tap as a switch at its end, for something that is on or off.
+	Switch bool
 }
 
 // Adjust is a tile's level: what it is now and how far it goes.
@@ -66,28 +71,74 @@ type Action struct {
 	View    string         // a dashboard view to go to instead, as a path: "home-refresh/climate"
 }
 
-// Block is one piece of the page.
+// Block is one piece of a section: one of a heading, tiles, a card of rows, text, a graph, a gauge
+// or a picture. Title is a card's own title, drawn inside it.
 type Block struct {
 	Heading string // a heading, with Right at its other end
 	Right   string
 	Tiles   []Tile
+	Rows    []Tile // an entities card: one thing a line
+	Title   string
 	Text    []string // paragraphs
+	Graph   *Graph
+	Gauge   *Gauge
+	Picture *Picture
+}
+
+// Section is blocks that stay together, one column wide: a room, a section of a sections view, a card
+// of a masonry view.
+type Section struct {
+	Blocks []Block
+}
+
+// Graph is a sensor's recent history as a line.
+type Graph struct {
+	Name, Icon, Value string
+	Points            []float64 // oldest first; NaN where there is nothing yet
+}
+
+// Gauge is a reading on an arc between its ends.
+type Gauge struct {
+	Name, Value string
+	Frac        float64 // 0 to 1 along the arc
+	Severity    string  // green, yellow, red, or empty for the accent
+}
+
+// Picture is an image: a camera's latest snapshot, or a picture card's.
+type Picture struct {
+	Name  string
+	Image image.Image // nil until it has arrived
 }
 
 // Drawn is the page as it stands.
 type Drawn struct {
-	Blocks  []Block
-	Problem string
-	Version uint64
+	Sections []Section
+	Theme    Theme
+	Problem  string
+	Version  uint64
 }
 
-// source is where a drawn dashboard's blocks come from.
+// needs is what a source asks for once connected: entities to follow, templates to render, histories
+// for graphs (entity to hours), pictures to fetch.
+type needs struct {
+	entities  []string
+	templates []template
+	graphs    map[string]int
+	pictures  []wanted
+}
+
+// look is everything a source draws from.
+type look struct {
+	states   map[string]hass.LiveEntity
+	rendered map[int]string
+	history  map[string][]point
+	pictures map[string]image.Image
+}
+
+// source is where a drawn dashboard comes from.
 type source interface {
-	// load reads what the dashboard needs once connected: which entities to follow and which
-	// templates to have Home Assistant render.
-	load(ctx context.Context, live *hass.Live) (entities []string, templates []template, err error)
-	// blocks is the page, from the entities' states and the templates as last rendered.
-	blocks(states map[string]hass.LiveEntity, rendered map[int]string) []Block
+	load(ctx context.Context, live *hass.Live) (needs, error)
+	sections(l look) []Section
 }
 
 // template is text Home Assistant renders and renders again whenever what it reads changes: a
@@ -109,6 +160,9 @@ type session struct {
 	states   map[string]hass.LiveEntity
 	rendered map[int]string
 	pending  map[string]pending
+	history  map[string][]point
+	graphs   map[string]int // entity to hours shown, for trimming its history
+	pictures map[string]image.Image
 	view     Drawn
 }
 
@@ -136,7 +190,8 @@ func (f *Feature) Drawn() Drawn {
 		if path != "" {
 			src = newLovelace(path)
 		}
-		s = &session{f: f, src: src, states: map[string]hass.LiveEntity{}, rendered: map[int]string{}, pending: map[string]pending{}}
+		s = &session{f: f, src: src, states: map[string]hass.LiveEntity{}, rendered: map[int]string{}, pending: map[string]pending{},
+			history: map[string][]point{}, graphs: map[string]int{}, pictures: map[string]image.Image{}}
 		f.drawn, f.drawnPath = s, path
 		go s.run()
 	}
@@ -314,24 +369,51 @@ func (s *session) once() error {
 	s.mu.Unlock()
 
 	lctx, lcancel := context.WithTimeout(ctx, 30*time.Second)
-	ids, templates, err := s.src.load(lctx, live)
+	need, err := s.src.load(lctx, live)
+	theme := loadTheme(lctx, live)
+	longest := 0
+	var graphed []string
+	for id, h := range need.graphs {
+		graphed = append(graphed, id)
+		longest = max(longest, h)
+	}
+	history := loadHistory(lctx, live, graphed, longest)
 	lcancel()
 	if err != nil {
 		s.problem(err.Error())
 		return err
 	}
 	s.mu.Lock()
-	s.view.Problem = ""
+	s.view.Problem, s.view.Theme = "", theme
+	s.history, s.graphs = history, need.graphs
 	s.mu.Unlock()
 	s.publish()
 
+	go keepPictures(ctx, need.pictures, func(key string, img image.Image) {
+		s.mu.Lock()
+		s.pictures[key] = img
+		s.mu.Unlock()
+		s.publish()
+	})
+
 	fctx, fcancel := context.WithTimeout(ctx, 30*time.Second)
 	defer fcancel()
+	ids := need.entities
 	if len(ids) > 0 {
 		err = live.FollowEntities(fctx, ids, func(e hass.LiveEntity) {
 			s.mu.Lock()
 			s.states[e.ID] = e
 			delete(s.pending, e.ID)
+			if hours, graphed := s.graphs[e.ID]; graphed {
+				if v, err := strconv.ParseFloat(e.State, 64); err == nil {
+					h := append(s.history[e.ID], point{at: time.Now(), v: v})
+					cut := time.Now().Add(-time.Duration(hours) * time.Hour)
+					for len(h) > 2 && h[1].at.Before(cut) {
+						h = h[1:]
+					}
+					s.history[e.ID] = h
+				}
+			}
 			s.mu.Unlock()
 			s.publish()
 		}, func(id string) {
@@ -344,7 +426,7 @@ func (s *session) once() error {
 			return err
 		}
 	}
-	for _, t := range templates {
+	for _, t := range need.templates {
 		id := t.id
 		if err := live.RenderTemplate(fctx, t.text, t.vars, func(result string) {
 			s.mu.Lock()
@@ -355,7 +437,8 @@ func (s *session) once() error {
 			slog.Info("drawn dashboard: a template would not render", "err", err)
 		}
 	}
-	slog.Info("drawn dashboard following", "entities", len(ids), "templates", len(templates))
+	slog.Info("drawn dashboard following", "entities", len(ids), "templates", len(need.templates),
+		"graphs", len(need.graphs), "pictures", len(need.pictures), "theme", theme.Set)
 	<-live.Done()
 	return live.Err()
 }
@@ -363,52 +446,62 @@ func (s *session) once() error {
 // publish rebuilds the page from what has arrived, and says there is something new to draw.
 func (s *session) publish() {
 	s.mu.Lock()
-	blocks := s.src.blocks(s.states, s.rendered)
-	for i := range blocks {
-		for j := range blocks[i].Tiles {
-			t := &blocks[i].Tiles[j]
-			entity := ""
-			switch {
-			case t.Tap != nil:
-				entity = t.Tap.Entity
-			case t.Adjust != nil:
-				entity = t.Adjust.Entity
+	sections := s.src.sections(look{states: s.states, rendered: s.rendered, history: s.history, pictures: s.pictures})
+	for i := range sections {
+		for j := range sections[i].Blocks {
+			b := &sections[i].Blocks[j]
+			for k := range b.Tiles {
+				s.pendingOn(&b.Tiles[k])
 			}
-			p, ok := s.pending[entity]
-			if entity == "" || !ok || time.Since(p.at) > 10*time.Second {
-				continue
-			}
-			switch {
-			case p.flip:
-				t.On = !t.On
-				switch t.Value {
-				case "On":
-					t.Value = "Off"
-				case "Off":
-					t.Value = "On"
-				default:
-					if t.On {
-						t.Value = "On"
-					} else {
-						t.Value = "Off"
-					}
-				}
-			case p.value != "":
-				t.On = p.on
-				t.Value = p.value
-				if t.Adjust != nil && t.Adjust.Kind == "brightness" {
-					t.Value = "On · " + p.value
-					if !p.on {
-						t.Value = "Off"
-					}
-				}
+			for k := range b.Rows {
+				s.pendingOn(&b.Rows[k])
 			}
 		}
 	}
-	s.view.Blocks = blocks
+	s.view.Sections = sections
 	s.view.Version++
 	s.mu.Unlock()
 	s.f.Changed.Emit(struct{}{})
+}
+
+// pendingOn shows on a tile what was asked of its entity and not yet confirmed. With s.mu held.
+func (s *session) pendingOn(t *Tile) {
+	entity := ""
+	switch {
+	case t.Tap != nil:
+		entity = t.Tap.Entity
+	case t.Adjust != nil:
+		entity = t.Adjust.Entity
+	}
+	p, ok := s.pending[entity]
+	if entity == "" || !ok || time.Since(p.at) > 10*time.Second {
+		return
+	}
+	switch {
+	case p.flip:
+		t.On = !t.On
+		switch t.Value {
+		case "On":
+			t.Value = "Off"
+		case "Off":
+			t.Value = "On"
+		default:
+			if t.On {
+				t.Value = "On"
+			} else {
+				t.Value = "Off"
+			}
+		}
+	case p.value != "":
+		t.On = p.on
+		t.Value = p.value
+		if t.Adjust != nil && t.Adjust.Kind == "brightness" {
+			t.Value = "On · " + p.value
+			if !p.on {
+				t.Value = "Off"
+			}
+		}
+	}
 }
 
 // raw is a card's JSON as it came, read field by field.

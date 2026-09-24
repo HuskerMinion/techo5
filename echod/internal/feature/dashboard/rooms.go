@@ -34,32 +34,39 @@ type roomsSource struct {
 	plan []plannedRoom
 }
 
-func (r *roomsSource) load(ctx context.Context, live *hass.Live) ([]string, []template, error) {
+func (r *roomsSource) load(ctx context.Context, live *hass.Live) (needs, error) {
 	areas, floors, devices, entities, err := live.Registries(ctx)
 	if err != nil {
-		return nil, nil, fmt.Errorf("Home Assistant would not list its rooms.")
+		return needs{}, fmt.Errorf("Home Assistant would not list its rooms.")
 	}
 	plan, ids := planRooms(areas, floors, devices, entities)
 	r.plan = plan
-	return ids, nil, nil
+	return needs{entities: ids}, nil
 }
 
-func (r *roomsSource) blocks(states map[string]hass.LiveEntity, _ map[int]string) []Block {
-	var out []Block
+// sections is a section a room: its name and climate over its tiles.
+func (r *roomsSource) sections(l look) []Section {
+	var out []Section
 	for _, p := range r.plan {
-		b := Block{Heading: p.name, Right: climateOf(states[p.temp], states[p.humidity])}
+		head := Block{Heading: p.name, Right: climateOf(l.states[p.temp], l.states[p.humidity])}
+		var tiles []Tile
 		for _, id := range p.entities {
-			e, ok := states[id]
+			e, ok := l.states[id]
 			if !ok {
 				continue
 			}
 			if t, keep := tileOf(e, p.name); keep {
-				b.Tiles = append(b.Tiles, t)
+				tiles = append(tiles, t)
 			}
 		}
-		if len(b.Tiles) > 0 || b.Right != "" {
-			out = append(out, b)
+		if len(tiles) == 0 && head.Right == "" {
+			continue
 		}
+		sec := Section{Blocks: []Block{head}}
+		if len(tiles) > 0 {
+			sec.Blocks = append(sec.Blocks, Block{Tiles: tiles})
+		}
+		out = append(out, sec)
 	}
 	return out
 }
