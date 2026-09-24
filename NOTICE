@@ -63,6 +63,11 @@ echod (dependency)
   github.com/hajimehoshi/go-mp3 — Apache License 2.0
   MP3 decoding for announcements Home Assistant serves unconverted.
 
+Icon font (embedded in the daemon)
+  Material Design Icons webfont 7.4.47, echod/internal/lib/mdi/materialdesignicons.ttf — Apache License 2.0
+  Pictogrammers, https://pictogrammers.com/library/mdi/. The icons Home Assistant uses, for dashboards
+  the device draws itself. Used unmodified.
+
 Wake word models (embedded in the daemon)
   The stop word, echod/internal/feature/detect/assets/stop.tflite — Apache License 2.0
   microWakeWord, https://github.com/kahrendt/microWakeWord. Embedded because it is not a choice:

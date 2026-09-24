@@ -113,6 +113,23 @@ type Display struct {
 	mu      sync.Mutex
 	on      bool
 	ceiling int
+
+	// The dashboard face (dashboard_spot.go): asked for, when last touched, whether the last frame
+	// drew it, whether the touch screen follows fingers for it, where it is scrolled and on which
+	// dashboard, a finger moving on it, a level being slid, the idle one put away until, and a finger
+	// held still on it.
+	dash          bool
+	dashTouched   time.Time
+	dashShowing   bool
+	dashFollow    bool
+	dashScroll    int
+	dashScrollFor string
+	dashDrag      drawnDrag
+	dashAdjust    dashAdjusting
+	dashAwayUntil time.Time
+	dashMoved     bool
+	dashHoldAt    time.Time
+	dashHoldPt    image.Point
 	autoOn  bool
 	level   float64
 	view    voice.State
@@ -407,6 +424,7 @@ func (d *Display) changed(s voice.State) {
 			// Back to the clock: whatever is up comes down, and music stops rather than holding the
 			// now-playing face.
 			d.weatherArmed, d.quiet, d.radar, d.radioCue = false, true, false, time.Time{}
+			d.dash = false
 			if d.menuOpen {
 				d.closeMenu()
 			}
@@ -504,6 +522,14 @@ func (d *Display) gesture(g touch.Gesture) {
 	}
 	if open {
 		d.menuGesture(g)
+		return
+	}
+	d.mu.Lock()
+	dashUp := d.dashShowing
+	d.mu.Unlock()
+	if dashUp {
+		d.dashGestureSpot(g)
+		d.wake()
 		return
 	}
 	if v, up := home.Get().Camera(); up {
@@ -809,6 +835,8 @@ func (d *Display) act(id itemID) {
 			d.openMenu(modeWeather, "")
 			d.weatherUntil = time.Now().Add(weatherIdle)
 		})
+	case itemDashboard:
+		d.toggleDashboard()
 	case itemTimers:
 		if timer.Get().Ringing() {
 			timer.Get().Stop()
@@ -1102,6 +1130,7 @@ func (d *Display) frame() time.Duration {
 		s.slideshowOverlay = home.Get().SlideshowOverlay()
 	}
 
+	d.dashSceneSpot(&s)
 	drawn := time.Now()
 	d.r.draw(s)
 	painted := time.Now()
@@ -1135,6 +1164,8 @@ func (d *Display) frame() time.Duration {
 		return radarStep
 	case s.sheetOpen:
 		return dialFrame // a finger dragging the page is followed smoothly
+	case s.showDash && !s.menuOpen:
+		return time.Second // what arrives for it wakes the loop itself
 	case s.phase == "listening" || s.phase == "thinking" || s.phase == "replying" || s.showVolume || s.menuOpen || s.btPairing || s.call.Phase != phone.Idle || s.ringing.any():
 		return activeFrame
 	default:

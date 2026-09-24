@@ -685,6 +685,33 @@ data:
   seconds: 60
 ```
 
+## Point the device at a dashboard server
+
+In YAML, refer to this action as `esphome.<node>_dashboard_server`.
+
+Where the dashcast server is, for a streamed dashboard, and the key it asks for. The same can be set
+on the device's setup page, which is easier for a long key. See [Dashboards](dashboards.md).
+
+### address (Required)
+
+The server's address and port, like `192.168.1.20:9555`.
+
+### key (Required)
+
+The key the server was started with (`DASHCAST_KEY`).
+
+## Choose the dashboard shown
+
+In YAML, refer to this action as `esphome.<node>_dashboard_path`.
+
+Which dashboard the screen shows, as its path in Home Assistant's address bar. The device's
+**Dashboard to show** list sets the same thing, and is usually easier. See [Dashboards](dashboards.md).
+
+### path (Optional)
+
+`lovelace/0`, `dashboard-kitchen/lights`, `energy`, … Empty is the Rooms dashboard when drawn, and
+the default dashboard when streamed.
+
 ## Choose the weather shown on the idle screen
 
 In YAML, refer to this action as `esphome.<node>_home_weather`.

@@ -1,0 +1,19 @@
+# Copy this next to a .env file holding HA_TOKEN (a non-administrator user's) and DASHCAST_KEY
+# (see README.md), then:
+#   docker compose up -d
+services:
+  dashcast:
+    image: ghcr.io/huskerminion/techo5-dashcast:latest
+    # or build it from this folder:
+    # build: .
+    restart: unless-stopped
+    ports:
+      # Better: only this machine's own LAN address, like "192.168.1.20:9555:9555". Never forward
+      # this port from your router.
+      - "9555:9555"
+    environment:
+      HA_URL: http://homeassistant.local:8123   # as a browser on this machine reaches Home Assistant
+      HA_TOKEN: ${HA_TOKEN}
+      DASHCAST_KEY: ${DASHCAST_KEY}
+    # Chrome wants more shared memory than Docker gives by default.
+    shm_size: 256m
