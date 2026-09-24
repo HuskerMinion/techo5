@@ -961,6 +961,33 @@ data:
   number: "15551234567"
 ```
 
+## Call another device in the house
+
+In YAML, refer to this action as `esphome.<node>_intercom_call`.
+
+Calls another TECHO5 device in the house over the intercom: it rings there with this device's name,
+and once someone answers, the two talk. No phone account, Home Assistant or internet is involved in
+the call itself. Answering and hanging up are the same as for a phone call (below), and the call
+fires the same `esphome.techo5_phone` events, with `kind: intercom`.
+
+> **Good to know**
+>
+> Both devices need the same house word, set on each device's setup page (the one announcing uses).
+> A device with no house word takes no calls, and one with a different word refuses them.
+
+### device (Required)
+
+*string*
+
+The name of the device to call, as it shows in Home Assistant ("Kitchen"). Capitals do not matter.
+The device has to be on and on the same network; the call fails at once if it is not found.
+
+```yaml
+action: esphome.office_intercom_call
+data:
+  device: Kitchen
+```
+
 ## Set the screen's contact list
 
 In YAML, refer to this action as `esphome.<node>_phone_contacts`.
@@ -990,7 +1017,7 @@ data:
 
 In YAML, refer to this action as `esphome.<node>_phone_answer`.
 
-Answers the device's currently ringing call, the same as pressing its action button, tapping its
+Answers the device's currently ringing call, phone or intercom, the same as pressing its action button, tapping its
 screen, or using the **Answer call** button Home Assistant shows while it rings.
 
 Takes no parameters.

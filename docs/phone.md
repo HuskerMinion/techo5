@@ -82,6 +82,7 @@ Each step of a call fires `esphome.techo5_phone` on Home Assistant's bus, with:
 | `device` | The device's name |
 | `peer` | The other party: a number, an extension, or a caller ID name and number |
 | `direction` | `incoming` or `outgoing` |
+| `kind` | `phone`, or `intercom` for a call between two devices in the house |
 | `by`, `seconds` | On `ended`: who hung up (`device` or `far end`) and how long the call lasted |
 
 The device needs **Allow the device to perform Home Assistant actions** turned on in its ESPHome
@@ -188,6 +189,16 @@ actions:
 At VoIP.ms, give your phone number a **ring group** with each device's sub-account in it and a
 failover (your mobile, or voicemail) for when nobody answers. Every device rings; the first to answer
 takes the call and the others stop.
+
+## Calling another device in the house
+
+The intercom calls one TECHO5 device from another with no phone account at all: the
+`intercom_call` action ([actions.md](actions.md#call-another-device-in-the-house)) with the other
+device's name. It rings, answers and hangs up like a phone call, on the same page and the same
+button, and fires the same events with `kind: intercom`. Both devices need the same house word from
+the setup page. The sound is the microphones' own 16 kHz rather than a phone line's 8 kHz, encrypted
+between the two devices with the house word as the key. What is planned next is in
+[intercom-plan.md](intercom-plan.md).
 
 ## How it works
 

@@ -21,9 +21,11 @@ import (
 )
 
 const (
-	// callRate and callFrame are a call's audio: 20 ms of 8 kHz.
+	// callRate and callFrame are a phone call's audio: 20 ms of 8 kHz. An intercom call carries the
+	// microphone's own 16 kHz, wideFrame to a frame, since both ends are this daemon.
 	callRate  = 8000
 	callFrame = callRate / 50
+	wideFrame = 2 * callFrame
 
 	// maxBehind is how far the speaker may fall behind the call before what is queued is dropped. The
 	// network delivers in bursts and the speaker plays at its own pace; without a limit a call drifts
@@ -53,7 +55,12 @@ func talk(ctx context.Context, m *diago.DialogMedia, say <-chan []int16) error {
 		return err
 	}
 	slog.Info("phone: audio", "codec", wprops.Codec.Name, "local", wprops.Laddr, "remote", wprops.Raddr)
+	return carry(ctx, enc, dec, false, say)
+}
 
+// carry is a call's audio both ways, whatever the call runs over: enc takes the microphones and dec
+// gives the far end, as 16-bit little-endian samples, at 8 kHz or (wide) at 16 kHz.
+func carry(ctx context.Context, enc io.Writer, dec io.Reader, wide bool, say <-chan []int16) error {
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 
@@ -68,14 +75,14 @@ func talk(ctx context.Context, m *diago.DialogMedia, say <-chan []int16) error {
 	safe.Go("phone: send", func() {
 		defer wg.Done()
 		defer cancel()
-		if err := send(ctx, enc, say, &st); err != nil && ctx.Err() == nil {
+		if err := send(ctx, enc, wide, say, &st); err != nil && ctx.Err() == nil {
 			slog.Warn("phone: sending audio", "err", err)
 		}
 	})
 	safe.Go("phone: receive", func() {
 		defer wg.Done()
 		defer cancel()
-		if err := receive(ctx, dec, &st); err != nil && ctx.Err() == nil && !errors.Is(err, io.EOF) {
+		if err := receive(ctx, dec, wide, &st); err != nil && ctx.Err() == nil && !errors.Is(err, io.EOF) {
 			slog.Warn("phone: receiving audio", "err", err)
 		}
 	})
@@ -85,14 +92,18 @@ func talk(ctx context.Context, m *diago.DialogMedia, say <-chan []int16) error {
 }
 
 // send is the microphones, and anything to say, out to the call.
-func send(ctx context.Context, enc io.Writer, say <-chan []int16, st *stats) error {
+func send(ctx context.Context, enc io.Writer, wide bool, say <-chan []int16, st *stats) error {
 	frames, stop := mic.Get().Listen("call")
 	defer stop()
 
 	d := newDown()
+	frameLen := callFrame
+	if wide {
+		frameLen = wideFrame
+	}
 	var pending []int16 // 16 kHz still to say
-	buf := make([]byte, 2*callFrame)
-	var out []int16 // 8 kHz not yet sent as a whole frame
+	buf := make([]byte, 2*frameLen)
+	var out []int16 // the call's rate, not yet sent as a whole frame
 	for {
 		select {
 		case <-ctx.Done():
@@ -114,16 +125,20 @@ func send(ctx context.Context, enc io.Writer, say <-chan []int16, st *stats) err
 				}
 				pending = pending[n:]
 			}
-			out = append(out, d.run(frame)...)
-			for len(out) >= callFrame {
-				for i := 0; i < callFrame; i++ {
+			if wide {
+				out = append(out, frame...)
+			} else {
+				out = append(out, d.run(frame)...)
+			}
+			for len(out) >= frameLen {
+				for i := 0; i < frameLen; i++ {
 					binary.LittleEndian.PutUint16(buf[2*i:], uint16(out[i]))
 				}
 				if _, err := enc.Write(buf); err != nil {
 					return err
 				}
-				st.add(&st.sent, &st.sentSq, out[:callFrame])
-				out = out[callFrame:]
+				st.add(&st.sent, &st.sentSq, out[:frameLen])
+				out = out[frameLen:]
 			}
 		}
 	}
@@ -131,14 +146,14 @@ func send(ctx context.Context, enc io.Writer, say <-chan []int16, st *stats) err
 
 // receive is the far end, out of the speaker. It holds the speaker for the call; anything that takes it
 // in the meantime (an announcement) has it until it is done, and then the call takes it back.
-func receive(ctx context.Context, dec io.Reader, st *stats) error {
+func receive(ctx context.Context, dec io.Reader, wide bool, st *stats) error {
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 	audioCh := make(chan []int16, 50)
 	errCh := make(chan error, 1)
 	safe.Go("phone: read", func() {
 		u := newUp()
-		buf := make([]byte, 2*callFrame)
+		buf := make([]byte, 2*wideFrame)
 		for {
 			n, err := dec.Read(buf)
 			if n >= 2 {
@@ -147,8 +162,11 @@ func receive(ctx context.Context, dec io.Reader, st *stats) error {
 					s[i] = int16(binary.LittleEndian.Uint16(buf[2*i:]))
 				}
 				st.add(&st.received, &st.recvSq, s)
+				if !wide {
+					s = u.run(s)
+				}
 				select {
-				case audioCh <- u.run(s):
+				case audioCh <- s:
 				default: // the speaker is behind; this frame is lost rather than everything after it late
 				}
 			}

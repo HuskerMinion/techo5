@@ -28,6 +28,7 @@ import (
 
 	"github.com/HuskerMinion/techo5/echod/internal/component"
 	"github.com/HuskerMinion/techo5/echod/internal/config"
+	"github.com/HuskerMinion/techo5/echod/internal/feature/web"
 	"github.com/HuskerMinion/techo5/echod/internal/hardware/led"
 	"github.com/HuskerMinion/techo5/echod/internal/layout"
 	"github.com/HuskerMinion/techo5/echod/internal/lib/hook"
@@ -81,6 +82,7 @@ type State struct {
 	Phase      Phase
 	Peer       string // who is on the other end, or calling
 	Incoming   bool
+	Intercom   bool      // the call is with another device in the house, not over the phone line
 	Since      time.Time // when the phase began
 	Problem    string    // why the phone cannot be used, if it cannot
 }
@@ -124,6 +126,7 @@ func build() *Phone {
 		say:    make(chan []int16, 16),
 	}
 	p.answer.OnPress = func() { p.Answer() }
+	web.Handle(intercomPath, "", intercomOpen, p.intercomIn)
 	p.hangup.OnPress = func() { p.Hangup() }
 	p.ringLED = led.Get().Claim(led.PriorityAlarm)
 	p.callLED = led.Get().Claim(led.PriorityTurn)
@@ -190,6 +193,9 @@ func (p *Phone) set(f func(s *State)) {
 	p.mu.Lock()
 	before := p.state
 	f(&p.state)
+	if p.state.Phase == Idle {
+		p.state.Intercom = false
+	}
 	if p.state.Phase != before.Phase {
 		p.state.Since = time.Now()
 	}
@@ -231,6 +237,10 @@ func statusText(s State) string {
 func fire(event string, st State, extra ...string) {
 	// device names which one this was: every device's events arrive on the one bus under one name.
 	data := map[string]string{"event": event, "peer": st.Peer, "device": config.Get().Device.Name}
+	data["kind"] = "phone"
+	if st.Intercom {
+		data["kind"] = "intercom"
+	}
 	if st.Incoming {
 		data["direction"] = "incoming"
 	} else {
@@ -385,7 +395,8 @@ func (p *Phone) Call(number string) error {
 			return
 		}
 		defer d.Close()
-		p.talk(ctx, d.Context(), &d.DialogMedia, func(hctx context.Context) error { return d.Hangup(hctx) })
+		p.talk(ctx, d.Context(), func(tctx context.Context) error { return talk(tctx, &d.DialogMedia, p.say) },
+			func(hctx context.Context) error { return d.Hangup(hctx) })
 	})
 	return nil
 }
@@ -430,7 +441,8 @@ func (p *Phone) incoming(d *diago.DialogServerSession) {
 			p.set(func(s *State) { s.Phase, s.Peer = Idle, "" })
 			return
 		}
-		p.talk(ctx, d.Context(), &d.DialogMedia, func(hctx context.Context) error { return d.Hangup(hctx) })
+		p.talk(ctx, d.Context(), func(tctx context.Context) error { return talk(tctx, &d.DialogMedia, p.say) },
+			func(hctx context.Context) error { return d.Hangup(hctx) })
 	case <-ctx.Done():
 		stopRing()
 		_ = d.Respond(603, "Decline", nil)
@@ -450,8 +462,9 @@ func (p *Phone) incoming(d *diago.DialogServerSession) {
 	}
 }
 
-// talk runs an answered call until either end hangs up.
-func (p *Phone) talk(ctx, callCtx context.Context, m *diago.DialogMedia, hangup func(context.Context) error) {
+// talk runs an answered call until either end hangs up. audio carries the call's sound until it is
+// told to stop, over whichever line the call is on.
+func (p *Phone) talk(ctx, callCtx context.Context, audio func(context.Context) error, hangup func(context.Context) error) {
 	p.set(func(s *State) { s.Phase = Talking })
 	fire("answered", p.State())
 	slog.Info("phone: call up", "peer", p.State().Peer)
@@ -469,7 +482,7 @@ func (p *Phone) talk(ctx, callCtx context.Context, m *diago.DialogMedia, hangup 
 		}
 		cancel()
 	})
-	if err := talk(tctx, m, p.say); err != nil {
+	if err := audio(tctx); err != nil {
 		slog.Warn("phone: call audio", "err", err)
 	}
 	cancel()
@@ -513,8 +526,8 @@ func (p *Phone) Hangup() {
 }
 
 // Actions: phone_account signs the device in (an empty username signs it out); phone_call places a
-// call; phone_contacts sets who a screen offers to call; phone_answer and phone_hangup act on the call
-// that is up.
+// call; intercom_call calls another device in the house; phone_contacts sets who a screen offers to
+// call; phone_answer and phone_hangup act on the call that is up, whichever line it is on.
 func (p *Phone) Actions() []*esphome.Action {
 	return []*esphome.Action{
 		{
@@ -560,6 +573,11 @@ func (p *Phone) Actions() []*esphome.Action {
 				p.Changed.Emit(p.State())
 				return nil, nil
 			},
+		},
+		{
+			Name: "intercom_call",
+			Args: []esphome.Arg{{Name: "device", Type: esphome.ArgString}},
+			Run:  func(c esphome.Call) (any, error) { return nil, p.CallDevice(c.String("device")) },
 		},
 		{Name: "phone_answer", Run: func(esphome.Call) (any, error) { p.Answer(); return nil, nil }},
 		{Name: "phone_hangup", Run: func(esphome.Call) (any, error) { p.Hangup(); return nil, nil }},
