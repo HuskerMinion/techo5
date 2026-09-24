@@ -180,7 +180,7 @@ func (f *Feature) Run(ctx context.Context) error {
 		}
 		known := make([]config.DashboardChoice, 0, len(boards))
 		for _, b := range boards {
-			known = append(known, config.DashboardChoice{Label: b.Label, Path: b.Path})
+			known = append(known, config.DashboardChoice{Label: b.Label, Path: b.Path, Streamed: b.Streamed})
 		}
 		if slices.Equal(known, config.Get().Dashboard.Known) {
 			continue

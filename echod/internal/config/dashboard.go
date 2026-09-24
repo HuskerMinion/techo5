@@ -26,8 +26,9 @@ type Dashboard struct {
 
 // DashboardChoice is one dashboard view: how a list names it, and its path.
 type DashboardChoice struct {
-	Label string `json:"label"`
-	Path  string `json:"path"`
+	Label    string `json:"label"`
+	Path     string `json:"path"`
+	Streamed bool   `json:"streamed,omitempty"` // a built-in page only a browser can show
 }
 
 type DashboardMode string

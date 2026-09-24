@@ -3,6 +3,7 @@ package hass
 import (
 	"context"
 	"encoding/json"
+	"slices"
 	"strconv"
 	"strings"
 )
@@ -12,6 +13,16 @@ import (
 type Board struct {
 	Label string `json:"label"`
 	Path  string `json:"path"`
+	// Streamed is one of Home Assistant's built-in pages - Energy, History - which only a browser can
+	// show: it is not made of cards the device could read.
+	Streamed bool `json:"streamed,omitempty"`
+}
+
+// builtIn is the built-in pages worth a screen of their own, by the panel's name, as a list shows
+// them. Settings, the profile and the like are left out.
+var builtIn = map[string]string{
+	"energy": "Energy", "history": "History", "logbook": "Logbook", "light": "Lights", "climate": "Climate",
+	"security": "Security", "home": "Home", "maintenance": "Maintenance", "media-browser": "Media",
 }
 
 // Boards is every dashboard's views, the default dashboard first, over one connection. A dashboard
@@ -75,6 +86,25 @@ func (c *Client) Boards(ctx context.Context) ([]Board, error) {
 				p = strconv.Itoa(i)
 			}
 			out = append(out, Board{Label: d.title + " · " + name, Path: base + "/" + p})
+		}
+	}
+
+	// Home Assistant's own pages, after the dashboards, in a steady order.
+	if raw, err := s.call(map[string]any{"type": "get_panels"}); err == nil {
+		var panels map[string]struct {
+			Component string `json:"component_name"`
+		}
+		if json.Unmarshal(raw, &panels) == nil {
+			var names []string
+			for key, p := range panels {
+				if _, ok := builtIn[p.Component]; ok && key == p.Component {
+					names = append(names, key)
+				}
+			}
+			slices.Sort(names)
+			for _, key := range names {
+				out = append(out, Board{Label: builtIn[key] + " (streamed only)", Path: key, Streamed: true})
+			}
 		}
 	}
 	return out, nil

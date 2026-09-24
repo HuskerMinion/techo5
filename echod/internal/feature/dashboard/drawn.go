@@ -182,7 +182,14 @@ type pending struct {
 // Drawn is the drawn dashboard for a screen width wide, connecting to Home Assistant if it is not
 // already: the Rooms dashboard, or the one chosen. For the page that is up; CloseDrawn ends it.
 func (f *Feature) Drawn(width int) Drawn {
-	path := config.Get().Dashboard.Path
+	d := config.Get().Dashboard
+	path := d.Path
+	for _, k := range d.Known {
+		if k.Path == path && k.Streamed {
+			f.CloseDrawn()
+			return Drawn{Problem: "This page can only be streamed: set Dashboard to Streamed, or pick another."}
+		}
+	}
 	f.mu.Lock()
 	s := f.drawn
 	if s == nil || f.drawnPath != path {
