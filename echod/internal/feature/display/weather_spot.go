@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"image/color"
 	"math"
-	"strings"
 	"time"
 
 	"github.com/HuskerMinion/techo5/echod/internal/feature/home"
@@ -34,26 +33,8 @@ var (
 	colBolt  = color.RGBA{255, 214, 64, 255}
 )
 
-// conditionWords turns Home Assistant's weather state into words for the screen.
-func conditionWords(c string) string {
-	switch c {
-	case "", "unknown", "unavailable":
-		return ""
-	case "clear-night":
-		return "Clear"
-	case "partlycloudy":
-		return "Partly cloudy"
-	case "lightning-rainy":
-		return "Thunderstorms"
-	case "snowy-rainy":
-		return "Sleet"
-	case "exceptional":
-		return "Severe"
-	case "windy-variant":
-		return "Windy"
-	}
-	return strings.ToUpper(c[:1]) + c[1:]
-}
+// conditionWords is home.ConditionWords, by its old name here.
+func conditionWords(c string) string { return home.ConditionWords(c) }
 
 // weatherLine is the reading under the clock: "72° Partly cloudy", or nothing without one.
 func weatherLine(w home.Weather) string {

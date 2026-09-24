@@ -9,7 +9,6 @@ import (
 	"image/draw"
 	"log/slog"
 	"math"
-	"strings"
 	"time"
 
 	"golang.org/x/image/font"
@@ -485,25 +484,8 @@ func (r *renderer) weatherCorner(s scene) {
 // part of it rather than as a picture somebody put there.
 const weatherMark = 46
 
-// conditionWords turns Home Assistant's weather state into words for the screen.
-func conditionWords(c string) string {
-	switch c {
-	case "", "unknown", "unavailable":
-		return ""
-	case "clear-night":
-		return "Clear"
-	case "partlycloudy":
-		return "Partly cloudy"
-	case "lightning-rainy":
-		return "Thunderstorms"
-	case "snowy-rainy":
-		return "Sleet"
-	case "exceptional":
-		return "Severe"
-	}
-	// "sunny", "cloudy", "rainy", "pouring", "fog", "hail", "snowy", "windy", "lightning"…
-	return strings.ToUpper(c[:1]) + c[1:]
-}
+// conditionWords is home.ConditionWords, by its old name here.
+func conditionWords(c string) string { return home.ConditionWords(c) }
 
 // cornerClock keeps the time in view while words have the screen.
 func (r *renderer) cornerClock(s scene) {

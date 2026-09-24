@@ -11,6 +11,7 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/HuskerMinion/techo5/echod/internal/feature/home"
 	"github.com/HuskerMinion/techo5/echod/internal/lib/hass"
 )
 
@@ -197,6 +198,22 @@ func describe(e hass.LiveEntity, name string) Tile {
 		t.Value = title(domain)
 		service := map[string]string{"scene": "scene.turn_on", "script": "script.turn_on", "button": "button.press", "input_button": "input_button.press"}[domain]
 		t.Tap, t.On = toggle(service), false
+	case "weather":
+		// As the clock says it: the words, and the temperature when there is one.
+		t.Value = home.ConditionWords(e.State)
+		if temp, ok := e.Attrs["temperature"].(float64); ok {
+			unit, _ := e.Attrs["temperature_unit"].(string)
+			reading := trimNumber(temp) + "°"
+			if unit != "" && unit != "°F" && unit != "°C" {
+				reading += " " + unit
+			}
+			if t.Value != "" {
+				t.Value += " · " + reading
+			} else {
+				t.Value = reading
+			}
+		}
+		t.On = false
 	case "sensor", "input_number", "number", "counter":
 		t.Value = e.State
 		if n := number(e.State); n != "" && strings.Contains(e.State, ".") {

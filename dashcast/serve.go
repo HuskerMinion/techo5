@@ -7,6 +7,7 @@ import (
 	"encoding/base64"
 	"encoding/binary"
 	"encoding/json"
+	"fmt"
 	"image"
 	"image/draw"
 	"image/jpeg"
@@ -127,20 +128,29 @@ func serve(ctx context.Context, b *browser, g *guard, cfg config, raw net.Conn) 
 
 	sctx, cancel := context.WithCancel(ctx)
 	defer cancel()
-	tab, closeTab, err := b.open(sctx, h.Path, h.W, h.H, allowed)
-	if err != nil {
-		slog.Warn("opening the dashboard failed", "name", h.Name, "err", err)
-		out.problem("The dashboard would not open: " + err.Error())
-		return
-	}
-	defer closeTab()
 
-	d := &differ{}
-	chromedp.ListenTarget(tab, func(ev any) {
-		f, ok := ev.(*page.EventScreencastFrame)
-		if !ok {
+	// The tab: this screen's parked one if it left a moment ago (warm.go), or a new one. It outlives
+	// the session, so it is opened against the server's context, not this connection's.
+	key := fmt.Sprintf("%s|%dx%d|%s", h.Name, h.W, h.H, h.Path)
+	w := warm.take(key)
+	reused := w != nil
+	if !reused {
+		tab, closeTab, err := b.open(ctx, h.Path, h.W, h.H, allowed)
+		if err != nil {
+			slog.Warn("opening the dashboard failed", "name", h.Name, "err", err)
+			out.problem("The dashboard would not open: " + err.Error())
 			return
 		}
+		w = newWarmTab(tab, closeTab, key)
+	} else {
+		slog.Info("dashboard picked up where it was left", "name", h.Name)
+	}
+	// Parked when this session ends, for the screen to come back to.
+	defer warm.park(w)
+	tab := w.ctx
+
+	d := &differ{}
+	w.watch(func(f *page.EventScreencastFrame) {
 		go func() {
 			// Acknowledged once handled, which is what paces Chrome: it sends the next frame only
 			// after this one is acknowledged, so a slow device holds frames back rather than queuing
@@ -170,6 +180,20 @@ func serve(ctx context.Context, b *browser, g *guard, cfg config, raw net.Conn) 
 			}
 		}()
 	})
+	// A tab picked up again shows what it already shows at once: Chrome only sends a frame when
+	// something is drawn, and a page left standing may draw nothing new for a while.
+	if reused {
+		var shot []byte
+		if err := chromedp.Run(tab, chromedp.ActionFunc(func(ctx context.Context) error {
+			var err error
+			shot, err = page.CaptureScreenshot().WithFormat(page.CaptureScreenshotFormatPng).Do(ctx)
+			return err
+		})); err == nil {
+			if img, err := png.Decode(bytes.NewReader(shot)); err == nil {
+				_ = d.send(d.changes(img), out)
+			}
+		}
+	}
 	// PNG from Chrome rather than JPEG: lossless, so two frames of an unchanged page are the same
 	// bytes and what changed can be found exactly. The JPEG is made here, of the changed part only.
 	if err := chromedp.Run(tab, page.StartScreencast().WithFormat(page.ScreencastFormatPng).
