@@ -334,7 +334,12 @@ func (s *session) run() {
 			return
 		}
 		if err := s.once(); err != nil {
-			slog.Info("drawn dashboard", "err", err)
+			s.mu.Lock()
+			closed := s.stopped
+			s.mu.Unlock()
+			if !closed { // closing it for another dashboard is not worth a line
+				slog.Info("drawn dashboard", "err", err)
+			}
 		}
 		s.mu.Lock()
 		stopped = s.stopped

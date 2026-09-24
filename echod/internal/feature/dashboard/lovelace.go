@@ -6,6 +6,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"html"
 	"math"
 	"regexp"
 	"strconv"
@@ -732,11 +733,12 @@ var (
 func plainText(md string) []string {
 	var out []string
 	for _, line := range strings.Split(md, "\n") {
+		line = html.UnescapeString(line)
 		line = mdPrefix.ReplaceAllString(line, "")
 		line = mdLink.ReplaceAllString(line, "$1")
 		line = mdTags.ReplaceAllString(line, "")
 		line = mdMarks.ReplaceAllString(line, "")
-		line = strings.TrimSpace(line)
+		line = strings.Join(strings.Fields(line), " ")
 		if line != "" {
 			out = append(out, line)
 		}

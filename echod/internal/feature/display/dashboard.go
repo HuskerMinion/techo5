@@ -90,6 +90,14 @@ func (d *Display) dashScene(s *scene, sheetOrDrawer bool) {
 	if want && mode == config.DashboardDrawn {
 		s.drawn = f.Drawn()
 		d.mu.Lock()
+		// A different dashboard starts at its top, and none is scrolled past its end: a short one
+		// chosen after a long one scrolled down would otherwise be all above the screen.
+		if path := config.Get().Dashboard.Path; path != d.dashScrollFor {
+			d.dashScroll, d.dashScrollFor = 0, path
+		}
+		if d.r != nil && d.r.dashContent > 0 {
+			d.dashScroll = min(d.dashScroll, max(d.r.dashContent-d.r.h, 0))
+		}
 		s.dashScroll, s.dashAdjust = d.dashScroll, d.dashAdjust
 		d.mu.Unlock()
 	} else {
