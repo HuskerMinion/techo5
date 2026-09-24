@@ -73,9 +73,6 @@ const (
 	// floor is the dimmest an "on" backlight goes; below it the panel reads as off.
 	floor = 8
 
-	// glow is the backlight of the night light: the dimmest the panel shows anything at.
-	glow = floor
-
 	// Auto-brightness: the fraction of the ceiling the room's light allows, from darkFraction in the
 	// dark rising on a log curve to the full ceiling at brightLux. Applied through a running average
 	// so a passing shadow does not flicker the panel.
@@ -137,8 +134,13 @@ type Display struct {
 	// the end of the night brings it back.
 	nightGlow bool
 
-	// nightHours and atNight are the night's settings in Home Assistant.
+	// nightHours and atNight are the night's settings in Home Assistant, glowLevel the night light's
+	// brightness.
 	nightHours, atNight *esphome.Select
+	glowLevel           *esphome.Number
+
+	// wide is the Show 8's bigger, brighter panel, which glows harder at the same backlight.
+	wide bool
 
 	// slideshowIdleSince is when the screen last became the plain idle page (nothing else showing);
 	// zero while it is not. Screensaver mode waits for this to run long enough before taking over.
@@ -229,6 +231,7 @@ func build() *Display {
 	d.strip = stripSelect(d.wake)
 	d.nightHours = nightHoursSelect()
 	d.atNight = atNightSelect(d)
+	d.glowLevel = glowNumber(d)
 	d.lang = langSelect()
 	voice.Changed.Listen(d.changed)
 	media.Get().OnVolume.Listen(d.volumeMoved)
@@ -276,7 +279,7 @@ func build() *Display {
 func (d *Display) Name() string { return "screen" }
 
 func (d *Display) Entities() []esphome.Entity {
-	return []esphome.Entity{d.light, d.auto, d.clock, d.lang, d.strip, d.nightHours, d.atNight}
+	return []esphome.Entity{d.light, d.auto, d.clock, d.lang, d.strip, d.nightHours, d.atNight, d.glowLevel}
 }
 
 // Restore lights the panel the way it was left. Before the framebuffer is opened: the backlight is
@@ -286,6 +289,7 @@ func (d *Display) Restore(c config.Config) {
 	d.strip.Set(stripOptions[stripIndex()])
 	d.nightHours.Set(nightHoursText(c.Screen.Night))
 	d.atNight.Set(atNightOptions[atNightIndex()])
+	d.glowLevel.Set(float32(d.glowSetting()))
 	d.setAuto(c.Screen.Auto, false)
 	d.apply(c.Screen.On, c.Screen.Brightness, false)
 }
@@ -357,7 +361,7 @@ func (d *Display) relight(jump bool) {
 		}
 		target = math.Max(target, floor)
 		if d.nightGlow {
-			target = glow
+			target = float64(d.glowBacklight()) // relight holds mu
 		}
 	}
 	// The light before an alarm takes the backlight over while it runs: it starts under anything the
@@ -894,7 +898,10 @@ func (d *Display) night(now time.Time, on bool, view voice.State) bool {
 	case in && on:
 		busy := view.Phase != "idle" || now.Sub(touched) < nightIdle || now.Sub(viewAt) < nightIdle ||
 			d.ringing(now).any() || phone.Get().Busy() || sunriseProgress(now) > 0 || reminderUp()
-		if playing, _ := media.Get().Playing(); playing || busy {
+		// Something playing is not somebody using the screen. At night it is rain or music to sleep
+		// to, and it kept a guest room's screen at full brightness all night; a touch or a word still
+		// brings the screen up to see what is playing.
+		if busy {
 			// Whatever keeps the screen up at night - a ring, a call, a turn, the light before an
 			// alarm - is seen at the screen's brightness, not the night light's.
 			d.mu.Lock()
@@ -1216,6 +1223,9 @@ func (d *Display) Start(context.Context) error {
 	d.dev = dev
 	d.r = newRenderer(dev.Canvas())
 	w, h := dev.Size()
+	d.mu.Lock()
+	d.wide = w > 1000 || h > 1000
+	d.mu.Unlock()
 	d.logo = newSplash(w, h)
 	d.mu.Lock()
 	d.booting, d.started = true, time.Now()

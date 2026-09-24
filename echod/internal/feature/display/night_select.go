@@ -101,3 +101,55 @@ func (d *Display) nightHoursChanged() {
 		d.nightHours.Set(nightHoursText(config.Get().Screen.Night))
 	}
 }
+
+// glowSteps is the night light's scale, 1 to 10, as backlight out of screen.BacklightMax: tight at the
+// bottom, where one step is the difference between a glow and a light in a dark room.
+var glowSteps = [...]int{1, 2, 3, 4, 6, 8, 10, 13, 16, 20}
+
+// glowSetting is the night light's brightness on its 1 to 10 scale: the one set, or the panel's own.
+// The Show 5 starts where the night light began; the Show 8's panel lights a dark room far more at the
+// same backlight, so it starts lower.
+func (d *Display) glowSetting() int {
+	d.mu.Lock()
+	wide := d.wide
+	d.mu.Unlock()
+	return glowFor(wide)
+}
+
+// glowFor is glowSetting for a panel already known, for callers holding mu.
+func glowFor(wide bool) int {
+	if v := config.Get().Screen.NightLightLevel; v > 0 {
+		return v
+	}
+	if wide {
+		return 3
+	}
+	return 6
+}
+
+// glowBacklight is the backlight the night light shows at on the panel. Wants mu, for wide.
+func (d *Display) glowBacklight() int {
+	return glowSteps[min(max(glowFor(d.wide), 1), len(glowSteps))-1]
+}
+
+func glowNumber(d *Display) *esphome.Number {
+	n := &esphome.Number{
+		Base: esphome.Base{
+			ObjectID: "screen_night_light_level",
+			Name:     "Night light brightness",
+			Icon:     "mdi:lightbulb-night",
+			Category: esphome.CategoryConfig,
+		},
+		Min: 1, Max: 10, Step: 1,
+	}
+	n.OnCommand = func(v float32) {
+		if err := config.Set().Screen().NightLightLevel(int(v)); err != nil {
+			slog.Error("saving the night light brightness failed", "err", err)
+			return
+		}
+		n.Set(float32(d.glowSetting()))
+		// Seen at once, so it can be set while looking at it in the dark.
+		d.relight(true)
+	}
+	return n
+}

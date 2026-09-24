@@ -104,6 +104,7 @@ var registered = []string{
 	"screen_clock_format",
 	"screen_language",
 	"screen_night_hours",
+	"screen_night_light_level",
 	"screen_now_playing",
 	"screen_web_access",
 	"segment_1",
