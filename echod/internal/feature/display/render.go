@@ -21,6 +21,7 @@ import (
 	"github.com/HuskerMinion/techo5/echod/internal/feature/alarm"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/announce"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/btaudio"
+	"github.com/HuskerMinion/techo5/echod/internal/feature/dashboard"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/home"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/media"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/phone"
@@ -49,6 +50,12 @@ type scene struct {
 	// volume is shown while it moves: the step out of media.VolumeSteps.
 	volume     int
 	showVolume bool
+
+	// The dashboard page, drawn instead of the clock while showDash is set: how it is shown, and
+	// when streamed, what arrived.
+	showDash bool
+	dashMode config.DashboardMode
+	dash     dashboard.View
 
 	// bt is the Bluetooth audio state: the pairing page replaces everything while it is on, and a
 	// connected device is named in the footer.
@@ -330,6 +337,13 @@ func (r *renderer) draw(s scene) {
 	if s.showWeather {
 		r.weatherPage(s)
 		r.footer(s)
+		if s.showVolume {
+			r.volumeBar(s)
+		}
+		return
+	}
+	if s.showDash {
+		r.dashboardPage(s)
 		if s.showVolume {
 			r.volumeBar(s)
 		}

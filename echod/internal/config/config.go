@@ -38,6 +38,7 @@ type Config struct {
 	Security   Security   `json:"security"`
 	Alarms     Alarms     `json:"alarms"`
 	Timers     Timers     `json:"timers"`
+	Dashboard  Dashboard  `json:"dashboard"`
 }
 
 // Defaults is a device nobody has set anything on.
@@ -90,6 +91,7 @@ func (w Writer) Alarms() AlarmsWriter         { return AlarmsWriter(w) }
 func (w Writer) Timers() TimersWriter         { return TimersWriter(w) }
 func (w Writer) Sendspin() SendspinWriter     { return SendspinWriter(w) }
 func (w Writer) Home() HomeWriter             { return HomeWriter(w) }
+func (w Writer) Dashboard() DashboardWriter   { return DashboardWriter(w) }
 
 // Wake names one slot, since every wake word setting belongs to one.
 func (w Writer) Wake(slot int) WakeWriter { return WakeWriter{st: w.st, slot: slot} }

@@ -35,6 +35,7 @@ import (
 	"github.com/HuskerMinion/techo5/echod/internal/feature/announce"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/btaudio"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/hastate"
+	"github.com/HuskerMinion/techo5/echod/internal/feature/dashboard"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/home"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/media"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/mute"
@@ -96,6 +97,15 @@ type Display struct {
 	viewAt  time.Time
 	volume  int
 	volAt   time.Time
+
+	// The dashboard page: asked for, when last touched, whether the last frame drew it, whether the
+	// touchscreen was put in follow mode for it, and a finger that started at its left edge.
+	dash                  bool
+	dashTouched           time.Time
+	dashShowing           bool
+	dashFollow            bool
+	dashEdge              bool
+	dashEdgeX             int
 
 	poke chan struct{}
 
@@ -273,6 +283,7 @@ func build() *Display {
 	timer.Get().Changed.Listen(func(struct{}) { d.wake() })
 	onMissed(d.wake)
 	home.Get().Changed.Listen(func(struct{}) { d.wake() })
+	dashboard.Get().Changed.Listen(func(struct{}) { d.wake() })
 	return d
 }
 
@@ -426,6 +437,7 @@ func (d *Display) changed(s voice.State) {
 		if aboutGoingHome(s.Heard) {
 			d.weatherArmed, d.weatherUntil = false, time.Time{}
 			d.sheet, d.quiet = false, true
+			d.dash = false
 			go home.Get().HideCamera()
 			go d.endMusic()
 			slog.Info("screen: home by voice")
@@ -582,6 +594,16 @@ func (d *Display) gesture(g touch.Gesture) {
 		case touch.SwipeRight:
 			bt.SetPairing(false)
 		}
+		d.wake()
+		return
+	}
+
+	// The dashboard: every finger is its, including the one that takes it away.
+	d.mu.Lock()
+	dashUp := d.dashShowing
+	d.mu.Unlock()
+	if dashUp {
+		d.dashGesture(g)
 		d.wake()
 		return
 	}
@@ -753,6 +775,10 @@ func (d *Display) gesture(g touch.Gesture) {
 		}
 		media.Get().Adjust(-1)
 	case touch.SwipeRight:
+		// From the left edge it brings the dashboard up, the drawer's gesture mirrored.
+		if d.r != nil && g.X < d.r.drawerEdge() && d.openDashboard() {
+			return
+		}
 		// Right puts the now-playing page away until the track changes. It is the one gesture left on that
 		// page that cannot be taken for play or pause, which a tap there has to be. It is not the drawer's
 		// way out: the drawer has closed on this swipe since long before there was a page to put away,
@@ -1193,6 +1219,10 @@ func (d *Display) OpenSheet(name string) bool {
 		d.showSheet(false)
 		d.openDrawer(drawerRadio)
 		return true
+	case "dashboard":
+		d.showSheet(false)
+		d.closeDrawer()
+		return d.openDashboard()
 	}
 	cat, ok := catByName(name)
 	if !ok {
@@ -1428,8 +1458,10 @@ func (d *Display) frame() time.Duration {
 	// boring is the plain idle page — the same set of pages draw() checks before falling through to
 	// bigClock/nowPlaying. Background mode rides along with it; Screensaver only takes over once it
 	// has held for the configured wait, tracked by how long it has run continuously.
+	d.dashScene(&s, s.showSheet || s.showDrawer || ring.any() || call.Phase != phone.Idle)
 	boring := s.phase == "idle" && call.Phase == phone.Idle && !ring.any() && !s.bt.Pairing &&
-		!s.showWifi && !s.showSheet && !s.showCamera && !s.showRadar && !s.showWeather && !s.nowPlaying
+		!s.showWifi && !s.showSheet && !s.showCamera && !s.showRadar && !s.showWeather && !s.nowPlaying &&
+		!s.showDash
 	// A browser waiting to be let in is a page of its own, over whatever is on the screen: asking for
 	// the setup page is done from the settings screen, so the answer has to reach somebody who is
 	// still standing in it. It was set only on the idle page once, and the press could not be given
@@ -1477,6 +1509,9 @@ func (d *Display) frame() time.Duration {
 
 	if s.showCamera {
 		return 250 * time.Millisecond // frames arrive as they are fetched; this keeps up
+	}
+	if s.showDash {
+		return time.Second // a streamed picture wakes it as it arrives
 	}
 	if ring.any() || call.Phase != phone.Idle {
 		return 500 * time.Millisecond

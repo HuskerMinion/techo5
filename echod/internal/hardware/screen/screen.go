@@ -99,6 +99,7 @@ type Device struct {
 	// and most frames change a few rows. row is scratch for one converted row.
 	shadow [][]byte
 	row    []byte
+	bands  [][]byte // scratch for rotate: one panel row per canvas column in a band
 }
 
 // Open maps the framebuffer and reads its geometry.
@@ -236,17 +237,88 @@ func (d *Device) Present() error {
 		}
 		return d.pan(next)
 	}
-	for x := 0; x < w && x < d.panelH; x++ {
-		row := dst[x*d.line : x*d.line+d.panelW*4]
-		for y := 0; y < h && y < d.panelW; y++ {
-			i := y*img.Stride + x*4
-			px := (d.panelW - 1 - y) * 4
-			pixel := uint32(img.Pix[i])<<sr | uint32(img.Pix[i+1])<<sg | uint32(img.Pix[i+2])<<sb | uint32(img.Pix[i+3])<<sa
-			binary.LittleEndian.PutUint32(row[px:px+4], pixel)
+	d.rotate(dst, next)
+	return d.pan(next)
+}
+
+// band is how many canvas columns rotate turns at once. A column of the canvas is a row of the panel,
+// and reading one column alone touches a different cache line for every pixel; eight side by side
+// read 32 bytes from each line instead of 4.
+const band = 8
+
+// rotate paints the canvas onto page next of the rotated panel. Each panel row is built in RAM and
+// compared with what the page already holds, and only a row that differs is written: the
+// framebuffer's own memory is slow to write, and most frames change few of its rows. A row is
+// written whole, in order, which that memory is quickest at.
+func (d *Device) rotate(dst []byte, next int) {
+	img := d.canvas
+	w, h := img.Rect.Dx(), img.Rect.Dy()
+	sr, sg, sb, sa := d.shift[0], d.shift[1], d.shift[2], d.shift[3]
+	// The common layouts are a byte copy, with red and blue swapped or not; anything else is packed
+	// a pixel at a time.
+	fast := sg == 8 && sa == 24 && ((sr == 0 && sb == 16) || (sr == 16 && sb == 0))
+	swap := sr == 16
+
+	if d.shadow == nil {
+		d.shadow = make([][]byte, max(d.pages, 1))
+	}
+	shadow := d.shadow[next]
+	if shadow == nil {
+		shadow = append([]byte(nil), dst...)
+		d.shadow[next] = shadow
+	}
+	rowBytes := d.panelW * 4
+	if len(d.bands) != band || len(d.bands[0]) != rowBytes {
+		d.bands = make([][]byte, band)
+		for k := range d.bands {
+			d.bands[k] = make([]byte, rowBytes)
 		}
 	}
+	rows := d.bands
+	cols := min(w, d.panelH)
+	height := min(h, d.panelW)
 
-	return d.pan(next)
+	for x0 := 0; x0 < cols; x0 += band {
+		n := min(band, cols-x0)
+		// One loop per layout, so the choice is made once a band and not once a pixel.
+		switch {
+		case fast && swap:
+			for y := 0; y < height; y++ {
+				src := img.Pix[y*img.Stride+x0*4 : y*img.Stride+(x0+n)*4]
+				px := (d.panelW - 1 - y) * 4
+				for k := 0; k < n; k++ {
+					p := src[k*4 : k*4+4 : k*4+4]
+					binary.LittleEndian.PutUint32(rows[k][px:px+4], uint32(p[2])|uint32(p[1])<<8|uint32(p[0])<<16|uint32(p[3])<<24)
+				}
+			}
+		case fast:
+			for y := 0; y < height; y++ {
+				src := img.Pix[y*img.Stride+x0*4 : y*img.Stride+(x0+n)*4]
+				px := (d.panelW - 1 - y) * 4
+				for k := 0; k < n; k++ {
+					copy(rows[k][px:px+4], src[k*4:k*4+4])
+				}
+			}
+		default:
+			for y := 0; y < height; y++ {
+				src := img.Pix[y*img.Stride+x0*4 : y*img.Stride+(x0+n)*4]
+				px := (d.panelW - 1 - y) * 4
+				for k := 0; k < n; k++ {
+					p := src[k*4 : k*4+4 : k*4+4]
+					binary.LittleEndian.PutUint32(rows[k][px:px+4], uint32(p[0])<<sr|uint32(p[1])<<sg|uint32(p[2])<<sb|uint32(p[3])<<sa)
+				}
+			}
+		}
+		for k := 0; k < n; k++ {
+			at := (x0 + k) * d.line
+			row := rows[k][:rowBytes]
+			if bytes.Equal(row, shadow[at:at+rowBytes]) {
+				continue
+			}
+			copy(shadow[at:at+rowBytes], row)
+			copy(dst[at:at+rowBytes], row)
+		}
+	}
 }
 
 // pan shows page next.
