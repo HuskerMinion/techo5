@@ -622,11 +622,13 @@ func playingWord(s scene) string {
 
 // playingButton is where the footer's word for the music sits: the right end of the bottom edge. The
 // whole of it is the target, because the word moves when a connected device is named beside it.
-// callButtonRect is the clock's Call button: a round one in the bottom-left corner, above the footer's
-// line and clear of the time and date.
+// callButtonRect is the clock's Call button: a round one in the bottom-left corner, in the gap between
+// the date and the footer's line. At 76 it reached up into the date on a Show 5, where a long date
+// line starts near the left edge and a tap on its first letters opened a call; 56 fits under it, and
+// the tap target is still wider than the button (display.go takes touches 12 around it).
 func (r *renderer) callButtonRect() image.Rectangle {
-	side := r.s(76)
-	return image.Rect(r.margin, r.h-r.s(52)-side, r.margin+side, r.h-r.s(52))
+	side := r.s(56)
+	return image.Rect(r.margin, r.h-r.s(44)-side, r.margin+side, r.h-r.s(44))
 }
 
 // callButtonDraw draws it: the call green, with a handset, raised off whatever is behind it.
@@ -637,8 +639,8 @@ func (r *renderer) callButtonDraw() {
 	r.roundShadow(b, rad, r.sf(10), r.s(3), shadowAlpha())
 	r.roundFill(b, rad, shift(green, 16), shift(green, -12))
 	r.roundHighlight(b, rad)
-	icon := r.s(44)
-	r.mdiIcon("phone", b.Min.X+(b.Dx()-icon)/2, b.Min.Y+(b.Dy()-icon)/2, 44, cream)
+	icon := r.s(32)
+	r.mdiIcon("phone", b.Min.X+(b.Dx()-icon)/2, b.Min.Y+(b.Dy()-icon)/2, 32, cream)
 }
 
 func (r *renderer) playingButton() image.Rectangle {

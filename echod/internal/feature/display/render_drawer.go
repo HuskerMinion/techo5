@@ -27,7 +27,7 @@ const (
 	drawerEdgeBase = 240
 
 	// drawerSegBase is the width of the Cameras/Radio/Announce/Call strip.
-	drawerSegBase = 500
+	drawerSegBase = 520 // wide enough for "Announce" when it is the chosen one
 
 	drawerCameras  = 0
 	drawerRadio    = 1
