@@ -906,6 +906,8 @@ func (c *conversation) stream(ctx context.Context, slot int, followUp bool, id s
 	// has heard, and a wake word means someone close has just spoken; a follow-up opens on nothing,
 	// where the loudest thing may be the television, and ending on that would send it the
 	// television's words to act on. There it is logged only, and the follow-up's own limit ends it.
+	// The same when the device has been told to leave it to Home Assistant.
+	acts := !followUp && !config.Get().Microphone.PipelineEnds
 	ep := endpoint.New(endpoint.Default)
 	var sent int
 	var endpointAt float64
@@ -913,10 +915,10 @@ func (c *conversation) stream(ctx context.Context, slot int, followUp bool, id s
 		sent += len(frame)
 		if endpointAt == 0 && ep.Feed(frame) {
 			endpointAt = float64(sent) / float64(mic.Rate)
-			slog.Info("end of speech heard here", "slot", slot+1, "acted", !followUp,
+			slog.Info("end of speech heard here", "slot", slot+1, "acted", acts,
 				"spoke_s", math.Round(float64(ep.EndedAt())/float64(mic.Rate)*10)/10,
 				"at_s", math.Round(endpointAt*10)/10)
-			if !followUp {
+			if acts {
 				c.post(event{kind: evSpokeEnd, text: id})
 			}
 		}

@@ -28,6 +28,10 @@ type Microphone struct {
 
 	// Denoise estimates the steady part of the room and takes it out of what the microphones heard.
 	Denoise bool `json:"denoise"`
+
+	// PipelineEnds leaves deciding when the speaker has finished to Home Assistant alone. Off, which
+	// is the default, the device ends a turn itself when it hears the speaker stop.
+	PipelineEnds bool `json:"pipeline_ends,omitempty"`
 }
 
 const (
@@ -132,6 +136,11 @@ func (w MicrophoneWriter) Sensitivity(db int) error {
 
 func (w MicrophoneWriter) Denoise(v bool) error {
 	return w.st.Update(func(c *Config) { c.Microphone.Denoise = v })
+}
+
+// DeviceEnds is whether the device ends a turn when it hears the speaker stop.
+func (w MicrophoneWriter) DeviceEnds(v bool) error {
+	return w.st.Update(func(c *Config) { c.Microphone.PipelineEnds = !v })
 }
 
 // Mixing is how a microphone array is reduced to the single channel recognition reads.
