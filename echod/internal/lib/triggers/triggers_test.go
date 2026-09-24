@@ -95,3 +95,21 @@ func TestOrdinaryCommandsLeaveTheScreenAlone(t *testing.T) {
 		}
 	}
 }
+
+// Asking for rain to fall asleep to is asking for a sound, and the forecast coming up over it is
+// wrong; asking whether it will rain still is a weather question.
+func TestRainSoundsAreNotTheForecast(t *testing.T) {
+	for _, s := range []string{
+		"Play the sounds of rain.", "play rain sounds", "put on the rain", "play rain",
+		"start the rain noise", "play the sound of a thunderstorm",
+	} {
+		if AboutWeather(s, "en") || AboutWeather(s, MatchAll) {
+			t.Errorf("AboutWeather(%q) = true", s)
+		}
+	}
+	for _, s := range []string{"Is it going to rain today?", "Will it storm tonight?", "What's the forecast?"} {
+		if !AboutWeather(s, "en") {
+			t.Errorf("AboutWeather(%q) = false", s)
+		}
+	}
+}
