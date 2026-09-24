@@ -61,3 +61,11 @@ func TestTiles(t *testing.T) {
 		t.Error("a lock is tappable")
 	}
 }
+
+// A weather tile says the condition as the clock does, with the temperature.
+func TestWeatherTile(t *testing.T) {
+	e := hass.LiveEntity{ID: "weather.home", State: "partlycloudy", Attrs: map[string]any{"temperature": 71.6, "temperature_unit": "°F"}}
+	if got := describe(e, "Home").Value; got != "Partly cloudy · 71.6°" {
+		t.Errorf("weather tile says %q", got)
+	}
+}
