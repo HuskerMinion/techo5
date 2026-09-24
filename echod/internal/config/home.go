@@ -32,6 +32,13 @@ type Home struct {
 	// each other and from nothing else. Empty means this device takes none: a device that makes a
 	// noise in a bedroom should do nothing until somebody has said it may.
 	HouseWord string `json:"house_word,omitempty"`
+
+	// DropIn lets an intercom call from another device in the house connect by itself after a chime,
+	// with nobody answering. Off unless somebody turns it on: it is a way to listen in on a room.
+	DropIn bool `json:"drop_in,omitempty"`
+
+	// DoNotDisturb turns intercom calls away: the caller is told, and nothing rings here.
+	DoNotDisturb bool `json:"do_not_disturb,omitempty"`
 }
 
 // Slideshow is how the idle screen's photo slideshow is wired: a Home Assistant media source to
@@ -165,6 +172,14 @@ func (w HomeWriter) Radio(r Radio) error {
 
 func (w HomeWriter) HouseWord(v string) error {
 	return w.st.Update(func(c *Config) { c.Home.HouseWord = v })
+}
+
+func (w HomeWriter) DropIn(v bool) error {
+	return w.st.Update(func(c *Config) { c.Home.DropIn = v })
+}
+
+func (w HomeWriter) DoNotDisturb(v bool) error {
+	return w.st.Update(func(c *Config) { c.Home.DoNotDisturb = v })
 }
 
 func (w HomeWriter) WeatherSources(ids []string) error {

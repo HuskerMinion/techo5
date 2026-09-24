@@ -7,6 +7,7 @@ import (
 	"net/http/httptest"
 	"path/filepath"
 	"strconv"
+	"sync"
 	"testing"
 	"time"
 
@@ -25,8 +26,21 @@ func house(t *testing.T) (*Phone, announce.Peer) {
 	p := Get()
 	p.Hangup()
 	p.set(func(s *State) { s.Phase, s.Peer = Idle, "" })
-	srv := httptest.NewServer(http.HandlerFunc(p.intercomIn))
-	t.Cleanup(srv.Close)
+	p.mu.Lock()
+	p.declined = nil
+	p.mu.Unlock()
+	// A call's handler outlives its request (the connection is taken over), so the test waits for
+	// each to finish: the next test swaps the config out from under it otherwise.
+	var calls sync.WaitGroup
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		calls.Add(1)
+		defer calls.Done()
+		p.intercomIn(w, r)
+	}))
+	t.Cleanup(func() {
+		srv.Close()
+		calls.Wait()
+	})
 	host, port, _ := net.SplitHostPort(srv.Listener.Addr().String())
 	n, _ := strconv.Atoi(port)
 	return p, announce.Peer{Name: "Kitchen", Address: host, Port: n}
@@ -117,4 +131,84 @@ func TestShownName(t *testing.T) {
 	if got := shownName(long); len(got) != nameMost {
 		t.Errorf("long name kept %d characters", len(got))
 	}
+}
+
+// firstAnswer is what a device says first to a call.
+func firstAnswer(t *testing.T, peer announce.Peer) (byte, *link) {
+	t.Helper()
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	t.Cleanup(cancel)
+	l, err := dialDevice(ctx, peer, intercomKey())
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(l.close)
+	select {
+	case got := <-l.control:
+		return got, l
+	case <-ctx.Done():
+		t.Fatal("no answer at all")
+	}
+	return 0, nil
+}
+
+// Do not disturb turns a call away before anything rings, and says why.
+func TestIntercomDoNotDisturb(t *testing.T) {
+	p, peer := house(t)
+	if err := config.Set().Home().DoNotDisturb(true); err != nil {
+		t.Fatal(err)
+	}
+	if got, _ := firstAnswer(t, peer); got != msgNotNow {
+		t.Fatalf("with do not disturb on, a call got %q", got)
+	}
+	if p.State().Phase != Idle {
+		t.Fatalf("the device is %v", p.State().Phase)
+	}
+}
+
+// A device whose call was just declined cannot ring again straight away.
+func TestIntercomDeclinedCallerWaits(t *testing.T) {
+	p, peer := house(t)
+	got, _ := firstAnswer(t, peer)
+	if got != msgRinging {
+		t.Fatalf("first call got %q", got)
+	}
+	waitFor(t, "ringing", func() bool { return p.State().Phase == Ringing })
+	p.Hangup()
+	waitFor(t, "idle", func() bool { return p.State().Phase == Idle })
+	if got, _ := firstAnswer(t, peer); got != msgDecline {
+		t.Fatalf("calling again at once got %q", got)
+	}
+	p.mu.Lock()
+	for k := range p.declined {
+		p.declined[k] = time.Now().Add(-declineHold)
+	}
+	p.mu.Unlock()
+	if got, _ := firstAnswer(t, peer); got != msgRinging {
+		t.Fatalf("calling again later got %q", got)
+	}
+	p.Hangup()
+}
+
+// With Drop In allowed, a call is answered by itself after its chime, and says it was a drop in.
+func TestIntercomDropInAnswersItself(t *testing.T) {
+	p, peer := house(t)
+	if err := config.Set().Home().DropIn(true); err != nil {
+		t.Fatal(err)
+	}
+	got, l := firstAnswer(t, peer)
+	if got != msgRinging {
+		t.Fatalf("first answer %q", got)
+	}
+	waitFor(t, "a drop in", func() bool { return p.State().DropIn })
+	select {
+	case got := <-l.control:
+		if got != msgAnswer {
+			t.Fatalf("then %q, not answered", got)
+		}
+	case <-time.After(3 * time.Second):
+		t.Fatal("a drop in was never answered")
+	}
+	p.Hangup()
+	waitFor(t, "idle", func() bool { return p.State().Phase == Idle })
 }

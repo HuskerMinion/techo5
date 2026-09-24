@@ -33,6 +33,10 @@ func (r *renderer) callPage(s scene) {
 	case st.Phase == phone.Talking:
 		title = "On a call"
 	}
+	if st.DropIn {
+		// Somebody connected without anyone here answering: the page says so, and whose device it is.
+		title = "Drop In"
+	}
 	r.text(r.title, title, (r.w-r.width(r.title, title))/2, 80, amber)
 
 	// Something ringing behind the call. It has to be said, because this page is drawn over the

@@ -69,6 +69,9 @@ func (r *roundRenderer) callFace(s roundScene) {
 	case phone.Talking:
 		title = "ON A CALL"
 	}
+	if st.DropIn {
+		title = "DROP IN"
+	}
 	r.centered(r.label, title, 150, colCall)
 
 	who := st.Peer

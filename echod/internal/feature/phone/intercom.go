@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"math"
 	"net"
 	"net/http"
 	"strconv"
@@ -20,6 +21,7 @@ import (
 	"github.com/HuskerMinion/techo5/echod/internal/config"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/announce"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/web"
+	"github.com/HuskerMinion/techo5/echod/internal/hardware/speaker"
 	"github.com/HuskerMinion/techo5/echod/internal/lib/safe"
 	"github.com/HuskerMinion/techo5/echod/internal/lib/sealed"
 )
@@ -46,6 +48,9 @@ const (
 	// does not hold the line.
 	handshakeFor = 5 * time.Second
 
+	// declineHold is how long a device whose call was turned down must wait before ringing here again.
+	declineHold = 30 * time.Second
+
 	nameMost    = 40 // runes of a caller's name that are shown
 	payloadMost = 2 * wideFrame
 )
@@ -57,6 +62,7 @@ const (
 	msgBusy    = 'B' // already on a call
 	msgAnswer  = 'A'
 	msgDecline = 'D' // declined, or nobody answered
+	msgNotNow  = 'N' // do not disturb
 	msgAudio   = 'S' // 20 ms of 16 kHz
 	msgBye     = 'X' // hung up
 )
@@ -213,6 +219,21 @@ func (p *Phone) intercomIn(w http.ResponseWriter, r *http.Request) {
 	_ = raw.SetDeadline(time.Time{})
 	caller := shownName(name)
 
+	home := config.Get().Home
+	if home.DoNotDisturb {
+		slog.Info("intercom: call turned away: do not disturb", "from", caller)
+		_ = writeMsg(c, msgNotNow, nil)
+		return
+	}
+	p.mu.Lock()
+	recent := time.Since(p.declined[caller]) < declineHold
+	p.mu.Unlock()
+	if recent {
+		slog.Info("intercom: call turned away: declined moments ago", "from", caller)
+		_ = writeMsg(c, msgDecline, nil)
+		return
+	}
+
 	answered := make(chan struct{})
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -221,7 +242,7 @@ func (p *Phone) intercomIn(w http.ResponseWriter, r *http.Request) {
 	if !busy {
 		p.answered, p.end = answered, cancel
 		p.claim(Ringing, caller, true)
-		p.state.Intercom = true
+		p.state.Intercom, p.state.DropIn = true, home.DropIn
 	}
 	p.mu.Unlock()
 	if busy {
@@ -238,7 +259,17 @@ func (p *Phone) intercomIn(w http.ResponseWriter, r *http.Request) {
 	fire("ringing", p.State())
 
 	rctx, stopRing := context.WithCancel(ctx)
-	safe.Go("intercom: ring", func() { ring(rctx) })
+	if home.DropIn {
+		// Drop In: a chime rather than a ring, and then it is answered by itself. The call page says
+		// who is listening, and hanging up or declining still ends it.
+		slog.Info("intercom: drop in", "from", caller)
+		safe.Go("intercom: chime", func() {
+			chime(rctx)
+			p.Answer()
+		})
+	} else {
+		safe.Go("intercom: ring", func() { ring(rctx) })
+	}
 	timeout := time.NewTimer(intercomRingFor)
 	defer timeout.Stop()
 	select {
@@ -254,6 +285,12 @@ func (p *Phone) intercomIn(w http.ResponseWriter, r *http.Request) {
 	case <-ctx.Done():
 		stopRing()
 		_ = l.say(msgDecline)
+		p.mu.Lock()
+		if p.declined == nil {
+			p.declined = map[string]time.Time{}
+		}
+		p.declined[caller] = time.Now()
+		p.mu.Unlock()
 		fire("declined", p.State())
 		p.set(func(s *State) { s.Phase, s.Peer = Idle, "" })
 	case <-l.gone:
@@ -328,6 +365,8 @@ func (p *Phone) CallDevice(name string) error {
 					reason = "busy"
 				case msgDecline:
 					reason = "declined"
+				case msgNotNow:
+					reason = "do not disturb"
 				default:
 					continue
 				}
@@ -351,6 +390,43 @@ func (p *Phone) CallDevice(name string) error {
 			func(context.Context) error { l.close(); return nil })
 	})
 	return nil
+}
+
+// chime is Drop In's sound, once: two short rising notes, where a call rings.
+func chime(ctx context.Context) {
+	const rate = speaker.VoiceRate
+	var tone []int16
+	for _, n := range []struct {
+		f1, f2 float64
+		ms     int
+	}{{660, 880, 160}, {0, 0, 70}, {880, 1100, 220}} {
+		count := rate * n.ms / 1000
+		for i := 0; i < count; i++ {
+			if n.f1 == 0 {
+				tone = append(tone, 0)
+				continue
+			}
+			t := float64(i) / rate
+			env := math.Min(1, math.Min(float64(i), float64(count-i))/(rate/100))
+			tone = append(tone, int16(8000*env*(0.5*math.Sin(2*math.Pi*n.f1*t)+0.5*math.Sin(2*math.Pi*n.f2*t))))
+		}
+	}
+	claim := speaker.Sound().Claim("drop in", func(cctx context.Context, pl *speaker.Player) error {
+		pl.PlayVoice(tone)
+		for pl.Queued() > 0 {
+			select {
+			case <-cctx.Done():
+				pl.Drain()
+				return nil
+			case <-ctx.Done():
+				pl.Drain()
+				return nil
+			case <-time.After(50 * time.Millisecond):
+			}
+		}
+		return nil
+	})
+	<-claim.Done()
 }
 
 // findPeer is the device in the house with this name, however it is capitalized.

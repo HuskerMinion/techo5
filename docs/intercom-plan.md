@@ -4,7 +4,11 @@ A two-way call between two TECHO5 devices in the same house: the office calls th
 answers, and they talk. It works with Home Assistant down and the internet down, the same as
 announcing does.
 
-This is a plan, not a feature yet. Nothing here is built. Agreed 2026-09-24: our own stream rather
+**Status (2026-09-24):** steps 1 to 4 are built and tested on two Show 5s, a Spot and a Dot; docs are
+in phone.md and actions.md. Settings landed in Settings, Display (the Call button), Sound & Voice (Do
+not disturb) and Privacy & Security (Allow Drop In). A Dot's call costs it about 15 to 20% more CPU.
+
+Agreed 2026-09-24: our own stream rather
 than SIP, and Drop In off by default with a setting to turn it on.
 
 ## What is already there

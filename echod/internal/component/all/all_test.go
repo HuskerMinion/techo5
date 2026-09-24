@@ -48,6 +48,8 @@ var registered = []string{
 	"hardware_color",
 	"headphones",
 	"insecure_tls",
+	"intercom_do_not_disturb",
+	"intercom_drop_in",
 	"ip_address",
 	"keep_recordings_1",
 	"keep_recordings_2",

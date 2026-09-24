@@ -974,6 +974,12 @@ fires the same `esphome.techo5_phone` events, with `kind: intercom`.
 >
 > Both devices need the same house word, set on each device's setup page (the one announcing uses).
 > A device with no house word takes no calls, and one with a different word refuses them.
+>
+> The device called decides how it takes the call. With **Intercom do not disturb** on, it turns the
+> call away (`reason: do not disturb`). With **Allow Drop In** on, it chimes and connects by itself,
+> with no one answering, and its screen says **Drop In**. Both are off by default, and are switches
+> in Home Assistant and settings on a screen (Sound & Voice, and Privacy & Security). After a call is
+> declined, the same device cannot ring it again for 30 seconds.
 
 ### device (Required)
 

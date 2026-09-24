@@ -19,6 +19,7 @@ import (
 	"github.com/HuskerMinion/techo5/echod/internal/feature/home"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/media"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/mute"
+	"github.com/HuskerMinion/techo5/echod/internal/feature/phone"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/security"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/sendspin"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/setup"
@@ -98,6 +99,7 @@ func categoryRows(sv sheetView) (rows []settingRow, note string) {
 			{id: "waketone", label: "Wake sound", kind: ctlChoice, value: config.Get().Wake.Slot(0).Tone.Label()},
 			{id: "sleep", label: "Sleep timer", sub: sleepSub(), kind: ctlChoice, value: sleepValue()},
 			{id: "quiet", label: "Quiet hours", sub: quietSub(), kind: ctlChoice, value: quietValue()},
+			{id: "dnd", label: "Do not disturb", sub: "Intercom calls from other rooms are turned away", kind: ctlToggle, on: config.Get().Home.DoNotDisturb},
 			{id: "bass", label: "Bass", sub: toneSub(), kind: ctlStepper, value: toneValue(config.Get().Speaker.Bass)},
 			{id: "treble", label: "Treble", kind: ctlStepper, value: toneValue(config.Get().Speaker.Treble)},
 			{id: "sendspin", label: "Music Assistant player", sub: "Play music in sync with other rooms", kind: ctlToggle, on: st.sendspin},
@@ -139,6 +141,8 @@ func securityRows(sv sheetView) []settingRow {
 			settingRow{id: "ssh", label: "SSH", sub: sub, kind: ctlToggle, on: sec.SSH},
 			settingRow{label: "SSH keys", sub: "Sent from Home Assistant", kind: ctlValue, value: keys})
 	}
+	rows = append(rows, settingRow{id: "dropin", label: "Allow Drop In", sub: "Intercom calls connect by themselves, after a chime",
+		kind: ctlToggle, on: config.Get().Home.DropIn})
 	link := settingRow{label: "Home Assistant link", sub: "Encrypted with this device's key", kind: ctlValue, value: "Encrypted"}
 	if !sec.Encrypted {
 		link.sub, link.value = "Add the device in Home Assistant to encrypt it", "Not encrypted"
@@ -545,6 +549,10 @@ func (d *Display) rowTap(id string, p part, opt int) {
 		d.setAuto(!on, true)
 	case "callbutton":
 		setCallButtonSaved(d.callBtn, !callButton.Load())
+	case "dnd":
+		go phone.Get().SetDoNotDisturb(!config.Get().Home.DoNotDisturb)
+	case "dropin":
+		go phone.Get().SetDropIn(!config.Get().Home.DropIn)
 	case "volume":
 		switch p {
 		case partMinus:

@@ -207,6 +207,13 @@ once the phone is signed in. To put a green Call button on the home screen that 
 on **Call button** in Settings, Display (or the **Call button on the home screen** switch in Home
 Assistant). It is off by default.
 
+**Do Not Disturb and Drop In.** Each device decides how it takes intercom calls. **Do not disturb**
+(Settings, Sound & Voice, or the **Intercom do not disturb** switch) turns them away and tells the
+caller why. **Allow Drop In** (Settings, Privacy & Security, or the **Allow Drop In** switch) lets a
+call connect by itself after a short chime, with **Drop In** and the caller's name on the screen; it is
+a way to listen in on a room, so it is off unless you turn it on. On a Dot, which has no screen, both
+are the Home Assistant switches, and the action button answers and hangs up.
+
 ## How it works
 
 - `echod/internal/feature/phone`: the component. SIP and RTP through
