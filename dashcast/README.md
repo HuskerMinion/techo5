@@ -34,15 +34,19 @@ loaded: nothing is sent while nothing changes.
 
 ## Pointing a device at it
 
-In Home Assistant, on the TECHO5 device:
+Tell the device where the server is and what its key is, either on the device's **setup page**
+(**Connections** tab, **Dashboard server**), or with the action **ESPHome: `<device>`_dashboard_server**.
 
-1. Run the action **ESPHome: `<device>`_dashboard_server** with the address (`host:9555`) and the key.
-2. Optionally run **`<device>`_dashboard_path** with the dashboard's path as the address bar shows it
-   (`lovelace/0`, `dashboard-kitchen/lights`). Empty is your default dashboard.
-3. Set **Dashboard** to **Streamed**.
+Then, on the device's page in Home Assistant (**Settings → Devices & services → Devices →** the
+device, **Configuration** card):
 
-On the device, swipe in from the left edge of the clock. The same swipe, or saying "go home", takes
-it away. **Dashboard when idle** shows it in place of the clock.
+1. Set **Dashboard** to **Streamed**.
+2. Pick the dashboard in **Dashboard to show**. Home Assistant's built-in pages (Energy, History,
+   Logbook…) are at the end of the list.
+3. Turn on **Dashboard when idle** to show it in place of the clock.
+
+On an Echo Show, swipe in from the left edge of the clock to open it; on the Spot, pick Dashboard
+in the ring menu. More in [docs/dashboards.md](../docs/dashboards.md).
 
 ## Security
 
