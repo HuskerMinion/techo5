@@ -133,7 +133,13 @@ func (d *Display) dashGesture(g touch.Gesture) {
 		}
 	case touch.Hold:
 		from := edgeNone
+		// On the dashboard the edges are the strips beside the page, not the clock's wider bands, and
+		// a finger that lands on a tile is the tile's even there: sliding a light on the right-hand
+		// side is not opening the drawer.
+		edge = min(edge, d.r.margin)
+		onTile := !streamed && d.tileAt(g.X, g.Y) != nil
 		switch {
+		case onTile:
 		case g.X < edge:
 			from = edgeLeft
 		case g.X >= d.r.w-edge:
