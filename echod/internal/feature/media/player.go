@@ -668,7 +668,20 @@ func (p *Player) Transport(t Transport) {
 			p.OnResumeRemote.Emit(struct{}{})
 			return
 		case TransportStop:
+			// A stop is the music, not only this player's hold on it: while there is still a remote to
+			// ask — one that played recently, or one still holding the speaker — it is asked as well, so
+			// its queue ends rather than waiting to be started again. The hold goes either way - the
+			// track is over.
+			//
+			// Dropped before the ask rather than after it, because the ask can put it back: a server
+			// that will only take a pause answers a stop by holding the track again for the screen, and
+			// dropping this player's hold afterwards threw that away. Play on the page then had nowhere
+			// to go, and the track somebody had just stopped could not be picked up from Home Assistant
+			// either.
 			p.held.Store(heldTrack{})
+			if p.remoteLast.Load() || p.remote.playing() {
+				p.OnTransport.Emit(TransportStop)
+			}
 			p.refresh()
 			return
 		}
