@@ -64,7 +64,7 @@ func TestEveryTabDrawsAndMarksItself(t *testing.T) {
 // A save comes back to the tab it was made on, or every save would throw the page back to the first.
 func TestASaveComesBackToItsTab(t *testing.T) {
 	f, c := in(t)
-	to := post(t, f, c, url.Values{"what": {"house"}, "tab": {"sound"}, "word": {"costilla"}})
+	to := post(t, f, c, url.Values{"what": {"house"}, "tab": {"sound"}, "word": {"bluebird"}})
 	if to.Query().Get("tab") != "sound" || to.Query().Get("saved") != "1" {
 		t.Errorf("sent back to %s", to)
 	}

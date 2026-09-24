@@ -11,10 +11,10 @@ import (
 // exactly as it was typed apart from the spaces somebody leaves on the end of a paste.
 func TestKeepingTheHouseWord(t *testing.T) {
 	config.Use(filepath.Join(t.TempDir(), "state.json"))
-	if problem := saveHouse("  costilla \t"); problem != "" {
+	if problem := saveHouse("  bluebird \t"); problem != "" {
 		t.Fatalf("refused: %s", problem)
 	}
-	if got := config.Get().Home.HouseWord; got != "costilla" {
+	if got := config.Get().Home.HouseWord; got != "bluebird" {
 		t.Errorf("kept %q, want it trimmed", got)
 	}
 }
@@ -23,7 +23,7 @@ func TestKeepingTheHouseWord(t *testing.T) {
 // rest of the house.
 func TestClearingTheHouseWord(t *testing.T) {
 	config.Use(filepath.Join(t.TempDir(), "state.json"))
-	if problem := saveHouse("costilla"); problem != "" {
+	if problem := saveHouse("bluebird"); problem != "" {
 		t.Fatalf("refused: %s", problem)
 	}
 	if problem := saveHouse("   "); problem != "" {

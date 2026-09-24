@@ -20,7 +20,7 @@ import (
 func house(t *testing.T) (*Phone, announce.Peer) {
 	t.Helper()
 	config.Use(filepath.Join(t.TempDir(), "state.json"))
-	if err := config.Set().Home().HouseWord("costilla"); err != nil {
+	if err := config.Set().Home().HouseWord("bluebird"); err != nil {
 		t.Fatal(err)
 	}
 	p := Get()

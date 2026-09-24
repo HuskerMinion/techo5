@@ -50,7 +50,7 @@ func TestPickingDevicesByName(t *testing.T) {
 // quiet hours must not hold it back.
 func TestAReminderArrivingIsNotAnAnnouncement(t *testing.T) {
 	config.Use(filepath.Join(t.TempDir(), "state.json"))
-	if err := config.Set().Home().HouseWord("costilla"); err != nil {
+	if err := config.Set().Home().HouseWord("bluebird"); err != nil {
 		t.Fatal(err)
 	}
 	f := &Feature{}
@@ -64,7 +64,7 @@ func TestAReminderArrivingIsNotAnAnnouncement(t *testing.T) {
 		for k, v := range headers {
 			r.Header.Set(k, v)
 		}
-		r.Header.Set(header, "costilla")
+		r.Header.Set(header, "bluebird")
 		w := httptest.NewRecorder()
 		f.receive(w, r)
 		return w.Code
