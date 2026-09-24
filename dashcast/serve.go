@@ -144,17 +144,28 @@ func serve(ctx context.Context, b *browser, g *guard, cfg config, raw net.Conn) 
 		go func() {
 			// Acknowledged once handled, which is what paces Chrome: it sends the next frame only
 			// after this one is acknowledged, so a slow device holds frames back rather than queuing
-			// them.
-			defer chromedp.Run(tab, page.ScreencastFrameAck(f.SessionID))
+			// them - and the acknowledgment waits longer the longer nothing has changed (idle).
+			changed := false
+			defer func() {
+				time.Sleep(d.pace(changed))
+				_ = chromedp.Run(tab, page.ScreencastFrameAck(f.SessionID))
+			}()
 			raw, err := base64.StdEncoding.DecodeString(f.Data)
 			if err != nil {
+				return
+			}
+			// A page that redraws without changing sends the same picture again and again, byte for
+			// byte: that is found without decoding it.
+			if d.same(raw) {
 				return
 			}
 			img, err := png.Decode(bytes.NewReader(raw))
 			if err != nil {
 				return
 			}
-			if err := d.send(d.changes(img), out); err != nil {
+			patches := d.changes(img)
+			changed = len(patches) > 0
+			if err := d.send(patches, out); err != nil {
 				cancel()
 			}
 		}()
@@ -273,10 +284,47 @@ type differ struct {
 	mu   sync.Mutex
 	last *image.RGBA
 
+	// lastRaw is the last frame as Chrome sent it, and still how many frames in a row have changed
+	// nothing on the screen.
+	lastRaw []byte
+	still   int
+
 	// blurred is what went at half size and is still owed at full size, and sharpen the timer that
 	// will send it once the screen settles.
 	blurred []image.Rectangle
 	sharpen *time.Timer
+}
+
+// Pacing: after a frame that changed something, the next is asked for almost at once, so a page
+// that moves - scrolling, a card opening - moves smoothly. After each frame that changed nothing the
+// wait doubles, up to idlePace: a page that only thinks it is changing (a chart redrawing itself,
+// an animation off the screen) costs next to nothing, and a real change still shows within a second.
+const (
+	busyPace = 40 * time.Millisecond
+	idlePace = time.Second
+)
+
+// pace is how long to wait before asking for the next frame.
+func (d *differ) pace(changed bool) time.Duration {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	if changed {
+		d.still = 0
+		return busyPace
+	}
+	d.still = min(d.still+1, 16)
+	return min(busyPace<<d.still, idlePace)
+}
+
+// same is whether a frame is the last one again, byte for byte, keeping it for the next if not.
+func (d *differ) same(raw []byte) bool {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	if bytes.Equal(raw, d.lastRaw) {
+		return true
+	}
+	d.lastRaw = raw
+	return false
 }
 
 // send sends a frame's changes: at full size, or at half size while most of the screen is moving.

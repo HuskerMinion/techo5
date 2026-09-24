@@ -4,6 +4,7 @@ import (
 	"image"
 	"image/color"
 	"testing"
+	"time"
 )
 
 func frame(w, h int) *image.RGBA {
@@ -88,5 +89,31 @@ func TestHAOrigin(t *testing.T) {
 		if got := haOrigin(ha); got != want {
 			t.Errorf("haOrigin(%q) = %q, want %q", ha, got, want)
 		}
+	}
+}
+
+// A frame that changed something asks for the next at once; each unchanged one waits longer, up to a
+// second.
+func TestPace(t *testing.T) {
+	d := &differ{}
+	if got := d.pace(true); got != busyPace {
+		t.Errorf("after a change: %v", got)
+	}
+	var last time.Duration
+	for i := 0; i < 20; i++ {
+		got := d.pace(false)
+		if got < last || got > idlePace {
+			t.Fatalf("unchanged frame %d: %v after %v", i, got, last)
+		}
+		last = got
+	}
+	if last != idlePace {
+		t.Errorf("a long still page waits %v, want %v", last, idlePace)
+	}
+	if got := d.pace(true); got != busyPace {
+		t.Errorf("a change after a still spell: %v", got)
+	}
+	if !(&differ{lastRaw: []byte("x")}).same([]byte("x")) {
+		t.Error("the same bytes were not the same")
 	}
 }
