@@ -77,6 +77,11 @@ func (a *Arbiter) Gave(p Producer) {
 	a.drop(p)
 	now := a.top()
 	held := a.held
+	// A producer that leaves takes the hold on it with it: it forgets being stood down, so if it comes
+	// back while the hold lasts it is a newcomer, and has to be stood down like one.
+	if a.hold == p {
+		a.hold = nil
+	}
 	a.mu.Unlock()
 
 	if now == nil || now == was || held {

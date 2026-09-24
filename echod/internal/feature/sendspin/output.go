@@ -131,6 +131,9 @@ func (o *out) close() {
 	o.mu.Lock()
 	defer o.mu.Unlock()
 	o.ready = false
+	// Closing leaves the speaker's backgrounds, and a hold is not released to one that has left: kept,
+	// the next stream would join already held, silent for as long as it played.
+	o.held = false
 	o.reset()
 }
 

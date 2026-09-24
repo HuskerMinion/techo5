@@ -306,6 +306,7 @@ func (m *Stream) Stop() {
 	m.mu.Lock()
 	t := m.track
 	m.track, m.paused, m.rewind = nil, false, nil
+	m.forget()
 	m.unblock()
 	m.mu.Unlock()
 
@@ -365,6 +366,16 @@ func (m *Stream) Playing() (playing, paused bool) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	return m.track != nil && !m.paused, m.track != nil && m.paused
+}
+
+// forget drops the holds on a player that is leaving the speaker's backgrounds. Nothing will release
+// them once it has gone: a turn's end and a reply's end are passed to the backgrounds there are, and
+// a stopped player is not one. Kept, they held every station started afterwards, silent while Home
+// Assistant was told it was playing. What still holds the speaker when it starts again stands it down
+// afresh as it rejoins. Wants mu.
+func (m *Stream) forget() {
+	m.holds = 0
+	m.duckHeld = false
 }
 
 // block and unblock hold and release the stream. Both want mu.
@@ -438,6 +449,7 @@ func (m *Stream) finished(t *track, itself bool) {
 		return
 	}
 	m.track, m.paused, m.rewind = nil, false, nil
+	m.forget()
 	m.unblock()
 	m.mu.Unlock()
 

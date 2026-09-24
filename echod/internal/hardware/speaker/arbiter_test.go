@@ -33,6 +33,13 @@ func (p *producer) Duck(on bool) {
 	p.ducked = on
 }
 
+// forget is what a real producer does when it gives the speaker back: its holds go with it.
+func (p *producer) forget() {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	p.resumes = p.suspends
+}
+
 func (p *producer) Requeue() {
 	p.mu.Lock()
 	defer p.mu.Unlock()
@@ -243,10 +250,11 @@ func TestAResumingTrackRetakingTheSpeakerIsNotHeldTwice(t *testing.T) {
 	}
 }
 
-// A sound that ends during the hold and starts again before it is over is still the producer the
-// hold stood down: stopping the noise to start another one under a claim must not leave it waiting
-// on a second suspend that one resume cannot answer.
-func TestARetakeAfterGivingBackDuringAHoldIsNotHeldTwice(t *testing.T) {
+// A sound that ends during the hold and starts again before it is over is a new start. A producer
+// forgets its holds when it gives the speaker back - nothing would ever release them, since a hold's end
+// goes to the producers there are - so it has to be stood down again as it rejoins, and come back once
+// when the hold ends.
+func TestARetakeAfterGivingBackDuringAHoldIsStoodDownAgain(t *testing.T) {
 	a := &Arbiter{}
 	track := &producer{}
 	a.Took(track)
@@ -256,8 +264,9 @@ func TestARetakeAfterGivingBackDuringAHoldIsNotHeldTwice(t *testing.T) {
 		t.Fatal("the track ignored the driver taking the speaker")
 	}
 
-	// A stop mid-claim, then a new sound before the claim ends.
+	// A stop mid-claim, which is where the track forgets the hold, then a new sound before it ends.
 	a.Gave(track)
+	track.forget()
 	a.Took(track)
 	if !track.held() {
 		t.Error("a track must stay stood down while the speaker is held")
