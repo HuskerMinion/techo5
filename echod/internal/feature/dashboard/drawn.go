@@ -133,6 +133,7 @@ type look struct {
 	rendered map[int]string
 	history  map[string][]point
 	pictures map[string]image.Image
+	width    int // the screen's, for a card shown only on a wide or a narrow one
 }
 
 // source is where a drawn dashboard comes from.
@@ -163,6 +164,8 @@ type session struct {
 	history  map[string][]point
 	graphs   map[string]int // entity to hours shown, for trimming its history
 	pictures map[string]image.Image
+	width    int
+	reload   bool // the connection was closed to read the dashboard again, not because it failed
 	view     Drawn
 }
 
@@ -176,9 +179,9 @@ type pending struct {
 	on    bool
 }
 
-// Drawn is the drawn dashboard, connecting to Home Assistant if it is not already: the Rooms
-// dashboard, or the one chosen. For the page that is up; CloseDrawn ends it.
-func (f *Feature) Drawn() Drawn {
+// Drawn is the drawn dashboard for a screen width wide, connecting to Home Assistant if it is not
+// already: the Rooms dashboard, or the one chosen. For the page that is up; CloseDrawn ends it.
+func (f *Feature) Drawn(width int) Drawn {
 	path := config.Get().Dashboard.Path
 	f.mu.Lock()
 	s := f.drawn
@@ -190,7 +193,7 @@ func (f *Feature) Drawn() Drawn {
 		if path != "" {
 			src = newLovelace(path)
 		}
-		s = &session{f: f, src: src, states: map[string]hass.LiveEntity{}, rendered: map[int]string{}, pending: map[string]pending{},
+		s = &session{f: f, src: src, width: width, states: map[string]hass.LiveEntity{}, rendered: map[int]string{}, pending: map[string]pending{},
 			history: map[string][]point{}, graphs: map[string]int{}, pictures: map[string]image.Image{}}
 		f.drawn, f.drawnPath = s, path
 		go s.run()
@@ -335,17 +338,22 @@ func (s *session) run() {
 		}
 		if err := s.once(); err != nil {
 			s.mu.Lock()
-			closed := s.stopped
+			quiet := s.stopped || s.reload
 			s.mu.Unlock()
-			if !closed { // closing it for another dashboard is not worth a line
+			if !quiet { // closing it for another dashboard, or to read this one again, is not worth a line
 				slog.Info("drawn dashboard", "err", err)
 			}
 		}
 		s.mu.Lock()
-		stopped = s.stopped
+		stopped, reload := s.stopped, s.reload
+		s.reload = false
 		s.mu.Unlock()
 		if stopped {
 			return
+		}
+		if reload {
+			wait = time.Second
+			continue
 		}
 		time.Sleep(wait)
 		wait = min(wait*2, 30*time.Second)
@@ -442,6 +450,26 @@ func (s *session) once() error {
 			slog.Info("drawn dashboard: a template would not render", "err", err)
 		}
 	}
+	// A dashboard saved in Home Assistant's editor is read again: the connection is closed, and run
+	// opens a new one, which loads it as it now is.
+	if l, ok := s.src.(*lovelaceSource); ok {
+		mine := l.dashboard
+		if mine == "" || mine == "lovelace" {
+			mine = ""
+		}
+		if err := live.SubscribeEvents(fctx, "lovelace_updated", func(data map[string]any) {
+			changed, _ := data["url_path"].(string)
+			if changed == mine {
+				slog.Info("drawn dashboard: changed in Home Assistant, reading it again", "dashboard", l.dashboard)
+				s.mu.Lock()
+				s.reload = true
+				s.mu.Unlock()
+				live.Close()
+			}
+		}); err != nil {
+			slog.Info("drawn dashboard: can't hear dashboard edits", "err", err)
+		}
+	}
 	slog.Info("drawn dashboard following", "entities", len(ids), "templates", len(need.templates),
 		"graphs", len(need.graphs), "pictures", len(need.pictures), "theme", theme.Set)
 	<-live.Done()
@@ -451,7 +479,7 @@ func (s *session) once() error {
 // publish rebuilds the page from what has arrived, and says there is something new to draw.
 func (s *session) publish() {
 	s.mu.Lock()
-	sections := s.src.sections(look{states: s.states, rendered: s.rendered, history: s.history, pictures: s.pictures})
+	sections := s.src.sections(look{states: s.states, rendered: s.rendered, history: s.history, pictures: s.pictures, width: s.width})
 	for i := range sections {
 		for j := range sections[i].Blocks {
 			b := &sections[i].Blocks[j]

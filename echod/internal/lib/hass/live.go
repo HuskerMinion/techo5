@@ -303,3 +303,28 @@ func (l *Live) RenderTemplate(ctx context.Context, text string, vars map[string]
 		return errors.New("hass: the connection ended")
 	}
 }
+
+// SubscribeEvents calls got with the data of each event of a type fired on Home Assistant's bus, on
+// the connection's reader, so it must not block.
+func (l *Live) SubscribeEvents(ctx context.Context, eventType string, got func(data map[string]any)) error {
+	handle := func(raw json.RawMessage) {
+		var ev struct {
+			Data map[string]any `json:"data"`
+		}
+		if json.Unmarshal(raw, &ev) == nil {
+			got(ev.Data)
+		}
+	}
+	_, ch, err := l.send(map[string]any{"type": "subscribe_events", "event_type": eventType}, handle)
+	if err != nil {
+		return err
+	}
+	select {
+	case r := <-ch:
+		return r.err
+	case <-ctx.Done():
+		return ctx.Err()
+	case <-l.done:
+		return errors.New("hass: the connection ended")
+	}
+}

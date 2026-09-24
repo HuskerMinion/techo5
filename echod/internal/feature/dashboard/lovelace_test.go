@@ -136,3 +136,44 @@ func TestBuckets(t *testing.T) {
 		t.Errorf("no history: %v", got)
 	}
 }
+
+// A card's visibility hides it as Home Assistant would: by state, by number, and by screen width,
+// which on the device is the device's own.
+func TestVisibility(t *testing.T) {
+	var cards []any
+	if err := json.Unmarshal([]byte(`[
+	  {"type": "tile", "entity": "light.a", "visibility": [{"condition": "state", "entity": "light.a", "state": "on"}]},
+	  {"type": "tile", "entity": "sensor.t", "visibility": [{"condition": "numeric_state", "entity": "sensor.t", "above": 70}]},
+	  {"type": "tile", "entity": "switch.wide", "visibility": [{"condition": "screen", "media_query": "(min-width: 1024px)"}]},
+	  {"type": "tile", "entity": "switch.who", "visibility": [{"condition": "user", "users": ["abc"]}]},
+	  {"type": "tile", "entity": "switch.either", "visibility": [{"condition": "or", "conditions": [
+	    {"condition": "state", "entity": "light.a", "state": "on"}, {"condition": "state", "entity": "switch.who", "state": "on"}]}]}
+	]`), &cards); err != nil {
+		t.Fatal(err)
+	}
+	c := &compiler{seen: map[string]bool{}, need: needs{graphs: map[string]int{}}}
+	l := &lovelaceSource{sects: [][]node{c.cards(cards)}}
+	lk := look{states: map[string]hass.LiveEntity{
+		"light.a":  {ID: "light.a", State: "off", Attrs: map[string]any{}},
+		"sensor.t": {ID: "sensor.t", State: "72", Attrs: map[string]any{}},
+	}, width: 960}
+	names := func() []string {
+		var out []string
+		for _, s := range l.sections(lk) {
+			for _, b := range s.Blocks {
+				for _, t := range b.Tiles {
+					out = append(out, t.Name)
+				}
+			}
+		}
+		return out
+	}
+	if got := names(); len(got) != 2 || got[0] != "sensor.t" || got[1] != "switch.who" {
+		t.Errorf("light off, 960 wide: %v", got)
+	}
+	lk.states["light.a"] = hass.LiveEntity{ID: "light.a", State: "on", Attrs: map[string]any{}}
+	lk.width = 1280
+	if got := names(); len(got) != 5 {
+		t.Errorf("light on, 1280 wide: %v", got)
+	}
+}

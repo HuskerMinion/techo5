@@ -38,6 +38,8 @@ func newLovelace(path string) *lovelaceSource {
 }
 
 func (l *lovelaceSource) load(ctx context.Context, live *hass.Live) (needs, error) {
+	// Loaded again on every connection, and after an edit: what was read last time goes.
+	l.sects, l.fallback = nil, nil
 	cmd := map[string]any{"type": "lovelace/config"}
 	if l.dashboard != "" && l.dashboard != "lovelace" {
 		cmd["url_path"] = l.dashboard
@@ -71,9 +73,14 @@ func (l *lovelaceSource) load(ctx context.Context, live *hass.Live) (needs, erro
 	if sections, ok := view["sections"].([]any); ok {
 		for _, s := range sections {
 			if sm, ok := s.(raw); ok {
-				if nodes := c.cards(sm["cards"]); len(nodes) > 0 {
-					l.sects = append(l.sects, nodes)
+				nodes := c.cards(sm["cards"])
+				if len(nodes) == 0 {
+					continue
 				}
+				if vis := c.conditions(sm["visibility"]); len(vis) > 0 {
+					nodes = []node{condNode{conds: vis, child: group(nodes)}}
+				}
+				l.sects = append(l.sects, nodes)
 			}
 		}
 	}
@@ -195,7 +202,20 @@ var graphCards = map[string]bool{
 	"history-graph": true, "statistics-graph": true, "custom:mini-graph-card": true, "custom:apexcharts-card": true,
 }
 
+// card compiles one card, behind its visibility conditions when it has any: Home Assistant hides a
+// card whose conditions are not met, and so does the device.
 func (c *compiler) card(card raw) node {
+	n := c.cardItself(card)
+	if n == nil {
+		return nil
+	}
+	if vis := c.conditions(card["visibility"]); len(vis) > 0 {
+		return condNode{conds: vis, child: n}
+	}
+	return n
+}
+
+func (c *compiler) cardItself(card raw) node {
 	kind := str(card, "type")
 	switch {
 	case kind == "heading" || kind == "custom:mushroom-title-card":
@@ -328,17 +348,7 @@ func (c *compiler) card(card raw) node {
 		if n.child == nil {
 			return nil
 		}
-		conds, _ := card["conditions"].([]any)
-		for _, x := range conds {
-			if m, ok := x.(raw); ok {
-				cd := cond{entity: str(m, "entity"), state: listOf(m["state"]), not: listOf(m["state_not"])}
-				if cd.entity == "" {
-					continue // screen, user and the like: always true here
-				}
-				c.follow(cd.entity)
-				n.conds = append(n.conds, cd)
-			}
-		}
+		n.conds = c.conditions(card["conditions"])
 		return n
 	}
 	if kind == "" {
@@ -680,9 +690,138 @@ func (p pictureNode) blocks(l look) []Block {
 	return []Block{{Picture: &Picture{Name: p.name, Image: l.pictures[p.key]}}}
 }
 
+// cond is one of Home Assistant's conditions, as a conditional card and a card's visibility use
+// them: an entity's state or number, the screen's width, or several of those together. A user
+// condition is always met: the device is not signed in as anybody.
 type cond struct {
+	kind       string // state, numeric_state, screen, and, or, not, always
 	entity     string
 	state, not []string
+	above      *float64
+	below      *float64
+	minW, maxW int // a screen condition's widths; 0 for no limit
+	subs       []cond
+}
+
+// conditions reads a list of conditions, in either of the forms Home Assistant writes them: a
+// conditional card's old {entity, state} or the {condition: ...} everything else uses.
+func (c *compiler) conditions(v any) []cond {
+	list, _ := v.([]any)
+	var out []cond
+	for _, x := range list {
+		m, ok := x.(raw)
+		if !ok {
+			continue
+		}
+		kind := str(m, "condition")
+		if kind == "" {
+			kind = "state"
+		}
+		cd := cond{kind: kind}
+		switch kind {
+		case "state":
+			cd.entity, cd.state, cd.not = str(m, "entity"), listOf(m["state"]), listOf(m["state_not"])
+			if cd.entity == "" {
+				continue
+			}
+			c.follow(cd.entity)
+		case "numeric_state":
+			cd.entity = str(m, "entity")
+			if cd.entity == "" {
+				continue
+			}
+			c.follow(cd.entity)
+			if f, ok := number64(m["above"]); ok {
+				cd.above = &f
+			}
+			if f, ok := number64(m["below"]); ok {
+				cd.below = &f
+			}
+		case "screen":
+			cd.minW, cd.maxW = widths(str(m, "media_query"))
+		case "and", "or", "not":
+			cd.subs = c.conditions(m["conditions"])
+		default:
+			cd.kind = "always" // user, location and the like: nothing here to hold against
+		}
+		out = append(out, cd)
+	}
+	return out
+}
+
+func number64(v any) (float64, bool) {
+	switch x := v.(type) {
+	case float64:
+		return x, true
+	case string:
+		f, err := strconv.ParseFloat(x, 64)
+		return f, err == nil
+	}
+	return 0, false
+}
+
+var mediaWidth = regexp.MustCompile(`\((min|max)-width:\s*(\d+)px\)`)
+
+// widths is a media query's width limits: "(min-width: 1024px)", "(max-width: 767px)", or both.
+func widths(q string) (lo, hi int) {
+	for _, m := range mediaWidth.FindAllStringSubmatch(q, -1) {
+		n, _ := strconv.Atoi(m[2])
+		if m[1] == "min" {
+			lo = n
+		} else {
+			hi = n
+		}
+	}
+	return lo, hi
+}
+
+// met is whether a condition holds now.
+func (cd cond) met(l look) bool {
+	switch cd.kind {
+	case "state":
+		s := l.states[cd.entity].State
+		if len(cd.state) > 0 && !contains(cd.state, s) {
+			return false
+		}
+		return !contains(cd.not, s)
+	case "numeric_state":
+		v, err := strconv.ParseFloat(l.states[cd.entity].State, 64)
+		if err != nil {
+			return false
+		}
+		return (cd.above == nil || v > *cd.above) && (cd.below == nil || v < *cd.below)
+	case "screen":
+		if l.width == 0 {
+			return true
+		}
+		return (cd.minW == 0 || l.width >= cd.minW) && (cd.maxW == 0 || l.width <= cd.maxW)
+	case "and":
+		return all(cd.subs, l)
+	case "or":
+		for _, s := range cd.subs {
+			if s.met(l) {
+				return true
+			}
+		}
+		return len(cd.subs) == 0
+	case "not":
+		for _, s := range cd.subs {
+			if s.met(l) {
+				return false
+			}
+		}
+		return true
+	}
+	return true
+}
+
+func all(conds []cond, l look) bool {
+	for _, c := range conds {
+		if !c.met(l) {
+			return false
+		}
+	}
+	return true
 }
 
 type condNode struct {
@@ -691,14 +830,8 @@ type condNode struct {
 }
 
 func (c condNode) blocks(l look) []Block {
-	for _, cd := range c.conds {
-		s := l.states[cd.entity].State
-		if len(cd.state) > 0 && !contains(cd.state, s) {
-			return nil
-		}
-		if contains(cd.not, s) {
-			return nil
-		}
+	if !all(c.conds, l) {
+		return nil
 	}
 	return c.child.blocks(l)
 }
