@@ -475,6 +475,9 @@ func (r *paint) pictureCard(b image.Rectangle, p dashboard.Picture, pal dashPal)
 		xdraw.ApproxBiLinear.Scale(r.dst, inner, p.Image, p.Image.Bounds(), draw.Src, nil)
 	} else {
 		msg := "Loading the picture…"
+		if p.TooLarge {
+			msg = "Too large to show here"
+		}
 		r.text(fc.sub, msg, b.Min.X+(b.Dx()-r.width(fc.sub, msg))/2, b.Min.Y+b.Dy()/2, pal.sub)
 	}
 	if p.Name != "" {

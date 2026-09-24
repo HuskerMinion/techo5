@@ -200,7 +200,11 @@ func (f *Feature) Run(ctx context.Context) error {
 		case <-lists.C:
 		}
 		lists.Reset(boardsEvery)
-		if f.Mode() == config.DashboardOff || !hass.Get().Ready() {
+		if f.Mode() == config.DashboardOff {
+			continue
+		}
+		if !hass.Get().Ready() {
+			lists.Reset(time.Minute) // soon, rather than at the next regular look
 			continue
 		}
 		f.listOnce(ctx)
@@ -208,16 +212,25 @@ func (f *Feature) Run(ctx context.Context) error {
 }
 
 // closeUnused closes a stream or a drawn session the page has not asked for in unused.
+//
+// Taken out under the lock, so a session the page asked for again in the meantime is a new one and
+// is left alone.
 func (f *Feature) closeUnused() {
 	f.mu.Lock()
-	stale := f.stream != nil && time.Since(f.streamUsed) > unused
-	staleDrawn := f.drawn != nil && time.Since(f.drawnUsed) > unused
-	f.mu.Unlock()
-	if stale {
-		f.Close()
+	var s *stream
+	var d *session
+	if f.stream != nil && time.Since(f.streamUsed) > unused {
+		s, f.stream = f.stream, nil
 	}
-	if staleDrawn {
-		f.CloseDrawn()
+	if f.drawn != nil && time.Since(f.drawnUsed) > unused {
+		d, f.drawn = f.drawn, nil
+	}
+	f.mu.Unlock()
+	if s != nil {
+		s.close()
+	}
+	if d != nil {
+		d.close()
 	}
 }
 

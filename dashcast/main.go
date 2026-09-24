@@ -59,7 +59,7 @@ func main() {
 	defer b.close()
 
 	g := &guard{cfg: cfg}
-	warnIfAdmin(ctx, cfg)
+	go warnIfAdmin(ctx, cfg) // a question for the log, which starting up does not wait on
 	ln, err := net.Listen("tcp", cfg.listen)
 	if err != nil {
 		slog.Error("listening failed", "addr", cfg.listen, "err", err)

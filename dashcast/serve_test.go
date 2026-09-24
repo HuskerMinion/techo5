@@ -75,3 +75,18 @@ func TestFirstPart(t *testing.T) {
 	}
 }
 
+// Home Assistant's origin is written as a browser writes location.origin.
+func TestHAOrigin(t *testing.T) {
+	for ha, want := range map[string]string{
+		"http://192.0.2.10:8123":            "http://192.0.2.10:8123",
+		"http://HA.Local:8123/":             "http://ha.local:8123",
+		"https://ha.example.com:443":        "https://ha.example.com",
+		"http://ha.example.com:80/lovelace": "http://ha.example.com",
+		"HTTPS://Ha.Example.com":            "https://ha.example.com",
+		"http://[2001:db8::1]:8123":         "http://[2001:db8::1]:8123",
+	} {
+		if got := haOrigin(ha); got != want {
+			t.Errorf("haOrigin(%q) = %q, want %q", ha, got, want)
+		}
+	}
+}
