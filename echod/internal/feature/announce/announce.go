@@ -17,12 +17,14 @@ package announce
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"log/slog"
 	"net"
 	"net/http"
 	"slices"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -180,7 +182,14 @@ func (f *Feature) receive(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "that was not an announcement", http.StatusBadRequest)
 		return
 	}
-	legacy, err := verify(r, config.Get().Home.HouseWord, raw, time.Now())
+	now := receiveNow()
+	legacy, err := verify(r, config.Get().Home.HouseWord, raw, now)
+	if errors.Is(err, errSkew) {
+		slog.Info("announcement signed by another clock: sending ours back", "from", r.RemoteAddr)
+		w.Header().Set(timeHeader, strconv.FormatInt(now.Unix(), 10))
+		http.Error(w, "our clocks disagree", http.StatusConflict)
+		return
+	}
 	if err != nil {
 		slog.Warn("announcement refused", "from", r.RemoteAddr, "err", err)
 		http.Error(w, "not this house", http.StatusForbidden)
@@ -442,24 +451,35 @@ func deliver(word string, to []Peer, m Message) {
 func post(p Peer, word string, body []byte, headers map[string]string) error {
 	ctx, cancel := context.WithTimeout(context.Background(), sendWait)
 	defer cancel()
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost,
-		fmt.Sprintf("http://%s/announce", net.JoinHostPort(p.Address, fmt.Sprint(p.Port))), bytes.NewReader(body))
-	if err != nil {
-		return err
+	addr := net.JoinHostPort(p.Address, fmt.Sprint(p.Port))
+	// Twice at most: the second time signed by the other device's clock, when it says ours is out.
+	for try := 0; ; try++ {
+		req, err := http.NewRequestWithContext(ctx, http.MethodPost, "http://"+addr+"/announce", bytes.NewReader(body))
+		if err != nil {
+			return err
+		}
+		for k, v := range headers {
+			req.Header.Set(k, v)
+		}
+		req.Header.Set(authHeader, sign(word, http.MethodPost, "/announce", headers, body, time.Now().Add(offsetFor(addr))))
+		resp, err := http.DefaultClient.Do(req)
+		if err != nil {
+			return err
+		}
+		_ = resp.Body.Close()
+		if resp.StatusCode == http.StatusConflict && try == 0 {
+			if theirs, err := strconv.ParseInt(resp.Header.Get(timeHeader), 10, 64); err == nil {
+				off := time.Until(time.Unix(theirs, 0))
+				setOffset(addr, off)
+				slog.Info("announce: signing by another device's clock", "device", p.Name, "off_by", off.Round(time.Second))
+				continue
+			}
+		}
+		if resp.StatusCode >= 300 {
+			return fmt.Errorf("%s said %s", p.Name, resp.Status)
+		}
+		return nil
 	}
-	for k, v := range headers {
-		req.Header.Set(k, v)
-	}
-	req.Header.Set(authHeader, sign(word, http.MethodPost, "/announce", headers, body, time.Now()))
-	resp, err := http.DefaultClient.Do(req)
-	if err != nil {
-		return err
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode >= 300 {
-		return fmt.Errorf("%s said %s", p.Name, resp.Status)
-	}
-	return nil
 }
 
 func clip(s string, n int) string {

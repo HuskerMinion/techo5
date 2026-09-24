@@ -216,8 +216,8 @@ another TECHO5 device the house already knows, calling from that device's own ad
 caller rings as usual. The chime plays at a minimum volume, so a turned-down room still hears it.
 Announcements between devices are signed with the house word rather than carrying it, so it never
 crosses the network. Devices from before that change still send it as it is, so update every device
-together: a device on the older release also turns away announcements from an updated one. On a Dot, which has no screen, both are the
-Home Assistant switches, and the action button answers and hangs up.
+together: a device on the older release also turns away announcements from an updated one. On a Dot,
+which has no screen, both are the Home Assistant switches, and the action button answers and hangs up.
 
 ## How it works
 

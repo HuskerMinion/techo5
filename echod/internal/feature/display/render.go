@@ -620,8 +620,6 @@ func playingWord(s scene) string {
 	return ""
 }
 
-// playingButton is where the footer's word for the music sits: the right end of the bottom edge. The
-// whole of it is the target, because the word moves when a connected device is named beside it.
 // callButtonRect is the clock's Call button: a round one in the bottom-left corner, in the gap between
 // the date and the footer's line. At 76 it reached up into the date on a Show 5, where a long date
 // line starts near the left edge and a tap on its first letters opened a call; 56 fits under it, and
@@ -643,6 +641,8 @@ func (r *renderer) callButtonDraw() {
 	r.mdiIcon("phone", b.Min.X+(b.Dx()-icon)/2, b.Min.Y+(b.Dy()-icon)/2, 32, cream)
 }
 
+// playingButton is where the footer's word for the music sits: the right end of the bottom edge. The
+// whole of it is the target, because the word moves when a connected device is named beside it.
 func (r *renderer) playingButton() image.Rectangle {
 	return image.Rect(r.w-r.s(280), r.h-r.s(42), r.w, r.h-r.s(4))
 }

@@ -27,6 +27,9 @@ const (
 	authHeader = "X-Techo5-Auth"
 	authLabel  = "techo5-announce hmac"
 
+	// timeHeader is the receiver's clock, sent back when a signature was good but its time was not.
+	timeHeader = "X-Techo5-Time"
+
 	// authSkew is how far a sender's clock may be from this one's. The devices keep time from the
 	// network, so a few minutes is generous; the nonces seen within it are remembered.
 	authSkew = 5 * time.Minute
@@ -64,6 +67,38 @@ func sign(word, method, path string, headers map[string]string, body []byte, now
 }
 
 var errNotThisHouse = errors.New("announce: not signed by this house")
+
+// errSkew is a signature made at a time too far from this device's. The clocks can disagree by years:
+// a device that restarted with the internet down has not set its clock yet, and announcing is meant
+// to work then above all. So the receiver says what time it makes it (timeHeader), and the sender
+// signs again by that clock (offsets). Replay is still refused: the time is checked against the
+// receiver's own clock and the nonce is remembered, whichever clock is right.
+var errSkew = errors.New("announce: signed at a time too far from this device's clock")
+
+// receiveNow is the receiving side's clock; a test moves it.
+var receiveNow = time.Now
+
+// offsets are how far each device's clock is from this one's, as the last one to say so said: added
+// to the time an announcement to it is signed at.
+var offsets struct {
+	sync.Mutex
+	by map[string]time.Duration
+}
+
+func offsetFor(addr string) time.Duration {
+	offsets.Lock()
+	defer offsets.Unlock()
+	return offsets.by[addr]
+}
+
+func setOffset(addr string, d time.Duration) {
+	offsets.Lock()
+	defer offsets.Unlock()
+	if offsets.by == nil {
+		offsets.by = map[string]time.Duration{}
+	}
+	offsets.by[addr] = d
+}
 
 // nonces are the ones seen lately, so a signed announcement heard on the network cannot be replayed.
 var nonces struct {
@@ -119,14 +154,15 @@ func verify(r *http.Request, word string, body []byte, now time.Time) (legacy bo
 	if err != nil {
 		return false, errNotThisHouse
 	}
-	if d := now.Sub(time.Unix(sec, 0)); d > authSkew || d < -authSkew {
-		return false, errors.New("announce: sent too long ago, or a clock is wrong")
-	}
 	want := hmac.New(sha256.New, authKey(word))
 	want.Write(signed(ts, nonce, r.Method, r.URL.Path, r.Header.Get, body))
 	sum, err := hex.DecodeString(got)
 	if err != nil || !hmac.Equal(sum, want.Sum(nil)) {
 		return false, errNotThisHouse
+	}
+	// The time after the signature: only a sender with the word learns this device's clock.
+	if d := now.Sub(time.Unix(sec, 0)); d > authSkew || d < -authSkew {
+		return false, errSkew
 	}
 	if !fresh(nonce, now) {
 		return false, errors.New("announce: heard this one already")
