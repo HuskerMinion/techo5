@@ -28,8 +28,6 @@ const (
 	spotDashForget = 10 * time.Minute
 	spotDashAway   = 2 * time.Minute
 
-	// menuHold is how long a still finger has to stay down on the dashboard to bring the menu up.
-	menuHold = 600 * time.Millisecond
 )
 
 // toggleDashboard is the menu's Dashboard item: up if it is down, down if it is up.
@@ -119,7 +117,7 @@ func (d *Display) dashGestureSpot(g touch.Gesture) {
 		}
 	case touch.Hold:
 		d.mu.Lock()
-		d.dashHoldAt, d.dashMoved = time.Now(), false
+		d.dashMoved = false
 		d.dashDrag = drawnDrag{startScroll: d.dashScroll}
 		d.mu.Unlock()
 		if streamed {
@@ -137,8 +135,11 @@ func (d *Display) dashGestureSpot(g touch.Gesture) {
 			d.drawnMove(g.X, g.Y)
 		}
 	case touch.Release:
+		// A finger that moves is reported as a Hold and at once a Drag; one held still is reported as a
+		// Hold only once it has been down long enough, and then nothing until it lifts. So a Hold with
+		// no Drag after it is the long press, whenever the finger lifts.
 		d.mu.Lock()
-		held := !d.dashMoved && time.Since(d.dashHoldAt) >= menuHold
+		held := !d.dashMoved
 		d.mu.Unlock()
 		if streamed {
 			f.Touch("up", g.X, g.Y)

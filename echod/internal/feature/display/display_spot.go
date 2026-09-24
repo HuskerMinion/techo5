@@ -127,7 +127,6 @@ type Display struct {
 	dashDrag      drawnDrag
 	dashAdjust    dashAdjusting
 	dashAwayUntil time.Time
-	dashHoldAt    time.Time
 	dashMoved     bool
 	autoOn  bool
 	level   float64
