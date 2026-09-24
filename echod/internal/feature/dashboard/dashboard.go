@@ -21,6 +21,7 @@ import (
 
 	"github.com/HuskerMinion/techo5/echod/internal/component"
 	"github.com/HuskerMinion/techo5/echod/internal/config"
+	"github.com/HuskerMinion/techo5/echod/internal/feature/voice"
 	"github.com/HuskerMinion/techo5/echod/internal/lib/hass"
 	"github.com/HuskerMinion/techo5/echod/internal/lib/hook"
 )
@@ -50,7 +51,20 @@ type Feature struct {
 	stream    *stream  // while the page is up in streamed mode
 	drawn     *session // while the page is up drawn, for drawnPath
 	drawnPath string
+
+	// When the page last asked for each: a session nobody has asked for in a while is closed, however
+	// the page went away - a turn, the screen going dark, the night.
+	streamUsed, drawnUsed time.Time
+
+	// look asks Run to list Home Assistant's dashboards now; relist is a changed list whose reconnect
+	// is waiting for the device to be idle.
+	look   chan struct{}
+	relist bool
 }
+
+// unused is how long a session stays open with nothing asking for it: long enough to outlast a turn,
+// so the dashboard is still there when the answer is done.
+const unused = time.Minute
 
 var (
 	once   sync.Once
@@ -60,6 +74,7 @@ var (
 func Get() *Feature {
 	once.Do(func() {
 		f := &Feature{
+			look: make(chan struct{}, 1),
 			mode: &esphome.Select{
 				Base: esphome.Base{
 					ObjectID: "screen_dashboard",
@@ -155,49 +170,93 @@ func (f *Feature) chooseBoard(label string) {
 	f.setMode(f.Mode())
 }
 
-// Run asks Home Assistant what dashboards there are, now and every so often, and when that has
-// changed puts the new list up. Home Assistant reads a list's choices once per connection, so a
-// changed list is a reconnect; an unchanged one, the usual case, is nothing.
+// Run keeps two things: sessions nobody is using are closed, and the list of Home Assistant's
+// dashboards is kept current while the dashboard is on at all. Home Assistant reads a list's choices
+// once per connection, so a changed list is a reconnect, which drops the link to Home Assistant for a
+// moment - so it waits for a moment when the device is not in a turn. An unchanged list, the usual
+// answer, costs nothing.
 func (f *Feature) Run(ctx context.Context) error {
-	t := time.NewTimer(20 * time.Second) // Home Assistant is usually not reachable the moment this starts
-	defer t.Stop()
+	lists := time.NewTimer(20 * time.Second) // Home Assistant is usually not reachable the moment this starts
+	defer lists.Stop()
+	tick := time.NewTicker(15 * time.Second)
+	defer tick.Stop()
 	for {
 		select {
 		case <-ctx.Done():
 			return nil
-		case <-t.C:
+		case <-tick.C:
+			f.closeUnused()
+			f.mu.Lock()
+			relist := f.relist && !voice.Get().Busy()
+			if relist {
+				f.relist = false
+			}
+			f.mu.Unlock()
+			if relist {
+				component.Reconnect.Emit(struct{}{})
+			}
+			continue
+		case <-f.look:
+		case <-lists.C:
 		}
-		t.Reset(boardsEvery)
-		if !hass.Get().Ready() {
-			t.Reset(time.Minute)
+		lists.Reset(boardsEvery)
+		if f.Mode() == config.DashboardOff || !hass.Get().Ready() {
 			continue
 		}
-		cctx, cancel := context.WithTimeout(ctx, 30*time.Second)
-		boards, err := hass.Get().Boards(cctx)
-		cancel()
-		if err != nil {
-			slog.Info("dashboard: listing Home Assistant's dashboards failed", "err", err)
-			continue
-		}
-		known := make([]config.DashboardChoice, 0, len(boards))
-		for _, b := range boards {
-			known = append(known, config.DashboardChoice{Label: b.Label, Path: b.Path, Streamed: b.Streamed})
-		}
-		if slices.Equal(known, config.Get().Dashboard.Known) {
-			continue
-		}
-		if err := config.Set().Dashboard().Known(known); err != nil {
-			slog.Error("saving the dashboards failed", "err", err)
-			continue
-		}
-		slog.Info("dashboard: Home Assistant's dashboards", "count", len(known))
-		f.listBoards(config.Get().Dashboard)
-		component.Reconnect.Emit(struct{}{})
+		f.listOnce(ctx)
 	}
+}
+
+// closeUnused closes a stream or a drawn session the page has not asked for in unused.
+func (f *Feature) closeUnused() {
+	f.mu.Lock()
+	stale := f.stream != nil && time.Since(f.streamUsed) > unused
+	staleDrawn := f.drawn != nil && time.Since(f.drawnUsed) > unused
+	f.mu.Unlock()
+	if stale {
+		f.Close()
+	}
+	if staleDrawn {
+		f.CloseDrawn()
+	}
+}
+
+// listOnce asks Home Assistant for its dashboards, and when the list has changed keeps it and asks
+// for the reconnect that shows it.
+func (f *Feature) listOnce(ctx context.Context) {
+	cctx, cancel := context.WithTimeout(ctx, 30*time.Second)
+	boards, err := hass.Get().Boards(cctx)
+	cancel()
+	if err != nil {
+		slog.Info("dashboard: listing Home Assistant's dashboards failed", "err", err)
+		return
+	}
+	known := make([]config.DashboardChoice, 0, len(boards))
+	for _, b := range boards {
+		known = append(known, config.DashboardChoice{Label: b.Label, Path: b.Path, Streamed: b.Streamed})
+	}
+	if slices.Equal(known, config.Get().Dashboard.Known) {
+		return
+	}
+	if err := config.Set().Dashboard().Known(known); err != nil {
+		slog.Error("saving the dashboards failed", "err", err)
+		return
+	}
+	slog.Info("dashboard: Home Assistant's dashboards", "count", len(known))
+	f.listBoards(config.Get().Dashboard)
+	f.mu.Lock()
+	f.relist = true
+	f.mu.Unlock()
 }
 
 // setMode applies a mode: a stream open in the old one is closed, and the page asks again.
 func (f *Feature) setMode(m config.DashboardMode) config.DashboardMode {
+	if m != config.DashboardOff {
+		select { // turned on: the list is wanted now, not at the next look
+		case f.look <- struct{}{}:
+		default:
+		}
+	}
 	f.Close()
 	f.CloseDrawn()
 	f.Changed.Emit(struct{}{})

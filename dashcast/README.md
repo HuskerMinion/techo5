@@ -68,7 +68,13 @@ touch. So treat the token and the key with care:
   wrong key simply cannot connect.
 - **Custom cards run with the token.** A custom card's code runs in dashcast's browser, as that
   user, exactly as it would in yours. Install custom cards you trust, as you would anyway.
-- **The key.** Make it long and random: `openssl rand -base64 24` is one way.
+- **The key.** At least 16 characters, and random: `openssl rand -base64 24` is one way. dashcast
+  will not start with a shorter one.
+- **Dashboards only.** Webpage dashboards are not shown, because they are often a tool (a code
+  editor, the ESPHome dashboard) that anyone with the key could then use. Neither are Settings, the
+  add-ons or Developer Tools.
+- **Up to 8 screens at once.** Each is a browser tab of a couple of hundred megabytes; a ninth is
+  told the server is full.
 
 ## Settings
 

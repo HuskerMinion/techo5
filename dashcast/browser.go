@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"net/url"
 	"os"
 	"os/exec"
 
@@ -85,8 +86,12 @@ func (b *browser) open(ctx context.Context, path string, w, h int, allowed map[s
 		firsts = append(firsts, p)
 	}
 	list, _ := json.Marshal(firsts)
-	script := fmt.Sprintf(`localStorage.setItem("hassTokens", %s); localStorage.setItem("dockedSidebar", '"always_hidden"');
-(() => {
+	// Only in Home Assistant's own top-level page: a card can frame another page, and one on the same
+	// machine would otherwise be handed the token too.
+	origin, _ := json.Marshal(haOrigin(b.cfg.ha))
+	script := fmt.Sprintf(`(() => {
+  if (window.top !== window || location.origin !== %s) return;
+  localStorage.setItem("hassTokens", %s); localStorage.setItem("dockedSidebar", '"always_hidden"');
   const allowed = new Set(%s);
   const ok = (u) => {
     try {
@@ -99,7 +104,7 @@ func (b *browser) open(ctx context.Context, path string, w, h int, allowed map[s
     const real = history[name].bind(history);
     history[name] = (state, title, url) => { if (url === undefined || url === null || ok(url)) return real(state, title, url); };
   }
-})();`, quoted, list)
+})();`, origin, quoted, list)
 
 	err := chromedp.Run(tab,
 		chromedp.ActionFunc(func(ctx context.Context) error {
@@ -117,4 +122,13 @@ func (b *browser) open(ctx context.Context, path string, w, h int, allowed map[s
 		return nil, nil, err
 	}
 	return tab, func() { stop(); cancel() }, nil
+}
+
+// haOrigin is Home Assistant's address as a page sees its own origin: scheme, host and port.
+func haOrigin(ha string) string {
+	u, err := url.Parse(ha)
+	if err != nil {
+		return ha
+	}
+	return u.Scheme + "://" + u.Host
 }

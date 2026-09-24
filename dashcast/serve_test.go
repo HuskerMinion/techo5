@@ -63,8 +63,10 @@ func TestShrinkAverages(t *testing.T) {
 // A path is its panel, and nothing that could walk anywhere else.
 func TestFirstPart(t *testing.T) {
 	for path, want := range map[string]string{
-		"/lovelace/0": "lovelace", "/home-refresh/lights?edit=1": "home-refresh", "energy": "energy",
+		"/lovelace/0": "lovelace", "/home-refresh/lights": "home-refresh", "energy": "energy",
 		"/config/dashboard": "config", "/../config": "", "//evil.example/x": "", "/": "", `\config`: "",
+		"/lovelace/%2e%2e/config": "", "/lovelace/.	./config": "", "/lovelace/./x": "", "/lights?edit=1": "",
+		"/lovelace/ 0": "", "": "",
 	} {
 		got, ok := firstPart(path)
 		if got != want || ok != (want != "") {
@@ -72,3 +74,4 @@ func TestFirstPart(t *testing.T) {
 		}
 	}
 }
+

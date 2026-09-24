@@ -71,8 +71,6 @@ func (d *Display) dashSceneSpot(s *roundScene) {
 
 	if want && mode == config.DashboardStreamed {
 		s.dash = f.Stream(d.r.w, d.r.h)
-	} else {
-		f.Close()
 	}
 	if want && mode == config.DashboardDrawn {
 		s.drawn = f.Drawn(spotDashArea.Dx())
@@ -80,13 +78,11 @@ func (d *Display) dashSceneSpot(s *roundScene) {
 		if path := config.Get().Dashboard.Path; path != d.dashScrollFor {
 			d.dashScroll, d.dashScrollFor = 0, path
 		}
-		if d.r.dashContent > 0 {
-			d.dashScroll = min(d.dashScroll, max(d.r.dashContent-d.r.h, 0))
+		if _, content := d.r.dash(); content > 0 {
+			d.dashScroll = min(d.dashScroll, max(content-d.r.h, 0))
 		}
 		s.dashScroll, s.dashAdjust = d.dashScroll, d.dashAdjust
 		d.mu.Unlock()
-	} else {
-		f.CloseDrawn()
 	}
 
 	d.mu.Lock()

@@ -16,6 +16,10 @@ RUN apt-get update \
  && apt-get install -y --no-install-recommends fonts-noto-core fonts-noto-color-emoji ca-certificates \
  && rm -rf /var/lib/apt/lists/*
 COPY --from=build /dashcast /usr/local/bin/dashcast
+# Not as root: Chrome's own sandbox is off in a container, so the container is the only wall, and a
+# page that broke out of Chrome would find itself nobody.
+USER 65534:65534
+ENV HOME=/tmp
 ENV LISTEN=:9555
 EXPOSE 9555
 ENTRYPOINT ["/usr/local/bin/dashcast"]

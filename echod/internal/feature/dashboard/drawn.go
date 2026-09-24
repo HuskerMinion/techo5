@@ -14,6 +14,7 @@ import (
 
 	"github.com/HuskerMinion/techo5/echod/internal/config"
 	"github.com/HuskerMinion/techo5/echod/internal/lib/hass"
+	"github.com/HuskerMinion/techo5/echod/internal/lib/safe"
 )
 
 // A drawn dashboard is sections laid out in columns, as Home Assistant lays out its own, each a stack
@@ -166,6 +167,27 @@ type session struct {
 	width    int
 	reload   bool // the connection was closed to read the dashboard again, not because it failed
 	view     Drawn
+
+	// soon is a rebuild waiting to happen: a house changes a lot of entities at once, and the page
+	// is rebuilt a few times a second at most, not once for each of them.
+	soon *time.Timer
+}
+
+// publishEvery is how often the page is rebuilt at most while entities change.
+const publishEvery = 250 * time.Millisecond
+
+// publishSoon rebuilds the page within publishEvery, once however many changes arrive meanwhile.
+func (s *session) publishSoon() {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.soon == nil {
+		s.soon = time.AfterFunc(publishEvery, func() {
+			s.mu.Lock()
+			s.soon = nil
+			s.mu.Unlock()
+			s.publish()
+		})
+	}
 }
 
 // pending is what a tap or a slide asked of an entity, shown at once rather than when Home
@@ -193,7 +215,7 @@ func (f *Feature) Drawn(width int) Drawn {
 	s := f.drawn
 	if s == nil || f.drawnPath != path {
 		if s != nil {
-			go s.close()
+			safe.Go("drawn dashboard close", s.close)
 		}
 		var src source = &roomsSource{}
 		if path != "" {
@@ -202,8 +224,9 @@ func (f *Feature) Drawn(width int) Drawn {
 		s = &session{f: f, src: src, width: width, states: map[string]hass.LiveEntity{}, rendered: map[int]string{}, pending: map[string]pending{},
 			history: map[string][]point{}, graphs: map[string]int{}, pictures: map[string]image.Image{}}
 		f.drawn, f.drawnPath = s, path
-		go s.run()
+		safe.Go("drawn dashboard", s.run)
 	}
+	f.drawnUsed = time.Now()
 	f.mu.Unlock()
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -408,11 +431,13 @@ func (s *session) once() error {
 	s.mu.Unlock()
 	s.publish()
 
-	go keepPictures(ctx, need.pictures, func(key string, img image.Image) {
-		s.mu.Lock()
-		s.pictures[key] = img
-		s.mu.Unlock()
-		s.publish()
+	safe.Go("dashboard pictures", func() {
+		keepPictures(ctx, need.pictures, func(key string, img image.Image) {
+			s.mu.Lock()
+			s.pictures[key] = img
+			s.mu.Unlock()
+			s.publishSoon()
+		})
 	})
 
 	fctx, fcancel := context.WithTimeout(ctx, 30*time.Second)
@@ -425,21 +450,16 @@ func (s *session) once() error {
 			delete(s.pending, e.ID)
 			if hours, graphed := s.graphs[e.ID]; graphed {
 				if v, err := strconv.ParseFloat(e.State, 64); err == nil {
-					h := append(s.history[e.ID], point{at: time.Now(), v: v})
-					cut := time.Now().Add(-time.Duration(hours) * time.Hour)
-					for len(h) > 2 && h[1].at.Before(cut) {
-						h = h[1:]
-					}
-					s.history[e.ID] = h
+					s.history[e.ID] = keep(append(s.history[e.ID], point{at: time.Now(), v: v}), hours)
 				}
 			}
 			s.mu.Unlock()
-			s.publish()
+			s.publishSoon()
 		}, func(id string) {
 			s.mu.Lock()
 			delete(s.states, id)
 			s.mu.Unlock()
-			s.publish()
+			s.publishSoon()
 		})
 		if err != nil {
 			return err
@@ -451,7 +471,7 @@ func (s *session) once() error {
 			s.mu.Lock()
 			s.rendered[id] = result
 			s.mu.Unlock()
-			s.publish()
+			s.publishSoon()
 		}); err != nil {
 			slog.Info("drawn dashboard: a template would not render", "err", err)
 		}

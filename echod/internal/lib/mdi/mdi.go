@@ -30,7 +30,8 @@ func Rune(name string) (rune, bool) {
 	once.Do(func() {
 		index = make(map[string]rune, 7500)
 		for _, line := range strings.Split(names, "\n") {
-			n, hex, ok := strings.Cut(line, " ")
+			// A checkout that turned the file's line ends into CRLF is still read right.
+			n, hex, ok := strings.Cut(strings.TrimRight(line, "\r"), " ")
 			if !ok {
 				continue
 			}
