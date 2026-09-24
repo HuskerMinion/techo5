@@ -1,10 +1,14 @@
 # dashcast: Home Assistant dashboards streamed to TECHO5 screens. See README.md.
-FROM golang:1.26 AS build
+#
+# Built for PCs (amd64) and Raspberry Pis (arm64). The Go program is cross-compiled on the machine
+# doing the build rather than under emulation, which would take many times longer.
+FROM --platform=$BUILDPLATFORM golang:1.26 AS build
+ARG TARGETOS TARGETARCH
 WORKDIR /src
 COPY go.mod go.sum ./
 RUN go mod download
 COPY *.go ./
-RUN CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o /dashcast .
+RUN CGO_ENABLED=0 GOOS=$TARGETOS GOARCH=$TARGETARCH go build -trimpath -ldflags="-s -w" -o /dashcast .
 
 # Chrome's headless shell, and fonts for the text a dashboard can hold.
 FROM chromedp/headless-shell:stable
