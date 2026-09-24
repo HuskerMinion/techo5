@@ -123,8 +123,13 @@ func drawerRows(s scene) ([]settingRow, string) {
 		}
 		var rows []settingRow
 		for i, c := range s.cameras {
-			rows = append(rows, settingRow{id: "cam:" + strconv.Itoa(i), label: c.Name,
-				sub: "Or say \"show " + strings.ToLower(c.Name) + "\"", kind: ctlButton, button: "Show", rowTap: true})
+			name := c.Name
+			if s.demo {
+				// A camera's name can say whose room it looks into.
+				name = demoCameras[i%len(demoCameras)]
+			}
+			rows = append(rows, settingRow{id: "cam:" + strconv.Itoa(i), label: name,
+				sub: "Or say \"show " + strings.ToLower(name) + "\"", kind: ctlButton, button: "Show", rowTap: true})
 		}
 		return rows, ""
 	}
@@ -172,3 +177,6 @@ func drawerRows(s scene) ([]settingRow, string) {
 	}
 	return rows, ""
 }
+
+// demoCameras stand in for the owner's camera names in screenshots that will be published.
+var demoCameras = []string{"Front door", "Driveway", "Backyard", "Porch", "Garage"}

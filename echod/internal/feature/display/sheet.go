@@ -149,7 +149,7 @@ func securityRows(sv sheetView) []settingRow {
 	return append(rows,
 		settingRow{id: "camweb", label: "Camera on the network", sub: "No login", kind: ctlToggle, on: sec.Camera},
 		settingRow{id: "screenweb", label: "Screen on the network", sub: "No login", kind: ctlToggle, on: sec.Screen},
-		setupRow(),
+		setupRow(st.demo),
 		link, certs)
 }
 
