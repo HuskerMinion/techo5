@@ -70,7 +70,10 @@ func chromePath(named string) string {
 // open is a new tab showing path at w by h, signed in to Home Assistant, in the dark theme a screen
 // in a room wants. The tab closes with ctx.
 func (b *browser) open(ctx context.Context, path string, w, h int, allowed map[string]bool) (context.Context, func(), error) {
-	tab, cancel := chromedp.NewContext(b.ctx, chromedp.WithErrorf(quiet))
+	// No options: a tab of a browser already running takes none of the browser's, and chromedp
+	// panics if it is given one (WithErrorf is one) - which it did on every device's first
+	// connection (techo5#26). The browser has its quiet logger from newBrowser.
+	tab, cancel := chromedp.NewContext(b.ctx)
 	stop := context.AfterFunc(ctx, cancel)
 
 	// The frontend keeps its sign-in in local storage; putting a long-lived token there before any
