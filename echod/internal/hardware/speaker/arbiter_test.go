@@ -295,3 +295,35 @@ func TestDuckingLastsUntilTheLastAskerLetsGo(t *testing.T) {
 		t.Error("the music stayed down after everyone let go")
 	}
 }
+
+// A producer stood down by another and then taking the speaker back is let go of the stand-down: it
+// was suspended once when the other took over, and taking over again is where that ends.
+func TestTakingTheSpeakerBackUndoesBeingStoodDown(t *testing.T) {
+	a := &Arbiter{}
+	station, song := &producer{}, &producer{}
+	a.Took(station)
+	a.Took(song) // the song stands the station down
+	if !station.held() {
+		t.Fatal("the station was not stood down by the song")
+	}
+	a.Took(station) // the station is started again
+	if station.held() {
+		t.Errorf("the station took the speaker back and stayed held: %d suspends, %d resumes",
+			station.suspends, station.resumes)
+	}
+	if !song.held() {
+		t.Error("the song kept playing under the station")
+	}
+
+	// And under a hold: taking the speaker back mid-hold stays down until the hold ends, then plays.
+	a.Took(song)
+	a.Suspend()
+	a.Took(station)
+	if !station.held() {
+		t.Fatal("the station played over the hold")
+	}
+	a.Resume()
+	if station.held() {
+		t.Errorf("the hold ended and the station stayed held: %d suspends, %d resumes", station.suspends, station.resumes)
+	}
+}

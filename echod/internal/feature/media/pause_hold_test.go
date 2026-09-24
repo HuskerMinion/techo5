@@ -109,3 +109,32 @@ func TestAStationPlaysAfterBeingStoppedDuringAPausedTurn(t *testing.T) {
 	}
 	s.Stop()
 }
+
+// The sequence as it really went on a Show: the station, paused by "stop playing", is stood down
+// when Music Assistant starts a song, and then "play the station" starts it again while Music
+// Assistant is still there. Taking the speaker back has to undo being stood down; it did not, and the
+// station was held silent from then on.
+func TestAStationThatTakesTheSpeakerBackFromAnotherPlays(t *testing.T) {
+	config.Use(filepath.Join(t.TempDir(), "state.json"))
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		<-r.Context().Done()
+	}))
+	defer srv.Close()
+
+	d := speaker.NewDriver(speaker.New())
+	a := d.Backgrounds()
+	s := NewStream(d, speaker.New(), func() {}, func(string) {})
+	s.Play(srv.URL)
+	s.Pause()       // "stop playing" is a pause
+	a.Took(other{}) // Music Assistant starts a song and stands the station down
+	s.Play(srv.URL) // "play the station": it takes the speaker back
+
+	s.mu.Lock()
+	holds, gated := s.holds, s.gate != nil
+	s.mu.Unlock()
+	if holds != 0 || gated {
+		t.Fatalf("the station took the speaker back and is still held: holds=%d gated=%v", holds, gated)
+	}
+	s.Stop()
+}
