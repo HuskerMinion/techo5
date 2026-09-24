@@ -13,6 +13,7 @@ import (
 	"github.com/gorilla/websocket"
 
 	"github.com/HuskerMinion/techo5/echod/internal/config"
+	"github.com/HuskerMinion/techo5/echod/internal/feature/home"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/media"
 	"github.com/HuskerMinion/techo5/echod/internal/hardware/speaker"
 	"github.com/HuskerMinion/techo5/echod/internal/layout"
@@ -72,6 +73,10 @@ type session struct {
 	// so it is an atomic like every other field here that two goroutines can reach.
 	asked atomic.Value // string
 
+	// picture counts the pictures the server has sent, so one still being decoded or waiting for its
+	// moment is dropped once a newer one has arrived.
+	picture atomic.Uint64
+
 	// live is false once this connection is finished. The media player outlives the session and keeps
 	// the transport hook, so anything asked after that is dropped rather than written to a dead client.
 	live atomic.Bool
@@ -86,16 +91,26 @@ func newSession(conn *websocket.Conn, o *out, bg *speaker.Arbiter, name string, 
 	}
 	mac, _ := layout.FactoryMAC()
 
+	// Nothing is activated that is not claimed here. Metadata is claimed so the room can say what it is
+	// playing, and the controller role so the room can ask for the track's own controls: next,
+	// previous, play and pause are the server's to carry out, and both the screen and Home Assistant
+	// reach them through this. A device with a screen also claims artwork, for the track's picture.
+	roles := []string{"player@v1", "metadata@v1", "controller@v1"}
+	var artwork *protocol.ArtworkV1Support
+	if home.HasScreen() {
+		roles = append(roles, "artwork@v1")
+		artwork = &protocol.ArtworkV1Support{Channels: []protocol.ArtworkChannel{{
+			Source: "album", Format: "jpeg", MediaWidth: artworkSide, MediaHeight: artworkSide,
+		}}}
+	}
+
 	client := protocol.NewClientFromConn(protocol.Config{
 		Name: name,
 
 		Version: protocolVersion,
 
-		// Nothing is activated that is not claimed here. Metadata is claimed so the room can say what
-		// it is playing, and the controller role so the room can ask for the track's own controls:
-		// next, previous, play and pause are the server's to carry out, and both the screen and Home
-		// Assistant reach them through this.
-		SupportedRoles: []string{"player@v1", "metadata@v1", "controller@v1"},
+		SupportedRoles:   roles,
+		ArtworkV1Support: artwork,
 
 		// The factory mac: survives a reinstall, a rename and a new address.
 		ClientID: mac,
@@ -138,6 +153,9 @@ func (s *session) run(ctx context.Context) error {
 	cancelTransport := media.Get().OnTransport.Listen(s.asks)
 	defer cancelTransport()
 
+	// A picture left from an earlier connection is not this server's: it sends its own current one
+	// as soon as the artwork stream starts.
+	s.unpictured()
 	s.reported()
 	s.out.use(s.clock)
 	safe.Go("sendspin clock", func() { s.synced(ctx) })
@@ -158,11 +176,21 @@ func (s *session) run(ctx context.Context) error {
 			s.began(start)
 
 		// Music Assistant ends the stream instead, but the spec has this for seeks and other servers
-		// may use it.
-		case <-s.client.StreamClear:
-			s.cleared()
+		// may use it. A clear names the roles it is for, and only the player's is audio.
+		case clear := <-s.client.StreamClear:
+			if names(clear.Roles, "player") {
+				s.cleared()
+			}
 
-		case <-s.client.StreamEnd:
+		// An end names its roles too, and Music Assistant ends the artwork stream on its own: taken
+		// for the player's, that stopped the music along with the picture.
+		case end := <-s.client.StreamEnd:
+			if names(end.Roles, "artwork") {
+				s.unpictured()
+			}
+			if !names(end.Roles, "player") {
+				continue
+			}
 			late, dropped := s.out.misses()
 			slog.Info("sendspin stream end", "queued_ms", s.out.queuedMs(), "late", late, "dropped", dropped)
 			s.ended()
@@ -179,10 +207,12 @@ func (s *session) run(ctx context.Context) error {
 		case g := <-s.client.GroupUpdate:
 			s.grouped(g)
 
-		// Nothing acts on the artwork, but an undrained channel blocks the reader.
 		case st := <-s.client.ServerState:
 			s.noticed(st)
-		case <-s.client.ArtworkChunks:
+
+		// Drained whether or not artwork was claimed: an undrained channel blocks the reader.
+		case a := <-s.client.ArtworkChunks:
+			s.pictured(a)
 		}
 	}
 }
@@ -402,8 +432,8 @@ func (s *session) heard(chunk protocol.AudioChunk) {
 }
 
 // noticed takes what the server says about the track, and which commands the controller role may send.
-// Only the player, metadata and controller roles are claimed, so the rest of the message is not this
-// device's to act on.
+// The track's picture comes as artwork, not here, so the rest of the message is not this device's to
+// act on.
 func (s *session) noticed(st protocol.ServerStateMessage) {
 	if st.Controller != nil {
 		s.took(st.Controller)

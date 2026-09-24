@@ -465,7 +465,8 @@ func carried(r Radio) Radio {
 		if title, artist, album, ok := media.Get().Held(); ok {
 			r.Playing, r.Now = false, "Music Assistant"
 			r.Title, r.Artist, r.Album = title, artist, album
-			r.Art, r.Thumb, r.Logo = nil, nil, false
+			r.Art, r.Thumb = remoteArt()
+			r.Logo = false
 			r.Music = true
 		}
 		return r
@@ -473,9 +474,10 @@ func carried(r Radio) Radio {
 	trackTitle, trackArtist, trackAlbum := media.Get().Track()
 	r.Playing, r.Now = true, "Music Assistant"
 	r.Title, r.Artist, r.Album = trackTitle, trackArtist, trackAlbum
-	// The page draws a stand-in of its own for a track with no picture, so the last station's cover
-	// and logo must not be left behind somebody else's.
-	r.Art, r.Thumb, r.Logo = nil, nil, false
+	// Music Assistant's own picture for the track when it sent one. Without one the page draws a
+	// stand-in of its own, so the last station's cover and logo must not be left behind somebody else's.
+	r.Art, r.Thumb = remoteArt()
+	r.Logo = false
 	r.Music = true
 	return r
 }
