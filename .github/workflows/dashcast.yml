@@ -17,9 +17,6 @@ on:
 
 permissions:
   contents: read
-  packages: write
-  id-token: write
-  attestations: write
 
 env:
   IMAGE: ghcr.io/huskerminion/techo5-dashcast
@@ -27,6 +24,12 @@ env:
 jobs:
   image:
     runs-on: ubuntu-latest
+    # Writing is for publishing on a release tag: the package, and the attestation that goes with it.
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+      attestations: write
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
 

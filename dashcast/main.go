@@ -41,6 +41,12 @@ func main() {
 		slog.Error("HA_URL, HA_TOKEN and DASHCAST_KEY all have to be set")
 		os.Exit(2)
 	}
+	// The key is what the encryption is keyed by, and one captured handshake is enough to guess a
+	// short one at leisure.
+	if len(cfg.key) < minKey {
+		slog.Error("DASHCAST_KEY is too short: use at least 16 characters, random ones (README)", "has", len(cfg.key))
+		os.Exit(2)
+	}
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
@@ -53,6 +59,7 @@ func main() {
 	defer b.close()
 
 	g := &guard{cfg: cfg}
+	warnIfAdmin(ctx, cfg)
 	ln, err := net.Listen("tcp", cfg.listen)
 	if err != nil {
 		slog.Error("listening failed", "addr", cfg.listen, "err", err)
@@ -76,6 +83,9 @@ func main() {
 		go serve(ctx, b, g, cfg, c)
 	}
 }
+
+// minKey is the shortest DASHCAST_KEY accepted.
+const minKey = 16
 
 type config struct {
 	ha, token, key, listen, chrome string

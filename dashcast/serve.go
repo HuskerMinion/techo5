@@ -15,6 +15,7 @@ import (
 	"net"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/chromedp/cdproto/input"
@@ -63,6 +64,15 @@ type touchMsg struct {
 // small, since mostly only what changed is sent.
 const quality = 85
 
+// lineMax is the longest line a device may send, and maxSessions how many screens are served at once.
+const (
+	lineMax     = 4096
+	maxSessions = 8
+)
+
+// sessions is how many screens are being served.
+var sessions atomic.Int32
+
 func serve(ctx context.Context, b *browser, g *guard, cfg config, raw net.Conn) {
 	defer raw.Close()
 	_ = raw.SetReadDeadline(time.Now().Add(10 * time.Second))
@@ -72,13 +82,15 @@ func serve(ctx context.Context, b *browser, g *guard, cfg config, raw net.Conn) 
 		slog.Warn("a device failed the handshake: a wrong key, or not a TECHO5 device", "from", raw.RemoteAddr(), "err", err)
 		return
 	}
-	r := bufio.NewReader(c)
-	line, err := r.ReadBytes('\n')
-	if err != nil {
+	// Lines are small - a hello, a touch - and are read with a small limit, so a device cannot send
+	// one that never ends.
+	lines := bufio.NewScanner(c)
+	lines.Buffer(make([]byte, 0, 1024), lineMax)
+	if !lines.Scan() {
 		return
 	}
 	var h hello
-	if json.Unmarshal(line, &h) != nil {
+	if json.Unmarshal(lines.Bytes(), &h) != nil {
 		return
 	}
 	_ = c.SetReadDeadline(time.Time{})
@@ -102,6 +114,14 @@ func serve(ctx context.Context, b *browser, g *guard, cfg config, raw net.Conn) 
 		return
 	}
 	allowed, _ := g.panels(ctx)
+	// Each screen is a browser tab of a couple of hundred megabytes, so there is a limit to them.
+	if n := sessions.Add(1); n > maxSessions {
+		sessions.Add(-1)
+		slog.Warn("too many screens at once", "name", h.Name, "most", maxSessions)
+		out.problem("The dashboard server is showing as many screens as it can.")
+		return
+	}
+	defer sessions.Add(-1)
 	slog.Info("device connected", "name", h.Name, "from", c.RemoteAddr(), "size", [2]int{h.W, h.H}, "path", h.Path)
 	defer slog.Info("device gone", "name", h.Name)
 
@@ -152,13 +172,9 @@ func serve(ctx context.Context, b *browser, g *guard, cfg config, raw net.Conn) 
 		c.Close()
 	}()
 	go keepOnDashboards(sctx, tab, b.cfg.ha+h.Path, g, h.Name)
-	for {
-		line, err := r.ReadBytes('\n')
-		if err != nil {
-			return
-		}
+	for lines.Scan() {
 		var t touchMsg
-		if json.Unmarshal(line, &t) != nil {
+		if json.Unmarshal(lines.Bytes(), &t) != nil {
 			continue
 		}
 		if err := chromedp.Run(tab, chromedp.ActionFunc(func(ctx context.Context) error { return touch(ctx, t) })); err != nil {
@@ -399,13 +415,19 @@ func keepOnDashboards(ctx context.Context, tab context.Context, home string, g *
 			return
 		case <-t.C:
 		}
-		var path string
-		if err := chromedp.Run(tab, chromedp.Evaluate(`location.pathname`, &path)); err != nil {
+		var where struct {
+			Origin string `json:"origin"`
+			Path   string `json:"path"`
+		}
+		if err := chromedp.Run(tab, chromedp.Evaluate(`({origin: location.origin, path: location.pathname})`, &where)); err != nil {
 			continue
 		}
-		if ok, err := g.allows(ctx, path); err != nil || ok {
-			continue
+		if where.Origin == haOrigin(g.cfg.ha) {
+			if ok, err := g.allows(ctx, where.Path); err != nil || ok {
+				continue
+			}
 		}
+		path := where.Origin + where.Path
 		slog.Warn("the page left the dashboards; taking it back", "name", name, "was", path)
 		_ = chromedp.Run(tab, chromedp.Navigate(home))
 	}
