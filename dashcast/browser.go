@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"net/url"
 	"os"
 	"os/exec"
@@ -34,7 +35,7 @@ func newBrowser(parent context.Context, cfg config) (*browser, error) {
 		opts = append(opts, chromedp.ExecPath(path))
 	}
 	actx, acancel := chromedp.NewExecAllocator(parent, opts...)
-	bctx, bcancel := chromedp.NewContext(actx)
+	bctx, bcancel := chromedp.NewContext(actx, chromedp.WithErrorf(quiet))
 	// Starting it now rather than with the first device, so a browser that cannot start says so at
 	// once rather than when somebody first opens the page.
 	if err := chromedp.Run(bctx); err != nil {
@@ -69,7 +70,7 @@ func chromePath(named string) string {
 // open is a new tab showing path at w by h, signed in to Home Assistant, in the dark theme a screen
 // in a room wants. The tab closes with ctx.
 func (b *browser) open(ctx context.Context, path string, w, h int, allowed map[string]bool) (context.Context, func(), error) {
-	tab, cancel := chromedp.NewContext(b.ctx)
+	tab, cancel := chromedp.NewContext(b.ctx, chromedp.WithErrorf(quiet))
 	stop := context.AfterFunc(ctx, cancel)
 
 	// The frontend keeps its sign-in in local storage; putting a long-lived token there before any
@@ -144,4 +145,15 @@ func haOrigin(ha string) string {
 		return scheme + "://" + host + ":" + port
 	}
 	return scheme + "://" + host
+}
+
+// quiet is where chromedp's own complaints go: events from a newer Chrome than it knows the names of
+// ("unhandled node event"), which say nothing about dashcast. Anything else it has to say goes to
+// the log at debug.
+func quiet(format string, args ...any) {
+	msg := fmt.Sprintf(format, args...)
+	if strings.Contains(msg, "unhandled") {
+		return
+	}
+	slog.Debug("chromedp", "said", msg)
 }
