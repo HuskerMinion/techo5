@@ -12,8 +12,8 @@ import (
 	"github.com/HuskerMinion/techo5/echod/internal/feature/home"
 )
 
-// The drawer: a swipe in from the right edge brings Cameras and Radio over the clock, which dims
-// behind it. They are things to use rather than settings, so they sit apart from the settings screen,
+// The drawer: a swipe in from the right edge brings Cameras, Radio, Announce and Call over the clock,
+// which dims behind it. They are things to use rather than settings, so they sit apart from the settings screen,
 // drawn with its rows and controls.
 
 // The lengths here are the ones this drawer was drawn at on a Show 5, and they go through paint.s
@@ -21,24 +21,25 @@ import (
 // while its labels scaled with the type, so on a Show 8 "Cameras" and "Announce" grew out of their
 // pills.
 const (
-	drawerWBase = 560
+	drawerWBase = 620
 
 	// drawerEdgeBase is how far from the right edge a leftward swipe has to start to open the drawer.
 	drawerEdgeBase = 240
 
-	// drawerSegBase is the width of the Cameras/Radio/Announce strip.
-	drawerSegBase = 400
+	// drawerSegBase is the width of the Cameras/Radio/Announce/Call strip.
+	drawerSegBase = 500
 
 	drawerCameras  = 0
 	drawerRadio    = 1
 	drawerAnnounce = 2
+	drawerCall     = 3
 )
 
 func (p *paint) drawerW() int    { return p.s(drawerWBase) }
 func (p *paint) drawerEdge() int { return p.s(drawerEdgeBase) }
 func (p *paint) drawerSeg() int  { return p.s(drawerSegBase) }
 
-var drawerTabs = []string{"Cameras", "Radio", "Announce"}
+var drawerTabs = []string{"Cameras", "Radio", "Announce", "Call"}
 
 func (r *renderer) drawer(s scene) {
 	fc := r.faces()
@@ -117,6 +118,9 @@ func drawerRows(s scene) ([]settingRow, string) {
 	if s.drawerTab == drawerAnnounce {
 		return announceRows(s)
 	}
+	if s.drawerTab == drawerCall {
+		return callRows(s)
+	}
 	if s.drawerTab == drawerCameras {
 		if len(s.cameras) == 0 {
 			return nil, "No cameras yet. Set a Home Assistant token to list them all, or pick some with the home_cameras action."
@@ -177,6 +181,35 @@ func drawerRows(s scene) ([]settingRow, string) {
 	}
 	return rows, ""
 }
+
+// callRows is the Call tab: the other devices in the house, then the phone's contacts.
+func callRows(s scene) ([]settingRow, string) {
+	if len(s.callees) == 0 {
+		return nil, "Nobody to call yet. Give every device the same house word on its setup page to call " +
+			"between rooms, or sign the phone in (the phone_account action) for your contacts."
+	}
+	var rows []settingRow
+	for i, c := range s.callees {
+		name, sub := c.Name, "Phone"
+		if c.Device {
+			sub = "Intercom, in the house"
+		}
+		if s.demo {
+			// A device's name can say whose room it is, and a contact's is somebody's name.
+			if c.Device {
+				name = demoRooms[i%len(demoRooms)]
+			} else {
+				name = "Contact " + strconv.Itoa(i+1)
+			}
+		}
+		rows = append(rows, settingRow{id: "call:" + strconv.Itoa(i), label: name, sub: sub,
+			kind: ctlButton, button: "Call", rowTap: true})
+	}
+	return rows, ""
+}
+
+// demoRooms stand in for the devices' names in screenshots that will be published.
+var demoRooms = []string{"Kitchen", "Office", "Living room", "Bedroom", "Garage"}
 
 // demoCameras stand in for the owner's camera names in screenshots that will be published.
 var demoCameras = []string{"Front door", "Driveway", "Backyard", "Porch", "Garage"}

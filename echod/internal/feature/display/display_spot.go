@@ -108,6 +108,8 @@ type Display struct {
 	light *esphome.Light
 	auto  *esphome.Switch
 	clock *esphome.Select
+	// callBtn is the home screen's Call button, on or off (callbutton.go).
+	callBtn *esphome.Switch
 	lang  *esphome.Select
 
 	mu      sync.Mutex
@@ -192,6 +194,10 @@ type Display struct {
 	cameraSel int
 	// contactTop is the first contact the Call list shows.
 	contactTop int
+	// callees are who the Call list showed, callShown the Call button on the face last drawn: taps act
+	// on what was on the screen.
+	callees   []phone.Callee
+	callShown bool
 	// slowSaid is when a slow frame was last logged.
 	slowSaid time.Time
 
@@ -238,6 +244,7 @@ func build() *Display {
 	d.light.OnCommand = d.command
 	d.auto.OnCommand = func(on bool) { d.setAuto(on, true) }
 	d.clock = clockSelect(d.wake)
+	d.callBtn = callButtonSwitch(d.wake)
 	d.lang = langSelect()
 	voice.Changed.Listen(d.changed)
 	media.Get().OnVolume.Listen(d.volumeMoved)
@@ -276,12 +283,13 @@ func build() *Display {
 func (d *Display) Name() string { return "screen" }
 
 func (d *Display) Entities() []esphome.Entity {
-	return []esphome.Entity{d.light, d.auto, d.clock, d.lang}
+	return []esphome.Entity{d.light, d.auto, d.clock, d.callBtn, d.lang}
 }
 
 // Restore lights the panel the way it was left.
 func (d *Display) Restore(c config.Config) {
 	setClock24(d.clock, c.Screen.Clock24)
+	setCallButton(d.callBtn, c.Screen.CallButton)
 	d.setAuto(c.Screen.Auto, false)
 	d.apply(c.Screen.On, c.Screen.Brightness, false)
 }
@@ -573,6 +581,17 @@ func (d *Display) gesture(g touch.Gesture) {
 	}
 	switch g.Kind {
 	case touch.Tap:
+		d.mu.Lock()
+		call := d.callShown && onCallButton(g.X, g.Y)
+		if call {
+			d.openMenu(modeContacts, "")
+			d.contactTop = 0
+		}
+		d.mu.Unlock()
+		if call {
+			d.wake()
+			return
+		}
 		voice.Get().Action()
 	case touch.SwipeUp:
 		media.Get().Adjust(+1)
@@ -701,7 +720,8 @@ func (d *Display) menuGesture(g touch.Gesture) {
 		}
 
 	case mode == modeContacts:
-		n := len(phone.Get().Contacts())
+		list := d.callees
+		n := len(list)
 		switch g.Kind {
 		case touch.SwipeUp:
 			d.contactTop = contactTopFor(d.contactTop+contactRows-1, n)
@@ -717,12 +737,12 @@ func (d *Display) menuGesture(g touch.Gesture) {
 			break
 		}
 		d.mu.Unlock()
-		if cs := phone.Get().Contacts(); row < len(cs) {
-			go func() {
-				if err := phone.Get().Call(cs[row].Number); err != nil {
+		if row < len(list) {
+			go func(c phone.Callee) {
+				if err := phone.Get().CallCallee(c); err != nil {
 					slog.Warn("screen: call", "err", err)
 				}
-			}()
+			}(list[row])
 		}
 		d.wake()
 		return
@@ -1055,12 +1075,14 @@ func (d *Display) frame() time.Duration {
 	}
 	if s.menuOpen {
 		s.phoneReady = phone.Get().State().Registered
-		contacts := phone.Get().Contacts()
-		s.contactCount = len(contacts)
+		s.houseReady = config.Get().Home.HouseWord != ""
+		callees := phone.Get().Callees()
+		s.contactCount = len(callees)
 		if s.menuMode == modeContacts {
-			s.contacts = contacts
+			s.contacts = callees
 			d.mu.Lock()
 			s.contactTop = d.contactTop
+			d.callees = callees
 			d.mu.Unlock()
 		}
 	}
@@ -1131,8 +1153,12 @@ func (d *Display) frame() time.Duration {
 	}
 
 	d.dashSceneSpot(&s)
+	s.callButton = callButton.Load()
 	drawn := time.Now()
 	d.r.draw(s)
+	d.mu.Lock()
+	d.callShown = d.r.callDrawn
+	d.mu.Unlock()
 	painted := time.Now()
 	if err := d.dev.Present(); err != nil {
 		slog.Warn("presenting the frame failed", "err", err)

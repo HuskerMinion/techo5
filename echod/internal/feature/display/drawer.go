@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/HuskerMinion/techo5/echod/internal/feature/home"
+	"github.com/HuskerMinion/techo5/echod/internal/feature/phone"
 	"github.com/HuskerMinion/techo5/echod/internal/hardware/touch"
 )
 
@@ -108,6 +109,18 @@ func (d *Display) drawerRowTap(id string) {
 	switch kind {
 	case "announce":
 		d.announceTap()
+	case "call":
+		d.mu.Lock()
+		list := d.callees
+		d.mu.Unlock()
+		if i < len(list) {
+			d.closeDrawer()
+			go func(c phone.Callee) {
+				if err := phone.Get().CallCallee(c); err != nil {
+					slog.Warn("screen: call", "err", err)
+				}
+			}(list[i])
+		}
 	case "cam":
 		if cams := home.Get().Cameras(); i < len(cams) {
 			d.closeDrawer()

@@ -86,6 +86,8 @@ type Display struct {
 	light *esphome.Light
 	auto  *esphome.Switch
 	clock *esphome.Select
+	// callBtn is the home screen's Call button, on or off (callbutton.go).
+	callBtn *esphome.Switch
 	lang  *esphome.Select
 
 	mu      sync.Mutex
@@ -195,6 +197,11 @@ type Display struct {
 	stripFullUntil time.Time
 	showingStrip   bool
 
+	// callShown is the Call button on the clock as last drawn, and callees who the drawer's Call tab
+	// listed: a tap acts on what was on the screen.
+	callShown bool
+	callees   []phone.Callee
+
 	// favedKey is the track the star was last pressed for, so the star shows it was saved.
 	favedKey string
 
@@ -243,6 +250,7 @@ func build() *Display {
 	d.light.OnCommand = d.command
 	d.auto.OnCommand = func(on bool) { d.setAuto(on, true) }
 	d.clock = clockSelect(d.wake)
+	d.callBtn = callButtonSwitch(d.wake)
 	d.strip = stripSelect(d.wake)
 	d.nightHours = nightHoursSelect()
 	d.atNight = atNightSelect(d)
@@ -295,13 +303,14 @@ func build() *Display {
 func (d *Display) Name() string { return "screen" }
 
 func (d *Display) Entities() []esphome.Entity {
-	return []esphome.Entity{d.light, d.auto, d.clock, d.lang, d.strip, d.nightHours, d.atNight, d.glowLevel}
+	return []esphome.Entity{d.light, d.auto, d.clock, d.callBtn, d.lang, d.strip, d.nightHours, d.atNight, d.glowLevel}
 }
 
 // Restore lights the panel the way it was left. Before the framebuffer is opened: the backlight is
 // its own device.
 func (d *Display) Restore(c config.Config) {
 	setClock24(d.clock, c.Screen.Clock24)
+	setCallButton(d.callBtn, c.Screen.CallButton)
 	d.strip.Set(stripOptions[stripIndex()])
 	d.nightHours.Set(nightHoursText(c.Screen.Night))
 	d.atNight.Set(atNightOptions[atNightIndex()])
@@ -706,6 +715,14 @@ func (d *Display) gesture(g touch.Gesture) {
 			d.away, d.awayTrack, d.awayStation = false, "", ""
 			d.mu.Unlock()
 			d.wake()
+			return
+		}
+		// The Call button, when it is on the clock: the list of devices and contacts to call.
+		d.mu.Lock()
+		callShown := d.callShown
+		d.mu.Unlock()
+		if idle && callShown && d.r != nil && image.Pt(g.X, g.Y).In(d.r.callButtonRect().Inset(-d.r.s(12))) {
+			d.openDrawer(drawerCall)
 			return
 		}
 		d.mu.Lock()
@@ -1436,6 +1453,12 @@ func (d *Display) frame() time.Duration {
 	if s.showDrawer && s.drawerTab == drawerCameras {
 		s.cameras = home.Get().Cameras()
 	}
+	if s.showDrawer && s.drawerTab == drawerCall {
+		s.callees = phone.Get().Callees()
+		d.mu.Lock()
+		d.callees = s.callees
+		d.mu.Unlock()
+	}
 	if (s.showDrawer && s.drawerTab == drawerRadio) || wants {
 		s.radio = home.Get().Radio()
 	}
@@ -1505,6 +1528,14 @@ func (d *Display) frame() time.Duration {
 		s.slideshowScreensaver = home.Get().SlideshowScreensaverPhoto()
 		s.slideshowOverlay = home.Get().SlideshowOverlay()
 	}
+
+	// The Call button is on the clock itself and only there: on any other page a tap where it would be
+	// still does what that page does.
+	s.callButton = callButton.Load() && s.phase == "idle" && !s.nowPlaying && !s.strip && !s.showWeather &&
+		s.sunrise == 0 && s.slideshowScreensaver == nil && !s.showDrawer && !s.showSheet
+	d.mu.Lock()
+	d.callShown = s.callButton
+	d.mu.Unlock()
 
 	d.r.draw(s)
 	if err := d.dev.Present(); err != nil {

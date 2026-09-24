@@ -28,6 +28,10 @@ type Screen struct {
 	// Clock24 shows times on the screen as 15:04 instead of 3:04 PM.
 	Clock24 bool `json:"clock_24,omitempty"`
 
+	// CallButton puts a Call button on the home screen, which opens the list of devices in the house
+	// and phone contacts to call. Off until somebody wants it, so an update changes nobody's screen.
+	CallButton bool `json:"call_button,omitempty"`
+
 	// MusicStrip is how many seconds music plays on the full now-playing page before the Show goes
 	// back to its clock with the music in a strip at the foot; none keeps the full page.
 	MusicStrip int `json:"music_strip,omitempty"`
@@ -93,6 +97,10 @@ func (w ScreenWriter) Welcomed(v bool) error {
 
 func (w ScreenWriter) Clock24(v bool) error {
 	return w.st.Update(func(c *Config) { c.Screen.Clock24 = v })
+}
+
+func (w ScreenWriter) CallButton(v bool) error {
+	return w.st.Update(func(c *Config) { c.Screen.CallButton = v })
 }
 
 func (w ScreenWriter) MusicStrip(seconds int) error {

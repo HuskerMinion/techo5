@@ -200,6 +200,13 @@ the setup page. The sound is the microphones' own 16 kHz rather than a phone lin
 between the two devices with the house word as the key. What is planned next is in
 [intercom-plan.md](intercom-plan.md).
 
+**Calling from the screen.** On a Show, the drawer (swipe in from the right edge) has a **Call** tab:
+the other devices in the house first, then your contacts, each with a Call button. On a Spot, the
+ring menu's **Call** item opens the same list. Devices are listed once a house word is set; contacts
+once the phone is signed in. To put a green Call button on the home screen that opens the list, turn
+on **Call button** in Settings, Display (or the **Call button on the home screen** switch in Home
+Assistant). It is off by default.
+
 ## How it works
 
 - `echod/internal/feature/phone`: the component. SIP and RTP through

@@ -102,6 +102,7 @@ var registered = []string{
 	"screen",
 	"screen_at_night",
 	"screen_auto_brightness",
+	"screen_call_button",
 	"screen_clock_format",
 	"screen_dashboard",
 	"screen_dashboard_idle",

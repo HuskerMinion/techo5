@@ -275,12 +275,12 @@ func itemHint(s roundScene, id itemID) string {
 		return "no other devices found"
 	case itemCall:
 		switch {
-		case !s.phoneReady:
-			return "phone not set up"
-		case s.contactCount == 0:
-			return "no contacts yet"
+		case s.contactCount > 0:
+			return fmt.Sprintf("%d to call", s.contactCount)
+		case !s.phoneReady && !s.houseReady:
+			return "needs a house word"
 		}
-		return fmt.Sprintf("%d contacts", s.contactCount)
+		return "nobody to call yet"
 	case itemMute:
 		if s.muted {
 			return "microphone is off"

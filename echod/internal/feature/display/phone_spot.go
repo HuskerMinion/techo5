@@ -4,6 +4,7 @@ package display
 
 import (
 	"fmt"
+	"image"
 	"image/color"
 	"math"
 	"time"
@@ -113,17 +114,41 @@ func contactRowAt(y, top, n int) int {
 	return top + i
 }
 
+// callButtonAt is the face's Call button: a small green one at the top of the circle, above the
+// status words, where the lines under the clock that come and go cannot reach it.
+var callButtonAt = struct{ x, y, r int }{center, 70, 30}
+
+// onCallButton is whether a tap at x, y is on it, with a little room around it for a finger.
+func onCallButton(x, y int) bool {
+	dx, dy := x-callButtonAt.x, y-callButtonAt.y
+	reach := callButtonAt.r + 14
+	return dx*dx+dy*dy <= reach*reach
+}
+
+func (r *roundRenderer) callButtonFace() {
+	b := callButtonAt
+	box := image.Rect(b.x-b.r, b.y-b.r, b.x+b.r, b.y+b.r)
+	rad := float64(b.r)
+	r.roundShadow(box, rad, 8, 2, shadowAlpha())
+	r.roundFill(box, rad, shift(colCall, 10), shift(colCall, -20))
+	r.mdiIcon("phone", b.x-17, b.y-17, 34, colText)
+}
+
 // contactTopFor keeps a scroll position inside the list.
 func contactTopFor(top, n int) int { return min(max(top, 0), max(n-contactRows, 0)) }
 
-// contactList is who the Call item offers: a tap calls them.
+// contactList is who the Call item offers, the devices in the house and then the contacts: a tap
+// calls them.
 func (r *roundRenderer) contactList(s roundScene) {
 	r.clear()
 	r.centered(r.label, "CALL", 84, colCall)
 	if len(s.contacts) == 0 {
 		msg := "No contacts yet: Home Assistant's phone_contacts action sets them"
-		if !s.phoneReady {
-			msg = "The phone is not set up"
+		switch {
+		case !s.phoneReady && !s.houseReady:
+			msg = "Set a house word on the setup page to call the other devices"
+		case !s.phoneReady:
+			msg = "No other devices found yet"
 		}
 		r.paragraph(r.body, msg, 230, colDim, 3)
 		return
@@ -135,8 +160,13 @@ func (r *roundRenderer) contactList(s roundScene) {
 		if i == 0 || i == contactRows-1 {
 			w = 280 // the circle is narrower at the top and bottom rows
 		}
-		r.line(float64(center-w/2), float64(y-12), float64(center+w/2), float64(y-12), float64(contactRowH-10), color.RGBA{28, 34, 42, 255})
-		r.centered(r.title, clip(r.title, r, s.contacts[top+i].Name, w-30), y, colText)
+		c := s.contacts[top+i]
+		bar := color.RGBA{28, 34, 42, 255}
+		if c.Device {
+			bar = color.RGBA{24, 48, 36, 255} // a device in the house: a green cast, where a contact is gray
+		}
+		r.line(float64(center-w/2), float64(y-12), float64(center+w/2), float64(y-12), float64(contactRowH-10), bar)
+		r.centered(r.title, clip(r.title, r, c.Name, w-30), y, colText)
 	}
 	if top > 0 {
 		r.triangle(center-16, 112, center+16, 112, center, 96, colCall)
