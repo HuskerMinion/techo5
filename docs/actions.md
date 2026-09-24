@@ -263,6 +263,199 @@ yet, and it says so. The reminder's action name comes from the
 device's name in Home Assistant (`esphome.<name>_reminder_set`); if you renamed the device there,
 put its action name in by hand.
 
+## Set, cancel and list alarms, and change the volume, by voice
+
+Home Assistant's own voice commands know timers but not clock alarms, so "set an alarm for 6:30",
+"cancel the alarm" and "what alarms do I have" get "Sorry, I don't know" or fall through to an AI
+agent if you have one. Its volume command works, but it changes every speaker in the room's area,
+so in a room with a TV or another speaker, "volume down" can turn down the wrong one. These three
+automations answer those sentences on the TECHO5 device that heard them. Add each one in Settings >
+Automations & scenes > Create automation > Edit in YAML.
+
+```yaml
+alias: TECHO5 - set an alarm by voice
+triggers:
+  - trigger: conversation
+    command:
+      - "set [a|an|my] alarm (for|at) {when}"
+      - "wake me [up] at {when}"
+      - "alarm for {when}"
+actions:
+  - variables:
+      techo5: >-
+        {{ trigger.device_id is not none and
+           device_entities(trigger.device_id) | select('search', 'stop_alarm') | list | count > 0 }}
+      node: "{{ device_attr(trigger.device_id, 'name') | slugify if techo5 else '' }}"
+      spoken: "{{ (trigger.slots.when | default('')) | lower | replace('.', '') | trim }}"
+      pm: "{{ 'pm' in spoken or 'p m' in spoken }}"
+      am: "{{ 'am' in spoken or 'a m' in spoken }}"
+      nums: "{{ spoken | regex_findall('[0-9]{1,2}') }}"
+      h: "{{ nums[0] | int(-1) if nums else -1 }}"
+      m: "{{ nums[1] | int(0) if nums | count > 1 else 0 }}"
+      hh: "{{ h + 12 if pm and h < 12 else (0 if am and h == 12 else h) }}"
+  - choose:
+      - conditions: "{{ not techo5 }}"
+        sequence:
+          - set_conversation_response: "Say that to the TECHO5 device you want the alarm on."
+      - conditions: "{{ h < 0 or hh > 23 or m > 59 }}"
+        sequence:
+          - set_conversation_response: "Sorry, I didn't catch what time you wanted."
+    default:
+      - action: "esphome.{{ node }}_alarm_set"
+        data:
+          time: "{{ '%02d:%02d' | format(hh, m) }}"
+          days: once
+          label: Alarm
+      - set_conversation_response: >-
+          Alarm set for {{ '%d:%02d %s' | format(hh % 12 or 12, m, 'AM' if hh < 12 else 'PM') }}.
+mode: queued
+```
+
+```yaml
+alias: TECHO5 - cancel or list alarms by voice
+triggers:
+  - trigger: conversation
+    id: cancel
+    command:
+      - "(cancel|delete|remove|clear) [the|my] alarm"
+      - "(cancel|delete|remove|clear) [all] [of] [the|my] alarms"
+      - "(cancel|delete|remove|clear) [the|my] {when} alarm"
+      - "(cancel|delete|remove|clear) [the|my] alarm (for|at) {when}"
+  - trigger: conversation
+    id: list
+    command:
+      - "what alarms [do I have|are set|have I set]"
+      - "what are my alarms"
+      - "(list|tell me) [all] [of] my alarms"
+      - "do I have any alarms [set]"
+      - "(when|what time) is my [next] alarm [set for]"
+actions:
+  - variables:
+      techo5: >-
+        {{ trigger.device_id is not none and
+           device_entities(trigger.device_id) | select('search', 'stop_alarm') | list | count > 0 }}
+      node: "{{ device_attr(trigger.device_id, 'name') | slugify if techo5 else '' }}"
+      spoken: "{{ (trigger.slots.when | default('')) | lower | replace('.', '') | trim }}"
+      everything: "{{ 'all' in trigger.sentence | lower or 'alarms' in trigger.sentence | lower }}"
+      pm: "{{ 'pm' in spoken or 'p m' in spoken }}"
+      am: "{{ 'am' in spoken or 'a m' in spoken }}"
+      nums: "{{ spoken | regex_findall('[0-9]{1,2}') }}"
+      h: "{{ nums[0] | int(-1) if nums else -1 }}"
+      m: "{{ nums[1] | int(0) if nums | count > 1 else 0 }}"
+      hh: "{{ h + 12 if pm and h < 12 else (0 if am and h == 12 else h) }}"
+      # With no AM or PM, "the 6 alarm" matches 6:00 AM and 6:00 PM.
+      times: >-
+        {{ [] if h < 0 else (['%02d:%02d' | format(hh, m)] if am or pm
+           else ['%02d:%02d' | format(h % 12, m), '%02d:%02d' | format(h % 12 + 12, m)]) }}
+  - if: "{{ not techo5 }}"
+    then:
+      - set_conversation_response: "Ask the TECHO5 device that holds the alarms."
+      - stop: Not said to a TECHO5 device
+  - action: "esphome.{{ node }}_alarms_list"
+    response_variable: listed
+  - variables:
+      # Reminders are in the same list; these sentences leave them alone.
+      alarms: "{{ listed.alarms | default([]) | rejectattr('reminder') | list }}"
+      picked: "{{ (alarms | selectattr('time', 'in', times) | list) if times else alarms }}"
+      said: >-
+        {% set ns = namespace(out=[]) %}
+        {% for a in (picked if trigger.id == 'cancel' and times else alarms) %}
+          {% set t = a.time.split(':') | map('int') | list %}
+          {% set ns.out = ns.out + ['%d:%02d %s' | format(t[0] % 12 or 12, t[1], 'AM' if t[0] < 12 else 'PM')] %}
+        {% endfor %}
+        {{ ns.out[:-1] | join(', ') ~ ' and ' ~ ns.out[-1] if ns.out | count > 1 else ns.out | join }}
+  - choose:
+      - conditions: "{{ alarms | count == 0 }}"
+        sequence:
+          - set_conversation_response: "You don't have any alarms set."
+      - conditions: "{{ trigger.id == 'list' }}"
+        sequence:
+          - set_conversation_response: >-
+              You have {{ 'one alarm' if alarms | count == 1 else (alarms | count) ~ ' alarms' }}: {{ said }}.
+      - conditions: "{{ times | count > 0 and picked | count == 0 }}"
+        sequence:
+          - set_conversation_response: "You don't have an alarm at that time."
+      - conditions: "{{ times | count > 0 or everything or alarms | count == 1 }}"
+        sequence:
+          - repeat:
+              for_each: "{{ picked | map(attribute='id') | list }}"
+              sequence:
+                - action: "esphome.{{ node }}_alarm_delete_id"
+                  data:
+                    id: "{{ repeat.item }}"
+          - set_conversation_response: >-
+              {{ 'Canceled your ' ~ (picked | count) ~ ' alarms.' if picked | count > 1
+                 else 'Canceled the ' ~ said ~ ' alarm.' }}
+    default:
+      - set_conversation_response: >-
+          You have {{ said }}. Which one? For example, say cancel the
+          {{ said.split(' and ')[0].split(',')[0] }} alarm.
+mode: queued
+```
+
+```yaml
+alias: TECHO5 - volume on the speaker that heard it
+triggers:
+  - trigger: conversation
+    command:
+      - "[turn [the]] volume {rest}"
+      - "set [the] volume {rest}"
+      - "[turn|set] [the] volume (up|down)"
+actions:
+  - variables:
+      speaker: >-
+        {{ (device_entities(trigger.device_id) | select('match', 'media_player[.]') | list + [''])
+           | first if trigger.device_id is not none else '' }}
+      words: "{{ (trigger.sentence | lower | regex_replace('[^a-z0-9 ]', ' ')).split() }}"
+      direction: "{{ 'up' if 'up' in words else ('down' if 'down' in words else '') }}"
+      named: >-
+        {% set map = {'one': 1, 'two': 2, 'three': 3, 'four': 4, 'five': 5,
+                      'six': 6, 'seven': 7, 'eight': 8, 'nine': 9, 'ten': 10} %}
+        {% set ns = namespace(n='') %}
+        {% for w in words if ns.n == '' %}
+          {% if w is match('^[0-9]+$') %}{% set ns.n = w | int %}
+          {% elif w in map %}{% set ns.n = map[w] %}{% endif %}
+        {% endfor %}
+        {{ ns.n }}
+      now: "{{ state_attr(speaker, 'volume_level') | float(0) if speaker else 0 }}"
+  - choose:
+      - conditions: "{{ speaker == '' }}"
+        sequence:
+          - set_conversation_response: "Say that to the speaker you want changed."
+      - conditions: "{{ direction == '' and named == '' }}"
+        sequence:
+          - set_conversation_response: "How loud? Say volume and a number from 1 to 10."
+    default:
+      - variables:
+          # "volume 4" is level 4 of 10, and 11 to 100 is a percent. "Up" or "down" moves one
+          # level, or as many as you say ("volume down 3"); "down to 2" sets level 2.
+          target: >-
+            {% if named != '' and (direction == '' or 'to' in words) %}
+              {{ named / 10 if named <= 10 else named / 100 }}
+            {% else %}
+              {{ now + (0.1 if direction == 'up' else -0.1) * (named if named != '' else 1) }}
+            {% endif %}
+          level: "{{ [[target | float, 0] | max, 1] | min | round(2) }}"
+      - action: media_player.volume_set
+        target:
+          entity_id: "{{ speaker }}"
+        data:
+          volume_level: "{{ level }}"
+      - set_conversation_response: "Volume {{ (level * 10) | round | int }}."
+mode: queued
+```
+
+Like the two above, each one finds the device that heard the sentence, so one of each covers every
+TECHO5 device in the house. The volume one works for any voice satellite that has its own media
+player. "Cancel the alarm" cancels
+the only alarm there is, or lists them and asks which when there are several; "cancel all alarms"
+cancels every one; "cancel the 6 AM alarm" cancels the ones at that time. Reminders are never
+canceled by these. These sentences now belong to the automations wherever they are said, so from the
+Home Assistant app, which has no alarms or speaker of its own, they answer by saying which device
+to ask. The alarm actions' names come from the device's name in
+Home Assistant (`esphome.<name>_alarm_set`); if you renamed the device there, put its action name in
+by hand.
+
 ## Delete an alarm
 
 In YAML, refer to this action as `esphome.<node>_alarm_delete`.
