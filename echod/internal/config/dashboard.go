@@ -18,6 +18,16 @@ type Dashboard struct {
 	// Idle shows the dashboard in place of the clock while nothing else is on the screen, for a
 	// screen that is there to show how the house is.
 	Idle bool `json:"idle,omitempty"`
+
+	// Known is the dashboards Home Assistant had when last asked, kept so the list of them is there
+	// from the start and not only once Home Assistant has been asked again.
+	Known []DashboardChoice `json:"known,omitempty"`
+}
+
+// DashboardChoice is one dashboard view: how a list names it, and its path.
+type DashboardChoice struct {
+	Label string `json:"label"`
+	Path  string `json:"path"`
 }
 
 type DashboardMode string
@@ -62,4 +72,8 @@ func (w DashboardWriter) Server(addr, key string) error {
 
 func (w DashboardWriter) Idle(v bool) error {
 	return w.st.Update(func(c *Config) { c.Dashboard.Idle = v })
+}
+
+func (w DashboardWriter) Known(v []DashboardChoice) error {
+	return w.st.Update(func(c *Config) { c.Dashboard.Known = v })
 }

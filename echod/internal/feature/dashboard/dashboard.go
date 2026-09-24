@@ -10,16 +10,27 @@
 package dashboard
 
 import (
+	"context"
 	"log/slog"
+	"slices"
 	"strings"
 	"sync"
+	"time"
 
 	esphome "github.com/ygelfand/go-esphome-device"
 
 	"github.com/HuskerMinion/techo5/echod/internal/component"
 	"github.com/HuskerMinion/techo5/echod/internal/config"
+	"github.com/HuskerMinion/techo5/echod/internal/lib/hass"
 	"github.com/HuskerMinion/techo5/echod/internal/lib/hook"
 )
+
+// automatic is the choice of no particular dashboard: the Rooms dashboard when drawn here, Home
+// Assistant's default one when streamed.
+const automatic = "Automatic"
+
+// boardsEvery is how often Home Assistant is asked what dashboards there are.
+const boardsEvery = 30 * time.Minute
 
 func init() {
 	component.Register(component.Device, Get(), component.Order(37))
@@ -30,8 +41,9 @@ type Feature struct {
 	// Changed fires when there is something new to draw; listeners must not block.
 	Changed hook.Hook[struct{}]
 
-	mode *esphome.Select
-	idle *esphome.Switch
+	mode  *esphome.Select
+	idle  *esphome.Switch
+	board *esphome.Select
 
 	mu     sync.Mutex
 	stream *stream // while the page is up in streamed mode
@@ -61,7 +73,16 @@ func Get() *Feature {
 					Category: esphome.CategoryConfig,
 				},
 			},
+			board: &esphome.Select{
+				Base: esphome.Base{
+					ObjectID: "screen_dashboard_view",
+					Name:     "Dashboard to show",
+					Icon:     "mdi:view-dashboard-variant",
+					Category: esphome.CategoryConfig,
+				},
+			},
 		}
+		f.board.OnCommand = f.chooseBoard
 		component.Bind(f.mode, config.DashboardModes(), f.setMode, config.Set().Dashboard().Mode)
 		f.idle.OnCommand = func(on bool) {
 			f.idle.Set(on)
@@ -77,12 +98,99 @@ func Get() *Feature {
 
 func (f *Feature) Name() string { return "dashboard" }
 
-func (f *Feature) Entities() []esphome.Entity { return []esphome.Entity{f.mode, f.idle} }
+func (f *Feature) Entities() []esphome.Entity { return []esphome.Entity{f.mode, f.idle, f.board} }
 
 func (f *Feature) Restore(c config.Config) {
 	component.Restore(f.mode, c.Dashboard.Mode, f.setMode)
 	f.idle.Set(c.Dashboard.Idle)
 	slog.Info("restored", "what", f.idle.ObjectID, "using", c.Dashboard.Idle)
+	f.listBoards(c.Dashboard)
+}
+
+// listBoards puts the known dashboards in the list, with the one chosen selected. A chosen path
+// Home Assistant no longer lists is kept as a choice of its own, so the list never claims a
+// different one is showing.
+func (f *Feature) listBoards(d config.Dashboard) {
+	opts := []string{automatic}
+	chosen := automatic
+	for _, b := range d.Known {
+		opts = append(opts, b.Label)
+		if b.Path == d.Path {
+			chosen = b.Label
+		}
+	}
+	if d.Path != "" && chosen == automatic {
+		opts = append(opts, d.Path)
+		chosen = d.Path
+	}
+	f.board.Options = opts
+	f.board.Set(chosen)
+}
+
+// chooseBoard is a dashboard picked from the list.
+func (f *Feature) chooseBoard(label string) {
+	d := config.Get().Dashboard
+	path, ok := "", label == automatic
+	for _, b := range d.Known {
+		if b.Label == label {
+			path, ok = b.Path, true
+		}
+	}
+	if !ok && label == d.Path {
+		path, ok = d.Path, true
+	}
+	if !ok {
+		slog.Warn("unknown dashboard", "value", label)
+		return
+	}
+	if err := config.Set().Dashboard().Path(path); err != nil {
+		slog.Error("saving the dashboard failed", "err", err)
+		return
+	}
+	f.board.Set(label)
+	slog.Info("dashboard chosen", "path", path)
+	f.setMode(f.Mode())
+}
+
+// Run asks Home Assistant what dashboards there are, now and every so often, and when that has
+// changed puts the new list up. Home Assistant reads a list's choices once per connection, so a
+// changed list is a reconnect; an unchanged one, the usual case, is nothing.
+func (f *Feature) Run(ctx context.Context) error {
+	t := time.NewTimer(20 * time.Second) // Home Assistant is usually not reachable the moment this starts
+	defer t.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return nil
+		case <-t.C:
+		}
+		t.Reset(boardsEvery)
+		if !hass.Get().Ready() {
+			t.Reset(time.Minute)
+			continue
+		}
+		cctx, cancel := context.WithTimeout(ctx, 30*time.Second)
+		boards, err := hass.Get().Boards(cctx)
+		cancel()
+		if err != nil {
+			slog.Info("dashboard: listing Home Assistant's dashboards failed", "err", err)
+			continue
+		}
+		known := make([]config.DashboardChoice, 0, len(boards))
+		for _, b := range boards {
+			known = append(known, config.DashboardChoice{Label: b.Label, Path: b.Path})
+		}
+		if slices.Equal(known, config.Get().Dashboard.Known) {
+			continue
+		}
+		if err := config.Set().Dashboard().Known(known); err != nil {
+			slog.Error("saving the dashboards failed", "err", err)
+			continue
+		}
+		slog.Info("dashboard: Home Assistant's dashboards", "count", len(known))
+		f.listBoards(config.Get().Dashboard)
+		component.Reconnect.Emit(struct{}{})
+	}
 }
 
 // setMode applies a mode: a stream open in the old one is closed, and the page asks again.
@@ -134,6 +242,7 @@ func (f *Feature) Actions() []*esphome.Action {
 					return nil, err
 				}
 				slog.Info("dashboard: path set", "path", p)
+				f.listBoards(config.Get().Dashboard)
 				f.setMode(f.Mode())
 				return nil, nil
 			},

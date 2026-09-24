@@ -15,11 +15,25 @@ import (
 
 // The dashboard page: a Home Assistant dashboard over the whole screen, drawn here or streamed from a
 // dashcast server. A swipe in from the left edge brings it up from the clock, and the same swipe takes
-// it away again; "go home" does too.
+// it away again; "go home" does too. The screen's own edges keep working on it: down from the top is
+// the settings, in from the right the drawer, so a dashboard that is the home page does not lock
+// anybody out of the rest.
 const (
 	// dashForget is how long an opened dashboard stays up untouched before the clock comes back,
 	// when it is not also the idle page.
 	dashForget = 10 * time.Minute
+
+	// dashAway is how long the clock stays up when the dashboard is the idle page and somebody put
+	// it away.
+	dashAway = 2 * time.Minute
+)
+
+// Where a finger on a streamed dashboard started, when that was one of the screen's own edges.
+const (
+	edgeNone = iota
+	edgeLeft
+	edgeTop
+	edgeRight
 )
 
 // openDashboard puts the dashboard up, if there is one to put up.
@@ -36,9 +50,14 @@ func (d *Display) openDashboard() bool {
 	return true
 }
 
+// closeDashboard takes the dashboard down: back to the clock, and when the dashboard is the idle page,
+// the clock for a while.
 func (d *Display) closeDashboard() {
 	d.mu.Lock()
-	d.dash, d.dashEdge = false, false
+	d.dash, d.dashEdge = false, edgeNone
+	if dashboard.Get().Idle() {
+		d.dashAwayUntil = time.Now().Add(dashAway)
+	}
 	d.mu.Unlock()
 	d.wake()
 }
@@ -54,11 +73,12 @@ func (d *Display) dashScene(s *scene, sheetOrDrawer bool) {
 		d.dash = false
 	}
 	asked := d.dash
+	away := time.Now().Before(d.dashAwayUntil)
 	d.mu.Unlock()
 
 	want := mode != config.DashboardOff && s.phase == "idle" && !sheetOrDrawer &&
 		!s.showCamera && !s.showWeather && !s.showRadar && !s.showWifi && !s.bt.Pairing &&
-		(asked || (f.Idle() && !s.nowPlaying))
+		(asked || (f.Idle() && !away && !s.nowPlaying))
 	s.showDash, s.dashMode = want, mode
 
 	streamed := want && mode == config.DashboardStreamed
@@ -82,8 +102,8 @@ func (d *Display) dashScene(s *scene, sheetOrDrawer bool) {
 }
 
 // dashGesture is a finger on the dashboard. Streamed, it goes to the page as it moves, except a
-// finger that starts at the left edge, which is the way back to the clock. Drawn, taps land on the
-// cards.
+// finger that starts at one of the screen's edges: the left takes the dashboard away, the top brings
+// the settings down, the right the drawer in. Drawn, taps land on the cards and the edges are swipes.
 func (d *Display) dashGesture(g touch.Gesture) {
 	if d.r == nil {
 		return
@@ -100,6 +120,14 @@ func (d *Display) dashGesture(g touch.Gesture) {
 			if g.X < edge {
 				d.closeDashboard()
 			}
+		case touch.SwipeLeft:
+			if g.X >= d.r.w-edge {
+				d.openDrawerOver()
+			}
+		case touch.SwipeDown:
+			if g.Y < topEdge {
+				d.showSheet(true)
+			}
 		case touch.Tap:
 			d.drawnTap(g.X, g.Y)
 		}
@@ -110,33 +138,60 @@ func (d *Display) dashGesture(g touch.Gesture) {
 	case touch.Tap:
 		f.Touch("tap", g.X, g.Y)
 	case touch.Hold:
-		if g.X < edge {
-			d.mu.Lock()
-			d.dashEdge, d.dashEdgeX = true, g.X
-			d.mu.Unlock()
-			return
+		from := edgeNone
+		switch {
+		case g.X < edge:
+			from = edgeLeft
+		case g.X >= d.r.w-edge:
+			from = edgeRight
+		case g.Y < topEdge/3:
+			// A thinner band than the clock's: the top of a dashboard is where its own tabs are.
+			from = edgeTop
 		}
-		f.Touch("down", g.X, g.Y)
+		d.mu.Lock()
+		d.dashEdge, d.dashEdgeAt = from, image.Pt(g.X, g.Y)
+		d.mu.Unlock()
+		if from == edgeNone {
+			f.Touch("down", g.X, g.Y)
+		}
 	case touch.Drag:
 		d.mu.Lock()
-		fromEdge := d.dashEdge
+		from := d.dashEdge
 		d.mu.Unlock()
-		if !fromEdge {
+		if from == edgeNone {
 			f.Touch("move", g.X, g.Y)
 		}
 	case touch.Release:
 		d.mu.Lock()
-		fromEdge, startX := d.dashEdge, d.dashEdgeX
-		d.dashEdge = false
+		from, start := d.dashEdge, d.dashEdgeAt
+		d.dashEdge = edgeNone
 		d.mu.Unlock()
-		if fromEdge {
-			if g.X-startX > d.r.s(80) {
+		far := d.r.s(80)
+		switch from {
+		case edgeNone:
+			f.Touch("up", g.X, g.Y)
+		case edgeLeft:
+			if g.X-start.X > far {
 				d.closeDashboard()
 			}
-			return
+		case edgeRight:
+			if start.X-g.X > far {
+				d.openDrawerOver()
+			}
+		case edgeTop:
+			if g.Y-start.Y > far {
+				d.showSheet(true)
+			}
 		}
-		f.Touch("up", g.X, g.Y)
 	}
+}
+
+// openDrawerOver brings the drawer in over the dashboard, on the tab it was last on.
+func (d *Display) openDrawerOver() {
+	d.mu.Lock()
+	tab := d.drawerTab
+	d.mu.Unlock()
+	d.openDrawer(tab)
 }
 
 // dashboardPage draws the dashboard over the whole panel.

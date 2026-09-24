@@ -104,8 +104,9 @@ type Display struct {
 	dashTouched           time.Time
 	dashShowing           bool
 	dashFollow            bool
-	dashEdge              bool
-	dashEdgeX             int
+	dashEdge              int // edgeNone, or the edge the finger on it started at
+	dashEdgeAt            image.Point
+	dashAwayUntil         time.Time // the idle dashboard put away, the clock up until then
 
 	poke chan struct{}
 
