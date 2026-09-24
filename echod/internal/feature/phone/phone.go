@@ -354,7 +354,14 @@ func (p *Phone) serve(ctx context.Context, acct Account) error {
 	p.line = l
 	p.mu.Unlock()
 	defer func() {
-		p.Hangup()
+		// The line going - a reload of the account, a failure - ends a call on it, and only that:
+		// an intercom call between two rooms has nothing to do with the provider.
+		p.mu.Lock()
+		intercom := p.state.Intercom
+		p.mu.Unlock()
+		if !intercom {
+			p.Hangup()
+		}
 		p.mu.Lock()
 		p.line = nil
 		p.mu.Unlock()
@@ -545,6 +552,19 @@ func (p *Phone) Answer() {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	if p.state.Phase != Ringing || p.answered == nil {
+		return
+	}
+	close(p.answered)
+	p.answered = nil
+}
+
+// answerIf answers only the call whose answer channel this is. Drop In answers by itself after its
+// chime, and a hangup in between lets the line go: a call that has claimed it since is not this
+// one's to pick up.
+func (p *Phone) answerIf(answered chan struct{}) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	if p.state.Phase != Ringing || p.answered == nil || p.answered != answered {
 		return
 	}
 	close(p.answered)

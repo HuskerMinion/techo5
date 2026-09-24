@@ -196,6 +196,9 @@ func TestIntercomDropInAnswersItself(t *testing.T) {
 	if err := config.Set().Home().DropIn(true); err != nil {
 		t.Fatal(err)
 	}
+	known := knownDevice
+	knownDevice = func(name, from string) bool { return from == peer.Address }
+	t.Cleanup(func() { knownDevice = known })
 	got, l := firstAnswer(t, peer)
 	if got != msgRinging {
 		t.Fatalf("first answer %q", got)
@@ -208,6 +211,34 @@ func TestIntercomDropInAnswersItself(t *testing.T) {
 		}
 	case <-time.After(3 * time.Second):
 		t.Fatal("a drop in was never answered")
+	}
+	p.Hangup()
+	waitFor(t, "idle", func() bool { return p.State().Phase == Idle })
+}
+
+// Drop In answers by itself only for a device this one knows, calling from that device's address.
+// Anyone else who has the house word - it also travels in announcements - rings like any call.
+func TestIntercomDropInOnlyForAKnownDevice(t *testing.T) {
+	p, peer := house(t)
+	if err := config.Set().Home().DropIn(true); err != nil {
+		t.Fatal(err)
+	}
+	known := knownDevice
+	knownDevice = func(name, from string) bool { return false }
+	t.Cleanup(func() { knownDevice = known })
+
+	got, l := firstAnswer(t, peer)
+	if got != msgRinging {
+		t.Fatalf("first answer %q", got)
+	}
+	waitFor(t, "ringing", func() bool { return p.State().Phase == Ringing })
+	if p.State().DropIn {
+		t.Fatal("an unknown caller was let drop in")
+	}
+	select {
+	case got := <-l.control:
+		t.Fatalf("an unknown caller's call was answered by itself (%q)", got)
+	case <-time.After(1500 * time.Millisecond):
 	}
 	p.Hangup()
 	waitFor(t, "idle", func() bool { return p.State().Phase == Idle })

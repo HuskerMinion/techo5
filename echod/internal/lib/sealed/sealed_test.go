@@ -58,3 +58,22 @@ func TestLabelsKeepKeysApart(t *testing.T) {
 		t.Fatal("two labels gave the same key")
 	}
 }
+
+// Before the key has been shown, a peer is not given memory for a big message: a handshake frame that
+// claims to be larger than a handshake is refused from its length alone.
+func TestServerRefusesAnOversizedHandshake(t *testing.T) {
+	a, b := net.Pipe()
+	t.Cleanup(func() { a.Close(); b.Close() })
+	done := make(chan error, 1)
+	go func() {
+		_, err := Server(b, "test/1", Key("test", "word"))
+		done <- err
+	}()
+	// A claimed length of 60,000 bytes, and nothing after it.
+	if _, err := a.Write([]byte{0x00, 0x00, 0xea, 0x60}); err != nil {
+		t.Fatal(err)
+	}
+	if err := <-done; err == nil {
+		t.Fatal("an oversized handshake frame was accepted")
+	}
+}

@@ -8,12 +8,12 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
-	"math"
 	"net"
 	"net/http"
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 	"unicode"
 	"unicode/utf8"
@@ -120,14 +120,34 @@ type link struct {
 	control chan byte
 	gone    chan struct{} // closed when the other end hangs up or the connection ends
 
+	// talking is set once the call is answered: from then on audio arrives every 20 ms, and a
+	// silence much longer than that is the other end gone, not quiet.
+	talking atomic.Bool
+
 	closeOnce sync.Once
 }
+
+// Every read and write has a deadline. A device that loses power or Wi-Fi mid-call sends nothing to
+// say so, and before these a call to one stayed up for a quarter of an hour, until the kernel gave
+// up: the microphones open, the wake word off, and every other call turned away as busy - with
+// hanging up stuck behind a write that would not finish.
+const (
+	waitQuiet  = intercomRingFor + 10*time.Second // before an answer, only a few messages come
+	talkQuiet  = 5 * time.Second                  // once answered, audio every 20 ms
+	writeFor   = 2 * time.Second
+	goodbyeFor = 500 * time.Millisecond
+)
 
 func newLink(c *sealed.Conn) *link {
 	l := &link{c: c, audio: make(chan []byte, 25), control: make(chan byte, 4), gone: make(chan struct{})}
 	safe.Go("intercom: read", func() {
 		defer close(l.gone)
 		for {
+			quiet := waitQuiet
+			if l.talking.Load() {
+				quiet = talkQuiet
+			}
+			_ = c.SetReadDeadline(time.Now().Add(quiet))
 			t, b, err := readMsg(c)
 			if err != nil || t == msgBye {
 				return
@@ -149,17 +169,27 @@ func newLink(c *sealed.Conn) *link {
 	return l
 }
 
-func (l *link) say(t byte) error { return writeMsg(l.c, t, nil) }
+func (l *link) say(t byte) error {
+	_ = l.c.SetWriteDeadline(time.Now().Add(writeFor))
+	return writeMsg(l.c, t, nil)
+}
 
+// close says goodbye if the other end is still listening, and hangs up either way. The short
+// deadline also frees a write already stuck on an end that stopped reading.
 func (l *link) close() {
 	l.closeOnce.Do(func() {
-		_ = l.say(msgBye)
+		_ = l.c.SetWriteDeadline(time.Now().Add(goodbyeFor))
+		_ = writeMsg(l.c, msgBye, nil)
 		_ = l.c.Close()
 	})
 }
 
+// talk marks the call answered, which shortens how long the other end may go quiet.
+func (l *link) talk() { l.talking.Store(true) }
+
 // Write is the microphones going out.
 func (l *link) Write(p []byte) (int, error) {
+	_ = l.c.SetWriteDeadline(time.Now().Add(writeFor))
 	if err := writeMsg(l.c, msgAudio, p); err != nil {
 		return 0, err
 	}
@@ -186,12 +216,57 @@ func (l *link) goneContext() context.Context {
 	return ctx
 }
 
+// unproven is how many connections may be in their handshake at once. Before the house word has been
+// shown, a connection is anybody on the network, and each holds memory and a slice of a busy CPU:
+// a few is plenty for a house, and the rest are turned away rather than let pile up.
+var unproven = make(chan struct{}, 4)
+
+// refusals keeps the log from filling with one line per failed handshake when something on the
+// network keeps trying.
+var refusals struct {
+	sync.Mutex
+	last  time.Time
+	count int
+}
+
+func refusedWord(from string, err error) {
+	refusals.Lock()
+	defer refusals.Unlock()
+	refusals.count++
+	if time.Since(refusals.last) < time.Minute {
+		return
+	}
+	slog.Warn("intercom: call refused: the house word did not match", "from", from, "err", err, "refused", refusals.count)
+	refusals.last, refusals.count = time.Now(), 0
+}
+
 // intercomIn is a call from another device, on the web port.
 func (p *Phone) intercomIn(w http.ResponseWriter, r *http.Request) {
 	if !strings.EqualFold(r.Header.Get("Upgrade"), intercomProtocol) {
 		http.Error(w, "an intercom call only", http.StatusBadRequest)
 		return
 	}
+	// The word is read once: the key and the check that there is one must agree, even if it is
+	// cleared while this call comes in.
+	word := config.Get().Home.HouseWord
+	if word == "" {
+		http.NotFound(w, r)
+		return
+	}
+	select {
+	case unproven <- struct{}{}:
+	default:
+		http.Error(w, "busy", http.StatusServiceUnavailable)
+		return
+	}
+	proven := false
+	prove := func() {
+		if !proven {
+			proven = true
+			<-unproven
+		}
+	}
+	defer prove()
 	hj, ok := w.(http.Hijacker)
 	if !ok {
 		http.Error(w, "cannot take the connection", http.StatusInternalServerError)
@@ -207,17 +282,19 @@ func (p *Phone) intercomIn(w http.ResponseWriter, r *http.Request) {
 	if _, err := fmt.Fprintf(raw, "HTTP/1.1 101 Switching Protocols\r\nUpgrade: %s\r\nConnection: Upgrade\r\n\r\n", intercomProtocol); err != nil {
 		return
 	}
-	c, err := sealed.Server(conn, intercomProtocol, intercomKey())
+	c, err := sealed.Server(conn, intercomProtocol, sealed.Key(intercomLabel, word))
 	if err != nil {
-		slog.Warn("intercom: call refused: the house word did not match", "from", r.RemoteAddr, "err", err)
+		refusedWord(r.RemoteAddr, err)
 		return
 	}
 	t, name, err := readMsg(c)
 	if err != nil || t != msgHello {
 		return
 	}
+	prove()
 	_ = raw.SetDeadline(time.Time{})
 	caller := shownName(name)
+	from, _, _ := net.SplitHostPort(r.RemoteAddr)
 
 	home := config.Get().Home
 	if home.DoNotDisturb {
@@ -225,13 +302,22 @@ func (p *Phone) intercomIn(w http.ResponseWriter, r *http.Request) {
 		_ = writeMsg(c, msgNotNow, nil)
 		return
 	}
+	// Held by where the call comes from, not the name it gives, which a caller chooses.
 	p.mu.Lock()
-	recent := time.Since(p.declined[caller]) < declineHold
+	recent := time.Since(p.declined[from]) < declineHold
 	p.mu.Unlock()
 	if recent {
 		slog.Info("intercom: call turned away: declined moments ago", "from", caller)
 		_ = writeMsg(c, msgDecline, nil)
 		return
+	}
+
+	// Drop In answers by itself, so it is only for a device this one already knows, calling from
+	// where that device is. The house word proves the caller is in on the house, but it also travels
+	// in announcements; a caller that only claims a device's name, from somewhere else, rings.
+	dropIn := home.DropIn && knownDevice(caller, from)
+	if home.DropIn && !dropIn {
+		slog.Info("intercom: not dropping in for a caller this device does not know there; ringing", "from", caller, "address", from)
 	}
 
 	answered := make(chan struct{})
@@ -242,7 +328,7 @@ func (p *Phone) intercomIn(w http.ResponseWriter, r *http.Request) {
 	if !busy {
 		p.answered, p.end = answered, cancel
 		p.claim(Ringing, caller, true)
-		p.state.Intercom, p.state.DropIn = true, home.DropIn
+		p.state.Intercom, p.state.DropIn = true, dropIn
 	}
 	p.mu.Unlock()
 	if busy {
@@ -259,13 +345,21 @@ func (p *Phone) intercomIn(w http.ResponseWriter, r *http.Request) {
 	fire("ringing", p.State())
 
 	rctx, stopRing := context.WithCancel(ctx)
-	if home.DropIn {
+	if dropIn {
 		// Drop In: a chime rather than a ring, and then it is answered by itself. The call page says
-		// who is listening, and hanging up or declining still ends it.
+		// who is listening, and hanging up or declining still ends it. A chime that did not play to
+		// its end - cut off by something else taking the speaker - is no warning, so the call rings
+		// instead. And only this call is answered: a hangup in the meantime lets the line go, and
+		// whatever claims it next is not picked up by this chime.
 		slog.Info("intercom: drop in", "from", caller)
 		safe.Go("intercom: chime", func() {
-			chime(rctx)
-			p.Answer()
+			if chime(rctx) {
+				p.answerIf(answered)
+				return
+			}
+			if rctx.Err() == nil {
+				ring(rctx)
+			}
 		})
 	} else {
 		safe.Go("intercom: ring", func() { ring(rctx) })
@@ -280,6 +374,7 @@ func (p *Phone) intercomIn(w http.ResponseWriter, r *http.Request) {
 			p.set(func(s *State) { s.Phase, s.Peer = Idle, "" })
 			return
 		}
+		l.talk()
 		p.talk(ctx, l.goneContext(), func(tctx context.Context) error { return carry(tctx, l, l, true, p.say) },
 			func(context.Context) error { l.close(); return nil })
 	case <-ctx.Done():
@@ -289,7 +384,12 @@ func (p *Phone) intercomIn(w http.ResponseWriter, r *http.Request) {
 		if p.declined == nil {
 			p.declined = map[string]time.Time{}
 		}
-		p.declined[caller] = time.Now()
+		for at, when := range p.declined {
+			if time.Since(when) >= declineHold {
+				delete(p.declined, at)
+			}
+		}
+		p.declined[from] = time.Now()
 		p.mu.Unlock()
 		fire("declined", p.State())
 		p.set(func(s *State) { s.Phase, s.Peer = Idle, "" })
@@ -386,47 +486,54 @@ func (p *Phone) CallDevice(name string) error {
 			p.set(func(s *State) { s.Phase, s.Peer = Idle, "" })
 			return
 		}
+		l.talk()
 		p.talk(ctx, l.goneContext(), func(tctx context.Context) error { return carry(tctx, l, l, true, p.say) },
 			func(context.Context) error { l.close(); return nil })
 	})
 	return nil
 }
 
-// chime is Drop In's sound, once: two short rising notes, where a call rings.
-func chime(ctx context.Context) {
-	const rate = speaker.VoiceRate
-	var tone []int16
-	for _, n := range []struct {
-		f1, f2 float64
-		ms     int
-	}{{660, 880, 160}, {0, 0, 70}, {880, 1100, 220}} {
-		count := rate * n.ms / 1000
-		for i := 0; i < count; i++ {
-			if n.f1 == 0 {
-				tone = append(tone, 0)
-				continue
-			}
-			t := float64(i) / rate
-			env := math.Min(1, math.Min(float64(i), float64(count-i))/(rate/100))
-			tone = append(tone, int16(8000*env*(0.5*math.Sin(2*math.Pi*n.f1*t)+0.5*math.Sin(2*math.Pi*n.f2*t))))
-		}
+// chimeFloor is the least a Drop In chime plays at, in volume steps. The chime is the only warning
+// that a room's microphones are about to open, so it goes out on the bell, at its own level, and a
+// room whose media volume is turned right down still hears it.
+const chimeFloor = 8
+
+// chime is Drop In's sound, once: two short rising notes, where a call rings. It reports whether it
+// played to its end; one cut short - by something else taking the speaker, or by the call ending -
+// has warned nobody.
+func chime(ctx context.Context) bool {
+	notes := []speaker.Note{{Freq: 880, Ms: 160}, {Freq: 0, Ms: 70}, {Freq: 1100, Ms: 220}}
+	var ms int
+	for _, n := range notes {
+		ms += n.Ms
 	}
+	played := false
 	claim := speaker.Sound().Claim("drop in", func(cctx context.Context, pl *speaker.Player) error {
-		pl.PlayVoice(tone)
-		for pl.Queued() > 0 {
-			select {
-			case <-cctx.Done():
-				pl.Drain()
-				return nil
-			case <-ctx.Done():
-				pl.Drain()
-				return nil
-			case <-time.After(50 * time.Millisecond):
-			}
+		pl.Bell(max(pl.Step(), chimeFloor), 0.6, notes...)
+		select {
+		case <-cctx.Done():
+		case <-ctx.Done():
+		case <-time.After(time.Duration(ms+120) * time.Millisecond):
+			played = cctx.Err() == nil && ctx.Err() == nil
 		}
 		return nil
 	})
 	<-claim.Done()
+	return played
+}
+
+// knownDevice reports whether a caller is a device this one already knows, calling from that
+// device's own address. A variable, so a test can stand in for the devices announcing themselves.
+var knownDevice = func(name, from string) bool {
+	if from == "" {
+		return false
+	}
+	for _, pe := range announce.Peers() {
+		if strings.EqualFold(pe.Name, name) && pe.Address == from {
+			return true
+		}
+	}
+	return false
 }
 
 // findPeer is the device in the house with this name, however it is capitalized.
