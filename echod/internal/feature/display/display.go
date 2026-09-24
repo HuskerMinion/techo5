@@ -107,6 +107,7 @@ type Display struct {
 	dashEdge              int // edgeNone, or the edge the finger on it started at
 	dashEdgeAt            image.Point
 	dashAwayUntil         time.Time // the idle dashboard put away, the clock up until then
+	dashScroll            int       // how far down the drawn dashboard is scrolled
 
 	poke chan struct{}
 

@@ -87,6 +87,14 @@ func (d *Display) dashScene(s *scene, sheetOrDrawer bool) {
 	} else {
 		f.Close()
 	}
+	if want && mode == config.DashboardDrawn {
+		s.drawn = f.Drawn()
+		d.mu.Lock()
+		s.dashScroll = d.dashScroll
+		d.mu.Unlock()
+	} else {
+		f.CloseDrawn()
+	}
 
 	d.mu.Lock()
 	d.dashShowing = want
@@ -125,9 +133,13 @@ func (d *Display) dashGesture(g touch.Gesture) {
 				d.openDrawerOver()
 			}
 		case touch.SwipeDown:
-			if g.Y < topEdge {
+			if g.Y < topEdge/3 {
 				d.showSheet(true)
+				return
 			}
+			d.drawnScroll(g)
+		case touch.SwipeUp:
+			d.drawnScroll(g)
 		case touch.Tap:
 			d.drawnTap(g.X, g.Y)
 		}

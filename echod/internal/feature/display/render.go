@@ -53,9 +53,11 @@ type scene struct {
 
 	// The dashboard page, drawn instead of the clock while showDash is set: how it is shown, and
 	// when streamed, what arrived.
-	showDash bool
-	dashMode config.DashboardMode
-	dash     dashboard.View
+	showDash   bool
+	dashMode   config.DashboardMode
+	dash       dashboard.View
+	drawn      dashboard.Drawn
+	dashScroll int
 
 	// bt is the Bluetooth audio state: the pairing page replaces everything while it is on, and a
 	// connected device is named in the footer.
@@ -166,6 +168,10 @@ type scene struct {
 // building a face at each size is not something to do per frame.
 type renderer struct {
 	paint            // the canvas, its size, and the settings screen's tap zones
+
+	// The drawn dashboard's tiles where they were last drawn, and how tall all of it is.
+	dashTiles   []dashTile
+	dashContent int
 	clock  font.Face // the big time
 	big    font.Face // a large reading, like today's temperature
 	ampm   font.Face

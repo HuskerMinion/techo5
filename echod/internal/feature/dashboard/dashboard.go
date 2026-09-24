@@ -47,6 +47,7 @@ type Feature struct {
 
 	mu     sync.Mutex
 	stream *stream // while the page is up in streamed mode
+	rooms  *rooms  // while the page is up drawn
 }
 
 var (
@@ -195,13 +196,8 @@ func (f *Feature) Run(ctx context.Context) error {
 
 // setMode applies a mode: a stream open in the old one is closed, and the page asks again.
 func (f *Feature) setMode(m config.DashboardMode) config.DashboardMode {
-	f.mu.Lock()
-	s := f.stream
-	f.stream = nil
-	f.mu.Unlock()
-	if s != nil {
-		s.close()
-	}
+	f.Close()
+	f.CloseDrawn()
 	f.Changed.Emit(struct{}{})
 	return m
 }
