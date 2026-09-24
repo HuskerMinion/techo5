@@ -167,20 +167,30 @@ func (s *Screen) Run(ctx context.Context) error {
 	dev := s.dev
 	stop := context.AfterFunc(ctx, func() { _ = dev.Close() })
 	defer stop()
+	return s.track(ctx, dev.Path, dev.Read)
+}
 
+// track turns the controller's events into gestures until read fails.
+func (s *Screen) track(ctx context.Context, path string, read func() (input.Event, error)) error {
 	slot := 0
 	var f *finger
-	// per-slot positions arrive before the slot's tracking id is known to be ours, so keep them all
-	type pos struct{ x, y int32 }
+	// Per-slot positions arrive before the slot's tracking id is known to be ours, so keep them all.
+	// They are also where a new finger starts: the kernel leaves out a slot's X or Y when it has not
+	// changed since the last contact there, so a finger put down exactly where the last one lifted
+	// sends no position at all until it moves.
+	type pos struct {
+		x, y         int32
+		seenX, seenY bool
+	}
 	slots := map[int]*pos{}
 
 	for {
-		e, err := dev.Read()
+		e, err := read()
 		if err != nil {
 			if ctx.Err() != nil {
 				return nil
 			}
-			return fmt.Errorf("touch: reading %s: %w", dev.Path, err)
+			return fmt.Errorf("touch: reading %s: %w", path, err)
 		}
 		switch e.Type {
 		case input.EvAbs:
@@ -193,14 +203,14 @@ func (s *Screen) Run(ctx context.Context) error {
 			case absMTSlot:
 				slot = int(e.Value)
 			case absMTPositionX:
-				p.x = e.Value
+				p.x, p.seenX = e.Value, true
 				if f != nil && f.slot == slot {
 					s.mu.Lock()
 					f.x, f.seenX = int(e.Value), true
 					s.mu.Unlock()
 				}
 			case absMTPositionY:
-				p.y = e.Value
+				p.y, p.seenY = e.Value, true
 				if f != nil && f.slot == slot {
 					s.mu.Lock()
 					f.y, f.seenY = int(e.Value), true
@@ -210,6 +220,10 @@ func (s *Screen) Run(ctx context.Context) error {
 				switch {
 				case e.Value >= 0 && f == nil:
 					f = &finger{slot: slot, id: e.Value, at: time.Now(), sx: -1}
+					if q := slots[slot]; q != nil {
+						f.x, f.seenX = int(q.x), q.seenX
+						f.y, f.seenY = int(q.y), q.seenY
+					}
 					s.setDown(true)
 					if holdGestures {
 						nf := f

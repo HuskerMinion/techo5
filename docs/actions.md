@@ -19,11 +19,11 @@ whatever paired the device, and isn't something you call from an automation afte
 
 > **Good to know**
 >
-> Several other actions depend on this being set first: `home_show_camera` calls Home Assistant
-> immediately and fails right away — `hass: no access configured` — if it isn't. `home_weather`,
+> Several other actions depend on this being set first: `home_show_camera`, `home_weather`,
 > `home_cameras`' automatic camera list (when called with no `cameras`), `home_slideshow`, and the
-> Radio Browser stations in `home_radio` all need it too, but fetch in the background, so without it
-> they simply show or offer nothing rather than raising an error at the time you call them.
+> Radio Browser stations in `home_radio`. They all fetch in the background, so the action itself
+> succeeds either way. Without the token they show or offer nothing, and `home_show_camera` opens
+> the camera view with `hass: no access configured` on it in place of the picture.
 >
 > The URL must be one the device itself can reach — its local IP address or `homeassistant.local`,
 > not an external or Nabu Casa URL — since the device calls it directly rather than through Home
@@ -663,8 +663,9 @@ the front door when the doorbell rings.
 
 > **Good to know**
 >
-> Needs `home_assistant` set up first — this action fetches the camera's snapshot from Home
-> Assistant directly, and fails with `hass: no access configured` otherwise.
+> Needs `home_assistant` set up first. This action fetches the camera's snapshot from Home
+> Assistant directly. Without it the action still succeeds, but the view shows
+> `hass: no access configured` in place of the picture.
 
 ### entity (Required)
 
