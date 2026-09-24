@@ -73,6 +73,17 @@ type session struct {
 	// so it is an atomic like every other field here that two goroutines can reach.
 	asked atomic.Value // string
 
+	// releaseAsked is a stop the room asked for, handed to the session's own goroutine, because the
+	// claim is this session's alone and a release has to be taken where it is made. A server that has
+	// already ended its stream answers a stop with nothing at all, so a release waiting to be told what
+	// it already knew left the room held until the connection dropped.
+	releaseAsked chan struct{}
+
+	// stopAsked is a stop that arrived while a stream was still being decoded. The claim is not given up
+	// until that stream ends, or what is already buffered goes on playing with nothing holding the room;
+	// see stopRelease and ended. Written and read on the session's own goroutine only.
+	stopAsked bool
+
 	// picture counts the pictures the server has sent, so one still being decoded or waiting for its
 	// moment is dropped once a newer one has arrived.
 	picture atomic.Uint64
@@ -126,7 +137,8 @@ func newSession(conn *websocket.Conn, o *out, bg *speaker.Arbiter, name string, 
 		},
 	}, conn)
 
-	return &session{client: client, clock: ssync.NewClockSync(), out: o, bg: bg, report: report}
+	return &session{client: client, clock: ssync.NewClockSync(), out: o, bg: bg, report: report,
+		releaseAsked: make(chan struct{}, 1)}
 }
 
 // bufferCapacity caps how far ahead the server may send, which is the stall the room can ride out. The
@@ -207,6 +219,15 @@ func (s *session) run(ctx context.Context) error {
 		case g := <-s.client.GroupUpdate:
 			s.grouped(g)
 
+		// A stop the room asked for: the room gives its hold back here, at once, rather than waiting for
+		// the server to report a stop it has already made. A stream still being decoded is different —
+		// what is buffered would go on playing with nothing holding the room — so the release waits for
+		// that stream to end. See asks, stopRelease and releaseNow.
+		case <-s.releaseAsked:
+			if s.stopRelease() {
+				s.releaseNow()
+			}
+
 		case st := <-s.client.ServerState:
 			s.noticed(st)
 
@@ -247,6 +268,10 @@ func (s *session) began(start protocol.StreamStart) {
 		s.dec.close()
 	}
 	s.dec = dec
+	// A stop that was waiting on the stream just replaced is not waiting on this one: it was asked of
+	// the track the new stream replaces, and letting it release this stream's claim would give the room
+	// up while the new track plays.
+	s.stopAsked = false
 	s.opened = true
 	if first {
 		s.bg.Took(s.out)
@@ -339,18 +364,52 @@ func (s *session) ended() {
 	s.out.close()
 	s.bg.Gave(s.out)
 	s.report(stateJoined)
+	// A stop that arrived while this stream was still arriving goes back now rather than after the grace
+	// a skip needs: there is no handover coming, so the two seconds the grace buys would only show a
+	// stopped track to somebody who has already pressed stop.
+	if s.stopAsked {
+		s.stopAsked = false
+		s.releaseNow()
+		return
+	}
 	s.releaseSoon()
 }
 
 // releaseSoon gives the room back when a stream ends inside a live session. A stream's end is what a
 // skip and a pause both look like from here, so the release is held back far enough that a skip does not
-// flash the clock on the way through.
+// flash the clock on the way through: if the next stream starts inside that window it takes the room with
+// a newer claim, and the held-back release no longer matches and does nothing.
 func (s *session) releaseSoon() { s.release(false) }
 
-// giveBack gives the room up because the connection is going. Nothing else from this session is coming
-// to take it, so there is nothing to hold it against - including a pause the room asked for, which would
-// otherwise keep the room for the life of the daemon.
-func (s *session) giveBack() { s.release(true) }
+// releaseNow gives the room back at once, because nothing is coming to take it. Two things are that: a
+// stop the room asked for itself, and the connection going, which is why the run loop and finish share
+// this. The grace releaseSoon waits is for a handover, and neither of these is one - held back, a stop
+// somebody pressed showed them a stopped track for two seconds after they pressed it.
+func (s *session) releaseNow() { s.release(true) }
+
+// askRelease hands a stop to the session's own goroutine, the only one that writes the claim. It never
+// blocks: a second ask while one is pending is the same ask, and the run loop is not waiting on this
+// goroutine for anything. What the run loop does with it is stopRelease's, which is where a stream still
+// arriving is told from a room with nothing left to hold.
+func (s *session) askRelease() {
+	select {
+	case s.releaseAsked <- struct{}{}:
+	default:
+	}
+}
+
+// stopRelease is what a stop asks for: whether the room goes back now, or is remembered for the stream
+// still being decoded to end. With nothing decoding there is nothing to leave held, and the release is
+// immediate. With a stream arriving, the claim is kept until that stream's own end: giving it up now
+// leaves what is already buffered playing on with the room showing nothing and no Stop row left to press,
+// and ended gives it back at once rather than after the grace when the ask was a stop.
+func (s *session) stopRelease() bool {
+	if s.dec != nil {
+		s.stopAsked = true
+		return false
+	}
+	return true
+}
 
 // released is what an end gives up: the claim, and how long the release is held for. Zero means nothing
 // goes back. A pause the room asked for keeps the room - the track stays on the screen with play
@@ -495,6 +554,11 @@ func (s *session) asks(t media.Transport) {
 		// The opposite of a pause: the room is not playing, and saying so here keeps the screen from
 		// offering play for a track that is on its way out while the release is held back.
 		media.Get().RemoteState("stopped")
+		// And the hold goes back on this request rather than on the server's answer to it. Music
+		// Assistant has usually ended the stream already - that is what a pause on its side is - and it
+		// sends only what changes, so it answers a stop with silence and the room stayed held, showing a
+		// track nobody could get rid of, until the connection dropped.
+		s.askRelease()
 	}
 	payload := map[string]any{
 		"controller": map[string]any{"command": name},
@@ -599,7 +663,7 @@ func (s *session) finish() {
 	// back before the teardown rather than after it, because ended() releases what is left of a stream
 	// and with the claim still there that release is the held-back one a skip needs - two seconds late
 	// for a connection that has already gone.
-	s.giveBack()
+	s.releaseNow()
 	s.asked.Store("")
 	s.ended()
 	s.client.Close()

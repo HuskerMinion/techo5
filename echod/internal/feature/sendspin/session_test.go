@@ -42,3 +42,66 @@ func TestWhatAnEndGivesBack(t *testing.T) {
 		})
 	}
 }
+
+// A stop the room asked for is given back at once, on its own request rather than on the server's answer
+// to it. Music Assistant has usually ended the stream already — that is what a pause on its side is — and
+// it sends only what changes, so it answers a stop with silence. A release waiting for that answer left
+// the room held, showing a track nobody could get rid of, until the connection dropped.
+//
+// At once, and not after the grace, because the grace is for a handover: it is there so a skip does not
+// flash the clock on the way to the next stream, and nothing follows a stop. Held back, it showed the
+// stopped track for two seconds after the press, which is the defect finish() had and was measured with.
+// The claim is written on the session's own goroutine, so what is tested here is the hand-over of the
+// ask; what the run loop then does with it is stopRelease's, tested below.
+func TestAStopAsksTheSessionForTheRoom(t *testing.T) {
+	s := &session{releaseAsked: make(chan struct{}, 1)}
+
+	s.askRelease()
+	select {
+	case <-s.releaseAsked:
+	default:
+		t.Fatal("a stop did not reach the session")
+	}
+
+	// A second ask while one is pending is the same ask, and the goroutine that asked is never waited on.
+	s.askRelease()
+	s.askRelease()
+	select {
+	case <-s.releaseAsked:
+	default:
+		t.Fatal("the pending ask was lost")
+	}
+	select {
+	case <-s.releaseAsked:
+		t.Error("a second ask was queued behind the first")
+	default:
+	}
+}
+
+// A stop with nothing decoding gives the room back at once; one that arrives while a stream is still
+// arriving does not, because what is already buffered would go on playing with the room showing nothing
+// and no Stop row left to press. It is remembered instead, and the stream's own end is where it goes back
+// — at once rather than after the grace, which ended does when stopAsked is set.
+func TestAStopWhileAStreamIsArrivingWaitsForIt(t *testing.T) {
+	s := &session{}
+	if !s.stopRelease() {
+		t.Error("a stop with nothing being decoded waited for a stream")
+	}
+	if s.stopAsked {
+		t.Error("a stop with nothing being decoded was remembered for later")
+	}
+
+	s.dec = fakeDecoder{}
+	if s.stopRelease() {
+		t.Error("a stop went back at once while a stream was still being decoded")
+	}
+	if !s.stopAsked {
+		t.Fatal("the stop was not remembered for the stream's end")
+	}
+}
+
+// fakeDecoder is a decoder that does nothing, for the tests that only ask whether one is there.
+type fakeDecoder struct{}
+
+func (fakeDecoder) decode([]byte) ([]int16, error) { return nil, nil }
+func (fakeDecoder) close() error                   { return nil }
