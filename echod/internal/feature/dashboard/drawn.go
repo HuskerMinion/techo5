@@ -106,8 +106,9 @@ type Gauge struct {
 
 // Picture is an image: a camera's latest snapshot, or a picture card's.
 type Picture struct {
-	Name  string
-	Image image.Image // nil until it has arrived
+	Name     string
+	Image    image.Image // nil until it has arrived
+	TooLarge bool        // it arrived, larger than the device will decode
 }
 
 // Drawn is the page as it stands.
@@ -341,6 +342,10 @@ func (s *session) close() {
 	s.mu.Lock()
 	s.stopped = true
 	live := s.live
+	if s.soon != nil {
+		s.soon.Stop()
+		s.soon = nil
+	}
 	s.mu.Unlock()
 	if live != nil {
 		live.Close()
@@ -434,7 +439,7 @@ func (s *session) once() error {
 	safe.Go("dashboard pictures", func() {
 		keepPictures(ctx, need.pictures, func(key string, img image.Image) {
 			s.mu.Lock()
-			s.pictures[key] = img
+			s.pictures[key] = img // nil: too large, which the card says
 			s.mu.Unlock()
 			s.publishSoon()
 		})

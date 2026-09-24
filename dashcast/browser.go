@@ -7,6 +7,7 @@ import (
 	"net/url"
 	"os"
 	"os/exec"
+	"strings"
 
 	"github.com/chromedp/cdproto/emulation"
 	"github.com/chromedp/cdproto/page"
@@ -124,11 +125,23 @@ func (b *browser) open(ctx context.Context, path string, w, h int, allowed map[s
 	return tab, func() { stop(); cancel() }, nil
 }
 
-// haOrigin is Home Assistant's address as a page sees its own origin: scheme, host and port.
+// haOrigin is Home Assistant's address as a page sees its own origin: the scheme and host in lower
+// case, and the port only when it is not the scheme's own - which is how a browser writes
+// location.origin, so the two can be compared as strings.
 func haOrigin(ha string) string {
 	u, err := url.Parse(ha)
 	if err != nil {
 		return ha
 	}
-	return u.Scheme + "://" + u.Host
+	scheme, host, port := strings.ToLower(u.Scheme), strings.ToLower(u.Hostname()), u.Port()
+	if (scheme == "http" && port == "80") || (scheme == "https" && port == "443") {
+		port = ""
+	}
+	if strings.Contains(host, ":") {
+		host = "[" + host + "]" // IPv6
+	}
+	if port != "" {
+		return scheme + "://" + host + ":" + port
+	}
+	return scheme + "://" + host
 }

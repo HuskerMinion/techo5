@@ -699,7 +699,8 @@ func (g gaugeNode) blocks(l look) []Block {
 type pictureNode struct{ key, name string }
 
 func (p pictureNode) blocks(l look) []Block {
-	return []Block{{Picture: &Picture{Name: p.name, Image: l.pictures[p.key]}}}
+	img, arrived := l.pictures[p.key]
+	return []Block{{Picture: &Picture{Name: p.name, Image: img, TooLarge: arrived && img == nil}}}
 }
 
 // cond is one of Home Assistant's conditions, as a conditional card and a card's visibility use
