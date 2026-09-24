@@ -214,6 +214,8 @@ func (f *Feature) save(w http.ResponseWriter, r *http.Request) {
 		}
 	case "house":
 		problem = saveHouse(r.PostFormValue("word"))
+	case "dashboard":
+		problem = saveDashboard(r)
 	case "timezone":
 		zone := strings.TrimSpace(r.PostFormValue("zone"))
 		switch {
@@ -298,6 +300,7 @@ func (f *Feature) settingsPage(w http.ResponseWriter, token, tab, saved, renamed
 			fmt.Fprint(w, `<fieldset><legend>Wi-Fi</legend><p class="note" style="margin:0">This device's network
 			 is not one this page can change.</p></fieldset>`)
 		}
+		dashboardSection(w, token)
 	case "privacy":
 		privacySection(w)
 	case "general":

@@ -93,17 +93,26 @@ func (c *Client) Boards(ctx context.Context) ([]Board, error) {
 	if raw, err := s.call(map[string]any{"type": "get_panels"}); err == nil {
 		var panels map[string]struct {
 			Component string `json:"component_name"`
+			Title     string `json:"title"`
 		}
 		if json.Unmarshal(raw, &panels) == nil {
-			var names []string
+			var names, pages []string
 			for key, p := range panels {
 				if _, ok := builtIn[p.Component]; ok && key == p.Component {
 					names = append(names, key)
+				}
+				// A Webpage dashboard: another site in the sidebar, which a browser can show too.
+				if p.Component == "iframe" && p.Title != "" {
+					pages = append(pages, key)
 				}
 			}
 			slices.Sort(names)
 			for _, key := range names {
 				out = append(out, Board{Label: builtIn[key] + " (streamed only)", Path: key, Streamed: true})
+			}
+			slices.Sort(pages)
+			for _, key := range pages {
+				out = append(out, Board{Label: panels[key].Title + " (streamed only)", Path: key, Streamed: true})
 			}
 		}
 	}

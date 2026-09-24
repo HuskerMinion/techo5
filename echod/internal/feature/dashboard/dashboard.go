@@ -29,8 +29,9 @@ import (
 // Assistant's default one when streamed.
 const automatic = "Automatic"
 
-// boardsEvery is how often Home Assistant is asked what dashboards there are.
-const boardsEvery = 30 * time.Minute
+// boardsEvery is how often Home Assistant is asked what dashboards there are: often enough that one
+// just made is there to pick without a restart. An unchanged list, the usual answer, costs nothing.
+const boardsEvery = 5 * time.Minute
 
 func init() {
 	component.Register(component.Device, Get(), component.Order(37))
@@ -203,6 +204,17 @@ func (f *Feature) setMode(m config.DashboardMode) config.DashboardMode {
 	return m
 }
 
+// SetServer keeps where the dashcast server is and its key, and connects to it afresh.
+func (f *Feature) SetServer(addr, key string) error {
+	addr, key = strings.TrimSpace(addr), strings.TrimSpace(key)
+	if err := config.Set().Dashboard().Server(addr, key); err != nil {
+		return err
+	}
+	slog.Info("dashboard: server set", "address", addr)
+	f.setMode(f.Mode()) // reconnect to the new one
+	return nil
+}
+
 // Mode is how the dashboard is shown, off included.
 func (f *Feature) Mode() config.DashboardMode { return config.Get().Dashboard.Mode }
 
@@ -220,13 +232,7 @@ func (f *Feature) Actions() []*esphome.Action {
 			Name: "dashboard_server",
 			Args: []esphome.Arg{{Name: "address", Type: esphome.ArgString}, {Name: "key", Type: esphome.ArgString}},
 			Run: func(c esphome.Call) (any, error) {
-				addr, key := strings.TrimSpace(c.String("address")), strings.TrimSpace(c.String("key"))
-				if err := config.Set().Dashboard().Server(addr, key); err != nil {
-					return nil, err
-				}
-				slog.Info("dashboard: server set", "address", addr)
-				f.setMode(f.Mode()) // reconnect to the new one
-				return nil, nil
+				return nil, f.SetServer(c.String("address"), c.String("key"))
 			},
 		},
 		{
