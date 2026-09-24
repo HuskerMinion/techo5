@@ -91,6 +91,7 @@ var registered = []string{
 	"reply_delivery_2",
 	"replying_effect_1",
 	"replying_effect_2",
+	"restart",
 	"ring",
 	"ring_muted",
 	"ring_volume",
