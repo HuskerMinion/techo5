@@ -128,6 +128,8 @@ type Display struct {
 	dashAdjust    dashAdjusting
 	dashAwayUntil time.Time
 	dashMoved     bool
+	dashHoldAt    time.Time
+	dashHoldPt    image.Point
 	autoOn  bool
 	level   float64
 	view    voice.State

@@ -28,6 +28,10 @@ const (
 	spotDashForget = 10 * time.Minute
 	spotDashAway   = 2 * time.Minute
 
+	// spotStill is how far a finger may wander on this panel and still be held still (the touch
+	// screen's own tapMove), and spotHold how long it stays for the ring menu.
+	spotStill = 40
+	spotHold  = 450 * time.Millisecond
 )
 
 // toggleDashboard is the menu's Dashboard item: up if it is down, down if it is up.
@@ -117,7 +121,7 @@ func (d *Display) dashGestureSpot(g touch.Gesture) {
 		}
 	case touch.Hold:
 		d.mu.Lock()
-		d.dashMoved = false
+		d.dashMoved, d.dashHoldAt, d.dashHoldPt = false, time.Now(), image.Pt(g.X, g.Y)
 		d.dashDrag = drawnDrag{startScroll: d.dashScroll}
 		d.mu.Unlock()
 		if streamed {
@@ -126,31 +130,52 @@ func (d *Display) dashGestureSpot(g touch.Gesture) {
 			d.drawnHold(g.X, g.Y)
 		}
 	case touch.Drag:
+		// This panel's finger wanders when it is held still, which the touch screen reports as moving;
+		// it has to go further than that wander before it counts as moving at all.
 		d.mu.Lock()
-		d.dashMoved = true
+		if !d.dashMoved && (abs(g.X-d.dashHoldPt.X) > spotStill || abs(g.Y-d.dashHoldPt.Y) > spotStill) {
+			d.dashMoved = true
+		}
+		moved := d.dashMoved
 		d.mu.Unlock()
+		if !moved {
+			return
+		}
 		if streamed {
 			f.Touch("move", g.X, g.Y)
 		} else {
 			d.drawnMove(g.X, g.Y)
 		}
 	case touch.Release:
-		// A finger that moves is reported as a Hold and at once a Drag; one held still is reported as a
-		// Hold only once it has been down long enough, and then nothing until it lifts. So a Hold with
-		// no Drag after it is the long press, whenever the finger lifts.
 		d.mu.Lock()
-		held := !d.dashMoved
+		still, long, at := !d.dashMoved, time.Since(d.dashHoldAt) >= spotHold, d.dashHoldPt
 		d.mu.Unlock()
-		if streamed {
-			f.Touch("up", g.X, g.Y)
-		} else {
-			d.drawnRelease()
-		}
-		if held {
+		switch {
+		case still && long:
+			// Held still: the ring menu, the way back to everything else.
+			if streamed {
+				f.Touch("up", at.X, at.Y)
+			} else {
+				d.drawnRelease()
+			}
 			d.mu.Lock()
 			d.openMenu(modeMain, itemDashboard)
 			d.mu.Unlock()
 			d.wake()
+		case still:
+			// A tap that wandered a little on its way.
+			if streamed {
+				f.Touch("up", at.X, at.Y)
+			} else {
+				d.drawnRelease()
+				d.drawnTap(at.X, at.Y)
+			}
+		default:
+			if streamed {
+				f.Touch("up", g.X, g.Y)
+			} else {
+				d.drawnRelease()
+			}
 		}
 	}
 }
