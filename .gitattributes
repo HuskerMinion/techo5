@@ -17,3 +17,7 @@ tools/*.sh text eol=lf
 *.ps1 text eol=crlf
 *.png binary
 *.tflite binary
+
+# The icon names are read at run time and must not grow a CR on a Windows checkout; the font is binary.
+echod/internal/lib/mdi/names.txt text eol=lf
+*.ttf binary
