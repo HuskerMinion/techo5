@@ -27,19 +27,22 @@ import (
 // A page with no photo never comes here, so it draws exactly as it always has.
 
 const (
-	// scrimTarget is how bright the picture may be behind words, in 8-bit luma after the wash. The
-	// Show's date and weather are its dimmest text (dim, luma about 126), and this keeps them near 3:1.
-	scrimTarget = 55.0
+	// scrimTarget is how bright the picture may be behind words, in 8-bit luma after the wash. A
+	// little above where plain text is comfortable, since the dark edge round the letters carries the
+	// rest and a lighter patch leaves more of the picture.
+	scrimTarget = 68.0
 
 	// scrimMost is the darkest a patch gets, so even a white photo keeps a trace of itself.
 	scrimMost = 0.88
 
 	// scrimPad is how far past its words a patch reaches at full strength, in the Show 5's pixels.
-	// It then fades out over half its own height, within scrimFeatherLeast and scrimFeatherMost: far
-	// enough that it reads as the picture getting darker there rather than as a box.
-	scrimPad          = 6
-	scrimFeatherLeast = 30
-	scrimFeatherMost  = 110
+	// Its corners are rounded by scrimRound of its shorter side, so it is a soft pill rather than a
+	// card, and it fades out over its own height, within scrimFeatherLeast and scrimFeatherMost, so
+	// it reads as the picture getting darker there rather than as something laid on it.
+	scrimPad          = 10
+	scrimRound        = 0.5
+	scrimFeatherLeast = 70
+	scrimFeatherMost  = 320
 
 	// scrimJoin is how close two lines come before they share a patch, in the Show 5's pixels: the
 	// time, its AM/PM and the date under them, but not the weather up in the corner.
@@ -196,7 +199,7 @@ func (p *paint) shape(wash uint8) *patchShape {
 	var patches []patch
 	for _, b := range groups {
 		core := b.Inset(-pad)
-		feather := min(max(core.Dy()/2, p.s(scrimFeatherLeast)), p.s(scrimFeatherMost))
+		feather := min(max(core.Dy(), p.s(scrimFeatherLeast)), p.s(scrimFeatherMost))
 		// The picture was drawn with its corner at the panel's; how bright it is under the words, as
 		// the wash already left it, and how much more ground brings it down to scrimTarget.
 		bright := brightness(o.photo, core.Add(o.photo.Rect.Min.Sub(p.dst.Rect.Min)))
@@ -233,8 +236,8 @@ type falloffKey struct {
 	feather int
 }
 
-// falloffFor is how a patch fades: 255 inside core, falling smoothly to nothing feather pixels beyond
-// it. It depends only on where the words are, so a new picture, or each frame of a fade between two,
+// falloffFor is how a patch fades: 255 inside core with its corners rounded off, falling smoothly to
+// nothing feather pixels beyond that. It depends only on where the words are, so a new picture, or each frame of a fade between two,
 // reuses it and only its strength is worked out again.
 func (o *overPhoto) falloffFor(core image.Rectangle, feather int) *image.Alpha {
 	k := falloffKey{core, feather}
@@ -247,18 +250,23 @@ func (o *overPhoto) falloffFor(core image.Rectangle, feather int) *image.Alpha {
 	if o.falloffs == nil {
 		o.falloffs = map[falloffKey]*image.Alpha{}
 	}
+	// The distance from a rounded rectangle is the distance from the rectangle shrunk by the radius,
+	// less the radius.
+	round := int(scrimRound * float64(min(core.Dx(), core.Dy())))
+	inner := image.Rect(core.Min.X+round, core.Min.Y+round, core.Max.X-1-round, core.Max.Y-1-round)
 	m := image.NewAlpha(core.Inset(-feather))
 	for y := m.Rect.Min.Y; y < m.Rect.Max.Y; y++ {
-		dy := max(core.Min.Y-y, y-(core.Max.Y-1), 0)
+		dy := max(inner.Min.Y-y, y-inner.Max.Y, 0)
 		for x := m.Rect.Min.X; x < m.Rect.Max.X; x++ {
-			dx := max(core.Min.X-x, x-(core.Max.X-1), 0)
+			dx := max(inner.Min.X-x, x-inner.Max.X, 0)
+			d := math.Hypot(float64(dx), float64(dy)) - float64(round)
 			f := 1.0
-			if dx > 0 || dy > 0 {
-				t := 1 - math.Hypot(float64(dx), float64(dy))/float64(feather)
+			if d > 0 {
+				t := 1 - d/float64(feather)
 				if t <= 0 {
 					continue
 				}
-				f = t * t * (3 - 2*t) // smoothstep: no visible edge where it ends
+				f = t * t * t * (t*(6*t-15) + 10) // smootherstep: no visible edge anywhere along it
 			}
 			m.Pix[m.PixOffset(x, y)] = uint8(f*255 + 0.5)
 		}

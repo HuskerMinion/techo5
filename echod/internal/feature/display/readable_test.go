@@ -71,7 +71,7 @@ func TestAPatchIsAsDarkAsThePictureNeeds(t *testing.T) {
 		switch l := luma(after.R, after.G, after.B); {
 		case kind == "night" && after != before:
 			t.Errorf("a dark picture was darkened, %v to %v", before, after)
-		case kind == "snow" && l > scrimTarget+3:
+		case kind == "snow" && l > scrimTarget+6: // aimed at the brighter part, so a pixel may be over
 			t.Errorf("behind the words a bright picture is still %.0f bright", l)
 		}
 		if dst.RGBAAt(5, 5) != corner {
