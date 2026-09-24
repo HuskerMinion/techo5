@@ -61,9 +61,16 @@ is the whole family as it stands, not a roadmap.
 
 The bigger changes of late September 2026. Every release lists the rest.
 
-<p align="center">
-  <a href="docs/screenshots/dashboard-streamed.png"><img src="docs/screenshots/dashboard-streamed.png" alt="Home Assistant's Energy dashboard streamed to an Echo Show 5: energy distribution and totals" width="640"></a>
-</p>
+<table>
+<tr>
+<td width="50%"><a href="docs/screenshots/show8/dashboard-drawn.png"><img src="docs/screenshots/show8/dashboard-drawn.png" alt="A dashboard drawn by the Echo Show 8 itself: tiles for a lamp, a fan, a scene, a porch light, a lock, the heat and the weather"></a></td>
+<td width="50%"><a href="docs/screenshots/show8/dashboard-streamed.png"><img src="docs/screenshots/show8/dashboard-streamed.png" alt="The same dashboard streamed to the Echo Show 8 exactly as Home Assistant draws it, with a five-day forecast"></a></td>
+</tr>
+<tr>
+<td><strong>Drawn on the device</strong>: instant, no server</td>
+<td><strong>Streamed</strong>: exactly as Home Assistant draws it</td>
+</tr>
+</table>
 
 **Home Assistant dashboards on the screen** (v0.9.0). The Echo Show and the Echo Spot can show a
 dashboard as a page you swipe in from the left edge of the clock (on the Spot, from the ring menu),

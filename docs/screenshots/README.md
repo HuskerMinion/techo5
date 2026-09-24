@@ -29,6 +29,8 @@ The sunrise before an alarm is animated: [on a Show](sunrise-show.gif) and [on t
 | **Themes**: presets or your own colors | **Privacy**: every open door has a switch |
 | ![The radio drawer](drawer-radio.png) | ![The cameras drawer](drawer-cameras.png) |
 | **Radio**: your favorites, or the stations near home | **Cameras** from Home Assistant, or say "show the front door" |
+| ![Home Assistant's Energy dashboard streamed to the Show 5](dashboard-streamed.png) | |
+| **A streamed dashboard**: Home Assistant's own Energy page | |
 
 ## Echo Show 8
 
@@ -38,6 +40,8 @@ The same software, laid out for the bigger screen.
 |---|---|
 | ![Clock on the Show 8](show8/clock.png) | ![Now playing with the album cover on the Show 8](show8/now-playing-cover.png) |
 | **Clock** | **Now playing** from Music Assistant |
+| ![A dashboard drawn by the Show 8 itself](show8/dashboard-drawn.png) | ![The same dashboard streamed to the Show 8](show8/dashboard-streamed.png) |
+| **A dashboard, drawn on the device** | **The same dashboard, streamed** through dashcast |
 | ![Weather on the Show 8](show8/weather.png) | ![An alarm ringing on the Show 8](show8/ringing.png) |
 | **Weather** | **Alarm ringing** |
 | ![Settings: Display on the Show 8](show8/settings-display.png) | ![Choosing the night light on the Show 8](show8/night-light.png) |
@@ -59,3 +63,5 @@ The round screen gets its own layouts.
 | **Clock** | **Now playing**, with the cover | **Settings** |
 | ![Settings: Display on the Spot](spot/settings-display.png) | ![Settings: Sound and Voice on the Spot](spot/settings-sound.png) | ![Settings: Alarms and Timers on the Spot](spot/settings-alarms.png) |
 | **Display** | **Sound & Voice** | **Alarms & Timers** |
+| ![A dashboard drawn by the Spot in one column](spot/dashboard-drawn.png) | ![The same dashboard streamed to the Spot's round face](spot/dashboard-streamed.png) | |
+| **A dashboard, drawn** in one column | **The same dashboard, streamed** | |
