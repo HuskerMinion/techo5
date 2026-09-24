@@ -65,7 +65,7 @@ type touchMsg struct {
 // small, since mostly only what changed is sent.
 const quality = 85
 
-func serve(ctx context.Context, b *browser, cfg config, c net.Conn) {
+func serve(ctx context.Context, b *browser, g *guard, cfg config, c net.Conn) {
 	defer c.Close()
 	r := bufio.NewReader(c)
 	_ = c.SetReadDeadline(time.Now().Add(10 * time.Second))
@@ -91,12 +91,24 @@ func serve(ctx context.Context, b *browser, cfg config, c net.Conn) {
 	if !strings.HasPrefix(h.Path, "/") {
 		h.Path = "/" + h.Path
 	}
+	// Dashboards only: see guard.go.
+	switch ok, err := g.allows(ctx, h.Path); {
+	case err != nil:
+		slog.Warn("could not ask Home Assistant what its dashboards are", "err", err)
+		out.problem("Can't reach Home Assistant to check the dashboard.")
+		return
+	case !ok:
+		slog.Warn("a device asked for a page that is not a dashboard", "name", h.Name, "path", h.Path)
+		out.problem("That page is not a dashboard, so it is not shown.")
+		return
+	}
+	allowed, _ := g.panels(ctx)
 	slog.Info("device connected", "name", h.Name, "from", c.RemoteAddr(), "size", [2]int{h.W, h.H}, "path", h.Path)
 	defer slog.Info("device gone", "name", h.Name)
 
 	sctx, cancel := context.WithCancel(ctx)
 	defer cancel()
-	tab, closeTab, err := b.open(sctx, h.Path, h.W, h.H)
+	tab, closeTab, err := b.open(sctx, h.Path, h.W, h.H, allowed)
 	if err != nil {
 		slog.Warn("opening the dashboard failed", "name", h.Name, "err", err)
 		out.problem("The dashboard would not open: " + err.Error())
@@ -140,6 +152,7 @@ func serve(ctx context.Context, b *browser, cfg config, c net.Conn) {
 		<-sctx.Done()
 		c.Close()
 	}()
+	go keepOnDashboards(sctx, tab, b.cfg.ha+h.Path, g, h.Name)
 	for {
 		line, err := r.ReadBytes('\n')
 		if err != nil {
@@ -372,5 +385,29 @@ func merge(rects []image.Rectangle, r image.Rectangle) []image.Rectangle {
 		if !joined {
 			return append(rects, r)
 		}
+	}
+}
+
+// keepOnDashboards looks at where the page is every second, and takes it back to its dashboard if it
+// has got anywhere else: the page's own guard (browser.go) stops the frontend going there, and this
+// is for whatever gets past it.
+func keepOnDashboards(ctx context.Context, tab context.Context, home string, g *guard, name string) {
+	t := time.NewTicker(time.Second)
+	defer t.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-t.C:
+		}
+		var path string
+		if err := chromedp.Run(tab, chromedp.Evaluate(`location.pathname`, &path)); err != nil {
+			continue
+		}
+		if ok, err := g.allows(ctx, path); err != nil || ok {
+			continue
+		}
+		slog.Warn("the page left the dashboards; taking it back", "name", name, "was", path)
+		_ = chromedp.Run(tab, chromedp.Navigate(home))
 	}
 }

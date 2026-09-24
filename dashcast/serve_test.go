@@ -59,3 +59,16 @@ func TestShrinkAverages(t *testing.T) {
 		t.Errorf("shrink = %v %v, want one pixel of 100", out.Bounds(), out.RGBAAt(0, 0))
 	}
 }
+
+// A path is its panel, and nothing that could walk anywhere else.
+func TestFirstPart(t *testing.T) {
+	for path, want := range map[string]string{
+		"/lovelace/0": "lovelace", "/home-refresh/lights?edit=1": "home-refresh", "energy": "energy",
+		"/config/dashboard": "config", "/../config": "", "//evil.example/x": "", "/": "", `\config`: "",
+	} {
+		got, ok := firstPart(path)
+		if got != want || ok != (want != "") {
+			t.Errorf("firstPart(%q) = %q %v, want %q", path, got, ok, want)
+		}
+	}
+}

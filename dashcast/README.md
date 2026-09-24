@@ -15,8 +15,10 @@ knows only the common cards. dashcast is for a dashboard that looks the way you 
 
 It needs:
 
-- a long-lived access token: in Home Assistant, your profile, **Security**, **Long-lived access
-  tokens**. The dashboards are shown as that user sees them, so use an account that should see them.
+- a long-lived access token from a **Home Assistant user made for this, who is not an
+  administrator** (see [Security](#security)). Make the user in **Settings → People → Users → Add
+  user**, with **Administrator** off. Sign in as it once, then make the token in its profile,
+  **Security**, **Long-lived access tokens**. The dashboards are shown as that user sees them.
 - a key of your own choosing, which each device has to present. Any long random string will do.
 
 ```sh
@@ -50,8 +52,21 @@ in the ring menu. More in [docs/dashboards.md](../docs/dashboards.md).
 
 ## Security
 
-Anyone who can reach the port and knows the key can see and use the dashboard as the token's user.
-Keep the port on your own network, and the key to yourself.
+The browser dashcast runs is signed in to Home Assistant with the token, and a device drives it by
+touch. So treat the token and the key with care:
+
+- **Use a user that is not an administrator.** dashcast only shows dashboards: it refuses any other
+  page a device asks for (Settings, Developer Tools, add-ons, the profile), and brings the page back
+  to its dashboard if it gets anywhere else. A user without administrator rights is the second wall
+  behind that: Home Assistant itself will not show that user those pages, whatever happens.
+- **Keep the port on your own network.** Anyone who can reach it and knows the key can see the
+  dashboards and use them. The compose file can bind it to this machine's own LAN address only (for
+  example `"192.168.1.20:9555:9555"`). **Never forward the port from your router.**
+- **The connection is not encrypted.** The key, the pictures and the touches cross your network as
+  they are, like most things on a home network. Keep it on a network you trust.
+- **Custom cards run with the token.** A custom card's code runs in dashcast's browser, as that
+  user, exactly as it would in yours. Install custom cards you trust, as you would anyway.
+- **The key.** Make it long and random: `openssl rand -base64 24` is one way.
 
 ## Settings
 

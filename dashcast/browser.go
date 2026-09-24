@@ -66,7 +66,7 @@ func chromePath(named string) string {
 
 // open is a new tab showing path at w by h, signed in to Home Assistant, in the dark theme a screen
 // in a room wants. The tab closes with ctx.
-func (b *browser) open(ctx context.Context, path string, w, h int) (context.Context, func(), error) {
+func (b *browser) open(ctx context.Context, path string, w, h int, allowed map[string]bool) (context.Context, func(), error) {
 	tab, cancel := chromedp.NewContext(b.ctx)
 	stop := context.AfterFunc(ctx, cancel)
 
@@ -78,7 +78,28 @@ func (b *browser) open(ctx context.Context, path string, w, h int) (context.Cont
 		"hassUrl": b.cfg.ha, "clientId": b.cfg.ha + "/", "expires": 9999999999999, "refresh_token": "",
 	})
 	quoted, _ := json.Marshal(string(tokens))
-	script := fmt.Sprintf(`localStorage.setItem("hassTokens", %s); localStorage.setItem("dockedSidebar", '"always_hidden"');`, quoted)
+	// And the frontend is kept on dashboards: it moves between its pages with the history API, and a
+	// move to anywhere not allowed is refused before it happens.
+	firsts := make([]string, 0, len(allowed))
+	for p := range allowed {
+		firsts = append(firsts, p)
+	}
+	list, _ := json.Marshal(firsts)
+	script := fmt.Sprintf(`localStorage.setItem("hassTokens", %s); localStorage.setItem("dockedSidebar", '"always_hidden"');
+(() => {
+  const allowed = new Set(%s);
+  const ok = (u) => {
+    try {
+      const p = new URL(u, location.href);
+      if (p.origin !== location.origin) return false;
+      return allowed.has(p.pathname.replace(/^\/+/, "").split("/")[0]);
+    } catch (e) { return false; }
+  };
+  for (const name of ["pushState", "replaceState"]) {
+    const real = history[name].bind(history);
+    history[name] = (state, title, url) => { if (url === undefined || url === null || ok(url)) return real(state, title, url); };
+  }
+})();`, quoted, list)
 
 	err := chromedp.Run(tab,
 		chromedp.ActionFunc(func(ctx context.Context) error {

@@ -5,6 +5,7 @@ go 1.26.8
 require (
 	github.com/chromedp/cdproto v0.0.0-20260922220944-a19bff23514f
 	github.com/chromedp/chromedp v0.16.0
+	github.com/gorilla/websocket v1.5.3
 )
 
 require (

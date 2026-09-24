@@ -52,6 +52,7 @@ func main() {
 	}
 	defer b.close()
 
+	g := &guard{cfg: cfg}
 	ln, err := net.Listen("tcp", cfg.listen)
 	if err != nil {
 		slog.Error("listening failed", "addr", cfg.listen, "err", err)
@@ -72,7 +73,7 @@ func main() {
 			slog.Warn("accept", "err", err)
 			continue
 		}
-		go serve(ctx, b, cfg, c)
+		go serve(ctx, b, g, cfg, c)
 	}
 }
 
