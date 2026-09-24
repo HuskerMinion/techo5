@@ -25,6 +25,7 @@ import (
 	"github.com/HuskerMinion/techo5/echod/internal/hardware/speaker"
 	"github.com/HuskerMinion/techo5/echod/internal/layout"
 	"github.com/HuskerMinion/techo5/echod/internal/lib/wake"
+	"github.com/HuskerMinion/techo5/echod/internal/update"
 )
 
 func init() {
@@ -51,6 +52,10 @@ type Diag struct {
 	cached *esphome.Sensor
 	free   *esphome.Sensor
 	purge  *esphome.Button
+
+	// restart is the daemon restarting on request: the way out of a state nothing else clears, without
+	// pulling the plug.
+	restart *esphome.Button
 
 	temperature *esphome.Sensor
 	radioTemp   *esphome.Sensor
@@ -116,7 +121,7 @@ func (d *Diag) Name() string { return "diagnostics" }
 
 func (d *Diag) Entities() []esphome.Entity {
 	out := []esphome.Entity{
-		d.cached, d.free, d.purge,
+		d.cached, d.free, d.purge, d.restart,
 		d.temperature, d.radioTemp, d.cores, d.coresOnline, d.load, d.memory, d.lux,
 		d.roomLevel, d.roomFloor,
 		d.tls, d.ip, d.color, d.signal, d.rxRate, d.txRate, d.ads,
@@ -414,6 +419,21 @@ func (d *Diag) storage() {
 			gone, freed := wake.Lib().Purge(inUse())
 			slog.Info("cache purged", "models", gone, "bytes", freed)
 			d.Measure()
+		},
+	}
+
+	// A restart through the supervisor, the way an update's restart goes: the ring and the speaker are
+	// put down properly, and an update still on trial is not rolled back as a reboot would.
+	d.restart = &esphome.Button{
+		Base: esphome.Base{
+			ObjectID: "restart",
+			Name:     "Restart",
+			Category: esphome.CategoryConfig,
+		},
+		DeviceClass: "restart",
+		OnPress: func() {
+			slog.Warn("restarting: asked to from Home Assistant")
+			update.Restart("restart button")
 		},
 	}
 }

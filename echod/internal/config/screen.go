@@ -15,6 +15,9 @@ type Screen struct {
 	// a touch brings it up to its brightness for a while.
 	NightLight bool `json:"night_light,omitempty"`
 
+	// NightLightLevel is how bright the night light is, 1 to 10; none is the panel's own default.
+	NightLightLevel int `json:"night_light_level,omitempty"`
+
 	// Theme names the screen's palette; empty is the first one, "Custom" is Palette.
 	Theme   string  `json:"theme,omitempty"`
 	Palette Palette `json:"palette,omitempty"`
@@ -70,6 +73,10 @@ func (w ScreenWriter) Auto(v bool) error {
 
 func (w ScreenWriter) Theme(v string) error {
 	return w.st.Update(func(c *Config) { c.Screen.Theme = v })
+}
+
+func (w ScreenWriter) NightLightLevel(v int) error {
+	return w.st.Update(func(c *Config) { c.Screen.NightLightLevel = min(max(v, 0), 10) })
 }
 
 func (w ScreenWriter) NightLight(v bool) error {

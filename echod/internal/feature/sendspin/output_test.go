@@ -278,3 +278,18 @@ func TestDriftCorrectionLeavesSmallErrorsAlone(t *testing.T) {
 		t.Fatalf("corrected %d, frame %d", o.corrected, o.frame)
 	}
 }
+
+// A stream that ends while a reply holds the speaker gives the speaker back held. The reply's end goes
+// to the backgrounds there are, and this one has left, so it has to forget the hold itself: the next
+// stream joined held and stayed silent for as long as it played.
+func TestAStreamThatEndsHeldForgetsTheHold(t *testing.T) {
+	o := newOut(speaker.New())
+	o.Suspend()
+	o.close()
+	o.mu.Lock()
+	held := o.held
+	o.mu.Unlock()
+	if held {
+		t.Fatal("a closed stream kept the hold on it")
+	}
+}

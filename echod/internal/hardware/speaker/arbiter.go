@@ -3,6 +3,7 @@ package speaker
 import (
 	"fmt"
 	"log/slog"
+	"slices"
 	"sync"
 )
 
@@ -48,11 +49,18 @@ func (d *Driver) Backgrounds() *Arbiter {
 // Took is a producer starting. Whatever was playing stands down but keeps its place.
 func (a *Arbiter) Took(p Producer) {
 	a.mu.Lock()
+	// A producer under the one being heard was stood down once, by whatever took the speaker over it
+	// or by the hold. Taking the speaker back is where that is undone: nothing else would undo it, and
+	// the station a song had stood down played nothing, however many times it was started again.
+	below := a.top() != p && slices.Contains(a.stack, p)
 	a.drop(p)
 	stood := a.top()
 	a.stack = append(a.stack, p)
 	held, duck := a.held, a.duck
 	hold := a.hold
+	if below && held {
+		a.hold = p // its one suspension now stands for the hold, which ends by resuming the top
+	}
 	a.mu.Unlock()
 
 	// Already down if the driver holds the lot, and suspending twice would need undoing twice.
@@ -61,11 +69,16 @@ func (a *Arbiter) Took(p Producer) {
 		stood.Suspend()
 	}
 	p.Duck(duck)
-	// The hold stood at most one producer down — the one being heard when it began, or none if the
-	// speaker was silent. A retake by that same producer is already held, so suspending it again would
-	// leave a resume outstanding; anyone else joining mid-hold is stood down here so it cannot play
-	// over the claim.
-	if held && p != hold {
+	switch {
+	case below && !held:
+		p.Resume()
+	case below:
+		// Held: its suspension carries on as the hold's, and the hold's end lets it play.
+	case held && p != hold:
+		// The hold stood at most one producer down — the one being heard when it began, or none if
+		// the speaker was silent. A retake by that same producer is already held, so suspending it
+		// again would leave a resume outstanding; anyone else joining mid-hold is stood down here so
+		// it cannot play over the claim.
 		p.Suspend()
 	}
 }
@@ -77,6 +90,11 @@ func (a *Arbiter) Gave(p Producer) {
 	a.drop(p)
 	now := a.top()
 	held := a.held
+	// A producer that leaves takes the hold on it with it: it forgets being stood down, so if it comes
+	// back while the hold lasts it is a newcomer, and has to be stood down like one.
+	if a.hold == p {
+		a.hold = nil
+	}
 	a.mu.Unlock()
 
 	if now == nil || now == was || held {
