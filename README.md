@@ -61,6 +61,26 @@ is the whole family as it stands, not a roadmap.
 
 The bigger changes of late September 2026. Every release lists the rest.
 
+<p align="center">
+  <a href="docs/screenshots/dashboard-streamed.png"><img src="docs/screenshots/dashboard-streamed.png" alt="Home Assistant's Energy dashboard streamed to an Echo Show 5: energy distribution and totals" width="640"></a>
+</p>
+
+**Home Assistant dashboards on the screen** (v0.9.0). The Echo Show and the Echo Spot can show a
+dashboard as a page you swipe in from the left edge of the clock (on the Spot, from the ring menu),
+or in place of the clock when nothing else is on the screen. There are two ways, picked per device in
+Home Assistant:
+
+- **Drawn on the device.** The device reads the dashboard's cards and draws them itself, in your
+  theme's colors: tiles you can tap or slide for brightness, position and temperature, rows with
+  switches, graphs, gauges, pictures and more. Taps are instant and nothing else is needed. With no
+  dashboard picked, it builds a Rooms dashboard from your Home Assistant areas.
+- **Streamed.** [dashcast](dashcast/README.md), a small server that runs next to Home Assistant
+  (a Docker image for PCs and Raspberry Pis), opens the dashboard in a headless browser and sends the
+  screen only what changes, encrypted with a key of your choosing. It looks exactly as Home Assistant
+  draws it, custom cards included, and it can show built-in pages like Energy and History.
+
+Which to use, how to set it up and what each can do: **[docs/dashboards.md](docs/dashboards.md)**.
+
 <table>
 <tr>
 <td width="50%"><a href="docs/screenshots/now-playing-cover.png"><img src="docs/screenshots/now-playing-cover.png" alt="Now playing from Music Assistant, with the album's cover behind the song"></a></td>
@@ -121,7 +141,7 @@ slot system, phone calls, and a minimal Alpine root filesystem in place of Andro
 | 🎙️ **Wake word on the device** | microWakeWord runs locally: twelve wake words, "Alexa", "Okay Nabu", "Hey Jarvis", "Hey Mycroft", "Computer" and more, chosen on the screen or in Home Assistant. Echo cancellation keeps it listening over music. |
 | 🔐 **Secure by default** | SSH is keys-only and off until you turn it on; keys arrive only through Home Assistant. The camera and screen web pages start closed. No password logins, not even in rescue. |
 | 🔄 **Updates that can't brick it** | Releases install over the air from Home Assistant's update card into the spare of two root filesystem slots, boot on trial, and fall back on their own if the new one doesn't settle. |
-| 📺 **A screen that's actually useful** | Clock and weather, the conversation as it happens, now playing with song and cover art, forecasts and a live rain radar, live Home Assistant cameras, timers and alarms, Wi-Fi setup, 13 themes. |
+| 📺 **A screen that's actually useful** | Clock and weather, the conversation as it happens, now playing with song and cover art, your Home Assistant dashboards, forecasts and a live rain radar, live Home Assistant cameras, timers and alarms, Wi-Fi setup, 13 themes. |
 | 📻 **Weather and radio with no setup** | A new Show uses the forecast every Home Assistant has, and lists the radio stations near home from Home Assistant's Radio Browser. Pick another weather entity (your own station, say) on the screen, and keep your own favorite stations too. |
 | ⏰ **Alarms that ring on their own** | Set on the screen, by Home Assistant, or followed from its helpers; they ring from the Show's own clock even when Home Assistant is down. Snooze included, and the screen can wake you with a sunrise before the sound. |
 | 🎧 **Bluetooth, rebuilt** | Earbuds and speakers over A2DP, plus a Home Assistant Bluetooth proxy, on a kernel rebuilt with Bluetooth from the LineageOS source. |
@@ -165,7 +185,7 @@ Echo Show 8 and the Echo Spot, are in [docs/screenshots](docs/screenshots/README
 | Voice assistant | Alexa, in Amazon's cloud | Home Assistant Assist, with any pipeline you run |
 | Where your voice goes | Amazon | Your Home Assistant, encrypted |
 | Wake word | "Alexa", processed for Amazon | On the device: Alexa, Okay Nabu, Hey Jarvis, Hey Mycroft and eight more |
-| Screen | Alexa cards and ads | Clock, weather, now playing, cameras, timers, alarms, settings |
+| Screen | Alexa cards and ads | Clock, weather, now playing, Home Assistant dashboards, cameras, timers, alarms, settings |
 | Music | Amazon Music and skills | Home Assistant radio lists with cover art, Music Assistant (Sendspin), Home Assistant media |
 | Timers and alarms | Alexa | Home Assistant timers on screen; alarms that ring without Home Assistant |
 | Camera | Video calls, Drop In | A Home Assistant camera entity, off unless watched |
