@@ -42,7 +42,7 @@ var Languages = map[string]Set{
 	"en": {
 		Weather:    []string{"weather", "forecast", "temperature", "rain", "snow", "how hot", "how cold", "storm", "radar", "weather map"},
 		Radar:      []string{"radar", "rain map", "weather map"},
-		NotWeather: []string{"sound", "noise", "play rain", "put on"},
+		NotWeather: []string{"sound", "noise", "play rain", "play the rain", "put on rain", "put on the rain", "put on some rain"},
 		GoHome:     []string{"go home", "home screen", "main screen"},
 		Camera:     []string{"show", "camera"},
 	},

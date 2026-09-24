@@ -107,7 +107,8 @@ func TestRainSoundsAreNotTheForecast(t *testing.T) {
 			t.Errorf("AboutWeather(%q) = true", s)
 		}
 	}
-	for _, s := range []string{"Is it going to rain today?", "Will it storm tonight?", "What's the forecast?"} {
+	for _, s := range []string{"Is it going to rain today?", "Will it storm tonight?", "What's the forecast?",
+		"Should I put on a jacket, is it going to rain?"} {
 		if !AboutWeather(s, "en") {
 			t.Errorf("AboutWeather(%q) = false", s)
 		}
