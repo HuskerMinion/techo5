@@ -84,11 +84,23 @@ type overPhoto struct {
 	falloffs map[falloffKey]*image.Alpha
 }
 
-// patchShape is how dark to make each pixel of area: 0 untouched, 255 the ground color.
+// patchShape is how dark to make the pixels under the words, as one small part per patch, or per
+// group of patches that touch: in each, 0 untouched and 255 the ground color. Parts, not one area
+// round them all: the weather in a top corner and the date near the bottom spanned most of a Show 8,
+// half a megabyte to fill and walk every frame for two lines of words.
 type patchShape struct {
+	parts []patchPart
+}
+
+type patchPart struct {
 	area  image.Rectangle
 	alpha []uint8
 }
+
+// shapesKept is how many patch shapes are kept for one picture. A running timer moves its line's
+// words every second, which is a new shape every second; a few are enough for the words that come
+// and go, and older ones are let go rather than kept for the rest of the picture.
+const shapesKept = 4
 
 // readableOver draws page over photo, which has already been drawn and washed with ground at wash,
 // with its words kept readable.
@@ -187,7 +199,7 @@ func (p *paint) shape(wash uint8) *patchShape {
 	groups := merged(o.boxes)
 	var key strings.Builder
 	fmt.Fprint(&key, wash, o.ground, p.dst.Rect, groups)
-	if o.shaped != o.photo || len(o.shapes) > 16 {
+	if o.shaped != o.photo || len(o.shapes) >= shapesKept {
 		o.shapes, o.shaped = map[string]*patchShape{}, o.photo
 	}
 	if sh, ok := o.shapes[key.String()]; ok {
@@ -214,23 +226,46 @@ func (p *paint) shape(wash uint8) *patchShape {
 			continue
 		}
 		patches = append(patches, patch{core, feather, min((washed-scrimTarget)/(washed-ground), scrimMost)})
-		sh.area = sh.area.Union(core.Inset(-feather))
 	}
-	sh.area = sh.area.Intersect(p.dst.Rect)
-	sh.alpha = make([]uint8, sh.area.Dx()*sh.area.Dy())
+
+	// Each patch's area, joined with any it touches until none do, so that where two fades overlap
+	// the darker wins exactly as it did in one area round them all.
+	var areas []image.Rectangle
 	for _, pt := range patches {
-		k := int(pt.a*255 + 0.5)
-		fall := o.falloffFor(pt.core, pt.feather)
-		area := fall.Rect.Intersect(sh.area)
-		for y := area.Min.Y; y < area.Max.Y; y++ {
-			row := sh.alpha[(y-sh.area.Min.Y)*sh.area.Dx():]
-			for x := area.Min.X; x < area.Max.X; x++ {
-				f := int(fall.Pix[fall.PixOffset(x, y)])
-				if v := uint8((f*k + 127) / 255); v > row[x-sh.area.Min.X] {
-					row[x-sh.area.Min.X] = v
+		if a := pt.core.Inset(-pt.feather).Intersect(p.dst.Rect); !a.Empty() {
+			areas = append(areas, a)
+		}
+	}
+	for joined := true; joined; {
+		joined = false
+		for i := 0; i < len(areas) && !joined; i++ {
+			for j := i + 1; j < len(areas); j++ {
+				if areas[i].Overlaps(areas[j]) {
+					areas[i] = areas[i].Union(areas[j])
+					areas = slices.Delete(areas, j, j+1)
+					joined = true
+					break
 				}
 			}
 		}
+	}
+	for _, a := range areas {
+		part := patchPart{area: a, alpha: make([]uint8, a.Dx()*a.Dy())}
+		for _, pt := range patches {
+			k := int(pt.a*255 + 0.5)
+			fall := o.falloffFor(pt.core, pt.feather)
+			in := fall.Rect.Intersect(a)
+			for y := in.Min.Y; y < in.Max.Y; y++ {
+				row := part.alpha[(y-a.Min.Y)*a.Dx():]
+				for x := in.Min.X; x < in.Max.X; x++ {
+					f := int(fall.Pix[fall.PixOffset(x, y)])
+					if v := uint8((f*k + 127) / 255); v > row[x-a.Min.X] {
+						row[x-a.Min.X] = v
+					}
+				}
+			}
+		}
+		sh.parts = append(sh.parts, part)
 	}
 	o.shapes[key.String()] = sh
 	return sh
@@ -285,18 +320,20 @@ func (o *overPhoto) falloffFor(core image.Rectangle, feather int) *image.Alpha {
 func (p *paint) lay(sh *patchShape) {
 	g := p.over.ground
 	gr, gg, gb := int(g.R), int(g.G), int(g.B)
-	for y := sh.area.Min.Y; y < sh.area.Max.Y; y++ {
-		row := sh.alpha[(y-sh.area.Min.Y)*sh.area.Dx():][:sh.area.Dx()]
-		i := p.dst.PixOffset(sh.area.Min.X, y)
-		for _, a := range row {
-			if a != 0 {
-				px := p.dst.Pix[i : i+3 : i+3]
-				k := int(a)
-				px[0] = uint8((int(px[0])*(255-k) + gr*k + 127) / 255)
-				px[1] = uint8((int(px[1])*(255-k) + gg*k + 127) / 255)
-				px[2] = uint8((int(px[2])*(255-k) + gb*k + 127) / 255)
+	for _, part := range sh.parts {
+		for y := part.area.Min.Y; y < part.area.Max.Y; y++ {
+			row := part.alpha[(y-part.area.Min.Y)*part.area.Dx():][:part.area.Dx()]
+			i := p.dst.PixOffset(part.area.Min.X, y)
+			for _, a := range row {
+				if a != 0 {
+					px := p.dst.Pix[i : i+3 : i+3]
+					k := int(a)
+					px[0] = uint8((int(px[0])*(255-k) + gr*k + 127) / 255)
+					px[1] = uint8((int(px[1])*(255-k) + gg*k + 127) / 255)
+					px[2] = uint8((int(px[2])*(255-k) + gb*k + 127) / 255)
+				}
+				i += 4
 			}
-			i += 4
 		}
 	}
 }

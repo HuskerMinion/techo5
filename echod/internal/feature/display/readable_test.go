@@ -119,3 +119,35 @@ func TestTextWithoutAPhotoIsUnchanged(t *testing.T) {
 		t.Error("text with no photo behind it drew differently")
 	}
 }
+
+// Patches far apart are kept as parts of their own size, not one area round them all: the weather in
+// a corner and the date near the bottom used to make a buffer as big as most of the screen, filled
+// and walked every frame. And only a few shapes are kept for one picture, however often the words move.
+func TestPatchesFarApartStaySmall(t *testing.T) {
+	const w, h = 1280, 800
+	photo := testPhoto("snow", w, h)
+	dst := washed(photo, color.RGBA{0x1c, 0x15, 0x11, 0xff}, 100)
+	p := &paint{dst: dst, w: w, h: h}
+	p.over.photo, p.over.ground = photo, color.RGBA{0x1c, 0x15, 0x11, 0xff}
+	p.over.boxes = []image.Rectangle{image.Rect(40, 30, 400, 80), image.Rect(400, 650, 900, 700)}
+	sh := p.shape(100)
+	if len(sh.parts) != 2 {
+		t.Fatalf("two lines far apart made %d parts, want 2", len(sh.parts))
+	}
+	var pixels int
+	for _, part := range sh.parts {
+		pixels += len(part.alpha)
+	}
+	union := sh.parts[0].area.Union(sh.parts[1].area)
+	if pixels*3 > union.Dx()*union.Dy() {
+		t.Errorf("the parts hold %d pixels; one area round both would be %d", pixels, union.Dx()*union.Dy())
+	}
+
+	for i := range 20 { // a timer's line moving every second
+		p.over.boxes = []image.Rectangle{image.Rect(40, 30, 400, 80), image.Rect(400+i, 650, 900+i, 700)}
+		p.shape(100)
+	}
+	if n := len(p.over.shapes); n > shapesKept {
+		t.Errorf("%d shapes kept for one picture, want at most %d", n, shapesKept)
+	}
+}
