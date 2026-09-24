@@ -34,6 +34,7 @@ const (
 	absMTPositionY  = 0x36
 	absMTTrackingID = 0x39
 	synReport       = 0
+	synDropped      = 3 // the kernel's event buffer overflowed and events were lost
 
 	// tapHold is how long a tap may stay down; how far it may wander is the device's tapMove.
 	tapHold = 500 * time.Millisecond
@@ -184,6 +185,11 @@ func (s *Screen) track(ctx context.Context, path string, read func() (input.Even
 	}
 	slots := map[int]*pos{}
 
+	// dropping is the time after the kernel said it lost events, until the report that ends the
+	// damaged frame: what arrives in between is part of a frame that is not whole, and is skipped,
+	// as the evdev documentation says to.
+	dropping := false
+
 	for {
 		e, err := read()
 		if err != nil {
@@ -191,6 +197,30 @@ func (s *Screen) track(ctx context.Context, path string, read func() (input.Even
 				return nil
 			}
 			return fmt.Errorf("touch: reading %s: %w", path, err)
+		}
+		if e.Type == input.EvSyn && e.Code == synDropped {
+			// Lost events leave the remembered positions out of step with the kernel's, and a finger
+			// seeded from them could land somewhere it never was, or swipe where it never moved. So
+			// they are forgotten, and a finger that is down is let go without acting on it: better a
+			// touch missed than one in the wrong place.
+			slots = map[int]*pos{}
+			if f != nil {
+				s.mu.Lock()
+				if f.holdTimer != nil {
+					f.holdTimer.Stop()
+				}
+				s.mu.Unlock()
+				f = nil
+				s.setDown(false)
+			}
+			dropping = true
+			continue
+		}
+		if dropping {
+			if e.Type == input.EvSyn && e.Code == synReport {
+				dropping = false
+			}
+			continue
 		}
 		switch e.Type {
 		case input.EvAbs:
@@ -252,6 +282,11 @@ func (s *Screen) track(ctx context.Context, path string, read func() (input.Even
 			switch {
 			case e.Value == 1 && f == nil:
 				f = &finger{slot: slot, at: time.Now(), sx: -1}
+				// Seeded as the tracking id's finger is, for a controller that says BTN_TOUCH first.
+				if q := slots[slot]; q != nil {
+					f.x, f.seenX = int(q.x), q.seenX
+					f.y, f.seenY = int(q.y), q.seenY
+				}
 				s.setDown(true)
 				if holdGestures {
 					nf := f
@@ -347,16 +382,26 @@ func (s *Screen) moved(f *finger) {
 		return
 	}
 	steps := (y0 - y1) / notch // positive: finger moved up
+	// Counted under the lock and sent after it: holdFired reads swiped on the hold timer's goroutine.
+	s.mu.Lock()
+	var ups, downs int
 	for f.notched < steps {
 		f.notched++
-		f.swiped = true
-		x, y := s.landscape(f.sx, f.sy)
-		s.Gestures.Emit(Gesture{Kind: SwipeUp, X: x, Y: y})
+		ups++
 	}
 	for f.notched > steps {
 		f.notched--
+		downs++
+	}
+	if ups+downs > 0 {
 		f.swiped = true
-		x, y := s.landscape(f.sx, f.sy)
+	}
+	x, y := s.landscape(f.sx, f.sy)
+	s.mu.Unlock()
+	for range ups {
+		s.Gestures.Emit(Gesture{Kind: SwipeUp, X: x, Y: y})
+	}
+	for range downs {
 		s.Gestures.Emit(Gesture{Kind: SwipeDown, X: x, Y: y})
 	}
 }
