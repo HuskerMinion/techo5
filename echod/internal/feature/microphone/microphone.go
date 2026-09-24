@@ -27,6 +27,7 @@ type Microphone struct {
 	cancel      *esphome.Switch
 	engine      *esphome.Select
 	denoise     *esphome.Switch
+	ends        *esphome.Switch
 	sensitivity *esphome.Number
 }
 
@@ -82,6 +83,14 @@ func build() *Microphone {
 				Category: esphome.CategoryConfig,
 			},
 		},
+		ends: &esphome.Switch{
+			Base: esphome.Base{
+				ObjectID: "microphone_end_of_speech",
+				Name:     "End of speech on the device",
+				Icon:     "mdi:account-voice",
+				Category: esphome.CategoryConfig,
+			},
+		},
 		sensitivity: &esphome.Number{
 			Base: esphome.Base{
 				ObjectID: "microphone_sensitivity",
@@ -106,7 +115,7 @@ func build() *Microphone {
 
 	for _, b := range []*esphome.Base{
 		&m.mixing.Base, &m.gain.Base, &m.leveling.Base, &m.cancel.Base, &m.engine.Base, &m.denoise.Base,
-		&m.sensitivity.Base,
+		&m.ends.Base, &m.sensitivity.Base,
 	} {
 		b.DeviceID = component.DeviceMicrophone
 	}
@@ -139,6 +148,14 @@ func build() *Microphone {
 		}
 	}
 
+	// Read by each turn as it opens, so there is nothing to apply here.
+	m.ends.OnCommand = func(on bool) {
+		m.ends.Set(on)
+		if err := config.Set().Microphone().DeviceEnds(on); err != nil {
+			slog.Error("saving the end of speech setting failed", "err", err)
+		}
+	}
+
 	m.sensitivity.OnCommand = func(v float32) {
 		m.sensitivity.Set(v)
 		source.SetSensitivity(int(v))
@@ -159,7 +176,7 @@ func build() *Microphone {
 func (m *Microphone) Name() string { return "microphone settings" }
 
 func (m *Microphone) Entities() []esphome.Entity {
-	return []esphome.Entity{m.mixing, m.gain, m.leveling, m.cancel, m.engine, m.denoise, m.sensitivity}
+	return []esphome.Entity{m.mixing, m.gain, m.leveling, m.cancel, m.engine, m.denoise, m.ends, m.sensitivity}
 }
 
 // setEngine applies a canceller choice and reports what the source settled on, which is the
@@ -191,6 +208,9 @@ func (m *Microphone) Restore(c config.Config) {
 	m.denoise.Set(c.Microphone.Denoise)
 	source.SetDenoising(c.Microphone.Denoise)
 	slog.Info("restored", "what", m.denoise.ObjectID, "using", c.Microphone.Denoise)
+
+	m.ends.Set(!c.Microphone.PipelineEnds)
+	slog.Info("restored", "what", m.ends.ObjectID, "using", !c.Microphone.PipelineEnds)
 
 	m.sensitivity.Set(float32(c.Microphone.Sensitivity))
 	source.SetSensitivity(c.Microphone.Sensitivity)

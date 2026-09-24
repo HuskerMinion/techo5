@@ -88,6 +88,7 @@ const (
 	evPlaying                      // the reply has audio, so the pipeline owes nothing more
 	evContinue                     // Home Assistant wants the answer to a question it just asked
 	evSpeaking                     // VAD detected speech has started
+	evSpokeEnd                     // the device heard the speaker finish; text is the turn's id
 )
 
 type event struct {
@@ -312,6 +313,16 @@ func (c *conversation) handle(e event) {
 	case evSpeaking:
 		if c.followUp && c.phase == phaseListening {
 			c.arm(wakeword.MaxListen(c.slot))
+		}
+
+	case evSpokeEnd:
+		// The device heard the speaker finish before the pipeline did, which with a television or
+		// other voices in the room it may never do. Ending the audio is what the pipeline's own end
+		// does, and it goes on to transcribe and answer what it has. The id keeps a late one from an
+		// earlier turn from ending this one.
+		if c.phase == phaseListening && e.text == c.turn.ID() {
+			slog.Info("end of speech heard here, ending the turn", "slot", c.slot+1)
+			c.think()
 		}
 
 	case evContinue:
@@ -855,7 +866,8 @@ func (c *conversation) startAudio(slot int, followUp bool) {
 	// slot is captured rather than read from the loop's state, which the streamer does not own. So is
 	// whether this is a follow-up: between them they say what the turn sounds like and so what has to
 	// be kept out of the microphone.
-	safe.Go("turn audio", func() { c.stream(ctx, slot, followUp) })
+	id := c.turn.ID()
+	safe.Go("turn audio", func() { c.stream(ctx, slot, followUp, id) })
 }
 
 func (c *conversation) stopStreaming() {
@@ -869,7 +881,7 @@ func (c *conversation) stopStreaming() {
 }
 
 // stream sends microphone frames until it is told to stop.
-func (c *conversation) stream(ctx context.Context, slot int, followUp bool) {
+func (c *conversation) stream(ctx context.Context, slot int, followUp bool, id string) {
 	frames, unlisten := c.source.Listen("turn")
 	defer unlisten()
 
@@ -886,9 +898,16 @@ func (c *conversation) stream(ctx context.Context, slot int, followUp bool) {
 		pre = nil
 	}
 
-	// Shadow end-of-speech: the device's own view of when the speaker finished, beside the pipeline's,
-	// logged and not yet acted on. It hears what is sent - the history too - since that is what it was
-	// measured on. See package endpoint for why the pipeline's detector alone is not enough.
+	// End of speech as the device hears it, which ends the turn when the pipeline has not already.
+	// It hears what is sent - the history too - since that is what it was measured on. See package
+	// endpoint for why the pipeline's detector alone is not enough.
+	//
+	// Only after a wake word, though. The detector measures the speaker against the loudest thing it
+	// has heard, and a wake word means someone close has just spoken; a follow-up opens on nothing,
+	// where the loudest thing may be the television, and ending on that would send it the
+	// television's words to act on. There it is logged only, and the follow-up's own limit ends it.
+	// The same when the device has been told to leave it to Home Assistant.
+	acts := !followUp && !config.Get().Microphone.PipelineEnds
 	ep := endpoint.New(endpoint.Default)
 	var sent int
 	var endpointAt float64
@@ -896,9 +915,12 @@ func (c *conversation) stream(ctx context.Context, slot int, followUp bool) {
 		sent += len(frame)
 		if endpointAt == 0 && ep.Feed(frame) {
 			endpointAt = float64(sent) / float64(mic.Rate)
-			slog.Info("end of speech heard here, not acted on", "slot", slot+1,
+			slog.Info("end of speech heard here", "slot", slot+1, "acted", acts,
 				"spoke_s", math.Round(float64(ep.EndedAt())/float64(mic.Rate)*10)/10,
 				"at_s", math.Round(endpointAt*10)/10)
+			if acts {
+				c.post(event{kind: evSpokeEnd, text: id})
+			}
 		}
 	}
 	see(pre)

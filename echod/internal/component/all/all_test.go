@@ -67,6 +67,7 @@ var registered = []string{
 	"mic_mute",
 	"microphone_cancel_echo",
 	"microphone_echo_canceller",
+	"microphone_end_of_speech",
 	"microphone_gain",
 	"microphone_leveling",
 	"microphone_mixing",
