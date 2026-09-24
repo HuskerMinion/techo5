@@ -31,13 +31,13 @@ import (
 // A page with no photo never comes here, so it draws exactly as it always has.
 
 const (
-	// scrimTarget is how bright the picture may be behind words, in 8-bit luma after the wash. A
-	// little above where plain text is comfortable, since the dark edge round the letters carries the
-	// rest and a lighter patch leaves more of the picture.
-	scrimTarget = 68.0
+	// scrimTarget is how bright the picture may be behind words, in 8-bit luma after the wash. Well
+	// above where plain text would be comfortable: the dark edge round the letters carries the rest,
+	// and on a real Show anything darker read as a dark blot rather than a shade.
+	scrimTarget = 115.0
 
-	// scrimMost is the darkest a patch gets, so even a white photo keeps a trace of itself.
-	scrimMost = 0.88
+	// scrimMost is the darkest a patch gets, so even a white photo shows through it.
+	scrimMost = 0.45
 
 	// scrimTallest is the tallest line that gets a patch, as the face's height in the Show 5's pixels:
 	// the title size (59) and below do, the AM/PM (70) and the time do not.
@@ -56,6 +56,11 @@ const (
 	haloAlpha = 190
 	haloReach = 110
 )
+
+// photoGold is the small lines' color over a photo, whatever it was: the theme's dim text is made for
+// a plain dark ground, and on a picture it sinks into it. A warm gold stands out from nearly any photo
+// and still sits with the cream time and the amber AM/PM.
+var photoGold = color.RGBA{0xE8, 0xC0, 0x4E, 0xff}
 
 // overPhoto is the state of drawing over a photo, kept on the paint between frames.
 type overPhoto struct {

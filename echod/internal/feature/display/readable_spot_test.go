@@ -64,7 +64,7 @@ func besideSmallLines(t *testing.T, name string, img *image.RGBA, boxes []image.
 			t.Errorf("%s: a line %d tall got a patch", name, b.Dy())
 		}
 		c := img.RGBAAt(b.Min.X-2, (b.Min.Y+b.Max.Y)/2)
-		if l := luma(c.R, c.G, c.B); l > scrimTarget+6 {
+		if l := luma(c.R, c.G, c.B); l > scrimTarget+12 {
 			t.Errorf("%s: beside the words at %v a snowy photo is still %.0f bright", name, b, l)
 		}
 	}

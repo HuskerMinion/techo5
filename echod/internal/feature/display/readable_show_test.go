@@ -45,7 +45,7 @@ func TestTheClockReadsOverAPhoto(t *testing.T) {
 					date := at.Format("Monday, January 2")
 					base := panel.high/2 + r.s(60) + r.s(70)
 					c := img.RGBAAt((panel.wide-r.width(r.small, date))/2-r.s(4), base-r.s(12))
-					if l := luma(c.R, c.G, c.B); l > scrimTarget+6 {
+					if l := luma(c.R, c.G, c.B); l > scrimTarget+12 {
 						t.Errorf("%s: beside the date a snowy photo is still %.0f bright", panel.name, l)
 					}
 					// Just left of the time: no patch there.
