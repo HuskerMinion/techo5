@@ -198,20 +198,63 @@ func (m *Mute) pressed(e buttons.Event) {
 	}
 	switch e.Kind {
 	case buttons.Tap:
-		// A ring takes the press, and the microphone is left where it was. Cutting the microphone is
-		// the last thing somebody wants at a ringing alarm, since it would take the stop word with
-		// it — and on a device with no action button this is one of the three that can stop a ring.
+		// A ring takes the press, and the microphone is left where it was (keep, which undoes it
+		// where the hardware has already moved). Cutting the microphone is the last thing somebody
+		// wants at a ringing alarm, since it would take the stop word with it — and on a device with
+		// no action button this is one of the three that can stop a ring.
 		if ring.Offered() {
 			ring.Accept()
+			m.keep()
 			return
 		}
 		if ring.Silence() {
+			m.keep()
 			return
 		}
 		m.Toggle()
 	case buttons.Hold:
 		speaker.Sound().Chime(speaker.ToneMuteHold)
 	}
+}
+
+// keep leaves the microphones where they were after a press that went to a ring. Where the hardware
+// acts on the button itself - the Dot's keypad driver, the 2nd gen Show 5's - it has already moved
+// the mute by the time the press arrives, and nothing here followed: a Dot muted before an alarm was
+// live after the press that stopped it, with its wake words still stopped and the stored state
+// still muted, so it answered nothing and came back muted after a restart (techo5-dot#4). The same
+// press on a live Dot cut its microphones behind Home Assistant's back.
+//
+// So the line is put back. If it will not go back, what the hardware did is taken as the press it
+// was, and published like any other, so that the device at least says what it is doing.
+func (m *Mute) keep() {
+	if m.line == nil {
+		return
+	}
+	was := m.sw.Get()
+	if !m.line.HardwareActs(was) {
+		return
+	}
+	m.await(was)
+	is, err := m.line.Get()
+	if err != nil {
+		slog.Error("reading mute state failed", "err", err)
+		return
+	}
+	if is == was {
+		return
+	}
+	if err := m.line.Set(was); err != nil {
+		slog.Error("putting the mute back after a ring failed", "muted", was, "err", err)
+	}
+	if now, err := m.line.Get(); err == nil && now != was {
+		m.settled(true)
+		return
+	}
+	// A latch released under the microphones may take the chip down with it; see settled.
+	if !was {
+		mic.Rewire()
+	}
+	slog.Info("microphone mute left as it was after a press that went to a ring", "muted", was)
 }
 
 // settled publishes what the line now reads — not what was asked for, so a line that did not move
