@@ -65,7 +65,7 @@ func (r *paint) dashPage(v dashboard.Drawn, scroll int, adj dashAdjusting, area 
 			y += r.s(30)
 			r.text(fc.label, line, area.Min.X+(area.Dx()-r.width(fc.label, line))/2, y, pal.sub)
 		}
-		r.dashTiles, r.dashContent = nil, 0
+		r.setDash(nil, 0)
 		return
 	}
 
@@ -91,9 +91,23 @@ func (r *paint) dashPage(v dashboard.Drawn, scroll int, adj dashAdjusting, area 
 	for _, h := range heights {
 		most = max(most, h)
 	}
-	r.dashTiles = tiles
 	// How far the page can scroll: its content, and the part of the panel below the area.
-	r.dashContent = most + gap + (r.h - area.Dy())
+	r.setDash(tiles, most+gap+(r.h-area.Dy()))
+}
+
+// setDash keeps where the tiles were drawn and how far the page scrolls, for the touch goroutine to
+// read: under zmu, as the settings screen's tap zones are.
+func (r *paint) setDash(tiles []dashTile, content int) {
+	r.zmu.Lock()
+	r.dashTiles, r.dashContent = tiles, content
+	r.zmu.Unlock()
+}
+
+// dash is what setDash kept.
+func (r *paint) dash() ([]dashTile, int) {
+	r.zmu.Lock()
+	defer r.zmu.Unlock()
+	return r.dashTiles, r.dashContent
 }
 
 // section draws a section's blocks down from y, and says how tall they came to. Blocks entirely off

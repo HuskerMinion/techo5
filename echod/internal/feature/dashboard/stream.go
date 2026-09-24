@@ -18,6 +18,7 @@ import (
 	"time"
 
 	"github.com/HuskerMinion/techo5/echod/internal/config"
+	"github.com/HuskerMinion/techo5/echod/internal/lib/safe"
 )
 
 // The dashcast protocol, as dashcast/serve.go describes it, inside the encrypted connection secure.go
@@ -74,12 +75,13 @@ func (f *Feature) Stream(w, h int) View {
 	s := f.stream
 	if s == nil || s.w != w || s.h != h {
 		if s != nil {
-			go s.close()
+			safe.Go("dashboard stream close", s.close)
 		}
 		s = &stream{f: f, w: w, h: h}
 		f.stream = s
-		go s.run()
+		safe.Go("dashboard stream", s.run)
 	}
+	f.streamUsed = time.Now()
 	f.mu.Unlock()
 
 	s.mu.Lock()
@@ -106,12 +108,16 @@ func (f *Feature) Touch(kind string, x, y int) {
 	if s == nil {
 		return
 	}
-	// Written by whoever touched, which is the touch reader: small, and the socket's buffer takes it.
+	// Written by whoever touched, which is the touch reader, outside the lock the page draws under,
+	// and given a moment at most: a server that has stopped reading must not freeze the screen.
 	s.mu.Lock()
-	defer s.mu.Unlock()
-	if s.enc != nil {
-		_ = s.enc.Encode(map[string]any{"t": kind, "x": x, "y": y})
+	enc, c := s.enc, s.conn
+	s.mu.Unlock()
+	if enc == nil {
+		return
 	}
+	_ = c.SetWriteDeadline(time.Now().Add(2 * time.Second))
+	_ = enc.Encode(map[string]any{"t": kind, "x": x, "y": y})
 }
 
 func (s *stream) close() {
@@ -207,7 +213,7 @@ func (s *stream) once() error {
 			return err
 		}
 		n := binary.BigEndian.Uint32(hdr[:])
-		if n == 0 || n > 16<<20 {
+		if n == 0 || n > messageMax {
 			return errors.New("dashboard stream: a message of an impossible size")
 		}
 		msg := make([]byte, n)
@@ -220,7 +226,7 @@ func (s *stream) once() error {
 				continue
 			}
 			at := image.Pt(int(binary.BigEndian.Uint16(msg[1:3])), int(binary.BigEndian.Uint16(msg[3:5])))
-			img, err := jpeg.Decode(bytes.NewReader(msg[5:]))
+			img, err := decodeWithin(msg[5:], s.w/2+1, s.h/2+1)
 			if err != nil {
 				continue
 			}
@@ -232,13 +238,29 @@ func (s *stream) once() error {
 				continue
 			}
 			at := image.Pt(int(binary.BigEndian.Uint16(msg[1:3])), int(binary.BigEndian.Uint16(msg[3:5])))
-			img, err := jpeg.Decode(bytes.NewReader(msg[5:]))
+			img, err := decodeWithin(msg[5:], s.w, s.h)
 			if err != nil {
 				continue
 			}
 			s.paint(at, img)
 		}
 	}
+}
+
+// messageMax is the largest message a server may send: a full-screen picture is well under 1 MB.
+const messageMax = 4 << 20
+
+// decodeWithin decodes a JPEG no larger than w by h, looking at its size before decoding it: a server
+// that sends a picture claiming to be enormous gets nothing decoded, rather than all of memory.
+func decodeWithin(b []byte, w, h int) (image.Image, error) {
+	cfg, err := jpeg.DecodeConfig(bytes.NewReader(b))
+	if err != nil {
+		return nil, err
+	}
+	if cfg.Width <= 0 || cfg.Height <= 0 || cfg.Width > w || cfg.Height > h {
+		return nil, errors.New("dashboard stream: a picture larger than the screen")
+	}
+	return jpeg.Decode(bytes.NewReader(b))
 }
 
 // paint puts a picture into the frame where it belongs. Pictures are painted as they arrive, however
@@ -265,6 +287,9 @@ func (s *stream) paintDoubled(at image.Point, img image.Image) {
 	small := image.NewRGBA(image.Rect(0, 0, b.Dx(), b.Dy()))
 	draw.Draw(small, small.Rect, img, b.Min, draw.Src)
 
+	if at.X < 0 || at.Y < 0 || at.X >= s.w || at.Y >= s.h {
+		return // off the screen: nothing of it would show
+	}
 	s.mu.Lock()
 	if s.frame == nil {
 		s.frame = image.NewRGBA(image.Rect(0, 0, s.w, s.h))
@@ -287,8 +312,11 @@ func (s *stream) paintDoubled(at image.Point, img image.Image) {
 			copy(r0[o:o+4], p)
 			copy(r0[o+4:o+8], p)
 		}
+		// The row below is the row just drawn, over the same span, clipped to the frame.
 		lo, hi := at.X*4, min(at.X+2*small.Rect.Dx(), s.w)*4
-		copy(f.Pix[(ty+1)*f.Stride+lo:(ty+1)*f.Stride+hi], r0[lo:hi])
+		if hi > lo {
+			copy(f.Pix[(ty+1)*f.Stride+lo:(ty+1)*f.Stride+hi], r0[lo:hi])
+		}
 	}
 	s.view.Ready = true
 	s.view.Version++

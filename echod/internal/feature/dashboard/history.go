@@ -45,14 +45,41 @@ func loadHistory(ctx context.Context, live *hass.Live, entities []string, hours 
 		return out
 	}
 	for id, list := range got {
+		var h []point
 		for _, p := range list {
 			if v, err := strconv.ParseFloat(p.S, 64); err == nil {
 				sec, frac := math.Modf(p.LU)
-				out[id] = append(out[id], point{at: time.Unix(int64(sec), int64(frac*1e9)), v: v})
+				h = append(h, point{at: time.Unix(int64(sec), int64(frac*1e9)), v: v})
+			}
+			if len(h) > 2*historyMost {
+				h = keep(h, hours)
 			}
 		}
+		out[id] = keep(h, hours)
 	}
 	return out
+}
+
+// historyMost is how many points an entity's history keeps: far more than a graph's width, far less
+// than a sensor reporting every second for a week would pile up.
+const historyMost = 1500
+
+// keep is a history trimmed to the last hours and to historyMost points: the oldest go first, and
+// past the limit every other point of the older half, so the line keeps its shape.
+func keep(h []point, hours int) []point {
+	cut := time.Now().Add(-time.Duration(hours) * time.Hour)
+	for len(h) > 2 && h[1].at.Before(cut) {
+		h = h[1:]
+	}
+	if len(h) <= historyMost {
+		return h
+	}
+	half := len(h) / 2
+	out := make([]point, 0, historyMost)
+	for i := 0; i < half; i += 2 {
+		out = append(out, h[i])
+	}
+	return append(out, h[half:]...)
 }
 
 // buckets is a history over the last hours as n values, oldest first: each the value at the end of

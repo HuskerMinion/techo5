@@ -108,9 +108,10 @@ func (d *Display) tileAt(x, y int) *dashTile {
 	if d.r == nil {
 		return nil
 	}
-	for i := range d.r.dashTiles {
-		if image.Pt(x, y).In(d.r.dashTiles[i].r) {
-			t := d.r.dashTiles[i]
+	tiles, _ := d.r.dash()
+	for i := range tiles {
+		if image.Pt(x, y).In(tiles[i].r) {
+			t := tiles[i]
 			return &t
 		}
 	}
@@ -134,6 +135,7 @@ const slideStart = 14
 // it, and along a tile with a level is that level following it, a tile's width from one end of its
 // range to the other.
 func (d *Display) drawnMove(x, y int) {
+	_, content := d.r.dash()
 	d.mu.Lock()
 	defer d.mu.Unlock()
 	dr := &d.dashDrag
@@ -150,7 +152,7 @@ func (d *Display) drawnMove(x, y int) {
 	}
 	switch {
 	case dr.scrolling:
-		most := max(d.r.dashContent-d.r.h, 0)
+		most := max(content-d.r.h, 0)
 		d.dashScroll = min(max(dr.startScroll-dy, 0), most)
 	case dr.sliding:
 		a := dr.tile.adjust

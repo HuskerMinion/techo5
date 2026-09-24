@@ -84,8 +84,6 @@ func (d *Display) dashScene(s *scene, sheetOrDrawer bool) {
 	streamed := want && mode == config.DashboardStreamed
 	if streamed && d.r != nil {
 		s.dash = f.Stream(d.r.w, d.r.h)
-	} else {
-		f.Close()
 	}
 	if want && mode == config.DashboardDrawn {
 		s.drawn = f.Drawn(d.r.w)
@@ -95,13 +93,11 @@ func (d *Display) dashScene(s *scene, sheetOrDrawer bool) {
 		if path := config.Get().Dashboard.Path; path != d.dashScrollFor {
 			d.dashScroll, d.dashScrollFor = 0, path
 		}
-		if d.r != nil && d.r.dashContent > 0 {
-			d.dashScroll = min(d.dashScroll, max(d.r.dashContent-d.r.h, 0))
+		if _, content := d.r.dash(); content > 0 {
+			d.dashScroll = min(d.dashScroll, max(content-d.r.h, 0))
 		}
 		s.dashScroll, s.dashAdjust = d.dashScroll, d.dashAdjust
 		d.mu.Unlock()
-	} else {
-		f.CloseDrawn()
 	}
 
 	d.mu.Lock()

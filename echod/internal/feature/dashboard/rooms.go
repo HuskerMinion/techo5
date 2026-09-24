@@ -9,6 +9,7 @@ import (
 	"math"
 	"slices"
 	"strings"
+	"sync"
 
 	"github.com/HuskerMinion/techo5/echod/internal/lib/hass"
 )
@@ -31,6 +32,7 @@ type plannedRoom struct {
 
 // roomsSource is the Rooms dashboard: the rooms are read once a connection, their things followed.
 type roomsSource struct {
+	mu   sync.Mutex // plan is replaced whole when it is read again
 	plan []plannedRoom
 }
 
@@ -40,14 +42,19 @@ func (r *roomsSource) load(ctx context.Context, live *hass.Live) (needs, error) 
 		return needs{}, onScreen("Home Assistant would not list its rooms.")
 	}
 	plan, ids := planRooms(areas, floors, devices, entities)
+	r.mu.Lock()
 	r.plan = plan
+	r.mu.Unlock()
 	return needs{entities: ids}, nil
 }
 
 // sections is a section a room: its name and climate over its tiles.
 func (r *roomsSource) sections(l look) []Section {
+	r.mu.Lock()
+	plan := r.plan
+	r.mu.Unlock()
 	var out []Section
-	for _, p := range r.plan {
+	for _, p := range plan {
 		head := Block{Heading: p.name, Right: climateOf(l.states[p.temp], l.states[p.humidity])}
 		var tiles []Tile
 		for _, id := range p.entities {
