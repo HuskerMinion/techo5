@@ -26,10 +26,14 @@ func (d *Display) openDrawer(tab int) {
 	d.wake()
 }
 
+// closeDrawer puts it away. It says so, the way openDrawer does: whether a pick closed the drawer or left
+// it over what it had opened is the whole of one of the things the hardware testing found, and a screen
+// nobody can see is no place to check it.
 func (d *Display) closeDrawer() {
 	d.mu.Lock()
 	d.drawer, d.drawerPick = false, ""
 	d.mu.Unlock()
+	slog.Info("drawer closed")
 	d.wake()
 }
 
@@ -131,6 +135,11 @@ func (d *Display) drawerRowTap(id string) {
 		if i >= len(rows) {
 			return
 		}
+		// The pick is the last thing the drawer is for: what it leaves you looking at is the page
+		// for it, so the drawer goes, the way it does for a camera. A station picked here used to
+		// leave the list sitting over the station somebody had just chosen, and Stop the radio left
+		// it over the clock, though either pick is as finished with the list as a camera is.
+		d.closeDrawer()
 		if rows[i] == "■ Stop" {
 			home.Get().Stop()
 			return
