@@ -15,6 +15,7 @@
 </p>
 
 <p align="center">
+  <a href="#whats-new">What's new</a> ·
   <a href="#built-on-echolocal">Built on EchoLocal</a> ·
   <a href="#why-techo5">Why</a> ·
   <a href="#screenshots">Screenshots</a> ·
@@ -56,6 +57,49 @@ is the whole family as it stands, not a roadmap.
   the device draws with.</em>
 </p>
 
+## What's new
+
+The bigger changes of late September 2026. Every release lists the rest.
+
+<table>
+<tr>
+<td width="50%"><a href="docs/screenshots/now-playing-cover.png"><img src="docs/screenshots/now-playing-cover.png" alt="Now playing from Music Assistant, with the album's cover behind the song"></a></td>
+<td width="50%"><a href="docs/screenshots/spot/now-playing-cover.png"><img src="docs/screenshots/spot/now-playing-cover.png" alt="Now playing on the Echo Spot, with the album cover in a circle" width="300"></a></td>
+</tr>
+<tr>
+<td colspan="2"><strong>Cover art for Music Assistant</strong> (v0.8.13). Music from Music Assistant, your own library included, now shows its album cover on the now-playing screen, the way radio stations already did. Music Assistant sends the picture itself, so there's nothing to set up. On the Spot it sits in a circle over the song.</td>
+</tr>
+</table>
+
+- 🗣️ **It stops listening when you stop talking** (v0.8.14). After the wake word, the device hears
+  you finish and ends the turn itself, instead of waiting for Home Assistant. With a TV or other
+  voices in the room, that used to mean 10 to 15 seconds of listening, or a turn that timed out and
+  did nothing. A switch per device, *End of speech on the device*, puts it back the old way.
+- 🌙 **A night light** (v0.8.12, v0.8.13). Night hours can dim the screen to a faint glow instead of
+  turning it off, and the first touch only brings it up. Music playing at night no longer keeps it
+  bright, and *Night light brightness* (1 to 10) in Home Assistant sets the glow.
+  [Screenshot](docs/screenshots/night-light.png)
+- 🎵 **Music that behaves** (v0.8.9 to v0.8.13). A mini player strip over the clock with its own
+  controls, Done and a favorite star on the now-playing page, pause and play that keep your place
+  with Music Assistant, and answers and announcements that play over the music, ducked, instead of
+  stopping it. Two ways a device could end up saying "Playing" in silence are fixed.
+  [Screenshot](docs/screenshots/now-playing-strip.png)
+- ⏰ **Alarms and reminders** (v0.8.1 onward). An alarm or reminder can ring once on a particular
+  day, each alarm can choose its own wake light, and reminders can be set by voice ("remind me
+  every Wednesday at 8 to take the trash out") with the automation in
+  [docs/actions.md](docs/actions.md#stop-a-ring-and-set-reminders-by-voice).
+  [Screenshot](docs/screenshots/alarm-editor.png)
+- 🔁 **A Restart button** in Home Assistant for every device (v0.8.13): restarts the TECHO5 software
+  the way an update does, for when something is stuck and you'd rather not unplug it.
+- 🌧️ **Sleep sounds** (v0.8.14). "Play the sounds of rain" no longer brings up the forecast, and a
+  sound file served by Home Assistant shows its own name on the now-playing page.
+- 🎙️ **More by voice**, with ready-made Home Assistant automations in
+  [docs/actions.md](docs/actions.md#set-cancel-and-list-alarms-and-change-the-volume-by-voice):
+  set, cancel and list alarms ("cancel the 6 AM alarm", "what alarms do I have"), and change the
+  volume on the speaker you're talking to rather than every speaker in the room.
+- 📺 **The Echo Show 8** (v0.8.0) runs the same software, laid out for its bigger screen.
+  [Screenshots](docs/screenshots/README.md#echo-show-8)
+
 ## Built on EchoLocal
 
 TECHO5 started from **[EchoLocal](https://github.com/ygelfand/echolocal)** by Yuri Gelfand (MIT),
@@ -87,12 +131,15 @@ slot system, phone calls, and a minimal Alpine root filesystem in place of Andro
 
 ## Screenshots
 
-Straight from the device's own screen.
+Straight from the device's own screen. **[All of them](docs/screenshots/README.md)**, including the
+Echo Show 8 and the Echo Spot, are in [docs/screenshots](docs/screenshots/README.md).
 
 | | |
 |---|---|
 | ![Clock with weather over a photo](docs/screenshots/clock.png) | ![An alarm ringing, with Stop and Snooze](docs/screenshots/ringing.png) |
 | **Clock**, weather and your own photos behind it | **Alarm ringing**, big enough to hit half awake |
+| ![Now playing from Music Assistant, with the album's cover](docs/screenshots/now-playing-cover.png) | ![The mini player strip over the clock](docs/screenshots/now-playing-strip.png) |
+| **Now playing**, with the album's cover | **The mini player**, over the clock |
 | ![Settings: Display](docs/screenshots/settings-display.png) | ![Settings: Sound & Voice](docs/screenshots/settings-sound.png) |
 | **Settings** by category: brightness, night hours, theme, clock | **Sound & Voice**: volume, microphone, wake word and its sound |
 | ![Alarm editor](docs/screenshots/alarm-editor.png) | ![Settings: Privacy & Security](docs/screenshots/settings-privacy.png) |
@@ -212,7 +259,7 @@ TECHO5 exists because of these projects and the people behind them.
 - **LineageOS 18.1 for `cronos`** (unofficial, R0rt1z2), built on
   [Amazon's GPL kernel source](https://github.com/amazon-oss/android_kernel_amazon_mt8163): the
   kernel TECHO5 rebuilds and the vendor drivers it keeps. [TWRP](https://twrp.me/) stays as the way back.
-- [ShowAssist](https://github.com/HuskerMinion/showassist) and the
+- ShowAssist and the
   [View Assist Companion App](https://github.com/msp1974/ViewAssistCompanionApp) (Mark Parker): what
   ran the Show before TECHO5, and the first proof it could be a Home Assistant satellite.
 - [jxlarrea/lineageos-echo-show-camera](https://github.com/jxlarrea/lineageos-echo-show-camera):
