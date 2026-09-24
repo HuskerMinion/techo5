@@ -12,8 +12,8 @@ import (
 
 // slideshowWash is the theme's ground color, translucent, over a photo — the same technique the
 // now-playing screen uses for cover art (render_nowplaying.go's background): the photo stays
-// recognizable, and the clock and date drawn over it stay legible.
-const slideshowWash = 130
+// recognizable. Light, because readable.go darkens a bright photo further just where the words go.
+const slideshowWash = 90
 
 // slideshowBackground draws a Background-mode photo full-bleed, then the wash over it.
 func (r *renderer) slideshowBackground(img *image.RGBA) {
@@ -32,9 +32,11 @@ func (r *renderer) slideshowScreensaverPage(s scene) {
 	}
 	wash := color.RGBA{walnut.R, walnut.G, walnut.B, slideshowWash}
 	draw.Draw(r.dst, r.dst.Rect, image.NewUniform(wash), image.Point{}, draw.Over)
-	if s.slideshowOverlay == config.SlideshowOverlaySmall {
-		r.cornerClock(s)
-		return
-	}
-	r.timeAndDate(s.now, r.h/2+60, "")
+	r.readableOver(s.slideshowScreensaver, walnut, slideshowWash, func() {
+		if s.slideshowOverlay == config.SlideshowOverlaySmall {
+			r.cornerClock(s)
+			return
+		}
+		r.timeAndDate(s.now, r.h/2+60, "")
+	})
 }

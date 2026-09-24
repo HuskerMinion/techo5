@@ -15,7 +15,6 @@ import (
 	"golang.org/x/image/font/gofont/gobold"
 	"golang.org/x/image/font/gofont/goregular"
 	"golang.org/x/image/font/opentype"
-	"golang.org/x/image/math/fixed"
 
 	"github.com/HuskerMinion/techo5/echod/internal/config"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/announce"
@@ -272,7 +271,7 @@ func (r *roundRenderer) draw(s roundScene) {
 		if s.slideshow != nil {
 			r.slideshowBackground(s.slideshow)
 		}
-		r.clockFace(s)
+		r.readableOver(s.slideshow, colBackground, slideshowWash, func() { r.clockFace(s) })
 	}
 	if s.menuOpen {
 		r.menu(s)
@@ -530,8 +529,7 @@ func (r *roundRenderer) blend(x, y int, c color.RGBA, cover float64) {
 }
 
 func (r *roundRenderer) text(face font.Face, s string, x, baseline int, c color.Color) {
-	d := &font.Drawer{Dst: r.dst, Src: image.NewUniform(c), Face: face, Dot: fixed.P(x, baseline)}
-	d.DrawString(s)
+	r.paint.text(face, s, x, baseline, c)
 }
 
 func (r *roundRenderer) width(face font.Face, s string) int {

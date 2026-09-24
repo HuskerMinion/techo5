@@ -12,8 +12,8 @@ import (
 
 // slideshowWash is the theme's ground color, translucent, over a photo — the same technique
 // render_slideshow.go's Show version uses, just this theme's color (colBackground) instead of
-// walnut: the photo stays recognizable, and the clock drawn over it stays legible.
-const slideshowWash = 130
+// walnut. Light, because readable.go darkens a bright photo further just where the words go.
+const slideshowWash = 90
 
 // slideshowBackground draws a Background-mode photo full-bleed, then the wash over it.
 func (r *roundRenderer) slideshowBackground(img *image.RGBA) {
@@ -32,7 +32,9 @@ func (r *roundRenderer) slideshowScreensaverFace(s roundScene) {
 	}
 	wash := color.RGBA{colBackground.R, colBackground.G, colBackground.B, slideshowWash}
 	draw.Draw(r.dst, r.dst.Rect, image.NewUniform(wash), image.Point{}, draw.Over)
-	r.screensaverClock(s, s.slideshowOverlay != config.SlideshowOverlaySmall)
+	r.readableOver(s.slideshowScreensaver, colBackground, slideshowWash, func() {
+		r.screensaverClock(s, s.slideshowOverlay != config.SlideshowOverlaySmall)
+	})
 }
 
 // screensaverClock is clockFace's time-and-date lines alone, without its weather/timer/status

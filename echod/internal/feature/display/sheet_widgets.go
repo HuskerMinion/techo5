@@ -62,6 +62,9 @@ type paint struct {
 	// absolute: a padding, a row height, a corner radius, the thickness of a line, the size of a
 	// piece of text. Zero means 1:1, so a paint that never sets these behaves exactly as before.
 	sNum, sDen int
+
+	// over is drawing words over a photo (readable.go).
+	over overPhoto
 }
 
 // s scales a fixed size to this screen. Every size written as a literal in this package is in the
@@ -105,6 +108,13 @@ func (r *paint) faces() sheetFaces {
 func (r *paint) text(face font.Face, s string, x, baseline int, c color.Color) {
 	if face == nil {
 		return
+	}
+	if r.over.record {
+		r.over.noteText(face, s, x, baseline)
+		return
+	}
+	if r.over.photo != nil {
+		r.over.halo(r.dst, face, s, x, baseline)
 	}
 	d := &font.Drawer{Dst: r.dst, Src: image.NewUniform(c), Face: face, Dot: fixed.P(x, baseline)}
 	d.DrawString(s)

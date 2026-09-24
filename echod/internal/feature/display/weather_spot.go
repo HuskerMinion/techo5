@@ -4,6 +4,7 @@ package display
 
 import (
 	"fmt"
+	"image"
 	"image/color"
 	"math"
 	"time"
@@ -58,6 +59,7 @@ func (r *roundRenderer) clockWeather(w home.Weather, baseline int) {
 	tw := r.width(r.body, line)
 	left := center - (tw+int(2*u)+gap)/2
 	r.weatherIcon(w.Condition, float64(left)+u, float64(baseline)-9, u)
+	r.over.note(image.Rect(left, baseline-9-int(u), left+int(2*u), baseline-9+int(u)))
 	r.text(r.body, line, left+int(2*u)+gap, baseline, colText)
 }
 

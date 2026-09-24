@@ -352,6 +352,7 @@ func (r *renderer) draw(s scene) {
 		return
 	}
 
+	var behind *image.RGBA // the photo behind the idle page, when it has one
 	switch s.phase {
 	case "listening":
 		r.status(s, "Listening…", true)
@@ -373,11 +374,13 @@ func (r *renderer) draw(s scene) {
 		} else {
 			if s.slideshow != nil {
 				r.slideshowBackground(s.slideshow)
+				behind = s.slideshow
 			}
-			r.bigClock(s)
+			r.readableOver(behind, walnut, slideshowWash, func() { r.bigClock(s) })
 		}
 	}
-	r.footer(s)
+	// The footer's words sit on the photo too, when there is one.
+	r.readableOver(behind, walnut, slideshowWash, func() { r.footer(s) })
 	if s.strip && s.phase == "idle" && s.sunrise == 0 {
 		r.musicStrip(s)
 	}
@@ -475,6 +478,7 @@ func (r *renderer) weatherCorner(s scene) {
 	x := r.margin
 	if w.Condition != "" && conditionWords(w.Condition) != "" {
 		r.weatherIcon(w.Condition, r.margin+weatherMark/2, r.margin+15, weatherMark)
+		r.over.note(image.Rect(r.margin, r.margin+15-weatherMark/2, r.margin+weatherMark, r.margin+15+weatherMark/2))
 		x += weatherMark + 14
 	}
 	r.text(r.small, line, x, r.margin+26, dim)
