@@ -9,6 +9,7 @@ import (
 	"github.com/HuskerMinion/techo5/echod/internal/component"
 	"github.com/HuskerMinion/techo5/echod/internal/config"
 	"github.com/HuskerMinion/techo5/echod/internal/lib/hass"
+	"github.com/HuskerMinion/techo5/echod/internal/lib/safe"
 )
 
 // Stations without any setup: Home Assistant's Radio Browser integration, which a new installation
@@ -227,10 +228,26 @@ func (f *Feature) playListed(source, name string) bool {
 // stream comes through Home Assistant's proxy, so its URL does not say.
 const listedFor = time.Minute
 
-// callFavorite plays a station through the script wired with home_radio.
-func callFavorite(h config.Radio, station string) {
-	component.CallService.Emit(component.Call{
-		Service: h.Service,
-		Data:    map[string]string{h.Field: askFor(station), h.SpeakerField: speakerEntity()},
+// callFavorite plays a station through the script wired with home_radio. It is handed to a goroutine
+// rather than done where it was asked for: naming this device's media player can wait on Home Assistant
+// — the registries are a websocket away — and the caller is a finger on the screen. playListed already
+// starts its own request the same way.
+//
+// Naming the player is also what lets two quick taps arrive out of order: the second sets the chosen
+// station while the first is still looking the player up, and the first then reaches Home Assistant after
+// the second and starts the station the finger has moved off. Only the station still chosen is asked for.
+func (f *Feature) callFavorite(h config.Radio, station string) {
+	safe.Go("radio: playing a favorite", func() {
+		speaker := speakerEntity()
+		f.mu.Lock()
+		chosen := f.chosen
+		f.mu.Unlock()
+		if chosen != station {
+			return
+		}
+		component.CallService.Emit(component.Call{
+			Service: h.Service,
+			Data:    map[string]string{h.Field: askFor(station), h.SpeakerField: speaker},
+		})
 	})
 }

@@ -577,7 +577,7 @@ func (f *Feature) Play(station string) {
 	f.mu.Lock()
 	f.chosen = station
 	f.mu.Unlock()
-	callFavorite(h, station)
+	f.callFavorite(h, station)
 	f.Changed.Emit(struct{}{})
 	f.pokeMeta()
 }
