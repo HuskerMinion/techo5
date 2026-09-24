@@ -35,15 +35,14 @@ func dashboardSection(w http.ResponseWriter, token string) {
 		html.EscapeString(d.Server), html.EscapeString(keyNote))
 }
 
-// saveDashboard keeps the server, and the key when a new one was typed.
+// saveDashboard keeps the server, and the key when a new one was typed. The address is cleaned up
+// by SetServer (a pasted https://…/ becomes host:port), and one it cannot make sense of is said
+// here rather than saved.
 func saveDashboard(r *http.Request) string {
-	addr := strings.TrimSpace(r.PostFormValue("address"))
+	addr := r.PostFormValue("address")
 	key := strings.TrimSpace(r.PostFormValue("key"))
 	if key == "" {
 		key = config.Get().Dashboard.Key
-	}
-	if addr != "" && !strings.Contains(addr, ":") {
-		addr += ":9555"
 	}
 	if err := dashboard.Get().SetServer(addr, key); err != nil {
 		return "could not save it: " + err.Error()

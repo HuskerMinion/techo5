@@ -277,8 +277,14 @@ func (f *Feature) setMode(m config.DashboardMode) config.DashboardMode {
 }
 
 // SetServer keeps where the dashcast server is and its key, and connects to it afresh.
+// The address is taken as typed, scheme and path and all, and kept as host:port (NormalizeServer);
+// one that is not an address is refused rather than kept to fail quietly later.
 func (f *Feature) SetServer(addr, key string) error {
-	addr, key = strings.TrimSpace(addr), strings.TrimSpace(key)
+	addr, err := NormalizeServer(addr)
+	if err != nil {
+		return err
+	}
+	key = strings.TrimSpace(key)
 	if err := config.Set().Dashboard().Server(addr, key); err != nil {
 		return err
 	}
