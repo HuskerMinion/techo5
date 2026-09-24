@@ -216,6 +216,11 @@ func (d *Display) openDrawerOver() {
 	d.openDrawer(tab)
 }
 
+// drawnDashboard is the drawn dashboard over the whole panel.
+func (r *renderer) drawnDashboard(s scene) {
+	r.dashPage(s.drawn, s.dashScroll, s.dashAdjust, r.dst.Rect)
+}
+
 // dashboardPage draws the dashboard over the whole panel.
 func (r *renderer) dashboardPage(s scene) {
 	if s.dashMode == config.DashboardDrawn {

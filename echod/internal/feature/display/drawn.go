@@ -1,4 +1,4 @@
-//go:build !dot && !spot
+//go:build !dot
 
 package display
 
@@ -49,7 +49,7 @@ var (
 )
 
 // iconFace is the icon font at size, made once.
-func (r *renderer) iconFace(size int) font.Face {
+func (r *paint) iconFace(size int) font.Face {
 	iconOnce.Do(func() {
 		f, err := opentype.Parse(mdi.Font)
 		if err != nil {
@@ -74,7 +74,7 @@ func (r *renderer) iconFace(size int) font.Face {
 }
 
 // wrapLines breaks text into lines no wider than w.
-func (r *renderer) wrapLines(face font.Face, text string, w int) []string {
+func (r *paint) wrapLines(face font.Face, text string, w int) []string {
 	var lines []string
 	line := ""
 	for _, word := range strings.Fields(text) {
@@ -93,21 +93,6 @@ func (r *renderer) wrapLines(face font.Face, text string, w int) []string {
 		lines = append(lines, r.fit(face, line, w))
 	}
 	return lines
-}
-
-// fit is s cut to width w with an ellipsis, when it does not fit whole.
-func (r *renderer) fit(face font.Face, s string, w int) string {
-	if r.width(face, s) <= w {
-		return s
-	}
-	runes := []rune(s)
-	for len(runes) > 1 {
-		runes = runes[:len(runes)-1]
-		if cut := string(runes) + "…"; r.width(face, cut) <= w {
-			return cut
-		}
-	}
-	return "…"
 }
 
 // drawnTap is a tap on the drawn dashboard: on a tile, it does what the tile says.

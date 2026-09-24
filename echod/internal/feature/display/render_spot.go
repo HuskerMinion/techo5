@@ -19,6 +19,7 @@ import (
 
 	"github.com/HuskerMinion/techo5/echod/internal/config"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/announce"
+	"github.com/HuskerMinion/techo5/echod/internal/feature/dashboard"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/home"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/phone"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/remind"
@@ -63,6 +64,14 @@ func (r *roundRenderer) timeLine(now time.Time, baseline int) {
 }
 
 type roundScene struct {
+	// The dashboard face: whether it is up, how it is shown, and what it shows.
+	showDash   bool
+	dashMode   config.DashboardMode
+	dash       dashboard.View
+	drawn      dashboard.Drawn
+	dashScroll int
+	dashAdjust dashAdjusting
+
 	now          time.Time
 	phase        string // idle, listening, thinking, replying, lingering
 	heard, reply string
@@ -247,6 +256,9 @@ func (r *roundRenderer) draw(s roundScene) {
 		r.volume(s)
 	case s.phase == "listening" || s.phase == "thinking" || s.phase == "replying" || s.phase == "lingering":
 		r.conversation(s)
+	case s.showDash:
+		r.dashFace(s)
+		r.rim(s) // the page clears the panel; the rim still says muted or listening
 	case s.nowPlaying:
 		r.nowPlayingFace(s)
 	case s.slideshowScreensaver != nil:

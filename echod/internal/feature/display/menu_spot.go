@@ -4,11 +4,13 @@ package display
 
 import (
 	"fmt"
+	"image"
 	"image/color"
 	"math"
 	"strings"
 
 	"github.com/HuskerMinion/techo5/echod/internal/config"
+	"github.com/HuskerMinion/techo5/echod/internal/feature/dashboard"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/home"
 )
 
@@ -60,6 +62,8 @@ const (
 	itemAnnounce itemID = "announce"
 	itemSettings itemID = "settings"
 	itemSleep    itemID = "sleep"
+
+	itemDashboard itemID = "dashboard"
 )
 
 type menuItem struct {
@@ -76,6 +80,7 @@ var mainItems = []menuItem{
 	{itemVolume, color.RGBA{58, 160, 255, 255}},
 	{itemWeather, color.RGBA{255, 196, 64, 255}},
 	{itemCamera, color.RGBA{60, 203, 127, 255}},
+	{itemDashboard, color.RGBA{64, 214, 230, 255}},
 	{itemTimers, color.RGBA{255, 176, 32, 255}},
 	{itemAnnounce, color.RGBA{255, 122, 89, 255}},
 	{itemSettings, color.RGBA{176, 150, 255, 255}},
@@ -231,6 +236,11 @@ func itemName(s roundScene, id itemID) string {
 		return "Weather"
 	case itemCamera:
 		return "Camera"
+	case itemDashboard:
+		if s.showDash {
+			return "Clock"
+		}
+		return "Dashboard"
 	case itemTimers:
 		return "Timers"
 	case itemAnnounce:
@@ -308,6 +318,14 @@ func itemHint(s roundScene, id itemID) string {
 		return "none running · ask to set one"
 	case itemSettings:
 		return "display, sound, alarms…"
+	case itemDashboard:
+		switch {
+		case s.showDash:
+			return "back to the clock"
+		case dashboard.Get().Mode() == config.DashboardOff:
+			return "turn it on in Home Assistant"
+		}
+		return "Home Assistant's"
 	case itemSleep:
 		return "tap the screen to wake"
 	}
@@ -441,6 +459,13 @@ func (r *roundRenderer) icon(id itemID, s roundScene, x, y, u, w float64, c colo
 		r.line(x-0.2*u, y-0.72*u, x+0.2*u, y-0.72*u, w, c)
 		r.line(x+0.2*u, y-0.72*u, x+0.35*u, y-0.45*u, w, c)
 		r.ringAt(x, y+0.1*u, 0.36*u-w/2, 0.36*u+w/2, 0, 2*math.Pi, c)
+	case itemDashboard:
+		// Four tiles, as a dashboard is.
+		for _, o := range [][2]float64{{-1, -1}, {1, -1}, {-1, 1}, {1, 1}} {
+			cx, cy := x+o[0]*0.45*u, y+o[1]*0.45*u
+			b := image.Rect(int(cx-0.33*u), int(cy-0.33*u), int(cx+0.33*u), int(cy+0.33*u))
+			r.roundFill(b, 0.12*u, c, c)
+		}
 	case itemWeather:
 		r.sunIcon(x+0.38*u, y-0.32*u, 0.62*u, w*0.8, c)
 		r.cloud(x-0.12*u, y+0.22*u, 1.02*u, colIconGround)

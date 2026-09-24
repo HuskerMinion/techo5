@@ -1,10 +1,10 @@
-//go:build dot || spot
+//go:build dot
 
 package setup
 
 import "net/http"
 
-// No dashboard page on these yet, so nothing to set for one.
+// The Dot has no screen, so nothing to set for a dashboard.
 func dashboardSection(http.ResponseWriter, string) {}
 
 func saveDashboard(*http.Request) string { return "this device has no dashboard page" }

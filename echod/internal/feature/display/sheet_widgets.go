@@ -50,6 +50,10 @@ type paint struct {
 	fc    *sheetFaces
 	round bool
 
+	// The drawn dashboard's tiles where they were last drawn, and how far it can scroll.
+	dashTiles   []dashTile
+	dashContent int
+
 	// sNum and sDen scale this screen's fixed sizes against the panel the layout was drawn for. The
 	// Echo Show 5 is that panel and stays 1:1; the Show 8 is 4:3 of it across.
 	//

@@ -1,4 +1,4 @@
-//go:build !dot && !spot
+//go:build !dot
 
 // Package dashboard puts a Home Assistant dashboard on the screen, in one of two ways. Drawn, the
 // device reads the dashboard's cards and draws them itself, in its own style: fast, and nothing else

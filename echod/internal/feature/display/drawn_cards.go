@@ -1,4 +1,4 @@
-//go:build !dot && !spot
+//go:build !dot
 
 package display
 
@@ -40,7 +40,7 @@ type dashPal struct {
 	rad                                 float64
 }
 
-func (r *renderer) palette(t dashboard.Theme) dashPal {
+func (r *paint) palette(t dashboard.Theme) dashPal {
 	if !t.Set {
 		return dashPal{bg: walnut, card: surface(3), text: cream, sub: dim, accent: amber, active: amber, rad: r.sf(18)}
 	}
@@ -48,23 +48,31 @@ func (r *renderer) palette(t dashboard.Theme) dashPal {
 		rad: float64(r.s(t.Radius))}
 }
 
-func (r *renderer) drawnDashboard(s scene) {
-	v := s.drawn
+// dashPage draws a drawn dashboard into area, scrolled down by scroll: the whole panel on the Show,
+// the part of the Spot's round one a column fits in.
+func (r *paint) dashPage(v dashboard.Drawn, scroll int, adj dashAdjusting, area image.Rectangle) {
 	pal := r.palette(v.Theme)
 	draw.Draw(r.dst, r.dst.Rect, image.NewUniform(pal.bg), image.Point{}, draw.Src)
+	fc := r.faces()
 	if len(v.Sections) == 0 {
 		msg := v.Problem
 		if msg == "" {
 			msg = "Loading the dashboard…"
 		}
-		r.text(r.small, msg, (r.w-r.width(r.small, msg))/2, r.h/2, pal.sub)
+		lines := r.wrapLines(fc.label, msg, area.Dx())
+		y := area.Min.Y + area.Dy()/2 - len(lines)*r.s(30)/2
+		for _, line := range lines {
+			y += r.s(30)
+			r.text(fc.label, line, area.Min.X+(area.Dx()-r.width(fc.label, line))/2, y, pal.sub)
+		}
 		r.dashTiles, r.dashContent = nil, 0
 		return
 	}
 
 	side, gap := r.s(dashSide), r.s(dashGap)
-	cols := max(1, (r.w-2*side+gap)/(r.s(sectionMinW)+gap))
-	colW := (r.w - 2*side - gap*(cols-1)) / cols
+	width := area.Dx() - 2*side
+	cols := max(1, (width+gap)/(r.s(sectionMinW)+gap))
+	colW := (width - gap*(cols-1)) / cols
 	heights := make([]int, cols)
 	var tiles []dashTile
 	for _, sec := range v.Sections {
@@ -74,9 +82,9 @@ func (r *renderer) drawnDashboard(s scene) {
 				c = i
 			}
 		}
-		x := side + c*(colW+gap)
+		x := area.Min.X + side + c*(colW+gap)
 		y := heights[c] + gap
-		h := r.section(sec, x, y-s.dashScroll, colW, pal, s.dashAdjust, &tiles)
+		h := r.section(sec, x, area.Min.Y+y-scroll, colW, pal, adj, &tiles)
 		heights[c] = y + h
 	}
 	most := 0
@@ -84,12 +92,13 @@ func (r *renderer) drawnDashboard(s scene) {
 		most = max(most, h)
 	}
 	r.dashTiles = tiles
-	r.dashContent = most + gap
+	// How far the page can scroll: its content, and the part of the panel below the area.
+	r.dashContent = most + gap + (r.h - area.Dy())
 }
 
 // section draws a section's blocks down from y, and says how tall they came to. Blocks entirely off
 // the screen are measured and not drawn.
-func (r *renderer) section(sec dashboard.Section, x, y, w int, pal dashPal, adj dashAdjusting, tiles *[]dashTile) int {
+func (r *paint) section(sec dashboard.Section, x, y, w int, pal dashPal, adj dashAdjusting, tiles *[]dashTile) int {
 	top := y
 	gap := r.s(dashGap)
 	for i, b := range sec.Blocks {
@@ -101,10 +110,10 @@ func (r *renderer) section(sec dashboard.Section, x, y, w int, pal dashPal, adj 
 	return y - top
 }
 
-func (r *renderer) visible(top, bottom int) bool { return bottom > 0 && top < r.h }
+func (r *paint) visible(top, bottom int) bool { return bottom > 0 && top < r.h }
 
 // block draws one block at x, y, w wide, and says how tall it is.
-func (r *renderer) block(b dashboard.Block, x, y, w int, pal dashPal, adj dashAdjusting, tiles *[]dashTile) int {
+func (r *paint) block(b dashboard.Block, x, y, w int, pal dashPal, adj dashAdjusting, tiles *[]dashTile) int {
 	fc := r.faces()
 	switch {
 	case b.Heading != "":
@@ -124,8 +133,10 @@ func (r *renderer) block(b dashboard.Block, x, y, w int, pal dashPal, adj dashAd
 
 	case len(b.Tiles) > 0:
 		gap := r.s(dashGap)
+		// Two tiles abreast where there is room for two, as a section has on the Show; one in the
+		// Spot's narrow column.
 		per := 1
-		if w >= r.s(300) {
+		if w >= r.s(380) {
 			per = 2
 		}
 		tw := (w - gap*(per-1)) / per
@@ -220,14 +231,14 @@ func (r *renderer) block(b dashboard.Block, x, y, w int, pal dashPal, adj dashAd
 }
 
 // zone remembers where a tile or a row is, for a tap or a slide to find it.
-func (r *renderer) zone(tiles *[]dashTile, box image.Rectangle, t dashboard.Tile) {
+func (r *paint) zone(tiles *[]dashTile, box image.Rectangle, t dashboard.Tile) {
 	if t.Tap != nil || t.Adjust != nil {
 		*tiles = append(*tiles, dashTile{r: box, action: t.Tap, adjust: t.Adjust})
 	}
 }
 
 // mdiIcon draws an mdi icon with its top left at x, y, size tall.
-func (r *renderer) mdiIcon(name string, x, y, size int, c color.RGBA) {
+func (r *paint) mdiIcon(name string, x, y, size int, c color.RGBA) {
 	face := r.iconFace(size)
 	g, ok := mdi.Rune(name)
 	if face == nil || !ok {
@@ -238,7 +249,7 @@ func (r *renderer) mdiIcon(name string, x, y, size int, c color.RGBA) {
 
 // tile draws one thing as Home Assistant's tile card does: a round badge with its icon, lit when it
 // is on, then its name, and what it is doing underneath.
-func (r *renderer) tile(b image.Rectangle, t dashboard.Tile, pal dashPal, adj dashAdjusting) {
+func (r *paint) tile(b image.Rectangle, t dashboard.Tile, pal dashPal, adj dashAdjusting) {
 	fc := r.faces()
 	r.roundFill(b, pal.rad, pal.card, pal.card)
 
@@ -291,7 +302,7 @@ func (r *renderer) tile(b image.Rectangle, t dashboard.Tile, pal dashPal, adj da
 }
 
 // row draws one line of an entities card: icon, name, and at the end a switch or the state.
-func (r *renderer) row(b image.Rectangle, t dashboard.Tile, pal dashPal, adj dashAdjusting) {
+func (r *paint) row(b image.Rectangle, t dashboard.Tile, pal dashPal, adj dashAdjusting) {
 	fc := r.faces()
 	pad := r.s(cardPad) + r.s(4)
 	isz := 28
@@ -341,7 +352,7 @@ func (r *renderer) row(b image.Rectangle, t dashboard.Tile, pal dashPal, adj das
 
 // graphCard draws a sensor card: its icon, name and reading, and its recent history as a line with
 // the ground under it tinted.
-func (r *renderer) graphCard(b image.Rectangle, g dashboard.Graph, pal dashPal) {
+func (r *paint) graphCard(b image.Rectangle, g dashboard.Graph, pal dashPal) {
 	fc := r.faces()
 	r.roundFill(b, pal.rad, pal.card, pal.card)
 	pad := r.s(cardPad) + r.s(4)
@@ -401,7 +412,7 @@ var severity = map[string]color.RGBA{
 
 // gaugeCard draws a gauge card: a half ring filled as far as the reading goes, the reading in its
 // middle and the name under it.
-func (r *renderer) gaugeCard(b image.Rectangle, g dashboard.Gauge, pal dashPal) {
+func (r *paint) gaugeCard(b image.Rectangle, g dashboard.Gauge, pal dashPal) {
 	fc := r.faces()
 	r.roundFill(b, pal.rad, pal.card, pal.card)
 	outer := float64(min(b.Dx()/2-r.s(24), r.s(84)))
@@ -442,7 +453,7 @@ func (r *renderer) gaugeCard(b image.Rectangle, g dashboard.Gauge, pal dashPal) 
 }
 
 // pictureCard draws a camera's snapshot or a picture, filling the card, with its name along the foot.
-func (r *renderer) pictureCard(b image.Rectangle, p dashboard.Picture, pal dashPal) {
+func (r *paint) pictureCard(b image.Rectangle, p dashboard.Picture, pal dashPal) {
 	fc := r.faces()
 	r.roundFill(b, pal.rad, pal.card, pal.card)
 	if p.Image != nil {
