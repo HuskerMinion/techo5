@@ -58,6 +58,7 @@ type scene struct {
 	dash       dashboard.View
 	drawn      dashboard.Drawn
 	dashScroll int
+	dashAdjust dashAdjusting // a level a finger is sliding
 
 	// bt is the Bluetooth audio state: the pairing page replaces everything while it is on, and a
 	// connected device is named in the footer.

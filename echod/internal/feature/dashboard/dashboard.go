@@ -45,9 +45,10 @@ type Feature struct {
 	idle  *esphome.Switch
 	board *esphome.Select
 
-	mu     sync.Mutex
-	stream *stream // while the page is up in streamed mode
-	rooms  *rooms  // while the page is up drawn
+	mu        sync.Mutex
+	stream    *stream  // while the page is up in streamed mode
+	drawn     *session // while the page is up drawn, for drawnPath
+	drawnPath string
 }
 
 var (

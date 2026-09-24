@@ -6,12 +6,9 @@ import (
 	"cmp"
 	"context"
 	"fmt"
-	"log/slog"
 	"math"
 	"slices"
 	"strings"
-	"sync"
-	"time"
 
 	"github.com/HuskerMinion/techo5/echod/internal/lib/hass"
 )
@@ -21,219 +18,50 @@ import (
 // room's temperature, the way Home Assistant's own areas dashboard lays a house out. It needs no
 // dashboard to have been made, which makes it the one a new device can show at once.
 
-// Tile is one thing in a room, as the page draws it.
-type Tile struct {
-	Entity string
-	Name   string
-	Icon   string // an mdi name
-	Value  string // what it is doing, in words: "On · 60%", "Closed", "72°"
-	On     bool   // lit, open, playing: drawn in the accent color
-	Tap    bool   // a tap does something
-	Busy   bool   // tapped, and Home Assistant has not said it changed yet
-	Gone   bool   // unavailable
-}
-
-// Room is an area and its tiles.
-type Room struct {
-	Name    string
-	Climate string // the room's temperature and humidity, when it has a sensor for them
-	Tiles   []Tile
-}
-
-// Drawn is the Rooms dashboard as it stands.
-type Drawn struct {
-	Rooms   []Room
-	Problem string
-	Version uint64
-}
-
 // shown is which domains a room shows, in the order its tiles go.
 var shown = []string{"light", "switch", "fan", "cover", "climate", "media_player", "lock", "input_boolean", "binary_sensor"}
 
-// openings is the binary sensors worth a tile: whether something is open, or somebody is there.
+// openings is the binary sensors worth a tile: whether something is open.
 var openings = map[string]bool{"door": true, "window": true, "garage_door": true, "opening": true, "lock": true}
-
-// rooms is the live session behind the page: the rooms, and the entities in them as they change.
-type rooms struct {
-	f *Feature
-
-	mu      sync.Mutex
-	live    *hass.Live
-	stopped bool
-	plan    []plannedRoom
-	states  map[string]hass.LiveEntity
-	busy    map[string]time.Time
-	view    Drawn
-}
 
 type plannedRoom struct {
 	name, temp, humidity string
 	entities             []string
 }
 
-// Drawn is the Rooms dashboard, connecting to Home Assistant if it is not already. For the page
-// that is up; CloseDrawn ends it.
-func (f *Feature) Drawn() Drawn {
-	f.mu.Lock()
-	r := f.rooms
-	if r == nil {
-		r = &rooms{f: f, states: map[string]hass.LiveEntity{}, busy: map[string]time.Time{}}
-		f.rooms = r
-		go r.run()
-	}
-	f.mu.Unlock()
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	return r.view
+// roomsSource is the Rooms dashboard: the rooms are read once a connection, their things followed.
+type roomsSource struct {
+	plan []plannedRoom
 }
 
-// CloseDrawn ends the Rooms session, if there is one.
-func (f *Feature) CloseDrawn() {
-	f.mu.Lock()
-	r := f.rooms
-	f.rooms = nil
-	f.mu.Unlock()
-	if r != nil {
-		r.close()
-	}
-}
-
-// TapTile does what a tap on a tile means: lights and switches toggle, covers open or close,
-// players play or pause. Locks and thermostats are left to Home Assistant's own screens; a tap is
-// too easy to make by accident for a front door.
-func (f *Feature) TapTile(entity string) {
-	f.mu.Lock()
-	r := f.rooms
-	f.mu.Unlock()
-	if r == nil {
-		return
-	}
-	domain, _, _ := strings.Cut(entity, ".")
-	service := map[string][2]string{
-		"light": {"light", "toggle"}, "switch": {"switch", "toggle"}, "fan": {"fan", "toggle"},
-		"input_boolean": {"input_boolean", "toggle"}, "cover": {"cover", "toggle"},
-		"media_player": {"media_player", "media_play_pause"},
-	}[domain]
-	if service[0] == "" {
-		return
-	}
-	r.mu.Lock()
-	live := r.live
-	r.busy[entity] = time.Now()
-	r.mu.Unlock()
-	r.publish()
-	if live == nil {
-		return
-	}
-	go func() {
-		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-		defer cancel()
-		if err := live.CallService(ctx, service[0], service[1], map[string]any{"entity_id": entity}); err != nil {
-			slog.Warn("dashboard: tap failed", "entity", entity, "err", err)
-			r.mu.Lock()
-			delete(r.busy, entity)
-			r.mu.Unlock()
-			r.publish()
-		}
-	}()
-}
-
-func (r *rooms) close() {
-	r.mu.Lock()
-	r.stopped = true
-	live := r.live
-	r.mu.Unlock()
-	if live != nil {
-		live.Close()
-	}
-}
-
-func (r *rooms) problem(text string) {
-	r.mu.Lock()
-	r.view.Problem = text
-	r.view.Version++
-	r.mu.Unlock()
-	r.f.Changed.Emit(struct{}{})
-}
-
-// run keeps a session going until closed.
-func (r *rooms) run() {
-	wait := time.Second
-	for {
-		r.mu.Lock()
-		stopped := r.stopped
-		r.mu.Unlock()
-		if stopped {
-			return
-		}
-		if err := r.once(); err != nil {
-			slog.Info("dashboard rooms", "err", err)
-		}
-		r.mu.Lock()
-		stopped = r.stopped
-		r.mu.Unlock()
-		if stopped {
-			return
-		}
-		time.Sleep(wait)
-		wait = min(wait*2, 30*time.Second)
-	}
-}
-
-func (r *rooms) once() error {
-	if !hass.Get().Ready() {
-		r.problem("The Rooms dashboard needs Home Assistant's address and a token (the hass action).")
-		return fmt.Errorf("no home assistant access")
-	}
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	live, err := hass.Get().OpenLive(ctx)
+func (r *roomsSource) load(ctx context.Context, live *hass.Live) ([]string, []template, error) {
+	areas, floors, devices, entities, err := live.Registries(ctx)
 	if err != nil {
-		r.problem("Can't reach Home Assistant.")
-		return err
-	}
-	defer live.Close()
-	r.mu.Lock()
-	if r.stopped {
-		r.mu.Unlock()
-		return nil
-	}
-	r.live = live
-	r.mu.Unlock()
-
-	cctx, ccancel := context.WithTimeout(ctx, 30*time.Second)
-	areas, floors, devices, entities, err := live.Registries(cctx)
-	ccancel()
-	if err != nil {
-		r.problem("Home Assistant would not list its rooms.")
-		return err
+		return nil, nil, fmt.Errorf("Home Assistant would not list its rooms.")
 	}
 	plan, ids := planRooms(areas, floors, devices, entities)
-	r.mu.Lock()
 	r.plan = plan
-	r.view.Problem = ""
-	r.mu.Unlock()
+	return ids, nil, nil
+}
 
-	fctx, fcancel := context.WithTimeout(ctx, 30*time.Second)
-	err = live.FollowEntities(fctx, ids, func(e hass.LiveEntity) {
-		r.mu.Lock()
-		r.states[e.ID] = e
-		delete(r.busy, e.ID)
-		r.mu.Unlock()
-		r.publish()
-	}, func(id string) {
-		r.mu.Lock()
-		delete(r.states, id)
-		r.mu.Unlock()
-		r.publish()
-	})
-	fcancel()
-	if err != nil {
-		return err
+func (r *roomsSource) blocks(states map[string]hass.LiveEntity, _ map[int]string) []Block {
+	var out []Block
+	for _, p := range r.plan {
+		b := Block{Heading: p.name, Right: climateOf(states[p.temp], states[p.humidity])}
+		for _, id := range p.entities {
+			e, ok := states[id]
+			if !ok {
+				continue
+			}
+			if t, keep := tileOf(e, p.name); keep {
+				b.Tiles = append(b.Tiles, t)
+			}
+		}
+		if len(b.Tiles) > 0 || b.Right != "" {
+			out = append(out, b)
+		}
 	}
-	slog.Info("dashboard rooms following", "rooms", len(plan), "entities", len(ids))
-	<-live.Done()
-	return live.Err()
+	return out
 }
 
 // planRooms decides which entities go in which room: an entity's own area, or else its device's.
@@ -298,36 +126,6 @@ func planRooms(areas []hass.Area, floors []hass.Floor, devices []hass.Device, en
 	return plan, ids
 }
 
-// publish rebuilds the page's view from the states, and says there is something new to draw.
-func (r *rooms) publish() {
-	r.mu.Lock()
-	var out []Room
-	for _, p := range r.plan {
-		room := Room{Name: p.name, Climate: climateOf(r.states[p.temp], r.states[p.humidity])}
-		for _, id := range p.entities {
-			e, ok := r.states[id]
-			if !ok {
-				continue
-			}
-			t, keep := tileOf(e, p.name)
-			if !keep {
-				continue
-			}
-			if at, busy := r.busy[id]; busy && time.Since(at) < 10*time.Second {
-				t.Busy = true
-			}
-			room.Tiles = append(room.Tiles, t)
-		}
-		if len(room.Tiles) > 0 || room.Climate != "" {
-			out = append(out, room)
-		}
-	}
-	r.view.Rooms = out
-	r.view.Version++
-	r.mu.Unlock()
-	r.f.Changed.Emit(struct{}{})
-}
-
 // tileOf is how one entity looks as a tile, and whether it is worth one: a binary sensor only
 // when it says whether something is open.
 func tileOf(e hass.LiveEntity, room string) (Tile, bool) {
@@ -336,29 +134,42 @@ func tileOf(e hass.LiveEntity, room string) (Tile, bool) {
 	if domain == "binary_sensor" && !openings[class] {
 		return Tile{}, false
 	}
-	t := Tile{Entity: e.ID, Name: nameOf(e, room)}
+	return describe(e, nameOf(e, room)), true
+}
+
+// describe is how any entity looks as a tile: its icon, its name, and its state in words, with the
+// tap that suits it. Locks and thermostats get none: a tap is too easy to make by accident for a
+// front door, and a thermostat wants more than on and off.
+func describe(e hass.LiveEntity, name string) Tile {
+	domain, _, _ := strings.Cut(e.ID, ".")
+	class, _ := e.Attrs["device_class"].(string)
+	t := Tile{Name: name}
 	on := e.State == "on" || e.State == "open" || e.State == "opening" || e.State == "playing" ||
-		e.State == "unlocked" || e.State == "heat" || e.State == "cool" || e.State == "heat_cool"
+		e.State == "unlocked" || e.State == "heat" || e.State == "cool" || e.State == "heat_cool" || e.State == "home"
 	t.On = on
+	toggle := func(service string) *Action { return &Action{Entity: e.ID, Service: service} }
 	switch domain {
 	case "light":
-		t.Value, t.Tap = onOff(e.State), true
+		t.Value, t.Tap = onOff(e.State), toggle("light.toggle")
 		if on {
 			if b, ok := e.Attrs["brightness"].(float64); ok {
 				t.Value = fmt.Sprintf("On · %d%%", int(math.Round(b/255*100)))
 			}
 		}
-	case "switch", "input_boolean", "fan":
-		t.Value, t.Tap = onOff(e.State), true
+	case "switch", "input_boolean", "fan", "siren", "automation":
+		t.Value, t.Tap = onOff(e.State), toggle(domain+".toggle")
 	case "cover":
-		t.Value, t.Tap = title(e.State), true
+		t.Value, t.Tap = title(e.State), toggle("cover.toggle")
 		if p, ok := e.Attrs["current_position"].(float64); ok && e.State == "open" && p < 100 {
 			t.Value = fmt.Sprintf("Open · %d%%", int(p))
 		}
 	case "climate":
 		t.Value = climateValue(e)
 	case "media_player":
-		t.Value, t.Tap = title(e.State), e.State == "playing" || e.State == "paused"
+		t.Value = title(e.State)
+		if e.State == "playing" || e.State == "paused" {
+			t.Tap = toggle("media_player.media_play_pause")
+		}
 		t.On = e.State == "playing"
 		if title, _ := e.Attrs["media_title"].(string); title != "" && e.State == "playing" {
 			t.Value = title
@@ -367,16 +178,60 @@ func tileOf(e hass.LiveEntity, room string) (Tile, bool) {
 		t.Value = title(e.State)
 		t.On = e.State != "locked"
 	case "binary_sensor":
-		t.Value = "Closed"
-		if e.State == "on" {
-			t.Value = "Open"
+		t.Value = binaryWords(class, e.State == "on")
+	case "scene", "script", "button", "input_button":
+		t.Value = title(domain)
+		service := map[string]string{"scene": "scene.turn_on", "script": "script.turn_on", "button": "button.press", "input_button": "input_button.press"}[domain]
+		t.Tap, t.On = toggle(service), false
+	case "sensor", "input_number", "number", "counter":
+		t.Value = e.State
+		if n := number(e.State); n != "" && strings.Contains(e.State, ".") {
+			// Two places are more than a glance wants; one is kept where the number is small.
+			var f float64
+			fmt.Sscanf(e.State, "%g", &f)
+			t.Value = trimNumber(f)
 		}
+		if unit, _ := e.Attrs["unit_of_measurement"].(string); unit != "" {
+			t.Value += " " + unit
+		}
+		t.On = false
+	default:
+		t.Value = title(e.State)
 	}
+	t.Adjust = adjustOf(e, domain)
 	if e.State == "unavailable" || e.State == "unknown" {
-		t.Value, t.Gone, t.On, t.Tap = "Unavailable", true, false, false
+		t.Value, t.Gone, t.On, t.Tap, t.Adjust = title(e.State), true, false, nil, nil
 	}
 	t.Icon = iconOf(e, domain, class, t.On)
-	return t, true
+	return t
+}
+
+// binaryWords is a binary sensor's state as its kind says it.
+func binaryWords(class string, on bool) string {
+	words := map[string][2]string{
+		"door": {"Open", "Closed"}, "window": {"Open", "Closed"}, "garage_door": {"Open", "Closed"},
+		"opening": {"Open", "Closed"}, "lock": {"Unlocked", "Locked"}, "motion": {"Detected", "Clear"},
+		"occupancy": {"Detected", "Clear"}, "presence": {"Home", "Away"}, "moisture": {"Wet", "Dry"},
+		"smoke": {"Detected", "Clear"}, "battery": {"Low", "Normal"}, "connectivity": {"Connected", "Disconnected"},
+		"problem": {"Problem", "OK"}, "plug": {"Plugged in", "Unplugged"}, "power": {"On", "Off"},
+	}
+	w, ok := words[class]
+	if !ok {
+		w = [2]string{"On", "Off"}
+	}
+	if on {
+		return w[0]
+	}
+	return w[1]
+}
+
+func trimNumber(f float64) string {
+	switch {
+	case math.Abs(f) >= 100:
+		return fmt.Sprintf("%.0f", f)
+	default:
+		return strings.TrimRight(strings.TrimRight(fmt.Sprintf("%.1f", f), "0"), ".")
+	}
 }
 
 // nameOf is the entity's name without the room's in front of it: in the Kitchen, "Kitchen ceiling
@@ -494,8 +349,94 @@ func iconOf(e hass.LiveEntity, domain, class string, on bool) string {
 			return pick("window-open", "window-closed")
 		case "garage_door":
 			return pick("garage-open", "garage")
+		case "motion", "occupancy", "presence":
+			return pick("motion-sensor", "motion-sensor-off")
+		case "moisture":
+			return pick("water", "water-off")
+		case "smoke":
+			return pick("smoke-detector-alert", "smoke-detector")
+		case "door", "opening", "":
+			return pick("door-open", "door-closed")
 		}
-		return pick("door-open", "door-closed")
+		return pick("checkbox-marked-circle", "checkbox-blank-circle-outline")
+	case "sensor":
+		switch class {
+		case "temperature":
+			return "thermometer"
+		case "humidity":
+			return "water-percent"
+		case "battery":
+			return "battery"
+		case "power", "energy":
+			return "flash"
+		case "illuminance":
+			return "brightness-5"
+		}
+		return "eye"
+	case "scene":
+		return "palette"
+	case "script":
+		return "script-text"
+	case "automation":
+		return "robot"
+	case "person":
+		return "account"
+	case "weather":
+		return "weather-partly-cloudy"
+	case "button", "input_button":
+		return "gesture-tap-button"
+	case "input_number", "number", "counter":
+		return "ray-vertex"
+	case "siren":
+		return "bullhorn"
 	}
 	return "help-circle-outline"
+}
+
+// adjustOf is the level a finger sliding along the entity's tile sets, if it has one: a light that
+// dims, a cover that stops part way, a thermostat's temperature.
+func adjustOf(e hass.LiveEntity, domain string) *Adjust {
+	switch domain {
+	case "light":
+		modes, _ := e.Attrs["supported_color_modes"].([]any)
+		dims := len(modes) == 0 && e.Attrs["brightness"] != nil
+		for _, m := range modes {
+			if m != "onoff" {
+				dims = true
+			}
+		}
+		if !dims {
+			return nil
+		}
+		v := 0.0
+		if b, ok := e.Attrs["brightness"].(float64); ok && e.State == "on" {
+			v = b / 255 * 100
+		}
+		return &Adjust{Entity: e.ID, Kind: "brightness", Value: v, Min: 0, Max: 100, Step: 1}
+	case "cover":
+		p, ok := e.Attrs["current_position"].(float64)
+		if !ok {
+			return nil
+		}
+		return &Adjust{Entity: e.ID, Kind: "position", Value: p, Min: 0, Max: 100, Step: 1}
+	case "climate":
+		t, ok := e.Attrs["temperature"].(float64)
+		if !ok {
+			return nil
+		}
+		lo, _ := e.Attrs["min_temp"].(float64)
+		hi, _ := e.Attrs["max_temp"].(float64)
+		step, _ := e.Attrs["target_temp_step"].(float64)
+		if hi <= lo {
+			lo, hi = t-10, t+10
+		}
+		if step <= 0 {
+			step = 0.5
+			if hi > 40 {
+				step = 1 // Fahrenheit
+			}
+		}
+		return &Adjust{Entity: e.ID, Kind: "temperature", Value: t, Min: lo, Max: hi, Step: step}
+	}
+	return nil
 }

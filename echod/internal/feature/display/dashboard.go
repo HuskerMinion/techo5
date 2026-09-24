@@ -90,7 +90,7 @@ func (d *Display) dashScene(s *scene, sheetOrDrawer bool) {
 	if want && mode == config.DashboardDrawn {
 		s.drawn = f.Drawn()
 		d.mu.Lock()
-		s.dashScroll = d.dashScroll
+		s.dashScroll, s.dashAdjust = d.dashScroll, d.dashAdjust
 		d.mu.Unlock()
 	} else {
 		f.CloseDrawn()
@@ -98,20 +98,21 @@ func (d *Display) dashScene(s *scene, sheetOrDrawer bool) {
 
 	d.mu.Lock()
 	d.dashShowing = want
-	follow := streamed
+	// Either way the page wants every finger as it moves: streamed, to scroll the page under it;
+	// drawn, to scroll and to slide a tile's level. The rest of the screen wants swipes.
+	follow := want
 	changed := follow != d.dashFollow
 	d.dashFollow = follow
 	d.mu.Unlock()
 	if changed {
-		// A streamed dashboard wants every finger as it moves, to scroll the page under it; the
-		// rest of the screen wants swipes.
 		touch.Get().SetFollow(follow)
 	}
 }
 
-// dashGesture is a finger on the dashboard. Streamed, it goes to the page as it moves, except a
-// finger that starts at one of the screen's edges: the left takes the dashboard away, the top brings
-// the settings down, the right the drawer in. Drawn, taps land on the cards and the edges are swipes.
+// dashGesture is a finger on the dashboard. It goes to the page as it moves, except a finger that
+// starts at one of the screen's edges: the left takes the dashboard away, the top brings the
+// settings down, the right the drawer in. Streamed, the page is the browser's; drawn, a finger
+// moving up or down scrolls it and one moving along a tile with a level slides the level.
 func (d *Display) dashGesture(g touch.Gesture) {
 	if d.r == nil {
 		return
@@ -121,34 +122,15 @@ func (d *Display) dashGesture(g touch.Gesture) {
 	d.mu.Unlock()
 	edge := d.r.drawerEdge()
 	f := dashboard.Get()
-
-	if f.Mode() != config.DashboardStreamed {
-		switch g.Kind {
-		case touch.SwipeRight:
-			if g.X < edge {
-				d.closeDashboard()
-			}
-		case touch.SwipeLeft:
-			if g.X >= d.r.w-edge {
-				d.openDrawerOver()
-			}
-		case touch.SwipeDown:
-			if g.Y < topEdge/3 {
-				d.showSheet(true)
-				return
-			}
-			d.drawnScroll(g)
-		case touch.SwipeUp:
-			d.drawnScroll(g)
-		case touch.Tap:
-			d.drawnTap(g.X, g.Y)
-		}
-		return
-	}
+	streamed := f.Mode() == config.DashboardStreamed
 
 	switch g.Kind {
 	case touch.Tap:
-		f.Touch("tap", g.X, g.Y)
+		if streamed {
+			f.Touch("tap", g.X, g.Y)
+		} else {
+			d.drawnTap(g.X, g.Y)
+		}
 	case touch.Hold:
 		from := edgeNone
 		switch {
@@ -162,16 +144,26 @@ func (d *Display) dashGesture(g touch.Gesture) {
 		}
 		d.mu.Lock()
 		d.dashEdge, d.dashEdgeAt = from, image.Pt(g.X, g.Y)
+		d.dashDrag = drawnDrag{startScroll: d.dashScroll}
 		d.mu.Unlock()
 		if from == edgeNone {
-			f.Touch("down", g.X, g.Y)
+			if streamed {
+				f.Touch("down", g.X, g.Y)
+			} else {
+				d.drawnHold(g.X, g.Y)
+			}
 		}
 	case touch.Drag:
 		d.mu.Lock()
 		from := d.dashEdge
 		d.mu.Unlock()
-		if from == edgeNone {
+		if from != edgeNone {
+			return
+		}
+		if streamed {
 			f.Touch("move", g.X, g.Y)
+		} else {
+			d.drawnMove(g.X, g.Y)
 		}
 	case touch.Release:
 		d.mu.Lock()
@@ -181,7 +173,11 @@ func (d *Display) dashGesture(g touch.Gesture) {
 		far := d.r.s(80)
 		switch from {
 		case edgeNone:
-			f.Touch("up", g.X, g.Y)
+			if streamed {
+				f.Touch("up", g.X, g.Y)
+			} else {
+				d.drawnRelease()
+			}
 		case edgeLeft:
 			if g.X-start.X > far {
 				d.closeDashboard()

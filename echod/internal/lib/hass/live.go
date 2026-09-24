@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strconv"
 	"sync"
 	"time"
 )
@@ -263,4 +264,42 @@ func copyEntity(e *LiveEntity) LiveEntity {
 		a[k] = v
 	}
 	return LiveEntity{ID: e.ID, State: e.State, Attrs: a}
+}
+
+// RenderTemplate has Home Assistant render a template, and render it again whenever anything it
+// reads changes: got is called with each result, on the connection's reader, so it must not block.
+func (l *Live) RenderTemplate(ctx context.Context, text string, vars map[string]any, got func(string)) error {
+	handle := func(raw json.RawMessage) {
+		var ev struct {
+			Result any `json:"result"`
+		}
+		if json.Unmarshal(raw, &ev) != nil || ev.Result == nil {
+			return
+		}
+		switch v := ev.Result.(type) {
+		case string:
+			got(v)
+		case float64:
+			got(strconv.FormatFloat(v, 'f', -1, 64))
+		default:
+			b, _ := json.Marshal(v)
+			got(string(b))
+		}
+	}
+	cmd := map[string]any{"type": "render_template", "template": text}
+	if len(vars) > 0 {
+		cmd["variables"] = vars
+	}
+	_, ch, err := l.send(cmd, handle)
+	if err != nil {
+		return err
+	}
+	select {
+	case r := <-ch:
+		return r.err
+	case <-ctx.Done():
+		return ctx.Err()
+	case <-l.done:
+		return errors.New("hass: the connection ended")
+	}
 }

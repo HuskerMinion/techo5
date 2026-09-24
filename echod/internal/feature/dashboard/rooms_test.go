@@ -41,7 +41,7 @@ func TestTiles(t *testing.T) {
 	light := hass.LiveEntity{ID: "light.kitchen_ceiling", State: "on",
 		Attrs: map[string]any{"friendly_name": "Kitchen ceiling", "brightness": 153.0}}
 	tile, ok := tileOf(light, "Kitchen")
-	if !ok || tile.Name != "Ceiling" || tile.Value != "On · 60%" || !tile.On || !tile.Tap || tile.Icon != "lightbulb" {
+	if !ok || tile.Name != "Ceiling" || tile.Value != "On · 60%" || !tile.On || tile.Tap == nil || tile.Tap.Service != "light.toggle" || tile.Icon != "lightbulb" {
 		t.Errorf("light tile %+v", tile)
 	}
 	motion := hass.LiveEntity{ID: "binary_sensor.hall_motion", State: "on", Attrs: map[string]any{"device_class": "motion"}}
@@ -49,15 +49,15 @@ func TestTiles(t *testing.T) {
 		t.Error("a motion sensor got a tile")
 	}
 	door := hass.LiveEntity{ID: "binary_sensor.back_door", State: "off", Attrs: map[string]any{"device_class": "door"}}
-	if tile, ok := tileOf(door, "Hall"); !ok || tile.Value != "Closed" || tile.Tap || tile.Icon != "door-closed" {
+	if tile, ok := tileOf(door, "Hall"); !ok || tile.Value != "Closed" || tile.Tap != nil || tile.Icon != "door-closed" {
 		t.Errorf("door tile %+v", tile)
 	}
 	gone := hass.LiveEntity{ID: "switch.fan", State: "unavailable", Attrs: map[string]any{}}
-	if tile, _ := tileOf(gone, "Den"); !tile.Gone || tile.Tap {
+	if tile, _ := tileOf(gone, "Den"); !tile.Gone || tile.Tap != nil {
 		t.Errorf("unavailable tile %+v", tile)
 	}
 	lock := hass.LiveEntity{ID: "lock.front", State: "locked", Attrs: map[string]any{}}
-	if tile, _ := tileOf(lock, "Hall"); tile.Tap {
+	if tile, _ := tileOf(lock, "Hall"); tile.Tap != nil {
 		t.Error("a lock is tappable")
 	}
 }
