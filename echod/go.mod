@@ -4,6 +4,9 @@ go 1.26.0
 
 require (
 	github.com/Sendspin/sendspin-go v1.8.2
+	github.com/emiago/diago v0.32.0
+	github.com/emiago/sipgo v1.4.3
+	github.com/flynn/noise v1.1.0
 	github.com/godbus/dbus/v5 v5.2.2
 	github.com/gorilla/websocket v1.5.3
 	github.com/hajimehoshi/go-mp3 v0.3.4
@@ -18,10 +21,7 @@ require (
 )
 
 require (
-	github.com/emiago/diago v0.32.0 // indirect
 	github.com/emiago/dtls/v3 v3.0.0-20260122183559-8b8d23e359c0 // indirect
-	github.com/emiago/sipgo v1.4.3 // indirect
-	github.com/flynn/noise v1.1.0 // indirect
 	github.com/go-audio/riff v1.0.0 // indirect
 	github.com/gobwas/httphead v0.1.0 // indirect
 	github.com/gobwas/pool v0.2.1 // indirect

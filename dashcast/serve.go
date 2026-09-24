@@ -4,7 +4,6 @@ import (
 	"bufio"
 	"bytes"
 	"context"
-	"crypto/subtle"
 	"encoding/base64"
 	"encoding/binary"
 	"encoding/json"
@@ -23,8 +22,8 @@ import (
 	"github.com/chromedp/chromedp"
 )
 
-// The conversation with a device. The device opens with one line of JSON, a hello; after that it
-// sends a line per touch. What comes back is messages framed as a 4-byte big-endian length, then a
+// The conversation with a device, inside the encrypted connection secure.go makes: the device opens
+// with one line of JSON, a hello; after that it sends a line per touch. What comes back is messages framed as a 4-byte big-endian length, then a
 // kind byte and its payload:
 //
 //	kindPicture  2-byte x, 2-byte y, then a JPEG to draw with its top left there
@@ -48,7 +47,6 @@ const (
 )
 
 type hello struct {
-	Key  string `json:"key"`
 	Name string `json:"name"` // for the log
 	W    int    `json:"w"`
 	H    int    `json:"h"`
@@ -65,10 +63,16 @@ type touchMsg struct {
 // small, since mostly only what changed is sent.
 const quality = 85
 
-func serve(ctx context.Context, b *browser, g *guard, cfg config, c net.Conn) {
-	defer c.Close()
+func serve(ctx context.Context, b *browser, g *guard, cfg config, raw net.Conn) {
+	defer raw.Close()
+	_ = raw.SetReadDeadline(time.Now().Add(10 * time.Second))
+	// The key is proved by the handshake, so a device that gets past it has the key.
+	c, err := serverHandshake(raw, cfg.key)
+	if err != nil {
+		slog.Warn("a device failed the handshake: a wrong key, or not a TECHO5 device", "from", raw.RemoteAddr(), "err", err)
+		return
+	}
 	r := bufio.NewReader(c)
-	_ = c.SetReadDeadline(time.Now().Add(10 * time.Second))
 	line, err := r.ReadBytes('\n')
 	if err != nil {
 		return
@@ -80,11 +84,6 @@ func serve(ctx context.Context, b *browser, g *guard, cfg config, c net.Conn) {
 	_ = c.SetReadDeadline(time.Time{})
 	out := &sender{c: c}
 
-	if subtle.ConstantTimeCompare([]byte(h.Key), []byte(cfg.key)) != 1 {
-		slog.Warn("a device with the wrong key", "from", c.RemoteAddr(), "name", h.Name)
-		out.problem("The dashboard server's key does not match this device's.")
-		return
-	}
 	if h.W <= 0 || h.H <= 0 || h.W > 4096 || h.H > 4096 {
 		return
 	}

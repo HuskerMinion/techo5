@@ -4,7 +4,6 @@ package dashboard
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"image"
 	"log/slog"
@@ -552,7 +551,8 @@ func str(m raw, key string) string {
 	return v
 }
 
-func toJSON(v any) string {
-	b, _ := json.Marshal(v)
-	return string(b)
-}
+// onScreen is an error that is a sentence for the screen as it stands, where the page says what went
+// wrong in words somebody standing at it can act on.
+type onScreen string
+
+func (s onScreen) Error() string { return string(s) }

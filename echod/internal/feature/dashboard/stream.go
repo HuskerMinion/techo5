@@ -20,8 +20,9 @@ import (
 	"github.com/HuskerMinion/techo5/echod/internal/config"
 )
 
-// The dashcast protocol, as dashcast/serve.go describes it: a hello line of JSON, then a JSON line per
-// touch; back come length-framed messages, a picture to draw at a place or a problem to show.
+// The dashcast protocol, as dashcast/serve.go describes it, inside the encrypted connection secure.go
+// makes: a hello line of JSON, then a JSON line per touch; back come length-framed messages, a
+// picture to draw at a place or a problem to show.
 const (
 	kindPicture = 1
 	kindProblem = 2
@@ -162,19 +163,26 @@ func (s *stream) once() error {
 		s.problem("Streaming needs a dashcast server: set one with the dashboard_server action.")
 		return errors.New("no server set")
 	}
-	c, err := net.DialTimeout("tcp", d.Server, 5*time.Second)
+	raw, err := net.DialTimeout("tcp", d.Server, 5*time.Second)
 	if err != nil {
 		s.problem("Can't reach the dashboard server at " + d.Server + ".")
 		return err
 	}
-	defer c.Close()
+	defer raw.Close()
+	_ = raw.SetDeadline(time.Now().Add(10 * time.Second))
+	c, err := clientHandshake(raw, d.Key)
+	if err != nil {
+		s.problem("The dashboard server did not accept this device's key.")
+		return err
+	}
+	_ = raw.SetDeadline(time.Time{})
 
 	path := "/" + d.Path
 	if d.Path == "" {
 		path = "/lovelace/0"
 	}
 	enc := json.NewEncoder(c)
-	if err := enc.Encode(map[string]any{"key": d.Key, "name": cfg.Device.Name, "w": s.w, "h": s.h, "path": path}); err != nil {
+	if err := enc.Encode(map[string]any{"name": cfg.Device.Name, "w": s.w, "h": s.h, "path": path}); err != nil {
 		return err
 	}
 	s.mu.Lock()

@@ -5,7 +5,7 @@ and themes included.
 
 An Echo Show is too small to run Home Assistant's frontend itself. dashcast runs a headless Chrome
 on a machine that can, opens the dashboard at the screen's size, and sends the screen only the parts
-that change, as pictures. Where the screen is touched goes back and is replayed on the page. While
+that change, as pictures, over a connection encrypted with a key you choose. Where the screen is touched goes back and is replayed on the page. While
 a page scrolls, the pictures go at half size, and the full-size ones follow once it stops.
 
 TECHO5 can also draw a dashboard itself, with no server at all. That is quicker to the touch but
@@ -62,8 +62,10 @@ touch. So treat the token and the key with care:
 - **Keep the port on your own network.** Anyone who can reach it and knows the key can see the
   dashboards and use them. The compose file can bind it to this machine's own LAN address only (for
   example `"192.168.1.20:9555:9555"`). **Never forward the port from your router.**
-- **The connection is not encrypted.** The key, the pictures and the touches cross your network as
-  they are, like most things on a home network. Keep it on a network you trust.
+- **The connection is encrypted, with the key.** A device and dashcast prove to each other that
+  they have the same key without sending it (a Noise handshake, as the device's own link to Home
+  Assistant uses), and everything after that, pictures and touches, is encrypted. A device with the
+  wrong key simply cannot connect.
 - **Custom cards run with the token.** A custom card's code runs in dashcast's browser, as that
   user, exactly as it would in yours. Install custom cards you trust, as you would anyway.
 - **The key.** Make it long and random: `openssl rand -base64 24` is one way.

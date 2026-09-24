@@ -37,7 +37,7 @@ type roomsSource struct {
 func (r *roomsSource) load(ctx context.Context, live *hass.Live) (needs, error) {
 	areas, floors, devices, entities, err := live.Registries(ctx)
 	if err != nil {
-		return needs{}, fmt.Errorf("Home Assistant would not list its rooms.")
+		return needs{}, onScreen("Home Assistant would not list its rooms.")
 	}
 	plan, ids := planRooms(areas, floors, devices, entities)
 	r.plan = plan

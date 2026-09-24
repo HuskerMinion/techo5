@@ -94,7 +94,9 @@ narrow screens, so one dashboard can show more on a phone than on the Show.
 
 Streamed needs **dashcast**, a small server that runs a headless Chrome next to Home Assistant. It
 opens the dashboard at the device's screen size and sends the device only what changes, as pictures.
-It sends where the screen was touched back, and replays it on the page. See
+It sends where the screen was touched back, and replays it on the page. The connection is encrypted
+with the key you give both ends, and dashcast only ever shows dashboards: Settings and the other
+admin pages are refused. See
 [`dashcast/README.md`](../dashcast/README.md) to run it with Docker.
 
 Then tell the device where it is, either:

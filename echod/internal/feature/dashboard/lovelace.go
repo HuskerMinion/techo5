@@ -5,7 +5,6 @@ package dashboard
 import (
 	"context"
 	"encoding/json"
-	"fmt"
 	"html"
 	"math"
 	"regexp"
@@ -46,7 +45,7 @@ func (l *lovelaceSource) load(ctx context.Context, live *hass.Live) (needs, erro
 	}
 	rawCfg, err := live.Call(ctx, cmd)
 	if err != nil {
-		return needs{}, fmt.Errorf("Home Assistant would not give this dashboard.")
+		return needs{}, onScreen("Home Assistant would not give this dashboard.")
 	}
 	var cfg struct {
 		Views []raw `json:"views"`
