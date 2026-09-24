@@ -185,6 +185,7 @@ func Get() *Feature {
 		media.Get().OnPlay.Listen(shared.played)
 		media.Get().OnEnd.Listen(shared.ended)
 		media.Get().OnResumeRemote.Listen(func(struct{}) { safe.Go("resume music assistant", resumeMusicAssistant) })
+		media.Get().OnTakeOver.Listen(func(struct{}) { safe.Go("leave the group", leaveGroup) })
 	})
 	return shared
 }
@@ -510,6 +511,10 @@ func carried(r Radio) Radio {
 		return r
 	}
 	trackTitle, trackArtist, trackAlbum := media.Get().Track()
+	// Nothing of this device's is starting while a remote is what the room hears. A station tapped just
+	// before Music Assistant took the speaker never plays - the remote ends it - and the list went on
+	// reading "Starting…" for it for as long as the remote carried on.
+	r.Chosen = ""
 	r.Playing, r.Now = true, "Music Assistant"
 	r.Title, r.Artist, r.Album = trackTitle, trackArtist, trackAlbum
 	// Music Assistant's own picture for the track when it sent one. Without one the page draws a

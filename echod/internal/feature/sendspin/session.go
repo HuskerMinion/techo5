@@ -286,6 +286,16 @@ func (s *session) askedFor() string {
 // is stream/end's job, which the server sends on stop as well as on skip and seek. Fields are deltas, so
 // an absent state means unchanged.
 func (s *session) grouped(g protocol.GroupUpdate) {
+	// Said out loud, because it is what a group looks like on the wire and it does not mean what it looks
+	// like it means: Music Assistant puts every player in a group, names the room's own one nothing, and
+	// names a house when there is one. See home.alone, which is what actually decides.
+	if g.GroupID != nil {
+		name := ""
+		if g.GroupName != nil {
+			name = *g.GroupName
+		}
+		slog.Debug("sendspin group", "id", *g.GroupID, "name", name)
+	}
 	if g.PlaybackState == nil {
 		return
 	}
@@ -315,9 +325,18 @@ func (s *session) grouped(g protocol.GroupUpdate) {
 		//
 		// And the track stays on the screen with play on it, as after a pause from the screen. A stop
 		// looks the same from here, so the page has a Done that ends it and goes home.
-		if playing, _ := media.Get().RemotePlaying(); playing && s.askedFor() != "pause" {
-			media.Get().HoldRemote()
-			media.Get().RemoteState("paused")
+		//
+		// Unless this player has something of its own in the room, which is the one case where a remote
+		// stopping means something else. Music Assistant gives the room up when a station here takes it,
+		// and a hold taken from that would put its track back on the page — with play offered — the
+		// moment the station ends. Found on the device: the footer said "♪ paused" over an idle clock,
+		// and the hold had been taken in the two seconds between that station starting and the room
+		// leaving the group, after the leave's own ForgetHeld had already run.
+		if playing, paused := media.Get().Playing(); !playing && !paused {
+			if playing, _ := media.Get().RemotePlaying(); playing && s.askedFor() != "pause" {
+				media.Get().HoldRemote()
+				media.Get().RemoteState("paused")
+			}
 		}
 		s.asked.Store("")
 		media.Get().RemoteState(state)

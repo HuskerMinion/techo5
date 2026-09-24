@@ -1,7 +1,11 @@
 package media
 
 import (
+	"net/http"
+	"net/http/httptest"
 	"testing"
+
+	esphome "github.com/ygelfand/go-esphome-device"
 
 	"github.com/HuskerMinion/techo5/echod/internal/hardware/speaker"
 )
@@ -57,5 +61,33 @@ func TestTheRoomIsCarriedOnlyWhenTheRemoteIsWhatIsHeard(t *testing.T) {
 					got, tc.claimed, tc.remoteSays, tc.local, tc.want)
 			}
 		})
+	}
+}
+
+// A remote starting to play ends this player's own track rather than standing it down to carry on
+// underneath. Two pieces of music take turns: a station stood down by a remote came back when the remote
+// stopped, so whichever of the two was stopped the other resurfaced, and in the room that looked like a
+// speaker that could not be turned off.
+func TestARemoteStartingEndsThisPlayersTrack(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		<-r.Context().Done() // a station: it never ends
+	}))
+	defer srv.Close()
+
+	d := speaker.NewDriver(speaker.New())
+	p := &Player{stream: NewStream(d, speaker.New(), func() {}, func(string) {}), mp: &esphome.MediaPlayer{}}
+
+	p.stream.Play(srv.URL)
+	if playing, _ := p.Playing(); !playing {
+		t.Fatal("the station is not playing to begin with")
+	}
+
+	p.External()
+
+	if playing, paused := p.Playing(); playing || paused {
+		t.Errorf("the station outlived the remote starting: playing %v paused %v", playing, paused)
+	}
+	if !p.remote.playing() {
+		t.Error("the remote did not take the speaker")
 	}
 }
