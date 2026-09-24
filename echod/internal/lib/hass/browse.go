@@ -30,6 +30,12 @@ type Media struct {
 type wsSession struct {
 	conn *websocket.Conn
 	next int
+	// deadline is the caller's own deadline, if it gave one, and the zero time otherwise. Every command is
+	// bounded by it as well as by its own thirty seconds: a caller that gave the connection five seconds
+	// does not get thirty out of the next one, which is the difference between a lookup that gives up and
+	// a caller that waits. It is the caller's, not this handshake's, so a walk that may run for minutes is
+	// not cut off thirty seconds in.
+	deadline time.Time
 }
 
 // wsOpen dials and authenticates. The caller closes the connection.
@@ -40,8 +46,15 @@ func (c *Client) wsOpen(ctx context.Context) (*wsSession, error) {
 	if acc.URL == "" || acc.Token == "" {
 		return nil, errors.New("hass: no access configured")
 	}
+	// What the caller gave, read before the wrap below: kept for the commands that follow, so their bound
+	// is the caller's own and each still gets its own thirty seconds. Reading it after the wrap would make
+	// every session thirty seconds long, and a caller that wanted longer would find every later command
+	// failing once those thirty were up.
+	caller, _ := ctx.Deadline()
+	// The dial and the handshake get their own thirty seconds, or the caller's if that is shorter.
 	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
 	defer cancel()
+	dl, _ := ctx.Deadline()
 
 	url := "ws" + strings.TrimPrefix(acc.URL, "http") + "/api/websocket"
 	conn, resp, err := websocket.DefaultDialer.DialContext(ctx, url, http.Header{})
@@ -51,7 +64,7 @@ func (c *Client) wsOpen(ctx context.Context) (*wsSession, error) {
 	if err != nil {
 		return nil, fmt.Errorf("hass: websocket: %w", err)
 	}
-	if dl, ok := ctx.Deadline(); ok {
+	if !dl.IsZero() {
 		_ = conn.SetReadDeadline(dl)
 		_ = conn.SetWriteDeadline(dl)
 	}
@@ -75,15 +88,19 @@ func (c *Client) wsOpen(ctx context.Context) (*wsSession, error) {
 		conn.Close()
 		return nil, fmt.Errorf("hass: websocket auth: %s %s", hello.Type, hello.Message)
 	}
-	return &wsSession{conn: conn}, nil
+	return &wsSession{conn: conn, deadline: caller}, nil
 }
 
-// call sends one command and returns its raw result, allowing it 30 seconds.
+// call sends one command and returns its raw result, allowing it 30 seconds or what is left of the
+// context the connection was opened with, whichever ends first.
 func (s *wsSession) call(cmd map[string]any) (json.RawMessage, error) {
 	s.next++
 	id := s.next
 	cmd["id"] = id
 	dl := time.Now().Add(30 * time.Second)
+	if !s.deadline.IsZero() && s.deadline.Before(dl) {
+		dl = s.deadline
+	}
 	_ = s.conn.SetReadDeadline(dl)
 	_ = s.conn.SetWriteDeadline(dl)
 	if err := s.conn.WriteJSON(cmd); err != nil {
