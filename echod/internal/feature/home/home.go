@@ -232,6 +232,12 @@ func (f *Feature) nameStream(url string) {
 			}
 		}
 	}
+	// A file of Home Assistant's own - rain to sleep to - is not a station, and without a name of
+	// its own the page would fall back to the house's "last station" text: the rain named after
+	// whatever some other speaker last played.
+	if name == "" {
+		name = fileName(url)
+	}
 	// No host fallback: Home Assistant proxies streams through itself, so the host would be its
 	// own address, which is not a station. Unknown stays unknown and the page falls back to the
 	// "last station" text or what was tapped.
@@ -241,6 +247,31 @@ func (f *Feature) nameStream(url string) {
 	}
 	f.mu.Unlock()
 	f.Changed.Emit(struct{}{})
+}
+
+// fileName is a name for a sound file Home Assistant serves from its own folders ("/local/sleep/
+// rain_deep.mp3" is "Rain deep"), or "" for anything else. Only those folders: a station's stream can
+// end in ".mp3" too, and its file name ("live", "stream") would be a worse name than the station's.
+func fileName(url string) string {
+	path, _, _ := strings.Cut(url, "?")
+	if !strings.Contains(path, "/local/") && !strings.Contains(path, "/media/local/") {
+		return ""
+	}
+	base := path[strings.LastIndex(path, "/")+1:]
+	dot := strings.LastIndex(base, ".")
+	if dot <= 0 {
+		return ""
+	}
+	switch strings.ToLower(base[dot+1:]) {
+	case "mp3", "ogg", "oga", "opus", "flac", "wav", "m4a", "aac":
+	default:
+		return ""
+	}
+	name := strings.TrimSpace(strings.NewReplacer("_", " ", "-", " ").Replace(base[:dot]))
+	if name == "" {
+		return ""
+	}
+	return strings.ToUpper(name[:1]) + name[1:]
 }
 
 func (f *Feature) wake() {

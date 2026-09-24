@@ -24,6 +24,10 @@ type Set struct {
 	Weather []string
 	Radar   []string
 
+	// NotWeather is words that make a sentence with a weather word in it something else: "play the
+	// sounds of rain" is asking for a sound, not the forecast.
+	NotWeather []string
+
 	// GoHome takes whatever is up back down to the clock. Camera is the words that make a sentence
 	// worth matching against the camera names, which are in the owner's own language already.
 	GoHome []string
@@ -36,10 +40,11 @@ type Set struct {
 // is what happens today anyway, so they are worth shipping and worth correcting.
 var Languages = map[string]Set{
 	"en": {
-		Weather: []string{"weather", "forecast", "temperature", "rain", "snow", "how hot", "how cold", "storm", "radar", "weather map"},
-		Radar:   []string{"radar", "rain map", "weather map"},
-		GoHome:  []string{"go home", "home screen", "main screen"},
-		Camera:  []string{"show", "camera"},
+		Weather:    []string{"weather", "forecast", "temperature", "rain", "snow", "how hot", "how cold", "storm", "radar", "weather map"},
+		Radar:      []string{"radar", "rain map", "weather map"},
+		NotWeather: []string{"sound", "noise", "play rain", "put on"},
+		GoHome:     []string{"go home", "home screen", "main screen"},
+		Camera:     []string{"show", "camera"},
 	},
 	"de": {
 		Weather: []string{"wetter", "vorhersage", "temperatur", "regen", "regn", "schnee", "schnei", "sturm", "gewitter",
@@ -115,7 +120,8 @@ func matches(heard string, lang string, pick func(Set) []string) bool {
 // rain map rather than the forecast; AboutGoingHome whether it asked for the clock back; AboutCamera
 // whether it is worth matching against the camera names at all.
 func AboutWeather(heard, lang string) bool {
-	return matches(heard, lang, func(s Set) []string { return s.Weather })
+	return matches(heard, lang, func(s Set) []string { return s.Weather }) &&
+		!matches(heard, lang, func(s Set) []string { return s.NotWeather })
 }
 
 func AboutRadar(heard, lang string) bool {
