@@ -63,3 +63,21 @@ func TestAWrongKeyFails(t *testing.T) {
 		t.Error("the server let a wrong key through")
 	}
 }
+
+// Before the key has been shown, a connection is not given memory for a big message: a handshake frame
+// claiming more than a handshake is refused from its length alone.
+func TestServerRefusesAnOversizedHandshake(t *testing.T) {
+	a, b := net.Pipe()
+	t.Cleanup(func() { a.Close(); b.Close() })
+	done := make(chan error, 1)
+	go func() {
+		_, err := serverHandshake(b, "a-long-enough-test-key")
+		done <- err
+	}()
+	if _, err := a.Write([]byte{0x00, 0x00, 0xea, 0x60}); err != nil { // claims 60,000 bytes
+		t.Fatal(err)
+	}
+	if err := <-done; err == nil {
+		t.Fatal("an oversized handshake frame was accepted")
+	}
+}

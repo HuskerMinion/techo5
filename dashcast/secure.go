@@ -28,6 +28,10 @@ const (
 	prologue  = "techo5-dashcast/1"
 	recordMax = 60000 // well inside Noise's 65535-byte message limit, with room for the tag
 	wireMax   = recordMax + 64
+
+	// handshakeMax is the most a handshake message may be. NNpsk0's are 48 bytes; a connection that
+	// claims more, before it has shown the key, is not given the memory to say it.
+	handshakeMax = 256
 )
 
 func suite() noise.CipherSuite {
@@ -59,13 +63,16 @@ func writeFrame(w io.Writer, b []byte) error {
 	return nil
 }
 
-func readFrame(r io.Reader) ([]byte, error) {
+func readFrame(r io.Reader) ([]byte, error) { return readFrameMax(r, wireMax) }
+
+// readFrameMax reads one frame of at most most bytes, refusing a larger one before allocating it.
+func readFrameMax(r io.Reader, most uint32) ([]byte, error) {
 	var hdr [4]byte
 	if _, err := io.ReadFull(r, hdr[:]); err != nil {
 		return nil, err
 	}
 	n := binary.BigEndian.Uint32(hdr[:])
-	if n == 0 || n > wireMax {
+	if n == 0 || n > most {
 		return nil, fmt.Errorf("secure: a record of %d bytes", n)
 	}
 	b := make([]byte, n)
@@ -82,7 +89,7 @@ func serverHandshake(c net.Conn, key string) (*secureConn, error) {
 	if err != nil {
 		return nil, err
 	}
-	first, err := readFrame(c)
+	first, err := readFrameMax(c, handshakeMax)
 	if err != nil {
 		return nil, err
 	}
@@ -116,7 +123,7 @@ func clientHandshake(c net.Conn, key string) (*secureConn, error) {
 	if err := writeFrame(c, first); err != nil {
 		return nil, err
 	}
-	reply, err := readFrame(c)
+	reply, err := readFrameMax(c, handshakeMax)
 	if err != nil {
 		return nil, err
 	}
