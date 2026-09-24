@@ -213,9 +213,10 @@ caller why. **Allow Drop In** (Settings, Privacy & Security, or the **Allow Drop
 call connect by itself after a short chime, with **Drop In** and the caller's name on the screen; it is
 a way to listen in on a room, so it is off unless you turn it on. Drop In only answers by itself for
 another TECHO5 device the house already knows, calling from that device's own address; any other
-caller rings as usual. The chime plays at a minimum volume, so a turned-down room still hears it. The
-house word itself is sent unencrypted with announcements, so anyone who can watch your network traffic
-could learn it: keep the devices on a network you trust. On a Dot, which has no screen, both are the
+caller rings as usual. The chime plays at a minimum volume, so a turned-down room still hears it.
+Announcements between devices are signed with the house word rather than carrying it, so it never
+crosses the network. Devices from before that change still send it as it is, so update every device
+together: a device on the older release also turns away announcements from an updated one. On a Dot, which has no screen, both are the
 Home Assistant switches, and the action button answers and hangs up.
 
 ## How it works

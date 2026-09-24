@@ -313,8 +313,9 @@ func (p *Phone) intercomIn(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Drop In answers by itself, so it is only for a device this one already knows, calling from
-	// where that device is. The house word proves the caller is in on the house, but it also travels
-	// in announcements; a caller that only claims a device's name, from somewhere else, rings.
+	// where that device is. The house word proves the caller is in on the house, but a device on an
+	// older release still sends it in announcements; a caller that only claims a device's name, from
+	// somewhere else, rings.
 	dropIn := home.DropIn && knownDevice(caller, from)
 	if home.DropIn && !dropIn {
 		slog.Info("intercom: not dropping in for a caller this device does not know there; ringing", "from", caller, "address", from)
