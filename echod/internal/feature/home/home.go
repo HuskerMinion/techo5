@@ -9,9 +9,12 @@ import (
 	"context"
 	"image"
 	"log/slog"
+	neturl "net/url"
 	"strings"
 	"sync"
 	"time"
+	"unicode"
+	"unicode/utf8"
 
 	esphome "github.com/ygelfand/go-esphome-device"
 
@@ -254,6 +257,9 @@ func (f *Feature) nameStream(url string) {
 // end in ".mp3" too, and its file name ("live", "stream") would be a worse name than the station's.
 func fileName(url string) string {
 	path, _, _ := strings.Cut(url, "?")
+	if p, err := neturl.PathUnescape(path); err == nil {
+		path = p
+	}
 	if !strings.Contains(path, "/local/") && !strings.Contains(path, "/media/local/") {
 		return ""
 	}
@@ -271,7 +277,8 @@ func fileName(url string) string {
 	if name == "" {
 		return ""
 	}
-	return strings.ToUpper(name[:1]) + name[1:]
+	first, size := utf8.DecodeRuneInString(name)
+	return string(unicode.ToUpper(first)) + name[size:]
 }
 
 func (f *Feature) wake() {
