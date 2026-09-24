@@ -13,8 +13,8 @@ import (
 	"github.com/HuskerMinion/techo5/echod/internal/feature/home"
 )
 
-// The round clock over photos: between the time and the date a snowy picture is brought down to
-// where the words read. With SPOT_PREVIEW set, each is written there to look at.
+// The round clock over photos: beside each small line a snowy picture is brought down to where the
+// words read. With SPOT_PREVIEW set, each is written there to look at.
 func TestTheRoundClockReadsOverAPhoto(t *testing.T) {
 	at := time.Date(2026, 9, 16, 14, 7, 0, 0, time.Local)
 	sky := home.Weather{Condition: "partlycloudy", Temp: "72°"}
@@ -32,13 +32,10 @@ func TestTheRoundClockReadsOverAPhoto(t *testing.T) {
 		}
 		for name, s := range scenes {
 			img := image.NewRGBA(image.Rect(0, 0, side, side))
-			newRoundRenderer(img).draw(s)
+			r := newRoundRenderer(img)
+			r.draw(s)
 			if name == "photo-snow" {
-				// Between the time and the date, inside their patches.
-				c := img.RGBAAt(center, 262)
-				if l := luma(c.R, c.G, c.B); l > scrimTarget+4 {
-					t.Errorf("between the time and the date a snowy photo is still %.0f bright", l)
-				}
+				besideSmallLines(t, "spot", img, r.over.boxes, r.s(scrimTallest))
 			}
 			if dir == "" {
 				continue
@@ -51,6 +48,24 @@ func TestTheRoundClockReadsOverAPhoto(t *testing.T) {
 				t.Fatal(err)
 			}
 			f.Close()
+		}
+	}
+}
+
+// besideSmallLines checks the words pass one found: none taller than a patch is for, some of them,
+// and just left of each the picture brought down to where they read.
+func besideSmallLines(t *testing.T, name string, img *image.RGBA, boxes []image.Rectangle, tallest int) {
+	t.Helper()
+	if len(boxes) == 0 {
+		t.Errorf("%s: no small lines were found", name)
+	}
+	for _, b := range boxes {
+		if b.Dy() > tallest {
+			t.Errorf("%s: a line %d tall got a patch", name, b.Dy())
+		}
+		c := img.RGBAAt(b.Min.X-2, (b.Min.Y+b.Max.Y)/2)
+		if l := luma(c.R, c.G, c.B); l > scrimTarget+6 {
+			t.Errorf("%s: beside the words at %v a snowy photo is still %.0f bright", name, b, l)
 		}
 	}
 }

@@ -21,6 +21,10 @@ import (
 // thin dark edge for a picture that is light and dark in the same place. A dark photo is left almost
 // as it was; a bright one gets dark just where the words are.
 //
+// Only small words get a patch: the weather, the date, the timers. The time and its AM/PM are large
+// and bold enough to stand on the edge alone, and a patch the size of the clock is a smudge across
+// the picture rather than a shadow under some words. Each line gets its own, hugging it.
+//
 // It is done in two passes. The first draws the page to a spare canvas, only to learn where its words
 // go; the patches are laid under all of them; the second draws the page for real on top. One pass
 // cannot do it, because a patch laid down for the date would darken the time drawn just above it.
@@ -35,18 +39,16 @@ const (
 	// scrimMost is the darkest a patch gets, so even a white photo keeps a trace of itself.
 	scrimMost = 0.88
 
-	// scrimPad is how far past its words a patch reaches at full strength, in the Show 5's pixels.
-	// Its corners are rounded by scrimRound of its shorter side, so it is a soft pill rather than a
-	// card, and it fades out over its own height, within scrimFeatherLeast and scrimFeatherMost, so
-	// it reads as the picture getting darker there rather than as something laid on it.
-	scrimPad          = 10
-	scrimRound        = 0.5
-	scrimFeatherLeast = 70
-	scrimFeatherMost  = 320
+	// scrimTallest is the tallest line that gets a patch, as the face's height in the Show 5's pixels:
+	// the title size (59) and below do, the AM/PM (70) and the time do not.
+	scrimTallest = 64
 
-	// scrimJoin is how close two lines come before they share a patch, in the Show 5's pixels: the
-	// time, its AM/PM and the date under them, but not the weather up in the corner.
-	scrimJoin = 46
+	// A patch reaches scrimPad of its line's height past the words at full strength, then fades out
+	// over scrimFeather of it. Its ends are rounded by scrimRound of its height, so it is a small
+	// soft pill under the line and nothing more.
+	scrimPad     = 0.35
+	scrimFeather = 0.45
+	scrimRound   = 0.5
 
 	// haloAlpha is the dark edge around the letters: the ground color at this opacity, reaching a
 	// haloReach-th of their height out (at least a pixel). Thin: the patch does the work, and the edge
@@ -177,7 +179,7 @@ func (o *overPhoto) haloFor(face font.Face, s string) *image.Alpha {
 // there needs.
 func (p *paint) shape(wash uint8) *patchShape {
 	o := &p.over
-	groups := merged(o.boxes, p.s(scrimJoin))
+	groups := merged(o.boxes)
 	var key strings.Builder
 	fmt.Fprint(&key, wash, o.ground, p.dst.Rect, groups)
 	if o.shaped != o.photo || len(o.shapes) > 16 {
@@ -187,7 +189,6 @@ func (p *paint) shape(wash uint8) *patchShape {
 		return sh
 	}
 
-	pad := p.s(scrimPad)
 	w := float64(wash) / 255
 	ground := luma(o.ground.R, o.ground.G, o.ground.B)
 	sh := &patchShape{}
@@ -198,8 +199,8 @@ func (p *paint) shape(wash uint8) *patchShape {
 	}
 	var patches []patch
 	for _, b := range groups {
-		core := b.Inset(-pad)
-		feather := min(max(core.Dy(), p.s(scrimFeatherLeast)), p.s(scrimFeatherMost))
+		core := b.Inset(-int(scrimPad*float64(b.Dy()) + 0.5))
+		feather := max(2, int(scrimFeather*float64(b.Dy())+0.5))
 		// The picture was drawn with its corner at the panel's; how bright it is under the words, as
 		// the wash already left it, and how much more ground brings it down to scrimTarget.
 		bright := brightness(o.photo, core.Add(o.photo.Rect.Min.Sub(p.dst.Rect.Min)))
@@ -295,15 +296,20 @@ func (p *paint) lay(sh *patchShape) {
 	}
 }
 
-// merged joins boxes that come within near of each other into one, until none do: the time, its
-// AM/PM and the date under them get one patch rather than three edges crossing between them.
-func merged(boxes []image.Rectangle, near int) []image.Rectangle {
+// merged joins the pieces of one line into one box, until none are left to join: the weather's icon
+// and its words, say. Two lines, one above the other, stay apart.
+func merged(boxes []image.Rectangle) []image.Rectangle {
 	out := slices.Clone(boxes)
+	sameLine := func(a, b image.Rectangle) bool {
+		shared := min(a.Max.Y, b.Max.Y) - max(a.Min.Y, b.Min.Y)
+		gap := max(a.Min.X, b.Min.X) - min(a.Max.X, b.Max.X)
+		return 2*shared >= min(a.Dy(), b.Dy()) && gap <= max(a.Dy(), b.Dy())
+	}
 	for joined := true; joined; {
 		joined = false
 		for i := 0; i < len(out) && !joined; i++ {
 			for j := i + 1; j < len(out); j++ {
-				if out[i].Inset(-near).Overlaps(out[j]) {
+				if sameLine(out[i], out[j]) {
 					out[i] = out[i].Union(out[j])
 					out = slices.Delete(out, j, j+1)
 					joined = true

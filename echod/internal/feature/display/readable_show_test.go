@@ -13,8 +13,9 @@ import (
 	"github.com/HuskerMinion/techo5/echod/internal/feature/home"
 )
 
-// The clock over photos, on both panels: beside the time a snowy picture is brought down to where
-// the words read, and a page with no photo never takes the two passes. With SHOW_PREVIEW set, each is
+// The clock over photos, on both panels: beside each small line a snowy picture is brought down to
+// where the words read, beside the time it is left alone, and a page with no photo never takes the
+// two passes. With SHOW_PREVIEW set, each is
 // written there to look at.
 func TestTheClockReadsOverAPhoto(t *testing.T) {
 	at := time.Date(2026, 9, 16, 14, 7, 0, 0, time.Local)
@@ -40,12 +41,19 @@ func TestTheClockReadsOverAPhoto(t *testing.T) {
 				r := newRenderer(img)
 				r.draw(s)
 				if name == "photo-snow" {
-					// Just left of the time, inside its patch.
+					// Just left of the date, inside its patch.
+					date := at.Format("Monday, January 2")
+					base := panel.high/2 + r.s(60) + r.s(70)
+					c := img.RGBAAt((panel.wide-r.width(r.small, date))/2-r.s(4), base-r.s(12))
+					if l := luma(c.R, c.G, c.B); l > scrimTarget+6 {
+						t.Errorf("%s: beside the date a snowy photo is still %.0f bright", panel.name, l)
+					}
+					// Just left of the time: no patch there.
 					hour := clockHM(at)
 					x := (panel.wide-r.width(r.clock, hour)-r.s(18)-r.width(r.ampm, clockSuffix(at)))/2 - r.s(4)
-					c := img.RGBAAt(x, panel.high/2+r.s(60)-r.s(30))
-					if l := luma(c.R, c.G, c.B); l > scrimTarget+4 {
-						t.Errorf("%s: beside the time a snowy photo is still %.0f bright", panel.name, l)
+					c = img.RGBAAt(x, panel.high/2+r.s(60)-r.s(80))
+					if l := luma(c.R, c.G, c.B); l < scrimTarget+30 {
+						t.Errorf("%s: beside the time the photo was darkened to %.0f", panel.name, l)
 					}
 				}
 				if dir == "" {

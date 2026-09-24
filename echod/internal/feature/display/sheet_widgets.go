@@ -110,7 +110,9 @@ func (r *paint) text(face font.Face, s string, x, baseline int, c color.Color) {
 		return
 	}
 	if r.over.record {
-		r.over.noteText(face, s, x, baseline)
+		if face.Metrics().Height.Ceil() <= r.s(scrimTallest) {
+			r.over.noteText(face, s, x, baseline)
+		}
 		return
 	}
 	if r.over.photo != nil {
