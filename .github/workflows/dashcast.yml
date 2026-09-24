@@ -45,6 +45,25 @@ jobs:
       - uses: docker/setup-qemu-action@99012661954931238ded8c8b007157a8430204e1 # v4.4.0
       - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
 
+      # The unit tests above skip what needs a browser when the runner's own Chrome will not start.
+      # So the image is built for this runner first and the browser test run inside it, against the
+      # headless-shell dashcast actually ships: there, a browser that does not start is a failure,
+      # and nothing is published.
+      - uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          context: dashcast
+          platforms: linux/amd64
+          load: true
+          push: false
+          tags: techo5-dashcast:ci
+
+      - name: Test inside the image
+        working-directory: dashcast
+        run: |
+          CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go test -c -o "$RUNNER_TEMP/dashcast.test" .
+          chmod 755 "$RUNNER_TEMP/dashcast.test"
+          docker run --rm -e DASHCAST_REQUIRE_BROWSER=1             -v "$RUNNER_TEMP/dashcast.test:/usr/local/bin/dashcast.test:ro"             --entrypoint /usr/local/bin/dashcast.test techo5-dashcast:ci -test.v -test.run TestOpenATabInTheRunningBrowser
+
       - name: Tags
         id: tags
         run: |
