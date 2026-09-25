@@ -313,7 +313,7 @@ func (s *session) askedFor() string {
 func (s *session) grouped(g protocol.GroupUpdate) {
 	// Said out loud, because it is what a group looks like on the wire and it does not mean what it looks
 	// like it means: Music Assistant puts every player in a group, names the room's own one nothing, and
-	// names a house when there is one. See home.alone, which is what actually decides.
+	// names a house when there is one. See home.leaveWith, which is what actually decides.
 	if g.GroupID != nil {
 		name := ""
 		if g.GroupName != nil {
