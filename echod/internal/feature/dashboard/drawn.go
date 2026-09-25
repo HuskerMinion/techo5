@@ -396,7 +396,7 @@ func (s *session) run() {
 
 func (s *session) once() error {
 	if !hass.Get().Ready() {
-		s.problem("A drawn dashboard needs Home Assistant's address and a token (the hass action).")
+		s.problem("A drawn dashboard needs Home Assistant's address and a token (the home_assistant action).")
 		return fmt.Errorf("no home assistant access")
 	}
 	ctx, cancel := context.WithCancel(context.Background())

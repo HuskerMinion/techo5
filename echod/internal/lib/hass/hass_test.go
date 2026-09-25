@@ -3,6 +3,7 @@ package hass
 import (
 	"io"
 	"net/http"
+	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -100,5 +101,23 @@ func TestOwnURL(t *testing.T) {
 				t.Errorf("ownURL(%q, %q) = %q, %v; want %q, %v", tc.base, tc.url, rest, ok, tc.rest, tc.ok)
 			}
 		})
+	}
+}
+
+// An address pasted with something invisible in front of it is kept without it, and one that is not an
+// address at all is refused when it is set rather than failing every request after.
+func TestTheAddressIsCleanedAndChecked(t *testing.T) {
+	Path = filepath.Join(t.TempDir(), "hass.json")
+	c := &Client{}
+	if err := c.Set("\u200b\ufeff http://192.168.1.20:8123/ \n", " abc.def\u200b "); err != nil {
+		t.Fatal(err)
+	}
+	if c.acc.URL != "http://192.168.1.20:8123" || c.acc.Token != "abc.def" {
+		t.Errorf("kept %q and %q", c.acc.URL, c.acc.Token)
+	}
+	for _, bad := range []string{"192.168.1.20:8123", "homeassistant.local", "ftp://ha", "http://"} {
+		if err := c.Set(bad, "abc"); err == nil {
+			t.Errorf("%q was taken as an address", bad)
+		}
 	}
 }

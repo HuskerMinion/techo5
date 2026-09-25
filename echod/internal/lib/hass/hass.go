@@ -16,6 +16,7 @@ import (
 	"strings"
 	"sync"
 	"time"
+	"unicode"
 
 	"github.com/HuskerMinion/techo5/echod/internal/layout"
 )
@@ -45,6 +46,8 @@ func Get() *Client {
 		shared = &Client{http: &http.Client{Timeout: 15 * time.Second}}
 		if b, err := os.ReadFile(Path); err == nil {
 			_ = json.Unmarshal(b, &shared.acc)
+			// Kept before the cleaning below existed, an address can carry a character nobody can see.
+			shared.acc.URL, shared.acc.Token = cleanURL(shared.acc.URL), clean(shared.acc.Token)
 		}
 	})
 	return shared
@@ -52,10 +55,12 @@ func Get() *Client {
 
 // Set stores the URL (like http://192.168.1.20:8123) and token.
 func (c *Client) Set(url, token string) error {
-	url = strings.TrimRight(strings.TrimSpace(url), "/")
-	token = strings.TrimSpace(token)
+	url, token = cleanURL(url), clean(token)
 	if url == "" || token == "" {
 		return errors.New("hass: url and token are both needed")
+	}
+	if u, err := neturl.Parse(url); err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" {
+		return fmt.Errorf("hass: %q is not an address like http://homeassistant.local:8123", url)
 	}
 	c.mu.Lock()
 	c.acc = access{URL: url, Token: token}
@@ -66,6 +71,22 @@ func (c *Client) Set(url, token string) error {
 	}
 	return os.WriteFile(Path, b, 0o600)
 }
+
+// clean takes out what a copy and paste carries along without anyone seeing it: spaces and line ends,
+// and the invisible ones - a zero-width space, a byte order mark - that no trim removes. Neither an
+// address nor a token has any of them, and one in front of "http" made every request fail with
+// "first path segment in URL cannot contain colon", which says nothing about why (techo5#24).
+func clean(s string) string {
+	return strings.Map(func(r rune) rune {
+		if unicode.IsSpace(r) || unicode.Is(unicode.Cf, r) || !unicode.IsPrint(r) {
+			return -1
+		}
+		return r
+	}, s)
+}
+
+// cleanURL is an address cleaned, without the trailing slash the paths are joined to.
+func cleanURL(s string) string { return strings.TrimRight(clean(s), "/") }
 
 // Ready reports whether there is an access to use.
 func (c *Client) Ready() bool {
