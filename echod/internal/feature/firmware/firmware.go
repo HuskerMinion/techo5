@@ -94,7 +94,15 @@ func build() *Firmware {
 	}
 	component.Bind(u.channel, update.Channels(),
 		func(c update.Channel) update.Channel { return c },
-		func(c update.Channel) error { return config.Set().Update().Channel(c.Label()) })
+		func(c update.Channel) error {
+			if err := config.Set().Update().Channel(c.Label()); err != nil {
+				return err
+			}
+			// The card still shows what the channel we just left was serving: nothing fetches the new
+			// one on a selection change, so ask as soon as the choice is saved.
+			safe.Go("update check", func() { u.Check(context.Background()) })
+			return nil
+		})
 
 	// Published now, or Home Assistant shows a select with no value until somebody changes it — and a
 	// device that has never been asked is on the stable channel, not on nothing.
@@ -134,8 +142,14 @@ func build() *Firmware {
 	// the property.
 	u.rolledBack = update.RolledBack()
 
-	// Off the hook's goroutine, which is the connection's read loop.
-	component.Subscribed.Listen(func(struct{}) { safe.Go("update announce", u.announce) })
+	// Off the hook's goroutine, which is the connection's read loop. The check goes out with the
+	// announce: Home Assistant reads the versions the moment it connects, and nothing else refreshes
+	// them while the device is alone, so a unit that has not been asked keeps offering whatever it
+	// last heard rather than what the channel is serving now.
+	component.Subscribed.Listen(func(struct{}) {
+		safe.Go("update announce", u.announce)
+		safe.Go("update check", func() { u.Check(context.Background()) })
+	})
 	return u
 }
 
