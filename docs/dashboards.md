@@ -30,6 +30,16 @@ your device. In the **Configuration** card (expand it if it ends in "+ N entitie
   at the end, marked *(streamed only)*.
 - **Dashboard when idle**: shows the dashboard instead of the clock whenever nothing else is on the
   screen.
+- **Dashboard without its header** (streamed only): hides Home Assistant's top bar, which on a small
+  screen takes a real slice of it. It works on your dashboards and on the built-in pages (Energy,
+  History, Logbook and the rest), with nothing to install and no change to the dashboards themselves,
+  so phones and tablets still see them as they were. On Energy the bar also holds its view tabs, so
+  they go with it. It needs a dashcast image newer than v0.9.5; an older one shows the bar.
+
+  If you would rather hide the bar in a dashboard's own configuration, the
+  [kiosk-mode](https://github.com/NemesisRE/kiosk-mode) card (HACS) works with dashcast too:
+  `kiosk_mode:` with `kiosk: true` at the top of the dashboard's YAML. That applies to everyone who
+  opens that dashboard, so give the screen a copy of its own.
 
 Each device has its own settings, so the kitchen and a bedroom can show different dashboards.
 

@@ -45,6 +45,7 @@ type Feature struct {
 
 	mode  *esphome.Select
 	idle  *esphome.Switch
+	kiosk *esphome.Switch
 	board *esphome.Select
 
 	mu        sync.Mutex
@@ -91,6 +92,14 @@ func Get() *Feature {
 					Category: esphome.CategoryConfig,
 				},
 			},
+			kiosk: &esphome.Switch{
+				Base: esphome.Base{
+					ObjectID: "screen_dashboard_kiosk",
+					Name:     "Dashboard without its header",
+					Icon:     "mdi:fullscreen",
+					Category: esphome.CategoryConfig,
+				},
+			},
 			board: &esphome.Select{
 				Base: esphome.Base{
 					ObjectID: "screen_dashboard_view",
@@ -109,6 +118,15 @@ func Get() *Feature {
 			}
 			f.Changed.Emit(struct{}{})
 		}
+		// Kiosk is asked for when the screen connects to dashcast, so a change reconnects.
+		f.kiosk.OnCommand = func(on bool) {
+			f.kiosk.Set(on)
+			if err := config.Set().Dashboard().Kiosk(on); err != nil {
+				slog.Error("saving the dashboard kiosk setting failed", "err", err)
+			}
+			slog.Info("dashboard: header", "hidden", on)
+			f.setMode(f.Mode())
+		}
 		shared = f
 	})
 	return shared
@@ -116,12 +134,15 @@ func Get() *Feature {
 
 func (f *Feature) Name() string { return "dashboard" }
 
-func (f *Feature) Entities() []esphome.Entity { return []esphome.Entity{f.mode, f.idle, f.board} }
+func (f *Feature) Entities() []esphome.Entity {
+	return []esphome.Entity{f.mode, f.idle, f.kiosk, f.board}
+}
 
 func (f *Feature) Restore(c config.Config) {
 	component.Restore(f.mode, c.Dashboard.Mode, f.setMode)
 	f.idle.Set(c.Dashboard.Idle)
 	slog.Info("restored", "what", f.idle.ObjectID, "using", c.Dashboard.Idle)
+	f.kiosk.Set(c.Dashboard.Kiosk)
 	f.listBoards(c.Dashboard)
 }
 

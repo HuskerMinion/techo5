@@ -48,6 +48,65 @@ func newBrowser(parent context.Context, cfg config) (*browser, error) {
 
 func (b *browser) close() { b.cancel() }
 
+// initScript is what runs in the tab before any of Home Assistant's own code: the sign-in, the
+// sidebar kept closed, the page kept on dashboards, and with kiosk the top bar hidden.
+func initScript(origin, tokens, allowed []byte, kiosk bool) string {
+	extra := ""
+	if kiosk {
+		extra = kioskScript
+	}
+	return fmt.Sprintf(`(() => {
+  if (window.top !== window || location.origin !== %s) return;
+  localStorage.setItem("hassTokens", %s); localStorage.setItem("dockedSidebar", '"always_hidden"');
+  const allowed = new Set(%s);
+  const ok = (u) => {
+    try {
+      const p = new URL(u, location.href);
+      if (p.origin !== location.origin) return false;
+      return allowed.has(p.pathname.replace(/^\/+/, "").split("/")[0]);
+    } catch (e) { return false; }
+  };
+  for (const name of ["pushState", "replaceState"]) {
+    const real = history[name].bind(history);
+    history[name] = (state, title, url) => { if (url === undefined || url === null || ok(url)) return real(state, title, url); };
+  }
+%s
+})();`, origin, tokens, allowed, extra)
+}
+
+// kioskScript hides Home Assistant's top bar, for a screen too small to give it the room (techo5#27).
+// There are two of them, each inside its component's own shadow root where a page-wide style cannot
+// reach: a dashboard's (hui-root, which the Energy page uses too) and the other pages' (History,
+// Logbook: ha-top-app-bar-fixed). A style goes into each as it appears, and --header-height set to
+// nothing there moves the page up into the room. Found by following the path the frontend builds, not
+// by searching the whole page, which on a Pi every second would cost more than it saves.
+const kioskScript = `
+  const css = {
+    "hui-root": ":host{--header-height:0px!important} .header{display:none!important}",
+    "ha-top-app-bar-fixed": ":host{--header-height:0px!important} header.top-app-bar{display:none!important} .mdc-top-app-bar--fixed-adjust,.content{padding-top:0!important}",
+  };
+  const dress = (el) => {
+    const rule = css[el.tagName.toLowerCase()];
+    if (!rule || !el.shadowRoot || el.shadowRoot.getElementById("techo5-kiosk")) return;
+    const s = document.createElement("style");
+    s.id = "techo5-kiosk";
+    s.textContent = rule;
+    el.shadowRoot.appendChild(s);
+  };
+  const look = () => {
+    const main = document.querySelector("home-assistant")?.shadowRoot?.querySelector("home-assistant-main")?.shadowRoot;
+    if (!main) return;
+    for (const panel of main.querySelectorAll("*")) {
+      if (!panel.tagName.toLowerCase().startsWith("ha-panel-") || !panel.shadowRoot) continue;
+      for (const el of panel.shadowRoot.querySelectorAll("hui-root, ha-top-app-bar-fixed")) dress(el);
+      for (const inner of panel.shadowRoot.querySelectorAll("*")) {
+        if (inner.shadowRoot) for (const el of inner.shadowRoot.querySelectorAll("hui-root, ha-top-app-bar-fixed")) dress(el);
+      }
+    }
+  };
+  setInterval(look, 1000);
+  addEventListener("load", look);`
+
 // chromePath is the browser to run: the one named, or the headless-shell image's, or whatever
 // chromedp finds for itself.
 func chromePath(named string) string {
@@ -69,7 +128,7 @@ func chromePath(named string) string {
 
 // open is a new tab showing path at w by h, signed in to Home Assistant, in the dark theme a screen
 // in a room wants. The tab closes with ctx.
-func (b *browser) open(ctx context.Context, path string, w, h int, allowed map[string]bool) (context.Context, func(), error) {
+func (b *browser) open(ctx context.Context, path string, w, h int, allowed map[string]bool, kiosk bool) (context.Context, func(), error) {
 	// No options: a tab of a browser already running takes none of the browser's, and chromedp
 	// panics if it is given one (WithErrorf is one) - which it did on every device's first
 	// connection (techo5#26). The browser has its quiet logger from newBrowser.
@@ -94,23 +153,7 @@ func (b *browser) open(ctx context.Context, path string, w, h int, allowed map[s
 	// Only in Home Assistant's own top-level page: a card can frame another page, and one on the same
 	// machine would otherwise be handed the token too.
 	origin, _ := json.Marshal(haOrigin(b.cfg.ha))
-	script := fmt.Sprintf(`(() => {
-  if (window.top !== window || location.origin !== %s) return;
-  localStorage.setItem("hassTokens", %s); localStorage.setItem("dockedSidebar", '"always_hidden"');
-  const allowed = new Set(%s);
-  const ok = (u) => {
-    try {
-      const p = new URL(u, location.href);
-      if (p.origin !== location.origin) return false;
-      return allowed.has(p.pathname.replace(/^\/+/, "").split("/")[0]);
-    } catch (e) { return false; }
-  };
-  for (const name of ["pushState", "replaceState"]) {
-    const real = history[name].bind(history);
-    history[name] = (state, title, url) => { if (url === undefined || url === null || ok(url)) return real(state, title, url); };
-  }
-})();`, origin, quoted, list)
-
+	script := initScript(origin, quoted, list, kiosk)
 	err := chromedp.Run(tab,
 		chromedp.ActionFunc(func(ctx context.Context) error {
 			_, err := page.AddScriptToEvaluateOnNewDocument(script).Do(ctx)

@@ -19,6 +19,10 @@ type Dashboard struct {
 	// screen that is there to show how the house is.
 	Idle bool `json:"idle,omitempty"`
 
+	// Kiosk has a streamed dashboard shown without Home Assistant's top bar, which on a small screen
+	// is a real slice of it. Only dashcast can do it; a drawn dashboard has no bar to hide.
+	Kiosk bool `json:"kiosk,omitempty"`
+
 	// Known is the dashboards Home Assistant had when last asked, kept so the list of them is there
 	// from the start and not only once Home Assistant has been asked again.
 	Known []DashboardChoice `json:"known,omitempty"`
@@ -69,6 +73,10 @@ func (w DashboardWriter) Path(v string) error {
 // other.
 func (w DashboardWriter) Server(addr, key string) error {
 	return w.st.Update(func(c *Config) { c.Dashboard.Server, c.Dashboard.Key = addr, key })
+}
+
+func (w DashboardWriter) Kiosk(v bool) error {
+	return w.st.Update(func(c *Config) { c.Dashboard.Kiosk = v })
 }
 
 func (w DashboardWriter) Idle(v bool) error {

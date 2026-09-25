@@ -188,7 +188,11 @@ func (s *stream) once() error {
 		path = "/lovelace/0"
 	}
 	enc := json.NewEncoder(c)
-	if err := enc.Encode(map[string]any{"name": cfg.Device.Name, "w": s.w, "h": s.h, "path": path}); err != nil {
+	hello := map[string]any{"name": cfg.Device.Name, "w": s.w, "h": s.h, "path": path}
+	if cfg.Dashboard.Kiosk {
+		hello["kiosk"] = true // a dashcast from before it knew kiosk ignores it and shows the header
+	}
+	if err := enc.Encode(hello); err != nil {
 		return err
 	}
 	s.mu.Lock()

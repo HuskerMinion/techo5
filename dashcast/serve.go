@@ -54,6 +54,9 @@ type hello struct {
 	W    int    `json:"w"`
 	H    int    `json:"h"`
 	Path string `json:"path"` // the dashboard, as in Home Assistant's own address bar: /lovelace/0
+
+	// Kiosk is the page without Home Assistant's top bar (browser.go, kioskScript).
+	Kiosk bool `json:"kiosk,omitempty"`
 }
 
 type touchMsg struct {
@@ -162,11 +165,11 @@ func serve(ctx context.Context, b *browser, g *guard, cfg config, raw net.Conn) 
 
 	// The tab: this screen's parked one if it left a moment ago (warm.go), or a new one. It outlives
 	// the session, so it is opened against the server's context, not this connection's.
-	key := fmt.Sprintf("%s|%dx%d|%s", h.Name, h.W, h.H, h.Path)
+	key := fmt.Sprintf("%s|%dx%d|%s|%t", h.Name, h.W, h.H, h.Path, h.Kiosk)
 	w := warm.take(key)
 	reused := w != nil
 	if !reused {
-		tab, closeTab, err := b.open(ctx, h.Path, h.W, h.H, allowed)
+		tab, closeTab, err := b.open(ctx, h.Path, h.W, h.H, allowed, h.Kiosk)
 		if err != nil {
 			slog.Warn("opening the dashboard failed", "name", h.Name, "err", err)
 			out.problem("The dashboard would not open: " + err.Error())
