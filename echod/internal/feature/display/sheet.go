@@ -177,7 +177,7 @@ func generalRows(sv sheetView) []settingRow {
 		restart.sub, restart.button = "Tap again to restart now", "Confirm"
 	}
 	return []settingRow{
-		{label: "Name", sub: "Set in Home Assistant", kind: ctlValue, value: st.name},
+		{label: "Name", sub: "Change it on the setup page", kind: ctlValue, value: st.name},
 		{id: "weather", label: "Weather", sub: "Shown with the clock", kind: ctlChoice, value: st.weather, button: "Show"},
 		{id: "timezone", label: "Time zone", sub: zoneSub(), kind: ctlChoice, value: zoneValue()},
 		{id: "screenlang", label: "Screen language", sub: "What this screen listens for, not what the assistant speaks",
