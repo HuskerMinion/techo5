@@ -99,6 +99,7 @@ func categoryRows(sv sheetView) (rows []settingRow, note string) {
 			{id: "waketone", label: "Wake sound", kind: ctlChoice, value: config.Get().Wake.Slot(0).Tone.Label()},
 			{id: "sleep", label: "Sleep timer", sub: sleepSub(), kind: ctlChoice, value: sleepValue()},
 			{id: "quiet", label: "Quiet hours", sub: quietSub(), kind: ctlChoice, value: quietValue()},
+			{id: "hasounds", label: "Home Assistant sounds", sub: "For muting and timers", kind: ctlToggle, on: !config.Get().Speaker.ClassicSounds},
 			{id: "dnd", label: "Do not disturb", sub: "Intercom calls from other rooms are turned away", kind: ctlToggle, on: config.Get().Home.DoNotDisturb},
 			{id: "bass", label: "Bass", sub: toneSub(), kind: ctlStepper, value: toneValue(config.Get().Speaker.Bass)},
 			{id: "treble", label: "Treble", kind: ctlStepper, value: toneValue(config.Get().Speaker.Treble)},
@@ -551,6 +552,8 @@ func (d *Display) rowTap(id string, p part, opt int) {
 		setCallButtonSaved(d.callBtn, !callButton.Load())
 	case "dnd":
 		go phone.Get().SetDoNotDisturb(!config.Get().Home.DoNotDisturb)
+	case "hasounds":
+		media.Get().SetHASounds(config.Get().Speaker.ClassicSounds)
 	case "dropin":
 		go phone.Get().SetDropIn(!config.Get().Home.DropIn)
 	case "volume":

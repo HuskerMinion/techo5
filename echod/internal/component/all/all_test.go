@@ -47,6 +47,7 @@ var registered = []string{
 	"free_space",
 	"hardware_color",
 	"headphones",
+	"home_assistant_sounds",
 	"insecure_tls",
 	"intercom_do_not_disturb",
 	"intercom_drop_in",

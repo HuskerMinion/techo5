@@ -21,6 +21,14 @@ type Speaker struct {
 	// load had false written back to it by the settling below, and would stay untuned for ever after
 	// the tuning started working. Unset means the default applies.
 	ASPChosen bool `json:"asp_chosen,omitempty"`
+
+	// ClassicSounds is TECHO5's own notes for muting and a finished timer, where the default is the
+	// Home Assistant satellites' recorded ones.
+	ClassicSounds bool `json:"classic_sounds,omitempty"`
+
+	// SoundsMoved is whether the wake sounds have been moved to Home Assistant's: once, for a device
+	// saved when Chirp was the default, and only for a word still on it (config.Load).
+	SoundsMoved bool `json:"sounds_moved,omitempty"`
 }
 
 const (
@@ -38,7 +46,25 @@ const (
 )
 
 func defaultSpeaker() Speaker {
-	return Speaker{Volume: DefaultVolume, Resampling: DefaultResampling, ASP: DefaultASP}
+	return Speaker{Volume: DefaultVolume, Resampling: DefaultResampling, ASP: DefaultASP, SoundsMoved: true}
+}
+
+// moveSounds gives a device saved when Chirp was the default wake sound Home Assistant's instead,
+// which is the default now: once, and only for a word (or its follow-up) still on Chirp, which is
+// what nearly everyone had without choosing it. Anyone can choose Chirp again, and it then stays.
+func (c *Config) moveSounds() {
+	if c.Speaker.SoundsMoved {
+		return
+	}
+	for i := range c.Wake.Words {
+		if c.Wake.Words[i].Tone == ToneChirp {
+			c.Wake.Words[i].Tone = ToneHA
+		}
+		if c.Wake.Words[i].FollowUpTone == ToneChirp {
+			c.Wake.Words[i].FollowUpTone = ToneHA
+		}
+	}
+	c.Speaker.SoundsMoved = true
 }
 
 type SpeakerWriter struct{ st *Store }
@@ -61,6 +87,10 @@ func (w SpeakerWriter) Bass(v float64) error {
 
 func (w SpeakerWriter) Treble(v float64) error {
 	return w.st.Update(func(c *Config) { c.Speaker.Treble = v })
+}
+
+func (w SpeakerWriter) ClassicSounds(v bool) error {
+	return w.st.Update(func(c *Config) { c.Speaker.ClassicSounds = v })
 }
 
 // ASPWanted is what the tuning should be set to: what somebody chose, or the default until somebody

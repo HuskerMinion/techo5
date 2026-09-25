@@ -292,10 +292,10 @@ func (m *Mute) settled(asked bool) {
 	m.Changed.Emit(muted)
 
 	if muted {
-		speaker.Sound().Chime(speaker.ToneMute)
+		speaker.Sound().Chime(speaker.MuteSound(true))
 		return
 	}
-	speaker.Sound().Chime(speaker.ToneUnmute)
+	speaker.Sound().Chime(speaker.MuteSound(false))
 }
 
 // pollInterval is how often await looks while it waits.

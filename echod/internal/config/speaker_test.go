@@ -23,3 +23,21 @@ func TestTheTuningComesBackOnByItselfUnlessSomebodyTurnedItOff(t *testing.T) {
 		t.Error("a setting somebody turned on did not stay on")
 	}
 }
+
+// A device saved when Chirp was the default moves to Home Assistant's wake sound once, a word set to
+// something else keeps it, and after the move Chirp chosen again stays Chirp.
+func TestWakeSoundsMoveOnce(t *testing.T) {
+	c := Config{Wake: Wake{Words: []WakeWord{{Tone: ToneChirp, FollowUpTone: ToneChirp}, {Tone: ToneDing}}}}
+	c.moveSounds()
+	if c.Wake.Words[0].Tone != ToneHA || c.Wake.Words[0].FollowUpTone != ToneHA || c.Wake.Words[1].Tone != ToneDing {
+		t.Fatalf("after the move: %+v", c.Wake.Words)
+	}
+	c.Wake.Words[0].Tone = ToneChirp
+	c.moveSounds()
+	if c.Wake.Words[0].Tone != ToneChirp {
+		t.Error("Chirp chosen after the move was moved again")
+	}
+	if !defaultSpeaker().SoundsMoved || DefaultTone != ToneHA {
+		t.Error("a new device starts on Chirp")
+	}
+}

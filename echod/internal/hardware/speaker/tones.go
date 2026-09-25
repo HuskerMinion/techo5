@@ -46,12 +46,14 @@ var (
 )
 
 // alarmSounds are what an alarm can ring with, in the order they are offered; the first is the
-// default. Each is one round of the pattern, repeated while the alarm rings, so each stays well
-// under the two seconds between rounds. Beeps is the timer's own, which alarms always used.
+// default. Each is one round of the pattern, repeated while the alarm rings; a round longer than the
+// time between rounds is let finish first (ring/bell.go). Home Assistant is the timer sound of the
+// Home Assistant satellites, and Beeps the one TECHO5 timers always used.
 var alarmSounds = []struct {
 	name  string
 	notes []Note
 }{
+	{"Home Assistant", []Note{ClipTimer.Note()}},
 	{"Beeps", ToneTimer},
 	{"Chimes", []Note{{Freq: 523, Ms: 90}, {Freq: 659, Ms: 90}, {Freq: 784, Ms: 90}, {Freq: 1047, Ms: 320}}},
 	{"Bells", []Note{{Freq: 1319, Ms: 320}, {Ms: 80}, {Freq: 1047, Ms: 520}}},
@@ -84,6 +86,7 @@ func AlarmSound(name string) []Note {
 // wakeTones is what a detection can sound like. They are told apart by shape rather than pitch, so
 // two wake words set to different ones are distinguishable without knowing which is which.
 var wakeTones = map[config.Tone][]Note{
+	config.ToneHA:    {ClipWake.Note()},
 	config.ToneNone:  nil,
 	config.ToneChirp: {{Freq: 784, Ms: 60}, {Freq: 1175, Ms: 90}},
 	config.ToneDing:  {{Freq: 1319, Ms: 200}},
@@ -104,7 +107,29 @@ func Length(notes []Note) time.Duration {
 
 // WakeTones lists them in the order they are offered.
 func WakeTones() []config.Tone {
-	return []config.Tone{config.ToneNone, config.ToneChirp, config.ToneDing, config.ToneRise}
+	return []config.Tone{config.ToneHA, config.ToneNone, config.ToneChirp, config.ToneDing, config.ToneRise}
+}
+
+// TimerSound is one round of a finished timer: Home Assistant's, or the classic beeps.
+func TimerSound() []Note {
+	if config.Get().Speaker.ClassicSounds {
+		return ToneTimer
+	}
+	return []Note{ClipTimer.Note()}
+}
+
+// MuteSound is what muting (on) or unmuting the microphones sounds like: Home Assistant's, or the
+// classic pair of notes.
+func MuteSound(on bool) []Note {
+	switch {
+	case config.Get().Speaker.ClassicSounds && on:
+		return ToneMute
+	case config.Get().Speaker.ClassicSounds:
+		return ToneUnmute
+	case on:
+		return []Note{ClipMuteOn.Note()}
+	}
+	return []Note{ClipMuteOff.Note()}
 }
 
 // Chime plays a tone alongside whatever is playing rather than instead of it: pressing volume during

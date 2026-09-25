@@ -10,7 +10,9 @@ Android, with one Go daemon, `echod`, doing everything the device does:
 
 - **Voice satellite for Home Assistant** over the ESPHome API: local wake word (microWakeWord on
   the CPU), streaming to Home Assistant's pipeline, spoken replies, echo cancellation so the
-  wake word works over music.
+  wake word works over music. It sounds like Home Assistant's own voice satellites: their recorded
+  sounds for a wake word, muting and a finished timer are the defaults, and TECHO5's own notes are a
+  choice (the Wake sound setting, and Home Assistant sounds under Sound & Voice).
 - **Screen**: clock and weather, the conversation as it happens, a now-playing page with song and
   artwork, a forecast page and a rain radar map, live views of Home Assistant cameras and of the Show's own camera, and
   a swipe-down settings screen with its categories down the left (Display, Sound, Alarms,
@@ -21,7 +23,7 @@ Android, with one Go daemon, `echod`, doing everything the device does:
   on the settings screen (Alarms) or with the `alarm_set` action, or followed from Home Assistant `input_datetime`
   helpers (`alarms_follow`), and ring from the device's own clock even when Home Assistant is down.
   A ringing timer or alarm takes the whole screen, lights a dark one, and offers Stop and Snooze
-  (9 minutes unless changed); the alarm sound (Beeps, Chimes, Bells, Gentle or Pulse) and the snooze
+  (9 minutes unless changed); the alarm sound (Home Assistant, Beeps, Chimes, Bells, Gentle or Pulse) and the snooze
   length are set on the Alarms card or in Home Assistant; the stop word, the action button and Home Assistant's Stop/Snooze buttons work too.
 - **Weather**: a new device shows Home Assistant's own forecast (`weather.forecast_home`), or, when
   Home Assistant has none, the first weather entity it lists; any other

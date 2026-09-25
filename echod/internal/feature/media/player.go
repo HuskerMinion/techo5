@@ -63,6 +63,10 @@ type Player struct {
 	// next try is heard; see feature/detect/nearmiss.go.
 	nearMiss *esphome.Switch
 
+	// haSounds is the Home Assistant satellites' recorded sounds for muting and a finished timer, or
+	// TECHO5's own notes (hardware/speaker/clips.go).
+	haSounds *esphome.Switch
+
 	// sleep stops what is playing after a while, the way a clock radio does.
 	sleep *sleeper
 
@@ -225,6 +229,14 @@ func build() *Player {
 			Min: -asp.ToneRange, Max: asp.ToneRange, Step: 1, Unit: "dB",
 			Mode: esphome.NumberBox,
 		},
+		haSounds: &esphome.Switch{
+			Base: esphome.Base{
+				ObjectID: "home_assistant_sounds",
+				Name:     "Home Assistant sounds",
+				Icon:     "mdi:home-sound-in",
+				Category: esphome.CategoryConfig,
+			},
+		},
 		nearMiss: &esphome.Switch{
 			Base: esphome.Base{
 				ObjectID: "duck_on_near_miss",
@@ -239,7 +251,7 @@ func build() *Player {
 
 	// The player itself stays on the device: it is what people reach for. These are how it behaves.
 	bases := []*esphome.Base{&p.resampling.Base, &p.onTurn.Base, &p.duck.Base, &p.jack.Base, &p.asp.Base,
-		&p.bass.Base, &p.treble.Base, &p.quiet.Base, &p.nearMiss.Base}
+		&p.bass.Base, &p.treble.Base, &p.quiet.Base, &p.nearMiss.Base, &p.haSounds.Base}
 	for _, sel := range p.layers {
 		bases = append(bases, &sel.Base)
 	}
@@ -282,6 +294,8 @@ func build() *Player {
 			p.sound()
 		}
 	}
+
+	p.haSounds.OnCommand = p.SetHASounds
 
 	p.nearMiss.OnCommand = func(v bool) {
 		p.nearMiss.Set(v)
@@ -355,9 +369,19 @@ func build() *Player {
 
 func (p *Player) Name() string { return "media player" }
 
+// SetHASounds chooses the Home Assistant satellites' sounds for muting and timers, or TECHO5's own.
+func (p *Player) SetHASounds(on bool) {
+	if err := config.Set().Speaker().ClassicSounds(!on); err != nil {
+		slog.Error("saving a setting failed", "setting", p.haSounds.ObjectID, "err", err)
+		return
+	}
+	p.haSounds.Set(on)
+	slog.Info("setting changed", "setting", p.haSounds.ObjectID, "using", on)
+}
+
 func (p *Player) Entities() []esphome.Entity {
 	out := []esphome.Entity{p.mp, p.jack, p.resampling, p.onTurn, p.duck, p.asp, p.bass, p.treble,
-		p.quiet, p.nearMiss, p.sleep.sel}
+		p.quiet, p.nearMiss, p.haSounds, p.sleep.sel}
 	for _, sel := range p.layers {
 		out = append(out, sel)
 	}
@@ -376,6 +400,7 @@ func (p *Player) Restore(c config.Config) {
 
 	p.nearMiss.Set(c.Media.DuckOnNearMiss)
 	slog.Info("restored", "what", p.nearMiss.ObjectID, "using", c.Media.DuckOnNearMiss)
+	p.haSounds.Set(!c.Speaker.ClassicSounds)
 
 	p.duck.Set(float32(c.Media.DuckDB))
 	slog.Info("restored", "what", p.duck.ObjectID, "using", c.Media.DuckDB)

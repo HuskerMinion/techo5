@@ -1,0 +1,84 @@
+package speaker
+
+import (
+	"embed"
+	"encoding/binary"
+	"math"
+	"sync"
+)
+
+// Recorded sounds, where a tone is a note made here: the Home Assistant Voice sounds (sounds/LICENSE.md,
+// CC BY 4.0, Clayton Charles Tapp), so a TECHO5 device sounds like the Home Assistant satellites
+// beside it (techo5#34). They are kept as they play - 16-bit mono at the output's rate, converted from
+// the originals' FLAC when they were added - so nothing is decoded on the device.
+
+//go:embed sounds/*.pcm
+var clipFiles embed.FS
+
+// Clip is one recorded sound.
+type Clip struct {
+	file string
+
+	once    sync.Once
+	samples []int16 // mono, at Rate
+	peak    float64 // the loudest sample, as a share of full scale
+}
+
+var (
+	ClipWake    = &Clip{file: "wake_word_triggered"}
+	ClipTimer   = &Clip{file: "timer_finished"}
+	ClipMuteOn  = &Clip{file: "mute_switch_on"}
+	ClipMuteOff = &Clip{file: "mute_switch_off"}
+)
+
+func (c *Clip) load() {
+	c.once.Do(func() {
+		b, err := clipFiles.ReadFile("sounds/" + c.file + ".pcm")
+		if err != nil {
+			return
+		}
+		c.samples = make([]int16, len(b)/2)
+		var most int
+		for i := range c.samples {
+			s := int16(binary.LittleEndian.Uint16(b[2*i:]))
+			c.samples[i] = s
+			most = max(most, abs(int(s)))
+		}
+		c.peak = float64(most) / math.MaxInt16
+	})
+}
+
+func abs(v int) int {
+	if v < 0 {
+		return -v
+	}
+	return v
+}
+
+// Ms is how long it plays.
+func (c *Clip) Ms() int {
+	c.load()
+	return len(c.samples) * 1000 / Rate
+}
+
+// Note is the clip as a note, so it goes wherever notes go: a chime, a ring, one round of an alarm.
+func (c *Clip) Note() Note { return Note{Clip: c, Ms: c.Ms()} }
+
+// render is the clip at level. A tone's level is its peak, and a clip is recorded at its own; at the
+// feedback tones' level it plays as it was recorded, louder in proportion to a louder level, and
+// never past full scale, since a recording mixed near the top has nowhere left to go.
+func (c *Clip) render(level float64) []int16 {
+	c.load()
+	gain := level / toneLevel
+	if c.peak > 0 {
+		gain = min(gain, 0.98/c.peak)
+	}
+	out := make([]int16, len(c.samples)*Channels)
+	for i, s := range c.samples {
+		v := int16(math.Round(float64(s) * gain))
+		for ch := range Channels {
+			out[i*Channels+ch] = v
+		}
+	}
+	return out
+}

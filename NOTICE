@@ -68,6 +68,15 @@ Icon font (embedded in the daemon)
   Pictogrammers, https://pictogrammers.com/library/mdi/. The icons Home Assistant uses, for dashboards
   the device draws itself. Used unmodified.
 
+Sounds (embedded in the daemon)
+  Home Assistant Voice sounds, echod/internal/hardware/speaker/sounds — Creative Commons Attribution
+  4.0 International (https://creativecommons.org/licenses/by/4.0/)
+  "Home Assistant Voice Preview Edition Sounds" © 2024 by Clayton Charles Tapp
+  (https://www.cctaudio.com/), from https://github.com/esphome/home-assistant-voice-pe/tree/dev/sounds.
+  Changes: wake_word_triggered, timer_finished, mute_switch_on and mute_switch_off were converted from
+  FLAC to raw 16-bit mono PCM at 48 kHz; the sounds themselves are unchanged. Their license note is
+  sounds/LICENSE.md beside them.
+
 Wake word models (embedded in the daemon)
   The stop word, echod/internal/feature/detect/assets/stop.tflite — Apache License 2.0
   microWakeWord, https://github.com/kahrendt/microWakeWord. Embedded because it is not a choice:

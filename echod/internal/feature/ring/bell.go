@@ -14,9 +14,12 @@ import (
 
 const (
 	// RingFor is how long a ring sounds if nobody stops it, and RingEvery how often its chime
-	// repeats. Every sound a ring can make has to fit inside RingEvery.
+	// repeats. A sound longer than RingEvery is let finish first (see ringBreath).
 	RingFor   = 15 * time.Minute
 	RingEvery = 2 * time.Second
+
+	// ringBreath is the quiet after a round too long for RingEvery, before the next.
+	ringBreath = 700 * time.Millisecond
 
 	// level is the chime's loudness: louder than the device's feedback tones, since a ring is meant
 	// to fetch somebody from another room.
@@ -232,12 +235,19 @@ func ringBell() {
 		// back only the rings it silenced. The light goes on pulsing through both, so the ring stays
 		// obviously alive while it is silent.
 		if !now.Before(next) {
+			every := ringEvery
 			if !Hushed() {
 				for _, notes := range loud {
 					chime(notes)
+					// A recorded round can outlast the time between rounds (Home Assistant's timer
+					// sound is nearly three seconds): the next waits for it and a breath, so two
+					// rounds never play over each other.
+					if l := speaker.Length(notes); l > RingEvery {
+						every = max(every, l+ringBreath)
+					}
 				}
 			}
-			next = now.Add(ringEvery)
+			next = now.Add(every)
 		}
 
 		wait = min(wait, next.Sub(now))

@@ -708,6 +708,9 @@ func (p *Player) Queued() int {
 type Note struct {
 	Freq float64
 	Ms   int
+
+	// Clip is a recorded sound played in the note's place (clips.go); Ms is then its length.
+	Clip *Clip
 }
 
 // Beep queues a tone.
@@ -786,6 +789,9 @@ func clamp(v int32) int16 {
 }
 
 func tone(n Note, level float64) []int16 {
+	if n.Clip != nil {
+		return n.Clip.render(level)
+	}
 	frames := Rate * n.Ms / 1000
 	out := make([]int16, frames*Channels)
 

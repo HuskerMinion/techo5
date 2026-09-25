@@ -76,7 +76,7 @@ type WakeWord struct {
 const (
 	DefaultThreshold = 0.85
 	DefaultEffect    = "Pulse"
-	DefaultTone      = ToneChirp
+	DefaultTone      = ToneHA
 	DefaultDelivery  = DeliveryWhole
 
 	DefaultMaxListen = 15
@@ -239,6 +239,9 @@ func (d Delivery) Label() string {
 type Tone string
 
 const (
+	// ToneHA is the Home Assistant satellites' own wake sound, the default (hardware/speaker/clips.go).
+	ToneHA Tone = "home_assistant"
+
 	// ToneNone is silence: the ring is feedback enough for some people.
 	ToneNone Tone = "none"
 
@@ -255,6 +258,8 @@ const (
 // Label is how the setting is shown.
 func (t Tone) Label() string {
 	switch t {
+	case ToneHA:
+		return "Home Assistant"
 	case ToneNone:
 		return "None"
 	case ToneChirp:

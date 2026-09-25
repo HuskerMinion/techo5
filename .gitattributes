@@ -21,3 +21,6 @@ tools/*.sh text eol=lf
 # The icon names are read at run time and must not grow a CR on a Windows checkout; the font is binary.
 echod/internal/lib/mdi/names.txt text eol=lf
 *.ttf binary
+
+# Recorded sounds embedded in the daemon: raw audio, which a line-ending conversion would corrupt.
+*.pcm binary

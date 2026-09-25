@@ -92,6 +92,7 @@ func Load(path string) (*Store, error) {
 	if err := json.Unmarshal(b, &st.c); err != nil {
 		return st, fmt.Errorf("config: %s: %w", path, err)
 	}
+	st.c.moveSounds()
 
 	st.readable = true
 	return st, nil
