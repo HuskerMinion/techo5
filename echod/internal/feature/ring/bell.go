@@ -235,19 +235,14 @@ func ringBell() {
 		// back only the rings it silenced. The light goes on pulsing through both, so the ring stays
 		// obviously alive while it is silent.
 		if !now.Before(next) {
-			every := ringEvery
 			if !Hushed() {
 				for _, notes := range loud {
 					chime(notes)
-					// A recorded round can outlast the time between rounds (Home Assistant's timer
-					// sound is nearly three seconds): the next waits for it and a breath, so two
-					// rounds never play over each other.
-					if l := speaker.Length(notes); l > RingEvery {
-						every = max(every, l+ringBreath)
-					}
 				}
+				next = now.Add(roundGap(loud))
+			} else {
+				next = now.Add(ringEvery)
 			}
-			next = now.Add(every)
 		}
 
 		wait = min(wait, next.Sub(now))
@@ -256,4 +251,17 @@ func ringBell() {
 		case <-time.After(wait):
 		}
 	}
+}
+
+// roundGap is how long until the next round of rings that just sounded: ringEvery, unless a round
+// outlasts RingEvery - a recorded sound can, Home Assistant's timer sound is nearly three seconds -
+// and then that round and a breath, so two rounds never play over each other.
+func roundGap(loud [][]speaker.Note) time.Duration {
+	every := ringEvery
+	for _, notes := range loud {
+		if l := speaker.Length(notes); l > RingEvery {
+			every = max(every, l+ringBreath)
+		}
+	}
+	return every
 }

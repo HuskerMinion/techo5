@@ -241,3 +241,20 @@ func TestAgainSoundsASilencedRing(t *testing.T) {
 	}
 	waitFor(t, "the ring to sound again", func() bool { return rm.rounds() > quiet })
 }
+
+// A round short enough for the time between rounds keeps it; one that outlasts it - Home Assistant's
+// timer sound - is let finish, with a breath, before the next; and with two ringing the longer decides.
+func TestALongRoundIsLetFinish(t *testing.T) {
+	short := [][]speaker.Note{speaker.ToneTimer}
+	if got := roundGap(short); got != ringEvery {
+		t.Errorf("the beeps wait %v between rounds, want %v", got, ringEvery)
+	}
+	long := speaker.ClipTimer.Note()
+	want := time.Duration(long.Ms)*time.Millisecond + ringBreath
+	if got := roundGap([][]speaker.Note{{long}}); got != want {
+		t.Errorf("Home Assistant's timer sound waits %v between rounds, want %v", got, want)
+	}
+	if got := roundGap([][]speaker.Note{speaker.ToneTimer, {long}}); got != want {
+		t.Errorf("with both ringing the rounds are %v apart, want %v", got, want)
+	}
+}

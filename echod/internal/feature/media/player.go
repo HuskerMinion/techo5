@@ -232,7 +232,7 @@ func build() *Player {
 		haSounds: &esphome.Switch{
 			Base: esphome.Base{
 				ObjectID: "home_assistant_sounds",
-				Name:     "Home Assistant sounds",
+				Name:     "Home Assistant sounds for muting and timers",
 				Icon:     "mdi:home-sound-in",
 				Category: esphome.CategoryConfig,
 			},
@@ -401,6 +401,7 @@ func (p *Player) Restore(c config.Config) {
 	p.nearMiss.Set(c.Media.DuckOnNearMiss)
 	slog.Info("restored", "what", p.nearMiss.ObjectID, "using", c.Media.DuckOnNearMiss)
 	p.haSounds.Set(!c.Speaker.ClassicSounds)
+	slog.Info("restored", "what", p.haSounds.ObjectID, "using", !c.Speaker.ClassicSounds)
 
 	p.duck.Set(float32(c.Media.DuckDB))
 	slog.Info("restored", "what", p.duck.ObjectID, "using", c.Media.DuckDB)

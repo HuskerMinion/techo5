@@ -59,9 +59,13 @@ func (c *Client) Set(url, token string) error {
 	if url == "" || token == "" {
 		return errors.New("hass: url and token are both needed")
 	}
-	if u, err := neturl.Parse(url); err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" {
+	u, err := neturl.Parse(url)
+	if err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" {
 		return fmt.Errorf("hass: %q is not an address like http://homeassistant.local:8123", url)
 	}
+	// As it was parsed: "HTTP://ha:8123" is a working address, and the websocket, which swaps the
+	// scheme's "http" for "ws", needs it written the way url.Parse writes it.
+	url = strings.TrimRight(u.Scheme+"://"+u.Host+u.Path, "/")
 	c.mu.Lock()
 	c.acc = access{URL: url, Token: token}
 	c.mu.Unlock()

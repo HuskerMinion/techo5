@@ -109,14 +109,20 @@ func Length(notes []Note) time.Duration {
 // recording counts only until its fade (Clip.LoudMs). A turn holds its microphone back for this long
 // while the wake sound plays, and Home Assistant's lasts nearly a second, most of it a quiet tail the
 // echo canceller takes care of; holding for all of it lost the first words of every request.
-func Audible(notes []Note) time.Duration {
+//
+// With no echo canceller running, nothing takes the fade out, and a speaker a few centimetres from the
+// microphones is loud even 20 dB down: uncancelled counts until the fade is 30 dB down instead.
+func Audible(notes []Note, uncancelled bool) time.Duration {
 	var ms int
 	for _, n := range notes {
-		if n.Clip != nil {
+		switch {
+		case n.Clip != nil && uncancelled:
+			ms += n.Clip.QuietMs()
+		case n.Clip != nil:
 			ms += n.Clip.LoudMs()
-			continue
+		default:
+			ms += n.Ms
 		}
-		ms += n.Ms
 	}
 	return time.Duration(ms) * time.Millisecond
 }
@@ -137,10 +143,11 @@ func TimerSound() []Note {
 // MuteSound is what muting (on) or unmuting the microphones sounds like: Home Assistant's, or the
 // classic pair of notes.
 func MuteSound(on bool) []Note {
+	classic := config.Get().Speaker.ClassicSounds
 	switch {
-	case config.Get().Speaker.ClassicSounds && on:
+	case classic && on:
 		return ToneMute
-	case config.Get().Speaker.ClassicSounds:
+	case classic:
 		return ToneUnmute
 	case on:
 		return []Note{ClipMuteOn.Note()}
