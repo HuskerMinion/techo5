@@ -555,8 +555,9 @@ func houseSection(w http.ResponseWriter, token string) {
 	 <p class="note">Type the <strong>same word on every device in this house</strong>. They then find
 	  each other on the network, and speaking to one plays it on the others. Anything that does not
 	  have the word is ignored.</p>
-	 <p class="note">Leave it empty to turn announcements off here: the device stops advertising itself
-	  and stops taking them. Reminders set to go off on other devices use it too.</p>
+	 <p class="note">Leave it empty to turn announcements and intercom calls off here: the device takes
+	  neither. The other devices can still see it on the network, but what they send it is refused.
+	  Reminders set to go off on other devices use it too.</p>
 	 <p><button type="submit">Save</button></p></form></fieldset>`,
 		html.EscapeString(word))
 }
