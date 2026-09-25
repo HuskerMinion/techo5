@@ -26,11 +26,13 @@ starts; the installer picks each one's boot image out of the release. The Show 5
 end to end, though on one unit so far. The Show 8 is newer still: it has been through an install, a slot
 update and a reboot on one unit, with the screen, microphones, wake word, speaker, camera, lens cover
 and mute latch all working, and nothing else has run on it for long. Two things a Show 8 owner should
-know before starting. the model number above is the one the unlock project lists for the
-1st gen, and a seller's own number may not tell the two generations apart, so go by the year as well
-when buying second-hand; the board a 1st gen reports is `crown`. And
-cycling the mute latch stops the camera until the unit is rebooted — the daemon says so when it happens.
-Other Echos (the Dot 3rd gen and later, and so on) are **not** supported.
+know before starting. The model number above is the one the unlock project lists for the 1st gen, and a
+seller's own number may not tell the two generations apart, so go by the year as well when buying
+second-hand; the board a 1st gen reports is `crown`. And the camera can stay off until the unit is
+rebooted: cycling the mute latch does it, and so does a daemon restart. The daemon says so when it
+happens (`the microphone latch cut the sensor's power behind its driver`), and the log is the whole
+story — only a reboot brings the camera back. Other Echos (the Dot 3rd gen and later, and so on) are
+**not** supported.
 
 ## What every device needs
 
@@ -62,9 +64,10 @@ images from your own unit's backup. You need Python 3, the Android platform tool
 Check with `python3 --version` and `adb version`. The unlock threads on XDA also need a (free) XDA
 account to download attachments.
 
-## Echo Show 5 (1st and 2nd gen)
+## Echo Show 5 and Show 8
 
-The steps are the same for both; where they differ, the 1st gen (`checkers`) is called out.
+The Show 5 (1st and 2nd gen) and the Show 8 (1st gen) take the same steps; where they differ, the
+board is called out — `checkers`, `cronos`, `crown`.
 
 1. **Unlock it with amonet.** On a 2nd gen, follow
    [[UNLOCK][ROOT][TWRP][UNBRICK] Echo Show 5 2nd Gen (cronos)](https://xdaforums.com/t/unlock-root-twrp-unbrick-amazon-echo-show-5-2nd-gen-2021-cronos.4772596/)
@@ -80,12 +83,17 @@ The steps are the same for both; where they differ, the 1st gen (`checkers`) is 
    [[UNLOCK][ROOT][TWRP][UNBRICK] Echo Show 5 1st Gen (checkers)](https://xdaforums.com/t/unlock-root-twrp-unbrick-amazon-echo-show-5-1st-gen-2019-checkers.4762900/)
    (amonet branch `mt8163-checkers`). A unit fresh out of the box may have shipped with firmware too
    new to unlock, so read the version before letting it reach the internet.
+   On a **Show 8**, the same again with the `crown` tools:
+   [[UNLOCK][ROOT][TWRP][UNBRICK] Amazon Echo Show 8 1st Gen - 2019 (crown)](https://xdaforums.com/t/unlock-root-twrp-unbrick-amazon-echo-show-8-1st-gen-2019-crown.4766687/)
+   (amonet branch `mt8163-crown`).
    *Check:* the Show boots into TWRP.
 2. **Install LineageOS 18.1.** Follow
    [[ROM][UNOFFICIAL][11][cronos] LineageOS 18.1 for the Echo Show 5 (2021)](https://xdaforums.com/t/rom-unofficial-11-cronos-lineageos-18-1-for-the-amazon-echo-show-5-2021.4772598/).
    Use a current build (0.4 or later; earlier ones lose audio after a few days). A **1st gen** takes
    R0rt1z2's `checkers` build of the same LineageOS, dated 2026-09-04 or later: TECHO5's kernel is
-   rebuilt from that source, and the installer checks the version before it does anything.
+   rebuilt from that source, and the installer checks the version before it does anything. A **Show 8**
+   takes R0rt1z2's `crown` build of the same LineageOS:
+   [[ROM][UNOFFICIAL][11][crown] LineageOS 18.1 for the Amazon Echo Show 8 (2019)](https://xdaforums.com/t/rom-unofficial-11-crown-lineageos-18-1-for-the-amazon-echo-show-8-2019.4766709/).
    *Check:* LineageOS boots.
 3. **Prepare LineageOS:** join your Wi-Fi, then in Settings → About → tap Build number seven times,
    and in Developer options turn on **USB debugging**.
