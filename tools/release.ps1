@@ -163,4 +163,9 @@ $missing = @($published | Where-Object { $_ -ne 'SHA256SUMS' -and $listed -notco
 if ($missing) {
     throw "published, but these assets have no checksum in SHA256SUMS: $($missing -join ', ')"
 }
+# The dev channel follows every release, stable ones too, so it never offers something older than a
+# unit already runs: Install then refuses it and the card never clears (techo5 issue #42). Its
+# manifest names this release's own files, so only the manifest and its signature move.
+& gh release upload dev (Join-Path $bin 'manifest.json') (Join-Path $bin 'manifest.json.sig') --repo $repo --clobber
+if ($LASTEXITCODE -ne 0) { throw "published, but the dev channel was not updated: upload manifest.json and manifest.json.sig to the dev release by hand" }
 Write-Host "published: https://github.com/$repo/releases/tag/$Version"
