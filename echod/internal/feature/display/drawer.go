@@ -22,6 +22,11 @@ func (d *Display) openDrawer(tab int) {
 	if tab == drawerCameras {
 		go home.Get().Prewarm()
 	}
+	if tab == drawerRadio {
+		// Whether this room is in a house is what the Stop row says, and the drawer is opened the moment
+		// before it is pressed. See home.PokeGroup.
+		go home.Get().PokeGroup()
+	}
 	slog.Info("drawer", "open", drawerTabs[tab])
 	d.wake()
 }
@@ -69,6 +74,9 @@ func (d *Display) drawerGesture(g touch.Gesture) {
 			d.mu.Unlock()
 			if z.opt == drawerCameras {
 				go home.Get().Prewarm()
+			}
+			if z.opt == drawerRadio {
+				go home.Get().PokeGroup()
 			}
 		case zoneDismiss:
 			d.mu.Lock()

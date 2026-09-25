@@ -845,6 +845,8 @@ func (d *Display) act(id itemID) {
 				sel = i
 			}
 		}
+		// Whether this room is in a house is what the Stop row says. See home.PokeGroup.
+		go home.Get().PokeGroup()
 		d.locked(func() {
 			d.openMenu(modeRadio, "")
 			d.radioSel = sel

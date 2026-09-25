@@ -241,6 +241,9 @@ func (r *roundRenderer) radioList(s roundScene) {
 		return
 	}
 
+	// A stop in a grouped room stops the group, so the ring says so. There is no second line to put it on
+	// here, so it goes in the hint under the name, where the gesture is spelled out anyway.
+	grouped := rd.Grouped
 	sel := min(max(s.radioSel, 0), len(rows)-1)
 	name := func(i int) string {
 		if rows[i] == stopRow {
@@ -266,6 +269,9 @@ func (r *roundRenderer) radioList(s roundScene) {
 	hint := "turn · tap to play"
 	if rows[sel] == stopRow {
 		hint = "turn · tap to stop"
+		if grouped {
+			hint = "turn · tap to stop all rooms"
+		}
 	}
 	r.centered(r.small, hint, 392, colDim)
 

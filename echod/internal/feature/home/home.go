@@ -48,6 +48,7 @@ type Radio struct {
 	Now        string // the station Home Assistant says is playing, empty for none
 	Playing    bool   // the device's own player is running
 	Chosen     string // the station tapped last, until Now catches up
+	Grouped    bool   // this room is playing along with a group, so a stop here stops the group
 
 	// What the station is playing, when its service says: the song, and a picture for the
 	// background — the cover when there is one, else the station's logo (Logo true).
@@ -64,6 +65,12 @@ type Feature struct {
 
 	mu     sync.Mutex
 	chosen string
+
+	// grouped is whether Music Assistant has this room playing along with any other, as last asked, and
+	// groupedAt when it was asked. See PokeGroup: the row that says what a Stop will do is drawn every
+	// frame, and the answer is a request to Home Assistant.
+	grouped   bool
+	groupedAt time.Time
 
 	// listed is the Radio Browser station tapped last, at listedAt, to name the stream that follows.
 	listed   string
@@ -473,6 +480,10 @@ func (f *Feature) Radio() Radio {
 		f.mu.Unlock()
 	}
 	r.Playing, _ = media.Get().Playing()
+	// Only while there is something of Music Assistant's being carried: the row warns that a stop reaches
+	// the group, and a Stop only reaches Music Assistant's player while this device is carrying its
+	// stream. A grouped Music Assistant player with a station of this device's playing is not reached.
+	r.Grouped = f.Grouped() && media.Get().Carried()
 	f.mu.Lock()
 	r.Chosen = f.chosen
 	r.Now = f.urlName
