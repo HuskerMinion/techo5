@@ -10,16 +10,19 @@ import (
 
 	"github.com/HuskerMinion/techo5/echod/internal/config"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/home"
+	"github.com/HuskerMinion/techo5/echod/internal/layout"
 	"github.com/HuskerMinion/techo5/echod/internal/lib/wifi"
 )
 
 // The Show's own parts of the settings screen: themes and their custom colors, the Wi-Fi pages, the
 // drawer's station lists, and how it closes, shows the forecast and restarts.
 
-// deviceModel is what the About row calls this device; nightRowLabel what the Display card calls the
-// night setting.
+// deviceModel is what the About row calls this device. One build serves the 1st gen Show 5, the 2nd
+// gen Show 5 and the Show 8, so it is the board the bootloader named rather than a constant.
+var deviceModel = layout.Model
+
+// nightRowLabel is what the Display card calls the night setting.
 const (
-	deviceModel   = "Echo Show 5"
 	nightRowLabel = "Night hours"
 
 	// hasNightLight is whether the night can leave the screen as a night light rather than dark. The
