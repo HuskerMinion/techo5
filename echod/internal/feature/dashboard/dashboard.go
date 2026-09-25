@@ -210,6 +210,7 @@ func (f *Feature) Run(ctx context.Context) error {
 	defer lists.Stop()
 	tick := time.NewTicker(15 * time.Second)
 	defer tick.Stop()
+	waiting := false // for Home Assistant, said in the log
 	for {
 		select {
 		case <-ctx.Done():
@@ -234,10 +235,15 @@ func (f *Feature) Run(ctx context.Context) error {
 			continue
 		}
 		if !hass.Get().Ready() {
-			slog.Info("dashboard: waiting for Home Assistant before listing its dashboards")
+			// Said once, not every minute: a device that is never given a token would say it forever.
+			if !waiting {
+				slog.Info("dashboard: waiting for Home Assistant before listing its dashboards")
+				waiting = true
+			}
 			lists.Reset(time.Minute) // soon, rather than at the next regular look
 			continue
 		}
+		waiting = false
 		f.listOnce(ctx)
 	}
 }
