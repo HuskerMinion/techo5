@@ -110,7 +110,7 @@ type Display struct {
 	clock *esphome.Select
 	// callBtn is the home screen's Call button, on or off (callbutton.go).
 	callBtn *esphome.Switch
-	lang  *esphome.Select
+	lang    *esphome.Select
 
 	mu      sync.Mutex
 	on      bool
@@ -132,12 +132,12 @@ type Display struct {
 	dashMoved     bool
 	dashHoldAt    time.Time
 	dashHoldPt    image.Point
-	autoOn  bool
-	level   float64
-	view    voice.State
-	viewAt  time.Time
-	volume  int
-	volAt   time.Time
+	autoOn        bool
+	level         float64
+	view          voice.State
+	viewAt        time.Time
+	volume        int
+	volAt         time.Time
 
 	// menuOpen is the ring menu on the screen, menuMode what it shows; menuSel the item at (or turning
 	// to) the top; menuRot the dial's rotation now and menuRest where it is heading; menuAt the last
@@ -1094,8 +1094,9 @@ func (d *Display) frame() time.Duration {
 	s.btPairing = bt.Pairing
 	if s.menuOpen && s.menuMode == modeWeather {
 		s.forecast = home.Get().Forecast()
-		if s.radarOn {
-			s.radar = home.Get().Radar()
+		// Asked for while the weather is up, so the rain map is ready when it is turned to.
+		if v := home.Get().Radar(); s.radarOn {
+			s.radar = v
 		}
 	}
 	s.nowPlaying = s.phase == "idle" && d.showsNowPlaying()

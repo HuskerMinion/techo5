@@ -9,6 +9,7 @@ import (
 	"math"
 	"net/http"
 	"net/http/httptest"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"testing"
@@ -74,4 +75,25 @@ func TestMosaic(t *testing.T) {
 	check(99, 99, color.RGBA{3, 1, 0, 255})  // still tile 3
 	check(100, 0, color.RGBA{0, 1, 0, 255})  // tile 0
 	check(299, 99, color.RGBA{0, 1, 0, 255}) // tile 0 to the right edge
+}
+
+// The map comes back from disk after a restart, as it was, only for the place it shows, and a map
+// kept for a new place takes the old one's place rather than piling up beside it.
+func TestTheMapIsKeptAcrossRestarts(t *testing.T) {
+	defer func(was string) { mapDir = was }(mapDir)
+	mapDir = t.TempDir()
+	img := image.NewRGBA(image.Rect(0, 0, radarW, radarH))
+	img.Pix[0], img.Pix[3] = 200, 255
+	saveMap(41.25, -96.0, img)
+	got := savedMap(41.25, -96.0)
+	if got == nil || got.Pix[0] != 200 {
+		t.Fatal("the kept map did not come back")
+	}
+	if savedMap(40.0, -96.0) != nil {
+		t.Error("a map kept for one place came back for another")
+	}
+	saveMap(40.0, -96.0, img)
+	if kept, _ := filepath.Glob(filepath.Join(mapDir, "radar-map-*.png")); len(kept) != 1 {
+		t.Errorf("%d maps kept, want the one", len(kept))
+	}
 }

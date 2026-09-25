@@ -34,8 +34,8 @@ import (
 	"github.com/HuskerMinion/techo5/echod/internal/feature/alarm"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/announce"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/btaudio"
-	"github.com/HuskerMinion/techo5/echod/internal/feature/hastate"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/dashboard"
+	"github.com/HuskerMinion/techo5/echod/internal/feature/hastate"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/home"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/media"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/mute"
@@ -88,7 +88,7 @@ type Display struct {
 	clock *esphome.Select
 	// callBtn is the home screen's Call button, on or off (callbutton.go).
 	callBtn *esphome.Switch
-	lang  *esphome.Select
+	lang    *esphome.Select
 
 	mu      sync.Mutex
 	on      bool
@@ -102,17 +102,17 @@ type Display struct {
 
 	// The dashboard page: asked for, when last touched, whether the last frame drew it, whether the
 	// touchscreen was put in follow mode for it, and a finger that started at its left edge.
-	dash                  bool
-	dashTouched           time.Time
-	dashShowing           bool
-	dashFollow            bool
-	dashEdge              int // edgeNone, or the edge the finger on it started at
-	dashEdgeAt            image.Point
-	dashAwayUntil         time.Time // the idle dashboard put away, the clock up until then
-	dashScroll            int       // how far down the drawn dashboard is scrolled
-	dashScrollFor         string    // the dashboard it is scrolled on
-	dashDrag              drawnDrag // a finger moving on the drawn dashboard
-	dashAdjust            dashAdjusting
+	dash          bool
+	dashTouched   time.Time
+	dashShowing   bool
+	dashFollow    bool
+	dashEdge      int // edgeNone, or the edge the finger on it started at
+	dashEdgeAt    image.Point
+	dashAwayUntil time.Time // the idle dashboard put away, the clock up until then
+	dashScroll    int       // how far down the drawn dashboard is scrolled
+	dashScrollFor string    // the dashboard it is scrolled on
+	dashDrag      drawnDrag // a finger moving on the drawn dashboard
+	dashAdjust    dashAdjusting
 
 	poke chan struct{}
 
@@ -1478,9 +1478,12 @@ func (d *Display) frame() time.Duration {
 	d.mu.Unlock()
 	if s.showWeather {
 		s.forecast = home.Get().Forecast()
-	}
-	if s.showRadar {
+		// Asked for while the forecast is up, so the rain map is there by the time its button is
+		// pressed rather than starting then; it fetches only when due.
 		s.radar = home.Get().Radar()
+	}
+	if !s.showRadar {
+		s.radar = home.RadarView{}
 	}
 
 	// boring is the plain idle page — the same set of pages draw() checks before falling through to
