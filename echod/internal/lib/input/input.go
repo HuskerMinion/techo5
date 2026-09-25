@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync"
 	"syscall"
 	"unsafe"
 )
@@ -87,6 +88,9 @@ type Device struct {
 	Path string
 	Name string
 	f    *os.File
+
+	closeOnce sync.Once
+	closeErr  error
 }
 
 // Open opens one event node and reads its reported name.
@@ -131,7 +135,15 @@ func word(b []byte) uint64 {
 	return binary.LittleEndian.Uint64(b)
 }
 
-func (d *Device) Close() error { return d.f.Close() }
+// Close releases the node. Closing it twice is expected rather than a failure: a service ends a
+// blocking read by closing the node from the side (the Run methods in hardware/touch and the other
+// input services do that), and the supervisor then closes the service on its way out. The first
+// answer is kept and returned again, so a real close failure is still reported and the second,
+// expected one is not.
+func (d *Device) Close() error {
+	d.closeOnce.Do(func() { d.closeErr = d.f.Close() })
+	return d.closeErr
+}
 
 func readFull(f *os.File, b []byte) (int, error) {
 	n := 0
