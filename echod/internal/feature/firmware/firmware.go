@@ -193,7 +193,8 @@ func (u *Firmware) Settled(event, status string) {
 func (u *Firmware) Offered() string {
 	u.mu.Lock()
 	defer u.mu.Unlock()
-	if u.found.Version == "" || u.found.Version == layout.Version || !u.found.Serves() {
+	if u.found.Version == "" || u.found.Version == layout.Version || !u.found.Serves() ||
+		!update.Newer(u.found.Version, layout.Version) {
 		return ""
 	}
 	return u.found.Version
@@ -221,10 +222,21 @@ func (u *Firmware) Check(ctx context.Context) {
 
 	found, err := update.Fetch(ctx, channel)
 	if err != nil {
+		// Checking before the clock is set is ordinary just after boot, and the next check follows.
+		if errors.Is(err, update.ErrClock) {
+			slog.Info("update check waits for the clock", "channel", channel.Label())
+			return
+		}
 		slog.Error("checking for an update failed", "channel", channel.Label(), "err", err)
 		return
 	}
 
+	// Checks can overlap - on connect, on a channel change, on the schedule - and a slow one for the
+	// channel just left must not replace the answer for the one chosen since.
+	if u.Channel() != channel {
+		slog.Info("update check for a channel no longer followed; dropped", "channel", channel.Label())
+		return
+	}
 	u.mu.Lock()
 	u.found = found
 	u.mu.Unlock()
@@ -264,7 +276,7 @@ func (u *Firmware) Install(ctx context.Context) {
 		u.mu.Unlock()
 	}
 
-	if found.Version == "" || found.Version == layout.Version || !found.Serves() {
+	if found.Version == "" || found.Version == layout.Version || !found.Serves() || !update.Newer(found.Version, layout.Version) {
 		slog.Warn("an install was asked for with nothing to install", "running", layout.Version, "offered", found.Version)
 		return
 	}

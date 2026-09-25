@@ -31,7 +31,8 @@ var client = &http.Client{
 // little after boot. Certificates cannot be checked against a clock like that, so nothing is fetched.
 var clockSet = func() bool { return time.Now().Year() >= 2025 }
 
-var errClock = errors.New("update: the clock is not set yet; checking later")
+// ErrClock is a check that was not made because the clock is not set yet.
+var ErrClock = errors.New("update: the clock is not set yet; checking later")
 
 // verify checks a manifest's detached signature: base64 of the 64-byte ed25519 signature over the
 // manifest's bytes exactly as served.

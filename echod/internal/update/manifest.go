@@ -90,7 +90,7 @@ const maxManifest = 64 << 10
 func Fetch(ctx context.Context, c Channel) (Manifest, error) {
 	var m Manifest
 	if !clockSet() {
-		return m, errClock
+		return m, ErrClock
 	}
 
 	ctx, cancel := context.WithTimeout(ctx, manifestTimeout)

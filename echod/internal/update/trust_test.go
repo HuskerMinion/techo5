@@ -84,7 +84,7 @@ func TestFetchNeedsTheSignatureAndTheClock(t *testing.T) {
 	}
 	releaseKey = pub
 	clockSet = func() bool { return false }
-	if _, err := Fetch(context.Background(), Stable); !errors.Is(err, errClock) {
+	if _, err := Fetch(context.Background(), Stable); !errors.Is(err, ErrClock) {
 		t.Errorf("fetched on an unset clock: %v", err)
 	}
 }
