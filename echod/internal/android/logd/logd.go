@@ -15,6 +15,7 @@ import (
 	"sync/atomic"
 
 	"github.com/HuskerMinion/techo5/echod/internal/hardware/metrics"
+	"github.com/HuskerMinion/techo5/echod/internal/layout"
 )
 
 // streamDepth is how far a reader of Lines may fall behind before it starts losing the oldest. The
@@ -83,6 +84,13 @@ func (s *stream) publish(l Line) {
 // want of logging.
 func NewHandler(tag string, fallback io.Writer) *Handler {
 	h := &Handler{fallback: fallback, mu: &sync.Mutex{}}
+
+	// Off Android there is no log daemon to dial, and the Linux rootfs never has one, so every start
+	// would report a failure to reach something that is not there. The fallback carries the log
+	// instead, which is what a Linux boot wants.
+	if !layout.OnAndroid() {
+		return h
+	}
 
 	c, err := dial(tag)
 	if err != nil {
