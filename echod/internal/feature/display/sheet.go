@@ -78,6 +78,7 @@ func categoryRows(sv sheetView) (rows []settingRow, note string) {
 		rows = append(rows,
 			settingRow{id: "clock", label: "Clock format", kind: ctlChoice, value: clockOptions[clockIndex()]},
 			settingRow{id: "callbutton", label: "Call button", sub: "On the home screen: devices and contacts", kind: ctlToggle, on: callButton.Load()},
+			settingRow{id: "weatherfx", label: "Weather animation", sub: "Rain, snow and storms move on the forecast", kind: ctlToggle, on: weatherAnimation.Load()},
 			settingRow{id: "musicstrip", label: "Now playing", sub: "Full page, or a strip over the clock", kind: ctlChoice, value: stripOptionText()},
 			settingRow{id: "slideshow", label: "Slideshow", sub: "Photos from Home Assistant", kind: ctlChoice, value: slideshowOptions[slideshowIndex()]},
 		)
@@ -550,6 +551,8 @@ func (d *Display) rowTap(id string, p part, opt int) {
 		d.setAuto(!on, true)
 	case "callbutton":
 		setCallButtonSaved(d.callBtn, !callButton.Load())
+	case "weatherfx":
+		setWeatherAnimationSaved(d.weatherFx, !weatherAnimation.Load())
 	case "dnd":
 		go phone.Get().SetDoNotDisturb(!config.Get().Home.DoNotDisturb)
 	case "hasounds":

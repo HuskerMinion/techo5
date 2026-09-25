@@ -120,6 +120,9 @@ type scene struct {
 	callees    []phone.Callee
 	callButton bool
 
+	// sky is the forecast page's weather moving (weatherfx.go), fxNone for a still one.
+	sky skyFx
+
 	// slideshow is Background mode's current photo, drawn under the idle clock in place of the
 	// flat background; nil off that mode or before a first photo arrives.
 	slideshow *image.RGBA
@@ -342,6 +345,8 @@ func (r *renderer) draw(s scene) {
 	}
 	if s.showWeather {
 		r.weatherPage(s)
+		// The bolt strikes in the gap between today's reading and the five days.
+		r.sky(s.sky, s.now, r.dst.Rect, image.Rect(r.w/2-r.s(80), r.s(70), r.w/2-r.s(10), r.s(400)))
 		r.footer(s)
 		if s.showVolume {
 			r.volumeBar(s)

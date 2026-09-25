@@ -88,7 +88,9 @@ type Display struct {
 	clock *esphome.Select
 	// callBtn is the home screen's Call button, on or off (callbutton.go).
 	callBtn *esphome.Switch
-	lang    *esphome.Select
+	// weatherFx is the weather page's sky moving, on or off (weatherfx.go).
+	weatherFx *esphome.Switch
+	lang      *esphome.Select
 
 	mu      sync.Mutex
 	on      bool
@@ -251,6 +253,7 @@ func build() *Display {
 	d.auto.OnCommand = func(on bool) { d.setAuto(on, true) }
 	d.clock = clockSelect(d.wake)
 	d.callBtn = callButtonSwitch(d.wake)
+	d.weatherFx = weatherAnimationSwitch(d.wake)
 	d.strip = stripSelect(d.wake)
 	d.nightHours = nightHoursSelect()
 	d.atNight = atNightSelect(d)
@@ -303,7 +306,7 @@ func build() *Display {
 func (d *Display) Name() string { return "screen" }
 
 func (d *Display) Entities() []esphome.Entity {
-	return []esphome.Entity{d.light, d.auto, d.clock, d.callBtn, d.lang, d.strip, d.nightHours, d.atNight, d.glowLevel}
+	return []esphome.Entity{d.light, d.auto, d.clock, d.callBtn, d.weatherFx, d.lang, d.strip, d.nightHours, d.atNight, d.glowLevel}
 }
 
 // Restore lights the panel the way it was left. Before the framebuffer is opened: the backlight is
@@ -311,6 +314,7 @@ func (d *Display) Entities() []esphome.Entity {
 func (d *Display) Restore(c config.Config) {
 	setClock24(d.clock, c.Screen.Clock24)
 	setCallButton(d.callBtn, c.Screen.CallButton)
+	setWeatherAnimation(d.weatherFx, !c.Screen.WeatherStill)
 	d.strip.Set(stripOptions[stripIndex()])
 	d.nightHours.Set(nightHoursText(c.Screen.Night))
 	d.atNight.Set(atNightOptions[atNightIndex()])
@@ -1481,6 +1485,9 @@ func (d *Display) frame() time.Duration {
 		// Asked for while the forecast is up, so the rain map is there by the time its button is
 		// pressed rather than starting then; it fetches only when due.
 		s.radar = home.Get().Radar()
+		if !s.showRadar {
+			s.sky = skyNow(weatherNow(s.weather, s.forecast))
+		}
 	}
 	if !s.showRadar {
 		s.radar = home.RadarView{}
@@ -1560,6 +1567,9 @@ func (d *Display) frame() time.Duration {
 	}
 	if s.showRadar && len(s.radar.Frames) > 1 {
 		return radarStep
+	}
+	if s.showWeather && s.sky != fxNone {
+		return fxFrame
 	}
 	if (s.slideshow != nil || s.slideshowScreensaver != nil) && home.Get().SlideshowTransitioning() {
 		return home.SlideshowFrame

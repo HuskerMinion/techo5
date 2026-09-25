@@ -115,6 +115,7 @@ var registered = []string{
 	"screen_night_hours",
 	"screen_night_light_level",
 	"screen_now_playing",
+	"screen_weather_animation",
 	"screen_web_access",
 	"segment_1",
 	"segment_10",

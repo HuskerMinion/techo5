@@ -120,6 +120,7 @@ type roundScene struct {
 	// contactCount how many there are.
 	phoneReady   bool
 	contacts     []phone.Callee
+	sky          skyFx // the weather face's sky moving (weatherfx.go)
 	houseReady   bool
 	callButton   bool
 	contactCount int
@@ -170,7 +171,7 @@ type roundScene struct {
 }
 
 type roundRenderer struct {
-	paint                            // the canvas, and the settings screen's tap zones
+	paint                                 // the canvas, and the settings screen's tap zones
 	callDrawn                        bool // the frame last drawn has the Call button on it; for taps
 	clock, title, body, small, label font.Face
 	tiny                             font.Face

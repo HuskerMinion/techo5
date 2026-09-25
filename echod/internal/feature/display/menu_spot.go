@@ -341,6 +341,8 @@ func (r *roundRenderer) menu(s roundScene) {
 		r.radarFace(s)
 	case s.menuMode == modeWeather:
 		r.weatherFace(s)
+		// The bolt strikes down the right of the face, beside the reading.
+		r.sky(s.sky, s.now, r.dst.Rect, image.Rect(r.dst.Rect.Dx()*3/4-30, 70, r.dst.Rect.Dx()*3/4+30, 250))
 	case s.menuMode == modeRadio:
 		r.radioList(s)
 	case s.menuMode == modeContacts:

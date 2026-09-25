@@ -32,6 +32,10 @@ type Screen struct {
 	// and phone contacts to call. Off until somebody wants it, so an update changes nobody's screen.
 	CallButton bool `json:"call_button,omitempty"`
 
+	// WeatherStill keeps the weather page's sky still: no rain or snow falling across it. The
+	// animation is on unless somebody turns it off, so a saved file without this is animated.
+	WeatherStill bool `json:"weather_still,omitempty"`
+
 	// MusicStrip is how many seconds music plays on the full now-playing page before the Show goes
 	// back to its clock with the music in a strip at the foot; none keeps the full page.
 	MusicStrip int `json:"music_strip,omitempty"`
@@ -97,6 +101,10 @@ func (w ScreenWriter) Welcomed(v bool) error {
 
 func (w ScreenWriter) Clock24(v bool) error {
 	return w.st.Update(func(c *Config) { c.Screen.Clock24 = v })
+}
+
+func (w ScreenWriter) WeatherStill(v bool) error {
+	return w.st.Update(func(c *Config) { c.Screen.WeatherStill = v })
 }
 
 func (w ScreenWriter) CallButton(v bool) error {
