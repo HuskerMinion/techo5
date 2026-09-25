@@ -185,10 +185,12 @@ type Display struct {
 
 	// away is the now-playing page put away by a swipe, and awayTrack/awayStation are what was playing
 	// when it went: the next track brings it back, so a dismissal costs nothing and never strands the
-	// buttons.
+	// buttons. awayPlaying is whether that track was playing at the last look, which is how a start
+	// after a stop is told apart from the track simply going on.
 	away        bool
 	awayTrack   string
 	awayStation string
+	awayPlaying bool
 
 	// strip is the music strip's setting in Home Assistant; stripKey/stripSince are the track the strip
 	// is timing and when it started, stripFullUntil a tap on the strip's song bringing the full page
@@ -207,11 +209,12 @@ type Display struct {
 	// favedKey is the track the star was last pressed for, so the star shows it was saved.
 	favedKey string
 
-	// showingPlaying and showingPaused are what the last painted screen was: the now-playing page, and
-	// whether the music on it was paused. The touch handler acts on what is on the screen, rather than
-	// working the same thing out a second way and drifting from it.
+	// showingPlaying and showingWord are what the last painted screen was: whether the now-playing
+	// page was on it, and whether the footer was drawing the word for the music. The touch handler acts
+	// on what is on the screen, rather than working the same thing out a second way and drifting from
+	// it — which is how a tap out of an empty corner came to send a play/pause.
 	showingPlaying bool
-	showingPaused  bool
+	showingWord    bool
 
 	// ringPreview shows the ringing page silently until then.
 	ringPreview time.Time
@@ -704,19 +707,23 @@ func (d *Display) gesture(g touch.Gesture) {
 			d.wake()
 			return
 		}
-		// The footer's word for the music is the way back to the player screen: while the track is paused
-		// and the screen has been put away, a tap on it shows what is playing rather than starting it from
-		// a screen that is not showing what it is.
+		// The footer's word for the music is the way back to the page: it shows what is playing, so a
+		// tap made to look at the music never leaves you looking at the clock, and it answers whether
+		// the track is playing or paused. While it was paused only, a page swiped away during a song had
+		// no way back at all. It brings the page back and does nothing else: playing or pausing is the
+		// page's own button, and a tap made to look at the song should not stop it.
 		d.mu.Lock()
-		showing, pausedMusic, away, inStrip := d.showingPlaying, d.showingPaused, d.away, d.showingStrip
+		showing, away, inStrip, word := d.showingPlaying, d.away, d.showingStrip, d.showingWord
 		d.mu.Unlock()
-		// And only when the page really is away: this is the way back to it, so taking a tap out of the
-		// bottom-right corner of the clock is worth it only when there is something to come back to.
-		// Not with the strip up, though: the word is not drawn then, and its corner is the strip's.
-		if d.r != nil && idle && pausedMusic && !showing && away && !inStrip &&
+		// Only while the word is really drawn, and only when the page is really away: this is the way back
+		// to it, so taking a tap out of the bottom-right corner of the clock is worth it only when there
+		// is both something to come back to and something drawn there. Nothing playing leaves the corner
+		// free, which is where a tap meant for a voice turn lands. Not with the strip up, either: the
+		// word is not drawn then, and its corner is the strip's.
+		if d.r != nil && idle && word && !showing && away && !inStrip &&
 			image.Pt(g.X, g.Y).In(d.r.playingButton()) {
 			d.mu.Lock()
-			d.away, d.awayTrack, d.awayStation = false, "", ""
+			d.away, d.awayTrack, d.awayStation, d.awayPlaying = false, "", "", false
 			d.mu.Unlock()
 			d.wake()
 			return
@@ -750,7 +757,7 @@ func (d *Display) gesture(g touch.Gesture) {
 			case at.In(d.r.stripSong()):
 				d.mu.Lock()
 				d.stripFullUntil = time.Now().Add(stripFull)
-				d.away, d.awayTrack, d.awayStation = false, "", ""
+				d.away, d.awayTrack, d.awayStation, d.awayPlaying = false, "", "", false
 				d.mu.Unlock()
 				d.wake()
 			}
@@ -817,8 +824,11 @@ func (d *Display) gesture(g touch.Gesture) {
 			return
 		}
 		rd := home.Get().Radio()
+		// Whether the music is playing, not whether the page says so: a carried stream that has stopped
+		// still has a page, and a dismissal made on one of those is over too.
+		playing, _ := media.Get().ScreenState()
 		d.mu.Lock()
-		d.away, d.awayTrack, d.awayStation = true, rd.Title, rd.Now
+		d.away, d.awayTrack, d.awayStation, d.awayPlaying = true, rd.Title, rd.Now, playing
 		d.mu.Unlock()
 		d.wake()
 	}
@@ -848,10 +858,11 @@ func (d *Display) endMusic() {
 	}
 	media.Get().ForgetHeld()
 	// And the page goes, as a swipe puts it away: a track somebody else is holding paused is still a
-	// page. It comes back for the next track.
+	// page. It comes back for the next track, and after a stop the next start counts as one, so the
+	// music just ended is not playing however the page went.
 	rd := home.Get().Radio()
 	d.mu.Lock()
-	d.away, d.awayTrack, d.awayStation = true, rd.Title, rd.Now
+	d.away, d.awayTrack, d.awayStation, d.awayPlaying = true, rd.Title, rd.Now, false
 	d.mu.Unlock()
 	d.wake()
 }
@@ -860,13 +871,26 @@ func (d *Display) endMusic() {
 // away only for the track it was put away on: a dismissal is temporary without needing a timer, and the
 // page comes back for the next song. Nothing playing at all clears it, so what comes next is not hidden
 // by a gesture made about something else.
-func (d *Display) putAway(rd home.Radio, wanted bool) bool {
+//
+// A start after a stop is a next song as much as a different one is, which is why awayPlaying is
+// remembered: the quiet while that track is stopped keeps the page away, and playing it again brings the
+// page back. Reading the track's name alone made restarting the station somebody had just put away look
+// like the same track going on, so the one deliberate press that should never leave you looking at the
+// clock was the one that did.
+func (d *Display) putAway(rd home.Radio, wanted, playing bool) bool {
 	d.mu.Lock()
 	defer d.mu.Unlock()
 
 	if !wanted || !d.away || rd.Title != d.awayTrack || rd.Now != d.awayStation {
+		d.away, d.awayTrack, d.awayStation, d.awayPlaying = false, "", "", false
+		return false
+	}
+	switch {
+	case playing && !d.awayPlaying:
 		d.away, d.awayTrack, d.awayStation = false, "", ""
 		return false
+	case !playing:
+		d.awayPlaying = false
 	}
 	return true
 }
@@ -1466,14 +1490,14 @@ func (d *Display) frame() time.Duration {
 	if (s.showDrawer && s.drawerTab == drawerRadio) || wants {
 		s.radio = home.Get().Radio()
 	}
-	s.nowPlaying = wants && !d.putAway(s.radio, wants)
+	s.nowPlaying = wants && !d.putAway(s.radio, wants, s.playing)
 	d.mu.Lock()
 	// Not under the sunrise light, which draws no strip: taps on a strip nobody can see would still act.
 	if wants && d.stripDue(now, s.radio, s.nowPlaying) && sunriseProgress(now) == 0 {
 		s.nowPlaying, s.strip = false, true
 	}
 	s.faved = d.favedKey != "" && d.favedKey == s.radio.Title+"\x00"+s.radio.Now
-	d.showingPlaying, d.showingPaused, d.showingStrip = s.nowPlaying, s.paused, s.strip
+	d.showingPlaying, d.showingStrip, d.showingWord = s.nowPlaying, s.strip, playingWord(s) != ""
 	d.mu.Unlock()
 	s.weather = home.Get().Weather()
 	d.mu.Lock()
