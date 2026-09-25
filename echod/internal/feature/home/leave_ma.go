@@ -2,6 +2,7 @@ package home
 
 import (
 	"log/slog"
+	"time"
 
 	"github.com/HuskerMinion/techo5/echod/internal/config"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/media"
@@ -85,6 +86,61 @@ func leaveWith(members []any, known, carried bool, unjoin func() error, stop fun
 		stop()
 	}
 	return nil
+}
+
+// groupEvery is how long an answer about the room's group is kept before it is asked again. The row that
+// says what a Stop is about to do is drawn every frame, and the answer is a request to Home Assistant, so
+// it is asked when the radio page is opened — the moment before the press it warns about — and read from
+// here in between.
+const groupEvery = 5 * time.Second
+
+// PokeGroup asks Home Assistant whether Music Assistant has this room playing along with any other, and
+// remembers it for the page. Nothing waits on it: the row is drawn from the last answer until this one
+// arrives, and an answer that changes nothing wakes nobody.
+//
+// Everything here is Debug rather than Warn: the drawer is opened often, and a device with no Home
+// Assistant or no Music Assistant player is not a fault worth a line each time. Where the answer is acted
+// on — leaveGroup — a failure is said out loud.
+func (f *Feature) PokeGroup() {
+	f.mu.Lock()
+	if time.Since(f.groupedAt) < groupEvery {
+		f.mu.Unlock()
+		return
+	}
+	f.groupedAt = time.Now()
+	f.mu.Unlock()
+
+	grouped := false
+	ma, err := musicAssistantPlayer()
+	switch {
+	case err != nil:
+		slog.Debug("group: looking for this device's Music Assistant player failed", "err", err)
+	case ma == "":
+		slog.Debug("group: no Music Assistant player for this device", "device", config.Get().Device.Name)
+	default:
+		if members, err := groupMembers(ma); err != nil {
+			slog.Debug("group: asking Home Assistant whether this room is in a group failed",
+				"player", ma, "err", err)
+		} else {
+			grouped = len(members) > 0
+		}
+	}
+
+	f.mu.Lock()
+	changed := grouped != f.grouped
+	f.grouped = grouped
+	f.mu.Unlock()
+	if changed {
+		f.Changed.Emit(struct{}{})
+	}
+}
+
+// Grouped is whether Music Assistant has this room playing along with any other, as last asked. The Stop
+// row says so, because a stop in a grouped room stops the group.
+func (f *Feature) Grouped() bool {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return f.grouped
 }
 
 // groupMembers is what Home Assistant says this room is playing with: the members of ma's group — this room
