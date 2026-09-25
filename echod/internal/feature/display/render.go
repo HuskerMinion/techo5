@@ -174,7 +174,13 @@ type scene struct {
 // renderer draws scenes onto one canvas. Faces are made once: parsing a font is cheap, but
 // building a face at each size is not something to do per frame.
 type renderer struct {
-	paint            // the canvas, its size, and the settings screen's tap zones
+	paint // the canvas, its size, and the settings screen's tap zones
+
+	// weatherKept is the forecast page as last drawn, and weatherKey what it showed: while the sky
+	// moves the page is drawn twelve times a second, and the page itself changes once a minute.
+	weatherKept []byte
+	weatherKey  string
+
 	clock  font.Face // the big time
 	big    font.Face // a large reading, like today's temperature
 	ampm   font.Face
@@ -344,7 +350,7 @@ func (r *renderer) draw(s scene) {
 		return
 	}
 	if s.showWeather {
-		r.weatherPage(s)
+		r.weatherPageKept(s)
 		// The bolt strikes in the gap between today's reading and the five days.
 		r.sky(s.sky, s.now, r.dst.Rect, image.Rect(r.w/2-r.s(80), r.s(70), r.w/2-r.s(10), r.s(400)))
 		r.footer(s)

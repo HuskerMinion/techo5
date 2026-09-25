@@ -113,7 +113,7 @@ func wrap(v, n float64) float64 {
 // sky draws fx over area at time t; a thunderstorm's lightning strikes within bolt. Sizes are the
 // Show 5's, through p.s.
 func (p *paint) sky(fx skyFx, t time.Time, area, bolt image.Rectangle) {
-	secs := float64(t.UnixMilli()%3_600_000) / 1000 // an hour's cycle keeps the numbers small
+	secs := float64(t.UnixMilli()) / 1000 // a float64 keeps a tenth of a microsecond at this size
 	switch fx {
 	case fxRain:
 		p.rain(secs, area, 55, 1.0, 0.32)

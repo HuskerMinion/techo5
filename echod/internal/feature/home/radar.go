@@ -58,9 +58,13 @@ const (
 	// radarEvery is how old the frames may get while the page is up.
 	radarEvery = 5 * time.Minute
 
+	userAgent = "TECHO5 (https://github.com/HuskerMinion/techo5)"
+)
+
+// Where the radar and the map come from; a test points them at its own server.
+var (
 	radarIndex = "https://api.rainviewer.com/public/weather-maps.json"
 	mapTiles   = "https://tile.openstreetmap.org/%d/%d/%d.png"
-	userAgent  = "TECHO5 (https://github.com/HuskerMinion/techo5)"
 )
 
 // RadarFrame is one picture of the loop and when the rain was measured.
@@ -94,7 +98,8 @@ type radarState struct {
 var mapDir = layout.StateDir
 
 func mapFile(lat, lon float64) string {
-	return filepath.Join(mapDir, fmt.Sprintf("radar-map-%.4f-%.4f-%dx%d.png", lat, lon, radarW, radarH))
+	// v1 is darken's look: a change to it has to be a new name, or the old look comes back from disk.
+	return filepath.Join(mapDir, fmt.Sprintf("radar-map-v1-%.4f-%.4f-%dx%d.png", lat, lon, radarW, radarH))
 }
 
 // savedMap is the map kept on disk for lat/lon, or nil.
@@ -115,7 +120,7 @@ func savedMap(lat, lon float64) *image.RGBA {
 
 // saveMap keeps the map on disk, in place of any kept for somewhere else.
 func saveMap(lat, lon float64, img *image.RGBA) {
-	old, _ := filepath.Glob(filepath.Join(mapDir, "radar-map-*.png"))
+	old, _ := filepath.Glob(filepath.Join(mapDir, "radar-map-*")) // a .tmp a crash left behind too
 	for _, f := range old {
 		_ = os.Remove(f)
 	}
@@ -165,8 +170,8 @@ func (f *Feature) fetchRadar() {
 	if err != nil {
 		slog.Warn("radar: fetch", "err", err)
 		r.view.Problem = err.Error()
-		if len(r.view.Frames) == 0 {
-			// Try again sooner than a good fetch would.
+		if len(r.view.Frames) < radarFrames {
+			// Try again sooner than a good fetch would: nothing shown, or only the newest frame still.
 			r.fetched = time.Now().Add(-radarEvery + 30*time.Second)
 		}
 	} else {
@@ -210,6 +215,12 @@ func (f *Feature) buildRadar() error {
 	if err != nil {
 		return err
 	}
+	return f.buildRadarAt(lat, lon)
+}
+
+// buildRadarAt is buildRadar for a home at lat, lon.
+func (f *Feature) buildRadarAt(lat, lon float64) error {
+	var err error
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 	defer cancel()
 	began := time.Now()
@@ -268,8 +279,9 @@ func (f *Feature) buildRadar() error {
 	}
 
 	// One frame: the radar at half the map's zoom, twice the size, over the map.
+	var fctx context.Context = ctx // the fetches' own, once they start side by side
 	frame := func(path string, at int64) (RadarFrame, error) {
-		rain, err := mosaic(ctx, radarW/2, radarH/2, x0/2, y0/2, radarZoom, 4, func(x, y int) string {
+		rain, err := mosaic(fctx, radarW/2, radarH/2, x0/2, y0/2, radarZoom, 4, func(x, y int) string {
 			return fmt.Sprintf("%s%s/%d/%d/%d/%d/2/1_1.png", index.Host, path, tileSize, radarZoom, x, y)
 		})
 		if err != nil {
@@ -311,28 +323,41 @@ func (f *Feature) buildRadar() error {
 		f.Changed.Emit(struct{}{})
 	}
 
-	// The rest side by side, framesAtOnce at a time.
+	// The rest side by side, framesAtOnce at a time. What is missing is listed before anything starts,
+	// so no fetch writes the map while the loop is still reading it; the first failure stops the others,
+	// and what did arrive is kept for the retry either way.
+	var todo []int
+	for i, p := range past[:len(past)-1] {
+		if _, ok := made[p.Path]; !ok {
+			todo = append(todo, i)
+		}
+	}
+	var stop context.CancelFunc
+	fctx, stop = context.WithCancel(ctx)
+	defer stop()
 	var (
 		wg    sync.WaitGroup
 		mu    sync.Mutex
 		first error
 		sem   = make(chan struct{}, framesAtOnce)
 	)
-	for _, p := range past[:len(past)-1] {
-		if _, ok := made[p.Path]; ok {
-			continue
-		}
+	for _, i := range todo {
+		p := past[i]
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
 			sem <- struct{}{}
 			defer func() { <-sem }()
+			if fctx.Err() != nil {
+				return
+			}
 			fr, err := frame(p.Path, p.Time)
 			mu.Lock()
 			defer mu.Unlock()
 			if err != nil {
 				if first == nil {
 					first = err
+					stop()
 				}
 				return
 			}
@@ -342,6 +367,9 @@ func (f *Feature) buildRadar() error {
 	}
 	wg.Wait()
 	if first != nil {
+		r.mu.Lock()
+		r.made = made
+		r.mu.Unlock()
 		return first
 	}
 

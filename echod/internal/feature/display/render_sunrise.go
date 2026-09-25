@@ -40,7 +40,7 @@ func (r *renderer) sunriseSky(p float64) {
 	}
 }
 
-// sunriseSun climbs from below the bottom edge towards the middle, growing and paling as it comes:
+// sunriseSun climbs from below the bottom edge toward the middle, growing and paling as it comes:
 // deep red at the horizon, gold by the time it is up, as a real one does.
 func (r *renderer) sunriseSun(p float64, face bool) {
 	// It stops short of the clock: the time has to stay readable, which matters more than the sun

@@ -352,7 +352,7 @@ func (s *Screen) holdFired(f *finger) {
 }
 
 // moved reports vertical travel a notch at a time while the finger is down. "Up" on the landscape
-// screen is towards smaller landscape y.
+// screen is toward smaller landscape y.
 func (s *Screen) moved(f *finger) {
 	s.mu.Lock()
 	if f.held {

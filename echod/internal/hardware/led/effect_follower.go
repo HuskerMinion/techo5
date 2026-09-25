@@ -6,10 +6,10 @@ import (
 )
 
 // follower points at whoever is talking. The array can tell roughly where a sound came from, so the ring
-// turns towards it and widens as the room gets louder — the one thing twelve lights on a seven microphone
+// turns toward it and widens as the room gets louder — the one thing twelve lights on a seven microphone
 // array can do that no strip of LEDs can.
 //
-// Where it is pointing is carried between frames and eased towards the answer rather than jumped to it.
+// Where it is pointing is carried between frames and eased toward the answer rather than jumped to it.
 // Direction arrives in sixths of a circle and switches whole beams at a time, so following it exactly
 // would snap two segments sideways; easing turns that into a head turning.
 func follower(p Palette, r Room) Frame {
@@ -18,7 +18,7 @@ func follower(p Palette, r Room) Frame {
 		narrow = 1.2
 		wide   = 3.2
 
-		// How far towards a new direction one frame moves, and how long a frame is assumed to be. Slow
+		// How far toward a new direction one frame moves, and how long a frame is assumed to be. Slow
 		// enough to read as turning, quick enough not to lag a conversation crossing the room.
 		ease = 0.18
 	)

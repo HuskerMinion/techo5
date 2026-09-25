@@ -33,7 +33,7 @@ func (s *Source) Facing() (float64, bool) {
 // It switches the moment a direction wins rather than waiting for it to keep winning, which the mix does
 // to avoid swinging mid-word. Nothing here is heard, so waiting only makes it remember where the last
 // sound was — and a door closing or a hand clapping is over inside the wait. What steadies the ring is
-// the effect easing towards the answer, which is the right place for it: the estimate says where the
+// the effect easing toward the answer, which is the right place for it: the estimate says where the
 // sound is now, and the animation decides how fast to believe it.
 func (s *Source) findFacing(mics [][]int16) {
 	if !s.wantFacing.Swap(false) {

@@ -330,7 +330,7 @@ func (d *device) setFeature(id uint32, v uint64) {
 }
 
 // Exposure: the sensor has no automatic mode, so this is it. The frame is metered in zones (meter, in
-// exposure.go) and the exposure (shutter lines times gain) is moved towards a target, shutter
+// exposure.go) and the exposure (shutter lines times gain) is moved toward a target, shutter
 // first — up to a frame at the sensor's rate — then gain, then longer shutters at the cost of
 // frame rate, then the rest of the gain.
 const (

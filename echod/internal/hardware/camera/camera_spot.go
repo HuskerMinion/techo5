@@ -468,7 +468,7 @@ func (d *device) skip() bool {
 }
 
 // Exposure: shutter in lines (504 is one frame at 30 a second; longer ones slow the frame rate) and
-// gain in 1/64, moved together towards a mean of the raw frame.
+// gain in 1/64, moved together toward a mean of the raw frame.
 const (
 	aeTarget   = 58 // mean of the 8-bit raw frame
 	aeDeadband = 4

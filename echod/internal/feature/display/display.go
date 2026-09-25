@@ -1568,7 +1568,7 @@ func (d *Display) frame() time.Duration {
 	if s.showRadar && len(s.radar.Frames) > 1 {
 		return radarStep
 	}
-	if s.showWeather && s.sky != fxNone {
+	if s.showWeather && s.sky != fxNone && !s.setupAsking {
 		return fxFrame
 	}
 	if (s.slideshow != nil || s.slideshowScreensaver != nil) && home.Get().SlideshowTransitioning() {

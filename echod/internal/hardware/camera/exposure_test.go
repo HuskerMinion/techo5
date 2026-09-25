@@ -77,7 +77,7 @@ func TestMeterFavoursTheMiddleOverAWindow(t *testing.T) {
 	if level > plain*0.6 {
 		t.Errorf("metered %.0f, want well under the plain mean %.0f", level, plain)
 	}
-	// Under the target, so the loop brightens towards the face instead of darkening for the window.
+	// Under the target, so the loop brightens toward the face instead of darkening for the window.
 	if level >= aeTarget {
 		t.Errorf("metered %.0f is at or over the target %d: the face would stay dark", level, aeTarget)
 	}

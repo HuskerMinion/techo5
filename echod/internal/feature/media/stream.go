@@ -634,7 +634,7 @@ func (m *Stream) Requeue() {
 	m.out.Adjust(m.attenuate)
 }
 
-// attenuate applies the duck, moving towards the target rather than jumping to it. Wants write, which
+// attenuate applies the duck, moving toward the target rather than jumping to it. Wants write, which
 // queue already holds.
 //
 // It rewrites the caller's slice, which is only ever a buffer feed just decoded. What replay puts back

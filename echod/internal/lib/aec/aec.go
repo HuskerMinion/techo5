@@ -131,7 +131,7 @@ func (c *Canceller) Process(mic, ref []int16) ([]int16, error) {
 	return c.out, nil
 }
 
-// step is one sample: predict the echo, subtract it, and move the filter towards what was left.
+// step is one sample: predict the echo, subtract it, and move the filter toward what was left.
 func (c *Canceller) step(x, d float32) float32 {
 	n := c.taps
 

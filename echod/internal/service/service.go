@@ -90,7 +90,7 @@ type policy struct {
 	maxBackoff time.Duration
 
 	// steady is how long a service must stay up before its backoff is forgotten, so a service that
-	// breaks once an hour does not creep towards the maximum delay.
+	// breaks once an hour does not creep toward the maximum delay.
 	steady time.Duration
 }
 

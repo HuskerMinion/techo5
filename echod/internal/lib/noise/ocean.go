@@ -38,7 +38,7 @@ var oceanSound = Sound{
 					period = g.between(oceanWave*(1-oceanVary), oceanWave*(1+oceanVary))
 				}
 
-				// Cubed sine: a swell that leans towards its break rather than a symmetrical hump.
+				// Cubed sine: a swell that leans toward its break rather than a symmetrical hump.
 				if n%ctrl == 0 {
 					s := float32(math.Sin(math.Pi * float64(phase)))
 					env = s * s * s

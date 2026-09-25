@@ -127,7 +127,7 @@ func (s *stream) take(data []byte, p *speaker.Player, started func()) {
 	s.flush(p)
 }
 
-// flush queues what is held, brought towards the speech loudness target. The gain follows the
+// flush queues what is held, brought toward the speech loudness target. The gain follows the
 // reply's loudness so far, so the first flush — which waits for a buffer's worth — already has
 // something to measure, and later flushes move it only as the reply's level changes.
 func (s *stream) flush(p *speaker.Player) {

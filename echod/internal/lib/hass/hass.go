@@ -48,6 +48,9 @@ func Get() *Client {
 			_ = json.Unmarshal(b, &shared.acc)
 			// Kept before the cleaning below existed, an address can carry a character nobody can see.
 			shared.acc.URL, shared.acc.Token = cleanURL(shared.acc.URL), clean(shared.acc.Token)
+			if u, err := neturl.Parse(shared.acc.URL); err == nil && u.Host != "" {
+				shared.acc.URL = normalURL(u) // an upper-case scheme saved before Set wrote it lower
+			}
 		}
 	})
 	return shared
@@ -65,7 +68,7 @@ func (c *Client) Set(url, token string) error {
 	}
 	// As it was parsed: "HTTP://ha:8123" is a working address, and the websocket, which swaps the
 	// scheme's "http" for "ws", needs it written the way url.Parse writes it.
-	url = strings.TrimRight(u.Scheme+"://"+u.Host+u.Path, "/")
+	url = normalURL(u)
 	c.mu.Lock()
 	c.acc = access{URL: url, Token: token}
 	c.mu.Unlock()
@@ -87,6 +90,12 @@ func clean(s string) string {
 		}
 		return r
 	}, s)
+}
+
+// normalURL is an address as url.Parse wrote it: the scheme lower case, which the websocket needs
+// ("http" swapped for "ws"), and the path as it was escaped. Nothing else belongs in it.
+func normalURL(u *neturl.URL) string {
+	return strings.TrimRight(u.Scheme+"://"+u.Host+u.EscapedPath(), "/")
 }
 
 // cleanURL is an address cleaned, without the trailing slash the paths are joined to.

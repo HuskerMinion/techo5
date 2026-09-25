@@ -64,7 +64,9 @@ func (r *roundRenderer) clockWeather(w home.Weather, baseline int) {
 }
 
 // weatherFace is today large and the next days along the bottom.
-func (r *roundRenderer) weatherFace(s roundScene) {
+// weatherFace draws the weather face, and says where a thunderstorm's bolt can strike clear of the
+// reading: beside it on whichever side has room inside the circle, or nowhere.
+func (r *roundRenderer) weatherFace(s roundScene) (bolt image.Rectangle) {
 	r.clear()
 	days := s.forecast
 	cond := s.weather.Condition
@@ -81,7 +83,7 @@ func (r *roundRenderer) weatherFace(s roundScene) {
 		r.weatherIcon("cloudy", center, 170, 44)
 		r.centered(r.title, "No weather yet", 272, colText)
 		r.paragraph(r.small, "Home Assistant has not sent a reading", 310, colDim, 2)
-		return
+		return image.Rectangle{}
 	}
 
 	// Today: the icon left of the reading, the words and the day's range under them.
@@ -90,6 +92,17 @@ func (r *roundRenderer) weatherFace(s roundScene) {
 	left := center - (tw+int(2*iconU)+16)/2
 	r.weatherIcon(cond, float64(left)+iconU, 150, iconU)
 	r.text(r.clock, big, left+int(2*iconU)+16, 190, colText)
+	// The bolt goes beside the reading, between y 96 and 214, where the circle is widest: its edge at
+	// y 96, the narrowest point of that band, is edge from the middle. A reading too wide for one each
+	// side leaves the storm without a bolt rather than striking through the words.
+	right := left + int(2*iconU) + 16 + tw
+	edge := int(math.Sqrt(float64(center*center - (center-96)*(center-96))))
+	switch {
+	case right+12+40 <= center+edge-8:
+		bolt = image.Rect(right+12, 96, right+52, 214)
+	case left-12-40 >= center-edge+8:
+		bolt = image.Rect(left-52, 96, left-12, 214)
+	}
 	r.centered(r.body, conditionWords(cond), 232, colText)
 	if len(days) > 0 {
 		today := fmt.Sprintf("High %.0f°  Low %.0f°", days[0].High, days[0].Low)
@@ -123,6 +136,7 @@ func (r *roundRenderer) weatherFace(s roundScene) {
 		r.text(r.label, hi, x-r.width(r.label, hi)/2, 396, colText)
 		r.text(r.label, lo, x-r.width(r.label, lo)/2, 420, colDim)
 	}
+	return bolt
 }
 
 // weatherIcon draws Home Assistant's condition as a small picture, centered at x, y, u half its size.

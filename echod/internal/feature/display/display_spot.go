@@ -144,7 +144,7 @@ type Display struct {
 	// menuOpen is the ring menu on the screen, menuMode what it shows; menuSel the item at (or turning
 	// to) the top; menuRot the dial's rotation now and menuRest where it is heading; menuAt the last
 	// touch; spinning a finger turning it, spinAngle its last direction from the center; jogTurn how
-	// far a jog wheel has turned towards its next step; restartArm the first tap on Restart and
+	// far a jog wheel has turned toward its next step; restartArm the first tap on Restart and
 	// forgetArm on Forget, on the settings screen.
 	menuOpen   bool
 	menuMode   menuMode

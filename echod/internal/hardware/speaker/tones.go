@@ -110,7 +110,7 @@ func Length(notes []Note) time.Duration {
 // while the wake sound plays, and Home Assistant's lasts nearly a second, most of it a quiet tail the
 // echo canceller takes care of; holding for all of it lost the first words of every request.
 //
-// With no echo canceller running, nothing takes the fade out, and a speaker a few centimetres from the
+// With no echo canceller running, nothing takes the fade out, and a speaker a few centimeters from the
 // microphones is loud even 20 dB down: uncancelled counts until the fade is 30 dB down instead.
 func Audible(notes []Note, uncancelled bool) time.Duration {
 	var ms int
