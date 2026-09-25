@@ -58,19 +58,17 @@ func currentStation(rd home.Radio) string {
 	return rd.Chosen
 }
 
-// stopMusic ends what plays, radio or otherwise, so the face goes back to the clock. The gate used to be
-// this player's own stream, which a carried one never satisfies: the row did nothing at all while Music
-// Assistant was playing. What "stop" means for whoever has the music is home's to decide.
 // musicState is what the room's music is doing: this player's own stream, or the one it carries for
 // Music Assistant when that is what is being heard. The face is drawn from it and taps are matched
 // against it, so the rows a finger lands on are the rows on the screen.
 func musicState() (playing, paused bool) { return media.Get().ScreenState() }
 
-func stopMusic() {
-	home.Get().Stop()
-	media.Get().Stop()
-	media.Get().ForgetHeld()
-}
+// stopMusic ends what plays, radio or otherwise, so the face goes back to the clock. What "stop" means
+// for whoever has the music is home's to decide — a stream this device did not start is asked to stop,
+// and its own is ended rather than paused — so this asks home rather than working it out again here. The
+// gate used to be this player's own stream, which a carried one never satisfies: the row did nothing at
+// all while Music Assistant was playing.
+func stopMusic() { home.Get().Stop() }
 
 // doneAt is the face's Done: left of play and pause, at the same height, where a thumb finds it.
 const doneX, doneY, doneR = center - 88.0, 420.0, 25.0
@@ -135,8 +133,7 @@ func pickStation(sel int) {
 		return
 	}
 	if rows[sel] == stopRow {
-		home.Get().Stop()
-		media.Get().Stop()
+		stopMusic()
 		return
 	}
 	home.Get().Play(rows[sel])

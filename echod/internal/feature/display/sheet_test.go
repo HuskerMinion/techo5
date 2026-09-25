@@ -189,6 +189,19 @@ func TestDemoHidesStations(t *testing.T) {
 	}
 }
 
+// A paused track still has a Stop row: Music Assistant ends its stream when it pauses, so a remote's track
+// paused from here is held for the screen with play offered. The page said "Paused" and this list said
+// nothing, because playing was the only thing its gate knew about.
+func TestAPausedTrackStillHasAStopRow(t *testing.T) {
+	s := scene{drawerTab: drawerRadio}
+	s.radio = home.Radio{Configured: true, Stations: []string{"101.1 WXYZ"}, Paused: true}
+
+	rows, _ := drawerRows(s)
+	if len(rows) < 2 || rows[1].label != "Stop the radio" {
+		t.Errorf("rows = %+v with a paused track, want a Stop row first", rows)
+	}
+}
+
 // The swipe that opened the settings keeps reporting notches until its finger lifts; those do not
 // scroll. Another swipe does, a notch at a time, and stops at the ends.
 func TestSheetSwipe(t *testing.T) {

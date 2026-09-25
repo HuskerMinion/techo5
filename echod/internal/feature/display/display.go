@@ -850,13 +850,13 @@ func (d *Display) favorite() {
 // endMusic is "go home" and the now-playing screen's Done: the music stops, a held track is let go,
 // and the page goes back to the clock.
 func (d *Display) endMusic() {
-	// Music Assistant's stream is carried, not this player's, so Playing never says it: asked of the
-	// speaker as well, as the Spot's stop already is.
-	if playing, paused := media.Get().Playing(); playing || paused || media.Get().ExternalPlaying() {
+	// Nothing playing is nothing to ask: "go home" on an idle clock with a remote merely holding the
+	// speaker sent a stop to Music Assistant's queue when it was the last remote. What a stop means for
+	// whoever has the music is home's to decide: a stream this device did not start is asked to stop, and
+	// its own is ended rather than paused.
+	if playing, paused := media.Get().ScreenState(); playing || paused {
 		home.Get().Stop()
-		media.Get().Stop()
 	}
-	media.Get().ForgetHeld()
 	// And the page goes, as a swipe puts it away: a track somebody else is holding paused is still a
 	// page. It comes back for the next track, and after a stop the next start counts as one, so the
 	// music just ended is not playing however the page went.
