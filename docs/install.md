@@ -1,9 +1,11 @@
-# Installing TECHO5 on an Echo Show 5
+# Installing TECHO5 on an Echo Show
 
-Step by step, from an Echo Show 5 (2nd generation, `cronos`) running LineageOS to one running
-TECHO5. Written from a first install on a second unit (2026-09-16); every command here was run on
-that install. Placeholders: `<serial>` is the unit's adb/fastboot serial, `<address>` its IP address
-on your network, `<version>` a release such as `v0.2.7`.
+Step by step, from an Echo Show running LineageOS to one running TECHO5. The 1st gen Show 5
+(`checkers`), the 2nd gen Show 5 (`cronos`) and the 1st gen Show 8 (`crown`) take the same steps;
+where a board differs, this says so, and the installer picks each one's own boot image out of the
+release. Written from a first install on a second unit (2026-09-16), with the Show 8's names taken
+from the crown release and `tools/install-show.py`; placeholders: `<serial>` is the unit's
+adb/fastboot serial, `<address>` its IP address on your network, `<version>` a release such as `v0.2.7`.
 
 **This erases Android.** LineageOS on the `system` partition is replaced by the TECHO5 slot store.
 The one part of LineageOS TECHO5 keeps is its `vendor` tree (the Wi-Fi and Bluetooth drivers and
@@ -25,12 +27,13 @@ FAILED (remote: 'the command you input is restricted on locked hw')
   [amonet-cronos](https://xdaforums.com/t/unlock-root-twrp-unbrick-amazon-echo-show-5-2nd-gen-2021-cronos.4772596/)
 - Show 5 **1st gen** (checkers):
   [amonet-checkers](https://xdaforums.com/t/unlock-root-twrp-unbrick-amazon-echo-show-5-1st-gen-2019-checkers.4762900/)
+- Show 8 **1st gen** (crown):
+  [amonet-crown](https://xdaforums.com/t/unlock-root-twrp-unbrick-amazon-echo-show-8-1st-gen-2019-crown.4766687/)
 
 ## What you need
 
-- An Echo Show 5 2nd gen, **unlocked as above**, running
-  [LineageOS 18.1](https://xdaforums.com/t/rom-unofficial-11-cronos-lineageos-18-1-for-the-amazon-echo-show-5-2021.4772598/),
-  connected to your Wi-Fi in Android, with USB debugging on.
+- An Echo Show, **unlocked as above**, running LineageOS 18.1 — the `cronos`, `checkers` or `crown`
+  build — connected to your Wi-Fi in Android, with USB debugging on.
 - Its power adapter and a USB **data** cable to the PC. Keep it on mains power while flashing.
 - A Windows, Linux or macOS computer with `adb` and `fastboot` (Android platform tools).
 - Home Assistant with the ESPHome integration.
