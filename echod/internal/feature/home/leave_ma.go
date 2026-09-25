@@ -3,6 +3,7 @@ package home
 import (
 	"log/slog"
 
+	"github.com/HuskerMinion/techo5/echod/internal/config"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/media"
 	"github.com/HuskerMinion/techo5/echod/internal/lib/hass"
 )
@@ -45,15 +46,14 @@ func leaveGroup() {
 	// that cannot be established is left with known false, which leaveWith stops in: the stop is the only
 	// thing that ends the track this room asked to replace, and a Home Assistant that cannot answer must
 	// not leave the room held.
-	own := speakerEntity()
-	ma, err := hass.Get().MusicAssistantFor(own)
+	ma, err := musicAssistantPlayer()
 	var members []any
 	known := false
 	switch {
 	case err != nil:
-		slog.Warn("group: looking for this device's Music Assistant player failed", "own", own, "err", err)
+		slog.Warn("group: looking for this device's Music Assistant player failed", "err", err)
 	case ma == "":
-		slog.Warn("group: no Music Assistant player for this device", "own", own)
+		slog.Warn("group: no Music Assistant player for this device", "device", config.Get().Device.Name)
 	default:
 		if members, err = groupMembers(ma); err != nil {
 			slog.Warn("group: asking Home Assistant whether this room is in a group failed",

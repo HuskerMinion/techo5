@@ -343,9 +343,16 @@ func (c *Client) Entities(domain string) ([]Entity, error) {
 	return list, nil
 }
 
-// MusicAssistantFor finds Music Assistant's own media player for a device's media player: the one
-// whose active queue is it. Empty when there is none.
-func (c *Client) MusicAssistantFor(own string) (string, error) {
+// MusicAssistantFor finds Music Assistant's own player for this device: the one it plays through the
+// media player it owns here. own is this device's media player entity, and name is what this device calls
+// itself - which is what it announces to Music Assistant over Sendspin, and so what Music Assistant names
+// its player. Empty when there is none.
+//
+// Two ways, because what Music Assistant puts in active_queue changed: it used to be the entity id of this
+// device's own player, and it is now the queue's own id (up<id>, which is the entity's unique_id as
+// well) - so that test alone finds nothing, on every device running it. The name is what holds, and
+// mass_player_type tells a player from a queue when both are named for the device.
+func (c *Client) MusicAssistantFor(own, name string) (string, error) {
 	out, err := c.do("GET", "/api/states", nil)
 	if err != nil {
 		return "", err
@@ -357,17 +364,34 @@ func (c *Client) MusicAssistantFor(own string) (string, error) {
 	if err := json.Unmarshal(out, &states); err != nil {
 		return "", err
 	}
+	named := ""
 	for _, s := range states {
 		if !strings.HasPrefix(s.EntityID, "media_player.") || s.EntityID == own {
 			continue
 		}
-		app, _ := s.Attributes["app_id"].(string)
-		queue, _ := s.Attributes["active_queue"].(string)
-		if app == "music_assistant" && queue == own {
+		if app, _ := s.Attributes["app_id"].(string); app != "music_assistant" {
+			continue
+		}
+		if queue, _ := s.Attributes["active_queue"].(string); queue == own {
 			return s.EntityID, nil
 		}
+		if name == "" {
+			continue
+		}
+		friendly, _ := s.Attributes["friendly_name"].(string)
+		if !strings.EqualFold(strings.TrimSpace(friendly), strings.TrimSpace(name)) {
+			continue
+		}
+		// A queue named for the device as well is not the thing to resume or unjoin, so it is not the
+		// answer of last resort either: only a player is, whatever the server calls it.
+		if kind, _ := s.Attributes["mass_player_type"].(string); kind == "player" {
+			return s.EntityID, nil
+		} else if kind == "queue" {
+			continue
+		}
+		named = s.EntityID
 	}
-	return "", nil
+	return named, nil
 }
 
 // Render has Home Assistant render a template and returns the text.

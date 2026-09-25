@@ -16,7 +16,7 @@ import (
 // playing, where Home Assistant only knows the last one started anywhere in the house.
 func (f *Feature) FavoriteNow() error {
 	if _, _, _, held := media.Get().Held(); media.Get().Carried() || held {
-		ma, err := hass.Get().MusicAssistantFor(speakerEntity())
+		ma, err := musicAssistantPlayer()
 		if err != nil {
 			return err
 		}
