@@ -3,6 +3,7 @@ package speaker
 import (
 	"math"
 	"testing"
+	"time"
 )
 
 // Every recorded sound is there, as long as it was recorded, and louder levels make it louder but
@@ -26,3 +27,17 @@ func TestClipsPlay(t *testing.T) {
 		}
 	}
 }
+
+// The wake sound is loud for its first few hundred milliseconds and a fade after that, and a turn
+// waits out only the loud part: holding the microphone back for the whole of it lost people's first
+// words. A tone's audible length is its length.
+func TestTheWakeSoundIsLoudOnlyBriefly(t *testing.T) {
+	loud := Audible([]Note{ClipWake.Note()})
+	if loud < 150*time.Millisecond || loud > 450*time.Millisecond {
+		t.Errorf("the wake sound holds the microphone for %v", loud)
+	}
+	if Audible(ToneMute) != Length(ToneMute) {
+		t.Error("a tone's audible length is not its length")
+	}
+}
+

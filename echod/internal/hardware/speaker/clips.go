@@ -22,6 +22,7 @@ type Clip struct {
 	once    sync.Once
 	samples []int16 // mono, at Rate
 	peak    float64 // the loudest sample, as a share of full scale
+	loudMs  int     // how long it stays loud (Audible)
 }
 
 var (
@@ -45,7 +46,35 @@ func (c *Clip) load() {
 			most = max(most, abs(int(s)))
 		}
 		c.peak = float64(most) / math.MaxInt16
+		c.loudMs = loudFor(c.samples)
 	})
+}
+
+// loudFor is how long samples stay within 20 dB of their loudest 10 ms: a recorded sound ends in a
+// fade long after it has stopped being loud, and the fade is not what anything has to wait out.
+func loudFor(samples []int16) int {
+	const win = Rate / 100
+	var levels []float64
+	for i := 0; i < len(samples); i += win {
+		var sum float64
+		n := 0
+		for _, s := range samples[i:min(i+win, len(samples))] {
+			sum += float64(s) * float64(s)
+			n++
+		}
+		levels = append(levels, sum/float64(n))
+	}
+	top := 0.0
+	for _, l := range levels {
+		top = max(top, l)
+	}
+	last := 0
+	for i, l := range levels {
+		if l >= top/100 { // 20 dB down, in power
+			last = i + 1
+		}
+	}
+	return last * 10
 }
 
 func abs(v int) int {
@@ -59,6 +88,12 @@ func abs(v int) int {
 func (c *Clip) Ms() int {
 	c.load()
 	return len(c.samples) * 1000 / Rate
+}
+
+// LoudMs is how long it plays loud, before its fade.
+func (c *Clip) LoudMs() int {
+	c.load()
+	return c.loudMs
 }
 
 // Note is the clip as a note, so it goes wherever notes go: a chime, a ring, one round of an alarm.

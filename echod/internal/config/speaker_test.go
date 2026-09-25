@@ -1,6 +1,10 @@
 package config
 
-import "testing"
+import (
+	"os"
+	"path/filepath"
+	"testing"
+)
 
 // A device that could not tune wrote the settled false back to itself, so every unit that ever ran
 // such a build carries "asp": false whether or not anybody chose it. Once the tuning works, those
@@ -24,20 +28,39 @@ func TestTheTuningComesBackOnByItselfUnlessSomebodyTurnedItOff(t *testing.T) {
 	}
 }
 
-// A device saved when Chirp was the default moves to Home Assistant's wake sound once, a word set to
-// something else keeps it, and after the move Chirp chosen again stays Chirp.
+// A device saved when Chirp was the default moves to Home Assistant's wake sound once, through a real
+// file that has never heard of the move; a word set to something else keeps it; after the move, Chirp
+// chosen again stays Chirp; and a new device starts on Home Assistant with nothing to move.
 func TestWakeSoundsMoveOnce(t *testing.T) {
-	c := Config{Wake: Wake{Words: []WakeWord{{Tone: ToneChirp, FollowUpTone: ToneChirp}, {Tone: ToneDing}}}}
-	c.moveSounds()
-	if c.Wake.Words[0].Tone != ToneHA || c.Wake.Words[0].FollowUpTone != ToneHA || c.Wake.Words[1].Tone != ToneDing {
-		t.Fatalf("after the move: %+v", c.Wake.Words)
+	p := filepath.Join(t.TempDir(), "state.json")
+	old := `{"wake":{"words":[{"id":"alexa","tone":"chirp","follow_up_tone":"chirp"},{"id":"","tone":"ding"}]}}`
+	if err := os.WriteFile(p, []byte(old), 0o600); err != nil {
+		t.Fatal(err)
 	}
-	c.Wake.Words[0].Tone = ToneChirp
-	c.moveSounds()
-	if c.Wake.Words[0].Tone != ToneChirp {
-		t.Error("Chirp chosen after the move was moved again")
+	st, err := Load(p)
+	if err != nil {
+		t.Fatal(err)
 	}
-	if !defaultSpeaker().SoundsMoved || DefaultTone != ToneHA {
-		t.Error("a new device starts on Chirp")
+	w := st.Get().Wake.Words
+	if w[0].Tone != ToneHA || w[0].FollowUpTone != ToneHA || w[1].Tone != ToneDing {
+		t.Fatalf("after the move: %+v", w)
+	}
+	if err := st.Update(func(c *Config) { c.Wake.Words[0].Tone = ToneChirp }); err != nil {
+		t.Fatal(err)
+	}
+	again, err := Load(p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := again.Get().Wake.Words[0].Tone; got != ToneChirp {
+		t.Errorf("Chirp chosen after the move came back as %q", got)
+	}
+
+	fresh, err := Load(filepath.Join(t.TempDir(), "none.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !fresh.Get().Speaker.SoundsMoved || DefaultTone != ToneHA {
+		t.Error("a new device does not start on Home Assistant's wake sound")
 	}
 }

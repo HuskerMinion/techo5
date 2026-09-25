@@ -105,6 +105,22 @@ func Length(notes []Note) time.Duration {
 	return time.Duration(ms) * time.Millisecond
 }
 
+// Audible is how long notes are loud enough to matter to the microphones: their length, except that a
+// recording counts only until its fade (Clip.LoudMs). A turn holds its microphone back for this long
+// while the wake sound plays, and Home Assistant's lasts nearly a second, most of it a quiet tail the
+// echo canceller takes care of; holding for all of it lost the first words of every request.
+func Audible(notes []Note) time.Duration {
+	var ms int
+	for _, n := range notes {
+		if n.Clip != nil {
+			ms += n.Clip.LoudMs()
+			continue
+		}
+		ms += n.Ms
+	}
+	return time.Duration(ms) * time.Millisecond
+}
+
 // WakeTones lists them in the order they are offered.
 func WakeTones() []config.Tone {
 	return []config.Tone{config.ToneHA, config.ToneNone, config.ToneChirp, config.ToneDing, config.ToneRise}

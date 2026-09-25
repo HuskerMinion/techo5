@@ -84,6 +84,7 @@ func Load(path string) (*Store, error) {
 	b, err := os.ReadFile(path)
 	if err != nil {
 		if os.IsNotExist(err) {
+			st.c.Speaker.SoundsMoved = true // a new device starts on the new default: nothing to move
 			st.readable = true
 			return st, nil
 		}

@@ -46,12 +46,14 @@ const (
 )
 
 func defaultSpeaker() Speaker {
-	return Speaker{Volume: DefaultVolume, Resampling: DefaultResampling, ASP: DefaultASP, SoundsMoved: true}
+	return Speaker{Volume: DefaultVolume, Resampling: DefaultResampling, ASP: DefaultASP}
 }
 
 // moveSounds gives a device saved when Chirp was the default wake sound Home Assistant's instead,
 // which is the default now: once, and only for a word (or its follow-up) still on Chirp, which is
 // what nearly everyone had without choosing it. Anyone can choose Chirp again, and it then stays.
+// SoundsMoved defaults to false so that a file saved before it existed, which does not mention it,
+// reads as not moved; a new device, which has no file, starts moved (Load).
 func (c *Config) moveSounds() {
 	if c.Speaker.SoundsMoved {
 		return
