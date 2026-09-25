@@ -5,11 +5,31 @@
 
 type log >/dev/null 2>&1 || log() { echo "techo5: $*" > /dev/kmsg; }
 
+# t5_board: which Echo this is, from the panel the bootloader names in the kernel command
+# line. The daemon reads the same thing (internal/layout); this side needs it because one
+# root filesystem serves all three boards, so the defaults below cannot be baked in per
+# board. Prints nothing and returns non-zero when no panel is named.
+t5_board() {
+	for w in $(cat /proc/cmdline 2>/dev/null); do
+		case $w in
+		lcm=*checkers*) echo checkers; return 0 ;;
+		lcm=*crown*) echo crown; return 0 ;;
+		lcm=*cronos*) echo cronos; return 0 ;;
+		esac
+	done
+	return 1
+}
+
 # t5_usb_acm: one CDC ACM serial function on the USB gadget (a COM port on the
 # host). Idempotent. The 4.9.77 (TWRP) kernel has the legacy android_usb
 # gadget, the 4.9.337 (LineageOS) kernel has configfs; both are handled.
-# T5_PRODUCT names the USB serial gadget; a device sets it (rootfs: /etc/techo5/device.conf).
-T5_PRODUCT=${T5_PRODUCT:-Echo Show 5 Linux}
+# T5_PRODUCT names the USB serial gadget. A device may set it, and a root filesystem
+# carrying /etc/techo5/device.conf does (boot.sh sources that file first); otherwise it
+# follows the board, so a Show 8 does not put the Show 5's name on the gadget.
+case $(t5_board) in
+crown) T5_PRODUCT=${T5_PRODUCT:-Echo Show 8 Linux} ;;
+*) T5_PRODUCT=${T5_PRODUCT:-Echo Show 5 Linux} ;;
+esac
 
 t5_usb_acm() {
 	A=/sys/class/android_usb/android0
