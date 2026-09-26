@@ -90,6 +90,17 @@ func (f *Feature) SetCalendarSources(ids []string) error {
 	if err := config.Set().Calendar().Sources(clean); err != nil {
 		return err
 	}
+	// The calendars that pop up are among those shown: one no longer shown is no longer one of them,
+	// and none left is every one again.
+	if pick := config.Get().Calendar.PopupCalendars; len(pick) > 0 {
+		kept := slices.DeleteFunc(slices.Clone(pick), func(id string) bool { return !slices.Contains(clean, id) })
+		if len(kept) == 0 {
+			kept = nil
+		}
+		if err := config.Set().Calendar().PopupCalendars(kept); err != nil {
+			return err
+		}
+	}
 	calendar.Lock()
 	calendar.months = nil // read for the old choice
 	calendar.Unlock()

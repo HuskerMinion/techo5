@@ -21,6 +21,7 @@ func (r *renderer) popupBox() image.Rectangle {
 // popupCard is an event coming up: its calendar and how soon, its title, and its time.
 func (r *renderer) popupCard(s scene, e hass.Event) {
 	box := r.popupBox()
+	r.setPopupAt(box)
 	r.roundShadow(box, r.cardRad(), float64(r.s(34)), r.s(12), shadowAlpha()*1.3)
 	r.roundFill(box, r.cardRad(), surface(4), surface(2))
 	r.roundHighlight(box, r.cardRad())
@@ -36,6 +37,19 @@ func (r *renderer) popupCard(s scene, e hass.Event) {
 	r.text(r.tiny, clipText(r, r.tiny, heading, width-hintW-r.s(24)), box.Min.X+in, box.Min.Y+r.s(52), amber)
 	r.text(r.title, clipText(r, r.title, e.Summary, width), box.Min.X+in, box.Min.Y+r.s(124), cream)
 	r.text(r.small, clipText(r, r.small, eventWhen(e, s.now), width), box.Min.X+in, box.Min.Y+r.s(180), dim)
+}
+
+func (r *renderer) setPopupAt(b image.Rectangle) {
+	r.weatherMu.Lock()
+	r.popupAt = b
+	r.weatherMu.Unlock()
+}
+
+// popupTapped is whether a tap at p landed on the pop-up as last drawn: none drawn, none tapped.
+func (r *renderer) popupTapped(p image.Point) bool {
+	r.weatherMu.Lock()
+	defer r.weatherMu.Unlock()
+	return !r.popupAt.Empty() && p.In(r.popupAt)
 }
 
 // popupSoon is how soon an event is, as its pop-up heads it: "In 15 minutes", "Starting now", "Today".

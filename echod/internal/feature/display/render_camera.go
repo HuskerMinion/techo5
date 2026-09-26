@@ -42,7 +42,7 @@ func (r *renderer) cameraView(s scene, v home.CameraView) {
 	r.text(r.small, t, r.w-r.margin-r.width(r.small, t), 32, dim)
 	left := time.Until(v.Until).Round(time.Second)
 	hint := "tap to close"
-	if left > 0 {
+	if left > 0 && left < 24*time.Hour { // "until tapped" is a year: no countdown for that
 		hint = "tap to close  ·  " + left.String()
 	}
 	draw.Draw(r.dst, image.Rect(0, r.h-36, r.w, r.h), image.NewUniform(shade), image.Point{}, draw.Over)

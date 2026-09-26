@@ -6,6 +6,7 @@ import (
 	"log/slog"
 	"slices"
 	"strconv"
+	"sync"
 
 	"github.com/HuskerMinion/techo5/echod/internal/config"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/home"
@@ -39,9 +40,22 @@ func calendarsValue() string {
 	return strconv.Itoa(len(src)) + " calendars"
 }
 
+// calendarsListed are the calendars the Calendars list last showed, in its order: a choice in it is one
+// of these, whatever Home Assistant's own list has become since.
+var calendarsListed struct {
+	sync.Mutex
+	ids []string
+}
+
 func calendarsPicker() pickerView {
 	p := pickerView{title: "Calendars", cur: -1}
 	cals := home.Get().Calendars()
+	calendarsListed.Lock()
+	calendarsListed.ids = calendarsListed.ids[:0]
+	for _, c := range cals {
+		calendarsListed.ids = append(calendarsListed.ids, c.ID)
+	}
+	calendarsListed.Unlock()
 	if len(cals) == 0 {
 		p.opts = []string{"None in Home Assistant yet"}
 		return p
@@ -63,12 +77,14 @@ func calendarsPicker() pickerView {
 // toggleCalendar turns the i'th of Home Assistant's calendars on or off, and reports whether the list
 // should stay open for another: only when there are several to choose from.
 func toggleCalendar(i int) bool {
-	cals := home.Get().Calendars()
-	if i < 0 || i >= len(cals) {
+	calendarsListed.Lock()
+	ids := slices.Clone(calendarsListed.ids)
+	calendarsListed.Unlock()
+	if i < 0 || i >= len(ids) {
 		return false
 	}
 	src := home.Get().CalendarSources()
-	id := cals[i].ID
+	id := ids[i]
 	if j := slices.Index(src, id); j >= 0 {
 		src = slices.Delete(slices.Clone(src), j, j+1)
 	} else {
@@ -78,7 +94,7 @@ func toggleCalendar(i int) bool {
 		slog.Warn("choosing the calendars failed", "err", err)
 		return false
 	}
-	return len(cals) > 1
+	return len(ids) > 1
 }
 
 // The pop-up rows, under Calendars once a calendar is shown: on or off, and when they are on, how early,

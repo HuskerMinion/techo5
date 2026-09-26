@@ -77,7 +77,7 @@ func (d *Display) dashScene(s *scene, sheetOrDrawer bool) {
 	d.mu.Unlock()
 
 	want := mode != config.DashboardOff && s.phase == "idle" && !sheetOrDrawer &&
-		!s.showCamera && !s.showWeather && !s.showRadar && !s.showWifi && !s.bt.Pairing &&
+		!s.showCamera && !s.showWeather && !s.showRadar && !s.showCalendar && !s.showWifi && !s.bt.Pairing &&
 		(asked || (f.Idle() && !away && !s.nowPlaying))
 	s.showDash, s.dashMode = want, mode
 

@@ -6,6 +6,7 @@ import (
 	"context"
 	"log/slog"
 	"slices"
+	"strings"
 	"time"
 
 	"github.com/HuskerMinion/techo5/echod/internal/component"
@@ -70,8 +71,9 @@ func duePopups(events []hass.Event, now time.Time, c config.Calendar, shown map[
 	return out
 }
 
-// popupTick looks, now and then, for an event to pop up, and takes one down that has been up long
-// enough. Called from every frame, so it keeps its own pace.
+// popupTick looks, now and then, for events to pop up, and takes one down that has been up long
+// enough. Events due while another is up wait their turn; a timed event puts an all-day one away, since
+// the all-day one has been seen. Called from every frame, so it keeps its own pace.
 func (d *Display) popupTick(now time.Time) {
 	d.mu.Lock()
 	if now.Before(d.popupNext) {
@@ -79,14 +81,16 @@ func (d *Display) popupTick(now time.Time) {
 		return
 	}
 	d.popupNext = now.Add(popupEvery)
-	up := d.popup
-	if up != nil && now.After(d.popupUntil) {
-		d.popup, up = nil, nil
+	if d.popup != nil && now.After(d.popupUntil) {
+		d.popup = nil
 	}
 	d.mu.Unlock()
 
 	c := config.Get().Calendar
-	if !c.Popups || up != nil || len(c.Sources) == 0 {
+	if !c.Popups || len(c.Sources) == 0 {
+		d.mu.Lock()
+		d.popup, d.popupQueue = nil, nil
+		d.mu.Unlock()
 		return
 	}
 	h := home.Get()
@@ -96,19 +100,51 @@ func (d *Display) popupTick(now time.Time) {
 		more, _ := h.MonthEvents(next)
 		events = append(events, more...)
 	}
+
 	d.mu.Lock()
-	if d.popupShown == nil {
-		d.popupShown = map[string]bool{}
+	shown := popupShownNow()
+	due := duePopups(events, now, c, shown)
+	for _, e := range due {
+		shown[popupKey(e)] = true
+		d.popupQueue = append(d.popupQueue, e)
 	}
-	due := duePopups(events, now, c, d.popupShown)
-	if len(due) == 0 {
+	if len(due) > 0 {
+		keepPopupShown(shown, now)
+	}
+	if d.popup != nil && d.popup.AllDay && slices.ContainsFunc(d.popupQueue, func(e hass.Event) bool { return !e.AllDay }) {
+		d.popup = nil
+	}
+	if d.popup != nil || len(d.popupQueue) == 0 {
 		d.mu.Unlock()
 		return
 	}
-	e := due[0]
-	d.popupShown[popupKey(e)] = true
-	d.popup = &e
+	// The next in turn, all-day ones after timed ones; a timed one long over by now is dropped.
+	slices.SortStableFunc(d.popupQueue, func(a, b hass.Event) int {
+		if a.AllDay != b.AllDay {
+			if a.AllDay {
+				return 1
+			}
+			return -1
+		}
+		return a.Start.Compare(b.Start)
+	})
+	var e hass.Event
+	for len(d.popupQueue) > 0 {
+		e, d.popupQueue = d.popupQueue[0], d.popupQueue[1:]
+		if e.AllDay || now.Before(e.End) || now.Before(e.Start.Add(popupAfter)) {
+			d.popup = &e
+			break
+		}
+	}
+	if d.popup == nil {
+		d.mu.Unlock()
+		return
+	}
+	// Up until ten minutes after it starts, or two minutes from now for one that waited its turn.
 	d.popupUntil = e.Start.Add(popupAfter)
+	if d.popupUntil.Before(now.Add(2 * time.Minute)) {
+		d.popupUntil = now.Add(2 * time.Minute)
+	}
 	if e.AllDay {
 		d.popupUntil = now.Add(popupAllDay)
 	}
@@ -122,6 +158,33 @@ func (d *Display) popupTick(now time.Time) {
 	}})
 	if !c.PopupSilent && !night && !config.Quiet() {
 		go popupChime()
+	}
+}
+
+// popupShownNow is the events already popped up, as kept: a restart does not pop them up again.
+func popupShownNow() map[string]bool {
+	shown := map[string]bool{}
+	for _, k := range config.Get().Calendar.PopupShown {
+		shown[k] = true
+	}
+	return shown
+}
+
+// keepPopupShown saves which events have popped up, forgetting those that started over two days ago.
+func keepPopupShown(shown map[string]bool, now time.Time) {
+	var keep []string
+	for k := range shown {
+		parts := strings.SplitN(k, "\x00", 3)
+		if len(parts) == 3 {
+			if at, err := time.Parse(time.RFC3339, parts[1]); err == nil && now.Sub(at) > 48*time.Hour {
+				continue
+			}
+		}
+		keep = append(keep, k)
+	}
+	slices.Sort(keep)
+	if err := config.Set().Calendar().PopupShown(keep); err != nil {
+		slog.Warn("calendar: keeping the pop-ups shown failed", "err", err)
 	}
 }
 
@@ -142,10 +205,11 @@ func popupChime() {
 	<-claim.Done()
 }
 
-// dismissPopup takes the pop-up down.
+// dismissPopup takes the pop-up down, and has the next in turn, if any, come up at once.
 func (d *Display) dismissPopup() {
 	d.mu.Lock()
 	d.popup = nil
+	d.popupNext = time.Time{}
 	d.mu.Unlock()
 }
 

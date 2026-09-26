@@ -212,6 +212,7 @@ type renderer struct {
 	pillsAt  []image.Rectangle
 	pillsIdx []int
 	dateAt   image.Rectangle // the date under the clock, the same way: a tap there opens the calendar
+	popupAt  image.Rectangle // an event's pop-up, the same way: a tap on it takes it down
 
 	// calHits are the calendar page's buttons, days and events as last drawn (render_calendar.go).
 	calMu   sync.Mutex
@@ -322,10 +323,12 @@ func newRenderer(dst *image.RGBA) *renderer {
 func (r *renderer) draw(s scene) {
 	r.setWeatherAt(image.Rectangle{})
 	r.setDateAt(image.Rectangle{})
+	r.setPopupAt(image.Rectangle{})
 	// The red night clock is the whole screen: nothing else, not even the header, is drawn over it.
 	// Anything that needs somebody - a call, an alarm, a turn - has already lifted the night light,
 	// and this with it.
-	if s.redClock && s.call.Phase == phone.Idle && !s.ring.any() && !s.setupAsking {
+	if s.redClock && s.call.Phase == phone.Idle && !s.ring.any() && !s.setupAsking &&
+		!s.showCamera && !s.showAnnouncement && !s.showReminder {
 		r.redClockPage(s)
 		return
 	}

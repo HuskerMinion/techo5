@@ -200,11 +200,11 @@ type Display struct {
 	calScroll int // the day's list, scrolled this many rows
 
 	// popup is an event popped up on the screen (calendar_popup.go), until popupUntil or a tap;
-	// popupShown the ones already shown, and popupNext when the calendar is next looked at.
+	// popupNext is when the calendar is next looked at (what was shown is kept in the config).
 	popup      *hass.Event
 	popupUntil time.Time
-	popupShown map[string]bool
 	popupNext  time.Time
+	popupQueue []hass.Event  // due while another was up: shown next
 	pop        popupEntities // the pop-ups' settings in Home Assistant
 
 	// The alert page (alerts.go): up until alertUntil, on alertIdx of the alerts at home, scrolled
@@ -497,6 +497,7 @@ func (d *Display) changed(s voice.State) {
 		// holding the now-playing page.
 		if aboutGoingHome(s.Heard) {
 			d.weatherArmed, d.weatherUntil = false, time.Time{}
+			d.calUntil, d.calDetail = time.Time{}, nil
 			d.sheet, d.quiet = false, true
 			d.dash = false
 			go home.Get().HideCamera()
@@ -613,7 +614,7 @@ func (d *Display) gesture(g touch.Gesture) {
 
 	// A reminder: a tap on its card puts it away, here and on every device it went off on. Only the
 	// card, as with the strip, so a finger meant for the music behind it still reaches the music.
-	if p := d.popupUp(); p != nil && g.Kind == touch.Tap && d.r != nil && image.Pt(g.X, g.Y).In(d.r.popupBox()) {
+	if g.Kind == touch.Tap && d.r != nil && d.r.popupTapped(image.Pt(g.X, g.Y)) {
 		d.dismissPopup()
 		d.wake()
 		return
@@ -1022,6 +1023,7 @@ func (d *Display) showSheet(on bool) {
 func (d *Display) ShowWeather(radar bool) {
 	d.mu.Lock()
 	d.weatherUntil, d.radar, d.sheet = time.Now().Add(weatherShow), radar, false
+	d.calUntil, d.calDetail = time.Time{}, nil // the forecast comes up over the calendar, not under it
 	d.mu.Unlock()
 	d.wake()
 }
@@ -1055,8 +1057,11 @@ func (d *Display) night(now time.Time, on bool, view voice.State) bool {
 	}
 	switch {
 	case in && on:
+		_, cameraUp := home.Get().Camera()
+		_, announcing := announce.Get().Showing()
 		busy := view.Phase != "idle" || now.Sub(touched) < nightIdle || now.Sub(viewAt) < nightIdle ||
-			d.ringing(now).any() || phone.Get().Busy() || sunriseProgress(now) > 0 || reminderUp()
+			d.ringing(now).any() || phone.Get().Busy() || sunriseProgress(now) > 0 || reminderUp() ||
+			cameraUp || announcing
 		// Something playing is not somebody using the screen. At night it is rain or music to sleep
 		// to, and it kept a guest room's screen at full brightness all night; a touch or a word still
 		// brings the screen up to see what is playing.
@@ -1441,7 +1446,14 @@ func (d *Display) frame() time.Duration {
 		on = true
 	}
 	if d.night(now, on, view) {
-		return time.Minute
+		// The panel put out: nothing to draw. The glow lifted or lowered: this frame shows the change,
+		// rather than the old page for a minute at the new brightness.
+		d.mu.Lock()
+		lit := d.on
+		d.mu.Unlock()
+		if !lit {
+			return time.Minute
+		}
 	}
 	if !config.Get().Screen.Welcomed {
 		d.r.welcome(scene{now: now})

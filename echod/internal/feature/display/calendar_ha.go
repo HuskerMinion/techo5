@@ -3,7 +3,9 @@
 package display
 
 import (
+	"fmt"
 	"log/slog"
+	"slices"
 	"strings"
 
 	esphome "github.com/ygelfand/go-esphome-device"
@@ -73,11 +75,16 @@ func (d *Display) popupSettingsChanged() {
 // setPopupCalendars is the calendar_popup_sources action: the calendars whose events pop up, as entity
 // ids separated by commas; empty is every one this device shows.
 func setPopupCalendars(list string) error {
+	shown := config.Get().Calendar.Sources
 	var pick []string
 	for _, id := range strings.Split(list, ",") {
-		if id = strings.TrimSpace(id); id != "" {
-			pick = append(pick, id)
+		if id = strings.TrimSpace(id); id == "" || slices.Contains(pick, id) {
+			continue
 		}
+		if !slices.Contains(shown, id) {
+			return fmt.Errorf("calendar: %s is not one of this device's calendars; choose it with calendar_sources first", id)
+		}
+		pick = append(pick, id)
 	}
 	return config.Set().Calendar().PopupCalendars(pick)
 }

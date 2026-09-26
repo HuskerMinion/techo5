@@ -3,11 +3,13 @@
 package display
 
 import (
+	"image"
 	"path/filepath"
 	"testing"
 	"time"
 
 	"github.com/HuskerMinion/techo5/echod/internal/config"
+	"github.com/HuskerMinion/techo5/echod/internal/feature/home"
 	"github.com/HuskerMinion/techo5/echod/internal/lib/hass"
 )
 
@@ -83,5 +85,94 @@ func TestPopupSoon(t *testing.T) {
 	}
 	if popupSoon(hass.Event{AllDay: true}, now) != "Today" {
 		t.Error("all day")
+	}
+}
+
+// popupTestDisplay is a Show with pop-ups on, and events kept in its month.
+func popupTestDisplay(t *testing.T) *Display {
+	t.Helper()
+	config.Use(filepath.Join(t.TempDir(), "state.json"))
+	if err := config.Set().Calendar().Sources([]string{"calendar.family"}); err != nil {
+		t.Fatal(err)
+	}
+	if err := config.Set().Calendar().Popups(true); err != nil {
+		t.Fatal(err)
+	}
+	if err := config.Set().Calendar().PopupSilent(true); err != nil {
+		t.Fatal(err)
+	}
+	return &Display{poke: make(chan struct{}, 1)}
+}
+
+// Two events at the same time: the second comes up after the first is taken down, and neither pops up
+// again - not even after a restart, since what was shown is kept.
+func TestPopupsWaitTheirTurn(t *testing.T) {
+	d := popupTestDisplay(t)
+	at := func(h, m int) time.Time { return time.Date(2026, 9, 26, h, m, 0, 0, time.Local) }
+	events := []hass.Event{
+		{Calendar: "calendar.family", Summary: "Dentist", Start: at(15, 0), End: at(16, 0)},
+		{Calendar: "calendar.family", Summary: "Call Mom", Start: at(15, 0), End: at(15, 30)},
+	}
+	c := config.Get().Calendar
+	now := at(14, 50)
+
+	due := duePopups(events, now, c, popupShownNow())
+	if len(due) != 2 {
+		t.Fatalf("due %v", due)
+	}
+	shown := popupShownNow()
+	for _, e := range due {
+		shown[popupKey(e)] = true
+	}
+	keepPopupShown(shown, now)
+	if got := duePopups(events, now, config.Get().Calendar, popupShownNow()); len(got) != 0 {
+		t.Errorf("popped up again after a restart: %v", got)
+	}
+
+	// The queue: one up, the other waiting; taking the first down brings the second.
+	d.popupQueue = due
+	d.popupTick(now) // nothing new is due now (both kept as shown); the queue is shown in turn
+	first := d.popupUp()
+	if first == nil {
+		t.Fatal("nothing came up from the queue")
+	}
+	d.dismissPopup()
+	d.popupTick(now.Add(time.Second))
+	second := d.popupUp()
+	if second == nil || second.Summary == first.Summary {
+		t.Fatalf("after the first, %v", second)
+	}
+}
+
+// A calendar no longer shown is no longer one that pops up; none left is every one again.
+func TestPopupCalendarsFollowTheCalendarsShown(t *testing.T) {
+	popupTestDisplay(t)
+	if err := config.Set().Calendar().PopupCalendars([]string{"calendar.family"}); err != nil {
+		t.Fatal(err)
+	}
+	if err := setPopupCalendars("calendar.other"); err == nil {
+		t.Error("a calendar the device does not show was taken")
+	}
+	if err := home.Get().SetCalendarSources([]string{"calendar.work"}); err != nil {
+		t.Fatal(err)
+	}
+	if got := config.Get().Calendar.PopupCalendars; got != nil {
+		t.Errorf("pop-up calendars %v, want every one (nil)", got)
+	}
+}
+
+// A tap takes a pop-up down only where one was drawn.
+func TestPopupTapFollowsTheDrawing(t *testing.T) {
+	r := newRenderer(image.NewRGBA(image.Rect(0, 0, 960, 480)))
+	now := time.Date(2026, 9, 26, 14, 50, 0, 0, time.Local)
+	e := hass.Event{Calendar: "calendar.family", Summary: "Dentist", Start: now.Add(10 * time.Minute), End: now.Add(time.Hour)}
+	mid := image.Pt(480, 240)
+	r.draw(scene{now: now, phase: "idle", popup: &e})
+	if !r.popupTapped(mid) {
+		t.Error("a tap on the pop-up was missed")
+	}
+	r.draw(scene{now: now, phase: "idle", popup: &e, showReminder: true}) // under a reminder: not drawn
+	if r.popupTapped(mid) {
+		t.Error("a tap went to a pop-up hidden under a reminder")
 	}
 }

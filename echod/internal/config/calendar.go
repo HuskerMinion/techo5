@@ -21,6 +21,10 @@ type Calendar struct {
 
 	// PopupAllDayNever leaves all-day events alone; otherwise each pops up once, in the morning.
 	PopupAllDayNever bool `json:"popup_all_day_never,omitempty"`
+
+	// PopupShown are the events already popped up, so a restart does not pop them up again: the
+	// calendar, start and title of each, for two days.
+	PopupShown []string `json:"popup_shown,omitempty"`
 }
 
 // PopupDefaultBefore is PopupBefore's default, in minutes.
@@ -65,6 +69,10 @@ func (w CalendarWriter) PopupLead(minutes int) error {
 
 func (w CalendarWriter) PopupSilent(v bool) error {
 	return w.st.Update(func(c *Config) { c.Calendar.PopupSilent = v })
+}
+
+func (w CalendarWriter) PopupShown(v []string) error {
+	return w.st.Update(func(c *Config) { c.Calendar.PopupShown = v })
 }
 
 func (w CalendarWriter) PopupAllDayNever(v bool) error {

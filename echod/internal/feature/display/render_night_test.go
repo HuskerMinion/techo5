@@ -88,3 +88,13 @@ func TestFlipCardsFlipOnce(t *testing.T) {
 		t.Error("coming back flipped every card")
 	}
 }
+
+// The night clock gives way to a reminder: its page is drawn, not the clock alone on black.
+func TestNightClockGivesWayToAReminder(t *testing.T) {
+	r := newRenderer(image.NewRGBA(image.Rect(0, 0, 960, 480)))
+	now := time.Date(2026, 9, 26, 3, 0, 0, 0, time.Local)
+	r.draw(scene{now: now, phase: "idle", redClock: true, showReminder: true})
+	if got := r.dst.RGBAAt(2, 240); got == (color.RGBA{0, 0, 0, 255}) {
+		t.Error("the night clock was drawn over a reminder")
+	}
+}

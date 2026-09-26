@@ -20,7 +20,7 @@ func (d *Display) OpenCalendar() bool {
 	now := time.Now()
 	d.mu.Lock()
 	d.calUntil, d.calMonth, d.calDay, d.calDetail = now.Add(calendarShow), firstOfMonth(now), time.Time{}, nil
-	d.weatherUntil, d.sheet = time.Time{}, false
+	d.weatherUntil, d.sheet, d.dash, d.drawer = time.Time{}, false, false, false
 	d.mu.Unlock()
 	d.wake()
 	return true
@@ -81,7 +81,8 @@ func (d *Display) calendarGesture(g touch.Gesture) {
 			if g.Kind == touch.SwipeDown {
 				step = -step
 			}
-			d.calScroll = max(d.calScroll+step, 0)
+			events, _ := home.Get().EventsOn(d.calDay)
+			d.calScroll = min(max(d.calScroll+step, 0), max(len(events)-d.r.calendarDayRows(), 0))
 		}
 		return
 	case touch.Tap:
