@@ -158,7 +158,9 @@ type Display struct {
 	// nightHours and atNight are the night's settings in Home Assistant, glowLevel the night light's
 	// brightness.
 	nightHours, atNight *esphome.Select
-	glowLevel           *esphome.Number
+	// nightStart and nightEnd are the night's custom hours, to the quarter hour.
+	nightStart, nightEnd *esphome.Select
+	glowLevel            *esphome.Number
 
 	// wide is the Show 8's bigger, brighter panel, which glows harder at the same backlight.
 	wide bool
@@ -261,7 +263,8 @@ func build() *Display {
 	d.callBtn = callButtonSwitch(d.wake)
 	d.weatherFx = weatherAnimationSwitch(d.wake)
 	d.strip = stripSelect(d.wake)
-	d.nightHours = nightHoursSelect()
+	d.nightHours = nightHoursSelect(d)
+	d.nightStart, d.nightEnd = nightEndSelect(d, true), nightEndSelect(d, false)
 	d.atNight = atNightSelect(d)
 	d.glowLevel = glowNumber(d)
 	d.lang = langSelect()
@@ -312,7 +315,7 @@ func build() *Display {
 func (d *Display) Name() string { return "screen" }
 
 func (d *Display) Entities() []esphome.Entity {
-	return []esphome.Entity{d.light, d.auto, d.clock, d.camTime, d.callBtn, d.weatherFx, d.lang, d.strip, d.nightHours, d.atNight, d.glowLevel}
+	return []esphome.Entity{d.light, d.auto, d.clock, d.camTime, d.callBtn, d.weatherFx, d.lang, d.strip, d.nightHours, d.nightStart, d.nightEnd, d.atNight, d.glowLevel}
 }
 
 // Restore lights the panel the way it was left. Before the framebuffer is opened: the backlight is
@@ -323,7 +326,7 @@ func (d *Display) Restore(c config.Config) {
 	setCallButton(d.callBtn, c.Screen.CallButton)
 	setWeatherAnimation(d.weatherFx, !c.Screen.WeatherStill)
 	d.strip.Set(stripOptions[stripIndex()])
-	d.nightHours.Set(nightHoursText(c.Screen.Night))
+	d.nightHoursChanged()
 	d.atNight.Set(atNightOptions[atNightIndex()])
 	d.glowLevel.Set(float32(d.glowSetting()))
 	d.setAuto(c.Screen.Auto, false)
@@ -1031,17 +1034,7 @@ func (d *Display) night(now time.Time, on bool, view voice.State) bool {
 const nightIdle = 90 * time.Second
 
 // inNight is whether now falls in the window, which may cross midnight.
-func inNight(v string, now time.Time) bool {
-	from, to, ok := nightWindow(v)
-	if !ok {
-		return false
-	}
-	h := now.Hour()
-	if from < to {
-		return h >= from && h < to
-	}
-	return h >= from || h < to
-}
+func inNight(v string, now time.Time) bool { return config.InWindow(v, now) }
 
 // ---- Wi-Fi pages ----
 

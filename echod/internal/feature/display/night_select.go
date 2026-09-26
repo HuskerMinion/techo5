@@ -3,8 +3,9 @@
 package display
 
 import (
+	"fmt"
 	"log/slog"
-	"time"
+	"strings"
 
 	esphome "github.com/ygelfand/go-esphome-device"
 
@@ -14,18 +15,46 @@ import (
 // The night's two settings in Home Assistant, beside Screen and Auto brightness: its hours, and what
 // it does to the screen. Both are on the screen too, under Display.
 
-// nightHoursText is a preset as Home Assistant lists it. In 24-hour time whatever the screen's clock
+// nightHoursText is a window as Home Assistant lists it. In 24-hour time whatever the screen's clock
 // says, so the list does not change under an automation when somebody changes the clock format.
 func nightHoursText(v string) string {
 	from, to, ok := nightWindow(v)
 	if !ok {
 		return "Never"
 	}
-	h := func(n int) string { return time.Date(2000, 1, 1, n, 0, 0, 0, time.UTC).Format("15:04") }
-	return h(from) + " – " + h(to)
+	return quarterText(from) + " – " + quarterText(to)
 }
 
-func nightHoursSelect() *esphome.Select {
+// nightCustom is the Night hours choice for hours that are none of the presets, set with Night starts
+// and Night ends.
+const nightCustom = "Custom"
+
+// nightHoursLabel is what the Night hours select shows: the preset, or Custom.
+func nightHoursLabel(v string) string {
+	for _, p := range nightPresets {
+		if p == v {
+			return nightHoursText(p)
+		}
+	}
+	if _, _, ok := nightWindow(v); ok {
+		return nightCustom
+	}
+	return nightHoursText("")
+}
+
+// quarterText is minutes since midnight as 24-hour time, "19:30".
+func quarterText(m int) string { return fmt.Sprintf("%02d:%02d", m/60, m%60) }
+
+// quarters are the times Night starts and Night ends offer: every quarter hour of the day.
+var quarters = func() []string {
+	out := make([]string, 0, 96)
+	for m := 0; m < 24*60; m += 15 {
+		out = append(out, quarterText(m))
+	}
+	return out
+}()
+
+func nightHoursSelect(d *Display) *esphome.Select {
 	s := &esphome.Select{
 		Base: esphome.Base{
 			ObjectID: "screen_night_hours",
@@ -37,19 +66,104 @@ func nightHoursSelect() *esphome.Select {
 	for _, p := range nightPresets {
 		s.Options = append(s.Options, nightHoursText(p))
 	}
+	s.Options = append(s.Options, nightCustom)
 	s.OnCommand = func(v string) {
 		for _, p := range nightPresets {
 			if nightHoursText(p) == v {
-				if err := config.Set().Screen().Night(p); err != nil {
-					slog.Error("saving the night hours failed", "err", err)
-					return
-				}
-				s.Set(v)
+				d.setNight(p)
 				return
 			}
 		}
+		// Custom on its own changes nothing: the hours are set with Night starts and Night ends.
+		d.nightHoursChanged()
 	}
 	return s
+}
+
+// nightEndSelect is Night starts (start true) or Night ends: one end of the night, to the quarter hour.
+func nightEndSelect(d *Display, start bool) *esphome.Select {
+	id, name, icon := "screen_night_end", "Night ends", "mdi:weather-sunset-up"
+	if start {
+		id, name, icon = "screen_night_start", "Night starts", "mdi:weather-sunset-down"
+	}
+	s := &esphome.Select{
+		Base:    esphome.Base{ObjectID: id, Name: name, Icon: icon, Category: esphome.CategoryConfig},
+		Options: quarters,
+	}
+	s.OnCommand = func(v string) {
+		m, ok := quarterMinutes(v)
+		if !ok {
+			return
+		}
+		from, to := nightOrDefault()
+		if start {
+			from = m
+		} else {
+			to = m
+		}
+		if from == to {
+			slog.Warn("night hours: the start and the end are the same time; not changed", "at", v)
+			d.nightHoursChanged()
+			return
+		}
+		d.setNight(config.FormatWindow(from, to))
+	}
+	return s
+}
+
+// quarterMinutes reads "19:30" back into minutes since midnight.
+func quarterMinutes(v string) (int, bool) {
+	for i, q := range quarters {
+		if q == v {
+			return i * 15, true
+		}
+	}
+	return 0, false
+}
+
+// nightOrDefault is the night set, or 22:00 to 06:00 for a device with none, as the end to keep
+// when only one end is being changed.
+func nightOrDefault() (from, to int) {
+	if f, t, ok := nightWindow(config.Get().Screen.Night); ok {
+		return f, t
+	}
+	return 22 * 60, 6 * 60
+}
+
+// setNight saves the night hours, shows them in Home Assistant, and lets the screen take them up.
+func (d *Display) setNight(v string) {
+	if err := config.Set().Screen().Night(v); err != nil {
+		slog.Error("saving the night hours failed", "err", err)
+		return
+	}
+	slog.Info("screen: night hours", "hours", cmpOr(v, "never"))
+	d.nightHoursChanged()
+	d.wake()
+}
+
+// Actions: screen_night_hours sets the night to any start and end, "19:00" and "09:30"; both empty is
+// no night.
+func (d *Display) Actions() []*esphome.Action {
+	return []*esphome.Action{{
+		Name: "screen_night_hours",
+		Args: []esphome.Arg{{Name: "start", Type: esphome.ArgString}, {Name: "end", Type: esphome.ArgString}},
+		Run:  func(c esphome.Call) (any, error) { return nil, d.setNightHours(c.String("start"), c.String("end")) },
+	}}
+}
+
+// setNightHours is the action: the night from start to end, "19:00" and "09:30"; both empty is none.
+func (d *Display) setNightHours(start, end string) error {
+	start, end = strings.TrimSpace(start), strings.TrimSpace(end)
+	if start == "" && end == "" {
+		d.setNight("")
+		return nil
+	}
+	from, to, ok := config.ParseWindow(start + "-" + end)
+	if !ok {
+		return fmt.Errorf("night hours: %q to %q is not two different times like 19:00 and 09:30", start, end)
+	}
+	d.setNight(config.FormatWindow(from, to))
+	return nil
 }
 
 func atNightSelect(d *Display) *esphome.Select {
@@ -95,10 +209,19 @@ func (d *Display) setAtNight(i int) {
 	d.wake()
 }
 
-// nightHoursChanged shows the hours chosen on the screen in Home Assistant.
+// nightHoursChanged shows the hours chosen, on the screen or here, in Home Assistant.
 func (d *Display) nightHoursChanged() {
+	v := config.Get().Screen.Night
 	if d.nightHours != nil {
-		d.nightHours.Set(nightHoursText(config.Get().Screen.Night))
+		d.nightHours.Set(nightHoursLabel(v))
+	}
+	if d.nightStart != nil {
+		from, to, ok := nightWindow(v)
+		if !ok {
+			from, to = nightOrDefault()
+		}
+		d.nightStart.Set(quarterText(from - from%15))
+		d.nightEnd.Set(quarterText(to - to%15))
 	}
 }
 

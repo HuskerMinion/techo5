@@ -25,7 +25,6 @@ package display
 
 import (
 	"context"
-	"fmt"
 	"image"
 	"log/slog"
 	"math"
@@ -383,21 +382,13 @@ func (d *Display) relight(jump bool) {
 	}
 }
 
-// inNight says whether now is within the night hours, "from-to" in whole hours, wrapping midnight.
+// inNight says whether now is within the night hours, which may cross midnight.
 func inNight(now time.Time) bool {
 	v := config.Get().Screen.Night
 	if v == "" {
 		v = defaultNight
 	}
-	var from, to int
-	if _, err := fmt.Sscanf(v, "%d-%d", &from, &to); err != nil || from == to {
-		return false
-	}
-	h := now.Hour()
-	if from < to {
-		return h >= from && h < to
-	}
-	return h >= from || h < to
+	return config.InWindow(v, now)
 }
 
 func allowed(lux float64) float64 {

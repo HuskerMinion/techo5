@@ -1,9 +1,6 @@
 package config
 
-import (
-	"fmt"
-	"time"
-)
+import "time"
 
 // Quiet hours: the device makes no sound of its own between these hours.
 //
@@ -21,25 +18,9 @@ import (
 // Nothing visual goes with it: the ring still shows the effect it would have shown, and a failure
 // still flashes. A quiet house is never a device that says nothing happened.
 
-// QuietHours is the window, as "22-7" — from ten at night to seven in the morning — or empty for
-// never. The same shape as the screen's night hours, and usually the same hours.
-func (s Speaker) Quiet(now time.Time) bool { return inWindow(s.QuietHours, now) }
-
-// inWindow is whether now falls inside a "from-to" window of whole hours, which may cross midnight.
-func inWindow(v string, now time.Time) bool {
-	var from, to int
-	if _, err := fmt.Sscanf(v, "%d-%d", &from, &to); err != nil {
-		return false
-	}
-	if from < 0 || from > 23 || to < 0 || to > 23 || from == to {
-		return false
-	}
-	h := now.Hour()
-	if from < to {
-		return h >= from && h < to
-	}
-	return h >= from || h < to
-}
+// QuietHours is the window, as "22-7" — from ten at night to seven in the morning — or "22:30-06:45",
+// or empty for never. The same shape as the screen's night hours, and usually the same hours.
+func (s Speaker) Quiet(now time.Time) bool { return InWindow(s.QuietHours, now) }
 
 // Quiet is whether the device should keep to itself now.
 func Quiet() bool { return Get().Speaker.Quiet(time.Now()) }

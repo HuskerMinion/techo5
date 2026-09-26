@@ -9,6 +9,7 @@ import (
 	"log/slog"
 	"math"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/HuskerMinion/techo5/echod/internal/config"
@@ -264,14 +265,34 @@ func slideshowIndex() int {
 	return 0
 }
 
-// nightText is a night window as the clock would say it: "10 PM – 6 AM", or "Never".
+// nightText is a night window as the clock would say it: "10 PM – 6 AM", "7 PM – 9:30 AM", or "Never".
 func nightText(v string) string {
 	from, to, ok := nightWindow(v)
 	if !ok {
 		return "Never"
 	}
-	return hourText(from) + " – " + hourText(to)
+	return minuteText(from) + " – " + minuteText(to)
 }
+
+// minuteText is minutes since midnight as the clock would say it: "10 PM" on the hour, "9:30 AM" off it.
+func minuteText(m int) string {
+	if m%60 == 0 {
+		return hourText(m / 60)
+	}
+	return clockTime(m/60, m%60)
+}
+
+// nightCustomRow is the night list's last choice: any start and end, picked hour then minutes.
+const nightCustomRow = "Custom…"
+
+// nightDraft holds the custom night's start while its end is being picked.
+var nightDraft struct {
+	sync.Mutex
+	fromHour, from, toHour int
+}
+
+// nightMinutes are the minutes a custom night can start or end on.
+var nightMinutes = []int{0, 15, 30, 45}
 
 func hourText(h int) string {
 	t := time.Date(2000, 1, 1, h, 0, 0, 0, time.UTC)
@@ -322,6 +343,32 @@ func pickerFor(id string, sv sheetView) (pickerView, bool) {
 			if n == cur {
 				p.cur = i
 			}
+		}
+		p.opts = append(p.opts, nightCustomRow)
+		if _, _, ok := nightWindow(cur); ok && p.cur < 0 {
+			p.cur = len(p.opts) - 1
+		}
+		return p, true
+	case "nightfromh", "nighttoh":
+		title := "Night starts"
+		if id == "nighttoh" {
+			title = "Night ends"
+		}
+		p := pickerView{title: title, cur: -1}
+		for h := 0; h < 24; h++ {
+			p.opts = append(p.opts, hourText(h))
+		}
+		return p, true
+	case "nightfromm", "nighttom":
+		nightDraft.Lock()
+		h, title := nightDraft.fromHour, "Night starts at"
+		if id == "nighttom" {
+			h, title = nightDraft.toHour, "Night ends at"
+		}
+		nightDraft.Unlock()
+		p := pickerView{title: title, cur: -1}
+		for _, m := range nightMinutes {
+			p.opts = append(p.opts, clockTime(h, m))
 		}
 		return p, true
 	case "wakeword":
@@ -414,7 +461,45 @@ func (d *Display) choose(id string, i int) {
 				slog.Warn("saving the night setting failed", "err", err)
 			}
 			d.nightHoursChanged()
+		} else if i == len(nightPresets) {
+			d.openPicker("nightfromh")
 		}
+	case "nightfromh", "nighttoh":
+		if i < 0 || i > 23 {
+			return
+		}
+		nightDraft.Lock()
+		next := "nightfromm"
+		if id == "nighttoh" {
+			nightDraft.toHour, next = i, "nighttom"
+		} else {
+			nightDraft.fromHour = i
+		}
+		nightDraft.Unlock()
+		d.openPicker(next)
+	case "nightfromm":
+		if i < 0 || i >= len(nightMinutes) {
+			return
+		}
+		nightDraft.Lock()
+		nightDraft.from = nightDraft.fromHour*60 + nightMinutes[i]
+		nightDraft.Unlock()
+		d.openPicker("nighttoh")
+	case "nighttom":
+		if i < 0 || i >= len(nightMinutes) {
+			return
+		}
+		nightDraft.Lock()
+		from, to := nightDraft.from, nightDraft.toHour*60+nightMinutes[i]
+		nightDraft.Unlock()
+		if from == to {
+			slog.Info("night hours: the start and the end are the same time; not changed")
+			return
+		}
+		if err := config.Set().Screen().Night(config.FormatWindow(from, to)); err != nil {
+			slog.Warn("saving the night setting failed", "err", err)
+		}
+		d.nightHoursChanged()
 	case "musicstrip":
 		d.setMusicStrip(i)
 	case "clock":

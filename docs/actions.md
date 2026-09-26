@@ -686,6 +686,34 @@ data:
   seconds: 60
 ```
 
+## Set the night hours
+
+In YAML, refer to this action as `esphome.<node>_screen_night_hours`.
+
+Sets when the night starts and ends on a Show: the hours the screen goes dark, or down to its night
+light, by itself. Any times, to the minute, and the night may cross midnight. The same can be set on
+the screen (Settings, Display, Night hours, Custom) and with the **Night hours**, **Night starts**
+and **Night ends** selects, which offer quarter hours.
+
+### start (Required)
+
+*string*
+
+When the night starts, in 24-hour time: `19:00`.
+
+### end (Required)
+
+*string*
+
+When it ends: `09:30`. Both empty turns the night off.
+
+```yaml
+action: esphome.office_screen_night_hours
+data:
+  start: "19:00"
+  end: "09:30"
+```
+
 ## Point the device at a dashboard server
 
 In YAML, refer to this action as `esphome.<node>_dashboard_server`.

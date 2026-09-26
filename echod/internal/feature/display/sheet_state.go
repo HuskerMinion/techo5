@@ -3,7 +3,6 @@
 package display
 
 import (
-	"fmt"
 	"image"
 	"time"
 
@@ -141,12 +140,7 @@ var repeats = []uint8{config.DaysOnce, config.DaysEvery, config.DaysWeekdays, co
 var nightPresets = []string{"", "22-6", "23-6", "0-7", "21-7", "23-8"}
 
 // nightWindow reads a night setting, "22-6": the hour the screen goes dark and the hour it comes back.
-func nightWindow(v string) (from, to int, ok bool) {
-	if _, err := fmt.Sscanf(v, "%d-%d", &from, &to); err != nil || from < 0 || from > 23 || to < 0 || to > 23 || from == to {
-		return 0, 0, false
-	}
-	return from, to, true
-}
+func nightWindow(v string) (from, to int, ok bool) { return config.ParseWindow(v) }
 
 // clockTime is an hour and minute the way the clock shows the time.
 func clockTime(hour, minute int) string {
