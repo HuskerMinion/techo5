@@ -120,27 +120,27 @@ func TestPopupsWaitTheirTurn(t *testing.T) {
 	if len(due) != 2 {
 		t.Fatalf("due %v", due)
 	}
-	shown := popupShownNow()
-	for _, e := range due {
-		shown[popupKey(e)] = true
-	}
-	keepPopupShown(shown, now)
-	if got := duePopups(events, now, config.Get().Calendar, popupShownNow()); len(got) != 0 {
-		t.Errorf("popped up again after a restart: %v", got)
-	}
 
-	// The queue: one up, the other waiting; taking the first down brings the second.
+	// The queue: one up, the other waiting. Only the one up counts as shown, so a restart now would
+	// still bring the second.
 	d.popupQueue = due
-	d.popupTick(now) // nothing new is due now (both kept as shown); the queue is shown in turn
+	d.popupTick(now)
 	first := d.popupUp()
 	if first == nil {
 		t.Fatal("nothing came up from the queue")
+	}
+	if got := duePopups(events, now, config.Get().Calendar, popupShownNow()); len(got) != 1 || got[0].Summary == first.Summary {
+		t.Fatalf("still due after the first came up: %v", got)
 	}
 	d.dismissPopup()
 	d.popupTick(now.Add(time.Second))
 	second := d.popupUp()
 	if second == nil || second.Summary == first.Summary {
 		t.Fatalf("after the first, %v", second)
+	}
+	// Both have come up: neither is due again, even after a restart.
+	if got := duePopups(events, now, config.Get().Calendar, popupShownNow()); len(got) != 0 {
+		t.Errorf("popped up again: %v", got)
 	}
 }
 

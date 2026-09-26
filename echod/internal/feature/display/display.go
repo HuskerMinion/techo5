@@ -1457,6 +1457,7 @@ func (d *Display) frame() time.Duration {
 		if !lit {
 			return time.Minute
 		}
+		on = lit // the night may have just turned the panel back on: this frame is its first
 	}
 	if !config.Get().Screen.Welcomed {
 		d.r.welcome(scene{now: now})

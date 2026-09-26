@@ -101,15 +101,17 @@ func (d *Display) popupTick(now time.Time) {
 		events = append(events, more...)
 	}
 
+	// Due and not yet shown; an event already waiting its turn, or up now, is not queued twice. An event
+	// counts as shown - and is saved as shown - only once it comes up, so a restart while it waits loses
+	// nothing.
+	due := duePopups(events, now, c, popupShownNow())
 	d.mu.Lock()
-	shown := popupShownNow()
-	due := duePopups(events, now, c, shown)
 	for _, e := range due {
-		shown[popupKey(e)] = true
+		k := popupKey(e)
+		if (d.popup != nil && popupKey(*d.popup) == k) || slices.ContainsFunc(d.popupQueue, func(q hass.Event) bool { return popupKey(q) == k }) {
+			continue
+		}
 		d.popupQueue = append(d.popupQueue, e)
-	}
-	if len(due) > 0 {
-		keepPopupShown(shown, now)
 	}
 	if d.popup != nil && d.popup.AllDay && slices.ContainsFunc(d.popupQueue, func(e hass.Event) bool { return !e.AllDay }) {
 		d.popup = nil
@@ -150,6 +152,12 @@ func (d *Display) popupTick(now time.Time) {
 	}
 	night := inNight(config.Get().Screen.Night, now)
 	d.mu.Unlock()
+
+	// Saved after the lock is let go: writing the config waits on the flash, and every frame, touch and
+	// turn waits on the lock.
+	shown := popupShownNow()
+	shown[popupKey(e)] = true
+	keepPopupShown(shown, now)
 
 	slog.Info("calendar: pop-up", "event", e.Summary, "starts", e.Start.Format(time.Kitchen), "night", night)
 	component.Fire.Emit(component.Event{Name: CalendarEvent, Data: map[string]string{
