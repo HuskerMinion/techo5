@@ -143,7 +143,7 @@ func (r *renderer) radarPage(s scene) {
 	draw.Draw(r.dst, r.dst.Bounds(), f.Image, image.Point{}, draw.Src)
 
 	// The weather alerts' shapes, under everything written over the map.
-	alertShapes(r.dst, v, s.alerts.Near, image.Point{}, 1)
+	alertShapes(r.dst, v, s.alerts.Near, image.Point{}, 1, nil)
 	pillY := r.margin + r.s(42) + r.s(10)
 	pills, _ := r.alertPills(s.alerts.Here, r.margin, pillY)
 

@@ -16,8 +16,11 @@ import (
 // nearby are a faint line, so the map shows what is coming without shouting about it.
 
 // alertShapes draws v's nearby alerts onto dst, whose picture is the rain map moved by off and scaled
-// by scale (1 on the Show; the Spot crops and may scale).
-func alertShapes(dst *image.RGBA, radar home.RadarView, alerts []home.Alert, off image.Point, scale float64) {
+// by scale (1 on the Show; the Spot crops and may scale). inside, when not nil, is the part of dst
+// that shows the map (the Spot's circle): nothing is drawn outside it.
+func alertShapes(dst *image.RGBA, radar home.RadarView, alerts []home.Alert, off image.Point, scale float64,
+	inside func(x, y int) bool) {
+	pen := pen{dst, inside}
 	project := func(ring [][2]float64) []image.Point {
 		pts := make([]image.Point, 0, len(ring))
 		for _, p := range ring {
@@ -37,18 +40,18 @@ func alertShapes(dst *image.RGBA, radar home.RadarView, alerts []home.Alert, off
 			switch {
 			case pass == 0 && !a.Here:
 				for _, r := range rings {
-					strokeRing(dst, r, withAlpha(a.Color, 110), 1)
+					pen.stroke(r, withAlpha(a.Color, 110), 1)
 				}
 			case pass == 1 && a.Here && !a.Storm:
-				fillRings(dst, rings, a.Color, 0.16)
+				pen.fill(rings, a.Color, 0.16)
 			case pass == 2 && a.Here:
 				w := 2.0
 				if a.Storm {
 					w = 3
 				}
 				for _, r := range rings {
-					strokeRing(dst, r, color.RGBA{0, 0, 0, 170}, w+2)
-					strokeRing(dst, r, a.Color, w)
+					pen.stroke(r, color.RGBA{0, 0, 0, 170}, w+2)
+					pen.stroke(r, a.Color, w)
 				}
 			}
 		}
@@ -57,9 +60,25 @@ func alertShapes(dst *image.RGBA, radar home.RadarView, alerts []home.Alert, off
 
 func withAlpha(c color.RGBA, a uint8) color.RGBA { c.A = a; return c }
 
-// blendAt mixes c into dst's pixel at x, y by c's alpha times k.
-func blendAt(dst *image.RGBA, x, y int, c color.RGBA, k float64) {
-	if !(image.Point{x, y}.In(dst.Rect)) {
+// pen draws onto dst, only where inside allows (everywhere when it is nil).
+type pen struct {
+	dst    *image.RGBA
+	inside func(x, y int) bool
+}
+
+// strokeRing and fillRings draw with a pen that may go anywhere on dst.
+func strokeRing(dst *image.RGBA, pts []image.Point, c color.RGBA, w float64) {
+	pen{dst, nil}.stroke(pts, c, w)
+}
+
+func fillRings(dst *image.RGBA, rings [][]image.Point, c color.RGBA, k float64) {
+	pen{dst, nil}.fill(rings, c, k)
+}
+
+// blend mixes c into the pixel at x, y by c's alpha times k.
+func (p pen) blend(x, y int, c color.RGBA, k float64) {
+	dst := p.dst
+	if !(image.Point{x, y}.In(dst.Rect)) || p.inside != nil && !p.inside(x, y) {
 		return
 	}
 	a := float64(c.A) / 255 * k
@@ -67,14 +86,15 @@ func blendAt(dst *image.RGBA, x, y int, c color.RGBA, k float64) {
 		return
 	}
 	i := dst.PixOffset(x, y)
-	p := dst.Pix[i : i+3 : i+3]
-	p[0] = uint8(float64(p[0])*(1-a) + float64(c.R)*a)
-	p[1] = uint8(float64(p[1])*(1-a) + float64(c.G)*a)
-	p[2] = uint8(float64(p[2])*(1-a) + float64(c.B)*a)
+	px := dst.Pix[i : i+3 : i+3]
+	px[0] = uint8(float64(px[0])*(1-a) + float64(c.R)*a)
+	px[1] = uint8(float64(px[1])*(1-a) + float64(c.G)*a)
+	px[2] = uint8(float64(px[2])*(1-a) + float64(c.B)*a)
 }
 
-// strokeRing draws a closed line through pts, w pixels wide, with soft edges.
-func strokeRing(dst *image.RGBA, pts []image.Point, c color.RGBA, w float64) {
+// stroke draws a closed line through pts, w pixels wide, with soft edges.
+func (p pen) stroke(pts []image.Point, c color.RGBA, w float64) {
+	dst := p.dst
 	if len(pts) < 2 {
 		return
 	}
@@ -92,7 +112,7 @@ func strokeRing(dst *image.RGBA, pts []image.Point, c color.RGBA, w float64) {
 			for x := minX; x <= maxX; x++ {
 				d := distToSegment(float64(x), float64(y), a, b)
 				if k := r + 0.5 - d; k > 0 {
-					blendAt(dst, x, y, c, math.Min(k, 1))
+					p.blend(x, y, c, math.Min(k, 1))
 				}
 			}
 		}
@@ -114,10 +134,10 @@ func distToSegment(x, y float64, a, b image.Point) float64 {
 	return math.Hypot(x-(ax+t*dx), y-(ay+t*dy))
 }
 
-// fillRings tints the inside of rings, taken together (even-odd), so neighboring zones of one alert
-// are one even tint rather than darker where they meet.
-func fillRings(dst *image.RGBA, rings [][]image.Point, c color.RGBA, k float64) {
-	b := dst.Rect
+// fill tints the inside of rings, taken together (even-odd), so neighboring zones of one alert are
+// one even tint rather than darker where they meet.
+func (pn pen) fill(rings [][]image.Point, c color.RGBA, k float64) {
+	b := pn.dst.Rect
 	var xs []float64
 	for y := b.Min.Y; y < b.Max.Y; y++ {
 		fy := float64(y) + 0.5
@@ -135,7 +155,7 @@ func fillRings(dst *image.RGBA, rings [][]image.Point, c color.RGBA, k float64) 
 		for i := 0; i+1 < len(xs); i += 2 {
 			x0, x1 := max(int(math.Ceil(xs[i]-0.5)), b.Min.X), min(int(math.Floor(xs[i+1]-0.5)), b.Max.X-1)
 			for x := x0; x <= x1; x++ {
-				blendAt(dst, x, y, c, k)
+				pn.blend(x, y, c, k)
 			}
 		}
 	}
@@ -147,4 +167,16 @@ func inkOn(c color.RGBA) color.RGBA {
 		return color.RGBA{20, 20, 20, 255}
 	}
 	return color.RGBA{255, 255, 255, 255}
+}
+
+// itoa is a count as the pages write it.
+func itoa(n int) string {
+	if n <= 0 {
+		return "0"
+	}
+	var b []byte
+	for ; n > 0; n /= 10 {
+		b = append([]byte{byte('0' + n%10)}, b...)
+	}
+	return string(b)
 }

@@ -161,6 +161,13 @@ type roundScene struct {
 	reminderFrom   string
 	reminderScroll int
 
+	// alerts are the weather alerts at home and nearby (the clock's pill, the rain map's pill and
+	// shapes); showAlert is the alert face, on alertIdx of them, scrolled alertScroll lines.
+	alerts      home.AlertView
+	showAlert   bool
+	alertIdx    int
+	alertScroll int
+
 	// setupAsking is a browser waiting to be let into the setup page, said on the face so that a
 	// request for a press is never something only the browser knows about.
 	setupAsking bool
@@ -184,6 +191,8 @@ type roundRenderer struct {
 
 	// reminderMax is how far a reminder's words could scroll in the frame last drawn; under zmu.
 	reminderMax int
+	// alertPillAt is where an alert pill was drawn in the frame last drawn, for a tap; under zmu.
+	alertPillAt image.Rectangle
 }
 
 func newRoundRenderer(dst *image.RGBA) *roundRenderer {
@@ -252,6 +261,10 @@ func (r *roundRenderer) draw(s roundScene) {
 	}
 	if s.showAnnouncement {
 		r.announceFace(s)
+		return
+	}
+	if s.showAlert {
+		r.alertFace(s)
 		return
 	}
 	if s.sheetOpen {
@@ -339,6 +352,7 @@ func (r *roundRenderer) rim(s roundScene) {
 
 func (r *roundRenderer) clockFace(s roundScene) {
 	now := s.now
+	r.alertPill(s.alerts.Here, clockPillY)
 	r.timeLine(now, 240)
 	r.centered(r.small, now.Format("Monday, January 2"), 290, colDim)
 

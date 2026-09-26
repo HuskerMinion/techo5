@@ -376,33 +376,37 @@ func (r *roundRenderer) radarFace(s roundScene) {
 	f := v.Frames[i]
 	r.coverCircle(f.Image, false)
 
+	// Placed as coverCircle placed the map: scaled to cover, centered.
+	sw, sh := f.Image.Bounds().Dx(), f.Image.Bounds().Dy()
+	scale := math.Max(float64(side)/float64(sw), float64(side)/float64(sh))
+	offX, offY := (float64(sw)-float64(side)/scale)/2, (float64(sh)-float64(side)/scale)/2
+	lim := float64(rimIn - 6)
+	inCircle := func(x, y int) bool { return math.Hypot(float64(x)-center, float64(y)-center) <= lim }
+	alertShapes(r.dst, v, s.alerts.Near, image.Pt(int(offX), int(offY)), scale, inCircle)
+
 	// Home: the frame is centered on it, and the circle crops round the middle.
 	r.ringAt(center, center, 6, 10, 0, 2*math.Pi, color.RGBA{0, 0, 0, 200})
 	r.ringAt(center, center, 7, 9, 0, 2*math.Pi, colRadar)
 
-	// The towns inside the circle, placed as coverCircle placed the map: scaled to cover, centered.
-	sw, sh := f.Image.Bounds().Dx(), f.Image.Bounds().Dy()
-	scale := math.Max(float64(side)/float64(sw), float64(side)/float64(sh))
-	offX, offY := (float64(sw)-float64(side)/scale)/2, (float64(sh)-float64(side)/scale)/2
+	// The towns inside the circle.
 	places := make([]home.RadarPlace, 0, len(v.Places))
 	for _, p := range v.Places {
 		p.At = image.Pt(int((float64(p.At.X)-offX)*scale), int((float64(p.At.Y)-offY)*scale))
 		places = append(places, p)
 	}
-	inCircle := func(b image.Rectangle) bool {
-		lim := float64(rimIn - 6)
+	boxIn := func(b image.Rectangle) bool {
 		for _, c := range []image.Point{b.Min, {b.Max.X, b.Min.Y}, {b.Min.X, b.Max.Y}, b.Max} {
-			if math.Hypot(float64(c.X)-center, float64(c.Y)-center) > lim {
+			if !inCircle(c.X, c.Y) {
 				return false
 			}
 		}
 		return true
 	}
 	keep := []image.Rectangle{
-		image.Rect(0, 40, side, 84), image.Rect(0, 404, side, 436),
+		image.Rect(0, 40, side, 84), image.Rect(0, 404, side, 436), image.Rect(0, radarPillY-4, side, radarPillY+36),
 		image.Rect(int(center)-14, int(center)-14, int(center)+14, int(center)+14),
 	}
-	drawPlaces(r.dst, r.small, places, keep, inCircle, 6)
+	drawPlaces(r.dst, r.small, places, keep, boxIn, 6)
 
 	label := "Radar " + clockHM(f.At.Local())
 	if i == n-1 {
@@ -411,8 +415,10 @@ func (r *roundRenderer) radarFace(s roundScene) {
 	w := r.width(r.label, label)
 	r.line(float64(center-w/2-10), 62, float64(center+w/2+10), 62, 32, color.RGBA{0, 0, 0, 160})
 	r.centered(r.label, label, 69, colText)
-	credit := v.Short
-	cw := r.width(r.tiny, credit)
-	r.line(float64(center-cw/2-8), 420, float64(center+cw/2+8), 420, 24, color.RGBA{0, 0, 0, 160})
-	r.centered(r.tiny, credit, 425, colDim)
+	r.alertPill(s.alerts.Here, radarPillY)
+	if credit := v.Short; credit != "" {
+		cw := r.width(r.tiny, credit)
+		r.line(float64(center-cw/2-8), 420, float64(center+cw/2+8), 420, 24, color.RGBA{0, 0, 0, 160})
+		r.centered(r.tiny, credit, 425, colDim)
+	}
 }

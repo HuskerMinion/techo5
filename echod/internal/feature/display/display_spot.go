@@ -166,6 +166,12 @@ type Display struct {
 	sheetAt   time.Time // the last touch on it, for closing it when left alone
 	sheetCtl
 
+	// The alert face (alerts_spot.go): up until alertUntil, on alertIdx of the alerts at home,
+	// scrolled alertScroll lines.
+	alertUntil  time.Time
+	alertIdx    int
+	alertScroll int
+
 	// reminderID is the reminder on the face, so a new one starts at the top; reminderScroll how far
 	// its words are dragged up, and the drag's own start while a finger is on it.
 	reminderID         string
@@ -521,6 +527,11 @@ func (d *Display) gesture(g touch.Gesture) {
 		d.wake()
 		return
 	}
+	// The alert face takes every gesture while it is up.
+	if d.alertUpSpot() {
+		d.alertGestureSpot(g)
+		return
+	}
 	d.mu.Lock()
 	sheet := d.sheetOpen
 	d.mu.Unlock()
@@ -589,6 +600,14 @@ func (d *Display) gesture(g touch.Gesture) {
 		}
 		d.mu.Unlock()
 		if call {
+			d.wake()
+			return
+		}
+		// The clock's alert pill opens the alert rather than starting a turn.
+		if d.r != nil && d.r.alertPillTapped(g.X, g.Y) && len(home.Get().Alerts().Here) > 0 {
+			d.mu.Lock()
+			d.openAlertSpot(0)
+			d.mu.Unlock()
 			d.wake()
 			return
 		}
@@ -677,7 +696,12 @@ func (d *Display) menuGesture(g touch.Gesture) {
 	case mode == modeWeather:
 		switch g.Kind {
 		case touch.Tap:
-			d.closeMenu()
+			// The alert pill over the rain map opens the alert; anywhere else closes the face.
+			if d.radar && d.r != nil && d.r.alertPillTapped(g.X, g.Y) && len(home.Get().Alerts().Here) > 0 {
+				d.openAlertSpot(0)
+			} else {
+				d.closeMenu()
+			}
 		case touch.SwipeLeft, touch.SwipeRight:
 			d.radar = !d.radar
 			d.weatherUntil = time.Now().Add(weatherIdle)
@@ -1158,6 +1182,7 @@ func (d *Display) frame() time.Duration {
 	d.mu.Lock()
 	s.reminderScroll = d.reminderScroll
 	d.mu.Unlock()
+	d.alertSceneSpot(&s, now)
 	s.missed = missedNote(now, true)
 
 	if boring {
