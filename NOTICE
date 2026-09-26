@@ -126,6 +126,18 @@ Linux kernel, https://git.kernel.org (GPL-2.0)
     - The script that does all of it is tools/linux/build-kernel.sh, and docs/building.md is how to
       run it. A rebuild reproduces the shipped kernel.
 
+Town names, echod/internal/feature/home/places.tsv.gz
+  From GeoNames (https://www.geonames.org/), the cities5000 and cities15000 lists, licensed under
+  the Creative Commons Attribution 4.0 License (https://creativecommons.org/licenses/by/4.0/).
+  Changes: reduced to places of 15,000 people or more, and of 5,000 or more in the U.S. and Canada;
+  each kept as its name (in Latin letters where the screen's font has no others), latitude,
+  longitude and population. The rain map credits GeoNames on screen.
+
+Radar color tables, echod/internal/feature/home/radar_palettes.go
+  The colors RainViewer's API documentation publishes for each radar reflectivity
+  (https://www.rainviewer.com/files/rainviewer_api_colors_table.csv), and the palette of the Iowa
+  Environmental Mesonet's national composite, used to read their tiles back into reflectivity.
+
 Test audio, echod/internal/lib/denoise/testdata (not shipped in any release)
   Made by testdata/gen.py and this project's own: espeak-ng speech mixed with generated noise. The
   out_ files are the output of mmse_log_spu.py from

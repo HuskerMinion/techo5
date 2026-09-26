@@ -29,8 +29,14 @@ Android, with one Go daemon, `echod`, doing everything the device does:
   Home Assistant has none, the first weather entity it lists; any other
   weather entity is chosen on the settings screen (General, Weather), with the "Weather source"
   select, or with the `home_weather` action, and stays chosen. The forecast page (after a weather
-  question, or Show beside Weather) has a Radar button: RainViewer's radar over an OpenStreetMap map centered on
-  Home Assistant's home zone, the last hour as a loop. "Show the radar" asks for it directly.
+  question, or Show beside Weather) has a Radar button: the rain map centered on Home Assistant's home
+  zone, the last hour as a loop, over NASA's Blue Marble with a GOES satellite's clouds and the towns
+  named. The radar comes from the National Weather Service in the lower 48 and RainViewer anywhere
+  else; the "Radar source" setting (settings screen, or the `radar_source` select) can pick either
+  always. "Show the radar" asks for it directly.
+- **Weather alerts** (U.S.): the National Weather Service's alerts in force at home put a badge on the
+  clock (a pill on the Spot) and pills over the rain map, with the alerts' storm polygons and counties
+  outlined on it; a tap opens the alert's whole text, swiped sideways to the next.
 - **Radio**: the drawer's Radio side lists the stations, with a choice of list at the top. Favorites are the stations wired with
   `home_radio` (Home Assistant `input_select` lists played through a script). With a Home Assistant
   token, Local stations (within 100 km of home) and Popular worldwide come from Home Assistant's
