@@ -341,7 +341,7 @@ func (f *Feature) want(h config.Home) {
 func (f *Feature) Actions() []*esphome.Action {
 	actions := append(f.cameraActions(), f.accessAction())
 	if hasScreen {
-		actions = append(actions, f.slideshowAction())
+		actions = append(actions, f.slideshowAction(), f.calendarAction())
 	}
 	return append(actions, []*esphome.Action{
 		{

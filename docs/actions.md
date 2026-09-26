@@ -686,6 +686,28 @@ data:
   seconds: 60
 ```
 
+## Choose the calendars shown
+
+In YAML, refer to this action as `esphome.<node>_calendar_sources`.
+
+Chooses which of Home Assistant's calendars this device shows, for its calendar page and event
+pop-ups. Each device keeps its own: one on a desk can show its owner's calendar, one in a kitchen the
+family's. Screen devices only. The calendars come from whatever Home Assistant connects to - Google
+Calendar, iCloud through CalDAV, an Outlook calendar through Microsoft 365 or a published link, its
+own Local Calendar - so no calendar password is ever on a device. Needs `home_assistant` set up first.
+
+### calendars (Required)
+
+*string*
+
+Calendar entities, separated by commas, in the order to show them. Empty shows no calendar.
+
+```yaml
+action: esphome.office_calendar_sources
+data:
+  calendars: calendar.family, calendar.work
+```
+
 ## Set the night hours
 
 In YAML, refer to this action as `esphome.<node>_screen_night_hours`.
