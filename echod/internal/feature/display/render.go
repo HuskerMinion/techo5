@@ -180,6 +180,9 @@ type scene struct {
 type renderer struct {
 	paint // the canvas, its size, and the settings screen's tap zones
 
+	// flip is the night's flip clock: what its cards show, and a flip under way.
+	flip flipState
+
 	// weatherKept is the forecast page as last drawn, and weatherKey what it showed: while the sky
 	// moves the page is drawn twelve times a second, and the page itself changes once a minute.
 	weatherKept []byte

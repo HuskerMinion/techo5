@@ -6,6 +6,7 @@ import (
 	"image"
 	"image/color"
 	"image/draw"
+	"math"
 	"strings"
 	"time"
 
@@ -174,45 +175,174 @@ func (r *renderer) hexSegment(x0, y0, x1, y1, t int, c color.Color) {
 	})
 }
 
-// flipClock draws the time as a flip clock does: hours and minutes on two cards, each split across its
-// middle, with tall narrow digits.
+// flipClock draws the time as a flip clock does, across the whole screen: a card for each digit, the
+// hours and the minutes apart, and on a 12-hour clock a smaller card for AM or PM at the end. A 12-hour
+// clock leaves the first card blank before ten. A card whose figure has just changed flips to it: the
+// old top leaf folds down over the split, and its back comes down with the new figure's lower half.
 func (r *renderer) flipClock(now time.Time) {
-	hm := strings.SplitN(clockHM(now), ":", 2)
+	digits := clockDigits(now)
 	ampm := clockSuffix(now)
-	ch := r.h * 66 / 100
-	cw := ch * 88 / 100
-	space := r.s(30)
-	x := (r.w - 2*cw - space) / 2
-	top := (r.h-ch)/2 - r.s(10)
-	mid := top + ch/2
-	k := r.s(18)
-	for i, part := range hm {
-		card := image.Rect(x, top, x+cw, top+ch)
-		// The lower leaf, then the upper over it; each is rounded all round, which leaves the small
-		// notches at the split that a real card has.
-		r.roundRect(card, k, flipLower)
-		r.roundRect(image.Rect(card.Min.X, card.Min.Y, card.Max.X, mid), k, flipTop)
-		r.flipDigits(part, image.Rect(card.Min.X, card.Min.Y+ch*12/100, card.Max.X, card.Max.Y-ch*12/100))
-		// The split, and the hinges that stand out from the card's sides.
-		r.fillRect(image.Rect(card.Min.X, mid-r.s(2), card.Max.X, mid+r.s(2)), flipSplit)
-		hw, hh := r.s(8), r.s(26)
-		r.roundRect(image.Rect(card.Min.X-hw, mid-hh/2, card.Min.X+r.s(2), mid+hh/2), r.s(3), flipHinge)
-		r.roundRect(image.Rect(card.Max.X-r.s(2), mid-hh/2, card.Max.X+hw, mid+hh/2), r.s(3), flipHinge)
-		if i == 0 && ampm != "" {
-			aw := r.width(r.small, ampm)
-			r.text(r.small, ampm, card.Min.X+(cw-aw)/2, card.Max.Y+r.s(40), flipInk)
+	var texts [5]string
+	for i, dg := range digits {
+		if dg >= 0 {
+			texts[i] = string(rune('0' + dg))
 		}
-		x += cw + space
+	}
+	texts[4] = ampm
+	r.flip.update(texts, now)
+
+	gap, apart := r.s(14), r.s(44) // between the cards of a pair, and between the pairs
+	avail := r.w * 94 / 100
+	// Card widths: four digits, and on a 12-hour clock the smaller, skinnier AM/PM card.
+	units, gaps := 4.0, 2*gap+apart
+	if ampm != "" {
+		units, gaps = 4.62, 2*gap+2*apart
+	}
+	w := int(float64(avail-gaps) / units)
+	h := min(w*16/10, r.h*72/100)
+	x := (r.w - (int(units*float64(w)) + gaps)) / 2
+	top := (r.h - h) / 2
+	for i := range digits {
+		r.flipCard(image.Rect(x, top, x+w, top+h), i, 12, now)
+		x += w
+		switch i {
+		case 1:
+			x += apart
+		case 0, 2:
+			x += gap
+		}
+	}
+	if ampm != "" {
+		// Smaller: three fifths the width of a digit card and a little over half its height, on the
+		// same split line.
+		aw, ah := w*62/100, h*56/100
+		at := top + (h-ah)/2
+		x += apart
+		r.flipCard(image.Rect(x, at, x+aw, at+ah), 4, 22, now)
 	}
 }
 
-// flipDigits draws s in box the way flip-clock numbers look: each digit on its own, in equal slots as
-// on a flip clock's leaves, the clock face's bold figures stretched tall and narrow to fill the box's
-// height. Zero is the face's round capital O, stretched to the oval a flip clock has, since the face's
-// own zero carries a slash.
+// flipFor is how long a card takes to flip.
+const flipFor = 560 * time.Millisecond
+
+// flipState is what each of the five cards shows, and the flip under way on those that just changed.
+type flipState struct {
+	shown, from [5]string
+	at          time.Time // when the cards last changed
+	drawn       time.Time // when the flip clock was last drawn
+}
+
+// update takes the cards' new texts. A card that changed flips from what it showed, unless the flip
+// clock has not been on the screen a moment ago: coming back to it, the cards are simply as they are.
+func (f *flipState) update(texts [5]string, now time.Time) {
+	fresh := f.drawn.IsZero() || now.Sub(f.drawn) > 3*time.Second
+	f.drawn = now
+	if texts == f.shown {
+		return
+	}
+	if fresh {
+		f.shown, f.from, f.at = texts, texts, time.Time{}
+		return
+	}
+	f.from, f.shown, f.at = f.shown, texts, now
+}
+
+// busy is whether a card is flipping, and the clock wants frames quickly.
+func (f *flipState) busy(now time.Time) bool {
+	return !f.at.IsZero() && now.Sub(f.at) < flipFor && now.Sub(f.drawn) < time.Second
+}
+
+// flipBusy is whether the flip clock is in the middle of a flip.
+func (r *renderer) flipBusy(now time.Time) bool { return r.flip.busy(now) }
+
+// flipCard draws card i: settled, or part way through its flip.
+func (r *renderer) flipCard(card image.Rectangle, i, inset int, now time.Time) {
+	shown, from := r.flip.shown[i], r.flip.from[i]
+	p := 1.0
+	if !r.flip.at.IsZero() {
+		p = min(float64(now.Sub(r.flip.at))/float64(flipFor), 1)
+	}
+	if from == shown || p >= 1 {
+		r.flipFace(card, shown, inset)
+	} else {
+		r.flipTurning(card, from, shown, inset, p)
+	}
+	mid := card.Min.Y + card.Dy()/2
+	r.fillRect(image.Rect(card.Min.X, mid-r.s(2), card.Max.X, mid+r.s(2)), flipSplit)
+	hw, hh := r.s(6), card.Dy()/9
+	r.roundRect(image.Rect(card.Min.X-hw, mid-hh/2, card.Min.X+r.s(2), mid+hh/2), r.s(3), flipHinge)
+	r.roundRect(image.Rect(card.Max.X-r.s(2), mid-hh/2, card.Max.X+hw, mid+hh/2), r.s(3), flipHinge)
+}
+
+// flipFace draws a card's two leaves and text on them, set in from the top and bottom by inset percent
+// of its height. Empty text is a blank card.
+func (r *renderer) flipFace(card image.Rectangle, text string, inset int) {
+	mid := card.Min.Y + card.Dy()/2
+	k := card.Dx() / 9
+	// The lower leaf, then the upper over it; each is rounded all round, which leaves the small
+	// notches at the split that a real card has.
+	r.roundRect(card, k, flipLower)
+	r.roundRect(image.Rect(card.Min.X, card.Min.Y, card.Max.X, mid), k, flipTop)
+	if text != "" {
+		in := card.Dy() * inset / 100
+		r.flipDigits(text, image.Rect(card.Min.X, card.Min.Y+in, card.Max.X, card.Max.Y-in))
+	}
+}
+
+// flipTurning draws a card p of the way through flipping from one text to the next. Behind the moving
+// leaf, the new text's top is already there above the split and the old text's bottom still below it.
+// In the first half the old top leaf folds down toward the split, darkening as it turns away; in the
+// second its back, which carries the new text's lower half, comes down over the old bottom.
+func (r *renderer) flipTurning(card image.Rectangle, from, to string, inset int, p float64) {
+	old := r.offscreen(card, func() { r.flipFace(card, from, inset) })
+	next := r.offscreen(card, func() { r.flipFace(card, to, inset) })
+	mid := card.Min.Y + card.Dy()/2
+	upper := image.Rect(card.Min.X, card.Min.Y, card.Max.X, mid)
+	lower := image.Rect(card.Min.X, mid, card.Max.X, card.Max.Y)
+	draw.Draw(r.dst, upper, next, upper.Min, draw.Over)
+	draw.Draw(r.dst, lower, old, lower.Min, draw.Over)
+	if p < 0.5 {
+		fold := math.Cos(p * math.Pi) // 1 standing up, 0 edge on
+		leaf := image.Rect(upper.Min.X, mid-int(fold*float64(upper.Dy())), upper.Max.X, mid)
+		if !leaf.Empty() {
+			xdraw.BiLinear.Scale(r.dst, leaf, old, upper, xdraw.Over, nil)
+			r.shade(leaf, 1-fold)
+		}
+		return
+	}
+	fold := -math.Cos(p * math.Pi) // 0 edge on, 1 lying flat on the lower leaf
+	leaf := image.Rect(lower.Min.X, mid, lower.Max.X, mid+int(fold*float64(lower.Dy())))
+	if !leaf.Empty() {
+		xdraw.BiLinear.Scale(r.dst, leaf, next, lower, xdraw.Over, nil)
+		r.shade(leaf, 1-fold)
+	}
+}
+
+// shade darkens b by a fraction up to three quarters: a leaf turned away from the light.
+func (r *renderer) shade(b image.Rectangle, by float64) {
+	a := uint8(math.Round(min(max(by, 0), 1) * 190))
+	draw.Draw(r.dst, b, image.NewUniform(color.RGBA{0, 0, 0, a}), image.Point{}, draw.Over)
+}
+
+// offscreen is what paint draws, drawn on black into a picture of just b, not onto the screen.
+func (r *renderer) offscreen(b image.Rectangle, paint func()) *image.RGBA {
+	img := image.NewRGBA(b)
+	draw.Draw(img, b, image.NewUniform(color.Black), image.Point{}, draw.Src)
+	screen := r.dst
+	r.dst = img
+	paint()
+	r.dst = screen
+	return img
+}
+
+// flipDigits draws s in box the way flip-clock figures look: each character in its own equal share of
+// the box, the clock face's bold figures stretched tall and narrow to fill the box's height. Zero is
+// the face's round capital O, stretched to the oval a flip clock has, since the face's own zero
+// carries a slash.
 func (r *renderer) flipDigits(s string, box image.Rectangle) {
-	slot := box.Dx() * 42 / 100
-	x := box.Min.X + (box.Dx()-slot*len(s))/2
+	n := len(s)
+	slot := box.Dx() * 84 / 100 / n
+	x := box.Min.X + (box.Dx()-slot*n)/2
 	for _, c := range s {
 		if c == '0' {
 			c = 'O'
@@ -233,9 +363,9 @@ func (r *renderer) flipGlyph(c rune, box image.Rectangle) {
 	(&font.Drawer{Dst: glyph, Src: image.NewUniform(flipInk), Face: r.clock,
 		Dot: fixed.Point26_6{X: -b.Min.X, Y: -b.Min.Y}}).DrawString(string(c))
 	h := box.Dy()
-	w := min(gw*h/gh*72/100, box.Dx()*88/100) // tall and narrow, as a flip clock's figures are
+	w := min(gw*h/gh*72/100, box.Dx()*92/100) // tall and narrow, as a flip clock's figures are
 	if c == '1' {
-		w = min(w, box.Dx()*46/100) // a one keeps its own slimness
+		w = min(w, box.Dx()*50/100) // a one keeps its own slimness
 	}
 	x := box.Min.X + (box.Dx()-w)/2
 	xdraw.BiLinear.Scale(r.dst, image.Rect(x, box.Min.Y, x+w, box.Max.Y), glyph, glyph.Bounds(), xdraw.Over, nil)

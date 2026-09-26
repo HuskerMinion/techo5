@@ -68,7 +68,10 @@ const (
 
 	// idleFrame and activeFrame are how often the screen is redrawn: once a second for a clock, and
 	// fast enough for the listening indicator to breathe and the volume to follow a finger.
-	idleFrame   = time.Second
+	idleFrame = time.Second
+
+	// flipFrame is how often the night's flip clock is drawn while a card is flipping.
+	flipFrame   = 33 * time.Millisecond
 	activeFrame = 150 * time.Millisecond
 
 	// floor is the dimmest an "on" backlight goes; below it the panel reads as off.
@@ -1580,6 +1583,9 @@ func (d *Display) frame() time.Duration {
 	}
 	d.answerShots()
 
+	if s.redClock && s.redStyle == nightStyleFlip && d.r.flipBusy(time.Now()) {
+		return flipFrame // a card is flipping
+	}
 	if s.showCamera {
 		return 250 * time.Millisecond // frames arrive as they are fetched; this keeps up
 	}

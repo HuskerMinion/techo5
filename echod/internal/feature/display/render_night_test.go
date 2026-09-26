@@ -61,3 +61,30 @@ func TestClockDigits(t *testing.T) {
 		t.Error("segment table")
 	}
 }
+
+// A card that changes flips for a moment and then settles; coming back to the flip clock after a while
+// away does not flip every card at once.
+func TestFlipCardsFlipOnce(t *testing.T) {
+	var f flipState
+	t0 := time.Date(2026, 9, 26, 12, 59, 59, 0, time.Local)
+	a := [5]string{"1", "2", "5", "9", "PM"}
+	b := [5]string{"", "1", "0", "0", "PM"}
+	f.update(a, t0)
+	if f.busy(t0) {
+		t.Fatal("the first look flipped")
+	}
+	t1 := t0.Add(time.Second)
+	f.update(b, t1)
+	if !f.busy(t1.Add(100*time.Millisecond)) || f.from != a || f.shown != b {
+		t.Fatalf("no flip on a change: %+v", f)
+	}
+	if f.busy(t1.Add(flipFor)) {
+		t.Error("still flipping after flipFor")
+	}
+	// Away for a minute, then back to different cards: no flip.
+	t2 := t1.Add(time.Minute)
+	f.update(a, t2)
+	if f.busy(t2) {
+		t.Error("coming back flipped every card")
+	}
+}
