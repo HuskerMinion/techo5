@@ -199,7 +199,9 @@ func (r *renderer) flipClock(now time.Time) {
 		units, gaps = 4.62, 2*gap+2*apart
 	}
 	w := int(float64(avail-gaps) / units)
-	h := min(w*16/10, r.h*72/100)
+	// As tall as the screen allows, up to about twice as tall as wide: taller than that, the figures
+	// stop looking like a flip clock's and start looking stretched.
+	h := min(w*21/10, r.h*90/100)
 	x := (r.w - (int(units*float64(w)) + gaps)) / 2
 	top := (r.h - h) / 2
 	for i := range digits {
@@ -218,7 +220,7 @@ func (r *renderer) flipClock(now time.Time) {
 		aw, ah := w*62/100, h*56/100
 		at := top + (h-ah)/2
 		x += apart
-		r.flipCard(image.Rect(x, at, x+aw, at+ah), 4, 22, now)
+		r.flipCard(image.Rect(x, at, x+aw, at+ah), 4, 30, now) // the letters shorter, so not pinched
 	}
 }
 
