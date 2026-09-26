@@ -176,9 +176,16 @@ func (r *renderer) radarPage(s scene) {
 	r.cornerClock(s)
 	r.drawAlertPills(s.alerts.Here, r.margin, pillY)
 
-	credit := v.Credit
+	credit := clipText(r, r.tiny, v.Credit, r.w-2*r.margin)
 	shade(image.Rect(0, r.h-r.s(34), r.w, r.h))
 	r.text(r.tiny, credit, r.margin, r.h-r.s(10), dim)
+	if v.Note != "" {
+		// Why the source is not the one chosen: a line of its own over the credits, clear of the button.
+		room := r.weatherButton().Min.X - r.s(12) - r.margin
+		note := clipText(r, r.tiny, v.Note, room)
+		shade(image.Rect(0, r.h-r.s(62), r.margin+r.width(r.tiny, note)+r.s(10), r.h-r.s(34)))
+		r.text(r.tiny, note, r.margin, r.h-r.s(40), amber)
+	}
 	r.weatherToggle("Forecast")
 }
 

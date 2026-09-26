@@ -267,7 +267,8 @@ func (r *roundRenderer) draw(s roundScene) {
 		r.announceFace(s)
 		return
 	}
-	if s.showAlert {
+	// Under a camera: one shown by Home Assistant (a doorbell) comes up over an alert already up.
+	if s.showAlert && !s.showCamera {
 		r.alertFace(s)
 		return
 	}

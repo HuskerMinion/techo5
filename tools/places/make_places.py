@@ -7,34 +7,52 @@ country between cities is emptier. Each is kept as its name, latitude and longit
 degree, and population, largest first, one tab-separated line each, gzipped.
 
 A name the screen's font (Go Regular) cannot draw is given in its Latin spelling, GeoNames' asciiname:
-the name is composed first (a letter and a separate accent become one character), and anything outside
-Latin (to Latin Extended-A), Greek or Cyrillic counts as not drawable. home/radar_places_test.go checks
-every name against the font itself.
+the name is composed first (a letter and a separate accent become one character), and then each of its
+characters is looked up in the font's own character map. home/radar_places_test.go checks every name
+against the font too.
 
-    python3 tools/places/make_places.py [cities5000.zip]
+Needs fontTools (pip install fonttools) and Go-Regular.ttf, found in Go's module cache
+(golang.org/x/image/font/gofont/ttfs) or given with --font.
+
+    python3 tools/places/make_places.py [--font Go-Regular.ttf] [cities5000.zip]
 """
+import glob
 import gzip
 import io
 import os
+import subprocess
 import sys
 import unicodedata
 import urllib.request
 import zipfile
 
+from fontTools.ttLib import TTFont
+
 URL = "https://download.geonames.org/export/dump/cities5000.zip"
 OUT = os.path.join(os.path.dirname(__file__), "..", "..", "echod", "internal", "feature", "home", "places.tsv.gz")
 
 
-def drawable(ch):
-    o = ord(ch)
-    return (0x20 <= o < 0x7F or 0xA0 <= o < 0x180  # Latin, Latin-1, Latin Extended-A
-            or 0x384 <= o < 0x3D0                  # Greek
-            or 0x400 <= o < 0x460)                 # Cyrillic
+def go_regular():
+    """The path of Go-Regular.ttf in Go's module cache, the newest x/image there."""
+    cache = subprocess.run(["go", "env", "GOMODCACHE"], capture_output=True, text=True, check=True).stdout.strip()
+    found = sorted(glob.glob(os.path.join(cache, "golang.org", "x", "image@*", "font", "gofont", "ttfs", "Go-Regular.ttf")))
+    if not found:
+        sys.exit("Go-Regular.ttf not in Go's module cache: run 'go mod download golang.org/x/image' in echod, or pass --font")
+    return found[-1]
 
 
 def main():
-    if len(sys.argv) > 1:
-        data = open(sys.argv[1], "rb").read()
+    args = sys.argv[1:]
+    font = None
+    if args[:1] == ["--font"]:
+        font, args = args[1], args[2:]
+    glyphs = set(TTFont(font or go_regular()).getBestCmap())
+
+    def drawable(ch):
+        return ord(ch) in glyphs
+
+    if args:
+        data = open(args[0], "rb").read()
     else:
         req = urllib.request.Request(URL, headers={"User-Agent": "TECHO5 (https://github.com/HuskerMinion/techo5)"})
         data = urllib.request.urlopen(req, timeout=120).read()

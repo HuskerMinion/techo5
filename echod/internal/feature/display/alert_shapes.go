@@ -35,6 +35,7 @@ type alertOverlay struct {
 func alertShapes(dst *image.RGBA, radar home.RadarView, alerts []home.Alert, off image.Point, scale float64,
 	inside func(x, y int) bool, cache *alertOverlay) {
 	if len(alerts) == 0 {
+		*cache = alertOverlay{} // nothing to keep it for: it is the page's size, 4 MB on a Show 8
 		return
 	}
 	var key strings.Builder
@@ -227,6 +228,16 @@ func alertWhen(a home.Alert, now time.Time) string {
 		return "Until " + at(a.Ends)
 	}
 	return "In force"
+}
+
+// otherKinds is how many kinds of alert there are at home besides the first's: the "+N" beside it on
+// the badge and the Spot's pill, counted as the pills group them, so two Wind Advisories are one.
+func otherKinds(here []home.Alert) int {
+	seen := map[string]bool{}
+	for _, a := range here {
+		seen[a.Event] = true
+	}
+	return max(len(seen)-1, 0)
 }
 
 // itoa is a count as the pages write it.

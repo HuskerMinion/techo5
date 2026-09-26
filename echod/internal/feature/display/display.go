@@ -730,7 +730,6 @@ func (d *Display) gesture(g touch.Gesture) {
 		return
 	}
 
-	// The calendar page takes its own taps and swipes while it is up.
 	// The alert page takes its own taps and swipes while it is up; it is drawn over the calendar, so it
 	// is asked first.
 	if d.alertUp() {

@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -154,6 +155,29 @@ func TestTheNWSFramesStepBackFromTheNewest(t *testing.T) {
 	}
 	if frames[0].key == newest.key {
 		t.Error("two frames kept under one key")
+	}
+}
+
+// A composite off the five-minute marks (12:17) never asks for a layer IEM does not have, like m07m.
+func TestTheNWSFramesOffTheMarks(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		fmt.Fprint(w, `{"meta": {"product": "N0Q", "valid": "2026-09-26T12:17:00Z"}}`)
+	}))
+	defer srv.Close()
+	defer func(n string) { iemNow = n }(iemNow)
+	iemNow = srv.URL
+	frames, err := nws.frames(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, f := range frames {
+		tile := f.tile(8, 1, 2)
+		if i := strings.Index(tile, "-m"); i >= 0 {
+			var back int
+			if _, err := fmt.Sscanf(tile[i:], "-m%02dm", &back); err != nil || back%5 != 0 {
+				t.Errorf("frame %v asks for %s", f.at, tile)
+			}
+		}
 	}
 }
 

@@ -238,8 +238,8 @@ func (r *renderer) alertBadge(s scene) {
 	}
 	a := here[0]
 	more := ""
-	if len(here) > 1 {
-		more = "  +" + itoa(len(here)-1)
+	if n := otherKinds(here); n > 0 {
+		more = "  +" + itoa(n)
 	}
 	h, mark := r.s(40), r.s(30)
 	right := r.w - r.margin

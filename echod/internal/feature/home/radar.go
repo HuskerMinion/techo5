@@ -74,6 +74,7 @@ type RadarView struct {
 	Home    image.Point // where home is on the picture
 	Credit  string      // where the radar, the clouds and the map came from, for the page to show
 	Short   string      // the same in a few words, for the Spot's round face
+	Note    string      // why the source shown is not the one chosen, or ""
 	Places  []RadarPlace
 	Origin  image.Point // the picture's top left, in world pixels at the map's zoom
 }
@@ -285,7 +286,7 @@ func (f *Feature) buildRadarAt(lat, lon float64) error {
 	r.mu.Lock()
 	r.base, r.lat, r.lon, r.source = base, lat, lon, src.name
 	r.view.Home = image.Pt(radarW/2, radarH/2)
-	r.view.Credit, r.view.Short = radarCredit(src, note, lon), src.name+" · NASA"
+	r.view.Credit, r.view.Short, r.view.Note = radarCredit(src, lon), src.name+" · NASA", note
 	r.view.Places = placesIn(x0, y0, radarW, radarH)
 	r.view.Origin = image.Pt(x0, y0)
 	r.mu.Unlock()

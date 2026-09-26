@@ -429,6 +429,7 @@ func (d *Display) changed(s voice.State) {
 	if newHeard {
 		if entity := home.Get().MatchCamera(s.Heard); entity != "" {
 			d.weatherArmed, d.quiet = false, true
+			d.closeAlert()
 			if d.menuOpen {
 				d.closeMenu()
 			}
@@ -439,6 +440,7 @@ func (d *Display) changed(s voice.State) {
 			// now-playing face.
 			d.weatherArmed, d.quiet, d.radar, d.radioCue = false, true, false, time.Time{}
 			d.dash = false
+			d.closeAlert()
 			if d.menuOpen {
 				d.closeMenu()
 			}
@@ -452,6 +454,7 @@ func (d *Display) changed(s voice.State) {
 		if !d.menuOpen || d.menuMode == modeWeather {
 			d.openMenu(modeWeather, "")
 			d.weatherUntil = time.Now().Add(weatherShow)
+			d.closeAlert() // the forecast or the rain map asked for comes up over an alert
 		}
 	}
 	d.mu.Unlock()

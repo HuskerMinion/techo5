@@ -174,7 +174,14 @@ func TestNoForecastPointIsRemembered(t *testing.T) {
 	if points != 1 || alerts != 0 {
 		t.Errorf("asked /points %d times and for alerts %d, want once and never", points, alerts)
 	}
-	if _, err := f.buildAlertsAt(48.90, -97.2); err != nil || points != 2 {
+	// A while later it is asked again, in case the 404 was the NWS's and not the place's.
+	f.alerts.mu.Lock()
+	f.alerts.outside = time.Now().Add(-time.Second)
+	f.alerts.mu.Unlock()
+	if _, err := f.buildAlertsAt(48.95, -97.2); err != nil || points != 2 {
+		t.Errorf("after the wait, /points asked %d times, want twice (err %v)", points, err)
+	}
+	if _, err := f.buildAlertsAt(48.90, -97.2); err != nil || points != 3 {
 		t.Errorf("after home moved, /points asked %d times, want again (err %v)", points, err)
 	}
 }

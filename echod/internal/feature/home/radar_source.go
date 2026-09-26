@@ -55,7 +55,7 @@ func radarSourceFor(lat, lon float64) (src radarSource, note string) {
 		if inLower48(lat, lon) {
 			return nws, ""
 		}
-		return rainViewer, "the NWS covers the lower 48 only"
+		return rainViewer, "Showing RainViewer: the NWS covers the lower 48 only"
 	}
 	if inLower48(lat, lon) && countryMayBeUS() {
 		return nws, ""
@@ -160,11 +160,14 @@ var nws = radarSource{
 		// marks, so the frames are the same ones from one refresh to the next and only the newest is
 		// fetched. The newest composite is five minutes past a mark half the time: the mark before it
 		// is then the newest frame, five minutes older than it could be.
-		newest := now.Meta.Valid.Truncate(10 * time.Minute)
+		// Valid is on a five-minute mark; were it ever not, back is taken from the mark before it, so no
+		// frame asks for a layer IEM does not have (m07m).
+		valid := now.Meta.Valid.Truncate(5 * time.Minute)
+		newest := valid.Truncate(10 * time.Minute)
 		out := make([]sourceFrame, 0, radarFrames)
 		for i := radarFrames - 1; i >= 0; i-- {
 			at := newest.Add(-time.Duration(i*10) * time.Minute)
-			back := int(now.Meta.Valid.Sub(at) / time.Minute)
+			back := int(valid.Sub(at) / time.Minute)
 			layer := "nexrad-n0q-900913"
 			if back > 0 {
 				layer += fmt.Sprintf("-m%02dm", back)
@@ -177,15 +180,13 @@ var nws = radarSource{
 	},
 }
 
-// radarCredit is the page's credit line for a source, with the map and, where they are, the clouds,
-// and the note when the source is not the one chosen.
-func radarCredit(src radarSource, note string, lon float64) string {
+// radarCredit is the page's credit line for a source, with the map and, where they are, the clouds.
+// A note on the source goes on its own line (RadarView.Note): here it pushed the credits off the page.
+// The widest of these must fit a Show 5's page (display's TestRadarCreditFits).
+func radarCredit(src radarSource, lon float64) string {
 	s := "Radar " + src.name
-	if note != "" {
-		s += " (" + note + ")"
-	}
 	if cloudLayer(lon) != "" {
-		s += "  ·  Clouds NOAA GOES"
+		s += " · Clouds NOAA"
 	}
-	return s + "  ·  Map NASA  ·  Places GeoNames"
+	return s + " · Map NASA · Places GeoNames"
 }

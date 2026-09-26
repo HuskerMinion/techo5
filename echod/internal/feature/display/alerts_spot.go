@@ -31,6 +31,10 @@ var (
 	radarPillY = 88
 )
 
+// closeAlert takes the alert face down: what somebody asked for since comes up in its place. Called
+// with d.mu held.
+func (d *Display) closeAlert() { d.alertUntil = time.Time{} }
+
 // openAlertSpot puts alert i of those at home on the face. Called with d.mu held.
 func (d *Display) openAlertSpot(i int) {
 	d.alertUntil, d.alertIdx, d.alertScroll = time.Now().Add(alertShowSpot), i, 0
@@ -39,9 +43,13 @@ func (d *Display) openAlertSpot(i int) {
 	}
 }
 
-// alertUpSpot is whether the alert face is showing: the same test alertSceneSpot draws it by.
+// alertUpSpot is whether the alert face is showing: the same test alertSceneSpot draws it by, and not
+// under a camera, which is drawn over it and takes the taps.
 func (d *Display) alertUpSpot() bool {
 	here := len(home.Get().Alerts().Here)
+	if _, camera := home.Get().Camera(); camera {
+		return false
+	}
 	d.mu.Lock()
 	defer d.mu.Unlock()
 	return time.Now().Before(d.alertUntil) && here > 0 && d.view.Phase == "idle"
@@ -119,8 +127,8 @@ func (r *roundRenderer) alertPill(here []home.Alert, y int) {
 	a := here[0]
 	// The pill is narrow on a round face: "T-Storm" is how the NWS itself shortens it on its maps.
 	label := strings.Replace(a.Event, "Thunderstorm", "T-Storm", 1)
-	if len(here) > 1 {
-		label += " +" + itoa(len(here)-1)
+	if n := otherKinds(here); n > 0 {
+		label += " +" + itoa(n)
 	}
 	mark := 22
 	label = clip(r.label, r, label, 330-mark)

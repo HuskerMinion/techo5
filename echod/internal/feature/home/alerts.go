@@ -71,7 +71,9 @@ type alertState struct {
 	lat     float64
 	lon     float64
 	state   string // home's state, from the NWS, for asking about it and its neighbors
-	outside bool   // the NWS said it has no forecast point here (a 404): not asked again until home moves
+	// outside is until when the NWS is not asked again, after it said it has no forecast point here (a
+	// 404): until home moves, or a few hours, in case the 404 was the NWS's mistake and not the place.
+	outside time.Time
 	zones   map[string][][][2]float64
 }
 
@@ -125,25 +127,23 @@ func (v AlertView) without(now time.Time) AlertView {
 	return AlertView{Here: keep(v.Here), Near: keep(v.Near)}
 }
 
+var errAlertPanic = errors.New("reading the alerts failed")
+
+// noPointFor is how long a 404 from the NWS's /points keeps it from being asked again.
+const noPointFor = 6 * time.Hour
+
 func (f *Feature) fetchAlerts() {
 	a := &f.alerts
-	// Whatever an alert's text holds, a mistake in reading it must not take the daemon down with it:
-	// the NWS keeps an alert up for hours, and a crash would come back after every restart.
-	defer func() {
-		if p := recover(); p != nil {
-			slog.Error("alerts: reading them failed", "panic", p)
-			a.mu.Lock()
-			a.busy, a.fetched = false, time.Now()
-			a.mu.Unlock()
-		}
-	}()
-	v, err := f.buildAlerts()
+	v, err := f.readAlerts()
 	a.mu.Lock()
 	a.busy, a.fetched = false, time.Now()
-	if err != nil {
+	switch {
+	case errors.Is(err, errAlertPanic):
+		// Logged where it was caught, and tried after the usual wait: sooner, it would only come again.
+	case err != nil:
 		slog.Debug("alerts: fetch", "err", err)
 		a.fetched = time.Now().Add(-alertsEvery + 45*time.Second) // sooner than a good fetch would
-	} else {
+	default:
 		changed := !sameAlerts(a.view, v)
 		a.view = v
 		if changed {
@@ -152,6 +152,19 @@ func (f *Feature) fetchAlerts() {
 	}
 	a.mu.Unlock()
 	f.Changed.Emit(struct{}{})
+}
+
+// readAlerts is buildAlerts, a panic in it made an error. Whatever an alert's text holds, a mistake
+// in reading it must not take the daemon down with it: the NWS keeps an alert up for hours, and a
+// crash would come back after every restart. It recovers outside a.mu, so no lock is left held.
+func (f *Feature) readAlerts() (v AlertView, err error) {
+	defer func() {
+		if p := recover(); p != nil {
+			slog.Error("alerts: reading them failed", "panic", p)
+			v, err = AlertView{}, fmt.Errorf("%w: %v", errAlertPanic, p)
+		}
+	}()
+	return f.buildAlerts()
 }
 
 func (f *Feature) buildAlerts() (AlertView, error) {
@@ -172,9 +185,9 @@ func (f *Feature) buildAlertsAt(lat, lon float64) (AlertView, error) {
 	a := &f.alerts
 	a.mu.Lock()
 	if a.lat != lat || a.lon != lon {
-		a.lat, a.lon, a.state, a.outside = lat, lon, "", false
+		a.lat, a.lon, a.state, a.outside = lat, lon, "", time.Time{}
 	}
-	st, outside := a.state, a.outside
+	st, outside := a.state, time.Now().Before(a.outside)
 	a.mu.Unlock()
 	if outside {
 		return AlertView{}, nil
@@ -193,9 +206,9 @@ func (f *Feature) buildAlertsAt(lat, lon float64) (AlertView, error) {
 		}
 		if err := getJSON(ctx, nwsAPI+"/points/"+at, &pt); err != nil {
 			if errors.Is(err, errNotFound) {
-				slog.Info("alerts: the NWS has no forecast point here; not asking again until home moves")
+				slog.Info("alerts: the NWS has no forecast point here; asking again in a while", "after", noPointFor)
 				a.mu.Lock()
-				a.outside = true
+				a.outside = time.Now().Add(noPointFor)
 				a.mu.Unlock()
 				return AlertView{}, nil
 			}
