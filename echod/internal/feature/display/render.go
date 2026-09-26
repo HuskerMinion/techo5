@@ -211,6 +211,8 @@ type renderer struct {
 	badgeAt  image.Rectangle
 	pillsAt  []image.Rectangle
 	pillsIdx []int
+	alertMax int             // how far the alert page could scroll in the frame last drawn
+	shapes   alertOverlay    // the alert shapes drawn over the rain map, kept while they stay the same
 	dateAt   image.Rectangle // the date under the clock, the same way: a tap there opens the calendar
 	popupAt  image.Rectangle // an event's pop-up, the same way: a tap on it takes it down
 
@@ -324,6 +326,7 @@ func (r *renderer) draw(s scene) {
 	r.setWeatherAt(image.Rectangle{})
 	r.setDateAt(image.Rectangle{})
 	r.setPopupAt(image.Rectangle{})
+	r.clearAlertTaps()
 	// The red night clock is the whole screen: nothing else, not even the header, is drawn over it.
 	// Anything that needs somebody - a call, an alarm, a turn - has already lifted the night light,
 	// and this with it.

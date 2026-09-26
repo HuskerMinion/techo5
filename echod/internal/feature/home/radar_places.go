@@ -67,7 +67,7 @@ func placesIn(x0, y0, w, h int) []RadarPlace {
 	var out []RadarPlace
 	for _, p := range loadPlaces() {
 		x, y := worldPixel(p.lat, p.lon, mapZoom)
-		at := image.Pt(int(x)-x0, int(y)-y0)
+		at := image.Pt(wrapX(x, x0, w), int(y)-y0)
 		if at.X < 0 || at.Y < 0 || at.X >= w || at.Y >= h {
 			continue
 		}

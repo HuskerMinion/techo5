@@ -82,8 +82,9 @@ type Feature struct {
 	weatherSel *esphome.Select
 	radarSel   *esphome.Select // where the rain map's radar comes from (radar_setting.go)
 
-	// alerts are the NWS's weather alerts at home and nearby (alerts.go).
+	// alerts are the NWS's weather alerts at home and nearby (alerts.go); alertsSw turns them on and off.
 	alerts     alertState
+	alertsSw   *esphome.Switch
 	weathers   []hass.Entity
 	weathersAt time.Time
 
@@ -193,6 +194,7 @@ func Get() *Feature {
 		shared = &Feature{poke: make(chan struct{}, 1), metaPoke: make(chan struct{}, 1)}
 		shared.buildWeatherSelect()
 		shared.buildRadarSelect()
+		shared.buildAlertsSwitch()
 		shared.buildSlideshowSelect()
 		hastate.Get().Changed.Listen(func(hastate.Update) { shared.Changed.Emit(struct{}{}) })
 		media.Get().OnPlay.Listen(shared.played)
@@ -309,6 +311,7 @@ func (f *Feature) Restore(c config.Config) {
 	f.weatherSel.Options = weatherOptions(c.Home)
 	f.weatherSel.Set(chosenOption(c.Home))
 	f.radarSel.Set(radarChoices[RadarSourceIndex()].label)
+	f.alertsSw.Set(!c.Home.AlertsOff)
 	if hasScreen {
 		f.slideshowSel.Set(slideshowLabelFor(c.Home.Slideshow.Mode))
 		f.slideshowOverlaySel.Set(slideshowOverlayLabelFor(c.Home.Slideshow.Overlay))

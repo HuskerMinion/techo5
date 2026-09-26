@@ -145,14 +145,25 @@ func TestShowScenesDraw(t *testing.T) {
 
 	// Weather alerts: the clock's badge, the page, a long one scrolled, and the pills over the rain map.
 	wind := home.Alert{ID: "a", Event: "Wind Advisory", Severity: "Moderate", Sender: "NWS Omaha/Valley NE",
-		Area: "Douglas; Sarpy; Cass", Expires: at.Add(20 * time.Hour), Color: home.AlertColor("Wind Advisory", ""), Here: true,
+		Area: "Douglas; Sarpy; Cass", Ends: at.Add(20 * time.Hour), Color: home.AlertColor("Wind Advisory", ""), Here: true,
 		Description: "What: North winds 15 to 25 mph with gusts up to 45 mph.\nWhere: Douglas, Sarpy and Cass counties.\nWhen: Until 6 AM Sunday.\nImpacts: Gusty winds will blow around unsecured objects.",
 		Instruction: "Winds this strong can make driving difficult. Secure outdoor objects."}
 	storm := home.Alert{ID: "b", Event: "Severe Thunderstorm Warning", Severity: "Severe", Sender: "NWS Omaha/Valley NE",
-		Area: "Douglas", Expires: at.Add(40 * time.Minute), Color: home.AlertColor("Severe Thunderstorm Warning", ""), Here: true, Storm: true,
+		Area: "Douglas", Ends: at.Add(40 * time.Minute), Color: home.AlertColor("Severe Thunderstorm Warning", ""), Here: true, Storm: true,
 		Description: "At 2:05 PM, a severe thunderstorm was located near Elkhorn, moving east at 30 mph.", Instruction: "Move to an interior room."}
 	alerts := home.AlertView{Here: []home.Alert{storm, wind}, Near: []home.Alert{storm, wind}}
 	scenes["clock-alert"] = scene{now: at, phase: "idle", weather: sky, alerts: alerts}
+	scenes["clock-alert-muted"] = scene{now: at, phase: "idle", weather: sky, alerts: alerts, muted: true}
+	later := wind
+	later.ID, later.Onset, later.Ends = "c", at.Add(26*time.Hour), at.Add(40*time.Hour)
+	scenes["alert-page-later"] = scene{now: at, phase: "idle", showAlert: true, alerts: home.AlertView{Here: []home.Alert{later}}}
+	many := home.AlertView{Here: []home.Alert{storm, wind,
+		{ID: "d", Event: "Flood Watch", Color: home.AlertColor("Flood Watch", ""), Here: true},
+		{ID: "e", Event: "Heat Advisory", Color: home.AlertColor("Heat Advisory", ""), Here: true},
+		{ID: "f", Event: "Air Quality Alert", Color: home.AlertColor("Air Quality Alert", ""), Here: true}}}
+	scenes["radar-alerts-many"] = scene{now: at, phase: "idle", showWeather: true, showRadar: true, alerts: many,
+		radar: home.RadarView{Frames: []home.RadarFrame{{Image: image.NewRGBA(image.Rect(0, 0, showWide, showHigh)), At: at}},
+			Home: image.Pt(showWide/2, showHigh/2)}}
 	scenes["alert-page"] = scene{now: at, phase: "idle", showAlert: true, alerts: alerts}
 	scenes["alert-page-2"] = scene{now: at, phase: "idle", showAlert: true, alertIdx: 1, alertScroll: 3, alerts: alerts}
 	scenes["radar-alerts"] = scene{now: at, phase: "idle", showWeather: true, showRadar: true, alerts: alerts,

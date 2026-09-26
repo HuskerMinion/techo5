@@ -382,7 +382,7 @@ func (r *roundRenderer) radarFace(s roundScene) {
 	offX, offY := (float64(sw)-float64(side)/scale)/2, (float64(sh)-float64(side)/scale)/2
 	lim := float64(rimIn - 6)
 	inCircle := func(x, y int) bool { return math.Hypot(float64(x)-center, float64(y)-center) <= lim }
-	alertShapes(r.dst, v, s.alerts.Near, image.Pt(int(offX), int(offY)), scale, inCircle)
+	alertShapes(r.dst, v, s.alerts.Near, image.Pt(int(offX), int(offY)), scale, inCircle, &r.shapes)
 
 	// Home: the frame is centered on it, and the circle crops round the middle.
 	r.ringAt(center, center, 6, 10, 0, 2*math.Pi, color.RGBA{0, 0, 0, 200})

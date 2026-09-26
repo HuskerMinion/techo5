@@ -498,6 +498,7 @@ func (d *Display) changed(s voice.State) {
 		if aboutGoingHome(s.Heard) {
 			d.weatherArmed, d.weatherUntil = false, time.Time{}
 			d.calUntil, d.calDetail = time.Time{}, nil
+			d.closeAlert()
 			d.sheet, d.quiet = false, true
 			d.dash = false
 			go home.Get().HideCamera()
@@ -730,14 +731,15 @@ func (d *Display) gesture(g touch.Gesture) {
 	}
 
 	// The calendar page takes its own taps and swipes while it is up.
-	if d.calendarUp() {
-		d.calendarGesture(g)
+	// The alert page takes its own taps and swipes while it is up; it is drawn over the calendar, so it
+	// is asked first.
+	if d.alertUp() {
+		d.alertGesture(g)
 		d.wake()
 		return
 	}
-	// So does the alert page.
-	if d.alertUp() {
-		d.alertGesture(g)
+	if d.calendarUp() {
+		d.calendarGesture(g)
 		d.wake()
 		return
 	}
@@ -1024,6 +1026,7 @@ func (d *Display) ShowWeather(radar bool) {
 	d.mu.Lock()
 	d.weatherUntil, d.radar, d.sheet = time.Now().Add(weatherShow), radar, false
 	d.calUntil, d.calDetail = time.Time{}, nil // the forecast comes up over the calendar, not under it
+	d.closeAlert()                             // and over an alert
 	d.mu.Unlock()
 	d.wake()
 }

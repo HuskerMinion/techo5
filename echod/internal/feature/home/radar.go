@@ -78,10 +78,20 @@ type RadarView struct {
 	Origin  image.Point // the picture's top left, in world pixels at the map's zoom
 }
 
-// Pixel is where a longitude and latitude fall on the picture.
+// Pixel is where a longitude and latitude fall on the picture, the world wrapped around at the
+// dateline so a place just across it lands beside home rather than a world's width away.
 func (v RadarView) Pixel(lon, lat float64) image.Point {
 	x, y := worldPixel(lat, lon, mapZoom)
-	return image.Pt(int(math.Round(x))-v.Origin.X, int(math.Round(y))-v.Origin.Y)
+	return image.Pt(wrapX(x, v.Origin.X, radarW), int(math.Round(y))-v.Origin.Y)
+}
+
+// wrapX is world x at the map's zoom as a column of a picture w wide whose left edge is x0: the copy of
+// it nearest the picture's middle, the world being a loop.
+func wrapX(x float64, x0, w int) int {
+	world := float64(tileSize) * math.Pow(2, mapZoom)
+	d := x - float64(x0) - float64(w)/2
+	d -= world * math.Round(d/world)
+	return int(math.Round(d + float64(w)/2))
 }
 
 // RadarPlace is a town on the picture, for the page to name where there is room: largest first.
@@ -99,6 +109,7 @@ type radarState struct {
 	lat, lon float64
 	base     *image.RGBA // the tinted map, for lat/lon
 	source   string      // the source the frames in made came from
+	gen      int         // bumped when the source setting changes; a fetch begun before it is stale
 
 	// made are the frames already drawn, by their source's key for them, for the frames still current.
 	made map[string]RadarFrame
@@ -176,9 +187,15 @@ func (f *Feature) Radar() RadarView {
 
 func (f *Feature) fetchRadar() {
 	r := &f.radar
+	r.mu.Lock()
+	gen := r.gen
+	r.mu.Unlock()
 	err := f.buildRadar()
 	r.mu.Lock()
 	r.busy, r.fetched = false, time.Now()
+	if r.gen != gen {
+		r.fetched = time.Time{} // the source changed while this fetch ran: fetch again at once
+	}
 	if err != nil {
 		slog.Warn("radar: fetch", "err", err)
 		r.view.Problem = err.Error()
@@ -241,7 +258,7 @@ func (f *Feature) buildRadarAt(lat, lon float64) error {
 	cx, cy := worldPixel(lat, lon, mapZoom)
 	x0, y0 := int(cx)-radarW/2, int(cy)-radarH/2
 
-	src := radarSourceFor(lat, lon)
+	src, note := radarSourceFor(lat, lon)
 	r := &f.radar
 	r.mu.Lock()
 	base := r.base
@@ -268,21 +285,29 @@ func (f *Feature) buildRadarAt(lat, lon float64) error {
 	r.mu.Lock()
 	r.base, r.lat, r.lon, r.source = base, lat, lon, src.name
 	r.view.Home = image.Pt(radarW/2, radarH/2)
-	r.view.Credit, r.view.Short = radarCredit(src, lon), src.name+" · NASA"
+	r.view.Credit, r.view.Short = radarCredit(src, note, lon), src.name+" · NASA"
 	r.view.Places = placesIn(x0, y0, radarW, radarH)
 	r.view.Origin = image.Pt(x0, y0)
 	r.mu.Unlock()
 
-	// The clouds change slowly next to the rain, so one picture of them sits under every frame; the map
-	// alone does if the satellite cannot be reached.
-	ground := image.NewRGBA(base.Bounds())
-	draw.Draw(ground, ground.Bounds(), base, image.Point{}, draw.Src)
-	if err := clouds(ctx, ground, lon, x0, y0); err != nil {
-		slog.Debug("radar: clouds", "err", err)
-		draw.Draw(ground, ground.Bounds(), base, image.Point{}, draw.Src)
-	}
+	// The clouds change slowly next to the rain, so one picture of them sits under every frame. They
+	// are fetched while the frames are listed, and given three seconds: the map alone is under the rain
+	// if the satellite is slow or cannot be reached, rather than the rain waiting for it.
+	grounded := make(chan *image.RGBA, 1)
+	go func() {
+		cctx, cancel := context.WithTimeout(ctx, 3*time.Second)
+		defer cancel()
+		g := image.NewRGBA(base.Bounds())
+		draw.Draw(g, g.Bounds(), base, image.Point{}, draw.Src)
+		if err := clouds(cctx, g, lon, x0, y0); err != nil {
+			slog.Debug("radar: clouds", "err", err)
+			draw.Draw(g, g.Bounds(), base, image.Point{}, draw.Src)
+		}
+		grounded <- g
+	}()
 
 	past, err := src.frames(ctx)
+	ground := <-grounded
 	if err != nil {
 		return err
 	}
@@ -451,10 +476,14 @@ func floorDiv(a, b int) int {
 	return q
 }
 
-func get(ctx context.Context, url string) ([]byte, error) { return getAccept(ctx, url, "") }
+func get(ctx context.Context, url string) ([]byte, error) { return getLimit(ctx, url, "", 4<<20) }
 
-// getAccept is get asking for a type: the NWS's API answers in the one it is asked for.
-func getAccept(ctx context.Context, url, accept string) ([]byte, error) {
+// errNotFound is a 404: the NWS's answer for a place it has no forecast point for.
+var errNotFound = errors.New("not found")
+
+// getLimit is get asking for a type (the NWS's API answers in the one it is asked for) and reading up
+// to limit bytes; an answer longer than that is an error rather than a cut-off one.
+func getLimit(ctx context.Context, url, accept string, limit int64) ([]byte, error) {
 	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
 	if err != nil {
 		return nil, err
@@ -468,8 +497,15 @@ func getAccept(ctx context.Context, url, accept string) ([]byte, error) {
 		return nil, err
 	}
 	defer resp.Body.Close()
+	if resp.StatusCode == http.StatusNotFound {
+		return nil, fmt.Errorf("%s: %w", url, errNotFound)
+	}
 	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("%s: %s", url, resp.Status)
 	}
-	return io.ReadAll(io.LimitReader(resp.Body, 4<<20))
+	b, err := io.ReadAll(io.LimitReader(resp.Body, limit+1))
+	if err == nil && int64(len(b)) > limit {
+		return nil, fmt.Errorf("%s: longer than %d bytes", url, limit)
+	}
+	return b, err
 }

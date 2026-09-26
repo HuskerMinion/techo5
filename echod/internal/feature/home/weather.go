@@ -41,7 +41,7 @@ func (f *Feature) buildWeatherSelect() {
 // with a screen to show them on.
 func (f *Feature) Entities() []esphome.Entity {
 	if hasScreen {
-		return []esphome.Entity{f.weatherSel, f.radarSel, f.slideshowSel, f.slideshowOverlaySel, f.slideshowIdleNum,
+		return []esphome.Entity{f.weatherSel, f.radarSel, f.alertsSw, f.slideshowSel, f.slideshowOverlaySel, f.slideshowIdleNum,
 			f.slideshowEveryNum, f.slideshowShuffleSw, f.slideshowSubfoldersSw, f.slideshowFolderTxt}
 	}
 	return []esphome.Entity{f.weatherSel}

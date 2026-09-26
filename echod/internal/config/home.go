@@ -44,6 +44,10 @@ type Home struct {
 	// Service's national composite, lower 48 only), RadarRainViewer (worldwide), or empty for
 	// automatic, which is the NWS when home is in the lower 48 and RainViewer anywhere else.
 	RadarSource string `json:"radar_source,omitempty"`
+
+	// AlertsOff turns the National Weather Service's alerts off (they are on for a device with a
+	// screen in the U.S.): no badge, no pills, no fetching.
+	AlertsOff bool `json:"alerts_off,omitempty"`
 }
 
 // Slideshow is how the idle screen's photo slideshow is wired: a Home Assistant media source to
@@ -195,6 +199,10 @@ func (w HomeWriter) DoNotDisturb(v bool) error {
 
 func (w HomeWriter) WeatherSources(ids []string) error {
 	return w.st.Update(func(c *Config) { c.Home.WeatherSources = ids })
+}
+
+func (w HomeWriter) AlertsOff(v bool) error {
+	return w.st.Update(func(c *Config) { c.Home.AlertsOff = v })
 }
 
 func (w HomeWriter) RadarSource(source string) error {

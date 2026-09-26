@@ -73,6 +73,7 @@ func (f *Feature) SetRadarSource(i int) {
 	r := &f.radar
 	r.mu.Lock()
 	r.fetched = time.Time{}
+	r.gen++
 	r.mu.Unlock()
 	f.Changed.Emit(struct{}{})
 }

@@ -78,7 +78,7 @@ func TestAlertsLive(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, a := range v.Here {
-		t.Logf("HERE %s (%s) until %s, %d rings", a.Event, a.Severity, a.Expires.Local().Format(time.Kitchen), len(a.Rings))
+		t.Logf("HERE %s (%s) until %s, %d rings", a.Event, a.Severity, a.Ends.Local().Format(time.Kitchen), len(a.Rings))
 	}
 	t.Logf("%d nearby", len(v.Near))
 	b, _ := json.Marshal(v)

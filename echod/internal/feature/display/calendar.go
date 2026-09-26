@@ -20,6 +20,7 @@ func (d *Display) OpenCalendar() bool {
 	now := time.Now()
 	d.mu.Lock()
 	d.calUntil, d.calMonth, d.calDay, d.calDetail = now.Add(calendarShow), firstOfMonth(now), time.Time{}, nil
+	d.closeAlert()
 	d.weatherUntil, d.sheet, d.dash, d.drawer = time.Time{}, false, false, false
 	d.mu.Unlock()
 	d.wake()

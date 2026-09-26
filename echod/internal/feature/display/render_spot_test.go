@@ -151,10 +151,10 @@ func TestRoundScenesDraw(t *testing.T) {
 	}
 	// Weather alerts: the clock's pill, the alert face (a second one, scrolled), the rain map's pill.
 	wind := home.Alert{ID: "a", Event: "Wind Advisory", Severity: "Moderate", Sender: "NWS Omaha/Valley NE",
-		Expires: at.Add(20 * time.Hour), Color: home.AlertColor("Wind Advisory", ""), Here: true,
+		Ends: at.Add(20 * time.Hour), Color: home.AlertColor("Wind Advisory", ""), Here: true,
 		Description: "What: North winds 15 to 25 mph with gusts up to 45 mph.\nWhere: Douglas, Sarpy and Cass counties.",
 		Instruction: "Secure outdoor objects."}
-	storm := home.Alert{ID: "b", Event: "Severe Thunderstorm Warning", Severity: "Severe", Expires: at.Add(40 * time.Minute),
+	storm := home.Alert{ID: "b", Event: "Severe Thunderstorm Warning", Severity: "Severe", Ends: at.Add(40 * time.Minute),
 		Color: home.AlertColor("Severe Thunderstorm Warning", ""), Here: true, Storm: true,
 		Description: "At 2:05 PM, a severe thunderstorm was located near Elkhorn, moving east at 30 mph.", Instruction: "Move to an interior room."}
 	alerts := home.AlertView{Here: []home.Alert{storm, wind}, Near: []home.Alert{storm, wind}}

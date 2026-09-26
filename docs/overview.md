@@ -36,7 +36,11 @@ Android, with one Go daemon, `echod`, doing everything the device does:
   always. "Show the radar" asks for it directly.
 - **Weather alerts** (U.S.): the National Weather Service's alerts in force at home put a badge on the
   clock (a pill on the Spot) and pills over the rain map, with the alerts' storm polygons and counties
-  outlined on it; a tap opens the alert's whole text, swiped sideways to the next.
+  outlined on it; a tap opens the alert's whole text, swiped sideways to the next. On unless turned off
+  ("Weather alerts" on the settings screen, or the `weather_alerts` switch). They are a convenience,
+  not an alert device: they are checked every few minutes while the screen is drawing, make no sound,
+  and a device that is off, offline or dark at night can miss one. For warnings that must wake you,
+  keep a NOAA Weather Radio or your phone's emergency alerts.
 - **Radio**: the drawer's Radio side lists the stations, with a choice of list at the top. Favorites are the stations wired with
   `home_radio` (Home Assistant `input_select` lists played through a script). With a Home Assistant
   token, Local stations (within 100 km of home) and Popular worldwide come from Home Assistant's

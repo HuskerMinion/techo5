@@ -131,7 +131,8 @@ Town names, echod/internal/feature/home/places.tsv.gz
   the Creative Commons Attribution 4.0 License (https://creativecommons.org/licenses/by/4.0/).
   Changes: reduced to places of 15,000 people or more, and of 5,000 or more in the U.S. and Canada;
   each kept as its name (in Latin letters where the screen's font has no others), latitude,
-  longitude and population. The rain map credits GeoNames on screen.
+  longitude and population. The rain map credits GeoNames on screen. tools/places/make_places.py
+  makes the file from GeoNames' download.
 
 Radar color tables, echod/internal/feature/home/radar_palettes.go
   The colors RainViewer's API documentation publishes for each radar reflectivity

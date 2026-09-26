@@ -191,8 +191,11 @@ type roundRenderer struct {
 
 	// reminderMax is how far a reminder's words could scroll in the frame last drawn; under zmu.
 	reminderMax int
-	// alertPillAt is where an alert pill was drawn in the frame last drawn, for a tap; under zmu.
+	// alertPillAt is where an alert pill was drawn in the frame last drawn, for a tap, and alertMax how
+	// far the alert face could scroll; under zmu. shapes are the alert shapes over the rain map.
 	alertPillAt image.Rectangle
+	alertMax    int
+	shapes      alertOverlay
 }
 
 func newRoundRenderer(dst *image.RGBA) *roundRenderer {
@@ -225,6 +228,7 @@ func newRoundRenderer(dst *image.RGBA) *roundRenderer {
 func (r *roundRenderer) draw(s roundScene) {
 	draw.Draw(r.dst, r.dst.Rect, image.NewUniform(colBackground), image.Point{}, draw.Src)
 	r.callDrawn = false
+	r.clearAlertTaps()
 
 	// Muted is drawn last, over whatever the face turns out to be: see mutedRim.
 	defer func() {

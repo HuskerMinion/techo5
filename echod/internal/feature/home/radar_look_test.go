@@ -90,21 +90,34 @@ func TestPaintRainOnlyWhereItRains(t *testing.T) {
 func TestTheSourceFollowsTheSettingAndHome(t *testing.T) {
 	config.Use(filepath.Join(t.TempDir(), "state.json"))
 	omaha, london := [2]float64{41.26, -95.94}, [2]float64{51.5, -0.12}
+	toronto := [2]float64{43.65, -79.38} // inside the lower 48's box
 	for _, tc := range []struct {
-		setting string
-		at      [2]float64
-		want    string
+		setting, country string
+		at               [2]float64
+		want             string
+		noted            bool
 	}{
-		{"", omaha, "NWS"}, {"", london, "RainViewer"},
-		{config.RadarRainViewer, omaha, "RainViewer"}, {config.RadarNWS, london, "NWS"},
+		{"", "", omaha, "NWS", false}, {"", "", london, "RainViewer", false},
+		{config.RadarRainViewer, "", omaha, "RainViewer", false},
+		// The NWS chosen where it has no picture: RainViewer, and the page says why.
+		{config.RadarNWS, "", london, "RainViewer", true},
+		// Home Assistant's country tells Toronto from Buffalo.
+		{"", "CA", toronto, "RainViewer", false}, {"", "US", omaha, "NWS", false},
 	} {
 		if err := config.Set().Home().RadarSource(tc.setting); err != nil {
 			t.Fatal(err)
 		}
-		if got := radarSourceFor(tc.at[0], tc.at[1]).name; got != tc.want {
-			t.Errorf("setting %q at %v: %s, want %s", tc.setting, tc.at, got, tc.want)
+		country.Lock()
+		country.code, country.asked = tc.country, time.Now()
+		country.Unlock()
+		src, note := radarSourceFor(tc.at[0], tc.at[1])
+		if src.name != tc.want || (note != "") != tc.noted {
+			t.Errorf("setting %q, country %q at %v: %s (note %q), want %s", tc.setting, tc.country, tc.at, src.name, note, tc.want)
 		}
 	}
+	country.Lock()
+	country.code, country.asked = "", time.Time{}
+	country.Unlock()
 	for lat, lon := range map[float64]float64{61.2: -149.9, 21.3: -157.9, 18.4: -66.1} { // Anchorage, Honolulu, San Juan
 		if inLower48(lat, lon) {
 			t.Errorf("%v, %v counted as the lower 48, which the NWS composite covers alone", lat, lon)
@@ -112,8 +125,9 @@ func TestTheSourceFollowsTheSettingAndHome(t *testing.T) {
 	}
 }
 
-// The NWS frames are the newest composite and the ones ten, twenty... minutes before it, oldest first,
-// each from its own layer and kept under its own time.
+// The NWS frames are on the ten-minute marks, the newest at or before the newest composite and the
+// rest ten, twenty... minutes before it, oldest first, each from the layer that many minutes back and
+// kept under its own time, so the same frame keeps its key from one refresh to the next.
 func TestTheNWSFramesStepBackFromTheNewest(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		fmt.Fprint(w, `{"meta": {"product": "N0Q", "valid": "2026-09-26T12:15:00Z"}}`)
@@ -129,13 +143,13 @@ func TestTheNWSFramesStepBackFromTheNewest(t *testing.T) {
 		t.Fatalf("%d frames, want %d", len(frames), radarFrames)
 	}
 	newest := frames[len(frames)-1]
-	if !newest.at.Equal(time.Date(2026, 9, 26, 12, 15, 0, 0, time.UTC)) || frames[0].at.After(newest.at) {
-		t.Errorf("frames run %v .. %v, want oldest first ending 12:15", frames[0].at, newest.at)
+	if !newest.at.Equal(time.Date(2026, 9, 26, 12, 10, 0, 0, time.UTC)) || frames[0].at.After(newest.at) {
+		t.Errorf("frames run %v .. %v, want oldest first ending 12:10", frames[0].at, newest.at)
 	}
-	if got := newest.tile(8, 58, 96); got != fmt.Sprintf(iemTiles, "nexrad-n0q-900913", 8, 58, 96) {
+	if got := newest.tile(8, 58, 96); got != fmt.Sprintf(iemTiles, "nexrad-n0q-900913-m05m", 8, 58, 96) {
 		t.Errorf("the newest frame's tile is %s", got)
 	}
-	if got := frames[0].tile(8, 1, 2); got != fmt.Sprintf(iemTiles, fmt.Sprintf("nexrad-n0q-900913-m%02dm", (radarFrames-1)*10), 8, 1, 2) {
+	if got := frames[0].tile(8, 1, 2); got != fmt.Sprintf(iemTiles, "nexrad-n0q-900913-m55m", 8, 1, 2) {
 		t.Errorf("the oldest frame's tile is %s", got)
 	}
 	if frames[0].key == newest.key {
@@ -149,5 +163,15 @@ func TestCloudsOnlyWhereASatelliteSees(t *testing.T) {
 		if (want == "") != (got == "") || want != "" && got[:len(want)] != want {
 			t.Errorf("clouds at %v°: %q, want %s", lon, got, want)
 		}
+	}
+}
+
+// Across the dateline: a place just over it lands beside home, not a world's width away.
+func TestMapPositionsWrapAtTheDateline(t *testing.T) {
+	x0, _ := worldPixel(52, 179.5, mapZoom) // a map around the Aleutians, just west of the dateline
+	v := RadarView{Origin: image.Pt(int(x0)-radarW/2, 0)}
+	east := v.Pixel(-179.5, 52) // a degree east, across the line
+	if east.X < radarW/2 || east.X > radarW {
+		t.Errorf("a place a degree across the dateline is at x=%d on a %d-wide map", east.X, radarW)
 	}
 }

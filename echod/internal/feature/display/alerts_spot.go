@@ -39,18 +39,20 @@ func (d *Display) openAlertSpot(i int) {
 	}
 }
 
-// alertUpSpot is whether the alert face is showing.
+// alertUpSpot is whether the alert face is showing: the same test alertSceneSpot draws it by.
 func (d *Display) alertUpSpot() bool {
+	here := len(home.Get().Alerts().Here)
 	d.mu.Lock()
 	defer d.mu.Unlock()
-	return time.Now().Before(d.alertUntil) && len(home.Get().Alerts().Here) > 0
+	return time.Now().Before(d.alertUntil) && here > 0 && d.view.Phase == "idle"
 }
 
-// alertSceneSpot fills in the alerts the faces may show, and the alert face when it is up.
+// alertSceneSpot fills in the alerts the faces may show, and the alert face when it is up. Only while
+// idle: a turn's listening rim and its answer draw over it.
 func (d *Display) alertSceneSpot(s *roundScene, now time.Time) {
 	s.alerts = home.Get().Alerts()
 	d.mu.Lock()
-	up := now.Before(d.alertUntil) && len(s.alerts.Here) > 0
+	up := now.Before(d.alertUntil) && len(s.alerts.Here) > 0 && s.phase == "idle"
 	i, scroll := d.alertIdx, d.alertScroll
 	d.mu.Unlock()
 	if up {
@@ -61,6 +63,10 @@ func (d *Display) alertSceneSpot(s *roundScene, now time.Time) {
 // alertGestureSpot is a finger on the alert face; every gesture is its.
 func (d *Display) alertGestureSpot(g touch.Gesture) {
 	n := len(home.Get().Alerts().Here)
+	limit := 0
+	if d.r != nil {
+		limit = d.r.alertScrollLimit()
+	}
 	d.mu.Lock()
 	d.alertUntil = time.Now().Add(alertShowSpot)
 	switch {
@@ -72,12 +78,27 @@ func (d *Display) alertGestureSpot(g touch.Gesture) {
 	case g.Kind == touch.SwipeRight:
 		d.alertIdx, d.alertScroll = (d.alertIdx+n-1)%n, 0
 	case g.Kind == touch.SwipeUp:
-		d.alertScroll += 2
+		d.alertScroll = min(d.alertScroll+2, limit)
 	case g.Kind == touch.SwipeDown:
-		d.alertScroll = max(d.alertScroll-2, 0)
+		d.alertScroll = max(min(d.alertScroll, limit)-2, 0)
 	}
 	d.mu.Unlock()
 	d.wake()
+}
+
+// clearAlertTaps forgets where the pill was: a face that does not draw it must not leave it
+// tappable. Called at the start of every frame.
+func (r *roundRenderer) clearAlertTaps() {
+	r.zmu.Lock()
+	r.alertPillAt = image.Rectangle{}
+	r.zmu.Unlock()
+}
+
+// alertScrollLimit is how far the alert on the face could scroll in the frame last drawn.
+func (r *roundRenderer) alertScrollLimit() int {
+	r.zmu.Lock()
+	defer r.zmu.Unlock()
+	return r.alertMax
 }
 
 // alertPillTapped reports whether a tap at x, y is on an alert pill drawn in the frame last drawn.
@@ -124,14 +145,7 @@ func (r *roundRenderer) alertFace(s roundScene) {
 	r.ringAt(center, center, rimIn-8, rimIn, 0, 2*math.Pi, a.Color)
 	r.centered(r.label, "WEATHER ALERT", 70, a.Color)
 	r.paragraph(r.title, a.Event, 112, colText, 2)
-	sub := "In force"
-	if !a.Expires.IsZero() {
-		end := a.Expires.Local()
-		sub = "Until " + clockHM(end)
-		if y, m, d := end.Date(); y != s.now.Year() || m != s.now.Month() || d != s.now.Day() {
-			sub = "Until " + end.Format("Mon") + " " + clockHM(end)
-		}
-	}
+	sub := clip(r.small, r, alertWhen(a, s.now), 360)
 	top := 176
 	if r.width(r.title, a.Event) > 360 {
 		top += 40 // the name took two lines
@@ -154,7 +168,11 @@ func (r *roundRenderer) alertFace(s roundScene) {
 		}
 	}
 	first, rows := top+34, max((392-(top+34))/alertLineH, 1)
-	scroll := min(s.alertScroll, max(len(lines)-rows, 0))
+	most := max(len(lines)-rows, 0)
+	scroll := min(s.alertScroll, most)
+	r.zmu.Lock()
+	r.alertMax = most
+	r.zmu.Unlock()
 	for i := 0; i < rows && scroll+i < len(lines); i++ {
 		l := lines[scroll+i]
 		r.centered(r.small, l.s, first+i*alertLineH+20, l.c)

@@ -95,33 +95,52 @@ var rainRamp = []rainStop{
 // paintRain smooths a w by h reflectivity field and paints it through the ramp into a picture of
 // dst's size, the field stretched to fit. Radar is blocky close up; the smoothing (a blur that only
 // counts pixels with an echo, so rain does not bleed dark into the ground) gives the soft edges.
+//
+// The blur is done on the field at its own size, before it is stretched: a quarter of the work for a
+// RainViewer field, and the same look, since stretching a blurred field smoothly is itself a blur. It
+// is then read at each of dst's pixels between its four nearest points.
 func paintRain(dst *image.RGBA, field []float32, w, h int) {
 	W, H := dst.Bounds().Dx(), dst.Bounds().Dy()
-	val := make([]float32, W*H)
-	has := make([]float32, W*H)
-	for y := 0; y < H; y++ {
-		sy := y * h / H
-		for x := 0; x < W; x++ {
-			if v := field[sy*w+x*w/W]; v > noRain+1 {
-				val[y*W+x], has[y*W+x] = v, 1
-			}
+	val := make([]float32, w*h)
+	has := make([]float32, w*h)
+	for i, v := range field {
+		if v > noRain+1 {
+			val[i], has[i] = v, 1
 		}
 	}
-	blur(val, W, H, 2.2)
-	blur(has, W, H, 2.2)
-	for i := range val {
-		if has[i] < 0.25 {
-			continue
+	// 2.2 pixels at the picture's size, whatever the field's.
+	sigma := max(2.2*float64(w)/float64(W), 0.6)
+	blur(val, w, h, sigma)
+	blur(has, w, h, sigma)
+	sx, sy := float32(w)/float32(W), float32(h)/float32(H)
+	for y := 0; y < H; y++ {
+		fy := max((float32(y)+0.5)*sy-0.5, 0)
+		y0 := min(int(fy), h-1)
+		y1, ty := min(y0+1, h-1), fy-float32(y0)
+		row := dst.Pix[y*dst.Stride:]
+		for x := 0; x < W; x++ {
+			fx := max((float32(x)+0.5)*sx-0.5, 0)
+			x0 := min(int(fx), w-1)
+			x1, tx := min(x0+1, w-1), fx-float32(x0)
+			lerp := func(f []float32) float32 {
+				top := f[y0*w+x0]*(1-tx) + f[y0*w+x1]*tx
+				bot := f[y1*w+x0]*(1-tx) + f[y1*w+x1]*tx
+				return top*(1-ty) + bot*ty
+			}
+			hv := lerp(has)
+			if hv < 0.25 {
+				continue
+			}
+			c := rampAt(lerp(val) / hv)
+			a := c.a * min(1, hv*1.4) / 255
+			if a <= 0 {
+				continue
+			}
+			p := row[x*4 : x*4+3 : x*4+3]
+			p[0] = uint8(float32(p[0])*(1-a) + c.r*a)
+			p[1] = uint8(float32(p[1])*(1-a) + c.g*a)
+			p[2] = uint8(float32(p[2])*(1-a) + c.b*a)
 		}
-		c := rampAt(val[i] / has[i])
-		a := c.a * min(1, has[i]*1.4) / 255
-		if a <= 0 {
-			continue
-		}
-		p := dst.Pix[(i/W)*dst.Stride+(i%W)*4:]
-		p[0] = uint8(float32(p[0])*(1-a) + c.r*a)
-		p[1] = uint8(float32(p[1])*(1-a) + c.g*a)
-		p[2] = uint8(float32(p[2])*(1-a) + c.b*a)
 	}
 }
 
@@ -231,15 +250,25 @@ func clouds(ctx context.Context, dst *image.RGBA, lon float64, x0, y0 int) error
 	xdraw.ApproxBiLinear.Scale(big, big.Bounds(), ir, image.Rect(0, 0, W/scale, H/scale), draw.Src, nil)
 	p, q := dst.Pix, big.Pix
 	for i := 0; i+3 < len(p); i += 4 {
-		v := (299*float32(q[i]) + 587*float32(q[i+1]) + 114*float32(q[i+2])) / 1000 / 255
-		t := (v - 0.42) / 0.45
-		if t <= 0 || q[i+3] == 0 {
+		lum := (299*int(q[i]) + 587*int(q[i+1]) + 114*int(q[i+2])) / 1000
+		a := veil[lum] * float32(q[i+3]) / 255
+		if a <= 0 {
 			continue
 		}
-		a := float32(math.Pow(float64(min(t, 1)), 1.2)) * 0.62 * float32(q[i+3]) / 255
 		for c := 0; c < 3; c++ {
 			p[i+c] = uint8(float32(p[i+c])*(1-a) + 175*a)
 		}
 	}
 	return nil
 }
+
+// veil is how thick the cloud veil is for each brightness of the infrared: nothing for warm ground
+// and low cloud, rising for colder, higher tops. Worked out once, not for every pixel.
+var veil = func() (t [256]float32) {
+	for lum := range t {
+		if x := (float64(lum)/255 - 0.42) / 0.45; x > 0 {
+			t[lum] = float32(math.Pow(math.Min(x, 1), 1.2) * 0.62)
+		}
+	}
+	return t
+}()

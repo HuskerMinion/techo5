@@ -3,6 +3,7 @@ package home
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"image/color"
 	"log/slog"
@@ -37,15 +38,17 @@ type Alert struct {
 	Area        string // the counties or zones, as the NWS lists them
 	Description string
 	Instruction string
-	Expires     time.Time // when the event ends (the NWS's "ends", else its "expires")
+	Onset       time.Time // when the event begins; zero when it already has, or the NWS does not say
+	Ends        time.Time // when the event ends; zero when the NWS does not say
+	Gone        time.Time // when the alert is over for the screen: Ends, else when this message runs out
 	Color       color.RGBA
 	Here        bool           // in force at home
 	Storm       bool           // drawn around a storm, rather than whole zones
 	Rings       [][][2]float64 // its outline(s), longitude and latitude; none when not drawn
 }
 
-// AlertView is what the screen shows: the alerts in force at home, one per kind of event, most severe
-// first, and every alert nearby with a shape to outline, home's among them.
+// AlertView is what the screen shows: the alerts in force at home, most severe first (an update and
+// the alert it replaces count once), and every alert nearby with a shape to outline, home's among them.
 type AlertView struct {
 	Here []Alert
 	Near []Alert
@@ -68,14 +71,20 @@ type alertState struct {
 	lat     float64
 	lon     float64
 	state   string // home's state, from the NWS, for asking about it and its neighbors
+	outside bool   // the NWS said it has no forecast point here (a 404): not asked again until home moves
 	zones   map[string][][][2]float64
 }
 
 // inUS is whether a place is where the NWS issues alerts: the lower 48, Alaska, Hawaii, Puerto Rico
-// and the Virgin Islands, roughly; the NWS answers anywhere else with nothing, which is also fine.
+// and the Virgin Islands. The boxes are rough (the lower 48's holds Toronto and Tijuana too), so Home
+// Assistant's country decides where it is set, and a 404 from the NWS's /points settles the rest.
 func inUS(lat, lon float64) bool {
+	if !countryMayBeUS() {
+		return false
+	}
 	return inLower48(lat, lon) ||
-		lat >= 51 && lat <= 72 && (lon <= -129 || lon >= 172) || // Alaska
+		lat >= 51 && lat <= 72 && (lon <= -141 || lon >= 172) || // Alaska, west of the Yukon
+		lat >= 54.5 && lat <= 60 && lon > -141 && lon <= -130 || // and its panhandle
 		lat >= 18.5 && lat <= 22.5 && lon >= -161 && lon <= -154 || // Hawaii
 		lat >= 17.5 && lat <= 18.6 && lon >= -67.5 && lon <= -64.5 // Puerto Rico and the Virgin Islands
 }
@@ -83,7 +92,7 @@ func inUS(lat, lon float64) bool {
 // Alerts is what was last fetched, and starts a fetch when one is due. Asked for with every picture
 // the screen draws, so the badge follows the alerts without anyone opening a page.
 func (f *Feature) Alerts() AlertView {
-	if !hasScreen {
+	if !hasScreen || !AlertsOn() {
 		return AlertView{}
 	}
 	a := &f.alerts
@@ -97,11 +106,37 @@ func (f *Feature) Alerts() AlertView {
 	if due {
 		go f.fetchAlerts()
 	}
-	return v
+	// An alert that ended since the last fetch goes now, not at the next one: the screen may have been
+	// dark, and fetches only happen while it draws.
+	return v.without(time.Now())
+}
+
+// without is the view with the alerts over by now taken out.
+func (v AlertView) without(now time.Time) AlertView {
+	keep := func(as []Alert) []Alert {
+		var out []Alert
+		for _, a := range as {
+			if a.Gone.IsZero() || a.Gone.After(now) {
+				out = append(out, a)
+			}
+		}
+		return out
+	}
+	return AlertView{Here: keep(v.Here), Near: keep(v.Near)}
 }
 
 func (f *Feature) fetchAlerts() {
 	a := &f.alerts
+	// Whatever an alert's text holds, a mistake in reading it must not take the daemon down with it:
+	// the NWS keeps an alert up for hours, and a crash would come back after every restart.
+	defer func() {
+		if p := recover(); p != nil {
+			slog.Error("alerts: reading them failed", "panic", p)
+			a.mu.Lock()
+			a.busy, a.fetched = false, time.Now()
+			a.mu.Unlock()
+		}
+	}()
 	v, err := f.buildAlerts()
 	a.mu.Lock()
 	a.busy, a.fetched = false, time.Now()
@@ -137,10 +172,15 @@ func (f *Feature) buildAlertsAt(lat, lon float64) (AlertView, error) {
 	a := &f.alerts
 	a.mu.Lock()
 	if a.lat != lat || a.lon != lon {
-		a.lat, a.lon, a.state = lat, lon, ""
+		a.lat, a.lon, a.state, a.outside = lat, lon, "", false
 	}
-	st := a.state
+	st, outside := a.state, a.outside
 	a.mu.Unlock()
+	if outside {
+		return AlertView{}, nil
+	}
+	// Home to three decimals, about a hundred meters: plenty for which county it is in.
+	at := fmt.Sprintf("%.3f,%.3f", lat, lon)
 	if st == "" {
 		var pt struct {
 			Properties struct {
@@ -151,7 +191,14 @@ func (f *Feature) buildAlertsAt(lat, lon float64) (AlertView, error) {
 				} `json:"relativeLocation"`
 			} `json:"properties"`
 		}
-		if err := getJSON(ctx, fmt.Sprintf("%s/points/%.4f,%.4f", nwsAPI, lat, lon), &pt); err != nil {
+		if err := getJSON(ctx, nwsAPI+"/points/"+at, &pt); err != nil {
+			if errors.Is(err, errNotFound) {
+				slog.Info("alerts: the NWS has no forecast point here; not asking again until home moves")
+				a.mu.Lock()
+				a.outside = true
+				a.mu.Unlock()
+				return AlertView{}, nil
+			}
 			return AlertView{}, fmt.Errorf("home's state: %w", err)
 		}
 		st = pt.Properties.RelativeLocation.Properties.State
@@ -160,7 +207,7 @@ func (f *Feature) buildAlertsAt(lat, lon float64) (AlertView, error) {
 		a.mu.Unlock()
 	}
 
-	here, err := fetchAlertList(ctx, fmt.Sprintf("%s/alerts/active?status=actual&point=%.4f,%.4f", nwsAPI, lat, lon))
+	here, err := fetchAlertList(ctx, nwsAPI+"/alerts/active?status=actual&point="+at)
 	if err != nil {
 		return AlertView{}, err
 	}
@@ -172,7 +219,9 @@ func (f *Feature) buildAlertsAt(lat, lon float64) (AlertView, error) {
 	if areas := append([]string{st}, neighbors[st]...); st != "" {
 		more, err := fetchAlertList(ctx, fmt.Sprintf("%s/alerts/active?status=actual&area=%s", nwsAPI, strings.Join(areas, ",")))
 		if err != nil {
-			return AlertView{}, err
+			// The alerts nearby are for the map; home's own still count without them.
+			slog.Debug("alerts: nearby", "err", err)
+			more = nil
 		}
 		near = more
 		for _, al := range here { // a marine or offshore alert at home may not be in the states' list
@@ -207,10 +256,8 @@ func (f *Feature) buildAlertsAt(lat, lon float64) (AlertView, error) {
 		}
 	}
 	sort.SliceStable(v.Near, func(i, j int) bool { return alertBefore(v.Near[i], v.Near[j]) })
-	seen := map[string]bool{}
 	for _, al := range v.Near {
-		if al.Here && !seen[al.Event] {
-			seen[al.Event] = true
+		if al.Here {
 			v.Here = append(v.Here, al)
 		}
 	}
@@ -268,22 +315,30 @@ type rawAlert struct {
 		Description   string    `json:"description"`
 		Instruction   string    `json:"instruction"`
 		MessageType   string    `json:"messageType"`
+		Onset         time.Time `json:"onset"`
 		Expires       time.Time `json:"expires"`
 		Ends          time.Time `json:"ends"`
 		AffectedZones []string  `json:"affectedZones"`
+		References    []struct {
+			ID string `json:"@id"`
+		} `json:"references"`
 	} `json:"properties"`
 	rings [][][2]float64
 }
 
 func (r rawAlert) alert() Alert {
 	p := r.Properties
-	until := p.Ends
-	if until.IsZero() {
-		until = p.Expires
+	gone := p.Ends
+	if gone.IsZero() {
+		gone = p.Expires
+	}
+	onset := p.Onset
+	if !onset.After(time.Now()) {
+		onset = time.Time{} // under way: the page says when it ends, not when it began
 	}
 	return Alert{ID: r.ID, Event: p.Event, Severity: p.Severity, Sender: p.SenderName, Area: p.AreaDesc,
-		Description: tidyText(p.Description), Instruction: tidyText(p.Instruction), Expires: until,
-		Color: AlertColor(p.Event, p.Severity)}
+		Description: tidyText(p.Description), Instruction: tidyText(p.Instruction),
+		Onset: onset, Ends: p.Ends, Gone: gone, Color: AlertColor(p.Event, p.Severity)}
 }
 
 // tidyText joins the NWS's hard-wrapped lines into paragraphs and turns "* WHAT..." into "What: ".
@@ -292,7 +347,7 @@ func tidyText(s string) string {
 	for i, p := range paras {
 		p = strings.Join(strings.Fields(p), " ")
 		if strings.HasPrefix(p, "* ") {
-			if head, rest, ok := strings.Cut(p[2:], "..."); ok && head == strings.ToUpper(head) {
+			if head, rest, ok := strings.Cut(p[2:], "..."); ok && head != "" && head == strings.ToUpper(head) {
 				p = strings.ToUpper(head[:1]) + strings.ToLower(head[1:]) + ": " + rest
 			}
 		}
@@ -309,9 +364,19 @@ func fetchAlertList(ctx context.Context, url string) ([]rawAlert, error) {
 		return nil, fmt.Errorf("alerts: %w", err)
 	}
 	now := time.Now()
+	// An update names the alerts it replaces; while both are listed only the update counts.
+	replaced := map[string]bool{}
+	for _, a := range list.Features {
+		for _, r := range a.Properties.References {
+			replaced[r.ID] = true
+		}
+	}
 	out := list.Features[:0]
 	for _, a := range list.Features {
-		// Gone when cancelled, or when the event is over: Ends where the NWS gives it, since Expires is
+		if replaced[a.ID] {
+			continue
+		}
+		// Gone when canceled, or when the event is over: Ends where the NWS gives it, since Expires is
 		// only when this message runs out, often a day before the event does.
 		p := a.Properties
 		until := p.Ends
@@ -415,8 +480,10 @@ func (f *Feature) zoneShape(ctx context.Context, url string, may bool) (rings []
 	return rings, true, nil
 }
 
+// getJSON reads one of the NWS's answers. A list of a region's alerts with their polygons runs to a
+// few megabytes on a stormy day, more than a map tile may be.
 func getJSON(ctx context.Context, url string, into any) error {
-	b, err := getAccept(ctx, url, "application/geo+json")
+	b, err := getLimit(ctx, url, "application/geo+json", 16<<20)
 	if err != nil {
 		return err
 	}

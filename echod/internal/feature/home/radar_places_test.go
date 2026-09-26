@@ -2,7 +2,12 @@
 
 package home
 
-import "testing"
+import (
+	"testing"
+
+	"golang.org/x/image/font/gofont/goregular"
+	"golang.org/x/image/font/sfnt"
+)
 
 // The towns on a picture are the ones inside it, largest first: around New York, the city itself.
 func TestPlacesInView(t *testing.T) {
@@ -21,5 +26,29 @@ func TestPlacesInView(t *testing.T) {
 	}
 	if len(got) > maxPlaces {
 		t.Errorf("%d towns offered, want at most %d", len(got), maxPlaces)
+	}
+}
+
+// Every town's name can be drawn in the screen's font: a letter it has no glyph for would show as an
+// empty box (tools/places/make_places.py gives those names in their Latin spelling).
+func TestEveryPlaceNameHasGlyphs(t *testing.T) {
+	f, err := sfnt.Parse(goregular.TTF)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var buf sfnt.Buffer
+	bad := 0
+	for _, p := range loadPlaces() {
+		for _, r := range p.name {
+			if g, err := f.GlyphIndex(&buf, r); err != nil || g == 0 {
+				if bad++; bad <= 10 {
+					t.Errorf("%q: no glyph for %q (U+%04X)", p.name, r, r)
+				}
+				break
+			}
+		}
+	}
+	if bad > 10 {
+		t.Errorf("and %d more", bad-10)
 	}
 }

@@ -5,9 +5,12 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strings"
+	"sync"
 	"time"
 
 	"github.com/HuskerMinion/techo5/echod/internal/config"
+	"github.com/HuskerMinion/techo5/echod/internal/lib/hass"
 )
 
 // Where the radar comes from. RainViewer covers the world; in the lower 48 the U.S. National Weather
@@ -42,18 +45,53 @@ func inLower48(lat, lon float64) bool {
 	return lat >= 24.3 && lat <= 49.6 && lon >= -125.1 && lon <= -66.8
 }
 
-// radarSourceFor is the source the setting and home's place pick.
-func radarSourceFor(lat, lon float64) radarSource {
+// radarSourceFor is the source the setting and home's place pick, and a word for the page when it is
+// not the one chosen: the NWS chosen for a home outside its composite gets RainViewer, and says so.
+func radarSourceFor(lat, lon float64) (src radarSource, note string) {
 	switch config.Get().Home.RadarSource {
 	case config.RadarRainViewer:
-		return rainViewer
+		return rainViewer, ""
 	case config.RadarNWS:
-		return nws
+		if inLower48(lat, lon) {
+			return nws, ""
+		}
+		return rainViewer, "the NWS covers the lower 48 only"
 	}
-	if inLower48(lat, lon) {
-		return nws
+	if inLower48(lat, lon) && countryMayBeUS() {
+		return nws, ""
 	}
-	return rainViewer
+	return rainViewer, ""
+}
+
+// The country Home Assistant is set to, asked once (and again after a while if it could not be):
+// the lower 48's box also holds Toronto, Vancouver and Tijuana, and the country tells them apart.
+var country struct {
+	sync.Mutex
+	code  string
+	asked time.Time
+}
+
+// homeCountry is Home Assistant's country code, or "" when not known (not set, or not asked yet).
+func homeCountry() string {
+	country.Lock()
+	defer country.Unlock()
+	if country.code != "" || time.Since(country.asked) < 10*time.Minute || !hass.Get().Ready() {
+		return country.code
+	}
+	country.asked = time.Now()
+	if c, err := hass.Get().Config(); err == nil {
+		country.code = strings.ToUpper(strings.TrimSpace(c.Country))
+	}
+	return country.code
+}
+
+// countryMayBeUS is whether home may be in the U.S.: the country says so, or does not say.
+func countryMayBeUS() bool {
+	switch c := homeCountry(); c {
+	case "", "US", "PR", "VI":
+		return true
+	}
+	return false
 }
 
 var rainViewer = radarSource{
@@ -112,18 +150,25 @@ var nws = radarSource{
 		if err != nil {
 			return nil, fmt.Errorf("radar time: %w", err)
 		}
-		if err := json.Unmarshal(b, &now); err != nil || now.Meta.Valid.IsZero() {
-			return nil, fmt.Errorf("radar time: %v", err)
+		if err := json.Unmarshal(b, &now); err != nil {
+			return nil, fmt.Errorf("radar time: %w", err)
 		}
-		// Ten minutes apart, like RainViewer's, so the loop moves at the same pace.
+		if now.Meta.Valid.IsZero() {
+			return nil, errors.New("radar time: the NWS composite has no time yet")
+		}
+		// Ten minutes apart, like RainViewer's, so the loop moves at the same pace; on the ten-minute
+		// marks, so the frames are the same ones from one refresh to the next and only the newest is
+		// fetched. The newest composite is five minutes past a mark half the time: the mark before it
+		// is then the newest frame, five minutes older than it could be.
+		newest := now.Meta.Valid.Truncate(10 * time.Minute)
 		out := make([]sourceFrame, 0, radarFrames)
 		for i := radarFrames - 1; i >= 0; i-- {
-			back := i * 10
+			at := newest.Add(-time.Duration(i*10) * time.Minute)
+			back := int(now.Meta.Valid.Sub(at) / time.Minute)
 			layer := "nexrad-n0q-900913"
 			if back > 0 {
 				layer += fmt.Sprintf("-m%02dm", back)
 			}
-			at := now.Meta.Valid.Add(-time.Duration(back) * time.Minute)
 			out = append(out, sourceFrame{at: at, key: "nws" + at.UTC().Format("20060102T1504"), tile: func(z, x, y int) string {
 				return fmt.Sprintf(iemTiles, layer, z, x, y)
 			}})
@@ -132,9 +177,13 @@ var nws = radarSource{
 	},
 }
 
-// radarCredit is the page's credit line for a source, with the map and, where they are, the clouds.
-func radarCredit(src radarSource, lon float64) string {
+// radarCredit is the page's credit line for a source, with the map and, where they are, the clouds,
+// and the note when the source is not the one chosen.
+func radarCredit(src radarSource, note string, lon float64) string {
 	s := "Radar " + src.name
+	if note != "" {
+		s += " (" + note + ")"
+	}
 	if cloudLayer(lon) != "" {
 		s += "  ·  Clouds NOAA GOES"
 	}

@@ -59,13 +59,15 @@ func TestAlertsAtHomeAndNearby(t *testing.T) {
 	gone := time.Now().Add(-time.Hour).UTC().Format(time.RFC3339)
 	storm := `{"type":"Polygon","coordinates":[[[-96.1,41.2],[-95.9,41.2],[-95.9,41.4],[-96.1,41.2]]]}`
 	wind := feature("w1", "Wind Advisory", "Moderate", "Update", later, "null", "NEC055")
-	wind2 := feature("w2", "Wind Advisory", "Moderate", "Alert", later, "null", "NEC055")
+	// An update names the alert it replaces: while both are listed, only the update counts.
+	wind2 := strings.Replace(feature("w2", "Wind Advisory", "Moderate", "Alert", later, "null", "NEC055"),
+		`"properties":{`, `"properties":{"references":[{"@id":"w1"}],`, 1)
 	tstorm := feature("t1", "Severe Thunderstorm Warning", "Severe", "Alert", later, storm, "NEC055")
-	cancelled := feature("c1", "Flood Watch", "Moderate", "Cancel", later, "null", "NEC055")
+	canceled := feature("c1", "Flood Watch", "Moderate", "Cancel", later, "null", "NEC055")
 	over := feature("o1", "Heat Advisory", "Moderate", "Alert", gone, "null", "NEC055")
 	minorAway := feature("m1", "Frost Advisory", "Minor", "Alert", later, "null", "IAC001")
-	n.here = strings.ReplaceAll(strings.Join([]string{wind, wind2, tstorm, cancelled, over}, ","), "SERVER", srv.URL)
-	n.states = strings.ReplaceAll(strings.Join([]string{wind, wind2, tstorm, cancelled, over, minorAway}, ","), "SERVER", srv.URL)
+	n.here = strings.ReplaceAll(strings.Join([]string{wind, wind2, tstorm, canceled, over}, ","), "SERVER", srv.URL)
+	n.states = strings.ReplaceAll(strings.Join([]string{wind, wind2, tstorm, canceled, over, minorAway}, ","), "SERVER", srv.URL)
 
 	f := &Feature{}
 	v, err := f.buildAlertsAt(41.26, -95.94)
@@ -80,7 +82,7 @@ func TestAlertsAtHomeAndNearby(t *testing.T) {
 		here = append(here, a.Event)
 	}
 	if strings.Join(here, "|") != "Severe Thunderstorm Warning|Wind Advisory" {
-		t.Errorf("at home: %v, want the warning then one Wind Advisory (the cancelled and the ended left out)", here)
+		t.Errorf("at home: %v, want the warning then one Wind Advisory (the canceled and the ended left out)", here)
 	}
 	for _, a := range v.Near {
 		if a.Event == "Frost Advisory" {
@@ -119,4 +121,85 @@ func TestNoAlertsOutsideTheUS(t *testing.T) {
 			t.Errorf("%v not counted as where the NWS issues alerts", p)
 		}
 	}
+}
+
+// A paragraph the NWS starts "* ..." with nothing before the dots (it happens) is left as it is, not
+// read as a heading: that took the daemon down, and again after every restart while the alert stood.
+func TestTidyTextSurvivesAnEmptyHeading(t *testing.T) {
+	for in, want := range map[string]string{
+		"* ...more to follow":      "* ...more to follow",
+		"* WHAT...Snow.":           "What: Snow.",
+		"*":                        "*",
+		"* ...":                    "* ...",
+		"* What...lower case head": "* What...lower case head",
+	} {
+		if got := tidyText(in); got != want {
+			t.Errorf("tidyText(%q) = %q, want %q", in, got, want)
+		}
+	}
+}
+
+// An alert that ends while the screen is dark is gone the next time anybody looks, fetched or not.
+func TestEndedAlertsLeaveAtOnce(t *testing.T) {
+	now := time.Now()
+	v := AlertView{Here: []Alert{{ID: "a", Gone: now.Add(-time.Minute)}, {ID: "b", Gone: now.Add(time.Hour)}, {ID: "c"}}}
+	v.Near = v.Here
+	got := v.without(now)
+	if len(got.Here) != 2 || got.Here[0].ID != "b" || len(got.Near) != 2 {
+		t.Errorf("after the end: %+v", got)
+	}
+}
+
+// Where the NWS has no forecast point (a 404 from /points), it is not asked again until home moves.
+func TestNoForecastPointIsRemembered(t *testing.T) {
+	var points, alerts int
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if strings.HasPrefix(r.URL.Path, "/points/") {
+			points++
+			http.NotFound(w, r)
+			return
+		}
+		alerts++
+		fmt.Fprint(w, `{"features":[]}`)
+	}))
+	defer srv.Close()
+	defer func(a string) { nwsAPI = a }(nwsAPI)
+	nwsAPI = srv.URL
+	f := &Feature{}
+	for i := 0; i < 3; i++ {
+		if v, err := f.buildAlertsAt(48.95, -97.2); err != nil || len(v.Here) != 0 {
+			t.Fatalf("try %d: %v %v", i, v, err)
+		}
+	}
+	if points != 1 || alerts != 0 {
+		t.Errorf("asked /points %d times and for alerts %d, want once and never", points, alerts)
+	}
+	if _, err := f.buildAlertsAt(48.90, -97.2); err != nil || points != 2 {
+		t.Errorf("after home moved, /points asked %d times, want again (err %v)", points, err)
+	}
+}
+
+// The boxes: Alaska without the Yukon, and Home Assistant's country over any box.
+func TestWhereTheNWSIssuesAlerts(t *testing.T) {
+	for _, tc := range []struct {
+		name     string
+		lat, lon float64
+		country  string
+		want     bool
+	}{
+		{"Anchorage", 61.2, -149.9, "", true}, {"Juneau", 58.3, -134.4, "", true},
+		{"Whitehorse", 60.72, -135.06, "", false}, {"Adak", 51.88, -176.65, "", true},
+		{"Omaha", 41.26, -95.94, "US", true}, {"Toronto, set to Canada", 43.65, -79.38, "CA", false},
+		{"Tijuana, set to Mexico", 32.5, -117.0, "MX", false}, {"San Juan", 18.4, -66.1, "PR", true},
+	} {
+		country.Lock()
+		country.code, country.asked = tc.country, time.Now()
+		country.Unlock()
+		if got := inUS(tc.lat, tc.lon); got != tc.want {
+			t.Errorf("%s: %v, want %v", tc.name, got, tc.want)
+		}
+	}
+	country.Lock()
+	country.code, country.asked = "", time.Time{}
+	country.Unlock()
 }

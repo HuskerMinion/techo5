@@ -10,5 +10,5 @@ var notOnThisDevice = []string{
 	"screen_web_access",
 	"slideshow_folder", "slideshow_interval",
 	"slideshow_mode", "slideshow_screensaver_idle", "slideshow_screensaver_overlay",
-	"slideshow_shuffle", "slideshow_subfolders",
+	"slideshow_shuffle", "slideshow_subfolders", "weather_alerts",
 }
