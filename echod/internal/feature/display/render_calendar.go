@@ -243,8 +243,8 @@ func (r *renderer) calendarMonth(v calendarView) {
 
 // calendarDay is a day's events as a list: the time, the title and the calendar, all-day first.
 func (r *renderer) calendarDay(v calendarView) {
-	x := r.calButton("Done", r.w-r.margin, calDone)
-	x = r.calButton("‹ Month", x, calBack)
+	// Done here goes back to the month; the month's own Done puts the calendar away.
+	x := r.calButton("Done", r.w-r.margin, calBack)
 	r.text(r.title, clipText(r, r.title, v.day.Format("Monday, January 2"), x-r.margin-r.s(10)), r.margin, r.margin+r.s(34), cream)
 
 	evs := eventsOn(v.events, v.day)

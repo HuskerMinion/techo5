@@ -10,10 +10,16 @@ import (
 	"github.com/HuskerMinion/techo5/echod/internal/feature/home"
 )
 
-// The Calendars row: which of Home Assistant's calendars this device shows. Its list ticks each one on
-// or off, and stays open so several can be chosen in a row.
+// The Calendars row: which of Home Assistant's calendars this device shows. Its list marks each one
+// shown or not: with one calendar a tap turns it on or off and closes the list; with several the list
+// stays open for the next, and Done at its foot closes it.
 
-const calendarTick = "✓  "
+// The marks beside each calendar. The screen's typeface has these circles and no check mark.
+const (
+	calendarOn    = "●  "
+	calendarOff   = "○  "
+	calendarsDone = "Done"
+)
 
 // calendarsValue is the row's value: the one calendar shown, how many, or none.
 func calendarsValue() string {
@@ -41,16 +47,20 @@ func calendarsPicker() pickerView {
 	}
 	src := home.Get().CalendarSources()
 	for _, c := range cals {
-		name := cmpOr(c.Name, c.ID)
+		mark := calendarOff
 		if slices.Contains(src, c.ID) {
-			name = calendarTick + name
+			mark = calendarOn
 		}
-		p.opts = append(p.opts, name)
+		p.opts = append(p.opts, mark+cmpOr(c.Name, c.ID))
+	}
+	if len(cals) > 1 {
+		p.opts = append(p.opts, calendarsDone)
 	}
 	return p
 }
 
-// toggleCalendar ticks the i'th of Home Assistant's calendars on or off, and reports whether it did.
+// toggleCalendar turns the i'th of Home Assistant's calendars on or off, and reports whether the list
+// should stay open for another: only when there are several to choose from.
 func toggleCalendar(i int) bool {
 	cals := home.Get().Calendars()
 	if i < 0 || i >= len(cals) {
@@ -67,5 +77,5 @@ func toggleCalendar(i int) bool {
 		slog.Warn("choosing the calendars failed", "err", err)
 		return false
 	}
-	return true
+	return len(cals) > 1
 }
