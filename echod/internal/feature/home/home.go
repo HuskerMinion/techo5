@@ -81,6 +81,9 @@ type Feature struct {
 	// weathersAt.
 	weatherSel *esphome.Select
 	radarSel   *esphome.Select // where the rain map's radar comes from (radar_setting.go)
+
+	// alerts are the NWS's weather alerts at home and nearby (alerts.go).
+	alerts     alertState
 	weathers   []hass.Entity
 	weathersAt time.Time
 

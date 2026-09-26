@@ -75,6 +75,13 @@ type RadarView struct {
 	Credit  string      // where the radar, the clouds and the map came from, for the page to show
 	Short   string      // the same in a few words, for the Spot's round face
 	Places  []RadarPlace
+	Origin  image.Point // the picture's top left, in world pixels at the map's zoom
+}
+
+// Pixel is where a longitude and latitude fall on the picture.
+func (v RadarView) Pixel(lon, lat float64) image.Point {
+	x, y := worldPixel(lat, lon, mapZoom)
+	return image.Pt(int(math.Round(x))-v.Origin.X, int(math.Round(y))-v.Origin.Y)
 }
 
 // RadarPlace is a town on the picture, for the page to name where there is room: largest first.
@@ -263,6 +270,7 @@ func (f *Feature) buildRadarAt(lat, lon float64) error {
 	r.view.Home = image.Pt(radarW/2, radarH/2)
 	r.view.Credit, r.view.Short = radarCredit(src, lon), src.name+" · NASA"
 	r.view.Places = placesIn(x0, y0, radarW, radarH)
+	r.view.Origin = image.Pt(x0, y0)
 	r.mu.Unlock()
 
 	// The clouds change slowly next to the rain, so one picture of them sits under every frame; the map
@@ -443,12 +451,18 @@ func floorDiv(a, b int) int {
 	return q
 }
 
-func get(ctx context.Context, url string) ([]byte, error) {
+func get(ctx context.Context, url string) ([]byte, error) { return getAccept(ctx, url, "") }
+
+// getAccept is get asking for a type: the NWS's API answers in the one it is asked for.
+func getAccept(ctx context.Context, url, accept string) ([]byte, error) {
 	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
 	if err != nil {
 		return nil, err
 	}
 	req.Header.Set("User-Agent", userAgent)
+	if accept != "" {
+		req.Header.Set("Accept", accept)
+	}
 	resp, err := tileClient.Do(req)
 	if err != nil {
 		return nil, err

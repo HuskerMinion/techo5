@@ -9,6 +9,7 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/HuskerMinion/techo5/echod/internal/config"
 )
@@ -44,6 +45,9 @@ func TestRadarLive(t *testing.T) {
 	if b, err := json.Marshal(v.Places); err == nil {
 		_ = os.WriteFile(filepath.Join(dir, "places.json"), b, 0o644)
 	}
+	if b, err := json.Marshal(v.Origin); err == nil {
+		_ = os.WriteFile(filepath.Join(dir, "origin.json"), b, 0o644)
+	}
 	for i, fr := range v.Frames {
 		out, err := os.Create(filepath.Join(dir, fmt.Sprintf("frame-%d.png", i)))
 		if err != nil {
@@ -52,4 +56,31 @@ func TestRadarLive(t *testing.T) {
 		_ = png.Encode(out, fr.Image)
 		out.Close()
 	}
+}
+
+// Fetches the NWS alerts for a place and writes what the screen would get, to look at:
+//
+//	RADAR_LIVE=<dir> RADAR_AT=lat,lon go test -run TestAlertsLive ./internal/feature/home/
+func TestAlertsLive(t *testing.T) {
+	dir := os.Getenv("RADAR_LIVE")
+	if dir == "" {
+		t.Skip("RADAR_LIVE not set")
+	}
+	at := strings.Split(os.Getenv("RADAR_AT"), ",")
+	lat, _ := strconv.ParseFloat(at[0], 64)
+	lon, _ := strconv.ParseFloat(at[1], 64)
+	defer func(d string) { mapDir = d }(mapDir)
+	mapDir = t.TempDir()
+	f := &Feature{}
+	f.alerts.lat, f.alerts.lon = lat, lon
+	v, err := f.buildAlertsAt(lat, lon)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, a := range v.Here {
+		t.Logf("HERE %s (%s) until %s, %d rings", a.Event, a.Severity, a.Expires.Local().Format(time.Kitchen), len(a.Rings))
+	}
+	t.Logf("%d nearby", len(v.Near))
+	b, _ := json.Marshal(v)
+	_ = os.WriteFile(filepath.Join(dir, "alerts.json"), b, 0o644)
 }

@@ -142,6 +142,11 @@ func (r *renderer) radarPage(s scene) {
 	f := v.Frames[i]
 	draw.Draw(r.dst, r.dst.Bounds(), f.Image, image.Point{}, draw.Src)
 
+	// The weather alerts' shapes, under everything written over the map.
+	alertShapes(r.dst, v, s.alerts.Near, image.Point{}, 1)
+	pillY := r.margin + r.s(42) + r.s(10)
+	pills, _ := r.alertPills(s.alerts.Here, r.margin, pillY)
+
 	// Home: a ring in the accent with a dark edge, readable over rain and map alike.
 	h := v.Home
 	r.ring(h, r.s(9), walnut)
@@ -155,6 +160,7 @@ func (r *renderer) radarPage(s scene) {
 		image.Rect(r.w-r.s(200), r.h-r.s(110), r.w, r.h),
 		image.Rect(h.X-r.s(12), h.Y-r.s(12), h.X+r.s(12), h.Y+r.s(12)),
 	}
+	keep = append(keep, pills...)
 	drawPlaces(r.dst, r.tiny, v.Places, keep, func(b image.Rectangle) bool { return b.In(r.dst.Bounds()) }, 14)
 
 	// The time of the frame, and the clock, on dark bands so they read over the map.
@@ -168,6 +174,7 @@ func (r *renderer) radarPage(s scene) {
 	shade(image.Rect(0, 0, r.w, r.margin+r.s(42)))
 	r.text(r.small, label, r.margin, r.margin+r.s(26), amber)
 	r.cornerClock(s)
+	r.drawAlertPills(s.alerts.Here, r.margin, pillY)
 
 	credit := v.Credit
 	shade(image.Rect(0, r.h-r.s(34), r.w, r.h))

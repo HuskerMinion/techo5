@@ -206,6 +206,12 @@ type Display struct {
 	popupShown map[string]bool
 	popupNext  time.Time
 	pop        popupEntities // the pop-ups' settings in Home Assistant
+
+	// The alert page (alerts.go): up until alertUntil, on alertIdx of the alerts at home, scrolled
+	// alertScroll lines.
+	alertUntil  time.Time
+	alertIdx    int
+	alertScroll int
 	// radar is the rain map in place of the forecast, while the weather page is up.
 	radar bool
 
@@ -728,12 +734,31 @@ func (d *Display) gesture(g touch.Gesture) {
 		d.wake()
 		return
 	}
+	// So does the alert page.
+	if d.alertUp() {
+		d.alertGesture(g)
+		d.wake()
+		return
+	}
 	switch g.Kind {
 	case touch.Tap:
 		d.mu.Lock()
 		weatherUp := time.Now().Before(d.weatherUntil)
 		idle := d.view.Phase == "idle"
 		d.mu.Unlock()
+		// The alert badge on the clock opens the alert, and a pill over the rain map opens its alert.
+		// Both sit in the top band too.
+		if idle && !weatherUp && d.r != nil && d.r.badgeTapped(image.Pt(g.X, g.Y)) && d.OpenAlert(0) {
+			return
+		}
+		d.mu.Lock()
+		onRadar := d.radar
+		d.mu.Unlock()
+		if weatherUp && onRadar && d.r != nil {
+			if i := d.r.pillTapped(image.Pt(g.X, g.Y)); i >= 0 && d.OpenAlert(i) {
+				return
+			}
+		}
 		// The weather on the home screen opens the forecast, the page a weather question brings up. It
 		// sits in the top band, so it is looked for before that band's rule below.
 		if idle && !weatherUp && d.r != nil && d.r.weatherTapped(image.Pt(g.X, g.Y)) {
@@ -1557,6 +1582,7 @@ func (d *Display) frame() time.Duration {
 	d.mu.Unlock()
 	s.weather = home.Get().Weather()
 	d.calendarScene(&s, now)
+	d.alertScene(&s, now)
 	d.mu.Lock()
 	s.showWeather = (s.phase == "idle" || s.phase == "lingering") && now.Before(d.weatherUntil)
 	s.showRadar = s.showWeather && d.radar
@@ -1579,7 +1605,7 @@ func (d *Display) frame() time.Duration {
 	// has held for the configured wait, tracked by how long it has run continuously.
 	d.dashScene(&s, s.showSheet || s.showDrawer || ring.any() || call.Phase != phone.Idle)
 	boring := s.phase == "idle" && call.Phase == phone.Idle && !ring.any() && !s.bt.Pairing &&
-		!s.showWifi && !s.showSheet && !s.showCamera && !s.showRadar && !s.showWeather && !s.showCalendar && !s.nowPlaying &&
+		!s.showWifi && !s.showSheet && !s.showCamera && !s.showRadar && !s.showWeather && !s.showCalendar && !s.showAlert && !s.nowPlaying &&
 		!s.showDash
 	// A browser waiting to be let in is a page of its own, over whatever is on the screen: asking for
 	// the setup page is done from the settings screen, so the answer has to reach somebody who is

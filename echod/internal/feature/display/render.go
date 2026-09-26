@@ -115,7 +115,14 @@ type scene struct {
 
 	// showCalendar is the calendar page, cal what it shows (render_calendar.go).
 	showCalendar bool
-	cal          calendarView
+
+	// alerts are the weather alerts at home and nearby (the clock's badge, the rain map's pills and
+	// outlines); showAlert is the alert page, on alertIdx of them, scrolled alertScroll lines (alerts.go).
+	alerts      home.AlertView
+	showAlert   bool
+	alertIdx    int
+	alertScroll int
+	cal         calendarView
 
 	// redClock is the night light as the red clock alone, in redStyle (render_night.go).
 	redClock bool
@@ -197,7 +204,14 @@ type renderer struct {
 	// goroutine, so under its own lock.
 	weatherMu sync.Mutex
 	weatherAt image.Rectangle
-	dateAt    image.Rectangle // the date under the clock, the same way: a tap there opens the calendar
+
+	// badgeAt, pillsAt and pillsIdx are where the alert badge and the rain map's alert pills were drawn
+	// in the frame last drawn, and the alert each pill opens, for a tap there.
+	alertMu  sync.Mutex
+	badgeAt  image.Rectangle
+	pillsAt  []image.Rectangle
+	pillsIdx []int
+	dateAt   image.Rectangle // the date under the clock, the same way: a tap there opens the calendar
 
 	// calHits are the calendar page's buttons, days and events as last drawn (render_calendar.go).
 	calMu   sync.Mutex
@@ -382,6 +396,13 @@ func (r *renderer) draw(s scene) {
 		}
 		return
 	}
+	if s.showAlert {
+		r.alertPage(s)
+		if s.showVolume {
+			r.volumeBar(s)
+		}
+		return
+	}
 	if s.showCalendar {
 		r.calendarPage(s)
 		if s.showVolume {
@@ -526,6 +547,7 @@ func (r *renderer) bigClock(s scene) {
 	}
 
 	r.weatherCorner(s)
+	r.alertBadge(s)
 }
 
 // weatherCorner is the weather where it has always been, top left, with the drawing of it that the

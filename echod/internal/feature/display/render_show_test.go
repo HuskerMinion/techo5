@@ -143,6 +143,22 @@ func TestShowScenesDraw(t *testing.T) {
 				alarm: config.Alarm{ID: "a", Hour: 6, Minute: 45, Days: config.DaysWeekdays, Label: "Wake up", Sunrise: 10, On: true}}},
 	}
 
+	// Weather alerts: the clock's badge, the page, a long one scrolled, and the pills over the rain map.
+	wind := home.Alert{ID: "a", Event: "Wind Advisory", Severity: "Moderate", Sender: "NWS Omaha/Valley NE",
+		Area: "Douglas; Sarpy; Cass", Expires: at.Add(20 * time.Hour), Color: home.AlertColor("Wind Advisory", ""), Here: true,
+		Description: "What: North winds 15 to 25 mph with gusts up to 45 mph.\nWhere: Douglas, Sarpy and Cass counties.\nWhen: Until 6 AM Sunday.\nImpacts: Gusty winds will blow around unsecured objects.",
+		Instruction: "Winds this strong can make driving difficult. Secure outdoor objects."}
+	storm := home.Alert{ID: "b", Event: "Severe Thunderstorm Warning", Severity: "Severe", Sender: "NWS Omaha/Valley NE",
+		Area: "Douglas", Expires: at.Add(40 * time.Minute), Color: home.AlertColor("Severe Thunderstorm Warning", ""), Here: true, Storm: true,
+		Description: "At 2:05 PM, a severe thunderstorm was located near Elkhorn, moving east at 30 mph.", Instruction: "Move to an interior room."}
+	alerts := home.AlertView{Here: []home.Alert{storm, wind}, Near: []home.Alert{storm, wind}}
+	scenes["clock-alert"] = scene{now: at, phase: "idle", weather: sky, alerts: alerts}
+	scenes["alert-page"] = scene{now: at, phase: "idle", showAlert: true, alerts: alerts}
+	scenes["alert-page-2"] = scene{now: at, phase: "idle", showAlert: true, alertIdx: 1, alertScroll: 3, alerts: alerts}
+	scenes["radar-alerts"] = scene{now: at, phase: "idle", showWeather: true, showRadar: true, alerts: alerts,
+		radar: home.RadarView{Frames: []home.RadarFrame{{Image: image.NewRGBA(image.Rect(0, 0, showWide, showHigh)), At: at}},
+			Home: image.Pt(showWide/2, showHigh/2), Places: []home.RadarPlace{{Name: "Omaha", At: image.Pt(470, 250), Pop: 480000}}}}
+
 	// The light before an alarm, frame by frame: the same curve the panel follows, with the sun's
 	// face on, for looking at away from a device at six in the morning.
 	wake := at.Add(20 * time.Minute)
