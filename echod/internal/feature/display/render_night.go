@@ -9,11 +9,14 @@ import (
 	"strings"
 	"time"
 
+	xdraw "golang.org/x/image/draw"
+	"golang.org/x/image/font"
+	"golang.org/x/image/math/fixed"
 	"golang.org/x/image/vector"
 )
 
-// The red night clock: the time alone, dim red on black, in one of three looks - the ordinary clock
-// face, an LED clock's seven segments, or a flip clock's split cards.
+// The night clock: the time alone on black, in one of three looks - the ordinary clock face in dim
+// red, an LED clock's seven red segments, or a flip clock's charcoal cards and off-white digits.
 
 var (
 	// nightRed is the lit red: dim, so with the backlight at the night light's level it reads across
@@ -21,9 +24,13 @@ var (
 	nightRed = color.RGBA{150, 14, 0, 255}
 	// nightGhost is an LED segment that is not lit, faint, as on a real LED clock.
 	nightGhost = color.RGBA{26, 3, 0, 255}
-	// nightCard is a flip card, and nightSplit the gap across its middle.
-	nightCard  = color.RGBA{30, 8, 5, 255}
-	nightSplit = color.RGBA{0, 0, 0, 255}
+	// The flip clock is not red: charcoal cards, a shade lighter above the split than below it, the
+	// hinges at their sides, and dim off-white digits.
+	flipTop   = color.RGBA{36, 36, 35, 255}
+	flipLower = color.RGBA{27, 27, 26, 255}
+	flipHinge = color.RGBA{52, 52, 50, 255}
+	flipInk   = color.RGBA{158, 152, 140, 255}
+	flipSplit = color.RGBA{0, 0, 0, 255}
 )
 
 // redClockPage is the night as a clock alone.
@@ -116,7 +123,7 @@ func (r *renderer) segmentDigit(x, top, w, h, t, digit int) {
 	if digit >= 0 && digit <= 9 {
 		lit = segments[digit]
 	}
-	g := max(t/5, 1) // the gap where two segments meet
+	g := max(t*2/5, 2) // the gap where two segments meet: wide, so each segment stands apart as on an old LED
 	mid := top + h/2
 	type seg struct {
 		name           byte
@@ -167,28 +174,71 @@ func (r *renderer) hexSegment(x0, y0, x1, y1, t int, c color.Color) {
 	})
 }
 
-// flipClock draws the time on two flip cards, hours and minutes, each split across its middle.
+// flipClock draws the time as a flip clock does: hours and minutes on two cards, each split across its
+// middle, with tall narrow digits.
 func (r *renderer) flipClock(now time.Time) {
 	hm := strings.SplitN(clockHM(now), ":", 2)
 	ampm := clockSuffix(now)
-	ch := r.h * 62 / 100
-	cw := max(r.width(r.clock, "88"), r.width(r.clock, hm[0]), r.width(r.clock, hm[1])) + r.s(44)
-	space := r.s(28)
+	ch := r.h * 66 / 100
+	cw := ch * 88 / 100
+	space := r.s(30)
 	x := (r.w - 2*cw - space) / 2
-	top := (r.h - ch) / 2
+	top := (r.h-ch)/2 - r.s(10)
+	mid := top + ch/2
+	k := r.s(18)
 	for i, part := range hm {
 		card := image.Rect(x, top, x+cw, top+ch)
-		r.roundRect(card, r.s(22), nightCard)
-		// The digits sit in the middle of the card, the split running through them.
-		tw := r.width(r.clock, part)
-		r.text(r.clock, part, card.Min.X+(cw-tw)/2, card.Min.Y+ch/2+r.digitHeight()/2, nightRed)
-		r.fillRect(image.Rect(card.Min.X, card.Min.Y+ch/2-r.s(2), card.Max.X, card.Min.Y+ch/2+r.s(2)), nightSplit)
+		// The lower leaf, then the upper over it; each is rounded all round, which leaves the small
+		// notches at the split that a real card has.
+		r.roundRect(card, k, flipLower)
+		r.roundRect(image.Rect(card.Min.X, card.Min.Y, card.Max.X, mid), k, flipTop)
+		r.flipDigits(part, image.Rect(card.Min.X, card.Min.Y+ch*12/100, card.Max.X, card.Max.Y-ch*12/100))
+		// The split, and the hinges that stand out from the card's sides.
+		r.fillRect(image.Rect(card.Min.X, mid-r.s(2), card.Max.X, mid+r.s(2)), flipSplit)
+		hw, hh := r.s(8), r.s(26)
+		r.roundRect(image.Rect(card.Min.X-hw, mid-hh/2, card.Min.X+r.s(2), mid+hh/2), r.s(3), flipHinge)
+		r.roundRect(image.Rect(card.Max.X-r.s(2), mid-hh/2, card.Max.X+hw, mid+hh/2), r.s(3), flipHinge)
 		if i == 0 && ampm != "" {
 			aw := r.width(r.small, ampm)
-			r.text(r.small, ampm, card.Min.X+(cw-aw)/2, card.Max.Y+r.s(40), nightRed)
+			r.text(r.small, ampm, card.Min.X+(cw-aw)/2, card.Max.Y+r.s(40), flipInk)
 		}
 		x += cw + space
 	}
+}
+
+// flipDigits draws s in box the way flip-clock numbers look: each digit on its own, in equal slots as
+// on a flip clock's leaves, the clock face's bold figures stretched tall and narrow to fill the box's
+// height. Zero is the face's round capital O, stretched to the oval a flip clock has, since the face's
+// own zero carries a slash.
+func (r *renderer) flipDigits(s string, box image.Rectangle) {
+	slot := box.Dx() * 42 / 100
+	x := box.Min.X + (box.Dx()-slot*len(s))/2
+	for _, c := range s {
+		if c == '0' {
+			c = 'O'
+		}
+		r.flipGlyph(c, image.Rect(x, box.Min.Y, x+slot, box.Max.Y))
+		x += slot
+	}
+}
+
+// flipGlyph draws one figure stretched into box, centered across it.
+func (r *renderer) flipGlyph(c rune, box image.Rectangle) {
+	b, _ := font.BoundString(r.clock, string(c))
+	gw, gh := (b.Max.X - b.Min.X).Ceil(), (b.Max.Y - b.Min.Y).Ceil()
+	if gw <= 0 || gh <= 0 {
+		return
+	}
+	glyph := image.NewRGBA(image.Rect(0, 0, gw, gh))
+	(&font.Drawer{Dst: glyph, Src: image.NewUniform(flipInk), Face: r.clock,
+		Dot: fixed.Point26_6{X: -b.Min.X, Y: -b.Min.Y}}).DrawString(string(c))
+	h := box.Dy()
+	w := min(gw*h/gh*72/100, box.Dx()*88/100) // tall and narrow, as a flip clock's figures are
+	if c == '1' {
+		w = min(w, box.Dx()*46/100) // a one keeps its own slimness
+	}
+	x := box.Min.X + (box.Dx()-w)/2
+	xdraw.BiLinear.Scale(r.dst, image.Rect(x, box.Min.Y, x+w, box.Max.Y), glyph, glyph.Bounds(), xdraw.Over, nil)
 }
 
 // digitHeight is how tall the clock face's digits stand above the baseline.

@@ -5,8 +5,8 @@ package display
 import "github.com/HuskerMinion/techo5/echod/internal/config"
 
 // atNightOptions is what the night does to a Show's screen: puts it out, leaves a night light, or
-// leaves only the clock, in dim red.
-var atNightOptions = []string{"Screen off", "Night light", "Red clock"}
+// leaves only the clock (render_night.go).
+var atNightOptions = []string{"Screen off", "Night light", "Night clock"}
 
 func atNightIndex() int {
 	switch sc := config.Get().Screen; {
@@ -18,17 +18,17 @@ func atNightIndex() int {
 	return 0
 }
 
-// The red clock's styles, as they are stored (render_night.go draws them).
+// The night clock's styles, as they are stored (render_night.go draws them).
 const (
 	nightStylePlain = ""
 	nightStyleLED   = "led"
 	nightStyleFlip  = "flip"
 )
 
-// nightStyleOptions are the red clock's looks, as the screen and Home Assistant name them, in the order
+// nightStyleOptions are the night clock's looks, as the screen and Home Assistant name them, in the order
 // of nightStyles.
 var (
-	nightStyleOptions = []string{"Plain", "LED", "Flip"}
+	nightStyleOptions = []string{"Red", "Red LED", "Flip"}
 	nightStyles       = []string{nightStylePlain, nightStyleLED, nightStyleFlip}
 )
 

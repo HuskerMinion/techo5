@@ -191,7 +191,7 @@ func nightStyleSelect(d *Display) *esphome.Select {
 	s := &esphome.Select{
 		Base: esphome.Base{
 			ObjectID: "screen_night_clock_style",
-			Name:     "Red clock style",
+			Name:     "Night clock style",
 			Icon:     "mdi:clock-digital",
 			Category: esphome.CategoryConfig,
 		},
@@ -208,13 +208,13 @@ func nightStyleSelect(d *Display) *esphome.Select {
 	return s
 }
 
-// setNightStyle saves the red clock's look and shows it at once, so it can be chosen while looking.
+// setNightStyle saves the night clock's look and shows it at once, so it can be chosen while looking.
 func (d *Display) setNightStyle(i int) {
 	if i < 0 || i >= len(nightStyles) {
 		return
 	}
 	if err := config.Set().Screen().NightClockStyle(nightStyles[i]); err != nil {
-		slog.Error("saving the red clock style failed", "err", err)
+		slog.Error("saving the night clock style failed", "err", err)
 		return
 	}
 	if d.nightStyle != nil {

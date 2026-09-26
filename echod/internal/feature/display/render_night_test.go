@@ -9,11 +9,15 @@ import (
 	"time"
 )
 
-// Each red clock style draws something red on black and nothing brighter than the night red: a
-// clock for a dark room must not light it.
+// Each night clock style draws the time on black and nothing brighter than its own ink - the night red,
+// or the flip clock's dim off-white: a clock for a dark room must not light it.
 func TestRedClockStaysDim(t *testing.T) {
 	now := time.Date(2026, 9, 26, 3, 47, 0, 0, time.Local)
 	for _, style := range []string{nightStylePlain, nightStyleLED, nightStyleFlip} {
+		ink := nightRed
+		if style == nightStyleFlip {
+			ink = flipInk
+		}
 		r := newRenderer(image.NewRGBA(image.Rect(0, 0, 960, 480)))
 		r.draw(scene{now: now, phase: "idle", redClock: true, redStyle: style})
 		lit := 0
@@ -21,10 +25,10 @@ func TestRedClockStaysDim(t *testing.T) {
 		for y := b.Min.Y; y < b.Max.Y; y++ {
 			for x := b.Min.X; x < b.Max.X; x++ {
 				c := r.dst.RGBAAt(x, y)
-				if luma(c.R, c.G, c.B) > luma(nightRed.R, nightRed.G, nightRed.B) {
-					t.Fatalf("%q: a pixel brighter than the night red at (%d, %d): %v", style, x, y, c)
+				if luma(c.R, c.G, c.B) > luma(ink.R, ink.G, ink.B)+1 {
+					t.Fatalf("%q: a pixel brighter than its ink at (%d, %d): %v", style, x, y, c)
 				}
-				if c.R == nightRed.R {
+				if c == ink {
 					lit++
 				}
 			}

@@ -72,10 +72,10 @@ func categoryRows(sv sheetView) (rows []settingRow, note string) {
 			{id: "night", label: nightRowLabel, kind: ctlChoice, value: nightText(st.night)},
 		}
 		if hasNightLight && st.night != "" {
-			rows = append(rows, settingRow{id: "atnight", label: "At night", sub: "Dark, a faint glow, or a red clock until touched",
+			rows = append(rows, settingRow{id: "atnight", label: "At night", sub: "Dark, a faint glow, or a clock alone until touched",
 				kind: ctlChoice, value: atNightOptions[atNightIndex()]})
 			if atNightIndex() == 2 {
-				rows = append(rows, settingRow{id: "nightstyle", label: "Clock style", sub: "How the red clock looks",
+				rows = append(rows, settingRow{id: "nightstyle", label: "Clock style", sub: "How the night clock looks",
 					kind: ctlChoice, value: nightStyleLabel()})
 			}
 		}
