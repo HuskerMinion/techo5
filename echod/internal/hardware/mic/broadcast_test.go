@@ -42,7 +42,7 @@ func (m *reusedBuffer) Mix(mics [][]int16) []int16 {
 // what arrives is the frame the mixer made rather than what those two made of it.
 func testSource() *Source {
 	s := New()
-	s.cancelling = false
+	s.canceling = false
 	s.leveling.Store(false)
 	s.denoising.Store(false)
 	return s
@@ -90,7 +90,7 @@ func TestCanceledFramesAreNotTheSameBuffer(t *testing.T) {
 	if s.cancel == nil {
 		t.Skip("no canceller in this build")
 	}
-	s.cancelling = true
+	s.canceling = true
 
 	frames, stop := s.Listen("behind")
 	defer stop()
@@ -98,7 +98,7 @@ func TestCanceledFramesAreNotTheSameBuffer(t *testing.T) {
 	for i := range behindFrames {
 		s.broadcast(rawFrame(i, true))
 	}
-	if !s.Cancelling() {
+	if !s.Canceling() {
 		t.Fatal("the canceller did not engage: the loopback in these frames is too quiet")
 	}
 

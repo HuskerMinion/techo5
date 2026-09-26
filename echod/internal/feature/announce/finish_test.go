@@ -23,9 +23,9 @@ func TestFinishingTwice(t *testing.T) {
 	f.Finish()
 }
 
-// Cancelling reaches the recording: record returns on ctx, and this is the handle the screen has on
+// Canceling reaches the recording: record returns on ctx, and this is the handle the screen has on
 // it. Without this the only way off the recording screen was to wait out the ceiling.
-func TestCancellingEndsTheRecording(t *testing.T) {
+func TestCancelingEndsTheRecording(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	f := &Feature{cancel: cancel}
 

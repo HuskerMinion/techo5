@@ -446,7 +446,7 @@ func (p *Phone) CallDevice(name string) error {
 			// this end sees of it; the other end's log says why.
 			reason := "failed"
 			if ctx.Err() != nil {
-				reason = "cancelled"
+				reason = "cancelled" // as Home Assistant receives it; automations match on it
 			}
 			slog.Info("intercom: call not answered", "device", peer.Name, "err", err)
 			fire("not_answered", p.State(), "reason", reason)
@@ -476,7 +476,7 @@ func (p *Phone) CallDevice(name string) error {
 				reason = "failed"
 				break wait
 			case <-ctx.Done():
-				reason = "cancelled"
+				reason = "cancelled" // as Home Assistant receives it; automations match on it
 				break wait
 			}
 		}

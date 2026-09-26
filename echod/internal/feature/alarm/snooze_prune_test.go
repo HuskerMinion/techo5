@@ -9,7 +9,7 @@ import (
 //
 // It used to stay there for good. A one-off already past is inert — next reports nothing for it ever
 // again, so due skips it, soonest skips it, and the only two things that ever pruned the list were a
-// snooze firing and somebody cancelling them all. Meanwhile the settings sheet went on drawing
+// snooze firing and somebody canceling them all. Meanwhile the settings sheet went on drawing
 // "Snoozed until" and a time that had been and gone: an alarm promised to somebody that was never
 // coming.
 func TestASnoozeThatPassedIsTakenOffTheList(t *testing.T) {

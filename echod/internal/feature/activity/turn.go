@@ -24,7 +24,7 @@ type Outcome string
 
 const (
 	Completed Outcome = "completed"
-	Canceled  Outcome = "cancelled"
+	Canceled  Outcome = "cancelled" // spelled so on purpose: Home Assistant receives it, and automations match on it
 	Timeout   Outcome = "timeout"
 	Failed    Outcome = "failed"
 )

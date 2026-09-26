@@ -111,12 +111,12 @@ func Length(notes []Note) time.Duration {
 // echo canceller takes care of; holding for all of it lost the first words of every request.
 //
 // With no echo canceller running, nothing takes the fade out, and a speaker a few centimeters from the
-// microphones is loud even 20 dB down: uncancelled counts until the fade is 30 dB down instead.
-func Audible(notes []Note, uncancelled bool) time.Duration {
+// microphones is loud even 20 dB down: uncanceled counts until the fade is 30 dB down instead.
+func Audible(notes []Note, uncanceled bool) time.Duration {
 	var ms int
 	for _, n := range notes {
 		switch {
-		case n.Clip != nil && uncancelled:
+		case n.Clip != nil && uncanceled:
 			ms += n.Clip.QuietMs()
 		case n.Clip != nil:
 			ms += n.Clip.LoudMs()

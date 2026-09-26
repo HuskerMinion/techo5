@@ -35,7 +35,7 @@ func TestSnoozesAreSavedAndReadBack(t *testing.T) {
 		}
 	}
 
-	// Cancelling them all is an empty list, not an absent one.
+	// Canceling them all is an empty list, not an absent one.
 	if err := st.Set().Alarms().Snoozed(nil); err != nil {
 		t.Fatalf("clearing the snoozes: %v", err)
 	}

@@ -432,7 +432,7 @@ func (p *Phone) Call(number string) error {
 		if err != nil {
 			reason := "failed"
 			if ctx.Err() != nil {
-				reason = "cancelled"
+				reason = "cancelled" // as Home Assistant receives it; automations match on it
 			}
 			slog.Info("phone: call not answered", "number", number, "err", err)
 			fire("not_answered", p.State(), "reason", reason)

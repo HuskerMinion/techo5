@@ -68,10 +68,10 @@ type Source struct {
 	mixer  Mixer
 	mixing config.Mixing
 
-	// cancel belongs to the reader alone. cancelling is the switch, which anything may set, and is read
+	// cancel belongs to the reader alone. canceling is the switch, which anything may set, and is read
 	// under mu with the mixer.
-	cancel     *canceller
-	cancelling bool
+	cancel    *canceller
+	canceling bool
 
 	// leveler and wasLeveling belong to the reader alone; leveling is the switch, which anything may
 	// set.
@@ -114,15 +114,15 @@ func (s *Source) Mixing() config.Mixing {
 func New() *Source {
 	mixer, mixing := NewMixer(config.Get().Microphone.Mixing)
 	s := &Source{
-		listeners:  map[int]*listener{},
-		raw:        map[int]chan []byte{},
-		mixer:      mixer,
-		mixing:     mixing,
-		leveler:    newLeveler(),
-		finder:     NewBeamformer(),
-		cancel:     newCanceller(),
-		cancelling: config.Get().Microphone.Cancel,
-		denoiser:   denoise.NewStream(Rate),
+		listeners: map[int]*listener{},
+		raw:       map[int]chan []byte{},
+		mixer:     mixer,
+		mixing:    mixing,
+		leveler:   newLeveler(),
+		finder:    NewBeamformer(),
+		cancel:    newCanceller(),
+		canceling: config.Get().Microphone.Cancel,
+		denoiser:  denoise.NewStream(Rate),
 	}
 	s.finder.hold = 1
 	s.facing.Store(-1)
@@ -390,7 +390,7 @@ func (s *Source) broadcast(raw []byte) {
 	// While something is playing, an echo canceled fixed path replaces the mix (cancelInput): the filter
 	// learns a single acoustic path, and the beamformer would steer at the loudest thing in the room,
 	// which during playback is the speaker being canceled.
-	if s.cancelling && s.cancel != nil {
+	if s.canceling && s.cancel != nil {
 		if canceled := s.cancel.apply(raw, cancelInput(s.mixer, mics, frame)); canceled != nil {
 			frame = canceled
 		}
@@ -401,7 +401,7 @@ func (s *Source) broadcast(raw []byte) {
 	// frame, and the denoiser and the leveler below work in place, so without this a listener holding
 	// a frame would find it turn into a later one: its channel is eight deep, and a wake engine a
 	// frame or two behind would score the newest frame twice over and never see what it missed. That
-	// is the wake word going unheard while music is playing, since cancelling is on by default.
+	// is the wake word going unheard while music is playing, since canceling is on by default.
 	//
 	// One buffer a frame, shared by every listener, because listeners only read what they are given.
 	// It is 640 bytes every 20 ms, next to the one Decode already allocates per microphone, so

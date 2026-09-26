@@ -12,19 +12,19 @@ func TestHomeAssistantCancelsOnlyTheDevicesOwnTimers(t *testing.T) {
 	eggs := ts.Start("Eggs", 7*time.Minute)
 
 	if err := ts.cancelFromHA("kettle"); err == nil {
-		t.Error("cancelling Home Assistant's own timer from here should be refused")
+		t.Error("canceling Home Assistant's own timer from here should be refused")
 	}
 	if err := ts.cancelFromHA("local:nope"); err == nil {
-		t.Error("cancelling a timer that does not exist should fail")
+		t.Error("canceling a timer that does not exist should fail")
 	}
 	if err := ts.cancelFromHA(pasta); err != nil {
-		t.Fatalf("cancelling %s: %v", pasta, err)
+		t.Fatalf("canceling %s: %v", pasta, err)
 	}
 	if _, ok := ts.held[pasta]; ok {
 		t.Error("the canceled timer is still held")
 	}
 	if _, ok := ts.held[eggs]; !ok {
-		t.Error("cancelling one timer took another with it")
+		t.Error("canceling one timer took another with it")
 	}
 
 	if err := ts.cancelFromHA("all"); err != nil {

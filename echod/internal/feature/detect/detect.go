@@ -68,12 +68,12 @@ const slackFloor = 0.5
 // it is the one word said while the speaker is certainly playing, because playing is what it is
 // asked to stop. Exempting it made the one word whose job is to interrupt a sound the only word
 // judged with no allowance for the sound.
-func thresholdFor(slot int, base func(int) float64, stop float64, cancelling bool) float64 {
+func thresholdFor(slot int, base func(int) float64, stop float64, canceling bool) float64 {
 	t := stop
 	if slot != StopSlot {
 		t = base(slot)
 	}
-	if cancelling {
+	if canceling {
 		t = max(t-playingSlack, slackFloor)
 	}
 	return t
@@ -85,7 +85,7 @@ func newDetect() *Detect {
 	e := New(StopSlot+1, mic.Get())
 
 	e.Threshold = func(slot int) float64 {
-		return thresholdFor(slot, wakeword.Threshold, config.Get().Wake.Stop.Threshold, mic.Get().Cancelling())
+		return thresholdFor(slot, wakeword.Threshold, config.Get().Wake.Stop.Threshold, mic.Get().Canceling())
 	}
 
 	e.OnDetect = func(slot int) {

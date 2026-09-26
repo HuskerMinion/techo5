@@ -30,7 +30,7 @@ const refQuiet = 1e-7 * 32768 * 32768 / 4
 //
 // Speech is full of gaps, and without this the gate flaps between every word. That is not only untidy:
 // the room is still ringing with the echo of the word that just played, and the measured tail here runs
-// past 100 ms, so disengaging on the gap stops cancelling exactly as that tail arrives. A second
+// past 100 ms, so disengaging on the gap stops canceling exactly as that tail arrives. A second
 // covers it with room to spare, and rides across the pauses in a radio talk show.
 const refHold = Rate
 
@@ -217,9 +217,9 @@ func referenceInto(raw []byte, dst []int16) {
 	}
 }
 
-// Cancelling reports whether the canceller is currently running, which it does only while the loopback
+// Canceling reports whether the canceller is currently running, which it does only while the loopback
 // is carrying audio.
-func (s *Source) Cancelling() bool {
+func (s *Source) Canceling() bool {
 	return s.cancel != nil && s.cancel.active.Load()
 }
 
@@ -231,12 +231,12 @@ func (s *Source) ERLE() float64 {
 	return float64(s.cancel.erle.Load()) / 1000
 }
 
-// SetCancelling turns echo cancellation on or off. Off is the same signal path the device had before it
+// SetCanceling turns echo cancellation on or off. Off is the same signal path the device had before it
 // existed, which is what makes it worth having as a switch: it is the comparison.
-func (s *Source) SetCancelling(on bool) {
+func (s *Source) SetCanceling(on bool) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	s.cancelling = on
+	s.canceling = on
 }
 
 // SetCancelEngine chooses which canceller runs — "builtin" or "webrtc" — and reports what it
@@ -260,11 +260,11 @@ func (s *Source) CancelEngine() string {
 	return s.cancel.engine
 }
 
-// SetAdapting stops or resumes the canceller learning, while it goes on cancelling with what it has.
+// SetAdapting stops or resumes the canceller learning, while it goes on canceling with what it has.
 //
 // Turn it off while somebody is being listened to. The filter cannot tell a voice it was never given a
 // reference for from an echo it predicted badly, so it treats the voice as its own error and fits itself
-// to it — at exactly the moment cancelling matters. What it already learned stays correct: the room did
+// to it — at exactly the moment canceling matters. What it already learned stays correct: the room did
 // not change because somebody spoke.
 func (s *Source) SetAdapting(on bool) {
 	if s.cancel != nil {

@@ -134,7 +134,7 @@ func build() *Microphone {
 
 	m.cancel.OnCommand = func(on bool) {
 		m.cancel.Set(on)
-		source.SetCancelling(on)
+		source.SetCanceling(on)
 		if err := config.Set().Microphone().Cancel(on); err != nil {
 			slog.Error("saving the echo cancellation setting failed", "err", err)
 		}
@@ -200,7 +200,7 @@ func (m *Microphone) Restore(c config.Config) {
 	slog.Info("restored", "what", m.leveling.ObjectID, "using", c.Microphone.Leveling)
 
 	m.cancel.Set(c.Microphone.Cancel)
-	source.SetCancelling(c.Microphone.Cancel)
+	source.SetCanceling(c.Microphone.Cancel)
 	slog.Info("restored", "what", m.cancel.ObjectID, "using", c.Microphone.Cancel)
 
 	component.Restore(m.engine, c.Microphone.CancelEngine, setEngine)
