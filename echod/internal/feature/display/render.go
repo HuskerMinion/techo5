@@ -108,6 +108,10 @@ type scene struct {
 	drawerPick   string
 	pickScroll   int
 
+	// redClock is the night light as the red clock alone, in redStyle (render_night.go).
+	redClock bool
+	redStyle string
+
 	// demo puts placeholders in for the owner's details, for screenshots that will be published.
 	demo bool
 
@@ -277,6 +281,13 @@ func newRenderer(dst *image.RGBA) *renderer {
 // draw composes a whole frame. Everything is repainted: the canvas is small and a full paint is
 // simpler than tracking what changed.
 func (r *renderer) draw(s scene) {
+	// The red night clock is the whole screen: nothing else, not even the header, is drawn over it.
+	// Anything that needs somebody - a call, an alarm, a turn - has already lifted the night light,
+	// and this with it.
+	if s.redClock && s.call.Phase == phone.Idle && !s.ring.any() && !s.setupAsking {
+		r.redClockPage(s)
+		return
+	}
 	draw.Draw(r.dst, r.dst.Rect, image.NewUniform(walnut), image.Point{}, draw.Src)
 
 	// Registered first so it runs last: the header goes over every page, including the ones below

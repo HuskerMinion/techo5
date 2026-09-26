@@ -187,9 +187,45 @@ func atNightSelect(d *Display) *esphome.Select {
 	return s
 }
 
+func nightStyleSelect(d *Display) *esphome.Select {
+	s := &esphome.Select{
+		Base: esphome.Base{
+			ObjectID: "screen_night_clock_style",
+			Name:     "Red clock style",
+			Icon:     "mdi:clock-digital",
+			Category: esphome.CategoryConfig,
+		},
+		Options: nightStyleOptions,
+	}
+	s.OnCommand = func(v string) {
+		for i, o := range nightStyleOptions {
+			if o == v {
+				d.setNightStyle(i)
+				return
+			}
+		}
+	}
+	return s
+}
+
+// setNightStyle saves the red clock's look and shows it at once, so it can be chosen while looking.
+func (d *Display) setNightStyle(i int) {
+	if i < 0 || i >= len(nightStyles) {
+		return
+	}
+	if err := config.Set().Screen().NightClockStyle(nightStyles[i]); err != nil {
+		slog.Error("saving the red clock style failed", "err", err)
+		return
+	}
+	if d.nightStyle != nil {
+		d.nightStyle.Set(nightStyleOptions[i])
+	}
+	d.wake()
+}
+
 // setAtNight saves the choice, shows it in Home Assistant, and lets the night take it up at once.
 func (d *Display) setAtNight(i int) {
-	if err := config.Set().Screen().NightLight(i == 1); err != nil {
+	if err := config.Set().Screen().AtNight(i >= 1, i == 2); err != nil {
 		slog.Error("saving the night setting failed", "err", err)
 		return
 	}

@@ -15,6 +15,14 @@ type Screen struct {
 	// a touch brings it up to its brightness for a while.
 	NightLight bool `json:"night_light,omitempty"`
 
+	// NightRed makes the night light a clock alone, in dim red on black, rather than the screen as it
+	// is. Only with NightLight.
+	NightRed bool `json:"night_red,omitempty"`
+
+	// NightClockStyle is how the red clock looks: empty for the ordinary clock face, "led" for an LED
+	// clock's seven segments, "flip" for a flip clock's cards.
+	NightClockStyle string `json:"night_clock_style,omitempty"`
+
 	// NightLightLevel is how bright the night light is, 1 to 10; none is the panel's own default.
 	NightLightLevel int `json:"night_light_level,omitempty"`
 
@@ -93,6 +101,15 @@ func (w ScreenWriter) NightLightLevel(v int) error {
 
 func (w ScreenWriter) NightLight(v bool) error {
 	return w.st.Update(func(c *Config) { c.Screen.NightLight = v })
+}
+
+func (w ScreenWriter) NightClockStyle(v string) error {
+	return w.st.Update(func(c *Config) { c.Screen.NightClockStyle = v })
+}
+
+// AtNight sets both at once: the night light, and whether it is the red clock.
+func (w ScreenWriter) AtNight(light, red bool) error {
+	return w.st.Update(func(c *Config) { c.Screen.NightLight, c.Screen.NightRed = light, light && red })
 }
 
 func (w ScreenWriter) Night(v string) error {

@@ -160,7 +160,9 @@ type Display struct {
 	nightHours, atNight *esphome.Select
 	// nightStart and nightEnd are the night's custom hours, to the quarter hour.
 	nightStart, nightEnd *esphome.Select
-	glowLevel            *esphome.Number
+	// nightStyle is the red night clock's look.
+	nightStyle *esphome.Select
+	glowLevel  *esphome.Number
 
 	// wide is the Show 8's bigger, brighter panel, which glows harder at the same backlight.
 	wide bool
@@ -265,6 +267,7 @@ func build() *Display {
 	d.strip = stripSelect(d.wake)
 	d.nightHours = nightHoursSelect(d)
 	d.nightStart, d.nightEnd = nightEndSelect(d, true), nightEndSelect(d, false)
+	d.nightStyle = nightStyleSelect(d)
 	d.atNight = atNightSelect(d)
 	d.glowLevel = glowNumber(d)
 	d.lang = langSelect()
@@ -315,7 +318,7 @@ func build() *Display {
 func (d *Display) Name() string { return "screen" }
 
 func (d *Display) Entities() []esphome.Entity {
-	return []esphome.Entity{d.light, d.auto, d.clock, d.camTime, d.callBtn, d.weatherFx, d.lang, d.strip, d.nightHours, d.nightStart, d.nightEnd, d.atNight, d.glowLevel}
+	return []esphome.Entity{d.light, d.auto, d.clock, d.camTime, d.callBtn, d.weatherFx, d.lang, d.strip, d.nightHours, d.nightStart, d.nightEnd, d.atNight, d.nightStyle, d.glowLevel}
 }
 
 // Restore lights the panel the way it was left. Before the framebuffer is opened: the backlight is
@@ -328,6 +331,7 @@ func (d *Display) Restore(c config.Config) {
 	d.strip.Set(stripOptions[stripIndex()])
 	d.nightHoursChanged()
 	d.atNight.Set(atNightOptions[atNightIndex()])
+	d.nightStyle.Set(nightStyleOptions[nightStyleIndex()])
 	d.glowLevel.Set(float32(d.glowSetting()))
 	d.setAuto(c.Screen.Auto, false)
 	d.apply(c.Screen.On, c.Screen.Brightness, false)
@@ -1474,6 +1478,8 @@ func (d *Display) frame() time.Duration {
 	d.mu.Unlock()
 	d.mu.Lock()
 	s.demo = now.Before(d.demoUntil)
+	s.redClock = d.nightGlow && config.Get().Screen.NightRed
+	s.redStyle = config.Get().Screen.NightClockStyle
 	d.mu.Unlock()
 	if s.showDrawer && s.drawerTab == drawerCameras {
 		s.cameras = home.Get().Cameras()

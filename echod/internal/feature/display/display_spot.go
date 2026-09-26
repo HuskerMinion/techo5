@@ -1230,3 +1230,4 @@ func (d *Display) Screenshot() *image.RGBA {
 // Spot's night only dims, and its hours are not in Home Assistant.
 func (d *Display) setAtNight(int)     {}
 func (d *Display) nightHoursChanged() {}
+func (d *Display) setNightStyle(int)  {}
