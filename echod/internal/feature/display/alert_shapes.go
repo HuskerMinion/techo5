@@ -66,14 +66,11 @@ type pen struct {
 	inside func(x, y int) bool
 }
 
-// strokeRing and fillRings draw with a pen that may go anywhere on dst.
+// strokeRing draws with a pen that may go anywhere on dst.
 func strokeRing(dst *image.RGBA, pts []image.Point, c color.RGBA, w float64) {
 	pen{dst, nil}.stroke(pts, c, w)
 }
 
-func fillRings(dst *image.RGBA, rings [][]image.Point, c color.RGBA, k float64) {
-	pen{dst, nil}.fill(rings, c, k)
-}
 
 // blend mixes c into the pixel at x, y by c's alpha times k.
 func (p pen) blend(x, y int, c color.RGBA, k float64) {
