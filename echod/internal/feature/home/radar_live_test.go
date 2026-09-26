@@ -1,6 +1,7 @@
 package home
 
 import (
+	"encoding/json"
 	"fmt"
 	"image/png"
 	"os"
@@ -39,7 +40,10 @@ func TestRadarLive(t *testing.T) {
 		t.Fatal(err)
 	}
 	v := f.radar.view
-	t.Logf("%d frames, credit %q", len(v.Frames), v.Credit)
+	t.Logf("%d frames, %d towns, credit %q", len(v.Frames), len(v.Places), v.Credit)
+	if b, err := json.Marshal(v.Places); err == nil {
+		_ = os.WriteFile(filepath.Join(dir, "places.json"), b, 0o644)
+	}
 	for i, fr := range v.Frames {
 		out, err := os.Create(filepath.Join(dir, fmt.Sprintf("frame-%d.png", i)))
 		if err != nil {

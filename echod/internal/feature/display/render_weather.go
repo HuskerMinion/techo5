@@ -148,6 +148,15 @@ func (r *renderer) radarPage(s scene) {
 	r.ring(h, r.s(7), amber)
 	r.ring(h, r.s(5), amber)
 
+	// The towns, where there is room: clear of the bands, the Forecast button and the home marker.
+	keep := []image.Rectangle{
+		image.Rect(0, 0, r.w, r.margin+r.s(42)),
+		image.Rect(0, r.h-r.s(34), r.w, r.h),
+		image.Rect(r.w-r.s(200), r.h-r.s(110), r.w, r.h),
+		image.Rect(h.X-r.s(12), h.Y-r.s(12), h.X+r.s(12), h.Y+r.s(12)),
+	}
+	drawPlaces(r.dst, r.tiny, v.Places, keep, func(b image.Rectangle) bool { return b.In(r.dst.Bounds()) }, 14)
+
 	// The time of the frame, and the clock, on dark bands so they read over the map.
 	shade := func(rect image.Rectangle) {
 		draw.Draw(r.dst, rect, image.NewUniform(color.RGBA{0, 0, 0, 150}), image.Point{}, draw.Over)

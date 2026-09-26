@@ -74,6 +74,14 @@ type RadarView struct {
 	Home    image.Point // where home is on the picture
 	Credit  string      // where the radar, the clouds and the map came from, for the page to show
 	Short   string      // the same in a few words, for the Spot's round face
+	Places  []RadarPlace
+}
+
+// RadarPlace is a town on the picture, for the page to name where there is room: largest first.
+type RadarPlace struct {
+	Name string
+	At   image.Point
+	Pop  int
 }
 
 type radarState struct {
@@ -254,6 +262,7 @@ func (f *Feature) buildRadarAt(lat, lon float64) error {
 	r.base, r.lat, r.lon, r.source = base, lat, lon, src.name
 	r.view.Home = image.Pt(radarW/2, radarH/2)
 	r.view.Credit, r.view.Short = radarCredit(src, lon), src.name+" · NASA"
+	r.view.Places = placesIn(x0, y0, radarW, radarH)
 	r.mu.Unlock()
 
 	// The clouds change slowly next to the rain, so one picture of them sits under every frame; the map

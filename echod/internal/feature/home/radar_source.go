@@ -138,5 +138,5 @@ func radarCredit(src radarSource, lon float64) string {
 	if cloudLayer(lon) != "" {
 		s += "  ·  Clouds NOAA GOES"
 	}
-	return s + "  ·  Map NASA Blue Marble"
+	return s + "  ·  Map NASA  ·  Places GeoNames"
 }

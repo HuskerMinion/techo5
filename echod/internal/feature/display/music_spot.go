@@ -4,6 +4,7 @@ package display
 
 import (
 	"fmt"
+	"image"
 	"image/color"
 	"math"
 	"strings"
@@ -378,6 +379,30 @@ func (r *roundRenderer) radarFace(s roundScene) {
 	// Home: the frame is centered on it, and the circle crops round the middle.
 	r.ringAt(center, center, 6, 10, 0, 2*math.Pi, color.RGBA{0, 0, 0, 200})
 	r.ringAt(center, center, 7, 9, 0, 2*math.Pi, colRadar)
+
+	// The towns inside the circle, placed as coverCircle placed the map: scaled to cover, centered.
+	sw, sh := f.Image.Bounds().Dx(), f.Image.Bounds().Dy()
+	scale := math.Max(float64(side)/float64(sw), float64(side)/float64(sh))
+	offX, offY := (float64(sw)-float64(side)/scale)/2, (float64(sh)-float64(side)/scale)/2
+	places := make([]home.RadarPlace, 0, len(v.Places))
+	for _, p := range v.Places {
+		p.At = image.Pt(int((float64(p.At.X)-offX)*scale), int((float64(p.At.Y)-offY)*scale))
+		places = append(places, p)
+	}
+	inCircle := func(b image.Rectangle) bool {
+		lim := float64(rimIn - 6)
+		for _, c := range []image.Point{b.Min, {b.Max.X, b.Min.Y}, {b.Min.X, b.Max.Y}, b.Max} {
+			if math.Hypot(float64(c.X)-center, float64(c.Y)-center) > lim {
+				return false
+			}
+		}
+		return true
+	}
+	keep := []image.Rectangle{
+		image.Rect(0, 40, side, 84), image.Rect(0, 404, side, 436),
+		image.Rect(int(center)-14, int(center)-14, int(center)+14, int(center)+14),
+	}
+	drawPlaces(r.dst, r.small, places, keep, inCircle, 6)
 
 	label := "Radar " + clockHM(f.At.Local())
 	if i == n-1 {
