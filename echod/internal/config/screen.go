@@ -28,6 +28,10 @@ type Screen struct {
 	// Clock24 shows times on the screen as 15:04 instead of 3:04 PM.
 	Clock24 bool `json:"clock_24,omitempty"`
 
+	// CameraMinutes is how long a camera opened from the screen stays up: 0 for the default minute,
+	// -1 until it is tapped closed.
+	CameraMinutes int `json:"camera_minutes,omitempty"`
+
 	// CallButton puts a Call button on the home screen, which opens the list of devices in the house
 	// and phone contacts to call. Off until somebody wants it, so an update changes nobody's screen.
 	CallButton bool `json:"call_button,omitempty"`
@@ -101,6 +105,10 @@ func (w ScreenWriter) Welcomed(v bool) error {
 
 func (w ScreenWriter) Clock24(v bool) error {
 	return w.st.Update(func(c *Config) { c.Screen.Clock24 = v })
+}
+
+func (w ScreenWriter) CameraMinutes(v int) error {
+	return w.st.Update(func(c *Config) { c.Screen.CameraMinutes = v })
 }
 
 func (w ScreenWriter) WeatherStill(v bool) error {

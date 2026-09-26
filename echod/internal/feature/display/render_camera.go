@@ -13,9 +13,8 @@ import (
 // The camera view: the latest frame centered on the panel, the camera's name and the time in the
 // corners, and a hint that a tap closes it. Below it, the cameras page: a list, like the radio's.
 const (
-	// camListShow is how long a camera picked from the list stays up; cameraVoiceShow one asked
-	// for by voice.
-	camListShow     = 60 * time.Second
+	// cameraVoiceShow is how long a camera asked for by voice stays up; one picked from the list
+	// stays for the Camera time setting (cameraScreenTime).
 	cameraVoiceShow = 30 * time.Second
 )
 

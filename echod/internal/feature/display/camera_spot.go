@@ -19,9 +19,9 @@ import (
 // a green dot at the top of the rim says so.
 
 const (
-	// cameraShow is how long a camera stays up when asked for; cameraStep when stepped to.
+	// cameraShow is how long a camera stays up when asked for; one stepped to from the screen stays
+	// for the Camera time setting (cameraScreenTime).
 	cameraShow = 30 * time.Second
-	cameraStep = 60 * time.Second
 
 	// cameraListIdle is how long the camera list stays up untouched.
 	cameraListIdle = 15 * time.Second
@@ -42,7 +42,7 @@ func stepCamera(current string, by int) {
 		}
 	}
 	i = ((i+by)%len(cams) + len(cams)) % len(cams)
-	home.Get().ShowCamera(cams[i].Entity, cameraStep)
+	home.Get().ShowCamera(cams[i].Entity, cameraScreenTime())
 }
 
 // cameraView fills the circle with the camera's latest frame.
@@ -131,7 +131,7 @@ func pickCamera(sel int) {
 	if sel < 0 || sel >= len(cams) {
 		return
 	}
-	home.Get().ShowCamera(cams[sel].Entity, cameraStep)
+	home.Get().ShowCamera(cams[sel].Entity, cameraScreenTime())
 }
 
 // discImage draws img inside a circle of radius rad at (cx, cy), scaled to cover it.

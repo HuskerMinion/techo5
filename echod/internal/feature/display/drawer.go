@@ -136,7 +136,7 @@ func (d *Display) drawerRowTap(id string) {
 	case "cam":
 		if cams := home.Get().Cameras(); i < len(cams) {
 			d.closeDrawer()
-			home.Get().ShowCamera(cams[i].Entity, camListShow)
+			home.Get().ShowCamera(cams[i].Entity, cameraScreenTime())
 		}
 	case "st":
 		rows := radioList(home.Get().Radio())

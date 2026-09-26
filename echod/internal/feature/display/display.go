@@ -86,6 +86,8 @@ type Display struct {
 	light *esphome.Light
 	auto  *esphome.Switch
 	clock *esphome.Select
+	// camTime is how long a camera opened from the screen stays up.
+	camTime *esphome.Select
 	// callBtn is the home screen's Call button, on or off (callbutton.go).
 	callBtn *esphome.Switch
 	// weatherFx is the weather page's sky moving, on or off (weatherfx.go).
@@ -255,6 +257,7 @@ func build() *Display {
 	d.light.OnCommand = d.command
 	d.auto.OnCommand = func(on bool) { d.setAuto(on, true) }
 	d.clock = clockSelect(d.wake)
+	d.camTime = cameraTimeSelect()
 	d.callBtn = callButtonSwitch(d.wake)
 	d.weatherFx = weatherAnimationSwitch(d.wake)
 	d.strip = stripSelect(d.wake)
@@ -309,13 +312,14 @@ func build() *Display {
 func (d *Display) Name() string { return "screen" }
 
 func (d *Display) Entities() []esphome.Entity {
-	return []esphome.Entity{d.light, d.auto, d.clock, d.callBtn, d.weatherFx, d.lang, d.strip, d.nightHours, d.atNight, d.glowLevel}
+	return []esphome.Entity{d.light, d.auto, d.clock, d.camTime, d.callBtn, d.weatherFx, d.lang, d.strip, d.nightHours, d.atNight, d.glowLevel}
 }
 
 // Restore lights the panel the way it was left. Before the framebuffer is opened: the backlight is
 // its own device.
 func (d *Display) Restore(c config.Config) {
 	setClock24(d.clock, c.Screen.Clock24)
+	d.camTime.Set(cameraTimes[cameraTimeIndex()].label)
 	setCallButton(d.callBtn, c.Screen.CallButton)
 	setWeatherAnimation(d.weatherFx, !c.Screen.WeatherStill)
 	d.strip.Set(stripOptions[stripIndex()])

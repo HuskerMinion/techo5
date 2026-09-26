@@ -77,6 +77,7 @@ func categoryRows(sv sheetView) (rows []settingRow, note string) {
 		rows = append(rows, themeRows()...)
 		rows = append(rows,
 			settingRow{id: "clock", label: "Clock format", kind: ctlChoice, value: clockOptions[clockIndex()]},
+			settingRow{id: "camtime", label: "Camera time", sub: "How long a camera opened here stays up", kind: ctlChoice, value: cameraTimes[cameraTimeIndex()].label},
 			settingRow{id: "callbutton", label: "Call button", sub: "On the home screen: devices and contacts", kind: ctlToggle, on: callButton.Load()},
 			settingRow{id: "weatherfx", label: "Weather animation", sub: "Rain, snow and storms move on the forecast", kind: ctlToggle, on: weatherAnimation.Load()},
 			settingRow{id: "musicstrip", label: "Now playing", sub: "Full page, or a strip over the clock", kind: ctlChoice, value: stripOptionText()},
@@ -370,6 +371,8 @@ func pickerFor(id string, sv sheetView) (pickerView, bool) {
 		return folderPicker(sv.st.folder, sv.st.demo), true
 	case "clock":
 		return pickerView{title: "Clock format", opts: clockOptions, cur: clockIndex()}, true
+	case "camtime":
+		return pickerView{title: "Camera time", opts: cameraTimeOptions(), cur: cameraTimeIndex()}, true
 	case "musicstrip":
 		return pickerView{title: "Now playing", opts: stripChoices(), cur: stripIndexShared()}, true
 	case "screenlang":
@@ -421,6 +424,8 @@ func (d *Display) choose(id string, i int) {
 			return
 		}
 		setClock24(d.clock, on)
+	case "camtime":
+		setCameraTime(d.camTime, i)
 	case "wakeword":
 		if models := wake.Lib().Ours(); i < len(models) {
 			id := models[i].ID
@@ -675,7 +680,7 @@ func (d *Display) rowTap(id string, p part, opt int) {
 	case "subfolders":
 		_, _, subfolders := home.Get().SlideshowSettings()
 		home.Get().SetSlideshowSubfolders(!subfolders)
-	case "night", "atnight", "clock", "musicstrip", "slideshow", "photoevery", "screenlang", "newtimer", "sleep", "sunrise",
+	case "night", "atnight", "clock", "camtime", "musicstrip", "slideshow", "photoevery", "screenlang", "newtimer", "sleep", "sunrise",
 		"timezone", "wakeword", "waketone":
 		d.openPicker(id)
 	}
