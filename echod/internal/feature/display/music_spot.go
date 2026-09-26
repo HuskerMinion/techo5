@@ -386,7 +386,7 @@ func (r *roundRenderer) radarFace(s roundScene) {
 	w := r.width(r.label, label)
 	r.line(float64(center-w/2-10), 62, float64(center+w/2+10), 62, 32, color.RGBA{0, 0, 0, 160})
 	r.centered(r.label, label, 69, colText)
-	credit := "RainViewer · © OpenStreetMap"
+	credit := v.Short
 	cw := r.width(r.tiny, credit)
 	r.line(float64(center-cw/2-8), 420, float64(center+cw/2+8), 420, 24, color.RGBA{0, 0, 0, 160})
 	r.centered(r.tiny, credit, 425, colDim)

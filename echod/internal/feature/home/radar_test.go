@@ -15,6 +15,8 @@ import (
 	"strings"
 	"sync"
 	"testing"
+
+	"github.com/HuskerMinion/techo5/echod/internal/config"
 )
 
 func TestWorldPixel(t *testing.T) {
@@ -140,11 +142,12 @@ func (fr *fakeRadar) count(frame string) int {
 // The radar builds every frame in order; a second build asks for nothing it already has; and a frame
 // that fails keeps the others that arrived, so the retry asks only for the one that was missing.
 func TestTheRadarBuildsAndReusesItsFrames(t *testing.T) {
-	defer func(i, m, d string) { radarIndex, mapTiles, mapDir = i, m, d }(radarIndex, mapTiles, mapDir)
+	defer func(i, m, d string) { radarIndex, baseTiles, mapDir = i, m, d }(radarIndex, baseTiles, mapDir)
 	fr := &fakeRadar{n: 4, asked: map[string]int{}}
 	srv := httptest.NewServer(fr)
 	defer srv.Close()
-	radarIndex, mapTiles, mapDir = srv.URL+"/index.json", srv.URL+"/map/%d/%d/%d.png", t.TempDir()
+	radarIndex, baseTiles, mapDir = srv.URL+"/index.json", srv.URL+"/map/%d/%d/%d.png", t.TempDir()
+	config.Use(filepath.Join(t.TempDir(), "state.json")) // automatic: RainViewer, since 10, 20 is not the U.S.
 
 	f := &Feature{}
 	if err := f.buildRadarAt(10, 20); err != nil {
@@ -166,7 +169,7 @@ func TestTheRadarBuildsAndReusesItsFrames(t *testing.T) {
 	if err := f.buildRadarAt(10, 20); err == nil {
 		t.Fatal("a frame that failed did not fail the build")
 	}
-	if _, ok := f.radar.made["/frame5"]; !ok {
+	if _, ok := f.radar.made["rv/frame5"]; !ok {
 		t.Error("the newest frame that arrived was not kept for the retry")
 	}
 	fr.mu.Lock()

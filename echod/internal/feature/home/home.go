@@ -80,6 +80,7 @@ type Feature struct {
 	// weatherSel picks the weather entity; weathers is Home Assistant's list of them, fetched at
 	// weathersAt.
 	weatherSel *esphome.Select
+	radarSel   *esphome.Select // where the rain map's radar comes from (radar_setting.go)
 	weathers   []hass.Entity
 	weathersAt time.Time
 
@@ -188,6 +189,7 @@ func Get() *Feature {
 	once.Do(func() {
 		shared = &Feature{poke: make(chan struct{}, 1), metaPoke: make(chan struct{}, 1)}
 		shared.buildWeatherSelect()
+		shared.buildRadarSelect()
 		shared.buildSlideshowSelect()
 		hastate.Get().Changed.Listen(func(hastate.Update) { shared.Changed.Emit(struct{}{}) })
 		media.Get().OnPlay.Listen(shared.played)
@@ -303,6 +305,7 @@ func (f *Feature) Name() string { return "home" }
 func (f *Feature) Restore(c config.Config) {
 	f.weatherSel.Options = weatherOptions(c.Home)
 	f.weatherSel.Set(chosenOption(c.Home))
+	f.radarSel.Set(radarChoices[RadarSourceIndex()].label)
 	if hasScreen {
 		f.slideshowSel.Set(slideshowLabelFor(c.Home.Slideshow.Mode))
 		f.slideshowOverlaySel.Set(slideshowOverlayLabelFor(c.Home.Slideshow.Overlay))

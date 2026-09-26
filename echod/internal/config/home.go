@@ -39,6 +39,11 @@ type Home struct {
 
 	// DoNotDisturb turns intercom calls away: the caller is told, and nothing rings here.
 	DoNotDisturb bool `json:"do_not_disturb,omitempty"`
+
+	// RadarSource is where the rain map's radar comes from: RadarNWS (the U.S. National Weather
+	// Service's national composite, lower 48 only), RadarRainViewer (worldwide), or empty for
+	// automatic, which is the NWS when home is in the lower 48 and RainViewer anywhere else.
+	RadarSource string `json:"radar_source,omitempty"`
 }
 
 // Slideshow is how the idle screen's photo slideshow is wired: a Home Assistant media source to
@@ -141,6 +146,12 @@ const (
 	RadioOwn = "own"
 )
 
+// Where the rain map's radar comes from; empty is automatic.
+const (
+	RadarNWS        = "nws"
+	RadarRainViewer = "rainviewer"
+)
+
 // The slideshow's display modes.
 const (
 	SlideshowBackground  = "background"  // behind the ordinary idle page, always on
@@ -184,6 +195,10 @@ func (w HomeWriter) DoNotDisturb(v bool) error {
 
 func (w HomeWriter) WeatherSources(ids []string) error {
 	return w.st.Update(func(c *Config) { c.Home.WeatherSources = ids })
+}
+
+func (w HomeWriter) RadarSource(source string) error {
+	return w.st.Update(func(c *Config) { c.Home.RadarSource = source })
 }
 
 func (w HomeWriter) RadioSource(source string) error {

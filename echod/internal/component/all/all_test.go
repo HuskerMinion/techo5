@@ -92,6 +92,7 @@ var registered = []string{
 	"phone_peer",
 	"purge_cache",
 	"quiet_hours",
+	"radar_source",
 	"radio_temperature",
 	"reply_buffer_1",
 	"reply_buffer_2",

@@ -2,11 +2,9 @@ package home
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"image"
-	"image/color"
 	"image/draw"
 	"image/png"
 	"io"
@@ -19,19 +17,17 @@ import (
 	"sync"
 	"time"
 
-	xdraw "golang.org/x/image/draw"
-
 	"github.com/HuskerMinion/techo5/echod/internal/feature/hastate"
 	"github.com/HuskerMinion/techo5/echod/internal/layout"
 	"github.com/HuskerMinion/techo5/echod/internal/lib/hass"
 )
 
-// The rain map: RainViewer's radar over an OpenStreetMap map, darkened here to sit with the rest of
-// the screen, centered on Home Assistant's home zone. Both are free to use with credit, which the page
-// shows; OpenStreetMap's tile policy also asks for an identifying User-Agent and light use, so the map
-// is fetched once for a location, two tiles at a time, and kept. RainViewer's free tiles stop at zoom 7,
-// so the radar is drawn from zoom 7 at twice the size over a zoom 8 map. The last frames play as a
-// loop, so the rain's direction shows.
+// The rain map, centered on Home Assistant's home zone: radar from the NWS in the lower 48 or
+// RainViewer anywhere (radar_source.go), drawn in one look over NASA's Blue Marble with the clouds from
+// a weather satellite (radar_look.go). All of it is free to use with credit, which the page shows; the
+// map is fetched once for a location, two tiles at a time, and kept. RainViewer's free tiles stop at
+// zoom 7, so its radar is drawn from zoom 7 at twice the size over the zoom 8 map; the NWS's comes at
+// zoom 8. The last frames play as a loop, so the rain's direction shows.
 //
 // Speed, since a page nobody can see yet is a page nobody waits for: the fetch starts when the weather
 // page opens, where the Radar button is; the newest frame is shown as soon as it alone is in, and the
@@ -61,11 +57,8 @@ const (
 	userAgent = "TECHO5 (https://github.com/HuskerMinion/techo5)"
 )
 
-// Where the radar and the map come from; a test points them at its own server.
-var (
-	radarIndex = "https://api.rainviewer.com/public/weather-maps.json"
-	mapTiles   = "https://tile.openstreetmap.org/%d/%d/%d.png"
-)
+// Where RainViewer's frames are listed; a test points it at its own server.
+var radarIndex = "https://api.rainviewer.com/public/weather-maps.json"
 
 // RadarFrame is one picture of the loop and when the rain was measured.
 type RadarFrame struct {
@@ -79,6 +72,8 @@ type RadarView struct {
 	Loading bool
 	Problem string
 	Home    image.Point // where home is on the picture
+	Credit  string      // where the radar, the clouds and the map came from, for the page to show
+	Short   string      // the same in a few words, for the Spot's round face
 }
 
 type radarState struct {
@@ -87,19 +82,21 @@ type radarState struct {
 	fetched  time.Time
 	busy     bool
 	lat, lon float64
-	base     *image.RGBA // the darkened map, for lat/lon
+	base     *image.RGBA // the tinted map, for lat/lon
+	source   string      // the source the frames in made came from
 
-	// made are the frames already drawn, by RainViewer's path for them, for the frames still current.
+	// made are the frames already drawn, by their source's key for them, for the frames still current.
 	made map[string]RadarFrame
 }
 
-// mapDir is where the darkened map is kept between restarts (a test moves it), and mapFile its name,
+// mapDir is where the tinted map is kept between restarts (a test moves it), and mapFile its name,
 // for what it shows.
 var mapDir = layout.StateDir
 
 func mapFile(lat, lon float64) string {
-	// v1 is darken's look: a change to it has to be a new name, or the old look comes back from disk.
-	return filepath.Join(mapDir, fmt.Sprintf("radar-map-v1-%.4f-%.4f-%dx%d.png", lat, lon, radarW, radarH))
+	// v2 is Blue Marble with tintBase's look: a change to either has to be a new name, or the old look
+	// comes back from disk.
+	return filepath.Join(mapDir, fmt.Sprintf("radar-map-v2-%.4f-%.4f-%dx%d.png", lat, lon, radarW, radarH))
 }
 
 // savedMap is the map kept on disk for lat/lon, or nil.
@@ -229,76 +226,71 @@ func (f *Feature) buildRadarAt(lat, lon float64) error {
 	cx, cy := worldPixel(lat, lon, mapZoom)
 	x0, y0 := int(cx)-radarW/2, int(cy)-radarH/2
 
+	src := radarSourceFor(lat, lon)
 	r := &f.radar
 	r.mu.Lock()
 	base := r.base
 	if r.lat != lat || r.lon != lon {
 		base, r.made = nil, nil
 	}
+	if r.source != src.name {
+		// A different source: its frames replace the old ones rather than looping with them.
+		r.made, r.view.Frames = nil, nil
+	}
 	r.mu.Unlock()
 	if base == nil {
 		base = savedMap(lat, lon)
 	}
 	if base == nil {
-		// OpenStreetMap asks for light use: two tiles at a time, once for a place, then kept.
 		if base, err = mosaic(ctx, radarW, radarH, x0, y0, mapZoom, 2, func(x, y int) string {
-			return fmt.Sprintf(mapTiles, mapZoom, x, y)
+			return fmt.Sprintf(baseTiles, mapZoom, y, x)
 		}); err != nil {
 			return fmt.Errorf("map: %w", err)
 		}
-		darken(base)
+		tintBase(base)
 		saveMap(lat, lon, base)
 	}
 	r.mu.Lock()
-	r.base, r.lat, r.lon = base, lat, lon
+	r.base, r.lat, r.lon, r.source = base, lat, lon, src.name
 	r.view.Home = image.Pt(radarW/2, radarH/2)
+	r.view.Credit, r.view.Short = radarCredit(src, lon), src.name+" · NASA"
 	r.mu.Unlock()
 
-	var index struct {
-		Host  string `json:"host"`
-		Radar struct {
-			Past []struct {
-				Time int64  `json:"time"`
-				Path string `json:"path"`
-			} `json:"past"`
-		} `json:"radar"`
-	}
-	b, err := get(ctx, radarIndex)
-	if err != nil {
-		return fmt.Errorf("radar index: %w", err)
-	}
-	if err := json.Unmarshal(b, &index); err != nil {
-		return fmt.Errorf("radar index: %w", err)
-	}
-	past := index.Radar.Past
-	if len(past) == 0 || index.Host == "" {
-		return errors.New("radar index is empty")
-	}
-	if len(past) > radarFrames {
-		past = past[len(past)-radarFrames:]
+	// The clouds change slowly next to the rain, so one picture of them sits under every frame; the map
+	// alone does if the satellite cannot be reached.
+	ground := image.NewRGBA(base.Bounds())
+	draw.Draw(ground, ground.Bounds(), base, image.Point{}, draw.Src)
+	if err := clouds(ctx, ground, lon, x0, y0); err != nil {
+		slog.Debug("radar: clouds", "err", err)
+		draw.Draw(ground, ground.Bounds(), base, image.Point{}, draw.Src)
 	}
 
-	// One frame: the radar at half the map's zoom, twice the size, over the map.
+	past, err := src.frames(ctx)
+	if err != nil {
+		return err
+	}
+
+	// One frame: the source's radar at its zoom, turned back into dBZ and painted over the ground.
 	var fctx context.Context = ctx // the fetches' own, once they start side by side
-	frame := func(path string, at int64) (RadarFrame, error) {
-		rain, err := mosaic(fctx, radarW/2, radarH/2, x0/2, y0/2, radarZoom, 4, func(x, y int) string {
-			return fmt.Sprintf("%s%s/%d/%d/%d/%d/2/1_1.png", index.Host, path, tileSize, radarZoom, x, y)
+	scale := 1 << (mapZoom - src.zoom)
+	frame := func(p sourceFrame) (RadarFrame, error) {
+		rain, err := mosaic(fctx, radarW/scale, radarH/scale, floorDiv(x0, scale), floorDiv(y0, scale), src.zoom, 4, func(x, y int) string {
+			return p.tile(src.zoom, x, y)
 		})
 		if err != nil {
 			return RadarFrame{}, fmt.Errorf("radar: %w", err)
 		}
 		img := image.NewRGBA(image.Rect(0, 0, radarW, radarH))
-		draw.Draw(img, img.Bounds(), base, image.Point{}, draw.Src)
-		xdraw.ApproxBiLinear.Scale(img, img.Bounds(), rain, rain.Bounds(), draw.Over,
-			&xdraw.Options{SrcMask: image.NewUniform(color.Alpha{A: 210})})
-		return RadarFrame{Image: img, At: time.Unix(at, 0)}, nil
+		draw.Draw(img, img.Bounds(), ground, image.Point{}, draw.Src)
+		paintRain(img, reflectivity(rain, src.colors), rain.Bounds().Dx(), rain.Bounds().Dy())
+		return RadarFrame{Image: img, At: p.at}, nil
 	}
 
 	r.mu.Lock()
 	made := make(map[string]RadarFrame, len(past))
 	for _, p := range past {
-		if fr, ok := r.made[p.Path]; ok {
-			made[p.Path] = fr
+		if fr, ok := r.made[p.key]; ok {
+			made[p.key] = fr
 		}
 	}
 	r.mu.Unlock()
@@ -307,12 +299,12 @@ func (f *Feature) buildRadarAt(lat, lon float64) error {
 	// The newest first, and on screen by itself if there is nothing there yet: it is the one anybody
 	// opening the page is looking for.
 	newest := past[len(past)-1]
-	if _, ok := made[newest.Path]; !ok {
-		fr, err := frame(newest.Path, newest.Time)
+	if _, ok := made[newest.key]; !ok {
+		fr, err := frame(newest)
 		if err != nil {
 			return err
 		}
-		made[newest.Path] = fr
+		made[newest.key] = fr
 		fetched++
 		r.mu.Lock()
 		if len(r.view.Frames) == 0 {
@@ -328,7 +320,7 @@ func (f *Feature) buildRadarAt(lat, lon float64) error {
 	// and what did arrive is kept for the retry either way.
 	var todo []int
 	for i, p := range past[:len(past)-1] {
-		if _, ok := made[p.Path]; !ok {
+		if _, ok := made[p.key]; !ok {
 			todo = append(todo, i)
 		}
 	}
@@ -351,7 +343,7 @@ func (f *Feature) buildRadarAt(lat, lon float64) error {
 			if fctx.Err() != nil {
 				return
 			}
-			fr, err := frame(p.Path, p.Time)
+			fr, err := frame(p)
 			mu.Lock()
 			defer mu.Unlock()
 			if err != nil {
@@ -361,7 +353,7 @@ func (f *Feature) buildRadarAt(lat, lon float64) error {
 				}
 				return
 			}
-			made[p.Path] = fr
+			made[p.key] = fr
 			fetched++
 		}()
 	}
@@ -375,13 +367,13 @@ func (f *Feature) buildRadarAt(lat, lon float64) error {
 
 	frames := make([]RadarFrame, 0, len(past))
 	for _, p := range past {
-		frames = append(frames, made[p.Path])
+		frames = append(frames, made[p.key])
 	}
 	r.mu.Lock()
 	r.view.Frames, r.made = frames, made
 	r.mu.Unlock()
-	slog.Info("radar: frames ready", "frames", len(frames), "fetched", fetched,
-		"latest", frames[len(frames)-1].At.Format(time.Kitchen),
+	slog.Info("radar: frames ready", "source", src.name, "frames", len(frames), "fetched", fetched,
+		"latest", frames[len(frames)-1].At.Local().Format(time.Kitchen),
 		"newest_after", newestAfter.Round(10*time.Millisecond), "took", time.Since(began).Round(10*time.Millisecond))
 	return nil
 }
@@ -432,20 +424,6 @@ func mosaic(ctx context.Context, w, h, x0, y0, zoom, parallel int, url func(x, y
 	}
 	wg.Wait()
 	return out, first
-}
-
-// darken turns a light map dark: brightness inverted, so land goes near black and labels light, then
-// tinted toward the screen's warm ground.
-func darken(img *image.RGBA) {
-	p := img.Pix
-	for i := 0; i+3 < len(p); i += 4 {
-		lum := (299*int(p[i]) + 587*int(p[i+1]) + 114*int(p[i+2])) / 1000
-		v := 255 - lum
-		p[i] = uint8(min(255, 22+v*62/100))
-		p[i+1] = uint8(min(255, 18+v*57/100))
-		p[i+2] = uint8(min(255, 16+v*52/100))
-		p[i+3] = 255
-	}
 }
 
 func floorDiv(a, b int) int {

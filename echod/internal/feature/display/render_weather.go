@@ -160,7 +160,7 @@ func (r *renderer) radarPage(s scene) {
 	r.text(r.small, label, r.margin, r.margin+r.s(26), amber)
 	r.cornerClock(s)
 
-	credit := "Radar RainViewer  ·  Map © OpenStreetMap contributors"
+	credit := v.Credit
 	shade(image.Rect(0, r.h-r.s(34), r.w, r.h))
 	r.text(r.tiny, credit, r.margin, r.h-r.s(10), dim)
 	r.weatherToggle("Forecast")
