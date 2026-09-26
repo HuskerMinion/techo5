@@ -124,20 +124,24 @@ func (r *renderer) segmentDigit(x, top, w, h, t, digit int) {
 	if digit >= 0 && digit <= 9 {
 		lit = segments[digit]
 	}
-	g := max(t*2/5, 2) // the gap where two segments meet: wide, so each segment stands apart as on an old LED
+	// Each segment runs between the corner points where the segments' centerlines cross, stopping short
+	// of them by g, so a clear gap stands at every corner, as on an old LED clock.
+	g := max(t*3/10, 2)
 	mid := top + h/2
+	left, right := x+t/2, x+w-t/2
+	upper, lower := top+t/2, top+h-t/2
 	type seg struct {
 		name           byte
 		x0, y0, x1, y1 int // the segment's centerline
 	}
 	for _, s := range []seg{
-		{'a', x + g, top + t/2, x + w - g, top + t/2},
-		{'d', x + g, top + h - t/2, x + w - g, top + h - t/2},
-		{'g', x + g, mid, x + w - g, mid},
-		{'f', x + t/2, top + g, x + t/2, mid - g},
-		{'b', x + w - t/2, top + g, x + w - t/2, mid - g},
-		{'e', x + t/2, mid + g, x + t/2, top + h - g},
-		{'c', x + w - t/2, mid + g, x + w - t/2, top + h - g},
+		{'a', left + g, upper, right - g, upper},
+		{'d', left + g, lower, right - g, lower},
+		{'g', left + g, mid, right - g, mid},
+		{'f', left, upper + g, left, mid - g},
+		{'b', right, upper + g, right, mid - g},
+		{'e', left, mid + g, left, lower - g},
+		{'c', right, mid + g, right, lower - g},
 	} {
 		c := nightGhost
 		if strings.IndexByte(lit, s.name) >= 0 {
