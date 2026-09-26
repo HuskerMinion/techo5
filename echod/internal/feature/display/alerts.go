@@ -271,27 +271,3 @@ func (r *renderer) badgeTapped(p image.Point) bool {
 	defer r.alertMu.Unlock()
 	return !r.badgeAt.Empty() && p.In(r.badgeAt.Inset(-r.s(10)))
 }
-
-// alertKind is one pill: a kind of event, the first alert of that kind at home (the one a tap opens),
-// and how many alerts of it there are.
-type alertKind struct {
-	idx   int
-	event string
-	color color.RGBA
-	count int
-}
-
-// alertKinds are the alerts at home as pills, one per kind of event, most severe first.
-func alertKinds(here []home.Alert) []alertKind {
-	var out []alertKind
-	at := map[string]int{}
-	for i, a := range here {
-		if k, ok := at[a.Event]; ok {
-			out[k].count++
-			continue
-		}
-		at[a.Event] = len(out)
-		out = append(out, alertKind{i, a.Event, a.Color, 1})
-	}
-	return out
-}

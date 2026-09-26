@@ -226,6 +226,9 @@ func newRoundRenderer(dst *image.RGBA) *roundRenderer {
 }
 
 func (r *roundRenderer) draw(s roundScene) {
+	if !(s.menuOpen && s.menuMode == modeWeather && s.radarOn) {
+		r.shapes = alertOverlay{} // kept only while the rain map is up
+	}
 	draw.Draw(r.dst, r.dst.Rect, image.NewUniform(colBackground), image.Point{}, draw.Src)
 	r.callDrawn = false
 	r.clearAlertTaps()

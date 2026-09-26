@@ -161,6 +161,11 @@ func (r *renderer) radarPage(s scene) {
 		image.Rect(h.X-r.s(12), h.Y-r.s(12), h.X+r.s(12), h.Y+r.s(12)),
 	}
 	keep = append(keep, pills...)
+	if v.Note != "" {
+		// The note's line over the credits, as wide as the note draws.
+		room := r.weatherButton().Min.X - r.s(12) - r.margin
+		keep = append(keep, image.Rect(0, r.h-r.s(62), r.margin+r.width(r.tiny, clipText(r, r.tiny, v.Note, room))+r.s(10), r.h-r.s(34)))
+	}
 	drawPlaces(r.dst, r.tiny, v.Places, keep, func(b image.Rectangle) bool { return b.In(r.dst.Bounds()) }, 14)
 
 	// The time of the frame, and the clock, on dark bands so they read over the map.

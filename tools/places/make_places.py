@@ -16,7 +16,6 @@ Needs fontTools (pip install fonttools) and Go-Regular.ttf, found in Go's module
 
     python3 tools/places/make_places.py [--font Go-Regular.ttf] [cities5000.zip]
 """
-import glob
 import gzip
 import io
 import os
@@ -33,18 +32,31 @@ OUT = os.path.join(os.path.dirname(__file__), "..", "..", "echod", "internal", "
 
 
 def go_regular():
-    """The path of Go-Regular.ttf in Go's module cache, the newest x/image there."""
+    """The path of Go-Regular.ttf in Go's module cache: the x/image version echod builds with, by its
+    go.mod, so the check is against the font the screen draws with."""
     cache = subprocess.run(["go", "env", "GOMODCACHE"], capture_output=True, text=True, check=True).stdout.strip()
-    found = sorted(glob.glob(os.path.join(cache, "golang.org", "x", "image@*", "font", "gofont", "ttfs", "Go-Regular.ttf")))
-    if not found:
-        sys.exit("Go-Regular.ttf not in Go's module cache: run 'go mod download golang.org/x/image' in echod, or pass --font")
-    return found[-1]
+    gomod = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "echod", "go.mod")
+    version = None
+    for line in open(gomod, encoding="utf-8"):
+        parts = line.split()
+        if len(parts) >= 2 and parts[0] in ("golang.org/x/image", "require") and "golang.org/x/image" in parts:
+            version = parts[parts.index("golang.org/x/image") + 1]
+            break
+    if not version:
+        sys.exit("golang.org/x/image is not in echod/go.mod; pass --font")
+    path = os.path.join(cache, "golang.org", "x", "image@" + version, "font", "gofont", "ttfs", "Go-Regular.ttf")
+    if not os.path.exists(path):
+        sys.exit("Go-Regular.ttf for x/image " + version + " is not in Go's module cache: run "
+                 "'go mod download golang.org/x/image' in echod, or pass --font")
+    return path
 
 
 def main():
     args = sys.argv[1:]
     font = None
     if args[:1] == ["--font"]:
+        if len(args) < 2:
+            sys.exit("--font needs the path of a Go-Regular.ttf")
         font, args = args[1], args[2:]
     glyphs = set(TTFont(font or go_regular()).getBestCmap())
 

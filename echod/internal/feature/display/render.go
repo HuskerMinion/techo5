@@ -323,6 +323,9 @@ func newRenderer(dst *image.RGBA) *renderer {
 // draw composes a whole frame. Everything is repainted: the canvas is small and a full paint is
 // simpler than tracking what changed.
 func (r *renderer) draw(s scene) {
+	if !s.showRadar {
+		r.shapes = alertOverlay{} // the alert shapes' picture is the page's size: kept only while the rain map is up
+	}
 	r.setWeatherAt(image.Rectangle{})
 	r.setDateAt(image.Rectangle{})
 	r.setPopupAt(image.Rectangle{})

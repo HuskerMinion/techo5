@@ -232,12 +232,30 @@ func alertWhen(a home.Alert, now time.Time) string {
 
 // otherKinds is how many kinds of alert there are at home besides the first's: the "+N" beside it on
 // the badge and the Spot's pill, counted as the pills group them, so two Wind Advisories are one.
-func otherKinds(here []home.Alert) int {
-	seen := map[string]bool{}
-	for _, a := range here {
-		seen[a.Event] = true
+func otherKinds(here []home.Alert) int { return max(len(alertKinds(here))-1, 0) }
+
+// alertKind is one pill: a kind of event, the first alert of that kind at home (the one a tap opens),
+// and how many alerts of it there are.
+type alertKind struct {
+	idx   int
+	event string
+	color color.RGBA
+	count int
+}
+
+// alertKinds are the alerts at home as pills, one per kind of event, most severe first.
+func alertKinds(here []home.Alert) []alertKind {
+	var out []alertKind
+	at := map[string]int{}
+	for i, a := range here {
+		if k, ok := at[a.Event]; ok {
+			out[k].count++
+			continue
+		}
+		at[a.Event] = len(out)
+		out = append(out, alertKind{i, a.Event, a.Color, 1})
 	}
-	return max(len(seen)-1, 0)
+	return out
 }
 
 // itoa is a count as the pages write it.
