@@ -45,13 +45,13 @@ const (
 // fb_var_screeninfo: 160 bytes on every ABI, all u32.
 type varInfo struct {
 	Xres, Yres, XresVirtual, YresVirtual, Xoffset, Yoffset uint32
-	BitsPerPixel, Grayscale                               uint32
-	Red, Green, Blue, Transp                              [3]uint32 // offset, length, msb_right
-	Nonstd, Activate, Height, Width, AccelFlags           uint32
-	Pixclock, LeftMargin, RightMargin, UpperMargin        uint32
-	LowerMargin, HsyncLen, VsyncLen, Sync, Vmode, Rotate  uint32
-	Colorspace                                            uint32
-	Reserved                                              [4]uint32
+	BitsPerPixel, Grayscale                                uint32
+	Red, Green, Blue, Transp                               [3]uint32 // offset, length, msb_right
+	Nonstd, Activate, Height, Width, AccelFlags            uint32
+	Pixclock, LeftMargin, RightMargin, UpperMargin         uint32
+	LowerMargin, HsyncLen, VsyncLen, Sync, Vmode, Rotate   uint32
+	Colorspace                                             uint32
+	Reserved                                               [4]uint32
 }
 
 // fb_fix_screeninfo as the 32-bit userspace sees it: unsigned long is 4 bytes.

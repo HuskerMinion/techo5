@@ -42,4 +42,3 @@ func (p *Phone) CallCallee(c Callee) error {
 	}
 	return p.Call(c.Number)
 }
-

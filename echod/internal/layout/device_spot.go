@@ -35,7 +35,6 @@ const (
 	// kept of its own run.
 	LogPath = "/data/techo5-linux/techo5.log"
 	BootLog = "/run/boot.log"
-
 )
 
 var AnimationScripts = []string{}

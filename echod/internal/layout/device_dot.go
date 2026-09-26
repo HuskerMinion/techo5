@@ -42,7 +42,6 @@ const (
 	// kernel ring rather than a file of its own, so BootLog is empty and a bundle reads dmesg for it.
 	LogPath = "/data/techo5-linux/echod.log"
 	BootLog = ""
-
 )
 
 var AnimationScripts = []string{StartAnimation, StopAnimation}
