@@ -48,6 +48,7 @@ import (
 	"github.com/HuskerMinion/techo5/echod/internal/hardware/ambient"
 	"github.com/HuskerMinion/techo5/echod/internal/hardware/screen"
 	"github.com/HuskerMinion/techo5/echod/internal/hardware/touch"
+	"github.com/HuskerMinion/techo5/echod/internal/lib/hass"
 	"github.com/HuskerMinion/techo5/echod/internal/lib/wifi"
 	"github.com/HuskerMinion/techo5/echod/internal/service"
 )
@@ -189,6 +190,14 @@ type Display struct {
 	// stays once the turn is over.
 	weatherArmed bool
 	weatherUntil time.Time
+
+	// The calendar page (render_calendar.go): up until calUntil, on calMonth, as calDay's list when
+	// that is set, with calDetail's window open over it when that is.
+	calUntil  time.Time
+	calMonth  time.Time
+	calDay    time.Time
+	calDetail *hass.Event
+	calScroll int // the day's list, scrolled this many rows
 	// radar is the rain map in place of the forecast, while the weather page is up.
 	radar bool
 
@@ -696,6 +705,12 @@ func (d *Display) gesture(g touch.Gesture) {
 		return
 	}
 
+	// The calendar page takes its own taps and swipes while it is up.
+	if d.calendarUp() {
+		d.calendarGesture(g)
+		d.wake()
+		return
+	}
 	switch g.Kind {
 	case touch.Tap:
 		d.mu.Lock()
@@ -707,6 +722,11 @@ func (d *Display) gesture(g touch.Gesture) {
 		if idle && !weatherUp && d.r != nil && d.r.weatherTapped(image.Pt(g.X, g.Y)) {
 			slog.Info("screen: forecast by touch")
 			d.ShowWeather(false)
+			return
+		}
+		// The date under the clock opens the calendar, once this device shows one.
+		if idle && !weatherUp && d.r != nil && d.r.dateTapped(image.Pt(g.X, g.Y)) && d.OpenCalendar() {
+			slog.Info("screen: calendar by touch")
 			return
 		}
 		// A short swipe from the top edge that never made a notch arrives as a tap; it must not
@@ -1513,6 +1533,7 @@ func (d *Display) frame() time.Duration {
 	d.showingPlaying, d.showingStrip, d.showingWord = s.nowPlaying, s.strip, playingWord(s) != ""
 	d.mu.Unlock()
 	s.weather = home.Get().Weather()
+	d.calendarScene(&s, now)
 	d.mu.Lock()
 	s.showWeather = (s.phase == "idle" || s.phase == "lingering") && now.Before(d.weatherUntil)
 	s.showRadar = s.showWeather && d.radar
@@ -1535,7 +1556,7 @@ func (d *Display) frame() time.Duration {
 	// has held for the configured wait, tracked by how long it has run continuously.
 	d.dashScene(&s, s.showSheet || s.showDrawer || ring.any() || call.Phase != phone.Idle)
 	boring := s.phase == "idle" && call.Phase == phone.Idle && !ring.any() && !s.bt.Pairing &&
-		!s.showWifi && !s.showSheet && !s.showCamera && !s.showRadar && !s.showWeather && !s.nowPlaying &&
+		!s.showWifi && !s.showSheet && !s.showCamera && !s.showRadar && !s.showWeather && !s.showCalendar && !s.nowPlaying &&
 		!s.showDash
 	// A browser waiting to be let in is a page of its own, over whatever is on the screen: asking for
 	// the setup page is done from the settings screen, so the answer has to reach somebody who is
@@ -1578,7 +1599,7 @@ func (d *Display) frame() time.Duration {
 
 	// The Call button is on the clock itself and only there: on any other page a tap where it would be
 	// still does what that page does.
-	s.callButton = callButton.Load() && s.phase == "idle" && !s.nowPlaying && !s.strip && !s.showWeather &&
+	s.callButton = callButton.Load() && s.phase == "idle" && !s.nowPlaying && !s.strip && !s.showWeather && !s.showCalendar &&
 		s.sunrise == 0 && s.slideshowScreensaver == nil && !s.showDrawer && !s.showSheet
 	d.mu.Lock()
 	d.callShown = s.callButton

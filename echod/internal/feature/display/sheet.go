@@ -184,6 +184,7 @@ func generalRows(sv sheetView) []settingRow {
 	}
 	return []settingRow{
 		{label: "Name", sub: "Change it on the setup page", kind: ctlValue, value: st.name},
+		{id: "calendars", label: "Calendars", sub: "Shown on the calendar page, from Home Assistant", kind: ctlChoice, value: calendarsValue()},
 		{id: "weather", label: "Weather", sub: "Shown with the clock", kind: ctlChoice, value: st.weather, button: "Show"},
 		{id: "timezone", label: "Time zone", sub: zoneSub(), kind: ctlChoice, value: zoneValue()},
 		{id: "screenlang", label: "Screen language", sub: "What this screen listens for, not what the assistant speaks",
@@ -426,6 +427,8 @@ func pickerFor(id string, sv sheetView) (pickerView, bool) {
 		return pickerView{title: "Clock format", opts: clockOptions, cur: clockIndex()}, true
 	case "camtime":
 		return pickerView{title: "Camera time", opts: cameraTimeOptions(), cur: cameraTimeIndex()}, true
+	case "calendars":
+		return calendarsPicker(), true
 	case "musicstrip":
 		return pickerView{title: "Now playing", opts: stripChoices(), cur: stripIndexShared()}, true
 	case "screenlang":
@@ -519,6 +522,10 @@ func (d *Display) choose(id string, i int) {
 		setClock24(d.clock, on)
 	case "camtime":
 		setCameraTime(d.camTime, i)
+	case "calendars":
+		if toggleCalendar(i) {
+			d.openPicker("calendars") // stays open, for ticking another
+		}
 	case "wakeword":
 		if models := wake.Lib().Ours(); i < len(models) {
 			id := models[i].ID
@@ -773,7 +780,7 @@ func (d *Display) rowTap(id string, p part, opt int) {
 	case "subfolders":
 		_, _, subfolders := home.Get().SlideshowSettings()
 		home.Get().SetSlideshowSubfolders(!subfolders)
-	case "night", "atnight", "nightstyle", "clock", "camtime", "musicstrip", "slideshow", "photoevery", "screenlang", "newtimer", "sleep", "sunrise",
+	case "night", "atnight", "nightstyle", "clock", "camtime", "calendars", "musicstrip", "slideshow", "photoevery", "screenlang", "newtimer", "sleep", "sunrise",
 		"timezone", "wakeword", "waketone":
 		d.openPicker(id)
 	}

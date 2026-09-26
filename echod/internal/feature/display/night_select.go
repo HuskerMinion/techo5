@@ -3,6 +3,7 @@
 package display
 
 import (
+	"errors"
 	"fmt"
 	"log/slog"
 	"strings"
@@ -148,6 +149,14 @@ func (d *Display) Actions() []*esphome.Action {
 		Name: "screen_night_hours",
 		Args: []esphome.Arg{{Name: "start", Type: esphome.ArgString}, {Name: "end", Type: esphome.ArgString}},
 		Run:  func(c esphome.Call) (any, error) { return nil, d.setNightHours(c.String("start"), c.String("end")) },
+	}, {
+		Name: "calendar_show",
+		Run: func(esphome.Call) (any, error) {
+			if !d.OpenCalendar() {
+				return nil, errors.New("calendar: this device shows no calendar; choose one with calendar_sources")
+			}
+			return nil, nil
+		},
 	}}
 }
 

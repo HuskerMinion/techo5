@@ -708,6 +708,19 @@ data:
   calendars: calendar.family, calendar.work
 ```
 
+## Show the calendar
+
+In YAML, refer to this action as `esphome.<node>_calendar_show`.
+
+Opens the calendar page on a Show, on this month, as a tap on the date under the clock does. The page
+shows the month with each day's events on it; a tap on a day lists its events, and a tap on an event
+opens its details. It closes after two minutes untouched, or with Done. Fails on a device that shows
+no calendar (choose one with `calendar_sources`, or Settings, General, Calendars). No arguments.
+
+```yaml
+action: esphome.office_calendar_show
+```
+
 ## Set the night hours
 
 In YAML, refer to this action as `esphome.<node>_screen_night_hours`.

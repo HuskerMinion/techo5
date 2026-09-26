@@ -109,6 +109,10 @@ type scene struct {
 	drawerPick   string
 	pickScroll   int
 
+	// showCalendar is the calendar page, cal what it shows (render_calendar.go).
+	showCalendar bool
+	cal          calendarView
+
 	// redClock is the night light as the red clock alone, in redStyle (render_night.go).
 	redClock bool
 	redStyle string
@@ -189,6 +193,11 @@ type renderer struct {
 	// goroutine, so under its own lock.
 	weatherMu sync.Mutex
 	weatherAt image.Rectangle
+	dateAt    image.Rectangle // the date under the clock, the same way: a tap there opens the calendar
+
+	// calHits are the calendar page's buttons, days and events as last drawn (render_calendar.go).
+	calMu   sync.Mutex
+	calHits []calHit
 
 	// weatherKept is the forecast page as last drawn, and weatherKey what it showed: while the sky
 	// moves the page is drawn twelve times a second, and the page itself changes once a minute.
@@ -202,6 +211,7 @@ type renderer struct {
 	body   font.Face // transcript and reply
 	small  font.Face // date, corner clock, footer
 	tiny   font.Face
+	micro  font.Face // an event's words on a day of the month
 	margin int
 
 	// base keeps the settings screen's unchanging part.
@@ -281,6 +291,7 @@ func newRenderer(dst *image.RGBA) *renderer {
 	r.body = face(regular, 42)
 	r.small = face(regular, 34)
 	r.tiny = face(regular, 26)
+	r.micro = face(regular, 18)
 	if r.scaled() {
 		fc := sheetFacesAt(r.s)
 		r.fc = &fc
@@ -292,6 +303,7 @@ func newRenderer(dst *image.RGBA) *renderer {
 // simpler than tracking what changed.
 func (r *renderer) draw(s scene) {
 	r.setWeatherAt(image.Rectangle{})
+	r.setDateAt(image.Rectangle{})
 	// The red night clock is the whole screen: nothing else, not even the header, is drawn over it.
 	// Anything that needs somebody - a call, an alarm, a turn - has already lifted the night light,
 	// and this with it.
@@ -359,6 +371,13 @@ func (r *renderer) draw(s scene) {
 	}
 	if s.showCamera {
 		r.cameraView(s, s.camera)
+		if s.showVolume {
+			r.volumeBar(s)
+		}
+		return
+	}
+	if s.showCalendar {
+		r.calendarPage(s)
 		if s.showVolume {
 			r.volumeBar(s)
 		}
@@ -450,7 +469,7 @@ func (r *renderer) volumeBar(s scene) {
 // timeAndDate draws the hour, AM/PM and date centered, with the hour's baseline at base and an
 // optional suffix appended to the date line (an alarm note, on the ordinary idle page). Shared by
 // bigClock and the screensaver's normal-size overlay, which wants the clock alone.
-func (r *renderer) timeAndDate(now time.Time, base int, dateSuffix string) {
+func (r *renderer) timeAndDate(now time.Time, base int, dateSuffix string) image.Rectangle {
 	hour := clockHM(now)
 	ampm := clockSuffix(now)
 	hw := r.width(r.clock, hour)
@@ -464,7 +483,9 @@ func (r *renderer) timeAndDate(now time.Time, base int, dateSuffix string) {
 	r.text(r.ampm, ampm, x+hw+gap, base, amber)
 
 	date := now.Format("Monday, January 2") + dateSuffix
-	r.text(r.small, date, (r.w-r.width(r.small, date))/2, base+r.s(70), dim)
+	x = (r.w - r.width(r.small, date)) / 2
+	r.text(r.small, date, x, base+r.s(70), dim)
+	return image.Rect(x, base+r.s(40), x+r.width(r.small, date), base+r.s(80))
 }
 
 // bigClock is the idle screen: the time across the middle, the date beneath, and under that the running
@@ -492,7 +513,8 @@ func (r *renderer) bigClock(s scene) {
 		}
 		suffix = "  ·  " + what + " " + clockText(next.At)
 	}
-	r.timeAndDate(s.now, base, suffix)
+	// A tap on the date opens the calendar, with a finger's room around it.
+	r.setDateAt(r.timeAndDate(s.now, base, suffix).Inset(-r.s(16)))
 	if timers {
 		r.timersLine(s, base+r.s(128))
 	}
@@ -524,6 +546,19 @@ func (r *renderer) weatherCorner(s scene) {
 	r.text(r.small, line, x, r.margin+26, dim)
 	// A tap on it opens the forecast: the icon and the words, with a finger's room around them.
 	r.setWeatherAt(image.Rect(r.margin, r.margin+15-weatherMark/2, x+r.width(r.small, line), r.margin+15+weatherMark/2).Inset(-r.s(14)))
+}
+
+func (r *renderer) setDateAt(b image.Rectangle) {
+	r.weatherMu.Lock()
+	r.dateAt = b
+	r.weatherMu.Unlock()
+}
+
+// dateTapped is whether a tap at p landed on the date under the home screen's clock, as last drawn.
+func (r *renderer) dateTapped(p image.Point) bool {
+	r.weatherMu.Lock()
+	defer r.weatherMu.Unlock()
+	return !r.dateAt.Empty() && p.In(r.dateAt)
 }
 
 func (r *renderer) setWeatherAt(b image.Rectangle) {
