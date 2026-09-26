@@ -698,15 +698,22 @@ func (d *Display) gesture(g touch.Gesture) {
 
 	switch g.Kind {
 	case touch.Tap:
+		d.mu.Lock()
+		weatherUp := time.Now().Before(d.weatherUntil)
+		idle := d.view.Phase == "idle"
+		d.mu.Unlock()
+		// The weather on the home screen opens the forecast, the page a weather question brings up. It
+		// sits in the top band, so it is looked for before that band's rule below.
+		if idle && !weatherUp && d.r != nil && d.r.weatherTapped(image.Pt(g.X, g.Y)) {
+			slog.Info("screen: forecast by touch")
+			d.ShowWeather(false)
+			return
+		}
 		// A short swipe from the top edge that never made a notch arrives as a tap; it must not
 		// start a turn. The top band is the sheet's, taps there do nothing.
 		if g.Y < topEdge {
 			return
 		}
-		d.mu.Lock()
-		weatherUp := time.Now().Before(d.weatherUntil)
-		idle := d.view.Phase == "idle"
-		d.mu.Unlock()
 		if weatherUp {
 			// The weather page: its button turns between the forecast and the rain map, and keeps the
 			// page up a while longer; a tap anywhere else puts it away.

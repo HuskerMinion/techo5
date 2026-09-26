@@ -9,6 +9,7 @@ import (
 	"image/draw"
 	"log/slog"
 	"math"
+	"sync"
 	"time"
 
 	"golang.org/x/image/font"
@@ -183,6 +184,12 @@ type renderer struct {
 	// flip is the night's flip clock: what its cards show, and a flip under way.
 	flip flipState
 
+	// weatherAt is where the home screen's weather was drawn in the frame last drawn, for a tap there
+	// to open the forecast; empty when it was not drawn. Written while drawing, read by the touch
+	// goroutine, so under its own lock.
+	weatherMu sync.Mutex
+	weatherAt image.Rectangle
+
 	// weatherKept is the forecast page as last drawn, and weatherKey what it showed: while the sky
 	// moves the page is drawn twelve times a second, and the page itself changes once a minute.
 	weatherKept []byte
@@ -284,6 +291,7 @@ func newRenderer(dst *image.RGBA) *renderer {
 // draw composes a whole frame. Everything is repainted: the canvas is small and a full paint is
 // simpler than tracking what changed.
 func (r *renderer) draw(s scene) {
+	r.setWeatherAt(image.Rectangle{})
 	// The red night clock is the whole screen: nothing else, not even the header, is drawn over it.
 	// Anything that needs somebody - a call, an alarm, a turn - has already lifted the night light,
 	// and this with it.
@@ -514,6 +522,21 @@ func (r *renderer) weatherCorner(s scene) {
 		x += weatherMark + 14
 	}
 	r.text(r.small, line, x, r.margin+26, dim)
+	// A tap on it opens the forecast: the icon and the words, with a finger's room around them.
+	r.setWeatherAt(image.Rect(r.margin, r.margin+15-weatherMark/2, x+r.width(r.small, line), r.margin+15+weatherMark/2).Inset(-r.s(14)))
+}
+
+func (r *renderer) setWeatherAt(b image.Rectangle) {
+	r.weatherMu.Lock()
+	r.weatherAt = b
+	r.weatherMu.Unlock()
+}
+
+// weatherTapped is whether a tap at p landed on the home screen's weather, as last drawn.
+func (r *renderer) weatherTapped(p image.Point) bool {
+	r.weatherMu.Lock()
+	defer r.weatherMu.Unlock()
+	return !r.weatherAt.Empty() && p.In(r.weatherAt)
 }
 
 // weatherMark is how big the corner's icon is: the height of the line it sits beside, so it reads as
