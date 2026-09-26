@@ -28,6 +28,9 @@ const (
 	// hasNightLight is whether the night can leave the screen as a night light rather than dark. The
 	// Spot's night only ever dims it.
 	hasNightLight = true
+
+	// hasCalendarPopups is whether events pop up on this screen (calendar_popup.go).
+	hasCalendarPopups = true
 )
 
 // settingsScreen draws the settings screen for the scene's category.

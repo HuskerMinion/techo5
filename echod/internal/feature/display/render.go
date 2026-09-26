@@ -28,6 +28,7 @@ import (
 	"github.com/HuskerMinion/techo5/echod/internal/feature/remind"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/security"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/timer"
+	"github.com/HuskerMinion/techo5/echod/internal/lib/hass"
 )
 
 // The palette (walnut ground, amber accent, cream text, dim text, ember rules) is in sheet_widgets.go,
@@ -108,6 +109,9 @@ type scene struct {
 	drawerScroll int
 	drawerPick   string
 	pickScroll   int
+
+	// popup is an event popped up over the screen (calendar_popup.go).
+	popup *hass.Event
 
 	// showCalendar is the calendar page, cal what it shows (render_calendar.go).
 	showCalendar bool
@@ -359,6 +363,8 @@ func (r *renderer) draw(s scene) {
 		// announcement can both be up at once.
 		if s.showReminder {
 			r.reminderCard(s)
+		} else if s.popup != nil {
+			r.popupCard(s, *s.popup)
 		}
 	}()
 

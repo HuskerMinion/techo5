@@ -1231,3 +1231,6 @@ func (d *Display) Screenshot() *image.RGBA {
 func (d *Display) setAtNight(int)     {}
 func (d *Display) nightHoursChanged() {}
 func (d *Display) setNightStyle(int)  {}
+
+// popupSettingsChanged: the Spot has no event pop-ups yet.
+func (d *Display) popupSettingsChanged() {}

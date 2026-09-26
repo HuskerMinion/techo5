@@ -182,17 +182,17 @@ func generalRows(sv sheetView) []settingRow {
 	if !st.restartArm.IsZero() && st.now.Sub(st.restartArm) < restartWindow {
 		restart.sub, restart.button = "Tap again to restart now", "Confirm"
 	}
-	return []settingRow{
-		{label: "Name", sub: "Change it on the setup page", kind: ctlValue, value: st.name},
-		{id: "calendars", label: "Calendars", sub: "Shown on the calendar page, from Home Assistant", kind: ctlChoice, value: calendarsValue()},
-		{id: "weather", label: "Weather", sub: "Shown with the clock", kind: ctlChoice, value: st.weather, button: "Show"},
-		{id: "timezone", label: "Time zone", sub: zoneSub(), kind: ctlChoice, value: zoneValue()},
-		{id: "screenlang", label: "Screen language", sub: "What this screen listens for, not what the assistant speaks",
+	rows := []settingRow{{label: "Name", sub: "Change it on the setup page", kind: ctlValue, value: st.name}}
+	rows = append(rows, calendarRows()...)
+	return append(rows,
+		settingRow{id: "weather", label: "Weather", sub: "Shown with the clock", kind: ctlChoice, value: st.weather, button: "Show"},
+		settingRow{id: "timezone", label: "Time zone", sub: zoneSub(), kind: ctlChoice, value: zoneValue()},
+		settingRow{id: "screenlang", label: "Screen language", sub: "What this screen listens for, not what the assistant speaks",
 			kind: ctlChoice, value: langOptions[langIndex()]},
 		updates,
-		{label: "About", kind: ctlValue, value: deviceModel + " · slot " + st.slot},
+		settingRow{label: "About", kind: ctlValue, value: deviceModel + " · slot " + st.slot},
 		restart,
-	}
+	)
 }
 
 // connectionRows are the Connections card's: Wi-Fi, Bluetooth audio, and the Bluetooth proxy.
@@ -429,6 +429,12 @@ func pickerFor(id string, sv sheetView) (pickerView, bool) {
 		return pickerView{title: "Camera time", opts: cameraTimeOptions(), cur: cameraTimeIndex()}, true
 	case "calendars":
 		return calendarsPicker(), true
+	case "calpopwhen":
+		return pickerView{title: "Pop up", opts: popupLeadLabels, cur: popupLeadIndex()}, true
+	case "calpopallday":
+		return pickerView{title: "All-day events", opts: popupAllDayOpts, cur: popupAllDayIndex()}, true
+	case "calpopcals":
+		return popupCalendarsPicker(), true
 	case "musicstrip":
 		return pickerView{title: "Now playing", opts: stripChoices(), cur: stripIndexShared()}, true
 	case "screenlang":
@@ -525,6 +531,18 @@ func (d *Display) choose(id string, i int) {
 	case "calendars":
 		if toggleCalendar(i) {
 			d.openPicker("calendars") // stays open, for ticking another
+		}
+	case "calpopwhen":
+		if i >= 0 && i < len(popupLeads) {
+			_ = config.Set().Calendar().PopupLead(popupLeads[i])
+			d.popupSettingsChanged()
+		}
+	case "calpopallday":
+		_ = config.Set().Calendar().PopupAllDayNever(i == 1)
+		d.popupSettingsChanged()
+	case "calpopcals":
+		if choosePopupCalendar(i) {
+			d.openPicker("calpopcals")
 		}
 	case "wakeword":
 		if models := wake.Lib().Ours(); i < len(models) {
@@ -656,6 +674,12 @@ func (d *Display) rowTap(id string, p part, opt int) {
 		d.setAuto(!on, true)
 	case "callbutton":
 		setCallButtonSaved(d.callBtn, !callButton.Load())
+	case "calpop":
+		_ = config.Set().Calendar().Popups(!config.Get().Calendar.Popups)
+		d.popupSettingsChanged()
+	case "calpopsound":
+		_ = config.Set().Calendar().PopupSilent(!config.Get().Calendar.PopupSilent)
+		d.popupSettingsChanged()
 	case "weatherfx":
 		setWeatherAnimationSaved(d.weatherFx, !weatherAnimation.Load())
 	case "dnd":
@@ -780,7 +804,7 @@ func (d *Display) rowTap(id string, p part, opt int) {
 	case "subfolders":
 		_, _, subfolders := home.Get().SlideshowSettings()
 		home.Get().SetSlideshowSubfolders(!subfolders)
-	case "night", "atnight", "nightstyle", "clock", "camtime", "calendars", "musicstrip", "slideshow", "photoevery", "screenlang", "newtimer", "sleep", "sunrise",
+	case "night", "atnight", "nightstyle", "clock", "camtime", "calendars", "calpopwhen", "calpopallday", "calpopcals", "musicstrip", "slideshow", "photoevery", "screenlang", "newtimer", "sleep", "sunrise",
 		"timezone", "wakeword", "waketone":
 		d.openPicker(id)
 	}

@@ -198,6 +198,14 @@ type Display struct {
 	calDay    time.Time
 	calDetail *hass.Event
 	calScroll int // the day's list, scrolled this many rows
+
+	// popup is an event popped up on the screen (calendar_popup.go), until popupUntil or a tap;
+	// popupShown the ones already shown, and popupNext when the calendar is next looked at.
+	popup      *hass.Event
+	popupUntil time.Time
+	popupShown map[string]bool
+	popupNext  time.Time
+	pop        popupEntities // the pop-ups' settings in Home Assistant
 	// radar is the rain map in place of the forecast, while the weather page is up.
 	radar bool
 
@@ -280,6 +288,7 @@ func build() *Display {
 	d.nightHours = nightHoursSelect(d)
 	d.nightStart, d.nightEnd = nightEndSelect(d, true), nightEndSelect(d, false)
 	d.nightStyle = nightStyleSelect(d)
+	d.buildPopupEntities()
 	d.atNight = atNightSelect(d)
 	d.glowLevel = glowNumber(d)
 	d.lang = langSelect()
@@ -330,7 +339,8 @@ func build() *Display {
 func (d *Display) Name() string { return "screen" }
 
 func (d *Display) Entities() []esphome.Entity {
-	return []esphome.Entity{d.light, d.auto, d.clock, d.camTime, d.callBtn, d.weatherFx, d.lang, d.strip, d.nightHours, d.nightStart, d.nightEnd, d.atNight, d.nightStyle, d.glowLevel}
+	return []esphome.Entity{d.light, d.auto, d.clock, d.camTime, d.callBtn, d.weatherFx, d.lang, d.strip, d.nightHours, d.nightStart, d.nightEnd, d.atNight, d.nightStyle, d.glowLevel,
+		d.pop.on, d.pop.lead, d.pop.chime, d.pop.allDay}
 }
 
 // Restore lights the panel the way it was left. Before the framebuffer is opened: the backlight is
@@ -344,6 +354,7 @@ func (d *Display) Restore(c config.Config) {
 	d.nightHoursChanged()
 	d.atNight.Set(atNightOptions[atNightIndex()])
 	d.nightStyle.Set(nightStyleOptions[nightStyleIndex()])
+	d.popupSettingsChanged()
 	d.glowLevel.Set(float32(d.glowSetting()))
 	d.setAuto(c.Screen.Auto, false)
 	d.apply(c.Screen.On, c.Screen.Brightness, false)
@@ -596,6 +607,12 @@ func (d *Display) gesture(g touch.Gesture) {
 
 	// A reminder: a tap on its card puts it away, here and on every device it went off on. Only the
 	// card, as with the strip, so a finger meant for the music behind it still reaches the music.
+	if p := d.popupUp(); p != nil && g.Kind == touch.Tap && d.r != nil && image.Pt(g.X, g.Y).In(d.r.popupBox()) {
+		d.dismissPopup()
+		d.wake()
+		return
+	}
+
 	if _, showing := remind.Get().Showing(); showing && g.Kind == touch.Tap &&
 		d.r != nil && image.Pt(g.X, g.Y).In(d.r.reminderBox()) {
 		go remind.Get().Stop()
@@ -1377,12 +1394,18 @@ func (d *Display) frame() time.Duration {
 	d.mu.Unlock()
 
 	now := time.Now()
+	d.popupTick(now)
 	ring := d.ringing(now)
 	call := phone.Get().State()
 	_, reminding := remind.Get().Showing()
 	if (ring.any() || reminding || call.Phase != phone.Idle) && !on {
 		// A ring, a reminder or a call lights a dark panel, night or not: its page is how it is
 		// answered or stopped, and a reminder is its words on the screen.
+		d.apply(true, d.ceilingOrDefault(), false)
+		on = true
+	}
+	if !on && d.popupUp() != nil && !inNight(config.Get().Screen.Night, now) {
+		// A pop-up lights a dark panel by day. At night it waits there, dark, until the screen is woken.
 		d.apply(true, d.ceilingOrDefault(), false)
 		on = true
 	}
@@ -1572,6 +1595,7 @@ func (d *Display) frame() time.Duration {
 	s.announcePeers = len(announce.Peers())
 	s.announcement, s.showAnnouncement = announce.Get().Showing()
 	s.reminder, s.showReminder = remind.Get().Showing()
+	s.popup = d.popupUp()
 	if s.reminder.From != config.Get().Device.Name {
 		s.reminderFrom = s.reminder.From
 	}
