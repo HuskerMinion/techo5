@@ -23,6 +23,7 @@ import (
 	"github.com/HuskerMinion/techo5/echod/internal/feature/phone"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/remind"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/timer"
+	"github.com/HuskerMinion/techo5/echod/internal/lib/hass"
 )
 
 // The round panel: everything is laid out from its center, and nothing may sit where the circle
@@ -90,6 +91,11 @@ type roundScene struct {
 
 	weather  home.Weather
 	forecast forecastDays
+
+	// calToday and calNext are the calendar face's events (calendar_spot.go), calOrder the calendars
+	// shown, which gives each its color.
+	calToday, calNext []hass.Event
+	calOrder          []string
 
 	// nowPlaying is the idle face given to music; radio what it and the station list show;
 	// radioSel the list's row in the middle; radar the rain map, radarOn the weather face turned to it.

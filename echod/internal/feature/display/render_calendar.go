@@ -7,7 +7,6 @@ import (
 	"image"
 	"image/color"
 	"image/draw"
-	"slices"
 	"strconv"
 	"time"
 
@@ -34,24 +33,7 @@ type calendarView struct {
 	now    time.Time
 }
 
-// calendarColors are the calendars' colors, in the order they were chosen.
-var calendarColors = []color.RGBA{
-	{224, 164, 72, 255},  // amber
-	{88, 160, 214, 255},  // sky
-	{118, 186, 112, 255}, // green
-	{214, 108, 112, 255}, // rose
-	{168, 128, 210, 255}, // violet
-	{92, 190, 178, 255},  // teal
-}
-
-func (v calendarView) color(cal string) color.RGBA {
-	for i, c := range v.order {
-		if c == cal {
-			return calendarColors[i%len(calendarColors)]
-		}
-	}
-	return calendarColors[len(calendarColors)-1]
-}
+func (v calendarView) color(cal string) color.RGBA { return calendarColor(v.order, cal) }
 
 func (v calendarView) name(cal string) string {
 	if n := v.names[cal]; n != "" {
@@ -100,33 +82,6 @@ func (r *renderer) calendarHit(p image.Point) (calHit, bool) {
 		}
 	}
 	return calHit{}, false
-}
-
-// eventsOn is the events of a list that touch day.
-func eventsOn(events []hass.Event, day time.Time) []hass.Event {
-	start := time.Date(day.Year(), day.Month(), day.Day(), 0, 0, 0, 0, time.Local)
-	end := start.AddDate(0, 0, 1)
-	var out []hass.Event
-	for _, e := range events {
-		if e.Start.Before(end) && (e.End.After(start) || e.Start.Equal(start)) {
-			out = append(out, e)
-		}
-	}
-	// All-day events first, then by when they start.
-	slices.SortStableFunc(out, func(a, b hass.Event) int {
-		if a.AllDay != b.AllDay {
-			if a.AllDay {
-				return -1
-			}
-			return 1
-		}
-		return a.Start.Compare(b.Start)
-	})
-	return out
-}
-
-func sameDay(a, b time.Time) bool {
-	return a.Year() == b.Year() && a.YearDay() == b.YearDay()
 }
 
 // calendarPage draws the calendar: the day's list or the month, and the event window over either.
@@ -375,4 +330,8 @@ func (r *renderer) calendarDetail(v calendarView, e hass.Event) {
 	label := "Close"
 	r.text(r.small, label, closeB.Min.X+(closeB.Dx()-r.width(r.small, label))/2, closeB.Min.Y+r.s(35), cream)
 	r.calHitAdd(calHit{r: closeB.Inset(-r.s(8)), kind: calClose})
+}
+
+func sameDay(a, b time.Time) bool {
+	return a.Year() == b.Year() && a.YearDay() == b.YearDay()
 }

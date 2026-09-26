@@ -7,6 +7,7 @@ import (
 	"image"
 	"image/color"
 	"math"
+	"slices"
 	"strings"
 
 	"github.com/HuskerMinion/techo5/echod/internal/config"
@@ -38,6 +39,7 @@ const (
 	modeMain menuMode = iota
 	modeVolume
 	modeWeather
+	modeCalendar
 	modeRadio
 	modeCameras
 	modeContacts
@@ -57,6 +59,7 @@ const (
 	itemMusic    itemID = "music"
 	itemVolume   itemID = "volume"
 	itemWeather  itemID = "weather"
+	itemCalendar itemID = "calendar"
 	itemCamera   itemID = "camera"
 	itemTimers   itemID = "timers"
 	itemAnnounce itemID = "announce"
@@ -79,6 +82,7 @@ var mainItems = []menuItem{
 	{itemMusic, color.RGBA{60, 203, 127, 255}},
 	{itemVolume, color.RGBA{58, 160, 255, 255}},
 	{itemWeather, color.RGBA{255, 196, 64, 255}},
+	{itemCalendar, color.RGBA{88, 160, 214, 255}},
 	{itemCamera, color.RGBA{60, 203, 127, 255}},
 	{itemDashboard, color.RGBA{64, 214, 230, 255}},
 	{itemTimers, color.RGBA{255, 176, 32, 255}},
@@ -94,6 +98,10 @@ var colBluetooth = color.RGBA{0, 130, 252, 255}
 func itemsFor(m menuMode) []menuItem {
 	switch m {
 	case modeMain:
+		if len(home.Get().CalendarSources()) == 0 {
+			// No calendar chosen: no calendar on the dial.
+			return slices.DeleteFunc(slices.Clone(mainItems), func(m menuItem) bool { return m.id == itemCalendar })
+		}
 		return mainItems
 	case modeCameras:
 		return cameraItems(home.Get().Cameras())
@@ -234,6 +242,8 @@ func itemName(s roundScene, id itemID) string {
 		return "Volume"
 	case itemWeather:
 		return "Weather"
+	case itemCalendar:
+		return "Calendar"
 	case itemCamera:
 		return "Camera"
 	case itemDashboard:
@@ -306,6 +316,14 @@ func itemHint(s roundScene, id itemID) string {
 			return l
 		}
 		return "forecast"
+	case itemCalendar:
+		switch {
+		case len(s.calToday) > 0:
+			return spotWhen(s.calToday[0], s.now) + " · " + s.calToday[0].Summary
+		case len(s.calNext) > 0:
+			return comingDay(s.calNext[0].Start, s.now) + " · " + s.calNext[0].Summary
+		}
+		return "nothing coming up"
 	case itemTimers:
 		switch {
 		case s.timerRinging:
@@ -339,6 +357,8 @@ func (r *roundRenderer) menu(s roundScene) {
 		r.jog(s)
 	case s.menuMode == modeWeather && s.radarOn:
 		r.radarFace(s)
+	case s.menuMode == modeCalendar:
+		r.calendarFace(s)
 	case s.menuMode == modeWeather:
 		bolt := r.weatherFace(s)
 		r.sky(s.sky, s.now, r.dst.Rect, bolt)
@@ -466,6 +486,17 @@ func (r *roundRenderer) icon(id itemID, s roundScene, x, y, u, w float64, c colo
 			cx, cy := x+o[0]*0.45*u, y+o[1]*0.45*u
 			b := image.Rect(int(cx-0.33*u), int(cy-0.33*u), int(cx+0.33*u), int(cy+0.33*u))
 			r.roundFill(b, 0.12*u, c, c)
+		}
+	case itemCalendar:
+		// A page of a calendar: its frame, the band across the top, and the two rings it hangs from.
+		r.line(x-0.75*u, y-0.55*u, x+0.75*u, y-0.55*u, w*1.8, c)
+		r.line(x-0.75*u, y-0.55*u, x-0.75*u, y+0.75*u, w, c)
+		r.line(x+0.75*u, y-0.55*u, x+0.75*u, y+0.75*u, w, c)
+		r.line(x-0.75*u, y+0.75*u, x+0.75*u, y+0.75*u, w, c)
+		r.line(x-0.4*u, y-0.9*u, x-0.4*u, y-0.45*u, w, c)
+		r.line(x+0.4*u, y-0.9*u, x+0.4*u, y-0.45*u, w, c)
+		for _, o := range [][2]float64{{-0.35, 0.05}, {0.05, 0.05}, {0.45, 0.05}, {-0.35, 0.42}, {0.05, 0.42}} {
+			r.discAt(x+o[0]*u, y+o[1]*u, 0.1*u, c)
 		}
 	case itemWeather:
 		r.sunIcon(x+0.38*u, y-0.32*u, 0.62*u, w*0.8, c)

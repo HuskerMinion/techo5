@@ -184,6 +184,7 @@ type Display struct {
 	// weatherArmed is a weather question in progress; weatherUntil when the weather face comes down.
 	weatherArmed bool
 	weatherUntil time.Time
+	calUntil     time.Time // the calendar face's, the same way
 
 	// quiet is a turn that was a screen command ("go home", "show the deck"): its words and reply are
 	// not shown, so the screen moves at once, as on the Show. radioCue is when Home Assistant last
@@ -615,7 +616,7 @@ func (d *Display) openMenu(mode menuMode, id itemID) {
 	}
 	// The finger follows (every move a turn of the ring) wherever there is a ring to turn. The weather
 	// face and the lists have none, and need their swipes and taps as they are.
-	touch.Get().SetFollow(mode != modeWeather && mode != modeContacts)
+	touch.Get().SetFollow(mode != modeWeather && mode != modeContacts && mode != modeCalendar)
 }
 
 // followFingers has the touch screen follow every moving finger (Hold, Drag, Release) rather than
@@ -664,6 +665,13 @@ func (d *Display) menuGesture(g touch.Gesture) {
 			d.spinning, d.jogTurn = false, 0
 		case touch.Tap:
 			d.finishJog(mode)
+		}
+
+	case mode == modeCalendar:
+		if g.Kind == touch.Tap {
+			d.closeMenu()
+		} else {
+			d.calUntil = time.Now().Add(calendarIdle)
 		}
 
 	case mode == modeWeather:
@@ -856,6 +864,11 @@ func (d *Display) act(id itemID) {
 			d.openMenu(modeWeather, "")
 			d.weatherUntil = time.Now().Add(weatherIdle)
 		})
+	case itemCalendar:
+		d.locked(func() {
+			d.openMenu(modeCalendar, "")
+			d.calUntil = time.Now().Add(calendarIdle)
+		})
 	case itemDashboard:
 		d.toggleDashboard()
 	case itemTimers:
@@ -992,6 +1005,10 @@ func (d *Display) frame() time.Duration {
 				d.closeMenu()
 				d.radar = false
 			}
+		case d.menuMode == modeCalendar:
+			if now.After(d.calUntil) {
+				d.closeMenu()
+			}
 		case d.menuMode == modeRadio:
 			if now.Sub(d.menuAt) > radioIdle {
 				d.closeMenu()
@@ -1093,6 +1110,13 @@ func (d *Display) frame() time.Duration {
 	s.cameraLive = camera.Get().Running()
 	bt := btaudio.Get().State()
 	s.btPairing = bt.Pairing
+	if s.menuOpen {
+		// The dial's line under the calendar, and the calendar face itself.
+		if src := home.Get().CalendarSources(); len(src) > 0 {
+			s.calToday, s.calNext = comingUp(now, 2)
+			s.calOrder = src
+		}
+	}
 	if s.menuOpen && s.menuMode == modeWeather {
 		s.forecast = home.Get().Forecast()
 		// Asked for while the weather is up, so the rain map is ready when it is turned to.
