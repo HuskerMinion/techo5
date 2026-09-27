@@ -722,10 +722,16 @@ func (d *Display) gesture(g touch.Gesture) {
 		return
 	}
 
-	// A live camera: a tap takes it down.
+	// A live camera: a tap takes it down, unless it lands on the sound's control — that silences what
+	// the camera is saying and leaves the view up, which is the whole use of it at a doorbell.
 	if _, up := home.Get().Camera(); up {
 		if g.Kind == touch.Tap {
-			home.Get().HideCamera()
+			if d.r != nil && home.Get().CameraSoundPlaying() && d.r.cameraSoundTapped(image.Pt(g.X, g.Y)) {
+				slog.Info("screen: the camera's sound silenced by touch")
+				home.Get().SilenceCameraSound()
+			} else {
+				home.Get().HideCamera()
+			}
 		}
 		d.wake()
 		return
@@ -1627,6 +1633,7 @@ func (d *Display) frame() time.Duration {
 		d.mu.Unlock()
 	}
 	s.camera, s.showCamera = home.Get().Camera()
+	s.cameraSound = home.Get().CameraSoundPlaying()
 	// Whether the idle screen wants to be what is playing. It is asked even when the page has been put
 	// away, because the track is what brings it back, so the radio is read either way.
 	wants := (s.phase == "idle") && d.nowPlaying()

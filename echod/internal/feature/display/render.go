@@ -135,7 +135,10 @@ type scene struct {
 	// showCamera is a live camera view, over everything but the sheet; cameras feeds the drawer.
 	showCamera bool
 	camera     home.CameraView
-	cameras    []config.Camera
+
+	// cameraSound is whether that view has its sound playing, which is when its control is drawn.
+	cameraSound bool
+	cameras     []config.Camera
 
 	// callees are who the drawer's Call tab offers; callButton is the clock's Call button showing.
 	callees    []phone.Callee
@@ -208,6 +211,11 @@ type renderer struct {
 	// goroutine, so under its own lock.
 	weatherMu sync.Mutex
 	weatherAt image.Rectangle
+
+	// cameraSoundAt is where the camera page's sound control was drawn in the frame last drawn, for a
+	// tap there to silence the sound rather than take the view down; empty when there was no control to
+	// draw. Under the same lock and for the same reason as weatherAt.
+	cameraSoundAt image.Rectangle
 
 	// badgeAt, pillsAt and pillsIdx are where the alert badge and the rain map's alert pills were drawn
 	// in the frame last drawn, and the alert each pill opens, for a tap there.
@@ -662,6 +670,19 @@ func (r *renderer) weatherTapped(p image.Point) bool {
 	r.weatherMu.Lock()
 	defer r.weatherMu.Unlock()
 	return !r.weatherAt.Empty() && p.In(r.weatherAt)
+}
+
+func (r *renderer) setCameraSoundAt(b image.Rectangle) {
+	r.weatherMu.Lock()
+	r.cameraSoundAt = b
+	r.weatherMu.Unlock()
+}
+
+// cameraSoundTapped is whether a tap at p landed on the camera page's sound control, as last drawn.
+func (r *renderer) cameraSoundTapped(p image.Point) bool {
+	r.weatherMu.Lock()
+	defer r.weatherMu.Unlock()
+	return !r.cameraSoundAt.Empty() && p.In(r.cameraSoundAt)
 }
 
 // weatherMark is how big the corner's icon is: the height of the line it sits beside, so it reads as

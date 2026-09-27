@@ -110,6 +110,39 @@ func (f *Feature) cameraSoundPlaying(url string) {
 	f.mu.Unlock()
 }
 
+// CameraSoundPlaying is whether the view on the screen has a sound playing for it, which is what the
+// screen asks before drawing the control that silences it.
+func (f *Feature) CameraSoundPlaying() bool {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return f.camSound != "" && f.camSoundURL != ""
+}
+
+// SilenceCameraSound stops this view's sound without taking the view down, which is what the screen's
+// control asks for and what somebody at a doorbell wants: the picture stays and the sound stops.
+func (f *Feature) SilenceCameraSound() {
+	if f.takeCameraSound() {
+		media.Get().Stop()
+		slog.Info("camera sound silenced from the screen")
+	}
+}
+
+// takeCameraSound gives up this view's claim on the sound and says whether what is playing is still
+// its own, and so whether there is anything to stop. The claim goes either way: the view gives it up
+// as well as stopping the sound, so nothing has to remember that it was silenced — the watcher finds
+// nothing of this view's to stop when the view ends, and the next view is a fresh one that follows the
+// setting again.
+//
+// A track that something else started in the meantime is not this view's to stop, which is the rule
+// the end of a view follows as well.
+func (f *Feature) takeCameraSound() (ours bool) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	ours = f.camSound != "" && f.camSoundURL != "" && f.camSoundURL == f.url
+	f.camSound, f.camSoundURL = "", ""
+	return ours
+}
+
 // cameraSoundEnds is what a view coming down means for its sound, read under the lock: whether the
 // view is still up, and whether what is playing is still the track this view started. The two are
 // answered together and before anything is cleared, which is the whole reason they are not asked

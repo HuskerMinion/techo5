@@ -123,3 +123,62 @@ func TestCameraSoundStaysWhileTheViewDoes(t *testing.T) {
 		t.Fatalf("the view's own sound was forgotten while the view was up: %q", f.camSound)
 	}
 }
+
+// The screen's control draws from this: there is a sound to silence only once the stream that answers
+// a request has arrived, since a request Home Assistant refused leaves the view silent.
+func TestCameraSoundPlayingNeedsAnAnsweredStream(t *testing.T) {
+	f := &Feature{}
+	if f.CameraSoundPlaying() {
+		t.Fatal("a device with no camera view was said to be playing something")
+	}
+	f.camSound = "camera.deck"
+	if f.CameraSoundPlaying() {
+		t.Fatal("a request that no stream has answered was said to be playing")
+	}
+	f.camSoundURL = "http://ha/one.wav"
+	f.url = "http://ha/one.wav" // what the player says it is playing, which the stream's arrival sets too
+	if !f.CameraSoundPlaying() {
+		t.Fatal("a stream that answered was not said to be playing")
+	}
+	if ours := f.takeCameraSound(); !ours {
+		t.Fatal("the view's own sound was not recognized as its own")
+	}
+	if f.CameraSoundPlaying() {
+		t.Fatal("a silenced view was still said to be playing")
+	}
+}
+
+// Silencing is the same question the end of a view asks: this view's own sound is stopped, and a track
+// that something else started is left playing. Either way the claim is given up, or the view would go
+// on being treated as the owner of whatever plays next.
+func TestSilencingStopsOnlyItsOwnSound(t *testing.T) {
+	const mine = "http://homeassistant.local:8123/api/esphome/ffmpeg_proxy/abc/one.wav"
+	const music = "http://homeassistant.local:8123/api/esphome/ffmpeg_proxy/abc/radio.wav"
+
+	cases := []struct {
+		name     string
+		sound    string
+		answered string
+		playing  string
+		wantOurs bool
+	}{
+		{name: "its own track", sound: "camera.deck", answered: mine, playing: mine, wantOurs: true},
+		{name: "music started since", sound: "camera.deck", answered: mine, playing: music},
+		{name: "the stream never answered", sound: "camera.deck", answered: "", playing: music},
+		{name: "nothing was started at all", sound: "", answered: "", playing: music},
+	}
+	for _, c := range cases {
+		f := &Feature{camSound: c.sound, camSoundURL: c.answered}
+		f.url = c.playing
+
+		if ours := f.takeCameraSound(); ours != c.wantOurs {
+			t.Errorf("%s: takeCameraSound = %v, want %v", c.name, ours, c.wantOurs)
+		}
+		if f.camSound != "" || f.camSoundURL != "" {
+			t.Errorf("%s: the claim was not given up (%q, %q)", c.name, f.camSound, f.camSoundURL)
+		}
+		if f.CameraSoundPlaying() {
+			t.Errorf("%s: still said to be playing after being silenced", c.name)
+		}
+	}
+}

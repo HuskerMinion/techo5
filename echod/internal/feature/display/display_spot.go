@@ -571,6 +571,13 @@ func (d *Display) gesture(g touch.Gesture) {
 	if v, up := home.Get().Camera(); up {
 		switch g.Kind {
 		case touch.Tap:
+			// The sound's control silences the sound and leaves the view up, which is the whole use of
+			// it at a doorbell; anywhere else on the face takes the view down as it always has.
+			if d.r != nil && home.Get().CameraSoundPlaying() && d.r.cameraSoundTapped(g.X, g.Y) {
+				slog.Info("screen: the camera's sound silenced by touch")
+				go home.Get().SilenceCameraSound()
+				return
+			}
 			go home.Get().HideCamera()
 			return
 		case touch.SwipeLeft:
@@ -1157,6 +1164,7 @@ func (d *Display) frame() time.Duration {
 	s.call = phone.Get().State()
 	s.weather = home.Get().Weather()
 	s.camera, s.showCamera = home.Get().Camera()
+	s.cameraSound = home.Get().CameraSoundPlaying()
 	s.cameraLive = camera.Get().Running()
 	bt := btaudio.Get().State()
 	s.btPairing = bt.Pairing

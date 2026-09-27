@@ -234,3 +234,37 @@ func TestFixedSizesScaleToTheShow8(t *testing.T) {
 		}
 	}
 }
+
+// The sound control is drawn and found in the same frame: what is drawn is what is tappable, and a
+// frame that does not draw it leaves nothing tappable behind. A control that moved while its tap
+// stayed where it was would silence nothing, or take the view down when somebody reached for the
+// sound.
+func TestTheCameraSoundControlIsWhereItIsDrawn(t *testing.T) {
+	at := time.Date(2026, 9, 16, 14, 7, 0, 0, time.Local)
+	img := image.NewRGBA(image.Rect(0, 0, 1280, 800))
+	r := newRenderer(img)
+	cam := scene{now: at, phase: "idle", showCamera: true,
+		camera: home.CameraView{Entity: "camera.deck", Name: "Deck"}}
+	box := cameraSoundBox(r.w, r.h, r.margin)
+	centre := box.Min.Add(image.Pt(box.Dx()/2, box.Dy()/2))
+
+	r.draw(cam)
+	if r.cameraSoundTapped(centre) {
+		t.Fatal("a tap found a sound control where the page draws none")
+	}
+
+	cam.cameraSound = true
+	r.draw(cam)
+	if !r.cameraSoundTapped(centre) {
+		t.Fatalf("a tap on the sound control, at %v, was missed", centre)
+	}
+	if r.cameraSoundTapped(image.Pt(r.margin, r.h-11)) {
+		t.Fatal("a tap on the hint was taken for the sound control")
+	}
+
+	cam.cameraSound = false
+	r.draw(cam)
+	if r.cameraSoundTapped(centre) {
+		t.Fatal("the control was left tappable after the sound stopped")
+	}
+}

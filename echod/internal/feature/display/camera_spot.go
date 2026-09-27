@@ -67,6 +67,43 @@ func (r *roundRenderer) cameraView(s roundScene) {
 		r.line(float64(center-w/2-10), 62, float64(center+w/2+10), 62, 32, color.RGBA{0, 0, 0, 150})
 		r.centered(r.label, v.Name, 69, colText)
 	}
+	// The sound's control at the bottom of the face, where a circle is widest and nothing else is
+	// drawn. A circle has no corner to put one in, so it is the same bar of words as the name above it:
+	// a tap silences what the camera is saying and leaves the view up.
+	if s.cameraSound {
+		b := cameraSoundBox()
+		r.line(float64(b.Min.X), float64(b.Min.Y+b.Dy()/2), float64(b.Max.X), float64(b.Min.Y+b.Dy()/2), float64(b.Dy()), color.RGBA{0, 0, 0, 150})
+		r.centered(r.label, "Mute", b.Min.Y+b.Dy()/2+8, colText)
+		r.setCameraSoundAt(b)
+	}
+}
+
+// cameraSoundBox is where the round camera page's sound control is drawn, and so where a tap on it has
+// to land: a bar across the bottom of the face, inside the rim.
+func cameraSoundBox() image.Rectangle {
+	const barW, barH = 96, 34
+	const bottom = side - 44
+	return image.Rect(center-barW/2, bottom-barH, center+barW/2, bottom)
+}
+
+func (r *roundRenderer) setCameraSoundAt(b image.Rectangle) {
+	r.zmu.Lock()
+	r.cameraSoundAt = b
+	r.zmu.Unlock()
+}
+
+// clearCameraSoundTap forgets where the control was: a face that does not draw it must not leave it
+// tappable. Called at the start of every frame, as clearAlertTaps is.
+func (r *roundRenderer) clearCameraSoundTap() {
+	r.setCameraSoundAt(image.Rectangle{})
+}
+
+// cameraSoundTapped reports whether a tap at x, y is on the sound control drawn in the frame last
+// drawn. The box is grown a little, as the alert pill's is: it is small and a finger is not.
+func (r *roundRenderer) cameraSoundTapped(x, y int) bool {
+	r.zmu.Lock()
+	defer r.zmu.Unlock()
+	return !r.cameraSoundAt.Empty() && image.Pt(x, y).In(r.cameraSoundAt.Inset(-10))
 }
 
 // coverCircle draws img scaled to cover the panel, cropped from the middle, inside the rim.
