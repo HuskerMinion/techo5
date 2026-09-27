@@ -150,6 +150,9 @@ func (r *roundRenderer) weatherIcon(cond string, x, y, u float64) {
 	case "partlycloudy":
 		r.sunDisc(x+0.3*u, y-0.3*u, 0.7*u)
 		r.cloud(x-0.1*u, y+0.15*u, 0.8*u, colCloud)
+	case home.PartlyCloudyNight:
+		r.moonIcon(x+0.3*u, y-0.3*u, 0.7*u, w, colSnow)
+		r.cloud(x-0.1*u, y+0.15*u, 0.8*u, colCloud)
 	case "cloudy":
 		r.cloud(x+0.25*u, y-0.2*u, 0.6*u, colDark)
 		r.cloud(x-0.1*u, y+0.1*u, 0.85*u, colCloud)

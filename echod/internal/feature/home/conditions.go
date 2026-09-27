@@ -10,7 +10,7 @@ func ConditionWords(c string) string {
 		return ""
 	case "clear-night":
 		return "Clear"
-	case "partlycloudy":
+	case "partlycloudy", PartlyCloudyNight:
 		return "Partly cloudy"
 	case "lightning-rainy":
 		return "Thunderstorms"
@@ -23,4 +23,24 @@ func ConditionWords(c string) string {
 	}
 	// "sunny", "cloudy", "rainy", "pouring", "fog", "hail", "snowy", "windy", "lightning"…
 	return strings.ToUpper(c[:1]) + c[1:]
+}
+
+// PartlyCloudyNight is partly cloudy with the sun down, drawn with a moon behind the cloud instead of a
+// sun. Home Assistant's conditions have a night form only for clear, so a partly cloudy night showed a
+// sun at one in the morning.
+const PartlyCloudyNight = "partlycloudy-night"
+
+// atNight is the condition as the sky looks: with the sun down, sunny is clear-night and partly cloudy
+// is PartlyCloudyNight. Everything else looks the same either way.
+func atNight(c string, night bool) string {
+	if !night {
+		return c
+	}
+	switch c {
+	case "sunny":
+		return "clear-night"
+	case "partlycloudy":
+		return PartlyCloudyNight
+	}
+	return c
 }

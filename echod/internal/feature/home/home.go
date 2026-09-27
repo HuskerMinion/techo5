@@ -334,6 +334,8 @@ func (f *Feature) want(h config.Home) {
 		keys = append(keys, hastate.Key{Entity: w}, hastate.Key{Entity: w, Attribute: "temperature"},
 			hastate.Key{Entity: w, Attribute: "temperature_unit"}, hastate.Key{Entity: w, Attribute: "friendly_name"})
 	}
+	// Whether the sun is up, for the current condition's icon (atNight).
+	keys = append(keys, hastate.Key{Entity: "sun.sun"})
 	// Home's location, for the rain map.
 	keys = append(keys, hastate.Key{Entity: "zone.home", Attribute: "latitude"}, hastate.Key{Entity: "zone.home", Attribute: "longitude"})
 	for _, s := range h.Radio.Stations {
@@ -449,6 +451,7 @@ func (f *Feature) Weather() Weather {
 	if w.Condition == "unknown" || w.Condition == "unavailable" {
 		w.Condition = ""
 	}
+	w.Condition = atNight(w.Condition, t.State("sun.sun") == "below_horizon")
 	if temp, ok := t.Value(entity, "temperature"); ok && temp != "" && temp != "None" {
 		if i := strings.IndexByte(temp, '.'); i > 0 {
 			temp = temp[:i]

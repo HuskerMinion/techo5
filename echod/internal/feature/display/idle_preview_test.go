@@ -50,3 +50,25 @@ func TestIdlePreview(t *testing.T) {
 		f.Close()
 	}
 }
+
+// TestWeatherIconPreview writes the day and night partly cloudy icons side by side to $ORB_PREVIEW.
+func TestWeatherIconPreview(t *testing.T) {
+	dir := os.Getenv("ORB_PREVIEW")
+	if dir == "" {
+		t.Skip("set ORB_PREVIEW to a directory")
+	}
+	applyTheme(themes[themeIndex("Ocean")])
+	defer applyTheme(themes[0])
+	dst := image.NewRGBA(image.Rect(0, 0, 480, 160))
+	r := newRenderer(dst)
+	r.draw(scene{now: time.Now(), phase: "idle"})
+	for i, c := range []string{"partlycloudy", home.PartlyCloudyNight, "clear-night"} {
+		r.weatherIcon(c, 80+i*160, 80, 110)
+	}
+	f, err := os.Create(dir + "/weather-icons.png")
+	if err != nil {
+		t.Fatal(err)
+	}
+	png.Encode(f, dst)
+	f.Close()
+}
