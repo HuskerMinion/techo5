@@ -123,6 +123,13 @@ type Feature struct {
 	// cam is the camera view in progress; see camera.go.
 	cam CameraView
 
+	// camSound is the camera whose audio was started with its view, and camSoundURL the stream that
+	// answered it, so that the end of the view can tell whether what is playing is still its own;
+	// cameraSoundSw is the setting's switch. See camera_sound.go.
+	camSound      string
+	camSoundURL   string
+	cameraSoundSw *esphome.Switch
+
 	// slideshowSel picks the display mode, slideshowOverlaySel the screensaver's clock/date size,
 	// slideshowIdleNum the screensaver's idle wait; slideshow is the fetch state. See slideshow.go.
 	slideshowSel        *esphome.Select
@@ -195,9 +202,11 @@ func Get() *Feature {
 		shared.buildWeatherSelect()
 		shared.buildRadarSelect()
 		shared.buildAlertsSwitch()
+		shared.buildCameraSoundSwitch()
 		shared.buildSlideshowSelect()
 		hastate.Get().Changed.Listen(func(hastate.Update) { shared.Changed.Emit(struct{}{}) })
 		media.Get().OnPlay.Listen(shared.played)
+		media.Get().OnPlay.Listen(shared.cameraSoundPlaying)
 		media.Get().OnEnd.Listen(shared.ended)
 		media.Get().OnResumeRemote.Listen(func(struct{}) { safe.Go("resume music assistant", resumeMusicAssistant) })
 		media.Get().OnTakeOver.Listen(func(struct{}) { safe.Go("leave the group", leaveGroup) })
@@ -312,6 +321,7 @@ func (f *Feature) Restore(c config.Config) {
 	f.weatherSel.Set(chosenOption(c.Home))
 	f.radarSel.Set(radarChoices[RadarSourceIndex()].label)
 	f.alertsSw.Set(!c.Home.AlertsOff)
+	f.cameraSoundSw.Set(c.Home.CameraSound)
 	if hasScreen {
 		f.slideshowSel.Set(slideshowLabelFor(c.Home.Slideshow.Mode))
 		f.slideshowOverlaySel.Set(slideshowOverlayLabelFor(c.Home.Slideshow.Overlay))

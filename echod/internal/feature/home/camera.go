@@ -104,8 +104,14 @@ func (f *Feature) Camera() (CameraView, bool) {
 	return f.cam, true
 }
 
-// ShowCamera puts a camera up for d.
+// ShowCamera puts a camera up for d, with its sound if the device's own setting asks for it.
 func (f *Feature) ShowCamera(entity string, d time.Duration) {
+	f.showCamera(entity, d, CameraSound())
+}
+
+// showCamera is ShowCamera with the sound decided by the caller, which is what the action does: an
+// automation for a doorbell wants that one camera heard whether or not the device's setting says so.
+func (f *Feature) showCamera(entity string, d time.Duration, sound bool) {
 	name := entity
 	for _, c := range f.Cameras() {
 		if c.Entity == entity {
@@ -119,12 +125,18 @@ func (f *Feature) ShowCamera(entity string, d time.Duration) {
 		f.cam.Frame = nil
 	}
 	f.mu.Unlock()
-	slog.Info("camera up", "entity", entity, "for", d)
+	slog.Info("camera up", "entity", entity, "for", d, "sound", fresh && sound)
 	if fresh {
 		if entity == LocalCamera {
 			go f.localFrames()
 		} else {
 			go f.fetchFrames(entity)
+		}
+		if sound {
+			// The sound is asked of Home Assistant and taken off the speaker when this view ends; a
+			// view already up keeps the sound it was started with (camera_sound.go).
+			go f.startCameraSound(entity)
+			go f.watchCameraSound(entity)
 		}
 	}
 	f.Changed.Emit(struct{}{})
@@ -276,7 +288,9 @@ func (f *Feature) MatchCamera(heard string) string {
 }
 
 // Camera actions: the list, and showing one — for an automation that wants the front door up when
-// the bell rings.
+// the bell rings. The sound is a second action rather than an argument on the first, because Home
+// Assistant registers an action's arguments as a closed, all-required set: no caller can leave one
+// out, so adding one to home_show_camera would break every automation already calling it.
 func (f *Feature) cameraActions() []*esphome.Action {
 	return []*esphome.Action{
 		{
@@ -307,13 +321,27 @@ func (f *Feature) cameraActions() []*esphome.Action {
 			Name: "home_show_camera",
 			Args: []esphome.Arg{{Name: "entity", Type: esphome.ArgString}, {Name: "seconds", Type: esphome.ArgInt}},
 			Run: func(c esphome.Call) (any, error) {
-				d := time.Duration(c.Int("seconds")) * time.Second
-				if d <= 0 {
-					d = cameraShow
-				}
-				f.ShowCamera(strings.TrimSpace(c.String("entity")), d)
+				f.ShowCamera(strings.TrimSpace(c.String("entity")), cameraSeconds(c))
+				return nil, nil
+			},
+		},
+		{
+			Name: "home_show_camera_sound",
+			Args: []esphome.Arg{{Name: "entity", Type: esphome.ArgString}, {Name: "seconds", Type: esphome.ArgInt}, {Name: "sound", Type: esphome.ArgString}},
+			Run: func(c esphome.Call) (any, error) {
+				f.showCamera(strings.TrimSpace(c.String("entity")), cameraSeconds(c), soundAsked(c.String("sound"), CameraSound()))
 				return nil, nil
 			},
 		},
 	}
+}
+
+// cameraSeconds is how long a show-camera action's view lasts: its own seconds, or the default when
+// that is zero or less.
+func cameraSeconds(c esphome.Call) time.Duration {
+	d := time.Duration(c.Int("seconds")) * time.Second
+	if d <= 0 {
+		d = cameraShow
+	}
+	return d
 }

@@ -7,6 +7,14 @@ The `<node>` prefix throughout this page is whatever name you gave the device wh
 substitute your own. Call any of them from **Developer Tools → Actions**, a script, or an
 automation.
 
+> **Good to know**
+>
+> Home Assistant registers every argument of an action as required, and refuses a call that leaves
+> one out — or that sends one the action doesn't have. Where you have no opinion on an argument,
+> send the value that means "no opinion" (`0` for a number, an empty string for text) rather than
+> omitting it. Adding an argument to an existing action therefore breaks every automation already
+> calling it, which is why a new one arrives as a new action instead.
+
 ## Connect the device to Home Assistant
 
 In YAML, refer to this action as `esphome.<node>_home_assistant`.
@@ -19,11 +27,12 @@ whatever paired the device, and isn't something you call from an automation afte
 
 > **Good to know**
 >
-> Several other actions depend on this being set first: `home_show_camera`, `home_weather`,
-> `home_cameras`' automatic camera list (when called with no `cameras`), `home_slideshow`, and the
-> Radio Browser stations in `home_radio`. They all fetch in the background, so the action itself
-> succeeds either way. Without the token they show or offer nothing, and `home_show_camera` opens
-> the camera view with `hass: no access configured` on it in place of the picture.
+> Several other actions depend on this being set first: `home_show_camera` and
+> `home_show_camera_sound`, `home_weather`, `home_cameras`' automatic camera list (when called with
+> no `cameras`), `home_slideshow`, and the Radio Browser stations in `home_radio`. They all fetch
+> in the background, so the action itself succeeds either way. Without the token they show or offer
+> nothing, and the camera actions open the view with `hass: no access configured` on it in place of
+> the picture.
 >
 > The URL must be one the device itself can reach — its local IP address or `homeassistant.local`,
 > not an external or Nabu Casa URL — since the device calls it directly rather than through Home
@@ -659,7 +668,8 @@ data:
 In YAML, refer to this action as `esphome.<node>_home_show_camera`.
 
 Puts one camera's live view up on the device's screen for a while — for an automation that shows
-the front door when the doorbell rings.
+the front door when the doorbell rings. The camera's audio follows the device's own **Camera
+sound** setting; `home_show_camera_sound` is the same view with the sound decided by the caller.
 
 > **Good to know**
 >
@@ -673,17 +683,61 @@ the front door when the doorbell rings.
 
 The camera entity to show. Does not need to be one of the cameras set with `home_cameras`.
 
-### seconds (Optional)
+### seconds (Required)
 
 *integer*
 
-How long to show it for. Defaults to 30 seconds if left out or zero.
+How long to show it for. `0` means the default, 30 seconds.
 
 ```yaml
 action: esphome.office_home_show_camera
 data:
   entity: camera.front_door
   seconds: 60
+```
+
+## Show a camera with its sound decided here
+
+In YAML, refer to this action as `esphome.<node>_home_show_camera_sound`.
+
+Shows a camera exactly as `home_show_camera` does, and decides whether its audio plays while the
+view is up: a doorbell automation can ask for the front door to be heard whatever the device's own
+setting says, or refuse a camera in a room somebody is sleeping in, for that one view. An
+automation with no opinion about sound should keep calling `home_show_camera`.
+
+> **Good to know**
+>
+> Everything `home_show_camera` says applies, `home_assistant` included. The sound additionally
+> needs a camera Home Assistant can stream (it plays the camera's stream to this device and
+> converts it on the way, the same way it plays a radio station). A camera that cannot be streamed
+> simply stays silent, and the picture is unaffected.
+
+### entity (Required)
+
+*string*
+
+The camera entity to show. Does not need to be one of the cameras set with `home_cameras`.
+
+### seconds (Required)
+
+*integer*
+
+How long to show it for. `0` means the default, 30 seconds.
+
+### sound (Required)
+
+*string*
+
+Whether to play the camera's audio with the view: `on` or `off`. Anything else — an empty string
+included — leaves it to the device's own **Camera sound** setting, off on a new device. The sound
+stops when the view does, and a track that something else started in the meantime is left alone.
+
+```yaml
+action: esphome.office_home_show_camera_sound
+data:
+  entity: camera.front_door
+  seconds: 60
+  sound: "on"
 ```
 
 ## Choose the calendars shown

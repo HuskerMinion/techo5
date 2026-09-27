@@ -48,6 +48,12 @@ type Home struct {
 	// AlertsOff turns the National Weather Service's alerts off (they are on for a device with a
 	// screen in the U.S.): no badge, no pills, no fetching.
 	AlertsOff bool `json:"alerts_off,omitempty"`
+
+	// CameraSound plays a camera's own audio on this device while its view is up: the yard or the
+	// street, in the room. Off unless somebody asks for it — a device that starts making the
+	// outside's noise unasked is a device people turn off — and the home_show_camera_sound action
+	// can ask for it, or refuse it, for one view whatever this says.
+	CameraSound bool `json:"camera_sound,omitempty"`
 }
 
 // Slideshow is how the idle screen's photo slideshow is wired: a Home Assistant media source to
@@ -203,6 +209,10 @@ func (w HomeWriter) WeatherSources(ids []string) error {
 
 func (w HomeWriter) AlertsOff(v bool) error {
 	return w.st.Update(func(c *Config) { c.Home.AlertsOff = v })
+}
+
+func (w HomeWriter) CameraSound(v bool) error {
+	return w.st.Update(func(c *Config) { c.Home.CameraSound = v })
 }
 
 func (w HomeWriter) RadarSource(source string) error {
