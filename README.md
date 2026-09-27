@@ -148,7 +148,7 @@ slot system, phone calls, and a minimal Alpine root filesystem in place of Andro
 | 🎙️ **Wake word on the device** | microWakeWord runs locally: twelve wake words, "Alexa", "Okay Nabu", "Hey Jarvis", "Hey Mycroft", "Computer" and more, chosen on the screen or in Home Assistant. Echo cancellation keeps it listening over music. |
 | 🔐 **Secure by default** | SSH is keys-only and off until you turn it on; keys arrive only through Home Assistant. The camera and screen web pages start closed. No password logins, not even in rescue. |
 | 🔄 **Updates that can't brick it** | Releases install over the air from Home Assistant's update card into the spare of two root filesystem slots, boot on trial, and fall back on their own if the new one doesn't settle. |
-| 📺 **A screen that's actually useful** | Clock and weather, the conversation as it happens (as words, or as an orb that follows the voice), now playing with song and cover art, your Home Assistant dashboards, forecasts, a live rain radar, the National Weather Service's alerts (in the U.S.), live Home Assistant cameras, timers and alarms, Wi-Fi setup, 13 themes. |
+| 📺 **A screen that's actually useful** | Clock and weather, the conversation as it happens (as words, or as an orb that follows the voice), a glance strip of chips from Home Assistant along the foot of the clock, now playing with song and cover art, your Home Assistant dashboards, forecasts, a live rain radar, the National Weather Service's alerts (in the U.S.), live Home Assistant cameras, timers and alarms, Wi-Fi setup, 13 themes. |
 | 📻 **Weather and radio with no setup** | A new Show uses the forecast every Home Assistant has, and lists the radio stations near home from Home Assistant's Radio Browser. Pick another weather entity (your own station, say) on the screen, and keep your own favorite stations too. |
 | ⏰ **Alarms that ring on their own** | Set on the screen, by Home Assistant, or followed from its helpers; they ring from the Show's own clock even when Home Assistant is down. Snooze included, and the screen can wake you with a sunrise before the sound. |
 | 🎧 **Bluetooth, rebuilt** | Earbuds and speakers over A2DP, plus a Home Assistant Bluetooth proxy, on a kernel rebuilt with Bluetooth from the LineageOS source. |
@@ -169,6 +169,8 @@ Echo Show 8 and the Echo Spot, are in [docs/screenshots](docs/screenshots/README
 | **Now playing**, with the album's cover | **The mini player**, over the clock |
 | ![The orb listening: rings round a glowing core that swells with the voice](docs/screenshots/turn-orb-listening.png) | ![The orb while the reply plays, the words beside it](docs/screenshots/turn-orb-speaking.png) |
 | **The orb**, a setting: rings round a core that follows the voice | **The orb** while the reply plays |
+| ![The clock with the idle orb and a glance strip of chips from Home Assistant](docs/screenshots/clock-glance.png) | |
+| **The glance strip**: chips from Home Assistant, only while they have news | |
 | ![Settings: Display](docs/screenshots/settings-display.png) | ![Settings: Sound & Voice](docs/screenshots/settings-sound.png) |
 | **Settings** by category: brightness, night hours, theme, clock | **Sound & Voice**: volume, microphone, wake word and its sound |
 | ![Alarm editor](docs/screenshots/alarm-editor.png) | ![Settings: Privacy & Security](docs/screenshots/settings-privacy.png) |

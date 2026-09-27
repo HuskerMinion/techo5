@@ -342,6 +342,9 @@ func (f *Feature) want(h config.Home) {
 	if h.Radio.Now != "" {
 		keys = append(keys, hastate.Key{Entity: h.Radio.Now})
 	}
+	if hasScreen {
+		keys = append(keys, glanceKeys(h)...)
+	}
 	hastate.Get().Follow("home", keys...)
 }
 
@@ -350,7 +353,7 @@ func (f *Feature) want(h config.Home) {
 func (f *Feature) Actions() []*esphome.Action {
 	actions := append(f.cameraActions(), f.accessAction())
 	if hasScreen {
-		actions = append(actions, f.slideshowAction(), f.calendarAction())
+		actions = append(actions, f.slideshowAction(), f.calendarAction(), f.glanceAction())
 	}
 	return append(actions, []*esphome.Action{
 		{

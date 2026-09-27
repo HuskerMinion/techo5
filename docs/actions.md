@@ -819,6 +819,39 @@ data:
   entity: weather.forecast_home
 ```
 
+## Show chips along the foot of the clock
+
+In YAML, refer to this action as `esphome.<node>_home_glance`.
+
+Sets the glance strip: Home Assistant entities shown as chips (a pill with the entity's icon and a
+short line) along the foot of the clock page, each only while it has something to say. Screen devices
+only. The list persists and the device follows the entities itself, so a chip comes and goes with its
+entity's state and nothing has to be sent again.
+
+What each entity shows:
+
+- **Off, idle, closed, locked, empty, `0`, `unknown` or `unavailable`**: nothing.
+- **A switch-like entity** (`binary_sensor`, `input_boolean`, `switch`, `light`, `lock`, `cover`, …)
+  that is on or open: its name.
+- **A number**: its name, the value and the unit ("Kitchen 21.5°C").
+- **Anything else**: the state itself, which is how a template sensor made for the strip reads
+  ("Washer done", "6:00 PM: water the plants").
+
+The icon is the entity's own, or one for its domain. Chips that don't fit are left for when there is
+room, in the order given. A running timer or the music strip takes the foot of the page instead.
+
+### entities (Required)
+
+*string*
+
+The entities, comma separated, in the order to show them. Empty takes the strip away.
+
+```yaml
+action: esphome.office_home_glance
+data:
+  entities: input_boolean.guest_mode, sensor.washer_status, binary_sensor.front_door
+```
+
 ## Wire up the radio page
 
 In YAML, refer to this action as `esphome.<node>_home_radio`.

@@ -19,6 +19,8 @@ func TestOrbPreview(t *testing.T) {
 	if dir == "" {
 		t.Skip("set ORB_PREVIEW to a directory")
 	}
+	applyTheme(themes[themeIndex("Ocean")]) // the orb takes the theme's accent
+	defer applyTheme(themes[0])
 	for _, size := range []image.Point{{960, 480}, {1280, 800}} {
 		dst := image.NewRGBA(image.Rect(0, 0, size.X, size.Y))
 		r := newRenderer(dst)

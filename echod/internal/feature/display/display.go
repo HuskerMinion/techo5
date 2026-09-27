@@ -231,7 +231,10 @@ type Display struct {
 	// back, and showingStrip whether the last frame had it, for the touch handler.
 	strip *esphome.Select
 	// turnStyle is the turn screen's setting in Home Assistant: classic, or the orb (render_orb.go).
-	turnStyle      *esphome.Select
+	turnStyle *esphome.Select
+	// themeSel is the theme in Home Assistant, and themeShown what it was last set to.
+	themeSel       *esphome.Select
+	themeShown     string
 	stripKey       string
 	stripSince     time.Time
 	stripFullUntil time.Time
@@ -296,6 +299,7 @@ func build() *Display {
 	d.weatherFx = weatherAnimationSwitch(d.wake)
 	d.strip = stripSelect(d.wake)
 	d.turnStyle = turnStyleSelect(d.wake)
+	d.themeSel = themeSelect(d.wake)
 	d.nightHours = nightHoursSelect(d)
 	d.nightStart, d.nightEnd = nightEndSelect(d, true), nightEndSelect(d, false)
 	d.nightStyle = nightStyleSelect(d)
@@ -350,7 +354,7 @@ func build() *Display {
 func (d *Display) Name() string { return "screen" }
 
 func (d *Display) Entities() []esphome.Entity {
-	return []esphome.Entity{d.light, d.auto, d.clock, d.camTime, d.callBtn, d.weatherFx, d.lang, d.strip, d.turnStyle, d.nightHours, d.nightStart, d.nightEnd, d.atNight, d.nightStyle, d.glowLevel,
+	return []esphome.Entity{d.light, d.auto, d.clock, d.camTime, d.callBtn, d.weatherFx, d.lang, d.strip, d.turnStyle, d.themeSel, d.nightHours, d.nightStart, d.nightEnd, d.atNight, d.nightStyle, d.glowLevel,
 		d.pop.on, d.pop.lead, d.pop.chime, d.pop.allDay}
 }
 
@@ -1480,7 +1484,9 @@ func (d *Display) frame() time.Duration {
 		}
 		return time.Hour
 	}
-	applyTheme(current())
+	t := current()
+	applyTheme(t)
+	d.syncThemeSelect(t.name)
 
 	d.mu.Lock()
 	booting, started := d.booting, d.started
@@ -1509,6 +1515,7 @@ func (d *Display) frame() time.Duration {
 	s.snooze = config.Get().Alarms.Snooze()
 	s.alarms = alarm.Get().View(now)
 	s.timers = timer.Get().List(now)
+	s.glance = home.Get().Glance()
 	if view.Phase == "idle" && (view.Heard != "" || view.Reply != "") && now.Sub(at) < linger {
 		s.phase = "lingering"
 	}
@@ -1714,6 +1721,9 @@ func (d *Display) frame() time.Duration {
 	}
 	if s.showWeather || s.nowPlaying {
 		return time.Until(now.Truncate(idleFrame).Add(idleFrame))
+	}
+	if s.phase == "idle" && !s.showVolume && d.r.idleOrbDrawn {
+		return idleOrbFrame
 	}
 	if (s.phase == "idle" || s.phase == "lingering") && !s.showVolume {
 		// On the next whole second, so the clock changes when the second does.

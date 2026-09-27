@@ -52,6 +52,9 @@ type scene struct {
 	// is sending while the reply plays, each 0 to 1.
 	micLevel, outLevel float64
 
+	// glance is the glance strip's chips (feature/home/glance.go), drawn at the foot of the clock page.
+	glance []home.Chip
+
 	// volume is shown while it moves: the step out of media.VolumeSteps.
 	volume     int
 	showVolume bool
@@ -239,6 +242,10 @@ type renderer struct {
 	micro  font.Face // an event's words on a day of the month
 	margin int
 
+	// idleOrbDrawn is whether the frame last drawn had the idle orb on it, so the display redraws it
+	// often enough to turn (render_orb.go).
+	idleOrbDrawn bool
+
 	// base keeps the settings screen's unchanging part.
 	base    *image.RGBA
 	baseKey baseKey
@@ -327,6 +334,7 @@ func newRenderer(dst *image.RGBA) *renderer {
 // draw composes a whole frame. Everything is repainted: the canvas is small and a full paint is
 // simpler than tracking what changed.
 func (r *renderer) draw(s scene) {
+	r.idleOrbDrawn = false
 	if !s.showRadar {
 		r.shapes = alertOverlay{} // the alert shapes' picture is the page's size: kept only while the rain map is up
 	}
@@ -551,6 +559,12 @@ func (r *renderer) bigClock(s scene) {
 		// The music strip takes the foot of the panel; the clock and date move up out of its way.
 		base -= r.s(30)
 	}
+	// The glance strip takes the foot too, when there is news and nothing else is using it: a running
+	// timer is news enough on its own, and the music strip is where the hand already is.
+	glance := len(s.glance) > 0 && !timers && !s.strip
+	if glance {
+		base -= r.s(30)
+	}
 
 	suffix := ""
 	if next := s.alarms.Next; next != nil && next.At.Sub(s.now) < 24*time.Hour {
@@ -561,9 +575,16 @@ func (r *renderer) bigClock(s scene) {
 		suffix = "  ·  " + what + " " + clockText(next.At)
 	}
 	// A tap on the date opens the calendar, with a finger's room around it.
+	if idleOrbOn() {
+		// Centered on the time and the date together, not the digits alone.
+		r.idleBackdrop(s, r.w/2, base-r.s(58))
+	}
 	r.setDateAt(r.timeAndDate(s.now, base, suffix).Inset(-r.s(16)))
 	if timers {
 		r.timersLine(s, base+r.s(128))
+	}
+	if glance {
+		r.glanceStrip(s.glance)
 	}
 
 	r.weatherCorner(s)

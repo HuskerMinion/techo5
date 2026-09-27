@@ -12,6 +12,8 @@ import (
 	"sync"
 	"time"
 
+	"golang.org/x/image/font"
+
 	"github.com/HuskerMinion/techo5/echod/internal/config"
 )
 
@@ -35,12 +37,19 @@ const orbFrame = 50 * time.Millisecond
 type orbPalette struct{ accent, light, core, warm color.RGBA }
 
 var (
-	orbDay = orbPalette{color.RGBA{0x1e, 0x9b, 0xf0, 0xff}, color.RGBA{0x7c, 0xd8, 0xff, 0xff}, color.RGBA{0xd6, 0xf4, 0xff, 0xff}, color.RGBA{0xff, 0xb3, 0x47, 0xff}}
-	// orbGround is the page under the orb: a navy close to black, which the blues need; the theme's
-	// ground (warm on most themes) turns them muddy.
-	orbGround = color.RGBA{0x03, 0x07, 0x0d, 0xff}
+	// orbGround is the page under the orb: Ocean's navy (lib/palette), which the blues need; a warm
+	// ground turns them muddy. On the Ocean theme the orb and the clock share one ground.
+	orbGround = color.RGBA{0x0a, 0x16, 0x22, 0xff}
 	orbNight  = orbPalette{color.RGBA{0xb0, 0x24, 0x1c, 0xff}, color.RGBA{0xe0, 0x50, 0x46, 0xff}, color.RGBA{0xff, 0x9a, 0x90, 0xff}, color.RGBA{0xb0, 0x5a, 0x20, 0xff}}
 )
+
+// orbDayPalette is the orb in the theme's accent, its bright parts and core lighter toward white, so
+// the orb is the same color as everything else on the screen: cyan on Ocean, amber on Walnut. The
+// readouts stay warm whatever the theme. Night has its own palette, orbNight.
+func orbDayPalette() orbPalette {
+	white := color.RGBA{0xff, 0xff, 0xff, 0xff}
+	return orbPalette{amber, lerp(amber, white, 0.45), lerp(amber, white, 0.85), color.RGBA{0xff, 0xb3, 0x47, 0xff}}
+}
 
 // orbPhase reports whether a phase draws the orb.
 func orbPhase(phase string) bool {
@@ -49,7 +58,7 @@ func orbPhase(phase string) bool {
 
 // orb draws the whole turn page: the orb, its readouts, and the words beside it.
 func (r *renderer) orb(s scene) {
-	pal := orbDay
+	pal := orbDayPalette()
 	if inNight(config.Get().Screen.Night, s.now) {
 		pal = orbNight
 	}
@@ -118,7 +127,7 @@ func (r *renderer) orbDraw(cx, cy int, rad, t float64, phase string, level float
 	if phase == "lingering" {
 		strength = 0.35
 	}
-	r.orbHalo(cx, cy, int(rad*1.45), strength, pal.accent)
+	r.orbHalo(cx, cy, int(rad*1.45), strength, pal.accent, orbGround)
 
 	turn := func(period float64) float64 { return 2 * math.Pi * t * speed / period }
 	px := func(n int) float64 { return float64(r.s(n)) }
@@ -399,10 +408,11 @@ func softPicture(key softKey, build func() *image.RGBA) *image.RGBA {
 	return img
 }
 
-func (r *renderer) orbHalo(cx, cy, rad int, strength float64, c color.RGBA) {
+// orbHalo lays the glow over a plain ground of color ground: it is copied whole, replacing what is under it.
+func (r *renderer) orbHalo(cx, cy, rad int, strength float64, c, ground color.RGBA) {
 	step := int(math.Round(clamp01(strength) * (orbHaloSteps - 1)))
-	img := softPicture(softKey{"halo", rad, c, orbGround, step}, func() *image.RGBA {
-		return haloImage(rad, c, orbGround, float64(step)/(orbHaloSteps-1))
+	img := softPicture(softKey{"halo", rad, c, ground, step}, func() *image.RGBA {
+		return haloImage(rad, c, ground, float64(step)/(orbHaloSteps-1))
 	})
 	draw.Draw(r.dst, img.Rect.Add(image.Pt(cx-rad, cy-rad)), img, image.Point{}, draw.Src)
 }
@@ -471,19 +481,103 @@ func coreImage(rad int, pal orbPalette) *image.RGBA {
 	return img
 }
 
+// softCore is a glow for the idle orb: the light tone fading through the accent to nothing, no white
+// center. Kept per radius in two-pixel steps, like the core.
+func (r *renderer) softCore(cx, cy, rad int, pal orbPalette) {
+	rad &^= 1
+	if rad < 4 {
+		return
+	}
+	img := softPicture(softKey{"softcore", rad, pal.accent, pal.light, 0}, func() *image.RGBA {
+		img := image.NewRGBA(image.Rect(0, 0, 2*rad, 2*rad))
+		for y := 0; y < 2*rad; y++ {
+			for x := 0; x < 2*rad; x++ {
+				dx, dy := float64(x-rad)+0.5, float64(y-rad)+0.5
+				u := math.Sqrt(dx*dx+dy*dy) / float64(rad)
+				if u >= 1 {
+					continue
+				}
+				c := lerp(pal.light, pal.accent, u)
+				a := 0.75 * (1 - u) * (1 - u)
+				i := img.PixOffset(x, y)
+				img.Pix[i+0] = uint8(float64(c.R)*a + 0.5)
+				img.Pix[i+1] = uint8(float64(c.G)*a + 0.5)
+				img.Pix[i+2] = uint8(float64(c.B)*a + 0.5)
+				img.Pix[i+3] = uint8(255*a + 0.5)
+			}
+		}
+		return img
+	})
+	draw.Draw(r.dst, img.Rect.Add(image.Pt(cx-rad, cy-rad)), img, image.Point{}, draw.Over)
+}
+
 // spaced draws s in small capitals spread out, centered on cx with its baseline at y: the orb's label.
 func (r *renderer) spaced(s string, cx, y float64, c color.RGBA) {
-	gap := r.s(10)
+	r.spacedFace(r.small, s, cx, y, r.s(10), c)
+}
+
+// spacedFace is spaced in any face, with gap pixels between letters.
+func (r *renderer) spacedFace(face font.Face, s string, cx, y float64, gap int, c color.RGBA) {
 	w := 0
 	for _, ch := range s {
-		w += r.width(r.small, string(ch)) + gap
+		w += r.width(face, string(ch)) + gap
 	}
 	x := int(cx) - (w-gap)/2
 	for _, ch := range strings.Split(s, "") {
-		r.text(r.small, ch, x, int(y), c)
-		x += r.width(r.small, ch) + gap
+		r.text(face, ch, x, int(y), c)
+		x += r.width(face, ch) + gap
 	}
 }
 
+// idleOrbFrame is how often the clock page is redrawn while the idle orb turns on it: slow enough to
+// cost little, quick enough that the orb moves rather than ticks.
+const idleOrbFrame = 200 * time.Millisecond
+
+// idleOrbLabel is the word under the idle orb; empty draws none.
+var idleOrbLabel = ""
+
 // setTurnStyle is the settings screen's choice, saved and shown in Home Assistant.
 func (d *Display) setTurnStyle(i int) { saveTurnStyle(d.turnStyle, i) }
+
+// idleOrbForced draws the idle orb whatever the setting says, for the preview tests.
+var idleOrbForced bool
+
+func idleOrbOn() bool { return idleOrbForced || config.Get().Screen.TurnOrb }
+
+// idleBackdrop is the orb at rest while Turn screen is Orb: its rings, large and faint and turning
+// slowly, centered on the time and date, with a soft glow at their heart and idleOrbLabel small at the
+// top right of the page. It is drawn before the time and date, so they sit over it. A tap anywhere free on the
+// clock page starts a turn, as it already did.
+func (r *renderer) idleBackdrop(s scene, cx, cy int) {
+	pal := orbDayPalette()
+	if inNight(config.Get().Screen.Night, s.now) {
+		pal = orbNight
+	}
+	rad := math.Round(float64(r.h) * 0.44) // the whole circle on the panel
+	t := float64(s.now.UnixMilli()%3600000) / 1000
+	turn := func(period float64) float64 { return 2 * math.Pi * t / period }
+	px := func(n int) float64 { return float64(r.s(n)) }
+	breathe := 0.5 + 0.5*math.Sin(2*math.Pi*t/5)
+	const f = 0.5 // the rings' strength: present, still under the time
+
+	r.idleOrbDrawn = true
+	if s.slideshow == nil {
+		r.orbHalo(cx, cy, int(rad*1.1), 0.1+0.15*breathe, pal.accent, walnut)
+	}
+	r.hudRing(cx, cy, rad, px(1), pal.light, 0.35*f, "solid", 0)
+	r.hudRing(cx, cy, rad*0.965, px(4), pal.accent, 0.9*f, "segments", turn(60))
+	r.hudRing(cx, cy, rad*0.9, px(3), pal.light, 0.6*f, "scale", -turn(120))
+	r.hudRing(cx, cy, rad*0.9, px(10), pal.light, 0.8*f, "majors", -turn(120))
+	r.hudRing(cx, cy, rad*0.8, px(2), pal.light, 0.9*f, "arcs", -turn(18))
+	r.hudRing(cx, cy, rad*0.71, px(2), pal.accent, 0.7*f, "dashes", turn(30))
+	r.hudRing(cx, cy, rad*0.6, px(5), pal.accent, 0.6*f, "brackets", -turn(40))
+	if idleOrbLabel != "" {
+		// Top right, level with the weather on the left: centered, it ran into a long weather line.
+		gap := r.s(4)
+		w := -gap
+		for _, ch := range idleOrbLabel {
+			w += r.width(r.tiny, string(ch)) + gap
+		}
+		r.spacedFace(r.tiny, idleOrbLabel, float64(r.w-r.margin-w/2), float64(r.margin+r.s(26)), gap, pal.light)
+	}
+}
