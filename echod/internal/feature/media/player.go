@@ -79,6 +79,12 @@ type Player struct {
 	// playing: its mapper has no case for announcing and raises on it.
 	speaking atomic.Bool
 
+	// over is a sound playing over the music rather than instead of it — a camera's own stream — and the
+	// way to stop the one that is. See overlay.go.
+	overNext atomic.Bool
+	overMu   sync.Mutex
+	overStop context.CancelFunc
+
 	// remote is the speaker lent to something this player did not start, and who is holding it now.
 	remote claim
 
@@ -486,9 +492,16 @@ func (p *Player) command(c esphome.MediaCommand) {
 	// An announcement is a url too, but a short one at the pipeline's rate, and it interrupts rather
 	// than replacing what is playing. It goes through the same path as one from the voice assistant.
 	if c.HasMediaURL && c.MediaURL != "" {
-		if c.Announcement {
+		switch {
+		case c.Announcement:
 			p.announce(c.MediaURL)
-		} else {
+		case p.takeOverNext():
+			// A url the device asked for over the music rather than instead of it: a camera's own sound.
+			// It plays under a claim that ducks whatever is playing, so the room keeps its music and
+			// gets it back when the view ends (overlay.go).
+			p.over(c.MediaURL)
+			p.OnPlay.Emit(c.MediaURL)
+		default:
 			p.ours()
 			p.stream.Play(c.MediaURL)
 			p.OnPlay.Emit(c.MediaURL)

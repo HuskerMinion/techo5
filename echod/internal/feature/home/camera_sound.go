@@ -72,6 +72,12 @@ func soundAsked(arg string, setting bool) bool {
 // Nothing is waited for: the request is answered by a stream that arrives later as an ordinary media
 // URL, which cameraSoundPlaying recognizes. A request that is refused, or a camera Home Assistant
 // cannot stream, therefore leaves the view silent and nothing to stop.
+//
+// The URL is asked to be played *over* whatever is playing rather than instead of it: the music keeps
+// going, ducked, and comes back up when the view ends, so hearing the door does not end what the room
+// was listening to and does not take this device out of a Music Assistant group. That ask is made
+// before the call, because the URL can arrive before the call returns — the service is answered only
+// once the stream has been set up and sent — and a URL that arrives first is played as a track.
 func (f *Feature) startCameraSound(entity string) {
 	if entity == LocalCamera {
 		// The device's own camera has no audio to play, and it is not a Home Assistant camera to ask
@@ -84,6 +90,7 @@ func (f *Feature) startCameraSound(entity string) {
 
 	// The device's own media player is what it is played on, by the device's own action on itself,
 	// rather than by a script on the other side having to know which camera this is.
+	media.Get().OverNext()
 	err := hass.Get().Call("camera", "play_stream", map[string]any{
 		"entity_id":    entity,
 		"media_player": speakerEntity(),
@@ -91,6 +98,9 @@ func (f *Feature) startCameraSound(entity string) {
 	})
 	if err != nil {
 		slog.Warn("camera sound", "entity", entity, "err", err)
+		// Nothing is coming, so the ask goes with the request: left standing it would take the next
+		// track of somebody's music for a camera's sound.
+		media.Get().ForgetOverNext()
 		f.mu.Lock()
 		f.camSound = ""
 		f.mu.Unlock()
@@ -122,7 +132,7 @@ func (f *Feature) CameraSoundPlaying() bool {
 // control asks for and what somebody at a doorbell wants: the picture stays and the sound stops.
 func (f *Feature) SilenceCameraSound() {
 	if f.takeCameraSound() {
-		media.Get().Stop()
+		media.Get().StopOver()
 		slog.Info("camera sound silenced from the screen")
 	}
 }
@@ -175,7 +185,7 @@ func (f *Feature) watchCameraSound(entity string) {
 			continue
 		}
 		if ours {
-			media.Get().Stop()
+			media.Get().StopOver()
 			slog.Info("camera sound off", "entity", entity)
 		}
 		return

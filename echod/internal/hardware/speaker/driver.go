@@ -78,6 +78,15 @@ func (d *Driver) ClaimSpeech(name string, play func(ctx context.Context, p *Play
 	return d.claim(name, config.Get().Media.OnTurn != config.OnTurnPause, play)
 }
 
+// ClaimOver takes the speaker for something that is not words but still belongs over the music rather
+// than instead of it: the background is ducked for as long as the claim lasts and comes back up when it
+// ends. It is ClaimSpeech without the words' setting deciding, because the two are not the same
+// question. Music that stops for a turn is what somebody asked for; a camera's own sound is the outside
+// coming in, and no setting about turns should make that the end of what the room was listening to.
+func (d *Driver) ClaimOver(name string, play func(ctx context.Context, p *Player) error) *Claim {
+	return d.claim(name, true, play)
+}
+
 func (d *Driver) claim(name string, over bool, play func(ctx context.Context, p *Player) error) *Claim {
 	ctx, cancel := context.WithCancel(context.Background())
 	c := &Claim{name: name, over: over, cancel: cancel, done: make(chan struct{})}
