@@ -171,3 +171,31 @@ func TestReadOverRefusesWhatItCannotPlay(t *testing.T) {
 		}
 	}
 }
+
+// Silencing before the stream has even started is not a failure either: the control can be tapped while
+// the reading is still in the handshake or the header, and that is where it landed on hardware — a
+// warning in the log every time, because the reader was only checking between reads.
+func TestReadOverGivesUpBeforeTheHeaderArrives(t *testing.T) {
+	release := make(chan struct{})
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// Nothing at all until the test says so, so the cancellation lands inside the header read.
+		select {
+		case <-release:
+		case <-r.Context().Done():
+			return
+		}
+		_, _ = w.Write(testWAV(64))
+	}))
+	defer srv.Close()
+	defer close(release)
+
+	stop, cancel := context.WithCancel(context.Background())
+	go func() {
+		time.Sleep(50 * time.Millisecond)
+		cancel()
+	}()
+
+	if err := readOver(stop, srv.URL, speaker.New()); err != nil {
+		t.Fatalf("silencing while the header was being read was reported as a failure: %v", err)
+	}
+}

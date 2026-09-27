@@ -121,9 +121,23 @@ func (p *Player) over(url string) {
 
 // readOver plays a url into the speaker as it arrives, until stop is done.
 //
-// The body is the same live WAV a track is: Home Assistant writes its sizes before it knows the length,
-// so the data chunk runs until the connection ends, and there is no end to wait for but the connection.
+// Being silenced is not a failure anywhere in it: the context can go away during the request, while the
+// header is being read, or between reads, and every one of those is somebody tapping the control rather
+// than something going wrong. A warning each time would be noise about the feature working.
 func readOver(stop context.Context, url string, spk *speaker.Player) error {
+	err := readOverOnce(stop, url, spk)
+	if stop.Err() != nil {
+		return nil
+	}
+	return err
+}
+
+// readOverOnce is the reading itself: the same live WAV a track is, read into the speaker as it arrives.
+//
+// The body is what Home Assistant serves for a converted stream: its sizes were written before the
+// length was known, so the data chunk runs until the connection ends, and there is no end to wait for
+// but the connection.
+func readOverOnce(stop context.Context, url string, spk *speaker.Player) error {
 	// No timeout on the client: a camera is watched for as long as somebody watches it. What is bounded
 	// is a single read, because a wedged connection otherwise holds the sound open for as long as the
 	// kernel keeps retrying.
