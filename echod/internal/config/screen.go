@@ -52,6 +52,10 @@ type Screen struct {
 	// back to its clock with the music in a strip at the foot; none keeps the full page.
 	MusicStrip int `json:"music_strip,omitempty"`
 
+	// TurnOrb draws a turn (listening, thinking, the reply) as the orb, a HUD of rings round a core that
+	// follows the voice, rather than the classic title and bar. Shows only.
+	TurnOrb bool `json:"turn_orb,omitempty"`
+
 	// Language is which words the screen listens for in a turn — "en", "de", "es", "fr", "it",
 	// "nl" — empty for all of them. It has nothing to do with what the assistant understands or
 	// says, which is Home Assistant's pipeline; it decides only which pages a sentence brings up.
@@ -134,6 +138,10 @@ func (w ScreenWriter) WeatherStill(v bool) error {
 
 func (w ScreenWriter) CallButton(v bool) error {
 	return w.st.Update(func(c *Config) { c.Screen.CallButton = v })
+}
+
+func (w ScreenWriter) TurnOrb(on bool) error {
+	return w.st.Update(func(c *Config) { c.Screen.TurnOrb = on })
 }
 
 func (w ScreenWriter) MusicStrip(seconds int) error {

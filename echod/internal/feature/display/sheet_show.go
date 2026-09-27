@@ -31,6 +31,9 @@ const (
 
 	// hasCalendarPopups is whether events pop up on this screen (calendar_popup.go).
 	hasCalendarPopups = true
+
+	// hasTurnOrb is whether a turn can be drawn as the orb (render_orb.go).
+	hasTurnOrb = true
 )
 
 // settingsScreen draws the settings screen for the scene's category.

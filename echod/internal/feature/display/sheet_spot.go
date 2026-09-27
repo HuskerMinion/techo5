@@ -126,6 +126,9 @@ const hasNightLight = false
 // hasCalendarPopups: not on the Spot yet.
 const hasCalendarPopups = false
 
+// hasTurnOrb: the orb is drawn for the Show's rectangle; the Spot's round screen keeps its own turn page.
+const hasTurnOrb = false
+
 // adaptRows fits the shared rows to the round card, which is narrower than the Show's: shorter
 // labels, a status under a row's name rather than beside its button, no second button beside a
 // choice (Weather's Show: the forecast is on the dial), and Updates as two rows, its channel and

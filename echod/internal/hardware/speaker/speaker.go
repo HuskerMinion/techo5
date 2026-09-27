@@ -64,6 +64,9 @@ type Player struct {
 	// hold is DRAMHold, kept open for as long as pb is: see paths_cronos.go.
 	hold *os.File
 
+	// level is what is being sent to the codec, for the screen: see level.go.
+	level atomic.Uint32
+
 	// Output changed: a headphone was plugged in or pulled out.
 	OnOutput hook.Hook[Output]
 
@@ -374,6 +377,7 @@ func (p *Player) Run(ctx context.Context) error {
 		}
 
 		p.fill(buf)
+		p.meter(buf)
 		to := buf
 		if s := p.sink.Load(); s != nil {
 			// The sink gets the audio; the codec keeps its pace on silence.

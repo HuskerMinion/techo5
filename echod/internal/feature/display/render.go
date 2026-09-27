@@ -48,6 +48,10 @@ type scene struct {
 	paused  bool
 	muted   bool
 
+	// micLevel and outLevel drive the orb: how loud the room is while listening, and what the speaker
+	// is sending while the reply plays, each 0 to 1.
+	micLevel, outLevel float64
+
 	// volume is shown while it moves: the step out of media.VolumeSteps.
 	volume     int
 	showVolume bool
@@ -446,14 +450,21 @@ func (r *renderer) draw(s scene) {
 
 	var behind *image.RGBA // the photo behind the idle page, when it has one
 	switch s.phase {
-	case "listening":
-		r.status(s, "Listening…", true)
-	case "thinking":
-		r.status(s, "Thinking…", true)
-		r.words(s.heard, "", 200)
-	case "replying", "lingering":
-		r.cornerClock(s)
-		r.words(s.heard, s.reply, 70)
+	case "listening", "thinking", "replying", "lingering":
+		if config.Get().Screen.TurnOrb {
+			r.orb(s)
+			break
+		}
+		switch s.phase {
+		case "listening":
+			r.status(s, "Listening…", true)
+		case "thinking":
+			r.status(s, "Thinking…", true)
+			r.words(s.heard, "", 200)
+		default:
+			r.cornerClock(s)
+			r.words(s.heard, s.reply, 70)
+		}
 	default:
 		if s.sunrise > 0 {
 			// The light before an alarm takes the whole screen: the panel is the lamp in the room, and
@@ -649,8 +660,12 @@ func (r *renderer) status(s scene, title string, breathe bool) {
 // words lays out what was heard, dimmed, and the reply beneath it, starting at top and stopping at
 // the footer. A long reply is shrunk one step before being cut.
 func (r *renderer) words(heard, reply string, top int) {
+	r.wordsW(heard, reply, top, r.w-2*r.margin)
+}
+
+// wordsW is words in a column maxW wide, for a page that keeps the right for something else.
+func (r *renderer) wordsW(heard, reply string, top, maxW int) {
 	y := top
-	maxW := r.w - 2*r.margin
 	bottom := r.h - 70
 	if heard != "" {
 		for _, line := range r.wrap(r.small, "“"+heard+"”", maxW) {

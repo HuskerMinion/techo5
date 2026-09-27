@@ -17,6 +17,8 @@ The sunrise before an alarm is animated: [on a Show](sunrise-show.gif) and [on t
 | **Clock**, with the weather and your own photos behind it | **Weather** now and for the week, the rain radar a tap away |
 | ![Now playing from Music Assistant, with the album's cover behind the song](now-playing-cover.png) | ![The clock with a mini player strip along the bottom, showing the paused song and its cover](now-playing-strip.png) |
 | **Now playing** from Music Assistant, with the album's cover | **The mini player**: after a while, or when paused, the song shrinks to a strip over the clock |
+| ![The orb while listening: rings round a glowing core that swells with the voice](turn-orb-listening.png) | ![The orb while the reply plays: the words on the left, a ring of bars standing up with the speaker](turn-orb-speaking.png) |
+| **The orb** (Turn screen: Orb), listening: the core swells with the voice | **The orb** while the reply plays, the words beside it |
 | ![An alarm ringing, with Stop and Snooze](ringing.png) | ![The alarm editor](alarm-editor.png) |
 | **Alarm ringing**, big enough to hit half awake | **Alarms** set on the device: once, on chosen days, each with its own wake light |
 | ![Settings: Alarms and Timers](settings-alarms.png) | ![Settings: Display](settings-display.png) |
@@ -50,6 +52,8 @@ The same software, laid out for the bigger screen.
 | **Alarms & Timers**, with the alarm sound | **A new alarm** |
 | ![Settings: Sound and Voice on the Show 8](show8/settings-sound.png) | ![Settings: Connections on the Show 8](show8/settings-connections.png) |
 | **Sound & Voice**, with quiet hours and bass | **Connections** |
+| ![The orb listening on the Show 8](show8/turn-orb-listening.png) | ![The orb speaking on the Show 8](show8/turn-orb-speaking.png) |
+| **The orb**, listening | **The orb**, speaking |
 | ![The radio drawer on the Show 8](show8/drawer-radio.png) | |
 | **Radio** | |
 

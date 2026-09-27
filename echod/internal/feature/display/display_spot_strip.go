@@ -14,6 +14,9 @@ import (
 // setMusicStrip saves the choice; the Spot has no strip of its own, and hides the row.
 func (d *Display) setMusicStrip(i int) { setStrip(nil, i) }
 
+// setTurnStyle: the Spot has no turn screen row (hasTurnOrb); this keeps the shared settings code whole.
+func (d *Display) setTurnStyle(i int) { saveTurnStyle(nil, i) }
+
 // The star on the round face, mirroring Done on the other side of play and pause.
 const starX, starY, starR = center + 88.0, 420.0, 25.0
 

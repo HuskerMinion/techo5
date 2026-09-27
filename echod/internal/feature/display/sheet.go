@@ -90,6 +90,9 @@ func categoryRows(sv sheetView) (rows []settingRow, note string) {
 			settingRow{id: "musicstrip", label: "Now playing", sub: "Full page, or a strip over the clock", kind: ctlChoice, value: stripOptionText()},
 			settingRow{id: "slideshow", label: "Slideshow", sub: "Photos from Home Assistant", kind: ctlChoice, value: slideshowOptions[slideshowIndex()]},
 		)
+		if hasTurnOrb {
+			rows = append(rows, settingRow{id: "turnstyle", label: "Turn screen", sub: "While it listens and answers: Classic, or the orb", kind: ctlChoice, value: turnStyleText()})
+		}
 		if slideshowIndex() != 0 {
 			rows = append(rows, slideshowRows(st.demo)...)
 		}
@@ -441,6 +444,8 @@ func pickerFor(id string, sv sheetView) (pickerView, bool) {
 		return popupCalendarsPicker(), true
 	case "musicstrip":
 		return pickerView{title: "Now playing", opts: stripChoices(), cur: stripIndexShared()}, true
+	case "turnstyle":
+		return pickerView{title: "Turn screen", opts: turnStyles, cur: turnStyleIndex()}, true
 	case "screenlang":
 		return pickerView{title: "Screen language", opts: langOptions, cur: langIndex()}, true
 	case "newtimer":
@@ -523,6 +528,8 @@ func (d *Display) choose(id string, i int) {
 		d.nightHoursChanged()
 	case "musicstrip":
 		d.setMusicStrip(i)
+	case "turnstyle":
+		d.setTurnStyle(i)
 	case "clock":
 		on := i == 1
 		if err := config.Set().Screen().Clock24(on); err != nil {
@@ -812,7 +819,7 @@ func (d *Display) rowTap(id string, p part, opt int) {
 	case "subfolders":
 		_, _, subfolders := home.Get().SlideshowSettings()
 		home.Get().SetSlideshowSubfolders(!subfolders)
-	case "night", "atnight", "nightstyle", "clock", "camtime", "radarsrc", "calendars", "calpopwhen", "calpopallday", "calpopcals", "musicstrip", "slideshow", "photoevery", "screenlang", "newtimer", "sleep", "sunrise",
+	case "night", "atnight", "nightstyle", "clock", "camtime", "radarsrc", "calendars", "calpopwhen", "calpopallday", "calpopcals", "musicstrip", "turnstyle", "slideshow", "photoevery", "screenlang", "newtimer", "sleep", "sunrise",
 		"timezone", "wakeword", "waketone":
 		d.openPicker(id)
 	}

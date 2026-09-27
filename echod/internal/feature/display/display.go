@@ -46,7 +46,9 @@ import (
 	"github.com/HuskerMinion/techo5/echod/internal/feature/timer"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/voice"
 	"github.com/HuskerMinion/techo5/echod/internal/hardware/ambient"
+	"github.com/HuskerMinion/techo5/echod/internal/hardware/mic"
 	"github.com/HuskerMinion/techo5/echod/internal/hardware/screen"
+	"github.com/HuskerMinion/techo5/echod/internal/hardware/speaker"
 	"github.com/HuskerMinion/techo5/echod/internal/hardware/touch"
 	"github.com/HuskerMinion/techo5/echod/internal/lib/hass"
 	"github.com/HuskerMinion/techo5/echod/internal/lib/wifi"
@@ -227,7 +229,9 @@ type Display struct {
 	// strip is the music strip's setting in Home Assistant; stripKey/stripSince are the track the strip
 	// is timing and when it started, stripFullUntil a tap on the strip's song bringing the full page
 	// back, and showingStrip whether the last frame had it, for the touch handler.
-	strip          *esphome.Select
+	strip *esphome.Select
+	// turnStyle is the turn screen's setting in Home Assistant: classic, or the orb (render_orb.go).
+	turnStyle      *esphome.Select
 	stripKey       string
 	stripSince     time.Time
 	stripFullUntil time.Time
@@ -291,6 +295,7 @@ func build() *Display {
 	d.callBtn = callButtonSwitch(d.wake)
 	d.weatherFx = weatherAnimationSwitch(d.wake)
 	d.strip = stripSelect(d.wake)
+	d.turnStyle = turnStyleSelect(d.wake)
 	d.nightHours = nightHoursSelect(d)
 	d.nightStart, d.nightEnd = nightEndSelect(d, true), nightEndSelect(d, false)
 	d.nightStyle = nightStyleSelect(d)
@@ -345,7 +350,7 @@ func build() *Display {
 func (d *Display) Name() string { return "screen" }
 
 func (d *Display) Entities() []esphome.Entity {
-	return []esphome.Entity{d.light, d.auto, d.clock, d.camTime, d.callBtn, d.weatherFx, d.lang, d.strip, d.nightHours, d.nightStart, d.nightEnd, d.atNight, d.nightStyle, d.glowLevel,
+	return []esphome.Entity{d.light, d.auto, d.clock, d.camTime, d.callBtn, d.weatherFx, d.lang, d.strip, d.turnStyle, d.nightHours, d.nightStart, d.nightEnd, d.atNight, d.nightStyle, d.glowLevel,
 		d.pop.on, d.pop.lead, d.pop.chime, d.pop.allDay}
 }
 
@@ -357,6 +362,7 @@ func (d *Display) Restore(c config.Config) {
 	setCallButton(d.callBtn, c.Screen.CallButton)
 	setWeatherAnimation(d.weatherFx, !c.Screen.WeatherStill)
 	d.strip.Set(stripOptions[stripIndex()])
+	d.turnStyle.Set(turnStyleText())
 	d.nightHoursChanged()
 	d.atNight.Set(atNightOptions[atNightIndex()])
 	d.nightStyle.Set(nightStyleOptions[nightStyleIndex()])
@@ -1506,6 +1512,12 @@ func (d *Display) frame() time.Duration {
 	if view.Phase == "idle" && (view.Heard != "" || view.Reply != "") && now.Sub(at) < linger {
 		s.phase = "lingering"
 	}
+	switch s.phase {
+	case "listening":
+		s.micLevel = mic.Get().Level()
+	case "replying":
+		s.outLevel = speaker.Get().Level()
+	}
 	d.mu.Lock()
 	quiet := d.quiet
 	d.mu.Unlock()
@@ -1706,6 +1718,9 @@ func (d *Display) frame() time.Duration {
 	if (s.phase == "idle" || s.phase == "lingering") && !s.showVolume {
 		// On the next whole second, so the clock changes when the second does.
 		return time.Until(now.Truncate(idleFrame).Add(idleFrame))
+	}
+	if orbPhase(s.phase) && config.Get().Screen.TurnOrb {
+		return orbFrame
 	}
 	return activeFrame
 }
