@@ -47,4 +47,5 @@ func (r *renderer) cameraView(s scene, v home.CameraView) {
 	}
 	draw.Draw(r.dst, image.Rect(0, r.h-36, r.w, r.h), image.NewUniform(shade), image.Point{}, draw.Over)
 	r.text(r.tiny, hint, r.margin, r.h-11, dim)
+	r.cameraPTZ(v)
 }

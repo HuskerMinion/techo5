@@ -3,6 +3,7 @@ package config
 import (
 	"encoding/json"
 	"fmt"
+	"maps"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -99,8 +100,8 @@ func Load(path string) (*Store, error) {
 	return st, nil
 }
 
-// Get returns a copy. The wake words and alarm lists are copied too, or a caller holding the snapshot would be
-// holding the store's own slice.
+// Get returns a copy. The wake words, alarm lists and camera turning map are copied too, or a caller holding the
+// snapshot would be holding the store's own.
 func (st *Store) Get() Config {
 	st.mu.Lock()
 	defer st.mu.Unlock()
@@ -114,6 +115,7 @@ func (st *Store) Get() Config {
 	c.Alarms.Follow = slices.Clone(st.c.Alarms.Follow)
 	c.Alarms.Snoozed = slices.Clone(st.c.Alarms.Snoozed)
 	c.Timers.Local = slices.Clone(st.c.Timers.Local)
+	c.Home.CameraPTZ = maps.Clone(st.c.Home.CameraPTZ)
 	return c
 }
 

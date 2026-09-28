@@ -220,6 +220,15 @@ type renderer struct {
 	dateAt   image.Rectangle // the date under the clock, the same way: a tap there opens the calendar
 	popupAt  image.Rectangle // an event's pop-up, the same way: a tap on it takes it down
 
+	// ptzAt and ptzPadAt are where the camera view's turning button and its four arrows were drawn in
+	// the frame last drawn, for a tap there, and empty when they were not; ptzOpen is whether the
+	// arrows are out, ptzEntity the camera they were drawn over (camera_ptz.go).
+	ptzMu     sync.Mutex
+	ptzAt     image.Rectangle
+	ptzPadAt  [4]image.Rectangle
+	ptzOpen   bool
+	ptzEntity string
+
 	// calHits are the calendar page's buttons, days and events as last drawn (render_calendar.go).
 	calMu   sync.Mutex
 	calHits []calHit

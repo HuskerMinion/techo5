@@ -686,6 +686,77 @@ data:
   seconds: 60
 ```
 
+## Say what turns a camera
+
+In YAML, refer to this action as `esphome.<node>_home_camera_ptz`.
+
+Gives a camera's view a button to turn the camera: a round button in the bottom right corner, above
+the "tap to close" strip, that opens four arrows and closes them again. Each tap on an arrow turns
+the camera a step that way. A tap anywhere else still closes the view.
+
+It is off until this action names a target for a camera: a camera with none gets no button, so every
+view looks as it always has. It is said here, once per camera, because the entity that shows a
+picture is often not the one that turns it — the picture may come through a restream or a snapshot
+URL, the turning only through the camera's ONVIF integration — and nothing in Home Assistant links
+the two. The device keeps it, across restarts, until it is called again.
+
+> **Good to know**
+>
+> The target is either an ONVIF camera entity or a `script.*`:
+>
+> - **An ONVIF camera** is turned with `onvif.ptz`'s continuous move, at half speed for half a second
+>   per tap. It is the continuous move because that is the one ONVIF's Profile S requires of a camera
+>   that turns; the relative and absolute moves are optional, and some cameras accept a relative move
+>   and do nothing with it.
+> - **A script** is called with a `direction` variable of `up`, `down`, `left` or `right`, and turns
+>   the camera however that camera needs. It is for a camera `onvif.ptz` cannot turn: one that
+>   refuses Home Assistant's continuous move because it carries a zoom speed the camera has no zoom
+>   for, one that takes only its own API, or one whose step should be tuned.
+>
+> The device never speaks to the camera itself: every move goes through Home Assistant, which already
+> holds the camera's address and credentials.
+
+### entity (Required)
+
+*string*
+
+The camera shown, as `home_show_camera` or `home_cameras` names it.
+
+### ptz (Required)
+
+*string*
+
+What Home Assistant turns for it: an ONVIF camera entity or a script. An empty string takes the
+button away from that camera again.
+
+```yaml
+action: esphome.office_home_camera_ptz
+data:
+  entity: camera.porch_restream
+  ptz: camera.porch_onvif
+```
+
+A script target, for a camera turned some other way:
+
+```yaml
+action: esphome.office_home_camera_ptz
+data:
+  entity: camera.porch
+  ptz: script.porch_ptz
+```
+
+```yaml
+script:
+  porch_ptz:
+    fields:
+      direction:
+        description: up, down, left or right
+    sequence:
+      - action: rest_command.porch_ptz
+        data:
+          direction: "{{ direction }}"
+```
+
 ## Choose the calendars shown
 
 In YAML, refer to this action as `esphome.<node>_calendar_sources`.

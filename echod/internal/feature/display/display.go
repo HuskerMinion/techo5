@@ -688,9 +688,9 @@ func (d *Display) gesture(g touch.Gesture) {
 		return
 	}
 
-	// A live camera: a tap takes it down.
+	// A live camera: a tap on its turning buttons turns it, anywhere else takes it down.
 	if _, up := home.Get().Camera(); up {
-		if g.Kind == touch.Tap {
+		if g.Kind == touch.Tap && !d.cameraPTZHit(image.Pt(g.X, g.Y)) {
 			home.Get().HideCamera()
 		}
 		d.wake()
