@@ -2,6 +2,7 @@ package home
 
 import (
 	"log/slog"
+	"math"
 	"regexp"
 	"slices"
 	"strconv"
@@ -77,13 +78,14 @@ func chipFor(entity, state, name, icon, unit string) (Chip, bool) {
 	case onOff[domain]:
 		text = name
 	case isNumber(state):
-		text = name + " " + state
+		value := rounded(state)
 		if unit = strings.TrimSpace(unit); unit != "" {
 			if unit != "%" && unit != "°C" && unit != "°F" {
-				text += " "
+				value += " "
 			}
-			text += unit
+			value += unit
 		}
+		text = nameAndValue(name, value)
 	default:
 		// A word or a sentence: the state is the message, the way a template sensor made for a chip
 		// is written. A bare state name reads as words: not_home as "Not home".
@@ -112,6 +114,35 @@ func spoken(state string) string {
 		return state
 	}
 	return strings.ToUpper(state[:1]) + strings.ReplaceAll(state[1:], "_", " ")
+}
+
+// rounded is a number with at most one decimal, which is all a chip has room for: "626.611149449502"
+// is "626.6" and "21.50" is "21.5". A number with one decimal or none is left exactly as it came, so a
+// long one keeps every digit.
+func rounded(s string) string {
+	_, decimals, ok := strings.Cut(s, ".")
+	if !ok || len(decimals) <= 1 {
+		return s
+	}
+	v, err := strconv.ParseFloat(s, 64)
+	if err != nil {
+		return s
+	}
+	return strconv.FormatFloat(math.Round(v*10)/10, 'f', -1, 64)
+}
+
+// nameAndValue is a number's chip line: the name, then the value. When the line is too long it is the
+// name that gets shortened, since the value is the news.
+func nameAndValue(name, value string) string {
+	line := name + " " + value
+	if utf8.RuneCountInString(line) <= chipMax {
+		return line
+	}
+	keep := chipMax - utf8.RuneCountInString(value) - 2 // a space and the ellipsis
+	if keep < 1 {
+		return value
+	}
+	return strings.TrimSpace(string([]rune(name)[:keep])) + "… " + value
 }
 
 func isNumber(s string) bool {
