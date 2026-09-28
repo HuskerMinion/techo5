@@ -68,14 +68,14 @@ func (d *Driver) Yields(b Background) {
 // returns, and the claim ends once what it queued has played out. It must return when ctx is done,
 // which is what being silenced means.
 func (d *Driver) Claim(name string, play func(ctx context.Context, p *Player) error) *Claim {
-	return d.claim(name, false, play)
+	return d.claim(name, false, false, play)
 }
 
 // ClaimSpeech is Claim for words: an answer or an announcement. Unless the listener set music to pause
 // for a turn, the background keeps playing under it, at whatever level it has been ducked to, rather
 // than standing aside until the words are done.
 func (d *Driver) ClaimSpeech(name string, play func(ctx context.Context, p *Player) error) *Claim {
-	return d.claim(name, config.Get().Media.OnTurn != config.OnTurnPause, play)
+	return d.claim(name, config.Get().Media.OnTurn != config.OnTurnPause, false, play)
 }
 
 // ClaimOver takes the speaker for something that is not words but still belongs over the music rather
@@ -83,11 +83,17 @@ func (d *Driver) ClaimSpeech(name string, play func(ctx context.Context, p *Play
 // ends. It is ClaimSpeech without the words' setting deciding, because the two are not the same
 // question. Music that stops for a turn is what somebody asked for; a camera's own sound is the outside
 // coming in, and no setting about turns should make that the end of what the room was listening to.
+//
+// Unlike a claim for words it does not take the speaker from what is being said, it waits for it: a
+// doorbell that announces and shows the camera both rings and shows the picture, and the camera's sound
+// arriving second must not cut the announcement off mid-word. What it waits for is read as over the
+// music either way, so nothing is resumed behind it that should not be.
 func (d *Driver) ClaimOver(name string, play func(ctx context.Context, p *Player) error) *Claim {
-	return d.claim(name, true, play)
+	return d.claim(name, true, true, play)
 }
 
-func (d *Driver) claim(name string, over bool, play func(ctx context.Context, p *Player) error) *Claim {
+// waits is whether the claim waits for whatever holds the speaker to finish rather than displacing it.
+func (d *Driver) claim(name string, over, waits bool, play func(ctx context.Context, p *Player) error) *Claim {
 	ctx, cancel := context.WithCancel(context.Background())
 	c := &Claim{name: name, over: over, cancel: cancel, done: make(chan struct{})}
 
@@ -108,9 +114,13 @@ func (d *Driver) claim(name string, over bool, play func(ctx context.Context, p 
 		bg.Duck(c.duckName(), true)
 	}
 
-	// Before the errand queues anything, so the two never fight over the same audio.
+	// Before the errand queues anything, so the two never fight over the same audio. A claim that waits
+	// its turn leaves what is playing where it is: taking it would leave the sound it was waiting for
+	// cancelled rather than heard.
 	d.settle()
-	previous.preempt(d.p)
+	if !waits {
+		previous.preempt(d.p)
+	}
 
 	go func() {
 		defer close(c.done)
@@ -119,6 +129,9 @@ func (d *Driver) claim(name string, over bool, play func(ctx context.Context, p 
 		}
 		defer d.release(c)
 
+		if waits && !waited(ctx, previous) {
+			return // given up on before it started, which is somebody silencing it
+		}
 		if err := play(ctx, d.p); err != nil {
 			c.fail(err)
 			return
@@ -126,6 +139,26 @@ func (d *Driver) claim(name string, over bool, play func(ctx context.Context, p 
 		c.mark(d.await(ctx))
 	}()
 	return c
+}
+
+// waited is whether the claim that held the speaker when this one was made has finished, which is what
+// a claim that waits its turn is waiting for. A claim made after this one takes the speaker first and
+// cancels this wait with it, rather than leaving two errands filling the same queue.
+func waited(ctx context.Context, previous *Claim) bool {
+	if ctx.Err() != nil {
+		return false // taken from it, or silenced, before it started
+	}
+	if previous == nil || previous.Finished() {
+		return true
+	}
+	select {
+	case <-previous.Done():
+		// Whichever fired, a claim taken from it while it waited must not go on to play: a newer claim
+		// has the speaker, and filling the queue under it is the one thing waiting was for.
+		return ctx.Err() == nil
+	case <-ctx.Done():
+		return false
+	}
 }
 
 // release lets the background sound carry on, once nothing else wants the speaker. A claim that was

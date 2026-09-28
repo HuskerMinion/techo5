@@ -131,3 +131,64 @@ func TestAnErrandThatWillNotStopDoesNotBlockForever(t *testing.T) {
 		t.Errorf("waited %s for a stuck errand", took.Round(time.Millisecond))
 	}
 }
+
+// A claim over the music waits its turn rather than taking the speaker from what is being said: a doorbell
+// that announces and shows the camera both rings and shows the picture, and the camera's own sound
+// arriving second must not cut the announcement off mid-word.
+func TestClaimOverWaitsForWhatIsBeingSaid(t *testing.T) {
+	d := driver()
+
+	release := make(chan struct{})
+	speaking := d.ClaimSpeech("announce", func(context.Context, *Player) error {
+		<-release
+		return nil
+	})
+
+	var ran atomic.Bool
+	over := d.ClaimOver("over the music", func(context.Context, *Player) error {
+		ran.Store(true)
+		return nil
+	})
+
+	// The announcement is still being made, so the sound over the music has not begun.
+	time.Sleep(50 * time.Millisecond)
+	if ran.Load() {
+		t.Fatal("a sound over the music cut off what was being said rather than waiting for it")
+	}
+	if speaking.Stopped() {
+		t.Fatal("the announcement was taken from rather than waited for")
+	}
+
+	close(release)
+	waitFor(t, over)
+	if !ran.Load() {
+		t.Error("the sound over the music never played after waiting")
+	}
+}
+
+// The other way round, words take the speaker from a sound over the music: an announcement is worth
+// interrupting a camera for. What the sound's own feature makes of that is the difference between being
+// stopped and being taken — the view still wants its sound, so it is asked for again.
+func TestWordsTakeTheSpeakerFromASoundOverTheMusic(t *testing.T) {
+	d := driver()
+
+	playing := make(chan struct{})
+	over := d.ClaimOver("over the music", func(ctx context.Context, _ *Player) error {
+		close(playing)
+		<-ctx.Done()
+		return nil
+	})
+	<-playing
+
+	announced := make(chan struct{})
+	said := d.ClaimSpeech("announce", func(context.Context, *Player) error {
+		close(announced)
+		return nil
+	})
+	<-announced
+	waitFor(t, said)
+
+	if !over.Stopped() {
+		t.Error("a sound over the music was left holding the speaker while an announcement was made")
+	}
+}
