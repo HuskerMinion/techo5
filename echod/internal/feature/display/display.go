@@ -246,6 +246,10 @@ type Display struct {
 	stripFullUntil time.Time
 	showingStrip   bool
 
+	// themeSel is the theme in Home Assistant, and themeShown what it was last set to.
+	themeSel   *esphome.Select
+	themeShown string
+
 	// callShown is the Call button on the clock as last drawn, and callees who the drawer's Call tab
 	// listed: a tap acts on what was on the screen.
 	callShown bool
@@ -307,6 +311,7 @@ func build() *Display {
 	d.callBtn = callButtonSwitch(d.wake)
 	d.weatherFx = weatherAnimationSwitch(d.wake)
 	d.strip = stripSelect(d.wake)
+	d.themeSel = themeSelect(d.wake)
 	d.nightHours = nightHoursSelect(d)
 	d.nightStart, d.nightEnd = nightEndSelect(d, true), nightEndSelect(d, false)
 	d.nightStyle = nightStyleSelect(d)
@@ -366,7 +371,7 @@ func (d *Display) Name() string { return "screen" }
 func (d *Display) turnStyleSel() *esphome.Select { return d.turnStyle }
 
 func (d *Display) Entities() []esphome.Entity {
-	return []esphome.Entity{d.light, d.auto, d.clock, d.clockPos, d.dateCol, d.camTime, d.answerTime, d.turnStyle, d.callBtn, d.weatherFx, d.lang, d.strip, d.nightHours, d.nightStart, d.nightEnd, d.nightMode, d.atNight, d.nightStyle, d.glowLevel,
+	return []esphome.Entity{d.light, d.auto, d.clock, d.clockPos, d.dateCol, d.camTime, d.answerTime, d.turnStyle, d.callBtn, d.weatherFx, d.lang, d.strip, d.themeSel, d.nightHours, d.nightStart, d.nightEnd, d.nightMode, d.atNight, d.nightStyle, d.glowLevel,
 		d.pop.on, d.pop.lead, d.pop.chime, d.pop.allDay}
 }
 
@@ -1541,7 +1546,9 @@ func (d *Display) frame() time.Duration {
 		}
 		return time.Hour
 	}
-	applyTheme(current())
+	t := current()
+	applyTheme(t)
+	d.syncThemeSelect(t.name)
 
 	d.mu.Lock()
 	booting, started := d.booting, d.started

@@ -129,6 +129,7 @@ var registered = []string{
 	"screen_night_mode",
 	"screen_night_start",
 	"screen_now_playing",
+	"screen_theme",
 	"screen_turn_style",
 	"screen_weather_animation",
 	"screen_web_access",
