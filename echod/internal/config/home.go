@@ -1,6 +1,9 @@
 package config
 
-import "slices"
+import (
+	"maps"
+	"slices"
+)
 
 // Home is what the device shows and reaches for in Home Assistant beyond its own entities: a
 // weather entity for the clock screen, and the radio — the selects whose options are the
@@ -24,6 +27,13 @@ type Home struct {
 
 	// Cameras are camera.* entities and the names to say for them, in the order the list shows.
 	Cameras []Camera `json:"cameras,omitempty"`
+
+	// CameraPTZ is, for a camera shown, what Home Assistant turns for it: an ONVIF camera entity, or a
+	// script.* for a camera onvif.ptz cannot turn. The two are often not the same entity — the picture
+	// comes through whatever shows it best (a restream, a snapshot URL), the turning only through the
+	// camera's ONVIF integration — and nothing in Home Assistant links them. A camera with no entry
+	// gets no turning button, which is every camera until home_camera_ptz names one.
+	CameraPTZ map[string]string `json:"camera_ptz,omitempty"`
 
 	// Slideshow is the idle photo slideshow's source and display mode.
 	Slideshow Slideshow `json:"slideshow"`
@@ -215,6 +225,22 @@ func (w HomeWriter) RadioSource(source string) error {
 
 func (w HomeWriter) Cameras(cams []Camera) error {
 	return w.st.Update(func(c *Config) { c.Home.Cameras = cams })
+}
+
+// CameraPTZ sets what Home Assistant turns for entity; an empty ptz takes the entry away.
+func (w HomeWriter) CameraPTZ(entity, ptz string) error {
+	return w.st.Update(func(c *Config) {
+		m := maps.Clone(c.Home.CameraPTZ)
+		if ptz == "" {
+			delete(m, entity)
+		} else {
+			if m == nil {
+				m = map[string]string{}
+			}
+			m[entity] = ptz
+		}
+		c.Home.CameraPTZ = m
+	})
 }
 
 func (w HomeWriter) Slideshow(s Slideshow) error {

@@ -315,5 +315,6 @@ func (f *Feature) cameraActions() []*esphome.Action {
 				return nil, nil
 			},
 		},
+		f.cameraPTZAction(),
 	}
 }
