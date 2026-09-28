@@ -125,12 +125,12 @@ type claimSpec struct {
 
 func (d *Driver) claim(name string, spec claimSpec, play func(ctx context.Context, p *Player) error) *Claim {
 	ctx, cancel := context.WithCancel(context.Background())
-	c := &Claim{
-		name:   name,
-		over:   spec.over,
-		duck:   duckDB(spec.deep),
-		cancel: cancel,
-		done:   make(chan struct{}),
+	c := &Claim{name: name, over: spec.over, cancel: cancel, done: make(chan struct{})}
+	if spec.over {
+		// Only a claim that sounds over the background ducks anything, and working out how far is the
+		// only thing here that reads the listener's setting. A plain claim must not read it: a ring left
+		// running by one test would then race the next test's config, and it never ducks anyway.
+		c.duck = duckDB(spec.deep)
 	}
 
 	// Words over the background have it ducked while they last, under a name of their own so the claim
