@@ -76,7 +76,8 @@ Two details that make route 1 fit this device exactly:
 2. The device starts serving its microphones as a live WAV on its own web port, behind the same kind
    of switch as the rest of it, and for as long as the talk lasts.
 3. The device asks go2rtc to play that URL on the camera: the `POST /api/streams` call above, with the
-   camera's stream name, from configuration.
+   camera's stream name from its own list of streams, or from configuration where the name is not
+   what the camera is called.
 4. go2rtc pulls the stream, transcodes PCM 16 kHz to the camera's codec, and the person at the door
    hears the room.
 5. All of the above happens *while* the camera's own audio is playing, ducked, on the device. The
@@ -89,9 +90,27 @@ phone-based doorbell usually does not.
 
 ## Configuration and where it lives
 
-- **The go2rtc base URL and the camera's stream name**, per device, the way the Home Assistant URL and
-  token are: an action to set them (`home_go2rtc`), and a settings row.
-- **Credentials**, if go2rtc's API is behind its basic auth: stored as a secret, never in a log line.
+**One go2rtc base URL per device, and one stream name per camera** — not one URL per camera. The URL
+and its credentials are set the way the Home Assistant URL and token are: an action (`home_go2rtc`)
+and a settings row. Credentials, where go2rtc's API has them, are stored as a secret and kept out of
+log lines.
+
+The stream name is the only per-camera thing, and it is mostly discoverable rather than configured:
+
+- `GET <go2rtc>/api/streams` lists every registered stream, keyed by name. Through Frigate it is
+  `GET <frigate>:5000/api/go2rtc/streams`, and there the names are Frigate's own camera names —
+  which is why a camera called `back_door` in Frigate is a stream called `back_door`.
+- Match that list against the Home Assistant camera by entity id, then object id, and keep a
+  per-camera override for the ones the match misses. **Nothing in a camera entity says which go2rtc
+  stream it is**: Home Assistant does not publish camera stream sources over its API, which is why
+  community integrations and an architectural proposal for exactly that exist, and why a match by
+  name plus an override is the honest design rather than a lookup.
+
+Where the camera's *RTSP link* comes from is go2rtc's business, not this device's: its own `streams:`
+config, Frigate's camera config, or its `hass:` source, which imports camera links out of Home
+Assistant's config files. So the one setting somebody has to make, once per camera, is outside this
+device — a camera that exists only in Home Assistant and nowhere in go2rtc has no stream to talk
+through until somebody gives it one.
 - **A switch**, off on a new device, for serving the microphones over the network at all. It belongs
   with the other Privacy switches, not with Display: this one is a live microphone on the LAN.
 - The **Talk control** is on the camera page, in the corner opposite the Mute control, and only while
@@ -118,6 +137,10 @@ phone-based doorbell usually does not.
 - **A talk that outlives its view.** The view can time out, another camera can replace it, or the
   screen can be tapped away while somebody is mid-sentence. Whatever ends the view ends the
   microphones going out, the same way it ends the camera's sound.
+- **Whether go2rtc lists a camera's stream at all before something has played it.** If the Home
+  Assistant integration registers sources on demand, a first Talk press would have nothing to match
+  against — in which case the per-camera override is not an escape hatch but the answer, and the
+  settings row should say so.
 - **The camera's own audio going out of sync with the picture** — the sound is a live stream and the
   picture is snapshots — is already true of the one-way feature and is not made worse here.
 
