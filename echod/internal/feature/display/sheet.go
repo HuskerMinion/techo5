@@ -96,7 +96,6 @@ func categoryRows(sv sheetView) (rows []settingRow, note string) {
 			settingRow{id: "weatherfx", label: "Weather animation", sub: "Rain, snow and storms move on the forecast", kind: ctlToggle, on: weatherAnimation.Load()},
 			settingRow{id: "radarsrc", label: "Radar source", sub: "Automatic uses the NWS in the lower 48", kind: ctlChoice, value: home.RadarSourceOptions()[home.RadarSourceIndex()]},
 			settingRow{id: "alerts", label: "Weather alerts", sub: "The NWS's alerts for home, in the U.S.", kind: ctlToggle, on: home.AlertsOn()},
-			settingRow{id: "camerasound", label: "Camera sound", sub: "A camera's own audio, while its view is up", kind: ctlToggle, on: home.CameraSound()},
 			settingRow{id: "musicstrip", label: "Now playing", sub: "Full page, or a strip over the clock", kind: ctlChoice, value: stripOptionText()},
 			settingRow{id: "slideshow", label: "Slideshow", sub: "Photos from Home Assistant", kind: ctlChoice, value: slideshowOptions[slideshowIndex()]},
 		)
@@ -119,6 +118,7 @@ func categoryRows(sv sheetView) (rows []settingRow, note string) {
 			{id: "sleep", label: "Sleep timer", sub: sleepSub(), kind: ctlChoice, value: sleepValue()},
 			{id: "quiet", label: "Quiet hours", sub: quietSub(), kind: ctlChoice, value: quietValue()},
 			{id: "hasounds", label: "Home Assistant sounds", sub: "For muting and timers", kind: ctlToggle, on: !config.Get().Speaker.ClassicSounds},
+			{id: "camerasound", label: "Camera sound", sub: "A camera's own audio, while its view is up", kind: ctlToggle, on: home.CameraSound()},
 			{id: "dnd", label: "Do not disturb", sub: "Intercom calls from other rooms are turned away", kind: ctlToggle, on: config.Get().Home.DoNotDisturb},
 			{id: "bass", label: "Bass", sub: toneSub(), kind: ctlStepper, value: toneValue(config.Get().Speaker.Bass)},
 			{id: "treble", label: "Treble", kind: ctlStepper, value: toneValue(config.Get().Speaker.Treble)},

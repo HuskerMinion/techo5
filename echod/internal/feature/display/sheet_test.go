@@ -294,3 +294,29 @@ func BenchmarkPickerOpen(b *testing.B) {
 		r.settingsScreen(s)
 	}
 }
+
+// The camera's own sound is what the device plays, so it is a Sound setting and belongs on that card. It
+// went under Display first, where the rows are about the screen — brightness, night, the clock, whether a
+// camera is up — and a sound setting among them is one nobody looks for.
+func TestTheCameraSoundSettingIsUnderSound(t *testing.T) {
+	inCard := func(cat category, id string) bool {
+		rows, _ := categoryRows(sheetView{st: settings{cat: cat}})
+		for _, r := range rows {
+			if r.id == id {
+				return true
+			}
+		}
+		return false
+	}
+
+	if !inCard(catSound, "camerasound") {
+		t.Error("the camera's sound is not on the Sound card")
+	}
+	if inCard(catDisplay, "camerasound") {
+		t.Error("the camera's sound is still on the Display card")
+	}
+	// And what stayed where it was: how long a view stays up is about the screen, not the sound.
+	if !inCard(catDisplay, "camtime") {
+		t.Error("the camera time row went with it: how long a view stays up is a screen setting")
+	}
+}
