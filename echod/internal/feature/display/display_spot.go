@@ -1164,7 +1164,7 @@ func (d *Display) frame() time.Duration {
 	s.call = phone.Get().State()
 	s.weather = home.Get().Weather()
 	s.camera, s.showCamera = home.Get().Camera()
-	s.cameraSound, s.cameraMuted = home.Get().CameraSoundOn(), home.Get().CameraSoundMuted()
+	s.cameraSound, s.cameraSoundLive = home.Get().CameraSoundOn(), home.Get().CameraSoundLive()
 	s.cameraLive = camera.Get().Running()
 	bt := btaudio.Get().State()
 	s.btPairing = bt.Pairing

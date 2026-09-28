@@ -71,23 +71,26 @@ func (r *roundRenderer) cameraView(s roundScene) {
 	// drawn. A circle has no corner to put one in, so it is the same bar of words as the name above it:
 	// a tap silences what the camera is saying and leaves the view up.
 	if s.cameraSound {
-		b := cameraSoundBox()
-		r.line(float64(b.Min.X), float64(b.Min.Y+b.Dy()/2), float64(b.Max.X), float64(b.Min.Y+b.Dy()/2), float64(b.Dy()), color.RGBA{0, 0, 0, 150})
-		label := "Mute"
-		if s.cameraMuted {
-			label = "Unmute"
+		label := "Unmute"
+		if s.cameraSoundLive {
+			label = "Mute"
 		}
+		b := cameraSoundBox(r.width(r.label, label) + 24)
+		r.line(float64(b.Min.X), float64(b.Min.Y+b.Dy()/2), float64(b.Max.X), float64(b.Min.Y+b.Dy()/2), float64(b.Dy()), color.RGBA{0, 0, 0, 150})
 		r.centered(r.label, label, b.Min.Y+b.Dy()/2+8, colText)
 		r.setCameraSoundAt(b)
 	}
 }
 
-// cameraSoundBox is where the round camera page's sound control is drawn, and so where a tap on it has
-// to land: a bar across the bottom of the face, inside the rim.
-func cameraSoundBox() image.Rectangle {
-	const barW, barH = 96, 34
+// cameraSoundBox is where the round camera page's sound control is drawn, and so where a tap on it has to
+// land: a bar across the bottom of the face, inside the rim, and as wide as what it says.
+func cameraSoundBox(w int) image.Rectangle {
+	const barH, barMin = 34, 96
 	const bottom = side - 44
-	return image.Rect(center-barW/2, bottom-barH, center+barW/2, bottom)
+	if w < barMin {
+		w = barMin
+	}
+	return image.Rect(center-w/2, bottom-barH, center+w/2, bottom)
 }
 
 func (r *roundRenderer) setCameraSoundAt(b image.Rectangle) {

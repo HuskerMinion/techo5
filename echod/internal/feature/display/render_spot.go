@@ -111,10 +111,11 @@ type roundScene struct {
 	cameraLive bool // the sensor is running
 
 	// cameraSound is whether that view has a sound of its own at all, which is when its control is drawn;
-	// cameraMuted is whether it has been silenced from the screen, which is what the control offers to
-	// undo. Drawn for both: muting has to be undoable from the screen.
-	cameraSound bool
-	cameraMuted bool
+	// cameraSoundLive is whether that sound is playing or on its way, which is what the control says: Mute
+	// while it is, and Unmute when it is not. Drawn for both, because a sound that is not playing has to
+	// be askable-for from the screen — muting it must not be a door that only closes.
+	cameraSound     bool
+	cameraSoundLive bool
 
 	btPairing bool
 

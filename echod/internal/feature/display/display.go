@@ -1633,7 +1633,7 @@ func (d *Display) frame() time.Duration {
 		d.mu.Unlock()
 	}
 	s.camera, s.showCamera = home.Get().Camera()
-	s.cameraSound, s.cameraMuted = home.Get().CameraSoundOn(), home.Get().CameraSoundMuted()
+	s.cameraSound, s.cameraSoundLive = home.Get().CameraSoundOn(), home.Get().CameraSoundLive()
 	// Whether the idle screen wants to be what is playing. It is asked even when the page has been put
 	// away, because the track is what brings it back, so the radio is read either way.
 	wants := (s.phase == "idle") && d.nowPlaying()

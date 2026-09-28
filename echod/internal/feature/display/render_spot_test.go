@@ -250,7 +250,8 @@ func TestTheCameraSoundControlIsWhereItIsDrawnOnTheSpot(t *testing.T) {
 	r := newRoundRenderer(img)
 	cam := roundScene{now: at, phase: "idle", showCamera: true,
 		camera: home.CameraView{Entity: "camera.deck", Name: "Deck"}}
-	box := cameraSoundBox()
+	// The widest the control ever says, so this is inside the bar whatever it is carrying.
+	box := cameraSoundBox(r.width(r.label, "Unmute") + 24)
 	centre := box.Min.Add(image.Pt(box.Dx()/2, box.Dy()/2))
 
 	r.draw(cam)
@@ -258,23 +259,29 @@ func TestTheCameraSoundControlIsWhereItIsDrawnOnTheSpot(t *testing.T) {
 		t.Fatal("a tap found a sound control where the face draws none")
 	}
 
-	cam.cameraSound = true
+	cam.cameraSound, cam.cameraSoundLive = true, true
 	r.draw(cam)
 	if !r.cameraSoundTapped(centre.X, centre.Y) {
 		t.Fatalf("a tap on the sound control, at %v, was missed", centre)
 	}
 
-	// Silenced: the control stays, offering to bring it back.
-	cam.cameraMuted = true
+	// Silenced, taken, or never arrived: the control stays, offering to ask for it again.
+	cam.cameraSoundLive = false
 	r.draw(cam)
 	if !r.cameraSoundTapped(centre.X, centre.Y) {
-		t.Fatal("a silenced view lost its control, so muting could not be undone")
+		t.Fatal("a sound that is not playing lost its control, so it could not be asked for again")
 	}
-	cam.cameraMuted = false
 
 	cam.cameraSound = false
 	r.draw(cam)
 	if r.cameraSoundTapped(centre.X, centre.Y) {
-		t.Fatal("the control was left tappable for a view with no sound to silence")
+		t.Fatal("the control was left tappable for a view with no sound")
+	}
+
+	// It has to hold the words it is given, on the face it is drawn with.
+	for _, label := range []string{"Mute", "Unmute"} {
+		if b := cameraSoundBox(r.width(r.label, label) + 24); b.Dx() < r.width(r.label, label) {
+			t.Errorf("%q does not fit the bar it is drawn in", label)
+		}
 	}
 }
