@@ -54,7 +54,11 @@ func (r *renderer) cameraView(s scene, v home.CameraView) {
 	if s.cameraSound {
 		b := cameraSoundBox(r.w, r.h, r.margin)
 		r.bevel(b, shift(ember, 16), true)
+		// The control says what it does: silence the sound, or bring it back.
 		label := "Mute"
+		if s.cameraMuted {
+			label = "Unmute"
+		}
 		r.text(r.tiny, label, b.Min.X+(b.Dx()-r.width(r.tiny, label))/2, b.Max.Y-r.s(9), cream)
 		r.setCameraSoundAt(b)
 		return

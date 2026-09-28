@@ -136,8 +136,11 @@ type scene struct {
 	showCamera bool
 	camera     home.CameraView
 
-	// cameraSound is whether that view has its sound playing, which is when its control is drawn.
+	// cameraSound is whether that view has a sound of its own at all, which is when its control is drawn;
+	// cameraMuted is whether it has been silenced from the screen, which is what the control offers to
+	// undo. The control is drawn for both: muting it has to be undoable from the screen.
 	cameraSound bool
+	cameraMuted bool
 	cameras     []config.Camera
 
 	// callees are who the drawer's Call tab offers; callButton is the clock's Call button showing.

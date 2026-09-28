@@ -126,31 +126,44 @@ func TestCameraSoundStaysWhileTheViewDoes(t *testing.T) {
 
 // The screen's control draws from this: there is a sound to silence only once the stream that answers
 // a request has arrived, since a request Home Assistant refused leaves the view silent.
-func TestCameraSoundPlayingNeedsAnAnsweredStream(t *testing.T) {
+// The screen's control is drawn from these, and it has to stay drawn while the view lasts: a sound that
+// vanished along with its control would leave muting as a one-way door, and closing the view to open it
+// again is not an answer at a doorbell.
+func TestASilencedViewKeepsItsSoundSoItCanBeBroughtBack(t *testing.T) {
 	f := &Feature{}
-	if f.CameraSoundPlaying() {
-		t.Fatal("a device with no camera view was said to be playing something")
+	if f.CameraSoundOn() || f.CameraSoundMuted() {
+		t.Fatal("a device with no camera view was said to have a sound")
 	}
+
 	f.camSound = "camera.deck"
-	if f.CameraSoundPlaying() {
-		t.Fatal("a request that no stream has answered was said to be playing")
+	if !f.CameraSoundOn() {
+		t.Fatal("a view that asked for its sound was said to have none")
 	}
-	f.camSoundURL = "http://ha/one.wav"
-	f.url = "http://ha/one.wav" // what the player says it is playing, which the stream's arrival sets too
-	if !f.CameraSoundPlaying() {
-		t.Fatal("a stream that answered was not said to be playing")
+	if f.CameraSoundMuted() {
+		t.Fatal("a sound nobody has silenced was said to be muted")
 	}
-	if ours := f.takeCameraSound(); !ours {
+
+	// Silenced: the claim on what is playing goes, the view keeps its sound. That is what the control
+	// is drawn from afterwards, offering to bring it back.
+	f.camSoundURL, f.url = "http://ha/one.wav", "http://ha/one.wav"
+	if ours := f.takeClaim(); !ours {
 		t.Fatal("the view's own sound was not recognized as its own")
 	}
-	if f.CameraSoundPlaying() {
-		t.Fatal("a silenced view was still said to be playing")
+	f.camMuted = true
+	if !f.CameraSoundOn() || !f.CameraSoundMuted() {
+		t.Fatal("a silenced view lost its sound, so its control would have nothing to undo")
+	}
+
+	// The view coming down forgets it altogether, so the next one starts clean.
+	f.cam = CameraView{Entity: "camera.deck"}
+	if up, _ := f.cameraSoundEnds("camera.deck"); up {
+		t.Fatal("a view with no time left was taken as up")
+	}
+	if f.CameraSoundOn() || f.CameraSoundMuted() {
+		t.Fatal("a sound outlived the view it belonged to")
 	}
 }
 
-// Silencing is the same question the end of a view asks: this view's own sound is stopped, and a track
-// that something else started is left playing. Either way the claim is given up, or the view would go
-// on being treated as the owner of whatever plays next.
 func TestSilencingStopsOnlyItsOwnSound(t *testing.T) {
 	const mine = "http://homeassistant.local:8123/api/esphome/ffmpeg_proxy/abc/one.wav"
 	const music = "http://homeassistant.local:8123/api/esphome/ffmpeg_proxy/abc/radio.wav"
@@ -171,14 +184,14 @@ func TestSilencingStopsOnlyItsOwnSound(t *testing.T) {
 		f := &Feature{camSound: c.sound, camSoundURL: c.answered}
 		f.url = c.playing
 
-		if ours := f.takeCameraSound(); ours != c.wantOurs {
-			t.Errorf("%s: takeCameraSound = %v, want %v", c.name, ours, c.wantOurs)
+		if ours := f.takeClaim(); ours != c.wantOurs {
+			t.Errorf("%s: takeClaim = %v, want %v", c.name, ours, c.wantOurs)
 		}
-		if f.camSound != "" || f.camSoundURL != "" {
-			t.Errorf("%s: the claim was not given up (%q, %q)", c.name, f.camSound, f.camSoundURL)
+		if f.camSoundURL != "" {
+			t.Errorf("%s: the claim on what was playing was not given up (%q)", c.name, f.camSoundURL)
 		}
-		if f.CameraSoundPlaying() {
-			t.Errorf("%s: still said to be playing after being silenced", c.name)
+		if f.camSound != c.sound {
+			t.Errorf("%s: the view's sound went with the claim (%q, want %q)", c.name, f.camSound, c.sound)
 		}
 	}
 }

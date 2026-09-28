@@ -73,7 +73,11 @@ func (r *roundRenderer) cameraView(s roundScene) {
 	if s.cameraSound {
 		b := cameraSoundBox()
 		r.line(float64(b.Min.X), float64(b.Min.Y+b.Dy()/2), float64(b.Max.X), float64(b.Min.Y+b.Dy()/2), float64(b.Dy()), color.RGBA{0, 0, 0, 150})
-		r.centered(r.label, "Mute", b.Min.Y+b.Dy()/2+8, colText)
+		label := "Mute"
+		if s.cameraMuted {
+			label = "Unmute"
+		}
+		r.centered(r.label, label, b.Min.Y+b.Dy()/2+8, colText)
 		r.setCameraSoundAt(b)
 	}
 }

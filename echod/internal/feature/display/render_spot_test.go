@@ -264,9 +264,17 @@ func TestTheCameraSoundControlIsWhereItIsDrawnOnTheSpot(t *testing.T) {
 		t.Fatalf("a tap on the sound control, at %v, was missed", centre)
 	}
 
+	// Silenced: the control stays, offering to bring it back.
+	cam.cameraMuted = true
+	r.draw(cam)
+	if !r.cameraSoundTapped(centre.X, centre.Y) {
+		t.Fatal("a silenced view lost its control, so muting could not be undone")
+	}
+	cam.cameraMuted = false
+
 	cam.cameraSound = false
 	r.draw(cam)
 	if r.cameraSoundTapped(centre.X, centre.Y) {
-		t.Fatal("the control was left tappable after the sound stopped")
+		t.Fatal("the control was left tappable for a view with no sound to silence")
 	}
 }

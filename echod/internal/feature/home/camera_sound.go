@@ -120,43 +120,74 @@ func (f *Feature) cameraSoundPlaying(url string) {
 	f.mu.Unlock()
 }
 
-// CameraSoundPlaying is whether the view on the screen has a sound playing for it, which is what the
-// screen asks before drawing the control that silences it.
-func (f *Feature) CameraSoundPlaying() bool {
+// CameraSoundOn is whether the view on the screen has a sound of its own — it was asked for, whether or
+// not it is playing now. It is what the screen draws the control from, and it is what makes the control
+// a toggle rather than a one-way door: a sound somebody silenced has to be brought back from somewhere,
+// and closing the view to open it again is not an answer at a doorbell.
+func (f *Feature) CameraSoundOn() bool {
 	f.mu.Lock()
 	defer f.mu.Unlock()
-	return f.camSound != "" && f.camSoundURL != ""
+	return f.camSound != ""
 }
 
-// SilenceCameraSound stops this view's sound without taking the view down, which is what the screen's
-// control asks for and what somebody at a doorbell wants: the picture stays and the sound stops.
-func (f *Feature) SilenceCameraSound() {
-	if f.takeCameraSound() {
+// CameraSoundMuted is whether that sound has been silenced from the screen, which is what the control
+// offers to undo.
+func (f *Feature) CameraSoundMuted() bool {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return f.camSound != "" && f.camMuted
+}
+
+// ToggleCameraSound silences this view's sound, or asks for it again when it was silenced. The picture
+// stays either way, which is the whole use of it at a doorbell.
+func (f *Feature) ToggleCameraSound() {
+	f.mu.Lock()
+	entity, muted := f.camSound, f.camMuted
+	f.mu.Unlock()
+
+	if entity == "" {
+		return // no sound of this view's to silence, and none to bring back
+	}
+
+	if muted {
+		// Asked for again rather than unpaused: the stream was given up when it was silenced, so this is
+		// a fresh request and the sound arrives a few seconds behind the picture, as it did the first
+		// time.
+		f.mu.Lock()
+		f.camMuted = false
+		f.mu.Unlock()
+		slog.Info("camera sound asked for again", "entity", entity)
+		go f.startCameraSound(entity)
+		return
+	}
+
+	f.mu.Lock()
+	f.camMuted = true
+	f.mu.Unlock()
+	if f.takeClaim() {
 		media.Get().StopOver()
 		slog.Info("camera sound silenced from the screen")
 	}
 }
 
-// takeCameraSound gives up this view's claim on the sound and says whether what is playing is still
-// its own, and so whether there is anything to stop. The claim goes either way: the view gives it up
-// as well as stopping the sound, so nothing has to remember that it was silenced — the watcher finds
-// nothing of this view's to stop when the view ends, and the next view is a fresh one that follows the
-// setting again.
+// takeClaim gives up this view's claim on the sound playing now and says whether it is still this
+// view's to stop. camSound is not given up with it: the view still has a sound, which is what the
+// control is drawn from, and the sound can be asked for again.
 //
-// A track that something else started in the meantime is not this view's to stop, which is the rule
-// the end of a view follows as well.
-func (f *Feature) takeCameraSound() (ours bool) {
+// A track that something else started in the meantime is not this view's to stop, which is the rule the
+// end of a view follows as well.
+func (f *Feature) takeClaim() (ours bool) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
-	ours = f.camSound != "" && f.camSoundURL != "" && f.camSoundURL == f.url
-	f.camSound, f.camSoundURL = "", ""
+	ours = f.camSoundURL != "" && f.camSoundURL == f.url
+	f.camSoundURL = ""
 	return ours
 }
 
 // cameraSoundEnds is what a view coming down means for its sound, read under the lock: whether the
 // view is still up, and whether what is playing is still the track this view started. The two are
 // answered together and before anything is cleared, which is the whole reason they are not asked
-// separately.
+// separately. Coming down is where the view's sound is forgotten altogether, muted or not.
 func (f *Feature) cameraSoundEnds(entity string) (up, ours bool) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
@@ -164,7 +195,7 @@ func (f *Feature) cameraSoundEnds(entity string) (up, ours bool) {
 	up = f.cam.Entity == entity && time.Now().Before(f.cam.Until)
 	ours = mine && f.camSoundURL != "" && f.camSoundURL == f.url
 	if !up && mine {
-		f.camSound, f.camSoundURL = "", ""
+		f.camSound, f.camSoundURL, f.camMuted = "", "", false
 	}
 	return up, ours
 }

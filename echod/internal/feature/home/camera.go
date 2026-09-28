@@ -123,6 +123,7 @@ func (f *Feature) showCamera(entity string, d time.Duration, sound bool) {
 	f.cam = CameraView{Entity: entity, Name: name, Until: time.Now().Add(d), Frame: f.cam.Frame, span: d}
 	if fresh {
 		f.cam.Frame = nil
+		f.camMuted = false // a fresh view starts audible if its sound was asked for
 	}
 	f.mu.Unlock()
 	slog.Info("camera up", "entity", entity, "for", d, "sound", fresh && sound)
