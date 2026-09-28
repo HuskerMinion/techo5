@@ -608,6 +608,9 @@ func (r *renderer) bigClock(s scene) {
 	glance := len(s.glance) > 0 && !timers && !s.strip
 	if glance {
 		base -= r.s(30)
+		if foot {
+			base -= r.s(26) // at the foot the date sits where the strip goes: it moves up clear of it
+		}
 	}
 
 	suffix := ""
@@ -629,7 +632,7 @@ func (r *renderer) bigClock(s scene) {
 		r.timersLine(s, base+timersAt)
 	}
 	if glance {
-		r.glanceStrip(s.glance)
+		r.glanceStrip(s.glance, s.callButton)
 	}
 
 	r.weatherCorner(s)

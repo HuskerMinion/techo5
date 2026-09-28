@@ -2,6 +2,7 @@ package home
 
 import (
 	"log/slog"
+	"regexp"
 	"slices"
 	"strconv"
 	"strings"
@@ -33,6 +34,10 @@ type Chip struct {
 // chipMax is the longest line a chip holds; a longer one ends in an ellipsis.
 const chipMax = 28
 
+// glanceMax is the most entities the strip follows. Four or five chips fill a Show 5's width, and each
+// entity is four values followed, so a longer list only costs.
+const glanceMax = 8
+
 // quiet are the states that mean an entity has nothing to say, compared lowercased.
 var quiet = map[string]bool{
 	"": true, "off": true, "unknown": true, "unavailable": true, "idle": true, "standby": true,
@@ -60,6 +65,9 @@ func chipFor(entity, state, name, icon, unit string) (Chip, bool) {
 	if quiet[strings.ToLower(state)] {
 		return Chip{}, false
 	}
+	if v, err := strconv.ParseFloat(state, 64); err == nil && v == 0 {
+		return Chip{}, false // 0.0 W is as quiet as 0
+	}
 	domain, _, _ := strings.Cut(entity, ".")
 	if name = strings.TrimSpace(name); name == "" {
 		name = entity
@@ -78,8 +86,8 @@ func chipFor(entity, state, name, icon, unit string) (Chip, bool) {
 		}
 	default:
 		// A word or a sentence: the state is the message, the way a template sensor made for a chip
-		// is written.
-		text = state
+		// is written. A bare state name reads as words: not_home as "Not home".
+		text = spoken(state)
 	}
 	if utf8.RuneCountInString(text) > chipMax {
 		text = string([]rune(text)[:chipMax-1]) + "…"
@@ -91,6 +99,19 @@ func chipFor(entity, state, name, icon, unit string) (Chip, bool) {
 		}
 	}
 	return Chip{Entity: entity, Icon: strings.TrimPrefix(icon, "mdi:"), Text: text}, true
+}
+
+// stateName is a state as Home Assistant names it rather than as a person writes it: lowercase, no
+// spaces, words joined by underscores ("not_home", "cleaning").
+var stateName = regexp.MustCompile(`^[a-z][a-z0-9]*(_[a-z0-9]+)*$`)
+
+// spoken is a state written for a person: a state name with its underscores as spaces and a capital
+// first letter; anything else, a template sensor's message say, as it is.
+func spoken(state string) string {
+	if !stateName.MatchString(state) {
+		return state
+	}
+	return strings.ToUpper(state[:1]) + strings.ReplaceAll(state[1:], "_", " ")
 }
 
 func isNumber(s string) bool {
@@ -151,22 +172,33 @@ func (f *Feature) redraw(entity string, glance []string, chips func() []Chip) bo
 	return fresh || f.others[entity]
 }
 
+// glanceList is the entities in a comma-separated list: trimmed, each once, in order, and no more than
+// glanceMax of them; dropped is how many past the limit were left out.
+func glanceList(s string) (list []string, dropped int) {
+	for _, e := range strings.Split(s, ",") {
+		if e = strings.TrimSpace(e); !strings.Contains(e, ".") || slices.Contains(list, e) {
+			continue
+		}
+		if len(list) == glanceMax {
+			dropped++
+			continue
+		}
+		list = append(list, e)
+	}
+	return list, dropped
+}
+
 // glanceAction sets the entities, comma separated; an empty list takes the strip away.
 func (f *Feature) glanceAction() *esphome.Action {
 	return &esphome.Action{
 		Name: "home_glance",
 		Args: []esphome.Arg{{Name: "entities", Type: esphome.ArgString}},
 		Run: func(c esphome.Call) (any, error) {
-			var list []string
-			for _, e := range strings.Split(c.String("entities"), ",") {
-				if e = strings.TrimSpace(e); strings.Contains(e, ".") {
-					list = append(list, e)
-				}
-			}
+			list, dropped := glanceList(c.String("entities"))
 			if err := config.Set().Home().Glance(list); err != nil {
 				return nil, err
 			}
-			slog.Info("home: glance strip", "entities", list)
+			slog.Info("home: glance strip", "entities", len(list), "past the limit", dropped)
 			f.rewire()
 			return nil, nil
 		},

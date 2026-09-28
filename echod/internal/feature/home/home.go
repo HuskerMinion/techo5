@@ -368,7 +368,7 @@ func (f *Feature) want(h config.Home) {
 	f.mu.Lock()
 	f.others = others
 	f.mu.Unlock()
-	if hasScreen {
+	if hasGlance {
 		keys = append(keys, glanceKeys(h)...)
 	}
 	hastate.Get().Follow("home", keys...)
@@ -405,7 +405,10 @@ func (f *Feature) locationAction() *esphome.Action {
 func (f *Feature) Actions() []*esphome.Action {
 	actions := append(f.cameraActions(), f.accessAction())
 	if hasScreen {
-		actions = append(actions, f.slideshowAction(), f.calendarAction(), f.locationAction(), f.glanceAction())
+		actions = append(actions, f.slideshowAction(), f.calendarAction(), f.locationAction())
+	}
+	if hasGlance {
+		actions = append(actions, f.glanceAction())
 	}
 	return append(actions, []*esphome.Action{
 		{

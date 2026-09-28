@@ -936,28 +936,37 @@ data:
 In YAML, refer to this action as `esphome.<node>_home_glance`.
 
 Sets the glance strip: Home Assistant entities shown as chips (a pill with the entity's icon and a
-short line) along the foot of the clock page, each only while it has something to say. Screen devices
-only. The list persists and the device follows the entities itself, so a chip comes and goes with its
+short line) along the foot of the clock page, each only while it has something to say. The Echo Show
+only; the Spot and the Dot don't have it. The list persists and the device follows the entities itself, so a chip comes and goes with its
 entity's state and nothing has to be sent again. A value that leaves the chips as they were
 does not redraw the screen.
 
 What each entity shows:
 
-- **Off, idle, closed, locked, empty, `0`, `unknown` or `unavailable`**: nothing.
+- **Off, idle, closed, locked, empty, zero (`0`, `0.0`), `unknown` or `unavailable`**: nothing.
 - **A switch-like entity** (`binary_sensor`, `input_boolean`, `switch`, `light`, `lock`, `cover`, …)
   that is on or open: its name.
 - **A number**: its name, the value and the unit ("Kitchen 21.5°C").
 - **Anything else**: the state itself, which is how a template sensor made for the strip reads
-  ("Washer done", "6:00 PM: water the plants").
+  ("Washer done", "6:00 PM: water the plants"). A state name reads as words: `not_home` shows as
+  "Not home".
 
 The icon is the entity's own, or one for its domain. Chips that don't fit are left for when there is
 room, in the order given. A running timer or the music strip takes the foot of the page instead.
+
+> **Good to know**
+>
+> A number's chip shows its value, so the screen redraws every time the value changes. A power or
+> energy sensor that reports every few seconds redraws the clock page every few seconds. For those,
+> make a template sensor that says only what matters ("Washer running", or nothing) and put that in
+> the list instead.
 
 ### entities (Required)
 
 *string*
 
-The entities, comma separated, in the order to show them. Empty takes the strip away.
+The entities, comma separated, in the order to show them: up to 8, and each once (a repeat and any
+past the eighth are left out). Empty takes the strip away.
 
 ```yaml
 action: esphome.office_home_glance

@@ -1,6 +1,11 @@
 package home
 
-import "testing"
+import (
+	"fmt"
+	"slices"
+	"strings"
+	"testing"
+)
 
 func TestChipFor(t *testing.T) {
 	for _, c := range []struct {
@@ -20,6 +25,13 @@ func TestChipFor(t *testing.T) {
 		{"lock.front", "locked", "Front lock", "", "", Chip{}, false},
 		{"lock.front", "unlocked", "Front lock", "", "", Chip{"lock.front", "lock-open-variant", "Front lock"}, true},
 		{"switch.fan", "on", "", "", "", Chip{"switch.fan", "toggle-switch", "switch.fan"}, true},
+		{"sensor.washer_power", "0.0", "Washer", "", "W", Chip{}, false},
+		{"sensor.washer_power", "-0", "Washer", "", "W", Chip{}, false},
+		{"sensor.washer_power", "0.4", "Washer", "", "W", Chip{"sensor.washer_power", "information-outline", "Washer 0.4 W"}, true},
+		{"person.guest", "not_home", "Guest", "", "", Chip{"person.guest", "account", "Not home"}, true},
+		{"vacuum.downstairs", "cleaning", "Vacuum", "", "", Chip{"vacuum.downstairs", "information-outline", "Cleaning"}, true},
+		{"sensor.note", "Washer done", "", "", "", Chip{"sensor.note", "information-outline", "Washer done"}, true},
+		{"sensor.note", "iPhone low_battery", "", "", "", Chip{"sensor.note", "information-outline", "iPhone low_battery"}, true},
 	} {
 		got, ok := chipFor(c.entity, c.state, c.name, c.icon, c.unit)
 		if ok != c.shown || got != c.want {
@@ -53,5 +65,23 @@ func TestRedrawOnlyWhenTheChipsChange(t *testing.T) {
 		if got := f.redraw(s.entity, glance, chips); got != s.want {
 			t.Errorf("%s: redraw = %v, want %v", s.name, got, s.want)
 		}
+	}
+}
+
+func TestGlanceList(t *testing.T) {
+	list, dropped := glanceList(" sensor.a, input_boolean.b ,sensor.a,, nonsense, sensor.c")
+	if want := []string{"sensor.a", "input_boolean.b", "sensor.c"}; !slices.Equal(list, want) || dropped != 0 {
+		t.Errorf("trim and dedupe: %v %d, want %v 0", list, dropped, want)
+	}
+	var many []string
+	for i := range glanceMax + 3 {
+		many = append(many, fmt.Sprintf("sensor.s%d", i))
+	}
+	list, dropped = glanceList(strings.Join(many, ","))
+	if len(list) != glanceMax || dropped != 3 || list[0] != "sensor.s0" {
+		t.Errorf("a long list: %d kept, %d dropped, first %q; want %d, 3, sensor.s0", len(list), dropped, list[0], glanceMax)
+	}
+	if list, _ := glanceList(""); len(list) != 0 {
+		t.Errorf("an empty list gives %v", list)
 	}
 }

@@ -13,12 +13,17 @@ import (
 // glanceStrip draws the chips centered along the foot of the clock page, above the footer's line: a
 // pill each, the entity's icon in the accent and its line in the text color. The small face is tried
 // first and the tiny one when that does not fit them all; then as many as fit are drawn, in order.
-func (r *renderer) glanceStrip(chips []home.Chip) {
+func (r *renderer) glanceStrip(chips []home.Chip, callButton bool) {
 	const icon = 24 // mdiIcon scales it
 	h := r.s(46)
 	bottom := r.h - r.s(50)
 	gap, pad, iconGap := r.s(12), r.s(16), r.s(10)
 	room := r.w - 2*r.margin
+	if callButton {
+		// The Call button has the bottom-left corner: the strip keeps as clear of it on the right as on
+		// the left, so it stays centered.
+		room = r.w - 2*(r.callButtonRect().Max.X+gap)
+	}
 
 	face, lift := r.small, r.s(10)
 	fit := func(f font.Face) (widths []int, total int) {
