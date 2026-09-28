@@ -671,6 +671,10 @@ Puts one camera's live view up on the device's screen for a while — for an aut
 the front door when the doorbell rings. The camera's audio follows the device's own **Camera
 sound** setting; `home_show_camera_sound` is the same view with the sound decided by the caller.
 
+A camera's sound plays over whatever the device is playing rather than instead of it: the music
+carries on underneath, quieter, and comes back up when the view ends. Nothing is taken from the
+room's music, so a Music Assistant group is not left.
+
 > **Good to know**
 >
 > Needs `home_assistant` set up first. This action fetches the camera's snapshot from Home
@@ -729,8 +733,14 @@ How long to show it for. `0` means the default, 30 seconds.
 *string*
 
 Whether to play the camera's audio with the view: `on` or `off`. Anything else — an empty string
-included — leaves it to the device's own **Camera sound** setting, off on a new device. The sound
-stops when the view does, and a track that something else started in the meantime is left alone.
+included — leaves it to the device's own **Camera sound** setting, off on a new device.
+
+The sound is heard over whatever the device is playing, which carries on underneath and comes back
+up when the view ends. A **Mute** control on the view silences it without closing the view, and
+reads **Unmute** while the sound is not playing — silenced, taken by an answer or an announcement,
+or still on its way — so the same tap asks for it again. A reply or an announcement takes the
+speaker from the camera for as long as it lasts, and the view's sound comes back after it. The
+sound stops when the view does.
 
 ```yaml
 action: esphome.office_home_show_camera_sound

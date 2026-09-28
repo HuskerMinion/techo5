@@ -14,7 +14,8 @@ Android, with one Go daemon, `echod`, doing everything the device does:
   sounds for a wake word, muting and a finished timer are the defaults, and TECHO5's own notes are a
   choice (the Wake sound setting, and Home Assistant sounds under Sound & Voice).
 - **Screen**: clock and weather, the conversation as it happens, a now-playing page with song and
-  artwork, a forecast page and a rain radar map, live views of Home Assistant cameras and of the Show's own camera, and
+  artwork, a forecast page and a rain radar map, live views of Home Assistant cameras — the camera's own sound plays over the music, with a Mute
+  control on the view — and of the Show's own camera, and
   a swipe-down settings screen with its categories down the left (Display, Sound, Alarms,
   Connections, Privacy, General) and each one's settings on a card beside them, a drawer in from the
   right edge with Cameras and Radio, and Wi-Fi setup with an on-screen keyboard. A first-run card
