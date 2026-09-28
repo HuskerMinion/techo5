@@ -2,6 +2,7 @@ package media
 
 import (
 	"context"
+	"math"
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
@@ -16,10 +17,10 @@ import (
 // has to be there to be stood down.
 type other struct{}
 
-func (other) Suspend()  {}
-func (other) Resume()   {}
-func (other) Duck(bool) {}
-func (other) Requeue()  {}
+func (other) Suspend() {}
+func (other) Resume()  {}
+func (other) Duck(int) {}
+func (other) Requeue() {}
 
 // An order a Show went through on 2026-09-24, with music set to pause for a turn: Music
 // Assistant is playing, a turn starts, and while its reply is sounding Home Assistant starts a station
@@ -137,4 +138,28 @@ func TestAStationThatTakesTheSpeakerBackFromAnotherPlays(t *testing.T) {
 		t.Fatalf("the station took the speaker back and is still held: holds=%d gated=%v", holds, gated)
 	}
 	s.Stop()
+}
+
+// The level a duck asks for is the level applied, rather than the setting being read again in here: a
+// camera's own sound asks for more than a turn does, and both are inside the setting's range.
+func TestTheDuckLevelIsTheOneAskedFor(t *testing.T) {
+	config.Use(filepath.Join(t.TempDir(), "state.json"))
+
+	s := &Stream{}
+	for _, c := range []struct {
+		db   int
+		want float32
+	}{
+		{0, 1},
+		{-15, 0.178},
+		{-30, 0.032},
+	} {
+		s.Duck(c.db)
+		s.write.Lock()
+		got := s.target
+		s.write.Unlock()
+		if math.Abs(float64(got-c.want)) > 0.002 {
+			t.Errorf("a duck of %d dB left the track at %v, want about %v", c.db, got, c.want)
+		}
+	}
 }

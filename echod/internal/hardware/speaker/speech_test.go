@@ -64,7 +64,7 @@ func TestAnAnswerPlaysOverTheTrackUnlessMusicPauses(t *testing.T) {
 	track := &producer{}
 	a.Took(track)
 
-	var duckedDuring bool
+	var duckedDuring int
 	waitFor(t, d.ClaimSpeech("reply", func(context.Context, *Player) error {
 		a.mu.Lock()
 		duckedDuring = a.duck
@@ -74,10 +74,10 @@ func TestAnAnswerPlaysOverTheTrackUnlessMusicPauses(t *testing.T) {
 	if track.suspends != 0 {
 		t.Fatal("an answer stood the track down with music set to duck")
 	}
-	if !duckedDuring {
+	if duckedDuring >= 0 {
 		t.Error("the track was not ducked under the answer")
 	}
-	if a.duck {
+	if a.duck < 0 {
 		t.Error("the track stayed ducked after the answer")
 	}
 

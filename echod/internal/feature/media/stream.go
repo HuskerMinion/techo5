@@ -118,12 +118,12 @@ const rampSamples = speaker.Rate * speaker.Channels * 60 / 1000
 // What it does about it is this end's decision, because only this end knows the difference between a
 // song and a doorbell. A track lowers itself and keeps playing; anyone who would rather have silence
 // under a reply sets it to pause, and then this is the same suspend a claim would have done.
-func (m *Stream) Duck(on bool) {
+func (m *Stream) Duck(db int) {
 	if m == nil {
 		return
 	}
 
-	if on {
+	if db < 0 {
 		if config.Get().Media.OnTurn == config.OnTurnPause {
 			// Once per turn: a second wake or a follow-up would suspend again, and the single
 			// release at the end would leave a hold behind — a stream that never plays again.
@@ -137,7 +137,7 @@ func (m *Stream) Duck(on bool) {
 			return
 		}
 
-		level := float32(math.Pow(10, float64(config.Get().Media.DuckDB)/20))
+		level := float32(math.Pow(10, float64(db)/20))
 		m.write.Lock()
 		m.target = level
 		m.write.Unlock()

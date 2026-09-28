@@ -3,9 +3,12 @@ package speaker
 import (
 	"context"
 	"errors"
+	"path/filepath"
 	"sync/atomic"
 	"testing"
 	"time"
+
+	"github.com/HuskerMinion/techo5/echod/internal/config"
 )
 
 // Tested without hardware. Nothing is queued, so a claim ends as soon as its errand returns, which
@@ -209,11 +212,7 @@ func TestMutingAClaimLetsTheBackgroundUp(t *testing.T) {
 	})
 	<-playing
 
-	ducked := func() bool {
-		music.mu.Lock()
-		defer music.mu.Unlock()
-		return music.ducked
-	}
+	ducked := func() bool { return music.quiet() }
 	if !ducked() {
 		t.Fatal("a sound over the music did not hold the music down while it played")
 	}
@@ -233,5 +232,111 @@ func TestMutingAClaimLetsTheBackgroundUp(t *testing.T) {
 	d.Silence()
 	if ducked() {
 		t.Error("the music was left down after a muted sound over it ended")
+	}
+}
+
+// A sound played over the music ducks deeper than words do. A reply is close and loud and is heard over a
+// room's music at the ducking a turn gets; a camera's own sound is what its microphone hears of a street,
+// and at that level it is the music that comes through instead.
+func TestASoundOverTheMusicDucksDeeperThanWords(t *testing.T) {
+	d := driver()
+	music := &producer{}
+	d.Backgrounds().Took(music)
+
+	level := func() int {
+		music.mu.Lock()
+		defer music.mu.Unlock()
+		return music.db
+	}
+
+	// Words, at the listener's own level while they last.
+	talking, done := make(chan struct{}), make(chan struct{})
+	words := d.ClaimSpeech("announce", func(context.Context, *Player) error {
+		close(talking)
+		<-done
+		return nil
+	})
+	<-talking
+	byWords := level()
+	if byWords >= 0 {
+		t.Fatalf("words ducked the music by %d dB, want it quietened", byWords)
+	}
+	close(done)
+	waitFor(t, words)
+
+	// A sound over the music, on its own, asks for more.
+	playing := make(chan struct{})
+	over := d.ClaimOver("over the music", func(ctx context.Context, _ *Player) error {
+		close(playing)
+		<-ctx.Done()
+		return nil
+	})
+	<-playing
+
+	if byOver := level(); byOver != byWords-overDeeper {
+		t.Errorf("a sound over the music ducked by %d dB against the %d dB words get, want %d",
+			byOver, byWords, byWords-overDeeper)
+	}
+	d.Silence()
+	waitFor(t, over)
+}
+
+// While more than one thing wants the background down, the deepest ask is the one heard, and letting go of
+// one leaves what the others asked for: a camera's own sound during an announcement is heard, and when it
+// ends the music goes back to the announcement's ducking rather than up under it.
+func TestTheDeepestDuckIsTheOneHeard(t *testing.T) {
+	a := &Arbiter{}
+	music := &producer{}
+	a.Took(music)
+
+	level := func() int {
+		music.mu.Lock()
+		defer music.mu.Unlock()
+		return music.db
+	}
+
+	a.Duck("turn", true)
+	byTurn := level()
+	if byTurn >= 0 {
+		t.Fatal("a turn did not duck the music")
+	}
+
+	a.duckTo("camera sound", duckDB(true), true)
+	if byCamera := level(); byCamera != byTurn-overDeeper {
+		t.Errorf("the music is at %d dB with a camera over a turn, want the camera's %d", byCamera, byTurn-overDeeper)
+	}
+
+	// The turn ends first: the camera's ask is the deeper one, so the music stays where it was.
+	a.Duck("turn", false)
+	if got := level(); got != byTurn-overDeeper {
+		t.Errorf("the music came up to %d dB while a camera was still playing over it", got)
+	}
+
+	a.duckTo("camera sound", duckDB(true), false)
+	if got := level(); got != 0 {
+		t.Errorf("the music is at %d dB with nobody asking, want it back at its own level", got)
+	}
+}
+
+// Nothing goes past silence: a listener who has already ducked the music as far as it goes does not have it
+// ducked further, out past the range of any number anybody chose.
+func TestTheDuckStopsAtItsFloor(t *testing.T) {
+	config.Use(filepath.Join(t.TempDir(), "state.json"))
+
+	if err := config.Set().Media().DuckDB(-3); err != nil {
+		t.Fatal(err)
+	}
+	if got := duckDB(false); got != -3 {
+		t.Errorf("words duck by %d dB when the listener asked for -3", got)
+	}
+	if got := duckDB(true); got != -3-overDeeper {
+		t.Errorf("a sound over the music ducks by %d dB, want %d", got, -3-overDeeper)
+	}
+
+	if err := config.Set().Media().DuckDB(-100); err != nil {
+		t.Fatal(err)
+	}
+	if got := duckDB(true); got != minDuck {
+		t.Errorf("a duck went to %d dB, want the floor of %d", got, minDuck)
 	}
 }

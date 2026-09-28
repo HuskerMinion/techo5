@@ -736,7 +736,8 @@ Whether to play the camera's audio with the view: `on` or `off`. Anything else �
 included — leaves it to the device's own **Camera sound** setting, off on a new device.
 
 The sound is heard over whatever the device is playing, which carries on underneath and comes back
-up when the view ends. A **Mute** control on the view silences it without closing it: the stream
+up when the view ends — further down than it goes for an answer, since a camera's own audio is what
+its microphone hears and is lost under a room's music otherwise. A **Mute** control on the view silences it without closing it: the stream
 keeps arriving and what arrives is thrown away rather than played, so the music comes back up to its
 own level and **Unmute** brings the sound back at once. The control reads Unmute whenever there is
 nothing to silence — silenced from the screen, taken by an answer or an announcement, or never

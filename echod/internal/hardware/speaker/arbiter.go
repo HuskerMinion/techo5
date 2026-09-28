@@ -11,8 +11,9 @@ import (
 type Producer interface {
 	Background
 
-	// Duck sets the level for what is written next; what is already queued is Requeue's job.
-	Duck(on bool)
+	// Duck sets the level for what is written next, in dB of attenuation and 0 for none; what is already
+	// queued is Requeue's job.
+	Duck(db int)
 
 	// Requeue re-scales what is already queued, which can be seconds of audio.
 	Requeue()
@@ -24,10 +25,12 @@ type Arbiter struct {
 	mu    sync.Mutex
 	stack []Producer // the last is the one being heard
 	held  bool       // the driver has stood the background down
-	duck  bool
-	// ducks is who wants the background quiet: a turn, a ring, an announcement. It stays down until
-	// the last of them lets go, so one ending does not bring the music back up under another.
-	ducks map[string]bool
+	// duck is how far down the background is now, in dB, and ducks who wants it there: a turn, a ring,
+	// an announcement, a camera's own sound. The deepest ask is the one heard — a camera silenced under
+	// a turn's ducking would be no quieter than the turn — and it stays down until the last of them
+	// lets go, so one ending does not bring the music back up under another.
+	duck  int
+	ducks map[string]int
 	// hold is the producer the hold stood down, so a retake by it during the same hold is not
 	// suspended a second time.
 	hold Producer
@@ -140,42 +143,56 @@ func (a *Arbiter) Resume() {
 	}
 }
 
-// Duck asks for the background to be quiet, for why, or lets go of that ask. It is quiet while anyone
-// asks.
-func (a *Arbiter) Duck(why string, on bool) {
+// Duck asks for the background to be quiet for why, at the listener's own level, or lets go of that ask. It
+// is quiet while anyone asks, and as quiet as the deepest of them.
+func (a *Arbiter) Duck(why string, on bool) { a.duckTo(why, duckDB(false), on) }
+
+// duckTo is who is asking, by how much, and the deepest ask is what is heard: a camera silenced under a
+// turn's ducking would be no quieter than the turn. A claim asks at its own level — words at the
+// listener's, a sound over the music deeper — and keeps asking until it lets go.
+func (a *Arbiter) duckTo(why string, db int, on bool) {
+	if !on {
+		db = 0
+	}
+
 	a.mu.Lock()
 	if a.ducks == nil {
-		a.ducks = map[string]bool{}
+		a.ducks = map[string]int{}
 	}
-	if on {
-		a.ducks[why] = true
-	} else {
+	if db >= 0 {
 		delete(a.ducks, why)
+	} else {
+		a.ducks[why] = db
 	}
-	want := len(a.ducks) > 0
+	deepest := 0
+	for _, level := range a.ducks {
+		deepest = min(deepest, level)
+	}
 	a.mu.Unlock()
-	a.setDuck(want)
+	a.setDuck(deepest)
 }
 
 // setDuck quietens everything, waiting producers included, so one resuming mid-turn comes back quiet.
-func (a *Arbiter) setDuck(on bool) {
+func (a *Arbiter) setDuck(db int) {
 	a.mu.Lock()
-	if a.duck == on {
+	if a.duck == db {
 		a.mu.Unlock()
 		return
 	}
-	a.duck = on
+	was := a.duck
+	a.duck = db
 	all := append([]Producer(nil), a.stack...)
 	heard := a.top()
 	a.mu.Unlock()
 
 	for _, p := range all {
-		p.Duck(on)
+		p.Duck(db)
 	}
 
-	// Only the audible one, or the same samples get attenuated once per producer. Unducking is left
-	// to drain.
-	if on && heard != nil {
+	// Only the audible one, or the same samples get attenuated once per producer. Going deeper is
+	// requeued, so a sound that needs the music out of the way has it from its first moment; coming
+	// back up is left to drain.
+	if db < was && heard != nil {
 		heard.Requeue()
 	}
 }

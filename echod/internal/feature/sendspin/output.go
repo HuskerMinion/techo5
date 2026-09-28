@@ -14,7 +14,6 @@ import (
 
 	ssync "github.com/Sendspin/sendspin-go/pkg/sync"
 
-	"github.com/HuskerMinion/techo5/echod/internal/config"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/media"
 	"github.com/HuskerMinion/techo5/echod/internal/hardware/speaker"
 )
@@ -371,10 +370,10 @@ func (o *out) Resume() {
 
 // Duck always quietens, never pauses, whatever config.Media.OnTurn says: a hole in one room of a
 // whole-house stream is worse, and the canceller keeps a live reference.
-func (o *out) Duck(on bool) {
+func (o *out) Duck(db int) {
 	gain := float32(1)
-	if on {
-		gain = float32(math.Pow(10, float64(config.Get().Media.DuckDB)/20))
+	if db < 0 {
+		gain = float32(math.Pow(10, float64(db)/20))
 	}
 
 	o.mu.Lock()

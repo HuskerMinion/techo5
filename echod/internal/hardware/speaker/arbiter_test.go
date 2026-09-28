@@ -11,7 +11,7 @@ type producer struct {
 	mu       sync.Mutex
 	suspends int
 	resumes  int
-	ducked   bool
+	db       int // how far down it was last told to be
 	requeues int
 }
 
@@ -27,10 +27,10 @@ func (p *producer) Resume() {
 	p.resumes++
 }
 
-func (p *producer) Duck(on bool) {
+func (p *producer) Duck(db int) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
-	p.ducked = on
+	p.db = db
 }
 
 // forget is what a real producer does when it gives the speaker back: its holds go with it.
@@ -58,10 +58,11 @@ func (p *producer) held() bool {
 	return p.suspends > p.resumes
 }
 
+// quiet is whether the producer is being held down at all, whatever level it was told.
 func (p *producer) quiet() bool {
 	p.mu.Lock()
 	defer p.mu.Unlock()
-	return p.ducked
+	return p.db < 0
 }
 
 func TestNewestProducerIsTheOneHeard(t *testing.T) {
@@ -287,11 +288,11 @@ func TestDuckingLastsUntilTheLastAskerLetsGo(t *testing.T) {
 	a.Duck("turn", true)
 	a.Duck("ring", true)
 	a.Duck("ring", false)
-	if !a.duck {
+	if a.duck >= 0 {
 		t.Fatal("one asker letting go brought the music up under the other")
 	}
 	a.Duck("turn", false)
-	if a.duck {
+	if a.duck < 0 {
 		t.Error("the music stayed down after everyone let go")
 	}
 }

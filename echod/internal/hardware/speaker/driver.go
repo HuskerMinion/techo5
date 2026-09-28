@@ -68,14 +68,14 @@ func (d *Driver) Yields(b Background) {
 // returns, and the claim ends once what it queued has played out. It must return when ctx is done,
 // which is what being silenced means.
 func (d *Driver) Claim(name string, play func(ctx context.Context, p *Player) error) *Claim {
-	return d.claim(name, false, false, play)
+	return d.claim(name, claimSpec{}, play)
 }
 
 // ClaimSpeech is Claim for words: an answer or an announcement. Unless the listener set music to pause
 // for a turn, the background keeps playing under it, at whatever level it has been ducked to, rather
 // than standing aside until the words are done.
 func (d *Driver) ClaimSpeech(name string, play func(ctx context.Context, p *Player) error) *Claim {
-	return d.claim(name, config.Get().Media.OnTurn != config.OnTurnPause, false, play)
+	return d.claim(name, claimSpec{over: config.Get().Media.OnTurn != config.OnTurnPause}, play)
 }
 
 // ClaimOver takes the speaker for something that is not words but still belongs over the music rather
@@ -89,13 +89,45 @@ func (d *Driver) ClaimSpeech(name string, play func(ctx context.Context, p *Play
 // arriving second must not cut the announcement off mid-word. What it waits for is read as over the
 // music either way, so nothing is resumed behind it that should not be.
 func (d *Driver) ClaimOver(name string, play func(ctx context.Context, p *Player) error) *Claim {
-	return d.claim(name, true, true, play)
+	return d.claim(name, claimSpec{over: true, waits: true, deep: true}, play)
 }
 
-// waits is whether the claim waits for whatever holds the speaker to finish rather than displacing it.
-func (d *Driver) claim(name string, over, waits bool, play func(ctx context.Context, p *Player) error) *Claim {
+// overDeeper is how much more a sound played over the music quietens the background than words do. A reply
+// is close and loud and is heard over a room's music at the ducking a turn gets; a camera's own sound is
+// what its microphone hears of a street, and at that level it is the room's music that comes through.
+const overDeeper = 15
+
+// minDuck is as far down as a duck goes. At that point it is silence either way, and a number nobody chose
+// is worse than a floor; the listener's own setting goes no further than -40.
+const minDuck = -60
+
+// duckDB is how far down the background is asked to be: the listener's own level for words, and deeper for a
+// sound whose own level is low. The deepest ask is the one heard, whichever claim it came from (arbiter.go).
+func duckDB(deep bool) int {
+	if !deep {
+		return max(config.Get().Media.DuckDB, minDuck)
+	}
+	return max(config.Get().Media.DuckDB-overDeeper, minDuck)
+}
+
+// claimSpec is what makes one kind of claim different from another. They are not one thing: a claim for
+// words ducks the background, and a sound over the music ducks it too, but it is not words — it never
+// displaces what is being said, and it needs more room than words do.
+type claimSpec struct {
+	over  bool // sounds over the background rather than standing it down
+	waits bool // waits for whatever holds the speaker rather than displacing it
+	deep  bool // ducks deeper than words: a sound whose own level is low, heard over the room's music
+}
+
+func (d *Driver) claim(name string, spec claimSpec, play func(ctx context.Context, p *Player) error) *Claim {
 	ctx, cancel := context.WithCancel(context.Background())
-	c := &Claim{name: name, over: over, cancel: cancel, done: make(chan struct{})}
+	c := &Claim{
+		name:   name,
+		over:   spec.over,
+		duck:   duckDB(spec.deep),
+		cancel: cancel,
+		done:   make(chan struct{}),
+	}
 
 	d.mu.Lock()
 	previous := d.now
@@ -105,32 +137,32 @@ func (d *Driver) claim(name string, over, waits bool, play func(ctx context.Cont
 	// Words over the background have it ducked while they last, under a name of their own so the claim
 	// that follows lets go of nothing but its own. A turn has usually ducked it already.
 	var bg *Arbiter
-	if over {
+	if spec.over {
 		d.mu.Lock()
 		bg = d.arb // only one that exists: nothing to duck is nothing to make
 		d.mu.Unlock()
 	}
 	if bg != nil {
 		c.bg = bg
-		bg.Duck(c.duckName(), true)
+		bg.duckTo(c.duckName(), c.duck, true)
 	}
 
 	// Before the errand queues anything, so the two never fight over the same audio. A claim that waits
 	// its turn leaves what is playing where it is: taking it would leave the sound it was waiting for
 	// cancelled rather than heard.
 	d.settle()
-	if !waits {
+	if !spec.waits {
 		previous.preempt(d.p)
 	}
 
 	go func() {
 		defer close(c.done)
 		if bg != nil {
-			defer bg.Duck(c.duckName(), false)
+			defer bg.duckTo(c.duckName(), c.duck, false)
 		}
 		defer d.release(c)
 
-		if waits && !waited(ctx, previous) {
+		if spec.waits && !waited(ctx, previous) {
 			return // given up on before it started, which is somebody silencing it
 		}
 		if err := play(ctx, d.p); err != nil {
@@ -266,9 +298,10 @@ type Claim struct {
 	cancel context.CancelFunc
 	done   chan struct{}
 
-	// bg is the background this claim holds down, for one that sounds over it. Muting lets it back up
-	// rather than leaving the room quiet and ducked at once.
-	bg *Arbiter
+	// duck is how far down this claim asks the background to be, and bg the background to ask, for one
+	// that sounds over it. Muting lets it back up rather than leaving the room quiet and ducked at once.
+	duck int
+	bg   *Arbiter
 
 	mu       sync.Mutex
 	err      error
@@ -292,7 +325,7 @@ func (c *Claim) Mute(on bool) {
 	if c == nil || c.bg == nil {
 		return
 	}
-	c.bg.Duck(c.duckName(), !on)
+	c.bg.duckTo(c.duckName(), c.duck, !on)
 }
 
 // Started records that sound has begun, which is where a reply's timing starts counting from.
