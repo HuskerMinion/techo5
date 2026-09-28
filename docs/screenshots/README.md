@@ -17,6 +17,8 @@ The sunrise before an alarm is animated: [on a Show](sunrise-show.gif) and [on t
 | **Clock**, with the weather and your own photos behind it | **Weather** now and for the week, the rain radar a tap away |
 | ![Now playing from Music Assistant, with the album's cover behind the song](now-playing-cover.png) | ![The clock with a mini player strip along the bottom, showing the paused song and its cover](now-playing-strip.png) |
 | **Now playing** from Music Assistant, with the album's cover | **The mini player**: after a while, or when paused, the song shrinks to a strip over the clock |
+| ![The clock with three glance chips along the foot: a switch that is on, a template sensor's message, a reminder](clock-glance.png) | |
+| **The glance strip** (`home_glance`): chips from Home Assistant, each only while it has something to say | |
 | ![An alarm ringing, with Stop and Snooze](ringing.png) | ![The alarm editor](alarm-editor.png) |
 | **Alarm ringing**, big enough to hit half awake | **Alarms** set on the device: once, on chosen days, each with its own wake light |
 | ![Settings: Alarms and Timers](settings-alarms.png) | ![Settings: Display](settings-display.png) |

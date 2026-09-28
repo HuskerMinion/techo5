@@ -29,6 +29,10 @@ type Home struct {
 	// Cameras are camera.* entities and the names to say for them, in the order the list shows.
 	Cameras []Camera `json:"cameras,omitempty"`
 
+	// Glance are Home Assistant entities shown as chips along the foot of the clock page, each only
+	// while it has something to say (feature/home/glance.go), in the order given.
+	Glance []string `json:"glance,omitempty"`
+
 	// Slideshow is the idle photo slideshow's source and display mode.
 	Slideshow Slideshow `json:"slideshow"`
 
@@ -240,6 +244,10 @@ func (w HomeWriter) RadarSource(source string) error {
 
 func (w HomeWriter) RadioSource(source string) error {
 	return w.st.Update(func(c *Config) { c.Home.RadioSource = source })
+}
+
+func (w HomeWriter) Glance(entities []string) error {
+	return w.st.Update(func(c *Config) { c.Home.Glance = entities })
 }
 
 func (w HomeWriter) Cameras(cams []Camera) error {

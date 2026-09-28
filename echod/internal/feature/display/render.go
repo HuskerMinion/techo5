@@ -49,6 +49,9 @@ type scene struct {
 	paused  bool
 	muted   bool
 
+	// glance is the glance strip's chips (feature/home/glance.go), drawn at the foot of the clock page.
+	glance []home.Chip
+
 	// volume is shown while it moves: the step out of media.VolumeSteps.
 	volume     int
 	showVolume bool
@@ -600,6 +603,12 @@ func (r *renderer) bigClock(s scene) {
 		// The music strip takes the foot of the panel; the clock and date move up out of its way.
 		base -= r.s(30)
 	}
+	// The glance strip takes the foot too, when there is news and nothing else is using it: a running
+	// timer is news enough on its own, and the music strip is where the hand already is.
+	glance := len(s.glance) > 0 && !timers && !s.strip
+	if glance {
+		base -= r.s(30)
+	}
 
 	suffix := ""
 	if next := s.alarms.Next; next != nil && next.At.Sub(s.now) < 24*time.Hour {
@@ -618,6 +627,9 @@ func (r *renderer) bigClock(s scene) {
 	r.setDateAt(r.timeAndDateAt(s.now, base, suffix, align, left).Inset(-r.s(16)))
 	if timers {
 		r.timersLine(s, base+timersAt)
+	}
+	if glance {
+		r.glanceStrip(s.glance)
 	}
 
 	r.weatherCorner(s)

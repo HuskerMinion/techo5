@@ -68,6 +68,11 @@ type Feature struct {
 	mu     sync.Mutex
 	chosen string
 
+	// others are the entities followed for something besides the glance strip, and chips the glance
+	// strip's chips as last sent on Changed (glance.go, redraw).
+	others map[string]bool
+	chips  []Chip
+
 	// grouped is whether Music Assistant has this room playing along with any other, as last asked, and
 	// groupedAt when it was asked. See PokeGroup: the row that says what a Stop will do is drawn every
 	// frame, and the answer is a request to Home Assistant.
@@ -208,7 +213,7 @@ func Get() *Feature {
 		shared.buildAlertsSwitch()
 		shared.buildCameraSoundSwitch()
 		shared.buildSlideshowSelect()
-		hastate.Get().Changed.Listen(func(hastate.Update) { shared.Changed.Emit(struct{}{}) })
+		hastate.Get().Changed.Listen(shared.stateChanged)
 		media.Get().OnPlay.Listen(shared.played)
 		media.Get().OnEnd.Listen(shared.ended)
 		media.Get().OnResumeRemote.Listen(func(struct{}) { safe.Go("resume music assistant", resumeMusicAssistant) })
@@ -356,6 +361,16 @@ func (f *Feature) want(h config.Home) {
 	if h.Radio.Now != "" {
 		keys = append(keys, hastate.Key{Entity: h.Radio.Now})
 	}
+	others := make(map[string]bool, len(keys))
+	for _, k := range keys {
+		others[k.Entity] = true
+	}
+	f.mu.Lock()
+	f.others = others
+	f.mu.Unlock()
+	if hasScreen {
+		keys = append(keys, glanceKeys(h)...)
+	}
 	hastate.Get().Follow("home", keys...)
 }
 
@@ -390,7 +405,7 @@ func (f *Feature) locationAction() *esphome.Action {
 func (f *Feature) Actions() []*esphome.Action {
 	actions := append(f.cameraActions(), f.accessAction())
 	if hasScreen {
-		actions = append(actions, f.slideshowAction(), f.calendarAction(), f.locationAction())
+		actions = append(actions, f.slideshowAction(), f.calendarAction(), f.locationAction(), f.glanceAction())
 	}
 	return append(actions, []*esphome.Action{
 		{
