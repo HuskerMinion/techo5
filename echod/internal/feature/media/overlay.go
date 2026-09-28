@@ -54,10 +54,11 @@ const (
 	// a later url — somebody's music — for a camera's sound.
 	overAskFor = 20 * time.Second
 
-	// overDropFor is how long a request that was given up on still catches its url, so that a stream
-	// already on its way is dropped instead of playing as a track. Short, because from here on a url it
-	// catches is more likely to be something else: the request is over, and the room wants its music.
-	overDropFor = 5 * time.Second
+	// overDropFor is how long a request that was given up on still catches its url after the call that
+	// made it has come back, so that a stream answering it is dropped instead of playing as a track. Short:
+	// everything the call was going to send has been sent by then, and a url arriving later is likelier to
+	// be something else — the request is over, and the room wants its music.
+	overDropFor = 2 * time.Second
 )
 
 // OverToken says which request for a sound over the music this is. It is what the thing that asked for
@@ -148,15 +149,29 @@ func (p *Player) OverNext() OverToken {
 // a camera's stream played as a track would replace what the room was listening to and nothing would
 // know to stop it; dropped rather than played over the music, because the sound was given up on before
 // it began.
+// It keeps waiting, and keeps dropping what arrives, until the call that made it comes back (OverSettled)
+// or its own wait runs out. That matters for a call that is slow: fifteen seconds is a call Home Assistant
+// has been seen to take, and a request forgotten before then would let its url through as a track.
 func (p *Player) ForgetOverNext(t OverToken) {
 	p.overMu.Lock()
 	defer p.overMu.Unlock()
 	for i := range p.overAsks {
-		if p.overAsks[i].token != t || p.overAsks[i].dropped {
-			continue
+		if p.overAsks[i].token == t {
+			p.overAsks[i].dropped = true
 		}
-		p.overAsks[i].dropped = true
-		if until := time.Now().Add(overDropFor); until.Before(p.overAsks[i].until) {
+	}
+}
+
+// OverSettled is the call that made a request having returned, whichever way it went. A request that was
+// given up on is forgotten a few seconds after that: what it was waiting for can still be just behind the
+// call, but not much, and from then on a url is likelier to be somebody's music than the sound nobody
+// wanted. A request that is still wanted is left alone to wait for its url.
+func (p *Player) OverSettled(t OverToken) {
+	until := time.Now().Add(overDropFor)
+	p.overMu.Lock()
+	defer p.overMu.Unlock()
+	for i := range p.overAsks {
+		if p.overAsks[i].token == t && p.overAsks[i].dropped && until.Before(p.overAsks[i].until) {
 			p.overAsks[i].until = until
 		}
 	}
@@ -333,7 +348,10 @@ func (p *Player) overURL(url string) bool {
 		p.overMu.Unlock()
 		return false
 	}
-	// The oldest unanswered ask, which is the one this url answers.
+	// The oldest unanswered ask, which is the one this url answers. Nothing in a url says which request it
+	// belongs to — they arrive on the same media path a track does — so this is order and nothing else: two
+	// cameras opened back to back and answered out of order would swap their sounds. What could be done
+	// about it is a guess at the url's shape, which is worse than the order Home Assistant answers in.
 	ask := p.overAsks[0]
 	p.overAsks = p.overAsks[1:]
 	p.overMu.Unlock()

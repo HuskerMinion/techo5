@@ -269,7 +269,10 @@ func TestASoundTakenByAnAnnouncementIsOneToAskForAgain(t *testing.T) {
 	if !p.overURL(overStream(t)) {
 		t.Fatal("the url the ask was for was played as a track")
 	}
-	waitUntil(t, "the sound playing", func() bool { return p.OverState(token) == OverPlaying })
+	// Playing, and holding the speaker: the state says playing from the moment the url is answered, while
+	// the claim itself takes the speaker a moment later — a claim over the music waits its turn rather than
+	// displacing what is being said, and only what holds it can be taken from.
+	waitUntil(t, "the sound holding the speaker", func() bool { return d.Busy() })
 
 	d.ClaimSpeech("announce", func(context.Context, *speaker.Player) error { return nil })
 
@@ -378,5 +381,51 @@ func TestReadOverGivesUpBeforeTheHeaderArrives(t *testing.T) {
 
 	if err := readOver(stop, srv.URL, speaker.New(), neverMuted); err != nil {
 		t.Fatalf("silencing while the header was being read was reported as a failure: %v", err)
+	}
+}
+
+// A request that was given up on keeps catching its url until the call that made it has come back: a slow
+// call is answered fifteen seconds later, and a url arriving then has to be dropped rather than played as a
+// track over the room's music. Once the call is back the catch is short — what was still to come can only
+// be just behind it — and then a url is likelier to be somebody's music than the sound nobody wanted.
+func TestAGivenUpRequestCatchesItsURLUntilItsCallReturns(t *testing.T) {
+	p, _ := overFor(t)
+
+	// The call is still out, and this is a slow one: the url is still its own to drop.
+	slow := p.OverNext()
+	p.ForgetOverNext(slow)
+	if !p.overURL(overStream(t)) {
+		t.Fatal("a url for a call still out was played as a track")
+	}
+
+	// The call comes back, and the request is forgotten a grace later rather than at once.
+	settled := p.OverNext()
+	p.ForgetOverNext(settled)
+	p.overMu.Lock()
+	long := time.Until(p.overAsks[0].until)
+	p.overMu.Unlock()
+	if long < 10*time.Second {
+		t.Fatalf("a given-up request waits %v for its url while its call is still out, want the call's own time", long)
+	}
+
+	p.OverSettled(settled)
+	p.overMu.Lock()
+	short := time.Until(p.overAsks[0].until)
+	p.overMu.Unlock()
+	if short > overDropFor+time.Second {
+		t.Errorf("a given-up request whose call returned waits %v, want about %v", short, overDropFor)
+	}
+	if !p.overURL(overStream(t)) {
+		t.Fatal("a url arriving within the grace was played as a track")
+	}
+
+	// A request nobody gave up on is left alone by its call returning: it is still wanted.
+	wanted := p.OverNext()
+	p.OverSettled(wanted)
+	p.overMu.Lock()
+	left := time.Until(p.overAsks[0].until)
+	p.overMu.Unlock()
+	if left < 10*time.Second {
+		t.Errorf("a request still wanted was cut short to %v by its call returning", left)
 	}
 }

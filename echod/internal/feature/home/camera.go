@@ -136,7 +136,7 @@ func (f *Feature) showCamera(entity string, d time.Duration, sound bool) {
 		if sound {
 			// The sound is asked of Home Assistant and taken off the speaker when this view ends; a
 			// view already up keeps the sound it was started with (camera_sound.go).
-			go f.startCameraSound(entity)
+			go f.startCameraSound(entity, thisDevice())
 		}
 	}
 	f.Changed.Emit(struct{}{})

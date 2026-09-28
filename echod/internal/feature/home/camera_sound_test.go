@@ -47,14 +47,17 @@ func TestSoundAsked(t *testing.T) {
 // real one does with those — the stream, the claim, the audio — is the media player's business, and is
 // tested there.
 type fakeOver struct {
-	mu       sync.Mutex
-	next     media.OverToken
-	states   map[media.OverToken]media.OverState // coming, or playing once its stream arrived
-	terminal map[media.OverToken]media.OverState // and what became of the ones that are over
-	muted    map[media.OverToken]bool
-	asked    []media.OverToken
-	stopped  []media.OverToken
-	dropped  []media.OverToken
+	mu            sync.Mutex
+	next          media.OverToken
+	states        map[media.OverToken]media.OverState // coming, or playing once its stream arrived
+	terminal      map[media.OverToken]media.OverState // and what became of the ones that are over
+	muted         map[media.OverToken]bool
+	asked         []media.OverToken
+	stopped       []media.OverToken
+	dropped       []media.OverToken
+	settledTokens []media.OverToken
+	callErr       error
+	player        overPlayer
 }
 
 // fakeOverFor swaps the real player and the call to Home Assistant for fakes, and puts them back after the
@@ -67,12 +70,36 @@ func fakeOverFor(t *testing.T) *fakeOver {
 		muted:    map[media.OverToken]bool{},
 	}
 	prevOver, prevStream, prevPoll := over, playStream, cameraSoundPoll
-	over = overPlayer{Ask: fake.ask, State: fake.state, Mute: fake.mute, Stop: fake.stop, Drop: fake.drop}
-	playStream = func(string, string) error { return nil }
+	fake.player = overPlayer{Ask: fake.ask, State: fake.state, Mute: fake.mute, Stop: fake.stop, Drop: fake.drop, Settled: fake.settled}
+	over = fake.player
+	playStream = fake.call
 	// The watcher's poll is a second on the device: a test of what it does does not need to wait for it.
 	cameraSoundPoll = time.Millisecond
 	t.Cleanup(func() { over, playStream, cameraSoundPoll = prevOver, prevStream, prevPoll })
 	return fake
+}
+
+// env is what a worker started by hand is given, the way the feature gives one to its own goroutines.
+func (f *fakeOver) env() soundEnv {
+	return soundEnv{player: f.player, call: f.call, poll: cameraSoundPoll}
+}
+
+// call is the stand-in for the request to Home Assistant, which the test can make fail.
+func (f *fakeOver) call(string, string) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return f.callErr
+}
+
+// settled records that a call came back, which is what lets a request that was given up on stop waiting
+// for its url shortly afterwards.
+func (f *fakeOver) settled(t media.OverToken) {
+	if t == 0 {
+		return
+	}
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.settledTokens = append(f.settledTokens, t)
 }
 
 func (f *fakeOver) ask() media.OverToken {
@@ -169,6 +196,12 @@ func (f *fakeOver) wasDropped(t media.OverToken) bool {
 	return slices.Contains(f.dropped, t)
 }
 
+func (f *fakeOver) wasSettled(t media.OverToken) bool {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return slices.Contains(f.settledTokens, t)
+}
+
 func (f *fakeOver) mutedNow(t media.OverToken) bool {
 	f.mu.Lock()
 	defer f.mu.Unlock()
@@ -189,7 +222,7 @@ func cameraUp(t *testing.T, f *Feature, entity, sound string, token media.OverTo
 		f.mu.Lock()
 		f.cam.Until = time.Now()
 		f.mu.Unlock()
-		time.Sleep(5 * cameraSoundPoll) // a poll or two, while this test's fake is still the one in place
+		time.Sleep(5 * cameraSoundPoll) // a poll or two, so the watcher for it has gone before the test ends
 	})
 }
 
@@ -334,7 +367,7 @@ func TestTheViewEndingTakesItsSoundWithIt(t *testing.T) {
 	cameraUp(t, f, "camera.deck", "camera.deck", token)
 	f.cam.Until = time.Now() // over: nothing is watching the clock but this
 
-	f.watchCameraSound("camera.deck", token)
+	f.watchCameraSound("camera.deck", token, fake.env())
 
 	if !fake.wasStopped(token) {
 		t.Fatal("the sound of a view that ended was left playing")
@@ -352,7 +385,7 @@ func TestTheViewEndingStopsNothingItWasNotPlaying(t *testing.T) {
 	f := &Feature{}
 	cameraUp(t, f, "camera.deck", "", 0)
 	f.cam.Until = time.Now()
-	f.watchCameraSound("camera.deck", 0)
+	f.watchCameraSound("camera.deck", 0, fake.env())
 	if _, stopped, _ := fake.counts(); stopped != 0 {
 		t.Fatalf("a view with no sound stopped %d sounds", stopped)
 	}
@@ -364,7 +397,7 @@ func TestTheViewEndingStopsNothingItWasNotPlaying(t *testing.T) {
 		t.Fatalf("silencing a sound stopped it (%d stops)", stopped)
 	}
 	f2.cam.Until = time.Now()
-	f2.watchCameraSound("camera.deck", f2.camOver)
+	f2.watchCameraSound("camera.deck", f2.camOver, fake.env())
 	if _, stopped, _ := fake.counts(); stopped != 1 {
 		t.Fatalf("the sound of a view that ended was stopped %d times, want once", stopped)
 	}
@@ -382,7 +415,7 @@ func TestASoundTakenFromTheViewIsAskedForAgain(t *testing.T) {
 	fake.mute(first, true)
 	f.camMuted = true
 
-	go f.watchCameraSound("camera.deck", first)
+	go f.watchCameraSound("camera.deck", first, fake.env())
 	fake.taken(first)
 
 	eventually(t, "the sound asked for again", func() bool {
@@ -409,12 +442,12 @@ func TestASoundTakenFromTheViewIsAskedForAgain(t *testing.T) {
 // is dropped rather than played as a track over the room's music.
 func TestAFailedCallKeepsASoundThatArrivedAndGivesUpOneThatDidNot(t *testing.T) {
 	fake := fakeOverFor(t)
-	playStream = func(string, string) error { return errNoStream }
+	fake.callErr = errNoStream
 	f := &Feature{}
 
 	cameraUp(t, f, "camera.deck", "camera.deck", fake.ask())
 	fake.playing(f.camOver)
-	f.askCameraSound("camera.deck", f.camOver)
+	f.askCameraSound("camera.deck", f.camOver, fake.env())
 	if fake.wasDropped(f.camOver) {
 		t.Fatal("a sound that had already arrived was given up on because the call failed")
 	}
@@ -424,7 +457,7 @@ func TestAFailedCallKeepsASoundThatArrivedAndGivesUpOneThatDidNot(t *testing.T) 
 
 	f2 := &Feature{}
 	cameraUp(t, f2, "camera.deck", "camera.deck", fake.ask())
-	f2.askCameraSound("camera.deck", f2.camOver)
+	f2.askCameraSound("camera.deck", f2.camOver, fake.env())
 	if !fake.wasDropped(f2.camOver) {
 		t.Fatal("a request that nothing answered was left waiting for a url after its call failed")
 	}
@@ -436,3 +469,47 @@ func TestAFailedCallKeepsASoundThatArrivedAndGivesUpOneThatDidNot(t *testing.T) 
 // errNoStream is a call to a camera Home Assistant will not stream: the request is refused, and there is
 // no stream coming for it.
 var errNoStream = errors.New("camera.play_stream: no stream for this camera")
+
+// A tap can land between a watcher finding its sound taken and asking for it again. The new request is only
+// made if the view is still on the very sound that watcher was watching, checked under the same lock as the
+// asking: two requests for one control would leave the second url with no ask of its own, played as a track.
+func TestAskingAgainOnlyWhenTheViewIsStillOnThatSound(t *testing.T) {
+	fake := fakeOverFor(t)
+	f := &Feature{}
+	cameraUp(t, f, "camera.deck", "camera.deck", fake.ask())
+	taken := f.camOver
+
+	// The watcher's own case: its sound was taken, and the view is still on it.
+	if got := f.askAgain("camera.deck", taken, fake.env()); got == 0 {
+		t.Fatal("a watcher could not ask again for a sound that had been taken")
+	}
+	if asked, _, _ := fake.counts(); asked != 2 {
+		t.Fatalf("%d requests after a sound was taken, want one more", asked)
+	}
+
+	// And the stale one: the view has moved on, so the watcher must not put a request out at all.
+	f.ToggleCameraSound() // a tap, while that sound is on its way
+	before, _, _ := fake.counts()
+	if got := f.askAgain("camera.deck", taken, fake.env()); got != 0 {
+		t.Error("a watcher asked again for a sound the view had already moved on from")
+	}
+	if after, _, _ := fake.counts(); after != before {
+		t.Errorf("a stale watcher put %d more requests out", after-before)
+	}
+}
+
+// The call that asks Home Assistant for a stream having come back is what tells the player that a request
+// given up on can stop waiting for its url shortly. Without it an ask nobody wanted would hold on for its
+// whole wait, dropping any url that arrived — including somebody's music.
+func TestTheCallComingBackSettlesTheRequest(t *testing.T) {
+	fake := fakeOverFor(t)
+	f := &Feature{}
+	cameraUp(t, f, "camera.deck", "camera.deck", fake.ask())
+	token := f.camOver
+
+	f.askCameraSound("camera.deck", token, fake.env())
+
+	if !fake.wasSettled(token) {
+		t.Error("the call coming back did not settle the request it had made")
+	}
+}
