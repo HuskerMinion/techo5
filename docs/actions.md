@@ -736,11 +736,12 @@ Whether to play the camera's audio with the view: `on` or `off`. Anything else �
 included — leaves it to the device's own **Camera sound** setting, off on a new device.
 
 The sound is heard over whatever the device is playing, which carries on underneath and comes back
-up when the view ends. A **Mute** control on the view silences it without closing the view, and
-reads **Unmute** while the sound is not playing — silenced, taken by an answer or an announcement,
-or still on its way — so the same tap asks for it again. A reply or an announcement takes the
-speaker from the camera for as long as it lasts, and the view's sound comes back after it. The
-sound stops when the view does.
+up when the view ends. A **Mute** control on the view silences it without closing it: the stream
+keeps arriving and what arrives is thrown away rather than played, so the music comes back up to its
+own level and **Unmute** brings the sound back at once. The control reads Unmute whenever there is
+nothing to silence — silenced from the screen, taken by an answer or an announcement, or never
+arrived. A reply or an announcement takes the speaker from the camera for as long as it lasts, and
+the view's sound comes back after it. The sound stops when the view does.
 
 ```yaml
 action: esphome.office_home_show_camera_sound

@@ -77,6 +77,9 @@ func overStream(t *testing.T) string {
 	return srv.URL
 }
 
+// neverMuted is what a reading is given when the test is not about muting: a sound that is heard.
+var neverMuted = func() bool { return false }
+
 // waitUntil waits for what happens off the reading's own goroutine: a sound starts, ends and is taken from
 // in the claim, so the state it leaves behind arrives a moment later.
 func waitUntil(t *testing.T, what string, ok func() bool) {
@@ -200,6 +203,43 @@ func TestASoundOverTheMusicIsNotATrack(t *testing.T) {
 	}
 }
 
+// Muting is not stopping. A sound silenced from the screen keeps its stream: what arrives is read and
+// thrown away, so bringing it back is immediate — the same request, the same stream — rather than another
+// trip to Home Assistant. Muting one whose url has not arrived yet is the same thing: what answers it is
+// still its own url, and it is silent when it starts.
+func TestMutingASoundOverTheMusicKeepsItsStream(t *testing.T) {
+	p, _ := overFor(t)
+	token := p.OverNext()
+
+	// Muted while it was still on its way.
+	p.MuteOver(token, true)
+	if got := p.OverState(token); got != OverMuted {
+		t.Fatalf("a sound muted on its way is %v, want muted", got)
+	}
+	if p.OverState(token).Live() {
+		t.Fatal("a muted sound was reported as one to silence rather than to bring back")
+	}
+
+	// The url that answers is still this request's, and the sound is there but silent.
+	if !p.overURL(overStream(t)) {
+		t.Fatal("the url for a muted request was played as a track instead")
+	}
+	waitUntil(t, "the muted sound connected", func() bool { return p.OverState(token) == OverMuted })
+
+	// Bringing it back is the same request still playing, which is the whole difference from stopping it
+	// and asking again.
+	p.MuteOver(token, false)
+	waitUntil(t, "the sound heard again", func() bool { return p.OverState(token) == OverPlaying })
+
+	// And silencing a sound that is already playing leaves the stream up too.
+	p.MuteOver(token, true)
+	if got := p.OverState(token); got != OverMuted {
+		t.Fatalf("a muted sound is %v, want muted", got)
+	}
+	p.MuteOver(token, false)
+	waitUntil(t, "the sound heard once more", func() bool { return p.OverState(token) == OverPlaying })
+}
+
 // Stopping a sound over the music is what lets the music back up, and it says so at once: whoever drew
 // the control that was tapped redraws it against the sound already being over rather than a second of
 // queued audio later. What it queued is drained with it (overlay.go), which is what makes that second
@@ -249,7 +289,7 @@ func TestReadOverEndsWithTheStream(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	if err := readOver(context.Background(), srv.URL, speaker.New()); err != nil {
+	if err := readOver(context.Background(), srv.URL, speaker.New(), neverMuted); err != nil {
 		t.Fatalf("a stream that ended was reported as a failure: %v", err)
 	}
 }
@@ -281,7 +321,7 @@ func TestReadOverGivesUpWhenSilenced(t *testing.T) {
 	}()
 
 	start := time.Now()
-	if err := readOver(stop, srv.URL, speaker.New()); err != nil {
+	if err := readOver(stop, srv.URL, speaker.New(), neverMuted); err != nil {
 		t.Fatalf("silencing was reported as a failure: %v", err)
 	}
 	if took := time.Since(start); took > 5*time.Second {
@@ -305,7 +345,7 @@ func TestReadOverRefusesWhatItCannotPlay(t *testing.T) {
 			w.WriteHeader(c.status)
 			_, _ = w.Write(c.body)
 		}))
-		err := readOver(context.Background(), srv.URL, speaker.New())
+		err := readOver(context.Background(), srv.URL, speaker.New(), neverMuted)
 		srv.Close()
 		if err == nil {
 			t.Errorf("%s: readOver played it anyway", c.name)
@@ -336,7 +376,7 @@ func TestReadOverGivesUpBeforeTheHeaderArrives(t *testing.T) {
 		cancel()
 	}()
 
-	if err := readOver(stop, srv.URL, speaker.New()); err != nil {
+	if err := readOver(stop, srv.URL, speaker.New(), neverMuted); err != nil {
 		t.Fatalf("silencing while the header was being read was reported as a failure: %v", err)
 	}
 }

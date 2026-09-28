@@ -192,3 +192,46 @@ func TestWordsTakeTheSpeakerFromASoundOverTheMusic(t *testing.T) {
 		t.Error("a sound over the music was left holding the speaker while an announcement was made")
 	}
 }
+
+// Muting a claim that sounds over the background lets the music back up to its own level, and brings it
+// down again when the sound is brought back: a camera's sound that has been silenced from the screen
+// should not leave the room's music quiet for the rest of the view.
+func TestMutingAClaimLetsTheBackgroundUp(t *testing.T) {
+	d := driver()
+	music := &producer{}
+	d.Backgrounds().Took(music)
+
+	playing := make(chan struct{})
+	over := d.ClaimOver("over the music", func(ctx context.Context, _ *Player) error {
+		close(playing)
+		<-ctx.Done()
+		return nil
+	})
+	<-playing
+
+	ducked := func() bool {
+		music.mu.Lock()
+		defer music.mu.Unlock()
+		return music.ducked
+	}
+	if !ducked() {
+		t.Fatal("a sound over the music did not hold the music down while it played")
+	}
+
+	over.Mute(true)
+	if ducked() {
+		t.Error("muting a sound over the music left the music down")
+	}
+
+	over.Mute(false)
+	if !ducked() {
+		t.Error("bringing the sound back did not hold the music down again")
+	}
+
+	// And however it ends, muted or not, the background is not left down.
+	over.Mute(true)
+	d.Silence()
+	if ducked() {
+		t.Error("the music was left down after a muted sound over it ended")
+	}
+}

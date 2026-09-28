@@ -75,6 +75,7 @@ func soundAsked(arg string, setting bool) bool {
 type overPlayer struct {
 	Ask   func() media.OverToken
 	State func(media.OverToken) media.OverState
+	Mute  func(media.OverToken, bool)
 	Stop  func(media.OverToken)
 	Drop  func(media.OverToken)
 }
@@ -82,6 +83,7 @@ type overPlayer struct {
 var over = overPlayer{
 	Ask:   func() media.OverToken { return media.Get().OverNext() },
 	State: func(t media.OverToken) media.OverState { return media.Get().OverState(t) },
+	Mute:  func(t media.OverToken, on bool) { media.Get().MuteOver(t, on) },
 	Stop:  func(t media.OverToken) { media.Get().StopOver(t) },
 	Drop:  func(t media.OverToken) { media.Get().ForgetOverNext(t) },
 }
@@ -151,7 +153,7 @@ func (f *Feature) CameraSoundOn() bool {
 
 // CameraSoundLive is whether that sound is playing or on its way, which is what the control says: Mute
 // while it is, and Unmute when it is not — silenced from the screen, taken by a reply or an
-// announcement, or a request that nothing answered.
+// announcement, never answered, or connected and silenced from the screen.
 //
 // It is asked of the media player rather than remembered here, because a sound can end without this
 // feature being told: a reply or an announcement claims the speaker, and what was playing over the music
@@ -163,13 +165,13 @@ func (f *Feature) CameraSoundLive() bool {
 	return over.State(token).Live()
 }
 
-// ToggleCameraSound silences this view's sound, or asks for it. The picture stays either way, which is
+// ToggleCameraSound silences this view's sound, or brings it back. The picture stays either way, which is
 // the whole use of it at a doorbell.
 //
-// What is playing and what to do about it are read and changed under the one lock, so two taps cannot
-// both start a request. The second finds the first's sound either playing or on its way and silences
-// that, rather than asking for a second stream: two urls arriving for one ask would leave the second
-// with no ask of its own, and it would play as a track.
+// Muting a sound that is still on its way mutes it rather than giving the request up: the stream arrives
+// and is read and thrown away, so the sound is back the moment it is asked for rather than a few seconds
+// later. What is playing and what to do about it are read and changed under the one lock, so two taps
+// cannot both start a request — the second finds the first's sound and silences or brings back that.
 func (f *Feature) ToggleCameraSound() {
 	f.mu.Lock()
 	entity, token := f.camSound, f.camOver
@@ -178,15 +180,24 @@ func (f *Feature) ToggleCameraSound() {
 		return // this view has no sound of its own to silence, and none to ask for
 	}
 
-	if over.State(token).Live() {
-		// Silenced: the request goes with the sound, whether its url has arrived or not, so a stream
-		// still on its way does not start after the button was pressed.
+	switch over.State(token) {
+	case media.OverComing, media.OverPlaying:
+		f.camMuted = true
 		f.mu.Unlock()
-		over.Stop(token)
+		over.Mute(token, true)
 		slog.Info("camera sound silenced from the screen", "entity", entity)
+		return
+	case media.OverMuted:
+		f.camMuted = false
+		f.mu.Unlock()
+		over.Mute(token, false)
+		slog.Info("camera sound heard again", "entity", entity)
 		return
 	}
 
+	// Silenced because something took the speaker, or because nothing ever answered: a tap asks for the
+	// sound again, and it is wanted, so the request is not a muted one.
+	f.camMuted = false
 	token = over.Ask()
 	f.camOver = token
 	go f.watchCameraSound(entity, token)
@@ -200,17 +211,21 @@ func (f *Feature) ToggleCameraSound() {
 // by a reply or an announcement comes back. It reports the token to watch next, or nothing if the view
 // gave its sound up in the meantime.
 func (f *Feature) askAgain(entity string) media.OverToken {
-	token := over.Ask()
 	f.mu.Lock()
 	if f.camSound != entity {
 		f.mu.Unlock()
-		over.Drop(token)
 		return 0
 	}
+	muted := f.camMuted
+	token := over.Ask()
 	f.camOver = token
 	f.mu.Unlock()
 
-	slog.Info("camera sound asked for again after it was taken", "entity", entity)
+	// A sound silenced from the screen is asked for again silenced, and kept connected: it is asked for so
+	// that it is there to bring back, not so that it starts talking after an announcement.
+	over.Mute(token, muted)
+
+	slog.Info("camera sound asked for again after it was taken", "entity", entity, "silenced", muted)
 	go f.askCameraSound(entity, token)
 	return token
 }

@@ -123,12 +123,14 @@ type Feature struct {
 	// cam is the camera view in progress; see camera.go.
 	cam CameraView
 
-	// camSound is the camera whose sound this view has, and camOver the media player's token for the
-	// request it was asked with. camSound stays for as long as the view does, playing or not: the view
-	// still has a sound, which is what the control on the screen is drawn from, and muting it is not the
-	// end of it. cameraSoundSw is the setting's switch. See camera_sound.go.
+	// camSound is the camera whose sound this view has, camOver the media player's token for the request
+	// it was asked with, and camMuted whether that sound was silenced from the screen. camSound stays for
+	// as long as the view does, playing or not: the view still has a sound, which is what the control on
+	// the screen is drawn from, and muting it is not the end of it. cameraSoundSw is the setting's
+	// switch. See camera_sound.go.
 	camSound      string
 	camOver       media.OverToken
+	camMuted      bool
 	cameraSoundSw *esphome.Switch
 
 	// slideshowSel picks the display mode, slideshowOverlaySel the screensaver's clock/date size,

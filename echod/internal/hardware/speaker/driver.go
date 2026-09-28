@@ -111,6 +111,7 @@ func (d *Driver) claim(name string, over, waits bool, play func(ctx context.Cont
 		d.mu.Unlock()
 	}
 	if bg != nil {
+		c.bg = bg
 		bg.Duck(c.duckName(), true)
 	}
 
@@ -265,6 +266,10 @@ type Claim struct {
 	cancel context.CancelFunc
 	done   chan struct{}
 
+	// bg is the background this claim holds down, for one that sounds over it. Muting lets it back up
+	// rather than leaving the room quiet and ducked at once.
+	bg *Arbiter
+
 	mu       sync.Mutex
 	err      error
 	stopped  bool
@@ -274,6 +279,21 @@ type Claim struct {
 
 // duckName is what the claim asks the background to duck under.
 func (c *Claim) duckName() string { return fmt.Sprintf("%s %p", c.name, c) }
+
+// Mute silences a claim's own sound without giving the speaker up, which is what the camera page's
+// control does: the background comes back up to its own level while the sound is silent, and goes down
+// again when it is brought back. Letting go of the duck rather than taking a second one is what keeps
+// that level where the claim put it, however many times the control is tapped.
+//
+// The audio is the caller's to stop writing: what a claim is playing is its own, and a mute here is only
+// the background's level. A claim that sounds instead of over the background has none to let up, and
+// nothing to do.
+func (c *Claim) Mute(on bool) {
+	if c == nil || c.bg == nil {
+		return
+	}
+	c.bg.Duck(c.duckName(), !on)
+}
 
 // Started records that sound has begun, which is where a reply's timing starts counting from.
 func (c *Claim) Started() {

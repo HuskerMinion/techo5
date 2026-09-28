@@ -9,6 +9,7 @@ import (
 	"io"
 	"log/slog"
 	"net/http"
+	"sync/atomic"
 	"time"
 
 	"github.com/HuskerMinion/techo5/echod/internal/hardware/speaker"
@@ -29,9 +30,13 @@ import (
 // with a token of its own, and the url that answers it plays under that token — never as a track, and
 // never in the track history, so a station's name and what is playing are where the room left them.
 //
-// The token is also what the screen's mute button and the end of a camera's view act on. The player
-// owns the identity of what it is playing rather than the feature that asked for it working it out from
-// the last url it saw: that url is whatever else has played since.
+// The token is also what the screen's mute button and the end of a camera's view act on. The player owns
+// the identity of what it is playing rather than the feature that asked for it working it out from the
+// last url it saw: that url is whatever else has played since.
+//
+// Muting is not stopping. A muted sound keeps its stream: what arrives is read and thrown away, so the
+// sound is back the moment it is brought back, and the music it plays over comes up to its own level
+// meanwhile. Stopping is the view ending, and gives the sound up entirely.
 
 const (
 	// overAhead is how much audio may sit in the speaker's queue, in frames: a second of it, the same
@@ -73,14 +78,19 @@ const (
 	// OverPlaying is a sound being heard.
 	OverPlaying
 
+	// OverMuted is a sound that is connected and silent: the stream is still arriving and being read, and
+	// what is read is thrown away. It is what makes bringing the sound back immediate rather than another
+	// trip to Home Assistant, and it is not the same as OverGone — the sound is still this view's.
+	OverMuted
+
 	// OverTaken is a sound something else claimed the speaker from — a reply, an announcement, a ring —
 	// and which can be asked for again. It is not the same as OverGone: a sound that was taken is one
 	// the room still wants, and one that was silenced is not.
 	OverTaken
 )
 
-// Live is whether the sound this state describes is playing or on its way, which is what a control that
-// offers to silence it is drawn from.
+// Live is whether the sound this state describes is playing or on its way — so whether a control that
+// offers to silence it, rather than to ask for it, is drawn.
 func (s OverState) Live() bool { return s == OverComing || s == OverPlaying }
 
 // overClaims takes the speaker for a sound over the music. It is a variable so that which request a sound
@@ -99,6 +109,7 @@ var overClaims = func(name string, play func(ctx context.Context, spk *speaker.P
 type overAsk struct {
 	token   OverToken
 	dropped bool      // given up on: a url for it is dropped rather than played
+	muted   bool      // silenced while it was still on its way: it plays silent when it arrives
 	until   time.Time // when an unanswered ask stops being one
 }
 
@@ -108,7 +119,12 @@ type overSound struct {
 	token   OverToken
 	stop    context.CancelFunc
 	spk     *speaker.Player
+	claim   *speaker.Claim
 	stopped bool
+
+	// muted is read by the reading itself, which keeps the stream and throws the audio away: a sound that
+	// is silenced from the screen goes on being connected, so bringing it back is immediate.
+	muted atomic.Bool
 }
 
 // OverNext asks that the next url the device is sent plays over the music rather than replacing it, and
@@ -155,10 +171,16 @@ func (p *Player) OverState(t OverToken) OverState {
 	p.dropStale(time.Now())
 
 	if p.over != nil && p.over.token == t {
+		if p.over.muted.Load() {
+			return OverMuted
+		}
 		return OverPlaying
 	}
 	for _, a := range p.overAsks {
 		if a.token == t {
+			if a.muted {
+				return OverMuted
+			}
 			return OverComing
 		}
 	}
@@ -166,6 +188,31 @@ func (p *Player) OverState(t OverToken) OverState {
 		return s
 	}
 	return OverGone
+}
+
+// MuteOver silences the sound a request asked for without giving it up, and brings it back when asked:
+// the stream keeps arriving and is read and thrown away, so the sound is back the moment the control is
+// tapped rather than a few seconds later.
+//
+// A request whose url has not arrived is muted when it does, so that muting a sound that is still
+// starting is muting rather than something else. It is deliberately not StopOver: that is the view
+// ending, where the sound is not wanted again at all, and its url should not be played.
+func (p *Player) MuteOver(t OverToken, on bool) {
+	p.overMu.Lock()
+	if p.over != nil && p.over.token == t {
+		p.over.muted.Store(on)
+		claim := p.over.claim
+		p.overMu.Unlock()
+		claim.Mute(on) // the music comes back up to its own level while the sound is silent
+		return
+	}
+	for i := range p.overAsks {
+		if p.overAsks[i].token == t {
+			p.overAsks[i].muted = on
+			break
+		}
+	}
+	p.overMu.Unlock()
 }
 
 // StopOver silences the sound a request asked for, and gives the request up if its url has not arrived:
@@ -206,12 +253,13 @@ func (p *Player) StopOver(t OverToken) {
 // held for as long as the reading lasts, so the music stays down for the whole of it; it is given back
 // when the claim ends, which is the reader returning — by itself at the end of the stream, because
 // somebody silenced it, or because a claim of another sort took the speaker.
-func (p *Player) playOver(url string, token OverToken) {
+func (p *Player) playOver(url string, token OverToken, muted bool) {
 	stop, cancel := context.WithCancel(context.Background())
 
 	p.overMu.Lock()
 	previous := p.over
 	sound := &overSound{token: token, stop: cancel}
+	sound.muted.Store(muted)
 	p.over = sound
 	if previous != nil {
 		// One at a time: a second sound replaces the first rather than playing under it. Stopped from
@@ -232,8 +280,17 @@ func (p *Player) playOver(url string, token OverToken) {
 			sound.spk = spk
 		}
 		p.overMu.Unlock()
-		return readOver(stop, url, spk)
+		return readOver(stop, url, spk, sound.isMuted)
 	})
+
+	p.overMu.Lock()
+	if p.over == sound {
+		sound.claim = claim
+	}
+	p.overMu.Unlock()
+	// A sound asked for while it was already silenced starts silent, and the music it is playing over
+	// comes back up: muting is not a quieter version of hearing it.
+	claim.Mute(sound.muted.Load())
 
 	// Home Assistant is told this is playing, as it is for an announcement: it is something the room
 	// hears that is not a track, and a player reporting itself idle while a doorbell rings is worse than
@@ -285,7 +342,7 @@ func (p *Player) overURL(url string) bool {
 		slog.Info("a sound asked for over the music was let go before its stream arrived", "url", url)
 		return true
 	}
-	p.playOver(url, ask.token)
+	p.playOver(url, ask.token, ask.muted)
 	return true
 }
 
@@ -323,25 +380,29 @@ func (p *Player) recordDone(t OverToken, s OverState) {
 // screen redrawn across the moment a sound is taken still asks about the token it drew with.
 const overDoneKept = 8
 
-// readOver plays a url into the speaker as it arrives, until stop is done.
+// readOver plays a url into the speaker as it arrives, until stop is done. muted reports whether the sound
+// is silenced for now.
 //
 // Being silenced is not a failure anywhere in it: the context can go away during the request, while the
 // header is being read, or between reads, and every one of those is somebody tapping the control rather
 // than something going wrong. A warning each time would be noise about the feature working.
-func readOver(stop context.Context, url string, spk *speaker.Player) error {
-	err := readOverOnce(stop, url, spk)
+func readOver(stop context.Context, url string, spk *speaker.Player, muted func() bool) error {
+	err := readOverOnce(stop, url, spk, muted)
 	if stop.Err() != nil {
 		return nil
 	}
 	return err
 }
 
+// isMuted is whether this sound is silenced from the screen, for the reading to ask.
+func (s *overSound) isMuted() bool { return s.muted.Load() }
+
 // readOverOnce is the reading itself: the same live WAV a track is, read into the speaker as it arrives.
 //
 // The body is what Home Assistant serves for a converted stream: its sizes were written before the
 // length was known, so the data chunk runs until the connection ends, and there is no end to wait for
 // but the connection.
-func readOverOnce(stop context.Context, url string, spk *speaker.Player) error {
+func readOverOnce(stop context.Context, url string, spk *speaker.Player, muted func() bool) error {
 	// No timeout on the client: a camera is watched for as long as somebody watches it. What is bounded
 	// is a single read, because a wedged connection otherwise holds the sound open for as long as the
 	// kernel keeps retrying.
@@ -388,7 +449,10 @@ func readOverOnce(stop context.Context, url string, spk *speaker.Player) error {
 		n, err := io.ReadFull(body, buf)
 		watchdog.Stop()
 
-		if n >= frame {
+		// A muted sound is read and thrown away rather than paused: what is coming is live, so keeping up
+		// with it is what makes bringing the sound back immediate, and nothing queues towards a burst of
+		// the seconds that were silent.
+		if n >= frame && !muted() {
 			samples := make([]int16, (n-n%frame)/2)
 			for i := range samples {
 				samples[i] = int16(binary.LittleEndian.Uint16(buf[i*2:]))
