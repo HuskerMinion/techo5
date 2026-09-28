@@ -339,4 +339,105 @@ func TestTheDuckStopsAtItsFloor(t *testing.T) {
 	if got := duckDB(true); got != minDuck {
 		t.Errorf("a duck went to %d dB, want the floor of %d", got, minDuck)
 	}
+
+	// And no ducking asked for is no ducking, camera or not: somebody who does not want their music
+	// quietened should not have it quietened at all.
+	if err := config.Set().Media().DuckDB(0); err != nil {
+		t.Fatal(err)
+	}
+	if got := duckDB(true); got != 0 {
+		t.Errorf("a sound over the music ducked by %d dB with ducking turned off, want none", got)
+	}
+	if got := duckDB(false); got != 0 {
+		t.Errorf("words ducked by %d dB with ducking turned off, want none", got)
+	}
+}
+
+// A claim that waits its turn is not what holds the speaker while it waits, and must not be: a reply
+// arriving meanwhile has to take the speaker from what is being said rather than from the wait, or it
+// plays mixed over the announcement it was meant to follow. The claim that waited plays when its turn
+// comes, after the reply.
+func TestAWaitingClaimDoesNotHoldTheSpeaker(t *testing.T) {
+	d := driver()
+
+	release := make(chan struct{})
+	announcement := d.ClaimSpeech("announce", func(ctx context.Context, _ *Player) error {
+		select {
+		case <-release:
+		case <-ctx.Done():
+		}
+		return nil
+	})
+
+	waiting := d.ClaimOver("over the music", func(context.Context, *Player) error { return nil })
+	time.Sleep(50 * time.Millisecond)
+
+	d.mu.Lock()
+	held := d.now
+	d.mu.Unlock()
+	if held != announcement {
+		name := "nothing"
+		if held != nil {
+			name = held.name
+		}
+		t.Fatalf("the speaker is held by %q while a claim waits its turn, want the announcement", name)
+	}
+	if waiting.Finished() {
+		t.Fatal("a claim waiting its turn was treated as though it had taken the speaker")
+	}
+
+	// A reply arriving now takes the speaker from the announcement, which is what leaves the announcement
+	// behind rather than under the reply.
+	replied := make(chan struct{})
+	reply := d.ClaimSpeech("reply", func(context.Context, *Player) error {
+		close(replied)
+		return nil
+	})
+	<-replied
+	waitFor(t, reply)
+
+	if !announcement.Stopped() {
+		t.Error("a reply arrived while a claim waited and left the announcement playing under it")
+	}
+
+	// And the claim that waited has its turn once the reply is done.
+	close(release)
+	waitFor(t, waiting)
+	if waiting.Stopped() {
+		t.Error("the claim that waited was stopped instead of played when its turn came")
+	}
+}
+
+// With music set to stop under a turn, a claim waiting its turn must not bring it back up: it is not the
+// holder, so nothing about the background is its to change until it starts.
+func TestAWaitingClaimLeavesTheBackgroundStandingDown(t *testing.T) {
+	config.Use(filepath.Join(t.TempDir(), "state.json"))
+	if err := config.Set().Media().OnTurn(config.OnTurnPause); err != nil {
+		t.Fatal(err)
+	}
+
+	d := driver()
+	music := &producer{}
+	d.Backgrounds().Took(music)
+
+	release := make(chan struct{})
+	d.ClaimSpeech("announce", func(ctx context.Context, _ *Player) error {
+		select {
+		case <-release:
+		case <-ctx.Done():
+		}
+		return nil
+	})
+	if !music.held() {
+		t.Fatal("words with music set to stop under them left it playing")
+	}
+
+	waiting := d.ClaimOver("over the music", func(context.Context, *Player) error { return nil })
+	time.Sleep(50 * time.Millisecond)
+	if !music.held() {
+		t.Error("a claim waiting its turn brought the music back up under the announcement")
+	}
+
+	close(release)
+	waitFor(t, waiting)
 }

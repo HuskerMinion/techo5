@@ -104,10 +104,14 @@ const minDuck = -60
 // duckDB is how far down the background is asked to be: the listener's own level for words, and deeper for a
 // sound whose own level is low. The deepest ask is the one heard, whichever claim it came from (arbiter.go).
 func duckDB(deep bool) int {
-	if !deep {
-		return max(config.Get().Media.DuckDB, minDuck)
+	db := config.Get().Media.DuckDB
+	if db >= 0 {
+		return 0 // asked for no ducking at all, which is what they get, camera or not
 	}
-	return max(config.Get().Media.DuckDB-overDeeper, minDuck)
+	if deep {
+		db -= overDeeper
+	}
+	return max(db, minDuck)
 }
 
 // claimSpec is what makes one kind of claim different from another. They are not one thing: a claim for
@@ -129,11 +133,6 @@ func (d *Driver) claim(name string, spec claimSpec, play func(ctx context.Contex
 		done:   make(chan struct{}),
 	}
 
-	d.mu.Lock()
-	previous := d.now
-	d.now = c
-	d.mu.Unlock()
-
 	// Words over the background have it ducked while they last, under a name of their own so the claim
 	// that follows lets go of nothing but its own. A turn has usually ducked it already.
 	var bg *Arbiter
@@ -144,14 +143,17 @@ func (d *Driver) claim(name string, spec claimSpec, play func(ctx context.Contex
 	}
 	if bg != nil {
 		c.bg = bg
-		bg.duckTo(c.duckName(), c.duck, true)
 	}
 
-	// Before the errand queues anything, so the two never fight over the same audio. A claim that waits
-	// its turn leaves what is playing where it is: taking it would leave the sound it was waiting for
-	// cancelled rather than heard.
-	d.settle()
 	if !spec.waits {
+		// The ordinary way: the claim holds the speaker from the moment it is made, and takes it from
+		// whatever had it. Before the errand queues anything, so the two never fight over the same audio.
+		d.mu.Lock()
+		previous := d.now
+		d.now = c
+		d.mu.Unlock()
+
+		d.settle()
 		previous.preempt(d.p)
 	}
 
@@ -162,8 +164,17 @@ func (d *Driver) claim(name string, spec claimSpec, play func(ctx context.Contex
 		}
 		defer d.release(c)
 
-		if spec.waits && !waited(ctx, previous) {
-			return // given up on before it started, which is somebody silencing it
+		if spec.waits {
+			// A claim that waits its turn takes the speaker only when its turn comes, and ducks only
+			// then: it is not what holds the speaker while it waits, and must not be, or a reply arriving
+			// meanwhile would preempt the wait rather than what is being said, and leave the announcement
+			// playing on under it.
+			if !d.take(ctx, c) {
+				return // silenced, or passed over, before it started
+			}
+		}
+		if bg != nil {
+			bg.duckTo(c.duckName(), c.duck, true)
 		}
 		if err := play(ctx, d.p); err != nil {
 			c.fail(err)
@@ -174,28 +185,39 @@ func (d *Driver) claim(name string, spec claimSpec, play func(ctx context.Contex
 	return c
 }
 
-// waited is whether the claim that held the speaker when this one was made has finished, which is what
-// a claim that waits its turn is waiting for. A claim made after this one takes the speaker first and
-// cancels this wait with it, rather than leaving two errands filling the same queue.
-func waited(ctx context.Context, previous *Claim) bool {
-	if ctx.Err() != nil {
-		return false // taken from it, or silenced, before it started
-	}
-	if previous == nil || previous.Finished() {
-		return true
-	}
-	select {
-	case <-previous.Done():
-		// Whichever fired, a claim taken from it while it waited must not go on to play: a newer claim
-		// has the speaker, and filling the queue under it is the one thing waiting was for.
-		return ctx.Err() == nil
-	case <-ctx.Done():
-		return false
+// take waits for the speaker to come free and takes it, for a claim that waits its turn rather than
+// displacing what holds it. It reports whether its turn came: a claim cancelled while it waited —
+// silenced, or passed over — does not, because the context is cancelled with it.
+func (d *Driver) take(ctx context.Context, c *Claim) bool {
+	for {
+		if ctx.Err() != nil {
+			return false
+		}
+
+		d.mu.Lock()
+		if d.now == nil || d.now == c {
+			d.now = c
+			d.mu.Unlock()
+			// The background's side of holding the speaker is this claim's now, which is what settle
+			// keeps equal to "something holds it" — an over claim holds it without standing the
+			// background down.
+			d.settle()
+			return true
+		}
+		held := d.now
+		d.mu.Unlock()
+
+		select {
+		case <-held.Done():
+		case <-ctx.Done():
+			return false
+		}
 	}
 }
 
 // release lets the background sound carry on, once nothing else wants the speaker. A claim that was
-// displaced releases nothing: the one that took it from it is still playing.
+// displaced releases nothing: the one that took it from it is still playing. Neither does one that never
+// took the speaker at all — a claim that waited and was passed over, or silenced before its turn.
 func (d *Driver) release(c *Claim) {
 	d.mu.Lock()
 	if d.now != c {
