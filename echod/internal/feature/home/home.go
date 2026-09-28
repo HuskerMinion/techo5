@@ -123,14 +123,12 @@ type Feature struct {
 	// cam is the camera view in progress; see camera.go.
 	cam CameraView
 
-	// camSound is the camera whose audio was started with its view, camSoundURL the stream that answered
-	// it, and camMuted whether that sound has been silenced from the screen. camSound stays for as long as
-	// the view lasts, muted or not: the view still has a sound, which is what the control on the screen is
-	// drawn from, and muting it is not the end of it. cameraSoundSw is the setting's switch.
-	// See camera_sound.go.
+	// camSound is the camera whose sound this view has, and camOver the media player's token for the
+	// request it was asked with. camSound stays for as long as the view does, playing or not: the view
+	// still has a sound, which is what the control on the screen is drawn from, and muting it is not the
+	// end of it. cameraSoundSw is the setting's switch. See camera_sound.go.
 	camSound      string
-	camSoundURL   string
-	camMuted      bool
+	camOver       media.OverToken
 	cameraSoundSw *esphome.Switch
 
 	// slideshowSel picks the display mode, slideshowOverlaySel the screensaver's clock/date size,
@@ -209,7 +207,6 @@ func Get() *Feature {
 		shared.buildSlideshowSelect()
 		hastate.Get().Changed.Listen(func(hastate.Update) { shared.Changed.Emit(struct{}{}) })
 		media.Get().OnPlay.Listen(shared.played)
-		media.Get().OnPlay.Listen(shared.cameraSoundPlaying)
 		media.Get().OnEnd.Listen(shared.ended)
 		media.Get().OnResumeRemote.Listen(func(struct{}) { safe.Go("resume music assistant", resumeMusicAssistant) })
 		media.Get().OnTakeOver.Listen(func(struct{}) { safe.Go("leave the group", leaveGroup) })

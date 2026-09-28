@@ -1,8 +1,13 @@
 package home
 
 import (
+	"errors"
+	"slices"
+	"sync"
 	"testing"
 	"time"
+
+	"github.com/HuskerMinion/techo5/echod/internal/feature/media"
 )
 
 // The action's sound argument is optional in both directions: an automation that wants the doorbell
@@ -36,162 +41,299 @@ func TestSoundAsked(t *testing.T) {
 	}
 }
 
-// The end of a view must take its own sound off the speaker and nothing else. The player holds one
-// stream at a time, so the sound is this view's only while what is playing is still the stream that
-// answered it: somebody's music started in between is theirs, and the camera closing must not stop it.
-func TestCameraSoundStopsOnlyItsOwnTrack(t *testing.T) {
-	const (
-		deck  = "camera.deck"
-		door  = "camera.door"
-		mine  = "http://homeassistant.local:8123/api/esphome/ffmpeg_proxy/abc/one.wav"
-		mine2 = "http://homeassistant.local:8123/api/esphome/ffmpeg_proxy/abc/two.wav"
-		music = "http://homeassistant.local:8123/api/esphome/ffmpeg_proxy/abc/radio.wav"
-	)
-
-	cases := []struct {
-		name     string
-		entity   string
-		sound    string // camSound: whose audio was started
-		answered string // camSoundURL: the stream that answered it, empty if none did
-		playing  string // url: what the player is playing now
-		up       bool   // the view is still up
-		wantUp   bool
-		wantOurs bool
-	}{
-		{name: "up, its own track", entity: deck, sound: deck, answered: mine, playing: mine, up: true,
-			wantUp: true, wantOurs: true},
-		{name: "up, music started since", entity: deck, sound: deck, answered: mine, playing: music, up: true,
-			wantUp: true, wantOurs: false},
-		{name: "up, the stream has not answered yet", entity: deck, sound: deck, answered: "", playing: music, up: true,
-			wantUp: true, wantOurs: false},
-		{name: "down, its own track", entity: deck, sound: deck, answered: mine, playing: mine,
-			wantUp: false, wantOurs: true},
-		{name: "down, music started since", entity: deck, sound: deck, answered: mine, playing: music,
-			wantUp: false, wantOurs: false},
-		{name: "down, the stream never answered", entity: deck, sound: deck, answered: "",
-			wantUp: false, wantOurs: false},
-		{name: "another camera's sound is playing", entity: deck, sound: door, answered: mine, playing: mine,
-			wantUp: false, wantOurs: false},
-		{name: "a view asked for with no sound", entity: deck, sound: "", answered: "", playing: mine,
-			wantUp: false, wantOurs: false},
-		{name: "a different camera's track answered this view", entity: deck, sound: deck, answered: mine, playing: mine2,
-			wantUp: false, wantOurs: false},
-	}
-
-	for _, c := range cases {
-		f := &Feature{camSound: c.sound, camSoundURL: c.answered}
-		f.url = c.playing
-		f.cam = CameraView{Entity: c.entity, span: time.Minute}
-		if c.up {
-			f.cam.Until = time.Now().Add(time.Minute)
-		}
-
-		up, ours := f.cameraSoundEnds(c.entity)
-		if up != c.wantUp || ours != c.wantOurs {
-			t.Errorf("%s: cameraSoundEnds = (up %v, ours %v), want (%v, %v)",
-				c.name, up, ours, c.wantUp, c.wantOurs)
-		}
-		// Whatever was decided: a view's own sound is not left behind for the next one to stop, and
-		// anybody else's is not touched.
-		wantSound := c.sound
-		if !c.wantUp && c.sound == c.entity {
-			wantSound = ""
-		}
-		if f.camSound != wantSound {
-			t.Errorf("%s: camSound is %q after the view ended, want %q", c.name, f.camSound, wantSound)
-		}
-	}
+// fakeOver is the media player's side of a sound over the music, as a test can hold it: an ask hands out a
+// token that says it is on its way, the state of each is what the test says it is, and what was asked for,
+// stopped and given up on is recorded. What the real one does with those — the stream, the claim, the
+// audio — is the media player's business, and is tested there.
+type fakeOver struct {
+	mu      sync.Mutex
+	next    media.OverToken
+	states  map[media.OverToken]media.OverState
+	asked   []media.OverToken
+	stopped []media.OverToken
+	dropped []media.OverToken
 }
 
-// A view still up keeps its sound: the check that decides whether to stop it must not stop anything
-// while the camera is on screen, however long it is left there.
-func TestCameraSoundStaysWhileTheViewDoes(t *testing.T) {
-	f := &Feature{camSound: "camera.deck", camSoundURL: "http://ha/one.wav"}
-	f.url = "http://ha/one.wav"
-	f.cam = CameraView{Entity: "camera.deck", Until: time.Now().Add(time.Hour)}
-
-	for i := 0; i < 3; i++ {
-		up, ours := f.cameraSoundEnds("camera.deck")
-		if !up {
-			t.Fatalf("the view was taken as over while it has an hour to run")
-		}
-		if !ours {
-			t.Fatalf("the sound was taken as not ours while nothing else has played")
-		}
-	}
-	if f.camSound != "camera.deck" {
-		t.Fatalf("the view's own sound was forgotten while the view was up: %q", f.camSound)
-	}
+// fakeOverFor swaps the real player and the call to Home Assistant for fakes, and puts them back after the
+// test. The call is made to answer: what a request does when it fails is a case of its own.
+func fakeOverFor(t *testing.T) *fakeOver {
+	t.Helper()
+	fake := &fakeOver{states: map[media.OverToken]media.OverState{}}
+	prevOver, prevStream, prevPoll := over, playStream, cameraSoundPoll
+	over = overPlayer{Ask: fake.ask, State: fake.state, Stop: fake.stop, Drop: fake.drop}
+	playStream = func(string, string) error { return nil }
+	// The watcher's poll is a second on the device: a test of what it does does not need to wait for it.
+	cameraSoundPoll = time.Millisecond
+	t.Cleanup(func() { over, playStream, cameraSoundPoll = prevOver, prevStream, prevPoll })
+	return fake
 }
 
-// The screen's control draws from this: there is a sound to silence only once the stream that answers
-// a request has arrived, since a request Home Assistant refused leaves the view silent.
-// The screen's control is drawn from these, and it has to stay drawn while the view lasts: a sound that
-// vanished along with its control would leave muting as a one-way door, and closing the view to open it
-// again is not an answer at a doorbell.
-func TestASilencedViewKeepsItsSoundSoItCanBeBroughtBack(t *testing.T) {
-	f := &Feature{}
-	if f.CameraSoundOn() || f.CameraSoundMuted() {
+func (f *fakeOver) ask() media.OverToken {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.next++
+	f.asked = append(f.asked, f.next)
+	f.states[f.next] = media.OverComing // on its way until the test says otherwise
+	return f.next
+}
+
+func (f *fakeOver) state(t media.OverToken) media.OverState {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if s, ok := f.states[t]; ok {
+		return s
+	}
+	return media.OverGone
+}
+
+// Neither stopping nor giving up on anything is done with the zero token: it is what a view that never
+// asked for a sound holds, and there is nothing behind it. The real player says the same by finding no
+// sound and no ask of that token.
+func (f *fakeOver) stop(t media.OverToken) {
+	if t == 0 {
+		return
+	}
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	switch f.states[t] {
+	case media.OverComing, media.OverPlaying:
+		f.stopped = append(f.stopped, t)
+		delete(f.states, t)
+	}
+	// Anything else is nothing to stop: the sound is already over, or it was taken from this view rather
+	// than stopped by it. The real player says the same by finding nothing of that token.
+}
+
+func (f *fakeOver) drop(t media.OverToken) {
+	if t == 0 {
+		return
+	}
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.dropped = append(f.dropped, t)
+	delete(f.states, t)
+}
+
+// playing and taken are the two things that can become of a sound: one that arrived, and one something
+// else claimed the speaker from.
+func (f *fakeOver) playing(t media.OverToken) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.states[t] = media.OverPlaying
+}
+
+func (f *fakeOver) taken(t media.OverToken) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.states[t] = media.OverTaken
+}
+
+func (f *fakeOver) counts() (asked, stopped, dropped int) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return len(f.asked), len(f.stopped), len(f.dropped)
+}
+
+func (f *fakeOver) wasStopped(t media.OverToken) bool {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return slices.Contains(f.stopped, t)
+}
+
+func (f *fakeOver) wasDropped(t media.OverToken) bool {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return slices.Contains(f.dropped, t)
+}
+
+// cameraUp puts a camera on the screen for the rest of the test. sound is the entity whose audio the view
+// asked for, empty for one opened without any, and token the request that sound was asked with.
+func cameraUp(f *Feature, entity, sound string, token media.OverToken) {
+	f.cam = CameraView{Entity: entity, Until: time.Now().Add(time.Minute)}
+	f.camSound, f.camOver = sound, token
+}
+
+// The screen's control is drawn for as long as the view has a sound of its own, and it says what it will
+// do: Mute while the sound is playing or on its way, Unmute when it is not. Drawn only while it plays,
+// silencing would be a door that only closes, and a sound taken by an announcement would leave the view
+// with no way back to it.
+func TestAViewKeepsItsSoundWhetherOrNotItIsPlaying(t *testing.T) {
+	fake := fakeOverFor(t)
+
+	if (&Feature{}).CameraSoundOn() || (&Feature{}).CameraSoundLive() {
 		t.Fatal("a device with no camera view was said to have a sound")
 	}
 
-	f.camSound = "camera.deck"
+	f := &Feature{}
+	cameraUp(f, "camera.deck", "camera.deck", fake.ask())
+	fake.playing(f.camOver)
 	if !f.CameraSoundOn() {
-		t.Fatal("a view that asked for its sound was said to have none")
+		t.Fatal("a view with a sound was said to have none")
 	}
-	if f.CameraSoundMuted() {
-		t.Fatal("a sound nobody has silenced was said to be muted")
-	}
-
-	// Silenced: the claim on what is playing goes, the view keeps its sound. That is what the control
-	// is drawn from afterwards, offering to bring it back.
-	f.camSoundURL, f.url = "http://ha/one.wav", "http://ha/one.wav"
-	if ours := f.takeClaim(); !ours {
-		t.Fatal("the view's own sound was not recognized as its own")
-	}
-	f.camMuted = true
-	if !f.CameraSoundOn() || !f.CameraSoundMuted() {
-		t.Fatal("a silenced view lost its sound, so its control would have nothing to undo")
+	if !f.CameraSoundLive() {
+		t.Fatal("a sound that is playing was not said to be one to silence")
 	}
 
-	// The view coming down forgets it altogether, so the next one starts clean.
-	f.cam = CameraView{Entity: "camera.deck"}
-	if up, _ := f.cameraSoundEnds("camera.deck"); up {
-		t.Fatal("a view with no time left was taken as up")
+	// Taken by a reply or an announcement: the view keeps its sound, and the control offers to ask for it
+	// again rather than saying there is something to silence.
+	fake.taken(f.camOver)
+	if !f.CameraSoundOn() {
+		t.Fatal("a view whose sound was taken was said to have none")
 	}
-	if f.CameraSoundOn() || f.CameraSoundMuted() {
-		t.Fatal("a sound outlived the view it belonged to")
+	if f.CameraSoundLive() {
+		t.Fatal("a sound that was taken was said to be one to silence rather than to ask for")
+	}
+
+	// A view asked for without a sound has no control to draw at all.
+	f2 := &Feature{}
+	cameraUp(f2, "camera.deck", "", 0)
+	if f2.CameraSoundOn() {
+		t.Fatal("a view asked for without a sound was said to have one")
 	}
 }
 
-func TestSilencingStopsOnlyItsOwnSound(t *testing.T) {
-	const mine = "http://homeassistant.local:8123/api/esphome/ffmpeg_proxy/abc/one.wav"
-	const music = "http://homeassistant.local:8123/api/esphome/ffmpeg_proxy/abc/radio.wav"
+// One control either way: a tap silences what is playing or on its way, and asks for it again when it is
+// not. That is what makes muting recoverable from the screen, and a second tap that asked again while the
+// first was still on its way would be two requests for one control.
+func TestTappingTheControlSilencesOrAsks(t *testing.T) {
+	fake := fakeOverFor(t)
+	f := &Feature{}
+	cameraUp(f, "camera.deck", "camera.deck", 0)
 
-	cases := []struct {
-		name     string
-		sound    string
-		answered string
-		playing  string
-		wantOurs bool
-	}{
-		{name: "its own track", sound: "camera.deck", answered: mine, playing: mine, wantOurs: true},
-		{name: "music started since", sound: "camera.deck", answered: mine, playing: music},
-		{name: "the stream never answered", sound: "camera.deck", answered: "", playing: music},
-		{name: "nothing was started at all", sound: "", answered: "", playing: music},
+	// Nothing playing, nothing asked for: a tap asks.
+	f.ToggleCameraSound()
+	if asked, _, _ := fake.counts(); asked != 1 {
+		t.Fatalf("%d requests were made for a sound that was not playing, want 1", asked)
 	}
-	for _, c := range cases {
-		f := &Feature{camSound: c.sound, camSoundURL: c.answered}
-		f.url = c.playing
+	if !f.CameraSoundLive() {
+		t.Fatal("a sound that was just asked for is not one the control offers to silence")
+	}
+	token := f.camOver
 
-		if ours := f.takeClaim(); ours != c.wantOurs {
-			t.Errorf("%s: takeClaim = %v, want %v", c.name, ours, c.wantOurs)
-		}
-		if f.camSoundURL != "" {
-			t.Errorf("%s: the claim on what was playing was not given up (%q)", c.name, f.camSoundURL)
-		}
-		if f.camSound != c.sound {
-			t.Errorf("%s: the view's sound went with the claim (%q, want %q)", c.name, f.camSound, c.sound)
-		}
+	// On its way: the same tap silences it, so a stream still arriving does not start after the button
+	// was pressed.
+	f.ToggleCameraSound()
+	if asked, stopped, _ := fake.counts(); asked != 1 || stopped != 1 {
+		t.Fatalf("a tap while the sound was on its way made %d requests and %d stops, want 1 and 1", asked, stopped)
+	}
+	if !fake.wasStopped(token) {
+		t.Fatal("silencing a sound on its way did not give that request up")
+	}
+	if f.CameraSoundLive() {
+		t.Fatal("a silenced sound is still one the control says can be silenced")
+	}
+
+	// And the tap after that asks again, which is the way back.
+	f.ToggleCameraSound()
+	if asked, _, _ := fake.counts(); asked != 2 {
+		t.Fatalf("a tap on a silenced view made %d requests, want one more", asked)
+	}
+	if f.camOver == token {
+		t.Fatal("asking again kept the token of the request that was given up on")
 	}
 }
+
+// A view that ends takes its sound with it, and a sound the view never had is nothing to stop: the
+// watching runs out of every view that asked for one, and a camera left with its sound still playing would
+// be a device nobody can silence from the screen.
+func TestTheViewEndingTakesItsSoundWithIt(t *testing.T) {
+	fake := fakeOverFor(t)
+	f := &Feature{}
+	token := fake.ask()
+	cameraUp(f, "camera.deck", "camera.deck", token)
+	f.cam.Until = time.Now() // over: nothing is watching the clock but this
+
+	f.watchCameraSound("camera.deck", token)
+
+	if !fake.wasStopped(token) {
+		t.Fatal("the sound of a view that ended was left playing")
+	}
+	if f.CameraSoundOn() {
+		t.Fatal("a sound outlived the view it belonged to, so the next view would start with it")
+	}
+}
+
+// A view with no sound of its own, and one whose sound has already been silenced, are both nothing to
+// stop: the watching must not take a sound off the speaker that was never this view's.
+func TestTheViewEndingStopsNothingItWasNotPlaying(t *testing.T) {
+	fake := fakeOverFor(t)
+
+	f := &Feature{}
+	cameraUp(f, "camera.deck", "", 0)
+	f.cam.Until = time.Now()
+	f.watchCameraSound("camera.deck", 0)
+	if _, stopped, _ := fake.counts(); stopped != 0 {
+		t.Fatalf("a view with no sound stopped %d sounds", stopped)
+	}
+
+	f2 := &Feature{}
+	cameraUp(f2, "camera.deck", "camera.deck", fake.ask())
+	f2.ToggleCameraSound() // silenced: the request is given up on, and the sound is not this view's
+	f2.cam.Until = time.Now()
+	f2.watchCameraSound("camera.deck", f2.camOver)
+	if _, stopped, _ := fake.counts(); stopped != 1 {
+		t.Fatalf("the sound of a view that was already silenced was stopped again (%d stops)", stopped)
+	}
+}
+
+// A reply or an announcement claims the speaker, and what was playing over the music goes with it. The
+// view still wants a sound, so it is asked for again — what it must not do is go on saying Mute over a
+// sound that is no longer there.
+func TestASoundTakenFromTheViewIsAskedForAgain(t *testing.T) {
+	fake := fakeOverFor(t)
+	f := &Feature{}
+	cameraUp(f, "camera.deck", "camera.deck", fake.ask())
+	first := f.camOver
+	fake.playing(first)
+
+	go f.watchCameraSound("camera.deck", first)
+	fake.taken(first)
+
+	eventually(t, "the sound asked for again", func() bool {
+		asked, _, _ := fake.counts()
+		return asked == 2
+	})
+	if f.camOver == first {
+		t.Fatal("the request that was taken is still the one the view holds")
+	}
+	if f.camSound != "camera.deck" {
+		t.Fatalf("the view's sound was forgotten when it was taken: %q", f.camSound)
+	}
+	if !f.CameraSoundLive() {
+		t.Fatal("a sound asked for again is not one the control offers to silence")
+	}
+}
+
+// The call that starts a stream is answered after the stream is set up, so it can fail with the sound
+// already playing: a slow one times out while the camera is being heard. A sound that has arrived is left
+// playing and left stoppable; a request that nothing answered is given up on, so that a url arriving
+// later is dropped rather than played as a track over the room's music.
+func TestAFailedCallKeepsASoundThatArrivedAndGivesUpOneThatDidNot(t *testing.T) {
+	fake := fakeOverFor(t)
+	playStream = func(string, string) error { return errNoStream }
+	f := &Feature{}
+
+	cameraUp(f, "camera.deck", "camera.deck", fake.ask())
+	fake.playing(f.camOver)
+	f.askCameraSound("camera.deck", f.camOver)
+	if fake.wasDropped(f.camOver) {
+		t.Fatal("a sound that had already arrived was given up on because the call failed")
+	}
+	if !f.CameraSoundLive() {
+		t.Fatal("a sound playing under a call that failed is not one the control offers to silence")
+	}
+
+	f2 := &Feature{}
+	cameraUp(f2, "camera.deck", "camera.deck", fake.ask())
+	f2.askCameraSound("camera.deck", f2.camOver)
+	if !fake.wasDropped(f2.camOver) {
+		t.Fatal("a request that nothing answered was left waiting for a url after its call failed")
+	}
+	if f2.CameraSoundLive() {
+		t.Fatal("a request that nothing answered is still one the control offers to silence")
+	}
+}
+
+// errNoStream is a call to a camera Home Assistant will not stream: the request is refused, and there is
+// no stream coming for it.
+var errNoStream = errors.New("camera.play_stream: no stream for this camera")

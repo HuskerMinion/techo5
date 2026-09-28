@@ -123,7 +123,6 @@ func (f *Feature) showCamera(entity string, d time.Duration, sound bool) {
 	f.cam = CameraView{Entity: entity, Name: name, Until: time.Now().Add(d), Frame: f.cam.Frame, span: d}
 	if fresh {
 		f.cam.Frame = nil
-		f.camMuted = false // a fresh view starts audible if its sound was asked for
 	}
 	f.mu.Unlock()
 	slog.Info("camera up", "entity", entity, "for", d, "sound", fresh && sound)
@@ -137,7 +136,6 @@ func (f *Feature) showCamera(entity string, d time.Duration, sound bool) {
 			// The sound is asked of Home Assistant and taken off the speaker when this view ends; a
 			// view already up keeps the sound it was started with (camera_sound.go).
 			go f.startCameraSound(entity)
-			go f.watchCameraSound(entity)
 		}
 	}
 	f.Changed.Emit(struct{}{})

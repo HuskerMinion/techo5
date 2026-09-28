@@ -24,8 +24,9 @@ import (
 // whole reason for doing it this way: every camera Home Assistant can stream is one this can hear.
 
 // cameraSoundPoll is how often a view's sound is checked against the view still being up. A second is
-// shorter than any view anybody asks for, and the check is a comparison under a lock.
-const cameraSoundPoll = time.Second
+// shorter than any view anybody asks for, and the check is a comparison under a lock. A variable only so
+// that a test of what the watching does does not have to wait a second to see it.
+var cameraSoundPoll = time.Second
 
 // CameraSound is whether a camera opened from the screen or by voice brings its audio with it.
 func CameraSound() bool { return config.Get().Home.CameraSound }
@@ -67,57 +68,75 @@ func soundAsked(arg string, setting bool) bool {
 	return setting
 }
 
-// startCameraSound asks Home Assistant to play this camera's audio on this device.
+// overPlayer is the media player's side of a sound played over the music. It is a field of functions so
+// that what this feature decides about a view's sound can be tested without a speaker: which request
+// belongs to which view, what a tap does to it, and when one is asked for again, are all decisions about
+// tokens rather than about audio.
+type overPlayer struct {
+	Ask   func() media.OverToken
+	State func(media.OverToken) media.OverState
+	Stop  func(media.OverToken)
+	Drop  func(media.OverToken)
+}
+
+var over = overPlayer{
+	Ask:   func() media.OverToken { return media.Get().OverNext() },
+	State: func(t media.OverToken) media.OverState { return media.Get().OverState(t) },
+	Stop:  func(t media.OverToken) { media.Get().StopOver(t) },
+	Drop:  func(t media.OverToken) { media.Get().ForgetOverNext(t) },
+}
+
+// startCameraSound asks Home Assistant to play this camera's audio on this device and watches it for as
+// long as the view lasts.
 //
-// Nothing is waited for: the request is answered by a stream that arrives later as an ordinary media
-// URL, which cameraSoundPlaying recognizes. A request that is refused, or a camera Home Assistant
-// cannot stream, therefore leaves the view silent and nothing to stop.
-//
-// The URL is asked to be played *over* whatever is playing rather than instead of it: the music keeps
-// going, ducked, and comes back up when the view ends, so hearing the door does not end what the room
-// was listening to and does not take this device out of a Music Assistant group. That ask is made
-// before the call, because the URL can arrive before the call returns — the service is answered only
-// once the stream has been set up and sent — and a URL that arrives first is played as a track.
+// The ask is made before the call, because the url the call produces can arrive before the call returns
+// — the service is answered only once the stream has been set up and sent — and a url that arrives with
+// no ask of its own would be played as a track, over the music it was meant to be heard over.
 func (f *Feature) startCameraSound(entity string) {
 	if entity == LocalCamera {
 		// The device's own camera has no audio to play, and it is not a Home Assistant camera to ask
 		// about.
 		return
 	}
+	token := over.Ask()
 	f.mu.Lock()
-	f.camSound, f.camSoundURL = entity, ""
+	f.camSound, f.camOver = entity, token
 	f.mu.Unlock()
 
-	// The device's own media player is what it is played on, by the device's own action on itself,
-	// rather than by a script on the other side having to know which camera this is.
-	media.Get().OverNext()
-	err := hass.Get().Call("camera", "play_stream", map[string]any{
-		"entity_id":    entity,
-		"media_player": speakerEntity(),
-		"format":       "hls",
-	})
-	if err != nil {
-		slog.Warn("camera sound", "entity", entity, "err", err)
-		// Nothing is coming, so the ask goes with the request: left standing it would take the next
-		// track of somebody's music for a camera's sound.
-		media.Get().ForgetOverNext()
-		f.mu.Lock()
-		f.camSound = ""
-		f.mu.Unlock()
-		return
-	}
-	slog.Info("camera sound on", "entity", entity)
+	go f.watchCameraSound(entity, token)
+	go f.askCameraSound(entity, token)
 }
 
-// cameraSoundPlaying notes the URL of the stream that answered a camera sound request. The player
-// holds one stream at a time, so a play of anything else afterwards — somebody's music — leaves this
-// behind, and cameraSoundEnds then finds the sound is no longer this view's to stop.
-func (f *Feature) cameraSoundPlaying(url string) {
-	f.mu.Lock()
-	if f.camSound != "" && f.camSoundURL == "" {
-		f.camSoundURL = url
+// playStream is the call that asks Home Assistant for a camera's stream on this device. It is a variable
+// so that what this feature decides about a request and its answer can be tested without a Home
+// Assistant: the request is answered by a stream arriving later, which the call itself says nothing about.
+var playStream = func(entity, player string) error {
+	// The device's own media player is what it is played on, by the device's own ask on itself, rather
+	// than by a script on the other side having to know which camera this is.
+	return hass.Get().Call("camera", "play_stream", map[string]any{
+		"entity_id":    entity,
+		"media_player": player,
+		"format":       "hls",
+	})
+}
+
+// askCameraSound makes the call a request stands for. Nothing is waited for: the request is answered by a
+// stream that arrives later as an ordinary media url, which the player plays under this token.
+func (f *Feature) askCameraSound(entity string, token media.OverToken) {
+	err := playStream(entity, speakerEntity())
+	if err == nil {
+		slog.Info("camera sound on", "entity", entity)
+		return
 	}
-	f.mu.Unlock()
+
+	// A stream can be on its way even when the call that started it fails: the service is answered only
+	// once the stream has been sent, so a slow one times out with the sound already playing. A sound
+	// that has arrived is left playing, and left stoppable; a request that nothing has answered is given
+	// up on, so that a url arriving later is dropped rather than played as a track.
+	slog.Warn("camera sound", "entity", entity, "err", err)
+	if over.State(token) != media.OverPlaying {
+		over.Drop(token)
+	}
 }
 
 // CameraSoundOn is whether the view on the screen has a sound of its own — it was asked for, whether or
@@ -130,95 +149,124 @@ func (f *Feature) CameraSoundOn() bool {
 	return f.camSound != ""
 }
 
-// CameraSoundMuted is whether that sound has been silenced from the screen, which is what the control
-// offers to undo.
-func (f *Feature) CameraSoundMuted() bool {
+// CameraSoundLive is whether that sound is playing or on its way, which is what the control says: Mute
+// while it is, and Unmute when it is not — silenced from the screen, taken by a reply or an
+// announcement, or a request that nothing answered.
+//
+// It is asked of the media player rather than remembered here, because a sound can end without this
+// feature being told: a reply or an announcement claims the speaker, and what was playing over the music
+// goes with it.
+func (f *Feature) CameraSoundLive() bool {
 	f.mu.Lock()
-	defer f.mu.Unlock()
-	return f.camSound != "" && f.camMuted
+	token := f.camOver
+	f.mu.Unlock()
+	return over.State(token).Live()
 }
 
-// ToggleCameraSound silences this view's sound, or asks for it again when it was silenced. The picture
-// stays either way, which is the whole use of it at a doorbell.
+// ToggleCameraSound silences this view's sound, or asks for it. The picture stays either way, which is
+// the whole use of it at a doorbell.
+//
+// What is playing and what to do about it are read and changed under the one lock, so two taps cannot
+// both start a request. The second finds the first's sound either playing or on its way and silences
+// that, rather than asking for a second stream: two urls arriving for one ask would leave the second
+// with no ask of its own, and it would play as a track.
 func (f *Feature) ToggleCameraSound() {
 	f.mu.Lock()
-	entity, muted := f.camSound, f.camMuted
-	f.mu.Unlock()
-
+	entity, token := f.camSound, f.camOver
 	if entity == "" {
-		return // no sound of this view's to silence, and none to bring back
+		f.mu.Unlock()
+		return // this view has no sound of its own to silence, and none to ask for
 	}
 
-	if muted {
-		// Asked for again rather than unpaused: the stream was given up when it was silenced, so this is
-		// a fresh request and the sound arrives a few seconds behind the picture, as it did the first
-		// time.
-		f.mu.Lock()
-		f.camMuted = false
+	if over.State(token).Live() {
+		// Silenced: the request goes with the sound, whether its url has arrived or not, so a stream
+		// still on its way does not start after the button was pressed.
 		f.mu.Unlock()
-		slog.Info("camera sound asked for again", "entity", entity)
-		go f.startCameraSound(entity)
+		over.Stop(token)
+		slog.Info("camera sound silenced from the screen", "entity", entity)
 		return
 	}
 
-	f.mu.Lock()
-	f.camMuted = true
+	token = over.Ask()
+	f.camOver = token
+	go f.watchCameraSound(entity, token)
 	f.mu.Unlock()
-	if f.takeClaim() {
-		media.Get().StopOver()
-		slog.Info("camera sound silenced from the screen")
-	}
+
+	slog.Info("camera sound asked for again", "entity", entity)
+	go f.askCameraSound(entity, token)
 }
 
-// takeClaim gives up this view's claim on the sound playing now and says whether it is still this
-// view's to stop. camSound is not given up with it: the view still has a sound, which is what the
-// control is drawn from, and the sound can be asked for again.
-//
-// A track that something else started in the meantime is not this view's to stop, which is the rule the
-// end of a view follows as well.
-func (f *Feature) takeClaim() (ours bool) {
+// askAgain takes a fresh request for the sound of a view that still wants it, which is how a sound taken
+// by a reply or an announcement comes back. It reports the token to watch next, or nothing if the view
+// gave its sound up in the meantime.
+func (f *Feature) askAgain(entity string) media.OverToken {
+	token := over.Ask()
+	f.mu.Lock()
+	if f.camSound != entity {
+		f.mu.Unlock()
+		over.Drop(token)
+		return 0
+	}
+	f.camOver = token
+	f.mu.Unlock()
+
+	slog.Info("camera sound asked for again after it was taken", "entity", entity)
+	go f.askCameraSound(entity, token)
+	return token
+}
+
+// cameraViewUp is whether this camera is the view on the screen now.
+func (f *Feature) cameraViewUp(entity string) bool {
 	f.mu.Lock()
 	defer f.mu.Unlock()
-	ours = f.camSoundURL != "" && f.camSoundURL == f.url
-	f.camSoundURL = ""
-	return ours
+	return f.cam.Entity == entity && time.Now().Before(f.cam.Until)
 }
 
-// cameraSoundEnds is what a view coming down means for its sound, read under the lock: whether the
-// view is still up, and whether what is playing is still the track this view started. The two are
-// answered together and before anything is cleared, which is the whole reason they are not asked
-// separately. Coming down is where the view's sound is forgotten altogether, muted or not.
-func (f *Feature) cameraSoundEnds(entity string) (up, ours bool) {
+// cameraSoundMine is whether the view's sound is still the one this request was made for: the view has
+// not given its sound up, and no newer request has taken its place.
+func (f *Feature) cameraSoundMine(entity string, token media.OverToken) bool {
 	f.mu.Lock()
 	defer f.mu.Unlock()
-	mine := f.camSound == entity
-	up = f.cam.Entity == entity && time.Now().Before(f.cam.Until)
-	ours = mine && f.camSoundURL != "" && f.camSoundURL == f.url
-	if !up && mine {
-		f.camSound, f.camSoundURL, f.camMuted = "", "", false
-	}
-	return up, ours
+	return f.camSound == entity && f.camOver == token
 }
 
-// watchCameraSound takes the camera's audio off the speaker when the view it belongs to ends: its
-// time runs out, somebody taps it away, or another camera replaces it. A view that closed with the
-// yard still playing would be a device nobody can silence from the screen, which is the one thing
-// this feature must not do.
+// cameraSoundOff is the view being over: its sound goes with it, and the view forgets it had one, so the
+// next view starts clean. A sound that is already over is nothing to stop — the watcher calls this on
+// the way out of every view with a sound, whether or not there was ever one.
+func (f *Feature) cameraSoundOff(entity string, token media.OverToken) {
+	over.Stop(token)
+	f.mu.Lock()
+	if f.camSound == entity && f.camOver == token {
+		f.camSound, f.camOver = "", 0
+	}
+	f.mu.Unlock()
+}
+
+// watchCameraSound takes the view's sound off the speaker when the view ends: its time runs out,
+// somebody taps it away, or another camera replaces it. A view that closed with the yard still playing
+// would be a device nobody can silence from the screen, which is the one thing this feature must not do.
 //
-// A track that something else took over in the meantime is left alone: it is not this view's any
-// more, and stopping it would be stopping somebody's music because a camera they looked at once
-// closed.
-func (f *Feature) watchCameraSound(entity string) {
+// It watches one request, not one view: a sound taken from this view by a reply or an announcement is
+// asked for again, and this goes on watching the new one.
+func (f *Feature) watchCameraSound(entity string, token media.OverToken) {
 	for {
 		time.Sleep(cameraSoundPoll)
-		up, ours := f.cameraSoundEnds(entity)
-		if up {
-			continue
+
+		if !f.cameraViewUp(entity) {
+			// The view is over, whoever has the screen now: this sound goes with it.
+			f.cameraSoundOff(entity, token)
+			return
 		}
-		if ours {
-			media.Get().StopOver()
-			slog.Info("camera sound off", "entity", entity)
+		if !f.cameraSoundMine(entity, token) {
+			return // the view is up, but this request has been given up on or replaced
 		}
-		return
+		if over.State(token) == media.OverTaken {
+			// A reply or an announcement claimed the speaker, so the sound went with it. The view still
+			// wants one, so it is asked for again, and that request waits its turn behind what is being
+			// said rather than cutting it off.
+			if token = f.askAgain(entity); token == 0 {
+				return
+			}
+		}
 	}
 }

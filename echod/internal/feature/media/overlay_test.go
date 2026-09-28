@@ -9,6 +9,8 @@ import (
 	"testing"
 	"time"
 
+	esphome "github.com/ygelfand/go-esphome-device"
+
 	"github.com/HuskerMinion/techo5/echod/internal/hardware/speaker"
 )
 
@@ -40,61 +42,200 @@ func testWAV(n int) []byte {
 	return b.Bytes()
 }
 
-// The ask is for one URL and no more. Left standing it would take the next track of somebody's music
-// for a camera's sound, and never standing it is a sound that replaces the music after all.
-func TestTheAskToPlayOverTheMusicIsForOneURL(t *testing.T) {
+// overFor is a player whose sounds over the music are heard by a speaker without hardware, and the
+// driver that arbitrates them: what a claim does to other claims is the speaker's business and is tested
+// there, and what is tested here is which request a sound belongs to and what becomes of it.
+func overFor(t *testing.T) (*Player, *speaker.Driver) {
+	t.Helper()
+	d := speaker.NewDriver(speaker.New())
+	prev := overClaims
+	overClaims = d.ClaimOver
+	t.Cleanup(func() { overClaims = prev })
+	return &Player{stream: &Stream{}, mp: &esphome.MediaPlayer{}}, d
+}
+
+// overStream serves a live stream: a second of WAV and then nothing until the reader goes away, which is
+// what a camera's converted stream is — read for as long as somebody is watching.
+func overStream(t *testing.T) string {
+	t.Helper()
+	done := make(chan struct{})
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "audio/wav")
+		_, _ = w.Write(testWAV(speaker.Rate))
+		if f, ok := w.(http.Flusher); ok {
+			f.Flush()
+		}
+		select {
+		case <-done:
+		case <-r.Context().Done():
+		}
+	}))
+	t.Cleanup(func() {
+		close(done) // the handler returns, so the server has nothing left to wait for
+		srv.Close()
+	})
+	return srv.URL
+}
+
+// waitUntil waits for what happens off the reading's own goroutine: a sound starts, ends and is taken from
+// in the claim, so the state it leaves behind arrives a moment later.
+func waitUntil(t *testing.T, what string, ok func() bool) {
+	t.Helper()
+	for deadline := time.Now().Add(2 * time.Second); time.Now().Before(deadline); time.Sleep(5 * time.Millisecond) {
+		if ok() {
+			return
+		}
+	}
+	t.Fatalf("%s never happened", what)
+}
+
+// Every ask has a token of its own, and a request that nothing has answered says so: the control on the
+// screen is drawn from that, so a sound still on its way is one there is something to silence.
+func TestAnAskHasATokenOfItsOwnAndWaits(t *testing.T) {
 	p := &Player{}
-	if p.takeOverNext() {
-		t.Fatal("a URL was taken for a sound over the music without anybody asking")
+	first := p.OverNext()
+	if first == 0 {
+		t.Fatal("the first ask had no token of its own")
 	}
-
-	p.OverNext()
-	if !p.takeOverNext() {
-		t.Fatal("the URL the sound was asked for was played as a track instead")
+	if second := p.OverNext(); second == first {
+		t.Fatal("two asks were given the same token")
 	}
-	if p.takeOverNext() {
-		t.Fatal("the ask was still standing for the URL after it")
+	if got := p.OverState(first); got != OverComing {
+		t.Fatalf("an ask nothing has answered is %v, want coming", got)
 	}
-
-	p.OverNext()
-	p.ForgetOverNext()
-	if p.takeOverNext() {
-		t.Fatal("the ask was left standing after the request for it failed")
+	if got := p.OverState(OverToken(9999)); got != OverGone {
+		t.Fatalf("a token nothing was ever asked with is %v, want gone", got)
 	}
 }
 
-// Stopping a sound over the music is what lets the music back up, and a sound that is not playing is
-// nothing to stop — the watcher calls this on the way out of every camera view, whether or not there
-// was ever a sound.
-func TestStoppingASoundOverTheMusicLetsTheMusicBackUp(t *testing.T) {
+// An ask that nothing answers stops being one. A url arriving after that is not the one it was waiting
+// for, and playing it over the music would be a camera heard long after its view closed.
+func TestAnAskNothingAnswersStopsBeingOne(t *testing.T) {
 	p := &Player{}
-	if p.Overing() {
-		t.Fatal("a player with nothing over it said something was playing over the music")
-	}
-	p.StopOver() // nothing to stop: not a panic, and not a crash
+	token := p.OverNext()
 
-	stopped := make(chan struct{})
+	// As if the wait had passed: twenty seconds of somebody's afternoon is what expiry is, and this is
+	// the same thing without the wait.
 	p.overMu.Lock()
-	p.overStop = func() { close(stopped) }
+	p.overAsks[0].until = time.Now().Add(-time.Second)
 	p.overMu.Unlock()
 
-	if !p.Overing() {
-		t.Fatal("a sound playing over the music was not reported")
+	if p.overURL("http://ha/late.wav") {
+		t.Fatal("a url arriving after the ask expired was taken for the sound that was asked for")
 	}
-	p.StopOver()
-	select {
-	case <-stopped:
-	case <-time.After(time.Second):
-		t.Fatal("stopping the sound did not stop it")
+	if got := p.OverState(token); got != OverGone {
+		t.Fatalf("an expired ask is %v, want gone", got)
+	}
+}
+
+// Giving a request up is not the same as forgetting it: a stream already on its way has to be dropped
+// rather than played as a track, which would replace the room's music with a camera's sound and leave
+// nothing able to stop it. This is the tap that silences a view while its stream is still starting.
+func TestARequestGivenUpOnDropsTheURLItWasFor(t *testing.T) {
+	p, _ := overFor(t)
+	token := p.OverNext()
+	p.ForgetOverNext(token)
+
+	if !p.overURL(overStream(t)) {
+		t.Fatal("a url for a request that was given up on was played as a track")
 	}
 
-	// What clears the report is the sound's own end, which the claim says; a stopped sound is not a
-	// sound.
 	p.overMu.Lock()
-	p.overStop = nil
+	playing, asks := p.over, len(p.overAsks)
 	p.overMu.Unlock()
-	if p.Overing() {
-		t.Fatal("a stopped sound was still reported as playing over the music")
+	if playing != nil {
+		t.Fatal("a sound whose request was given up on played anyway")
+	}
+	if asks != 0 {
+		t.Fatalf("%d asks left after one was answered", asks)
+	}
+	if got := p.OverState(token); got != OverGone {
+		t.Fatalf("a request that was given up on is %v, want gone", got)
+	}
+}
+
+// Asks are answered in the order they were made, which is what tells two of them apart: a second camera
+// opened while the first camera's stream is still starting would otherwise play the first camera's sound
+// under the second camera's view.
+func TestAsksAreAnsweredInTheOrderTheyWereMade(t *testing.T) {
+	p, _ := overFor(t)
+	first, second := p.OverNext(), p.OverNext()
+	url := overStream(t)
+
+	if !p.overURL(url) {
+		t.Fatal("the first url was played as a track")
+	}
+	waitUntil(t, "the first sound playing", func() bool { return p.OverState(first) == OverPlaying })
+	if got := p.OverState(second); got != OverComing {
+		t.Fatalf("the second ask is %v after the first was answered, want coming", got)
+	}
+
+	if !p.overURL(url) {
+		t.Fatal("the second url was played as a track")
+	}
+	waitUntil(t, "the second sound playing", func() bool { return p.OverState(second) == OverPlaying })
+	if got := p.OverState(first); got != OverGone {
+		t.Fatalf("the first sound is %v once the second replaced it, want gone", got)
+	}
+}
+
+// A sound over the music is not a track, and is not announced as one: the station that was playing keeps
+// its name, and a stream that gets dropped is still the thing to resume. What the screen and the
+// last-station memory hear about is the room's music, not a camera.
+func TestASoundOverTheMusicIsNotATrack(t *testing.T) {
+	p, _ := overFor(t)
+
+	var played []string
+	p.OnPlay.Listen(func(url string) { played = append(played, url) })
+
+	token := p.OverNext()
+	url := overStream(t)
+	if !p.overURL(url) {
+		t.Fatal("the url the ask was for was played as a track")
+	}
+	waitUntil(t, "the sound playing", func() bool { return p.OverState(token) == OverPlaying })
+
+	if len(played) != 0 {
+		t.Fatalf("a sound over the music was announced as a track: %v", played)
+	}
+}
+
+// Stopping a sound over the music is what lets the music back up, and it says so at once: whoever drew
+// the control that was tapped redraws it against the sound already being over rather than a second of
+// queued audio later. What it queued is drained with it (overlay.go), which is what makes that second
+// silent — queued audio is only audible on a device, so it is the hardware that shows that half.
+func TestStoppingASoundOverTheMusicEndsItAtOnce(t *testing.T) {
+	p, d := overFor(t)
+	token := p.OverNext()
+	if !p.overURL(overStream(t)) {
+		t.Fatal("the url the ask was for was played as a track")
+	}
+	waitUntil(t, "the sound playing", func() bool { return p.OverState(token) == OverPlaying })
+
+	p.StopOver(token)
+
+	if got := p.OverState(token); got != OverGone {
+		t.Fatalf("a stopped sound is %v, want gone", got)
+	}
+	waitUntil(t, "the speaker free again", func() bool { return !d.Busy() })
+}
+
+// Being taken from is not the same as being silenced. A reply or an announcement claims the speaker, and
+// what was playing over the music goes with it — but the view that asked for it still wants a sound, so
+// the state says it can be asked for again. Silencing it from the screen says the opposite.
+func TestASoundTakenByAnAnnouncementIsOneToAskForAgain(t *testing.T) {
+	p, d := overFor(t)
+	token := p.OverNext()
+	if !p.overURL(overStream(t)) {
+		t.Fatal("the url the ask was for was played as a track")
+	}
+	waitUntil(t, "the sound playing", func() bool { return p.OverState(token) == OverPlaying })
+
+	d.ClaimSpeech("announce", func(context.Context, *speaker.Player) error { return nil })
+
+	waitUntil(t, "the sound taken", func() bool { return p.OverState(token) == OverTaken })
+	if p.OverState(token).Live() {
+		t.Fatal("a sound that was taken was reported as one to silence rather than to ask for")
 	}
 }
 
