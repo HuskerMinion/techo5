@@ -597,10 +597,8 @@ func (r *paint) settingRow(card image.Rectangle, top int, row settingRow) {
 		face = fc.labelBold
 	}
 	right, cy := card.Max.X-r.s(26), top+r.rowH()/2
-	// The label and its line under it keep clear of the control: on a narrow card they give up their
-	// ends to an ellipsis rather than run under it.
-	room := right - r.controlWidth(row) - r.s(16) - (card.Min.X + r.rowIn())
-	row.label, row.sub = r.fit(face, row.label, room), r.fit(fc.sub, row.sub, room)
+	var labelEnd int
+	row.label, row.sub, labelEnd = r.rowWords(card, row, face)
 	if row.sub == "" {
 		r.text(face, row.label, card.Min.X+r.rowIn(), top+r.s(40), cream)
 	} else {
@@ -610,8 +608,7 @@ func (r *paint) settingRow(card image.Rectangle, top int, row settingRow) {
 
 	whole := image.Rect(card.Min.X+r.s(8), top, card.Max.X-r.s(8), top+r.rowH())
 	// A value never runs into the label: it keeps its start and loses its end to an ellipsis.
-	labelEnd := card.Min.X + r.rowIn() + max(r.width(face, row.label), r.width(fc.sub, row.sub))
-	fit := func(text string, rightEdge int) string { return r.fit(fc.value, text, rightEdge-labelEnd-r.s(24)) }
+	fit := func(text string, rightEdge int) string { return r.fit(fc.value, text, rightEdge-labelEnd-r.s(rowGap)) }
 	add := func(r0 image.Rectangle, p part) {
 		if row.id != "" {
 			r.addZone(zone{r: r0, kind: zoneRow, id: row.id, part: p})
@@ -684,6 +681,21 @@ func (r *paint) settingRow(card image.Rectangle, top int, row settingRow) {
 		}
 		add(image.Rect(x-8, top+4, card.Max.X-12, top+r.rowH()-4), partMain)
 	}
+}
+
+// rowGap is the space a row keeps between its words and its value or control.
+const rowGap = 24
+
+// rowWords is a row's label and the line under it as drawn, and where the longer of them ends. They
+// keep clear of the control: on a narrow card they give up their ends to an ellipsis rather than run
+// under it. The room left to them is the room the value is fitted beside, so a row whose line is cut
+// still shows its value whole.
+func (r *paint) rowWords(card image.Rectangle, row settingRow, face font.Face) (label, sub string, end int) {
+	fc := r.faces()
+	right := card.Max.X - r.s(26)
+	room := right - r.controlWidth(row) - r.s(rowGap) - (card.Min.X + r.rowIn())
+	label, sub = r.fit(face, row.label, room), r.fit(fc.sub, row.sub, room)
+	return label, sub, card.Min.X + r.rowIn() + max(r.width(face, label), r.width(fc.sub, sub))
 }
 
 // dayChip is the width of a ctlDays row's day and the gap between them: smaller on a round panel,
