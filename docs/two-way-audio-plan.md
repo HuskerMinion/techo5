@@ -1,179 +1,169 @@
 # Two-way audio: talking back through a camera
 
 A camera's own sound is heard on the device while its view is up. This is the other direction:
-somebody presses a control on the camera page, speaks, and the device's microphones go out to the
+somebody taps **Talk** on the camera page, speaks, and the device's microphones go out to the
 camera's own speaker. Answering the doorbell without a phone in hand.
 
-**Status: a plan. Nothing of it is built.** It follows the camera's own sound (see `actions.md`), and
-the maintainer's note on that work, which asked for this as a separate piece.
+**Status: a plan, revised 2026-09-30. Nothing of it is built.** The first version was written before
+the camera's own sound, the Reolink cameras and the device without Home Assistant were on main; this
+one is checked against main at `7ef38f6` and against go2rtc's source at v1.9.14 and master. The
+task-by-task implementation is [superpowers/plans/2026-09-30-two-way-audio.md](superpowers/plans/2026-09-30-two-way-audio.md).
 
-## What is already there
+## What changed since the first version
 
-Most of the hard parts, and none of them in the way this usually is:
+- **No ffmpeg, and no transcoding by go2rtc.** go2rtc's plain `http:` source reads a live WAV itself
+  (`pkg/magic` sniffs `RIFF`, `pkg/wav` ignores the sizes), but it does **not** convert: the codec the
+  device serves has to be the one the camera's backchannel takes, exactly. That is G.711 at 8 kHz on
+  nearly every camera that has a backchannel (Tapo, DVRIP, ISAPI, Doorbird, Reolink's doorbell over
+  RTSP). So the device downsamples to 8 kHz and encodes A-law or μ-law itself: a few dozen lines of Go
+  and a lookup, cheaper than any stream go2rtc would have to start. The first version's "PCM 16 kHz,
+  nothing has to be encoded" was a misreading: `pkg/pcm/backchannel.go` is the output side of
+  `exec:` sources, not an input.
+- **go2rtc says whether a camera can be talked to.** `GET /api/streams?src=<name>&microphone` connects
+  to the camera and lists its media, and a backchannel is the one marked `sendonly`:
+  `"audio, sendonly, PCMA/8000"`. The Talk control is drawn only on a view whose camera answered that
+  way, which settles the first version's open question about offering Talk where it cannot work.
+- **Cameras are not only Home Assistant's now.** They are `camera.*` entities, `reolink:<channel>` read
+  straight from a recorder, and `local`. Talk does not need Home Assistant at all: a Reolink camera on a
+  device with no Home Assistant can be talked to through a go2rtc that knows it.
+- **Settings for servers other than Home Assistant live on the setup page**, with the password written
+  and never shown (the chat model, SearXNG, Reolink, iCal links). go2rtc goes there too, on the
+  Connections tab next to Reolink, and not in a `home_go2rtc` action.
+- **Home Assistant's own go2rtc is not the go2rtc to point at.** Since 2024.11 Home Assistant runs one
+  inside itself, but its API listens on a Unix socket only (`api.listen: ""`), its RTSP on 127.0.0.1, and
+  its stream names are `<platform>_<unique_id>`, registered only once something has viewed the camera.
+  The one reachable way in is its `debug_ui` port, which Home Assistant says is for debugging. The go2rtc
+  this is for is a standalone one, the go2rtc add-on, or Frigate's with port 1984 mapped out.
+- **Home Assistant still has no two-way audio of its own.** Core PR #148282 (a `TWO_WAY_AUDIO` camera
+  feature and a WebRTC re-offer command) is open, not merged, as of 2026-09-16. If it lands it is a
+  WebRTC route and needs a WebRTC stack on the device; it changes nothing here.
+- **The wake word is not paused by the intercom**, which the first version said it was. The wake engine
+  keeps scoring every frame during a call and only ignores what it hears (`feature/detect/detect.go`
+  `OnDetect`, on `phone.Busy()`). Talking does the same: the wake word is ignored while somebody talks
+  to a camera, because "Alexa" said to a visitor is not said to the device.
+- **The echo canceller needs nothing fed to it.** Its reference is the hardware loopback
+  (`hardware/mic/mic.go`), so the camera's sound playing on the device is subtracted from the
+  microphones because it goes through the DAC, not because anything tells it to.
 
-- **The microphones**, 16 kHz mono, S24_3LE, 20 ms frames (`hardware/mic`, `Rate` and `FrameSamples`),
-  through a beamformer, a denoiser and **echo cancellation against the speaker's own output**
-  (`hardware/mic/cancel.go`, and `mic/webrtc.go` for WebRTC's canceller in a helper process). Echo
-  cancellation is the thing that makes this a conversation rather than a walkie-talkie: the camera's
-  audio is playing *while* somebody talks over it, and the canceller has the loopback reference to
-  subtract. Every other part of the daemon that speaks already feeds it.
-- **Capture to the network**: the house intercom already takes those frames, frames them (`msgAudio`,
-  20 ms of 16 kHz, `feature/phone/intercom.go`), sends them over a connection and plays what comes
-  back the other way. That is the nearest thing to this that is already built — see
-  [intercom-plan.md](intercom-plan.md) — and the *capture → framed PCM → out* path in it is built and
-  tested on four kinds of device.
-- **The camera's own sound**, which is the same session's other half: Home Assistant converts the
-  camera's stream to a live WAV, the device plays it over whatever is playing, ducked, with a Mute
-  control on the view. Talking back has to coexist with it, not replace it.
-- **A web port with switches in front of everything it serves** (`feature/web`): the camera's stills,
-  the panel screenshot, the setup page, and the intercom's own HTTP path. Each has its own switch,
-  off on a new device.
-- **The camera page's control plumbing**: the Mute control records where it was drawn and tells a tap
-  from the tap that closes the view (`display/render_camera.go`, and the Spot's own pair of the same
-  functions). A Talk control is the same machinery with a different label.
+## How it works
 
-## What go2rtc gives us
-
-go2rtc is already the thing most Home Assistant camera users have in front of their cameras, and its
-**backchannel** is the return path: audio in, to the camera's speaker, transcoded to whatever codec
-that camera takes. Three ways in, in the order worth considering:
-
-1. **Stream to camera** — go2rtc *pulls* an audio source and plays it on the camera:
+1. Somebody opens a camera. If go2rtc is set up and the **Talk through cameras** switch is on, the
+   device finds the camera's go2rtc stream (below) and asks go2rtc whether it has a backchannel, in the
+   background, while the first picture loads. The answer is kept for ten minutes.
+2. If it has one, a **Talk** control is drawn on the view. A tap on it starts talking; a second tap ends
+   it. It is a toggle and not press-to-talk, because the echo canceller makes both directions at once
+   work, and holding a finger on a picture of the person you are talking to is not how anybody wants to
+   hold a conversation.
+3. Talking starts by making a one-time address, `http://<device>:8181/talk/<32 hex>.wav`, opening the
+   web port if nothing else had it open, and asking go2rtc to play it on the camera:
 
    ```
-   POST http://<go2rtc>:1984/api/streams?dst=<camera>&src=ffmpeg:<uri>#audio=<codec>#input=file
+   POST http://<go2rtc>:1984/api/streams?dst=<stream>&src=http://<device>:8181/talk/<token>.wav
    ```
 
-   The source can be a file, a URL, or a live stream, and ffmpeg transcodes it to the camera's codec.
-   **This is the route to build first**, because the source can be *this device serving its own
-   microphone*: nothing new on the wire, no protocol to speak, and go2rtc does the codec work.
+   `<device>` is the address the device reached go2rtc from, which is the address go2rtc can reach the
+   device on. It is read off the connection, not configured.
+4. go2rtc fetches the address during that POST. The device answers with a WAV header whose sizes are
+   unknown (`0xFFFFFFFF`), then 20 ms at a time: the microphones' processed 16 kHz frames, filtered and
+   halved to 8 kHz, encoded A-law or μ-law, flushed. Each address serves once, to the first request
+   that asks for it, and 404s everything else.
+5. The camera's own sound goes on playing on the device, ducked, while this happens. The canceller has
+   the loopback, so the microphones send the room and not the doorbell's echo of itself.
+6. While somebody is talking the view does not time out: every second it is held at least 15 s ahead.
+7. Talking ends when the control is tapped again, the view closes (tapped away, replaced by another
+   camera), the switch is turned off, the microphones are muted, two minutes pass, or go2rtc hangs up.
+   Ending is the device closing its response: go2rtc's play loop sees the end of its source, waits a
+   second for its buffer, and closes the camera's backchannel (`internal/streams/play.go`). There is no
+   second API call to make and nothing to tear down in go2rtc.
+8. A refusal is said on the view for five seconds ("Can't talk: …") and in the log with go2rtc's own
+   words.
 
-2. **RTSP server backchannel** (go2rtc #1432): with `backchannel=1` on a stream, a client may send
-   audio *into* go2rtc over RTSP. That is the tidier shape for a long session — one connection, no
-   per-press API call — but it means an RTSP client on the device that sends backchannel RTP, and a
-   codec chosen by negotiation rather than by us.
+`DELETE /api/streams` must never be used: it deletes the stream from go2rtc's config. An empty
+`src=` on the same POST stops a play, and is not needed while the source ending does the same.
 
-3. **`exec:` backchannel** — go2rtc pipes the incoming audio to a command's stdin as PCMA or PCM
-   48000. Only useful when the audio is produced *on the go2rtc host*, which ours is not. Worth
-   knowing so nobody re-derives it.
+## Finding the camera's go2rtc stream
 
-The browser's own two-way audio — the WebRTC card, and Home Assistant's newer native support — is the
-same backchannel fed from a dashboard microphone. Good for a person at a computer; no use to a device
-in a hall, and it is why this is the device's own job.
+Nothing in a Home Assistant camera entity says which go2rtc stream it is, and nothing in a Reolink
+channel does either. So the stream is matched by name, against go2rtc's list (`GET /api/streams`), and a
+per-camera name on the setup page settles the ones the match misses:
 
-Two details that make route 1 fit this device exactly:
+1. The name set on the setup page for this camera, if there is one — used whether or not go2rtc lists
+   it, since a stream registered on demand is not listed until something has used it.
+2. For `camera.<id>`: `<id>`. This is what makes Frigate cameras match, since Frigate's go2rtc streams
+   are named for its cameras and so are its Home Assistant entities.
+3. The camera's name as the list shows it, made a name: lower case, spaces and dashes to underscores,
+   nothing but letters, digits and underscores ("Front Door" → `front_door`). This is the Reolink case.
+4. The same two again ignoring case.
+5. The device's own camera never has one.
 
-- The `pcm` source's backchannel defaults to **PCM 16 kHz** (`pkg/pcm/backchannel.go`), which is the
-  microphones' native rate and format. Nothing has to be encoded. The camera's own codec (G.711,
-  Opus, whatever it speaks) is go2rtc's problem.
-- A live WAV whose sizes were written before the length was known is exactly what Home Assistant hands
-  the device for the camera's own audio, and the device reads it today (`readOverOnce`). Serving one
-  is the same file read the other way round.
+## Configuration
 
-## How it would work
-
-1. Somebody opens a camera and presses **Talk** on the view.
-2. The device starts serving its microphones as a live WAV on its own web port, behind the same kind
-   of switch as the rest of it, and for as long as the talk lasts.
-3. The device asks go2rtc to play that URL on the camera: the `POST /api/streams` call above, with the
-   camera's stream name from its own list of streams, or from configuration where the name is not
-   what the camera is called.
-4. go2rtc pulls the stream, transcodes PCM 16 kHz to the camera's codec, and the person at the door
-   hears the room.
-5. All of the above happens *while* the camera's own audio is playing, ducked, on the device. The
-   echo canceller has the loopback, so the microphones hear the room rather than the doorbell.
-6. Talk is released, the WAV stream ends, the ffmpeg pull ends with it, and the camera's speaker falls
-   silent. Nothing has to be torn down on the go2rtc side if the source is what ends.
-
-Hearing and talking at once is the point, and it is the one thing this design gets for free that a
-phone-based doorbell usually does not.
-
-## Configuration and where it lives
-
-**One go2rtc base URL per device, and one stream name per camera** — not one URL per camera. The URL
-and its credentials are set the way the Home Assistant URL and token are: an action (`home_go2rtc`)
-and a settings row. Credentials, where go2rtc's API has them, are stored as a secret and kept out of
-log lines.
-
-The stream name is the only per-camera thing, and it is mostly discoverable rather than configured:
-
-- `GET <go2rtc>/api/streams` lists every registered stream, keyed by name. Through Frigate it is
-  `GET <frigate>:5000/api/go2rtc/streams`, and there the names are Frigate's own camera names —
-  which is why a camera called `back_door` in Frigate is a stream called `back_door`.
-- Match that list against the Home Assistant camera by entity id, then object id, and keep a
-  per-camera override for the ones the match misses. **Nothing in a camera entity says which go2rtc
-  stream it is**: Home Assistant does not publish camera stream sources over its API, which is why
-  community integrations and an architectural proposal for exactly that exist, and why a match by
-  name plus an override is the honest design rather than a lookup.
-
-Where the camera's *RTSP link* comes from is go2rtc's business, not this device's: its own `streams:`
-config, Frigate's camera config, or its `hass:` source, which imports camera links out of Home
-Assistant's config files. So the one setting somebody has to make, once per camera, is outside this
-device — a camera that exists only in Home Assistant and nowhere in go2rtc has no stream to talk
-through until somebody gives it one.
-- **A switch**, off on a new device, for serving the microphones over the network at all. It belongs
-  with the other Privacy switches, not with Display: this one is a live microphone on the LAN.
-- The **Talk control** is on the camera page, in the corner opposite the Mute control, and only while
-  the view is up.
+- **go2rtc**, on the setup page's Connections tab: the address (`http://192.168.1.5:1984`; `http://`
+  and `:1984` are added when missing), and a user and password for go2rtc's `api:` basic auth, which is
+  off unless somebody set it. The password is written and never shown, and kept out of the diagnostics
+  bundle. Saving it lists go2rtc's streams, so a wrong address is found out on the form and not at the
+  door.
+- **A stream name per camera**, on the same form, one row per camera on the list, empty for the match.
+- **Talk through cameras**, a switch, off on a new device, in Privacy & Security on the screen, in Home
+  Assistant as `talk_back`, and shown (not changed) on the setup page's Privacy tab like the others. It
+  is a live microphone on the LAN, even if only for as long as somebody has tapped Talk, and only to
+  whoever holds the one-time address.
+- No action. Home Assistant users get the switch; the address is set once, on the page. An action can
+  follow if an automation turns out to want one.
 
 ## Limits and unknowns
 
-- **Latency is unmeasured.** The path is microphone → device → go2rtc → transcode → camera → its
-  speaker, and nothing in that chain is a long buffer, but "should be a few hundred milliseconds" is
-  not a measurement. It wants timing on real hardware with a real doorbell before any of it is
-  designed around.
-- **The picture stays a slideshow.** The view is Home Assistant snapshots at a few frames a second,
-  which is what this panel can decode. A conversation does not need more, but nobody should expect
-  go2rtc's WebRTC latency on the *picture* because its backchannel is being used for sound.
-- **Half of the cameras cannot be talked to at all.** The backchannel exists only where go2rtc's
-  source supports it (ONVIF Profile T, Tapo, DVRIP, ISAPI, Doorbird, Ring, Wyze, Tuya, Xiaomi). A
-  camera that cannot is found out by asking, not by pre-checking: the Talk control should not be
-  offered on a view whose camera the device has no reason to think it can talk through, and the log
-  should say plainly when go2rtc refuses.
-- **One talker at a time**, and for a reason: two of them are two streams into one camera speaker.
-- **CPU.** The intercom costs a Dot 15–20% more of a budget that is already the tightest of any
-  device, and it pauses the wake word to do it. The same trade applies here, and the Dot gets its own
-  go/no-go.
-- **A talk that outlives its view.** The view can time out, another camera can replace it, or the
-  screen can be tapped away while somebody is mid-sentence. Whatever ends the view ends the
-  microphones going out, the same way it ends the camera's sound.
-- **Whether go2rtc lists a camera's stream at all before something has played it.** If the Home
-  Assistant integration registers sources on demand, a first Talk press would have nothing to match
-  against — in which case the per-camera override is not an escape hatch but the answer, and the
-  settings row should say so.
-- **The camera's own audio going out of sync with the picture** — the sound is a live stream and the
-  picture is snapshots — is already true of the one-way feature and is not made worse here.
+- **Latency is unmeasured.** Reading go2rtc gives a floor of 40 ms (its WAV reader's block) plus 128 ms
+  for RTSP cameras taking G.711 (it regroups into 1024-byte packets for the Reolink doorbell's sake,
+  `pkg/rtsp/consumer.go`), plus the device's 20 ms frames, plus whatever the camera buffers. It wants
+  measuring at a real door before anybody designs around it; the last task does that and writes the
+  numbers here.
+- **go2rtc has to reach the device** on port 8181. On one LAN it does. Across a VLAN or a Docker bridge
+  without host networking it may not, and then go2rtc's POST fails with its own error, which the view
+  shows. The routes that reach out from the device instead (an RTSP client offering go2rtc
+  `?backchannel=1`, or WebRTC) are the fallback, and are not built here.
+- **Cameras whose backchannel is not G.711 at 8 kHz** (Ring and Roborock take Opus; some RTSP cameras
+  offer 16 kHz PCM) get no Talk control. go2rtc's `ffmpeg:` source can transcode a 16 kHz WAV to them,
+  at the cost of an ffmpeg start and its probing per talk; that is a later task once somebody has one.
+- **Reolink** is RTSP backchannel only, on firmware that offers it: the doorbell since 2023 does; reports
+  on the 2025 PoE doorbell are mixed (go2rtc #331, still open). go2rtc has no Baichuan source, and
+  Reolink's HTTP API has no talk command that anybody documents. Frigate's advice is a second, plain
+  `rtsp://` stream in go2rtc for talking, which is what the per-camera name is for.
+- **One talker at a time.** A device talks to one camera; two devices talking to the same camera each
+  replace the other's play, which is go2rtc's behaviour and is the right one.
+- **The Dot** has no camera page, so it has no Talk control and no switch; this is a no-op there.
+- **CPU.** One more microphone listener, a 31-tap filter at 16 kHz and a table lookup per sample: well
+  under the intercom's cost, which also encodes. Measured with the latency.
+- **Muted is muted.** A muted microphone sends zeros to every listener; a talk ends on mute instead of
+  sending a camera silence and letting somebody believe they are heard.
 
 ## Order of work
 
-1. **T1 — the microphones as a stream.** Serve them as a live WAV on the web port, behind a switch,
-   and prove it with `curl | wavstats` and by listening to it. This is the piece everything else
-   needs, it is testable with no camera at all, and on its own it already makes the device a camera
-   whose audio can be pulled by anything on the LAN.
-2. **T2 — the Talk control and the call.** The control on the camera page in the Mute control's
-   pattern, the go2rtc URL and stream name in configuration, and the `POST /api/streams` when it is
-   pressed. Tried against a camera with a backchannel and a person listening at the door.
-3. **T3 — what the world sees**: the action, the settings row, the switch in Privacy, and the docs.
-4. **T4 — the other shapes of device**: the Spot's round page (its own control geometry) and the Dot
-   (CPU, and the wake-word pause). A Dot has no camera page at all, so this may be a no-op there.
-5. **T5 — measure latency** on real hardware, with the numbers written into this document rather than
-   into a commit message.
+1. **G.711 and a filter** (`lib/g711`): A-law, μ-law, the 16→8 kHz halving, the WAV header go2rtc
+   reads. Pure functions, tested against the reference encoder's values.
+2. **A go2rtc client** (`lib/go2rtc`): list streams, ask for a camera's backchannel, play a source,
+   and the device's own address as go2rtc sees it. Tested against an `httptest` go2rtc.
+3. **Settings**: go2rtc's address and account, per-camera stream names, and the switch.
+4. **The talk itself** (`feature/home/talk.go`): the stream match, the backchannel probe on view-up, the
+   one-time WAV on the web port, the start, the watcher that ends it, and the view held while talking.
+   Testable end to end with a fake go2rtc that fetches the address the way the real one does.
+5. **The Show's camera page**: the Talk control beside Mute, the note, the tap.
+6. **The Spot's round camera page**: a second bar above Mute.
+7. **The switch and the setup page**: Privacy & Security row, Home Assistant switch, the Connections
+   form, the Privacy tab's line, the diagnostics summary; the wake word ignored while talking.
+8. **At a real door**: a camera with a backchannel, a person listening, latency and CPU measured and
+   written above.
 
 ## Smaller than this, and worth having
 
-**Playing a message to the camera** — "I'll be right there" — is the same go2rtc call with a file or a
-Home Assistant TTS URL as the source, and no microphones, no switch and no Talk control. It could
-land first, on its own, as an action: show the camera, hear it, and press a button that says one
-thing to whoever is at the door.
+**Playing a message to the camera** — "I'll be right there" — is the same POST with a TTS or file URL
+as `src`, through `ffmpeg:` because a TTS URL is MP3 and the camera takes G.711. No microphones, no
+switch, no one-time address. It could land on its own as an action once the client exists.
 
 ## Later, not part of this
 
-- **The go2rtc stream as the view's own video source**: `/api/frame.jpeg` snapshots, or an MJPEG
-  pull, would be smoother and lower-latency than Home Assistant's camera proxy. It is a different
-  piece of work with a different cost (JPEG decoding on the device), and it would help every camera
-  view, not just this one.
-- **WebRTC on the device.** It would make the device a first-class go2rtc client in both directions
-  and remove the served-microphone trick. It is also a stack, a negotiation and a codec — a
-  project, not a step.
-- **Talking through the intercom to a camera** — a device-to-device call that ends at a camera
-  instead of another device. The transport is not the hard part there; the camera's backchannel is.
+- **go2rtc as the view's picture source** (`/api/frame.jpeg`, or MJPEG): smoother than Home Assistant's
+  camera proxy for every camera, and a different piece of work.
+- **The device dialling out** — an RTSP client on `?backchannel=1`, or WebRTC — for a go2rtc that cannot
+  reach the device. WebRTC would also be the route to Home Assistant's own two-way audio if it lands.
+- **Talking through the intercom to a camera**: the transport is not the hard part, the camera is.
