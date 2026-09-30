@@ -308,3 +308,105 @@ func TestOneRingCoversTimersFromBothSides(t *testing.T) {
 		t.Errorf("the ringing changed to %q when a second timer finished, want the first to hold", name)
 	}
 }
+
+// ranOut moves a timer so that it ran out the given time ago, without waiting for it.
+func ranOut(ts *Timers, id string, ago time.Duration, now time.Time) {
+	ts.mu.Lock()
+	if c := ts.held[id]; c != nil {
+		c.at = now.Add(-ago - c.left)
+	}
+	ts.mu.Unlock()
+}
+
+// A timer from Home Assistant whose finishing event never arrives — the device was updating, restarting or
+// offline when it ran out — must not sit at zero for ever. Nothing else ends it: only the device's own
+// timers run out from this clock, and the event is what ends Home Assistant's.
+func TestATimerWhoseEventNeverArrivesIsEndedHere(t *testing.T) {
+	now := time.Now()
+	ts := build()
+	t.Cleanup(func() { ts.Stop() })
+
+	ts.Event(started("kettle", 180))
+
+	// The moment it runs out: the event for it is on its way over the link it was set over, so nothing is
+	// decided yet.
+	ranOut(ts, "kettle", 0, now)
+	ts.ripe(now)
+	if len(ts.held) != 1 {
+		t.Fatal("a timer was ended the instant it ran out, before its event could arrive")
+	}
+
+	// Long past any event that was coming: it is ended here, and rung, since it has only just gone.
+	ranOut(ts, "kettle", lostAfter+time.Second, now)
+	ts.ripe(now)
+	if len(ts.held) != 0 {
+		t.Errorf("holding %d timers, want none: a timer whose event never came is ended here", len(ts.held))
+	}
+	if !ts.Ringing() {
+		t.Error("a timer that had only just run out was not rung when the device ended it")
+	}
+	ts.Stop()
+
+	// The ring lets go a moment later, as it does on the device.
+	for range 100 {
+		if !ts.Ringing() {
+			break
+		}
+		time.Sleep(5 * time.Millisecond)
+	}
+	if ts.Ringing() {
+		t.Fatal("a timer that had run out stayed ringing after being stopped")
+	}
+
+	// An event arriving afterwards does not ring it a second time.
+	ts.Event(esphome.TimerEvent{
+		Type:    api.VoiceAssistantTimerEvent_VOICE_ASSISTANT_TIMER_FINISHED,
+		TimerID: "kettle",
+		Name:    "kettle",
+	})
+	if ts.Ringing() {
+		t.Error("a late finishing event rang a timer the device had already ended")
+	}
+}
+
+// One that ran out hours ago is recorded as missed rather than rung: a timer nobody heard is not made right
+// by sounding now. That is what a timer of the device's own gets in the same case.
+func TestATimerThatRanOutLongAgoIsRecordedAsMissed(t *testing.T) {
+	now := time.Now()
+	ts := build()
+	t.Cleanup(func() { ts.Stop() })
+
+	ts.Event(started("kettle", 180))
+	ranOut(ts, "kettle", 3*time.Hour, now)
+
+	ts.ripe(now)
+	if len(ts.held) != 0 {
+		t.Errorf("holding %d timers, want none", len(ts.held))
+	}
+	if ts.Ringing() {
+		t.Error("a timer that ran out three hours ago was rung")
+	}
+}
+
+// And a timer of the device's own is untouched by any of this: it ends when it ends, whether or not
+// anything else is listening.
+func TestALocalTimerStillEndsItself(t *testing.T) {
+	now := time.Now()
+	ts := build()
+	t.Cleanup(func() { ts.Stop() })
+
+	ts.Start("kettle", 60*time.Second)
+	ts.mu.Lock()
+	for _, c := range ts.held {
+		c.at = now.Add(-61 * time.Second)
+	}
+	ts.mu.Unlock()
+
+	ts.ripe(now)
+	if len(ts.held) != 0 {
+		t.Errorf("holding %d timers, want none", len(ts.held))
+	}
+	if !ts.Ringing() {
+		t.Error("a timer of the device's own that ran out did not ring")
+	}
+}

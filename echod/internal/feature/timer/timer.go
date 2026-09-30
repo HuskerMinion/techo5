@@ -47,6 +47,11 @@ const (
 
 var countdownColor = led.Color{R: 0xFF, G: 0x8C, B: 0x00}
 
+// lostAfter is how long a timer from Home Assistant may sit at zero before the device ends it itself. Its
+// finishing event crosses the same link the timer was set over, so it arrives in a moment; this is only
+// about how long to wait for one that is not coming, and being generous costs a stuck line for a while.
+const lostAfter = 10 * time.Second
+
 // resumeWithin is how late a timer of the device's own may still ring after a restart; the alarm's
 // ResumeWithin, and for the same reasons. Not imported: alarm imports this package.
 const resumeWithin = 2 * time.Minute
@@ -63,6 +68,10 @@ type Timers struct {
 
 	mu   sync.Mutex
 	held map[string]*timer
+
+	// ended is when a timer was ended here because its event from Home Assistant never came, so that an
+	// event arriving late does not ring it a second time.
+	ended map[string]time.Time
 
 	// waiting is saved timers not yet restored, because the clock was not set when the device came
 	// up. Kept so a save meanwhile writes them back rather than dropping them.
@@ -126,6 +135,10 @@ type timer struct {
 	// clock, so it runs with Home Assistant away.
 	local bool
 }
+
+// due is when this timer runs out, as well as the device can tell: from when it was started and how long
+// it was set for. A paused timer holds where it was stopped, so its due time is not a moment.
+func (t *timer) due() time.Time { return t.at.Add(t.left) }
 
 func (t *timer) remaining(now time.Time) time.Duration {
 	if !t.active {
@@ -408,29 +421,61 @@ func (t *Timers) Cancel(id string) bool {
 	return true
 }
 
-// ripe finishes any of the device's own timers that have run out, since nothing else will tell us.
-// Home Assistant sends an event for its own, which is why only local ones are looked at here.
+// ripe finishes any timer that has run out: the device's own, which nothing else will end, and one from
+// Home Assistant whose finishing event never arrived.
+//
+// Home Assistant sends an event for its own, and while it does, that event is what ends them. It cannot
+// arrive while the device is restarting, updating or offline — and a timer left at zero stays there, the
+// screen showing 00:00 until something ends it, which nothing would. So one that has been at zero for
+// longer than the link it was set over could take is ended here, the way one that went by while the device
+// was off is: rung if it has only just gone, and recorded as missed otherwise.
 func (t *Timers) ripe(now time.Time) {
 	t.mu.Lock()
 	var done []string
 	for id, c := range t.held {
-		if c.local && c.active && c.remaining(now) <= 0 {
+		if !c.active || c.remaining(now) > 0 {
+			continue
+		}
+		if c.local || now.Sub(c.due()) > lostAfter {
 			done = append(done, id)
 		}
 	}
+	for id, at := range t.ended {
+		if now.Sub(at) > resumeWithin {
+			delete(t.ended, id)
+		}
+	}
 	t.mu.Unlock()
+
 	for _, id := range done {
 		t.mu.Lock()
-		name := ""
-		if c := t.held[id]; c != nil {
-			name = c.name
+		c := t.held[id]
+		name, due, local := "", now, false
+		if c != nil {
+			name, due, local = c.name, c.due(), c.local
+			if !local {
+				if t.ended == nil {
+					t.ended = map[string]time.Time{}
+				}
+				t.ended[id] = now
+			}
 		}
 		delete(t.held, id)
 		saved := t.saved(now)
 		t.mu.Unlock()
-		saveLocal(saved)
-		slog.Info("timer finished here", "name", name)
-		t.startRinging(cmp.Or(name, "Timer"))
+
+		switch {
+		case local:
+			saveLocal(saved)
+			slog.Info("timer finished here", "name", name)
+			t.startRinging(cmp.Or(name, "Timer"))
+		case now.Sub(due) <= resumeWithin:
+			slog.Info("a timer finished and the event for it never came", "name", name)
+			t.startRinging(cmp.Or(name, "Timer"))
+		default:
+			slog.Info("a timer finished while this device was not listening", "name", name)
+			ring.Missed("timer", name, due)
+		}
 		t.publish()
 		t.Changed.Emit(struct{}{})
 	}
@@ -439,7 +484,7 @@ func (t *Timers) ripe(now time.Time) {
 // Event is a timer event from Home Assistant.
 func (t *Timers) Event(e esphome.TimerEvent) {
 	slog.Info("timer",
-		"event", e.Type, "name", e.Name, "left", e.SecondsLeft, "total", e.TotalSeconds, "active", e.IsActive)
+		"event", e.Type, "id", e.TimerID, "name", e.Name, "left", e.SecondsLeft, "total", e.TotalSeconds, "active", e.IsActive)
 
 	switch e.Type {
 	case api.VoiceAssistantTimerEvent_VOICE_ASSISTANT_TIMER_STARTED,
@@ -553,7 +598,15 @@ func (t *Timers) forget(id string) {
 func (t *Timers) finished(e esphome.TimerEvent) {
 	t.mu.Lock()
 	delete(t.held, e.TimerID)
+	_, ended := t.ended[e.TimerID]
+	delete(t.ended, e.TimerID)
 	t.mu.Unlock()
+
+	if ended {
+		// Ended here already, when this event was too late to matter: a second ring for one timer is
+		// worse than none.
+		return
+	}
 	t.startRinging(cmp.Or(e.Name, "Timer"))
 }
 
