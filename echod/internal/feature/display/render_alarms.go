@@ -7,19 +7,9 @@ import (
 	"image"
 	"image/draw"
 	"strings"
-	"time"
 
 	"github.com/HuskerMinion/techo5/echod/internal/feature/timer"
 )
-
-// countdown is a timer's time left: 4:05, or 1:02:05 past an hour.
-func countdown(left time.Duration) string {
-	secs := int(left.Round(time.Second).Seconds())
-	if secs >= 3600 {
-		return fmt.Sprintf("%d:%02d:%02d", secs/3600, secs/60%60, secs%60)
-	}
-	return fmt.Sprintf("%d:%02d", secs/60, secs%60)
-}
 
 // ringingPage is over everything while a timer or an alarm sounds: what it is, the time, and buttons
 // big enough to hit half awake.
@@ -90,7 +80,7 @@ func (r *renderer) timersLine(s scene, y int) {
 		return
 	}
 	first := running[0]
-	line := countdown(first.Left)
+	line := timer.LeftText(first.Left)
 	if first.Name != "" {
 		line = first.Name + "  " + line
 	} else {

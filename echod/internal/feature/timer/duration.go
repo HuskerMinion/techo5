@@ -81,3 +81,14 @@ func clockDuration(s string) (time.Duration, error) {
 	}
 	return total, nil
 }
+
+// LeftText is a timer's time left as the screen writes it and as Home Assistant is told it: "4:05", or
+// "1:02:05" past an hour. It lives here so the two cannot drift — what the sensor says and what the panel
+// shows are the same timer said twice, and a second implementation would eventually say it differently.
+func LeftText(left time.Duration) string {
+	secs := int(left.Round(time.Second).Seconds())
+	if secs >= 3600 {
+		return fmt.Sprintf("%d:%02d:%02d", secs/3600, secs/60%60, secs%60)
+	}
+	return fmt.Sprintf("%d:%02d", secs/60, secs%60)
+}

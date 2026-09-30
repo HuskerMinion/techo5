@@ -1,6 +1,7 @@
 package timer
 
 import (
+	"strings"
 	"testing"
 	"time"
 
@@ -162,32 +163,58 @@ func TestAFinishedTimerRingsUntilItIsStopped(t *testing.T) {
 	t.Error("still ringing after being stopped")
 }
 
-func TestWhatIsCountingDownIsNamedSoonestFirst(t *testing.T) {
+// What Home Assistant is told is what the screen shows: each timer by name, soonest first, and what is
+// left of it. A name on its own would not say whether it is the timer somebody is waiting on — and after a
+// restart of Home Assistant, which takes its timers with it, this sensor is the only place one can still
+// be watched.
+func TestWhatIsCountingDownIsNamedSoonestFirstWithWhatIsLeft(t *testing.T) {
+	now := time.Now()
 	ts := build()
 	ts.Event(started("pasta", 600))
 	ts.Event(started("eggs", 240))
 
-	if got := ts.names.Get(); got != "eggs, pasta" {
-		t.Errorf("naming %q, want %q", got, "eggs, pasta")
+	// Starting them a moment ago and describing them at a fixed moment: what is left is then exact, rather
+	// than a second out depending on how long the events took.
+	mine := func() {
+		ts.mu.Lock()
+		for _, c := range ts.held {
+			c.at = now
+		}
+		ts.mu.Unlock()
+	}
+	mine()
+
+	if got := ts.describe(now); got != "eggs 4:00, pasta 10:00" {
+		t.Errorf("describing %q, want %q", got, "eggs 4:00, pasta 10:00")
+	}
+	if got := ts.names.Get(); !strings.HasPrefix(got, "eggs 4:00, pasta 1") {
+		// The published one is read from the clock, so its seconds are its own.
+		t.Errorf("publishing %q, want the same timers with their times", got)
 	}
 
 	ts.Event(esphome.TimerEvent{
 		Type:    api.VoiceAssistantTimerEvent_VOICE_ASSISTANT_TIMER_CANCELLED,
 		TimerID: "eggs",
 	})
-	if got := ts.names.Get(); got != "pasta" {
-		t.Errorf("naming %q, want %q", got, "pasta")
+	if got := ts.describe(now); got != "pasta 10:00" {
+		t.Errorf("describing %q, want %q", got, "pasta 10:00")
 	}
 }
 
 func TestAnUnnamedTimerStillHasSomethingToCallIt(t *testing.T) {
+	now := time.Now()
 	ts := build()
 	e := started("kettle", 180)
 	e.Name = ""
 	ts.Event(e)
+	ts.mu.Lock()
+	for _, c := range ts.held {
+		c.at = now
+	}
+	ts.mu.Unlock()
 
-	if got := ts.names.Get(); got != "Timer" {
-		t.Errorf("naming %q, want %q", got, "Timer")
+	if got := ts.describe(now); got != "Timer 3:00" {
+		t.Errorf("describing %q, want %q", got, "Timer 3:00")
 	}
 }
 

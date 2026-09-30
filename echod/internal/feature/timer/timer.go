@@ -60,7 +60,9 @@ const resumeWithin = 2 * time.Minute
 type Timers struct {
 	countdown *led.Claim
 
-	// names is what is counting down, since the ring can only ever say that something is.
+	// names is what is counting down and what is left of each, which is also what Home Assistant is told:
+	// the ring itself can only ever say that something is, and after a restart of Home Assistant this is
+	// the one place a timer of its own can still be watched.
 	names *esphome.TextSensor
 
 	// woke is how a new timer restarts the redraw, which stops while there is nothing counting down.
@@ -502,9 +504,16 @@ func (t *Timers) Event(e esphome.TimerEvent) {
 
 // publish names what is counting down, soonest first. It follows the table rather than the clock, so
 // it does not send Home Assistant anything four times a second.
-func (t *Timers) publish() {
+func (t *Timers) publish() { t.names.Set(t.describe(time.Now())) }
+
+// describe is what Home Assistant is told is counting down: each timer by name and what is left of it,
+// soonest first. A name on its own does not say whether it is the timer somebody is waiting on, and a
+// timer Home Assistant has forgotten — a restart takes its own, and it never re-sends them — can still be
+// watched from there by its remaining time.
+//
+// It takes the moment rather than reading the clock, so what it says can be tested without waiting.
+func (t *Timers) describe(now time.Time) string {
 	t.mu.Lock()
-	now := time.Now()
 	running := make([]*timer, 0, len(t.held))
 	for _, c := range t.held {
 		if c.active {
@@ -515,11 +524,11 @@ func (t *Timers) publish() {
 
 	slices.SortFunc(running, func(a, b *timer) int { return cmp.Compare(a.remaining(now), b.remaining(now)) })
 
-	names := make([]string, 0, len(running))
+	said := make([]string, 0, len(running))
 	for _, c := range running {
-		names = append(names, cmp.Or(c.name, "Timer"))
+		said = append(said, cmp.Or(c.name, "Timer")+" "+LeftText(c.remaining(now)))
 	}
-	t.names.Set(strings.Join(names, ", "))
+	return strings.Join(said, ", ")
 }
 
 // Forget drops every timer, for a Home Assistant that has stopped listening: it holds them in memory
