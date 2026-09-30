@@ -5,7 +5,7 @@ somebody taps **Talk** on the camera page, speaks, and the device's microphones 
 camera's own speaker. Answering the doorbell without a phone in hand.
 
 **Status: a plan, revised 2026-09-30. Nothing of it is built.** The first version was written before
-the camera's own sound, the Reolink cameras and the device without Home Assistant were on main; this
+the camera's own sound, cameras read without Home Assistant and the device without Home Assistant were on main; this
 one is checked against main at `7ef38f6` and against go2rtc's source at v1.9.14 and master
 (re-checked after rebasing onto main the same day: nothing had moved). The
 task-by-task implementation is [superpowers/plans/2026-09-30-two-way-audio.md](superpowers/plans/2026-09-30-two-way-audio.md).
@@ -15,8 +15,7 @@ task-by-task implementation is [superpowers/plans/2026-09-30-two-way-audio.md](s
 - **No ffmpeg, and no transcoding by go2rtc.** go2rtc's plain `http:` source reads a live WAV itself
   (`pkg/magic` sniffs `RIFF`, `pkg/wav` ignores the sizes), but it does **not** convert: the codec the
   device serves has to be the one the camera's backchannel takes, exactly. That is G.711 at 8 kHz on
-  nearly every camera that has a backchannel (Tapo, DVRIP, ISAPI, Doorbird, Reolink's doorbell over
-  RTSP). So the device downsamples to 8 kHz and encodes A-law or μ-law itself: a few dozen lines of Go
+  nearly every camera that has a backchannel (see "Which cameras" below). So the device downsamples to 8 kHz and encodes A-law or μ-law itself: a few dozen lines of Go
   and a lookup, cheaper than any stream go2rtc would have to start. The first version's "PCM 16 kHz,
   nothing has to be encoded" was a misreading: `pkg/pcm/backchannel.go` is the output side of
   `exec:` sources, not an input.
@@ -24,17 +23,21 @@ task-by-task implementation is [superpowers/plans/2026-09-30-two-way-audio.md](s
   to the camera and lists its media, and a backchannel is the one marked `sendonly`:
   `"audio, sendonly, PCMA/8000"`. The Talk control is drawn only on a view whose camera answered that
   way, which settles the first version's open question about offering Talk where it cannot work.
-- **Cameras are not only Home Assistant's now.** They are `camera.*` entities, `reolink:<channel>` read
-  straight from a recorder, and `local`. Talk does not need Home Assistant at all: a Reolink camera on a
-  device with no Home Assistant can be talked to through a go2rtc that knows it.
+- **Cameras are not only Home Assistant's now.** The device's list holds `camera.*` entities, cameras it
+  reads straight from a recorder with no Home Assistant in between, and its own. Talk is not tied to any
+  of these: it needs only a go2rtc that has a stream for the camera, so it works the same for a camera
+  from any source, and on a device with no Home Assistant at all.
 - **Settings for servers other than Home Assistant live on the setup page**, with the password written
-  and never shown (the chat model, SearXNG, Reolink, iCal links). go2rtc goes there too, on the
-  Connections tab next to Reolink, and not in a `home_go2rtc` action.
+  and never shown (the chat model, SearXNG, a camera recorder, iCal links). go2rtc goes there too, on
+  the Connections tab with the other camera settings, and not in a `home_go2rtc` action.
 - **Home Assistant's own go2rtc is not the go2rtc to point at.** Since 2024.11 Home Assistant runs one
   inside itself, but its API listens on a Unix socket only (`api.listen: ""`), its RTSP on 127.0.0.1, and
   its stream names are `<platform>_<unique_id>`, registered only once something has viewed the camera.
   The one reachable way in is its `debug_ui` port, which Home Assistant says is for debugging. The go2rtc
-  this is for is a standalone one, the go2rtc add-on, or Frigate's with port 1984 mapped out.
+  this is for is a standalone one, the go2rtc add-on, or the one inside Frigate with port 1984 mapped
+  out. Frigate is the easiest of these: it runs go2rtc already, names each stream for its camera, and
+  its Home Assistant integration names the camera entities the same way, so the match below finds every
+  camera with nothing to set by hand.
 - **Home Assistant still has no two-way audio of its own.** Core PR #148282 (a `TWO_WAY_AUDIO` camera
   feature and a WebRTC re-offer command) is open, not merged, as of 2026-09-16. If it lands it is a
   WebRTC route and needs a WebRTC stack on the device; it changes nothing here.
@@ -82,18 +85,41 @@ task-by-task implementation is [superpowers/plans/2026-09-30-two-way-audio.md](s
 `DELETE /api/streams` must never be used: it deletes the stream from go2rtc's config. An empty
 `src=` on the same POST stops a play, and is not needed while the source ending does the same.
 
+## Which cameras
+
+Any camera go2rtc can send audio to. The device never asks what make a camera is: it asks go2rtc
+whether the camera's stream has a speaker, and what it takes, and offers Talk on that answer alone. What
+decides it is the source go2rtc reads the camera through. go2rtc's two-way sources (its README, "Two-way
+audio"), with what their speakers take:
+
+| go2rtc source | What the speaker takes |
+|---|---|
+| `rtsp:` / `onvif:` (ONVIF Profile T backchannel) | whatever the camera offers; usually PCMA or PCMU at 8 kHz |
+| `tapo:`, `dvrip:`, `multitrans:` | PCMA at 8 kHz |
+| `isapi:` | PCMA or PCMU at 8 kHz |
+| `doorbird:` | PCMU at 8 kHz |
+| `wyze:`, `xiaomi:`, `tuya:` | per model, the same codec as the camera's own audio |
+| `ring:`, `roborock:` | Opus at 48 kHz (not offered Talk yet; see Limits) |
+
+An RTSP camera has a backchannel only if its firmware implements one, and that varies by model and by
+firmware version even within one maker's range. The probe finds out, so nobody has to keep a list. Where
+a camera's main stream in go2rtc is something other than plain RTSP (an HTTP-FLV feed, or one wrapped in
+`ffmpeg:`, which has no backchannel), a second stream in go2rtc with the camera's plain `rtsp://` link
+is the usual way to talk to it, and that is what the per-camera stream name below is for.
+
 ## Finding the camera's go2rtc stream
 
-Nothing in a Home Assistant camera entity says which go2rtc stream it is, and nothing in a Reolink
-channel does either. So the stream is matched by name, against go2rtc's list (`GET /api/streams`), and a
+Nothing in a camera entity, or in a camera the device reads from a recorder, says which go2rtc stream it
+is. So the stream is matched by name, against go2rtc's list (`GET /api/streams`), and a
 per-camera name on the setup page settles the ones the match misses:
 
 1. The name set on the setup page for this camera, if there is one — used whether or not go2rtc lists
    it, since a stream registered on demand is not listed until something has used it.
-2. For `camera.<id>`: `<id>`. This is what makes Frigate cameras match, since Frigate's go2rtc streams
-   are named for its cameras and so are its Home Assistant entities.
+2. For `camera.<id>`: `<id>`. Streams are often named for their cameras, and Frigate's always are; its
+   Home Assistant entities are named the same way, so every Frigate camera matches here.
 3. The camera's name as the list shows it, made a name: lower case, spaces and dashes to underscores,
-   nothing but letters, digits and underscores ("Front Door" → `front_door`). This is the Reolink case.
+   nothing but letters, digits and underscores ("Front Door" → `front_door`). This covers a stream named
+   for the camera where the camera did not come from Home Assistant, or where its entity was renamed.
 4. The same two again ignoring case.
 5. The device's own camera never has one.
 
@@ -115,7 +141,7 @@ per-camera name on the setup page settles the ones the match misses:
 ## Limits and unknowns
 
 - **Latency is unmeasured.** Reading go2rtc gives a floor of 40 ms (its WAV reader's block) plus 128 ms
-  for RTSP cameras taking G.711 (it regroups into 1024-byte packets for the Reolink doorbell's sake,
+  for RTSP cameras taking G.711 (it regroups the audio into 1024-byte packets before sending,
   `pkg/rtsp/consumer.go`), plus the device's 20 ms frames, plus whatever the camera buffers. It wants
   measuring at a real door before anybody designs around it; the last task does that and writes the
   numbers here.
@@ -123,13 +149,12 @@ per-camera name on the setup page settles the ones the match misses:
   without host networking it may not, and then go2rtc's POST fails with its own error, which the view
   shows. The routes that reach out from the device instead (an RTSP client offering go2rtc
   `?backchannel=1`, or WebRTC) are the fallback, and are not built here.
-- **Cameras whose backchannel is not G.711 at 8 kHz** (Ring and Roborock take Opus; some RTSP cameras
-  offer 16 kHz PCM) get no Talk control. go2rtc's `ffmpeg:` source can transcode a 16 kHz WAV to them,
+- **Cameras whose backchannel is not G.711 at 8 kHz** (Opus through `ring:` and `roborock:`; some RTSP
+  cameras offer 16 kHz PCM) get no Talk control. go2rtc's `ffmpeg:` source can transcode a 16 kHz WAV to them,
   at the cost of an ffmpeg start and its probing per talk; that is a later task once somebody has one.
-- **Reolink** is RTSP backchannel only, on firmware that offers it: the doorbell since 2023 does; reports
-  on the 2025 PoE doorbell are mixed (go2rtc #331, still open). go2rtc has no Baichuan source, and
-  Reolink's HTTP API has no talk command that anybody documents. Frigate's advice is a second, plain
-  `rtsp://` stream in go2rtc for talking, which is what the per-camera name is for.
+- **Cameras go2rtc cannot talk to cannot be talked to here.** A camera whose only speaker path is its
+  maker's own app or protocol, with no go2rtc source for it, gets no Talk control. That is a gap in
+  go2rtc, and is filled there, not on the device.
 - **One talker at a time.** A device talks to one camera; two devices talking to the same camera each
   replace the other's play, which is go2rtc's behaviour and is the right one.
 - **The Dot** has no camera page, so it has no Talk control and no switch; this is a no-op there.

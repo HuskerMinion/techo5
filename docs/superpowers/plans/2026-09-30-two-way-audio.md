@@ -437,7 +437,7 @@ func TestNormalize(t *testing.T) {
 		{"192.168.1.5:1985", "http://192.168.1.5:1985"},
 		{"http://go2rtc.lan:1984/", "http://go2rtc.lan:1984"},
 		{"https://go2rtc.lan", "https://go2rtc.lan"},
-		{" frigate.lan ", "http://frigate.lan:1984"},
+		{" nvr.lan ", "http://nvr.lan:1984"},
 	} {
 		if got, err := Normalize(c.in); err != nil || got != c.want {
 			t.Errorf("Normalize(%q) = %q, %v; want %q", c.in, got, err, c.want)
@@ -828,16 +828,16 @@ func TestTalkSettings(t *testing.T) {
 		t.Fatal(err)
 	}
 	before := Get().Home.TalkStreams
-	if err := Set().Home().TalkStream("reolink:0", "porch"); err != nil {
+	if err := Set().Home().TalkStream("camera.porch", "porch_talk"); err != nil {
 		t.Fatal(err)
 	}
-	if _, leaked := before["reolink:0"]; leaked {
+	if _, leaked := before["camera.porch"]; leaked {
 		t.Fatal("a copy read before a change saw the change: the map is shared, not copied")
 	}
 	if err := Set().Home().TalkStream("camera.front", ""); err != nil {
 		t.Fatal(err)
 	}
-	if got := Get().Home.TalkStreams; len(got) != 1 || got["reolink:0"] != "porch" {
+	if got := Get().Home.TalkStreams; len(got) != 1 || got["camera.porch"] != "porch_talk" {
 		t.Fatalf("after clearing one: %v", got)
 	}
 }
@@ -974,8 +974,8 @@ func TestTalkStreamFor(t *testing.T) {
 	streams := []string{"back_door", "Front_Door", "porch", "garage_talk"}
 	named := map[string]string{"camera.garage": "garage_talk", "camera.shed": "shed_on_demand"}
 	for _, c := range []struct{ entity, name, want string }{
-		{"camera.back_door", "Back door", "back_door"},  // Frigate: entity id is the stream
-		{"reolink:2", "Porch", "porch"},                   // Reolink: the name made a name
+		{"camera.back_door", "Back door", "back_door"},  // the entity id is the stream (Frigate's naming)
+		{"recorder:2", "Porch", "porch"},                  // not from Home Assistant: the name made a name
 		{"camera.x", "Front Door", "Front_Door"},          // case aside
 		{"camera.garage", "Garage", "garage_talk"},        // set on the setup page
 		{"camera.shed", "Shed", "shed_on_demand"},         // set, and not listed yet: still used
@@ -2273,7 +2273,7 @@ func SetTalkStream(entity, stream string) error {
 }
 ```
 
-`feature/setup/talk.go`, in the Reolink form's shape (`setup/cameras.go`):
+`feature/setup/talk.go`, in the shape of the existing camera recorder form (`reolinkSection` in `setup/cameras.go`):
 
 ```go
 package setup
@@ -2401,12 +2401,12 @@ git commit -m "Talk through cameras: its switch, go2rtc on the setup page, and t
 
 **Files:**
 - Modify: `docs/two-way-audio-plan.md` (status, latency and CPU numbers)
-- Modify: `docs/setup.md` (the Connections form) and `docs/actions.md` (the `talk_back` switch), wherever the camera sound and Reolink are already described. Put these next to them.
+- Modify: `docs/setup.md` (the Connections form) and `docs/actions.md` (the `talk_back` switch), next to where the camera's own sound is already described.
 
 This task is by hand. There is nothing to write a failing test for.
 
 - [ ] **Step 1: Check the stream with no camera at all.** Build and install to a Show. Set go2rtc to a machine running `go2rtc` v1.9.14 with one stream. Turn on the switch, open that camera, and tap Talk. On the go2rtc machine, `GET /api/streams?src=<cam>` should list a consumer from `http://<device>:8181/talk/…`. `curl http://<device>:8181/talk/<token>.wav` should return 404, because the address serves once.
-- [ ] **Step 2: A camera with a backchannel** (a Tapo, or a Reolink doorbell on an `rtsp://` stream). With a person at the camera, talk while the camera's own sound plays on the device. Confirm they hear the room and not the doorbell's own echo. Confirm "Alexa" said mid-talk does nothing.
+- [ ] **Step 2: Cameras with a backchannel.** Use any camera whose go2rtc probe (`GET /api/streams?src=<stream>&microphone`) lists `audio, sendonly, PCMA/8000` or `PCMU/8000`. Try one camera through an RTSP/ONVIF stream and, if one is to hand, one through a native go2rtc source (`tapo:`, `isapi:`, `dvrip:`…), so that both go2rtc paths are exercised. Also check that a camera whose probe shows no sendonly audio gets no Talk control. With a person at the camera, talk while the camera's own sound plays on the device. Confirm they hear the room and not the doorbell's own echo. Confirm "Alexa" said mid-talk does nothing.
 - [ ] **Step 3: Every way it ends**: a second tap, a tap on the picture, the view replaced by voice, the switch off in Home Assistant, the mute button, two minutes, and go2rtc restarted mid-talk. After each, go2rtc's stream shows no consumer from the device, and the device's log says `talk: ended` with the reason.
 - [ ] **Step 4: Latency.** Clap in front of the device, and record the device and the camera's speaker on one phone. Measure the gap in an audio editor, five times, and give the median. Take `top -b -n 5 -d 1` on the device while talking and while not.
 - [ ] **Step 5: Write it down.** Put the numbers in `docs/two-way-audio-plan.md` under Limits, with the camera model and go2rtc version. Change **Status** to built. Add the form and the switch to the user docs.
