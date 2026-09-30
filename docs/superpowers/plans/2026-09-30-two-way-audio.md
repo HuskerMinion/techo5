@@ -933,7 +933,7 @@ git commit -m "config: go2rtc's address, a camera's stream name, and the talk sw
 - Create: `echod/internal/feature/home/talk.go`
 - Create: `echod/internal/feature/home/talk_test.go`
 - Modify: `echod/internal/feature/home/home.go` (fields on `Feature` after `cameraSoundSw`; registration beside `shared.buildCameraSoundSwitch()` at about line 228)
-- Modify: `echod/internal/feature/home/camera.go` (`showCamera`, inside `if fresh {`)
+- Modify: `echod/internal/feature/home/camera.go` (`showCamera`, the second `if fresh {`, after the lock is released, at about line 131)
 
 **Interfaces:**
 - Consumes: `g711.Law`, `g711.ALaw`, `g711.MuLaw`, `g711.Header`, `g711.NewEncoder` (Task 1); `go2rtc.Client`, `go2rtc.Codec` (Task 2); `config.Home.Go2rtc`, `config.Home.TalkStreams`, `config.Security.Talk` (Task 3); `web.Handle`, `web.Wake`, `web.Port`; `mic.Get().Listen`; `mute.Get().Muted()`; `f.cameraViewUp(entity)` (camera_sound.go).
@@ -1760,7 +1760,7 @@ In `home.go`, next to `shared.buildCameraSoundSwitch()`:
 		shared.registerTalk()
 ```
 
-In `camera.go` `showCamera`, inside `if fresh {`, after the camera sound block:
+In `camera.go` `showCamera`, inside the second `if fresh {` (the one after `f.mu.Unlock()` that starts the frames), after the camera sound block:
 
 ```go
 		// Whether this camera can be talked to is asked while its first picture loads (talk.go).
@@ -2344,9 +2344,7 @@ func saveGo2rtc(r *http.Request) string {
 }
 
 func saveTalkStreams(r *http.Request) string {
-	if err := r.ParseForm(); err != nil {
-		return err.Error()
-	}
+	// The save handler has parsed the form already (page.go), under its size limit.
 	for k, v := range r.PostForm {
 		entity, ok := strings.CutPrefix(k, "stream:")
 		if !ok || len(v) == 0 {
@@ -2371,7 +2369,7 @@ func saveTalkStreams(r *http.Request) string {
 
 and on the Connections tab after `reolinkSection(w, token)`: `go2rtcSection(w, token)`.
 
-Check `hidden`'s signature in `setup/` before using it. `cameras.go` calls it as `hidden(w, token, what, tab)`, and this code follows that. If `page.go` already calls `r.ParseForm` before dispatching, drop the one in `saveTalkStreams`.
+`hidden(w, token, what, tab string)` is in `setup/tabs.go`. The save handler parses the form under `maxBody` before it dispatches (`page.go`, about line 174), so the save functions read `r.PostForm` directly.
 
 - [ ] **Step 5: Ignore the wake word while talking** (`detect/detect.go`, `OnDetect`)
 

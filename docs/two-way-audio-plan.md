@@ -6,7 +6,8 @@ camera's own speaker. Answering the doorbell without a phone in hand.
 
 **Status: a plan, revised 2026-09-30. Nothing of it is built.** The first version was written before
 the camera's own sound, the Reolink cameras and the device without Home Assistant were on main; this
-one is checked against main at `7ef38f6` and against go2rtc's source at v1.9.14 and master. The
+one is checked against main at `7ef38f6` and against go2rtc's source at v1.9.14 and master
+(re-checked after rebasing onto main the same day: nothing had moved). The
 task-by-task implementation is [superpowers/plans/2026-09-30-two-way-audio.md](superpowers/plans/2026-09-30-two-way-audio.md).
 
 ## What changed since the first version
