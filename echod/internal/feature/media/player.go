@@ -42,9 +42,16 @@ const volumeFlash = 2 * time.Second
 // stoppedFor is how long a stopped track stays paused before it is ended.
 const stoppedFor = 30 * time.Minute
 
+const (
+	outputAutomatic = "Automatic"
+	outputSpeaker   = "Internal speaker"
+	outputHeadphone = "Headphones / AUX"
+)
+
 type Player struct {
 	mp     *esphome.MediaPlayer
 	jack   *esphome.BinarySensor
+	output *esphome.Select
 	stream *Stream
 
 	// resampling is how voice is stretched to the playback rate. A reply arrives at the pipeline's
@@ -190,6 +197,15 @@ func build() *Player {
 			},
 			DeviceClass: "plug",
 		},
+		output: &esphome.Select{
+			Base: esphome.Base{
+				ObjectID: "audio_output",
+				Name:     "Audio output",
+				Icon:     "mdi:speaker-multiple",
+				Category: esphome.CategoryConfig,
+			},
+			Options: []string{outputAutomatic, outputSpeaker, outputHeadphone},
+		},
 		resampling: &esphome.Select{
 			Base: esphome.Base{
 				ObjectID: "voice_resampling",
@@ -265,7 +281,7 @@ func build() *Player {
 	p.layers = noiseLayers()
 
 	// The player itself stays on the device: it is what people reach for. These are how it behaves.
-	bases := []*esphome.Base{&p.resampling.Base, &p.onTurn.Base, &p.duck.Base, &p.jack.Base, &p.asp.Base,
+	bases := []*esphome.Base{&p.resampling.Base, &p.onTurn.Base, &p.duck.Base, &p.jack.Base, &p.output.Base, &p.asp.Base,
 		&p.bass.Base, &p.treble.Base, &p.quiet.Base, &p.nearMiss.Base, &p.haSounds.Base}
 	for _, sel := range p.layers {
 		bases = append(bases, &sel.Base)
@@ -275,6 +291,27 @@ func build() *Player {
 	}
 
 	p.mp.OnCommand = p.command
+	p.output.OnCommand = func(v string) {
+		var mode config.OutputMode
+
+		switch v {
+		case outputAutomatic:
+			mode = config.OutputModeAuto
+		case outputSpeaker:
+			mode = config.OutputModeSpeaker
+		case outputHeadphone:
+			mode = config.OutputModeHeadphone
+		default:
+			return
+		}
+
+		if err := config.Set().Speaker().OutputMode(mode); err != nil {
+			slog.Error("saving the audio output setting failed", "err", err)
+			return
+		}
+		p.applyOutputMode(mode)
+	}
+	p.output.Set(outputAutomatic)
 	component.Bind(p.resampling, speaker.Resamplings(), speaker.Get().SetResampling,
 		config.Set().Speaker().Resampling)
 
@@ -372,8 +409,8 @@ func build() *Player {
 	})
 
 	spk := speaker.Get()
-	spk.OnOutput.Listen(func(out speaker.Output) { p.jack.Set(out == speaker.OutputHeadphone) })
-	p.jack.Set(spk.Output() == speaker.OutputHeadphone)
+	spk.OnJack.Listen(func(out speaker.Output) { p.jack.Set(out == speaker.OutputHeadphone) })
+	p.jack.Set(speaker.DetectOutput() == speaker.OutputHeadphone)
 
 	p.mp.SetState(esphome.MediaPlayerIdle)
 	for _, sel := range p.layers {
@@ -395,7 +432,7 @@ func (p *Player) SetHASounds(on bool) {
 }
 
 func (p *Player) Entities() []esphome.Entity {
-	out := []esphome.Entity{p.mp, p.jack, p.resampling, p.onTurn, p.duck, p.asp, p.bass, p.treble,
+	out := []esphome.Entity{p.mp, p.jack, p.output, p.resampling, p.onTurn, p.duck, p.asp, p.bass, p.treble,
 		p.quiet, p.nearMiss, p.haSounds, p.sleep.sel}
 	for _, sel := range p.layers {
 		out = append(out, sel)
@@ -403,9 +440,27 @@ func (p *Player) Entities() []esphome.Entity {
 	return out
 }
 
+func (p *Player) applyOutputMode(mode config.OutputMode) {
+	switch mode {
+	case config.OutputModeSpeaker:
+		speaker.Get().SetOutputMode(speaker.OutputModeSpeaker)
+		p.output.Set(outputSpeaker)
+
+	case config.OutputModeHeadphone:
+		speaker.Get().SetOutputMode(speaker.OutputModeHeadphone)
+		p.output.Set(outputHeadphone)
+
+	default:
+		speaker.Get().SetOutputMode(speaker.OutputModeAuto)
+		p.output.Set(outputAutomatic)
+	}
+}
+
 // Restore puts the volume back where it was, without flashing the arc: nothing happened, the device
 // is starting where it left off.
 func (p *Player) Restore(c config.Config) {
+	p.applyOutputMode(c.Speaker.OutputMode)
+
 	p.apply(c.Speaker.Volume, false)
 	slog.Info("restored", "what", "volume", "step", c.Speaker.Volume, "of", VolumeSteps)
 

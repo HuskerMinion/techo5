@@ -6,6 +6,7 @@ type Speaker struct {
 	Volume     int        `json:"volume"`
 	Resampling Resampling `json:"resampling"`
 	ASP        bool       `json:"asp"`
+	OutputMode OutputMode `json:"output_mode,omitempty"`
 
 	// QuietHours is when the device makes no sound of its own, as "22-7", empty for never. See
 	// quiet.go for what that does and does not cover.
@@ -79,6 +80,10 @@ func (w SpeakerWriter) Resampling(v Resampling) error {
 	return w.st.Update(func(c *Config) { c.Speaker.Resampling = v })
 }
 
+func (w SpeakerWriter) OutputMode(v OutputMode) error {
+	return w.st.Update(func(c *Config) { c.Speaker.OutputMode = v })
+}
+
 func (w SpeakerWriter) QuietHours(v string) error {
 	return w.st.Update(func(c *Config) { c.Speaker.QuietHours = v })
 }
@@ -110,6 +115,15 @@ func (s Speaker) ASPWanted() bool {
 func (w SpeakerWriter) ASP(v bool) error {
 	return w.st.Update(func(c *Config) { c.Speaker.ASP, c.Speaker.ASPChosen = v, true })
 }
+
+// OutputMode controls whether playback follows jack detection or forces an output.
+type OutputMode string
+
+const (
+	OutputModeAuto      OutputMode = ""
+	OutputModeSpeaker   OutputMode = "speaker"
+	OutputModeHeadphone OutputMode = "headphone"
+)
 
 // Resampling is how the 16 kHz voice a pipeline sends is stretched to the 48 kHz the codec takes.
 type Resampling string
