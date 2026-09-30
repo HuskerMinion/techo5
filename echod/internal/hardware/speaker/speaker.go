@@ -53,6 +53,15 @@ const (
 	PlaybackDevice = 23
 )
 
+// OutputMode controls whether playback follows jack detection or forces an output.
+type OutputMode int32
+
+const (
+	OutputModeAuto OutputMode = iota
+	OutputModeSpeaker
+	OutputModeHeadphone
+)
+
 // Player owns the speaker: one playback stream held open for the life of the process, with the
 // amplifier enabled while it runs.
 type Player struct {
@@ -65,8 +74,11 @@ type Player struct {
 	// hold is DRAMHold, kept open for as long as pb is: see paths_cronos.go.
 	hold *os.File
 
-	// Output changed: a headphone was plugged in or pulled out.
+	// Output changed: the codec moved between speaker and headphone output.
 	OnOutput hook.Hook[Output]
+
+	// Jack changed: a headphone was physically plugged in or pulled out.
+	OnJack hook.Hook[Output]
 
 	// sink, when set, is where the audio goes instead of the codec: see sink.go.
 	sink atomic.Pointer[sinkState]
@@ -74,8 +86,11 @@ type Player struct {
 	volume atomic.Uint32 // linear gain, derived from step and the current output's curve
 	step   atomic.Int32
 
-	pathMu sync.Mutex
-	out    Output
+	pathMu       sync.Mutex
+	out          Output
+	jack         Output
+	outputMode   atomic.Int32
+	outputModeMu sync.Mutex
 
 	voiceMu    sync.Mutex
 	voice      Resampler
@@ -153,7 +168,11 @@ func (p *Player) Written() uint64 { return p.written.Load() }
 // New makes the speaker without taking the hardware, so callers can hold it before there is anything
 // to play through. Audio queued before Start waits; Volume and the rest work throughout.
 func New() *Player {
-	p := &Player{out: DetectOutput()}
+	detected := DetectOutput()
+	p := &Player{
+		out:  detected,
+		jack: detected,
+	}
 	p.voice, p.resampling = NewResampler(config.ResampleSinc)
 	p.SetVolume(VolumeSteps)
 	p.on.Store(config.DefaultASP)
@@ -306,16 +325,54 @@ func (p *Player) setOutput(out Output) {
 	p.OnOutput.Emit(out)
 }
 
-// watchJack follows the headphone jack.
+// desiredOutput resolves the selected mode to the output the codec should use.
+func (p *Player) desiredOutput() Output {
+	switch OutputMode(p.outputMode.Load()) {
+	case OutputModeSpeaker:
+		return OutputSpeaker
+	case OutputModeHeadphone:
+		return OutputHeadphone
+	default:
+		return DetectOutput()
+	}
+}
+
+// SetOutputMode selects automatic jack detection or forces one output.
+func (p *Player) SetOutputMode(mode OutputMode) {
+	p.outputModeMu.Lock()
+	defer p.outputModeMu.Unlock()
+
+	p.outputMode.Store(int32(mode))
+	p.setOutput(p.desiredOutput())
+}
+
+// watchJack tracks the physical headphone jack and follows it when automatic output selection is enabled.
 func (p *Player) watchJack(ctx context.Context) {
 	t := time.NewTicker(jackPoll)
 	defer t.Stop()
+
 	for {
 		select {
 		case <-ctx.Done():
 			return
+
 		case <-t.C:
-			p.setOutput(DetectOutput())
+			detected := DetectOutput()
+
+			p.pathMu.Lock()
+			changed := p.jack != detected
+			p.jack = detected
+			p.pathMu.Unlock()
+
+			if changed {
+				p.OnJack.Emit(detected)
+			}
+
+			p.outputModeMu.Lock()
+			if OutputMode(p.outputMode.Load()) == OutputModeAuto {
+				p.setOutput(detected)
+			}
+			p.outputModeMu.Unlock()
 		}
 	}
 }
