@@ -452,27 +452,29 @@ func (t *Timers) ripe(now time.Time) {
 // Home Assistant stopped listening cannot be told different stories. A timer of the device's own that has
 // run out rings. One of Home Assistant's rings if it has only just gone — the event for it is late or was
 // never coming — and is recorded as missed if it went by while nothing was listening. One that is still
-// counting is dropped quietly: Home Assistant keeps its own timer and will end it itself, and a ring here
-// would be one nobody asked for.
+// counting, or paused, is dropped quietly: Home Assistant keeps its own timer and will end it itself, and a
+// ring here would be one nobody asked for.
+//
+// Only a timer rung or recorded as missed here is remembered as ended, so that its late event is not a
+// second ring. One dropped quietly is still Home Assistant's to finish, and its event is the only ring it gets.
 func (t *Timers) end(ids []string, now time.Time) {
 	for _, id := range ids {
 		t.mu.Lock()
 		c := t.held[id]
-		name, due, local := "", now, false
-		if c != nil {
-			name, due, local = c.name, c.due(), c.local
-			if !local {
-				if t.ended == nil {
-					t.ended = map[string]time.Time{}
-				}
-				t.ended[id] = now
-			}
+		if c == nil {
+			// Ended already, between being picked out and now.
+			t.mu.Unlock()
+			continue
 		}
+		name, due, local := c.name, c.due(), c.local
+		dropped := !local && (!c.active || now.Before(due))
 		delete(t.held, id)
-		for ended, at := range t.ended {
-			if now.Sub(at) > resumeWithin {
-				delete(t.ended, ended)
+		t.pruneEnded(now)
+		if !local && !dropped {
+			if t.ended == nil {
+				t.ended = map[string]time.Time{}
 			}
+			t.ended[id] = now
 		}
 		saved := t.saved(now)
 		t.mu.Unlock()
@@ -482,7 +484,7 @@ func (t *Timers) end(ids []string, now time.Time) {
 			saveLocal(saved)
 			slog.Info("timer finished here", "name", name)
 			t.startRinging(cmp.Or(name, "Timer"))
-		case now.Before(due):
+		case dropped:
 			slog.Info("a timer dropped as Home Assistant stopped listening", "name", name)
 		case now.Sub(due) <= resumeWithin:
 			slog.Info("a timer finished and the event for it never came", "name", name)
@@ -618,6 +620,7 @@ func (t *Timers) forget(id string) {
 func (t *Timers) finished(e esphome.TimerEvent) {
 	t.mu.Lock()
 	delete(t.held, e.TimerID)
+	t.pruneEnded(time.Now())
 	_, ended := t.ended[e.TimerID]
 	delete(t.ended, e.TimerID)
 	t.mu.Unlock()
@@ -628,6 +631,17 @@ func (t *Timers) finished(e esphome.TimerEvent) {
 		return
 	}
 	t.startRinging(cmp.Or(e.Name, "Timer"))
+}
+
+// pruneEnded lets go of timers ended here longer ago than a late event for them could still be coming. It
+// runs wherever ended is written or read, so an entry does not wait on the next timer to end. Call it with
+// the lock held.
+func (t *Timers) pruneEnded(now time.Time) {
+	for id, at := range t.ended {
+		if now.Sub(at) > resumeWithin {
+			delete(t.ended, id)
+		}
+	}
 }
 
 // startRinging rings for a timer that has run out, or joins the ringing already going: one alarm

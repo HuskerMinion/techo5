@@ -9,6 +9,7 @@ import (
 	"github.com/ygelfand/go-esphome-device/api"
 
 	"github.com/HuskerMinion/techo5/echod/internal/config"
+	"github.com/HuskerMinion/techo5/echod/internal/feature/ring"
 	"github.com/HuskerMinion/techo5/echod/internal/hardware/led"
 )
 
@@ -487,5 +488,71 @@ func TestForgetEndsHomeAssistantsTimerThatHasRunOut(t *testing.T) {
 	}
 	if !ts.Ringing() {
 		t.Error("a timer that had just run out was dropped without ringing when Home Assistant stopped listening")
+	}
+}
+
+// A timer dropped because Home Assistant stopped listening is not one the device ended: Home Assistant
+// still has it, and when it finishes there its event is the only ring it gets.
+func TestATimerForgottenWhileCountingStillRingsWhenItFinishes(t *testing.T) {
+	ts := build()
+	t.Cleanup(func() { ts.Stop() })
+	ts.Event(started("kettle", 600))
+
+	ts.Forget()
+	ts.Event(esphome.TimerEvent{
+		Type:    api.VoiceAssistantTimerEvent_VOICE_ASSISTANT_TIMER_FINISHED,
+		TimerID: "kettle",
+		Name:    "kettle",
+	})
+
+	if !ts.Ringing() {
+		t.Error("a timer dropped while it was still counting did not ring when Home Assistant finished it")
+	}
+}
+
+// A paused timer has no moment it runs out, so forgetting one drops it quietly: it is neither rung nor
+// recorded as missed, however long ago it was paused.
+func TestForgetDropsAPausedTimerQuietly(t *testing.T) {
+	now := time.Now()
+	ts := build()
+	t.Cleanup(func() { ts.Stop(); ring.ClearMissed() })
+	ring.ClearMissed()
+
+	paused := started("kettle", 180)
+	paused.IsActive = false
+	ts.Event(paused)
+	ranOut(ts, "kettle", 3*time.Hour, now)
+
+	ts.Forget()
+
+	if len(ts.held) != 0 {
+		t.Errorf("holding %d timers, want none", len(ts.held))
+	}
+	if ts.Ringing() {
+		t.Error("a paused timer was rung when Home Assistant stopped listening")
+	}
+	if got := ring.Missing(); len(got) != 0 {
+		t.Errorf("a paused timer was recorded as missed: %v", got)
+	}
+	if len(ts.ended) != 0 {
+		t.Error("a paused timer was taken for one the device had ended")
+	}
+}
+
+// What the device ended is only remembered for as long as a late event could still be on its way, and a
+// finishing event is where it is looked at, so that is where it is let go.
+func TestWhatWasEndedHereIsLetGoOfWhenAnEventComes(t *testing.T) {
+	ts := build()
+	t.Cleanup(func() { ts.Stop() })
+	ts.ended = map[string]time.Time{"kettle": time.Now().Add(-resumeWithin - time.Second)}
+
+	ts.Event(esphome.TimerEvent{
+		Type:    api.VoiceAssistantTimerEvent_VOICE_ASSISTANT_TIMER_FINISHED,
+		TimerID: "pasta",
+		Name:    "pasta",
+	})
+
+	if len(ts.ended) != 0 {
+		t.Errorf("still remembering %d timers ended here long ago", len(ts.ended))
 	}
 }
