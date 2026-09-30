@@ -442,14 +442,20 @@ func (t *Timers) ripe(now time.Time) {
 			done = append(done, id)
 		}
 	}
-	for id, at := range t.ended {
-		if now.Sub(at) > resumeWithin {
-			delete(t.ended, id)
-		}
-	}
 	t.mu.Unlock()
+	t.end(done, now)
+}
 
-	for _, id := range done {
+// end takes timers off the held list and says what became of each.
+//
+// It is the one place that decides, so that a timer ended by the clock running out and one ended because
+// Home Assistant stopped listening cannot be told different stories. A timer of the device's own that has
+// run out rings. One of Home Assistant's rings if it has only just gone — the event for it is late or was
+// never coming — and is recorded as missed if it went by while nothing was listening. One that is still
+// counting is dropped quietly: Home Assistant keeps its own timer and will end it itself, and a ring here
+// would be one nobody asked for.
+func (t *Timers) end(ids []string, now time.Time) {
+	for _, id := range ids {
 		t.mu.Lock()
 		c := t.held[id]
 		name, due, local := "", now, false
@@ -463,6 +469,11 @@ func (t *Timers) ripe(now time.Time) {
 			}
 		}
 		delete(t.held, id)
+		for ended, at := range t.ended {
+			if now.Sub(at) > resumeWithin {
+				delete(t.ended, ended)
+			}
+		}
 		saved := t.saved(now)
 		t.mu.Unlock()
 
@@ -471,6 +482,8 @@ func (t *Timers) ripe(now time.Time) {
 			saveLocal(saved)
 			slog.Info("timer finished here", "name", name)
 			t.startRinging(cmp.Or(name, "Timer"))
+		case now.Before(due):
+			slog.Info("a timer dropped as Home Assistant stopped listening", "name", name)
 		case now.Sub(due) <= resumeWithin:
 			slog.Info("a timer finished and the event for it never came", "name", name)
 			t.startRinging(cmp.Or(name, "Timer"))
@@ -526,9 +539,18 @@ func (t *Timers) describe(now time.Time) string {
 
 	said := make([]string, 0, len(running))
 	for _, c := range running {
-		said = append(said, cmp.Or(c.name, "Timer")+" "+LeftText(c.remaining(now)))
+		said = append(said, cmp.Or(c.name, "Timer")+" at "+clockText(c.due()))
 	}
 	return strings.Join(said, ", ")
+}
+
+// clockText is a time of day as this device writes one, following the screen's twelve or twenty-four hour
+// setting, so that a timer read in Home Assistant is written the way the panel would write it.
+func clockText(t time.Time) string {
+	if config.Get().Screen.Clock24 {
+		return t.Format("15:04")
+	}
+	return t.Format("3:04 PM")
 }
 
 // Forget drops every timer, for a Home Assistant that has stopped listening: it holds them in memory
@@ -536,25 +558,14 @@ func (t *Timers) describe(now time.Time) string {
 // nothing. Whatever is already ringing carries on, since that no longer depends on Home Assistant.
 func (t *Timers) Forget() {
 	t.mu.Lock()
-	n := 0
-	// The device's own timers stay. They finish from this clock and are meant to run with Home
-	// Assistant away — that is what makes them local — so dropping them because Home Assistant
-	// stopped listening threw away the one kind that was still counting down to something real.
+	var gone []string
 	for id, c := range t.held {
-		if c.local {
-			continue
+		if !c.local {
+			gone = append(gone, id)
 		}
-		delete(t.held, id)
-		n++
 	}
 	t.mu.Unlock()
-
-	if n > 0 {
-		slog.Info("Home Assistant's timers forgotten", "count", n)
-	}
-	t.show()
-	t.publish()
-	t.Changed.Emit(struct{}{})
+	t.end(gone, time.Now())
 }
 
 // Ringing reports whether a finished timer is sounding, which is one of the things that makes the
