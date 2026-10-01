@@ -19,3 +19,27 @@ func TestGainForStepUnknownOutput(t *testing.T) {
 		t.Errorf("gainForStep(bluetooth, top) = %v, want the speaker's %v", got, want)
 	}
 }
+
+func TestDesiredOutput(t *testing.T) {
+	cases := []struct {
+		name     string
+		mode     OutputMode
+		detected Output
+		want     Output
+	}{
+		{"automatic, empty jack", OutputModeAuto, OutputSpeaker, OutputSpeaker},
+		{"automatic, plugged in", OutputModeAuto, OutputHeadphone, OutputHeadphone},
+		{"speaker, plugged in", OutputModeSpeaker, OutputHeadphone, OutputSpeaker},
+		{"headphones, empty jack", OutputModeHeadphone, OutputSpeaker, OutputSpeaker},
+		{"headphones, plugged in", OutputModeHeadphone, OutputHeadphone, OutputHeadphone},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			p := &Player{}
+			p.outputMode.Store(int32(tc.mode))
+			if got := p.desiredOutput(tc.detected); got != tc.want {
+				t.Errorf("desiredOutput(%s) = %s, want %s", tc.detected, got, tc.want)
+			}
+		})
+	}
+}

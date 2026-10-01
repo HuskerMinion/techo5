@@ -53,7 +53,7 @@ const (
 	PlaybackDevice = 23
 )
 
-// OutputMode controls whether playback follows jack detection or forces an output.
+// OutputMode selects automatic routing, the speaker, or headphones when plugged in.
 type OutputMode int32
 
 const (
@@ -326,27 +326,30 @@ func (p *Player) setOutput(out Output) {
 }
 
 // desiredOutput resolves the selected mode to the output the codec should use.
-func (p *Player) desiredOutput() Output {
+func (p *Player) desiredOutput(detected Output) Output {
 	switch OutputMode(p.outputMode.Load()) {
 	case OutputModeSpeaker:
 		return OutputSpeaker
 	case OutputModeHeadphone:
-		return OutputHeadphone
+		if detected == OutputHeadphone {
+			return OutputHeadphone
+		}
+		return OutputSpeaker
 	default:
-		return DetectOutput()
+		return detected
 	}
 }
 
-// SetOutputMode selects automatic jack detection or forces one output.
+// SetOutputMode selects automatic jack detection, the speaker, or headphones when plugged in.
 func (p *Player) SetOutputMode(mode OutputMode) {
 	p.outputModeMu.Lock()
 	defer p.outputModeMu.Unlock()
 
 	p.outputMode.Store(int32(mode))
-	p.setOutput(p.desiredOutput())
+	p.setOutput(p.desiredOutput(DetectOutput()))
 }
 
-// watchJack tracks the physical headphone jack and follows it when automatic output selection is enabled.
+// watchJack tracks the physical headphone jack and updates playback routing.
 func (p *Player) watchJack(ctx context.Context) {
 	t := time.NewTicker(jackPoll)
 	defer t.Stop()
@@ -369,9 +372,7 @@ func (p *Player) watchJack(ctx context.Context) {
 			}
 
 			p.outputModeMu.Lock()
-			if OutputMode(p.outputMode.Load()) == OutputModeAuto {
-				p.setOutput(detected)
-			}
+			p.setOutput(p.desiredOutput(detected))
 			p.outputModeMu.Unlock()
 		}
 	}
