@@ -42,6 +42,7 @@ const volumeFlash = 2 * time.Second
 // stoppedFor is how long a stopped track stays paused before it is ended.
 const stoppedFor = 30 * time.Minute
 
+// Audio output options shown in Home Assistant.
 const (
 	outputAutomatic = "Automatic"
 	outputSpeaker   = "Internal speaker"
@@ -447,6 +448,7 @@ func (p *Player) Entities() []esphome.Entity {
 	return out
 }
 
+// applyOutputMode routes playback and publishes the selected option on devices with a jack.
 func (p *Player) applyOutputMode(mode config.OutputMode) {
 	if !speaker.HasJack {
 		return

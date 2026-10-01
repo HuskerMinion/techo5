@@ -57,8 +57,11 @@ const (
 type OutputMode int32
 
 const (
+	// OutputModeAuto follows the jack switch.
 	OutputModeAuto OutputMode = iota
+	// OutputModeSpeaker selects the internal speaker.
 	OutputModeSpeaker
+	// OutputModeHeadphone selects headphones when plugged in, otherwise the speaker.
 	OutputModeHeadphone
 )
 

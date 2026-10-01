@@ -80,6 +80,7 @@ func (w SpeakerWriter) Resampling(v Resampling) error {
 	return w.st.Update(func(c *Config) { c.Speaker.Resampling = v })
 }
 
+// OutputMode saves the selected audio output mode.
 func (w SpeakerWriter) OutputMode(v OutputMode) error {
 	return w.st.Update(func(c *Config) { c.Speaker.OutputMode = v })
 }
