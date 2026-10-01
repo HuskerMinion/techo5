@@ -17,6 +17,7 @@ type Output string
 const (
 	OutputSpeaker   Output = "speaker"
 	OutputHeadphone Output = "headphone"
+	HasJack                = true
 )
 
 // The playback ring: the Show's, since it is the same LineageOS kernel and AFE driver.

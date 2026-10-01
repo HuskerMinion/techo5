@@ -17,6 +17,7 @@ type Output string
 const (
 	OutputSpeaker   Output = "speaker"
 	OutputHeadphone Output = "headphone"
+	HasJack                = true
 )
 
 // The mixer sequences below come direct from the device.

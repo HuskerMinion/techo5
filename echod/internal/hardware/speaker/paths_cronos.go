@@ -19,6 +19,7 @@ type Output string
 const (
 	OutputSpeaker   Output = "speaker"
 	OutputHeadphone Output = "headphone"
+	HasJack                = false
 )
 
 // The playback ring: the vendor HAL's period at twice its depth.

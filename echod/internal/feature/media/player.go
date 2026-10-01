@@ -281,8 +281,11 @@ func build() *Player {
 	p.layers = noiseLayers()
 
 	// The player itself stays on the device: it is what people reach for. These are how it behaves.
-	bases := []*esphome.Base{&p.resampling.Base, &p.onTurn.Base, &p.duck.Base, &p.jack.Base, &p.output.Base, &p.asp.Base,
+	bases := []*esphome.Base{&p.resampling.Base, &p.onTurn.Base, &p.duck.Base, &p.jack.Base, &p.asp.Base,
 		&p.bass.Base, &p.treble.Base, &p.quiet.Base, &p.nearMiss.Base, &p.haSounds.Base}
+	if speaker.HasJack {
+		bases = append(bases, &p.output.Base)
+	}
 	for _, sel := range p.layers {
 		bases = append(bases, &sel.Base)
 	}
@@ -432,8 +435,11 @@ func (p *Player) SetHASounds(on bool) {
 }
 
 func (p *Player) Entities() []esphome.Entity {
-	out := []esphome.Entity{p.mp, p.jack, p.output, p.resampling, p.onTurn, p.duck, p.asp, p.bass, p.treble,
+	out := []esphome.Entity{p.mp, p.jack, p.resampling, p.onTurn, p.duck, p.asp, p.bass, p.treble,
 		p.quiet, p.nearMiss, p.haSounds, p.sleep.sel}
+	if speaker.HasJack {
+		out = append(out, p.output)
+	}
 	for _, sel := range p.layers {
 		out = append(out, sel)
 	}
@@ -441,6 +447,10 @@ func (p *Player) Entities() []esphome.Entity {
 }
 
 func (p *Player) applyOutputMode(mode config.OutputMode) {
+	if !speaker.HasJack {
+		return
+	}
+
 	switch mode {
 	case config.OutputModeSpeaker:
 		speaker.Get().SetOutputMode(speaker.OutputModeSpeaker)
