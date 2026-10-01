@@ -317,8 +317,10 @@ func (p *Player) setOutput(out Output) {
 	p.apply(pathSequence[out])
 	p.pathMu.Unlock()
 
-	time.Sleep(codecSettle)
-	p.amp(true)
+	if _, mixer := p.device(); mixer != nil {
+		time.Sleep(codecSettle)
+		p.amp(true)
+	}
 
 	p.SetVolume(int(p.step.Load()))
 	slog.Info("output changed", "output", out)
