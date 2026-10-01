@@ -311,18 +311,28 @@ func (p *Player) setOutput(out Output) {
 	if AmpSwitch != "" {
 		p.apply([]kctl{{name: AmpSwitch, value: "Off"}})
 	}
+	if out == OutputHeadphone && p.sink.Load() == nil {
+		if _, mixer := p.device(); mixer != nil {
+			// Keep both outputs off until old-gain samples have cleared the playback ring.
+			p.apply(headphoneOff)
+			p.pathMu.Unlock()
+			p.SetVolume(int(p.step.Load()))
+			time.Sleep(time.Duration(period*(periods+1)) * time.Second / Rate)
+			p.pathMu.Lock()
+		}
+	}
 	if out == OutputSpeaker {
 		p.apply(headphoneOff)
 	}
 	p.apply(pathSequence[out])
 	p.pathMu.Unlock()
 
+	p.SetVolume(int(p.step.Load()))
 	if _, mixer := p.device(); mixer != nil {
 		time.Sleep(codecSettle)
 		p.amp(true)
 	}
 
-	p.SetVolume(int(p.step.Load()))
 	slog.Info("output changed", "output", out)
 }
 
