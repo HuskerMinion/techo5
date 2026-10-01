@@ -74,9 +74,6 @@ type Player struct {
 	// hold is DRAMHold, kept open for as long as pb is: see paths_cronos.go.
 	hold *os.File
 
-	// Output changed: the codec moved between speaker and headphone output.
-	OnOutput hook.Hook[Output]
-
 	// Jack changed: a headphone was physically plugged in or pulled out.
 	OnJack hook.Hook[Output]
 
@@ -89,7 +86,7 @@ type Player struct {
 	pathMu       sync.Mutex
 	out          Output
 	jack         Output
-	outputMode   atomic.Int32
+	outputMode   OutputMode
 	outputModeMu sync.Mutex
 
 	voiceMu    sync.Mutex
@@ -324,12 +321,11 @@ func (p *Player) setOutput(out Output) {
 
 	p.SetVolume(int(p.step.Load()))
 	slog.Info("output changed", "output", out)
-	p.OnOutput.Emit(out)
 }
 
 // desiredOutput resolves the selected mode to the output the codec should use.
 func (p *Player) desiredOutput(detected Output) Output {
-	switch OutputMode(p.outputMode.Load()) {
+	switch p.outputMode {
 	case OutputModeSpeaker:
 		return OutputSpeaker
 	case OutputModeHeadphone:
@@ -347,7 +343,7 @@ func (p *Player) SetOutputMode(mode OutputMode) {
 	p.outputModeMu.Lock()
 	defer p.outputModeMu.Unlock()
 
-	p.outputMode.Store(int32(mode))
+	p.outputMode = mode
 	p.setOutput(p.desiredOutput(DetectOutput()))
 }
 
@@ -431,7 +427,6 @@ func (p *Player) Run(ctx context.Context) error {
 
 	p.amp(true)
 	slog.Info("playback path up", "output", out)
-	p.OnOutput.Emit(out)
 	safe.Go("jack watcher", func() { p.watchJack(ctx) })
 
 	silence := make([]byte, len(buf))

@@ -36,7 +36,7 @@ func TestDesiredOutput(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			p := &Player{}
-			p.outputMode.Store(int32(tc.mode))
+			p.outputMode = tc.mode
 			if got := p.desiredOutput(tc.detected); got != tc.want {
 				t.Errorf("desiredOutput(%s) = %s, want %s", tc.detected, got, tc.want)
 			}

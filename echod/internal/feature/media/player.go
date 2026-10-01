@@ -310,6 +310,7 @@ func build() *Player {
 
 		if err := config.Set().Speaker().OutputMode(mode); err != nil {
 			slog.Error("saving the audio output setting failed", "err", err)
+			p.output.Set(p.output.Get())
 			return
 		}
 		p.applyOutputMode(mode)
@@ -470,6 +471,9 @@ func (p *Player) applyOutputMode(mode config.OutputMode) {
 // is starting where it left off.
 func (p *Player) Restore(c config.Config) {
 	p.applyOutputMode(c.Speaker.OutputMode)
+	if speaker.HasJack {
+		slog.Info("restored", "what", p.output.ObjectID, "using", p.output.Get())
+	}
 
 	p.apply(c.Speaker.Volume, false)
 	slog.Info("restored", "what", "volume", "step", c.Speaker.Volume, "of", VolumeSteps)

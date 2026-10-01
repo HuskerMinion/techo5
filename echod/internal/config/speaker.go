@@ -116,7 +116,7 @@ func (w SpeakerWriter) ASP(v bool) error {
 	return w.st.Update(func(c *Config) { c.Speaker.ASP, c.Speaker.ASPChosen = v, true })
 }
 
-// OutputMode controls whether playback follows jack detection or forces an output.
+// OutputMode selects automatic routing, the speaker, or headphones when plugged in.
 type OutputMode string
 
 const (
