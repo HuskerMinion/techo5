@@ -193,6 +193,31 @@ yourself. Each comes as two files, a `.json` and a `.tflite` with the same name 
 3. Pick the new wake word in the device's **Wake word** list, on the Assist satellite in Home
    Assistant. The device downloads it from Home Assistant and keeps it.
 
+### Sounds of your own
+
+The sounds a voice request makes can be recordings of your own. Put a WAVE file named for the sound
+in `/data/misc/techo5/sounds` on the device, over SSH
+([Set the SSH authorized keys](actions.md#set-the-ssh-authorized-keys)):
+
+| File | Plays in place of |
+|---|---|
+| `wake_word_triggered.wav` | the wake sound, and a follow-up's, where **Wake sound** is Home Assistant |
+| `failure.wav` | the falling notes when a request cannot be served |
+| `canceled.wav` | the notes when a request is dropped |
+| `timer_finished.wav` | a finished timer, and the Home Assistant alarm sound |
+| `mute_switch_on.wav`, `mute_switch_off.wav` | muting and unmuting the microphones |
+
+The timer and mute files play where **Home Assistant sounds** is on. A file has to be 16-bit, at
+48 kHz, mono or stereo, and at most 10 seconds long. It plays at the level it was recorded at, as the
+stock sounds do. ffmpeg converts anything else:
+
+```sh
+ffmpeg -i chime.flac -ac 1 -ar 48000 -c:a pcm_s16le wake_word_triggered.wav
+```
+
+A new or changed file plays the next time its sound does, with no restart, and deleting it brings the
+stock sound back. A file the device cannot play leaves the stock sound playing, and the log says why.
+
 Alarms and timers work by voice, on the screen, and from Home Assistant. See
 [docs/actions.md](actions.md) for all of them.
 

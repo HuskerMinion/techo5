@@ -3,9 +3,15 @@ package speaker
 import (
 	"embed"
 	"encoding/binary"
+	"fmt"
 	"io/fs"
+	"log/slog"
 	"math"
+	"os"
+	"path/filepath"
 	"sync"
+
+	"github.com/HuskerMinion/techo5/echod/internal/layout"
 )
 
 // Recorded sounds, where a tone is a note made here: the Home Assistant Voice sounds (sounds/LICENSE.md,
@@ -16,11 +22,24 @@ import (
 //go:embed sounds/*.pcm
 var clipFiles embed.FS
 
+// SoundsDir is where recordings of the owner's own are kept. A 16-bit WAVE file at Rate named for a
+// clip, wake_word_triggered.wav say, plays in its place, and taking it away puts the stock one back.
+// Either is noticed the next time the clip plays, so neither needs a restart.
+var SoundsDir = filepath.Join(layout.StateDir, "sounds")
+
+// longestOwn is the most a recording of the owner's own may hold: a cue, not a song, and the whole of
+// it is held in memory as samples.
+const longestOwn = 10 * Rate * Channels * 2
+
 // Clip is one recorded sound.
 type Clip struct {
 	file string
 
-	once    sync.Once
+	// Everything below is guarded by mu, and is what load last read.
+	mu      sync.Mutex
+	from    recording
+	loaded  bool
+	own     bool    // samples are the owner's recording rather than the stock one
 	samples []int16 // mono, at Rate
 	peak    float64 // the loudest sample, as a share of full scale
 	loudMs  int     // how long it stays within 20 dB of its loudest (Audible)
@@ -28,9 +47,16 @@ type Clip struct {
 
 	// The last rendering and the gain it was made at: a ring plays the same clip at the same level
 	// round after round.
-	mu       sync.Mutex
 	lastGain float64
 	last     []int16
+}
+
+// recording is the file of the owner's own a clip was read from, as of when it was read; the zero
+// value is none. A file replaced or taken away no longer matches it.
+type recording struct {
+	path  string
+	mtime int64
+	size  int64
 }
 
 var (
@@ -38,25 +64,87 @@ var (
 	ClipTimer   = &Clip{file: "timer_finished"}
 	ClipMuteOn  = &Clip{file: "mute_switch_on"}
 	ClipMuteOff = &Clip{file: "mute_switch_off"}
+
+	// ClipFailure and ClipCanceled have no stock recording: they are notes (tones.go) until the owner
+	// puts one of their own in SoundsDir.
+	ClipFailure  = &Clip{file: "failure"}
+	ClipCanceled = &Clip{file: "canceled"}
 )
 
+func (c *Clip) ownPath() string { return filepath.Join(SoundsDir, c.file+".wav") }
+
+// ownRecording is the owner's file for this clip as it stands now, the zero value where there is none.
+func (c *Clip) ownRecording() recording {
+	info, err := os.Stat(c.ownPath())
+	if err != nil {
+		return recording{}
+	}
+	return recording{c.ownPath(), info.ModTime().UnixNano(), info.Size()}
+}
+
+// load reads the clip if it has not been read, or if the owner's recording has changed since. It is
+// called with mu held.
 func (c *Clip) load() {
-	c.once.Do(func() {
-		b, err := clipFiles.ReadFile("sounds/" + c.file + ".pcm")
-		if err != nil {
+	from := c.ownRecording()
+	if c.loaded && from == c.from {
+		return
+	}
+	c.loaded, c.from, c.own, c.last = true, from, false, nil
+	if from != (recording{}) {
+		samples, err := readOwn(from.path)
+		if err == nil {
+			c.own = true
+			c.set(samples)
 			return
 		}
-		c.samples = make([]int16, len(b)/2)
-		var most int
-		for i := range c.samples {
-			s := int16(binary.LittleEndian.Uint16(b[2*i:]))
-			c.samples[i] = s
-			most = max(most, abs(int(s)))
-		}
-		c.peak = float64(most) / math.MaxInt16
-		c.loudMs = loudFor(c.samples, 20)
-		c.quietMs = loudFor(c.samples, 30)
-	})
+		slog.Warn("playing the stock sound instead of the owner's", "file", from.path, "err", err)
+	}
+	b, err := clipFiles.ReadFile("sounds/" + c.file + ".pcm")
+	if err != nil {
+		c.set(nil)
+		return
+	}
+	samples := make([]int16, len(b)/2)
+	for i := range samples {
+		samples[i] = int16(binary.LittleEndian.Uint16(b[2*i:]))
+	}
+	c.set(samples)
+}
+
+func (c *Clip) set(samples []int16) {
+	var most int
+	for _, s := range samples {
+		most = max(most, abs(int(s)))
+	}
+	c.samples = samples
+	c.peak = float64(most) / math.MaxInt16
+	c.loudMs = loudFor(samples, 20)
+	c.quietMs = loudFor(samples, 30)
+}
+
+// readOwn is the owner's recording at path as the device plays it. It has to be at the output's rate
+// already: a recording at another rate played as if it were right is the right sound at the wrong
+// speed.
+func readOwn(path string) ([]int16, error) {
+	info, err := os.Stat(path)
+	if err != nil {
+		return nil, err
+	}
+	if info.Size() > longestOwn {
+		return nil, fmt.Errorf("%d bytes is longer than a sound needs to be", info.Size())
+	}
+	b, err := os.ReadFile(path)
+	if err != nil {
+		return nil, err
+	}
+	samples, f, err := MonoWAV(b)
+	if err != nil {
+		return nil, err
+	}
+	if f.Rate != Rate {
+		return nil, fmt.Errorf("recorded at %d Hz; the device plays %d", f.Rate, Rate)
+	}
+	return samples, nil
 }
 
 // loudFor is how long samples stay within db of their loudest 10 ms: a recorded sound ends in a fade
@@ -93,8 +181,17 @@ func abs(v int) int {
 	return v
 }
 
-// Ms is how long it plays, from the file's size, so listing a clip among the sounds decodes nothing.
+// Ms is how long it plays. The stock one's comes from the file's size, so listing a clip among the
+// sounds decodes nothing unless the owner has a recording of their own for it.
 func (c *Clip) Ms() int {
+	if c.ownRecording() != (recording{}) {
+		c.mu.Lock()
+		defer c.mu.Unlock()
+		c.load()
+		if c.own {
+			return len(c.samples) * 1000 / Rate
+		}
+	}
 	info, err := fs.Stat(clipFiles, "sounds/"+c.file+".pcm")
 	if err != nil {
 		return 0
@@ -104,13 +201,25 @@ func (c *Clip) Ms() int {
 
 // LoudMs is how long it plays loud, before its fade; QuietMs how long before the fade is 30 dB down.
 func (c *Clip) LoudMs() int {
+	c.mu.Lock()
+	defer c.mu.Unlock()
 	c.load()
 	return c.loudMs
 }
 
 func (c *Clip) QuietMs() int {
+	c.mu.Lock()
+	defer c.mu.Unlock()
 	c.load()
 	return c.quietMs
+}
+
+// Own reports whether the owner's recording is what plays.
+func (c *Clip) Own() bool {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.load()
+	return c.own
 }
 
 // Note is the clip as a note, so it goes wherever notes go: a chime, a ring, one round of an alarm.
@@ -120,13 +229,13 @@ func (c *Clip) Note() Note { return Note{Clip: c, Ms: c.Ms()} }
 // feedback tones' level it plays as it was recorded, louder in proportion to a louder level, and
 // never past full scale, since a recording mixed near the top has nowhere left to go.
 func (c *Clip) render(level float64) []int16 {
+	c.mu.Lock()
+	defer c.mu.Unlock()
 	c.load()
 	gain := level / toneLevel
 	if c.peak > 0 {
 		gain = min(gain, 0.98/c.peak)
 	}
-	c.mu.Lock()
-	defer c.mu.Unlock()
 	if c.last != nil && c.lastGain == gain {
 		return c.last // callers copy it into what they queue (Chime, Bell); nothing writes to it
 	}

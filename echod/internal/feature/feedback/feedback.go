@@ -81,7 +81,7 @@ func (f *Feedback) Restore(c config.Config) {
 // failure that can wait until morning.
 func Failure() {
 	if !config.Quiet() {
-		speaker.Sound().Chime(speaker.ToneTrouble)
+		speaker.Sound().Chime(speaker.FailureSound())
 	}
 
 	name := config.Get().Ring.Trouble
@@ -96,6 +96,6 @@ func Failure() {
 // sounds: the ring is already showing the turn ending, so in quiet hours it leaves nothing behind.
 func Canceled() {
 	if !config.Quiet() {
-		speaker.Sound().Chime(speaker.ToneCancel)
+		speaker.Sound().Chime(speaker.CancelSound())
 	}
 }

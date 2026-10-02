@@ -216,61 +216,16 @@ type wavFormat struct {
 	codec                string
 }
 
-// monoPCM takes 16-bit samples out of a RIFF/WAVE body, walking the chunks rather than assuming a
-// 44-byte header: a converted file can carry extra chunks before the data. The result is one channel
-// at speaker.VoiceRate whatever the file carried: Home Assistant is asked for that, but what it
-// serves is decided by its proxy, and a mismatch played as if it were right is speech at the wrong
-// speed.
-//
-// Sizes are handled as uint64. A 32-bit int cannot hold a large RIFF size, and a chunk claiming
-// one turns negative, which slips past a bounds check and panics on the slice.
+// monoPCM is a WAVE body as one channel at speaker.VoiceRate, whatever the file carried: Home
+// Assistant is asked for that, but what it serves is decided by its proxy, and a mismatch played as if
+// it were right is speech at the wrong speed.
 func monoPCM(body []byte) ([]int16, wavFormat, error) {
-	f := wavFormat{channels: 1, rate: speaker.VoiceRate, bits: 16, codec: "wav"}
-	if len(body) < 12 || string(body[0:4]) != "RIFF" || string(body[8:12]) != "WAVE" {
-		return nil, f, fmt.Errorf("not a WAVE file: %d bytes", len(body))
+	mono, w, err := speaker.MonoWAV(body)
+	f := wavFormat{channels: w.Channels, rate: w.Rate, bits: w.Bits, codec: "wav"}
+	if err != nil {
+		return nil, f, err
 	}
-
-	total := uint64(len(body))
-	for off := uint64(12); off+8 <= total; {
-		id := string(body[off : off+4])
-		size := uint64(binary.LittleEndian.Uint32(body[off+4 : off+8]))
-		off += 8
-
-		end := off + size
-		if end > total {
-			end = total
-		}
-
-		switch id {
-		case "fmt ":
-			if end-off >= 16 {
-				f.channels = int(binary.LittleEndian.Uint16(body[off+2:]))
-				f.rate = int(binary.LittleEndian.Uint32(body[off+4:]))
-				f.bits = int(binary.LittleEndian.Uint16(body[off+14:]))
-			}
-		case "data":
-			if f.bits != 16 || f.channels < 1 {
-				return nil, f, fmt.Errorf("unsupported WAVE: %d-bit, %d channels", f.bits, f.channels)
-			}
-			pcm := body[off:end]
-			frames := len(pcm) / (2 * f.channels)
-			mono := make([]int16, frames)
-			for i := range mono {
-				var sum int
-				for c := 0; c < f.channels; c++ {
-					sum += int(int16(binary.LittleEndian.Uint16(pcm[(i*f.channels+c)*2:])))
-				}
-				mono[i] = int16(sum / f.channels)
-			}
-			return toVoiceRate(mono, f.rate), f, nil
-		}
-
-		off = end
-		if size%2 == 1 {
-			off++
-		}
-	}
-	return nil, f, fmt.Errorf("no data chunk in %d bytes", total)
+	return toVoiceRate(mono, f.rate), f, nil
 }
 
 // ToVoiceRate is toVoiceRate, for speech that arrives some other way than a URL.
