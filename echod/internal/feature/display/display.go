@@ -116,6 +116,7 @@ type Display struct {
 	ceiling int // percent Home Assistant asked for
 	autoOn  bool
 	level   float64 // backlight actually applied, 0..BacklightMax, as a running average
+	settled bool    // level has reached the target; settle steps it there between readings
 	view    voice.State
 	viewAt  time.Time
 	volume  int
@@ -499,6 +500,7 @@ func (d *Display) relight(jump bool) {
 	} else {
 		d.level += (target - d.level) * autoSmooth
 	}
+	d.settled = math.Abs(target-d.level) < 0.5
 	level := int(math.Round(d.level))
 	glowing := d.nightGlow
 	d.mu.Unlock()
@@ -1546,6 +1548,7 @@ func (d *Display) Close() error {
 // Run redraws the screen until ctx is canceled: on the second while idle, faster while a turn is
 // on or the volume is showing, and at once when something changes.
 func (d *Display) Run(ctx context.Context) error {
+	go d.settle(ctx)
 	for {
 		wait := d.frame()
 		select {

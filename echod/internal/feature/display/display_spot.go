@@ -149,6 +149,7 @@ type Display struct {
 	dashHoldPt    image.Point
 	autoOn        bool
 	level         float64
+	settled       bool // level has reached the target; settle steps it there between readings
 	view          voice.State
 	viewAt        time.Time
 	volume        int
@@ -406,6 +407,7 @@ func (d *Display) relight(jump bool) {
 	} else {
 		d.level += (target - d.level) * autoSmooth
 	}
+	d.settled = math.Abs(target-d.level) < 0.5
 	level := int(math.Round(d.level))
 	d.mu.Unlock()
 
@@ -1047,6 +1049,7 @@ func (d *Display) Close() error {
 
 // Run redraws until ctx is canceled: on the second while idle, faster while something moves.
 func (d *Display) Run(ctx context.Context) error {
+	go d.settle(ctx)
 	for {
 		wait := d.frame()
 		select {
