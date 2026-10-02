@@ -5,8 +5,9 @@
 //
 // The board's sensor sits behind MediaTek's hwmsensor framework rather than IIO: it has to be
 // switched on through /sys/class/misc/m_alsps_misc and then reports lux as ABS_X events on the
-// input device named m_alsps_input, every alsdelay nanoseconds. (The IIO device on this board is
-// the auxadc, which is why metrics.LuxPath finds nothing.)
+// input device named m_alsps_input. The driver samples every alsdelay nanoseconds, but the input
+// layer drops a value equal to the last, so a reading arrives only when the light changes. (The
+// IIO device on this board is the auxadc, which is why metrics.LuxPath finds nothing.)
 package ambient
 
 import (
@@ -32,8 +33,8 @@ const (
 	misc       = "/sys/class/misc/m_alsps_misc"
 	deviceName = "m_alsps_input"
 
-	// period is how often the driver reports, as alsdelay wants it in nanoseconds. Twice a second
-	// follows a light being switched without chasing every flicker.
+	// period is how often the driver samples, as alsdelay wants it in nanoseconds. Twice a second
+	// follows a light being switched without chasing every flicker. A steady room sends nothing.
 	period = 500 * time.Millisecond
 )
 
