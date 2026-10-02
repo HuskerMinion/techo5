@@ -519,7 +519,8 @@ func allowed(lux float64) float64 {
 	return math.Min(math.Max(f, darkFraction), 1)
 }
 
-// lux is a reading from the room. On the sensor's goroutine, twice a second.
+// lux is a reading from the room, on the sensor's goroutine. Readings come only when the light
+// changes, so this takes the first step and settle the rest.
 func (d *Display) lux(float64) {
 	d.mu.Lock()
 	auto, on := d.autoOn, d.on
