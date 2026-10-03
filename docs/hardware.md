@@ -15,12 +15,12 @@ Items marked *unverified* have not been confirmed on a unit by this project.
 | Display | 5.5-inch 960×480 IPS, DSI video mode, panel `st7701s` (cmdline `lcm=1-st7701s_wsvga_dsi_vdo_cronos_st_truly`), 59.64 Hz, backlight `/sys/class/leds/lcd-backlight` (0–255) |
 | Touch | Goodix GT9xx (`gt9xx`, I²C 2-0x5d), input `goodix-ts`, raw axes 480×960 (panel is mounted rotated), 16 slots |
 | Audio in | 4-mic array into a TI **TLV320AIC3101** ADC (I²C 0-0x18) |
-| Audio out | one speaker on a Maxim **MAX98396** class-D amp (I²C 2-0x3d, reset on `gpio-392`) |
+| Audio out | one speaker on a Maxim **MAX98396** class-D amp (I²C 2-0x3d, reset on `gpio-392`). Some units carry a TI **TAS5805M** at I²C 2-0x2c instead (the kernel has both drivers, and only the one fitted probes); its mixer controls differ, see [#59](https://github.com/HuskerMinion/techo5/issues/59). Which one: `cat /sys/bus/i2c/devices/2-*/name` |
 | Wi-Fi / BT | MediaTek **MT7668** SDIO combo (`mt76x8_wlan.ko`, `mt76x8_bt.ko`, firmware in `/vendor/firmware`) |
 | Sensors | ambient light only: a Solteam **JSA1214** (`alsps`, I²C 0-0x44, kernel `CONFIG_MTK_JSA1214`), exposed as input `m_alsps_input` and Android "Light Sensor". The driver is Amazon's copy of Sensortek's stk3x1x and keeps its proximity attributes, but the chip has no proximity half: nothing ever reports one |
 | Camera | main + sub camera on I²C 0, mechanical lens cover on `gpio-499` (`SW_CAMERA_LENS_COVER`) |
 | Buttons | volume up (`gpio-393`), volume down (`gpio-394`), mic-mute (`gpio-404`) |
-| Bootloader | Amazon LK; stock build `77c8c2e-20211019_182552`, amonet replaces it with `44072a3-20240709_162755`; preloader `29ba1b5-20210311_160043` |
+| Bootloader | Amazon LK; stock build `77c8c2e-20211019_182552`, amonet replaces it with `44072a3-20240709_162755`; preloader `29ba1b5-20210311_160043`. A unit still on the amonet 1.x unlock reports `product: CHECKERS`, `unlock_status: false` and `lk_build_desc 4c6677c-20190328_014231` in fastboot, and boots through a 1 KB microloader header at the front of `boot` and `recovery`; TECHO5 does not boot there (see [install.md](install.md#unlock-the-bootloader-first)) |
 | Kernel | Linux **4.9.337** arm64 (LineageOS build) or **4.9.77** 32-bit ARM (TWRP build); see [Kernels](#kernels) |
 | Stock OS | Fire OS 7 (Android 9 based) |
 

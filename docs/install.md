@@ -30,6 +30,14 @@ FAILED (remote: 'the command you input is restricted on locked hw')
 - Show 8 **1st gen** (crown):
   [amonet-crown](https://xdaforums.com/t/unlock-root-twrp-unbrick-amazon-echo-show-8-1st-gen-2019-crown.4766687/)
 
+**Unlocked before v2.0.0?** A Show 5 2nd gen unlocked with amonet-cronos 1.x is unlocked, but in
+the older way: a microloader at the front of `boot` and `recovery` rather than kaeru, and fastboot
+still says `unlock_status: false`. The installer fails on it at the same write. Flash
+`amonet-cronos-v2.0.1.zip` in the unit's TWRP (the upgrade path the unlock thread gives), then run
+the installer. Afterwards fastboot reports `product: CRONOS` and `unlock_status: true`, and TWRP is
+3.7.0. Signs of the old unlock: TWRP 3.2.3, `fastboot getvar product` answering `CHECKERS`, and
+`adb reboot recovery` from TWRP starting Android instead.
+
 ## What you need
 
 - An Echo Show, **unlocked as above**, running LineageOS 18.1 — the `cronos`, `checkers` or `crown`
