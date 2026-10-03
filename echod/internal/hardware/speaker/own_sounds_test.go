@@ -5,7 +5,9 @@ import (
 	"encoding/binary"
 	"os"
 	"path/filepath"
+	"syscall"
 	"testing"
+	"time"
 )
 
 // ownSounds points SoundsDir at a folder of the test's own for as long as the test runs.
@@ -95,5 +97,51 @@ func TestFailureAndCancelTakeARecording(t *testing.T) {
 	}
 	if got := Length(CancelSound()); got.Milliseconds() != 300 {
 		t.Errorf("cancel lasts %v with a recording of its own", got)
+	}
+}
+
+// The 10-second limit is on how long a recording plays, whatever its channels: a 10-second stereo
+// file is taken, and a 15-second mono one, though fewer bytes, is not.
+func TestTheLimitIsTenSecondsOfSound(t *testing.T) {
+	dir := ownSounds(t)
+	c := &Clip{file: "timer_finished"}
+	writeWAV(t, filepath.Join(dir, "timer_finished.wav"), Rate, 2, 10000)
+	if !c.Own() || c.Ms() != 10000 {
+		t.Errorf("a 10-second stereo recording was not taken: own %v, %d ms", c.Own(), c.Ms())
+	}
+	writeWAV(t, filepath.Join(dir, "timer_finished.wav"), Rate, 1, 15000)
+	if c.Own() {
+		t.Error("a 15-second mono recording was taken")
+	}
+}
+
+// A recording with no sound in it leaves the stock sound playing rather than silence.
+func TestAnEmptyRecordingIsNotPlayed(t *testing.T) {
+	dir := ownSounds(t)
+	c := &Clip{file: "mute_switch_on"}
+	stock := c.Ms()
+	writeWAV(t, filepath.Join(dir, "mute_switch_on.wav"), Rate, 1, 0)
+	if c.Own() || c.Ms() != stock {
+		t.Errorf("an empty recording was taken: own %v, %d ms against the stock %d", c.Own(), c.Ms(), stock)
+	}
+}
+
+// Something in the folder that is not a file, a pipe say, is not read: reading a pipe waits for a
+// writer that may never come, and the sound with it.
+func TestAPipeIsNotRead(t *testing.T) {
+	dir := ownSounds(t)
+	c := &Clip{file: "mute_switch_off"}
+	if err := syscall.Mkfifo(filepath.Join(dir, "mute_switch_off.wav"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	own := make(chan bool, 1)
+	go func() { own <- c.Own() }()
+	select {
+	case got := <-own:
+		if got {
+			t.Error("a pipe was taken for a recording")
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("reading the pipe hung")
 	}
 }

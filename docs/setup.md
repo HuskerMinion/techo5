@@ -196,8 +196,9 @@ yourself. Each comes as two files, a `.json` and a `.tflite` with the same name 
 ### Sounds of your own
 
 The sounds a voice request makes can be recordings of your own. Put a WAVE file named for the sound
-in `/data/misc/techo5/sounds` on the device, over SSH
-([Set the SSH authorized keys](actions.md#set-the-ssh-authorized-keys)):
+in the device's sounds folder, over SSH
+([Set the SSH authorized keys](actions.md#set-the-ssh-authorized-keys)). The folder is
+`/data/misc/echolocal/sounds` on an Echo Dot, and `/data/misc/techo5/sounds` on everything else.
 
 | File | Plays in place of |
 |---|---|
@@ -209,7 +210,8 @@ in `/data/misc/techo5/sounds` on the device, over SSH
 
 The timer and mute files play where **Home Assistant sounds** is on. A file has to be 16-bit, at
 48 kHz, mono or stereo, and at most 10 seconds long. It plays at the level it was recorded at, as the
-stock sounds do. ffmpeg converts anything else:
+stock sounds do. Keep the wake sound short: the device listens for the request only once the wake
+sound has finished, so a long one cuts off the first words. ffmpeg converts anything else:
 
 ```sh
 ffmpeg -i chime.flac -ac 1 -ar 48000 -c:a pcm_s16le wake_word_triggered.wav

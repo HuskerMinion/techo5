@@ -27,9 +27,13 @@ var clipFiles embed.FS
 // Either is noticed the next time the clip plays, so neither needs a restart.
 var SoundsDir = filepath.Join(layout.StateDir, "sounds")
 
-// longestOwn is the most a recording of the owner's own may hold: a cue, not a song, and the whole of
-// it is held in memory as samples.
-const longestOwn = 10 * Rate * Channels * 2
+// longestOwn is the most a recording of the owner's own may hold, in samples: a cue, not a song, and
+// the whole of it is held in memory. largestOwn keeps a file far past that from being read at all;
+// it is twice a 10-second stereo file, so headers and extra chunks never decide it.
+const (
+	longestOwn = 10 * Rate
+	largestOwn = 2 * longestOwn * 2 * 2
+)
 
 // Clip is one recorded sound.
 type Clip struct {
@@ -130,7 +134,10 @@ func readOwn(path string) ([]int16, error) {
 	if err != nil {
 		return nil, err
 	}
-	if info.Size() > longestOwn {
+	if !info.Mode().IsRegular() {
+		return nil, fmt.Errorf("not a file: %v", info.Mode())
+	}
+	if info.Size() > largestOwn {
 		return nil, fmt.Errorf("%d bytes is longer than a sound needs to be", info.Size())
 	}
 	b, err := os.ReadFile(path)
@@ -143,6 +150,12 @@ func readOwn(path string) ([]int16, error) {
 	}
 	if f.Rate != Rate {
 		return nil, fmt.Errorf("recorded at %d Hz; the device plays %d", f.Rate, Rate)
+	}
+	if len(samples) == 0 {
+		return nil, fmt.Errorf("holds no sound")
+	}
+	if len(samples) > longestOwn {
+		return nil, fmt.Errorf("%d ms is longer than a sound needs to be", len(samples)*1000/Rate)
 	}
 	return samples, nil
 }
