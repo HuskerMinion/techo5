@@ -156,6 +156,11 @@ func (v *Voice) Run(ctx context.Context) error {
 // shows on the ring while it comes up.
 func (v *Voice) Ready() bool { return v.vs.Subscribed() || config.Get().Brain.Direct() }
 
+// HomeAssistant reports whether Home Assistant itself has a voice pipeline listening, whatever the
+// brain. Ready is always true with a direct brain, so it says nothing about whether Home Assistant
+// can still reach the device.
+func (v *Voice) HomeAssistant() bool { return v.vs.Subscribed() }
+
 // Start asks for a turn as if that slot's wake word had fired, which is how detection and the
 // buttons both reach a pipeline. What that means from the phase the conversation is already in is
 // the conversation's decision, not the caller's.

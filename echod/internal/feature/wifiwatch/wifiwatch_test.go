@@ -14,16 +14,32 @@ type world struct {
 	gateway    bool
 	reassocs   int
 	said       []string
+
+	deaf     bool   // the radio hears nothing sent to a group
+	noCounts bool   // the IP counters cannot be read
+	in, out  uint64 // the group counters
+}
+
+// groupPackets is the network between two looks: the device sends to groups itself and hears its own
+// copies, and unless it is deaf it hears the rest of the network too.
+func (wd *world) groupPackets() (uint64, uint64, bool) {
+	wd.out += 5
+	wd.in += 5
+	if !wd.deaf {
+		wd.in += 3
+	}
+	return wd.in, wd.out, !wd.noCounts
 }
 
 func (wd *world) watch() *Watch {
 	return &Watch{
-		now:         func() time.Time { return wd.now },
-		haConnected: func() bool { return wd.ha },
-		joined:      func(context.Context) bool { return wd.joined },
-		gatewayUp:   func(context.Context) bool { return wd.gateway },
-		reassociate: func(context.Context) error { wd.reassocs++; return nil },
-		evidence:    func(context.Context) []string { return []string{"supplicant: wpa_state=COMPLETED"} },
+		now:          func() time.Time { return wd.now },
+		haConnected:  func() bool { return wd.ha },
+		groupPackets: wd.groupPackets,
+		joined:       func(context.Context) bool { return wd.joined },
+		gatewayUp:    func(context.Context) bool { return wd.gateway },
+		reassociate:  func(context.Context) error { wd.reassocs++; return nil },
+		evidence:     func(context.Context) []string { return []string{"supplicant: wpa_state=COMPLETED"} },
 		say: func(msg string, args ...any) {
 			for i := 0; i+1 < len(args); i += 2 {
 				if args[i] == "when" {
@@ -149,5 +165,99 @@ func TestItLeavesAloneWhatAReassociationDoesNotCure(t *testing.T) {
 				t.Errorf("reassociated %d times", wd.reassocs)
 			}
 		})
+	}
+}
+
+// A device with a direct brain never has Home Assistant connected, so it goes by group traffic: when
+// that stops while the device stays joined and the gateway answers, it is the rekey, and it is cured
+// the same way, with the same grace and the same backoff.
+func TestWithoutHomeAssistantItGoesByTrafficSentToEveryone(t *testing.T) {
+	wd := start()
+	wd.ha = false
+	w := wd.watch()
+	wd.run(w, time.Minute) // the network is heard, last at 17:00:30
+
+	wd.deaf = true // from 17:01: only its own copies come back
+	wd.run(w, 4*time.Minute)
+	if wd.reassocs != 0 {
+		t.Fatalf("reassociated %d times before the network had been quiet for quiet and then gone", wd.reassocs)
+	}
+	wd.run(w, 2*time.Minute) // quiet from 17:02:30, gone at 17:05:30
+	if wd.reassocs != 1 {
+		t.Fatalf("reassociated %d times once the network had been quiet long enough, want 1", wd.reassocs)
+	}
+	if wd.count("wifi: traffic sent to everyone has been gone") != 1 {
+		t.Errorf("the log does not say what it went by: %q", wd.said)
+	}
+	wd.run(w, 8*time.Minute) // to 17:15; the second try is due at 17:15:30
+	if wd.reassocs != 1 {
+		t.Fatalf("reassociated again inside the first wait: %d", wd.reassocs)
+	}
+
+	wd.deaf = false
+	wd.run(w, time.Minute)
+	if wd.count("wifi: recovered: traffic sent to everyone") != 0 {
+		t.Errorf("said it recovered long after the settle time: %q", wd.said)
+	}
+	if !w.lostAt.IsZero() || w.wait != firstWait {
+		t.Errorf("hearing the network again did not reset the watcher: wait %v, lost at %v", w.wait, w.lostAt)
+	}
+}
+
+// Back within the settle time after a reassociation is said as a recovery.
+func TestWithoutHomeAssistantItSaysTheReassociationWorked(t *testing.T) {
+	wd := start()
+	wd.ha = false
+	w := wd.watch()
+	wd.run(w, time.Minute)
+	wd.deaf = true
+	wd.run(w, 5*time.Minute) // reassociates at 17:05:30
+	if wd.reassocs != 1 {
+		t.Fatalf("reassociated %d times, want 1", wd.reassocs)
+	}
+	wd.deaf = false
+	wd.run(w, time.Minute)
+	if wd.count("wifi: recovered: traffic sent to everyone is back") != 1 {
+		t.Errorf("recovery not said once: %q", wd.said)
+	}
+}
+
+func TestWithoutHomeAssistantItLeavesAloneWhatItCannotTell(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		set  func(*world)
+	}{
+		{"a network that is never heard this boot", func(wd *world) { wd.deaf = true }},
+		{"counters that cannot be read", func(wd *world) { wd.noCounts = true }},
+		{"a gateway that does not answer (the network is down)", func(wd *world) { wd.gateway = false }},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			wd := start()
+			wd.ha = false
+			tc.set(wd)
+			w := wd.watch()
+			wd.run(w, time.Minute)
+			wd.deaf = true
+			wd.run(w, time.Hour)
+			if wd.reassocs != 0 {
+				t.Errorf("reassociated %d times", wd.reassocs)
+			}
+		})
+	}
+}
+
+// Once Home Assistant has connected it is the sign, as before: group traffic still arriving does not
+// hide that Home Assistant can no longer reach the device.
+func TestHomeAssistantStaysTheSignOnceItHasConnected(t *testing.T) {
+	wd := start()
+	w := wd.watch()
+	wd.run(w, time.Minute)
+	wd.ha = false
+	wd.run(w, 5*time.Minute)
+	if wd.reassocs != 1 {
+		t.Fatalf("reassociated %d times with Home Assistant gone and the network still heard, want 1", wd.reassocs)
+	}
+	if wd.count("wifi: Home Assistant has been gone") != 1 {
+		t.Errorf("the log does not name Home Assistant: %q", wd.said)
 	}
 }
