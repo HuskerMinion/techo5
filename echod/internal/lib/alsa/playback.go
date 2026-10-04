@@ -14,6 +14,9 @@ const FormatS16_LE = 2
 var (
 	ioctlWritei = ioc(1, 'A', 0x50, xferiSize)
 	ioctlDrain  = ioc(0, 'A', 0x44, 0)
+
+	// SNDRV_PCM_IOCTL_DELAY: _IOR('A', 0x21, snd_pcm_sframes_t), a signed long, so word sized.
+	ioctlDelay = ioc(2, 'A', 0x21, longSize)
 )
 
 // Playback is an open PCM playback stream.
@@ -133,6 +136,19 @@ func (p *Playback) Write(buf []byte) (int, error) {
 		}
 	}
 	return int(x.result) * p.frameBytes, nil
+}
+
+// Delay is how many frames the card has yet to play: what has been written and not yet reached the
+// codec. The kernel syncs the hardware pointer first, so on a driver whose pointer callback reads the
+// DMA position (MediaTek's AFE does) it is good to a few frames, not just to a period. It is what a
+// frame written now waits before it is heard, less whatever the codec and amplifier add after the
+// ring.
+func (p *Playback) Delay() (int, error) {
+	var d int // snd_pcm_sframes_t is the kernel's long, which is Go's int on both ABIs (see xferi)
+	if err := ioctl(p.f.Fd(), ioctlDelay, unsafe.Pointer(&d)); err != nil {
+		return 0, err
+	}
+	return d, nil
 }
 
 // Drain waits for buffered audio to finish playing.

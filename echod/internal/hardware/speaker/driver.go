@@ -279,7 +279,9 @@ func (d *Driver) Busy() bool {
 }
 
 // HardwareTail is how long the playback buffer goes on sounding after the queue has run out, so
-// nothing should conclude the room is quiet until it has passed.
+// nothing should conclude the room is quiet until it has passed. It is a margin, generous on purpose,
+// and not the output latency: placing audio in time wants Player.Latency, which is what the card
+// reports (about 60 ms on a Show 5, against these 150).
 const HardwareTail = 150 * time.Millisecond
 
 // dry is how long the queue has to stay empty to count as finished. Audio arrives in chunks with gaps

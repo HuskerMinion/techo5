@@ -150,6 +150,12 @@ type Player struct {
 	// written counts frames handed to the card, which is what a Source places audio against.
 	written atomic.Uint64
 
+	// inRing is how many frames the card still had to play just after the last period went in, plus
+	// one, so that zero means the card has not said (no device yet, or a driver that will not answer).
+	// It is read right after the write returns and before the next period is rendered, so it is the
+	// wait a frame rendered now has ahead of it: see Latency.
+	inRing atomic.Int64
+
 	srcMu  sync.Mutex
 	src    Source
 	srcBuf []int16
@@ -173,6 +179,34 @@ func (p *Player) Attach(s Source) {
 
 // Written is the output frame index of the next frame to be handed to the card.
 func (p *Player) Written() uint64 { return p.written.Load() }
+
+// OutputExtra is what the path adds after the ring: the tuning's limiter looks 2 ms ahead (lib/asp
+// mbcl.go), and the AFE's FIFO and the codec's DAC filters about another. Estimated from the parts,
+// not measured; a room that still sits a few milliseconds off another is where to look first.
+const OutputExtra = 3 * time.Millisecond
+
+// DefaultLatency is Latency when the card will not say: a full ring, which is what the write loop
+// keeps it at, and the path after it.
+const DefaultLatency = time.Duration(period*periods)*time.Second/Rate + OutputExtra
+
+// Latency is how long a frame rendered now waits before it is heard: the frames already in the
+// card's ring ahead of it, as the card itself reported after the last write, and the path after the
+// ring. This is the output latency a synchronized stream has to lead by. It is not HardwareTail,
+// which is a margin for deciding the room has gone quiet and is deliberately generous.
+//
+// Measured on a 1st gen Show 5 (2026-10-02, idle loop feeding silence): the ring holds 3072 frames and
+// the card reported 2528 to 2880 of them queued at arbitrary moments, so 53 to 60 ms; just after a
+// write, where a period is rendered, it is close to the full 64 ms.
+//
+// A sink (Bluetooth) is not counted: the codec keeps its pace on silence while the sink plays the
+// audio with a delay of its own that nothing here knows.
+func (p *Player) Latency() time.Duration {
+	n := p.inRing.Load() - 1
+	if n < 0 {
+		return DefaultLatency
+	}
+	return time.Duration(n)*time.Second/Rate + OutputExtra
+}
 
 // New makes the speaker without taking the hardware, so callers can hold it before there is anything
 // to play through. Audio queued before Start waits; Volume and the rest work throughout.
@@ -493,6 +527,13 @@ func (p *Player) Run(ctx context.Context) error {
 				return nil
 			}
 			return err
+		}
+		// What the card holds now is what the period rendered next waits behind, so it is read here,
+		// between the write and the render, and before written moves on to that period.
+		if d, err := pb.Delay(); err == nil && d >= 0 {
+			p.inRing.Store(int64(d) + 1)
+		} else {
+			p.inRing.Store(0)
 		}
 		p.written.Add(period)
 	}
@@ -982,6 +1023,7 @@ func (p *Player) Close() error {
 	pb, mixer, hold := p.pb, p.mixer, p.hold
 	p.pb, p.mixer, p.hold = nil, nil, nil
 	p.devMu.Unlock()
+	p.inRing.Store(0) // the next device says afresh
 
 	if mixer != nil {
 		_ = mixer.Close()

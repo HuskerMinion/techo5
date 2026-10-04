@@ -602,14 +602,58 @@ func (s *session) told(cmd protocol.PlayerCommand) {
 
 // reported echoes what took effect. The server has no other way to learn a command landed, and the
 // protocol carries no position, so this is the whole of what we say back.
+//
+// It goes out as its own client/state rather than through SendState, because sendspin-go v1.8.2's
+// PlayerState has no timing fields and the spec has made them required: Music Assistant's aiosendspin
+// logs a player without them as legacy ("omitted required player timing fields") and can be set to
+// refuse one. The delay is sent under both names it has had: static_delay_ms in aiosendspin 9.1.1,
+// the newest release, and output_delay_ms since the spec renamed it (spec PR #164, in aiosendspin's
+// main branch but not yet released). A server ignores a field it does not know.
+//
+// The delay is 0 and the command to set it is not offered. It is for a chain beyond the device's own
+// port, which a Show does not have; its own latency is compensated here (out.latency), as the spec
+// asks. And it can only move a player earlier, so it could never have fixed a Show playing early.
 func (s *session) reported() {
-	if err := s.client.SendState(protocol.PlayerState{
-		State:  "synchronized",
-		Volume: config.Get().Speaker.Volume * 100 / speaker.VolumeSteps,
-		Muted:  s.muted,
+	if err := s.client.Send("client/state", clientState{
+		Available: true,
+		Player: playerState{
+			State:              "synchronized",
+			Volume:             config.Get().Speaker.Volume * 100 / speaker.VolumeSteps,
+			Muted:              s.muted,
+			StaticDelayMs:      0,
+			OutputDelayMs:      0,
+			RequiredLeadTimeMs: requiredLeadTimeMs,
+			MinBufferMs:        minBufferMs,
+		},
 	}); err != nil {
 		slog.Debug("sendspin client state", "err", err)
 	}
+}
+
+// What the player asks the server for, in the spec's client/state terms. Not measured: the output
+// latency (Player.Latency, about 64 ms) and a decoder starting from cold sit well inside the lead, and
+// the buffer is Wi-Fi jitter with room to spare. The room can hold 30 s (bufferSeconds), so these are
+// floors, not caps.
+const (
+	requiredLeadTimeMs = 300
+	minBufferMs        = 200
+)
+
+// clientState is client/state with the fields sendspin-go does not have yet. available is the spec's
+// replacement for player.state; state stays for a server that predates it.
+type clientState struct {
+	Available bool        `json:"available"`
+	Player    playerState `json:"player"`
+}
+
+type playerState struct {
+	State              string `json:"state,omitempty"`
+	Volume             int    `json:"volume"`
+	Muted              bool   `json:"muted"`
+	StaticDelayMs      int    `json:"static_delay_ms"`
+	OutputDelayMs      int    `json:"output_delay_ms"`
+	RequiredLeadTimeMs int    `json:"required_lead_time_ms"`
+	MinBufferMs        int    `json:"min_buffer_ms"`
 }
 
 // synced keeps the clock filter fed. It owns TimeSyncResp: nothing else may read that channel, or the
