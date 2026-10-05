@@ -30,3 +30,22 @@ func TestGainForStep(t *testing.T) {
 		}
 	}
 }
+
+// The DAC reaches the speaker amp and the jack through the same two mixer switches, and the codec
+// boots with them off, so each output has to turn them on itself: a Dot that started on the jack
+// once stayed silent until the output was changed.
+func TestDotPathsRouteTheDAC(t *testing.T) {
+	for _, out := range []Output{OutputSpeaker, OutputHeadphone} {
+		on := map[string]bool{}
+		for _, k := range pathSequence[out] {
+			if k.level == 1 {
+				on[k.name] = true
+			}
+		}
+		for _, name := range []string{"HPL Output Mixer L_DAC Switch", "HPR Output Mixer R_DAC Switch"} {
+			if !on[name] {
+				t.Errorf("%s: %s not on", out, name)
+			}
+		}
+	}
+}

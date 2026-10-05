@@ -62,6 +62,10 @@ var pathSequence = map[Output][]kctl{
 		{name: driverGain, level: 6},
 	},
 	OutputHeadphone: {
+		// The DAC reaches the jack through these too, and the codec boots with them off: without them
+		// here, a Dot that starts on the jack is silent until the speaker path has run once.
+		{name: "HPL Output Mixer L_DAC Switch", level: 1},
+		{name: "HPR Output Mixer R_DAC Switch", level: 1},
 		{name: "Ignore Ramp Up", value: "On"},
 		{name: driverGain, level: 11},
 		{name: "Audio_DacMux_Setting", value: "On"},
