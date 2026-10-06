@@ -39,6 +39,9 @@ type drawnDrag struct {
 	// down is a finger that came down on the page; moved is one that has gone further than a hold
 	// allows, so lifting it is not a long press.
 	down, moved bool
+	// onSheet is a finger that came down on the color sheet: only one of those that moves chooses
+	// where it lifts, so a drag from the page under the sheet does not set what it ends over.
+	onSheet bool
 }
 
 // colorZone is a part of the color sheet where it was drawn (color_sheet.go): Done, the band of whites
@@ -182,6 +185,10 @@ func (d *Display) drawnHold(x, y int) {
 	d.dashDrag.tile = t
 	d.dashDrag.down = true
 	d.mu.Unlock()
+	onSheet := d.onColorSheet(x, y)
+	d.mu.Lock()
+	d.dashDrag.onSheet = onSheet
+	d.mu.Unlock()
 }
 
 // slideStart is how far a finger moves before it counts as a scroll or a slide rather than a tap
@@ -192,10 +199,7 @@ const slideStart = 14
 // it, and along a tile with a level is that level following it, a tile's width from one end of its
 // range to the other.
 func (d *Display) drawnMove(x, y int) {
-	if d.colorOpen() {
-		// The sheet is over the page: nothing under it scrolls or slides.
-		return
-	}
+	sheet := d.colorOpen()
 	_, content := d.r.dash()
 	d.mu.Lock()
 	defer d.mu.Unlock()
@@ -203,6 +207,11 @@ func (d *Display) drawnMove(x, y int) {
 	dx, dy := x-dr.at.X, y-dr.at.Y
 	if abs(dx) > holdStill || abs(dy) > holdStill {
 		dr.moved = true
+	}
+	if sheet {
+		// The sheet is over the page: nothing under it scrolls or slides. That the finger moved is
+		// kept, for where it lifts (drawnRelease).
+		return
 	}
 	if !dr.sliding && !dr.scrolling {
 		switch {
@@ -234,6 +243,9 @@ func (d *Display) drawnRelease(x, y int) {
 	d.dashDrag = drawnDrag{}
 	d.dashAdjust = dashAdjusting{}
 	d.mu.Unlock()
+	if dr.moved && !dr.onSheet && d.colorOpen() {
+		return // a drag from the page under the sheet: nothing on the sheet was chosen
+	}
 	if d.colorTap(x, y) {
 		return
 	}

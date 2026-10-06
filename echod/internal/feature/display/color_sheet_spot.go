@@ -9,3 +9,5 @@ func (d *Display) longPress(*dashTile) {}
 func (d *Display) colorOpen() bool { return false }
 
 func (d *Display) colorTap(int, int) bool { return false }
+
+func (d *Display) onColorSheet(int, int) bool { return false }

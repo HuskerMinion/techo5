@@ -9,7 +9,10 @@ import (
 	"time"
 
 	"github.com/HuskerMinion/techo5/echod/internal/config"
+	"github.com/HuskerMinion/techo5/echod/internal/feature/announce"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/dashboard"
+	"github.com/HuskerMinion/techo5/echod/internal/feature/remind"
+	"github.com/HuskerMinion/techo5/echod/internal/feature/setup"
 	"github.com/HuskerMinion/techo5/echod/internal/hardware/touch"
 )
 
@@ -125,6 +128,7 @@ func (d *Display) dashScene(s *scene, sheetOrDrawer bool) {
 		d.mu.Unlock()
 	}
 
+	over := d.overDashboard(s)
 	d.mu.Lock()
 	d.dashShowing = want
 	// Either way the page wants every finger as it moves: streamed, to scroll the page under it;
@@ -133,21 +137,44 @@ func (d *Display) dashScene(s *scene, sheetOrDrawer bool) {
 	changed := follow != d.dashFollow
 	d.dashFollow = follow
 	// Drawn, a finger held still on a light is a long press for its colors (color_sheet.go), which
-	// needs holds reported; the color sheet goes with the page.
-	holds := want && mode == config.DashboardDrawn
+	// needs holds reported; the color sheet goes with the page. Not while something that takes only a
+	// tap is drawn over the page (overDashboard): with holds on, a slow press on it would be a hold
+	// and a release, which it does not answer, and which the page under it would.
+	holds := want && mode == config.DashboardDrawn && !over
 	holdsChanged := holds != d.dashHolds
 	d.dashHolds = holds
-	if !holds {
+	if !(want && mode == config.DashboardDrawn) {
 		d.dashColor = nil
 	}
-	glowing := d.nightGlow
 	d.mu.Unlock()
 	if changed {
 		touch.Get().SetFollow(follow)
 	}
 	if holdsChanged {
-		touch.Get().SetHolds(holds || glowing)
+		d.applyHolds()
 	}
+}
+
+// overDashboard is whether something that acts on a tap alone is drawn over the dashboard: a
+// reminder's card, an event's pop-up, the PIN pad, the setup page's Allow and Deny, or an
+// announcement arriving or being recorded.
+func (d *Display) overDashboard(s *scene) bool {
+	_, announcing := announce.Get().Showing()
+	_, reminding := remind.Get().Showing()
+	return s.pin.open || setup.Get().Waiting() || announce.Get().Recording() || announcing || reminding ||
+		d.popupUp() != nil
+}
+
+// applyHolds tells the touchscreen whether to report a finger held still: for the night light's way up
+// (gesture) or the drawn dashboard's long press. What is wanted is read and set in one step under
+// holdsMu, so of two changes at once the later one is what the touchscreen is left with.
+func (d *Display) applyHolds() {
+	d.holdsMu.Lock()
+	defer d.holdsMu.Unlock()
+	d.mu.Lock()
+	holds := d.nightGlow || d.dashHolds
+	d.mu.Unlock()
+	touch.Get().SetHolds(holds)
 }
 
 // dashGesture is a finger on the dashboard. It goes to the page as it moves, except a finger that

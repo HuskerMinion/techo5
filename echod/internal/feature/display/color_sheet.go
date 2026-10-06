@@ -79,6 +79,15 @@ func (d *Display) colorOpen() bool {
 	return d.dashColor != nil
 }
 
+// onColorSheet is whether x, y is on the color sheet, while it is up.
+func (d *Display) onColorSheet(x, y int) bool {
+	if !d.colorOpen() || d.r == nil {
+		return false
+	}
+	_, in := d.r.colorAt(x, y)
+	return in
+}
+
 // colorTap is a finger lifted at x, y while the color sheet is up, which the sheet always takes: the
 // page under it is not tapped. It says whether the sheet was up.
 func (d *Display) colorTap(x, y int) bool {

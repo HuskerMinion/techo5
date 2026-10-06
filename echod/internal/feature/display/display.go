@@ -100,6 +100,9 @@ const (
 )
 
 type Display struct {
+	// holdsMu makes reading whether holds are wanted and telling the touchscreen one step (applyHolds).
+	holdsMu sync.Mutex
+
 	light *esphome.Light
 	auto  *esphome.Switch
 	clock *esphome.Select
@@ -574,12 +577,11 @@ func (d *Display) relight(jump bool) {
 		d.settled = false
 	}
 	level := int(math.Round(d.level))
-	holds := d.nightGlow || d.dashHolds
 	d.mu.Unlock()
 	// A long press is the way up from the night light (gesture), and on the drawn dashboard what opens
 	// a light's colors; this screen reports no holds otherwise. Every change to the night light comes
 	// through here, and the dashboard's own change (dashScene) sets it too.
-	touch.Get().SetHolds(holds)
+	d.applyHolds()
 
 	if err := screen.SetBacklight(level); err != nil {
 		slog.Warn("setting the backlight failed", "err", err)
