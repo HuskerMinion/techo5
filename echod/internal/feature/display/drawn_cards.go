@@ -546,12 +546,14 @@ func cover(src, dst image.Rectangle) image.Rectangle {
 	if sw <= 0 || sh <= 0 || dw <= 0 || dh <= 0 {
 		return src
 	}
+	// At least a pixel: a picture far narrower or flatter than its frame would otherwise come to
+	// nothing, and draw nothing.
 	if sw*dh > sh*dw {
-		w := sh * dw / dh
+		w := max(1, sh*dw/dh)
 		x := src.Min.X + (sw-w)/2
 		return image.Rect(x, src.Min.Y, x+w, src.Max.Y)
 	}
-	h := sw * dh / dw
+	h := max(1, sw*dh/dw)
 	y := src.Min.Y + (sh-h)/2
 	return image.Rect(src.Min.X, y, src.Max.X, y+h)
 }
