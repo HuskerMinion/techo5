@@ -39,12 +39,12 @@ import (
 // meanwhile. Stopping is the view ending, and gives the sound up entirely.
 
 const (
-	// overAhead is how much audio may sit in the speaker's queue, in frames: a second of it, the same
-	// as a track keeps.
-	overAhead = speaker.Rate
-
-	// overPace is how often the reading looks to see whether the queue has room.
-	overPace = 100 * time.Millisecond
+	// overAhead is how much audio may sit in the speaker's queue, in frames, before what arrives on top
+	// of it is dropped: half a second. The sound is live, and Home Assistant's converter holds back the
+	// first seconds of a stream while it works out what is in it, then sends them all at once: played,
+	// they would keep the sound that far behind the picture for as long as it lasts. Dropped, it is
+	// as near live as the network lets it be from the first second on.
+	overAhead = speaker.Rate / 2
 
 	// overStall is how long one read may produce nothing before the sound is given up on.
 	overStall = 30 * time.Second
@@ -448,19 +448,15 @@ func readOverOnce(stop context.Context, url string, spk *speaker.Player, muted f
 	}
 
 	buf := make([]byte, chunk)
+	var dropped int // frames, to say once how far behind the stream started
+	defer func() {
+		if dropped > 0 {
+			slog.Info("sound over the music: caught up with a live stream", "dropped_ms", dropped*1000/speaker.Rate)
+		}
+	}()
 	for {
 		if stop.Err() != nil {
 			return nil // silenced, which is not a failure
-		}
-
-		// About a second ahead of the speaker and no more, so a stream that arrives faster than the
-		// device plays it does not grow in memory.
-		for spk.Queued() > overAhead {
-			select {
-			case <-stop.Done():
-				return nil
-			case <-time.After(overPace):
-			}
 		}
 
 		watchdog := time.AfterFunc(overStall, giveUp)
@@ -475,7 +471,13 @@ func readOverOnce(stop context.Context, url string, spk *speaker.Player, muted f
 			for i := range samples {
 				samples[i] = int16(binary.LittleEndian.Uint16(buf[i*2:]))
 			}
-			spk.Play(samples)
+			if spk.Queued() > overAhead {
+				// Further ahead of the speaker than live allows: a burst the stream sent on top of what
+				// is playing, which is the past by the time it would be heard.
+				dropped += len(samples) / speaker.Channels
+			} else {
+				spk.Play(samples)
+			}
 		}
 
 		switch {
