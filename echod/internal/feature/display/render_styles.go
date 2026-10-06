@@ -441,7 +441,6 @@ func (r *renderer) dashboardStyle(s scene, box image.Rectangle) {
 	days = days[:min(len(days), 5)]
 	// The row sits at the foot, so the middle of the screen is left clear for a tap that starts Assist.
 	row := max(base+r.s(86), box.Max.Y-r.s(150))
-	r.fxLine(float64(box.Min.X), float64(row), float64(box.Max.X), float64(row), float64(r.s(2)), ember, 1)
 	cw := box.Dx() / len(days)
 	for i, d := range days {
 		cx := box.Min.X + cw*i + cw/2
