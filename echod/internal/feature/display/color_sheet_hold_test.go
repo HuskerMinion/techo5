@@ -67,3 +67,36 @@ func TestTheDashboardKnowsWhatIsDrawnOverIt(t *testing.T) {
 		t.Error("an event's pop-up is up, but nothing was over the dashboard")
 	}
 }
+
+// A finger that comes down on the band of whites moves the mark as it goes, also once it has wandered
+// off the band above or below, and the sheet stays up when it lifts.
+func TestASheetsSliderFollowsTheFinger(t *testing.T) {
+	r := newRenderer(image.NewRGBA(image.Rect(0, 0, showWide, showHigh)))
+	light := dashboard.LightColor{Entity: "light.desk", Name: "Desk lamp", Kelvin: true, MinK: 2700, MaxK: 6500, NowK: 2700}
+	r.draw(scene{now: time.Now(), phase: "idle", showDash: true, dashMode: config.DashboardDrawn, drawn: fourControls(), dashColor: &light})
+	var band image.Rectangle
+	r.zmu.Lock()
+	for _, z := range r.colorZones {
+		if z.kind == colorPartWhite {
+			band = z.r
+		}
+	}
+	r.zmu.Unlock()
+	d := &Display{r: r, poke: make(chan struct{}, 1)}
+	d.dashColor = &light
+	mid := (band.Min.Y + band.Max.Y) / 2
+	d.drawnHold(band.Min.X+2, mid)
+	d.drawnMove(band.Min.X+band.Dx()/2, mid)
+	if k := d.dashColor.NowK; k <= 2700 || k >= 6500 {
+		t.Errorf("halfway along the band the mark is at %v kelvin", k)
+	}
+	d.drawnMove(band.Max.X+40, band.Max.Y+60) // past the end, and off the band below
+	if k := d.dashColor.NowK; k != 6500 {
+		t.Errorf("past the band's end the mark is at %v kelvin, want 6500", k)
+	}
+	d.drawnRelease(band.Max.X+40, band.Max.Y+60)
+	if !d.colorOpen() || d.dashColor.NowK != 6500 {
+		t.Errorf("lifted past the end: sheet up %v, mark at %v", d.colorOpen(), d.dashColor.NowK)
+	}
+
+}

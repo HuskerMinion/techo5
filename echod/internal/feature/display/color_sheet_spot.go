@@ -11,3 +11,7 @@ func (d *Display) colorOpen() bool { return false }
 func (d *Display) colorTap(int, int) bool { return false }
 
 func (d *Display) onColorSheet(int, int) bool { return false }
+
+func (d *Display) sliderAt(int, int) (sheetSlider, bool) { return sheetSlider{}, false }
+
+func (d *Display) slideSheet(sheetSlider, int, bool) {}

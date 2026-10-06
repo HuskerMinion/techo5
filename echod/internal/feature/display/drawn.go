@@ -42,6 +42,9 @@ type drawnDrag struct {
 	// onSheet is a finger that came down on the color sheet: only one of those that moves chooses
 	// where it lifts, so a drag from the page under the sheet does not set what it ends over.
 	onSheet bool
+	// slider is the sheet's slider the finger came down on, if it did: it follows the finger along,
+	// and is set where the finger lifts.
+	slider *sheetSlider
 }
 
 // colorZone is a part of the color sheet where it was drawn (color_sheet.go): Done, the band of whites
@@ -50,6 +53,20 @@ type colorZone struct {
 	r             image.Rectangle
 	kind          int
 	value, lo, hi float64
+}
+
+// sheetSlider is a slider on a sheet where it was drawn: the color sheet's band of whites, from lo at
+// its left end to hi at its right.
+type sheetSlider struct {
+	kind   int // colorPartWhite
+	r      image.Rectangle
+	lo, hi float64
+}
+
+// at is the value under x, kept to the slider's ends when the finger is past them.
+func (s sheetSlider) at(x int) float64 {
+	f := float64(x-s.r.Min.X) / float64(max(s.r.Dx()-1, 1))
+	return s.lo + min(max(f, 0), 1)*(s.hi-s.lo)
 }
 
 // holdStill is how far a finger may wander and still be a long press when it lifts: less than the
@@ -186,8 +203,14 @@ func (d *Display) drawnHold(x, y int) {
 	d.dashDrag.down = true
 	d.mu.Unlock()
 	onSheet := d.onColorSheet(x, y)
+	var slider *sheetSlider
+	if onSheet {
+		if s, ok := d.sliderAt(x, y); ok {
+			slider = &s
+		}
+	}
 	d.mu.Lock()
-	d.dashDrag.onSheet = onSheet
+	d.dashDrag.onSheet, d.dashDrag.slider = onSheet, slider
 	d.mu.Unlock()
 }
 
@@ -202,7 +225,6 @@ func (d *Display) drawnMove(x, y int) {
 	sheet := d.colorOpen()
 	_, content := d.r.dash()
 	d.mu.Lock()
-	defer d.mu.Unlock()
 	dr := &d.dashDrag
 	dx, dy := x-dr.at.X, y-dr.at.Y
 	if abs(dx) > holdStill || abs(dy) > holdStill {
@@ -210,9 +232,15 @@ func (d *Display) drawnMove(x, y int) {
 	}
 	if sheet {
 		// The sheet is over the page: nothing under it scrolls or slides. That the finger moved is
-		// kept, for where it lifts (drawnRelease).
+		// kept, for where it lifts (drawnRelease), and a slider it came down on follows it.
+		slider := dr.slider
+		d.mu.Unlock()
+		if slider != nil {
+			d.slideSheet(*slider, x, false)
+		}
 		return
 	}
+	defer d.mu.Unlock()
 	if !dr.sliding && !dr.scrolling {
 		switch {
 		case abs(dx) > d.r.s(slideStart) && abs(dx) > abs(dy) && dr.tile != nil && dr.tile.adjust != nil:
@@ -245,6 +273,10 @@ func (d *Display) drawnRelease(x, y int) {
 	d.mu.Unlock()
 	if dr.moved && !dr.onSheet && d.colorOpen() {
 		return // a drag from the page under the sheet: nothing on the sheet was chosen
+	}
+	if dr.slider != nil && d.colorOpen() {
+		d.slideSheet(*dr.slider, x, true) // where it lifted, wherever it went on the way
+		return
 	}
 	if d.colorTap(x, y) {
 		return

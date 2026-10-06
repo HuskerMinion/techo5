@@ -88,6 +88,38 @@ func (d *Display) onColorSheet(x, y int) bool {
 	return in
 }
 
+// sliderAt is the slider of the sheet that is up under x, y: the color sheet's whites.
+func (d *Display) sliderAt(x, y int) (sheetSlider, bool) {
+	if d.r == nil {
+		return sheetSlider{}, false
+	}
+	if z, in := d.r.colorAt(x, y); in && z.kind == colorPartWhite {
+		return sheetSlider{kind: colorPartWhite, r: z.r, lo: z.lo, hi: z.hi}, true
+	}
+	return sheetSlider{}, false
+}
+
+// slideSheet moves a sheet's slider to the finger at x, as a tile's level follows a finger sliding
+// along it; final, when the finger lifts, sets what it shows.
+func (d *Display) slideSheet(s sheetSlider, x int, final bool) {
+	v := s.at(x)
+	switch s.kind {
+	case colorPartWhite:
+		k := math.Round(v/kelvinSnap) * kelvinSnap
+		k = min(max(k, s.lo), s.hi)
+		d.setShownColor(k)
+		d.mu.Lock()
+		c := d.dashColor
+		d.mu.Unlock()
+		if final && c != nil {
+			slog.Info("dashboard color", "entity", c.Entity, "kelvin", k)
+			dashboard.Get().Tap(dashboard.Action{Entity: c.Entity, Service: "light.turn_on",
+				Data: map[string]any{"color_temp_kelvin": int(k)}})
+		}
+	}
+	d.wake()
+}
+
 // colorTap is a finger lifted at x, y while the color sheet is up, which the sheet always takes: the
 // page under it is not tapped. It says whether the sheet was up.
 func (d *Display) colorTap(x, y int) bool {
