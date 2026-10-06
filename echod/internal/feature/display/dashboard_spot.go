@@ -178,7 +178,7 @@ func (d *Display) dashGestureSpot(g touch.Gesture) {
 			if streamed {
 				f.Touch("up", at.X, at.Y)
 			} else {
-				d.drawnRelease()
+				d.drawnRelease(g.X, g.Y)
 			}
 			d.mu.Lock()
 			d.openMenu(modeMain, itemDashboard)
@@ -189,14 +189,14 @@ func (d *Display) dashGestureSpot(g touch.Gesture) {
 			if streamed {
 				f.Touch("up", at.X, at.Y)
 			} else {
-				d.drawnRelease()
+				d.drawnRelease(g.X, g.Y)
 				d.drawnTap(at.X, at.Y)
 			}
 		default:
 			if streamed {
 				f.Touch("up", g.X, g.Y)
 			} else {
-				d.drawnRelease()
+				d.drawnRelease(g.X, g.Y)
 			}
 		}
 	}

@@ -66,8 +66,9 @@ type scene struct {
 	dash       dashboard.View
 	drawn      dashboard.Drawn
 	dashScroll int
-	dashAdjust dashAdjusting // a level a finger is sliding
-	dashTiles  string        // the Dashboard tiles setting: "", "large" or "fill"
+	dashAdjust dashAdjusting         // a level a finger is sliding
+	dashTiles  string                // the Dashboard tiles setting: "", "large" or "fill"
+	dashColor  *dashboard.LightColor // the color sheet over the page, while it is up
 
 	// bt is the Bluetooth audio state: the pairing page replaces everything while it is on, and a
 	// connected device is named in the footer.

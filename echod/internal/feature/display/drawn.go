@@ -36,7 +36,22 @@ type drawnDrag struct {
 	sliding     bool
 	scrolling   bool
 	value       float64 // the slid level, while sliding
+	// down is a finger that came down on the page; moved is one that has gone further than a hold
+	// allows, so lifting it is not a long press.
+	down, moved bool
 }
+
+// colorZone is a part of the color sheet where it was drawn (color_sheet.go): Done, the band of whites
+// from lo to hi kelvin, or a color whose hue is value.
+type colorZone struct {
+	r             image.Rectangle
+	kind          int
+	value, lo, hi float64
+}
+
+// holdStill is how far a finger may wander and still be a long press when it lifts: less than the
+// touchscreen's followMove, so a finger it began to follow never is.
+const holdStill = 10
 
 // dashAdjusting is the level a finger is sliding, for the tile to draw it.
 type dashAdjusting struct {
@@ -135,6 +150,9 @@ func (r *paint) wrapLines(face font.Face, text string, w int) []string {
 
 // drawnTap is a tap on the drawn dashboard: on a tile, it does what the tile says.
 func (d *Display) drawnTap(x, y int) {
+	if d.colorTap(x, y) {
+		return
+	}
 	if t := d.tileAt(x, y); t != nil && t.action != nil {
 		slog.Info("dashboard tap", "entity", t.action.Entity, "service", t.action.Service, "view", t.action.View)
 		dashboard.Get().Tap(*t.action)
@@ -162,6 +180,7 @@ func (d *Display) drawnHold(x, y int) {
 	d.mu.Lock()
 	d.dashDrag.at = image.Pt(x, y)
 	d.dashDrag.tile = t
+	d.dashDrag.down = true
 	d.mu.Unlock()
 }
 
@@ -173,11 +192,18 @@ const slideStart = 14
 // it, and along a tile with a level is that level following it, a tile's width from one end of its
 // range to the other.
 func (d *Display) drawnMove(x, y int) {
+	if d.colorOpen() {
+		// The sheet is over the page: nothing under it scrolls or slides.
+		return
+	}
 	_, content := d.r.dash()
 	d.mu.Lock()
 	defer d.mu.Unlock()
 	dr := &d.dashDrag
 	dx, dy := x-dr.at.X, y-dr.at.Y
+	if abs(dx) > holdStill || abs(dy) > holdStill {
+		dr.moved = true
+	}
 	if !dr.sliding && !dr.scrolling {
 		switch {
 		case abs(dx) > d.r.s(slideStart) && abs(dx) > abs(dy) && dr.tile != nil && dr.tile.adjust != nil:
@@ -200,16 +226,23 @@ func (d *Display) drawnMove(x, y int) {
 	}
 }
 
-// drawnRelease is the finger lifting: a slide sets its level.
-func (d *Display) drawnRelease() {
+// drawnRelease is the finger lifting at x, y: a slide sets its level, and a finger that stayed put
+// until it was a hold is a long press (longPress). With the color sheet up, it is the sheet's.
+func (d *Display) drawnRelease(x, y int) {
 	d.mu.Lock()
 	dr := d.dashDrag
 	d.dashDrag = drawnDrag{}
 	d.dashAdjust = dashAdjusting{}
 	d.mu.Unlock()
-	if dr.sliding && dr.tile != nil && dr.tile.adjust != nil {
+	if d.colorTap(x, y) {
+		return
+	}
+	switch {
+	case dr.sliding && dr.tile != nil && dr.tile.adjust != nil:
 		slog.Info("dashboard slide", "entity", dr.tile.adjust.Entity, "to", dr.value)
 		dashboard.Get().SetLevel(*dr.tile.adjust, dr.value)
+	case dr.down && !dr.moved && !dr.scrolling && dr.tile != nil:
+		d.longPress(dr.tile)
 	}
 }
 

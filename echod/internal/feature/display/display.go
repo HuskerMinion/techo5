@@ -158,6 +158,8 @@ type Display struct {
 	dashScrollFor string    // the dashboard it is scrolled on
 	dashDrag      drawnDrag // a finger moving on the drawn dashboard
 	dashAdjust    dashAdjusting
+	dashColor     *dashboard.LightColor // the color sheet, while it is up
+	dashHolds     bool                  // the drawn dashboard is up, and wants a finger held still reported
 
 	poke chan struct{}
 
@@ -572,11 +574,12 @@ func (d *Display) relight(jump bool) {
 		d.settled = false
 	}
 	level := int(math.Round(d.level))
-	glowing := d.nightGlow
+	holds := d.nightGlow || d.dashHolds
 	d.mu.Unlock()
-	// A long press is the way up from the night light (gesture), and this screen reports no holds
-	// otherwise. Every change to the night light comes through here.
-	touch.Get().SetHolds(glowing)
+	// A long press is the way up from the night light (gesture), and on the drawn dashboard what opens
+	// a light's colors; this screen reports no holds otherwise. Every change to the night light comes
+	// through here, and the dashboard's own change (dashScene) sets it too.
+	touch.Get().SetHolds(holds)
 
 	if err := screen.SetBacklight(level); err != nil {
 		slog.Warn("setting the backlight failed", "err", err)

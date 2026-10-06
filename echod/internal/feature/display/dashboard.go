@@ -121,7 +121,7 @@ func (d *Display) dashScene(s *scene, sheetOrDrawer bool) {
 		if _, content := d.r.dash(); content > 0 {
 			d.dashScroll = min(d.dashScroll, max(content-d.r.h, 0))
 		}
-		s.dashScroll, s.dashAdjust = d.dashScroll, d.dashAdjust
+		s.dashScroll, s.dashAdjust, s.dashColor = d.dashScroll, d.dashAdjust, d.dashColor
 		d.mu.Unlock()
 	}
 
@@ -132,9 +132,21 @@ func (d *Display) dashScene(s *scene, sheetOrDrawer bool) {
 	follow := want
 	changed := follow != d.dashFollow
 	d.dashFollow = follow
+	// Drawn, a finger held still on a light is a long press for its colors (color_sheet.go), which
+	// needs holds reported; the color sheet goes with the page.
+	holds := want && mode == config.DashboardDrawn
+	holdsChanged := holds != d.dashHolds
+	d.dashHolds = holds
+	if !holds {
+		d.dashColor = nil
+	}
+	glowing := d.nightGlow
 	d.mu.Unlock()
 	if changed {
 		touch.Get().SetFollow(follow)
+	}
+	if holdsChanged {
+		touch.Get().SetHolds(holds || glowing)
 	}
 }
 
@@ -211,7 +223,7 @@ func (d *Display) dashGesture(g touch.Gesture) {
 			if streamed {
 				f.Touch("up", g.X, g.Y)
 			} else {
-				d.drawnRelease()
+				d.drawnRelease(g.X, g.Y)
 			}
 		case edgeLeft:
 			if g.X-start.X > far {
@@ -240,6 +252,7 @@ func (d *Display) openDrawerOver() {
 // drawnDashboard is the drawn dashboard over the whole panel.
 func (r *renderer) drawnDashboard(s scene) {
 	r.dashPage(s.drawn, s.dashScroll, s.dashAdjust, r.dst.Rect, s.dashTiles)
+	r.colorSheet(s.dashColor, s.drawn.Theme)
 }
 
 // dashboardPage draws the dashboard over the whole panel.
