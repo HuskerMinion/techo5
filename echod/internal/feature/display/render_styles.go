@@ -392,7 +392,8 @@ func sunWords(now, rise, set time.Time) string {
 	return "Sunset was at " + clockText(set)
 }
 
-// dashboardStyle is the time with the day's next events beside it and the coming days' weather under.
+// dashboardStyle is the time with the day's next events beside it and the coming days' weather along
+// the foot.
 func (r *renderer) dashboardStyle(s scene, box image.Rectangle) {
 	hm, ampm := clockHM(s.now), clockSuffix(s.now)
 	tf := r.styleFace(true, 132)
@@ -438,7 +439,8 @@ func (r *renderer) dashboardStyle(s scene, box image.Rectangle) {
 		return
 	}
 	days = days[:min(len(days), 5)]
-	row := base + r.s(86)
+	// The row sits at the foot, so the middle of the screen is left clear for a tap that starts Assist.
+	row := max(base+r.s(86), box.Max.Y-r.s(150))
 	r.fxLine(float64(box.Min.X), float64(row), float64(box.Max.X), float64(row), float64(r.s(2)), ember, 1)
 	cw := box.Dx() / len(days)
 	for i, d := range days {
