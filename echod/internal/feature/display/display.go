@@ -227,12 +227,14 @@ type Display struct {
 	weatherUntil time.Time
 
 	// The calendar page (render_calendar.go): up until calUntil, on calMonth, as calDay's list when
-	// that is set, with calDetail's window open over it when that is.
+	// that is set, or the coming days' agenda when calAgenda is, with calDetail's window open over it
+	// when that is.
 	calUntil  time.Time
 	calMonth  time.Time
 	calDay    time.Time
+	calAgenda bool
 	calDetail *hass.Event
-	calScroll int // the day's list, scrolled this many rows
+	calScroll int // the day's list or the agenda, scrolled this many rows
 
 	// The deck page (deck.go): up while deckUp, on deckPage, with deckPress the press being shown.
 	deckUp    bool
@@ -1034,6 +1036,11 @@ func (d *Display) gesture(g touch.Gesture) {
 		// The date under the clock opens the calendar, once this device shows one.
 		if idle && !weatherUp && !overButtons && d.r != nil && d.r.dateTapped(image.Pt(g.X, g.Y)) && d.OpenCalendar() {
 			slog.Info("screen: calendar by touch")
+			return
+		}
+		// The Dashboard's next events open the agenda: the coming days' events as one list.
+		if idle && !weatherUp && !overButtons && d.r != nil && d.r.nextTapped(image.Pt(g.X, g.Y)) && d.OpenAgenda() {
+			slog.Info("screen: agenda by touch")
 			return
 		}
 		// A short swipe from the top edge that never made a notch arrives as a tap; it must not

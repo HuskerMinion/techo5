@@ -420,6 +420,8 @@ func (r *renderer) dashboardStyle(s scene, box image.Rectangle) {
 		r.text(r.tiny, r.clipTo(r.tiny, e.Summary, r.w-r.margin-tx), tx, y, cream)
 		y += r.s(44)
 	}
+	// A tap on the column, its heading to its last line, opens the agenda.
+	r.setNextAt(image.Rect(col-r.s(20), top-r.s(10), r.w-r.margin, max(y-r.s(30), top+r.s(76))+r.s(10)))
 
 	// The coming days, when there is room for them; otherwise today's weather on a line, so the style that
 	// leaves out the weather corner still says what it is outside and still opens the forecast.

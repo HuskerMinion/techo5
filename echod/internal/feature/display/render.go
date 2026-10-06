@@ -280,11 +280,13 @@ type renderer struct {
 	alertMax int             // how far the alert page could scroll in the frame last drawn
 	shapes   alertOverlay    // the alert shapes drawn over the rain map, kept while they stay the same
 	dateAt   image.Rectangle // the date under the clock, the same way: a tap there opens the calendar
+	nextAt   image.Rectangle // the Dashboard's next events, the same way: a tap there opens the agenda
 	popupAt  image.Rectangle // an event's pop-up, the same way: a tap on it takes it down
 
 	// calHits are the calendar page's buttons, days and events as last drawn (render_calendar.go).
-	calMu   sync.Mutex
-	calHits []calHit
+	calMu        sync.Mutex
+	calHits      []calHit
+	calAgendaMax int // how far the agenda could scroll, in rows
 
 	// weatherKept is the forecast page as last drawn, and weatherKey what it showed: while the sky
 	// moves the page is drawn twelve times a second, and the page itself changes once a minute.
@@ -401,6 +403,7 @@ func (r *renderer) draw(s scene) {
 	r.artDrawn = false
 	r.setWeatherAt(image.Rectangle{})
 	r.setDateAt(image.Rectangle{})
+	r.setNextAt(image.Rectangle{})
 	// The camera page's controls are tappable only in a frame that draws them, from when it is done.
 	r.drawnSound, r.drawnTalk = image.Rectangle{}, image.Rectangle{}
 	defer r.publishCameraTaps()
@@ -748,6 +751,19 @@ func (r *renderer) dateTapped(p image.Point) bool {
 	r.weatherMu.Lock()
 	defer r.weatherMu.Unlock()
 	return !r.dateAt.Empty() && p.In(r.dateAt)
+}
+
+func (r *renderer) setNextAt(b image.Rectangle) {
+	r.weatherMu.Lock()
+	r.nextAt = b
+	r.weatherMu.Unlock()
+}
+
+// nextTapped is whether a tap at p landed on the Dashboard's next events, as last drawn.
+func (r *renderer) nextTapped(p image.Point) bool {
+	r.weatherMu.Lock()
+	defer r.weatherMu.Unlock()
+	return !r.nextAt.Empty() && p.In(r.nextAt)
 }
 
 func (r *renderer) setWeatherAt(b image.Rectangle) {

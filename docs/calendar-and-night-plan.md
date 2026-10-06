@@ -58,6 +58,10 @@ events) on a page reached like its other pages, and the pop-ups below.
   Small: the page exists, and only the tap is new.
 - **The date** opens the calendar page, once there is one. Before a calendar is chosen, a tap there
   does nothing, as now.
+- **The next events** of the Dashboard clock style open the calendar as an agenda: the next two
+  weeks' events in one list under each day's heading, today's that are over left out. A tap on an
+  event opens its details, on a day's heading that day's list, and Month goes to the month. A swipe
+  up or down moves through a long one.
 - Both already sit on the soft dark backing the home screen gives the weather and the date, so they
   look like something to press. Their touch areas are sized for a finger, and a tap anywhere else on
   the home screen keeps doing what it does today.
