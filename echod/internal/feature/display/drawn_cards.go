@@ -183,6 +183,26 @@ func (r *paint) block(b dashboard.Block, x, y, w int, pal dashPal, adj dashAdjus
 		}
 		return rows*th + (rows-1)*gap
 
+	case len(b.Pictures) > 0:
+		// A gallery: as many abreast as the grid asks, up to three, one in a narrow column. Each
+		// picture fills a 4:3 frame and, with a tap_action, is a tap of its own.
+		gap := r.s(dashGap)
+		per := min(max(b.Columns, 1), 3)
+		if w < r.s(380) {
+			per = 1
+		}
+		pw := (w - gap*(per-1)) / per
+		ph := pw * 3 / 4
+		rows := (len(b.Pictures) + per - 1) / per
+		for i, p := range b.Pictures {
+			box := image.Rect(x+(i%per)*(pw+gap), y+(i/per)*(ph+gap), x+(i%per)*(pw+gap)+pw, y+(i/per)*(ph+gap)+ph)
+			if r.visible(box.Min.Y, box.Max.Y) {
+				r.pictureCard(box, p, pal)
+				r.zone(tiles, box, dashboard.Tile{Tap: p.Tap})
+			}
+		}
+		return rows*ph + (rows-1)*gap
+
 	case len(b.Rows) > 0 || (b.Title != "" && len(b.Text) == 0 && b.Graph == nil && b.Gauge == nil && b.Picture == nil):
 		pad := r.s(cardPad)
 		h := pad*2 + len(b.Rows)*r.s(rowH)
@@ -255,7 +275,9 @@ func (r *paint) block(b dashboard.Block, x, y, w int, pal dashPal, adj dashAdjus
 		}
 		h = min(h, r.s(320))
 		if r.visible(y, y+h) {
-			r.pictureCard(image.Rect(x, y, x+w, y+h), *b.Picture, pal)
+			box := image.Rect(x, y, x+w, y+h)
+			r.pictureCard(box, *b.Picture, pal)
+			r.zone(tiles, box, dashboard.Tile{Tap: b.Picture.Tap})
 		}
 		return h
 	}
@@ -502,7 +524,7 @@ func (r *paint) pictureCard(b image.Rectangle, p dashboard.Picture, pal dashPal)
 	r.roundFill(b, pal.rad, pal.card, pal.card)
 	if p.Image != nil {
 		inner := b.Inset(r.s(2))
-		xdraw.ApproxBiLinear.Scale(r.dst, inner, p.Image, p.Image.Bounds(), draw.Src, nil)
+		xdraw.ApproxBiLinear.Scale(r.dst, inner, p.Image, cover(p.Image.Bounds(), inner), draw.Src, nil)
 	} else {
 		msg := "Loading the picture…"
 		if p.TooLarge {
@@ -515,4 +537,21 @@ func (r *paint) pictureCard(b image.Rectangle, p dashboard.Picture, pal dashPal)
 		draw.Draw(r.dst, band, image.NewUniform(color.RGBA{0, 0, 0, 140}), image.Point{}, draw.Over)
 		r.text(fc.label, r.fit(fc.label, p.Name, b.Dx()-2*r.s(cardPad)), b.Min.X+r.s(cardPad), b.Max.Y-r.s(12), color.RGBA{255, 255, 255, 255})
 	}
+}
+
+// cover is the part src of a picture that has the proportions of the frame dst, centered: the
+// picture fills the frame, and what does not fit is cut off at the edges rather than squeezed.
+func cover(src, dst image.Rectangle) image.Rectangle {
+	sw, sh, dw, dh := src.Dx(), src.Dy(), dst.Dx(), dst.Dy()
+	if sw <= 0 || sh <= 0 || dw <= 0 || dh <= 0 {
+		return src
+	}
+	if sw*dh > sh*dw {
+		w := sh * dw / dh
+		x := src.Min.X + (sw-w)/2
+		return image.Rect(x, src.Min.Y, x+w, src.Max.Y)
+	}
+	h := sw * dh / dw
+	y := src.Min.Y + (sh-h)/2
+	return image.Rect(src.Min.X, y, src.Max.X, y+h)
 }

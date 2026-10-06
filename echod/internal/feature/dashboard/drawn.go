@@ -83,6 +83,10 @@ type Block struct {
 	Graph   *Graph
 	Gauge   *Gauge
 	Picture *Picture
+	// Pictures is a gallery: a grid of nothing but pictures, laid out abreast as Columns asks, each
+	// picture a tap of its own.
+	Pictures []Picture
+	Columns  int
 }
 
 // Section is blocks that stay together, one column wide: a room, a section of a sections view, a card
@@ -109,6 +113,7 @@ type Picture struct {
 	Name     string
 	Image    image.Image // nil until it has arrived
 	TooLarge bool        // it arrived, larger than the device will decode
+	Tap      *Action     // the card's own tap_action; nil when a tap does nothing
 }
 
 // Drawn is the page as it stands.

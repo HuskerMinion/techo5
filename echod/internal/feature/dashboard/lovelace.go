@@ -137,7 +137,7 @@ func (l *lovelaceSource) sections(lk look) []Section {
 
 func onlyTiles(b Block) bool {
 	return len(b.Tiles) > 0 && b.Heading == "" && b.Title == "" && len(b.Rows) == 0 && len(b.Text) == 0 &&
-		b.Graph == nil && b.Gauge == nil && b.Picture == nil
+		b.Graph == nil && b.Gauge == nil && b.Picture == nil && len(b.Pictures) == 0
 }
 
 // node is a compiled card: what it draws from what has arrived.
@@ -330,7 +330,7 @@ func (c *compiler) cardItself(card raw) node {
 		if name == "" {
 			name = str(card, "name")
 		}
-		return pictureNode{key: w.key(), name: name}
+		return pictureNode{key: w.key(), name: name, tap: pictureTap(card, e)}
 
 	case entityCards[kind]:
 		e := str(card, "entity")
@@ -346,7 +346,16 @@ func (c *compiler) cardItself(card raw) node {
 
 	case kind == "grid" || kind == "vertical-stack" || kind == "horizontal-stack" ||
 		kind == "custom:stack-in-card" || kind == "custom:vertical-stack-in-card" || kind == "custom:layout-card":
-		inner := group(c.cards(card["cards"]))
+		children := c.cards(card["cards"])
+		if kind == "grid" {
+			if g, ok := asGallery(children, card); ok {
+				if title := str(card, "title"); title != "" {
+					return group{headingNode{text: c.render(title, "")}, g}
+				}
+				return g
+			}
+		}
+		inner := group(children)
 		if title := str(card, "title"); title != "" {
 			return group{headingNode{text: c.render(title, "")}, inner}
 		}
@@ -696,11 +705,62 @@ func (g gaugeNode) blocks(l look) []Block {
 }
 
 // pictureNode is a camera or an image.
-type pictureNode struct{ key, name string }
+type pictureNode struct {
+	key, name string
+	tap       *Action
+}
+
+func (p pictureNode) picture(l look) Picture {
+	img, arrived := l.pictures[p.key]
+	return Picture{Name: p.name, Image: img, TooLarge: arrived && img == nil, Tap: p.tap}
+}
 
 func (p pictureNode) blocks(l look) []Block {
-	img, arrived := l.pictures[p.key]
-	return []Block{{Picture: &Picture{Name: p.name, Image: img, TooLarge: arrived && img == nil}}}
+	pic := p.picture(l)
+	return []Block{{Picture: &pic}}
+}
+
+// pictureTap is what a tap on a picture card does: its own tap_action, when that does something.
+// Without one, or with "none" or "more-info", a picture stays something to look at, as before.
+func pictureTap(card raw, entity string) *Action {
+	a := actionOf(card, entity)
+	if a == nil || (a.Service == "" && a.View == "") {
+		return nil
+	}
+	return a
+}
+
+// galleryNode is a grid of nothing but pictures, drawn abreast rather than one under the other:
+// a page of rooms, each a photo that opens it.
+type galleryNode struct {
+	pics    []pictureNode
+	columns int
+}
+
+// asGallery is a grid's cards as a gallery, when the grid asks for two or more columns and every
+// card in it is a picture. Anything else in it, and the grid stays as it was: its cards in turn.
+func asGallery(children []node, card raw) (galleryNode, bool) {
+	cols, _ := card["columns"].(float64)
+	if cols < 2 || len(children) < 2 {
+		return galleryNode{}, false
+	}
+	g := galleryNode{columns: int(cols)}
+	for _, n := range children {
+		p, ok := n.(pictureNode)
+		if !ok {
+			return galleryNode{}, false
+		}
+		g.pics = append(g.pics, p)
+	}
+	return g, true
+}
+
+func (g galleryNode) blocks(l look) []Block {
+	b := Block{Columns: g.columns}
+	for _, p := range g.pics {
+		b.Pictures = append(b.Pictures, p.picture(l))
+	}
+	return []Block{b}
 }
 
 // cond is one of Home Assistant's conditions, as a conditional card and a card's visibility use

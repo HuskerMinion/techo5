@@ -177,3 +177,50 @@ func TestVisibility(t *testing.T) {
 		t.Errorf("light on, 1280 wide: %v", got)
 	}
 }
+
+// A grid of nothing but pictures, with columns, is a gallery: abreast, each picture a tap of its own.
+// A picture without a tap_action, or with "none", stays something to look at, and a grid with
+// anything else in it stays its cards in turn.
+func TestPicturesInAGridBecomeAGallery(t *testing.T) {
+	var cards []any
+	if err := json.Unmarshal([]byte(`[
+	  {"type": "grid", "columns": 2, "cards": [
+	    {"type": "picture", "image": "/local/kitchen.png", "name": "Kitchen", "tap_action": {"action": "navigate", "navigation_path": "/rooms/kitchen"}},
+	    {"type": "picture", "image": "/local/garden.png", "name": "Garden", "tap_action": {"action": "none"}}
+	  ]},
+	  {"type": "grid", "columns": 2, "cards": [
+	    {"type": "picture", "image": "/local/hall.png"},
+	    {"type": "tile", "entity": "light.hall"}
+	  ]},
+	  {"type": "picture", "image": "/local/porch.png", "tap_action": {"action": "navigate", "navigation_path": "/rooms/porch"}}
+	]`), &cards); err != nil {
+		t.Fatal(err)
+	}
+	c := &compiler{seen: map[string]bool{}, need: needs{graphs: map[string]int{}}}
+	nodes := c.cards(cards)
+	if len(c.need.pictures) != 4 {
+		t.Fatalf("pictures %+v", c.need.pictures)
+	}
+	lk := look{states: map[string]hass.LiveEntity{"light.hall": {ID: "light.hall", State: "off", Attrs: map[string]any{}}},
+		history: map[string][]point{}, pictures: map[string]image.Image{}}
+	blocks := group(nodes).blocks(lk)
+	if len(blocks) != 4 {
+		t.Fatalf("%d blocks, want 4: %+v", len(blocks), blocks)
+	}
+	g := blocks[0]
+	if g.Columns != 2 || len(g.Pictures) != 2 || g.Picture != nil || onlyTiles(g) {
+		t.Fatalf("gallery %+v", g)
+	}
+	if p := g.Pictures[0]; p.Name != "Kitchen" || p.Tap == nil || p.Tap.View != "rooms/kitchen" {
+		t.Errorf("kitchen %+v", p)
+	}
+	if p := g.Pictures[1]; p.Name != "Garden" || p.Tap != nil {
+		t.Errorf("garden %+v", p)
+	}
+	if p := blocks[1].Picture; p == nil || p.Tap != nil || len(blocks[2].Tiles) != 1 {
+		t.Errorf("mixed grid %+v %+v", blocks[1], blocks[2])
+	}
+	if p := blocks[3].Picture; p == nil || p.Tap == nil || p.Tap.View != "rooms/porch" {
+		t.Errorf("porch %+v", blocks[3])
+	}
+}
