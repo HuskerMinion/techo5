@@ -148,10 +148,13 @@ func (f styleFacts) style() string {
 	return clockStyle()
 }
 
-// upcomingEvents is up to n of today's and tomorrow's events that have not ended, soonest first.
+// upcomingDays is how far ahead the Dashboard looks for its next events, today the first.
+const upcomingDays = 7
+
+// upcomingEvents is up to n of the coming week's events that have not ended, soonest first.
 func upcomingEvents(now time.Time, n int) []hass.Event {
 	var out []hass.Event
-	for d := range 2 {
+	for d := range upcomingDays {
 		events, _ := home.Get().EventsOn(now.AddDate(0, 0, d))
 		for _, e := range events {
 			if e.End.After(now) && !slices.ContainsFunc(out, func(o hass.Event) bool { return o.Summary == e.Summary && o.Start.Equal(e.Start) }) {

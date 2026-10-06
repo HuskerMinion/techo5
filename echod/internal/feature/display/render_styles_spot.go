@@ -526,12 +526,12 @@ func dashWhenSpot(start time.Time, allDay bool, now time.Time) string {
 		return "Now"
 	case allDay && start.Before(tomorrow):
 		return "Today"
-	case allDay:
-		return "Tmrw"
 	case start.Before(tomorrow):
 		return clockText(start)
+	case start.Before(tomorrow.AddDate(0, 0, 1)):
+		return "Tmrw"
 	}
-	return "Tmrw"
+	return locale.ShortWeekday(start, screenLang())
 }
 
 // spotClip is s cut to fit w, with an ellipsis.

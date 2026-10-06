@@ -133,3 +133,29 @@ func TestDashboardNextTap(t *testing.T) {
 		}
 	}
 }
+
+// The Dashboard's next events say when: the time today, "Tmrw" and the time tomorrow, and the weekday
+// after that, the time beside it when there is one.
+func TestDashWhen(t *testing.T) {
+	config.Use(filepath.Join(t.TempDir(), "state.json"))
+	now := time.Date(2026, 10, 6, 10, 0, 0, 0, time.Local) // a Tuesday
+	at := func(d, h int) time.Time { return time.Date(2026, 10, d, h, 0, 0, 0, time.Local) }
+	day := func(d int) hass.Event { return hass.Event{Start: at(d, 0), End: at(d+1, 0), AllDay: true} }
+	timed := func(d, h int) hass.Event { return hass.Event{Start: at(d, h), End: at(d, h+1)} }
+	for _, c := range []struct {
+		e    hass.Event
+		want string
+	}{
+		{timed(6, 9), "Now"},
+		{timed(6, 15), clockText(at(6, 15))},
+		{day(6), "Today"},
+		{timed(7, 9), "Tmrw " + clockText(at(7, 9))},
+		{day(7), "Tomorrow"},
+		{timed(8, 15), "Thu " + clockText(at(8, 15))},
+		{day(10), "Sat"},
+	} {
+		if got := dashWhen(c.e, now); got != c.want {
+			t.Errorf("%v: %q, want %q", c.e.Start, got, c.want)
+		}
+	}
+}

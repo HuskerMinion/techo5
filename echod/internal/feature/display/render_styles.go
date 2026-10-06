@@ -462,19 +462,25 @@ func (r *renderer) dashboardStyle(s scene, box image.Rectangle) {
 }
 
 // dashWhen is when an event starts, as the dashboard writes it: "Now" for one under way, its time
-// today, "Tmrw" and the time after that, "Today" or "Tomorrow" for one with no time.
+// today, "Tmrw" and the time tomorrow, the weekday and the time after that, and "Today", "Tomorrow" or
+// the weekday alone for one with no time.
 func dashWhen(e hass.Event, now time.Time) string {
 	start, allDay := e.Start, e.AllDay
 	today := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())
+	tomorrow, later := today.AddDate(0, 0, 1), today.AddDate(0, 0, 2)
 	switch {
 	case !allDay && !start.After(now):
 		return "Now"
-	case allDay && start.Before(today.AddDate(0, 0, 1)):
+	case allDay && start.Before(tomorrow):
 		return "Today"
-	case allDay:
+	case allDay && start.Before(later):
 		return "Tomorrow"
-	case start.Before(today.AddDate(0, 0, 1)):
+	case allDay:
+		return locale.ShortWeekday(start, screenLang())
+	case start.Before(tomorrow):
 		return clockText(start)
+	case start.Before(later):
+		return "Tmrw " + strings.TrimSpace(clockText(start))
 	}
-	return "Tmrw " + strings.TrimSpace(clockText(start))
+	return locale.ShortWeekday(start, screenLang()) + " " + strings.TrimSpace(clockText(start))
 }
