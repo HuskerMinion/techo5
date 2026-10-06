@@ -27,7 +27,7 @@ func (d *Display) openCalendar(agenda bool) bool {
 	now := time.Now()
 	d.mu.Lock()
 	d.calUntil, d.calMonth, d.calDay, d.calDetail = now.Add(calendarShow), firstOfMonth(now), time.Time{}, nil
-	d.calAgenda, d.calScroll = agenda, 0
+	d.calAgenda, d.calScroll, d.calKept = agenda, 0, 0
 	d.closeAlert()
 	d.weatherUntil, d.sheet, d.dash, d.drawer = time.Time{}, false, false, false
 	d.mu.Unlock()
@@ -146,9 +146,15 @@ func (d *Display) calendarGesture(g touch.Gesture) {
 		slog.Info("screen: calendar put away")
 	case calBack:
 		d.calDay, d.calScroll = time.Time{}, 0
+		if d.calAgenda {
+			d.calScroll = d.calKept // back where the agenda was
+		}
 	case calMonthView:
 		d.calAgenda, d.calScroll, d.calMonth = false, 0, firstOfMonth(time.Now())
 	case calDay:
+		if d.calAgenda {
+			d.calKept = d.calScroll
+		}
 		d.calDay, d.calScroll = hit.day, 0
 		// A day at the edge of the grid belongs to the month before or after: its list reads that one.
 		d.calMonth = firstOfMonth(hit.day)

@@ -15,8 +15,8 @@ import (
 
 // The calendar page (docs/calendar-and-night-plan.md): the month as a grid with each day's events on
 // it, a day's events as a list, the coming days' events as an agenda, and one event's details in a
-// window over any of them. The events are Home
-// Assistant's, from the calendars this device shows, each calendar in its own color.
+// window over any of them. The events are Home Assistant's, from the calendars this device shows, each
+// calendar in its own color.
 
 // calendarShow is how long the calendar stays up untouched.
 const calendarShow = 2 * time.Minute
@@ -29,7 +29,7 @@ type calendarView struct {
 	month  time.Time    // the first of the month shown
 	day    time.Time    // the day opened as a list; zero for the month or the agenda
 	agenda bool         // the coming days' events, as one list, rather than the month
-	detail *hass.Event  // the event opened in its window, over the month or the day
+	detail *hass.Event  // the event opened in its window, over the month, the day or the agenda
 	scroll int          // how far down the day's list or the agenda is scrolled, in rows
 	events []hass.Event // the month's; for the agenda, this month's and the next's
 	loaded bool         // whether those events have been read yet
@@ -207,7 +207,8 @@ func (r *renderer) calendarMonth(v calendarView) {
 
 // calendarDay is a day's events as a list: the time, the title and the calendar, all-day first.
 func (r *renderer) calendarDay(v calendarView) {
-	// Done here goes back to the month; the month's own Done puts the calendar away.
+	// Done here goes back to the month or the agenda it was opened from; their own Done puts the
+	// calendar away.
 	x := r.calButton("Done", r.w-r.margin, calBack)
 	r.text(r.title, clipText(r, r.title, v.day.Format("Monday, January 2"), x-r.margin-r.s(10)), r.margin, r.margin+r.s(34), cream)
 

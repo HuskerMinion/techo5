@@ -235,6 +235,7 @@ type Display struct {
 	calAgenda bool
 	calDetail *hass.Event
 	calScroll int // the day's list or the agenda, scrolled this many rows
+	calKept   int // the agenda's scroll while one of its days is open, for Done to return to
 
 	// The deck page (deck.go): up while deckUp, on deckPage, with deckPress the press being shown.
 	deckUp    bool

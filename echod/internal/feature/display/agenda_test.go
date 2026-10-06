@@ -94,6 +94,19 @@ func TestAgendaByTouch(t *testing.T) {
 		t.Errorf("scrolled to %d, past the end at %d", d.calScroll, d.r.calendarAgendaMax())
 	}
 
+	// A day opened from the scrolled agenda, and Done there, comes back to the same place.
+	scrolled := d.calScroll
+	draw()
+	tap(hitOf(t, d.r, calDay))
+	if d.calDay.IsZero() || d.calScroll != 0 {
+		t.Fatalf("a heading in the scrolled agenda opened %v at %d", d.calDay, d.calScroll)
+	}
+	draw()
+	tap(hitOf(t, d.r, calBack))
+	if d.calScroll != scrolled {
+		t.Errorf("Done came back to the agenda at %d, not where it was at %d", d.calScroll, scrolled)
+	}
+
 	draw()
 	tap(hitOf(t, d.r, calMonthView))
 	if d.calAgenda || d.calScroll != 0 {
