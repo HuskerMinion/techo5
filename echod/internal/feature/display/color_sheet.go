@@ -128,14 +128,20 @@ const sheetSendEvery = 300 * time.Millisecond
 var sliderTap = func(a dashboard.Action) { dashboard.Get().Tap(a) }
 
 // sliderSent is what a sheet's slider last sent, and the value waiting to be sent while sends are held
-// back.
+// back. gen is which wait a held-back send belongs to: a send, or the finger lifting, starts the next,
+// and a timer of an earlier one that fires anyway sends nothing.
 type sliderSent struct {
 	at      time.Time
 	value   float64
 	sent    bool
 	pending float64
 	timer   *time.Timer
+	gen     uint64
 }
+
+// sliderAfter starts the timer for a held-back send; a variable so that a test can fire one late, as
+// the race it guards against does.
+var sliderAfter = time.AfterFunc
 
 // sendSlider sends a slider's value to its light: at once when the last send was long
 // enough ago, else once it is (the last value a finger stopped on is sent too), and always when the
@@ -147,8 +153,15 @@ func (d *Display) sendSlider(s sheetSlider, value float64, final bool) {
 	st.pending = value
 	if wait := sheetSendEvery - time.Since(st.at); !final && wait > 0 {
 		if st.timer == nil {
-			st.timer = time.AfterFunc(wait, func() {
+			gen := st.gen
+			st.timer = sliderAfter(wait, func() {
 				d.mu.Lock()
+				if d.sheetSent.gen != gen {
+					// The finger lifted, or a send went first, after this timer could no longer be
+					// stopped: what it would send is not what the slider shows.
+					d.mu.Unlock()
+					return
+				}
 				d.sheetSent.timer = nil
 				v := d.sheetSent.pending
 				d.mu.Unlock()
@@ -162,10 +175,11 @@ func (d *Display) sendSlider(s sheetSlider, value float64, final bool) {
 		st.timer.Stop()
 		st.timer = nil
 	}
+	st.gen++ // a timer that fires anyway is too late
 	repeat := st.sent && st.value == value
 	st.at, st.value, st.sent = time.Now(), value, true
 	if final {
-		*st = sliderSent{} // the next finger starts afresh
+		*st = sliderSent{gen: st.gen} // the next finger starts afresh
 	}
 	c := d.dashColor
 	d.mu.Unlock()

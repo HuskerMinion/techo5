@@ -13,6 +13,7 @@ import (
 	"github.com/HuskerMinion/techo5/echod/internal/feature/dashboard"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/remind"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/setup"
+	"github.com/HuskerMinion/techo5/echod/internal/feature/video"
 	"github.com/HuskerMinion/techo5/echod/internal/hardware/touch"
 )
 
@@ -156,13 +157,14 @@ func (d *Display) dashScene(s *scene, sheetOrDrawer bool) {
 }
 
 // overDashboard is whether something that acts on a tap alone is drawn over the dashboard: a
-// reminder's card, an event's pop-up, the PIN pad, the setup page's Allow and Deny, or an
-// announcement arriving or being recorded.
+// reminder's card, an event's pop-up, the PIN pad, the setup page's Allow and Deny, an announcement
+// arriving or being recorded, a DLNA video asking to be shown, or the video page.
 func (d *Display) overDashboard(s *scene) bool {
 	_, announcing := announce.Get().Showing()
 	_, reminding := remind.Get().Showing()
+	_, _, _, videoAsking := video.Get().Asking()
 	return s.pin.open || setup.Get().Waiting() || announce.Get().Recording() || announcing || reminding ||
-		d.popupUp() != nil
+		d.popupUp() != nil || videoAsking || d.videoUp()
 }
 
 // applyHolds tells the touchscreen whether to report a finger held still: for the night light's way up
@@ -172,10 +174,17 @@ func (d *Display) applyHolds() {
 	d.holdsMu.Lock()
 	defer d.holdsMu.Unlock()
 	d.mu.Lock()
-	holds := d.nightGlow || d.dashHolds
+	holds := d.holdsWanted()
 	d.mu.Unlock()
 	touch.Get().SetHolds(holds)
 }
+
+// holdsWanted is whether a finger held still is to be reported: for the night light, and for the
+// drawn dashboard only while the panel is lit. Dark, the dashboard's own wish is left over from before
+// (dashScene does not run while the panel is off), and the dark panel wakes on a tap: with holds on, a
+// slow press there - a half-asleep hand on a night alarm - would be a hold and a release, and nothing.
+// Called with mu held.
+func (d *Display) holdsWanted() bool { return d.nightGlow || (d.dashHolds && d.on) }
 
 // dashGesture is a finger on the dashboard. It goes to the page as it moves, except a finger that
 // starts at one of the screen's edges: the left takes the dashboard away, the top brings the

@@ -67,6 +67,10 @@ func TestTheDashboardKnowsWhatIsDrawnOverIt(t *testing.T) {
 	if !d.overDashboard(&scene{}) {
 		t.Error("an event's pop-up is up, but nothing was over the dashboard")
 	}
+	d = &Display{poke: make(chan struct{}, 1), videoOnScreen: true}
+	if !d.overDashboard(&scene{}) {
+		t.Error("the video page is up, but nothing was over the dashboard")
+	}
 }
 
 // A finger that comes down on the band of whites moves the mark as it goes, also once it has wandered
@@ -146,5 +150,57 @@ func TestASheetsSliderSendsAsTheFingerMoves(t *testing.T) {
 	defer mu.Unlock()
 	if len(faded) != 3 || faded[0] || faded[1] || !faded[2] {
 		t.Errorf("faded %v, want the steps on the way without a fade and the last with one", faded)
+	}
+}
+
+// A held-back send whose timer fires only after the finger has lifted - too late to be stopped -
+// sends nothing: the light keeps where the finger lifted, not the value waiting before it.
+func TestALateHeldBackSendSendsNothing(t *testing.T) {
+	var mu sync.Mutex
+	var sent []int
+	prevTap, prevAfter := sliderTap, sliderAfter
+	sliderTap = func(a dashboard.Action) {
+		mu.Lock()
+		defer mu.Unlock()
+		sent = append(sent, a.Data["color_temp_kelvin"].(int))
+	}
+	var late func()
+	sliderAfter = func(_ time.Duration, f func()) *time.Timer {
+		late = f
+		return time.NewTimer(time.Hour) // stopped at the lift, but the callback is fired by hand
+	}
+	t.Cleanup(func() { sliderTap, sliderAfter = prevTap, prevAfter })
+
+	d := &Display{poke: make(chan struct{}, 1)}
+	d.dashColor = &dashboard.LightColor{Entity: "light.desk", Kelvin: true, MinK: 2000, MaxK: 6500}
+	whites := sheetSlider{kind: colorPartWhite}
+	d.sendSlider(whites, 3000, false)
+	d.sendSlider(whites, 3500, false) // held back: its timer is waiting
+	d.sendSlider(whites, 4500, true)  // the finger lifts
+	if late == nil {
+		t.Fatal("the held-back send started no timer")
+	}
+	late() // and the timer fires anyway
+	mu.Lock()
+	defer mu.Unlock()
+	if len(sent) != 2 || sent[0] != 3000 || sent[1] != 4500 {
+		t.Errorf("sent %v, want 3000 and then where the finger lifted, 4500, and nothing after", sent)
+	}
+}
+
+// Holds are reported for the dashboard only while the panel is lit, and for the night light always.
+func TestHoldsAreForALitDashboard(t *testing.T) {
+	for _, c := range []struct {
+		dash, on, glow, want bool
+	}{
+		{true, true, false, true},
+		{true, false, false, false},
+		{false, false, true, true},
+		{false, true, false, false},
+	} {
+		d := &Display{dashHolds: c.dash, on: c.on, nightGlow: c.glow}
+		if got := d.holdsWanted(); got != c.want {
+			t.Errorf("dashboard %v, lit %v, night light %v: holds %v, want %v", c.dash, c.on, c.glow, got, c.want)
+		}
 	}
 }
