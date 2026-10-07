@@ -96,6 +96,61 @@ func TestAPlayerHomeAssistantGroupsIsGroupedWithoutMusicAssistant(t *testing.T) 
 	}
 }
 
+// A Sonos that Music Assistant also plays to is grouped through Music Assistant while Music Assistant
+// has music there, a track a pause stopped included; while the Sonos plays from its own app, it is
+// grouped the Sonos's own way, which takes that music along to the speakers grouped in.
+func TestASpeakerPlayingFromElsewhereIsGroupedItsOwnWay(t *testing.T) {
+	sonos := func(id, name, state string) hass.LiveEntity {
+		return hass.LiveEntity{ID: id, State: state, Attrs: map[string]any{
+			"friendly_name": name, "supported_features": 8319551.0, "group_members": []any{id}}}
+	}
+	ma := func(id, name, state, title string) hass.LiveEntity {
+		return hass.LiveEntity{ID: id, State: state, Attrs: map[string]any{"friendly_name": name, "mass_player_type": "player",
+			"supported_features": 8322623.0, "media_title": title, "group_members": []any{}}}
+	}
+	for _, c := range []struct {
+		name                  string
+		own, maState, maTitle string
+		elsewhere, queued     bool
+		group                 string
+	}{
+		{"the speaker plays from its own app", "playing", "idle", "Old Song", true, false, "media_player.sonos_kitchen"},
+		{"and is paused there", "paused", "idle", "", true, false, "media_player.sonos_kitchen"},
+		{"Music Assistant plays there", "playing", "playing", "Song", false, true, "media_player.ma_kitchen"},
+		{"a pause stopped Music Assistant's group", "idle", "idle", "Song", false, true, "media_player.ma_kitchen"},
+		{"nothing anywhere", "idle", "idle", "", false, false, "media_player.ma_kitchen"},
+	} {
+		states := []hass.LiveEntity{
+			sonos("media_player.sonos_kitchen", "Kitchen", c.own),
+			sonos("media_player.sonos_bath", "Bathroom", "idle"),
+			ma("media_player.ma_kitchen", "Kitchen", c.maState, c.maTitle),
+			ma("media_player.ma_bath", "Bathroom", "idle", ""),
+		}
+		l := listsFor("media_player.sonos_kitchen", "Kitchen", states)
+		if l.Elsewhere != c.elsewhere || l.Queued != c.queued || l.Group != c.group || l.Target != "media_player.ma_kitchen" {
+			t.Errorf("%s: elsewhere %v, queued %v, grouped by %s, music on %s; want %v, %v, %s and the Music Assistant player",
+				c.name, l.Elsewhere, l.Queued, l.Group, l.Target, c.elsewhere, c.queued, c.group)
+		}
+		if want := "media_player.sonos_bath"; c.elsewhere && (len(l.Speakers) != 1 || l.Speakers[0].Entity != want) {
+			t.Errorf("%s: speakers %+v, want the other Sonos", c.name, l.Speakers)
+		}
+	}
+}
+
+// A media player's tile plays and pauses while it plays, is paused or is idle: idle is where Music
+// Assistant leaves a group it could not pause, and a play there goes on with its queue.
+func TestAMediaPlayersTileTapsWhenIdle(t *testing.T) {
+	for _, state := range []string{"playing", "paused", "idle"} {
+		tile := describe(hass.LiveEntity{ID: "media_player.den", State: state}, "Den")
+		if tile.Tap == nil || tile.Tap.Service != "media_player.media_play_pause" {
+			t.Errorf("%s: tap %+v, want play or pause", state, tile.Tap)
+		}
+	}
+	if tile := describe(hass.LiveEntity{ID: "media_player.den", State: "off"}, "Den"); tile.Tap != nil {
+		t.Errorf("off: tap %+v, want none", tile.Tap)
+	}
+}
+
 // A media player that says its volume and takes one slides it, from 0 to 100; one that is off, or
 // that cannot be set, has no level.
 func TestAMediaPlayersVolumeSlides(t *testing.T) {
@@ -115,16 +170,21 @@ func TestAMediaPlayersVolumeSlides(t *testing.T) {
 }
 
 // A tile's play or pause goes to Music Assistant's player of the same name while Music Assistant plays
-// or has paused there, so that it reaches the whole group; otherwise it stays with the tile's player.
+// or has paused there, so that it reaches the whole group, and while it holds a track a pause stopped;
+// it stays with the tile's player while that plays from elsewhere, or when Music Assistant has nothing.
 func TestATilesPlayPauseReachesTheGroup(t *testing.T) {
-	for _, c := range []struct{ target, state, want string }{
-		{"media_player.ma_kitchen", "playing", "media_player.ma_kitchen"},
-		{"media_player.ma_kitchen", "paused", "media_player.ma_kitchen"},
-		{"media_player.ma_kitchen", "idle", "media_player.sonos_kitchen"},
-		{"", "playing", "media_player.sonos_kitchen"},
+	const own, ma = "media_player.sonos_kitchen", "media_player.ma_kitchen"
+	for _, c := range []struct{ own, target, state, title, want string }{
+		{"playing", ma, "playing", "Song", ma},
+		{"idle", ma, "paused", "Song", ma},
+		{"idle", ma, "idle", "Song", ma},        // a group's pause stopped it: play goes on with the queue
+		{"paused", ma, "idle", "Song", own},     // the speaker plays from its own app
+		{"playing", ma, "idle", "", own},        // and Music Assistant has nothing
+		{"idle", ma, "idle", "", own},           // nothing anywhere
+		{"playing", "", "playing", "Song", own}, // no Music Assistant player for it
 	} {
-		if got := routeTo("media_player.sonos_kitchen", c.target, c.state); got != c.want {
-			t.Errorf("Music Assistant's %q %s: sent to %s, want %s", c.target, c.state, got, c.want)
+		if got := routeTo(own, c.own, c.target, c.state, c.title); got != c.want {
+			t.Errorf("own %s, Music Assistant's %q %s %q: sent to %s, want %s", c.own, c.target, c.state, c.title, got, c.want)
 		}
 	}
 }

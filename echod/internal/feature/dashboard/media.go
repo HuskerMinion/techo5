@@ -68,6 +68,13 @@ type MediaLists struct {
 	Speakers []Speaker
 	// Members is what Group plays together with now, itself included.
 	Members []string
+	// Elsewhere is whether the tile's own player plays from something other than Music Assistant (a
+	// Sonos from the Spotify app): it is then grouped the player's own way, which takes that music
+	// along, while Music Assistant's grouping would join speakers to a queue that is not playing.
+	Elsewhere bool
+	// Queued is whether Music Assistant has music on Target that this player is playing or can play on
+	// from: playing, paused, or stopped by a pause (a group Music Assistant cannot pause stops).
+	Queued bool
 }
 
 // groupingFeature is MediaPlayerEntityFeature.GROUPING: a player that can be joined to others.
@@ -222,20 +229,42 @@ func transportTo(entity string) string {
 	if target == "" || target == entity {
 		return entity
 	}
-	st, err := hass.Get().State(target)
+	t, err := hass.Get().State(target)
 	if err != nil {
 		return entity
 	}
-	return routeTo(entity, target, st.State)
+	own, err := hass.Get().State(entity)
+	if err != nil {
+		return entity
+	}
+	title, _ := t.Attributes["media_title"].(string)
+	return routeTo(entity, own.State, target, t.State, title)
 }
 
-// routeTo is entity's commands' player given Music Assistant's player of the same name and what it
-// is doing: Music Assistant's while it plays or is paused, else the tile's own.
-func routeTo(entity, target, targetState string) string {
-	if target != "" && (targetState == "playing" || targetState == "paused") {
+// routeTo is entity's commands' player, given what it is doing and Music Assistant's player of the
+// same name and what that is doing: Music Assistant's while it plays or is paused; the tile's own
+// while that plays or is paused from elsewhere; Music Assistant's again while it holds a track it
+// stopped, since Music Assistant answers a pause on a group it cannot pause by stopping, and a play
+// then picks its queue up where it was, where the tile's own player has nothing to play.
+func routeTo(entity, entityState, target, targetState, targetTitle string) string {
+	active := func(s string) bool { return s == "playing" || s == "paused" }
+	switch {
+	case target == "":
+		return entity
+	case active(targetState):
+		return target
+	case active(entityState):
+		return entity
+	case targetState == "idle" && targetTitle != "":
 		return target
 	}
 	return entity
+}
+
+// queued is whether Music Assistant's player has music that a play goes on with.
+func queued(e hass.LiveEntity) bool {
+	title, _ := e.Attrs["media_title"].(string)
+	return e.State == "playing" || e.State == "paused" || (e.State == "idle" && title != "")
 }
 
 // maPlayerFor is Music Assistant's player for a tile's player, as last worked out.
@@ -276,26 +305,37 @@ func LoadMedia(entity, name string) (MediaLists, error) {
 	if err != nil {
 		return MediaLists{}, err
 	}
-	players := maPlayers(states)
-	l := MediaLists{MusicAssistant: len(players) > 0, Target: mediaTarget(entity, name, players)}
-	if l.Target != "" {
-		l.Group, l.Speakers = l.Target, groupable(l.Target, players)
-	} else if speakers, ok := haGroupable(entity, states); ok {
-		l.Group, l.Speakers = entity, speakers
-	}
-	byID := make(map[string]hass.LiveEntity, len(states))
-	for _, e := range states {
-		byID[e.ID] = e
-	}
-	l.Members = mediaNow(byID[l.Group]).Members
-	for i := range l.Speakers {
-		l.Speakers[i].Volume = mediaNow(byID[l.Speakers[i].Entity]).Volume
-	}
+	l := listsFor(entity, name, states)
 	if l.Target == "" {
 		return l, nil // nothing Music Assistant plays to: no music to choose
 	}
 	l.Favorites, err = maFavorites()
 	return l, err
+}
+
+// listsFor is the sheet of entity, but for the favorites, from every entity's state: Music Assistant's
+// player for it, and which player groups the speakers, Music Assistant's or the tile's own.
+func listsFor(entity, name string, states []hass.LiveEntity) MediaLists {
+	players := maPlayers(states)
+	l := MediaLists{MusicAssistant: len(players) > 0, Target: mediaTarget(entity, name, players)}
+	byID := make(map[string]hass.LiveEntity, len(states))
+	for _, e := range states {
+		byID[e.ID] = e
+	}
+	own, target := byID[entity].State, byID[l.Target]
+	l.Elsewhere = l.Target != "" && l.Target != entity && (own == "playing" || own == "paused") &&
+		target.State != "playing" && target.State != "paused"
+	l.Queued = l.Target != "" && !l.Elsewhere && queued(target)
+	if l.Target != "" && !l.Elsewhere {
+		l.Group, l.Speakers = l.Target, groupable(l.Target, players)
+	} else if speakers, ok := haGroupable(entity, states); ok {
+		l.Group, l.Speakers = entity, speakers
+	}
+	l.Members = mediaNow(byID[l.Group]).Members
+	for i := range l.Speakers {
+		l.Speakers[i].Volume = mediaNow(byID[l.Speakers[i].Entity]).Volume
+	}
+	return l
 }
 
 // haGroupable is, for a player Home Assistant can group itself, the others it can group with: players

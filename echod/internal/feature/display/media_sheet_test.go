@@ -373,3 +373,36 @@ func TestAnUnauthorizedListIsSaidInWords(t *testing.T) {
 		t.Errorf("another problem said %q, want it as it is", got)
 	}
 }
+
+// A favorite put on from the sheet is the one marked while Music Assistant has music there, even when
+// a pause has stopped it; Music Assistant says which track plays, not which playlist it came from.
+func TestTheFavoritePutOnIsMarked(t *testing.T) {
+	prev := sheetTap
+	sheetTap = func(dashboard.Action) {}
+	t.Cleanup(func() { sheetTap = prev; putOn.Delete("media_player.ma_kitchen") })
+
+	lists := dashboard.MediaLists{MusicAssistant: true, Target: "media_player.ma_kitchen", Group: "media_player.ma_kitchen",
+		Elsewhere: true, Favorites: []dashboard.MediaChoice{
+			{Name: "Morning", URI: "library://playlist/1", Kind: "playlist"},
+			{Name: "Evening", URI: "library://playlist/2", Kind: "playlist"}}}
+	sheet := mediaSheet{entity: "media_player.sonos_kitchen", volume: -1, lists: lists}
+	view := mediaView{sheet: sheet, now: dashboard.MediaNow{Entity: sheet.entity, Name: "Kitchen", State: "idle", Volume: 0.4}}
+	r := newRenderer(image.NewRGBA(image.Rect(0, 0, showWide, showHigh)))
+	r.draw(scene{now: time.Now(), phase: "idle", showDash: true, dashMode: config.DashboardDrawn, drawn: fourControls(), dashMedia: &view})
+	d := &Display{r: r, poke: make(chan struct{}, 1)}
+	d.dashMedia = &sheet
+	r.zmu.Lock()
+	zones := r.mediaZones
+	r.zmu.Unlock()
+	for _, z := range zones {
+		if z.kind == mediaPartFavorite && z.index == 1 {
+			d.mediaTap((z.r.Min.X+z.r.Max.X)/2, (z.r.Min.Y+z.r.Max.Y)/2)
+		}
+	}
+	if on, _ := putOn.Load("media_player.ma_kitchen"); on != "library://playlist/2" {
+		t.Errorf("put on %v, want Evening's URI", on)
+	}
+	if !d.dashMedia.lists.Queued || d.dashMedia.lists.Elsewhere {
+		t.Errorf("after putting music on: queued %v, elsewhere %v; want Music Assistant's music there", d.dashMedia.lists.Queued, d.dashMedia.lists.Elsewhere)
+	}
+}

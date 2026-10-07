@@ -10,6 +10,7 @@ import (
 	"maps"
 	"slices"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/HuskerMinion/techo5/echod/internal/feature/dashboard"
@@ -73,6 +74,11 @@ func (m mediaSheet) speakerVolume(entity string) float64 {
 	}
 	return -1
 }
+
+// putOn is the favorite last put on each Music Assistant player from a sheet, by its URI, for the
+// sheet to mark while that player still has music of Music Assistant's: Music Assistant says which
+// track plays, not which playlist it came from.
+var putOn sync.Map
 
 // tapLit is how long a tapped favorite stays lit.
 const tapLit = 500 * time.Millisecond
@@ -207,6 +213,8 @@ func (d *Display) mediaTap(x, y int) bool {
 	case z.kind == mediaPartFavorite && z.index < len(m.lists.Favorites):
 		f := m.lists.Favorites[z.index]
 		tap(m.lists.Target, "music_assistant.play_media", map[string]any{"media_id": f.URI, "media_type": f.Kind, "enqueue": "replace"})
+		putOn.Store(m.lists.Target, f.URI)
+		d.editMedia(func(n *mediaSheet) { n.lists.Queued, n.lists.Elsewhere = true, false })
 		i := z.index
 		d.editMedia(func(n *mediaSheet) { n.lit, n.litUntil = i, time.Now().Add(tapLit) })
 		time.AfterFunc(tapLit+50*time.Millisecond, d.wake) // to draw it unlit again
@@ -431,6 +439,9 @@ func (r *renderer) mediaSheet(v *mediaView, th dashboard.Theme) {
 				return true // just tapped
 			}
 			f := m.lists.Favorites[i]
+			if on, _ := putOn.Load(m.lists.Target); m.lists.Queued && on == f.URI {
+				return true // put on from here and still Music Assistant's there
+			}
 			return now.Playing() && now.Title != "" && strings.EqualFold(f.Name, now.Title)
 		}
 		icon := func(i int) string {

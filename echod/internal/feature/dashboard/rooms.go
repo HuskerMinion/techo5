@@ -182,7 +182,9 @@ func describe(e hass.LiveEntity, name string) Tile {
 		t.Value = climateValue(e)
 	case "media_player":
 		t.Value = title(e.State)
-		if e.State == "playing" || e.State == "paused" {
+		// Idle too: Music Assistant stops a group it cannot pause, and a play then takes its queue up
+		// again (transportTo); a speaker with nothing to go on simply does nothing.
+		if e.State == "playing" || e.State == "paused" || e.State == "idle" {
 			t.Tap = toggle("media_player.media_play_pause")
 		}
 		t.On = e.State == "playing"
