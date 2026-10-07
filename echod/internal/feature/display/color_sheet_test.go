@@ -25,10 +25,10 @@ func TestTheColorSheetOffersWhatTheLightCanTake(t *testing.T) {
 		light        dashboard.LightColor
 		whites, hues int
 	}{
-		{"both", dashboard.LightColor{Entity: "light.desk", Name: "Desk lamp", Kelvin: true, MinK: 2202, MaxK: 6535, NowK: 3000, Colors: true}, 1, len(colorHues)},
+		{"both", dashboard.LightColor{Entity: "light.desk", Name: "Desk lamp", Kelvin: true, MinK: 2202, MaxK: 6535, NowK: 3000, Colors: true}, 1, 1},
 		{"whites", dashboard.LightColor{Entity: "light.ceiling", Name: "Ceiling", Kelvin: true, MinK: 2700, MaxK: 6500}, 1, 0},
-		{"colors", dashboard.LightColor{Entity: "light.strip", Name: "Strip", Colors: true}, 0, len(colorHues)},
-		{"group", dashboard.LightColor{Entity: "light.lounge", Name: "Lounge", Kelvin: true, MinK: 2000, MaxK: 6535, Colors: true, Group: true}, 1, len(colorHues)},
+		{"colors", dashboard.LightColor{Entity: "light.strip", Name: "Strip", Colors: true, HasHue: true, NowHue: 120}, 0, 1},
+		{"group", dashboard.LightColor{Entity: "light.lounge", Name: "Lounge", Kelvin: true, MinK: 2000, MaxK: 6535, Colors: true, Group: true}, 1, 1},
 	} {
 		img := image.NewRGBA(image.Rect(0, 0, showWide, showHigh))
 		r := newRenderer(img)
@@ -48,6 +48,15 @@ func TestTheColorSheetOffersWhatTheLightCanTake(t *testing.T) {
 			t.Errorf("%s: parts %v, want %d whites, %d colors and Done", c.name, count, c.whites, c.hues)
 		}
 		for _, z := range zones {
+			if z.kind == colorPartHue {
+				mid := (z.r.Min.Y + z.r.Max.Y) / 2
+				if hit, _ := colorHit(zones, card, z.r.Min.X, mid); hit.value != 0 {
+					t.Errorf("%s: the band of colors starts at hue %v, want red", c.name, hit.value)
+				}
+				if hit, _ := colorHit(zones, card, z.r.Min.X+z.r.Dx()/3, mid); hit.value < 115 || hit.value > 125 {
+					t.Errorf("%s: a third along the band of colors is hue %v, want green", c.name, hit.value)
+				}
+			}
 			if z.kind != colorPartWhite {
 				continue
 			}

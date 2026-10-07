@@ -24,6 +24,9 @@ func TestALightSaysWhatColorItCanBe(t *testing.T) {
 		{"both, on a color", hass.LiveEntity{ID: "light.strip", State: "on", Attrs: map[string]any{
 			"supported_color_modes": []any{"color_temp", "xy"}, "color_mode": "xy", "color_temp_kelvin": 4000.0}},
 			LightColor{Entity: "light.strip", Kelvin: true, MinK: warmestK, MaxK: coolestK, Colors: true}, true},
+		{"on a color", hass.LiveEntity{ID: "light.bulb", State: "on", Attrs: map[string]any{
+			"supported_color_modes": []any{"hs"}, "color_mode": "hs", "hs_color": []any{200.0, 80.0}}},
+			LightColor{Entity: "light.bulb", Colors: true, HasHue: true, NowHue: 200}, true},
 		{"colors only", hass.LiveEntity{ID: "light.led", State: "off", Attrs: map[string]any{
 			"supported_color_modes": []any{"rgb"}}},
 			LightColor{Entity: "light.led", Colors: true}, true},

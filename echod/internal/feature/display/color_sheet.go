@@ -8,14 +8,16 @@ import (
 	"image/draw"
 	"log/slog"
 	"math"
+	"time"
 
 	"github.com/HuskerMinion/techo5/echod/internal/feature/dashboard"
 )
 
 // The color sheet: a finger resting on a light's tile on the drawn dashboard, and lifting without
-// sliding or scrolling, brings up the light's whites and colors over the page. A tap on the band of
-// whites, or a finger lifted on it after moving along it, sets that white; a tap on a color sets the
-// color. Done, or a tap beside the sheet, puts it away.
+// sliding or scrolling, brings up the light's whites and colors over the page: a band of whites from
+// warm to cool, and a band of colors around the wheel, with marks at the colors most often wanted. A
+// tap on a band sets what is under it; a finger sliding along one takes the light along with it.
+// Done, or a tap beside the sheet, puts it away.
 
 // What a part of the sheet is, for a tap.
 const (
@@ -25,8 +27,8 @@ const (
 	colorPartHue
 )
 
-// colorHues are the colors the sheet offers, around the wheel: red, orange, yellow, green, cyan,
-// blue, violet, pink.
+// colorHues are the colors marked under the band of colors, around the wheel: red, orange, yellow,
+// green, cyan, blue, violet, pink.
 var colorHues = []float64{0, 28, 52, 120, 180, 225, 275, 320}
 
 // kelvinSnap is the step whites are set in.
@@ -88,36 +90,111 @@ func (d *Display) onColorSheet(x, y int) bool {
 	return in
 }
 
-// sliderAt is the slider of the sheet that is up under x, y: the color sheet's whites.
+// sliderAt is the slider of the color sheet under x, y: its band of whites or its band of colors.
 func (d *Display) sliderAt(x, y int) (sheetSlider, bool) {
 	if d.r == nil {
 		return sheetSlider{}, false
 	}
-	if z, in := d.r.colorAt(x, y); in && z.kind == colorPartWhite {
-		return sheetSlider{kind: colorPartWhite, r: z.r, lo: z.lo, hi: z.hi}, true
+	if z, in := d.r.colorAt(x, y); in && (z.kind == colorPartWhite || z.kind == colorPartHue) {
+		return sheetSlider{kind: z.kind, r: z.r, lo: z.lo, hi: z.hi}, true
 	}
 	return sheetSlider{}, false
 }
 
 // slideSheet moves a sheet's slider to the finger at x, as a tile's level follows a finger sliding
-// along it; final, when the finger lifts, sets what it shows.
+// along it, and the light follows it too (sendSlider); final, when the finger lifts, sets where it
+// ended.
 func (d *Display) slideSheet(s sheetSlider, x int, final bool) {
 	v := s.at(x)
 	switch s.kind {
 	case colorPartWhite:
-		k := math.Round(v/kelvinSnap) * kelvinSnap
-		k = min(max(k, s.lo), s.hi)
-		d.setShownColor(k)
-		d.mu.Lock()
-		c := d.dashColor
-		d.mu.Unlock()
-		if final && c != nil {
-			slog.Info("dashboard color", "entity", c.Entity, "kelvin", k)
-			dashboard.Get().Tap(dashboard.Action{Entity: c.Entity, Service: "light.turn_on",
-				Data: map[string]any{"color_temp_kelvin": int(k)}})
-		}
+		v = min(max(math.Round(v/kelvinSnap)*kelvinSnap, s.lo), s.hi)
+		d.setShownColor(v)
+	case colorPartHue:
+		v = hueAt(v / 360)
+		d.setShownHue(v)
 	}
+	d.sendSlider(s, v, final)
 	d.wake()
+}
+
+// sheetSendEvery is how often a sheet's slider sends what it shows while a finger moves it: the light
+// warms or cools or changes color as the finger goes, a few steps a second rather than one for every
+// movement, which a Zigbee light would queue up behind.
+const sheetSendEvery = 300 * time.Millisecond
+
+// sliderTap is how a slider's value reaches Home Assistant; a variable so that a test can see what
+// is sent, and when.
+var sliderTap = func(a dashboard.Action) { dashboard.Get().Tap(a) }
+
+// sliderSent is what a sheet's slider last sent, and the value waiting to be sent while sends are held
+// back.
+type sliderSent struct {
+	at      time.Time
+	value   float64
+	sent    bool
+	pending float64
+	timer   *time.Timer
+}
+
+// sendSlider sends a slider's value to its light: at once when the last send was long
+// enough ago, else once it is (the last value a finger stopped on is sent too), and always when the
+// finger lifts - each value once.
+func (d *Display) sendSlider(s sheetSlider, value float64, final bool) {
+	kind := s.kind
+	d.mu.Lock()
+	st := &d.sheetSent
+	st.pending = value
+	if wait := sheetSendEvery - time.Since(st.at); !final && wait > 0 {
+		if st.timer == nil {
+			st.timer = time.AfterFunc(wait, func() {
+				d.mu.Lock()
+				d.sheetSent.timer = nil
+				v := d.sheetSent.pending
+				d.mu.Unlock()
+				d.sendSlider(s, v, false)
+			})
+		}
+		d.mu.Unlock()
+		return
+	}
+	if st.timer != nil {
+		st.timer.Stop()
+		st.timer = nil
+	}
+	repeat := st.sent && st.value == value
+	st.at, st.value, st.sent = time.Now(), value, true
+	if final {
+		*st = sliderSent{} // the next finger starts afresh
+	}
+	c := d.dashColor
+	d.mu.Unlock()
+	if repeat {
+		return
+	}
+	log := slog.Debug
+	if final {
+		log = slog.Info
+	}
+	// The steps on the way go without the light's own fade, which would put each one about half a second
+	// behind the finger: the light jumps, and a few jumps a second read as one movement. Where the
+	// finger lifts fades in as the light always does.
+	light := func(data map[string]any) map[string]any {
+		if !final {
+			data["transition"] = 0
+		}
+		return data
+	}
+	switch {
+	case kind == colorPartWhite && c != nil:
+		log("dashboard color", "entity", c.Entity, "kelvin", value)
+		sliderTap(dashboard.Action{Entity: c.Entity, Service: "light.turn_on",
+			Data: light(map[string]any{"color_temp_kelvin": int(value)})})
+	case kind == colorPartHue && c != nil:
+		log("dashboard color", "entity", c.Entity, "hue", value)
+		sliderTap(dashboard.Action{Entity: c.Entity, Service: "light.turn_on",
+			Data: light(map[string]any{"hs_color": []any{value, 100.0}})})
+	}
 }
 
 // colorTap is a finger lifted at x, y while the color sheet is up, which the sheet always takes: the
@@ -144,19 +221,31 @@ func (d *Display) colorTap(x, y int) bool {
 		slog.Info("dashboard color", "entity", c.Entity, "hue", z.value)
 		dashboard.Get().Tap(dashboard.Action{Entity: c.Entity, Service: "light.turn_on",
 			Data: map[string]any{"hs_color": []any{z.value, 100.0}}})
-		d.setShownColor(0)
+		d.setShownHue(z.value)
 	}
 	d.wake()
 	return true
 }
 
-// setShownColor moves the sheet's mark to the white just chosen, or takes it off for a color, without
-// waiting for Home Assistant to say so.
+// setShownColor moves the sheet's mark to the white just chosen, and off the colors, without waiting
+// for Home Assistant to say so.
 func (d *Display) setShownColor(kelvin float64) {
 	d.mu.Lock()
 	if d.dashColor != nil {
 		n := *d.dashColor
 		n.NowK = kelvin
+		n.HasHue = n.HasHue && kelvin <= 0
+		d.dashColor = &n
+	}
+	d.mu.Unlock()
+}
+
+// setShownHue moves the sheet's mark to the color just chosen, and off the whites.
+func (d *Display) setShownHue(hue float64) {
+	d.mu.Lock()
+	if d.dashColor != nil {
+		n := *d.dashColor
+		n.NowK, n.HasHue, n.NowHue = 0, true, hue
 		d.dashColor = &n
 	}
 	d.mu.Unlock()
@@ -185,8 +274,9 @@ func (r *renderer) colorSheet(c *dashboard.LightColor, th dashboard.Theme) {
 	if c.Kelvin {
 		h += bandH + wordsH + gap
 	}
+	tickH := r.s(14)
 	if c.Colors {
-		h += swatchH + gap
+		h += swatchH + tickH + gap
 	}
 	h += btnH + pad
 	x0, y0 := (r.w-w)/2, max((r.h-h)/2, r.s(8))
@@ -225,17 +315,29 @@ func (r *renderer) colorSheet(c *dashboard.LightColor, th dashboard.Theme) {
 	}
 
 	if c.Colors {
-		n := len(colorHues)
-		sg := r.s(10)
-		sw := (inner - sg*(n-1)) / n
-		for i, hue := range colorHues {
-			x := x0 + pad + i*(sw+sg)
-			b := image.Rect(x, y, x+sw, y+swatchH)
-			col := hueRGB(hue)
-			r.roundFill(b, pal.rad*0.6, col, col)
-			zones = append(zones, colorZone{r: b, kind: colorPartHue, value: hue})
+		// The band of colors, the whole wheel along it, with a small mark under each of the colors
+		// most often wanted, and the light's own color marked on it when it is on one.
+		band := image.Rect(x0+pad, y, x0+pad+inner, y+swatchH)
+		span := float64(max(band.Dx()-1, 1))
+		for x := band.Min.X; x < band.Max.X; x++ {
+			hue := float64(x-band.Min.X) / span * 360
+			draw.Draw(r.dst, image.Rect(x, band.Min.Y, x+1, band.Max.Y), image.NewUniform(hueRGB(hue)), image.Point{}, draw.Src)
 		}
-		y += swatchH + gap
+		for _, hue := range colorHues {
+			tx := band.Min.X + int(hue/360*span+0.5)
+			for i := 0; i < r.s(8); i++ {
+				row := image.Rect(tx-i*3/4, band.Max.Y+r.s(3)+i, tx+i*3/4+1, band.Max.Y+r.s(4)+i)
+				draw.Draw(r.dst, row, image.NewUniform(pal.sub), image.Point{}, draw.Src)
+			}
+		}
+		if c.HasHue {
+			mx := band.Min.X + int(c.NowHue/360*span+0.5)
+			mx = min(max(mx, band.Min.X+r.s(3)), band.Max.X-r.s(3))
+			mark := image.Rect(mx-r.s(3), band.Min.Y-r.s(5), mx+r.s(3), band.Max.Y+r.s(5))
+			draw.Draw(r.dst, mark, image.NewUniform(pal.text), image.Point{}, draw.Src)
+		}
+		zones = append(zones, colorZone{r: band, kind: colorPartHue, lo: 0, hi: 360})
+		y += swatchH + tickH + gap
 	}
 
 	done := colorWord(2)
@@ -273,14 +375,23 @@ func colorHit(zones []colorZone, card image.Rectangle, x, y int) (colorZone, boo
 		if !pt.In(z.r) {
 			continue
 		}
-		if z.kind == colorPartWhite {
-			f := float64(x-z.r.Min.X) / float64(max(z.r.Dx()-1, 1))
+		f := float64(x-z.r.Min.X) / float64(max(z.r.Dx()-1, 1))
+		switch z.kind {
+		case colorPartWhite:
 			k := math.Round((z.lo+f*(z.hi-z.lo))/kelvinSnap) * kelvinSnap
 			z.value = min(max(k, z.lo), z.hi)
+		case colorPartHue:
+			z.value = hueAt(f)
 		}
 		return z, true
 	}
 	return colorZone{kind: colorPartNone}, true
+}
+
+// hueAt is the hue a fraction of the way along the band of colors, in whole degrees; its right end is
+// red again, which is 0.
+func hueAt(f float64) float64 {
+	return math.Mod(math.Round(min(max(f, 0), 1)*360), 360)
 }
 
 // kelvinRGB is roughly the color of a white at k kelvin, after Tanner Helland's fit of the black-body

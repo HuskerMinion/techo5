@@ -19,8 +19,10 @@ type LightColor struct {
 	// it is off or on a color.
 	Kelvin           bool
 	MinK, MaxK, NowK float64
-	// Colors is any hue at all.
+	// Colors is any hue at all. NowHue is the one it is on, when HasHue: it is on and on a color.
 	Colors bool
+	HasHue bool
+	NowHue float64
 	// Group is a group of lights, which says it can take what any one of them can: a color it is
 	// given reaches only those that have colors, and the rest stay white.
 	Group bool
@@ -73,6 +75,13 @@ func lightColor(e hass.LiveEntity) LightColor {
 			c.Kelvin = true
 		case "hs", "xy", "rgb", "rgbw", "rgbww":
 			c.Colors = true
+		}
+	}
+	if c.Colors && e.State == "on" && e.Attrs["color_mode"] != "color_temp" {
+		if hs, ok := e.Attrs["hs_color"].([]any); ok && len(hs) == 2 {
+			if h, ok := hs[0].(float64); ok {
+				c.HasHue, c.NowHue = true, h
+			}
 		}
 	}
 	if !c.Kelvin {

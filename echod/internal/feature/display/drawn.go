@@ -55,10 +55,10 @@ type colorZone struct {
 	value, lo, hi float64
 }
 
-// sheetSlider is a slider on a sheet where it was drawn: the color sheet's band of whites, from lo at
-// its left end to hi at its right.
+// sheetSlider is a slider on a sheet where it was drawn: the color sheet's band of whites or of
+// colors, from lo at its left end to hi at its right.
 type sheetSlider struct {
-	kind   int // colorPartWhite
+	kind   int // colorPartWhite or colorPartHue
 	r      image.Rectangle
 	lo, hi float64
 }

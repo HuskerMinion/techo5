@@ -4,6 +4,7 @@ package display
 
 import (
 	"image"
+	"sync"
 	"testing"
 	"time"
 
@@ -99,4 +100,51 @@ func TestASheetsSliderFollowsTheFinger(t *testing.T) {
 		t.Errorf("lifted past the end: sheet up %v, mark at %v", d.colorOpen(), d.dashColor.NowK)
 	}
 
+}
+
+// While a finger moves a sheet's slider, the light follows it: the first step at once, the rest a
+// few a second, the one it stops on shortly after, and where it lifts - each value once. The steps
+// on the way go without the light's fade; where it lifts fades as usual.
+func TestASheetsSliderSendsAsTheFingerMoves(t *testing.T) {
+	var mu sync.Mutex
+	var sent []float64
+	var faded []bool
+	prev := sliderTap
+	sliderTap = func(a dashboard.Action) {
+		mu.Lock()
+		defer mu.Unlock()
+		sent = append(sent, float64(a.Data["color_temp_kelvin"].(int)))
+		_, jump := a.Data["transition"]
+		faded = append(faded, !jump)
+	}
+	t.Cleanup(func() { sliderTap = prev })
+	got := func() []float64 {
+		mu.Lock()
+		defer mu.Unlock()
+		return append([]float64(nil), sent...)
+	}
+
+	d := &Display{poke: make(chan struct{}, 1)}
+	d.dashColor = &dashboard.LightColor{Entity: "light.desk", Kelvin: true, MinK: 2000, MaxK: 6500}
+	whites := sheetSlider{kind: colorPartWhite}
+	d.sendSlider(whites, 3000, false)
+	d.sendSlider(whites, 3500, false) // held back: too soon after the first
+	d.sendSlider(whites, 4000, false) // and this one replaces it
+	if s := got(); len(s) != 1 || s[0] != 3000 {
+		t.Fatalf("right away sent %v, want only the first step", s)
+	}
+	time.Sleep(sheetSendEvery + 150*time.Millisecond)
+	if s := got(); len(s) != 2 || s[1] != 4000 {
+		t.Fatalf("after a pause sent %v, want the value it stopped on as well", s)
+	}
+	d.sendSlider(whites, 4000, true) // lifted where it stopped: nothing new to send
+	d.sendSlider(whites, 5000, true) // the next finger, lifted at once: sent
+	if s := got(); len(s) != 3 || s[2] != 5000 {
+		t.Errorf("sent %v, want 3000, 4000 and 5000", s)
+	}
+	mu.Lock()
+	defer mu.Unlock()
+	if len(faded) != 3 || faded[0] || faded[1] || !faded[2] {
+		t.Errorf("faded %v, want the steps on the way without a fade and the last with one", faded)
+	}
 }
