@@ -283,14 +283,18 @@ func (f *Feature) Tap(a Action) {
 	if _, has := data["entity_id"]; !has && a.Entity != "" {
 		data["entity_id"] = a.Entity
 	}
+	// A media player's play or pause, next and back reach the whole group when Music Assistant plays
+	// there (transportTo). Which player that is takes a look at Home Assistant, so it is worked out with
+	// the call, off the goroutine the finger is on.
+	var route func() string
 	if domain == "media_player" && (service == "media_play_pause" || service == "media_next_track" || service == "media_previous_track") {
-		data["entity_id"] = transportTo(a.Entity) // the whole group, when Music Assistant plays there
+		route = func() string { return routeTransport(a.Entity) }
 	}
 	var p *pending
 	if strings.HasSuffix(service, "toggle") || service == "media_play_pause" {
 		p = &pending{flip: true}
 	}
-	s.call(a.Entity, domain, service, data, p)
+	s.callVia(a.Entity, domain, service, data, p, route)
 }
 
 // SetLevel sets a tile's level to v: a light's brightness, a cover's position, a thermostat's
@@ -331,6 +335,18 @@ func (f *Feature) SetLevel(a Adjust, v float64) {
 
 // call runs a service for a tile, showing what it asked for until Home Assistant says otherwise.
 func (s *session) call(entity, domain, service string, data map[string]any, p *pending) {
+	s.callVia(entity, domain, service, data, p, nil)
+}
+
+// callService runs a service on Home Assistant; a variable so that a test can see what a tap asks for,
+// and when, without a Home Assistant.
+var callService = func(live *hass.Live, ctx context.Context, domain, service string, data map[string]any) error {
+	return live.CallService(ctx, domain, service, data)
+}
+
+// callVia is call with the entity the service goes to worked out by route, when there is one, on the
+// way: with the service, never on the caller's goroutine, which is the finger's.
+func (s *session) callVia(entity, domain, service string, data map[string]any, p *pending, route func() string) {
 	s.mu.Lock()
 	live := s.live
 	if p != nil && entity != "" {
@@ -345,7 +361,10 @@ func (s *session) call(entity, domain, service string, data map[string]any, p *p
 	go func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancel()
-		if err := live.CallService(ctx, domain, service, data); err != nil {
+		if route != nil {
+			data["entity_id"] = route()
+		}
+		if err := callService(live, ctx, domain, service, data); err != nil {
 			slog.Warn("dashboard: a tap failed", "service", domain+"."+service, "err", err)
 			s.mu.Lock()
 			delete(s.pending, entity)

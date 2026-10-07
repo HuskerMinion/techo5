@@ -23,3 +23,5 @@ func (d *Display) sliderBegins(sheetSlider) {}
 func (s sheetSlider) slides(bool) bool { return true }
 
 func (d *Display) pageSwipeOnSheet(image.Point, int, int) bool { return false }
+
+func (d *Display) samePartOnSheet(image.Point, image.Point) bool { return true }

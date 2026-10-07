@@ -32,7 +32,8 @@ const (
 	mediaPartVolume
 	mediaPartFavorite
 	mediaPartSpeaker
-	mediaPartPage // the favorites' block, where a finger swipes to the next page or back
+	mediaPartPage        // the favorites' block, where a finger swipes to the next page or back
+	mediaPartSpeakerPage // the speakers' block, likewise
 )
 
 // mediaSheet is the sheet while it is up: the player, and what Home Assistant has said it offers.
@@ -49,8 +50,8 @@ type mediaSheet struct {
 	// lit is the favorite just tapped, drawn lit until litUntil, so a tap is seen to have landed.
 	lit      int
 	litUntil time.Time
-	// page is the page of favorites shown, from 0.
-	page int
+	// page is the page of favorites shown, from 0, and speakerPage the page of speakers.
+	page, speakerPage int
 	// speakerVol is each speaker's volume as last set from here, ahead of Home Assistant saying so.
 	speakerVol map[string]float64
 	// groupBase and mainBase are where the speakers grouped in and the player stood when a finger came
@@ -76,15 +77,11 @@ func (m mediaSheet) speakerVolume(entity string) float64 {
 // tapLit is how long a tapped favorite stays lit.
 const tapLit = 500 * time.Millisecond
 
-// transport is the player the sheet's back, play or pause and next go to: Music Assistant's, when it
-// plays here, so that they reach every speaker grouped in, rather than the tile's own player alone,
-// which would stop and leave the others playing.
-func (m mediaSheet) transport() string {
-	if m.lists.Target != "" {
-		return m.lists.Target
-	}
-	return m.entity
-}
+// sheetTap is how the sheet's taps reach Home Assistant; a variable so that a test can see what they
+// ask for. Back, play or pause and next name the tile's own player: the dashboard sends them to Music
+// Assistant's while it plays there (dashboard.Feature.Tap), and to the tile's own while the speaker
+// plays from elsewhere, where Music Assistant's would start its own old queue.
+var sheetTap = func(a dashboard.Action) { dashboard.Get().Tap(a) }
 
 // mediaView is the sheet as one frame draws it: the sheet and what the player is doing now.
 type mediaView struct {
@@ -96,15 +93,20 @@ type mediaView struct {
 // loading, no favorites, a player Music Assistant does not play to, and the player's states.
 var mediaWords = map[string][]string{
 	"": {"Play", "Speakers", "Done", "Loading…", "No favorites in Music Assistant yet",
-		"Music Assistant does not play here: controls only", "Playing", "Paused", "Idle", "Off"},
+		"Music Assistant does not play here: controls only", "Playing", "Paused", "Idle", "Off",
+		"Favorites need a Home Assistant administrator's token"},
 	"de": {"Abspielen", "Lautsprecher", "Fertig", "Lädt …", "Noch keine Favoriten in Music Assistant",
-		"Music Assistant spielt hier nicht: nur Steuerung", "Spielt", "Pausiert", "Bereit", "Aus"},
+		"Music Assistant spielt hier nicht: nur Steuerung", "Spielt", "Pausiert", "Bereit", "Aus",
+		"Für Favoriten braucht es ein Token eines Home-Assistant-Administrators"},
 	"es": {"Reproducir", "Altavoces", "Listo", "Cargando…", "Aún no hay favoritos en Music Assistant",
-		"Music Assistant no reproduce aquí: solo controles", "Reproduciendo", "En pausa", "Inactivo", "Apagado"},
+		"Music Assistant no reproduce aquí: solo controles", "Reproduciendo", "En pausa", "Inactivo", "Apagado",
+		"Los favoritos necesitan un token de administrador de Home Assistant"},
 	"fr": {"Écouter", "Enceintes", "OK", "Chargement…", "Pas encore de favoris dans Music Assistant",
-		"Music Assistant ne joue pas ici : commandes seulement", "Lecture", "En pause", "Inactif", "Éteint"},
+		"Music Assistant ne joue pas ici : commandes seulement", "Lecture", "En pause", "Inactif", "Éteint",
+		"Les favoris demandent un jeton d'administrateur Home Assistant"},
 	"it": {"Riproduci", "Altoparlanti", "Fatto", "Caricamento…", "Ancora nessun preferito in Music Assistant",
-		"Music Assistant non riproduce qui: solo comandi", "In riproduzione", "In pausa", "Inattivo", "Spento"},
+		"Music Assistant non riproduce qui: solo comandi", "In riproduzione", "In pausa", "Inattivo", "Spento",
+		"I preferiti richiedono un token di amministratore di Home Assistant"},
 }
 
 func mediaWord(i int) string {
@@ -113,6 +115,16 @@ func mediaWord(i int) string {
 		w = mediaWords[""]
 	}
 	return w[i]
+}
+
+// problemText is what the sheet says when its lists could not be had. Music Assistant's library is
+// read with its config entry, which only an administrator's token may read: a token without that
+// right is told so in words, not as Home Assistant's "401 Unauthorized".
+func problemText(err error) string {
+	if s := err.Error(); strings.Contains(s, "401") || strings.Contains(s, "403") {
+		return mediaWord(10)
+	}
+	return err.Error()
 }
 
 // stateWord is a player's state in words, for the line under its name when nothing is named.
@@ -146,7 +158,7 @@ func (d *Display) openMedia(entity string) bool {
 			n := *m
 			n.lists, n.loading = lists, false
 			if err != nil {
-				n.problem = err.Error()
+				n.problem = problemText(err)
 				slog.Warn("dashboard media sheet", "entity", entity, "err", err)
 			}
 			n.grouped = map[string]bool{}
@@ -170,10 +182,10 @@ func (d *Display) mediaTap(x, y int) bool {
 	if m == nil || d.r == nil {
 		return false
 	}
-	z, frac, in := d.r.mediaAt(x, y)
+	z, _, in := d.r.mediaAt(x, y)
 	tap := func(entity, service string, data map[string]any) {
 		slog.Info("dashboard media", "entity", entity, "service", service)
-		dashboard.Get().Tap(dashboard.Action{Entity: entity, Service: service, Data: data})
+		sheetTap(dashboard.Action{Entity: entity, Service: service, Data: data})
 	}
 	switch {
 	case !in || z.kind == mediaPartDone:
@@ -181,15 +193,17 @@ func (d *Display) mediaTap(x, y int) bool {
 		d.dashMedia = nil
 		d.mu.Unlock()
 	case z.kind == mediaPartPrev:
-		tap(m.transport(), "media_player.media_previous_track", nil)
+		tap(m.entity, "media_player.media_previous_track", nil)
 	case z.kind == mediaPartPlay:
-		tap(m.transport(), "media_player.media_play_pause", nil)
+		tap(m.entity, "media_player.media_play_pause", nil)
 	case z.kind == mediaPartNext:
-		tap(m.transport(), "media_player.media_next_track", nil)
+		tap(m.entity, "media_player.media_next_track", nil)
 	case z.kind == mediaPartVolume:
-		v := float64(int(frac*100+0.5)) / 100
-		tap(m.entity, "media_player.volume_set", map[string]any{"volume_level": v})
-		d.editMedia(func(n *mediaSheet) { n.volume = v })
+		// As a finger sliding along it: the speakers grouped in move with it.
+		if s, ok := d.sliderAt(x, y); ok {
+			d.sliderBegins(s)
+			d.slideSheet(s, x, true)
+		}
 	case z.kind == mediaPartFavorite && z.index < len(m.lists.Favorites):
 		f := m.lists.Favorites[z.index]
 		tap(m.lists.Target, "music_assistant.play_media", map[string]any{"media_id": f.URI, "media_type": f.Kind, "enqueue": "replace"})
@@ -271,8 +285,14 @@ func (r *renderer) mediaSheet(v *mediaView, th dashboard.Theme) {
 	// as are left.
 	fixed := pad + titleH + subH + ctrlH + gap + btnH + pad
 	speakerRows := min(rows(len(m.lists.Speakers)), 2)
+	speakersPer := max(speakerRows*cols, 1)
+	speakerPages := (len(m.lists.Speakers) + speakersPer - 1) / speakersPer
+	speakerPage := min(max(m.speakerPage, 0), max(speakerPages-1, 0))
 	if speakerRows > 0 {
 		fixed += labelH + speakerRows*(chipH+gap)
+	}
+	if speakerPages > 1 {
+		fixed += r.s(16)
 	}
 	favRows := rows(len(m.lists.Favorites))
 	room := (r.h - r.s(16) - fixed - labelH) / (chipH + gap)
@@ -287,7 +307,7 @@ func (r *renderer) mediaSheet(v *mediaView, th dashboard.Theme) {
 	}
 	// Without Music Assistant there is no music to choose, and no list to say so about.
 	music := m.loading || m.lists.MusicAssistant
-	notice := m.loading || m.problem != "" || m.lists.Target == "" || len(m.lists.Favorites) == 0
+	notice := m.loading || m.lists.Target == "" || len(m.lists.Favorites) == 0
 	h := fixed
 	switch {
 	case !music:
@@ -423,18 +443,7 @@ func (r *renderer) mediaSheet(v *mediaView, th dashboard.Theme) {
 		chips(names, playing, icon, func(int) float64 { return -1 }, mediaPartFavorite, page*perPage, perPage)
 		y += favRows * (chipH + gap)
 		if pages > 1 {
-			// Which page this is, of how many: a dot each, this one lit.
-			ds, dg := r.s(8), r.s(10)
-			dx := x0 + (w-(pages*ds+(pages-1)*dg))/2
-			for i := 0; i < pages; i++ {
-				c := lerp(pal.card, pal.sub, 0.6)
-				if i == page {
-					c = pal.accent
-				}
-				dot := image.Rect(dx+i*(ds+dg), y, dx+i*(ds+dg)+ds, y+ds)
-				r.roundFill(dot, float64(ds)/2, c, c)
-			}
-			y += dotsH
+			y = r.pageDots(x0, w, y, pages, page, pal)
 		}
 		// The block a swipe pages through; after the favorites, so a tap on one finds the favorite.
 		zones = append(zones, mediaZone{r: image.Rect(x0+pad, top, x0+w-pad, y), kind: mediaPartPage})
@@ -455,8 +464,13 @@ func (r *renderer) mediaSheet(v *mediaView, th dashboard.Theme) {
 			}
 			return m.speakerVolume(m.lists.Speakers[i].Entity)
 		}
-		chips(names, grouped, func(int) string { return "speaker" }, level, mediaPartSpeaker, 0, speakerRows*cols)
+		top := y
+		chips(names, grouped, func(int) string { return "speaker" }, level, mediaPartSpeaker, speakerPage*speakersPer, speakersPer)
 		y += speakerRows * (chipH + gap)
+		if speakerPages > 1 {
+			y = r.pageDots(x0, w, y, speakerPages, speakerPage, pal)
+		}
+		zones = append(zones, mediaZone{r: image.Rect(x0+pad, top, x0+w-pad, y), kind: mediaPartSpeakerPage})
 	}
 
 	done := mediaWord(2)
@@ -467,8 +481,24 @@ func (r *renderer) mediaSheet(v *mediaView, th dashboard.Theme) {
 	zones = append(zones, mediaZone{r: btn, kind: mediaPartDone})
 	r.setMedia(zones, card)
 	r.zmu.Lock()
-	r.mediaPages = pages
+	r.mediaPages, r.mediaSpeakerPages = pages, speakerPages
 	r.zmu.Unlock()
+}
+
+// pageDots draws which page of how many a list is on, a dot each and this one lit, across the sheet
+// x0 and w wide at y, and is where the sheet goes on under them.
+func (r *renderer) pageDots(x0, w, y, pages, page int, pal dashPal) int {
+	ds, dg := r.s(8), r.s(10)
+	dx := x0 + (w-(pages*ds+(pages-1)*dg))/2
+	for i := 0; i < pages; i++ {
+		c := lerp(pal.card, pal.sub, 0.6)
+		if i == page {
+			c = pal.accent
+		}
+		dot := image.Rect(dx+i*(ds+dg), y, dx+i*(ds+dg)+ds, y+ds)
+		r.roundFill(dot, float64(ds)/2, c, c)
+	}
+	return y + r.s(16)
 }
 
 // mediaPageSwipe is a finger that came down on the favorites at from and lifted at x, y: a swipe along
@@ -479,7 +509,8 @@ func (d *Display) mediaPageSwipe(from image.Point, x, y int) bool {
 		return false
 	}
 	z, _, in := d.r.mediaAt(from.X, from.Y)
-	if !in || (z.kind != mediaPartFavorite && z.kind != mediaPartPage) {
+	speakers := z.kind == mediaPartSpeaker || z.kind == mediaPartSpeakerPage
+	if !in || (z.kind != mediaPartFavorite && z.kind != mediaPartPage && !speakers) {
 		return false
 	}
 	dx, dy := x-from.X, y-from.Y
@@ -487,13 +518,19 @@ func (d *Display) mediaPageSwipe(from image.Point, x, y int) bool {
 		return false
 	}
 	d.r.zmu.Lock()
-	pages := d.r.mediaPages
+	pages, speakerPages := d.r.mediaPages, d.r.mediaSpeakerPages
 	d.r.zmu.Unlock()
 	step := 1
 	if dx > 0 {
 		step = -1
 	}
-	d.editMedia(func(n *mediaSheet) { n.page = min(max(n.page+step, 0), max(pages-1, 0)) })
+	d.editMedia(func(n *mediaSheet) {
+		if speakers {
+			n.speakerPage = min(max(n.speakerPage+step, 0), max(speakerPages-1, 0))
+		} else {
+			n.page = min(max(n.page+step, 0), max(pages-1, 0))
+		}
+	})
 	d.wake()
 	return true
 }

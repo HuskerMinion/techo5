@@ -61,9 +61,10 @@ type paint struct {
 	colorZones []colorZone
 	colorCard  image.Rectangle
 	// The media sheet's likewise (media_sheet.go).
-	mediaZones []mediaZone
-	mediaCard  image.Rectangle
-	mediaPages int // the pages of favorites the sheet has
+	mediaZones        []mediaZone
+	mediaCard         image.Rectangle
+	mediaPages        int // the pages of favorites the sheet has
+	mediaSpeakerPages int // and of speakers
 
 	// sNum and sDen scale this screen's fixed sizes against the panel the layout was drawn for. The
 	// Echo Show 5 is that panel and stays 1:1; the Show 8 is 4:3 of it across.

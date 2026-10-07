@@ -213,6 +213,9 @@ var routes struct {
 	at time.Time
 }
 
+// routeTransport is transportTo; a variable so that a test can see that a tap waits for none of it.
+var routeTransport = transportTo
+
 // transportTo is the player a tile's play or pause, next or back go to.
 func transportTo(entity string) string {
 	target := maPlayerFor(entity)

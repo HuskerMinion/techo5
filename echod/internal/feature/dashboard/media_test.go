@@ -3,8 +3,10 @@
 package dashboard
 
 import (
+	"context"
 	"reflect"
 	"testing"
+	"time"
 
 	"github.com/HuskerMinion/techo5/echod/internal/lib/hass"
 )
@@ -126,3 +128,42 @@ func TestATilesPlayPauseReachesTheGroup(t *testing.T) {
 		}
 	}
 }
+
+// A tile's play or pause is sent without waiting for the look at Home Assistant that says which
+// player it goes to: that is worked out with the call, off the finger's goroutine.
+func TestATapDoesNotWaitForItsRoute(t *testing.T) {
+	routed := make(chan string, 1)
+	prevRoute, prevCall := routeTransport, callService
+	routeTransport = func(string) string {
+		time.Sleep(300 * time.Millisecond) // Home Assistant slow to answer
+		return "media_player.ma_kitchen"
+	}
+	callService = func(_ *hass.Live, _ context.Context, _, _ string, data map[string]any) error {
+		routed <- data["entity_id"].(string)
+		return nil
+	}
+	t.Cleanup(func() { routeTransport, callService = prevRoute, prevCall })
+
+	f := &Feature{}
+	f.drawn = &session{f: f, src: noSource{}, live: &hass.Live{}, states: map[string]hass.LiveEntity{},
+		pending: map[string]pending{}}
+	start := time.Now()
+	f.Tap(Action{Entity: "media_player.sonos_kitchen", Service: "media_player.media_play_pause"})
+	if took := time.Since(start); took > 100*time.Millisecond {
+		t.Errorf("the tap took %v, waiting for the route", took)
+	}
+	select {
+	case to := <-routed:
+		if to != "media_player.ma_kitchen" {
+			t.Errorf("sent to %s, want the routed player", to)
+		}
+	case <-time.After(2 * time.Second):
+		t.Error("the call was never made")
+	}
+}
+
+// noSource is a dashboard with nothing on it, for a session that only takes taps.
+type noSource struct{}
+
+func (noSource) load(context.Context, *hass.Live) (needs, error) { return needs{}, nil }
+func (noSource) sections(look) []Section                         { return nil }

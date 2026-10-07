@@ -115,8 +115,8 @@ func (d *Display) sliderAt(x, y int) (sheetSlider, bool) {
 		d.mu.Unlock()
 		if m != nil && z.index < len(m.lists.Speakers) {
 			sp := m.lists.Speakers[z.index]
-			if m.grouped[sp.Entity] && m.speakerVolume(sp.Entity) >= 0 {
-				return sheetSlider{kind: mediaPartSpeaker, r: z.r, lo: 0, hi: 1, entity: sp.Entity}, true
+			if v := m.speakerVolume(sp.Entity); m.grouped[sp.Entity] && v >= 0 {
+				return sheetSlider{kind: mediaPartSpeaker, r: z.r, lo: 0, hi: 1, entity: sp.Entity, from: x, base: v}, true
 			}
 		}
 	}
@@ -131,6 +131,25 @@ func (s sheetSlider) slides(moved bool) bool { return s.kind != mediaPartSpeaker
 // swipe along the media sheet's favorites turns their page.
 func (d *Display) pageSwipeOnSheet(from image.Point, x, y int) bool {
 	return d.mediaPageSwipe(from, x, y)
+}
+
+// samePartOnSheet is whether a and b are on the same part of the sheet that is up: a finger that came
+// down on one part and lifted on another tapped neither.
+func (d *Display) samePartOnSheet(a, b image.Point) bool {
+	if d.r == nil {
+		return true
+	}
+	za, ina := d.r.colorAt(a.X, a.Y)
+	zb, inb := d.r.colorAt(b.X, b.Y)
+	if ina || inb {
+		return ina == inb && za.kind == zb.kind && za.r == zb.r
+	}
+	ma, _, ina := d.r.mediaAt(a.X, a.Y)
+	mb, _, inb := d.r.mediaAt(b.X, b.Y)
+	if ina || inb {
+		return ina == inb && ma.kind == mb.kind && ma.index == mb.index
+	}
+	return true
 }
 
 // sliderBegins is a finger coming down on a sheet's slider. On the media sheet's volume it notes where
@@ -182,7 +201,8 @@ func (d *Display) slideSheet(s sheetSlider, x int, final bool) {
 			}
 		})
 	case mediaPartSpeaker:
-		v = math.Round(v*100) / 100
+		v = s.base + float64(x-s.from)/float64(max(s.r.Dx(), 1))
+		v = math.Round(min(max(v, 0), 1)*100) / 100
 		d.editMedia(func(n *mediaSheet) { n.speakerVol[s.entity] = v })
 	}
 	d.sendSlider(s, v, final)

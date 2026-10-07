@@ -72,6 +72,10 @@ type sheetSlider struct {
 	r      image.Rectangle
 	lo, hi float64
 	entity string // the speaker, for mediaPartSpeaker
+	// from and base are, on a speaker's button, where the finger came down and the volume it had: the
+	// button is no bar to aim at, so the volume moves by as much as the finger does, as a tile's level.
+	from int
+	base float64
 }
 
 // at is the value under x, kept to the slider's ends when the finger is past them.
@@ -290,6 +294,9 @@ func (d *Display) drawnRelease(x, y int) {
 	}
 	if dr.moved && dr.onSheet && dr.slider == nil && d.pageSwipeOnSheet(dr.at, x, y) {
 		return
+	}
+	if dr.moved && dr.onSheet && dr.slider == nil && !d.samePartOnSheet(dr.at, image.Pt(x, y)) {
+		return // a drag that lifted on another part of the sheet: neither was tapped
 	}
 	if dr.slider != nil && d.colorOpen() && dr.slider.slides(dr.moved) {
 		d.slideSheet(*dr.slider, x, true) // where it lifted, wherever it went on the way

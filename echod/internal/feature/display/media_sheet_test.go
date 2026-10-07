@@ -3,11 +3,13 @@
 package display
 
 import (
+	"errors"
 	"fmt"
 	"image"
 	"image/png"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -96,16 +98,37 @@ func TestTheMediaSheetOffersWhatThePlayerCanDo(t *testing.T) {
 	}
 }
 
-// Back, play or pause and next go to Music Assistant's player when it plays here, so that they reach
-// every speaker grouped in; to the tile's own player when there is none.
-func TestTheMediaSheetsControlsReachTheWholeGroup(t *testing.T) {
-	grouped := mediaSheet{entity: "media_player.sonos_kitchen", lists: dashboard.MediaLists{Target: "media_player.ma_kitchen"}}
-	if got := grouped.transport(); got != "media_player.ma_kitchen" {
-		t.Errorf("with Music Assistant the controls go to %s, want its player", got)
+// Back, play or pause and next name the tile's own player: the dashboard works out whether Music
+// Assistant's reaches the group from there (it is the one playing) or not (the speaker plays from
+// elsewhere, and Music Assistant's would start its own old queue).
+func TestTheMediaSheetsControlsNameTheTilesPlayer(t *testing.T) {
+	var asked []dashboard.Action
+	prev := sheetTap
+	sheetTap = func(a dashboard.Action) { asked = append(asked, a) }
+	t.Cleanup(func() { sheetTap = prev })
+
+	r := newRenderer(image.NewRGBA(image.Rect(0, 0, showWide, showHigh)))
+	sheet := mediaSheet{entity: "media_player.sonos_kitchen", volume: -1,
+		lists: dashboard.MediaLists{MusicAssistant: true, Target: "media_player.ma_kitchen", Group: "media_player.ma_kitchen"}}
+	view := mediaView{sheet: sheet, now: dashboard.MediaNow{Entity: sheet.entity, Name: "Kitchen", State: "playing", Volume: 0.4}}
+	r.draw(scene{now: time.Now(), phase: "idle", showDash: true, dashMode: config.DashboardDrawn, drawn: fourControls(), dashMedia: &view})
+	d := &Display{r: r, poke: make(chan struct{}, 1)}
+	d.dashMedia = &sheet
+	r.zmu.Lock()
+	zones := r.mediaZones
+	r.zmu.Unlock()
+	for _, z := range zones {
+		if z.kind == mediaPartPrev || z.kind == mediaPartPlay || z.kind == mediaPartNext {
+			d.mediaTap((z.r.Min.X+z.r.Max.X)/2, (z.r.Min.Y+z.r.Max.Y)/2)
+		}
 	}
-	alone := mediaSheet{entity: "media_player.tv"}
-	if got := alone.transport(); got != "media_player.tv" {
-		t.Errorf("without Music Assistant the controls go to %s, want the tile's player", got)
+	if len(asked) != 3 {
+		t.Fatalf("the three controls asked %d times", len(asked))
+	}
+	for _, a := range asked {
+		if a.Entity != "media_player.sonos_kitchen" {
+			t.Errorf("%s went to %s, want the tile's own player", a.Service, a.Entity)
+		}
 	}
 }
 
@@ -179,6 +202,17 @@ func TestTheMediaSheetsVolumeMovesTheGroup(t *testing.T) {
 	if d.dashMedia.grouped["media_player.ma_bath"] {
 		t.Error("a tap on a grouped speaker left it in the group")
 	}
+
+	// A quick tap on the volume, with no slide, moves the group too.
+	mu.Lock()
+	deckBefore := set["media_player.ma_deck"]
+	mu.Unlock()
+	d.mediaTap(at(0.4), my)
+	mu.Lock()
+	if set["media_player.den"] != 0.4 || set["media_player.ma_deck"] >= deckBefore {
+		t.Errorf("a tap on the volume at 0.4 set %v; want den 0.4 and the deck lower than %v", set, deckBefore)
+	}
+	mu.Unlock()
 }
 
 // More favorites than fit are paged through: a page holds what fits, dots say which page it is, a
@@ -240,5 +274,102 @@ func TestTheMediaSheetPagesThroughFavorites(t *testing.T) {
 	}
 	if d.dashMedia.page != 0 {
 		t.Errorf("swiped back past the first page: on page %d, want 0", d.dashMedia.page)
+	}
+}
+
+// With a problem fetching the lists and the favorites of before still to show, the sheet is sized for
+// what it draws: every part on it, and Done clear of the speakers.
+func TestAStaleListKeepsTheSheetsShape(t *testing.T) {
+	lists := dashboard.MediaLists{MusicAssistant: true, Target: "media_player.ma_den", Group: "media_player.ma_den"}
+	for i := 0; i < 6; i++ {
+		lists.Favorites = append(lists.Favorites, dashboard.MediaChoice{Name: fmt.Sprintf("Playlist %d", i), URI: fmt.Sprintf("library://playlist/%d", i), Kind: "playlist"})
+		lists.Speakers = append(lists.Speakers, dashboard.Speaker{Entity: fmt.Sprintf("media_player.s%d", i), Name: fmt.Sprintf("Room %d", i), Volume: 0.3})
+	}
+	view := mediaView{sheet: mediaSheet{entity: "media_player.den", lists: lists, problem: "hass: GET /api/states: 502 Bad Gateway", volume: -1},
+		now: dashboard.MediaNow{Entity: "media_player.den", Name: "Den", State: "idle", Volume: 0.3}}
+	r := newRenderer(image.NewRGBA(image.Rect(0, 0, showWide, showHigh)))
+	r.draw(scene{now: time.Now(), phase: "idle", showDash: true, dashMode: config.DashboardDrawn, drawn: fourControls(), dashMedia: &view})
+	r.zmu.Lock()
+	zones, card := r.mediaZones, r.mediaCard
+	r.zmu.Unlock()
+	var done image.Rectangle
+	for _, z := range zones {
+		if !z.r.In(card) {
+			t.Errorf("part %d at %v is off the sheet %v", z.kind, z.r, card)
+		}
+		if z.kind == mediaPartDone {
+			done = z.r
+		}
+	}
+	for _, z := range zones {
+		if (z.kind == mediaPartSpeaker || z.kind == mediaPartFavorite) && z.r.Overlaps(done) {
+			t.Errorf("Done %v is on top of %v", done, z.r)
+		}
+	}
+}
+
+// A drag that came down on a favorite and lifted on a speaker taps neither; more speakers than fit
+// are paged through as the favorites are.
+func TestADragBetweenPartsTapsNothingAndSpeakersPage(t *testing.T) {
+	var asked []dashboard.Action
+	prev := sheetTap
+	sheetTap = func(a dashboard.Action) { asked = append(asked, a) }
+	t.Cleanup(func() { sheetTap = prev })
+
+	lists := dashboard.MediaLists{MusicAssistant: true, Target: "media_player.ma_den", Group: "media_player.ma_den"}
+	for i := 0; i < 8; i++ {
+		lists.Favorites = append(lists.Favorites, dashboard.MediaChoice{Name: fmt.Sprintf("Playlist %d", i), URI: fmt.Sprintf("library://playlist/%d", i), Kind: "playlist"})
+	}
+	for i := 0; i < 12; i++ {
+		lists.Speakers = append(lists.Speakers, dashboard.Speaker{Entity: fmt.Sprintf("media_player.s%d", i), Name: fmt.Sprintf("Room %d", i), Volume: 0.3})
+	}
+	sheet := mediaSheet{entity: "media_player.den", lists: lists, volume: -1, grouped: map[string]bool{}}
+	view := mediaView{sheet: sheet, now: dashboard.MediaNow{Entity: "media_player.den", Name: "Den", State: "idle", Volume: 0.3}}
+	r := newRenderer(image.NewRGBA(image.Rect(0, 0, showWide, showHigh)))
+	r.draw(scene{now: time.Now(), phase: "idle", showDash: true, dashMode: config.DashboardDrawn, drawn: fourControls(), dashMedia: &view})
+	r.zmu.Lock()
+	zones, speakerPages := r.mediaZones, r.mediaSpeakerPages
+	r.zmu.Unlock()
+	if speakerPages < 2 {
+		t.Fatalf("12 speakers on %d page(s)", speakerPages)
+	}
+	var fav0, spk image.Rectangle
+	for _, z := range zones {
+		switch {
+		case z.kind == mediaPartFavorite && z.index == 0:
+			fav0 = z.r
+		case z.kind == mediaPartSpeaker && spk.Empty():
+			spk = z.r
+		}
+	}
+	if fav0.Empty() || spk.Empty() {
+		t.Fatalf("favorite %v, speaker %v", fav0, spk)
+	}
+	d := &Display{r: r, poke: make(chan struct{}, 1)}
+	d.dashMedia = &sheet
+	cx := (fav0.Min.X + fav0.Max.X) / 2
+	d.drawnHold(cx, (fav0.Min.Y+fav0.Max.Y)/2)
+	d.drawnMove(cx, (spk.Min.Y+spk.Max.Y)/2)
+	d.drawnRelease(cx, (spk.Min.Y+spk.Max.Y)/2)
+	if len(asked) != 0 || len(d.dashMedia.grouped) != 0 {
+		t.Errorf("a drag from a favorite to a speaker asked for %v, grouped %v", asked, d.dashMedia.grouped)
+	}
+
+	sy := (spk.Min.Y + spk.Max.Y) / 2
+	d.drawnHold(spk.Max.X-5, sy)
+	d.drawnMove(spk.Max.X-155, sy)
+	d.drawnRelease(spk.Max.X-155, sy)
+	if d.dashMedia.speakerPage != 1 || len(asked) != 0 {
+		t.Errorf("a swipe along the speakers: page %d, asked %v; want page 1 and nothing asked", d.dashMedia.speakerPage, asked)
+	}
+}
+
+// A token that may not read Music Assistant's library is told so in words.
+func TestAnUnauthorizedListIsSaidInWords(t *testing.T) {
+	if got := problemText(errors.New("hass: GET /api/config/config_entries/entry: 401 Unauthorized")); strings.Contains(got, "401") {
+		t.Errorf("said %q", got)
+	}
+	if got := problemText(errors.New("hass: GET /api/states: 502 Bad Gateway")); !strings.Contains(got, "502") {
+		t.Errorf("another problem said %q, want it as it is", got)
 	}
 }
