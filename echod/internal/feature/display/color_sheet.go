@@ -8,6 +8,8 @@ import (
 	"image/draw"
 	"log/slog"
 	"math"
+	"sort"
+	"strings"
 	"time"
 
 	"github.com/HuskerMinion/techo5/echod/internal/feature/dashboard"
@@ -59,6 +61,9 @@ func (d *Display) longPress(t *dashTile) {
 	if t == nil {
 		return
 	}
+	if strings.HasPrefix(t.entity, "media_player.") && d.openMedia(t.entity) {
+		return
+	}
 	if t.adjust != nil && t.adjust.Kind == "brightness" {
 		if c, ok := dashboard.Get().LightColor(t.adjust.Entity); ok {
 			slog.Info("dashboard color sheet", "entity", c.Entity, "whites", c.Kelvin, "colors", c.Colors)
@@ -74,23 +79,25 @@ func (d *Display) longPress(t *dashTile) {
 	}
 }
 
-// colorOpen is whether the color sheet is up.
+// colorOpen is whether a sheet is up over the page: the color sheet, or the media sheet.
 func (d *Display) colorOpen() bool {
 	d.mu.Lock()
 	defer d.mu.Unlock()
-	return d.dashColor != nil
+	return d.dashColor != nil || d.dashMedia != nil
 }
 
-// onColorSheet is whether x, y is on the color sheet, while it is up.
+// onColorSheet is whether x, y is on the sheet that is up: the color sheet, or the media sheet.
 func (d *Display) onColorSheet(x, y int) bool {
 	if !d.colorOpen() || d.r == nil {
 		return false
 	}
 	_, in := d.r.colorAt(x, y)
-	return in
+	_, _, onMedia := d.r.mediaAt(x, y)
+	return in || onMedia
 }
 
-// sliderAt is the slider of the color sheet under x, y: its band of whites or its band of colors.
+// sliderAt is the slider of the sheet that is up under x, y: the color sheet's whites or colors, the
+// media sheet's volume, or the volume of a speaker grouped in, along its button.
 func (d *Display) sliderAt(x, y int) (sheetSlider, bool) {
 	if d.r == nil {
 		return sheetSlider{}, false
@@ -98,12 +105,65 @@ func (d *Display) sliderAt(x, y int) (sheetSlider, bool) {
 	if z, in := d.r.colorAt(x, y); in && (z.kind == colorPartWhite || z.kind == colorPartHue) {
 		return sheetSlider{kind: z.kind, r: z.r, lo: z.lo, hi: z.hi}, true
 	}
+	z, _, in := d.r.mediaAt(x, y)
+	if in && z.kind == mediaPartVolume {
+		return sheetSlider{kind: mediaPartVolume, r: z.r, lo: 0, hi: 1}, true
+	}
+	if in && z.kind == mediaPartSpeaker {
+		d.mu.Lock()
+		m := d.dashMedia
+		d.mu.Unlock()
+		if m != nil && z.index < len(m.lists.Speakers) {
+			sp := m.lists.Speakers[z.index]
+			if m.grouped[sp.Entity] && m.speakerVolume(sp.Entity) >= 0 {
+				return sheetSlider{kind: mediaPartSpeaker, r: z.r, lo: 0, hi: 1, entity: sp.Entity}, true
+			}
+		}
+	}
 	return sheetSlider{}, false
 }
 
+// slides is whether a finger on s moves it yet: at once, but on a speaker only once it has moved,
+// since a tap there groups the speaker in or takes it out.
+func (s sheetSlider) slides(moved bool) bool { return s.kind != mediaPartSpeaker || moved }
+
+// pageSwipeOnSheet is a finger that came down on a sheet at from and lifted at x, y after moving: a
+// swipe along the media sheet's favorites turns their page.
+func (d *Display) pageSwipeOnSheet(from image.Point, x, y int) bool {
+	return d.mediaPageSwipe(from, x, y)
+}
+
+// sliderBegins is a finger coming down on a sheet's slider. On the media sheet's volume it notes where
+// the player and each speaker grouped in stand, so that the whole group moves by what the finger
+// moves the volume by.
+func (d *Display) sliderBegins(s sheetSlider) {
+	if s.kind != mediaPartVolume {
+		return
+	}
+	d.mu.Lock()
+	m := d.dashMedia
+	d.mu.Unlock()
+	if m == nil {
+		return
+	}
+	main := m.volume
+	if main < 0 {
+		now, _ := dashboard.Get().MediaNow(m.entity)
+		main = now.Volume
+	}
+	d.editMedia(func(n *mediaSheet) {
+		n.mainBase, n.groupBase = main, map[string]float64{}
+		for e, on := range n.grouped {
+			if v := n.speakerVolume(e); on && v >= 0 {
+				n.groupBase[e] = v
+			}
+		}
+	})
+}
+
 // slideSheet moves a sheet's slider to the finger at x, as a tile's level follows a finger sliding
-// along it, and the light follows it too (sendSlider); final, when the finger lifts, sets where it
-// ended.
+// along it, and the light or the speaker follows it too (sendSlider); final, when the finger lifts,
+// sets where it ended.
 func (d *Display) slideSheet(s sheetSlider, x int, final bool) {
 	v := s.at(x)
 	switch s.kind {
@@ -113,14 +173,34 @@ func (d *Display) slideSheet(s sheetSlider, x int, final bool) {
 	case colorPartHue:
 		v = hueAt(v / 360)
 		d.setShownHue(v)
+	case mediaPartVolume:
+		v = math.Round(v*100) / 100
+		d.editMedia(func(n *mediaSheet) {
+			n.volume = v
+			for e, base := range n.groupBase {
+				n.speakerVol[e] = groupShift(base, n.mainBase, v)
+			}
+		})
+	case mediaPartSpeaker:
+		v = math.Round(v*100) / 100
+		d.editMedia(func(n *mediaSheet) { n.speakerVol[s.entity] = v })
 	}
 	d.sendSlider(s, v, final)
 	d.wake()
 }
 
+// groupShift is a grouped speaker's volume when the group's moves from main to v: moved by as much,
+// and kept between 0 and 1.
+func groupShift(base, main, v float64) float64 {
+	if main < 0 {
+		return base
+	}
+	return math.Round(min(max(base+v-main, 0), 1)*100) / 100
+}
+
 // sheetSendEvery is how often a sheet's slider sends what it shows while a finger moves it: the light
-// warms or cools or changes color as the finger goes, a few steps a second rather than one for every
-// movement, which a Zigbee light would queue up behind.
+// warms or cools and the speaker gets louder or quieter as the finger goes, a few steps a second
+// rather than one for every movement, which a Zigbee light would queue up behind.
 const sheetSendEvery = 300 * time.Millisecond
 
 // sliderTap is how a slider's value reaches Home Assistant; a variable so that a test can see what
@@ -143,7 +223,7 @@ type sliderSent struct {
 // the race it guards against does.
 var sliderAfter = time.AfterFunc
 
-// sendSlider sends a slider's value to its light: at once when the last send was long
+// sendSlider sends a slider's value to its light or speaker: at once when the last send was long
 // enough ago, else once it is (the last value a finger stopped on is sent too), and always when the
 // finger lifts - each value once.
 func (d *Display) sendSlider(s sheetSlider, value float64, final bool) {
@@ -181,7 +261,7 @@ func (d *Display) sendSlider(s sheetSlider, value float64, final bool) {
 	if final {
 		*st = sliderSent{gen: st.gen} // the next finger starts afresh
 	}
-	c := d.dashColor
+	c, m := d.dashColor, d.dashMedia
 	d.mu.Unlock()
 	if repeat {
 		return
@@ -209,12 +289,33 @@ func (d *Display) sendSlider(s sheetSlider, value float64, final bool) {
 		log("dashboard color", "entity", c.Entity, "hue", value)
 		sliderTap(dashboard.Action{Entity: c.Entity, Service: "light.turn_on",
 			Data: light(map[string]any{"hs_color": []any{value, 100.0}})})
+	case kind == mediaPartVolume && m != nil:
+		log("dashboard media", "entity", m.entity, "volume", value, "grouped", len(m.groupBase))
+		sliderTap(dashboard.Action{Entity: m.entity, Service: "media_player.volume_set",
+			Data: map[string]any{"volume_level": value}})
+		// The speakers grouped in move with it, each by as much, in name order.
+		entities := make([]string, 0, len(m.groupBase))
+		for e := range m.groupBase {
+			entities = append(entities, e)
+		}
+		sort.Strings(entities)
+		for _, e := range entities {
+			sliderTap(dashboard.Action{Entity: e, Service: "media_player.volume_set",
+				Data: map[string]any{"volume_level": groupShift(m.groupBase[e], m.mainBase, value)}})
+		}
+	case kind == mediaPartSpeaker && m != nil:
+		log("dashboard media", "entity", s.entity, "volume", value)
+		sliderTap(dashboard.Action{Entity: s.entity, Service: "media_player.volume_set",
+			Data: map[string]any{"volume_level": value}})
 	}
 }
 
 // colorTap is a finger lifted at x, y while the color sheet is up, which the sheet always takes: the
 // page under it is not tapped. It says whether the sheet was up.
 func (d *Display) colorTap(x, y int) bool {
+	if d.mediaTap(x, y) {
+		return true
+	}
 	d.mu.Lock()
 	c := d.dashColor
 	d.mu.Unlock()

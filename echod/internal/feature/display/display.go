@@ -162,7 +162,8 @@ type Display struct {
 	dashDrag      drawnDrag // a finger moving on the drawn dashboard
 	dashAdjust    dashAdjusting
 	dashColor     *dashboard.LightColor // the color sheet, while it is up
-	sheetSent     sliderSent            // what the color sheet's slider last sent, while a finger moves it
+	dashMedia     *mediaSheet           // the media sheet, while it is up
+	sheetSent     sliderSent            // what a sheet's slider last sent, while a finger moves it
 	dashHolds     bool                  // the drawn dashboard is up, and wants a finger held still reported
 
 	poke chan struct{}

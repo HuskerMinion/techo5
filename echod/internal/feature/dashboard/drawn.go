@@ -24,12 +24,15 @@ import (
 
 // Tile is one thing on the page: an icon, a name, and what it is doing.
 type Tile struct {
-	Name  string
-	Icon  string // an mdi name
-	Value string // what it is doing, in words: "On · 60%", "Closed", "72°"
-	On    bool   // lit, open, playing: drawn in the accent color
-	Gone  bool   // unavailable
-	Tap   *Action
+	// Entity is the entity the tile shows, when it shows one: what a long press on it opens a sheet
+	// for (a light's colors, a media player's music).
+	Entity string
+	Name   string
+	Icon   string // an mdi name
+	Value  string // what it is doing, in words: "On · 60%", "Closed", "72°"
+	On     bool   // lit, open, playing: drawn in the accent color
+	Gone   bool   // unavailable
+	Tap    *Action
 	// Adjust is a level a finger sliding along the tile sets: a light's brightness, a cover's
 	// position, a thermostat's temperature.
 	Adjust *Adjust
@@ -204,6 +207,8 @@ type pending struct {
 	flip  bool   // toggled: shown the other way
 	value string // set to a level: shown as this
 	on    bool
+	// keepOn leaves whether the tile is lit alone: a level that is not the thing being on.
+	keepOn bool
 }
 
 // Drawn is the drawn dashboard for a screen width wide, connecting to Home Assistant if it is not
@@ -278,6 +283,9 @@ func (f *Feature) Tap(a Action) {
 	if _, has := data["entity_id"]; !has && a.Entity != "" {
 		data["entity_id"] = a.Entity
 	}
+	if domain == "media_player" && (service == "media_play_pause" || service == "media_next_track" || service == "media_previous_track") {
+		data["entity_id"] = transportTo(a.Entity) // the whole group, when Music Assistant plays there
+	}
 	var p *pending
 	if strings.HasSuffix(service, "toggle") || service == "media_play_pause" {
 		p = &pending{flip: true}
@@ -311,10 +319,14 @@ func (f *Feature) SetLevel(a Adjust, v float64) {
 	case "temperature":
 		domain, service = "climate", "set_temperature"
 		data["temperature"] = v
+	case "volume":
+		domain, service = "media_player", "volume_set"
+		data["volume_level"] = float64(int(v+0.5)) / 100
 	default:
 		return
 	}
-	s.call(a.Entity, domain, service, data, &pending{value: a.Label(v), on: v > a.Min})
+	// A player's volume says nothing about whether it is playing: the tile keeps that.
+	s.call(a.Entity, domain, service, data, &pending{value: a.Label(v), on: v > a.Min, keepOn: a.Kind == "volume"})
 }
 
 // call runs a service for a tile, showing what it asked for until Home Assistant says otherwise.
@@ -562,7 +574,9 @@ func (s *session) pendingOn(t *Tile) {
 			}
 		}
 	case p.value != "":
-		t.On = p.on
+		if !p.keepOn {
+			t.On = p.on
+		}
 		t.Value = p.value
 		if t.Adjust != nil && t.Adjust.Kind == "brightness" {
 			t.Value = "On · " + p.value

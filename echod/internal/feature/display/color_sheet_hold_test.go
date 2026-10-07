@@ -73,8 +73,9 @@ func TestTheDashboardKnowsWhatIsDrawnOverIt(t *testing.T) {
 	}
 }
 
-// A finger that comes down on the band of whites moves the mark as it goes, also once it has wandered
-// off the band above or below, and the sheet stays up when it lifts.
+// A finger that comes down on a sheet's slider moves it as it goes - the whites' mark along the band,
+// the volume's fill along the bar - also once it has wandered off the slider above or below, and
+// the sheet stays up when it lifts.
 func TestASheetsSliderFollowsTheFinger(t *testing.T) {
 	r := newRenderer(image.NewRGBA(image.Rect(0, 0, showWide, showHigh)))
 	light := dashboard.LightColor{Entity: "light.desk", Name: "Desk lamp", Kelvin: true, MinK: 2700, MaxK: 6500, NowK: 2700}
@@ -104,6 +105,32 @@ func TestASheetsSliderFollowsTheFinger(t *testing.T) {
 		t.Errorf("lifted past the end: sheet up %v, mark at %v", d.colorOpen(), d.dashColor.NowK)
 	}
 
+	view := mediaView{sheet: mediaSheet{entity: "media_player.den", volume: -1},
+		now: dashboard.MediaNow{Entity: "media_player.den", Name: "Den", State: "playing", Volume: 0.5}}
+	r.draw(scene{now: time.Now(), phase: "idle", showDash: true, dashMode: config.DashboardDrawn, drawn: fourControls(), dashMedia: &view})
+	var bar image.Rectangle
+	r.zmu.Lock()
+	for _, z := range r.mediaZones {
+		if z.kind == mediaPartVolume {
+			bar = z.r
+		}
+	}
+	r.zmu.Unlock()
+	if bar.Empty() {
+		t.Fatal("the media sheet has no volume")
+	}
+	d = &Display{r: r, poke: make(chan struct{}, 1)}
+	d.dashMedia = &view.sheet
+	my := (bar.Min.Y + bar.Max.Y) / 2
+	d.drawnHold(bar.Min.X+bar.Dx()/2, my)
+	d.drawnMove(bar.Min.X+bar.Dx()/4, my-50)
+	if v := d.dashMedia.volume; v < 0.2 || v > 0.3 {
+		t.Errorf("a quarter along the bar the volume is %v", v)
+	}
+	d.drawnRelease(bar.Min.X-30, my)
+	if d.dashMedia == nil || d.dashMedia.volume != 0 {
+		t.Errorf("lifted left of the bar: the volume is %v, want 0", d.dashMedia)
+	}
 }
 
 // While a finger moves a sheet's slider, the light follows it: the first step at once, the rest a

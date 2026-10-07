@@ -1,0 +1,128 @@
+//go:build !dot
+
+package dashboard
+
+import (
+	"reflect"
+	"testing"
+
+	"github.com/HuskerMinion/techo5/echod/internal/lib/hass"
+)
+
+// The sheet plays and groups through Music Assistant: a player of its own directly, a player it also
+// plays to (a Sonos, a Cast device) through its player of the same name - the one that can be grouped
+// when an older one of that name lingers - and nothing for a player it does not know. The speakers
+// offered are its other players that can be grouped, by name, never a group of its own or one that is
+// gone.
+func TestTheMediaSheetPlaysThroughMusicAssistant(t *testing.T) {
+	ma := func(id, name, kind string, features float64, state string) hass.LiveEntity {
+		return hass.LiveEntity{ID: id, State: state, Attrs: map[string]any{
+			"friendly_name": name, "mass_player_type": kind, "supported_features": features}}
+	}
+	states := []hass.LiveEntity{
+		ma("media_player.ma_kitchen", "Kitchen", "player", 8322623, "idle"),
+		ma("media_player.kitchen_old", "Kitchen", "player", 7796279, "idle"),
+		ma("media_player.ma_bath", "Bathroom", "player", 8322623, "playing"),
+		ma("media_player.ma_deck", "Deck", "player", 8322623, "unavailable"),
+		ma("media_player.ma_all", "Everywhere", "group", 8320575, "idle"),
+		{ID: "media_player.sonos_kitchen", State: "idle", Attrs: map[string]any{"friendly_name": "Kitchen"}},
+		{ID: "light.kitchen", State: "on", Attrs: map[string]any{"friendly_name": "Kitchen"}},
+	}
+	players := maPlayers(states)
+	for _, c := range []struct{ entity, name, want string }{
+		{"media_player.ma_bath", "Bathroom", "media_player.ma_bath"},
+		{"media_player.sonos_kitchen", "Kitchen", "media_player.ma_kitchen"},
+		{"media_player.tv", "TV", ""},
+	} {
+		if got := mediaTarget(c.entity, c.name, players); got != c.want {
+			t.Errorf("%s: plays through %q, want %q", c.entity, got, c.want)
+		}
+	}
+	want := []Speaker{{Entity: "media_player.ma_bath", Name: "Bathroom"}}
+	if got := groupable("media_player.ma_kitchen", players); !reflect.DeepEqual(got, want) {
+		t.Errorf("speakers %+v, want %+v", got, want)
+	}
+}
+
+// What a player is doing is read from its state; its favorites from Music Assistant's library, each
+// with what kind it is, leaving out anything without a name or an address.
+func TestTheMediaSheetReadsThePlayerAndTheLibrary(t *testing.T) {
+	now := mediaNow(hass.LiveEntity{ID: "media_player.ma_bath", State: "playing", Attrs: map[string]any{
+		"friendly_name": "Bathroom", "media_title": "Slow Morning", "media_artist": "The Example Band", "volume_level": 0.4,
+		"group_members": []any{"media_player.ma_bath", "media_player.ma_kitchen"}}})
+	if now.Name != "Bathroom" || now.Title != "Slow Morning" || now.Artist != "The Example Band" || now.Volume != 0.4 ||
+		len(now.Members) != 2 || !now.Playing() {
+		t.Errorf("read as %+v", now)
+	}
+	if v := mediaNow(hass.LiveEntity{ID: "media_player.tv", State: "off"}).Volume; v != -1 {
+		t.Errorf("a player that says no volume has %v, want -1", v)
+	}
+	items := libraryItems(map[string]any{"items": []any{
+		map[string]any{"name": "Liked Songs", "uri": "library://playlist/155", "media_type": "playlist"},
+		map[string]any{"name": "Radio One", "uri": "library://radio/3"},
+		map[string]any{"name": "", "uri": "library://playlist/9"},
+		map[string]any{"name": "SUNSET 🌴 IBIZA 🌅  DEEP ", "uri": "library://playlist/7"},
+	}}, "radio")
+	want := []MediaChoice{{"Liked Songs", "library://playlist/155", "playlist"}, {"Radio One", "library://radio/3", "radio"},
+		{"SUNSET IBIZA DEEP", "library://playlist/7", "radio"}}
+	if !reflect.DeepEqual(items, want) {
+		t.Errorf("favorites %+v, want %+v", items, want)
+	}
+}
+
+// Without Music Assistant, a player Home Assistant groups itself is grouped with the others that say
+// what they are grouped with and can be, there, by name; one that cannot be grouped has no speakers.
+func TestAPlayerHomeAssistantGroupsIsGroupedWithoutMusicAssistant(t *testing.T) {
+	sonos := func(id, name, state string) hass.LiveEntity {
+		return hass.LiveEntity{ID: id, State: state, Attrs: map[string]any{
+			"friendly_name": name, "supported_features": 8319551.0, "group_members": []any{id}}}
+	}
+	states := []hass.LiveEntity{
+		sonos("media_player.office", "Office", "idle"),
+		sonos("media_player.living_room", "Living Room", "playing"),
+		sonos("media_player.bedroom", "Bedroom", "paused"),
+		sonos("media_player.garage", "Garage", "unavailable"),
+		{ID: "media_player.tv", State: "on", Attrs: map[string]any{"friendly_name": "TV", "supported_features": 22961.0}},
+	}
+	got, ok := haGroupable("media_player.living_room", states)
+	want := []Speaker{{Entity: "media_player.bedroom", Name: "Bedroom"}, {Entity: "media_player.office", Name: "Office"}}
+	if !ok || !reflect.DeepEqual(got, want) {
+		t.Errorf("speakers %+v (%v), want %+v", got, ok, want)
+	}
+	if _, ok := haGroupable("media_player.tv", states); ok {
+		t.Error("a player that cannot be grouped was offered speakers")
+	}
+}
+
+// A media player that says its volume and takes one slides it, from 0 to 100; one that is off, or
+// that cannot be set, has no level.
+func TestAMediaPlayersVolumeSlides(t *testing.T) {
+	playing := hass.LiveEntity{ID: "media_player.den", State: "playing", Attrs: map[string]any{"volume_level": 0.35, "supported_features": 8320575.0}}
+	a := adjustOf(playing, "media_player")
+	if a == nil || a.Kind != "volume" || a.Value != 35 || a.Min != 0 || a.Max != 100 {
+		t.Errorf("volume %+v, want 35 of 0 to 100", a)
+	}
+	for _, e := range []hass.LiveEntity{
+		{ID: "media_player.tv", State: "off", Attrs: map[string]any{"supported_features": 22961.0}},
+		{ID: "media_player.radio", State: "on", Attrs: map[string]any{"volume_level": 0.5, "supported_features": 1.0}},
+	} {
+		if a := adjustOf(e, "media_player"); a != nil {
+			t.Errorf("%s slides %+v, want nothing", e.ID, a)
+		}
+	}
+}
+
+// A tile's play or pause goes to Music Assistant's player of the same name while Music Assistant plays
+// or has paused there, so that it reaches the whole group; otherwise it stays with the tile's player.
+func TestATilesPlayPauseReachesTheGroup(t *testing.T) {
+	for _, c := range []struct{ target, state, want string }{
+		{"media_player.ma_kitchen", "playing", "media_player.ma_kitchen"},
+		{"media_player.ma_kitchen", "paused", "media_player.ma_kitchen"},
+		{"media_player.ma_kitchen", "idle", "media_player.sonos_kitchen"},
+		{"", "playing", "media_player.sonos_kitchen"},
+	} {
+		if got := routeTo("media_player.sonos_kitchen", c.target, c.state); got != c.want {
+			t.Errorf("Music Assistant's %q %s: sent to %s, want %s", c.target, c.state, got, c.want)
+		}
+	}
+}

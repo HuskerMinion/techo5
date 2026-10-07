@@ -7,6 +7,7 @@ import (
 	"image/color"
 	"image/draw"
 	"math"
+	"strings"
 
 	xdraw "golang.org/x/image/draw"
 
@@ -286,8 +287,9 @@ func (r *paint) block(b dashboard.Block, x, y, w int, pal dashPal, adj dashAdjus
 
 // zone remembers where a tile or a row is, for a tap or a slide to find it.
 func (r *paint) zone(tiles *[]dashTile, box image.Rectangle, t dashboard.Tile) {
-	if t.Tap != nil || t.Adjust != nil {
-		*tiles = append(*tiles, dashTile{r: box, action: t.Tap, adjust: t.Adjust})
+	// A media player is something to press on even with nothing to tap: its sheet (media_sheet.go).
+	if t.Tap != nil || t.Adjust != nil || strings.HasPrefix(t.Entity, "media_player.") {
+		*tiles = append(*tiles, dashTile{r: box, action: t.Tap, adjust: t.Adjust, entity: t.Entity})
 	}
 }
 

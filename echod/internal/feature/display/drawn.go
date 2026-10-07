@@ -25,6 +25,7 @@ type dashTile struct {
 	r      image.Rectangle
 	action *dashboard.Action
 	adjust *dashboard.Adjust
+	entity string // the entity it shows, for a long press to open its sheet
 }
 
 // drawnDrag is a finger moving on the drawn dashboard: undecided until it has moved far enough to
@@ -55,12 +56,22 @@ type colorZone struct {
 	value, lo, hi float64
 }
 
+// mediaZone is a part of the media sheet where it was drawn (media_sheet.go); index is the favorite's
+// or the speaker's.
+type mediaZone struct {
+	r     image.Rectangle
+	kind  int
+	index int
+}
+
 // sheetSlider is a slider on a sheet where it was drawn: the color sheet's band of whites or of
-// colors, from lo at its left end to hi at its right.
+// colors, the media sheet's volume, or a grouped speaker's volume along its button, from lo at its
+// left end to hi at its right.
 type sheetSlider struct {
-	kind   int // colorPartWhite or colorPartHue
+	kind   int // colorPartWhite, colorPartHue, mediaPartVolume or mediaPartSpeaker
 	r      image.Rectangle
 	lo, hi float64
+	entity string // the speaker, for mediaPartSpeaker
 }
 
 // at is the value under x, kept to the slider's ends when the finger is past them.
@@ -212,6 +223,9 @@ func (d *Display) drawnHold(x, y int) {
 	d.mu.Lock()
 	d.dashDrag.onSheet, d.dashDrag.slider = onSheet, slider
 	d.mu.Unlock()
+	if slider != nil {
+		d.sliderBegins(*slider)
+	}
 }
 
 // slideStart is how far a finger moves before it counts as a scroll or a slide rather than a tap
@@ -233,9 +247,9 @@ func (d *Display) drawnMove(x, y int) {
 	if sheet {
 		// The sheet is over the page: nothing under it scrolls or slides. That the finger moved is
 		// kept, for where it lifts (drawnRelease), and a slider it came down on follows it.
-		slider := dr.slider
+		slider, moved := dr.slider, dr.moved
 		d.mu.Unlock()
-		if slider != nil {
+		if slider != nil && slider.slides(moved) {
 			d.slideSheet(*slider, x, false)
 		}
 		return
@@ -274,7 +288,10 @@ func (d *Display) drawnRelease(x, y int) {
 	if dr.moved && !dr.onSheet && d.colorOpen() {
 		return // a drag from the page under the sheet: nothing on the sheet was chosen
 	}
-	if dr.slider != nil && d.colorOpen() {
+	if dr.moved && dr.onSheet && dr.slider == nil && d.pageSwipeOnSheet(dr.at, x, y) {
+		return
+	}
+	if dr.slider != nil && d.colorOpen() && dr.slider.slides(dr.moved) {
 		d.slideSheet(*dr.slider, x, true) // where it lifted, wherever it went on the way
 		return
 	}
