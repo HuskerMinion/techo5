@@ -441,9 +441,10 @@ func (r *renderer) dashboardStyle(s scene, box image.Rectangle) {
 	days = days[:min(len(days), 5)]
 	// The row sits at the foot, so the middle of the screen is left clear for a tap that starts Assist.
 	row := max(base+r.s(86), box.Max.Y-r.s(150))
-	cw := box.Dx() / len(days)
+	left, right := r.dashRowSpan(days, box, row, s.callButton)
+	cw := (right - left) / len(days)
 	for i, d := range days {
-		cx := box.Min.X + cw*i + cw/2
+		cx := left + cw*i + cw/2
 		name := locale.ShortWeekday(d.When, screenLang())
 		if i == 0 {
 			name = locale.Today(screenLang())
@@ -454,10 +455,33 @@ func (r *renderer) dashboardStyle(s scene, box image.Rectangle) {
 		}
 		r.text(r.tiny, name, cx-r.width(r.tiny, name)/2, row+r.s(36), c)
 		r.weatherIcon(d.Condition, cx, row+r.s(80), r.s(44))
-		t := fmt.Sprintf("%.0f°  %.0f°", d.High, d.Low)
+		t := dayTemps(d)
 		r.text(r.tiny, t, cx-r.width(r.tiny, t)/2, row+r.s(138), cream)
 	}
-	r.setWeatherAt(image.Rect(box.Min.X, row, box.Max.X, row+r.s(150)))
+	r.setWeatherAt(image.Rect(left, row, right, row+r.s(150)))
+}
+
+func dayTemps(d hass.Day) string { return fmt.Sprintf("%.0f°  %.0f°", d.High, d.Low) }
+
+// dashRowSpan is where across the row of the coming days is drawn. The Call button has the bottom-left
+// corner, over Today's icon and temperatures: while it shows level with the row, the row narrows from
+// both sides, staying centered, just enough that Today clears it.
+func (r *renderer) dashRowSpan(days []hass.Day, box image.Rectangle, row int, callButton bool) (left, right int) {
+	left, right = box.Min.X, box.Max.X
+	b := r.callButtonRect()
+	n := len(days)
+	if !callButton || n < 2 || row+r.s(150) <= b.Min.Y {
+		return left, right
+	}
+	// Today's icon and temperatures, half of the wider, and how far their left edge is short of clear.
+	half := max(r.width(r.tiny, dayTemps(days[0])), r.s(44)) / 2
+	short := b.Max.X + r.s(12) + half - (left + (right-left)/n/2)
+	if short <= 0 {
+		return left, right
+	}
+	// Each step in from both sides moves Today's center right by 1 - 1/n of it.
+	in := (short*n + n - 2) / (n - 1)
+	return left + in, right - in
 }
 
 // dashWhen is when an event starts, as the dashboard writes it: "Now" for one under way, its time

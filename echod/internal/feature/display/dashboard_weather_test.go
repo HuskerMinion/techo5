@@ -40,12 +40,36 @@ func TestDashboardWeatherAtTheFoot(t *testing.T) {
 			t.Errorf("%v: a tap at %v above the coming days was taken", size, middle)
 		}
 
+		// With a timer, the weather stays above it: on a Show 8 the row moves up, and on a Show 5, where the
+		// row no longer fits under the clock, today's weather on a line takes its place.
 		r.draw(scene{now: at, phase: "idle", weather: sky, style: facts, timers: running})
 		r.weatherMu.Lock()
 		withTimer := r.weatherAt
 		r.weatherMu.Unlock()
 		if withTimer.Empty() || withTimer.Max.Y >= row.Max.Y {
-			t.Errorf("%v: with a timer the coming days are at %v, not above it", size, withTimer)
+			t.Errorf("%v: with a timer the weather is at %v, not above it", size, withTimer)
+		}
+		if isRow := withTimer.Dy() == r.s(150); isRow != (size.X == show8Wide) {
+			t.Errorf("%v: with a timer the weather drawn as a row is %v", size, isRow)
+		}
+
+		// With the Call button, the row narrows from both sides just enough that Today clears it.
+		r.draw(scene{now: at, phase: "idle", weather: sky, style: facts, callButton: true})
+		r.weatherMu.Lock()
+		withCall := r.weatherAt
+		r.weatherMu.Unlock()
+		left, right := withCall.Min.X, withCall.Max.X
+		if left == row.Min.X || left-row.Min.X != row.Max.X-right {
+			t.Errorf("%v: with the Call button the row spans %d-%d, not narrowed evenly from %v", size, left, right, row)
+		}
+		cw := (right - left) / len(week)
+		half := max(r.width(r.tiny, dayTemps(week[0])), r.s(44)) / 2
+		b := r.callButtonRect()
+		if todayLeft := left + cw/2 - half; todayLeft < b.Max.X+r.s(12) {
+			t.Errorf("%v: Today starts at %d, under the Call button ending at %d", size, todayLeft, b.Max.X)
+		}
+		if todayLeft := left + cw/2 - half; todayLeft > b.Max.X+r.s(12)+len(week) {
+			t.Errorf("%v: Today starts at %d, further than it needs from the Call button ending at %d", size, todayLeft, b.Max.X)
 		}
 	}
 }
