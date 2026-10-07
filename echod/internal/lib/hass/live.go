@@ -121,6 +121,11 @@ func (l *Live) read() {
 
 // send writes a command with the next id, noting who waits for its result.
 func (l *Live) send(cmd map[string]any, sub func(json.RawMessage)) (int, chan liveResult, error) {
+	// Home Assistant refuses an id lower than one it has seen ("id_reuse"), so the id is given and the
+	// command written in one go: two sends at once, a slider's volume and a tap, went out the wrong way
+	// round and the second was refused.
+	l.writeMu.Lock()
+	defer l.writeMu.Unlock()
 	l.mu.Lock()
 	if l.err != nil {
 		err := l.err
@@ -137,10 +142,8 @@ func (l *Live) send(cmd map[string]any, sub func(json.RawMessage)) (int, chan li
 	l.mu.Unlock()
 
 	cmd["id"] = id
-	l.writeMu.Lock()
 	_ = l.s.conn.SetWriteDeadline(time.Now().Add(10 * time.Second))
 	err := l.s.conn.WriteJSON(cmd)
-	l.writeMu.Unlock()
 	if err != nil {
 		l.mu.Lock()
 		delete(l.waiting, id)
