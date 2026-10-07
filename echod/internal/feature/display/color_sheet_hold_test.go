@@ -108,18 +108,17 @@ func TestASheetsSliderFollowsTheFinger(t *testing.T) {
 
 // While a finger moves a sheet's slider, the light follows it: the first step at once, the rest a
 // few a second, the one it stops on shortly after, and where it lifts - each value once. The steps
-// on the way go without the light's fade; where it lifts fades as usual.
+// on the way fade over as long as they come apart; where it lifts fades as the light always does.
 func TestASheetsSliderSendsAsTheFingerMoves(t *testing.T) {
 	var mu sync.Mutex
 	var sent []float64
-	var faded []bool
+	var fades []any
 	prev := sliderTap
 	sliderTap = func(a dashboard.Action) {
 		mu.Lock()
 		defer mu.Unlock()
 		sent = append(sent, float64(a.Data["color_temp_kelvin"].(int)))
-		_, jump := a.Data["transition"]
-		faded = append(faded, !jump)
+		fades = append(fades, a.Data["transition"])
 	}
 	t.Cleanup(func() { sliderTap = prev })
 	got := func() []float64 {
@@ -148,8 +147,9 @@ func TestASheetsSliderSendsAsTheFingerMoves(t *testing.T) {
 	}
 	mu.Lock()
 	defer mu.Unlock()
-	if len(faded) != 3 || faded[0] || faded[1] || !faded[2] {
-		t.Errorf("faded %v, want the steps on the way without a fade and the last with one", faded)
+	step := sheetSendEvery.Seconds()
+	if len(fades) != 3 || fades[0] != step || fades[1] != step || fades[2] != nil {
+		t.Errorf("transitions %v, want %v for the steps on the way and the light's own for the last", fades, step)
 	}
 }
 

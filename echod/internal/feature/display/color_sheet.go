@@ -190,12 +190,13 @@ func (d *Display) sendSlider(s sheetSlider, value float64, final bool) {
 	if final {
 		log = slog.Info
 	}
-	// The steps on the way go without the light's own fade, which would put each one about half a second
-	// behind the finger: the light jumps, and a few jumps a second read as one movement. Where the
-	// finger lifts fades in as the light always does.
+	// The steps on the way fade over as long as they come apart, so the light moves from one to the
+	// next as the finger does rather than jumping, and is there as the next comes: the light's own fade
+	// (half a second on a Hue bulb) put each step behind the one before. Where the finger lifts fades
+	// in as the light always does.
 	light := func(data map[string]any) map[string]any {
 		if !final {
-			data["transition"] = 0
+			data["transition"] = sheetSendEvery.Seconds()
 		}
 		return data
 	}
