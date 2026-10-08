@@ -87,6 +87,13 @@ data:
   seconds: 60
 ```
 
+A camera Home Assistant can stream (one that plays live in its own dashboard, from an RTSP camera or
+an integration with a stream) is shown live, decoded on the device from Home Assistant's HLS stream.
+A still picture comes up first, and the moving picture follows within a second, or a few seconds
+when Home Assistant still has to start the camera's stream. Other cameras, and any whose stream
+fails, are shown from snapshots, a few a second. A camera's sub stream (often called *fluent* or
+*sub*) is the better choice: it is sharper than the panel needs anyway, starts sooner and costs less.
+
 ### Talking through a camera
 
 On the Show and the Spot, **Talk** on the camera page sends the device's microphones to the camera's

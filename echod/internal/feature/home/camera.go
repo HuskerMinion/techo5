@@ -17,9 +17,10 @@ import (
 )
 
 // The cameras page: "show the front door" puts a camera's live view up for a while, a tap takes it
-// down. Frames are Home Assistant's snapshots through the token, fetched one after another while
-// the view is up, decoded and scaled here; a few a second is what the panel and the SoC manage,
-// and enough to see who is there.
+// down. A camera Home Assistant can stream is shown from its live stream, decoded by the video
+// decoder on every core (camera_stream.go). Any other, and one whose stream fails, is shown from
+// Home Assistant's snapshots through the token, fetched one after another while the view is up,
+// decoded and scaled here: a few a second, enough to see who is there.
 
 const (
 	// cameraShow is how long a camera stays up when asked for by voice.
@@ -165,39 +166,49 @@ func (f *Feature) HideCamera() {
 	f.Changed.Emit(struct{}{})
 }
 
-// fetchFrames pulls snapshots while the view is up, one after another.
+// fetchFrames shows the camera while the view is up: its live stream where it has one
+// (camera_stream.go), else, or once that fails, snapshots one after another.
 func (f *Feature) fetchFrames(entity string) {
-	for {
-		f.mu.Lock()
-		up := f.cam.Entity == entity && time.Now().Before(f.cam.Until)
-		f.mu.Unlock()
-		if !up {
-			return
-		}
+	if f.streamFrames(entity) {
+		return
+	}
+	for f.viewUp(entity) {
 		frame, err := f.snapshot(entity)
-		f.mu.Lock()
-		if f.cam.Entity == entity {
-			if err != nil {
-				f.cam.Error = err.Error()
-			} else {
-				// The time on screen counts from the first picture, not from the request: some
-				// cameras take a while to start a stream, and a view that closes as it opens
-				// is no view at all.
-				if f.cam.Frame == nil {
-					if until := time.Now().Add(f.cam.span); until.After(f.cam.Until) {
-						f.cam.Until = until // never shorter than a hold asked for (HoldCamera)
-					}
-				}
-				f.cam.Frame, f.cam.Error = frame, ""
-			}
-		}
-		f.mu.Unlock()
-		f.Changed.Emit(struct{}{})
+		f.showFrame(entity, frame, err)
 		if err != nil {
 			slog.Warn("camera frame", "entity", entity, "err", err)
 			time.Sleep(2 * time.Second)
 		}
 	}
+}
+
+// viewUp is whether the view of entity is still on screen.
+func (f *Feature) viewUp(entity string) bool {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return f.cam.Entity == entity && time.Now().Before(f.cam.Until)
+}
+
+// showFrame puts a frame of entity's on screen, or why there is none, if its view is the one up.
+func (f *Feature) showFrame(entity string, frame *image.RGBA, err error) {
+	f.mu.Lock()
+	if f.cam.Entity == entity {
+		if err != nil {
+			f.cam.Error = err.Error()
+		} else {
+			// The time on screen counts from the first picture, not from the request: some
+			// cameras take a while to start a stream, and a view that closes as it opens
+			// is no view at all.
+			if f.cam.Frame == nil {
+				if until := time.Now().Add(f.cam.span); until.After(f.cam.Until) {
+					f.cam.Until = until // never shorter than a hold asked for (HoldCamera)
+				}
+			}
+			f.cam.Frame, f.cam.Error = frame, ""
+		}
+	}
+	f.mu.Unlock()
+	f.Changed.Emit(struct{}{})
 }
 
 // localFrames shows the device's own camera while the view is up: every frame the sensor
@@ -251,9 +262,9 @@ func (f *Feature) localFrames() {
 	}
 }
 
-// Prewarm asks Home Assistant for one frame from every camera and drops it. Some cameras take
-// seconds to start a stream on the first request; asking while the list is on screen means the
-// one that gets tapped answers at once.
+// Prewarm asks Home Assistant for one frame from every camera and drops it, and for the stream of
+// every camera it can stream. Some cameras take seconds to start a stream on the first request;
+// asking while the list is on screen means the one that gets tapped answers at once.
 func (f *Feature) Prewarm() {
 	for _, c := range f.Cameras() {
 		if c.Entity == LocalCamera || isReolink(c.Entity) {
@@ -263,6 +274,7 @@ func (f *Feature) Prewarm() {
 			if _, err := hass.Get().Fetch("/api/camera_proxy/" + entity); err != nil {
 				slog.Debug("camera prewarm", "entity", entity, "err", err)
 			}
+			prewarmStream(entity)
 		}(c.Entity)
 	}
 }
