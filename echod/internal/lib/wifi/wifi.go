@@ -257,8 +257,17 @@ func networkID(ctx context.Context, ssid string) (string, error) {
 	return "", fmt.Errorf("wifi: %q is not among the saved networks", ssid)
 }
 
-// renewLease pokes udhcpc for a new lease on the new network.
+// renewLease gets the address on the new network: through techo5-net, which keeps a fixed address
+// when there is one (address.go), or, on a root filesystem without it, by poking udhcpc for a lease.
 func renewLease() {
+	if _, err := os.Stat(netTool); err == nil {
+		ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+		defer cancel()
+		if out, err := exec.CommandContext(ctx, netTool, "renew").CombinedOutput(); err != nil {
+			slog.Warn("wifi: techo5-net renew failed", "err", err, "out", strings.TrimSpace(string(out)))
+		}
+		return
+	}
 	pid, err := os.ReadFile("/run/udhcpc.pid")
 	if err != nil {
 		return

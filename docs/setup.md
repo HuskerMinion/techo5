@@ -320,6 +320,23 @@ whether it is on; turning it off removes the PIN.
 While the lock is on, the PIN is also asked for when Home Assistant opens the settings, and when
 **Allow** is pressed on the setup page.
 
+## 9. A fixed address
+
+The device gets its address from the router (DHCP) unless told otherwise. To give it a fixed one, for
+example from a range the router does not hand out, open the setup page, go to **Connections →
+Network address**, choose **Fixed**, and type the address (`192.168.1.50`, or `192.168.1.50/24`
+with its prefix), the gateway, and DNS servers if they are not the gateway. On an Echo Show the
+same is on the screen, under Settings → Connections → **Network address**, with a keypad; the
+[network_address action](actions.md#set-the-network-address) does it from Home Assistant.
+
+A new fixed address is tried before it is kept. If another device already answers for it, or the
+gateway does not answer from it, the device goes back to the setting it had, and the setup page says
+why. Once kept, the address is used as it is at every start, the way any device with a fixed address
+does, even when the router is still starting up.
+
+Home Assistant follows the device to its new address by itself, about two minutes after the change:
+it first has to notice that the old connection is gone. To go back to DHCP, choose **Automatic**.
+
 ## More
 
 - [Dashboards](dashboards.md): Home Assistant dashboards on the screen.

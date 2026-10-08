@@ -25,8 +25,9 @@ type wifiState struct {
 	text     string        // the passphrase so far
 	shift    bool
 	symbols  bool
-	busy     string // "Connecting to X…" while a join runs
-	err      string // why the last join failed
+	busy     string    // "Connecting to X…" while a join runs
+	err      string    // why the last join failed
+	addr     *addrForm // the network address page (address_page.go), when it is the one open
 }
 
 // The sizes below are the ones this page was drawn at on a Show 5. Everything that is a length goes
@@ -137,6 +138,10 @@ func (r *renderer) keyAt(x, y int, symbols bool) string {
 
 func (r *renderer) wifiPage(s scene) {
 	w := s.wifi
+	if w.addr != nil {
+		r.addressPage(s)
+		return
+	}
 	if w.pick != nil {
 		r.keyboardPage(s)
 		return

@@ -199,6 +199,11 @@ func (f *Feature) save(w http.ResponseWriter, r *http.Request) {
 			ssid = other
 		}
 		problem = joinWifi(r.Context(), ssid, r.PostFormValue("passphrase"))
+	case "address":
+		var handled bool
+		if problem, handled = saveAddress(w, r); handled {
+			return
+		}
 	case "forget":
 		ssid := strings.TrimSpace(r.PostFormValue("ssid"))
 		if err := wifi.Forget(r.Context(), ssid); err != nil {
@@ -358,6 +363,7 @@ func (f *Feature) settingsPage(ctx context.Context, w http.ResponseWriter, token
 	case "connections":
 		if wifi.Available() {
 			f.wifiSection(w, token, scan)
+			addressSection(w, token)
 		} else {
 			fmt.Fprint(w, `<fieldset><legend>Wi-Fi</legend><p class="note" style="margin:0">This device's network
 			 is not one this page can change.</p></fieldset>`)

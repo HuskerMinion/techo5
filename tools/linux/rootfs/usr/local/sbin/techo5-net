@@ -1,0 +1,131 @@
+#!/bin/sh
+# techo5-net: the Wi-Fi interface's IPv4 address, by DHCP or fixed.
+#
+#   techo5-net up      address wlan0 as the setting says; a DHCP client already running is left be
+#   techo5-net renew   the same, and a DHCP client already running is asked again from the start
+#   techo5-net try     a setting just changed, on trial: kept only when it works, else the one before
+#
+# The setting is /data/techo5-linux/network.conf, written by the daemon (lib/wifi/address.go) from the
+# setup page or the network_address action; without it, or with MODE=dhcp, this is udhcpc as before.
+#
+# At boot and whenever Wi-Fi comes back, a fixed address is simply put on, as on any other device: a
+# router still starting after a power cut is no reason to take another address. Only a setting that was
+# just changed is on trial, the way an update's slot is: a fixed address another device answers for, or
+# whose gateway does not answer from it, is given up for the setting before it (network.conf.prev, kept
+# by the daemon), and why goes to /run/techo5/network-fallback for the setup page to show. A typo must not
+# leave the device where nobody can reach it.
+
+CONF=${TECHO5_NETWORK_CONF:-/data/techo5-linux/network.conf}
+IF=wlan0
+FALLBACK=/run/techo5/network-fallback
+RESOLV=/run/resolv.conf
+SCRIPT=${UDHCPC_SCRIPT:-/etc/techo5/udhcpc.sh}
+
+log() {
+	echo "techo5-net: $*" > /dev/kmsg 2>/dev/null
+	echo "$(date '+%Y-%m-%d %H:%M:%S') $*" >> /run/techo5/network.log 2>/dev/null
+}
+
+dhcp() {
+	pidof udhcpc >/dev/null || udhcpc -i $IF -b -R -t 10 -p /run/udhcpc.pid -s "$SCRIPT" > /tmp/udhcpc.log 2>&1
+}
+
+load() {
+	MODE=; ADDRESS=; PREFIX=; GATEWAY=; DNS=
+	[ -r "$1" ] && . "$1"
+	PREFIX=${PREFIX:-24}
+	[ "$MODE" = static ] && [ -n "$ADDRESS" ] && [ -n "$GATEWAY" ]
+}
+
+# fixed puts the loaded fixed address on, with its route and name servers.
+fixed() {
+	# Already so, with its route: nothing to do. The network keeper calls this whenever it finds no
+	# default route, and an address in place must not be taken down to be put back.
+	if ip -4 addr show dev $IF 2>/dev/null | grep -q "inet $ADDRESS/$PREFIX " &&
+		ip route show default 2>/dev/null | grep -q "via $GATEWAY dev $IF"; then
+		return 0
+	fi
+	killall udhcpc 2>/dev/null
+	ip link set $IF up 2>/dev/null
+	ip -4 addr flush dev $IF 2>/dev/null
+	ip addr add "$ADDRESS/$PREFIX" dev $IF 2>/dev/null || return 1
+	ip route replace default via "$GATEWAY" dev $IF 2>/dev/null || return 1
+	{
+		for d in ${DNS:-$GATEWAY}; do echo "nameserver $d"; done
+	} > "$RESOLV.tmp" && mv -f "$RESOLV.tmp" "$RESOLV"
+	log "fixed address $ADDRESS/$PREFIX via $GATEWAY"
+}
+
+# automatic is DHCP; restart asks a running client again from the start, as after a change of network,
+# where the lease it has may belong to the network left behind.
+automatic() {
+	if [ "$1" = restart ]; then
+		killall udhcpc 2>/dev/null
+		ip -4 addr flush dev $IF 2>/dev/null
+		sleep 1
+	elif ! pidof udhcpc >/dev/null; then
+		# No client running: whatever address is on is a fixed one from before the switch to DHCP.
+		ip -4 addr flush dev $IF 2>/dev/null
+	fi
+	dhcp
+}
+
+# apply puts a setting file on as it is, without any trial.
+apply() {
+	if load "$1"; then
+		fixed || automatic restart
+	else
+		automatic "$2"
+	fi
+}
+
+mkdir -p /run/techo5
+
+case "$1" in
+up)
+	apply "$CONF"
+	;;
+renew)
+	apply "$CONF" restart
+	;;
+try)
+	rm -f $FALLBACK
+	if ! load "$CONF"; then
+		automatic restart
+		exit 0
+	fi
+	reason=
+	# Nobody else may have it: two devices on one address lose packets to each other in turns, which
+	# looks like a bad radio rather than what it is. arping -D answers 0 only when no one replied. It
+	# is asked before the address the device has now is taken down, so a refused one costs nothing.
+	if ! ip -4 addr show dev $IF 2>/dev/null | grep -q "inet $ADDRESS/" &&
+		! arping -D -q -I $IF -c 2 -w 3 "$ADDRESS" 2>/dev/null; then
+		reason="$ADDRESS is already in use by another device"
+	elif ! fixed; then
+		reason="the address $ADDRESS/$PREFIX or its route to $GATEWAY was refused"
+	else
+		# The gateway has to answer from here: a ping, or, for a router that drops pings, its ARP reply.
+		n=0
+		until ping -c 1 -W 2 "$GATEWAY" >/dev/null 2>&1 || arping -q -I $IF -c 1 -w 2 "$GATEWAY" 2>/dev/null; do
+			n=$((n+1))
+			[ $n -ge 8 ] && { reason="the gateway $GATEWAY did not answer from $ADDRESS/$PREFIX"; break; }
+			sleep 1
+		done
+	fi
+	[ -z "$reason" ] && exit 0
+	# On trial and failed: the setting before it goes back, file and all.
+	echo "$reason" > $FALLBACK
+	log "new fixed address not kept: $reason; back to the setting before"
+	if [ -r "$CONF.prev" ]; then
+		cp "$CONF.prev" "$CONF.tmp" && mv -f "$CONF.tmp" "$CONF"
+	else
+		echo "MODE=dhcp" > "$CONF"
+	fi
+	apply "$CONF" restart
+	;;
+*)
+	echo "usage: techo5-net up|renew|try" >&2
+	exit 2
+	;;
+esac
+exit 0

@@ -79,9 +79,27 @@ func (a *API) advertise(ctx context.Context, port int) {
 			}
 		}
 		adv.Close()
+		moved := metrics.AddressKey(metrics.Addresses()) != metrics.AddressKey(ips)
 		slog.Info("addresses or key changed, re-advertising over mdns", "was", metrics.AddressKey(ips), "key was", keyName(keyed))
+		if !moved {
+			continue
+		}
+		// Home Assistant does not take a new address for a device it still counts as connected, so a
+		// device on Wi-Fi that roams is not torn from a working connection by a stray record. A
+		// connection to an address the device no longer has looks connected until its keepalive gives
+		// up, ninety seconds on. The device drops its side (which cannot reach Home Assistant from an
+		// address it has left), and stays unannounced until Home Assistant has given up too: announced
+		// sooner, the new address was ignored, and Home Assistant kept trying the old one for good.
+		a.server().Reconnect()
+		if !pause(ctx, movedGap) {
+			return
+		}
 	}
 }
+
+// movedGap is how long a device that changed address stays unannounced: longer than Home Assistant's
+// keepalive (aioesphomeapi: 20 s pings, given up after 4.5 of them) takes to drop the old connection.
+const movedGap = 2 * time.Minute
 
 // keyTXT is what the record says about a kind of key. A real key is api_encryption: Home Assistant asks
 // for it. The zero key of a device waiting to be added (adopt.go) is api_encryption_supported with
