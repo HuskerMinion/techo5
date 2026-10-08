@@ -55,6 +55,9 @@ type session struct {
 	opened bool
 	muted  bool
 
+	// converged is set once the clock filter has converged, and stays set: available in client/state.
+	converged atomic.Bool
+
 	// meta is the track the server last described, and what a message that only changes part of it
 	// is merged onto.
 	meta metadata
@@ -636,13 +639,22 @@ func (s *session) told(cmd protocol.PlayerCommand) {
 // main branch but not yet released). A server ignores a field it does not know.
 //
 // The delay is 0 and the command to set it is not offered. It is for a chain beyond the device's own
-// port, which a Show does not have; its own latency is compensated here (out.latency), as the spec
+// port, which a Show does not have; its own latency is compensated here (out.position), as the spec
 // asks. And it can only move a player earlier, so it could never have fixed a Show playing early.
+//
+// available is false until the clock filter has converged, as the spec requires: a player that says it
+// can play before its clock is good would be scheduled against a wrong offset. The clock loop says it
+// again once it has (noteClock).
 func (s *session) reported() {
+	available := s.converged.Load()
+	state := "synchronized"
+	if !available {
+		state = "error"
+	}
 	if err := s.client.Send("client/state", clientState{
-		Available: true,
+		Available: available,
 		Player: playerState{
-			State:              "synchronized",
+			State:              state,
 			Volume:             config.Get().Speaker.Volume * 100 / speaker.VolumeSteps,
 			Muted:              s.muted,
 			StaticDelayMs:      0,
@@ -656,9 +668,9 @@ func (s *session) reported() {
 }
 
 // What the player asks the server for, in the spec's client/state terms. Not measured: the output
-// latency (Player.Latency, about 64 ms) and a decoder starting from cold sit well inside the lead, and
-// the buffer is Wi-Fi jitter with room to spare. The room can hold 30 s (bufferSeconds), so these are
-// floors, not caps.
+// latency (Player.Latency, at most a full ring: 64 ms on a Show 5, about 85 on a Dot) and a decoder
+// starting from cold sit well inside the lead, and the buffer is Wi-Fi jitter with room to spare. The
+// room can hold 30 s (bufferSeconds), so these are floors, not caps.
 const (
 	requiredLeadTimeMs = 300
 	minBufferMs        = 200
@@ -686,6 +698,16 @@ type playerState struct {
 	MinBufferMs        int    `json:"min_buffer_ms"`
 }
 
+// noteClock tells the server the player is available the first time the clock filter is past lost,
+// right after a round. It latches: CheckQuality reads lost again whenever 5 s pass without a round,
+// and rounds are syncEvery apart, so following it would take the player away between every two
+// rounds (seen on a Show: the server stopped streaming to it).
+func (s *session) noteClock() {
+	if s.clock.CheckQuality() != ssync.QualityLost && !s.converged.Swap(true) {
+		s.reported()
+	}
+}
+
 // synced keeps the clock filter fed. It owns TimeSyncResp: nothing else may read that channel, or the
 // burst would lose rounds to whoever got there first.
 func (s *session) synced(ctx context.Context) {
@@ -694,6 +716,7 @@ func (s *session) synced(ctx context.Context) {
 
 	for {
 		s.measure(ctx)
+		s.noteClock()
 
 		select {
 		case <-ctx.Done():

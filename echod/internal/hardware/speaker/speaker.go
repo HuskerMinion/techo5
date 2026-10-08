@@ -153,11 +153,10 @@ type Player struct {
 	// written counts frames handed to the card, which is what a Source places audio against.
 	written atomic.Uint64
 
-	// inRing is how many frames the card still had to play just after the last period went in, plus
-	// one, so that zero means the card has not said (no device yet, or a driver that will not answer).
-	// It is read right after the write returns and before the next period is rendered, so it is the
-	// wait a frame rendered now has ahead of it: see Latency.
-	inRing atomic.Int64
+	// ring is the card's last word on what it holds, published as one value with the write count it
+	// belongs to, so a reader never pairs a count with a delay read at another write. Nil until the
+	// card has said (no device yet, or a driver that will not answer): see Latency and Position.
+	ring atomic.Pointer[ringReading]
 
 	srcMu  sync.Mutex
 	src    Source
@@ -183,6 +182,14 @@ func (p *Player) Attach(s Source) {
 // Written is the output frame index of the next frame to be handed to the card.
 func (p *Player) Written() uint64 { return p.written.Load() }
 
+// ringReading is one answer from the card: just after the write that brought the count to written,
+// it still had frames to play, as of at.
+type ringReading struct {
+	written uint64
+	frames  int64
+	at      time.Time
+}
+
 // OutputExtra is what the path adds after the ring: the tuning's limiter looks 2 ms ahead (lib/asp
 // mbcl.go), and the AFE's FIFO and the codec's DAC filters about another. Estimated from the parts,
 // not measured; a room that still sits a few milliseconds off another is where to look first.
@@ -192,23 +199,35 @@ const OutputExtra = 3 * time.Millisecond
 // keeps it at, and the path after it.
 const DefaultLatency = time.Duration(period*periods)*time.Second/Rate + OutputExtra
 
-// Latency is how long a frame rendered now waits before it is heard: the frames already in the
-// card's ring ahead of it, as the card itself reported after the last write, and the path after the
+// Latency is how long a frame rendered now waits before it is heard: the frames the card still had
+// in its ring after the last write, less what it has played since it said so, and the path after the
 // ring. This is the output latency a synchronized stream has to lead by. It is not HardwareTail,
 // which is a margin for deciding the room has gone quiet and is deliberately generous.
 //
-// Measured on a 1st gen Show 5 (2026-10-02, idle loop feeding silence): the ring holds 3072 frames and
-// the card reported 2528 to 2880 of them queued at arbitrary moments, so 53 to 60 ms; just after a
-// write, where a period is rendered, it is close to the full 64 ms.
+// The reading is taken in the write loop and used from the network goroutine, up to a period later
+// (16 ms on a Show 5, 21 on a Dot), so the time since it was taken comes off: without that, the anchor
+// sat up to a period early.
+//
+// A full ring is 3072 frames (64 ms) on a Show 5 and 4096 (about 85 ms) on a Dot, and just after a
+// write the card holds close to all of it. Measured on a 1st gen Show 5 (2026-10-02, idle loop feeding
+// silence), at arbitrary moments it held 2528 to 2880 frames, 53 to 60 ms.
 //
 // A sink (Bluetooth) is not counted: the codec keeps its pace on silence while the sink plays the
 // audio with a delay of its own that nothing here knows.
 func (p *Player) Latency() time.Duration {
-	n := p.inRing.Load() - 1
-	if n < 0 {
-		return DefaultLatency
+	_, l := p.Position()
+	return l
+}
+
+// Position is the index of the next frame to go to the card and how long, from now, until it is
+// heard: both from the same reading, so the frame and its latency always belong together.
+func (p *Player) Position() (written uint64, latency time.Duration) {
+	r := p.ring.Load()
+	if r == nil {
+		return p.written.Load(), DefaultLatency
 	}
-	return time.Duration(n)*time.Second/Rate + OutputExtra
+	left := time.Duration(r.frames)*time.Second/Rate - time.Since(r.at)
+	return r.written, max(left, 0) + OutputExtra
 }
 
 // New makes the speaker without taking the hardware, so callers can hold it before there is anything
@@ -535,13 +554,15 @@ func (p *Player) Run(ctx context.Context) error {
 			return err
 		}
 		// What the card holds now is what the period rendered next waits behind, so it is read here,
-		// between the write and the render, and before written moves on to that period.
-		if d, err := pb.Delay(); err == nil && d >= 0 {
-			p.inRing.Store(int64(d) + 1)
+		// between the write and the render, and published with the count it belongs to.
+		d, err := pb.Delay()
+		at := time.Now()
+		w := p.written.Add(period)
+		if err == nil && d >= 0 {
+			p.ring.Store(&ringReading{written: w, frames: int64(d), at: at})
 		} else {
-			p.inRing.Store(0)
+			p.ring.Store(nil)
 		}
-		p.written.Add(period)
 	}
 }
 
@@ -1046,7 +1067,7 @@ func (p *Player) Close() error {
 	pb, mixer, hold := p.pb, p.mixer, p.hold
 	p.pb, p.mixer, p.hold = nil, nil, nil
 	p.devMu.Unlock()
-	p.inRing.Store(0) // the next device says afresh
+	p.ring.Store(nil) // the next device says afresh
 
 	if mixer != nil {
 		_ = mixer.Close()

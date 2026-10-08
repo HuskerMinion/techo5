@@ -191,10 +191,11 @@ func (o *out) frameFor(at int64) uint64 {
 	// where the server's intended moment falls. It has to be the real latency rather than a margin: a
 	// Show next to an ESPHome speaker that measures its own (or anything else that follows the spec)
 	// is only in step if both mean the same moment by "play at". HardwareTail here put every Show
-	// 150 - 64 ms early.
-	latency := o.latency()
+	// early by the difference, 150 ms against at most a 64 ms ring. The frame and its latency come
+	// from one reading of the card (position), so they always belong together.
+	written, latency := o.position()
 	ahead := time.Until(o.clock.ServerToLocalTime(at)) - latency
-	o.frame = o.p.Written() + uint64(max(0, ahead.Seconds()*speaker.Rate))
+	o.frame = written + uint64(max(0, ahead.Seconds()*speaker.Rate))
 	o.at = at
 	o.anchored = true
 	o.played = o.frame
@@ -203,7 +204,7 @@ func (o *out) frameFor(at int64) uint64 {
 	// server's frame, and correct() holds the room to the second. They should agree.
 	slog.Info("sendspin anchored", "frame", o.frame, "ahead_ms", ahead.Milliseconds(),
 		"latency_ms", latency.Milliseconds(),
-		"lead_ms", (at-o.clock.ServerMicrosNow())/1000, "written", o.p.Written(),
+		"lead_ms", (at-o.clock.ServerMicrosNow())/1000, "written", written,
 		"quality", o.clock.CheckQuality())
 	return o.frame
 }
@@ -320,13 +321,13 @@ func (o *out) correct(from uint64) {
 	}
 }
 
-// latency is how long a frame rendered now waits to be heard: the card's word for it, or the full
-// ring when there is no card to ask.
-func (o *out) latency() time.Duration {
+// position is the next frame to go to the card and how long until it is heard: the card's word for
+// both, or the full ring when there is no card to ask.
+func (o *out) position() (uint64, time.Duration) {
 	if o.p == nil {
-		return time.Duration(tailFrames) * time.Second / speaker.Rate
+		return 0, time.Duration(tailFrames) * time.Second / speaker.Rate
 	}
-	return o.p.Latency()
+	return o.p.Position()
 }
 
 // tail is latency in frames.
