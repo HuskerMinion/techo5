@@ -60,6 +60,10 @@ type Radio struct {
 	Thumb                *image.RGBA // the same picture as a square, fitted or filled the same way
 	Logo                 bool
 	Music                bool // a music station, for the default picture when there is none
+
+	// Followed is another of Home Assistant's players on the page (follow.go): its buttons go to it,
+	// and Done puts it away rather than stopping it.
+	Followed bool
 }
 
 type Feature struct {
@@ -94,6 +98,14 @@ type Feature struct {
 	alertsSw   *esphome.Switch
 	weathers   []hass.Entity
 	weathersAt time.Time
+
+	// followSel picks another media player for Now Playing to follow; players is Home Assistant's list of
+	// them, fetched at playersAt (follow.go).
+	followSel *esphome.Select
+	players   []hass.Entity
+	playersAt time.Time
+
+	lyricsSw *esphome.Switch // the words on Now Playing (lyrics.go)
 
 	// haCameras is every camera Home Assistant has, fetched at haCamerasAt, for a device given no list
 	// of its own; haCamerasBusy is a fetch under way.
@@ -181,6 +193,7 @@ func (f *Feature) Run(ctx context.Context) error {
 	}
 	for {
 		f.refreshSources()
+		f.refreshPlayers()
 		f.refreshForecast()
 		select {
 		case <-ctx.Done():
@@ -227,6 +240,8 @@ func Get() *Feature {
 	once.Do(func() {
 		shared = &Feature{poke: make(chan struct{}, 1), metaPoke: make(chan struct{}, 1)}
 		shared.buildWeatherSelect()
+		shared.buildFollowSelect()
+		shared.buildLyricsSwitch()
 		shared.buildRadarSelect()
 		shared.buildAlertsSwitch()
 		shared.buildCameraSoundSwitch()
@@ -346,6 +361,14 @@ func (f *Feature) Name() string { return "home" }
 func (f *Feature) Restore(c config.Config) {
 	f.weatherSel.Options = weatherOptions(c.Home)
 	f.weatherSel.Set(chosenOption(c.Home))
+	f.mu.Lock()
+	f.followSel.Options = followOptions(c.Home)
+	f.mu.Unlock()
+	f.followSel.Set(followOption(c.Home))
+	f.lyricsSw.Set(c.Home.Lyrics)
+	if hasScreen {
+		f.restartFollow()
+	}
 	f.radarSel.Set(radarChoices[RadarSourceIndex()].label)
 	f.alertsSw.Set(!c.Home.AlertsOff)
 	f.showRadio(meta{}) // nothing plays at a start; the poller fills them in
@@ -531,14 +554,14 @@ func (f *Feature) Weather() Weather {
 	}
 	// Nothing from Home Assistant: the device's own, when it has fetched some.
 	if w.Condition == "" {
-		return f.ownWeather()
-	}
-	if temp, ok := t.Value(entity, "temperature"); ok && temp != "" && temp != "None" {
+		w = f.ownWeather()
+	} else if temp, ok := t.Value(entity, "temperature"); ok && temp != "" && temp != "None" {
 		if i := strings.IndexByte(temp, '.'); i > 0 {
 			temp = temp[:i]
 		}
 		w.Temp = temp + "°"
 	}
+	w.Condition = f.SkyAt(w.Condition, time.Now())
 	return w
 }
 
@@ -550,7 +573,7 @@ func (f *Feature) Radio() Radio {
 	if !r.Configured {
 		// No list to show, but the page is shown for a carried stream all the same, and it has to name
 		// what is playing: the same last word the configured path ends with.
-		return carried(r)
+		return withFollowed(carried(r))
 	}
 	t := hastate.Get()
 	if r.Source == config.RadioFavorites {
@@ -597,7 +620,7 @@ func (f *Feature) Radio() Radio {
 		}
 	}
 
-	return carried(r)
+	return withFollowed(carried(r))
 }
 
 // carried puts what a remote is playing on the page, over whatever this device chose. It is the last
@@ -730,6 +753,11 @@ func askFor(label string) string {
 // take only a pause gets a pause, because that is the strongest thing it offers, which is what the row
 // did before anything was carried and what it should go on doing.
 func (f *Feature) Stop() {
+	if Following() {
+		// The page is another room's player: a stop here puts it away, and leaves that music alone.
+		f.DismissFollowed()
+		return
+	}
 	// The same request a transport button makes, so that what a stop reaches is media's to decide: a
 	// stream this device did not start is asked to stop, a track it is holding for somebody else is let
 	// go, and its own stream is ended. Working any of it out here as well is how the hold came to be
@@ -750,7 +778,10 @@ func (f *Feature) Stop() {
 const (
 	AirPlayName = "AirPlay"
 	SpotifyName = "Spotify"
+	DLNAName    = "DLNA"
 )
 
 // Receiver is whether a received track's name is one of the receivers'.
-func Receiver(from string) bool { return from == AirPlayName || from == SpotifyName }
+func Receiver(from string) bool {
+	return from == AirPlayName || from == SpotifyName || from == DLNAName
+}

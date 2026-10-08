@@ -5,26 +5,51 @@ package display
 import (
 	"image"
 	"log/slog"
+	"slices"
 	"time"
 
 	"github.com/HuskerMinion/techo5/echod/internal/feature/home"
 	"github.com/HuskerMinion/techo5/echod/internal/hardware/touch"
+	"github.com/HuskerMinion/techo5/echod/internal/lib/hass"
 )
 
 // OpenCalendar puts the calendar up on this month. It reports false, and does nothing, on a device
 // that shows no calendar.
-func (d *Display) OpenCalendar() bool {
+func (d *Display) OpenCalendar() bool { return d.openCalendar(false) }
+
+// OpenAgenda puts the calendar up as the coming days' events in one list, as OpenCalendar does the month.
+func (d *Display) OpenAgenda() bool { return d.openCalendar(true) }
+
+func (d *Display) openCalendar(agenda bool) bool {
 	if len(home.Get().CalendarSources()) == 0 {
 		return false
 	}
 	now := time.Now()
 	d.mu.Lock()
 	d.calUntil, d.calMonth, d.calDay, d.calDetail = now.Add(calendarShow), firstOfMonth(now), time.Time{}, nil
+	d.calAgenda, d.calScroll, d.calKept = agenda, 0, 0
 	d.closeAlert()
 	d.weatherUntil, d.sheet, d.dash, d.drawer = time.Time{}, false, false, false
 	d.mu.Unlock()
 	d.wake()
 	return true
+}
+
+// agendaEvents is this month's and the next's events together, which hold every day the agenda shows,
+// and whether both have been read. An event running across the turn of the month is in both: it is
+// kept once.
+func agendaEvents(now time.Time) ([]hass.Event, bool) {
+	first := firstOfMonth(now)
+	events, ok := home.Get().MonthEvents(first)
+	more, ok2 := home.Get().MonthEvents(first.AddDate(0, 1, 0))
+	for _, e := range more {
+		if !slices.ContainsFunc(events, func(o hass.Event) bool {
+			return o.Calendar == e.Calendar && o.Summary == e.Summary && o.Start.Equal(e.Start)
+		}) {
+			events = append(events, e)
+		}
+	}
+	return events, ok && ok2
 }
 
 func firstOfMonth(t time.Time) time.Time {
@@ -42,19 +67,25 @@ func (d *Display) calendarUp() bool {
 func (d *Display) calendarScene(s *scene, now time.Time) {
 	d.mu.Lock()
 	up := now.Before(d.calUntil) && (s.phase == "idle" || s.phase == "lingering")
-	month, day, detail, scroll := d.calMonth, d.calDay, d.calDetail, d.calScroll
+	month, day, agenda, detail, scroll := d.calMonth, d.calDay, d.calAgenda, d.calDetail, d.calScroll
 	d.mu.Unlock()
 	if !up {
 		return
 	}
 	h := home.Get()
-	events, loaded := h.MonthEvents(month)
+	var events []hass.Event
+	var loaded bool
+	if agenda {
+		events, loaded = agendaEvents(now)
+	} else {
+		events, loaded = h.MonthEvents(month)
+	}
 	names := map[string]string{}
 	for _, c := range h.Calendars() {
 		names[c.ID] = c.Name
 	}
 	s.showCalendar = true
-	s.cal = calendarView{month: month, day: day, detail: detail, scroll: scroll, events: events, loaded: loaded,
+	s.cal = calendarView{month: month, day: day, agenda: agenda, detail: detail, scroll: scroll, events: events, loaded: loaded,
 		names: names, order: h.CalendarSources(), now: now}
 }
 
@@ -63,7 +94,7 @@ func (d *Display) calendarGesture(g touch.Gesture) {
 	d.mu.Lock()
 	defer d.mu.Unlock()
 	d.calUntil = time.Now().Add(calendarShow)
-	month := d.calDay.IsZero() && d.calDetail == nil
+	month := d.calDay.IsZero() && !d.calAgenda && d.calDetail == nil
 	switch g.Kind {
 	case touch.SwipeLeft:
 		if month {
@@ -76,14 +107,20 @@ func (d *Display) calendarGesture(g touch.Gesture) {
 		}
 		return
 	case touch.SwipeUp, touch.SwipeDown:
-		// A long day's list: up shows the later events, down the earlier.
-		if !d.calDay.IsZero() && d.calDetail == nil && d.r != nil {
-			step := max(d.r.calendarDayRows()-1, 1)
-			if g.Kind == touch.SwipeDown {
-				step = -step
-			}
+		// A long day's list or the agenda: up shows the later events, down the earlier.
+		if d.calDetail != nil || d.r == nil {
+			return
+		}
+		step := max(d.r.calendarDayRows()-1, 1)
+		if g.Kind == touch.SwipeDown {
+			step = -step
+		}
+		switch {
+		case !d.calDay.IsZero():
 			events, _ := home.Get().EventsOn(d.calDay)
 			d.calScroll = min(max(d.calScroll+step, 0), max(len(events)-d.r.calendarDayRows(), 0))
+		case d.calAgenda:
+			d.calScroll = min(max(d.calScroll+step, 0), d.r.calendarAgendaMax())
 		}
 		return
 	case touch.Tap:
@@ -109,7 +146,15 @@ func (d *Display) calendarGesture(g touch.Gesture) {
 		slog.Info("screen: calendar put away")
 	case calBack:
 		d.calDay, d.calScroll = time.Time{}, 0
+		if d.calAgenda {
+			d.calScroll = d.calKept // back where the agenda was
+		}
+	case calMonthView:
+		d.calAgenda, d.calScroll, d.calMonth = false, 0, firstOfMonth(time.Now())
 	case calDay:
+		if d.calAgenda {
+			d.calKept = d.calScroll
+		}
 		d.calDay, d.calScroll = hit.day, 0
 		// A day at the edge of the grid belongs to the month before or after: its list reads that one.
 		d.calMonth = firstOfMonth(hit.day)

@@ -188,7 +188,9 @@ func (f *Feature) Run(ctx context.Context) error {
 				slog.Error("web port", "port", Port, "err", err)
 				break
 			}
-			srv = &http.Server{Handler: mux, ReadHeaderTimeout: 10 * time.Second}
+			// No ReadTimeout: the intercom takes its connection over, and a deadline set here would
+			// stay on it and end the call. Idle keep-alive connections are let go.
+			srv = &http.Server{Handler: mux, ReadHeaderTimeout: 10 * time.Second, IdleTimeout: 2 * time.Minute}
 			go func(srv *http.Server) {
 				if err := srv.Serve(ln); err != nil && !errors.Is(err, http.ErrServerClosed) {
 					slog.Error("web port", "err", err)

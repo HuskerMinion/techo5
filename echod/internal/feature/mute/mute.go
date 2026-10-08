@@ -18,6 +18,7 @@ import (
 	"github.com/HuskerMinion/techo5/echod/internal/config"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/ring"
 	"github.com/HuskerMinion/techo5/echod/internal/hardware/buttons"
+	"github.com/HuskerMinion/techo5/echod/internal/hardware/camera"
 	"github.com/HuskerMinion/techo5/echod/internal/hardware/led"
 	"github.com/HuskerMinion/techo5/echod/internal/hardware/mic"
 	"github.com/HuskerMinion/techo5/echod/internal/hardware/privacy"
@@ -214,6 +215,9 @@ func (m *Mute) pressed(e buttons.Event) {
 		m.Toggle()
 	case buttons.Hold:
 		speaker.Sound().Chime(speaker.ToneMuteHold)
+		// A hold is what tells the kernel's camera driver the privacy latch is off, on the Show 8
+		// and the 1st gen Show 5; a camera held off since a tap to unmute can be tried again.
+		camera.Get().Unwedge()
 	}
 }
 

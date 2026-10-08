@@ -15,6 +15,14 @@ type Home struct {
 	// WeatherSources are the weather entities Home Assistant listed last, offered as choices.
 	WeatherSources []string `json:"weather_sources,omitempty"`
 
+	// FollowPlayer is another media_player Now Playing shows while this device plays nothing of its
+	// own; empty follows none. PlayerSources are the media players Home Assistant listed last.
+	FollowPlayer  string   `json:"follow_player,omitempty"`
+	PlayerSources []string `json:"player_sources,omitempty"`
+
+	// Lyrics shows the words of the song on Now Playing, looked up at LRCLIB by title and artist.
+	Lyrics bool `json:"lyrics,omitempty"`
+
 	// Location is a zone.* entity the rain map and weather alerts are centered on, for a device that
 	// is somewhere other than home (a family device in another house). Empty is Home Assistant's home.
 	Location string `json:"location,omitempty"`
@@ -57,6 +65,9 @@ type Home struct {
 	// DropIn lets an intercom call from another device in the house connect by itself after a chime,
 	// with nobody answering. Off unless somebody turns it on: it is a way to listen in on a room.
 	DropIn bool `json:"drop_in,omitempty"`
+
+	// RingSound is how a call rings here, one of the phone's ring sounds; empty is the first of them.
+	RingSound string `json:"ring_sound,omitempty"`
 
 	// DoNotDisturb turns intercom calls away: the caller is told, and nothing rings here.
 	DoNotDisturb bool `json:"do_not_disturb,omitempty"`
@@ -251,8 +262,24 @@ func (w HomeWriter) DropIn(v bool) error {
 	return w.st.Update(func(c *Config) { c.Home.DropIn = v })
 }
 
+func (w HomeWriter) RingSound(v string) error {
+	return w.st.Update(func(c *Config) { c.Home.RingSound = v })
+}
+
 func (w HomeWriter) DoNotDisturb(v bool) error {
 	return w.st.Update(func(c *Config) { c.Home.DoNotDisturb = v })
+}
+
+func (w HomeWriter) Lyrics(on bool) error {
+	return w.st.Update(func(c *Config) { c.Home.Lyrics = on })
+}
+
+func (w HomeWriter) FollowPlayer(entity string) error {
+	return w.st.Update(func(c *Config) { c.Home.FollowPlayer = entity })
+}
+
+func (w HomeWriter) PlayerSources(ids []string) error {
+	return w.st.Update(func(c *Config) { c.Home.PlayerSources = ids })
 }
 
 func (w HomeWriter) WeatherSources(ids []string) error {

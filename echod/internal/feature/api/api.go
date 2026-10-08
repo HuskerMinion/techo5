@@ -15,6 +15,7 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	esphome "github.com/ygelfand/go-esphome-device"
@@ -45,17 +46,87 @@ func init() {
 const writeTimeout = 20 * time.Second
 
 type API struct {
-	srv  *esphome.Server
+	// srv is the server serving now. Run makes a new one each time it listens again, with the key in
+	// force: a key Home Assistant pushes stays inside the server that took it (the library keeps it
+	// ahead of PSK from then on), so a key changed afterward, by the window opening or shutting, only
+	// takes on a server of its own. Read from anywhere, written only by Start and Run.
+	srv  atomic.Pointer[esphome.Server]
 	name string
+
+	// What every server is made from: Start sets them, and Run alone changes info between servers.
+	addr    string
+	info    esphome.Info
+	handler esphome.Handler
 
 	reconnect chan struct{}
 	announced sync.Once
 
-	// mu guards nextPSK, a key for the server to take when it next listens, and unkeyed, whether the
-	// key it serves with is the zero key (adopt.go).
+	// mu guards nextPSK, a key for the server to take when it next listens, key, the key in force,
+	// and unkeyed, whether that is the zero key (adopt.go).
 	mu      sync.Mutex
 	nextPSK *esphome.PSK
+	key     *esphome.PSK
 	unkeyed bool
+
+	// keyed is what kind of key is in force, for the mDNS record (mdns.go): keyNone (plaintext),
+	// keyZero (the all-zeros key a Home Assistant may replace, adopt.go) or keyReal.
+	keyed atomic.Int32
+}
+
+const (
+	keyNone int32 = iota
+	keyZero
+	keyReal
+)
+
+// keyKind is what a key is, for keyed.
+func keyKind(k *esphome.PSK) int32 {
+	switch {
+	case k == nil:
+		return keyNone
+	case k.IsZero():
+		return keyZero
+	}
+	return keyReal
+}
+
+// server is the server serving now, nil before Start.
+func (a *API) server() *esphome.Server { return a.srv.Load() }
+
+// useKey makes k the key in force. With mu held.
+func (a *API) useKey(k *esphome.PSK) {
+	a.key = k
+	a.unkeyed = k != nil && k.IsZero()
+	a.keyed.Store(keyKind(k))
+}
+
+// serverFor is a server for one spell of listening, serving with k.
+func (a *API) serverFor(k *esphome.PSK) *esphome.Server {
+	return &esphome.Server{
+		Addr:         a.addr,
+		WriteTimeout: writeTimeout,
+		Info:         a.info,
+		PSK:          k,
+		Logger:       slog.Default(),
+		// Persist a key Home Assistant pushes, or the next connection reverts to the old one.
+		OnSetEncryptionKey: a.keySet,
+
+		OnSubscribed: func() { component.Subscribed.Emit(struct{}{}) },
+
+		Handler: a.handler,
+	}
+}
+
+// nextServer is the server for the next spell of listening: a key waiting to be taken (serveWith) is
+// taken, and the server is a new one with the key in force, whatever the last one was holding.
+func (a *API) nextServer() *esphome.Server {
+	if k := a.takeNextPSK(); k != nil {
+		slog.Info("serving with a new key", "provisioned", !k.IsZero())
+	}
+	a.mu.Lock()
+	k := a.key
+	a.mu.Unlock()
+	return a.serverFor(k)
 }
 
 var (
@@ -76,7 +147,8 @@ func Get() *API {
 // call asks Home Assistant to run an action — a script, a service — with data. Like fire, nothing
 // happens before the server is up; Home Assistant also has to allow it for this device.
 func (a *API) call(c component.Call) {
-	if a.srv == nil {
+	srv := a.server()
+	if srv == nil {
 		return
 	}
 	pairs := func(m map[string]string) []*api.HomeassistantServiceMap {
@@ -87,7 +159,7 @@ func (a *API) call(c component.Call) {
 		return out
 	}
 	req := &api.HomeassistantActionRequest{Service: c.Service, Data: pairs(c.Data), DataTemplate: pairs(c.Templates)}
-	if err := a.srv.Broadcast(req); err != nil {
+	if err := srv.Broadcast(req); err != nil {
 		slog.Warn("calling a home assistant action failed", "service", c.Service, "err", err)
 	} else {
 		slog.Info("home assistant action called", "service", c.Service, "data", c.Data, "templates", c.Templates)
@@ -105,7 +177,7 @@ func (a *API) Start(ctx context.Context) error {
 	}
 	psk = a.resumeAdoption(psk)
 	a.mu.Lock()
-	a.unkeyed = psk.IsZero()
+	a.useKey(psk)
 	a.mu.Unlock()
 	mac, err := layout.FactoryMAC()
 	if err != nil {
@@ -122,36 +194,28 @@ func (a *API) Start(ctx context.Context) error {
 	}
 
 	a.name = layout.Slug(device.Name)
-	a.srv = &esphome.Server{
-		Addr:         device.Addr,
-		WriteTimeout: writeTimeout,
-		Info: esphome.Info{
-			Name:         a.name,
-			FriendlyName: device.Name,
-			MACAddress:   mac,
-			Manufacturer: layout.Manufacturer,
-			// The model carries the daemon's own release, since the version field is Home Assistant's
-			// ESPHome version: given this daemon's release number there, it reads an ancient ESPHome and
-			// raises a repair to update firmware the device does not run (compat.go).
-			Model:             layout.Model + " · TECHO5 " + layout.Version,
-			Version:           ESPHomeCompat,
-			VoiceFeatures:     voice.Features,
-			BluetoothFeatures: bluetooth.Get().Features(),
+	a.addr = device.Addr
+	a.info = esphome.Info{
+		Name:         a.name,
+		FriendlyName: device.Name,
+		MACAddress:   mac,
+		Manufacturer: layout.Manufacturer,
+		// The model carries the daemon's own release, since the version field is Home Assistant's
+		// ESPHome version: given this daemon's release number there, it reads an ancient ESPHome and
+		// raises a repair to update firmware the device does not run (compat.go).
+		Model:             layout.Model + " · TECHO5 " + layout.Version,
+		Version:           ESPHomeCompat,
+		ESPHomeVersion:    ESPHomeCompat,
+		VoiceFeatures:     voice.Features,
+		BluetoothFeatures: bluetooth.Get().Features(),
 
-			Devices: subDevices(device.Name),
-		},
-		PSK:    psk,
-		Logger: slog.Default(),
-		// Persist a key Home Assistant pushes, or the next connection reverts to the old one.
-		OnSetEncryptionKey: a.keySet,
-
-		OnSubscribed: func() { component.Subscribed.Emit(struct{}{}) },
-
-		// The handlers components answer for themselves rather than through an entity: the voice
-		// satellite's pipeline traffic, and the Bluetooth proxy's subscribe and set-mode messages.
-		// Describers go first so what they add to the entity list lands before the library's Done.
-		Handler: esphome.Chain(append(append(component.Default().Describers(), ents), component.Default().Handlers()...)...),
+		Devices: subDevices(device.Name),
 	}
+	// The handlers components answer for themselves rather than through an entity: the voice
+	// satellite's pipeline traffic, and the Bluetooth proxy's subscribe and set-mode messages.
+	// Describers go first so what they add to the entity list lands before the library's Done.
+	a.handler = esphome.Chain(append(append(component.Default().Describers(), ents), component.Default().Handlers()...)...)
+	a.srv.Store(a.serverFor(psk))
 	return nil
 }
 
@@ -188,9 +252,10 @@ func (a *API) Run(ctx context.Context) error {
 	}
 
 	for {
-		ln, err := net.Listen("tcp", a.srv.Addr)
+		srv := a.server()
+		ln, err := net.Listen("tcp", srv.Addr)
 		if err != nil {
-			return fmt.Errorf("api: listen %s: %w", a.srv.Addr, err)
+			return fmt.Errorf("api: listen %s: %w", srv.Addr, err)
 		}
 
 		a.announced.Do(func() {
@@ -210,24 +275,21 @@ func (a *API) Run(ctx context.Context) error {
 		// waits on the zero key for a Home Assistant to give it one (adopt.go): that hand-over is
 		// left exactly as Home Assistant has always found it.
 		served := ln
-		if a.srv.PSK != nil && !a.srv.PSK.IsZero() {
+		if keyKind(srv.PSK) == keyReal {
 			served = hintListener{ln}
 		}
-		err = a.srv.Serve(serving, served)
+		err = srv.Serve(serving, served)
 		stop()
 
 		if err != nil || ctx.Err() != nil {
 			return err
 		}
 
-		// Between serving and listening again nothing reads Info, which is the only moment it can be
-		// changed: a client is told what the device is once, when it connects. The key likewise.
-		a.srv.Info.BluetoothFeatures = bluetooth.Get().Features()
-		if k := a.takeNextPSK(); k != nil {
-			a.srv.PSK = k
-			slog.Info("serving with a new key", "provisioned", !k.IsZero())
-		}
-		slog.Info("serving again", "bluetooth", a.srv.Info.BluetoothFeatures)
+		// Between serving and listening again is the only moment what the device says it is can change:
+		// a client is told once, when it connects. The key likewise, on a server of its own.
+		a.info.BluetoothFeatures = bluetooth.Get().Features()
+		a.srv.Store(a.nextServer())
+		slog.Info("serving again", "bluetooth", a.info.BluetoothFeatures)
 	}
 }
 
@@ -235,10 +297,11 @@ func (a *API) Run(ctx context.Context) error {
 // client is subscribed: an event nobody is listening for is not a failure, and the component that
 // asked for it has nothing useful to do about one.
 func (a *API) fire(e component.Event) {
-	if a.srv == nil {
+	srv := a.server()
+	if srv == nil {
 		return
 	}
-	if err := a.srv.FireEvent(e.Name, e.Data); err != nil {
+	if err := srv.FireEvent(e.Name, e.Data); err != nil {
 		slog.Debug("firing an event failed", "event", e.Name, "err", err)
 	}
 }

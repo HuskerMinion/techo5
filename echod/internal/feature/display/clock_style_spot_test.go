@@ -35,13 +35,17 @@ func TestSpotClockStylesDraw(t *testing.T) {
 			{Summary: "Dentist", Start: at.Add(83 * time.Minute), End: at.Add(143 * time.Minute)},
 			{Summary: "Soccer practice at the park", Start: at.Add(233 * time.Minute), End: at.Add(293 * time.Minute)},
 		},
+		places: worldPlaces(nil),
 	}
+	named := facts
+	named.named = "Binary"
 	running := []timer.Countdown{{Name: "Pasta", Left: 4*time.Minute + 32*time.Second, Total: 10 * time.Minute, Active: true}}
 	scenes := map[string]roundScene{
 		"":        {now: at, phase: "idle", weather: sky, style: facts},
 		"-timer":  {now: at, phase: "idle", weather: sky, style: facts, timers: running},
 		"-oclock": {now: time.Date(2026, 9, 16, 12, 0, 0, 0, time.Local), phase: "idle", weather: sky, style: facts},
 		"-24h":    {now: at, phase: "idle", weather: sky, style: facts},
+		"-named":  {now: at, phase: "idle", weather: sky, style: named},
 	}
 	dir := os.Getenv("SPOT_PREVIEW")
 	for _, st := range clockStyles {

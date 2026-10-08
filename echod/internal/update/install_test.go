@@ -181,13 +181,28 @@ func TestDownloadStopsAtTheOfferedSize(t *testing.T) {
 		t.Errorf("%v, want something about how many bytes arrived", err)
 	}
 
-	st, statErr := os.Stat(to)
-	if statErr != nil {
-		t.Fatal(statErr)
+	if _, err := os.Stat(to); err == nil {
+		t.Error("a download that was refused was left where it would be installed from")
 	}
-	if st.Size() > b.Size+1 {
-		t.Errorf("wrote %d bytes for a download offered as %d", st.Size(), b.Size)
+	if written(t, dir) > b.Size+1 {
+		t.Errorf("wrote %d bytes for a download offered as %d", written(t, dir), b.Size)
 	}
+}
+
+// written is the most any one file in dir holds.
+func written(t *testing.T, dir string) int64 {
+	t.Helper()
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var most int64
+	for _, e := range entries {
+		if info, err := e.Info(); err == nil && info.Size() > most {
+			most = info.Size()
+		}
+	}
+	return most
 }
 
 // An old manifest is signed as well as a new one, so the only thing standing between a device and a

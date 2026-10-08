@@ -9,6 +9,7 @@ import (
 	"log/slog"
 	"os"
 	"sync"
+	"sync/atomic"
 	"syscall"
 	"time"
 	"unsafe"
@@ -47,6 +48,16 @@ func (f *Frame) Image() *image.RGBA {
 	return f.rgba
 }
 
+// Luma is the frame as a w x h grid of brightness (0 to 255), read straight off the sensor's own
+// frame without developing the picture: enough to see something move, at a tiny fraction of the
+// work. Nil for a frame with nothing in it (one sent while the camera was held off).
+func (f *Frame) Luma(w, h int) []uint8 {
+	if f.raw == nil || w <= 0 || h <= 0 {
+		return nil
+	}
+	return lumaGrid(f.raw, w, h)
+}
+
 // level is the tone the frame was measured at, with f.mu held.
 func (f *Frame) level() tone {
 	if !f.toned {
@@ -62,6 +73,9 @@ type Camera struct {
 
 	mu      sync.Mutex
 	users   int
+	fast    int           // users that want every frame; the rest (AcquireSlow) take one every slowEvery
+	sent    time.Time     // when the last frame went out, for the slow users
+	every   time.Duration // how often the slow users get one (SetSlowEvery); zero is slowEvery
 	running bool
 	powered bool // the sensor is on (running, and not held off by the mute)
 	stop    chan struct{}
@@ -93,15 +107,17 @@ type Camera struct {
 	wedged error
 }
 
-// ErrNeedsReboot is the sensor refusing to open in a way that only a reboot clears.
-//
-// The mute latch cuts the camera's power without telling the sensor driver, which goes on believing
-// the sensor is powered; the power-down it runs before the next power-on then fails on VCAMD and
-// takes the open with it. Every open after that returns EIO, for the life of the boot. The fix
-// belongs in the kernel - amazon-gating cutting the camera behind imgsensor's back - and this is
-// only about not sitting in the failure: it was found as three and a half hours of the same error
-// every twenty seconds, one per still Home Assistant asked for.
-var ErrNeedsReboot = errors.New("the camera needs a reboot: the sensor did not come back after the microphone latch")
+// ErrNeedsReboot is the sensor refusing to open because the kernel's camera driver still believes
+// the privacy latch is on. On the Show 8 and the 1st gen Show 5 (amazon-gating, OV9734), the latch is
+// let go in hardware by any press of the mute button, but the driver tells the camera so only on a
+// long press: a short press to unmute leaves the camera's own "gating mode" on, and every open fails
+// ("Failed to enable CAM, GATING Mode is ON", then a power-down that unbalances the sensor's
+// regulator) however long after. Measured on a Show 8, 2026-10-04: opens at 0.15 s, 1.6 s and 72 s
+// after a short unmute all failed; a hold of the mute button for a second (Unwedge) brought the
+// camera straight back, without muting. The kernel's fix is amazon-oss android_kernel_amazon_mt8163
+// fac5c8e ("Fix camera dying when booting with privacy on"). A reboot clears it too. The 2nd gen
+// Show 5 (cronos) has another privacy driver and never gets here.
+var ErrNeedsReboot = errors.New("the camera is held off since the mute button was tapped: hold the mute button for a second, or restart the device")
 
 var (
 	once   sync.Once
@@ -149,7 +165,43 @@ func Available() bool {
 // A muted device refuses: the mute button is the camera's off switch too. So does one whose shutter
 // is closed, on the devices that have one — there is nothing behind it to photograph, and saying so
 // is more use than powering the sensor up to stream a picture of a piece of plastic.
-func (c *Camera) Acquire() (release func(), err error) {
+func (c *Camera) Acquire() (release func(), err error) { return c.acquire(true) }
+
+// AcquireSlow is Acquire for a user that wants a frame now and then rather than every one: what
+// watches the room for somebody coming near. While only slow users hold the sensor, a frame goes out
+// every slowEvery, and the rest are not even copied; the exposure still follows every one.
+func (c *Camera) AcquireSlow() (release func(), err error) { return c.acquire(false) }
+
+// slowEvery is how often the slow users get a frame unless one asks for more (SetSlowEvery).
+const slowEvery = 500 * time.Millisecond
+
+// SetSlowEvery is how often the slow users get a frame: more often while a gesture could mean
+// something, back to slowEvery after. Zero is slowEvery.
+func (c *Camera) SetSlowEvery(d time.Duration) {
+	if d <= 0 {
+		d = slowEvery
+	}
+	c.mu.Lock()
+	c.every = d
+	c.mu.Unlock()
+}
+
+// wanted says whether the frame the sensor just made goes out, and marks it sent if so.
+func (c *Camera) wanted(now time.Time) bool {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	every := c.every
+	if every <= 0 {
+		every = slowEvery
+	}
+	if c.fast == 0 && now.Sub(c.sent) < every-every/8 {
+		return false
+	}
+	c.sent = now
+	return true
+}
+
+func (c *Camera) acquire(fast bool) (release func(), err error) {
 	if !Available() {
 		return nil, errors.New("no camera on this device")
 	}
@@ -211,6 +263,10 @@ func (c *Camera) Acquire() (release func(), err error) {
 		return nil, c.wedged
 	}
 	c.users++
+	if fast {
+		c.fast++
+		liveUsers.Add(1)
+	}
 	if c.idle != nil {
 		c.idle.Stop()
 		c.idle = nil
@@ -235,6 +291,10 @@ func (c *Camera) Acquire() (release func(), err error) {
 			c.mu.Lock()
 			defer c.mu.Unlock()
 			c.users--
+			if fast {
+				c.fast--
+				liveUsers.Add(-1)
+			}
 			if c.users == 0 {
 				c.idle = time.AfterFunc(linger, c.idleStop)
 			}
@@ -355,8 +415,8 @@ func (c *Camera) run(stop, stopped chan struct{}) {
 		d, err := open()
 		if err != nil {
 			if c.startFailed(err, stopped) {
-				slog.Error("camera will not open again until this device is rebooted",
-					"err", err, "why", "the microphone latch cut the sensor's power behind its driver")
+				slog.Error("camera held off by the privacy latch: hold the mute button for a second, or restart",
+					"err", err)
 				return
 			}
 			slog.Error("camera start", "err", err)
@@ -383,7 +443,7 @@ func (c *Camera) run(stop, stopped chan struct{}) {
 		}()
 		d.stream(halt, func(bayer []byte) {
 			d.autoExpose(bayer)
-			if d.skip() {
+			if d.skip() || !c.wanted(time.Now()) {
 				return
 			}
 			f := &Frame{At: time.Now(), raw: make([]byte, len(bayer))}
@@ -466,6 +526,89 @@ func (c *Camera) Wedged() error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	return c.wedged
+}
+
+// The exposure held through a sudden change, for gestures (feature/presence). A hand over the lens is
+// a sudden change of the whole picture, and the exposure would brighten it away within a third of a
+// second, leaving nothing to tell it from a light switched off; held still, the hand stays a hand
+// (dark, or bright with the screen's own light on it, and smooth) for as long as it is there.
+
+// gestureExposure is whether the exposure is held through sudden changes (SetGestureExposure).
+var gestureExposure atomic.Bool
+
+// liveUsers counts the users that want every frame (a picture being looked at): for them the exposure
+// follows the room at once, gestures or not.
+var liveUsers atomic.Int32
+
+// SetGestureExposure holds the exposure still for a moment whenever the picture's brightness jumps
+// by half or more at once, while on.
+func SetGestureExposure(on bool) { gestureExposure.Store(on) }
+
+const (
+	aeHoldFor = 2500 * time.Millisecond
+	// aeWarm is the frames averaged before a jump is believed: a sensor just started is still finding
+	// its exposure, and its first frames' swings are its own.
+	aeWarm = 10
+	// aeGap is a pause in the frames long enough that the sensor was stopped and started again.
+	aeGap = 2 * time.Second
+)
+
+// aeHold is one device's exposure hold: the brightness it has been seeing, and until when it holds.
+type aeHold struct {
+	avg   float64
+	n     int       // frames averaged since the sensor started
+	last  time.Time // the last frame
+	until time.Time
+}
+
+// held reports whether the exposure is to be left as it is for this frame of brightness mean.
+func (h *aeHold) held(mean float64) bool {
+	return h.heldAt(mean, time.Now())
+}
+
+func (h *aeHold) heldAt(mean float64, now time.Time) bool {
+	if !gestureExposure.Load() || liveUsers.Load() > 0 || now.Sub(h.last) > aeGap {
+		*h = aeHold{last: now}
+		if gestureExposure.Load() && liveUsers.Load() == 0 {
+			h.avg, h.n = mean, 1
+		}
+		return false
+	}
+	h.last = now
+	if !h.until.IsZero() {
+		if now.Before(h.until) {
+			return true
+		}
+		// The hold is over: whatever the picture is now is what the room looks like, and the
+		// exposure follows it from here rather than holding again against the old brightness.
+		h.until, h.avg, h.n = time.Time{}, mean, aeWarm
+		return false
+	}
+	if h.n >= aeWarm && h.avg > 4 && (mean < h.avg/2 || mean > h.avg*2) {
+		h.until = now.Add(aeHoldFor)
+		return true
+	}
+	h.n++
+	h.avg += (mean - h.avg) * 0.2
+	return false
+}
+
+// Unwedged fires when the camera may be opened again after being held off (Unwedge). Listeners must
+// not block.
+var Unwedged hook.Hook[struct{}]
+
+// Unwedge lets the camera be tried again: the mute button was held, which is what tells the kernel's
+// camera driver that the privacy latch is off (see ErrNeedsReboot). If it still will not open, the
+// next try finds that out again.
+func (c *Camera) Unwedge() {
+	c.mu.Lock()
+	was := c.wedged != nil
+	c.wedged = nil
+	c.mu.Unlock()
+	if was {
+		slog.Info("camera: the mute button was held; trying the camera again")
+		Unwedged.Emit(struct{}{})
+	}
 }
 
 // heapNew returns a new T that is certain to live on the heap. The compat ioctls take pointers

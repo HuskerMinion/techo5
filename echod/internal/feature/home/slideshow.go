@@ -524,7 +524,7 @@ func (f *Feature) nextSlideshowChild(h config.Slideshow) (string, bool) {
 
 // slideshowNothing records a look that came back with nothing. After slideshowGiveUp of them in a
 // row the device stops looking for a while and the screen says why, so a folder that was renamed,
-// moved or unshared is visible instead of being retried quietly for ever.
+// moved or unshared is visible instead of being retried quietly forever.
 func (f *Feature) slideshowNothing(why string) {
 	f.mu.Lock()
 	f.slideshow.fails++

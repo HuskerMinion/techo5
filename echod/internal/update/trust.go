@@ -25,6 +25,23 @@ var client = &http.Client{
 		TLSClientConfig:     &tls.Config{MinVersion: tls.VersionTLS12},
 		TLSHandshakeTimeout: 15 * time.Second,
 	},
+	// A release asset on GitHub answers with a redirect to its CDN, and a resumed download has to
+	// arrive there still asking for the rest rather than the whole. Go carries the header over on its
+	// own; this makes it so whatever the default becomes.
+	CheckRedirect: func(req *http.Request, via []*http.Request) error {
+		if len(via) >= 10 {
+			return errors.New("update: stopped after 10 redirects")
+		}
+		// The hash would still catch a changed file, but what is being fetched is nobody else's
+		// business: an https asset does not go on over plain http.
+		if via[0].URL.Scheme == "https" && req.URL.Scheme != "https" {
+			return fmt.Errorf("update: refusing a redirect from https to %s", req.URL.Scheme)
+		}
+		if r := via[0].Header.Get("Range"); r != "" {
+			req.Header.Set("Range", r)
+		}
+		return nil
+	},
 }
 
 // clockSet is how an unset clock is recognized: this kernel starts in 1970 and NTP corrects it a

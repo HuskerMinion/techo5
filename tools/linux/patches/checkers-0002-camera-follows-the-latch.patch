@@ -1,0 +1,177 @@
+diff --git a/drivers/misc/gating.c b/drivers/misc/gating.c
+index 2920673bca8a..31d6c71f6c60 100644
+--- a/drivers/misc/gating.c
++++ b/drivers/misc/gating.c
+@@ -87,10 +87,25 @@ static enum gating_state __gating_state(struct gating_priv *priv)
+  */
+ int gating_hw_state(void)
+ {
+-	if (!gating_hw_priv)
++	struct gating_priv *priv = smp_load_acquire(&gating_hw_priv);
++	int state;
++
++	if (!priv)
+ 		return -ENODEV;
+ 
+-	return __gating_state(gating_hw_priv);
++	/*
++	 * A mute being turned on counts as on: the GATED notification goes out before the latch is
++	 * driven, and the pin can read UNGATED for up to a second after it. A pin that cannot be read
++	 * is returned as the error, not as UNGATED, so a caller that only acts on UNGATED fails closed.
++	 */
++	mutex_lock(&priv->mutex);
++	if (priv->cur_state == ONGOING || priv->req_state == GATED)
++		state = GATED;
++	else
++		state = gpiod_get_value_cansleep(priv->state_gpio);
++	mutex_unlock(&priv->mutex);
++
++	return state;
+ }
+ EXPORT_SYMBOL(gating_hw_state);
+ 
+@@ -138,7 +153,11 @@ static void gating_update_work_func(struct work_struct *work)
+ 	}
+ 
+ skip:
+-	cur_state = __gating_state(priv);
++	/* A pin that cannot be read is taken as gated here: an UNGATED notification turns the
++	 * microphones back on, and only a pin that reads released may do that.
++	 */
++	ret = gpiod_get_value_cansleep(priv->state_gpio);
++	cur_state = ret < 0 ? GATED : ret;
+ 
+ 	if (cur_state != req_state) {
+ 		ret = srcu_notifier_call_chain(priv_nh, cur_state, NULL);
+@@ -455,7 +474,6 @@ static int gating_probe(struct platform_device *pdev)
+ 	mutex_init(&priv->mutex);
+ 
+ 	platform_set_drvdata(pdev, priv);
+-	gating_hw_priv = priv;
+ 
+ 	priv->state_gpio = devm_gpiod_get(dev, "state", GPIOD_IN);
+ 	ret = PTR_ERR_OR_ZERO(priv->state_gpio);
+@@ -484,6 +502,11 @@ static int gating_probe(struct platform_device *pdev)
+ 	}
+ 
+ 	priv->input_event->priv = priv;
++	/*
++	 * The latch is hardware and survives a reboot. Starting from what the state pin says, not from
++	 * zero, keeps a long press after a boot with the latch engaged from being taken the wrong way.
++	 */
++	priv->cur_state = __gating_state(priv);
+ 	priv->req_state = NONE;
+ 	INIT_WORK(&priv->priv_update, gating_update_work_func);
+ 
+@@ -507,6 +530,9 @@ static int gating_probe(struct platform_device *pdev)
+ 		device_init_wakeup(&pdev->dev,
+ 					priv->input_event->wakeup_capable);
+ 
++	/* Only now that every field is set, and never on a probe that failed and freed priv. */
++	smp_store_release(&gating_hw_priv, priv);
++
+ 	dev_info(dev, "%s : done\n", __func__);
+ 
+ 	return 0;
+@@ -518,6 +544,8 @@ static int gating_remove(struct platform_device *pdev)
+ 	struct device *dev = &pdev->dev;
+ 	struct gating_input_event *priv_event;
+ 
++	smp_store_release(&gating_hw_priv, NULL);
++
+ 	priv = platform_get_drvdata(pdev);
+ 	priv_event = priv->input_event;
+ 
+@@ -581,6 +609,8 @@ static struct platform_driver gating_driver = {
+ 		.pm = &gating_pm_ops,
+ #endif
+ 		.of_match_table	= of_match_ptr(gating_of_table),
++		/* gating_hw_state() readers hold no reference; no unbind from under them. */
++		.suppress_bind_attrs = true,
+ 	},
+ 	.probe	= gating_probe,
+ 	.remove	= gating_remove,
+diff --git a/drivers/misc/mediatek/imgsensor/src/mt8163/camera_hw/camera_project/checkers/kd_camera_hw.c b/drivers/misc/mediatek/imgsensor/src/mt8163/camera_hw/camera_project/checkers/kd_camera_hw.c
+index cecaaf70aeca..38b2a7d45a46 100644
+--- a/drivers/misc/mediatek/imgsensor/src/mt8163/camera_hw/camera_project/checkers/kd_camera_hw.c
++++ b/drivers/misc/mediatek/imgsensor/src/mt8163/camera_hw/camera_project/checkers/kd_camera_hw.c
+@@ -81,11 +81,28 @@ static enum gating_state conf_cam_gate(enum gating_state state)
+ /* set_gate_state() : check and configure the camera gating state */
+ static enum gating_state set_gate_state(enum gating_state state)
+ {
++	int latch;
++
+ 	if (!cam_gate)
+ 		return state;
+ 
+ 	mutex_lock(&cam_gate->mutex);
+ 
++	/*
++	 * Go by the latch, not only by the last notification: a latch engaged before boot was never
++	 * announced, and on a stock gating.c a quick tap that released it was not either. Trusting
++	 * req_state alone left the camera refused after the second, and powered into a rail the latch
++	 * holds down after the first, both for the rest of the boot. gating_hw_state() counts a mute
++	 * still being turned on as GATED and returns an error for a pin it cannot read, and the error
++	 * holds the camera off too, so this can only let the camera on when the latch is released.
++	 * Read under the mutex, so a GATED notification cannot land between the read and the write.
++	 */
++	latch = gating_hw_state();
++	if (latch == UNGATED || latch == GATED)
++		cam_gate->req_state = latch;
++	else if (latch != -ENODEV)
++		cam_gate->req_state = GATED;
++
+ 	/* Make sure device is in UNGATED Mode before trying to enable CAM */
+ 	if (state == UNGATED && cam_gate->req_state != UNGATED) {
+ 		pr_info("Failed to enable CAM, GATING Mode is ON\n");
+diff --git a/drivers/misc/mediatek/imgsensor/src/mt8163/camera_hw/camera_project/crown/kd_camera_hw.c b/drivers/misc/mediatek/imgsensor/src/mt8163/camera_hw/camera_project/crown/kd_camera_hw.c
+index c27536681127..6fa10e24ec6b 100644
+--- a/drivers/misc/mediatek/imgsensor/src/mt8163/camera_hw/camera_project/crown/kd_camera_hw.c
++++ b/drivers/misc/mediatek/imgsensor/src/mt8163/camera_hw/camera_project/crown/kd_camera_hw.c
+@@ -94,11 +94,28 @@ static enum gating_state conf_cam_gate(enum gating_state state)
+ /* set_gate_state() : check and configure the camera gating state */
+ static enum gating_state set_gate_state(enum gating_state state)
+ {
++	int latch;
++
+ 	if (!cam_gate)
+ 		return state;
+ 
+ 	mutex_lock(&cam_gate->mutex);
+ 
++	/*
++	 * Go by the latch, not only by the last notification: a latch engaged before boot was never
++	 * announced, and on a stock gating.c a quick tap that released it was not either. Trusting
++	 * req_state alone left the camera refused after the second, and powered into a rail the latch
++	 * holds down after the first, both for the rest of the boot. gating_hw_state() counts a mute
++	 * still being turned on as GATED and returns an error for a pin it cannot read, and the error
++	 * holds the camera off too, so this can only let the camera on when the latch is released.
++	 * Read under the mutex, so a GATED notification cannot land between the read and the write.
++	 */
++	latch = gating_hw_state();
++	if (latch == UNGATED || latch == GATED)
++		cam_gate->req_state = latch;
++	else if (latch != -ENODEV)
++		cam_gate->req_state = GATED;
++
+ 	/* Make sure device is in UNGATED Mode before trying to enable CAM */
+ 	if (state == UNGATED && cam_gate->req_state != UNGATED) {
+ 		pr_info("Failed to enable CAM, GATING Mode is ON\n");
+diff --git a/include/misc/gating.h b/include/misc/gating.h
+index deb730035c24..ec9eb6825668 100644
+--- a/include/misc/gating.h
++++ b/include/misc/gating.h
+@@ -25,9 +25,10 @@ enum gating_state {
+ /* register a srcu notifier call by providing a notifier block */
+ int register_gating_state_notifier(struct notifier_block *nb);
+ 
+-/* the latch as the hardware reports it now: GATED, UNGATED, or -ENODEV before the driver is up.
+- * Reading the pin is the only truth available to another driver: the notifier says what changed,
+- * and a change that is missed is never repeated.
++/* the latch as the hardware reports it now: GATED (also while a mute is being turned on), UNGATED,
++ * -ENODEV before the driver is up, or another negative error when the pin cannot be read. Only
++ * UNGATED means the latch is released. Reading the pin is the only truth available to another
++ * driver: the notifier says what changed, and a change that is missed is never repeated.
+  */
+ int gating_hw_state(void);
+ 

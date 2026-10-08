@@ -49,14 +49,14 @@ func installRootfs(ctx context.Context, m Manifest, progress func(float32)) erro
 	if err := os.MkdirAll(rootfsDir, 0o755); err != nil {
 		return err
 	}
+	to := filepath.Join(rootfsDir, "techo5-rootfs-"+m.Version+".tar.gz")
+	sweepRootfs(to, b)
 	// Before the fetch, not after it: a tarball this size arriving on a full data partition is how the
 	// device ends up with no room for its own state either.
-	if err := room(rootfsDir, b.Size); err != nil {
+	if err := room(rootfsDir, b.Size-partial(to, b)); err != nil {
 		return err
 	}
-	to := filepath.Join(rootfsDir, "techo5-rootfs-"+m.Version+".tar.gz")
 	if err := download(ctx, b, to, progress); err != nil {
-		os.Remove(to)
 		return err
 	}
 	slog.Info("update: installing the rootfs into the other slot", "version", m.Version, "file", to)

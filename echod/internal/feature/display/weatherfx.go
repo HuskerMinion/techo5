@@ -68,12 +68,10 @@ func fxFor(cond string) skyFx {
 	return fxNone
 }
 
-// weatherNow is the condition the weather page shows: the reading, or today's forecast without one.
-func weatherNow(w home.Weather, days forecastDays) string {
-	if w.Condition != "" || len(days) == 0 {
-		return w.Condition
-	}
-	return days[0].Condition
+// weatherNow is the condition the weather page shows: the reading, or today's forecast without one,
+// as the sky looks at now (home.SkyNow).
+func weatherNow(w home.Weather, days forecastDays, now time.Time) string {
+	return home.Get().SkyNow(w, days, now)
 }
 
 // skyNow is the sky to draw for a condition, or none while the setting is off.

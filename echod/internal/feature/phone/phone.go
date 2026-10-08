@@ -17,6 +17,7 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
+	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -92,6 +93,7 @@ type Phone struct {
 	status, peer     *esphome.TextSensor
 	answer, hangup   *esphome.Button
 	dropIn, dnd      *esphome.Switch
+	ringSound        *esphome.Select
 	ringLED, callLED *led.Claim
 
 	// Changed fires when State does; listeners must not block.
@@ -135,6 +137,11 @@ func build() *Phone {
 	p.dropIn = &esphome.Switch{Base: esphome.Base{ObjectID: "intercom_drop_in", Name: "Allow Drop In", Icon: "mdi:phone-in-talk", Category: esphome.CategoryConfig}}
 	p.dnd = &esphome.Switch{Base: esphome.Base{ObjectID: "intercom_do_not_disturb", Name: "Intercom do not disturb", Icon: "mdi:phone-cancel", Category: esphome.CategoryConfig}}
 	p.dropIn.OnCommand = p.SetDropIn
+	p.ringSound = &esphome.Select{
+		Base:      esphome.Base{ObjectID: "phone_ring_sound", Name: "Call ring", Icon: "mdi:phone-ring", Category: esphome.CategoryConfig},
+		Options:   RingSounds,
+		OnCommand: p.SetRingSound,
+	}
 	p.dnd.OnCommand = p.SetDoNotDisturb
 	web.Handle(intercomPath, "", intercomOpen, p.intercomIn)
 	p.hangup.OnPress = func() { p.Hangup() }
@@ -148,12 +155,13 @@ func build() *Phone {
 func (p *Phone) Name() string { return "phone" }
 
 func (p *Phone) Entities() []esphome.Entity {
-	return []esphome.Entity{p.status, p.peer, p.answer, p.hangup, p.dropIn, p.dnd}
+	return []esphome.Entity{p.status, p.peer, p.answer, p.hangup, p.dropIn, p.dnd, p.ringSound}
 }
 
-// Restore puts the intercom's two switches back the way they were left.
+// Restore puts the intercom's two switches and the call ring back the way they were left.
 func (p *Phone) Restore(c config.Config) {
 	p.dropIn.Set(c.Home.DropIn)
+	p.ringSound.Set(RingSounds[RingSoundIndex()])
 	p.dnd.Set(c.Home.DoNotDisturb)
 }
 
@@ -166,6 +174,19 @@ func (p *Phone) SetDropIn(on bool) {
 	p.dropIn.Set(on)
 	slog.Info("intercom: drop in", "allowed", on)
 	p.Changed.Emit(p.State())
+}
+
+// SetRingSound chooses how a call rings here, from RingSounds.
+func (p *Phone) SetRingSound(v string) {
+	if !slices.Contains(RingSounds, v) {
+		return
+	}
+	if err := config.Set().Home().RingSound(v); err != nil {
+		slog.Error("phone: saving the call ring", "err", err)
+		return
+	}
+	p.ringSound.Set(v)
+	slog.Info("phone: call ring", "sound", v)
 }
 
 // SetDoNotDisturb turns intercom calls away, or lets them ring again.
@@ -292,6 +313,9 @@ func fire(event string, st State, extra ...string) {
 
 // Run keeps the account signed in, and signs in again whenever the login changes.
 func (p *Phone) Run(ctx context.Context) error {
+	// The bell is a lot of sums. Built here, off the call's path, a first call or intercom ring takes
+	// the speaker at once rather than after them.
+	safe.Go("phone: build the bell", func() { bellRing() })
 	for {
 		acct, err := loadAccount()
 		if err != nil {
@@ -473,7 +497,8 @@ func (p *Phone) incoming(d *diago.DialogServerSession) {
 	fire("ringing", p.State())
 
 	rctx, stopRing := context.WithCancel(ctx)
-	safe.Go("phone: ring", func() { ring(rctx) })
+	tone := ringTone()
+	safe.Go("phone: ring", func() { ring(rctx, tone) })
 
 	timeout := time.NewTimer(ringFor)
 	defer timeout.Stop()

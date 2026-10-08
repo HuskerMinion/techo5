@@ -36,7 +36,10 @@ func TestShowClockStylesDraw(t *testing.T) {
 			{Summary: "Soccer practice", Start: at.Add(233 * time.Minute), End: at.Add(293 * time.Minute)},
 			{Summary: "Trash day", Start: time.Date(2026, 9, 17, 0, 0, 0, 0, time.Local), End: time.Date(2026, 9, 18, 0, 0, 0, 0, time.Local), AllDay: true},
 		},
+		places: worldPlaces(nil),
 	}
+	named := facts
+	named.named = "Binary"
 	later := facts
 	later.next = append([]hass.Event{{Summary: "Doctor's appointment", Start: time.Date(2026, 9, 17, 9, 45, 0, 0, time.Local), End: time.Date(2026, 9, 17, 10, 45, 0, 0, time.Local)},
 		{Summary: "Still going", Start: at.Add(-30 * time.Minute), End: at.Add(time.Hour)}}, facts.next[:1]...)
@@ -44,6 +47,8 @@ func TestShowClockStylesDraw(t *testing.T) {
 	chips := []home.Chip{{Icon: "mdi:door", Text: "Back door open"}, {Icon: "mdi:thermometer", Text: "Upstairs 74°"}}
 	scenes := map[string]scene{
 		"":        {now: at, phase: "idle", weather: sky, style: facts},
+		"-named":  {now: at, phase: "idle", weather: sky, style: named},
+		"-24h":    {now: at, phase: "idle", weather: sky, style: facts},
 		"-timer":  {now: at, phase: "idle", weather: sky, style: facts, timers: running},
 		"-glance": {now: at, phase: "idle", weather: sky, style: facts, glance: chips},
 		"-strip": {now: at, phase: "idle", weather: sky, style: facts, strip: true, playing: true,
@@ -60,6 +65,7 @@ func TestShowClockStylesDraw(t *testing.T) {
 			t.Fatal(err)
 		}
 		for suffix, s := range scenes {
+			clock24.Store(suffix == "-24h")
 			for _, panel := range []struct {
 				name       string
 				wide, high int
@@ -81,6 +87,7 @@ func TestShowClockStylesDraw(t *testing.T) {
 			}
 		}
 	}
+	clock24.Store(false)
 }
 
 func TestClockWords(t *testing.T) {

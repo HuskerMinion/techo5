@@ -1,5 +1,7 @@
 package config
 
+import "slices"
+
 // Screen is the panel: whether it is lit, how brightly in percent, and whether the room's light
 // is allowed to dim it below that. Only the Echo Show has one; on the Dot nothing reads this.
 type Screen struct {
@@ -54,9 +56,13 @@ type Screen struct {
 	DateColor     string `json:"date_color,omitempty"`
 
 	// ClockStyle is how the home screen's clock looks all day: empty for the classic face, or "big",
-	// "flip", "led", "analog", "words", "sun" or "dashboard" (display/clock_style.go). The night clock
-	// keeps its own look.
+	// "flip", "led", "analog", "words", "sun", "dashboard", "binary", "world", "agenda" or "glow"
+	// (display/clock_style.go). The night clock keeps its own look.
 	ClockStyle string `json:"clock_style,omitempty"`
+
+	// WorldClocks are the World style's places, as time zone names ("Europe/London"); none for its
+	// own three.
+	WorldClocks []string `json:"world_clocks,omitempty"`
 
 	// NightByHA leaves the night to Home Assistant: the hours are not followed, and it is night only
 	// while the Night mode switch is on. Night keeps the hours, for choosing them again.
@@ -92,6 +98,15 @@ type Screen struct {
 	// "nl" — empty for all of them. It has nothing to do with what the assistant understands or
 	// says, which is Home Assistant's pipeline; it decides only which pages a sentence brings up.
 	Language string `json:"language,omitempty"`
+
+	// ClockTap is what a tap on the clock does: empty starts a voice turn, as it always has,
+	// "dashboard" puts the dashboard up, "deck" the deck (Show), and "nothing" leaves it, for a panel
+	// that is talked to.
+	ClockTap string `json:"clock_tap,omitempty"`
+
+	// NoStyleSwipe stops a swipe left or right across the clock from turning its style (on unless
+	// this is set; display/style_swipe.go).
+	NoStyleSwipe bool `json:"no_style_swipe,omitempty"`
 }
 
 // DefaultTheme is the palette a new device comes up in.
@@ -185,6 +200,11 @@ func (w ScreenWriter) ClockStyle(v string) error {
 	return w.st.Update(func(c *Config) { c.Screen.ClockStyle = v })
 }
 
+func (w ScreenWriter) WorldClocks(v []string) error {
+	v = slices.Clone(v)
+	return w.st.Update(func(c *Config) { c.Screen.WorldClocks = v })
+}
+
 func (w ScreenWriter) DateColor(v string) error {
 	return w.st.Update(func(c *Config) { c.Screen.DateColor = v })
 }
@@ -205,6 +225,10 @@ func (w ScreenWriter) MuteRingSubtle(v bool) error {
 	return w.st.Update(func(c *Config) { c.Screen.MuteRingSubtle = v })
 }
 
+func (w ScreenWriter) NoStyleSwipe(v bool) error {
+	return w.st.Update(func(c *Config) { c.Screen.NoStyleSwipe = v })
+}
+
 func (w ScreenWriter) CallButton(v bool) error {
 	return w.st.Update(func(c *Config) { c.Screen.CallButton = v })
 }
@@ -215,6 +239,10 @@ func (w ScreenWriter) MusicStrip(seconds int) error {
 
 func (w ScreenWriter) Language(v string) error {
 	return w.st.Update(func(c *Config) { c.Screen.Language = v })
+}
+
+func (w ScreenWriter) ClockTap(v string) error {
+	return w.st.Update(func(c *Config) { c.Screen.ClockTap = v })
 }
 
 // Custom saves a palette and makes it the theme.

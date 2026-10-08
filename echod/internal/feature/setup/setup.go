@@ -265,11 +265,15 @@ func (f *Feature) button(e buttons.Event) {
 
 // press lets in the browser that is waiting, if one is. It answers whoever was already asking rather
 // than the next to ask: a press cannot be saved up.
-func (f *Feature) press() bool {
+func (f *Feature) press() bool { return f.pressFor("") }
+
+// pressFor is press for the browser asking (Asking) when the press began, or for whoever is asking
+// for "": a press that took a while, a PIN typed first, lets in only the browser it was made for.
+func (f *Feature) pressFor(asking string) bool {
 	now := time.Now()
 	f.mu.Lock()
 	defer f.mu.Unlock()
-	if !f.on(now) || f.waiting == "" || now.After(f.waitingEnd) {
+	if !f.on(now) || f.waiting == "" || now.After(f.waitingEnd) || (asking != "" && f.waiting != asking) {
 		return false
 	}
 	if len(f.live) >= sessions {
@@ -297,6 +301,29 @@ func (f *Feature) Answer(allow bool) bool {
 	if allow {
 		return f.press()
 	}
+	return f.refuse()
+}
+
+// Asking names the browser asking to be let in now, or "" when none is: to answer it later with
+// AllowAsking.
+func (f *Feature) Asking() string {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if f.waiting == "" || time.Now().After(f.waitingEnd) {
+		return ""
+	}
+	return f.waiting
+}
+
+// AllowAsking lets in the browser Asking named, if it is still the one asking.
+func (f *Feature) AllowAsking(asking string) bool {
+	if asking == "" {
+		return false
+	}
+	return f.pressFor(asking)
+}
+
+func (f *Feature) refuse() bool {
 	f.mu.Lock()
 	had := f.waiting != ""
 	f.waiting, f.waitingEnd = "", time.Time{}

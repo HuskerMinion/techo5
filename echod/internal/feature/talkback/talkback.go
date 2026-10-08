@@ -55,6 +55,11 @@ const (
 
 	// maxError is the most of a failure's words the camera page shows: they can come from the camera.
 	maxError = 100
+
+	// talkLevel is what the microphones are turned down by for a talk, 12 dB under what recognition
+	// is leveled to. A doorbell's small speaker overdrives at that level and its own microphone takes
+	// it back in, so the visitor hears a loud, looping voice (#60).
+	talkLevel = 0.25
 )
 
 // check is how often a running talk looks at what ends it besides the camera, on top of looking
@@ -347,7 +352,7 @@ func (f *Feature) talk(ctx context.Context, gen int, entity string) (err error) 
 			if !ok {
 				return errors.New("the microphones stopped")
 			}
-			if err := s.Write(d.Run(fr)); err != nil {
+			if err := s.Write(d.Run(quieter(fr))); err != nil {
 				return err
 			}
 		case <-f.poke:
@@ -371,6 +376,16 @@ func (f *Feature) talk(ctx context.Context, gen int, entity string) (err error) 
 			f.Changed.Emit(struct{}{}) // the countdown
 		}
 	}
+}
+
+// quieter is a frame turned down to talkLevel, in a new slice: the one heard is shared with every
+// other listener.
+func quieter(frame []int16) []int16 {
+	out := make([]int16, len(frame))
+	for i, v := range frame {
+		out[i] = int16(float32(v) * talkLevel)
+	}
+	return out
 }
 
 // duckRoom turns the background down, or lets it back up; a variable for the tests, which have no

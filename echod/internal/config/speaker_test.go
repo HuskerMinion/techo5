@@ -8,7 +8,7 @@ import (
 
 // A device that could not tune wrote the settled false back to itself, so every unit that ever ran
 // such a build carries "asp": false whether or not anybody chose it. Once the tuning works, those
-// units have to come up tuned rather than staying off for ever.
+// units have to come up tuned rather than staying off forever.
 func TestTheTuningComesBackOnByItselfUnlessSomebodyTurnedItOff(t *testing.T) {
 	// What every existing unit looks like: false was written by the settling, never chosen.
 	settled := Speaker{ASP: false}

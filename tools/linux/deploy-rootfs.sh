@@ -91,6 +91,12 @@ for c in fbprobe audioprobe rebootto btbridge; do cp "$ROOT/bin/$c-arm" "$STAGE/
 # The Spotify Connect receiver (librespot, Rust) is built separately too (tools/linux/build-librespot.sh in WSL).
 # The Spot's daemon offers neither receiver (feature/streaming), so its image carries neither.
 [ "$BUILD_TAGS" != spot ] && [ -e "$ROOT/bin/techo5-librespot-arm" ] && cp "$ROOT/bin/techo5-librespot-arm" "$STAGE/bin/techo5-librespot"
+# The video player's decoder (ffmpeg, C, tools/linux/build-ffmpeg.sh in WSL), for the Show's and the Spot's video
+# player (feature/video). Not optional: an image without it offers Video and plays nothing, so a build that
+# lacks it stops here rather than ship that. Its SHA-256 is said, to check against the one build-ffmpeg.sh printed.
+[ -e "$ROOT/bin/techo5-ffmpeg-arm" ] || { echo "bin/techo5-ffmpeg-arm is missing: build it with tools/linux/build-ffmpeg.sh (in WSL)" >&2; exit 1; }
+cp "$ROOT/bin/techo5-ffmpeg-arm" "$STAGE/bin/techo5-ffmpeg"
+echo "== ffmpeg: sha256 $(sha256sum "$ROOT/bin/techo5-ffmpeg-arm" | cut -d' ' -f1)"
 cp "$ROOT/tools/linux/slotctl" "$ROOT/tools/linux/techo5-lib.sh" "$ROOT/tools/linux/mkrootfs.sh" "$ROOT/tools/linux/packages-rootfs.txt" "$STAGE/tools/"
 [ "$BUILD_TAGS" = spot ] && sed -i '/^shairport-sync/d' "$STAGE/tools/packages-rootfs.txt"
 cp -r "$ROOT/tools/linux/rootfs/." "$STAGE/overlay/"

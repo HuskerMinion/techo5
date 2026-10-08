@@ -85,15 +85,31 @@ func (a *API) resumeAdoption(psk *esphome.PSK) *esphome.PSK {
 
 func (a *API) shutAdoptionAt(until time.Time) {
 	time.AfterFunc(time.Until(until), func() {
+		// Under a.mu, as keySet writes the key: a key set by a Home Assistant in the same instant must
+		// not be written over by the window's own, or the device would serve one and keep the other.
+		a.mu.Lock()
 		if _, err := os.Stat(keyFile); err == nil {
+			a.mu.Unlock()
 			return // a Home Assistant set its key in the window
+		}
+		// A window opened again since has a later end, and this timer is not its to shut: without this
+		// a first window's timer shut the second one early, with a random key.
+		if t, ok := readAdopt(); ok && t.Unix() != until.Unix() {
+			a.mu.Unlock()
+			return
 		}
 		k, err := shutAdoption()
 		if err != nil {
+			a.mu.Unlock()
 			slog.Error("api: shutting the window a Home Assistant could add this device in", "err", err)
 			return
 		}
-		a.serveWith(k)
+		// Queued under the same lock, so a key a Home Assistant sets on its last moment's connection
+		// (keySet, which clears the queue) wins over the window's: the device then serves the key it
+		// keeps.
+		a.nextPSK = k
+		a.mu.Unlock()
+		a.Reconnect()
 	})
 }
 
@@ -114,21 +130,34 @@ func shutAdoption() (*esphome.PSK, error) {
 	return &k, nil
 }
 
-// keySet is a Home Assistant setting the device's key. It is kept, and a device that was serving
-// with no key serves with it from the next connection on: without that, the zero key would go on
-// letting anybody in until the next restart.
+// keySet is a Home Assistant setting the device's key. It is kept, and is the key in force from now
+// on: the server that took it serves with it, and so does every server after (Run makes a new one each
+// time it listens). A device that was serving with no key is reconnected onto it: without that, the
+// zero key would go on letting anybody in until the next restart.
 func (a *API) keySet(k esphome.PSK) error {
+	a.mu.Lock()
 	if err := writePSK(keyFile, k); err != nil {
+		a.mu.Unlock()
 		return err
 	}
 	_ = os.Remove(adoptPath)
-	a.mu.Lock()
+	// A key queued by the window's timer a moment ago is not the one kept now: this one is.
+	a.nextPSK = nil
 	unkeyed := a.unkeyed
+	a.useKey(&k)
 	a.mu.Unlock()
 	if unkeyed {
 		slog.Info("api: a Home Assistant added this device and set its key")
-		// After the answer has gone back: the reconnect closes the connection it is going out on.
-		time.AfterFunc(2*time.Second, func() { a.serveWith(&k) })
+		// After the answer has gone back: the reconnect closes the connection it is going out on. It
+		// serves the key in force when it runs, not this one: a second key set in the two seconds
+		// between is the one saved, and serving this one would leave the device serving one key and
+		// keeping another.
+		time.AfterFunc(2*time.Second, func() {
+			a.mu.Lock()
+			now := a.key
+			a.mu.Unlock()
+			a.serveWith(now)
+		})
 	}
 	return nil
 }
@@ -157,7 +186,7 @@ func (a *API) takeNextPSK() *esphome.PSK {
 	k := a.nextPSK
 	a.nextPSK = nil
 	if k != nil {
-		a.unkeyed = k.IsZero()
+		a.useKey(k)
 	}
 	return k
 }

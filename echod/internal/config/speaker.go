@@ -30,7 +30,7 @@ type Speaker struct {
 
 	// ASPChosen is whether anybody ever set ASP themselves. Without it a saved false cannot be told
 	// from a device that was never able to tune: every unit that ran a build whose tuning would not
-	// load had false written back to it by the settling below, and would stay untuned for ever after
+	// load had false written back to it by the settling below, and would stay untuned forever after
 	// the tuning started working. Unset means the default applies.
 	ASPChosen bool `json:"asp_chosen,omitempty"`
 

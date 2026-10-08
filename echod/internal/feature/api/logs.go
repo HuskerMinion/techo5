@@ -26,7 +26,7 @@ func (a *API) pipeLogs(ctx context.Context) {
 		// Until something is listening there is nowhere to put a line, so they are left in the buffer
 		// rather than drained into nothing. What waits there is the most recent of them, which is how
 		// Home Assistant gets the log from before it connected — including the boot.
-		if !a.srv.LogsSubscribed() {
+		if !a.server().LogsSubscribed() {
 			select {
 			case <-ctx.Done():
 				return
@@ -40,10 +40,10 @@ func (a *API) pipeLogs(ctx context.Context) {
 			return
 		case l := <-lines:
 			if l.Dropped > 0 {
-				a.srv.Log(proto.LogLevel_LOG_LEVEL_WARN,
+				a.server().Log(proto.LogLevel_LOG_LEVEL_WARN,
 					fmt.Sprintf("%d log lines dropped", l.Dropped))
 			}
-			a.srv.Log(logLevel(l.Level), l.Text)
+			a.server().Log(logLevel(l.Level), l.Text)
 		}
 	}
 }

@@ -117,12 +117,15 @@ Linux kernel, https://git.kernel.org (GPL-2.0)
       docs/dumps/cronos-techo5-kernel-4.9.337-bt.config (as TECHO5 builds it);
       docs/dumps/cronos-twrp-kernel-4.9.77.config is the TWRP kernel's, for comparison. All three are
       derived from that GPL-2.0 source and are GPL-2.0 themselves.
-    - Changes: tools/linux/patches/checkers-0001-mic-enable-on-capture.patch, applied for the 1st gen
-      build. It changes drivers/misc/gating.c, include/misc/gating.h and
-      sound/soc/mediatek/mt_soc_audio_8163_amzn/mt_soc_machine.c so that releasing the mute latch
-      brings the microphone path back, and is a modification of that GPL-2.0 source, so it is
-      GPL-2.0 too. The appended device trees then have amzn,mic-downmix removed (tools/linux/
-      patch-dtb.py).
+    - Changes: the patches in tools/linux/patches, applied for the 1st gen Show 5 and Show 8 builds.
+      checkers-0001-mic-enable-on-capture.patch changes drivers/misc/gating.c, include/misc/gating.h
+      and sound/soc/mediatek/mt_soc_audio_8163_amzn/mt_soc_machine.c so that releasing the mute
+      latch brings the microphone path back; checkers-0002-camera-follows-the-latch.patch changes
+      drivers/misc/gating.c and the checkers and crown kd_camera_hw.c so the camera follows the
+      latch; checkers-0003-mute-button-follows-a-short-press.patch changes drivers/misc/gating.c so
+      a short press that releases the latch is not missed. They are modifications of that GPL-2.0
+      source, so they are GPL-2.0 too. The appended device trees then have amzn,mic-downmix removed
+      (tools/linux/patch-dtb.py).
     - The script that does all of it is tools/linux/build-kernel.sh, and docs/building.md is how to
       run it. A rebuild reproduces the shipped kernel.
 

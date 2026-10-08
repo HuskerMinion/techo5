@@ -7,6 +7,7 @@ import (
 	"image/color"
 	"image/draw"
 	"math"
+	"strings"
 
 	xdraw "golang.org/x/image/draw"
 
@@ -25,6 +26,7 @@ const (
 	dashGap     = 12  // between sections, and between blocks and tiles
 	sectionMinW = 360 // a column is at least this wide, so a Show 5 has two
 	tileH       = 84
+	tileWide    = 220 // a usual tile's width, two abreast in a Show section, for scaling a bigger one
 	headingH    = 46
 	rowH        = 52
 	cardPad     = 14
@@ -49,9 +51,12 @@ func (r *paint) palette(t dashboard.Theme) dashPal {
 }
 
 // dashPage draws a drawn dashboard into area, scrolled down by scroll: the whole panel on the Show,
-// the part of the Spot's round one a column fits in.
-func (r *paint) dashPage(v dashboard.Drawn, scroll int, adj dashAdjusting, area image.Rectangle) {
+// the part of the Spot's round one a column fits in. size is the Dashboard tiles setting: "" for the
+// usual size, "large" for taller tiles across the whole width, and "fill" for a view of a few tiles laid out
+// over the whole of area (fillGrid), which is large for any other view.
+func (r *paint) dashPage(v dashboard.Drawn, scroll int, adj dashAdjusting, area image.Rectangle, size string) {
 	pal := r.palette(v.Theme)
+	r.bigTiles = size == "large" || size == "fill"
 	draw.Draw(r.dst, r.dst.Rect, image.NewUniform(pal.bg), image.Point{}, draw.Src)
 	fc := r.faces()
 	if len(v.Sections) == 0 {
@@ -69,9 +74,20 @@ func (r *paint) dashPage(v dashboard.Drawn, scroll int, adj dashAdjusting, area 
 		return
 	}
 
+	if size == "fill" {
+		if few, ok := fewTiles(v); ok {
+			r.fillGrid(few, area, pal, adj)
+			return
+		}
+	}
+
 	side, gap := r.s(dashSide), r.s(dashGap)
 	width := area.Dx() - 2*side
 	cols := max(1, (width+gap)/(r.s(sectionMinW)+gap))
+	if r.bigTiles {
+		// Large: no empty column beside a lone section, so its tiles take the whole width.
+		cols = max(1, min(cols, len(v.Sections)))
+	}
 	colW := (width - gap*(cols-1)) / cols
 	heights := make([]int, cols)
 	var tiles []dashTile
@@ -148,13 +164,16 @@ func (r *paint) block(b dashboard.Block, x, y, w int, pal dashPal, adj dashAdjus
 	case len(b.Tiles) > 0:
 		gap := r.s(dashGap)
 		// Two tiles abreast where there is room for two, as a section has on the Show; one in the
-		// Spot's narrow column.
+		// Spot's narrow column. Set large, they are taller, and as wide as the section lets them.
 		per := 1
 		if w >= r.s(380) {
 			per = 2
 		}
 		tw := (w - gap*(per-1)) / per
 		th := r.s(tileH)
+		if r.bigTiles {
+			th = r.s(tileH) * 3 / 2
+		}
 		rows := (len(b.Tiles) + per - 1) / per
 		for i, t := range b.Tiles {
 			box := image.Rect(x+(i%per)*(tw+gap), y+(i/per)*(th+gap), x+(i%per)*(tw+gap)+tw, y+(i/per)*(th+gap)+th)
@@ -164,6 +183,26 @@ func (r *paint) block(b dashboard.Block, x, y, w int, pal dashPal, adj dashAdjus
 			}
 		}
 		return rows*th + (rows-1)*gap
+
+	case len(b.Pictures) > 0:
+		// A gallery: as many abreast as the grid asks, up to three, one in a narrow column. Each
+		// picture fills a 4:3 frame and, with a tap_action, is a tap of its own.
+		gap := r.s(dashGap)
+		per := min(max(b.Columns, 1), 3)
+		if w < r.s(380) {
+			per = 1
+		}
+		pw := (w - gap*(per-1)) / per
+		ph := pw * 3 / 4
+		rows := (len(b.Pictures) + per - 1) / per
+		for i, p := range b.Pictures {
+			box := image.Rect(x+(i%per)*(pw+gap), y+(i/per)*(ph+gap), x+(i%per)*(pw+gap)+pw, y+(i/per)*(ph+gap)+ph)
+			if r.visible(box.Min.Y, box.Max.Y) {
+				r.pictureCard(box, p, pal)
+				r.zone(tiles, box, dashboard.Tile{Tap: p.Tap})
+			}
+		}
+		return rows*ph + (rows-1)*gap
 
 	case len(b.Rows) > 0 || (b.Title != "" && len(b.Text) == 0 && b.Graph == nil && b.Gauge == nil && b.Picture == nil):
 		pad := r.s(cardPad)
@@ -237,7 +276,9 @@ func (r *paint) block(b dashboard.Block, x, y, w int, pal dashPal, adj dashAdjus
 		}
 		h = min(h, r.s(320))
 		if r.visible(y, y+h) {
-			r.pictureCard(image.Rect(x, y, x+w, y+h), *b.Picture, pal)
+			box := image.Rect(x, y, x+w, y+h)
+			r.pictureCard(box, *b.Picture, pal)
+			r.zone(tiles, box, dashboard.Tile{Tap: b.Picture.Tap})
 		}
 		return h
 	}
@@ -246,8 +287,9 @@ func (r *paint) block(b dashboard.Block, x, y, w int, pal dashPal, adj dashAdjus
 
 // zone remembers where a tile or a row is, for a tap or a slide to find it.
 func (r *paint) zone(tiles *[]dashTile, box image.Rectangle, t dashboard.Tile) {
-	if t.Tap != nil || t.Adjust != nil {
-		*tiles = append(*tiles, dashTile{r: box, action: t.Tap, adjust: t.Adjust})
+	// A media player is something to press on even with nothing to tap: its sheet (media_sheet.go).
+	if t.Tap != nil || t.Adjust != nil || strings.HasPrefix(t.Entity, "media_player.") {
+		*tiles = append(*tiles, dashTile{r: box, action: t.Tap, adjust: t.Adjust, entity: t.Entity})
 	}
 }
 
@@ -291,8 +333,16 @@ func (r *paint) tile(b image.Rectangle, t dashboard.Tile, pal dashPal, adj dashA
 		}
 	}
 
-	pad := r.s(12)
-	badge := r.s(44)
+	// A tile bigger than the usual one, set large or filling the screen, scales its badge and words
+	// with it: by its height, and no further than its width leaves room for the name.
+	k := min(float64(b.Dy())/float64(r.s(tileH)), float64(b.Dx())/float64(r.s(tileWide)), 2.5)
+	big := k > 1.05
+	if !big {
+		k = 1
+	}
+	scale := func(n int) int { return int(float64(n) * k) }
+	pad := r.s(scale(12))
+	badge := r.s(scale(44))
 	bx, by := b.Min.X+pad, b.Min.Y+(b.Dy()-badge)/2
 	ring := image.Rect(bx, by, bx+badge, by+badge)
 	ic := pal.sub
@@ -306,13 +356,17 @@ func (r *paint) tile(b image.Rectangle, t dashboard.Tile, pal dashPal, adj dashA
 	default:
 		r.roundFill(ring, float64(badge)/2, lerp(pal.card, pal.sub, 0.14), lerp(pal.card, pal.sub, 0.14))
 	}
-	isz := 26
+	isz := scale(26)
 	r.mdiIcon(t.Icon, bx+(badge-r.s(isz))/2, by+(badge-r.s(isz))/2, isz, ic)
 
-	x := bx + badge + r.s(12)
+	name, value := fc.label, fc.sub
+	if big {
+		name, value = r.textFace(false, scale(29)), r.textFace(false, scale(21))
+	}
+	x := bx + badge + r.s(scale(12))
 	room := b.Max.X - pad - x
-	r.text(fc.label, r.fit(fc.label, t.Name, room), x, b.Min.Y+b.Dy()/2-r.s(3), pal.text)
-	r.text(fc.sub, r.fit(fc.sub, t.Value, room), x, b.Min.Y+b.Dy()/2+r.s(24), pal.sub)
+	r.text(name, r.fit(name, t.Name, room), x, b.Min.Y+b.Dy()/2-r.s(scale(3)), pal.text)
+	r.text(value, r.fit(value, t.Value, room), x, b.Min.Y+b.Dy()/2+r.s(scale(24)), pal.sub)
 }
 
 // row draws one line of an entities card: icon, name, and at the end a switch or the state.
@@ -472,7 +526,7 @@ func (r *paint) pictureCard(b image.Rectangle, p dashboard.Picture, pal dashPal)
 	r.roundFill(b, pal.rad, pal.card, pal.card)
 	if p.Image != nil {
 		inner := b.Inset(r.s(2))
-		xdraw.ApproxBiLinear.Scale(r.dst, inner, p.Image, p.Image.Bounds(), draw.Src, nil)
+		xdraw.ApproxBiLinear.Scale(r.dst, inner, p.Image, cover(p.Image.Bounds(), inner), draw.Src, nil)
 	} else {
 		msg := "Loading the picture…"
 		if p.TooLarge {
@@ -485,4 +539,23 @@ func (r *paint) pictureCard(b image.Rectangle, p dashboard.Picture, pal dashPal)
 		draw.Draw(r.dst, band, image.NewUniform(color.RGBA{0, 0, 0, 140}), image.Point{}, draw.Over)
 		r.text(fc.label, r.fit(fc.label, p.Name, b.Dx()-2*r.s(cardPad)), b.Min.X+r.s(cardPad), b.Max.Y-r.s(12), color.RGBA{255, 255, 255, 255})
 	}
+}
+
+// cover is the part src of a picture that has the proportions of the frame dst, centered: the
+// picture fills the frame, and what does not fit is cut off at the edges rather than squeezed.
+func cover(src, dst image.Rectangle) image.Rectangle {
+	sw, sh, dw, dh := src.Dx(), src.Dy(), dst.Dx(), dst.Dy()
+	if sw <= 0 || sh <= 0 || dw <= 0 || dh <= 0 {
+		return src
+	}
+	// At least a pixel: a picture far narrower or flatter than its frame would otherwise come to
+	// nothing, and draw nothing.
+	if sw*dh > sh*dw {
+		w := max(1, sh*dw/dh)
+		x := src.Min.X + (sw-w)/2
+		return image.Rect(x, src.Min.Y, x+w, src.Max.Y)
+	}
+	h := max(1, sw*dh/dw)
+	y := src.Min.Y + (sh-h)/2
+	return image.Rect(src.Min.X, y, src.Max.X, y+h)
 }

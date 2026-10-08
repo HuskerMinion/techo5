@@ -81,8 +81,30 @@ func (s *Sensor) Start(context.Context) error {
 		return fmt.Errorf("ambient: %w", err)
 	}
 	s.dev = dev
-	slog.Info("light sensor on", "device", dev.Path, "period", period)
+	if lux, ok := s.seed(dev.Abs); ok {
+		slog.Info("light sensor on", "device", dev.Path, "period", period, "lux", lux)
+	} else {
+		slog.Info("light sensor on", "device", dev.Path, "period", period)
+	}
 	return nil
+}
+
+// seed starts from the value the input device keeps for ABS_X. A steady room sends nothing, so after
+// echod restarted the room read as unknown until the light changed, and auto-brightness had nothing
+// to go on. The kernel holds the last value the driver reported. Before the driver's first sample
+// after a boot that is zero, a dark room, and the first sample of a lit one differs from it, so it is
+// sent and replaces it.
+func (s *Sensor) seed(abs func(code uint16) (input.AbsInfo, error)) (float64, bool) {
+	info, err := abs(0)
+	if err != nil {
+		slog.Debug("light sensor has no value to start from", "err", err)
+		return 0, false
+	}
+	lux := float64(info.Value)
+	s.mu.Lock()
+	s.last, s.at = lux, time.Now()
+	s.mu.Unlock()
+	return lux, true
 }
 
 func (s *Sensor) Close() error {

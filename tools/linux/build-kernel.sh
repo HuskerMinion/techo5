@@ -19,9 +19,9 @@
 # of *.patch applied for this build and taken out again afterwards whatever happens; the release
 # string is then pinned as KPATCHED does, since the vendor modules check it).
 #
-# The Show 8 wants PATCHES=tools/linux/patches, whose one patch puts the microphone pin back when a
-# capture stream opens. Its name says checkers; the code it touches (drivers/misc/gating.c,
-# include/misc/gating.h, mt_soc_machine.c) is board-generic and the Show 8 has the same mute latch.
+# The 1st gen Show 5 and the Show 8 want PATCHES=tools/linux/patches: the microphone pin back when a
+# capture stream opens, the camera following the mute latch, and the button following a short press
+# (docs/building.md). Their names say checkers; the Show 8 has the same mute latch.
 #
 # Afterwards: delete amzn,mic-downmix from the appended device trees the way
 # patch-dtb.py does, then build-image.sh KERNEL=<Image.gz-dtb> (see README.md).
@@ -40,6 +40,10 @@ while [ $# -gt 0 ]; do
 	*) echo "unknown argument: $1" >&2; exit 1;;
 	esac
 done
+
+# Both are read after the cd into the kernel tree, so a path relative to here is made absolute first.
+[ -z "$PATCHES" ] || PATCHES=$(realpath "$PATCHES")
+[ -z "$OUT" ] || OUT=$(realpath -m "$OUT")
 
 cd "$KSRC"
 if [ -n "$PATCHES" ]; then

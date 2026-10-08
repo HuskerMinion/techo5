@@ -43,6 +43,17 @@ func (r *renderer) nowPlaying(s scene) {
 		headline, sub = rd.Title, rd.Artist
 	}
 	r.text(r.small, label, r.margin, r.s(150), amber)
+	if s.hasLyric && rd.Title != "" {
+		r.lyricLines(s.lyric, rd)
+	} else {
+		r.songLines(headline, sub)
+	}
+
+	r.transportRow(s)
+}
+
+// songLines is the middle of the page without words: the song (or the station) large, who plays it under.
+func (r *renderer) songLines(headline, sub string) {
 	face := r.title
 	if r.width(face, headline) > r.w-2*r.margin {
 		face = r.body
@@ -58,7 +69,43 @@ func (r *renderer) nowPlaying(s scene) {
 	if sub != "" {
 		r.text(r.body, sub, r.margin, y+r.s(6), dim)
 	}
+}
 
+// lyricLines is the middle of the page with the words: the song and who plays it on one line, the line
+// being sung large under it, and the next one dim. Before the first line and in a long gap the large
+// line is a mark, so the page does not look stuck.
+func (r *renderer) lyricLines(l home.Lyric, rd home.Radio) {
+	width := r.w - 2*r.margin
+	song := rd.Title
+	if rd.Artist != "" {
+		song += "  ·  " + rd.Artist
+	}
+	r.text(r.body, r.clipTo(r.body, song, width), r.margin, r.s(200), dim)
+
+	line := l.Line
+	color := cream
+	if line == "" {
+		line, color = "· · ·", dim
+	}
+	face := r.title
+	if r.width(face, line) > width && len(r.wrap(face, line, width)) > 2 {
+		face = r.body
+	}
+	y := r.s(268)
+	for i, part := range r.wrap(face, line, width) {
+		if i == 2 {
+			break
+		}
+		r.text(face, part, r.margin, y, color)
+		y += r.s(54)
+	}
+	if l.Next != "" {
+		r.text(r.body, r.clipTo(r.body, l.Next, width), r.margin, max(y, r.s(330))+r.s(6), dim)
+	}
+}
+
+// transportRow is the foot of the page: the rule, back, play or pause, forward, Done and the star.
+func (r *renderer) transportRow(s scene) {
 	// A rule, then the three buttons: back, play or pause, and forward. What they do belongs to whoever
 	// is playing, so a stream Music Assistant is carrying is paused and skipped by the server.
 	draw.Draw(r.dst, image.Rect(r.margin, r.h-r.s(84), r.w-r.margin, r.h-r.s(81)), image.NewUniform(ember), image.Point{}, draw.Src)

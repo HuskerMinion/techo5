@@ -102,9 +102,10 @@ Android, with one Go daemon, `echod`, doing everything the device does:
   kernel.
 - **Slots**: `slotctl status`, `slotctl install <tar.gz>`, `slotctl switch <a|b>`; a trial slot
   commits after five minutes of a healthy daemon.
-- **Release**: `tools/release.ps1 -Version vX.Y.Z -Notes "..." -Rootfs <tarball> [-Boot <image>]` builds the
+- **Release**: `tools/release.ps1 -Version vX.Y.Z -Notes "..." -Rootfs <tarball> [-Boot <image>] -Agents <dir>` builds the
   daemon, writes the manifest, and publishes the release Home Assistant will offer. `-Boot` attaches a
   boot image built with `build-image.sh --no-key` for new units, and refuses one that carries a key.
+  `-Agents` is the CI run's TECHO5 Deck agent files (`-NoAgents` to release without them).
 
 ## Known gaps
 

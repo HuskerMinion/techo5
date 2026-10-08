@@ -2,24 +2,16 @@ package update
 
 import (
 	"context"
-	"crypto/sha256"
-	"encoding/hex"
 	"errors"
 	"fmt"
 	"io"
 	"log/slog"
-	"net/http"
 	"os"
 	"path/filepath"
 	"sync"
-	"time"
 
 	"github.com/HuskerMinion/techo5/echod/internal/layout"
 )
-
-// downloadTimeout bounds the fetch. Sixteen megabytes over a satellite's wifi is not quick, and a stalled
-// download should give up rather than hold the device in an installing state for ever.
-const downloadTimeout = 10 * time.Minute
 
 // installing is held for the whole of an install, so a second request while one is running is refused
 // rather than racing it onto the same file.
@@ -69,12 +61,15 @@ func Install(ctx context.Context, m Manifest, progress func(float32)) error {
 
 	staged := filepath.Join(layout.StateDir, "echod.incoming")
 	defer os.Remove(staged)
+	// What an earlier try fetched of another release only takes up room, and has to go before the
+	// room is measured, or a nearly full partition refuses every release after it.
+	dropParts(staged+".*.part", partPath(staged, b))
 
 	// Both partitions are asked for the room before anything is fetched. The download lands on the
 	// state partition and is then copied into /system beside the binary it replaces, so the space has
 	// to be there twice over — and finding that out after sixteen megabytes have been written is
 	// finding it out with the device's storage already full.
-	if err := room(layout.StateDir, b.Size); err != nil {
+	if err := room(layout.StateDir, b.Size-partial(staged, b)); err != nil {
 		return err
 	}
 	if err := room(mount, b.Size); err != nil {
@@ -102,58 +97,6 @@ func Install(ctx context.Context, m Manifest, progress func(float32)) error {
 func notOlder(offered, running string) error {
 	if rank, ok := compareVersions(offered, running); ok && rank < 0 {
 		return fmt.Errorf("update: %s is older than the running %s, and an older release is not installed over a newer one", offered, running)
-	}
-	return nil
-}
-
-// download fetches the binary and proves it before it is allowed near /system. The hash is taken as the
-// bytes go past rather than by reading the file back, so nothing has to hold sixteen megabytes in memory
-// on a device with half a gigabyte.
-func download(ctx context.Context, b Binary, to string, progress func(float32)) error {
-	ctx, cancel := context.WithTimeout(ctx, downloadTimeout)
-	defer cancel()
-
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, b.URL, nil)
-	if err != nil {
-		return err
-	}
-	resp, err := client.Do(req)
-	if err != nil {
-		return fmt.Errorf("update: fetching %s: %w", b.URL, err)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("update: fetching %s: %s", b.URL, resp.Status)
-	}
-
-	f, err := os.OpenFile(to, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, 0o755)
-	if err != nil {
-		return err
-	}
-	defer f.Close()
-
-	// One byte past what was offered is all that is read. The size in the manifest is what the room
-	// check was made against, and a server that keeps sending after it — a mirror serving the wrong
-	// file, or something aiming a stream of zeros at a device with a couple of gigabytes of flash —
-	// would otherwise write until the partition was full. The extra byte is what makes the length
-	// check below say "more than offered" rather than silently accepting a truncation.
-	sum := sha256.New()
-	written, err := io.Copy(io.MultiWriter(f, sum), &counter{
-		from: io.LimitReader(resp.Body, b.Size+1), size: b.Size, report: progress,
-	})
-	if err != nil {
-		return fmt.Errorf("update: downloading %s: %w", b.URL, err)
-	}
-	if err := f.Sync(); err != nil {
-		return err
-	}
-
-	if written != b.Size {
-		return fmt.Errorf("update: %d bytes, offered as %d", written, b.Size)
-	}
-	if got := hex.EncodeToString(sum.Sum(nil)); got != b.SHA256 {
-		return fmt.Errorf("update: hash %s, offered as %s", got, b.SHA256)
 	}
 	return nil
 }
@@ -214,32 +157,6 @@ func copyTo(from, to string) error {
 		return fmt.Errorf("update: writing %s: %w", to, err)
 	}
 	return dst.Sync()
-}
-
-// counter reports how far a download has got, as a fraction.
-type counter struct {
-	from   io.Reader
-	size   int64
-	report func(float32)
-
-	read int64
-	last float32
-}
-
-func (c *counter) Read(p []byte) (int, error) {
-	n, err := c.from.Read(p)
-	c.read += int64(n)
-
-	if c.report == nil || c.size <= 0 {
-		return n, err
-	}
-
-	// Only when it has moved a percent, since every update is a message to Home Assistant.
-	if at := float32(c.read) / float32(c.size); at-c.last >= 0.01 {
-		c.last = at
-		c.report(at)
-	}
-	return n, err
 }
 
 // Serves reports whether this device could install what the manifest offers: a rootfs for its

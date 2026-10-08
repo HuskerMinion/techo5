@@ -346,6 +346,7 @@ func (p *Phone) intercomIn(w http.ResponseWriter, r *http.Request) {
 	fire("ringing", p.State())
 
 	rctx, stopRing := context.WithCancel(ctx)
+	tone := ringTone()
 	if dropIn {
 		// Drop In: a chime rather than a ring, and then it is answered by itself. The call page says
 		// who is listening, and hanging up or declining still ends it. A chime that did not play to
@@ -359,11 +360,11 @@ func (p *Phone) intercomIn(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 			if rctx.Err() == nil {
-				ring(rctx)
+				ring(rctx, tone)
 			}
 		})
 	} else {
-		safe.Go("intercom: ring", func() { ring(rctx) })
+		safe.Go("intercom: ring", func() { ring(rctx, tone) })
 	}
 	timeout := time.NewTimer(intercomRingFor)
 	defer timeout.Stop()

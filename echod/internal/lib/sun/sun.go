@@ -34,6 +34,25 @@ func Times(lat, lon float64, day time.Time) (rise, set time.Time, ok bool) {
 	return julian(transit - h).In(loc), julian(transit + h).In(loc), true
 }
 
+// Up is whether the sun's upper edge is above the horizon at lat, lon at t: what decides day and night
+// where Times has no answer, the polar night and the midnight sun.
+func Up(lat, lon float64, t time.Time) bool { return Altitude(lat, lon, t) > -0.833 }
+
+// Altitude is the sun's center above the horizon at lat, lon at t, in degrees (negative below), from
+// the same short solar formulas as Times: good to a fraction of a degree.
+func Altitude(lat, lon float64, t time.Time) float64 {
+	d := float64(t.Unix())/86400 + 2440587.5 - 2451545.0 // days since J2000.0
+	m := rad(math.Mod(357.5291+0.98560028*d, 360))
+	c := 1.9148*math.Sin(m) + 0.0200*math.Sin(2*m) + 0.0003*math.Sin(3*m)
+	l := rad(math.Mod(deg(m)+c+180+102.9372, 360)) // ecliptic longitude
+	eps := rad(23.4397)
+	decl := math.Asin(math.Sin(l) * math.Sin(eps))
+	ra := math.Atan2(math.Cos(eps)*math.Sin(l), math.Cos(l))
+	gmst := rad(math.Mod(280.46061837+360.98564736629*d, 360))
+	h := gmst + rad(lon) - ra // the local hour angle
+	return deg(math.Asin(math.Sin(rad(lat))*math.Sin(decl) + math.Cos(rad(lat))*math.Cos(decl)*math.Cos(h)))
+}
+
 func rad(d float64) float64 { return d * math.Pi / 180 }
 func deg(r float64) float64 { return r * 180 / math.Pi }
 

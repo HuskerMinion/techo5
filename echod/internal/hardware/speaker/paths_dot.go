@@ -62,6 +62,10 @@ var pathSequence = map[Output][]kctl{
 		{name: driverGain, level: 6},
 	},
 	OutputHeadphone: {
+		// The DAC reaches the jack through these too, and the codec boots with them off: without them
+		// here, a Dot that starts on the jack is silent until the speaker path has run once.
+		{name: "HPL Output Mixer L_DAC Switch", level: 1},
+		{name: "HPR Output Mixer R_DAC Switch", level: 1},
 		{name: "Ignore Ramp Up", value: "On"},
 		{name: driverGain, level: 11},
 		{name: "Audio_DacMux_Setting", value: "On"},
@@ -152,6 +156,22 @@ const OutputBoost = 1.0
 // DriverTuning applies the vendor driver's volume-dependent EQ and limiter (lib/asp), read from the
 // vendor partition: the files it reads are the Dot's.
 const DriverTuning = true
+
+// firstCurves puts the volume in front of the tuning, as on the Show (paths_cronos.go, which says
+// why and how these were worked out). The Dot's AFE.cfg has no volume stage of its own, so Android
+// turned the volume down before the tuning, which is where this puts it too.
+//
+// Up to step 16 each step is as loud as it was. Above it, the old curve's repeated values left
+// steps no louder than the one below (17 and 18, 19 to 21), so from 16 to 30 the loudness now rises
+// evenly instead, to the same top. The gain itself drops at 22, 25 and 28, where the vendor's EQ
+// moves to a louder filter: the loudness still rises there.
+var firstCurves = map[string][VolumeSteps + 1]float64{
+	"dot": {
+		-90, -42.1, -38.9, -34.7, -33.6, -31.6, -29.5, -27.5, -25.5, -24.4,
+		-22.3, -21.3, -20.2, -18, -16.9, -15.8, -14.5, -14, -13.4, -12.8,
+		-12.2, -11.6, -14.5, -13.8, -13.1, -16.4, -15.5, -14.6, -20.6, -19.5, -18.2,
+	},
+}
 
 // HasJack is whether the device has a headphone jack, and so the Audio output choice.
 const HasJack = true

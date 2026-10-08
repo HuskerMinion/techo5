@@ -42,8 +42,13 @@ func Available() bool { return false }
 var errNone = errors.New("no camera on this device")
 
 func (c *Camera) Acquire() (func(), error)                     { return nil, errNone }
+func (c *Camera) AcquireSlow() (func(), error)                 { return nil, errNone }
+func (c *Camera) SetSlowEvery(time.Duration)                   {}
+func (c *Camera) Unwedge()                                     {}
+func SetGestureExposure(bool)                                  {}
 func (c *Camera) Snapshot(ctx context.Context) (*Frame, error) { return nil, errNone }
 func (c *Camera) Last() *Frame                                 { return nil }
 func (c *Camera) Running() bool                                { return false }
 func (f *Frame) Full() *image.RGBA                             { return f.RGBA }
 func (f *Frame) Image() *image.RGBA                            { return f.RGBA }
+func (f *Frame) Luma(w, h int) []uint8                         { return nil }

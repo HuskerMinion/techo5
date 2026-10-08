@@ -70,7 +70,9 @@ Assistant. Alarms, radio stations, Wi-Fi and its other settings stay.
 Afterward, delete the device from **Settings → Devices & services → ESPHome** in your Home Assistant.
 The new key isn't shown anywhere. To add the device to another Home Assistant later, open its setup
 page, go to **General**, and choose **Let a Home Assistant add this device**: for 15 minutes the
-device has no key, and the Home Assistant that adds it sets one.
+device has no key, and the Home Assistant that adds it sets one. Home Assistant sends that key over
+your network unencrypted, as it does for ESPHome devices, so open the window only on a network you
+trust. Adding a device with nothing typed needs a recent Home Assistant (tested with 2026.9).
 
 ### confirm (Required)
 
@@ -986,8 +988,9 @@ In YAML, refer to these actions as `esphome.<node>_dashboard_show` and `esphome.
 
 `dashboard_show` puts the dashboard up, the same as swiping it in (on a Spot, the Dashboard item in
 the ring menu). It stays up until `dashboard_hide`, a swipe or "go home" takes it down. It doesn't
-time out after 10 minutes the way one opened by hand does. If the settings, a camera or a call has the
-screen, the dashboard comes up once they're done. The **Dashboard** setting must not be **Off**.
+time out the way one opened by hand does (after **Dashboard returns to the clock after**, 10 minutes
+unless changed). If the settings, a camera or a call has the screen, the dashboard comes up once
+they're done. The **Dashboard** setting must not be **Off**.
 
 `dashboard_hide` goes back to the clock. With **Dashboard when idle** on, the clock stays for 2
 minutes, then the dashboard comes back, the same as swiping it away.
@@ -1013,6 +1016,60 @@ actions:
       - action: esphome.office_dashboard_show
     else:
       - action: esphome.office_dashboard_hide
+```
+
+## Press a deck button
+
+In YAML, refer to this action as `esphome.<node>_deck_press`.
+
+Does what a TECHO5 Deck button does, as if it were pressed on the screen: an automation can switch
+an OBS scene or start the stream with it. Show only. See [TECHO5 Deck](deck.md).
+
+### page (Required)
+
+The page, counting from 1.
+
+### button (Required)
+
+The button on that page, counting from 1, row by row: on a 4-across deck the second row starts at 5.
+
+## Play a video
+
+In YAML, refer to this action as `esphome.<node>_play_video`.
+
+Plays a video full screen, with its sound, in place of any video already playing. Show and Spot,
+and only while the **Video** switch is on. See [Video](video.md).
+
+### url (Required)
+
+*string*
+
+An `http://` or `https://` address: MP4, MKV, MPEG-TS or HLS, best as H.264 at 720p or less. Other
+kinds of address (files, `rtsp://`) are refused.
+
+### title (Required)
+
+*string*
+
+What the screen and the **Video title** sensor call it. `""` for none: they show the address's host
+instead.
+
+```yaml
+action: esphome.office_play_video
+data:
+  url: "http://192.168.1.20:8096/Videos/clip.mp4"
+  title: "Front door"
+```
+
+## Stop, pause or carry on a video
+
+In YAML, refer to these actions as `esphome.<node>_stop_video`, `esphome.<node>_pause_video` and
+`esphome.<node>_resume_video`. They take nothing, and do nothing when no video is playing. Stop also
+takes down a DLNA video's question on the screen.
+
+```yaml
+action: esphome.office_stop_video
+data: {}
 ```
 
 ## Choose the weather shown on the idle screen
@@ -1267,6 +1324,33 @@ action: esphome.office_ssh_keys
 data:
   keys: |
     ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIExample you@your-pc
+```
+
+## Set the settings lock's PIN
+
+In YAML, refer to this action as `esphome.<node>_settings_lock_pin`.
+
+Sets the PIN the device asks for before its settings screen opens (Show and Spot). Everything else on
+the device works without it: the clock, music, the voice assistant, calls. The **Settings lock**
+switch shows whether a PIN is set; turning it off removes the PIN, which is the way back in if it is
+forgotten. The PIN can also be set on the device (Settings → Privacy & Security → Settings lock) and
+on the setup page.
+
+> **Good to know**
+>
+> Like `ssh_keys`, this is refused unless Home Assistant's *ESPHome* link to the device already has a
+> real encryption key set, so the PIN never crosses the network in the clear.
+
+### pin (Required)
+
+*string*
+
+4 to 8 digits. Empty removes the PIN and the lock.
+
+```yaml
+action: esphome.office_settings_lock_pin
+data:
+  pin: "2468"
 ```
 
 ## Sign a device in to a SIP account

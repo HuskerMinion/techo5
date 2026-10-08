@@ -1,8 +1,18 @@
 package sendspin
 
 import (
+	"encoding/json"
+	"net/http"
+	"net/http/httptest"
+	"path/filepath"
+	"strings"
 	"testing"
 	"time"
+
+	"github.com/Sendspin/sendspin-go/pkg/protocol"
+	"github.com/gorilla/websocket"
+
+	"github.com/HuskerMinion/techo5/echod/internal/config"
 )
 
 // What an end gives back, and when. A stream ending is what a skip and a pause both look like from here,
@@ -105,3 +115,66 @@ type fakeDecoder struct{}
 
 func (fakeDecoder) decode([]byte) ([]int16, error) { return nil, nil }
 func (fakeDecoder) close() error                   { return nil }
+
+// A player that lists the volume and mute commands says both in every client/state, the off and zero
+// values too. The library's PlayerState drops them, so after a mute, an unmute and a volume change,
+// Music Assistant showed the device muted while it played, and aiosendspin called it non-compliant.
+// This reads what actually crossed the socket.
+func TestStateSaysMutedAndVolumeEvenWhenOff(t *testing.T) {
+	config.Use(filepath.Join(t.TempDir(), "state.json"))
+	if err := config.Set().Speaker().Volume(0); err != nil {
+		t.Fatal(err)
+	}
+
+	got := make(chan []byte, 1)
+	up := websocket.Upgrader{}
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		c, err := up.Upgrade(w, r, nil)
+		if err != nil {
+			return
+		}
+		defer c.Close()
+		_, b, err := c.ReadMessage()
+		if err == nil {
+			got <- b
+		}
+	}))
+	defer srv.Close()
+
+	conn, _, err := websocket.DefaultDialer.Dial("ws"+strings.TrimPrefix(srv.URL, "http"), nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer conn.Close()
+	s := &session{client: protocol.NewClientFromConn(protocol.Config{}, conn)}
+	s.reported()
+
+	var b []byte
+	select {
+	case b = <-got:
+	case <-time.After(5 * time.Second):
+		t.Fatal("no client/state arrived")
+	}
+	var msg struct {
+		Type    string `json:"type"`
+		Payload struct {
+			Player map[string]any `json:"player"`
+		} `json:"payload"`
+	}
+	if err := json.Unmarshal(b, &msg); err != nil {
+		t.Fatal(err)
+	}
+	if msg.Type != "client/state" {
+		t.Fatalf("type = %q: %s", msg.Type, b)
+	}
+	p := msg.Payload.Player
+	if m, ok := p["muted"]; !ok || m != false {
+		t.Errorf("muted = %v (present %v), want false: %s", m, ok, b)
+	}
+	if v, ok := p["volume"]; !ok || v != float64(0) {
+		t.Errorf("volume = %v (present %v), want 0: %s", v, ok, b)
+	}
+	if p["state"] != "synchronized" {
+		t.Errorf("state = %v: %s", p["state"], b)
+	}
+}

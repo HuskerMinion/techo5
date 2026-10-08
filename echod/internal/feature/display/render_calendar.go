@@ -14,20 +14,25 @@ import (
 )
 
 // The calendar page (docs/calendar-and-night-plan.md): the month as a grid with each day's events on
-// it, a day's events as a list, and one event's details in a window over either. The events are Home
-// Assistant's, from the calendars this device shows, each calendar in its own color.
+// it, a day's events as a list, the coming days' events as an agenda, and one event's details in a
+// window over any of them. The events are Home Assistant's, from the calendars this device shows, each
+// calendar in its own color.
 
 // calendarShow is how long the calendar stays up untouched.
 const calendarShow = 2 * time.Minute
 
+// agendaDays is how many days the agenda lists, today the first.
+const agendaDays = 14
+
 // calendarView is what the page shows.
 type calendarView struct {
 	month  time.Time    // the first of the month shown
-	day    time.Time    // the day opened as a list; zero for the month
-	detail *hass.Event  // the event opened in its window, over the month or the day
-	scroll int          // how far down the day's list is scrolled, in rows
-	events []hass.Event // the month's
-	loaded bool         // whether the month's events have been read yet
+	day    time.Time    // the day opened as a list; zero for the month or the agenda
+	agenda bool         // the coming days' events, as one list, rather than the month
+	detail *hass.Event  // the event opened in its window, over the month, the day or the agenda
+	scroll int          // how far down the day's list or the agenda is scrolled, in rows
+	events []hass.Event // the month's; for the agenda, this month's and the next's
+	loaded bool         // whether those events have been read yet
 	names  map[string]string
 	order  []string // the calendars shown, in order, which picks their colors
 	now    time.Time
@@ -46,17 +51,18 @@ func (v calendarView) name(cal string) string {
 type calHitKind int
 
 const (
-	calNone    calHitKind = iota
-	calPrev               // the month before
-	calNext               // the month after
-	calToday              // back to this month
-	calDone               // put the calendar away
-	calBack               // from a day back to its month
-	calDay                // a day of the month: its list
-	calEvent              // an event: its window
-	calClose              // the window's Close
-	calOutside            // anywhere outside the window: closes it
-	calInside             // the window itself: nothing
+	calNone      calHitKind = iota
+	calPrev                 // the month before
+	calNext                 // the month after
+	calToday                // back to this month
+	calDone                 // put the calendar away
+	calBack                 // from a day back to its month
+	calDay                  // a day of the month: its list
+	calEvent                // an event: its window
+	calClose                // the window's Close
+	calOutside              // anywhere outside the window: closes it
+	calInside               // the window itself: nothing
+	calMonthView            // from the agenda to the month
 )
 
 type calHit struct {
@@ -90,10 +96,13 @@ func (r *renderer) calendarPage(s scene) {
 	r.calHits = r.calHits[:0]
 	r.calMu.Unlock()
 	v := s.cal
-	if v.day.IsZero() {
-		r.calendarMonth(v)
-	} else {
+	switch {
+	case !v.day.IsZero():
 		r.calendarDay(v)
+	case v.agenda:
+		r.calendarAgenda(v)
+	default:
+		r.calendarMonth(v)
 	}
 	if v.detail != nil {
 		r.calendarDetail(v, *v.detail)
@@ -198,7 +207,8 @@ func (r *renderer) calendarMonth(v calendarView) {
 
 // calendarDay is a day's events as a list: the time, the title and the calendar, all-day first.
 func (r *renderer) calendarDay(v calendarView) {
-	// Done here goes back to the month; the month's own Done puts the calendar away.
+	// Done here goes back to the month or the agenda it was opened from; their own Done puts the
+	// calendar away.
 	x := r.calButton("Done", r.w-r.margin, calBack)
 	r.text(r.title, clipText(r, r.title, v.day.Format("Monday, January 2"), x-r.margin-r.s(10)), r.margin, r.margin+r.s(34), cream)
 
@@ -240,6 +250,122 @@ func (r *renderer) calendarDay(v calendarView) {
 // calendarDayRows is how many events the day's list shows at once, for scrolling it.
 func (r *renderer) calendarDayRows() int {
 	return max((r.h-r.s(10)-(r.margin+r.s(74)))/r.s(66), 1)
+}
+
+// agendaRow is a line of the agenda: a day's heading, or one of its events.
+type agendaRow struct {
+	day time.Time
+	ev  *hass.Event // nil for the day's heading
+}
+
+func (a agendaRow) height(r *renderer) int {
+	if a.ev == nil {
+		return r.s(48)
+	}
+	return r.s(66)
+}
+
+// agendaRows is the agenda's lines: each of the coming agendaDays that has events, its heading and
+// then its events, all-day first, leaving out today's that are over.
+func agendaRows(events []hass.Event, now time.Time) []agendaRow {
+	today := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, time.Local)
+	var rows []agendaRow
+	for i := range agendaDays {
+		day := today.AddDate(0, 0, i)
+		var evs []hass.Event
+		for _, e := range eventsOn(events, day) {
+			if i > 0 || e.AllDay || e.End.After(now) || !e.End.After(e.Start) && !e.Start.Before(now) {
+				evs = append(evs, e)
+			}
+		}
+		if len(evs) == 0 {
+			continue
+		}
+		rows = append(rows, agendaRow{day: day})
+		for _, e := range evs {
+			rows = append(rows, agendaRow{day: day, ev: &e})
+		}
+	}
+	return rows
+}
+
+// agendaDayName is a day's heading in the agenda: "Today", "Tomorrow", or its weekday and date.
+func agendaDayName(day, now time.Time) string {
+	switch {
+	case sameDay(day, now):
+		return "Today"
+	case sameDay(day, now.AddDate(0, 0, 1)):
+		return "Tomorrow"
+	}
+	return day.Format("Monday, January 2")
+}
+
+// calendarAgenda is the coming days' events as one list, each day under its heading. A tap on an event
+// opens its window, a tap on a heading that day's list.
+func (r *renderer) calendarAgenda(v calendarView) {
+	x := r.calButton("Done", r.w-r.margin, calDone)
+	x = r.calButton("Month", x, calMonthView)
+	r.text(r.title, clipText(r, r.title, "Coming up", x-r.margin-r.s(10)), r.margin, r.margin+r.s(34), cream)
+
+	rows := agendaRows(v.events, v.now)
+	top := r.margin + r.s(74)
+	bottom := r.h - r.s(10)
+	// The furthest the list can scroll: the first row from which the rest all fit.
+	most, used := len(rows), 0
+	for most > 0 && used+rows[most-1].height(r) <= bottom-top {
+		most--
+		used += rows[most].height(r)
+	}
+	r.calMu.Lock()
+	r.calAgendaMax = most
+	r.calMu.Unlock()
+	if len(rows) == 0 {
+		msg := "Nothing in the next two weeks"
+		if !v.loaded {
+			msg = "Reading the calendar…"
+		}
+		r.text(r.body, msg, r.margin, top+r.s(60), dim)
+		return
+	}
+	first := min(max(v.scroll, 0), most)
+	y, last := top, first
+	for i := first; i < len(rows) && y+rows[i].height(r) <= bottom; i++ {
+		row := rows[i]
+		h := row.height(r)
+		if row.ev == nil {
+			r.text(r.small, agendaDayName(row.day, v.now), r.margin, y+r.s(34), amber)
+			r.fxLine(float64(r.margin), float64(y+h-r.s(4)), float64(r.w-r.margin), float64(y+h-r.s(4)), float64(r.s(2)), ember, 1)
+			r.calHitAdd(calHit{r: image.Rect(r.margin, y, r.w-r.margin, y+h), kind: calDay, day: row.day})
+		} else {
+			e := *row.ev
+			box := image.Rect(r.margin, y+r.s(4), r.w-r.margin, y+h-r.s(2))
+			c := v.color(e.Calendar)
+			r.roundRect(box, r.s(10), color.NRGBA{255, 255, 255, 12})
+			r.roundRect(image.Rect(box.Min.X+r.s(10), box.Min.Y+r.s(10), box.Min.X+r.s(18), box.Max.Y-r.s(10)), r.s(4), c)
+			textX := box.Min.X + r.s(34)
+			r.text(r.small, clipText(r, r.small, e.Summary, box.Dx()-r.s(60)), textX, box.Min.Y+r.s(28), cream)
+			r.text(r.tiny, clipText(r, r.tiny, eventWhen(e, row.day)+"  ·  "+v.name(e.Calendar), box.Dx()-r.s(60)),
+				textX, box.Min.Y+r.s(54), dim)
+			r.calHitAdd(calHit{r: box, kind: calEvent, ev: e})
+		}
+		y += h
+		last = i + 1
+	}
+	// More than fits: a swipe up or down moves through them, and the corners say there are more.
+	if first > 0 {
+		r.text(r.tiny, "▲ more", r.w-r.margin-r.s(130), top-r.s(8), amber)
+	}
+	if last < len(rows) {
+		label := "▼ more"
+		r.text(r.tiny, label, r.w-r.margin-r.width(r.tiny, label), r.h-r.s(4), amber)
+	}
+}
+
+// calendarAgendaMax is how far the agenda could scroll, in rows, as last drawn.
+func (r *renderer) calendarAgendaMax() int {
+	r.calMu.Lock()
+	defer r.calMu.Unlock()
+	return r.calAgendaMax
 }
 
 // eventWhen is an event's time as the day's list says it: "All day", "3:00 PM – 4:30 PM", or, for

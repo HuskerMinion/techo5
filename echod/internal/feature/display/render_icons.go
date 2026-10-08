@@ -7,6 +7,8 @@ import (
 	"image/color"
 	"image/draw"
 	"math"
+
+	"github.com/HuskerMinion/techo5/echod/internal/feature/home"
 )
 
 // Weather icons, drawn rather than shipped: a sun, a moon, clouds, rain, snow, a bolt, fog,
@@ -128,6 +130,9 @@ func (r *renderer) weatherIcon(cond string, cx, cy, size int) {
 		r.moon(cx, cy, w/4)
 	case "partlycloudy":
 		r.sun(cx-w/6, cy-w/6, w/6)
+		r.cloud(cx+w/12, cy+w/4, w*3/4, cloudGray)
+	case home.PartlyCloudyNight:
+		r.moon(cx-w/6, cy-w/6, w/5)
 		r.cloud(cx+w/12, cy+w/4, w*3/4, cloudGray)
 	case "cloudy":
 		r.cloud(cx, cy+w/4, w, cloudGray)

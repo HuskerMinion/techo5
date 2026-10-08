@@ -13,7 +13,8 @@ import (
 
 // What the screen listens for, for both screens: the Show's pages and the Spot's faces react to the
 // same sentences, so the words live in lib/triggers once rather than in each. Which language's words
-// are used is the Screen language setting; unset, every language is matched.
+// are used is the Screen language setting; unset, every language is matched. The same setting is the
+// language the clock's dates and the weather are written in (lib/locale), English when unset.
 
 // The Screen language row's choices. Match all is first, and is what a device comes up in.
 var (

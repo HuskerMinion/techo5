@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"regexp"
 	"runtime"
+	"strings"
 	"time"
 )
 
@@ -197,7 +198,7 @@ func (m Manifest) Valid() error {
 		switch {
 		case b.URL == "":
 			return fmt.Errorf("update: the %s named by %s has no url", name, m.Version)
-		case len(b.SHA256) != 64:
+		case !usableHash(b.SHA256):
 			return fmt.Errorf("update: the %s named by %s has no usable sha256", name, m.Version)
 		case b.Size <= 0:
 			return fmt.Errorf("update: the %s named by %s gives no size", name, m.Version)
@@ -214,11 +215,17 @@ func (m Manifest) Asset(name string) (Binary, bool) {
 	return b, ok
 }
 
+// usableHash is a sha256 as the release tooling writes it: 64 characters of lowercase hex. Anything
+// else could never match what the download hashes to, and part of it goes into a file name.
+func usableHash(h string) bool {
+	return len(h) == 64 && strings.Trim(h, "0123456789abcdef") == ""
+}
+
 func (b Binary) valid(version, arch string) error {
 	switch {
 	case b.URL == "":
 		return fmt.Errorf("update: the %s binary for %s has no url", arch, version)
-	case len(b.SHA256) != 64:
+	case !usableHash(b.SHA256):
 		return fmt.Errorf("update: the %s binary for %s has no usable sha256", arch, version)
 	case b.Size <= 0:
 		return fmt.Errorf("update: the %s binary for %s gives no size", arch, version)

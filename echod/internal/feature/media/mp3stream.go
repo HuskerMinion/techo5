@@ -32,6 +32,8 @@ func pcmSource(body *bufio.Reader, contentType string) (io.Reader, error) {
 			return nil, err
 		}
 		return body, nil
+	case string(head) == "fLaC":
+		return newFLACSamples(body)
 	case streamIsMP3(head, contentType) || unlabeledMP3(body, contentType):
 		if err := skipID3(body); err != nil {
 			return nil, err
@@ -43,6 +45,13 @@ func pcmSource(body *bufio.Reader, contentType string) (io.Reader, error) {
 		ct = "an unknown format"
 	}
 	return nil, unplayable{ct}
+}
+
+// DecodeStream is body as the speaker's own samples (48 kHz stereo S16_LE): WAV, MP3 or FLAC, by its
+// first bytes and contentType. For a source that fetches its own stream and plays it as a received
+// track (feature/dlna).
+func DecodeStream(body *bufio.Reader, contentType string) (io.Reader, error) {
+	return pcmSource(body, contentType)
 }
 
 // unplayable is a stream in a format the device does not decode: AAC, HLS, Ogg and the rest. It is
@@ -122,7 +131,7 @@ func skipID3(body *bufio.Reader) error {
 }
 
 // syncMost is how far into a stream a frame header is looked for, before or after a bad frame: the
-// decoder scans byte by byte, and a stream of something else called MP3 would keep it scanning for ever.
+// decoder scans byte by byte, and a stream of something else called MP3 would keep it scanning forever.
 const syncMost = 256 << 10
 
 // scanLimit is the stream as the decoder reads it, failing once the decoder has read syncMost bytes

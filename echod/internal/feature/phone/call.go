@@ -8,6 +8,7 @@ import (
 	"io"
 	"log/slog"
 	"math"
+	"slices"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -15,6 +16,7 @@ import (
 	"github.com/emiago/diago"
 	"github.com/emiago/diago/audio"
 
+	"github.com/HuskerMinion/techo5/echod/internal/config"
 	"github.com/HuskerMinion/techo5/echod/internal/hardware/mic"
 	"github.com/HuskerMinion/techo5/echod/internal/hardware/speaker"
 	"github.com/HuskerMinion/techo5/echod/internal/lib/safe"
@@ -253,8 +255,32 @@ func (st *stats) level(sq *atomic.Uint64, n *atomic.Int64) string {
 	return fmt.Sprintf("%.0f", 10*math.Log10(ms/(32768*32768)))
 }
 
-// ringTone is one cycle of a device ringing: two short rising bursts and a pause, at 16 kHz.
+// RingSounds are the ways a call can ring, in the order the screen and Home Assistant offer them;
+// the first is the one a device starts with.
+var RingSounds = []string{"Old phone", "Chime"}
+
+// RingSoundIndex is the saved call ring's place in RingSounds; one no longer offered reads as the first.
+func RingSoundIndex() int {
+	if i := slices.Index(RingSounds, config.Get().Home.RingSound); i >= 0 {
+		return i
+	}
+	return 0
+}
+
+// ringTone is one cycle of the call ring chosen here.
 func ringTone() []int16 {
+	if RingSounds[RingSoundIndex()] == "Chime" {
+		return chimeRing()
+	}
+	return bellRing()
+}
+
+// bellRing is built once: it is a lot of sums, and a ring that waited on them would take the speaker
+// late.
+var bellRing = sync.OnceValue(buildBellRing)
+
+// chimeRing is one cycle of a chime ring: two short rising bursts and a pause, at 16 kHz.
+func chimeRing() []int16 {
 	const rate = speaker.VoiceRate
 	var out []int16
 	burst := func(f1, f2 float64, ms int) {
@@ -274,13 +300,57 @@ func ringTone() []int16 {
 	return out
 }
 
-// ring sounds until ctx ends.
-func ring(ctx context.Context) {
-	tone := ringTone()
+// buildBellRing makes one cycle of an old desk phone's ring: a clapper beating between two bells
+// 20 times a second for two seconds, then four seconds quiet, at 16 kHz.
+func buildBellRing() []int16 {
+	const (
+		rate   = speaker.VoiceRate
+		strike = rate / 20 // the clapper hits a bell every 50 ms, the other bell in between
+		on     = 2 * rate
+		cycle  = 6 * rate
+	)
+	// Each bell is a struck metal dome: a few partials that are not harmonics, the higher ones dying first.
+	type partial struct{ ratio, gain, decay float64 }
+	partials := []partial{{1, 1, 0.15}, {2.76, 0.45, 0.07}, {4.9, 0.2, 0.03}}
+	bells := []float64{1180, 1420}
+	sum := make([]float64, cycle)
+	for at, b := 0, 0; at < on; at, b = at+strike/2, 1-b {
+		for _, pt := range partials {
+			f := bells[b] * pt.ratio
+			for i := 0; at+i < cycle && float64(i)/rate < 6*pt.decay; i++ {
+				t := float64(i) / rate
+				sum[at+i] += pt.gain * math.Exp(-t/pt.decay) * math.Sin(2*math.Pi*f*t)
+			}
+		}
+	}
+	peak := 0.0
+	for _, v := range sum {
+		peak = math.Max(peak, math.Abs(v))
+	}
+	out := make([]int16, cycle)
+	for i, v := range sum {
+		out[i] = int16(9000 * v / peak)
+	}
+	return out
+}
+
+// ring sounds one cycle of a call ring, from ringTone, over and over until ctx ends. The caller picks
+// the tone where the call comes in, so the setting is not read from the ring's own goroutine.
+func ring(ctx context.Context, tone []int16) {
+	if ctx.Err() != nil {
+		return // the call ended first; taking the speaker now would only cut off whatever has it
+	}
+	cycle := time.Duration(len(tone)) * time.Second / speaker.VoiceRate
 	claim := speaker.Sound().Claim("ringing", func(cctx context.Context, p *speaker.Player) error {
 		for {
 			p.PlayVoice(tone)
-			for p.Queued() > 0 {
+			// With no playback device nothing is queued, and the cycle is waited out as though it had
+			// played, rather than resampling the whole tone again every look.
+			next := time.Now().Add(cycle)
+			idle := p.Queued() == 0
+			// Looked at every 50 ms even when nothing is queued: with no playback device nothing ever is,
+			// and a ring that only looked while sound was queued never stopped.
+			for {
 				select {
 				case <-cctx.Done():
 					p.Drain()
@@ -289,6 +359,9 @@ func ring(ctx context.Context) {
 					p.Drain()
 					return nil
 				case <-time.After(50 * time.Millisecond):
+				}
+				if p.Queued() == 0 && (!idle || !time.Now().Before(next)) {
+					break
 				}
 			}
 		}

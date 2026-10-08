@@ -24,7 +24,9 @@ import (
 	"github.com/HuskerMinion/techo5/echod/internal/feature/remind"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/talkback"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/timer"
+	"github.com/HuskerMinion/techo5/echod/internal/feature/video"
 	"github.com/HuskerMinion/techo5/echod/internal/lib/hass"
+	"github.com/HuskerMinion/techo5/echod/internal/lib/locale"
 )
 
 // The round panel: everything is laid out from its center, and nothing may sit where the circle
@@ -66,6 +68,7 @@ func (r *roundRenderer) timeLine(now time.Time, baseline int) {
 }
 
 type roundScene struct {
+	pin pinView // the settings lock's PIN pad (pin.go), over everything but a call or a ring
 	// The dashboard face: whether it is up, how it is shown, and what it shows.
 	showDash   bool
 	dashMode   config.DashboardMode
@@ -202,6 +205,14 @@ type roundScene struct {
 	// it shows.
 	sheetOpen, sheetGrid bool
 	sheet                sheetView
+
+	// The video face (video_spot.go): as the Show's scene has it.
+	video         video.State
+	showVideo     bool
+	videoLive     bool
+	videoControls bool
+	showVideoAsk  bool
+	videoAsk      videoAsk
 }
 
 type roundRenderer struct {
@@ -238,6 +249,13 @@ type roundRenderer struct {
 	// artDrawn is weather moving over the art in the frame last drawn, which wants the next one soon.
 	washed   washedArt
 	artDrawn bool
+
+	// glow is the Glow style's images, kept between frames (glow.go).
+	glow glowBuffers
+	// videoZones are the video face's controls as last drawn, under zmu, and videoOver what of the
+	// canvas goes over the picture (render_video_spot.go).
+	videoZones []image.Rectangle
+	videoOver  image.Rectangle
 }
 
 func newRoundRenderer(dst *image.RGBA) *roundRenderer {
@@ -271,6 +289,18 @@ func (r *roundRenderer) draw(s roundScene) {
 	if !(s.menuOpen && s.menuMode == modeWeather && s.radarOn) {
 		r.shapes = alertOverlay{} // kept only while the rain map is up
 	}
+	r.videoOver = image.Rectangle{}
+	// A video is over everything it is not covered by (video_spot.go decides which): the picture is
+	// the face, with no rim.
+	if s.showVideo {
+		r.clearCameraSoundTap()
+		r.publishCameraTaps()
+		r.videoOver = r.videoFace(s)
+		return
+	}
+	r.zmu.Lock()
+	r.videoZones = nil
+	r.zmu.Unlock()
 	draw.Draw(r.dst, r.dst.Rect, image.NewUniform(colBackground), image.Point{}, draw.Src)
 	r.callDrawn, r.artDrawn = false, false
 	r.clearAlertTaps()
@@ -294,8 +324,16 @@ func (r *roundRenderer) draw(s roundScene) {
 	}
 	// A browser waiting to be let in: the answer is a tap here, since this device has no button for
 	// it. Under a call and under a ringing alarm, both of which are somebody already being answered.
+	if s.pin.open {
+		r.pinFace(s.pin)
+		return
+	}
 	if s.setupAsking {
 		r.setupAskFace(s)
+		return
+	}
+	if s.showVideoAsk {
+		r.videoAskFace(s)
 		return
 	}
 	// This device taking an announcement, then one that arrived: both take the face, since a circle
@@ -417,6 +455,7 @@ func (r *roundRenderer) rim(s roundScene) {
 }
 
 func (r *roundRenderer) clockFace(s roundScene) {
+	defer r.styleNameTag(s)
 	if style := s.style.style(); style != styleClassic {
 		r.styledClockFace(s, style)
 		return
@@ -429,7 +468,7 @@ func (r *roundRenderer) classicClockFace(s roundScene) {
 	now := s.now
 	r.alertPill(s.alerts.Here, clockPillY)
 	r.timeLine(now, 240)
-	r.centered(r.small, now.Format("Monday, January 2"), 290, colDim)
+	r.centered(r.small, locale.LongDate(now, screenLang()), 290, colDim)
 
 	line := 332
 	if weatherLine(s.weather) != "" {

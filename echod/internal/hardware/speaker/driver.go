@@ -284,6 +284,10 @@ func (d *Driver) Busy() bool {
 // reports (about 60 ms on a Show 5, against these 150).
 const HardwareTail = 150 * time.Millisecond
 
+// OutputLatency is how long a frame taken off the queue takes to be heard: the card's ring, and the
+// period being filled for it. What has left the queue is not yet in the room by this much.
+const OutputLatency = time.Duration(period*(periods+1)) * time.Second / Rate
+
 // dry is how long the queue has to stay empty to count as finished. Audio arrives in chunks with gaps
 // between them, so one empty read means nothing.
 const dry = 400 * time.Millisecond

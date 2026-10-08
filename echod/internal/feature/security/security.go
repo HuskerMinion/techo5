@@ -36,6 +36,7 @@ const recheck = time.Minute
 // Feature is the switches and what they control.
 type Feature struct {
 	ssh, camera, screen, talk *esphome.Switch
+	lockSw                    *esphome.Switch // the settings lock (lock.go)
 	wake                      chan struct{}
 
 	// Changed fires when a setting changes or the keys do; listeners must not block.
@@ -69,6 +70,7 @@ func build() *Feature {
 	f.camera = sw("camera_web_access", "Camera web access", "mdi:webcam", f.SetCamera)
 	f.screen = sw("screen_web_access", "Screen web access", "mdi:monitor-screenshot", f.SetScreen)
 	f.talk = sw("talk_back", "Talk through cameras", "mdi:account-voice", f.SetTalkBack)
+	f.buildLock()
 	return f
 }
 
@@ -80,7 +82,7 @@ func (f *Feature) Entities() []esphome.Entity {
 		out = append(out, f.ssh)
 	}
 	if webPages {
-		out = append(out, f.camera, f.screen, f.talk)
+		out = append(out, f.camera, f.screen, f.talk, f.lockSw)
 	}
 	return out
 }
@@ -90,6 +92,7 @@ func (f *Feature) Restore(c config.Config) {
 	f.camera.Set(c.Security.Camera)
 	f.screen.Set(c.Security.Screen)
 	f.talk.Set(c.Security.TalkBack)
+	f.lockSw.Set(webPages && c.Security.LockPIN != "")
 }
 
 // Run keeps the SSH server matching the switch.
@@ -183,12 +186,17 @@ func (f *Feature) State() State {
 	return st
 }
 
-// Actions: ssh_keys replaces the authorized keys, one per line; an empty value removes them all.
+// Actions: ssh_keys replaces the authorized keys, one per line; an empty value removes them all. On a
+// device with a screen, settings_lock_pin sets the settings lock's PIN (lock.go).
 func (f *Feature) Actions() []*esphome.Action {
-	if !sshAvailable() {
-		return nil
+	var out []*esphome.Action
+	if webPages {
+		out = append(out, f.lockAction())
 	}
-	return []*esphome.Action{{
+	if !sshAvailable() {
+		return out
+	}
+	return append(out, &esphome.Action{
 		Name: "ssh_keys",
 		Args: []esphome.Arg{{Name: "keys", Type: esphome.ArgString}},
 		Run: func(c esphome.Call) (any, error) {
@@ -222,7 +230,7 @@ func (f *Feature) Actions() []*esphome.Action {
 			}
 			return nil, nil
 		},
-	}}
+	})
 }
 
 // keyTypes are the public key formats dropbear accepts.

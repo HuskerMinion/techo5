@@ -102,6 +102,10 @@ type Device struct {
 	shadow [][]byte
 	row    []byte
 	bands  [][]byte // scratch for rotate: one panel row per canvas column in a band
+
+	// stale marks a page that a frame (PresentFrame) was painted on, so it no longer holds what its
+	// shadow says: the next Present onto it writes every row.
+	stale []bool
 }
 
 // Open maps the framebuffer and reads its geometry.
@@ -212,6 +216,7 @@ func (d *Device) Present() error {
 			d.shadow[next] = shadow
 		}
 		row := d.row[:w*4]
+		whole := d.takeStale(next)
 		for y := 0; y < h && y < d.panelH; y++ {
 			copy(row, img.Pix[y*img.Stride:y*img.Stride+w*4])
 			if swap {
@@ -220,7 +225,7 @@ func (d *Device) Present() error {
 				}
 			}
 			at := y * d.line
-			if bytes.Equal(row, shadow[at:at+w*4]) {
+			if !whole && bytes.Equal(row, shadow[at:at+w*4]) {
 				continue
 			}
 			copy(shadow[at:at+w*4], row)
@@ -229,6 +234,7 @@ func (d *Device) Present() error {
 		return d.pan(next)
 	}
 	if !rotated {
+		d.takeStale(next)
 		for y := 0; y < h && y < d.panelH; y++ {
 			row := dst[y*d.line : y*d.line+d.panelW*4]
 			for x := 0; x < w && x < d.panelW; x++ {
@@ -277,6 +283,7 @@ func (d *Device) rotate(dst []byte, next int) {
 		}
 	}
 	rows := d.bands
+	whole := d.takeStale(next)
 	cols := min(w, d.panelH)
 	height := min(h, d.panelW)
 
@@ -314,7 +321,7 @@ func (d *Device) rotate(dst []byte, next int) {
 		for k := 0; k < n; k++ {
 			at := (x0 + k) * d.line
 			row := rows[k][:rowBytes]
-			if bytes.Equal(row, shadow[at:at+rowBytes]) {
+			if !whole && bytes.Equal(row, shadow[at:at+rowBytes]) {
 				continue
 			}
 			copy(shadow[at:at+rowBytes], row)

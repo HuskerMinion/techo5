@@ -187,6 +187,33 @@ var volumeCurves = map[Output][VolumeSteps + 1]float64{
 	},
 }
 
+// firstCurves are the volume curves for a tuned speaker, by tuning set, in dB in front of the
+// tuning rather than behind it. The vendor's own chain turns the volume down first and then applies
+// the EQ and the compressor ("Playback": AVL, UserEQ, EQ, MBCL in AFE.cfg), so the compressor sees
+// music as loud as the dial makes it. Behind the tuning, it sees full-scale music at every volume
+// and pulls the mids down by 30 dB on each kick drum, which is music that sounds flat and pumps with
+// the bass (issue #81).
+//
+// Each step is as loud as volumeCurves' step was with the volume behind the tuning, worked out
+// offline from each set's own files on three stations' worth of real music, six clips leveled to
+// -14 dBFS RMS (about where Spotify and Music Assistant normalize), matching their average loudness
+// (TestVolumeInFrontKeepsTheLoudness checks it). The old order squashed every song to much the same level, so a song
+// mastered quieter than that now plays quieter, as it would anywhere else. The jumps are where the
+// vendor's EQ changes filter (steps 13 and 25 on the Show 5, step 10 on the Show 8): the loudness
+// moved there before too.
+var firstCurves = map[string][VolumeSteps + 1]float64{
+	"show": {
+		-90, -64.3, -62.8, -61.3, -59.8, -58.3, -56.8, -55.3, -53.8, -52.3,
+		-50.8, -49.3, -47.8, -44.7, -43.2, -41.7, -40.5, -39.3, -38.1, -36.9,
+		-35.7, -34.5, -33.2, -32, -30.8, -27.8, -26.6, -25.2, -23.5, -21.6, -19.5,
+	},
+	"crown": {
+		-90, -63.9, -62.4, -60.9, -59.4, -57.9, -56.4, -54.9, -53.4, -51.9,
+		-48.7, -47.2, -45.7, -44.2, -42.7, -41.2, -39.3, -38.1, -36.9, -35.7,
+		-34.5, -33.3, -32.6, -31.4, -30.2, -29, -27.7, -26.5, -25.1, -23.7, -21.9,
+	},
+}
+
 // mute is the attenuation the curves use for step 0.
 const mute = -90
 

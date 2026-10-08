@@ -278,3 +278,17 @@ func TestRedactedAndClipped(t *testing.T) {
 		t.Errorf("clipped to %d", len(got))
 	}
 }
+
+// A talk goes out 12 dB under the microphones, and leaves the frame every other listener shares as it was.
+func TestATalkIsQuieterThanTheMicrophones(t *testing.T) {
+	heard := []int16{32767, -32768, 4000, -4000, 0}
+	got := quieter(heard)
+	for i, want := range []int16{8191, -8192, 1000, -1000, 0} {
+		if got[i] != want {
+			t.Errorf("sample %d: %d, want %d", i, got[i], want)
+		}
+	}
+	if heard[0] != 32767 || heard[2] != 4000 {
+		t.Error("the shared frame was changed")
+	}
+}

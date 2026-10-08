@@ -23,16 +23,22 @@ import (
 var spotDashArea = image.Rect(76, 60, 404, 430)
 
 const (
-	// spotDashForget and spotDashAway are the Show's dashForget and dashAway: how long an opened
-	// dashboard stays up untouched, and how long the clock stays after the idle one is put away.
-	spotDashForget = 10 * time.Minute
-	spotDashAway   = 2 * time.Minute
+	// spotDashAway is the Show's dashAway: how long the clock stays after the idle dashboard is put
+	// away.
+	spotDashAway = 2 * time.Minute
 
 	// spotStill is how far a finger may wander on this panel and still be held still (the touch
 	// screen's own tapMove), and spotHold how long it stays for the ring menu.
 	spotStill = 40
 	spotHold  = 450 * time.Millisecond
 )
+
+// spotDashForgotten is the Show's dashForgotten: whether a dashboard opened by hand has been left
+// long enough, by the Dashboard returns setting, for the clock to come back.
+func spotDashForgotten(touched time.Time) bool {
+	after, ok := config.Get().Dashboard.Return()
+	return ok && time.Since(touched) > after
+}
 
 // toggleDashboard is the menu's Dashboard item: up if it is down, down if it is up.
 func (d *Display) toggleDashboard() {
@@ -79,7 +85,7 @@ func (d *Display) dashSceneSpot(s *roundScene) {
 	f := dashboard.Get()
 	mode := f.Mode()
 	d.mu.Lock()
-	if d.dash && !d.dashHeld && time.Since(d.dashTouched) > spotDashForget {
+	if d.dash && !d.dashHeld && spotDashForgotten(d.dashTouched) {
 		d.dash = false
 	}
 	asked, away, menu := d.dash, time.Now().Before(d.dashAwayUntil), d.menuOpen
@@ -172,7 +178,7 @@ func (d *Display) dashGestureSpot(g touch.Gesture) {
 			if streamed {
 				f.Touch("up", at.X, at.Y)
 			} else {
-				d.drawnRelease()
+				d.drawnRelease(g.X, g.Y)
 			}
 			d.mu.Lock()
 			d.openMenu(modeMain, itemDashboard)
@@ -183,14 +189,14 @@ func (d *Display) dashGestureSpot(g touch.Gesture) {
 			if streamed {
 				f.Touch("up", at.X, at.Y)
 			} else {
-				d.drawnRelease()
+				d.drawnRelease(g.X, g.Y)
 				d.drawnTap(at.X, at.Y)
 			}
 		default:
 			if streamed {
 				f.Touch("up", g.X, g.Y)
 			} else {
-				d.drawnRelease()
+				d.drawnRelease(g.X, g.Y)
 			}
 		}
 	}
@@ -199,7 +205,7 @@ func (d *Display) dashGestureSpot(g touch.Gesture) {
 // dashFace draws the dashboard over the round panel.
 func (r *roundRenderer) dashFace(s roundScene) {
 	if s.dashMode == config.DashboardDrawn {
-		r.dashPage(s.drawn, s.dashScroll, s.dashAdjust, spotDashArea)
+		r.dashPage(s.drawn, s.dashScroll, s.dashAdjust, spotDashArea, "")
 		return
 	}
 	v := s.dash

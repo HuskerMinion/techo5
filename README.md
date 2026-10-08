@@ -86,6 +86,9 @@ Home Assistant:
   screen only what changes, encrypted with a key of your choosing. It looks exactly as Home Assistant
   draws it, custom cards included, and it can show built-in pages like Energy and History.
 
+For a Show on a wall, a tap on the clock can open the dashboard, a few tiles can fill the whole
+screen, and the clock comes back on its own after the time you choose.
+
 Which to use, how to set it up and what each can do: **[docs/dashboards.md](docs/dashboards.md)**.
 
 <table>
@@ -98,6 +101,34 @@ Which to use, how to set it up and what each can do: **[docs/dashboards.md](docs
 </tr>
 </table>
 
+- 🔊 **Fuller sound** (v1.0.0). Music no longer sounds flat or dips when the bass hits: the volume
+  now goes in front of the speaker's own tuning, as on Amazon's software, so the limiter only works
+  near the top of the dial. Every volume step is as loud as it was. On every Echo.
+- 🖼️ **A Show on the wall** (v1.0.0). A tap on the clock can open the dashboard instead of Assist, a
+  few dashboard tiles can fill the whole screen, and a dashboard you opened goes back to the clock
+  after the time you choose. All of it can be set from the setup page.
+  [docs/dashboards.md](docs/dashboards.md)
+- 🌍 **The clock in your language** (v1.0.0). With Screen language set to German, Spanish, French,
+  Italian or Dutch, the clock's date, the forecast and the weather are written in it.
+  [docs/setup.md](docs/setup.md#clock-and-home-screen)
+- 🎶 **Now playing follows another speaker, and lyrics** (v1.0.0). Now playing can follow another of
+  Home Assistant's players, a Sonos in the same room say: its song and cover show while the device
+  plays nothing of its own, and the buttons control it. A Lyrics switch (off by default) shows the
+  words in time with the music, from the free LRCLIB database, for Music Assistant, DLNA and followed
+  players. [docs/setup.md](docs/setup.md#5-music)
+- 👀 **Presence detection** (v1.0.0). The Show's and the Spot's camera can notice somebody near: a
+  Presence sensor for Home Assistant, and the screen goes out when the room has been empty a while and
+  comes back as you walk up. On the device only, nothing kept; off by default.
+  [docs/setup.md](docs/setup.md#presence-and-gestures)
+- ✋ **Cover the camera to stop an alarm** (v1.0.0, experimental). With Gestures on, a palm over the
+  camera stops a ringing alarm or timer and sends Home Assistant an event. Off by default.
+  [docs/setup.md](docs/setup.md#presence-and-gestures)
+- 🔒 **A settings lock** (v1.0.0). Set a PIN and the Show and the Spot ask for it before their
+  settings open; everything else keeps working for guests and kids. Off by default.
+  [docs/setup.md](docs/setup.md#8-settings-lock)
+- 📡 **DLNA, and FLAC** (v1.0.0). Every device can be a DLNA speaker that music apps and servers play
+  to (BubbleUPnP, Jellyfin, Plex, a NAS), off until you turn it on. Streams in FLAC now play on the
+  device too, alongside MP3 and WAV. [docs/setup.md](docs/setup.md#5-music)
 - 📲 **AirPlay and Spotify Connect** (v0.9.25, new and untested). The Show and the Dot can be a
   speaker other apps play to, under the device's own name: AirPlay from an iPhone, iPad or Mac, and
   Spotify Connect from the Spotify app (Premium). Both are off until you turn them on, on the screen,
@@ -162,7 +193,8 @@ slot system, phone calls, and a minimal Alpine root filesystem in place of Andro
 | 🎙️ **Wake word on the device** | microWakeWord runs locally: twelve wake words, "Alexa", "Okay Nabu", "Hey Jarvis", "Hey Mycroft", "Computer" and more, chosen on the screen or in Home Assistant. Echo cancellation keeps it listening over music. |
 | 🔐 **Secure by default** | SSH is keys-only and off until you turn it on; keys arrive only through Home Assistant. The camera and screen web pages start closed, and a firewall lets in nothing on Wi-Fi but what the device serves. No password logins, not even in rescue. |
 | 🔄 **Updates that can't brick it** | Releases install over the air from Home Assistant's update card into the spare of two root filesystem slots, boot on trial, and fall back on their own if the new one doesn't settle. |
-| 📺 **A screen that's actually useful** | Clock and weather, the conversation as it happens, a glance strip of chips from Home Assistant along the foot of the clock, now playing with song and cover art, your Home Assistant dashboards, forecasts, a live rain radar, the National Weather Service's alerts (in the U.S.), live Home Assistant cameras, timers and alarms, Wi-Fi setup, 13 themes. |
+| 📺 **A screen that's actually useful** | Clock and weather, the conversation as it happens, a glance strip of chips from Home Assistant along the foot of the clock, now playing with song and cover art, your Home Assistant dashboards, forecasts, a live rain radar, the National Weather Service's alerts (in the U.S.), live Home Assistant cameras, timers and alarms, Wi-Fi setup, 13 themes, and 12 clock styles you swipe between. |
+| 🎬 **Videos on the screen** | An address from Home Assistant's `play_video` action, or a video from a DLNA app or media server (BubbleUPnP, Jellyfin, Plex, Windows' Cast to device), plays full screen with its sound, on the Show and the Spot. H.264 at 720p plays best. Off until you turn it on, and a DLNA video from a new address asks on the screen first. [docs/video.md](docs/video.md) |
 | 📻 **Weather and radio with no setup** | A new Show uses the forecast every Home Assistant has, and lists the radio stations near home from Home Assistant's Radio Browser. Pick another weather entity (your own station, say) on the screen, and keep your own favorite stations too. |
 | ⏰ **Alarms that ring on their own** | Set on the screen, by Home Assistant, or followed from its helpers; they ring from the Show's own clock even when Home Assistant is down. Snooze included, and the screen can wake you with a sunrise before the sound. |
 | 🎧 **Bluetooth, rebuilt** | Earbuds and speakers over A2DP, plus a Home Assistant Bluetooth proxy, on a kernel rebuilt with Bluetooth from the LineageOS source. |
@@ -260,8 +292,9 @@ are in [techo5-checkers](https://github.com/HuskerMinion/techo5-checkers).
 speaker, four microphones, wake word, camera, lens cover and mute latch all work, and it takes slot
 updates like the others. It is the newest of the three and has been through far less use than either
 Show 5, so treat it as such. Two things worth knowing first: a seller's model number does not tell the
-two Show 8 generations apart, so go by the year when buying second-hand, and cycling the mute latch
-stops the camera until the unit is rebooted.
+two Show 8 generations apart, so go by the year when buying second-hand. A unit installed before
+v1.0.1 needs the new boot image so a quick tap to unmute no longer leaves the camera off
+([updating the boot image](docs/install.md#updating-the-boot-image)).
 
 ## Under the hood
 

@@ -29,7 +29,7 @@ const (
 	nearMissDuck = 4 * time.Second
 
 	// nearMissQuiet is how long after a duck before another near miss may start one, so a room that
-	// keeps nearly triggering does not hold the music down for ever.
+	// keeps nearly triggering does not hold the music down forever.
 	nearMissQuiet = 6 * time.Second
 
 	// ringHushQuiet is the same idea for a ring, and it matters more: music held down is an

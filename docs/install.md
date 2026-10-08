@@ -281,8 +281,35 @@ Then:
 - **Security**: SSH, and the camera and screen pages on port 8181, have switches on the settings
   screen (Privacy) and in Home Assistant. SSH keys only come from Home Assistant (`esphome.<device>_ssh_keys`).
 - **Updates**: the firmware update entity installs new releases into the other slot, reboots, and
-  falls back if the new slot does not settle.
+  falls back if the new slot does not settle. The boot image is not part of an update; see
+  [Updating the boot image](#updating-the-boot-image).
 - The old Android integrations for the unit (ShowAssist, the View Assist companion) can be deleted.
+
+## Updating the boot image
+
+A firmware update replaces the root filesystem and leaves the boot image (the kernel) alone. When a
+release has a new boot image for your model, put it on over SSH. v1.0.1 has one for the 1st gen
+Show 5 (`techo5-boot-checkers-v1.0.1.img`) and the Show 8 (`techo5-boot-crown-v1.0.1.img`), so a
+quick tap to unmute no longer leaves the camera off. The 2nd gen Show 5 doesn't need it.
+
+Turn **SSH** on, then from the folder you downloaded the image to:
+
+```
+scp -O techo5-boot-<board>-v1.0.1.img root@<address>:/tmp/boot.img
+ssh root@<address>
+```
+
+On the unit, check that the board is the one the image is for (`checkers` or `crown`), that the
+checksum matches the release's `SHA256SUMS`, then write it to the boot partition and restart:
+
+```
+grep -o 'androidboot.product=[a-z]*' /proc/cmdline
+sha256sum /tmp/boot.img
+p=$(grep -l '^PARTNAME=boot$' /sys/class/block/mmcblk0p*/uevent); p=/dev/$(basename $(dirname $p))
+[ -b "$p" ] && dd if=/tmp/boot.img of=$p bs=1M conv=fsync && sync && reboot
+```
+
+Settings, slots and Home Assistant are kept; only the kernel and the rescue environment change.
 
 ## Radio
 
@@ -351,6 +378,7 @@ again on its own is this, not a fault.
 |---|---|
 | The daemon restarts every few seconds on a fresh install, log shows `slice bounds out of range` in `microwakeword` | v0.2.5 shipped damaged wake word models. Use v0.2.6 or later; on a unit already installed, copy good `.tflite` files over `/data/misc/techo5/models/`. |
 | An update from Home Assistant fails with `context deadline exceeded` | The download was too slow, usually on 2.4 GHz next to the unit's own Bluetooth. Press Install again; from v0.2.5 the unit moves itself to the network's 5 GHz radio when one is in range. |
+| An update from Home Assistant is slow, or fails with `nothing arrived` or `gave up after 2h0m0s` | The download is slow or keeps stalling. Newer builds keep what they fetched and carry on from there, on their own and on the next press of Install, and give up only after two hours. A download from the internet that crawls under 50 kB/s while the Wi-Fi is up gets one Wi-Fi reassociation (at most once every 6 hours); the log says `a download from the internet is crawling`. If it is still slow, reconnect the unit's Wi-Fi or restart it, then press Install again. |
 | The screen shows "hacked fastboot" | A leftover `reboot bootloader` request: `fastboot -s <serial> continue`. |
 | No SSH after the switch to the slot | SSH is off unless step 5 was done: turn on the SSH switch in Home Assistant and send a key with the `ssh_keys` action, or use the USB serial console. |
 | The unit sits in rescue | The screen says so: **RESCUE**, with the reason on the last line. No bootable slot. `slotctl status` shows why; the daemon still runs from a slot in rescue, so Home Assistant keeps working while you look. |

@@ -15,6 +15,7 @@
 #   bin/techo5 bin/fbprobe bin/audioprobe bin/rebootto bin/btbridge  Go binaries, armv7
 #   bin/techo5-aec                                         WebRTC echo canceller helper (C++, build-aec.sh), optional
 #   bin/techo5-librespot                                   Spotify Connect receiver (Rust, build-librespot.sh), optional
+#   bin/techo5-ffmpeg                                      the Show's video decoder (C, build-ffmpeg.sh), optional
 #   tools/slotctl tools/techo5-lib.sh tools/packages-rootfs.txt
 #   overlay/                                               tools/linux/rootfs from the repo
 #   inputs/alpine-minirootfs-*-armv7.tar.gz
@@ -102,9 +103,18 @@ fi
 
 # Our binaries and scripts.
 install -d "$R/usr/local/bin" "$R/usr/local/sbin" "$R/lib" "$R/var/lib/bluetooth" "$R/var/lib/bluealsa" "$R/usr/var/lib/bluealsa"
-for b in techo5 fbprobe audioprobe rebootto btbridge techo5-aec techo5-librespot; do
+for b in techo5 fbprobe audioprobe rebootto btbridge techo5-aec techo5-librespot techo5-ffmpeg; do
 	[ -e "$IN/bin/$b" ] && install -m 755 "$IN/bin/$b" "$R/usr/local/bin/$b"
 done
+
+# The video decoder (feature/video) parses whatever a stream holds, so it runs as a user of its own that owns
+# nothing, in the inet group for its one network socket (see the receivers' user above).
+if [ -e "$IN/bin/techo5-ffmpeg" ]; then
+	grep -q '^techo5-video:' "$R/etc/group" || echo 'techo5-video:x:89:' >> "$R/etc/group"
+	grep -q '^techo5-video:' "$R/etc/passwd" || echo 'techo5-video:x:89:89:techo5-video:/var/empty:/sbin/nologin' >> "$R/etc/passwd"
+	grep -q '^inet:' "$R/etc/group" || echo 'inet:x:3003:' >> "$R/etc/group"
+	grep -Eq "^inet:.*[:,]techo5-video(,|\$)" "$R/etc/group" || sed -i -E "/^inet:/{s/:\$/:techo5-video/;t;s/\$/,techo5-video/}" "$R/etc/group"
+fi
 install -m 755 "$IN/tools/slotctl" "$R/usr/local/sbin/slotctl"
 install -m 644 "$IN/tools/techo5-lib.sh" "$R/lib/techo5-lib.sh"
 

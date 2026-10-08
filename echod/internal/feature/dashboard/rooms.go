@@ -158,7 +158,7 @@ func tileOf(e hass.LiveEntity, room string) (Tile, bool) {
 func describe(e hass.LiveEntity, name string) Tile {
 	domain, _, _ := strings.Cut(e.ID, ".")
 	class, _ := e.Attrs["device_class"].(string)
-	t := Tile{Name: name}
+	t := Tile{Entity: e.ID, Name: name}
 	on := e.State == "on" || e.State == "open" || e.State == "opening" || e.State == "playing" ||
 		e.State == "unlocked" || e.State == "heat" || e.State == "cool" || e.State == "heat_cool" || e.State == "home"
 	t.On = on
@@ -182,7 +182,9 @@ func describe(e hass.LiveEntity, name string) Tile {
 		t.Value = climateValue(e)
 	case "media_player":
 		t.Value = title(e.State)
-		if e.State == "playing" || e.State == "paused" {
+		// Idle too: Music Assistant stops a group it cannot pause, and a play then takes its queue up
+		// again (transportTo); a speaker with nothing to go on simply does nothing.
+		if e.State == "playing" || e.State == "paused" || e.State == "idle" {
 			t.Tap = toggle("media_player.media_play_pause")
 		}
 		t.On = e.State == "playing"
@@ -424,8 +426,11 @@ func iconOf(e hass.LiveEntity, domain, class string, on bool) string {
 	return "help-circle-outline"
 }
 
+// volumeSet is MediaPlayerEntityFeature.VOLUME_SET.
+const volumeSet = 4
+
 // adjustOf is the level a finger sliding along the entity's tile sets, if it has one: a light that
-// dims, a cover that stops part way, a thermostat's temperature.
+// dims, a cover that stops part way, a thermostat's temperature, a media player's volume.
 func adjustOf(e hass.LiveEntity, domain string) *Adjust {
 	switch domain {
 	case "light":
@@ -468,6 +473,15 @@ func adjustOf(e hass.LiveEntity, domain string) *Adjust {
 			}
 		}
 		return &Adjust{Entity: e.ID, Kind: "temperature", Value: t, Min: lo, Max: hi, Step: step}
+	case "media_player":
+		// Only a player that says its volume and takes one (MediaPlayerEntityFeature.VOLUME_SET): one
+		// that is off says none, and a slide would set nothing anybody could see.
+		vol, ok := e.Attrs["volume_level"].(float64)
+		features, _ := e.Attrs["supported_features"].(float64)
+		if !ok || int(features)&volumeSet == 0 {
+			return nil
+		}
+		return &Adjust{Entity: e.ID, Kind: "volume", Value: vol * 100, Min: 0, Max: 100, Step: 1}
 	}
 	return nil
 }

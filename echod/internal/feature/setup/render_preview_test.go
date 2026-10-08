@@ -26,7 +26,8 @@ func TestRenderSetupPage(t *testing.T) {
 	}
 	config.Use(filepath.Join(t.TempDir(), "state.json"))
 	SetScreen(&ScreenChoices{Styles: []string{"Classic", "Big", "Flip", "LED", "Analog", "Words", "Sun", "Dashboard"},
-		Current: func() int { return 6 }, Choose: func(int) {}})
+		Current: func() int { return 6 }, Choose: func(int) {},
+		Taps: []string{"Assist", "Dashboard", "Nothing", "Deck"}, TapNow: func() int { return 1 }, ChooseTap: func(int) {}})
 	t.Cleanup(func() { SetScreen(nil) })
 	if th := os.Getenv("SETUP_THEME"); th != "" {
 		if err := config.Set().Screen().Theme(th); err != nil {
@@ -46,6 +47,9 @@ func TestRenderSetupPage(t *testing.T) {
 	_, _ = a.Set(9, 0, config.DaysWeekends, "")
 	_, _ = a.SetReminder(14, 30, config.DaysOnce, "Take the medication", []string{"Kitchen", "Office"})
 	timer.Get().Start("Pasta", 272*time.Second)
+	_ = config.Set().Deck().OBS("192.168.1.20", "pw")
+	_ = config.Set().Deck().Page(0, []config.DeckButton{{Label: "BRB", Action: config.DeckOBSScene, Scene: "BRB", Color: "blue"},
+		{Action: config.DeckOBSStream, Color: "red"}, {Action: config.DeckOBSMute, Input: "Mic", Color: "orange"}})
 
 	f := build()
 	f.Open()

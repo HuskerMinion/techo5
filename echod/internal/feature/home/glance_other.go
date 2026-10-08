@@ -3,3 +3,5 @@
 package home
 
 const hasGlance = false
+
+const hasLyrics = false

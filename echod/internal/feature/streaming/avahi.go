@@ -92,7 +92,7 @@ func ensureBus() {
 		if waitForBus(5 * time.Second) {
 			return
 		}
-		// Or had, and died holding it: the lock is taken over rather than waited on for ever.
+		// Or had, and died holding it: the lock is taken over rather than waited on forever.
 		_ = os.Remove(busStarting)
 		if err := os.Mkdir(busStarting, 0o755); err != nil {
 			return

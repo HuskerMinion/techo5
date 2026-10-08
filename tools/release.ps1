@@ -8,9 +8,9 @@
   installs the binary it names. This script produces both files and publishes them with gh.
 
 .EXAMPLE
-  .\tools\release.ps1 -Version v0.1.0 -Notes "First release: voice satellite on the Echo Show 5."
-  .\tools\release.ps1 -Version v0.1.1 -Notes "..." -Prerelease
-  .\tools\release.ps1 -Version v0.1.2 -Notes "..." -PrebuiltArm bin\echod-arm -PrebuiltArmDot bin\echod-arm-dot
+  .\tools\release.ps1 -Version v0.1.0 -Notes "First release: voice satellite on the Echo Show 5." -NoAgents
+  .\tools\release.ps1 -Version v0.1.1 -Notes "..." -Prerelease -NoAgents
+  .\tools\release.ps1 -Version v0.1.2 -Notes "..." -PrebuiltArm bin\echod-arm -PrebuiltArmDot bin\echod-arm-dot -Agents bin
 #>
 param(
     [Parameter(Mandatory)][ValidatePattern('^v\d+\.\d+\.\d+(-[0-9A-Za-z.]+)?$')][string]$Version,
@@ -49,9 +49,19 @@ param(
     # branch or by hand is stamped with another version, and Home Assistant would then offer the
     # update forever after it was installed.
     [string]$PrebuiltArm = '',
-    [string]$PrebuiltArmDot = ''
+    [string]$PrebuiltArmDot = '',
+    # The folder of TECHO5 Deck agent binaries from the same workflow run (techo5-deck-windows-amd64.exe
+    # and the rest). Each is checked against CI's attestation for this tag, named in the signed
+    # manifest, and published under its own name, so a link to the latest release's file never changes.
+    [string]$Agents = '',
+    # A Show release without the agents breaks every link to the latest release's agent files, so it
+    # takes this switch to make one on purpose.
+    [switch]$NoAgents
 )
 $ErrorActionPreference = 'Stop'
+if (-not $Agents -and -not $NoAgents) {
+    throw "no -Agents folder: the docs link to the latest release's TECHO5 Deck agent files (pass -NoAgents to release without them)"
+}
 if (($PrebuiltArm -and -not $PrebuiltArmDot) -or ($PrebuiltArmDot -and -not $PrebuiltArm)) {
     throw "PrebuiltArm and PrebuiltArmDot must be given together"
 }
@@ -94,6 +104,19 @@ try {
         $env:GOOS = $null; $env:GOARCH = $null; $env:GOARM = $null; $env:CGO_ENABLED = $null
     }
 
+    $agentAssets = @()
+    if ($Agents) {
+        foreach ($n in @('techo5-deck-windows-amd64.exe', 'techo5-deck-windows-arm64.exe', 'techo5-deck-macos-amd64', 'techo5-deck-macos-arm64', 'techo5-deck-linux-amd64', 'techo5-deck-linux-arm64')) {
+            $f = Join-Path $Agents $n
+            if (-not (Test-Path -LiteralPath $f -PathType Leaf)) { throw "deck agent not found: $f" }
+            & gh attestation verify $f --repo $repo --source-ref "refs/tags/$Version" | Out-Null
+            if ($LASTEXITCODE -ne 0) { throw "$f is not attested as built by CI from tag $Version" }
+            $named = Join-Path $bin $n
+            Copy-Item $f $named -Force
+            $agentAssets += $named
+        }
+    }
+
     # The boot images are named in the manifest, so they have to be under their published names before
     # it is written. An image built without --no-key carries the builder's key in its initramfs; that
     # must not ship. The check is for the file entry (its name ends in a NUL), not the init script that
@@ -121,7 +144,7 @@ try {
     if ($DotRootfs) { $mk += @('-rootfs-arm-dot', $DotRootfs) }
     # Under the signature, not just in SHA256SUMS: install-show.py writes a boot image to a unit, and
     # nothing signs SHA256SUMS, so whatever could serve a substituted list could serve the image too.
-    foreach ($a in $bootAssets) { $mk += @('-asset', $a) }
+    foreach ($a in $bootAssets + $agentAssets) { $mk += @('-asset', $a) }
     & $Go @mk
     if ($LASTEXITCODE -ne 0) { throw 'mkmanifest failed' }
     Get-Content (Join-Path $bin 'manifest.json')
@@ -133,6 +156,7 @@ $args = @('release', 'create', $Version, (Join-Path $bin 'echod-arm'), (Join-Pat
 if ($Rootfs) { $args += $Rootfs }
 if ($DotRootfs) { $args += $DotRootfs }
 $args += $bootAssets
+$args += $agentAssets
 # SHA256SUMS: for checking a download by hand. No installer reads it — the signed manifest covers
 # every file one of them fetches, and an unsigned list of checksums is no check against whoever served
 # the files it describes.
@@ -180,9 +204,9 @@ if (-not $devVersion -or (Test-VersionNewer $Version $devVersion)) {
 # re-running this. SHA256SUMS is checked too, so what people verify by hand stays complete.
 $published = @(& gh release view $Version --repo $repo --json assets -q '.assets[].name')
 $named = @((Get-Content (Join-Path $bin 'manifest.json') -Raw | ConvertFrom-Json).assets.PSObject.Properties.Name)
-$unsigned = @($published | Where-Object { $_ -like 'techo5-boot-*' -and $named -notcontains $_ })
+$unsigned = @($published | Where-Object { ($_ -like 'techo5-boot-*' -or $_ -like 'techo5-deck-*') -and $named -notcontains $_ })
 if ($unsigned) {
-    throw "published, but these boot images are not named in the signed manifest and no installer will use them: $($unsigned -join ', ')"
+    throw "published, but these are not named in the signed manifest and nothing will trust them: $($unsigned -join ', ')"
 }
 $listed = @(Get-Content $sumsFile | ForEach-Object { ($_ -split '\s+', 2)[1].Trim() })
 $missing = @($published | Where-Object { $_ -ne 'SHA256SUMS' -and $listed -notcontains $_ })

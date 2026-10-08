@@ -34,7 +34,7 @@ func TestOnceItIsGoneItIsGone(t *testing.T) {
 // Home Assistant shows whatever it is given.
 func TestTheErrorSaysWhatToDo(t *testing.T) {
 	msg := ErrNeedsReboot.Error()
-	for _, want := range []string{"reboot", "camera"} {
+	for _, want := range []string{"hold the mute button", "restart", "camera"} {
 		if !strings.Contains(msg, want) {
 			t.Errorf("%q does not mention %q", msg, want)
 		}
@@ -49,5 +49,22 @@ func TestOnlyEIOLatches(t *testing.T) {
 	}
 	if errors.Is(syscall.EBUSY, syscall.EIO) {
 		t.Error("EBUSY reads as EIO, which would latch on a camera that is only in use")
+	}
+}
+
+// A hold of the mute button lets a camera held off by the latch be tried again, and says so.
+func TestAHoldLetsTheCameraBeTriedAgain(t *testing.T) {
+	c := &Camera{}
+	c.wedged = ErrNeedsReboot
+	told := 0
+	stop := Unwedged.Listen(func(struct{}) { told++ })
+	defer stop()
+	c.Unwedge()
+	if c.Wedged() != nil || told != 1 {
+		t.Fatalf("after a hold: wedged=%v told=%d", c.Wedged(), told)
+	}
+	c.Unwedge() // nothing held off: nothing to say
+	if told != 1 {
+		t.Errorf("a hold with nothing held off still told %d times", told)
 	}
 }

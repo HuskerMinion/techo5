@@ -15,10 +15,10 @@ func TestDashboardShownByHomeAssistantStays(t *testing.T) {
 	if !d.dash || !d.dashHeld {
 		t.Fatalf("dashboard_show: dash %v held %v, want both", d.dash, d.dashHeld)
 	}
-	d.dashTouched = time.Now().Add(-2 * dashForget)
+	d.dashTouched = time.Now().Add(-20 * time.Minute)
 	d.dashScene(&scene{phase: "idle"}, false)
 	if !d.dash {
-		t.Fatal("a dashboard put up by Home Assistant was forgotten after dashForget")
+		t.Fatal("a dashboard put up by Home Assistant was forgotten after the return time")
 	}
 
 	d.dashShowing = true
@@ -31,9 +31,9 @@ func TestDashboardShownByHomeAssistantStays(t *testing.T) {
 // One opened by a finger is still forgotten.
 func TestDashboardOpenedByHandIsForgotten(t *testing.T) {
 	d := &Display{}
-	d.dash, d.dashTouched = true, time.Now().Add(-2*dashForget)
+	d.dash, d.dashTouched = true, time.Now().Add(-20*time.Minute)
 	d.dashScene(&scene{phase: "idle"}, false)
 	if d.dash {
-		t.Fatal("a dashboard opened by hand stayed past dashForget")
+		t.Fatal("a dashboard opened by hand stayed past the return time")
 	}
 }

@@ -120,13 +120,24 @@ microphones instead of their average (`patch-dtb.py`, which needs `python3 -m pi
 | Board | `DEFCONFIG` | |
 |---|---|---|
 | Echo Show 5 2nd gen | `cronos_defconfig` | the default |
-| Echo Show 5 1st gen | `checkers_defconfig` | |
-| Echo Show 8 1st gen | `crown_defconfig` | plus `PATCHES=` the microphone patch below |
+| Echo Show 5 1st gen | `checkers_defconfig` | plus `PATCHES=tools/linux/patches` |
+| Echo Show 8 1st gen | `crown_defconfig` | plus `PATCHES=tools/linux/patches` |
 
-The Show 8 needs `tools/linux/patches/checkers-0001-mic-enable-on-capture.patch`, which puts the
-microphone pin back when a capture stream opens and the mute latch reads ungated. Despite the name it
-is not a 1st gen Show 5 patch: it touches `drivers/misc/gating.c`, `include/misc/gating.h` and
-`mt_soc_machine.c`, which are board-generic, and the Show 8 has the same latch. `crown_defconfig` is in
+Both 1st gen boards have a mute latch that the 2nd gen doesn't, and `tools/linux/patches` holds three
+fixes for it:
+
+- `checkers-0001-mic-enable-on-capture.patch` puts the microphone pin back when a capture stream opens
+  and the latch reads ungated.
+- `checkers-0002-camera-follows-the-latch.patch` lets the camera follow the latch itself, so a quick
+  tap to unmute no longer leaves the camera blocked until a reboot, and starts the driver from the
+  latch's real state after a boot with it engaged. A mute that is still being turned on counts as on,
+  and a state pin that can't be read counts as muted.
+- `checkers-0003-mute-button-follows-a-short-press.patch` keeps the driver's idea of the latch right
+  after a quick tap to unmute, so the next long press mutes instead of doing nothing.
+
+Despite the names they are not only for the 1st gen Show 5: they touch `drivers/misc/gating.c`,
+`include/misc/gating.h`, `mt_soc_machine.c` and the checkers and crown camera drivers, and the Show 8
+has the same latch. `crown_defconfig` is in
 the Amazon kernel tree already, beside the others, at the same commit — it was diffed against a Show 8's
 own `/proc/config.gz`, 1341 options each side and no differences either way.
 
@@ -222,7 +233,7 @@ for all three is built here:
 ```
 git tag v0.6.0 && git push origin v0.6.0                       # the Show; triggers the workflow
 gh run download -n techo5-v0.6.0 -D bin                        # once it finishes
-.\tools\release.ps1 -Version v0.6.0 -Notes "..." -PrebuiltArm bin\echod-arm -PrebuiltArmDot bin\echod-arm-dot
+.\tools\release.ps1 -Version v0.6.0 -Notes "..." -PrebuiltArm bin\echod-arm -PrebuiltArmDot bin\echod-arm-dot -Agents bin
 ```
 
 All three Shows share the tag `vX.Y.Z` and the one `echod-arm`: which board a unit is settles itself at

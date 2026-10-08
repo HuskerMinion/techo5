@@ -12,6 +12,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/HuskerMinion/techo5/echod/internal/lib/locale"
 	xdraw "golang.org/x/image/draw"
 	"golang.org/x/image/font"
 	"golang.org/x/image/font/gofont/gobold"
@@ -94,6 +95,14 @@ func (r *roundRenderer) styledClockFace(s roundScene, style string) {
 		r.sunFace(s)
 	case styleDashboard:
 		r.dashboardFace(s)
+	case styleBinary:
+		r.binaryFace(s)
+	case styleWorld:
+		r.worldFace(s)
+	case styleAgenda:
+		r.agendaFace(s)
+	case styleGlow:
+		r.glowFace(s)
 	}
 }
 
@@ -130,7 +139,7 @@ func (r *roundRenderer) statusWord(s roundScene, baseline int) {
 
 // shortDay is the day and the temperature, for a style's foot: "Wed 16  ·  72°".
 func shortDay(s roundScene) string {
-	line := s.now.Format("Mon 2")
+	line := locale.DayAndNumber(s.now, screenLang())
 	if s.weather.Temp != "" {
 		line += "  ·  " + s.weather.Temp
 	}
@@ -264,7 +273,7 @@ func (r *roundRenderer) ledFace(s roundScene) {
 	if ampm != "" {
 		r.text(r.label, ampm, int(x-gap+8), int(top+dh), lit)
 	}
-	r.centered(r.small, s.now.Format("Monday, January 2"), 330, colDim)
+	r.centered(r.small, locale.LongDate(s.now, screenLang()), 330, colDim)
 	r.footLine(s, 372, "")
 }
 
@@ -327,7 +336,7 @@ func (r *roundRenderer) analogFace(s roundScene) {
 		}
 		r.text(r.small, w.Temp, left+int(2*u)+8, 150, colText)
 	}
-	day := strings.ToUpper(s.now.Format("Mon 2"))
+	day := strings.ToUpper(locale.DayAndNumber(s.now, screenLang()))
 	dw := r.width(r.label, day) + 20
 	r.roundFill(image.Rect(center-dw/2, 302, center+dw/2, 334), 8, color.RGBA{24, 29, 36, 255}, color.RGBA{24, 29, 36, 255})
 	r.centered(r.label, day, 325, colText)
@@ -384,7 +393,7 @@ func (r *roundRenderer) sunFace(s roundScene) {
 	}
 	r.statusWord(s, 118)
 	r.timeLine(s.now, 206)
-	r.centered(r.small, s.now.Format("Monday, January 2"), 256, colDim)
+	r.centered(r.small, locale.LongDate(s.now, screenLang()), 256, colDim)
 	line := 298
 	if weatherLine(s.weather) != "" {
 		r.clockWeather(s.weather, line)
@@ -484,7 +493,7 @@ func (r *roundRenderer) dashboardFace(s roundScene) {
 	if ampm != "" {
 		r.text(r.label, ampm, x+r.width(h, hm)+6, 138, colAccent)
 	}
-	r.centered(r.styleFace(false, 20), s.now.Format("Monday, January 2"), 172, colDim)
+	r.centered(r.styleFace(false, 20), locale.LongDate(s.now, screenLang()), 172, colDim)
 	r.line(90, 196, 390, 196, 2, colTrack)
 
 	f := r.styleFace(false, 20)
@@ -506,7 +515,7 @@ func (r *roundRenderer) dashboardFace(s roundScene) {
 	days := s.style.days[:min(len(s.style.days), 3)]
 	for i, d := range days {
 		cx := center - 100 + i*100
-		name := d.When.Format("Mon")
+		name := locale.ShortWeekday(d.When, screenLang())
 		if i == 0 {
 			name = "Now"
 		}
@@ -525,12 +534,12 @@ func dashWhenSpot(start time.Time, allDay bool, now time.Time) string {
 		return "Now"
 	case allDay && start.Before(tomorrow):
 		return "Today"
-	case allDay:
-		return "Tmrw"
 	case start.Before(tomorrow):
 		return clockText(start)
+	case start.Before(tomorrow.AddDate(0, 0, 1)):
+		return "Tmrw"
 	}
-	return "Tmrw"
+	return locale.ShortWeekday(start, screenLang())
 }
 
 // spotClip is s cut to fit w, with an ellipsis.

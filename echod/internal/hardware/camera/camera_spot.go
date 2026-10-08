@@ -166,6 +166,7 @@ func (m *mmio) unmap() {
 }
 
 type device struct {
+	hold           aeHold // exposure held still through a sudden change, for gestures
 	isp, sens, ion int
 	cam, sen, mipi *mmio
 	buf            []byte
@@ -499,6 +500,9 @@ func (d *device) autoExpose(raw []byte) {
 		return
 	}
 	mean := meter(raw)
+	if d.hold.held(float64(mean)) {
+		return
+	}
 	if mean >= aeTarget-aeDeadband && mean <= aeTarget+aeDeadband {
 		return
 	}
@@ -659,3 +663,20 @@ func render(raw []byte, t tone) *image.RGBA {
 
 // Full is the frame at full size: the same picture as Image, which is already the sensor's size.
 func (f *Frame) Full() *image.RGBA { return f.Image() }
+
+// lumaGrid samples one green pair per grid cell, at the cell's middle, from the RGGB frame.
+func lumaGrid(raw []byte, w, h int) []uint8 {
+	out := make([]uint8, w*h)
+	for gy := range h {
+		y := (2*gy + 1) * sensorH / (2 * h) &^ 1 // the top of a 2x2 cell
+		for gx := range w {
+			x := (2*gx + 1) * sensorW / (2 * w) &^ 1
+			if (y+1)*sensorW+x+1 >= len(raw) {
+				continue
+			}
+			g := (uint16(raw[y*sensorW+x+1]) + uint16(raw[(y+1)*sensorW+x])) / 2
+			out[gy*w+gx] = uint8(g)
+		}
+	}
+	return out
+}

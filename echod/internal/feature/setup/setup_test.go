@@ -403,3 +403,26 @@ func TestANetworkNameCannotCarryALineEnding(t *testing.T) {
 		t.Errorf("the configuration was written for a name that was refused: %v", err)
 	}
 }
+
+// Allow behind the settings lock lets in the browser that was asking when Allow was tapped, and not one
+// that asked while the PIN was being typed: that one was never seen at the device.
+func TestAllowLetsInOnlyTheBrowserItWasFor(t *testing.T) {
+	f := build()
+	f.Open()
+	a := ask(t, f)
+	asking := f.Asking()
+	if asking == "" {
+		t.Fatal("nobody asking after a browser asked")
+	}
+	f.Answer(false) // a's ask runs out while the PIN is typed
+	b := ask(t, f)
+	if f.AllowAsking(asking) {
+		t.Error("the PIN for the first browser let in the second")
+	}
+	if f.letIn(a.Value) || f.letIn(b.Value) {
+		t.Fatal("a browser was let in")
+	}
+	if !f.AllowAsking(f.Asking()) || !f.letIn(b.Value) {
+		t.Error("Allow for the browser asking did not let it in")
+	}
+}

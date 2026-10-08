@@ -120,6 +120,10 @@ type track struct {
 
 	// ask is the stream's asks when this track was started.
 	ask uint64
+
+	// queued counts the samples of this track that went into the speaker's queue, under the stream's
+	// write lock: with what is still waiting, how far into the track the room has heard (Heard).
+	queued uint64
 }
 
 // NewStream builds the stream and joins the speaker's backgrounds. changed is called whenever what it
@@ -715,19 +719,50 @@ func (m *Stream) feed(t *track, pcm []byte) {
 // waiting on it, and what that goroutine does next is read whatever the socket already holds — so
 // without this it can put a chunk of a track that has been stopped into a queue that was just
 // flushed, and the speaker plays it.
-func (m *Stream) queue(t *track, samples []int16) {
+func (m *Stream) queue(t *track, samples []int16) { m.offer(t, samples) }
+
+// offer is queue, saying whether the samples are dealt with: queued, or dropped for a track that is
+// over. False is a track held up (paused, or the speaker taken from it) as the samples arrived: they
+// are still its to play once it may.
+func (m *Stream) offer(t *track, samples []int16) bool {
 	m.write.Lock()
 	defer m.write.Unlock()
 
 	m.mu.Lock()
-	stale := m.gate != nil || m.track != t
+	gated, gone := m.gate != nil, m.track != t
 	m.mu.Unlock()
-	if stale {
-		return
+	if gone {
+		return true
+	}
+	if gated {
+		return false
 	}
 
 	m.attenuate(samples)
 	m.out.Play(samples)
+	t.queued += uint64(len(samples))
+	return true
+}
+
+// Heard is how far into the received track named name the room has heard, and whether that is the
+// track loaded now: what it queued, less what is still waiting in the queue, kept aside for a pause,
+// or on its way through the card. A video's sound is its clock (feature/video).
+func (m *Stream) Heard(name string) (time.Duration, bool) {
+	if m == nil {
+		return 0, false
+	}
+	m.write.Lock()
+	defer m.write.Unlock()
+	m.mu.Lock()
+	t := m.track
+	kept := len(m.rewind)
+	m.mu.Unlock()
+	if t == nil || !t.received || t.item != name {
+		return 0, false
+	}
+	frames := int64(t.queued/speaker.Channels) - int64(m.out.Queued()) - int64(kept/speaker.Channels)
+	at := time.Duration(frames)*time.Second/speaker.Rate - speaker.OutputLatency
+	return max(at, 0), true
 }
 
 // Requeue ducks what is already queued, which is up to a second of music the room would otherwise hear

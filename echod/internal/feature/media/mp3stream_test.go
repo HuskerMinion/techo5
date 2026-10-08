@@ -148,7 +148,7 @@ func TestAnID3TagIsSkippedWithinReason(t *testing.T) {
 	}
 }
 
-// Something else called MP3 is given up on after a while, not scanned for ever.
+// Something else called MP3 is given up on after a while, not scanned forever.
 func TestGarbageCalledMP3EndsInsteadOfScanningForever(t *testing.T) {
 	junk := make([]byte, syncMost+4096) // zeros: never a frame header
 	if _, err := served(t, junk, "audio/mpeg"); err == nil {

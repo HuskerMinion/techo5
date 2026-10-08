@@ -15,7 +15,12 @@ import (
 // after boot, and an advert that never reappears is a device that has to be found by address.
 const mdnsRetry = 3 * time.Second
 
-// advertise publishes the addresses the device actually has, and republishes them when they change.
+// advertise publishes the addresses the device actually has, and how its key stands, and republishes
+// when either changes.
+//
+// The key decides what Home Assistant does with a device it finds (keyTXT). A device waiting to be
+// added that announced itself as needing a key had Home Assistant asking for one nobody had, and the
+// window shut on a key nobody would ever have.
 //
 // echod starts from init, well before wifi has associated. The addresses are passed rather than left
 // to the library, which falls back to loopback when nothing routable exists — a record Home Assistant
@@ -34,16 +39,20 @@ func (a *API) advertise(ctx context.Context, port int) {
 			continue
 		}
 
+		keyed := a.keyed.Load()
+		encrypted, provisionable := keyTXT(keyed)
+		info := a.server().Info
 		adv, err := mdns.Advertise(mdns.Config{
-			Name:         a.name,
-			FriendlyName: a.srv.Info.FriendlyName,
-			Port:         port,
-			MACAddress:   a.srv.Info.MACAddress,
-			Version:      a.srv.Info.Version,
-			Platform:     layout.Platform,
-			Board:        layout.Board,
-			Encrypted:    a.srv.PSK != nil,
-			IPs:          ips,
+			Name:          a.name,
+			FriendlyName:  info.FriendlyName,
+			Port:          port,
+			MACAddress:    info.MACAddress,
+			Version:       info.Version,
+			Platform:      layout.Platform,
+			Board:         layout.Board,
+			Encrypted:     encrypted,
+			Provisionable: provisionable,
+			IPs:           ips,
 		})
 		if err != nil {
 			// Only the first failure is worth a warning: after that it is the expected state of a
@@ -59,19 +68,38 @@ func (a *API) advertise(ctx context.Context, port int) {
 			continue
 		}
 
-		slog.Info("advertising over mdns", "name", a.name, "port", port, "addrs", metrics.AddressKey(ips))
+		slog.Info("advertising over mdns", "name", a.name, "port", port, "addrs", metrics.AddressKey(ips), "key", keyName(keyed))
 
 		// The registration stands until the addresses it was made with are no longer the ones the
-		// device has: a lease that changed, or a network that arrived late.
-		for metrics.AddressKey(metrics.Addresses()) == metrics.AddressKey(ips) {
+		// device has (a lease that changed, or a network that arrived late), or the key changed kind.
+		for metrics.AddressKey(metrics.Addresses()) == metrics.AddressKey(ips) && a.keyed.Load() == keyed {
 			if !pause(ctx, mdnsRetry) {
 				adv.Close()
 				return
 			}
 		}
 		adv.Close()
-		slog.Info("addresses changed, re-advertising over mdns", "was", metrics.AddressKey(ips))
+		slog.Info("addresses or key changed, re-advertising over mdns", "was", metrics.AddressKey(ips), "key was", keyName(keyed))
 	}
+}
+
+// keyTXT is what the record says about a kind of key. A real key is api_encryption: Home Assistant asks
+// for it. The zero key of a device waiting to be added (adopt.go) is api_encryption_supported with
+// api_provisioning=zero-psk: Home Assistant adds it with nothing typed and sets a key of its own, over
+// zero-key Noise, or over plaintext as Home Assistant 2026.9 does (the library takes either while the
+// zero key is served). No key is plaintext, which supports encryption without asking for it.
+func keyTXT(kind int32) (encrypted, provisionable bool) {
+	return kind == keyReal, kind == keyZero
+}
+
+func keyName(k int32) string {
+	switch k {
+	case keyZero:
+		return "waiting for a Home Assistant to set one"
+	case keyReal:
+		return "set"
+	}
+	return "none"
 }
 
 // pause sleeps unless ctx ends first, reporting whether there is any point carrying on.

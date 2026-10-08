@@ -165,3 +165,58 @@ func TestTheNightLightStaysForATouchAndATurn(t *testing.T) {
 		t.Error("the screen went back down while it was being used")
 	}
 }
+
+// A glow left over (a video lit the screen at the night light's level, then the night light was turned
+// off) is cleared as the night puts the screen out, so the next tap lights it as a tap does.
+func TestGoingDarkClearsAGlowLeftOver(t *testing.T) {
+	config.Use(filepath.Join(t.TempDir(), "config.json"))
+	h := time.Now().Hour()
+	if err := config.Set().Screen().Night(fmt.Sprintf("%d-%d", (h+23)%24, (h+2)%24)); err != nil {
+		t.Fatal(err)
+	}
+	d := &Display{
+		poke: make(chan struct{}, 1),
+		view: voice.State{Phase: "idle"},
+		light: &esphome.Light{
+			Base:                esphome.Base{ObjectID: "screen", Name: "Screen", Icon: "mdi:monitor"},
+			SupportedColorModes: []esphome.ColorMode{esphome.ColorModeBrightness},
+		},
+		on: true, ceiling: 60, nightGlow: true,
+	}
+	d.touchedAt = time.Now().Add(-time.Hour)
+	d.viewAt = time.Now().Add(-time.Hour)
+	if !d.night(time.Now(), true, voice.State{Phase: "idle"}) {
+		t.Fatal("the night left the screen on")
+	}
+	d.mu.Lock()
+	glowing, dark := d.nightGlow, d.nightDark
+	d.mu.Unlock()
+	if glowing || !dark {
+		t.Errorf("glow=%v dark=%v, want the glow gone and the screen dark", glowing, dark)
+	}
+}
+
+// On a night light the video page still takes its fingers: the night light's rule is the clock's.
+func TestTheVideoPageTakesTapsAtNight(t *testing.T) {
+	config.Use(filepath.Join(t.TempDir(), "config.json"))
+	d := &Display{
+		poke: make(chan struct{}, 1),
+		view: voice.State{Phase: "idle"},
+		light: &esphome.Light{
+			Base:                esphome.Base{ObjectID: "screen", Name: "Screen", Icon: "mdi:monitor"},
+			SupportedColorModes: []esphome.ColorMode{esphome.ColorModeBrightness},
+		},
+		on: true, ceiling: 60, nightGlow: true, videoOnScreen: true, videoTried: 5,
+	}
+	if err := config.Set().Screen().Welcomed(true); err != nil {
+		t.Fatal(err)
+	}
+	// No video is playing in the test, so the page is the one saying a video failed: a tap puts it away.
+	d.gesture(touch.Gesture{Kind: touch.Tap, X: 400, Y: 200})
+	d.mu.Lock()
+	tried := d.videoTried
+	d.mu.Unlock()
+	if tried != 0 {
+		t.Error("the night light took the tap meant for the video page")
+	}
+}

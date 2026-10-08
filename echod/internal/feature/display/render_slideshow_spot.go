@@ -8,6 +8,7 @@ import (
 	"image/draw"
 
 	"github.com/HuskerMinion/techo5/echod/internal/config"
+	"github.com/HuskerMinion/techo5/echod/internal/lib/locale"
 )
 
 // slideshowWash is the theme's ground color, translucent, over a photo — the same technique
@@ -54,5 +55,5 @@ func (r *roundRenderer) screensaverClock(s roundScene, big bool) {
 	}
 	now := s.now
 	r.timeLine(now, 240)
-	r.centered(r.small, now.Format("Monday, January 2"), 290, colDim)
+	r.centered(r.small, locale.LongDate(now, screenLang()), 290, colDim)
 }

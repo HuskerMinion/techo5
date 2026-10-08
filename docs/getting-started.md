@@ -30,9 +30,9 @@ Show 8 owner should know before starting. The 1st gen's label says C7H6N3; the 2
 almost the same, says A8H3N2, and can't be unlocked. When buying second-hand go by that label, not the
 serial number or the box: serials starting G6G1 turn up on both generations, and a box can belong to another
 unit. The 1st gen also has a 1 MP camera where the 2nd gen has 13 MP, and the board a 1st gen reports
-is `crown`. And the camera can stay off until the unit is rebooted: cycling the mute latch does it, and
-so does a daemon restart. The daemon says so when it happens (`the microphone latch cut the sensor's
-power behind its driver`), and the log is the whole story — only a reboot brings the camera back. Other
+is `crown`. On boot images before v1.0.1, a quick tap of the mute button to unmute leaves the camera
+off until the unit is rebooted; the v1.0.1 boot image fixes that, and a unit installed earlier gets it
+by [updating its boot image](install.md#updating-the-boot-image). Other
 Echos (the Dot 3rd gen and later, and so on) are **not** supported.
 
 ## What every device needs

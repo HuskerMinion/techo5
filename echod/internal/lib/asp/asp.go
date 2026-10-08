@@ -177,6 +177,9 @@ func LoadSet(dir string, set Set) (*Tuning, error) {
 	return t, nil
 }
 
+// Name is which set this is: "dot", "show", "crown" or "spot".
+func (t *Tuning) Name() string { return t.set.Name }
+
 // Bucket is which filter a fraction of full volume uses: the first one the volume reaches up to, and
 // the last of them for anything above the rest.
 func (t *Tuning) Bucket(of float64) int {

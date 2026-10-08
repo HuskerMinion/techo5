@@ -224,6 +224,7 @@ func (m *mmio) unmap() {
 
 // device is the open camera: file descriptors, register windows, the frame buffers.
 type device struct {
+	hold           aeHold // exposure held still through a sudden change, for gestures
 	isp, sens, ion int
 	cam, sen, mipi *mmio
 	buf            []byte
@@ -355,6 +356,9 @@ func (d *device) autoExpose(bayer []byte) {
 		return
 	}
 	mean := int(meter(bayer))
+	if d.hold.held(float64(mean)) {
+		return
+	}
 	if mean >= aeTarget-aeDeadband && mean <= aeTarget+aeDeadband {
 		return
 	}
@@ -856,4 +860,40 @@ func (f *Frame) Full() *image.RGBA {
 		}
 	}
 	return img
+}
+
+// lumaGrid samples one green pair per grid cell, at the cell's middle, from the packed frame: the
+// Bayer cell (x, y) is pixels (2x, 2y) to (2x+1, 2y+1), and its greens are (2x+1, 2y) and (2x, 2y+1).
+func lumaGrid(raw []byte, w, h int) []uint8 {
+	out := make([]uint8, w*h)
+	px := func(line []byte, x int) uint16 {
+		i := x / 4 * 5
+		if i+4 >= len(line) {
+			return 0
+		}
+		b := line[i : i+5]
+		switch x % 4 {
+		case 0:
+			return uint16(b[0]) | uint16(b[1]&3)<<8
+		case 1:
+			return uint16(b[1])>>2 | uint16(b[2]&0xF)<<6
+		case 2:
+			return uint16(b[2])>>4 | uint16(b[3]&0x3F)<<4
+		}
+		return uint16(b[3])>>6 | uint16(b[4])<<2
+	}
+	for gy := range h {
+		y := (2*gy + 1) * Height / (2 * h)
+		if (2*y+2)*bytesPerLine > len(raw) {
+			continue
+		}
+		row0 := raw[(2*y)*bytesPerLine : (2*y+1)*bytesPerLine]
+		row1 := raw[(2*y+1)*bytesPerLine : (2*y+2)*bytesPerLine]
+		for gx := range w {
+			x := (2*gx + 1) * Width / (2 * w)
+			g := px(row0, 2*x+1) + px(row1, 2*x) // 11 bits
+			out[gy*w+gx] = uint8(min(g>>3, 255))
+		}
+	}
+	return out
 }

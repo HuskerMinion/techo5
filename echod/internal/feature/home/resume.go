@@ -28,7 +28,7 @@ const (
 
 	// resumeTries is how many times in resumeWindow a station may be put back before this gives up
 	// and leaves it off. A stream that drops three times in ten minutes is not going to keep playing,
-	// and a device that keeps trying for ever is worse than one that stops.
+	// and a device that keeps trying forever is worse than one that stops.
 	resumeTries  = 3
 	resumeWindow = 10 * time.Minute
 )

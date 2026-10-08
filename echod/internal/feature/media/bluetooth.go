@@ -6,6 +6,8 @@ import (
 	"io"
 	"log/slog"
 	"os"
+	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/HuskerMinion/techo5/echod/internal/hardware/speaker"
@@ -17,6 +19,32 @@ import (
 type PCMSource interface {
 	io.ReadCloser
 	SetReadDeadline(time.Time) error
+}
+
+// keepWhileHeld names the received tracks whose audio is kept, not dropped, when it arrives while
+// the track is held up (KeepWhileHeld).
+var keepWhileHeld sync.Map
+
+// KeepWhileHeld marks the received track named name as one whose audio is never dropped for arriving
+// while it is paused or a reply has the speaker: the video's (feature/video), whose sound is its
+// picture's clock. Bluetooth, AirPlay, Spotify Connect and DLNA music keep the old way.
+func KeepWhileHeld(name string) { keepWhileHeld.Store(name, true) }
+
+func keepsWhileHeld(name string) bool {
+	_, ok := keepWhileHeld.Load(name)
+	return ok
+}
+
+// offeredHook, when set, hears how each offer of received audio went; tests wait on it.
+var offeredHook atomic.Pointer[func(item string, ok bool)]
+
+// offered is offer, for received audio, told to offeredHook.
+func (m *Stream) offered(t *track, samples []int16) bool {
+	ok := m.offer(t, samples)
+	if h := offeredHook.Load(); h != nil {
+		(*h)(t.item, ok)
+	}
+	return ok
 }
 
 // receiveQuiet is how long a remote may send nothing before its track ends. A phone that is paused
@@ -42,6 +70,9 @@ func (m *Stream) PlayPCM(name string, src PCMSource, rate, channels int) {
 	slog.Info("playing received audio", "from", name, "rate", rate, "channels", channels)
 
 	safe.Go("received audio", func() {
+		// A phone that stopped sending is not a stream to put back on: it is somebody walking away.
+		// Deferred, so a source that panics (a decoder fed a lying stream) still lets the speaker go.
+		defer m.finished(t, false)
 		stop := context.AfterFunc(ctx, func() { _ = src.Close() })
 		defer stop()
 		defer src.Close()
@@ -50,8 +81,6 @@ func (m *Stream) PlayPCM(name string, src PCMSource, rate, channels int) {
 		if err != nil && ctx.Err() == nil {
 			slog.Warn("received audio ended", "from", name, "err", err)
 		}
-		// A phone that stopped sending is not a stream to put back on: it is somebody walking away.
-		m.finished(t, false)
 	})
 }
 
@@ -85,7 +114,20 @@ func (m *Stream) receive(ctx context.Context, t *track, src PCMSource, conv *toS
 		if n > 0 {
 			in := append(carry, buf[:n]...)
 			whole := len(in) - len(in)%(conv.channels*2)
-			m.queue(t, conv.run(in[:whole]))
+			samples := conv.run(in[:whole])
+			if keepsWhileHeld(t.item) {
+				// Held up between the read and the queue (a pause, or a reply taking the speaker), what was
+				// read waits for the track to go on rather than being dropped: a video's picture follows
+				// its sound (Stream.Heard), and dropped, the sound would run ahead of it.
+				for !m.offered(t, samples) {
+					if err := m.wait(ctx); err != nil {
+						return err
+					}
+				}
+			} else {
+				// Every other received track as it always was: what arrives while it is held up goes.
+				m.offered(t, samples)
+			}
 			carry = append(carry[:0], in[whole:]...)
 		}
 		switch {

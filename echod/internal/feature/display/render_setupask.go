@@ -6,7 +6,7 @@ package display
 //
 // A press on the device is what proves somebody is standing at it, and the Dot has a button for
 // that. The Show has volume and mute and nothing else — so the screen said "press the action
-// button", which is a button it does not have, and a browser could ask for ever with nothing on the
+// button", which is a button it does not have, and a browser could ask forever with nothing on the
 // device able to say yes. This is that press: over whatever was on the screen, with the refusal
 // where the eye lands first and the two answers far enough apart that neither is given by accident.
 //

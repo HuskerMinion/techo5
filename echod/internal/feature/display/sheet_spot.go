@@ -69,6 +69,22 @@ func (r *paint) swatchStrip(settingRow, int, int, int) {}
 
 // openSettings puts the settings screen up on its six categories. Called with d.mu held.
 func (d *Display) openSettings() {
+	if security.Locked() {
+		// The settings lock: the PIN pad first, and the settings once the PIN is right.
+		d.closeMenu()
+		openPIN(func() {
+			d.mu.Lock()
+			d.openSettingsNow()
+			d.mu.Unlock()
+			d.wake()
+		})
+		return
+	}
+	d.openSettingsNow()
+}
+
+// openSettingsNow is openSettings past the lock. Called with d.mu held.
+func (d *Display) openSettingsNow() {
 	d.closeMenu()
 	d.sheetOpen, d.sheetGrid, d.sheetAt = true, true, time.Now()
 	d.picker, d.cardScroll, d.pickScroll, d.draft, d.dragging = "", 0, 0, nil, false
@@ -150,6 +166,8 @@ func adaptRows(rows []settingRow, sv sheetView) []settingRow {
 			row.sub = "Not the music's"
 		case row.id == "musicstrip":
 			continue // the strip is the Show's; the round face has no clock page under it to share
+		case row.id == "lyrics":
+			continue // the words need the Show's page; the round face has room for the song alone
 		case row.id == "wakesens":
 			row.label = "Sensitivity"
 		case row.id == "output":
@@ -508,11 +526,28 @@ func (d *Display) OpenSheet(name string) bool {
 	if !ok && !grid {
 		return false
 	}
-	d.mu.Lock()
-	d.openSettings()
-	if !grid {
-		d.cat, d.sheetGrid = cat, false
+	open := func() {
+		d.openSettingsNow()
+		if !grid {
+			d.cat, d.sheetGrid = cat, false
+		}
 	}
+	if security.Locked() {
+		// The PIN first, then the settings on the page asked for. Called back without d.mu.
+		d.mu.Lock()
+		d.closeMenu()
+		d.mu.Unlock()
+		openPINRemote(func() {
+			d.mu.Lock()
+			open()
+			d.mu.Unlock()
+			d.wake()
+		})
+		d.wake()
+		return true
+	}
+	d.mu.Lock()
+	open()
 	d.mu.Unlock()
 	d.wake()
 	return true

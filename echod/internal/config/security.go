@@ -10,6 +10,14 @@ type Security struct {
 
 	// TalkBack lets the camera page send the microphones to a camera's speaker (config.TalkBack).
 	TalkBack bool `json:"talk_back,omitempty"`
+
+	// LockPIN is the settings lock's PIN, salted and hashed (feature/security lock.go); empty for no lock.
+	LockPIN string `json:"lock_pin,omitempty"`
+
+	// LockFails and LockBlockedUntil are the wrong PINs in a row and the wait they earned, kept here so
+	// that pulling the plug does not start the count over.
+	LockFails        int   `json:"lock_fails,omitempty"`
+	LockBlockedUntil int64 `json:"lock_blocked_until,omitempty"` // unix seconds
 }
 
 // Everything closed on a device nobody has set: SSH has no key until Home Assistant sends one, the
@@ -29,6 +37,14 @@ func (w SecurityWriter) Camera(v bool) error {
 
 func (w SecurityWriter) Screen(v bool) error {
 	return w.st.Update(func(c *Config) { c.Security.Screen = v })
+}
+
+func (w SecurityWriter) LockPIN(v string) error {
+	return w.st.Update(func(c *Config) { c.Security.LockPIN = v })
+}
+
+func (w SecurityWriter) LockTries(fails int, blockedUntil int64) error {
+	return w.st.Update(func(c *Config) { c.Security.LockFails, c.Security.LockBlockedUntil = fails, blockedUntil })
 }
 
 func (w SecurityWriter) TalkBack(v bool) error {

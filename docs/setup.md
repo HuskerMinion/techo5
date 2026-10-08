@@ -4,8 +4,8 @@ What to set up once TECHO5 is installed and the device is in Home Assistant, in 
 works. [Getting started](getting-started.md) gets you to that point. Everything here can be changed
 later, and most of it is optional.
 
-Photos, weather, cameras and the night settings are for devices with a screen: the Show and the
-Spot. On a Dot, steps 1, 5 and 7 apply.
+Photos, weather, cameras, the screen and the settings lock are for devices with a screen: the Show
+and the Spot. On a Dot, steps 1, 5 and 7 apply.
 
 In the examples the device is named `office`. Use your own device's name: the actions are
 `esphome.<name>_...` and the entities `switch.<name>_...` and so on.
@@ -106,6 +106,8 @@ with cameras that have a speaker and take G.711 audio, which includes most Reoli
 A tap on **Talk** starts it and another ends it. While it runs the button is red and counts down, the
 view stays up, and neither the wake word nor the action button starts a question; a press of the
 action button ends the talk. Music and radio are turned down while it runs, and the screen stays lit.
+The microphones go out 12 dB quieter than they are for the voice assistant, since a doorbell's small
+speaker distorts at that level and its own microphone picks it back up.
 The room is only sent while the camera page is on the screen, so the talk also ends when the view
 closes or anything covers it (a call, a ring, an announcement, the settings), when the microphones
 are muted, the switch goes off, the camera hangs up (a camera's own app taking its speaker does
@@ -143,27 +145,107 @@ one-way: you are heard at the door, but the visitor is not heard on the device.
   Spotify Connect keeps the login a phone hands it until it is turned off. Spotify Connect has been
   tried on a Show; AirPlay has not been tried with an iPhone yet. If something does not work, open an
   issue.
+- **DLNA (new).** On every device, the **DLNA** switch (Settings → Sound, the setup page's Play to
+  this device box, or Home Assistant) makes the device a DLNA speaker, a "media renderer", under its
+  own name. Music apps and servers on the network find it and play to it: BubbleUPnP on a phone,
+  Jellyfin, Plex or Emby, a NAS's music app, foobar2000, Windows' Cast to device. It plays MP3, FLAC
+  and WAV; most apps and servers convert anything else when asked. The song's name, artist and cover
+  show as now playing, the app's volume slider sets the device's volume, and play, pause and stop go
+  both ways. Skipping within a song is not supported yet. It is off until turned on: anyone on the
+  same network can play to it while it is on, as with any DLNA speaker, and can also ask what it is
+  playing, including the song's address (some servers put a login token in it, as with any DLNA
+  speaker). With **Video** and **DLNA video** on as well (Show and Spot), it takes videos too
+  ([Video](video.md)).
 - **Radio.** The Radio drawer and its favorites are set with
   [the radio actions](actions.md#wire-up-the-radio-page). While a station plays, the **Radio station**,
   **Radio artist** and **Radio title** sensors say what's on (the artist and title when the station's
   service reports them), for an automation or a dashboard to use.
+- **Now playing follows** (also the **Now Playing follows** select in Home Assistant): another of Home
+  Assistant's media players, a Sonos in the same room for example. While this device plays nothing of
+  its own, Now Playing shows that player's song and cover, and its buttons control it. **Done** puts it
+  away until the next song without stopping it. Needs the home_assistant action (address and token).
+  On the Spot, a swipe across a followed player's page skips to the next or previous song. **Stop**
+  on a followed page puts it away and leaves the other player playing.
+- **Lyrics** (Show, also a switch in Home Assistant, off by default): the words of the song on Now
+  Playing, the line being sung and the next one, in time with the music. They come from
+  [LRCLIB](https://lrclib.net), a free lyrics database, so the song's title and artist are sent there.
+  Words are only kept in time for music whose position is known: Music Assistant, DLNA when the app
+  says how long the song is, and a followed player. Radio stations, AirPlay and Spotify show the song
+  without words.
 
-## 6. Night and the screen
+## 6. The screen
 
-All of these are on the Show, under Settings → **Display**, and are entities in Home Assistant.
+These are on the Show under Settings → **Display**, and are entities in Home Assistant. Most are on
+the Spot too, in its settings.
+
+### Night
 
 - **Night hours**: when the screen dims by itself. **At night** picks dark, a faint glow, or a clock
   alone. During the night only a call wakes the screen.
 - **Night mode** switch in Home Assistant: start or end the night now, from a bedtime automation for
   example. Set Night hours to **Controlled by Home Assistant** to leave the night to the switch alone.
   See [Turning the night on from an automation](actions.md#turning-the-night-on-from-an-automation).
+
+### Clock and home screen
+
 - **Clock format**, **Clock position** (center, or a smaller clock in a bottom corner so a photo
   stays in view) and **Date color**.
+- **Clock style**: how the clock looks all day. *Classic*, *Big*, *Flip*, *LED*, *Analog*, *Words*
+  (the time in words), *Sun* (the sun's path from sunrise to sunset), *Dashboard* (the next events
+  and the week's weather), *Binary* (the time in lights, one column per digit, counted 1, 2, 4, 8
+  from the bottom), *World* (the time here and in other places), *Agenda* (today's and tomorrow's
+  events beside the time) and *Glow* (soft colors drifting behind the time). Swipe left or right
+  across the clock for the next style or the one before; its name shows for a moment, and a swipe
+  the other way puts the last style back. The night clock keeps its own look. Also in Home Assistant
+  and on the setup page's Screen & Photos tab.
+- **Swipe between clock styles**: on by default. Turn it off (setup page, Screen & Photos, or the
+  switch in Home Assistant) so a swipe across the clock leaves its style alone. It's off whenever
+  **Tap on the clock** is *Nothing*, too.
+- **World clock places** (setup page, Screen & Photos tab): the World style's places, as time zone
+  names with commas between them, like `America/Chicago, Europe/Paris, Asia/Tokyo`. Up to three; the
+  Spot shows the first two. Leave it empty for New York, London and Tokyo.
 - **Theme**, **Answer time** and **Now playing** (the full page, or a strip over the clock).
+- **Tap on the clock** (Show): *Assist*, as it always was, *Dashboard* to open the dashboard, *Deck*
+  to open TECHO5 Deck (until a deck has buttons, a tap still starts Assist), or *Nothing*, for a panel
+  you only talk to. A voice request under way still
+  takes the tap. Also on the setup page's Screen & Photos tab. See [Dashboards](dashboards.md) for the
+  rest of a panel setup.
+- **TECHO5 Deck** (Show): pages of buttons for OBS Studio, opened with a swipe up from the bottom
+  edge of the clock. Set up on the setup page's Screen & Photos tab. See [TECHO5 Deck](deck.md).
+- **Video** (Show and Spot): videos full screen from Home Assistant's `play_video` action and, with **DLNA
+  video** on, from DLNA apps. Off on a new device. On the setup page's Screen & Photos tab. See
+  [Video](video.md).
+- **Screen language** (Settings → General): the clock's day and date, the forecast's days, the
+  weather's words and the alarm after the date are written in it: German, Spanish, French, Italian or
+  Dutch, and English for *Match all* or *English*. It also picks which words the screen listens for.
+  It doesn't change what the assistant understands or says, and the rest of the screen stays in
+  English.
 - **Turn screen**: how a voice request looks. **Classic** is the words, **Wave** is glowing lines and
   **Bars** is an LED-style equalizer, both moving with the voice. This one is on the Spot too.
 - **Subtle mute ring** (Spot, in Home Assistant): the red ring shown while the microphones are muted
   is drawn thin and in a dimmer red, so it doesn't light up a dark room.
+
+### Presence and gestures
+
+- **Presence detection** (Show and Spot, off by default; Settings → Display → Presence, or the
+  **Presence detection** switch in Home Assistant): the camera notices somebody moving near the device.
+  Home Assistant gets a **Presence** sensor (occupancy) for automations, and **Screen off when nobody
+  is near** (5 minutes to start with, or Never) puts the screen out once the room has been empty that
+  long and lights it again when somebody comes near. Never at night, and never during a conversation,
+  a call, an alarm or with the settings open. Nothing the camera sees is kept or sent: a couple of
+  times a second the newest frame is compared with the last as a small grid of brightness, on the
+  device. The mute button and the lens shutter stop it, and then the screen is left as it is. On a
+  Show 8 or 1st gen Show 5 with a boot image older than v1.0.1, a quick tap of the mute button to
+  unmute leaves the camera switched off inside Amazon's kernel: **hold the mute button for a second**
+  (it chimes and stays unmuted) and the camera, presence and camera stills come back, or restart.
+  The v1.0.1 boot image fixes it ([updating the boot image](install.md#updating-the-boot-image)); with
+  it, holding the button mutes like a tap. The 2nd gen Show 5 is not affected.
+- **Gestures** (Show and Spot, experimental, off by default; the **Gestures** switch in Home
+  Assistant): cover the camera with your palm, hand on or almost on the lens, for half a second to
+  three seconds. It stops a ringing alarm or timer, and Home Assistant gets an `esphome.techo5_gesture`
+  event (`gesture: cover`, `device`) for automations. A hand held a few inches away is not counted:
+  the camera cannot tell it from somebody leaning in. While Gestures is on the camera looks eight
+  times a second, which costs a little more than presence alone.
 
 ## 7. Voice
 
@@ -225,6 +307,18 @@ stock sound back. A file the device cannot play leaves the stock sound playing, 
 
 Alarms and timers work by voice, on the screen, and from Home Assistant. See
 [docs/actions.md](actions.md) for all of them.
+
+## 8. Settings lock
+
+A **settings lock** (Show and Spot, off by default) is a PIN the device asks for before its settings
+open, so guests and children can use everything else without changing anything. Set it under
+Settings → Privacy & Security, on the setup page (Privacy), or with the
+[settings_lock_pin action](actions.md#set-the-settings-locks-pin). Five wrong tries in a row make
+the device wait before it takes another. The **Settings lock** switch in Home Assistant shows
+whether it is on; turning it off removes the PIN.
+
+While the lock is on, the PIN is also asked for when Home Assistant opens the settings, and when
+**Allow** is pressed on the setup page.
 
 ## More
 

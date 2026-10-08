@@ -111,9 +111,12 @@ type Player struct {
 	// on gates it; the chain is only ever touched by the write loop.
 	tuning *asp.Tuning
 	chain  *asp.Chain
-	on     atomic.Bool
-	stale  atomic.Bool
-	mono   []float32
+	// first is the volume curve to apply in front of the tuning, where this tuning has one
+	// (firstCurves); nil turns down what the tuning produced instead.
+	first *[VolumeSteps + 1]float64
+	on    atomic.Bool
+	stale atomic.Bool
+	mono  []float32
 
 	// tone is the listener's own shelves, waiting to be picked up: the chain belongs to the write
 	// loop, so a setting changed from anywhere else is left here and applied there. applied is what
@@ -235,6 +238,9 @@ func New() *Player {
 		return p
 	}
 	p.tuning, p.chain, p.mono = t, c, make([]float32, period)
+	if curve, ok := firstCurves[t.Name()]; ok {
+		p.first = &curve
+	}
 	return p
 }
 
@@ -644,6 +650,13 @@ func (p *Player) fill(buf []byte) {
 		}
 	}
 
+	// Where the tuning has a curve of its own the volume goes in front of it, as the vendor's chain
+	// has it, scaled from the gain worked out above so a bell over the music keeps its balance.
+	pre, post := float32(1), gain
+	if tuned && p.first != nil {
+		pre, post = gain*firstRatio(p.first, out, step), 1
+	}
+
 	// The vendor tunes by volume: each bucket has a filter of its own, and on the Show the quiet ones
 	// carry more bass and treble rather than simply less of everything. Telling the chain where the
 	// dial is picks the one it meant.
@@ -691,7 +704,7 @@ func (p *Player) fill(buf []byte) {
 			r = l
 		}
 		if tuned {
-			p.mono[j] = float32(clamp(l)) / full
+			p.mono[j] = float32(clamp(l)) / full * pre
 			continue
 		}
 		binary.LittleEndian.PutUint16(buf[i*2:], uint16(limit(float32(l)*OutputBoost*gain)))
@@ -707,11 +720,11 @@ func (p *Player) fill(buf []byte) {
 		p.chain.Reset()
 	}
 
-	// Volume attenuates what the tuning produced. It cannot go in front of it: the limiter holds a
-	// fixed ceiling, so anything turned down before it is pulled straight back up to the same level.
+	// Without a curve of its own, the volume attenuates what the tuning produced: the compressor then
+	// works on full-scale music at every volume, which is what firstCurves is for.
 	p.chain.Process(p.mono)
 	for i, j := 0, 0; i < period*Channels; i, j = i+Channels, j+1 {
-		s := int16(p.mono[j] * full * gain)
+		s := int16(p.mono[j] * full * post)
 		binary.LittleEndian.PutUint16(buf[i*2:], uint16(s))
 		binary.LittleEndian.PutUint16(buf[(i+1)*2:], uint16(s))
 	}
@@ -968,6 +981,16 @@ func (p *Player) SetVolume(step int) {
 		return
 	}
 	p.volume.Store(math.Float32bits(gainForStep(p.Output(), step)))
+}
+
+// firstRatio is what turns a step's gain on the usual curve into its gain in front of the tuning.
+func firstRatio(first *[VolumeSteps + 1]float64, out Output, step int) float32 {
+	step = max(0, min(step, VolumeSteps))
+	usual := gainForStep(out, step)
+	if usual == 0 || first[step] <= mute {
+		return 0
+	}
+	return float32(math.Pow(10, first[step]/20)) / usual
 }
 
 // gainFor is the linear gain for a step on whatever the audio is going to now.

@@ -5,7 +5,8 @@
 # In on wlan0: Home Assistant's API (6053/tcp), mDNS (5353/udp), SSH (22/tcp; dropbear listens only
 # while the SSH switch is on and a key is set), Sendspin audio (8928/tcp), the setup page and the camera
 # and screen views (8181/tcp; each served only while it is on), AirPlay (5000/tcp, 6001-6010/udp) and
-# Spotify Connect (4070/tcp), which nothing listens on unless their switches are on; DHCP replies, ping,
+# Spotify Connect (4070/tcp) and DLNA's SSDP searches (1900/udp, IPv4), which nothing listens on unless
+# their switches are on; DHCP replies, ping,
 # IPv6 neighbor discovery, and anything answering a connection the device made (calls included).
 # Out: everything, as before.
 #
@@ -43,7 +44,9 @@ for T in iptables-legacy ip6tables-legacy; do
 	fi
 done
 if [ -n "$ok" ]; then
-	iptables-legacy -A $CHAIN -p udp --sport 67 --dport 68 -j ACCEPT &&
+	# feature/dlna: SSDP searches, IPv4 only, as SSDP listens (its HTTP side is on 8181).
+	iptables-legacy -A $CHAIN -p udp --dport 1900 -j ACCEPT &&
+		iptables-legacy -A $CHAIN -p udp --sport 67 --dport 68 -j ACCEPT &&
 		iptables-legacy -A $CHAIN -p icmp -j ACCEPT &&
 		ip6tables-legacy -A $CHAIN -p ipv6-icmp -j ACCEPT &&
 		ip6tables-legacy -A $CHAIN -p udp --sport 547 --dport 546 -j ACCEPT &&
@@ -58,3 +61,60 @@ if [ -z "$ok" ]; then
 	exit 1
 fi
 echo "techo5-firewall: Wi-Fi inbound closed except 6053, 5353, 22, 8928, 8181, 5000, 6001-6010, 4070" >&2
+
+# The video decoder (feature/video, as techo5-video): out to anywhere but the device itself. It follows
+# names and redirects on its own, so this is where a name for 127.0.0.1 or a redirect to the device's
+# own address is refused (loopback carries both), and link-local with it. The daemon makes the same
+# chain for whichever user it runs the decoder as, and starts no decoder without it.
+#
+# Run again, it never leaves the decoder unfenced for a moment, whatever an earlier run left behind:
+#  1. TECHO5-VIDEO is made whole where it is (each rule and the jump to it added if missing), so the
+#     user is fenced from here on;
+#  2. a TECHO5-VIDEO-NEW left by a run that stopped partway is taken out, jumps and all;
+#  3. the rules are made afresh in TECHO5-VIDEO-NEW, its jump goes in, and only then does the old chain
+#     come out and the new one take its name. Stopped partway, the next run starts again from 1.
+uid=$(sed -n 's/^techo5-video:[^:]*:\([0-9]*\):.*/\1/p' /etc/passwd)
+video_rules() {
+	echo "-o lo -p tcp -j REJECT --reject-with tcp-reset"
+	echo "-o lo -j REJECT"
+	echo "-d $1 -j REJECT"
+	echo "-d $2 -j REJECT"
+}
+if [ -n "$uid" ]; then
+	fenced=1
+	for T in iptables-legacy ip6tables-legacy; do
+		lo4=127.0.0.0/8; ll=169.254.0.0/16
+		[ $T = ip6tables-legacy ] && { lo4=::1/128; ll=fe80::/10; }
+		jump="-m owner --uid-owner $uid -j"
+		# 1. The fence as it stands, whole.
+		$T -w -N TECHO5-VIDEO 2> /dev/null
+		video_rules $lo4 $ll | while read -r rule; do
+			$T -w -C TECHO5-VIDEO $rule 2> /dev/null || $T -w -A TECHO5-VIDEO $rule
+		done
+		$T -w -C OUTPUT $jump TECHO5-VIDEO 2> /dev/null || $T -w -I OUTPUT 1 $jump TECHO5-VIDEO
+		# 2. What an earlier run left.
+		while $T -w -D OUTPUT $jump TECHO5-VIDEO-NEW 2> /dev/null; do :; done
+		$T -w -F TECHO5-VIDEO-NEW 2> /dev/null; $T -w -X TECHO5-VIDEO-NEW 2> /dev/null
+		# 3. Made afresh, then swapped in.
+		ok=1
+		$T -w -N TECHO5-VIDEO-NEW || ok=
+		[ -n "$ok" ] && video_rules $lo4 $ll | {
+			r=0
+			while read -r rule; do $T -w -A TECHO5-VIDEO-NEW $rule || r=1; done
+			exit $r
+		} || ok=
+		[ -n "$ok" ] && $T -w -I OUTPUT 1 $jump TECHO5-VIDEO-NEW || ok=
+		if [ -n "$ok" ]; then
+			while $T -w -D OUTPUT $jump TECHO5-VIDEO 2> /dev/null; do :; done
+			$T -w -F TECHO5-VIDEO && $T -w -X TECHO5-VIDEO && $T -w -E TECHO5-VIDEO-NEW TECHO5-VIDEO
+		fi
+		# Fenced is a jump from OUTPUT to one of the two, with its rules in it.
+		$T -w -C OUTPUT $jump TECHO5-VIDEO 2> /dev/null && $T -w -C TECHO5-VIDEO -o lo -j REJECT 2> /dev/null ||
+			$T -w -C OUTPUT $jump TECHO5-VIDEO-NEW 2> /dev/null || fenced=
+	done
+	if [ -n "$fenced" ]; then
+		echo "techo5-firewall: the video decoder (uid $uid) kept off the device" >&2
+	else
+		echo "techo5-firewall: the video decoder could not be fenced here; the daemon keeps it off the device itself" >&2
+	fi
+fi

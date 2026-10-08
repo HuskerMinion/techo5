@@ -1,7 +1,8 @@
 name: Build release binaries
 
-# Builds echod-arm, echod-arm-dot and echod-arm-spot on GitHub's runners from a tagged commit, and
-# attests that the published binaries were built from that exact source — so anyone can verify a
+# Builds echod-arm, echod-arm-dot and echod-arm-spot, and the TECHO5 Deck agent for Windows, macOS
+# and Linux, on GitHub's runners from a tagged commit, and attests that the published binaries were
+# built from that exact source — so anyone can verify a
 # release matches the repo without trusting the maintainer's machine, for all three devices' release
 # scripts (this repo's release.ps1, techo5-dot's release-dot.ps1, techo5-spot's release-spot.ps1 /
 # deploy-rootfs.sh). Signing stays local in each: the release key never touches CI. See
@@ -64,6 +65,9 @@ jobs:
           go test ./...
           go test -tags dot ./...
           go test -tags spot ./...
+          # The deck agent's Windows and macOS code doesn't build here otherwise.
+          GOOS=windows go vet ./cmd/techo5-deck
+          GOOS=darwin go vet ./cmd/techo5-deck
 
       - name: Build
         working-directory: echod
@@ -79,9 +83,24 @@ jobs:
           go build -tags dot -trimpath -ldflags "$ldflags" -o ../bin/echod-arm-dot ./cmd/echod
           go build -tags spot -trimpath -ldflags "$ldflags" -o ../bin/echod-arm-spot ./cmd/echod
 
+      # The TECHO5 Deck agent, for the computers a Show's deck presses keys on. Named without the
+      # version, so a link to the latest release's file never changes.
+      - name: Build the deck agent
+        working-directory: echod
+        env:
+          CGO_ENABLED: "0"
+        run: |
+          ldflags="-s -w -X 'main.version=${{ steps.ver.outputs.version }}'"
+          for t in windows/amd64/windows-amd64.exe windows/arm64/windows-arm64.exe \
+                   darwin/amd64/macos-amd64 darwin/arm64/macos-arm64 \
+                   linux/amd64/linux-amd64 linux/arm64/linux-arm64; do
+            IFS=/ read -r os arch name <<< "$t"
+            GOOS=$os GOARCH=$arch go build -trimpath -ldflags "$ldflags" -o "../bin/techo5-deck-$name" ./cmd/techo5-deck
+          done
+
       - name: Checksums
         working-directory: bin
-        run: sha256sum echod-arm echod-arm-dot echod-arm-spot > SHA256SUMS
+        run: sha256sum echod-arm echod-arm-dot echod-arm-spot techo5-deck-* > SHA256SUMS
 
       # Cryptographically ties these files to this exact workflow run, source commit and tag (Sigstore,
       # keyless). Check by hand with:
@@ -93,6 +112,7 @@ jobs:
             bin/echod-arm
             bin/echod-arm-dot
             bin/echod-arm-spot
+            bin/techo5-deck-*
 
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
@@ -101,5 +121,6 @@ jobs:
             bin/echod-arm
             bin/echod-arm-dot
             bin/echod-arm-spot
+            bin/techo5-deck-*
             bin/SHA256SUMS
           if-no-files-found: error

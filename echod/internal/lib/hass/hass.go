@@ -409,6 +409,22 @@ func (c *Client) Call(domain, service string, data map[string]any) error {
 	return err
 }
 
+// CallResponse calls a service that answers, such as Music Assistant's library, and returns what it
+// answered.
+func (c *Client) CallResponse(domain, service string, data map[string]any) (map[string]any, error) {
+	b, err := c.do("POST", "/api/services/"+domain+"/"+service+"?return_response", data)
+	if err != nil {
+		return nil, err
+	}
+	var out struct {
+		Response map[string]any `json:"service_response"`
+	}
+	if err := json.Unmarshal(b, &out); err != nil {
+		return nil, fmt.Errorf("hass: %s.%s answered: %w", domain, service, err)
+	}
+	return out.Response, nil
+}
+
 // MediaPlay asks a media player to play again what it was playing.
 func (c *Client) MediaPlay(player string) error {
 	_, err := c.do("POST", "/api/services/media_player/media_play", map[string]any{"entity_id": player})
