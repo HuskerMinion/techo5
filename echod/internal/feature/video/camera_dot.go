@@ -5,6 +5,7 @@ package video
 import (
 	"context"
 	"image"
+	"io"
 	"time"
 )
 
@@ -14,3 +15,5 @@ type Camera struct{}
 func OpenCamera(context.Context, string, int, int) (*Camera, error) { return nil, ErrNotHere }
 func (*Camera) Next(time.Duration) (*image.RGBA, error)             { return nil, ErrNotHere }
 func (*Camera) Close()                                              {}
+
+func OpenCameraSound(context.Context, string) (io.ReadCloser, error) { return nil, ErrNotHere }

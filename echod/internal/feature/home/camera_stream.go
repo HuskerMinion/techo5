@@ -3,6 +3,7 @@ package home
 import (
 	"context"
 	"fmt"
+	"io"
 	"log/slog"
 	"time"
 
@@ -92,6 +93,22 @@ func prewarmStream(entity string) {
 	defer cancel()
 	if _, err := hass.Get().CameraStream(ctx, entity); err != nil {
 		slog.Debug("camera stream prewarm", "entity", entity, "err", err)
+	}
+}
+
+// streamedSound is how to hear entity from its stream, or nil when it has none to hear it from: the
+// decoder is missing, Home Assistant cannot stream it, or it is a recorder's camera, which Home
+// Assistant does not have. A variable for the tests.
+var streamedSound = func(entity string) func(context.Context) (io.ReadCloser, error) {
+	if !cameraStreams || isReolink(entity) || !video.Installed() || !canStream(entity) {
+		return nil
+	}
+	return func(ctx context.Context) (io.ReadCloser, error) {
+		url, err := hass.Get().CameraStream(ctx, entity)
+		if err != nil {
+			return nil, err
+		}
+		return video.OpenCameraSound(ctx, url)
 	}
 }
 

@@ -1,6 +1,8 @@
 package home
 
 import (
+	"context"
+	"io"
 	"log/slog"
 	"strings"
 	"time"
@@ -13,6 +15,9 @@ import (
 )
 
 // A camera's own sound, on this device's speaker, for as long as its view is up.
+//
+// A camera Home Assistant can stream is heard from the stream its picture comes from, decoded here
+// (camera_stream.go). For any other, what follows.
 //
 // The picture is fetched from Home Assistant one snapshot at a time (camera.go). The sound cannot be:
 // it is a stream of AAC inside the camera's own video, and the device decodes nothing for the
@@ -79,10 +84,16 @@ type overPlayer struct {
 	Stop    func(media.OverToken)
 	Drop    func(media.OverToken)
 	Settled func(media.OverToken)
+
+	// Answer plays a sound made here under an ask's token (media.AnswerOver); nil where there is none.
+	Answer func(media.OverToken, func(context.Context) (io.ReadCloser, error)) bool
 }
 
 var over = overPlayer{
-	Ask:     func() media.OverToken { return media.Get().OverNext() },
+	Ask: func() media.OverToken { return media.Get().OverNext() },
+	Answer: func(t media.OverToken, open func(context.Context) (io.ReadCloser, error)) bool {
+		return media.Get().AnswerOver(t, open)
+	},
 	State:   func(t media.OverToken) media.OverState { return media.Get().OverState(t) },
 	Mute:    func(t media.OverToken, on bool) { media.Get().MuteOver(t, on) },
 	Stop:    func(t media.OverToken) { media.Get().StopOver(t) },
@@ -144,6 +155,16 @@ var playStream = func(entity, player string) error {
 // askCameraSound makes the call a request stands for. Nothing is waited for: the request is answered by a
 // stream that arrives later as an ordinary media url, which the player plays under this token.
 func (f *Feature) askCameraSound(entity string, token media.OverToken, env soundEnv) {
+	// A camera Home Assistant can stream is heard from that stream, decoded here, as its picture is: a
+	// second or two behind the camera rather than the dozen and more the same stream took converted by
+	// Home Assistant and sent back, too far behind for anybody to answer the door over.
+	if env.player.Answer != nil {
+		if open := streamedSound(entity); open != nil && env.player.Answer(token, open) {
+			slog.Info("camera sound on, from its stream", "entity", entity)
+			env.player.Settled(token)
+			return
+		}
+	}
 	err := env.call(entity, speakerEntity())
 	if err != nil {
 		// A stream can be on its way even when the call that started it fails: the service is answered

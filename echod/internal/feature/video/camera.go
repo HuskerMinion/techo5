@@ -77,3 +77,36 @@ func (c *Camera) Next(wait time.Duration) (*image.RGBA, error) {
 
 // Close ends the decoding and waits for it.
 func (c *Camera) Close() { c.d.stop() }
+
+// cameraSoundArgs runs the decoder on a camera's stream for its sound alone: at its own pace from the
+// newest part of the playlist, as the picture is, so the two are about as far behind the camera, and as
+// the speaker's samples (soundRate, soundChannels, 16-bit) with no header.
+func cameraSoundArgs(url string, insecure bool) []string {
+	a := []string{"-hide_banner", "-nostdin", "-loglevel", "error"}
+	a = append(a, netArgs(url, caFileIf(), insecure, "")...)
+	a = append(a, "-re", "-live_start_index", "-1", "-fflags", "nobuffer", "-i", url,
+		"-map", "0:a:0", "-vn", "-sn", "-dn",
+		"-af", "aresample="+strconv.Itoa(soundRate)+":async=1",
+		"-ac", strconv.Itoa(soundChannels), "-ar", strconv.Itoa(soundRate),
+		"-f", "s16le", "pipe:3")
+	return a
+}
+
+// OpenCameraSound starts decoding a camera's sound from its stream at url (Home Assistant's HLS
+// playlist for it), for the speaker; ctx ending, or Close, ends it.
+func OpenCameraSound(ctx context.Context, url string) (io.ReadCloser, error) {
+	if !Installed() {
+		return nil, errors.New("video: this image has no decoder")
+	}
+	d, err := start(ctx, cameraSoundArgs(url, config.Get().Diag.InsecureTLS), true, false)
+	if err != nil {
+		return nil, err
+	}
+	return cameraSound{d}, nil
+}
+
+// cameraSound is a camera's sound as it is decoded.
+type cameraSound struct{ d *decoder }
+
+func (c cameraSound) Read(p []byte) (int, error) { return c.d.video.Read(p) }
+func (c cameraSound) Close() error               { c.d.stop(); return nil }
