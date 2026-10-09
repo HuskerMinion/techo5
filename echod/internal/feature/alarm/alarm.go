@@ -447,7 +447,7 @@ func (a *Alarms) fire(s source, now time.Time) {
 	a.ringing = &Ring{Key: strings.TrimPrefix(s.key, "snooze:"), Label: s.label, At: now}
 	// Started under the lock, so there is no moment where an alarm is ringing and Stop finds
 	// nothing to stop. The bell calls rang from its own goroutine, never from here.
-	a.silence = ring.Start("alarm", speaker.AlarmSound(a.Sound()), a.rang)
+	a.silence = ring.Start("alarm", s.label, speaker.AlarmSound(a.Sound()), a.rang)
 	a.mu.Unlock()
 
 	if spent {
