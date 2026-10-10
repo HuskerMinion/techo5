@@ -62,7 +62,7 @@ jobs:
         run: |
           CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go test -c -o "$RUNNER_TEMP/dashcast.test" .
           chmod 755 "$RUNNER_TEMP/dashcast.test"
-          docker run --rm -e DASHCAST_REQUIRE_BROWSER=1             -v "$RUNNER_TEMP/dashcast.test:/usr/local/bin/dashcast.test:ro"             --entrypoint /usr/local/bin/dashcast.test techo5-dashcast:ci -test.v -test.run TestOpenATabInTheRunningBrowser
+          docker run --rm -e DASHCAST_REQUIRE_BROWSER=1             -v "$RUNNER_TEMP/dashcast.test:/usr/local/bin/dashcast.test:ro"             --entrypoint /usr/local/bin/dashcast.test techo5-dashcast:ci -test.v -test.run 'TestOpenATabInTheRunningBrowser|TestAParkedTabShowsAgain'
 
       - name: Tags
         id: tags
