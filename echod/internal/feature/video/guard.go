@@ -20,6 +20,7 @@ import (
 	"time"
 
 	"github.com/HuskerMinion/techo5/echod/internal/config"
+	"github.com/HuskerMinion/techo5/echod/internal/lib/netguard"
 )
 
 // The guard is the fence (fence.go) for a kernel that cannot match a packet to its user: the Spot's
@@ -97,42 +98,9 @@ var loopbackUp = func() {
 // guard is the proxy.
 type guard struct{ auth string }
 
-// refused is whether the guard keeps the decoder off ip; a variable for the tests.
-var refused = func(ip net.IP) bool {
-	return ip == nil || ip.IsLoopback() || ip.IsUnspecified() || ip.IsLinkLocalUnicast() ||
-		ip.IsLinkLocalMulticast() || ip.IsMulticast() || ownIP(ip)
-}
-
-// ownIP is whether ip is one of the device's own addresses, read at each connection; not knowing them,
-// the guard takes every address for its own.
-func ownIP(ip net.IP) bool {
-	addrs, err := net.InterfaceAddrs()
-	if err != nil {
-		return true
-	}
-	for _, a := range addrs {
-		if n, ok := a.(*net.IPNet); ok && n.IP.Equal(ip) {
-			return true
-		}
-	}
-	return false
-}
-
 // guardDialer makes the guard's connections, refusing one that would reach the device whatever the name
 // or the DNS answer that led there: checked as the connection is made.
-var guardDialer = &net.Dialer{
-	Timeout: 10 * time.Second,
-	Control: func(_, address string, _ syscall.RawConn) error {
-		host, _, err := net.SplitHostPort(address)
-		if err != nil {
-			return err
-		}
-		if refused(net.ParseIP(host)) {
-			return fmt.Errorf("the decoder may not reach %s", host)
-		}
-		return nil
-	},
-}
+var guardDialer = netguard.Dialer(10 * time.Second)
 
 // guardTransport fetches for the decoder, never following a redirect itself: ffmpeg follows it, and its
 // next request comes back here to be checked like the first.

@@ -73,6 +73,8 @@ type Feature struct {
 	mu     sync.Mutex
 	chosen string
 
+	loops sync.WaitGroup // the goroutines a camera or picture view started (spawn); a test waits on it
+
 	// others are the entities followed for something besides the glance strip, and chips the glance
 	// strip's chips as last sent on Changed (glance.go, redraw).
 	others map[string]bool

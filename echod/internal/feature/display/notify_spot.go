@@ -42,18 +42,18 @@ func (r *roundRenderer) notifyFace(s roundScene) {
 	r.centered(r.small, "tap to dismiss", y+16, colDim)
 }
 
-// notifyLights puts the menu away for a notification of words, at any hour, as a reminder does
-// (reminder_spot.go), and lights a dark face for either kind by day. At night it waits, dark, until the
-// face is woken.
+// notifyLights puts the menu away for a notification of words and lights a dark face for either kind,
+// once per notification and by day (noticeLights). At night it leaves the face as it is: the menu is
+// put away by the touch that releases the notification (gesture), and a dark face stays dark until
+// that touch lights it.
 func (d *Display) notifyLights() {
+	night := inNight(time.Now())
 	d.mu.Lock()
 	on := d.on
-	if _, card := notify.Get().Card(); card && d.menuOpen {
+	if _, card := notify.Get().Card(); card && d.menuOpen && !night {
 		d.closeMenu()
 	}
 	d.mu.Unlock()
-	if _, up := notify.Get().Showing(); up && !on && !inNight(time.Now()) {
-		d.apply(true, d.ceilingOrDefault(), false)
-	}
+	d.noticeLights(on, night)
 	d.wake()
 }

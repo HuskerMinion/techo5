@@ -14,7 +14,7 @@ import (
 // heard asks for it, one that wants a view quiet refuses it, and anything else — an absent argument
 // included — is the device's own setting answering. Getting this wrong is silent: a camera that
 // plays its audio when nobody asked, or one that refuses to when they did.
-func TestSoundAsked(t *testing.T) {
+func TestParseOnOff(t *testing.T) {
 	cases := []struct {
 		arg     string
 		setting bool
@@ -29,14 +29,17 @@ func TestSoundAsked(t *testing.T) {
 		{"Off", true, false},
 		{"true", false, true},
 		{"false", true, false},
+		{"yes", false, true},
+		{"No", true, false},
+		{"False", true, false}, // an unquoted off in YAML, as Home Assistant sends it
 		{"1", false, true},
 		{"0", true, false},
 		{"sometimes", true, true}, // not a word this understands: the setting answers
 		{"sometimes", false, false},
 	}
 	for _, c := range cases {
-		if got := soundAsked(c.arg, c.setting); got != c.want {
-			t.Errorf("soundAsked(%q, setting=%v) = %v, want %v", c.arg, c.setting, got, c.want)
+		if got := ParseOnOff(c.arg, c.setting); got != c.want {
+			t.Errorf("ParseOnOff(%q, setting=%v) = %v, want %v", c.arg, c.setting, got, c.want)
 		}
 	}
 }
@@ -237,7 +240,7 @@ func TestAViewKeepsItsSoundWhetherOrNotItIsPlaying(t *testing.T) {
 		t.Fatal("a device with no camera view was said to have a sound")
 	}
 
-	f := &Feature{}
+	f := newFeature(t)
 	cameraUp(t, f, "camera.deck", "camera.deck", fake.ask())
 	fake.playing(f.camOver)
 	if !f.CameraSoundOn() {
@@ -267,7 +270,7 @@ func TestAViewKeepsItsSoundWhetherOrNotItIsPlaying(t *testing.T) {
 	}
 
 	// A view asked for without a sound has no control to draw at all.
-	f2 := &Feature{}
+	f2 := newFeature(t)
 	cameraUp(t, f2, "camera.deck", "", 0)
 	if f2.CameraSoundOn() {
 		t.Fatal("a view asked for without a sound was said to have one")
@@ -279,7 +282,7 @@ func TestAViewKeepsItsSoundWhetherOrNotItIsPlaying(t *testing.T) {
 // rather than a second request and another few seconds.
 func TestTappingTheControlSilencesAndBringsItBack(t *testing.T) {
 	fake := fakeOverFor(t)
-	f := &Feature{}
+	f := newFeature(t)
 	cameraUp(t, f, "camera.deck", "camera.deck", 0)
 
 	// Nothing playing and nothing asked for: a tap asks.
@@ -327,7 +330,7 @@ func TestTappingTheControlSilencesAndBringsItBack(t *testing.T) {
 // saying they want to hear it.
 func TestTappingAsksForASoundThatIsNotThere(t *testing.T) {
 	fake := fakeOverFor(t)
-	f := &Feature{}
+	f := newFeature(t)
 	cameraUp(t, f, "camera.deck", "camera.deck", fake.ask())
 	first := f.camOver
 
@@ -362,7 +365,7 @@ func TestTappingAsksForASoundThatIsNotThere(t *testing.T) {
 // device nobody can silence from the screen.
 func TestTheViewEndingTakesItsSoundWithIt(t *testing.T) {
 	fake := fakeOverFor(t)
-	f := &Feature{}
+	f := newFeature(t)
 	token := fake.ask()
 	cameraUp(t, f, "camera.deck", "camera.deck", token)
 	f.cam.Until = time.Now() // over: nothing is watching the clock but this
@@ -382,7 +385,7 @@ func TestTheViewEndingTakesItsSoundWithIt(t *testing.T) {
 func TestTheViewEndingStopsNothingItWasNotPlaying(t *testing.T) {
 	fake := fakeOverFor(t)
 
-	f := &Feature{}
+	f := newFeature(t)
 	cameraUp(t, f, "camera.deck", "", 0)
 	f.cam.Until = time.Now()
 	f.watchCameraSound("camera.deck", 0, fake.env())
@@ -390,7 +393,7 @@ func TestTheViewEndingStopsNothingItWasNotPlaying(t *testing.T) {
 		t.Fatalf("a view with no sound stopped %d sounds", stopped)
 	}
 
-	f2 := &Feature{}
+	f2 := newFeature(t)
 	cameraUp(t, f2, "camera.deck", "camera.deck", fake.ask())
 	f2.ToggleCameraSound() // silenced from the screen: connected and quiet, not given up
 	if _, stopped, _ := fake.counts(); stopped != 0 {
@@ -408,7 +411,7 @@ func TestTheViewEndingStopsNothingItWasNotPlaying(t *testing.T) {
 // silenced, because it is asked for so that it is there to bring back, not so that it starts talking.
 func TestASoundTakenFromTheViewIsAskedForAgain(t *testing.T) {
 	fake := fakeOverFor(t)
-	f := &Feature{}
+	f := newFeature(t)
 	cameraUp(t, f, "camera.deck", "camera.deck", fake.ask())
 	first := f.camOver
 	fake.playing(first)
@@ -443,7 +446,7 @@ func TestASoundTakenFromTheViewIsAskedForAgain(t *testing.T) {
 func TestAFailedCallKeepsASoundThatArrivedAndGivesUpOneThatDidNot(t *testing.T) {
 	fake := fakeOverFor(t)
 	fake.callErr = errNoStream
-	f := &Feature{}
+	f := newFeature(t)
 
 	cameraUp(t, f, "camera.deck", "camera.deck", fake.ask())
 	fake.playing(f.camOver)
@@ -455,7 +458,7 @@ func TestAFailedCallKeepsASoundThatArrivedAndGivesUpOneThatDidNot(t *testing.T) 
 		t.Fatal("a sound playing under a call that failed is not one the control offers to silence")
 	}
 
-	f2 := &Feature{}
+	f2 := newFeature(t)
 	cameraUp(t, f2, "camera.deck", "camera.deck", fake.ask())
 	f2.askCameraSound("camera.deck", f2.camOver, fake.env())
 	if !fake.wasDropped(f2.camOver) {
@@ -475,7 +478,7 @@ var errNoStream = errors.New("camera.play_stream: no stream for this camera")
 // asking: two requests for one control would leave the second url with no ask of its own, played as a track.
 func TestAskingAgainOnlyWhenTheViewIsStillOnThatSound(t *testing.T) {
 	fake := fakeOverFor(t)
-	f := &Feature{}
+	f := newFeature(t)
 	cameraUp(t, f, "camera.deck", "camera.deck", fake.ask())
 	taken := f.camOver
 
@@ -503,7 +506,7 @@ func TestAskingAgainOnlyWhenTheViewIsStillOnThatSound(t *testing.T) {
 // whole wait, dropping any url that arrived — including somebody's music.
 func TestTheCallComingBackSettlesTheRequest(t *testing.T) {
 	fake := fakeOverFor(t)
-	f := &Feature{}
+	f := newFeature(t)
 	cameraUp(t, f, "camera.deck", "camera.deck", fake.ask())
 	token := f.camOver
 

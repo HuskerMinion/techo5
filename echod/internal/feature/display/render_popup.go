@@ -5,7 +5,6 @@ package display
 import (
 	"image"
 	"strconv"
-	"strings"
 	"time"
 
 	"github.com/HuskerMinion/techo5/echod/internal/feature/home"
@@ -22,21 +21,13 @@ func (r *renderer) popupBox() image.Rectangle {
 func (r *renderer) popupCard(s scene, e hass.Event) {
 	box := r.popupBox()
 	r.setPopupAt(box)
-	r.roundShadow(box, r.cardRad(), float64(r.s(34)), r.s(12), shadowAlpha()*1.3)
-	r.roundFill(box, r.cardRad(), surface(4), surface(2))
-	r.roundHighlight(box, r.cardRad())
-
-	in := r.rowIn()
-	width := box.Dx() - 2*in
-	heading := strings.ToUpper(popupSoon(e, s.now))
+	heading := popupSoon(e, s.now)
 	if name := popupCalendarName(e.Calendar); name != "" {
-		heading += "  ·  " + strings.ToUpper(name)
+		heading += "  ·  " + name
 	}
-	hintW := r.width(r.tiny, dismissHint)
-	r.rightText(r.tiny, dismissHint, box.Max.X-in, box.Min.Y+r.s(52), dim)
-	r.text(r.tiny, clipText(r, r.tiny, heading, width-hintW-r.s(24)), box.Min.X+in, box.Min.Y+r.s(52), amber)
-	r.text(r.title, clipText(r, r.title, e.Summary, width), box.Min.X+in, box.Min.Y+r.s(124), cream)
-	r.text(r.small, clipText(r, r.small, eventWhen(e, s.now), width), box.Min.X+in, box.Min.Y+r.s(180), dim)
+	r.noticeCard(box, 52, 124, "", heading, e.Summary, 1)
+	in := r.rowIn()
+	r.text(r.small, clipText(r, r.small, eventWhen(e, s.now), box.Dx()-2*in), box.Min.X+in, box.Min.Y+r.s(180), dim)
 }
 
 func (r *renderer) setPopupAt(b image.Rectangle) {

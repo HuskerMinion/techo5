@@ -13,12 +13,14 @@ import (
 	neturl "net/url"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"sync"
 	"time"
 	"unicode"
 
 	"github.com/HuskerMinion/techo5/echod/internal/layout"
+	"github.com/HuskerMinion/techo5/echod/internal/lib/netguard"
 )
 
 // Path is where the URL and token live: next to the PSK, readable by root only.
@@ -33,6 +35,33 @@ type Client struct {
 	mu   sync.Mutex
 	acc  access
 	http *http.Client
+	// outside fetches addresses on hosts that are not Home Assistant: its dialer refuses the device's
+	// own addresses. Nil (a Client made by hand) falls back to http.
+	outside *http.Client
+}
+
+// newClient is a client with both the token client and the guarded one outside hosts get.
+func newClient(url, token string) *Client {
+	return &Client{
+		acc:     access{URL: url, Token: token},
+		http:    &http.Client{Timeout: 15 * time.Second},
+		outside: outsideClient(),
+	}
+}
+
+// outsideClient dials through netguard, which checks the address actually connected to: after DNS and
+// after each redirect, so a name that resolves to the device is refused as much as its number is.
+func outsideClient() *http.Client {
+	return &http.Client{
+		Timeout: 15 * time.Second,
+		Transport: &http.Transport{
+			Proxy:               nil,
+			DialContext:         netguard.Dialer(10 * time.Second).DialContext,
+			TLSHandshakeTimeout: 10 * time.Second,
+			MaxIdleConnsPerHost: 1,
+			IdleConnTimeout:     30 * time.Second,
+		},
+	}
 }
 
 var (
@@ -43,7 +72,7 @@ var (
 // Get is the client; it reads the saved access the first time.
 func Get() *Client {
 	once.Do(func() {
-		shared = &Client{http: &http.Client{Timeout: 15 * time.Second}}
+		shared = newClient("", "")
 		if b, err := os.ReadFile(Path); err == nil {
 			_ = json.Unmarshal(b, &shared.acc)
 			// Kept before the cleaning below existed, an address can carry a character nobody can see.
@@ -237,9 +266,18 @@ func (c *Client) FetchURL(url string) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	resp, err := c.http.Do(req)
+	hc := c.outside
+	if hc == nil {
+		hc = c.http
+	}
+	resp, err := hc.Do(req)
 	if err != nil {
-		return nil, err
+		var ue *neturl.Error
+		if errors.As(err, &ue) {
+			// The transport's own text repeats the whole address, login and query too.
+			err = ue.Err
+		}
+		return nil, fmt.Errorf("hass: GET %s: %w", withoutLogin(url), err)
 	}
 	defer resp.Body.Close()
 	out, err := io.ReadAll(io.LimitReader(resp.Body, 8<<20))
@@ -247,9 +285,35 @@ func (c *Client) FetchURL(url string) ([]byte, error) {
 		return nil, err
 	}
 	if resp.StatusCode/100 != 2 {
-		return nil, fmt.Errorf("hass: GET %s: %s", url, resp.Status)
+		return nil, fmt.Errorf("hass: GET %s: %s", withoutLogin(url), resp.Status)
 	}
 	return out, nil
+}
+
+// withoutLogin is an address as an error or a log line may repeat it: no user:pass@, no query and no
+// fragment, since all three can be a secret (a camera's or a NAS's login, a signed link's token).
+// Something that does not parse as an address is cut at its first ? or #, and a login in what is left
+// is taken off by hand.
+func withoutLogin(raw string) string {
+	if u, err := neturl.Parse(raw); err == nil && u.Host != "" {
+		u.User, u.RawQuery, u.ForceQuery, u.Fragment, u.RawFragment = nil, "", false, "", ""
+		return u.String()
+	}
+	if i := strings.IndexAny(raw, "?#"); i >= 0 {
+		raw = raw[:i]
+	}
+	return loginInAddress.ReplaceAllString(raw, "//")
+}
+
+// loginInAddress is the user:pass@ of an address, from the // before it to the last @ before the path,
+// since a password can hold an @.
+var loginInAddress = regexp.MustCompile(`//[^/\s"']*@`)
+
+// IsOwn is whether raw is an address on the configured Home Assistant, which is fetched as a path with
+// the token (FetchURL) and so is not another host's to be judged as one.
+func (c *Client) IsOwn(raw string) bool {
+	_, ok := ownURL(c.baseURL(), raw)
+	return ok
 }
 
 // ownURL reports whether raw addresses the configured Home Assistant, and if so returns the part

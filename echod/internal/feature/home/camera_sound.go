@@ -56,16 +56,18 @@ func (f *Feature) SetCameraSound(on bool) {
 	slog.Info("setting changed", "setting", "camera_sound", "using", on)
 }
 
-// soundAsked reads the home_show_camera_sound action's sound argument: "on" or "off" for this one
-// view, anything else — an empty string included — for what the device's own setting says.
-func soundAsked(arg string, setting bool) bool {
+// ParseOnOff reads an argument that says on or off the way Home Assistant sends one: "on", "true",
+// "yes" and "1" are on, "off", "false", "no" and "0" are off, in any case and with spaces around. An
+// unquoted off in YAML arrives as the string "False", so those have to read the same. Anything else
+// - an empty string included - is def, which is what the device's own setting says.
+func ParseOnOff(arg string, def bool) bool {
 	switch strings.ToLower(strings.TrimSpace(arg)) {
 	case "on", "true", "yes", "1":
 		return true
 	case "off", "false", "no", "0":
 		return false
 	}
-	return setting
+	return def
 }
 
 // overPlayer is the media player's side of a sound played over the music. It is a field of functions so
@@ -124,8 +126,8 @@ func (f *Feature) startCameraSound(entity string, env soundEnv) {
 	f.camSound, f.camOver = entity, token
 	f.mu.Unlock()
 
-	go f.watchCameraSound(entity, token, env)
-	go f.askCameraSound(entity, token, env)
+	f.spawn(func() { f.watchCameraSound(entity, token, env) })
+	f.spawn(func() { f.askCameraSound(entity, token, env) })
 }
 
 // playStream is the call that asks Home Assistant for a camera's stream on this device. It is a variable
@@ -228,11 +230,11 @@ func (f *Feature) ToggleCameraSound() {
 	f.camMuted = false
 	token = env.player.Ask()
 	f.camOver = token
-	go f.watchCameraSound(entity, token, env)
+	f.spawn(func() { f.watchCameraSound(entity, token, env) })
 	f.mu.Unlock()
 
 	slog.Info("camera sound asked for again", "entity", entity)
-	go f.askCameraSound(entity, token, env)
+	f.spawn(func() { f.askCameraSound(entity, token, env) })
 }
 
 // askAgain takes a fresh request for the sound of a view that still wants it, which is how a sound taken
@@ -257,7 +259,7 @@ func (f *Feature) askAgain(entity string, watched media.OverToken, env soundEnv)
 	env.player.Mute(token, muted)
 
 	slog.Info("camera sound asked for again after it was taken", "entity", entity, "silenced", muted)
-	go f.askCameraSound(entity, token, env)
+	f.spawn(func() { f.askCameraSound(entity, token, env) })
 	return token
 }
 

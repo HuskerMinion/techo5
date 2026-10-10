@@ -128,6 +128,8 @@ func TestRoundScenesDraw(t *testing.T) {
 			announcement: announce.Message{From: "Laundry Room"}},
 		"notification": {now: at, phase: "idle", weather: sky, showNotification: true,
 			notification: notify.Notification{Kind: notify.Text, Title: "Washer", Icon: "mdi:washing-machine", Message: "The washing machine is done"}},
+		"notification-under-camera": {now: at, phase: "idle", showCamera: true, camera: home.CameraView{Entity: "camera.front_door", Name: "Front door", Frame: testPicture()},
+			showNotification: true, notification: notify.Notification{Kind: notify.Text, Title: "Washer", Message: "The washing machine is done"}},
 		"notification-bare": {now: at, phase: "idle", showNotification: true,
 			notification: notify.Notification{Kind: notify.Text, Message: "Done"}},
 		"notification-longest": {now: at, phase: "idle", showNotification: true,

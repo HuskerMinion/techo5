@@ -94,6 +94,14 @@ func TestShowScenesDraw(t *testing.T) {
 			notification: notify.Notification{Kind: notify.Text, Title: "A title that runs on and on past the card's edge",
 				Message: "Move the washing to the dryer, then put the towels on the rack by the back door and the " +
 					"sheets on the line, and fold what is already dry before the rain comes in this afternoon"}},
+		// An event's pop-up over the clock: its title on one line, long ones cut short, and an all-day one.
+		"popup": {now: at, phase: "idle", weather: sky, popup: &hass.Event{Calendar: "calendar.family",
+			Summary: "Dentist", Start: at.Add(15 * time.Minute), End: at.Add(75 * time.Minute)}},
+		"popup-longest": {now: at, phase: "idle", weather: sky, popup: &hass.Event{Calendar: "calendar.family",
+			Summary: "Parent-teacher conferences for the whole middle school, rooms 12 through 40",
+			Start:   at.Add(3 * time.Hour), End: at.Add(4 * time.Hour)}},
+		"popup-all-day": {now: at, phase: "idle", weather: sky, popup: &hass.Event{Summary: "Trash day", AllDay: true,
+			Start: at, End: at.Add(24 * time.Hour)}},
 		"notification-under-reminder": {now: at, phase: "idle", weather: sky, showReminder: true,
 			reminder: remind.Reminder{Label: "Take the trash out"}, showNotification: true,
 			notification: notify.Notification{Kind: notify.Text, Message: "hidden under the reminder"}},

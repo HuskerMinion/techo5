@@ -26,6 +26,20 @@ const (
 	cameraShow = 30 * time.Second
 )
 
+// cameraRetry is how long a camera waits after a frame fails before asking again. A variable only so
+// that a test does not have to wait it out when it takes a view down.
+var cameraRetry = 2 * time.Second
+
+// spawn runs fn in the background and counts it, so that a test can wait for every goroutine a view
+// started to be gone (Feature.loops) before the next test swaps the config and Home Assistant under it.
+func (f *Feature) spawn(fn func()) {
+	f.loops.Add(1)
+	go func() {
+		defer f.loops.Done()
+		fn()
+	}()
+}
+
 // CameraView is what the screen shows.
 type CameraView struct {
 	Entity string
@@ -70,7 +84,7 @@ func (f *Feature) homeAssistantCameras() []config.Camera {
 	defer f.mu.Unlock()
 	if time.Since(f.haCamerasAt) > haCamerasEvery && !f.haCamerasBusy {
 		f.haCamerasBusy = true
-		go func() {
+		f.spawn(func() {
 			list, err := hass.Get().Entities("camera")
 			var cams []config.Camera
 			for _, e := range list {
@@ -92,7 +106,7 @@ func (f *Feature) homeAssistantCameras() []config.Camera {
 			if err == nil {
 				f.Changed.Emit(struct{}{})
 			}
-		}()
+		})
 	}
 	return f.haCameras
 }
@@ -141,20 +155,20 @@ func (f *Feature) showCameraCaptioned(entity string, d time.Duration, sound bool
 	slog.Info("camera up", "entity", entity, "for", d, "sound", fresh && sound)
 	if fresh {
 		if entity == LocalCamera {
-			go f.localFrames()
+			f.spawn(func() { f.localFrames() })
 		} else {
-			go f.fetchFrames(entity)
+			f.spawn(func() { f.fetchFrames(entity) })
 		}
 		if sound && !isReolink(entity) {
 			// The sound is asked of Home Assistant and taken off the speaker when this view ends; a
 			// view already up keeps the sound it was started with (camera_sound.go).
-			go f.startCameraSound(entity, thisDevice())
+			f.spawn(func() { f.startCameraSound(entity, thisDevice()) })
 		}
 	}
 	if !listed && name == entity && entity != LocalCamera && !isReolink(entity) {
 		// Not on the device's list, or on Home Assistant's list before it has been fetched: Home
 		// Assistant is asked for this one camera's name rather than showing its entity id.
-		go f.lookUpName(entity, entity)
+		f.spawn(func() { f.lookUpName(entity, entity) })
 	}
 	f.Changed.Emit(struct{}{})
 }
@@ -197,26 +211,53 @@ func (f *Feature) HoldCamera(entity string, d time.Duration) {
 	}
 }
 
-// HideCamera takes the view down.
+// HideCamera takes the view down, and forgets whose words were on it: a frame still on its way for
+// the view must find nothing to land on (viewIsUp), and a tap on a view gone must not be taken for a
+// tap on a notification that came after it.
 func (f *Feature) HideCamera() {
 	f.mu.Lock()
 	f.cam.Until = time.Time{}
+	f.cam.Caption = nil
 	f.mu.Unlock()
 	f.Changed.Emit(struct{}{})
+}
+
+// HidePicture takes the view down if it is notification id's, and says whether it did. The compare and
+// the hide are one step under the lock, so a tap or a replacement landing while a newer notification
+// takes the page cannot take the newer one's view down.
+func (f *Feature) HidePicture(id string) bool {
+	f.mu.Lock()
+	ours := f.cam.Caption != nil && f.cam.Caption.ID == id && time.Now().Before(f.cam.Until)
+	if ours {
+		f.cam.Until = time.Time{}
+		f.cam.Caption = nil
+	}
+	f.mu.Unlock()
+	if ours {
+		f.Changed.Emit(struct{}{})
+	}
+	return ours
+}
+
+// viewIsUp is whether entity's view is the one on the screen and has not run out or been taken down.
+// A fetch writes to the view only while this holds, with f.mu held across the check and the write:
+// otherwise a frame that was on its way when somebody tapped would put the view back up.
+func (f *Feature) viewIsUp(entity string) bool {
+	return f.cam.Entity == entity && time.Now().Before(f.cam.Until)
 }
 
 // fetchFrames pulls snapshots while the view is up, one after another.
 func (f *Feature) fetchFrames(entity string) {
 	for {
 		f.mu.Lock()
-		up := f.cam.Entity == entity && time.Now().Before(f.cam.Until)
+		up := f.viewIsUp(entity)
 		f.mu.Unlock()
 		if !up {
 			return
 		}
 		frame, err := f.snapshot(entity)
 		f.mu.Lock()
-		if f.cam.Entity == entity {
+		if f.viewIsUp(entity) {
 			if err != nil {
 				f.cam.Error = err.Error()
 			} else {
@@ -235,7 +276,7 @@ func (f *Feature) fetchFrames(entity string) {
 		f.Changed.Emit(struct{}{})
 		if err != nil {
 			slog.Warn("camera frame", "entity", entity, "err", err)
-			time.Sleep(2 * time.Second)
+			time.Sleep(cameraRetry)
 		}
 	}
 }
@@ -246,7 +287,9 @@ func (f *Feature) localFrames() {
 	release, err := camera.Get().Acquire()
 	if err != nil {
 		f.mu.Lock()
-		f.cam.Error = err.Error()
+		if f.viewIsUp(LocalCamera) {
+			f.cam.Error = err.Error()
+		}
 		f.mu.Unlock()
 		f.Changed.Emit(struct{}{})
 		return
@@ -263,7 +306,7 @@ func (f *Feature) localFrames() {
 	defer cancel()
 	for {
 		f.mu.Lock()
-		up := f.cam.Entity == LocalCamera && time.Now().Before(f.cam.Until)
+		up := f.viewIsUp(LocalCamera)
 		f.mu.Unlock()
 		if !up {
 			return
@@ -275,7 +318,7 @@ func (f *Feature) localFrames() {
 			shown := image.NewRGBA(dst.Bounds())
 			copy(shown.Pix, dst.Pix)
 			f.mu.Lock()
-			if f.cam.Entity == LocalCamera {
+			if f.viewIsUp(LocalCamera) {
 				if f.cam.Frame == nil {
 					if until := time.Now().Add(f.cam.span); until.After(f.cam.Until) {
 						f.cam.Until = until // never shorter than a hold asked for (HoldCamera)
@@ -399,7 +442,7 @@ func (f *Feature) cameraActions() []*esphome.Action {
 			Name: "home_show_camera_sound",
 			Args: []esphome.Arg{{Name: "entity", Type: esphome.ArgString}, {Name: "seconds", Type: esphome.ArgInt}, {Name: "sound", Type: esphome.ArgString}},
 			Run: func(c esphome.Call) (any, error) {
-				f.showCamera(strings.TrimSpace(c.String("entity")), cameraSeconds(c), soundAsked(c.String("sound"), CameraSound()))
+				f.showCamera(strings.TrimSpace(c.String("entity")), cameraSeconds(c), ParseOnOff(c.String("sound"), CameraSound()))
 				return nil, nil
 			},
 		},

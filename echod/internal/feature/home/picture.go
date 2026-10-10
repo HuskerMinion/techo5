@@ -6,10 +6,13 @@ import (
 	"image"
 	_ "image/png" // a picture from Home Assistant's www folder is as often a PNG as a JPEG
 	"log/slog"
+	"net/url"
 	"regexp"
 	"strings"
+	"sync/atomic"
 	"time"
 
+	"github.com/HuskerMinion/techo5/echod/internal/feature/video"
 	"github.com/HuskerMinion/techo5/echod/internal/lib/hass"
 )
 
@@ -24,6 +27,10 @@ type Caption struct {
 	ID      string
 	Title   string
 	Message string
+	// UntilTapped is a still a notification gave no time to, which stays until somebody taps it (twelve
+	// hours at most): the page shows no countdown for it. A live camera's no-time is thirty seconds,
+	// which does count down.
+	UntilTapped bool
 }
 
 // Wordless is whether a notification sent its picture with no words at all, which the page shows as
@@ -37,15 +44,29 @@ const untitled = "Notification"
 // on Home Assistant, or an http(s) address. path is what is fetched for a still. Anything else is
 // refused here, before anything is shown, so the automation hears why.
 func pictureSource(src string) (live bool, path string, err error) {
+	lower := strings.ToLower(src) // a scheme in any case, as the video player takes it
 	switch {
 	case strings.HasPrefix(src, "camera."):
 		return true, src, nil
 	case strings.HasPrefix(src, "image."):
 		return false, "/api/image_proxy/" + src, nil
-	case strings.HasPrefix(src, "/"), strings.HasPrefix(src, "http://"), strings.HasPrefix(src, "https://"):
+	case strings.HasPrefix(src, "/"):
+		return false, src, nil
+	case strings.HasPrefix(lower, "http://"), strings.HasPrefix(lower, "https://"):
+		// Home Assistant's own address is fetched as a path, with the token, so it is Home Assistant
+		// that is asked, wherever it lives (a home server is often on a private address, and a test's
+		// is on loopback), and it is not judged as some other host. Any other host is fetched bare
+		// and is held to the rules the video player holds a stream to: not this device, not a
+		// link-local address. The login and query are left out of the refusal, which the automation
+		// and the log both hear.
+		if !hass.Get().IsOwn(src) {
+			if _, err := video.CheckURL(src); err != nil {
+				return false, "", fmt.Errorf("picture %q: %v", redactURL(src), err)
+			}
+		}
 		return false, src, nil
 	}
-	return false, "", fmt.Errorf("picture %q: not a camera, an image entity, a path on Home Assistant or an http(s) address", src)
+	return false, "", fmt.Errorf("picture %q: not a camera, an image entity, a path on Home Assistant or an http(s) address", redactURL(src))
 }
 
 // CheckPicture says whether src is a picture ShowPicture can show. Built on every device, so a Dot
@@ -64,7 +85,7 @@ func (f *Feature) ShowPicture(src string, c Caption, d time.Duration, sound stri
 		return err
 	}
 	if live {
-		f.showCameraCaptioned(src, d, soundAsked(sound, CameraSound()), &c)
+		f.showCameraCaptioned(src, d, ParseOnOff(sound, CameraSound()), &c)
 		return nil
 	}
 	name := c.Title
@@ -76,26 +97,57 @@ func (f *Feature) ShowPicture(src string, c Caption, d time.Duration, sound stri
 	f.camMuted = false
 	f.mu.Unlock()
 	slog.Info("picture up", "source", redactURL(src), "for", d)
-	go f.fetchStill(path, c.ID)
+	f.spawn(func() { f.fetchStill(src, path, c.ID) })
 	if name == untitled && strings.HasPrefix(src, "image.") {
-		go f.lookUpName(src, untitled)
+		f.spawn(func() { f.lookUpName(src, untitled) })
 	}
 	f.Changed.Emit(struct{}{})
 	return nil
 }
 
-// fetchStill fetches a still once and puts it on the view, if the view is still this notification's.
-// As with a camera, the time on screen counts from the picture arriving.
-func (f *Feature) fetchStill(path, id string) {
-	frame, err := still(path)
+// stillTurn lets one still be fetched and decoded at a time. A picture can be 8 MB of bytes and a
+// 12 megapixel PNG decodes to about 48 MB, on a device with little memory to spare, so a burst of
+// notifications waits its turn instead of decoding side by side.
+var stillTurn = make(chan struct{}, 1)
+
+// stillsDecoded counts the stills that got as far as being decoded, which is what a test of the
+// drop-before-decode check reads.
+var stillsDecoded atomic.Int32
+
+// errReplaced is a still's fetch finding that its view is gone or no longer its notification's.
+var errReplaced = errors.New("the picture's view is gone")
+
+// stillIsUp is whether the view on the screen is still the one src was shown for, by notification id.
+func (f *Feature) stillIsUp(src, id string) bool {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return f.viewIsUp(src) && f.cam.Caption != nil && f.cam.Caption.ID == id
+}
+
+// fetchStill fetches a still once and puts it on the view, if the view is still this notification's
+// when its turn comes, when its bytes arrive and when the picture is ready. A view that is gone costs
+// the next stage nothing: bytes for a notification that was tapped away or replaced are dropped
+// without being decoded. As with a camera, the time on screen counts from the picture arriving.
+func (f *Feature) fetchStill(src, path, id string) {
+	stillTurn <- struct{}{}
+	defer func() { <-stillTurn }()
+	mine := func() bool { return f.stillIsUp(src, id) }
+	if !mine() {
+		return
+	}
+	frame, err := still(path, mine)
+	if errors.Is(err, errReplaced) {
+		return
+	}
 	if err != nil {
-		// A picture's address can carry a token in its query, and the fetch's error repeats the
-		// address - not always as it was given, since Home Assistant's own full address is fetched as
-		// a path - so every query in the error comes off before it goes on the screen or into the log.
+		// A picture's address can carry a token in its query or a login before its host, and the
+		// fetch's error repeats the address - not always as it was given, since Home Assistant's own
+		// full address is fetched as a path - so every query and login in the error comes off before
+		// it goes on the screen or into the log.
 		err = errors.New(redactError(err.Error()))
 	}
 	f.mu.Lock()
-	if f.cam.Caption != nil && f.cam.Caption.ID == id {
+	if f.viewIsUp(src) && f.cam.Caption != nil && f.cam.Caption.ID == id {
 		if err != nil {
 			f.cam.Error = err.Error()
 		} else {
@@ -112,42 +164,61 @@ func (f *Feature) fetchStill(path, id string) {
 	f.Changed.Emit(struct{}{})
 }
 
-// redactURL is s without its query and fragment, where an address keeps a token.
+// redactURL is s without its login, query and fragment, which is where an address keeps a camera's
+// password or a token. An address that does not parse is cut at its first ? or # and has any login taken
+// off by hand.
 func redactURL(s string) string {
-	if i := strings.IndexAny(s, "?#"); i >= 0 {
-		return s[:i]
+	if u, err := url.Parse(s); err == nil && u.Host != "" {
+		u.User, u.RawQuery, u.ForceQuery, u.Fragment, u.RawFragment = nil, "", false, "", ""
+		return u.String()
 	}
-	return s
+	if i := strings.IndexAny(s, "?#"); i >= 0 {
+		s = s[:i]
+	}
+	return loginInError.ReplaceAllString(s, "//")
 }
 
 // queryInError is an address's query or fragment as an error repeats it: from the ? or # to the
 // end of the address, which is where a space or a quote starts.
 var queryInError = regexp.MustCompile(`[?#][^\s"']*`)
 
-// redactError is an error's text with the query and fragment taken off every address in it. The colon
-// an error puts after an address stays, so the rest of the text still reads.
+// loginInError is an address's user:pass@ (or user@) as an error repeats it, from the // before it.
+var loginInError = regexp.MustCompile(`//[^/\s"']*@`)
+
+// redactError is an error's text with the login, query and fragment taken off every address in it. The
+// colon an error puts after an address stays, so the rest of the text still reads. The query goes first
+// so that an @ inside one is not taken for a login.
 func redactError(s string) string {
-	return queryInError.ReplaceAllStringFunc(s, func(q string) string {
+	s = queryInError.ReplaceAllStringFunc(s, func(q string) string {
 		if strings.HasSuffix(q, ":") {
 			return ":"
 		}
 		return ""
 	})
+	return loginInError.ReplaceAllString(s, "//")
 }
 
 // still fetches a picture and scales it to the panel. Home Assistant's own addresses get the token and
-// any other host does not (hass.FetchURL).
-func still(path string) (*image.RGBA, error) {
+// any other host does not (hass.FetchURL). wanted is asked once the bytes are in, before they are
+// decoded: if it says no, the picture is dropped (errReplaced).
+func still(path string, wanted func() bool) (*image.RGBA, error) {
 	b, err := hass.Get().FetchURL(path)
 	if err != nil {
 		return nil, err
 	}
+	if !wanted() {
+		return nil, errReplaced
+	}
+	stillsDecoded.Add(1)
 	src, err := decodeWithin(b, maxFramePixels, "picture")
 	if err != nil {
 		return nil, err
 	}
 	return fitFrame(src), nil
 }
+
+// PictureIsLive is whether a notification's picture is a camera, shown live, rather than one still.
+func PictureIsLive(src string) bool { return strings.HasPrefix(src, "camera.") }
 
 // PictureUp is whether the camera page is up with notification id's words on it.
 func (f *Feature) PictureUp(id string) bool {

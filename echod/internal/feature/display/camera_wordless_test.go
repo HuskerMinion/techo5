@@ -48,3 +48,24 @@ func TestAWordlessPictureIsThePictureAlone(t *testing.T) {
 		t.Error("a picture with words lost its top strip or its caption bar")
 	}
 }
+
+// A still left until tapped (twelve hours) says "tap to close" with no countdown; the same still with
+// a Caption that is not until tapped counts down, which would put the strip's pixels elsewhere.
+func TestAnUntilTappedPictureHasNoCountdown(t *testing.T) {
+	at := time.Date(2026, 10, 9, 14, 7, 0, 0, time.Local)
+	draw := func(c *home.Caption, until time.Time) *image.RGBA {
+		img := image.NewRGBA(image.Rect(0, 0, showWide, showHigh))
+		newRenderer(img).draw(scene{now: at, phase: "idle", showCamera: true, camera: home.CameraView{
+			Entity: "camera.front_door", Name: "Front door", Until: until, Frame: white(showWide, showHigh), Caption: c}})
+		return img
+	}
+	same := func(a, b *image.RGBA) bool { return string(a.Pix) == string(b.Pix) }
+	// With no time left to count there is nothing to show, so this is the page without a countdown.
+	plain := draw(&home.Caption{ID: "1", Title: "Door"}, time.Time{})
+	if !same(draw(&home.Caption{ID: "1", Title: "Door", UntilTapped: true}, time.Now().Add(12*time.Hour)), plain) {
+		t.Error("an until-tapped picture draws a countdown")
+	}
+	if same(draw(&home.Caption{ID: "1", Title: "Door"}, time.Now().Add(12*time.Hour)), plain) {
+		t.Error("a picture with a time left draws no countdown")
+	}
+}

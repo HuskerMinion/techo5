@@ -47,7 +47,7 @@ func fakeNames(t *testing.T) *atomic.Int32 {
 // A camera the device has no name for is named as Home Assistant names it, once the answer arrives.
 func TestAnUnlistedCameraGetsItsFriendlyName(t *testing.T) {
 	fakeNames(t)
-	f := &Feature{}
+	f := newFeature(t)
 	f.ShowCamera("camera.porch", time.Minute)
 	eventually(t, "the friendly name", func() bool { v, _ := f.Camera(); return v.Name == "Porch" })
 }
@@ -58,7 +58,7 @@ func TestAListedCameraKeepsItsOwnName(t *testing.T) {
 	if err := config.Set().Home().Cameras([]config.Camera{{Entity: "camera.porch", Name: "Back porch"}}); err != nil {
 		t.Fatal(err)
 	}
-	f := &Feature{}
+	f := newFeature(t)
 	f.ShowCamera("camera.porch", time.Minute)
 	time.Sleep(200 * time.Millisecond) // long enough for a lookup to land, were there one
 	if v, _ := f.Camera(); v.Name != "Back porch" {
@@ -72,7 +72,7 @@ func TestAListedCameraKeepsItsOwnName(t *testing.T) {
 // A camera Home Assistant has no name for, or cannot be asked about, keeps its entity id.
 func TestAnUnnamedCameraKeepsItsEntityID(t *testing.T) {
 	asked := fakeNames(t)
-	f := &Feature{}
+	f := newFeature(t)
 	f.ShowCamera("camera.nowhere", time.Minute)
 	eventually(t, "the lookup", func() bool { return asked.Load() > 0 })
 	time.Sleep(100 * time.Millisecond)
@@ -84,7 +84,7 @@ func TestAnUnnamedCameraKeepsItsEntityID(t *testing.T) {
 // A name that arrives after its camera has gone does not land on the view that replaced it.
 func TestALateNameStaysWithItsCamera(t *testing.T) {
 	fakeNames(t)
-	f := &Feature{}
+	f := newFeature(t)
 	f.ShowCamera("camera.porch", time.Minute)
 	f.ShowCamera("camera.nowhere", time.Minute)
 	time.Sleep(200 * time.Millisecond)
@@ -96,7 +96,7 @@ func TestALateNameStaysWithItsCamera(t *testing.T) {
 // An image entity with no title is named as Home Assistant names it, in place of the placeholder.
 func TestAnImageWithNoTitleGetsItsFriendlyName(t *testing.T) {
 	fakeNames(t)
-	f := &Feature{}
+	f := newFeature(t)
 	if err := f.ShowPicture("image.doorbell_snapshot", Caption{ID: "1"}, time.Minute, ""); err != nil {
 		t.Fatal(err)
 	}

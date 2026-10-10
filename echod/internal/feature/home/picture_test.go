@@ -91,7 +91,7 @@ func fakePicturesAt(t *testing.T) (*atomic.Int32, string) {
 // A still is fetched once, scaled to the panel, and shown with its caption.
 func TestAStillIsFetchedOnceAndScaled(t *testing.T) {
 	hits := fakePictures(t)
-	f := &Feature{}
+	f := newFeature(t)
 	if err := f.ShowPicture("/local/door.png", Caption{ID: "1", Title: "Doorbell", Message: "Someone is here"}, time.Minute, ""); err != nil {
 		t.Fatal(err)
 	}
@@ -115,7 +115,7 @@ func TestAStillIsFetchedOnceAndScaled(t *testing.T) {
 // A picture that cannot be fetched still comes up, with its caption and why there is no picture.
 func TestAStillThatFailsKeepsItsCaption(t *testing.T) {
 	fakePictures(t)
-	f := &Feature{}
+	f := newFeature(t)
 	if err := f.ShowPicture("/local/missing.png", Caption{ID: "1", Message: "Washer done"}, time.Minute, ""); err != nil {
 		t.Fatal(err)
 	}
@@ -127,12 +127,15 @@ func TestAStillThatFailsKeepsItsCaption(t *testing.T) {
 
 func TestRedactURL(t *testing.T) {
 	for in, want := range map[string]string{
-		"/local/door.png":                     "/local/door.png",
-		"/local/door.png?token=secret":        "/local/door.png",
-		"https://x.test/a.jpg?sig=1&b=2#frag": "https://x.test/a.jpg",
-		"https://x.test/a.jpg#frag?not-query": "https://x.test/a.jpg",
-		"camera.front_door":                   "camera.front_door",
-		"":                                    "",
+		"/local/door.png":                           "/local/door.png",
+		"/local/door.png?token=secret":              "/local/door.png",
+		"https://x.test/a.jpg?sig=1&b=2#frag":       "https://x.test/a.jpg",
+		"https://x.test/a.jpg#frag?not-query":       "https://x.test/a.jpg",
+		"camera.front_door":                         "camera.front_door",
+		"http://user:pass@cam.example/snap.jpg?x=1": "http://cam.example/snap.jpg",
+		"http://user@cam.example:8080/snap.jpg#f":   "http://cam.example:8080/snap.jpg",
+		"//user:pass@cam.example/snap.jpg?x=1":      "//cam.example/snap.jpg", // a network-path reference: parsed with its host
+		"":                                          "",
 	} {
 		if got := redactURL(in); got != want {
 			t.Errorf("redactURL(%q) = %q, want %q", in, got, want)
@@ -149,9 +152,9 @@ func TestAFailedFetchLeaksNoToken(t *testing.T) {
 		"/local/missing.png?token=secret",
 		base + "/local/missing.png?token=secret",
 		base + "/local/missing.png#secret",
-		"http://127.0.0.1:1/missing.png?token=secret", // nothing listens there: the error is the dial's
+		"http://nothing.invalid/missing.png?token=secret", // no such host: the error is the dial's
 	} {
-		f := &Feature{}
+		f := newFeature(t)
 		if err := f.ShowPicture(src, Caption{ID: "1", Message: "x"}, time.Minute, ""); err != nil {
 			t.Fatal(err)
 		}
@@ -172,6 +175,9 @@ func TestRedactError(t *testing.T) {
 		"hass: GET /local/x.png: 404 Not Found":                             "hass: GET /local/x.png: 404 Not Found",
 		"picture: reading the image header: image: unknown format":          "picture: reading the image header: image: unknown format",
 		"hass: GET /a?t=1: 500 then GET /b?u=2: 404":                        "hass: GET /a: 500 then GET /b: 404",
+		"hass: GET http://user:p@ss@h/x: 401 Unauthorized":                  "hass: GET http://h/x: 401 Unauthorized",
+		"hass: GET http://user:pass@h/x: 401 Unauthorized":                  "hass: GET http://h/x: 401 Unauthorized",
+		`Get "http://user:***@h:1/x.png?k=v": dial tcp: refused`:            `Get "http://h:1/x.png": dial tcp: refused`,
 	} {
 		if got := redactError(in); got != want {
 			t.Errorf("redactError(%q)\n got %q\nwant %q", in, got, want)
@@ -181,7 +187,7 @@ func TestRedactError(t *testing.T) {
 
 // ShowPicture refuses what it cannot show, and shows nothing for it.
 func TestShowPictureRefusesWhatItCannotShow(t *testing.T) {
-	f := &Feature{}
+	f := newFeature(t)
 	if err := f.ShowPicture("front door", Caption{ID: "1", Message: "x"}, time.Minute, ""); err == nil {
 		t.Error("took a picture that is no kind of source")
 	}
@@ -193,7 +199,7 @@ func TestShowPictureRefusesWhatItCannotShow(t *testing.T) {
 // A camera asked for any other way is a plain camera: the caption does not carry over.
 func TestShowCameraClearsACaption(t *testing.T) {
 	fakePictures(t)
-	f := &Feature{}
+	f := newFeature(t)
 	if err := f.ShowPicture("/local/door.png", Caption{ID: "1", Message: "x"}, time.Minute, ""); err != nil {
 		t.Fatal(err)
 	}
@@ -210,7 +216,7 @@ func TestShowCameraClearsACaption(t *testing.T) {
 // ends when the page's entity changes) ends with it.
 func TestAPictureReplacesACameraView(t *testing.T) {
 	fakePictures(t)
-	f := &Feature{}
+	f := newFeature(t)
 	f.ShowCamera("camera.deck", time.Minute)
 	if err := f.ShowPicture("/local/door.png", Caption{ID: "1", Message: "x"}, time.Minute, ""); err != nil {
 		t.Fatal(err)
@@ -226,7 +232,7 @@ func TestAPictureReplacesACameraView(t *testing.T) {
 // A camera named by a notification is live, with its caption.
 func TestACameraPictureIsLive(t *testing.T) {
 	fakePictures(t)
-	f := &Feature{}
+	f := newFeature(t)
 	if err := f.ShowPicture("camera.front_door", Caption{ID: "7", Title: "Doorbell", Message: "x"}, time.Minute, ""); err != nil {
 		t.Fatal(err)
 	}

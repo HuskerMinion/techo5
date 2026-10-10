@@ -263,6 +263,12 @@ type Display struct {
 	vp            videoPainter
 	vask          askLatch
 	videoLit      uint64
+
+	// notifyLit is the last notification that lit the face, once per notification like videoLit.
+	// notifySeen is the one the face may show at night: the one that came up by day, or that a touch
+	// released (notice_spot.go). Both under mu.
+	notifyLit  string
+	notifySeen string
 }
 
 var (
@@ -560,10 +566,18 @@ func (d *Display) gesture(g touch.Gesture) {
 	d.mu.Lock()
 	on, open := d.on, d.menuOpen
 	d.mu.Unlock()
+	// A notification that came up at night waits for a touch (releaseNotice), but not for one that stops
+	// a ring: that one is for the alarm. The touch that releases it only releases: whoever touched the
+	// face has not seen the card yet, so it is not a tap on anything.
+	held := d.noticeHeld()
+	ringTap := g.Kind == touch.Tap && ringingNow(time.Now()).any()
 
 	if !on {
 		// A dark panel only lights; nothing under the finger is acted on.
 		if g.Kind == touch.Tap || g.Kind == touch.Hold {
+			if !ringTap {
+				d.releaseHeld()
+			}
 			d.apply(true, d.ceilingOrDefault(), true)
 		}
 		// Unless something is ringing, where spending the press on the backlight is the wrong trade:
@@ -630,13 +644,24 @@ func (d *Display) gesture(g touch.Gesture) {
 		d.wake()
 		return
 	}
-	// A notification takes the face too: a tap puts it away and tells Home Assistant.
-	if _, up := notify.Get().Card(); up {
-		if g.Kind == touch.Tap {
-			go notify.Get().Dismiss()
-		}
+	// The touch that releases a held notification only releases it, rather than falling through to what
+	// is under the finger. The pages that take every tap have had their say above. A menu left open is
+	// put away now: the card is about to be drawn over it, and notifyLights left it alone for the night.
+	if held {
+		d.releaseHeld()
 		d.wake()
 		return
+	}
+	// A notification takes the face too: a tap puts it away and tells Home Assistant. A camera view is
+	// over it (the card stays up underneath and shows when the view ends), so the view takes the taps.
+	if _, camera := home.Get().Camera(); !camera {
+		if n, up := notify.Get().Card(); up {
+			if g.Kind == touch.Tap {
+				go notify.Get().DismissID(n.ID)
+			}
+			d.wake()
+			return
+		}
 	}
 	// The alert face takes every gesture while it is up.
 	if d.alertUpSpot() {
@@ -1247,10 +1272,9 @@ func (d *Display) frame() time.Duration {
 	d.mu.Unlock()
 
 	_, reminding := remind.Get().Showing()
-	_, notifying := notify.Get().Showing()
 	vs := video.Get().State()
 	busy := view.Phase != "idle" || sheetOpen || ringingNow(now).any() || phone.Get().Busy() || pinIsOpen() ||
-		sunriseProgress(now) > 0 || setup.Get().Waiting() || reminding || notifying || vs.Active()
+		sunriseProgress(now) > 0 || setup.Get().Waiting() || reminding || vs.Active()
 	if d.awayTick(now, on, busy, inNight(now)) {
 		d.mu.Lock()
 		on = d.on
@@ -1333,6 +1357,7 @@ func (d *Display) frame() time.Duration {
 	s.style = styleFactsFor(clockStyle(), now)
 	s.style.named = d.styleName(now)
 	s.camera, s.showCamera = home.Get().Camera()
+	s.camera, s.showCamera = d.gateCamera(s.camera, s.showCamera, inNight(now))
 	s.cameraSound, s.cameraSoundLive = home.Get().CameraSoundOn(), home.Get().CameraSoundLive()
 	if s.showCamera {
 		s.talkOffered, s.talk = talkback.Offered(s.camera.Entity), talkback.Get().State()
@@ -1386,6 +1411,7 @@ func (d *Display) frame() time.Duration {
 	s.announcement, s.showAnnouncement = announce.Get().Showing()
 	s.reminder, s.showReminder = remind.Get().Showing()
 	s.notification, s.showNotification = notify.Get().Card()
+	d.gateNotice(&s, inNight(now))
 	if s.reminder.From != config.Get().Device.Name {
 		s.reminderFrom = s.reminder.From
 	}

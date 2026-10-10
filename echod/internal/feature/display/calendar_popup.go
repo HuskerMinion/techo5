@@ -3,7 +3,6 @@
 package display
 
 import (
-	"context"
 	"log/slog"
 	"slices"
 	"strings"
@@ -12,7 +11,7 @@ import (
 	"github.com/HuskerMinion/techo5/echod/internal/component"
 	"github.com/HuskerMinion/techo5/echod/internal/config"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/home"
-	"github.com/HuskerMinion/techo5/echod/internal/hardware/speaker"
+	"github.com/HuskerMinion/techo5/echod/internal/feature/notify"
 	"github.com/HuskerMinion/techo5/echod/internal/lib/hass"
 )
 
@@ -165,7 +164,7 @@ func (d *Display) popupTick(now time.Time) {
 		"start": e.Start.Format(time.RFC3339), "device": config.Get().Device.Name,
 	}})
 	if !c.PopupSilent && !night && !config.Quiet() {
-		go popupChime()
+		go notify.Chime()
 	}
 }
 
@@ -194,23 +193,6 @@ func keepPopupShown(shown map[string]bool, now time.Time) {
 	if err := config.Set().Calendar().PopupShown(keep); err != nil {
 		slog.Warn("calendar: keeping the pop-ups shown failed", "err", err)
 	}
-}
-
-// popupFloor is the least the chime plays at, in volume steps, so it is heard.
-const popupFloor = 6
-
-// popupChime is the pop-up's sound: two soft falling notes, once.
-func popupChime() {
-	notes := []speaker.Note{{Freq: 988, Ms: 150}, {Freq: 0, Ms: 60}, {Freq: 784, Ms: 260}}
-	claim := speaker.Sound().Claim("calendar", func(ctx context.Context, pl *speaker.Player) error {
-		pl.Bell(max(pl.Step(), popupFloor), 0.5, notes...)
-		select {
-		case <-ctx.Done():
-		case <-time.After(700 * time.Millisecond):
-		}
-		return nil
-	})
-	<-claim.Done()
 }
 
 // dismissPopup takes the pop-up down, and has the next in turn, if any, come up at once.

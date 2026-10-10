@@ -36,9 +36,14 @@ func init() {
 const Event = "esphome.techo5_notification"
 
 const (
-	// untilTapped is how long a notification asked for with no time stays: a year, which a tap ends
-	// long before. It is the camera page's own "until tapped", so the page shows no countdown for it.
-	untilTapped = 365 * 24 * time.Hour
+	// untilTappedCap is how long words or a still picture asked for with no time stay if nobody taps
+	// them: long enough for a night's sleep and then some, short enough that one forgotten is not up
+	// for ever.
+	untilTappedCap = 12 * time.Hour
+
+	// liveWith is how long a live camera asked for with no time stays, as home_show_camera takes 0: a
+	// live view polls Home Assistant the whole time it is up.
+	liveWith = 30 * time.Second
 
 	longest = 24 * time.Hour // a time that was asked for is held to a day
 
@@ -64,6 +69,7 @@ type Notification struct {
 	Title   string // "" for none
 	Message string
 	Icon    string // an mdi icon name, "" for none
+	Tag     string // what the caller called it, carried back on the event; "" for none
 	Until   time.Time
 }
 
@@ -71,7 +77,7 @@ type Notification struct {
 type pictures interface {
 	ShowPicture(src string, c home.Caption, d time.Duration, sound string) error
 	PictureUp(id string) bool
-	HideCamera()
+	HidePicture(id string) bool
 }
 
 type Feature struct {
@@ -104,8 +110,12 @@ var (
 	shared *Feature
 
 	nightMu sync.Mutex
-	nightFn = func(time.Time) bool { return false }
+	nightFn = nightByHours
 )
+
+// nightByHours is night by the night hours in the settings alone. It stands in until the display says
+// what night is, so a notification right after boot is not chimed at night.
+func nightByHours(t time.Time) bool { return config.InWindow(config.Get().Screen.Night, t) }
 
 func Get() *Feature {
 	once.Do(func() {
@@ -119,7 +129,7 @@ func Get() *Feature {
 }
 
 // SetNight hands over the screen's idea of night, which is the display's to decide (night hours, Home
-// Assistant's night, the switch over either). A Dot has no night and keeps the default.
+// Assistant's night, the switch over either). A Dot has no display and keeps the night hours.
 func SetNight(f func(time.Time) bool) {
 	nightMu.Lock()
 	nightFn = f
@@ -138,10 +148,11 @@ func newFeature(pics pictures) *Feature {
 	f := &Feature{
 		now:    time.Now,
 		pics:   pics,
-		chime:  playChime,
+		chime:  Chime,
 		say:    remind.Say,
 		hushed: hushedNow,
-		fire:   func(e component.Event) { component.Fire.Emit(e) },
+		// Events go out through an outbox (outbox.go), so nothing here waits on Home Assistant.
+		fire: newOutbox(func(e component.Event) { component.Fire.Emit(e) }, outboxSize).post,
 	}
 	// Home Assistant registers an action's arguments as a closed set, all required, so these lists are
 	// fixed for good: an optional argument is passed as "" or 0, and one added later would break every
@@ -155,10 +166,11 @@ func newFeature(pics pictures) *Feature {
 				{Name: "icon", Type: esphome.ArgString},
 				{Name: "chime", Type: esphome.ArgString},
 				{Name: "speak", Type: esphome.ArgString},
+				{Name: "tag", Type: esphome.ArgString},
 				{Name: "seconds", Type: esphome.ArgInt},
 			},
 			Run: func(c esphome.Call) (any, error) {
-				return nil, f.Notify(c.String("message"), c.String("title"), c.String("icon"), c.String("chime"), c.String("speak"), c.Int("seconds"))
+				return nil, f.Notify(c.String("message"), c.String("title"), c.String("icon"), c.String("chime"), c.String("speak"), c.String("tag"), c.Int("seconds"))
 			},
 		},
 		{
@@ -170,10 +182,11 @@ func newFeature(pics pictures) *Feature {
 				{Name: "chime", Type: esphome.ArgString},
 				{Name: "speak", Type: esphome.ArgString},
 				{Name: "sound", Type: esphome.ArgString},
+				{Name: "tag", Type: esphome.ArgString},
 				{Name: "seconds", Type: esphome.ArgInt},
 			},
 			Run: func(c esphome.Call) (any, error) {
-				return nil, f.NotifyPicture(c.String("message"), c.String("title"), c.String("picture"), c.String("chime"), c.String("speak"), c.String("sound"), c.Int("seconds"))
+				return nil, f.NotifyPicture(c.String("message"), c.String("title"), c.String("picture"), c.String("chime"), c.String("speak"), c.String("sound"), c.String("tag"), c.Int("seconds"))
 			},
 		},
 	}
@@ -184,9 +197,9 @@ func (f *Feature) Name() string { return "notifications" }
 
 func (f *Feature) Actions() []*esphome.Action { return f.actions }
 
-// Notify puts words up in a card. chime "off" puts it up without its chime, and speak "on" has the
-// words said aloud as well.
-func (f *Feature) Notify(message, title, icon, chime, speak string, seconds int) error {
+// Notify puts words up in a card. chime and speak read on and off as sound does (chime is on unless
+// off, speak is off unless on), and tag is carried back on the notification's events.
+func (f *Feature) Notify(message, title, icon, chime, speak, tag string, seconds int) error {
 	message = clean(message, maxMessage)
 	if message == "" {
 		return errors.New("notify: the message is empty")
@@ -197,45 +210,51 @@ func (f *Feature) Notify(message, title, icon, chime, speak string, seconds int)
 	defer f.order.Unlock()
 	f.put(Notification{
 		ID: f.nextID(), Kind: Text, Title: clean(title, maxTitle), Message: message,
-		Icon: strings.TrimSpace(icon), Until: f.now().Add(lasting(seconds)),
-	}, chimeOff(chime), speakOn(speak))
+		Icon: strings.TrimSpace(icon), Tag: strings.TrimSpace(tag), Until: f.now().Add(lasting(seconds, false)),
+	}, how{silent: !home.ParseOnOff(chime, true), aloud: home.ParseOnOff(speak, false), hushed: f.hushed(), untilDone: seconds <= 0})
 	return nil
 }
 
 // NotifyPicture puts words up over a picture on the camera page, or the picture alone when there are
 // none: a doorbell's camera says enough by itself. The picture is checked on every device, so a Dot
-// refuses what a Show would. chime "off" puts it up without its chime, speak "on" has its words said
-// aloud as well, and sound is a camera's own audio as home_show_camera_sound takes it ("on", "off", or
-// anything else for the device's Camera sound setting).
-func (f *Feature) NotifyPicture(message, title, picture, chime, speak, sound string, seconds int) error {
+// refuses what a Show would. chime and speak are as Notify takes them, and sound is a camera's own audio
+// as home_show_camera_sound takes it (on or off, or anything else for the device's Camera sound
+// setting); it stays off at night and in quiet hours.
+func (f *Feature) NotifyPicture(message, title, picture, chime, speak, sound, tag string, seconds int) error {
 	message, picture = clean(message, maxMessage), strings.TrimSpace(picture)
 	if err := home.CheckPicture(picture); err != nil {
 		return err
 	}
-	d := lasting(seconds)
+	d := lasting(seconds, home.PictureIsLive(picture))
 	// Two at once could otherwise show A, show B, put B, put A, leaving B's view up under A's
 	// notification, so the whole sequence goes one at a time.
 	f.order.Lock()
 	defer f.order.Unlock()
-	n := Notification{ID: f.nextID(), Kind: Picture, Title: clean(title, maxTitle), Message: message, Until: f.now().Add(d)}
+	h := how{silent: !home.ParseOnOff(chime, true), aloud: home.ParseOnOff(speak, false), hushed: f.hushed(), untilDone: seconds <= 0}
+	if h.hushed {
+		sound = "off"
+	}
+	n := Notification{ID: f.nextID(), Kind: Picture, Title: clean(title, maxTitle), Message: message, Tag: strings.TrimSpace(tag), Until: f.now().Add(d)}
 	// The view first, then the notification: the ticker counts a picture as over when its view is, and
 	// must never look between the two.
 	if f.pics != nil {
-		if err := f.pics.ShowPicture(picture, home.Caption{ID: n.ID, Title: n.Title, Message: n.Message}, d, sound); err != nil {
+		if err := f.pics.ShowPicture(picture, home.Caption{ID: n.ID, Title: n.Title, Message: n.Message, UntilTapped: seconds <= 0 && !home.PictureIsLive(picture)}, d, sound); err != nil {
 			return err
 		}
 	}
-	f.put(n, chimeOff(chime), speakOn(speak))
+	f.put(n, h)
 	return nil
 }
 
-// chimeOff is whether an action asked for no chime: "off", as home_show_camera_sound takes its sound.
-// Anything else, an empty string included, leaves the chime to the hour.
-func chimeOff(chime string) bool { return strings.EqualFold(strings.TrimSpace(chime), "off") }
-
-// speakOn is whether an action asked for its words said aloud: "on". Anything else, an empty string
-// included, keeps them to the screen, which is what a notification was before it could speak.
-func speakOn(speak string) bool { return strings.EqualFold(strings.TrimSpace(speak), "on") }
+// how is what a notification is put up with.
+type how struct {
+	silent bool // the caller asked for no chime
+	aloud  bool // the caller asked for the words said
+	hushed bool // night or quiet hours: no chime, no words, no camera sound
+	// untilDone ends a notification on a device with no screen once its chime and words are done, when
+	// the caller gave it no time: there is nothing to tap, so nothing else would end it.
+	untilDone bool
+}
 
 // spoken is what a notification says aloud: its title and its message as one sentence would carry
 // them, or the one of them there is.
@@ -258,31 +277,32 @@ func (f *Feature) nextID() string {
 	return strconv.Itoa(f.seq)
 }
 
-// put makes n the one up, ending whatever was. silent leaves its chime out whatever the hour, and aloud
-// has its words said after the chime.
-func (f *Feature) put(n Notification, silent, aloud bool) {
+// put makes n the one up, ending whatever was as replaced.
+func (f *Feature) put(n Notification, h how) {
+	// The events are posted with the change, under f.mu, so a tap that ends n straight away is
+	// reported after n was shown. Posting never waits (outbox.go).
 	f.mu.Lock()
 	old := f.up
 	f.up = &n
-	f.mu.Unlock()
 	if old != nil {
-		// Words replacing a picture take the picture's view down; a picture replacing a picture has
-		// already replaced the view.
-		if old.Kind == Picture && n.Kind == Text && f.pics != nil && f.pics.PictureUp(old.ID) {
-			f.pics.HideCamera()
-		}
-		f.report(*old, "expired")
+		f.report(*old, "replaced")
 	}
 	f.report(n, "shown")
+	f.mu.Unlock()
+	// Words replacing a picture take the picture's view down, if it is still that picture's; a picture
+	// replacing a picture has already replaced the view.
+	if old != nil && old.Kind == Picture && n.Kind == Text && f.pics != nil {
+		f.pics.HidePicture(old.ID)
+	}
 	// Night and quiet hours keep a notification to the screen: no chime and no words, since it is not
 	// an alarm and nobody set it for now.
-	hushed := f.hushed()
-	chime, words := !silent && !hushed, ""
-	if aloud && !hushed {
+	chime, words := !h.silent && !h.hushed, ""
+	if h.aloud && !h.hushed {
 		words = spoken(n)
 	}
 	slog.Info("notification", "kind", n.Kind, "title", n.Title, "until", n.Until.Format(time.Kitchen),
-		"chime", chime, "spoken", words != "", "hushed", hushed)
+		"chime", chime, "spoken", words != "", "hushed", h.hushed)
+	ends := h.untilDone && f.pics == nil
 	if chime || words != "" {
 		// One after the other in one goroutine: the chime has the speaker until it is done, and words
 		// over it would be lost under it.
@@ -293,8 +313,28 @@ func (f *Feature) put(n Notification, silent, aloud bool) {
 			if words != "" {
 				f.say(words)
 			}
+			if ends {
+				f.finish(n.ID)
+			}
 		})
+	} else if ends {
+		f.finish(n.ID)
 	}
+	f.Changed.Emit(struct{}{})
+}
+
+// finish ends notification id because there was nothing more to do for it, and does nothing if it is
+// not the one up.
+func (f *Feature) finish(id string) {
+	f.mu.Lock()
+	n := f.up
+	if n == nil || n.ID != id {
+		f.mu.Unlock()
+		return
+	}
+	f.up = nil
+	f.report(*n, "expired")
+	f.mu.Unlock()
 	f.Changed.Emit(struct{}{})
 }
 
@@ -308,25 +348,41 @@ func (f *Feature) Card() (Notification, bool) {
 func (f *Feature) Showing() (Notification, bool) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
-	if f.up == nil || !f.now().Before(f.up.Until) {
+	n := f.up
+	if n == nil {
 		return Notification{}, false
 	}
-	return *f.up, true
+	// A picture is up while its view is, as tick counts it: the view has its own time, counted from the
+	// picture arriving.
+	if n.Kind == Picture && f.pics != nil {
+		return *n, f.pics.PictureUp(n.ID)
+	}
+	if !f.now().Before(n.Until) {
+		return Notification{}, false
+	}
+	return *n, true
 }
 
 // Dismiss takes the notification down because somebody tapped it, and says whether there was one.
-func (f *Feature) Dismiss() bool {
+func (f *Feature) Dismiss() bool { return f.dismiss("") }
+
+// DismissID takes the notification down only if it is the one with this id, and says whether it did: a
+// tap on a picture's view that has gone must not end the notification that came after it.
+func (f *Feature) DismissID(id string) bool { return id != "" && f.dismiss(id) }
+
+func (f *Feature) dismiss(id string) bool {
 	f.mu.Lock()
 	n := f.up
-	f.up = nil
-	f.mu.Unlock()
-	if n == nil {
+	if n == nil || (id != "" && n.ID != id) {
+		f.mu.Unlock()
 		return false
 	}
-	if n.Kind == Picture && f.pics != nil && f.pics.PictureUp(n.ID) {
-		f.pics.HideCamera()
-	}
+	f.up = nil
 	f.report(*n, "dismissed")
+	f.mu.Unlock()
+	if n.Kind == Picture && f.pics != nil {
+		f.pics.HidePicture(n.ID)
+	}
 	f.Changed.Emit(struct{}{})
 	return true
 }
@@ -349,6 +405,10 @@ func (f *Feature) Run(ctx context.Context) error {
 // tick ends the notification up if it is over: words when their time is, a picture when its view is
 // (which has its own time, counted from the picture arriving, and can be taken down other ways).
 func (f *Feature) tick(now time.Time) {
+	// Not between a picture's view going up and its notification being put: the old picture's view is
+	// gone by then, and ending it here would report it expired when it is being replaced.
+	f.order.Lock()
+	defer f.order.Unlock()
 	f.mu.Lock()
 	n := f.up
 	if n == nil {
@@ -364,25 +424,30 @@ func (f *Feature) tick(now time.Time) {
 		return
 	}
 	f.up = nil
-	f.mu.Unlock()
 	f.report(*n, "expired")
+	f.mu.Unlock()
 	f.Changed.Emit(struct{}{})
 }
 
+// report posts an event about n. Callers hold f.mu, so events are posted in the order the changes
+// happen; fire never waits (the outbox), so holding the lock for it costs nothing.
 func (f *Feature) report(n Notification, what string) {
 	f.fire(component.Event{Name: Event, Data: map[string]string{
-		"event": what, "title": n.Title, "message": n.Message, "kind": string(n.Kind),
+		"event": what, "id": n.ID, "tag": n.Tag, "title": n.Title, "message": n.Message, "kind": string(n.Kind),
 		"device": config.Get().Device.Name,
 	}})
 }
 
-// lasting is how long a notification stays: its own seconds, a day at most, or until somebody taps it
-// when it was given none. A notification nobody gave a time to is one somebody is meant to see.
-func lasting(seconds int) time.Duration {
-	if seconds <= 0 {
-		return untilTapped
-	}
-	if seconds > int(longest/time.Second) {
+// lasting is how long a notification stays: its own seconds, a day at most. With none it is until
+// somebody taps it, which is twelve hours at most, or for a live camera 30 seconds. A notification
+// nobody gave a time to is one somebody is meant to see.
+func lasting(seconds int, live bool) time.Duration {
+	switch {
+	case seconds <= 0 && live:
+		return liveWith
+	case seconds <= 0:
+		return untilTappedCap
+	case seconds > int(longest/time.Second):
 		return longest
 	}
 	return time.Duration(seconds) * time.Second

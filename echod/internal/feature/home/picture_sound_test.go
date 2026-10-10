@@ -34,7 +34,7 @@ func TestAPictureCamerasSoundIsAskedFor(t *testing.T) {
 		if err := config.Set().Home().CameraSound(c.setting); err != nil {
 			t.Fatal(err)
 		}
-		f := &Feature{}
+		f := newFeature(t)
 		if err := f.ShowPicture("camera.front_door", Caption{ID: "1", Message: "x"}, time.Minute, c.sound); err != nil {
 			t.Fatal(err)
 		}
@@ -53,7 +53,7 @@ func TestAPictureCamerasSoundIsAskedFor(t *testing.T) {
 func TestAStillHasNoSound(t *testing.T) {
 	fakePictures(t)
 	fake := fakeOverFor(t)
-	f := &Feature{}
+	f := newFeature(t)
 	if err := f.ShowPicture("/local/door.png", Caption{ID: "1", Message: "x"}, time.Minute, "on"); err != nil {
 		t.Fatal(err)
 	}

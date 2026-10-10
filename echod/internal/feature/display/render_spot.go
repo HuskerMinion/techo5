@@ -360,8 +360,10 @@ func (r *roundRenderer) draw(s roundScene) {
 		r.announceFace(s)
 		return
 	}
-	// A notification takes the face as an announcement does, under it and under a reminder.
-	if s.showNotification {
+	// A notification takes the face as an announcement does, under it and under a reminder. A camera
+	// view wins over a card: the card stays up underneath and shows when the view ends. (A picture
+	// notification is itself a camera view, and has no card.)
+	if s.showNotification && !s.showCamera {
 		r.notifyFace(s)
 		return
 	}

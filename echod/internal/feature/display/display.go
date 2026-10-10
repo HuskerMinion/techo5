@@ -338,6 +338,12 @@ type Display struct {
 	vp            videoPainter
 	vask          askLatch
 	videoLit      uint64 // the last video that lit the panel (frame)
+
+	// notifyLit is the last notification that lit the panel (frame), once per notification like
+	// videoLit. notifySeen is the notification the screen may show at night: the one that came up by
+	// day, or that a touch released. A notification at night waits for the touch (mu).
+	notifyLit  string
+	notifySeen string
 }
 
 var (
@@ -781,6 +787,10 @@ func (d *Display) gesture(g touch.Gesture) {
 	d.mu.Lock()
 	d.touchedAt = time.Now()
 	d.mu.Unlock()
+	// A notification that came up at night waits for a touch (releaseNotice), but not for one that
+	// stops a ring: that one is for the alarm. The touch that releases it only releases: whoever
+	// touched the screen has not seen the card yet, so it is not a tap on anything.
+	held := d.noticeHeld()
 
 	if !on {
 		if g.Kind == touch.Tap && d.ringing(time.Now()).any() {
@@ -788,6 +798,7 @@ func (d *Display) gesture(g touch.Gesture) {
 			d.stopRing()
 			return
 		}
+		d.releaseNotice()
 		if g.Kind == touch.Tap {
 			d.apply(true, d.ceilingOrDefault(), true)
 		}
@@ -810,6 +821,24 @@ func (d *Display) gesture(g touch.Gesture) {
 			d.stopRing()
 			d.wake()
 			return
+		}
+		if held {
+			d.releaseNotice()
+			d.wake()
+		} else if g.Kind == touch.Tap {
+			// What a touch released on the night light is tapped away like any other, and the red clock
+			// comes back; without this it stayed until the notification ended. A text card only by its
+			// own box; a camera view (a picture notification's, or one somebody asked for) anywhere.
+			if n, up := notify.Get().Card(); up && d.r != nil && image.Pt(g.X, g.Y).In(d.r.notifyBox()) {
+				go notify.Get().DismissID(n.ID)
+				d.wake()
+				return
+			}
+			if v, up := home.Get().Camera(); up {
+				go closeCamera(v)
+				d.wake()
+				return
+			}
 		}
 		if g.Kind == touch.Hold {
 			d.mu.Lock()
@@ -900,6 +929,15 @@ func (d *Display) gesture(g touch.Gesture) {
 		return
 	}
 
+	// On a lit night screen the touch that releases a held notification only releases it, rather than
+	// falling through to the deck, the drawer, the dashboard or a button under the finger. A ring, a
+	// call and the pages that take every tap have had their say above.
+	if held {
+		d.releaseNotice()
+		d.wake()
+		return
+	}
+
 	// A reminder: a tap on its card puts it away, here and on every device it went off on. Only the
 	// card, as with the strip, so a finger meant for the music behind it still reaches the music.
 	if g.Kind == touch.Tap && d.r != nil && d.r.popupTapped(image.Pt(g.X, g.Y)) {
@@ -917,8 +955,8 @@ func (d *Display) gesture(g touch.Gesture) {
 
 	// A notification's card, the same way: a tap on the card puts it away and tells Home Assistant;
 	// anywhere else is a tap on what is behind it. Under the reminder, which is drawn over it.
-	if _, up := notify.Get().Card(); up && g.Kind == touch.Tap && d.r != nil && image.Pt(g.X, g.Y).In(d.r.notifyBox()) {
-		go notify.Get().Dismiss()
+	if n, up := notify.Get().Card(); up && g.Kind == touch.Tap && d.r != nil && image.Pt(g.X, g.Y).In(d.r.notifyBox()) {
+		go notify.Get().DismissID(n.ID)
 		d.wake()
 		return
 	}
@@ -991,7 +1029,8 @@ func (d *Display) gesture(g touch.Gesture) {
 				// Silence it, or ask for it again: the control is a toggle, and the view stays either way.
 				home.Get().ToggleCameraSound()
 			} else {
-				closeCamera(v)
+				// Off the touch goroutine: closing a notification's picture ends in a network write.
+				go closeCamera(v)
 			}
 		}
 		d.wake()
@@ -1851,7 +1890,6 @@ func (d *Display) frame() time.Duration {
 	ring := d.ringing(now)
 	call := phone.Get().State()
 	_, reminding := remind.Get().Showing()
-	_, notifying := notify.Get().Showing()
 	night := nightNow(now)
 	if !on && (call.Phase != phone.Idle || (!night && (ring.any() || reminding))) {
 		// A call lights a dark panel, at night to half brightness (relight): its page is how it is
@@ -1860,12 +1898,12 @@ func (d *Display) frame() time.Duration {
 		d.apply(true, d.ceilingOrDefault(), false)
 		on = true
 	}
-	if !on && (d.popupUp() != nil || notifying) && !nightNow(now) {
-		// A pop-up or a notification lights a dark panel by day. At night it waits there, dark, until
-		// the screen is woken.
+	if !on && d.popupUp() != nil && !night {
+		// A pop-up lights a dark panel by day. At night it waits there, dark, until the screen is woken.
 		d.apply(true, d.ceilingOrDefault(), false)
 		on = true
 	}
+	on = d.noticeLights(on, night)
 	if vs := video.Get().State(); vs.Active() && vs.ID != d.videoLit && (vs.Phase != video.Asking || !nightNow(now)) {
 		// A video starting lights a dark panel, day or night: somebody asked for it to be watched. Once
 		// per video, so a screen turned off while one plays stays off. A DLNA video asking first lights it
@@ -1904,7 +1942,7 @@ func (d *Display) frame() time.Duration {
 	d.mu.Lock()
 	sheetUp, wifiUp := d.sheet, d.wifiOpen
 	d.mu.Unlock()
-	busy := view.Phase != "idle" || call.Phase != phone.Idle || ring.any() || reminding || notifying || sheetUp || pinIsOpen() ||
+	busy := view.Phase != "idle" || call.Phase != phone.Idle || ring.any() || reminding || sheetUp || pinIsOpen() ||
 		sunriseProgress(now) > 0 || d.popupUp() != nil || setup.Get().Waiting() || wifiUp || video.Get().State().Active()
 	if d.awayTick(now, on, busy, night) {
 		d.mu.Lock()
@@ -2049,6 +2087,7 @@ func (d *Display) frame() time.Duration {
 		d.mu.Unlock()
 	}
 	s.camera, s.showCamera = home.Get().Camera()
+	s.camera, s.showCamera = d.gateCamera(s.camera, s.showCamera, nightNow(now))
 	s.cameraSound, s.cameraSoundLive = home.Get().CameraSoundOn(), home.Get().CameraSoundLive()
 	if s.showCamera {
 		s.talkOffered, s.talk = talkback.Offered(s.camera.Entity), talkback.Get().State()
@@ -2140,6 +2179,7 @@ func (d *Display) frame() time.Duration {
 	s.announcement, s.showAnnouncement = announce.Get().Showing()
 	s.reminder, s.showReminder = remind.Get().Showing()
 	s.notification, s.showNotification = notify.Get().Card()
+	d.gateNotice(&s, nightNow(now))
 	s.popup = d.popupUp()
 	if s.reminder.From != config.Get().Device.Name {
 		s.reminderFrom = s.reminder.From

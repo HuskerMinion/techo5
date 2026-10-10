@@ -13,6 +13,8 @@ import (
 	"net/url"
 	"strings"
 	"testing"
+
+	"github.com/HuskerMinion/techo5/echod/internal/lib/netguard"
 )
 
 // The guard takes only the decoder, fetches what it asks for, hands a redirect back rather than
@@ -27,12 +29,12 @@ func TestTheGuardKeepsTheDecoderOffTheDevice(t *testing.T) {
 		_, _ = io.WriteString(w, "picture")
 	}))
 	defer ok.Close()
-	saved := refused
-	t.Cleanup(func() { refused = saved })
+	saved := netguard.Refused
+	t.Cleanup(func() { netguard.Refused = saved })
 	// In the test everything is on loopback, so what the guard refuses is switched by hand: first the
 	// upstream stands for the network, then for the device.
 	refusing := false
-	refused = func(net.IP) bool { return refusing }
+	netguard.Refused = func(net.IP) bool { return refusing }
 
 	savedAllowed := guardAllowed
 	t.Cleanup(func() { guardAllowed = savedAllowed })

@@ -19,7 +19,7 @@ func TestATapOnAPictureNotificationDismissesIt(t *testing.T) {
 	notify.SetNight(func(time.Time) bool { return true }) // night, so the chime stays quiet
 	t.Cleanup(func() { notify.SetNight(func(time.Time) bool { return false }) })
 
-	if err := notify.Get().NotifyPicture("Someone is here", "Doorbell", "camera.front_door", "", "", "", 60); err != nil {
+	if err := notify.Get().NotifyPicture("Someone is here", "Doorbell", "camera.front_door", "", "", "", "", 60); err != nil {
 		t.Fatal(err)
 	}
 	v, up := home.Get().Camera()
@@ -39,5 +39,26 @@ func TestATapOnAPictureNotificationDismissesIt(t *testing.T) {
 	closeCamera(v)
 	if _, up := home.Get().Camera(); up {
 		t.Error("a plain camera view is still up after the tap")
+	}
+}
+
+// A tap on a view whose notification has been replaced by a newer picture takes down nothing of the
+// newer one: closeCamera runs on its own goroutine, so the replacement can come first.
+func TestClosingAReplacedPictureLeavesTheNewerOne(t *testing.T) {
+	config.Use(filepath.Join(t.TempDir(), "state.json"))
+	notify.SetNight(func(time.Time) bool { return true })
+	t.Cleanup(func() { notify.SetNight(func(time.Time) bool { return false }) })
+
+	if err := notify.Get().NotifyPicture("First", "", "camera.front_door", "", "", "", "", 60); err != nil {
+		t.Fatal(err)
+	}
+	old, _ := home.Get().Camera()
+	if err := notify.Get().NotifyPicture("Second", "", "camera.deck", "", "", "", "", 60); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { notify.Get().Dismiss() })
+	closeCamera(old)
+	if v, up := home.Get().Camera(); !up || v.Caption == nil || v.Caption.Message != "Second" {
+		t.Errorf("view %+v up=%v after closing the replaced one, want the newer picture still up", v, up)
 	}
 }

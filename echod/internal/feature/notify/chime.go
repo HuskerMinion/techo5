@@ -7,16 +7,16 @@ import (
 	"github.com/HuskerMinion/techo5/echod/internal/hardware/speaker"
 )
 
-// tone is what a notification arrives with: the calendar pop-up's two notes falling, since the two are
-// the same kind of thing — something to look at, nobody waiting on an answer.
+// tone is what a notification arrives with: two soft notes falling, the calendar pop-up's too, since the
+// two are the same kind of thing: something to look at, nobody waiting on an answer.
 var tone = []speaker.Note{{Freq: 988, Ms: 150}, {Freq: 0, Ms: 60}, {Freq: 784, Ms: 260}}
 
 // chimeFloor is the least the chime plays at, in volume steps, so it is heard with the volume down.
 const chimeFloor = 6
 
-// playChime is the notification's chime, at the speaker's own volume or the floor. The calendar's is in
-// a file built for the Show alone, so this is its own, built for every device.
-func playChime() {
+// Chime plays the two soft falling notes, once, at the speaker's own volume or the floor, and returns
+// when they are done. The calendar pop-up uses it too, since the two are the same kind of thing.
+func Chime() {
 	claim := speaker.Sound().Claim("notification", func(ctx context.Context, pl *speaker.Player) error {
 		pl.Bell(max(pl.Step(), chimeFloor), 0.5, tone...)
 		select {

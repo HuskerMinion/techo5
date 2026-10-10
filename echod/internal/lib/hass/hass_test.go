@@ -3,6 +3,7 @@ package hass
 import (
 	"io"
 	"net/http"
+	"net/http/httptest"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -122,6 +123,48 @@ func TestTheAddressIsCleanedAndChecked(t *testing.T) {
 	for _, bad := range []string{"192.168.1.20:8123", "homeassistant.local", "ftp://ha", "http://"} {
 		if err := c.Set(bad, "abc"); err == nil {
 			t.Errorf("%q was taken as an address", bad)
+		}
+	}
+}
+
+// A reply that is not a success from an address with a login in it says what went wrong without the
+// login: the text is drawn on the screen and written to the log. The query and fragment, where a
+// signed link keeps its token, go with it.
+func TestFetchURLErrorHasNoLogin(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		http.Error(w, "no", http.StatusUnauthorized)
+	}))
+	defer srv.Close()
+	c := &Client{acc: access{URL: "http://ha:8123", Token: "t"}, http: srv.Client()}
+	host := strings.TrimPrefix(srv.URL, "http://")
+	_, err := c.FetchURL("http://user:secret@" + host + "/x.jpg?sig=abc#frag")
+	if err == nil {
+		t.Fatal("a 401 was taken as a picture")
+	}
+	for _, leak := range []string{"user", "secret", "sig", "abc", "frag"} {
+		if strings.Contains(err.Error(), leak) {
+			t.Errorf("error %q repeats %q", err, leak)
+		}
+	}
+	for _, keep := range []string{"hass: GET http://" + host + "/x.jpg", "401 Unauthorized"} {
+		if !strings.Contains(err.Error(), keep) {
+			t.Errorf("error %q lost %q", err, keep)
+		}
+	}
+}
+
+// An address too broken to parse still loses its login and its query.
+func TestWithoutLogin(t *testing.T) {
+	for in, want := range map[string]string{
+		"http://u:p@h/x?a=1#f":      "http://h/x",
+		"http://u@h:81/x":           "http://h:81/x",
+		"/api/x?token=1":            "/api/x",
+		"http://u:p@h:bad/x?a=1":    "http://h:bad/x", // a bad port: not parsed, cut by hand
+		"http://u:p@ss@h:bad/x?a=1": "http://h:bad/x",
+		"http://h/x":                "http://h/x",
+	} {
+		if got := withoutLogin(in); got != want {
+			t.Errorf("withoutLogin(%q) = %q, want %q", in, got, want)
 		}
 	}
 }
