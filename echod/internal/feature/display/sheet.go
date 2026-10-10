@@ -50,7 +50,7 @@ func categoryCard(sv sheetView) cardView {
 	if dv, ok := deviceCard(sv); ok {
 		v = dv
 		v.scroll = st.cardScroll
-		return v
+		return withLocks(v)
 	}
 	switch {
 	case st.cat == catAlarms:
@@ -61,6 +61,21 @@ func categoryCard(sv sheetView) cardView {
 	}
 	v.rows = adaptRows(v.rows, sv)
 	v.scroll = st.cardScroll
+	return withLocks(v)
+}
+
+// withLocks marks the card's rows that are behind the settings lock while it is on, for the padlock
+// beside their names.
+func withLocks(v cardView) cardView {
+	if !security.Locked() {
+		return v
+	}
+	rows := make([]settingRow, len(v.rows))
+	for i, row := range v.rows {
+		row.locked = rowLocked(row.id)
+		rows[i] = row
+	}
+	v.rows = rows
 	return v
 }
 
@@ -208,7 +223,7 @@ func securityRows(sv sheetView) []settingRow {
 			settingRow{id: "ssh", label: "SSH", sub: sub, kind: ctlToggle, on: sec.SSH},
 			settingRow{label: "SSH keys", sub: "Sent from Home Assistant", kind: ctlValue, value: keys})
 	}
-	lockSub := "A PIN before these settings open"
+	lockSub := "A PIN before most settings change"
 	if security.LockSet() {
 		lockSub = "On: turn off to remove the PIN"
 	}
@@ -801,13 +816,13 @@ func (d *Display) nextTap(x, y int) {
 		id := d.picker
 		d.picker = ""
 		d.mu.Unlock()
-		d.choose(id, z.opt)
+		gate(id, d.sheetUp, func() { d.choose(id, z.opt) })
 	case zoneRow:
-		d.rowTap(z.id, z.part, z.opt)
+		gate(z.id, d.sheetUp, func() { d.rowTap(z.id, z.part, z.opt) })
 	}
 }
 
-// rowTap is a tap on a row's control.
+// rowTap is a tap on a row's control, past the settings lock: nextTap asks for the PIN first.
 func (d *Display) rowTap(id string, p part, opt int) {
 	if d.alarmRowTap(id, p, opt) {
 		return

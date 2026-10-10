@@ -9,7 +9,7 @@ import (
 )
 
 // lockSection is the settings lock (feature/security lock.go): a PIN the device asks for before its
-// settings screen opens. Only on a device with a screen. The PIN is never shown.
+// settings change. Only on a device with a screen. The PIN is never shown.
 func lockSection(w http.ResponseWriter, token string) {
 	if !hasScreen {
 		return

@@ -261,6 +261,7 @@ type settingRow struct {
 	days       uint8  // ctlDays: bit 0 Sunday to bit 6 Saturday
 	role       int    // ctlSwatches: which role of the theme
 	rowTap     bool   // a tap on the row beside its control means something of its own (partRow)
+	locked     bool   // behind the settings lock while it is on: a padlock after its name
 }
 
 // part is which piece of a row a tap landed on.
@@ -636,11 +637,18 @@ func (r *paint) settingRow(card image.Rectangle, top int, row settingRow) {
 	right, cy := card.Max.X-r.s(26), top+r.rowH()/2
 	var labelEnd int
 	row.label, row.sub, labelEnd = r.rowWords(card, row, face)
+	base := top + r.s(40)
 	if row.sub == "" {
-		r.text(face, row.label, card.Min.X+r.rowIn(), top+r.s(40), cream)
+		r.text(face, row.label, card.Min.X+r.rowIn(), base, cream)
 	} else {
-		r.text(face, row.label, card.Min.X+r.rowIn(), top+r.s(30), cream)
+		base = top + r.s(30)
+		r.text(face, row.label, card.Min.X+r.rowIn(), base, cream)
 		r.text(fc.sub, row.sub, card.Min.X+r.rowIn(), top+r.s(53), dim)
+	}
+	if row.locked {
+		x := card.Min.X + r.rowIn() + r.width(face, row.label) + r.s(lockGap)
+		r.padlock(x+r.s(lockW)/2, base-r.s(9), dim)
+		labelEnd = max(labelEnd, x+r.s(lockW))
 	}
 
 	whole := image.Rect(card.Min.X+r.s(8), top, card.Max.X-r.s(8), top+r.rowH())
@@ -723,6 +731,22 @@ func (r *paint) settingRow(card image.Rectangle, top int, row settingRow) {
 // rowGap is the space a row keeps between its words and its value or control.
 const rowGap = 24
 
+// lockW is the padlock after a locked row's name, and lockGap the space before it.
+const (
+	lockW   = 14
+	lockGap = 10
+)
+
+// padlock is the small padlock after the name of a row behind the settings lock, centered on (cx, cy).
+func (r *paint) padlock(cx, cy int, col color.RGBA) {
+	k := float64(r.s(100)) / 100
+	x, y, w := float64(cx), float64(cy), 1.8*k
+	r.roundStrokeF(x-6*k, y-1*k, x+6*k, y+7*k, 2*k, w, col)
+	r.aaRing(x, y-4*k, 3.6*k, w, math.Pi, 2*math.Pi, col)
+	r.aaLine(x-3.6*k, y-4*k, x-3.6*k, y-1*k, w, col)
+	r.aaLine(x+3.6*k, y-4*k, x+3.6*k, y-1*k, w, col)
+}
+
 // rowWords is a row's label and the line under it as drawn, and where the longer of them ends. They
 // keep clear of the control: on a narrow card they give up their ends to an ellipsis rather than run
 // under it. The room left to them is the room the value is fitted beside, so a row whose line is cut
@@ -731,6 +755,9 @@ func (r *paint) rowWords(card image.Rectangle, row settingRow, face font.Face) (
 	fc := r.faces()
 	right := card.Max.X - r.s(26)
 	room := right - r.controlWidth(row) - r.s(rowGap) - (card.Min.X + r.rowIn())
+	if row.locked {
+		room -= r.s(lockGap + lockW) // the label gives way to its padlock, which follows it
+	}
 	label, sub = r.fit(face, row.label, room), r.fit(fc.sub, row.sub, room)
 	return label, sub, card.Min.X + r.rowIn() + max(r.width(face, label), r.width(fc.sub, sub))
 }

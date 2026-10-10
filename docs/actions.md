@@ -1333,8 +1333,9 @@ data:
 
 In YAML, refer to this action as `esphome.<node>_settings_lock_pin`.
 
-Sets the PIN the device asks for before its settings screen opens (Show and Spot). Everything else on
-the device works without it: the clock, music, the voice assistant, calls. The **Settings lock**
+Sets the PIN the device asks for before its settings change (Show and Spot). Everything else on the
+device works without it: the clock, music, the voice assistant, calls, and the everyday settings
+(alarms and timers, the volume, the brightness; see [the settings lock](setup.md#8-settings-lock)). The **Settings lock**
 switch shows whether a PIN is set; turning it off removes the PIN, which is the way back in if it is
 forgotten. The PIN can also be set on the device (Settings → Privacy & Security → Settings lock) and
 on the setup page.

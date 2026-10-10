@@ -17,8 +17,10 @@ import (
 	"github.com/HuskerMinion/techo5/echod/internal/config"
 )
 
-// The settings lock: a PIN the device asks for before its settings screen opens, so guests and children
-// can use the device (the clock, the music, the voice assistant, the call button) without changing it.
+// The settings lock: a PIN the device asks for before its settings change, so guests and children can
+// use the device (the clock, the music, the voice assistant, the call button) without changing it. The
+// settings screen itself opens without it: what is part of using the device (alarms and timers, the
+// volume and tone, brightness) stays open to everyone, and the rest asks for the PIN (display/pin.go).
 // Off until a PIN is set, from Home Assistant (the settings_lock_pin action) or the setup page; the
 // "Settings lock" switch shows whether one is set, and turning it off clears it, which is the way back in
 // from a forgotten PIN. A right PIN opens the settings for a couple of minutes; wrong ones in a row make
@@ -112,6 +114,16 @@ func TryPIN(pin string) (ok bool, wait time.Duration) {
 func saveTries(fails int, until int64) {
 	if err := config.Set().Security().LockTries(fails, until); err != nil {
 		slog.Error("settings lock: saving the tries failed", "err", err)
+	}
+}
+
+// KeepOpen keeps the settings open for another while, as a setting behind the lock is changed: the
+// lock comes back after a couple of minutes left alone, not a couple of minutes after the PIN.
+func KeepOpen() {
+	lock.mu.Lock()
+	defer lock.mu.Unlock()
+	if now := time.Now(); now.Before(lock.unlockedUntil) {
+		lock.unlockedUntil = now.Add(unlockFor)
 	}
 }
 

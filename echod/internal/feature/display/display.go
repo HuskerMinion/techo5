@@ -1377,18 +1377,9 @@ func (d *Display) nowPlaying() bool {
 // the stream itself has to be playing to keep it.
 const radioCueFor = 20 * time.Second
 
+// showSheet puts the sheet up or takes it down. The settings lock does not keep it shut: the rows
+// behind the lock ask for the PIN as they are tapped (gate, pin.go).
 func (d *Display) showSheet(on bool) {
-	if on && security.Locked() {
-		// The settings lock: the PIN pad first, and the sheet once the PIN is right.
-		openPIN(func() { d.setSheet(true) })
-		d.wake()
-		return
-	}
-	d.setSheet(on)
-}
-
-// setSheet puts the sheet up or takes it down, past the lock: showSheet asks for the PIN first.
-func (d *Display) setSheet(on bool) {
 	d.mu.Lock()
 	d.sheet = on
 	d.restartArm, d.picker, d.cardScroll, d.pickScroll, d.colors = time.Time{}, "", 0, 0, false
@@ -1761,21 +1752,13 @@ func (d *Display) OpenSheet(name string) bool {
 	if !ok {
 		return false
 	}
-	open := func() {
-		d.closeDrawer()
-		d.mu.Lock()
-		d.sheet, d.cat, d.picker, d.restartArm = true, cat, "", time.Time{}
-		d.draft, d.cardScroll, d.pickScroll = nil, 0, 0
-		d.mu.Unlock()
-		d.wake()
-	}
-	if security.Locked() {
-		// Asked for from Home Assistant or by voice, the settings are behind the lock all the same.
-		openPINRemote(open)
-		d.wake()
-		return true
-	}
-	open()
+	// Asked for from Home Assistant or by voice, the rows behind the lock ask for the PIN all the same.
+	d.closeDrawer()
+	d.mu.Lock()
+	d.sheet, d.cat, d.picker, d.restartArm = true, cat, "", time.Time{}
+	d.draft, d.cardScroll, d.pickScroll = nil, 0, 0
+	d.mu.Unlock()
+	d.wake()
 	return true
 }
 

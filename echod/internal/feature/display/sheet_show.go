@@ -165,6 +165,13 @@ func (d *Display) deviceRowTap(id string, p part, opt int) bool {
 // closeSheet takes the settings screen down.
 func (d *Display) closeSheet() { d.showSheet(false) }
 
+// sheetUp is whether the settings sheet is showing.
+func (d *Display) sheetUp() bool {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	return d.sheet
+}
+
 // sheetBack is a Back the Show's screen has no button for.
 func (d *Display) sheetBack() {}
 

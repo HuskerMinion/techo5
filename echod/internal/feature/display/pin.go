@@ -4,6 +4,7 @@ package display
 
 import (
 	"fmt"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -12,9 +13,10 @@ import (
 	"github.com/HuskerMinion/techo5/echod/internal/feature/setup"
 )
 
-// The PIN pad: what the settings screen shows first while the settings lock is on (security/lock.go). A
-// right PIN opens the settings; Cancel, or half a minute of nothing, puts the pad away. The same pad is
-// drawn on the Show and on the Spot, each to its own shape.
+// The PIN pad: what a setting behind the settings lock (security/lock.go) shows first while the lock is
+// on. A right PIN changes the setting that was tapped, and leaves the rest open for a while; Cancel, or
+// half a minute of nothing, puts the pad away. The same pad is drawn on the Show and on the Spot, each
+// to its own shape.
 
 const pinIdle = 30 * time.Second
 
@@ -44,18 +46,8 @@ var pinPad struct {
 
 // openPIN puts the pad up for a tap on the device, with after to run once the right PIN is in: the
 // person at the device decides what the PIN is for.
-func openPIN(after func()) { putPINUp(after, false) }
-
-// openPINRemote is openPIN for a request from elsewhere (Home Assistant, a link): it leaves a pad that
-// is already up as it is, since the PIN being typed there is for what the person at the device asked.
-func openPINRemote(after func()) { putPINUp(after, true) }
-
-func putPINUp(after func(), keepOpen bool) {
+func openPIN(after func()) {
 	pinPad.mu.Lock()
-	if keepOpen && pinPad.open && time.Since(pinPad.at) <= pinIdle {
-		pinPad.mu.Unlock()
-		return
-	}
 	pinPad.open, pinPad.entry, pinPad.msg, pinPad.at, pinPad.after = true, "", "", time.Now(), after
 	pinPad.setting, pinPad.first = false, ""
 	pinPad.mu.Unlock()
@@ -88,12 +80,52 @@ func pinNow(now time.Time) pinView {
 
 func pinIsOpen() bool { return pinNow(time.Now()).open }
 
+// everyday is whether the settings row id is part of using the device rather than setting it up, and
+// so open to everyone while the lock is on: the alarms and timers, the alarm editor, the volume, the
+// tone, the headphones, the microphone, the wake sound, the sleep timer, and the brightness. Everything
+// else is behind the PIN, including rows added later: a row is open only by being named here.
+func everyday(id string) bool {
+	for _, prefix := range []string{"alarm:", "timer:", "e."} {
+		if strings.HasPrefix(id, prefix) {
+			return true
+		}
+	}
+	switch id {
+	case "snoozed", "snooze", "ringvol", "alarmsound", "sunrise", "sunface", "newtimer", // Alarms & Timers
+		"volume", "bass", "treble", "output", "mic", "waketone", "sleep", // Sound
+		"brightness", "auto", "dimmest": // Display
+		return true
+	}
+	return false
+}
+
+// rowLocked is whether a tap on the row id asks for the PIN first.
+func rowLocked(id string) bool { return id != "" && !everyday(id) && security.Locked() }
+
+// gate runs tap, a tap on the settings row id, now, or once the PIN is right when the row is behind the
+// lock. Taps on a locked row only put the pad up: they are no tries at the PIN, so they never count
+// toward the wait. up says whether the settings are still showing when the PIN comes in, since a
+// setting changed behind a screen that has gone is not what was asked for.
+func gate(id string, up func() bool, tap func()) {
+	if !rowLocked(id) {
+		if security.LockSet() && !everyday(id) {
+			security.KeepOpen()
+		}
+		tap()
+		return
+	}
+	openPIN(func() {
+		if up() {
+			tap()
+		}
+	})
+}
+
 // sheetWasOpen is whether the settings were open at the last frame.
 var sheetWasOpen atomic.Bool
 
-// relockOnClose puts the lock back on as the settings close, however they closed. Only as they close:
-// relocking on every frame they are shut would take back the PIN just typed before the settings it
-// was typed for could open.
+// relockOnClose puts the lock back on as the settings close, however they closed: a PIN typed for one
+// setting does not leave the rest open behind a screen that has gone.
 func relockOnClose(open bool) {
 	if sheetWasOpen.Swap(open) && !open {
 		security.Relock()

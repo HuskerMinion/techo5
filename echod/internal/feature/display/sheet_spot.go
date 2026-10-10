@@ -67,28 +67,21 @@ func (d *Display) deviceRowTap(id string, _ part, _ int) bool {
 // swatchStrip is the custom colors row, which the Spot has no use for.
 func (r *paint) swatchStrip(settingRow, int, int, int) {}
 
-// openSettings puts the settings screen up on its six categories. Called with d.mu held.
+// openSettings puts the settings screen up on its six categories. The settings lock does not keep it
+// shut: the rows behind the lock ask for the PIN as they are tapped (gate, pin.go). Called with d.mu
+// held.
 func (d *Display) openSettings() {
-	if security.Locked() {
-		// The settings lock: the PIN pad first, and the settings once the PIN is right.
-		d.closeMenu()
-		openPIN(func() {
-			d.mu.Lock()
-			d.openSettingsNow()
-			d.mu.Unlock()
-			d.wake()
-		})
-		return
-	}
-	d.openSettingsNow()
-}
-
-// openSettingsNow is openSettings past the lock. Called with d.mu held.
-func (d *Display) openSettingsNow() {
 	d.closeMenu()
 	d.sheetOpen, d.sheetGrid, d.sheetAt = true, true, time.Now()
 	d.picker, d.cardScroll, d.pickScroll, d.draft, d.dragging = "", 0, 0, nil, false
 	d.followFingers(true)
+}
+
+// sheetUp is whether the settings screen is showing.
+func (d *Display) sheetUp() bool {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	return d.sheetOpen
 }
 
 // closeSheet takes the settings screen down, back to the face.
@@ -450,9 +443,9 @@ func (d *Display) sheetGesture(g touch.Gesture) {
 			id := d.picker
 			d.picker = ""
 			d.mu.Unlock()
-			d.choose(id, z.opt)
+			gate(id, d.sheetUp, func() { d.choose(id, z.opt) })
 		case zoneRow:
-			d.rowTap(z.id, z.part, z.opt)
+			gate(z.id, d.sheetUp, func() { d.rowTap(z.id, z.part, z.opt) })
 		}
 	}
 	d.wake()
@@ -526,28 +519,12 @@ func (d *Display) OpenSheet(name string) bool {
 	if !ok && !grid {
 		return false
 	}
-	open := func() {
-		d.openSettingsNow()
-		if !grid {
-			d.cat, d.sheetGrid = cat, false
-		}
-	}
-	if security.Locked() {
-		// The PIN first, then the settings on the page asked for. Called back without d.mu.
-		d.mu.Lock()
-		d.closeMenu()
-		d.mu.Unlock()
-		openPINRemote(func() {
-			d.mu.Lock()
-			open()
-			d.mu.Unlock()
-			d.wake()
-		})
-		d.wake()
-		return true
-	}
+	// Asked for from Home Assistant or by voice, the rows behind the lock ask for the PIN all the same.
 	d.mu.Lock()
-	open()
+	d.openSettings()
+	if !grid {
+		d.cat, d.sheetGrid = cat, false
+	}
 	d.mu.Unlock()
 	d.wake()
 	return true

@@ -124,7 +124,8 @@ Which to use, how to set it up and what each can do: **[docs/dashboards.md](docs
   camera stops a ringing alarm or timer and sends Home Assistant an event. Off by default.
   [docs/setup.md](docs/setup.md#presence-and-gestures)
 - 🔒 **A settings lock** (v1.0.0). Set a PIN and the Show and the Spot ask for it before their
-  settings open; everything else keeps working for guests and kids. Off by default.
+  settings change; alarms, the volume, the brightness and everything else in daily use keep working
+  for guests and kids. Off by default.
   [docs/setup.md](docs/setup.md#8-settings-lock)
 - 📡 **DLNA, and FLAC** (v1.0.0). Every device can be a DLNA speaker that music apps and servers play
   to (BubbleUPnP, Jellyfin, Plex, a NAS), off until you turn it on. Streams in FLAC now play on the
