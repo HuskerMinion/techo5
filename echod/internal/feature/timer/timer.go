@@ -657,7 +657,7 @@ func (t *Timers) startRinging(name string) {
 		return
 	}
 	t.rang = name
-	t.stop = ring.Start("timer", speaker.TimerSound(), t.rungOut)
+	t.stop = ring.Start("timer", name, speaker.TimerSound(), t.rungOut)
 }
 
 // rungOut is the bell telling the timers their ring is over, however that came about.

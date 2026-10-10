@@ -256,6 +256,7 @@ Snoozes and the device's own timers persist as absolute times. **A missed ring l
 (principle 5): `ring.Missed` writes it down, the clock page says it for 12 hours ("Missed: timer
 "Pasta" at 2:03 PM yesterday" in the Show's footer, a shorter line under the Spot's clock) and the
 `missed_ring` sensor carries the latest to Home Assistant, which on a Dot is the only trace there is.
+While a ring is active the `sounding`, `alarm_sounding` and `timer_sounding` binary sensors are on and `sounding_what` names the rings (`feature/ring/sounding.go`); on means a ring is active, not that it is audible, so a ring a button silenced still reads on until its snooze offer is answered or runs out.
 What it catches: a snooze or timer that came due while the device was off, a snooze or alarm a clock
 jump carried past, and - new - **an alarm that came due while the device was off**, which used to
 leave nothing at all, since the scheduler starts from now. That needs to know when the device

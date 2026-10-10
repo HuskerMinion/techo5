@@ -87,7 +87,7 @@ type ringer struct {
 
 // Start rings: the chime every RingEvery, the light pulsing and the music ducked under it, until
 // the returned stop is called, the ring is silenced and left unanswered, or it has sounded for
-// RingFor. what names it in the log.
+// RingFor. what names it in the log, and with label says which one it is to Home Assistant.
 //
 // ended is called once, whatever ended it, and always from the bell's own goroutine rather than
 // from whoever called stop: an engine may hold its own lock while it stops a ring, and its ended
@@ -95,8 +95,9 @@ type ringer struct {
 // its ringing state in ended stays consistent with IsSounding.
 //
 // Start counts as Sounding before it returns, so nothing can see a ring started and not sounding.
-func Start(what string, notes []speaker.Note, ended func()) (stop func()) {
-	r := &ringer{what: what, notes: notes, until: time.Now().Add(ringFor), done: Sounding(), ended: ended}
+func Start(what, label string, notes []speaker.Note, ended func()) (stop func()) {
+	sound, leave := Sounding(), begin(what, label)
+	r := &ringer{what: what, notes: notes, until: time.Now().Add(ringFor), ended: ended, done: func() { sound(); leave() }}
 
 	bell.mu.Lock()
 	bell.rings = append(bell.rings, r)
