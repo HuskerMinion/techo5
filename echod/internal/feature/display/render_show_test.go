@@ -15,6 +15,7 @@ import (
 	"github.com/HuskerMinion/techo5/echod/internal/feature/alarm"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/announce"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/home"
+	"github.com/HuskerMinion/techo5/echod/internal/feature/notify"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/phone"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/remind"
 	"github.com/HuskerMinion/techo5/echod/internal/lib/hass"
@@ -82,6 +83,29 @@ func TestShowScenesDraw(t *testing.T) {
 			announcement: announce.Message{From: "Laundry Room",
 				Text: "the washing machine has finished its cycle and the door is unlocked now"}},
 		"announce-recording": {now: at, phase: "idle", weather: sky, announceRecording: true, announcePeers: 3},
+		"notification": {now: at, phase: "idle", weather: sky, showNotification: true,
+			notification: notify.Notification{Kind: notify.Text, Title: "Washer", Icon: "mdi:washing-machine",
+				Message: "The washing machine is done"}},
+		"notification-no-title": {now: at, phase: "idle", weather: sky, showNotification: true,
+			notification: notify.Notification{Kind: notify.Text, Message: "The washing machine is done"}},
+		"notification-unknown-icon": {now: at, phase: "idle", weather: sky, showNotification: true,
+			notification: notify.Notification{Kind: notify.Text, Title: "Washer", Icon: "mdi:no-such-icon", Message: "Done"}},
+		"notification-longest": {now: at, phase: "idle", weather: sky, showNotification: true,
+			notification: notify.Notification{Kind: notify.Text, Title: "A title that runs on and on past the card's edge",
+				Message: "Move the washing to the dryer, then put the towels on the rack by the back door and the " +
+					"sheets on the line, and fold what is already dry before the rain comes in this afternoon"}},
+		"notification-under-reminder": {now: at, phase: "idle", weather: sky, showReminder: true,
+			reminder: remind.Reminder{Label: "Take the trash out"}, showNotification: true,
+			notification: notify.Notification{Kind: notify.Text, Message: "hidden under the reminder"}},
+		"camera-captioned": {now: at, phase: "idle", showCamera: true, camera: home.CameraView{Entity: "camera.front_door",
+			Name: "Front door", Until: at.Add(30 * time.Second), Frame: image.NewRGBA(image.Rect(0, 0, 853, 480)),
+			Caption: &home.Caption{ID: "1", Title: "Doorbell", Message: "Someone is at the front door"}}},
+		"camera-wordless": {now: at, phase: "idle", showCamera: true, camera: home.CameraView{Entity: "camera.front_door",
+			Name: "Front door", Until: at.Add(30 * time.Second), Frame: image.NewRGBA(image.Rect(0, 0, 853, 480)),
+			Caption: &home.Caption{ID: "1"}}},
+		"camera-captioned-no-title": {now: at, phase: "idle", showCamera: true, camera: home.CameraView{Entity: "/local/a.png",
+			Name: "Notification", Until: at.Add(30 * time.Second), Error: "hass: GET /local/a.png: 404 Not Found",
+			Caption: &home.Caption{ID: "1", Message: "The picture could not be fetched"}}},
 		"reminder": {now: at, phase: "idle", weather: sky, showReminder: true,
 			reminder: remind.Reminder{Label: "Take the medication"}},
 		"reminder-from-elsewhere": {now: at, phase: "idle", weather: sky, showReminder: true, reminderFrom: "Kitchen",

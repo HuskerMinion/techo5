@@ -36,16 +36,24 @@ func (r *renderer) cameraView(s scene, v home.CameraView) {
 		}
 		r.text(r.small, msg, (r.w-r.width(r.small, msg))/2, r.h/2, dim)
 	}
-	// Corners on a dark strip so they read over any picture.
-	draw.Draw(r.dst, image.Rect(0, 0, r.w, 44), image.NewUniform(shade), image.Point{}, draw.Over)
-	r.text(r.small, name, r.margin, 32, cream)
-	t := clockHM(s.now)
-	r.text(r.small, t, r.w-r.margin-r.width(r.small, t), 32, dim)
+	// A picture a notification sent with no words is the picture alone: no name, no clock and no
+	// caption over it, only the strip at the foot that says how to close it.
+	wordless := v.Caption != nil && v.Caption.Wordless()
+	if !wordless {
+		// Corners on a dark strip so they read over any picture.
+		draw.Draw(r.dst, image.Rect(0, 0, r.w, 44), image.NewUniform(shade), image.Point{}, draw.Over)
+		r.text(r.small, name, r.margin, 32, cream)
+		t := clockHM(s.now)
+		r.text(r.small, t, r.w-r.margin-r.width(r.small, t), 32, dim)
+	}
 	left := time.Until(v.Until).Round(time.Second)
 	hint := "tap to close"
 	talking := s.talk.Entity == v.Entity && s.talk.Phase != talkback.Idle // the view is held: no countdown
 	if left > 0 && left < 24*time.Hour && !talking {                      // "until tapped" is a year: no countdown for that
 		hint = "tap to close  ·  " + left.String()
+	}
+	if v.Caption != nil && !wordless {
+		r.captionBar(*v.Caption)
 	}
 	draw.Draw(r.dst, image.Rect(0, r.h-36, r.w, r.h), image.NewUniform(shade), image.Point{}, draw.Over)
 
@@ -72,7 +80,7 @@ func (r *renderer) cameraView(s scene, v home.CameraView) {
 		// A talk goes on only while this is on the screen. The strips and cards drawn over the page
 		// afterward (an announcement, a recording, a reminder, a pop-up) cover it, so with one up it
 		// is not seen; the volume bar is the person talking turning it, and the talk goes on under it.
-		if !s.announceRecording && !s.showAnnouncement && !s.showReminder && s.popup == nil {
+		if !s.announceRecording && !s.showAnnouncement && !s.showReminder && !s.showNotification && s.popup == nil {
 			talkback.Get().Seen(v.Entity)
 		}
 		end = b.Min.X - r.s(10)

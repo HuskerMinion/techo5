@@ -41,6 +41,7 @@ import (
 	"github.com/HuskerMinion/techo5/echod/internal/feature/home"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/media"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/mute"
+	"github.com/HuskerMinion/techo5/echod/internal/feature/notify"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/phone"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/presence"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/remind"
@@ -431,6 +432,8 @@ func build() *Display {
 	talkback.Get().Changed.Listen(func(struct{}) { d.wake() })
 	alarm.Get().Changed.Listen(func(struct{}) { d.wake() })
 	remind.Get().Changed.Listen(func(struct{}) { d.wake() })
+	notify.Get().Changed.Listen(func(struct{}) { d.wake() })
+	notify.SetNight(nightNow)
 	timer.Get().Changed.Listen(func(struct{}) { d.wake() })
 	onMissed(d.wake)
 	home.Get().Changed.Listen(func(struct{}) { d.wake() })
@@ -910,6 +913,14 @@ func (d *Display) gesture(g touch.Gesture) {
 		return
 	}
 
+	// A notification's card, the same way: a tap on the card puts it away and tells Home Assistant;
+	// anywhere else is a tap on what is behind it. Under the reminder, which is drawn over it.
+	if _, up := notify.Get().Card(); up && g.Kind == touch.Tap && d.r != nil && image.Pt(g.X, g.Y).In(d.r.notifyBox()) {
+		go notify.Get().Dismiss()
+		d.wake()
+		return
+	}
+
 	// The first-run card: any tap puts it away for good.
 	if !config.Get().Screen.Welcomed {
 		if g.Kind == touch.Tap {
@@ -977,7 +988,7 @@ func (d *Display) gesture(g touch.Gesture) {
 				// Silence it, or ask for it again: the control is a toggle, and the view stays either way.
 				home.Get().ToggleCameraSound()
 			} else {
-				home.Get().HideCamera()
+				closeCamera(v)
 			}
 		}
 		d.wake()
@@ -1837,6 +1848,7 @@ func (d *Display) frame() time.Duration {
 	ring := d.ringing(now)
 	call := phone.Get().State()
 	_, reminding := remind.Get().Showing()
+	_, notifying := notify.Get().Showing()
 	night := nightNow(now)
 	if !on && (call.Phase != phone.Idle || (!night && (ring.any() || reminding))) {
 		// A call lights a dark panel, at night to half brightness (relight): its page is how it is
@@ -1845,8 +1857,9 @@ func (d *Display) frame() time.Duration {
 		d.apply(true, d.ceilingOrDefault(), false)
 		on = true
 	}
-	if !on && d.popupUp() != nil && !nightNow(now) {
-		// A pop-up lights a dark panel by day. At night it waits there, dark, until the screen is woken.
+	if !on && (d.popupUp() != nil || notifying) && !nightNow(now) {
+		// A pop-up or a notification lights a dark panel by day. At night it waits there, dark, until
+		// the screen is woken.
 		d.apply(true, d.ceilingOrDefault(), false)
 		on = true
 	}
@@ -1888,7 +1901,7 @@ func (d *Display) frame() time.Duration {
 	d.mu.Lock()
 	sheetUp, wifiUp := d.sheet, d.wifiOpen
 	d.mu.Unlock()
-	busy := view.Phase != "idle" || call.Phase != phone.Idle || ring.any() || reminding || sheetUp || pinIsOpen() ||
+	busy := view.Phase != "idle" || call.Phase != phone.Idle || ring.any() || reminding || notifying || sheetUp || pinIsOpen() ||
 		sunriseProgress(now) > 0 || d.popupUp() != nil || setup.Get().Waiting() || wifiUp || video.Get().State().Active()
 	if d.awayTick(now, on, busy, night) {
 		d.mu.Lock()
@@ -2122,6 +2135,7 @@ func (d *Display) frame() time.Duration {
 	s.announcePeers = len(announce.Peers())
 	s.announcement, s.showAnnouncement = announce.Get().Showing()
 	s.reminder, s.showReminder = remind.Get().Showing()
+	s.notification, s.showNotification = notify.Get().Card()
 	s.popup = d.popupUp()
 	if s.reminder.From != config.Get().Device.Name {
 		s.reminderFrom = s.reminder.From
