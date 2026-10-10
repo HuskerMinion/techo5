@@ -28,6 +28,7 @@ const mdnsRetry = 3 * time.Second
 // discovers and then cannot connect to, which is worse than no record at all. Discovery is a
 // convenience and a device reachable by address works without it, so this only logs.
 func (a *API) advertise(ctx context.Context, port int) {
+	var movedAt time.Time // the last IPv4 move, which the announcements after it follow up
 	for attempt := 1; ; attempt++ {
 		ips := metrics.Addresses()
 		if len(ips) == 0 {
@@ -73,13 +74,30 @@ func (a *API) advertise(ctx context.Context, port int) {
 
 		// The registration stands until the addresses it was made with are no longer the ones the
 		// device has (a lease that changed, or a network that arrived late), or the key changed kind.
+		// For a while after a move it is also made again every so often (followMove).
+		advertisedAt, again := time.Now(), false
 		for metrics.AddressKey(metrics.Addresses()) == metrics.AddressKey(ips) && a.keyed.Load() == keyed {
+			if !movedAt.IsZero() && time.Since(movedAt) < followMove && time.Since(advertisedAt) >= followEvery {
+				again = true
+				break
+			}
 			if !pause(ctx, mdnsRetry) {
 				adv.Close()
 				return
 			}
 		}
 		adv.Close()
+		if again {
+			// Gone and back: a browser that saw the record already sees it anew, and Home Assistant,
+			// which ignores a new address while it still counts the old connection as alive, gets
+			// another chance once it has given that up. How long that takes is its keepalive, twenty
+			// seconds a ping and four and a half of them missed, and more: it was seen at two minutes
+			// and more after the move, past the gap.
+			if !pause(ctx, goodbyeGap) {
+				return
+			}
+			continue
+		}
 		moved := movedIPv4(ips, metrics.Addresses())
 		slog.Info("addresses or key changed, re-advertising over mdns", "was", metrics.AddressKey(ips), "key was", keyName(keyed))
 		if !moved {
@@ -100,13 +118,15 @@ func (a *API) advertise(ctx context.Context, port int) {
 		// address tried and dropped, then another kept), and a gap counted from the first ended while
 		// Home Assistant still held a connection made in between, so the new address was ignored again.
 		a.server().Reconnect()
-		last, until := v4Key(metrics.Addresses()), time.Now().Add(movedGap)
+		movedAt = time.Now()
+		last, until := v4Key(metrics.Addresses()), movedAt.Add(movedGap)
 		for time.Now().Before(until) {
 			if !pause(ctx, mdnsRetry) {
 				return
 			}
 			if k := v4Key(metrics.Addresses()); k != last {
-				last, until = k, time.Now().Add(movedGap)
+				movedAt = time.Now()
+				last, until = k, movedAt.Add(movedGap)
 				a.server().Reconnect()
 			}
 		}
@@ -130,6 +150,15 @@ func v4Key(ips []net.IP) string {
 	}
 	return metrics.AddressKey(v4)
 }
+
+// After a move, the device is announced again every followEvery until followMove has passed since it,
+// with goodbyeGap unannounced in between: a goodbye and a new record a moment apart, which a browser takes
+// as the device gone and back rather than as a refresh of what it has.
+const (
+	followMove  = 5 * time.Minute
+	followEvery = 30 * time.Second
+	goodbyeGap  = 2 * time.Second
+)
 
 // movedGap is how long a device that changed address stays unannounced: longer than Home Assistant's
 // keepalive (aioesphomeapi: 20 s pings, given up after 4.5 of them) takes to drop the old connection.
