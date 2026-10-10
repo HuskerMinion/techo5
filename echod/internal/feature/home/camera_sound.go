@@ -11,6 +11,7 @@ import (
 
 	"github.com/HuskerMinion/techo5/echod/internal/config"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/media"
+	"github.com/HuskerMinion/techo5/echod/internal/feature/video"
 	"github.com/HuskerMinion/techo5/echod/internal/lib/hass"
 )
 
@@ -47,6 +48,33 @@ func (f *Feature) buildCameraSoundSwitch() {
 		},
 		OnCommand: func(on bool) { f.SetCameraSound(on) },
 	}
+}
+
+// CameraLive is whether a camera Home Assistant can stream is shown live (camera_stream.go).
+func CameraLive() bool { return config.Get().Home.CameraLive }
+
+// buildCameraLiveSwitch is that setting as Home Assistant's switch.
+func (f *Feature) buildCameraLiveSwitch() {
+	f.cameraLiveSw = &esphome.Switch{
+		Base: esphome.Base{
+			ObjectID: "camera_live",
+			Name:     "Live camera video",
+			Icon:     "mdi:cctv",
+			Category: esphome.CategoryConfig,
+		},
+		OnCommand: func(on bool) { f.SetCameraLive(on) },
+	}
+}
+
+// SetCameraLive saves the choice and shows it in Home Assistant; a view already up keeps what it has.
+func (f *Feature) SetCameraLive(on bool) {
+	if err := config.Set().Home().CameraLive(on); err != nil {
+		slog.Error("saving the live camera switch failed", "err", err)
+		return
+	}
+	f.cameraLiveSw.Set(on)
+	video.CameraLiveChanged()
+	slog.Info("setting changed", "setting", "camera_live", "using", on)
 }
 
 // SetCameraSound saves the choice and shows it in Home Assistant. A view that is already up is left
@@ -158,11 +186,22 @@ func (f *Feature) askCameraSound(entity string, token media.OverToken, env sound
 	// A camera Home Assistant can stream is heard from that stream, decoded here, as its picture is: a
 	// second or two behind the camera rather than the dozen and more the same stream took converted by
 	// Home Assistant and sent back, too far behind for anybody to answer the door over.
+	//
+	// Started before the ask is answered with it, and given up on for Home Assistant's way if it brings
+	// nothing: a stream with no sound in it, or one that cannot be read, would otherwise leave the view
+	// silent where camera.play_stream had sound.
 	if env.player.Answer != nil {
-		if open := streamedSound(entity); open != nil && env.player.Answer(token, open) {
-			slog.Info("camera sound on, from its stream", "entity", entity)
-			env.player.Settled(token)
-			return
+		if open := streamedSound(entity); open != nil {
+			src, why := startSound(open)
+			if src == nil {
+				slog.Info("camera sound: none from its stream, asking Home Assistant", "entity", entity, "why", why)
+			} else if env.player.Answer(token, func(context.Context) (io.ReadCloser, error) { return src, nil }) {
+				slog.Info("camera sound on, from its stream", "entity", entity)
+				env.player.Settled(token)
+				return
+			} else {
+				src.Close()
+			}
 		}
 	}
 	err := env.call(entity, speakerEntity())
@@ -336,4 +375,62 @@ func (f *Feature) watchCameraSound(entity string, token media.OverToken, env sou
 			}
 		}
 	}
+}
+
+// soundStart is how long a camera's stream may take to bring the first of its sound.
+var soundStart = 20 * time.Second
+
+// startSound opens a sound and waits for the first of it. Nil, with why, when none comes.
+func startSound(open func(context.Context) (io.ReadCloser, error)) (io.ReadCloser, string) {
+	ctx, cancel := context.WithCancel(context.Background())
+	r, err := open(ctx)
+	if err != nil {
+		cancel()
+		return nil, err.Error()
+	}
+	type deadline interface{ SetReadDeadline(time.Time) error }
+	d, bounded := r.(deadline)
+	if bounded {
+		_ = d.SetReadDeadline(time.Now().Add(soundStart))
+	}
+	buf := make([]byte, 4096)
+	n, err := r.Read(buf)
+	if bounded {
+		_ = d.SetReadDeadline(time.Time{})
+	}
+	if n == 0 {
+		why := "no sound"
+		if err != nil {
+			why = err.Error()
+		}
+		if rs, ok := r.(interface{ Reason() string }); ok && rs.Reason() != "" {
+			why = rs.Reason()
+		}
+		r.Close()
+		cancel()
+		return nil, why
+	}
+	return &startedSound{first: buf[:n], r: r, cancel: cancel}, ""
+}
+
+// startedSound is a sound with the first of it already read.
+type startedSound struct {
+	first  []byte
+	r      io.ReadCloser
+	cancel context.CancelFunc
+}
+
+func (s *startedSound) Read(p []byte) (int, error) {
+	if len(s.first) > 0 {
+		n := copy(p, s.first)
+		s.first = s.first[n:]
+		return n, nil
+	}
+	return s.r.Read(p)
+}
+
+func (s *startedSound) Close() error {
+	err := s.r.Close()
+	s.cancel()
+	return err
 }

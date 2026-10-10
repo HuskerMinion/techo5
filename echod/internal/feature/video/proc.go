@@ -177,8 +177,15 @@ func start(ctx context.Context, args []string, decode, sound bool) (*decoder, er
 // growPipe gives the pipe a megabyte, the most an unprivileged reader could ask for: a second of a
 // video's frames does not fit, but several of its sound do, and every bit of slack is a stall the
 // decoder rides out.
+//
+// Through SyscallConn, not Fd: Fd puts the file in blocking mode, and a read deadline on it then does
+// nothing, which the camera's stall timeouts rely on.
 func growPipe(f *os.File) {
-	_, _ = unix.FcntlInt(f.Fd(), unix.F_SETPIPE_SZ, 1<<20)
+	rc, err := f.SyscallConn()
+	if err != nil {
+		return
+	}
+	_ = rc.Control(func(fd uintptr) { _, _ = unix.FcntlInt(fd, unix.F_SETPIPE_SZ, 1<<20) })
 }
 
 func (d *decoder) closeReads() {

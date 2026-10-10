@@ -3,104 +3,149 @@ package home
 import (
 	"context"
 	"fmt"
+	"image"
 	"io"
 	"log/slog"
+	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/HuskerMinion/techo5/echod/internal/feature/video"
 	"github.com/HuskerMinion/techo5/echod/internal/lib/hass"
 )
 
-// A camera's live stream on the camera page, instead of its snapshots. Home Assistant hands out an HLS
-// playlist for any camera it can stream (camera/stream), and the video decoder plays it on every core,
-// scaled to the page (feature/video, camera.go). On a Show 5, a 640×480 stream at 10 frames a second
-// takes a fifth of the CPU and is on screen in under a second once Home Assistant has the stream
-// running; its main stream at full size takes two fifths. Snapshots came a few a second at best, each
-// decoded and scaled in the daemon on one core.
+// A camera's live stream on the camera page, instead of its snapshots, when Live camera video is on
+// (CameraLive). Home Assistant hands out an HLS playlist for any camera it can stream (camera/stream),
+// and the video decoder plays it, scaled to the page (feature/video, camera.go). On a Show 5, a 640×480
+// sub stream at 10 to 15 frames a second costs the decoder about a seventh of a core; a 896×672 stream
+// at 20 to 24 about two thirds of one. The picture is a few seconds behind the camera, since HLS comes
+// in parts a keyframe interval long.
 //
-// A snapshot still comes first: it is on screen at once, while the stream starts (a few seconds for a
-// camera Home Assistant was not streaming yet), and its shape is the stream's, which the decoder has to
-// be told before it makes a frame. A camera that cannot stream, a decoder that is missing, and a stream
-// that fails or stalls all leave the page on snapshots, as it was.
+// Snapshots keep coming, as they did before, until the stream's first frame: that can take seconds
+// (seventeen from cold has been seen) while Home Assistant starts the camera's stream. The first one
+// also gives the stream its shape; without one, the stream fills the panel with bars where its shape
+// does not. A camera that cannot stream, a decoder that is missing or refuses the stream (H.265, which
+// the image cannot decode; a stream over 1080p), and a stream that stalls all leave the page on
+// snapshots, and a camera whose stream failed is not tried again for a while.
 
 const (
 	// streamStart is how long the first frame of a stream may take: Home Assistant starts a camera's
 	// stream on the first request and hands out the playlist before it has its first part.
-	streamStart = 20 * time.Second
+	streamStart = 25 * time.Second
 	// streamStall is how long a stream may go without a frame once it has started before it is given
 	// up for snapshots.
 	streamStall = 10 * time.Second
+	// shapeWait is how long the stream waits for the first snapshot to learn its shape from.
+	shapeWait = 5 * time.Second
+	// failedFor is how long a camera whose stream failed is shown from snapshots without trying again.
+	failedFor = 10 * time.Minute
 )
 
-// cameraStreams is whether Home Assistant is asked for a camera's stream at all; a variable for the
-// tests.
-var cameraStreams = true
+// failedStreams is when each camera's stream last failed.
+var failedStreams = struct {
+	sync.Mutex
+	at map[string]time.Time
+}{at: map[string]time.Time{}}
 
-// streamFrames shows entity's live stream while its view is up. It reports whether the view was seen
-// to its end that way; false leaves it to snapshots, from wherever the stream got to.
-func (f *Feature) streamFrames(entity string) bool {
-	if !cameraStreams || isReolink(entity) || !video.Installed() || !canStream(entity) {
+func streamFailed(entity string) {
+	failedStreams.Lock()
+	failedStreams.at[entity] = time.Now()
+	failedStreams.Unlock()
+}
+
+func streamFailedLately(entity string) bool {
+	failedStreams.Lock()
+	defer failedStreams.Unlock()
+	at, ok := failedStreams.at[entity]
+	return ok && time.Since(at) < failedFor
+}
+
+// streamFrames shows entity's live stream while its view gen is up. It reports whether the view was
+// seen to its end that way; false leaves it to snapshots, from wherever the stream got to.
+func (f *Feature) streamFrames(ctx context.Context, entity string, gen uint64) bool {
+	if !CameraLive() || isReolink(entity) || !video.Installed() || streamFailedLately(entity) || !canStream(entity) {
 		return false
 	}
-	first, err := f.snapshot(entity)
-	if err != nil {
-		return false
-	}
-	f.showFrame(entity, first, nil)
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
+
+	// Snapshots until the stream's first frame, the first of them giving the stream its shape.
+	var streaming atomic.Bool
+	shape := make(chan image.Point, 1)
+	go func() {
+		told := false
+		for !streaming.Load() && f.viewUp(ctx, entity, gen) {
+			frame, err := f.snapshot(entity)
+			if streaming.Load() {
+				return
+			}
+			if err != nil {
+				slog.Debug("camera frame while the stream starts", "entity", entity, "err", err)
+				pause(ctx, 2*time.Second)
+				continue
+			}
+			if !told {
+				shape <- frame.Bounds().Size()
+				told = true
+			}
+			f.showFrame(entity, gen, frame, nil)
+		}
+	}()
+	w, h := cameraFrameW, cameraFrameH
+	select {
+	case p := <-shape:
+		w, h = p.X, p.Y
+	case <-time.After(shapeWait):
+	case <-ctx.Done():
+		return true
+	}
+	w, h = max(w&^1, 2), max(h&^1, 2)
+
 	url, err := hass.Get().CameraStream(ctx, entity)
 	if err != nil {
 		slog.Info("camera: no stream, showing snapshots", "entity", entity, "err", err)
+		streamFailed(entity)
 		return false
 	}
-	w, h := first.Bounds().Dx()&^1, first.Bounds().Dy()&^1
 	cam, err := video.OpenCamera(ctx, url, w, h)
 	if err != nil {
 		slog.Info("camera: stream not opened, showing snapshots", "entity", entity, "err", err)
+		streamFailed(entity)
 		return false
 	}
 	defer cam.Close()
 	began, frames := time.Now(), 0
 	wait := streamStart
-	for f.viewUp(entity) {
+	for f.viewUp(ctx, entity, gen) {
 		frame, err := cam.Next(wait)
 		if err != nil {
+			if !f.viewUp(ctx, entity, gen) {
+				break
+			}
 			slog.Warn("camera: stream ended, showing snapshots", "entity", entity, "frames", frames, "err", err)
+			streamFailed(entity)
 			return false
 		}
 		if frames == 0 {
+			streaming.Store(true)
 			slog.Info("camera: streaming", "entity", entity, "size", fmt.Sprintf("%dx%d", w, h),
 				"first frame in", time.Since(began).Round(100*time.Millisecond))
 		}
 		frames++
 		wait = streamStall
-		f.showFrame(entity, frame, nil)
+		f.showFrame(entity, gen, frame, nil)
 	}
 	slog.Info("camera: stream closed", "entity", entity, "frames", frames,
 		"for", time.Since(began).Round(time.Second))
 	return true
 }
 
-// prewarmStream has Home Assistant start entity's stream, if it can stream it, without watching it: a
-// stream nobody watches is kept for half a minute, long enough for the camera tapped on the list to come
-// up moving almost at once rather than after the seconds a camera's stream takes to start.
-func prewarmStream(entity string) {
-	if !cameraStreams || !video.Installed() || !canStream(entity) {
-		return
-	}
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-	defer cancel()
-	if _, err := hass.Get().CameraStream(ctx, entity); err != nil {
-		slog.Debug("camera stream prewarm", "entity", entity, "err", err)
-	}
-}
-
-// streamedSound is how to hear entity from its stream, or nil when it has none to hear it from: the
-// decoder is missing, Home Assistant cannot stream it, or it is a recorder's camera, which Home
-// Assistant does not have. A variable for the tests.
+// streamedSound is how to hear entity from the stream its picture comes from, or nil when there is no
+// better way than asking Home Assistant: live video is off, the decoder is missing, Home Assistant
+// cannot stream it, its stream failed lately, or it is a recorder's camera, which Home Assistant does
+// not have. A variable for the tests.
 var streamedSound = func(entity string) func(context.Context) (io.ReadCloser, error) {
-	if !cameraStreams || isReolink(entity) || !video.Installed() || !canStream(entity) {
+	if !CameraLive() || isReolink(entity) || !video.Installed() || streamFailedLately(entity) || !canStream(entity) {
 		return nil
 	}
 	return func(ctx context.Context) (io.ReadCloser, error) {
@@ -120,4 +165,14 @@ func canStream(entity string) bool {
 	}
 	features, _ := st.Attributes["supported_features"].(float64)
 	return int(features)&hass.CameraCanStream != 0
+}
+
+// pause waits d, or less if ctx ends; false when it did.
+func pause(ctx context.Context, d time.Duration) bool {
+	select {
+	case <-ctx.Done():
+		return false
+	case <-time.After(d):
+		return true
+	}
 }

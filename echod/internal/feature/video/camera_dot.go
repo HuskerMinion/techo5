@@ -17,3 +17,4 @@ func (*Camera) Next(time.Duration) (*image.RGBA, error)             { return nil
 func (*Camera) Close()                                              {}
 
 func OpenCameraSound(context.Context, string) (io.ReadCloser, error) { return nil, ErrNotHere }
+func CameraLiveChanged()                                             {}

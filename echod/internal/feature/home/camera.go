@@ -1,6 +1,7 @@
 package home
 
 import (
+	"context"
 	"image"
 	_ "image/jpeg" // Home Assistant serves camera snapshots as JPEG
 	"log/slog"
@@ -36,6 +37,7 @@ type CameraView struct {
 	Error  string      // why there is no frame, when there is none
 
 	span time.Duration // how long it was asked for; Until is restarted from the first frame
+	gen  uint64        // which view this is: frames fetched for an earlier one are not shown in it
 }
 
 // LocalCamera is the entity name of the device's own camera on the list; it is not a Home
@@ -122,18 +124,28 @@ func (f *Feature) showCamera(entity string, d time.Duration, sound bool) {
 	}
 	f.mu.Lock()
 	fresh := f.cam.Entity != entity || time.Now().After(f.cam.Until)
-	f.cam = CameraView{Entity: entity, Name: name, Until: time.Now().Add(d), Frame: f.cam.Frame, span: d}
+	f.cam = CameraView{Entity: entity, Name: name, Until: time.Now().Add(d), Frame: f.cam.Frame, span: d, gen: f.cam.gen}
+	var ctx context.Context
 	if fresh {
 		f.cam.Frame = nil
 		f.camMuted = false // a fresh view starts audible if its sound was asked for
+		// A view of its own, ending what fetched for the one before: a camera closed while its stream
+		// was starting and opened again must not end up with two decoders.
+		if f.camCancel != nil {
+			f.camCancel()
+		}
+		f.camGen++
+		f.cam.gen = f.camGen
+		ctx, f.camCancel = context.WithCancel(context.Background())
 	}
+	gen := f.cam.gen
 	f.mu.Unlock()
 	slog.Info("camera up", "entity", entity, "for", d, "sound", fresh && sound)
 	if fresh {
 		if entity == LocalCamera {
 			go f.localFrames()
 		} else {
-			go f.fetchFrames(entity)
+			go f.fetchFrames(ctx, entity, gen)
 		}
 		if sound && !isReolink(entity) {
 			// The sound is asked of Home Assistant and taken off the speaker when this view ends; a
@@ -162,37 +174,44 @@ func (f *Feature) HoldCamera(entity string, d time.Duration) {
 func (f *Feature) HideCamera() {
 	f.mu.Lock()
 	f.cam.Until = time.Time{}
+	if f.camCancel != nil {
+		f.camCancel() // what it fetched with stops now, not at its next look at the clock
+		f.camCancel = nil
+	}
 	f.mu.Unlock()
 	f.Changed.Emit(struct{}{})
 }
 
-// fetchFrames shows the camera while the view is up: its live stream where it has one
-// (camera_stream.go), else, or once that fails, snapshots one after another.
-func (f *Feature) fetchFrames(entity string) {
-	if f.streamFrames(entity) {
+// fetchFrames shows the camera while its view, gen, is up: its live stream where it has one and live
+// video is on (camera_stream.go), else, or once that fails, snapshots one after another.
+func (f *Feature) fetchFrames(ctx context.Context, entity string, gen uint64) {
+	if f.streamFrames(ctx, entity, gen) {
 		return
 	}
-	for f.viewUp(entity) {
+	for f.viewUp(ctx, entity, gen) {
 		frame, err := f.snapshot(entity)
-		f.showFrame(entity, frame, err)
+		f.showFrame(entity, gen, frame, err)
 		if err != nil {
 			slog.Warn("camera frame", "entity", entity, "err", err)
-			time.Sleep(2 * time.Second)
+			pause(ctx, 2*time.Second)
 		}
 	}
 }
 
-// viewUp is whether the view of entity is still on screen.
-func (f *Feature) viewUp(entity string) bool {
+// viewUp is whether view gen of entity is still on screen.
+func (f *Feature) viewUp(ctx context.Context, entity string, gen uint64) bool {
+	if ctx.Err() != nil {
+		return false
+	}
 	f.mu.Lock()
 	defer f.mu.Unlock()
-	return f.cam.Entity == entity && time.Now().Before(f.cam.Until)
+	return f.cam.Entity == entity && f.cam.gen == gen && time.Now().Before(f.cam.Until)
 }
 
-// showFrame puts a frame of entity's on screen, or why there is none, if its view is the one up.
-func (f *Feature) showFrame(entity string, frame *image.RGBA, err error) {
+// showFrame puts a frame of entity's on screen, or why there is none, if its view gen is the one up.
+func (f *Feature) showFrame(entity string, gen uint64, frame *image.RGBA, err error) {
 	f.mu.Lock()
-	if f.cam.Entity == entity {
+	if f.cam.Entity == entity && f.cam.gen == gen {
 		if err != nil {
 			f.cam.Error = err.Error()
 		} else {
@@ -274,7 +293,6 @@ func (f *Feature) Prewarm() {
 			if _, err := hass.Get().Fetch("/api/camera_proxy/" + entity); err != nil {
 				slog.Debug("camera prewarm", "entity", entity, "err", err)
 			}
-			prewarmStream(entity)
 		}(c.Entity)
 	}
 }
