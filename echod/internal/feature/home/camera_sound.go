@@ -1,6 +1,8 @@
 package home
 
 import (
+	"context"
+	"io"
 	"log/slog"
 	"strings"
 	"time"
@@ -9,10 +11,14 @@ import (
 
 	"github.com/HuskerMinion/techo5/echod/internal/config"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/media"
+	"github.com/HuskerMinion/techo5/echod/internal/feature/video"
 	"github.com/HuskerMinion/techo5/echod/internal/lib/hass"
 )
 
 // A camera's own sound, on this device's speaker, for as long as its view is up.
+//
+// A camera Home Assistant can stream is heard from the stream its picture comes from, decoded here
+// (camera_stream.go). For any other, what follows.
 //
 // The picture is fetched from Home Assistant one snapshot at a time (camera.go). The sound cannot be:
 // it is a stream of AAC inside the camera's own video, and the device decodes nothing for the
@@ -42,6 +48,33 @@ func (f *Feature) buildCameraSoundSwitch() {
 		},
 		OnCommand: func(on bool) { f.SetCameraSound(on) },
 	}
+}
+
+// CameraLive is whether a camera Home Assistant can stream is shown live (camera_stream.go).
+func CameraLive() bool { return config.Get().Home.CameraLive }
+
+// buildCameraLiveSwitch is that setting as Home Assistant's switch.
+func (f *Feature) buildCameraLiveSwitch() {
+	f.cameraLiveSw = &esphome.Switch{
+		Base: esphome.Base{
+			ObjectID: "camera_live",
+			Name:     "Live camera video",
+			Icon:     "mdi:cctv",
+			Category: esphome.CategoryConfig,
+		},
+		OnCommand: func(on bool) { f.SetCameraLive(on) },
+	}
+}
+
+// SetCameraLive saves the choice and shows it in Home Assistant; a view already up keeps what it has.
+func (f *Feature) SetCameraLive(on bool) {
+	if err := config.Set().Home().CameraLive(on); err != nil {
+		slog.Error("saving the live camera switch failed", "err", err)
+		return
+	}
+	f.cameraLiveSw.Set(on)
+	video.CameraLiveChanged()
+	slog.Info("setting changed", "setting", "camera_live", "using", on)
 }
 
 // SetCameraSound saves the choice and shows it in Home Assistant. A view that is already up is left
@@ -79,10 +112,16 @@ type overPlayer struct {
 	Stop    func(media.OverToken)
 	Drop    func(media.OverToken)
 	Settled func(media.OverToken)
+
+	// Answer plays a sound made here under an ask's token (media.AnswerOver); nil where there is none.
+	Answer func(media.OverToken, func(context.Context) (io.ReadCloser, error)) bool
 }
 
 var over = overPlayer{
-	Ask:     func() media.OverToken { return media.Get().OverNext() },
+	Ask: func() media.OverToken { return media.Get().OverNext() },
+	Answer: func(t media.OverToken, open func(context.Context) (io.ReadCloser, error)) bool {
+		return media.Get().AnswerOver(t, open)
+	},
 	State:   func(t media.OverToken) media.OverState { return media.Get().OverState(t) },
 	Mute:    func(t media.OverToken, on bool) { media.Get().MuteOver(t, on) },
 	Stop:    func(t media.OverToken) { media.Get().StopOver(t) },
@@ -144,6 +183,29 @@ var playStream = func(entity, player string) error {
 // askCameraSound makes the call a request stands for. Nothing is waited for: the request is answered by a
 // stream that arrives later as an ordinary media url, which the player plays under this token.
 func (f *Feature) askCameraSound(entity string, token media.OverToken, env soundEnv) {
+	// A camera Home Assistant can stream is heard from that stream, decoded here, as its picture is: a
+	// second or two behind the camera rather than the dozen and more the same stream took converted by
+	// Home Assistant and sent back, too far behind for anybody to answer the door over.
+	//
+	// Started before the ask is answered with it, and given up on for Home Assistant's way if it brings
+	// nothing: a stream with no sound in it, or one that cannot be read, would otherwise leave the view
+	// silent where camera.play_stream had sound.
+	if env.player.Answer != nil {
+		for i, open := range soundSources(entity) {
+			src, why := startSound(open)
+			if src == nil {
+				slog.Info("camera sound: none this way, trying the next", "entity", entity, "way", i+1, "why", why)
+				continue
+			}
+			if env.player.Answer(token, func(context.Context) (io.ReadCloser, error) { return src, nil }) {
+				slog.Info("camera sound on, decoded here", "entity", entity, "way", i+1)
+				env.player.Settled(token)
+				return
+			}
+			src.Close()
+			break
+		}
+	}
 	err := env.call(entity, speakerEntity())
 	if err != nil {
 		// A stream can be on its way even when the call that started it fails: the service is answered
@@ -315,4 +377,62 @@ func (f *Feature) watchCameraSound(entity string, token media.OverToken, env sou
 			}
 		}
 	}
+}
+
+// soundStart is how long a camera's stream may take to bring the first of its sound.
+var soundStart = 20 * time.Second
+
+// startSound opens a sound and waits for the first of it. Nil, with why, when none comes.
+func startSound(open func(context.Context) (io.ReadCloser, error)) (io.ReadCloser, string) {
+	ctx, cancel := context.WithCancel(context.Background())
+	r, err := open(ctx)
+	if err != nil {
+		cancel()
+		return nil, err.Error()
+	}
+	type deadline interface{ SetReadDeadline(time.Time) error }
+	d, bounded := r.(deadline)
+	if bounded {
+		_ = d.SetReadDeadline(time.Now().Add(soundStart))
+	}
+	buf := make([]byte, 4096)
+	n, err := r.Read(buf)
+	if bounded {
+		_ = d.SetReadDeadline(time.Time{})
+	}
+	if n == 0 {
+		why := "no sound"
+		if err != nil {
+			why = err.Error()
+		}
+		if rs, ok := r.(interface{ Reason() string }); ok && rs.Reason() != "" {
+			why = rs.Reason()
+		}
+		r.Close()
+		cancel()
+		return nil, why
+	}
+	return &startedSound{first: buf[:n], r: r, cancel: cancel}, ""
+}
+
+// startedSound is a sound with the first of it already read.
+type startedSound struct {
+	first  []byte
+	r      io.ReadCloser
+	cancel context.CancelFunc
+}
+
+func (s *startedSound) Read(p []byte) (int, error) {
+	if len(s.first) > 0 {
+		n := copy(p, s.first)
+		s.first = s.first[n:]
+		return n, nil
+	}
+	return s.r.Read(p)
+}
+
+func (s *startedSound) Close() error {
+	err := s.r.Close()
+	s.cancel()
+	return err
 }

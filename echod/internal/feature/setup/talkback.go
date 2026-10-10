@@ -11,6 +11,7 @@ import (
 	"github.com/HuskerMinion/techo5/echod/internal/config"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/home"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/talkback"
+	"github.com/HuskerMinion/techo5/echod/internal/feature/video"
 )
 
 // talkBackSection is where each camera is talked to (feature/talkback): an RTSP address per camera on
@@ -55,6 +56,11 @@ func talkBackSection(w http.ResponseWriter, token string) {
 		 <input type="hidden" name="entity" value="%s">
 		 <input id="tbaddr%d" name="addr" value="%s" placeholder="rtsp://192.168.1.40:554/h264Preview_01_main" autocomplete="off">`,
 			i, html.EscapeString(cam.Name), html.EscapeString(cam.Entity), i, html.EscapeString(c.TalkBack.Cameras[cam.Entity]))
+		if video.CanRTSP() {
+			fmt.Fprintf(w, `<label for="tbpic%d">%s: picture (optional)</label>
+			 <input id="tbpic%d" name="pic" value="%s" placeholder="rtsp://192.168.1.40:554/h264Preview_01_sub" autocomplete="off">`,
+				i, html.EscapeString(cam.Name), i, html.EscapeString(c.TalkBack.Pictures[cam.Entity]))
+		}
 	}
 	if len(cams) == 0 {
 		fmt.Fprint(w, `<p class="note">No other cameras are on the list.</p>`)
@@ -62,8 +68,13 @@ func talkBackSection(w http.ResponseWriter, token string) {
 	fmt.Fprint(w, `<p class="note">A camera's address is its RTSP stream: for a Reolink,
 	  rtsp://<i>address</i>:554/h264Preview_01_main, with RTSP turned on in the camera's network settings.
 	  Leave it empty for a camera with no speaker, and it gets no Talk. Put the login in User and
-	  Password, not in the address. The device only sends it protected (digest), never in the clear.</p>
-	 <p><button type="submit">Save</button></p></form></fieldset>`)
+	  Password, not in the address. The device only sends it protected (digest), never in the clear.</p>`)
+	if video.CanRTSP() {
+		fmt.Fprint(w, `<p class="note">A camera's picture, if given, is read from that address on the camera page
+		  instead of Home Assistant's stream, which is seconds behind: a stream about the screen's size, for a
+		  Reolink rtsp://<i>address</i>:554/h264Preview_01_sub. Its sound comes from the address above.</p>`)
+	}
+	fmt.Fprint(w, `<p><button type="submit">Save</button></p></form></fieldset>`)
 }
 
 // talkBackCameras are the cameras on the list that are given an address here: not the device's own, and
@@ -96,11 +107,16 @@ func saveTalkBack(r *http.Request) string {
 	for _, cam := range talkBackCameras() {
 		known[cam.Entity] = true
 	}
-	ents, addrs := r.PostForm["entity"], r.PostForm["addr"]
-	if len(ents) != len(addrs) {
+	ents, addrs, pics := r.PostForm["entity"], r.PostForm["addr"], r.PostForm["pic"]
+	if len(ents) != len(addrs) || (len(pics) != 0 && len(pics) != len(ents)) {
 		return "the form came back incomplete; reload the page and try again"
 	}
-	kept := map[string]string{}
+	kept, pictures := map[string]string{}, map[string]string{}
+	for e, a := range config.Get().TalkBack.Pictures {
+		if _, _, _, onRecorder := home.ReolinkRTSP(e); !known[e] && !onRecorder {
+			pictures[e] = a
+		}
+	}
 	// A camera no longer on the list keeps its address, for when it comes back; one now on the Reolink
 	// recorder has the recorder's.
 	for e, a := range config.Get().TalkBack.Cameras {
@@ -117,26 +133,50 @@ func saveTalkBack(r *http.Request) string {
 			}
 			continue
 		}
+		if len(pics) != 0 {
+			p := strings.TrimSpace(pics[i])
+			if why := rtspAddress(p); why != "" {
+				return why
+			}
+			if p != "" {
+				pictures[e] = p
+			}
+		}
 		a := strings.TrimSpace(addrs[i])
-		if a == "" {
-			continue
+		if why := rtspAddress(a); why != "" {
+			return why
 		}
-		u, err := url.Parse(a)
-		if err != nil || u.Scheme != "rtsp" || u.Hostname() == "" || len(a) > 512 || strings.ContainsAny(a, "\r\n ") {
-			return "a camera's address should be like rtsp://192.168.1.40:554/h264Preview_01_main"
+		if a != "" {
+			kept[e] = a
 		}
-		if u.User != nil {
-			return "put the login in User and Password, not in the address"
-		}
-		kept[e] = a
 	}
 	var p *string
 	if pass != "" {
 		p = &pass
 	}
-	if err := config.Set().TalkBack().Save(user, p, kept); err != nil {
+	save := func() error { return config.Set().TalkBack().Save(user, p, kept) }
+	if len(pics) != 0 {
+		save = func() error { return config.Set().TalkBack().SaveWithPictures(user, p, kept, pictures) }
+	}
+	if err := save(); err != nil {
 		return "could not save it: " + err.Error()
 	}
 	slog.Info("setup page: talk back set", "cameras", len(kept), "password", p != nil)
+	return ""
+}
+
+// rtspAddress says what is wrong with a camera's address as typed: nothing for one that will do, or for
+// none at all.
+func rtspAddress(a string) string {
+	if a == "" {
+		return ""
+	}
+	u, err := url.Parse(a)
+	if err != nil || u.Scheme != "rtsp" || u.Hostname() == "" || len(a) > 512 || strings.ContainsAny(a, "\r\n ") {
+		return "a camera's address should be like rtsp://192.168.1.40:554/h264Preview_01_main"
+	}
+	if u.User != nil {
+		return "put the login in User and Password, not in the address"
+	}
 	return ""
 }
