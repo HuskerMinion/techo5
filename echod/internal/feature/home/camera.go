@@ -1,6 +1,7 @@
 package home
 
 import (
+	"context"
 	"image"
 	_ "image/jpeg" // Home Assistant serves camera snapshots as JPEG
 	"log/slog"
@@ -17,9 +18,10 @@ import (
 )
 
 // The cameras page: "show the front door" puts a camera's live view up for a while, a tap takes it
-// down. Frames are Home Assistant's snapshots through the token, fetched one after another while
-// the view is up, decoded and scaled here; a few a second is what the panel and the SoC manage,
-// and enough to see who is there.
+// down. A camera Home Assistant can stream is shown from its live stream, decoded by the video
+// decoder on every core (camera_stream.go). Any other, and one whose stream fails, is shown from
+// Home Assistant's snapshots through the token, fetched one after another while the view is up,
+// decoded and scaled here: a few a second, enough to see who is there.
 
 const (
 	// cameraShow is how long a camera stays up when asked for by voice.
@@ -35,6 +37,7 @@ type CameraView struct {
 	Error  string      // why there is no frame, when there is none
 
 	span time.Duration // how long it was asked for; Until is restarted from the first frame
+	gen  uint64        // which view this is: frames fetched for an earlier one are not shown in it
 }
 
 // LocalCamera is the entity name of the device's own camera on the list; it is not a Home
@@ -121,18 +124,28 @@ func (f *Feature) showCamera(entity string, d time.Duration, sound bool) {
 	}
 	f.mu.Lock()
 	fresh := f.cam.Entity != entity || time.Now().After(f.cam.Until)
-	f.cam = CameraView{Entity: entity, Name: name, Until: time.Now().Add(d), Frame: f.cam.Frame, span: d}
+	f.cam = CameraView{Entity: entity, Name: name, Until: time.Now().Add(d), Frame: f.cam.Frame, span: d, gen: f.cam.gen}
+	var ctx context.Context
 	if fresh {
 		f.cam.Frame = nil
 		f.camMuted = false // a fresh view starts audible if its sound was asked for
+		// A view of its own, ending what fetched for the one before: a camera closed while its stream
+		// was starting and opened again must not end up with two decoders.
+		if f.camCancel != nil {
+			f.camCancel()
+		}
+		f.camGen++
+		f.cam.gen = f.camGen
+		ctx, f.camCancel = context.WithCancel(context.Background())
 	}
+	gen := f.cam.gen
 	f.mu.Unlock()
 	slog.Info("camera up", "entity", entity, "for", d, "sound", fresh && sound)
 	if fresh {
 		if entity == LocalCamera {
 			go f.localFrames()
 		} else {
-			go f.fetchFrames(entity)
+			go f.fetchFrames(ctx, entity, gen)
 		}
 		if sound && !isReolink(entity) {
 			// The sound is asked of Home Assistant and taken off the speaker when this view ends; a
@@ -161,43 +174,60 @@ func (f *Feature) HoldCamera(entity string, d time.Duration) {
 func (f *Feature) HideCamera() {
 	f.mu.Lock()
 	f.cam.Until = time.Time{}
+	if f.camCancel != nil {
+		f.camCancel() // what it fetched with stops now, not at its next look at the clock
+		f.camCancel = nil
+	}
 	f.mu.Unlock()
 	f.Changed.Emit(struct{}{})
 }
 
-// fetchFrames pulls snapshots while the view is up, one after another.
-func (f *Feature) fetchFrames(entity string) {
-	for {
-		f.mu.Lock()
-		up := f.cam.Entity == entity && time.Now().Before(f.cam.Until)
-		f.mu.Unlock()
-		if !up {
-			return
-		}
+// fetchFrames shows the camera while its view, gen, is up: its live stream where it has one and live
+// video is on (camera_stream.go), else, or once that fails, snapshots one after another.
+func (f *Feature) fetchFrames(ctx context.Context, entity string, gen uint64) {
+	if f.streamFrames(ctx, entity, gen) {
+		return
+	}
+	for f.viewUp(ctx, entity, gen) {
 		frame, err := f.snapshot(entity)
-		f.mu.Lock()
-		if f.cam.Entity == entity {
-			if err != nil {
-				f.cam.Error = err.Error()
-			} else {
-				// The time on screen counts from the first picture, not from the request: some
-				// cameras take a while to start a stream, and a view that closes as it opens
-				// is no view at all.
-				if f.cam.Frame == nil {
-					if until := time.Now().Add(f.cam.span); until.After(f.cam.Until) {
-						f.cam.Until = until // never shorter than a hold asked for (HoldCamera)
-					}
-				}
-				f.cam.Frame, f.cam.Error = frame, ""
-			}
-		}
-		f.mu.Unlock()
-		f.Changed.Emit(struct{}{})
+		f.showFrame(entity, gen, frame, err)
 		if err != nil {
 			slog.Warn("camera frame", "entity", entity, "err", err)
-			time.Sleep(2 * time.Second)
+			pause(ctx, 2*time.Second)
 		}
 	}
+}
+
+// viewUp is whether view gen of entity is still on screen.
+func (f *Feature) viewUp(ctx context.Context, entity string, gen uint64) bool {
+	if ctx.Err() != nil {
+		return false
+	}
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return f.cam.Entity == entity && f.cam.gen == gen && time.Now().Before(f.cam.Until)
+}
+
+// showFrame puts a frame of entity's on screen, or why there is none, if its view gen is the one up.
+func (f *Feature) showFrame(entity string, gen uint64, frame *image.RGBA, err error) {
+	f.mu.Lock()
+	if f.cam.Entity == entity && f.cam.gen == gen {
+		if err != nil {
+			f.cam.Error = err.Error()
+		} else {
+			// The time on screen counts from the first picture, not from the request: some
+			// cameras take a while to start a stream, and a view that closes as it opens
+			// is no view at all.
+			if f.cam.Frame == nil {
+				if until := time.Now().Add(f.cam.span); until.After(f.cam.Until) {
+					f.cam.Until = until // never shorter than a hold asked for (HoldCamera)
+				}
+			}
+			f.cam.Frame, f.cam.Error = frame, ""
+		}
+	}
+	f.mu.Unlock()
+	f.Changed.Emit(struct{}{})
 }
 
 // localFrames shows the device's own camera while the view is up: every frame the sensor
@@ -251,9 +281,9 @@ func (f *Feature) localFrames() {
 	}
 }
 
-// Prewarm asks Home Assistant for one frame from every camera and drops it. Some cameras take
-// seconds to start a stream on the first request; asking while the list is on screen means the
-// one that gets tapped answers at once.
+// Prewarm asks Home Assistant for one frame from every camera and drops it, and for the stream of
+// every camera it can stream. Some cameras take seconds to start a stream on the first request;
+// asking while the list is on screen means the one that gets tapped answers at once.
 func (f *Feature) Prewarm() {
 	for _, c := range f.Cameras() {
 		if c.Entity == LocalCamera || isReolink(c.Entity) {

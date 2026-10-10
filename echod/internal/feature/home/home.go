@@ -144,8 +144,11 @@ type Feature struct {
 	meta     meta
 	metaPoke chan struct{}
 
-	// cam is the camera view in progress; see camera.go.
-	cam CameraView
+	// cam is the camera view in progress; see camera.go. camGen numbers the views, and camCancel ends
+	// what the one up fetches with.
+	cam       CameraView
+	camGen    uint64
+	camCancel context.CancelFunc
 
 	// camSound is the camera whose sound this view has, camOver the media player's token for the request
 	// it was asked with, and camMuted whether that sound was silenced from the screen. camSound stays for
@@ -160,6 +163,7 @@ type Feature struct {
 	camOver       media.OverToken
 	camMuted      bool
 	cameraSoundSw *esphome.Switch
+	cameraLiveSw  *esphome.Switch
 
 	// slideshowSel picks the display mode, slideshowOverlaySel the screensaver's clock/date size,
 	// slideshowIdleNum the screensaver's idle wait; slideshow is the fetch state. See slideshow.go.
@@ -245,6 +249,7 @@ func Get() *Feature {
 		shared.buildRadarSelect()
 		shared.buildAlertsSwitch()
 		shared.buildCameraSoundSwitch()
+		shared.buildCameraLiveSwitch()
 		shared.buildSlideshowSelect()
 		shared.buildRadioSensors()
 		hastate.Get().Changed.Listen(shared.stateChanged)
@@ -373,6 +378,7 @@ func (f *Feature) Restore(c config.Config) {
 	f.alertsSw.Set(!c.Home.AlertsOff)
 	f.showRadio(meta{}) // nothing plays at a start; the poller fills them in
 	f.cameraSoundSw.Set(c.Home.CameraSound)
+	f.cameraLiveSw.Set(c.Home.CameraLive)
 	if hasScreen {
 		f.slideshowSel.Set(slideshowLabelFor(c.Home.Slideshow.Mode))
 		f.slideshowOverlaySel.Set(slideshowOverlayLabelFor(c.Home.Slideshow.Overlay))

@@ -238,8 +238,9 @@ func (g *guard) tunnel(w http.ResponseWriter, r *http.Request) {
 	down.Close()
 }
 
-// guardAllowed is whether videos may play, which the proxy is for; a variable for the tests.
-var guardAllowed = func() bool { return config.Get().Video.On }
+// guardAllowed is whether the decoder may run at all, which the proxy is for: videos may play, or
+// cameras are shown live (camera.go). A variable for the tests.
+var guardAllowed = func() bool { c := config.Get(); return c.Video.On || c.Home.CameraLive }
 
 // netGuard is how the decoder's network is kept off the device for this run: "" when the kernel fences
 // its user (fence.go), else the guard's address for -http_proxy. An error is neither: no decoder. A

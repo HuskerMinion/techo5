@@ -187,7 +187,9 @@ func (f *Feature) SetOn(on bool) {
 	slog.Info("setting changed", "setting", "video", "using", on)
 	if !on {
 		f.Stop()
-		closeGuard()
+		if !guardAllowed() { // live cameras may still want it
+			closeGuard()
+		}
 	}
 	f.Changed.Emit(struct{}{})
 }

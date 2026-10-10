@@ -39,12 +39,12 @@ import (
 // meanwhile. Stopping is the view ending, and gives the sound up entirely.
 
 const (
-	// overAhead is how much audio may sit in the speaker's queue, in frames: a second of it, the same
-	// as a track keeps.
-	overAhead = speaker.Rate
-
-	// overPace is how often the reading looks to see whether the queue has room.
-	overPace = 100 * time.Millisecond
+	// overAhead is how much audio may sit in the speaker's queue, in frames, before what arrives on top
+	// of it is dropped: half a second. The sound is live, and Home Assistant's converter holds back the
+	// first seconds of a stream while it works out what is in it, then sends them all at once: played,
+	// they would keep the sound that far behind the picture for as long as it lasts. Dropped, it is
+	// as near live as the network lets it be from the first second on.
+	overAhead = speaker.Rate / 2
 
 	// overStall is how long one read may produce nothing before the sound is given up on.
 	overStall = 30 * time.Second
@@ -269,6 +269,17 @@ func (p *Player) StopOver(t OverToken) {
 // when the claim ends, which is the reader returning — by itself at the end of the stream, because
 // somebody silenced it, or because a claim of another sort took the speaker.
 func (p *Player) playOver(url string, token OverToken, muted bool) {
+	p.playOverWith(url, token, muted, func(stop context.Context, spk *speaker.Player, muted func() bool) error {
+		return readOver(stop, url, spk, muted)
+	})
+}
+
+// overReader reads a sound over the music into the speaker until stop is done.
+type overReader func(stop context.Context, spk *speaker.Player, muted func() bool) error
+
+// playOverWith is playOver for any reader: a url's, or a sound the device makes itself (AnswerOver).
+// what names it in the log.
+func (p *Player) playOverWith(what string, token OverToken, muted bool, read overReader) {
 	stop, cancel := context.WithCancel(context.Background())
 
 	p.overMu.Lock()
@@ -295,7 +306,7 @@ func (p *Player) playOver(url string, token OverToken, muted bool) {
 			sound.spk = spk
 		}
 		p.overMu.Unlock()
-		return readOver(stop, url, spk, sound.isMuted)
+		return read(stop, spk, sound.isMuted)
 	})
 
 	p.overMu.Lock()
@@ -317,7 +328,7 @@ func (p *Player) playOver(url string, token OverToken, muted bool) {
 	safe.Go("sound over the music", func() {
 		<-claim.Done()
 		if err := claim.Err(); err != nil {
-			slog.Warn("the sound over the music ended badly", "url", url, "err", err)
+			slog.Warn("the sound over the music ended badly", "url", what, "err", err)
 		}
 
 		p.overMu.Lock()
@@ -361,6 +372,39 @@ func (p *Player) overURL(url string) bool {
 		return true
 	}
 	p.playOver(url, ask.token, ask.muted)
+	return true
+}
+
+// AnswerOver answers an ask (OverNext) with a sound the device makes itself rather than a url it is sent:
+// a camera's sound decoded here from the stream its picture comes from (feature/home), heard about as
+// far behind the camera as the picture is, where the same stream converted by Home Assistant and sent
+// back came a dozen seconds and more behind it. open starts it, under a context that ends with the
+// sound; it reads the speaker's own samples (16-bit, Rate, Channels) with no header. Everything else is
+// the ask's as it would be for a url: its token, whether it was silenced while on its way, and what the
+// control and the view's end do to it. It reports whether the token was an ask still waiting; one
+// given up on is answered by dropping it.
+func (p *Player) AnswerOver(t OverToken, open func(context.Context) (io.ReadCloser, error)) bool {
+	p.overMu.Lock()
+	p.dropStale(time.Now())
+	var ask overAsk
+	found := false
+	for i, a := range p.overAsks {
+		if a.token == t {
+			ask, found = a, true
+			p.overAsks = append(p.overAsks[:i], p.overAsks[i+1:]...)
+			break
+		}
+	}
+	p.overMu.Unlock()
+	if !found {
+		return false
+	}
+	if ask.dropped {
+		return true
+	}
+	p.playOverWith("a sound made here", t, ask.muted, func(stop context.Context, spk *speaker.Player, muted func() bool) error {
+		return readOverPCM(stop, open, spk, muted)
+	})
 	return true
 }
 
@@ -446,21 +490,44 @@ func readOverOnce(stop context.Context, url string, spk *speaker.Player, muted f
 	if err := header(body); err != nil {
 		return err
 	}
+	return pumpOver(stop, fetch, giveUp, body, spk, muted)
+}
 
+// readOverPCM plays a sound the device makes itself into the speaker (AnswerOver) until stop is done.
+// As for a url, a read that produces nothing for overStall gives the sound up: the context open was
+// given ends, and with it whatever makes the sound.
+func readOverPCM(stop context.Context, open func(context.Context) (io.ReadCloser, error), spk *speaker.Player, muted func() bool) error {
+	fetch, giveUp := context.WithCancel(stop)
+	defer giveUp()
+	r, err := open(fetch)
+	if err != nil {
+		if stop.Err() != nil {
+			return nil
+		}
+		return err
+	}
+	defer r.Close()
+	err = pumpOver(stop, fetch, giveUp, r, spk, muted)
+	if stop.Err() != nil {
+		return nil
+	}
+	return err
+}
+
+// pumpOver reads samples into the speaker as they arrive, dropping them while muted or while the speaker
+// is further behind than live allows. giveUp ends fetch, which is what a read that has produced nothing
+// for overStall does.
+func pumpOver(stop, fetch context.Context, giveUp func(), body io.Reader, spk *speaker.Player, muted func() bool) error {
 	buf := make([]byte, chunk)
+	var dropped int // frames, to say once how far behind the stream started
+	defer func() {
+		if dropped > 0 {
+			slog.Info("sound over the music: caught up with a live stream", "dropped_ms", dropped*1000/speaker.Rate)
+		}
+	}()
 	for {
 		if stop.Err() != nil {
 			return nil // silenced, which is not a failure
-		}
-
-		// About a second ahead of the speaker and no more, so a stream that arrives faster than the
-		// device plays it does not grow in memory.
-		for spk.Queued() > overAhead {
-			select {
-			case <-stop.Done():
-				return nil
-			case <-time.After(overPace):
-			}
 		}
 
 		watchdog := time.AfterFunc(overStall, giveUp)
@@ -475,7 +542,13 @@ func readOverOnce(stop context.Context, url string, spk *speaker.Player, muted f
 			for i := range samples {
 				samples[i] = int16(binary.LittleEndian.Uint16(buf[i*2:]))
 			}
-			spk.Play(samples)
+			if spk.Queued() > overAhead {
+				// Further ahead of the speaker than live allows: a burst the stream sent on top of what
+				// is playing, which is the past by the time it would be heard.
+				dropped += len(samples) / speaker.Channels
+			} else {
+				spk.Play(samples)
+			}
 		}
 
 		switch {
