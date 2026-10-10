@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -18,6 +19,7 @@ import (
 	"github.com/HuskerMinion/techo5/echod/internal/feature/home"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/notify"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/remind"
+	"github.com/HuskerMinion/techo5/echod/internal/feature/talkback"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/voice"
 	"github.com/HuskerMinion/techo5/echod/internal/hardware/touch"
 )
@@ -284,6 +286,45 @@ func TestACameraViewIsTappedAwayOnTheNightLight(t *testing.T) {
 	}
 	tapAt(d, image.Pt(showWide/2, showHigh/2))
 	within(t, "the plain view coming down", func() bool { _, up := home.Get().Camera(); return !up })
+}
+
+// On the night light a tap reaches the camera page's controls before it closes the view: somebody
+// reaching for Talk at the door at night must not lose the doorbell's view, and Mute likewise. A tap
+// anywhere else still takes the view down.
+func TestTheNightLightKeepsACameraViewForTalkAndMute(t *testing.T) {
+	d := noticeDisplay(t, showWide, showHigh)
+	atNight(t)
+	if err := config.Set().Screen().AtNight(true, true); err != nil {
+		t.Fatal(err)
+	}
+	d.nightGlow = true
+	var talked, muted atomic.Int32
+	toggleTalk = func(string) { talked.Add(1) }
+	toggleSound = func() { muted.Add(1) }
+	t.Cleanup(func() {
+		toggleTalk = func(entity string) { talkback.Get().Toggle(entity) }
+		toggleSound = func() { home.Get().ToggleCameraSound() }
+	})
+
+	home.Get().ShowCamera("camera.front_door", time.Minute)
+	v, _ := home.Get().Camera()
+	d.r.draw(scene{now: time.Now(), phase: "idle", showCamera: true, camera: v, talkOffered: true, cameraSound: true})
+	mid := func(b image.Rectangle) image.Point { return b.Min.Add(image.Pt(b.Dx()/2, b.Dy()/2)) }
+
+	tapAt(d, mid(d.r.cameraTalkAt))
+	within(t, "Talk toggling", func() bool { return talked.Load() == 1 })
+	tapAt(d, mid(d.r.cameraSoundAt))
+	within(t, "Mute toggling", func() bool { return muted.Load() == 1 })
+	time.Sleep(100 * time.Millisecond) // a close, if one were wrongly started, has had its turn
+	if _, up := home.Get().Camera(); !up {
+		t.Fatal("a tap on Talk or Mute closed the camera view on the night light")
+	}
+
+	tapAt(d, image.Pt(showWide/2, showHigh/2))
+	within(t, "the view coming down", func() bool { _, up := home.Get().Camera(); return !up })
+	if talked.Load() != 1 || muted.Load() != 1 {
+		t.Errorf("a tap elsewhere toggled talk %d and sound %d, want 1 and 1", talked.Load(), muted.Load())
+	}
 }
 
 // A tap that stops a ring is for the alarm: it does not release a notification that is waiting.

@@ -1,6 +1,7 @@
 package home
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"image"
@@ -93,11 +94,17 @@ func (f *Feature) ShowPicture(src string, c Caption, d time.Duration, sound stri
 		name = untitled
 	}
 	f.mu.Lock()
-	f.cam = CameraView{Entity: src, Name: name, Until: time.Now().Add(d), Caption: &c, span: d}
+	f.cancelStill() // the still this one replaces is not wanted any more
+	ctx, cancel := context.WithCancel(context.Background())
+	f.stillCancel = cancel
+	f.cam = CameraView{Entity: src, Name: name, Until: time.Now().Add(d), Caption: &c, span: d, View: f.newView()}
 	f.camMuted = false
 	f.mu.Unlock()
 	slog.Info("picture up", "source", redactURL(src), "for", d)
-	f.spawn(func() { f.fetchStill(src, path, c.ID) })
+	f.spawn(func() {
+		defer cancel() // the context is done with once the fetch is
+		f.fetchStill(ctx, src, path, c.ID)
+	})
 	if name == untitled && strings.HasPrefix(src, "image.") {
 		f.spawn(func() { f.lookUpName(src, untitled) })
 	}
@@ -124,19 +131,34 @@ func (f *Feature) stillIsUp(src, id string) bool {
 	return f.viewIsUp(src) && f.cam.Caption != nil && f.cam.Caption.ID == id
 }
 
+// cancelStill gives up the fetch of the still on the view, if there is one: its view is being replaced
+// or taken down, and its bytes would be dropped anyway. The caller holds f.mu.
+func (f *Feature) cancelStill() {
+	if f.stillCancel != nil {
+		f.stillCancel()
+		f.stillCancel = nil
+	}
+}
+
 // fetchStill fetches a still once and puts it on the view, if the view is still this notification's
 // when its turn comes, when its bytes arrive and when the picture is ready. A view that is gone costs
 // the next stage nothing: bytes for a notification that was tapped away or replaced are dropped
-// without being decoded. As with a camera, the time on screen counts from the picture arriving.
-func (f *Feature) fetchStill(src, path, id string) {
-	stillTurn <- struct{}{}
+// without being decoded. As with a camera, the time on screen counts from the picture arriving. ctx is
+// canceled when the view is replaced or taken down: the fetch then lets go of its place in line, or of
+// the turn it holds, at once instead of when its bytes arrive, and writes nothing.
+func (f *Feature) fetchStill(ctx context.Context, src, path, id string) {
+	select {
+	case stillTurn <- struct{}{}:
+	case <-ctx.Done():
+		return
+	}
 	defer func() { <-stillTurn }()
 	mine := func() bool { return f.stillIsUp(src, id) }
 	if !mine() {
 		return
 	}
-	frame, err := still(path, mine)
-	if errors.Is(err, errReplaced) {
+	frame, err := still(ctx, path, mine)
+	if errors.Is(err, errReplaced) || ctx.Err() != nil {
 		return
 	}
 	if err != nil {
@@ -201,8 +223,8 @@ func redactError(s string) string {
 // still fetches a picture and scales it to the panel. Home Assistant's own addresses get the token and
 // any other host does not (hass.FetchURL). wanted is asked once the bytes are in, before they are
 // decoded: if it says no, the picture is dropped (errReplaced).
-func still(path string, wanted func() bool) (*image.RGBA, error) {
-	b, err := hass.Get().FetchURL(path)
+func still(ctx context.Context, path string, wanted func() bool) (*image.RGBA, error) {
+	b, err := hass.Get().FetchURLContext(ctx, path)
 	if err != nil {
 		return nil, err
 	}

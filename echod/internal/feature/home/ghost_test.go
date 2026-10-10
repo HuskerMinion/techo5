@@ -313,3 +313,57 @@ func newFeature(t *testing.T) *Feature {
 	})
 	return f
 }
+
+// Every view has its own number, and HideView takes down only the view it was read from: a tap read
+// before a newer view replaced the old one must not hide the newer.
+func TestHideViewHidesOnlyThatView(t *testing.T) {
+	newSlowHA(t)
+	f := newFeature(t)
+	f.ShowCamera("camera.front_door", time.Minute)
+	first, _ := f.Camera()
+	f.ShowCamera("camera.deck", time.Minute)
+	second, up := f.Camera()
+	if !up || second.View == 0 || second.View == first.View {
+		t.Fatalf("views %d then %d (up %v), want two different numbers", first.View, second.View, up)
+	}
+	if f.HideView(first.View) {
+		t.Error("HideView of a replaced view said it hid something")
+	}
+	if v, up := f.Camera(); !up || v.View != second.View {
+		t.Fatalf("view %+v up=%v after hiding the replaced one, want the newer still up", v, up)
+	}
+	if !f.HideView(second.View) {
+		t.Error("HideView of the current view said it hid nothing")
+	}
+	if _, up := f.Camera(); up {
+		t.Error("the current view is still up after HideView")
+	}
+	if f.HideView(second.View) {
+		t.Error("HideView of a view already down said it hid something")
+	}
+}
+
+// The same camera asked for again is the same thing on screen and keeps its number, so a tap read
+// before the re-show still closes it. A notification's picture over a plain view of the same camera is
+// not: it gets a number of its own, or that tap would hide the notification's picture.
+func TestAReshownCameraKeepsItsViewNumber(t *testing.T) {
+	newSlowHA(t)
+	f := newFeature(t)
+	f.ShowCamera("camera.front_door", time.Minute)
+	first, _ := f.Camera()
+	f.ShowCamera("camera.front_door", 2*time.Minute)
+	again, _ := f.Camera()
+	if again.View != first.View {
+		t.Errorf("view %d after a re-show, want %d kept", again.View, first.View)
+	}
+	if err := f.ShowPicture("camera.front_door", Caption{ID: "1", Message: "x"}, time.Minute, "off"); err != nil {
+		t.Fatal(err)
+	}
+	pic, _ := f.Camera()
+	if pic.View == first.View {
+		t.Error("a notification's picture over the plain view kept its number")
+	}
+	if f.HideView(first.View) {
+		t.Error("a tap on the plain view hid the notification's picture")
+	}
+}

@@ -148,6 +148,10 @@ type Feature struct {
 
 	// cam is the camera view in progress; see camera.go.
 	cam CameraView
+	// viewSeq numbers the views put up (CameraView.View).
+	viewSeq uint64
+	// stillCancel gives up the fetch of the still on the view (picture.go), when there is one.
+	stillCancel context.CancelFunc
 
 	// camSound is the camera whose sound this view has, camOver the media player's token for the request
 	// it was asked with, and camMuted whether that sound was silenced from the screen. camSound stays for

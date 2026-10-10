@@ -49,6 +49,11 @@ type CameraView struct {
 	Error  string      // why there is no frame, when there is none
 	// Caption is a notification's words over the view (feature/notify); nil for a plain camera.
 	Caption *Caption
+	// View numbers the view, so that a tap can close the view it was read from and not whichever is up
+	// when it gets round to it (HideView). Until cannot say which view it is: it moves when the first
+	// frame arrives. A camera asked for again while its view is up keeps its number, and a different
+	// notification's picture over it gets a new one.
+	View uint64
 
 	span time.Duration // how long it was asked for; Until is restarted from the first frame
 }
@@ -146,7 +151,14 @@ func (f *Feature) showCameraCaptioned(entity string, d time.Duration, sound bool
 	if !listed && !fresh {
 		name = f.cam.Name // the same camera asked for again keeps the name it was given, looked up or not
 	}
-	f.cam = CameraView{Entity: entity, Name: name, Until: time.Now().Add(d), Frame: f.cam.Frame, Caption: c, span: d}
+	view := f.cam.View
+	if fresh || !sameCaption(f.cam.Caption, c) {
+		// Asked for again with the same words (or none) it is the same thing on screen and keeps its
+		// number, so a tap read before the re-show still closes it; anything else is a new view.
+		view = f.newView()
+	}
+	f.cancelStill() // a camera in place of a still: the still's picture is not wanted
+	f.cam = CameraView{Entity: entity, Name: name, Until: time.Now().Add(d), Frame: f.cam.Frame, Caption: c, span: d, View: view}
 	if fresh {
 		f.cam.Frame = nil
 		f.camMuted = false // a fresh view starts audible if its sound was asked for
@@ -211,11 +223,44 @@ func (f *Feature) HoldCamera(entity string, d time.Duration) {
 	}
 }
 
+// newView is the number for a view being put up. The caller holds f.mu.
+func (f *Feature) newView() uint64 {
+	f.viewSeq++
+	return f.viewSeq
+}
+
+// sameCaption is whether two captions are the same notification's (or both none).
+func sameCaption(a, b *Caption) bool {
+	if a == nil || b == nil {
+		return a == b
+	}
+	return a.ID == b.ID
+}
+
+// HideView takes the view down if it is still the view numbered view, and says whether it did. The
+// compare and the hide are one step under the lock, so a tap that was read before a newer view replaced
+// its own cannot take the newer one down.
+func (f *Feature) HideView(view uint64) bool {
+	f.mu.Lock()
+	ours := f.cam.View == view && f.cam.Entity != "" && time.Now().Before(f.cam.Until)
+	if ours {
+		f.cancelStill()
+		f.cam.Until = time.Time{}
+		f.cam.Caption = nil
+	}
+	f.mu.Unlock()
+	if ours {
+		f.Changed.Emit(struct{}{})
+	}
+	return ours
+}
+
 // HideCamera takes the view down, and forgets whose words were on it: a frame still on its way for
 // the view must find nothing to land on (viewIsUp), and a tap on a view gone must not be taken for a
 // tap on a notification that came after it.
 func (f *Feature) HideCamera() {
 	f.mu.Lock()
+	f.cancelStill()
 	f.cam.Until = time.Time{}
 	f.cam.Caption = nil
 	f.mu.Unlock()
@@ -229,6 +274,7 @@ func (f *Feature) HidePicture(id string) bool {
 	f.mu.Lock()
 	ours := f.cam.Caption != nil && f.cam.Caption.ID == id && time.Now().Before(f.cam.Until)
 	if ours {
+		f.cancelStill()
 		f.cam.Until = time.Time{}
 		f.cam.Caption = nil
 	}

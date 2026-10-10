@@ -62,3 +62,25 @@ func TestClosingAReplacedPictureLeavesTheNewerOne(t *testing.T) {
 		t.Errorf("view %+v up=%v after closing the replaced one, want the newer picture still up", v, up)
 	}
 }
+
+// The same for a plain view: the tap closes only the view it was read from, so a picture notification
+// that landed before closeCamera ran is not hidden (and Home Assistant told it expired).
+func TestClosingAReplacedPlainViewLeavesThePicture(t *testing.T) {
+	config.Use(filepath.Join(t.TempDir(), "state.json"))
+	notify.SetNight(func(time.Time) bool { return true })
+	t.Cleanup(func() { notify.SetNight(func(time.Time) bool { return false }) })
+
+	home.Get().ShowCamera("camera.deck", time.Minute)
+	old, _ := home.Get().Camera()
+	if err := notify.Get().NotifyPicture("Someone is here", "", "camera.front_door", "", "", "", "", 60); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { notify.Get().Dismiss() })
+	closeCamera(old)
+	if v, up := home.Get().Camera(); !up || v.Caption == nil || v.Caption.Message != "Someone is here" {
+		t.Errorf("view %+v up=%v after closing the replaced plain view, want the picture still up", v, up)
+	}
+	if _, up := notify.Get().Showing(); !up {
+		t.Error("the picture notification was dismissed by a tap on the view before it")
+	}
+}

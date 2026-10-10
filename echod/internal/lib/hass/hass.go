@@ -5,6 +5,7 @@ package hass
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -138,6 +139,11 @@ func (c *Client) Ready() bool {
 }
 
 func (c *Client) do(method, path string, body any) ([]byte, error) {
+	return c.doContext(context.Background(), method, path, body)
+}
+
+// doContext is do that gives up when ctx is done.
+func (c *Client) doContext(ctx context.Context, method, path string, body any) ([]byte, error) {
 	c.mu.Lock()
 	acc := c.acc
 	c.mu.Unlock()
@@ -152,7 +158,7 @@ func (c *Client) do(method, path string, body any) ([]byte, error) {
 		}
 		rd = bytes.NewReader(b)
 	}
-	req, err := http.NewRequest(method, acc.URL+path, rd)
+	req, err := http.NewRequestWithContext(ctx, method, acc.URL+path, rd)
 	if err != nil {
 		return nil, err
 	}
@@ -256,13 +262,20 @@ func (c *Client) Fetch(path string) ([]byte, error) {
 // Assistant API, so putting it on that request would hand the house to whoever answers it. Those
 // fetches go out bare, which is all they need: the source signed the URL itself.
 func (c *Client) FetchURL(url string) ([]byte, error) {
+	return c.FetchURLContext(context.Background(), url)
+}
+
+// FetchURLContext is FetchURL that gives up as soon as ctx is done, with the same limits and the same
+// errors; a caller that no longer wants the bytes (a picture that has been replaced) does not hold its
+// place for the client's whole timeout.
+func (c *Client) FetchURLContext(ctx context.Context, url string) ([]byte, error) {
 	if strings.HasPrefix(url, "/") {
-		return c.do("GET", url, nil)
+		return c.doContext(ctx, "GET", url, nil)
 	}
 	if rest, ok := ownURL(c.baseURL(), url); ok {
-		return c.do("GET", rest, nil)
+		return c.doContext(ctx, "GET", rest, nil)
 	}
-	req, err := http.NewRequest("GET", url, nil)
+	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
 	if err != nil {
 		return nil, err
 	}

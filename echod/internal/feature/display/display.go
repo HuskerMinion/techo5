@@ -777,6 +777,30 @@ func (d *Display) volumeMoved(step int) {
 	d.wake()
 }
 
+// toggleTalk and toggleSound are what the camera page's Talk and sound controls do; variables only so
+// that a test can see a tap reach them.
+var (
+	toggleTalk  = func(entity string) { talkback.Get().Toggle(entity) }
+	toggleSound = func() { home.Get().ToggleCameraSound() }
+)
+
+// cameraTap is a tap on the camera page for view v: it takes the view down, unless it lands on the
+// sound's control — that silences what the camera is saying and leaves the view up, which is the whole
+// use of it at a doorbell — or on Talk, which starts or ends talking through the camera. By day and on
+// the night light both come here, so a hand reaching for Talk in the dark does not lose the view.
+func (d *Display) cameraTap(g touch.Gesture, v home.CameraView) {
+	if d.r != nil && d.r.cameraTalkTapped(image.Pt(g.X, g.Y)) {
+		go toggleTalk(v.Entity)
+	} else if d.r != nil && d.r.cameraSoundTapped(image.Pt(g.X, g.Y)) {
+		// Silence it, or ask for it again: the control is a toggle, and the view stays either way. Inline,
+		// as it always was: it only changes the player's own state, and two quick taps stay in order.
+		toggleSound()
+	} else {
+		// Off the touch goroutine: closing a notification's picture ends in a network write.
+		go closeCamera(v)
+	}
+}
+
 // gesture is a finger on the panel. A dark screen only lights up; otherwise a tap is the action
 // button and a vertical swipe the volume.
 func (d *Display) gesture(g touch.Gesture) {
@@ -828,14 +852,15 @@ func (d *Display) gesture(g touch.Gesture) {
 		} else if g.Kind == touch.Tap {
 			// What a touch released on the night light is tapped away like any other, and the red clock
 			// comes back; without this it stayed until the notification ended. A text card only by its
-			// own box; a camera view (a picture notification's, or one somebody asked for) anywhere.
+			// own box; a camera view (a picture notification's, or one somebody asked for) as by day, where
+			// Talk and the sound's control keep the view up and anywhere else takes it down.
 			if n, up := notify.Get().Card(); up && d.r != nil && image.Pt(g.X, g.Y).In(d.r.notifyBox()) {
 				go notify.Get().DismissID(n.ID)
 				d.wake()
 				return
 			}
 			if v, up := home.Get().Camera(); up {
-				go closeCamera(v)
+				d.cameraTap(g, v) // Talk and Mute first, as by day
 				d.wake()
 				return
 			}
@@ -1017,21 +1042,11 @@ func (d *Display) gesture(g touch.Gesture) {
 		return
 	}
 
-	// A live camera: a tap takes it down, unless it lands on the sound's control — that silences what
-	// the camera is saying and leaves the view up, which is the whole use of it at a doorbell — or on
-	// Talk, which starts or ends talking through the camera. Not while the settings are open: they are
-	// drawn over the camera, so the tap is for them, as on the Spot.
+	// A live camera: see cameraTap. Not while the settings are open: they are drawn over the camera, so
+	// the tap is for them, as on the Spot.
 	if v, up := home.Get().Camera(); up && !d.sheetUp() {
 		if g.Kind == touch.Tap {
-			if d.r != nil && d.r.cameraTalkTapped(image.Pt(g.X, g.Y)) {
-				go talkback.Get().Toggle(v.Entity)
-			} else if d.r != nil && d.r.cameraSoundTapped(image.Pt(g.X, g.Y)) {
-				// Silence it, or ask for it again: the control is a toggle, and the view stays either way.
-				home.Get().ToggleCameraSound()
-			} else {
-				// Off the touch goroutine: closing a notification's picture ends in a network write.
-				go closeCamera(v)
-			}
+			d.cameraTap(g, v)
 		}
 		d.wake()
 		return
