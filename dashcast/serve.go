@@ -265,7 +265,12 @@ func serve(ctx context.Context, b *browser, g *guard, cfg config, raw net.Conn) 
 		err := chromedp.Run(ctx, chromedp.ActionFunc(func(ctx context.Context) error { return touch(ctx, t) }))
 		cancelTouch()
 		if errors.Is(err, context.DeadlineExceeded) {
-			if late++; late >= 2 {
+			// The late touch is called off, so the page is not left with a finger held down when
+			// it was a press, and that has the same time to be taken.
+			ctx, cancelOff := context.WithTimeout(tab, tabAnswer)
+			err := chromedp.Run(ctx, input.DispatchTouchEvent(input.TouchCancel, []*input.TouchPoint{}))
+			cancelOff()
+			if late++; late >= 2 || errors.Is(err, context.DeadlineExceeded) {
 				slog.Warn("touches were not taken; closing the dashboard", "name", h.Name)
 				w.markStuck()
 				return

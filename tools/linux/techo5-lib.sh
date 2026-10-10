@@ -331,7 +331,13 @@ t5_wifi_prefer5() {
 		if t5_wifi_joined; then
 			rm -f $pin.miss
 			on=$(iw dev wlan0 link 2>/dev/null | sed -n 's/.*freq: \([0-9]*\).*/\1/p')
-			[ -n "$on" ] && [ "${on%%.*}" != "$(cut -d' ' -f2 $pin)" ] && rm -f $pin
+			# Cleared on its network as well, in case the supplicant went to another saved network
+			# on its own, with no reload: the pinned one would keep only the old channel until a
+			# reboot. Clearing it on the network in use does not drop the link.
+			if [ -n "$on" ] && [ "${on%%.*}" != "$(cut -d' ' -f2 $pin)" ]; then
+				$w set_network "$(cut -d' ' -f1 $pin)" freq_list "" >/dev/null 2>&1
+				rm -f $pin
+			fi
 		elif [ -e $pin.miss ]; then
 			log "wifi: not associated while pinned to $(cut -d' ' -f2 $pin) MHz; back to every band"
 			$w set_network "$(cut -d' ' -f1 $pin)" freq_list "" >/dev/null 2>&1
