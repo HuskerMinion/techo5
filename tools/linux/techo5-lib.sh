@@ -300,6 +300,10 @@ t5_wifi_up() {
 # t5_ip: the current IPv4 address on wlan0, empty if none.
 t5_ip() { ip -4 addr show wlan0 2>/dev/null | sed -n 's/.*inet \([0-9.]*\).*/\1/p' | head -1; }
 
+# t5_wifi_joined: whether the supplicant is associated. An address alone does not say so: a lease
+# stays on wlan0 after the link is lost, until it runs out.
+t5_wifi_joined() { wpa_cli -p /run/wpa -i wlan0 status 2>/dev/null | grep -q '^wpa_state=COMPLETED'; }
+
 # t5_wifi_prefer5: keep the link on the network's strongest worthwhile radio, 5 GHz first.
 #
 # The supplicant picks a radio at connect time and often takes 2.4 GHz, where the Bluetooth half of the
@@ -314,8 +318,27 @@ t5_ip() { ip -4 addr show wlan0 2>/dev/null | sed -n 's/.*inet \([0-9.]*\).*/\1/
 # back (or was never listed: a connected supplicant stops scanning) is found. A move pins the running
 # supplicant to the chosen channel, nothing is saved; if it does not associate there within 30 s it
 # goes back to every band and leaves it for 30 minutes.
+#
+# A pin outlives the channel it was made for: a router on automatic channels moves its 5 GHz radio
+# (radar on a DFS channel, a channel scan), and a supplicant pinned to the old channel never finds it
+# again (#111). So once the link has been gone at two checks in a row, the pin comes off and the
+# supplicant looks on every band again.
 t5_wifi_prefer5() {
 	w="wpa_cli -p /run/wpa -i wlan0"
+	pin=/run/techo5/prefer5-pin
+	if [ -s $pin ]; then
+		if t5_wifi_joined; then
+			rm -f $pin.miss
+		elif [ -e $pin.miss ]; then
+			log "wifi: not associated while pinned to $(cut -d' ' -f2 $pin) MHz; back to every band"
+			$w set_network "$(cut -d' ' -f1 $pin)" freq_list "" >/dev/null 2>&1
+			$w reassociate >/dev/null 2>&1
+			rm -f $pin $pin.miss
+			return 0
+		else
+			: > $pin.miss
+		fi
+	fi
 	link=$(iw dev wlan0 link 2>/dev/null)
 	freq=$(echo "$link" | sed -n 's/.*freq: \([0-9]*\).*/\1/p'); freq=${freq%%.*}
 	sig=$(echo "$link" | sed -n 's/.*signal: \(-*[0-9]*\).*/\1/p')
@@ -359,14 +382,17 @@ t5_wifi_prefer5() {
 	while [ $n -lt 30 ]; do
 		sleep 2; n=$((n+2))
 		f=$(iw dev wlan0 link 2>/dev/null | sed -n 's/.*freq: \([0-9]*\).*/\1/p')
-		if [ "${f%%.*}" = "$target" ] && $w status 2>/dev/null | grep -q '^wpa_state=COMPLETED'; then
+		if [ "${f%%.*}" = "$target" ] && t5_wifi_joined; then
 			log "wifi: on $target MHz"
+			echo "$id $target" > $pin
+			rm -f $pin.miss
 			return 0
 		fi
 	done
 	log "wifi: no association on $target MHz in 30 s; back to every band for 30 minutes"
 	$w set_network "$id" freq_list "" >/dev/null 2>&1
 	$w reassociate >/dev/null 2>&1
+	rm -f $pin $pin.miss
 	echo $((now + 1800)) > /run/techo5/prefer5-after
 }
 

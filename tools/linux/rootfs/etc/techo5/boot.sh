@@ -136,12 +136,15 @@ t5_bt_up "$BT_MODULE" /var/log
 # --- Network keeper: bring Wi-Fi back if it is gone, and reboot after 15 minutes
 # without an address — an unattended unit must never sit unreachable.
 (
-	down=0
+	down=0; lost=0
 	while true; do
 		sleep 60
 		# Someone is choosing a network on the screen: not a fault, no reboot.
-		[ -e /run/techo5/wifi-setup ] && { down=0; continue; }
-		if [ -n "$(t5_ip)" ]; then
+		[ -e /run/techo5/wifi-setup ] && { down=0; lost=0; continue; }
+		# A lease stays on wlan0 after the link is lost, until it runs out, hours later: an address
+		# is not a network. Not associated for three minutes in a row counts as down (#111).
+		if t5_wifi_joined; then lost=0; else lost=$((lost+1)); fi
+		if [ -n "$(t5_ip)" ] && [ $lost -lt 3 ]; then
 			down=0
 			# An address without a default route is the aftermath of the link bouncing:
 			# udhcpc does not put the route back. Renewing the lease does.
@@ -175,13 +178,19 @@ t5_bt_up "$BT_MODULE" /var/log
 			continue
 		fi
 		down=$((down+1))
-		log "network: no address for $down min"
+		if [ $lost -ge 3 ]; then
+			log "network: not associated for $lost min, down for $down"
+		else
+			log "network: no address for $down min"
+		fi
 		if [ $down -ge 15 ]; then
 			log "network: rebooting"
 			sync
 			reboot
 		fi
 		killall udhcpc wpa_supplicant 2>/dev/null
+		# A new supplicant has no channel pin (t5_wifi_prefer5).
+		rm -f /run/techo5/prefer5-pin /run/techo5/prefer5-pin.miss
 		# Gone before it is started again: t5_wifi_up starts one only when none is running, and
 		# one still on its way out counts.
 		n=0; while [ $n -lt 10 ] && pidof wpa_supplicant >/dev/null; do sleep 1; n=$((n+1)); done
