@@ -1590,6 +1590,10 @@ func (d *Display) wifiTap(x, y int) {
 	d.mu.Lock()
 	w := d.wifi
 	d.mu.Unlock()
+	if w.addr != nil {
+		d.addressTap(x, y)
+		return
+	}
 	if w.pick != nil {
 		d.wifiKey(d.r.keyAt(x, y, w.symbols))
 		return
@@ -2012,8 +2016,16 @@ func (d *Display) frame() time.Duration {
 	d.mu.Lock()
 	s.showSheet = d.sheet
 	s.pin = pinNow(now)
-	relockOnClose(s.showSheet)
+	// The network address page is one of the settings, opened from them and going back to them: the
+	// lock stays open behind it.
+	relockOnClose(s.showSheet || (d.wifiOpen && d.wifi.addr != nil))
 	s.showWifi, s.wifi = d.wifiOpen, d.wifi
+	if d.wifi.addr != nil {
+		// The page's form as it is now: the taps and the change running in the background write it
+		// under the lock, and the frame is drawn without it.
+		form := *d.wifi.addr
+		s.wifi.addr = &form
+	}
 	restartArm := d.restartArm
 	wifiAt := d.wifiAt
 	d.mu.Unlock()

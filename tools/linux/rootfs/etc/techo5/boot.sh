@@ -147,11 +147,16 @@ t5_bt_up "$BT_MODULE" /var/log
 		if [ -n "$(t5_ip)" ] && [ $lost -lt 3 ]; then
 			down=0
 			# An address without a default route is the aftermath of the link bouncing:
-			# udhcpc does not put the route back. Renewing the lease does.
+			# udhcpc does not put the route back. Renewing the lease does, and techo5-net
+			# puts a fixed address's route back the same way.
 			if ! ip route show default 2>/dev/null | grep -q default; then
 				log "network: address but no default route; renewing the lease"
-				killall udhcpc 2>/dev/null
-				udhcpc -i wlan0 -b -R -t 10 -p /run/udhcpc.pid -s "${UDHCPC_SCRIPT:-/usr/share/udhcpc/default.script}" > /tmp/udhcpc.log 2>&1
+				if [ -x /usr/local/sbin/techo5-net ]; then
+					/usr/local/sbin/techo5-net renew
+				else
+					killall udhcpc 2>/dev/null
+					udhcpc -i wlan0 -b -R -t 10 -p /run/udhcpc.pid -s "${UDHCPC_SCRIPT:-/usr/share/udhcpc/default.script}" > /tmp/udhcpc.log 2>&1
+				fi
 			fi
 			# The clock is set once there is an address. When Wi-Fi takes longer than the boot
 			# script to come up, that happens here: without it the clock stays years behind,
@@ -166,6 +171,10 @@ t5_bt_up "$BT_MODULE" /var/log
 				t5_ntp
 				ntpd $(t5_ntp_peers) > /dev/null 2>&1
 			fi
+			# A fixed address whose gateway stays silent gives way to DHCP for the session
+			# (techo5-net check): without it, a device whose router moved to another subnet, or
+			# whose supplicant hung, would keep an address and a route and never be noticed.
+			[ -x /usr/local/sbin/techo5-net ] && /usr/local/sbin/techo5-net check
 			t5_wifi_prefer5
 			continue
 		fi

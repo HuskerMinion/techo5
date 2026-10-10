@@ -86,6 +86,59 @@ data:
   confirm: leave
 ```
 
+## Set the network address
+
+In YAML, refer to this action as `esphome.<node>_network_address`.
+
+Sets how the device gets its address on Wi-Fi: from the router (DHCP), or fixed. It is the
+**Connections → Network address** setting of the setup page, explained in
+[Setting it up](setup.md#9-a-fixed-address). The device answers first and changes its address two
+seconds later.
+
+A new fixed address is tried before it is kept: if another device answers for it, or the gateway does
+not answer from it, the device keeps the setting it had, and the setup page says why. Calling it with
+the setting already in use changes nothing. Home Assistant follows the device to its new address by
+itself, about two minutes after the change. The device's IP address sensor shows the address in use.
+The action is there only on an image that can set an address.
+
+### address (Required)
+
+*string*
+
+The address, like `192.168.1.50`, or with its prefix, like `192.168.1.50/24` (`/24` when left out).
+Empty switches back to DHCP, and the other two are then ignored.
+
+### gateway (Required)
+
+*string*
+
+The router, like `192.168.1.1`. It must be in the address's network. Empty when `address` is empty.
+
+### dns (Required)
+
+*string*
+
+Up to three DNS servers, separated by commas. Empty uses the gateway, and is ignored when `address`
+is empty. All three empty switches the device to DHCP.
+
+```yaml
+action: esphome.office_network_address
+data:
+  address: 192.168.1.50/24
+  gateway: 192.168.1.1
+  dns: ""
+```
+
+Back to DHCP:
+
+```yaml
+action: esphome.office_network_address
+data:
+  address: ""
+  gateway: ""
+  dns: ""
+```
+
 ## Set an alarm
 
 In YAML, refer to this action as `esphome.<node>_alarm_set`.

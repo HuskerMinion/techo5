@@ -285,7 +285,11 @@ t5_wifi_up() {
 		log "wifi: not associated ($(wpa_cli -p /run/wpa -i wlan0 status 2>/dev/null | grep wpa_state))"
 		return 1
 	fi
-	if ! pidof udhcpc >/dev/null; then
+	# The address: fixed when the setting says so (techo5-net, which falls back to DHCP if the fixed
+	# one does not work), else a lease.
+	if [ -x /usr/local/sbin/techo5-net ]; then
+		/usr/local/sbin/techo5-net up
+	elif ! pidof udhcpc >/dev/null; then
 		udhcpc -i wlan0 -b -R -t 10 -p /run/udhcpc.pid -s "${UDHCPC_SCRIPT:-/usr/share/udhcpc/default.script}" > /tmp/udhcpc.log 2>&1
 	fi
 	n=0; while [ $n -lt 30 ]; do

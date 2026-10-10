@@ -273,6 +273,9 @@ func connectionRows(sv sheetView) []settingRow {
 		wifiRow.sub = "No address yet"
 	}
 	rows := []settingRow{wifiRow}
+	if st.addressSet != "" {
+		rows = append(rows, settingRow{id: "address", label: "Network address", sub: st.addressSet, kind: ctlButton, button: "Change"})
+	}
 	switch {
 	case !bt.Available:
 		rows = append(rows, settingRow{label: "Bluetooth audio", sub: "Not available on this build", kind: ctlValue})

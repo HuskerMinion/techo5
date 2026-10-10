@@ -61,6 +61,7 @@ type settings struct {
 	wifi        string
 	wifiName    string // the network joined, or what the Wi-Fi is doing
 	wifiOK      bool   // Wi-Fi is managed here, so it can be changed
+	addressSet  string // how the address is set, for its row; empty where the screen cannot change it
 	btProxy     bool
 	checking    bool       // an update check from the screen is out
 	colors      bool       // the custom colors editor is open
