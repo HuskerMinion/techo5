@@ -9,6 +9,7 @@ import (
 
 	"github.com/HuskerMinion/techo5/echod/internal/component"
 	"github.com/HuskerMinion/techo5/echod/internal/config"
+	"github.com/HuskerMinion/techo5/echod/internal/lib/safe"
 )
 
 // What Home Assistant is told about a ring. On means a ring is active, not that it is audible: one a
@@ -39,7 +40,10 @@ func (soundingFeature) Entities() []esphome.Entity {
 	return []esphome.Entity{sounding, alarmSounding, timerSounding, soundingWhat}
 }
 
-func (soundingFeature) Restore(config.Config) { publish(nil) }
+// Restore has the sensors written from whatever is ringing, which at start-up is nothing: they read
+// off rather than unknown. It asks the publisher rather than writing, so a restore that ran while a
+// ring was active would leave the sensors on.
+func (soundingFeature) Restore(config.Config) { poke() }
 
 func init() { component.Register(component.Device, soundingFeature{}, component.Order(34)) }
 
@@ -59,28 +63,60 @@ func (r *activeRing) says() string {
 	return r.what + ` "` + r.label + `"`
 }
 
-// begin puts a ring on the sensors and returns the call that takes it off. Called with no lock of
-// the bell's held: setting a sensor only records state and tells Home Assistant, and must never be
-// able to hold up a ring or its stop.
+// begin puts a ring on the sensors and returns the call that takes it off. It only changes the list
+// and tells the publisher; it never writes a sensor itself. Writing one sends to every Home Assistant
+// connection and can wait on a dead one for as long as the connection's write timeout, and the alarm
+// and the timer call Start with their own locks held, so a write here would hold up a ring starting,
+// and the Stop that waits on the same lock.
 func begin(what, label string) (leave func()) {
 	r := &activeRing{what: what, label: label}
 	active.mu.Lock()
-	defer active.mu.Unlock()
 	active.list = append(active.list, r)
-	publish(active.list)
+	active.mu.Unlock()
+	poke()
 
 	var once sync.Once
 	return func() {
 		once.Do(func() {
 			active.mu.Lock()
-			defer active.mu.Unlock()
 			active.list = slices.DeleteFunc(active.list, func(x *activeRing) bool { return x == r })
-			publish(active.list)
+			active.mu.Unlock()
+			poke()
 		})
 	}
 }
 
-// publish writes the sensors from the rings given; active.mu is held, or there is nothing to race.
+var (
+	// wake has room for one: a burst of changes is one write of the latest list, not one each.
+	wake      = make(chan struct{}, 1)
+	publisher sync.Once
+)
+
+// poke asks the publisher to write the sensors from the list as it is by then.
+func poke() {
+	publisher.Do(func() { safe.Go("sounding sensors", publishLoop) })
+	select {
+	case wake <- struct{}{}:
+	default:
+	}
+}
+
+// publishLoop is the only thing that writes the sensors, so nothing on the ring path waits on the
+// network. It writes the latest list each time, so the sensors end up right however many changes
+// were folded together or however long one write took.
+func publishLoop() {
+	for range wake {
+		active.mu.Lock()
+		list, set := slices.Clone(active.list), setSensors
+		active.mu.Unlock()
+		set(list)
+	}
+}
+
+// setSensors is what the sensors are written with, read and replaced under active.mu.
+var setSensors = publish
+
+// publish writes the sensors from the rings given. Only the publisher calls it, with no lock held.
 func publish(list []*activeRing) {
 	var alarm, timer bool
 	says := make([]string, 0, len(list))
