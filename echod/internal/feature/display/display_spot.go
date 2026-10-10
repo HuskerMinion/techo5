@@ -47,6 +47,7 @@ import (
 	"github.com/HuskerMinion/techo5/echod/internal/feature/home"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/media"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/mute"
+	"github.com/HuskerMinion/techo5/echod/internal/feature/notify"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/phone"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/presence"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/remind"
@@ -312,6 +313,8 @@ func build() *Display {
 	timer.Get().Changed.Listen(func(struct{}) { d.ringLights() })
 	alarm.Get().Changed.Listen(func(struct{}) { d.ringLights() })
 	remind.Get().Changed.Listen(func(struct{}) { d.reminderLights() })
+	notify.Get().Changed.Listen(func(struct{}) { d.notifyLights() })
+	notify.SetNight(inNight)
 	home.Get().Changed.Listen(func(struct{}) { d.wake() })
 	d.watchRoom()
 	talkback.Get().Changed.Listen(func(struct{}) { d.wake() })
@@ -625,6 +628,14 @@ func (d *Display) gesture(g touch.Gesture) {
 		d.wake()
 		return
 	}
+	// A notification takes the face too: a tap puts it away and tells Home Assistant.
+	if _, up := notify.Get().Card(); up {
+		if g.Kind == touch.Tap {
+			go notify.Get().Dismiss()
+		}
+		d.wake()
+		return
+	}
 	// The alert face takes every gesture while it is up.
 	if d.alertUpSpot() {
 		d.alertGestureSpot(g)
@@ -664,13 +675,19 @@ func (d *Display) gesture(g touch.Gesture) {
 				go talkback.Get().Toggle(v.Entity)
 				return
 			}
-			go home.Get().HideCamera()
+			go closeCamera(v)
 			return
 		case touch.SwipeLeft:
-			go stepCamera(v.Entity, +1)
+			// A captioned view is a notification's, and stepping to the next camera would replace it
+			// without a word to Home Assistant; it stays, and a tap still dismisses it.
+			if v.Caption == nil {
+				go stepCamera(v.Entity, +1)
+			}
 			return
 		case touch.SwipeRight:
-			go stepCamera(v.Entity, -1)
+			if v.Caption == nil {
+				go stepCamera(v.Entity, -1)
+			}
 			return
 		case touch.Hold:
 			d.mu.Lock()
@@ -1223,9 +1240,10 @@ func (d *Display) frame() time.Duration {
 	d.mu.Unlock()
 
 	_, reminding := remind.Get().Showing()
+	_, notifying := notify.Get().Showing()
 	vs := video.Get().State()
 	busy := view.Phase != "idle" || sheetOpen || ringingNow(now).any() || phone.Get().Busy() || pinIsOpen() ||
-		sunriseProgress(now) > 0 || setup.Get().Waiting() || reminding || vs.Active()
+		sunriseProgress(now) > 0 || setup.Get().Waiting() || reminding || notifying || vs.Active()
 	if d.awayTick(now, on, busy, inNight(now)) {
 		d.mu.Lock()
 		on = d.on
@@ -1359,6 +1377,7 @@ func (d *Display) frame() time.Duration {
 	s.announcePeers = len(announce.Peers())
 	s.announcement, s.showAnnouncement = announce.Get().Showing()
 	s.reminder, s.showReminder = remind.Get().Showing()
+	s.notification, s.showNotification = notify.Get().Card()
 	if s.reminder.From != config.Get().Device.Name {
 		s.reminderFrom = s.reminder.From
 	}
@@ -1465,7 +1484,7 @@ func (d *Display) frame() time.Duration {
 	case d.r.artDrawn:
 		return artFxFrame // rain or snow is falling over the weather art on the screen
 	case s.eq != nil && !s.showVolume && !s.menuOpen && !s.sheetOpen && !s.showCamera && s.call.Phase == phone.Idle &&
-		!s.ringing.any() && !s.setupAsking && !s.announceRecording && !s.showReminder && !s.showAnnouncement &&
+		!s.ringing.any() && !s.setupAsking && !s.announceRecording && !s.showReminder && !s.showAnnouncement && !s.showNotification &&
 		!s.showAlert && !(s.phase == "lingering" && s.eq.quiet):
 		if s.eq.wave {
 			return waveFrame

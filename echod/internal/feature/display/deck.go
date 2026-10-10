@@ -85,7 +85,7 @@ func (d *Display) onClock() bool {
 // with the same key look the same.
 func deckFrameKey(s scene, ringing, calling bool) string {
 	if !s.showDeck || s.showVideo || s.showVideoAsk || s.showVolume || ringing || calling || s.setupAsking || s.showAnnouncement ||
-		s.showReminder || s.popup != nil || s.bt.Pairing || s.pin.open || s.redClock || s.announceRecording {
+		s.showReminder || s.showNotification || s.popup != nil || s.bt.Pairing || s.pin.open || s.redClock || s.announceRecording {
 		return ""
 	}
 	// The colors too: the deck is drawn in the theme's, and a change from the setup page (a custom

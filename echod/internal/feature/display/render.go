@@ -24,6 +24,7 @@ import (
 	"github.com/HuskerMinion/techo5/echod/internal/feature/dashboard"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/home"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/media"
+	"github.com/HuskerMinion/techo5/echod/internal/feature/notify"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/phone"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/remind"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/security"
@@ -156,6 +157,11 @@ type scene struct {
 	cameraSound     bool
 	cameraSoundLive bool
 	cameras         []config.Camera
+
+	// notification is a notification of words from Home Assistant (feature/notify), with
+	// showNotification saying one is up; a picture notification is the camera page instead.
+	notification     notify.Notification
+	showNotification bool
 
 	// talkOffered is whether that view has Talk (feature/talkback), and talk is where a talk is.
 	talkOffered bool
@@ -442,10 +448,10 @@ func (r *renderer) draw(s scene) {
 	r.clearAlertTaps()
 	// The red night clock is the whole screen: nothing else, not even the header, is drawn over it,
 	// and it stays up while an alarm or a timer rings (a tap on it stops the ring). A call has lifted
-	// the night light and takes the screen; a turn, a camera, an announcement or a reminder is shown in
+	// the night light and takes the screen; a turn, a camera, an announcement, a reminder or a notification is shown in
 	// its place at the night light's level.
 	if s.redClock && s.phase == "idle" && s.call.Phase == phone.Idle && !s.setupAsking && !s.showVideoAsk &&
-		!s.showWifi && !s.bt.Pairing && !s.showCamera && !s.showAnnouncement && !s.showReminder {
+		!s.showWifi && !s.bt.Pairing && !s.showCamera && !s.showAnnouncement && !s.showReminder && !s.showNotification {
 		r.redClockPage(s)
 		return
 	}
@@ -503,9 +509,12 @@ func (r *renderer) draw(s scene) {
 			r.announcementStrip(s)
 		}
 		// The card is in the middle and the strips along the bottom, so a reminder and an
-		// announcement can both be up at once.
+		// announcement can both be up at once. One card at a time: a reminder over a notification
+		// over an event's pop-up.
 		if s.showReminder {
 			r.reminderCard(s)
+		} else if s.showNotification {
+			r.notifyCard(s)
 		} else if s.popup != nil {
 			r.popupCard(s, *s.popup)
 		}

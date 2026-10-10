@@ -20,6 +20,7 @@ import (
 	"github.com/HuskerMinion/techo5/echod/internal/feature/announce"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/dashboard"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/home"
+	"github.com/HuskerMinion/techo5/echod/internal/feature/notify"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/phone"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/remind"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/talkback"
@@ -178,6 +179,11 @@ type roundScene struct {
 	showReminder   bool
 	reminderFrom   string
 	reminderScroll int
+
+	// notification is a notification of words from Home Assistant (feature/notify), with
+	// showNotification saying one is up; a picture notification is the camera face instead.
+	notification     notify.Notification
+	showNotification bool
 
 	// alerts are the weather alerts at home and nearby (the clock's pill, the rain map's pill and
 	// shapes); showAlert is the alert face, on alertIdx of them, scrolled alertScroll lines.
@@ -350,6 +356,11 @@ func (r *roundRenderer) draw(s roundScene) {
 	}
 	if s.showAnnouncement {
 		r.announceFace(s)
+		return
+	}
+	// A notification takes the face as an announcement does, under it and under a reminder.
+	if s.showNotification {
+		r.notifyFace(s)
 		return
 	}
 	// Under a camera: one shown by Home Assistant (a doorbell) comes up over an alert already up.
