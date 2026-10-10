@@ -70,7 +70,7 @@ func (a Adjust) Snap(v float64) float64 {
 type Action struct {
 	Entity  string         // the entity a toggle or service is about
 	Service string         // "light.toggle"; empty for none
-	Data    map[string]any // the service's data, with entity_id added when it has none
+	Data    map[string]any // the service's data, with entity_id added when it has none (serviceData)
 	View    string         // a dashboard view to go to instead, as a path: "home-refresh/climate"
 }
 
@@ -276,13 +276,7 @@ func (f *Feature) Tap(a Action) {
 	if !ok {
 		return
 	}
-	data := map[string]any{}
-	for k, v := range a.Data {
-		data[k] = v
-	}
-	if _, has := data["entity_id"]; !has && a.Entity != "" {
-		data["entity_id"] = a.Entity
-	}
+	data := serviceData(a)
 	// A media player's play or pause, next and back reach the whole group when Music Assistant plays
 	// there (transportTo). Which player that is takes a look at Home Assistant, so it is worked out with
 	// the call, off the goroutine the finger is on. Only the tile's own player is routed: a card that
@@ -304,6 +298,21 @@ func (f *Feature) Tap(a Action) {
 		p = &pending{flip: true}
 	}
 	s.callVia(a.Entity, domain, service, data, p, route)
+}
+
+// serviceData is what a tap's service is called with: the card's data and target, and the card's
+// entity as the target when it names none. Not for an ESPHome device's own action
+// (esphome.<node>_home_show_camera, say): it takes no entity, refuses any argument it does not have,
+// and a picture of a camera whose tap showed that camera on a device failed with entity_id added.
+func serviceData(a Action) map[string]any {
+	data := map[string]any{}
+	for k, v := range a.Data {
+		data[k] = v
+	}
+	if _, has := data["entity_id"]; !has && a.Entity != "" && !strings.HasPrefix(a.Service, "esphome.") {
+		data["entity_id"] = a.Entity
+	}
+	return data
 }
 
 // SetLevel sets a tile's level to v: a light's brightness, a cover's position, a thermostat's
