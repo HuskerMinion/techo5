@@ -15,7 +15,12 @@
 # (HTTP, HTTPS, TCP, TLS, HLS, crypto for AES HLS, and httpproxy for the daemon's guard proxy, which a
 # device whose kernel cannot fence the decoder sends everything through) and pipe for its output. There is no file protocol
 # at all: nothing a stream or a playlist names can make it read a file on the device, whatever its
-# protocol whitelist says. udp is in only because ffmpeg 8's TLS code links against it. The libraries
+# protocol whitelist says. udp is in only because ffmpeg 8's TLS code links against it. RTSP (the demuxer,
+# the rtp protocol it reads a stream with, and G.711, the sound many cameras send over it) is for a camera
+# whose RTSP addresses the device knows (feature/home, camera_stream.go): its sound from the one it talks
+# back through, its picture from one given for it, read straight from the camera and live, where Home
+# Assistant's HLS of the same camera is a keyframe interval and more behind it. Only where the kernel
+# fences the decoder: RTSP does not go through the guard's proxy. The libraries
 # are static; only musl, libssl.so.3, libcrypto.so.3 and libz.so.1 (all in the rootfs) are shared.
 #
 # The source is ffmpeg's release tarball, checked against the SHA-256 below (taken from the tarball
@@ -68,10 +73,10 @@ FLAGS="--arch=arm --cpu=cortex-a53 --enable-neon \
 	--enable-static --disable-shared --enable-pthreads \
 	--enable-openssl --enable-zlib --enable-network \
 	--enable-swscale --enable-swresample --enable-avfilter \
-	--enable-decoder=h264,mpeg4,aac,aac_latm,mp3float,opus,ac3,eac3 \
-	--enable-demuxer=mov,matroska,mpegts,hls,aac,mp3,ogg,wav \
+	--enable-decoder=h264,mpeg4,aac,aac_latm,mp3float,opus,ac3,eac3,pcm_mulaw,pcm_alaw \
+	--enable-demuxer=mov,matroska,mpegts,hls,aac,mp3,ogg,wav,rtsp \
 	--enable-parser=h264,mpeg4video,aac,aac_latm,mpegaudio,opus,ac3 \
-	--enable-protocol=pipe,http,https,httpproxy,tcp,udp,tls,hls,crypto \
+	--enable-protocol=pipe,http,https,httpproxy,tcp,udp,tls,hls,crypto,rtp \
 	--enable-muxer=rawvideo,pcm_s16le,null \
 	--enable-encoder=rawvideo,pcm_s16le,wrapped_avframe \
 	--enable-filter=scale,format,transpose,pad,fps,hflip,vflip,null,anull,aresample,aformat,acompressor,alimiter"

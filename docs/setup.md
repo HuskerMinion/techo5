@@ -100,6 +100,15 @@ Home Assistant and sent back was some twenty seconds. A stream with no sound in 
 Assistant's way. A camera's sub stream (often called *fluent* or *sub*) is the better choice: it is
 sharper than the panel needs anyway, starts sooner and costs less.
 
+Where the image's decoder reads RTSP, a camera given an RTSP address for talking through it (below) is
+heard from that address instead: live, a word said at the device comes back out of it through a
+doorbell's own microphone in two to three seconds, against eight from the stream. A camera's picture
+can be read from its own address too, beside the talking one on the setup page: give it a stream about
+the screen's size (for a Reolink, `rtsp://<address>:554/h264Preview_01_sub`). Both use the cameras'
+login, so both need **Talk through cameras** allowed. Where an address cannot be read, the device falls
+back to Home Assistant's stream, and on a device whose kernel cannot keep the decoder off its own
+network (the Spot) it uses that stream only.
+
 ### Talking through a camera
 
 On the Show and the Spot, **Talk** on the camera page sends the device's microphones to the camera's

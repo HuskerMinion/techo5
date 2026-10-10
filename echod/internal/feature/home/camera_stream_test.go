@@ -27,33 +27,41 @@ func TestACameraWithAStreamIsHeardFromIt(t *testing.T) {
 	env := fake.env()
 	calls := 0
 	env.call = func(string, string) error { calls++; return nil }
-	prev := streamedSound
-	streamedSound = func(entity string) func(context.Context) (io.ReadCloser, error) {
+	type opener = func(context.Context) (io.ReadCloser, error)
+	sound := func(context.Context) (io.ReadCloser, error) { return io.NopCloser(strings.NewReader("pcm")), nil }
+	silent := func(context.Context) (io.ReadCloser, error) { return io.NopCloser(strings.NewReader("")), nil } // ffmpeg ends at once
+	refused := func(context.Context) (io.ReadCloser, error) { return nil, errors.New("refused") }
+	prev := soundSources
+	soundSources = func(entity string) []opener {
 		switch entity {
 		case "camera.porch":
-			return func(context.Context) (io.ReadCloser, error) { return io.NopCloser(strings.NewReader("pcm")), nil }
-		case "camera.yard": // a stream with no sound in it: ffmpeg ends at once
-			return func(context.Context) (io.ReadCloser, error) { return io.NopCloser(strings.NewReader("")), nil }
-		case "camera.gate": // one that cannot be opened
-			return func(context.Context) (io.ReadCloser, error) { return nil, errors.New("refused") }
+			return []opener{sound}
+		case "camera.door": // its RTSP address refuses the login; its HLS stream has sound
+			return []opener{refused, sound}
+		case "camera.yard": // a stream with no sound in it
+			return []opener{silent}
+		case "camera.gate": // neither way can be opened
+			return []opener{refused, refused}
 		}
 		return nil
 	}
-	t.Cleanup(func() { streamedSound = prev })
+	t.Cleanup(func() { soundSources = prev })
 
 	f := &Feature{}
-	streamed := env.player.Ask()
-	f.askCameraSound("camera.porch", streamed, env)
-	if !slices.Equal(answered, []media.OverToken{streamed}) || calls != 0 {
-		t.Errorf("a camera with a stream: answered %v, Home Assistant asked %d times", answered, calls)
-	}
-	if !slices.Contains(fake.settledTokens, streamed) {
-		t.Error("the streamed ask was never settled")
+	for _, entity := range []string{"camera.porch", "camera.door"} {
+		tk := env.player.Ask()
+		f.askCameraSound(entity, tk, env)
+		if answered[len(answered)-1] != tk || calls != 0 {
+			t.Errorf("%s: answered %v, Home Assistant asked %d times", entity, answered, calls)
+		}
+		if !slices.Contains(fake.settledTokens, tk) {
+			t.Errorf("%s: the ask was never settled", entity)
+		}
 	}
 
 	for i, entity := range []string{"camera.garage", "camera.yard", "camera.gate"} {
 		f.askCameraSound(entity, env.player.Ask(), env)
-		if len(answered) != 1 || calls != i+1 {
+		if len(answered) != 2 || calls != i+1 {
 			t.Errorf("%s: answered %v, Home Assistant asked %d times", entity, answered, calls)
 		}
 	}

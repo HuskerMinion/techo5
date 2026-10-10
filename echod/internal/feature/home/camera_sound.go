@@ -191,17 +191,19 @@ func (f *Feature) askCameraSound(entity string, token media.OverToken, env sound
 	// nothing: a stream with no sound in it, or one that cannot be read, would otherwise leave the view
 	// silent where camera.play_stream had sound.
 	if env.player.Answer != nil {
-		if open := streamedSound(entity); open != nil {
+		for i, open := range soundSources(entity) {
 			src, why := startSound(open)
 			if src == nil {
-				slog.Info("camera sound: none from its stream, asking Home Assistant", "entity", entity, "why", why)
-			} else if env.player.Answer(token, func(context.Context) (io.ReadCloser, error) { return src, nil }) {
-				slog.Info("camera sound on, from its stream", "entity", entity)
+				slog.Info("camera sound: none this way, trying the next", "entity", entity, "way", i+1, "why", why)
+				continue
+			}
+			if env.player.Answer(token, func(context.Context) (io.ReadCloser, error) { return src, nil }) {
+				slog.Info("camera sound on, decoded here", "entity", entity, "way", i+1)
 				env.player.Settled(token)
 				return
-			} else {
-				src.Close()
 			}
+			src.Close()
+			break
 		}
 	}
 	err := env.call(entity, speakerEntity())

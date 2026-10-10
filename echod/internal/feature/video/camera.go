@@ -3,13 +3,17 @@
 package video
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
 	"image"
 	"io"
+	"net/url"
+	"os"
 	"regexp"
 	"strconv"
+	"sync"
 	"time"
 
 	"github.com/HuskerMinion/techo5/echod/internal/config"
@@ -144,4 +148,130 @@ func CameraLiveChanged() {
 	if !guardAllowed() {
 		closeGuard()
 	}
+}
+
+// CanRTSP is whether this image's decoder reads RTSP. An image built before it did has no RTSP demuxer,
+// and a camera asked of it over RTSP would be nothing at all. Read once from the decoder itself: the
+// RTSP demuxer's own option name is in it only when the demuxer is.
+func CanRTSP() bool {
+	rtspOnce.Do(func() {
+		b, err := os.ReadFile(decoderPath())
+		rtspOK = err == nil && bytes.Contains(b, []byte("rtsp_transport"))
+	})
+	return rtspOK
+}
+
+var (
+	rtspOnce sync.Once
+	rtspOK   bool
+)
+
+// rtspFence is whether a decoder reading RTSP can be kept off the device's own network. RTSP does not
+// go through the guard's HTTP proxy, so only the kernel's fence (fence.go) will do; where it cannot
+// hold (the Spot), a camera is read through Home Assistant's HLS instead.
+func rtspFence(ctx context.Context) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	if !guardAllowed() {
+		return ErrOff
+	}
+	cred, err := decoderCred()
+	if err != nil {
+		return err
+	}
+	if cred == nil {
+		return nil // the tests' stand-in
+	}
+	return fence(cred.Uid)
+}
+
+// rtspURL is a camera's RTSP address with its login: the address's own when it has one, else user and
+// pass, as config.TalkBack says.
+func rtspURL(addr, user, pass string) (string, error) {
+	u, err := url.Parse(addr)
+	if err != nil || u.Scheme != "rtsp" || u.Host == "" {
+		return "", errors.New("video: not an rtsp:// address")
+	}
+	if u.User == nil && user != "" {
+		u.User = url.UserPassword(user, pass)
+	}
+	return u.String(), nil
+}
+
+// rtspInput is how a camera is read over RTSP: one track of it, over the RTSP connection itself,
+// nothing held back to look at first. A live camera sets its own pace, so there is no -re. The address
+// carries the login: it is an argument to the decoder, which runs as its own user, and is never logged.
+func rtspInput(track string) []string {
+	return []string{"-protocol_whitelist", "rtsp,rtp,tcp,udp",
+		"-rtsp_transport", "tcp", "-allowed_media_types", track, "-timeout", "15000000",
+		"-fflags", "nobuffer", "-flags", "low_delay", "-probesize", "500000", "-analyzeduration", "0"}
+}
+
+// cameraRTSPArgs reads a camera's picture straight from its RTSP address: the video track alone, fitted
+// into w×h and made the page's pixels.
+func cameraRTSPArgs(addr string, w, h int) []string {
+	a := []string{"-hide_banner", "-nostdin", "-loglevel", "error", "-max_pixels", maxPixels}
+	a = append(a, rtspInput("video")...)
+	a = append(a, "-threads", strconv.Itoa(threads(h)), "-i", addr,
+		"-map", "0:v:0", "-an", "-sn", "-dn",
+		"-vf", fitFilter(w, h), "-fps_mode", "passthrough",
+		"-f", "rawvideo", "-pix_fmt", "rgba", "pipe:3")
+	return a
+}
+
+// cameraSoundRTSPArgs reads a camera's sound straight from its RTSP address: the audio track alone, the
+// camera not asked for its picture at all, as the speaker's samples.
+func cameraSoundRTSPArgs(addr string) []string {
+	a := []string{"-hide_banner", "-nostdin", "-loglevel", "error"}
+	a = append(a, rtspInput("audio")...)
+	a = append(a, "-i", addr,
+		"-map", "0:a:0", "-vn", "-sn", "-dn",
+		"-af", "aresample="+strconv.Itoa(soundRate)+":async=1",
+		"-ac", strconv.Itoa(soundChannels), "-ar", strconv.Itoa(soundRate),
+		"-f", "s16le", "pipe:3")
+	return a
+}
+
+// OpenCameraRTSP starts decoding a camera's picture from its RTSP address into w×h frames, where the
+// decoder reads RTSP and the fence holds. Close ends it.
+func OpenCameraRTSP(ctx context.Context, addr, user, pass string, w, h int) (*Camera, error) {
+	if w <= 0 || h <= 0 || w&1 != 0 || h&1 != 0 {
+		return nil, fmt.Errorf("video: a camera picture of %dx%d", w, h)
+	}
+	if !Installed() || !CanRTSP() {
+		return nil, errors.New("video: this image's decoder does not read RTSP")
+	}
+	if err := rtspFence(ctx); err != nil {
+		return nil, err
+	}
+	u, err := rtspURL(addr, user, pass)
+	if err != nil {
+		return nil, err
+	}
+	d, err := start(ctx, cameraRTSPArgs(u, w, h), true, false)
+	if err != nil {
+		return nil, err
+	}
+	return &Camera{d: d, w: w, h: h}, nil
+}
+
+// OpenCameraSoundRTSP starts decoding a camera's sound from its RTSP address, for the speaker, where the
+// decoder reads RTSP and the fence holds; ctx ending, or Close, ends it.
+func OpenCameraSoundRTSP(ctx context.Context, addr, user, pass string) (io.ReadCloser, error) {
+	if !Installed() || !CanRTSP() {
+		return nil, errors.New("video: this image's decoder does not read RTSP")
+	}
+	if err := rtspFence(ctx); err != nil {
+		return nil, err
+	}
+	u, err := rtspURL(addr, user, pass)
+	if err != nil {
+		return nil, err
+	}
+	d, err := start(ctx, cameraSoundRTSPArgs(u), true, false)
+	if err != nil {
+		return nil, err
+	}
+	return cameraSound{d}, nil
 }

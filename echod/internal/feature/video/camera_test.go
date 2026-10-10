@@ -102,3 +102,62 @@ func TestATokenIsNotLogged(t *testing.T) {
 		t.Errorf("logged as %q", got)
 	}
 }
+
+// A camera read over RTSP is asked for one track alone, over the RTSP connection, nothing held back, at
+// its own pace, and the decoder may open nothing but RTSP and what RTSP runs on.
+func TestACameraOverRTSP(t *testing.T) {
+	addr := "rtsp://viewer:secret@192.0.2.20:554/stream1"
+	for _, c := range []struct {
+		name string
+		a    []string
+		want [][]string
+	}{
+		{"picture", cameraRTSPArgs(addr, 640, 480), [][]string{
+			{"-allowed_media_types", "video"}, {"-threads", "2"}, {"-map", "0:v:0", "-an"},
+			{"-max_pixels", "2088960"}, {"-f", "rawvideo", "-pix_fmt", "rgba", "pipe:3"},
+		}},
+		{"sound", cameraSoundRTSPArgs(addr), [][]string{
+			{"-allowed_media_types", "audio"}, {"-map", "0:a:0", "-vn"},
+			{"-ac", "2", "-ar", "48000", "-f", "s16le", "pipe:3"},
+		}},
+	} {
+		has := func(seq ...string) bool {
+			for i := 0; i+len(seq) <= len(c.a); i++ {
+				if slices.Equal(c.a[i:i+len(seq)], seq) {
+					return true
+				}
+			}
+			return false
+		}
+		for _, seq := range append(c.want, []string{"-protocol_whitelist", "rtsp,rtp,tcp,udp"},
+			[]string{"-rtsp_transport", "tcp"}, []string{"-fflags", "nobuffer"}, []string{"-i", addr}) {
+			if !has(seq...) {
+				t.Errorf("%s: no %q in %q", c.name, seq, c.a)
+			}
+		}
+		in := slices.Index(c.a, "-i")
+		for _, opt := range []string{"-protocol_whitelist", "-rtsp_transport", "-allowed_media_types", "-fflags"} {
+			if slices.Index(c.a, opt) > in {
+				t.Errorf("%s: %s is after the input", c.name, opt)
+			}
+		}
+		if slices.Contains(c.a, "-re") {
+			t.Errorf("%s: a live camera held to its own pace", c.name)
+		}
+	}
+}
+
+// A login in a camera's address is the one it is read with; one without gets the shared login.
+func TestALoginInTheAddressWins(t *testing.T) {
+	for _, c := range []struct{ addr, want string }{
+		{"rtsp://192.0.2.20:554/s", "rtsp://admin:shared@192.0.2.20:554/s"},
+		{"rtsp://own:pw@192.0.2.20:554/s", "rtsp://own:pw@192.0.2.20:554/s"},
+	} {
+		if got, err := rtspURL(c.addr, "admin", "shared"); err != nil || got != c.want {
+			t.Errorf("%s: %q (%v), want %q", c.addr, got, err, c.want)
+		}
+	}
+	if _, err := rtspURL("http://192.0.2.20/s", "admin", "x"); err == nil {
+		t.Error("an http address taken for RTSP")
+	}
+}

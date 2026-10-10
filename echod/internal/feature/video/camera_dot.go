@@ -18,3 +18,10 @@ func (*Camera) Close()                                              {}
 
 func OpenCameraSound(context.Context, string) (io.ReadCloser, error) { return nil, ErrNotHere }
 func CameraLiveChanged()                                             {}
+func CanRTSP() bool                                                  { return false }
+func OpenCameraSoundRTSP(context.Context, string, string, string) (io.ReadCloser, error) {
+	return nil, ErrNotHere
+}
+func OpenCameraRTSP(context.Context, string, string, string, int, int) (*Camera, error) {
+	return nil, ErrNotHere
+}
