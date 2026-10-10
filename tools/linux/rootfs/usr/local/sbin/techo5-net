@@ -88,8 +88,11 @@ stopdhcp() {
 	return 0
 }
 
+# dhcp starts the client if none is running. Without the lock's descriptor: the client stays in the
+# background, and one holding fd 9 would hold the lock for as long as it lives, and every later run of
+# this, the keeper's minute among them, would wait for it for good.
 dhcp() {
-	pidof udhcpc >/dev/null || udhcpc -i $IF -b -R -t 10 -p /run/udhcpc.pid -s "$SCRIPT" > /tmp/udhcpc.log 2>&1
+	pidof udhcpc >/dev/null || udhcpc -i $IF -b -R -t 10 -p /run/udhcpc.pid -s "$SCRIPT" > /tmp/udhcpc.log 2>&1 9>&-
 	echo dhcp > $APPLIED
 }
 
