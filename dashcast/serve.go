@@ -218,11 +218,21 @@ func serve(ctx context.Context, b *browser, g *guard, cfg config, raw net.Conn) 
 	// something is drawn, and a page left standing may draw nothing new for a while.
 	if reused {
 		var shot []byte
-		if err := chromedp.Run(tab, chromedp.ActionFunc(func(ctx context.Context) error {
+		ctx, cancelShot := context.WithTimeout(tab, tabAnswer)
+		err := chromedp.Run(ctx, chromedp.ActionFunc(func(ctx context.Context) error {
 			var err error
 			shot, err = page.CaptureScreenshot().WithFormat(page.CaptureScreenshotFormatPng).Do(ctx)
 			return err
-		})); err == nil {
+		}))
+		cancelShot()
+		if errors.Is(err, context.DeadlineExceeded) {
+			// A picture of a page that should have one at once: the tab is stuck. The device
+			// connects again, and gets a new one.
+			slog.Warn("a parked dashboard did not answer; closing it", "name", h.Name)
+			w.markStuck()
+			return
+		}
+		if err == nil {
 			if img, err := png.Decode(bytes.NewReader(shot)); err == nil {
 				_ = d.send(d.changes(img), out)
 			}
@@ -246,7 +256,18 @@ func serve(ctx context.Context, b *browser, g *guard, cfg config, raw net.Conn) 
 		if json.Unmarshal(lines.Bytes(), &t) != nil {
 			continue
 		}
-		if err := chromedp.Run(tab, chromedp.ActionFunc(func(ctx context.Context) error { return touch(ctx, t) })); err != nil {
+		// A touch the page does not take within tabAnswer is a stuck tab, and every touch after it
+		// would wait behind it, unread (#112): the session ends, and the device connects again to a
+		// new tab.
+		ctx, cancelTouch := context.WithTimeout(tab, tabAnswer)
+		err := chromedp.Run(ctx, chromedp.ActionFunc(func(ctx context.Context) error { return touch(ctx, t) }))
+		cancelTouch()
+		if errors.Is(err, context.DeadlineExceeded) {
+			slog.Warn("a touch was not taken; closing the dashboard", "name", h.Name)
+			w.markStuck()
+			return
+		}
+		if err != nil {
 			slog.Warn("touch", "err", err)
 		}
 	}

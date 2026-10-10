@@ -161,6 +161,10 @@ func (b *browser) open(ctx context.Context, path string, w, h int, allowed map[s
 		}),
 		emulation.SetDeviceMetricsOverride(int64(w), int64(h), 1, false),
 		emulation.SetTouchEmulationEnabled(true).WithMaxTouchPoints(1),
+		// Every tab is a page somebody is looking at. Without this a tab is hidden whenever another
+		// is in front of it, and always after it has been parked (warm.go): a hidden page sends one
+		// frame and then none, so a screen that came back to its parked tab froze (#112).
+		emulation.SetFocusEmulationEnabled(true),
 		emulation.SetEmulatedMedia().WithFeatures([]*emulation.MediaFeature{{Name: "prefers-color-scheme", Value: "dark"}}),
 		chromedp.Navigate(b.cfg.ha+path),
 	)

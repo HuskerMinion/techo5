@@ -6,6 +6,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/chromedp/cdproto/emulation"
 	"github.com/chromedp/cdproto/page"
 	"github.com/chromedp/chromedp"
 )
@@ -33,6 +34,7 @@ type warmTab struct {
 	onFrame func(*page.EventScreencastFrame)
 	key     string
 	expiry  *time.Timer
+	stuck   bool // it stopped answering (serve.go): closed when the session ends, not parked
 }
 
 func newWarmTab(tab context.Context, closeTab func(), key string) *warmTab {
@@ -50,6 +52,13 @@ func newWarmTab(tab context.Context, closeTab func(), key string) *warmTab {
 		}
 	})
 	return w
+}
+
+// markStuck keeps a tab that stopped answering from being parked and handed out again.
+func (w *warmTab) markStuck() {
+	w.mu.Lock()
+	w.stuck = true
+	w.mu.Unlock()
 }
 
 func (w *warmTab) watch(on func(*page.EventScreencastFrame)) {
@@ -82,17 +91,38 @@ func (p *warmPool) take(key string) *warmTab {
 		return nil
 	}
 	w.expiry.Stop()
-	if err := chromedp.Run(w.ctx, page.SetWebLifecycleState(page.SetWebLifecycleStateStateActive)); err != nil {
+	// Thawed, and seen to be showing: a page still hidden after it sends no frames, and a new tab is
+	// better than a screen that never changes again (#112).
+	var shown string
+	ctx, cancel := context.WithTimeout(w.ctx, tabAnswer)
+	defer cancel()
+	if err := chromedp.Run(ctx, page.SetWebLifecycleState(page.SetWebLifecycleStateStateActive),
+		emulation.SetFocusEmulationEnabled(true),
+		chromedp.Evaluate(`document.visibilityState`, &shown)); err != nil || shown != "visible" {
+		slog.Warn("a parked dashboard would not show again; opening it afresh", "screen", key, "state", shown, "err", err)
 		w.close()
 		return nil
 	}
 	return w
 }
 
+// tabAnswer is as long as a tab is waited on for what should come at once: a thaw, a touch, a
+// picture of what it shows. A tab that takes longer is stuck, and is not parked to be used again.
+const tabAnswer = 10 * time.Second
+
 // park stops a tab's stream, freezes it, and keeps it for warmFor.
 func (p *warmPool) park(w *warmTab) {
 	w.watch(nil)
-	if err := chromedp.Run(w.ctx, page.StopScreencast(),
+	w.mu.Lock()
+	stuck := w.stuck
+	w.mu.Unlock()
+	if stuck {
+		w.close()
+		return
+	}
+	ctx, cancel := context.WithTimeout(w.ctx, tabAnswer)
+	defer cancel()
+	if err := chromedp.Run(ctx, page.StopScreencast(),
 		page.SetWebLifecycleState(page.SetWebLifecycleStateStateFrozen)); err != nil {
 		w.close()
 		return
