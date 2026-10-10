@@ -33,6 +33,8 @@ type CameraView struct {
 	Until  time.Time
 	Frame  *image.RGBA // the latest frame, scaled to fit; nil until the first arrives
 	Error  string      // why there is no frame, when there is none
+	// Caption is a notification's words over the view (feature/notify); nil for a plain camera.
+	Caption *Caption
 
 	span time.Duration // how long it was asked for; Until is restarted from the first frame
 }
@@ -113,15 +115,24 @@ func (f *Feature) ShowCamera(entity string, d time.Duration) {
 // showCamera is ShowCamera with the sound decided by the caller, which is what the action does: an
 // automation for a doorbell wants that one camera heard whether or not the device's setting says so.
 func (f *Feature) showCamera(entity string, d time.Duration, sound bool) {
-	name := entity
-	for _, c := range f.Cameras() {
-		if c.Entity == entity {
-			name = c.Name
+	f.showCameraCaptioned(entity, d, sound, nil)
+}
+
+// showCameraCaptioned puts a camera up with a notification's words over it, or none (nil): a camera
+// asked for any other way is a plain camera, so a caption never outlasts its notification.
+func (f *Feature) showCameraCaptioned(entity string, d time.Duration, sound bool, c *Caption) {
+	name, listed := entity, false
+	for _, cam := range f.Cameras() {
+		if cam.Entity == entity {
+			name, listed = cam.Name, true
 		}
 	}
 	f.mu.Lock()
 	fresh := f.cam.Entity != entity || time.Now().After(f.cam.Until)
-	f.cam = CameraView{Entity: entity, Name: name, Until: time.Now().Add(d), Frame: f.cam.Frame, span: d}
+	if !listed && !fresh {
+		name = f.cam.Name // the same camera asked for again keeps the name it was given, looked up or not
+	}
+	f.cam = CameraView{Entity: entity, Name: name, Until: time.Now().Add(d), Frame: f.cam.Frame, Caption: c, span: d}
 	if fresh {
 		f.cam.Frame = nil
 		f.camMuted = false // a fresh view starts audible if its sound was asked for
@@ -140,7 +151,36 @@ func (f *Feature) showCamera(entity string, d time.Duration, sound bool) {
 			go f.startCameraSound(entity, thisDevice())
 		}
 	}
+	if !listed && name == entity && entity != LocalCamera && !isReolink(entity) {
+		// Not on the device's list, or on Home Assistant's list before it has been fetched: Home
+		// Assistant is asked for this one camera's name rather than showing its entity id.
+		go f.lookUpName(entity, entity)
+	}
 	f.Changed.Emit(struct{}{})
+}
+
+// lookUpName asks Home Assistant what it calls entity and puts that on the view in place of
+// placeholder, if the view is still entity's and still says placeholder. Nothing changes when Home
+// Assistant cannot be asked or has no name for it.
+func (f *Feature) lookUpName(entity, placeholder string) {
+	s, err := hass.Get().State(entity)
+	if err != nil {
+		slog.Debug("camera name", "entity", entity, "err", err)
+		return
+	}
+	name, _ := s.Attributes["friendly_name"].(string)
+	if name = strings.TrimSpace(name); name == "" {
+		return
+	}
+	f.mu.Lock()
+	ours := f.cam.Entity == entity && f.cam.Name == placeholder
+	if ours {
+		f.cam.Name = name
+	}
+	f.mu.Unlock()
+	if ours {
+		f.Changed.Emit(struct{}{})
+	}
 }
 
 // HoldCamera keeps the view of entity up for at least d more, if it is the one up: a camera being
@@ -283,6 +323,11 @@ func (f *Feature) snapshot(entity string) (*image.RGBA, error) {
 	if err != nil {
 		return nil, err
 	}
+	return fitFrame(src), nil
+}
+
+// fitFrame scales a picture to fit the panel, keeping its shape.
+func fitFrame(src image.Image) *image.RGBA {
 	sw, sh := src.Bounds().Dx(), src.Bounds().Dy()
 	w, h := cameraFrameW, sh*cameraFrameW/sw
 	if h > cameraFrameH {
@@ -290,7 +335,7 @@ func (f *Feature) snapshot(entity string) (*image.RGBA, error) {
 	}
 	dst := image.NewRGBA(image.Rect(0, 0, w, h))
 	xdraw.ApproxBiLinear.Scale(dst, dst.Bounds(), src, src.Bounds(), xdraw.Src, nil)
-	return dst, nil
+	return dst
 }
 
 // MatchCamera finds a camera named in what was heard: "show the front door", "show me the deck

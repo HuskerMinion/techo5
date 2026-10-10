@@ -11,6 +11,7 @@ import (
 	"github.com/HuskerMinion/techo5/echod/internal/config"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/announce"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/dashboard"
+	"github.com/HuskerMinion/techo5/echod/internal/feature/notify"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/remind"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/setup"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/video"
@@ -158,16 +159,17 @@ func (d *Display) dashScene(s *scene, sheetOrDrawer bool) {
 }
 
 // overDashboard is whether something that acts on a tap alone is drawn over the dashboard: a
-// reminder's card, an event's pop-up, the PIN pad, the setup page's Allow and Deny, an announcement
+// reminder's or a notification's card, an event's pop-up, the PIN pad, the setup page's Allow and Deny, an announcement
 // arriving or being recorded, a DLNA video asking to be shown, or the video page.
 func (d *Display) overDashboard(s *scene) bool {
 	_, announcing := announce.Get().Showing()
 	_, reminding := remind.Get().Showing()
+	_, notifying := notify.Get().Card()
 	_, _, _, videoAsking := video.Get().Asking()
 	// The video's own state, not videoUp: that is what the last frame drew, and videoScene runs after
 	// this one, so the first frame of a video would still hold. The alert page is drawn in the
 	// dashboard's place (alertScene runs before this).
-	return s.pin.open || setup.Get().Waiting() || announce.Get().Recording() || announcing || reminding ||
+	return s.pin.open || setup.Get().Waiting() || announce.Get().Recording() || announcing || reminding || notifying ||
 		d.popupUp() != nil || videoAsking || d.videoUp() || video.Get().State().Active() || s.showAlert
 }
 

@@ -18,6 +18,10 @@ import (
 // test here still passes.
 var actions = []string{
 	"announce_house",
+	// An automation that notifies every device calls each one's, so a device without them - a Dot,
+	// where nothing else imports notify - fails the whole automation.
+	"notify",
+	"notify_picture",
 }
 
 // The actions other devices depend on still register.

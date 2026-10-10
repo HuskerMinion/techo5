@@ -6,6 +6,7 @@ import (
 	"image"
 	"image/color"
 	"math"
+	"strings"
 	"time"
 
 	"github.com/HuskerMinion/techo5/echod/internal/feature/home"
@@ -62,11 +63,29 @@ func (r *roundRenderer) cameraView(s roundScene) {
 			r.paragraph(r.small, v.Error, 290, colDim, 2)
 		}
 	}
-	// The name on a dark band near the top, readable over any picture.
-	if v.Name != "" {
-		w := r.width(r.label, v.Name)
+	// The name on a dark band near the top, readable over any picture; a notification's title in its
+	// place, and its words on a band under it. A picture sent with no words has neither: it is the
+	// picture alone.
+	name := v.Name
+	if c := v.Caption; c != nil && c.Title != "" {
+		name = clip(r.label, r, c.Title, 240)
+	}
+	if name != "" && (v.Caption == nil || !v.Caption.Wordless()) {
+		w := r.width(r.label, name)
 		r.line(float64(center-w/2-10), 62, float64(center+w/2+10), 62, 32, color.RGBA{0, 0, 0, 150})
-		r.centered(r.label, v.Name, 69, colText)
+		r.centered(r.label, name, 69, colText)
+	}
+	if c := v.Caption; c != nil && c.Message != "" {
+		lines := r.wrap(r.small, c.Message, 290)
+		if len(lines) > 2 {
+			lines = append(lines[:1], clip(r.small, r, strings.Join(lines[1:], " "), 290))
+		}
+		const lineH, top = 26, 112
+		mid := float64(top + (len(lines)-1)*lineH/2 - 8)
+		r.line(float64(center-150), mid, float64(center+150), mid, float64(len(lines)*lineH+12), color.RGBA{0, 0, 0, 160})
+		for i, line := range lines {
+			r.centered(r.small, line, top+i*lineH, colText)
+		}
 	}
 	// Talk, as a bar like the sound's just above it: a tap sends the microphones to the camera's speaker,
 	// and another ends it, and the bar is red while they go. Why a talk failed shows above it for a few
@@ -104,6 +123,15 @@ func (r *roundRenderer) cameraView(s roundScene) {
 		r.line(float64(b.Min.X), float64(b.Min.Y+b.Dy()/2), float64(b.Max.X), float64(b.Min.Y+b.Dy()/2), float64(b.Dy()), color.RGBA{0, 0, 0, 150})
 		r.centered(r.label, label, b.Min.Y+b.Dy()/2+8, colText)
 		r.setCameraSoundAt(b)
+	}
+	// A notification's picture says how to close it, in the sound's place at the foot when that is
+	// free: the Show's page has always said so, and a picture somebody else put up is one a person
+	// standing here may not know is theirs to dismiss.
+	if v.Caption != nil && !s.cameraSound && !s.talkOffered {
+		const label = "tap to close"
+		b := cameraSoundBox(r.width(r.label, label) + 24)
+		r.line(float64(b.Min.X), float64(b.Min.Y+b.Dy()/2), float64(b.Max.X), float64(b.Min.Y+b.Dy()/2), float64(b.Dy()), color.RGBA{0, 0, 0, 150})
+		r.centered(r.label, label, b.Min.Y+b.Dy()/2+8, colText)
 	}
 }
 

@@ -16,6 +16,7 @@ import (
 	"github.com/HuskerMinion/techo5/echod/internal/feature/alarm"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/announce"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/home"
+	"github.com/HuskerMinion/techo5/echod/internal/feature/notify"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/phone"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/remind"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/timer"
@@ -125,6 +126,21 @@ func TestRoundScenesDraw(t *testing.T) {
 		"announcement":  {now: at, phase: "idle", showAnnouncement: true, announcement: announce.Message{From: "Guest's Desk", Text: "dinner is ready, come down"}},
 		"announcement-voice": {now: at, phase: "idle", showAnnouncement: true,
 			announcement: announce.Message{From: "Laundry Room"}},
+		"notification": {now: at, phase: "idle", weather: sky, showNotification: true,
+			notification: notify.Notification{Kind: notify.Text, Title: "Washer", Icon: "mdi:washing-machine", Message: "The washing machine is done"}},
+		"notification-bare": {now: at, phase: "idle", showNotification: true,
+			notification: notify.Notification{Kind: notify.Text, Message: "Done"}},
+		"notification-longest": {now: at, phase: "idle", showNotification: true,
+			notification: notify.Notification{Kind: notify.Text, Title: "A title that runs on and on past the face",
+				Message: "Move the washing to the dryer, then put the towels on the rack by the back door and the sheets on the line"}},
+		"camera-captioned": {now: at, phase: "idle", showCamera: true, camera: home.CameraView{Entity: "camera.front_door",
+			Name: "Front door", Frame: testPicture(), Caption: &home.Caption{ID: "1", Title: "Doorbell", Message: "Someone is at the front door, and has been for a while"}}},
+		"camera-captioned-long-title": {now: at, phase: "idle", showCamera: true, camera: home.CameraView{Entity: "camera.front_door",
+			Name: "Front door", Frame: testPicture(), Caption: &home.Caption{ID: "1", Title: "Somebody has been standing at the front door for a very long time", Message: "Come and see"}}},
+		"camera-wordless": {now: at, phase: "idle", showCamera: true, camera: home.CameraView{Entity: "camera.front_door",
+			Name: "Front door", Frame: testPicture(), Caption: &home.Caption{ID: "1"}}},
+		"camera-captioned-error": {now: at, phase: "idle", showCamera: true, camera: home.CameraView{Entity: "/local/a.png",
+			Name: "Notification", Error: "404 Not Found", Caption: &home.Caption{ID: "1", Message: "The picture could not be fetched"}}},
 		"reminder": {now: at, phase: "idle", showReminder: true,
 			reminder: remind.Reminder{Label: "Take the trash out"}},
 		// Longer than the box: the words scroll rather than stopping after two lines, at rest and

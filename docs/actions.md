@@ -856,6 +856,333 @@ data:
   sound: "on"
 ```
 
+## Show a notification
+
+In YAML, refer to this action as `esphome.<node>_notify`.
+
+Puts a notification up on this device's screen: a card in the middle of the screen with a heading (an
+icon and a title, either optional) and a message of up to three lines. It can chime as it comes up and
+can be said aloud. It stays until somebody taps it or its time runs out.
+
+Every TECHO5 has its own `notify`, and a call shows on that device alone. To reach several devices,
+call each one's action; see [Notifying every device](#notifying-every-device).
+
+> **Good to know**
+>
+> Home Assistant requires every argument on every call. To leave one out, pass `""` (or `0` for
+> `seconds`). An automation that omits an argument fails before it reaches the device.
+>
+> `speak: "on"` needs **Allow the device to perform Home Assistant actions** turned on for the device
+> in Home Assistant's ESPHome integration (**Settings → Devices & services → ESPHome → the device →
+> Configure**), as reminders do. Without it the notification still shows and chimes; it just isn't said.
+>
+> A Dot has no screen: it chimes, says the words if asked to, fires the events, and shows nothing. It
+> has no night hours, so only quiet hours keep it quiet.
+
+### Arguments
+
+| Argument | Type | Accepted values | Empty / `0` means |
+|---|---|---|---|
+| `message` | string | Any text. Up to 240 bytes; longer is cut short. New lines and tabs become spaces, other control characters are dropped. Three lines fit on a Show; more ends in "…". | Not allowed: the call fails with *the message is empty*. |
+| `title` | string | Any text. Up to 40 bytes; longer is cut short. Shown in capitals above the message. | No heading text. |
+| `icon` | string | A [Material Design Icons](https://pictogrammers.com/library/mdi/) name with its prefix, such as `mdi:washing-machine` or `mdi:bell-ring`. Shown left of the title. An unknown name shows no icon. | No icon. |
+| `chime` | string | `"off"` (any letter case) to come up without a chime. Anything else chimes. | The usual chime. |
+| `speak` | string | `"on"` (any letter case) to have the title and message said aloud after the chime. Anything else keeps them to the screen. | Not said. |
+| `seconds` | integer | How long it stays up, in seconds. At most a day (86400); anything longer is held to a day. | Until somebody taps it. A negative number means the same. |
+
+Emoji aren't drawn: the screen's font has none, so one shows as an empty box. Use `icon` instead.
+
+### What happens
+
+- **One at a time.** A new notification, of either kind, takes the place of the one up. The one it
+  replaced reports `expired`.
+- **Sound.** The chime plays as it comes up, then the words if `speak` is `"on"`, joined as one
+  sentence: title `Doorbell` and message `Someone is here` are said as "Doorbell. Someone is here".
+- **Night and quiet hours.** No chime and no words, whatever `chime` and `speak` say, and a dark
+  screen stays dark: the notification is there when the screen is next woken. By day it lights a
+  dark screen.
+- **What it sits under and over.** A ringing alarm or timer, a call, a reminder, the setup page's
+  question and the PIN pad are shown over it. It is shown over the dashboard and the deck, and puts
+  the Spot's menu away.
+- **On a Spot** it takes the whole face: icon, title, message, and "tap to dismiss".
+
+### The event
+
+Each notification fires an `esphome.techo5_notification` event on Home Assistant's bus: once as it
+comes up, and once more as it goes.
+
+| Field | |
+|---|---|
+| `event` | `shown` as it comes up; then `dismissed` (somebody tapped it) or `expired` (its time ran out, another notification replaced it, or its picture was closed some other way) |
+| `kind` | `text` for `notify`, `picture` for `notify_picture` |
+| `title` | The title as shown (clipped), `""` for none |
+| `message` | The message as shown (clipped), `""` for none |
+| `device` | The name of the device that showed it |
+
+### Examples
+
+```yaml
+# The washer is done: a card with an icon, the usual chime, for 10 minutes.
+action: esphome.kitchen_notify
+data:
+  message: "The washing machine is done"
+  title: "Washer"
+  icon: "mdi:washing-machine"
+  chime: ""
+  speak: ""
+  seconds: 600
+```
+
+```yaml
+# Said aloud as well as shown: "Garage. The garage door has been open for 10 minutes".
+action: esphome.kitchen_notify
+data:
+  message: "The garage door has been open for 10 minutes"
+  title: "Garage"
+  icon: "mdi:garage-open"
+  chime: ""
+  speak: "on"
+  seconds: 300
+```
+
+```yaml
+# A quiet note: no chime, no words, no title, up for an hour.
+action: esphome.office_notify
+data:
+  message: "Trash goes out tonight"
+  title: ""
+  icon: "mdi:trash-can"
+  chime: "off"
+  speak: ""
+  seconds: 3600
+```
+
+### Notifying every device
+
+There is no "all devices" action. Each device shows what it is sent, so a script that calls every
+device's action does it, and an automation calls the script once:
+
+```yaml
+script:
+  notify_techo5s:
+    fields:
+      message: {}
+      title: {}
+      icon: {}
+    sequence:
+      - parallel:
+          - action: esphome.kitchen_notify
+            data: {message: "{{ message }}", title: "{{ title | default('') }}", icon: "{{ icon | default('') }}", chime: "", speak: "", seconds: 0}
+          - action: esphome.office_notify
+            data: {message: "{{ message }}", title: "{{ title | default('') }}", icon: "{{ icon | default('') }}", chime: "", speak: "", seconds: 0}
+```
+
+### Following up
+
+```yaml
+# Somebody saw the washer card and tapped it away: nothing more to do. Nobody did in its 10 minutes:
+# tell a phone. (A card with seconds: 0 never expires, so this needs a time.)
+alias: Washer card missed
+triggers:
+  - trigger: event
+    event_type: esphome.techo5_notification
+    event_data:
+      event: expired
+      title: Washer
+actions:
+  - action: notify.mobile_app_phone
+    data:
+      message: "The washer finished and nobody saw it ({{ trigger.event.data.device }})"
+```
+
+## Show a picture notification
+
+In YAML, refer to this action as `esphome.<node>_notify_picture`.
+
+Puts a picture up full screen on this device, with a notification's words over it: a camera's live
+view for a doorbell, a snapshot an automation saved, or any picture Home Assistant or another web
+server serves. It uses the camera page, so a tap anywhere closes it, and it stays until then or until
+its time runs out. It chimes, speaks, replaces and reports exactly as `notify` does (see
+[Show a notification](#show-a-notification)), with `kind: picture` in its event.
+
+> **Good to know**
+>
+> **Set up `home_assistant` first.** A camera, an image entity and a Home Assistant path are fetched
+> by the device itself, from Home Assistant's REST API, with the URL and long-lived access token that
+> [Connect the device to Home Assistant](#connect-the-device-to-home-assistant)
+> (`esphome.<node>_home_assistant`) stores. The ESPHome connection Home Assistant uses to reach the
+> device carries no token the other way. Until that action has been called on the device, the
+> notification still comes up, with its words, but with `hass: no access configured` in place of the
+> picture. Only an `http(s)://` address on another server works without it.
+>
+> Home Assistant requires every argument on every call. To leave one out, pass `""` (or `0` for
+> `seconds`).
+>
+> A camera's own sound is decided by `sound`, as on `home_show_camera_sound`: it plays over whatever
+> the device is playing, the Mute/Unmute control on the page silences it, and words said with
+> `speak: "on"` take the speaker for as long as they last and hand it back. A camera already up with
+> its sound keeps it.
+>
+> `speak: "on"` needs **Allow the device to perform Home Assistant actions**, as for `notify`.
+>
+> A Dot has no screen. It checks the picture the same way, chimes, speaks if asked, fires the events,
+> and shows nothing.
+
+### Arguments
+
+| Argument | Type | Accepted values | Empty / `0` means |
+|---|---|---|---|
+| `message` | string | Any text, up to 240 bytes; one line under the title, clipped to the screen's width. New lines and tabs become spaces. | No message line. |
+| `title` | string | Any text, up to 40 bytes. Shown small, in capitals, above the message. On a Spot it replaces the camera's name at the top. | No title. A camera or image entity is then named on the page as Home Assistant names it (its friendly name). |
+| `picture` | string | One of the four kinds below. Anything else fails the call with *not a camera, an image entity, a path on Home Assistant or an http(s) address*, and nothing is shown. | Not allowed. |
+| `chime` | string | `"off"` (any letter case) to come up without a chime. Anything else chimes. | The usual chime. |
+| `speak` | string | `"on"` (any letter case) to have the title and message said aloud after the chime. | Not said. A picture with no words never says anything. |
+| `sound` | string | A camera's own audio, as `home_show_camera_sound` takes it: `"on"` (or `true`, `yes`, `1`) to play it, `"off"` (or `false`, `no`, `0`) to keep it silent. Only a camera Home Assistant can stream has any; a still and a Reolink camera ignore it. | The device's own **Camera sound** setting, off on a new device. |
+| `seconds` | integer | How long it stays up, in seconds, counted from when the picture arrives (a camera that is slow to start loses none of it). At most a day. | Until somebody taps it, with "tap to close" and no countdown. A negative number means the same. |
+
+With neither a `title` nor a `message`, it is **the picture alone**: no name, clock or caption over it,
+only "tap to close" at its foot.
+
+The kinds of `picture`:
+
+| `picture` | Example | Shown as | Fetched from | Needs `home_assistant` |
+|---|---|---|---|---|
+| A camera entity | `camera.front_door` | Live: frames one after another while it is up | `/api/camera_proxy/<entity>` on Home Assistant | Yes |
+| An image entity | `image.doorbell_snapshot` | A still, fetched once | `/api/image_proxy/<entity>` on Home Assistant | Yes |
+| A path on Home Assistant | `/local/snapshots/door.jpg` | A still, fetched once | Home Assistant, with the token. `/local/` is Home Assistant's `config/www` folder | Yes |
+| An `http://` or `https://` address | `http://192.168.1.10:8123/local/door.jpg`, `https://example.com/porch.jpg` | A still, fetched once | Home Assistant's own address (the one `home_assistant` stores) is fetched with the token, as a path. Any other host is fetched without it, so a camera or NAS that needs a login must carry it in the address | Only for Home Assistant's own address |
+
+A still is JPEG or PNG, at most 8 MB and about 12 megapixels, and is scaled to fit the screen. A picture
+that cannot be fetched (not found, not a picture, too big, no `home_assistant`) still comes up with its
+words, and the reason where the picture would be. A token in an address's query is never shown or
+logged: the query is taken off first.
+
+### Examples
+
+```yaml
+# A camera: the doorbell, live, with words and said aloud, for a minute.
+action: esphome.kitchen_notify_picture
+data:
+  message: "Someone is at the front door"
+  title: "Doorbell"
+  picture: camera.front_door
+  chime: ""
+  speak: "on"
+  sound: ""
+  seconds: 60
+```
+
+```yaml
+# The doorbell with its own sound: whoever is at the door is heard in the room, whatever the device's
+# Camera sound setting says.
+action: esphome.kitchen_notify_picture
+data:
+  message: "Someone is at the front door"
+  title: "Doorbell"
+  picture: camera.front_door
+  chime: ""
+  speak: ""
+  sound: "on"
+  seconds: 60
+```
+
+```yaml
+# The camera alone: no words, no chime, up until somebody taps it.
+action: esphome.kitchen_notify_picture
+data:
+  message: ""
+  title: ""
+  picture: camera.driveway
+  chime: "off"
+  speak: ""
+  sound: ""
+  seconds: 0
+```
+
+```yaml
+# An image entity: a doorbell's last snapshot (many doorbell integrations provide one).
+action: esphome.office_notify_picture
+data:
+  message: "A package was left at the door"
+  title: "Delivery"
+  picture: image.front_door_doorbell_snapshot
+  chime: ""
+  speak: ""
+  sound: ""
+  seconds: 120
+```
+
+```yaml
+# A snapshot saved to Home Assistant's www folder, shown by its path. The automation saves it first
+# (camera.snapshot writes config/www/snapshots/porch.jpg, which Home Assistant serves as
+# /local/snapshots/porch.jpg).
+- action: camera.snapshot
+  target:
+    entity_id: camera.porch
+  data:
+    filename: /config/www/snapshots/porch.jpg
+- action: esphome.kitchen_notify_picture
+  data:
+    message: "Motion on the porch"
+    title: "Porch"
+    picture: /local/snapshots/porch.jpg
+    chime: ""
+    speak: ""
+    sound: ""
+    seconds: 45
+```
+
+```yaml
+# A picture on another server, fetched without Home Assistant's token. Anything the server needs to
+# let the device in has to be in the address.
+action: esphome.kitchen_notify_picture
+data:
+  message: "Tonight's radar"
+  title: "Weather"
+  picture: "https://example.com/radar/latest.png"
+  chime: "off"
+  speak: ""
+  sound: ""
+  seconds: 300
+```
+
+A whole doorbell automation, which tells a phone when nobody answered:
+
+```yaml
+alias: Doorbell on the kitchen Show
+triggers:
+  - trigger: state
+    entity_id: binary_sensor.front_door_doorbell
+    to: "on"
+actions:
+  - action: esphome.kitchen_notify_picture
+    data:
+      message: "Someone is at the front door"
+      title: "Doorbell"
+      picture: camera.front_door
+      chime: ""
+      speak: "on"
+      sound: ""
+      seconds: 60
+  # Wait for it to go: tapped away (dismissed) or not (expired). Waiting for any event would catch
+  # its "shown" first.
+  - wait_for_trigger:
+      - trigger: event
+        event_type: esphome.techo5_notification
+        event_data: {kind: picture, title: Doorbell, event: dismissed}
+      - trigger: event
+        event_type: esphome.techo5_notification
+        event_data: {kind: picture, title: Doorbell, event: expired}
+    timeout: "00:02:00"
+  - if:
+      - condition: template
+        value_template: "{{ wait.trigger is none or wait.trigger.event.data.event == 'expired' }}"
+    then:
+      - action: notify.mobile_app_phone
+        data:
+          message: "Nobody answered the door"
+```
+
 ## Choose the calendars shown
 
 In YAML, refer to this action as `esphome.<node>_calendar_sources`.
