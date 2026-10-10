@@ -5,9 +5,12 @@ import (
 	"fmt"
 	"html"
 	"log/slog"
+	"net"
 	"net/http"
+	"strconv"
 	"time"
 
+	"github.com/HuskerMinion/techo5/echod/internal/feature/web"
 	"github.com/HuskerMinion/techo5/echod/internal/lib/safe"
 	"github.com/HuskerMinion/techo5/echod/internal/lib/wifi"
 )
@@ -107,7 +110,7 @@ func saveAddress(w http.ResponseWriter, r *http.Request) (problem string, handle
 	head(w)
 	fmt.Fprintf(w, `<div class="wrap"><h1>%s</h1><p class="sub">Setup</p>`, html.EscapeString(deviceName()))
 	if a.Fixed {
-		next := "http://" + a.IP.String() + "/setup"
+		next := "http://" + net.JoinHostPort(a.IP.String(), strconv.Itoa(web.Port)) + "/setup"
 		fmt.Fprintf(w, `<p><strong>Saved.</strong> In a moment the device moves to %s; Home Assistant
 		 finds it there by itself, within about two minutes.</p>
 		 <p><a href="%s">Open the setup page there</a> (let the browser in again on the device). If it is not

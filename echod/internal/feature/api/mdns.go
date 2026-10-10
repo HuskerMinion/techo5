@@ -95,9 +95,20 @@ func (a *API) advertise(ctx context.Context, port int) {
 		// up, ninety seconds on. The device drops its side (which cannot reach Home Assistant from an
 		// address it has left), and stays unannounced until Home Assistant has given up too: announced
 		// sooner, the new address was ignored, and Home Assistant kept trying the old one for good.
+		//
+		// The gap runs from the last change: the address can move more than once in a row (a fixed
+		// address tried and dropped, then another kept), and a gap counted from the first ended while
+		// Home Assistant still held a connection made in between, so the new address was ignored again.
 		a.server().Reconnect()
-		if !pause(ctx, movedGap) {
-			return
+		last, until := v4Key(metrics.Addresses()), time.Now().Add(movedGap)
+		for time.Now().Before(until) {
+			if !pause(ctx, mdnsRetry) {
+				return
+			}
+			if k := v4Key(metrics.Addresses()); k != last {
+				last, until = k, time.Now().Add(movedGap)
+				a.server().Reconnect()
+			}
 		}
 	}
 }
