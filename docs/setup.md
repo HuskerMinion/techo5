@@ -330,12 +330,18 @@ same is on the screen, under Settings → Connections → **Network address**, w
 [network_address action](actions.md#set-the-network-address) does it from Home Assistant.
 
 A new fixed address is tried before it is kept. If another device already answers for it, or the
-gateway does not answer from it, the device goes back to the setting it had, and the setup page says
-why. Once kept, the address is used as it is at every start, the way any device with a fixed address
-does, even when the router is still starting up.
+gateway does not answer from it, the device keeps the setting it had, and the setup page says why. A
+restart in the middle of the trial comes back on the setting that worked last. Once kept, the address
+is used as it is at every start, the way any device with a fixed address does, even when the router is
+still starting up.
 
-Home Assistant follows the device to its new address by itself, about two minutes after the change:
-it first has to notice that the old connection is gone. To go back to DHCP, choose **Automatic**.
+The address belongs to the Wi-Fi it was set on. On another network, or when its gateway has not
+answered for five minutes (a router moved to another subnet, say), the device takes an address from
+the router instead until it restarts, so it can still be found; the setting itself is kept.
+
+After a change the setup page is at the new address, and the browser has to be let in there again.
+Home Assistant follows the device by itself, about two minutes after the change: it first has to notice
+that the old connection is gone. To go back to DHCP, choose **Automatic**.
 
 ## More
 

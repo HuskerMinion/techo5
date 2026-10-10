@@ -96,9 +96,10 @@ Sets how the device gets its address on Wi-Fi: from the router (DHCP), or fixed.
 seconds later.
 
 A new fixed address is tried before it is kept: if another device answers for it, or the gateway does
-not answer from it, the device goes back to the setting it had, and the setup page says why. Home
-Assistant follows the device to its new address by itself, about two minutes after the change. The
-device's IP address sensor shows the address in use.
+not answer from it, the device keeps the setting it had, and the setup page says why. Calling it with
+the setting already in use changes nothing. Home Assistant follows the device to its new address by
+itself, about two minutes after the change. The device's IP address sensor shows the address in use.
+The action is there only on an image that can set an address.
 
 ### address (Required)
 
@@ -111,13 +112,14 @@ Empty switches back to DHCP, and the other two are then ignored.
 
 *string*
 
-The router, like `192.168.1.1`. It must be in the address's network.
+The router, like `192.168.1.1`. It must be in the address's network. Empty when `address` is empty.
 
 ### dns (Required)
 
 *string*
 
-Up to three DNS servers, separated by commas. Empty uses the gateway.
+Up to three DNS servers, separated by commas. Empty uses the gateway, and is ignored when `address`
+is empty. All three empty switches the device to DHCP.
 
 ```yaml
 action: esphome.office_network_address

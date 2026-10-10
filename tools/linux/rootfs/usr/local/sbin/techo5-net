@@ -3,95 +3,170 @@
 #
 #   techo5-net up      address wlan0 as the setting says; a DHCP client already running is left be
 #   techo5-net renew   the same, and a DHCP client already running is asked again from the start
-#   techo5-net try     a setting just changed, on trial: kept only when it works, else the one before
+#   techo5-net try     a changed setting (network.conf.new) on trial: kept only when it works
+#   techo5-net check   the network keeper's minute: a fixed address whose gateway has not answered for
+#                      five minutes gives way to DHCP until the next boot
 #
-# The setting is /data/techo5-linux/network.conf, written by the daemon (lib/wifi/address.go) from the
-# setup page or the network_address action; without it, or with MODE=dhcp, this is udhcpc as before.
+# The setting in use is /data/techo5-linux/network.conf. The daemon (lib/wifi/address.go) writes a new
+# one from the setup page, the screen or the network_address action as network.conf.new, and only `try`
+# makes it network.conf, once it has worked. So network.conf only ever holds a setting that worked: a
+# restart, a crash or a power cut in the middle of a trial comes back up on the last good one. A fixed
+# address another device answers for, or whose gateway does not answer from it, is dropped, and why goes
+# to /run/techo5/network-fallback for the setup page to show. A typo must not leave the device where
+# nobody can reach it.
 #
 # At boot and whenever Wi-Fi comes back, a fixed address is simply put on, as on any other device: a
-# router still starting after a power cut is no reason to take another address. Only a setting that was
-# just changed is on trial, the way an update's slot is: a fixed address another device answers for, or
-# whose gateway does not answer from it, is given up for the setting before it (network.conf.prev, kept
-# by the daemon), and why goes to /run/techo5/network-fallback for the setup page to show. A typo must not
-# leave the device where nobody can reach it.
+# router still starting after a power cut is no reason to take another address. Two things give it way
+# to DHCP for the rest of the session, without changing the file, so a device carried to another house
+# or a router moved to another subnet can still be reached: a network other than the one the address was
+# set on, and a gateway that has not answered for five minutes (`check`).
+#
+# The file is read line by line and every value checked, never run as a script: it is root's, but
+# what is in it came from a web form.
 
 CONF=${TECHO5_NETWORK_CONF:-/data/techo5-linux/network.conf}
+NEW=$CONF.new
 IF=wlan0
-FALLBACK=/run/techo5/network-fallback
+RUN=/run/techo5
+FALLBACK=$RUN/network-fallback
+SESSION=$RUN/network-dhcp-session   # why DHCP is used this session despite a fixed setting
+APPLIED=$RUN/network-applied        # "static" or "dhcp": what is on the interface now
+GWFAIL=$RUN/network-gateway-misses
 RESOLV=/run/resolv.conf
 SCRIPT=${UDHCPC_SCRIPT:-/etc/techo5/udhcpc.sh}
+WPA="wpa_cli -p /run/wpa -i $IF"
 
 log() {
 	echo "techo5-net: $*" > /dev/kmsg 2>/dev/null
-	echo "$(date '+%Y-%m-%d %H:%M:%S') $*" >> /run/techo5/network.log 2>/dev/null
+	echo "$(date '+%Y-%m-%d %H:%M:%S') $*" >> $RUN/network.log 2>/dev/null
+}
+
+ipv4() {
+	echo "$1" | awk -F. 'NF==4 { for (i=1;i<=4;i++) if ($i !~ /^[0-9]+$/ || $i > 255) exit 1; exit 0 } { exit 1 }'
+}
+
+# load reads a setting file into MODE, ADDRESS, PREFIX, GATEWAY, DNS and SSID, checking each value;
+# true for a usable fixed address. Anything missing or malformed reads as DHCP, as the daemon reads it.
+load() {
+	MODE=; ADDRESS=; PREFIX=; GATEWAY=; DNS=; SSID=
+	[ -r "$1" ] || return 1
+	while IFS= read -r line || [ -n "$line" ]; do
+		key=${line%%=*}; val=${line#*=}
+		[ "$key" = "$line" ] && continue
+		val=${val#\"}; val=${val%\"}
+		case "$key" in
+		MODE) MODE=$val ;;
+		ADDRESS) ADDRESS=$val ;;
+		PREFIX) PREFIX=$val ;;
+		GATEWAY) GATEWAY=$val ;;
+		DNS) DNS=$val ;;
+		SSID) SSID=$val ;;
+		esac
+	done < "$1"
+	[ "$MODE" = static ] || return 1
+	ipv4 "$ADDRESS" && ipv4 "$GATEWAY" || return 1
+	case "$PREFIX" in ''|*[!0-9]*) return 1 ;; esac
+	[ "$PREFIX" -ge 8 ] && [ "$PREFIX" -le 30 ] || return 1
+	for d in $DNS; do ipv4 "$d" || return 1; done
+	case "$SSID" in *[!0-9a-f]*) return 1 ;; esac
+	return 0
+}
+
+# ssidhex is the network joined now, in hex of the form wpa_cli prints it, as the daemon stored it.
+ssidhex() {
+	$WPA status 2>/dev/null | sed -n 's/^ssid=//p' | head -1 | tr -d '\n' | od -An -v -tx1 | tr -d ' \n'
+}
+
+# stopdhcp ends a running client and waits for it to be gone: on its way out it sends its release and
+# runs the script's deconfig, which flushes wlan0, and that must not land on an address put on after it.
+stopdhcp() {
+	pidof udhcpc >/dev/null || return 0
+	killall udhcpc 2>/dev/null
+	n=0
+	while pidof udhcpc >/dev/null && [ $n -lt 10 ]; do sleep 1; n=$((n+1)); done
+	pidof udhcpc >/dev/null && killall -9 udhcpc 2>/dev/null
+	return 0
 }
 
 dhcp() {
 	pidof udhcpc >/dev/null || udhcpc -i $IF -b -R -t 10 -p /run/udhcpc.pid -s "$SCRIPT" > /tmp/udhcpc.log 2>&1
+	echo dhcp > $APPLIED
 }
 
-load() {
-	MODE=; ADDRESS=; PREFIX=; GATEWAY=; DNS=
-	[ -r "$1" ] && . "$1"
-	PREFIX=${PREFIX:-24}
-	[ "$MODE" = static ] && [ -n "$ADDRESS" ] && [ -n "$GATEWAY" ]
-}
-
-# fixed puts the loaded fixed address on, with its route and name servers.
+# fixed puts the loaded fixed address on, with its route and name servers. An address and route already
+# in place are left (the keeper calls this whenever the default route is missing, and taking an address
+# down to put it back costs connections), but the DHCP client goes and the name servers are written.
 fixed() {
-	# Already so, with its route: nothing to do. The network keeper calls this whenever it finds no
-	# default route, and an address in place must not be taken down to be put back.
-	if ip -4 addr show dev $IF 2>/dev/null | grep -q "inet $ADDRESS/$PREFIX " &&
-		ip route show default 2>/dev/null | grep -q "via $GATEWAY dev $IF"; then
-		return 0
-	fi
-	killall udhcpc 2>/dev/null
+	stopdhcp
 	ip link set $IF up 2>/dev/null
-	ip -4 addr flush dev $IF 2>/dev/null
-	ip addr add "$ADDRESS/$PREFIX" dev $IF 2>/dev/null || return 1
-	ip route replace default via "$GATEWAY" dev $IF 2>/dev/null || return 1
+	if ! { ip -4 addr show dev $IF 2>/dev/null | grep -q "inet $ADDRESS/$PREFIX " &&
+		ip -4 addr show dev $IF 2>/dev/null | grep -c "inet " | grep -qx 1 &&
+		ip route show default 2>/dev/null | grep -q "via $GATEWAY dev $IF"; }; then
+		ip -4 addr flush dev $IF 2>/dev/null
+		ip addr add "$ADDRESS/$PREFIX" dev $IF 2>/dev/null || return 1
+		ip route replace default via "$GATEWAY" dev $IF 2>/dev/null || return 1
+		log "fixed address $ADDRESS/$PREFIX via $GATEWAY"
+	fi
 	{
 		for d in ${DNS:-$GATEWAY}; do echo "nameserver $d"; done
 	} > "$RESOLV.tmp" && mv -f "$RESOLV.tmp" "$RESOLV"
-	log "fixed address $ADDRESS/$PREFIX via $GATEWAY"
+	echo static > $APPLIED
+	rm -f $GWFAIL
 }
 
-# automatic is DHCP; restart asks a running client again from the start, as after a change of network,
-# where the lease it has may belong to the network left behind.
+# automatic is DHCP; restart asks again from the start, as after a change of network, where the lease
+# a running client holds may belong to the network left behind.
 automatic() {
-	if [ "$1" = restart ]; then
-		killall udhcpc 2>/dev/null
-		ip -4 addr flush dev $IF 2>/dev/null
-		sleep 1
-	elif ! pidof udhcpc >/dev/null; then
-		# No client running: whatever address is on is a fixed one from before the switch to DHCP.
+	if [ "$1" = restart ] || [ "$(cat $APPLIED 2>/dev/null)" = static ]; then
+		stopdhcp
 		ip -4 addr flush dev $IF 2>/dev/null
 	fi
 	dhcp
 }
 
-# apply puts a setting file on as it is, without any trial.
+# apply puts the setting in use on as it is, without any trial, unless this session is on DHCP for a
+# reason of its own or the device is on another network than the address was set on.
 apply() {
-	if load "$1"; then
-		fixed || automatic restart
-	else
-		automatic "$2"
+	if ! load "$CONF"; then
+		automatic "$1"
+		return
 	fi
+	if [ -r $SESSION ]; then
+		automatic "$1"
+		return
+	fi
+	now=$(ssidhex)
+	if [ -n "$SSID" ] && [ -n "$now" ] && [ "$now" != "$SSID" ]; then
+		echo "on another network than the fixed address was set on" > $SESSION
+		log "on another network than $ADDRESS was set on: DHCP until the next boot"
+		automatic restart
+		return
+	fi
+	fixed || automatic restart
 }
 
-mkdir -p /run/techo5
+mkdir -p $RUN
+# One at a time: the daemon serializes its own changes, but the keeper, a Wi-Fi join and a trial can
+# still meet here, and two trials at once would each take the other's address for the one to keep.
+exec 9>$RUN/network.lock
+flock 9
 
 case "$1" in
 up)
-	apply "$CONF"
+	apply
 	;;
 renew)
-	apply "$CONF" restart
+	apply restart
 	;;
 try)
+	[ -r "$NEW" ] || exit 0
 	rm -f $FALLBACK
-	if ! load "$CONF"; then
+	if ! load "$NEW"; then
+		# DHCP needs no trial: the router hands out what works on its network.
+		mv -f "$NEW" "$CONF"
+		rm -f $SESSION
 		automatic restart
+		log "address by DHCP"
 		exit 0
 	fi
 	reason=
@@ -112,19 +187,34 @@ try)
 			sleep 1
 		done
 	fi
-	[ -z "$reason" ] && exit 0
-	# On trial and failed: the setting before it goes back, file and all.
-	echo "$reason" > $FALLBACK
-	log "new fixed address not kept: $reason; back to the setting before"
-	if [ -r "$CONF.prev" ]; then
-		cp "$CONF.prev" "$CONF.tmp" && mv -f "$CONF.tmp" "$CONF"
-	else
-		echo "MODE=dhcp" > "$CONF"
+	if [ -z "$reason" ]; then
+		mv -f "$NEW" "$CONF"
+		rm -f $SESSION
+		log "fixed address $ADDRESS/$PREFIX kept"
+		exit 0
 	fi
-	apply "$CONF" restart
+	# On trial and failed: the candidate goes, and the setting in use goes back on.
+	echo "$reason" > $FALLBACK
+	rm -f "$NEW"
+	log "new fixed address not kept: $reason; back to the setting in use"
+	apply restart
+	;;
+check)
+	[ "$(cat $APPLIED 2>/dev/null)" = static ] || exit 0
+	load "$CONF" || exit 0
+	if ping -c 1 -W 2 "$GATEWAY" >/dev/null 2>&1 || arping -q -I $IF -c 1 -w 2 "$GATEWAY" 2>/dev/null; then
+		rm -f $GWFAIL
+		exit 0
+	fi
+	n=$(( $(cat $GWFAIL 2>/dev/null || echo 0) + 1 ))
+	echo $n > $GWFAIL
+	[ $n -lt 5 ] && exit 0
+	echo "the gateway $GATEWAY did not answer for five minutes" > $SESSION
+	log "gateway $GATEWAY silent for five minutes: DHCP until the next boot"
+	automatic restart
 	;;
 *)
-	echo "usage: techo5-net up|renew|try" >&2
+	echo "usage: techo5-net up|renew|try|check" >&2
 	exit 2
 	;;
 esac

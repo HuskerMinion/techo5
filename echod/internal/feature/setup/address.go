@@ -14,16 +14,17 @@ import (
 
 // addressSection is how the device gets its address on the network: from the router's DHCP, as every
 // device starts, or fixed. A new fixed address that does not work, taken by another device or with a
-// gateway that does not answer from it, is given up for the setting before it, and this says why.
+// gateway that does not answer from it, is dropped and the setting in use kept, and this says why.
+// Not offered on an image without techo5-net, which could save a setting but never try it.
 func addressSection(w http.ResponseWriter, token string) {
-	if !wifi.Available() {
+	if !wifi.Available() || !wifi.AddressSupported() {
 		return
 	}
 	a := wifi.LoadAddress()
 	fmt.Fprint(w, `<fieldset><legend>Network address</legend><form method="post" action="/setup/save">`)
 	hidden(w, token, "address", "connections")
 	if reason := wifi.AddressFallback(); reason != "" {
-		fmt.Fprintf(w, `<p class="bad">The last change was not kept: %s. The device went back to the setting
+		fmt.Fprintf(w, `<p class="bad">The last change was not kept: %s. The device kept the setting
 		 below.</p>`, html.EscapeString(reason))
 	}
 	checked := func(on bool) string {
@@ -39,16 +40,18 @@ func addressSection(w http.ResponseWriter, token string) {
 	fmt.Fprintf(w, `<label><input type="radio" name="mode" value="dhcp"%s> Automatic, from the router (DHCP)</label>
 	 <label><input type="radio" name="mode" value="fixed"%s> Fixed</label>
 	 <label for="address">Address</label>
-	 <input id="address" name="address" value="%s" autocomplete="off" placeholder="192.168.1.50/24" inputmode="decimal">
+	 <input id="address" name="address" value="%s" autocomplete="off" placeholder="192.168.1.50/24">
 	 <label for="gateway">Gateway</label>
-	 <input id="gateway" name="gateway" value="%s" autocomplete="off" placeholder="192.168.1.1" inputmode="decimal">
+	 <input id="gateway" name="gateway" value="%s" autocomplete="off" placeholder="192.168.1.1">
 	 <label for="dns">DNS</label>
-	 <input id="dns" name="dns" value="%s" autocomplete="off" placeholder="the gateway" inputmode="decimal">
+	 <input id="dns" name="dns" value="%s" autocomplete="off" placeholder="the gateway">
 	 <p class="note">A fixed address can be one the router's DHCP does not hand out. Without a prefix it is
 	  /24. Up to three DNS servers, with commas between them; left empty, it asks the gateway.</p>
-	 <p class="note">Changing it moves this page to the new address. A new fixed address is tried first: if
-	  another device has it, or the gateway does not answer from it, the device goes back to the setting it
-	  had and says why here. Once kept, it is used as it is after every restart. Home Assistant follows the
+	 <p class="note">Changing it moves this page to the new address, where the browser has to be let in
+	  again. A new fixed address is tried first: if another device has it, or the gateway does not answer
+	  from it, the device keeps the setting it had and says why here. Once kept, it is used as it is after
+	  every restart, on the Wi-Fi it was set on; on another network, or when its gateway stays silent for five
+	  minutes, the device takes an address from the router until it restarts. Home Assistant follows the
 	  device to a new address by itself, about two minutes after the change.</p>
 	 <p><button type="submit">Save</button></p></form></fieldset>`,
 		checked(!a.Fixed), checked(a.Fixed), html.EscapeString(a.CIDR()), html.EscapeString(ipString(a)), html.EscapeString(dns))
@@ -80,10 +83,10 @@ func saveAddress(w http.ResponseWriter, r *http.Request) (problem string, handle
 	if r.PostFormValue("mode") == "fixed" && !a.Fixed {
 		return "a fixed address needs the address itself, like 192.168.1.50/24", false
 	}
-	before := wifi.LoadAddress()
-	if err := wifi.SaveAddress(a); err != nil {
-		return "the address could not be saved: " + err.Error(), false
+	if wifi.AddressUnchanged(a) {
+		return "", false // the setting in use: nothing to try, nothing moves
 	}
+	before := wifi.LoadAddress()
 	slog.Info("setup page: network address set", "address", a.String())
 
 	ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
@@ -91,7 +94,7 @@ func saveAddress(w http.ResponseWriter, r *http.Request) (problem string, handle
 	cancel()
 	safe.Go("network address", func() {
 		time.Sleep(applyAfter)
-		if _, err := wifi.ApplyAddress(context.Background()); err != nil {
+		if _, err := wifi.ChangeAddress(context.Background(), a); err != nil {
 			slog.Warn("setup page: the network address could not be applied", "err", err)
 		}
 	})
@@ -107,8 +110,9 @@ func saveAddress(w http.ResponseWriter, r *http.Request) (problem string, handle
 		next := "http://" + a.IP.String() + "/setup"
 		fmt.Fprintf(w, `<p><strong>Saved.</strong> In a moment the device moves to %s; Home Assistant
 		 finds it there by itself, within about two minutes.</p>
-		 <p><a href="%s">Open the setup page there</a>. If it is not found within a minute, the address did not
-		  work and the device went back to the one it had: open the page there to see why.</p></div>`, html.EscapeString(a.IP.String()), html.EscapeString(next))
+		 <p><a href="%s">Open the setup page there</a> (let the browser in again on the device). If it is not
+		  found within a minute, the address did not work and the device kept the one it had: open the page
+		  there to see why.</p></div>`, html.EscapeString(a.IP.String()), html.EscapeString(next))
 	} else {
 		fmt.Fprint(w, `<p><strong>Saved.</strong> In a moment the device asks the router for an address.</p>
 		 <p>The setup page will be at that new address: the router's list of devices shows it, and so does the

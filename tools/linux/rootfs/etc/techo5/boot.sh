@@ -171,6 +171,10 @@ t5_bt_up "$BT_MODULE" /var/log
 				t5_ntp
 				ntpd $(t5_ntp_peers) > /dev/null 2>&1
 			fi
+			# A fixed address whose gateway stays silent gives way to DHCP for the session
+			# (techo5-net check): without it, a device whose router moved to another subnet, or
+			# whose supplicant hung, would keep an address and a route and never be noticed.
+			[ -x /usr/local/sbin/techo5-net ] && /usr/local/sbin/techo5-net check
 			t5_wifi_prefer5
 			continue
 		fi

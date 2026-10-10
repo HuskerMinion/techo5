@@ -218,7 +218,13 @@ func (d *Display) addressTap(x, y int) {
 	hit := d.r.addrHit(x, y)
 	d.mu.Lock()
 	f := d.wifi.addr
-	if f == nil || f.busy != "" {
+	if f == nil {
+		d.mu.Unlock()
+		return
+	}
+	// While a change is tried (up to about a minute, with a lease to wait for), only Back: the trial goes
+	// on without the page, and its outcome is on the setup page and in the log.
+	if f.busy != "" && hit != "Back" {
 		d.mu.Unlock()
 		return
 	}
@@ -271,8 +277,8 @@ func (d *Display) saveAddress() {
 		d.mu.Unlock()
 		return
 	}
-	if err := wifi.SaveAddress(a); err != nil {
-		f.err = "Could not be saved: " + err.Error()
+	if wifi.AddressUnchanged(a) {
+		f.note = "Nothing changed: that is the setting in use."
 		d.mu.Unlock()
 		return
 	}
@@ -281,7 +287,7 @@ func (d *Display) saveAddress() {
 	d.wake()
 	slog.Info("network address set on the screen", "address", a.String())
 	safe.Go("network address", func() {
-		moved, err := wifi.ApplyAddress(context.Background())
+		moved, err := wifi.ChangeAddress(context.Background(), a)
 		note := ""
 		switch why := wifi.AddressFallback(); {
 		case err != nil:

@@ -2020,6 +2020,12 @@ func (d *Display) frame() time.Duration {
 	// lock stays open behind it.
 	relockOnClose(s.showSheet || (d.wifiOpen && d.wifi.addr != nil))
 	s.showWifi, s.wifi = d.wifiOpen, d.wifi
+	if d.wifi.addr != nil {
+		// The page's form as it is now: the taps and the change running in the background write it
+		// under the lock, and the frame is drawn without it.
+		form := *d.wifi.addr
+		s.wifi.addr = &form
+	}
 	restartArm := d.restartArm
 	wifiAt := d.wifiAt
 	d.mu.Unlock()

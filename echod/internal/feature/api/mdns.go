@@ -3,6 +3,7 @@ package api
 import (
 	"context"
 	"log/slog"
+	"net"
 	"time"
 
 	"github.com/ygelfand/go-esphome-device/mdns"
@@ -79,11 +80,15 @@ func (a *API) advertise(ctx context.Context, port int) {
 			}
 		}
 		adv.Close()
-		moved := metrics.AddressKey(metrics.Addresses()) != metrics.AddressKey(ips)
+		moved := movedIPv4(ips, metrics.Addresses())
 		slog.Info("addresses or key changed, re-advertising over mdns", "was", metrics.AddressKey(ips), "key was", keyName(keyed))
 		if !moved {
 			continue
 		}
+		// The IPv4 address Home Assistant connected to has gone for another, as when a fixed one is set
+		// (lib/wifi/address.go): an IPv6 address arriving or rotating, or a first lease, is no reason to
+		// drop working connections.
+		//
 		// Home Assistant does not take a new address for a device it still counts as connected, so a
 		// device on Wi-Fi that roams is not torn from a working connection by a stray record. A
 		// connection to an address the device no longer has looks connected until its keepalive gives
@@ -95,6 +100,24 @@ func (a *API) advertise(ctx context.Context, port int) {
 			return
 		}
 	}
+}
+
+// movedIPv4 is whether the device's IPv4 addresses changed from one set to another: the address Home
+// Assistant connected to is gone. A first address, an address lost with nothing in its place, and any
+// change to the IPv6 addresses alone are not a move.
+func movedIPv4(was, now []net.IP) bool {
+	before, after := v4Key(was), v4Key(now)
+	return before != "" && after != "" && before != after
+}
+
+func v4Key(ips []net.IP) string {
+	var v4 []net.IP
+	for _, ip := range ips {
+		if ip.To4() != nil {
+			v4 = append(v4, ip)
+		}
+	}
+	return metrics.AddressKey(v4)
 }
 
 // movedGap is how long a device that changed address stays unannounced: longer than Home Assistant's

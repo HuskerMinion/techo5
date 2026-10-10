@@ -16,11 +16,12 @@ import (
 var applyAfter = 2 * time.Second
 
 // Actions: network_address sets how the device gets its address (lib/wifi/address.go). An empty address
-// is DHCP; otherwise the address, with or without its prefix, the gateway, and name servers if not the
-// gateway. A new fixed address that does not work is given up for the setting before it by the device
-// itself.
+// is DHCP, and the gateway and name servers are then ignored; otherwise the address, with or without its
+// prefix, the gateway, and name servers if not the gateway. A new fixed address that does not work is
+// dropped by the device itself, which keeps the setting in use. Not offered on an image without
+// techo5-net, which could save a setting but never try it.
 func (w *Watch) Actions() []*esphome.Action {
-	if !wifi.Available() {
+	if !wifi.Available() || !wifi.AddressSupported() {
 		return nil
 	}
 	return []*esphome.Action{{
@@ -35,13 +36,13 @@ func (w *Watch) Actions() []*esphome.Action {
 			if err != nil {
 				return nil, err
 			}
-			if err := wifi.SaveAddress(a); err != nil {
-				return nil, err
+			if wifi.AddressUnchanged(a) {
+				return nil, nil // the setting in use: nothing to try
 			}
 			slog.Info("network address set from Home Assistant", "address", a.String())
 			safe.Go("network address", func() {
 				time.Sleep(applyAfter)
-				if _, err := wifi.ApplyAddress(context.Background()); err != nil {
+				if _, err := wifi.ChangeAddress(context.Background(), a); err != nil {
 					slog.Warn("the network address could not be applied", "err", err)
 				}
 			})

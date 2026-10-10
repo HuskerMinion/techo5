@@ -4,8 +4,6 @@ package display
 
 import (
 	"image"
-	"image/png"
-	"os"
 	"testing"
 	"time"
 )
@@ -47,12 +45,6 @@ func TestTheAddressPageIsTappedWhereItIsDrawn(t *testing.T) {
 		// Between the fields and the keypad is the status line, which is no key.
 		if got := r.addrHit(size.X/2, r.s(addrStatusTopBase)-r.s(4)); got != "" {
 			t.Errorf("%v: the status line reads as %q", size, got)
-		}
-		if out := os.Getenv("ADDRESS_PAGE_PNG"); out != "" {
-			if fh, err := os.Create(out + "-" + string(rune('0'+size.X/320)) + ".png"); err == nil {
-				_ = png.Encode(fh, img)
-				fh.Close()
-			}
 		}
 	}
 }
