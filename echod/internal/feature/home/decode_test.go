@@ -31,10 +31,12 @@ func hugePNG(w, h uint32) []byte {
 
 // A picture is measured before it is unpacked: an 8 MB JPEG can hold 20000×15000 pixels, and
 // decoding that asks for the better part of a gigabyte on a device that has one for everything.
-// The panel is 960×480, so nothing that large was ever going to be shown.
+// The panel is 960×480, so nothing that large was ever going to be shown. The one tried here is
+// 9000×6000, past the photo budget: at 20000×15000 the png package on 32-bit ARM, which the
+// devices are, refuses the size itself before the budget is asked, and the test saw its words.
 func TestAnAbsurdlyLargeImageIsRefusedBeforeItIsDecoded(t *testing.T) {
-	if _, err := decodeWithin(hugePNG(20000, 15000), maxPhotoPixels, "a photo"); err == nil {
-		t.Fatal("a 300 megapixel photo was decoded")
+	if _, err := decodeWithin(hugePNG(9000, 6000), maxPhotoPixels, "a photo"); err == nil {
+		t.Fatal("a 54 megapixel photo was decoded")
 	} else if !strings.Contains(err.Error(), "pixels") {
 		t.Errorf("%v, want something about how many pixels it declared", err)
 	}
