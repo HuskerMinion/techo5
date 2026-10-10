@@ -322,13 +322,16 @@ t5_wifi_joined() { wpa_cli -p /run/wpa -i wlan0 status 2>/dev/null | grep -q '^w
 # A pin outlives the channel it was made for: a router on automatic channels moves its 5 GHz radio
 # (radar on a DFS channel, a channel scan), and a supplicant pinned to the old channel never finds it
 # again (#111). So once the link has been gone at two checks in a row, the pin comes off and the
-# supplicant looks on every band again.
+# supplicant looks on every band again. A link on another channel than the pin's is one the pin no
+# longer holds: a network joined or forgotten since reloads the supplicant without it.
 t5_wifi_prefer5() {
 	w="wpa_cli -p /run/wpa -i wlan0"
 	pin=/run/techo5/prefer5-pin
 	if [ -s $pin ]; then
 		if t5_wifi_joined; then
 			rm -f $pin.miss
+			on=$(iw dev wlan0 link 2>/dev/null | sed -n 's/.*freq: \([0-9]*\).*/\1/p')
+			[ -n "$on" ] && [ "${on%%.*}" != "$(cut -d' ' -f2 $pin)" ] && rm -f $pin
 		elif [ -e $pin.miss ]; then
 			log "wifi: not associated while pinned to $(cut -d' ' -f2 $pin) MHz; back to every band"
 			$w set_network "$(cut -d' ' -f1 $pin)" freq_list "" >/dev/null 2>&1

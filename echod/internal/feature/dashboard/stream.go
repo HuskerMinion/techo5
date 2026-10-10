@@ -137,7 +137,9 @@ func (s *stream) problem(text string) {
 	s.f.Changed.Emit(struct{}{})
 }
 
-// run connects and reconnects until closed, waiting longer each time it fails.
+// run connects and reconnects until closed, waiting longer each time it fails. A connection that
+// lasted is not a failure: the server ending a stuck session (#112) is answered within a second, not
+// after the longest wait of failures long past.
 func (s *stream) run() {
 	wait := time.Second
 	for {
@@ -147,7 +149,11 @@ func (s *stream) run() {
 		if stopped {
 			return
 		}
+		began := time.Now()
 		err := s.once()
+		if time.Since(began) > time.Minute {
+			wait = time.Second
+		}
 		s.mu.Lock()
 		stopped = s.stopped
 		s.mu.Unlock()

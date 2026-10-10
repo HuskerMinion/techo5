@@ -251,22 +251,29 @@ func serve(ctx context.Context, b *browser, g *guard, cfg config, raw net.Conn) 
 		c.Close()
 	}()
 	go keepOnDashboards(sctx, tab, b.cfg.ha+h.Path, g, h.Name)
+	late := 0
 	for lines.Scan() {
 		var t touchMsg
 		if json.Unmarshal(lines.Bytes(), &t) != nil {
 			continue
 		}
-		// A touch the page does not take within tabAnswer is a stuck tab, and every touch after it
-		// would wait behind it, unread (#112): the session ends, and the device connects again to a
-		// new tab.
+		// A tab that does not take touches is stuck, and every touch after one would wait behind it,
+		// unread (#112): the session ends, and the device connects again to a new tab. Two late in a
+		// row, not one: a Pi loading another screen's heavy dashboard can keep Chrome busy past
+		// tabAnswer once, and closing this tab for it would only load it again.
 		ctx, cancelTouch := context.WithTimeout(tab, tabAnswer)
 		err := chromedp.Run(ctx, chromedp.ActionFunc(func(ctx context.Context) error { return touch(ctx, t) }))
 		cancelTouch()
 		if errors.Is(err, context.DeadlineExceeded) {
-			slog.Warn("a touch was not taken; closing the dashboard", "name", h.Name)
-			w.markStuck()
-			return
+			if late++; late >= 2 {
+				slog.Warn("touches were not taken; closing the dashboard", "name", h.Name)
+				w.markStuck()
+				return
+			}
+			slog.Warn("a touch was not taken in time", "name", h.Name)
+			continue
 		}
+		late = 0
 		if err != nil {
 			slog.Warn("touch", "err", err)
 		}
