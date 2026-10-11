@@ -47,7 +47,9 @@ func runAirPlayReceiver(ctx context.Context, name string) {
 		slog.Error("streaming: writing shairport-sync's configuration failed", "err", err)
 		return
 	}
-	safe.Go("airplay audio", func() { pump(ctx, home.AirPlayName, r, nil) })
+	// The sender is reached only while this receiver runs.
+	defer airplayRemote.forget()
+	safe.Go("airplay audio", func() { pump(ctx, home.AirPlayName, r, nil, airplayStarts) })
 	supervise(ctx, program{name: "shairport-sync", path: shairportPath, args: []string{"-c", conf}, stdout: w, cred: cred})
 }
 
@@ -142,9 +144,76 @@ func readAirPlayMetadata(ctx context.Context, path string) {
 	// Covers are laid out apart from the reading, so a slow one never holds the pipe up: shairport-sync
 	// drops what it cannot write.
 	covers := &latest{do: func(b []byte) { home.ReceivedPicture(home.AirPlayName, b) }}
+	session := &airplaySession{remote: airplayRemote, starts: airplayStarts, paused: func(paused bool) {
+		media.Get().ReceiverPaused(home.AirPlayName, paused)
+	}}
 	followAirPlayMetadata(f, func(title, artist, album string) {
 		media.Get().SetReceivedTrack(home.AirPlayName, title, artist, album)
-	}, covers.put)
+	}, covers.put, session)
+}
+
+// airplaySession follows the session as the metadata tells of it: who the sender is and how to reach
+// it (dacpRemote), and whether it has paused.
+//
+// An iPhone pausing says so (core/caps 2), and some seconds later ends the session (ssnc/pend); until
+// then shairport-sync goes on sending silence. Played again before the end it only says it plays (caps
+// 1); after it, it starts a new session (pbeg, prsm) and says so. A session ended without the pause is
+// the phone gone: it chose another speaker, or left.
+type airplaySession struct {
+	remote *dacpRemote
+	starts *startCount       // counts the times the sender starts to play, for the audio (pump)
+	paused func(paused bool) // the sender pausing, or playing again, on its own
+	caps   byte              // what the sender last said it is doing: 1 playing, 2 paused, 0 nothing yet
+}
+
+// airplayStarts counts the times the AirPlay receiver's sender starts to play; there is one receiver.
+var airplayStarts = &startCount{}
+
+// heard takes one of the items about the session.
+func (s *airplaySession) heard(typ, code string, d []byte) {
+	if s == nil {
+		return
+	}
+	switch {
+	case typ == "core" && code == "caps" && len(d) == 1 && (d[0] == 1 || d[0] == 2):
+		if d[0] == 1 && s.caps == 2 {
+			// Playing again within the session: an iPhone that pauses keeps it a while before it
+			// ends it, and one played again meanwhile says no more than this.
+			s.starts.start()
+		}
+		s.caps = d[0]
+		s.paused(d[0] == 2)
+	case typ != "ssnc":
+	case code == "daid":
+		s.remote.setID(string(d))
+	case code == "acre":
+		s.remote.setToken(string(d))
+	case code == "clip":
+		s.remote.setClient(string(d))
+	case code == "dapo":
+		s.remote.setPort(d)
+	case code == "pbeg", code == "prsm":
+		// The sender playing: a session starting, or going on after a flush.
+		if code == "pbeg" || s.caps == 2 {
+			s.starts.start()
+		}
+		s.caps = 1
+		s.paused(false)
+	}
+}
+
+// ended is the session ending (pend, disc), and says whether it is over for good. One the sender ended
+// as it paused is not: the song stays for the screen, with play on it, and the way back to the sender
+// is kept for that play to reach it.
+func (s *airplaySession) ended() bool {
+	if s == nil {
+		return true
+	}
+	if s.caps == 2 {
+		return false
+	}
+	s.remote.forget()
+	return true
 }
 
 // cutField is a song field far longer than any name cut to 1024 bytes, back to the start of the
@@ -250,9 +319,9 @@ func (b *itemBudget) ReadByte() (byte, error) {
 
 // followAirPlayMetadata reads items from r until it ends, calling told with the song whenever a field of
 // it changes, and pictured with its cover as the phone sends one; both with nothing when the session
-// ends. Anything the decoder cannot take is passed over, and reading goes on after it: only r failing
-// ends it.
-func followAirPlayMetadata(r io.Reader, told func(title, artist, album string), pictured func(picture []byte)) {
+// ends for good. What the items say of the session goes to session, which may be nil. Anything the
+// decoder cannot take is passed over, and reading goes on after it: only r failing ends it.
+func followAirPlayMetadata(r io.Reader, told func(title, artist, album string), pictured func(picture []byte), session *airplaySession) {
 	src := &readErr{r: r}
 	br := bufio.NewReaderSize(src, 64<<10)
 	budget := &itemBudget{br: br}
@@ -311,9 +380,13 @@ func followAirPlayMetadata(r io.Reader, told func(title, artist, album string), 
 		case typ == "core" && code == "asal":
 			album = data
 		case typ == "ssnc" && (code == "pend" || code == "disc"):
+			if !session.ended() {
+				continue
+			}
 			title, artist, album = "", "", ""
 			pictured(nil)
 		default:
+			session.heard(typ, code, cutField(d))
 			continue
 		}
 		told(title, artist, album)

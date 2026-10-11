@@ -101,6 +101,13 @@ func (m *Stream) Receiving() string {
 	return m.track.item
 }
 
+// pausedOn is whether t is the track loaded and the listener has it paused.
+func (m *Stream) pausedOn(t *track) bool {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return m.track == t && m.paused
+}
+
 // receive reads what the remote sends and queues it, until the remote goes quiet or the track is
 // replaced.
 func (m *Stream) receive(ctx context.Context, t *track, src PCMSource, conv *toSpeaker) error {
@@ -137,6 +144,11 @@ func (m *Stream) receive(ctx context.Context, t *track, src PCMSource, conv *toS
 		switch {
 		case err == nil:
 		case errors.Is(err, os.ErrDeadlineExceeded):
+			// A sender paused along with the track sends nothing until it plays again (ReceiverControl):
+			// the track waits for it, paused, rather than ending.
+			if receiverControl(t.item) != nil && m.pausedOn(t) {
+				continue
+			}
 			slog.Info("received audio went quiet", "item", t.item)
 			return nil
 		case errors.Is(err, io.EOF), errors.Is(err, os.ErrClosed):

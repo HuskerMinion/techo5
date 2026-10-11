@@ -8,6 +8,7 @@ import (
 	"math"
 	"os"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/HuskerMinion/techo5/echod/internal/feature/media"
@@ -97,7 +98,8 @@ func (l *level) gain() float64 {
 // and none of the receiver's own is playing, and runs until the receiver goes quiet or something else
 // takes the speaker. r stays open across tracks and across the program's restarts. lv, when there is
 // one, scales every sample (Spotify's, which undoes librespot's own volume); nil leaves them as sent.
-func pump(ctx context.Context, name string, r *os.File, lv *level) {
+// starts, when there is one, counts the times the sender starts to play (AirPlay's).
+func pump(ctx context.Context, name string, r *os.File, lv *level, starts *startCount) {
 	buf := make([]byte, 16384)
 	for ctx.Err() == nil {
 		_ = r.SetReadDeadline(time.Time{})
@@ -122,22 +124,44 @@ func pump(ctx context.Context, name string, r *os.File, lv *level) {
 		case <-src.done:
 		}
 		// A track that ended because the receiver went quiet is simply over: what it sends next is a new
-		// one. One that was taken from it (something else played, or it was paused here, which no phone
-		// hears of) leaves the receiver still sending: that is set aside until it has been quiet a
-		// moment, which a pause on the phone gives.
+		// one. One that was taken from it (something else played, or it was stopped here, which not every
+		// phone hears of) leaves the receiver still sending: that is set aside until it has been quiet a
+		// moment, which a pause on the phone gives, or until the sender says it plays again. An iPhone
+		// told to pause keeps its session for some seconds, and shairport-sync sends silence all that
+		// time, so a play on it soon after a stop here came before any quiet, and was set aside with the
+		// rest for as long as it played.
 		if !src.wentQuiet() {
-			drain(ctx, r, buf, lv)
+			at := starts.count()
+			drain(ctx, r, buf, lv, func() bool { return starts.count() != at })
 		}
 	}
 }
 
-// drain reads and drops what r sends until it has sent nothing for setAside. It reads no faster than
-// the audio would play: librespot writes as fast as it is read, and drained flat out it would race
-// through the listener's queue while the speaker plays something else.
-func drain(ctx context.Context, r *os.File, buf []byte, lv *level) {
+// startCount counts the times a receiver's sender has started to play: a session beginning, or
+// going on after a pause. nil counts none.
+type startCount struct{ n atomic.Uint64 }
+
+func (c *startCount) count() uint64 {
+	if c == nil {
+		return 0
+	}
+	return c.n.Load()
+}
+
+func (c *startCount) start() {
+	if c != nil {
+		c.n.Add(1)
+	}
+}
+
+// drain reads and drops what r sends until it has sent nothing for setAside, or anew says the sender
+// started to play again. It reads no faster than the audio would play: librespot writes as fast as it
+// is read, and drained flat out it would race through the listener's queue while the speaker plays
+// something else.
+func drain(ctx context.Context, r *os.File, buf []byte, lv *level, anew func() bool) {
 	const bytesPerSecond = audioRate * audioChannels * 2
 	start, read := time.Now(), int64(0)
-	for ctx.Err() == nil {
+	for ctx.Err() == nil && !anew() {
 		switch ahead := time.Duration(read)*time.Second/bytesPerSecond - time.Since(start); {
 		case ahead > 0:
 			select {
@@ -170,7 +194,7 @@ type pipeSource struct {
 	mu      sync.Mutex
 	pending []byte
 	closed  bool
-	quiet   bool // the track's last read found the receiver quiet
+	quiet   bool // the track's last read found the receiver quiet; a paused track reads on after one
 	lv      *level
 	once    sync.Once
 	done    chan struct{}
@@ -205,15 +229,13 @@ func (s *pipeSource) Read(p []byte) (int, error) {
 	s.lv.fromPipe(n)
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	switch {
-	case s.closed:
+	if s.closed {
 		// Over while the read waited: what it took belongs to whatever reads the pipe next, and is
 		// dropped rather than queued to a track that has ended.
 		s.lv.passed(lead + max(n, 0))
 		return 0, os.ErrClosed
-	case errors.Is(err, os.ErrDeadlineExceeded):
-		s.quiet = true
 	}
+	s.quiet = errors.Is(err, os.ErrDeadlineExceeded)
 	return s.scale(p, lead+n), err
 }
 

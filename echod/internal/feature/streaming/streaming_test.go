@@ -40,7 +40,7 @@ func TestAirPlayMetadata(t *testing.T) {
 		got = append(got, [3]string{title, artist, album})
 	}, func(b []byte) {
 		pictures = append(pictures, string(b))
-	})
+	}, nil)
 	if len(got) != 4 || got[2] != [3]string{"Take It Easy", "Eagles", "Eagles"} || got[3] != [3]string{} {
 		t.Errorf("told %v", got)
 	}
@@ -62,7 +62,7 @@ func TestAirPlayMetadataPassesOverAnItemTooBig(t *testing.T) {
 		titles = append(titles, title)
 	}, func(b []byte) {
 		pictures = append(pictures, string(b))
-	})
+	}, nil)
 	if !slices.Equal(titles, []string{"After", ""}) || !slices.Equal(pictures, []string{"small", ""}) {
 		t.Errorf("titles %q, pictures %q", titles, pictures)
 	}
@@ -83,7 +83,7 @@ func TestAirPlayCoverAndFields(t *testing.T) {
 		titles = append(titles, title)
 	}, func(b []byte) {
 		pictures = append(pictures, string(b))
-	})
+	}, nil)
 	cut := strings.Repeat("€", 341) // 1023 bytes: the 342nd character would end past 1024
 	if !slices.Equal(titles, []string{"One", cut, ""}) {
 		t.Errorf("titles %d long: %q", len(titles), titles)
@@ -584,7 +584,7 @@ func TestEveryByteIsCountedOnce(t *testing.T) {
 	if _, err := w.Write(make([]byte, 4097)); err != nil {
 		t.Fatal(err)
 	}
-	drain(context.Background(), r, make([]byte, 16384), l) // what it went on sending, set aside
+	drain(context.Background(), r, make([]byte, 16384), l, func() bool { return false }) // what it went on sending, set aside
 	w.Close()
 
 	l.mu.Lock()
@@ -741,7 +741,7 @@ func TestThePumpLeavesTheSpeakerToWhatWasPlayedLast(t *testing.T) {
 	defer w.Close()
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	go pump(ctx, "AirPlay", r, nil)
+	go pump(ctx, "AirPlay", r, nil, nil)
 
 	w.Write(make([]byte, 4096))
 	waitUntil(t, func() bool { return count() == 1 })
@@ -759,6 +759,58 @@ func TestThePumpLeavesTheSpeakerToWhatWasPlayedLast(t *testing.T) {
 	// It pauses, then plays again: that is asked for.
 	time.Sleep(300 * time.Millisecond)
 	w.Write(make([]byte, 4096))
+	waitUntil(t, func() bool { return count() == 2 })
+}
+
+// A sender that starts to play again while what it sent is set aside takes the speaker back at once,
+// without the quiet: an iPhone told to pause keeps its session, and silence coming, for seconds, and a
+// play on it within them was set aside with the rest.
+func TestPlayingAgainIsNotSetAside(t *testing.T) {
+	was, wasAside := play, setAside
+	setAside = 5 * time.Second // long, so only the new session can end the setting aside
+	t.Cleanup(func() { play, setAside = was, wasAside })
+	var mu sync.Mutex
+	var started []media.PCMSource
+	play = func(name string, src media.PCMSource, rate, channels int) {
+		mu.Lock()
+		started = append(started, src)
+		mu.Unlock()
+	}
+	count := func() int { mu.Lock(); defer mu.Unlock(); return len(started) }
+	r, w, err := os.Pipe()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer w.Close()
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	starts := &startCount{}
+	go pump(ctx, "AirPlay", r, nil, starts)
+
+	w.Write(make([]byte, 4096))
+	waitUntil(t, func() bool { return count() == 1 })
+	// Stopped here: the sender keeps going a while, and is set aside.
+	mu.Lock()
+	started[0].Close()
+	mu.Unlock()
+	sending := make(chan struct{})
+	go func() {
+		for {
+			select {
+			case <-sending:
+				return
+			default:
+			}
+			w.Write(make([]byte, 4096))
+			time.Sleep(20 * time.Millisecond)
+		}
+	}()
+	defer close(sending)
+	time.Sleep(200 * time.Millisecond)
+	if count() != 1 {
+		t.Fatal("a sender still going took the speaker straight back")
+	}
+	starts.start() // the phone plays again
 	waitUntil(t, func() bool { return count() == 2 })
 }
 
@@ -794,7 +846,7 @@ func TestAQuietEndIsNotSetAside(t *testing.T) {
 	defer w.Close()
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	go pump(ctx, "AirPlay", r, nil)
+	go pump(ctx, "AirPlay", r, nil, nil)
 
 	w.Write(make([]byte, 4096))
 	waitUntil(t, func() bool { return count() == 1 })

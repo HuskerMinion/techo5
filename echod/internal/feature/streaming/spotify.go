@@ -417,7 +417,7 @@ func runSpotifyReceiver(ctx context.Context, name string) {
 	_ = os.Chmod(cache, 0o700)
 	handTo(cred, cache)
 	args, level := spotifyArgs(name, cache, script, volume)
-	safe.Go("spotify audio", func() { pump(ctx, home.SpotifyName, r, level) })
+	safe.Go("spotify audio", func() { pump(ctx, home.SpotifyName, r, level, nil) })
 	supervise(ctx, program{
 		name:   "librespot",
 		path:   librespotPath,

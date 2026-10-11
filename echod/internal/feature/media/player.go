@@ -141,6 +141,10 @@ type Player struct {
 	// play has come since.
 	stoppedAt atomic.Uint64
 
+	// toSender carries what is passed on to a received track's sender, one at a time and in order: a
+	// pause and the play straight after it must reach the phone that way round (tellSender).
+	toSender inOrder
+
 	// step is the level, written by the buttons, Home Assistant, the setup page, Music Assistant,
 	// Spotify and the night volume alike.
 	step atomic.Int32
@@ -890,8 +894,12 @@ func (p *Player) Transport(t Transport) {
 	case TransportStop:
 		p.Stop()
 	case TransportNext, TransportPrevious:
-		// Nothing to skip to: the tracks this player has are its own stations, and it plays one
-		// stream at a time.
+		// A received track's sender has a queue of its own, and one that can be reached is asked to skip
+		// (ReceiverControl). Otherwise there is nothing to skip to: the tracks this player has are its own
+		// stations, and it plays one stream at a time.
+		if from := p.Receiving(); from != "" {
+			p.tellSender(from, t)
+		}
 	}
 }
 
@@ -1145,11 +1153,17 @@ func (p *Player) Track() (title, artist, album string) {
 // the speaker from.
 func (p *Player) Playing() (playing, paused bool) { return p.stream.Playing() }
 
-// Pause leaves the track where it is, so it can be picked up again. A received track whose sender no
-// pause reaches (StopOnPause) is stopped instead: held, it would hold the sender up mid-write while
-// the phone shows it playing, and the speaker with it.
+// Pause leaves the track where it is, so it can be picked up again. A received track whose sender a
+// pause reaches (ReceiverControl) is paused here and the sender told, so the phone pauses with it. One
+// whose sender no pause reaches (StopOnPause) is stopped instead: held, it would hold the sender up
+// mid-write while the phone shows it playing, and the speaker with it.
 func (p *Player) Pause() {
 	if from := p.Receiving(); from != "" {
+		if receiverControl(from) != nil {
+			p.stream.Pause()
+			p.tellSender(from, TransportPause)
+			return
+		}
 		if _, ok := stopOnPause.Load(from); ok {
 			slog.Info("pausing a receiver that cannot be told: stopping it here", "from", from)
 			p.stream.Stop()
@@ -1162,16 +1176,127 @@ func (p *Player) Pause() {
 // stopOnPause holds the received sources that a pause here cannot reach (StopOnPause).
 var stopOnPause sync.Map
 
-// StopOnPause marks the received source name as one a pause on the device cannot reach: AirPlay and
-// Spotify Connect hear nothing back from the speaker, where a phone over Bluetooth is told.
+// StopOnPause marks the received source name as one a pause on the device cannot reach: Spotify
+// Connect hears nothing back from the speaker, where a phone over Bluetooth is told.
 func StopOnPause(name string) { stopOnPause.Store(name, true) }
 
-// Resume picks a paused track up again. (Stream.Resume is something else: it gives the speaker back
-// after a turn, and leaves a track the listener paused where it is.)
-func (p *Player) Resume() { p.stream.Unpause() }
+// receiverControls holds, for the received sources whose sender the device can reach, how to reach it
+// (ReceiverControl).
+var receiverControls sync.Map // name → func(Transport) bool
 
-// Stop ends the track, as Home Assistant's stop does.
-func (p *Player) Stop() { p.stream.Stop() }
+// ReceiverControl gives the received source name a way back to its sender, which a pause, a play and
+// a skip on the device go to: AirPlay's, which asks the phone over DACP. ctl says whether the sender
+// took the command; it is called off the screen's and Home Assistant's goroutines, since the sender is
+// across the network. A track whose sender took a pause stays paused here, however long the sender
+// then sends nothing, until the sender plays again or it is stopped.
+func ReceiverControl(name string, ctl func(Transport) bool) { receiverControls.Store(name, ctl) }
+
+func receiverControl(name string) func(Transport) bool {
+	if ctl, ok := receiverControls.Load(name); ok {
+		return ctl.(func(Transport) bool)
+	}
+	return nil
+}
+
+// tellSender passes t on to the sender of the received track named from, in order with whatever was
+// passed on before it. A pause the sender does not take ends the track here instead, as for a sender
+// no pause reaches (StopOnPause), unless something has played it again meanwhile.
+func (p *Player) tellSender(from string, t Transport) {
+	ctl := receiverControl(from)
+	if ctl == nil {
+		return
+	}
+	p.toSender.put(func() {
+		if ctl(t) {
+			return
+		}
+		slog.Info("the sender of a received track was not reached", "from", from, "transport", t)
+		if _, paused := p.stream.Playing(); t == TransportPause && paused && p.Receiving() == from {
+			p.stream.Stop()
+		}
+	})
+}
+
+// inOrder runs what it is given one at a time and in order, on a goroutine of its own while there is
+// anything to run. The zero value is ready.
+type inOrder struct {
+	mu      sync.Mutex
+	queue   []func()
+	running bool
+}
+
+func (o *inOrder) put(f func()) {
+	o.mu.Lock()
+	defer o.mu.Unlock()
+	o.queue = append(o.queue, f)
+	if !o.running {
+		o.running = true
+		safe.Go("in order", o.run)
+	}
+}
+
+// run does what is queued until nothing is. running goes false in the same hold of mu that finds the
+// queue empty, so a put just after it starts another; one that panics is let go of here, so the rest
+// still run.
+func (o *inOrder) run() {
+	for {
+		o.mu.Lock()
+		if len(o.queue) == 0 {
+			o.running = false
+			o.mu.Unlock()
+			return
+		}
+		f := o.queue[0]
+		o.queue = o.queue[1:]
+		o.mu.Unlock()
+		func() {
+			defer func() {
+				if r := recover(); r != nil {
+					slog.Error("recovered from a panic", "in", "in order", "panic", r)
+				}
+			}()
+			f()
+		}()
+	}
+}
+
+// ReceiverPaused is the sender of the received track named name pausing, or playing again, on its own
+// (from the phone): the track here follows it, without telling the sender back. A track by any other
+// name, or none, is left as it is.
+func (p *Player) ReceiverPaused(name string, paused bool) {
+	if p.Receiving() != name {
+		return
+	}
+	if paused {
+		p.stream.Pause()
+		return
+	}
+	p.stream.Unpause()
+}
+
+// Resume picks a paused track up again, and a received track's sender with it (ReceiverControl).
+// (Stream.Resume is something else: it gives the speaker back after a turn, and leaves a track the
+// listener paused where it is.)
+func (p *Player) Resume() {
+	if from := p.Receiving(); from != "" {
+		if _, paused := p.stream.Playing(); paused {
+			p.tellSender(from, TransportPlay)
+		}
+	}
+	p.stream.Unpause()
+}
+
+// Stop ends the track, as Home Assistant's stop does. A received track's sender that a pause reaches
+// (ReceiverControl) is paused as well: stopped only here, the phone would go on playing to a speaker
+// that drops what it sends.
+func (p *Player) Stop() {
+	if from := p.Receiving(); from != "" {
+		if playing, _ := p.stream.Playing(); playing {
+			p.tellSender(from, TransportPause)
+		}
+	}
+	p.stream.Stop()
+}
 
 // Sleep is the sleep timer: what is playing stops after a while.
 func (p *Player) Sleep() *sleeper { return p.sleep }
