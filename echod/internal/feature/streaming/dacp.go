@@ -3,19 +3,17 @@ package streaming
 import (
 	"context"
 	"encoding/binary"
-	"errors"
 	"fmt"
 	"log/slog"
-	"net"
 	"net/http"
 	"net/netip"
-	"strconv"
 	"sync"
 	"time"
 
 	"github.com/godbus/dbus/v5"
 
 	"github.com/HuskerMinion/techo5/echod/internal/feature/media"
+	"github.com/HuskerMinion/techo5/echod/internal/lib/netguard"
 )
 
 // dacpRemote is the way back to the phone playing over AirPlay: DACP, the remote control a sender
@@ -24,49 +22,60 @@ import (
 // iTunes_Ctrl_<DACP-ID> (_dacp._tcp), found through avahi; and it takes GET /ctrl-int/1/<command> with
 // the token. This is AirPlay as shairport-sync receives it (classic, not AirPlay 2).
 //
-// An iPhone ends the session each time it pauses and starts another to play again, with the same
-// DACP-ID and token, so what is known of the sender is kept across a pause (airplaySession) and dropped
-// only when the session ends for good.
+// Each session that plays names its sender afresh (take), from what it gave as it was set up and
+// nothing else: one from a sender that gives no DACP-ID or token leaves none to ask, rather than the
+// last one, which may be playing somewhere else by now. An iPhone ends the session each time it pauses
+// and starts another to play again, with the same DACP-ID and token, so what is known of it is kept
+// across a pause, for airplayKeptFor at most (airplaySession), and dropped when it has gone.
 type dacpRemote struct {
 	mu     sync.Mutex
 	id     string     // DACP-ID
 	token  string     // Active-Remote
 	client netip.Addr // the sender's address as the session gave it (clip)
 	port   uint16     // its DACP port, as shairport-sync found it (dapo)
+	portOf string     // the DACP-ID port was found for, kept with it when the sender goes (take)
+	took   uint64     // counts the sessions taken (take), for forgetIf
 }
 
 // airplayRemote is the AirPlay receiver's way back to its sender; there is one receiver.
 var airplayRemote = &dacpRemote{}
 
-func (d *dacpRemote) setID(id string) {
+// dacpSender is what a session says of its sender as it is set up, each part empty where the sender
+// gave none.
+type dacpSender struct {
+	id, token string     // DACP-ID and Active-Remote (daid, acre)
+	client    netip.Addr // where the session came from (clip), if a sender could be there (senderAddr)
+}
+
+// take makes s, the sender of a session starting to play, the one commands go to, whole: what it did
+// not give is not taken from the last sender. It says whether s is another sender than the last:
+// another DACP-ID, none, or one let go of since (forget).
+//
+// The port found for a DACP-ID (dapo) outlasts its sender: shairport-sync looks it up once, and not
+// again for a phone that comes back after it had gone, or after a session that named none. Only
+// another DACP-ID drops it, and shairport-sync then looks that one's up.
+func (d *dacpRemote) take(s dacpSender) (another bool) {
 	d.mu.Lock()
 	defer d.mu.Unlock()
-	if id != d.id {
-		// Another sender, or the same one choosing this speaker again: what was found of the last is
-		// not this one's.
-		d.client, d.port = netip.Addr{}, 0
+	another = s.id == "" || s.id != d.id
+	if s.id != "" && s.id != d.portOf {
+		d.port, d.portOf = 0, ""
 	}
-	d.id = id
+	d.id, d.token, d.client = s.id, s.token, s.client
+	d.took++
+	return another
 }
 
-func (d *dacpRemote) setToken(token string) {
+// sessions counts the sessions taken so far, for forgetIf.
+func (d *dacpRemote) sessions() uint64 {
 	d.mu.Lock()
 	defer d.mu.Unlock()
-	d.token = token
+	return d.took
 }
 
-// setClient takes the sender's address as shairport-sync wrote it; one that does not read is left out.
-func (d *dacpRemote) setClient(addr string) {
-	a, err := netip.ParseAddr(addr)
-	d.mu.Lock()
-	defer d.mu.Unlock()
-	if err != nil {
-		a = netip.Addr{}
-	}
-	d.client = a.Unmap()
-}
-
-// setPort takes the DACP port as shairport-sync sends it: four bytes, most significant first.
+// setPort takes the DACP port as shairport-sync sends it, four bytes, most significant first: for the
+// sender taken, which shairport-sync looks up once it plays, or, with none, for the last one it looked
+// up (portOf), whose service avahi saw again. Coming with neither, it is passed over.
 func (d *dacpRemote) setPort(b []byte) {
 	if len(b) != 4 {
 		return
@@ -74,16 +83,33 @@ func (d *dacpRemote) setPort(b []byte) {
 	p := binary.BigEndian.Uint32(b)
 	d.mu.Lock()
 	defer d.mu.Unlock()
-	if p > 0 && p <= 0xffff {
+	switch {
+	case p == 0 || p > 0xffff:
+	case d.id != "":
+		d.port, d.portOf = uint16(p), d.id
+	case d.portOf != "":
 		d.port = uint16(p)
 	}
 }
 
-// forget drops the sender: the session is over, and nothing from here reaches it any more.
+// forget drops the sender: it has gone, and nothing from here reaches it any more. The port found for
+// its DACP-ID stays with it (take).
 func (d *dacpRemote) forget() {
 	d.mu.Lock()
 	defer d.mu.Unlock()
-	d.id, d.token, d.client, d.port = "", "", netip.Addr{}, 0
+	d.id, d.token, d.client = "", "", netip.Addr{}
+}
+
+// forgetIf drops the sender unless a session has been taken since sessions said n, and says whether it
+// did: in one hold of mu, so the sender of a session starting just then is not the one dropped.
+func (d *dacpRemote) forgetIf(n uint64) bool {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	if d.took != n {
+		return false
+	}
+	d.id, d.token, d.client = "", "", netip.Addr{}
+	return true
 }
 
 // dacpCommands are DACP's words for the controls the device has.
@@ -95,9 +121,22 @@ var dacpCommands = map[media.Transport]string{
 	media.TransportPrevious: "previtem",
 }
 
-// control asks the sender for t, and says whether it took it: false with no sender to ask, or one that
-// cannot be reached. It is media's ReceiverControl for AirPlay.
-func (d *dacpRemote) control(t media.Transport) bool {
+// control binds t, as it is given, to the sender taken then (take): what it gives back asks that sender
+// for t when its turn comes (media's senderQueue), and says whether it took it. It is media's
+// ReceiverControl for AirPlay.
+func (d *dacpRemote) control(t media.Transport) func() bool {
+	d.mu.Lock()
+	of := d.id
+	d.mu.Unlock()
+	return func() bool { return d.ask(t, of) }
+}
+
+// ask asks the sender for t, and says whether it took it: false with no sender to ask, or one that
+// cannot be reached within dacpAskTimeout. A command given for one sender (of, its DACP-ID) and still
+// waiting when another has been taken, behind an ask of a phone slow to answer, is not passed on to
+// the new one, which plays a song of its own: it is let go of as taken, and the track here left as it
+// is.
+func (d *dacpRemote) ask(t media.Transport, of string) bool {
 	cmd, ok := dacpCommands[t]
 	if !ok {
 		return false
@@ -105,17 +144,24 @@ func (d *dacpRemote) control(t media.Transport) bool {
 	d.mu.Lock()
 	id, token, client, port := d.id, d.token, d.client, d.port
 	d.mu.Unlock()
+	if id != of {
+		slog.Info("streaming: a command given for the last AirPlay sender is not passed to the next", "command", cmd)
+		return true
+	}
 	if id == "" || token == "" {
 		slog.Info("streaming: no AirPlay sender to ask", "command", cmd)
 		return false
 	}
+	start := time.Now()
+	ctx, cancel := context.WithTimeout(context.Background(), dacpAskTimeout)
+	defer cancel()
 	// Where the sender is: as avahi finds it, and else as the session gave it. The session's address is
 	// often an IPv6 link-local one, which cannot be reached without knowing the interface; avahi's IPv4
 	// one can.
 	var tried []string
-	ctx, cancel := context.WithTimeout(context.Background(), dacpResolveTimeout)
-	host, err := dacpResolve(ctx, id)
-	cancel()
+	rctx, rcancel := context.WithTimeout(ctx, dacpResolveTimeout)
+	host, err := dacpResolve(rctx, id)
+	rcancel()
 	if err == nil {
 		tried = append(tried, host)
 	} else {
@@ -127,9 +173,9 @@ func (d *dacpRemote) control(t media.Transport) bool {
 		}
 	}
 	for _, hp := range tried {
-		err := dacpSend(hp, cmd, token)
+		err := dacpSend(ctx, hp, cmd, token)
 		if err == nil {
-			slog.Info("streaming: told the AirPlay sender", "command", cmd)
+			slog.Info("streaming: told the AirPlay sender", "command", cmd, "took", time.Since(start).Round(time.Millisecond))
 			return true
 		}
 		slog.Warn("streaming: telling the AirPlay sender failed", "command", cmd, "at", hp, "err", err)
@@ -137,8 +183,14 @@ func (d *dacpRemote) control(t media.Transport) bool {
 	return false
 }
 
-// dacpResolveTimeout bounds finding the sender: avahi answers from its cache at once, and asks the
-// network otherwise.
+// dacpAskTimeout bounds one command from start to answer: finding the sender and every try at it. A
+// sender that is there answers at once, and avahi from its cache; one that has gone holds a pause on the
+// device, which it never hears, no longer than this before the track is stopped here instead (media's
+// tellSender), and what waits behind it no longer either. A variable, for the tests.
+var dacpAskTimeout = 4 * time.Second
+
+// dacpResolveTimeout bounds finding the sender, within dacpAskTimeout: avahi answers from its cache at
+// once, and asks the network otherwise. What is left is for asking it.
 const dacpResolveTimeout = 3 * time.Second
 
 // dacpClient sends the commands. A sender answers at once or not at all.
@@ -149,10 +201,10 @@ var dacpClient = &http.Client{
 	},
 }
 
-// dacpSend asks the sender at hostport for cmd, with its token: any 2xx is taken (an iPhone answers
-// 200, the protocol says 204).
-func dacpSend(hostport, cmd, token string) error {
-	req, err := http.NewRequest(http.MethodGet, "http://"+hostport+"/ctrl-int/1/"+cmd, nil)
+// dacpSend asks the sender at hostport for cmd, with its token, within ctx: any 2xx is taken (an iPhone
+// answers 200, the protocol says 204).
+func dacpSend(ctx context.Context, hostport, cmd, token string) error {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, "http://"+hostport+"/ctrl-int/1/"+cmd, nil)
 	if err != nil {
 		return err
 	}
@@ -173,7 +225,8 @@ func dacpSend(hostport, cmd, token string) error {
 var dacpResolve = avahiResolveDACP
 
 // avahiResolveDACP asks avahi, on the system bus, where iTunes_Ctrl_<id> is: its IPv4 address, which
-// needs no interface to reach, and its port.
+// needs no interface to reach, and its port. Any host on the network can announce that name, at any
+// address, so one no sender could be at is not taken (dacpHost).
 func avahiResolveDACP(ctx context.Context, id string) (string, error) {
 	conn, err := dbus.Connect("unix:path="+busSocket, dbus.WithContext(ctx))
 	if err != nil {
@@ -199,8 +252,33 @@ func avahiResolveDACP(ctx context.Context, id string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	if net.ParseIP(addr) == nil || port == 0 {
-		return "", errors.New("avahi gave no address")
+	return dacpHost(addr, port)
+}
+
+// dacpHost is the sender's remote control at addr and port as avahi gives them, as host:port, if a
+// sender could be there (senderAddr).
+func dacpHost(addr string, port uint16) (string, error) {
+	a := senderAddr(addr)
+	if !a.IsValid() || port == 0 {
+		return "", fmt.Errorf("avahi gave no address a sender could be at: %q, port %d", addr, port)
 	}
-	return net.JoinHostPort(addr, strconv.Itoa(int(port))), nil
+	return netip.AddrPortFrom(a, port).String(), nil
+}
+
+// senderAddr is addr, as a session (clip) or avahi gives it, if a sender could be there, and the zero
+// Addr otherwise. Any host on the network can name an address, and some are not a sender's: those
+// netguard keeps the device's connections off (the device itself, by loopback or by one of its own
+// addresses, which the kernel carries over loopback past the firewall; link-local; a group), the rest
+// of 0.0.0.0/8, where no host is, and the broadcast address. An IPv4 address written as IPv6 is taken
+// as IPv4.
+func senderAddr(addr string) netip.Addr {
+	a, err := netip.ParseAddr(addr)
+	if err != nil {
+		return netip.Addr{}
+	}
+	a = a.Unmap()
+	if netguard.Refused(a.AsSlice()) || (a.Is4() && (a.As4()[0] == 0 || a == netip.AddrFrom4([4]byte{255, 255, 255, 255}))) {
+		return netip.Addr{}
+	}
+	return a
 }

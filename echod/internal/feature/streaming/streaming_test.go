@@ -718,6 +718,10 @@ func TestShairportConf(t *testing.T) {
 	if want := fmt.Sprintf(`include_cover_art = "%s";`, yesNo(home.HasScreen())); !strings.Contains(c, want) {
 		t.Errorf("conf without %s:\n%s", want, c)
 	}
+	// One session at a time, which airplaySession counts on.
+	if strings.Contains(c, "allow_session_interruption") {
+		t.Errorf("conf lets a sender break in:\n%s", c)
+	}
 }
 
 // A receiver's audio plays as a track when it arrives; once that track is over (quiet, or something

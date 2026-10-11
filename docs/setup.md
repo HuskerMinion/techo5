@@ -201,12 +201,13 @@ automation that wants to know too.
   volume are one: the slider sets the device to where it is, and the device's buttons, Home Assistant
   and night volume move the slider. With AirPlay, play, pause, next and previous on the device's
   screen, and play and pause from Home Assistant, reach the iPhone, and the song stays on the screen
-  while it is paused; a pause or a play on the phone shows on the device too, and Stop pauses the
-  phone as well. With Spotify Connect, a pause on the device stops the stream there; the phone keeps
-  going until it is paused too. Anyone on the same network can play to the device while one is on, as
-  with any AirPlay or Spotify speaker, and Spotify Connect keeps the login a phone hands it until it
-  is turned off. Both have been tried on a Show, AirPlay with an iPhone. If something does not work,
-  open an issue.
+  while it is paused, until half an hour after the iPhone lets go of the device (it does a few seconds
+  after a pause); a pause or a play on the phone shows on the device too, and Stop pauses the phone as
+  well. With Spotify Connect, and with an AirPlay app that gives the device no way back to it, a pause
+  on the device stops the stream there; the phone keeps going until it is paused too. Anyone on the
+  same network can play to the device while one is on, as with any AirPlay or Spotify speaker, and
+  Spotify Connect keeps the login a phone hands it until it is turned off. Both have been tried on a
+  Show, AirPlay with an iPhone. If something does not work, open an issue.
 - **DLNA (new).** On every device, the **DLNA** switch (Settings → Sound, the setup page's Play to
   this device box, or Home Assistant) makes the device a DLNA speaker, a "media renderer", under its
   own name. Music apps and servers on the network find it and play to it: BubbleUPnP on a phone,

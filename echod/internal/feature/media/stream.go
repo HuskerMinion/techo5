@@ -393,14 +393,31 @@ func (m *Stream) Unpause() {
 }
 
 // Stop ends the track. There is nothing to come back to afterwards.
-func (m *Stream) Stop() {
+func (m *Stream) Stop() { m.stopIf(nil) }
+
+// stopPaused ends the received track named name if it is the one loaded and the listener has it
+// paused, and says whether it did. It is looked at and ended in one hold of mu, so a play or another
+// track that comes just before is not undone.
+func (m *Stream) stopPaused(name string) bool {
+	return m.stopIf(func(t *track, paused bool) bool {
+		return t != nil && t.received && t.item == name && paused
+	})
+}
+
+// stopIf ends the track if ok, given it (nil with none loaded) and whether it is paused, says so, and
+// says whether it did; a nil ok ends it whatever it is.
+func (m *Stream) stopIf(ok func(t *track, paused bool) bool) bool {
 	if m == nil {
-		return
+		return false
 	}
 
 	m.mu.Lock()
-	m.asks++
 	t := m.track
+	if ok != nil && !ok(t, m.paused) {
+		m.mu.Unlock()
+		return false
+	}
+	m.asks++
 	m.track, m.paused, m.rewind = nil, false, nil
 	m.forget()
 	m.unblock()
@@ -409,11 +426,12 @@ func (m *Stream) Stop() {
 	m.bg.Gave(m)
 
 	if t == nil {
-		return
+		return false
 	}
 	t.stop()
 	m.flush()
 	m.changed()
+	return true
 }
 
 // Suspend implements speaker.Background: something else wants the speaker.

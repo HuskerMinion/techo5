@@ -145,7 +145,8 @@ func (m *Stream) receive(ctx context.Context, t *track, src PCMSource, conv *toS
 		case err == nil:
 		case errors.Is(err, os.ErrDeadlineExceeded):
 			// A sender paused along with the track sends nothing until it plays again (ReceiverControl):
-			// the track waits for it, paused, rather than ending.
+			// the track waits for it, paused, rather than ending, until its receiver says the sender has
+			// gone (ReceiverGone).
 			if receiverControl(t.item) != nil && m.pausedOn(t) {
 				continue
 			}
