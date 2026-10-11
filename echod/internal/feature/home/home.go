@@ -156,6 +156,11 @@ type Feature struct {
 	// Assistant (radio_sensors.go).
 	radioStationTxt, radioArtistTxt, radioTitleTxt *esphome.TextSensor
 
+	// nowSourceTxt, nowTitleTxt, nowArtistTxt and nowAlbumTxt are what is played to the device, for Home
+	// Assistant; nowPoke asks for them to be looked at again (nowplaying_sensors.go).
+	nowSourceTxt, nowTitleTxt, nowArtistTxt, nowAlbumTxt *esphome.TextSensor
+	nowPoke                                              chan struct{}
+
 	camSound      string
 	camOver       media.OverToken
 	camMuted      bool
@@ -188,6 +193,7 @@ const forecastEvery = 30 * time.Minute
 // Run keeps the forecast current. Nothing to do without a token or a weather entity.
 func (f *Feature) Run(ctx context.Context) error {
 	go f.metaLoop(ctx)
+	go f.nowPlayingLoop(ctx)
 	if hasScreen {
 		go f.slideshowLoop(ctx)
 	}
@@ -238,7 +244,7 @@ var (
 
 func Get() *Feature {
 	once.Do(func() {
-		shared = &Feature{poke: make(chan struct{}, 1), metaPoke: make(chan struct{}, 1)}
+		shared = &Feature{poke: make(chan struct{}, 1), metaPoke: make(chan struct{}, 1), nowPoke: make(chan struct{}, 1)}
 		shared.buildWeatherSelect()
 		shared.buildFollowSelect()
 		shared.buildLyricsSwitch()
@@ -247,9 +253,11 @@ func Get() *Feature {
 		shared.buildCameraSoundSwitch()
 		shared.buildSlideshowSelect()
 		shared.buildRadioSensors()
+		shared.buildNowPlayingSensors()
 		hastate.Get().Changed.Listen(shared.stateChanged)
 		media.Get().OnPlay.Listen(shared.played)
 		media.Get().OnEnd.Listen(shared.ended)
+		media.Get().OnNowPlaying.Listen(func(struct{}) { shared.pokeNowPlaying() })
 		media.Get().OnResumeRemote.Listen(func(struct{}) { safe.Go("resume music assistant", resumeMusicAssistant) })
 		media.Get().OnTakeOver.Listen(func(struct{}) { safe.Go("leave the group", leaveGroup) })
 	})
@@ -372,6 +380,9 @@ func (f *Feature) Restore(c config.Config) {
 	f.radarSel.Set(radarChoices[RadarSourceIndex()].label)
 	f.alertsSw.Set(!c.Home.AlertsOff)
 	f.showRadio(meta{}) // nothing plays at a start; the poller fills them in
+	// Nor is anything played to it. All four are written, though each holds "" already, so none of
+	// them starts out unknown in Home Assistant.
+	f.showNowPlaying(nil, nowPlaying{})
 	f.cameraSoundSw.Set(c.Home.CameraSound)
 	if hasScreen {
 		f.slideshowSel.Set(slideshowLabelFor(c.Home.Slideshow.Mode))

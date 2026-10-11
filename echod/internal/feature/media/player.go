@@ -178,6 +178,12 @@ type Player struct {
 	// stopped or replaced does not fire: the difference is the whole use of it, since a radio stream
 	// that ends by itself has been dropped and one that was stopped was stopped by somebody.
 	OnEnd hook.Hook[string]
+
+	// OnNowPlaying fires whenever what the room is playing, or the name of it, may have changed: a track
+	// starting, pausing or ending, a receiver's or a remote's song, a held track let go. It says only
+	// that something may have, not what, and fires for much that changes nothing - an announcement too
+	// - so a listener works out for itself whether anything did, on the far side of a channel.
+	OnNowPlaying hook.Hook[struct{}]
 }
 
 var (
@@ -1015,6 +1021,8 @@ func (p *Player) RemoteGone() {
 	// What the last session said about its stream is not what the next one's first stream is doing.
 	p.remoteState.Store("")
 	p.remoteGen.Add(1)
+	// Not a refresh, but what the room is carrying is read from that state, so whoever names it looks again.
+	p.OnNowPlaying.Emit(struct{}{})
 }
 
 // ExternalPlaying reports whether something this player did not start is using the speaker, which is
@@ -1238,6 +1246,11 @@ func (p *Player) ReceivedTrack() (from, title, artist, album string) {
 // refresh tells Home Assistant what the player is doing. Anything that displaces the noise — a track,
 // a stop, the action button — clears both entities, rather than leaving them naming a sound nobody can
 // hear.
+//
+// What the room plays changes through here - the stream's tracks starting, pausing and ending, a
+// receiver's or a remote's song, a remote taking or giving back the speaker - which is why OnNowPlaying
+// fires from it rather than from each of them. Two things do not: a remote going (RemoteGone fires it
+// itself), and a held track running out of time, which nothing marks.
 func (p *Player) refresh() {
 	p.mp.SetState(p.state())
 
@@ -1246,6 +1259,7 @@ func (p *Player) refresh() {
 			sel.Set(noiseOff)
 		}
 	}
+	p.OnNowPlaying.Emit(struct{}{})
 }
 
 func (p *Player) state() esphome.MediaPlayerState {

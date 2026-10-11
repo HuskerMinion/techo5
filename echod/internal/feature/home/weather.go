@@ -37,20 +37,23 @@ func (f *Feature) buildWeatherSelect() {
 	}
 }
 
-// Entities is the weather source select and what the radio is playing, plus the radar source's and
-// the slideshow's own on a device with a screen to show them on.
+// Entities is the weather source select, what the radio is playing and what is played to the device,
+// plus the radar source's and the slideshow's own on a device with a screen to show them on.
 func (f *Feature) Entities() []esphome.Entity {
 	if hasScreen && !hasLyrics {
 		return []esphome.Entity{f.weatherSel, f.followSel, f.radarSel, f.alertsSw, f.cameraSoundSw, f.slideshowSel, f.slideshowOverlaySel, f.slideshowIdleNum,
 			f.slideshowEveryNum, f.slideshowShuffleSw, f.slideshowSubfoldersSw, f.slideshowArtSw, f.slideshowWholeSw, f.slideshowFolderTxt,
-			f.radioStationTxt, f.radioArtistTxt, f.radioTitleTxt}
+			f.radioStationTxt, f.radioArtistTxt, f.radioTitleTxt,
+			f.nowSourceTxt, f.nowTitleTxt, f.nowArtistTxt, f.nowAlbumTxt}
 	}
 	if hasScreen {
 		return []esphome.Entity{f.weatherSel, f.followSel, f.lyricsSw, f.radarSel, f.alertsSw, f.cameraSoundSw, f.slideshowSel, f.slideshowOverlaySel, f.slideshowIdleNum,
 			f.slideshowEveryNum, f.slideshowShuffleSw, f.slideshowSubfoldersSw, f.slideshowArtSw, f.slideshowWholeSw, f.slideshowFolderTxt,
-			f.radioStationTxt, f.radioArtistTxt, f.radioTitleTxt}
+			f.radioStationTxt, f.radioArtistTxt, f.radioTitleTxt,
+			f.nowSourceTxt, f.nowTitleTxt, f.nowArtistTxt, f.nowAlbumTxt}
 	}
-	return []esphome.Entity{f.weatherSel, f.radioStationTxt, f.radioArtistTxt, f.radioTitleTxt}
+	return []esphome.Entity{f.weatherSel, f.radioStationTxt, f.radioArtistTxt, f.radioTitleTxt,
+		f.nowSourceTxt, f.nowTitleTxt, f.nowArtistTxt, f.nowAlbumTxt}
 }
 
 // weatherOptions is what the select offers: none, Home Assistant's forecast (unless Home Assistant

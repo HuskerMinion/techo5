@@ -191,6 +191,19 @@ automation that wants to know too.
   [the radio actions](actions.md#wire-up-the-radio-page). While a station plays, the **Radio station**,
   **Radio artist** and **Radio title** sensors say what's on (the artist and title when the station's
   service reports them), for an automation or a dashboard to use.
+- **Now playing.** What is played to the device has sensors of its own: **Now playing source**
+  (AirPlay, Spotify, DLNA or Music Assistant), **Now playing title**, **Now playing artist** and **Now
+  playing album**, for an automation or a dashboard to use, since the media player itself cannot carry
+  a song's name. They name what is played to the device, as the app sent it, and are empty while
+  nothing is being played to it: AirPlay about five seconds after it is paused on the phone. A Music
+  Assistant track paused or stopped while it played here stays named for up to half an hour from the
+  pause, as Now Playing keeps it with play on it until **Done**, though the media player reads idle
+  meanwhile. Something else played to the device in that time is named while it plays, and the paused
+  track comes back once it ends. The device reads no song names from a phone over Bluetooth, so they
+  stay empty for it; the radio keeps its own sensors, and a followed player's song (below) is not
+  named here. On the Spot only DLNA and Music Assistant fill them in. Anyone who can play to the
+  device can put a title there, and the titles go into Home Assistant's history and logbook like any
+  sensor's.
 - **Now playing follows** (also the **Now Playing follows** select in Home Assistant): another of Home
   Assistant's media players, a Sonos in the same room for example. While this device plays nothing of
   its own, Now Playing shows that player's song and cover, and its buttons control it. **Done** puts it
