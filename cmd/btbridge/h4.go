@@ -14,10 +14,11 @@ type h4Framer struct {
 }
 
 const (
-	h4ACL   = 0x02
-	h4SCO   = 0x03
-	h4Event = 0x04
-	h4ISO   = 0x05
+	h4Command = 0x01
+	h4ACL     = 0x02
+	h4SCO     = 0x03
+	h4Event   = 0x04
+	h4ISO     = 0x05
 )
 
 // feed appends what a read returned and returns every packet now complete, in order. The returned
@@ -85,6 +86,27 @@ func p192Key(pkt []byte) bool {
 	default:
 		return false
 	}
+	return true
+}
+
+// acceptAsPeripheral rewrites the role in an Accept Connection Request from "become central" (0) to
+// "remain peripheral" (1). Reports whether the packet was changed.
+//
+// BlueZ listens for audio asking to become central, so the kernel accepts a phone's connection asking
+// the controller for a role switch. The Echo Dot's MediaTek controller does not switch (the phone
+// stays central), and the link is left unable to authenticate: the link key goes to the controller
+// and nothing comes back, no Authentication Complete, no Encryption Change, until the idle link is
+// dropped a few seconds later. No phone could connect to play to the Dot. Accepted as peripheral, the
+// same connection is encrypted at once. Connections the device opens itself are untouched.
+func acceptAsPeripheral(pkt []byte) bool {
+	// 01 09 04 07 bdaddr[6] role
+	if len(pkt) != 11 || pkt[0] != h4Command || pkt[1] != 0x09 || pkt[2] != 0x04 || pkt[3] != 0x07 {
+		return false
+	}
+	if pkt[10] != 0x00 {
+		return false
+	}
+	pkt[10] = 0x01
 	return true
 }
 

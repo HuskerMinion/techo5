@@ -5,7 +5,7 @@
 // packets both ways through the kernel's virtual HCI driver (/dev/vhci,
 // CONFIG_BT_HCIVHCI). BlueZ then sees hci0 like on any other board.
 //
-//	btbridge [-stp /dev/stpbt] [-vhci /dev/vhci]
+//	btbridge [-stp /dev/stpbt] [-vhci /dev/vhci] [-accept-as-peripheral]
 //	btbridge -uart /dev/ttyMT1 -hcd <patch.hcd> [-baud 3000000]   (a Broadcom controller; brcm.go)
 //
 // Each read on either side returns one whole H4 packet (type byte first);
@@ -41,6 +41,8 @@ func main() {
 		"(1 on the Echo Dot, whose controller refuses page 2 after claiming it); -1 leaves replies alone")
 	p192 := flag.Bool("p192-keys", false, "report a phone's P-256 link keys to the kernel as the P-192 kind "+
 		"(the Echo Show, whose controller encrypts them with E0; h4.go p192Key)")
+	peripheral := flag.Bool("accept-as-peripheral", false, "accept incoming connections as peripheral, never "+
+		"asking for a role switch (the Echo Dot, whose controller then cannot authenticate; h4.go acceptAsPeripheral)")
 	flag.Parse()
 
 	if *bdaddr == "idme" {
@@ -83,13 +85,13 @@ func main() {
 	fmt.Fprintln(os.Stderr, "btbridge: hci device registered")
 
 	errc := make(chan error, 2)
-	go func() { errc <- vhciToStp(vhci, stp) }()
+	go func() { errc <- vhciToStp(vhci, stp, *peripheral) }()
 	go func() { errc <- stpToVhci(stp, vhci, *maxPage, *p192) }()
 	die("%v", <-errc)
 }
 
-// vhciToStp forwards packets the kernel stack sends (vhci reads block).
-func vhciToStp(vhci *os.File, stp int) error {
+// vhciToStp forwards packets the kernel stack sends (vhci reads block), one whole packet per read.
+func vhciToStp(vhci *os.File, stp int, peripheral bool) error {
 	buf := make([]byte, 65536)
 	for {
 		n, err := vhci.Read(buf)
@@ -98,6 +100,9 @@ func vhciToStp(vhci *os.File, stp int) error {
 		}
 		if n == 0 || buf[0] == vendorPkt {
 			continue // vhci's "device created" notice and the like
+		}
+		if peripheral && acceptAsPeripheral(buf[:n]) {
+			fmt.Fprintln(os.Stderr, "btbridge: an incoming connection accepted as peripheral")
 		}
 		if err := writeAll(stp, buf[:n]); err != nil {
 			return fmt.Errorf("stp: write %d bytes: %w", n, err)

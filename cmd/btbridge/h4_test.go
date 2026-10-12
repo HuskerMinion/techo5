@@ -130,3 +130,24 @@ func TestP256KeysArePassedOnAsP192(t *testing.T) {
 		t.Error("a short packet was changed")
 	}
 }
+
+func TestAcceptedAsPeripheral(t *testing.T) {
+	accept := func(role byte) []byte {
+		return []byte{h4Command, 0x09, 0x04, 0x07, 1, 2, 3, 4, 5, 6, role}
+	}
+	for _, c := range []struct{ in, want byte }{{0, 1}, {1, 1}} {
+		p := accept(c.in)
+		changed := acceptAsPeripheral(p)
+		if p[10] != c.want || changed != (c.in != c.want) {
+			t.Errorf("role %d: became %d, changed %v; want %d", c.in, p[10], changed, c.want)
+		}
+	}
+	reject := accept(0)
+	reject[1] = 0x0a // Reject Connection Request: the same length, the last byte a reason
+	if acceptAsPeripheral(reject) || reject[10] != 0 {
+		t.Error("a packet that is not an Accept Connection Request was changed")
+	}
+	if acceptAsPeripheral(accept(0)[:9]) {
+		t.Error("a short packet was changed")
+	}
+}
