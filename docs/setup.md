@@ -299,8 +299,8 @@ the Spot too, in its settings.
   video** on, from DLNA apps. Off on a new device. On the setup page's Screen & Photos tab. See
   [Video](video.md).
 - **Screen language** (Settings → General): the clock's day and date, the forecast's days, the
-  weather's words and the alarm after the date are written in it: German, Spanish, French, Italian or
-  Dutch, and English for *Match all* or *English*. It also picks which words the screen listens for.
+  weather's words and the alarm after the date are written in it: German, Spanish, French, Italian,
+  Dutch or Russian, and English for *Match all* or *English*. It also picks which words the screen listens for.
   It doesn't change what the assistant understands or says, and the rest of the screen stays in
   English.
 - **Turn screen**: how a voice request looks. **Classic** is the words, **Wave** is glowing lines and

@@ -81,6 +81,14 @@ var Languages = map[string]Set{
 		GoHome: []string{"beginscherm", "startscherm", "terug naar de klok", "laat de klok zien"},
 		Camera: []string{"laat", "toon", "camera"},
 	},
+	"ru": {
+		Weather: []string{"погод", "прогноз", "температур", "дожд", "снег", "снеж", "гроз", "шторм", "буря", "ураган",
+			"осадк", "сколько градус", "жарко", "холодно", "солнечно", "облачн", "радар"},
+		Radar:      []string{"радар", "карта дождя", "карту дождя", "карта осадков", "карту осадков", "карта погоды", "карту погоды"},
+		NotWeather: []string{"звук", "шум"},
+		GoHome:     []string{"главный экран", "главном экран", "главную", "домашний экран", "домашнем экран", "верни часы", "вернись к часам", "покажи часы"},
+		Camera:     []string{"покажи", "показать", "камер"},
+	},
 }
 
 // MatchAll is the Language setting that consults every table, as this behaved before the tables

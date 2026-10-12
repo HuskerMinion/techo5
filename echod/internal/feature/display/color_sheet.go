@@ -44,6 +44,7 @@ var colorWords = map[string][4]string{
 	"es": {"cálido", "frío", "Listo", "Grupo · las luces sin color quedan blancas"},
 	"fr": {"chaud", "froid", "OK", "Groupe · les lampes sans couleur restent blanches"},
 	"it": {"caldo", "freddo", "Fatto", "Gruppo · le luci senza colore restano bianche"},
+	"ru": {"тёплый", "холодный", "Готово", "Группа · лампы без цвета остаются белыми"},
 }
 
 func colorWord(i int) string {

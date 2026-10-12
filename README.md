@@ -139,7 +139,7 @@ Which to use, how to set it up and what each can do: **[docs/dashboards.md](docs
   after the time you choose. All of it can be set from the setup page.
   [docs/dashboards.md](docs/dashboards.md)
 - 🌍 **The clock in your language** (v1.0.0). With Screen language set to German, Spanish, French,
-  Italian or Dutch, the clock's date, the forecast and the weather are written in it.
+  Italian, Dutch or Russian, the clock's date, the forecast and the weather are written in it.
   [docs/setup.md](docs/setup.md#clock-and-home-screen)
 - 🎶 **Now playing follows another speaker, and lyrics** (v1.0.0). Now playing can follow another of
   Home Assistant's players, a Sonos in the same room say: its song and cover show while the device

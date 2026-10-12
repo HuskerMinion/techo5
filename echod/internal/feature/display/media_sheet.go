@@ -113,6 +113,9 @@ var mediaWords = map[string][]string{
 	"it": {"Riproduci", "Altoparlanti", "Fatto", "Caricamento…", "Ancora nessun preferito in Music Assistant",
 		"Music Assistant non riproduce qui: solo comandi", "In riproduzione", "In pausa", "Inattivo", "Spento",
 		"I preferiti richiedono un token di amministratore di Home Assistant"},
+	"ru": {"Играть", "Колонки", "Готово", "Загрузка…", "В Music Assistant пока нет избранного",
+		"Music Assistant здесь не воспроизводит: только управление", "Играет", "Пауза", "Ожидание", "Выкл.",
+		"Для избранного нужен токен администратора Home Assistant"},
 }
 
 func mediaWord(i int) string {

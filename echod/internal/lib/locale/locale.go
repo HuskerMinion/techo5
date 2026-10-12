@@ -1,5 +1,5 @@
 // Package locale writes the dates and weather words the screen shows in the screen's language: the
-// clock's day and date, the forecast's day names, and what the sky is doing. Six languages, the ones
+// clock's day and date, the forecast's day names, and what the sky is doing. Seven languages, the ones
 // the screen's Language setting offers; anything else, empty included, is English.
 //
 // Only those words. The rest of the screen's own text - its settings, its buttons - is English.
@@ -80,6 +80,18 @@ var langs = map[string]*words{
 			"sunny": "Zonnig", "windy": "Winderig", "windy-variant": "Winderig",
 		},
 	},
+	"ru": {
+		days:        [7]string{"воскресенье", "понедельник", "вторник", "среда", "четверг", "пятница", "суббота"},
+		shortDays:   [7]string{"вс", "пн", "вт", "ср", "чт", "пт", "сб"},
+		months:      [12]string{"января", "февраля", "марта", "апреля", "мая", "июня", "июля", "августа", "сентября", "октября", "ноября", "декабря"},
+		shortMonths: [12]string{"янв", "фев", "мар", "апр", "мая", "июн", "июл", "авг", "сен", "окт", "ноя", "дек"},
+		sky: map[string]string{
+			"clear-night": "Ясно", "cloudy": "Облачно", "exceptional": "Опасная погода", "fog": "Туман", "hail": "Град",
+			"lightning": "Молния", "lightning-rainy": "Гроза", "partlycloudy": "Переменная облачность",
+			"pouring": "Ливень", "rainy": "Дождь", "snowy": "Снег", "snowy-rainy": "Мокрый снег",
+			"sunny": "Солнечно", "windy": "Ветрено", "windy-variant": "Ветрено",
+		},
+	},
 }
 
 // phrases are the few words written beside a date: today, as the forecast heads its first day, and
@@ -103,6 +115,9 @@ var phrases = map[string]map[string]string{
 	"nl": {"here": "Hier", "today": "Vandaag", "alarm": "Wekker", "snoozed": "Sluimeren tot", "tomorrow": "Morgen", "yesterday": "Gisteren",
 		"now": "Nu", "allday": "Hele dag", "nothing": "Niets in de agenda", "nothingtoday": "Niets vandaag",
 		"nothingelse": "Verder niets vandaag"},
+	"ru": {"here": "Здесь", "today": "Сегодня", "alarm": "Будильник", "snoozed": "Отложен до", "tomorrow": "Завтра", "yesterday": "Вчера",
+		"now": "Сейчас", "allday": "Весь день", "nothing": "В календаре пусто", "nothingtoday": "Сегодня ничего",
+		"nothingelse": "Больше ничего сегодня"},
 }
 
 // Here is the World clock's own place.
@@ -158,7 +173,7 @@ func up(s string) string {
 func day(t time.Time) string { return strconv.Itoa(t.Day()) }
 
 // LongDate is the clock's date: "Monday, January 2", "Montag, 2. Januar", "Lunes, 2 de enero",
-// "Lundi 2 janvier", "Lunedì 2 gennaio", "Maandag 2 januari".
+// "Lundi 2 janvier", "Lunedì 2 gennaio", "Maandag 2 januari", "Понедельник, 2 января".
 func LongDate(t time.Time, lang string) string {
 	w, ok := langs[lang]
 	if !ok {
@@ -170,6 +185,8 @@ func LongDate(t time.Time, lang string) string {
 		return up(d) + ", " + day(t) + ". " + m
 	case "es":
 		return up(d) + ", " + day(t) + " de " + m
+	case "ru":
+		return up(d) + ", " + day(t) + " " + m
 	}
 	return up(d) + " " + day(t) + " " + m
 }
@@ -184,7 +201,7 @@ func ShortDate(t time.Time, lang string) string {
 	switch lang {
 	case "de":
 		return up(d) + "., " + day(t) + ". " + m
-	case "es":
+	case "es", "ru":
 		return up(d) + ", " + day(t) + " " + m
 	}
 	return up(d) + " " + day(t) + " " + m
