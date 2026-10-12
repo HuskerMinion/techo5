@@ -23,7 +23,8 @@ const afterCancel = 250 * time.Millisecond
 const pairedFlash = 1500 * time.Millisecond
 
 // On the Echo Dot, holding the action button (buttons.LongHold) turns pairing mode on, or off if it
-// is on, and the ring pulses blue for as long as it is on, however it was turned on.
+// is on, and the ring pulses blue for as long as it or phone pairing is on, however it was turned
+// on.
 func init() {
 	if layout.OnAndroid() {
 		return
@@ -60,10 +61,11 @@ func init() {
 	ring := led.Get().Claim(led.PriorityBusy)
 	showing := false
 	Get().Changed.Listen(func(s State) {
-		if s.Pairing == showing {
+		on := s.Pairing || s.Phone
+		if on == showing {
 			return
 		}
-		showing = s.Pairing
+		showing = on
 		if showing {
 			ring.Play(led.EffectPulse, pairingColor)
 		} else {

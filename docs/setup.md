@@ -215,6 +215,16 @@ automation that wants to know too.
   playing, including the song's address (some servers put a login token in it, as with any DLNA
   speaker). With **Video** and **DLNA video** on as well (Show and Spot), it takes videos too
   ([Video](video.md)).
+- **A phone over Bluetooth (new).** The **Bluetooth phone** switch, in Home Assistant, lets a phone
+  play to the device as to any Bluetooth speaker. For two minutes the device can be found and paired
+  with, with no scan for speakers, and a phone connects from its own Bluetooth settings, a new one or
+  one paired before; on the Dot the ring pulses blue meanwhile. Once the phone's audio is up the
+  window closes, the phone is remembered, and the switch stays on while it is connected: turning it
+  off disconnects the phone. The **Bluetooth audio** sensor names the connected phone. A phone that
+  went away does not come back by itself, so **Bluetooth reconnect phone** calls the remembered
+  phones until one answers. Anyone nearby can pair while the switch is on, as in pairing mode, and a
+  phone that joined stays remembered, so **Bluetooth forget phones** forgets every paired device that
+  is not a speaker or earbuds. Tried on a Dot; not yet on a Show or a Spot.
 - **Radio.** The Radio drawer and its favorites are set with
   [the radio actions](actions.md#wire-up-the-radio-page). While a station plays, the **Radio station**,
   **Radio artist** and **Radio title** sensors say what's on (the artist and title when the station's

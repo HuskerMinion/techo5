@@ -13,6 +13,7 @@ func TestSameState(t *testing.T) {
 	}
 	for name, change := range map[string]func(*State){
 		"pairing":   func(s *State) { s.Pairing = true },
+		"phone":     func(s *State) { s.Phone = true },
 		"connected": func(s *State) { s.Connected = "" },
 		"status":    func(s *State) { s.Status = "Connecting" },
 		"rssi":      func(s *State) { s.Devices = []Device{{Address: "a", RSSI: -40}} },
