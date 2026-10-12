@@ -25,6 +25,12 @@ func item(typ, code, data string) string {
 		hex.EncodeToString([]byte(typ)), hex.EncodeToString([]byte(code)), len(data), base64.StdEncoding.EncodeToString([]byte(data)))
 }
 
+// rawItem is an item with its data written as given: base64 as it came, damaged or not.
+func rawItem(typ, code, b64 string) string {
+	return fmt.Sprintf("<item><type>%s</type><code>%s</code><length>%d</length>\n<data encoding=\"base64\">\n%s</data></item>\n",
+		hex.EncodeToString([]byte(typ)), hex.EncodeToString([]byte(code)), len(b64), b64)
+}
+
 // AirPlay's metadata names the song field by field, and its cover apart, and the end of a session
 // clears both; what the decoder cannot take on the way is passed over, a cover that will not decode
 // included.

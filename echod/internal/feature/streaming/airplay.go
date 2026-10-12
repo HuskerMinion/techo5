@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"net/netip"
 	"os"
 	"path/filepath"
 	"runtime/debug"
@@ -72,7 +73,7 @@ const (
 // a screen to show it. Its volume stays its own: the phone's slider scales what it sends, and the
 // device's volume is applied on top as for anything else. A second sender is turned away while one
 // plays (allow_session_interruption is left off): the metadata then tells of one session at a time,
-// each ended before the next one's items begin, which airplaySession counts on.
+// which airplaySession counts on, and allows for the end of one coming late.
 func shairportConf(name, metaPipe string) string {
 	return fmt.Sprintf(`general = {
 	name = %s;
@@ -158,6 +159,8 @@ func readAirPlayMetadata(ctx context.Context, path string) {
 	followAirPlayMetadata(f, func(title, artist, album string) {
 		media.Get().SetReceivedTrack(home.AirPlayName, title, artist, album)
 	}, covers.put, session)
+	// The receiver stopping ends the wait for a paused sender along with the sender (runAirPlayReceiver).
+	session.stopKept()
 }
 
 // airplaySession follows the session as the metadata tells of it: who the sender is and how to reach
@@ -173,12 +176,15 @@ func readAirPlayMetadata(ctx context.Context, path string) {
 // (snam, snua, each only if the sender names itself), setting it up (acre, daid, each only if the
 // sender gives it, then clip), and playing (pbeg); dapo comes from avahi apart from these, once the
 // session plays, and pend ends it. The next session's items all come after that pend (shairportConf).
-// So what a session says of its sender is gathered as it is set up (next), and taken whole as it plays
-// (take): a session that gave no DACP-ID or token has none, rather than the last one's. shairport-sync
-// starting afresh (svna) ends a session it had open, which no pend will.
+// 5.5.1 can send the pend of a sender that vanished after the next session's setup has begun, which is
+// why next is not reset at pend. disc (AirPlay 2) carries the address of the client leaving, and can
+// come after the next session has started: it ends the session only if that is the one it came from
+// (from). So what a session says of its sender is gathered as it is set up (next), and taken whole as
+// it plays (take): a session that gave no DACP-ID or token has none, rather than the last one's.
+// shairport-sync starting afresh (svna) ends a session it had open, which no pend will.
 //
-// caps, next and open belong to the goroutine reading the metadata; the timer that ends the wait for a
-// paused sender touches only remote and gone.
+// caps, next, from, open and kept belong to the goroutine reading the metadata; the timer that ends the
+// wait for a paused sender touches only remote and gone.
 type airplaySession struct {
 	remote *dacpRemote
 	starts *startCount       // counts the times the sender starts to play, for the audio (pump)
@@ -186,7 +192,9 @@ type airplaySession struct {
 	gone   func()            // the sender gone for good: a track still paused here for it ends
 	caps   byte              // what the sender last said it is doing: 1 playing, 2 paused, 0 nothing yet
 	next   dacpSender        // what the session being set up has said of its sender so far
-	open   bool              // a session has begun (pbeg) and not ended (pend)
+	from   netip.Addr        // where the open session came from (clip), as it was given
+	open   bool              // a session has begun (pbeg) and not ended (pend, disc)
+	kept   *time.Timer       // the wait for a sender that ended its session as it paused, if one is running
 }
 
 // airplayStarts counts the times the AirPlay receiver's sender starts to play; there is one receiver.
@@ -228,14 +236,18 @@ func (s *airplaySession) heard(typ, code string, d []byte) (another bool) {
 		s.next.id = string(d)
 	case code == "clip":
 		s.next.client = senderAddr(string(d))
+		s.next.from = clientAddr(string(d))
 	case code == "dapo":
 		s.remote.setPort(d)
 	case code == "pbeg", code == "prsm":
 		// The sender playing: a session starting, or going on after a flush.
 		if code == "pbeg" {
+			// A session playing is the sender back, or another: either way the wait for the last
+			// one is over.
+			s.stopKept()
 			// A session's sender is the one it named as it was set up, and no other.
 			another = s.remote.take(s.next)
-			s.next, s.open = dacpSender{}, true
+			s.from, s.next, s.open = s.next.from, dacpSender{}, true
 		}
 		if code == "pbeg" || s.caps == 2 {
 			s.starts.start()
@@ -246,19 +258,21 @@ func (s *airplaySession) heard(typ, code string, d []byte) (another bool) {
 	return another
 }
 
-// ended is the session ending (pend, disc), and says whether it is over for good. One the sender ended
-// as it paused is not, for airplayKeptFor: the song stays for the screen, with play on it, and the way
-// back to the sender is kept for that play to reach it. If no session has played by then, the sender
-// has gone: the way back is dropped, and its track, if still paused here, ends. A session ended without
-// the pause is the sender gone at once, and a track the device paused for it ends with it.
+// ended is the session ending (pend, or disc from the session's own address), and says whether it is
+// over for good. One the sender ended as it paused is not, for airplayKeptFor: the song stays for the
+// screen, with play on it, and the way back to the sender is kept for that play to reach it. If no
+// session has played by then, the sender has gone: the way back is dropped, and its track, if still
+// paused here, ends. A session ended without the pause is the sender gone at once, and a track the
+// device paused for it ends with it. A wait already running is the last session's, and is replaced.
 func (s *airplaySession) ended() bool {
 	if s == nil {
 		return true
 	}
 	s.open = false
+	s.stopKept()
 	if s.caps == 2 {
 		n := s.remote.sessions()
-		airplayKeptAfter(airplayKeptFor, func() {
+		s.kept = airplayKeptAfter(airplayKeptFor, func() {
 			if s.remote.forgetIf(n) {
 				slog.Info("streaming: an AirPlay sender paused this long is taken as gone", "after", airplayKeptFor)
 				s.gone()
@@ -269,6 +283,31 @@ func (s *airplaySession) ended() bool {
 	s.remote.forget()
 	s.gone()
 	return true
+}
+
+// disconnected is a client leaving (disc), with its address as shairport-sync gives it, and says whether
+// the session is over for good (ended). Only the session that client began ends with it: one from
+// another address, or one whose address was never given, is not touched, and the pend that ends it
+// comes in its own time. With no session followed, any client leaving ends it.
+func (s *airplaySession) disconnected(addr string) bool {
+	if s == nil {
+		return s.ended()
+	}
+	if a := clientAddr(addr); !s.open || !a.IsValid() || a != s.from {
+		return false
+	}
+	return s.ended()
+}
+
+// stopKept ends the wait for a paused sender, if one is running: the sender playing again answers it,
+// a later end replaces it, and so does the receiver stopping, so there is one wait at a time rather
+// than one for each pause. One whose time came as a session started has run already, and forgetIf
+// passes it over (took).
+func (s *airplaySession) stopKept() {
+	if s != nil && s.kept != nil {
+		s.kept.Stop()
+		s.kept = nil
+	}
 }
 
 // restarted is shairport-sync starting (svna), and says whether a session it had open is over for good:
@@ -440,8 +479,11 @@ func followAirPlayMetadata(r io.Reader, told func(title, artist, album string), 
 			continue
 		}
 		d, err := base64.StdEncoding.DecodeString(strings.TrimSpace(it.Data))
-		if err != nil && typ == "core" {
-			// A field that cannot be read leaves the song as it was.
+		if err != nil && (typ == "core" || (typ == "ssnc" && usesData(code))) {
+			// A field that cannot be read leaves the song as it was, and an item whose data is used as
+			// it comes (a token, an address) leaves what it would have set: the decoder gives what it
+			// read before the error, and that cut short is not what was sent (192.0.2.10 as 192.0.2.1
+			// would send the commands to another host).
 			continue
 		}
 		data := string(cutField(d))
@@ -453,7 +495,13 @@ func followAirPlayMetadata(r io.Reader, told func(title, artist, album string), 
 		case typ == "core" && code == "asal":
 			album = data
 		case typ == "ssnc" && (code == "pend" || code == "disc"):
-			if !session.ended() {
+			var over bool
+			if code == "disc" {
+				over = session.disconnected(data)
+			} else {
+				over = session.ended()
+			}
+			if !over {
 				continue
 			}
 			title, artist, album, covered = "", "", "", false
@@ -492,6 +540,17 @@ func (e *readErr) Read(p []byte) (int, error) {
 		e.err = err
 	}
 	return n, err
+}
+
+// usesData is whether the session item code is used for what its data says: the sender's token, its
+// DACP-ID, address and port, and the address of a client leaving. The other items (pbeg, pend and the
+// rest) say all they do by coming.
+func usesData(code string) bool {
+	switch code {
+	case "acre", "daid", "clip", "dapo", "disc":
+		return true
+	}
+	return false
 }
 
 // fourCC is a four-character code written as eight hex digits.

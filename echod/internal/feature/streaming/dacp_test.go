@@ -118,6 +118,7 @@ func TestAnAirPlaySessionEndedWithoutAPauseIsOver(t *testing.T) {
 
 // A sender is asked over DACP: the command's own path, with the session's token.
 func TestTheSenderIsAskedOverDACP(t *testing.T) {
+	allowLoopback(t)
 	var mu sync.Mutex
 	var asked []string
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -172,6 +173,7 @@ func TestTheSenderIsAskedOverDACP(t *testing.T) {
 // to reach, is not. (The phone here listens on loopback, which a session's own address is never taken
 // as (senderAddr), so it is given whole.)
 func TestTheSessionsAddressIsTheFallback(t *testing.T) {
+	allowLoopback(t)
 	var hits int
 	var mu sync.Mutex
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -436,6 +438,7 @@ func TestShairportSyncStartingAfreshEndsTheSession(t *testing.T) {
 // answer, when another phone has started to play is not passed on to that one. The same phone playing
 // again, which a play from here does by starting a session, is still the one asked.
 func TestACommandGoesToTheSenderItWasGivenFor(t *testing.T) {
+	allowLoopback(t)
 	var asked []string
 	var mu sync.Mutex
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -473,6 +476,7 @@ func TestAnAddressNoSenderCouldBeAtIsLeftOut(t *testing.T) {
 	t.Cleanup(func() { netguard.OwnIP = was })
 	for addr, want := range map[string]string{
 		"192.0.2.10": "192.0.2.10", "198.51.100.7": "198.51.100.7", "2001:db8::10": "2001:db8::10",
+		"2001:db8::10%eth0": "2001:db8::10", "::ffff:192.0.2.10%eth0": "192.0.2.10", "fe80::1%eth0": "",
 		"::ffff:192.0.2.10": "192.0.2.10", "192.0.2.99": "", "::ffff:192.0.2.99": "", "169.254.10.20": "", "fe80::1": "",
 		"127.0.0.1": "", "127.8.9.10": "", "::1": "", "::ffff:127.0.0.1": "", "0.0.0.0": "", "0.1.2.3": "", "::": "",
 		"224.0.0.251": "", "239.255.255.250": "", "ff02::fb": "", "255.255.255.255": "", "": "", "not an address": "",
@@ -507,6 +511,7 @@ func TestAnAddressNoSenderCouldBeAtIsLeftOut(t *testing.T) {
 // sender that does not answer at the session's address, hold it up no longer than dacpAskTimeout, not
 // the resolve's and each try's own timeouts one after the other.
 func TestAnAskIsBoundedAsAWhole(t *testing.T) {
+	allowLoopback(t)
 	was := dacpAskTimeout
 	dacpAskTimeout = 500 * time.Millisecond
 	t.Cleanup(func() { dacpAskTimeout = was })
@@ -530,6 +535,209 @@ func TestAnAskIsBoundedAsAWhole(t *testing.T) {
 	}
 	if took := time.Since(start); took > 1500*time.Millisecond {
 		t.Errorf("the ask took %v", took)
+	}
+}
+
+// The address is checked as the connection is made, and not only as the session gave it: a sender that
+// resolves to the device itself (avahi's answer is passed to the dialer as it is here) is not reached,
+// with netguard's rules as they are.
+func TestTheDeviceIsNotDialedForASender(t *testing.T) {
+	var hits int
+	var mu sync.Mutex
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		mu.Lock()
+		hits++
+		mu.Unlock()
+	}))
+	defer srv.Close()
+	resolveTo(t, func(context.Context, string) (string, error) { return srv.Listener.Addr().String(), nil })
+	d := &dacpRemote{}
+	d.take(dacpSender{id: "ABCD", token: "1234"})
+	if d.control(media.TransportPause)() {
+		t.Error("a sender on the loopback took the pause")
+	}
+	mu.Lock()
+	defer mu.Unlock()
+	if hits != 0 {
+		t.Errorf("the loopback was reached %d times", hits)
+	}
+}
+
+// A session's address and what it says are read as the same however they are written (clientAddr): a
+// zone is not part of it, and an IPv4 address written as IPv6 is IPv4.
+func TestAClientsAddressIsReadTheSameWhateverTheWriting(t *testing.T) {
+	for addr, want := range map[string]string{
+		"192.0.2.10": "192.0.2.10", "::ffff:192.0.2.10": "192.0.2.10", "2001:db8::10%eth0": "2001:db8::10",
+		"fe80::1234": "fe80::1234", "fe80::1234%eth0": "fe80::1234", "": "", "not an address": "",
+	} {
+		if got := clientAddr(addr); (want == "" && got.IsValid()) || (want != "" && got.String() != want) {
+			t.Errorf("clientAddr(%q) = %v, want %q", addr, got, want)
+		}
+	}
+}
+
+// Only one wait for a paused sender runs at a time: the next pause, whether another session paused or
+// the same one ending again, stops the last one's, and the sender playing again does too.
+func TestOnlyOneWaitForAPausedSenderRuns(t *testing.T) {
+	_, timers := keptTimersLive(t)
+	f := newFollowed()
+	f.follow(pausedAndGone("1122334455", "0123456789ABCDEF", "192.0.2.10", "Tush"))
+	f.follow(pausedAndGone("1122334455", "0123456789ABCDEF", "192.0.2.10", "Tush"))
+	if len(*timers) != 2 {
+		t.Fatalf("%d waits started, want 2", len(*timers))
+	}
+	if (*timers)[0].Stop() {
+		t.Error("the wait of the first pause was still running after the second")
+	}
+	if !(*timers)[1].Stop() {
+		t.Error("the wait of the second pause is not running")
+	}
+
+	// The same pause ended twice (pend, then disc from its own address) is one wait.
+	f = newFollowed()
+	f.follow(pausedAndGone("1122334455", "0123456789ABCDEF", "192.0.2.10", "Tush"))
+	f.follow(item("ssnc", "pend", ""))
+	if len(*timers) != 4 || (*timers)[2].Stop() || !(*timers)[3].Stop() {
+		t.Errorf("%d waits, and the one before the second end still running or the last not", len(*timers))
+	}
+
+	// The sender playing again ends it, and the session's end after that is not a pause.
+	f = newFollowed()
+	f.follow(pausedAndGone("1122334455", "0123456789ABCDEF", "192.0.2.10", "Tush"))
+	f.follow(item("ssnc", "acre", "1122334455") + item("ssnc", "daid", "0123456789ABCDEF") +
+		item("ssnc", "clip", "192.0.2.10") + item("ssnc", "pbeg", ""))
+	if len(*timers) != 5 || (*timers)[4].Stop() || f.s.kept != nil {
+		t.Errorf("%d waits, the sender back and its wait still running (%v)", len(*timers), f.s.kept)
+	}
+
+	// The receiver stopping stops the one running, and is safe with none.
+	f = newFollowed()
+	f.follow(pausedAndGone("1122334455", "0123456789ABCDEF", "192.0.2.10", "Tush"))
+	f.s.stopKept()
+	if len(*timers) != 6 || (*timers)[5].Stop() {
+		t.Errorf("%d waits, the one running when the receiver stopped still is", len(*timers))
+	}
+	f.s.stopKept()
+	(*airplaySession)(nil).stopKept()
+}
+
+// An item whose data is used as it comes (the token, the DACP-ID, the address) that cannot be decoded
+// is left out: the decoder gives the bytes it read before the error, and the address cut short, 192.0.2.1
+// for 192.0.2.10, would send the commands to another host.
+func TestADamagedSetupItemIsLeftOut(t *testing.T) {
+	keptTimers(t)
+	good := item("ssnc", "acre", "1122334455") + item("ssnc", "daid", "0123456789ABCDEF") + item("ssnc", "clip", "192.0.2.10")
+	for _, tc := range []struct{ code, cut string }{
+		{"acre", "MTEy%%%%"},         // "112"
+		{"daid", "MDEyMzQ1%%%%"},     // "012345"
+		{"clip", "MTkyLjAuMi4x%%%%"}, // "192.0.2.1"
+	} {
+		t.Run(tc.code, func(t *testing.T) {
+			f := newFollowed()
+			f.follow(strings.Replace(good, item("ssnc", tc.code, map[string]string{
+				"acre": "1122334455", "daid": "0123456789ABCDEF", "clip": "192.0.2.10"}[tc.code]), rawItem("ssnc", tc.code, tc.cut), 1) +
+				item("ssnc", "pbeg", ""))
+			r := f.s.remote
+			switch tc.code {
+			case "acre":
+				if r.token != "" || r.id != "0123456789ABCDEF" {
+					t.Errorf("token %q, id %q: a token cut short was taken", r.token, r.id)
+				}
+			case "daid":
+				if r.id != "" || r.token != "1122334455" {
+					t.Errorf("id %q, token %q: a DACP-ID cut short was taken", r.id, r.token)
+				}
+			case "clip":
+				if r.client.IsValid() || f.s.from.IsValid() {
+					t.Errorf("client %v, from %v: an address cut short was taken", r.client, f.s.from)
+				}
+			}
+		})
+	}
+
+	// What does not use its data is taken whatever it holds: a pend that is damaged still ends the session.
+	f := newFollowed()
+	f.follow(item("ssnc", "pbeg", "") + item("core", "minm", "Tush") + rawItem("ssnc", "pend", "%%%%"))
+	if !slices.Equal(f.titles, []string{"Tush", ""}) || f.gone != 1 {
+		t.Errorf("titles %q, gone %d: a damaged pend did not end the session", f.titles, f.gone)
+	}
+}
+
+// A client leaving (disc) ends the session it began, and only that: one from another address does not,
+// nor does the last one's, which can come after the next session has started; and what the session never
+// said of its address is left to its pend.
+func TestADiscEndsOnlyItsOwnSession(t *testing.T) {
+	keptTimers(t)
+	playing := item("ssnc", "acre", "1122334455") + item("ssnc", "daid", "0123456789ABCDEF") +
+		item("ssnc", "clip", "192.0.2.10") + item("ssnc", "pbeg", "") + item("core", "minm", "Tush") + item("core", "caps", "\x01")
+
+	// Another client's.
+	f := newFollowed()
+	f.follow(playing + item("ssnc", "disc", "192.0.2.20"))
+	if f.gone != 0 || f.s.remote.id == "" || !f.s.open || !slices.Equal(f.titles, []string{"Tush"}) {
+		t.Errorf("gone %d, open %v, titles %q, remote %+v: another client's disc ended the session", f.gone, f.s.open, f.titles, f.s.remote)
+	}
+	// Its own, however its address is written.
+	f.follow(item("ssnc", "disc", "::ffff:192.0.2.10"))
+	if f.gone != 1 || f.s.remote.id != "" || f.s.open || !slices.Equal(f.titles, []string{"Tush", ""}) {
+		t.Errorf("gone %d, open %v, titles %q, remote %+v: the session's own disc did not end it", f.gone, f.s.open, f.titles, f.s.remote)
+	}
+	// And once, not again after.
+	f.follow(item("ssnc", "disc", "192.0.2.10"))
+	if f.gone != 1 {
+		t.Errorf("gone %d: a session already over was ended again", f.gone)
+	}
+
+	// The last session's disc late, after the next one, from another address, has begun.
+	f = newFollowed()
+	f.follow(pausedAndGone("1122334455", "0123456789ABCDEF", "192.0.2.10", "Tush") +
+		item("ssnc", "acre", "5566778899") + item("ssnc", "daid", "FEDCBA9876543210") + item("ssnc", "clip", "198.51.100.7") +
+		item("ssnc", "pbeg", "") + item("core", "minm", "Other") + item("core", "caps", "\x01"))
+	titles := len(f.titles)
+	f.follow(item("ssnc", "disc", "192.0.2.10"))
+	if f.gone != 0 || !f.s.open || f.s.remote.id != "FEDCBA9876543210" || len(f.titles) != titles {
+		t.Errorf("gone %d, open %v, remote %+v, titles %q: the last session's disc ended the new one", f.gone, f.s.open, f.s.remote, f.titles)
+	}
+	// The new one's own does.
+	f.follow(item("ssnc", "disc", "198.51.100.7"))
+	if f.gone != 1 || f.s.open || f.s.remote.id != "" {
+		t.Errorf("gone %d, open %v, remote %+v: the new session's own disc did not end it", f.gone, f.s.open, f.s.remote)
+	}
+
+	// A link-local address, which no command is sent to (senderAddr) but a session still has, with or
+	// without the interface a disc may name it by.
+	f = newFollowed()
+	f.follow(item("ssnc", "clip", "fe80::1234") + item("ssnc", "pbeg", "") + item("core", "caps", "\x01") +
+		item("ssnc", "disc", "fe80::1234%eth0"))
+	if f.gone != 1 || f.s.open {
+		t.Errorf("gone %d, open %v: a link-local session's own disc did not end it", f.gone, f.s.open)
+	}
+
+	// A session that never gave its address is not ended by any disc, but by its pend.
+	f = newFollowed()
+	f.follow(item("ssnc", "pbeg", "") + item("core", "minm", "Tush") + item("ssnc", "disc", "192.0.2.10") + item("ssnc", "disc", ""))
+	if f.gone != 0 || !f.s.open {
+		t.Errorf("gone %d, open %v: a disc ended a session whose address is not known", f.gone, f.s.open)
+	}
+	f.follow(item("ssnc", "pend", ""))
+	if f.gone != 1 || f.s.open {
+		t.Errorf("gone %d, open %v: the pend did not end it", f.gone, f.s.open)
+	}
+
+	// A session that is no more than a pause is ended by a disc as it is by a pend: waited on.
+	timers := keptTimers(t)
+	f = newFollowed()
+	f.follow(playing + item("core", "caps", "\x02") + item("ssnc", "disc", "192.0.2.10"))
+	if f.gone != 0 || len(*timers) != 1 || f.s.remote.id == "" {
+		t.Errorf("gone %d, %d waits, remote %+v: a paused session's disc did not keep the sender", f.gone, len(*timers), f.s.remote)
+	}
+
+	// With no session followed (as the song alone is), a client leaving ends the song as it did.
+	var told []string
+	followAirPlayMetadata(strings.NewReader(item("core", "minm", "Tush")+item("ssnc", "disc", "192.0.2.10")),
+		func(title, _, _ string) { told = append(told, title) }, func([]byte) {}, nil)
+	if !slices.Equal(told, []string{"Tush", ""}) {
+		t.Errorf("titles %q: a disc with no session followed left the song", told)
 	}
 }
 
@@ -565,20 +773,45 @@ func pausedAndGone(token, id, addr, title string) string {
 }
 
 // keptTimers stands in for the timer that ends the wait for a paused sender, for the length of the
-// test: none is started, and the test runs out the waits it was given by hand.
+// test: what it is given never runs by itself, and the test runs out the waits it was given by hand.
 func keptTimers(t *testing.T) *[]func() {
 	t.Helper()
-	var waits []func()
+	waits, _ := keptTimersLive(t)
+	return waits
+}
+
+// keptTimersLive is keptTimers, with the timers the waits were given as well: real ones, an hour long
+// with nothing to do, so that Stop says whether one was still running.
+func keptTimersLive(t *testing.T) (waits *[]func(), timers *[]*time.Timer) {
+	t.Helper()
+	var fs []func()
+	var ts []*time.Timer
 	was := airplayKeptAfter
 	airplayKeptAfter = func(d time.Duration, f func()) *time.Timer {
 		if d != airplayKeptFor {
 			t.Errorf("a paused sender waited for %v, want %v", d, airplayKeptFor)
 		}
-		waits = append(waits, f)
-		return nil
+		fs = append(fs, f)
+		timer := time.AfterFunc(time.Hour, func() {})
+		ts = append(ts, timer)
+		return timer
 	}
-	t.Cleanup(func() { airplayKeptAfter = was })
-	return &waits
+	t.Cleanup(func() {
+		airplayKeptAfter = was
+		for _, timer := range ts {
+			timer.Stop()
+		}
+	})
+	return &fs, &ts
+}
+
+// allowLoopback has netguard let the loopback through for the length of the test, for a sender that is a
+// listener of the test's own; the rest of its rules stay.
+func allowLoopback(t *testing.T) {
+	t.Helper()
+	was := netguard.Refused
+	netguard.Refused = func(ip net.IP) bool { return !ip.IsLoopback() && was(ip) }
+	t.Cleanup(func() { netguard.Refused = was })
 }
 
 // resolveTo stands in for avahi for the length of the test.

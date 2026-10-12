@@ -45,6 +45,7 @@ var airplayRemote = &dacpRemote{}
 type dacpSender struct {
 	id, token string     // DACP-ID and Active-Remote (daid, acre)
 	client    netip.Addr // where the session came from (clip), if a sender could be there (senderAddr)
+	from      netip.Addr // where it came from as it was given (clientAddr), link-local or not: not for asking, for telling it from another's (disc)
 }
 
 // take makes s, the sender of a session starting to play, the one commands go to, whole: what it did
@@ -193,9 +194,18 @@ var dacpAskTimeout = 4 * time.Second
 // once, and asks the network otherwise. What is left is for asking it.
 const dacpResolveTimeout = 3 * time.Second
 
-// dacpClient sends the commands. A sender answers at once or not at all.
+// dacpClient sends the commands. A sender answers at once or not at all. It dials through netguard, as
+// every connection the device makes for somebody else's address does, so the address is checked as it
+// is connected to, on each connection, and not only as the session gave it (senderAddr): the device's
+// own addresses are read then. It goes direct, by no proxy the environment names.
 var dacpClient = &http.Client{
 	Timeout: 2 * time.Second,
+	Transport: &http.Transport{
+		Proxy:               nil,
+		DialContext:         netguard.Dialer(2 * time.Second).DialContext,
+		MaxIdleConnsPerHost: 1,
+		IdleConnTimeout:     30 * time.Second,
+	},
 	CheckRedirect: func(*http.Request, []*http.Request) error {
 		return http.ErrUseLastResponse
 	},
@@ -265,18 +275,29 @@ func dacpHost(addr string, port uint16) (string, error) {
 	return netip.AddrPortFrom(a, port).String(), nil
 }
 
-// senderAddr is addr, as a session (clip) or avahi gives it, if a sender could be there, and the zero
-// Addr otherwise. Any host on the network can name an address, and some are not a sender's: those
-// netguard keeps the device's connections off (the device itself, by loopback or by one of its own
-// addresses, which the kernel carries over loopback past the firewall; link-local; a group), the rest
-// of 0.0.0.0/8, where no host is, and the broadcast address. An IPv4 address written as IPv6 is taken
-// as IPv4.
-func senderAddr(addr string) netip.Addr {
+// clientAddr is addr, as a session (clip, disc) or avahi gives it, as an address, and the zero Addr if
+// it is none: an IPv4 address written as IPv6 is taken as IPv4, and a zone (an interface's name, on a
+// link-local address, which the address means only with) is left off, so the same client's address is
+// the same however it was written.
+func clientAddr(addr string) netip.Addr {
 	a, err := netip.ParseAddr(addr)
 	if err != nil {
 		return netip.Addr{}
 	}
-	a = a.Unmap()
+	return a.Unmap().WithZone("")
+}
+
+// senderAddr is addr, as a session (clip) or avahi gives it (clientAddr), if a sender could be there,
+// and the zero Addr otherwise. Any host on the network can name an address, and some are not a
+// sender's: those netguard keeps the device's connections off (the device itself, by loopback or by
+// one of its own addresses, which the kernel carries over loopback past the firewall; link-local; a
+// group), the rest of 0.0.0.0/8, where no host is, and the broadcast address. A zone is left off: one
+// on a global address got past AsSlice, and into the address dialed.
+func senderAddr(addr string) netip.Addr {
+	a := clientAddr(addr)
+	if !a.IsValid() {
+		return a
+	}
 	if netguard.Refused(a.AsSlice()) || (a.Is4() && (a.As4()[0] == 0 || a == netip.AddrFrom4([4]byte{255, 255, 255, 255}))) {
 		return netip.Addr{}
 	}
