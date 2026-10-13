@@ -535,7 +535,9 @@ The timer and mute files play where **Home Assistant sounds** is on, and an alar
 Home Assistant sound plays `timer_finished.wav` either way. A file has to be 16-bit, at
 48 kHz, mono or stereo, and at most 10 seconds long. It plays at the level it was recorded at, as the
 stock sounds do. Keep the wake sound short: the device listens for the request only once the wake
-sound fades, so a long one cuts off the first words. ffmpeg converts anything else:
+sound fades, so a long one cuts off the first words. The wake word is not acted on while the unmute
+sound plays and for a moment after, so the device does not take its own sound for the word: a long
+`mute_switch_off.wav` keeps it deaf for as long. ffmpeg converts anything else:
 
 ```sh
 ffmpeg -i chime.flac -ac 1 -ar 48000 -c:a pcm_s16le wake_word_triggered.wav
