@@ -113,6 +113,7 @@ func build() *Voice {
 	mute.Get().Changed.Listen(func(bool) { v.turn.post(event{kind: evWatch}) })
 
 	wakeword.Requested.Listen(v.Start)
+	wakeword.CancelRequested.Listen(func(struct{}) { v.CancelRequest() })
 
 	// The action button is the only one where a hold means something different from a press, and what
 	// it means is the conversation's to decide. The other buttons are somebody else's listeners.
@@ -180,6 +181,17 @@ func (v *Voice) HomeAssistant() bool { return v.vs.Subscribed() }
 // whoever says it at a ringing alarm wants it quiet, and should not have to know the one word that
 // stops it. The turn goes on, over a quiet room, and "stop" in it ends the ring (see stopsRing).
 func (v *Voice) Start(slot int) { v.open(slot, false) }
+
+// CancelRequest is the Cancel request button: it ends a request that is running, whichever
+// assistant it is for and whatever step it is at, as a tap on the action button ends one. Nothing
+// else is stopped: music, a ringing alarm and an announcement are the action button's, not this.
+func (v *Voice) CancelRequest() {
+	if !v.turn.Busy() {
+		return
+	}
+	slog.Info("cancel request button, canceling the request", "phase", v.turn.Phase())
+	v.turn.Cancel()
+}
 
 // Woke is Start for the wake word itself, which is the one way a turn can be opened by mistake: by a
 // sound that was not the word (see Mistaken).
