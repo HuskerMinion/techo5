@@ -35,6 +35,8 @@ const (
 
 	// AudioSink is the A2DP sink service class: something that plays what it is sent.
 	AudioSink = "0000110b-0000-1000-8000-00805f9b34fb"
+	// AudioSource is the A2DP source service class: something that sends audio, a phone.
+	AudioSource = "0000110a-0000-1000-8000-00805f9b34fb"
 )
 
 // SystemBus is where bluetoothd is. Set from the environment if it is somewhere else.

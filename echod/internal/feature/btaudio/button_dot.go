@@ -35,9 +35,17 @@ func init() {
 		}
 		safe.Go("bluetooth pairing button", func() {
 			f := Get()
-			on := !f.Pairing()
+			// With either mode on, a long press ends it: someone cancelling phone pairing must not get
+			// pairing mode, with its scan and its pick.
+			pairing, phone := f.Pairing(), f.PhonePairing()
+			on := !pairing && !phone
 			time.Sleep(afterCancel)
-			f.SetPairing(on)
+			if on || pairing {
+				f.SetPairing(on)
+			}
+			if phone {
+				f.SetPhonePairing(false)
+			}
 			switch {
 			case on && !f.Pairing():
 				// Bluetooth is not up (yet): it comes up a minute or more after the rest.
