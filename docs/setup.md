@@ -436,6 +436,10 @@ Under Settings → **Sound**, or on the device's Assist satellite in Home Assist
   anything else playing at that moment, like an announcement. With no request running it does
   nothing. The device's Assist satellite says whether one is running, so a tile can show it and start
   or stop it.
+- **Wake word effect**, **Thinking effect** and **Replying effect**, for each wake word in Home
+  Assistant: what the ring shows while the device listens, waits on an answer and replies. An
+  automation can show another for the step a request is in, without changing these, with
+  [`voice_effect`](actions.md#show-an-effect-on-the-ring-during-a-request).
 - **Quiet hours** and **Do not disturb**.
 
 On the setup page (Sound & Voice) or in Home Assistant, **Night volume** turns the device down to that

@@ -495,6 +495,9 @@ func (c *Claim) live() bool {
 	return !c.released && !c.content.empty()
 }
 
+// Showing is what the claim has up, released or not.
+func (c *Claim) Showing() Content { return c.get() }
+
 func (c *Claim) get() Content {
 	c.mu.Lock()
 	defer c.mu.Unlock()

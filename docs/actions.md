@@ -308,6 +308,28 @@ recorder:
       - esphome.echolocal_turn
 ```
 
+## Show an effect on the ring during a request
+
+In YAML, refer to this action as `esphome.<node>_voice_effect`.
+
+Puts an effect on the ring for the step the running voice request is in, for an automation to show
+what the request is waiting on: a slower speech-to-text taking over, a long answer. Nothing is saved:
+the next step, and the next request, show their own effects as ever. With no request running it does
+nothing.
+
+### effect (Required)
+
+*string*
+
+An effect the ring has, as the effect lists in Home Assistant name them, or `None` to turn the ring
+off for the step, or `Default` to put back the step's own effect. Any other name is refused.
+
+```yaml
+action: esphome.kitchen_echo_voice_effect
+data:
+  effect: Ice Comet
+```
+
 ## Set a reminder
 
 In YAML, refer to this action as `esphome.<node>_reminder_set`.

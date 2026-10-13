@@ -9,7 +9,10 @@ package voice
 
 import (
 	"context"
+	"fmt"
 	"log/slog"
+	"slices"
+	"strings"
 	"sync"
 	"sync/atomic"
 
@@ -26,6 +29,7 @@ import (
 	"github.com/HuskerMinion/techo5/echod/internal/feature/timer"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/wakeword"
 	"github.com/HuskerMinion/techo5/echod/internal/hardware/buttons"
+	"github.com/HuskerMinion/techo5/echod/internal/hardware/led"
 	"github.com/HuskerMinion/techo5/echod/internal/hardware/speaker"
 	"github.com/HuskerMinion/techo5/echod/internal/lib/wake"
 )
@@ -43,8 +47,9 @@ const Features = esphome.DefaultVoiceFeatures |
 	esphome.FeatureTimers
 
 type Voice struct {
-	vs   *esphome.VoiceSatellite
-	turn *conversation
+	vs     *esphome.VoiceSatellite
+	turn   *conversation
+	effect *esphome.Action
 }
 
 var (
@@ -144,6 +149,39 @@ func build() *Voice {
 }
 
 func (v *Voice) Name() string { return "conversation" }
+
+// Actions is voice_effect (ShowEffect).
+func (v *Voice) Actions() []*esphome.Action {
+	if v.effect == nil {
+		v.effect = &esphome.Action{
+			Name: "voice_effect",
+			Args: []esphome.Arg{{Name: "effect", Type: esphome.ArgString}},
+			Run: func(c esphome.Call) (any, error) {
+				return nil, v.ShowEffect(strings.TrimSpace(c.String("effect")))
+			},
+		}
+	}
+	return []*esphome.Action{v.effect}
+}
+
+// ShowEffect puts the effect named name on the ring for the step the running request is in, for an
+// automation to say what the request is waiting on: another speech-to-text taking over, a slow
+// answer. None turns the ring off for it, and Default (or nothing) goes back to the step's own
+// setting. It is the request's, not a setting: nothing is saved, and the next step, or the next
+// request, shows its own effect as ever. With no request running it does nothing; a name the ring
+// does not have is refused.
+func (v *Voice) ShowEffect(name string) error {
+	switch {
+	case name == "", name == component.EffectDefault, name == component.EffectNone:
+	case !slices.Contains(led.EffectNames(), name):
+		return fmt.Errorf("no ring effect called %q", name)
+	}
+	if !v.turn.Busy() {
+		return nil
+	}
+	v.turn.post(event{kind: evEffect, text: name})
+	return nil
+}
 
 // Handle is the satellite's own protocol messages, which have no entity to arrive through.
 //
