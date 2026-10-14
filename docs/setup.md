@@ -242,8 +242,14 @@ automation that wants to know too.
   the Dot is connected to a Bluetooth speaker. Tried on a Dot, a Show and a Spot.
 - **Bluetooth, the rest of it (new).** A phone playing to the device has one volume, the device's: its
   volume slider moves the device's volume, and the device's buttons and Home Assistant move the
-  slider (night volume still caps a raise from the phone). With two phones, the last to start playing
-  has the speaker, and the first takes it back when the second stops, if it is still playing; not
+  slider (night volume still caps a raise from the phone). Pause and play on the device, by voice or
+  from Home Assistant, reach the phone over Bluetooth, and so do next and previous on the screen of
+  a Show or a Spot; a pause or a play on the phone is followed here, so the song picks up where it
+  was paused whichever side plays it again, for half an hour after the pause. A phone still playing
+  when something other than a phone takes the speaker (Music Assistant, AirPlay, Spotify Connect,
+  DLNA, the radio) is paused, and playing it again on the phone takes the speaker back. With two
+  phones, the last to start playing has the speaker, and the first takes it back when the second
+  stops, if it is still playing; not
   after AirPlay, Spotify Connect or Music Assistant played, or after a stop on the device. While
   earbuds or a speaker are connected, a phone's audio goes on to them. A short rising tone says a
   Bluetooth device connected and a falling one that it went, except in quiet hours and during a

@@ -155,6 +155,11 @@ type Feature struct {
 	// speaker from while they were still sending: once nothing is playing, one still sending takes it
 	// back (refresh).
 	displaced map[string]bool
+	// pausedAway is the phones paused for playing to nobody, by item, while they go on sending
+	// (pauseAway): each is asked once.
+	pausedAway map[string]bool
+	// kept ends a phone's track left paused too long (keep).
+	kept *time.Timer
 	// levels is each received stream's level as last seen or set, by PCM path: a phone's volume slider,
 	// which is the device's volume while it plays here (phoneSlider, tellPhone).
 	levels    map[string]int
@@ -227,6 +232,7 @@ func build() *Feature {
 		busy:       map[string]bool{},
 		received:   map[string]bool{},
 		displaced:  map[string]bool{},
+		pausedAway: map[string]bool{},
 		levels:     map[string]int{},
 		ours:       map[string]time.Time{},
 		hushed:     map[string]time.Time{},
@@ -322,6 +328,7 @@ func (f *Feature) open(ctx context.Context) error {
 	f.state.Remembered = config.Get().Bluetooth.AudioName
 	f.mu.Unlock()
 	a.Changed.Listen(func(struct{}) { f.wake() })
+	a.PlayerChanged.Listen(f.playerChanged)
 	al.Changed.Listen(func(struct{}) { f.wake() })
 	slog.Info("bluetooth up", "address", a.Address(), "devices", len(a.Devices()))
 	return nil
@@ -532,6 +539,7 @@ func (f *Feature) refresh() {
 		taken[string(back.pcm.Path)] = true
 		f.receive(al, back.pcm, back.dev)
 	}
+	f.pauseAway(playingToNobody(sending, m.Receiving(), playing, paused, external))
 	if cur := m.Receiving(); cur != "" {
 		for _, r := range sending {
 			if r.item == cur && !taken[string(r.pcm.Path)] {
@@ -647,6 +655,7 @@ func (f *Feature) refresh() {
 			onPaired()
 		})
 	}
+	goneFrom(devices)
 	if phoneJoined != "" {
 		slog.Info("bluetooth phone pairing: a phone connected; phone pairing ends", "address", phoneJoined)
 		if err := a.Trust(phoneJoined, true); err != nil {
@@ -687,6 +696,7 @@ func (f *Feature) receive(al *bluealsa.Client, p bluealsa.PCM, d bluez.Device) b
 		return false
 	}
 	slog.Info("bluetooth: playing what a device sends", "device", displayName(d), "codec", p.Codec, "rate", p.Rate, "channels", p.Channels)
+	media.ReceiverControl(item, f.control(d.Path, displayName(d)))
 	media.Get().PlayReceived(item, s, p.Rate, p.Channels)
 	f.oneVolume(al, p)
 	return true

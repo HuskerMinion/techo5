@@ -350,7 +350,9 @@ func (m *Stream) start(t *track) (*track, context.Context) {
 }
 
 // Pause stops the track where it is. What was queued but not heard is kept, so resuming does not
-// skip it.
+// skip it. A phone's over Bluetooth that is told of the pause (ReceiverControl) is the exception: the
+// phone stops where it is and plays on from there, so what was queued here is a tail it plays again
+// after a gap, the time the phone takes to start sending once more. It is dropped instead.
 func (m *Stream) Pause() {
 	if m == nil {
 		return
@@ -364,9 +366,17 @@ func (m *Stream) Pause() {
 	m.paused = true
 	m.block()
 	ours := m.holds == 0
+	live := m.track.received && strings.HasPrefix(m.track.item, BluetoothPrefix) &&
+		receiverControl(m.track.item) != nil
+	if live {
+		m.rewind = nil
+	}
 	m.mu.Unlock()
 
-	if ours {
+	switch {
+	case ours && live:
+		m.flush()
+	case ours:
 		m.keep()
 	}
 	m.changed()
@@ -649,6 +659,13 @@ func (m *Stream) run(ctx context.Context, t *track, url string) error {
 			return err
 		}
 	}
+}
+
+// held is whether the track may not go on now: paused, or the speaker taken by a reply (wait).
+func (m *Stream) held() bool {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return m.gate != nil
 }
 
 // wait holds the stream until it may play and the queue has room for more.

@@ -4,6 +4,7 @@ import (
 	"io"
 	"os"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -404,3 +405,76 @@ func (q *quietSrc) Close() error {
 }
 
 func (q *quietSrc) SetReadDeadline(time.Time) error { return nil }
+
+// A phone over Bluetooth told of a pause plays on from where it stopped, so what this end set aside to
+// play first on resuming is dropped; an AirPlay track keeps it as before. (The speaker's queue itself
+// needs a playback device; flush and keep are what empty it, and this is which one runs.)
+func TestAPausedPhoneLeavesNoTailToReplay(t *testing.T) {
+	for name, wantKept := range map[string]bool{
+		BluetoothPrefix + "Phone (its tail dropped)": false,
+		"AirPlay (its tail kept)":                    true,
+	} {
+		newSender(t, name, true)
+		_, s := receivedPlayer(name)
+		s.mu.Lock()
+		s.rewind = make([]int16, speaker.Rate) // set aside by a reply that took the speaker
+		s.mu.Unlock()
+
+		s.Pause()
+		s.mu.Lock()
+		kept := len(s.rewind) > 0
+		s.mu.Unlock()
+		if kept != wantKept {
+			t.Errorf("%s: kept a tail %v, want %v", name, kept, wantKept)
+		}
+		s.Stop()
+	}
+}
+
+// flowSrc is a sender that keeps sending, a little at a time, counting the reads.
+type flowSrc struct {
+	reads  atomic.Int64
+	closed chan struct{}
+	once   sync.Once
+}
+
+func (f *flowSrc) Read(b []byte) (int, error) {
+	select {
+	case <-f.closed:
+		return 0, io.EOF
+	case <-time.After(5 * time.Millisecond):
+	}
+	f.reads.Add(1)
+	return copy(b, make([]byte, 4)), nil
+}
+
+func (f *flowSrc) Close() error {
+	f.once.Do(func() { close(f.closed) })
+	return nil
+}
+
+func (f *flowSrc) SetReadDeadline(time.Time) error { return nil }
+
+// A phone's track paused here goes on reading what the phone sends, and drops it, so a phone playing
+// again does not overflow bluez-alsa before the track plays on; an AirPlay track waits unread.
+func TestAPausedPhoneIsReadOn(t *testing.T) {
+	for name, readsOn := range map[string]bool{
+		BluetoothPrefix + "Phone (read on)": true,
+		"AirPlay (left unread)":             false,
+	} {
+		newSender(t, name, true)
+		s := NewStream(speaker.NewDriver(speaker.New()), speaker.New(), func() {}, func(string) {})
+		src := &flowSrc{closed: make(chan struct{})}
+		s.PlayPCM(name, src, speaker.Rate, 2)
+		waitUntil(t, "a first read", func() bool { return src.reads.Load() > 0 })
+
+		s.Pause()
+		time.Sleep(50 * time.Millisecond) // a read under way when it paused ends
+		before := src.reads.Load()
+		time.Sleep(200 * time.Millisecond)
+		if got := src.reads.Load() > before+5; got != readsOn {
+			t.Errorf("%s: read on while paused %v, want %v", name, got, readsOn)
+		}
+		s.Stop()
+	}
+}

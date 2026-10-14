@@ -6,6 +6,7 @@ import (
 	"io"
 	"log/slog"
 	"os"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -113,9 +114,15 @@ func (m *Stream) pausedOn(t *track) bool {
 func (m *Stream) receive(ctx context.Context, t *track, src PCMSource, conv *toSpeaker) error {
 	buf := make([]byte, chunk-chunk%(conv.channels*2))
 	var carry []byte
+	phone := strings.HasPrefix(t.item, BluetoothPrefix)
 	for {
-		if err := m.wait(ctx); err != nil {
-			return err
+		// A phone is read on while the track is held up, and what it sends goes (offered): left unread,
+		// what a phone that plays again sends piles up in bluez-alsa until it overflows, and the track
+		// plays again with a piece of it missing, half a second in.
+		if !phone || !m.held() {
+			if err := m.wait(ctx); err != nil {
+				return err
+			}
 		}
 
 		// Armed only around the read, as for a url: waiting for a reply to finish is not the remote

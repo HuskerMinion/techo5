@@ -26,6 +26,8 @@ const (
 	service     = "org.bluez"
 	adapterIfc  = "org.bluez.Adapter1"
 	deviceIfc   = "org.bluez.Device1"
+	playerIfc   = "org.bluez.MediaPlayer1"
+	controlIfc  = "org.bluez.MediaControl1"
 	agentIfc    = "org.bluez.Agent1"
 	agentMgrIfc = "org.bluez.AgentManager1"
 	propsIfc    = "org.freedesktop.DBus.Properties"
@@ -84,6 +86,10 @@ type Adapter struct {
 	// Advertised fires with a device every time one is heard from: it appeared, or its signal or
 	// advertising data changed. Listeners must not block.
 	Advertised hook.Hook[Device]
+
+	// PlayerChanged fires when a device's AVRCP player (a phone playing to this one) says it is
+	// playing or not. Listeners must not block.
+	PlayerChanged hook.Hook[PlayerStatus]
 
 	mu      sync.Mutex
 	devices map[dbus.ObjectPath]*Device
@@ -213,6 +219,7 @@ func (a *Adapter) watch() error {
 		{dbus.WithMatchInterface(objMgrIfc), dbus.WithMatchMember("InterfacesAdded")},
 		{dbus.WithMatchInterface(objMgrIfc), dbus.WithMatchMember("InterfacesRemoved")},
 		{dbus.WithMatchInterface(propsIfc), dbus.WithMatchMember("PropertiesChanged"), dbus.WithMatchArg(0, deviceIfc)},
+		{dbus.WithMatchInterface(propsIfc), dbus.WithMatchMember("PropertiesChanged"), dbus.WithMatchArg(0, playerIfc)},
 	}
 	for _, o := range opts {
 		if err := a.conn.AddMatchSignal(o...); err != nil {
@@ -240,6 +247,84 @@ func (a *Adapter) watch() error {
 	return nil
 }
 
+// PlayerStatus is a device's AVRCP player saying what it is doing: MediaPlayer1's Status,
+// "playing", "paused", "stopped", "forward-seek", "reverse-seek" or "error".
+type PlayerStatus struct {
+	Device dbus.ObjectPath
+	Status string
+}
+
+// playerStatus reads a player's Status change out of a signal, with the device the player is under
+// (BlueZ puts it at the device's path, then avrcp/playerN).
+func playerStatus(s *dbus.Signal) (PlayerStatus, bool) {
+	if s.Name != propsIfc+".PropertiesChanged" || len(s.Body) < 2 {
+		return PlayerStatus{}, false
+	}
+	if ifc, _ := s.Body[0].(string); ifc != playerIfc {
+		return PlayerStatus{}, false
+	}
+	props, _ := s.Body[1].(map[string]dbus.Variant)
+	status, ok := props["Status"].Value().(string)
+	if !ok {
+		return PlayerStatus{}, false
+	}
+	return PlayerStatus{Device: deviceOf(s.Path), Status: status}, true
+}
+
+// deviceOf is the device path an object under it belongs to: /org/bluez/hci0/dev_XX for
+// /org/bluez/hci0/dev_XX/avrcp/player0.
+func deviceOf(path dbus.ObjectPath) dbus.ObjectPath {
+	p := string(path)
+	i := strings.Index(p, "/dev_")
+	if i < 0 {
+		return path
+	}
+	if j := strings.Index(p[i+1:], "/"); j >= 0 {
+		return dbus.ObjectPath(p[:i+1+j])
+	}
+	return path
+}
+
+// ErrNoPlayer is a device with no AVRCP player to ask: not connected, or not a phone that offers
+// one.
+var ErrNoPlayer = errors.New("bluez: the device has no media player")
+
+// Control asks a device's AVRCP player, a phone playing to this one, to play, pause or skip: method
+// is MediaPlayer1's Play, Pause, Next or Previous.
+func (a *Adapter) Control(ctx context.Context, device dbus.ObjectPath, method string) error {
+	var objs map[dbus.ObjectPath]map[string]map[string]dbus.Variant
+	if err := a.conn.Object(service, "/").CallWithContext(ctx, objMgrIfc+".GetManagedObjects", 0).Store(&objs); err != nil {
+		return err
+	}
+	player, ok := playerOf(objs, device)
+	if !ok {
+		return ErrNoPlayer
+	}
+	return a.conn.Object(service, player).CallWithContext(ctx, playerIfc+"."+method, 0).Err
+}
+
+// playerOf is the player of device's to ask: the one its MediaControl1 says is the phone's
+// addressed player, the app in control, or with none said, the first of its players by path, so the
+// same one is asked every time.
+func playerOf(objs map[dbus.ObjectPath]map[string]map[string]dbus.Variant, device dbus.ObjectPath) (dbus.ObjectPath, bool) {
+	if p, ok := objs[device][controlIfc]["Player"].Value().(dbus.ObjectPath); ok {
+		if _, ok := objs[p][playerIfc]; ok {
+			return p, true
+		}
+	}
+	var players []string
+	for path, ifcs := range objs {
+		if _, ok := ifcs[playerIfc]; ok && deviceOf(path) == device {
+			players = append(players, string(path))
+		}
+	}
+	if len(players) == 0 {
+		return "", false
+	}
+	sort.Strings(players)
+	return dbus.ObjectPath(players[0]), true
+}
+
 // advertOnly is a change that is only a device heard again: its signal strength or what it
 // advertises. Bluetooth sensors send these many times a second without anything about the device as
 // a connection changing, so they go to Advertised alone and not to Changed.
@@ -255,6 +340,10 @@ func advertOnly(props map[string]dbus.Variant) bool {
 }
 
 func (a *Adapter) signal(s *dbus.Signal) {
+	if st, ok := playerStatus(s); ok {
+		a.PlayerChanged.Emit(st)
+		return
+	}
 	changed := false
 	var heard *Device
 	a.mu.Lock()
