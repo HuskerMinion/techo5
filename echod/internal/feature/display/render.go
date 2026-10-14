@@ -56,6 +56,13 @@ type scene struct {
 	volume     int
 	showVolume bool
 
+	// update is the native firmware update dialog, shown above the current page.
+	updateActive   bool
+	updateProgress float32
+	updatePhase    string
+	updateTarget   string
+	updateMessage  string
+
 	// The dashboard page, drawn instead of the clock while showDash is set: how it is shown, and
 	// when streamed, what arrived.
 	showDash   bool
@@ -423,6 +430,8 @@ func (r *renderer) useFont() {
 // simpler than tracking what changed.
 func (r *renderer) draw(s scene) {
 	r.useFont()
+	defer r.updateOverlay(s) // Draw update overlay at the end of frame using defer
+
 	if !s.showDeck {
 		// Where the deck's buttons were is nothing to tap once something else is drawn there.
 		r.zmu.Lock()

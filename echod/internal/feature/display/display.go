@@ -38,6 +38,7 @@ import (
 	"github.com/HuskerMinion/techo5/echod/internal/feature/dashboard"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/deck"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/doorbell"
+	"github.com/HuskerMinion/techo5/echod/internal/feature/firmware"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/hastate"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/home"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/media"
@@ -133,12 +134,19 @@ type Display struct {
 	weatherFx *esphome.Switch
 	lang      *esphome.Select
 
-	mu      sync.Mutex
-	on      bool
-	ceiling int // percent Home Assistant asked for
-	autoOn  bool
-	level   float64 // backlight actually applied, 0..BacklightMax, as a running average
-	settled bool    // level has reached the target; settle steps it there between readings
+	mu sync.Mutex
+	// Update dialog state, protected by mu.
+	updateActive     bool
+	updateProgress   float32
+	updatePhase      string
+	updateTarget     string
+	updateMessage    string
+	updateErrorUntil time.Time
+	on               bool
+	ceiling          int // percent Home Assistant asked for
+	autoOn           bool
+	level            float64 // backlight actually applied, 0..BacklightMax, as a running average
+	settled          bool    // level has reached the target; settle steps it there between readings
 	// lightMu makes each relight one step, from working out the level to writing it.
 	lightMu sync.Mutex
 	// sunriseLit is the light before an alarm having been on at the last settle tick (autobright.go).
@@ -1522,6 +1530,8 @@ func (d *Display) night(now time.Time, on bool, view voice.State) bool {
 	d.showNightMode(in)
 	d.mu.Lock()
 	dark, touched, viewAt, wifiUp, asked := d.nightDark, d.touchedAt, d.viewAt, d.wifiOpen, d.askedUp(now)
+	updateVisible := d.updateActive ||
+		(d.updateMessage != "" && now.Before(d.updateErrorUntil))
 	d.mu.Unlock()
 	if !in {
 		d.mu.Lock()
@@ -1551,7 +1561,8 @@ func (d *Display) night(now time.Time, on bool, view voice.State) bool {
 		// A video playing keeps the screen as it is: lit at the night light's level if it came on at
 		// night (frame), not put out under it.
 		// A page Home Assistant asked for keeps it while it is up (askedAtNight).
-		active := view.Phase != "idle" || now.Sub(touched) < nightIdle || now.Sub(viewAt) < nightIdle ||
+		active := updateVisible || view.Phase != "idle" ||
+			now.Sub(touched) < nightIdle || now.Sub(viewAt) < nightIdle ||
 			video.Get().State().Active() || asked
 		// Something playing is not somebody using the screen. At night it is rain or music to sleep
 		// to, and it kept a guest room's screen at full brightness all night.
@@ -1871,6 +1882,38 @@ func (d *Display) OpenSheet(name string) bool {
 	return true
 }
 
+// updateChanged receives firmware progress and wakes the renderer when it changes.
+func (d *Display) updateChanged(active bool, progress float32, phase, target, message string) {
+	if progress < 0 {
+		progress = 0
+	}
+	if progress > 1 {
+		progress = 1
+	}
+
+	d.mu.Lock()
+	d.updateActive = active
+	d.updateProgress = progress
+	d.updatePhase = phase
+	d.updateTarget = target
+	d.updateMessage = message
+
+	d.updateErrorUntil = time.Time{}
+	if !active && message != "" {
+		// Show the failure long enough to read without trapping the user on the dialog.
+		d.updateErrorUntil = time.Now().Add(12 * time.Second)
+	}
+
+	on := d.on
+	d.mu.Unlock()
+
+	// An update requested through Home Assistant should be visible on the device too.
+	if active && !on {
+		d.apply(true, d.ceilingOrDefault(), false)
+	}
+	d.wake()
+}
+
 func (d *Display) wake() {
 	select {
 	case d.poke <- struct{}{}:
@@ -1886,6 +1929,7 @@ func (d *Display) Start(context.Context) error {
 	}
 	d.dev = dev
 	d.r = newRenderer(dev.Canvas())
+	firmware.Get().SetProgressListener(d.updateChanged)
 	w, h := dev.Size()
 	d.mu.Lock()
 	d.wide = w > 1000 || h > 1000
@@ -1942,6 +1986,18 @@ func (d *Display) frame() time.Duration {
 	d.mu.Unlock()
 
 	now := time.Now()
+
+	d.mu.Lock()
+	if !d.updateErrorUntil.IsZero() && !now.Before(d.updateErrorUntil) {
+		d.updateActive = false
+		d.updateProgress = 0
+		d.updatePhase = ""
+		d.updateTarget = ""
+		d.updateMessage = ""
+		d.updateErrorUntil = time.Time{}
+	}
+	d.mu.Unlock()
+
 	d.popupTick(now)
 	ring := d.ringing(now)
 	call := phone.Get().State()
@@ -1997,8 +2053,10 @@ func (d *Display) frame() time.Duration {
 	}
 	d.mu.Lock()
 	sheetUp, wifiUp := d.sheet, d.wifiOpen
+	updateVisible := d.updateActive ||
+		(d.updateMessage != "" && now.Before(d.updateErrorUntil))
 	d.mu.Unlock()
-	busy := view.Phase != "idle" || call.Phase != phone.Idle || ring.any() || reminding || sheetUp || pinIsOpen() ||
+	busy := updateVisible || view.Phase != "idle" || call.Phase != phone.Idle || ring.any() || reminding || sheetUp || pinIsOpen() ||
 		sunriseProgress(now) > 0 || d.popupUp() != nil || setup.Get().Waiting() || wifiUp || video.Get().State().Active()
 	if d.awayTick(now, on, busy, night) {
 		d.mu.Lock()
@@ -2105,6 +2163,11 @@ func (d *Display) frame() time.Duration {
 	s.bt = btaudio.Get().State()
 	d.mu.Lock()
 	s.showSheet = d.sheet
+	s.updateActive = d.updateActive
+	s.updateProgress = d.updateProgress
+	s.updatePhase = d.updatePhase
+	s.updateTarget = d.updateTarget
+	s.updateMessage = d.updateMessage
 	s.pin = pinNow(now)
 	// The network address page is one of the settings, opened from them and going back to them: the
 	// lock stays open behind it.
@@ -2317,7 +2380,9 @@ func (d *Display) frame() time.Duration {
 		slog.Warn("presenting the frame failed", "err", err)
 	}
 	d.answerShots()
-
+	if s.updateActive {
+		return 250 * time.Millisecond
+	}
 	if d.r.flipBusy(time.Now()) {
 		return flipFrame // a card is flipping: the night's flip clock, or the Flip clock style
 	}

@@ -54,6 +54,13 @@ type Firmware struct {
 	// did not install: for the setup page, which has no update card to watch.
 	at     float32
 	failed string
+
+	// phase and target describe the update currently being installed.
+	phase  string
+	target string
+	// progressListener reports updates to an optional on-device display.
+	progressListener func(bool, float32, string, string, string)
+
 	// busy counts the Install calls running, which re-read the channel before the download starts.
 	busy atomic.Int32
 }
@@ -73,6 +80,21 @@ func (u *Firmware) Failed() string {
 	u.mu.Lock()
 	defer u.mu.Unlock()
 	return u.failed
+}
+
+// SetProgressListener registers a listener for the on-device update dialog.
+func (u *Firmware) SetProgressListener(listener func(bool, float32, string, string, string)) {
+	u.mu.Lock()
+	u.progressListener = listener
+
+	active := u.busy.Load() > 0 || update.Installing()
+	at, phase, target, message := u.at, u.phase, u.target, u.failed
+	u.mu.Unlock()
+
+	// A display starting after an update has begun should see the current state too.
+	if listener != nil && (active || message != "") {
+		listener(active, at, phase, target, message)
+	}
 }
 
 var (
@@ -293,6 +315,7 @@ func (u *Firmware) command(cmd esphome.UpdateCommand) {
 func (u *Firmware) Install(ctx context.Context) {
 	u.busy.Add(1)
 	defer u.busy.Add(-1)
+
 	found, err := update.Fetch(ctx, u.Channel())
 	if err != nil {
 		slog.Warn("re-reading the channel failed, using the last check", "err", err)
@@ -339,26 +362,65 @@ func (u *Firmware) Install(ctx context.Context) {
 	}
 	if err != nil {
 		slog.Error("installing an update failed", "version", found.Version, "err", err)
+
+		message := err.Error()
+
 		u.mu.Lock()
-		u.failed = found.Version + ": " + err.Error()
+		u.failed = found.Version + ": " + message
+		u.phase, u.target = "failed", found.Version
+		listener := u.progressListener
 		u.mu.Unlock()
+
+		if listener != nil {
+			listener(false, 0, "failed", found.Version, message)
+		}
+
 		u.publish(found)
-		u.Settled(EventFailed, "installing "+found.Version+" failed: "+err.Error())
+		u.Settled(EventFailed, "installing "+found.Version+" failed: "+message)
 		feedback.Failure()
 		return
 	}
+
+	u.mu.Lock()
+	u.phase, u.target = "restarting", found.Version
+	listener := u.progressListener
+	u.mu.Unlock()
+
+	if listener != nil {
+		listener(true, 1, "restarting", found.Version, "")
+	}
+
 	update.Restart("update to " + found.Version)
 }
 
 // progress republishes the state with how far the download has got. The version fields go out with it
 // because Home Assistant reads the whole state each time.
 func (u *Firmware) progress(found update.Manifest, at float32) {
+	if at < 0 {
+		at = 0
+	}
+	if at > 1 {
+		at = 1
+	}
+
+	phase := "downloading"
+	if at >= 1 {
+		phase = "installing"
+	}
+
 	u.mu.Lock()
 	u.at, u.failed = at, ""
+	u.phase, u.target = phase, found.Version
+	listener := u.progressListener
 	u.mu.Unlock()
+
 	state := u.state(found)
 	state.InProgress, state.Progress = true, at*100
 	u.entity.Set(state)
+
+	if listener != nil {
+		listener(true, at, phase, found.Version, "")
+	}
 }
 
 // publish is the state with nothing happening, which is also how a failed install stops looking like one
