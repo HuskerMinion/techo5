@@ -10,9 +10,11 @@ package firmware
 import (
 	"context"
 	"errors"
+	"fmt"
 	"log/slog"
 	"sync"
 	"sync/atomic"
+	"time"
 
 	esphome "github.com/ygelfand/go-esphome-device"
 
@@ -381,13 +383,19 @@ func (u *Firmware) Install(ctx context.Context) {
 		return
 	}
 
-	u.mu.Lock()
-	u.phase, u.target = "restarting", found.Version
-	listener := u.progressListener
-	u.mu.Unlock()
+	// Keep the screen on the installing state until Install has finished. Then give the person
+	// standing at the device a visible three-second countdown before the supervisor restarts it.
+	for seconds := 3; seconds >= 1; seconds-- {
+		phase := fmt.Sprintf("countdown-%d", seconds)
+		u.mu.Lock()
+		u.at, u.phase, u.target = 1, phase, found.Version
+		listener := u.progressListener
+		u.mu.Unlock()
 
-	if listener != nil {
-		listener(true, 1, "restarting", found.Version, "")
+		if listener != nil {
+			listener(true, 1, phase, found.Version, "")
+		}
+		time.Sleep(time.Second)
 	}
 
 	update.Restart("update to " + found.Version)

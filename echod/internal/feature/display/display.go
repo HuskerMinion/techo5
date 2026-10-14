@@ -823,13 +823,17 @@ func (d *Display) cameraTap(g touch.Gesture, v home.CameraView) {
 // gesture is a finger on the panel. A dark screen only lights up; otherwise a tap is the action
 // button and a vertical swipe the volume.
 func (d *Display) gesture(g touch.Gesture) {
+	now := time.Now()
 	d.mu.Lock()
+	updateVisible := d.updateActive || (d.updateMessage != "" && now.Before(d.updateErrorUntil))
 	on := d.on
+	d.touchedAt = now
 	d.mu.Unlock()
 	slog.Info("touch", "gesture", g.String())
-	d.mu.Lock()
-	d.touchedAt = time.Now()
-	d.mu.Unlock()
+	if updateVisible {
+		// The update dialog is modal: don't let a tap, swipe or hold reach the page behind it.
+		return
+	}
 	// A notification that came up at night waits for a touch (releaseNotice), but not for one that
 	// stops a ring: that one is for the alarm. The touch that releases it only releases: whoever
 	// touched the screen has not seen the card yet, so it is not a tap on anything.

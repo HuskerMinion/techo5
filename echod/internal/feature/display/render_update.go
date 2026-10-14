@@ -7,6 +7,9 @@ import (
 	"image"
 	"image/color"
 	"image/draw"
+	"strings"
+
+	"github.com/HuskerMinion/techo5/echod/internal/layout"
 )
 
 // updateOverlay draws the system update dialog last, above the page currently on screen.
@@ -47,26 +50,34 @@ func (r *renderer) updateOverlay(s scene) {
 	r.roundStroke(card, radius, float64(r.s(2)), ember)
 
 	padding := r.s(42)
+	faces := r.faces()
+	titleFace := faces.header
+	versionFace := faces.labelBold
+	statusFace := faces.label
+	detailFace := faces.sub
+
 	title := "System update"
 	if s.updateMessage != "" {
 		title = "Update failed"
 	}
 
 	r.text(
-		r.title,
+		titleFace,
 		title,
-		(r.w-r.width(r.title, title))/2,
+		(r.w-r.width(titleFace, title))/2,
 		card.Min.Y+r.s(72),
 		amber,
 	)
 
 	if s.updateTarget != "" {
-		target := "Version " + s.updateTarget
-		target = r.fit(r.body, target, card.Dx()-2*padding)
+		oldVersion := "v" + strings.TrimPrefix(strings.TrimSpace(layout.Version), "v")
+		newVersion := "v" + strings.TrimPrefix(strings.TrimSpace(s.updateTarget), "v")
+		target := oldVersion + " → " + newVersion
+		target = r.fit(versionFace, target, card.Dx()-2*padding)
 		r.text(
-			r.body,
+			versionFace,
 			target,
-			(r.w-r.width(r.body, target))/2,
+			(r.w-r.width(versionFace, target))/2,
 			card.Min.Y+r.s(130),
 			cream,
 		)
@@ -75,21 +86,21 @@ func (r *renderer) updateOverlay(s scene) {
 	// A failed update stays visible briefly so the error can be read without trapping
 	// the user on a permanent dialog.
 	if s.updateMessage != "" {
-		message := r.fit(r.small, s.updateMessage, card.Dx()-2*padding)
+		message := r.fit(statusFace, s.updateMessage, card.Dx()-2*padding)
 		r.text(
-			r.small,
+			statusFace,
 			message,
-			(r.w-r.width(r.small, message))/2,
+			(r.w-r.width(statusFace, message))/2,
 			card.Min.Y+r.s(205),
 			cream,
 		)
 
 		retry := "Retry from Settings > General > Updates"
-		retry = r.fit(r.small, retry, card.Dx()-2*padding)
+		retry = r.fit(detailFace, retry, card.Dx()-2*padding)
 		r.text(
-			r.small,
+			detailFace,
 			retry,
-			(r.w-r.width(r.small, retry))/2,
+			(r.w-r.width(detailFace, retry))/2,
 			card.Min.Y+r.s(270),
 			dim,
 		)
@@ -107,18 +118,24 @@ func (r *renderer) updateOverlay(s scene) {
 	var status string
 	switch s.updatePhase {
 	case "installing":
-		status = "Installing update..."
+		status = "Installing…"
+	case "countdown-3":
+		status = "Rebooting in 3…"
+	case "countdown-2":
+		status = "Rebooting in 2…"
+	case "countdown-1":
+		status = "Rebooting in 1…"
 	case "restarting":
-		status = "Restarting..."
+		status = "Rebooting…"
 	default:
 		status = fmt.Sprintf("Downloading update · %d%%", int(progress*100+0.5))
 	}
 
-	status = r.fit(r.body, status, card.Dx()-2*padding)
+	status = r.fit(statusFace, status, card.Dx()-2*padding)
 	r.text(
-		r.body,
+		statusFace,
 		status,
-		(r.w-r.width(r.body, status))/2,
+		(r.w-r.width(statusFace, status))/2,
 		card.Min.Y+r.s(190),
 		cream,
 	)
@@ -132,7 +149,12 @@ func (r *renderer) updateOverlay(s scene) {
 	barRadius := float64(bar.Dy()) / 2
 	r.roundFill(bar, barRadius, ember, ember)
 
-	if s.updatePhase == "installing" || s.updatePhase == "restarting" {
+	indeterminate := false
+	switch s.updatePhase {
+	case "installing", "restarting", "countdown-3", "countdown-2", "countdown-1":
+		indeterminate = true
+	}
+	if indeterminate {
 		// slotctl does not report progress while writing the inactive slot.
 		// Animate a segment instead of showing a misleading percentage.
 		segmentW := bar.Dx() / 3
@@ -169,9 +191,9 @@ func (r *renderer) updateOverlay(s scene) {
 
 	hint := "Keep the device powered on"
 	r.text(
-		r.small,
+		detailFace,
 		hint,
-		(r.w-r.width(r.small, hint))/2,
+		(r.w-r.width(detailFace, hint))/2,
 		card.Min.Y+r.s(290),
 		dim,
 	)
