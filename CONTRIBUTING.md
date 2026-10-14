@@ -25,11 +25,13 @@ daemon can run on a device that already has TECHO5:
 3. Build and copy it over:
 
    ```
+   DEVICE=192.168.X.X #Replace with your device's IP address
+   
    cd echod
    GOOS=linux GOARCH=arm GOARM=7 CGO_ENABLED=0 go build -o ../bin/echod-arm ./cmd/echod
    cd ..
-   scp -O bin/echod-arm root@<address>:/tmp/echod-test
-   ssh root@<address> 'mount --bind /tmp/echod-test /usr/local/bin/techo5 && killall techo5'
+   scp -O bin/echod-arm root@$DEVICE:/tmp/echod-test
+   ssh root@$DEVICE 'mount --bind /tmp/echod-test /usr/local/bin/techo5 && killall techo5'
    ```
 
    For a Spot add `-tags spot`. For a Dot add `-tags dot`, and the daemon there is `echod`:
