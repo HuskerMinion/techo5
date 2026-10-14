@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	"github.com/HuskerMinion/techo5/echod/internal/layout"
+	"github.com/HuskerMinion/techo5/echod/internal/lib/locale"
 )
 
 // updateOverlay draws the system update dialog last, above the page currently on screen.
@@ -56,9 +57,10 @@ func (r *renderer) updateOverlay(s scene) {
 	statusFace := faces.label
 	detailFace := faces.sub
 
-	title := "System update"
+	lang := screenLang()
+	title := locale.UpdateText(lang, locale.UpdateSystemTitle)
 	if s.updateMessage != "" {
-		title = "Update failed"
+		title = locale.UpdateText(lang, locale.UpdateFailedTitle)
 	}
 
 	r.text(
@@ -95,7 +97,7 @@ func (r *renderer) updateOverlay(s scene) {
 			cream,
 		)
 
-		retry := "Retry from Settings > General > Updates"
+		retry := locale.UpdateText(lang, locale.UpdateRetryHint)
 		retry = r.fit(detailFace, retry, card.Dx()-2*padding)
 		r.text(
 			detailFace,
@@ -118,17 +120,17 @@ func (r *renderer) updateOverlay(s scene) {
 	var status string
 	switch s.updatePhase {
 	case "installing":
-		status = "Installing…"
+		status = locale.UpdateText(lang, locale.UpdateInstalling)
 	case "countdown-3":
-		status = "Rebooting in 3…"
+		status = fmt.Sprintf(locale.UpdateText(lang, locale.UpdateRebootingIn), 3)
 	case "countdown-2":
-		status = "Rebooting in 2…"
+		status = fmt.Sprintf(locale.UpdateText(lang, locale.UpdateRebootingIn), 2)
 	case "countdown-1":
-		status = "Rebooting in 1…"
+		status = fmt.Sprintf(locale.UpdateText(lang, locale.UpdateRebootingIn), 1)
 	case "restarting":
-		status = "Rebooting…"
+		status = locale.UpdateText(lang, locale.UpdateRebooting)
 	default:
-		status = fmt.Sprintf("Downloading update · %d%%", int(progress*100+0.5))
+		status = fmt.Sprintf(locale.UpdateText(lang, locale.UpdateDownloading), int(progress*100+0.5))
 	}
 
 	status = r.fit(statusFace, status, card.Dx()-2*padding)
@@ -189,7 +191,7 @@ func (r *renderer) updateOverlay(s scene) {
 		}
 	}
 
-	hint := "Keep the device powered on"
+	hint := locale.UpdateText(lang, locale.UpdatePowerHint)
 	r.text(
 		detailFace,
 		hint,
