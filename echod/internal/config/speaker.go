@@ -3,7 +3,9 @@ package config
 // Speaker is how loud the device is, how voice is stretched to the playback rate, and whether the
 // driver's tuning is applied.
 type Speaker struct {
-	Volume     int        `json:"volume"`
+	Volume int `json:"volume"`
+	// GainDB is an optional TAS5805M amplifier boost in dB; zero is the vendor's gain.
+	GainDB     int        `json:"gain_db,omitempty"`
 	Resampling Resampling `json:"resampling"`
 	ASP        bool       `json:"asp"`
 	OutputMode OutputMode `json:"output_mode,omitempty"`
@@ -55,6 +57,10 @@ const (
 
 	// DefaultASP applies the driver's tuning, which is what the vendor's firmware does.
 	DefaultASP = true
+
+	// SpeakerGainMax is an optional amplifier boost, not another volume scale. Zero keeps
+	// the vendor's unity gain. Boosts can distort, especially with raised bass or treble.
+	SpeakerGainMax = 10
 )
 
 func defaultSpeaker() Speaker {
@@ -85,6 +91,10 @@ type SpeakerWriter struct{ st *Store }
 
 func (w SpeakerWriter) Volume(v int) error {
 	return w.st.Update(func(c *Config) { c.Speaker.Volume = v })
+}
+
+func (w SpeakerWriter) GainDB(v int) error {
+	return w.st.Update(func(c *Config) { c.Speaker.GainDB = max(0, min(v, SpeakerGainMax)) })
 }
 
 func (w SpeakerWriter) NightVolume(v int) error {

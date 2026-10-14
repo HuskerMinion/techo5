@@ -31,6 +31,13 @@ func speakerSection(w http.ResponseWriter, token string) {
 	fmt.Fprintf(w, `<label for="volume">Volume, 0 to %d</label>
 	 <input id="volume" name="volume" type="number" min="0" max="%d" value="%d"><input type="hidden" name="was_volume" value="%d">`,
 		media.VolumeSteps, media.VolumeSteps, vol, vol)
+	if p.SpeakerGainAvailable() {
+		gain := p.SpeakerGain()
+		fmt.Fprintf(w, `<label for="gain">Speaker gain, dB (0 is normal)</label>
+	 <input id="gain" name="gain" type="number" min="0" max="%d" step="1" value="%d"><input type="hidden" name="was_gain" value="%d">
+	 <p>Boosts can distort, especially at high volume or with raised bass or treble. Set 0 dB to restore normal gain.</p>`,
+			config.SpeakerGainMax, gain, gain)
+	}
 
 	if models := wake.Lib().Ours(); len(models) > 0 {
 		cur := c.Wake.Slot(0).ID
@@ -123,6 +130,15 @@ func saveSpeaker(r *http.Request) string {
 	if problem != "" {
 		return problem
 	}
+	gain, gainChanged, problem := gainLevel(r, p.SpeakerGainAvailable())
+	if problem != "" {
+		return problem
+	}
+	if gainChanged {
+		if err := p.SetSpeakerGain(gain); err != nil {
+			return "the speaker gain could not be saved: " + err.Error()
+		}
+	}
 	if volChanged {
 		p.Adjust(vol - p.Volume())
 	}
@@ -161,6 +177,21 @@ func saveSpeaker(r *http.Request) string {
 	}
 	slog.Info("setup page: speaker and voice saved")
 	return ""
+}
+
+func gainLevel(r *http.Request, available bool) (n int, ok bool, problem string) {
+	v, ok := changed(r, "gain")
+	if !ok {
+		return 0, false, ""
+	}
+	if !available {
+		return 0, false, "speaker gain is not supported on this amplifier"
+	}
+	n, err := strconv.Atoi(strings.TrimSpace(v))
+	if err != nil || n < 0 || n > config.SpeakerGainMax {
+		return 0, false, fmt.Sprintf("the speaker gain is a whole number from 0 to %d dB", config.SpeakerGainMax)
+	}
+	return n, true, ""
 }
 
 func oneOf(v string, list []string) bool {

@@ -71,6 +71,9 @@ type Player struct {
 	// asp is the driver's tuning: on applies it, off sends the signal as it came.
 	asp          *esphome.Switch
 	bass, treble *esphome.Number
+	gain         *esphome.Number
+	gainApply    func(int) error
+	gainMu       sync.Mutex
 	quiet        *esphome.Select
 
 	// night is the night volume, the most quiet hours play at (night.go).
@@ -320,6 +323,16 @@ func build() *Player {
 	p.quiet = newQuiet()
 	p.night = newNight()
 	p.layers = noiseLayers()
+	if speaker.GainAvailable() {
+		p.gain = &esphome.Number{
+			Base: esphome.Base{ObjectID: "speaker_gain", Name: "Speaker gain",
+				Icon: "mdi:volume-plus", Category: esphome.CategoryConfig,
+				DeviceID: component.DevicePlayback},
+			Min: 0, Max: config.SpeakerGainMax, Step: 1, Unit: "dB", Mode: esphome.NumberBox,
+		}
+		p.gainApply = speaker.Get().SetSpeakerGain
+		p.gain.OnCommand = p.commandSpeakerGain
+	}
 
 	// The player itself stays on the device: it is what people reach for. These are how it behaves.
 	bases := []*esphome.Base{&p.resampling.Base, &p.onTurn.Base, &p.duck.Base, &p.jack.Base, &p.asp.Base,
@@ -489,6 +502,9 @@ func (p *Player) SetHASounds(on bool) {
 func (p *Player) Entities() []esphome.Entity {
 	out := []esphome.Entity{p.mp, p.jack, p.resampling, p.onTurn, p.duck, p.asp, p.bass, p.treble,
 		p.quiet, p.night, p.nearMiss, p.haSounds, p.sleep.sel}
+	if p.gain != nil {
+		out = append(out, p.gain)
+	}
 	if speaker.HasJack {
 		out = append(out, p.output)
 	}
@@ -580,6 +596,15 @@ func (p *Player) Restore(c config.Config) {
 	slog.Info("restored", "what", p.duck.ObjectID, "using", c.Media.DuckDB)
 
 	want := c.Speaker.ASPWanted()
+	if p.gain != nil {
+		db := max(0, min(c.Speaker.GainDB, config.SpeakerGainMax))
+		if err := p.gainApply(db); err != nil {
+			slog.Error("restoring speaker gain failed", "err", err)
+		} else {
+			p.gain.Set(float32(db))
+			slog.Info("restored", "what", p.gain.ObjectID, "using", db)
+		}
+	}
 	settled := speaker.Get().SetASP(want)
 	p.asp.Set(settled)
 	slog.Info("restored", "what", p.asp.ObjectID, "using", settled, "asked", want)

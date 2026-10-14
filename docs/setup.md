@@ -393,6 +393,18 @@ device's fonts folder over SSH ([Set the SSH authorized keys](actions.md#set-the
 
 ## 7. Voice
 
+**Speaker gain** is an optional amplifier boost on Show 5 2nd gen units with a TI TAS5805M.
+It appears beside the speaker controls in Settings → **Sound**, on the setup page under
+**Sound & Voice**, and in Home Assistant's **Playback** configuration. Units with another
+amplifier do not offer it. The setting is saved and restored before audio starts, including
+after reboots and software updates.
+
+The default is **0 dB**, the amplifier's normal gain. Choose 0 to reset it, or raise it in
+1 dB steps up to +10 dB. This boosts all internal-speaker audio, including voice, music and
+alarms; the usual volume and night volume still work. Higher gain can distort or crackle,
+especially at high volume or with raised bass or treble. Start low and reduce the boost if
+that happens; +10 dB is a setting limit, not a guarantee of clean output on every track.
+
 Under Settings → **Sound**, or on the device's Assist satellite in Home Assistant:
 
 - **Wake word**: Okay Nabu, Hey Jarvis, Alexa and others. Choosing none is fine if you only want

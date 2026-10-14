@@ -154,6 +154,11 @@ func categoryRows(sv sheetView) (rows []settingRow, note string) {
 			rows = append(rows, settingRow{id: "output", label: "Audio output", sub: "Where the sound goes with headphones in",
 				kind: ctlChoice, value: media.Get().Output()})
 		}
+		if media.Get().SpeakerGainAvailable() {
+			rows = append(rows, settingRow{id: "speakergain", label: "Speaker gain",
+				sub:  "0 dB is normal; boosts can distort, especially with more bass",
+				kind: ctlStepper, value: fmt.Sprintf("%+d dB", media.Get().SpeakerGain())})
+		}
 		rows = append(rows, []settingRow{
 			{label: "Voice", kind: ctlHeading},
 			{id: "mic", label: "Microphone", sub: "The mute button does this too", kind: ctlToggle, on: !st.muted, value: mic},
@@ -924,6 +929,19 @@ func (d *Display) rowTap(id string, p part, opt int) {
 		}
 	case "mic":
 		mute.Get().Toggle()
+	case "speakergain":
+		v := media.Get().SpeakerGain()
+		switch p {
+		case partMinus:
+			v--
+		case partPlus:
+			v++
+		default:
+			return
+		}
+		if err := media.Get().SetSpeakerGain(max(0, min(v, config.SpeakerGainMax))); err != nil {
+			slog.Error("changing speaker gain failed", "err", err)
+		}
 	case "wakesens":
 		v := config.Get().Wake.Slot(0).Threshold
 		switch p {

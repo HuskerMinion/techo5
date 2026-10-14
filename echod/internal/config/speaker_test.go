@@ -6,6 +6,20 @@ import (
 	"testing"
 )
 
+func TestExistingSpeakerStateDefaultsToNormalGain(t *testing.T) {
+	p := filepath.Join(t.TempDir(), "state.json")
+	if err := os.WriteFile(p, []byte(`{"speaker":{"volume":20,"bass":3}}`), 0600); err != nil {
+		t.Fatal(err)
+	}
+	st, err := Load(p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if c := st.Get().Speaker; c.GainDB != 0 || c.Volume != 20 || c.Bass != 3 {
+		t.Fatalf("existing speaker settings changed: %+v", c)
+	}
+}
+
 // A device that could not tune wrote the settled false back to itself, so every unit that ever ran
 // such a build carries "asp": false whether or not anybody chose it. Once the tuning works, those
 // units have to come up tuned rather than staying off forever.

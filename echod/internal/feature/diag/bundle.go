@@ -109,6 +109,7 @@ func settingsSummary(c config.Config) string {
 	add := func(f string, v ...any) { out = append(out, fmt.Sprintf(f, v...)) }
 	add("wake words: %d configured", len(c.Wake.Words))
 	add("volume: %d", c.Speaker.Volume)
+	add("speaker gain: %d dB", c.Speaker.GainDB)
 	add("microphone muted: %t", c.Microphone.Muted)
 	out = append(out, screenSettings(c)...)
 	add("alarms: %d set, %d followed, sunrise=%d min", len(c.Alarms.List), len(c.Alarms.Follow), c.Alarms.SunriseMinutes)

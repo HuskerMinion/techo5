@@ -1,13 +1,37 @@
 package setup
 
 import (
+	"net/http/httptest"
 	"net/url"
 	"strconv"
+	"strings"
 	"testing"
 
 	"github.com/HuskerMinion/techo5/echod/internal/config"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/media"
 )
+
+func TestSpeakerGainFormValidation(t *testing.T) {
+	for _, tc := range []struct {
+		value, was              string
+		available, changed, bad bool
+	}{
+		{"5", "0", true, true, false}, {"0", "5", true, true, false},
+		{"10", "0", true, true, false}, {"5", "5", true, false, false},
+		{"11", "0", true, false, true}, {"-1", "0", true, false, true},
+		{"1.5", "0", true, false, true}, {"NaN", "0", true, false, true},
+		{"5", "0", false, false, true},
+	} {
+		form := url.Values{"gain": {tc.value}, "was_gain": {tc.was}}
+		r := httptest.NewRequest("POST", "/setup/save", strings.NewReader(form.Encode()))
+		r.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+		_ = r.ParseForm()
+		_, changed, problem := gainLevel(r, tc.available)
+		if changed != tc.changed || (problem != "") != tc.bad {
+			t.Errorf("gain=%q was=%q supported=%t: changed=%t problem=%q", tc.value, tc.was, tc.available, changed, problem)
+		}
+	}
+}
 
 // Speaker and voice changes what was changed on the page and leaves the rest as it now stands.
 func TestSpeakerAndVoiceSavesOnlyWhatChanged(t *testing.T) {
