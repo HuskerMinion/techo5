@@ -17,7 +17,8 @@ func TestSpeakerGainFormValidation(t *testing.T) {
 		available, changed, bad bool
 	}{
 		{"5", "0", true, true, false}, {"0", "5", true, true, false},
-		{"10", "0", true, true, false}, {"5", "5", true, false, false},
+		{"6", "0", true, true, false}, {"5", "5", true, false, false},
+		{"7", "0", true, false, true}, {"10", "0", true, false, true},
 		{"11", "0", true, false, true}, {"-1", "0", true, false, true},
 		{"1.5", "0", true, false, true}, {"NaN", "0", true, false, true},
 		{"5", "0", false, false, true},

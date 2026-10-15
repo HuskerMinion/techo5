@@ -527,7 +527,7 @@ func (p *Player) Run(ctx context.Context) error {
 	p.route()
 	if GainAvailable() {
 		if err := p.applySpeakerGain(); err != nil {
-			return err
+			slog.Error("restoring speaker gain failed, continuing playback", "err", err)
 		}
 	}
 

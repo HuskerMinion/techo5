@@ -15,7 +15,7 @@ func TestHASpeakerGainRejectsNonIntegerAndNonFiniteValues(t *testing.T) {
 	config.Use(filepath.Join(t.TempDir(), "state.json"))
 	writes := 0
 	p := &Player{gain: &esphome.Number{}, gainApply: func(int) error { writes++; return nil }}
-	for _, v := range []float32{-1, 11, 1.5, float32(math.NaN()), float32(math.Inf(1))} {
+	for _, v := range []float32{-1, 7, 10, 1.5, float32(math.NaN()), float32(math.Inf(1))} {
 		p.commandSpeakerGain(v)
 	}
 	if writes != 0 || p.SpeakerGain() != 0 {
@@ -32,7 +32,7 @@ func TestSpeakerGainSavesAndRestoresDefault(t *testing.T) {
 	config.Use(path)
 	var applied int
 	p := &Player{gain: &esphome.Number{}, gainApply: func(v int) error { applied = v; return nil }}
-	for _, db := range []int{5, 10, 0} {
+	for _, db := range []int{5, 6, 0} {
 		if err := p.SetSpeakerGain(db); err != nil {
 			t.Fatal(err)
 		}
@@ -44,7 +44,7 @@ func TestSpeakerGainSavesAndRestoresDefault(t *testing.T) {
 			t.Fatalf("gain did not agree after reload for %d dB", db)
 		}
 	}
-	for _, db := range []int{-1, 11} {
+	for _, db := range []int{-1, 7, 10} {
 		if err := p.SetSpeakerGain(db); err == nil {
 			t.Fatalf("accepted %d", db)
 		}

@@ -400,10 +400,10 @@ amplifier do not offer it. The setting is saved and restored before audio starts
 after reboots and software updates.
 
 The default is **0 dB**, the amplifier's normal gain. Choose 0 to reset it, or raise it in
-1 dB steps up to +10 dB. This boosts all internal-speaker audio, including voice, music and
+1 dB steps up to +6 dB. This boosts all internal-speaker audio, including voice, music and
 alarms; the usual volume and night volume still work. Higher gain can distort or crackle,
 especially at high volume or with raised bass or treble. Start low and reduce the boost if
-that happens; +10 dB is a setting limit, not a guarantee of clean output on every track.
+that happens; +6 dB is a setting limit, not a guarantee of clean output on every track.
 
 Under Settings → **Sound**, or on the device's Assist satellite in Home Assistant:
 

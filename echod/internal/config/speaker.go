@@ -60,7 +60,7 @@ const (
 
 	// SpeakerGainMax is an optional amplifier boost, not another volume scale. Zero keeps
 	// the vendor's unity gain. Boosts can distort, especially with raised bass or treble.
-	SpeakerGainMax = 10
+	SpeakerGainMax = 6
 )
 
 func defaultSpeaker() Speaker {
