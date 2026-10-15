@@ -41,9 +41,6 @@ var (
 const (
 	// holdGestures: the Show's screen has no use for holds; its taps and swipes stay as they were.
 	holdGestures = false
-
-	// verticalOnly would ignore a slanted drag. Neither Show wants that.
-	verticalOnly = false
 )
 
 // onCrown picks the Show 8's value over the Show 5's, which covers both Show 5 generations.

@@ -1,8 +1,12 @@
 package component
 
 import (
+	"bytes"
 	"context"
+	"errors"
+	"log/slog"
 	"slices"
+	"strings"
 	"testing"
 	"time"
 
@@ -152,4 +156,37 @@ func TestEmptyRegistry(t *testing.T) {
 		t.Errorf("Handlers = %v", got)
 	}
 	r.Restore(config.Defaults())
+}
+
+// acting is a component with one action that fails.
+type acting struct{ bare }
+
+func (acting) Actions() []*esphome.Action {
+	return []*esphome.Action{{Name: "go", Run: func(esphome.Call) (any, error) { return "said", errors.New("no such thing") }}}
+}
+
+// An action's failure is logged, since Home Assistant hears of it only when it asked for an answer,
+// and the action still answers as it did.
+func TestAFailedActionIsLogged(t *testing.T) {
+	var buf bytes.Buffer
+	old := slog.Default()
+	slog.SetDefault(slog.New(slog.NewTextHandler(&buf, nil)))
+	t.Cleanup(func() { slog.SetDefault(old) })
+
+	r := New()
+	r.Add(Device, acting{bare{"acting"}})
+	acts := r.Actions()
+	answer, err := acts[0].Run(esphome.Call{})
+	if answer != "said" || err == nil {
+		t.Errorf("the action answered %v, %v", answer, err)
+	}
+	if !strings.Contains(buf.String(), "action=go") || !strings.Contains(buf.String(), "no such thing") {
+		t.Errorf("the failure was not logged: %q", buf.String())
+	}
+	// Asked again, the actions are logged once each, not wrapped twice.
+	buf.Reset()
+	r.Actions()[0].Run(esphome.Call{})
+	if n := strings.Count(buf.String(), "action failed"); n != 1 {
+		t.Errorf("logged %d times", n)
+	}
 }

@@ -19,6 +19,7 @@ import (
 	"github.com/HuskerMinion/techo5/echod/internal/feature/wakeword"
 	"github.com/HuskerMinion/techo5/echod/internal/hardware/led"
 	"github.com/HuskerMinion/techo5/echod/internal/hardware/mic"
+	"github.com/HuskerMinion/techo5/echod/internal/hardware/speaker"
 	"github.com/HuskerMinion/techo5/echod/internal/lib/wake"
 	"github.com/HuskerMinion/techo5/echod/internal/service"
 )
@@ -91,6 +92,24 @@ func thresholdFor(slot int, base func(int) float64, stop float64, canceling bool
 		t = max(t-playingSlack, slackFloor)
 	}
 	return t
+}
+
+// settleTail is how long past the unmute sound detections stay held: the echo of its last notes,
+// and the canceller letting go of them.
+const settleTail = 300 * time.Millisecond
+
+// unmuteSettle is how long detections are held after an unmute: as long as the unmute sound plays,
+// and settleTail after. The sound plays straight into the wake words as they come back cold from
+// the mute, while the canceller is starting and the threshold already has the playing slack taken
+// off, and it was heard as the word (a wake at 0.716 against 0.70, nothing said). Its length is the
+// sound's own: two seconds for Home Assistant's, less for the classic notes, up to ten for a
+// recording of the owner's.
+func unmuteSettle() time.Duration {
+	d := settleTail
+	for _, n := range speaker.MuteSound(false) {
+		d += time.Duration(n.Ms) * time.Millisecond
+	}
+	return d
 }
 
 func newDetect() *Detect {
@@ -179,7 +198,21 @@ func newDetect() *Detect {
 
 	// A cut microphone hands on silence, and running the models over it is work that cannot find
 	// anything. The engines go down with the microphones and come back with them.
-	mute.Get().Changed.Listen(e.Quiet)
+	mute.Get().Changed.Listen(func(muted bool) {
+		e.Quiet(muted)
+		// The stop word is spared while an alarm or timer rings: it has to stop when told, and the sound
+		// could otherwise hold it for as long as ten seconds. With nothing ringing it settles too, or
+		// the unmute sound could be heard as "stop" and cut itself short, and music with it.
+		if !muted {
+			settle := unmuteSettle()
+			if ring.IsSounding() {
+				e.Settle(settle, StopSlot)
+			} else {
+				e.Settle(settle)
+			}
+			slog.Info("wake words settling after unmute", "for", settle)
+		}
+	})
 	e.OnReady = d.busy.scored
 
 	// The engine loads on every start, including a restart. Home Assistant only pushes a selection when

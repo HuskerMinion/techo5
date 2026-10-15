@@ -185,8 +185,9 @@ exposes a raw H4 channel at `/dev/stpbt` rather than a Linux HCI device.
 copies packets between `/dev/stpbt` and the kernel's `/dev/vhci`, so BlueZ sees
 an ordinary `hci0`. `t5_bt_up` (techo5-lib.sh) loads the module, keeps the
 bridge running, starts `dbus-daemon`, `bluetoothd`, and `bluealsa -p
-a2dp-source` after it, and power-cycles `hci0` once: on the bench the
-controller answered commands but never reported an inquiry result or an
+a2dp-source -p a2dp-sink` after it (out to earbuds and speakers, in from a
+phone; the class says loudspeaker, in bluetoothd's `main.conf` as well), and
+power-cycles `hci0` once: on the bench the controller answered commands but never reported an inquiry result or an
 advertisement until it had been powered off and on after the first bring-up.
 Bonds live on userdata (`/data/misc/techo5/bluetooth`, bind-mounted over
 `/var/lib/bluetooth`).

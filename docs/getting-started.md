@@ -27,7 +27,8 @@ tested end to end, though on one unit so far. The Show 8 is newer still: it has 
 install, a slot update and a reboot on one unit, with the screen, microphones, wake word, speaker,
 camera, lens cover and mute latch all working, and nothing else has run on it for long. Two things a
 Show 8 owner should know before starting. The 1st gen's label says C7H6N3; the 2nd gen (2021) looks
-almost the same, says A8H3N2, and can't be unlocked. When buying second-hand go by that label, not the
+almost the same, says A8H3N2, and isn't supported yet: it can now be unlocked (thanks to R0rt1z2 on
+XDA), and TECHO5 support for it is in progress. When buying second-hand go by that label, not the
 serial number or the box: serials starting G6G1 turn up on both generations, and a box can belong to another
 unit. The 1st gen also has a 1 MP camera where the 2nd gen has 13 MP, and the board a 1st gen reports
 is `crown`. On boot images before v1.0.1, a quick tap of the mute button to unmute leaves the camera
@@ -104,11 +105,19 @@ board is called out — `checkers`, `cronos`, `crown`.
    has the details.
 2. **Install LineageOS 18.1.** Follow
    [[ROM][UNOFFICIAL][11][cronos] LineageOS 18.1 for the Echo Show 5 (2021)](https://xdaforums.com/t/rom-unofficial-11-cronos-lineageos-18-1-for-the-amazon-echo-show-5-2021.4772598/).
-   Use a current build (0.4 or later; earlier ones lose audio after a few days). A **1st gen** takes
-   R0rt1z2's `checkers` build of the same LineageOS, dated 2026-09-04 or later: TECHO5's kernel is
-   rebuilt from that source, and the installer checks the version before it does anything. A **Show 8**
-   takes R0rt1z2's `crown` build of the same LineageOS:
+   **Use the 2026-09-04 build, not the newest:** `cronos` v0.4,
+   [lineage-18.1-20260904-UNOFFICIAL-cronos.zip](https://github.com/amazon-oss/releases/releases/tag/lineage-18.1-cronos-v0.4)
+   (earlier ones lose audio after a few days). A **1st gen** takes R0rt1z2's `checkers` build of the
+   same LineageOS, v0.7
+   ([lineage-18.1-20260904-UNOFFICIAL-checkers.zip](https://github.com/amazon-oss/releases/releases/tag/lineage-18.1-checkers-v0.7)).
+   A **Show 8** takes R0rt1z2's `crown` build, v0.5
+   ([lineage-18.1-20260904-UNOFFICIAL-crown.zip](https://github.com/amazon-oss/releases/releases/tag/lineage-18.1-crown-v0.5));
+   its guide is
    [[ROM][UNOFFICIAL][11][crown] LineageOS 18.1 for the Amazon Echo Show 8 (2019)](https://xdaforums.com/t/rom-unofficial-11-crown-lineageos-18-1-for-the-amazon-echo-show-8-2019.4766709/).
+   TECHO5's kernel is rebuilt from the kernel of exactly that build, and LineageOS's Wi-Fi and Bluetooth
+   drivers only load on the kernel they were built with. The builds of 2026-10-14 (`cronos` v0.5,
+   `checkers` v0.8, `crown` v0.6) have a newer kernel and are not supported yet; the installer checks
+   the version before it does anything.
    *Check:* LineageOS boots.
 3. **Prepare LineageOS:** join your Wi-Fi, then in Settings → About → tap Build number seven times,
    and in Developer options turn on **USB debugging**.

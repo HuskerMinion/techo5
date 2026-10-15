@@ -102,6 +102,11 @@ type Controller struct {
 
 	// tapped is when each button last reported a Tap, for recognizing the second of a pair.
 	tapped map[Name]time.Time
+
+	// down counts each button's presses still down, and went is when each last went down; see
+	// Pressed.
+	down map[Name]int
+	went map[Name]time.Time
 }
 
 var (
@@ -230,11 +235,39 @@ func (c *Controller) emit(name Name, kind Kind) {
 	}
 }
 
+// Pressed reports whether a button is down now, and when it last went down. A press still reads as
+// down while its listeners hear the release, so whatever a tap does is done before it is let go: the
+// mute's watch after a hold leaves the line alone in between, where the hardware may have moved it
+// for the press before the tap arrives.
+func (c *Controller) Pressed(name Name) (down bool, at time.Time) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.down[name] > 0, c.went[name]
+}
+
+// mark records a button going down or coming up, for Pressed.
+func (c *Controller) mark(name Name, down bool) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if c.down == nil {
+		c.down, c.went = map[Name]int{}, map[Name]time.Time{}
+	}
+	if down {
+		c.down[name]++
+		c.went[name] = time.Now()
+		return
+	}
+	if c.down[name] > 0 {
+		c.down[name]--
+	}
+}
+
 func (c *Controller) watch(ctx context.Context, d *input.Device) error {
 	down := map[uint16]*held{}
 	defer func() {
-		for _, h := range down {
+		for code, h := range down {
 			h.stop()
+			c.mark(codes[code], false)
 		}
 	}()
 
@@ -270,6 +303,7 @@ func (c *Controller) watch(ctx context.Context, d *input.Device) error {
 
 // pressed starts tracking a button that has just gone down.
 func (c *Controller) pressed(name Name) *held {
+	c.mark(name, true)
 	h := &held{}
 
 	// A repeating button acts at once and then ramps, so a tap moves one step.
@@ -308,6 +342,7 @@ func (c *Controller) pressed(name Name) *held {
 // released finishes a button. A tap is reported here for anything that did not already report one on
 // the way down, and nothing is reported for a button that was held: the hold was the event.
 func (c *Controller) released(name Name, h *held) {
+	defer c.mark(name, false)
 	h.stop()
 
 	h.mu.Lock()

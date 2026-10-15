@@ -294,7 +294,7 @@ func (f *Feature) watch(ctx context.Context) {
 		if err != nil {
 			if errors.Is(err, camera.ErrNeedsReboot) {
 				// Nothing to ask again until the mute button is held or the device restarts; said once.
-				slog.Warn("presence: the camera is held off since the mute button was tapped; hold it for a second to bring it back")
+				slog.Warn("presence: the camera is held off since the mute button was tapped; hold it for a second to bring it back, and tap it if that mutes")
 				if !unwedged.Load() {
 					select {
 					case <-ctx.Done():

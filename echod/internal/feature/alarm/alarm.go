@@ -897,15 +897,7 @@ func (a *Alarms) Actions() []*esphome.Action {
 			Name: "alarm_delete_id",
 			Args: []esphome.Arg{{Name: "id", Type: esphome.ArgString}},
 			Run: func(c esphome.Call) (any, error) {
-				id := strings.TrimSpace(c.String("id"))
-				if !slices.ContainsFunc(config.Get().Alarms.List, func(al config.Alarm) bool { return al.ID == id }) {
-					return nil, fmt.Errorf("alarms: no alarm %q on this device", id)
-				}
-				if err := a.Delete(id); err != nil {
-					return nil, err
-				}
-				slog.Info("alarm deleted from home assistant", "id", id)
-				return nil, nil
+				return nil, a.deleteFromHA(strings.TrimSpace(c.String("id")), timer.Get().List(time.Now()))
 			},
 		},
 		{
@@ -1008,4 +1000,23 @@ func (a *Alarms) followed(now time.Time) []Followed {
 
 func (a *Alarms) helperSource(entity string, now time.Time) (source, bool) {
 	return fromHelper(entity, hastate.Get().State(entity), now.Location())
+}
+
+// deleteFromHA deletes the alarm alarm_delete_id names. A timer's id, from alarms_list's timers, is
+// refused with where it goes instead: the device's own to timer_cancel, Home Assistant's to Assist.
+func (a *Alarms) deleteFromHA(id string, timers []timer.Countdown) error {
+	if !slices.ContainsFunc(config.Get().Alarms.List, func(al config.Alarm) bool { return al.ID == id }) {
+		if i := slices.IndexFunc(timers, func(c timer.Countdown) bool { return c.ID == id }); i >= 0 {
+			if timers[i].Local {
+				return fmt.Errorf("alarms: %.64q is a timer, not an alarm; timer_cancel cancels it", id)
+			}
+			return fmt.Errorf("alarms: %.64q is a timer set through Home Assistant, not an alarm; cancel it there", id)
+		}
+		return fmt.Errorf("alarms: no alarm %.64q on this device", id)
+	}
+	if err := a.Delete(id); err != nil {
+		return err
+	}
+	slog.Info("alarm deleted from home assistant", "id", id)
+	return nil
 }

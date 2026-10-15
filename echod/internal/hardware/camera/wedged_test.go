@@ -34,7 +34,9 @@ func TestOnceItIsGoneItIsGone(t *testing.T) {
 // Home Assistant shows whatever it is given.
 func TestTheErrorSaysWhatToDo(t *testing.T) {
 	msg := ErrNeedsReboot.Error()
-	for _, want := range []string{"hold the mute button", "restart", "camera"} {
+	// A hold sets the latch on a boot image that never wedged it, so the tap that lets it go again
+	// is part of the advice.
+	for _, want := range []string{"hold the mute button", "if that mutes", "tap it", "restart", "camera"} {
 		if !strings.Contains(msg, want) {
 			t.Errorf("%q does not mention %q", msg, want)
 		}

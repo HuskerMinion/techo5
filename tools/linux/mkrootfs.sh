@@ -86,6 +86,21 @@ if [ -d "$R/etc/avahi" ]; then
 	rm -f "$R"/etc/avahi/services/*.service
 fi
 
+# bluetoothd says the device is a loudspeaker (major 4, audio/video; minor 5) from the start, and again
+# on each hci0 a restarted bridge brings up: with no Class of its own it writes 0 as the adapter
+# registers, and a phone that sees the device then shows it with no audio device type (#105).
+# t5_bt_up and t5_bt_again (techo5-lib.sh) write the same class after it.
+bc="$R/etc/bluetooth/main.conf"
+if [ -f "$bc" ] && grep -Eq '^#?[[:space:]]*Class[[:space:]]*=' "$bc"; then
+	sed -i -E 's/^#?[[:space:]]*Class[[:space:]]*=.*/Class = 0x000414/' "$bc"
+elif [ -f "$bc" ] && grep -q '^\[General\]' "$bc"; then
+	sed -i 's/^\[General\]$/[General]\nClass = 0x000414/' "$bc"
+else
+	mkdir -p "$R/etc/bluetooth"
+	printf '[General]\nClass = 0x000414\n' >> "$bc"
+fi
+grep -q '^Class = 0x000414$' "$bc" || { echo "mkrootfs: could not set the class in $bc" >&2; exit 1; }
+
 # Vendor tree: Wi-Fi/BT modules, firmware (firmware_class.path=/vendor/firmware on
 # the kernel command line), the audio tuning the daemon reads. It is Amazon's and the chip makers',
 # so an image leaves /vendor empty: the unit's own tree, kept in the store, is mounted there at boot.

@@ -172,3 +172,38 @@ func TestDashWhen(t *testing.T) {
 		}
 	}
 }
+
+// The Agenda clock puts each day under its own heading: Tomorrow for tomorrow only, and the name and
+// date for each day after it. An event that started before today goes under Today with today's.
+func TestAgendaClockHeads(t *testing.T) {
+	now := time.Date(2026, 10, 15, 10, 0, 0, 0, time.Local) // a Thursday
+	at := func(d, h int) time.Time { return time.Date(2026, 10, d, h, 0, 0, 0, time.Local) }
+	ev := func(d, h int) hass.Event { return hass.Event{Start: at(d, h), End: at(d, h+1)} }
+	trip := hass.Event{Start: at(13, 0), End: at(17, 0), AllDay: true}
+	for _, c := range []struct {
+		events []hass.Event
+		want   []string
+	}{
+		{[]hass.Event{trip, ev(15, 14), ev(16, 9), ev(16, 18), ev(18, 9), ev(21, 9)},
+			[]string{"", "", "Tomorrow", "", "Sunday, October 18", "Wednesday, October 21"}},
+		// Only a day well ahead: its own heading, not Tomorrow.
+		{[]hass.Event{ev(18, 9)}, []string{"Sunday, October 18"}},
+		{[]hass.Event{{Start: at(17, 0), End: at(18, 0), AllDay: true}, ev(17, 9)}, []string{"Saturday, October 17", ""}},
+	} {
+		if got := agendaHeads(c.events, now, ""); fmt.Sprint(got) != fmt.Sprint(c.want) {
+			t.Errorf("headings %q, want %q", got, c.want)
+		}
+	}
+
+	// A week of events draws, the headings and all, without running off the bottom.
+	config.Use(filepath.Join(t.TempDir(), "state.json"))
+	facts := styleFactsFor("", now)
+	facts.kind, facts.chosen = styleAgenda, true
+	for d := 15; d < 22; d++ {
+		facts.next = append(facts.next, ev(d, 11), ev(d, 15))
+	}
+	for _, size := range []image.Point{{showWide, showHigh}, {show8Wide, show8High}} {
+		r := newRenderer(image.NewRGBA(image.Rect(0, 0, size.X, size.Y)))
+		r.draw(scene{now: now, phase: "idle", style: facts})
+	}
+}

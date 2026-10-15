@@ -69,3 +69,25 @@ func TestOnCrownDefaultsToTheShow5(t *testing.T) {
 		t.Errorf("width %d, want 960", got)
 	}
 }
+
+// rawFrame is a portrait panel exactly the landscape screen turned, so frame and raw pixels match.
+func rawFrame() (rawW, rawH int, toRaw func(x, y int) (int, int)) {
+	return Height, Width, func(x, y int) (int, int) { return Height - 1 - y, x }
+}
+
+// Issue #113 on both Shows, each at its own size and notch.
+func TestShowSwipeDirections(t *testing.T) {
+	defer func(w, h, n, m int) { Width, Height, notch, tapMove = w, h, n, m }(Width, Height, notch, tapMove)
+	for _, c := range []struct {
+		name                 string
+		w, h, notch, tapMove int
+	}{
+		{"Show 5", 960, 480, 40, 24},
+		{"Show 8", 1280, 800, 56, 32},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			Width, Height, notch, tapMove = c.w, c.h, c.notch, c.tapMove
+			checkSwipeDirections(t)
+		})
+	}
+}

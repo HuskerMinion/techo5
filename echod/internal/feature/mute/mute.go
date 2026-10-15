@@ -10,6 +10,7 @@ package mute
 import (
 	"log/slog"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	esphome "github.com/ygelfand/go-esphome-device"
@@ -24,6 +25,7 @@ import (
 	"github.com/HuskerMinion/techo5/echod/internal/hardware/privacy"
 	"github.com/HuskerMinion/techo5/echod/internal/hardware/speaker"
 	"github.com/HuskerMinion/techo5/echod/internal/lib/hook"
+	"github.com/HuskerMinion/techo5/echod/internal/lib/safe"
 )
 
 func init() {
@@ -56,6 +58,19 @@ type Mute struct {
 	// Changed fires when the microphones are actually cut or brought back, with the new state. It is
 	// what lets the detector stop running models over silence.
 	Changed hook.Hook[bool]
+
+	// mu takes whatever publishes the line one at a time: Home Assistant, the screen, the button, a
+	// press that went to a ring, and the watch after a hold. Each reads the switch as the state it
+	// starts from, so none may publish a move that another is in the middle of.
+	mu sync.Mutex
+
+	// button is whether the mute button is down, and when it last went down (buttons.Pressed). Tests
+	// stand in for it.
+	button func() (down bool, went time.Time)
+
+	// announce is what follows once the switch says what the line reads: announced, unless a test
+	// stands in for it.
+	announce func(muted, asked bool)
 }
 
 var (
@@ -144,6 +159,8 @@ func (m *Mute) Restore(c config.Config) {
 	if m.line == nil {
 		return
 	}
+	m.mu.Lock()
+	defer m.mu.Unlock()
 	was, err := m.line.Get()
 	if err != nil {
 		slog.Error("reading mute state failed", "err", err)
@@ -171,11 +188,35 @@ func (m *Mute) Set(muted bool) {
 	if m.line == nil {
 		return
 	}
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.set(muted)
+}
+
+func (m *Mute) set(muted bool) {
 	if err := m.line.Set(muted); err != nil {
 		slog.Error("setting mute failed", "muted", muted, "err", err)
 		return
 	}
 	m.settled(true)
+}
+
+// Flip is the microphone switch on the screen. It asks for the other state, as Home Assistant does,
+// rather than standing in for the button: a press is news where the hardware has already moved, and
+// from the screen nothing has, so on a Show the switch did nothing to the line and only played the
+// sound again. Unmuting a Show from it fails the way it does from Home Assistant.
+func (m *Mute) Flip() {
+	if m.line == nil {
+		return
+	}
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	is, err := m.line.Get()
+	if err != nil {
+		slog.Error("reading mute state failed", "err", err)
+		return
+	}
+	m.set(!is)
 }
 
 // Toggle is the button on top of the device. Where the hardware has already acted on the press, the
@@ -185,13 +226,29 @@ func (m *Mute) Toggle() {
 	if m.line == nil {
 		return
 	}
-	if !m.line.HardwareActs(m.sw.Get()) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if m.mustMove(m.sw.Get()) {
 		if _, err := m.line.Toggle(); err != nil {
 			slog.Error("toggling mute failed", "err", err)
 			return
 		}
 	}
 	m.settled(true)
+}
+
+// mustMove reports whether a press has to move the line itself, given the switch from before it. Not
+// where the hardware acts on the press, and not where the line has already left that state: Amazon's
+// gating driver sets the latch itself on a press of half a second or more, which is still a tap
+// here, and toggling after it asked for an unmute the latch refuses - the press was dropped and the
+// switch left saying live over a set latch, so the next tap set it again instead of letting it go
+// (#153). A line that cannot be read is left to Toggle, which says so.
+func (m *Mute) mustMove(was bool) bool {
+	if m.line.HardwareActs(was) {
+		return false
+	}
+	is, err := m.line.Get()
+	return err != nil || is == was
 }
 
 // pressed is the mute button. A hold only sounds: nothing is bound to it, and the tone says the
@@ -219,9 +276,104 @@ func (m *Mute) pressed(e buttons.Event) {
 	case buttons.Hold:
 		speaker.Sound().Chime(speaker.ToneMuteHold)
 		// A hold is what tells the kernel's camera driver the privacy latch is off, on the Show 8
-		// and the 1st gen Show 5; a camera held off since a tap to unmute can be tried again.
+		// and the 1st gen Show 5 with an older boot image; a camera held off since a tap to unmute
+		// can be tried again. On a newer one the hold mutes instead (camera.ErrNeedsReboot).
 		camera.Get().Unwedge()
+		safe.Go("mute after a hold", m.followHold)
 	}
+}
+
+// After a hold the switch can be behind the line. Amazon's gating driver (the 1st gen Show 5, the
+// Show 8) takes a press of half a second or more as its own mute toggle and sets the latch when the
+// button is let go, and any press releases it; where the hardware acts on the press itself (the 2nd
+// gen, the Dot) a press held long enough to be a hold moves it all the same. Nothing here acts on a
+// hold, so the line is watched instead. Left behind, the switch said live over a latch that was set,
+// and the next tap - taken for a press with the microphones live - set the latch again instead of
+// letting it go: the button seemed unable to unmute (#153).
+var (
+	// followFor is how long after a hold the line is watched. The driver moves it when the button
+	// is let go, which can be any time after the hold is reported, and a release can be followed
+	// by the driver's own set.
+	followFor = 15 * time.Second
+
+	// followPoll is how often it looks.
+	followPoll = 100 * time.Millisecond
+)
+
+// following keeps it to one watch, and followUntil is when that watch ends: a hold during it moves
+// the end on rather than starting a second one.
+var (
+	following   atomic.Bool
+	followUntil atomic.Int64
+)
+
+// followHold publishes whatever the line does during and after a hold.
+func (m *Mute) followHold() {
+	if m.line == nil {
+		return
+	}
+	followUntil.Store(time.Now().Add(followFor).UnixNano())
+	until := func() time.Time { return time.Unix(0, followUntil.Load()) }
+	for following.CompareAndSwap(false, true) {
+		m.follow(until, followPoll)
+		following.Store(false)
+		// A hold that came in as the watch was ending moved the end on, and found it still running.
+		if !time.Now().Before(until()) {
+			return
+		}
+	}
+}
+
+// follow publishes the line whenever it differs from the switch, looking every poll until until has
+// passed.
+//
+// A difference is taken only once two looks in a row have read it, the second with the button up,
+// and the button not pressed since the first was taken. The hardware moves the line for a tap as the button goes down, and the tap
+// arrives when it comes up; published in between, the switch already said where the press went, and
+// the tap - taken for a press from there - set the latch straight back on a Show (#153 again) or
+// played its sound a second time elsewhere. The button reads as down until its tap has been dealt
+// with, and the second look covers a press the hardware acted on just before it was heard.
+func (m *Mute) follow(until func() time.Time, poll time.Duration) {
+	var prev look
+	for {
+		prev = m.look(prev)
+		if !time.Now().Before(until()) {
+			return
+		}
+		time.Sleep(poll)
+	}
+}
+
+// look is one read of the line during a watch.
+type look struct {
+	at    time.Time
+	muted bool
+	ok    bool
+}
+
+// look reads the line once, and publishes it if prev read the same and nothing has pressed the
+// button since; see follow.
+func (m *Mute) look(prev look) look {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	at := time.Now()
+	is, err := m.line.Get()
+	if err != nil {
+		return look{}
+	}
+	down, went := m.pressedState()
+	if prev.ok && prev.muted == is && is != m.sw.Get() && !down && went.Before(prev.at) {
+		m.settled(true)
+	}
+	return look{at: at, muted: is, ok: true}
+}
+
+// pressedState is whether the mute button is down, and when it last went down.
+func (m *Mute) pressedState() (bool, time.Time) {
+	if m.button != nil {
+		return m.button()
+	}
+	return buttons.Get().Pressed(buttons.Mute)
 }
 
 // keep leaves the microphones where they were after a press that went to a ring. Where the hardware
@@ -237,6 +389,8 @@ func (m *Mute) keep() {
 	if m.line == nil {
 		return
 	}
+	m.mu.Lock()
+	defer m.mu.Unlock()
 	was := m.sw.Get()
 	if !m.line.HardwareActs(was) {
 		return
@@ -278,6 +432,15 @@ func (m *Mute) settled(asked bool) {
 	}
 
 	m.sw.Set(muted)
+	if m.announce != nil {
+		m.announce(muted, asked)
+		return
+	}
+	m.announced(muted, asked)
+}
+
+// announced shows what the line reads on the ring and, when somebody asked, tells everything else.
+func (m *Mute) announced(muted, asked bool) {
 	m.show(component.ChosenEffect(m.ring))
 
 	// A latch that has just been released may have taken the microphone chip down with it, which

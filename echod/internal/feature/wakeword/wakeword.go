@@ -35,8 +35,13 @@ const Slots = 2
 // conversation's to decide, so this only says which slot.
 var Requested hook.Hook[int]
 
+// CancelRequested is the Cancel request button: Wake's way back. What a request is, and whether one
+// is running, is the conversation's to know.
+var CancelRequested hook.Hook[struct{}]
+
 type WakeWord struct {
-	slots []slot
+	slots  []slot
+	cancel *esphome.Button
 }
 
 type slot struct {
@@ -63,12 +68,27 @@ var (
 
 func Get() *WakeWord {
 	once.Do(func() {
-		shared = &WakeWord{}
+		shared = &WakeWord{cancel: newCancel()}
 		for i := range Slots {
 			shared.slots = append(shared.slots, newSlot(i))
 		}
 	})
 	return shared
+}
+
+// newCancel builds the Cancel request button. One for the device rather than one per assistant,
+// since only one request runs at a time, and on the device itself, beside the Assist satellite
+// whose state says whether there is anything to cancel: Home Assistant can start a request (Wake)
+// but has no action of its own to end one.
+func newCancel() *esphome.Button {
+	return &esphome.Button{
+		Base: esphome.Base{
+			ObjectID: "cancel_request",
+			Name:     "Cancel request",
+			Icon:     "mdi:account-voice-off",
+		},
+		OnPress: func() { CancelRequested.Emit(struct{}{}) },
+	}
 }
 
 // newSlot builds one slot's entities. The name leads with the assistant so that everything belonging
@@ -364,7 +384,7 @@ func (w *WakeWord) SetFollowUps(n, count int) {
 func (w *WakeWord) Name() string { return "wake word settings" }
 
 func (w *WakeWord) Entities() []esphome.Entity {
-	var ents []esphome.Entity
+	ents := []esphome.Entity{w.cancel}
 	for _, s := range w.slots {
 		ents = append(ents, s.wake, s.threshold, s.tone, s.effect, s.thinking, s.replying,
 			s.delivery, s.buffer, s.followUp, s.followUps, s.followUpTone, s.maxListen, s.maxThink)

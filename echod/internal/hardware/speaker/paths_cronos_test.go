@@ -167,3 +167,11 @@ func TestOutputDoesNotWaitOnASwitch(t *testing.T) {
 		t.Fatal("Output waited on the path lock")
 	}
 }
+
+// The Show's DL1 driver reads a restart with one period in the ring as an underflow and stops it
+// again; the stream has to start full (#142).
+func TestTheShowStartsWithAFullRing(t *testing.T) {
+	if !startFull {
+		t.Fatal("the Show's playback starts before its ring is full")
+	}
+}

@@ -9,14 +9,15 @@ import (
 
 // fakeLine is a mute line whose hardware may or may not act on the button by itself.
 type fakeLine struct {
-	muted bool
-	acts  bool
-	sets  []bool
+	muted   bool
+	acts    bool
+	sets    []bool
+	toggles int
 }
 
 func (f *fakeLine) Get() (bool, error)         { return f.muted, nil }
 func (f *fakeLine) Set(muted bool) error       { f.sets = append(f.sets, muted); f.muted = muted; return nil }
-func (f *fakeLine) Toggle() (bool, error)      { f.muted = !f.muted; return f.muted, nil }
+func (f *fakeLine) Toggle() (bool, error)      { f.toggles++; f.muted = !f.muted; return f.muted, nil }
 func (f *fakeLine) HardwareActs(was bool) bool { return f.acts }
 func (f *fakeLine) Lag() time.Duration         { return 0 }
 

@@ -31,6 +31,10 @@ const (
 // (paths_cronos.go). Held on the Spot as a precaution until the SRAM path is proven safe here.
 const DRAMHold = "/dev/snd/pcmC0D1c"
 
+// startFull is the Show's (paths_cronos.go): the same DL1 driver and the same restart after an
+// underrun.
+const startFull = true
+
 // A mixer write, as the shared player applies it.
 type kctl struct {
 	name  string

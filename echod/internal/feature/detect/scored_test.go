@@ -8,7 +8,8 @@ import (
 )
 
 // A wake reports the highest score it reached once the hold is over, not the score that first crossed
-// the cutoff: the peak is what says how far over the threshold it was.
+// the cutoff: the peak is what says how far over the threshold it was. The cutoff it reports is the one
+// it crossed, even if the threshold has dropped since, as it does when the wake tone starts the canceller.
 func TestAWakeReportsItsPeak(t *testing.T) {
 	fakes(t)
 	e := New(2, nil)
@@ -27,6 +28,7 @@ func TestAWakeReportsItsPeak(t *testing.T) {
 	at := time.Now()
 	s := &e.slots[0]
 	e.judge(0, s, 0.92, at, nil)
+	e.Threshold = func(int) float64 { return 0.8 }
 	e.judge(0, s, 0.97, at.Add(100*time.Millisecond), nil)
 	e.judge(0, s, 0.95, at.Add(200*time.Millisecond), nil)
 	select {

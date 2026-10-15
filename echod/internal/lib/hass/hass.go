@@ -94,7 +94,8 @@ func (c *Client) Set(url, token string) error {
 	}
 	u, err := neturl.Parse(url)
 	if err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" {
-		return fmt.Errorf("hass: %q is not an address like http://homeassistant.local:8123", url)
+		// Not quoted back: an address can carry a user and password, and errors reach the log.
+		return errors.New("hass: the address is not one like http://homeassistant.local:8123")
 	}
 	// As it was parsed: "HTTP://ha:8123" is a working address, and the websocket, which swaps the
 	// scheme's "http" for "ws", needs it written the way url.Parse writes it.

@@ -659,6 +659,7 @@ In YAML, refer to this action as `esphome.<node>_alarm_delete_id`.
 
 Deletes exactly one device alarm or reminder, picked by the ID `alarms_list` gives it. Use this when two alarms
 share a time and you want only one of them gone. Fails if there is no alarm with that ID.
+It does not cancel timers: a timer's `id` from `alarms_list` goes to `timer_cancel` instead.
 
 ### id (Required)
 

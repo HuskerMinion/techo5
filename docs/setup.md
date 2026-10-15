@@ -227,19 +227,19 @@ automation that wants to know too.
   playing, including the song's address (some servers put a login token in it, as with any DLNA
   speaker). With **Video** and **DLNA video** on as well (Show and Spot), it takes videos too
   ([Video](video.md)).
-- **A phone over Bluetooth (new).** On the Show and the Dot, the **Bluetooth phone** switch, in Home
-  Assistant, lets a phone play to the device as to any Bluetooth speaker. For two minutes the device
-  can be found and paired with, with no scan for speakers, and a phone connects from its own
-  Bluetooth settings, a new one or one paired before; on the Dot the ring pulses blue meanwhile. Once
-  the phone's audio is up the window closes, the phone is remembered, and the switch stays on while
-  it is connected: turning it off disconnects the phone. The **Bluetooth audio** sensor names the
-  connected phone, as the phone calls itself (often with its owner's name), and a phone paired in
-  pairing mode shows there and turns the switch on too. A phone that went away may not come back by
-  itself: it can connect from its own Bluetooth settings, and **Bluetooth reconnect phone** calls the
-  remembered phones until one answers. Anyone nearby can pair while the switch is on, as in pairing
-  mode, and a phone that joined stays remembered, so **Bluetooth forget phones** forgets every phone
-  and keeps the speakers and earbuds. On the Dot a phone may not get in while the Dot is connected to
-  a Bluetooth speaker. Tried on a Dot and a Show.
+- **A phone over Bluetooth (new).** On the Show, the Spot and the Dot, the **Bluetooth phone**
+  switch, in Home Assistant, lets a phone play to the device as to any Bluetooth speaker. For two
+  minutes the device can be found and paired with, with no scan for speakers, and a phone connects
+  from its own Bluetooth settings, a new one or one paired before; on the Dot the ring pulses blue
+  meanwhile. Once the phone's audio is up the window closes, the phone is remembered, and the switch
+  stays on while it is connected: turning it off disconnects the phone. The **Bluetooth audio**
+  sensor names the connected phone, as the phone calls itself (often with its owner's name), and a
+  phone paired in pairing mode shows there and turns the switch on too. A phone that went away may
+  not come back by itself: it can connect from its own Bluetooth settings, and **Bluetooth reconnect
+  phone** calls the remembered phones until one answers. Anyone nearby can pair while the switch is
+  on, as in pairing mode, and a phone that joined stays remembered, so **Bluetooth forget phones**
+  forgets every phone and keeps the speakers and earbuds. On the Dot a phone may not get in while
+  the Dot is connected to a Bluetooth speaker. Tried on a Dot, a Show and a Spot.
 - **Bluetooth, the rest of it (new).** A phone playing to the device has one volume, the device's: its
   volume slider moves the device's volume, and the device's buttons and Home Assistant move the
   slider (night volume still caps a raise from the phone). With two phones, the last to start playing
@@ -308,8 +308,8 @@ the Spot too, in its settings.
 - **Clock style**: how the clock looks all day. *Classic*, *Big*, *Flip*, *LED*, *Analog*, *Words*
   (the time in words), *Sun* (the sun's path from sunrise to sunset), *Dashboard* (the next events
   and the week's weather), *Binary* (the time in lights, one column per digit, counted 1, 2, 4, 8
-  from the bottom), *World* (the time here and in other places), *Agenda* (today's and tomorrow's
-  events beside the time) and *Glow* (soft colors drifting behind the time). Swipe left or right
+  from the bottom), *World* (the time here and in other places), *Agenda* (the coming week's
+  events beside the time, each day under its heading) and *Glow* (soft colors drifting behind the time). Swipe left or right
   across the clock for the next style or the one before; its name shows for a moment, and a swipe
   the other way puts the last style back. The night clock keeps its own look. Also in Home Assistant
   and on the setup page's Screen & Photos tab.
@@ -381,7 +381,8 @@ device's fonts folder over SSH ([Set the SSH authorized keys](actions.md#set-the
   device. The mute button and the lens shutter stop it, and then the screen is left as it is. On a
   Show 8 or 1st gen Show 5 with a boot image older than v1.0.1, a quick tap of the mute button to
   unmute leaves the camera switched off inside Amazon's kernel: **hold the mute button for a second**
-  (it chimes and stays unmuted) and the camera, presence and camera stills come back, or restart.
+  (it chimes and stays unmuted; if it mutes instead, tap it to unmute) and the camera, presence and
+  camera stills come back, or restart.
   The v1.0.1 boot image fixes it ([updating the boot image](install.md#updating-the-boot-image)); with
   it, holding the button mutes like a tap. The 2nd gen Show 5 is not affected.
 - **Gestures** (Show and Spot, experimental, off by default; the **Gestures** switch in Home
@@ -416,6 +417,12 @@ Under Settings → **Sound**, or on the device's Assist satellite in Home Assist
 - **Wake word on Home Assistant** and **Confirm wake with Home Assistant** (both off by default):
   let Home Assistant's own wake word engine listen as well as the device, or check a wake the device
   wasn't sure of. See [Wake word on Home Assistant](#wake-word-on-home-assistant) below.
+- **Wake**, a button for each wake word, and **Cancel request**, in Home Assistant. Wake starts
+  listening for that assistant, as its wake word would. Cancel request ends a request that is
+  running, listening, thinking or replying, as a tap on the action button does, and with it
+  anything else playing at that moment, like an announcement. With no request running it does
+  nothing. The device's Assist satellite says whether one is running, so a tile can show it and start
+  or stop it.
 - **Quiet hours** and **Do not disturb**.
 
 On the setup page (Sound & Voice) or in Home Assistant, **Night volume** turns the device down to that
@@ -547,7 +554,9 @@ The timer and mute files play where **Home Assistant sounds** is on, and an alar
 Home Assistant sound plays `timer_finished.wav` either way. A file has to be 16-bit, at
 48 kHz, mono or stereo, and at most 10 seconds long. It plays at the level it was recorded at, as the
 stock sounds do. Keep the wake sound short: the device listens for the request only once the wake
-sound fades, so a long one cuts off the first words. ffmpeg converts anything else:
+sound fades, so a long one cuts off the first words. The wake word is not acted on while the unmute
+sound plays and for a moment after, so the device does not take its own sound for the word: a long
+`mute_switch_off.wav` keeps it deaf for as long. ffmpeg converts anything else:
 
 ```sh
 ffmpeg -i chime.flac -ac 1 -ar 48000 -c:a pcm_s16le wake_word_triggered.wav

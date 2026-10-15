@@ -5,6 +5,7 @@ import (
 	"os"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/HuskerMinion/techo5/echod/internal/config"
 	"github.com/HuskerMinion/techo5/echod/internal/layout"
@@ -22,7 +23,8 @@ import (
 // On a device that has never met a Home Assistant there is nothing to think about at all, and naming
 // one before it is handed to somebody is exactly what this is for.
 
-// nameLimit is what the installer allows too: one line, short enough for the screen.
+// nameLimit is what the installer allows too, in characters rather than bytes: one line, short enough for
+// the screen.
 const nameLimit = 31
 
 // rename writes the new name and restarts, since the name is announced when the daemon starts.
@@ -32,7 +34,9 @@ func rename(to string, acknowledged bool) string {
 	switch {
 	case to == "":
 		return "the device needs a name"
-	case len(to) > nameLimit:
+	case !utf8.ValidString(to):
+		return "a name has to be UTF-8 text"
+	case utf8.RuneCountInString(to) > nameLimit:
 		return "a name is at most 31 characters"
 	case strings.ContainsAny(to, "\n\r\t"):
 		return "a name is one line"

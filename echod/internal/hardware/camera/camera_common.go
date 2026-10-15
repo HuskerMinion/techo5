@@ -114,10 +114,14 @@ type Camera struct {
 // ("Failed to enable CAM, GATING Mode is ON", then a power-down that unbalances the sensor's
 // regulator) however long after. Measured on a Show 8, 2026-10-04: opens at 0.15 s, 1.6 s and 72 s
 // after a short unmute all failed; a hold of the mute button for a second (Unwedge) brought the
-// camera straight back, without muting. The kernel's fix is amazon-oss android_kernel_amazon_mt8163
-// fac5c8e ("Fix camera dying when booting with privacy on"). A reboot clears it too. The 2nd gen
-// Show 5 (cronos) has another privacy driver and never gets here.
-var ErrNeedsReboot = errors.New("the camera is held off since the mute button was tapped: hold the mute button for a second, or restart the device")
+// camera straight back, without muting: after the tap the driver still holds its latch as set, so
+// the hold reads as an unmute and only says so. A boot image with tools/linux/patches 0002 and 0003
+// (v1.0.1) has the camera read the latch itself and the driver follow the tap, so nothing is left
+// to undo, and a hold there sets the latch on release like any hold with the microphones live; a
+// tap then lets it go, and the camera reads the latch afresh at its next open. Hence the hint's "if
+// that mutes". A reboot clears it too. The 2nd gen Show 5 (cronos) has another privacy driver and
+// never gets here.
+var ErrNeedsReboot = errors.New("the camera is held off since the mute button was tapped: hold the mute button for a second (if that mutes the microphones, tap it to turn them back on), or restart the device")
 
 var (
 	once   sync.Once
@@ -415,7 +419,7 @@ func (c *Camera) run(stop, stopped chan struct{}) {
 		d, err := open()
 		if err != nil {
 			if c.startFailed(err, stopped) {
-				slog.Error("camera held off by the privacy latch: hold the mute button for a second, or restart",
+				slog.Error("camera held off by the privacy latch: hold the mute button for a second, and tap it if that mutes, or restart",
 					"err", err)
 				return
 			}
@@ -521,7 +525,8 @@ func (c *Camera) setPowered(on bool) {
 }
 
 // Wedged is why the sensor cannot be opened at all, or nil. It is ErrNeedsReboot once the mute
-// latch has taken the sensor away, and nothing clears it but a reboot.
+// latch has taken the sensor away, and nothing clears it but a hold of the mute button (Unwedge) or
+// a reboot.
 func (c *Camera) Wedged() error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
@@ -597,9 +602,9 @@ func (h *aeHold) heldAt(mean float64, now time.Time) bool {
 // not block.
 var Unwedged hook.Hook[struct{}]
 
-// Unwedge lets the camera be tried again: the mute button was held, which is what tells the kernel's
-// camera driver that the privacy latch is off (see ErrNeedsReboot). If it still will not open, the
-// next try finds that out again.
+// Unwedge lets the camera be tried again: the mute button was held, which on an older boot image is
+// what tells the kernel's camera driver that the privacy latch is off (see ErrNeedsReboot). If it
+// still will not open, the next try finds that out again.
 func (c *Camera) Unwedge() {
 	c.mu.Lock()
 	was := c.wedged != nil

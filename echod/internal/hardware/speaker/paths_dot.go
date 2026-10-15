@@ -144,6 +144,10 @@ const (
 // DRAMHold is unused on the Dot: its DL1 driver's SRAM ring works.
 const DRAMHold = ""
 
+// startFull is off on the Dot: its kernel and DL1 driver are not the Show's, and it has no report of
+// the restart storm the Show's had (paths_cronos.go).
+const startFull = false
+
 // MediaService is the init service that owns Android's audio HAL on Fire OS.
 const MediaService = "media"
 

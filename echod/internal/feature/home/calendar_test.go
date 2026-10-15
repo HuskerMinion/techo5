@@ -56,7 +56,14 @@ func fakeCalendars(t *testing.T) *atomic.Int32 {
 
 func eventually(t *testing.T, what string, ok func() bool) {
 	t.Helper()
-	for end := time.Now().Add(3 * time.Second); time.Now().Before(end); time.Sleep(10 * time.Millisecond) {
+	eventuallyWithin(t, 3*time.Second, what, ok)
+}
+
+// eventuallyWithin is eventually with its own wait, for what depends on something slower than the
+// device, such as a DNS answer.
+func eventuallyWithin(t *testing.T, within time.Duration, what string, ok func() bool) {
+	t.Helper()
+	for end := time.Now().Add(within); time.Now().Before(end); time.Sleep(10 * time.Millisecond) {
 		if ok() {
 			return
 		}

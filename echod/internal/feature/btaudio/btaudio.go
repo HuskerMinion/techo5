@@ -16,7 +16,7 @@
 // connects and disconnects. A button calls the paired phones back, for a phone that left and came
 // home, since a phone may not look for the device on its own. Anyone nearby can pair while phone
 // pairing is on, so another button forgets every phone (and drops it), leaving the speakers and
-// earbuds the device plays to. Not on the Spot, which takes no audio from a phone (phones_spot.go).
+// earbuds the device plays to.
 //
 // To Home Assistant: a switch for pairing mode, a "Bluetooth phone" switch (on while phone pairing
 // is on or a phone is connected; off disconnects it), a sensor saying what is connected (a phone
@@ -258,9 +258,6 @@ func build() *Feature {
 func (f *Feature) Name() string { return "bluetooth audio" }
 
 func (f *Feature) Entities() []esphome.Entity {
-	if !takesPhones {
-		return []esphome.Entity{f.pairing, f.status, f.reconnect, f.disconnect, f.forgetOne}
-	}
 	return []esphome.Entity{
 		f.pairing, f.phonePair, f.status, f.reconnect, f.disconnect, f.forgetOne, f.callPhone, f.forget,
 	}

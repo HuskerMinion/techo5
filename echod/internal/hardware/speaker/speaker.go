@@ -314,6 +314,7 @@ func (p *Player) open() error {
 		Bits:       Bits,
 		PeriodSize: period,
 		Periods:    periods,
+		StartFull:  startFull,
 	})
 	if err != nil {
 		_ = m.Close()
@@ -321,6 +322,9 @@ func (p *Player) open() error {
 			_ = hold.Close()
 		}
 		return fmt.Errorf("speaker: opening playback: %w", err)
+	}
+	if startFull && !pb.StartsFull() {
+		slog.Warn("the kernel would not hold playback until its ring is full; it starts on the first period")
 	}
 
 	p.devMu.Lock()
@@ -452,6 +456,29 @@ func (p *Player) SetOutputMode(mode OutputMode) {
 
 	p.outputMode = mode
 	p.setOutput(p.desiredOutput(DetectOutput()))
+}
+
+// Reopen writes the speaker's whole path again, the way Run first opens it: the init sequence, the
+// route, and the amplifier once the codec has settled. Choosing Speakers when the speaker is already
+// the output changes nothing in setOutput, and a path something has knocked out of place (#142) would
+// stay that way until a restart; asking for the speaker by hand is the moment to put it back.
+func (p *Player) Reopen() {
+	p.pathMu.Lock()
+	if p.out != OutputSpeaker || p.draining {
+		p.pathMu.Unlock()
+		return
+	}
+	p.apply(initSequence)
+	p.apply(headphoneOff)
+	p.apply(pathSequence[OutputSpeaker])
+	p.pathMu.Unlock()
+
+	p.SetVolume(int(p.step.Load()))
+	if _, mixer := p.device(); mixer != nil {
+		time.Sleep(codecSettle)
+		p.amp(true)
+	}
+	slog.Info("speaker path written again")
 }
 
 // watchJack tracks the physical headphone jack and updates playback routing.

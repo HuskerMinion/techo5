@@ -158,7 +158,12 @@ func TestAFailedFetchLeaksNoToken(t *testing.T) {
 		if err := f.ShowPicture(src, Caption{ID: "1", Message: "x"}, time.Minute, ""); err != nil {
 			t.Fatal(err)
 		}
-		eventually(t, "the error for "+src, func() bool { v, _ := f.Camera(); return v.Error != "" })
+		// No such host is a DNS answer, and a slow resolver (CI's) took longer than eventually waits.
+		within := 3 * time.Second
+		if strings.Contains(src, ".invalid") {
+			within = 30 * time.Second
+		}
+		eventuallyWithin(t, within, "the error for "+src, func() bool { v, _ := f.Camera(); return v.Error != "" })
 		if v, _ := f.Camera(); strings.Contains(v.Error, "secret") {
 			t.Errorf("%s: error %q carries the token", src, v.Error)
 		}

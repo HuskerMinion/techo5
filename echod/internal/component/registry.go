@@ -3,6 +3,7 @@ package component
 import (
 	"cmp"
 	"context"
+	"log/slog"
 	"slices"
 	"sync"
 
@@ -85,15 +86,35 @@ func (r *Registry) Entities() []esphome.Entity {
 	return out
 }
 
-// Actions is everything the components let Home Assistant call.
+// Actions is everything the components let Home Assistant call. Each one's failure is logged: Home
+// Assistant is only told of it when it asked for an answer, so an automation calling one without
+// response_variable would otherwise fail without a word anywhere.
 func (r *Registry) Actions() []*esphome.Action {
 	var out []*esphome.Action
 	for _, e := range r.sorted() {
 		if acts, ok := e.c.(Actions); ok {
-			out = append(out, acts.Actions()...)
+			for _, a := range acts.Actions() {
+				out = append(out, logFailure(a))
+			}
 		}
 	}
 	return out
+}
+
+// logFailure is a copy of a whose Run logs the error it returns.
+func logFailure(a *esphome.Action) *esphome.Action {
+	c, run := *a, a.Run
+	if run == nil {
+		return &c
+	}
+	c.Run = func(call esphome.Call) (any, error) {
+		answer, err := run(call)
+		if err != nil {
+			slog.Warn("home assistant action failed", "action", c.Name, "err", err)
+		}
+		return answer, err
+	}
+	return &c
 }
 
 // Handlers is the components that answer protocol messages themselves, Describers left out: they

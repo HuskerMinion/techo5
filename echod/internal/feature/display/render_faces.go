@@ -122,8 +122,8 @@ func (r *renderer) worldStyle(s scene, box image.Rectangle) {
 	}
 }
 
-// agendaStyle is the time on the left and the coming events down the right: today's and tomorrow's
-// that have not ended, soonest first, as many as fit.
+// agendaStyle is the time on the left and the coming events down the right: the coming week's that
+// have not ended, soonest first, each day under its heading, as many as fit.
 func (r *renderer) agendaStyle(s scene, box image.Rectangle) {
 	col := box.Min.X + box.Dx()*42/100
 	hm := clockHM(s.now)
@@ -161,7 +161,7 @@ func (r *renderer) agendaStyle(s scene, box image.Rectangle) {
 	slices.SortStableFunc(events, func(a, b hass.Event) int { return a.Start.Compare(b.Start) })
 	today := time.Date(s.now.Year(), s.now.Month(), s.now.Day(), 0, 0, 0, 0, s.now.Location())
 	tomorrow := today.AddDate(0, 0, 1)
-	saidTomorrow := false
+	heads := agendaHeads(events, s.now, lang)
 	tx := col + r.s(130)
 	if !events[0].Start.Before(tomorrow) {
 		// "Nothing else" only after a day that had something; a day with nothing at all says so.
@@ -172,16 +172,14 @@ func (r *renderer) agendaStyle(s scene, box image.Rectangle) {
 		r.text(r.small, none, col, y, dim)
 		y += r.s(48)
 	}
-	for _, e := range events {
-		later := !e.Start.Before(tomorrow)
-		if later && !saidTomorrow {
+	for i, e := range events {
+		if heads[i] != "" {
 			if y+r.s(56) > box.Max.Y {
 				return
 			}
 			y += r.s(10)
-			r.text(head, strings.ToUpper(locale.Tomorrow(lang)), col, y, dim)
+			r.text(head, r.clipTo(head, strings.ToUpper(heads[i]), box.Max.X-col), col, y, dim)
 			y += r.s(46)
-			saidTomorrow = true
 		}
 		if y > box.Max.Y {
 			return
@@ -197,6 +195,29 @@ func (r *renderer) agendaStyle(s scene, box image.Rectangle) {
 		r.text(r.small, r.clipTo(r.small, e.Summary, box.Max.X-tx), tx, y, cream)
 		y += r.s(48)
 	}
+}
+
+// agendaHeads is the heading the Agenda draws above each event, or nothing when it goes under the one
+// before it: today's events go under Today, drawn already; tomorrow's under Tomorrow, and each day after
+// that under its name and date. events are soonest first.
+func agendaHeads(events []hass.Event, now time.Time, lang string) []string {
+	today := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())
+	tomorrow := today.AddDate(0, 0, 1)
+	said := today
+	heads := make([]string, len(events))
+	for i, e := range events {
+		st := e.Start.In(now.Location())
+		on := time.Date(st.Year(), st.Month(), st.Day(), 0, 0, 0, 0, now.Location())
+		if !on.After(said) {
+			continue
+		}
+		heads[i] = locale.Tomorrow(lang)
+		if !on.Equal(tomorrow) {
+			heads[i] = locale.Weekday(on, lang) + ", " + locale.MonthDay(on, lang)
+		}
+		said = on
+	}
+	return heads
 }
 
 // glowStyle is the time over colors drifting slowly across the screen, like a lava lamp; glowGround

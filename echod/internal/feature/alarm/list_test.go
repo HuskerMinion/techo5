@@ -2,6 +2,7 @@ package alarm
 
 import (
 	"encoding/json"
+	"path/filepath"
 	"reflect"
 	"strings"
 	"testing"
@@ -59,5 +60,33 @@ func TestAnEmptyListingIsAnObjectOfEmptyLists(t *testing.T) {
 		if !strings.Contains(s, k) {
 			t.Errorf("%s missing from %s", k, s)
 		}
+	}
+}
+
+// alarm_delete_id deletes the alarm it names, and given a timer's id from the listing it says where the
+// timer goes instead of only that there is no such alarm.
+func TestDeleteByIDTellsATimerFromAnAlarm(t *testing.T) {
+	config.Use(filepath.Join(t.TempDir(), "state.json"))
+	a := build()
+	al, err := a.Set(6, 45, config.DaysWeekdays, "Wake up")
+	if err != nil {
+		t.Fatal(err)
+	}
+	timers := []timer.Countdown{{ID: "local:x", Local: true}, {ID: "01JABC", Name: "Pasta"}}
+
+	for _, c := range []struct{ id, want string }{
+		{"local:x", "timer_cancel"},
+		{"01JABC", "set through Home Assistant"},
+		{"nope", "no alarm"},
+	} {
+		if err := a.deleteFromHA(c.id, timers); err == nil || !strings.Contains(err.Error(), c.want) {
+			t.Errorf("%q: %v, want it to say %q", c.id, err, c.want)
+		}
+	}
+	if err := a.deleteFromHA(al.ID, timers); err != nil {
+		t.Fatal(err)
+	}
+	if len(config.Get().Alarms.List) != 0 {
+		t.Errorf("the alarm is still there: %+v", config.Get().Alarms.List)
 	}
 }

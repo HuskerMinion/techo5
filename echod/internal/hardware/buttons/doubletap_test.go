@@ -103,3 +103,29 @@ func TestADoubleIsOneButton(t *testing.T) {
 		t.Error("two different buttons made a double tap")
 	}
 }
+
+// A press reads as down until its tap has been heard, and says when it went down. The mute's watch
+// after a hold relies on it to leave alone a line the hardware moved for a tap still on its way.
+func TestPressedWhileTheTapIsHeard(t *testing.T) {
+	c := &Controller{}
+	var during bool
+	defer c.Events.Listen(func(e Event) {
+		if e.Kind == Tap {
+			during, _ = c.Pressed(Mute)
+		}
+	})()
+
+	before := time.Now()
+	h := c.pressed(Mute)
+	if down, at := c.Pressed(Mute); !down || at.Before(before) {
+		t.Fatalf("after the press: down=%v at=%v, want down since %v", down, at, before)
+	}
+	c.released(Mute, h)
+
+	if !during {
+		t.Error("the press read as let go while its tap was heard")
+	}
+	if down, at := c.Pressed(Mute); down || at.Before(before) {
+		t.Errorf("after the release: down=%v at=%v, want up, last down at the press", down, at)
+	}
+}

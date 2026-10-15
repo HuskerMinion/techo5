@@ -44,8 +44,8 @@ Assistant voice satellite with a touch screen of its own.
 | **Echo Spot, 1st gen** (2017, `rook`) | VN94DQ | [TECHO5 Spot](https://github.com/HuskerMinion/techo5-spot) | In daily use |
 | **Echo Dot, 2nd gen** (2016, `biscuit`) | RS03QR | [TECHO5 Dot](https://github.com/HuskerMinion/techo5-dot) | In daily use |
 
-Every other device amonet opens is a Fire tablet. No Echo made after 2021 has a public unlock, so this
-is the whole family as it stands, not a roadmap.
+Every other device amonet opens is a Fire tablet. The Echo Show 8 2nd gen (2021) can be unlocked now,
+and support for it is in progress; no Echo made after 2021 has a public unlock.
 
 <p align="center">
   <img src="docs/screenshots/sunrise-show.gif" alt="The screen turning into a sunrise over the twenty minutes before an alarm: a dark red sky warming through orange to a pale gold, a sun climbing into it, the time readable throughout" width="560">
@@ -295,10 +295,10 @@ photos, weather, cameras, music and the night settings, in order.
 
 You need a Show 5 **unlocked and running LineageOS 18.1** — 2nd gen with
 [amonet-cronos](https://xdaforums.com/t/unlock-root-twrp-unbrick-amazon-echo-show-5-2nd-gen-2021-cronos.4772596/)
-and [this ROM](https://xdaforums.com/t/rom-unofficial-11-cronos-lineageos-18-1-for-the-amazon-echo-show-5-2021.4772598/),
-1st gen with
+and [this ROM](https://xdaforums.com/t/rom-unofficial-11-cronos-lineageos-18-1-for-the-amazon-echo-show-5-2021.4772598/)
+in its 2026-09-04 build (v0.4; the newer v0.5 is not supported yet), 1st gen with
 [amonet-checkers](https://xdaforums.com/t/unlock-root-twrp-unbrick-amazon-echo-show-5-1st-gen-2019-checkers.4762900/)
-and R0rt1z2's `checkers` build of the same LineageOS — a USB cable, a computer (Windows, Linux or macOS) with Python 3, `adb` and `fastboot`, and Home
+and R0rt1z2's `checkers` build of the same LineageOS (v0.7) — a USB cable, a computer (Windows, Linux or macOS) with Python 3, `adb` and `fastboot`, and Home
 Assistant. Each [release](https://github.com/HuskerMinion/techo5/releases/latest) carries everything
 else: the boot image (with Bluetooth) and the root filesystem. Nothing is built.
 

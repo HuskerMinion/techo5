@@ -20,10 +20,9 @@ const (
 	// drifts over 20 pixels in the time of a tap (recorded 2026-09-16).
 	tapMove = 40
 
-	// notch is the vertical travel per volume step, and only a drag more up or down than sideways
-	// counts: on this panel 40 turned the volume from a tap's drift.
-	notch        = 60
-	verticalOnly = true
+	// notch is the vertical travel per volume step: on this panel 40 turned the volume from a tap's
+	// drift.
+	notch = 60
 )
 
 func toFrame(rawW, rawH, rx, ry int) (x, y int) {

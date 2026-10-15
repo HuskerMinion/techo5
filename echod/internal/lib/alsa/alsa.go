@@ -144,6 +144,9 @@ type Config struct {
 	Bits       int // physical bits per sample: 24 for S24_3LE
 	PeriodSize int
 	Periods    int
+	// StartFull holds a playback stream back until its whole ring is written, at open and again after
+	// every underrun. Without it the kernel starts the stream on the first frames written.
+	StartFull bool
 }
 
 // Capture is an open PCM capture stream.

@@ -41,6 +41,18 @@ const (
 // MultiMedia1_Capture is an AFE capture nothing on this device uses.
 const DRAMHold = "/dev/snd/pcmC0D1c"
 
+// startFull starts the stream only once the whole ring is written, at open and after every underrun.
+//
+// The DL1 driver's pointer check (mtk_pcm_I2S0dl1_pointer) calls it an underflow when it reads the
+// DMA as further along than what it holds. After a stop it starts counting from the top of the ring
+// again, and the first readings after a restart can still show the DMA where it stopped. With one
+// period in the ring that reads as an underflow every time, so the stream stops and restarts
+// thousands of times a second: constant "pointer underflow" and "stop" lines in the kernel log and
+// choppy sound until a reboot (#142). With the whole ring written no such reading can exceed what it
+// holds. That is the theory from the driver source and the unit's kernel log; the fix has not been
+// seen to end the storm on a unit yet.
+const startFull = true
+
 // A mixer write, as the shared player applies it.
 type kctl struct {
 	name  string

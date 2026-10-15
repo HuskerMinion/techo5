@@ -928,7 +928,7 @@ func (d *Display) rowTap(id string, p part, opt int) {
 			media.Get().Adjust(+1)
 		}
 	case "mic":
-		mute.Get().Toggle()
+		mute.Get().Flip()
 	case "speakergain":
 		v := media.Get().SpeakerGain()
 		switch p {

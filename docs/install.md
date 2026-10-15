@@ -82,7 +82,8 @@ waits, and it can be fixed in another terminal without stopping the install.
 
 A unit fresh from its unlock sits in TWRP, and it doesn't have to start LineageOS at all. LineageOS is
 only needed for the Wi-Fi and Bluetooth drivers on its system partition, which TWRP can install without
-booting it. Download the LineageOS zip the unlock guide links, then, with the unit in TWRP:
+booting it. Download the 2026-09-04 LineageOS zip the getting started guide links (`cronos` v0.4,
+`checkers` v0.7, `crown` v0.5; a newer one is not supported yet), then, with the unit in TWRP:
 
 ```
 python3 tools/install-show.py --lineage-zip lineage-18.1-XXXXXXXX-UNOFFICIAL-cronos.zip --wifi "MyNetwork"
@@ -148,6 +149,10 @@ and Bluetooth modules load. Check before flashing:
 ```
 adb -s <serial> shell uname -r      # must be 4.9.337-g8d928c5176cc
 ```
+
+That is the 2026-09-04 LineageOS build (`cronos` v0.4, `checkers` v0.7, `crown` v0.5). The builds of
+2026-10-14 run 4.9.337-g9ef8b783847e, a newer commit with a different kernel configuration, and are not
+supported yet: flash the 2026-09-04 zip in TWRP, or install from TWRP with `--lineage-zip`.
 
 ## 2. Put the root filesystem on the unit
 
