@@ -431,11 +431,13 @@ func TestAPausedPhoneLeavesNoTailToReplay(t *testing.T) {
 	}
 }
 
-// flowSrc is a sender that keeps sending, a little at a time, counting the reads.
+// flowSrc is a sender that keeps sending, a little at a time, counting the reads: music when loud,
+// and else the silence a paused phone sends while it holds its stream open.
 type flowSrc struct {
 	reads  atomic.Int64
 	closed chan struct{}
 	once   sync.Once
+	loud   bool
 }
 
 func (f *flowSrc) Read(b []byte) (int, error) {
@@ -445,7 +447,11 @@ func (f *flowSrc) Read(b []byte) (int, error) {
 	case <-time.After(5 * time.Millisecond):
 	}
 	f.reads.Add(1)
-	return copy(b, make([]byte, 4)), nil
+	frame := []byte{0, 0, 0, 0}
+	if f.loud {
+		frame = []byte{0x00, 0x40, 0x00, 0x40} // 16384 a channel
+	}
+	return copy(b, frame), nil
 }
 
 func (f *flowSrc) Close() error {
@@ -477,4 +483,87 @@ func TestAPausedPhoneIsReadOn(t *testing.T) {
 		}
 		s.Stop()
 	}
+}
+
+// After a pause, a phone that sends on without a break is taken not to have paused; one that stops,
+// even briefly, did, and its playing again later is not counted against it.
+func TestAPhoneSendingOnAfterAPause(t *testing.T) {
+	at := time.Unix(1000, 0)
+	step := 20 * time.Millisecond
+	run := func(on *sendingOn, from, to time.Duration, audio bool) bool {
+		ignored := false
+		for d := from; d <= to; d += step {
+			ignored = on.heard(true, at.Add(d), audio) || ignored
+		}
+		return ignored
+	}
+
+	var on sendingOn
+	if run(&on, 0, sendingIgnored-step, true) {
+		t.Error("taken as ignored before sendingIgnored had gone by")
+	}
+	if !run(&on, sendingIgnored, sendingIgnored+step, true) {
+		t.Error("a phone sending on without a break was not taken as ignoring the pause")
+	}
+
+	on = sendingOn{}
+	run(&on, 0, 300*time.Millisecond, true) // the last of what it had in flight
+	if run(&on, 300*time.Millisecond+sendingBreak, 4*time.Second, true) {
+		t.Error("a phone that stopped, then played again, was taken as ignoring the pause")
+	}
+
+	on = sendingOn{}
+	run(&on, 0, 100*time.Millisecond, true)
+	on.heard(true, at.Add(time.Second), false) // a read that waited out its deadline
+	if run(&on, time.Second, 4*time.Second, true) {
+		t.Error("a phone that went quiet was taken as ignoring the pause")
+	}
+
+	if on.heard(false, at.Add(5*time.Second), true) || !on.since.IsZero() {
+		t.Error("playing again here did not start over")
+	}
+}
+
+// A phone's track paused here ends when the phone plays on regardless; one whose phone stops, or
+// sends silence while it holds its stream open, waits.
+func TestAPhoneThatIgnoresAPauseEndsItsTrack(t *testing.T) {
+	was := sendingIgnored
+	sendingIgnored = 200 * time.Millisecond
+	t.Cleanup(func() { sendingIgnored = was })
+
+	name := BluetoothPrefix + "Phone (plays on)"
+	newSender(t, name, true)
+	s := NewStream(speaker.NewDriver(speaker.New()), speaker.New(), func() {}, func(string) {})
+	src := &flowSrc{closed: make(chan struct{}), loud: true}
+	s.PlayPCM(name, src, speaker.Rate, 2)
+	waitUntil(t, "a first read", func() bool { return src.reads.Load() > 0 })
+	s.Pause()
+	waitUntil(t, "the track to end", func() bool { return s.Receiving() == "" })
+
+	name = BluetoothPrefix + "Phone (sends silence)"
+	newSender(t, name, true)
+	s = NewStream(speaker.NewDriver(speaker.New()), speaker.New(), func() {}, func(string) {})
+	src = &flowSrc{closed: make(chan struct{})}
+	s.PlayPCM(name, src, speaker.Rate, 2)
+	waitUntil(t, "a first read", func() bool { return src.reads.Load() > 0 })
+	s.Pause()
+	time.Sleep(400 * time.Millisecond)
+	if s.Receiving() != name {
+		t.Error("the track of a phone sending silence after the pause ended")
+	}
+	s.Stop()
+
+	name = BluetoothPrefix + "Phone (stops)"
+	newSender(t, name, true)
+	s = NewStream(speaker.NewDriver(speaker.New()), speaker.New(), func() {}, func(string) {})
+	quiet := newQuietSrc()
+	s.PlayPCM(name, quiet, speaker.Rate, 2)
+	<-quiet.reads
+	s.Pause()
+	quiet.quiet <- struct{}{} // it stopped: the read waits out its deadline
+	time.Sleep(300 * time.Millisecond)
+	if s.Receiving() != name {
+		t.Error("the track of a phone that took the pause ended")
+	}
+	s.Stop()
 }

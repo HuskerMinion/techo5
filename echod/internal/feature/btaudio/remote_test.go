@@ -53,32 +53,41 @@ func TestAPhoneIsAskedToPauseOnce(t *testing.T) {
 	}
 }
 
-// A phone's paused track is kept phoneKeptFor: a pause starts the wait, a play stops it, and a
-// pause again starts it afresh.
+// A phone's paused track is kept phoneKeptFor, one wait for each phone: a pause, the phone's own or
+// one it took from here, starts it, a play stops it, and another phone's pause or play leaves it.
 func TestAPausedPhoneIsKeptAWhile(t *testing.T) {
-	var armed []time.Duration
-	var timers []*time.Timer
+	armed := 0
 	phoneKeptAfter = func(d time.Duration, fn func()) *time.Timer {
-		armed = append(armed, d)
-		tm := time.AfterFunc(time.Hour, fn)
-		timers = append(timers, tm)
-		return tm
+		if d != phoneKeptFor {
+			t.Errorf("a wait of %v, want %v", d, phoneKeptFor)
+		}
+		armed++
+		return time.AfterFunc(time.Hour, fn)
 	}
 	t.Cleanup(func() { phoneKeptAfter = time.AfterFunc })
 	f := &Feature{}
-	item := media.BluetoothPrefix + "Pixel"
-
-	f.keep(item, true)
-	if len(armed) != 1 || armed[0] != phoneKeptFor || f.kept == nil {
-		t.Fatalf("a pause armed %v, want one wait of %v", armed, phoneKeptFor)
+	pixel, redmi := media.BluetoothPrefix+"Pixel", media.BluetoothPrefix+"Redmi"
+	waiting := func(item string) bool {
+		f.mu.Lock()
+		defer f.mu.Unlock()
+		return f.kept[item] != nil
 	}
-	f.keep(item, false)
-	if f.kept != nil || timers[0].Stop() {
+
+	f.taken(pixel, media.TransportPause) // a pause from here the phone took
+	if !waiting(pixel) || armed != 1 {
+		t.Fatalf("a pause the phone took started %d waits, want 1", armed)
+	}
+	f.keep(redmi, true)
+	f.keep(redmi, false)
+	if !waiting(pixel) {
+		t.Error("another phone's pause and play stopped this one's wait")
+	}
+	f.taken(pixel, media.TransportNext)
+	if !waiting(pixel) || armed != 2 {
+		t.Errorf("a skip touched the wait (%d started)", armed)
+	}
+	f.keep(pixel, false) // the phone's own play
+	if waiting(pixel) {
 		t.Error("a play left the wait running")
 	}
-	f.keep(item, true)
-	if len(armed) != 2 || f.kept == nil {
-		t.Errorf("a pause again armed %d waits, want 2", len(armed))
-	}
-	f.kept.Stop()
 }

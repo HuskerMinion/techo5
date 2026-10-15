@@ -158,8 +158,8 @@ type Feature struct {
 	// pausedAway is the phones paused for playing to nobody, by item, while they go on sending
 	// (pauseAway): each is asked once.
 	pausedAway map[string]bool
-	// kept ends a phone's track left paused too long (keep).
-	kept *time.Timer
+	// kept ends a phone's track left paused too long (keep), one timer for each phone by item.
+	kept map[string]*time.Timer
 	// levels is each received stream's level as last seen or set, by PCM path: a phone's volume slider,
 	// which is the device's volume while it plays here (phoneSlider, tellPhone).
 	levels    map[string]int
@@ -233,6 +233,7 @@ func build() *Feature {
 		received:   map[string]bool{},
 		displaced:  map[string]bool{},
 		pausedAway: map[string]bool{},
+		kept:       map[string]*time.Timer{},
 		levels:     map[string]int{},
 		ours:       map[string]time.Time{},
 		hushed:     map[string]time.Time{},

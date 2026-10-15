@@ -55,6 +55,7 @@ func (f *Feature) control(device dbus.ObjectPath, name string) func(media.Transp
 				return false
 			}
 			slog.Info("bluetooth: a command passed to the phone", "device", name, "command", method)
+			f.taken(media.BluetoothPrefix+name, t)
 			return true
 		}
 	}
@@ -100,20 +101,42 @@ func (f *Feature) playerChanged(st bluez.PlayerStatus) {
 	}
 }
 
-// keep starts phoneKeptFor for item's track, paused, or stops it, playing. When it runs out, the
-// track ends if it is still item's and still paused (ReceiverGone).
+// taken is a command the phone at item took: a pause starts phoneKeptFor as the phone's own pause
+// does, so a phone that never says it paused is not kept paused for good, and a play stops it.
+func (f *Feature) taken(item string, t media.Transport) {
+	switch t {
+	case media.TransportPause:
+		f.keep(item, true)
+	case media.TransportPlay:
+		f.keep(item, false)
+	}
+}
+
+// keep starts phoneKeptFor for item's track, paused, or stops it, playing: one wait for each phone,
+// so another phone's pause or play leaves this one's alone. When it runs out, the track ends if it
+// is still item's and still paused (ReceiverGone).
 func (f *Feature) keep(item string, paused bool) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
-	if f.kept != nil {
-		f.kept.Stop()
-		f.kept = nil
+	if f.kept == nil {
+		f.kept = map[string]*time.Timer{}
+	}
+	if t := f.kept[item]; t != nil {
+		t.Stop()
+		delete(f.kept, item)
 	}
 	if paused {
-		f.kept = phoneKeptAfter(phoneKeptFor, func() {
+		var t *time.Timer
+		t = phoneKeptAfter(phoneKeptFor, func() {
+			f.mu.Lock()
+			if f.kept[item] == t {
+				delete(f.kept, item)
+			}
+			f.mu.Unlock()
 			slog.Info("bluetooth: a phone paused this long is taken as put away", "device", item, "after", phoneKeptFor)
 			media.Get().ReceiverGone(item)
 		})
+		f.kept[item] = t
 	}
 }
 

@@ -115,6 +115,7 @@ func (m *Stream) receive(ctx context.Context, t *track, src PCMSource, conv *toS
 	buf := make([]byte, chunk-chunk%(conv.channels*2))
 	var carry []byte
 	phone := strings.HasPrefix(t.item, BluetoothPrefix)
+	var on sendingOn
 	for {
 		// A phone is read on while the track is held up, and what it sends goes (offered): left unread,
 		// what a phone that plays again sends piles up in bluez-alsa until it overflows, and the track
@@ -129,10 +130,22 @@ func (m *Stream) receive(ctx context.Context, t *track, src PCMSource, conv *toS
 		// going quiet.
 		_ = src.SetReadDeadline(time.Now().Add(receiveQuiet))
 		n, err := src.Read(buf)
+		var samples []int16
+		in, whole := carry, 0
 		if n > 0 {
-			in := append(carry, buf[:n]...)
-			whole := len(in) - len(in)%(conv.channels*2)
-			samples := conv.run(in[:whole])
+			in = append(carry, buf[:n]...)
+			whole = len(in) - len(in)%(conv.channels*2)
+			samples = conv.run(in[:whole])
+		}
+		if phone && receiverControl(t.item) != nil && on.heard(m.pausedOn(t), time.Now(), audible(samples)) {
+			// It took the pause and went on playing: the wrong player was asked, or an app that does not
+			// listen. Paused here it would play to nobody for good; it ends, as for a pause not taken.
+			if m.stopPaused(t.item) {
+				slog.Info("a phone went on playing after it took a pause; its track here ends", "item", t.item)
+				return nil
+			}
+		}
+		if n > 0 {
 			if keepsWhileHeld(t.item) {
 				// Held up between the read and the queue (a pause, or a reply taking the speaker), what was
 				// read waits for the track to go on rather than being dropped: a video's picture follows
@@ -165,6 +178,55 @@ func (m *Stream) receive(ctx context.Context, t *track, src PCMSource, conv *toS
 			return err
 		}
 	}
+}
+
+// sendingBreak is the shortest break in what a phone sends that says it stopped: it sends a packet
+// every few tens of milliseconds while it plays. sendingIgnored is how long after a pause one that
+// sends on without such a break is taken not to have paused; a variable for the tests.
+const sendingBreak = 500 * time.Millisecond
+
+var sendingIgnored = 2 * time.Second
+
+// audibleFloor is the level a sample has to reach to be the phone playing, about -42 dBFS: a phone
+// that paused holds its stream open for a few seconds sending silence before it lets it go.
+const audibleFloor = 256
+
+// audible is whether samples carry anything over audibleFloor.
+func audible(samples []int16) bool {
+	for _, v := range samples {
+		if v > audibleFloor || v < -audibleFloor {
+			return true
+		}
+	}
+	return false
+}
+
+// sendingOn watches a phone's track paused here for the phone going on playing as if it had not
+// paused. One that paused stops within moments, or sends silence until it lets its stream go (a Pixel
+// does for three seconds or so), and anything audible after a break is it playing again, which its
+// Status follows.
+type sendingOn struct {
+	since, last time.Time // the pause, as first seen, and the last audio since
+	broke       bool      // a break since the pause: the phone did stop
+}
+
+// heard takes one read, at now, audible or not, while the track is paused here or not, and says
+// whether the phone has played on without a break for sendingIgnored since the pause.
+func (s *sendingOn) heard(paused bool, now time.Time, audio bool) bool {
+	if !paused {
+		*s = sendingOn{}
+		return false
+	}
+	if s.since.IsZero() {
+		s.since, s.last = now, now
+	}
+	if !audio || now.Sub(s.last) >= sendingBreak {
+		s.broke = true
+	}
+	if audio {
+		s.last = now
+	}
+	return !s.broke && now.Sub(s.since) >= sendingIgnored
 }
 
 // toSpeaker turns what a remote sends (mono or stereo, at its own rate: phones pick 44.1 or 48 kHz)
