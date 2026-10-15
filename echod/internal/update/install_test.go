@@ -95,7 +95,7 @@ func TestInstallRefusesAManifestItCannotUse(t *testing.T) {
 		"no hash":     {Version: "0.0.1", Binaries: map[string]Binary{arch: {URL: good.URL, Size: 1}}},
 		"no size":     {Version: "0.0.1", Binaries: map[string]Binary{arch: {URL: good.URL, SHA256: good.SHA256}}},
 	} {
-		if err := Install(context.Background(), m, nil); err == nil {
+		if err := Install(context.Background(), m, nil, nil); err == nil {
 			t.Errorf("%s: installed something unusable", name)
 		}
 	}
@@ -219,7 +219,7 @@ func TestInstallRefusesAnOlderVersionThanTheOneRunning(t *testing.T) {
 	b := Binary{URL: "http://example/echod", SHA256: strings.Repeat("a", 64), Size: 1}
 	m := Manifest{Version: "v0.7.9", Binaries: map[string]Binary{arch: b}}
 
-	err := Install(context.Background(), m, nil)
+	err := Install(context.Background(), m, nil, nil)
 	if err == nil {
 		t.Fatal("an older release was installed over a newer one")
 	}

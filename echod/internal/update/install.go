@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"sync"
+	"time"
 
 	"github.com/HuskerMinion/techo5/echod/internal/layout"
 )
@@ -39,7 +40,10 @@ func Installing() bool {
 	return true
 }
 
-func Install(ctx context.Context, m Manifest, progress func(float32)) error {
+// phase, when not nil, is called with each named step once the download has finished — the
+// three-second countdown and then "restarting" — so a display can show them rather than a bar stuck
+// at 100%.
+func Install(ctx context.Context, m Manifest, progress func(float32), phase func(string)) error {
 	if !installing.TryLock() {
 		return ErrInstalling
 	}
@@ -51,35 +55,66 @@ func Install(ctx context.Context, m Manifest, progress func(float32)) error {
 	if err := notOlder(m.Version, layout.Version); err != nil {
 		return err
 	}
-	if slotSystem() {
-		return installRootfs(ctx, m, progress)
-	}
-	b, err := m.For(arch)
-	if err != nil {
-		return err
+
+	// A slot install replaces the whole rootfs, so getting into it is the device's reboot. A binary
+	// swap only needs this process replaced, which the supervisor does without the device going down.
+	reboot := slotSystem()
+	if reboot {
+		if err := installRootfs(ctx, m, progress); err != nil {
+			return err
+		}
+	} else {
+		b, err := m.For(arch)
+		if err != nil {
+			return err
+		}
+
+		staged := filepath.Join(layout.StateDir, "echod.incoming")
+		defer os.Remove(staged)
+		// What an earlier try fetched of another release only takes up room, and has to go before the
+		// room is measured, or a nearly full partition refuses every release after it.
+		dropParts(staged+".*.part", partPath(staged, b))
+
+		// Both partitions are asked for the room before anything is fetched. The download lands on the
+		// state partition and is then copied into /system beside the binary it replaces, so the space has
+		// to be there twice over — and finding that out after sixteen megabytes have been written is
+		// finding it out with the device's storage already full.
+		if err := room(layout.StateDir, b.Size-partial(staged, b)); err != nil {
+			return err
+		}
+		if err := room(mount, b.Size); err != nil {
+			return err
+		}
+
+		if err := download(ctx, b, staged, progress); err != nil {
+			return err
+		}
+		if err := swap(staged, m.Version); err != nil {
+			return err
+		}
 	}
 
-	staged := filepath.Join(layout.StateDir, "echod.incoming")
-	defer os.Remove(staged)
-	// What an earlier try fetched of another release only takes up room, and has to go before the
-	// room is measured, or a nearly full partition refuses every release after it.
-	dropParts(staged+".*.part", partPath(staged, b))
+	// The install lock is held through the countdown, so a second press in this window is refused
+	// rather than starting the download over. It also gives whoever is standing at the device a
+	// visible three seconds before it goes away.
+	for seconds := 3; seconds >= 1; seconds-- {
+		report(phase, fmt.Sprintf("countdown-%d", seconds))
+		time.Sleep(time.Second)
+	}
+	report(phase, "restarting")
 
-	// Both partitions are asked for the room before anything is fetched. The download lands on the
-	// state partition and is then copied into /system beside the binary it replaces, so the space has
-	// to be there twice over — and finding that out after sixteen megabytes have been written is
-	// finding it out with the device's storage already full.
-	if err := room(layout.StateDir, b.Size-partial(staged, b)); err != nil {
-		return err
+	if reboot {
+		return rebootIntoSlot()
 	}
-	if err := room(mount, b.Size); err != nil {
-		return err
-	}
+	Restart("update to " + m.Version)
+	return nil
+}
 
-	if err := download(ctx, b, staged, progress); err != nil {
-		return err
+// report passes a named step to the display, if one is listening.
+func report(phase func(string), name string) {
+	if phase != nil {
+		phase(name)
 	}
-	return swap(staged, m.Version)
 }
 
 // notOlder refuses a manifest offering a version below the one this binary reports as running.

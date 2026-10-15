@@ -10,11 +10,9 @@ package firmware
 import (
 	"context"
 	"errors"
-	"fmt"
 	"log/slog"
 	"sync"
 	"sync/atomic"
-	"time"
 
 	esphome "github.com/ygelfand/go-esphome-device"
 
@@ -348,7 +346,9 @@ func (u *Firmware) Install(ctx context.Context) {
 	defer working.Done()
 
 	u.progress(found, 0)
-	err = update.Install(ctx, found, func(at float32) { u.progress(found, at) })
+	err = update.Install(ctx, found,
+		func(at float32) { u.progress(found, at) },
+		func(phase string) { u.phaseReport(found, phase) })
 
 	// Home Assistant learns nothing from the command it sent — the update entity has no way to say an
 	// install failed, and the card just goes back to offering it. So the failure has to arrive as state,
@@ -383,22 +383,23 @@ func (u *Firmware) Install(ctx context.Context) {
 		return
 	}
 
-	// Keep the screen on the installing state until Install has finished. Then give the person
-	// standing at the device a visible three-second countdown before the supervisor restarts it.
-	for seconds := 3; seconds >= 1; seconds-- {
-		phase := fmt.Sprintf("countdown-%d", seconds)
-		u.mu.Lock()
-		u.at, u.phase, u.target = 1, phase, found.Version
-		listener := u.progressListener
-		u.mu.Unlock()
+	// update.Install ran the countdown and asked for the restart (or, on a slot device, the reboot)
+	// itself, with the install lock held throughout. All that is left is to let the progress
+	// listener's last phase stand.
+}
 
-		if listener != nil {
-			listener(true, 1, phase, found.Version, "")
-		}
-		time.Sleep(time.Second)
+// phaseReport is a named step of the install with no progress of its own — the countdown before it
+// goes away, and the restart itself. It goes to the on-device dialog, and the version fields are kept
+// current for whoever reads them.
+func (u *Firmware) phaseReport(found update.Manifest, phase string) {
+	u.mu.Lock()
+	u.at, u.phase, u.target = 1, phase, found.Version
+	listener := u.progressListener
+	u.mu.Unlock()
+
+	if listener != nil {
+		listener(true, 1, phase, found.Version, "")
 	}
-
-	update.Restart("update to " + found.Version)
 }
 
 // progress republishes the state with how far the download has got. The version fields go out with it

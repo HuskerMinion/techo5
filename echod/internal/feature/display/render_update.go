@@ -9,13 +9,19 @@ import (
 	"image/draw"
 	"strings"
 
+	"github.com/HuskerMinion/techo5/echod/internal/feature/phone"
 	"github.com/HuskerMinion/techo5/echod/internal/layout"
 	"github.com/HuskerMinion/techo5/echod/internal/lib/locale"
 )
 
 // updateOverlay draws the system update dialog last, above the page currently on screen.
 func (r *renderer) updateOverlay(s scene) {
-	if !s.updateActive && s.updateMessage == "" {
+	if !s.updateActive {
+		return
+	}
+	// A ring or a call is never covered: a tap has to be able to stop the ring or work the call, and
+	// its page is how. The dialog comes back once the ring is over.
+	if s.ring.any() || s.call.Phase != phone.Idle {
 		return
 	}
 

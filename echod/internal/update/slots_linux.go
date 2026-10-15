@@ -36,9 +36,12 @@ func slotSystem() bool {
 	return err == nil
 }
 
-// installRootfs fetches the rootfs the manifest offers for this device (rootfsArch), hands it to
-// slotctl, and reboots into it. On the 2nd gen Show 8 slotctl checks the rootfs is athena's too
-// (T5_BOARD in its device.conf against the store's board) before it empties the other slot.
+// installRootfs fetches the rootfs the manifest offers for this device (rootfsArch) and hands it to
+// slotctl, which unpacks it into the other slot and marks it "trial". It does not reboot: the caller
+// runs the countdown and then asks for the reboot (rebootIntoSlot), so the countdown is actually
+// seen. The install lock stays held across both, since they are one install. On the 2nd gen Show 8
+// slotctl checks the rootfs is athena's too (T5_BOARD in its device.conf against the store's board)
+// before it empties the other slot.
 func installRootfs(ctx context.Context, m Manifest, progress func(float32)) error {
 	key := rootfsArch()
 	b, ok := m.Rootfs[key]
@@ -68,11 +71,15 @@ func installRootfs(ctx context.Context, m Manifest, progress func(float32)) erro
 	if err != nil {
 		return fmt.Errorf("update: slotctl install: %w: %s", err, out)
 	}
-	slog.Warn("update: rootfs installed, rebooting into it", "version", m.Version, "slotctl", string(out))
-	// Reboot here and now. Anything deferred loses: the caller asks the supervisor for a restart
-	// as soon as this returns, and a goroutine waiting to reboot dies with the process (seen on
-	// the first over-the-air install, 2026-09-16 — the slot was ready, the device sat on the old
-	// one until someone rebooted it).
+	slog.Warn("update: rootfs installed, ready to reboot into it", "version", m.Version, "slotctl", string(out))
+	return nil
+}
+
+// rebootIntoSlot restarts the device into the slot that was just installed. It is called with the
+// install lock still held, after the countdown, so the reboot is not lost to a deferred call that
+// dies with the process (seen on the first over-the-air install, 2026-09-16 — the slot was ready,
+// the device sat on the old one until someone rebooted it).
+func rebootIntoSlot() error {
 	syscall.Sync()
 	if err := syscall.Reboot(syscall.LINUX_REBOOT_CMD_RESTART); err != nil {
 		return fmt.Errorf("update: rootfs installed but the reboot failed: %w", err)

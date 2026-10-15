@@ -85,8 +85,11 @@ func (d *Display) onClock() bool {
 // deckFrameKey is what a frame of the deck shows, or "" when the frame isn't just the deck: two frames
 // with the same key look the same.
 func deckFrameKey(s scene, ringing, calling bool) string {
+	// The update dialog is drawn over the deck, and its progress changes every frame, so a frame with
+	// it up is not the unchanged deck: otherwise the dialog is skipped while the deck is still there
+	// to take the taps that dismiss it, and the screen looks normal while ignoring every touch.
 	if !s.showDeck || s.showVideo || s.showVideoAsk || s.showVolume || ringing || calling || s.setupAsking || s.showAnnouncement ||
-		s.showReminder || s.showNotification || s.popup != nil || s.bt.Pairing || s.pin.open || s.redClock || s.announceRecording {
+		s.showReminder || s.showNotification || s.popup != nil || s.bt.Pairing || s.pin.open || s.redClock || s.announceRecording || s.updateActive {
 		return ""
 	}
 	// The colors too: the deck is drawn in the theme's, and a change from the setup page (a custom

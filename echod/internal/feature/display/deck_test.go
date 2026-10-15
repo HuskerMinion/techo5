@@ -117,6 +117,9 @@ func TestDeckFrameKey(t *testing.T) {
 	if deckFrameKey(s, true, false) != "" || deckFrameKey(scene{showDeck: true, showVolume: true, deck: s.deck}, false, false) != "" {
 		t.Error("a ring or the volume bar over the deck still had a key")
 	}
+	if deckFrameKey(scene{showDeck: true, deck: s.deck, updateActive: true}, false, false) != "" {
+		t.Error("the update dialog over the deck still had a key")
+	}
 }
 
 // The deck is drawn again when the font changes, or the fonts of one's own do.
