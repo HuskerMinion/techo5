@@ -117,6 +117,63 @@ func TestStaleUpdateDialogIsDropped(t *testing.T) {
 	}
 }
 
+// Live video is painted over the canvas by the panel, so the dialog drawn on the canvas underneath it
+// is not on the screen: a tap belongs to the picture, and its own swipes keep working. It comes back
+// once the video is gone.
+func TestUpdateDialogIsNotOnScreenOverLiveVideo(t *testing.T) {
+	d := updateDisplay(t)
+	d.updateActive = true
+	d.updateSeen = time.Now()
+	d.videoLive = true
+
+	d.mu.Lock()
+	shown := d.updateShown(time.Now())
+	d.mu.Unlock()
+	if shown {
+		t.Error("the update dialog counted as on the screen over a live video")
+	}
+
+	d.mu.Lock()
+	d.videoLive = false
+	shown = d.updateShown(time.Now())
+	d.mu.Unlock()
+	if !shown {
+		t.Error("the update dialog did not come back once the video was gone")
+	}
+}
+
+// What the dialog says while an install runs, and how the bar shows it: the steps after the download
+// report no progress of their own, so they animate it, and a restart is worded apart from a reboot.
+func TestUpdateStatusAndBarFollowThePhase(t *testing.T) {
+	for phase, want := range map[string]string{
+		"downloading":     "Downloading update · 42%",
+		"installing":      "Installing…",
+		"restarting-in-3": "Restarting in 3…",
+		"restarting-in-1": "Restarting in 1…",
+		"restarting":      "Restarting…",
+		"rebooting-in-2":  "Rebooting in 2…",
+		"rebooting":       "Rebooting…",
+	} {
+		if got := updateStatus("en", phase, 0.42); got != want {
+			t.Errorf("updateStatus(%q) = %q; want %q", phase, got, want)
+		}
+	}
+
+	for phase, want := range map[string]bool{
+		"downloading":     false,
+		"":                false,
+		"installing":      true,
+		"restarting":      true,
+		"rebooting":       true,
+		"restarting-in-2": true,
+		"rebooting-in-2":  true,
+	} {
+		if got := updateBarSpins(phase); got != want {
+			t.Errorf("updateBarSpins(%q) = %v; want %v", phase, got, want)
+		}
+	}
+}
+
 // A failure's message is dropped once its window has passed, and no sooner.
 func TestUpdateFailureExpires(t *testing.T) {
 	d := updateDisplay(t)

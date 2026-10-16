@@ -9,7 +9,9 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync/atomic"
 	"testing"
+	"time"
 
 	"github.com/HuskerMinion/techo5/echod/internal/layout"
 )
@@ -127,6 +129,48 @@ func TestProgressReachesTheEnd(t *testing.T) {
 	}
 	if last < 0.9 {
 		t.Errorf("finished at %v", last)
+	}
+}
+
+// A binary swap restarts this process; only a slot device reboots, and the display words the two
+// apart, so the name it is handed has to be the right one for the device it is on.
+func TestRestartStepNamesWhatActuallyHappens(t *testing.T) {
+	if got := restartStep(true); got != "rebooting" {
+		t.Errorf("a slot install's last step is %q; want rebooting", got)
+	}
+	if got := restartStep(false); got != "restarting" {
+		t.Errorf("a binary swap's last step is %q; want restarting", got)
+	}
+}
+
+// The step after the download reports nothing of its own — slotctl says nothing at all until it
+// returns — so the display is told it is still going, and told again until it is over. Without that,
+// a dialog is dropped for silence in the middle of unpacking the rootfs.
+func TestTheInstallingStepSaysItIsStillGoing(t *testing.T) {
+	old := installingEvery
+	installingEvery = time.Millisecond
+	t.Cleanup(func() { installingEvery = old })
+
+	var reports atomic.Int32
+	stop := stillInstalling(func(string) { reports.Add(1) })
+	time.Sleep(30 * time.Millisecond)
+	stop()
+
+	if got := reports.Load(); got < 2 {
+		t.Errorf("the install was mentioned %d times while it ran; want it repeated", got)
+	}
+	// It stops with the step, rather than reporting for the rest of the install.
+	settled := reports.Load()
+	time.Sleep(20 * time.Millisecond)
+	if got := reports.Load(); got != settled {
+		t.Errorf("the step carried on reporting after it was over: %d then %d", settled, got)
+	}
+
+	// A caller with no display is not given a goroutine to run.
+	if stop := stillInstalling(nil); stop == nil {
+		t.Error("stillInstalling(nil) returned nothing to call")
+	} else {
+		stop()
 	}
 }
 

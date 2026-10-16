@@ -58,6 +58,7 @@ func (d *Display) videoScene(s *scene, now time.Time) {
 	s.videoControls = controls
 	s.videoLive = s.showVideo && up && st.Frames
 	d.videoOnScreen = s.showVideo
+	d.videoLive = s.videoLive
 	d.mu.Unlock()
 }
 

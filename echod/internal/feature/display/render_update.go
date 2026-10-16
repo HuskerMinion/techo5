@@ -123,22 +123,7 @@ func (r *renderer) updateOverlay(s scene) {
 		progress = 1
 	}
 
-	var status string
-	switch s.updatePhase {
-	case "installing":
-		status = locale.UpdateText(lang, locale.UpdateInstalling)
-	case "countdown-3":
-		status = fmt.Sprintf(locale.UpdateText(lang, locale.UpdateRebootingIn), 3)
-	case "countdown-2":
-		status = fmt.Sprintf(locale.UpdateText(lang, locale.UpdateRebootingIn), 2)
-	case "countdown-1":
-		status = fmt.Sprintf(locale.UpdateText(lang, locale.UpdateRebootingIn), 1)
-	case "restarting":
-		status = locale.UpdateText(lang, locale.UpdateRebooting)
-	default:
-		status = fmt.Sprintf(locale.UpdateText(lang, locale.UpdateDownloading), int(progress*100+0.5))
-	}
-
+	status := updateStatus(lang, s.updatePhase, progress)
 	status = r.fit(statusFace, status, card.Dx()-2*padding)
 	r.text(
 		statusFace,
@@ -157,14 +142,9 @@ func (r *renderer) updateOverlay(s scene) {
 	barRadius := float64(bar.Dy()) / 2
 	r.roundFill(bar, barRadius, ember, ember)
 
-	indeterminate := false
-	switch s.updatePhase {
-	case "installing", "restarting", "countdown-3", "countdown-2", "countdown-1":
-		indeterminate = true
-	}
-	if indeterminate {
-		// slotctl does not report progress while writing the inactive slot.
-		// Animate a segment instead of showing a misleading percentage.
+	if updateBarSpins(s.updatePhase) {
+		// The step reports no progress of its own (slotctl writes the inactive slot in silence). Animate
+		// a segment rather than leaving a bar stuck at the end of the download.
 		segmentW := bar.Dx() / 3
 		if segmentW > r.s(180) {
 			segmentW = r.s(180)
@@ -205,4 +185,51 @@ func (r *renderer) updateOverlay(s scene) {
 		card.Min.Y+r.s(290),
 		dim,
 	)
+}
+
+// updateStatus is the line under the title: the step the install is in. The countdown and the step it
+// counts to are worded for what the device actually does — a slot device reboots into the rootfs it
+// has unpacked, while a binary swap only has this process replaced — so the screen does not call a
+// restart a reboot. Anything else is a download, and the number is how far it has got.
+func updateStatus(lang, phase string, progress float32) string {
+	plain := func(key string) string { return locale.UpdateText(lang, key) }
+	in := func(key string, seconds int) string { return fmt.Sprintf(locale.UpdateText(lang, key), seconds) }
+
+	switch phase {
+	case "downloading":
+		return fmt.Sprintf(plain(locale.UpdateDownloading), int(progress*100+0.5))
+	case "installing":
+		return plain(locale.UpdateInstalling)
+	case "rebooting-in-3":
+		return in(locale.UpdateRebootingIn, 3)
+	case "rebooting-in-2":
+		return in(locale.UpdateRebootingIn, 2)
+	case "rebooting-in-1":
+		return in(locale.UpdateRebootingIn, 1)
+	case "rebooting":
+		return plain(locale.UpdateRebooting)
+	case "restarting-in-3":
+		return in(locale.UpdateRestartingIn, 3)
+	case "restarting-in-2":
+		return in(locale.UpdateRestartingIn, 2)
+	case "restarting-in-1":
+		return in(locale.UpdateRestartingIn, 1)
+	case "restarting":
+		return plain(locale.UpdateRestarting)
+	}
+	// Nothing named yet: an install whose download has just started.
+	return fmt.Sprintf(plain(locale.UpdateDownloading), int(progress*100+0.5))
+}
+
+// updateBarSpins is whether the bar has no percentage to show: the steps that report no progress of
+// their own — unpacking the rootfs into the other slot, the countdown, and the restart or reboot
+// after it — rather than a download the bar can measure.
+func updateBarSpins(phase string) bool {
+	switch phase {
+	case "installing", "rebooting", "restarting",
+		"rebooting-in-3", "rebooting-in-2", "rebooting-in-1",
+		"restarting-in-3", "restarting-in-2", "restarting-in-1":
+		return true
+	}
+	return false
 }

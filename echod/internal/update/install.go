@@ -40,9 +40,9 @@ func Installing() bool {
 	return true
 }
 
-// phase, when not nil, is called with each named step once the download has finished — the
-// three-second countdown and then "restarting" — so a display can show them rather than a bar stuck
-// at 100%.
+// phase, when not nil, is called with each named step once the download has finished — installing
+// what arrived, the three-second countdown, and then the restart or the reboot itself — so a display
+// can show them rather than a bar stuck at 100%.
 func Install(ctx context.Context, m Manifest, progress func(float32), phase func(string)) error {
 	if !installing.TryLock() {
 		return ErrInstalling
@@ -60,7 +60,7 @@ func Install(ctx context.Context, m Manifest, progress func(float32), phase func
 	// swap only needs this process replaced, which the supervisor does without the device going down.
 	reboot := slotSystem()
 	if reboot {
-		if err := installRootfs(ctx, m, progress); err != nil {
+		if err := installRootfs(ctx, m, progress, phase); err != nil {
 			return err
 		}
 	} else {
@@ -89,19 +89,27 @@ func Install(ctx context.Context, m Manifest, progress func(float32), phase func
 		if err := download(ctx, b, staged, progress); err != nil {
 			return err
 		}
+		// The download reaching its end is not the end of the install: what arrived still has to be
+		// copied into /system, and a screen left on a bar at 100% through that looks finished while the
+		// install it is describing is still going.
+		report(phase, installStep)
 		if err := swap(staged, m.Version); err != nil {
 			return err
 		}
 	}
 
+	// What follows the countdown is named for what actually happens: a slot device reboots into the
+	// new rootfs, while a binary swap only has this process replaced, and a screen that called both a
+	// reboot would be saying the wrong thing on one of them.
+	last := restartStep(reboot)
 	// The install lock is held through the countdown, so a second press in this window is refused
 	// rather than starting the download over. It also gives whoever is standing at the device a
 	// visible three seconds before it goes away.
 	for seconds := 3; seconds >= 1; seconds-- {
-		report(phase, fmt.Sprintf("countdown-%d", seconds))
+		report(phase, fmt.Sprintf("%s-in-%d", last, seconds))
 		time.Sleep(time.Second)
 	}
-	report(phase, "restarting")
+	report(phase, last)
 
 	if reboot {
 		return rebootIntoSlot()
@@ -114,6 +122,54 @@ func Install(ctx context.Context, m Manifest, progress func(float32), phase func
 func report(phase func(string), name string) {
 	if phase != nil {
 		phase(name)
+	}
+}
+
+// installStep is the named step an install is in once the download has finished and it is writing
+// what arrived: slotctl unpacking the rootfs into the other slot, or the copy into /system.
+const installStep = "installing"
+
+// installingEvery is how often that step says it is still going. It has no progress of its own to
+// report — slotctl says nothing at all until it returns, which is seconds on a fast device and
+// minutes on a slow one — and the display drops a dialog it has heard nothing about for a few
+// minutes, so the word has to keep coming well inside that.
+var installingEvery = 30 * time.Second
+
+// restartStep is the last named step of an install, and so what its countdown counts to. A slot
+// device reboots into the rootfs it has just unpacked; a binary swap only has this process replaced,
+// which the supervisor does without the device going down. The display words the two differently.
+func restartStep(reboot bool) string {
+	if reboot {
+		return "rebooting"
+	}
+	return "restarting"
+}
+
+// stillInstalling tells the display that the step with nothing to report is still running, every
+// installingEvery, until the returned function is called. That step is the one the device must not
+// lose power in, so a dialog dropped for silence there would drop the warning with it. The returned
+// function is called once, when the step is over, and does not return until the reports have stopped.
+func stillInstalling(phase func(string)) func() {
+	if phase == nil {
+		return func() {}
+	}
+	done, stopped := make(chan struct{}), make(chan struct{})
+	go func() {
+		defer close(stopped)
+		tick := time.NewTicker(installingEvery)
+		defer tick.Stop()
+		for {
+			select {
+			case <-done:
+				return
+			case <-tick.C:
+				report(phase, installStep)
+			}
+		}
+	}()
+	return func() {
+		close(done)
+		<-stopped
 	}
 }
 

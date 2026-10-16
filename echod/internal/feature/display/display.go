@@ -351,6 +351,9 @@ type Display struct {
 	// that of the canvas over them, and vp the frames themselves (video_shared.go).
 	videoUntil    time.Time
 	videoOnScreen bool
+	// videoLive is the video page painting its own frames over the canvas (video.go), so the update
+	// dialog drawn on the canvas underneath it is not on the screen: updateShown asks this.
+	videoLive     bool
 	videoTried    uint64
 	videoPainting bool
 	videoOver     image.Rectangle
@@ -1924,6 +1927,13 @@ func (d *Display) clearUpdateLocked() {
 // still inside its window, unless a tap has put it away. Caller holds d.mu.
 func (d *Display) updateShown(now time.Time) bool {
 	if d.updateDismissed {
+		return false
+	}
+	// What the panel blends over the canvas is not the canvas: a live video's frames are painted over
+	// it, so the dialog drawn there is not on the screen. Counting it as up would take the first tap
+	// on the picture for a dialog nobody can see, and leave the picture's own swipes dead for the
+	// whole install. It comes back once the video is gone.
+	if d.videoLive {
 		return false
 	}
 	return d.updateActive || (d.updateMessage != "" && now.Before(d.updateErrorUntil))

@@ -18,7 +18,7 @@ func TestAnAthenaRefusesTheOtherShowsRootfs(t *testing.T) {
 	m := Manifest{Version: "1.3.0", Rootfs: map[string]Binary{
 		"arm": {URL: "https://example/techo5-rootfs-1.3.0.tar.gz", SHA256: strings.Repeat("d", 64), Size: 60 << 20},
 	}}
-	err := installRootfs(context.Background(), m, nil)
+	err := installRootfs(context.Background(), m, nil, nil)
 	if err == nil || !strings.Contains(err.Error(), "no rootfs for arm-athena") {
 		t.Fatalf("installRootfs on an athena with only the arm rootfs: %v", err)
 	}
