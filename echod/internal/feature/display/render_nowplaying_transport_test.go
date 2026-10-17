@@ -62,7 +62,7 @@ func TestTheTransportIconSitsOnItsButton(t *testing.T) {
 			dy := (mark.Min.Y+mark.Max.Y)/2 - (b.Min.Y + b.Dy()/2)
 			// The numbers, so a shift of one or two pixels can be told from a mistake: mdiIcon puts the
 			// baseline at the bottom of the box it is given, not at the bottom of the glyph's own ink.
-			t.Logf("%-13s in %-18s button %v centre %d,%d | ink %v | off %+d,%+d",
+			t.Logf("%-13s in %-18s button %v center %d,%d | ink %v | off %+d,%+d",
 				icon, where, b, b.Min.X+b.Dx()/2, b.Min.Y+b.Dy()/2, mark, dx, dy)
 			if !mark.In(b) {
 				t.Errorf("the %s icon %v is not inside %s %v", icon, mark, where, b)
