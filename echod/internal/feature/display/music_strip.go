@@ -116,13 +116,16 @@ func (r *renderer) musicStrip(s scene) {
 	for _, c := range []image.Rectangle{back, play, next} {
 		r.disc(c.Min.X+c.Dx()/2, c.Min.Y+c.Dy()/2, c.Dx()/2, shade)
 	}
-	r.markBack(back.Min.X+back.Dx()/2-r.s(22), back.Min.Y+back.Dy()/2-r.s(18))
+	// Every mark is drawn from the middle of its button and at one height, so the three need nothing
+	// but where their middles are: the widths differ, and one guessed offset cannot fit them all.
+	top := r.markTop(back)
+	r.markBack(back.Min.X+back.Dx()/2, top)
 	if s.paused {
-		r.markPlay(play.Min.X+play.Dx()/2-r.s(12), play.Min.Y+play.Dy()/2-r.s(18))
+		r.markPlay(play.Min.X+play.Dx()/2, top)
 	} else {
-		r.markPause(play.Min.X+play.Dx()/2-r.s(15), play.Min.Y+play.Dy()/2-r.s(18))
+		r.markPause(play.Min.X+play.Dx()/2, top)
 	}
-	r.markNext(next.Min.X+next.Dx()/2-r.s(27), next.Min.Y+next.Dy()/2-r.s(18))
+	r.markNext(next.Min.X+next.Dx()/2, top)
 
 	cx, cy, cr := closeX.Min.X+closeX.Dx()/2, closeX.Min.Y+closeX.Dy()/2, closeX.Dx()/2
 	r.disc(cx, cy, cr, color.NRGBA{R: 16, G: 12, B: 10, A: 230})

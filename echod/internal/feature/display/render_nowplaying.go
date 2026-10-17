@@ -163,46 +163,85 @@ func (r *renderer) transportButtons() (back, play, next image.Rectangle) {
 }
 
 // control paints one of the three, with its mark in the middle.
-func (r *renderer) control(b image.Rectangle, mark func(x, top int)) {
+func (r *renderer) control(b image.Rectangle, mark func(cx, top int)) {
 	r.bevel(b, shift(ember, 16), true)
-	mark(b.Min.X+b.Dx()/2-r.s(18), b.Min.Y+r.s(9))
+	mark(b.Min.X+b.Dx()/2, r.markTop(b))
 }
 
-// The marks are 36 rows high from x and top at the Show 5's width, drawn as rows the way this panel has
-// always drawn its play mark. Sizes go through s() so a wider panel gets marks to match its buttons.
+// The marks are drawn from the middle of their button, at one height for every part, so a caller only
+// says where the middle is. They used to be positioned by a guess at their own width at each call site,
+// and the widths differ (11, 26, 30, 45), which is how the next mark came to have a gap twice as wide as
+// its own bar and the pause and play marks to sit left of center: no single offset fits them all.
+const (
+	// markHeight is the height of every part, the bar and the triangle alike: a mark made of both
+	// looks broken when they disagree.
+	markHeight = 36
+	// markBarW is the bar's width, and markGap the space between the parts of one mark — the one
+	// pause's two bars have always had.
+	markBarW = 11
+	markGap  = 8
+)
 
-func (r *renderer) markBack(x, top int) {
-	r.markTriangle(x+r.s(14), top, r.s(30), false)
+// markTop is where a mark begins in b: its middle on the button's middle.
+func (r *renderer) markTop(b image.Rectangle) int {
+	return b.Min.Y + (b.Dy()-r.s(markHeight))/2
+}
+
+// triangleWidth is how wide markTriangle draws at height h. Its rows grow by half again to the middle,
+// so the widest is (h-1)/2*3/2+1: a triangle is about a third narrower than it is tall, not as wide as
+// the h it is given.
+func triangleWidth(h int) int { return (h-1)/2*3/2 + 1 }
+
+// markWidth is how wide a mark of a bar and a triangle is.
+func (r *renderer) markWidth() int {
+	return r.s(markBarW) + r.s(markGap) + triangleWidth(r.s(markHeight))
+}
+
+// markBack draws the previous mark centered on cx: the bar, then the triangle pointing left.
+func (r *renderer) markBack(cx, top int) {
+	x := cx - r.markWidth()/2
 	r.markBar(x, top)
+	r.markTriangle(x+r.s(markBarW)+r.s(markGap), top, r.s(markHeight), false)
 }
 
-func (r *renderer) markNext(x, top int) {
-	r.markTriangle(x, top, r.s(30), true)
-	r.markBar(x+r.s(44), top)
+// markNext draws the next mark centered on cx: the triangle pointing right, then the bar.
+func (r *renderer) markNext(cx, top int) {
+	x := cx - r.markWidth()/2
+	r.markTriangle(x, top, r.s(markHeight), true)
+	r.markBar(x+triangleWidth(r.s(markHeight))+r.s(markGap), top)
 }
 
-func (r *renderer) markPlay(x, top int) { r.markTriangle(x, top, r.s(36), true) }
+// markPlay draws the play triangle centered on cx.
+func (r *renderer) markPlay(cx, top int) {
+	r.markTriangle(cx-triangleWidth(r.s(markHeight))/2, top, r.s(markHeight), true)
+}
 
-func (r *renderer) markPause(x, top int) {
+// markPause draws the two bars centered on cx.
+func (r *renderer) markPause(cx, top int) {
+	w := r.s(markBarW)
+	x := cx - (2*w+r.s(markGap))/2
 	r.markBar(x, top)
-	r.markBar(x+r.s(19), top)
+	r.markBar(x+w+r.s(markGap), top)
 }
 
 func (r *renderer) markBar(x, top int) {
-	mark := image.Rect(x, top, x+r.s(11), top+r.s(36))
+	mark := image.Rect(x, top, x+r.s(markBarW), top+r.s(markHeight))
 	draw.Draw(r.dst, mark, image.NewUniform(amber), image.Point{}, draw.Src)
 }
 
-// markTriangle draws a triangle pointing right or left, widest in the middle.
-func (r *renderer) markTriangle(x, top, size int, right bool) {
-	for i := 0; i < size; i++ {
-		half := min(i, size-1-i)
-		w := half*3/2 + 1
+// markTriangle draws a triangle of height h pointing right or left, one row at a time, widest in the
+// middle. x is its left edge either way: the two directions are mirror images, so a mark drawn one way
+// sits exactly where its twin drawn the other does.
+func (r *renderer) markTriangle(x, top, h int, right bool) {
+	w := triangleWidth(h)
+	for i := 0; i < h; i++ {
+		half := min(i, h-1-i)
+		row := half*3/2 + 1
 		x0 := x
 		if !right {
-			x0 = x + (size/2)*3/2 + 1 - w
+			x0 = x + w - row
 		}
-		draw.Draw(r.dst, image.Rect(x0, top+i, x0+w, top+i+1), image.NewUniform(amber), image.Point{}, draw.Src)
+		draw.Draw(r.dst, image.Rect(x0, top+i, x0+row, top+i+1), image.NewUniform(amber), image.Point{}, draw.Src)
 	}
 }
 
