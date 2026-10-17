@@ -324,6 +324,30 @@ func (a *playingAgain) heard(senderPaused bool, now time.Time, audio bool) bool 
 	return now.Sub(a.since) >= sendingAgain
 }
 
+// MusicStarts watches a phone whose stream started while something else is playing here for the phone
+// playing music rather than a sound of its own: the same sendingAgain of audible audio with no break of
+// sendingBreak that a phone paused on its own needs to play again (playingAgain). A phone starts its
+// stream for any app that opens its audio: a browser coming back to the screen sends nothing but
+// silence, for seconds or for half a minute, and taken as the phone playing, it stopped Music
+// Assistant.
+type MusicStarts struct{ again playingAgain }
+
+// Heard takes one read of what the phone sends, raw S16_LE, at now, and says whether the phone is now
+// playing music.
+func (s *MusicStarts) Heard(pcm []byte, now time.Time) bool {
+	return s.again.heard(true, now, audibleS16(pcm))
+}
+
+// audibleS16 is audible for raw S16_LE.
+func audibleS16(pcm []byte) bool {
+	for i := 0; i+1 < len(pcm); i += 2 {
+		if v := int16(uint16(pcm[i]) | uint16(pcm[i+1])<<8); v > audibleFloor || v < -audibleFloor {
+			return true
+		}
+	}
+	return false
+}
+
 // toSpeaker turns what a remote sends (mono or stereo, at its own rate: phones pick 44.1 or 48 kHz)
 // into the speaker's interleaved stereo at its rate. Linear interpolation, carried across calls so a
 // stream read in pieces comes out continuous.

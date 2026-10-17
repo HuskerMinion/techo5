@@ -334,7 +334,10 @@ ffmpeg and an ONVIF client library, not against a recorder on a device.
   a Show or a Spot; a pause or a play on the phone is followed here, so the song picks up where it
   was paused whichever side plays it again, for half an hour after the pause. A phone still playing
   when something other than a phone takes the speaker (Music Assistant, AirPlay, Spotify Connect,
-  DLNA, the radio) is paused, and playing it again on the phone takes the speaker back. With two
+  DLNA, the radio) is paused, and playing it again on the phone takes the speaker back. Over one of
+  those playing, a phone takes the speaker once it has played for a second and a half: an app that
+  opens the phone's audio without playing anything (a browser does, coming back to the screen) or a
+  click does not stop it. With two
   phones, the last to start playing has the speaker, and the first takes it back when the second
   stops, if it is still playing; not
   after AirPlay, Spotify Connect or Music Assistant played, or after a stop on the device. While

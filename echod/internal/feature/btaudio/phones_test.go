@@ -285,3 +285,24 @@ func TestEchoWindow(t *testing.T) {
 		t.Error("a stream nothing was handed to is echoing")
 	}
 }
+
+// A phone that starts sending is listened to before it takes the speaker only from something else that
+// is playing: not from another phone, and not when nothing plays.
+func TestOthersSounding(t *testing.T) {
+	for name, c := range map[string]struct {
+		receiving         string
+		playing, external bool
+		want              bool
+	}{
+		"nothing":                   {"", false, false, false},
+		"Music Assistant":           {"", false, true, true},
+		"a station of the device's": {"", true, false, true},
+		"AirPlay":                   {"AirPlay", true, false, true},
+		"another phone":             {media.BluetoothPrefix + "Phone B", true, false, false},
+		"a phone and remote":        {media.BluetoothPrefix + "Phone B", true, true, false},
+	} {
+		if got := othersSounding(c.receiving, c.playing, c.external); got != c.want {
+			t.Errorf("%s: %v, want %v", name, got, c.want)
+		}
+	}
+}
