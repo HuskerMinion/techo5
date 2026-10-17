@@ -106,33 +106,40 @@ func (r *renderer) lyricLines(l home.Lyric, rd home.Radio) {
 
 // transportRow is the foot of the page: the rule, back, play or pause, forward, Done and the star.
 func (r *renderer) transportRow(s scene) {
-	// A rule, then the three buttons: back, play or pause, and forward. What they do belongs to whoever
-	// is playing, so a stream Music Assistant is carrying is paused and skipped by the server.
-	draw.Draw(r.dst, image.Rect(r.margin, r.h-r.s(84), r.w-r.margin, r.h-r.s(81)), image.NewUniform(ember), image.Point{}, draw.Src)
+	// The three buttons: back, play or pause, and forward. What they do belongs to whoever is playing, so
+	// a stream Music Assistant is carrying is paused and skipped by the server. A rule used to run across
+	// here as well; the buttons' own rim and shadow separate the footer now, and it read as clutter.
 	back, play, next := r.transportButtons()
-	r.control(back, r.markBack)
+	r.transportButton(back, "skip-previous", false)
 	if s.paused {
-		r.control(play, r.markPlay)
+		r.transportButton(play, "play", true)
 	} else {
-		r.control(play, r.markPause)
+		r.transportButton(play, "pause", true)
 	}
-	r.control(next, r.markNext)
+	r.transportButton(next, "skip-next", false)
 
 	// Done, in the corner the buttons leave: the music ends and the screen goes back to the clock. A
 	// pause keeps this page up with play on it, and so does a stop from Music Assistant, which looks
 	// the same from here, so the page needs its own way out.
 	done := r.doneButton()
-	r.bevel(done, shift(ember, 16), true)
-	r.text(r.small, "Done", done.Min.X+(done.Dx()-r.width(r.small, "Done"))/2, done.Min.Y+done.Dy()/2+r.s(10), amber)
+	doneCol := r.buttonFace(done, float64(done.Dy())/2, btnSecondary)
+	// The sheet's button face, not this page's small text: a button drawn from one place has to be
+	// labeled from one place, or the same control is two sizes on two screens. The baseline is the
+	// sheet's too, from pillButton.
+	doneFace := r.faces().button
+	r.text(doneFace, "Done", done.Min.X+(done.Dx()-r.width(doneFace, "Done"))/2, done.Min.Y+done.Dy()/2+r.s(8), doneCol)
 
 	// The star saves what is playing to favorites, and fills in once it has.
 	fav := r.favButton()
-	r.bevel(fav, shift(ember, 16), true)
+	r.buttonFace(fav, float64(fav.Dy())/2, btnSecondary)
+	// The icon font's star, not one drawn as a polygon: the same outline the rest of the program would
+	// draw, and filled in once the station is saved.
+	starIcon := "star-outline"
 	starColor := color.RGBA{0x9a, 0x8c, 0x7a, 0xff}
 	if s.faved {
-		starColor = amber
+		starIcon, starColor = "star", amber
 	}
-	r.star(fav.Min.X+fav.Dx()/2, fav.Min.Y+fav.Dy()/2, r.s(17), starColor)
+	r.iconIn(fav, starIcon, transportIcon, starColor)
 }
 
 // favButton is the star, beside Done.
@@ -162,48 +169,36 @@ func (r *renderer) transportButtons() (back, play, next image.Rectangle) {
 	return back, play, next
 }
 
-// control paints one of the three, with its mark in the middle.
-func (r *renderer) control(b image.Rectangle, mark func(x, top int)) {
-	r.bevel(b, shift(ember, 16), true)
-	mark(b.Min.X+b.Dx()/2-r.s(18), b.Min.Y+r.s(9))
-}
+// transportIcon is the size a transport icon is drawn at, the size the media sheet draws these same
+// controls at: small enough for the strip's circles and the page's pills both. closeIcon is the cross on
+// the strip's way out, a smaller button than the three.
+const (
+	transportIcon = 32
+	closeIcon     = 20
+	// iconLift is how much higher the glyph's box goes. mdiIcon puts the baseline at the box's bottom
+	// less two, and the ink of these symbols lands two pixels below the box's middle: measured by
+	// TestTheTransportIconSitsOnItsButton, which fails if that ever stops being true.
+	iconLift = 2
+)
 
-// The marks are 36 rows high from x and top at the Show 5's width, drawn as rows the way this panel has
-// always drawn its play mark. Sizes go through s() so a wider panel gets marks to match its buttons.
-
-func (r *renderer) markBack(x, top int) {
-	r.markTriangle(x+r.s(14), top, r.s(30), false)
-	r.markBar(x, top)
-}
-
-func (r *renderer) markNext(x, top int) {
-	r.markTriangle(x, top, r.s(30), true)
-	r.markBar(x+r.s(44), top)
-}
-
-func (r *renderer) markPlay(x, top int) { r.markTriangle(x, top, r.s(36), true) }
-
-func (r *renderer) markPause(x, top int) {
-	r.markBar(x, top)
-	r.markBar(x+r.s(19), top)
-}
-
-func (r *renderer) markBar(x, top int) {
-	mark := image.Rect(x, top, x+r.s(11), top+r.s(36))
-	draw.Draw(r.dst, mark, image.NewUniform(amber), image.Point{}, draw.Src)
-}
-
-// markTriangle draws a triangle pointing right or left, widest in the middle.
-func (r *renderer) markTriangle(x, top, size int, right bool) {
-	for i := 0; i < size; i++ {
-		half := min(i, size-1-i)
-		w := half*3/2 + 1
-		x0 := x
-		if !right {
-			x0 = x + (size/2)*3/2 + 1 - w
-		}
-		draw.Draw(r.dst, image.Rect(x0, top+i, x0+w, top+i+1), image.NewUniform(amber), image.Point{}, draw.Src)
+// transportButton draws one of the transport controls: the button the rest of the program draws, in the
+// accent for the one in the middle, with the icon font's mark for that control. The names are the media
+// sheet's, so the two screens show the same three buttons — and a glyph from the font is antialiased at
+// any size, which the rows this page used to paint its own marks from were not.
+func (r *renderer) transportButton(b image.Rectangle, icon string, accent bool) {
+	style := btnSecondary
+	if accent {
+		style = btnPrimary
 	}
+	col := r.buttonFace(b, float64(b.Dy())/2, style)
+	r.iconIn(b, icon, transportIcon, col)
+}
+
+// iconIn draws an icon-font glyph centered in b, box and all: the one place the transport marks, the star
+// and the strip's cross take their position from.
+func (r *renderer) iconIn(b image.Rectangle, name string, size int, col color.RGBA) {
+	side := r.s(size)
+	r.mdiIcon(name, b.Min.X+(b.Dx()-side)/2, b.Min.Y+(b.Dy()-side)/2-r.s(iconLift), size, col)
 }
 
 // background paints the picture behind the now-playing text, toned down so the text reads.
