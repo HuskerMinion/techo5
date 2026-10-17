@@ -1074,7 +1074,14 @@ func (f *Feature) attach(al *bluealsa.Client, p bluealsa.PCM, d bluez.Device) {
 	if old != nil {
 		speaker.Get().SetSink(nil, "", 0, 0) // closes it
 	}
-	speaker.Get().SetSink(s, displayName(d), p.Rate, p.Channels)
+	f.mu.Lock()
+	a := f.adapter
+	f.mu.Unlock()
+	var sink speaker.Sink = s
+	if a != nil {
+		sink = newLevelStream(al, s, displayName(d), d.Path, a.AbsoluteVolume)
+	}
+	speaker.Get().SetSink(sink, displayName(d), p.Rate, p.Channels)
 	slog.Info("playing through bluetooth", "device", displayName(d), "codec", p.Codec, "rate", p.Rate, "channels", p.Channels)
 	f.note(displayName(d) + " connected")
 }

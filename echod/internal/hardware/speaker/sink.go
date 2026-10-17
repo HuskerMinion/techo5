@@ -27,6 +27,17 @@ type Sink interface {
 	Close() error
 }
 
+// A LevelSink is a Sink with a volume of its own: a Bluetooth speaker that takes its volume from this
+// side (AVRCP absolute volume), as it takes a phone's. While Level says it takes it, the sink is told
+// the step the output plays at and sent the audio at full scale, rather than the audio being turned
+// down here and the speaker left at whatever level it had: a speaker the last phone left at 70% then
+// never got louder than that. Level is called for every period, from the write loop, so it must not
+// block.
+type LevelSink interface {
+	Sink
+	Level(step int) bool
+}
+
 // sinkQuietAfter is how many silent periods before the transport is paused: about two seconds,
 // so the gaps in speech and between a chime and a reply do not pump it.
 const sinkQuietAfter = 2 * Rate / period
@@ -112,6 +123,17 @@ func sinkGain(step int) float32 {
 	}
 	db := (float64(step)/VolumeSteps - 1) * 40
 	return float32(math.Pow(10, db/20))
+}
+
+// sinkScale is what the output gain is multiplied by for a sink that takes step as its own volume:
+// the step's gain on the sink curve is the speaker's to apply, so it is taken back out here. Never a
+// boost, and a muted output stays muted.
+func sinkScale(gain float32, step int) float32 {
+	g := sinkGain(step)
+	if gain <= 0 || g <= 0 {
+		return gain
+	}
+	return min(1, gain/g)
 }
 
 // push converts one period (48 kHz stereo S16_LE, already at the sink's gain) and writes it.
