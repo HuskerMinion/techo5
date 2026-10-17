@@ -4,9 +4,7 @@ package display
 
 import (
 	"image"
-	"image/color"
 	"image/draw"
-	"math"
 	"time"
 
 	xdraw "golang.org/x/image/draw"
@@ -111,24 +109,20 @@ func (r *renderer) musicStrip(s scene) {
 		r.text(r.tiny, r.clipTo(r.tiny, sub, room), tx, b.Min.Y+r.s(76), amber)
 	}
 
-	// The controls see through to the strip, so the song under them stays readable.
-	shade := color.NRGBA{R: 16, G: 12, B: 10, A: 150}
-	for _, c := range []image.Rectangle{back, play, next} {
-		r.disc(c.Min.X+c.Dx()/2, c.Min.Y+c.Dy()/2, c.Dx()/2, shade)
-	}
-	r.markBack(back.Min.X+back.Dx()/2-r.s(22), back.Min.Y+back.Dy()/2-r.s(18))
+	// The controls are the buttons the rest of the program draws, icons and all: the strip had a look of
+	// its own, the way the Show's square answers did.
+	r.transportButton(back, "skip-previous", false)
 	if s.paused {
-		r.markPlay(play.Min.X+play.Dx()/2-r.s(12), play.Min.Y+play.Dy()/2-r.s(18))
+		r.transportButton(play, "play", true)
 	} else {
-		r.markPause(play.Min.X+play.Dx()/2-r.s(15), play.Min.Y+play.Dy()/2-r.s(18))
+		r.transportButton(play, "pause", true)
 	}
-	r.markNext(next.Min.X+next.Dx()/2-r.s(27), next.Min.Y+next.Dy()/2-r.s(18))
+	r.transportButton(next, "skip-next", false)
 
-	cx, cy, cr := closeX.Min.X+closeX.Dx()/2, closeX.Min.Y+closeX.Dy()/2, closeX.Dx()/2
-	r.disc(cx, cy, cr, color.NRGBA{R: 16, G: 12, B: 10, A: 230})
-	k := r.s(6)
-	r.stroke(cx-k, cy-k, cx+k, cy+k, r.s(3), cream)
-	r.stroke(cx-k, cy+k, cx+k, cy-k, r.s(3), cream)
+	// The cross is the icon font's too, so the strip's small way out is drawn the way every other
+	// control on the screen is.
+	closeCol := r.buttonFace(closeX, float64(closeX.Dx())/2, btnSecondary)
+	r.iconIn(closeX, "close", closeIcon, closeCol)
 }
 
 // joinDot joins two parts of a line with a dot, leaving out an empty one.
@@ -159,37 +153,4 @@ func (r *renderer) clipTo(face font.Face, s string, w int) string {
 		return s
 	}
 	return clipRunes(s, 1, func(line string) bool { return r.width(face, line) <= w })
-}
-
-// star fills a five-pointed star centered at cx, cy with outer radius rad.
-func (r *renderer) star(cx, cy, rad int, c color.Color) {
-	var pts [10][2]float64
-	for i := range pts {
-		a := -math.Pi/2 + float64(i)*math.Pi/5
-		rr := float64(rad)
-		if i%2 == 1 {
-			rr *= 0.45
-		}
-		pts[i] = [2]float64{float64(cx) + rr*math.Cos(a), float64(cy) + rr*math.Sin(a)}
-	}
-	src := image.NewUniform(c)
-	for y := cy - rad; y <= cy+rad; y++ {
-		for x := cx - rad; x <= cx+rad; x++ {
-			if inPolygon(float64(x)+0.5, float64(y)+0.5, pts[:]) {
-				draw.Draw(r.dst, image.Rect(x, y, x+1, y+1), src, image.Point{}, draw.Over)
-			}
-		}
-	}
-}
-
-// inPolygon is the even-odd test.
-func inPolygon(x, y float64, pts [][2]float64) bool {
-	in := false
-	for i, j := 0, len(pts)-1; i < len(pts); j, i = i, i+1 {
-		xi, yi, xj, yj := pts[i][0], pts[i][1], pts[j][0], pts[j][1]
-		if (yi > y) != (yj > y) && x < (xj-xi)*(y-yi)/(yj-yi)+xi {
-			in = !in
-		}
-	}
-	return in
 }
