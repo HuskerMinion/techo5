@@ -272,7 +272,11 @@ func New() *Player {
 		slog.Info("this board plays without the driver tuning for now", "board", layout.Board)
 		return p
 	}
-	t, err := asp.Load(asp.VendorDir)
+	load := asp.Load
+	if tuningSet != nil {
+		load = func(dir string) (*asp.Tuning, error) { return asp.LoadSet(dir, *tuningSet) }
+	}
+	t, err := load(asp.VendorDir)
 	if err != nil {
 		slog.Error("the driver tuning is not available, playing untuned", "err", err)
 		return p
@@ -904,7 +908,7 @@ func (p *Player) fill(buf []byte) {
 	// works on full-scale music at every volume, which is what firstCurves is for.
 	p.chain.Process(p.mono)
 	for i, j := 0, 0; i < period*Channels; i, j = i+Channels, j+1 {
-		s := int16(p.mono[j] * full * post)
+		s := clamp16(p.mono[j] * full * post)
 		binary.LittleEndian.PutUint16(buf[i*2:], uint16(s))
 		binary.LittleEndian.PutUint16(buf[(i+1)*2:], uint16(s))
 	}

@@ -63,6 +63,12 @@ echod (dependency)
   github.com/hajimehoshi/go-mp3 — Apache License 2.0
   MP3 decoding for announcements Home Assistant serves unconverted.
 
+echod (findings)
+  EchoMuse, https://github.com/wilbowes/EchoMuse — MIT License, Copyright (c) 2026 Wil Bowes
+  The Echo 2nd gen's parametric EQ (echod/internal/lib/asp/peq.go) uses the vendor's own filter
+  designs as EchoMuse PR #687 read them out of the vendor's library: Zölzer's shelf and peak, the
+  shelf taking no Q and root two written as 1.4142. Written here from those findings, not copied.
+
 Icon font (embedded in the daemon)
   Material Design Icons webfont 7.4.47, echod/internal/lib/mdi/materialdesignicons.ttf — Apache License 2.0
   Pictogrammers, https://pictogrammers.com/library/mdi/. The icons Home Assistant uses, for dashboards

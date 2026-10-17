@@ -90,7 +90,7 @@ func vendorTuning(t *testing.T) (*asp.Tuning, [VolumeSteps + 1]float64) {
 	if dir == "" {
 		t.Skip("set ECHOLOCAL_VENDOR_DIR to a copy of /vendor/etc/audio-algorithms")
 	}
-	tun, err := asp.Load(dir)
+	tun, err := asp.VendorSet(dir, os.Getenv("ECHOLOCAL_VENDOR_SET"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -152,11 +152,25 @@ func leveledMusic(t *testing.T) [][]float32 {
 
 // evenTop is whether a set's steps above 16 rise evenly to the top rather than follow its vendor curve,
 // whose repeated values there leave steps no louder than the one below: the Dot's and the Spot's.
-func evenTop(name string) bool { return name == "dot" || name == "spot" }
+func evenTop(name string) bool { return name == "dot" || name == "spot" || name == "radar" }
+
+// untunedLevel is what src plays at, the second half's RMS in dB, through no tuning at all at db: the
+// loudness a board that played untuned (untunedCurves) is held to.
+func untunedLevel(src []float32, db float64) float64 {
+	g := math.Pow(10, db/20)
+	var sum float64
+	tail := src[len(src)/2:]
+	for _, v := range tail {
+		v := math.Max(-1, math.Min(1, float64(v)*g))
+		sum += v * v
+	}
+	return 10 * math.Log10(sum/float64(len(tail)))
+}
 
 // With the real tuning and real music, every step in front of it is about as loud as the same step was
 // behind it, so nobody's dial changes, and every step is louder than the one below. The Dot's and the
 // Spot's steps above 16 rise evenly to the same top instead (paths_dot.go), so they are held to that.
+// The Echo 2nd gen played untuned before its tuning was read, so its steps are held to that instead.
 // Needs a copy of the unit's tuning and some music:
 //
 //	ECHOLOCAL_VENDOR_DIR=/tmp/coefs ECHOLOCAL_MUSIC_DIR=/tmp/music go test ./internal/hardware/speaker/ -run VolumeInFront -v
@@ -167,6 +181,9 @@ func TestVolumeInFrontKeepsTheLoudness(t *testing.T) {
 		var sum float64
 		for _, s := range songs {
 			r, _ := levels(t, tun, s, step, 1, gainForStep(OutputSpeaker, step)*untunedTrim)
+			if c, ok := untunedCurves[tun.Name()]; ok {
+				r = untunedLevel(s, c[step])
+			}
 			sum += r
 		}
 		return sum / float64(len(songs))

@@ -22,6 +22,7 @@ const Rate = 48000
 
 // The filter lengths the tunings use. A file of any other length is a tuning we do not know.
 const (
+	tapsRadar = 2048 // Echo 2nd gen
 	tapsLong  = 1024 // Dot and Show
 	tapsShort = 512  // Spot
 )
@@ -38,6 +39,12 @@ type Set struct {
 
 	// Taps is how long each filter is, which is not the same on every device.
 	Taps int
+
+	// PEQ is the parametric EQ's file, where the chain has one between the FIR and the compressor,
+	// and TrimDB the fixed gain after the compressor's limiter ("OutputTrim"). Only the Echo 2nd gen
+	// has either.
+	PEQ    string
+	TrimDB float64
 }
 
 // Bucket is one EQ file and the fraction of full volume it reaches up to.
@@ -103,6 +110,32 @@ var (
 		MBCL: "MBCL_2W_Audio.cfg",
 		Taps: tapsShort,
 	}
+
+	// Radar is the Echo 2nd gen, whose chain has two stages none of the others do. Its AFE.cfg's
+	// Playback path, read off a unit 2026-10-16, is the volume, UserEQ, the FIR, a parametric EQ,
+	// MBCL and a fixed trim:
+	//
+	//	"External Coefficients" : [ "EQ_50.cfg","EQ_60.cfg","EQ_70.cfg", "EQ_80.cfg","EQ_100.cfg"],
+	//	"Volume Boundary"       : [50,60,70,80,100 ]
+	//	"Parametric EQ":  { "External Config" : "ParametricEQ.cfg" },
+	//	"MBCL":           { "External Config" : [ "MBCL.cfg" ] },
+	//	"OutputTrim":     { "GaindB" : 3.0 }
+	//
+	// The five are loudness compensation: at 50 Hz the quietest lifts 15 dB over 1 kHz and the loudest
+	// 5 dB. The directory also holds an EQ_30.cfg and an EQ_40.cfg that nothing references, and the
+	// EQ_40 makes SetFor take it for a Show 5, so this set is never found by its files: the board
+	// asks for it by name (LoadSet).
+	Radar = Set{
+		Name: "radar",
+		EQ: []Bucket{
+			{0.5, "EQ_50.cfg"}, {0.6, "EQ_60.cfg"}, {0.7, "EQ_70.cfg"},
+			{0.8, "EQ_80.cfg"}, {1.0, "EQ_100.cfg"},
+		},
+		MBCL:   "MBCL.cfg",
+		Taps:   tapsRadar,
+		PEQ:    "ParametricEQ.cfg",
+		TrimDB: 3,
+	}
 )
 
 // SetFor is the tuning a directory holds, told apart by a file only one of them has, and where no
@@ -145,6 +178,7 @@ func SetFor(dir string) (Set, bool) {
 type Tuning struct {
 	set     Set
 	filters [][]float32 // one filter per bucket, in Set.EQ order
+	peq     []peqFilter
 	mbcl    mbcl
 }
 
@@ -158,7 +192,22 @@ func Load(dir string) (*Tuning, error) {
 	return LoadSet(dir, set)
 }
 
-// LoadSet reads one named set, for a test that has files of its own.
+// VendorSet is Load, or the set called name where one is given: what the vendor tests and the tools
+// that work from a copy of a unit's files use, since an Echo 2nd gen's do not say which they are.
+func VendorSet(dir, name string) (*Tuning, error) {
+	if name == "" {
+		return Load(dir)
+	}
+	for _, s := range []Set{Dot, Show, Crown, Spot, Radar} {
+		if s.Name == name {
+			return LoadSet(dir, s)
+		}
+	}
+	return nil, fmt.Errorf("asp: no tuning called %q", name)
+}
+
+// LoadSet reads one named set, for a test that has files of its own, or for a board whose files do
+// not say which they are.
 func LoadSet(dir string, set Set) (*Tuning, error) {
 	t := &Tuning{set: set}
 	for _, e := range set.EQ {
@@ -169,6 +218,14 @@ func LoadSet(dir string, set Set) (*Tuning, error) {
 		t.filters = append(t.filters, h)
 	}
 
+	if set.PEQ != "" {
+		p, err := readPEQ(filepath.Join(dir, set.PEQ))
+		if err != nil {
+			return nil, err
+		}
+		t.peq = p
+	}
+
 	m, err := readMBCL(filepath.Join(dir, set.MBCL))
 	if err != nil {
 		return nil, err
@@ -177,7 +234,7 @@ func LoadSet(dir string, set Set) (*Tuning, error) {
 	return t, nil
 }
 
-// Name is which set this is: "dot", "show", "crown" or "spot".
+// Name is which set this is: "dot", "show", "crown", "spot" or "radar".
 func (t *Tuning) Name() string { return t.set.Name }
 
 // Bucket is which filter a fraction of full volume uses: the first one the volume reaches up to, and
@@ -197,7 +254,9 @@ type Chain struct {
 	tuning *Tuning
 	tone   *tone
 	fir    *fir
+	peq    []*biquad
 	comp   *mbclState
+	trim   float32
 }
 
 // Chain builds the processing state for a stream of the given block size. Every call to Process must
@@ -214,7 +273,14 @@ func (t *Tuning) Chain(block int) (*Chain, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &Chain{tuning: t, tone: newTone(Tone{}, Rate), fir: newFIR(t.filters, block), comp: comp}, nil
+	return &Chain{
+		tuning: t,
+		tone:   newTone(Tone{}, Rate),
+		fir:    newFIR(t.filters, block),
+		peq:    newPEQ(t.peq, Rate),
+		comp:   comp,
+		trim:   float32(dbToLinear(t.set.TrimDB)),
+	}, nil
 }
 
 // Volume tells the chain what fraction of full volume is playing, so it uses the filter the vendor
@@ -231,7 +297,21 @@ func (c *Chain) SetTone(t Tone) { c.tone = newTone(t, Rate) }
 func (c *Chain) Process(x []float32) {
 	c.tone.process(x)
 	c.fir.process(x)
+	for _, f := range c.peq {
+		for i, v := range x {
+			x[i] = f.step(v)
+		}
+	}
 	c.comp.process(x)
+
+	// The trim comes after the limiter, so the Echo 2nd gen's 3 dB on a -3 dB ceiling reaches full
+	// scale, and a lookahead limiter's overshoot would then pass it. Full scale is the ceiling: past
+	// it the sample is the speaker's to clip (clamp16), and this keeps it from having to.
+	if c.trim != 1 {
+		for i, v := range x {
+			x[i] = max(-1, min(1, v*c.trim))
+		}
+	}
 }
 
 // Reset drops the filter's history and the compressor's envelopes, so the next block is processed as
@@ -240,5 +320,8 @@ func (c *Chain) Process(x []float32) {
 func (c *Chain) Reset() {
 	c.tone.reset()
 	c.fir.reset()
+	for _, f := range c.peq {
+		f.z1, f.z2 = 0, 0
+	}
 	c.comp.reset()
 }

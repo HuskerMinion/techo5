@@ -185,6 +185,9 @@ func testMBCL() mbcl {
 //
 //	adb pull /vendor/etc/audio-algorithms /tmp/coefs
 //	ECHOLOCAL_VENDOR_DIR=/tmp/coefs go test ./internal/lib/asp/ -run Vendor -v
+//
+// An Echo 2nd gen's files do not say which they are (Radar), so its copy also needs
+// ECHOLOCAL_VENDOR_SET=radar.
 func vendorTuning(t *testing.T) *Tuning {
 	t.Helper()
 	dir := os.Getenv("ECHOLOCAL_VENDOR_DIR")
@@ -192,7 +195,7 @@ func vendorTuning(t *testing.T) *Tuning {
 		t.Skip("set ECHOLOCAL_VENDOR_DIR to a copy of /vendor/etc/audio-algorithms")
 	}
 
-	v, err := Load(dir)
+	v, err := VendorSet(dir, os.Getenv("ECHOLOCAL_VENDOR_SET"))
 	if err != nil {
 		t.Fatalf("Load: %v", err)
 	}
@@ -226,6 +229,16 @@ var shapes = map[string][]struct {
 		{125, 200, 0, 6},
 		{200, 320, 1, 7},
 		{2000, 3200, -11, -3},
+		{500, 1000, -1, 1},
+	},
+	// The Echo 2nd gen's woofer needs its lift lower down, under 125 Hz, and flat through the low
+	// mids where the Dot's peaks; a little presence rather than the Dot's cut. Measured off a unit,
+	// 2026-10-16. The quieter filters lift the same region more, up to 15 dB at EQ_50.
+	"radar": {
+		{40, 80, 3, 8},
+		{80, 125, 3, 8},
+		{200, 320, -2, 1},
+		{2000, 3200, 0, 5},
 		{500, 1000, -1, 1},
 	},
 }
@@ -288,9 +301,10 @@ func TestVendorMBCLIsTheOneWeBuiltFor(t *testing.T) {
 		ratio       float64
 		threshAbove float64
 	}{
-		"dot":  {115, 10, -40},
-		"show": {70, 4, -20},
-		"spot": {200, 4, -20},
+		"dot":   {115, 10, -40},
+		"show":  {70, 4, -20},
+		"spot":  {200, 4, -20},
+		"radar": {70, 20, -25},
 	}
 	if p, ok := protection[v.set.Name]; ok {
 		if m.Crossovers[0] != p.crossover {

@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/HuskerMinion/techo5/echod/internal/config"
+	"github.com/HuskerMinion/techo5/echod/internal/lib/asp"
 )
 
 // Output is one of the device's audio outputs: the speaker, or the 3.5 mm jack.
@@ -186,6 +187,9 @@ const OutputBoost = 1.0
 // length of the other devices', and a compressor chosen by power mode — lib/asp knows it as asp.Spot.
 // A unit whose files are missing says so and plays untuned.
 const DriverTuning = true
+
+// tuningSet is the tuning to load by name, where the files cannot tell it: nil, the Spot's can.
+var tuningSet *asp.Set
 
 // firstCurves puts the volume in front of the tuning, as on the Show (paths_cronos.go, which says
 // why and how these were worked out). The Spot's AFE.cfg has no volume stage of its own, so Android

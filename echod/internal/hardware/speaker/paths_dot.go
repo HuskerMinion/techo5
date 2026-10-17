@@ -10,6 +10,7 @@ import (
 
 	"github.com/HuskerMinion/techo5/echod/internal/config"
 	"github.com/HuskerMinion/techo5/echod/internal/layout"
+	"github.com/HuskerMinion/techo5/echod/internal/lib/asp"
 )
 
 // Output is one of the device's audio outputs.
@@ -199,9 +200,13 @@ const mayHaveTAS5805M = false
 const OutputBoost = 1.0
 
 // DriverTuning applies the vendor driver's volume-dependent EQ and limiter (lib/asp), read from the
-// vendor partition: the files it reads are the Dot's. The Echo 2nd gen's are another kind (longer
-// filters, one per volume step), which lib/asp does not read yet, so it plays untuned.
-var DriverTuning = !layout.Radar()
+// vendor partition: the Dot's six filters and compressor, or the Echo 2nd gen's five longer ones with
+// its parametric EQ and trim (asp.Radar), which the boot script keeps in the store.
+const DriverTuning = true
+
+// tuningSet is the tuning to load by name, where the files cannot tell it: the Echo 2nd gen's
+// directory holds an unreferenced EQ_40.cfg that asp.SetFor takes for a Show 5's.
+var tuningSet = onRadar(&asp.Radar, nil)
 
 // firstCurves puts the volume in front of the tuning, as on the Show (paths_cronos.go, which says
 // why and how these were worked out). The Dot's AFE.cfg has no volume stage of its own, so Android
@@ -212,9 +217,18 @@ var DriverTuning = !layout.Radar()
 // evenly instead, to the same top. The gain itself drops at 22, 25 and 28, where the vendor's EQ
 // moves to a louder filter: the loudness still rises there.
 //
-// The Echo 2nd gen has no entry: a curve in front of the tuning only applies where a tuning runs, and
-// it plays untuned (DriverTuning), on radarCurves.
+// The Echo 2nd gen's played untuned until its tuning was read, on radarCurves, so its steps are as loud
+// as radarCurves' were with no tuning at all, rising evenly from 16 to the same top as the Dot's do.
+// Worked out from a unit's own files on three stations' worth of music (TestVolumeInFrontKeepsTheLoudness,
+// against untunedCurves). Its EQ changes filter at steps 16 and 25, where the gain jumps. Full volume
+// is 8.7 dB short of the vendor's own: the dial tops out where it did before, and how much louder it
+// should go is for listening to decide.
 var firstCurves = map[string][VolumeSteps + 1]float64{
+	"radar": {
+		-90, -57.4, -54.4, -50.4, -49.4, -47.4, -45.4, -43.4, -41.4, -40.4,
+		-38.4, -36.8, -35.1, -32.2, -30.4, -28.4, -24.6, -23.7, -22.8, -21.2,
+		-20.3, -19.4, -18.3, -17.3, -16.3, -13.7, -12.8, -11.8, -10.8, -9.8, -8.7,
+	},
 	"dot": {
 		-90, -42.1, -38.9, -34.7, -33.6, -31.6, -29.5, -27.5, -25.5, -24.4,
 		-22.3, -21.3, -20.2, -18, -16.9, -15.8, -14.5, -14, -13.4, -12.8,

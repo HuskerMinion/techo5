@@ -89,7 +89,8 @@ var radarHeadphoneOff = []kctl{
 
 // radarCurves start from the Dot's: the speaker 6 dB quieter up to step 10, easing back to the Dot's
 // curve by step 20, since testers found the low steps too loud. A first guess, to be measured; the
-// jack is the Dot's as it is.
+// jack is the Dot's as it is. With the tuning on the speaker follows firstCurves["radar"] instead,
+// which keeps these loudnesses; these are what plays with the tuning off or missing.
 var radarCurves = map[Output][VolumeSteps + 1]float64{
 	OutputSpeaker: {
 		-90, -39, -36, -32, -31, -29, -27, -25, -23, -22,

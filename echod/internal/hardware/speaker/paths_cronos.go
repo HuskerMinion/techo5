@@ -10,6 +10,7 @@ import (
 
 	"github.com/HuskerMinion/techo5/echod/internal/config"
 	"github.com/HuskerMinion/techo5/echod/internal/layout"
+	"github.com/HuskerMinion/techo5/echod/internal/lib/asp"
 )
 
 // Output is one of the device's audio outputs. The 1st gen Show 5 and the Show 8 have a headphone
@@ -362,6 +363,9 @@ const OutputBoost = 1.0
 // compressor in their AFE.cfg ("Cronos" and "Checkers"), which lib/asp knows as asp.Show; a unit
 // whose files are missing or are a set we do not know says so and plays untuned.
 const DriverTuning = true
+
+// tuningSet is the tuning to load by name, where the files cannot tell it: nil, the Shows' can.
+var tuningSet *asp.Set
 
 // HasJack is whether the device has a headphone jack, and so the Audio output choice: the 1st gen
 // Show 5 and the Show 8 do; the 2nd gen Show 5 has none. The kernel's jack switch has to be there as
