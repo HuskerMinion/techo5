@@ -738,3 +738,54 @@ func TestALateAnswerIsNotALaterPausesAnswer(t *testing.T) {
 	snd.answer()
 	waitUntil(t, "the second pause to be taken", func() bool { return !taken().IsZero() })
 }
+
+// A phone whose stream starts while something else plays is heard as music only after sendingAgain of
+// audible audio without a break: half a minute of silence from an app that opened the phone's audio is
+// not, nor is a sound of a second and the silence after it.
+func TestMusicStartsOnlyAfterSustainedAudio(t *testing.T) {
+	t0 := time.Unix(1000, 0)
+	at := func(ms int) time.Time { return t0.Add(time.Duration(ms) * time.Millisecond) }
+	read := func(level int16) []byte {
+		pcm := make([]byte, 0, 2*64)
+		for range 64 {
+			pcm = append(pcm, byte(uint16(level)), byte(uint16(level)>>8))
+		}
+		return pcm
+	}
+	var s MusicStarts
+
+	// An app that opened the phone's audio and plays nothing.
+	for ms := 0; ms <= 30000; ms += 20 {
+		if s.Heard(read(0), at(ms)) {
+			t.Fatalf("silence was taken as music at %d ms", ms)
+		}
+	}
+	// A second of sound, then silence.
+	for ms := 30020; ms <= 34000; ms += 20 {
+		level := int16(0)
+		if ms <= 31020 {
+			level = -4000
+		}
+		if s.Heard(read(level), at(ms)) {
+			t.Fatalf("a sound of a second was taken as music at %d ms", ms)
+		}
+	}
+	// Silence just under the floor is still silence.
+	for ms := 34020; ms <= 36000; ms += 20 {
+		if s.Heard(read(audibleFloor), at(ms)) {
+			t.Fatalf("near silence was taken as music at %d ms", ms)
+		}
+	}
+	// Music: past sendingAgain from its own start.
+	start := 36020
+	played := -1
+	for ms := start; ms <= start+2000; ms += 20 {
+		if s.Heard(read(3000), at(ms)) {
+			played = ms
+			break
+		}
+	}
+	if played < start+int(sendingAgain/time.Millisecond) {
+		t.Fatalf("taken as music at %d ms, want %v after %d", played, sendingAgain, start)
+	}
+}

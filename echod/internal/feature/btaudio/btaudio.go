@@ -26,7 +26,9 @@ package btaudio
 
 import (
 	"context"
+	"errors"
 	"log/slog"
+	"os"
 	"slices"
 	"sort"
 	"strings"
@@ -168,6 +170,9 @@ type Feature struct {
 	// openFailed is how many looks in a row each phone's stream, by item, failed to open as it started
 	// (receive): one failing is not paused away while it is still being tried (stillOpening).
 	openFailed map[string]int
+	// listening is the phones, by item, whose stream started while something else was playing and is
+	// read until they are heard playing music (listen); each stops its listener.
+	listening map[string]*listener
 	// kept ends a phone's track left paused too long (keep), one timer for each phone by item.
 	kept map[string]*time.Timer
 	// levels is each received stream's level as last seen or set, by PCM path: a phone's volume slider,
@@ -250,6 +255,7 @@ func build() *Feature {
 		displaced:  map[string]bool{},
 		pausedAway: map[string]bool{},
 		openFailed: map[string]int{},
+		listening:  map[string]*listener{},
 		kept:       map[string]*time.Timer{},
 		levels:     map[string]int{},
 		ours:       map[string]time.Time{},
@@ -362,7 +368,12 @@ func (f *Feature) Close() error {
 	a, al := f.adapter, f.alsa
 	f.adapter, f.alsa = nil, nil
 	f.state.Available = false
+	listening := f.listening
+	f.listening = map[string]*listener{}
 	f.mu.Unlock()
+	for _, l := range listening {
+		l.stop()
+	}
 	f.detach()
 	if al != nil {
 		al.Close()
@@ -535,6 +546,7 @@ func (f *Feature) refresh() {
 			f.mu.Lock()
 			delete(f.openFailed, r.item)
 			f.mu.Unlock()
+			f.stopListening(r.item)
 			continue
 		}
 		sending = append(sending, r)
@@ -542,8 +554,14 @@ func (f *Feature) refresh() {
 			continue
 		}
 		holder := media.Get().Receiving()
-		taken[string(p.Path)] = true
-		if !f.receive(al, p, d) {
+		// Over something else playing, the phone takes the speaker once it is heard playing music, not
+		// for silence or a click (listen).
+		start := f.listen
+		if !f.othersSounding() {
+			start = f.receive
+			taken[string(p.Path)] = true
+		}
+		if !start(al, p, d) {
 			// Tried again at the next look rather than never: the stream a remote paused and resumed
 			// quickly can still be held by the track that was playing it until that track lets go.
 			f.mu.Lock()
@@ -575,6 +593,10 @@ func (f *Feature) refresh() {
 		clear(f.displaced)
 	}
 	back := takeBack(f.displaced, sending, speakerFree(playing, paused, external))
+	// A phone being listened to is not playing to nobody: it is not yet known to be playing at all.
+	for item := range f.listening {
+		opening[item] = true
+	}
 	f.mu.Unlock()
 	if back != nil {
 		slog.Info("bluetooth: a device still sending takes the speaker back", "device", displayName(back.dev))
@@ -738,11 +760,117 @@ func (f *Feature) receive(al *bluealsa.Client, p bluealsa.PCM, d bluez.Device) b
 		slog.Warn("bluetooth: opening a received stream", "device", displayName(d), "err", err)
 		return false
 	}
+	f.play(al, p, d, s)
+	return true
+}
+
+// play plays s, opened on what the remote d sends, through the speaker as a media track.
+func (f *Feature) play(al *bluealsa.Client, p bluealsa.PCM, d bluez.Device, s *bluealsa.Stream) {
+	item := media.BluetoothPrefix + displayName(d)
 	slog.Info("bluetooth: playing what a device sends", "device", displayName(d), "codec", p.Codec, "rate", p.Rate, "channels", p.Channels)
 	media.ReceiverControl(item, f.control(d.Path, displayName(d)))
 	media.Get().PlayReceived(item, s, p.Rate, p.Channels)
 	f.oneVolume(al, p)
+}
+
+// othersSounding is whether something other than a phone is playing here: Music Assistant or another
+// remote, or a track of the device's own. A phone that starts sending then has to be heard playing
+// music before it takes the speaker (listen). A phone playing here is left to the phones' own rules
+// (displaced, takeBack), and with nothing playing a phone takes the speaker at once, as before.
+func (f *Feature) othersSounding() bool {
+	m := media.Get()
+	playing, _ := m.Playing()
+	return othersSounding(m.Receiving(), playing, m.ExternalPlaying())
+}
+
+func othersSounding(receiving string, playing, external bool) bool {
+	return !strings.HasPrefix(receiving, media.BluetoothPrefix) && (playing || external)
+}
+
+// listener reads a phone's stream for listen until it stops.
+type listener struct{ stop context.CancelFunc }
+
+// listenQuiet bounds each read of a phone being listened to, so a phone sending nothing still sees
+// whatever was playing finish.
+const listenQuiet = time.Second
+
+// listen opens the stream of a phone that started sending while something else is playing here, and
+// reads it without playing it until the phone is heard playing music (media.MusicStarts) or nothing
+// else is playing any more: then the phone takes the speaker, as it did at once before. A phone
+// starts its stream for any app that opens its audio, playing or not: a browser on a Pixel opens it
+// each time it comes back to the screen and sends nothing but silence, for four seconds or for thirty,
+// and each time Music Assistant was stopped for it. Read, what the phone sends does not pile up in
+// bluez-alsa meanwhile, and a phone that does play loses only the first moments of it. It reports
+// whether the stream opened, or was already being listened to.
+func (f *Feature) listen(al *bluealsa.Client, p bluealsa.PCM, d bluez.Device) bool {
+	item := media.BluetoothPrefix + displayName(d)
+	f.mu.Lock()
+	_, already := f.listening[item]
+	f.mu.Unlock()
+	if already {
+		return true
+	}
+	s, err := al.OpenRead(p)
+	if err != nil {
+		slog.Warn("bluetooth: opening a received stream", "device", displayName(d), "err", err)
+		return false
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	closing := context.AfterFunc(ctx, func() { _ = s.Close() })
+	l := &listener{stop: cancel}
+	f.mu.Lock()
+	f.listening[item] = l
+	f.mu.Unlock()
+	slog.Info("bluetooth: a device started sending while something else plays; listening for music", "device", displayName(d))
+
+	safe.Go("bluetooth listen", func() {
+		defer func() {
+			f.mu.Lock()
+			if f.listening[item] == l {
+				delete(f.listening, item)
+			}
+			f.mu.Unlock()
+			cancel() // closes the stream unless it was handed on
+		}()
+		buf := make([]byte, 4096)
+		var music media.MusicStarts
+		for {
+			_ = s.SetReadDeadline(time.Now().Add(listenQuiet))
+			n, err := s.Read(buf)
+			if ctx.Err() != nil {
+				return
+			}
+			heard := n > 0 && music.Heard(buf[:n], time.Now())
+			if heard || !f.othersSounding() {
+				// Stopped in the meantime, the stream is closed or closing: it is not handed on.
+				if !closing() {
+					return
+				}
+				if heard {
+					slog.Info("bluetooth: the device sending is playing music; it takes the speaker", "device", displayName(d))
+				}
+				f.play(al, p, d, s)
+				f.wake()
+				return
+			}
+			if err != nil && !errors.Is(err, os.ErrDeadlineExceeded) {
+				slog.Info("bluetooth: a device listened to stopped sending", "device", displayName(d), "err", err)
+				return
+			}
+		}
+	})
 	return true
+}
+
+// stopListening stops listening to item's stream, if it is (listen).
+func (f *Feature) stopListening(item string) {
+	f.mu.Lock()
+	l := f.listening[item]
+	delete(f.listening, item)
+	f.mu.Unlock()
+	if l != nil {
+		l.stop()
+	}
 }
 
 // A phone playing here has one volume, the device's: its slider is the device's volume, as on any
