@@ -106,9 +106,9 @@ func (r *renderer) lyricLines(l home.Lyric, rd home.Radio) {
 
 // transportRow is the foot of the page: the rule, back, play or pause, forward, Done and the star.
 func (r *renderer) transportRow(s scene) {
-	// A rule, then the three buttons: back, play or pause, and forward. What they do belongs to whoever
-	// is playing, so a stream Music Assistant is carrying is paused and skipped by the server.
-	draw.Draw(r.dst, image.Rect(r.margin, r.h-r.s(84), r.w-r.margin, r.h-r.s(81)), image.NewUniform(ember), image.Point{}, draw.Src)
+	// The three buttons: back, play or pause, and forward. What they do belongs to whoever is playing, so
+	// a stream Music Assistant is carrying is paused and skipped by the server. A rule used to run across
+	// here as well; the buttons' own rim and shadow separate the footer now, and it read as clutter.
 	back, play, next := r.transportButtons()
 	r.transportButton(back, "skip-previous", false)
 	if s.paused {
