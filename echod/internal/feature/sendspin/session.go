@@ -3,6 +3,7 @@ package sendspin
 import (
 	"context"
 	"encoding/base64"
+	"errors"
 	"log/slog"
 	"math"
 	"sync/atomic"
@@ -178,7 +179,7 @@ func (s *session) run(ctx context.Context) error {
 	for {
 		select {
 		case <-ctx.Done():
-			s.client.SendGoodbye("user_request")
+			s.leave(ctx)
 			return nil
 
 		case <-s.client.Done():
@@ -788,6 +789,30 @@ func (s *session) finish() {
 	// that would have carried a command to it has gone with the connection, so a play or a pause belongs
 	// to this player's stream again.
 	media.Get().RemoteGone()
+}
+
+// errSwitchedOff ends the sessions when the Sendspin switch is turned off (Player.switchOff): the
+// one stop the device does not come back from.
+var errSwitchedOff = errors.New("sendspin: switched off")
+
+// goodbyeFor is the client/goodbye reason for a session ctx ended. Music Assistant dials a device
+// set up by address again only after "restart"; after "user_request", or a connection that just
+// drops while nothing plays, it stops dialing for good. A device that restarted, was updated or
+// rebooted was then left out of Music Assistant until Music Assistant itself was restarted. So the
+// daemon stopping is "restart", since the device comes back, and only the switch turned off is
+// "user_request".
+func goodbyeFor(ctx context.Context) string {
+	if errors.Is(context.Cause(ctx), errSwitchedOff) {
+		return "user_request"
+	}
+	return "restart"
+}
+
+// leave says goodbye for the reason ctx ended (goodbyeFor).
+func (s *session) leave(ctx context.Context) {
+	if err := s.client.SendGoodbye(goodbyeFor(ctx)); err != nil {
+		slog.Debug("sendspin: saying goodbye", "err", err)
+	}
 }
 
 func micros() int64 { return time.Now().UnixMicro() }

@@ -27,7 +27,7 @@ type Player struct {
 	out *out
 
 	mu      sync.Mutex
-	running context.CancelFunc
+	running context.CancelCauseFunc
 	wake    chan struct{}
 }
 
@@ -102,7 +102,7 @@ func (p *Player) Restore(c config.Config) { p.enabled.Set(c.Sendspin.Enabled) }
 
 // Run holds the port open for as long as the switch is on.
 func (p *Player) Run(ctx context.Context) error {
-	defer p.stop()
+	defer p.stop(nil)
 
 	for {
 		p.settle(ctx)
@@ -135,12 +135,11 @@ func (p *Player) settle(parent context.Context) {
 	case want && already, !want && !already:
 		return
 	case !want:
-		p.stop()
-		p.state.Set(stateOff)
+		p.switchOff()
 		return
 	}
 
-	ctx, cancel := context.WithCancel(parent)
+	ctx, cancel := context.WithCancelCause(parent)
 	p.mu.Lock()
 	p.running = cancel
 	p.mu.Unlock()
@@ -165,7 +164,15 @@ func (p *Player) settle(parent context.Context) {
 	slog.Info("sendspin waiting for a server", "name", name, "port", Port)
 }
 
-func (p *Player) stop() {
+// switchOff ends what is running for the switch turned off: its sessions say goodbye for good.
+func (p *Player) switchOff() {
+	p.stop(errSwitchedOff)
+	p.state.Set(stateOff)
+}
+
+// stop ends what is running, for cause: errSwitchedOff when the switch went off, so the sessions
+// say goodbye for good (goodbyeFor), nil when the daemon stops and the device comes back.
+func (p *Player) stop(cause error) {
 	p.mu.Lock()
 	cancel := p.running
 	p.running = nil
@@ -174,7 +181,7 @@ func (p *Player) stop() {
 	if cancel == nil {
 		return
 	}
-	cancel()
+	cancel(cause)
 
 	if err := firewall.Close(firewall.Sendspin); err != nil {
 		slog.Warn("closing the sendspin port failed", "port", Port, "err", err)
