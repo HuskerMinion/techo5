@@ -59,7 +59,8 @@ Android, with one Go daemon, `echod`, doing everything the device does:
   `esphome.techo5_phone` event per step. Off until `phone_account` signs the device in. See
   [phone.md](phone.md).
 - **Bluetooth audio** to earbuds or a speaker, and from a phone on the Show, the Spot and the Dot; a
-  Bluetooth proxy for Home Assistant (scanning through BlueZ on the Show), off by default.
+  Bluetooth proxy for Home Assistant, off by default: scanning, and on the Show and the Spot active
+  connections too (through BlueZ), so integrations that control a BLE device can reach it.
 - **Security**: nothing is open to the network by default except Home Assistant's encrypted link
   and the Sendspin player. SSH (keys only), the camera page and the screen page each have a switch
   on the settings screen (Privacy) and in Home Assistant, all off on a new device. SSH keys come only from Home
@@ -113,8 +114,9 @@ Android, with one Go daemon, `echod`, doing everything the device does:
 
 ## Known gaps
 
-- The Bluetooth proxy on the Show only scans: BlueZ owns the controller, so there is no beacon
-  and no active connections for Home Assistant. It stays off by default until it has run a while.
+- The Bluetooth proxy on the Show and the Spot has no beacon: BlueZ owns the controller. Its active
+  connections have no pairing or cache clearing, and the Dot's proxy only scans. It stays off by
+  default until it has run a while.
 - The camera and screen pages have no login: they are for a trusted network, and off until
   switched on. The rescue environment (boot image) still trusts the key built into that image.
 - Song metadata rests on two undocumented service endpoints; when one changes shape the page
