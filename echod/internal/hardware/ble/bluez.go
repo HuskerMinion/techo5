@@ -27,6 +27,7 @@ type bluezScanner struct {
 	stop     chan struct{}
 	running  bool
 	scanning bool
+	paused   int
 	reports  atomic.Uint64
 }
 
@@ -74,9 +75,11 @@ func (s *bluezScanner) Start(scan, active bool, advertisement []byte, found func
 	if err != nil {
 		return fmt.Errorf("ble: bluez: %w", err)
 	}
-	if err := a.DiscoverLE(true); err != nil {
-		a.Close()
-		return fmt.Errorf("ble: bluez discovery: %w", err)
+	if s.paused == 0 {
+		if err := a.DiscoverLE(true); err != nil {
+			a.Close()
+			return fmt.Errorf("ble: bluez discovery: %w", err)
+		}
 	}
 	s.adapter = a
 	s.cancel = a.Advertised.Listen(func(d bluez.Device) {
@@ -98,6 +101,12 @@ func (s *bluezScanner) Start(scan, active bool, advertisement []byte, found func
 			case <-stop:
 				return
 			case <-t.C:
+				s.mu.Lock()
+				paused := s.paused > 0
+				s.mu.Unlock()
+				if paused {
+					continue
+				}
 				if err := a.DiscoverLE(true); err != nil {
 					slog.Debug("ble: bluez discovery", "err", err)
 				}
@@ -105,6 +114,34 @@ func (s *bluezScanner) Start(scan, active bool, advertisement []byte, found func
 		}
 	}(a, s.stop)
 	return nil
+}
+
+// Pause stops discovery until the returned resume is called, while a connection is being made: the
+// Spot's controller aborts an LE connection it is asked for while it scans, and an ESP32 proxy pauses
+// its scanner for a connection the same way. Pauses nest.
+func (s *bluezScanner) Pause() (resume func()) {
+	s.mu.Lock()
+	s.paused++
+	if s.paused == 1 && s.adapter != nil {
+		if err := s.adapter.Discover(false); err != nil {
+			slog.Debug("ble: pausing bluez discovery", "err", err)
+		}
+	}
+	s.mu.Unlock()
+
+	var once sync.Once
+	return func() {
+		once.Do(func() {
+			s.mu.Lock()
+			defer s.mu.Unlock()
+			s.paused--
+			if s.paused == 0 && s.adapter != nil {
+				if err := s.adapter.DiscoverLE(true); err != nil {
+					slog.Debug("ble: resuming bluez discovery", "err", err)
+				}
+			}
+		})
+	}
 }
 
 func (s *bluezScanner) Stop() {

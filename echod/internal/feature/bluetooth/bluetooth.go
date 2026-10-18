@@ -38,10 +38,14 @@ const (
 	queued = 512
 )
 
-// bluetoothFeatures is what the device advertises when the proxy is on.
-const bluetoothFeatures = esphome.BluetoothPassiveScan |
-	esphome.BluetoothRawAdvertisements |
-	esphome.BluetoothStateAndMode
+// bluetoothFeatures is what the device advertises when the proxy is on, and connecting adds active
+// connections where there is a GATT client to lend.
+const (
+	bluetoothFeatures = esphome.BluetoothPassiveScan |
+		esphome.BluetoothRawAdvertisements |
+		esphome.BluetoothStateAndMode
+	connectingFeatures = esphome.BluetoothActiveConnections | esphome.BluetoothRemoteCaching
+)
 
 type beaconState struct {
 	advertisement []byte
@@ -59,6 +63,7 @@ type Proxy struct {
 	radio  ble.Scanner
 	enable *esphome.Switch
 	beacon beaconState
+	links  *connections
 
 	wanted  chan struct{}
 	reports chan ble.Advertisement
@@ -87,6 +92,7 @@ func build() *Proxy {
 		beacon:  beaconState{advertisement: beaconAdvertisement(minor), minor: minor},
 		wanted:  make(chan struct{}, 1),
 		reports: make(chan ble.Advertisement, queued),
+		links:   newConnections(openCentral),
 		enable: &esphome.Switch{
 			Base: esphome.Base{
 				ObjectID: "bluetooth_proxy",
@@ -97,12 +103,18 @@ func build() *Proxy {
 		},
 	}
 
+	if p, ok := b.radio.(interface{ Pause() func() }); ok {
+		b.links.pause = p.Pause
+	}
 	b.proxy.OnSubscribed = func(bool) { b.apply() }
 	b.proxy.OnMode = func(bool) { b.apply() }
 
 	b.enable.Set(config.Get().Bluetooth.Proxy)
 	b.enable.OnCommand = func(on bool) {
 		b.enable.Set(on)
+		if !on {
+			b.links.ReleaseAll()
+		}
 		if err := config.Set().Bluetooth().Proxy(on); err != nil {
 			slog.Error("saving the bluetooth proxy setting failed", "err", err)
 			return
@@ -131,8 +143,12 @@ func (b *Proxy) Name() string { return "bluetooth proxy" }
 
 func (b *Proxy) Entities() []esphome.Entity { return []esphome.Entity{b.enable} }
 
-// Handle answers the proxy's own protocol messages: subscribe, unsubscribe, set mode.
+// Handle answers the proxy's own protocol messages: subscribe, unsubscribe, set mode, and the
+// connections Home Assistant makes through it.
 func (b *Proxy) Handle(ctx context.Context, conn *esphome.Conn, msg proto.Message) error {
+	if handles(msg) {
+		return b.links.Handle(conn, msg)
+	}
 	return b.proxy.Handle(ctx, conn, msg)
 }
 
@@ -153,10 +169,13 @@ func (b *Proxy) Reports() uint64 { return b.radio.Reports() }
 // reads the two disagreeing as a fault, and asks the user to power cycle the device. There is no state
 // in that model for a proxy its owner switched off.
 func (b *Proxy) Features() esphome.BluetoothFeature {
-	if b.Enabled() {
-		return bluetoothFeatures
+	if !b.Enabled() {
+		return 0
 	}
-	return 0
+	if openCentral != nil {
+		return bluetoothFeatures | connectingFeatures
+	}
+	return bluetoothFeatures
 }
 
 // apply asks for the radio to be brought in line, without waiting for it.

@@ -327,6 +327,13 @@ ffmpeg and an ONVIF client library, not against a recorder on a device.
   the Dot is connected to a Bluetooth speaker. Tried on a Dot, a Show and a Spot.
   **Turn the Bluetooth proxy off** on a device a phone plays to: the proxy keeps scanning on the same
   radio, and the phone's sound stutters or drops while it does (#105).
+- **Bluetooth proxy connections (new).** On the Show and the Spot the **Bluetooth proxy** also lends
+  Home Assistant connections, up to three at a time, the way an ESP32 proxy does: an integration
+  that controls a BLE device (a humidifier, a lock, a light) can reach it through the device, not only
+  read what it advertises. Scanning pauses for the second or two a connection takes, which this
+  controller needs. Pairing (bonding) and clearing the cache from Home Assistant are not offered;
+  devices that authenticate in their own protocol work. Tried on a Spot with a Boneco H400 through
+  the Boneco integration.
 - **Bluetooth, the rest of it (new).** A phone playing to the device has one volume, the device's: its
   volume slider moves the device's volume, and the device's buttons and Home Assistant move the
   slider (night volume still caps a raise from the phone). Pause and play on the device, by voice or
