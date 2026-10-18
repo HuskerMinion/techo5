@@ -18,6 +18,7 @@ import (
 	"github.com/HuskerMinion/techo5/echod/internal/feature/light"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/media"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/mute"
+	"github.com/HuskerMinion/techo5/echod/internal/feature/phone"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/recording"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/ring"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/wakeword"
@@ -995,7 +996,9 @@ func (c *conversation) speak(url string) {
 	// The deadline is left as it was. Text arriving is not the pipeline delivering: it still owes the
 	// audio, and the limit it was given when the device stopped listening goes on running until some
 	// of that audio turns up.
-	errand := func(ctx context.Context, p *speaker.Player) error { return c.play(ctx, url, playing) }
+	errand := func(ctx context.Context, p *speaker.Player) error {
+		return c.play(ctx, url, playing, phone.RepliesIntoCall())
+	}
 	if url == "" {
 		s := newStream(c.speaker.Splices(), c.speaker.Underruns(), wakeword.Buffer(c.slot))
 		c.reply.stream = s
@@ -1004,12 +1007,15 @@ func (c *conversation) speak(url string) {
 		}
 	}
 
+	// A call up meanwhile sends the reply, not the room, until it and its echo are over (phone's uplink).
+	phone.Get().ReplyPlaying(true)
 	held := c.sound.ClaimSpeech("reply", errand)
 	// The slot is read here, on the loop: by the time the reply is over, the loop may be on another
 	// turn, and the slot is not the reply goroutine's to read.
 	slot := c.slot
 	safe.Go("reply", func() {
 		<-held.Done()
+		time.AfterFunc(speaker.HardwareTail, func() { phone.Get().ReplyPlaying(false) })
 
 		// A reply that was stopped - canceled, interrupted by a wake word, or cut off by another sound -
 		// fails its fetch with the context canceled, which says nothing about the url. Taken as a

@@ -51,6 +51,7 @@ func newHouse(t *testing.T) *house {
 	n.wakeWord = func(int) string { return "okay_nabu" }
 	n.score = func() float64 { return 20 }
 	n.hears = func() bool { return true }
+	n.onCall = func() bool { return false }
 	n.peers = func() []announce.Peer { return []announce.Peer{{Name: "Kitchen", Address: "192.0.2.1", Port: 8181}} }
 	n.fanout = func(_ []announce.Peer, mine *pending) { h.sent = append(h.sent, mine.claim); h.mine = mine }
 	n.now = func() time.Time { return h.now }
@@ -535,5 +536,18 @@ func TestASlowClaimIsAnsweredAndLetGo(t *testing.T) {
 			t.Errorf("signed %v: the connection was kept", header != "")
 		}
 		c.Close()
+	}
+}
+
+// A device on a call claims the wake word over any other, since the call is what somebody wants ended.
+func TestOnCallClaimsOverOthers(t *testing.T) {
+	h := newHouse(t)
+	h.n.onCall = func() bool { return true }
+	h.n.Woke(0)
+	if len(h.sent) != 1 {
+		t.Fatalf("claims sent: %d", len(h.sent))
+	}
+	if got := h.sent[0].Score; got != 20+onCallBonus {
+		t.Errorf("score %v, want %v", got, 20+onCallBonus)
 	}
 }

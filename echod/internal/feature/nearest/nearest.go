@@ -35,6 +35,7 @@ import (
 	"github.com/HuskerMinion/techo5/echod/internal/component"
 	"github.com/HuskerMinion/techo5/echod/internal/config"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/announce"
+	"github.com/HuskerMinion/techo5/echod/internal/feature/phone"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/voice"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/web"
 	"github.com/HuskerMinion/techo5/echod/internal/hardware/mic"
@@ -108,10 +109,13 @@ type Nearest struct {
 	wakeWord  func(slot int) string
 	score     func() float64
 	hears     func() bool
-	peers     func() []announce.Peer
-	fanout    func(peers []announce.Peer, mine *pending)
-	now       func() time.Time
-	after     func(d time.Duration, f func())
+	// onCall is whether a call is up here: a wake word heard during one is for this device, which is
+	// the one somebody wants to hang up, however much better another heard it.
+	onCall func() bool
+	peers  func() []announce.Peer
+	fanout func(peers []announce.Peer, mine *pending)
+	now    func() time.Time
+	after  func(d time.Duration, f func())
 
 	mu      sync.Mutex
 	enabled bool
@@ -158,10 +162,11 @@ func build() *Nearest {
 			}
 			return ""
 		},
-		score: func() float64 { return mic.Get().Standout(heard) },
-		hears: layout.HasMicrophone,
-		peers: announce.Peers,
-		now:   time.Now,
+		score:  func() float64 { return mic.Get().Standout(heard) },
+		hears:  layout.HasMicrophone,
+		onCall: func() bool { return phone.Get().Busy() },
+		peers:  announce.Peers,
+		now:    time.Now,
 		after: func(d time.Duration, f func()) {
 			time.AfterFunc(d, func() { safe.Go("nearest device decision", f) })
 		},
@@ -271,7 +276,7 @@ func (n *Nearest) Woke(slot int) {
 	window := c.Nearest.Window()
 	mine := &pending{
 		claim: claim{From: c.Device.Name, Turn: newTurn(), Word: n.wakeWord(slot),
-			Score: n.score() + float64(c.Nearest.Offset)},
+			Score: n.score() + float64(c.Nearest.Offset) + n.callBonus()},
 		at:     at,
 		window: window,
 	}
@@ -329,6 +334,16 @@ func (n *Nearest) decide(slot int, mine *pending) {
 			"waited", n.now().Sub(mine.at).Round(time.Millisecond))
 		n.woke(slot, mine.at)
 	}
+}
+
+// onCallBonus is added to a claim from a device on a call: more than any standout and offset reach.
+const onCallBonus = 1000
+
+func (n *Nearest) callBonus() float64 {
+	if n.onCall != nil && n.onCall() {
+		return onCallBonus
+	}
+	return 0
 }
 
 // bestSince is the best claim from another device since from, and whether it beats mine. Called with

@@ -145,7 +145,13 @@ func newDetect() *Detect {
 		// A call has the microphones and the speaker. The far end talking through the speaker is not
 		// someone in the room, and a turn would take the call's audio away mid-sentence. A talk through
 		// a camera (feature/talkback) is the same: whoever is at the door is being spoken to.
-		if phone.Get().Busy() || talkback.Get().Busy() {
+		//
+		// With Wake word during calls on, a wake word over a call ringing here or during one that is up
+		// opens a turn after all, so Home Assistant can be asked to answer or hang up; not one heard
+		// while the far end was talking (phone.WakeAllowed). The stop word still only ends a ring:
+		// stopping the sound would be stopping the call.
+		onCall := phone.Get().Busy()
+		if talkback.Get().Busy() || onCall && (slot == StopSlot || !phone.Get().WakeAllowed()) {
 			// A ring during a call is the one thing that still has to hear "stop". The call page
 			// takes every tap and Home Assistant cannot stop a timer, so without this a timer that
 			// finishes mid-call sounds for its full fifteen minutes with no way out at all.
@@ -158,8 +164,15 @@ func newDetect() *Detect {
 				ring.End()
 				return
 			}
+			if onCall && slot != StopSlot && config.Get().Home.CallWake && phone.Get().FarEndTalking() {
+				slog.Info("wake word during a call ignored, the far end was talking", "slot", slot+1)
+				return
+			}
 			slog.Debug("wake word ignored during a call or a talk through a camera", "slot", slot+1)
 			return
+		}
+		if onCall {
+			slog.Info("wake word during a call", "slot", slot+1)
 		}
 		if slot == StopSlot {
 			voice.Get().Interrupt()

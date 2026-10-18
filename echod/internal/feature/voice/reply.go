@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/HuskerMinion/techo5/echod/internal/feature/media"
+	"github.com/HuskerMinion/techo5/echod/internal/feature/phone"
 	"github.com/HuskerMinion/techo5/echod/internal/hardware/speaker"
 )
 
@@ -151,6 +152,10 @@ func (s *stream) flush(p *speaker.Player) {
 	}
 	if gain := media.SpeechGain(s.energy, s.samples); gain > 1 {
 		out = media.Scale(out, gain)
+	}
+	// A reply to a turn during a call goes to the far end too, with Assistant replies go into calls on.
+	if phone.RepliesIntoCall() {
+		phone.Get().Say(out)
 	}
 	p.PlayVoice(out)
 }

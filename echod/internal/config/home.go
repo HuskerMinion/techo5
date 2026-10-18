@@ -79,6 +79,18 @@ type Home struct {
 	// DoNotDisturb turns intercom calls away: the caller is told, and nothing rings here.
 	DoNotDisturb bool `json:"do_not_disturb,omitempty"`
 
+	// CallWake lets the wake word open a turn while a call is up, which is how a call is hung up by
+	// voice: Home Assistant hears "hang up" and calls phone_hangup. Off unless chosen.
+	CallWake bool `json:"call_wake,omitempty"`
+
+	// CallReplies sends the assistant's reply to a turn during a call into the call as well, so the
+	// far end hears it. Off, only the room does. An announcement goes into the call either way.
+	CallReplies bool `json:"call_replies,omitempty"`
+
+	// CallUnderlay keeps the far end playing, quieter, under the chime and the reply of a turn during
+	// a call. Off, they are not heard until the speaker is the call's again.
+	CallUnderlay bool `json:"call_underlay,omitempty"`
+
 	// RadarSource is where the rain map's radar comes from: RadarNWS (the U.S. National Weather
 	// Service's national composite, lower 48 only), RadarRainViewer (worldwide), or empty for
 	// automatic, which is the NWS when home is in the lower 48 and RainViewer anywhere else.
@@ -305,6 +317,18 @@ func (w HomeWriter) DropIn(v bool) error {
 
 func (w HomeWriter) RingSound(v string) error {
 	return w.st.Update(func(c *Config) { c.Home.RingSound = v })
+}
+
+func (w HomeWriter) CallWake(v bool) error {
+	return w.st.Update(func(c *Config) { c.Home.CallWake = v })
+}
+
+func (w HomeWriter) CallReplies(v bool) error {
+	return w.st.Update(func(c *Config) { c.Home.CallReplies = v })
+}
+
+func (w HomeWriter) CallUnderlay(v bool) error {
+	return w.st.Update(func(c *Config) { c.Home.CallUnderlay = v })
 }
 
 func (w HomeWriter) DoNotDisturb(v bool) error {

@@ -120,3 +120,9 @@ Each step lands on main with tests and gets a bench test before the next one sta
 
 - Moving announcing onto the same Noise handshake, so its house word stops crossing the network in
   plain text.
+- **Saying who is calling.** A Dot rings with no word of who it is; the Show and the Spot only show it.
+  The way in is Home Assistant: an automation on `esphome.techo5_phone` `ringing` that calls
+  `assist_satellite.announce` with the caller's name, for phone calls as well as intercom ones. The
+  device has to change first: a ring stands down for good once anything takes the speaker from it
+  (`ring` in feature/phone/call.go), so the announcement would leave the call ringing with no sound.
+  The ring has to come back once the announcement is over.

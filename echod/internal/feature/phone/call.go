@@ -33,7 +33,26 @@ const (
 	// network delivers in bursts and the speaker plays at its own pace; without a limit a call drifts
 	// seconds late and people talk over each other.
 	maxBehind = 300 * time.Millisecond
+
+	// farEndLoud is the mean square per sample, at int16 scale, over which a frame from the far end
+	// counts as somebody talking: about -45 dBFS, well under speech on a call and over a line's hiss.
+	farEndLoud = 3.2e-5 * 32768 * 32768
+
+	// farEndHold is how long after a loud frame arrives the far end still counts as talking. The frame
+	// plays up to maxBehind later, the room rings with it after that, and a wake word is reported a
+	// moment after it is said: a word the far end said ends inside this.
+	farEndHold = maxBehind + 500*time.Millisecond
 )
+
+// farEndAt is when the last loud frame came from the far end, as Unix nanoseconds; zero is never.
+var farEndAt atomic.Int64
+
+// farEndTalking reports whether the far end was loud in the last farEndHold: what comes out of the
+// speaker then could be the far end saying the wake word, not somebody in the room.
+func farEndTalking(now time.Time) bool {
+	at := farEndAt.Load()
+	return at != 0 && now.Sub(time.Unix(0, at)) < farEndHold
+}
 
 // talk carries a call's audio both ways until the call ends or ctx does: the microphones (after echo
 // cancellation) to the far end, and the far end to the speaker. say is spoken audio to send as well, at
@@ -117,16 +136,8 @@ func send(ctx context.Context, enc io.Writer, wide bool, say <-chan []int16, st 
 			if !ok {
 				return errors.New("microphones stopped")
 			}
-			frame := append([]int16(nil), f...)
-			// Something to say is mixed over the room rather than replacing it, so whoever answers a
-			// call placed for help hears both the message and the room.
-			if len(pending) > 0 {
-				n := min(len(pending), len(frame))
-				for i := 0; i < n; i++ {
-					frame[i] = clamp(float64(frame[i]) + float64(pending[i]))
-				}
-				pending = pending[n:]
-			}
+			var frame []int16
+			frame, pending = uplink(append([]int16(nil), f...), pending, repliesPlaying.Load() > 0)
 			if wide {
 				out = append(out, frame...)
 			} else {
@@ -146,6 +157,28 @@ func send(ctx context.Context, enc io.Writer, wide bool, say <-chan []int16, st 
 	}
 }
 
+// repliesPlaying counts turns' replies playing here (Phone.ReplyPlaying): a count, so the end of one
+// that lands after the next has begun does not let the room back in under it.
+var repliesPlaying atomic.Int32
+
+// uplink is one frame of the room as it goes up the call, with what there is to say. That is mixed over
+// the room rather than replacing it, so whoever answers a call placed for help hears both the message
+// and the room. Not while a turn's reply plays here (alone): the room is then mostly the reply again,
+// out of the speaker a moment later and not taken off by the echo canceller, which a turn stops from
+// learning; mixed, the far end hears it twice, as an echo, and faintly even with the reply not sent.
+// So the reply goes up alone, or silence if it is not being sent. It returns the frame and what is
+// still to say.
+func uplink(frame, pending []int16, alone bool) ([]int16, []int16) {
+	if alone {
+		clear(frame)
+	}
+	n := min(len(pending), len(frame))
+	for i := 0; i < n; i++ {
+		frame[i] = clamp(float64(frame[i]) + float64(pending[i]))
+	}
+	return frame, pending[n:]
+}
+
 // receive is the far end, out of the speaker. It holds the speaker for the call; anything that takes it
 // in the meantime (an announcement) has it until it is done, and then the call takes it back.
 func receive(ctx context.Context, dec io.Reader, wide bool, st *stats) error {
@@ -163,7 +196,9 @@ func receive(ctx context.Context, dec io.Reader, wide bool, st *stats) error {
 				for i := range s {
 					s[i] = int16(binary.LittleEndian.Uint16(buf[2*i:]))
 				}
-				st.add(&st.received, &st.recvSq, s)
+				if st.add(&st.received, &st.recvSq, s) > farEndLoud {
+					farEndAt.Store(time.Now().UnixNano())
+				}
 				if !wide {
 					s = u.Run(s)
 				}
@@ -195,6 +230,12 @@ func receive(ctx context.Context, dec io.Reader, wide bool, st *stats) error {
 					return nil
 				case s := <-audioCh:
 					if p.Queued() > limit {
+						// A chime or a beep mixed over the call (the wake word's, during a call) has
+						// made the queue long, not the network: draining would lose it, so this frame
+						// is dropped instead, as the drain would have dropped it.
+						if p.Overlaying() {
+							continue
+						}
 						p.Drain()
 					}
 					p.PlayVoice(s)
@@ -211,11 +252,20 @@ func receive(ctx context.Context, dec io.Reader, wide bool, st *stats) error {
 		if ctx.Err() != nil {
 			break
 		}
-		// Something else took the speaker. What arrives meanwhile is dropped, and the call takes the
-		// speaker back once it is free.
+		// Something else took the speaker. What arrives meanwhile is dropped, or with Hear the call
+		// under the assistant on, played quieter under it (underlay), and the call takes the speaker
+		// back once it is free.
+		var under *underlay
 		for ctx.Err() == nil && sound.Busy() {
 			select {
-			case <-audioCh:
+			case s := <-audioCh:
+				if !config.Get().Home.CallUnderlay {
+					continue
+				}
+				if under == nil {
+					under = newUnderlay(speaker.Get().Bed(), limit)
+				}
+				under.play(s)
 			case err := <-errCh:
 				return err
 			case <-time.After(50 * time.Millisecond):
@@ -232,16 +282,18 @@ type stats struct {
 	sentSq, recvSq atomic.Uint64 // mean square per frame, summed
 }
 
-func (st *stats) add(n *atomic.Int64, sq *atomic.Uint64, s []int16) {
+func (st *stats) add(n *atomic.Int64, sq *atomic.Uint64, s []int16) float64 {
 	if len(s) == 0 {
-		return
+		return 0
 	}
 	var sum float64
 	for _, v := range s {
 		sum += float64(v) * float64(v)
 	}
+	ms := sum / float64(len(s))
 	n.Add(1)
-	sq.Add(uint64(sum / float64(len(s))))
+	sq.Add(uint64(ms))
+	return ms
 }
 
 func (st *stats) level(sq *atomic.Uint64, n *atomic.Int64) string {

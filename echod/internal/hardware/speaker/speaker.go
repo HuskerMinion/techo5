@@ -160,6 +160,9 @@ type Player struct {
 
 	mu      sync.Mutex
 	pending []int16 // interleaved stereo waiting to go out
+	// overlay is how many samples at the front of pending carry a sound mixed in by Overlay (a chime, a
+	// beep), so whatever else is queued there knows not to drain it away (Overlaying).
+	overlay int
 
 	// bed is a track's audio, queued apart from pending so an answer or an announcement can sound
 	// over it rather than after it: the two are summed as they go out, as a Source is. Same stereo,
@@ -746,6 +749,7 @@ func (p *Player) fill(buf []byte) {
 	if len(p.pending) == 0 {
 		p.pending = nil
 	}
+	p.overlay = max(0, p.overlay-take)
 	bedTake := min(len(p.bed), period*Channels)
 	bed := p.bed[:bedTake]
 	p.bed = p.bed[bedTake:]
@@ -939,6 +943,7 @@ func (p *Player) Take() []int16 {
 
 	pending := p.pending
 	p.pending = nil
+	p.overlay = 0
 	return pending
 }
 
@@ -966,6 +971,7 @@ func (p *Player) PlayVoice(mono []int16) {
 func (p *Player) Drain() {
 	p.mu.Lock()
 	p.pending = nil
+	p.overlay = 0
 	p.mu.Unlock()
 
 	p.voiceMu.Lock()
@@ -1071,6 +1077,19 @@ func (p *Player) Overlay(samples []int16) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	p.pending = mix(p.pending, samples)
+	p.overlaid(len(samples))
+}
+
+// overlaid notes that the first n samples of the queue now carry an overlay. Called with mu held.
+func (p *Player) overlaid(n int) { p.overlay = max(p.overlay, n) }
+
+// Overlaying reports whether a sound mixed in by Overlay is still queued. Something that keeps the queue
+// short by draining it (a call that has fallen behind) drops its own audio instead while this is so, or
+// the chime or the beep would go with it.
+func (p *Player) Overlaying() bool {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	return p.overlay > 0
 }
 
 // mix sums add into the front of into, extending it if add outlasts it.
