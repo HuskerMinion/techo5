@@ -326,6 +326,25 @@ func (r *paint) mdiIcon(name string, x, y, size int, c color.RGBA) {
 	r.text(face, string(g), x, y+r.s(size)-r.s(2), c)
 }
 
+// mdiIconIn draws an icon-font glyph centred in b, and centred by the ink of the glyph itself. mdiIcon
+// places the baseline at the bottom of its box, and the ink of a symbol sits at its own height above that
+// baseline, which differs per glyph: two pixels for the transport marks, three for the star, four for the
+// strip's cross. Asking the face for the glyph's own bounds is what puts them all on the middle.
+func (r *paint) mdiIconIn(name string, b image.Rectangle, size int, c color.RGBA) {
+	face := r.iconFace(size)
+	g, ok := mdi.Rune(name)
+	if face == nil || !ok {
+		return
+	}
+	bounds, _, ok := face.GlyphBounds(g)
+	if !ok {
+		return
+	}
+	mid := ((bounds.Min.Y + bounds.Max.Y) / 2).Round()
+	side := r.s(size)
+	r.text(face, string(g), b.Min.X+(b.Dx()-side)/2, b.Min.Y+b.Dy()/2-mid, c)
+}
+
 // tile draws one thing as Home Assistant's tile card does: a round badge with its icon, lit when it
 // is on, then its name, and what it is doing underneath.
 func (r *paint) tile(b image.Rectangle, t dashboard.Tile, pal dashPal, adj dashAdjusting) {

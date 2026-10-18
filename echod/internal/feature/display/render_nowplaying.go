@@ -175,10 +175,6 @@ func (r *renderer) transportButtons() (back, play, next image.Rectangle) {
 const (
 	transportIcon = 32
 	closeIcon     = 20
-	// iconLift is how much higher the glyph's box goes. mdiIcon puts the baseline at the box's bottom
-	// less two, and the ink of these symbols lands two pixels below the box's middle: measured by
-	// TestTheTransportIconSitsOnItsButton, which fails if that ever stops being true.
-	iconLift = 2
 )
 
 // transportButton draws one of the transport controls: the button the rest of the program draws, in the
@@ -194,11 +190,11 @@ func (r *renderer) transportButton(b image.Rectangle, icon string, accent bool) 
 	r.iconIn(b, icon, transportIcon, col)
 }
 
-// iconIn draws an icon-font glyph centered in b, box and all: the one place the transport marks, the star
-// and the strip's cross take their position from.
+// iconIn draws an icon-font glyph centered in b: the one place the transport marks, the star and the
+// strip's cross take their position from. mdiIconIn does it by the glyph's own ink, which is the only
+// thing that works for icons whose ink does not sit where a font's baseline puts text.
 func (r *renderer) iconIn(b image.Rectangle, name string, size int, col color.RGBA) {
-	side := r.s(size)
-	r.mdiIcon(name, b.Min.X+(b.Dx()-side)/2, b.Min.Y+(b.Dy()-side)/2-r.s(iconLift), size, col)
+	r.mdiIconIn(name, b, size, col)
 }
 
 // background paints the picture behind the now-playing text, toned down so the text reads.
