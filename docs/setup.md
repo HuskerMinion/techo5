@@ -332,17 +332,20 @@ ffmpeg and an ONVIF client library, not against a recorder on a device.
   slider (night volume still caps a raise from the phone). Pause and play on the device, by voice or
   from Home Assistant, reach the phone over Bluetooth, and so do next and previous on the screen of
   a Show or a Spot; a pause or a play on the phone is followed here, so the song picks up where it
-  was paused whichever side plays it again, for half an hour after the pause. A phone still playing
-  when something other than a phone takes the speaker (Music Assistant, AirPlay, Spotify Connect,
-  DLNA, the radio) is paused, and playing it again on the phone takes the speaker back. With two
-  phones, the last to start playing has the speaker, and the first takes it back when the second
-  stops, if it is still playing; not
-  after AirPlay, Spotify Connect or Music Assistant played, or after a stop on the device. While
-  earbuds or a speaker are connected, a phone's audio goes on to them. A short rising tone says a
-  Bluetooth device connected and a falling one that it went, except in quiet hours and during a
-  call. **Forget**, under the earbuds or speaker in **Settings > Connections** (it asks twice), or the
-  **Bluetooth forget** button in Home Assistant on any device, forgets them, so new ones can be
-  paired.
+  was paused whichever side plays it again, for half an hour after the pause. A phone takes the
+  speaker once it plays: after a second and a half of music, which is not heard, over anything
+  playing or paused here (Music Assistant, AirPlay, Spotify Connect, DLNA, the radio, another phone).
+  An app that opens the phone's audio without playing anything (a browser does, coming back to the
+  screen) or a click does not take it, and with nothing loaded a phone takes it at once. A phone
+  still playing when something else takes the speaker is paused, another phone included, and playing
+  it again on the phone takes the speaker back; with two phones, the last to start playing has it. A
+  phone that ignored the pause takes the speaker back once the phone that has it is paused on the
+  phone or stops, but not after AirPlay, Spotify Connect or Music Assistant played, or after a pause
+  or a stop on the device. While earbuds or a speaker are connected, a phone's audio goes on to them.
+  A short rising tone says a Bluetooth device connected and a falling one that it went, except in
+  quiet hours and during a call. **Forget**, under the earbuds or speaker in **Settings >
+  Connections** (it asks twice), or the **Bluetooth forget** button in Home Assistant on any device,
+  forgets them, so new ones can be paired.
 - **Radio.** The Radio drawer and its favorites are set with
   [the radio actions](actions.md#wire-up-the-radio-page). While a station plays, the **Radio station**,
   **Radio artist** and **Radio title** sensors say what's on (the artist and title when the station's

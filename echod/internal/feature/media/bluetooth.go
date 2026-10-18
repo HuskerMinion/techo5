@@ -120,6 +120,17 @@ func (m *Stream) senderPausedOn(t *track) bool {
 	return m.track == t && m.paused && m.bySender
 }
 
+// SenderPaused is whether the track loaded is a received one its sender paused on its own
+// (ReceiverPaused), rather than one paused from here.
+func (m *Stream) SenderPaused() bool {
+	if m == nil {
+		return false
+	}
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return m.track != nil && m.track.received && m.paused && m.bySender
+}
+
 // pauseSeq is which pause is in effect, or was last (pauses), for pauseTook to tell its answer by.
 func (m *Stream) pauseSeq() uint64 {
 	if m == nil {
@@ -322,6 +333,60 @@ func (a *playingAgain) heard(senderPaused bool, now time.Time, audio bool) bool 
 	}
 	a.last = now
 	return now.Sub(a.since) >= sendingAgain
+}
+
+// PhonePlays follows what a phone sends for whether it is playing music. Its stream says nothing of
+// that: a phone starts it for any app that opens its audio, playing or not (a browser coming back
+// to the screen sends nothing but silence, for seconds or for half a minute), and holds it open for
+// seconds after a pause, or for as long as it likes. It starts playing with sendingAgain of audible
+// audio with no break of sendingBreak, as a phone that paused on its own plays again
+// (playingAgain), and stops with receiveQuiet of nothing audible, as its track here would end.
+type PhonePlays struct {
+	again playingAgain
+	last  time.Time // the last audible read while it plays
+	on    bool
+	asked bool // asked to pause from here (Asked)
+}
+
+// Asked says whether the phone has been asked to pause from here. While it has, a break of
+// sendingBreak with nothing audible ends its play, as a phone that takes the pause stops at once,
+// so its music after that is heard starting again: played again moments later, a phone whose play
+// had not yet ended went on playing to nobody. One that ignores the pause sends on without a break
+// and goes on being heard playing.
+func (p *PhonePlays) Asked(pause bool) { p.asked = pause }
+
+// Hear takes one read of what the phone sends, raw S16_LE, none for a read that waited for nothing,
+// at now, and says whether the phone started or stopped playing with it.
+func (p *PhonePlays) Hear(pcm []byte, now time.Time) (changed bool) {
+	audio := audibleS16(pcm)
+	if p.on {
+		quiet := now.Sub(p.last)
+		if audio {
+			p.last = now
+		} else if quiet >= receiveQuiet || (p.asked && quiet >= sendingBreak) {
+			*p = PhonePlays{}
+			return true
+		}
+		return false
+	}
+	if p.again.heard(true, now, audio) {
+		*p = PhonePlays{on: true, last: now}
+		return true
+	}
+	return false
+}
+
+// Playing is whether the phone is playing music, as last heard.
+func (p *PhonePlays) Playing() bool { return p.on }
+
+// audibleS16 is audible for raw S16_LE.
+func audibleS16(pcm []byte) bool {
+	for i := 0; i+1 < len(pcm); i += 2 {
+		if v := int16(uint16(pcm[i]) | uint16(pcm[i+1])<<8); v > audibleFloor || v < -audibleFloor {
+			return true
+		}
+	}
+	return false
 }
 
 // toSpeaker turns what a remote sends (mono or stereo, at its own rate: phones pick 44.1 or 48 kHz)

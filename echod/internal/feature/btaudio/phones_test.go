@@ -82,33 +82,112 @@ func TestWhichPhoneJoins(t *testing.T) {
 	}
 }
 
-// A phone another took the speaker from takes it back once the speaker is free, if it is still
-// sending; one that stopped sending is forgotten, and one taken back is not owed it again.
-func TestADisplacedPhoneTakesTheSpeakerBack(t *testing.T) {
-	pixel := received{item: "Bluetooth: Pixel"}
-	g5 := received{item: "Bluetooth: G5"}
-	displaced := map[string]bool{"Bluetooth: Pixel": true}
-
-	if got := takeBack(displaced, []received{pixel, g5}, false); got != nil {
-		t.Fatalf("speaker busy: took back %q", got.item)
-	}
-	if !displaced["Bluetooth: Pixel"] {
-		t.Fatal("still sending, yet no longer owed the speaker")
-	}
-	got := takeBack(displaced, []received{g5, pixel}, true)
-	if got == nil || got.item != pixel.item {
-		t.Fatalf("speaker free: took back %v, want the Pixel", got)
-	}
-	if len(displaced) != 0 {
-		t.Errorf("taken back, still displaced: %v", displaced)
-	}
-	if got := takeBack(displaced, []received{pixel}, true); got != nil {
-		t.Errorf("taken back twice: %q", got.item)
-	}
-
-	displaced["Bluetooth: Pixel"] = true
-	if got := takeBack(displaced, []received{g5}, true); got != nil || len(displaced) != 0 {
-		t.Errorf("stopped sending: took %v, displaced %v", got, displaced)
+// The speaker goes by what the phones play: a phone that starts playing takes it from anything, the
+// last to start first; a stream starting takes only a free speaker; and once the phone that has it
+// stops, the one it took it from takes it back if it is still playing; nothing is played for one
+// that took the pause.
+func TestChoose(t *testing.T) {
+	const pixel, pad = media.BluetoothPrefix + "Pixel", media.BluetoothPrefix + "Pad"
+	t0 := time.Unix(1000, 0)
+	for name, c := range map[string]struct {
+		phones    []heard
+		h         holding
+		displaced []string
+		want      string
+	}{
+		"silence over Music Assistant": {
+			h:      holding{external: true},
+			phones: []heard{{item: pixel, started: true}},
+		},
+		"music over Music Assistant": {
+			h:      holding{external: true},
+			phones: []heard{{item: pixel, plays: true, fresh: true, since: t0}},
+			want:   pixel,
+		},
+		"music over a paused station": {
+			h:      holding{paused: true},
+			phones: []heard{{item: pixel, plays: true, fresh: true, since: t0}},
+			want:   pixel,
+		},
+		"silence over a paused station": {
+			h:      holding{paused: true},
+			phones: []heard{{item: pixel, started: true}},
+		},
+		"a stream starting, nothing loaded": {
+			phones: []heard{{item: pixel, started: true}},
+			want:   pixel,
+		},
+		"silence over a phone playing": {
+			h:      holding{holder: pixel, playing: true},
+			phones: []heard{{item: pad, started: true}, {item: pixel, plays: true, since: t0}},
+		},
+		"music over a phone playing": {
+			h: holding{holder: pixel, playing: true},
+			phones: []heard{
+				{item: pad, plays: true, fresh: true, since: t0.Add(time.Minute)},
+				{item: pixel, plays: true, since: t0},
+			},
+			want: pad,
+		},
+		"the last to start first": {
+			h: holding{external: true},
+			phones: []heard{
+				{item: pad, plays: true, fresh: true, since: t0},
+				{item: pixel, plays: true, fresh: true, since: t0.Add(time.Second)},
+			},
+			want: pixel,
+		},
+		"its own track playing again": {
+			h:      holding{holder: pixel, paused: true},
+			phones: []heard{{item: pixel, plays: true, fresh: true, since: t0}},
+		},
+		"owed and playing, the holder paused on the phone": {
+			h:         holding{holder: pixel, paused: true, senderPaused: true},
+			phones:    []heard{{item: pad, plays: true, since: t0}, {item: pixel}},
+			displaced: []string{pad},
+			want:      pad,
+		},
+		"owed and paused for it, the holder paused on the phone": {
+			h:         holding{holder: pixel, paused: true, senderPaused: true},
+			phones:    []heard{{item: pad}, {item: pixel}},
+			displaced: []string{pad},
+		},
+		"owed and playing, the holder paused from here": {
+			h:         holding{holder: pixel, paused: true},
+			phones:    []heard{{item: pad, plays: true, since: t0}, {item: pixel}},
+			displaced: []string{pad},
+		},
+		"owed and paused for it, the holder paused from here": {
+			h:         holding{holder: pixel, paused: true},
+			phones:    []heard{{item: pad}, {item: pixel}},
+			displaced: []string{pad},
+		},
+		"owed, the holder still playing": {
+			h:         holding{holder: pixel, playing: true},
+			phones:    []heard{{item: pad}, {item: pixel, plays: true, since: t0}},
+			displaced: []string{pad},
+		},
+		"owed, the speaker free": {
+			phones:    []heard{{item: pad, plays: true, since: t0}},
+			displaced: []string{pad},
+			want:      pad,
+		},
+		"playing but not owed, the speaker free": {
+			phones: []heard{{item: pad, plays: true, since: t0}},
+		},
+		"owed, under Music Assistant": {
+			h:         holding{external: true},
+			phones:    []heard{{item: pad, plays: true, since: t0}},
+			displaced: []string{pad},
+		},
+	} {
+		displaced := map[string]bool{}
+		for _, d := range c.displaced {
+			displaced[d] = true
+		}
+		if got := choose(c.phones, c.h, displaced); got != c.want {
+			t.Errorf("%s: %q, want %q", name, got, c.want)
+		}
 	}
 }
 

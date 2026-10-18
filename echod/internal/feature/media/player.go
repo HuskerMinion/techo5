@@ -1380,6 +1380,9 @@ func (p *Player) ReceiverPaused(name string, paused bool) {
 	p.stream.Unpause()
 }
 
+// SenderPaused is whether the received track loaded was paused by its sender, not from here.
+func (p *Player) SenderPaused() bool { return p.stream.SenderPaused() }
+
 // senderPlaysAgain is the sender of the received track named name heard playing again (sendingAgain
 // of music, playingAgain), with no word that it plays (ReceiverPaused): a phone that paused on its
 // own and played again without its Status saying so. The track plays again with it, rather than
