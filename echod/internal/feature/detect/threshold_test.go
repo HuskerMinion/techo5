@@ -52,3 +52,28 @@ func TestTheSlotsKeepTheirOwnThresholds(t *testing.T) {
 		}
 	}
 }
+
+// During a call with nothing ringing, the stop word and the hang-up word get no allowance for the
+// speaker: the call keeps the canceller running even with the far end silent, so they would always be
+// judged low, and each fires to end the call. A ring during a call keeps the allowance for the stop
+// word, which has to be heard over it. Wake words keep it as before.
+func TestNoSlackForEndingACall(t *testing.T) {
+	for _, c := range []struct {
+		name               string
+		slot               int
+		canceling, onCall  bool
+		ringing, wantSlack bool
+	}{
+		{"stop word, no call", StopSlot, true, false, false, true},
+		{"stop word, on a call", StopSlot, true, true, false, false},
+		{"stop word over a ring on a call", StopSlot, true, true, true, true},
+		{"hang-up word, on a call", HangupSlot, true, true, false, false},
+		{"hang-up word over a ring on a call", HangupSlot, true, true, true, false},
+		{"wake word, on a call", 0, true, true, false, true},
+		{"nothing playing", StopSlot, false, false, false, false},
+	} {
+		if got := slackFor(c.slot, c.canceling, c.onCall, c.ringing); got != c.wantSlack {
+			t.Errorf("%s: slack %v, want %v", c.name, got, c.wantSlack)
+		}
+	}
+}

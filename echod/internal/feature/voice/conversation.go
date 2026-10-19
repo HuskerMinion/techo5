@@ -1008,14 +1008,14 @@ func (c *conversation) speak(url string) {
 	}
 
 	// A call up meanwhile sends the reply, not the room, until it and its echo are over (phone's uplink).
-	phone.Get().ReplyPlaying(true)
+	replied := phone.Get().ReplyStarted()
 	held := c.sound.ClaimSpeech("reply", errand)
 	// The slot is read here, on the loop: by the time the reply is over, the loop may be on another
 	// turn, and the slot is not the reply goroutine's to read.
 	slot := c.slot
 	safe.Go("reply", func() {
 		<-held.Done()
-		time.AfterFunc(speaker.HardwareTail, func() { phone.Get().ReplyPlaying(false) })
+		time.AfterFunc(speaker.HardwareTail, replied)
 
 		// A reply that was stopped - canceled, interrupted by a wake word, or cut off by another sound -
 		// fails its fetch with the context canceled, which says nothing about the url. Taken as a

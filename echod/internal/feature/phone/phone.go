@@ -201,29 +201,43 @@ func callSwitch(id, name, icon string, save func(bool) error) *esphome.Switch {
 // while the far end was not talking just then (their wake word comes out of the speaker too). Not a
 // call being placed: what comes back while it rings out is the far end's.
 func (p *Phone) WakeAllowed() bool {
-	switch p.State().Phase {
+	return WakeAllowedIn(p.State().Phase, config.Get().Home.CallWake, p.FarEndTalking())
+}
+
+// WakeAllowedIn is WakeAllowed for a phase, the Wake word during calls setting, and whether the far end
+// was talking, so what reads them all can decide without reading them twice.
+func WakeAllowedIn(phase Phase, callWake, farEnd bool) bool {
+	switch phase {
 	case Idle:
 		return true
 	case Ringing:
-		return config.Get().Home.CallWake
+		return callWake
 	case Talking:
-		return config.Get().Home.CallWake && !p.FarEndTalking()
+		return callWake && !farEnd
 	}
 	return false
 }
+
+// Answerable reports whether a call in phase can be answered or hung up by voice: one ringing here, or
+// one that is up. Not one being placed, which ends with the button: what comes back while it rings out
+// is the far end's, and an automation calling for help places one that must not end on a word.
+func Answerable(phase Phase) bool { return phase == Ringing || phase == Talking }
 
 // FarEndTalking reports whether the other party was talking a moment ago, through the speaker: a word
 // heard then may be theirs rather than somebody's in the room.
 func (p *Phone) FarEndTalking() bool { return farEndTalking(time.Now()) }
 
-// ReplyPlaying says a turn's reply has started or finished playing here. While it plays, a call sends
-// the reply alone, or silence, in place of the room (uplink).
-func (p *Phone) ReplyPlaying(on bool) {
-	if on {
-		repliesPlaying.Add(1)
-	} else {
-		repliesPlaying.Add(-1)
+// ReplyStarted says a turn's reply has started playing here, and returns what to call once it and its
+// echo are over. Only a reply begun while a call is up counts: while one plays, the call sends the reply
+// alone, or silence, in place of the room (uplink). One already playing when a call is answered leaves
+// the call alone, rather than holding its uplink until the reply ends.
+func (p *Phone) ReplyStarted() (done func()) {
+	if !p.Busy() {
+		return func() {}
 	}
+	repliesPlaying.Add(1)
+	var once sync.Once
+	return func() { once.Do(func() { repliesPlaying.Add(-1) }) }
 }
 
 // Replying reports whether a turn's reply is playing here now, or its echo is still dying away.

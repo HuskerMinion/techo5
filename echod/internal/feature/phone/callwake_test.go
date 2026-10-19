@@ -94,3 +94,28 @@ func TestUplink(t *testing.T) {
 		t.Errorf("alone with nothing to say: %v, want silence", out)
 	}
 }
+
+// Only a reply that starts while a call is up holds the room back from the call: one already playing
+// when a call is answered leaves the call's uplink alone.
+func TestReplyStartedOnlyCountsDuringACall(t *testing.T) {
+	config.Use(filepath.Join(t.TempDir(), "state.json"))
+	p := Get()
+	defer p.set(func(s *State) { s.Phase = Idle })
+
+	p.set(func(s *State) { s.Phase = Idle })
+	done := p.ReplyStarted()
+	p.set(func(s *State) { s.Phase = Talking }) // answered while the reply plays
+	if p.Replying() {
+		t.Error("a reply begun before the call holds the call's uplink")
+	}
+	done()
+
+	done = p.ReplyStarted()
+	if !p.Replying() {
+		t.Error("a reply begun during the call does not hold the room back")
+	}
+	done()
+	if p.Replying() {
+		t.Error("still replying after the reply was done")
+	}
+}

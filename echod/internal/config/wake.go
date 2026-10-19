@@ -75,8 +75,8 @@ func defaultStop() Stop {
 // Listening reports whether the stop word is being listened for.
 func (s Stop) Listening() bool { return s.Threshold < StopOff }
 
-// Hangup is the hang-up word: which word, and the score it has to reach. An empty ID is the default,
-// which is the stop word; HangupStop is the stop word chosen, HangupNone is none chosen, and anything
+// Hangup is the hang-up word: which word, and the score it has to reach. An empty ID is none, which is
+// the default, so hanging up by voice is something chosen; HangupStop is the stop word, and anything
 // else is a model from the same library as the wake words.
 type Hangup struct {
 	ID string `json:"id,omitempty"`
@@ -85,18 +85,15 @@ type Hangup struct {
 	Threshold float64 `json:"threshold,omitempty"`
 }
 
-// HangupNone is the hang-up word switched off. Stored as itself rather than as empty: empty is the
-// default, and a choice of none has to outlast the default.
-const HangupNone = "none"
-
 // HangupStop is the stop word doing the hang-up word's work: the stop word that is listened for anyway,
-// so nothing more is loaded for a call, and a ring during the call is still stopped first. It is the
-// default, and stored as itself when chosen, so the choice outlasts a different default later (a "hang
-// up" model of the device's own).
+// so nothing more is loaded for a call, and a ring during the call is still stopped first.
 const HangupStop = "stop_word"
 
-// StopWord reports whether the stop word is the hang-up word: chosen, or by default.
-func (h Hangup) StopWord() bool { return h.ID == "" || h.ID == HangupStop }
+// On reports whether a hang-up word is chosen at all.
+func (h Hangup) On() bool { return h.ID != "" }
+
+// StopWord reports whether the stop word is the hang-up word.
+func (h Hangup) StopWord() bool { return h.ID == HangupStop }
 
 // ThresholdAt is the score the hang-up word has to reach.
 func (h Hangup) ThresholdAt() float64 {

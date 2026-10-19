@@ -157,7 +157,7 @@ func send(ctx context.Context, enc io.Writer, wide bool, say <-chan []int16, st 
 	}
 }
 
-// repliesPlaying counts turns' replies playing here (Phone.ReplyPlaying): a count, so the end of one
+// repliesPlaying counts turns' replies playing here (Phone.ReplyStarted): a count, so the end of one
 // that lands after the next has begun does not let the room back in under it.
 var repliesPlaying atomic.Int32
 

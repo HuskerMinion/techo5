@@ -2,6 +2,7 @@ package detect
 
 import (
 	"log/slog"
+	"slices"
 	"sync"
 
 	esphome "github.com/ygelfand/go-esphome-device"
@@ -23,23 +24,23 @@ const hangupNone = "None"
 // hangUp is the hang-up word, or the stop word standing in for it, heard: it hangs up if hangupHeard
 // says so. what names which, for the log.
 func hangUp(what string) {
-	onCall, farEnd, replying := phone.Get().Busy(), phone.Get().FarEndTalking(), phone.Get().Replying()
-	if !hangupHeard(onCall, talkback.Get().Busy(), farEnd, replying) {
-		slog.Info(what+" ignored", "on_call", onCall, "far_end_talking", farEnd, "reply_playing", replying)
+	phase, farEnd, replying := phone.Get().State().Phase, phone.Get().FarEndTalking(), phone.Get().Replying()
+	if !hangupHeard(phase, talkback.Get().Busy(), farEnd, replying) {
+		slog.Info(what+" ignored", "phase", phase, "far_end_talking", farEnd, "reply_playing", replying)
 		return
 	}
 	slog.Info(what + ", hanging up")
 	phone.Get().Hangup()
 }
 
-// hangupHeard reports whether the hang-up word, heard now, hangs up. Only with a call ringing, being
-// placed or up (the word is only loaded then, but a detection can land just after the call ends), not
-// over a talk through a camera, and not while the far end was talking: their voice comes out of the
-// speaker, and the word in it is not somebody in the room hanging up. Nor while a turn's reply plays
-// (Wake word during calls): an answer that says "hang up" is the device's own speaker, which the far-end
-// check does not cover and the echo canceller, not learning through a turn, hardly takes off.
-func hangupHeard(onCall, talkBack, farEnd, replying bool) bool {
-	return onCall && !talkBack && !farEnd && !replying
+// hangupHeard reports whether the hang-up word, heard now, hangs up. Only a call that can be ended by
+// voice (phone.Answerable): one ringing here or one that is up, not one being placed, and not just after
+// a call has ended. Not over a talk through a camera, and not while the far end was talking: their voice
+// comes out of the speaker, and the word in it is not somebody in the room hanging up. Nor while a turn's
+// reply plays (Wake word during calls): an answer that says the word is the device's own speaker, which
+// the far-end check does not cover and the echo canceller, not learning through a turn, hardly takes off.
+func hangupHeard(phase phone.Phase, talkBack, farEnd, replying bool) bool {
+	return phone.Answerable(phase) && !talkBack && !farEnd && !replying
 }
 
 // hangup is the hang-up word's select and threshold, and loading its model while a call needs it.
@@ -48,15 +49,17 @@ type hangup struct {
 	word      *esphome.Select
 	threshold *esphome.Number
 
-	// models is what the device has, the same library the wake words come from. A test stands in for it.
-	models func() []wake.Model
+	// models is what the device has, the same library the wake words come from, and wakeWords the ids
+	// chosen as wake words. Tests stand in for both.
+	models    func() []wake.Model
+	wakeWords func() []string
 
 	// mu keeps one load or clear at a time.
 	mu sync.Mutex
 }
 
 func newHangup(d *Detect) *hangup {
-	h := &hangup{d: d, models: wake.Lib().Ours}
+	h := &hangup{d: d, models: wake.Lib().Ours, wakeWords: chosenWakeWords}
 	h.word = &esphome.Select{
 		Base: esphome.Base{
 			ObjectID: "hangup_word",
@@ -78,7 +81,7 @@ func newHangup(d *Detect) *hangup {
 		}
 		h.word.Set(v)
 		slog.Info("setting changed", "setting", h.word.ObjectID, "using", v)
-		h.follow(phone.Get().Busy())
+		h.follow(phone.Answerable(phone.Get().State().Phase))
 	}
 	h.threshold = &esphome.Number{
 		Base: esphome.Base{
@@ -98,33 +101,50 @@ func newHangup(d *Detect) *hangup {
 		}
 		h.threshold.Set(v)
 	}
-	// Loaded as a call starts and cleared as it ends. Changed's listeners must not block, and a load
-	// reads a model off disk.
+	// Loaded while a call can be ended by voice, and cleared otherwise. Changed's listeners must not
+	// block, and a load reads a model off disk.
 	phone.Get().Changed.Listen(func(s phone.State) {
-		onCall := s.Phase != phone.Idle
-		go h.follow(onCall)
+		go h.follow(phone.Answerable(s.Phase))
 	})
 	return h
 }
 
-// options are None, the stop word, and the models the device has, by phrase. One of the user's called
-// "Stop" is left out, as it could not be told apart from the stop word in the list.
+// options are None, the stop word, and the models the device has, by phrase. Left out: one of the
+// user's called "Stop", as it could not be told apart from the stop word in the list, and the wake words
+// chosen now, which as the hang-up word would be a second copy of the same word, hanging up and opening
+// a turn at once.
 func (h *hangup) options() []string {
 	out := []string{hangupNone, assets.StopPhrase}
 	for _, m := range h.models() {
-		if m.Phrase != assets.StopPhrase {
+		if m.Phrase != assets.StopPhrase && !h.isWakeWord(m.ID) {
 			out = append(out, m.Phrase)
 		}
 	}
 	return out
 }
 
-// idFor is what a select option is saved as, and whether it names anything: config.HangupNone for None,
+// isWakeWord reports whether id is one of the wake words chosen now.
+func (h *hangup) isWakeWord(id string) bool {
+	return slices.Contains(h.wakeWords(), id)
+}
+
+// chosenWakeWords are the ids of the wake words chosen in Home Assistant's slots.
+func chosenWakeWords() []string {
+	var ids []string
+	for _, w := range config.Get().Wake.Words {
+		if w.ID != "" {
+			ids = append(ids, w.ID)
+		}
+	}
+	return ids
+}
+
+// idFor is what a select option is saved as, and whether it names anything: empty for None,
 // config.HangupStop for the stop word, a model's id for one of the library's.
 func (h *hangup) idFor(phrase string) (string, bool) {
 	switch phrase {
 	case hangupNone:
-		return config.HangupNone, true
+		return "", true
 	case assets.StopPhrase:
 		return config.HangupStop, true
 	}
@@ -136,14 +156,14 @@ func (h *hangup) idFor(phrase string) (string, bool) {
 	return "", false
 }
 
-// phraseFor is the select option for what was saved: the stop word for the default. A model the device
-// no longer has shows as None, which is what the device then does.
+// phraseFor is the select option for what was saved. A model the device no longer has shows as None,
+// which is what the device then does.
 func (h *hangup) phraseFor(id string) string {
 	switch id {
-	case "", config.HangupStop:
-		return assets.StopPhrase
-	case config.HangupNone:
+	case "":
 		return hangupNone
+	case config.HangupStop:
+		return assets.StopPhrase
 	}
 	if m, ok := wake.Find(h.models(), id); ok {
 		return m.Phrase
@@ -158,14 +178,19 @@ func (h *hangup) restore(c config.Hangup) {
 	slog.Info("restored", "what", h.word.ObjectID, "using", h.phraseFor(c.ID))
 }
 
-// wanted is the model the slot should hold: none off a call, with None chosen, or with the stop word
-// (it has a slot of its own, loaded already), which is the default; otherwise the library's model.
+// wanted is the model the slot should hold: none off a call, with None (the default) or the stop word
+// (it has a slot of its own, loaded already), or with a word that has since been chosen as a wake word;
+// otherwise the library's model.
 func (h *hangup) wanted(onCall bool) (wake.Model, bool) {
 	c := config.Get().Wake.Hangup
-	if !onCall || c.ID == config.HangupNone || c.StopWord() {
+	if !onCall || !c.On() || c.StopWord() {
 		return wake.Model{}, false
 	}
 	id := c.ID
+	if h.isWakeWord(id) {
+		slog.Warn("the hang-up word is a wake word now, so it is not listened for as the hang-up word", "id", id)
+		return wake.Model{}, false
+	}
 	m, ok := wake.Find(h.models(), id)
 	if !ok {
 		slog.Warn("the hang-up word is not on the device", "id", id)

@@ -75,23 +75,24 @@ the Spot's screen and pulses the Dot's ring green.
 
 ### A hang-up word
 
-Say "stop" during a call and the device hangs it up: one that is up, one ringing here (declined), or
-one being placed. It is heard on the device, so it works with Home Assistant down. The stop word is
-the hang-up word unless **Hang-up word** (the device's microphone settings in Home Assistant) is set to
-something else. The same list has **None**, which turns it off, and every wake word the device has, so
-one of your own ("hang up", say) can do it instead, added the way a wake word of your own is
-(setup.md).
+Choose a word in **Hang-up word** (the device's microphone settings in Home Assistant) and saying it
+during a call hangs the call up, or declines one ringing here. It is heard on the device, so it works
+with Home Assistant down. It is **None**, off, until chosen. The list has **Stop**, which has the stop
+word do it, and every wake word the device has but the ones chosen as wake words, so one of your own
+("hang up", say) can do it, added the way a wake word of your own is (setup.md).
 
-- An alarm or timer ringing during the call is stopped first, and the next "stop" hangs up.
+- A call being placed is never ended this way, only one ringing here or one that is up.
 - It is not acted on while the other party is talking, or for a moment after: their voice comes out
   of the speaker. Wait for a gap.
 - A talk through a camera is not ended this way.
-- "Stop" comes up in conversation, so it can hang up by mistake. A word of your own that does not
-  come up is less likely to.
-- The stop word is heard at **Stop word threshold**, and does nothing with the stop word turned off
-  (that threshold at its top). Another word is listened for only while a call rings or is up, at
-  **Hang-up word threshold**, a wake word's 0.85 until set; higher hears it less often, by mistake or
-  not.
+- With **Stop**, an alarm or timer ringing during the call is stopped first, and the next "stop" hangs
+  up. "Stop" comes up in conversation, so it can hang up by mistake; a word of your own that does not
+  come up is less likely to. It is heard at **Stop word threshold**, and does nothing with the stop word
+  turned off (that threshold at its top).
+- Another word is listened for only while a call rings or is up, at **Hang-up word threshold**, a wake
+  word's 0.85 until set. Higher hears it less often, by mistake or not.
+- During a call the stop word and the hang-up word are held to their full threshold, without the
+  allowance words get while the speaker plays; the stop word gets it back over a ring.
 
 ### Answering and hanging up by voice
 
@@ -102,7 +103,8 @@ or hangs up the call on the device that heard it. The call carries on while you 
 - A wake word heard while the other party was talking, or for a moment after, is ignored: their voice
   comes out of the speaker. Wait for a gap.
 - A call being placed (still ringing out) is ended with the button, not by voice.
-- The device on the call answers the wake word, even if another device nearby heard it better.
+- The device on the call answers a wake word another device nearby heard about as well, but not one
+  another device heard clearly better, which was somebody talking to that one.
 - The stop word does not open a turn during a call: it stops an alarm or timer, or hangs up if it is
   the hang-up word.
 

@@ -109,8 +109,8 @@ type Nearest struct {
 	wakeWord  func(slot int) string
 	score     func() float64
 	hears     func() bool
-	// onCall is whether a call is up here: a wake word heard during one is for this device, which is
-	// the one somebody wants to hang up, however much better another heard it.
+	// onCall is whether a call is up here: a wake word heard during one is most likely for this device,
+	// the one somebody wants to hang up, so its claim leads by onCallLead.
 	onCall func() bool
 	peers  func() []announce.Peer
 	fanout func(peers []announce.Peer, mine *pending)
@@ -336,12 +336,15 @@ func (n *Nearest) decide(slot int, mine *pending) {
 	}
 }
 
-// onCallBonus is added to a claim from a device on a call: more than any standout and offset reach.
-const onCallBonus = 1000
+// onCallLead is added to a claim from a device on a call, in the same dB of standout the claims are
+// made of. Enough to win a word another device heard about as well, the call being what somebody most
+// likely meant; not so much that a word somebody said to a device in another room, and heard faintly
+// here, goes to the call.
+const onCallLead = 6
 
 func (n *Nearest) callBonus() float64 {
 	if n.onCall != nil && n.onCall() {
-		return onCallBonus
+		return onCallLead
 	}
 	return 0
 }

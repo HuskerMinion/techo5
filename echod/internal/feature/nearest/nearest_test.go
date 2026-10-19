@@ -539,15 +539,28 @@ func TestASlowClaimIsAnsweredAndLetGo(t *testing.T) {
 	}
 }
 
-// A device on a call claims the wake word over any other, since the call is what somebody wants ended.
-func TestOnCallClaimsOverOthers(t *testing.T) {
-	h := newHouse(t)
-	h.n.onCall = func() bool { return true }
-	h.n.Woke(0)
-	if len(h.sent) != 1 {
-		t.Fatalf("claims sent: %d", len(h.sent))
-	}
-	if got := h.sent[0].Score; got != 20+onCallBonus {
-		t.Errorf("score %v, want %v", got, 20+onCallBonus)
+// A device on a call leads by onCallLead: it wins a wake word another device heard about as well, the
+// call being what somebody most likely meant, but not one another device heard clearly better, which
+// was somebody in that room talking to that device.
+func TestOnCallLeadsByAMargin(t *testing.T) {
+	for _, c := range []struct {
+		name   string
+		theirs float64
+		opened bool
+	}{
+		{"heard about as well elsewhere", 20 + onCallLead - 1, true},
+		{"heard clearly better elsewhere", 20 + onCallLead + 1, false},
+	} {
+		h := newHouse(t)
+		h.n.onCall = func() bool { return true }
+		h.n.Woke(0)
+		if len(h.sent) != 1 || h.sent[0].Score != 20+onCallLead {
+			t.Fatalf("%s: claims sent %+v, want one at %v", c.name, h.sent, 20+onCallLead)
+		}
+		h.claimFrom("Kitchen", c.theirs)
+		h.wait(300 * time.Millisecond)
+		if got := len(h.opened) == 1; got != c.opened {
+			t.Errorf("%s: opened %v, want %v", c.name, got, c.opened)
+		}
 	}
 }

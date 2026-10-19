@@ -117,6 +117,22 @@ func thresholdFor(slot int, base func(int) float64, stop float64, canceling bool
 	return t
 }
 
+// slackFor reports whether a slot is judged with the allowance for the speaker (thresholdFor): while the
+// canceller runs, except for the words that end a call, during one. A call keeps the canceller running
+// even with the far end silent, so they would always be judged low, and a word heard by mistake ends the
+// call. The stop word keeps the allowance over a ring, which it has to be heard over to stop.
+func slackFor(slot int, canceling, onCall, ringing bool) bool {
+	switch {
+	case !canceling:
+		return false
+	case onCall && slot == HangupSlot:
+		return false
+	case onCall && slot == StopSlot:
+		return ringing
+	}
+	return true
+}
+
 // settleTail is how long past the unmute sound detections stay held: the echo of its last notes,
 // and the canceller letting go of them.
 const settleTail = 300 * time.Millisecond
@@ -148,66 +164,49 @@ func newDetect() *Detect {
 		return wakeword.Threshold(slot)
 	}
 	e.Threshold = func(slot int) float64 {
-		return thresholdFor(slot, base, config.Get().Wake.Stop.Threshold, mic.Get().Canceling())
+		slack := slackFor(slot, mic.Get().Canceling(), phone.Get().Busy(), ring.IsSounding())
+		return thresholdFor(slot, base, config.Get().Wake.Stop.Threshold, slack)
 	}
 
 	e.OnDetect = func(slot int) {
-		// The hang-up word means nothing but that, whatever else is going on (hangup.go).
-		if slot == HangupSlot {
-			hangUp("hang-up word")
-			return
+		c := config.Get()
+		h := heard{
+			phase:    phone.Get().State().Phase,
+			talkBack: talkback.Get().Busy(),
+			ringing:  ring.IsSounding(),
+			stopHang: c.Wake.Hangup.StopWord(),
+			callWake: c.Home.CallWake,
+			farEnd:   phone.Get().FarEndTalking(),
 		}
-
-		// A call has the microphones and the speaker. The far end talking through the speaker is not
-		// someone in the room, and a turn would take the call's audio away mid-sentence. A talk through
-		// a camera (feature/talkback) is the same: whoever is at the door is being spoken to.
-		//
-		// With Wake word during calls on, a wake word over a call ringing here or during one that is up
-		// opens a turn after all, so Home Assistant can be asked to answer or hang up; not one heard
-		// while the far end was talking (phone.WakeAllowed). The stop word never opens or interrupts a
-		// turn here, since stopping the sound would be stopping the call: it ends a ring, or chosen as
-		// the hang-up word, hangs up.
-		onCall := phone.Get().Busy()
-		if talkback.Get().Busy() || onCall && (slot == StopSlot || !phone.Get().WakeAllowed()) {
-			// A ring during a call is the one thing that still has to hear "stop". The call page
-			// takes every tap and Home Assistant cannot stop a timer, so without this a timer that
-			// finishes mid-call sounds for its full fifteen minutes with no way out at all.
-			//
-			// It ends the ring and nothing else: the call is not interrupted, and the word is not
-			// passed to the turn, because the far end talking through the speaker is not somebody in
-			// the room.
-			if slot == StopSlot && ring.IsSounding() {
-				slog.Info("stop word during a call, ending the ring")
-				ring.End()
-				return
-			}
-			// With nothing ringing, the stop word chosen as the hang-up word hangs up (hangup.go). A
-			// ring first, so a timer going off mid-call is stopped without ending the call.
-			if slot == StopSlot && onCall && config.Get().Wake.Hangup.StopWord() {
+		switch routeFor(slot, h) {
+		case routeHangUp:
+			if slot == StopSlot {
 				hangUp("stop word")
-				return
+			} else {
+				hangUp("hang-up word")
 			}
-			if onCall && slot != StopSlot && config.Get().Home.CallWake && phone.Get().FarEndTalking() {
-				slog.Info("wake word during a call ignored, the far end was talking", "slot", slot+1)
-				return
-			}
-			slog.Debug("wake word ignored during a call or a talk through a camera", "slot", slot+1)
-			return
-		}
-		if onCall {
-			slog.Info("wake word during a call", "slot", slot+1)
-		}
-		if slot == StopSlot {
+		case routeEndRing:
+			slog.Info("stop word during a call, ending the ring")
+			ring.End()
+		case routeInterrupt:
 			voice.Get().Interrupt()
-			return
+		case routeFarEnd:
+			slog.Info("wake word during a call ignored, the far end was talking", "slot", slot+1)
+		case routeTurn:
+			if h.phase != phone.Idle {
+				slog.Info("wake word during a call", "slot", slot+1)
+			}
+			// Heard here while Home Assistant's engine is listening too (config.OnHA), it still wakes:
+			// the run there is closed and the turn opens here. The same word heard by both opens one
+			// turn, since a wake word while listening is ignored.
+			//
+			// The other devices that heard it may be asked first which of them heard it best
+			// (feature/nearest); with that off, or nobody to ask, the turn opens at once as it always
+			// has.
+			nearest.Get().Woke(slot)
+		default:
+			slog.Debug("wake word ignored during a call or a talk through a camera", "slot", slot+1)
 		}
-		// Heard here while Home Assistant's engine is listening too (config.OnHA), it still wakes: the
-		// run there is closed and the turn opens here. The same word heard by both opens one turn, since
-		// a wake word while listening is ignored.
-		//
-		// The other devices that heard it may be asked first which of them heard it best (feature/nearest);
-		// with that off, or nobody to ask, the turn opens at once as it always has.
-		nearest.Get().Woke(slot)
 	}
 
 	// A wake the device was not sure of, asked about when confirming is on: only the first wake word,
