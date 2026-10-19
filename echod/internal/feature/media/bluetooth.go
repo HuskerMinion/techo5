@@ -342,27 +342,34 @@ func (a *playingAgain) heard(senderPaused bool, now time.Time, audio bool) bool 
 // audio with no break of sendingBreak, as a phone that paused on its own plays again
 // (playingAgain), and stops with receiveQuiet of nothing audible, as its track here would end.
 type PhonePlays struct {
-	again playingAgain
-	last  time.Time // the last audible read while it plays
-	on    bool
-	asked bool // asked to pause from here (Asked)
+	again   playingAgain
+	last    time.Time // the last audible read while it plays
+	on      bool
+	asked   bool      // asked to pause from here (Asked)
+	askedAt time.Time // the first read after the ask, zero until then
 }
 
-// Asked says whether the phone has been asked to pause from here. While it has, a break of
-// sendingBreak with nothing audible ends its play, as a phone that takes the pause stops at once,
-// so its music after that is heard starting again: played again moments later, a phone whose play
-// had not yet ended went on playing to nobody. One that ignores the pause sends on without a break
-// and goes on being heard playing.
-func (p *PhonePlays) Asked(pause bool) { p.asked = pause }
+// Asked says whether the phone has been asked to pause from here. For receiveQuiet after that, a
+// break of sendingBreak with nothing audible ends its play, as a phone that takes the pause stops
+// within moments, so its music after that is heard starting again: played again moments later, a
+// phone whose play had not yet ended went on playing to nobody. One that plays on through those
+// seconds ignored the pause, and the gaps between its songs are not taken for it stopping.
+func (p *PhonePlays) Asked(pause bool) { p.asked, p.askedAt = pause, time.Time{} }
 
 // Hear takes one read of what the phone sends, raw S16_LE, none for a read that waited for nothing,
 // at now, and says whether the phone started or stopped playing with it.
 func (p *PhonePlays) Hear(pcm []byte, now time.Time) (changed bool) {
 	audio := audibleS16(pcm)
+	if p.asked && p.askedAt.IsZero() {
+		p.askedAt = now // measured on the reader's clock, which the ask is not read on
+	}
 	if p.on {
 		quiet := now.Sub(p.last)
 		if audio {
 			p.last = now
+			if p.asked && now.Sub(p.askedAt) >= receiveQuiet {
+				p.asked = false // it played on through the pause
+			}
 		} else if quiet >= receiveQuiet || (p.asked && quiet >= sendingBreak) {
 			*p = PhonePlays{}
 			return true

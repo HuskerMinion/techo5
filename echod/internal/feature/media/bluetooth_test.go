@@ -132,6 +132,14 @@ func TestPhonePlays(t *testing.T) {
 		t.Fatal("a phone asked to pause that stopped was still heard playing")
 	}
 	if !read(3000, 2*time.Second) || !p.Playing() {
-		t.Error("a phone played again after it paused was not heard starting")
+		t.Fatal("a phone played again after it paused was not heard starting")
+	}
+
+	// One that plays on through the seconds after the ask ignored it: the gap between two of its
+	// songs is not it stopping.
+	p.Asked(true)
+	if read(3000, receiveQuiet+time.Second) || read(0, time.Second) || read(3000, 3*time.Second) ||
+		!p.Playing() {
+		t.Error("a phone that ignored the pause was heard stopping between two songs")
 	}
 }

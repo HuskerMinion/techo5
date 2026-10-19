@@ -57,13 +57,12 @@ func (s *inStream) look() heard {
 	return l
 }
 
-// watch opens p's stream and reads it until the phone goes (Close, or stop from refresh). It
-// returns nil when the stream does not open: refresh tries again at its next look.
-func (f *Feature) watch(al *bluealsa.Client, p bluealsa.PCM, d bluez.Device) *inStream {
+// watch opens p's stream and reads it until the phone goes (Close, or stop from refresh). When the
+// stream does not open, refresh tries again at its next look.
+func (f *Feature) watch(al *bluealsa.Client, p bluealsa.PCM, d bluez.Device) (*inStream, error) {
 	src, err := al.OpenRead(p)
 	if err != nil {
-		slog.Warn("bluetooth: opening a phone's stream", "device", displayName(d), "err", err)
-		return nil
+		return nil, err
 	}
 	ctx, cancel := context.WithCancel(context.Background())
 	s := &inStream{item: media.BluetoothPrefix + displayName(d), pcm: p, dev: d, stop: cancel}
@@ -77,7 +76,7 @@ func (f *Feature) watch(al *bluealsa.Client, p bluealsa.PCM, d bluez.Device) *in
 			slog.Info("bluetooth: a phone's stream ended", "device", displayName(d), "err", err)
 		}
 	})
-	return s
+	return s, nil
 }
 
 // readSource is what read reads: a phone's stream, raw S16_LE.

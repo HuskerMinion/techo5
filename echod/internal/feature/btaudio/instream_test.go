@@ -234,7 +234,8 @@ func TestAStaleStreamIsReadAfresh(t *testing.T) {
 }
 
 // A phone asked to pause that pauses and plays again moments later, before receiveQuiet, is heard
-// starting again, so it takes the speaker back; one that ignores the pause and plays on is not.
+// starting again, so it takes the speaker back; one that ignores the pause and plays on is not, nor
+// at the gap between two of its songs.
 func TestAPhonePausedAwayAndPlayedAgainStarts(t *testing.T) {
 	again := &inStream{item: "Bluetooth: Pixel"}
 	if turns, _ := readAll(again, stereo(3000, 3*time.Second)); len(turns) != 1 {
@@ -251,7 +252,9 @@ func TestAPhonePausedAwayAndPlayedAgainStarts(t *testing.T) {
 	readAll(on, stereo(3000, 3*time.Second))
 	on.look()
 	on.askedToPause()
-	if turns, _ := readAll(on, stereo(3000, 5*time.Second)); len(turns) != 0 || on.look().fresh {
+	turns, _ = readAll(on, concat(stereo(3000, 7*time.Second), stereo(0, time.Second),
+		stereo(3000, 3*time.Second)))
+	if len(turns) != 0 || on.look().fresh {
 		t.Errorf("a phone playing on through the pause was heard starting again: %v", turns)
 	}
 }

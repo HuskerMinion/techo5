@@ -160,6 +160,9 @@ type Feature struct {
 	received map[string]bool
 	// streams is each connected phone's stream, by PCM path, read while the phone is connected.
 	streams map[string]*inStream
+	// unopened is the phones' streams that did not open, by PCM path, until one does or the phone
+	// goes: each is tried again at every look, and its failure logged once.
+	unopened map[string]bool
 	// displaced is the phones, by item, that another phone took the speaker from while they were
 	// playing: one still playing takes it back once that one stops (choose).
 	displaced map[string]bool
@@ -248,6 +251,7 @@ func build() *Feature {
 		displaced:  map[string]bool{},
 		pausedAway: map[string]bool{},
 		streams:    map[string]*inStream{},
+		unopened:   map[string]bool{},
 		kept:       map[string]*time.Timer{},
 		levels:     map[string]int{},
 		ours:       map[string]time.Time{},
@@ -363,6 +367,7 @@ func (f *Feature) Close() error {
 	streams := f.streams
 	f.streams = map[string]*inStream{}
 	clear(f.received)
+	clear(f.unopened)
 	f.mu.Unlock()
 	for _, s := range streams {
 		s.stop()
@@ -545,10 +550,25 @@ func (f *Feature) refresh() {
 		}
 		known := s != nil
 		if !known {
-			if s = f.watch(al, p, d); s == nil {
+			var err error
+			if s, err = f.watch(al, p, d); err != nil {
+				f.mu.Lock()
+				first := !f.unopened[path]
+				f.unopened[path] = true
+				f.mu.Unlock()
+				if first {
+					slog.Warn("bluetooth: opening a phone's stream", "device", displayName(d), "err", err)
+				}
 				continue // tried again at the next look
 			}
 			f.mu.Lock()
+			if f.alsa != al {
+				// Closed while it opened: Close stopped the streams it knew of, not this one.
+				f.mu.Unlock()
+				s.stop()
+				return
+			}
+			delete(f.unopened, path)
 			f.streams[path] = s
 			f.mu.Unlock()
 		}
@@ -566,6 +586,11 @@ func (f *Feature) refresh() {
 			gone = append(gone, s)
 			delete(f.streams, path)
 			delete(f.received, path)
+		}
+	}
+	for path := range f.unopened {
+		if !present[path] {
+			delete(f.unopened, path)
 		}
 	}
 	f.mu.Unlock()
