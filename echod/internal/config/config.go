@@ -129,6 +129,9 @@ func (w Writer) Wake(slot int) WakeWriter { return WakeWriter{st: w.st, slot: sl
 // Stop is the stop word, which is not a slot.
 func (w Writer) Stop() StopWriter { return StopWriter(w) }
 
+// Hangup is the hang-up word, which is not a slot either.
+func (w Writer) Hangup() HangupWriter { return HangupWriter(w) }
+
 // OnHA is Home Assistant's wake word engine.
 func (w Writer) OnHA() OnHAWriter { return OnHAWriter(w) }
 

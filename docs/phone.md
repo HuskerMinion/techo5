@@ -51,7 +51,7 @@ diagnostics can read, and never in an image or a release.
 |---|---|
 | **Place a call** | `esphome.<device>_phone_call` with `number`: a phone number (`15551234567`) or another account's extension. Spaces, dashes and a leading `+` are dropped. |
 | **Answer** | The action button on a Dot, a tap on a Show or Spot, the **Answer call** button in Home Assistant, `esphome.<device>_phone_answer`, or by voice with **Wake word during calls** on (below). |
-| **Decline or hang up** | The same button again, a sideways swipe on the Spot, **Decline** / **Hang up** on the Show, the **Hang up** button, `esphome.<device>_phone_hangup`, or by voice with **Wake word during calls** on (below). |
+| **Decline or hang up** | The same button again, a sideways swipe on the Spot, **Decline** / **Hang up** on the Show, the **Hang up** button, `esphome.<device>_phone_hangup`, the hang-up word, or by voice with **Wake word during calls** on (below). |
 | **Say something into a call** | `assist_satellite.announce` on the same device while a call is up: the message plays in the room and goes into the call. |
 
 ### Contacts on a screen
@@ -73,6 +73,26 @@ someone in the room), unless **Wake word during calls** is on (below). Music and
 for a call. A ringing call lights the Show's and
 the Spot's screen and pulses the Dot's ring green.
 
+### A hang-up word
+
+Say "stop" during a call and the device hangs it up: one that is up, one ringing here (declined), or
+one being placed. It is heard on the device, so it works with Home Assistant down. The stop word is
+the hang-up word unless **Hang-up word** (the device's microphone settings in Home Assistant) is set to
+something else. The same list has **None**, which turns it off, and every wake word the device has, so
+one of your own ("hang up", say) can do it instead, added the way a wake word of your own is
+(setup.md).
+
+- An alarm or timer ringing during the call is stopped first, and the next "stop" hangs up.
+- It is not acted on while the other party is talking, or for a moment after: their voice comes out
+  of the speaker. Wait for a gap.
+- A talk through a camera is not ended this way.
+- "Stop" comes up in conversation, so it can hang up by mistake. A word of your own that does not
+  come up is less likely to.
+- The stop word is heard at **Stop word threshold**, and does nothing with the stop word turned off
+  (that threshold at its top). Another word is listened for only while a call rings or is up, at
+  **Hang-up word threshold**, a wake word's 0.85 until set; higher hears it less often, by mistake or
+  not.
+
 ### Answering and hanging up by voice
 
 Turn on **Wake word during calls** and the wake word opens a turn while a call rings here or is up, as
@@ -83,7 +103,8 @@ or hangs up the call on the device that heard it. The call carries on while you 
   comes out of the speaker. Wait for a gap.
 - A call being placed (still ringing out) is ended with the button, not by voice.
 - The device on the call answers the wake word, even if another device nearby heard it better.
-- The stop word still only stops an alarm or timer during a call.
+- The stop word does not open a turn during a call: it stops an alarm or timer, or hangs up if it is
+  the hang-up word.
 
 Two more switches decide how the turn sounds:
 
@@ -118,6 +139,13 @@ actions:
 
 The empty response keeps the assistant from talking over the call it just answered, or into the room
 after hanging up.
+
+### Both at once
+
+The hang-up word and **Wake word during calls** can both be on. The hang-up word then ends the call
+on the device as soon as it is heard, and with a word of your own such as "hang up", the automation
+that follows "Okay Nabu, hang up" finds no call left to hang up. While the assistant's answer is
+playing the hang-up word is not acted on, so an answer that says it does not end the call.
 
 ## Events
 

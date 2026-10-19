@@ -74,6 +74,8 @@ var registered = []string{
 	"follow_ups_2",
 	"free_space",
 	"hardware_color",
+	"hangup_word",
+	"hangup_word_threshold",
 	"headphones",
 	"hear_call_under_assistant",
 	"home_assistant_sounds",

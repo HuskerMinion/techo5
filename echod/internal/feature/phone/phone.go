@@ -226,6 +226,9 @@ func (p *Phone) ReplyPlaying(on bool) {
 	}
 }
 
+// Replying reports whether a turn's reply is playing here now, or its echo is still dying away.
+func (p *Phone) Replying() bool { return repliesPlaying.Load() > 0 }
+
 // RepliesIntoCall reports whether a turn's reply goes into the call as well as the room.
 func RepliesIntoCall() bool { return config.Get().Home.CallReplies }
 

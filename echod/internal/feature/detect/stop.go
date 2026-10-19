@@ -96,7 +96,7 @@ func newStopEntity(d *Detect) *esphome.Number {
 }
 
 func (d *Detect) Entities() []esphome.Entity {
-	return []esphome.Entity{d.stop, d.score, d.onHA.stream, d.onHA.confirm, d.onHA.threshold,
+	return []esphome.Entity{d.stop, d.hangup.word, d.hangup.threshold, d.score, d.onHA.stream, d.onHA.confirm, d.onHA.threshold,
 		d.clipsTotal, d.clipsKinds, d.keepClips}
 }
 
@@ -120,6 +120,7 @@ func newScoreEntity() *esphome.Sensor {
 func (d *Detect) Restore(c config.Config) {
 	d.stop.Set(float32(c.Wake.Stop.Threshold))
 	slog.Info("restored", "what", d.stop.ObjectID, "using", c.Wake.Stop.Threshold)
+	d.hangup.restore(c.Wake.Hangup)
 	d.onHA.restore(c.Wake.OnHA)
 	// An off that never reached the state wins over it (clipsoff.go).
 	keep := d.keepClipsAtStart(c.Wake.KeepClips)

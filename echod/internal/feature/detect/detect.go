@@ -50,6 +50,9 @@ type Detect struct {
 	refreshing atomic.Bool
 	lib        *wake.Library
 
+	// hangup is the hang-up word's select and threshold, and its loading with the call: see hangup.go.
+	hangup *hangup
+
 	// score is the last wake's peak, for setting the threshold by: see newScoreEntity.
 	score *esphome.Sensor
 
@@ -133,23 +136,37 @@ func unmuteSettle() time.Duration {
 }
 
 func newDetect() *Detect {
-	// Sized to reach the stop word's reserved index. The slots between it and Home Assistant's are never
-	// loaded, and an unloaded slot is one comparison a frame.
-	e := New(StopSlot+1, mic.Get())
+	// Sized to reach the reserved indexes, the stop word's and the hang-up word's. The slots between them
+	// and Home Assistant's are never loaded, and an unloaded slot is one comparison a frame.
+	e := New(HangupSlot+1, mic.Get())
 
+	// The hang-up word is judged as a wake word is, its own threshold standing in for the slot's.
+	base := func(slot int) float64 {
+		if slot == HangupSlot {
+			return config.Get().Wake.Hangup.ThresholdAt()
+		}
+		return wakeword.Threshold(slot)
+	}
 	e.Threshold = func(slot int) float64 {
-		return thresholdFor(slot, wakeword.Threshold, config.Get().Wake.Stop.Threshold, mic.Get().Canceling())
+		return thresholdFor(slot, base, config.Get().Wake.Stop.Threshold, mic.Get().Canceling())
 	}
 
 	e.OnDetect = func(slot int) {
+		// The hang-up word means nothing but that, whatever else is going on (hangup.go).
+		if slot == HangupSlot {
+			hangUp("hang-up word")
+			return
+		}
+
 		// A call has the microphones and the speaker. The far end talking through the speaker is not
 		// someone in the room, and a turn would take the call's audio away mid-sentence. A talk through
 		// a camera (feature/talkback) is the same: whoever is at the door is being spoken to.
 		//
 		// With Wake word during calls on, a wake word over a call ringing here or during one that is up
 		// opens a turn after all, so Home Assistant can be asked to answer or hang up; not one heard
-		// while the far end was talking (phone.WakeAllowed). The stop word still only ends a ring:
-		// stopping the sound would be stopping the call.
+		// while the far end was talking (phone.WakeAllowed). The stop word never opens or interrupts a
+		// turn here, since stopping the sound would be stopping the call: it ends a ring, or chosen as
+		// the hang-up word, hangs up.
 		onCall := phone.Get().Busy()
 		if talkback.Get().Busy() || onCall && (slot == StopSlot || !phone.Get().WakeAllowed()) {
 			// A ring during a call is the one thing that still has to hear "stop". The call page
@@ -162,6 +179,12 @@ func newDetect() *Detect {
 			if slot == StopSlot && ring.IsSounding() {
 				slog.Info("stop word during a call, ending the ring")
 				ring.End()
+				return
+			}
+			// With nothing ringing, the stop word chosen as the hang-up word hangs up (hangup.go). A
+			// ring first, so a timer going off mid-call is stopped without ending the call.
+			if slot == StopSlot && onCall && config.Get().Wake.Hangup.StopWord() {
+				hangUp("stop word")
 				return
 			}
 			if onCall && slot != StopSlot && config.Get().Home.CallWake && phone.Get().FarEndTalking() {
@@ -211,6 +234,7 @@ func newDetect() *Detect {
 	d.ducker = newDucker()
 	d.ducker.watch(e)
 	d.stop = newStopEntity(d)
+	d.hangup = newHangup(d)
 	d.score = newScoreEntity()
 	d.onHA = newOnHAEntities()
 	e.OnScored = func(slot int, peak, _ float64) {

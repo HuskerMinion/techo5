@@ -39,8 +39,8 @@ const (
 	farEndLoud = 3.2e-5 * 32768 * 32768
 
 	// farEndHold is how long after a loud frame arrives the far end still counts as talking. The frame
-	// plays up to maxBehind later, the room rings with it after that, and a wake word is reported a
-	// moment after it is said: a word the far end said ends inside this.
+	// plays up to maxBehind later, the room rings with it after that, and a word is reported a moment
+	// after it is said: a word the far end said ends inside this.
 	farEndHold = maxBehind + 500*time.Millisecond
 )
 
@@ -48,7 +48,7 @@ const (
 var farEndAt atomic.Int64
 
 // farEndTalking reports whether the far end was loud in the last farEndHold: what comes out of the
-// speaker then could be the far end saying the wake word, not somebody in the room.
+// speaker then could be the far end saying the word, not somebody in the room.
 func farEndTalking(now time.Time) bool {
 	at := farEndAt.Load()
 	return at != 0 && now.Sub(time.Unix(0, at)) < farEndHold

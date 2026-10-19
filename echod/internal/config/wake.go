@@ -13,6 +13,10 @@ type Wake struct {
 	// above: Home Assistant does not choose it, and it opens no pipeline.
 	Stop Stop `json:"stop"`
 
+	// Hangup is a word that hangs up a call, heard on the device. Like Stop it is not one of the slots:
+	// it opens no pipeline, and it is listened for only while a call rings or is up.
+	Hangup Hangup `json:"hangup,omitempty"`
+
 	// OnHA is Home Assistant's own wake word engine, used beside the device's or in its place.
 	OnHA OnHA `json:"on_ha,omitempty"`
 
@@ -70,6 +74,37 @@ func defaultStop() Stop {
 
 // Listening reports whether the stop word is being listened for.
 func (s Stop) Listening() bool { return s.Threshold < StopOff }
+
+// Hangup is the hang-up word: which word, and the score it has to reach. An empty ID is the default,
+// which is the stop word; HangupStop is the stop word chosen, HangupNone is none chosen, and anything
+// else is a model from the same library as the wake words.
+type Hangup struct {
+	ID string `json:"id,omitempty"`
+
+	// Threshold is the score it has to reach. Zero is DefaultThreshold, a wake word's.
+	Threshold float64 `json:"threshold,omitempty"`
+}
+
+// HangupNone is the hang-up word switched off. Stored as itself rather than as empty: empty is the
+// default, and a choice of none has to outlast the default.
+const HangupNone = "none"
+
+// HangupStop is the stop word doing the hang-up word's work: the stop word that is listened for anyway,
+// so nothing more is loaded for a call, and a ring during the call is still stopped first. It is the
+// default, and stored as itself when chosen, so the choice outlasts a different default later (a "hang
+// up" model of the device's own).
+const HangupStop = "stop_word"
+
+// StopWord reports whether the stop word is the hang-up word: chosen, or by default.
+func (h Hangup) StopWord() bool { return h.ID == "" || h.ID == HangupStop }
+
+// ThresholdAt is the score the hang-up word has to reach.
+func (h Hangup) ThresholdAt() float64 {
+	if h.Threshold <= 0 {
+		return DefaultThreshold
+	}
+	return h.Threshold
+}
 
 // WakeWord is one slot: which wake word listens there and how it behaves when it fires. An empty ID
 // is the slot switched off, which is also how detection is turned off altogether.
@@ -198,6 +233,17 @@ type StopWriter struct{ st *Store }
 
 func (w StopWriter) Threshold(v float64) error {
 	return w.st.Update(func(c *Config) { c.Wake.Stop.Threshold = v })
+}
+
+// HangupWriter is the hang-up word, which belongs to no slot.
+type HangupWriter struct{ st *Store }
+
+func (w HangupWriter) ID(v string) error {
+	return w.st.Update(func(c *Config) { c.Wake.Hangup.ID = v })
+}
+
+func (w HangupWriter) Threshold(v float64) error {
+	return w.st.Update(func(c *Config) { c.Wake.Hangup.Threshold = v })
 }
 
 type WakeWriter struct {
