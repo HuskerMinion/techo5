@@ -95,12 +95,8 @@ func (r *roundRenderer) cameraView(s roundScene) {
 	if s.talkOffered {
 		label := talkLabel(s.talk, v.Entity)
 		b := cameraSoundBox(r.width(r.label, label) + 24).Sub(image.Pt(0, 34+talkGap))
-		band := color.RGBA{0, 0, 0, 150}
-		if s.talk.Entity == v.Entity && s.talk.Phase != talkback.Idle {
-			band = talkLive
-		}
-		r.line(float64(b.Min.X), float64(b.Min.Y+b.Dy()/2), float64(b.Max.X), float64(b.Min.Y+b.Dy()/2), float64(b.Dy()), band)
-		r.centered(r.label, label, b.Min.Y+b.Dy()/2+8, colText)
+		live := s.talk.Entity == v.Entity && s.talk.Phase != talkback.Idle
+		r.cameraControl(b, label, live)
 		r.setCameraTalkAt(b)
 		talkback.Get().Seen(v.Entity) // a talk goes on only while this is on the screen
 		if s.talk.Error != "" && s.talk.Entity == v.Entity {
@@ -121,8 +117,7 @@ func (r *roundRenderer) cameraView(s roundScene) {
 			label = "Mute"
 		}
 		b := cameraSoundBox(r.width(r.label, label) + 24)
-		r.line(float64(b.Min.X), float64(b.Min.Y+b.Dy()/2), float64(b.Max.X), float64(b.Min.Y+b.Dy()/2), float64(b.Dy()), color.RGBA{0, 0, 0, 150})
-		r.centered(r.label, label, b.Min.Y+b.Dy()/2+8, colText)
+		r.cameraControl(b, label, false)
 		r.setCameraSoundAt(b)
 	}
 	// A notification's picture says how to close it, in the sound's place at the foot when that is

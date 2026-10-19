@@ -31,6 +31,14 @@ func (r *renderer) pinCancel() image.Rectangle {
 	return image.Rect(r.margin, y, r.margin+w, y+h)
 }
 
+// pinButton draws the pad's own control in b: the program's button, its words centered in it. The
+// keys are the page's own input grid and keep their bevel.
+func (r *renderer) pinButton(b image.Rectangle, label string) {
+	col := r.buttonFace(b, float64(b.Dy())/2, btnSecondary)
+	face := r.faces().button
+	r.text(face, label, b.Min.X+(b.Dx()-r.width(face, label))/2, b.Min.Y+b.Dy()/2+r.s(8), col)
+}
+
 func (r *renderer) pinPage(p pinView) {
 	heading := "Settings"
 	if p.what != "" {
@@ -53,8 +61,7 @@ func (r *renderer) pinPage(p pinView) {
 		r.text(r.body, p.msg, r.margin, r.s(310), amber)
 	}
 	c := r.pinCancel()
-	r.bevel(c, shift(ember, 16), true)
-	r.text(r.small, "Cancel", c.Min.X+(c.Dx()-r.width(r.small, "Cancel"))/2, c.Min.Y+c.Dy()/2+r.s(10), amber)
+	r.pinButton(c, "Cancel")
 
 	for i, k := range r.pinKeyRects() {
 		r.bevel(k, shift(ember, 16), true)

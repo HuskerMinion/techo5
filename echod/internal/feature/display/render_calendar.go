@@ -138,12 +138,20 @@ func (r *renderer) calendarPage(s scene) {
 	}
 }
 
+// calButtonAt draws a button in b: the program's button face, with its words centered in it.
+func (r *renderer) calButtonAt(b image.Rectangle, label string) {
+	col := r.buttonFace(b, float64(b.Dy())/2, btnSecondary)
+	face := r.faces().button
+	r.text(face, label, b.Min.X+(b.Dx()-r.width(face, label))/2, b.Min.Y+b.Dy()/2+r.s(8), col)
+}
+
 // calButton draws a button with its right edge at right, on the header line, and says where it is.
 func (r *renderer) calButton(label string, right int, kind calHitKind) int {
+	// The box is the one the page's small face measured, so the header stays where it was: the
+	// button face is narrower and fits inside it.
 	w := r.width(r.small, label) + r.s(36)
 	b := image.Rect(right-w, r.margin-r.s(8), right, r.margin+r.s(40))
-	r.roundRect(b, b.Dy()/2, calWash(26))
-	r.text(r.small, label, b.Min.X+r.s(18), b.Min.Y+r.s(36), cream)
+	r.calButtonAt(b, label)
 	r.calHitAdd(calHit{r: b.Inset(-r.s(6)), kind: kind})
 	return b.Min.X - r.s(14)
 }
@@ -403,9 +411,7 @@ func (r *renderer) calendarDetail(v calendarView, e hass.Event) {
 			y += r.s(32)
 		}
 	}
-	r.roundRect(closeB, closeB.Dy()/2, color.NRGBA{255, 255, 255, 30})
-	label := "Close"
-	r.text(r.small, label, closeB.Min.X+(closeB.Dx()-r.width(r.small, label))/2, closeB.Min.Y+r.s(35), cream)
+	r.calButtonAt(closeB, "Close")
 	r.calHitAdd(calHit{r: closeB.Inset(-r.s(8)), kind: calClose})
 }
 

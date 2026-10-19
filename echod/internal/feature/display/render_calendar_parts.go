@@ -97,12 +97,11 @@ func (r *renderer) calSegmented(sel string, right int, week bool) int {
 		ink := dim
 		if l == sel {
 			in := seg.Inset(r.s(4))
-			r.roundRect(in, in.Dy()/2, calWash(46))
-			ink = cream
+			ink = r.buttonFace(in, float64(in.Dy())/2, btnPrimary)
 		} else {
 			r.calHitAdd(calHit{r: seg.Inset(-r.s(2)), kind: kinds[i]})
 		}
-		r.text(f, l, x+pad, b.Min.Y+r.s(33), ink)
+		r.text(f, l, seg.Min.X+(seg.Dx()-r.width(f, l))/2, seg.Min.Y+seg.Dy()/2+r.s(9), ink)
 		x += w
 	}
 	return b.Min.X - r.s(14)
@@ -278,10 +277,12 @@ func (r *renderer) calChips(v calendarView, cals []string, x, cy int, inLine boo
 // moreChip is the "+N" chip after the chips that fit, for the calendars that did not: a tap opens the
 // list of every calendar, where each can be turned off or on, so a hidden one is never out of reach.
 func (r *renderer) moreChip(n, x, cy int) {
-	f, h := r.chipFace(false)
+	_, h := r.chipFace(false)
 	b := image.Rect(x, cy-h/2, x+r.moreChipWidth(n), cy-h/2+h)
-	r.roundRect(b, h/2, calWash(30))
-	r.text(f, "+"+strconv.Itoa(n), b.Min.X+r.s(18), cy+capHeight(f)/2, cream)
+	col := r.buttonFace(b, float64(b.Dy())/2, btnSecondary)
+	face := r.faces().button
+	label := "+" + strconv.Itoa(n)
+	r.text(face, label, b.Min.X+(b.Dx()-r.width(face, label))/2, b.Min.Y+b.Dy()/2+r.s(8), col)
 	r.calHitAdd(calHit{r: b.Inset(-r.s(3)), kind: calChipsMore})
 }
 
@@ -301,8 +302,7 @@ func (r *renderer) calChipsList(v calendarView) {
 	r.calHitAdd(calHit{r: card, kind: calInside})
 	r.text(r.small, "Calendars", card.Min.X+r.s(28), card.Min.Y+r.s(48), cream)
 	done := image.Rect(card.Max.X-r.s(130), card.Min.Y+r.s(14), card.Max.X-r.s(22), card.Min.Y+r.s(62))
-	r.roundRect(done, done.Dy()/2, calWash(30))
-	r.text(r.small, "Done", done.Min.X+(done.Dx()-r.width(r.small, "Done"))/2, done.Min.Y+r.s(36), cream)
+	r.calButtonAt(done, "Done")
 	r.calHitAdd(calHit{r: done.Inset(-r.s(6)), kind: calChipsDone})
 	// As many columns as the calendars need, each as wide as the widest chip with a gap after it; where
 	// that is more than the card has room for, the names are cut to the columns that fit, so no chip

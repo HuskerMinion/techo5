@@ -73,16 +73,10 @@ func (r *renderer) cameraView(s scene, v home.CameraView) {
 		if s.cameraSound {
 			end = r.cameraSoundBox(r.cameraSoundLabel(s)).Min.X - r.s(10)
 		}
-		label, fill := talkLabel(s.talk, v.Entity), shift(ember, 16)
-		if talking {
-			fill = talkLive
-		}
+		label := talkLabel(s.talk, v.Entity)
 		b := r.cameraSoundBox(label)
 		b = b.Add(image.Pt(end-b.Max.X, 0))
-		r.bevel(b, fill, true)
-		m := r.tiny.Metrics()
-		mid := b.Min.Y + (b.Dy()+m.Ascent.Ceil()-m.Descent.Ceil())/2
-		r.text(r.tiny, label, b.Min.X+(b.Dx()-r.width(r.tiny, label))/2, mid, cream)
+		r.cameraControl(b, label, talking)
 		r.setCameraTalkAt(b)
 		// A talk goes on only while this is on the screen. The strips and cards drawn over the page
 		// afterward (an announcement, a recording, a reminder, a pop-up) cover it, so with one up it
@@ -106,10 +100,7 @@ func (r *renderer) cameraView(s scene, v home.CameraView) {
 		// The control says what it does: silence the sound, or ask for it.
 		label := r.cameraSoundLabel(s)
 		b := r.cameraSoundBox(label)
-		r.bevel(b, shift(ember, 16), true)
-		m := r.tiny.Metrics()
-		mid := b.Min.Y + (b.Dy()+m.Ascent.Ceil()-m.Descent.Ceil())/2
-		r.text(r.tiny, label, b.Min.X+(b.Dx()-r.width(r.tiny, label))/2, mid, cream)
+		r.cameraControl(b, label, false)
 		r.setCameraSoundAt(b)
 		return
 	}

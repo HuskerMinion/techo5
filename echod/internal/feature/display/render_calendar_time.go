@@ -193,8 +193,7 @@ func (r *renderer) calendarTimeline(v calendarView, l calLook) {
 		t = clipText(r, r.micro, t, maxW)
 		w := r.width(r.micro, t) + r.s(28)
 		b := image.Rect(right-r.s(14)-w, bottom-r.s(36), right-r.s(14), bottom-r.s(6))
-		r.roundRect(b, b.Dy()/2, calWash(40))
-		r.text(r.micro, t, b.Min.X+r.s(14), b.Max.Y-r.s(9), amber)
+		r.calMicroButton(b, t)
 		r.calHitAdd(calHit{r: b.Inset(-r.s(6)), kind: calLater, ev: e})
 	}
 	if len(evs) == 0 && !v.loaded {
@@ -258,9 +257,17 @@ func (r *renderer) weekMarker(evs []hass.Event, day time.Time, b image.Rectangle
 	}
 	lead := arrow + " "
 	room := b.Dx() - r.s(12) - r.width(r.micro, lead)
-	r.roundRect(b, b.Dy()/2, calWash(40))
-	r.text(r.micro, lead+clipText(r, r.micro, text, room), b.Min.X+r.s(6), b.Max.Y-r.s(4), amber)
+	r.calMicroButton(b, lead+clipText(r, r.micro, text, room))
 	r.calHitAdd(calHit{r: b, kind: calDay, day: day})
+}
+
+// calMicroButton draws one of the calendar's compact controls in b — the day's Later pill, a week's
+// off-hours marker — as the program's button, its words centered. They stay in the page's micro face
+// because the box is measured from them, and the sheet's button face is wider than that box.
+func (r *renderer) calMicroButton(b image.Rectangle, label string) {
+	r.buttonFace(b, float64(b.Dy())/2, btnSecondary)
+	r.text(r.micro, label, b.Min.X+(b.Dx()-r.width(r.micro, label))/2,
+		b.Min.Y+(b.Dy()+r.micro.Metrics().Ascent.Ceil()-r.micro.Metrics().Descent.Ceil())/2, amber)
 }
 
 // laterScroll is the scroll that shows an event on the day's hours as last drawn: its hour a little
