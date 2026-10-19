@@ -11,8 +11,19 @@ import (
 	"github.com/HuskerMinion/techo5/echod/internal/lib/deckwire"
 )
 
+// privateDir is a scratch folder the agent accepts: t.TempDir makes it 0777 & ~umask, which a
+// permissive umask leaves writable to others.
+func privateDir(t *testing.T) string {
+	t.Helper()
+	dir := t.TempDir()
+	if err := os.Chmod(dir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	return dir
+}
+
 func TestReadScripts(t *testing.T) {
-	p := filepath.Join(t.TempDir(), "scripts.txt")
+	p := filepath.Join(privateDir(t), "scripts.txt")
 	if err := ensureScriptsFile(p); err != nil {
 		t.Fatal(err)
 	}
@@ -31,8 +42,8 @@ func TestReadScripts(t *testing.T) {
 }
 
 func TestOnlyListedScriptsRun(t *testing.T) {
-	p := filepath.Join(t.TempDir(), "scripts.txt")
-	os.WriteFile(p, []byte("Touch = touch "+filepath.Join(t.TempDir(), "x")+"\n"), 0o600)
+	p := filepath.Join(privateDir(t), "scripts.txt")
+	os.WriteFile(p, []byte("Touch = touch "+filepath.Join(privateDir(t), "x")+"\n"), 0o600)
 	a := &agent{name: "pc", scriptsPath: p, keys: make(chan struct{}, 1)}
 	a.refresh()
 	if r := a.do(deckwire.Request{Op: deckwire.OpRun, Arg: "rm -rf /"}); r.OK {
@@ -70,7 +81,7 @@ func TestOnlyTheLocalNetwork(t *testing.T) {
 }
 
 func TestKeyKeptAndRemade(t *testing.T) {
-	p := filepath.Join(t.TempDir(), "key")
+	p := filepath.Join(privateDir(t), "key")
 	k1, err := loadKey(p, false)
 	if err != nil {
 		t.Fatal(err)
@@ -104,7 +115,7 @@ func TestWebAddresses(t *testing.T) {
 }
 
 func TestOnlyPrivateScriptLists(t *testing.T) {
-	p := filepath.Join(t.TempDir(), "scripts.txt")
+	p := filepath.Join(privateDir(t), "scripts.txt")
 	os.WriteFile(p, []byte("Ok = true\n"), 0o600)
 	a := &agent{name: "pc", scriptsPath: p, keys: make(chan struct{}, 1)}
 	a.loadScripts(true)
@@ -117,6 +128,35 @@ func TestOnlyPrivateScriptLists(t *testing.T) {
 	os.Chtimes(p, future, future)
 	if r := a.do(deckwire.Request{Op: deckwire.OpHello}); len(r.Hello.Scripts) != 2 {
 		t.Fatalf("an edited list wasn't read again: %v", r.Hello.Scripts)
+	}
+}
+
+// A folder only its owner can write to is accepted, whatever umask made the scratch folder.
+func TestPrivateFolderAccepted(t *testing.T) {
+	p := filepath.Join(privateDir(t), "scripts.txt")
+	os.WriteFile(p, []byte("Ok = true\n"), 0o600)
+	a := &agent{name: "pc", scriptsPath: p, keys: make(chan struct{}, 1)}
+	a.refresh()
+	if len(a.hello().Scripts) != 1 {
+		t.Fatalf("a private folder was refused: %v", a.hello().Scripts)
+	}
+}
+
+// A folder others can write to is refused: this is the rule the tests above have to satisfy with their
+// scratch folders, and without this test the rule would only exist rather than be pinned.
+func TestGroupWritableFolderRefused(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.Chmod(dir, 0o777); err != nil {
+		t.Fatal(err)
+	}
+	p := filepath.Join(dir, "scripts.txt")
+	if err := os.WriteFile(p, []byte("Touch = true\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	a := &agent{name: "pc", scriptsPath: p, keys: make(chan struct{}, 1)}
+	a.refresh()
+	if got := len(a.hello().Scripts); got != 0 {
+		t.Fatalf("a folder others can write to was read, %d scripts", got)
 	}
 }
 
