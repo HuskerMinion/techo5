@@ -73,8 +73,8 @@ func timelineFor(auto, shown float64, scroll int) (start float64, t timeline) {
 func (r *renderer) calendarTimeline(v calendarView, l calLook) {
 	today := sameDay(v.day, v.now)
 	x := r.calButton("Done", r.w-r.margin, calBack)
-	x = r.calButton("›", x, calNext)
-	x = r.calButton("‹", x, calPrev)
+	x = r.calIconButton("chevron-right", "›", x, calNext)
+	x = r.calIconButton("chevron-left", "‹", x, calPrev)
 	title := clipText(r, r.title, v.day.Format("Monday, January 2"), x-r.margin-r.s(10))
 	r.text(r.title, title, r.margin, r.margin+r.s(34), cream)
 	if today {
@@ -413,8 +413,8 @@ func weekTitle(first time.Time, short bool) string {
 func (r *renderer) calendarWeek(v calendarView, l calLook) {
 	first := weekStart(v.day)
 	x := r.calButton("Done", r.w-r.margin, calDone)
-	x = r.calButton("›", x, calNext)
-	x = r.calButton("‹", x, calPrev)
+	x = r.calIconButton("chevron-right", "›", x, calNext)
+	x = r.calIconButton("chevron-left", "‹", x, calPrev)
 	x = r.calSegmented("Week", x, true)
 	title := weekTitle(first, false)
 	if r.margin+r.width(r.title, title) > x-r.s(10) {

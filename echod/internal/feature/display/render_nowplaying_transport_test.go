@@ -103,9 +103,10 @@ func TestTheTransportIconFitsItsButton(t *testing.T) {
 }
 
 // The icons are the font's, and a name the font does not know draws nothing at all: mdiIcon gives up
-// quietly when mdi.Rune has no glyph for it. Every name this screen asks for has to leave ink behind.
+// quietly when mdi.Rune has no glyph for it. Every name the program asks for has to leave ink behind.
 func TestTheIconNamesExist(t *testing.T) {
-	for _, name := range []string{"star", "star-outline", "close", "play", "pause", "skip-previous", "skip-next"} {
+	for _, name := range []string{"star", "star-outline", "close", "play", "pause", "skip-previous", "skip-next",
+		"chevron-left", "chevron-right"} {
 		r := testRenderer()
 		r.mdiIcon(name, 100, 100, transportIcon, cream)
 		if _, drew := diffBox(r, testRenderer()); !drew {

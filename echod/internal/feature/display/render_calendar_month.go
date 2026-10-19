@@ -29,8 +29,8 @@ func (r *renderer) calendarMonth(v calendarView, l calLook) {
 	if v.month.Year() != v.now.Year() || v.month.Month() != v.now.Month() {
 		x = r.calButton("Today", x, calToday)
 	}
-	x = r.calButton("›", x, calNext)
-	x = r.calButton("‹", x, calPrev)
+	x = r.calIconButton("chevron-right", "›", x, calNext)
+	x = r.calIconButton("chevron-left", "‹", x, calPrev)
 	if l.week {
 		x = r.calSegmented("Month", x, true)
 	}

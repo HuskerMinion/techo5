@@ -138,6 +138,11 @@ func (r *renderer) calendarPage(s scene) {
 	}
 }
 
+// calArrowIcon is the size the header's chevrons are drawn at. The program's icon buttons draw the
+// transport marks at transportIcon's 32 pixels in a 54-pixel button; the header's buttons are 48
+// tall, so 28 is the same share of the button.
+const calArrowIcon = 28
+
 // calButtonAt draws a button in b: the program's button face, with its words centered in it.
 func (r *renderer) calButtonAt(b image.Rectangle, label string) {
 	col := r.buttonFace(b, float64(b.Dy())/2, btnSecondary)
@@ -145,13 +150,35 @@ func (r *renderer) calButtonAt(b image.Rectangle, label string) {
 	r.text(face, label, b.Min.X+(b.Dx()-r.width(face, label))/2, b.Min.Y+b.Dy()/2+r.s(8), col)
 }
 
+// calIconButtonAt draws a button in b whose label is an icon-font glyph: the program's button face,
+// with the mark centered by the ink of the glyph itself, as the transport controls are.
+func (r *renderer) calIconButtonAt(b image.Rectangle, icon string) {
+	col := r.buttonFace(b, float64(b.Dy())/2, btnSecondary)
+	r.iconIn(b, icon, calArrowIcon, col)
+}
+
+// calButtonBox is the box a header button takes: the one the page's small face measured, so the
+// header stays where it was. The button face is narrower and fits inside it.
+func (r *renderer) calButtonBox(label string, right int) image.Rectangle {
+	w := r.width(r.small, label) + r.s(36)
+	return image.Rect(right-w, r.margin-r.s(8), right, r.margin+r.s(40))
+}
+
 // calButton draws a button with its right edge at right, on the header line, and says where it is.
 func (r *renderer) calButton(label string, right int, kind calHitKind) int {
-	// The box is the one the page's small face measured, so the header stays where it was: the
-	// button face is narrower and fits inside it.
-	w := r.width(r.small, label) + r.s(36)
-	b := image.Rect(right-w, r.margin-r.s(8), right, r.margin+r.s(40))
+	b := r.calButtonBox(label, right)
 	r.calButtonAt(b, label)
+	r.calHitAdd(calHit{r: b.Inset(-r.s(6)), kind: kind})
+	return b.Min.X - r.s(14)
+}
+
+// calIconButton draws a button whose label is an icon-font glyph, with its right edge at right, on the
+// header line, and says where it is. label is the words the icon replaces: the box is still the one
+// they measured, so every button and hit rectangle on the header line stays where it was, on any
+// screen font, and only the ink changes.
+func (r *renderer) calIconButton(icon, label string, right int, kind calHitKind) int {
+	b := r.calButtonBox(label, right)
+	r.calIconButtonAt(b, icon)
 	r.calHitAdd(calHit{r: b.Inset(-r.s(6)), kind: kind})
 	return b.Min.X - r.s(14)
 }

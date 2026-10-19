@@ -10,7 +10,16 @@ import (
 // labelOnButton is the measure these tests take of a converted control: draw the control with its
 // words, draw the same button bare, and the pixels between the two are the words. Their box has to
 // sit in the middle of the button, or the control is not the program's button with a label in it.
+// Two pixels either way: a glyph's own ink does not fill its line box, so a word with a descender
+// ("Today") lands a little off; the box itself is the middle.
 func labelOnButton(t *testing.T, name string, b image.Rectangle, draw, bare func(*renderer)) {
+	t.Helper()
+	labelOnButtonWithin(t, name, b, 2, draw, bare)
+}
+
+// labelOnButtonWithin is labelOnButton with the tolerance the label's ink deserves: a word needs the
+// two pixels its line box leaves, a mark centered by its own ink next to none.
+func labelOnButtonWithin(t *testing.T, name string, b image.Rectangle, tol int, draw, bare func(*renderer)) {
 	t.Helper()
 	if b.Empty() {
 		t.Fatalf("%s has no button to measure against", name)
@@ -29,13 +38,11 @@ func labelOnButton(t *testing.T, name string, b image.Rectangle, draw, bare func
 	cx, cy := b.Min.X+b.Dx()/2, b.Min.Y+b.Dy()/2
 	dx, dy := (ink.Min.X+ink.Max.X)/2-cx, (ink.Min.Y+ink.Max.Y)/2-cy
 	t.Logf("%-24s button %v center %d,%d | ink %v | off %+d,%+d", name, b, cx, cy, ink, dx, dy)
-	// Two pixels either way: a glyph's own ink does not fill its line box, so a word with a
-	// descender ("Today") or the arrow glyphs land a little off; the box itself is the middle.
-	if dx < -2 || dx > 2 {
-		t.Errorf("%s label is %d px off the middle of its button", name, dx)
+	if dx < -tol || dx > tol {
+		t.Errorf("%s label is %d px off the middle of its button, past the %d it is allowed", name, dx, tol)
 	}
-	if dy < -2 || dy > 2 {
-		t.Errorf("%s label is %d px off the middle of its button, vertically", name, dy)
+	if dy < -tol || dy > tol {
+		t.Errorf("%s label is %d px off the middle of its button, vertically, past the %d it is allowed", name, dy, tol)
 	}
 }
 
@@ -64,13 +71,35 @@ func TestTheCameraControlsSitOnTheirButtons(t *testing.T) {
 }
 
 func TestTheCalendarsHeaderButtonsSitOnTheirButtons(t *testing.T) {
-	for _, label := range []string{"Done", "Today", "‹", "›"} {
+	for _, label := range []string{"Done", "Today"} {
 		r := testRenderer()
 		right := r.w - r.margin
 		left := r.calButton(label, right, calDone) + r.s(14)
 		b := image.Rect(left, r.margin-r.s(8), right, r.margin+r.s(40))
 		labelOnButton(t, "calendar "+label, b,
 			func(rr *renderer) { rr.calButton(label, right, calDone) },
+			func(rr *renderer) { rr.buttonFace(b, float64(b.Dy())/2, btnSecondary) })
+	}
+}
+
+// The header's two arrows are icon-font chevrons, drawn through the renderer's ink-centering path
+// (iconIn) rather than by a font's baseline: nothing hangs above or below the ink, so it has to sit
+// on the middle of its button within a pixel. Their boxes are still the ones the text arrows
+// measured, so only the glyph changed.
+func TestTheCalendarsArrowsSitOnTheirButtons(t *testing.T) {
+	for _, c := range []struct{ icon, label string }{
+		{"chevron-left", "‹"},
+		{"chevron-right", "›"},
+	} {
+		r := testRenderer()
+		right := r.w - r.margin
+		left := r.calIconButton(c.icon, c.label, right, calPrev)
+		if want := r.calButton(c.label, right, calPrev); left != want {
+			t.Errorf("the %s button starts at %d, where the text arrow started at %d", c.icon, left, want)
+		}
+		b := image.Rect(left+r.s(14), r.margin-r.s(8), right, r.margin+r.s(40))
+		labelOnButtonWithin(t, "calendar "+c.icon, b, 1,
+			func(rr *renderer) { rr.calIconButton(c.icon, c.label, right, calPrev) },
 			func(rr *renderer) { rr.buttonFace(b, float64(b.Dy())/2, btnSecondary) })
 	}
 }
