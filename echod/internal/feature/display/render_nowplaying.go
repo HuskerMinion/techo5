@@ -208,7 +208,7 @@ func (r *renderer) background(rd home.Radio) {
 		if rd.Logo {
 			alpha = 120
 		}
-		draw.Draw(r.dst, r.dst.Rect, image.NewUniform(washOf(walnut, alpha)), image.Point{}, draw.Over)
+		washOver(r.dst, r.dst.Rect, washOf(walnut, alpha))
 		return
 	}
 	// No picture from the service: a drawn one, faint, on the right where the text is not.

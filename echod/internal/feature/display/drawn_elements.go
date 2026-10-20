@@ -125,7 +125,7 @@ func (r *paint) wholePicture(frame image.Rectangle, p dashboard.Picture, pal das
 	}
 	if p.Name != "" {
 		band := image.Rect(pic.Min.X, pic.Max.Y-r.s(40), pic.Max.X, pic.Max.Y)
-		draw.Draw(r.dst, band, image.NewUniform(color.RGBA{0, 0, 0, 140}), image.Point{}, draw.Over)
+		washOver(r.dst, band, color.RGBA{0, 0, 0, 140})
 		r.text(fc.label, r.fit(fc.label, p.Name, pic.Dx()-2*r.s(cardPad)), pic.Min.X+r.s(cardPad), pic.Max.Y-r.s(12), color.RGBA{255, 255, 255, 255})
 	}
 	r.zone(tiles, pic, dashboard.Tile{Tap: p.Tap})

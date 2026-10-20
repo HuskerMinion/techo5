@@ -352,7 +352,7 @@ func (r *renderer) flipTurning(card image.Rectangle, from, to string, inset int,
 // shade darkens b by a fraction up to three quarters: a leaf turned away from the light.
 func (r *renderer) shade(b image.Rectangle, by float64) {
 	a := uint8(math.Round(min(max(by, 0), 1) * 190))
-	draw.Draw(r.dst, b, image.NewUniform(color.RGBA{0, 0, 0, a}), image.Point{}, draw.Over)
+	washOver(r.dst, b, color.RGBA{0, 0, 0, a})
 }
 
 // offscreen is what paint draws, over what the screen already has there, into a picture of just b,
@@ -413,7 +413,7 @@ func (r *renderer) digitHeight() int {
 }
 
 func (r *renderer) fillRect(b image.Rectangle, c color.Color) {
-	draw.Draw(r.dst, b, image.NewUniform(c), image.Point{}, draw.Over)
+	washOver(r.dst, b, c)
 }
 
 // roundRect fills b with its corners rounded to radius k.

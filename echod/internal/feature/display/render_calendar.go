@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"image"
 	"image/color"
-	"image/draw"
 	"strconv"
 	"time"
 
@@ -392,7 +391,7 @@ func eventWhenFull(e hass.Event) (day, at string) {
 // calendarDetail is one event's window: the title, when, the calendar, and the location and the
 // description when it has them.
 func (r *renderer) calendarDetail(v calendarView, e hass.Event) {
-	draw.Draw(r.dst, r.dst.Rect, image.NewUniform(color.NRGBA{0, 0, 0, 150}), image.Point{}, draw.Over)
+	washOver(r.dst, r.dst.Rect, color.NRGBA{0, 0, 0, 150})
 	r.calHitAdd(calHit{r: r.dst.Rect, kind: calOutside})
 	w, h := r.w*76/100, r.h*80/100
 	card := image.Rect((r.w-w)/2, (r.h-h)/2, (r.w+w)/2, (r.h+h)/2)

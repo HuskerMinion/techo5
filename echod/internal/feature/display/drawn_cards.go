@@ -509,7 +509,7 @@ func (r *paint) graphCard(b image.Rectangle, g dashboard.Graph, pal dashPal) {
 		}
 		v := a + (c-a)*(f-float64(i))
 		y := yAt(v)
-		draw.Draw(r.dst, image.Rect(px, y, px+1, area.Max.Y), image.NewUniform(fill), image.Point{}, draw.Over)
+		washOver(r.dst, image.Rect(px, y, px+1, area.Max.Y), fill)
 		top, bottom := y, y
 		if prev >= 0 {
 			top, bottom = min(prev, y), max(prev, y)
@@ -580,7 +580,7 @@ func (r *paint) pictureCard(b image.Rectangle, p dashboard.Picture, pal dashPal)
 	}
 	if p.Name != "" {
 		band := image.Rect(b.Min.X, b.Max.Y-r.s(40), b.Max.X, b.Max.Y)
-		draw.Draw(r.dst, band, image.NewUniform(color.RGBA{0, 0, 0, 140}), image.Point{}, draw.Over)
+		washOver(r.dst, band, color.RGBA{0, 0, 0, 140})
 		r.text(fc.label, r.fit(fc.label, p.Name, b.Dx()-2*r.s(cardPad)), b.Min.X+r.s(cardPad), b.Max.Y-r.s(12), color.RGBA{255, 255, 255, 255})
 	}
 }

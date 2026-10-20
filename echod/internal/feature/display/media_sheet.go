@@ -285,7 +285,7 @@ func (r *renderer) mediaSheet(v *mediaView, th dashboard.Theme) {
 	m, now := v.sheet, v.now
 	pal := r.palette(th)
 	fc := r.faces()
-	draw.Draw(r.dst, r.dst.Rect, image.NewUniform(color.RGBA{0, 0, 0, 150}), image.Point{}, draw.Over)
+	washOver(r.dst, r.dst.Rect, color.RGBA{0, 0, 0, 150})
 
 	pad, gap := r.s(18), r.s(10)
 	titleH, subH, ctrlH, labelH, chipH, btnH := r.s(34), r.s(28), r.s(56), r.s(30), r.s(44), r.s(46)

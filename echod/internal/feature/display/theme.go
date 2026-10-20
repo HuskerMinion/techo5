@@ -167,9 +167,9 @@ func (r *renderer) bevel(rect image.Rectangle, fill color.RGBA, raised bool) {
 	}
 	if raised {
 		sh := image.Rect(rect.Min.X+3, rect.Max.Y, rect.Max.X+3, rect.Max.Y+3)
-		draw.Draw(r.dst, sh, image.NewUniform(shade), image.Point{}, draw.Over)
+		washOver(r.dst, sh, shade)
 		sh = image.Rect(rect.Max.X, rect.Min.Y+3, rect.Max.X+3, rect.Max.Y)
-		draw.Draw(r.dst, sh, image.NewUniform(shade), image.Point{}, draw.Over)
+		washOver(r.dst, sh, shade)
 	}
 	draw.Draw(r.dst, rect, image.NewUniform(fill), image.Point{}, draw.Src)
 	draw.Draw(r.dst, image.Rect(rect.Min.X, rect.Min.Y, rect.Max.X, rect.Min.Y+2), image.NewUniform(light), image.Point{}, draw.Src)
