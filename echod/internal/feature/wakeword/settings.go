@@ -46,7 +46,9 @@ func ReplyingEffect(slot int) string { return saved(slot).ReplyingEffect }
 // The turn asks this three times — whether to chime, whether the microphone's history belongs at the
 // front of it, and whether to hold the microphone back while the tone sounds — and the three have to
 // agree. Nobody waits for a tone that is not coming, so a turn that is silent sends the history
-// instead, which is what carries somebody running straight on into their request.
+// instead, which is what carries somebody running straight on into their request. A wake word's
+// turn with the echo canceller on sends both anyway (talkThrough in voice's stream): the canceller
+// takes the tone out, so whoever runs straight on is heard under it.
 func Tones(slot int, followUp bool) bool {
 	return toneFor(slot, followUp) != config.ToneNone && !config.Quiet()
 }

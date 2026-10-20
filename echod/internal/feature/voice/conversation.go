@@ -1357,11 +1357,15 @@ func (c *conversation) stream(ctx context.Context, be backend, slot int, followU
 	// it has been spoken, and people run straight on into the request, so the opening words exist only
 	// in the microphone's history. Subscribing first means no audio falls between the two.
 	//
-	// A slot that chimes does not send it: whoever is talking waits for the tone, so the history holds
-	// the wake word rather than the request, and the tone itself is louder at the array than they are.
-	// That is as true of a wake Home Assistant's engine heard.
+	// A slot that chimes does not send it when the speaker is not canceled: whoever is talking waits
+	// for the tone, so the history holds the wake word rather than the request, and the tone itself is
+	// louder at the array than they are. That is as true of a wake Home Assistant's engine heard.
+	// With the echo canceller on (talkThrough) the tone is taken out of what the microphones hear, so
+	// a wake word that fires right at the end of the word — before the request, not after a pause —
+	// keeps the history and every frame the tone plays over: "Jarvis, turn on the light" in one breath.
+	talkThrough := !followUp && wakeword.Tones(slot, followUp) && config.Get().Microphone.Cancel
 	pre := c.source.Recent(mic.History + waited)
-	if wakeword.Tones(slot, followUp) {
+	if wakeword.Tones(slot, followUp) && !talkThrough {
 		pre = nil
 	}
 
@@ -1400,6 +1404,13 @@ func (c *conversation) stream(ctx context.Context, be backend, slot int, followU
 	if continued {
 		pre = nil
 	}
+	// A wake word that fires right at its end leaves its last sound in the history ("…s" of
+	// "Jarvis"), which speech recognition then reads as a word of its own. Where the history has a
+	// pause after that sound, the request (if any) starts after it: send from the pause on. The
+	// end-of-speech detector above has heard the whole history, word included, as its reference.
+	if !followUp {
+		pre = afterWakeTail(pre)
+	}
 
 	if len(pre) > 0 {
 		for _, s := range pre {
@@ -1417,7 +1428,7 @@ func (c *conversation) stream(ctx context.Context, be backend, slot int, followU
 	// nothing is sent while it is sounding. What the speaker still has queued says when that is, and
 	// hardwareTail is what the driver holds after the queue runs out.
 	var sounding time.Time
-	if wakeword.Tones(slot, followUp) {
+	if wakeword.Tones(slot, followUp) && !talkThrough {
 		sounding = time.Now().Add(wakeword.ChimeLength(slot, followUp) + speaker.HardwareTail)
 	}
 	var held int
@@ -1535,4 +1546,43 @@ func pageAsked(heard string) bool {
 		return true
 	}
 	return !config.Get().Brain.Direct() && (triggers.AboutWeather(heard, lang) || triggers.AboutRadar(heard, lang))
+}
+
+// afterWakeTail drops the end of the wake word from the history: everything before the first
+// stretch of at least tailGapFrames 10 ms frames that are tailGapDB below the history's loudest,
+// when something loud comes before it. With no such pause (the request runs straight on from the
+// word) the history is kept whole.
+func afterWakeTail(pre []int16) []int16 {
+	const (
+		frame         = mic.Rate / 100
+		tailGapFrames = 4
+		tailGapDB     = 12.0
+	)
+	n := len(pre) / frame
+	if n < tailGapFrames+1 {
+		return pre
+	}
+	energy := make([]float64, n)
+	var loudest float64
+	for i := range n {
+		var sum float64
+		for _, s := range pre[i*frame : (i+1)*frame] {
+			sum += float64(s) * float64(s)
+		}
+		energy[i] = sum / frame
+		loudest = max(loudest, energy[i])
+	}
+	quiet := loudest * math.Pow(10, -tailGapDB/10)
+	run, seenLoud := 0, false
+	for i, e := range energy {
+		if e >= quiet {
+			run, seenLoud = 0, true
+			continue
+		}
+		run++
+		if run == tailGapFrames && seenLoud {
+			return pre[(i-tailGapFrames+1)*frame:]
+		}
+	}
+	return pre
 }
