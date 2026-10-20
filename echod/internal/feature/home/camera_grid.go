@@ -13,6 +13,7 @@ import (
 	xdraw "golang.org/x/image/draw"
 
 	"github.com/HuskerMinion/techo5/echod/internal/lib/hass"
+	"github.com/HuskerMinion/techo5/echod/internal/lib/picscale"
 )
 
 // The camera grid: several cameras on the screen at once, from their snapshots, each refreshed on its own.
@@ -188,7 +189,7 @@ func (f *Feature) gridSnapshot(ctx context.Context, entity string, w, h int) (*i
 		return nil, ctx.Err()
 	}
 	defer func() { <-decoding }()
-	src, err := decodeWithin(b, maxFramePixels, "camera "+entity)
+	src, err := decodeWithin(b, maxFramePixels, "camera "+entity, w, h)
 	if err != nil {
 		return nil, err
 	}
@@ -206,6 +207,6 @@ func FitInto(src image.Image, w, h int) *image.RGBA {
 		dw, dh = sw*h/sh, h
 	}
 	dst := image.NewRGBA(image.Rect(0, 0, max(dw, 1), max(dh, 1)))
-	xdraw.ApproxBiLinear.Scale(dst, dst.Bounds(), src, src.Bounds(), xdraw.Src, nil)
+	picscale.CatmullRom.Scale(dst, dst.Bounds(), src, src.Bounds(), xdraw.Src)
 	return dst
 }

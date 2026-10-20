@@ -298,12 +298,22 @@ func securityRows(sv sheetView) []settingRow {
 	if st.insecureTLS {
 		certs.sub, certs.value = "Turned off in Home Assistant", "Off"
 	}
+	rows = append(rows, cameraTestRows()...)
 	return append(rows,
-		settingRow{id: "camweb", label: "Camera on the network", sub: "No login", kind: ctlToggle, on: sec.Camera},
+		settingRow{id: "camweb", label: "Camera on the network", sub: cameraLoginSub(), kind: ctlToggle, on: sec.Camera},
 		settingRow{id: "screenweb", label: "Screen on the network", sub: "No login", kind: ctlToggle, on: sec.Screen},
 		settingRow{id: "talkback", label: "Talk through cameras", sub: "Talk on the camera page", kind: ctlToggle, on: sec.TalkBack},
 		setupRow(st.demo),
 		link, certs)
+}
+
+// cameraLoginSub says who the camera's pages take: anybody, or, once camera streaming has a password,
+// its login.
+func cameraLoginSub() string {
+	if _, _, ok := security.CameraLogin(); ok {
+		return "The camera streaming login"
+	}
+	return "No login until camera streaming has one"
 }
 
 // generalRows are the General card's: the device's name, weather, updates, what it is, and Restart.
@@ -1111,6 +1121,8 @@ func (d *Display) rowTap(id string, p part, opt int) {
 		dlna.Get().Set(!config.Get().Streaming.DLNA)
 	case "presence":
 		safe.Go("presence from the screen", func() { presence.Get().SetOn(!config.Get().Presence.On) })
+	case "faces":
+		safe.Go("faces from the screen", func() { presence.Get().SetFaces(!config.Get().Presence.Faces) })
 	case "settingslock":
 		if security.LockSet() {
 			if err := security.Get().SetPIN(""); err != nil {

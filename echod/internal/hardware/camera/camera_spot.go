@@ -16,6 +16,7 @@
 package camera
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"image"
@@ -550,6 +551,12 @@ func convert(raw []byte) (*image.RGBA, tone) {
 
 // stats measures gray-world white balance on the 2x2 cells, and the black and white points from the
 // green histogram (0.2 % and 99.5 %).
+// statsFor levels a frame; the Spot's frames are all the stream's size.
+func statsFor(f *Frame) tone { return stats(f.raw) }
+
+// Still is the next frame: the Spot streams its whole array already.
+func (c *Camera) Still(ctx context.Context) (*Frame, error) { return c.Snapshot(ctx) }
+
 func stats(raw []byte) tone {
 	var sumR, sumG, sumB uint64
 	var hist [256]int
@@ -683,3 +690,21 @@ func lumaGrid(raw []byte, w, h int) []uint8 {
 
 // v4l2Board: the Spot's camera is never the V4L2 one.
 func v4l2Board() (bool, bool) { return false, false }
+
+// mainlineCameraPath: the Spot has no TECHO5 mainline camera node.
+func mainlineCameraPath() string { return "" }
+
+// GPUYUYV is the GPU's development of a frame; the Spot has no GPU helper.
+func (f *Frame) GPUYUYV() (fd, stride, w, h int, ok bool) { return -1, 0, 0, 0, false }
+
+// ISPRaw is nothing on the Spot: it has no ISP to develop a frame (the 2nd gen Show 8's, camera.go).
+func (f *Frame) ISPRaw() (raw []byte, w, h, bpl int, t ISPTone, ok bool) {
+	return nil, 0, 0, 0, t, false
+}
+
+// Dims and I420 are nothing on the Spot: no encoder takes its frames (feature/rtsp).
+func (f *Frame) Dims() (w, h int)                    { return 0, 0 }
+func (f *Frame) I420(dst []byte) (w, h int, ok bool) { return 0, 0, false }
+
+// ISPI420 is nothing on the Spot: it has no ISP to develop a frame (the 2nd gen Show 5's, isp_cronos.go).
+func (f *Frame) ISPI420(dst []byte) (w, h int, ok bool) { return 0, 0, false }

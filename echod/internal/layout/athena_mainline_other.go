@@ -15,3 +15,6 @@ func HasMicrophone() bool { return true }
 
 // idmeFallback: the Dot and the Spot always have /proc/idme, and a panel has no idme at all.
 func idmeFallback(string) (string, bool) { return "", false }
+
+// CronosMainline: never here.
+func CronosMainline() bool { return false }

@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/HuskerMinion/techo5/echod/internal/feature/video"
+	"github.com/HuskerMinion/techo5/echod/internal/hardware/gpu"
 	"github.com/HuskerMinion/techo5/echod/internal/hardware/screen"
 )
 
@@ -134,7 +135,7 @@ func (p *videoPainter) paint(ctx context.Context, dev *screen.Device, poke <-cha
 			video.Get().Done(fr)
 			continue
 		case fr != nil:
-			if err := dev.PresentFrame(fr.Pix, over); err != nil {
+			if err := present(dev, fr, over); err != nil {
 				slog.Warn("presenting a video frame failed", "err", err)
 			}
 			video.Get().Done(p.last)
@@ -143,11 +144,13 @@ func (p *videoPainter) paint(ctx context.Context, dev *screen.Device, poke <-cha
 		case redraw && !p.dark:
 			// The frame on the panel again, with the controls as they are now; black under them when
 			// there is none to hand (the page has just been uncovered), never the page that was over it.
-			pix := p.blackFrame(dev)
+			var err error
 			if p.last != nil {
-				pix = p.last.Pix
+				err = present(dev, p.last, over)
+			} else {
+				err = dev.PresentFrame(p.blackFrame(dev), over)
 			}
-			if err := dev.PresentFrame(pix, over); err != nil {
+			if err != nil {
 				slog.Warn("presenting a video frame failed", "err", err)
 			}
 			redraw = false
@@ -170,11 +173,61 @@ func (p *videoPainter) paint(ctx context.Context, dev *screen.Device, poke <-cha
 	}
 }
 
+// present puts a frame on the panel: panel pixels as they are, or the hardware decoder's own picture
+// through the GPU, which converts, scales and turns it into its place.
+func present(dev *screen.Device, fr *video.Frame, over image.Rectangle) error {
+	if y := fr.YUV; y != nil {
+		place := image.Rect(y.Place.X, y.Place.Y, y.Place.X+y.Place.W, y.Place.Y+y.Place.H)
+		return dev.PresentYUV(fr.Pix, y.W, y.H, place, gpu.YUV{FullRange: y.FullRange, BT709: y.BT709}, over)
+	}
+	return dev.PresentFrame(fr.Pix, over)
+}
+
+// shotYUV paints the hardware decoder's picture into its place on the canvas, as the GPU shows it
+// (nearest pixel; BT.601 or 709, limited or full range), black around it.
+func shotYUV(img *image.RGBA, fr *video.Frame) {
+	y := fr.YUV
+	for i := 3; i < len(img.Pix); i += 4 {
+		img.Pix[i] = 255
+	}
+	if y.Place.W <= 0 || y.Place.H <= 0 || len(fr.Pix) < y.Bytes() {
+		return
+	}
+	kr, kgu, kgv, kb := 1.402, 0.344136, 0.714136, 1.772
+	if y.BT709 {
+		kr, kgu, kgv, kb = 1.5748, 0.1873, 0.4681, 1.8556
+	}
+	c := fr.Pix[y.W*y.H:]
+	for cy := 0; cy < y.Place.H; cy++ {
+		sy := cy * y.H / y.Place.H
+		for cx := 0; cx < y.Place.W; cx++ {
+			sx := cx * y.W / y.Place.W
+			l := float64(fr.Pix[sy*y.W+sx]) / 255
+			k := (sy/2)*y.W + sx&^1
+			u, v := float64(c[k])/255-0.5, float64(c[k+1])/255-0.5
+			if !y.FullRange {
+				l, u, v = (l-16.0/255)*255/219, u*255/224, v*255/224
+			}
+			o := img.PixOffset(y.Place.X+cx, y.Place.Y+cy)
+			if o < 0 || o+3 >= len(img.Pix) {
+				continue
+			}
+			img.Pix[o] = clamp8(l + kr*v)
+			img.Pix[o+1] = clamp8(l - kgu*u - kgv*v)
+			img.Pix[o+2] = clamp8(l + kb*u)
+		}
+	}
+}
+
+func clamp8(f float64) uint8 { return uint8(max(0, min(255, f*255+0.5))) }
+
 // videoShot is a screenshot of the video page: the frame on the panel turned back to the canvas's
 // way up, with the canvas (the controls) over it.
 func (p *videoPainter) shot(dev *screen.Device, canvas *image.RGBA) *image.RGBA {
 	img := image.NewRGBA(canvas.Rect)
-	if fr := p.last; fr != nil && dev != nil {
+	if fr := p.last; fr != nil && fr.YUV != nil {
+		shotYUV(img, fr)
+	} else if fr != nil && dev != nil {
 		pw, ph := dev.FrameSize()
 		bgra := dev.PixFmt() == "bgra"
 		w, h := img.Rect.Dx(), img.Rect.Dy()

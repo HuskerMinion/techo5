@@ -45,7 +45,7 @@ func (r *renderer) cameraView(s scene, v home.CameraView) {
 	wordless := v.Caption != nil && v.Caption.Wordless()
 	if !wordless {
 		// Corners on a dark strip so they read over any picture.
-		draw.Draw(r.dst, image.Rect(0, 0, r.w, r.s(44)), image.NewUniform(shade), image.Point{}, draw.Over)
+		washOver(r.dst, image.Rect(0, 0, r.w, r.s(44)), shade)
 		r.text(r.small, name, r.margin, r.s(32), captionText)
 		t := clockHM(s.now)
 		r.text(r.small, t, r.w-r.margin-r.width(r.small, t), r.s(32), captionDim)

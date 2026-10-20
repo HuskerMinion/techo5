@@ -26,9 +26,9 @@ import (
 // Snapshots keep coming, as they did before, until the stream's first frame: that can take seconds
 // (seventeen from cold has been seen) while Home Assistant starts the camera's stream. The first one
 // also gives the stream its shape; without one, the stream fills the panel with bars where its shape
-// does not. A camera that cannot stream, a decoder that is missing or refuses the stream (H.265, which
-// the image cannot decode; a stream over 1080p), and a stream that stalls all leave the page on
-// snapshots, and a camera whose stream failed is not tried again for a while.
+// does not. A camera that cannot stream, a decoder that is missing or refuses the stream (H.265 from an
+// image whose ffmpeg was built without it; a stream over 1080p), and a stream that stalls all leave
+// the page on snapshots, and a camera whose stream failed is not tried again for a while.
 
 const (
 	// streamStart is how long the first frame of a stream may take: Home Assistant starts a camera's

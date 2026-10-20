@@ -20,7 +20,12 @@ func (d *Device) FrameSize() (w, h int) { return d.panelW, d.panelH }
 func (d *Device) Rotated() bool { return rotated }
 
 // PixFmt is ffmpeg's name for the panel's pixel layout, or "" for a layout it has no name for.
-func (d *Device) PixFmt() string { return pixFmt(d.shift) }
+func (d *Device) PixFmt() string {
+	if d.gpu != nil {
+		return "rgba" // the GPU takes frames as RGBA textures
+	}
+	return pixFmt(d.shift)
+}
 
 func pixFmt(shift [4]uint) string {
 	switch shift {
@@ -36,6 +41,9 @@ func pixFmt(shift [4]uint) string {
 // over drawn over it, blended by its alpha (the video page's controls). An empty rectangle is the
 // frame alone.
 func (d *Device) PresentFrame(frame []byte, over image.Rectangle) error {
+	if d.presentFrameGPU(frame, over) {
+		return nil
+	}
 	next := d.page
 	if d.pages > 1 {
 		next = (d.page + 1) % d.pages

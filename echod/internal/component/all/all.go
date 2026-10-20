@@ -60,4 +60,5 @@ import (
 	_ "github.com/HuskerMinion/techo5/echod/internal/feature/wakeword"
 	_ "github.com/HuskerMinion/techo5/echod/internal/feature/web"
 	_ "github.com/HuskerMinion/techo5/echod/internal/feature/wifiwatch"
+	_ "github.com/HuskerMinion/techo5/echod/internal/hardware/cpuplug"
 )

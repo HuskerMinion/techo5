@@ -26,6 +26,7 @@ import (
 
 	"golang.org/x/sys/unix"
 
+	"github.com/HuskerMinion/techo5/echod/internal/hardware/gpu"
 	"github.com/HuskerMinion/techo5/echod/internal/layout"
 )
 
@@ -96,6 +97,7 @@ type Device struct {
 	panelW    int
 	panelH    int
 	shift     [4]uint // where red, green, blue and alpha sit in a pixel
+	alphaMask uint32  // 0xff when the framebuffer has a transparency channel, else 0
 
 	canvas *image.RGBA
 
@@ -110,6 +112,15 @@ type Device struct {
 	// shadow says: the next Present onto it writes every row.
 	stale []bool
 
+	// gpu draws the canvas instead, where techo5-gpu drives the panel (screen_gpu.go); nil otherwise.
+	gpu *gpu.Display
+
+	// tint is what the panel is shown with (tint.go); on the framebuffer tintTable applies it to a
+	// copy of each frame, tintImg.
+	tint       Tint
+	tintTable  *[3][256]uint8
+	tintImg    *image.RGBA
+	tintWarned bool
 	// filter is laid over every row on its way to the panel (SetFilter, filter.go).
 	filter rowFilter
 }
@@ -158,6 +169,12 @@ func Open() (*Device, error) {
 		d.pages = max(int(fx.SmemLen)/d.pageBytes, 1)
 	}
 	d.shift = pixelShift(&d.v)
+	// A framebuffer without a transparency channel (mainline's DRM fbdev: XRGB8888, transp offset 0,
+	// length 0) must not receive the alpha byte at all: shifted by 0 it lands on the blue byte and
+	// every pixel comes out with full blue added. Amazon's mtkfb put alpha at bit 24, which hid this.
+	if d.v.Transp[1] > 0 {
+		d.alphaMask = 0xff
+	}
 
 	// On TECHO5's mainline kernel /dev/fb0 can be DRM's fbdev emulation (mediatek-drm), which sets no
 	// mode of its own while there is no console on it: unblanking does, so the panel shows this buffer
@@ -192,6 +209,7 @@ func Open() (*Device, error) {
 	} else {
 		d.canvas = image.NewRGBA(image.Rect(0, 0, d.panelW, d.panelH))
 	}
+	d.useGPU()
 	return d, nil
 }
 
@@ -225,6 +243,14 @@ func (d *Device) String() string {
 // it. Landscape (x, y) lands at panel (panelW-1-y, x), so each landscape column becomes one panel
 // row, written contiguously.
 func (d *Device) Present() error {
+	if d.presentGPU() {
+		return nil
+	}
+	if d.tintTable != nil {
+		drawn := d.canvas
+		d.canvas = d.tinted()
+		defer func() { d.canvas = drawn }()
+	}
 	next := d.page
 	if d.pages > 1 {
 		next = (d.page + 1) % d.pages
@@ -273,7 +299,7 @@ func (d *Device) Present() error {
 			row := dst[y*d.line : y*d.line+d.panelW*4]
 			for x := 0; x < w && x < d.panelW; x++ {
 				i := y*img.Stride + x*4
-				pixel := uint32(img.Pix[i])<<sr | uint32(img.Pix[i+1])<<sg | uint32(img.Pix[i+2])<<sb | uint32(img.Pix[i+3])<<sa
+				pixel := uint32(img.Pix[i])<<sr | uint32(img.Pix[i+1])<<sg | uint32(img.Pix[i+2])<<sb | (uint32(img.Pix[i+3])&d.alphaMask)<<sa
 				binary.LittleEndian.PutUint32(row[x*4:x*4+4], pixel)
 			}
 		}
@@ -347,7 +373,7 @@ func (d *Device) rotate(img *image.RGBA, dst []byte, next int) {
 				px := (d.panelW - 1 - y) * 4
 				for k := 0; k < n; k++ {
 					p := src[k*4 : k*4+4 : k*4+4]
-					binary.LittleEndian.PutUint32(rows[k][px:px+4], uint32(p[0])<<sr|uint32(p[1])<<sg|uint32(p[2])<<sb|uint32(p[3])<<sa)
+					binary.LittleEndian.PutUint32(rows[k][px:px+4], uint32(p[0])<<sr|uint32(p[1])<<sg|uint32(p[2])<<sb|(uint32(p[3])&d.alphaMask)<<sa)
 				}
 			}
 		}
@@ -366,8 +392,10 @@ func (d *Device) rotate(img *image.RGBA, dst []byte, next int) {
 // pan shows page next. The mainline kernel's simple-framebuffer on the 2nd gen Show 8 has one page
 // and no pan operation (FBIOPAN_DISPLAY gives EINVAL): there it scans out what was written. DRM's
 // fbdev emulation (mediatek-drm) has two pages and pans with an atomic commit, at the next vblank.
+// On the Echo Show 5's mainline kernel that emulation (the framebuffer without a transparency
+// channel) has a single page, where a pan to the page on show is only a wasted commit.
 func (d *Device) pan(next int) error {
-	if d.pages <= 1 && layout.AthenaMainline() {
+	if d.pages <= 1 && (layout.AthenaMainline() || d.v.Transp[1] == 0) {
 		d.page = 0
 		return nil
 	}
@@ -406,12 +434,21 @@ const (
 	skylightBacklightMax = 235
 )
 
+// The Echo Show 5 on TECHO5's mainline kernel has no LED class node either: its display PWM is a
+// backlight class device whose range is read from max_brightness.
+const cronosBacklightDir = "/sys/class/backlight/display-backlight"
+
 func backlightNode() (path string, top int) {
 	if layout.AthenaMainline() {
 		return mainlineBacklightPath, mainlineBacklightMax
 	}
 	if layout.Skylight() {
 		return skylightBacklightDir + "/brightness", readTop(skylightBacklightDir+"/max_brightness", skylightBacklightMax)
+	}
+	if _, err := os.Stat(backlightPath); os.IsNotExist(err) {
+		if top := readTop(cronosBacklightDir+"/max_brightness", 0); top > 0 {
+			return cronosBacklightDir + "/brightness", top
+		}
 	}
 	return backlightPath, BacklightMax
 }
@@ -434,7 +471,8 @@ func SetBacklight(level int) error {
 	level = min(max(level, 0), BacklightMax)
 	path, top := backlightNode()
 	raw := level * top / BacklightMax
-	if err := os.WriteFile(path, []byte(strconv.Itoa(raw)), 0o644); err != nil {
+	// Through the lift (lift.go), which turns it down by as much as the pixels are drawn brighter.
+	if err := lit.setBacklight(path, top, raw); err != nil {
 		return fmt.Errorf("screen: backlight: %w", err)
 	}
 	return nil
@@ -443,6 +481,9 @@ func SetBacklight(level int) error {
 // Backlight reads the level the driver holds. The bootloader's own setting reads as 0 until
 // something writes one.
 func Backlight() (int, error) {
+	if level, ok := lit.askedLevel(); ok {
+		return level, nil // the level asked for, not the lift's share of it
+	}
 	path, top := backlightNode()
 	b, err := os.ReadFile(path)
 	if err != nil {

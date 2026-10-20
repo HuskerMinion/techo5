@@ -3,6 +3,7 @@
 package video
 
 import (
+	"bufio"
 	"context"
 	"errors"
 	"io"
@@ -35,13 +36,29 @@ const stuckFor = 400 * time.Millisecond
 // statsEvery is how often a playing video's numbers go in the log.
 const statsEvery = 10 * time.Second
 
-// Frame is one picture, ready for the panel (hardware/screen.PresentFrame), and its place in the video.
+// Frame is one picture, ready for the panel (hardware/screen.PresentFrame), and its place in the video;
+// or, with YUV, the picture as the hardware decoder made it, for the GPU to put on the panel
+// (hardware/screen.PresentYUV).
 type Frame struct {
 	Pix []byte
 	N   int
+	YUV *YUVFrames
 
 	owner *session
 }
+
+// YUVFrames is what a video's frames are when they come from the hardware decoder as it makes them
+// (hw_vcodec.go): NV12 of W x H, to be drawn into Place on the canvas, with their color matrix and
+// range.
+type YUVFrames struct {
+	W, H      int
+	Place     Fit
+	FullRange bool
+	BT709     bool
+}
+
+// Bytes is one frame's size.
+func (y *YUVFrames) Bytes() int { return y.W * y.H * 3 / 2 }
 
 // session is one video, from the request to its end.
 type session struct {
@@ -75,6 +92,12 @@ type session struct {
 	shown   int
 	dropped int
 	playing bool // started (the first frame has arrived)
+	// place is where a frame goes on the panel when the decoder hands over only the picture's own
+	// place (the hardware's, hw.go), nil when its frames are the whole panel.
+	place *Fit
+	// yuv is the frames' layout when they are the hardware decoder's own (hw_vcodec.go), nil when
+	// they are panel pixels.
+	yuv *YUVFrames
 
 	// The clock. With sound, it is how far the room has heard (media.Player.Heard) until the sound runs
 	// out, and the wall clock from there; without, the wall clock alone. wallBase is where the wall
@@ -190,12 +213,42 @@ func (s *session) play(insecure bool) (error, bool) {
 		"probed in", time.Since(began).Round(time.Millisecond))
 	s.changed()
 
-	dec, err := start(s.ctx, DecodeArgs(Decoding{URL: s.u.String(), Info: info, Screen: s.screen, CAFile: caFileIf(), Insecure: insecure, Proxy: proxy}), true, s.sound)
-	if err != nil {
-		return err, false
+	dd := Decoding{URL: s.u.String(), Info: info, Screen: s.screen, CAFile: caFileIf(), Insecure: insecure, Proxy: proxy}
+	var dec *decoder
+	hw := HWUsable(info, s.screen, hwOnce())
+	if hw {
+		// The hardware decoder (hw.go): its frames are the picture's place on the panel, not the panel.
+		if dec, err = startHW(s.ctx, HWDecodeArgs(dd), GstArgs(info, s.screen), s.sound); err != nil {
+			slog.Warn("video: the hardware decoder did not start; on the cores", "id", s.id, "err", err)
+			hw = false
+		}
 	}
+	var yuv *YUVFrames
+	if !hw && VcodecUsable(info, s.screen, vcodecHere()) {
+		// The Show 5's decoder (hw_vcodec.go): its frames are the picture as it decoded it, which the
+		// GPU puts in its place.
+		y := VcodecFrames(info, s.screen)
+		if dec, err = startVcodec(s.ctx, VcodecDecodeArgs(dd), info.VideoCodec, y, s.sound); err != nil {
+			slog.Warn("video: the hardware decoder did not start; on the cores", "id", s.id, "err", err)
+		} else {
+			hw, yuv = true, y
+		}
+	}
+	if !hw {
+		if dec, err = start(s.ctx, DecodeArgs(dd), true, s.sound); err != nil {
+			return err, false
+		}
+	}
+	slog.Info("video: decoding", "id", s.id, "hardware", hw)
 	s.mu.Lock()
 	s.dec = dec
+	switch {
+	case yuv != nil:
+		s.yuv = yuv
+		s.most = max(queueBytes/yuv.Bytes(), 3)
+	case hw:
+		s.place = &fit
+	}
 	s.mu.Unlock()
 
 	if s.sound {
@@ -244,8 +297,18 @@ func (s *session) play(insecure bool) (error, bool) {
 }
 
 // readFrames reads the picture off its pipe until it ends.
-func (s *session) readFrames(r *os.File) error {
+func (s *session) readFrames(f *os.File) error {
 	size := FrameBytes(s.panelW, s.panelH)
+	s.mu.Lock()
+	place, yuv := s.place, s.yuv
+	s.mu.Unlock()
+	if yuv != nil {
+		size, place = yuv.Bytes(), nil
+	}
+	var r io.Reader = f
+	if place != nil && place.W != s.panelW {
+		r = bufio.NewReaderSize(f, 1<<20) // a row at a time
+	}
 	stats := time.NewTicker(statsEvery)
 	defer stats.Stop()
 	shown, dropped := 0, 0
@@ -254,7 +317,7 @@ func (s *session) readFrames(r *os.File) error {
 		if fr == nil {
 			return nil // stopped
 		}
-		if _, err := io.ReadFull(r, fr.Pix[:size]); err != nil {
+		if err := readFrame(r, fr.Pix[:size], s.panelW, place); err != nil {
 			s.mu.Lock()
 			s.free = append(s.free, fr)
 			s.videoIn = true
@@ -263,6 +326,7 @@ func (s *session) readFrames(r *os.File) error {
 		}
 		s.mu.Lock()
 		fr.N = s.read
+		fr.YUV = yuv
 		s.read++
 		s.ready = append(s.ready, fr)
 		first := !s.playing
@@ -290,6 +354,27 @@ func (s *session) readFrames(r *os.File) error {
 	}
 }
 
+// readFrame reads one frame into pix, a panel panelW pixels wide: the whole of it, or with place, only
+// the picture's place (the rows' other pixels left as they are).
+func readFrame(r io.Reader, pix []byte, panelW int, place *Fit) error {
+	if place == nil {
+		_, err := io.ReadFull(r, pix)
+		return err
+	}
+	stride, row := panelW*4, place.W*4
+	if place.W == panelW {
+		_, err := io.ReadFull(r, pix[place.Y*stride:(place.Y+place.H)*stride])
+		return err
+	}
+	for y := place.Y; y < place.Y+place.H; y++ {
+		o := y*stride + place.X*4
+		if _, err := io.ReadFull(r, pix[o:o+row]); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 // buffer is a free frame buffer, waiting for one while the frames decoded ahead are as many as there
 // may be. Nil once the video is over.
 func (s *session) buffer() *Frame {
@@ -306,7 +391,18 @@ func (s *session) buffer() *Frame {
 		}
 		if s.made < s.most {
 			s.made++
-			return &Frame{Pix: make([]byte, FrameBytes(s.panelW, s.panelH))}
+			size := FrameBytes(s.panelW, s.panelH)
+			if s.yuv != nil {
+				size = s.yuv.Bytes()
+			}
+			fr := &Frame{Pix: make([]byte, size)}
+			if s.place != nil {
+				// Black bars, opaque, as ffmpeg pads: only the picture's place is read into
+				for i := 3; i < len(fr.Pix); i += 4 {
+					fr.Pix[i] = 255
+				}
+			}
+			return fr
 		}
 		// Full. Waiting is right while the clock moves or the video is paused; full with the clock
 		// standing still, the decoder is waiting on these frames to make the sound that would move

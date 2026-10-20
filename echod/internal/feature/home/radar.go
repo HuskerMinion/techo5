@@ -464,7 +464,7 @@ func mosaic(ctx context.Context, w, h, x0, y0, zoom, parallel int, url func(x, y
 			b, err := get(ctx, url(x, t.ty))
 			var img image.Image
 			if err == nil {
-				img, err = decodeWithin(b, maxArtPixels, "map tile")
+				img, err = decodeWithin(b, maxArtPixels, "map tile", 0, 0)
 			}
 			mu.Lock()
 			defer mu.Unlock()

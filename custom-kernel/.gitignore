@@ -1,0 +1,9 @@
+# Build products and generated intermediates, never committed: each README has the steps that make them.
+# wifi-work/ regenerates from wifi-amazon/ with wifi/port.py, codec-work/ from the Amazon kernel source with
+# patches/port-aic3101.py; initramfs/firmware/ is filled from the unit's own boot image (tools/prepare-firmware.py).
+*/out/
+cronos/wifi-work/
+cronos/codec-work/
+cronos/logs/
+cronos/initramfs/firmware/*
+!cronos/initramfs/firmware/LICENSE

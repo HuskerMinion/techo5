@@ -11,7 +11,8 @@
 //
 // The model is TensorFlow's person detection example (MobileNet v1, int8, 96x96 grayscale): small
 // enough for these processors, and a modest judge. A person far from the camera, or half out of the
-// picture, is often missed, which is why the sensor holds a sighting for a while.
+// picture, is often missed, which is why the sensor holds a sighting for a while. On the 2nd gen
+// Show 8 it runs on the VPU (vpu.go), and on the cores wherever there is none or it fails.
 package person
 
 import (
@@ -62,6 +63,9 @@ type Feature struct {
 
 	// score runs the model on a picture: the chance it shows a person. Replaced in tests.
 	score func(gray []uint8) (float32, error)
+	// idle is told the time every second while looking, and lets the VPU go when it has not been
+	// used for a while. Replaced in tests.
+	idle func(now time.Time)
 
 	mu    sync.Mutex
 	judge judge
@@ -144,7 +148,7 @@ const loadAgain = time.Hour
 
 // look runs the model on the camera's frames while it is wanted, and lets the model go after.
 func (f *Feature) look(ctx context.Context) {
-	score := f.score
+	score, idle := f.score, f.idle
 	if score == nil {
 		if !f.failedAt.IsZero() && time.Since(f.failedAt) < loadAgain {
 			return // said once, and tried again later rather than every few seconds
@@ -156,7 +160,8 @@ func (f *Feature) look(ctx context.Context) {
 			return
 		}
 		f.failedAt = time.Time{}
-		score = m.score
+		defer m.close()
+		score, idle = m.score, m.idle
 	}
 	frames := make(chan *camera.Frame, 1)
 	stop := camera.Get().Frames.Listen(func(fr *camera.Frame) {
@@ -191,6 +196,9 @@ func (f *Feature) look(ctx context.Context) {
 				return
 			}
 			f.update(now)
+			if idle != nil {
+				idle(now)
+			}
 		case fr := <-frames:
 			now := time.Now()
 			// A frame a little early is taken: frames come about every so often, and one just short
@@ -263,6 +271,8 @@ var errSize = errors.New("the picture or the model's answer is not the size expe
 // detector is the model, loaded, with the buffers it runs in.
 type detector struct {
 	in *tflite.Interpreter
+	// vpu is the model on the VPU, nil where there is none or once it failed.
+	vpu *accel
 }
 
 func load() (*detector, error) {
@@ -279,15 +289,21 @@ func load() (*detector, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &detector{in: in}, nil
+	return &detector{in: in, vpu: newAccel(m, in)}, nil
 }
 
-// score is the chance a 96x96 gray picture shows a person. The model takes each pixel as it was
-// quantized for: the byte less 128, at the input's scale.
+// score is the chance a 96x96 gray picture shows a person: on the VPU if it can, else on the
+// cores. The model takes each pixel as it was quantized for: the byte less 128, at the input's scale.
 func (d *detector) score(gray []uint8) (float32, error) {
 	x := d.in.Input(0)
 	if len(gray) != len(x.F32) {
 		return 0, errSize
+	}
+	if d.vpu != nil {
+		if p, ok := d.vpu.score(gray, time.Now()); ok {
+			return p, nil
+		}
+		d.vpu = nil // failed, said, and not tried again
 	}
 	for i, p := range gray {
 		x.F32[i] = float32(int64(p)-128-x.ZeroPoint) * x.Scale
@@ -300,4 +316,18 @@ func (d *detector) score(gray []uint8) (float32, error) {
 		return 0, errSize
 	}
 	return out[1], nil // no person, person
+}
+
+// idle lets the VPU go when it has not been used for a while.
+func (d *detector) idle(now time.Time) {
+	if d.vpu != nil {
+		d.vpu.idle(now)
+	}
+}
+
+// close lets the VPU go.
+func (d *detector) close() {
+	if d.vpu != nil {
+		d.vpu.close()
+	}
 }

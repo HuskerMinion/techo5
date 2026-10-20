@@ -652,29 +652,35 @@ func artVersion(img *image.RGBA) (uint64, bool) {
 	return a.gen, true
 }
 
-// washedArt keeps the weather art's frame with the wash on it, for the frames drawn in the same second.
+// washedArt keeps the picture under the page with the wash on it: the weather art's frame for the
+// frames drawn in the same second, or a slideshow photo for as long as it is shown.
 type washedArt struct {
 	img  *image.RGBA
 	gen  uint64
 	wash color.RGBA
+	// src is the photo kept (nil when what is kept is the weather art). Photos are never written
+	// once published (home's slideshow swaps in a new image, and a cross-fade makes a new one each
+	// frame), so the photo itself says whether the kept wash is still good.
+	src *image.RGBA
 }
 
 // lay draws img washed with wash onto dst: from what is kept when img is the weather art's frame it
-// has already washed, else washing it and keeping that when it is the art.
+// has already washed, or the photo it washed last, else washing it and keeping that.
 func (k *washedArt) lay(dst, img *image.RGBA, wash color.RGBA) {
 	gen, art := artVersion(img)
-	if art && k.img != nil && k.gen == gen && k.wash == wash && k.img.Rect == dst.Rect {
+	if k.img != nil && k.wash == wash && k.img.Rect == dst.Rect &&
+		((art && k.src == nil && k.gen == gen) || (!art && k.src == img)) {
 		copy(dst.Pix, k.img.Pix)
 		return
 	}
 	draw.Draw(dst, dst.Rect, img, img.Bounds().Min, draw.Src)
-	draw.Draw(dst, dst.Rect, image.NewUniform(wash), image.Point{}, draw.Over)
-	if !art {
-		return
-	}
+	washOver(dst, dst.Rect, wash)
 	if k.img == nil || k.img.Rect != dst.Rect {
 		k.img = image.NewRGBA(dst.Rect)
 	}
 	copy(k.img.Pix, dst.Pix)
-	k.gen, k.wash = gen, wash
+	k.gen, k.wash, k.src = gen, wash, nil
+	if !art {
+		k.src = img
+	}
 }

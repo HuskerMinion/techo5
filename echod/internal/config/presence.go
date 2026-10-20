@@ -19,6 +19,10 @@ type Presence struct {
 
 	// Person: a model looks for a person in what moved (feature/person).
 	Person bool `json:"person,omitempty"`
+
+	// Faces: the face detector looks at a frame a second, for Home Assistant's Face sensor, where the
+	// board has one (the 2nd gen Show 8). A face also counts as somebody near while On is set.
+	Faces bool `json:"faces,omitempty"`
 }
 
 // PresenceSensitivity is the sensitivity in force.
@@ -52,6 +56,10 @@ func (w PresenceWriter) Gestures(v bool) error {
 
 func (w PresenceWriter) Person(v bool) error {
 	return w.st.Update(func(c *Config) { c.Presence.Person = v })
+}
+
+func (w PresenceWriter) Faces(v bool) error {
+	return w.st.Update(func(c *Config) { c.Presence.Faces = v })
 }
 
 func (w PresenceWriter) Sensitivity(v int) error {

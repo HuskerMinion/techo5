@@ -258,6 +258,10 @@ type Display struct {
 	// nightStyle is the red night clock's look.
 	nightStyle *esphome.Select
 	glowLevel  *esphome.Number
+	// warmthSw is Night warmth (night_warmth.go).
+	warmthSw *esphome.Switch
+	// liftSw is Adaptive backlight (adaptive_backlight.go).
+	liftSw *esphome.Switch
 	// dimmestNum is the Dimmest setting in Home Assistant: how dark auto-brightness goes.
 	dimmestNum *esphome.Number
 	// nightMode is Night mode: Home Assistant turning the night on and off; nightShown what it last said.
@@ -278,6 +282,9 @@ type Display struct {
 	wifi     wifiState
 	wifiOpen bool
 	wifiAt   time.Time
+
+	// camtest is the camera test page (camtest_page.go), while it is up.
+	camtest *camTest
 
 	// quiet is a turn that was a screen command ("go home", "show the deck"): its words and reply
 	// are not shown, so the screen moves at once. radioCue is when Home Assistant last named a
@@ -472,6 +479,8 @@ func build() *Display {
 	d.nightHours = nightHoursSelect(d)
 	d.nightStart, d.nightEnd = nightEndSelect(d, true), nightEndSelect(d, false)
 	d.nightStyle = nightStyleSelect(d)
+	d.warmthSw = nightWarmthSwitch(d)
+	d.liftSw = adaptiveBacklightSwitch(d)
 	d.buildPopupEntities()
 	d.buildLookEntities()
 	d.atNight = atNightSelect(d)
@@ -561,7 +570,7 @@ func (d *Display) skinSel() *esphome.Select { return d.skinSl }
 func (d *Display) clockTapSel() *esphome.Select { return d.clockTap }
 
 func (d *Display) Entities() []esphome.Entity {
-	return append([]esphome.Entity{d.light, d.power, d.roomSw, d.auto, d.clock, d.clockStyleSel, d.clockPos, d.dateCol, d.camTime, d.answerTime, d.turnStyle, d.timerStyle, d.skinSl, d.callBtn, d.weatherFx, d.lang, d.strip, d.themeSel, d.lightThemeSel, d.themeModeSel, d.nightHours, d.nightStart, d.nightEnd, d.nightMode, d.atNight, d.nightStyle, d.glowLevel, d.dimmestNum,
+	return append([]esphome.Entity{d.light, d.power, d.roomSw, d.auto, d.clock, d.clockStyleSel, d.clockPos, d.dateCol, d.camTime, d.answerTime, d.turnStyle, d.timerStyle, d.skinSl, d.callBtn, d.weatherFx, d.warmthSw, d.liftSw, d.lang, d.strip, d.themeSel, d.lightThemeSel, d.themeModeSel, d.nightHours, d.nightStart, d.nightEnd, d.nightMode, d.atNight, d.nightStyle, d.glowLevel, d.dimmestNum,
 		d.pop.on, d.pop.lead, d.pop.chime, d.pop.allDay, d.clockTap, d.styleSwipeSw, d.nightTapSw, d.fontSel}, d.lookEnts...)
 }
 
@@ -593,6 +602,8 @@ func (d *Display) Restore(c config.Config) {
 	d.nightHoursChanged()
 	d.atNight.Set(atNightOptions[atNightIndex()])
 	d.nightStyle.Set(nightStyleOptions[nightStyleIndex()])
+	d.warmthSw.Set(c.Screen.NightWarm)
+	d.liftSw.Set(c.Screen.AdaptiveBacklight)
 	d.popupSettingsChanged()
 	d.lookChanged()
 	d.glowLevel.Set(float32(d.glowSetting()))
@@ -1197,6 +1208,15 @@ func (d *Display) gesture(g touch.Gesture) {
 			media.Get().Adjust(-1)
 		case touch.SwipeRight:
 			bt.SetPairing(false)
+		}
+		d.wake()
+		return
+	}
+
+	// The camera test takes every finger while it is up; only Back means anything.
+	if d.cameraTestUp() {
+		if g.Kind == touch.Tap && d.r != nil {
+			d.cameraTestTap(g.X, g.Y)
 		}
 		d.wake()
 		return
@@ -2218,7 +2238,7 @@ func (d *Display) Start(context.Context) error {
 	d.lookChanged()
 	d.logo = newSplash(w, h)
 	fw, fh := dev.FrameSize()
-	video.Get().UseScreen(video.Screen{W: w, H: h, Rotated: dev.Rotated(), PixFmt: dev.PixFmt()}, fw, fh)
+	video.Get().UseScreen(video.Screen{W: w, H: h, Rotated: dev.Rotated(), PixFmt: dev.PixFmt(), GPU: dev.GPUDrawn()}, fw, fh)
 	d.mu.Lock()
 	d.booting, d.started = true, time.Now()
 	d.mu.Unlock()
@@ -2278,6 +2298,10 @@ func (d *Display) frame() time.Duration {
 	call := phone.Get().State()
 	_, reminding := remind.Get().Showing()
 	night := nightNow(now)
+	if d.dev != nil {
+		d.dev.SetTint(d.nightTint(now, night))
+		d.dev.SetLift(config.Get().Screen.AdaptiveBacklight)
+	}
 	if !on && (call.Phase != phone.Idle || (!night && (ring.any() || reminding))) {
 		// A call lights a dark panel, at night to half brightness (relight): its page is how it is
 		// answered. By day a ring and a reminder do too, the ring's page being how it is stopped and a
@@ -2329,11 +2353,11 @@ func (d *Display) frame() time.Duration {
 		on = lit // the night may have just turned the panel back on: this frame is its first
 	}
 	d.mu.Lock()
-	sheetUp, wifiUp := d.sheet, d.wifiOpen
+	sheetUp, wifiUp, camUp := d.sheet, d.wifiOpen, d.camtest != nil
 	updateVisible := d.updateShown(now)
 	d.mu.Unlock()
 	busy := updateVisible || view.Phase != "idle" || call.Phase != phone.Idle || ring.any() || reminding || sheetUp || pinIsOpen() ||
-		d.wakeLight(now) > 0 || d.popupUp() != nil || setup.Get().Waiting() || wifiUp || video.Get().State().Active()
+		d.wakeLight(now) > 0 || d.popupUp() != nil || setup.Get().Waiting() || wifiUp || camUp || video.Get().State().Active()
 	if d.awayTick(now, on, busy, night) {
 		d.mu.Lock()
 		on = d.on
@@ -2485,8 +2509,8 @@ func (d *Display) frame() time.Duration {
 	s.updateMessage = d.updateMessage
 	s.pin = pinNow(now)
 	// The network address page is one of the settings, opened from them and going back to them: the
-	// lock stays open behind it.
-	relockOnClose(s.showSheet || (d.wifiOpen && d.wifi.addr != nil))
+	// lock stays open behind it. So is the camera test.
+	relockOnClose(s.showSheet || (d.wifiOpen && d.wifi.addr != nil) || d.camtest != nil)
 	s.showWifi, s.wifi = d.wifiOpen, d.wifi
 	if d.wifi.addr != nil {
 		// The page's form as it is now: the taps and the change running in the background write it
@@ -2548,6 +2572,7 @@ func (d *Display) frame() time.Duration {
 	s.redStyle = config.Get().Screen.NightClockStyle
 	s.nightDim = d.nightGlow
 	d.mu.Unlock()
+	s.camtest = d.cameraTestView(now)
 	if s.showDrawer && s.drawerTab == drawerCameras {
 		s.cameras = home.Get().Cameras()
 	}

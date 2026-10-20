@@ -7,11 +7,19 @@ import (
 	"time"
 )
 
+// cpuOnly is the model on the cores, the VPU let go if the board has one.
+func cpuOnly(d *detector) *detector {
+	d.close()
+	d.vpu = nil
+	return d
+}
+
 func TestModelLoadsAndScores(t *testing.T) {
 	d, err := load()
 	if err != nil {
 		t.Fatal(err)
 	}
+	d = cpuOnly(d)
 	gray := make([]uint8, side*side)
 	for i := range gray {
 		gray[i] = uint8(i % 251)
@@ -61,6 +69,7 @@ func BenchmarkScore(b *testing.B) {
 	if err != nil {
 		b.Fatal(err)
 	}
+	d = cpuOnly(d)
 	gray := make([]uint8, side*side)
 	for b.Loop() {
 		if _, err := d.score(gray); err != nil {

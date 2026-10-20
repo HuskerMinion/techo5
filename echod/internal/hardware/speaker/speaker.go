@@ -92,7 +92,8 @@ type Player struct {
 	mixer *alsa.Mixer
 
 	// hold is DRAMHold, kept open for as long as pb is: see paths_cronos.go.
-	hold *os.File
+	hold     *os.File
+	mainline bool
 
 	// Jack changed: a headphone was physically plugged in or pulled out.
 	OnJack hook.Hook[Output]
@@ -289,6 +290,14 @@ func New() *Player {
 	if curve, ok := firstCurves[t.Name()]; ok {
 		p.first = &curve
 	}
+	// The unit's own curve when its AFE.cfg has one: Fire OS's, which reaches 0 dB in front of the
+	// tuning at the top step. firstCurves stop near -20 dB there, matching an older order that ended at
+	// -6 dB behind the tuning, and left the speaker about 10 dB quieter at full volume than Fire OS.
+	if table := t.VolumeTable(); len(table) == VolumeSteps+1 {
+		var curve [VolumeSteps + 1]float64
+		copy(curve[:], table)
+		p.first = &curve
+	}
 	return p
 }
 
@@ -318,13 +327,14 @@ func (p *Player) Name() string { return "speaker" }
 // open takes the playback stream and the mixer. Mixer writes happen in Run: the first one enumerates
 // the card, which takes over a second.
 func (p *Player) open() error {
-	pb, m, hold, err := openDevice()
+	pb, m, hold, mainline, err := openDevice()
 	if err != nil {
 		return err
 	}
 
 	p.devMu.Lock()
 	p.pb, p.mixer, p.hold = pb, m, hold
+	p.mainline = mainline
 	p.devMu.Unlock()
 	return nil
 }
@@ -618,7 +628,7 @@ func (p *Player) Run(ctx context.Context) error {
 	// unmuteAfter periods, when the ring has filled and the card has taken from it.
 	defer p.stopped()
 	out := p.Output()
-	p.apply(initSequence)
+	p.initializeMixer()
 	p.route()
 	// Written on every start, even at 0 dB: 110 (0 dB) is the TAS5805M driver's own default (probe
 	// sets its vol to 110, and every unmute writes that cached vol to the chip), so at 0 dB this
@@ -692,7 +702,7 @@ func (p *Player) Run(ctx context.Context) error {
 		w := p.written.Add(period)
 		if err == nil && d >= 0 {
 			p.ring.Store(&ringReading{written: w, frames: int64(d), at: at})
-			if softRef {
+			if softRef && echoref.InUse() {
 				// The period's last frame is the card's newest: heard once the ring ahead of it plays.
 				echoref.Push(sent, Rate, at.Add(time.Duration(d)*time.Second/Rate+OutputExtra))
 			}
@@ -1226,7 +1236,7 @@ func (p *Player) Volume() float32 { return math.Float32frombits(p.volume.Load())
 // Close mutes the codec, turns the amplifier off and lets the device go. The Player stays usable:
 // Start can take it again, which is how a restart works.
 func (p *Player) Close() error {
-	p.apply(initSequence)
+	p.initializeMixer()
 
 	p.devMu.Lock()
 	pb, mixer, hold := p.pb, p.mixer, p.hold
@@ -1302,4 +1312,14 @@ func (b *Bed) Drain() {
 	b.p.mu.Lock()
 	b.p.bed = nil
 	b.p.mu.Unlock()
+}
+
+// initializeMixer keeps vendor amplifier controls off the mainline card.
+func (p *Player) initializeMixer() {
+	if p.mainline {
+		// TAS5805M index 110 is unity; the existing software volume curve controls loudness.
+		p.apply([]kctl{{name: "Master Playback Volume", level: 110}})
+		return
+	}
+	p.apply(initSequence)
 }

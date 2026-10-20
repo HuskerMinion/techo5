@@ -8,6 +8,8 @@ import (
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/HuskerMinion/techo5/echod/internal/hardware/privacy"
 )
 
 // offDevice makes a Camera that Available() says yes to, and whose sensor is a function rather than
@@ -17,8 +19,20 @@ func offDevice(t *testing.T, owner func(stop, stopped chan struct{})) *Camera {
 	was := nodes
 	nodes = []string{t.TempDir()}
 	t.Cleanup(func() { nodes = was })
+	wasMute := muteSwitch
+	muteSwitch = func() (privacy.Mute, error) { return unmuted{}, nil }
+	t.Cleanup(func() { muteSwitch = wasMute })
 	return &Camera{owner: owner}
 }
+
+// unmuted is a privacy latch that is off.
+type unmuted struct{}
+
+func (unmuted) Get() (bool, error)     { return false, nil }
+func (unmuted) Set(bool) error         { return nil }
+func (unmuted) Toggle() (bool, error)  { return false, nil }
+func (unmuted) HardwareActs(bool) bool { return false }
+func (unmuted) Lag() time.Duration     { return 0 }
 
 // A stop that is still running owns the sensor until its goroutine returns. idleStop clears running
 // and lets the lock go first, so an Acquire landing in that window used to open the sensor a second

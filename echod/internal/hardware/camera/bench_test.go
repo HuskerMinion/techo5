@@ -221,3 +221,14 @@ func TestSampleStepDoesNotMoveTheTone(t *testing.T) {
 		t.Errorf("gamma %.3f, want about %.3f", taken.gamma, full.gamma)
 	}
 }
+
+func BenchmarkI420(b *testing.B) {
+	f := &Frame{raw: benchRaw}
+	dst := make([]byte, sensorW*sensorH*3/2)
+	f.I420(dst)
+	b.SetBytes(int64(len(dst)))
+	b.ResetTimer()
+	for range b.N {
+		f.I420(dst)
+	}
+}

@@ -70,7 +70,7 @@ Kernel/initramfs updates are separate: they are a `fastboot flash boot`
 Inputs (kept out of the repo, in `inputs/` or `$TECHO5_INPUTS`; [docs/building.md](../../docs/building.md) says where each comes from):
 
 - `boot-lineage-18.1-20260904-cronos.img` — LineageOS boot image (kernel + header)
-- `alpine-minirootfs-3.24.1-armv7.tar.gz`, `busybox.static` (from `busybox-static-1.37.0-r31.apk`)
+- `alpine-minirootfs-3.24.2-armv7.tar.gz`, `busybox.static` (from `busybox-static-1.37.0-r31.apk`)
 - `apks/`, `apks312/` — the packages in `packages.txt` (initramfs) and the
   wpa_supplicant 2.9 set (both)
 - no vendor tree: images don't carry LineageOS's drivers and firmware. Each unit keeps its own in the
@@ -238,6 +238,20 @@ setup page has let in; the green dot shows while either is read). `/screen.png[?
 same port, while Screen web access is on, is a screenshot of the panel, for checking layouts from a
 PC; the parameters that put a page up first work the screen rather than read it, so they need a
 browser the setup page has let in. With both off the port is closed.
+
+Camera streaming (`feature/camstream`, docs/setup.md) serves the camera over RTSP and ONVIF for
+recorders. On the 2nd gen Show 8 and Show 5 it is H.264 from the SoC's encoder (`h264.go`): the Show 8's
+ISP pass 2 (`mtk-dip`) develops each raw frame into two-plane NV12 and its encoder (`mtk-vcodec-enc`)
+reads those planes in place as dmabufs (`hardware/camstream`), 1456x1088 at up to 60 frames a second (the
+crop switch: the middle 1920x1088), the two pipelined at about 15 ms a frame; the Show 5's cores
+develop the raw frame straight into I420 while the MT8163's encoder, through MediaTek's own libraries,
+encodes the frame before (`hardware/vencpipe`, custom-kernel/cronos/README.md), 1600x1200 at up to 30.
+On both, a frame's tone statistics and (on the Show 5) its development run a frame ahead of the blocks,
+so the stream keeps the sensor's rate: 59.8 and 29.5 frames a second measured.
+Elsewhere it is RTP/JPEG. Auto-exposure puts the picture before the rate: it lengthens the exposure to
+a 30-a-second frame, then adds gain up to 6x, then lengthens the frame further, so the sensors run at
+their top rates (the Show 8's 60, the Show 5's 30) in good light and slow down, rather than amplify
+noise, as it falls. The camera runs only while somebody watches.
 
 ## Updates on the slots
 

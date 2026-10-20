@@ -2,8 +2,9 @@
 // record it like any other camera: rtsp://<device>:8554/camera, with a login. A recorder that adds cameras
 // by ONVIF finds the stream through onvif.go.
 //
-// The device has no video encoder, so the stream is JPEGs, carried as RTP/JPEG (lib/rtpjpeg), which ffmpeg
-// and everything built on it reads. Each picture is encoded once, at most maxFPS a second, and sent to
+// Where the board has a video encoder (the 2nd gen Show 8 and Show 5), the stream is H.264 made by it at the
+// sensor's rate (h264.go); elsewhere it is JPEGs, carried as RTP/JPEG (lib/rtpjpeg), which ffmpeg and
+// everything built on it reads. Each picture is encoded once, JPEGs at most maxFPS a second, and sent to
 // every viewer. RTP goes over the RTSP connection itself (TCP, interleaved): one port to let through, and
 // nothing to lose on Wi-Fi.
 //
@@ -17,10 +18,12 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"fmt"
 	"image"
 	"image/jpeg"
 	"log/slog"
 	"net"
+	"strings"
 	"sync"
 	"time"
 
@@ -28,6 +31,7 @@ import (
 
 	"github.com/HuskerMinion/techo5/echod/internal/component"
 	"github.com/HuskerMinion/techo5/echod/internal/config"
+	"github.com/HuskerMinion/techo5/echod/internal/feature/security"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/web"
 	"github.com/HuskerMinion/techo5/echod/internal/hardware/camera"
 	"github.com/HuskerMinion/techo5/echod/internal/layout"
@@ -63,6 +67,23 @@ const (
 // frame is a camera frame, developed when called.
 type frame func() image.Image
 
+// sendable is one picture as the stream sends it: an RTP/JPEG frame, or an H.264 access unit.
+type sendable interface {
+	Packets(seq *uint16, ts, ssrc uint32, mtu int) [][]byte
+}
+
+// keyed is a picture a viewer can start at, or not: H.264's keyframes. A picture that does not say is
+// one to start at. at is when the camera took it, where the picture knows.
+type keyed interface {
+	keyframe() bool
+	at() time.Time
+}
+
+// h264Queue is how many access units a viewer may be behind (two seconds at 30 a second): unlike a JPEG,
+// one dropped spoils the picture until the next keyframe, so a viewer that falls this far behind waits
+// for one.
+const h264Queue = 60
+
 var errFull = errors.New("as many viewers as the stream takes are watching")
 
 // Feature is the switch, the server and the pictures they share.
@@ -72,8 +93,12 @@ type Feature struct {
 	// frames starts the camera and hands its pictures over until release, each still to be developed, so
 	// one skipped costs nothing; replaced in tests.
 	frames func() (<-chan frame, func(), error)
-	// available is whether the device has a camera to stream; replaced in tests.
+	// available is whether the device has a camera to stream; h264 whether the board has an encoder to make
+	// the stream H.264 with; both replaced in tests.
 	available func() bool
+	h264      func() bool
+
+	crop *esphome.Switch
 
 	// Changed fires when somebody starts or stops watching.
 	Changed hook.Hook[struct{}]
@@ -92,10 +117,14 @@ type Feature struct {
 	pending int                 // connections that have not logged in
 	waiting map[string]int      // the same, by address
 	since   map[net.Conn]waiter // each connection not logged in yet, and when it came
-	subs    map[chan rtpjpeg.Frame]struct{}
-	stopPic func() // ends the pictures, while anybody watches
-	pages   int    // camera web pages being sent (webpages.go)
-	pageGen uint64 // moves on when open page streams must end: a new login, the lens cover (PageGen)
+	subs    map[chan sendable]struct{}
+	lost    map[chan sendable]bool // H.264 viewers that fell behind, until the next keyframe
+	stopPic func()                 // ends the pictures, while anybody watches
+	pages   int                    // camera web pages being sent (webpages.go)
+	pageGen uint64                 // moves on when open page streams must end: a new login, the lens cover (PageGen)
+
+	sps, pps []byte // the H.264 stream's parameter sets, once the encoder has made them
+	forceKey func() // asks the H.264 encoder for a keyframe, while it runs
 }
 
 var (
@@ -116,11 +145,23 @@ func build() *Feature {
 		}},
 		frames:    cameraFrames,
 		available: offered,
+		h264:      hasEncoder,
 		wake:      make(chan struct{}, 1),
 		conns:     map[net.Conn]struct{}{},
 		waiting:   map[string]int{},
 		since:     map[net.Conn]waiter{},
-		subs:      map[chan rtpjpeg.Frame]struct{}{},
+		subs:      map[chan sendable]struct{}{},
+		lost:      map[chan sendable]bool{},
+	}
+	f.crop = &esphome.Switch{
+		Base: esphome.Base{ObjectID: "camera_stream_crop", Name: "Camera stream crop (1920x1088)", Icon: "mdi:crop",
+			Category: esphome.CategoryConfig},
+		OnCommand: func(on bool) {
+			f.crop.Set(on)
+			if err := config.Set().CamStream().Crop(on); err != nil {
+				slog.Error("saving the camera stream's crop failed", "err", err)
+			}
+		},
 	}
 	f.on.OnCommand = func(on bool) {
 		f.on.Set(on)
@@ -134,15 +175,51 @@ func build() *Feature {
 
 func (f *Feature) Name() string { return "camera streaming" }
 
-// Entities are the switch, on a device with a camera only.
+// Entities are the switch, on a device with a camera only, and on the 2nd gen Show 8 the switch between the
+// whole view scaled (1456x1088) and its middle pixel for pixel (1920x1088).
 func (f *Feature) Entities() []esphome.Entity {
 	if !f.available() {
 		return nil
 	}
+	if CropOffered() {
+		return []esphome.Entity{f.on, f.crop}
+	}
 	return []esphome.Entity{f.on}
 }
 
-func (f *Feature) Restore(c config.Config) { f.on.Set(c.CamStream.On) }
+// Actions: camera_credentials sets the stream's login from Home Assistant, as the setup page does, over
+// Home Assistant's link only once it is encrypted with the device's key: a password sent in the clear is
+// not one to trust.
+func (f *Feature) Actions() []*esphome.Action {
+	if !f.available() {
+		return nil
+	}
+	return []*esphome.Action{{
+		Name: "camera_credentials",
+		Args: []esphome.Arg{{Name: "username", Type: esphome.ArgString}, {Name: "password", Type: esphome.ArgString}},
+		Run: func(c esphome.Call) (any, error) {
+			if !security.Encrypted() {
+				slog.Warn("camera streaming: login refused while Home Assistant's link has no device key")
+				return nil, errors.New("camera_credentials: the device has no API encryption key; set one first")
+			}
+			user, pass := strings.TrimSpace(c.String("username")), c.String("password")
+			if err := security.CheckLogin(user, pass); err != nil {
+				return nil, fmt.Errorf("camera_credentials: %w", err)
+			}
+			if err := config.Set().CamStream().Login(user, pass); err != nil {
+				return nil, err
+			}
+			Poke()
+			slog.Info("camera streaming: login set from Home Assistant", "user", user)
+			return nil, nil
+		},
+	}}
+}
+
+func (f *Feature) Restore(c config.Config) {
+	f.on.Set(c.CamStream.On)
+	f.crop.Set(c.CamStream.Crop)
+}
 
 // poke has the listener looked at again, for a change to the switch.
 func (f *Feature) poke() {
@@ -196,6 +273,8 @@ func (f *Feature) wanted() bool {
 
 // Run keeps the port open while the camera is to be served, and shut while it is not.
 func (f *Feature) Run(ctx context.Context) error {
+	stopDiscovery := func() {}
+	defer func() { stopDiscovery() }()
 	defer f.close()
 	defer onCover(func() { f.dropAll(); f.endPages() })()
 	tick := time.NewTicker(30 * time.Second)
@@ -212,8 +291,12 @@ func (f *Feature) Run(ctx context.Context) error {
 				f.mu.Unlock()
 				slog.Info("camera streaming: on", "port", Port)
 				go f.serve(ln)
+				dctx, cancel := context.WithCancel(ctx)
+				stopDiscovery = cancel
+				go f.discover(dctx)
 			}
 		case !want && f.listener() != nil:
+			stopDiscovery()
 			f.close()
 			slog.Info("camera streaming: off")
 		}
@@ -340,8 +423,9 @@ func (f *Feature) unwait(conn net.Conn) {
 	}
 }
 
-// subscribe hands a viewer the pictures, starting the camera for the first one.
-func (f *Feature) subscribe() (<-chan rtpjpeg.Frame, func(), error) {
+// subscribe hands a viewer the pictures, starting the camera for the first one; an H.264 stream is asked
+// for a keyframe for each, to start at.
+func (f *Feature) subscribe() (<-chan sendable, func(), error) {
 	f.startMu.Lock()
 	defer f.startMu.Unlock()
 	f.mu.Lock()
@@ -350,7 +434,18 @@ func (f *Feature) subscribe() (<-chan rtpjpeg.Frame, func(), error) {
 	if n >= maxViewers {
 		return nil, nil, errFull
 	}
-	if n == 0 {
+	if n == 0 && f.h264() {
+		release, err := camera.Get().Acquire()
+		if err != nil {
+			return nil, nil, err
+		}
+		stop := make(chan struct{})
+		var once sync.Once
+		f.mu.Lock()
+		f.stopPic = func() { once.Do(func() { close(stop) }) }
+		f.mu.Unlock()
+		go f.pumpH264(stop, release)
+	} else if n == 0 {
 		frames, release, err := f.frames()
 		if err != nil {
 			return nil, nil, err
@@ -362,16 +457,24 @@ func (f *Feature) subscribe() (<-chan rtpjpeg.Frame, func(), error) {
 		f.mu.Unlock()
 		go f.pump(frames, stop)
 	}
-	ch := make(chan rtpjpeg.Frame, 1)
+	depth := 1
+	if f.h264() {
+		depth = h264Queue
+	}
+	ch := make(chan sendable, depth)
 	f.mu.Lock()
 	f.subs[ch] = struct{}{}
+	key := f.forceKey
 	f.mu.Unlock()
+	if key != nil {
+		key()
+	}
 	f.Changed.Emit(struct{}{})
 	return ch, func() { f.unsubscribe(ch) }, nil
 }
 
 // unsubscribe lets a viewer go, and the camera with the last one.
-func (f *Feature) unsubscribe(ch chan rtpjpeg.Frame) {
+func (f *Feature) unsubscribe(ch chan sendable) {
 	f.startMu.Lock()
 	defer f.startMu.Unlock()
 	f.mu.Lock()
@@ -380,6 +483,7 @@ func (f *Feature) unsubscribe(ch chan rtpjpeg.Frame) {
 		return
 	}
 	delete(f.subs, ch)
+	delete(f.lost, ch)
 	close(ch)
 	var stop func()
 	if len(f.subs) == 0 {
@@ -414,15 +518,7 @@ func (f *Feature) pump(frames <-chan frame, stop <-chan struct{}) {
 			develop, held, due = held, nil, nil
 		case next, ok := <-frames:
 			if !ok {
-				f.mu.Lock()
-				subs := make([]chan rtpjpeg.Frame, 0, len(f.subs))
-				for ch := range f.subs {
-					subs = append(subs, ch)
-				}
-				f.mu.Unlock()
-				for _, ch := range subs {
-					f.unsubscribe(ch)
-				}
+				f.letAllGo()
 				return
 			}
 			if wait := time.Second/maxFPS - time.Since(last); wait > 0 {
@@ -448,15 +544,51 @@ func (f *Feature) pump(frames <-chan frame, stop <-chan struct{}) {
 			slog.Warn("camera streaming: a picture that cannot be sent", "err", err)
 			continue
 		}
-		f.mu.Lock()
-		for ch := range f.subs {
-			select {
-			case <-ch: // behind: the older picture goes
-			default:
+		f.hand(pic)
+	}
+}
+
+// hand gives a picture to every viewer: a JPEG viewer that is behind gets the newest only; an H.264 viewer
+// that is a whole queue behind loses what is queued and starts again at the next keyframe.
+func (f *Feature) hand(pic sendable) {
+	k, isKeyed := pic.(keyed)
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	for ch := range f.subs {
+		if isKeyed {
+			if len(ch) == cap(ch) {
+				f.lost[ch] = true
+				for len(ch) > 0 {
+					<-ch
+				}
+			}
+			if f.lost[ch] {
+				if !k.keyframe() {
+					continue
+				}
+				delete(f.lost, ch)
 			}
 			ch <- pic
+			continue
 		}
-		f.mu.Unlock()
+		select {
+		case <-ch: // behind: the older picture goes
+		default:
+		}
+		ch <- pic
+	}
+}
+
+// letAllGo lets every viewer go, the camera having stopped.
+func (f *Feature) letAllGo() {
+	f.mu.Lock()
+	subs := make([]chan sendable, 0, len(f.subs))
+	for ch := range f.subs {
+		subs = append(subs, ch)
+	}
+	f.mu.Unlock()
+	for _, ch := range subs {
+		f.unsubscribe(ch)
 	}
 }
 

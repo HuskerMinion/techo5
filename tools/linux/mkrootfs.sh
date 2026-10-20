@@ -16,9 +16,11 @@
 #   bin/techo5-aec                                         WebRTC echo canceller helper (C++, build-aec.sh), optional
 #   bin/techo5-librespot                                   Spotify Connect receiver (Rust, build-librespot.sh), optional
 #   bin/techo5-ffmpeg                                      the Show's video decoder (C, build-ffmpeg.sh), optional
+#   bin/techo5-gpu                                         the GPU helper (C, tools/gpu), 64-bit builds only, optional
+#   bin/techo5-jpeg                                        the JPEG decoder (C, tools/jpeg), 64-bit builds only, optional
 #   tools/slotctl tools/techo5-lib.sh tools/packages-rootfs.txt
 #   overlay/                                               tools/linux/rootfs from the repo
-#   inputs/alpine-minirootfs-*-armv7.tar.gz
+#   inputs/alpine-minirootfs-*.tar.gz        armv7, or aarch64 for a 64-bit build
 #   inputs/vendor.tar.gz                                   optional, development only: LineageOS's vendor/.
 #                                                          Published images never carry it: each unit keeps
 #                                                          its own in the store (etc/techo5/boot.sh)
@@ -45,7 +47,8 @@ R=$WORK/root
 rm -rf "$R"
 mkdir -p "$R"
 
-mini=$(ls "$IN"/inputs/alpine-minirootfs-*-armv7.tar.gz | head -1)
+# The base the build staged: armv7 for every board, or aarch64 for the mainline ones built 64-bit.
+mini=$(ls "$IN"/inputs/alpine-minirootfs-*.tar.gz | head -1)
 say "base: $(basename "$mini")"
 tar -xzf "$mini" -C "$R"
 
@@ -110,7 +113,8 @@ if [ -e "$IN/inputs/vendor.tar.gz" ]; then
 	tar -xzf "$IN/inputs/vendor.tar.gz" -C "$R" vendor
 	# The Wi-Fi driver the device boots with (etc/techo5/device.conf in the overlay; the Show's by default).
 	WIFI_MODULE=/vendor/lib/modules/mt76x8_wlan.ko
-	[ -r "$IN/overlay/etc/techo5/device.conf" ] && WIFI_MODULE=$(sed -n 's/^WIFI_MODULE=//p' "$IN/overlay/etc/techo5/device.conf" | tr -d '"')
+	[ -r "$IN/overlay/etc/techo5/device.conf" ] && WIFI_MODULE=$(sed -n 's/^WIFI_MODULE=//p' "$IN/overlay/etc/techo5/device.conf" | tr -d '
+"')
 	[ -e "$R$WIFI_MODULE" ] || { echo "mkrootfs: vendor tree has no $WIFI_MODULE" >&2; exit 1; }
 else
 	say "no vendor tree: the unit's own is mounted at /vendor"
@@ -118,7 +122,7 @@ fi
 
 # Our binaries and scripts.
 install -d "$R/usr/local/bin" "$R/usr/local/sbin" "$R/lib" "$R/var/lib/bluetooth" "$R/var/lib/bluealsa" "$R/usr/var/lib/bluealsa"
-for b in techo5 fbprobe audioprobe rebootto btbridge techo5-aec techo5-librespot techo5-ffmpeg; do
+for b in techo5 fbprobe audioprobe rebootto btbridge techo5-aec techo5-librespot techo5-ffmpeg techo5-gpu techo5-jpeg; do
 	[ -e "$IN/bin/$b" ] && install -m 755 "$IN/bin/$b" "$R/usr/local/bin/$b"
 done
 
@@ -129,6 +133,10 @@ if [ -e "$IN/bin/techo5-ffmpeg" ]; then
 	grep -q '^techo5-video:' "$R/etc/passwd" || echo 'techo5-video:x:89:89:techo5-video:/var/empty:/sbin/nologin' >> "$R/etc/passwd"
 	grep -q '^inet:' "$R/etc/group" || echo 'inet:x:3003:' >> "$R/etc/group"
 	grep -Eq "^inet:.*[:,]techo5-video(,|\$)" "$R/etc/group" || sed -i -E "/^inet:/{s/:\$/:techo5-video/;t;s/\$/,techo5-video/}" "$R/etc/group"
+	# ...and in the video group, for a hardware decoder's devices where the board has one (boot.sh gives
+	# the group those and nothing else).
+	grep -q '^video:' "$R/etc/group" || echo 'video:x:27:' >> "$R/etc/group"
+	grep -Eq "^video:.*[:,]techo5-video(,|\$)" "$R/etc/group" || sed -i -E "/^video:/{s/:\$/:techo5-video/;t;s/\$/,techo5-video/}" "$R/etc/group"
 fi
 install -m 755 "$IN/tools/slotctl" "$R/usr/local/sbin/slotctl"
 install -m 644 "$IN/tools/techo5-lib.sh" "$R/lib/techo5-lib.sh"
@@ -139,6 +147,11 @@ say "overlay"
 find "$R/etc/techo5" "$R/usr/local/sbin" "$R/lib/techo5-lib.sh" "$R/etc/inittab" "$R/etc/profile.d/techo5.sh" "$R/etc/hostname" "$R/etc/motd" \
 	-type f -exec sed -i 's/\r$//' {} +
 chmod 755 "$R"/etc/techo5/*.sh "$R"/usr/local/sbin/*
+
+# Optional mainline modules and firmware, built from the same kernel as boot.
+if [ -f "$IN/inputs/kernel.tar.gz" ]; then
+	tar -xzf "$IN/inputs/kernel.tar.gz" -C "$R"
+fi
 
 # State that must survive an image change lives on userdata.
 rm -rf "$R/etc/dropbear"

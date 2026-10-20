@@ -235,7 +235,9 @@ The camera of a Show or a Spot can be recorded like any other camera, by Frigate
 
 1. On the setup page, under **Privacy & Security** → **Camera streaming**, set a password (12
    characters or more) and, if you like, a user name (`camera` unless changed). Save. The password is
-   never shown again; leave the field empty to keep it.
+   never shown again; leave the field empty to keep it. Home Assistant can set the same login with the
+   device's `camera_credentials` action (`username`, `password`), once the device has its encryption
+   key, so the password never crosses the network in the clear.
 2. Turn on **Camera streaming**, a switch of the device's in Home Assistant, under its configuration.
 
 It never runs without a password. Turning it off, saving a new login and closing the lens cover each
@@ -244,7 +246,7 @@ While somebody is being sent the camera, a Show draws a small green dot in the t
 screen, over everything; a Spot shows its camera dot, as it does whenever its camera runs. With the
 screen off, it lights at its dimmest to show the dot alone on black, so the room can still tell.
 
-Two viewers at most watch at once, at up to 10 pictures a second. The login is checked with Digest, so
+Two viewers at most watch at once. The login is checked with Digest, so
 the password does not cross the network in the clear, but the picture itself is not encrypted, and
 Digest is MD5: somebody on your network who records a login can try passwords against it offline. Use a
 long password of its own, not one you use anywhere else. An address that gets the login wrong 10 times
@@ -254,9 +256,18 @@ for 15 minutes, so a guesser who keeps changing addresses is stopped too. A reco
 the last day is not kept out by that, only by wrong logins from its own address; one that shares an
 address with a guesser (behind the same router, say) is refused with it.
 
-The device has no video encoder, so the stream is a series of JPEGs (RTP/JPEG, over TCP only), not
-H.264. ffmpeg, and Frigate and go2rtc with it, read it; a recorder that wants H.264 has to re-encode it,
-which in Frigate is an ffmpeg output argument:
+On the 2nd gen Show 8 and Show 5 the stream is H.264, made by the SoC's own encoder at the sensor's own
+rate: the Show 8 at 1456x1088 (its whole view; the encoder takes 1088 lines at most), up to 60 pictures a
+second, and the Show 5 at 1600x1200, up to 30. The picture comes before the rate: as the light falls
+the exposure is lengthened, and the rate with it (down to 15 and 9), before the picture is amplified into
+noise. Keyframes come every second and for each viewer that joins. On the
+Show 8 the **Camera stream crop (1920x1088)** switch makes it the middle 1920x1088 of the sensor's frame
+pixel for pixel: a view a tenth narrower and a third shorter, at the sensor's own sharpness. A recorder
+takes it as it is (record with `-c:v copy`).
+
+The other devices have no video encoder, so their stream is a series of JPEGs (RTP/JPEG, over TCP only),
+up to 10 a second. ffmpeg, and Frigate and go2rtc with it, read it; a recorder that wants H.264 has to
+re-encode it, which in Frigate is an ffmpeg output argument:
 
 ```yaml
 cameras:
@@ -278,8 +289,9 @@ ask for that login too, so set a camera password before you use them; a browser 
 in needs none. **Since v1.2.24:** a Home Assistant Generic Camera, MJPEG camera or recorder that read
 `/camera.jpg` or `/camera.mjpeg` with no login gets "401" until you set a camera password and give it the
 user and password with **Digest** authentication (Basic is not taken). Changing the password ends the
-pages' open streams, and so does closing the lens cover. The device is not found by ONVIF discovery:
-give the recorder its address. ONVIF and the pages are a login digest over plain HTTP, as on most
+pages' open streams, and so does closing the lens cover. While the stream is
+on, the device answers ONVIF's WS-Discovery searches (3702/udp), so Home Assistant's ONVIF integration
+lists it among the discovered devices. ONVIF and the pages are a login digest over plain HTTP, as on most
 cameras: the password itself is never sent, but anyone who can watch your Wi-Fi traffic could replay a
 captured login to the same page for a few minutes, and could see the pictures anyway. `/screen.png`
 (Screen web access) has no login: if the screen is showing the camera, a screenshot shows it too.
@@ -643,8 +655,11 @@ device's fonts folder over SSH ([Set the SSH authorized keys](actions.md#set-the
   or more on average, where 1 is surely a person, and stays on for a minute after the last time they
   did. The model is TensorFlow's
   person detection example: small enough for these processors, and a modest judge. It often misses a
-  person far from the camera or half out of the picture.
-  Nothing it sees is kept or sent.
+  person far from the camera or half out of the picture. On the 2nd gen Show 8 it runs on the
+  SoC's vision DSP (the VPU) rather than the processors: about 3 ms a look and a fiftieth of the
+  processor time, its scores within about 0.04 of the processors' (the VPU takes a coarser kind of
+  model, converted on the device); on any error it goes back to the processors. Nothing it sees is
+  kept or sent.
 - **Gestures** (Show and Spot, off by default; the **Gestures** switch in Home
   Assistant): cover the camera with your palm, hand on or almost on the lens, for half a second to
   three seconds. It stops a ringing alarm or timer, and Home Assistant gets an `esphome.techo5_gesture`

@@ -11,11 +11,10 @@ import (
 	"net/http"
 	"time"
 
-	xdraw "golang.org/x/image/draw"
-
 	"github.com/HuskerMinion/techo5/echod/internal/config"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/hastate"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/media"
+	"github.com/HuskerMinion/techo5/echod/internal/lib/picscale"
 	"github.com/HuskerMinion/techo5/echod/internal/lib/radiometa"
 )
 
@@ -196,7 +195,7 @@ func fetchArt(ctx context.Context, u string, logo bool) (*image.RGBA, *image.RGB
 // layoutArt decodes a picture and lays it out for the panel, by fetchArt's rule. It is the half that
 // does not care where the bytes came from: a URL here, or Music Assistant sending the picture itself.
 func layoutArt(b []byte, logo bool, what string) (*image.RGBA, *image.RGBA, error) {
-	src, err := decodeWithin(b, maxArtPixels, what)
+	src, err := decodeWithin(b, maxArtPixels, what, artW, artH)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -228,7 +227,7 @@ func layoutArt(b []byte, logo bool, what string) (*image.RGBA, *image.RGBA, erro
 		}
 		target = image.Rect((artW-w)/2, (artH-h)/2, (artW-w)/2+w, (artH-h)/2+h)
 	}
-	xdraw.ApproxBiLinear.Scale(dst, target, src, sb, draw.Src, nil)
+	picscale.CatmullRom.Scale(dst, target, src, sb, draw.Src)
 
 	thumb := image.NewRGBA(image.Rect(0, 0, thumbSide, thumbSide))
 	w, h := thumbSide, thumbSide
@@ -237,6 +236,6 @@ func layoutArt(b []byte, logo bool, what string) (*image.RGBA, *image.RGBA, erro
 	} else {
 		w = sw * thumbSide / sh
 	}
-	xdraw.ApproxBiLinear.Scale(thumb, image.Rect((thumbSide-w)/2, (thumbSide-h)/2, (thumbSide-w)/2+w, (thumbSide-h)/2+h), src, sb, draw.Src, nil)
+	picscale.CatmullRom.Scale(thumb, image.Rect((thumbSide-w)/2, (thumbSide-h)/2, (thumbSide-w)/2+w, (thumbSide-h)/2+h), src, sb, draw.Src)
 	return dst, thumb, nil
 }

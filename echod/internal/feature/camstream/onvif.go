@@ -25,9 +25,9 @@ import (
 
 // ONVIF, as little of it as lets a recorder that adds cameras by ONVIF add this one: the device and media
 // services on the web port (8181), one profile, its stream (the RTSP above) and, with Camera web access on,
-// its snapshot. The same login as the stream, given as a WS-Security UsernameToken digest. No discovery:
-// the camera is added by its address. No PTZ, events, imaging or settings: there is nothing to turn, and the
-// device is set up from Home Assistant.
+// its snapshot. The same login as the stream, given as a WS-Security UsernameToken digest. Found by
+// WS-Discovery (discovery.go) or added by its address. No PTZ, events, imaging or settings: there is
+// nothing to turn, and the device is set up from Home Assistant.
 
 const (
 	devicePath = "/onvif/device_service"
@@ -130,7 +130,7 @@ func (f *Feature) onvif(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
-	body, ok := f.answer(op, env.Body.Inner.ProfileToken, requestHost(r))
+	body, ok := f.answer(op, env.Body.Inner.ProfileToken, requestHost(r), r.URL.Path == mediaPath)
 	if !ok {
 		fault(w, http.StatusBadRequest, "ter:ActionNotSupported", op+" is not offered")
 		return
@@ -139,7 +139,7 @@ func (f *Feature) onvif(w http.ResponseWriter, r *http.Request) {
 }
 
 // answer is an operation's response body, or false for one not offered.
-func (f *Feature) answer(op, profile, host string) (string, bool) {
+func (f *Feature) answer(op, profile, host string, media bool) (string, bool) {
 	deviceURL := "http://" + net.JoinHostPort(host, strconv.Itoa(web.Port)) + devicePath
 	mediaURL := "http://" + net.JoinHostPort(host, strconv.Itoa(web.Port)) + mediaPath
 	streamURL := "rtsp://" + net.JoinHostPort(host, Port) + Path
@@ -169,6 +169,13 @@ func (f *Feature) answer(op, profile, host string) (string, bool) {
 <tds:Version><tt:Major>2</tt:Major><tt:Minor>0</tt:Minor></tds:Version></tds:Service>
 </tds:GetServicesResponse>`, true
 	case "GetServiceCapabilities":
+		if media {
+			return `<trt:GetServiceCapabilitiesResponse><trt:Capabilities SnapshotUri="` +
+				strconv.FormatBool(config.Get().Security.Camera) + `" Rotation="false">` +
+				`<trt:ProfileCapabilities MaximumNumberOfProfiles="1"/>` +
+				`<trt:StreamingCapabilities RTPMulticast="false" RTP_TCP="true" RTP_RTSP_TCP="true"/>` +
+				`</trt:Capabilities></trt:GetServiceCapabilitiesResponse>`, true
+		}
 		return `<tds:GetServiceCapabilitiesResponse><tds:Capabilities><tds:Network/><tds:Security UsernameToken="true"/>
 <tds:System/></tds:Capabilities></tds:GetServiceCapabilitiesResponse>`, true
 	case "GetDeviceInformation":
@@ -177,19 +184,30 @@ func (f *Feature) answer(op, profile, host string) (string, bool) {
 			`</tds:FirmwareVersion><tds:SerialNumber>` + serialNumber(config.Get().Device.Name) +
 			`</tds:SerialNumber><tds:HardwareId>TECHO5</tds:HardwareId></tds:GetDeviceInformationResponse>`, true
 	case "GetScopes":
-		return `<tds:GetScopesResponse>` + scope("onvif://www.onvif.org/type/video_encoder") +
-			scope("onvif://www.onvif.org/Profile/Streaming") +
-			scope("onvif://www.onvif.org/name/"+strings.ReplaceAll(config.Get().Device.Name, " ", "_")) +
-			`</tds:GetScopesResponse>`, true
+		var b strings.Builder
+		for _, sc := range scopes() {
+			b.WriteString(scope(sc))
+		}
+		return `<tds:GetScopesResponse>` + b.String() + `</tds:GetScopesResponse>`, true
+	case "GetHostname":
+		return `<tds:GetHostnameResponse><tds:HostnameInformation><tt:FromDHCP>false</tt:FromDHCP><tt:Name>` +
+			html.EscapeString(config.Get().Device.Name) + `</tt:Name></tds:HostnameInformation></tds:GetHostnameResponse>`, true
+	case "GetNetworkInterfaces":
+		// Home Assistant keys an ONVIF camera on the address here.
+		return `<tds:GetNetworkInterfacesResponse><tds:NetworkInterfaces token="wlan0"><tt:Enabled>true</tt:Enabled>
+<tt:Info><tt:Name>wlan0</tt:Name><tt:HwAddress>` + mac() + `</tt:HwAddress><tt:MTU>1500</tt:MTU></tt:Info>
+<tt:IPv4><tt:Enabled>true</tt:Enabled><tt:Config><tt:FromDHCP><tt:Address>` + html.EscapeString(strings.Trim(host, "[]")) +
+			`</tt:Address><tt:PrefixLength>24</tt:PrefixLength></tt:FromDHCP><tt:DHCP>true</tt:DHCP></tt:Config></tt:IPv4>
+</tds:NetworkInterfaces></tds:GetNetworkInterfacesResponse>`, true
 	case "GetProfiles":
 		return `<trt:GetProfilesResponse>` + profileXML("trt:Profiles") + `</trt:GetProfilesResponse>`, true
 	case "GetProfile":
 		return `<trt:GetProfileResponse>` + profileXML("trt:Profile") + `</trt:GetProfileResponse>`, true
 	case "GetVideoSources":
-		w, h := size()
-		return fmt.Sprintf(`<trt:GetVideoSourcesResponse><trt:VideoSources token="camera"><tt:Framerate>15</tt:Framerate>
+		st := Stream()
+		return fmt.Sprintf(`<trt:GetVideoSourcesResponse><trt:VideoSources token="camera"><tt:Framerate>%d</tt:Framerate>
 <tt:Resolution><tt:Width>%d</tt:Width><tt:Height>%d</tt:Height></tt:Resolution></trt:VideoSources>
-</trt:GetVideoSourcesResponse>`, w, h), true
+</trt:GetVideoSourcesResponse>`, st.FPS, st.W, st.H), true
 	case "GetStreamUri":
 		return `<trt:GetStreamUriResponse><trt:MediaUri><tt:Uri>` + html.EscapeString(streamURL) + `</tt:Uri>
 <tt:InvalidAfterConnect>false</tt:InvalidAfterConnect><tt:InvalidAfterReboot>false</tt:InvalidAfterReboot>
@@ -211,17 +229,23 @@ func scope(s string) string {
 	return `<tds:Scopes><tt:ScopeDef>Fixed</tt:ScopeDef><tt:ScopeItem>` + html.EscapeString(s) + `</tt:ScopeItem></tds:Scopes>`
 }
 
-// profileXML is the one profile: the camera, as JPEG.
+// profileXML is the one profile: the camera, as the stream sends it (H.264 where the board has an
+// encoder, JPEG elsewhere).
 func profileXML(tag string) string {
-	w, h := size()
+	st := Stream()
+	token, codec := "jpeg", ""
+	if st.Codec == "H264" {
+		token = "h264"
+		codec = `<tt:H264><tt:GovLength>` + strconv.Itoa(st.FPS) + `</tt:GovLength><tt:H264Profile>High</tt:H264Profile></tt:H264>`
+	}
 	return fmt.Sprintf(`<%s token="main" fixed="true"><tt:Name>main</tt:Name>
 <tt:VideoSourceConfiguration token="camera"><tt:Name>camera</tt:Name><tt:UseCount>1</tt:UseCount>
 <tt:SourceToken>camera</tt:SourceToken><tt:Bounds x="0" y="0" width="%d" height="%d"/></tt:VideoSourceConfiguration>
-<tt:VideoEncoderConfiguration token="jpeg"><tt:Name>jpeg</tt:Name><tt:UseCount>1</tt:UseCount>
-<tt:Encoding>JPEG</tt:Encoding><tt:Resolution><tt:Width>%d</tt:Width><tt:Height>%d</tt:Height></tt:Resolution>
-<tt:Quality>%d</tt:Quality><tt:RateControl><tt:FrameRateLimit>15</tt:FrameRateLimit><tt:EncodingInterval>1</tt:EncodingInterval>
-<tt:BitrateLimit>0</tt:BitrateLimit></tt:RateControl><tt:SessionTimeout>PT60S</tt:SessionTimeout></tt:VideoEncoderConfiguration>
-</%s>`, tag, w, h, w, h, quality, tag)
+<tt:VideoEncoderConfiguration token="%s"><tt:Name>%s</tt:Name><tt:UseCount>1</tt:UseCount>
+<tt:Encoding>%s</tt:Encoding><tt:Resolution><tt:Width>%d</tt:Width><tt:Height>%d</tt:Height></tt:Resolution>
+<tt:Quality>%d</tt:Quality><tt:RateControl><tt:FrameRateLimit>%d</tt:FrameRateLimit><tt:EncodingInterval>1</tt:EncodingInterval>
+<tt:BitrateLimit>%d</tt:BitrateLimit></tt:RateControl>%s<tt:SessionTimeout>PT60S</tt:SessionTimeout></tt:VideoEncoderConfiguration>
+</%s>`, tag, st.W, st.H, token, token, st.Codec, st.W, st.H, quality, st.FPS, st.Bitrate/1000, codec, tag)
 }
 
 // tokenOK is whether a request's UsernameToken is the stream's login, as a digest made within skew of now,

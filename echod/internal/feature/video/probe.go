@@ -3,6 +3,8 @@ package video
 import (
 	"bufio"
 	"errors"
+	"fmt"
+	"math"
 	"regexp"
 	"strconv"
 	"strings"
@@ -31,25 +33,81 @@ type Info struct {
 	// VideoCodec and AudioCodec are their codecs, for the log.
 	VideoCodec, AudioCodec string
 
+	// PixFmt is the picture's pixel format as ffmpeg names it (yuv420p, yuv420p10le, ...), "" when it
+	// named none; Interlaced, that its frames are two fields. A hardware decoder takes only some (hw.go).
+	PixFmt     string
+	Interlaced bool
+
 	// Duration is how long it runs, 0 for a live stream or one that does not say.
 	Duration time.Duration
 }
 
-// Usable codecs: what the image's ffmpeg decodes (tools/linux/build-ffmpeg.sh).
+// Usable codecs: what the image's ffmpeg decodes (tools/linux/build-ffmpeg.sh). H.265, VP8 and VP9 only
+// where they were built in, which decodesHEVC and decodesVPx say.
 var (
 	videoCodecs = map[string]bool{"h264": true, "mpeg4": true}
 	audioCodecs = map[string]bool{"aac": true, "aac_latm": true, "mp3": true, "mp3float": true, "opus": true, "ac3": true, "eac3": true}
 )
 
+// decodesHEVC is whether the image's ffmpeg decodes H.265 and can copy it out as Annex-B (proc.go
+// looks); an older one cannot.
+var decodesHEVC = func() bool { return false }
+
+// decodesVPx is whether the image's ffmpeg decodes VP8 and VP9 (WebM's video), always on the cores: no
+// decoder here does them in hardware (proc.go looks).
+var decodesVPx = func() bool { return false }
+
+// vpxMost is the most VP8 or VP9 the cores decode in time, in pixels a second (width by height by
+// frame rate), 0 for no limit; a stream past it is not played, rather than played behind (vpx_show.go
+// sets it for the board).
+var vpxMost float64
+
+// vpxTooFast is whether a VP8 or VP9 picture is more than the cores decode in time here. A stream that
+// does not say its rate is not refused.
+func vpxTooFast(codec string, w, h int, fps float64) bool {
+	return (codec == "vp8" || codec == "vp9") && vpxMost > 0 && float64(w)*float64(h)*fps > vpxMost
+}
+
+func usableVideo(codec string) bool {
+	switch codec {
+	case "hevc":
+		return decodesHEVC()
+	case "vp8", "vp9":
+		return decodesVPx()
+	}
+	return videoCodecs[codec]
+}
+
+// vpxReach says what vpxMost allows, for a refusal: as a 1080p rate, which is how streams are offered.
+func vpxReach() string {
+	return "VP8 and VP9 up to 1080p at " + strconv.FormatFloat(math.Round(vpxMost/(1920*1080)), 'f', -1, 64) + " frames a second"
+}
+
+// decodable names the video codecs this device plays, for a refusal.
+func decodable() string {
+	c := []string{"H.264"}
+	if decodesHEVC() {
+		c = append(c, "H.265")
+	}
+	if decodesVPx() {
+		c = append(c, "VP8", "VP9")
+	}
+	return strings.Join(c, ", ") + " and MPEG-4 only"
+}
+
 var (
-	reStream   = regexp.MustCompile(`^\s*Stream #\d+:\d+(?:\[[^\]]*\])?(?:\([^)]*\))?: (Video|Audio|Subtitle|Data|Attachment): ([A-Za-z0-9_]+)(.*)$`)
-	reSize     = regexp.MustCompile(`, (\d{1,5})x(\d{1,5})\b`)
-	reSAR      = regexp.MustCompile(`\[SAR (\d+):(\d+) DAR`)
-	reFPS      = regexp.MustCompile(`, ([0-9.]+) fps\b`)
-	reTBR      = regexp.MustCompile(`, ([0-9.]+)(k?) tbr\b`)
-	reRotation = regexp.MustCompile(`rotation of (-?[0-9.]+) degrees`)
-	reDuration = regexp.MustCompile(`Duration: (\d+):(\d\d):(\d\d(?:\.\d+)?)`)
-	reProgram  = regexp.MustCompile(`^\s*Program (\d+)`)
+	reStream = regexp.MustCompile(`^\s*Stream #\d+:\d+(?:\[[^\]]*\])?(?:\([^)]*\))?: (Video|Audio|Subtitle|Data|Attachment): ([A-Za-z0-9_]+)(.*)$`)
+	reSize   = regexp.MustCompile(`, (\d{1,5})x(\d{1,5})\b`)
+	// The pixel format, after the codec's own parenthesis, with what ffmpeg says of the picture in its
+	// own: "yuv420p(tv, bt709, progressive)", "yuv420p(top first)".
+	rePixFmt     = regexp.MustCompile(`, ((?:yuvj?|nv|gray|rgb|bgr|p0)[0-9a-z]*)(?:\(([^)]*)\))?`)
+	reInterlaced = regexp.MustCompile(`\b(top|bottom) first\b|\b[tb][tb]\b`)
+	reSAR        = regexp.MustCompile(`\[SAR (\d+):(\d+) DAR`)
+	reFPS        = regexp.MustCompile(`, ([0-9.]+) fps\b`)
+	reTBR        = regexp.MustCompile(`, ([0-9.]+)(k?) tbr\b`)
+	reRotation   = regexp.MustCompile(`rotation of (-?[0-9.]+) degrees`)
+	reDuration   = regexp.MustCompile(`Duration: (\d+):(\d\d):(\d\d(?:\.\d+)?)`)
+	reProgram    = regexp.MustCompile(`^\s*Program (\d+)`)
 )
 
 // most is the largest picture worth choosing among a stream's variants: past it, a variant only costs
@@ -70,6 +128,9 @@ func ParseProbe(out string) (Info, error) {
 		codec         string
 		usable        bool
 		attachedImage bool
+		pixFmt        string
+		interlaced    bool
+		tooFast       bool
 	}
 	type audioStream struct {
 		idx, n, program int
@@ -114,8 +175,12 @@ func ParseProbe(out string) (Info, error) {
 		kind, codec, rest := m[1], m[2], m[3]
 		switch kind {
 		case "Video":
-			v := videoStream{idx: nv, n: n, program: program, sarN: 1, sarD: 1, codec: codec, usable: videoCodecs[codec],
+			v := videoStream{idx: nv, n: n, program: program, sarN: 1, sarD: 1, codec: codec, usable: usableVideo(codec),
 				attachedImage: strings.Contains(rest, "(attached pic)")}
+			if s := rePixFmt.FindStringSubmatch(rest); s != nil {
+				v.pixFmt = s[1]
+				v.interlaced = reInterlaced.MatchString(s[2])
+			}
 			if s := reSize.FindStringSubmatch(rest); s != nil {
 				v.w, _ = strconv.Atoi(s[1])
 				v.h, _ = strconv.Atoi(s[2])
@@ -131,6 +196,9 @@ func ParseProbe(out string) (Info, error) {
 				if s[2] == "k" {
 					v.fps *= 1000
 				}
+			}
+			if v.usable && vpxTooFast(codec, v.w, v.h, v.fps) {
+				v.usable, v.tooFast = false, true
 			}
 			vids = append(vids, v)
 			lastVideo = len(vids) - 1
@@ -163,8 +231,14 @@ func ParseProbe(out string) (Info, error) {
 		}
 	}
 	if best < 0 {
+		for _, v := range vids {
+			if v.tooFast {
+				return info, fmt.Errorf("its video is %s at %dx%d and %s frames a second, more than this device decodes in time (%s)",
+					v.codec, v.w, v.h, strconv.FormatFloat(v.fps, 'f', -1, 64), vpxReach())
+			}
+		}
 		if len(vids) > 0 {
-			return info, errors.New("its video is " + vids[0].codec + ", which this device does not decode (H.264 and MPEG-4 only)")
+			return info, errors.New("its video is " + vids[0].codec + ", which this device does not decode (" + decodable() + ")")
 		}
 		if problem != "" {
 			return info, errors.New(problem)
@@ -174,6 +248,7 @@ func ParseProbe(out string) (Info, error) {
 	v := vids[best]
 	info.VideoIndex, info.VideoCodec = v.idx, v.codec
 	info.Width, info.Height, info.FPS, info.Rotation = v.w, v.h, v.fps, v.rotation
+	info.PixFmt, info.Interlaced = v.pixFmt, v.interlaced
 	if v.sarN > 0 && v.sarD > 0 {
 		info.SARNum, info.SARDen = v.sarN, v.sarD
 	}

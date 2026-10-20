@@ -11,14 +11,13 @@
 package camera
 
 import (
-	"bytes"
 	"context"
 	"fmt"
 	"image"
-	"image/jpeg"
 	"log/slog"
 	"net/http"
 	"strconv"
+	"sync"
 	"time"
 
 	"github.com/HuskerMinion/techo5/echod/internal/component"
@@ -26,6 +25,7 @@ import (
 	"github.com/HuskerMinion/techo5/echod/internal/feature/camstream"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/web"
 	"github.com/HuskerMinion/techo5/echod/internal/hardware/camera"
+	"github.com/HuskerMinion/techo5/echod/internal/hardware/jpegenc"
 )
 
 func init() {
@@ -34,8 +34,10 @@ func init() {
 }
 
 const (
-	// quality is the JPEG quality for both.
-	quality = 85
+	// quality is the JPEG quality for the stream and the stills alike. Every picture sent is the
+	// sensor's full size, developed and encoded across the cores (Frame.Full, encodeStripes), so the
+	// stream is as sharp as a still of the same mode.
+	quality = 90
 
 	// snapshotWait bounds a snapshot request: sensor start plus a frame or two.
 	snapshotWait = 8 * time.Second
@@ -79,35 +81,81 @@ func guarded(h http.HandlerFunc) http.HandlerFunc {
 // pageGenKey carries the page generation guarded read into the handler.
 type pageGenKey struct{}
 
+// encode is a streamed frame at the sensor's full size. Viewers of the same frame share one encode:
+// the last one is kept, and a second viewer asking for it while it is being made waits for it.
 func encode(f *camera.Frame) ([]byte, error) {
-	return encodeImage(f.Image())
+	encoded.mu.Lock()
+	defer encoded.mu.Unlock()
+	if encoded.frame == f {
+		return encoded.jpg, nil
+	}
+	b, err := encodeFrame(f)
+	if err != nil {
+		return nil, err
+	}
+	encoded.frame, encoded.jpg = f, b
+	return b, nil
 }
 
-// encodeFull is a still at the sensor's own size.
-func encodeFull(f *camera.Frame) ([]byte, error) {
+var encoded struct {
+	mu    sync.Mutex
+	frame *camera.Frame
+	jpg   []byte
+}
+
+// encodeFrame is a frame, streamed or still, as a JPEG, by the cheapest way the board has:
+//   - the 2nd gen Show 8: the GPU develops it to YUYV in a buffer of its own, which the JPEG encoder
+//     reads in place, so no picture passes through the cores at all;
+//   - elsewhere, or if the GPU or the encoder fails: developed on the cores (Full) and encoded there,
+//     in strips across them. The 2nd gen Show 5 goes this way although it has a GPU: its Mali-T720
+//     takes about 110 ms to develop a 1600x1200 frame and as long again to bring YCbCr back, where the
+//     cores' bands manage five frames a second for half the frame rate's worth of power saved at best.
+//
+// The GPU's buffer is reused by the next development, so developing and encoding go together, one
+// frame at a time.
+func encodeFrame(f *camera.Frame) ([]byte, error) {
+	pipe.Lock()
+	defer pipe.Unlock()
+	if jpegenc.Available() {
+		if fd, stride, w, h, ok := f.GPUYUYV(); ok {
+			b, err := jpegenc.EncodeDMABuf(fd, w, h, stride, quality)
+			if err == nil {
+				return b, nil
+			}
+			slog.Warn("camera: hardware jpeg of a GPU frame, encoding on the cores", "err", err)
+		}
+	}
 	return encodeImage(f.Full())
 }
 
-func encodeImage(img image.Image) ([]byte, error) {
-	var b bytes.Buffer
-	if err := jpeg.Encode(&b, img, &jpeg.Options{Quality: quality}); err != nil {
-		return nil, err
+var pipe sync.Mutex
+
+// encodeImage is a JPEG of the picture: on the 2nd gen Show 8's JPEG encoder where the board has one
+// and the size suits it (a fraction of the time, and of the power, the cores take), on the cores
+// otherwise, and on the cores too if the encoder fails a picture.
+func encodeImage(img *image.RGBA) ([]byte, error) {
+	if jpegenc.Available() && jpegenc.Fits(img.Bounds()) {
+		b, err := jpegenc.Encode(img, quality)
+		if err == nil {
+			return b, nil
+		}
+		slog.Warn("camera: hardware jpeg, encoding on the cores", "err", err)
 	}
-	return b.Bytes(), nil
+	return encodeStripes(img, quality)
 }
 
 // snapshot answers with the next frame.
 func (f *Feature) snapshot(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithTimeout(r.Context(), snapshotWait)
 	defer cancel()
-	fr, err := camera.Get().Snapshot(ctx)
+	fr, err := camera.Get().Still(ctx)
 	if err != nil {
 		slog.Warn("camera snapshot", "err", err)
 		http.Error(w, err.Error(), http.StatusServiceUnavailable)
 		return
 	}
 	defer camstream.PageWatching()() // only a picture that goes out lights the dot
-	b, err := encodeFull(fr)
+	b, err := encodeFrame(fr)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return

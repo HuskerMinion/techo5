@@ -1,6 +1,7 @@
 package audio
 
 import (
+	"bytes"
 	"encoding/binary"
 	"math"
 	"testing"
@@ -115,5 +116,56 @@ func TestUpsamplerGain(t *testing.T) {
 	last := float64(int16(binary.LittleEndian.Uint16(out[len(out)-2:])))
 	if want := 10000 * math.Pow(10, -10.0/20); math.Abs(last-want) > 2 {
 		t.Errorf("DC of 10000 at -10 dB came out %.0f, want %.0f", last, want)
+	}
+}
+
+// Silence is skipped, not changed: through sound, a long silence and sound again, both filters give
+// exactly what the plain sums do, and silence comes out as zeros.
+func TestSilenceSkippedExactly(t *testing.T) {
+	sig := func(i int) float32 {
+		if i >= 3000 && i < 9000 {
+			return 0
+		}
+		return float32(math.Sin(float64(i)*0.05)*8000 + math.Sin(float64(i)*0.31)*3000)
+	}
+	d := NewDecimator(6, 96)
+	var win []float32
+	for i := range 12000 {
+		x := sig(i)
+		win = append(win, x)
+		y, ok := d.Push(x)
+		if !ok {
+			continue
+		}
+		var want float32
+		for j, c := range d.h {
+			if k := len(win) - len(d.h) + j; k >= 0 {
+				want += c * win[k]
+			}
+		}
+		if math.Abs(float64(y-want)) > 1e-2*(1+math.Abs(float64(want))) {
+			t.Fatalf("decimator at %d: %v, want %v", i, y, want)
+		}
+		if i >= 3000+len(d.h) && i < 9000 && y != 0 {
+			t.Fatalf("decimator at %d: %v in silence", i, y)
+		}
+	}
+
+	u := NewUpsampler(2, 48, 2, 1)
+	ref := NewUpsampler(2, 48, 2, 1)
+	var in []byte
+	for i := range 6000 {
+		v := int16(0)
+		if i < 1000 || i >= 4000 {
+			v = int16(sig(i) / 2)
+		}
+		in = binary.LittleEndian.AppendUint16(in, uint16(v))
+		in = binary.LittleEndian.AppendUint16(in, uint16(-v))
+	}
+	got := u.S16LE(in, nil)
+	ref.zeros = -1 << 30 // never skips
+	want := ref.S16LE(in, nil)
+	if !bytes.Equal(got, want) {
+		t.Fatal("the upsampler's output changed with silence skipped")
 	}
 }

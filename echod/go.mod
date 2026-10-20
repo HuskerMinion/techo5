@@ -14,6 +14,7 @@ require (
 	github.com/mewkiz/flac v1.0.13
 	github.com/miekg/dns v1.1.72
 	github.com/pion/opus v0.1.1-0.20260806214105-56fe97fcac80
+	github.com/pion/rtp v1.8.18
 	github.com/spf13/cobra v1.10.2
 	github.com/spf13/viper v1.21.0
 	github.com/zserge/microwakeword v0.0.0-20260330234603-bfaf3840114e
@@ -37,7 +38,6 @@ require (
 	github.com/pion/logging v0.2.4 // indirect
 	github.com/pion/randutil v0.1.0 // indirect
 	github.com/pion/rtcp v1.2.15 // indirect
-	github.com/pion/rtp v1.8.18 // indirect
 	github.com/pion/srtp/v3 v3.0.6 // indirect
 	github.com/pion/transport/v3 v3.1.1 // indirect
 	github.com/pion/transport/v4 v4.0.1 // indirect
@@ -65,3 +65,5 @@ require (
 	golang.org/x/sys v0.48.0
 	golang.org/x/text v0.42.0
 )
+
+replace github.com/zserge/microwakeword => ./third_party/microwakeword

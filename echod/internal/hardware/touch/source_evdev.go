@@ -20,6 +20,10 @@ func (s *Screen) Start(context.Context) error {
 		find, name = input.FindPrefix, "generic ft5x06"
 	}
 	dev, err := find(name)
+	if err != nil && layout.Board == "cronos" {
+		// The 2nd gen Show 5 on TECHO5's mainline kernel: the Goodix driver's own name.
+		dev, err = input.Find("Goodix Capacitive TouchScreen")
+	}
 	if err != nil {
 		return fmt.Errorf("touch: %w", err)
 	}

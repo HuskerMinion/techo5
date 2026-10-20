@@ -16,10 +16,10 @@ import (
 	"time"
 
 	esphome "github.com/ygelfand/go-esphome-device"
-	xdraw "golang.org/x/image/draw"
 
 	"github.com/HuskerMinion/techo5/echod/internal/config"
 	"github.com/HuskerMinion/techo5/echod/internal/lib/hass"
+	"github.com/HuskerMinion/techo5/echod/internal/lib/picscale"
 	"github.com/HuskerMinion/techo5/echod/internal/lib/safe"
 )
 
@@ -1139,11 +1139,18 @@ func fetchSlideshowSource(id string) (image.Image, error) {
 	if err != nil {
 		return nil, err
 	}
-	src, err := decodeWithin(b, maxPhotoPixels, "slideshow photo "+id)
+	// Decoded no smaller than covers the panel once it is turned upright: a photo stored on its side is
+	// turned after it is decoded, so its width is the panel's height. A pair's half is smaller still.
+	o := exifOrientation(b)
+	w, h := slideshowW, slideshowH
+	if o >= 5 {
+		w, h = h, w
+	}
+	src, err := decodeWithin(b, maxPhotoPixels, "slideshow photo "+id, w, h)
 	if err != nil {
 		return nil, err
 	}
-	return upright(src, exifOrientation(b)), nil
+	return upright(src, o), nil
 }
 
 // wholeShade is how much of the blurred sides' brightness is kept, out of 256: dark enough that the
@@ -1170,7 +1177,7 @@ func fitWhole(src image.Image, w, h int) *image.RGBA {
 	}
 	dst := blurredCover(src, w, h, wholeShade)
 	target := image.Rect((w-tw)/2, (h-th)/2, (w-tw)/2+tw, (h-th)/2+th)
-	xdraw.ApproxBiLinear.Scale(dst, target, src, sb, draw.Over, nil)
+	picscale.CatmullRom.Scale(dst, target, src, sb, draw.Over)
 	return dst
 }
 
@@ -1208,7 +1215,7 @@ func blurredCover(src image.Image, w, h, shade int) *image.RGBA {
 		}
 	}
 	out := image.NewRGBA(image.Rect(0, 0, w, h))
-	xdraw.BiLinear.Scale(out, out.Rect, small, small.Rect, draw.Src, nil)
+	picscale.BiLinear.Scale(out, out.Rect, small, small.Rect, draw.Src)
 	return out
 }
 
@@ -1228,7 +1235,7 @@ func cropToFill(src image.Image, w, h int) *image.RGBA {
 		tw, th = sw*h/sh, h
 	}
 	target := image.Rect((w-tw)/2, (h-th)/2, (w-tw)/2+tw, (h-th)/2+th)
-	xdraw.ApproxBiLinear.Scale(dst, target, src, sb, draw.Over, nil)
+	picscale.CatmullRom.Scale(dst, target, src, sb, draw.Over)
 	return dst
 }
 

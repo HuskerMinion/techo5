@@ -73,7 +73,7 @@ func (r *renderer) cloud(cx, y, w int, c color.Color) {
 	r.disc(cx-w/4, y-h/2, h/2, c)
 	r.disc(cx+w/6, y-h/2, h*2/3, c)
 	r.disc(cx-w/16, y-h*5/6, h*3/5, c)
-	draw.Draw(r.dst, image.Rect(cx-w/4, y-h/2, cx+w/6+h*2/3, y), image.NewUniform(c), image.Point{}, draw.Over)
+	washOver(r.dst, image.Rect(cx-w/4, y-h/2, cx+w/6+h*2/3, y), c)
 }
 
 func (r *renderer) sun(cx, cy, rad int) {

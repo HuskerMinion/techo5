@@ -180,6 +180,7 @@ type Tuning struct {
 	filters [][]float32 // one filter per bucket, in Set.EQ order
 	peq     []peqFilter
 	mbcl    mbcl
+	volume  []float64 // AFE.cfg's music volume table, dB per step; nil when it has none
 }
 
 // Load reads the tuning a directory holds, normally VendorDir: whichever set it is, with a filter
@@ -231,11 +232,16 @@ func LoadSet(dir string, set Set) (*Tuning, error) {
 		return nil, err
 	}
 	t.mbcl = m
+	t.volume = readVolumeTable(filepath.Join(dir, "AFE.cfg"))
 	return t, nil
 }
 
 // Name is which set this is: "dot", "show", "crown", "spot" or "radar".
 func (t *Tuning) Name() string { return t.set.Name }
+
+// VolumeTable is the unit's own music volume curve, in dB per step from mute to full, as its AFE.cfg
+// gives it to the vendor's chain in front of the EQ and compressor; nil when AFE.cfg has none.
+func (t *Tuning) VolumeTable() []float64 { return t.volume }
 
 // Bucket is which filter a fraction of full volume uses: the first one the volume reaches up to, and
 // the last of them for anything above the rest.
