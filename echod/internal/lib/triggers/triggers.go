@@ -81,6 +81,24 @@ var Languages = map[string]Set{
 		GoHome: []string{"beginscherm", "startscherm", "terug naar de klok", "laat de klok zien"},
 		Camera: []string{"laat", "toon", "camera"},
 	},
+	"pt": {
+		// Matched inside what was heard, so "tempo" alone is left out: it is in "quanto tempo" (how long)
+		// and timers. The weather is asked for in phrases instead. Brazilian Portuguese, as it is spoken.
+		Weather: []string{"previsão do tempo", "previsao do tempo", "como está o tempo", "como esta o tempo", "como tá o tempo",
+			"como ta o tempo", "como vai estar o tempo", "tempo hoje", "tempo amanhã", "tempo amanha", "clima hoje", "clima amanhã",
+			"clima amanha", "mapa do tempo", "qual a temperatura", "qual é a temperatura", "quantos graus", "chuva", "chover",
+			"chove", "nevar", "tempestade", "vai fazer calor", "vai fazer frio", "ensolarado", "nublado", "radar",
+			"previsão", "previsao", "como vai o tempo", "que tempo faz", "tá frio", "ta frio", "tá calor", "ta calor", "faz frio",
+			"fazer sol", "temporal"},
+		Radar: []string{"radar", "mapa de chuva", "mapa da chuva", "mapa do tempo"},
+		NotWeather: []string{"som de chuva", "som da chuva", "sons de chuva", "barulho de chuva", "barulho da chuva", "ruído", "ruido",
+			"toca chuva", "toca a chuva", "toque chuva", "coloca chuva", "coloca a chuva", "bota chuva", "bota a chuva",
+			"põe chuva", "poe chuva", "põe a chuva", "poe a chuva"},
+		GoHome: []string{"tela inicial", "tela principal", "volta pro relógio", "volta pro relogio", "volta para o relógio",
+			"volta para o relogio", "voltar ao relógio", "voltar ao relogio", "mostra o relógio", "mostra o relogio",
+			"volta pro início", "volta pro inicio", "volta para o início", "volta para o inicio", "tela de início", "tela de inicio"},
+		Camera: []string{"mostra", "mostre", "mostrar", "câmera", "camera"},
+	},
 	"ru": {
 		// Matched inside what was heard, so each form is listed where the stem is inside another word:
 		// "погод" is in "погоди" (wait), "облачн" in cloud storage. Thunderstorm is left out: every

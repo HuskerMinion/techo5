@@ -1,5 +1,5 @@
 // Package locale writes the dates and weather words the screen shows in the screen's language: the
-// clock's day and date, the forecast's day names, and what the sky is doing. Seven languages, the ones
+// clock's day and date, the forecast's day names, and what the sky is doing. Eight languages, the ones
 // the screen's Language setting offers; anything else, empty included, is English.
 //
 // Only those words. The rest of the screen's own text - its settings, its buttons - is English.
@@ -80,6 +80,18 @@ var langs = map[string]*words{
 			"sunny": "Zonnig", "windy": "Winderig", "windy-variant": "Winderig",
 		},
 	},
+	"pt": {
+		days:        [7]string{"domingo", "segunda-feira", "terça-feira", "quarta-feira", "quinta-feira", "sexta-feira", "sábado"},
+		shortDays:   [7]string{"dom", "seg", "ter", "qua", "qui", "sex", "sáb"},
+		months:      [12]string{"janeiro", "fevereiro", "março", "abril", "maio", "junho", "julho", "agosto", "setembro", "outubro", "novembro", "dezembro"},
+		shortMonths: [12]string{"jan", "fev", "mar", "abr", "mai", "jun", "jul", "ago", "set", "out", "nov", "dez"},
+		sky: map[string]string{
+			"clear-night": "Céu limpo", "cloudy": "Nublado", "exceptional": "Excepcional", "fog": "Neblina", "hail": "Granizo",
+			"lightning": "Relâmpagos", "lightning-rainy": "Tempestade", "partlycloudy": "Parcialmente nublado",
+			"pouring": "Chuva forte", "rainy": "Chuva", "snowy": "Neve", "snowy-rainy": "Chuva com neve",
+			"sunny": "Ensolarado", "windy": "Ventoso", "windy-variant": "Ventoso",
+		},
+	},
 	"ru": {
 		days:        [7]string{"воскресенье", "понедельник", "вторник", "среда", "четверг", "пятница", "суббота"},
 		shortDays:   [7]string{"вс", "пн", "вт", "ср", "чт", "пт", "сб"},
@@ -115,6 +127,9 @@ var phrases = map[string]map[string]string{
 	"nl": {"here": "Hier", "today": "Vandaag", "alarm": "Wekker", "snoozed": "Sluimeren tot", "tomorrow": "Morgen", "yesterday": "Gisteren",
 		"now": "Nu", "allday": "Hele dag", "nothing": "Niets in de agenda", "nothingtoday": "Niets vandaag",
 		"nothingelse": "Verder niets vandaag", "upcoming": "BINNENKORT", "nothingsoon": "Niets gepland"},
+	"pt": {"here": "Aqui", "today": "Hoje", "alarm": "Alarme", "snoozed": "Adiado até", "tomorrow": "Amanhã", "yesterday": "Ontem",
+		"now": "Agora", "allday": "Dia inteiro", "nothing": "Nada na agenda", "nothingtoday": "Nada hoje",
+		"nothingelse": "Nada mais hoje", "upcoming": "PRÓXIMOS", "nothingsoon": "Nada previsto"},
 	"ru": {"here": "Здесь", "today": "Сегодня", "alarm": "Будильник", "snoozed": "Отложен до", "tomorrow": "Завтра", "yesterday": "Вчера",
 		"now": "Сейчас", "allday": "Весь день", "nothing": "В календаре пусто", "nothingtoday": "Сегодня ничего",
 		"nothingelse": "Больше ничего сегодня", "upcoming": "СКОРО", "nothingsoon": "Ничего не запланировано"},
@@ -177,7 +192,8 @@ func up(s string) string {
 func day(t time.Time) string { return strconv.Itoa(t.Day()) }
 
 // LongDate is the clock's date: "Monday, January 2", "Montag, 2. Januar", "Lunes, 2 de enero",
-// "Lundi 2 janvier", "Lunedì 2 gennaio", "Maandag 2 januari", "Понедельник, 2 января".
+// "Lundi 2 janvier", "Lunedì 2 gennaio", "Maandag 2 januari", "Понедельник, 2 января",
+// "Segunda-feira, 2 de janeiro".
 func LongDate(t time.Time, lang string) string {
 	w, ok := langs[lang]
 	if !ok {
@@ -187,7 +203,7 @@ func LongDate(t time.Time, lang string) string {
 	switch lang {
 	case "de":
 		return up(d) + ", " + day(t) + ". " + m
-	case "es":
+	case "es", "pt":
 		return up(d) + ", " + day(t) + " de " + m
 	case "ru":
 		return up(d) + ", " + day(t) + " " + m
@@ -205,7 +221,7 @@ func ShortDate(t time.Time, lang string) string {
 	switch lang {
 	case "de":
 		return up(d) + "., " + day(t) + ". " + m
-	case "es", "ru":
+	case "es", "pt", "ru":
 		return up(d) + ", " + day(t) + " " + m
 	}
 	return up(d) + " " + day(t) + " " + m
@@ -237,7 +253,7 @@ func MonthDay(t time.Time, lang string) string {
 	switch lang {
 	case "de":
 		return day(t) + ". " + m
-	case "es":
+	case "es", "pt":
 		return day(t) + " de " + m
 	}
 	return day(t) + " " + m
@@ -250,7 +266,7 @@ func PhotoDate(t time.Time, lang string) string {
 	if _, ok := langs[lang]; !ok {
 		return MonthDay(t, lang) + ", " + y
 	}
-	if lang == "es" {
+	if lang == "es" || lang == "pt" {
 		return MonthDay(t, lang) + " de " + y
 	}
 	return MonthDay(t, lang) + " " + y

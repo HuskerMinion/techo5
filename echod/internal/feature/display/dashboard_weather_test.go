@@ -82,7 +82,7 @@ func TestDashboardWeatherLineStaysLeftOfTheEvents(t *testing.T) {
 	at := time.Date(2026, 10, 8, 18, 42, 0, 0, time.Local)
 	s := dashScene(at, "27°", false, dashEvents(at, 0, 6, false))
 	s.weather.Condition = "partlycloudy"
-	for _, lang := range []string{"", "de", "es", "fr", "it", "nl", "ru"} {
+	for _, lang := range []string{"", "de", "es", "fr", "it", "nl", "pt", "ru"} {
 		if err := config.Set().Screen().Language(lang); err != nil {
 			t.Fatal(err)
 		}

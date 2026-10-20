@@ -34,7 +34,7 @@ func TestClockInTheScreensLanguage(t *testing.T) {
 	s := scene{now: at, phase: "idle", weather: home.Weather{Condition: "partlycloudy", Temp: "22°"},
 		style: styleFacts{days: week}, alarms: alarm.View{Next: &alarm.Upcoming{At: at.Add(16 * time.Hour)}}}
 	dir := os.Getenv("SHOW_PREVIEW")
-	for _, lang := range []string{"de", "es", "fr", "it", "nl", "ru"} {
+	for _, lang := range []string{"de", "es", "fr", "it", "nl", "pt", "ru"} {
 		if err := config.Set().Screen().Language(lang); err != nil {
 			t.Fatal(err)
 		}

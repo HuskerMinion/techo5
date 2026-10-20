@@ -7,7 +7,7 @@ import (
 )
 
 func TestUpdateTextAvailableForScreenLanguages(t *testing.T) {
-	languages := []string{"en", "de", "es", "fr", "it", "nl", "ru"}
+	languages := []string{"en", "de", "es", "fr", "it", "nl", "pt", "ru"}
 	keys := []string{
 		UpdateSystemTitle,
 		UpdateFailedTitle,
@@ -41,7 +41,7 @@ func TestUpdateTextFallsBackToEnglish(t *testing.T) {
 }
 
 func TestUpdateDownloadingFormatsPercent(t *testing.T) {
-	for _, lang := range []string{"en", "de", "es", "fr", "it", "nl", "ru"} {
+	for _, lang := range []string{"en", "de", "es", "fr", "it", "nl", "pt", "ru"} {
 		got := fmt.Sprintf(UpdateText(lang, UpdateDownloading), 73)
 		if got == "" || !strings.Contains(got, "73%") {
 			t.Errorf("download text for %q = %q; want the percentage", lang, got)
@@ -52,7 +52,7 @@ func TestUpdateDownloadingFormatsPercent(t *testing.T) {
 // The countdown before a restart and the one before a reboot are different things to the person
 // watching, so no language may word them the same.
 func TestRestartingAndRebootingReadApart(t *testing.T) {
-	for _, lang := range []string{"en", "de", "es", "fr", "it", "nl", "ru"} {
+	for _, lang := range []string{"en", "de", "es", "fr", "it", "nl", "pt", "ru"} {
 		for _, pair := range [][2]string{
 			{UpdateRestartingIn, UpdateRebootingIn},
 			{UpdateRestarting, UpdateRebooting},

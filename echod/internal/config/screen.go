@@ -140,7 +140,7 @@ type Screen struct {
 	MusicStrip int `json:"music_strip,omitempty"`
 
 	// Language is which words the screen listens for in a turn — "en", "de", "es", "fr", "it", "nl",
-	// "ru" — empty for all of them. It has nothing to do with what the assistant understands or
+	// "pt", "ru" — empty for all of them. It has nothing to do with what the assistant understands or
 	// says, which is Home Assistant's pipeline; it decides only which pages a sentence brings up.
 	Language string `json:"language,omitempty"`
 

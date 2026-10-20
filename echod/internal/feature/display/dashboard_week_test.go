@@ -51,7 +51,7 @@ func TestDashboardWeekDraws(t *testing.T) {
 	withTimer := s
 	withTimer.timers = []timer.Countdown{{Name: "Pasta", Left: 4 * time.Minute, Total: 10 * time.Minute, Active: true}}
 	t.Cleanup(func() { _ = config.Set().Screen().Language("") })
-	for _, lang := range []string{"", "de", "es", "fr", "it", "nl", "ru"} {
+	for _, lang := range []string{"", "de", "es", "fr", "it", "nl", "pt", "ru"} {
 		if err := config.Set().Screen().Language(lang); err != nil {
 			t.Fatal(err)
 		}

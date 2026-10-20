@@ -13,6 +13,7 @@ var spoken = map[string]struct{ weather, radar, home, camera string }{
 	"fr": {"Quel temps fait-il ?", "Montre la carte des pluies", "Retour à l'horloge", "Montre la porte d'entrée"},
 	"it": {"Che tempo fa?", "Mostra la mappa della pioggia", "Torna all'orologio", "Mostra la porta d'ingresso"},
 	"nl": {"Hoe is het weer?", "Laat de buienradar zien", "Terug naar de klok", "Laat de voordeur zien"},
+	"pt": {"Como está o tempo?", "Mostra o mapa de chuva", "Volta pro relógio", "Mostra a porta da frente"},
 	"ru": {"Какая погода?", "Покажи карту дождя", "Верни часы", "Покажи входную дверь"},
 }
 
@@ -86,6 +87,7 @@ func TestOrdinaryCommandsLeaveTheScreenAlone(t *testing.T) {
 		"allume la lumière du salon", "mets de la musique",
 		"accendi la luce", "metti un timer di dieci minuti",
 		"doe het licht aan", "zet een timer van tien minuten",
+		"acende a luz da cozinha", "coloca um timer de dez minutos",
 	}
 	for _, s := range quiet {
 		if AboutWeather(s, MatchAll) {
@@ -137,6 +139,34 @@ func TestRussianWeatherForms(t *testing.T) {
 	for _, heard := range []string{"Что с погодой?", "Какая погодка завтра?", "Погодные условия на выходные"} {
 		if !AboutWeather(heard, "ru") {
 			t.Errorf("%q was not taken as the weather", heard)
+		}
+	}
+}
+
+// Portuguese sentences that only look like the triggers: "tempo" for how long, and rain asked for as a
+// sound to sleep to.
+func TestPortugueseLookalikes(t *testing.T) {
+	for _, heard := range []string{
+		"Quanto tempo falta no timer?", "Coloca som de chuva", "Toca a chuva pra dormir", "Liga o chuveiro",
+		"Põe barulho da chuva", "Põe chuva pra dormir",
+	} {
+		if AboutWeather(heard, "pt") || AboutGoingHome(heard, "pt") {
+			t.Errorf("%q was taken as weather or going home", heard)
+		}
+	}
+	for _, heard := range []string{"Vai chover amanhã?", "Qual é a temperatura lá fora?", "Como tá o tempo hoje?", "Previsão do tempo",
+		"Qual a previsão?", "Como vai o tempo?", "Tá frio lá fora?", "Vai fazer sol amanhã?", "Vai ter temporal?"} {
+		if !AboutWeather(heard, "pt") {
+			t.Errorf("%q was not taken as the weather", heard)
+		}
+	}
+}
+
+// The ways a Brazilian asks for the clock back.
+func TestPortugueseGoingHome(t *testing.T) {
+	for _, heard := range []string{"Volta pro início", "Volta pra tela inicial", "Mostra o relógio"} {
+		if !AboutGoingHome(heard, "pt") {
+			t.Errorf("%q did not bring the clock back", heard)
 		}
 	}
 }

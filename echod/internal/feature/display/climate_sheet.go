@@ -58,6 +58,8 @@ var climateWords = map[string]map[string]string{
 		"off": "Arrêt", "heat": "Chauffage", "cool": "Clim", "heat_cool": "Chaud/Froid", "auto": "Auto", "dry": "Déshumidif.", "fan_only": "Ventilation"},
 	"it": {"now": "Ora", "low": "Riscalda a", "high": "Raffresca a", "done": "Fatto",
 		"off": "Spento", "heat": "Caldo", "cool": "Freddo", "heat_cool": "Caldo/Freddo", "auto": "Auto", "dry": "Deumidifica", "fan_only": "Ventola"},
+	"pt": {"now": "Agora", "low": "Aquecer até", "high": "Resfriar até", "done": "Pronto",
+		"off": "Desligado", "heat": "Aquecer", "cool": "Resfriar", "heat_cool": "Aquecer/Resfriar", "auto": "Auto", "dry": "Desumidificar", "fan_only": "Ventilador"},
 	"ru": {"now": "Сейчас", "low": "Нагрев до", "high": "Охлаждение до", "done": "Готово",
 		"off": "Выкл.", "heat": "Нагрев", "cool": "Охлаждение", "heat_cool": "Нагрев/Охл.", "auto": "Авто", "dry": "Осушение", "fan_only": "Вентилятор"},
 }

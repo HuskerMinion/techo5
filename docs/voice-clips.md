@@ -36,8 +36,8 @@ A voice is only safe here when the dataset is permissive **and** it was trained 
 | Italian | `it_IT-serena` | CC BY 4.0 | from scratch |
 | Dutch | `nl_NL-mls` | CC BY 4.0 | from scratch |
 
-Those were the six languages the screen listened in (`lib/triggers`) when this was written; Russian,
-added since, has no voice chosen yet. The CC BY ones want attribution wherever the clips ship, and
+Those were the six languages the screen listened in (`lib/triggers`) when this was written; Russian
+and Portuguese, added since, have no voice chosen yet. The CC BY ones want attribution wherever the clips ship, and
 no clips ship yet. When they do, the attribution goes in [NOTICE](../NOTICE), which is where
 everything else this project redistributes is credited: the voice, its dataset, its license and
 where the model card says so, one entry per language.
