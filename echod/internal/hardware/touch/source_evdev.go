@@ -24,6 +24,10 @@ func (s *Screen) Start(context.Context) error {
 		// The driver names module ids it knows by the panel instead: 0x43 is "EP0430M09"
 		dev, err = input.Find("EP0430M09")
 	}
+	if err != nil && layout.Board == "cronos" {
+		// The 2nd gen Show 5 on TECHO5's mainline kernel: the Goodix driver's own name.
+		dev, err = input.Find("Goodix Capacitive TouchScreen")
+	}
 	if err != nil {
 		return fmt.Errorf("touch: %w", err)
 	}

@@ -57,7 +57,45 @@ func (r Reader) Temperatures() map[string]float64 {
 		}
 		out[name] = milli / 1000
 	}
+	if _, exists := out["mtktscpu"]; !exists {
+		if temp, ok := out["cpu-thermal"]; ok {
+			out["mtktscpu"] = temp
+		}
+	}
+	if _, exists := out["mtktswmt"]; !exists {
+		if raw, err := text(r.path("proc/net/wlan/get_temperature")); err == nil {
+			if key, value, ok := strings.Cut(raw, "="); ok && strings.TrimSpace(key) == "Temperature" {
+				if temp, err := strconv.ParseFloat(strings.TrimSpace(value), 64); err == nil && temp >= -40 && temp <= 150 {
+					out["mtktswmt"] = temp
+				}
+			}
+		}
+	}
+	if _, exists := out["mtktswmt"]; !exists {
+		if temp, ok := r.mt76Temperature(); ok {
+			out["mtktswmt"] = temp
+		}
+	}
 	return out
+}
+
+// mt76Temperature is the radio's temperature on a mainline kernel's mt76 driver: the 2nd gen Show 8's
+// MT7663 reports it through a hwmon device named mt7615_phy0, where the kernel's driver offers it, in
+// millidegrees. Zero is the firmware not answering, not a reading: a
+// radio that is on is never that cold.
+func (r Reader) mt76Temperature() (float64, bool) {
+	devices, _ := filepath.Glob(r.path("sys/class/hwmon/hwmon*"))
+	for _, dev := range devices {
+		name, err := text(dev + "/name")
+		if err != nil || !strings.HasPrefix(name, "mt7615_phy") {
+			continue
+		}
+		milli, err := number(dev + "/temp1_input")
+		if temp := milli / 1000; err == nil && temp > 0 && temp <= 150 {
+			return temp, true
+		}
+	}
+	return 0, false
 }
 
 // zoneNumber is the n of a thermal_zoneN path, or one past any zone for a name that has none.

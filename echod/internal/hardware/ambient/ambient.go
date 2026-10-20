@@ -11,7 +11,9 @@
 //
 // The 2nd gen Show 8 on TECHO5's mainline kernel is different: its TCS3400 is an IIO device with raw
 // color counts and no lux, so it is polled and converted here (iio.go). So is the Skylight Calendar's
-// EM3071X, which has no driver at all and is read over I2C (em3071x.go).
+// EM3071X, which has no driver at all and is read over I2C (em3071x.go). The Echo Show 5 on TECHO5's
+// mainline kernel has no misc node either: its JSA1214 is an IIO device that reports lux with its own
+// scale, so it is polled through metrics (metricsLux).
 package ambient
 
 import (
@@ -24,6 +26,7 @@ import (
 	"time"
 
 	"github.com/HuskerMinion/techo5/echod/internal/component"
+	"github.com/HuskerMinion/techo5/echod/internal/hardware/metrics"
 	"github.com/HuskerMinion/techo5/echod/internal/layout"
 	"github.com/HuskerMinion/techo5/echod/internal/lib/hook"
 	"github.com/HuskerMinion/techo5/echod/internal/lib/input"
@@ -95,6 +98,19 @@ func (s *Sensor) Start(context.Context) error {
 	}
 	if layout.AthenaMainline() {
 		return s.startIIO()
+	}
+	if _, err := os.Stat(misc); os.IsNotExist(err) {
+		path := metrics.Reader{}.LuxPath()
+		if path == "" {
+			return fmt.Errorf("ambient: no supported light sensor")
+		}
+		s.mu.Lock()
+		s.poll = metricsLux(path)
+		s.mu.Unlock()
+		slog.Info("light sensor on", "device", path, "period", period)
+		return nil
+	} else if err != nil {
+		return fmt.Errorf("ambient: finding the sensor: %w", err)
 	}
 	if err := os.WriteFile(misc+"/alsdelay", []byte(fmt.Sprint(period.Nanoseconds())), 0o644); err != nil {
 		return fmt.Errorf("ambient: setting the report period: %w", err)
@@ -194,10 +210,27 @@ func (s *Sensor) Run(ctx context.Context) error {
 		if e.Type != input.EvAbs || e.Code != 0 { // ABS_X carries the lux
 			continue
 		}
-		lux := float64(e.Value)
-		s.mu.Lock()
-		s.last, s.at = lux, time.Now()
-		s.mu.Unlock()
-		s.Lux.Emit(lux)
+		s.emit(float64(e.Value))
 	}
 }
+
+func (s *Sensor) emit(lux float64) {
+	s.mu.Lock()
+	s.last, s.at = lux, time.Now()
+	s.mu.Unlock()
+	s.Lux.Emit(lux)
+}
+
+// metricsLux is an IIO light sensor that reports lux itself, read through metrics: the 2nd gen Show 5's
+// JSA1214 on TECHO5's mainline kernel.
+type metricsLux string
+
+func (p metricsLux) sample() (float64, bool, error) {
+	r := (metrics.Reader{}).Lux(string(p))
+	if !r.Known {
+		return 0, false, fmt.Errorf("ambient: reading %s", string(p))
+	}
+	return r.Value, true, nil
+}
+
+func (metricsLux) close() error { return nil }

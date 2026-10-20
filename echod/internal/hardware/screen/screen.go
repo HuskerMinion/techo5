@@ -425,12 +425,21 @@ const (
 	skylightBacklightMax = 235
 )
 
+// The Echo Show 5 on TECHO5's mainline kernel has no LED class node either: its display PWM is a
+// backlight class device whose range is read from max_brightness.
+const cronosBacklightDir = "/sys/class/backlight/display-backlight"
+
 func backlightNode() (path string, top int) {
 	if layout.AthenaMainline() {
 		return mainlineBacklightPath, mainlineBacklightMax
 	}
 	if layout.Skylight() {
 		return skylightBacklightDir + "/brightness", readTop(skylightBacklightDir+"/max_brightness", skylightBacklightMax)
+	}
+	if _, err := os.Stat(backlightPath); os.IsNotExist(err) {
+		if top := readTop(cronosBacklightDir+"/max_brightness", 0); top > 0 {
+			return cronosBacklightDir + "/brightness", top
+		}
 	}
 	return backlightPath, BacklightMax
 }
