@@ -9,6 +9,7 @@ import (
 	"os"
 	"os/exec"
 	"os/user"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -99,6 +100,15 @@ func lookupDecoderCred() (*syscall.Credential, error) {
 				c.Groups = []uint32{uint32(id)}
 			}
 		}
+		// The video group, for a hardware decoder's devices where the board has one (hw.go): only
+		// when the image put the user in it (tools/linux/mkrootfs.sh).
+		if g, err := user.LookupGroup("video"); err == nil {
+			if ids, err := u.GroupIds(); err == nil && slices.Contains(ids, g.Gid) {
+				if id, err := strconv.ParseUint(g.Gid, 10, 32); err == nil {
+					c.Groups = append(c.Groups, uint32(id))
+				}
+			}
+		}
 		return c, nil
 	}
 	return nil, errors.New("no user to run the decoder as in this image")
@@ -122,7 +132,10 @@ var shellPath = "/bin/sh"
 // rather than being bounded a moment after it has started. The shell's script is fixed; ffmpeg and
 // its arguments, the address among them, reach it as its own arguments ("$0" "$@"), never as text it
 // reads as a command.
-func wrap(path string, args []string) (string, []string) {
+func wrap(path string, args []string) (string, []string) { return wrapWith(path, args, limits) }
+
+// wrapWith is wrap with limits of the caller's.
+func wrapWith(path string, args, limits []string) (string, []string) {
 	// The kernel's choice when memory runs out, before anything of the daemon's.
 	script := "echo 1000 > /proc/self/oom_score_adj && "
 	for _, l := range limits {
@@ -132,11 +145,13 @@ func wrap(path string, args []string) (string, []string) {
 	return shellPath, append([]string{"-c", script, path}, args...)
 }
 
-// decoder is one run of ffmpeg.
+// decoder is one run of ffmpeg, and of GStreamer behind it when the picture goes through the hardware
+// (hw.go).
 type decoder struct {
 	cmd    *exec.Cmd
-	video  *os.File // the picture, read end (nil for a probe)
-	audio  *os.File // the sound, read end (nil when there is none, or for a probe)
+	helper *exec.Cmd // GStreamer, nil when ffmpeg decodes the picture itself
+	video  *os.File  // the picture, read end (nil for a probe)
+	audio  *os.File  // the sound, read end (nil when there is none, or for a probe)
 	stderr *tail
 	done   chan struct{}
 	err    error
@@ -224,8 +239,10 @@ func (d *decoder) closeReads() {
 
 // stop ends the run at once and waits for it.
 func (d *decoder) stop() {
-	if d.cmd != nil && d.cmd.Process != nil {
-		_ = syscall.Kill(-d.cmd.Process.Pid, syscall.SIGKILL)
+	for _, c := range []*exec.Cmd{d.cmd, d.helper} {
+		if c != nil && c.Process != nil {
+			_ = syscall.Kill(-c.Process.Pid, syscall.SIGKILL)
+		}
 	}
 	d.closeReads()
 	<-d.done

@@ -300,6 +300,11 @@ Mesa, https://mesa3d.org (MIT License)
   (tools/gpu), built unmodified from the Mesa release tools/linux/build-mesa.sh names; its source is
   https://archive.mesa3d.org.
 
+GStreamer, https://gstreamer.freedesktop.org (LGPL-2.1+)
+  A 64-bit root filesystem may carry six of Alpine Linux v3.24's GStreamer plugins with the libraries
+  they need, for the 2nd gen Show 8's hardware video decoder (tools/linux/build-gst-arm64.sh),
+  unmodified; their sources are Alpine's, https://gitlab.alpinelinux.org/alpine/aports/-/tree/3.24-stable.
+
 echod (dependency)
   github.com/miekg/dns — BSD 3-Clause License
   Copyright (c) 2009, The Go Authors. Extensions copyright (c) 2011, Miek Gieben. All rights reserved.

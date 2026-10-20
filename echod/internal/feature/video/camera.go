@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"image"
 	"io"
+	"log/slog"
 	"net/url"
 	"os"
 	"regexp"
@@ -34,6 +35,14 @@ type Camera struct {
 	frame *image.RGBA
 	// release lets go of its hold on the decoder's proxy (holdGuard); nil for one read over RTSP.
 	release func()
+
+	// The hardware decoder (hw.go, cameraHW): hw while it decodes, place where its pictures go in the
+	// frame (known once GStreamer has chosen their size), soft the run on the cores to fall back to
+	// until a frame has come.
+	hw    bool
+	place *Fit
+	soft  func() (*decoder, error)
+	shown bool
 }
 
 // cameraArgs runs the decoder on a camera's stream at its own pace (-re: a playlist's parts arrive
@@ -43,14 +52,22 @@ type Camera struct {
 // carries the stream's token: it is an argument to the decoder, so the image mounts /proc so that only
 // root sees another user's arguments (boot.sh), and it is never logged (hideTokens).
 func cameraArgs(url string, w, h int, insecure bool, proxy string) []string {
+	return append(cameraIn(url, h, insecure, proxy), cameraOut(w, h)...)
+}
+
+// cameraIn is cameraArgs's input: the stream, read as it comes.
+func cameraIn(url string, h int, insecure bool, proxy string) []string {
 	a := []string{"-hide_banner", "-nostdin", "-loglevel", "error", "-max_pixels", maxPixels}
 	a = append(a, netArgs(url, caFileIf(), insecure, proxy)...)
-	a = append(a, "-threads", strconv.Itoa(threads(h)), "-re", "-live_start_index", "-1",
-		"-fflags", "nobuffer", "-i", url,
-		"-map", "0:v:0", "-an", "-sn", "-dn",
+	return append(a, "-threads", strconv.Itoa(threads(h)), "-re", "-live_start_index", "-1",
+		"-fflags", "nobuffer", "-i", url)
+}
+
+// cameraOut is a camera's picture out of the decoder: fitted into w×h, the page's pixels, on fd 3.
+func cameraOut(w, h int) []string {
+	return []string{"-map", "0:v:0", "-an", "-sn", "-dn",
 		"-vf", fitFilter(w, h), "-fps_mode", "passthrough",
-		"-f", "rawvideo", "-pix_fmt", "rgba", "pipe:3")
-	return a
+		"-f", "rawvideo", "-pix_fmt", "rgba", "pipe:3"}
 }
 
 // fitFilter scales a picture into w×h with its shape kept, the rest black.
@@ -73,13 +90,15 @@ func OpenCamera(ctx context.Context, url string, w, h int) (*Camera, error) {
 		release()
 		return nil, err
 	}
-	d, err := start(ctx, cameraArgs(url, w, h, config.Get().Diag.InsecureTLS, proxy), true, false)
+	insecure := config.Get().Diag.InsecureTLS
+	c, err := openCamera(ctx, cameraIn(url, h, insecure, proxy), w, h)
 	if err != nil {
 		release()
 		return nil, err
 	}
-	releaseWhenDone(d, release)
-	return &Camera{d: d, w: w, h: h, release: release}, nil
+	releaseWhenDone(c.d, release)
+	c.release = release
+	return c, nil
 }
 
 // Next is the next frame, waiting up to wait for it. A stream that ended, or failed, says why. The
@@ -89,8 +108,21 @@ func (c *Camera) Next(wait time.Duration) (*image.RGBA, error) {
 		c.frame = image.NewRGBA(image.Rect(0, 0, c.w, c.h))
 	}
 	img := c.frame
-	_ = c.d.video.SetReadDeadline(time.Now().Add(wait))
-	if _, err := io.ReadFull(c.d.video, img.Pix); err != nil {
+	err := c.read(img, wait)
+	if err != nil && c.soft != nil && !c.shown && c.hwStopped() {
+		// The hardware took nothing of it (a camera that is not H.264, say): on the cores, as ever.
+		slog.Info("video: camera stream on the cores", "hardware said", hideTokens(c.d.stderr.last()), "err", err)
+		c.d.stop()
+		soft := c.soft
+		c.hw, c.place, c.soft = false, nil, nil
+		d, serr := soft()
+		if serr != nil {
+			return nil, serr
+		}
+		c.d = d
+		err = c.read(img, wait)
+	}
+	if err != nil {
 		select {
 		case <-c.d.done:
 			if why := c.d.stderr.last(); why != "" {
@@ -100,6 +132,7 @@ func (c *Camera) Next(wait time.Duration) (*image.RGBA, error) {
 		}
 		return nil, fmt.Errorf("video: camera stream: %w", err)
 	}
+	c.shown = true
 	return img, nil
 }
 
@@ -309,13 +342,14 @@ func rtspInput(track string) []string {
 // cameraRTSPArgs reads a camera's picture straight from its RTSP address: the video track alone, fitted
 // into w×h and made the page's pixels.
 func cameraRTSPArgs(addr string, w, h int) []string {
+	return append(cameraRTSPIn(addr, h), cameraOut(w, h)...)
+}
+
+// cameraRTSPIn is cameraRTSPArgs's input.
+func cameraRTSPIn(addr string, h int) []string {
 	a := []string{"-hide_banner", "-nostdin", "-loglevel", "error", "-max_pixels", maxPixels}
 	a = append(a, rtspInput("video")...)
-	a = append(a, "-threads", strconv.Itoa(threads(h)), "-i", addr,
-		"-map", "0:v:0", "-an", "-sn", "-dn",
-		"-vf", fitFilter(w, h), "-fps_mode", "passthrough",
-		"-f", "rawvideo", "-pix_fmt", "rgba", "pipe:3")
-	return a
+	return append(a, "-threads", strconv.Itoa(threads(h)), "-i", addr)
 }
 
 // cameraSoundRTSPArgs reads a camera's sound straight from its RTSP address: the audio track alone, the
@@ -347,11 +381,7 @@ func OpenCameraRTSP(ctx context.Context, addr, user, pass string, w, h int) (*Ca
 	if err != nil {
 		return nil, err
 	}
-	d, err := start(ctx, cameraRTSPArgs(u, w, h), true, false)
-	if err != nil {
-		return nil, err
-	}
-	return &Camera{d: d, w: w, h: h}, nil
+	return openCamera(ctx, cameraRTSPIn(u, h), w, h)
 }
 
 // OpenCameraSoundRTSP starts decoding a camera's sound from its RTSP address, for the speaker, where the

@@ -102,6 +102,16 @@ mdev -s
 chmod 666 /dev/null /dev/zero /dev/full /dev/random /dev/urandom /dev/tty 2>/dev/null
 mkdir -p /dev/graphics
 [ -e /dev/fb0 ] && ln -sf /dev/fb0 /dev/graphics/fb0
+# The hardware video decoder and the scaler behind it (the Show 8's MT8183), for the video player's
+# decoder, which runs as a user of its own in the video group (echod's feature/video, hw.go). The
+# kernel makes every video device root's alone; these two, and only these, go to the group.
+for v in /sys/class/video4linux/video* /sys/bus/media/devices/media*; do
+	n=$(cat "$v/name" "$v/model" 2>/dev/null)
+	case "$n" in
+	# the stateless decoder takes its pictures through its media controller node (the request API)
+	mtk-vcodec-dec|mtk-mdp3:m2m) chgrp video "/dev/${v##*/}" && chmod 660 "/dev/${v##*/}";;
+	esac
+done
 # The 2nd gen Show 5 on mainline (mtk-cpufreq, schedutil): let schedutil change the CPU frequency at
 # most every 10 ms rather than every 1 ms. The driver gives no transition latency, so the default is
 # 1 ms, and every change costs I2C to the sym827 (cpufreq's Vproc): the switch runs the cores on the

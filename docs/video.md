@@ -10,7 +10,8 @@ picture fills the width, and the edge of the glass takes its corners.
 
 - **Addresses:** `http://` and `https://` only. MP4, MKV, MPEG-TS and HLS (`.m3u8`) streams.
 - **Picture:** H.264 (and old MPEG-4). 720p or less plays best. 1080p plays on a Show 5 but uses
-  almost all of it. HEVC (H.265), VP8 and VP9 (WebM) play only on the 64-bit images (the 2nd gen
+  almost all of it. On the 2nd gen Show 8, on a kernel that offers its H.264 decoder, H.264 is
+  decoded in hardware. HEVC (H.265), VP8 and VP9 (WebM) play only on the 64-bit images (the 2nd gen
   Show 5 and Show 8 on a mainline kernel), on the cores, and only as fast as those decode in time: a
   faster one is refused rather than played behind. VP8 and VP9 up to 1080p at 30 frames a second on
   the Show 5, with no limit on the Show 8; HEVC up to 720p at 30 on the Show 5, 1080p at 30 on the
