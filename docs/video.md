@@ -10,7 +10,11 @@ picture fills the width, and the edge of the glass takes its corners.
 
 - **Addresses:** `http://` and `https://` only. MP4, MKV, MPEG-TS and HLS (`.m3u8`) streams.
 - **Picture:** H.264 (and old MPEG-4). 720p or less plays best. 1080p plays on a Show 5 but uses
-  almost all of it. HEVC (H.265), VP9 and AV1 don't play.
+  almost all of it. HEVC (H.265), VP8 and VP9 (WebM) play only on the 64-bit images (the 2nd gen
+  Show 5 and Show 8 on a mainline kernel), on the cores, and only as fast as those decode in time: a
+  faster one is refused rather than played behind. VP8 and VP9 up to 1080p at 30 frames a second on
+  the Show 5, with no limit on the Show 8; HEVC up to 720p at 30 on the Show 5, 1080p at 30 on the
+  Show 8. Elsewhere HEVC, VP8 and VP9 don't play, nor does AV1 anywhere.
 - **Sound:** AAC, MP3, Opus, AC-3 and E-AC-3 (Dolby Digital), surround mixed down to stereo. A
   video whose sound is something else (DTS, TrueHD) plays without it.
 - **Loudness:** films are mixed much quieter than music, so the Show evens a video's sound out to

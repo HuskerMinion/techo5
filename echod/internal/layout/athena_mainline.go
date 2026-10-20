@@ -18,6 +18,12 @@ var athenaMainline = Board == boardAthena && mainlineRelease(kernelRelease())
 // AthenaMainline is whether this is the 2nd gen Show 8 on TECHO5's mainline kernel.
 func AthenaMainline() bool { return athenaMainline }
 
+// cronosMainline is the same question for the 2nd gen Show 5, whose vendor kernel is LineageOS's 4.9.
+var cronosMainline = Board == boardCronos && mainlineRelease(kernelRelease())
+
+// CronosMainline is whether this is the 2nd gen Show 5 on a mainline kernel.
+func CronosMainline() bool { return cronosMainline }
+
 // mainlineRelease: Amazon's athena kernel is 4.4 (4.4.146+ on the units read 2026-10-14); ours is
 // 6.x. Anything that is not 4.x is taken as mainline.
 func mainlineRelease(release string) bool {

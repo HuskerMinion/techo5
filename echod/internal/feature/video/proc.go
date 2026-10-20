@@ -32,6 +32,31 @@ func decoderPath() string {
 	return "/usr/local/bin/techo5-ffmpeg"
 }
 
+// The image's ffmpeg decodes H.265 when it carries the decoder (build-ffmpeg-arm64.sh builds it in, with
+// its parser): a message only the decoder has, as CanRTSP looks for RTSP. Looked for once.
+func init() {
+	decodesHEVC = sync.OnceValue(func() bool {
+		ok, err := fileHas(decoderPath(), hevcDecoder)
+		return err == nil && ok
+	})
+}
+
+var hevcDecoder = []byte("Two slices reporting being the first in the same frame")
+
+// The same for VP8 and VP9, which build-ffmpeg-arm64.sh builds in together: a message each of their
+// decoders alone has.
+func init() {
+	decodesVPx = sync.OnceValue(func() bool {
+		ok, err := fileHas(decoderPath(), vp8Decoder, vp9Decoder)
+		return err == nil && ok
+	})
+}
+
+var (
+	vp8Decoder = []byte("Discarding interframe without a prior keyframe!")
+	vp9Decoder = []byte("Invalid compressed header size")
+)
+
 // caFile is where the image keeps the certificate authorities, for https.
 const caFile = "/etc/ssl/certs/ca-certificates.crt"
 
