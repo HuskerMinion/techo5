@@ -30,12 +30,18 @@ import (
 type Frame struct {
 	Seq uint64
 	At  time.Time
+	// Gain is the sensor's gain the frame was asked for with, in 1/64 (64: 1x; 0: not known). The
+	// exposure lengthens the frame before it adds the last of its gain (autoExpose), so a high gain
+	// is a dim scene and a noisy picture.
+	Gain int
 
-	mu    sync.Mutex
-	raw   []byte // the sensor's frame as it came
-	rgba  *image.RGBA
-	tone  tone
-	toned bool
+	mu        sync.Mutex
+	raw       []byte      // the sensor's frame as it came
+	full      *geometry   // a still from the whole array (Camera.Still); nil is the stream's size
+	developed *image.RGBA // Full's picture, made once
+	rgba      *image.RGBA
+	tone      tone
+	toned     bool
 }
 
 // Image is the frame as a Width x Height picture, developed once however many ask for it.
@@ -58,10 +64,16 @@ func (f *Frame) Luma(w, h int) []uint8 {
 	return lumaGrid(f.raw, w, h)
 }
 
+// ISPTone is a frame's leveling as the 2nd gen Show 8's ISP takes it (its DIP's V4L2 controls): the
+// black level at the sensor's 10 bits; the red and blue
+// gains and the stretch to white in 1/512. The ISP's pipeline is 12 bits wide, so its stretch is a
+// quarter of the one the cores apply (measured: 4x on the ISP matched 12.4x here).
+type ISPTone struct{ Black, Red, Blue, Gain int }
+
 // level is the tone the frame was measured at, with f.mu held.
 func (f *Frame) level() tone {
 	if !f.toned {
-		f.tone, f.toned = stats(f.raw), true
+		f.tone, f.toned = statsFor(f), true
 	}
 	return f.tone
 }
@@ -94,6 +106,10 @@ type Camera struct {
 	// an old failure is simply not its business. Each run has its own stopped channel, so the channel
 	// is the run's name.
 	errFrom chan struct{}
+
+	// stills carries a request for a still from the whole array to the run that owns the sensor
+	// (Still), on a board whose sensor has a bigger mode than the one it streams.
+	stills chan stillRequest
 
 	// stopping is the stopped channel of a run that is on its way out: running is already clear,
 	// but the goroutine still owns the sensor until it closes. Acquire waits on it. See idleStop.
@@ -129,7 +145,7 @@ var (
 )
 
 func Get() *Camera {
-	once.Do(func() { shared = &Camera{} })
+	once.Do(func() { shared = &Camera{stills: make(chan stillRequest)} })
 	return shared
 }
 
@@ -159,11 +175,21 @@ var nodes = []string{"/dev/camera-isp", "/dev/kd_camera_hw", "/dev/ion", "/proc/
 // variable so that a test off the device can stand in an unmuted one.
 var muteSwitch = privacy.Microphone
 
-// Available reports whether this device has the camera nodes.
+// Available reports whether this device has a camera TECHO5 drives: the single capture node of
+// TECHO5's own mainline kernels (camera_v4l2_techo5.go), the seninf/CAMSV chain of the athena
+// kernel in tools/linux/athena (camera_v4l2.go), or the vendor kernel's nodes.
 func Available() bool {
+	if mainlineCameraPath() != "" {
+		return true
+	}
 	if is, there := v4l2Board(); is {
 		return there
 	}
+	return availableVendor()
+}
+
+// availableVendor reports whether this device has the vendor kernel's camera nodes.
+func availableVendor() bool {
 	for _, p := range nodes {
 		if _, err := os.Stat(p); err != nil {
 			return false
@@ -473,7 +499,7 @@ func (c *Camera) run(stop, stopped chan struct{}) {
 			if d.skip() || !c.wanted(time.Now()) {
 				return
 			}
-			f := &Frame{At: time.Now(), raw: make([]byte, len(bayer))}
+			f := &Frame{At: time.Now(), raw: make([]byte, len(bayer)), Gain: d.gain}
 			copy(f.raw, bayer)
 			c.emit(f)
 		})
@@ -692,3 +718,17 @@ var escape = func(unsafe.Pointer) {}
 
 // ptr32 is the address of a heapNew object as the compat ioctl structures carry it.
 func ptr32[T any](p *T) uint32 { return uint32(uintptr(unsafe.Pointer(p))) }
+
+// geometry is a packed frame's size: the sensor's pixels, and its bytes a line.
+type geometry struct{ w, h, bpl int }
+
+// stillRequest asks the running sensor for one frame from the whole array; the raw frame, or why
+// not, comes back on done.
+type stillRequest struct {
+	done chan stillResult
+}
+
+type stillResult struct {
+	raw []byte
+	err error
+}

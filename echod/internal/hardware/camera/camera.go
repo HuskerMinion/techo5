@@ -8,7 +8,7 @@
 // driver's mmap, the way MediaTek's libcamdrv does on MT8163. docs/camera-research.md has the
 // map and the dead ends; cmd/camframe is the standalone version of this file.
 //
-// Frames arrive as 1600x1200 packed 10-bit Bayer at about 14 frames a second and are handed out
+// Frames arrive as 1600x1200 packed 10-bit Bayer at up to 30 frames a second and are handed out
 // two ways: an 800x600 RGBA made on every frame (one pixel per Bayer cell, gray-world white
 // balance, a gamma curve) for the live view and the stream, and the packed frame itself, which
 // Full() demosaics to 1600x1200 on demand for stills. The sensor runs only while something holds
@@ -16,6 +16,7 @@
 package camera
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"image"
@@ -30,6 +31,7 @@ import (
 
 	"golang.org/x/sys/unix"
 
+	"github.com/HuskerMinion/techo5/echod/internal/hardware/gpu"
 	"github.com/HuskerMinion/techo5/echod/internal/layout"
 )
 
@@ -37,7 +39,7 @@ import (
 // imgsensor driver that powers the sensor and writes its register table, the CSI-2 receiver, the
 // timing generator, the DMA, the picture pipeline — is the same on both.
 //
-// The 2nd gen (cronos) has an OmniVision OV02B10: 1600x1200 at about 14 frames a second, the first
+// The 2nd gen (cronos) has an OmniVision OV02B10: 1600x1200 at up to 30 frames a second, the first
 // pixel of each Bayer cell red. The 1st gen (checkers) has an OV9734: 1280x720 at up to 30, the
 // first pixel blue, and its own exposure limits (framelength 802 lines less a margin of 4, shutter
 // from 1 line; both from the driver in the kernel source). The gain scale and its 15.5x ceiling are
@@ -53,52 +55,107 @@ import (
 // Show 5, it picked the right sensor by accident. Telling the boards apart is what turned that into
 // a choice someone had to make, and the symptom of making it wrongly is a camera that opens, streams
 // nothing, and times out.
+//
+// The 2nd gen Show 8 (athena) has an OmniVision OV13855, and only a mainline kernel with TECHO5's
+// capture node drives it (camera_v4l2_techo5.go): the 2112x1568 binned mode, the first pixel blue, in
+// the same packing, at 30 frames a second (3214 lines) for as long as the light allows: an exposure
+// longer than that frame lengthens it in the driver, down to 15 a second (6428 lines), which the
+// exposure takes only after the gain has risen to 6x, as on the Show 5's sensors.
 type sensorSpec struct {
 	w, h       int  // what the sensor hands over
 	outW, outH int  // one pixel per Bayer cell: the live view and the stream
 	minShut    int  // shortest exposure the driver takes, in lines
 	frameLines int  // shutter lines that fit a frame at the sensor's own rate
-	maxShut    int  // the longest shutter the exposure loop asks for
+	maxShut    int  // the longest shutter the exposure loop asks for, in lines: past frameLines the frame rate drops
 	blackCap   int  // the most taken as black, on the summed-green scale (blackFor)
 	pedestal   int  // the sensor's black level a pixel, taken off before white balance
 	blueFirst  bool // the first pixel of each cell is blue, not red
-	v4l2       bool // driven through V4L2 on a mainline kernel (camera_v4l2.go)
+	v4l2       bool // driven through the seninf/CAMSV chain of tools/linux/athena's kernel (camera_v4l2.go)
+	// fullW and fullH are the whole array, for stills (Still), where it is bigger than the mode that
+	// streams; zero where the stream is the whole array already. fullLine is how many times longer
+	// a line is in that mode, which an exposure in lines is divided by to keep its time.
+	fullW, fullH int
+	fullLine     float64
 }
 
-// hasOV9734 is whether this board carries the OV9734 rather than the OV02B10.
-func hasOV9734() bool { return layout.Checkers() || layout.Crown() }
+type sensorKind int
 
-func pickSensor(ov9734 bool) sensorSpec {
-	if ov9734 {
+const (
+	sensorOV02B10 sensorKind = iota
+	sensorOV9734
+	sensorOV13855
+)
+
+// boardSensor is the sensor this board carries, as TECHO5's own kernels drive it.
+func boardSensor() sensorKind {
+	switch {
+	case layout.AthenaMainline():
+		return sensorOV13855
+	case layout.Checkers() || layout.Crown():
+		return sensorOV9734
+	}
+	return sensorOV02B10
+}
+
+func pickSensor(kind sensorKind) sensorSpec {
+	switch kind {
+	case sensorOV9734:
 		return sensorSpec{w: 1280, h: 720, outW: 640, outH: 360, minShut: 1, frameLines: 798, maxShut: 4000,
 			blackCap: 64, blueFirst: true}
+	case sensorOV13855:
+		// TECHO5's capture node on a mainline kernel (camera_v4l2_techo5.go), the ISP's raw input. The whole
+		// array is 4224x3136, read at the binned mode's lane rate with a 2400-clock line against 1122
+		// (sensor_full). The binned mode's shortest frame is 1608 lines, 60 a second, which any exposure
+		// shorter than that keeps; the shutter is still let grow to a 30-a-second frame before gain is
+		// added, and in a dark room to about half a second (longShut). Its black level is 64 a pixel.
+		return sensorSpec{w: 2112, h: 1568, outW: 1056, outH: 784, minShut: 4, frameLines: 3198,
+			maxShut: longShut(6412, 51984), blackCap: 144, pedestal: 64, blueFirst: true,
+			fullW: 4224, fullH: 3136, fullLine: 2400.0 / 1122}
 	}
-	return sensorSpec{w: 1600, h: 1200, outW: 800, outH: 600, minShut: 4, frameLines: 1200, maxShut: 4000,
-		blackCap: 64}
+	return sensorSpec{w: 1600, h: 1200, outW: 800, outH: 600, minShut: 4, frameLines: 1200,
+		maxShut: longShut(4000, 16000), blackCap: 64}
 }
 
-// athenaSensor is the 2nd gen Show 8's OmniVision OV13855 in its 2x2 binned mode: 2112x1568 at 30
-// frames a second, the first pixel of each cell blue (BGGR). A frame is 3209 lines, and the driver
-// lets the shutter run to 8 short of that; a longer one would need a longer frame, which the driver
-// does not make on its own, so the loop stops there and takes the rest from gain. Its black level is
-// 64 a pixel (the darkest 0.1% of a dim room read 64 on every channel, 2026-10-19).
+// athenaSensor is the 2nd gen Show 8's OmniVision OV13855 behind the seninf/CAMSV chain of the kernel
+// in tools/linux/athena, in its 2x2 binned mode: 2112x1568 at 30 frames a second, the first pixel of
+// each cell blue (BGGR). A frame is 3209 lines, and that driver lets the shutter run to 8 short of
+// that; a longer one would need a longer frame, which it does not make on its own, so the loop stops
+// there and takes the rest from gain. Its black level is 64 a pixel (the darkest 0.1% of a dim room
+// read 64 on every channel, 2026-10-19).
 var athenaSensor = sensorSpec{w: 2112, h: 1568, outW: 1056, outH: 784, minShut: 4, frameLines: 3200,
 	maxShut: 3200, blackCap: 144, pedestal: 64, blueFirst: true, v4l2: true}
 
-func boardSensor() sensorSpec {
-	if layout.AthenaMainline() {
+// sensorFor is this board's sensor and how it is driven: TECHO5's own capture node where its kernel
+// has one, the CAMSV chain on the 2nd gen Show 8's other mainline kernel, the vendor path elsewhere.
+func sensorFor() sensorSpec {
+	if layout.AthenaMainline() && mainlineCameraPath() == "" {
 		return athenaSensor
 	}
-	return pickSensor(hasOV9734())
+	return pickSensor(boardSensor())
 }
 
-var sensor = boardSensor()
+// maxStretch is the most the leveling amplifies a dark frame: past it, the signal is noise.
+const maxStretch = 8
 
-// v4l2Board is whether this board's camera is the V4L2 one, and whether its chain is there. A 2nd
-// gen Show 8 on Amazon's own kernel has neither path TECHO5 knows (its MT8183 ISP is not the
-// MT8163's this file programs), so it answers here too, with no camera.
+// longShut is the longest exposure, in lines: short on Amazon's and LineageOS's kernels, whose drivers
+// stop there, and long on TECHO5's mainline kernels for the 2nd gen Shows, whose drivers let a frame
+// run to about half a second in a dark room (the Show 8's 52000 lines of 10.4 us, the Show 5's 16000
+// of 27 us): a longer frame gathers the light that gain would only
+// turn into noise, at about two frames a second.
+func longShut(short, long int) int {
+	if layout.AthenaMainline() || layout.CronosMainline() {
+		return long
+	}
+	return short
+}
+
+var sensor = sensorFor()
+
+// v4l2Board is whether this board's camera is the CAMSV one, and whether its chain is there. A 2nd
+// gen Show 8 on Amazon's own kernel has no path TECHO5 knows (its MT8183 ISP is not the MT8163's
+// this file programs), so it answers here too, with no camera.
 func v4l2Board() (bool, bool) {
-	if layout.Athena() && !sensor.v4l2 {
+	if layout.Athena() && !sensor.v4l2 && mainlineCameraPath() == "" {
 		return true, false
 	}
 	return sensor.v4l2, sensor.v4l2 && v4l2Available()
@@ -114,6 +171,26 @@ var (
 	bytesPerLine     = sensorW * 10 / 8 // packed 10-bit Bayer: four pixels in five bytes
 	frameBytes       = bytesPerLine * sensorH
 )
+
+// streamed is the geometry of the frames the stream hands out.
+func streamed() geometry { return geometry{sensorW, sensorH, bytesPerLine} }
+
+// geometryOf is a frame's size: a still's own, or the stream's.
+func geometryOf(f *Frame) geometry {
+	if f.full != nil {
+		return *f.full
+	}
+	return streamed()
+}
+
+// statsFor levels a frame by its own size. A still from the whole array is four times the cells of a
+// streamed frame, so it is measured at twice the step, which reads about as many of them.
+func statsFor(f *Frame) tone {
+	if f.full != nil {
+		return sampleIn(f.raw, 2*statsStep, *f.full)
+	}
+	return stats(f.raw)
+}
 
 const (
 	slots = 3 // DMA targets in rotation: a finished frame rests two periods
@@ -256,6 +333,7 @@ func (m *mmio) unmap() {
 // device is the open camera: file descriptors, register windows, the frame buffers.
 type device struct {
 	hold           aeHold // exposure held still through a sudden change, for gestures
+	v4l2           bool
 	isp, sens, ion int
 	cam, sen, mipi *mmio
 	buf            []byte
@@ -270,6 +348,9 @@ type device struct {
 }
 
 func open() (*device, error) {
+	if path := mainlineCameraPath(); path != "" {
+		return openCapture(path)
+	}
 	d := &device{isp: -1, sens: -1, ion: -1}
 	var err error
 	if sensor.v4l2 {
@@ -358,6 +439,10 @@ func open() (*device, error) {
 // setFeature is KDIMGSENSORIOC_X_FEATURECONCTROL with one integer parameter. The kernel is 64-bit
 // and reads the parameter as an unsigned long, so eight bytes go over.
 func (d *device) setFeature(id uint32, v uint64) {
+	if d.v4l2 {
+		d.v4l2Feature(id, v)
+		return
+	}
 	para, size := heapNew[[8]byte](), heapNew[uint32]()
 	for i := range para {
 		para[i] = byte(v >> (8 * i))
@@ -374,8 +459,10 @@ func (d *device) setFeature(id uint32, v uint64) {
 
 // Exposure: the sensor has no automatic mode, so this is it. The frame is metered in zones (meter, in
 // exposure.go) and the exposure (shutter lines times gain) is moved toward a target, shutter
-// first — up to a frame at the sensor's rate — then gain, then longer shutters at the cost of
-// frame rate, then the rest of the gain.
+// first — up to frameLines, a 30-a-second frame — then gain up to aeMidGain, then longer shutters at
+// the cost of frame rate, then the rest of the gain. The picture comes before the rate: gain is noise,
+// so it is the last thing traded. In good light the exposure is short anyway, and the sensor runs at
+// its own top rate (the Show 8's 60 a second, the Show 5's 30) at no cost to the picture.
 const (
 	aeTarget   = 290 // mean of the 10-bit frame to aim for: a lit room, no clipping to speak of
 	aeDelay    = 3   // frames between changes: a new exposure takes two frames to show
@@ -385,16 +472,25 @@ const (
 	aeDeadband = 6   // no change inside target ± this
 )
 
-// The shortest exposure the sensor takes and the lines that fit one of its frames: its own.
+// The shortest exposure the sensor takes, the lines that fit one of its frames, and the longest it
+// is given (sensorSpec.maxShut: about half a second on the mainline kernels, where a dark room runs at
+// about two frames a second).
 var (
 	aeMinShut = sensor.minShut
 	aeFrame   = sensor.frameLines
-	aeMaxShut = sensor.maxShut // on the Show 5, beyond 4000 the frame rate drops under 5 a second
+	aeMaxShut = sensor.maxShut
+	// aePinGain holds the gain there at a 30-a-second frame, whatever the light (0: off). Only device
+	// tests set it (PinGainForTest).
+	aePinGain = 0
 )
 
 func (d *device) autoExpose(bayer []byte) {
 	if d.settle > 0 {
 		d.settle--
+		return
+	}
+	if aePinGain > 0 {
+		d.setExposure(aeFrame, aePinGain, -1)
 		return
 	}
 	mean := int(meter(bayer))
@@ -425,8 +521,11 @@ func (d *device) autoExpose(bayer []byte) {
 	default:
 		shutter, gain = aeMaxShut, int(want/float64(aeMaxShut))
 	}
-	shutter = min(max(shutter, aeMinShut), aeMaxShut)
-	gain = min(max(gain, aeMinGain), aeMaxGain)
+	d.setExposure(min(max(shutter, aeMinShut), aeMaxShut), min(max(gain, aeMinGain), aeMaxGain), mean)
+}
+
+// setExposure asks the sensor for shutter lines and gain, if they changed (mean: the frame's, logged).
+func (d *device) setExposure(shutter, gain, mean int) {
 	if shutter == d.shutter && gain == d.gain {
 		return
 	}
@@ -448,6 +547,10 @@ func (d *device) autoExpose(bayer []byte) {
 func (d *device) close() {
 	if d.v != nil {
 		d.v.close()
+		return
+	}
+	if d.v4l2 {
+		syscall.Close(d.isp)
 		return
 	}
 	if d.cam != nil {
@@ -657,6 +760,10 @@ func (d *device) stream(stop chan struct{}, frame func(bayer []byte)) {
 		d.v.stream(stop, frame)
 		return
 	}
+	if d.v4l2 {
+		d.streamV4L2(stop, frame)
+		return
+	}
 	cam := d.cam
 	cur := 0
 	cam.wr(regImgoBase, d.mva)
@@ -732,29 +839,57 @@ func stats(raw []byte) tone { return sample(raw, statsStep) }
 // sixteenth of the frame; sampling every cell measures the same picture for four times the work.
 const statsStep = 2
 
-func sample(raw []byte, step int) tone {
-	row0 := make([]uint16, sensorW)
-	row1 := make([]uint16, sensorW)
-	var sumR, sumG, sumB uint32
+func sample(raw []byte, step int) tone { return sampleIn(raw, step, streamed()) }
+
+// sampleIn is sample over a frame of the given size; it walks the Bayer cells, half the pixels each way.
+func sampleIn(raw []byte, step int, geo geometry) tone {
+	return sampleWith(raw, step, geo, step%2 != 0)
+}
+
+// sampleInUnpacking is sampleIn through whole unpacked lines, whatever the step (the tests' reference).
+func sampleInUnpacking(raw []byte, step int, geo geometry) tone {
+	return sampleWith(raw, step, geo, true)
+}
+
+func sampleWith(raw []byte, step int, geo geometry, unpack bool) tone {
+	cellsW, cellsH := geo.w/2, geo.h/2
+	var row0, row1 []uint16
+	if unpack {
+		row0, row1 = make([]uint16, geo.w), make([]uint16, geo.w)
+	}
+	var sumR, sumG, sumB uint64
 	var hist, center [2048]int
 	taken, middle := 0, 0
-	for y := 0; y < Height; y += step {
-		unpackLine(raw[(2*y)*bytesPerLine:(2*y+1)*bytesPerLine], row0)
-		unpackLine(raw[(2*y+1)*bytesPerLine:(2*y+2)*bytesPerLine], row1)
-		down := y >= Height/4 && y < Height*3/4
-		for x := 0; x < Width; x += step {
-			r := row0[2*x]
-			g := row0[2*x+1] + row1[2*x]
-			b := row1[2*x+1]
+	for y := 0; y < cellsH; y += step {
+		l0, l1 := raw[(2*y)*geo.bpl:(2*y+1)*geo.bpl], raw[(2*y+1)*geo.bpl:(2*y+2)*geo.bpl]
+		if row0 != nil {
+			unpackLine(l0, row0)
+			unpackLine(l1, row1)
+		}
+		down := y >= cellsH/4 && y < cellsH*3/4
+		for x := 0; x < cellsW; x += step {
+			var r, g, b uint16
+			if row0 == nil {
+				// An even step takes cells that start a 5-byte group (four pixels, two cells):
+				// its first two pixels, read straight from the packed line rather than the whole
+				// line unpacked for them, which cost as much as the rest of the frame's work.
+				i := x / 2 * 5
+				a0, a1, a2 := uint16(l0[i]), uint16(l0[i+1]), uint16(l0[i+2])
+				b0, b1, b2 := uint16(l1[i]), uint16(l1[i+1]), uint16(l1[i+2])
+				r, b = a0|(a1&3)<<8, b1>>2|(b2&0xF)<<6
+				g = (a1>>2 | (a2&0xF)<<6) + (b0 | (b1&3)<<8)
+			} else {
+				r, g, b = row0[2*x], row0[2*x+1]+row1[2*x], row1[2*x+1]
+			}
 			if sensor.blueFirst {
 				r, b = b, r
 			}
-			sumR += uint32(r)
-			sumG += uint32(g)
-			sumB += uint32(b)
+			sumR += uint64(r)
+			sumG += uint64(g)
+			sumB += uint64(b)
 			hist[g]++
 			taken++
-			if down && x >= Width/4 && x < Width*3/4 {
+			if down && x >= cellsW/4 && x < cellsW*3/4 {
 				center[g]++
 				middle++
 			}
@@ -766,7 +901,7 @@ func sample(raw []byte, step int) tone {
 	// a dim room and the gains stay near 1 whatever the cast.
 	ped := float64(2 * sensor.pedestal)
 	avgR, avgG, avgB := float64(sumR)*2/n-ped, float64(sumG)/n-ped, float64(sumB)*2/n-ped
-	if avgR > 1 && avgB > 1 {
+	if avgR > 1 && avgB > 1 && avgG > 1 {
 		// Quantized so a steady scene keeps asking for the tables it already has.
 		t.gainR = math.Round(avgG/avgR*256) / 256
 		t.gainB = math.Round(avgG/avgB*256) / 256
@@ -789,10 +924,12 @@ func sample(raw []byte, step int) tone {
 			break
 		}
 	}
-	if t.white < 32 {
-		t.white = 32
+	// The leveling stretches the white point to full scale, but no more than maxStretch: a frame too dark
+	// to show is shown dark, not its noise stretched to a white screen.
+	if floor := 2*sensor.pedestal + (2046-2*sensor.pedestal)/maxStretch; t.white < floor {
+		t.white = floor
 	}
-	t.gamma = gammaFor(median, t.white)
+	t.gamma = gammaFor(median-2*sensor.pedestal, t.white-2*sensor.pedestal)
 	t.black = blackFor(low, t.white)
 	return t
 }
@@ -855,69 +992,97 @@ var lutCache struct {
 	built *[3][2048]uint8
 }
 
-// Full demosaics the frame at the sensor's own 1600x1200: bilinear, each pixel's missing two
-// colors averaged from its neighbors, leveled the way the half-size picture was. It costs a
-// few hundred milliseconds on this SoC, so it is for stills, not the stream.
+// Full demosaics the frame at the size it was read at (the stream's, or a still's from the whole
+// array): bilinear, each pixel's missing two colors averaged from its neighbors, leveled the way the
+// half-size picture was, the edges mirrored. Rows are done in bands across every core, two pixels a
+// step, and the result kept on the frame, so the stream can be developed at full size as well as the
+// stills, and every viewer of a frame shares one development.
 func (f *Frame) Full() *image.RGBA {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	if f.raw == nil {
 		return f.rgba
 	}
-	w, h := sensorW, sensorH
-	px := make([]uint16, w*h)
-	for y := 0; y < h; y++ {
-		unpackLine(f.raw[y*bytesPerLine:(y+1)*bytesPerLine], px[y*w:(y+1)*w])
+	if f.developed != nil {
+		return f.developed
 	}
-	at := func(x, y int) uint32 {
-		if x < 0 {
-			x = 1
-		} else if x >= w {
-			x = w - 2
-		}
-		if y < 0 {
-			y = 1
-		} else if y >= h {
-			y = h - 2
-		}
-		return uint32(px[y*w+x])
-	}
+	g := geometryOf(f)
+	w, h := g.w, g.h
 	luts := f.level().tables()
 	img := image.NewRGBA(image.Rect(0, 0, w, h))
-	for y := 0; y < h; y++ {
-		for x := 0; x < w; x++ {
-			var r, g, b uint32
-			c := at(x, y)
-			switch (y&1)<<1 | x&1 {
-			case 0: // red site
-				r = c
-				g = (at(x-1, y) + at(x+1, y) + at(x, y-1) + at(x, y+1)) / 4
-				b = (at(x-1, y-1) + at(x+1, y-1) + at(x-1, y+1) + at(x+1, y+1)) / 4
-			case 1: // green on a red row
-				g = c
-				r = (at(x-1, y) + at(x+1, y)) / 2
-				b = (at(x, y-1) + at(x, y+1)) / 2
-			case 2: // green on a blue row
-				g = c
-				b = (at(x-1, y) + at(x+1, y)) / 2
-				r = (at(x, y-1) + at(x, y+1)) / 2
-			default: // blue site
-				b = c
-				g = (at(x-1, y) + at(x+1, y) + at(x, y-1) + at(x, y+1)) / 4
-				r = (at(x-1, y-1) + at(x+1, y-1) + at(x-1, y+1) + at(x+1, y+1)) / 4
+	bands := runtime.NumCPU()
+	var wg sync.WaitGroup
+	for b := range bands {
+		y0, y1 := h*b/bands, h*(b+1)/bands
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			// Each band unpacks its rows and the ones either side it reads into a buffer of its
+			// own; overlapping rows are unpacked twice, which is cheaper than waiting for the
+			// neighbors, and no band writes memory another reads.
+			lo, hi := max(y0-1, 0), min(y1+1, h)
+			px := make([]uint16, (hi-lo)*w)
+			for y := lo; y < hi; y++ {
+				unpackLine(f.raw[y*g.bpl:(y+1)*g.bpl], px[(y-lo)*w:(y-lo+1)*w])
 			}
-			if sensor.blueFirst {
-				r, b = b, r
+			for y := y0; y < y1; y++ {
+				developRow(img.Pix[y*img.Stride:], px, lo, w, h, y, luts)
 			}
-			// The tables run on the 11-bit scale of a summed green pair; single samples double up.
-			j := (y*w + x) * 4
-			img.Pix[j] = luts[0][r<<1]
-			img.Pix[j+1] = luts[1][g<<1]
-			img.Pix[j+2] = luts[2][b<<1]
-			img.Pix[j+3] = 255
+		}()
+	}
+	wg.Wait()
+	f.developed = img
+	return img
+}
+
+// developRow is one row of Full: the pixel and its neighbors in the rows above and below (mirrored at
+// the edges, row 1 standing for row -1 and the next-to-last for the one past the end), and the same
+// for columns. px holds rows from lo on.
+func developRow(out []uint8, px []uint16, lo, w, h, y int, luts *[3][2048]uint8) {
+	ym, yp := y-1, y+1
+	if ym < 0 {
+		ym = 1
+	}
+	if yp >= h {
+		yp = h - 2
+	}
+	ym, y0, yp := ym-lo, y-lo, yp-lo
+	up, cur, dn := px[ym*w:ym*w+w], px[y0*w:y0*w+w], px[yp*w:yp*w+w]
+	swap := sensor.blueFirst
+	lr, lg, lb := &luts[0], &luts[1], &luts[2]
+	put := func(x int, r, g, b uint32) {
+		if swap {
+			r, b = b, r
+		}
+		// The tables run on the 11-bit scale of a summed green pair; single samples double up.
+		j := x * 4
+		out[j] = lr[r<<1]
+		out[j+1] = lg[g<<1]
+		out[j+2] = lb[b<<1]
+		out[j+3] = 255
+	}
+	for x := 0; x < w; x += 2 {
+		xm, xp, xpp := x-1, x+1, x+2
+		if xm < 0 {
+			xm = 1
+		}
+		if xpp >= w {
+			xpp = w - 2
+		}
+		c0, c1 := uint32(cur[x]), uint32(cur[xp])
+		l0, r1 := uint32(cur[xm]), uint32(cur[xpp])
+		u0, u1, d0, d1 := uint32(up[x]), uint32(up[xp]), uint32(dn[x]), uint32(dn[xp])
+		um, dm, upp, dpp := uint32(up[xm]), uint32(dn[xm]), uint32(up[xpp]), uint32(dn[xpp])
+		if y&1 == 0 {
+			// A red row: red at x, green at x+1.
+			put(x, c0, (l0+c1+u0+d0)/4, (um+u1+dm+d1)/4)
+			put(xp, (c0+r1)/2, c1, (u1+d1)/2)
+		} else {
+			// A blue row: green at x, blue at x+1.
+			put(x, (u0+d0)/2, c0, (l0+c1)/2)
+			put(xp, (u0+upp+d0+dpp)/4, (c0+r1+u1+d1)/4, c1)
 		}
 	}
-	return img
 }
 
 // lumaGrid samples one green pair per grid cell, at the cell's middle, from the packed frame: the
@@ -957,4 +1122,98 @@ func lumaGrid(raw []byte, w, h int) []uint8 {
 		}
 	}
 	return out
+}
+
+// Still is a frame for a still. Where the sensor has a mode bigger than the one it streams (the 2nd
+// gen Show 8's whole array, 4224x3136, against the stream's binned 2112x1568) the running stream takes
+// one frame in that mode and goes back; elsewhere it is the next streamed frame. Either develops like
+// any frame (Full, or the GPU's GPUYUYV and GPUYCbCr).
+func (c *Camera) Still(ctx context.Context) (*Frame, error) {
+	g, ok := fullGeometry()
+	if !ok {
+		return c.Snapshot(ctx)
+	}
+	release, err := c.Acquire()
+	if err != nil {
+		return nil, err
+	}
+	defer release()
+	req := stillRequest{done: make(chan stillResult, 1)}
+	select {
+	case c.stills <- req:
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	}
+	select {
+	case r := <-req.done:
+		if r.err != nil {
+			return nil, r.err
+		}
+		return &Frame{At: time.Now(), raw: r.raw, full: &g}, nil
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	}
+}
+
+// The GPU develops a frame for a JPEG encoder, not as RGBA: on these SoCs the cores read GPU memory
+// uncached, so reading a whole RGBA picture back costs more than Full's bands do, while what an encoder
+// wants is smaller, or need not come back at all.
+
+// gpuDevelops is whether frames are developed on the GPU here: the 2nd gen Show 8's Mali-G72 does a
+// 2112x1568 frame in about 20 ms. The 2nd gen Show 5's Mali-T720 takes about 110 ms for 1600x1200 and
+// as long again to give it back, slower than the cores' bands, so it is left to draw the screen.
+var gpuDevelops = boardSensor() == sensorOV13855
+
+// GPUYUYV develops the frame at full size to YUYV in a buffer of the GPU's and returns its dmabuf
+// (stride bytes a row), for the 2nd gen Show 8's JPEG encoder to read in place. The buffer is reused by
+// the next development, so the caller encodes it before developing another. ok is false where there
+// is no GPU helper or it failed.
+func (f *Frame) GPUYUYV() (fd, stride, w, h int, ok bool) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if f.raw == nil || !gpuDevelops || !gpu.Available() {
+		return -1, 0, 0, 0, false
+	}
+	g := geometryOf(f)
+	fd, stride, err := gpu.DevelopDMABuf(f.raw, g.w, g.h, g.bpl, f.level().tables(), sensor.blueFirst)
+	if err != nil {
+		slog.Debug("camera: gpu dmabuf", "err", err)
+		return -1, 0, 0, 0, false
+	}
+	return fd, stride, g.w, g.h, true
+}
+
+// Dims is the frame's size: the sensor's whole frame, or a still's; 0 for a frame with nothing in it.
+func (f *Frame) Dims() (w, h int) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if f.raw == nil {
+		return 0, 0
+	}
+	g := geometryOf(f)
+	return g.w, g.h
+}
+
+// ISPRaw is the frame as the sensor sent it, for the ISP to develop (hardware/facedetect): its packed
+// 10-bit lines, the size, the bytes a line, and its leveling. ok is false for a frame with nothing
+// in it.
+func (f *Frame) ISPRaw() (raw []byte, w, h, bpl int, t ISPTone, ok bool) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if f.raw == nil {
+		return nil, 0, 0, 0, t, false
+	}
+	g := geometryOf(f)
+	l := f.level()
+	stretch := 1.0
+	if l.white > l.black {
+		stretch = float64(2046-l.black) / float64(l.white-l.black)
+	}
+	t = ISPTone{
+		Black: l.black / 2, // the 11-bit scale of a summed green pair
+		Red:   int(l.gainR*512 + 0.5),
+		Blue:  int(l.gainB*512 + 0.5),
+		Gain:  min(max(int(stretch*512/4+0.5), 128), 8191),
+	}
+	return f.raw, g.w, g.h, g.bpl, t, true
 }

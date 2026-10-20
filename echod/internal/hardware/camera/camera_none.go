@@ -57,6 +57,7 @@ func (c *Camera) SetSlowEvery(time.Duration)                   {}
 func (c *Camera) Unwedge()                                     {}
 func SetGestureExposure(bool)                                  {}
 func (c *Camera) Snapshot(ctx context.Context) (*Frame, error) { return nil, errNone }
+func (c *Camera) Still(ctx context.Context) (*Frame, error)    { return nil, errNone }
 func (c *Camera) Last() *Frame                                 { return nil }
 func (c *Camera) Running() bool                                { return false }
 func (f *Frame) Full() *image.RGBA                             { return f.RGBA }
@@ -64,3 +65,20 @@ func (f *Frame) Image() *image.RGBA                            { return f.RGBA }
 func (f *Frame) Luma(w, h int) []uint8                         { return nil }
 func (f *Frame) Blank() bool                                   { return false }
 func (c *Camera) ListenLatest(chan *Frame) (cancel func())     { return func() {} }
+
+// GPUYUYV is the GPU's development of a frame; the Dot has no camera.
+func (f *Frame) GPUYUYV() (fd, stride, w, h int, ok bool) { return -1, 0, 0, 0, false }
+
+// ISPTone is how an ISP levels a frame (camera_common.go); nothing here has one.
+type ISPTone struct{ Black, Red, Blue, Gain int }
+
+// ISPRaw is nothing here: no camera.
+func (f *Frame) ISPRaw() (raw []byte, w, h, bpl int, t ISPTone, ok bool) {
+	return nil, 0, 0, 0, t, false
+}
+
+// Dims is nothing here: no camera.
+func (f *Frame) Dims() (w, h int) { return 0, 0 }
+
+// Wedged is never anything here: no camera.
+func (c *Camera) Wedged() error { return nil }
