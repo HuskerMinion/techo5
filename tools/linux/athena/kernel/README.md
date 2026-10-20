@@ -54,6 +54,7 @@ reasoning; each one checks its anchors and is a no-op on a tree it has already p
 | `0001-mt8183-afe-leave-cache-only-before-enabling-clocks.patch` | mt8183 AFE: leave regmap cache-only mode before enabling the audio clocks. The clock gates go through the same syscon regmap, so the writes were dropped and the AFE never ran when the bootloader had left its clocks off. |
 | `patch-kbuild.py` | Kconfig `SND_SOC_MT8183_ATHENA` and the Makefile lines for the machine driver and the DTB. |
 | `patch-afe-di2.py` | mt8183 AFE: the second I2S2 data input (DI2) and VUL12's 4-channel mode, for athena's 4 microphones. Also fixes an upstream bug: UL1_CH2's "I2S0_CH2" switch wrote channel 1's register. |
+| `patch-afe-awb-dl1.py` | mt8183 AFE: routes from DL1 into UL2 (the AWB memif), so its "UL2_CH1 DL1_CH1" and "UL2_CH2 DL1_CH2" switches exist and the machine driver's `DL1_AWB_Record` (hw:0,1) records what DL1 sends the amplifier: the echo reference, as on Amazon's kernel. They have to be the AFE's: it makes its mixers' controls at platform probe, before a card's routes are added. |
 | `patch-usb-force-vbus.py` | mtu3 + T-PHY: a `mediatek,force-vbus` property. athena senses VBUS on a GPIO, so neither the PHY nor the controller sees a session and USB device mode never comes up without it. |
 | `patch-tcs3400.py` | tcs3472 IIO driver: support the AMS TCS3400 light sensor (no command-type field, its own gains, integration step and interrupt clear) and the `ams,tcs3400` compatible. |
 | `patch-btmtksdio-bdaddr.py` | btmtksdio: program a public address set through mgmt again on every power-on, since the controller can lose it while off. |
@@ -73,7 +74,9 @@ New files, copied into the tree:
   guess marked TODO). I2C2 and I2C4 run bit-banged on their pads: the hardware controllers are
   shared with the SCP and time out under mainline.
 - `src/mt8183-athena.c`: the ALSA SoC machine driver (MT8183 AFE + TAS5805M amp on I2S1 +
-  TLV320ADC5140 4-channel mic ADC on I2S2), GPL-2.0.
+  TLV320ADC5140 4-channel mic ADC on I2S2, and the AFE's DL1 write-back as the echo reference),
+  GPL-2.0. PCMs: hw:0,0 `Playback_1` (DL1), hw:0,1 `DL1_AWB_Record` (the reference), hw:0,2
+  `Capture_1` (the four microphones, UL1).
 - `athena_defconfig`: the full kernel configuration.
 
 ## Display panels
