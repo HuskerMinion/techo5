@@ -8,9 +8,8 @@ import (
 	"image/draw"
 	"math"
 
-	xdraw "golang.org/x/image/draw"
-
 	"github.com/HuskerMinion/techo5/echod/internal/feature/dashboard"
+	"github.com/HuskerMinion/techo5/echod/internal/lib/picscale"
 )
 
 // A picture drawn whole: a picture-elements card's, whose elements are places on it to tap, and a
@@ -110,7 +109,7 @@ func (r *paint) wholePicture(frame image.Rectangle, p dashboard.Picture, pal das
 			return
 		}
 	} else {
-		xdraw.ApproxBiLinear.Scale(r.dst, pic, p.Image, p.Image.Bounds(), draw.Src, nil)
+		picscale.CatmullRom.Scale(r.dst, pic, p.Image, p.Image.Bounds(), draw.Src)
 	}
 	boxes := make([]image.Rectangle, len(p.Elements))
 	for i, e := range p.Elements {

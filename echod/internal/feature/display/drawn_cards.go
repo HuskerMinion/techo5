@@ -9,10 +9,9 @@ import (
 	"math"
 	"strings"
 
-	xdraw "golang.org/x/image/draw"
-
 	"github.com/HuskerMinion/techo5/echod/internal/feature/dashboard"
 	"github.com/HuskerMinion/techo5/echod/internal/lib/mdi"
+	"github.com/HuskerMinion/techo5/echod/internal/lib/picscale"
 )
 
 // The drawn dashboard's layout: sections in columns, the way Home Assistant lays a sections view out,
@@ -576,7 +575,7 @@ func (r *paint) pictureCard(b image.Rectangle, p dashboard.Picture, pal dashPal)
 		r.text(fc.sub, msg, b.Min.X+(b.Dx()-r.width(fc.sub, msg))/2, b.Min.Y+b.Dy()/2, pal.sub)
 	} else {
 		inner := b.Inset(r.s(2))
-		xdraw.ApproxBiLinear.Scale(r.dst, inner, p.Image, cover(p.Image.Bounds(), inner), draw.Src, nil)
+		picscale.CatmullRom.Scale(r.dst, inner, p.Image, cover(p.Image.Bounds(), inner), draw.Src)
 	}
 	if p.Name != "" {
 		band := image.Rect(b.Min.X, b.Max.Y-r.s(40), b.Max.X, b.Max.Y)
