@@ -1,0 +1,12 @@
+diff --git a/arch/arm64/boot/dts/mediatek/mt8163.dtsi b/arch/arm64/boot/dts/mediatek/mt8163.dtsi
+index 83676d180..cdabb29e1 100644
+--- a/arch/arm64/boot/dts/mediatek/mt8163.dtsi
++++ b/arch/arm64/boot/dts/mediatek/mt8163.dtsi
+@@ -18,6 +18,7 @@
+ #include <dt-bindings/gce/mediatek,mt8163-gce.h>
+ #include <dt-bindings/memory/mt8163-larb-port.h>
+ #include <dt-bindings/pinctrl/mt8163-pinfunc.h>
++#include <dt-bindings/thermal/thermal.h>
+ #include <dt-bindings/power/mediatek,mt8163-power-controller.h>
+ #include <dt-bindings/reset/mediatek,mt8163-infracfg.h>
+ #include <dt-bindings/reset/mediatek,mt8163-mmsys.h>

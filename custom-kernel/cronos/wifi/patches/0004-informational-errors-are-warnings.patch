@@ -1,0 +1,95 @@
+Messages the driver logs as errors that report nothing wrong: a configuration value, a regulatory
+notice that arrives before the interface exists, the P2P device's BSS index, a mailbox dump after
+an unanswered command, a TX time option, and the firmware's own debug text arriving shorter
+than its header says (the driver drops it either way). Logged as warnings, below the default level.
+
+--- a/common/wlan_lib.c
++++ b/common/wlan_lib.c
+@@ -6760,7 +6760,7 @@
+ 	P_NET_INTERFACE_INFO_T prNetIfInfo;
+ 
+ 	if (ucBssIndex >= ARRAY_SIZE(prGlueInfo->arNetInterfaceInfo)) {
+-		DBGLOG(INIT, ERROR, "Array index out of bound, ucBssIndex=%u\n", ucBssIndex);
++		DBGLOG(INIT, WARN, "Array index out of bound, ucBssIndex=%u\n", ucBssIndex);
+ 		return;
+ 	}
+ 
+@@ -9994,7 +9994,7 @@
+ 		prAdapter->rWifiVar.rRssiPathCompasation.c2GRssiCompensation;
+ 	rCmdRssiPathCompasation.c5GRssiCompensation =
+ 		prAdapter->rWifiVar.rRssiPathCompasation.c5GRssiCompensation;
+-	DBGLOG(INIT, ERROR, "c2GRssiCompensation=%d,c5GRssiCompensation=%d\n",
++	DBGLOG(INIT, WARN, "c2GRssiCompensation=%d,c5GRssiCompensation=%d\n",
+ 				rCmdRssiPathCompasation.c2GRssiCompensation, rCmdRssiPathCompasation.c5GRssiCompensation);
+ 
+ 	return wlanSendSetQueryCmd(prAdapter,
+--- a/nic/nic_cmd_event.c
++++ b/nic/nic_cmd_event.c
+@@ -3693,7 +3693,7 @@
+ 
+ 	if (u4EventBufLen < sizeof(EVENT_DEBUG_MSG_T))
+ 	{
+-		DBGLOG(NIC, ERROR, "%s: Invalid event length: %d < %d\n", __func__, u4EventBufLen, sizeof(EVENT_DEBUG_MSG_T));
++		DBGLOG(NIC, WARN, "%s: Invalid event length: %d < %d\n", __func__, u4EventBufLen, sizeof(EVENT_DEBUG_MSG_T));
+ 		return;
+ 	}
+ 	prEventDebugMsg = (P_EVENT_DEBUG_MSG_T) (prEvent->aucBuffer);
+@@ -3701,7 +3701,7 @@
+ 	if (u4EventBufLen <
+ 		sizeof(EVENT_DEBUG_MSG_T) + prEventDebugMsg->u2MsgSize - 1)
+ 	{
+-		DBGLOG(NIC, ERROR, "%s: Invalid event length: %d < %d\n", __func__, u4EventBufLen, sizeof(EVENT_DEBUG_MSG_T) + prEventDebugMsg->u2MsgSize);
++		DBGLOG(NIC, WARN, "%s: Invalid event length: %d < %d\n", __func__, u4EventBufLen, sizeof(EVENT_DEBUG_MSG_T) + prEventDebugMsg->u2MsgSize);
+ 		return;
+ 	}
+ 	u2DebugMsgId = prEventDebugMsg->u2DebugMsgId;
+--- a/nic/nic_tx.c
++++ b/nic/nic_tx.c
+@@ -3044,7 +3044,7 @@
+ 
+     if (u4PktOption & MSDU_OPT_MANUAL_LIFE_TIME) {
+ 		HAL_MAC_TX_DESC_SET_REMAINING_LIFE_TIME_IN_MS(prTxDesc, prMsduInfo->u4RemainingLifetime);
+-		DBGLOG(NIC, ERROR, "Remaining Tx Time %d ms in pkt option (%d)\n",
++		DBGLOG(NIC, WARN, "Remaining Tx Time %d ms in pkt option (%d)\n",
+ 			prMsduInfo->u4RemainingLifetime,
+ 			HAL_MAC_TX_DESC_GET_REMAINING_LIFE_TIME_IN_MS(prTxDesc));
+ 	}
+--- a/os/linux/gl_cfg80211.c
++++ b/os/linux/gl_cfg80211.c
+@@ -4658,12 +4658,12 @@
+ 	 */
+ 	prGlueInfo = rlmDomainGetGlueInfo();
+ 	if (!prGlueInfo) {
+-		DBGLOG(RLM, ERROR, "prGlueInfo is NULL!\n");
++		DBGLOG(RLM, WARN, "prGlueInfo is NULL!\n");
+ 		return; /*interface is not up yet.*/
+ 	}
+ 	prAdapter = prGlueInfo->prAdapter;
+ 	if (!prAdapter) {
+-		DBGLOG(RLM, ERROR, "prGlueInfo is NULL!\n");
++		DBGLOG(RLM, WARN, "prGlueInfo is NULL!\n");
+ 		return; /*interface is not up yet.*/
+ 	}
+ 	/*
+--- a/os/linux/gl_init.c
++++ b/os/linux/gl_init.c
+@@ -1758,7 +1758,7 @@
+ #ifdef STA_P2P_MCC
+     prWiphy->iface_combinations =  iface_comb_mcc;
+     prWiphy->n_iface_combinations = ARRAY_SIZE(iface_comb_mcc);
+-    DBGLOG(INIT, ERROR, "The num_different_channels is %d\n",iface_comb_mcc[0].num_different_channels);
++    DBGLOG(INIT, WARN, "The num_different_channels is %d\n",iface_comb_mcc[0].num_different_channels);
+ #endif
+ 	if (wiphy_register(prWiphy) < 0) {
+ 		DBGLOG(INIT, ERROR, "wiphy_register error\n");
+--- a/os/linux/hif/sdio/hal_api.c
++++ b/os/linux/hif/sdio/hal_api.c
+@@ -1894,7 +1894,7 @@
+ 
+ 	halGetMailbox(prAdapter, 0, &u4MailBoxStatus0);
+ 	halGetMailbox(prAdapter, 1, &u4MailBoxStatus1);
+-	DBGLOG(INIT, ERROR, "MailBox Status = 0x%08X, 0x%08X\n", u4MailBoxStatus0, u4MailBoxStatus1);
++	DBGLOG(INIT, WARN, "MailBox Status = 0x%08X, 0x%08X\n", u4MailBoxStatus0, u4MailBoxStatus1);
+ }
+ 
+ VOID halProcessSoftwareInterrupt(IN P_ADAPTER_T prAdapter)

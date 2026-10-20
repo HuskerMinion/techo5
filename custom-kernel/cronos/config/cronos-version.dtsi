@@ -1,0 +1,5 @@
+// SPDX-License-Identifier: GPL-2.0-only OR MIT
+/* The bootloader selects this device tree by its factory board revision. */
+/ {
+	version = "pvt_4_1";
+};

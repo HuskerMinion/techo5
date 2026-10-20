@@ -1,0 +1,113 @@
+--- a/drivers/gpu/drm/mediatek/mtk_disp_ovl.c
++++ b/drivers/gpu/drm/mediatek/mtk_disp_ovl.c
+@@ -12,6 +12,7 @@
+ #include <linux/module.h>
+ #include <linux/of.h>
+ #include <linux/platform_device.h>
++#include <linux/reset.h>
+ #include <linux/pm_runtime.h>
+ #include <linux/soc/mediatek/mtk-cmdq.h>
+ 
+@@ -158,6 +159,7 @@
+  * @data: platform data
+  */
+ struct mtk_disp_ovl {
++	struct reset_control		*reset;
+ 	struct drm_crtc			*crtc;
+ 	struct clk			*clk;
+ 	void __iomem			*regs;
+@@ -247,7 +249,17 @@
+ {
+ 	struct mtk_disp_ovl *ovl = dev_get_drvdata(dev);
+ 
+-	return clk_prepare_enable(ovl->clk);
++	int ret;
++
++	ret = clk_prepare_enable(ovl->clk);
++	if (ret)
++		return ret;
++
++	/* Clear bootloader transactions before configuring a new scanout. */
++	ret = reset_control_reset(ovl->reset);
++	if (ret)
++		clk_disable_unprepare(ovl->clk);
++	return ret;
+ }
+ 
+ void mtk_ovl_clk_disable(struct device *dev)
+@@ -627,6 +639,11 @@
+ 		return dev_err_probe(dev, PTR_ERR(priv->clk),
+ 				     "failed to get ovl clk\n");
+ 
++	priv->reset = devm_reset_control_get_optional_exclusive(dev, NULL);
++	if (IS_ERR(priv->reset))
++		return dev_err_probe(dev, PTR_ERR(priv->reset),
++				     "failed to get ovl reset\n");
++
+ 	priv->regs = devm_platform_ioremap_resource(pdev, 0);
+ 	if (IS_ERR(priv->regs))
+ 		return dev_err_probe(dev, PTR_ERR(priv->regs),
+--- a/drivers/soc/mediatek/mtk-mmsys.c
++++ b/drivers/soc/mediatek/mtk-mmsys.c
+@@ -59,7 +59,8 @@
+ 	.routes = mt8163_mmsys_routing_table,
+ 	.num_routes = ARRAY_SIZE(mt8163_mmsys_routing_table),
+ 	.sw0_rst_offset = MT8183_MMSYS_SW0_RST_B,
+-	.num_resets = 64,
++	.rst_tb = mmsys_mt8163_rst_tb,
++	.num_resets = ARRAY_SIZE(mmsys_mt8163_rst_tb),
+ };
+ 
+ static const struct mtk_mmsys_driver_data mt8167_mmsys_driver_data = {
+@@ -67,8 +68,7 @@
+ 	.routes = mt8167_mmsys_routing_table,
+ 	.num_routes = ARRAY_SIZE(mt8167_mmsys_routing_table),
+ 	.sw0_rst_offset = MT8183_MMSYS_SW0_RST_B,
+-	.rst_tb = mmsys_mt8163_rst_tb,
+-	.num_resets = ARRAY_SIZE(mmsys_mt8163_rst_tb),
++	.num_resets = 64,
+ };
+ 
+ static const struct mtk_mmsys_driver_data mt8173_mmsys_driver_data = {
+--- a/drivers/gpu/drm/mediatek/mtk_disp_gamma.c
++++ b/drivers/gpu/drm/mediatek/mtk_disp_gamma.c
+@@ -125,9 +125,12 @@
+ 	struct drm_color_lut *lut;
+ 	unsigned int i;
+ 
+-	/* If there's no gamma lut there's nothing to do here. */
+-	if (!state->gamma_lut)
++	/* MT8163 must bypass the LUT when no color correction is requested. */
++	if (!state->gamma_lut) {
++		if (of_device_is_compatible(dev->of_node, "mediatek,mt8163-disp-gamma"))
++			writel(GAMMA_RELAY_MODE, gamma->regs + DISP_GAMMA_CFG);
+ 		return;
++	}
+ 
+ 	num_lut_banks = gamma->data->lut_size / gamma->data->lut_bank_size;
+ 	lut = (struct drm_color_lut *)state->gamma_lut->data;
+@@ -218,6 +221,9 @@
+ 	sz |= FIELD_PREP(DISP_GAMMA_SIZE_VSIZE, h);
+ 
+ 	mtk_ddp_write(cmdq_pkt, sz, &gamma->cmdq_reg, gamma->regs, DISP_GAMMA_SIZE);
++	if (of_device_is_compatible(dev->of_node, "mediatek,mt8163-disp-gamma"))
++		mtk_ddp_write(cmdq_pkt, GAMMA_RELAY_MODE, &gamma->cmdq_reg,
++			      gamma->regs, DISP_GAMMA_CFG);
+ 	if (gamma->data && gamma->data->has_dither)
+ 		mtk_dither_set_common(gamma->regs, &gamma->cmdq_reg, bpc,
+ 				      DISP_GAMMA_CFG, GAMMA_DITHERING, cmdq_pkt);
+--- a/drivers/gpu/drm/mediatek/mtk_ddp_comp.c
++++ b/drivers/gpu/drm/mediatek/mtk_ddp_comp.c
+@@ -157,6 +157,12 @@
+ {
+ 	struct mtk_ddp_comp_dev *priv = dev_get_drvdata(dev);
+ 
++	if (of_device_is_compatible(dev->of_node, "mediatek,mt8163-disp-dither")) {
++		/* MT8163 needs its internal dither engine and lookup mode initialized. */
++		mtk_ddp_write(cmdq_pkt, 1, &priv->cmdq_reg, priv->regs, 0x100);
++		mtk_ddp_write(cmdq_pkt, 0x3004, &priv->cmdq_reg, priv->regs, 0x118);
++		mtk_ddp_write(cmdq_pkt, 0x11, &priv->cmdq_reg, priv->regs, 0x130);
++	}
+ 	mtk_ddp_write(cmdq_pkt, w << 16 | h, &priv->cmdq_reg, priv->regs, DISP_REG_DITHER_SIZE);
+ 	mtk_ddp_write(cmdq_pkt, DITHER_RELAY_MODE, &priv->cmdq_reg, priv->regs,
+ 		      DISP_REG_DITHER_CFG);

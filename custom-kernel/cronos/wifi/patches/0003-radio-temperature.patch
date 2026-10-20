@@ -1,0 +1,119 @@
+--- a/Makefile
++++ b/Makefile
+@@ -508,7 +508,7 @@
+ 			$(OS_DIR)platform.o
+ 
+ ifeq ($(CFG_GET_TEMPURATURE),y)
+-OS_OBJS +=	$(OS_DIR)amazon_wifi_temp_sensor.o
++# Temperature is exposed through the existing proc interface.
+ endif
+ 
+ MGMT_OBJS := $(MGMT_DIR)ais_fsm.o \
+--- a/os/linux/gl_init.c
++++ b/os/linux/gl_init.c
+@@ -2805,9 +2805,7 @@
+ 			break;
+ 		}
+ #endif /* WLAN_INCLUDE_PROC */
+-#ifdef CFG_GET_TEMPURATURE
+-		wifi_temp_sensor_register(prGlueInfo);
+-#endif
++
+ 
+ #if CFG_MET_PACKET_TRACE_SUPPORT
+ 		kalMetInit(prGlueInfo);
+@@ -3123,9 +3121,7 @@
+ 		glUnregisterAmpc(prGlueInfo);
+ #endif
+ 
+-#ifdef CFG_GET_TEMPURATURE
+-	wifi_temp_sensor_deregister();
+-#endif
++
+ 	/* 4 <3> Remove /proc filesystem. */
+ #if WLAN_INCLUDE_PROC
+ 	procRemoveProcfs();
+@@ -3392,9 +3388,7 @@
+ 
+ 	registerDriver();
+ 
+-#ifdef CFG_GET_TEMPURATURE
+-	ret = wifi_temp_sensor_init();
+-#endif
++
+ 	DBGLOG(INIT, STATE, "initWlan end\n");
+ 
+ 	return ret;
+@@ -3419,9 +3413,7 @@
+ 		wait_for_completion_interruptible_timeout(prWaitForResetComp,
+ 					SEC_TO_SYSTIME(5));
+ 
+-#ifdef CFG_GET_TEMPURATURE
+-	wifi_temp_sensor_exit();
+-#endif
++
+ 
+ 	unregisterDriver();
+ 	DBGLOG(INIT, STATE, "exitWlan end\n");
+--- a/os/linux/gl_proc.c
++++ b/os/linux/gl_proc.c
+@@ -835,42 +835,24 @@
+ #endif
+ 
+ #ifdef CFG_GET_TEMPURATURE
+-static ssize_t proc_get_temperature(struct file *filp,
+-				    char __user *buf,
+-				    size_t count,
+-				    loff_t *f_pos)
+-{
+-	P_GLUE_INFO_T prGlueInfo;
+-	unsigned int pos = 0, buf_len = 128, oid_len;
+-	char *buffer;
+-	int temperature = 0;
+-	WLAN_STATUS rStatus = WLAN_STATUS_SUCCESS;
+-
+-	if (*f_pos > 0)
++static ssize_t proc_get_temperature(struct file *filp, char __user *buf,
++				    size_t count, loff_t *f_pos)
++{
++	unsigned int oid_len;
++	char buffer[64];
++	int temperature, len;
++	WLAN_STATUS status;
++
++	if (*f_pos)
+ 		return 0;
+-
+-	prGlueInfo = g_prGlueInfo_proc;
+-	if (!prGlueInfo)
+-		return -EFAULT;
+-
+-	buffer = (char *) kalMemAlloc(buf_len, VIR_MEM_TYPE);
+-	if (!buffer)
+-		return -ENOMEM;
+-
+-	rStatus = kalIoctl(prGlueInfo,
+-			   wlanoidGetTemperature, &temperature,
+-			   sizeof(temperature), TRUE, TRUE, TRUE, &oid_len);
+-
+-	pos = kalScnprintf(buffer, buf_len, "Temperature = %d\n", temperature);
+-
+-	if (copy_to_user(buf, buffer, pos)) {
+-		DBGLOG(INIT, ERROR, "copy to user failed\n");
+-		return -EFAULT;
+-	}
+-
+-	*f_pos += pos;
+-
+-	return pos;
++	if (!g_prGlueInfo_proc)
++		return -ENODEV;
++	status = kalIoctl(g_prGlueInfo_proc, wlanoidGetTemperature, &temperature,
++			 sizeof(temperature), TRUE, TRUE, TRUE, &oid_len);
++	if (status != WLAN_STATUS_SUCCESS)
++		return -EIO;
++	len = scnprintf(buffer, sizeof(buffer), "Temperature = %d\n", temperature);
++	return simple_read_from_buffer(buf, count, f_pos, buffer, len);
+ }
+ #endif
+ #if CFG_CHIP_RESET_SUPPORT

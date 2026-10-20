@@ -1,0 +1,6 @@
+[submodule "custom-kernel/cronos/wifi-amazon"]
+	path = custom-kernel/cronos/wifi-amazon
+	url = https://github.com/amazon-oss/android_kernel_amazon_mt76x8-wifi.git
+[submodule "custom-kernel/cronos/sources/amazon-kernel"]
+	path = custom-kernel/cronos/sources/amazon-kernel
+	url = https://github.com/amazon-oss/android_kernel_amazon_mt8163.git

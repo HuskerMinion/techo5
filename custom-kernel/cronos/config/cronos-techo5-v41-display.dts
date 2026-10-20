@@ -1,0 +1,5 @@
+// SPDX-License-Identifier: GPL-2.0-only OR MIT
+#include "mt8163-amazon-cronos.dts"
+#include "mt8163-amazon-cronos-bootfix.dtsi"
+#include "mt8163-amazon-cronos-version.dtsi"
+#include "mt8163-amazon-cronos-display.dtsi"

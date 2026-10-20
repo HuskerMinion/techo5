@@ -1,0 +1,52 @@
+// SPDX-License-Identifier: GPL-2.0-only OR MIT
+/* Amazon PSCI 0.1 records CPU entry points; mt-boot powers the cores through SPM. */
+
+&cpu0 {
+	enable-method = "mt-boot";
+};
+
+&cpu1 {
+	enable-method = "mt-boot";
+};
+
+&cpu2 {
+	enable-method = "mt-boot";
+};
+
+&cpu3 {
+	enable-method = "mt-boot";
+};
+
+/* Keep the bootloader-powered panel supplied during DRM takeover. */
+
+&mt6323_vgp3_reg {
+	regulator-always-on;
+	regulator-boot-on;
+};
+
+&mt6323_vio28_reg {
+	regulator-always-on;
+	regulator-boot-on;
+};
+
+/ {
+	psci {
+		compatible = "arm,psci";
+		method = "smc";
+		cpu_suspend = <0x84000001>;
+		cpu_off = <0x84000002>;
+		cpu_on = <0x84000003>;
+		affinity_info = <0x84000004>;
+	};
+
+	reserved-memory {
+		ramoops@44410000 {
+			compatible = "ramoops";
+			reg = <0 0x44410000 0 0xe0000>;
+			console-size = <0x20000>;
+			record-size = <0x20000>;
+			pmsg-size = <0x10000>;
+			ftrace-size = <0>;
+		};
+	};
+};

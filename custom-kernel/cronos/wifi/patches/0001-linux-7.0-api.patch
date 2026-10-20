@@ -1,0 +1,1436 @@
+diff --color -ruN module/common/wlan_oid.c ../wifi-work/common/wlan_oid.c
+--- a/common/wlan_oid.c
++++ b/common/wlan_oid.c
+@@ -72,7 +72,7 @@
+ #include "mgmt/rsn.h"
+ #include "gl_wext.h"
+ #include "debug.h"
+-#include <stddef.h>
++#include <linux/stddef.h>
+ 
+ /******************************************************************************
+ *                              C O N S T A N T S
+diff --color -ruN module/include/nic/nic_tx.h ../wifi-work/include/nic/nic_tx.h
+--- a/include/nic/nic_tx.h
++++ b/include/nic/nic_tx.h
+@@ -1528,8 +1528,8 @@
+ VOID nicTxDirectClearStaPsQ(IN P_ADAPTER_T prAdapter, UINT_8 ucStaRecIndex);
+ VOID nicTxDirectClearBssAbsentQ(IN P_ADAPTER_T prAdapter, UINT_8 ucBssIndex);
+ VOID nicTxDirectClearAllStaPsQ(IN P_ADAPTER_T prAdapter);
+-void nicTxDirectTimerCheckSkbQ(unsigned long data);
+-void nicTxDirectTimerCheckHifQ(unsigned long data);
++void nicTxDirectTimerCheckSkbQ(struct timer_list *t);
++void nicTxDirectTimerCheckHifQ(struct timer_list *t);
+ WLAN_STATUS nicTxDirectStartXmit(struct sk_buff *prSkb, P_GLUE_INFO_T prGlueInfo);
+ /* TX Direct functions : END */
+ 
+diff --color -ruN module/mgmt/p2p_func.c ../wifi-work/mgmt/p2p_func.c
+--- a/mgmt/p2p_func.c
++++ b/mgmt/p2p_func.c
+@@ -1229,7 +1229,7 @@
+ 
+ 	DBGLOG(P2P, INFO, "p2pFuncDfsSwitchCh: Update to OS\n");
+ 	cfg80211_ch_switch_notify(prGlueInfo->prP2PInfo[prP2pRoleFsmInfo->ucRoleIndex]->prDevHandler,
+-					prGlueInfo->prP2PInfo[prP2pRoleFsmInfo->ucRoleIndex]->chandef);
++					prGlueInfo->prP2PInfo[prP2pRoleFsmInfo->ucRoleIndex]->chandef, 0);
+ 	DBGLOG(P2P, INFO, "p2pFuncDfsSwitchCh: Update to OS Done\n");
+ 
+ }				/* p2pFuncDfsSwitchCh */
+diff --color -ruN module/mgmt/saa_fsm.c ../wifi-work/mgmt/saa_fsm.c
+--- a/mgmt/saa_fsm.c
++++ b/mgmt/saa_fsm.c
+@@ -1828,7 +1828,7 @@
+ #endif
+ #if CFG_SUPPORT_CFG80211_AUTH
+ 					DBGLOG(SAA, INFO, "notification of RX disassociation %d\n", prSwRfb->u2PacketLen);
+-					if (wdev->current_bss) {
++					if (wdev->connected) {
+ #if (KERNEL_VERSION(3, 11, 0) <= CFG80211_VERSION_CODE)
+ #if CFG_WDEV_LOCK_THREAD_SUPPORT
+ 						if (in_interrupt()) {
+@@ -1878,7 +1878,7 @@
+ 			prBssInfo = GET_BSS_INFO_BY_INDEX(prAdapter, prStaRec->ucBssIndex);
+ 			ucRoleIdx = (UINT_8)prBssInfo->u4PrivateData;
+ 			wdev = prAdapter->prGlueInfo->prP2PInfo[ucRoleIdx]->prDevHandler->ieee80211_ptr;
+-			if (wdev->current_bss) {
++			if (wdev->connected) {
+ #if (KERNEL_VERSION(3, 11, 0) <= CFG80211_VERSION_CODE)
+ #if CFG_WDEV_LOCK_THREAD_SUPPORT
+ 				pFrameBuf = kalMemAlloc(prSwRfb->u2PacketLen,
+@@ -1922,7 +1922,7 @@
+ 			/* TODO(Kevin) */
+ #if CFG_SUPPORT_CFG80211_AUTH
+ 			DBGLOG(SAA, INFO, "notification of RX disassociation %d\n", prSwRfb->u2PacketLen);
+-			if (wdev->current_bss) {
++			if (wdev->connected) {
+ #if (KERNEL_VERSION(3, 11, 0) <= CFG80211_VERSION_CODE)
+ #if CFG_WDEV_LOCK_THREAD_SUPPORT
+ 				if (in_interrupt()) {
+diff --color -ruN module/nic/nic_tx.c ../wifi-work/nic/nic_tx.c
+--- a/nic/nic_tx.c
++++ b/nic/nic_tx.c
+@@ -3949,10 +3949,10 @@
+ * \retval none
+ */
+ /*----------------------------------------------------------------------------*/
+-void nicTxDirectTimerCheckSkbQ(unsigned long data)
++void nicTxDirectTimerCheckSkbQ(struct timer_list *t)
+ {
+-	P_GLUE_INFO_T prGlueInfo = (P_GLUE_INFO_T)data;
+-	P_ADAPTER_T prAdapter = prGlueInfo->prAdapter;
++	P_ADAPTER_T prAdapter = timer_container_of(prAdapter, t, rTxDirectSkbTimer);
++	P_GLUE_INFO_T prGlueInfo = prAdapter->prGlueInfo;
+ 
+ 	if (skb_queue_len(&prAdapter->rTxDirectSkbQueue))
+ 		nicTxDirectStartXmit(NULL, prGlueInfo);
+@@ -3970,10 +3970,10 @@
+ * \retval none
+ */
+ /*----------------------------------------------------------------------------*/
+-void nicTxDirectTimerCheckHifQ(unsigned long data)
++void nicTxDirectTimerCheckHifQ(struct timer_list *t)
+ {
+-	P_GLUE_INFO_T prGlueInfo = (P_GLUE_INFO_T)data;
+-	P_ADAPTER_T prAdapter = prGlueInfo->prAdapter;
++	P_ADAPTER_T prAdapter = timer_container_of(prAdapter, t, rTxDirectHifTimer);
++	P_GLUE_INFO_T prGlueInfo = prAdapter->prGlueInfo;
+ 	UINT_8 ucHifTc = 0;
+ 	UINT_32 u4StaPsBitmap, u4BssAbsentBitmap;
+ 	UINT_8 ucStaRecIndex, ucBssIndex;
+diff --color -ruN module/os/linux/gl_cfg80211.c ../wifi-work/os/linux/gl_cfg80211.c
+--- a/os/linux/gl_cfg80211.c
++++ b/os/linux/gl_cfg80211.c
+@@ -138,7 +138,7 @@
+ /*----------------------------------------------------------------------------*/
+ int
+ mtk_cfg80211_change_iface(struct wiphy *wiphy,
+-			  struct net_device *ndev, enum nl80211_iftype type, u32 *flags, struct vif_params *params)
++			  struct net_device *ndev, enum nl80211_iftype type, struct vif_params *params)
+ {
+ 	P_GLUE_INFO_T prGlueInfo = NULL;
+ 	WLAN_STATUS rStatus = WLAN_STATUS_SUCCESS;
+@@ -189,7 +189,7 @@
+ int
+ mtk_cfg80211_add_key(struct wiphy *wiphy,
+ 		     struct net_device *ndev,
+-		     u8 key_index, bool pairwise, const u8 *mac_addr, struct key_params *params)
++		     int link_id, u8 key_index, bool pairwise, const u8 *mac_addr, struct key_params *params)
+ {
+ 	PARAM_KEY_T rKey;
+ 	P_GLUE_INFO_T prGlueInfo = NULL;
+@@ -359,7 +359,7 @@
+ int
+ mtk_cfg80211_get_key(struct wiphy *wiphy,
+ 		     struct net_device *ndev,
+-		     u8 key_index,
++		     int link_id, u8 key_index,
+ 		     bool pairwise,
+ 		     const u8 *mac_addr, void *cookie, void (*callback) (void *cookie, struct key_params *)
+ )
+@@ -388,7 +388,7 @@
+  *         others:  failure
+  */
+ /*----------------------------------------------------------------------------*/
+-int mtk_cfg80211_del_key(struct wiphy *wiphy, struct net_device *ndev, u8 key_index, bool pairwise, const u8 *mac_addr)
++int mtk_cfg80211_del_key(struct wiphy *wiphy, struct net_device *ndev, int link_id, u8 key_index, bool pairwise, const u8 *mac_addr)
+ {
+ 	P_GLUE_INFO_T prGlueInfo = NULL;
+ 	WLAN_STATUS rStatus = WLAN_STATUS_SUCCESS;
+@@ -456,7 +456,7 @@
+  */
+ /*----------------------------------------------------------------------------*/
+ int
+-mtk_cfg80211_set_default_key(struct wiphy *wiphy, struct net_device *ndev, u8 key_index, bool unicast, bool multicast)
++mtk_cfg80211_set_default_key(struct wiphy *wiphy, struct net_device *ndev, int link_id, u8 key_index, bool unicast, bool multicast)
+ {
+ 	P_GLUE_INFO_T prGlueInfo = NULL;
+ 	PARAM_DEFAULT_KEY_T rDefaultKey;
+@@ -979,7 +979,7 @@
+ 			rScanRequest.arChnlInfoList[i].u4CenterFreq2 = 0;
+ 			rScanRequest.arChnlInfoList[i].u2PriChnlFreq = request->channels[i]->center_freq;
+ #if KERNEL_VERSION(3, 12, 0) <= CFG80211_VERSION_CODE
+-			rScanRequest.arChnlInfoList[i].ucChnlBw = request->scan_width;
++			rScanRequest.arChnlInfoList[i].ucChnlBw = 0;
+ #else
+ 			rScanRequest.arChnlInfoList[i].ucChnlBw = 0;
+ #endif
+@@ -3828,19 +3828,19 @@
+ 
+ 	if (params == NULL)
+ 		return 0;
+-	else if (params->supported_rates == NULL)
++	else if (params->link_sta_params.supported_rates == NULL)
+ 		return 0;
+ 
+ 	/* init */
+ 	kalMemZero(&rCmdUpdate, sizeof(rCmdUpdate));
+ 	kalMemCopy(rCmdUpdate.aucPeerMac, mac, 6);
+ 
+-	if (params->supported_rates != NULL) {
++	if (params->link_sta_params.supported_rates != NULL) {
+ 
+-		u4Temp = params->supported_rates_len;
++		u4Temp = params->link_sta_params.supported_rates_len;
+ 		if (u4Temp > CMD_PEER_UPDATE_SUP_RATE_MAX)
+ 			u4Temp = CMD_PEER_UPDATE_SUP_RATE_MAX;
+-		kalMemCopy(rCmdUpdate.aucSupRate, params->supported_rates, u4Temp);
++		kalMemCopy(rCmdUpdate.aucSupRate, params->link_sta_params.supported_rates, u4Temp);
+ 		rCmdUpdate.u2SupRateLen = u4Temp;
+ 	}
+ 
+@@ -3862,23 +3862,23 @@
+ 		rCmdUpdate.u2ExtCapLen = u4Temp;
+ 	}
+ 
+-	if (params->ht_capa != NULL) {
++	if (params->link_sta_params.ht_capa != NULL) {
+ 
+-		rCmdUpdate.rHtCap.u2CapInfo = params->ht_capa->cap_info;
+-		rCmdUpdate.rHtCap.ucAmpduParamsInfo = params->ht_capa->ampdu_params_info;
+-		rCmdUpdate.rHtCap.u2ExtHtCapInfo = params->ht_capa->extended_ht_cap_info;
+-		rCmdUpdate.rHtCap.u4TxBfCapInfo = params->ht_capa->tx_BF_cap_info;
+-		rCmdUpdate.rHtCap.ucAntennaSelInfo = params->ht_capa->antenna_selection_info;
++		rCmdUpdate.rHtCap.u2CapInfo = params->link_sta_params.ht_capa->cap_info;
++		rCmdUpdate.rHtCap.ucAmpduParamsInfo = params->link_sta_params.ht_capa->ampdu_params_info;
++		rCmdUpdate.rHtCap.u2ExtHtCapInfo = params->link_sta_params.ht_capa->extended_ht_cap_info;
++		rCmdUpdate.rHtCap.u4TxBfCapInfo = params->link_sta_params.ht_capa->tx_BF_cap_info;
++		rCmdUpdate.rHtCap.ucAntennaSelInfo = params->link_sta_params.ht_capa->antenna_selection_info;
+ 		kalMemCopy(rCmdUpdate.rHtCap.rMCS.arRxMask,
+-			   params->ht_capa->mcs.rx_mask, sizeof(rCmdUpdate.rHtCap.rMCS.arRxMask));
++			   params->link_sta_params.ht_capa->mcs.rx_mask, sizeof(rCmdUpdate.rHtCap.rMCS.arRxMask));
+ 
+-		rCmdUpdate.rHtCap.rMCS.u2RxHighest = params->ht_capa->mcs.rx_highest;
+-		rCmdUpdate.rHtCap.rMCS.ucTxParams = params->ht_capa->mcs.tx_params;
++		rCmdUpdate.rHtCap.rMCS.u2RxHighest = params->link_sta_params.ht_capa->mcs.rx_highest;
++		rCmdUpdate.rHtCap.rMCS.ucTxParams = params->link_sta_params.ht_capa->mcs.tx_params;
+ 		rCmdUpdate.fgIsSupHt = TRUE;
+ 	}
+ 	/* vht */
+ 
+-	if (params->vht_capa != NULL) {
++	if (params->link_sta_params.vht_capa != NULL) {
+ 		/* rCmdUpdate.rVHtCap */
+ 		/* rCmdUpdate.rVHtCap */
+ 	}
+@@ -3931,19 +3931,19 @@
+ 
+ 	if (params == NULL)
+ 		return 0;
+-	else if (params->supported_rates == NULL)
++	else if (params->link_sta_params.supported_rates == NULL)
+ 		return 0;
+ 
+ 	/* init */
+ 	kalMemZero(&rCmdUpdate, sizeof(rCmdUpdate));
+ 	kalMemCopy(rCmdUpdate.aucPeerMac, mac, 6);
+ 
+-	if (params->supported_rates != NULL) {
++	if (params->link_sta_params.supported_rates != NULL) {
+ 
+-		u4Temp = params->supported_rates_len;
++		u4Temp = params->link_sta_params.supported_rates_len;
+ 		if (u4Temp > CMD_PEER_UPDATE_SUP_RATE_MAX)
+ 			u4Temp = CMD_PEER_UPDATE_SUP_RATE_MAX;
+-		kalMemCopy(rCmdUpdate.aucSupRate, params->supported_rates, u4Temp);
++		kalMemCopy(rCmdUpdate.aucSupRate, params->link_sta_params.supported_rates, u4Temp);
+ 		rCmdUpdate.u2SupRateLen = u4Temp;
+ 	}
+ 
+@@ -3965,23 +3965,23 @@
+ 		rCmdUpdate.u2ExtCapLen = u4Temp;
+ 	}
+ 
+-	if (params->ht_capa != NULL) {
++	if (params->link_sta_params.ht_capa != NULL) {
+ 
+-		rCmdUpdate.rHtCap.u2CapInfo = params->ht_capa->cap_info;
+-		rCmdUpdate.rHtCap.ucAmpduParamsInfo = params->ht_capa->ampdu_params_info;
+-		rCmdUpdate.rHtCap.u2ExtHtCapInfo = params->ht_capa->extended_ht_cap_info;
+-		rCmdUpdate.rHtCap.u4TxBfCapInfo = params->ht_capa->tx_BF_cap_info;
+-		rCmdUpdate.rHtCap.ucAntennaSelInfo = params->ht_capa->antenna_selection_info;
++		rCmdUpdate.rHtCap.u2CapInfo = params->link_sta_params.ht_capa->cap_info;
++		rCmdUpdate.rHtCap.ucAmpduParamsInfo = params->link_sta_params.ht_capa->ampdu_params_info;
++		rCmdUpdate.rHtCap.u2ExtHtCapInfo = params->link_sta_params.ht_capa->extended_ht_cap_info;
++		rCmdUpdate.rHtCap.u4TxBfCapInfo = params->link_sta_params.ht_capa->tx_BF_cap_info;
++		rCmdUpdate.rHtCap.ucAntennaSelInfo = params->link_sta_params.ht_capa->antenna_selection_info;
+ 		kalMemCopy(rCmdUpdate.rHtCap.rMCS.arRxMask,
+-			   params->ht_capa->mcs.rx_mask, sizeof(rCmdUpdate.rHtCap.rMCS.arRxMask));
++			   params->link_sta_params.ht_capa->mcs.rx_mask, sizeof(rCmdUpdate.rHtCap.rMCS.arRxMask));
+ 
+-		rCmdUpdate.rHtCap.rMCS.u2RxHighest = params->ht_capa->mcs.rx_highest;
+-		rCmdUpdate.rHtCap.rMCS.ucTxParams = params->ht_capa->mcs.tx_params;
++		rCmdUpdate.rHtCap.rMCS.u2RxHighest = params->link_sta_params.ht_capa->mcs.rx_highest;
++		rCmdUpdate.rHtCap.rMCS.ucTxParams = params->link_sta_params.ht_capa->mcs.tx_params;
+ 		rCmdUpdate.fgIsSupHt = TRUE;
+ 	}
+ 	/* vht */
+ 
+-	if (params->vht_capa != NULL) {
++	if (params->link_sta_params.vht_capa != NULL) {
+ 		/* rCmdUpdate.rVHtCap */
+ 		/* rCmdUpdate.rVHtCap */
+ 	}
+@@ -4211,7 +4211,7 @@
+ #if KERNEL_VERSION(3, 18, 0) <= CFG80211_VERSION_CODE
+ int
+ mtk_cfg80211_tdls_mgmt(struct wiphy *wiphy, struct net_device *dev,
+-		       const u8 *peer, u8 action_code, u8 dialog_token,
++		       const u8 *peer, int link_id, u8 action_code, u8 dialog_token,
+ 		       u16 status_code, u32 peer_capability,
+ 		       bool initiator, const u8 *buf, size_t len)
+ {
+@@ -4584,6 +4584,10 @@
+ 		if (((old_state == REGD_STATE_SET_COUNTRY_USER) || (old_state == REGD_STATE_SET_COUNTRY_DRIVER))
+ 			&& (!(rlmDomainIsSameCountryCode(pRequest->alpha2, sizeof(pRequest->alpha2)))))
+ 			DBGLOG(RLM, INFO, "Set by user to NEW country code\n");
++		else if (pRequest->initiator == NL80211_REGDOM_SET_BY_CORE)
++			/* Linux 7.0: the core's regdomain lands after the init-time parse, which saw every
++			 * channel disabled and sent the firmware an empty list. Parse and send again. */
++			DBGLOG(RLM, INFO, "core regdomain after init: parsing channels again\n");
+ 		else
+ 			/* Change to same state or same country, ignore */
+ 			return;
+@@ -4787,3 +4791,12 @@
+ 	return 0;
+ }
+ 
++
++void mtk_cfg80211_update_mgmt_frame_registrations(struct wiphy *wiphy, struct wireless_dev *wdev,
++						   struct mgmt_frame_regs *upd)
++{
++	mtk_cfg80211_mgmt_frame_register(wiphy, wdev, MAC_FRAME_PROBE_REQ,
++		!!(upd->interface_stypes & BIT(IEEE80211_STYPE_PROBE_REQ >> 4)));
++	mtk_cfg80211_mgmt_frame_register(wiphy, wdev, MAC_FRAME_ACTION,
++		!!(upd->interface_stypes & BIT(IEEE80211_STYPE_ACTION >> 4)));
++}
+diff --color -ruN module/os/linux/gl_init.c ../wifi-work/os/linux/gl_init.c
+--- a/os/linux/gl_init.c
++++ b/os/linux/gl_init.c
+@@ -133,7 +133,6 @@
+ 
+ MODULE_AUTHOR(NIC_AUTHOR);
+ MODULE_DESCRIPTION(NIC_DESC);
+-MODULE_SUPPORTED_DEVICE(NIC_NAME);
+ 
+ /* MODULE_LICENSE("MTK Propietary"); */
+ MODULE_LICENSE("Dual BSD/GPL");
+@@ -413,7 +412,7 @@
+ 	.cancel_remain_on_channel = mtk_cfg80211_cancel_remain_on_channel,
+ 	.mgmt_tx = mtk_cfg80211_mgmt_tx,
+ 	/* .mgmt_tx_cancel_wait        = mtk_cfg80211_mgmt_tx_cancel_wait, */
+-	.mgmt_frame_register = mtk_cfg80211_mgmt_frame_register,
++	.update_mgmt_frame_registrations = mtk_cfg80211_update_mgmt_frame_registrations,
+ 
+ #ifdef CONFIG_NL80211_TESTMODE
+ 	.testmode_cmd = mtk_cfg80211_testmode_cmd,
+@@ -437,6 +436,7 @@
+ 			.subcmd = WIFI_SUBCMD_GET_CHANNEL_LIST
+ 		},
+ 		.flags = WIPHY_VENDOR_CMD_NEED_WDEV | WIPHY_VENDOR_CMD_NEED_NETDEV,
++		.policy = VENDOR_CMD_RAW_DATA,
+ 		.doit = mtk_cfg80211_vendor_get_channel_list
+ 	},
+ 	{
+@@ -445,6 +445,7 @@
+ 			.subcmd = WIFI_SUBCMD_SET_COUNTRY_CODE
+ 		},
+ 		.flags = WIPHY_VENDOR_CMD_NEED_WDEV | WIPHY_VENDOR_CMD_NEED_NETDEV,
++		.policy = VENDOR_CMD_RAW_DATA,
+ 		.doit = mtk_cfg80211_vendor_set_country_code
+ 	}
+ 
+@@ -601,7 +602,7 @@
+ 
+ #if KERNEL_VERSION(3, 14, 0) <= LINUX_VERSION_CODE
+ u16 wlanSelectQueue(struct net_device *dev, struct sk_buff *skb,
+-		    void *accel_priv, select_queue_fallback_t fallback)
++		    struct net_device *sb_dev)
+ {
+ 	return mtk_wlan_ndev_select_queue(skb);
+ }
+@@ -1029,7 +1030,7 @@
+ 
+ 	/* 2. indication to cfg80211 */
+ 	/* 20150205 change cfg80211_sched_scan_stopped to work queue due to sched_scan_mtx dead lock issue */
+-	cfg80211_sched_scan_stopped(priv_to_wiphy(prGlueInfo));
++	cfg80211_sched_scan_stopped(priv_to_wiphy(prGlueInfo), 0);
+ 	DBGLOG(SCN, INFO,
+ 	       "cfg80211_sched_scan_stopped event send done WorkQueue thread return from wlanSchedScanStoppedWorkQueue\n");
+ 	return;
+@@ -1081,11 +1082,15 @@
+ 			switch(prParamWDevLock->fn) {
+ 				case CFG80211_RX_ASSOC_RESP:
+ #if (KERNEL_VERSION(3, 18, 0) <= CFG80211_VERSION_CODE)
+-					cfg80211_rx_assoc_resp(prParamWDevLock->pDev,
+-								prParamWDevLock->pBss,
+-								prParamWDevLock->pFrameBuf,
+-								prParamWDevLock->frameLen,
+-								prParamWDevLock->uapsd_queues);
++					{
++						struct cfg80211_rx_assoc_resp_data rResp = {};
++
++						rResp.buf = prParamWDevLock->pFrameBuf;
++						rResp.len = prParamWDevLock->frameLen;
++						rResp.uapsd_queues = prParamWDevLock->uapsd_queues;
++						rResp.links[0].bss = prParamWDevLock->pBss;
++						cfg80211_rx_assoc_resp(prParamWDevLock->pDev, &rResp);
++					}
+ #elif (KERNEL_VERSION(3, 11, 0) <= CFG80211_VERSION_CODE)
+ 					cfg80211_rx_assoc_resp(prParamWDevLock->pDev,
+ 								prParamWDevLock->pBss,
+@@ -1108,21 +1113,28 @@
+ 				case CFG80211_TX_MLME_MGMT:
+ 					cfg80211_tx_mlme_mgmt(prParamWDevLock->pDev,
+ 								prParamWDevLock->pFrameBuf,
+-								prParamWDevLock->frameLen);
++								prParamWDevLock->frameLen, false);
+ 					break;
+ 				case CFG80211_ABANDON_ASSOC:
+-#if (KERNEL_VERSION(4, 4, 41) <= CFG80211_VERSION_CODE)
+-					cfg80211_abandon_assoc(prParamWDevLock->pDev,
+-								prParamWDevLock->pBss);
++					{
++						struct cfg80211_assoc_failure rFail = {};
++
++						rFail.bss[0] = prParamWDevLock->pBss;
++						cfg80211_assoc_failure(prParamWDevLock->pDev, &rFail);
++					}
+ 					break;
+-#endif
+ 				/* For kernel < 4.4.41,
+ 				 * fall through to use assoc timeout
+ 				 */
+ 				case CFG80211_ASSOC_TIMEOUT:
+ #if (KERNEL_VERSION(3, 11, 0) <= CFG80211_VERSION_CODE)
+-					cfg80211_assoc_timeout(prParamWDevLock->pDev,
+-								prParamWDevLock->pBss);
++					{
++						struct cfg80211_assoc_failure rFail = {};
++
++						rFail.bss[0] = prParamWDevLock->pBss;
++						rFail.timeout = true;
++						cfg80211_assoc_failure(prParamWDevLock->pDev, &rFail);
++					}
+ #else
+ 					cfg80211_send_assoc_timeout(prParamWDevLock->pDev,
+ 								prParamWDevLock->pBss->bssid);
+@@ -2666,14 +2678,9 @@
+ 			if (!prAdapter->fgTxDirectInited) {
+ 				skb_queue_head_init(&prAdapter->rTxDirectSkbQueue);
+ 
+-				init_timer(&prAdapter->rTxDirectSkbTimer);
+-				prAdapter->rTxDirectSkbTimer.data = (unsigned long)prGlueInfo;
+-				prAdapter->rTxDirectSkbTimer.function = nicTxDirectTimerCheckSkbQ;
++				timer_setup(&prAdapter->rTxDirectSkbTimer, nicTxDirectTimerCheckSkbQ, 0);
++				timer_setup(&prAdapter->rTxDirectHifTimer, nicTxDirectTimerCheckHifQ, 0);
+ 
+-				init_timer(&prAdapter->rTxDirectHifTimer);
+-				prAdapter->rTxDirectHifTimer.data = (unsigned long)prGlueInfo;
+-				prAdapter->rTxDirectHifTimer.function = nicTxDirectTimerCheckHifQ;
+-
+ 				prAdapter->fgTxDirectInited = TRUE;
+ 			}
+ 		}
+@@ -2696,15 +2703,10 @@
+ 		/* TODO the change schedule API shall be provided by OS glue layer */
+ 		/* Switch the Wi-Fi task priority to higher priority and change the scheduling method */
+ 		if (prGlueInfo->prAdapter->rWifiVar.ucThreadPriority > 0) {
+-			struct sched_param param = {.sched_priority = prGlueInfo->prAdapter->rWifiVar.ucThreadPriority
+-			};
+-			sched_setscheduler(prGlueInfo->main_thread,
+-					   prGlueInfo->prAdapter->rWifiVar.ucThreadScheduling, &param);
++			sched_set_fifo_low(prGlueInfo->main_thread);
+ #if CFG_SUPPORT_MULTITHREAD
+-			sched_setscheduler(prGlueInfo->hif_thread,
+-					   prGlueInfo->prAdapter->rWifiVar.ucThreadScheduling, &param);
+-			sched_setscheduler(prGlueInfo->rx_thread,
+-					   prGlueInfo->prAdapter->rWifiVar.ucThreadScheduling, &param);
++			sched_set_fifo_low(prGlueInfo->hif_thread);
++			sched_set_fifo_low(prGlueInfo->rx_thread);
+ #endif
+ 			DBGLOG(INIT, INFO,
+ 			       "Set pri = %d, sched = %d\n",
+@@ -2747,7 +2749,7 @@
+ 				i4Status = -ENXIO;
+ 				break;
+ 			} else {
+-				kalMemCopy(prGlueInfo->prDevHandler->dev_addr, &MacAddr.sa_data, ETH_ALEN);
++				eth_hw_addr_set(prGlueInfo->prDevHandler, (const u8 *)&MacAddr.sa_data);
+ 				kalMemCopy(prGlueInfo->prDevHandler->perm_addr,
+ 					   prGlueInfo->prDevHandler->dev_addr, ETH_ALEN);
+ 
+@@ -3098,8 +3100,8 @@
+ 
+ 	if (HAL_IS_TX_DIRECT(prAdapter)) {
+ 		if (prAdapter->fgTxDirectInited) {
+-			del_timer_sync(&prAdapter->rTxDirectSkbTimer);
+-			del_timer_sync(&prAdapter->rTxDirectHifTimer);
++			timer_delete_sync(&prAdapter->rTxDirectSkbTimer);
++			timer_delete_sync(&prAdapter->rTxDirectHifTimer);
+ 		}
+ 	}
+ 
+diff --color -ruN module/os/linux/gl_kal.c ../wifi-work/os/linux/gl_kal.c
+--- a/os/linux/gl_kal.c
++++ b/os/linux/gl_kal.c
+@@ -116,7 +116,7 @@
+ static int pm_resume_done = 0;
+ #endif
+ 
+-#ifdef CONFIG_IDME
++#if 1 /* TECHO5: IDME from the device tree */
+ static BOOLEAN g_fgIsIdmeMacAddrExist = FALSE;
+ static PARAM_MAC_ADDRESS rIdmeMacAddr;
+ #endif
+@@ -615,7 +615,7 @@
+ 		return;
+ 
+ 	DBGLOG(INIT, TEMP, "WDEV_LOCK Try to acquire\n");
+-	mutex_lock(&(pDev->ieee80211_ptr)->mtx);
++	wiphy_lock(pDev->ieee80211_ptr->wiphy);
+ 	DBGLOG(INIT, TEMP, "WDEV_LOCK Acquired\n");
+ }				/* end of kalAcquireWDevMutex() */
+ 
+@@ -637,7 +637,7 @@
+ 	if(pDev == NULL)
+ 		return;
+ 
+-	mutex_unlock(&(pDev->ieee80211_ptr)->mtx);
++	wiphy_unlock(pDev->ieee80211_ptr->wiphy);
+ 	DBGLOG(INIT, TEMP, "WDEV_UNLOCK\n");
+ }				/* end of kalReleaseWDevMutex() */
+ #endif
+@@ -660,7 +660,7 @@
+ 	ASSERT(pucMacAddr);
+ 
+ 	if (UNEQUAL_MAC_ADDR(prGlueInfo->prDevHandler->dev_addr, pucMacAddr))
+-		memcpy(prGlueInfo->prDevHandler->dev_addr, pucMacAddr, PARAM_MAC_ADDR_LEN);
++		eth_hw_addr_set(prGlueInfo->prDevHandler, pucMacAddr);
+ 
+ }
+ 
+@@ -941,7 +941,6 @@
+ 
+ 	}
+ #endif
+-	prNetDev->last_rx = jiffies;
+ #if CFG_SUPPORT_SNIFFER
+ 	if (prGlueInfo->fgIsEnableMon) {
+ 		skb_reset_mac_header(prSkb);
+@@ -994,7 +993,7 @@
+ 		DBGLOG(RSN, WARN, "Rx EAPOL Frame [Len: %d]\n", prSkb->len);
+ 
+ 	if (!in_interrupt())
+-		netif_rx_ni(prSkb);	/* only in non-interrupt context */
++		netif_rx(prSkb);	/* only in non-interrupt context */
+ 	else
+ 		netif_rx(prSkb);
+ 
+@@ -1134,12 +1133,17 @@
+ 									  (ucChannelNum, KAL_BAND_5GHZ));
+ 				}
+ 
+-				cfg80211_roamed(prGlueInfo->prDevHandler,
+-						prChannel,
+-						arBssid,
+-						prGlueInfo->aucReqIe,
+-						prGlueInfo->u4ReqIeLength,
+-						prGlueInfo->aucRspIe, prGlueInfo->u4RspIeLength, GFP_KERNEL);
++				{
++					struct cfg80211_roam_info rRoamInfo = {};
++
++					rRoamInfo.links[0].channel = prChannel;
++					rRoamInfo.links[0].bssid = arBssid;
++					rRoamInfo.req_ie = prGlueInfo->aucReqIe;
++					rRoamInfo.req_ie_len = prGlueInfo->u4ReqIeLength;
++					rRoamInfo.resp_ie = prGlueInfo->aucRspIe;
++					rRoamInfo.resp_ie_len = prGlueInfo->u4RspIeLength;
++					cfg80211_roamed(prGlueInfo->prDevHandler, &rRoamInfo, GFP_KERNEL);
++				}
+ 			} else {
+ 				cfg80211_connect_result(prGlueInfo->prDevHandler, arBssid,
+ 							prGlueInfo->aucReqIe,
+@@ -3395,53 +3399,37 @@
+ }
+ 
+ 
+-#ifdef CONFIG_IDME
+-#ifdef CFG_SUPPORT_DUAL_CARD_DUAL_DRIVER
+-#define IDME_MACADDR "/proc/idme/mac_addr2"
+-#else
+-#define IDME_MACADDR "/proc/idme/mac_addr"
+-#endif
++#if 1 /* TECHO5: IDME from the device tree */
++#include <linux/of.h>
++#include <linux/hex.h>
++/* The 12 hex digits the bootloader leaves in /idme/mac_addr/value, what 4.9's /proc/idme/mac_addr showed. */
+ static int idme_get_mac_addr(unsigned char *mac_addr, size_t addr_len)
+ {
+-	unsigned char buf[IFHWADDRLEN * 2 + 1] = {""}, str[3] = {""};
+-	int i, mac[IFHWADDRLEN];
+-	mm_segment_t old_fs;
+-	struct file *f;
++	struct device_node *np;
++	const char *v;
++	int i, hi, lo;
+ 
+-	if (!mac_addr || addr_len < IFHWADDRLEN) {
+-		DBGLOG(INIT, ERROR, "invalid mac_addr ptr or buf\n");
++	if (!mac_addr || addr_len < IFHWADDRLEN)
+ 		return -1;
++	np = of_find_node_by_path("/idme/mac_addr");
++	if (!np) {
++		DBGLOG(INIT, ERROR, "no /idme/mac_addr in the device tree\n");
++		return -1;
+ 	}
+-
+-	f = filp_open(IDME_MACADDR, O_RDONLY, 0);
+-	if (IS_ERR(f)) {
+-		DBGLOG(INIT, ERROR, "can't open mac addr file\n");
++	v = of_get_property(np, "value", NULL);
++	of_node_put(np);
++	if (!v || strlen(v) != IFHWADDRLEN * 2) {
++		DBGLOG(INIT, ERROR, "bad /idme/mac_addr value\n");
+ 		return -1;
+ 	}
+-
+-	old_fs = get_fs();
+-	set_fs(get_ds());
+-	f->f_op->read(f, buf, IFHWADDRLEN * 2, &f->f_pos);
+-	filp_close(f, NULL);
+-	set_fs(old_fs);
+-
+-	if (strlen(buf) != IFHWADDRLEN * 2)
+-		goto bailout;
+-
+ 	for (i = 0; i < IFHWADDRLEN; i++) {
+-		str[0] = buf[i * 2];
+-		str[1] = buf[i * 2 + 1];
+-		if (!isxdigit(str[0]) || !isxdigit(str[1]))
+-			goto bailout;
+-		if (kstrtoint(str, 16, &mac[i]))
+-			goto bailout;
++		hi = hex_to_bin(v[i * 2]);
++		lo = hex_to_bin(v[i * 2 + 1]);
++		if (hi < 0 || lo < 0)
++			return -1;
++		mac_addr[i] = (hi << 4) | lo;
+ 	}
+-	for (i = 0; i < IFHWADDRLEN; i++)
+-		mac_addr[i] = (unsigned char)mac[i];
+ 	return 0;
+-bailout:
+-	DBGLOG(INIT, ERROR, "wrong mac addr %02x %02x\n", buf[0], buf[1]);
+-	return -1;
+ }
+ #endif
+ 
+@@ -3467,7 +3455,7 @@
+ 
+ 	wlanHwAddrToBin(prAdapter->rWifiVar.aucMacAddrStr, prGlueInfo->rMacAddrOverride);
+ 
+-#ifdef CONFIG_IDME
++#if 1 /* TECHO5: IDME from the device tree */
+ 	if (prMacAddr && 0 == idme_get_mac_addr((unsigned char *)prMacAddr, sizeof(PARAM_MAC_ADDRESS))) {
+ 		DBGLOG(INIT, INFO, "use IDME mac addr\n");
+ 		g_fgIsIdmeMacAddrExist = TRUE;
+@@ -3807,9 +3795,7 @@
+ 
+ 	ASSERT(prGlueInfo);
+ 
+-	init_timer(&(prGlueInfo->tickfn));
+-	prGlueInfo->tickfn.function = prTimerHandler;
+-	prGlueInfo->tickfn.data = (unsigned long)prGlueInfo;
++	timer_setup(&prGlueInfo->tickfn, (void (*)(struct timer_list *))prTimerHandler, 0);
+ }
+ 
+ /* Todo */
+@@ -3830,7 +3816,7 @@
+ 	if (HAL_IS_RX_DIRECT(prGlueInfo->prAdapter)) {
+ 		mod_timer(&prGlueInfo->tickfn, jiffies + u4Interval * HZ / MSEC_PER_SEC);
+ 	} else {
+-		del_timer_sync(&(prGlueInfo->tickfn));
++		timer_delete_sync(&(prGlueInfo->tickfn));
+ 
+ 		prGlueInfo->tickfn.expires = jiffies + u4Interval * HZ / MSEC_PER_SEC;
+ 		add_timer(&(prGlueInfo->tickfn));
+@@ -3855,7 +3841,7 @@
+ 
+ 	clear_bit(GLUE_FLAG_TIMEOUT_BIT, &prGlueInfo->ulFlag);
+ 
+-	if (del_timer_sync(&(prGlueInfo->tickfn)) >= 0)
++	if (timer_delete_sync(&(prGlueInfo->tickfn)) >= 0)
+ 		return TRUE;
+ 	else
+ 		return FALSE;
+@@ -3910,10 +3896,10 @@
+  * \retval (none)
+  */
+ /*----------------------------------------------------------------------------*/
+-VOID kalTimeoutHandler(unsigned long arg)
++VOID kalTimeoutHandler(struct timer_list *t)
+ {
+ 
+-	P_GLUE_INFO_T prGlueInfo = (P_GLUE_INFO_T) arg;
++	P_GLUE_INFO_T prGlueInfo = timer_container_of(prGlueInfo, t, tickfn);
+ 
+ 	ASSERT(prGlueInfo);
+ 
+@@ -4354,18 +4340,10 @@
+ 
+ struct file *kalFileOpen(const char *path, int flags, int rights)
+ {
+-	struct file *filp = NULL;
+-	mm_segment_t oldfs;
+-	int err = 0;
++	struct file *filp = filp_open(path, flags, rights);
+ 
+-	oldfs = get_fs();
+-	set_fs(get_ds());
+-	filp = filp_open(path, flags, rights);
+-	set_fs(oldfs);
+-	if (IS_ERR(filp)) {
+-		err = PTR_ERR(filp);
++	if (IS_ERR(filp))
+ 		return NULL;
+-	}
+ 	return filp;
+ }
+ 
+@@ -4376,30 +4354,16 @@
+ 
+ UINT_32 kalFileRead(struct file *file, unsigned long long offset, unsigned char *data, unsigned int size)
+ {
+-	mm_segment_t oldfs;
+-	int ret;
++	loff_t pos = offset;
+ 
+-	oldfs = get_fs();
+-	set_fs(get_ds());
+-
+-	ret = vfs_read(file, data, size, &offset);
+-
+-	set_fs(oldfs);
+-	return ret;
++	return kernel_read(file, data, size, &pos);
+ }
+ 
+ UINT_32 kalFileWrite(struct file *file, unsigned long long offset, unsigned char *data, unsigned int size)
+ {
+-	mm_segment_t oldfs;
+-	int ret;
++	loff_t pos = offset;
+ 
+-	oldfs = get_fs();
+-	set_fs(get_ds());
+-
+-	ret = vfs_write(file, data, size, &offset);
+-
+-	set_fs(oldfs);
+-	return ret;
++	return kernel_write(file, data, size, &pos);
+ }
+ 
+ UINT_32 kalWriteToFile(const PUINT_8 pucPath, BOOLEAN fgDoAppend, PUINT_8 pucData, UINT_32 u4Size)
+@@ -4854,7 +4818,7 @@
+ {
+ 	ASSERT(prGlueInfo);
+ 
+-	cfg80211_sched_scan_results(priv_to_wiphy(prGlueInfo));
++	cfg80211_sched_scan_results(priv_to_wiphy(prGlueInfo), 0);
+ 
+ }
+ 
+@@ -5361,16 +5325,16 @@
+ }
+ 
+ #if 0
+-const struct file_operations rMetProcFops = {
+-	.write = kalMetWriteProcfs
++const struct proc_ops rMetProcFops = {
++	.proc_write = kalMetWriteProcfs
+ };
+ #endif
+-const struct file_operations rMetProcCtrlFops = {
+-	.write = kalMetCtrlWriteProcfs
++const struct proc_ops rMetProcCtrlFops = {
++	.proc_write = kalMetCtrlWriteProcfs
+ };
+ 
+-const struct file_operations rMetProcPortFops = {
+-	.write = kalMetPortWriteProcfs
++const struct proc_ops rMetProcPortFops = {
++	.proc_write = kalMetPortWriteProcfs
+ };
+ 
+ int kalMetInitProcfs(IN P_GLUE_INFO_T prGlueInfo)
+@@ -5459,14 +5423,10 @@
+ 
+ UINT_64 kalGetBootTime(void)
+ {
+-	struct timespec ts;
++	struct timespec64 ts;
+ 	UINT_64 bootTime = 0;
+ 
+-#if KERNEL_VERSION(2, 6, 39) <= LINUX_VERSION_CODE
+-	get_monotonic_boottime(&ts);
+-#else
+-	ts = ktime_to_timespec(ktime_get());
+-#endif
++	ktime_get_boottime_ts64(&ts);
+ 
+ 	bootTime = ts.tv_sec;
+ 	bootTime *= USEC_PER_SEC;
+@@ -5763,7 +5723,7 @@
+ 	DBGLOG(REQ, STATE, "DFS channel switch to %d\n", ucChannelNum);
+ 
+ 	cfg80211_chandef_create(&chandef, prChannel, rChannelType);
+-	cfg80211_ch_switch_notify(prGlueInfo->prDevHandler, &chandef);
++	cfg80211_ch_switch_notify(prGlueInfo->prDevHandler, &chandef, 0);
+ }
+ #endif
+ 
+diff --color -ruN module/os/linux/gl_p2p.c ../wifi-work/os/linux/gl_p2p.c
+--- a/os/linux/gl_p2p.c
++++ b/os/linux/gl_p2p.c
+@@ -154,7 +154,7 @@
+ 	.set_wiphy_params = mtk_p2p_cfg80211_set_wiphy_params,
+ 	.del_station = mtk_p2p_cfg80211_del_station,
+ 	.set_bitrate_mask = mtk_p2p_cfg80211_set_bitrate_mask,
+-	.mgmt_frame_register = mtk_p2p_cfg80211_mgmt_frame_register,
++	.update_mgmt_frame_registrations = mtk_p2p_cfg80211_update_mgmt_frame_registrations,
+ 	.get_station = mtk_p2p_cfg80211_get_station,
+ 	.add_key = mtk_p2p_cfg80211_add_key,
+ 	.get_key = mtk_p2p_cfg80211_get_key,
+@@ -186,6 +186,7 @@
+ 			.subcmd = WIFI_SUBCMD_GET_CHANNEL_LIST
+ 		},
+ 		.flags = WIPHY_VENDOR_CMD_NEED_WDEV | WIPHY_VENDOR_CMD_NEED_NETDEV,
++		.policy = VENDOR_CMD_RAW_DATA,
+ 		.doit = mtk_cfg80211_vendor_get_channel_list
+ 	},
+ 	{
+@@ -194,6 +195,7 @@
+ 			.subcmd = WIFI_SUBCMD_SET_COUNTRY_CODE
+ 		},
+ 		.flags = WIPHY_VENDOR_CMD_NEED_WDEV | WIPHY_VENDOR_CMD_NEED_NETDEV,
++		.policy = VENDOR_CMD_RAW_DATA,
+ 		.doit = mtk_cfg80211_vendor_set_country_code
+ 	},
+ };
+@@ -1032,7 +1034,7 @@
+ 		COPY_MAC_ADDR(rMacAddr, prAdapter->rMyMacAddr);
+ 		rMacAddr[0] |= 0x2;
+ 		rMacAddr[0] ^= i << 2;	/* change to local administrated address */
+-		kalMemCopy(prGlueInfo->prP2PInfo[i]->prDevHandler->dev_addr, rMacAddr, ETH_ALEN);
++		eth_hw_addr_set(prGlueInfo->prP2PInfo[i]->prDevHandler, rMacAddr);
+ 		kalMemCopy(prGlueInfo->prP2PInfo[i]->prDevHandler->perm_addr,
+ 			prGlueInfo->prP2PInfo[i]->prDevHandler->dev_addr,
+ 			   ETH_ALEN);
+diff --color -ruN module/os/linux/gl_p2p_cfg80211.c ../wifi-work/os/linux/gl_p2p_cfg80211.c
+--- a/os/linux/gl_p2p_cfg80211.c
++++ b/os/linux/gl_p2p_cfg80211.c
+@@ -310,11 +310,11 @@
+ #if KERNEL_VERSION(4, 1, 0) <= CFG80211_VERSION_CODE
+ struct wireless_dev *mtk_p2p_cfg80211_add_iface(struct wiphy *wiphy,
+ 						const char *name, unsigned char name_assign_type,
+-						enum nl80211_iftype type, u32 *flags, struct vif_params *params)
++						enum nl80211_iftype type, struct vif_params *params)
+ #else
+ struct wireless_dev *mtk_p2p_cfg80211_add_iface(struct wiphy *wiphy,
+ 						const char *name,
+-						enum nl80211_iftype type, u32 *flags, struct vif_params *params)
++						enum nl80211_iftype type, struct vif_params *params)
+ #endif
+ {
+ 	/* 2 TODO: Fit kernel 3.10 modification */
+@@ -403,7 +403,8 @@
+ 		if (prNewNetDevice->ieee80211_ptr)
+ 			prNewNetDevice->ieee80211_ptr->iftype = type;
+ 		/* register destructor function for virtual interface */
+-		prNewNetDevice->destructor = mtk_vif_destructor;
++		prNewNetDevice->priv_destructor = mtk_vif_destructor;
++		prNewNetDevice->needs_free_netdev = false;
+ 
+ 		gprP2pRoleWdev[u4Idx] = prWdev;
+ 		/*prP2pInfo->prRoleWdev[0] = prWdev;*//* TH3 multiple P2P */
+@@ -636,7 +637,7 @@
+ 
+ int mtk_p2p_cfg80211_add_key(struct wiphy *wiphy,
+ 			     struct net_device *ndev,
+-			     u8 key_index, bool pairwise, const u8 *mac_addr, struct key_params *params)
++			     int link_id, u8 key_index, bool pairwise, const u8 *mac_addr, struct key_params *params)
+ {
+ 	P_GLUE_INFO_T prGlueInfo = NULL;
+ 	INT_32 i4Rslt = -EINVAL;
+@@ -778,7 +779,7 @@
+ 
+ int mtk_p2p_cfg80211_get_key(struct wiphy *wiphy,
+ 			     struct net_device *ndev,
+-			     u8 key_index,
++			     int link_id, u8 key_index,
+ 			     bool pairwise,
+ 			     const u8 *mac_addr, void *cookie, void (*callback) (void *cookie, struct key_params *)
+ )
+@@ -795,7 +796,7 @@
+ }
+ 
+ int mtk_p2p_cfg80211_del_key(struct wiphy *wiphy,
+-			     struct net_device *ndev, u8 key_index, bool pairwise, const u8 *mac_addr)
++			     struct net_device *ndev, int link_id, u8 key_index, bool pairwise, const u8 *mac_addr)
+ {
+ 	P_GLUE_INFO_T prGlueInfo = NULL;
+ 	PARAM_REMOVE_KEY_T rRemoveKey;
+@@ -845,7 +846,7 @@
+ 
+ int
+ mtk_p2p_cfg80211_set_default_key(struct wiphy *wiphy,
+-				 struct net_device *netdev, u8 key_index, bool unicast, bool multicast)
++				 struct net_device *netdev, int link_id, u8 key_index, bool unicast, bool multicast)
+ {
+ 	P_GLUE_INFO_T prGlueInfo = NULL;
+ 	PARAM_DEFAULT_KEY_T rDefaultKey;
+@@ -906,7 +907,7 @@
+  *         others:  failure
+  */
+ /*----------------------------------------------------------------------------*/
+-int mtk_p2p_cfg80211_set_mgmt_key(struct wiphy *wiphy, struct net_device *dev, u8 key_index)
++int mtk_p2p_cfg80211_set_mgmt_key(struct wiphy *wiphy, struct net_device *dev, int link_id, u8 key_index)
+ {
+ 	DBGLOG(RSN, INFO, "mtk_p2p_cfg80211_set_mgmt_key, kid:%d\n", key_index);
+ 
+@@ -1163,7 +1164,7 @@
+ 	return i4RetRslt;
+ }				/* mtk_p2p_cfg80211_scan */
+ 
+-int mtk_p2p_cfg80211_set_wiphy_params(struct wiphy *wiphy, u32 changed)
++int mtk_p2p_cfg80211_set_wiphy_params(struct wiphy *wiphy, int radio_idx, u32 changed)
+ {
+ 	INT_32 i4Rslt = -EINVAL;
+ 	P_GLUE_INFO_T prGlueInfo = NULL;
+@@ -1233,7 +1234,7 @@
+ }
+ 
+ int mtk_p2p_cfg80211_set_txpower(struct wiphy *wiphy,
+-				 struct wireless_dev *wdev, enum nl80211_tx_power_setting type, int mbm)
++				 struct wireless_dev *wdev, int radio_idx, enum nl80211_tx_power_setting type, int mbm)
+ {
+ 	P_GLUE_INFO_T prGlueInfo = NULL;
+ 
+@@ -1246,7 +1247,7 @@
+ 	return -EINVAL;
+ }
+ 
+-int mtk_p2p_cfg80211_get_txpower(struct wiphy *wiphy, struct wireless_dev *wdev, int *dbm)
++int mtk_p2p_cfg80211_get_txpower(struct wiphy *wiphy, struct wireless_dev *wdev, int radio_idx, unsigned int link_id, int *dbm)
+ {
+ 	P_GLUE_INFO_T prGlueInfo = NULL;
+ 
+@@ -1584,7 +1585,7 @@
+ 
+ #if KERNEL_VERSION(3, 15, 0) <= CFG80211_VERSION_CODE
+ int mtk_p2p_cfg80211_start_radar_detection(struct wiphy *wiphy, struct net_device *dev,
+-					struct cfg80211_chan_def *chandef, unsigned int cac_time_ms)
++					struct cfg80211_chan_def *chandef, u32 cac_time_ms, int link_id)
+ {
+ 	return mtk_p2p_cfg80211_start_radar_detection_impl(
+ 			wiphy, dev, chandef, cac_time_ms);
+@@ -1802,8 +1803,9 @@
+ };
+ #endif
+ 
+-int mtk_p2p_cfg80211_change_beacon(struct wiphy *wiphy, struct net_device *dev, struct cfg80211_beacon_data *info)
++int mtk_p2p_cfg80211_change_beacon(struct wiphy *wiphy, struct net_device *dev, struct cfg80211_ap_update *update)
+ {
++	struct cfg80211_beacon_data *info = &update->beacon;
+ 	P_GLUE_INFO_T prGlueInfo = (P_GLUE_INFO_T) NULL;
+ 	INT_32 i4Rslt = -EINVAL;
+ 	P_MSG_P2P_BEACON_UPDATE_T prP2pBcnUpdateMsg = (P_MSG_P2P_BEACON_UPDATE_T) NULL;
+@@ -1930,7 +1932,7 @@
+ 	return i4Rslt;
+ }				/* mtk_p2p_cfg80211_change_beacon */
+ 
+-int mtk_p2p_cfg80211_stop_ap(struct wiphy *wiphy, struct net_device *dev)
++int mtk_p2p_cfg80211_stop_ap(struct wiphy *wiphy, struct net_device *dev, unsigned int link_id)
+ {
+ 	P_GLUE_INFO_T prGlueInfo = (P_GLUE_INFO_T) NULL;
+ 	INT_32 i4Rslt = -EINVAL;
+@@ -2668,7 +2670,7 @@
+ int
+ mtk_p2p_cfg80211_change_iface(IN struct wiphy *wiphy,
+ 			      IN struct net_device *ndev,
+-			      IN enum nl80211_iftype type, IN u32 *flags, IN struct vif_params *params)
++			      IN enum nl80211_iftype type, IN struct vif_params *params)
+ {
+ 	P_GLUE_INFO_T prGlueInfo = (P_GLUE_INFO_T) NULL;
+ 	INT_32 i4Rslt = -EINVAL;
+@@ -2779,7 +2781,7 @@
+ int
+ mtk_p2p_cfg80211_set_bitrate_mask(IN struct wiphy *wiphy,
+ 				  IN struct net_device *dev,
+-				  IN const u8 *peer, IN const struct cfg80211_bitrate_mask *mask)
++				  unsigned int link_id, IN const u8 *peer, IN const struct cfg80211_bitrate_mask *mask)
+ {
+ 	INT_32 i4Rslt = -EINVAL;
+ 	P_GLUE_INFO_T prGlueInfo = (P_GLUE_INFO_T) NULL;
+@@ -3684,3 +3686,12 @@
+ #endif
+ 
+ #endif /* CFG_ENABLE_WIFI_DIRECT && CFG_ENABLE_WIFI_DIRECT_CFG_80211 */
++
++void mtk_p2p_cfg80211_update_mgmt_frame_registrations(struct wiphy *wiphy, struct wireless_dev *wdev,
++						   struct mgmt_frame_regs *upd)
++{
++	mtk_p2p_cfg80211_mgmt_frame_register(wiphy, wdev, MAC_FRAME_PROBE_REQ,
++		!!(upd->interface_stypes & BIT(IEEE80211_STYPE_PROBE_REQ >> 4)));
++	mtk_p2p_cfg80211_mgmt_frame_register(wiphy, wdev, MAC_FRAME_ACTION,
++		!!(upd->interface_stypes & BIT(IEEE80211_STYPE_ACTION >> 4)));
++}
+diff --color -ruN module/os/linux/gl_p2p_kal.c ../wifi-work/os/linux/gl_p2p_kal.c
+--- a/os/linux/gl_p2p_kal.c
++++ b/os/linux/gl_p2p_kal.c
+@@ -1347,7 +1347,7 @@
+ 		}
+ 
+ 		/* cac start disable for next cac slot if enable in dfs channel */
+-		prGlueInfo->prP2PInfo[ucRoleIndex]->prWdev->cac_started = FALSE;
++		prGlueInfo->prP2PInfo[ucRoleIndex]->prWdev->links[0].cac_started = FALSE;
+ 		DBGLOG(INIT, INFO, "kalP2PRddDetectUpdate: Update to OS\n");
+ 		cfg80211_radar_event(prGlueInfo->prP2PInfo[ucRoleIndex]->prWdev->wiphy,
+ 				prGlueInfo->prP2PInfo[ucRoleIndex]->chandef, GFP_KERNEL);
+@@ -1376,7 +1376,7 @@
+ 		DBGLOG(INIT, INFO, "kalP2PCacFinishedUpdate: Update to OS\n");
+ #if KERNEL_VERSION(3, 14, 0) <= CFG80211_VERSION_CODE
+ 		cfg80211_cac_event(prGlueInfo->prP2PInfo[ucRoleIndex]->prDevHandler,
+-				prGlueInfo->prP2PInfo[ucRoleIndex]->chandef, NL80211_RADAR_CAC_FINISHED, GFP_KERNEL);
++				prGlueInfo->prP2PInfo[ucRoleIndex]->chandef, NL80211_RADAR_CAC_FINISHED, GFP_KERNEL, 0);
+ #else
+ 		cfg80211_cac_event(prGlueInfo->prP2PInfo[ucRoleIndex]->prDevHandler,
+ 				NL80211_RADAR_CAC_FINISHED, GFP_KERNEL);
+diff --color -ruN module/os/linux/gl_proc.c ../wifi-work/os/linux/gl_proc.c
+--- a/os/linux/gl_proc.c
++++ b/os/linux/gl_proc.c
+@@ -922,56 +922,49 @@
+ 	return i4Ret;
+ }
+ #endif
+-static const struct file_operations dbglevel_ops = {
+-	.owner = THIS_MODULE,
+-	.read = procDbgLevelRead,
+-	.write = procDbgLevelWrite,
++static const struct proc_ops dbglevel_ops = {
++	.proc_read = procDbgLevelRead,
++	.proc_write = procDbgLevelWrite,
+ };
+ 
+ #if WLAN_INCLUDE_PROC
+ #if	CFG_SUPPORT_EASY_DEBUG
+ 
+-static const struct file_operations efusedump_ops = {
+-	.owner	 = THIS_MODULE,
+-	.open	 = procEfuseDumpOpen,
+-	.read	 = seq_read,
+-	.llseek  = seq_lseek,
+-	.release = seq_release,
++static const struct proc_ops efusedump_ops = {
++	.proc_open	 = procEfuseDumpOpen,
++	.proc_read	 = seq_read,
++	.proc_lseek  = seq_lseek,
++	.proc_release = seq_release,
+ };
+ 
+-static const struct file_operations drivercmd_ops = {
+-	.owner = THIS_MODULE,
+-	.read = procDriverCmdRead,
+-	.write = procDriverCmdWrite,
++static const struct proc_ops drivercmd_ops = {
++	.proc_read = procDriverCmdRead,
++	.proc_write = procDriverCmdWrite,
+ };
+ 
+-static const struct file_operations cfg_ops = {
+-	.owner = THIS_MODULE,
+-	.read = procCfgRead,
+-	.write = procCfgWrite,
++static const struct proc_ops cfg_ops = {
++	.proc_read = procCfgRead,
++	.proc_write = procCfgWrite,
+ };
+ #endif
+ #endif
+ 
+ #ifdef CFG_DUMP_TXPOWR_TABLE
+-static const struct file_operations get_txpwr_tbl_ops = {
+-	.owner	 = THIS_MODULE,
+-	.read = procGetTxpwrTblRead,
++static const struct proc_ops get_txpwr_tbl_ops = {
++	.proc_read = procGetTxpwrTblRead,
+ };
+ #endif
+ 
+ 
+ #ifdef CFG_GET_TEMPURATURE
+-static const struct file_operations get_temperature_ops = {
+-	.owner	 = THIS_MODULE,
+-	.read = proc_get_temperature,
++static const struct proc_ops get_temperature_ops = {
++	.proc_read = proc_get_temperature,
+ };
+ #endif
+ 
+ #if CFG_CHIP_RESET_SUPPORT
+-static const struct file_operations reset_ops = {
+-	.owner = THIS_MODULE,
+-	.read = procReset,
++static const struct proc_ops reset_ops = {
++	.proc_read = procReset,
+ };
+ #endif
+ 
+@@ -1113,10 +1106,9 @@
+ 
+ }				/* end of procMCRWrite() */
+ 
+-static const struct file_operations mcr_ops = {
+-	.owner = THIS_MODULE,
+-	.read = procMCRRead,
+-	.write = procMCRWrite,
++static const struct proc_ops mcr_ops = {
++	.proc_read = procMCRRead,
++	.proc_write = procMCRWrite,
+ };
+ 
+ #if CFG_SUPPORT_DEBUG_FS
+@@ -1162,9 +1154,8 @@
+ 	return i4Ret;
+ }
+ 
+-static const struct file_operations country_ops = {
+-	.owner = THIS_MODULE,
+-	.read = procCountryRead,
++static const struct proc_ops country_ops = {
++	.proc_read = procCountryRead,
+ };
+ #endif
+ 
+diff --color -ruN module/os/linux/gl_wext_priv.c ../wifi-work/os/linux/gl_wext_priv.c
+--- a/os/linux/gl_wext_priv.c
++++ b/os/linux/gl_wext_priv.c
+@@ -2072,7 +2072,7 @@
+ 
+ 	ASSERT(IW_IS_GET(u2Cmd));
+ 	if (prIwReqData->data.length != 0) {
+-		if (!access_ok(VERIFY_READ, prIwReqData->data.pointer, prIwReqData->data.length)) {
++		if (!access_ok(prIwReqData->data.pointer, prIwReqData->data.length)) {
+ 			DBGLOG(REQ, INFO, "%s access_ok Read fail written = %d\n", __func__, i4BytesWritten);
+ 			return -EFAULT;
+ 		}
+@@ -2109,7 +2109,7 @@
+ 	/* trick,hack in ./net/wireless/wext-priv.c ioctl_private_iw_point */
+ 	/* because the cmd number is even (set), the return string will not be copy_to_user */
+ 	ASSERT(IW_IS_SET(u2Cmd));
+-	if (!access_ok(VERIFY_WRITE, prIwReqData->data.pointer, i4BytesWritten)) {
++	if (!access_ok(prIwReqData->data.pointer, i4BytesWritten)) {
+ 		DBGLOG(REQ, INFO, "%s access_ok Write fail written = %d\n", __func__, i4BytesWritten);
+ 		return -EFAULT;
+ 	}
+diff --color -ruN module/os/linux/include/gl_cfg80211.h ../wifi-work/os/linux/include/gl_cfg80211.h
+--- a/os/linux/include/gl_cfg80211.h
++++ b/os/linux/include/gl_cfg80211.h
+@@ -164,25 +164,25 @@
+ /* cfg80211 hooks */
+ int
+ mtk_cfg80211_change_iface(struct wiphy *wiphy,
+-			  struct net_device *ndev, enum nl80211_iftype type, u32 *flags, struct vif_params *params);
++			  struct net_device *ndev, enum nl80211_iftype type, struct vif_params *params);
+ 
+ int
+ mtk_cfg80211_add_key(struct wiphy *wiphy,
+ 		     struct net_device *ndev,
+-		     u8 key_index, bool pairwise, const u8 *mac_addr, struct key_params *params);
++		     int link_id, u8 key_index, bool pairwise, const u8 *mac_addr, struct key_params *params);
+ 
+ int
+ mtk_cfg80211_get_key(struct wiphy *wiphy,
+ 		     struct net_device *ndev,
+-		     u8 key_index,
++		     int link_id, u8 key_index,
+ 		     bool pairwise,
+ 		     const u8 *mac_addr, void *cookie, void (*callback) (void *cookie, struct key_params *));
+ 
+ int
+-mtk_cfg80211_del_key(struct wiphy *wiphy, struct net_device *ndev, u8 key_index, bool pairwise, const u8 *mac_addr);
++mtk_cfg80211_del_key(struct wiphy *wiphy, struct net_device *ndev, int link_id, u8 key_index, bool pairwise, const u8 *mac_addr);
+ 
+ int
+-mtk_cfg80211_set_default_key(struct wiphy *wiphy, struct net_device *ndev, u8 key_index, bool unicast, bool multicast);
++mtk_cfg80211_set_default_key(struct wiphy *wiphy, struct net_device *ndev, int link_id, u8 key_index, bool unicast, bool multicast);
+ 
+ #if KERNEL_VERSION(3, 16, 0) <= CFG80211_VERSION_CODE
+ int mtk_cfg80211_get_station(struct wiphy *wiphy, struct net_device *ndev, const u8 *mac, struct station_info *sinfo);
+@@ -242,6 +242,8 @@
+ 			 const u8 *buf, size_t len, bool no_cck, bool dont_wait_for_ack, u64 *cookie);
+ #endif
+ 
++void mtk_cfg80211_update_mgmt_frame_registrations(struct wiphy *wiphy, struct wireless_dev *wdev,
++						   struct mgmt_frame_regs *upd);
+ void mtk_cfg80211_mgmt_frame_register(IN struct wiphy *wiphy,
+ 				      IN struct wireless_dev *wdev, IN u16 frame_type, IN bool reg);
+ 
+@@ -302,7 +304,7 @@
+ #endif
+ #if KERNEL_VERSION(3, 18, 0) <= CFG80211_VERSION_CODE
+ int mtk_cfg80211_tdls_mgmt(struct wiphy *wiphy, struct net_device *dev,
+-			   const u8 *peer, u8 action_code, u8 dialog_token,
++			   const u8 *peer, int link_id, u8 action_code, u8 dialog_token,
+ 			   u16 status_code, u32 peer_capability,
+ 			   bool initiator, const u8 *buf, size_t len);
+ #else
+diff --color -ruN module/os/linux/include/gl_kal.h ../wifi-work/os/linux/include/gl_kal.h
+--- a/os/linux/include/gl_kal.h
++++ b/os/linux/include/gl_kal.h
+@@ -837,6 +837,7 @@
+ 		(_Interval) += KAL_GET_TIME_INTERVAL(); \
+ 	}
+ 
++#include <linux/sched/clock.h>
+ #define KAL_GET_HOST_CLOCK()		local_clock()
+ 
+ /*******************************************************************************
+@@ -1078,7 +1079,7 @@
+ 
+ UINT_32 kalRandomNumber(VOID);
+ 
+-VOID kalTimeoutHandler(unsigned long arg);
++VOID kalTimeoutHandler(struct timer_list *t);
+ 
+ VOID kalSetEvent(P_GLUE_INFO_T pr);
+ 
+diff --color -ruN module/os/linux/include/gl_os.h ../wifi-work/os/linux/include/gl_os.h
+--- a/os/linux/include/gl_os.h
++++ b/os/linux/include/gl_os.h
+@@ -1030,7 +1030,7 @@
+ 
+ #if KERNEL_VERSION(3, 14, 0) <= LINUX_VERSION_CODE
+ u16 wlanSelectQueue(struct net_device *dev, struct sk_buff *skb,
+-		    void *accel_priv, select_queue_fallback_t fallback);
++		    struct net_device *sb_dev);
+ #elif KERNEL_VERSION(3, 13, 0) <= LINUX_VERSION_CODE
+ u16 wlanSelectQueue(struct net_device *dev, struct sk_buff *skb,
+ 		    void *accel_priv);
+diff --color -ruN module/os/linux/include/gl_p2p_ioctl.h ../wifi-work/os/linux/include/gl_p2p_ioctl.h
+--- a/os/linux/include/gl_p2p_ioctl.h
++++ b/os/linux/include/gl_p2p_ioctl.h
+@@ -372,42 +372,42 @@
+ #if KERNEL_VERSION(4, 1, 0) <= CFG80211_VERSION_CODE
+ struct wireless_dev *mtk_p2p_cfg80211_add_iface(struct wiphy *wiphy,
+ 						const char *name, unsigned char name_assign_type,
+-						enum nl80211_iftype type, u32 *flags, struct vif_params *params);
++						enum nl80211_iftype type, struct vif_params *params);
+ #else
+ struct wireless_dev *mtk_p2p_cfg80211_add_iface(struct wiphy *wiphy,
+ 						const char *name,
+-						enum nl80211_iftype type, u32 *flags, struct vif_params *params);
++						enum nl80211_iftype type, struct vif_params *params);
+ #endif
+ 
+ int
+ mtk_p2p_cfg80211_change_iface(struct wiphy *wiphy,
+ 			      struct net_device *ndev,
+-			      enum nl80211_iftype type, u32 *flags, struct vif_params *params);
++			      enum nl80211_iftype type, struct vif_params *params);
+ 
+ int mtk_p2p_cfg80211_del_iface(struct wiphy *wiphy, struct wireless_dev *wdev);
+ 
+ int
+ mtk_p2p_cfg80211_add_key(struct wiphy *wiphy,
+ 			 struct net_device *ndev,
+-			 u8 key_index, bool pairwise, const u8 *mac_addr, struct key_params *params);
++			 int link_id, u8 key_index, bool pairwise, const u8 *mac_addr, struct key_params *params);
+ 
+ int
+ mtk_p2p_cfg80211_get_key(struct wiphy *wiphy,
+ 			 struct net_device *ndev,
+-			 u8 key_index,
++			 int link_id, u8 key_index,
+ 			 bool pairwise,
+ 			 const u8 *mac_addr, void *cookie, void (*callback) (void *cookie, struct key_params *));
+ 
+ int
+ mtk_p2p_cfg80211_del_key(struct wiphy *wiphy,
+-			 struct net_device *ndev, u8 key_index, bool pairwise, const u8 *mac_addr);
++			 struct net_device *ndev, int link_id, u8 key_index, bool pairwise, const u8 *mac_addr);
+ 
+ int
+ mtk_p2p_cfg80211_set_default_key(struct wiphy *wiphy,
+-				 struct net_device *netdev, u8 key_index, bool unicast, bool multicast);
++				 struct net_device *netdev, int link_id, u8 key_index, bool unicast, bool multicast);
+ 
+ int
+-mtk_p2p_cfg80211_set_mgmt_key(struct wiphy *wiphy, struct net_device *dev, u8 key_index);
++mtk_p2p_cfg80211_set_mgmt_key(struct wiphy *wiphy, struct net_device *dev, int link_id, u8 key_index);
+ 
+ #if KERNEL_VERSION(3, 16, 0) <= CFG80211_VERSION_CODE
+ int mtk_p2p_cfg80211_get_station(struct wiphy *wiphy, struct net_device *ndev,
+@@ -417,7 +417,7 @@
+ #endif
+ int mtk_p2p_cfg80211_scan(struct wiphy *wiphy, struct cfg80211_scan_request *request);
+ 
+-int mtk_p2p_cfg80211_set_wiphy_params(struct wiphy *wiphy, u32 changed);
++int mtk_p2p_cfg80211_set_wiphy_params(struct wiphy *wiphy, int radio_idx, u32 changed);
+ 
+ int mtk_p2p_cfg80211_connect(struct wiphy *wiphy, struct net_device *dev, struct cfg80211_connect_params *sme);
+ 
+@@ -428,9 +428,9 @@
+ int mtk_p2p_cfg80211_leave_ibss(struct wiphy *wiphy, struct net_device *dev);
+ 
+ int mtk_p2p_cfg80211_set_txpower(struct wiphy *wiphy,
+-				 struct wireless_dev *wdev, enum nl80211_tx_power_setting type, int mbm);
++				 struct wireless_dev *wdev, int radio_idx, enum nl80211_tx_power_setting type, int mbm);
+ 
+-int mtk_p2p_cfg80211_get_txpower(struct wiphy *wiphy, struct wireless_dev *wdev, int *dbm);
++int mtk_p2p_cfg80211_get_txpower(struct wiphy *wiphy, struct wireless_dev *wdev, int radio_idx, unsigned int link_id, int *dbm);
+ 
+ int mtk_p2p_cfg80211_remain_on_channel(struct wiphy *wiphy,
+ 				       struct wireless_dev *wdev,
+@@ -446,7 +446,7 @@
+ int mtk_p2p_cfg80211_start_radar_detection(struct wiphy *wiphy,
+ 						struct net_device *dev,
+ 						struct cfg80211_chan_def *chandef,
+-						unsigned int cac_time_ms);
++						u32 cac_time_ms, int link_id);
+ #else
+ int mtk_p2p_cfg80211_start_radar_detection(struct wiphy *wiphy,
+ 						struct net_device *dev,
+@@ -467,7 +467,7 @@
+ 
+ int mtk_p2p_cfg80211_start_ap(struct wiphy *wiphy, struct net_device *dev, struct cfg80211_ap_settings *settings);
+ 
+-int mtk_p2p_cfg80211_change_beacon(struct wiphy *wiphy, struct net_device *dev, struct cfg80211_beacon_data *info);
++int mtk_p2p_cfg80211_change_beacon(struct wiphy *wiphy, struct net_device *dev, struct cfg80211_ap_update *update);
+ #if KERNEL_VERSION(3, 14, 0) <= CFG80211_VERSION_CODE
+ int mtk_p2p_cfg80211_mgmt_tx(struct wiphy *wiphy,
+ 			     struct wireless_dev *wdev,
+@@ -491,17 +491,19 @@
+ 
+ int mtk_p2p_cfg80211_mgmt_tx_cancel_wait(struct wiphy *wiphy, struct wireless_dev *wdev, u64 cookie);
+ 
+-int mtk_p2p_cfg80211_stop_ap(struct wiphy *wiphy, struct net_device *dev);
++int mtk_p2p_cfg80211_stop_ap(struct wiphy *wiphy, struct net_device *dev, unsigned int link_id);
+ 
+ int mtk_p2p_cfg80211_set_channel(struct wiphy *wiphy, struct cfg80211_chan_def *chandef);
+ 
++void mtk_p2p_cfg80211_update_mgmt_frame_registrations(struct wiphy *wiphy, struct wireless_dev *wdev,
++						   struct mgmt_frame_regs *upd);
+ void mtk_p2p_cfg80211_mgmt_frame_register(IN struct wiphy *wiphy,
+ 					  struct wireless_dev *wdev, IN u16 frame_type, IN bool reg);
+ 
+ int
+ mtk_p2p_cfg80211_set_bitrate_mask(IN struct wiphy *wiphy,
+ 				  IN struct net_device *dev,
+-				  IN const u8 *peer, IN const struct cfg80211_bitrate_mask *mask);
++				  unsigned int link_id, IN const u8 *peer, IN const struct cfg80211_bitrate_mask *mask);
+ 
+ #ifdef CONFIG_NL80211_TESTMODE
+ #if KERNEL_VERSION(3, 12, 0) <= CFG80211_VERSION_CODE
+diff --color -ruN module/os/linux/platform.c ../wifi-work/os/linux/platform.c
+--- a/os/linux/platform.c
++++ b/os/linux/platform.c
+@@ -319,45 +319,16 @@
+ {
+ #if CFG_SUPPORT_NVRAM
+ 	struct file *fd;
+-	int retLen = -1;
++	loff_t pos = offset;
++	int retLen;
+ 
+-	mm_segment_t old_fs = get_fs();
+-
+-	set_fs(KERNEL_DS);
+-
+ 	fd = filp_open(filename, O_RDONLY, 0644);
+-
+ 	if (IS_ERR(fd)) {
+ 		DBGLOG(INIT, INFO, "[nvram_read] : failed to open!!\n");
+-		set_fs(old_fs);
+ 		return -1;
+ 	}
+-
+-	do {
+-		if ((fd->f_op == NULL) || (fd->f_op->read == NULL)) {
+-			DBGLOG(INIT, INFO, "[nvram_read] : file can not be read!!\n");
+-			break;
+-		}
+-
+-		if (fd->f_pos != offset) {
+-			if (fd->f_op->llseek) {
+-				if (fd->f_op->llseek(fd, offset, 0) != offset) {
+-					DBGLOG(INIT, INFO, "[nvram_read] : failed to seek!!\n");
+-					break;
+-				}
+-			} else {
+-				fd->f_pos = offset;
+-			}
+-		}
+-
+-		retLen = fd->f_op->read(fd, buf, len, &fd->f_pos);
+-
+-	} while (FALSE);
+-
++	retLen = kernel_read(fd, buf, len, &pos);
+ 	filp_close(fd, NULL);
+-
+-	set_fs(old_fs);
+-
+ 	return retLen;
+ 
+ #else /* !CFG_SUPPORT_NVRAM */
+@@ -384,45 +355,16 @@
+ {
+ #if CFG_SUPPORT_NVRAM
+ 	struct file *fd;
+-	int retLen = -1;
++	loff_t pos = offset;
++	int retLen;
+ 
+-	mm_segment_t old_fs = get_fs();
+-
+-	set_fs(KERNEL_DS);
+-
+ 	fd = filp_open(filename, O_WRONLY | O_CREAT, 0644);
+-
+ 	if (IS_ERR(fd)) {
+ 		DBGLOG(INIT, INFO, "[nvram_write] : failed to open!!\n");
+-		set_fs(old_fs);
+ 		return -1;
+ 	}
+-
+-	do {
+-		if ((fd->f_op == NULL) || (fd->f_op->write == NULL)) {
+-			DBGLOG(INIT, INFO, "[nvram_write] : file can not be write!!\n");
+-			break;
+-		}
+-		/* End of if */
+-		if (fd->f_pos != offset) {
+-			if (fd->f_op->llseek) {
+-				if (fd->f_op->llseek(fd, offset, 0) != offset) {
+-					DBGLOG(INIT, INFO, "[nvram_write] : failed to seek!!\n");
+-					break;
+-				}
+-			} else {
+-				fd->f_pos = offset;
+-			}
+-		}
+-
+-		retLen = fd->f_op->write(fd, buf, len, &fd->f_pos);
+-
+-	} while (FALSE);
+-
++	retLen = kernel_write(fd, buf, len, &pos);
+ 	filp_close(fd, NULL);
+-
+-	set_fs(old_fs);
+-
+ 	return retLen;
+ 
+ #else /* !CFG_SUPPORT_NVRAMS */

@@ -338,3 +338,25 @@ echod (dependency)
   Finding other TECHO5 devices and the deck's computers, and being found by Music Assistant, over
   mDNS (feature/announce, feature/deck, feature/sendspin). The MIT License's text is as above, under
   EchoLocal.
+
+custom-kernel/cronos/
+  MT8163 kernel support for the Echo Show 5 (cronos), based on the linux-mtk
+  mt8163/7.0 branch and adapted to Linux 7.2.11. The platform patch retains
+  upstream copyright and license notices; patches/ and config/ contain the
+  board adaptations under the licenses declared in each file.
+
+  wifi-amazon/ is a pinned submodule of
+  https://github.com/amazon-oss/android_kernel_amazon_mt76x8-wifi.
+  Its dual GPLv2/BSD notices remain in the upstream source headers.
+
+  sources/amazon-kernel/ is a pinned submodule of
+  https://github.com/amazon-oss/android_kernel_amazon_mt8163.
+  It supplies vendor codec build inputs and hardware reference sources under
+  their upstream licenses. Local adaptations are stored separately as patches.
+
+  Firmware is supplied locally or extracted from a locally supplied vendor boot
+  image. The amplifier configuration is generated from the pinned vendor source.
+  Generated firmware and the regulatory database are excluded from this repository.
+  initramfs/firmware/LICENSE preserves the regulatory database's ISC notice.
+  Device-specific boot images, bootloader dumps, and rescue archives are local
+  build inputs and are not included in the source changes.

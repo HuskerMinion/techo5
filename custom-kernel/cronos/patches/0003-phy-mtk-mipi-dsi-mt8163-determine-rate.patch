@@ -1,0 +1,11 @@
+--- a/drivers/phy/mediatek/phy-mtk-mipi-dsi-mt8173.c
++++ b/drivers/phy/mediatek/phy-mtk-mipi-dsi-mt8173.c
+@@ -355,7 +355,7 @@ static const struct clk_ops mtk_mipi_tx_pll_ops = {
+ static const struct clk_ops mtk_mipi_tx_pll_ops_mt8163 = {
+ 	.prepare = mtk_mipi_tx_pll_prepare_mt8163,
+ 	.unprepare = mtk_mipi_tx_pll_unprepare,
+-	.round_rate = mtk_mipi_tx_pll_round_rate,
++	.determine_rate = mtk_mipi_tx_pll_determine_rate,
+ 	.set_rate = mtk_mipi_tx_pll_set_rate,
+ 	.recalc_rate = mtk_mipi_tx_pll_recalc_rate,
+ };

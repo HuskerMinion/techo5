@@ -1,0 +1,11 @@
+# Android properties for the vendor codec libs (read by our libcutils stub).
+# key=value, one per line; VCODEC_PROPS="k=v;k=v" in the environment overrides.
+#
+# More driver logging (logcat tag VDO_LOG, printed to stderr by our liblog):
+#vendor.mtk.vdec.h264.log=1
+#vendor.mtk.venc.h264.showlog=1
+#vendor.mtk.venc.drvinfo=1
+# Register-level trace of the decoder HAL into /sdcard/dump_reg_<tid>_<addr>.txt
+# (create /sdcard in the chroot first):
+#vendor.mtk.vdec.regdump=1
+ro.build.type=userdebug

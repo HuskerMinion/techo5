@@ -1,0 +1,396 @@
+--- a/os/linux/include/gl_rst.h
++++ b/os/linux/include/gl_rst.h
+@@ -71,7 +71,8 @@
+ ********************************************************************************
+ */
+ #include "gl_typedef.h"
+-#include <linux/of_gpio.h>
++#include <linux/of.h>
++#include <linux/gpio/consumer.h>
+ #include <linux/mmc/host.h>
+ /*******************************************************************************
+ *                              C O N S T A N T S
+--- a/os/linux/gl_rst.c
++++ b/os/linux/gl_rst.c
+@@ -656,7 +656,7 @@
+ INT_32 pmu_toggle(struct rst_struct *data)
+ {
+ 	UINT_32 pmu_en_delay = MT76x8_PMU_EN_DEFAULT_DELAY;
+-	int pmu_en;
++	struct gpio_desc *pmu_en;
+ 	struct device *prDev;
+ 	INT_32 i4Status = 0;
+ 
+@@ -684,9 +684,9 @@
+ 	}
+ 
+ 	DBGLOG(INIT, STATE, "[RST] pmu reset\n");
+-	pmu_en = of_get_named_gpio(prDev->of_node, MT76x8_PMU_EN_PIN_NAME, 0);
+-
+-	if (gpio_is_valid(pmu_en)) {
++	pmu_en = gpiod_get_optional(prDev, "mt76x8_pmu_en", GPIOD_OUT_HIGH);
++
++	if (!IS_ERR_OR_NULL(pmu_en)) {
+ 		i4Status = of_property_read_u32(prDev->of_node,
+ 					   MT76x8_PMU_EN_DELAY_NAME,
+ 					   &pmu_en_delay);
+@@ -695,9 +695,10 @@
+ 			"[RST] undefined pmu_en delay, use default %ums\n",
+ 				i4Status);
+ 		}
+-		gpio_direction_output(pmu_en, 0);
++		gpiod_set_raw_value_cansleep(pmu_en, 0);
+ 		mdelay(pmu_en_delay);
+-		gpio_direction_output(pmu_en, 1);
++		gpiod_set_raw_value_cansleep(pmu_en, 1);
++		gpiod_put(pmu_en);
+ 	} else {
+ 		DBGLOG(INIT, ERROR, "[RST] invalid gpio %s\n",
+ 			MT76x8_PMU_EN_PIN_NAME);
+--- a/os/linux/gl_init.c
++++ b/os/linux/gl_init.c
+@@ -3233,20 +3233,20 @@
+ #ifdef CFG_SUPPORT_MT76X8_WIFI_PLATFORM_DRIVER
+ 
+ struct mt76x8_wifi_priv {
+-	int reset_gpio;
++	struct gpio_desc *reset_gpio;
+ 	uint32_t reset_delay_ms;
+ };
+ 
+ static int mt76x8_reset_chip(struct mt76x8_wifi_priv *wifi)
+ {
+-	if (!gpio_is_valid(wifi->reset_gpio))
++	if (!wifi->reset_gpio)
+ 		return -EINVAL;
+ 
+ 	DBGLOG(INIT, STATE, "Resetting wifi chip\n");
+ 
+-	gpio_direction_output(wifi->reset_gpio, 0);
++	gpiod_set_raw_value_cansleep(wifi->reset_gpio, 0);
+ 	mdelay(wifi->reset_delay_ms);
+-	gpio_direction_output(wifi->reset_gpio, 1);
++	gpiod_set_raw_value_cansleep(wifi->reset_gpio, 1);
+ 
+ 	return 0;
+ }
+@@ -3256,7 +3256,8 @@
+ 	struct mt76x8_wifi_priv *wifi;
+ 	struct device *dev = &pdev->dev;
+ 	struct device_node *np = pdev->dev.of_node;
+-	int gpio, ret = 0;
++	struct gpio_desc *gpio;
++	int ret = 0;
+ 	const char* pwr_limit_file;
+ 
+ 	wifi = devm_kzalloc(dev, sizeof(struct mt76x8_wifi_priv), GFP_KERNEL);
+@@ -3266,9 +3267,11 @@
+ 	platform_set_drvdata(pdev, wifi);
+ 
+ 	if (np) {
+-		gpio = of_get_named_gpio(np, "reset-gpio", 0);
+-
+-		if (gpio_is_valid(gpio)) {
++		gpio = devm_gpiod_get_optional(dev, "reset", GPIOD_OUT_HIGH);
++		if (IS_ERR(gpio))
++			return PTR_ERR(gpio);
++
++		if (gpio) {
+ 			wifi->reset_gpio = gpio;
+ 
+ 			ret = of_property_read_u32(np, "reset-delay-ms", &wifi->reset_delay_ms);
+--- a/os/linux/include/gl_kal.h
++++ b/os/linux/include/gl_kal.h
+@@ -700,9 +700,16 @@
+ #define strnicmp(s1, s2, n)                         strncasecmp(s1, s2, n)
+ #endif
+ 
++/* Preserve fixed-width, zero-padded vendor fields without strncpy(). */
++static inline char *kal_strncpy(char *dst, const char *src, size_t n)
++{
++	memcpy_and_pad(dst, n, src, strnlen(src, n), 0);
++	return dst;
++}
++
+ /* string operation */
+ #define kalStrCpy(dest, src)                        strcpy(dest, src)
+-#define kalStrnCpy(dest, src, n)                    strncpy(dest, src, n)
++#define kalStrnCpy(dest, src, n)                    kal_strncpy(dest, src, n)
+ #define kalStrCmp(ct, cs)                           strcmp(ct, cs)
+ #define kalStrnCmp(ct, cs, n)                       strncmp(ct, cs, n)
+ #define kalStrChr(s, c)                             strchr(s, c)
+--- a/common/wlan_lib.c
++++ b/common/wlan_lib.c
+@@ -8076,7 +8076,7 @@
+ 	}
+ 
+ 	cmd_v1.itemStringLength = args_size[ED_STRING_SITE];
+-	strncpy(cmd_v1.itemString, args[ED_STRING_SITE],  cmd_v1.itemStringLength);
++	kal_strncpy(cmd_v1.itemString, args[ED_STRING_SITE],  cmd_v1.itemStringLength);
+ 	DBGLOG(INIT, INFO, "itemString:");
+ 	for (i = 0; i <  cmd_v1.itemStringLength; i++)
+ 		DBGLOG(INIT, INFO, "%c", cmd_v1.itemString[i]);
+@@ -8126,7 +8126,7 @@
+ 		cmd_v1.itemValueLength = bufferindex;
+ 	} else if (cmd_v1.itemType == ITEM_TYPE_STR) {
+ 		cmd_v1.itemValueLength = args_size[ED_VALUE_SITE];
+-		strncpy(cmd_v1.itemValue, args[ED_VALUE_SITE], cmd_v1.itemValueLength);
++		kal_strncpy(cmd_v1.itemValue, args[ED_VALUE_SITE], cmd_v1.itemValueLength);
+ 	}
+ 
+ 	DBGLOG(INIT, INFO, "Length = %d itemValue:", cmd_v1.itemValueLength);
+--- a/os/linux/gl_wext.c
++++ b/os/linux/gl_wext.c
+@@ -899,22 +899,22 @@
+ 
+ 		switch (eNetWorkType) {
+ 		case PARAM_NETWORK_TYPE_DS:
+-			strncpy(pcName, "IEEE 802.11b", sizeof(((struct iwreq *)0)->u.name));
++			kal_strncpy(pcName, "IEEE 802.11b", sizeof(((struct iwreq *)0)->u.name));
+ 			break;
+ 		case PARAM_NETWORK_TYPE_OFDM24:
+-			strncpy(pcName, "IEEE 802.11bgn", sizeof(((struct iwreq *)0)->u.name));
++			kal_strncpy(pcName, "IEEE 802.11bgn", sizeof(((struct iwreq *)0)->u.name));
+ 			break;
+ 		case PARAM_NETWORK_TYPE_AUTOMODE:
+ 		case PARAM_NETWORK_TYPE_OFDM5:
+-			strncpy(pcName, "IEEE 802.11abgn", sizeof(((struct iwreq *)0)->u.name));
++			kal_strncpy(pcName, "IEEE 802.11abgn", sizeof(((struct iwreq *)0)->u.name));
+ 			break;
+ 		case PARAM_NETWORK_TYPE_FH:
+ 		default:
+-			strncpy(pcName, "IEEE 802.11", sizeof(((struct iwreq *)0)->u.name));
++			kal_strncpy(pcName, "IEEE 802.11", sizeof(((struct iwreq *)0)->u.name));
+ 			break;
+ 		}
+ 	} else {
+-		strncpy(pcName, "Disconnected", sizeof(((struct iwreq *)0)->u.name));
++		kal_strncpy(pcName, "Disconnected", sizeof(((struct iwreq *)0)->u.name));
+ 	}
+ 
+ 	return 0;
+--- a/os/linux/gl_init.c
++++ b/os/linux/gl_init.c
+@@ -372,17 +372,89 @@
+ 	WLAN_CIPHER_SUITE_AES_CMAC
+ };
+ 
++/* cfg80211 supplies wireless_dev for key and station operations. */
++static int mtk_wdev_add_key(struct wiphy *wiphy, struct wireless_dev *wdev,
++		int link_id, u8 key_index, bool pairwise, const u8 *mac_addr, struct key_params *params)
++{
++	if (!wdev->netdev)
++		return -EOPNOTSUPP;
++	return mtk_cfg80211_add_key(wiphy, wdev->netdev, link_id, key_index, pairwise, mac_addr, params);
++}
++
++static int mtk_wdev_get_key(struct wiphy *wiphy, struct wireless_dev *wdev,
++		int link_id, u8 key_index, bool pairwise, const u8 *mac_addr, void *cookie, void (*callback)(void *, struct key_params *))
++{
++	if (!wdev->netdev)
++		return -EOPNOTSUPP;
++	return mtk_cfg80211_get_key(wiphy, wdev->netdev, link_id, key_index, pairwise, mac_addr, cookie, callback);
++}
++
++static int mtk_wdev_del_key(struct wiphy *wiphy, struct wireless_dev *wdev,
++		int link_id, u8 key_index, bool pairwise, const u8 *mac_addr)
++{
++	if (!wdev->netdev)
++		return -EOPNOTSUPP;
++	return mtk_cfg80211_del_key(wiphy, wdev->netdev, link_id, key_index, pairwise, mac_addr);
++}
++
++static int mtk_wdev_get_station(struct wiphy *wiphy, struct wireless_dev *wdev,
++		const u8 *mac, struct station_info *sinfo)
++{
++	if (!wdev->netdev)
++		return -EOPNOTSUPP;
++	return mtk_cfg80211_get_station(wiphy, wdev->netdev, mac, sinfo);
++}
++
++#if CFG_SUPPORT_TDLS
++static int mtk_wdev_change_station(struct wiphy *wiphy, struct wireless_dev *wdev,
++		const u8 *mac, struct station_parameters *params)
++{
++	if (!wdev->netdev)
++		return -EOPNOTSUPP;
++	return mtk_cfg80211_change_station(wiphy, wdev->netdev, mac, params);
++}
++
++#endif
++#if CFG_SUPPORT_TDLS
++static int mtk_wdev_add_station(struct wiphy *wiphy, struct wireless_dev *wdev,
++		const u8 *mac, struct station_parameters *params)
++{
++	if (!wdev->netdev)
++		return -EOPNOTSUPP;
++	return mtk_cfg80211_add_station(wiphy, wdev->netdev, mac, params);
++}
++
++#endif
++#if CFG_SUPPORT_TDLS
++static int mtk_wdev_del_station(struct wiphy *wiphy, struct wireless_dev *wdev,
++		struct station_del_parameters *params)
++{
++	if (!wdev->netdev)
++		return -EOPNOTSUPP;
++	return mtk_cfg80211_del_station(wiphy, wdev->netdev, params);
++}
++
++#endif
++static int mtk_remain_on_channel(struct wiphy *wiphy, struct wireless_dev *wdev,
++		struct ieee80211_channel *chan, unsigned int duration, u64 *cookie,
++		const u8 *addr)
++{
++	if (addr && (!wdev->netdev || !ether_addr_equal(addr, wdev->netdev->dev_addr)))
++		return -EOPNOTSUPP;
++	return mtk_cfg80211_remain_on_channel(wiphy, wdev, chan, duration, cookie);
++}
++
+ static struct cfg80211_ops mtk_wlan_ops = {
+ 	.change_virtual_intf = mtk_cfg80211_change_iface,
+-	.add_key = mtk_cfg80211_add_key,
+-	.get_key = mtk_cfg80211_get_key,
+-	.del_key = mtk_cfg80211_del_key,
++	.add_key = mtk_wdev_add_key,
++	.get_key = mtk_wdev_get_key,
++	.del_key = mtk_wdev_del_key,
+ 	.set_default_key = mtk_cfg80211_set_default_key,
+-	.get_station = mtk_cfg80211_get_station,
++	.get_station = mtk_wdev_get_station,
+ #if CFG_SUPPORT_TDLS
+-	.change_station = mtk_cfg80211_change_station,
+-	.add_station = mtk_cfg80211_add_station,
+-	.del_station = mtk_cfg80211_del_station,
++	.change_station = mtk_wdev_change_station,
++	.add_station = mtk_wdev_add_station,
++	.del_station = mtk_wdev_del_station,
+ #endif
+ 	.scan = mtk_cfg80211_scan,
+ 	.connect = mtk_cfg80211_connect,
+@@ -408,7 +480,7 @@
+ 	.assoc = mtk_cfg80211_assoc,
+ 
+ 	/* Action Frame TX/RX */
+-	.remain_on_channel = mtk_cfg80211_remain_on_channel,
++	.remain_on_channel = mtk_remain_on_channel,
+ 	.cancel_remain_on_channel = mtk_cfg80211_cancel_remain_on_channel,
+ 	.mgmt_tx = mtk_cfg80211_mgmt_tx,
+ 	/* .mgmt_tx_cancel_wait        = mtk_cfg80211_mgmt_tx_cancel_wait, */
+--- a/os/linux/gl_p2p.c
++++ b/os/linux/gl_p2p.c
+@@ -132,6 +132,63 @@
+ struct net_device *gPrP2pDev[KAL_P2P_NUM];
+ 
+ #if CFG_ENABLE_WIFI_DIRECT_CFG_80211
++static int mtk_p2p_wdev_add_key(struct wiphy *wiphy, struct wireless_dev *wdev,
++		int link_id, u8 key_index, bool pairwise, const u8 *mac_addr, struct key_params *params)
++{
++	if (!wdev->netdev)
++		return -EOPNOTSUPP;
++	return mtk_p2p_cfg80211_add_key(wiphy, wdev->netdev, link_id, key_index, pairwise, mac_addr, params);
++}
++
++static int mtk_p2p_wdev_get_key(struct wiphy *wiphy, struct wireless_dev *wdev,
++		int link_id, u8 key_index, bool pairwise, const u8 *mac_addr, void *cookie, void (*callback)(void *, struct key_params *))
++{
++	if (!wdev->netdev)
++		return -EOPNOTSUPP;
++	return mtk_p2p_cfg80211_get_key(wiphy, wdev->netdev, link_id, key_index, pairwise, mac_addr, cookie, callback);
++}
++
++static int mtk_p2p_wdev_del_key(struct wiphy *wiphy, struct wireless_dev *wdev,
++		int link_id, u8 key_index, bool pairwise, const u8 *mac_addr)
++{
++	if (!wdev->netdev)
++		return -EOPNOTSUPP;
++	return mtk_p2p_cfg80211_del_key(wiphy, wdev->netdev, link_id, key_index, pairwise, mac_addr);
++}
++
++static int mtk_p2p_wdev_get_station(struct wiphy *wiphy, struct wireless_dev *wdev,
++		const u8 *mac, struct station_info *sinfo)
++{
++	if (!wdev->netdev)
++		return -EOPNOTSUPP;
++	return mtk_p2p_cfg80211_get_station(wiphy, wdev->netdev, mac, sinfo);
++}
++
++static int mtk_p2p_wdev_del_station(struct wiphy *wiphy, struct wireless_dev *wdev,
++		struct station_del_parameters *params)
++{
++	if (!wdev->netdev)
++		return -EOPNOTSUPP;
++	return mtk_p2p_cfg80211_del_station(wiphy, wdev->netdev, params);
++}
++
++static int mtk_p2p_remain_on_channel(struct wiphy *wiphy, struct wireless_dev *wdev,
++		struct ieee80211_channel *chan, unsigned int duration, u64 *cookie,
++		const u8 *addr)
++{
++	if (addr && (!wdev->netdev || !ether_addr_equal(addr, wdev->netdev->dev_addr)))
++		return -EOPNOTSUPP;
++	return mtk_p2p_cfg80211_remain_on_channel(wiphy, wdev, chan, duration, cookie);
++}
++
++static int mtk_p2p_wdev_set_mgmt_key(struct wiphy *wiphy, struct wireless_dev *wdev,
++		int link_id, u8 key_index)
++{
++	if (!wdev->netdev)
++		return -EOPNOTSUPP;
++	return mtk_p2p_cfg80211_set_mgmt_key(wiphy, wdev->netdev, link_id, key_index);
++}
++
+ static struct cfg80211_ops mtk_p2p_ops = {
+ #if (CFG_ENABLE_WIFI_DIRECT_CFG_80211 != 0)
+ 	/* Froyo */
+@@ -140,7 +197,7 @@
+ 	.del_virtual_intf = mtk_p2p_cfg80211_del_iface,
+ 	.change_bss = mtk_p2p_cfg80211_change_bss,
+ 	.scan = mtk_p2p_cfg80211_scan,
+-	.remain_on_channel = mtk_p2p_cfg80211_remain_on_channel,
++	.remain_on_channel = mtk_p2p_remain_on_channel,
+ 	.cancel_remain_on_channel = mtk_p2p_cfg80211_cancel_remain_on_channel,
+ 	.mgmt_tx = mtk_p2p_cfg80211_mgmt_tx,
+ 	.mgmt_tx_cancel_wait = mtk_p2p_cfg80211_mgmt_tx_cancel_wait,
+@@ -152,15 +209,15 @@
+ 	.change_beacon = mtk_p2p_cfg80211_change_beacon,
+ 	.stop_ap = mtk_p2p_cfg80211_stop_ap,
+ 	.set_wiphy_params = mtk_p2p_cfg80211_set_wiphy_params,
+-	.del_station = mtk_p2p_cfg80211_del_station,
++	.del_station = mtk_p2p_wdev_del_station,
+ 	.set_bitrate_mask = mtk_p2p_cfg80211_set_bitrate_mask,
+ 	.update_mgmt_frame_registrations = mtk_p2p_cfg80211_update_mgmt_frame_registrations,
+-	.get_station = mtk_p2p_cfg80211_get_station,
+-	.add_key = mtk_p2p_cfg80211_add_key,
+-	.get_key = mtk_p2p_cfg80211_get_key,
+-	.del_key = mtk_p2p_cfg80211_del_key,
++	.get_station = mtk_p2p_wdev_get_station,
++	.add_key = mtk_p2p_wdev_add_key,
++	.get_key = mtk_p2p_wdev_get_key,
++	.del_key = mtk_p2p_wdev_del_key,
+ 	.set_default_key = mtk_p2p_cfg80211_set_default_key,
+-	.set_default_mgmt_key = mtk_p2p_cfg80211_set_mgmt_key,
++	.set_default_mgmt_key = mtk_p2p_wdev_set_mgmt_key,
+ 	.join_ibss = mtk_p2p_cfg80211_join_ibss,
+ 	.leave_ibss = mtk_p2p_cfg80211_leave_ibss,
+ 	.set_tx_power = mtk_p2p_cfg80211_set_txpower,
+--- a/os/linux/gl_p2p_kal.c
++++ b/os/linux/gl_p2p_kal.c
+@@ -1307,7 +1307,7 @@
+ 			rStationInfo.assoc_req_ies = prCliStaRec->pucAssocReqIe;
+ 			rStationInfo.assoc_req_ies_len = prCliStaRec->u2AssocReqIeLen;
+ 
+-			cfg80211_new_sta(prP2pGlueInfo->aprRoleHandler,
++			cfg80211_new_sta(prP2pGlueInfo->aprRoleHandler->ieee80211_ptr,
+ 					 /* struct net_device * dev, */
+ 					 prCliStaRec->aucMacAddr, &rStationInfo, GFP_KERNEL);
+ 		} else {
+@@ -1319,7 +1319,7 @@
+ 				(prGlueInfo->prAdapter->rP2PNetRegState ==
+ 					ENUM_NET_REG_STATE_REGISTERED) &&
+ 				((prGlueInfo->ulFlag & GLUE_FLAG_HALT) == 0)) {
+-				cfg80211_del_sta(prP2pGlueInfo->aprRoleHandler,
++				cfg80211_del_sta(prP2pGlueInfo->aprRoleHandler->ieee80211_ptr,
+ 					prCliStaRec->aucMacAddr, GFP_KERNEL);
+ 			}
+ 		}
