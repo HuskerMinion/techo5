@@ -283,6 +283,9 @@ type Display struct {
 	wifiOpen bool
 	wifiAt   time.Time
 
+	// camtest is the camera test page (camtest_page.go), while it is up.
+	camtest *camTest
+
 	// quiet is a turn that was a screen command ("go home", "show the deck"): its words and reply
 	// are not shown, so the screen moves at once. radioCue is when Home Assistant last named a
 	// station as playing, which comes seconds before the stream does.
@@ -1208,6 +1211,15 @@ func (d *Display) gesture(g touch.Gesture) {
 			media.Get().Adjust(-1)
 		case touch.SwipeRight:
 			bt.SetPairing(false)
+		}
+		d.wake()
+		return
+	}
+
+	// The camera test takes every finger while it is up; only Back means anything.
+	if d.cameraTestUp() {
+		if g.Kind == touch.Tap && d.r != nil {
+			d.cameraTestTap(g.X, g.Y)
 		}
 		d.wake()
 		return
@@ -2366,11 +2378,11 @@ func (d *Display) frame() (next time.Duration) {
 		on = lit // the night may have just turned the panel back on: this frame is its first
 	}
 	d.mu.Lock()
-	sheetUp, wifiUp := d.sheet, d.wifiOpen
+	sheetUp, wifiUp, camUp := d.sheet, d.wifiOpen, d.camtest != nil
 	updateVisible := d.updateShown(now)
 	d.mu.Unlock()
 	busy := updateVisible || view.Phase != "idle" || call.Phase != phone.Idle || ring.any() || reminding || sheetUp || pinIsOpen() ||
-		d.wakeLight(now) > 0 || d.popupUp() != nil || setup.Get().Waiting() || wifiUp || video.Get().State().Active()
+		d.wakeLight(now) > 0 || d.popupUp() != nil || setup.Get().Waiting() || wifiUp || camUp || video.Get().State().Active()
 	if d.awayTick(now, on, busy, night) {
 		d.mu.Lock()
 		on = d.on
@@ -2525,8 +2537,8 @@ func (d *Display) frame() (next time.Duration) {
 	s.updateMessage = d.updateMessage
 	s.pin = pinNow(now)
 	// The network address page is one of the settings, opened from them and going back to them: the
-	// lock stays open behind it.
-	relockOnClose(s.showSheet || (d.wifiOpen && d.wifi.addr != nil))
+	// lock stays open behind it. So is the camera test.
+	relockOnClose(s.showSheet || (d.wifiOpen && d.wifi.addr != nil) || d.camtest != nil)
 	s.showWifi, s.wifi = d.wifiOpen, d.wifi
 	if d.wifi.addr != nil {
 		// The page's form as it is now: the taps and the change running in the background write it
@@ -2589,6 +2601,7 @@ func (d *Display) frame() (next time.Duration) {
 	s.redStyle = config.Get().Screen.NightClockStyle
 	s.nightDim = d.nightGlow
 	d.mu.Unlock()
+	s.camtest = d.cameraTestView(now)
 	if s.showDrawer && s.drawerTab == drawerCameras {
 		s.cameras = home.Get().Cameras()
 	}

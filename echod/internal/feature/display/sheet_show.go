@@ -179,6 +179,12 @@ func (d *Display) deviceRowTap(id string, p part, opt int) bool {
 			d.openAddress()
 			d.showSheet(false)
 		}
+	case "camtest":
+		// The same way round as the address page.
+		if camTestAvailable() {
+			d.openCameraTest()
+			d.showSheet(false)
+		}
 	default:
 		return d.lookRowTap(id)
 	}
