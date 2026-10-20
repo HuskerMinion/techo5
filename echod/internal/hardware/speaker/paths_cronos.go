@@ -42,8 +42,9 @@ const (
 // DRAM path plays cleanly. Holding any other AFE node marks the SRAM taken, so DL1 takes DRAM.
 // MultiMedia1_Capture is an AFE capture nothing on this device uses.
 //
-// athena on TECHO5's mainline kernel has no such fault, and its pcmC0D1c is the microphones'
-// capture, so nothing is held there. Nor on the Skylight, which has no MediaTek AFE.
+// athena on TECHO5's mainline kernels has no such fault, and its pcmC0D1c is the microphones' capture
+// (an older tools/linux/athena kernel) or the echo reference (DL1_AWB_Record), so nothing is held
+// there. Nor on the Skylight, which has no MediaTek AFE.
 var DRAMHold = onSkylight("", onMainline("", "/dev/snd/pcmC0D1c"))
 
 // startFull starts the stream only once the whole ring is written, at open and after every underrun.
@@ -219,8 +220,9 @@ var hwTrimDB = onAthena(athenaTrimDB, 0)
 
 const athenaTrimDB = 0.0
 
-// softRef is whether the speaker feeds the software echo reference (lib/echoref): only athena on the
-// mainline kernel, whose card has no loopback.
+// softRef is whether the speaker may feed the software echo reference (lib/echoref): only athena on
+// the mainline kernel, and there only while the microphones use it (echoref.InUse), which is when the
+// card's own DL1_AWB_Record did not open (mic/athena.go).
 var softRef = layout.AthenaMainline()
 
 // onMainline picks the value for athena on TECHO5's mainline kernel over any other.

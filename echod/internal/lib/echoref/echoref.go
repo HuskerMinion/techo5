@@ -1,6 +1,7 @@
 // Package echoref is the echo canceller's playback reference made in software, for a board whose card
-// has no loopback of what it plays: athena on TECHO5's mainline kernel, where the amplifier's output
-// reaches no pin the SoC reads and the AFE has no write-back front end. The speaker hands over every
+// has no loopback of what it plays: athena on a mainline kernel without the AFE's DL1 write-back
+// (DL1_AWB_Record, mic/athena.go), which is the fallback there when that device does not open. The
+// speaker hands over every
 // period it sends the card, stamped with when its last frame will be heard; the microphones take out
 // what was heard over the stretch of time each of their reads covers.
 //
@@ -16,6 +17,7 @@ import (
 	"encoding/binary"
 	"math"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/HuskerMinion/techo5/echod/internal/lib/audio"
@@ -40,6 +42,16 @@ const (
 	// stopped, and the stamps no longer say where its audio is.
 	stale = 250 * time.Millisecond
 )
+
+// inUse is whether a capture reads this reference (Use).
+var inUse atomic.Bool
+
+// Use says whether the microphones read this reference: the speaker feeds it only then, so a capture
+// with the card's own reference costs nothing here.
+func Use(on bool) { inUse.Store(on) }
+
+// InUse is what Use last said.
+func InUse() bool { return inUse.Load() }
 
 // base is the origin of every stamp, so times are plain seconds on the monotonic clock.
 var base = time.Now()

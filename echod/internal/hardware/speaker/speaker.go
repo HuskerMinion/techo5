@@ -694,7 +694,7 @@ func (p *Player) Run(ctx context.Context) error {
 		w := p.written.Add(period)
 		if err == nil && d >= 0 {
 			p.ring.Store(&ringReading{written: w, frames: int64(d), at: at})
-			if softRef {
+			if softRef && echoref.InUse() {
 				// The period's last frame is the card's newest: heard once the ring ahead of it plays.
 				echoref.Push(sent, Rate, at.Add(time.Duration(d)*time.Second/Rate+OutputExtra))
 			}
