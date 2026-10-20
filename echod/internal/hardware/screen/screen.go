@@ -26,6 +26,7 @@ import (
 
 	"golang.org/x/sys/unix"
 
+	"github.com/HuskerMinion/techo5/echod/internal/hardware/gpu"
 	"github.com/HuskerMinion/techo5/echod/internal/layout"
 )
 
@@ -110,6 +111,15 @@ type Device struct {
 	// shadow says: the next Present onto it writes every row.
 	stale []bool
 
+	// gpu draws the canvas instead, where techo5-gpu drives the panel (screen_gpu.go); nil otherwise.
+	gpu *gpu.Display
+
+	// tint is what the panel is shown with (tint.go); on the framebuffer tintTable applies it to a
+	// copy of each frame, tintImg.
+	tint       Tint
+	tintTable  *[3][256]uint8
+	tintImg    *image.RGBA
+	tintWarned bool
 	// filter is laid over every row on its way to the panel (SetFilter, filter.go).
 	filter rowFilter
 }
@@ -192,6 +202,7 @@ func Open() (*Device, error) {
 	} else {
 		d.canvas = image.NewRGBA(image.Rect(0, 0, d.panelW, d.panelH))
 	}
+	d.useGPU()
 	return d, nil
 }
 
@@ -225,6 +236,14 @@ func (d *Device) String() string {
 // it. Landscape (x, y) lands at panel (panelW-1-y, x), so each landscape column becomes one panel
 // row, written contiguously.
 func (d *Device) Present() error {
+	if d.presentGPU() {
+		return nil
+	}
+	if d.tintTable != nil {
+		drawn := d.canvas
+		d.canvas = d.tinted()
+		defer func() { d.canvas = drawn }()
+	}
 	next := d.page
 	if d.pages > 1 {
 		next = (d.page + 1) % d.pages
@@ -434,7 +453,8 @@ func SetBacklight(level int) error {
 	level = min(max(level, 0), BacklightMax)
 	path, top := backlightNode()
 	raw := level * top / BacklightMax
-	if err := os.WriteFile(path, []byte(strconv.Itoa(raw)), 0o644); err != nil {
+	// Through the lift (lift.go), which turns it down by as much as the pixels are drawn brighter.
+	if err := lit.setBacklight(path, top, raw); err != nil {
 		return fmt.Errorf("screen: backlight: %w", err)
 	}
 	return nil
@@ -443,6 +463,9 @@ func SetBacklight(level int) error {
 // Backlight reads the level the driver holds. The bootloader's own setting reads as 0 until
 // something writes one.
 func Backlight() (int, error) {
+	if level, ok := lit.askedLevel(); ok {
+		return level, nil // the level asked for, not the lift's share of it
+	}
 	path, top := backlightNode()
 	b, err := os.ReadFile(path)
 	if err != nil {
