@@ -543,7 +543,7 @@ func (f *Feature) snapshot(entity string) (*image.RGBA, error) {
 	if err != nil {
 		return nil, err
 	}
-	src, err := decodeWithin(b, maxFramePixels, "camera "+entity)
+	src, err := decodeWithin(b, maxFramePixels, "camera "+entity, cameraFrameW, cameraFrameH)
 	if err != nil {
 		return nil, err
 	}

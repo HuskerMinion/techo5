@@ -19,6 +19,7 @@ import (
 
 	xdraw "golang.org/x/image/draw"
 
+	"github.com/HuskerMinion/techo5/echod/internal/lib/fastjpeg"
 	"github.com/HuskerMinion/techo5/echod/internal/lib/hass"
 	"github.com/HuskerMinion/techo5/echod/internal/lib/picscale"
 )
@@ -103,7 +104,7 @@ func fetchPicture(ctx context.Context, w wanted) (shot, error) {
 // decodePicture is a fetched picture decoded and shrunk to as wide as it is kept, unless it would take
 // more memory decoded than it may (most), or the session it is for has ended.
 func decodePicture(ctx context.Context, b []byte, w wanted) (shot, error) {
-	cfg, _, err := image.DecodeConfig(bytes.NewReader(b))
+	cfg, format, err := image.DecodeConfig(bytes.NewReader(b))
 	if err != nil {
 		return shot{failed: true}, err
 	}
@@ -116,7 +117,13 @@ func decodePicture(ctx context.Context, b []byte, w wanted) (shot, error) {
 	if err := ctx.Err(); err != nil {
 		return shot{failed: true}, err // nobody is waiting for it: not worth the memory
 	}
-	img, _, err := image.Decode(bytes.NewReader(b))
+	var img image.Image
+	if format == "jpeg" {
+		// No narrower than it is kept, which is all shrink needs (lib/fastjpeg).
+		img, err = fastjpeg.DecodeAtLeast(b, w.width(), 1)
+	} else {
+		img, _, err = image.Decode(bytes.NewReader(b))
+	}
 	if err != nil {
 		return shot{failed: true}, err
 	}

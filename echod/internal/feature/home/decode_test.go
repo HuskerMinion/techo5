@@ -35,7 +35,7 @@ func hugePNG(w, h uint32) []byte {
 // 9000×6000, past the photo budget: at 20000×15000 the png package on 32-bit ARM, which the
 // devices are, refuses the size itself before the budget is asked, and the test saw its words.
 func TestAnAbsurdlyLargeImageIsRefusedBeforeItIsDecoded(t *testing.T) {
-	if _, err := decodeWithin(hugePNG(9000, 6000), maxPhotoPixels, "a photo"); err == nil {
+	if _, err := decodeWithin(hugePNG(9000, 6000), maxPhotoPixels, "a photo", 0, 0); err == nil {
 		t.Fatal("a 54 megapixel photo was decoded")
 	} else if !strings.Contains(err.Error(), "pixels") {
 		t.Errorf("%v, want something about how many pixels it declared", err)
@@ -50,7 +50,7 @@ func TestAnAbsurdlyLargeImageIsRefusedBeforeItIsDecoded(t *testing.T) {
 		"camera frame": {8000, 6000, maxFramePixels},
 		"map tile":     {4000, 4000, maxArtPixels},
 	} {
-		if _, err := decodeWithin(hugePNG(tc.w, tc.h), tc.max, name); err == nil {
+		if _, err := decodeWithin(hugePNG(tc.w, tc.h), tc.max, name, 0, 0); err == nil {
 			t.Errorf("%s: %d×%d was decoded", name, tc.w, tc.h)
 		}
 	}
@@ -66,7 +66,7 @@ func TestAPictureThePanelCanUseIsDecoded(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	got, err := decodeWithin(b.Bytes(), maxPhotoPixels, "a photo")
+	got, err := decodeWithin(b.Bytes(), maxPhotoPixels, "a photo", 0, 0)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -81,7 +81,7 @@ func TestAPictureThePanelCanUseIsDecoded(t *testing.T) {
 // A header that is not a picture at all is a refusal too, not a panic: the body came off the network
 // and may be an error page, a redirect somebody forgot to follow, or nothing.
 func TestSomethingThatIsNotAPictureIsRefused(t *testing.T) {
-	if _, err := decodeWithin([]byte("<html>not found</html>"), maxPhotoPixels, "a photo"); err == nil {
+	if _, err := decodeWithin([]byte("<html>not found</html>"), maxPhotoPixels, "a photo", 0, 0); err == nil {
 		t.Error("an HTML page was taken for a photo")
 	}
 }

@@ -30,7 +30,7 @@ func TestImmichLive(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		img, err := decodeWithin(b, maxPhotoPixels, "live")
+		img, err := decodeWithin(b, maxPhotoPixels, "live", 0, 0)
 		if err != nil {
 			t.Fatal(err)
 		}
