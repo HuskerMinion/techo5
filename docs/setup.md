@@ -253,7 +253,7 @@ While somebody is being sent the camera, a Show draws a small green dot in the t
 screen, over everything; a Spot shows its camera dot, as it does whenever its camera runs. With the
 screen off, it lights at its dimmest to show the dot alone on black, so the room can still tell.
 
-Two viewers at most watch at once, at up to 10 pictures a second. The login is checked with Digest, so
+Two viewers at most watch at once. The login is checked with Digest, so
 the password does not cross the network in the clear, but the picture itself is not encrypted, and
 Digest is MD5: somebody on your network who records a login can try passwords against it offline. Use a
 long password of its own, not one you use anywhere else. An address that gets the login wrong 10 times
@@ -263,9 +263,17 @@ for 15 minutes, so a guesser who keeps changing addresses is stopped too. A reco
 the last day is not kept out by that, only by wrong logins from its own address; one that shares an
 address with a guesser (behind the same router, say) is refused with it.
 
-The device has no video encoder, so the stream is a series of JPEGs (RTP/JPEG, over TCP only), not
-H.264. ffmpeg, and Frigate and go2rtc with it, read it; a recorder that wants H.264 has to re-encode it,
-which in Frigate is an ffmpeg output argument:
+On the 2nd gen Show 8, on a kernel that offers its ISP and H.264 encoder, the stream is H.264, made by
+the SoC's own encoder at the sensor's own rate: 1456x1088 (its whole view; the encoder takes 1088 lines
+at most), up to 60 pictures a second. The picture comes before the rate: as the light falls the exposure
+is lengthened, and the rate with it (down to 15), before the picture is amplified into noise. Keyframes
+come every second and for each viewer that joins. The **Camera stream crop (1920x1088)** switch makes it
+the middle 1920x1088 of the sensor's frame pixel for pixel: a view a tenth narrower and a third shorter,
+at the sensor's own sharpness. A recorder takes it as it is (record with `-c:v copy`).
+
+The other devices have no video encoder, so their stream is a series of JPEGs (RTP/JPEG, over TCP only),
+up to 10 a second. ffmpeg, and Frigate and go2rtc with it, read it; a recorder that wants H.264 has to
+re-encode it, which in Frigate is an ffmpeg output argument:
 
 ```yaml
 cameras:

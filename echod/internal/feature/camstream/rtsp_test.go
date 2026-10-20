@@ -36,6 +36,7 @@ func server(t *testing.T) (*Feature, string, chan image.Image, chan bool) {
 	released := make(chan bool, 4)
 	f := build()
 	f.available = func() bool { return true }
+	f.h264 = func() bool { return false }
 	lazy := make(chan frame, 1)
 	go func() {
 		for img := range pics {

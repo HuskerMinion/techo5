@@ -7,6 +7,10 @@ type CamStream struct {
 	User string `json:"user,omitempty"`
 	Pass string `json:"pass,omitempty"`
 
+	// Crop makes the 2nd gen Show 8's stream the middle 1920x1088 of the sensor's frame, pixel for pixel,
+	// instead of the whole view scaled to 1456x1088 (feature/camstream h264.go).
+	Crop bool `json:"crop,omitempty"`
+
 	// Discovery answers ONVIF's WS-Discovery while the stream is served (feature/camstream
 	// discovery.go): anyone on the network who asks is told the device's name, model and MAC address,
 	// so it is off until turned on.
@@ -29,6 +33,10 @@ type CamStreamWriter struct{ st *Store }
 
 func (w CamStreamWriter) Discovery(v bool) error {
 	return w.st.Update(func(c *Config) { c.CamStream.Discovery = v })
+}
+
+func (w CamStreamWriter) Crop(v bool) error {
+	return w.st.Update(func(c *Config) { c.CamStream.Crop = v })
 }
 
 func (w CamStreamWriter) On(v bool) error {

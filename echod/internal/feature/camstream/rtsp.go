@@ -228,9 +228,13 @@ func (s *session) handle(req request) bool {
 	}
 	switch req.method {
 	case "DESCRIBE":
+		media := "m=video 0 RTP/AVP " + strconv.Itoa(rtpjpeg.PayloadType) + "\r\na=rtpmap:" + strconv.Itoa(rtpjpeg.PayloadType) +
+			" JPEG/" + strconv.Itoa(rtpjpeg.ClockRate) + "\r\n"
+		if s.f.h264() {
+			media = s.f.sdpH264()
+		}
 		sdp := "v=0\r\no=- " + randomDigits() + " 1 IN IP4 0.0.0.0\r\ns=TECHO5 camera\r\nc=IN IP4 0.0.0.0\r\nt=0 0\r\n" +
-			"m=video 0 RTP/AVP " + strconv.Itoa(rtpjpeg.PayloadType) + "\r\na=rtpmap:" + strconv.Itoa(rtpjpeg.PayloadType) +
-			" JPEG/" + strconv.Itoa(rtpjpeg.ClockRate) + "\r\na=control:track1\r\n"
+			media + "a=control:track1\r\n"
 		base := strings.TrimSuffix(req.uri, "/") + "/"
 		return s.reply(req, "200 OK", []string{"Content-Type: application/sdp", "Content-Base: " + base}, sdp)
 	case "SETUP":
@@ -277,7 +281,7 @@ func (s *session) handle(req request) bool {
 // send sends the pictures until they end or a write fails. A failed write, or the camera stopping by
 // itself, closes the connection, which ends the session; the session letting them go does not, as its
 // answer to TEARDOWN may still be on the way.
-func (s *session) send(pics <-chan rtpjpeg.Frame) {
+func (s *session) send(pics <-chan sendable) {
 	defer func() {
 		if !s.ending.Load() {
 			_ = s.conn.Close()
@@ -286,8 +290,18 @@ func (s *session) send(pics <-chan rtpjpeg.Frame) {
 	ssrc := binary.BigEndian.Uint32(randomBytes(4))
 	seq := binary.BigEndian.Uint16(randomBytes(2))
 	start := time.Now()
+	var first time.Time // an H.264 stream's first picture sent, which its times count from
 	for pic := range pics {
 		ts := uint32(time.Since(start).Seconds() * rtpjpeg.ClockRate)
+		if k, ok := pic.(keyed); ok {
+			if first.IsZero() {
+				if !k.keyframe() {
+					continue // a viewer starts at a keyframe
+				}
+				first = k.at()
+			}
+			ts = uint32(k.at().Sub(first).Seconds() * rtpjpeg.ClockRate)
+		}
 		for _, p := range pic.Packets(&seq, ts, ssrc, mtu) {
 			if !s.write(p) {
 				_ = s.conn.Close()

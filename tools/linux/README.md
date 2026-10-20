@@ -239,6 +239,17 @@ same port, while Screen web access is on, is a screenshot of the panel, for chec
 PC; the parameters that put a page up first work the screen rather than read it, so they need a
 browser the setup page has let in. With both off the port is closed.
 
+Camera streaming (`feature/camstream`, docs/setup.md) serves the camera over RTSP and ONVIF for
+recorders. On the 2nd gen Show 8, where its kernel offers the blocks, it is H.264 from the SoC's encoder
+(`h264.go`): the ISP pass 2 (`mtk-dip`) develops each raw frame into two-plane NV12 and the encoder
+(`mtk-vcodec-enc`) reads those planes in place as dmabufs (`hardware/camstream`), 1456x1088 at up to 60
+frames a second (the crop switch: the middle 1920x1088), the two pipelined at about 15 ms a frame. A
+frame's tone statistics run a frame ahead of the blocks, so the stream keeps the sensor's rate: 59.8
+frames a second measured. Elsewhere it is RTP/JPEG. Auto-exposure puts the picture before the rate: it lengthens the exposure to
+a 30-a-second frame, then adds gain up to 6x, then lengthens the frame further, so the sensors run at
+their top rates (the Show 8's 60, the Show 5's 30) in good light and slow down, rather than amplify
+noise, as it falls. The camera runs only while somebody watches.
+
 ## Updates on the slots
 
 A release may carry a rootfs tarball (`release.ps1 -Rootfs <techo5-rootfs-*.tar.gz>`, built by
