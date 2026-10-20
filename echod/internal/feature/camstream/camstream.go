@@ -17,10 +17,12 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"fmt"
 	"image"
 	"image/jpeg"
 	"log/slog"
 	"net"
+	"strings"
 	"sync"
 	"time"
 
@@ -28,6 +30,7 @@ import (
 
 	"github.com/HuskerMinion/techo5/echod/internal/component"
 	"github.com/HuskerMinion/techo5/echod/internal/config"
+	"github.com/HuskerMinion/techo5/echod/internal/feature/security"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/web"
 	"github.com/HuskerMinion/techo5/echod/internal/hardware/camera"
 	"github.com/HuskerMinion/techo5/echod/internal/layout"
@@ -152,6 +155,35 @@ func (f *Feature) Entities() []esphome.Entity {
 		return nil
 	}
 	return []esphome.Entity{f.on, f.discovery}
+}
+
+// Actions: camera_credentials sets the stream's login from Home Assistant, as the setup page does, over
+// Home Assistant's link only once it is encrypted with the device's key: a password sent in the clear is
+// not one to trust.
+func (f *Feature) Actions() []*esphome.Action {
+	if !f.available() {
+		return nil
+	}
+	return []*esphome.Action{{
+		Name: "camera_credentials",
+		Args: []esphome.Arg{{Name: "username", Type: esphome.ArgString}, {Name: "password", Type: esphome.ArgString}},
+		Run: func(c esphome.Call) (any, error) {
+			if !security.Encrypted() {
+				slog.Warn("camera streaming: login refused while Home Assistant's link has no device key")
+				return nil, errors.New("camera_credentials: the device has no API encryption key; set one first")
+			}
+			user, pass := strings.TrimSpace(c.String("username")), c.String("password")
+			if err := security.CheckLogin(user, pass); err != nil {
+				return nil, fmt.Errorf("camera_credentials: %w", err)
+			}
+			if err := config.Set().CamStream().Login(user, pass); err != nil {
+				return nil, err
+			}
+			Poke()
+			slog.Info("camera streaming: login set from Home Assistant", "user", user)
+			return nil, nil
+		},
+	}}
 }
 
 func (f *Feature) Restore(c config.Config) {

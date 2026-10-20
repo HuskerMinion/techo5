@@ -242,7 +242,9 @@ The camera of a Show or a Spot can be recorded like any other camera, by Frigate
 
 1. On the setup page, under **Privacy & Security** → **Camera streaming**, set a password (12
    characters or more) and, if you like, a user name (`camera` unless changed). Save. The password is
-   never shown again; leave the field empty to keep it.
+   never shown again; leave the field empty to keep it. Home Assistant can set the same login with the
+   device's `camera_credentials` action (`username`, `password`), once the device has its encryption
+   key, so the password never crosses the network in the clear.
 2. Turn on **Camera streaming**, a switch of the device's in Home Assistant, under its configuration.
 
 It never runs without a password. Turning it off, saving a new login and closing the lens cover each

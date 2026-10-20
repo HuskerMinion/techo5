@@ -299,11 +299,20 @@ func securityRows(sv sheetView) []settingRow {
 		certs.sub, certs.value = "Turned off in Home Assistant", "Off"
 	}
 	return append(rows,
-		settingRow{id: "camweb", label: "Camera on the network", sub: "No login", kind: ctlToggle, on: sec.Camera},
+		settingRow{id: "camweb", label: "Camera on the network", sub: cameraLoginSub(), kind: ctlToggle, on: sec.Camera},
 		settingRow{id: "screenweb", label: "Screen on the network", sub: "No login", kind: ctlToggle, on: sec.Screen},
 		settingRow{id: "talkback", label: "Talk through cameras", sub: "Talk on the camera page", kind: ctlToggle, on: sec.TalkBack},
 		setupRow(st.demo),
 		link, certs)
+}
+
+// cameraLoginSub says who the camera's pages take: anybody, or, once camera streaming has a password,
+// its login.
+func cameraLoginSub() string {
+	if _, _, ok := security.CameraLogin(); ok {
+		return "The camera streaming login"
+	}
+	return "No login until camera streaming has one"
 }
 
 // generalRows are the General card's: the device's name, weather, updates, what it is, and Restart.
