@@ -285,8 +285,12 @@ ask for that login too, so set a camera password before you use them; a browser 
 in needs none. **Since v1.2.24:** a Home Assistant Generic Camera, MJPEG camera or recorder that read
 `/camera.jpg` or `/camera.mjpeg` with no login gets "401" until you set a camera password and give it the
 user and password with **Digest** authentication (Basic is not taken). Changing the password ends the
-pages' open streams, and so does closing the lens cover. The device is not found by ONVIF discovery:
-give the recorder its address. ONVIF and the pages are a login digest over plain HTTP, as on most
+pages' open streams, and so does closing the lens cover. The device is not found by ONVIF discovery
+unless you turn on **Camera discovery (ONVIF)**, a switch of the device's in Home Assistant, under its
+configuration: then, while the stream is on, it answers WS-Discovery searches (3702/udp), so Home
+Assistant's ONVIF integration lists it among the discovered devices. The answer tells anyone on your
+network who asks the device's name, model and MAC address, which is why it is off by default; without
+it, give the recorder the device's address. ONVIF and the pages are a login digest over plain HTTP, as on most
 cameras: the password itself is never sent, but anyone who can watch your Wi-Fi traffic could replay a
 captured login to the same page for a few minutes, and could see the pictures anyway. `/screen.png`
 (Screen web access) has no login: if the screen is showing the camera, a screenshot shows it too.

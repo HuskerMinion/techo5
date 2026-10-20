@@ -67,7 +67,8 @@ var errFull = errors.New("as many viewers as the stream takes are watching")
 
 // Feature is the switch, the server and the pictures they share.
 type Feature struct {
-	on *esphome.Switch
+	on        *esphome.Switch
+	discovery *esphome.Switch
 
 	// frames starts the camera and hands its pictures over until release, each still to be developed, so
 	// one skipped costs nothing; replaced in tests.
@@ -122,6 +123,17 @@ func build() *Feature {
 		since:     map[net.Conn]waiter{},
 		subs:      map[chan rtpjpeg.Frame]struct{}{},
 	}
+	f.discovery = &esphome.Switch{
+		Base: esphome.Base{ObjectID: "camera_discovery", Name: "Camera discovery (ONVIF)", Icon: "mdi:access-point-network",
+			Category: esphome.CategoryConfig},
+		OnCommand: func(on bool) {
+			f.discovery.Set(on)
+			if err := config.Set().CamStream().Discovery(on); err != nil {
+				slog.Error("saving the camera's discovery failed", "err", err)
+			}
+			f.poke()
+		},
+	}
 	f.on.OnCommand = func(on bool) {
 		f.on.Set(on)
 		if err := config.Set().CamStream().On(on); err != nil {
@@ -134,15 +146,18 @@ func build() *Feature {
 
 func (f *Feature) Name() string { return "camera streaming" }
 
-// Entities are the switch, on a device with a camera only.
+// Entities are the switch and the discovery switch, on a device with a camera only.
 func (f *Feature) Entities() []esphome.Entity {
 	if !f.available() {
 		return nil
 	}
-	return []esphome.Entity{f.on}
+	return []esphome.Entity{f.on, f.discovery}
 }
 
-func (f *Feature) Restore(c config.Config) { f.on.Set(c.CamStream.On) }
+func (f *Feature) Restore(c config.Config) {
+	f.on.Set(c.CamStream.On)
+	f.discovery.Set(c.CamStream.Discovery)
+}
 
 // poke has the listener looked at again, for a change to the switch.
 func (f *Feature) poke() {
@@ -196,6 +211,12 @@ func (f *Feature) wanted() bool {
 
 // Run keeps the port open while the camera is to be served, and shut while it is not.
 func (f *Feature) Run(ctx context.Context) error {
+	var stopDiscovery context.CancelFunc
+	defer func() {
+		if stopDiscovery != nil {
+			stopDiscovery()
+		}
+	}()
 	defer f.close()
 	defer onCover(func() { f.dropAll(); f.endPages() })()
 	tick := time.NewTicker(30 * time.Second)
@@ -216,6 +237,17 @@ func (f *Feature) Run(ctx context.Context) error {
 		case !want && f.listener() != nil:
 			f.close()
 			slog.Info("camera streaming: off")
+		}
+		// WS-Discovery while the stream is served and its own switch is on.
+		switch discover := f.listener() != nil && config.Get().CamStream.Discovery; {
+		case discover && stopDiscovery == nil:
+			dctx, cancel := context.WithCancel(ctx)
+			stopDiscovery = cancel
+			go f.discover(dctx)
+			slog.Info("camera streaming: answering discovery")
+		case !discover && stopDiscovery != nil:
+			stopDiscovery()
+			stopDiscovery = nil
 		}
 		select {
 		case <-ctx.Done():
