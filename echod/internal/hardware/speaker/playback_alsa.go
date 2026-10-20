@@ -8,24 +8,38 @@ import (
 	"os"
 	"syscall"
 
+	"github.com/HuskerMinion/techo5/echod/internal/layout"
 	"github.com/HuskerMinion/techo5/echod/internal/lib/alsa"
 )
 
 // openDevice takes the mixer, the DRAM hold where the board needs one, the routes the card needs
 // before it opens (openSequence), and the playback stream at the card's own rate (hwRate).
-func openDevice() (playback, *alsa.Mixer, *os.File, error) {
-	m, err := alsa.OpenMixer(Card)
+// openDevice also says whether it found the 2nd gen Show 5's mainline card (mt8163cronos), whose
+// playback front end is found by name and needs no DRAM hold.
+func openDevice() (playback, *alsa.Mixer, *os.File, bool, error) {
+	card, device, holdPath := Card, PlaybackDevice, DRAMHold
+	mainline := false
+	if layout.Board == "cronos" {
+		c, d, found, err := alsa.FindPCM("mt8163cronos", "MultiMedia1_Playback", false)
+		if err != nil {
+			return nil, nil, nil, false, fmt.Errorf("speaker: selecting playback: %w", err)
+		}
+		if found {
+			card, device, holdPath, mainline = c, d, "", true
+		}
+	}
+	m, err := alsa.OpenMixer(card)
 	if err != nil {
-		return nil, nil, nil, fmt.Errorf("speaker: opening mixer: %w", err)
+		return nil, nil, nil, false, fmt.Errorf("speaker: opening mixer: %w", err)
 	}
 
 	// Before the playback device, so its driver sees the AFE in use and takes the DRAM ring.
 	var hold *os.File
-	if DRAMHold != "" {
-		hold, err = os.OpenFile(DRAMHold, os.O_RDWR|syscall.O_NONBLOCK, 0)
+	if holdPath != "" {
+		hold, err = os.OpenFile(holdPath, os.O_RDWR|syscall.O_NONBLOCK, 0)
 		if err != nil {
 			_ = m.Close()
-			return nil, nil, nil, fmt.Errorf("speaker: holding %s: %w", DRAMHold, err)
+			return nil, nil, nil, false, fmt.Errorf("speaker: holding %s: %w", holdPath, err)
 		}
 	}
 
@@ -34,7 +48,7 @@ func openDevice() (playback, *alsa.Mixer, *os.File, error) {
 	applyTo(m, openSequence)
 
 	// The ring is the same length of time at whatever rate the card runs (hwRate).
-	pb, err := alsa.OpenPlayback(Card, PlaybackDevice, alsa.Config{
+	pb, err := alsa.OpenPlayback(card, device, alsa.Config{
 		Channels:   Channels,
 		Rate:       hwRate,
 		Format:     alsa.FormatS16_LE,
@@ -48,12 +62,12 @@ func openDevice() (playback, *alsa.Mixer, *os.File, error) {
 		if hold != nil {
 			_ = hold.Close()
 		}
-		return nil, nil, nil, fmt.Errorf("speaker: opening playback: %w", err)
+		return nil, nil, nil, false, fmt.Errorf("speaker: opening playback: %w", err)
 	}
 	if startFull && !pb.StartsFull() {
 		slog.Warn("the kernel would not hold playback until its ring is full; it starts on the first period")
 	}
-	return pb, m, hold, nil
+	return pb, m, hold, mainline, nil
 }
 
 // volumeChanged has nothing to tell on an Echo: the step is applied here, in software.
