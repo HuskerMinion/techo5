@@ -44,6 +44,14 @@ type Screen struct {
 	// clock's seven segments, "flip" for a flip clock's cards.
 	NightClockStyle string `json:"night_clock_style,omitempty"`
 
+	// NightWarm turns the screen's white to a lamp's through the night. A Show's display pipeline
+	// does it on the way to the panel (screen.Tint).
+	NightWarm bool `json:"night_warm,omitempty"`
+
+	// AdaptiveBacklight turns a Show's backlight down on dark content and draws its pixels brighter by
+	// as much, so the picture is the same for less light (screen's lift).
+	AdaptiveBacklight bool `json:"adaptive_backlight,omitempty"`
+
 	// NightLightLevel is how bright the night light is, 1 to 10; none is the panel's own default.
 	NightLightLevel int `json:"night_light_level,omitempty"`
 
@@ -266,6 +274,14 @@ func (w ScreenWriter) IgnoreRoomLights(v bool) error {
 
 func (w ScreenWriter) NightClockStyle(v string) error {
 	return w.st.Update(func(c *Config) { c.Screen.NightClockStyle = v })
+}
+
+func (w ScreenWriter) NightWarm(v bool) error {
+	return w.st.Update(func(c *Config) { c.Screen.NightWarm = v })
+}
+
+func (w ScreenWriter) AdaptiveBacklight(v bool) error {
+	return w.st.Update(func(c *Config) { c.Screen.AdaptiveBacklight = v })
 }
 
 // AtNight sets both at once: the night light, and whether it is the red clock. NightDark is cleared.
