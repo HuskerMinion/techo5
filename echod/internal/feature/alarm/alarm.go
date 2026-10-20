@@ -353,7 +353,9 @@ func (a *Alarms) poke() {
 // Run rings what comes due, looking at least every look and whenever something changes.
 func (a *Alarms) Run(ctx context.Context) error {
 	last := time.Now()
-	published := ""
+	// Published on the first pass even when it is "" (no alarm), so Home Assistant does not show the
+	// sensor as unknown on a device with no alarms set.
+	published, sent := "", false
 	looked, started, edited := false, time.Now(), false
 	for {
 		now := time.Now()
@@ -397,9 +399,9 @@ func (a *Alarms) Run(ctx context.Context) error {
 				label += " · " + up.Label
 			}
 		}
-		if label != published {
+		if label != published || !sent {
 			a.next.Set(label)
-			published = label
+			published, sent = label, true
 			a.Changed.Emit(struct{}{})
 		}
 

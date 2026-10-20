@@ -180,6 +180,9 @@ func build() *Firmware {
 			Category: esphome.CategoryDiagnostic,
 		},
 	}
+	// Empty until an attempt settles: no outcome claimed for one this process did not see (Settled),
+	// and not unknown in Home Assistant either.
+	u.status.Set("")
 
 	u.events = &esphome.Event{
 		Base: esphome.Base{
