@@ -7,6 +7,7 @@ import (
 	"slices"
 
 	"github.com/HuskerMinion/techo5/echod/internal/config"
+	"github.com/HuskerMinion/techo5/echod/internal/feature/presence"
 	"github.com/HuskerMinion/techo5/echod/internal/hardware/camera"
 )
 
@@ -34,7 +35,8 @@ func awayLabels() []string {
 func awayIndex() int { return slices.Index(awayChoices, config.Get().Presence.PresenceScreenOff()) }
 
 // withPresence adds the room's rows to the Display card, on a device with a camera: whether the camera
-// watches for somebody near, and how long an empty room leaves the screen on.
+// watches for somebody near, how long an empty room leaves the screen on, and, where the board has a
+// face detector, whether it looks for faces.
 func withPresence(rows []settingRow) []settingRow {
 	if !camera.Available() {
 		return rows
@@ -47,6 +49,11 @@ func withPresence(rows []settingRow) []settingRow {
 	if p.On {
 		rows = append(rows, settingRow{id: "awayoff", label: "Screen off when nobody is near",
 			sub: "Lights again when somebody comes near", kind: ctlChoice, value: awayLabel(p.PresenceScreenOff())})
+	}
+	if presence.FacesAvailable() {
+		rows = append(rows, settingRow{id: "faces", label: "Face detection",
+			sub:  "The SoC's face detector tells Home Assistant when a face is in view; nothing is kept",
+			kind: ctlToggle, on: p.Faces})
 	}
 	return rows
 }

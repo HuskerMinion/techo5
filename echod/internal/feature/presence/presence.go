@@ -47,11 +47,13 @@ const (
 )
 
 type Feature struct {
-	sw      *esphome.Switch
-	offNum  *esphome.Number
-	sensNum *esphome.Number
-	gestSw  *esphome.Switch
-	sensor  *esphome.BinarySensor
+	sw         *esphome.Switch
+	offNum     *esphome.Number
+	sensNum    *esphome.Number
+	gestSw     *esphome.Switch
+	faceSw     *esphome.Switch
+	sensor     *esphome.BinarySensor
+	faceSensor *esphome.BinarySensor // a face, apart from Presence (faces.go)
 
 	// Gesture fires with a gesture's name ("cover") when one is seen. Listeners must not block.
 	Gesture hook.Hook[string]
@@ -105,8 +107,18 @@ func Get() *Feature {
 			Base:      esphome.Base{ObjectID: "gestures", Name: "Gestures", Icon: "mdi:hand-back-right", Category: esphome.CategoryConfig},
 			OnCommand: f.SetGestures,
 		}
+		f.faceSw = &esphome.Switch{
+			Base:      esphome.Base{ObjectID: "face_detection", Name: "Face detection", Icon: "mdi:face-recognition", Category: esphome.CategoryConfig},
+			OnCommand: f.SetFaces,
+		}
 		f.sensor = &esphome.BinarySensor{
 			Base:        esphome.Base{ObjectID: "presence", Name: "Presence", Icon: "mdi:account-eye"},
+			DeviceClass: "occupancy",
+		}
+		// A face in front of the camera, apart from Presence (which a face also holds on), where the
+		// board has a face detector (faces.go)
+		f.faceSensor = &esphome.BinarySensor{
+			Base:        esphome.Base{ObjectID: "face", Name: "Face", Icon: "mdi:face-recognition"},
 			DeviceClass: "occupancy",
 		}
 		shared = f
@@ -117,7 +129,11 @@ func Get() *Feature {
 func (f *Feature) Name() string { return "presence" }
 
 func (f *Feature) Entities() []esphome.Entity {
-	return []esphome.Entity{f.sw, f.offNum, f.sensNum, f.gestSw, f.sensor}
+	e := []esphome.Entity{f.sw, f.offNum, f.sensNum, f.gestSw, f.sensor}
+	if facesAvailable() {
+		e = append(e, f.faceSw, f.faceSensor)
+	}
+	return e
 }
 
 func (f *Feature) Restore(c config.Config) {
@@ -125,13 +141,15 @@ func (f *Feature) Restore(c config.Config) {
 	f.offNum.Set(float32(c.Presence.PresenceScreenOff()))
 	f.sensNum.Set(float32(c.Presence.PresenceSensitivity()))
 	f.gestSw.Set(c.Presence.Gestures)
+	f.faceSw.Set(c.Presence.Faces)
 	f.sensor.Set(false)
+	f.faceSensor.Set(false)
 }
 
-// On is whether the camera watches the room at all: for somebody near, or for gestures.
+// On is whether the camera watches the room at all: for somebody near, for gestures, or for faces.
 func On() bool {
 	p := config.Get().Presence
-	return (p.On || p.Gestures) && camera.Available()
+	return (p.On || p.Gestures || p.Faces && facesAvailable()) && camera.Available()
 }
 
 // GestureEvent is the event a gesture puts on Home Assistant's bus, with the gesture's name and the
@@ -147,6 +165,22 @@ func (f *Feature) SetGestures(on bool) {
 	}
 	f.gestSw.Set(on)
 	slog.Info("setting changed", "setting", "gestures", "using", on)
+	f.poke()
+	f.Changed.Emit(struct{}{})
+}
+
+// SetFaces is the Face detection switch.
+func (f *Feature) SetFaces(on bool) {
+	if err := config.Set().Presence().Faces(on); err != nil {
+		slog.Error("saving a setting failed", "setting", "faces", "err", err)
+		f.faceSw.Set(!on)
+		return
+	}
+	f.faceSw.Set(on)
+	if !on {
+		f.faceSensor.Set(false)
+	}
+	slog.Info("setting changed", "setting", "faces", "using", on)
 	f.poke()
 	f.Changed.Emit(struct{}{})
 }
@@ -342,12 +376,15 @@ func (f *Feature) watchFor(ctx context.Context, release func()) {
 		f.watching, f.present, f.stoppedAt = false, false, time.Now()
 		f.mu.Unlock()
 		f.sensor.Set(false)
+		f.faceSensor.Set(false)
 		f.Changed.Emit(struct{}{})
 		slog.Info("presence: not watching")
 	}()
 
 	f.camRate()
 	defer camera.SetGestureExposure(false)
+	var fs faces
+	defer fs.close()
 	tick := time.NewTicker(time.Second)
 	defer tick.Stop()
 	quiet := time.Now()
@@ -369,6 +406,12 @@ func (f *Feature) watchFor(ctx context.Context, release func()) {
 			}
 			quiet = time.Now()
 			f.take(g, fr.At)
+			if seen, looked := fs.look(fr); looked {
+				f.faceSensor.Set(seen)
+				if seen && config.Get().Presence.On {
+					f.face(fr.At)
+				}
+			}
 		case now := <-tick.C:
 			if now.Sub(quiet) > 15*time.Second {
 				slog.Info("presence: the camera stopped sending frames")
