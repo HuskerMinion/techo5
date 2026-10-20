@@ -1,7 +1,7 @@
 # Alpine packages unpacked into the initramfs by mkimage.py --apk (files only).
 # armv7. Download from https://dl-cdn.alpinelinux.org/alpine/<branch>/main/armv7/
 #
-# From v3.24 (matches the 3.24.1 minirootfs):
+# From v3.24 (matches the 3.24.2 minirootfs):
 dropbear-2026.91-r0.apk
 zlib-1.3.2-r0.apk
 utmps-libs-0.1.3.3-r0.apk

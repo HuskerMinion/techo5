@@ -337,12 +337,16 @@ t5_wifi_up() {
 	if [ "$mod" = builtin ]; then
 		n=0; while [ $n -lt 20 ] && ! ip link show wlan0 >/dev/null 2>&1; do sleep 1; n=$((n+1)); done
 		ip link show wlan0 >/dev/null 2>&1 || { log "wifi: no wlan0 from the built-in driver"; return 1; }
+	else
+		# A module must match the running kernel; retain the vendor path for 4.9.
+		kernel_mod=/lib/modules/$(uname -r)/extra/mt76x8_wlan.ko
+		[ -f "$kernel_mod" ] && mod=$kernel_mod
 	fi
 	if ! ip link show wlan0 >/dev/null 2>&1; then
 		[ -e "$mod" ] || { log "wifi: driver not found at $mod"; return 1; }
-		insmod "$mod" 2>/tmp/insmod.err || { log "wifi: insmod failed: $(cat /tmp/insmod.err)"; return 1; }
-		n=0; while [ $n -lt 10 ] && ! ip link show wlan0 >/dev/null 2>&1; do sleep 1; n=$((n+1)); done
-		ip link show wlan0 >/dev/null 2>&1 || { log "wifi: driver loaded but no wlan0"; return 1; }
+		until t5_wifi_load "$mod"; do
+			t5_wifi_reset "$mod" || return 1
+		done
 		log "wifi: driver loaded, wlan0 present"
 	fi
 	[ -r "$conf" ] || { log "wifi: no configuration"; return 1; }
@@ -395,6 +399,39 @@ t5_wifi_up() {
 	done
 	[ -n "$IP" ] || { log "wifi: associated but no lease"; return 1; }
 	log "wifi: $IP on wlan0"
+}
+
+# t5_wifi_load <module.ko>: load the Wi-Fi driver and wait for its wlan0.
+t5_wifi_load() {
+	insmod "$1" 2>/tmp/insmod.err || { log "wifi: insmod failed: $(cat /tmp/insmod.err)"; return 1; }
+	n=0; while [ $n -lt 10 ] && ! ip link show wlan0 >/dev/null 2>&1; do sleep 1; n=$((n+1)); done
+	ip link show wlan0 >/dev/null 2>&1 || { log "wifi: driver loaded but no wlan0"; return 1; }
+}
+
+# t5_wifi_reset <module.ko>: after a driver that made no wlan0, power the chip off and on and let
+# t5_wifi_load try again, twice a boot at most. On the Show 5 the MT7668's Wi-Fi half failed so on
+# 5 boots of about 260 (2026-10-17..19; Bluetooth, on the same SDIO card, came up), and the network
+# keeper rebooted 15 minutes later, which always fixed it. Unbinding the SDIO host (WIFI_SDIO_HOST,
+# its device in its platform driver) takes the card's supply, the chip's power, off; binding it powers
+# the chip up and probes both halves again (Bluetooth's settings are made later, by t5_bt_up). The
+# kernel's account of the failure is kept first, the last five in /data/techo5-linux/wifi-fail.
+t5_wifi_reset() {
+	h=${WIFI_SDIO_HOST:-}
+	[ -n "$h" ] && [ -w "${h%/*}/bind" ] || return 1
+	tries=$(cat /run/techo5/wifi-resets 2>/dev/null || echo 0)
+	[ "$tries" -lt 2 ] || { log "wifi: no wlan0 after two resets of the chip"; return 1; }
+	echo $((tries + 1)) > /run/techo5/wifi-resets
+	d=/data/techo5-linux/wifi-fail
+	mkdir -p $d
+	dmesg > "$d/$(date +%Y%m%d-%H%M%S)-$(cut -c1-8 /proc/sys/kernel/random/boot_id 2>/dev/null).txt" 2>/dev/null
+	ls -1t $d/* 2>/dev/null | tail -n +6 | while read -r f; do rm -f "$f"; done
+	m=$(basename "$1" .ko | tr - _)
+	grep -q "^$m " /proc/modules && rmmod "$m" 2>/dev/null
+	[ -e "$h" ] && echo "${h##*/}" > "${h%/*}/unbind"
+	sleep 2
+	echo "${h##*/}" > "${h%/*}/bind"
+	n=0; while [ $n -lt 20 ] && [ -z "$(ls /sys/bus/sdio/devices 2>/dev/null)" ]; do sleep 1; n=$((n+1)); done
+	log "wifi: no wlan0; the chip powered off and on (reset $((tries + 1))), its card back after ${n}s"
 }
 
 # t5_ip: the current IPv4 address on wlan0, empty if none.
@@ -632,7 +669,8 @@ t5_bt_native() {
 # With BT_MODULE=builtin hci0 comes from the kernel's own driver instead (t5_bt_native).
 t5_bt_up() {
 	mod=$1; logdir=${2:-/tmp}
-	if [ "$mod" = builtin ]; then
+	# builtin, or a kernel whose own driver already made hci0 (btmtksdio on the cronos mainline build).
+	if [ "$mod" = builtin ] || [ -d /sys/class/bluetooth/hci0 ]; then
 		t5_bt_native || return 1
 	else
 		t5_bt_bridge "$mod" "$logdir" || return 1

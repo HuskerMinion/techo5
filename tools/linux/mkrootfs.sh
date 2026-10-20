@@ -16,9 +16,12 @@
 #   bin/techo5-aec                                         WebRTC echo canceller helper (C++, build-aec.sh), optional
 #   bin/techo5-librespot                                   Spotify Connect receiver (Rust, build-librespot.sh), optional
 #   bin/techo5-ffmpeg                                      the Show's video decoder (C, build-ffmpeg.sh), optional
+#   bin/techo5-gpu                                         the GPU helper, 64-bit builds only, optional
+#   bin/techo5-jpeg                                        the JPEG decoder helper, 64-bit builds only, optional
 #   tools/slotctl tools/techo5-lib.sh tools/packages-rootfs.txt
 #   overlay/                                               tools/linux/rootfs from the repo
-#   inputs/alpine-minirootfs-*-armv7.tar.gz
+#   inputs/alpine-minirootfs-*-<arch>.tar.gz               <arch>: -a's, else apk's own (armv7, or
+#                                                          aarch64 for a 64-bit build)
 #   inputs/vendor.tar.gz                                   optional, development only: LineageOS's vendor/.
 #                                                          Published images never carry it: each unit keeps
 #                                                          its own in the store (etc/techo5/boot.sh)
@@ -45,7 +48,13 @@ R=$WORK/root
 rm -rf "$R"
 mkdir -p "$R"
 
-mini=$(ls "$IN"/inputs/alpine-minirootfs-*-armv7.tar.gz | head -1)
+# The base for the architecture being built, the packages' (-a on a host, else apk's own on the device:
+# not uname's, which says aarch64 for an armv7 userspace on a 64-bit kernel). armv7 for every board,
+# aarch64 for a 64-bit build; a staging directory may hold both.
+base=${ARCH:-$($APK --print-arch 2>/dev/null)}
+base=${base:-armv7}
+mini=$(ls "$IN"/inputs/alpine-minirootfs-*-"$base".tar.gz 2>/dev/null | head -1)
+[ -n "$mini" ] || { echo "mkrootfs: no inputs/alpine-minirootfs-*-$base.tar.gz" >&2; exit 1; }
 say "base: $(basename "$mini")"
 tar -xzf "$mini" -C "$R"
 
@@ -118,7 +127,7 @@ fi
 
 # Our binaries and scripts.
 install -d "$R/usr/local/bin" "$R/usr/local/sbin" "$R/lib" "$R/var/lib/bluetooth" "$R/var/lib/bluealsa" "$R/usr/var/lib/bluealsa"
-for b in techo5 fbprobe audioprobe rebootto btbridge techo5-aec techo5-librespot techo5-ffmpeg; do
+for b in techo5 fbprobe audioprobe rebootto btbridge techo5-aec techo5-librespot techo5-ffmpeg techo5-gpu techo5-jpeg; do
 	[ -e "$IN/bin/$b" ] && install -m 755 "$IN/bin/$b" "$R/usr/local/bin/$b"
 done
 
@@ -139,6 +148,11 @@ say "overlay"
 find "$R/etc/techo5" "$R/usr/local/sbin" "$R/lib/techo5-lib.sh" "$R/etc/inittab" "$R/etc/profile.d/techo5.sh" "$R/etc/hostname" "$R/etc/motd" \
 	-type f -exec sed -i 's/\r$//' {} +
 chmod 755 "$R"/etc/techo5/*.sh "$R"/usr/local/sbin/*
+
+# Optional mainline modules and firmware, built from the same kernel as boot.
+if [ -f "$IN/inputs/kernel.tar.gz" ]; then
+	tar -xzf "$IN/inputs/kernel.tar.gz" -C "$R"
+fi
 
 # State that must survive an image change lives on userdata.
 rm -rf "$R/etc/dropbear"

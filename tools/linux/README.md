@@ -70,7 +70,7 @@ Kernel/initramfs updates are separate: they are a `fastboot flash boot`
 Inputs (kept out of the repo, in `inputs/` or `$TECHO5_INPUTS`; [docs/building.md](../../docs/building.md) says where each comes from):
 
 - `boot-lineage-18.1-20260904-cronos.img` — LineageOS boot image (kernel + header)
-- `alpine-minirootfs-3.24.1-armv7.tar.gz`, `busybox.static` (from `busybox-static-1.37.0-r31.apk`)
+- `alpine-minirootfs-3.24.2-armv7.tar.gz`, `busybox.static` (from `busybox-static-1.37.0-r31.apk`)
 - `apks/`, `apks312/` — the packages in `packages.txt` (initramfs) and the
   wpa_supplicant 2.9 set (both)
 - no vendor tree: images don't carry LineageOS's drivers and firmware. Each unit keeps its own in the
