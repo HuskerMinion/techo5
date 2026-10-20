@@ -65,3 +65,5 @@ require (
 	golang.org/x/sys v0.48.0
 	golang.org/x/text v0.42.0
 )
+
+replace github.com/zserge/microwakeword => ./third_party/microwakeword

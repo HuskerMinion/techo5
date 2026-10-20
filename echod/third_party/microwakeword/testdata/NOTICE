@@ -1,0 +1,7 @@
+The TFLite model files in testdata/ are from the micro-wake-word-models
+project by Kevin Ahrendt and contributors:
+
+  https://github.com/kahrendt/micro-wake-word-models
+
+Licensed under the Apache License, Version 2.0.
+See https://www.apache.org/licenses/LICENSE-2.0

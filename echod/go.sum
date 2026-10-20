@@ -110,8 +110,6 @@ github.com/ygelfand/go-esphome-device v0.0.15-0.20261013225817-bf214844c4f5 h1:8
 github.com/ygelfand/go-esphome-device v0.0.15-0.20261013225817-bf214844c4f5/go.mod h1:Rrbk7Xmsx2Au87DCXhPfOvI8O7OXFtWqUjxqiGL0nCQ=
 github.com/zaf/g711 v1.4.0 h1:XZYkjjiAg9QTBnHqEg37m2I9q3IIDv5JRYXs2N8ma7c=
 github.com/zaf/g711 v1.4.0/go.mod h1:eCDXt3dSp/kYYAoooba7ukD/Q75jvAaS4WOMr0l1Roo=
-github.com/zserge/microwakeword v0.0.0-20260330234603-bfaf3840114e h1:W7Rfr8nl15z15s6EMHGiuJjySfrgy2uJweO5Kk6mImo=
-github.com/zserge/microwakeword v0.0.0-20260330234603-bfaf3840114e/go.mod h1:O7dsX2fwJHkPSXYjkoXLY6XH327YXyLdDfPWmb7OQW8=
 go.yaml.in/yaml/v3 v3.0.4 h1:tfq32ie2Jv2UxXFdLJdh3jXuOzWiL1fo0bu/FbuKpbc=
 go.yaml.in/yaml/v3 v3.0.4/go.mod h1:DhzuOOF2ATzADvBadXxruRBLzYTpT36CKvDb3+aBEFg=
 golang.org/x/crypto v0.0.0-20210322153248-0c34fe9e7dc2/go.mod h1:T9bdIzuCu7OtxOm1hfPfRQxPLYneinmdGuTeoZ9dtd4=
