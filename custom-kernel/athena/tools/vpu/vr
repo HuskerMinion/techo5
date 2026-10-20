@@ -1,0 +1,11 @@
+#!/bin/sh
+# vr OFFSET [VALUE]: read (or write) a 32-bit word of the VPU core window (debugfs techo5-vpu/regs)
+R=/sys/kernel/debug/techo5-vpu/regs
+o=$(($1))
+if [ -n "${2:-}" ]; then
+	v=$(($2))
+	printf "$(printf '\\%03o\\%03o\\%03o\\%03o' $((v & 255)) $((v >> 8 & 255)) $((v >> 16 & 255)) $((v >> 24 & 255)))" |
+		dd of=$R bs=4 seek=$((o / 4)) count=1 conv=notrunc 2>/dev/null
+else
+	printf '0x%08x\n' 0x$(dd if=$R bs=4 skip=$((o / 4)) count=1 2>/dev/null | od -An -tx4 | tr -d ' ')
+fi

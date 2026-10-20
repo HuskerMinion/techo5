@@ -102,6 +102,7 @@ if ! grep -q "leave cache-only mode before the clocks are enabled" \
 fi
 python3 "$P/patch-kbuild.py" "$KTREE"
 python3 "$P/patch-afe-di2.py" "$KTREE"
+python3 "$P/patch-afe-awb-dl1.py" "$KTREE"
 python3 "$P/patch-usb-force-vbus.py" "$KTREE"
 python3 "$P/patch-tcs3400.py" "$KTREE"
 python3 "$P/patch-btmtksdio-bdaddr.py" "$KTREE"

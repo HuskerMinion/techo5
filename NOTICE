@@ -338,3 +338,9 @@ echod (dependency)
   Finding other TECHO5 devices and the deck's computers, and being found by Music Assistant, over
   mDNS (feature/announce, feature/deck, feature/sendspin). The MIT License's text is as above, under
   EchoLocal.
+
+custom-kernel/athena/
+  Builds the Echo Show 8 2nd gen kernel on Linux 7.2.11 from the files in
+  tools/linux/athena/kernel, under the licenses given there. The scripts in
+  patches/ change kernel sources and are GPL-2.0; build.sh and the release scripts
+  (release.sh, build-rootfs.sh, build-store.sh) are MIT.

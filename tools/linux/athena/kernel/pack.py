@@ -16,6 +16,7 @@ slot store) and runs /init there, as Amazon's kernel does.
 """
 import hashlib
 import struct
+import os
 import sys
 
 BOOT_MAGIC = b"ANDROID!"
@@ -32,10 +33,14 @@ HEADER_SIZE = 1648         # v1 header: 1632 bytes of v0 fields + recovery_dtbo 
 # bootopt= first, as on the stock image (LK reads it); LK appends root= and its own arguments.
 # console=ttyS0 at 921600 as stock; *_ignore_unused keep LK's display path and rails on until
 # their drivers take over; mem= keeps LK's framebuffer and reserved areas above the kernel's RAM.
+# An RCU stall (a core stuck in the secure firmware) panics, so panic=5 reboots a wedged unit.
 CMDLINE = ("bootopt=64S3,32N2,64N2 console=ttyS0,921600 earlycon consoleblank=0 "
            "clk_ignore_unused pd_ignore_unused regulator_ignore_unused cpuidle.off=1 "
-           "loglevel=7 panic=5 mem=0x7e150000")
+           "loglevel=7 panic=5 sysctl.kernel.panic_on_rcu_stall=1 mem=0x7e150000")
 EXTRA_CMDLINE = ""
+# A build with MCDI's AP side and idle states (custom-kernel/athena patches/mcdi.py) lets cpuidle run.
+if os.environ.get("CPUIDLE"):
+    CMDLINE = CMDLINE.replace("cpuidle.off=1 ", "")
 
 BOOT_PARTITION_SIZE = 16 * 1024 * 1024  # athena's boot partition
 

@@ -400,10 +400,15 @@
 };
 
 /*
- * TODO: the mainline idle-state PSCI params (0x00010001, 0x01010001) match
- * stock mcdi-cpu / mcdi-cluster, but Amazon's TF-A is untested with them.
- * If the first boot hangs after "smp: Bringing up secondary CPUs", try
- * cpuidle.off=1.
+ * The mainline idle states' PSCI params (0x00010001, 0x01010001) are stock
+ * mcdi-cpu / mcdi-cluster: Amazon's TF-A only parks the core's GIC interface
+ * and hands the power-down to the SSPM's MCDI firmware. Unless the AP lists
+ * the CPUs it may manage, a core never takes an interrupt again (tried
+ * 2026-10-17: the unit wedged); custom-kernel/athena's athena-mcdi.c lists
+ * them, and the CPU-level state (0x00010001) then powers the core off between
+ * wakes (research/mcdi-cpuidle.md), and the cluster-level one (0x01010001)
+ * powers the cluster off when its last core goes, without the CAN_POWER_OFF
+ * word Fire OS writes first. Every core keeps both of mt8183.dtsi's states.
  */
 
 /*

@@ -31,6 +31,8 @@ RAMDISK_FILES = {
     "mediatek/mt7663pr2h.bin",
     "mediatek/mt7663pr2h_rebb.bin",
 }
+# The 7.2.11 build (custom-kernel/athena) adds the SCP's firmware.
+RAMDISK_FILES_SCP = RAMDISK_FILES | {"mediatek/mt8183/scp.img"}
 
 
 def gunzip_all(data):
@@ -88,7 +90,9 @@ def check(img, filled=False):
     want(hv == pack.HEADER_VERSION, "header_version %d" % hv)
     want(osv == pack.OS_VERSION, "os_version %#x" % osv)
     want(name == pack.BOARD_NAME.ljust(16, b"\0"), "name %r" % name)
-    want(cmd == pack.CMDLINE.encode().ljust(512, b"\0"), "cmdline %r" % cmd.rstrip(b"\0"))
+    # pack.py's, or with cpuidle on (a build with MCDI's idle states, pack.py's CPUIDLE)
+    cmdlines = {c.encode().ljust(512, b"\0") for c in (pack.CMDLINE, pack.CMDLINE.replace("cpuidle.off=1 ", ""))}
+    want(cmd in cmdlines, "cmdline %r" % cmd.rstrip(b"\0"))
     want(extra == pack.EXTRA_CMDLINE.encode().ljust(1024, b"\0"), "extra_cmdline")
     want(dtbo_size == 0 and dtbo_off == 0, "recovery_dtbo %d@%d" % (dtbo_size, dtbo_off))
     want(hsize == pack.HEADER_SIZE, "header_size %d" % hsize)
@@ -126,7 +130,7 @@ def check(img, filled=False):
         ents = cpio_entries(cpio)
         files = {n[len("lib/firmware/"):] for n, (m, _) in ents.items()
                  if m & 0o170000 == 0o100000 and n.startswith("lib/firmware/")}
-        want(files == RAMDISK_FILES, "ramdisk files %s" % sorted(files))
+        want(files in (RAMDISK_FILES, RAMDISK_FILES_SCP), "ramdisk files %s" % sorted(files))
         others = [n for n, (m, _) in ents.items()
                   if m & 0o170000 != 0o040000 and not n.startswith("lib/firmware/")]
         want(not others, "ramdisk has other entries: %s" % others)
