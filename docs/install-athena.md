@@ -349,3 +349,35 @@ The unlock, saiyaku-athena and kaeru, is by R0rt1z2 with bengris32 and FieryFlam
 with thanks to nuno407 for the META mode idea:
 [XDA thread](https://xdaforums.com/t/unlock-root-twrp-unbrick-amazon-echo-show-8-2nd-gen-2021-athena.4804958/).
 The Linux port is by HuskerMinion.
+
+### Experimental internal-speaker stereo (opt-in)
+
+On **Show 8 2nd generation (athena)**, TECHO5 mixes the left and right music channels
+to mono by default. Stereo can be enabled explicitly on a build containing this
+experimental Stage 1 change; other boards and existing installations remain mono.
+
+With the TECHO5 daemon **stopped**, save the preference using its CLI:
+
+~~~sh
+techo5 tools stereo on
+~~~
+
+Start/restart the daemon afterwards. The change is saved in the device's
+normal settings file and survives a reboot. Use the same CLI without
+arguments to inspect the saved value, or run the command with off to
+return to mono (then restart the daemon for the change to take effect).
+Do not invoke the CLI writer concurrently with the running daemon, as
+the latter may overwrite older settings snapshots when it saves other preferences.
+
+In stereo mode TECHO5 keeps independent left and right channels through
+the speaker EQ and limiter; normal mono remains the fallback. Athena's
+physical speaker wiring reverses the standard PCM left/right order, so
+stereo corrects that order for the internal speakers, not headphone-only output.
+
+**Stereo may make wake-word recognition less reliable for now**, especially
+while music is playing. The existing echo canceller still uses only the
+first playback reference channel, not separate stereo references or a
+left/right average; improving this is outside Stage 1.
+
+The stereo option affects speaker playback, not the separate microphone
+capture or wake-word model.

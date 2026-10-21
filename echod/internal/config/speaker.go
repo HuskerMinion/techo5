@@ -10,6 +10,9 @@ type Speaker struct {
 	GainDB     int        `json:"gain_db,omitempty"`
 	Resampling Resampling `json:"resampling"`
 	ASP        bool       `json:"asp"`
+	// Stereo preserves separate L/R on athena when explicitly chosen.
+	// False/missing means the original mono behavior and survives upgrades.
+	Stereo     bool       `json:"stereo,omitempty"`
 	OutputMode OutputMode `json:"output_mode,omitempty"`
 
 	// QuietHours is when the device makes no sound of its own, as "22-7", empty for never. See
@@ -131,6 +134,11 @@ func (s Speaker) Daytime() int {
 
 func (w SpeakerWriter) Resampling(v Resampling) error {
 	return w.st.Update(func(c *Config) { c.Speaker.Resampling = v })
+}
+
+// Stereo persists the opt-in, applied when the audio daemon next starts.
+func (w SpeakerWriter) Stereo(on bool) error {
+	return w.st.Update(func(c *Config) { c.Speaker.Stereo = on })
 }
 
 // OutputMode saves the selected audio output mode.
