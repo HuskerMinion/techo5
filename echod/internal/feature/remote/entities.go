@@ -33,8 +33,9 @@ var readOnly = []string{
 	"person_detection",
 	// Taking settings from the other devices.
 	"settings_sharing",
-	// Calls.
-	"phone", "phone_answer", "phone_hangup", "phone_peer",
+	// Calls, and what may end one or listen during one.
+	"phone", "phone_answer", "phone_hangup", "phone_peer", "wake_word_during_calls", "assistant_replies_into_calls",
+	"hear_call_under_assistant", "hangup_word", "hangup_word_threshold",
 	// Who can get in, and what it is paired with.
 	"settings_lock", "bluetooth_pairing", "bluetooth_phone_pairing", "bluetooth_forget", "bluetooth_forget_phones",
 	"bluetooth_secure_connections",

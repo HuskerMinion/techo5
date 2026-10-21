@@ -95,6 +95,15 @@ func (h Hangup) On() bool { return h.ID != "" }
 // StopWord reports whether the stop word is the hang-up word.
 func (h Hangup) StopWord() bool { return h.ID == HangupStop }
 
+// ModelID is the model the hang-up word takes from the wake word library, empty for none or the stop
+// word: what has to be kept on the device for it.
+func (h Hangup) ModelID() string {
+	if !h.On() || h.StopWord() {
+		return ""
+	}
+	return h.ID
+}
+
 // ThresholdAt is the score the hang-up word has to reach.
 func (h Hangup) ThresholdAt() float64 {
 	if h.Threshold <= 0 {

@@ -109,8 +109,9 @@ type Nearest struct {
 	wakeWord  func(slot int) string
 	score     func() float64
 	hears     func() bool
-	// onCall is whether a call is up here: a wake word heard during one is most likely for this device,
-	// the one somebody wants to hang up, so its claim leads by onCallLead.
+	// onCall is whether a call is up here and lets the wake word through (phone.WakeAllowed): a wake word
+	// heard during one is most likely for this device, the one somebody wants to hang up, so its claim
+	// leads by onCallLead. Only then: a device on a call that does not take wake words claims as any other.
 	onCall func() bool
 	peers  func() []announce.Peer
 	fanout func(peers []announce.Peer, mine *pending)
@@ -164,7 +165,7 @@ func build() *Nearest {
 		},
 		score:  func() float64 { return mic.Get().Standout(heard) },
 		hears:  layout.HasMicrophone,
-		onCall: func() bool { return phone.Get().Busy() },
+		onCall: func() bool { return phone.Get().Busy() && phone.Get().WakeAllowed() },
 		peers:  announce.Peers,
 		now:    time.Now,
 		after: func(d time.Duration, f func()) {

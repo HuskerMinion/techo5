@@ -11,6 +11,8 @@ import (
 	esphome "github.com/ygelfand/go-esphome-device"
 
 	"github.com/HuskerMinion/techo5/echod/internal/layout"
+
+	"github.com/HuskerMinion/techo5/echod/internal/lib/hook"
 )
 
 // Library is the models a device has and the ones Home Assistant is offering it.
@@ -25,6 +27,10 @@ import (
 // only the id, so they arrive in separate messages and this is where they meet.
 type Library struct {
 	dir string
+
+	// Changed fires after the list of models is read again (Reload): a word added, removed or fetched.
+	// Listeners must not block.
+	Changed hook.Hook[struct{}]
 
 	// ours is cached because reading it parses every model to work out which engine runs it.
 	muOurs sync.Mutex
@@ -93,6 +99,7 @@ func (l *Library) Reload() {
 	l.muOurs.Lock()
 	l.ours = models
 	l.muOurs.Unlock()
+	l.Changed.Emit(struct{}{})
 }
 
 // Offered records what Home Assistant is hosting, replacing what it offered before.

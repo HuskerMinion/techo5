@@ -157,6 +157,15 @@ func send(ctx context.Context, enc io.Writer, wide bool, say <-chan []int16, st 
 	}
 }
 
+// turnsListening counts turns listening here (Phone.TurnListening): while one does, the far end is held
+// back from the room (playFarEnd).
+var turnsListening atomic.Int32
+
+// playFarEnd reports whether the far end's audio goes out of the speaker now. Not while a turn listens:
+// with Wake word during calls on, the caller would otherwise be speaking into what the device sends Home
+// Assistant, and hearing the chime, they would know when to.
+func playFarEnd() bool { return turnsListening.Load() == 0 }
+
 // repliesPlaying counts turns' replies playing here (Phone.ReplyStarted): a count, so the end of one
 // that lands after the next has begun does not let the room back in under it.
 var repliesPlaying atomic.Int32
@@ -229,6 +238,9 @@ func receive(ctx context.Context, dec io.Reader, wide bool, st *stats) error {
 				case <-ctx.Done():
 					return nil
 				case s := <-audioCh:
+					if !playFarEnd() {
+						continue // held back while a turn listens; dropped, as live audio has to be
+					}
 					if p.Queued() > limit {
 						// A chime or a beep mixed over the call (the wake word's, during a call) has
 						// made the queue long, not the network: draining would lose it, so this frame
@@ -259,17 +271,21 @@ func receive(ctx context.Context, dec io.Reader, wide bool, st *stats) error {
 		for ctx.Err() == nil && sound.Busy() {
 			select {
 			case s := <-audioCh:
-				if !config.Get().Home.CallUnderlay {
+				if !config.Get().Home.CallUnderlay || !playFarEnd() {
 					continue
 				}
 				if under == nil {
-					under = newUnderlay(speaker.Get().Bed(), limit)
+					under = newUnderlay(speaker.Get(), limit)
 				}
 				under.play(s)
 			case err := <-errCh:
 				return err
 			case <-time.After(50 * time.Millisecond):
 			}
+		}
+		// What is left of the underlay is behind the far end the call is about to play as itself.
+		if under != nil {
+			speaker.Get().DrainUnder()
 		}
 	}
 	return nil
@@ -388,36 +404,55 @@ func buildBellRing() []int16 {
 
 // ring sounds one cycle of a call ring, from ringTone, over and over until ctx ends. The caller picks
 // the tone where the call comes in, so the setting is not read from the ring's own goroutine.
+//
+// Anything that takes the speaker meanwhile (a turn's chime and reply over a ringing call, an
+// announcement) has it until it is done, and then the ring takes it back, as a call's audio does
+// (receive): a call left ringing in silence is one nobody knows is there.
 func ring(ctx context.Context, tone []int16) {
-	if ctx.Err() != nil {
-		return // the call ended first; taking the speaker now would only cut off whatever has it
-	}
-	cycle := time.Duration(len(tone)) * time.Second / speaker.VoiceRate
-	claim := speaker.Sound().Claim("ringing", func(cctx context.Context, p *speaker.Player) error {
-		for {
-			p.PlayVoice(tone)
-			// With no playback device nothing is queued, and the cycle is waited out as though it had
-			// played, rather than resampling the whole tone again every look.
-			next := time.Now().Add(cycle)
-			idle := p.Queued() == 0
-			// Looked at every 50 ms even when nothing is queued: with no playback device nothing ever is,
-			// and a ring that only looked while sound was queued never stopped.
-			for {
-				select {
-				case <-cctx.Done():
-					p.Drain()
-					return nil
-				case <-ctx.Done():
-					p.Drain()
-					return nil
-				case <-time.After(50 * time.Millisecond):
-				}
-				if p.Queued() == 0 && (!idle || !time.Now().Before(next)) {
-					break
-				}
+	sound := speaker.Sound()
+	for ctx.Err() == nil {
+		claim := sound.Claim("ringing", func(cctx context.Context, p *speaker.Player) error {
+			return ringCycles(ctx, cctx, p, tone)
+		})
+		select {
+		case <-ctx.Done():
+			<-claim.Done()
+			return
+		case <-claim.Done():
+		}
+		for ctx.Err() == nil && sound.Busy() {
+			select {
+			case <-ctx.Done():
+			case <-time.After(50 * time.Millisecond):
 			}
 		}
-	})
-	<-ctx.Done()
-	<-claim.Done()
+	}
+}
+
+// ringCycles plays the ring until the call ends (ctx) or the speaker is taken (cctx).
+func ringCycles(ctx, cctx context.Context, p *speaker.Player, tone []int16) error {
+	cycle := time.Duration(len(tone)) * time.Second / speaker.VoiceRate
+	for {
+		p.PlayVoice(tone)
+		// With no playback device nothing is queued, and the cycle is waited out as though it had
+		// played, rather than resampling the whole tone again every look.
+		next := time.Now().Add(cycle)
+		idle := p.Queued() == 0
+		// Looked at every 50 ms even when nothing is queued: with no playback device nothing ever is,
+		// and a ring that only looked while sound was queued never stopped.
+		for {
+			select {
+			case <-cctx.Done():
+				p.Drain()
+				return nil
+			case <-ctx.Done():
+				p.Drain()
+				return nil
+			case <-time.After(50 * time.Millisecond):
+			}
+			if p.Queued() == 0 && (!idle || !time.Now().Before(next)) {
+				break
+			}
+		}
+	}
 }

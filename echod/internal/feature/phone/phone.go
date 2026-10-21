@@ -240,6 +240,14 @@ func (p *Phone) ReplyStarted() (done func()) {
 	return func() { once.Do(func() { repliesPlaying.Add(-1) }) }
 }
 
+// TurnListening says a turn has started listening here, and returns what to call when it stops. While
+// any turn listens, a call holds the far end back from the room (playFarEnd).
+func (p *Phone) TurnListening() (done func()) {
+	turnsListening.Add(1)
+	var once sync.Once
+	return func() { once.Do(func() { turnsListening.Add(-1) }) }
+}
+
 // Replying reports whether a turn's reply is playing here now, or its echo is still dying away.
 func (p *Phone) Replying() bool { return repliesPlaying.Load() > 0 }
 

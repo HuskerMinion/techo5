@@ -37,6 +37,14 @@ func TestRouteFor(t *testing.T) {
 		// The hang-up word goes to hangUp, which has its own checks (hangupHeard).
 		{"hang-up word", HangupSlot, heard{phase: phone.Talking}, routeHangUp},
 
+		// A turn open during a call: "stop" cancels the turn, as it would any turn, rather than ending the
+		// call; the hang-up word ends both, so "Okay Nabu, hang up" still hangs up. A ring still comes first.
+		{"stop word, turn open on a call", StopSlot, heard{phase: phone.Talking, turnOpen: true, stopHang: true}, routeCancelTurn},
+		{"stop word, turn open on a call, not the hang-up word", StopSlot, heard{phase: phone.Talking, turnOpen: true}, routeCancelTurn},
+		{"stop word over a ring, turn open on a call", StopSlot, heard{phase: phone.Talking, turnOpen: true, ringing: true}, routeEndRing},
+		{"hang-up word, turn open on a call", HangupSlot, heard{phase: phone.Talking, turnOpen: true}, routeCancelAndHangUp},
+		{"stop word, turn open, no call", StopSlot, heard{turnOpen: true}, routeInterrupt},
+
 		// A wake word during a call, only with Wake word during calls on.
 		{"wake word, on a call, off", wake, heard{phase: phone.Talking}, routeIgnore},
 		{"wake word, on a call", wake, heard{phase: phone.Talking, callWake: true}, routeTurn},
@@ -65,11 +73,11 @@ func TestNothingHangsUpByDefault(t *testing.T) {
 				t.Errorf("phase %v, slot %d: got %d, want ignored", phase, slot, got)
 			}
 		}
-		if hangupHeard(phase, false, false, false) != phone.Answerable(phase) {
+		if hangupHeard(phase, false, false, false, false) != phone.Answerable(phase) {
 			t.Errorf("phase %v: the hang-up word acts where a call cannot be ended by voice", phase)
 		}
 	}
-	if hangupHeard(phone.Dialing, false, false, false) {
+	if hangupHeard(phone.Dialing, false, false, false, false) {
 		t.Error("the hang-up word ends a call being placed")
 	}
 }

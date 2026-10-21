@@ -1,6 +1,7 @@
 package phone
 
 import (
+	"context"
 	"math"
 	"path/filepath"
 	"slices"
@@ -8,6 +9,7 @@ import (
 	"time"
 
 	"github.com/HuskerMinion/techo5/echod/internal/config"
+	"github.com/HuskerMinion/techo5/echod/internal/hardware/speaker"
 )
 
 // The far end counts as talking for farEndHold after its last loud frame, and not before one.
@@ -117,5 +119,48 @@ func TestReplyStartedOnlyCountsDuringACall(t *testing.T) {
 	done()
 	if p.Replying() {
 		t.Error("still replying after the reply was done")
+	}
+}
+
+// A call's ring takes the speaker back once whatever took it (a turn's chime and reply over a ringing
+// call) is done, rather than leaving the call ringing in silence.
+func TestRingComesBackAfterAnotherSound(t *testing.T) {
+	sound := speaker.Sound()
+	ctx, cancel := context.WithCancel(context.Background())
+	rang := make(chan struct{})
+	go func() { ring(ctx, make([]int16, speaker.VoiceRate/10)); close(rang) }()
+	defer func() { cancel(); <-rang }()
+
+	waitFor := func(what string, cond func() bool) {
+		t.Helper()
+		for end := time.Now().Add(2 * time.Second); time.Now().Before(end); time.Sleep(10 * time.Millisecond) {
+			if cond() {
+				return
+			}
+		}
+		t.Fatalf("timed out waiting for %s", what)
+	}
+	waitFor("the ring", func() bool { return sound.Holder() == "ringing" })
+
+	other := sound.Claim("turn", func(context.Context, *speaker.Player) error { return nil })
+	<-other.Done()
+	waitFor("the ring to come back", func() bool { return sound.Holder() == "ringing" })
+}
+
+// While a turn listens, the far end is held back from the room, so the caller cannot speak into what the
+// device is sending Home Assistant; once listening ends they are heard again.
+func TestFarEndHeldWhileATurnListens(t *testing.T) {
+	p := Get()
+	if !playFarEnd() {
+		t.Fatal("the far end held back with no turn listening")
+	}
+	done := p.TurnListening()
+	if playFarEnd() {
+		t.Error("the far end plays while a turn listens")
+	}
+	done()
+	done() // twice is once
+	if !playFarEnd() {
+		t.Error("the far end still held back after the turn stopped listening")
 	}
 }

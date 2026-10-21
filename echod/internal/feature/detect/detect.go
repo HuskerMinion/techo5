@@ -177,6 +177,7 @@ func newDetect() *Detect {
 			stopHang: c.Wake.Hangup.StopWord(),
 			callWake: c.Home.CallWake,
 			farEnd:   phone.Get().FarEndTalking(),
+			turnOpen: voice.Get().Busy(),
 		}
 		switch routeFor(slot, h) {
 		case routeHangUp:
@@ -184,6 +185,13 @@ func newDetect() *Detect {
 				hangUp("stop word")
 			} else {
 				hangUp("hang-up word")
+			}
+		case routeCancelTurn:
+			slog.Info("stop word during a turn on a call, canceling the turn")
+			voice.Get().Cancel()
+		case routeCancelAndHangUp:
+			if hangUp("hang-up word during a turn") {
+				voice.Get().Cancel()
 			}
 		case routeEndRing:
 			slog.Info("stop word during a call, ending the ring")
@@ -281,6 +289,8 @@ func newDetect() *Detect {
 		turn := voice.Get()
 		turn.SetActiveWakeWords(d.load(turn.ActiveWakeWords()))
 		d.loadStop()
+		// A call already up when the engine starts has its hang-up word, as one that starts later does.
+		d.hangup.follow(phone.Answerable(phone.Get().State().Phase))
 		// A device that was muted when it was switched off comes back muted, and the hook below only
 		// fires on a change, so the state has to be read once here as well.
 		if muted, err := mute.Get().Muted(); err == nil {
@@ -400,6 +410,13 @@ func (d *Detect) loadLocked(ids []string) []string {
 		loaded = append(loaded, slot)
 	}
 	d.library().Loaded(accepted)
+
+	// The hang-up word's list leaves the wake words out, and a word just chosen as one is no longer
+	// listened for as the hang-up word.
+	if d.hangup != nil {
+		d.hangup.refreshOptions()
+		d.hangup.follow(phone.Answerable(phone.Get().State().Phase))
+	}
 
 	// Only the slots that took a wake word are waited on. A selection that loaded nothing has nothing to
 	// warm up, so the ring goes back to what it was showing rather than animating for a device that is

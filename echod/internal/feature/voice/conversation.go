@@ -1331,9 +1331,13 @@ func (c *conversation) startAudio(slot int, followUp, continued bool, waited tim
 	// be kept out of the microphone.
 	id := c.turn.ID()
 	be := c.be
+	// A call up meanwhile holds the far end back from the room for as long as this listens (phone's
+	// playFarEnd), so the caller does not speak into the turn.
+	listened := phone.Get().TurnListening()
 	streams.Add(1)
 	safe.Go("turn audio", func() {
 		defer streams.Done()
+		defer listened()
 		c.stream(ctx, be, slot, followUp, continued, id, waited)
 	})
 }

@@ -137,3 +137,15 @@ func TestStaleIsARunningWordWithANewModel(t *testing.T) {
 		t.Errorf("stale %v, want none: a model sent from the setup page is not replaced", got)
 	}
 }
+
+// Whatever reads the library's list hears when it changes, so a list built from it (the hang-up word's)
+// is not left offering a word that is gone, or missing one just added.
+func TestReloadSaysTheLibraryChanged(t *testing.T) {
+	l := NewLibrary(t.TempDir())
+	heard := 0
+	l.Changed.Listen(func(struct{}) { heard++ })
+	l.Reload()
+	if heard != 1 {
+		t.Errorf("heard %d changes, want 1", heard)
+	}
+}

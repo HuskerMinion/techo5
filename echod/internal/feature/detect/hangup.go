@@ -12,6 +12,7 @@ import (
 	"github.com/HuskerMinion/techo5/echod/internal/feature/detect/assets"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/phone"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/talkback"
+	"github.com/HuskerMinion/techo5/echod/internal/hardware/speaker"
 	"github.com/HuskerMinion/techo5/echod/internal/lib/wake"
 )
 
@@ -22,25 +23,36 @@ const HangupSlot = StopSlot + 1
 const hangupNone = "None"
 
 // hangUp is the hang-up word, or the stop word standing in for it, heard: it hangs up if hangupHeard
-// says so. what names which, for the log.
-func hangUp(what string) {
+// says so, and reports whether it did. what names which, for the log.
+func hangUp(what string) bool {
 	phase, farEnd, replying := phone.Get().State().Phase, phone.Get().FarEndTalking(), phone.Get().Replying()
-	if !hangupHeard(phase, talkback.Get().Busy(), farEnd, replying) {
-		slog.Info(what+" ignored", "phase", phase, "far_end_talking", farEnd, "reply_playing", replying)
-		return
+	own := ownSound(speaker.Sound().Holder(), speaker.Get().Overlaying())
+	if !hangupHeard(phase, talkback.Get().Busy(), farEnd, replying, own) {
+		slog.Info(what+" ignored", "phase", phase, "far_end_talking", farEnd, "reply_playing", replying,
+			"own_sound", own)
+		return false
 	}
 	slog.Info(what + ", hanging up")
 	phone.Get().Hangup()
+	return true
+}
+
+// ownSound reports whether the device is making a sound of its own that could have said the word: any
+// claim on the speaker but the call's audio and its ring, which are the far end's and a tone, or a chime
+// or beep mixed in (speaker.Player.Overlaying).
+func ownSound(holder string, overlaying bool) bool {
+	return overlaying || holder != "" && holder != "call" && holder != "ringing"
 }
 
 // hangupHeard reports whether the hang-up word, heard now, hangs up. Only a call that can be ended by
 // voice (phone.Answerable): one ringing here or one that is up, not one being placed, and not just after
 // a call has ended. Not over a talk through a camera, and not while the far end was talking: their voice
-// comes out of the speaker, and the word in it is not somebody in the room hanging up. Nor while a turn's
-// reply plays (Wake word during calls): an answer that says the word is the device's own speaker, which
+// comes out of the speaker, and the word in it is not somebody in the room hanging up. Nor while the
+// device makes a sound of its own (ownSound), a turn's reply included (replying, which also covers its
+// echo dying away): an announcement or an answer that says the word is the device's own speaker, which
 // the far-end check does not cover and the echo canceller, not learning through a turn, hardly takes off.
-func hangupHeard(phase phone.Phase, talkBack, farEnd, replying bool) bool {
-	return phone.Answerable(phase) && !talkBack && !farEnd && !replying
+func hangupHeard(phase phone.Phase, talkBack, farEnd, replying, ownSound bool) bool {
+	return phone.Answerable(phase) && !talkBack && !farEnd && !replying && !ownSound
 }
 
 // hangup is the hang-up word's select and threshold, and loading its model while a call needs it.
@@ -101,6 +113,8 @@ func newHangup(d *Detect) *hangup {
 		}
 		h.threshold.Set(v)
 	}
+	// Words added or removed change what is offered. Changed's listeners must not block.
+	wake.Lib().Changed.Listen(func(struct{}) { go h.refreshOptions() })
 	// Loaded while a call can be ended by voice, and cleared otherwise. Changed's listeners must not
 	// block, and a load reads a model off disk.
 	phone.Get().Changed.Listen(func(s phone.State) {
@@ -169,6 +183,14 @@ func (h *hangup) phraseFor(id string) string {
 		return m.Phrase
 	}
 	return hangupNone
+}
+
+// refreshOptions offers the select's options again, from what the device has and the wake words chosen
+// now, and shows what is chosen: after a word is added or removed (the library's Changed), and after the
+// wake words are chosen again (loadLocked).
+func (h *hangup) refreshOptions() {
+	h.word.SetOptions(h.options())
+	h.word.Set(h.phraseFor(config.Get().Wake.Hangup.ID))
 }
 
 func (h *hangup) restore(c config.Hangup) {

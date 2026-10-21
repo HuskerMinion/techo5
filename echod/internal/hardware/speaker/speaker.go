@@ -169,6 +169,11 @@ type Player struct {
 	// same media volume; a track ducks its own samples before they are queued.
 	bed []int16
 
+	// under is a call's far end played under whatever took the speaker from it (a turn's reply, an
+	// announcement), a lane of its own beside bed: bed is a track's, which keeps what is left in it as the
+	// track's own audio and resumes paused music into it. Summed as bed is, at the media volume.
+	under []int16
+
 	// bell is a ring's chime, queued apart from everything else because it goes out at a level of
 	// its own: bellStep rather than the media volume. ringing holds that level for the whole of a
 	// ring rather than only while a chime sounds, so the music under it does not change tuning
@@ -756,6 +761,12 @@ func (p *Player) fill(buf []byte) {
 	if len(p.bed) == 0 {
 		p.bed = nil
 	}
+	underTake := min(len(p.under), period*Channels)
+	under := p.under[:underTake]
+	p.under = p.under[underTake:]
+	if len(p.under) == 0 {
+		p.under = nil
+	}
 	rang := min(len(p.bell), period*Channels)
 	bell := p.bell[:rang]
 	p.bell = p.bell[rang:]
@@ -785,7 +796,7 @@ func (p *Player) fill(buf []byte) {
 	// The write loop runs whether or not anything is playing, since the amplifier hisses when nothing
 	// drives the DAC, and tuning silence costs what tuning music costs. The block after the audio stops
 	// still goes through: that is the filter's own length, and it holds the tail.
-	fed := take > 0 || bedTake > 0 || len(rendered) > 0 || rang > 0
+	fed := take > 0 || bedTake > 0 || underTake > 0 || len(rendered) > 0 || rang > 0
 	drain := fed || p.fed
 	p.fed = fed
 
@@ -849,6 +860,12 @@ func (p *Player) fill(buf []byte) {
 		}
 		if i+1 < len(bed) {
 			r += int32(bed[i+1])
+		}
+		if i < len(under) {
+			l += int32(under[i])
+		}
+		if i+1 < len(under) {
+			r += int32(under[i+1])
 		}
 		if i < len(rendered) {
 			l += int32(rendered[i])
@@ -1321,4 +1338,32 @@ func (b *Bed) Drain() {
 	b.p.mu.Lock()
 	b.p.bed = nil
 	b.p.mu.Unlock()
+}
+
+// Underlay queues interleaved stereo for the underlay lane (under), dropped as Player.Play drops audio
+// with no device.
+func (p *Player) Underlay(samples []int16) {
+	if pb, _ := p.device(); pb == nil {
+		if n := p.deaf.Add(1); n == 1 || n%100 == 0 {
+			slog.Warn("audio dropped, no playback device", "times", n)
+		}
+		return
+	}
+	p.mu.Lock()
+	p.under = append(p.under, samples...)
+	p.mu.Unlock()
+}
+
+// UnderQueued is how many frames of the underlay are waiting.
+func (p *Player) UnderQueued() int {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	return len(p.under) / Channels
+}
+
+// DrainUnder discards the underlay: the call has the speaker back, and plays its far end as itself.
+func (p *Player) DrainUnder() {
+	p.mu.Lock()
+	p.under = nil
+	p.mu.Unlock()
 }
