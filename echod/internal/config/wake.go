@@ -13,6 +13,11 @@ type Wake struct {
 	// above: Home Assistant does not choose it, and it opens no pipeline.
 	Stop Stop `json:"stop"`
 
+	// VolumeDown is a word that turns the volume down with no wake word, heard on the device (#191).
+	// Like Stop it is not one of the slots: it opens no pipeline, and it is listened for only while
+	// something plays.
+	VolumeDown CommandWord `json:"volume_down,omitzero"`
+
 	// OnHA is Home Assistant's own wake word engine, used beside the device's or in its place.
 	OnHA OnHA `json:"on_ha,omitempty"`
 
@@ -70,6 +75,32 @@ func defaultStop() Stop {
 
 // Listening reports whether the stop word is being listened for.
 func (s Stop) Listening() bool { return s.Threshold < StopOff }
+
+// CommandWord is a word that acts on its own, with no wake word before it: which word, and the score it
+// has to reach. An empty ID is none, which is the default, so nothing acts on a word nobody chose;
+// anything else is a model from the same library as the wake words.
+type CommandWord struct {
+	ID string `json:"id,omitempty"`
+
+	// Threshold is the score it has to reach. Zero is DefaultCommandThreshold, and at StopOff the word
+	// is not listened for, as with the stop word.
+	Threshold float64 `json:"threshold,omitempty"`
+}
+
+// DefaultCommandThreshold is higher than a wake word's. A command word is short, it is said over the
+// music it acts on, and it acts at once: there is no turn after it to show that it was a mistake.
+const DefaultCommandThreshold = 0.90
+
+// On reports whether a word is chosen and can be heard at all.
+func (w CommandWord) On() bool { return w.ID != "" && w.ThresholdAt() < StopOff }
+
+// ThresholdAt is the score the word has to reach.
+func (w CommandWord) ThresholdAt() float64 {
+	if w.Threshold <= 0 {
+		return DefaultCommandThreshold
+	}
+	return w.Threshold
+}
 
 // WakeWord is one slot: which wake word listens there and how it behaves when it fires. An empty ID
 // is the slot switched off, which is also how detection is turned off altogether.
@@ -198,6 +229,17 @@ type StopWriter struct{ st *Store }
 
 func (w StopWriter) Threshold(v float64) error {
 	return w.st.Update(func(c *Config) { c.Wake.Stop.Threshold = v })
+}
+
+// VolumeDownWriter is the volume down word, which belongs to no slot either.
+type VolumeDownWriter struct{ st *Store }
+
+func (w VolumeDownWriter) ID(v string) error {
+	return w.st.Update(func(c *Config) { c.Wake.VolumeDown.ID = v })
+}
+
+func (w VolumeDownWriter) Threshold(v float64) error {
+	return w.st.Update(func(c *Config) { c.Wake.VolumeDown.Threshold = v })
 }
 
 type WakeWriter struct {

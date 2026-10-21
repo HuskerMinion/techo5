@@ -237,6 +237,8 @@ var registered = []string{
 	"update_outcome",
 	"update_status",
 	"voice_resampling",
+	"volume_down_word",
+	"volume_down_word_threshold",
 	"wake_assistant_1",
 	"wake_assistant_2",
 	"wake_clips",

@@ -30,6 +30,25 @@ func TestTheStopWordGetsTheSlackTheOtherSlotsGet(t *testing.T) {
 	}
 }
 
+// The volume down word is judged at its own threshold with or without the canceller: it is only
+// listened for over music, and acts with no turn after it to show a mistake.
+func TestTheVolumeDownWordGetsNoSlack(t *testing.T) {
+	base := func(slot int) float64 {
+		if slot == CommandSlot {
+			return 0.9
+		}
+		return 0.8
+	}
+	for _, canceling := range []bool{false, true} {
+		if got := thresholdFor(CommandSlot, base, 0.7, canceling); got != 0.9 {
+			t.Errorf("canceling=%v: judged at %v, want its own 0.9", canceling, got)
+		}
+	}
+	if got, want := thresholdFor(0, base, 0.7, true), base(0)-playingSlack; got != want {
+		t.Errorf("the wake word is judged at %v, want %v with the slack", got, want)
+	}
+}
+
 // The slack never drags a threshold below the floor, however low it was configured.
 func TestTheSlackStopsAtTheFloor(t *testing.T) {
 	base := func(int) float64 { return 0.52 }

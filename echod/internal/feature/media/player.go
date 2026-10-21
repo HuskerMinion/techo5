@@ -1580,6 +1580,13 @@ func (p *Player) Mute(muted bool) {
 	speaker.Get().SetVolume(p.Volume())
 }
 
+// Muted reports whether the speaker is muted (Mute): the level is kept, and nothing is heard.
+func (p *Player) Muted() bool { return p.muted.Load() }
+
+// NoisePlaying reports whether what this player plays is noise it generates (Noise), a bed to sleep or
+// work to rather than music somebody would turn down.
+func (p *Player) NoisePlaying() bool { return len(p.stream.Noise()) > 0 }
+
 // Adjust moves the level by a step and says so, which is what the buttons and Home Assistant's own
 // up and down both do.
 func (p *Player) Adjust(delta int) {

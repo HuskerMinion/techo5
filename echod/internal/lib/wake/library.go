@@ -11,6 +11,7 @@ import (
 	esphome "github.com/ygelfand/go-esphome-device"
 
 	"github.com/HuskerMinion/techo5/echod/internal/layout"
+	"github.com/HuskerMinion/techo5/echod/internal/lib/hook"
 )
 
 // Library is the models a device has and the ones Home Assistant is offering it.
@@ -43,6 +44,11 @@ type Library struct {
 	// failed is the hash each id last failed to download as, under muOffers. A model that cannot be
 	// fetched is not tried again on every connect, only once Home Assistant offers a different one.
 	failed map[string]string
+
+	// Changed fires after Ours is read again, for the lists that offer the device's models by name (the
+	// volume down word's): one sent from the setup page, or taken away, is in them for the reconnect
+	// that follows. Listeners must not block.
+	Changed hook.Hook[struct{}]
 }
 
 // adoptTimeout bounds a download, since it happens while Home Assistant waits for a selection to be
@@ -93,6 +99,7 @@ func (l *Library) Reload() {
 	l.muOurs.Lock()
 	l.ours = models
 	l.muOurs.Unlock()
+	l.Changed.Emit(struct{}{})
 }
 
 // Offered records what Home Assistant is hosting, replacing what it offered before.

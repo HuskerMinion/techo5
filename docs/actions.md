@@ -339,6 +339,23 @@ recorder:
       - esphome.echolocal_turn
 ```
 
+## Command word events
+
+Each time the [volume down word](setup.md#the-volume-down-word) acts, it fires
+`esphome.techo5_command` on Home Assistant's bus, with:
+
+| Field | |
+|---|---|
+| `command` | What the word did: `volume_down` |
+| `word` | The id of the model that heard it, as on the setup page |
+| `score` | How sure the model was when it acted, `0.50` to `1.00` |
+| `volume` | The volume step it went to, `0` to `30` |
+| `device` | The device's name |
+
+It acted already: the event says so, for an automation or a dashboard to follow. All values are text,
+and the device needs **Allow the device to perform Home Assistant actions** turned on, as for alarm
+events.
+
 ## Show an effect on the ring during a request
 
 In YAML, refer to this action as `esphome.<node>_voice_effect`.

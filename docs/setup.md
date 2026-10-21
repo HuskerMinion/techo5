@@ -950,7 +950,10 @@ The quickest way is the device's setup page:
 Only microWakeWord models are taken (`"type": "micro"` in the `.json`), with a `.tflite` of at most
 1 MB, and up to 20 sent this way. **Remove** takes one sent from the page off the device; the wake
 words that came with the device or from Home Assistant can't be removed there. A wake word the device
-is listening for can't be removed either: pick another one first.
+is listening for can't be removed or sent again either: pick another one first. Neither can the one
+chosen as the [volume down word](#the-volume-down-word), even while it's off for being a wake word
+too: set **Volume down word** to **None** or another word first. The page says "listening for that
+wake word" in both cases.
 
 Or, through Home Assistant:
 
@@ -960,6 +963,37 @@ Or, through Home Assistant:
    only shows up after a restart; reloading the device's ESPHome entry is not enough.
 3. Pick the new wake word in the device's **Wake word** list, on the Assist satellite in Home
    Assistant. The device downloads it from Home Assistant and keeps it.
+
+### The volume down word
+
+Music loud enough can drown out the wake word. A word of your own can turn it down with no wake
+word before it, and with the music down the wake word is heard again.
+
+- **Volume down word** (on the device's microphone in Home Assistant) picks it from the wake word
+  models the device has. **None**, the default, is off. Send yours from the setup page first
+  ([A wake word of your own](#a-wake-word-of-your-own)). Home Assistant reads the list as it connects:
+  one sent from the setup page shows up within seconds, but one Home Assistant downloaded (by choosing
+  it as a wake word) only at the next connection, so reload the device's ESPHome entry to see it
+  sooner. One word can't do both: while the word chosen is also a wake word (or has a wake word's
+  phrase), it is off as the volume down word, and it comes back once it isn't.
+- Heard while music plays, it turns the volume down five steps, with the volume chime. Said again, it
+  goes down again. It does nothing during a call, a talk through a camera or a request, or while an
+  alarm or timer rings (say "stop" to end a ring or a request), and nothing with the speaker muted or
+  with only the device's own white noise playing.
+- It is listened for only while music plays, and for ten seconds after, so the gap between two
+  tracks doesn't turn it off. With nothing playing, it costs nothing. If its model goes from the
+  device, it goes back to **None**. One that fails to load, or fails on the music, is left off: the
+  list still shows it and the device's log says why. It comes back when you choose it again (pick
+  **None**, then the word), when a model is sent or removed, or when the device starts again.
+- **Volume down word threshold** (0.90 to start with) sets how sure it has to be. It gets none of the
+  allowance the other words get while the speaker plays: it is only ever said over music, and it acts
+  at once. At the top of its range, it is off. Its scores don't show in **Last wake score**, and **Keep
+  wake clips** keeps none of it: the device's log has each one (`wake detected` and `wake near miss`,
+  with `slot=103`).
+
+Each time it acts, it fires a [command word event](actions.md#command-word-events). Train it the
+way [Training a wake word of your own](training-wake-word.md) describes, with the device's own music
+recorded as a negative set: that is what it has to tell the word apart from.
 
 ### Wake word clips
 

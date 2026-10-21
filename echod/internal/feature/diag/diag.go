@@ -788,7 +788,8 @@ func set(s *esphome.Sensor, r metrics.Reading) {
 	}
 }
 
-// inUse is what the slots are set to, which is what a purge has to leave alone.
+// inUse is what the slots and the volume down word are set to, which is what a purge has to leave
+// alone.
 func inUse() []string {
 	saved := config.Get().Wake
 
@@ -797,6 +798,9 @@ func inUse() []string {
 		if id := saved.Slot(slot).ID; id != "" {
 			ids = append(ids, id)
 		}
+	}
+	if id := saved.VolumeDown.ID; id != "" {
+		ids = append(ids, id)
 	}
 	return ids
 }

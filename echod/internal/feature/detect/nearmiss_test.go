@@ -74,6 +74,17 @@ func TestNearMissDoesNothingWithNothingPlaying(t *testing.T) {
 	}
 }
 
+// The volume down word only listens over music, so a near miss of it is mostly the music, and the music
+// is not held down for it.
+func TestNearMissOfTheVolumeDownWordDoesNotDuck(t *testing.T) {
+	k := newDeck()
+	k.d.heard(CommandSlot, 0.8)
+
+	if len(k.ducked) != 0 {
+		t.Fatalf("a near miss of the volume down word ducked the music: %v", k.ducked)
+	}
+}
+
 func TestNearMissRespectsTheSetting(t *testing.T) {
 	k := newDeck()
 	k.on = false

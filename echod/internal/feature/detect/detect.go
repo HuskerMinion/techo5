@@ -41,6 +41,10 @@ type Detect struct {
 	busy   *wakeBusy
 	stop   *esphome.Number
 
+	// command is the volume down word's select and threshold, and its loading with the music: see
+	// command.go.
+	command *command
+
 	// loading is held for a whole load, so a refresh (wakeword.Refresh) and a selection take turns, and
 	// asked is what the latest one was asked for, which is what a refresh loads again. refreshing keeps
 	// a run of connects from queueing refreshes behind it, and lib is the library, wake.Lib() unless a
@@ -103,12 +107,16 @@ const slackFloor = 0.5
 // it is the one word said while the speaker is certainly playing, because playing is what it is
 // asked to stop. Exempting it made the one word whose job is to interrupt a sound the only word
 // judged with no allowance for the sound.
+//
+// The volume down word (command.go) gets none. It is listened for only while the speaker plays, so
+// the allowance would be its threshold all the time, and it acts at once with no turn after it to show
+// a mistake: the music it is said over is the one thing it must not take for the word.
 func thresholdFor(slot int, base func(int) float64, stop float64, canceling bool) float64 {
 	t := stop
 	if slot != StopSlot {
 		t = base(slot)
 	}
-	if canceling {
+	if canceling && slot != CommandSlot {
 		t = max(t-playingSlack, slackFloor)
 	}
 	return t
@@ -133,14 +141,23 @@ func unmuteSettle() time.Duration {
 }
 
 func newDetect() *Detect {
-	// Sized to reach the stop word's reserved index. The slots between it and Home Assistant's are never
-	// loaded, and an unloaded slot is one comparison a frame.
-	e := New(StopSlot+1, mic.Get())
+	// Sized to reach the reserved indexes, the stop word's and the volume down word's. The slots between
+	// them and Home Assistant's are never loaded, and an unloaded slot is one comparison a frame.
+	e := New(CommandSlot+1, mic.Get())
 
+	// The volume down word is judged as a wake word is, its own threshold standing in for the slot's.
+	base := func(slot int) float64 {
+		if slot == CommandSlot {
+			return config.Get().Wake.VolumeDown.ThresholdAt()
+		}
+		return wakeword.Threshold(slot)
+	}
 	e.Threshold = func(slot int) float64 {
-		return thresholdFor(slot, wakeword.Threshold, config.Get().Wake.Stop.Threshold, mic.Get().Canceling())
+		return thresholdFor(slot, base, config.Get().Wake.Stop.Threshold, mic.Get().Canceling())
 	}
 
+	// d is made below, once the hooks it chains onto are in place; a detection only arrives after Start.
+	var d *Detect
 	e.OnDetect = func(slot int) {
 		// A call has the microphones and the speaker. The far end talking through the speaker is not
 		// someone in the room, and a turn would take the call's audio away mid-sentence. A talk through
@@ -163,6 +180,10 @@ func newDetect() *Detect {
 		}
 		if slot == StopSlot {
 			voice.Get().Interrupt()
+			return
+		}
+		if slot == CommandSlot {
+			d.command.heard()
 			return
 		}
 		// Heard here while Home Assistant's engine is listening too (config.OnHA), it still wakes: the
@@ -194,10 +215,12 @@ func newDetect() *Detect {
 		voice.Get().Candidate(slot, peak)
 	}
 
-	d := &Detect{engine: e, busy: newWakeBusy(led.Get().Busy(), e.Ready)}
+	d = &Detect{engine: e, busy: newWakeBusy(led.Get().Busy(), e.Ready)}
 	d.ducker = newDucker()
 	d.ducker.watch(e)
 	d.stop = newStopEntity(d)
+	d.command = newCommand(d)
+	d.command.watch()
 	d.score = newScoreEntity()
 	d.onHA = newOnHAEntities()
 	e.OnScored = func(slot int, peak, _ float64) {
@@ -237,6 +260,11 @@ func newDetect() *Detect {
 		}
 	})
 	e.OnReady = d.busy.scored
+	e.OnDropped = func(slot int, id string) {
+		if slot == CommandSlot {
+			d.command.dropped(id)
+		}
+	}
 
 	// The engine loads on every start, including a restart. Home Assistant only pushes a selection when
 	// the user changes one, so an engine that came back empty would leave the device deaf while it went
@@ -245,6 +273,8 @@ func newDetect() *Detect {
 		turn := voice.Get()
 		turn.SetActiveWakeWords(d.load(turn.ActiveWakeWords()))
 		d.loadStop()
+		// Back in if music is playing: the start emptied its slot.
+		d.command.restarted()
 		// A device that was muted when it was switched off comes back muted, and the hook below only
 		// fires on a change, so the state has to be read once here as well.
 		if muted, err := mute.Get().Muted(); err == nil {
@@ -253,9 +283,7 @@ func newDetect() *Detect {
 		return nil
 	}
 
-	// A selection both downloads models and lets go of the ones it replaced, so it is the one thing that
-	// moves either number the disk reports.
-	voice.Get().OnWakeWord(d.load, diag.Get().Measure)
+	voice.Get().OnWakeWord(d.load, d.selected)
 	wakeword.Refresh = d.refresh
 
 	ours := wake.Lib().Ours()
@@ -264,6 +292,15 @@ func newDetect() *Detect {
 		"microwakeword", len(wake.OfKind(ours, wake.KindMicroWakeWord)))
 
 	return d
+}
+
+// selected is a wake word selection saved. A selection both downloads models and lets go of the ones it
+// replaced, so it is the one thing that moves either number the disk reports. Saved, it is also what
+// the volume down word is kept apart from, looked at here rather than from load, which runs before the
+// save.
+func (d *Detect) selected() {
+	diag.Get().Measure()
+	d.command.follow()
 }
 
 func (d *Detect) Name() string { return "wake" }
@@ -364,6 +401,9 @@ func (d *Detect) loadLocked(ids []string) []string {
 		loaded = append(loaded, slot)
 	}
 	d.library().Loaded(accepted)
+	// A word running as a wake word now is not listened for as the volume down word too. A selection
+	// looks again once it is saved (OnWakeWord); this covers a start and a refresh.
+	d.command.nudge()
 
 	// Only the slots that took a wake word are waited on. A selection that loaded nothing has nothing to
 	// warm up, so the ring goes back to what it was showing rather than animating for a device that is

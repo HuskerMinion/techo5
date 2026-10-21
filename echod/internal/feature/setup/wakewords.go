@@ -74,14 +74,16 @@ func tooLarge(err error) bool {
 	return errors.As(err, &big)
 }
 
-// listening is whether a slot is listening for the model, as the selection was last saved.
+// listening is whether a slot is listening for the model, as the selection was last saved, or the
+// volume down word is: a model it has loaded would go on running whatever replaced it on disk.
 func listening(id string) bool {
-	for _, s := range config.Get().Wake.Slots(wakeword.Slots) {
+	wake := config.Get().Wake
+	for _, s := range wake.Slots(wakeword.Slots) {
 		if s.ID == id {
 			return true
 		}
 	}
-	return false
+	return wake.VolumeDown.ID == id
 }
 
 // wakeWordUpload takes a model from the page's script: the token, then the .json, then the .tflite,
