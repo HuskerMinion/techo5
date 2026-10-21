@@ -451,6 +451,15 @@ func parseBuiltinOptions(opCode, optType int, tab *flatbuffers.Table, opts map[s
 		opts["shrink_axis_mask"] = getI32(tab, 12)
 	case OpCallOnce:
 		opts["init_subgraph_index"] = getI32(tab, 4)
+	case OpAdd: // techo5: ADD's and the pools' options (#190)
+		opts["fused_activation"] = getI8(tab, 4)
+	case OpAveragePool2D, OpMaxPool2D:
+		opts["padding"] = getI8(tab, 4)
+		opts["stride_w"] = getI32(tab, 6)
+		opts["stride_h"] = getI32(tab, 8)
+		opts["filter_width"] = getI32(tab, 10)
+		opts["filter_height"] = getI32(tab, 12)
+		opts["fused_activation"] = getI8(tab, 14)
 	}
 }
 

@@ -915,10 +915,9 @@ yourself ([training-wake-word.md](training-wake-word.md) covers how, other langu
 `echo.json` and `echo.tflite`).
 
 Not every one does: the device runs microWakeWord models with its own small engine, which doesn't
-have every operation ESPHome's does yet. A model built with extra layers, such as `ADD` or
-`AVERAGE_POOL_2D`, is refused when you add it, with the operation named
-([#190](https://github.com/HuskerMinion/techo5/issues/190)). A model that works with ESPHome's
-`micro_wake_word` may still be one of these.
+have every operation ESPHome's does. A model that needs one it lacks is refused when you add it, with
+the operation named ([#190](https://github.com/HuskerMinion/techo5/issues/190)). Models built with
+residual connections or pooling (`ADD`, `AVERAGE_POOL_2D`, `MAX_POOL_2D`) run.
 
 The quickest way is the device's setup page:
 

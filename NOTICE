@@ -84,7 +84,8 @@ echod (dependency, vendored and changed)
   bfaf3840114e (v0.0.0-20260330234603-bfaf3840114e), its license in that directory's LICENSE, with
   TECHO5's changes marked "techo5:" in the code. Its testdata (not shipped in any release): the
   .tflite models are from https://github.com/kahrendt/micro-wake-word-models, Apache License 2.0
-  (testdata/NOTICE); the test audio is as distributed in upstream's MIT-licensed repository.
+  (testdata/NOTICE), except add_pool.tflite, which testdata/add_pool.py makes up; the test audio is
+  as distributed in upstream's MIT-licensed repository.
 
 echod (dependency)
   github.com/emiago/diago — Mozilla Public License 2.0

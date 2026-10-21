@@ -22,7 +22,7 @@ PCM 16 kHz ─► Audio Frontend ─► TFLite Interpreter ─► Sliding Avg �
    variables (streaming). Supports the op subset used by MWW v2 models:
    Conv2D, DepthwiseConv2D, FullyConnected, Logistic, Quantize, Reshape,
    Concatenation, StridedSlice, SplitV, VarHandle, ReadVariable, AssignVariable,
-   CallOnce.
+   CallOnce; techo5: also Add (with broadcasting), AveragePool2D and MaxPool2D.
 3. **Sliding-window detection** — averages the last N inference probabilities and
    compares against a cutoff threshold.
 

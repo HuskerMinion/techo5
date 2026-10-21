@@ -1,7 +1,10 @@
-The TFLite model files in testdata/ are from the micro-wake-word-models
+The TFLite model files in testdata/ (all but add_pool.tflite) are from the micro-wake-word-models
 project by Kevin Ahrendt and contributors:
 
   https://github.com/kahrendt/micro-wake-word-models
 
 Licensed under the Apache License, Version 2.0.
 See https://www.apache.org/licenses/LICENSE-2.0
+
+techo5: add_pool.tflite and add_pool_tflite.bin are made by add_pool.py, a made-up model with no
+trained weights and no audio in it, and TensorFlow Lite's outputs for it.

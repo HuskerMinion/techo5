@@ -30,6 +30,10 @@ func getOpDispatch() map[int]opFunc {
 		model.OpLogistic:        opLogistic,
 		model.OpQuantize:        opQuantize,
 		model.OpSplitV:          opSplitV,
+		// techo5: residual and pooled models' operations (#190)
+		model.OpAdd:           opAdd,
+		model.OpAveragePool2D: opAveragePool2D,
+		model.OpMaxPool2D:     opMaxPool2D,
 	}
 }
 
@@ -398,6 +402,221 @@ func opQuantize(interp *Interpreter, op model.Operator) error {
 	return nil
 }
 
+// techo5: ADD, AVERAGE_POOL_2D and MAX_POOL_2D, which MixedNet models trained with residual
+// connections or pooling use (#190). They follow TFLite Micro's integer kernels; testdata/add_pool.py
+// makes a model of all three and TFLite's outputs for it (addpool_test.go).
+
+// addPlan is what ADD works out once per operator: the broadcast strides, the multipliers and the
+// output's bounds, and the coordinate it walks with, so a step allocates nothing.
+type addPlan struct {
+	shape          []int
+	s1, s2, coord  []int
+	n, len1, len2  int
+	m1, m2, mo     QuantMultiplier
+	zp1, zp2, zpo  int32
+	actMin, actMax int32
+}
+
+// addLeftShift is the headroom both inputs get before they are rescaled to a common scale.
+const addLeftShift = 20
+
+// opAdd implements quantized element-wise addition with NumPy-style
+// broadcasting, following TFLite Micro's integer ADD kernel.
+func opAdd(interp *Interpreter, op model.Operator) error {
+	if len(op.Inputs) != 2 || len(op.Outputs) != 1 {
+		return fmt.Errorf("ADD: bad io")
+	}
+	sg := interp.model.Subgraphs[interp.sgIdx]
+	pl, err := interp.plan(func() (any, error) { return newAddPlan(sg, op) })
+	if err != nil {
+		return err
+	}
+	p := pl.(*addPlan)
+
+	in1 := interp.tensors[op.Inputs[0]].data
+	in2 := interp.tensors[op.Inputs[1]].data
+	out := interp.tensors[op.Outputs[0]].data
+	if len(in1) < p.len1 || len(in2) < p.len2 || len(out) < p.n {
+		return fmt.Errorf("ADD: tensor data shorter than shape")
+	}
+
+	coord := p.coord
+	clear(coord)
+	for i := range p.n {
+		off1, off2 := 0, 0
+		for d, c := range coord {
+			off1 += c * p.s1[d]
+			off2 += c * p.s2[d]
+		}
+		a := (int32(int8(in1[off1])) - p.zp1) << addLeftShift
+		b := (int32(int8(in2[off2])) - p.zp2) << addLeftShift
+		sum := MultiplyByQuantizedMultiplier(a, p.m1) + MultiplyByQuantizedMultiplier(b, p.m2)
+		v := MultiplyByQuantizedMultiplier(sum, p.mo) + p.zpo
+		out[i] = byte(int8(min(max(v, p.actMin), p.actMax)))
+		for d := len(coord) - 1; d >= 0; d-- {
+			coord[d]++
+			if coord[d] < p.shape[d] {
+				break
+			}
+			coord[d] = 0
+		}
+	}
+	return nil
+}
+
+func newAddPlan(sg model.Subgraph, op model.Operator) (*addPlan, error) {
+	in1T := sg.Tensors[op.Inputs[0]]
+	in2T := sg.Tensors[op.Inputs[1]]
+	outT := sg.Tensors[op.Outputs[0]]
+	for _, t := range []model.Tensor{in1T, in2T, outT} {
+		if t.Type != model.TensorInt8 {
+			return nil, fmt.Errorf("ADD: only int8 is supported")
+		}
+		if len(t.Quant.Scale) == 0 || t.Quant.Scale[0] <= 0 {
+			return nil, fmt.Errorf("ADD: missing quantization")
+		}
+	}
+	s1, err := broadcastStrides(in1T.Shape, outT.Shape)
+	if err != nil {
+		return nil, fmt.Errorf("ADD: %w", err)
+	}
+	s2, err := broadcastStrides(in2T.Shape, outT.Shape)
+	if err != nil {
+		return nil, fmt.Errorf("ADD: %w", err)
+	}
+
+	// Both inputs are rescaled to a common scale of twice the larger input
+	// scale, with 20 bits of headroom, then summed and rescaled to the output.
+	sc1 := float64(in1T.Quant.Scale[0])
+	sc2 := float64(in2T.Quant.Scale[0])
+	so := float64(outT.Quant.Scale[0])
+	twiceMax := 2 * math.Max(sc1, sc2)
+	zpo := zeroPoint(outT)
+	activation := 0
+	if v, ok := op.Options["fused_activation"]; ok {
+		activation = v.(int)
+	}
+	actMin, actMax := activationBounds(activation, zpo)
+	return &addPlan{
+		shape: outT.Shape,
+		s1:    s1, s2: s2, coord: make([]int, len(outT.Shape)),
+		n:    numElems(outT.Shape),
+		len1: numElems(in1T.Shape), len2: numElems(in2T.Shape),
+		m1:  QuantizeMultiplier(sc1 / twiceMax),
+		m2:  QuantizeMultiplier(sc2 / twiceMax),
+		mo:  QuantizeMultiplier(twiceMax / (float64(1<<addLeftShift) * so)),
+		zp1: zeroPoint(in1T), zp2: zeroPoint(in2T), zpo: zpo,
+		actMin: actMin, actMax: actMax,
+	}, nil
+}
+
+func opAveragePool2D(interp *Interpreter, op model.Operator) error {
+	return pool2D(interp, op, "AVERAGE_POOL_2D", false)
+}
+
+func opMaxPool2D(interp *Interpreter, op model.Operator) error {
+	return pool2D(interp, op, "MAX_POOL_2D", true)
+}
+
+// pool2D implements quantized NHWC average and max pooling, following
+// TFLite Micro's integer pooling kernels. Windows are clipped to the input,
+// so padding never counts towards an average.
+func pool2D(interp *Interpreter, op model.Operator, name string, isMax bool) error {
+	if len(op.Inputs) != 1 || len(op.Outputs) != 1 {
+		return fmt.Errorf("%s: bad io", name)
+	}
+	sg := interp.model.Subgraphs[interp.sgIdx]
+	inT := sg.Tensors[op.Inputs[0]]
+	outT := sg.Tensors[op.Outputs[0]]
+	if inT.Type != model.TensorInt8 || outT.Type != model.TensorInt8 {
+		return fmt.Errorf("%s: only int8 is supported", name)
+	}
+	if len(inT.Shape) != 4 || len(outT.Shape) != 4 ||
+		inT.Shape[0] != outT.Shape[0] || inT.Shape[3] != outT.Shape[3] {
+		return fmt.Errorf("%s: shapes %v -> %v are not NHWC with matching batch and channels", name, inT.Shape, outT.Shape)
+	}
+	scale := func(t model.Tensor) float64 {
+		if len(t.Quant.Scale) > 0 {
+			return float64(t.Quant.Scale[0])
+		}
+		return 0
+	}
+	if math.Abs(scale(inT)-scale(outT)) > 1e-6 || zeroPoint(inT) != zeroPoint(outT) {
+		return fmt.Errorf("%s: input and output quantization differ", name)
+	}
+
+	opt := func(key string) int {
+		if v, ok := op.Options[key]; ok {
+			return v.(int)
+		}
+		return 0
+	}
+	padding := opt("padding")
+	strideW, strideH := opt("stride_w"), opt("stride_h")
+	filterW, filterH := opt("filter_width"), opt("filter_height")
+	activation := opt("fused_activation")
+	if strideW < 1 || strideH < 1 || filterW < 1 || filterH < 1 {
+		return fmt.Errorf("%s: bad window %dx%d stride %dx%d", name, filterH, filterW, strideH, strideW)
+	}
+
+	batch, inH, inW, ch := inT.Shape[0], inT.Shape[1], inT.Shape[2], inT.Shape[3]
+	outH, outW := outT.Shape[1], outT.Shape[2]
+	in := interp.tensors[op.Inputs[0]].data
+	out := interp.tensors[op.Outputs[0]].data
+	if len(in) < batch*inH*inW*ch || len(out) < batch*outH*outW*ch {
+		return fmt.Errorf("%s: tensor data shorter than shape", name)
+	}
+
+	padH, padW := 0, 0
+	if padding == model.PaddingSame {
+		padH = max(0, ((outH-1)*strideH+filterH-inH)/2)
+		padW = max(0, ((outW-1)*strideW+filterW-inW)/2)
+	}
+	actMin, actMax := activationBounds(activation, zeroPoint(outT))
+
+	for b := range batch {
+		for oy := range outH {
+			y0 := oy*strideH - padH
+			fy0, fy1 := max(0, -y0), min(filterH, inH-y0)
+			for ox := range outW {
+				x0 := ox*strideW - padW
+				fx0, fx1 := max(0, -x0), min(filterW, inW-x0)
+				for c := range ch {
+					acc := int32(0)
+					if isMax {
+						acc = -128
+					}
+					count := int32(0)
+					for fy := fy0; fy < fy1; fy++ {
+						for fx := fx0; fx < fx1; fx++ {
+							v := int32(int8(in[((b*inH+y0+fy)*inW+x0+fx)*ch+c]))
+							if isMax {
+								acc = max(acc, v)
+							} else {
+								acc += v
+							}
+							count++
+						}
+					}
+					if !isMax {
+						if count == 0 {
+							return fmt.Errorf("%s: window at (%d,%d) covers no input", name, oy, ox)
+						}
+						if acc > 0 {
+							acc = (acc + count/2) / count
+						} else {
+							acc = (acc - count/2) / count
+						}
+					}
+					acc = min(max(acc, actMin), actMax)
+					out[((b*outH+oy)*outW+ox)*ch+c] = byte(int8(acc))
+				}
+			}
+		}
+	}
+	return nil
+}
+
 // --- Helper functions ---
 
 func activationBounds(activation int, outputZP int32) (int32, int32) {
@@ -425,6 +644,52 @@ func getBias32(data []byte, idx int) int32 {
 	}
 	return int32(data[off]) | int32(data[off+1])<<8 |
 		int32(data[off+2])<<16 | int32(data[off+3])<<24
+}
+
+// numElems is how many elements a tensor of this shape holds; a scalar
+// (empty shape) holds one, matching makeTensorData.
+func numElems(shape []int) int {
+	if n := model.TensorSize(shape); n > 0 {
+		return n
+	}
+	return 1
+}
+
+// zeroPoint returns a tensor's (first) zero point, 0 when it has none.
+func zeroPoint(t model.Tensor) int32 {
+	if len(t.Quant.ZeroPoint) > 0 {
+		return int32(t.Quant.ZeroPoint[0])
+	}
+	return 0
+}
+
+// broadcastStrides maps output coordinates onto an input of shape in
+// (NumPy rules, shapes aligned at the last dimension). The result has one
+// entry per output dimension: the input's element stride along it, or 0
+// where the input is broadcast.
+func broadcastStrides(in, out []int) ([]int, error) {
+	if len(in) > len(out) {
+		return nil, fmt.Errorf("cannot broadcast %v to %v", in, out)
+	}
+	strides := make([]int, len(out))
+	step := 1
+	for i := 1; i <= len(out); i++ {
+		od := out[len(out)-i]
+		id := 1
+		if i <= len(in) {
+			id = in[len(in)-i]
+		}
+		switch {
+		case id == od:
+			strides[len(out)-i] = step
+		case id == 1:
+			strides[len(out)-i] = 0
+		default:
+			return nil, fmt.Errorf("cannot broadcast %v to %v", in, out)
+		}
+		step *= id
+	}
+	return strides, nil
 }
 
 // opSplitV splits a tensor along an axis into multiple output tensors.

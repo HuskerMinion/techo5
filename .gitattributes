@@ -32,5 +32,8 @@ tools/boot-logo/*.bin binary
 # The wake word front end's golden test audio and features: binary, byte for byte.
 echod/internal/lib/mwwfront/testdata/* binary
 
+# The engine's golden features and TensorFlow Lite outputs: binary, byte for byte.
+echod/third_party/microwakeword/testdata/*.bin binary
+
 # The person model's golden test pictures, raw gray: binary, byte for byte.
 echod/internal/feature/person/testdata/*.gray binary

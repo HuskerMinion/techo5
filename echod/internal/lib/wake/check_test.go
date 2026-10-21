@@ -62,6 +62,15 @@ func TestBundledModelsPassTheModelCheck(t *testing.T) {
 	}
 }
 
+// A model with ADD, AVERAGE_POOL_2D and MAX_POOL_2D, as residual and pooled MixedNet models have, is
+// taken: the engine runs all three (#190). The engine's own tests check what they give.
+func TestModelCheckTakesAddAndPools(t *testing.T) {
+	path := filepath.Join("..", "..", "..", "third_party", "microwakeword", "testdata", "add_pool.tflite")
+	if err := CheckMicro(path); err != nil {
+		t.Fatal(err)
+	}
+}
+
 func stopModel(t *testing.T) []byte {
 	t.Helper()
 	b, err := os.ReadFile(stopPath)
