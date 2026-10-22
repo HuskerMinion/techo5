@@ -1003,7 +1003,8 @@ word before it, and with the music down the wake word is heard again.
   **None**, then the word), when a model is sent or removed, or when the device starts again.
 - **Volume down word threshold** (0.90 to start with) sets how sure it has to be. It gets none of the
   allowance the wake words and the stop word get while the speaker plays: it is only ever said over
-  music, and it acts at once. At the top of its range, it is off. Its scores don't show in **Last wake score**, and **Keep
+  music, and it acts at once (a moment later with the volume up or next song word listening too: see
+  below). At the top of its range, it is off. Its scores don't show in **Last wake score**, and **Keep
   wake clips** keeps none of it: the device's log has each one (`wake detected` and `wake near miss`,
   with `slot=103`).
 
@@ -1027,6 +1028,10 @@ speaker muted, no allowance while the speaker plays), and is off until you choos
 - One model can't be two of these: chosen for more than one, it listens only as the first, in the
   order volume down, volume up, next song. The others keep their choice and listen again once it's
   free. A wake word can't be one either, as for the volume down word.
+- With more than one of them listening, a word acts a moment later (about half a second): one thing
+  said can reach two of them ("turn it down" scoring for the volume up word too), so the words heard
+  together wait until each has peaked, and only the surest acts. The device's log names the one left
+  out.
 - Each device acts on what it hears by itself. Devices playing together in one Music Assistant or
   AirPlay group each ask for the next song when they hear the word, so with the next song word on more
   than one of them, one "next song" can skip more than once. Choose it on one device in the group.

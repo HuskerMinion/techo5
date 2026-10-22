@@ -370,11 +370,98 @@ func (c *command) letGo() {
 	}
 }
 
-// commandHeard is a command word heard in slot (routeCommand).
+// commandDecide is how long the command words heard together wait, from the latest of them to cross,
+// before the surest acts: the Hold that finds its peak (OnScored), the next fresh score after it (an
+// openWakeWord model scores every 80 ms), and room for the goroutines between.
+const commandDecide = Hold + 200*time.Millisecond
+
+// commandVote is the command words heard together, while more than one listens. One thing said can
+// cross two of them (a "turn it down" the volume up word scores over its own threshold too), so they wait
+// until each has peaked, and only the one that peaked highest acts. Peaks rather than crossings: each
+// word crosses at its own threshold, which can be set lower for one than another, and the wrong one
+// tends to cross first, on the words they share. Each word that joins puts the count back to
+// commandDecide after its own crossing, so its peak is in before it.
+type commandVote struct {
+	mu    sync.Mutex
+	peaks map[int]float64 // slot: its peak, or what it crossed at until its hold ends; nil with none open
+	gen   int             // which count is the latest: an earlier one finds it isn't and counts nothing
+}
+
+// commandHeard is a command word heard in slot (routeCommand). With no other command word listening
+// there is nothing to mistake it for, and it acts at once.
 func (d *Detect) commandHeard(slot int) {
-	if c := d.commandAt(slot); c != nil {
-		c.heard()
+	c := d.commandAt(slot)
+	if c == nil {
+		return
 	}
+	if d.commandsListening() < 2 {
+		c.heard()
+		return
+	}
+	v := &d.vote
+	v.mu.Lock()
+	defer v.mu.Unlock()
+	if v.peaks == nil {
+		v.peaks = map[int]float64{}
+	}
+	if _, in := v.peaks[slot]; in {
+		return
+	}
+	v.peaks[slot] = c.score()
+	v.gen++
+	gen := v.gen
+	c.after(commandDecide, func() { d.commandDecided(gen) })
+}
+
+// commandScored is a command word's peak, the Hold after it crossed (Engine.OnScored), for the vote.
+func (d *Detect) commandScored(slot int, peak float64) {
+	v := &d.vote
+	v.mu.Lock()
+	defer v.mu.Unlock()
+	if _, in := v.peaks[slot]; in {
+		v.peaks[slot] = peak
+	}
+}
+
+// commandDecided counts the vote, unless a word joined it since: the word that peaked highest acts (on a
+// tie, the earlier slot), and the others are only logged.
+func (d *Detect) commandDecided(gen int) {
+	v := &d.vote
+	v.mu.Lock()
+	if gen != v.gen || v.peaks == nil {
+		v.mu.Unlock()
+		return
+	}
+	peaks := v.peaks
+	v.peaks = nil
+	v.mu.Unlock()
+	best, top := -1, 0.0
+	for slot, p := range peaks {
+		if best < 0 || p > top || p == top && slot < best {
+			best, top = slot, p
+		}
+	}
+	c := d.commandAt(best)
+	if c == nil {
+		return
+	}
+	for slot, p := range peaks {
+		if o := d.commandAt(slot); o != nil && slot != best {
+			slog.Info(o.kind.what+" heard with the "+c.kind.what+", left to it", "peak", p, "acting_peak", top)
+		}
+	}
+	c.heard()
+}
+
+// commandsListening is how many command words have their model in the engine.
+func (d *Detect) commandsListening() int {
+	n := 0
+	for _, c := range d.commands {
+		if _, in := d.engine.Loaded(c.kind.slot); in {
+			n++
+		}
+	}
+	return n
 }
 
 // commandDropped is the engine having taken a command word's model out of slot for failing on the audio

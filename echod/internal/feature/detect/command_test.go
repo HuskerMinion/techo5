@@ -947,6 +947,81 @@ func TestASharedModelMovesWhenTheFirstLetsGo(t *testing.T) {
 	_ = up
 }
 
+// One thing said that crosses two command words acts as one: the one that peaked highest, even though
+// the other crossed first, and higher (its threshold set higher). In the order the engine gives them:
+// the first word's peak comes in before the second's, and the second joining puts the count back, so
+// the first count is nothing and the second's peak is in for the last.
+func TestCommandWordsHeardTogetherActAsOne(t *testing.T) {
+	r, d, words := newAllRig(t)
+	r.playing = true
+	r.level = 30
+	for _, c := range []struct {
+		set func(string) error
+		id  string
+	}{{config.Set().VolumeDown().ID, "turn_it_down"}, {config.Set().VolumeUp().ID, "turn_it_up"}} {
+		if err := c.set(c.id); err != nil {
+			t.Fatal(err)
+		}
+	}
+	for _, c := range d.commands {
+		c.follow()
+	}
+	if d.commandsListening() != 2 {
+		t.Fatalf("%d command words listening, want 2", d.commandsListening())
+	}
+	words[volumeUp].score = func() float64 { return 0.95 }
+	words[volumeDown].score = func() float64 { return 0.91 }
+	r.waits, r.timers = nil, nil
+	d.commandHeard(VolumeUpSlot) // the volume up word crosses first, on a "turn it down"
+	d.commandHeard(CommandSlot)
+	if len(r.adjusted) != 0 || len(r.fired) != 0 {
+		t.Fatalf("acted before the vote: adjusted %v, fired %v", r.adjusted, r.fired)
+	}
+	if len(r.timers) != 2 || r.waits[0] != commandDecide || r.waits[1] != commandDecide {
+		t.Fatalf("waits %v; want two of %v, one from each crossing", r.waits, commandDecide)
+	}
+	d.scored(VolumeUpSlot, 0.96)
+	r.timers[0]() // the first word's count: the second has joined since
+	if len(r.adjusted) != 0 || len(r.fired) != 0 {
+		t.Fatalf("counted before the second word's peak: adjusted %v, fired %v", r.adjusted, r.fired)
+	}
+	d.scored(CommandSlot, 1)
+	d.scored(NextSongSlot, 1) // (not heard: not in the vote)
+	r.timers[1]()
+	if !slices.Equal(r.adjusted, []int{-volumeSteps}) || len(r.fired) != 1 || r.fired[0]["command"] != "volume_down" {
+		t.Fatalf("adjusted %v, fired %v; want only the volume down word", r.adjusted, r.fired)
+	}
+
+	// The next thing said is a vote of its own.
+	r.waits, r.timers = nil, nil
+	d.commandHeard(VolumeUpSlot)
+	d.scored(VolumeUpSlot, 0.95)
+	if len(r.timers) != 1 {
+		t.Fatalf("timers %d, want a new vote", len(r.timers))
+	}
+	r.timers[0]()
+	if !slices.Equal(r.adjusted, []int{-volumeSteps, volumeSteps}) || len(r.fired) != 2 {
+		t.Fatalf("adjusted %v, fired %v; want the volume up word on its own", r.adjusted, r.fired)
+	}
+}
+
+// With one command word listening there is nothing to mistake it for: it acts at once, as it always has.
+func TestOneCommandWordListeningActsAtOnce(t *testing.T) {
+	r, d, _ := newAllRig(t)
+	r.playing = true
+	if err := config.Set().VolumeDown().ID("turn_it_down"); err != nil {
+		t.Fatal(err)
+	}
+	for _, c := range d.commands {
+		c.follow()
+	}
+	r.waits, r.timers = nil, nil
+	d.commandHeard(CommandSlot)
+	if len(r.timers) != 0 || len(r.adjusted) != 1 {
+		t.Fatalf("timers %d, adjusted %v; want it to act at once", len(r.timers), r.adjusted)
+	}
+}
+
 // logged has the log written to a buffer until the test ends. slog.SetDefault also points the log
 // package at the new handler, and putting slog's own default back doesn't undo that, so the log
 // package's writer and flags are put back too: after the default, which leaves them alone.

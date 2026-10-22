@@ -42,8 +42,9 @@ type Detect struct {
 	stop   *esphome.Number
 
 	// commands are the command words' selects and thresholds, and their loading with the music, in slot
-	// order: see command.go.
+	// order, and vote is the ones heard together: see command.go.
 	commands []*command
+	vote     commandVote
 
 	// loading is held for a whole load, so a refresh (wakeword.Refresh) and a selection take turns, and
 	// asked is what the latest one was asked for, which is what a refresh loads again. refreshing keeps
@@ -274,13 +275,7 @@ func newDetect() *Detect {
 	}
 	d.score = newScoreEntity()
 	d.onHA = newOnHAEntities()
-	e.OnScored = func(slot int, peak, _ float64) {
-		// Only Home Assistant's wake words: the stop word, and any other word listened for past them,
-		// has its own threshold and says nothing about theirs.
-		if slot < wakeword.Slots {
-			d.score.Set(float32(peak))
-		}
-	}
+	e.OnScored = func(slot int, peak, _ float64) { d.scored(slot, peak) }
 	// A wake Home Assistant confirmed is a wake, and its score is what says how far under the threshold
 	// the word is landing. One it did not confirm is not shown: it opened nothing.
 	voice.Confirmed.Listen(func(c voice.Confirmation) { d.score.Set(float32(c.Peak)) })
@@ -472,4 +467,16 @@ func (d *Detect) loadLocked(ids []string) []string {
 	// not going to hear anything.
 	d.busy.waitFor(loaded)
 	return accepted
+}
+
+// scored is a word's peak, the Hold after it fired (Engine.OnScored). Last wake score is only Home
+// Assistant's wake words: the stop word, and any other word listened for past them, has its own threshold
+// and says nothing about theirs. A command word's peak is for the vote between them (command.go).
+func (d *Detect) scored(slot int, peak float64) {
+	if slot < wakeword.Slots {
+		d.score.Set(float32(peak))
+	}
+	if isCommandSlot(slot) {
+		d.commandScored(slot, peak)
+	}
 }
