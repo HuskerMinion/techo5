@@ -64,6 +64,10 @@ func TestRouteFor(t *testing.T) {
 		{"volume down word, turn open", CommandSlot, heard{turnOpen: true}, routeCommand},
 		{"volume down word, ringing", CommandSlot, heard{ringing: true}, routeCommand},
 		{"volume down word, talk-back", CommandSlot, heard{talkBack: true}, routeIgnore},
+		{"volume up word", VolumeUpSlot, heard{}, routeCommand},
+		{"volume up word, talk-back", VolumeUpSlot, heard{talkBack: true}, routeIgnore},
+		{"next song word", NextSongSlot, heard{}, routeCommand},
+		{"next song word, call not dialed yet", NextSongSlot, heard{phase: phone.Dialing, waiting: true}, routeIgnore},
 	} {
 		if got := routeFor(c.slot, c.h); got != c.want {
 			t.Errorf("%s: got %d, want %d", c.name, got, c.want)
@@ -71,18 +75,20 @@ func TestRouteFor(t *testing.T) {
 	}
 }
 
-// The volume down word never opens a turn, and does nothing in any phase of a call, even with Wake word
-// during calls on and with the stop word as the hang-up word.
-func TestTheVolumeDownWordNeverActsOnACall(t *testing.T) {
-	for _, phase := range []phone.Phase{phone.Ringing, phone.Dialing, phone.Talking} {
-		for _, h := range []heard{
-			{phase: phase},
-			{phase: phase, callWake: true},
-			{phase: phase, callWake: true, farEnd: true},
-			{phase: phase, stopHang: true, turnOpen: true, ringing: true},
-		} {
-			if got := routeFor(CommandSlot, h); got != routeIgnore {
-				t.Errorf("%+v: got %d, want it ignored", h, got)
+// The command words never open a turn, and do nothing in any phase of a call, even with Wake word during
+// calls on and with the stop word as the hang-up word.
+func TestTheCommandWordsNeverActOnACall(t *testing.T) {
+	for _, slot := range []int{CommandSlot, VolumeUpSlot, NextSongSlot} {
+		for _, phase := range []phone.Phase{phone.Ringing, phone.Dialing, phone.Talking} {
+			for _, h := range []heard{
+				{phase: phase},
+				{phase: phase, callWake: true},
+				{phase: phase, callWake: true, farEnd: true},
+				{phase: phase, stopHang: true, turnOpen: true, ringing: true},
+			} {
+				if got := routeFor(slot, h); got != routeIgnore {
+					t.Errorf("slot %d, %+v: got %d, want it ignored", slot, h, got)
+				}
 			}
 		}
 	}

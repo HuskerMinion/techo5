@@ -94,9 +94,9 @@ func (d *ducker) heard(slot int, peak float64) {
 	if slot == StopSlot && d.ringing() {
 		d.hushRing(peak)
 	}
-	// The volume down word is listened for only while music plays, and its near misses are mostly the
+	// The command words are listened for only while music plays, and their near misses are mostly the
 	// music: ducking for them would hold the music down for nobody.
-	if slot == CommandSlot {
+	if isCommandSlot(slot) {
 		return
 	}
 

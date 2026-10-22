@@ -341,20 +341,48 @@ recorder:
 
 ## Command word events
 
-Each time the [volume down word](setup.md#the-volume-down-word) acts, it fires
-`esphome.techo5_command` on Home Assistant's bus, with:
+Each time a command word acts (the [volume down word](setup.md#the-volume-down-word), or the [volume
+up or next song word](setup.md#the-volume-up-and-next-song-words)), it fires `esphome.techo5_command`
+on Home Assistant's bus, with:
 
 | Field | |
 |---|---|
-| `command` | What the word did: `volume_down` |
+| `command` | What the word did: `volume_down`, `volume_up` or `next` |
 | `word` | The id of the model that heard it, as on the setup page |
 | `score` | How sure the model was when it acted, `0.50` to `1.00` |
-| `volume` | The volume step it went to, `0` to `30` |
+| `volume` | The volume step it went to, `0` to `30` (`volume_down` and `volume_up` only) |
+| `asked` | `next` only: `true` when the device passed the skip to the sender's controls (Music Assistant, or a phone over AirPlay or Bluetooth), `false` when there was nobody to ask. `true` doesn't promise a skip: a radio stream Music Assistant can't skip, or an AirPlay sender that gave the device no remote control, won't take it |
 | `device` | The device's name |
 
-It acted already: the event says so, for an automation or a dashboard to follow. All values are text,
-and the device needs **Allow the device to perform Home Assistant actions** turned on, as for alarm
-events.
+The volume words have acted already: the event says so, for an automation or a dashboard to follow.
+All values are text, and the device needs **Allow the device to perform Home Assistant actions** turned
+on, as for alarm events.
+
+A `next` with `asked: false` is the one to act on: nobody was asked, so for music Home Assistant plays
+on the device a track at a time, skip on it. `asked: false` also comes for the device's own radio
+stations and for senders it can't ask, such as Spotify Connect, so the automation checks that its queue
+is what's playing first:
+
+```yaml
+triggers:
+  - trigger: event
+    event_type: esphome.techo5_command
+    event_data:
+      command: next
+      asked: "false"
+      device: Kitchen
+conditions:
+  - condition: state
+    entity_id: media_player.kitchen_queue
+    state: playing
+actions:
+  - action: media_player.media_next_track
+    target:
+      entity_id: media_player.kitchen_queue
+```
+
+**Replace `Kitchen` with your device's name, and `media_player.kitchen_queue` with the media player
+that plays the queue.**
 
 ## Show an effect on the ring during a request
 

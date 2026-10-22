@@ -910,6 +910,18 @@ func (p *Player) fromHA(t Transport) {
 	p.Transport(t)
 }
 
+// SkipReaches reports whether a next or previous asked for now would be passed on: to a remote whose
+// track it is (Music Assistant), or to a received track's sender that can be reached (ReceiverControl).
+// Otherwise Transport has nothing to skip to, and whoever plays one track at a time on the device has to
+// skip it themselves.
+func (p *Player) SkipReaches() bool {
+	if p.remoteIsTheTrack() {
+		return true
+	}
+	from := p.Receiving()
+	return from != "" && receiverControl(from) != nil
+}
+
 func (p *Player) Transport(t Transport) {
 	// A remote's track paused from here and since let go: play asks for it back, stop forgets it.
 	if _, _, _, ok := p.Held(); ok {

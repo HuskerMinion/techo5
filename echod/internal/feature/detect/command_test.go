@@ -1,10 +1,14 @@
 package detect
 
 import (
+	"bytes"
 	"errors"
+	"log"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"slices"
+	"strings"
 	"testing"
 	"time"
 
@@ -16,8 +20,9 @@ import (
 	"github.com/HuskerMinion/techo5/echod/internal/lib/wake"
 )
 
-// commandRig is a volume down word with the world stood in for: the music, the speaker's mute, a turn,
-// a ring, the clock, the timer, the level and the bus.
+// commandRig is a command word, the volume down word unless a test says otherwise, with the world stood
+// in for: the music, the speaker's mute, a turn, a ring, the clock, the timer, the level, the next song
+// and the bus.
 type commandRig struct {
 	c         *command
 	e         *Engine
@@ -30,6 +35,8 @@ type commandRig struct {
 	waits     []time.Duration
 	level     int
 	adjusted  []int
+	reaches   bool
+	skipped   int
 	fired     []map[string]string
 	wakeWords []string
 	models    []wake.Model
@@ -40,16 +47,24 @@ func newCommandRig(t *testing.T) *commandRig {
 	fakes(t)
 	config.Use(filepath.Join(t.TempDir(), "state.json"))
 	r := &commandRig{
-		e:      New(CommandSlot+1, nil),
+		e:      New(lastCommandSlot+1, nil),
 		clock:  time.Unix(1_000_000, 0),
 		level:  30,
 		models: []wake.Model{model("turn_it_down", wake.KindMicroWakeWord), model("okay_nabu", wake.KindMicroWakeWord)},
 	}
+	r.c = r.newWord(volumeDown)
+	return r
+}
+
+// newWord is a command word of kind k on the rig: the same engine, music, clock and bus as the rest.
+func (r *commandRig) newWord(k *commandKind) *command {
 	word := &esphome.Select{}
-	r.c = &command{
+	return &command{
+		kind:      k,
 		d:         &Detect{engine: r.e},
 		word:      word,
 		opts:      component.NewOptions(word),
+		threshold: &esphome.Number{},
 		models:    func() []wake.Model { return r.models },
 		wakeWords: func() []string { return r.wakeWords },
 		playing:   func() bool { return r.playing },
@@ -62,15 +77,16 @@ func newCommandRig(t *testing.T) *commandRig {
 			r.level = max(0, r.level+delta)
 			return r.level
 		},
-		fire:  func(data map[string]string) { r.fired = append(r.fired, data) },
-		now:   func() time.Time { return r.clock },
-		after: func(d time.Duration, f func()) { r.waits = append(r.waits, d); r.timers = append(r.timers, f) },
+		reaches: func() bool { return r.reaches },
+		next:    func() { r.skipped++ },
+		fire:    func(data map[string]string) { r.fired = append(r.fired, data) },
+		now:     func() time.Time { return r.clock },
+		after:   func(d time.Duration, f func()) { r.waits = append(r.waits, d); r.timers = append(r.timers, f) },
 	}
-	return r
 }
 
 func (r *commandRig) loaded() string {
-	m, ok := r.e.Loaded(CommandSlot)
+	m, ok := r.e.Loaded(r.c.kind.slot)
 	if !ok {
 		return ""
 	}
@@ -79,9 +95,15 @@ func (r *commandRig) loaded() string {
 
 func (r *commandRig) choose(t *testing.T, id string) {
 	t.Helper()
-	if err := config.Set().VolumeDown().ID(id); err != nil {
+	if err := r.c.kind.setID(id); err != nil {
 		t.Fatal(err)
 	}
+}
+
+// as makes the rig's word another command word: its slot, its saved choice, what it does.
+func (r *commandRig) as(k *commandKind) *commandRig {
+	r.c = r.newWord(k)
+	return r
 }
 
 // fireTimers runs the timers that were set, as time.AfterFunc would once they are due.
@@ -376,15 +398,15 @@ func TestAModelThatWillNotLoadIsTriedOnce(t *testing.T) {
 	}
 }
 
-// Heard, it turns the music down by volumeDownSteps and tells the bus where the level went. During a
+// Heard, it turns the music down by volumeSteps and tells the bus where the level went. During a
 // turn, over a ring, with the speaker muted (Adjust would unmute it) or with no music, it does nothing.
 func TestTheVolumeDownWordTurnsItDown(t *testing.T) {
 	r := newCommandRig(t)
 	r.choose(t, "turn_it_down")
 	r.playing = true
 	r.c.heard()
-	if !slices.Equal(r.adjusted, []int{-volumeDownSteps}) {
-		t.Fatalf("adjusted %v, want one step of %d", r.adjusted, -volumeDownSteps)
+	if !slices.Equal(r.adjusted, []int{-volumeSteps}) {
+		t.Fatalf("adjusted %v, want one step of %d", r.adjusted, -volumeSteps)
 	}
 	want := map[string]string{"command": "volume_down", "word": "turn_it_down", "score": "0.93", "volume": "25"}
 	if len(r.fired) != 1 {
@@ -458,7 +480,7 @@ func TestVolumeDownOptions(t *testing.T) {
 func TestWakeWordIDsIncludeWhatRuns(t *testing.T) {
 	fakes(t)
 	config.Use(filepath.Join(t.TempDir(), "state.json"))
-	e := New(CommandSlot+1, nil)
+	e := New(lastCommandSlot+1, nil)
 	if err := e.Use(0, model("okay_nabu", wake.KindMicroWakeWord)); err != nil {
 		t.Fatal(err)
 	}
@@ -510,7 +532,7 @@ func TestTheEngineReportsAModelItDropped(t *testing.T) {
 	build = func(wake.Kind) (backend, error) { return d, nil }
 	t.Cleanup(func() { build = was })
 
-	e := New(CommandSlot+1, nil)
+	e := New(lastCommandSlot+1, nil)
 	type drop struct {
 		slot int
 		id   string
@@ -553,7 +575,7 @@ func TestAWakeWordSelectionMovesTheVolumeDownWord(t *testing.T) {
 	}
 	r := newCommandRig(t)
 	busy, _ := fixture(t, warm{0: true})
-	d := &Detect{engine: r.e, busy: busy, lib: wake.NewLibrary(dir), command: r.c}
+	d := &Detect{engine: r.e, busy: busy, lib: wake.NewLibrary(dir), commands: []*command{r.c}}
 	r.c.d = d
 	r.c.models = func() []wake.Model { return d.library().Ours() }
 	r.c.wakeWords = d.wakeWordIDs
@@ -596,7 +618,7 @@ func TestAWakeWordSelectionMovesTheVolumeDownWord(t *testing.T) {
 // Crossing is the score the latest detection fired at, the one a command word's event carries.
 func TestTheEngineKeepsTheCrossingScore(t *testing.T) {
 	fakes(t)
-	e := New(CommandSlot+1, nil)
+	e := New(lastCommandSlot+1, nil)
 	if got := e.Crossing(CommandSlot); got != 0 {
 		t.Fatalf("before any detection: %v", got)
 	}
@@ -608,5 +630,466 @@ func TestTheEngineKeepsTheCrossingScore(t *testing.T) {
 	}
 	if got := e.Crossing(len(e.slots)); got != 0 {
 		t.Errorf("a slot out of range: %v", got)
+	}
+}
+
+// The volume up word turns the music up by volumeSteps and tells the bus, with the same checks as the
+// volume down word: nothing during a turn, over a ring, muted (Adjust would unmute it) or with no music.
+func TestTheVolumeUpWordTurnsItUp(t *testing.T) {
+	r := newCommandRig(t).as(volumeUp)
+	r.level = 20
+	r.choose(t, "turn_it_up")
+	r.playing = true
+	r.c.heard()
+	if !slices.Equal(r.adjusted, []int{volumeSteps}) {
+		t.Fatalf("adjusted %v, want one step of %d", r.adjusted, volumeSteps)
+	}
+	want := map[string]string{"command": "volume_up", "word": "turn_it_up", "score": "0.93", "volume": "25"}
+	if len(r.fired) != 1 {
+		t.Fatalf("fired %v, want one event", r.fired)
+	}
+	for k, v := range want {
+		if r.fired[0][k] != v {
+			t.Errorf("event %s = %q, want %q (%v)", k, r.fired[0][k], v, r.fired[0])
+		}
+	}
+	for _, c := range []struct {
+		name string
+		set  func(*commandRig)
+	}{
+		{"a turn", func(r *commandRig) { r.busy = true }},
+		{"a ring", func(r *commandRig) { r.ringing = true }},
+		{"muted", func(r *commandRig) { r.muted = true }},
+		{"no music", func(r *commandRig) { r.playing = false }},
+	} {
+		r := newCommandRig(t).as(volumeUp)
+		r.playing = true
+		c.set(r)
+		r.c.heard()
+		if len(r.adjusted) != 0 || len(r.fired) != 0 {
+			t.Errorf("%s: adjusted %v, fired %v", c.name, r.adjusted, r.fired)
+		}
+	}
+}
+
+// The next song word asks for the next song and tells the bus, for a client that skips its own queue;
+// it leaves the level alone. Not during a turn, a ring, muted, or with no music.
+func TestTheNextSongWordSkips(t *testing.T) {
+	r := newCommandRig(t).as(nextSong)
+	r.choose(t, "next_song")
+	r.playing = true
+	r.reaches = true
+	r.c.heard()
+	if r.skipped != 1 || len(r.adjusted) != 0 {
+		t.Fatalf("skipped %d, adjusted %v; want one skip and the level left alone", r.skipped, r.adjusted)
+	}
+	want := map[string]string{"command": "next", "word": "next_song", "score": "0.93", "asked": "true"}
+	if len(r.fired) != 1 {
+		t.Fatalf("fired %v, want one event", r.fired)
+	}
+	for k, v := range want {
+		if r.fired[0][k] != v {
+			t.Errorf("event %s = %q, want %q (%v)", k, r.fired[0][k], v, r.fired[0])
+		}
+	}
+	if _, ok := r.fired[0]["volume"]; ok {
+		t.Errorf("a skip says a volume: %v", r.fired[0])
+	}
+	for _, c := range []struct {
+		name string
+		set  func(*commandRig)
+	}{
+		{"a turn", func(r *commandRig) { r.busy = true }},
+		{"a ring", func(r *commandRig) { r.ringing = true }},
+		{"muted", func(r *commandRig) { r.muted = true }},
+		{"no music", func(r *commandRig) { r.playing = false }},
+	} {
+		r := newCommandRig(t).as(nextSong)
+		r.playing = true
+		r.reaches = true
+		c.set(r)
+		r.c.heard()
+		if r.skipped != 0 || len(r.fired) != 0 {
+			t.Errorf("%s: skipped %d, fired %v", c.name, r.skipped, r.fired)
+		}
+	}
+}
+
+// With nobody the device can ask (its own stations, a client sending one track at a time), the next song
+// word asks nothing, and the event says so: asked false is the skip, for whoever plays the music.
+func TestTheNextSongWordWithNobodyToAsk(t *testing.T) {
+	r := newCommandRig(t).as(nextSong)
+	r.choose(t, "next_song")
+	r.playing = true
+	r.reaches = false
+	r.c.heard()
+	if r.skipped != 0 {
+		t.Fatalf("asked for a skip with nobody to ask (%d)", r.skipped)
+	}
+	if len(r.fired) != 1 || r.fired[0]["command"] != "next" || r.fired[0]["asked"] != "false" {
+		t.Fatalf("fired %v, want one next event with asked false", r.fired)
+	}
+}
+
+// Each command word listens in a slot of its own, while music plays, each its own model.
+func TestEachCommandWordHasItsOwnSlot(t *testing.T) {
+	r := newCommandRig(t)
+	r.models = append(r.models, model("turn_it_up", wake.KindMicroWakeWord), model("next_song", wake.KindMicroWakeWord))
+	r.playing = true
+	words := map[*commandKind]string{volumeDown: "turn_it_down", volumeUp: "turn_it_up", nextSong: "next_song"}
+	var all []*command
+	for _, k := range commandKinds {
+		all = append(all, r.newWord(k))
+	}
+	for _, c := range all {
+		if err := c.kind.setID(words[c.kind]); err != nil {
+			t.Fatal(err)
+		}
+	}
+	for _, c := range all {
+		c.follow()
+	}
+	for _, c := range all {
+		m, ok := r.e.Loaded(c.kind.slot)
+		if !ok || m.ID != words[c.kind] {
+			t.Errorf("%s: slot %d holds %q (%v), want %q", c.kind.what, c.kind.slot, m.ID, ok, words[c.kind])
+		}
+	}
+	if !isCommandSlot(CommandSlot) || !isCommandSlot(VolumeUpSlot) || !isCommandSlot(NextSongSlot) ||
+		isCommandSlot(HangupSlot) || isCommandSlot(StopSlot) || isCommandSlot(NextSongSlot+1) {
+		t.Error("isCommandSlot does not match the command words' slots")
+	}
+	for _, k := range commandKinds {
+		if commandKindAt(k.slot) != k {
+			t.Errorf("commandKindAt(%d) is not the %s", k.slot, k.what)
+		}
+	}
+}
+
+// One model chosen as two command words listens only as the first, in slot order: heard as both, it would
+// turn the music down and up at once. The second keeps its choice and listens once the first lets go.
+func TestAModelChosenTwiceListensOnlyAsTheFirst(t *testing.T) {
+	r := newCommandRig(t)
+	r.playing = true
+	up := r.newWord(volumeUp)
+	if err := config.Set().VolumeDown().ID("turn_it_down"); err != nil {
+		t.Fatal(err)
+	}
+	if err := config.Set().VolumeUp().ID("turn_it_down"); err != nil {
+		t.Fatal(err)
+	}
+	r.c.follow()
+	up.follow()
+	if m, ok := r.e.Loaded(CommandSlot); !ok || m.ID != "turn_it_down" {
+		t.Fatalf("the volume down word holds %q (%v)", m.ID, ok)
+	}
+	if m, ok := r.e.Loaded(VolumeUpSlot); ok {
+		t.Fatalf("the same model also listens as the volume up word: %q", m.ID)
+	}
+	if _, why := up.wanted(); why != "it is the volume down word too" {
+		t.Errorf("why %q", why)
+	}
+	if got := config.Get().Wake.VolumeUp.ID; got != "turn_it_down" {
+		t.Fatalf("the volume up word's choice was lost: %q", got)
+	}
+	if err := config.Set().VolumeDown().ID(""); err != nil {
+		t.Fatal(err)
+	}
+	r.c.follow()
+	up.follow()
+	if m, ok := r.e.Loaded(VolumeUpSlot); !ok || m.ID != "turn_it_down" {
+		t.Errorf("with the volume down word off, the volume up word holds %q (%v)", m.ID, ok)
+	}
+}
+
+// Their selects and thresholds are entities of their own, named for what they do, on the microphone.
+func TestCommandWordEntities(t *testing.T) {
+	fakes(t)
+	config.Use(filepath.Join(t.TempDir(), "state.json"))
+	d := &Detect{engine: New(lastCommandSlot+1, nil)}
+	seen := map[string]bool{}
+	for _, k := range commandKinds {
+		c := newCommand(d, k)
+		for _, id := range []string{c.word.ObjectID, c.threshold.ObjectID} {
+			if seen[id] {
+				t.Errorf("object id %q twice", id)
+			}
+			seen[id] = true
+		}
+		if c.word.DeviceID != component.DeviceMicrophone || c.threshold.Name != c.word.Name+" threshold" {
+			t.Errorf("%s: %q on %v, threshold %q", k.what, c.word.ObjectID, c.word.DeviceID, c.threshold.Name)
+		}
+	}
+	for _, id := range []string{"volume_down_word", "volume_down_word_threshold", "volume_up_word",
+		"volume_up_word_threshold", "next_song_word", "next_song_word_threshold"} {
+		if !seen[id] {
+			t.Errorf("no entity %q", id)
+		}
+	}
+}
+
+// allRig is the three command words on one Detect, as the device has them, so what one does to another is
+// what is tested.
+func newAllRig(t *testing.T) (*commandRig, *Detect, map[*commandKind]*command) {
+	t.Helper()
+	r := newCommandRig(t)
+	r.models = append(r.models, model("turn_it_up", wake.KindMicroWakeWord), model("next_song", wake.KindMicroWakeWord),
+		wake.Model{ID: "turn_it_down_2", Phrase: "turn_it_down", Kind: wake.KindMicroWakeWord})
+	d := &Detect{engine: r.e}
+	words := map[*commandKind]*command{}
+	for _, k := range commandKinds {
+		c := r.newWord(k)
+		c.d = d
+		d.commands = append(d.commands, c)
+		words[k] = c
+	}
+	r.c = words[volumeDown]
+	return r, d, words
+}
+
+func (r *commandRig) holds(slot int) string {
+	m, ok := r.e.Loaded(slot)
+	if !ok {
+		return ""
+	}
+	return m.ID
+}
+
+// Each slot reaches its own word: heard, dropped. Not a command word's slot reaches none.
+func TestCommandWordsAreReachedByTheirSlot(t *testing.T) {
+	r, d, words := newAllRig(t)
+	for _, k := range commandKinds {
+		if d.commandAt(k.slot) != words[k] {
+			t.Errorf("commandAt(%d) is not the %s", k.slot, k.what)
+		}
+	}
+	if d.commandAt(StopSlot) != nil || d.commandAt(NextSongSlot+1) != nil || d.commandAt(0) != nil {
+		t.Error("a slot that isn't a command word's has one")
+	}
+	if err := config.Set().VolumeUp().ID("turn_it_up"); err != nil {
+		t.Fatal(err)
+	}
+	r.playing = true
+	r.level = 10
+	d.commandHeard(VolumeUpSlot)
+	if !slices.Equal(r.adjusted, []int{volumeSteps}) || len(r.fired) != 1 || r.fired[0]["command"] != "volume_up" {
+		t.Fatalf("heard in the volume up word's slot: adjusted %v, fired %v", r.adjusted, r.fired)
+	}
+	d.commandHeard(HangupSlot)
+	if len(r.fired) != 1 {
+		t.Errorf("a slot that isn't a command word's acted: %v", r.fired)
+	}
+
+	// A model that fails on the audio is left out of that word only.
+	if err := config.Set().VolumeDown().ID("turn_it_down"); err != nil {
+		t.Fatal(err)
+	}
+	for _, c := range d.commands {
+		c.follow()
+	}
+	r.e.Clear(VolumeUpSlot) // as Engine.dropFailed does, before it calls OnDropped
+	d.commandDropped(VolumeUpSlot, "turn_it_up")
+	for _, c := range d.commands {
+		c.follow()
+	}
+	if got := r.holds(VolumeUpSlot); got != "" {
+		t.Errorf("the dropped model is back: %q", got)
+	}
+	if words[volumeUp].failed != "turn_it_up" || words[volumeDown].failed != "" {
+		t.Errorf("failed: up %q, down %q", words[volumeUp].failed, words[volumeDown].failed)
+	}
+	if got := r.holds(CommandSlot); got != "turn_it_down" {
+		t.Errorf("the volume down word was touched: holds %q", got)
+	}
+}
+
+// A model chosen for two words moves between them as one lets go of it, without any word being followed by
+// hand: followAll, which the selects and thresholds call, looks at all of them. And at no moment on the
+// way is it in two slots at once, heard twice.
+func TestASharedModelMovesWhenTheFirstLetsGo(t *testing.T) {
+	logs := logged(t)
+	r, _, words := newAllRig(t)
+	r.playing = true
+	down, up := words[volumeDown], words[volumeUp]
+	for _, set := range []func(string) error{config.Set().VolumeDown().ID, config.Set().VolumeUp().ID} {
+		if err := set("turn_it_down"); err != nil {
+			t.Fatal(err)
+		}
+	}
+	down.followAll()
+	if r.holds(CommandSlot) != "turn_it_down" || r.holds(VolumeUpSlot) != "" {
+		t.Fatalf("both chosen: down holds %q, up holds %q", r.holds(CommandSlot), r.holds(VolumeUpSlot))
+	}
+	if err := config.Set().VolumeDown().Threshold(config.StopOff); err != nil {
+		t.Fatal(err)
+	}
+	down.followAll()
+	if r.holds(CommandSlot) != "" || r.holds(VolumeUpSlot) != "turn_it_down" {
+		t.Fatalf("volume down off: down holds %q, up holds %q", r.holds(CommandSlot), r.holds(VolumeUpSlot))
+	}
+	if err := config.Set().VolumeDown().Threshold(0.9); err != nil {
+		t.Fatal(err)
+	}
+	down.followAll()
+	if r.holds(CommandSlot) != "turn_it_down" || r.holds(VolumeUpSlot) != "" {
+		t.Fatalf("volume down back: down holds %q, up holds %q", r.holds(CommandSlot), r.holds(VolumeUpSlot))
+	}
+	if got := config.Get().Wake.VolumeUp.ID; got != "turn_it_down" {
+		t.Errorf("the volume up word's choice was lost: %q", got)
+	}
+	id, loads := heldTwice(logs.String())
+	if id != "" {
+		t.Errorf("%s was in two slots at once on the way", id)
+	}
+	if loads < 3 { // down, then up, then down again
+		t.Errorf("the engine logged %d loads; want at least 3 (has its log changed?)", loads)
+	}
+	_ = up
+}
+
+// logged has the log written to a buffer until the test ends. slog.SetDefault also points the log
+// package at the new handler, and putting slog's own default back doesn't undo that, so the log
+// package's writer and flags are put back too: after the default, which leaves them alone.
+func logged(t *testing.T) *bytes.Buffer {
+	t.Helper()
+	var buf bytes.Buffer
+	was, w, flags := slog.Default(), log.Writer(), log.Flags()
+	slog.SetDefault(slog.New(slog.NewTextHandler(&buf, &slog.HandlerOptions{Level: slog.LevelInfo})))
+	t.Cleanup(func() {
+		slog.SetDefault(was)
+		log.SetOutput(w)
+		log.SetFlags(flags)
+	})
+	return &buf
+}
+
+// heldTwice replays what the engine logged loading and clearing slots, from an empty engine, so a test
+// sees every moment rather than only where it ended: the first model found in two slots at once, or "",
+// and how many loads it read.
+func heldTwice(text string) (id string, loads int) {
+	held := map[string]string{} // slot: model
+	for _, line := range strings.Split(text, "\n") {
+		loaded, cleared := strings.Contains(line, `msg="wake word loaded"`), strings.Contains(line, `msg="wake word cleared"`)
+		if !loaded && !cleared {
+			continue
+		}
+		slot, model := logField(line, "slot"), logField(line, "id")
+		if cleared {
+			delete(held, slot)
+			continue
+		}
+		loads++
+		for s, other := range held {
+			if s != slot && other == model {
+				return model, loads
+			}
+		}
+		held[slot] = model
+	}
+	return "", loads
+}
+
+// logField is the value of key in a line of the text log.
+func logField(line, key string) string {
+	for _, f := range strings.Fields(line) {
+		if v, ok := strings.CutPrefix(f, key+"="); ok {
+			return v
+		}
+	}
+	return ""
+}
+
+// Two models of one phrase are one word to whoever says it: chosen as volume down and volume up, only
+// the volume down word listens. And a later word never blocks an earlier one: next song behind volume up.
+func TestOnePhraseIsOneCommandWord(t *testing.T) {
+	r, d, words := newAllRig(t)
+	r.playing = true
+	if err := config.Set().VolumeDown().ID("turn_it_down"); err != nil {
+		t.Fatal(err)
+	}
+	if err := config.Set().VolumeUp().ID("turn_it_down_2"); err != nil {
+		t.Fatal(err)
+	}
+	for _, c := range d.commands {
+		c.follow()
+	}
+	if r.holds(VolumeUpSlot) != "" {
+		t.Fatalf("a second model of the same phrase listens as the volume up word: %q", r.holds(VolumeUpSlot))
+	}
+	if _, why := words[volumeUp].wanted(); why != "it is the volume down word too" {
+		t.Errorf("why %q", why)
+	}
+
+	if err := config.Set().VolumeDown().ID(""); err != nil {
+		t.Fatal(err)
+	}
+	if err := config.Set().VolumeUp().ID("turn_it_up"); err != nil {
+		t.Fatal(err)
+	}
+	if err := config.Set().NextSong().ID("turn_it_up"); err != nil {
+		t.Fatal(err)
+	}
+	for _, c := range d.commands {
+		c.follow()
+	}
+	if r.holds(VolumeUpSlot) != "turn_it_up" || r.holds(NextSongSlot) != "" {
+		t.Fatalf("up holds %q, next holds %q; want the volume up word only", r.holds(VolumeUpSlot), r.holds(NextSongSlot))
+	}
+	if _, why := words[nextSong].wanted(); why != "it is the volume up word too" {
+		t.Errorf("why %q", why)
+	}
+	if _, why := words[volumeUp].wanted(); why != "" {
+		t.Errorf("a later word blocks an earlier one: %q", why)
+	}
+}
+
+// Each slot is judged at its own word's threshold, and the config lists the words in slot order.
+func TestEachCommandWordHasItsOwnThreshold(t *testing.T) {
+	fakes(t)
+	config.Use(filepath.Join(t.TempDir(), "state.json"))
+	for _, c := range []struct {
+		set func(float64) error
+		v   float64
+	}{{config.Set().VolumeDown().Threshold, 0.91}, {config.Set().VolumeUp().Threshold, 0.92}, {config.Set().NextSong().Threshold, 0.93}} {
+		if err := c.set(c.v); err != nil {
+			t.Fatal(err)
+		}
+	}
+	w := config.Get().Wake
+	for slot, want := range map[int]float64{CommandSlot: 0.91, VolumeUpSlot: 0.92, NextSongSlot: 0.93} {
+		if got, ok := commandThreshold(w, slot); !ok || got != want {
+			t.Errorf("slot %d: %v, %v; want %v", slot, got, ok, want)
+		}
+	}
+	if _, ok := commandThreshold(w, HangupSlot); ok {
+		t.Error("the hang-up word's slot read as a command word's")
+	}
+	for i, cw := range w.CommandWords() {
+		if cw != commandKinds[i].saved(w) {
+			t.Errorf("CommandWords()[%d] is not the %s", i, commandKinds[i].what)
+		}
+	}
+}
+
+// Restore publishes each word's own saved choice and threshold.
+func TestEachCommandWordRestoresItsOwn(t *testing.T) {
+	r, d, words := newAllRig(t)
+	_ = r
+	saved := config.Wake{
+		VolumeDown: config.CommandWord{ID: "turn_it_down", Threshold: 0.91},
+		VolumeUp:   config.CommandWord{ID: "turn_it_up", Threshold: 0.92},
+		NextSong:   config.CommandWord{ID: "next_song", Threshold: 0.93},
+	}
+	d.restoreCommands(saved)
+	for k, want := range map[*commandKind]struct {
+		phrase string
+		thr    float32
+	}{volumeDown: {"turn_it_down", 0.91}, volumeUp: {"turn_it_up", 0.92}, nextSong: {"next_song", 0.93}} {
+		if got := words[k].word.Get(); got != want.phrase {
+			t.Errorf("%s shows %q, want %q", k.what, got, want.phrase)
+		}
+		if got := words[k].threshold.Get(); got != want.thr {
+			t.Errorf("%s threshold %v, want %v", k.what, got, want.thr)
+		}
 	}
 }

@@ -41,9 +41,9 @@ type Detect struct {
 	busy   *wakeBusy
 	stop   *esphome.Number
 
-	// command is the volume down word's select and threshold, and its loading with the music: see
-	// command.go.
-	command *command
+	// commands are the command words' selects and thresholds, and their loading with the music, in slot
+	// order: see command.go.
+	commands []*command
 
 	// loading is held for a whole load, so a refresh (wakeword.Refresh) and a selection take turns, and
 	// asked is what the latest one was asked for, which is what a refresh loads again. refreshing keeps
@@ -126,12 +126,12 @@ func thresholdFor(slot int, base func(int) float64, stop float64, canceling bool
 // even with the far end silent, so they would always be judged low, and a word heard by mistake ends the
 // call. The stop word keeps the allowance over a ring, which it has to be heard over to stop.
 //
-// The volume down word (command.go) never gets it. It is listened for only while the speaker plays, so
-// the allowance would be off its threshold all the time, and it acts at once with no turn after it to
-// show a mistake: the music it is said over is the one thing it must not take for the word.
+// The command words (command.go) never get it. They are listened for only while the speaker plays, so
+// the allowance would be off their thresholds all the time, and they act at once with no turn after them
+// to show a mistake: the music they are said over is the one thing they must not take for the word.
 func slackFor(slot int, canceling, onCall, ringing bool) bool {
 	switch {
-	case !canceling, slot == CommandSlot:
+	case !canceling, isCommandSlot(slot):
 		return false
 	case onCall && slot == HangupSlot:
 		return false
@@ -160,19 +160,19 @@ func unmuteSettle() time.Duration {
 }
 
 func newDetect() *Detect {
-	// Sized to reach the reserved indexes, the stop word's, the hang-up word's and the volume down
-	// word's. The slots between them and Home Assistant's are never loaded, and an unloaded slot is one
-	// comparison a frame.
-	e := New(CommandSlot+1, mic.Get())
+	// Sized to reach the reserved indexes, the stop word's, the hang-up word's and the command words'.
+	// The slots between them and Home Assistant's are never loaded, and an unloaded slot is one comparison
+	// a frame.
+	e := New(lastCommandSlot+1, mic.Get())
 
-	// The hang-up and volume down words are judged as a wake word is, their own thresholds standing in
-	// for the slot's.
+	// The hang-up and command words are judged as a wake word is, their own thresholds standing in for
+	// the slot's.
 	base := func(slot int) float64 {
-		switch slot {
-		case HangupSlot:
+		if slot == HangupSlot {
 			return config.Get().Wake.Hangup.ThresholdAt()
-		case CommandSlot:
-			return config.Get().Wake.VolumeDown.ThresholdAt()
+		}
+		if t, ok := commandThreshold(config.Get().Wake, slot); ok {
+			return t
 		}
 		return wakeword.Threshold(slot)
 	}
@@ -220,7 +220,7 @@ func newDetect() *Detect {
 			slog.Info("stop word during a call, ending the ring")
 			ring.End()
 		case routeCommand:
-			d.command.heard()
+			d.commandHeard(slot)
 		case routeInterrupt:
 			voice.Get().Interrupt()
 		case routeFarEnd:
@@ -267,8 +267,11 @@ func newDetect() *Detect {
 	d.ducker.watch(e)
 	d.stop = newStopEntity(d)
 	d.hangup = newHangup(d)
-	d.command = newCommand(d)
-	d.command.watch()
+	for _, k := range commandKinds {
+		c := newCommand(d, k)
+		c.watch()
+		d.commands = append(d.commands, c)
+	}
 	d.score = newScoreEntity()
 	d.onHA = newOnHAEntities()
 	e.OnScored = func(slot int, peak, _ float64) {
@@ -308,11 +311,7 @@ func newDetect() *Detect {
 		}
 	})
 	e.OnReady = d.busy.scored
-	e.OnDropped = func(slot int, id string) {
-		if slot == CommandSlot {
-			d.command.dropped(id)
-		}
-	}
+	e.OnDropped = d.commandDropped
 
 	// The engine loads on every start, including a restart. Home Assistant only pushes a selection when
 	// the user changes one, so an engine that came back empty would leave the device deaf while it went
@@ -323,8 +322,10 @@ func newDetect() *Detect {
 		d.loadStop()
 		// A call already up when the engine starts has its hang-up word, as one that starts later does.
 		d.hangup.follow(hangupListens(phone.Get().State()))
-		// Back in if music is playing: the start emptied its slot.
-		d.command.restarted()
+		// Back in if music is playing: the start emptied their slots.
+		for _, c := range d.commands {
+			c.restarted()
+		}
 		// A device that was muted when it was switched off comes back muted, and the hook below only
 		// fires on a change, so the state has to be read once here as well.
 		if muted, err := mute.Get().Muted(); err == nil {
@@ -346,11 +347,13 @@ func newDetect() *Detect {
 
 // selected is a wake word selection saved. A selection both downloads models and lets go of the ones it
 // replaced, so it is the one thing that moves either number the disk reports. Saved, it is also what
-// the volume down word is kept apart from, looked at here rather than from load, which runs before the
+// the command words are kept apart from, looked at here rather than from load, which runs before the
 // save.
 func (d *Detect) selected() {
 	diag.Get().Measure()
-	d.command.follow()
+	for _, c := range d.commands {
+		c.follow()
+	}
 }
 
 func (d *Detect) Name() string { return "wake" }
@@ -451,9 +454,11 @@ func (d *Detect) loadLocked(ids []string) []string {
 		loaded = append(loaded, slot)
 	}
 	d.library().Loaded(accepted)
-	// A word running as a wake word now is not listened for as the volume down word too. A selection
-	// looks again once it is saved (OnWakeWord); this covers a start and a refresh.
-	d.command.nudge()
+	// A word running as a wake word now is not listened for as a command word too. A selection looks
+	// again once it is saved (OnWakeWord); this covers a start and a refresh.
+	for _, c := range d.commands {
+		c.nudge()
+	}
 
 	// The hang-up word's list leaves the wake words out, and a word just chosen as one is no longer
 	// listened for as the hang-up word.

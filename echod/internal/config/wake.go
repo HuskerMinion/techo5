@@ -22,6 +22,11 @@ type Wake struct {
 	// something plays.
 	VolumeDown CommandWord `json:"volume_down,omitzero"`
 
+	// VolumeUp and NextSong are the other command words, the same way: one turns the volume up, the
+	// other skips to the next song.
+	VolumeUp CommandWord `json:"volume_up,omitzero"`
+	NextSong CommandWord `json:"next_song,omitzero"`
+
 	// OnHA is Home Assistant's own wake word engine, used beside the device's or in its place.
 	OnHA OnHA `json:"on_ha,omitempty"`
 
@@ -134,6 +139,12 @@ const DefaultCommandThreshold = 0.90
 
 // On reports whether a word is chosen and can be heard at all.
 func (w CommandWord) On() bool { return w.ID != "" && w.ThresholdAt() < StopOff }
+
+// CommandWords are the command words in the order their slots are in: volume down, volume up, next song.
+// What keeps their models on the device (a purge, the setup page's remove) goes by this list.
+func (w Wake) CommandWords() []CommandWord {
+	return []CommandWord{w.VolumeDown, w.VolumeUp, w.NextSong}
+}
 
 // ThresholdAt is the score the word has to reach.
 func (w CommandWord) ThresholdAt() float64 {
@@ -292,6 +303,28 @@ func (w VolumeDownWriter) ID(v string) error {
 
 func (w VolumeDownWriter) Threshold(v float64) error {
 	return w.st.Update(func(c *Config) { c.Wake.VolumeDown.Threshold = v })
+}
+
+// VolumeUpWriter is the volume up word, which belongs to no slot either.
+type VolumeUpWriter struct{ st *Store }
+
+func (w VolumeUpWriter) ID(v string) error {
+	return w.st.Update(func(c *Config) { c.Wake.VolumeUp.ID = v })
+}
+
+func (w VolumeUpWriter) Threshold(v float64) error {
+	return w.st.Update(func(c *Config) { c.Wake.VolumeUp.Threshold = v })
+}
+
+// NextSongWriter is the next song word, which belongs to no slot either.
+type NextSongWriter struct{ st *Store }
+
+func (w NextSongWriter) ID(v string) error {
+	return w.st.Update(func(c *Config) { c.Wake.NextSong.ID = v })
+}
+
+func (w NextSongWriter) Threshold(v float64) error {
+	return w.st.Update(func(c *Config) { c.Wake.NextSong.Threshold = v })
 }
 
 type WakeWriter struct {

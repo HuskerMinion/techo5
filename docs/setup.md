@@ -964,11 +964,11 @@ The quickest way is the device's setup page:
 Only microWakeWord models are taken (`"type": "micro"` in the `.json`), with a `.tflite` of at most
 1 MB, and up to 20 sent this way. **Remove** takes one sent from the page off the device; the wake
 words that came with the device or from Home Assistant can't be removed there. A wake word the device
-is listening for can't be removed or sent again either: pick another one first. Neither can the one
-chosen as the [volume down word](#the-volume-down-word) or the [hang-up word](phone.md#a-hang-up-word),
-even while it's off (for being a wake word too, or with no music or call): set **Volume down word** or
-**Hang-up word** to **None** or another word first. The page says "listening for that wake word" in
-each case.
+is listening for can't be removed or sent again either: pick another one first. Neither can one
+chosen as the [volume down word](#the-volume-down-word), the [volume up or next song
+word](#the-volume-up-and-next-song-words) or the [hang-up word](phone.md#a-hang-up-word), even while
+it's off (for being a wake word too, or with no music or call): set that word's list to **None** or
+another word first. The page says "listening for that wake word" in each case.
 
 Or, through Home Assistant:
 
@@ -1002,14 +1002,36 @@ word before it, and with the music down the wake word is heard again.
   list still shows it and the device's log says why. It comes back when you choose it again (pick
   **None**, then the word), when a model is sent or removed, or when the device starts again.
 - **Volume down word threshold** (0.90 to start with) sets how sure it has to be. It gets none of the
-  allowance the other words get while the speaker plays: it is only ever said over music, and it acts
-  at once. At the top of its range, it is off. Its scores don't show in **Last wake score**, and **Keep
+  allowance the wake words and the stop word get while the speaker plays: it is only ever said over
+  music, and it acts at once. At the top of its range, it is off. Its scores don't show in **Last wake score**, and **Keep
   wake clips** keeps none of it: the device's log has each one (`wake detected` and `wake near miss`,
   with `slot=103`).
 
 Each time it acts, it fires a [command word event](actions.md#command-word-events). Train it the
 way [Training a wake word of your own](training-wake-word.md) describes, with the device's own music
 recorded as a negative set: that is what it has to tell the word apart from.
+
+### The volume up and next song words
+
+Two more words act on the music the same way, with no wake word: **Volume up word** turns it up five
+steps, and **Next song word** skips to the next song. Each has its own list and threshold next to
+**Volume down word** on the device's microphone, works as the volume down word does (heard only while
+music plays, never during a call, a talk through a camera, a request or a ring, nothing with the
+speaker muted, no allowance while the speaker plays), and is off until you choose a word.
+
+- **Next song word** asks whoever is sending the music for the next song when the device can ask:
+  Music Assistant, or a phone playing over AirPlay or Bluetooth. With nobody to ask (a client that
+  sends one track at a time, the device's own radio stations, or a sender like Spotify Connect that
+  can't be asked) it only fires the [command word event](actions.md#command-word-events), with
+  `asked: false`, and whoever plays the music skips on that.
+- One model can't be two of these: chosen for more than one, it listens only as the first, in the
+  order volume down, volume up, next song. The others keep their choice and listen again once it's
+  free. A wake word can't be one either, as for the volume down word.
+- Each device acts on what it hears by itself. Devices playing together in one Music Assistant or
+  AirPlay group each ask for the next song when they hear the word, so with the next song word on more
+  than one of them, one "next song" can skip more than once. Choose it on one device in the group.
+- Each one loaded is one more model running while music plays. The device's log has their scores
+  with `slot=104` (volume up) and `slot=105` (next song).
 
 ### Wake word clips
 

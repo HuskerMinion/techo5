@@ -135,6 +135,12 @@ func (w Writer) Hangup() HangupWriter { return HangupWriter(w) }
 // VolumeDown is the volume down word, which is not a slot either.
 func (w Writer) VolumeDown() VolumeDownWriter { return VolumeDownWriter(w) }
 
+// VolumeUp is the volume up word, which is not a slot either.
+func (w Writer) VolumeUp() VolumeUpWriter { return VolumeUpWriter(w) }
+
+// NextSong is the next song word, which is not a slot either.
+func (w Writer) NextSong() NextSongWriter { return NextSongWriter(w) }
+
 // OnHA is Home Assistant's wake word engine.
 func (w Writer) OnHA() OnHAWriter { return OnHAWriter(w) }
 

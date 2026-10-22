@@ -14,7 +14,7 @@ const (
 	routeFarEnd                // a wake word during a call, ignored because the far end was talking
 	routeCancelTurn            // the stop word in a turn during a call: the turn ends, the call stays
 	routeCancelAndHangUp       // the hang-up word in a turn: the turn and the call both end, if hangUp agrees
-	routeCommand               // the volume down word, with no call and no talk through a camera: command.heard
+	routeCommand               // a command word, with no call and no talk through a camera: command.heard
 	routeCancelCall            // the stop or hang-up word before a call asked for by voice is dialed: it is not placed
 )
 
@@ -51,15 +51,15 @@ type heard struct {
 // far end says can be in the speaker yet, and the only sound is the device saying whom it is calling.
 // An alarm or timer ringing then is still what the stop word ends first.
 //
-// The volume down word does nothing in any phase of a call or during a talk through a camera, whatever
-// Wake word during calls says: the music it turns down is not what is playing then. Otherwise it goes
-// to command.heard, which has its own checks (a turn, a ring, no music), and never opens a turn.
+// The command words do nothing in any phase of a call or during a talk through a camera, whatever Wake
+// word during calls says: the music they act on is not what is playing then. Otherwise they go to
+// command.heard, which has its own checks (a turn, a ring, no music), and never open a turn.
 func routeFor(slot int, h heard) route {
 	inCall := h.phase != phone.Idle
 	switch {
-	case slot == CommandSlot && (inCall || h.talkBack):
+	case isCommandSlot(slot) && (inCall || h.talkBack):
 		return routeIgnore
-	case slot == CommandSlot:
+	case isCommandSlot(slot):
 		return routeCommand
 	case h.waiting && !h.talkBack && (slot == HangupSlot || slot == StopSlot && !h.ringing):
 		return routeCancelCall
