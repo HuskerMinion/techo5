@@ -65,7 +65,12 @@ func Rewire() {
 // driver already believes in would leave the hardware where the reset put it, muted (a unit stayed
 // deaf after the button released the latch until this was written the long way, 2026-09-20).
 func routeInputs() {
-	m, err := alsa.OpenMixer(Card)
+	card, _, _, err := captureDevice()
+	if err != nil {
+		slog.Error("selecting microphone mixer failed", "err", err)
+		return
+	}
+	m, err := alsa.OpenMixer(card)
 	if err != nil {
 		slog.Error("opening the mixer failed", "err", err)
 		return
@@ -89,7 +94,12 @@ func applyGain(db int) {
 	if !hasMixer {
 		return // a panel: the app's microphone has no converter of ours to turn up
 	}
-	m, err := alsa.OpenMixer(Card)
+	card, _, _, err := captureDevice()
+	if err != nil {
+		slog.Error("selecting microphone mixer failed", "err", err)
+		return
+	}
+	m, err := alsa.OpenMixer(card)
 	if err != nil {
 		slog.Error("opening the mixer failed", "err", err)
 		return

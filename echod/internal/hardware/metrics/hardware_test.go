@@ -226,3 +226,67 @@ func TestLuxFallsBackToTheVendorDriver(t *testing.T) {
 		t.Errorf("Lux() = %v, want 8", got)
 	}
 }
+
+func TestMainlineTemperatures(t *testing.T) {
+	for _, radio := range []string{"Temperature = 47\n", "Temperature = invalid\n", "Temperature = 999\n", ""} {
+		t.Run(radio, func(t *testing.T) {
+			root := t.TempDir()
+			for path, body := range map[string]string{
+				"sys/class/thermal/thermal_zone2/type": "cpu-thermal\n",
+				"sys/class/thermal/thermal_zone2/temp": "50219\n",
+				"proc/net/wlan/get_temperature":        radio,
+			} {
+				full := filepath.Join(root, path)
+				if err := os.MkdirAll(filepath.Dir(full), 0755); err != nil {
+					t.Fatal(err)
+				}
+				if err := os.WriteFile(full, []byte(body), 0644); err != nil {
+					t.Fatal(err)
+				}
+			}
+			got := (Reader{Root: root}).Temperatures()
+			if got["mtktscpu"] != 50.219 {
+				t.Fatalf("CPU: %v", got)
+			}
+			temp, known := got["mtktswmt"]
+			if radio == "Temperature = 47\n" {
+				if !known || temp != 47 {
+					t.Fatalf("radio: %v", got)
+				}
+			} else if known {
+				t.Fatalf("invalid radio reading published: %v", got)
+			}
+		})
+	}
+}
+
+// The 2nd gen Show 8's MT7663 on the mainline kernel reports through hwmon, beside the CPU's own.
+func TestMt76RadioTemperature(t *testing.T) {
+	for _, tc := range []struct {
+		milli string
+		want  float64
+		known bool
+	}{{"41000\n", 41, true}, {"0\n", 0, false}, {"", 0, false}, {"999000\n", 0, false}} {
+		root := t.TempDir()
+		for path, body := range map[string]string{
+			"sys/class/thermal/thermal_zone0/type": "cpu-thermal\n",
+			"sys/class/thermal/thermal_zone0/temp": "39861\n",
+			"sys/class/hwmon/hwmon0/name":          "cpu_thermal\n",
+			"sys/class/hwmon/hwmon0/temp1_input":   "39861\n",
+			"sys/class/hwmon/hwmon1/name":          "mt7615_phy0\n",
+			"sys/class/hwmon/hwmon1/temp1_input":   tc.milli,
+		} {
+			full := filepath.Join(root, path)
+			if err := os.MkdirAll(filepath.Dir(full), 0755); err != nil {
+				t.Fatal(err)
+			}
+			if err := os.WriteFile(full, []byte(body), 0644); err != nil {
+				t.Fatal(err)
+			}
+		}
+		temp, known := (Reader{Root: root}).Temperatures()["mtktswmt"]
+		if known != tc.known || temp != tc.want {
+			t.Errorf("radio from %q = %v (%v), want %v (%v)", tc.milli, temp, known, tc.want, tc.known)
+		}
+	}
+}

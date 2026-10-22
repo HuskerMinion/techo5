@@ -4,7 +4,7 @@ package all
 
 // notOnThisDevice: what the Echo Spot build leaves out of the shared list: the LED ring's entities, as
 // on the Show, and the Show's own screen settings.
-var notOnThisDevice = append(ringOnly, "calendar_popup_all_day", "calendar_popup_before", "calendar_popup_chime", "calendar_popups", "screen_now_playing", "screen_theme", "screen_theme_mode", "screen_timer_style", "screen_light_theme", "screen_auto_brightness_dimmest", "screen_date_color", "screen_weather_position", "screen_clock_tap", "screen_dashboard_tiles", "lyrics", "screen_night_tap_lifts", "slideshow_pairs",
+var notOnThisDevice = append(ringOnly, "calendar_popup_all_day", "calendar_popup_before", "calendar_popup_chime", "calendar_popups", "screen_now_playing", "screen_theme", "screen_theme_mode", "screen_timer_style", "screen_night_warmth", "screen_light_theme", "screen_auto_brightness_dimmest", "screen_date_color", "screen_weather_position", "screen_clock_tap", "screen_dashboard_tiles", "lyrics", "screen_night_tap_lifts", "slideshow_pairs",
 	// Tessera screens are the Show's for now (feature/tessera): a round screen wants a layout of its own.
 	"tessera_screen",
 	// The Show's calendar page and its look; the Spot's calendar is its own.

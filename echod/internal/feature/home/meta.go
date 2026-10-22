@@ -11,11 +11,10 @@ import (
 	"net/http"
 	"time"
 
-	xdraw "golang.org/x/image/draw"
-
 	"github.com/HuskerMinion/techo5/echod/internal/config"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/hastate"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/media"
+	"github.com/HuskerMinion/techo5/echod/internal/lib/picscale"
 	"github.com/HuskerMinion/techo5/echod/internal/lib/radiometa"
 )
 
@@ -229,7 +228,7 @@ func layoutArt(b []byte, logo bool, what string) (*image.RGBA, *image.RGBA, erro
 		}
 		target = image.Rect((artW-w)/2, (artH-h)/2, (artW-w)/2+w, (artH-h)/2+h)
 	}
-	xdraw.ApproxBiLinear.Scale(dst, target, src, sb, draw.Src, nil)
+	picscale.CatmullRom.Scale(dst, target, src, sb, draw.Src)
 
 	thumb := image.NewRGBA(image.Rect(0, 0, thumbSide, thumbSide))
 	w, h := thumbSide, thumbSide
@@ -238,6 +237,6 @@ func layoutArt(b []byte, logo bool, what string) (*image.RGBA, *image.RGBA, erro
 	} else {
 		w = sw * thumbSide / sh
 	}
-	xdraw.ApproxBiLinear.Scale(thumb, image.Rect((thumbSide-w)/2, (thumbSide-h)/2, (thumbSide-w)/2+w, (thumbSide-h)/2+h), src, sb, draw.Src, nil)
+	picscale.CatmullRom.Scale(thumb, image.Rect((thumbSide-w)/2, (thumbSide-h)/2, (thumbSide-w)/2+w, (thumbSide-h)/2+h), src, sb, draw.Src)
 	return dst, thumb, nil
 }

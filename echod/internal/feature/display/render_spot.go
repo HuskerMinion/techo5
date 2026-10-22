@@ -708,7 +708,7 @@ func (r *roundRenderer) clear() {
 
 // dim darkens the whole canvas by alpha.
 func (r *roundRenderer) dim(alpha uint8) {
-	draw.Draw(r.dst, r.dst.Rect, image.NewUniform(color.RGBA{0, 0, 0, alpha}), image.Point{}, draw.Over)
+	washOver(r.dst, r.dst.Rect, color.RGBA{0, 0, 0, alpha})
 }
 
 func (r *roundRenderer) blend(x, y int, c color.RGBA, cover float64) {

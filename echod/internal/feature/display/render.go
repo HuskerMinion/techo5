@@ -114,6 +114,10 @@ type scene struct {
 	showWifi bool
 	wifi     wifiState
 
+	// camtest is the camera test page while it is up (camtest_page.go), over the settings and
+	// everything under them.
+	camtest *camTestView
+
 	// radio feeds the drawer's Radio side and the now-playing screen; weather is on the clock when known.
 	radio   home.Radio
 	weather home.Weather
@@ -511,7 +515,7 @@ func (r *renderer) draw(s scene) {
 	// and it stays up while an alarm or a timer rings (a tap on it stops the ring). A call has lifted
 	// the night light and takes the screen; a turn, a camera, an announcement or a reminder is shown in
 	// its place at the night light's level.
-	if s.redClockFace() {
+	if s.redClockFace() && s.camtest == nil {
 		r.redClockPage(s)
 		return
 	}
@@ -580,6 +584,13 @@ func (r *renderer) draw(s scene) {
 		}
 	}()
 
+	if s.camtest != nil {
+		r.cameraTestPage(s)
+		if s.showVolume {
+			r.volumeBar(s)
+		}
+		return
+	}
 	if s.showSheet {
 		r.settingsScreen(s)
 		if s.showVolume {

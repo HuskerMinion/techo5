@@ -445,7 +445,7 @@ func (r *renderer) colorSheet(c *dashboard.LightColor, th dashboard.Theme) {
 	}
 	pal := r.palette(th)
 	fc := r.faces()
-	draw.Draw(r.dst, r.dst.Rect, image.NewUniform(color.RGBA{0, 0, 0, 150}), image.Point{}, draw.Over)
+	washOver(r.dst, r.dst.Rect, color.RGBA{0, 0, 0, 150})
 
 	pad, gap := r.s(20), r.s(14)
 	bandH, swatchH, btnH, wordsH, noteH := r.s(64), r.s(60), r.s(52), r.s(30), r.s(30)

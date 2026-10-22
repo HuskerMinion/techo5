@@ -214,9 +214,9 @@ func (f *Feature) answer(op, profile, host string, media bool) (string, bool) {
 		return `<trt:GetProfileResponse>` + profileXML("trt:Profile") + `</trt:GetProfileResponse>`, true
 	case "GetVideoSources":
 		w, h := size()
-		return fmt.Sprintf(`<trt:GetVideoSourcesResponse><trt:VideoSources token="camera"><tt:Framerate>15</tt:Framerate>
+		return fmt.Sprintf(`<trt:GetVideoSourcesResponse><trt:VideoSources token="camera"><tt:Framerate>%d</tt:Framerate>
 <tt:Resolution><tt:Width>%d</tt:Width><tt:Height>%d</tt:Height></tt:Resolution></trt:VideoSources>
-</trt:GetVideoSourcesResponse>`, w, h), true
+</trt:GetVideoSourcesResponse>`, maxFPS, w, h), true
 	case "GetStreamUri":
 		return `<trt:GetStreamUriResponse><trt:MediaUri><tt:Uri>` + html.EscapeString(streamURL) + `</tt:Uri>
 <tt:InvalidAfterConnect>false</tt:InvalidAfterConnect><tt:InvalidAfterReboot>false</tt:InvalidAfterReboot>
@@ -270,9 +270,9 @@ func profileXML(tag string) string {
 <tt:SourceToken>camera</tt:SourceToken><tt:Bounds x="0" y="0" width="%d" height="%d"/></tt:VideoSourceConfiguration>
 <tt:VideoEncoderConfiguration token="jpeg"><tt:Name>jpeg</tt:Name><tt:UseCount>1</tt:UseCount>
 <tt:Encoding>JPEG</tt:Encoding><tt:Resolution><tt:Width>%d</tt:Width><tt:Height>%d</tt:Height></tt:Resolution>
-<tt:Quality>%d</tt:Quality><tt:RateControl><tt:FrameRateLimit>15</tt:FrameRateLimit><tt:EncodingInterval>1</tt:EncodingInterval>
+<tt:Quality>%d</tt:Quality><tt:RateControl><tt:FrameRateLimit>%d</tt:FrameRateLimit><tt:EncodingInterval>1</tt:EncodingInterval>
 <tt:BitrateLimit>0</tt:BitrateLimit></tt:RateControl><tt:SessionTimeout>PT60S</tt:SessionTimeout></tt:VideoEncoderConfiguration>
-</%s>`, tag, w, h, w, h, quality, tag)
+</%s>`, tag, w, h, w, h, quality, maxFPS, tag)
 }
 
 // tokenOK is whether a request's UsernameToken is the stream's login, as a digest made within skew of now,

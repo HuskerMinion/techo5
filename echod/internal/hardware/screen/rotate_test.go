@@ -12,7 +12,7 @@ import (
 
 // fake is a Show's panel in RAM: 480 wide, 960 tall, rows padded as a real framebuffer's can be.
 func fake(shift [4]uint) (*Device, []byte) {
-	d := &Device{panelW: 480, panelH: 960, line: 480*4 + 64, pages: 3, shift: shift}
+	d := &Device{panelW: 480, panelH: 960, line: 480*4 + 64, pages: 3, shift: shift, alphaMask: 0xff}
 	d.pageBytes = d.line * d.panelH
 	d.canvas = image.NewRGBA(image.Rect(0, 0, 960, 480))
 	return d, make([]byte, d.pageBytes)

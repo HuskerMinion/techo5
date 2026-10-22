@@ -93,12 +93,12 @@ func send(c *esphome.Conn, jpg []byte) error {
 func (f *Feature) single(c *esphome.Conn) {
 	ctx, cancel := context.WithTimeout(context.Background(), snapshotWait)
 	defer cancel()
-	fr, err := camera.Get().Snapshot(ctx)
+	fr, err := stillFrame(ctx)
 	if err != nil {
 		slog.Warn("camera entity: still", "err", err)
 		return
 	}
-	jpg, err := encodeFull(fr)
+	jpg, err := encodeStill(fr)
 	if err != nil {
 		return
 	}

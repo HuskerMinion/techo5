@@ -13,6 +13,7 @@ import (
 	xdraw "golang.org/x/image/draw"
 
 	"github.com/HuskerMinion/techo5/echod/internal/lib/hass"
+	"github.com/HuskerMinion/techo5/echod/internal/lib/picscale"
 )
 
 // The camera grid: several cameras on the screen at once, from their snapshots, each refreshed on its own.
@@ -207,6 +208,6 @@ func FitInto(src image.Image, w, h int) *image.RGBA {
 		dw, dh = sw*h/sh, h
 	}
 	dst := image.NewRGBA(image.Rect(0, 0, max(dw, 1), max(dh, 1)))
-	xdraw.ApproxBiLinear.Scale(dst, dst.Bounds(), src, src.Bounds(), xdraw.Src, nil)
+	picscale.CatmullRom.Scale(dst, dst.Bounds(), src, src.Bounds(), xdraw.Src)
 	return dst
 }

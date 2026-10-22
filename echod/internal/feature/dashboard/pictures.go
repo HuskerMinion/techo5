@@ -20,6 +20,7 @@ import (
 	xdraw "golang.org/x/image/draw"
 
 	"github.com/HuskerMinion/techo5/echod/internal/lib/hass"
+	"github.com/HuskerMinion/techo5/echod/internal/lib/picscale"
 )
 
 // Pictures on a drawn dashboard: a camera's latest snapshot, or a picture card's image. A camera is
@@ -196,7 +197,7 @@ func shrink(img image.Image, most int) image.Image {
 	}
 	h := b.Dy() * most / b.Dx()
 	out := image.NewRGBA(image.Rect(0, 0, most, max(h, 1)))
-	xdraw.ApproxBiLinear.Scale(out, out.Rect, img, b, xdraw.Src, nil)
+	picscale.CatmullRom.Scale(out, out.Rect, img, b, xdraw.Src)
 	return out
 }
 

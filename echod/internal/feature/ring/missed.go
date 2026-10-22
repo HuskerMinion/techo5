@@ -63,6 +63,9 @@ func (missedFeature) Name() string               { return "missed rings" }
 func (missedFeature) Entities() []esphome.Entity { return []esphome.Entity{missedSensor} }
 
 func init() {
+	// Nothing missed yet: the list lives in memory, so a fresh start has none. Without a value Home
+	// Assistant showed the sensor as unknown.
+	missedSensor.Set("")
 	missed.now = time.Now
 	component.Register(component.Device, missedFeature{}, component.Order(33))
 }

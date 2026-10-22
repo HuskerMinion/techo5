@@ -298,6 +298,7 @@ func securityRows(sv sheetView) []settingRow {
 	if st.insecureTLS {
 		certs.sub, certs.value = "Turned off in Home Assistant", "Off"
 	}
+	rows = append(rows, cameraTestRows()...)
 	return append(rows,
 		settingRow{id: "camweb", label: "Camera on the network", sub: "No login", kind: ctlToggle, on: sec.Camera},
 		settingRow{id: "screenweb", label: "Screen on the network", sub: "No login", kind: ctlToggle, on: sec.Screen},

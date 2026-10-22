@@ -247,13 +247,32 @@ func valueWidth(typ uint32) int {
 	return longSize // long value[128]
 }
 
+// putValue stores one value of a control of type typ at the stride valueWidth gives. An integer or
+// boolean control's slot is the kernel's long, and on arm64 that is 64 bits: the value is
+// sign-extended into it, because the 32-bit pattern of a negative level with its high half left zero
+// would reach the kernel as a large positive number instead. On a 32-bit build the long is the 32 bits
+// themselves. Get reads the low half back, the same 32-bit pattern on either ABI. A 64-bit control
+// keeps what it always had, the value zero-extended.
+func putValue(b []byte, typ uint32, v uint32) {
+	switch w := valueWidth(typ); {
+	case w == 1:
+		b[0] = byte(v)
+	case w == 8 && typ != TypeInteger64:
+		binary.LittleEndian.PutUint64(b, uint64(int64(int32(v))))
+	case w == 8:
+		binary.LittleEndian.PutUint64(b, uint64(v))
+	default:
+		binary.LittleEndian.PutUint32(b, v)
+	}
+}
+
 // Set writes the same value to every channel of a control.
 func (m *Mixer) Set(c Control, v uint32) error {
 	var buf [elemValueSize]byte
 	binary.LittleEndian.PutUint32(buf[idNumidOff:], c.Numid)
-	w := uint32(valueWidth(c.Type))
-	for i := uint32(0); i < c.Count; i++ {
-		binary.LittleEndian.PutUint32(buf[valueDataOff+i*w:], v)
+	w := valueWidth(c.Type)
+	for i := 0; i < int(c.Count); i++ {
+		putValue(buf[valueDataOff+i*w:], c.Type, v)
 	}
 	if err := ioctl(m.f.Fd(), ioctlElemWrite, unsafe.Pointer(&buf)); err != nil {
 		return fmt.Errorf("alsa: writing %q: %w", c.Name, err)
@@ -272,11 +291,7 @@ func (m *Mixer) SetAll(c Control, values []uint32) error {
 	binary.LittleEndian.PutUint32(buf[idNumidOff:], c.Numid)
 	w := valueWidth(c.Type)
 	for i, v := range values {
-		if w == 1 {
-			buf[valueDataOff+i] = byte(v)
-			continue
-		}
-		binary.LittleEndian.PutUint32(buf[valueDataOff+i*w:], v)
+		putValue(buf[valueDataOff+i*w:], c.Type, v)
 	}
 	if err := ioctl(m.f.Fd(), ioctlElemWrite, unsafe.Pointer(&buf)); err != nil {
 		return fmt.Errorf("alsa: writing %q: %w", c.Name, err)

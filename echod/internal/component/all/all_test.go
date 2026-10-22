@@ -182,6 +182,7 @@ var registered = []string{
 	"screen_night_mode",
 	"screen_night_start",
 	"screen_night_tap_lifts",
+	"screen_night_warmth",
 	"screen_now_playing",
 	"screen_power",
 	"screen_theme",

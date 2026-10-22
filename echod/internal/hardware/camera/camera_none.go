@@ -64,3 +64,9 @@ func (f *Frame) Image() *image.RGBA                            { return f.RGBA }
 func (f *Frame) Luma(w, h int) []uint8                         { return nil }
 func (f *Frame) Blank() bool                                   { return false }
 func (c *Camera) ListenLatest(chan *Frame) (cancel func())     { return func() {} }
+
+// Dims is nothing here: no camera.
+func (f *Frame) Dims() (w, h int) { return 0, 0 }
+
+// Wedged is never anything here: no camera.
+func (c *Camera) Wedged() error { return nil }

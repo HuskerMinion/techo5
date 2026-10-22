@@ -32,7 +32,7 @@ const dialWait = 10 * time.Second
 const sendBuffer = 8 * period * Channels * Bits / 8
 
 // openDevice connects to the app. There is no mixer and nothing to hold: Android owns the hardware.
-func openDevice() (playback, *alsa.Mixer, *os.File, error) {
+func openDevice() (playback, *alsa.Mixer, *os.File, bool, error) {
 	deadline := time.Now().Add(dialWait)
 	for {
 		conn, err := panelsock.Dial(speakerSocket)
@@ -43,10 +43,10 @@ func openDevice() (playback, *alsa.Mixer, *os.File, error) {
 			if uc, ok := conn.(*net.UnixConn); ok {
 				_ = uc.SetWriteBuffer(sendBuffer)
 			}
-			return &socketPlayback{conn: conn}, nil, nil, nil
+			return &socketPlayback{conn: conn}, nil, nil, false, nil
 		}
 		if time.Now().After(deadline) {
-			return nil, nil, nil, fmt.Errorf("speaker: connecting to the app: %w", err)
+			return nil, nil, nil, false, fmt.Errorf("speaker: connecting to the app: %w", err)
 		}
 		time.Sleep(250 * time.Millisecond)
 	}

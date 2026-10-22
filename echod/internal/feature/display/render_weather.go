@@ -185,7 +185,7 @@ func (r *renderer) radarPage(s scene) {
 
 	// The time of the frame, and the clock, on dark bands so they read over the map.
 	shade := func(rect image.Rectangle) {
-		draw.Draw(r.dst, rect, image.NewUniform(color.RGBA{0, 0, 0, 150}), image.Point{}, draw.Over)
+		washOver(r.dst, rect, color.RGBA{0, 0, 0, 150})
 	}
 	label := "Radar  " + clockText(f.At.Local())
 	if i == n-1 {
