@@ -239,7 +239,7 @@ func TestRoundScenesDraw(t *testing.T) {
 			eq: &eqView{level: night, peak: nightPk, night: true, wave: wave}}
 	}
 	// The pictures of turn_visual.go, which take the turn's phase.
-	for _, style := range []string{"vu", "orb", "hal"} {
+	for _, style := range []string{"vu", "orb", "hal", "face"} {
 		think := eqFor("thinking", false, at)
 		think.style, think.phase = style, "thinking"
 		scenes["turn-"+style+"-listening"] = roundScene{now: at, phase: "listening", eq: &eqView{level: listen, peak: listenPk, style: style, phase: "listening"}}
@@ -253,6 +253,7 @@ func TestRoundScenesDraw(t *testing.T) {
 	dir := os.Getenv("SPOT_PREVIEW")
 	for name, s := range scenes {
 		img := image.NewRGBA(image.Rect(0, 0, side, side))
+		faceState.set = false // each a face of its own, not the last one's easing toward it
 		newRoundRenderer(img).draw(s)
 		if dir == "" {
 			continue

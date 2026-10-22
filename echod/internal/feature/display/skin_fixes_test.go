@@ -149,7 +149,7 @@ func TestTurnPageUnderALightSkin(t *testing.T) {
 		t.Fatalf("the turn page under E-ink is %v, want the skin's light ground", g)
 	}
 	r := newRenderer(image.NewRGBA(image.Rect(0, 0, showWide, showHigh)))
-	for _, l := range r.eqWords(s, r.h) {
+	for _, l := range r.eqWords(s, r.h, r.w-2*r.margin) {
 		if luma(l.c.R, l.c.G, l.c.B) > 128 {
 			t.Errorf("%q is %v on a light ground", l.text, l.c)
 		}

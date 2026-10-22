@@ -116,9 +116,9 @@ type Screen struct {
 
 	// TurnStyle is how a voice turn is drawn: empty for the classic title and words, "wave" for a wave
 	// moving with the voice, "equalizer" for bars, "vu" for a pair of needle meters, "orb" for a ball of
-	// light, "hal" for the HAL 9000 computer's eye, or "cue" and "captions" for a light over the page
-	// left up, with the words as captions for the second, or "rainbow" for a glow round the edge with the
-	// words on a card (the Show's).
+	// light, "hal" for the HAL 9000 computer's eye, "face" for a face of glowing strokes, or "cue" and
+	// "captions" for a light over the page left up, with the words as captions for the second, or
+	// "rainbow" for a glow round the edge with the words on a card (the Show's).
 	TurnStyle string `json:"turn_style,omitempty"`
 
 	// TimerStyle is how running timers show on the Show's clock: empty for the line under the date,

@@ -677,6 +677,8 @@ func (r *renderer) draw(s scene) {
 			r.wave(s)
 		case s.eq.style == "vu" || s.eq.style == "orb" || s.eq.style == "hal":
 			r.turnVisual(s)
+		case s.eq.style == "face":
+			r.faceTurn(s)
 		default:
 			r.equalizer(s)
 		}

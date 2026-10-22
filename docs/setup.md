@@ -613,7 +613,9 @@ like "kitchen screen" under its **Voice assistants** settings in Home Assistant.
 - **Turn screen**: how a voice request looks. This one is on the Spot too. **Classic** is the words,
   **Wave** is glowing lines, **Bars** is an LED-style equalizer, **VU meters** are two moving-needle
   meters, **Orb** is a ball of light (cool while it listens, violet while it thinks, warm while it
-  answers) and **HAL 9000** is the computer's red eye, all moving with the voice. **Cue light** leaves
+  answers) and **HAL 9000** is the computer's red eye, all moving with the voice. **Face** is a little
+  face of glowing strokes with the words beside it: wide eyes while it listens, a squint and a sideways
+  mouth while it thinks, a mouth moving with the answer, and smiling eyes after. **Cue light** leaves
   the screen as it is (the clock, the dashboard, the music, the photos, the night clock) and shows the
   request as a light along the top edge instead, with a microphone on it while the device listens: it
   breathes while the device listens, runs while it thinks and stays on while it answers. On the Spot

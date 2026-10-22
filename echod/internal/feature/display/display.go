@@ -2844,9 +2844,9 @@ func (d *Display) frame() (next time.Duration) {
 	if (s.slideshow != nil || s.slideshowScreensaver != nil) && home.Get().SlideshowTransitioning() {
 		return home.SlideshowFrame
 	}
-	if turnShown(s) && !(s.phase == "lingering" && s.eq.quiet) {
-		if s.eq.wave || s.eq.style == "orb" {
-			return waveFrame // ten a second: the orb is a soft glow that needs no more
+	if turnShown(s) && !(s.phase == "lingering" && s.eq.quiet && faceSettled(s.eq)) {
+		if s.eq.wave || s.eq.style == "orb" || s.eq.style == "face" {
+			return waveFrame // ten a second: the orb and the face are soft and need no more
 		}
 		return eqFrame // the bars are moving
 	}

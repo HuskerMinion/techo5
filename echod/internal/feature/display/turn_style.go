@@ -11,10 +11,11 @@ import (
 )
 
 // What a voice turn looks like on the screen: Classic, the title and the words, or a picture moving
-// with the voice being heard and the answer being spoken: the wave, the bars, VU meters, the orb or
-// HAL 9000's eye (turn_draw.go, turn_visual.go). Or a cue: the page stays as it was and the turn is a
-// light along its edge, with the words as captions over the page's foot if asked for (turn_cue.go);
-// or Rainbow, a glow of colors round the whole edge with the words on a card of glass (render_rainbow.go).
+// with the voice being heard and the answer being spoken: the wave, the bars, VU meters, the orb,
+// HAL 9000's eye or a face (turn_draw.go, turn_visual.go, turn_face.go). Or a cue: the page stays as
+// it was and the turn is a light along its edge, with the words as captions over the page's foot if
+// asked for (turn_cue.go); or Rainbow, a glow of colors round the whole edge with the words on a card
+// of glass (render_rainbow.go).
 // Classic until somebody chooses.
 
 // turnStyle is a choice, with what the config keeps for it.
@@ -31,6 +32,7 @@ var turnStyles = offered([]turnStyle{
 	{"VU meters", "vu"},
 	{"Orb", "orb"},
 	{"HAL 9000", "hal"},
+	{"Face", "face"},
 	{"Cue light", "cue"},
 	{"Cue and captions", "captions"},
 	{"Rainbow", "rainbow"},

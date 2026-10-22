@@ -1753,9 +1753,9 @@ func (d *Display) frame() (next time.Duration) {
 		return artFxFrame // rain or snow is falling over the weather art on the screen
 	case s.eq != nil && !s.showVolume && !s.menuOpen && !s.sheetOpen && !s.showCamera && s.call.Phase == phone.Idle &&
 		!s.ringing.any() && !s.setupAsking && !s.announceRecording && !s.showReminder && !s.showAnnouncement && !s.showNotification &&
-		!s.showAlert && !(s.phase == "lingering" && s.eq.quiet):
-		if s.eq.wave || s.eq.style == "orb" {
-			return waveFrame // ten a second: the orb is a soft glow that needs no more
+		!s.showAlert && !(s.phase == "lingering" && s.eq.quiet && faceSettled(s.eq)):
+		if s.eq.wave || s.eq.style == "orb" || s.eq.style == "face" {
+			return waveFrame // ten a second: the orb and the face are soft and need no more
 		}
 		return eqFrame // the bars are moving
 	case s.phase == "listening" || s.phase == "thinking" || s.phase == "replying" || s.showVolume || s.menuOpen || s.btPairing || s.call.Phase != phone.Idle || s.ringing.any():

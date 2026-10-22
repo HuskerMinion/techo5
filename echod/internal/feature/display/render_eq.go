@@ -18,9 +18,9 @@ type eqLine struct {
 	lineH int
 }
 
-// eqWords lays out what goes under the bars: what it is doing, what was heard, and the answer, the
-// answer a size smaller when it is long.
-func (r *renderer) eqWords(s scene, room int) []eqLine {
+// eqWords lays out what goes under the bars, maxW wide: what it is doing, what was heard, and the
+// answer, the answer a size smaller when it is long.
+func (r *renderer) eqWords(s scene, room, maxW int) []eqLine {
 	accent, heardCol, replyCol := color.RGBA{120, 220, 140, 255}, color.RGBA{170, 178, 190, 255}, color.RGBA{240, 244, 250, 255}
 	if skin() != skinNone {
 		// On the skin's ground (turnGround), in its colors: a light skin's ground would lose these.
@@ -29,7 +29,6 @@ func (r *renderer) eqWords(s scene, room int) []eqLine {
 	if s.eq.night {
 		accent, heardCol, replyCol = color.RGBA{255, 90, 70, 255}, color.RGBA{150, 110, 105, 255}, color.RGBA{255, 140, 120, 255}
 	}
-	maxW := r.w - 2*r.margin
 	var out []eqLine
 	switch s.phase {
 	case "listening":
@@ -139,7 +138,7 @@ func (r *renderer) turnVisual(s scene) {
 func (r *renderer) eqLayout(s scene, pct int) (top, bot, under, bottom int, lines []eqLine) {
 	top, bottom = r.s(headerH)+r.s(8), r.h-r.s(14)
 	under = r.s(54)
-	lines = r.eqWords(s, bottom-(r.h*28/100)-under)
+	lines = r.eqWords(s, bottom-(r.h*28/100)-under, r.w-2*r.margin)
 	words := 0
 	for _, l := range lines {
 		words += l.lineH
@@ -150,7 +149,10 @@ func (r *renderer) eqLayout(s scene, pct int) (top, bot, under, bottom int, line
 }
 
 // eqText draws the words centered from y down; what still does not fit ends in an ellipsis.
-func (r *renderer) eqText(lines []eqLine, y, bottom int) {
+func (r *renderer) eqText(lines []eqLine, y, bottom int) { r.eqTextAt(lines, y, bottom, -1) }
+
+// eqTextAt is eqText with the words against left, or centered for a left below 0.
+func (r *renderer) eqTextAt(lines []eqLine, y, bottom, left int) {
 	for i, l := range lines {
 		base := y + l.lineH - r.s(14)
 		last := i+1 < len(lines) && base+lines[i+1].lineH > bottom+r.s(10)
@@ -158,7 +160,11 @@ func (r *renderer) eqText(lines []eqLine, y, bottom int) {
 		if last {
 			text += " …"
 		}
-		r.text(l.face, text, (r.w-r.width(l.face, text))/2, base, l.c)
+		x := left
+		if x < 0 {
+			x = (r.w - r.width(l.face, text)) / 2
+		}
+		r.text(l.face, text, x, base, l.c)
 		if last {
 			return
 		}

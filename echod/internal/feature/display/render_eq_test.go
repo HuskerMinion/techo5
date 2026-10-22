@@ -41,9 +41,10 @@ func TestEqualizerDraws(t *testing.T) {
 		{"-show8", show8Wide, show8High},
 	} {
 		for name, s := range eqScenes(time.Date(2026, 9, 27, 20, 0, 0, 0, time.Local)) {
-			for _, style := range []string{"bars", "wave", "vu", "orb", "hal"} {
+			for _, style := range []string{"bars", "wave", "vu", "orb", "hal", "face"} {
 				s.eq.wave, s.eq.style, s.eq.phase = style == "wave", style, s.phase
 				img := image.NewRGBA(image.Rect(0, 0, panel.wide, panel.high))
+				faceState.set = false // each a face of its own, not the last one's easing toward it
 				newRenderer(img).draw(s)
 				if dir == "" {
 					continue
@@ -70,7 +71,7 @@ func BenchmarkEqualizerFrame(b *testing.B) {
 		{"show5", showWide, showHigh},
 		{"show8", show8Wide, show8High},
 	} {
-		for _, style := range []string{"bars", "wave", "vu", "orb", "hal"} {
+		for _, style := range []string{"bars", "wave", "vu", "orb", "hal", "face"} {
 			b.Run(panel.name+"-"+style, func(b *testing.B) {
 				s := eqScenes(time.Now())["eq-replying"]
 				s.eq.wave, s.eq.style, s.eq.phase = style == "wave", style, s.phase
