@@ -1,0 +1,47 @@
+blueprint:
+  name: TECHO5 - rain sounds by voice
+  description: >-
+    "Play the sounds of rain" or "play rain" said to a TECHO5 device plays a rain stream on the
+    speaker that heard it. The device leaves that sentence alone so it isn't taken as a weather
+    question; the sound itself comes from Home Assistant. "Stop" ends it like any other music. To
+    play a recording of your own, put it in Home Assistant's www folder and give
+    http://<home-assistant-address>:8123/local/<file>.mp3 as the stream; a long recording works
+    best, since a file stops when it ends.
+  domain: automation
+  author: TECHO5
+  source_url: https://github.com/HuskerMinion/techo5/blob/main/blueprints/automation/techo5/rain_sounds_by_voice.yaml
+  homeassistant:
+    min_version: 2024.10.0
+  input:
+    stream:
+      name: Rain stream
+      description: The address of the sound to play. The default is a free online rain stream.
+      default: https://maggie.torontocast.com:2020/stream/natureradiorain
+      selector:
+        text:
+          type: url
+
+variables:
+  stream: !input stream
+triggers:
+  - trigger: conversation
+    command:
+      - "play [the] sound[s] of rain"
+      - "play rain [sounds]"
+actions:
+  - variables:
+      speaker: >-
+        {{ (device_entities(trigger.device_id) | select('match', 'media_player[.]') | list + [''])
+           | first if trigger.device_id is not none else '' }}
+  - if: "{{ not speaker }}"
+    then:
+      - set_conversation_response: "Say that to the speaker you want the rain on."
+      - stop: No speaker heard it
+  - action: media_player.play_media
+    target:
+      entity_id: "{{ speaker }}"
+    data:
+      media_content_type: music
+      media_content_id: "{{ stream }}"
+  - set_conversation_response: "Playing rain."
+mode: single

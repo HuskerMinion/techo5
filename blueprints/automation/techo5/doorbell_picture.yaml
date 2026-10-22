@@ -1,0 +1,136 @@
+blueprint:
+  name: TECHO5 - doorbell picture
+  description: >-
+    When the doorbell rings, puts the door camera's live view up full screen on TECHO5 devices with
+    a message over it, and runs your actions when nobody answered: the picture ran its time on every
+    device without anybody tapping it away. Tapped away on any device, or taken over by a newer
+    notification, is not an unanswered door. A Dot has no screen: it chimes, and says the message if
+    asked. The picture needs each device's `home_assistant` action set up; speaking needs "Allow the
+    device to perform Home Assistant actions" turned on in its ESPHome integration options.
+  domain: automation
+  author: TECHO5
+  source_url: https://github.com/HuskerMinion/techo5/blob/main/blueprints/automation/techo5/doorbell_picture.yaml
+  homeassistant:
+    min_version: 2024.10.0
+  input:
+    doorbell:
+      name: Doorbell
+      description: Rings when this turns on.
+      selector:
+        entity:
+          domain: binary_sensor
+    devices:
+      name: TECHO5 devices
+      description: Leave empty for every TECHO5 device.
+      default: []
+      selector:
+        device:
+          integration: esphome
+          manufacturer: TECHO5
+          multiple: true
+    camera:
+      name: Camera
+      description: Its live view is shown.
+      selector:
+        entity:
+          domain: camera
+    title:
+      name: Title
+      default: Doorbell
+      selector:
+        text:
+    message:
+      name: Message
+      default: Someone is at the front door
+      selector:
+        text:
+    speak:
+      name: Say the message aloud
+      default: true
+      selector:
+        boolean:
+    sound:
+      name: Camera sound
+      default: device
+      selector:
+        select:
+          options:
+            - label: As each device's Camera sound setting
+              value: device
+            - label: "On"
+              value: "on"
+            - label: "Off"
+              value: "off"
+    seconds:
+      name: Show it for
+      default: 60
+      selector:
+        number:
+          min: 10
+          max: 600
+          unit_of_measurement: seconds
+    tag:
+      name: Tag
+      description: >-
+        Picks out this doorbell's picture from other notifications. Give each doorbell its own when
+        you have more than one.
+      default: doorbell
+      selector:
+        text:
+    unanswered:
+      name: When nobody answered
+      description: Such as a notification to a phone.
+      default: []
+      selector:
+        action: {}
+
+variables:
+  chosen: !input devices
+  speak: !input speak
+  sound: !input sound
+  seconds: !input seconds
+  tag: !input tag
+triggers:
+  - trigger: state
+    entity_id: !input doorbell
+    to: "on"
+actions:
+  - variables:
+      # Each TECHO5 device is several in Home Assistant: the device, and its microphone, playback,
+      # ring and assistants under it. Only the device itself has the actions.
+      targets: >-
+        {% set ns = namespace(out=[]) %}
+        {% set found = [chosen] | flatten | select | list or
+           (integration_entities('esphome') | select('is_device_attr', 'manufacturer', 'TECHO5')
+            | map('device_id') | reject('none') | list) %}
+        {% for d in found %}{% set ns.out = ns.out + [device_attr(d, 'via_device_id') or d] %}{% endfor %}
+        {{ ns.out | unique | list }}
+      nodes: "{{ targets | map('device_attr', 'name') | reject('none') | map('slugify') | list }}"
+  - repeat:
+      for_each: "{{ nodes }}"
+      sequence:
+        - action: "esphome.{{ repeat.item }}_notify_picture"
+          data:
+            message: !input message
+            title: !input title
+            picture: !input camera
+            chime: ""
+            speak: "{{ 'on' if speak else 'off' }}"
+            sound: "{{ '' if sound == 'device' else sound }}"
+            tag: "{{ tag }}"
+            seconds: "{{ seconds }}"
+          continue_on_error: true
+  # Somebody answered when the picture is tapped away on any device, or taken over by a newer
+  # notification. Each picture ends as expired after its time, so none of those by then is a door
+  # nobody answered. The tag picks out this doorbell's picture, not another notification.
+  - wait_for_trigger:
+      - trigger: event
+        event_type: esphome.techo5_notification
+        event_data: { tag: "{{ tag }}", event: dismissed }
+      - trigger: event
+        event_type: esphome.techo5_notification
+        event_data: { tag: "{{ tag }}", event: replaced }
+    timeout: "{{ seconds + 15 }}"
+  - if: "{{ wait.trigger is none }}"
+    then: !input unanswered
+mode: single

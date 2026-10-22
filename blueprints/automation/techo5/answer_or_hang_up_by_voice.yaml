@@ -1,0 +1,103 @@
+blueprint:
+  name: TECHO5 - answer or hang up a call by voice
+  description: >-
+    Answers or hangs up a TECHO5 phone or intercom call by voice: "answer", "pick up the call",
+    "hang up", "end the call", "decline". With no device named, it answers the one that is ringing
+    and hangs up every TECHO5 call. Name one to pick it ("answer the call in the kitchen", "hang up
+    the office"); names match the TECHO5 name, a name given in Home Assistant, or the area. Say it to
+    any voice device or the Home Assistant app, or to the device in the call when its wake word
+    during calls is on. Nothing has to be set.
+  domain: automation
+  author: TECHO5
+  source_url: https://github.com/HuskerMinion/techo5/blob/main/blueprints/automation/techo5/answer_or_hang_up_by_voice.yaml
+  homeassistant:
+    min_version: 2024.10.0
+  input:
+    aliases:
+      name: Aliases
+      description: >-
+        Other names for a device, one per line, like `sweet room: Suite Room` when speech to text
+        writes "Suite Room" as "Sweet Room". The left side is what gets heard, the right side a
+        device's name, its name in Home Assistant, or its area.
+      default: {}
+      selector:
+        object: {}
+
+variables:
+  aliases: !input aliases
+triggers:
+  - trigger: conversation
+    id: answer
+    command:
+      - "(answer|pick up) [the] [call|phone|intercom]"
+      - "(answer|pick up) [the] (call|phone|intercom) (on|in|at) [the] {who}"
+      - "(answer|pick up) [the] {who}"
+  - trigger: conversation
+    id: hangup
+    command:
+      - "(hang up|end|decline|reject|ignore) [the] [call|phone|intercom]"
+      - "(hang up|end|decline|reject|ignore) [the] (call|phone|intercom) (on|in|at) [the] {who}"
+      - "hang up [the] {who}"
+actions:
+  - variables:
+      devices: |-
+        {%- set ns = namespace(out=[]) -%}
+        {%- for d in states.button | selectattr('entity_id', 'search', '_stop_alarm_or_timer$') | map(attribute='entity_id') | map('device_id') | reject('none') | unique -%}
+          {%- set ents = device_entities(d) -%}
+          {%- set ns.out = ns.out + [{
+              'id': d,
+              'name': device_attr(d, 'name_by_user') or device_attr(d, 'name'),
+              'names': [device_attr(d, 'name'), device_attr(d, 'name_by_user'), area_name(d)] | reject('none') | map('lower') | unique | list,
+              'state': states(ents | select('search', '^sensor[.].*_phone$') | first | default('')),
+              'answer': ents | select('search', '^button[.].*_answer_call$') | first | default(''),
+              'hangup': ents | select('search', '^button[.].*_hang_up$') | first | default('')}] -%}
+        {%- endfor -%}
+        {{ ns.out }}
+      # What was heard, in lower case with "the", number words and a trailing "call" taken out, then
+      # through the aliases.
+      who: |-
+        {%- macro norm(s) -%}
+          {%- set nums = {'one': '1', 'two': '2', 'three': '3', 'four': '4', 'five': '5', 'six': '6', 'seven': '7', 'eight': '8', 'nine': '9', 'ten': '10'} -%}
+          {%- set w = namespace(w=[]) -%}
+          {%- for x in (s | string | lower | regex_replace('[^a-z0-9 ]', ' ')).split() -%}{%- if not (loop.first and x == 'the') -%}{%- set w.w = w.w + [nums.get(x, x)] -%}{%- endif -%}{%- endfor -%}
+          {%- set out = w.w | join(' ') | regex_replace('\s*\\b(call|phone|intercom)$', '') | trim -%}
+          {{- '' if out in ['call', 'phone', 'intercom'] else out -}}
+        {%- endmacro -%}
+        {%- set heard = norm(trigger.slots.who | default('')) -%}
+        {%- set m = namespace(out={}) -%}
+        {%- for k, v in (aliases or {}).items() -%}{%- set m.out = dict(m.out, **{norm(k): (v | string | lower | trim)}) -%}{%- endfor -%}
+        {{ m.out.get(heard, heard) }}
+  - variables:
+      named: "{{ devices | selectattr('names', 'contains', who) | list if who else devices }}"
+      live: "{{ named | selectattr('state', 'in', ['Ringing'] if trigger.id == 'answer' else ['Ringing', 'Calling', 'In call']) | list }}"
+      said: |-
+        {%- set n = live | map(attribute='name') | list -%}
+        {{ n[:-1] | join(', ') ~ ' and ' ~ n[-1] if n | count > 1 else n | join }}
+  - choose:
+      - conditions: "{{ who != '' and named | count == 0 }}"
+        sequence:
+          - set_conversation_response: "I don't know a device called {{ trigger.slots.who }}."
+      - conditions: "{{ live | count == 0 }}"
+        sequence:
+          - set_conversation_response: >-
+              {{ ('Nothing is ringing' if trigger.id == 'answer' else 'There is no call') ~ (' on ' ~ named[0].name if who else '') }}.
+      - conditions:
+          - condition: trigger
+            id: answer
+          - "{{ live | count > 1 }}"
+        sequence:
+          - set_conversation_response: "{{ said }} are ringing. Say answer the call on, and the device."
+      - conditions:
+          - condition: trigger
+            id: answer
+        sequence:
+          - action: button.press
+            target:
+              entity_id: "{{ live[0].answer }}"
+          - set_conversation_response: "Answered on {{ live[0].name }}."
+    default:
+      - action: button.press
+        target:
+          entity_id: "{{ live | map(attribute='hangup') | reject('eq', '') | list }}"
+      - set_conversation_response: "Hung up {{ said }}."
+mode: queued

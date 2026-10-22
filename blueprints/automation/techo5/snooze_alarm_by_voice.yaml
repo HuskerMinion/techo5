@@ -1,0 +1,36 @@
+blueprint:
+  name: TECHO5 - snooze an alarm by voice
+  description: >-
+    "Snooze", "snooze for ten minutes" or "snooze the alarm another 5 minutes" said to a TECHO5
+    device snoozes its ringing alarm, and Home Assistant answers "Snoozed until 7:42 AM." The whole
+    sentence goes to the device's `alarm_snooze_for` action, which reads the length from it. A
+    ringing timer cannot be put off, so it stops. One automation covers every TECHO5 device; the
+    action name comes from the device's name in Home Assistant. Nothing to set.
+  domain: automation
+  author: TECHO5
+  source_url: https://github.com/HuskerMinion/techo5/blob/main/blueprints/automation/techo5/snooze_alarm_by_voice.yaml
+  homeassistant:
+    min_version: 2024.10.0
+  input: {}
+
+triggers:
+  - trigger: conversation
+    command:
+      - "snooze [the] [alarm|it]"
+      - "snooze {rest}"
+conditions:
+  - "{{ device_entities(trigger.device_id) | select('search', 'stop_alarm') | list | count > 0 }}"
+actions:
+  - action: "esphome.{{ device_attr(trigger.device_id, 'name') | slugify }}_alarm_snooze_for"
+    data:
+      sentence: "{{ trigger.sentence }}"
+    response_variable: snooze
+    continue_on_error: true
+  - if:
+      - condition: template
+        value_template: "{{ snooze is defined and snooze.snoozed | default(false) }}"
+    then:
+      - set_conversation_response: "Snoozed until {{ snooze.until }}."
+    else:
+      - set_conversation_response: "{{ 'Stopped.' if snooze is defined and snooze.stopped | default(false) else 'Nothing is ringing.' }}"
+mode: queued

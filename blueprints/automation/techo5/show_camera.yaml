@@ -1,0 +1,99 @@
+blueprint:
+  name: TECHO5 - show a camera when something happens
+  description: >-
+    Puts a camera's live view up on TECHO5 screens when something happens: the garage door opens,
+    a gate opens, motion at the door. Choose the devices, or leave them empty for every TECHO5 device
+    with a screen. The camera's sound can follow each device's own Camera sound setting, or be turned
+    on or off for this view. Needs each device's `home_assistant` action set up, or the view shows
+    "hass: no access configured" in place of the picture.
+  domain: automation
+  author: TECHO5
+  source_url: https://github.com/HuskerMinion/techo5/blob/main/blueprints/automation/techo5/show_camera.yaml
+  homeassistant:
+    min_version: 2024.10.0
+  input:
+    when:
+      name: When
+      description: Such as the garage door's state changing to open.
+      selector:
+        trigger: {}
+    only_if:
+      name: Only if
+      description: Optional, such as only after dark.
+      default: []
+      selector:
+        condition: {}
+    camera:
+      name: Camera
+      selector:
+        entity:
+          domain: camera
+    devices:
+      name: TECHO5 devices
+      description: Leave empty for every TECHO5 device with a screen.
+      default: []
+      selector:
+        device:
+          integration: esphome
+          manufacturer: TECHO5
+          multiple: true
+    seconds:
+      name: Show it for
+      default: 30
+      selector:
+        number:
+          min: 5
+          max: 600
+          unit_of_measurement: seconds
+    sound:
+      name: Camera sound
+      default: device
+      selector:
+        select:
+          options:
+            - label: As each device's Camera sound setting
+              value: device
+            - label: "On"
+              value: "on"
+            - label: "Off"
+              value: "off"
+
+variables:
+  chosen: !input devices
+  camera: !input camera
+  seconds: !input seconds
+  sound: !input sound
+triggers: !input when
+conditions: !input only_if
+actions:
+  - variables:
+      # Each TECHO5 device is several in Home Assistant: the device, and its microphone, playback,
+      # ring and assistants under it. Only the device itself has the actions. With none chosen, the
+      # ones with a screen are those with a Night mode switch.
+      targets: >-
+        {% set ns = namespace(out=[]) %}
+        {% for d in [chosen] | flatten | select | list %}{% set ns.out = ns.out + [device_attr(d, 'via_device_id') or d] %}{% endfor %}
+        {% if not ns.out %}
+          {% set ns.out = integration_entities('esphome') | select('match', 'switch[.].*_night_mode$')
+                          | select('is_device_attr', 'manufacturer', 'TECHO5') | map('device_id') | list %}
+        {% endif %}
+        {{ ns.out | unique | list }}
+      nodes: "{{ targets | map('device_attr', 'name') | reject('none') | map('slugify') | list }}"
+  - repeat:
+      for_each: "{{ nodes }}"
+      sequence:
+        - if: "{{ sound == 'device' }}"
+          then:
+            - action: "esphome.{{ repeat.item }}_home_show_camera"
+              data:
+                entity: "{{ camera }}"
+                seconds: "{{ seconds }}"
+              continue_on_error: true
+          else:
+            - action: "esphome.{{ repeat.item }}_home_show_camera_sound"
+              data:
+                entity: "{{ camera }}"
+                seconds: "{{ seconds }}"
+                sound: "{{ sound }}"
+              continue_on_error: true
+mode: restart

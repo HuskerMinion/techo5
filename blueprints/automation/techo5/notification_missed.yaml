@@ -1,0 +1,56 @@
+blueprint:
+  name: TECHO5 - notification nobody saw
+  description: >-
+    Runs your actions when a TECHO5 notification with a given tag runs out of time without anybody
+    tapping it away, such as telling a phone that the washer card on the kitchen Show was missed.
+    Give the notification its tag in the `notify` or `notify_picture` call that puts it up. A card
+    with no time limit ends as expired after 12 hours at most.
+  domain: automation
+  author: TECHO5
+  source_url: https://github.com/HuskerMinion/techo5/blob/main/blueprints/automation/techo5/notification_missed.yaml
+  homeassistant:
+    min_version: 2024.10.0
+  input:
+    techo5:
+      name: TECHO5 device
+      selector:
+        device:
+          integration: esphome
+          manufacturer: TECHO5
+    tag:
+      name: Tag
+      description: The tag the notification was given.
+      selector:
+        text:
+    event:
+      name: When it
+      default: expired
+      selector:
+        select:
+          options:
+            - label: Ran out of time (nobody saw it)
+              value: expired
+            - label: Was tapped away
+              value: dismissed
+            - label: Was replaced by a newer one
+              value: replaced
+            - label: Came up
+              value: shown
+    actions:
+      name: Actions
+      selector:
+        action: {}
+
+variables:
+  picked: !input techo5
+  # A device's microphone, playback, ring and assistants are devices under it; take the device itself.
+  techo5: "{{ device_attr(picked, 'via_device_id') or picked }}"
+  tag: !input tag
+  event: !input event
+triggers:
+  - trigger: event
+    event_type: esphome.techo5_notification
+conditions:
+  - "{{ trigger.event.data.tag == tag and trigger.event.data.event == event and trigger.event.data.device == device_attr(techo5, 'name') }}"
+actions: !input actions
+mode: queued

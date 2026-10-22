@@ -1,0 +1,43 @@
+blueprint:
+  name: TECHO5 - voice request failed
+  description: >-
+    Puts up a Home Assistant notification when a voice request on any TECHO5 device ends in an error,
+    with what was heard and Home Assistant's error code, and can keep a logbook line for every
+    request. The devices need "Allow the device to perform Home Assistant actions" turned on in their
+    ESPHome integration options.
+  domain: automation
+  author: TECHO5
+  source_url: https://github.com/HuskerMinion/techo5/blob/main/blueprints/automation/techo5/voice_request_failed.yaml
+  homeassistant:
+    min_version: 2024.10.0
+  input:
+    logbook:
+      name: Log every request
+      description: Keep a logbook line for each request, not only the failed ones.
+      default: false
+      selector:
+        boolean:
+
+variables:
+  logbook: !input logbook
+triggers:
+  - trigger: event
+    event_type: esphome.techo5_voice
+conditions:
+  - "{{ logbook or trigger.event.data.ended == 'error' }}"
+actions:
+  - if: "{{ logbook }}"
+    then:
+      - action: logbook.log
+        data:
+          name: "{{ trigger.event.data.device }}"
+          message: "heard {{ trigger.event.data.heard | default('nothing') }}, {{ trigger.event.data.ended }}"
+  - if: "{{ trigger.event.data.ended == 'error' }}"
+    then:
+      - action: persistent_notification.create
+        data:
+          title: "Voice request failed on {{ trigger.event.data.device }}"
+          message: >-
+            Heard "{{ trigger.event.data.heard | default('') }}",
+            error {{ trigger.event.data.error }}.
+mode: queued

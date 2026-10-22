@@ -1,0 +1,61 @@
+blueprint:
+  name: TECHO5 - volume on the speaker that heard it
+  description: >-
+    Home Assistant's own volume command changes every speaker in the room's area, so in a room with a
+    TV or another speaker "volume down" can turn down the wrong one. This changes only the speaker
+    that heard the sentence. "Volume 4" is level 4 of 10, and 11 to 100 is a percent; "up" or "down"
+    moves one level, or as many as you say ("volume down 3"); "down to 2" sets level 2. Works for any
+    voice satellite with its own media player, TECHO5 or not. Nothing to set.
+  domain: automation
+  author: TECHO5
+  source_url: https://github.com/HuskerMinion/techo5/blob/main/blueprints/automation/techo5/volume_by_voice.yaml
+  homeassistant:
+    min_version: 2024.10.0
+  input: {}
+
+triggers:
+  - trigger: conversation
+    command:
+      - "[turn [the]] volume {rest}"
+      - "set [the] volume {rest}"
+      - "[turn|set] [the] volume (up|down)"
+actions:
+  - variables:
+      speaker: >-
+        {{ (device_entities(trigger.device_id) | select('match', 'media_player[.]') | list + [''])
+           | first if trigger.device_id is not none else '' }}
+      words: "{{ (trigger.sentence | lower | regex_replace('[^a-z0-9 ]', ' ')).split() }}"
+      direction: "{{ 'up' if 'up' in words else ('down' if 'down' in words else '') }}"
+      named: >-
+        {% set map = {'one': 1, 'two': 2, 'three': 3, 'four': 4, 'five': 5,
+                      'six': 6, 'seven': 7, 'eight': 8, 'nine': 9, 'ten': 10} %}
+        {% set ns = namespace(n='') %}
+        {% for w in words if ns.n == '' %}
+          {% if w is match('^[0-9]+$') %}{% set ns.n = w | int %}
+          {% elif w in map %}{% set ns.n = map[w] %}{% endif %}
+        {% endfor %}
+        {{ ns.n }}
+      now: "{{ state_attr(speaker, 'volume_level') | float(0) if speaker else 0 }}"
+  - choose:
+      - conditions: "{{ speaker == '' }}"
+        sequence:
+          - set_conversation_response: "Say that to the speaker you want changed."
+      - conditions: "{{ direction == '' and named == '' }}"
+        sequence:
+          - set_conversation_response: "How loud? Say volume and a number from 1 to 10."
+    default:
+      - variables:
+          target: >-
+            {% if named != '' and (direction == '' or 'to' in words) %}
+              {{ named / 10 if named <= 10 else named / 100 }}
+            {% else %}
+              {{ now + (0.1 if direction == 'up' else -0.1) * (named if named != '' else 1) }}
+            {% endif %}
+          level: "{{ [[target | float, 0] | max, 1] | min | round(2) }}"
+      - action: media_player.volume_set
+        target:
+          entity_id: "{{ speaker }}"
+        data:
+          volume_level: "{{ level }}"
+      - set_conversation_response: "Volume {{ (level * 10) | round | int }}."
+mode: queued

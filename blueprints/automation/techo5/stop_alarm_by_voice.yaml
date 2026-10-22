@@ -1,0 +1,28 @@
+blueprint:
+  name: TECHO5 - stop alarm or timer by voice
+  description: >-
+    "Stop the alarm", "turn off the timer" or "stop the ringing" said to a TECHO5 device stops
+    what is ringing on that device, and Home Assistant answers "Stopped." rather than not
+    understanding. One automation covers every TECHO5 device in the house; a speaker that is not a
+    TECHO5 device is left alone. Nothing to set.
+  domain: automation
+  author: TECHO5
+  source_url: https://github.com/HuskerMinion/techo5/blob/main/blueprints/automation/techo5/stop_alarm_by_voice.yaml
+  homeassistant:
+    min_version: 2024.10.0
+  input: {}
+
+triggers:
+  - trigger: conversation
+    command:
+      - "stop [the] (alarm|timer)"
+      - "turn off [the] (alarm|timer)"
+      - "stop [the] ringing"
+conditions:
+  - "{{ device_entities(trigger.device_id) | select('search', 'stop_alarm') | list | count > 0 }}"
+actions:
+  - action: button.press
+    target:
+      entity_id: "{{ device_entities(trigger.device_id) | select('search', 'stop_alarm') | first }}"
+  - set_conversation_response: "Stopped."
+mode: queued

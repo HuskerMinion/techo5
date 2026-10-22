@@ -1,0 +1,94 @@
+blueprint:
+  name: TECHO5 - timer while an appliance runs
+  description: >-
+    Starts a timer on a TECHO5 device when an appliance starts (the washer, the dishwasher, the
+    oven), so the device counts it down, shows it and rings when it is due, and cancels it when the
+    appliance stops first. The timer belongs to the device and keeps going with Home Assistant down.
+    Starting again while one is counting replaces it. Timers are matched by their label, so give
+    each appliance its own.
+  domain: automation
+  author: TECHO5
+  source_url: https://github.com/HuskerMinion/techo5/blob/main/blueprints/automation/techo5/appliance_timer.yaml
+  homeassistant:
+    min_version: 2024.10.0
+  input:
+    appliance:
+      name: Appliance
+      description: The entity that shows it running.
+      selector:
+        entity: {}
+    running:
+      name: Running state
+      description: The state it is in while it runs, such as on, running or washing.
+      default: "on"
+      selector:
+        text:
+    techo5:
+      name: TECHO5 device
+      selector:
+        device:
+          integration: esphome
+          manufacturer: TECHO5
+    duration:
+      name: Timer length
+      default:
+        hours: 1
+        minutes: 0
+        seconds: 0
+      selector:
+        duration: {}
+    label:
+      name: Label
+      description: Shown on the screen while it counts down and when it rings.
+      default: Washer
+      selector:
+        text:
+    cancel:
+      name: Cancel it when the appliance stops
+      default: true
+      selector:
+        boolean:
+
+variables:
+  picked: !input techo5
+  # A device's microphone, playback, ring and assistants are devices under it; take the device itself.
+  node: "{{ device_attr(device_attr(picked, 'via_device_id') or picked, 'name') | slugify }}"
+  running: !input running
+  duration: !input duration
+  label: !input label
+  cancel: !input cancel
+triggers:
+  - trigger: state
+    entity_id: !input appliance
+    to: !input running
+    id: started
+  - trigger: state
+    entity_id: !input appliance
+    from: !input running
+    id: stopped
+conditions:
+  - "{{ trigger.id == 'started' or cancel }}"
+  # A restart of Home Assistant or the appliance going unavailable is not a finished run.
+  - "{{ trigger.to_state.state not in ['unavailable', 'unknown'] and trigger.from_state.state not in ['unavailable', 'unknown'] }}"
+actions:
+  # Whichever way it went, this appliance's timers counting down now are done with.
+  - action: "esphome.{{ node }}_alarms_list"
+    response_variable: listing
+  - repeat:
+      for_each: >-
+        {{ listing.timers | default([]) | selectattr('local') | selectattr('label', 'eq', label)
+           | map(attribute='id') | list }}
+      sequence:
+        - action: "esphome.{{ node }}_timer_cancel"
+          data:
+            id: "{{ repeat.item }}"
+          continue_on_error: true
+  - if: "{{ trigger.id == 'started' }}"
+    then:
+      - action: "esphome.{{ node }}_timer_start"
+        data:
+          duration: >-
+            {{ '%02d:%02d:%02d' | format(duration.hours | default(0) | int + (duration.days | default(0) | int) * 24,
+                                         duration.minutes | default(0) | int, duration.seconds | default(0) | int) }}
+          label: "{{ label }}"
+mode: queued

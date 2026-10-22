@@ -1,0 +1,37 @@
+blueprint:
+  name: TECHO5 - missed call
+  description: >-
+    When a phone call to a TECHO5 device goes unanswered, runs your actions (tell a phone). Every
+    device in a ring group reports the call, and one of them may have answered it, so this waits 3
+    seconds and goes ahead only when no TECHO5 device is in a call. `{{ peer }}` is the caller and
+    `{{ device }}` the device that reported it.
+  domain: automation
+  author: TECHO5
+  source_url: https://github.com/HuskerMinion/techo5/blob/main/blueprints/automation/techo5/missed_call.yaml
+  homeassistant:
+    min_version: 2024.10.0
+  input:
+    notify:
+      name: Actions
+      description: >-
+        What to do, such as a notification: message "Missed call from {{ peer }}."
+      selector:
+        action: {}
+
+triggers:
+  - trigger: event
+    event_type: esphome.techo5_phone
+    event_data:
+      event: missed
+variables:
+  peer: "{{ trigger.event.data.peer }}"
+  device: "{{ trigger.event.data.device }}"
+actions:
+  - delay: 3
+  - condition: template
+    value_template: >-
+      {{ states.sensor | selectattr('entity_id', 'search', '_phone$')
+         | selectattr('state', 'eq', 'In call') | list | count == 0 }}
+  - choose: []
+    default: !input notify
+mode: single

@@ -1,0 +1,100 @@
+blueprint:
+  name: TECHO5 - help by voice
+  description: >-
+    "I need help", "help me" or "emergency" said to a TECHO5 device runs your alert actions (tell
+    phones), then calls each number in turn from that device until one answers. When someone
+    answers, the device tells them which room asked for help. A voicemail box answering counts as
+    answered, so the list stops there. Needs the device's phone signed in for the calls; the alert
+    runs either way.
+  domain: automation
+  author: TECHO5
+  source_url: https://github.com/HuskerMinion/techo5/blob/main/blueprints/automation/techo5/help_by_voice.yaml
+  homeassistant:
+    min_version: 2024.10.0
+  input:
+    alert:
+      name: Alert
+      description: >-
+        What to do first, such as a high-priority notification to phones. `{{ room }}` is the name
+        of the device that heard it.
+      default: []
+      selector:
+        action: {}
+    numbers:
+      name: Numbers to call
+      description: Called in this order until one answers. Leave empty to only run the alert.
+      default: []
+      selector:
+        text:
+          multiple: true
+    ring_seconds:
+      name: Ring each number for
+      default: 70
+      selector:
+        number:
+          min: 15
+          max: 180
+          unit_of_measurement: seconds
+    announcement:
+      name: What to say when someone answers
+      default: "This is a help call from the {{ room }}. Someone here asked for help."
+      selector:
+        text:
+          multiline: true
+
+variables:
+  numbers: !input numbers
+  ring_seconds: !input ring_seconds
+triggers:
+  - trigger: conversation
+    command:
+      - "I need help"
+      - "help me"
+      - "emergency"
+actions:
+  - variables:
+      device: "{{ trigger.device_id }}"
+      room: "{{ device_attr(device, 'name') if device else 'Home Assistant app' }}"
+      call: "esphome.{{ room | slugify }}_phone_call"
+      hangup: "esphome.{{ room | slugify }}_phone_hangup"
+      satellite: >-
+        {{ (device_entities(device) | select('match', 'assist_satellite[.]') | list + [''])
+           | first if device else '' }}
+      can_call: "{{ device is not none and device_entities(device) | select('search', 'phone_hangup') | list | count > 0 }}"
+  - choose: []
+    default: !input alert
+  - set_conversation_response: "{{ 'Calling for help now.' if can_call and numbers else 'I have let everyone know.' }}"
+  - if: "{{ not can_call }}"
+    then:
+      - stop: No phone on this device
+  - repeat:
+      for_each: "{{ numbers }}"
+      sequence:
+        - action: "{{ call }}"
+          data:
+            number: "{{ repeat.item }}"
+        # dialing arrives first and decides nothing: wait for what does.
+        - wait_for_trigger:
+            - trigger: event
+              event_type: esphome.techo5_phone
+              event_data: { device: "{{ room }}", event: answered }
+            - trigger: event
+              event_type: esphome.techo5_phone
+              event_data: { device: "{{ room }}", event: not_answered }
+            - trigger: event
+              event_type: esphome.techo5_phone
+              event_data: { device: "{{ room }}", event: ended }
+          timeout: "{{ ring_seconds }}"
+        - if: "{{ wait.trigger is not none and wait.trigger.event.data.event == 'answered' }}"
+          then:
+            - delay: 1
+            - action: assist_satellite.announce
+              target:
+                entity_id: "{{ satellite }}"
+              data:
+                message: !input announcement
+                preannounce: false
+            - stop: answered
+          else:
+            - action: "{{ hangup }}"
+mode: single

@@ -1,0 +1,54 @@
+blueprint:
+  name: TECHO5 - stop every device
+  description: >-
+    Stops whatever every TECHO5 device is doing: a voice request and anything playing. It finds the
+    devices by their manufacturer, so it picks up a new device by itself. It leaves alarms alone
+    unless you choose otherwise, because "Stop alarm or timer" pressed on a device with nothing
+    ringing cancels its snoozed alarms and turns off a wake light held for the next alarm.
+  domain: script
+  author: TECHO5
+  source_url: https://github.com/HuskerMinion/techo5/blob/main/blueprints/script/techo5/stop_every_device.yaml
+  homeassistant:
+    min_version: 2024.10.0
+  input:
+    alarms:
+      name: Stop alarms and timers too
+      description: Also stops ringing alarms and timers, and cancels snoozed ones.
+      default: false
+      selector:
+        boolean:
+    mute:
+      name: Mute instead of stopping
+      description: Mutes the speakers rather than stopping what they play.
+      default: false
+      selector:
+        boolean:
+
+mode: single
+variables:
+  alarms: !input alarms
+  mute: !input mute
+sequence:
+  - variables:
+      techo5: >-
+        {{ integration_entities('esphome')
+           | select('is_device_attr', 'manufacturer', 'TECHO5') | list }}
+      players: "{{ techo5 | select('match', 'media_player[.]') | list }}"
+  - action: button.press
+    target:
+      entity_id: >-
+        {{ techo5 | select('search', '_(cancel_request|stop_alarm_or_timer)$' if alarms else '_cancel_request$') | list }}
+    continue_on_error: true
+  - if: "{{ mute }}"
+    then:
+      - action: media_player.volume_mute
+        target:
+          entity_id: "{{ players }}"
+        data:
+          is_volume_muted: true
+        continue_on_error: true
+    else:
+      - action: media_player.media_stop
+        target:
+          entity_id: "{{ players }}"
+        continue_on_error: true

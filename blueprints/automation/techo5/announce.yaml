@@ -1,0 +1,83 @@
+blueprint:
+  name: TECHO5 - announce to the house when something happens
+  description: >-
+    Says something on every TECHO5 device in the house when something happens: a leak, a door left
+    open, rain coming. One device sends it to the others over the house's own network; the sending
+    device puts the words up and says them as well. Devices with a screen show the words; a Dot
+    chimes, and says them only on the sending device. Every device needs the same house word, set
+    on its setup page. Inside a device's quiet hours it is shown and not sounded. Speaking on the
+    sending device needs "Allow the device to perform Home Assistant actions" turned on in its
+    ESPHome integration options.
+  domain: automation
+  author: TECHO5
+  source_url: https://github.com/HuskerMinion/techo5/blob/main/blueprints/automation/techo5/announce.yaml
+  homeassistant:
+    min_version: 2024.10.0
+  input:
+    when:
+      name: When
+      selector:
+        trigger: {}
+    only_if:
+      name: Only if
+      default: []
+      selector:
+        condition: {}
+    text:
+      name: What to say
+      description: >-
+        Templates work, such as "Water under the {{ trigger.to_state.name }}".
+      selector:
+        text:
+          multiline: true
+    sender:
+      name: Send from
+      description: >-
+        The TECHO5 device that sends it. Leave empty for any one of them.
+      default: ""
+      selector:
+        device:
+          integration: esphome
+          manufacturer: TECHO5
+    here_too:
+      name: Say it on the sending device too
+      description: The house announcement reaches every other device, not the one sending it.
+      default: true
+      selector:
+        boolean:
+
+variables:
+  picked: !input sender
+  here_too: !input here_too
+triggers: !input when
+conditions: !input only_if
+actions:
+  - variables:
+      said: !input text
+      # A device's microphone, playback, ring and assistants are devices under it; take the device
+      # itself. With none chosen, any device that can announce.
+      sender: >-
+        {% if picked %}{{ device_attr(picked, 'via_device_id') or picked }}
+        {% else %}{{ integration_entities('esphome') | select('match', 'button[.].*_stop_alarm_or_timer$')
+                     | select('is_device_attr', 'manufacturer', 'TECHO5') | map('device_id') | first | default('') }}
+        {% endif %}
+      node: "{{ device_attr(sender | trim, 'name') | slugify if sender | trim else '' }}"
+  - if: "{{ node == '' or said | trim == '' }}"
+    then:
+      - stop: No TECHO5 device, or nothing to say
+  - action: "esphome.{{ node }}_announce_house"
+    data:
+      text: "{{ said }}"
+  - if: "{{ here_too }}"
+    then:
+      - action: "esphome.{{ node }}_notify"
+        data:
+          message: "{{ said }}"
+          title: ""
+          icon: "mdi:bullhorn"
+          chime: "on"
+          speak: "on"
+          tag: announce
+          seconds: 60
+        continue_on_error: true
+mode: queued

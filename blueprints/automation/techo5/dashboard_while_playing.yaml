@@ -1,0 +1,54 @@
+blueprint:
+  name: TECHO5 - show a dashboard while a speaker plays
+  description: >-
+    Puts a TECHO5 Show's dashboard up while a speaker plays, such as a Now Playing dashboard, and
+    goes back to the clock once it has stopped for a while. The device's Dashboard setting must not
+    be Off.
+  domain: automation
+  author: TECHO5
+  source_url: https://github.com/HuskerMinion/techo5/blob/main/blueprints/automation/techo5/dashboard_while_playing.yaml
+  homeassistant:
+    min_version: 2024.10.0
+  input:
+    speaker:
+      name: Speaker
+      selector:
+        entity:
+          domain: media_player
+    techo5:
+      name: TECHO5 device
+      selector:
+        device:
+          integration: esphome
+          manufacturer: TECHO5
+    stopped_for:
+      name: Back to the clock after it has stopped for
+      default:
+        minutes: 5
+      selector:
+        duration: {}
+
+variables:
+  picked: !input techo5
+  # A device's microphone, playback, ring and assistants are devices under it; take the device itself.
+  techo5: "{{ device_attr(picked, 'via_device_id') or picked }}"
+  node: "{{ device_attr(techo5, 'name') | slugify }}"
+triggers:
+  - trigger: state
+    entity_id: !input speaker
+    to: playing
+    id: playing
+  - trigger: state
+    entity_id: !input speaker
+    from: playing
+    for: !input stopped_for
+    id: stopped
+actions:
+  - if:
+      - condition: trigger
+        id: playing
+    then:
+      - action: "esphome.{{ node }}_dashboard_show"
+    else:
+      - action: "esphome.{{ node }}_dashboard_hide"
+mode: restart

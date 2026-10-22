@@ -1,0 +1,52 @@
+blueprint:
+  name: TECHO5 - follow the wake light
+  description: >-
+    Brings a room light up with a TECHO5 device's wake light (Wake with light), at the same
+    brightness and color. The sensors change at most every 5 seconds while the light comes up, and
+    at once when it comes on.
+  domain: automation
+  author: TECHO5
+  source_url: https://github.com/HuskerMinion/techo5/blob/main/blueprints/automation/techo5/follow_wake_light.yaml
+  homeassistant:
+    min_version: 2024.10.0
+  input:
+    brightness:
+      name: Wake light brightness sensor
+      description: The device's sensor ending in _wake_light_brightness.
+      selector:
+        entity:
+          domain: sensor
+          integration: esphome
+    color:
+      name: Wake light color sensor
+      description: The device's sensor ending in _wake_light_color.
+      selector:
+        entity:
+          domain: sensor
+          integration: esphome
+    light:
+      name: Light to bring up
+      selector:
+        target:
+          entity:
+            domain: light
+
+variables:
+  brightness: !input brightness
+  color: !input color
+triggers:
+  - trigger: state
+    entity_id: !input brightness
+conditions:
+  - condition: numeric_state
+    entity_id: !input brightness
+    above: 0
+actions:
+  - action: light.turn_on
+    target: !input light
+    data:
+      brightness_pct: "{{ states(brightness) | int }}"
+      rgb_color: >-
+        {% set c = states(color) %}
+        {{ [c[1:3] | int(base=16), c[3:5] | int(base=16), c[5:7] | int(base=16)] }}
+mode: restart

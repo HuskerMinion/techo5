@@ -1,0 +1,148 @@
+blueprint:
+  name: TECHO5 - notify devices
+  description: >-
+    A script that puts a notification up on TECHO5 devices, for any automation to call: a card with
+    an icon, a title and a message, or, given a picture, a picture full screen with the words over
+    it. A camera's picture is its live view. It goes to the devices the call names, or else to the
+    ones chosen here, or else to every TECHO5 device in the house, found by their manufacturer so a
+    new one is picked up by itself. A Dot has no screen: it chimes and says the words if asked.
+    Speaking needs "Allow the device to perform Home Assistant actions" turned on in the device's
+    ESPHome integration options, and a picture from Home Assistant needs the device's
+    `home_assistant` action set up. Call it with, for example, `action: script.notify_techo5`,
+    `data: {message: "The washer is done", icon: "mdi:washing-machine", seconds: 600}`.
+  domain: script
+  author: TECHO5
+  source_url: https://github.com/HuskerMinion/techo5/blob/main/blueprints/script/techo5/notify_devices.yaml
+  homeassistant:
+    min_version: 2024.10.0
+  input:
+    devices:
+      name: Devices
+      description: Where a call that names no devices goes. Leave empty for every TECHO5 device.
+      default: []
+      selector:
+        device:
+          integration: esphome
+          manufacturer: TECHO5
+          multiple: true
+
+fields:
+  message:
+    name: Message
+    description: Up to 240 bytes. Needed for a card; a picture can go without.
+    required: true
+    selector:
+      text:
+        multiline: true
+  title:
+    name: Title
+    description: Up to 40 bytes, shown in capitals above the message.
+    selector:
+      text:
+  icon:
+    name: Icon
+    description: Shown left of the title on a card. Not shown with a picture.
+    example: mdi:washing-machine
+    selector:
+      icon:
+  picture:
+    name: Picture
+    description: >-
+      A camera (its live view), an image entity, a path on Home Assistant like
+      /local/snapshots/door.jpg, or an http(s) address. Leave empty for a card.
+    selector:
+      text:
+  chime:
+    name: Chime
+    default: true
+    selector:
+      boolean:
+  speak:
+    name: Say it aloud
+    default: false
+    selector:
+      boolean:
+  sound:
+    name: Camera sound
+    description: For a camera's picture only.
+    default: device
+    selector:
+      select:
+        options:
+          - label: As the device's Camera sound setting
+            value: device
+          - label: "On"
+            value: "on"
+          - label: "Off"
+            value: "off"
+  tag:
+    name: Tag
+    description: Carried back on the notification's events, for an automation to tell this one from others.
+    selector:
+      text:
+  seconds:
+    name: Seconds
+    description: How long it stays up. 0 is until somebody taps it, 12 hours at most.
+    default: 0
+    selector:
+      number:
+        min: 0
+        max: 86400
+        unit_of_measurement: seconds
+        mode: box
+  devices:
+    name: Devices
+    description: Only these. Leave empty for the script's own choice.
+    selector:
+      device:
+        integration: esphome
+        manufacturer: TECHO5
+        multiple: true
+
+mode: parallel
+variables:
+  chosen: !input devices
+sequence:
+  - variables:
+      # Each TECHO5 device is several in Home Assistant: the device, and its microphone, playback,
+      # ring and assistants under it. Only the device itself has the actions, so each one picked or
+      # found is taken to the device it hangs under.
+      every: >-
+        {% set ns = namespace(out=[]) %}
+        {% for d in integration_entities('esphome') | select('is_device_attr', 'manufacturer', 'TECHO5')
+                    | map('device_id') | reject('none') | unique %}
+          {% set ns.out = ns.out + [device_attr(d, 'via_device_id') or d] %}
+        {% endfor %}
+        {{ ns.out | unique | list }}
+      named: "{{ [devices] | flatten | select | list if devices is defined else [] }}"
+      picked: >-
+        {% set ns = namespace(out=[]) %}
+        {% for d in (named if named else ([chosen] | flatten | select | list)) %}
+          {% set ns.out = ns.out + [device_attr(d, 'via_device_id') or d] %}
+        {% endfor %}
+        {{ ns.out | unique | list }}
+      targets: "{{ picked or every }}"
+      # The action names come from each device's name in Home Assistant (esphome.<name>_notify).
+      nodes: "{{ targets | map('device_attr', 'name') | reject('none') | map('slugify') | list }}"
+      words:
+        message: "{{ message | default('') }}"
+        title: "{{ title | default('') }}"
+        chime: "{{ 'on' if chime | default(true) else 'off' }}"
+        speak: "{{ 'on' if speak | default(false) else 'off' }}"
+        tag: "{{ tag | default('') }}"
+        seconds: "{{ seconds | default(0) | int(0) }}"
+      shown: "{{ picture | default('') | trim }}"
+  - repeat:
+      for_each: "{{ nodes }}"
+      sequence:
+        - if: "{{ shown != '' }}"
+          then:
+            - action: "esphome.{{ repeat.item }}_notify_picture"
+              data: >-
+                {{ dict(words, picture=shown,
+                        sound='' if (sound | default('device')) == 'device' else sound) }}
+              continue_on_error: true
+          else:
+            - action: "esphome.{{ repeat.item }}_notify"
+              data: "{{ dict(words, icon=icon | default('')) }}"
+              continue_on_error: true

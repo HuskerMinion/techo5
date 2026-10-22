@@ -1,0 +1,105 @@
+blueprint:
+  name: TECHO5 - call by voice
+  description: >-
+    "Call the kitchen", "intercom Echo Show 3" or "drop in on the office" said to a TECHO5 device
+    places an intercom call from that device to the one named. Names match the TECHO5 name, a name
+    given to the device in Home Assistant, or the device's area. Add contacts and "call Alex" places
+    a phone call from the device that heard it to Alex's number; device names are tried first, and
+    "intercom" or "drop in" only ever means a device. Intercom calls need the same house word on
+    both devices; phone calls need the device's phone signed in. Contacts stay in Home Assistant,
+    not on the devices.
+  domain: automation
+  author: TECHO5
+  source_url: https://github.com/HuskerMinion/techo5/blob/main/blueprints/automation/techo5/call_by_voice.yaml
+  homeassistant:
+    min_version: 2024.10.0
+  input:
+    contacts:
+      name: Contacts
+      description: >-
+        Names and the numbers to dial for them, one per line, like `alex: "15551234567"`. A number
+        can be an extension. Leave empty for intercom calls only.
+      default: {}
+      selector:
+        object: {}
+    aliases:
+      name: Aliases
+      description: >-
+        Other names for a device or contact, one per line, like `sweet room: Suite Room` when speech
+        to text writes "Suite Room" as "Sweet Room". The left side is what gets heard, the right side
+        a device's name, its name in Home Assistant, its area, or a contact. Tried before anything
+        else.
+      default: {}
+      selector:
+        object: {}
+
+variables:
+  contacts: !input contacts
+  aliases: !input aliases
+triggers:
+  - trigger: conversation
+    command:
+      - "intercom [the] {who}"
+      - "call [the] {who} (on|over) [the] intercom"
+      - "call [the] {who}"
+      - "drop in on [the] {who}"
+actions:
+  - variables:
+      devices: |-
+        {%- set ns = namespace(out=[]) -%}
+        {%- for d in states.button | selectattr('entity_id', 'search', '_stop_alarm_or_timer$') | map(attribute='entity_id') | map('device_id') | reject('none') | unique -%}
+          {%- set ents = device_entities(d) -%}
+          {%- set ns.out = ns.out + [{
+              'id': d,
+              'name': device_attr(d, 'name'),
+              'names': [device_attr(d, 'name'), device_attr(d, 'name_by_user'), area_name(d)] | reject('none') | map('lower') | unique | list,
+              'state': states(ents | select('search', '^sensor[.].*_phone$') | first | default(''))}] -%}
+        {%- endfor -%}
+        {{ ns.out }}
+      here: "{{ devices | selectattr('id', 'eq', trigger.device_id) | first | default({}) }}"
+      intercom_only: "{{ trigger.sentence | lower is search('intercom|drop in') }}"
+      # What was heard, in lower case with "the" and number words taken out, then through the aliases.
+      who: |-
+        {%- macro norm(s) -%}
+          {%- set nums = {'one': '1', 'two': '2', 'three': '3', 'four': '4', 'five': '5', 'six': '6', 'seven': '7', 'eight': '8', 'nine': '9', 'ten': '10'} -%}
+          {%- set w = namespace(w=[]) -%}
+          {%- for x in (s | string | lower | regex_replace('[^a-z0-9 ]', ' ') | regex_replace('\s+(on|over)\s+(the\s+)?intercom\s*$', '')).split() -%}{%- if not (loop.first and x == 'the') -%}{%- set w.w = w.w + [nums.get(x, x)] -%}{%- endif -%}{%- endfor -%}
+          {{- w.w | join(' ') -}}
+        {%- endmacro -%}
+        {%- set heard = norm(trigger.slots.who | default('')) -%}
+        {%- set m = namespace(out={}) -%}
+        {%- for k, v in (aliases or {}).items() -%}{%- set m.out = dict(m.out, **{norm(k): (v | string | lower | trim)}) -%}{%- endfor -%}
+        {{ m.out.get(heard, heard) }}
+      target: "{{ devices | selectattr('names', 'contains', who) | first | default({}) }}"
+      book: >-
+        {% set ns = namespace(out={}) %}
+        {% for k, v in (contacts or {}).items() %}{% set ns.out = dict(ns.out, **{k | string | lower | trim: v | string}) %}{% endfor %}
+        {{ ns.out }}
+      number: "{{ '' if intercom_only else book.get(who, '') }}"
+  - choose:
+      - conditions: "{{ here == {} }}"
+        sequence:
+          - set_conversation_response: "Say that to the TECHO5 device you want to call from."
+      - conditions: "{{ target == {} and number == '' }}"
+        sequence:
+          - set_conversation_response: "I don't know a device or a number for {{ trigger.slots.who }}."
+      - conditions: "{{ target == {} }}"
+        sequence:
+          - action: "esphome.{{ here.name | slugify }}_phone_call"
+            data:
+              number: "{{ number }}"
+            continue_on_error: true
+          - set_conversation_response: "Calling {{ trigger.slots.who }}."
+      - conditions: "{{ target.id == here.id }}"
+        sequence:
+          - set_conversation_response: "That's the device you're talking to."
+      - conditions: "{{ target.state in ['Ringing', 'Calling', 'In call'] }}"
+        sequence:
+          - set_conversation_response: "{{ target.name }} is already on a call."
+    default:
+      - action: "esphome.{{ here.name | slugify }}_intercom_call"
+        data:
+          device: "{{ target.name }}"
+        continue_on_error: true
+      - set_conversation_response: "Calling {{ target.name }}."
+mode: queued

@@ -1,0 +1,64 @@
+blueprint:
+  name: TECHO5 - when an alarm goes off
+  description: >-
+    Runs your actions at a step of a TECHO5 alarm: when it rings, when a silent alarm goes off (wake
+    the house without a sound), when a light-only alarm's time comes, or when it is snoozed or
+    stopped. A snoozed alarm rings again when it comes back. Reminders fire nothing here. The device
+    needs "Allow the device to perform Home Assistant actions" turned on in its ESPHome integration
+    options.
+  domain: automation
+  author: TECHO5
+  source_url: https://github.com/HuskerMinion/techo5/blob/main/blueprints/automation/techo5/alarm_event.yaml
+  homeassistant:
+    min_version: 2024.10.0
+  input:
+    event:
+      name: When the alarm
+      default: silent
+      selector:
+        select:
+          options:
+            - label: Rings
+              value: ringing
+            - label: Goes off silently (a silent alarm)
+              value: silent
+            - label: Reaches its time (a light-only alarm)
+              value: light_only
+            - label: Is snoozed
+              value: snoozed
+            - label: Is stopped
+              value: stopped
+    label:
+      name: Alarm label
+      description: Only alarms with this label (any case). Leave empty for every alarm.
+      default: ""
+      selector:
+        text:
+    techo5:
+      name: TECHO5 device
+      description: Only alarms on this device. Leave empty for every device.
+      default: ""
+      selector:
+        device:
+          integration: esphome
+          manufacturer: TECHO5
+    actions:
+      name: Actions
+      selector:
+        action: {}
+
+variables:
+  event: !input event
+  label: !input label
+  picked: !input techo5
+  # A device's microphone, playback, ring and assistants are devices under it; take the device itself.
+  techo5: "{{ (device_attr(picked, 'via_device_id') or picked) if picked else '' }}"
+triggers:
+  - trigger: event
+    event_type: esphome.techo5_alarm
+conditions:
+  - "{{ trigger.event.data.event == event }}"
+  - "{{ label == '' or (trigger.event.data.label | default('') | lower) == label | lower }}"
+  - "{{ not techo5 or trigger.event.data.device == device_attr(techo5, 'name') }}"
+actions: !input actions
+mode: queued

@@ -1,0 +1,123 @@
+blueprint:
+  name: TECHO5 - cancel or list alarms by voice
+  description: >-
+    "Cancel the alarm", "cancel all alarms", "cancel the six thirty alarm", "what alarms do I have"
+    and "when is my next alarm" said to a TECHO5 device act on that device's alarms. "Cancel the
+    alarm" cancels the only alarm there is, or lists them and asks which when there are several; a
+    time with no AM or PM matches both. Times are read however they are spoken (6:30, six thirty,
+    half past six, quarter to 7). Reminders are never canceled or listed by these. Said anywhere
+    else, such as the Home Assistant app, it answers by saying which device to ask. One automation
+    covers every TECHO5 device; the action names come from the device's name in Home Assistant.
+    Nothing to set.
+  domain: automation
+  author: TECHO5
+  source_url: https://github.com/HuskerMinion/techo5/blob/main/blueprints/automation/techo5/cancel_or_list_alarms_by_voice.yaml
+  homeassistant:
+    min_version: 2024.10.0
+  input: {}
+
+triggers:
+  - trigger: conversation
+    id: cancel
+    command:
+      - "(cancel|delete|remove|clear) [the|my] alarm"
+      - "(cancel|delete|remove|clear) [all] [of] [the|my] alarms"
+      - "(cancel|delete|remove|clear) [the|my] {when} alarm"
+      - "(cancel|delete|remove|clear) [the|my] alarm (for|at) {when}"
+  - trigger: conversation
+    id: list
+    command:
+      - "what alarms [do I have|are set|have I set]"
+      - "what are my alarms"
+      - "(list|tell me) [all] [of] my alarms"
+      - "do I have any alarms [set]"
+      - "(when|what time) is my [next] alarm [set for]"
+actions:
+  - variables:
+      techo5: >-
+        {{ trigger.device_id is not none and
+           device_entities(trigger.device_id) | select('search', 'stop_alarm') | list | count > 0 }}
+      node: "{{ device_attr(trigger.device_id, 'name') | slugify if techo5 else '' }}"
+      spoken: "{{ (trigger.slots.when | default('')) | lower | trim }}"
+      everything: "{{ 'all' in trigger.sentence | lower or 'alarms' in trigger.sentence | lower }}"
+      c: |-
+        {%- set s = ' ' ~ spoken ~ ' ' -%}
+        {%- set s = s | replace('.', '') | replace(',', ' ') | replace(':', ' ') | replace('-', ' ') | replace("o'clock", ' ') | replace('oclock', ' ') | replace(' a m ', ' am ') | replace(' p m ', ' pm ') -%}
+        {%- set W = {'zero':0,'one':1,'two':2,'three':3,'four':4,'five':5,'six':6,'seven':7,'eight':8,'nine':9,'ten':10,'eleven':11,'twelve':12,'thirteen':13,'fourteen':14,'fifteen':15,'sixteen':16,'seventeen':17,'eighteen':18,'nineteen':19,'twenty':20,'thirty':30,'forty':40,'fifty':50} -%}
+        {%- set ns = namespace(n=[], tens=false, ap='', rel=0, to=false) -%}
+        {%- for t0 in s.split() -%}
+          {%- set t = t0 -%}
+          {%- if t | length > 2 and t[-2:] in ['am','pm'] and t[:-2] | regex_match('^[0-9]+$') -%}{%- set ns.ap = t[-2:] -%}{%- set t = t[:-2] -%}{%- endif -%}
+          {%- if t | regex_match('^[0-9]+$') -%}{%- set ns.n = ns.n + [t | int] -%}{%- set ns.tens = false -%}
+          {%- elif t in W -%}{%- set v = W[t] -%}
+            {%- if ns.tens and 1 <= v <= 9 and ns.n -%}{%- set ns.n = ns.n[:-1] + [ns.n[-1] + v] -%}{%- set ns.tens = false -%}
+            {%- else -%}{%- set ns.n = ns.n + [v] -%}{%- set ns.tens = v in [20,30,40,50] -%}{%- endif -%}
+          {%- elif t in ['am','pm'] -%}{%- set ns.ap = t -%}
+          {%- elif t == 'noon' -%}{%- set ns.n = ns.n if ns.n else [12] -%}{%- set ns.ap = 'pm' -%}
+          {%- elif t == 'midnight' -%}{%- set ns.n = ns.n if ns.n else [12] -%}{%- set ns.ap = 'am' -%}
+          {%- elif t == 'half' -%}{%- set ns.rel = 30 -%}
+          {%- elif t == 'quarter' -%}{%- set ns.rel = 15 -%}
+          {%- elif t in ['to','till','til','before'] -%}{%- set ns.to = true -%}
+          {%- elif t == 'morning' and not ns.ap -%}{%- set ns.ap = 'am' -%}
+          {%- elif t in ['afternoon','evening','tonight','night'] and not ns.ap -%}{%- set ns.ap = 'pm' -%}
+          {%- endif -%}
+        {%- endfor -%}
+        {%- set n = ns.n -%}
+        {%- if n and n[0] >= 100 -%}{%- set n = [n[0] // 100, n[0] % 100] + n[1:] -%}{%- endif -%}
+        {%- set h = n[0] if n else -1 -%}
+        {%- set mm = n[1] if n | count > 1 else 0 -%}
+        {%- if ns.rel and n -%}{%- if ns.to -%}{%- set mm = 60 - ns.rel -%}{%- set h = h - 1 if h > 1 else 12 -%}{%- else -%}{%- set mm = ns.rel -%}{%- endif -%}{%- endif -%}
+        {{ {'h': h if 0 <= h <= 23 and 0 <= mm <= 59 else -1, 'm': mm, 'ap': ns.ap} }}
+      pm: "{{ c.ap == 'pm' }}"
+      am: "{{ c.ap == 'am' }}"
+      h: "{{ c.h }}"
+      m: "{{ c.m }}"
+      hh: "{{ h + 12 if pm and h < 12 else (0 if am and h == 12 else h) }}"
+      # With no AM or PM, "the 6 alarm" matches 6:00 AM and 6:00 PM.
+      times: >-
+        {{ [] if h < 0 else (['%02d:%02d' | format(hh, m)] if am or pm
+           else ['%02d:%02d' | format(h % 12, m), '%02d:%02d' | format(h % 12 + 12, m)]) }}
+  - if: "{{ not techo5 }}"
+    then:
+      - set_conversation_response: "Ask the TECHO5 device that holds the alarms."
+      - stop: Not said to a TECHO5 device
+  - action: "esphome.{{ node }}_alarms_list"
+    response_variable: listed
+  - variables:
+      # Reminders are in the same list; these sentences leave them alone.
+      alarms: "{{ listed.alarms | default([]) | rejectattr('reminder') | list }}"
+      picked: "{{ (alarms | selectattr('time', 'in', times) | list) if times else alarms }}"
+      said: >-
+        {% set ns = namespace(out=[]) %}
+        {% for a in (picked if trigger.id == 'cancel' and times else alarms) %}
+          {% set t = a.time.split(':') | map('int') | list %}
+          {% set ns.out = ns.out + ['%d:%02d %s' | format(t[0] % 12 or 12, t[1], 'AM' if t[0] < 12 else 'PM')] %}
+        {% endfor %}
+        {{ ns.out[:-1] | join(', ') ~ ' and ' ~ ns.out[-1] if ns.out | count > 1 else ns.out | join }}
+  - choose:
+      - conditions: "{{ alarms | count == 0 }}"
+        sequence:
+          - set_conversation_response: "You don't have any alarms set."
+      - conditions: "{{ trigger.id == 'list' }}"
+        sequence:
+          - set_conversation_response: >-
+              You have {{ 'one alarm' if alarms | count == 1 else (alarms | count) ~ ' alarms' }}: {{ said }}.
+      - conditions: "{{ times | count > 0 and picked | count == 0 }}"
+        sequence:
+          - set_conversation_response: "You don't have an alarm at that time."
+      - conditions: "{{ times | count > 0 or everything or alarms | count == 1 }}"
+        sequence:
+          - repeat:
+              for_each: "{{ picked | map(attribute='id') | list }}"
+              sequence:
+                - action: "esphome.{{ node }}_alarm_delete_id"
+                  data:
+                    id: "{{ repeat.item }}"
+          - set_conversation_response: >-
+              {{ 'Canceled your ' ~ (picked | count) ~ ' alarms.' if picked | count > 1
+                 else 'Canceled the ' ~ said ~ ' alarm.' }}
+    default:
+      - set_conversation_response: >-
+          You have {{ said }}. Which one? For example, say cancel the
+          {{ said.split(' and ')[0].split(',')[0] }} alarm.
+mode: queued

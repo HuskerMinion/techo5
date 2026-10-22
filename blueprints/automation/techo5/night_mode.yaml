@@ -1,0 +1,75 @@
+blueprint:
+  name: TECHO5 - night mode with the house
+  description: >-
+    Starts the night on TECHO5 screens when something in Home Assistant turns on (a bedtime helper,
+    a "house asleep" schedule, a sleep mode switch) and ends it when that turns off. With night
+    hours set on a device, the night holds until its hours next start or end it; to leave the night
+    to Home Assistant entirely, set the device's Night hours to "Controlled by Home Assistant".
+    Shows and Spots only; a Dot has no screen.
+  domain: automation
+  author: TECHO5
+  source_url: https://github.com/HuskerMinion/techo5/blob/main/blueprints/automation/techo5/night_mode.yaml
+  homeassistant:
+    min_version: 2024.10.0
+  input:
+    follow:
+      name: Follow
+      description: Night while this is on.
+      selector:
+        entity:
+          domain:
+            - input_boolean
+            - schedule
+            - binary_sensor
+            - switch
+    devices:
+      name: TECHO5 devices
+      description: Leave empty for every TECHO5 device with a screen.
+      default: []
+      selector:
+        device:
+          integration: esphome
+          manufacturer: TECHO5
+          multiple: true
+    end_too:
+      name: End the night when it turns off
+      description: Off leaves the morning to each device's own night hours.
+      default: true
+      selector:
+        boolean:
+
+variables:
+  chosen: !input devices
+  end_too: !input end_too
+triggers:
+  - trigger: state
+    entity_id: !input follow
+    to: "on"
+    id: "on"
+  - trigger: state
+    entity_id: !input follow
+    to: "off"
+    id: "off"
+conditions:
+  - "{{ trigger.id == 'on' or end_too }}"
+actions:
+  - variables:
+      # A device's microphone, playback, ring and assistants are devices under it; take the device
+      # itself, and its Night mode switch.
+      switches: >-
+        {% set ns = namespace(out=[]) %}
+        {% for d in [chosen] | flatten | select | list %}
+          {% set ns.out = ns.out + (device_entities(device_attr(d, 'via_device_id') or d) | select('match', 'switch[.].*_night_mode$') | list) %}
+        {% endfor %}
+        {% if not [chosen] | flatten | select | list %}
+          {% set ns.out = integration_entities('esphome') | select('match', 'switch[.].*_night_mode$')
+                          | select('is_device_attr', 'manufacturer', 'TECHO5') | list %}
+        {% endif %}
+        {{ ns.out | unique | list }}
+  - if: "{{ switches | count == 0 }}"
+    then:
+      - stop: No TECHO5 screen to put to night
+  - action: "switch.turn_{{ trigger.id }}"
+    target:
+      entity_id: "{{ switches }}"
+mode: queued
