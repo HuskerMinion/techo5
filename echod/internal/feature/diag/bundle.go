@@ -227,8 +227,8 @@ func settingsSummary(c config.Config) string {
 	add("alarms: %d set, %d followed, sunrise=%d min", len(c.Alarms.List), len(c.Alarms.Follow), c.Alarms.SunriseMinutes)
 	add("radio: source=%q own=%d favorites wired=%t", c.Home.RadioSource, len(c.Home.Radio.Own), c.Home.Radio.Configured())
 	add("security: ssh=%t camera_web=%t screen_web=%t talk_back=%t settings_lock=%t", c.Security.SSH, c.Security.Camera, c.Security.Screen, c.Security.TalkBack, c.Security.LockPIN != "")
-	add("switches: remote_api=%t camera_streaming=%t camera_discovery=%t nearest=%t noise_sensor=%t claps=%t clock_hold=%t",
-		c.Remote.On, c.CamStream.On, c.CamStream.Discovery, c.Nearest.Enabled(), c.Microphone.Noise, c.Microphone.Claps, c.Screen.ClockHold)
+	add("switches: remote_api=%t camera_streaming=%t camera_discovery=%t camera_login_from_ha=%t nearest=%t noise_sensor=%t claps=%t clock_hold=%t",
+		c.Remote.On, c.CamStream.On, c.CamStream.Discovery, c.CamStream.LoginFromHA, c.Nearest.Enabled(), c.Microphone.Noise, c.Microphone.Claps, c.Screen.ClockHold)
 	add("updates: channel=%q", c.Update.Channel)
 	add("deck: set=%t pages=%d obs=%t obs_password=%t", c.Deck.Set(), len(c.Deck.Pages), c.Deck.OBS.Addr != "", c.Deck.OBS.Password != "")
 	return strings.Join(out, "\n")

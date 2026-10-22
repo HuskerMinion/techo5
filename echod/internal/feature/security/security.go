@@ -312,6 +312,9 @@ func keyLabel(k string) string {
 	return fields[0]
 }
 
+// Encrypted reports whether the Home Assistant link has a key of its own (encrypted).
+func Encrypted() bool { return encrypted() }
+
 // encrypted reports whether the Home Assistant link has a key of its own rather than the reserved
 // all-zeros one an unprovisioned device answers with.
 func encrypted() bool {

@@ -15,7 +15,7 @@ func TestTheBundleSaysWhichSwitchesAreOn(t *testing.T) {
 	c.CamStream.On, c.CamStream.Pass = true, "camera-password-value"
 	c.Microphone.Claps = true
 	got := settingsSummary(c)
-	want := "switches: remote_api=true camera_streaming=true camera_discovery=false nearest=true noise_sensor=false claps=true clock_hold=false"
+	want := "switches: remote_api=true camera_streaming=true camera_discovery=false camera_login_from_ha=false nearest=true noise_sensor=false claps=true clock_hold=false"
 	if !strings.Contains(got, want) {
 		t.Errorf("summary %q, want %q", got, want)
 	}

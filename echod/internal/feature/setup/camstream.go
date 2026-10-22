@@ -6,17 +6,12 @@ import (
 	"log/slog"
 	"net/http"
 	"strings"
-	"unicode/utf8"
 
 	"github.com/HuskerMinion/techo5/echod/internal/config"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/camstream"
 )
 
 func init() { saves["camstream"] = saveCamStream }
-
-// minCamPass is the shortest password the camera stream takes: it is the one thing between the network and
-// the room.
-const minCamPass = 12
 
 // camStreamSection is the login for the camera over RTSP (feature/camstream), on a device with a camera.
 // The password is never shown: it is written, or left alone.
@@ -33,7 +28,7 @@ func camStreamSection(w http.ResponseWriter, token string) {
 	case c.On:
 		state = "on, but waiting for a password"
 	}
-	hint := fmt.Sprintf("at least %d characters", minCamPass)
+	hint := fmt.Sprintf("at least %d characters", camstream.MinPass)
 	if c.Pass != "" {
 		hint = "set; leave empty to keep it"
 	}
@@ -57,19 +52,9 @@ func camStreamSection(w http.ResponseWriter, token string) {
 func saveCamStream(r *http.Request) string {
 	user := strings.TrimSpace(r.PostFormValue("user"))
 	pass := r.PostFormValue("pass")
-	if strings.ContainsAny(user+pass, "\r\n\"") {
-		return "the user and password are one line each, with no quotes"
+	if err := camstream.SetLogin(user, pass); err != nil {
+		return err.Error()
 	}
-	if strings.Contains(user, ":") {
-		return "the user cannot have a colon in it"
-	}
-	if pass != "" && utf8.RuneCountInString(pass) < minCamPass {
-		return fmt.Sprintf("the password needs at least %d characters", minCamPass)
-	}
-	if err := config.Set().CamStream().Login(user, pass); err != nil {
-		return "could not save: " + err.Error()
-	}
-	camstream.Poke()
 	slog.Info("setup page: camera streaming login set")
 	return ""
 }

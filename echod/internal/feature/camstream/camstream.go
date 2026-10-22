@@ -17,10 +17,12 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"fmt"
 	"image"
 	"image/jpeg"
 	"log/slog"
 	"net"
+	"strings"
 	"sync"
 	"time"
 
@@ -28,6 +30,7 @@ import (
 
 	"github.com/HuskerMinion/techo5/echod/internal/component"
 	"github.com/HuskerMinion/techo5/echod/internal/config"
+	"github.com/HuskerMinion/techo5/echod/internal/feature/security"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/web"
 	"github.com/HuskerMinion/techo5/echod/internal/hardware/camera"
 	"github.com/HuskerMinion/techo5/echod/internal/layout"
@@ -69,6 +72,8 @@ var errFull = errors.New("as many viewers as the stream takes are watching")
 type Feature struct {
 	on        *esphome.Switch
 	discovery *esphome.Switch
+	// loginFromHA lets Home Assistant set the login (camera_credentials).
+	loginFromHA *esphome.Switch
 
 	// frames starts the camera and hands its pictures over until release, each still to be developed, so
 	// one skipped costs nothing; replaced in tests.
@@ -134,6 +139,16 @@ func build() *Feature {
 			f.poke()
 		},
 	}
+	f.loginFromHA = &esphome.Switch{
+		Base: esphome.Base{ObjectID: "camera_login_from_ha", Name: "Camera login from Home Assistant", Icon: "mdi:key-chain",
+			Category: esphome.CategoryConfig},
+		OnCommand: func(on bool) {
+			f.loginFromHA.Set(on)
+			if err := config.Set().CamStream().LoginFromHA(on); err != nil {
+				slog.Error("saving camera login from Home Assistant failed", "err", err)
+			}
+		},
+	}
 	f.on.OnCommand = func(on bool) {
 		f.on.Set(on)
 		if err := config.Set().CamStream().On(on); err != nil {
@@ -146,17 +161,53 @@ func build() *Feature {
 
 func (f *Feature) Name() string { return "camera streaming" }
 
-// Entities are the switch and the discovery switch, on a device with a camera only.
+// Entities are the switch, the discovery switch and the switch that lets Home Assistant set the login,
+// on a device with a camera only.
 func (f *Feature) Entities() []esphome.Entity {
 	if !f.available() {
 		return nil
 	}
-	return []esphome.Entity{f.on, f.discovery}
+	return []esphome.Entity{f.on, f.discovery, f.loginFromHA}
+}
+
+// Actions: camera_credentials sets the stream's login from Home Assistant, by the setup page's rules
+// (SetLogin), only with the Camera login from Home Assistant switch on (off by default) and only over a
+// Home Assistant link encrypted with the device's key: a password sent in the clear is not one to trust.
+func (f *Feature) Actions() []*esphome.Action {
+	if !f.available() {
+		return nil
+	}
+	return []*esphome.Action{{
+		Name: "camera_credentials",
+		Args: []esphome.Arg{{Name: "username", Type: esphome.ArgString}, {Name: "password", Type: esphome.ArgString}},
+		Run: func(c esphome.Call) (any, error) {
+			return nil, setCredentials(c.String("username"), c.String("password"))
+		},
+	}}
+}
+
+// setCredentials is camera_credentials, with what it asks of the device to be allowed.
+var setCredentials = func(user, pass string) error {
+	if !config.Get().CamStream.LoginFromHA {
+		slog.Warn("camera streaming: login from Home Assistant refused: its switch is off")
+		return errors.New("camera_credentials: turn on Camera login from Home Assistant first")
+	}
+	if !security.Encrypted() {
+		slog.Warn("camera streaming: login refused while Home Assistant's link has no device key")
+		return errors.New("camera_credentials: the device has no API encryption key; set one first")
+	}
+	user = strings.TrimSpace(user)
+	if err := SetLogin(user, pass); err != nil {
+		return fmt.Errorf("camera_credentials: %w", err)
+	}
+	slog.Info("camera streaming: login set from Home Assistant", "user", user)
+	return nil
 }
 
 func (f *Feature) Restore(c config.Config) {
 	f.on.Set(c.CamStream.On)
 	f.discovery.Set(c.CamStream.Discovery)
+	f.loginFromHA.Set(c.CamStream.LoginFromHA)
 }
 
 // poke has the listener looked at again, for a change to the switch.
