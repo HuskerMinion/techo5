@@ -64,6 +64,9 @@ func (d *Device) SetFilter(name string, f func(row []byte, y int)) { d.filter.se
 // source is what Present sends: the canvas, or the canvas through the filter.
 func (d *Device) source() *image.RGBA { return d.filter.over(d.canvas) }
 
+// Settle is for the same calls as on an Echo's panel (screen.go): Present here is done when it returns.
+func (d *Device) Settle() error { return nil }
+
 // Present sends the smallest rectangle holding every pixel that changed, after the filter.
 func (d *Device) Present() error {
 	img := d.source()

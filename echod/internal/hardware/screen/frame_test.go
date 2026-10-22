@@ -13,7 +13,7 @@ import (
 // A frame lands on the panel as it is, row by row into a padded framebuffer, and only the canvas's
 // rectangle is drawn over it, at the place the canvas has it once turned.
 func TestAFrameIsCopiedAndTheControlsDrawnOverIt(t *testing.T) {
-	d, dst := fake([4]uint{16, 8, 0, 24}) // BGRA, as the Show's panel is
+	d, dst := fake(960, 480, [4]uint{16, 8, 0, 24}) // BGRA, as the Show's panel is
 	if d.PixFmt() != "bgra" {
 		t.Fatalf("pixfmt %q", d.PixFmt())
 	}
@@ -64,7 +64,7 @@ func TestAFrameIsCopiedAndTheControlsDrawnOverIt(t *testing.T) {
 // The page a frame went onto is drawn whole by the next Present, though the canvas matches what the
 // page held before: its shadow is no longer the truth.
 func TestAPageAFrameWentOnIsDrawnWholeNextTime(t *testing.T) {
-	d, dst := fake([4]uint{16, 8, 0, 24})
+	d, dst := fake(960, 480, [4]uint{16, 8, 0, 24})
 	rand.New(rand.NewSource(3)).Read(d.canvas.Pix)
 	d.rotate(d.canvas, dst, 0)
 	want := append([]byte(nil), dst...)
@@ -80,14 +80,14 @@ func TestAPageAFrameWentOnIsDrawnWholeNextTime(t *testing.T) {
 }
 
 func TestAShortFrameIsRefused(t *testing.T) {
-	d, dst := fake([4]uint{16, 8, 0, 24})
+	d, dst := fake(960, 480, [4]uint{16, 8, 0, 24})
 	if err := d.paintFrame(dst, 0, make([]byte, 100), image.Rectangle{}); err == nil {
 		t.Error("a short frame was taken")
 	}
 }
 
 func BenchmarkPaintFrame(b *testing.B) {
-	d, dst := fake([4]uint{16, 8, 0, 24})
+	d, dst := fake(960, 480, [4]uint{16, 8, 0, 24})
 	d.line = 480 * 4
 	w, h := d.FrameSize()
 	frame := make([]byte, w*h*4)
@@ -98,7 +98,7 @@ func BenchmarkPaintFrame(b *testing.B) {
 }
 
 func BenchmarkPaintFrameWithControls(b *testing.B) {
-	d, dst := fake([4]uint{16, 8, 0, 24})
+	d, dst := fake(960, 480, [4]uint{16, 8, 0, 24})
 	w, h := d.FrameSize()
 	frame := make([]byte, w*h*4)
 	strip := image.Rect(0, 380, 960, 480)

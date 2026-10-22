@@ -36,6 +36,9 @@ func pixFmt(shift [4]uint) string {
 // over drawn over it, blended by its alpha (the video page's controls). An empty rectangle is the
 // frame alone.
 func (d *Device) PresentFrame(frame []byte, over image.Rectangle) error {
+	if err := d.settle(); err != nil {
+		return err
+	}
 	next := d.page
 	if d.pages > 1 {
 		next = (d.page + 1) % d.pages
