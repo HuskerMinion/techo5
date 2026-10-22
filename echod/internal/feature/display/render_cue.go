@@ -49,6 +49,11 @@ func cueOver(s scene) (light, words bool) {
 
 // turnCue draws a cue turn over whatever the frame turned out to be.
 func (r *renderer) turnCue(s scene) {
+	if rainbowOn() && !s.redClockFace() {
+		// At night the night clock's red band instead: the colors would light the room.
+		r.rainbowTurn(s)
+		return
+	}
 	light, words := cueOver(s)
 	if light && cueLit(s.cue) {
 		r.cueLight(s)

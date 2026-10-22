@@ -47,7 +47,7 @@ func TestCueTurn(t *testing.T) {
 	}
 }
 
-// The two cue styles are cues and never the equalizer; the pictures are not cues.
+// The cue styles, Rainbow among them, are cues and never the equalizer; the pictures are not cues.
 func TestCueStyles(t *testing.T) {
 	config.Use(filepath.Join(t.TempDir(), "state.json"))
 	t.Cleanup(func() { _ = config.Set().Screen().TurnStyle("") })
@@ -60,6 +60,7 @@ func TestCueStyles(t *testing.T) {
 		{"wave", false, false, hasEqualizer},
 		{"cue", true, false, false},
 		{"captions", true, true, false},
+		{"rainbow", hasRainbow, hasRainbow, false}, // Classic where it is not offered
 	} {
 		if err := config.Set().Screen().TurnStyle(c.value); err != nil {
 			t.Fatal(err)
@@ -82,7 +83,11 @@ func TestCuePageKeepsItsTaps(t *testing.T) {
 	if pageIdle("thinking") || !d.answerUp(now) {
 		t.Fatal("classic: a turn is not the page, and its answer is up")
 	}
-	for _, style := range []string{"cue", "captions"} {
+	styles := []string{"cue", "captions"}
+	if hasRainbow {
+		styles = append(styles, "rainbow")
+	}
+	for _, style := range styles {
 		if err := config.Set().Screen().TurnStyle(style); err != nil {
 			t.Fatal(err)
 		}

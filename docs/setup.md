@@ -616,9 +616,14 @@ like "kitchen screen" under its **Voice assistants** settings in Home Assistant.
   it's the rim. **Cue and captions** adds what was heard and the answer as captions at the bottom of
   the screen, up to four lines (three on the Spot), cut with "…" if the answer is longer. They sit
   above the music strip, the Now Playing buttons and the Tessera page's dots rather than over them.
+  **Rainbow** (Show only) is a cue too: a glow of pinks, violets, blues and oranges round the whole
+  edge of the screen that moves with the voice, along the top and bottom only while the device
+  thinks, and what was heard and the answer on a card of frosted glass a little above the middle. A
+  request opens with a gold globe at the right edge and a wave of pink crossing the screen. At night,
+  over the night clock, it is the red Cue light instead.
   The screen under a cue keeps working: a tap there does what it always does, and a tap on the
-  captions puts them away. Stop a request by voice or with the stop word. A page with buttons to
-  answer (a call, a ringing alarm, the settings, a camera) gets neither the light nor captions over
+  captions (or Rainbow's card) puts them away. Stop a request by voice or with the stop word. A page
+  with buttons to answer (a call, a ringing alarm, the settings, a camera) gets neither the light nor captions over
   it.
 - **Timers** (Show; **Timers on the clock** in Home Assistant): how running timers show on the clock.
   **Line** is the soonest under the date with a thin bar, as before. **Ring** is a ring for each (up

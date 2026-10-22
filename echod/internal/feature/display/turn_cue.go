@@ -29,14 +29,21 @@ import (
 // light breathing and running. A page that moves faster keeps its own pace.
 const cueFrame = 100 * time.Millisecond
 
-// cueOn is whether turns are drawn as a cue over the page.
+// cueOn is whether turns are drawn as a cue over the page: Rainbow is one too, drawn its own way where
+// the device has it (render_rainbow.go) and as Cue and captions where it does not.
 func cueOn() bool {
 	v := turnStyles[turnStyleIndex()].value
-	return v == "cue" || v == "captions"
+	return v == "cue" || v == "captions" || v == "rainbow"
 }
 
 // captionsOn is whether the cue carries the words.
-func captionsOn() bool { return turnStyles[turnStyleIndex()].value == "captions" }
+func captionsOn() bool {
+	v := turnStyles[turnStyleIndex()].value
+	return v == "captions" || v == "rainbow"
+}
+
+// rainbowOn is whether turns are drawn as Rainbow.
+func rainbowOn() bool { return turnStyles[turnStyleIndex()].value == "rainbow" }
 
 // pageIdle is whether the page is up for a turn in the phase given: idle, or any phase under a cue,
 // which leaves the page up. What the touch side asks before handing a finger to a page, so it is

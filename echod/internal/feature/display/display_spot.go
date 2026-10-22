@@ -77,6 +77,9 @@ func init() {
 // hasEqualizer is whether this screen offers the Wave and Bars turn screens (render_turn_spot.go).
 const hasEqualizer = true
 
+// hasRainbow is whether this screen offers the Rainbow turn screen: not the Spot's, which is round.
+const hasRainbow = false
+
 // hasTimerStyles: the Spot's timers stay around its rim, whatever the Show's are set to.
 const hasTimerStyles = false
 

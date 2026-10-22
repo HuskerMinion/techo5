@@ -30,6 +30,7 @@ import (
 	"github.com/HuskerMinion/techo5/echod/internal/feature/video"
 	"github.com/HuskerMinion/techo5/echod/internal/lib/hass"
 	"github.com/HuskerMinion/techo5/echod/internal/lib/locale"
+	"github.com/HuskerMinion/techo5/echod/internal/lib/rainbow"
 )
 
 // The palette (walnut ground, amber accent, cream text, dim text, ember rules) is in sheet_widgets.go,
@@ -311,6 +312,15 @@ type renderer struct {
 	// wb is the wave turn screen's working memory, made the first time it is drawn.
 	wb *waveBuf
 
+	// rainbow is the Rainbow turn screen, kept between frames, and the page under it, kept while it
+	// does not change (render_rainbow.go).
+	rainbow       rainbow.Screen
+	rainbowPage   *image.RGBA
+	rainbowKey    rainbowPageKey
+	rainbowDrew   rainbowDrew
+	rainbowPageOK bool
+	rainbowReused bool
+
 	// weatherAt is where the home screen's weather was drawn in the frame last drawn, for a tap there
 	// to open the forecast; empty when it was not drawn. Written while drawing, read by the touch
 	// goroutine, so under its own lock.
@@ -493,7 +503,15 @@ func (r *renderer) draw(s scene) {
 	r.videoZones = nil
 	r.zmu.Unlock()
 	// A cue turn goes over the page it was on, the night clock included, when that page is one to be
-	// looked at rather than answered (render_cue.go).
+	// looked at rather than answered (render_cue.go). Rainbow's begins before the page.
+	if rainbowOn() && !s.redClockFace() {
+		r.rainbowBegin(s)
+		if r.rainbowKept(s) {
+			// The page as it was, its taps as they were: only Rainbow is drawn again.
+			r.turnCue(s)
+			return
+		}
+	}
 	defer r.turnCue(s)
 	r.artDrawn = false
 	r.weatherRight = false
