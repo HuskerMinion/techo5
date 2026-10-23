@@ -257,7 +257,7 @@ func (r *roundRenderer) centeredText(face font.Face, s string, baseline int, c c
 // raised in the accent, and Done.
 func (r *roundRenderer) categoryTiles(sel category) {
 	fc := r.faces()
-	r.centeredText(fc.header, "Settings", 70, cream)
+	r.centeredText(fc.header, jpUI("Settings"), 70, cream)
 	const tw, th, gap = 142, 96, 12
 	x0, y0 := center-tw-gap/2, 96
 	for c := category(0); c < categories; c++ {
@@ -282,7 +282,7 @@ func (r *roundRenderer) categoryTiles(sel category) {
 	done := image.Rect(center-62, 424, center+62, 460)
 	r.roundFill(done, 18, surface(4), surface(3))
 	r.roundStroke(done, 18, 1, ember)
-	r.centeredText(fc.button, "Done", 449, cream)
+	r.centeredText(fc.button, jpUI("Done"), 449, cream)
 	r.addZone(zone{r: done.Inset(-8), kind: zoneDone})
 }
 

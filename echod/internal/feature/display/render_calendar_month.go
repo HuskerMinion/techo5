@@ -24,15 +24,18 @@ import (
 // events as bars of their color. A day with more than fits says how many more.
 func (r *renderer) calendarMonth(v calendarView, l calLook) {
 	title := v.month.Format("January 2006")
+	if screenLang() == "ja" {
+		title = v.month.Format("2006年1月")
+	}
 	r.text(r.title, title, r.margin, r.margin+r.s(34), cream)
-	x := r.calButton("Done", r.w-r.margin, calDone)
+	x := r.calButton(jpUI("Done"), r.w-r.margin, calDone)
 	if v.month.Year() != v.now.Year() || v.month.Month() != v.now.Month() {
-		x = r.calButton("Today", x, calToday)
+		x = r.calButton(jpUI("Today"), x, calToday)
 	}
 	x = r.calIconButton("chevron-right", "›", x, calNext)
 	x = r.calIconButton("chevron-left", "‹", x, calPrev)
 	if l.week {
-		x = r.calSegmented("Month", x, true)
+		x = r.calSegmented(jpUI("Month"), x, true)
 	}
 
 	top := r.margin + r.s(58)
@@ -58,6 +61,9 @@ func (r *renderer) calendarMonth(v calendarView, l calLook) {
 	colW := (r.w - 2*r.margin) / 7
 	for i := range 7 {
 		label := time.Weekday(i).String()[:3]
+		if screenLang() == "ja" {
+			label = []string{"日", "月", "火", "水", "木", "金", "土"}[i]
+		}
 		r.text(r.tiny, label, r.margin+i*colW+(colW-r.width(r.tiny, label))/2, top+r.s(20), dim)
 	}
 	gridTop := top + r.s(28)
@@ -81,7 +87,7 @@ func (r *renderer) calendarMonth(v calendarView, l calLook) {
 		r.monthWeekEvents(v, l, row, cells, today)
 	}
 	if !v.loaded {
-		msg := "Reading the calendar…"
+		msg := jpUI("Reading the calendar…")
 		r.text(r.tiny, msg, r.w-r.margin-r.width(r.tiny, msg), top+r.s(20), dim)
 	}
 }

@@ -299,7 +299,7 @@ func (r *renderer) calChipsList(v calendarView) {
 	r.calHitAdd(calHit{r: card, kind: calInside})
 	r.text(r.small, "Calendars", card.Min.X+r.s(28), card.Min.Y+r.s(48), cream)
 	done := image.Rect(card.Max.X-r.s(130), card.Min.Y+r.s(14), card.Max.X-r.s(22), card.Min.Y+r.s(62))
-	r.labelButton(done, "Done", btnSecondary)
+	r.labelButton(done, jpUI("Done"), btnSecondary)
 	r.calHitAdd(calHit{r: done.Inset(-r.s(6)), kind: calChipsDone})
 	// As many columns as the calendars need, each as wide as the widest chip with a gap after it; where
 	// that is more than the card has room for, the names are cut to the columns that fit, so no chip
