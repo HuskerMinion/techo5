@@ -2,6 +2,7 @@ package home
 
 import (
 	"bytes"
+	"fmt"
 	"image"
 	"image/png"
 	"net/http"
@@ -109,6 +110,43 @@ func TestAStillIsFetchedOnceAndScaled(t *testing.T) {
 	}
 	if !f.PictureUp("1") || f.PictureUp("2") {
 		t.Error("PictureUp should be true for its own notification and only that one")
+	}
+}
+
+// A run of notifications over the same picture changes only their words: the picture stays on the
+// screen from one to the next, and is fetched once. One over another picture is fetched as it comes.
+func TestTheSamePictureAgainKeepsItsFrame(t *testing.T) {
+	hits := fakePictures(t)
+	f := newFeature(t)
+	if err := f.ShowPicture("/local/door.png", Caption{ID: "1", Message: "One"}, time.Minute, ""); err != nil {
+		t.Fatal(err)
+	}
+	eventually(t, "the picture", func() bool { v, _ := f.Camera(); return v.Frame != nil })
+	first, _ := f.Camera()
+	for i, msg := range []string{"Two", "Three"} {
+		id := fmt.Sprint(i + 2)
+		if err := f.ShowPicture("/local/door.png", Caption{ID: id, Message: msg}, time.Minute, ""); err != nil {
+			t.Fatal(err)
+		}
+		v, up := f.Camera()
+		if !up || v.Frame != first.Frame || v.Caption == nil || v.Caption.Message != msg {
+			t.Fatalf("view %+v up=%v, want the same frame with %q over it at once", v, up, msg)
+		}
+		if !f.PictureUp(id) {
+			t.Errorf("notification %s is not the one up", id)
+		}
+	}
+	time.Sleep(200 * time.Millisecond) // long enough for another fetch, were there one
+	if n := hits.Load(); n != 1 {
+		t.Errorf("fetched %d times, want once", n)
+	}
+
+	// Another picture's address: a view of its own, fetched.
+	if err := f.ShowPicture("/local/door.png?v=2", Caption{ID: "4", Message: "Four"}, time.Minute, ""); err != nil {
+		t.Fatal(err)
+	}
+	if v, _ := f.Camera(); v.Frame != nil {
+		t.Error("another picture's view came up with the last picture's frame")
 	}
 }
 

@@ -183,6 +183,15 @@ func (f *Feature) stillLocked(src, path string, c Caption, d time.Duration) func
 	if name == "" {
 		name = untitled
 	}
+	// The same picture again, already on the screen (a run of notifications over one picture, only
+	// their words changing): the new view keeps its frame, and the picture is not fetched and decoded
+	// again. A view put up bare while the same bytes came back left the screen blank between each,
+	// which flickered. A picture that changes behind one address (a snapshot) needs the address to
+	// change too, a query that differs each time, to be fetched anew.
+	var keep *image.RGBA
+	if f.viewIsUp(src) && f.cam.Caption != nil && f.cam.Frame != nil && f.cam.Error == "" {
+		keep = f.cam.Frame
+	}
 	f.endCaption("replaced")
 	if f.waiting != nil && f.waiting.c.ID != c.ID {
 		f.dropWaiting("replaced") // another still, not the waiting one coming up
@@ -194,14 +203,18 @@ func (f *Feature) stillLocked(src, path string, c Caption, d time.Duration) func
 	f.stopCameraFetch()
 	ctx, cancel := context.WithCancel(context.Background())
 	f.stillCancel = cancel
-	f.cam = CameraView{Entity: src, Name: name, Until: time.Now().Add(d), Caption: &c, span: d, View: f.newView()}
+	f.cam = CameraView{Entity: src, Name: name, Until: time.Now().Add(d), Caption: &c, span: d, View: f.newView(), Frame: keep}
 	f.camMuted = false
 	return func() {
-		slog.Info("picture up", "source", redactURL(src), "for", d)
-		f.spawn(func() {
-			defer cancel() // the context is done with once the fetch is
-			f.fetchStill(ctx, src, path, c.ID)
-		})
+		slog.Info("picture up", "source", redactURL(src), "for", d, "kept", keep != nil)
+		if keep != nil {
+			cancel() // nothing to fetch: the picture is the one already up
+		} else {
+			f.spawn(func() {
+				defer cancel() // the context is done with once the fetch is
+				f.fetchStill(ctx, src, path, c.ID)
+			})
+		}
 		if name == untitled && strings.HasPrefix(src, "image.") {
 			f.spawn(func() { f.lookUpName(src, untitled) })
 		}

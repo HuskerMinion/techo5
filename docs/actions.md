@@ -1541,6 +1541,12 @@ The kinds of `picture`:
 | A path on Home Assistant | `/local/snapshots/door.jpg` | A still, fetched once | Home Assistant, with the token. `/local/` is Home Assistant's `config/www` folder | Yes |
 | An `http://` or `https://` address | `http://192.168.1.10:8123/local/door.jpg`, `https://example.com/porch.jpg` | A still, fetched once | Home Assistant's own address (the one `home_assistant` stores) is fetched with the token, as a path. Any other host is fetched without it, under the video player's rule (the same one, in `lib/netguard`): anything that is not `http` or `https` is refused, and so are loopback, link-local, multicast and this device's own addresses, judged on the address actually connected to, after DNS and after every redirect. A camera or NAS that needs a login must carry it in the address | Only for Home Assistant's own address |
 
+A still that is up already, by the same `picture`, stays up when the next notification comes over it:
+only the words change, and the picture isn't fetched again, so a run of notifications over one picture
+doesn't flicker. A picture that changes behind one address (a snapshot saved over the last) needs a
+`picture` that changes with it, such as a query that differs each time (`/local/door.jpg?t=…`), to be
+fetched again.
+
 A still is JPEG or PNG, at most 8 MB and about 12 megapixels, and is scaled to fit the screen. A picture
 that cannot be fetched (not found, not a picture, too big, no `home_assistant`) still comes up with its
 words, and the reason where the picture would be. A login in an address
