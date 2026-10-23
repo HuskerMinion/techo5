@@ -179,7 +179,7 @@ func (r *renderer) calIconButton(icon, label string, right int, kind calHitKind)
 func (r *renderer) calendarDay(v calendarView) {
 	// Done here goes back to the month or the agenda it was opened from; their own Done puts the
 	// calendar away.
-	x := r.calButton("Done", r.w-r.margin, calBack)
+	x := r.calButton(jpUI("Done"), r.w-r.margin, calBack)
 	r.text(r.title, clipText(r, r.title, v.day.Format("Monday, January 2"), x-r.margin-r.s(10)), r.margin, r.margin+r.s(34), cream)
 
 	evs := eventsOn(v.events, v.day)
@@ -273,9 +273,9 @@ func agendaDayName(day, now time.Time) string {
 // calendarAgenda is the coming days' events as one list, each day under its heading. A tap on an event
 // opens its window, a tap on a heading that day's list.
 func (r *renderer) calendarAgenda(v calendarView) {
-	x := r.calButton("Done", r.w-r.margin, calDone)
-	x = r.calButton("Month", x, calMonthView)
-	r.text(r.title, clipText(r, r.title, "Coming up", x-r.margin-r.s(10)), r.margin, r.margin+r.s(34), cream)
+	x := r.calButton(jpUI("Done"), r.w-r.margin, calDone)
+	x = r.calButton(jpUI("Month"), x, calMonthView)
+	r.text(r.title, clipText(r, r.title, jpUI("Coming up"), x-r.margin-r.s(10)), r.margin, r.margin+r.s(34), cream)
 
 	rows := agendaRows(v.events, v.now)
 	top := r.margin + r.s(74)
@@ -291,7 +291,7 @@ func (r *renderer) calendarAgenda(v calendarView) {
 	r.calAgendaStep = max(r.calendarDayRows()-1, 1)
 	r.calMu.Unlock()
 	if len(rows) == 0 {
-		msg := "Nothing in the next two weeks"
+		msg := jpUI("Nothing in the next two weeks")
 		if !v.loaded {
 			msg = "Reading the calendar…"
 		}
@@ -430,7 +430,7 @@ func (r *renderer) calendarDetail(v calendarView, e hass.Event) {
 			y += r.s(32)
 		}
 	}
-	r.labelButton(closeB, "Close", btnSecondary)
+	r.labelButton(closeB, jpUI("Close"), btnSecondary)
 	r.calHitAdd(calHit{r: closeB.Inset(-r.s(8)), kind: calClose})
 }
 

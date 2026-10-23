@@ -369,7 +369,7 @@ func (r *renderer) cameraTestPage(s scene) int {
 			y += lh
 		}
 	}
-	r.key(r.camTestBackRect(), "Back", false)
+	r.key(r.camTestBackRect(), jpUI("Back"), false)
 
 	// The words, down the right.
 	x := pic.Max.X + r.s(camTestGapBase)

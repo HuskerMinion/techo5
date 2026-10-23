@@ -104,7 +104,7 @@ func (r *renderer) deckPage(s scene) {
 	case !v.connected && v.problem != "":
 		line = v.problem
 	case !v.connected:
-		line = "Connecting to OBS…"
+		line = jpUI("Connecting to OBS…")
 	}
 	if line != "" {
 		fc := r.faces()

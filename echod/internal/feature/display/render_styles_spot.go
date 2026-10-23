@@ -109,11 +109,11 @@ func (r *roundRenderer) footLine(s roundScene, baseline int, otherwise string) {
 func (r *roundRenderer) statusWord(s roundScene, baseline int) {
 	switch {
 	case s.setupAsking:
-		r.centered(r.label, "A BROWSER IS ASKING", baseline, colMuted)
+		r.centered(r.label, jpUI("A BROWSER IS ASKING"), baseline, colMuted)
 	case s.muted:
-		r.centered(r.label, "MICROPHONE OFF", baseline, colMuted)
+		r.centered(r.label, jpUI("MICROPHONE OFF"), baseline, colMuted)
 	case s.btPairing:
-		r.centered(r.label, "BLUETOOTH PAIRING", baseline, colBluetooth)
+		r.centered(r.label, jpUI("BLUETOOTH PAIRING"), baseline, colBluetooth)
 	case s.playing:
 		r.centered(r.label, "PLAYING", baseline, colDim)
 	case s.paused:

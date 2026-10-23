@@ -61,7 +61,7 @@ func (r *roundRenderer) videoWordsSpot(s roundScene) {
 	if name == "" {
 		name = v.Host
 	}
-	head, sub := "Loading video…", name
+	head, sub := jpUI("Loading video…"), name
 	if !v.Active() && v.Err != "" {
 		head, sub = "Can't play it", v.Err
 	}
@@ -74,7 +74,7 @@ func (r *roundRenderer) videoWordsSpot(s roundScene) {
 		r.centered(r.small, l, 222+i*30, colDim)
 	}
 	if !v.Active() {
-		r.centered(r.tiny, "Tap to go back", 400, colDim)
+		r.centered(r.tiny, jpUI("Tap to go back"), 400, colDim)
 	}
 }
 
@@ -144,6 +144,6 @@ func (r *roundRenderer) videoAskFace(s roundScene) {
 	}
 	fc := r.faces()
 	right := func(label string) int { return center + (r.paint.width(fc.button, label)+44)/2 }
-	r.pillButton(right("Not now"), askNoY, "Not now", btnSecondary)
+	r.pillButton(right(jpUI("Not now")), askNoY, jpUI("Not now"), btnSecondary)
 	r.pillButton(right("Allow"), askYesY, "Allow", btnPrimary)
 }

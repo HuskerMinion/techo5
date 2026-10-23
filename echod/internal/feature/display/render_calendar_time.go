@@ -72,7 +72,7 @@ func timelineFor(auto, shown float64, scroll int) (start float64, t timeline) {
 // calendarTimeline is a day on its hours.
 func (r *renderer) calendarTimeline(v calendarView, l calLook) {
 	today := sameDay(v.day, v.now)
-	x := r.calButton("Done", r.w-r.margin, calBack)
+	x := r.calButton(jpUI("Done"), r.w-r.margin, calBack)
 	x = r.calIconButton("chevron-right", "›", x, calNext)
 	x = r.calIconButton("chevron-left", "‹", x, calPrev)
 	title := clipText(r, r.title, v.day.Format("Monday, January 2"), x-r.margin-r.s(10))
@@ -93,7 +93,7 @@ func (r *renderer) calendarTimeline(v calendarView, l calLook) {
 
 	// The all-day strip, with the day's weather at its right end.
 	sy0, sy1 := r.margin+r.s(58), r.margin+r.s(92)
-	r.text(r.micro, "All day", r.margin, sy0+r.s(23), dim)
+	r.text(r.micro, jpUI("All day"), r.margin, sy0+r.s(23), dim)
 	wx := r.dayWeather(v.forecast, v.day, right, sy0+r.s(25), r.tiny, 28, true)
 	ax := gx + r.s(6)
 	var allDay []hass.Event
@@ -412,7 +412,7 @@ func weekTitle(first time.Time, short bool) string {
 // its weather; today's column tinted and the now line across it.
 func (r *renderer) calendarWeek(v calendarView, l calLook) {
 	first := weekStart(v.day)
-	x := r.calButton("Done", r.w-r.margin, calDone)
+	x := r.calButton(jpUI("Done"), r.w-r.margin, calDone)
 	x = r.calIconButton("chevron-right", "›", x, calNext)
 	x = r.calIconButton("chevron-left", "‹", x, calPrev)
 	x = r.calSegmented("Week", x, true)
@@ -509,7 +509,7 @@ func (r *renderer) calendarWeek(v calendarView, l calLook) {
 		r.calHitAdd(calHit{r: image.Rect(cx0, hy-r.s(4), cx0+colW, hy+hdrH), kind: calDay, day: day})
 	}
 
-	r.text(r.micro, "All day", r.margin, allTop+r.s(19), dim)
+	r.text(r.micro, jpUI("All day"), r.margin, allTop+r.s(19), dim)
 	half := lerp(walnut, ember, 0.4)
 	line := max(r.s(1), 1)
 	for h := startH; h <= endH; h++ {

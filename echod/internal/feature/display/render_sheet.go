@@ -128,7 +128,7 @@ func (r *renderer) settingsShell() {
 	r.roundShadow(done, rad, r.sf(8), r.s(3), shadowAlpha()*0.6)
 	r.roundFill(done, rad, surface(3), surface(2))
 	r.roundStroke(done, rad, r.sf(100)/100*1.2, ember)
-	r.text(fc.button, "Done", done.Min.X+(done.Dx()-r.width(fc.button, "Done"))/2, done.Min.Y+r.s(33), cream)
+	r.text(fc.button, jpUI("Done"), done.Min.X+(done.Dx()-r.width(fc.button, jpUI("Done")))/2, done.Min.Y+r.s(33), cream)
 
 	// The card, floating over the ground.
 	card := r.nextCard(r.w, r.h)
