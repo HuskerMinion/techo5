@@ -217,10 +217,16 @@ func (c *Client) Forecast(entity string) ([]Day, error) {
 		return nil, fmt.Errorf("hass: no forecast for %s", entity)
 	}
 	days := make([]Day, 0, len(fc.Forecast))
-	for _, f := range fc.Forecast {
+	today := time.Now()
+	today = time.Date(today.Year(), today.Month(), today.Day(), 0, 0, 0, 0, time.Local)
+	for i, f := range fc.Forecast {
 		d := Day{Condition: f.Condition, Rain: -1}
-		if t, err := time.Parse(time.RFC3339, f.Datetime); err == nil {
-			d.When = t.Local()
+		if t, ok := forecastTime(f.Datetime); ok {
+			d.When = t
+		} else {
+			// A day whose date can't be read is the day it comes in the list, today first: left as the
+			// zero time, every such day read as a Monday.
+			d.When = today.AddDate(0, 0, i)
 		}
 		if f.Temperature != nil {
 			d.High = *f.Temperature
@@ -234,6 +240,29 @@ func (c *Client) Forecast(entity string) ([]Day, error) {
 		days = append(days, d)
 	}
 	return days, nil
+}
+
+// forecastLayouts are the forms a forecast's datetime comes in without a zone, as some integrations
+// send it (Deutscher Wetterdienst's: 2026-10-23T00:00:00): with a T or a space, or the date alone.
+// Those are read as local time, which is what the integration meant by midnight; read as UTC, a day
+// west of Greenwich would be the day before.
+var forecastLayouts = []string{"2006-01-02T15:04:05", "2006-01-02 15:04:05", "2006-01-02"}
+
+// forecastTime is a forecast's datetime read: RFC 3339 as most integrations send it, with a space for
+// the T, or without a zone.
+func forecastTime(s string) (time.Time, bool) {
+	s = strings.TrimSpace(s)
+	for _, l := range []string{time.RFC3339, "2006-01-02 15:04:05Z07:00"} {
+		if t, err := time.Parse(l, s); err == nil {
+			return t.Local(), true
+		}
+	}
+	for _, l := range forecastLayouts {
+		if t, err := time.ParseInLocation(l, s, time.Local); err == nil {
+			return t, true
+		}
+	}
+	return time.Time{}, false
 }
 
 // State is an entity's state and attributes.

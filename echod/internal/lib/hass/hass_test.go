@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 )
 
 // recorder answers every request with a short body and keeps the last one, so a test can see the
@@ -166,5 +167,60 @@ func TestWithoutLogin(t *testing.T) {
 		if got := withoutLogin(in); got != want {
 			t.Errorf("withoutLogin(%q) = %q, want %q", in, got, want)
 		}
+	}
+}
+
+// A forecast's dates are read in every form integrations send them. Deutscher Wetterdienst's come
+// without a zone (2026-10-23T00:00:00), and read as nothing they all became the zero time, a Monday:
+// the dashboard's row of days read Today, Mon, Mon, Mon, Mon.
+func TestForecastDatesWithoutAZone(t *testing.T) {
+	for _, tc := range []struct {
+		in   string
+		want string // the local date it is read as
+	}{
+		{"2026-10-23T00:00:00", "2026-10-23"},
+		{"2026-10-23T00:00:00.000000", "2026-10-23"},
+		{"2026-10-23 00:00:00", "2026-10-23"},
+		{"2026-10-23", "2026-10-23"},
+		{" 2026-10-23T00:00:00 ", "2026-10-23"},
+		{"2026-10-23T12:00:00Z", time.Date(2026, 10, 23, 12, 0, 0, 0, time.UTC).Local().Format("2006-01-02")},
+		{"2026-10-23T00:00:00+02:00", time.Date(2026, 10, 22, 22, 0, 0, 0, time.UTC).Local().Format("2006-01-02")},
+		{"2026-10-23 00:00:00+02:00", time.Date(2026, 10, 22, 22, 0, 0, 0, time.UTC).Local().Format("2006-01-02")},
+	} {
+		got, ok := forecastTime(tc.in)
+		if !ok || got.Format("2006-01-02") != tc.want {
+			t.Errorf("forecastTime(%q) = %v, %v; want %s", tc.in, got, ok, tc.want)
+		}
+	}
+	if _, ok := forecastTime("tomorrow"); ok {
+		t.Error("forecastTime read \"tomorrow\" as a date")
+	}
+}
+
+// A forecast whose dates can't be read at all counts its days from today, one after another, rather
+// than leaving every one of them a Monday.
+func TestForecastDaysCountFromTodayWhenUnreadable(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Write([]byte(`{"service_response":{"weather.home":{"forecast":[
+			{"datetime":"2026-10-23T00:00:00","condition":"rainy","temperature":14,"templow":7.6},
+			{"datetime":"2026-10-24T00:00:00","condition":"cloudy","temperature":12,"templow":6},
+			{"datetime":"soon","condition":"sunny","temperature":15,"templow":5},
+			{"condition":"sunny","temperature":16,"templow":5}]}}}`))
+	}))
+	defer srv.Close()
+	c := &Client{acc: access{URL: srv.URL, Token: "secret"}, http: &http.Client{}}
+	days, err := c.Forecast("weather.home")
+	if err != nil {
+		t.Fatal(err)
+	}
+	today := time.Now()
+	want := []string{"2026-10-23", "2026-10-24", today.AddDate(0, 0, 2).Format("2006-01-02"), today.AddDate(0, 0, 3).Format("2006-01-02")}
+	for i, d := range days {
+		if got := d.When.Format("2006-01-02"); got != want[i] {
+			t.Errorf("day %d is %s, want %s", i, got, want[i])
+		}
+	}
+	if days[0].When.Weekday() == days[1].When.Weekday() {
+		t.Errorf("the first two days are both %s", days[0].When.Weekday())
 	}
 }
