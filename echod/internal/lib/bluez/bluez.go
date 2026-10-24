@@ -29,6 +29,7 @@ const (
 	deviceIfc   = "org.bluez.Device1"
 	playerIfc   = "org.bluez.MediaPlayer1"
 	controlIfc  = "org.bluez.MediaControl1"
+	transIfc    = "org.bluez.MediaTransport1"
 	agentIfc    = "org.bluez.Agent1"
 	agentMgrIfc = "org.bluez.AgentManager1"
 	propsIfc    = "org.freedesktop.DBus.Properties"
@@ -337,6 +338,27 @@ func (a *Adapter) Control(ctx context.Context, device dbus.ObjectPath, method st
 		return ErrNoPlayer
 	}
 	return a.conn.Object(service, player).CallWithContext(ctx, playerIfc+"."+method, 0).Err
+}
+
+// AbsoluteVolume is whether device's audio takes its volume from this side over AVRCP (absolute
+// volume): bluetoothd gives a transport a Volume only when the other end said it does. A speaker
+// that does has a volume of its own, which is otherwise left where the last phone put it.
+func (a *Adapter) AbsoluteVolume(ctx context.Context, device dbus.ObjectPath) (bool, error) {
+	var objs map[dbus.ObjectPath]map[string]map[string]dbus.Variant
+	if err := a.conn.Object(service, "/").CallWithContext(ctx, objMgrIfc+".GetManagedObjects", 0).Store(&objs); err != nil {
+		return false, err
+	}
+	return absoluteVolume(objs, device), nil
+}
+
+// absoluteVolume is whether one of device's transports in objs has a Volume.
+func absoluteVolume(objs map[dbus.ObjectPath]map[string]map[string]dbus.Variant, device dbus.ObjectPath) bool {
+	for path, ifcs := range objs {
+		if _, ok := ifcs[transIfc]["Volume"]; ok && deviceOf(path) == device {
+			return true
+		}
+	}
+	return false
 }
 
 // playerOf is the player of device's to ask: the one its MediaControl1 says is the phone's

@@ -62,3 +62,40 @@ func TestSinkSoundingFollowsTheSound(t *testing.T) {
 		t.Fatal("no sink, and sounding")
 	}
 }
+
+// levelSink is a sink with a volume of its own: it takes the steps it is told when takes is set.
+type levelSink struct {
+	fakeSink
+	takes bool
+	steps []int
+}
+
+func (l *levelSink) Level(step int) bool {
+	l.steps = append(l.steps, step)
+	return l.takes
+}
+
+// A sink with a volume of its own is told the volume step and given the audio at full scale; one
+// without, or one that does not take it, gets the audio turned down here as before.
+func TestALevelSinkTakesTheStepAndFullScale(t *testing.T) {
+	for _, step := range []int{1, 12, VolumeSteps} {
+		if got := sinkScale(sinkGain(step), step); got != 1 {
+			t.Errorf("step %d: scale %v, want full scale", step, got)
+		}
+	}
+	if got := sinkScale(0, 0); got != 0 {
+		t.Errorf("muted: scale %v, want 0", got)
+	}
+	if got := sinkScale(2, 12); got != 1 {
+		t.Errorf("a gain above the step's was boosted to %v", got)
+	}
+
+	p := New()
+	sink := &levelSink{takes: true}
+	p.SetSink(sink, "test", Rate, Channels)
+	p.SetVolume(12)
+	p.fill(make([]byte, period*Channels*2))
+	if len(sink.steps) == 0 || sink.steps[len(sink.steps)-1] != 12 {
+		t.Errorf("the sink was told %v, want step 12", sink.steps)
+	}
+}

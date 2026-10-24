@@ -95,3 +95,27 @@ func TestOnlyTheAddressedPlayersStatusIsFollowed(t *testing.T) {
 		t.Fatalf("heard %+v, want the only player left followed", heard)
 	}
 }
+
+// A device takes its volume from here when one of its own transports has a Volume: not when its
+// transport has none, and not because another device's has one.
+func TestAbsoluteVolumeIsTheDevicesTransportHavingAVolume(t *testing.T) {
+	dev := dbus.ObjectPath("/org/bluez/hci0/dev_11_22_33_44_55_66")
+	other := dbus.ObjectPath("/org/bluez/hci0/dev_66_55_44_33_22_11")
+	with := map[string]dbus.Variant{"Volume": dbus.MakeVariant(uint16(88)), "State": dbus.MakeVariant("active")}
+	without := map[string]dbus.Variant{"State": dbus.MakeVariant("active")}
+	objs := func(path dbus.ObjectPath, props map[string]dbus.Variant) map[dbus.ObjectPath]map[string]map[string]dbus.Variant {
+		return map[dbus.ObjectPath]map[string]map[string]dbus.Variant{
+			dev:                {deviceIfc: {}},
+			path + "/sep2/fd0": {transIfc: props},
+		}
+	}
+	if !absoluteVolume(objs(dev, with), dev) {
+		t.Error("a transport with a Volume was not taken as absolute volume")
+	}
+	if absoluteVolume(objs(dev, without), dev) {
+		t.Error("a transport with no Volume was taken as absolute volume")
+	}
+	if absoluteVolume(objs(other, with), dev) {
+		t.Error("another device's transport counted for this one")
+	}
+}

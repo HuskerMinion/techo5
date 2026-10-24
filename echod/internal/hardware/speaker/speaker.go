@@ -880,6 +880,14 @@ func (p *Player) fill(buf []byte) {
 		mediaK, bellK, gain, step = ringBalance(first, out, gain, step, p.gainFor(bs), bs)
 	}
 
+	// A sink with a volume of its own is told the step the output goes at, and plays the audio at its
+	// full scale: the balance between the lanes stays in mediaK and bellK.
+	if st := p.sink.Load(); st != nil {
+		if ls, ok := st.sink.(LevelSink); ok && ls.Level(step) {
+			gain = sinkScale(gain, step)
+		}
+	}
+
 	// Where the tuning has a curve of its own the volume goes in front of it, as the vendor's chain
 	// has it, scaled from the gain worked out above so a bell over the music keeps its balance.
 	pre, post := float32(1), gain
