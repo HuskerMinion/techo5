@@ -11,13 +11,12 @@ func init() { panelscreen.DialWait = 0 }
 // notOnPanel is what a TECHO5 Panel leaves out of the Show's list, as a tablet has it (layout.OnAndroid
 // is true in a panel build, tests too): the app updates itself, so there is no channel to follow; an
 // app has no AirPlay or Spotify Connect programs to run (streaming.Here) and no techo5-ffmpeg, so no
-// video player (video.Here) and no camera stream (home's cameraStreamHere); Android has the Bluetooth
-// radio, so there is no proxy (bluetooth.Here) and no Bluetooth audio (btaudio stands down on
-// Android); and the tablet's camera is Android's, so there is no camera page (security's cameraPage).
+// video player (video.Here) and no camera stream (home's cameraStreamHere); Android handles its
+// Bluetooth audio (btaudio stands down on Android), while the app now supplies BLE reports and
+// one opt-in GATT slot; and the tablet's camera is Android's, so there is no camera web page here.
 var notOnPanel = []string{
 	"update_channel", "airplay", "spotify_connect",
 	"video", "dlna_video", "video_state", "video_title", "video_error", "camera_live", "camera_sound",
-	"bluetooth_proxy", "ble_advertisements",
 	"bluetooth_audio", "bluetooth_disconnect", "bluetooth_forget", "bluetooth_forget_phones", "bluetooth_pairing",
 	"bluetooth_phone_pairing", "bluetooth_reconnect", "bluetooth_reconnect_phone", "bluetooth_secure_connections",
 	"bluetooth_sets_volume", "camera_web_access", "screen_night_warmth",
@@ -27,5 +26,6 @@ var notOnPanel = []string{
 	"min_cores",
 }
 
-// onlyOnPanel is what a panel adds: Android can silence a tablet's microphone under the app.
-var onlyOnPanel = []string{"microphone_silent"}
+// onlyOnPanel is what a panel adds: Android can silence the app's microphone, and its Bluetooth
+// adapter can lend Home Assistant one active connection when separately enabled.
+var onlyOnPanel = []string{"microphone_silent", "bluetooth_proxy_connections"}

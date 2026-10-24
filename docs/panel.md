@@ -36,10 +36,13 @@ Android does for the app instead:
   channel and no A/B slots on a panel. The update card in Home Assistant shows the app's version.
   Checking only looks; Install asks the app to install. With **Install updates automatically** on,
   it installs by itself in the same night hours as an Echo (2 to 5 am), when nothing is playing.
+- **Android Bluetooth LE.** The app can forward nearby advertisements to Home Assistant when
+  Bluetooth proxy is on. A separate **Bluetooth proxy connections** switch enables one active GATT
+  slot and is off by default. When the proxy is off, active requests are refused too. Android
+  still handles ordinary Bluetooth audio pairing.
 - **What it leaves out.** No LED ring and no camera of its own: a tablet on the Show 5's chip (the
   8th gen Fire HD 8) simply has no camera, rather than trying the Show's and failing. No button
-  events: the app passes on no keys, so the four button event entities aren't there. No Bluetooth
-  at all: no Bluetooth proxy and no Bluetooth speaker or phone (Android keeps the radio). No video player, live camera
+  events: the app passes on no keys, so the four button event entities aren't there. No video player, live camera
   video or camera sound (the Echos' video decoder isn't in the app; cameras show Home Assistant's
   snapshots). No AirPlay or Spotify Connect, no remote adb, and no firewall of its own. A call to a
   SIP account rings only when it comes from the provider.

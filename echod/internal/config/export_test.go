@@ -400,14 +400,16 @@ func TestCredentialsComeOutOfAddresses(t *testing.T) {
 	}
 }
 
-// Sendspin, the Bluetooth proxy and a choice of no wake word are the device's own.
+// Sendspin, Bluetooth scanning and active connections, and a choice of no wake word are the device's own.
 func TestARestoreKeepsWhatIsOnByDefaultOff(t *testing.T) {
 	here := Defaults()
 	here.Sendspin.Enabled = false
 	here.Bluetooth.Proxy = false
+	here.Bluetooth.ProxyConnections = false
 	here.Wake.NoneChosen, here.Wake.Words = true, nil
 	from := Defaults()
 	from.Sendspin.Enabled, from.Bluetooth.Proxy = true, true
+	from.Bluetooth.ProxyConnections = true
 	from.Wake.Words = []WakeWord{{ID: "okay_nabu"}}
 	file, _ := Export(from, "m", "v0")
 	r, err := Restored(here, file, "m")
@@ -415,8 +417,9 @@ func TestARestoreKeepsWhatIsOnByDefaultOff(t *testing.T) {
 		t.Fatal(err)
 	}
 	c := r.Config
-	if c.Sendspin.Enabled || c.Bluetooth.Proxy || !c.Wake.NoneChosen || len(c.Wake.Words) != 0 {
-		t.Errorf("sendspin %v proxy %v none chosen %v words %v", c.Sendspin.Enabled, c.Bluetooth.Proxy, c.Wake.NoneChosen, c.Wake.Words)
+	if c.Sendspin.Enabled || c.Bluetooth.Proxy || c.Bluetooth.ProxyConnections || !c.Wake.NoneChosen || len(c.Wake.Words) != 0 {
+		t.Errorf("sendspin %v proxy %v connections %v none chosen %v words %v",
+			c.Sendspin.Enabled, c.Bluetooth.Proxy, c.Bluetooth.ProxyConnections, c.Wake.NoneChosen, c.Wake.Words)
 	}
 }
 
