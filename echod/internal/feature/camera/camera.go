@@ -93,6 +93,9 @@ var fullPages = layout.CronosMainline()
 // frame share one encode (the last one is kept, and a second viewer asking for it while it is being
 // made waits for it); elsewhere the half-size picture.
 func encode(f *camera.Frame) ([]byte, error) {
+	if raw, ok := any(f).(interface{ RawJPEG() []byte }); ok && len(raw.RawJPEG()) > 0 {
+		return raw.RawJPEG(), nil
+	}
 	if !fullPages {
 		return encodeHalf(f)
 	}
@@ -123,6 +126,9 @@ func stillFrame(ctx context.Context) (*camera.Frame, error) {
 // encodeStill is a still's JPEG: by encodeFrame where fullPages, else developed at full size (Full)
 // and encoded at quality.
 func encodeStill(f *camera.Frame) ([]byte, error) {
+	if raw, ok := any(f).(interface{ RawJPEG() []byte }); ok && len(raw.RawJPEG()) > 0 {
+		return raw.RawJPEG(), nil
+	}
 	if fullPages {
 		return encodeFrame(f)
 	}

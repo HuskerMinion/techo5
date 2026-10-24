@@ -2,23 +2,35 @@
 
 package camera
 
-import "testing"
+import (
+	"os"
+	"path/filepath"
+	"testing"
 
-// A panel never drives the Echo camera. A tablet on the Echo Show 5's MediaTek chip (the 8th gen Fire
-// HD 8) has /dev/camera-isp and /dev/kd_camera_hw like a Show, and a panel that looked for them took
-// the tablet for a Show and failed to open the camera ("open camera-isp: permission denied"). The
-// Echo camera is not built into a panel, so nothing here may answer as if a camera were there.
-func TestAPanelHasNoCamera(t *testing.T) {
-	if Available() {
-		t.Fatal("a panel reports a camera of the daemon's own")
-	}
-	if _, err := Get().Acquire(); err == nil {
-		t.Fatal("a panel acquired a camera")
-	}
-	if _, err := Get().AcquireSlow(); err == nil {
-		t.Fatal("a panel acquired a camera for watching the room")
-	}
-	if f, err := Get().Snapshot(t.Context()); err == nil || f != nil {
-		t.Fatal("a panel took a snapshot")
+	"github.com/HuskerMinion/techo5/echod/internal/layout"
+)
+
+func TestPanelCameraModeMarker(t *testing.T) {
+	previous := layout.StateDir
+	layout.StateDir = t.TempDir()
+	t.Cleanup(func() { layout.StateDir = previous })
+	marker := filepath.Join(layout.StateDir, "camera-ready")
+	for _, test := range []struct {
+		value  string
+		width  int
+		height int
+	}{
+		{"1280 720\n", 1280, 720},
+		{"640 480\n", 640, 480},
+		{"2592 1944\n", 640, 480}, // RTP/JPEG cannot carry this as live video.
+		{"garbage", 640, 480},
+	} {
+		if err := os.WriteFile(marker, []byte(test.value), 0600); err != nil {
+			t.Fatal(err)
+		}
+		width, height := panelOutputSize()
+		if width != test.width || height != test.height {
+			t.Fatalf("marker %q: got %dx%d, want %dx%d", test.value, width, height, test.width, test.height)
+		}
 	}
 }
