@@ -189,6 +189,14 @@ image goes on with `fastboot flash boot` (with the Show in fastboot, docs/instal
 [tools/linux/build-aec.sh](../tools/linux/build-aec.sh) compiles the WebRTC echo canceller helper for
 armv7 (Linux or WSL). `deploy-rootfs.sh` includes `bin/techo5-aec-arm` when it exists.
 
+## Optional: AirPlay 2
+
+[tools/linux/build-shairport-sync.sh](../tools/linux/build-shairport-sync.sh) builds
+`bin/techo5-shairport-sync-arm`, shairport-sync with AirPlay 2, and `bin/techo5-nqptp-arm`, the clock it
+needs (Linux or WSL, with zig). A device that carries both can be grouped with other AirPlay 2 speakers on an
+iPhone; one without them keeps the classic receiver from Alpine. Its sources are checked against the SHA-256s
+in the script, and it prints the binaries' own.
+
 ## The video decoder
 
 Every image carries a small ffmpeg for the video player and live cameras. It is not optional:
