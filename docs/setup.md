@@ -885,7 +885,9 @@ Under Settings → **Sound**, or on the device's Assist satellite in Home Assist
 - **Wake word threshold** (0.5 to 0.99): the score the wake word has to reach. Higher wakes by
   mistake less often; lower hears you more easily. If it wakes by mistake, raise it a step at a time
   (0.90, 0.93, 0.95) and watch **Last wake score** on the device in Home Assistant: a false wake that
-  scored 0.91 is gone at 0.93. Called Wake word sensitivity before v1.2.8.
+  scored 0.91 is gone at 0.93. The setup page shows the scores as they come too
+  ([Watching the wake word scores](#watching-the-wake-word-scores)). Called Wake word sensitivity
+  before v1.2.8.
 - **Wake word on Home Assistant** and **Confirm wake with Home Assistant** (both off by default):
   let Home Assistant's own wake word engine listen as well as the device, or check a wake the device
   wasn't sure of. See [Wake word on Home Assistant](#wake-word-on-home-assistant) below.
@@ -1116,7 +1118,8 @@ word before it, and with the music down the wake word is heard again.
   music, and it acts at once (a moment later with the volume up or next song word listening too: see
   below). At the top of its range, it is off. Its scores don't show in **Last wake score**, and **Keep
   wake clips** keeps none of it: the device's log has each one (`wake detected` and `wake near miss`,
-  with `slot=103`).
+  with `slot=103`), and so does the setup page's
+  [scores](#watching-the-wake-word-scores).
 
 Each time it acts, it fires a [command word event](actions.md#command-word-events). Train it the
 way [Training a wake word of your own](training-wake-word.md) describes, with the device's own music
@@ -1146,7 +1149,8 @@ speaker muted, no allowance while the speaker plays), and is off until you choos
   AirPlay group each ask for the next song when they hear the word, so with the next song word on more
   than one of them, one "next song" can skip more than once. Choose it on one device in the group.
 - Each one loaded is one more model running while music plays. The device's log has their scores
-  with `slot=104` (volume up) and `slot=105` (next song).
+  with `slot=104` (volume up) and `slot=105` (next song), and the setup page shows them as they come
+  ([Watching the wake word scores](#watching-the-wake-word-scores)).
 
 ### Wake word clips
 
@@ -1184,6 +1188,34 @@ same details, and the file name holds the time, the assistant, the score and the
 
 The clips are what the microphones heard in your room. They stay on the device until you copy them
 off; keep them on your own machine.
+
+### Watching the wake word scores
+
+The setup page shows what each word the device listens for is scoring, so a threshold can be picked by
+watching instead of by reading the device's log. It is under **Sound & Voice**, after **Wake words of
+your own**, on a device with microphones.
+
+- The table has each word listened for right now: the wake words, the stop word, the hang-up word
+  during a call, and the command words while music plays. For each it gives the model, its slot as the
+  log numbers it (`slot=104`), its threshold, and what a score is judged against now. For the wake words
+  and the stop word that is lower while the speaker plays and the echo canceller runs; the command words,
+  and the hang-up word on a call, never get that allowance.
+- **Last heard** lists the latest detections, near misses, wakes the device was unsure of (with
+  **Confirm wake with Home Assistant** on: a score over its threshold but under the wake word's), and
+  words that became ready or were taken out, each with the numbers its line in the log has.
+- **Watch** draws each word's highest score in the last two seconds as a bar, with a line where its
+  cutoff is, and adds what is heard as it happens. Scores just after a wake or an unmute, while the device
+  holds detections back, don't count toward the bar. Without script, **Refresh** brings the table and the
+  list up to date.
+
+To pick a threshold, press **Watch** and say the word ten times from where people say it. Real tries
+that peak just under the line mean the threshold can come down a step; a sound that isn't the word
+peaking over it means it should go up. The thresholds themselves are set in Home Assistant or on the
+device's screen.
+
+The scores are numbers, never audio, and are kept only in memory: the last 64 events, and the peaks
+from moment to moment only while the page is watching, for ten seconds after its last look. They are
+behind the press like the rest of the page, and watching doesn't keep the page open.
 
 ### Wake word on Home Assistant
 

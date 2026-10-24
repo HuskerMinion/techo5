@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/HuskerMinion/techo5/echod/internal/config"
+	"github.com/HuskerMinion/techo5/echod/internal/feature/wakeword"
 	"github.com/HuskerMinion/techo5/echod/internal/hardware/mic"
 	"github.com/HuskerMinion/techo5/echod/internal/lib/safe"
 	"github.com/HuskerMinion/techo5/echod/internal/lib/wake"
@@ -60,6 +61,9 @@ type Engine struct {
 
 	// quiet is the microphones being cut: the backends are dropped while it holds. See Quiet.
 	quiet bool
+
+	// board is what the words have scored lately, for the setup page (board.go).
+	board board
 
 	// Threshold is asked for every score, so a change in Home Assistant takes effect at once. It is
 	// per slot because the models disagree on scale.
@@ -193,6 +197,7 @@ func (e *Engine) reset() {
 	for i := range e.slots {
 		e.slots[i] = slot{}
 	}
+	e.board.forgetAll()
 }
 
 // build makes an engine of one kind. A test replaces it with one that needs no model files.
@@ -235,6 +240,7 @@ func (e *Engine) Use(n int, m wake.Model) error {
 	old := e.slots[n]
 	e.slots[n] = slot{model: m, loaded: true}
 	e.drop(old)
+	e.board.forget(n)
 
 	slog.Info("wake word loaded", "slot", n+1, "phrase", m.Phrase, "id", m.ID, "engine", m.Kind)
 	return nil
@@ -255,6 +261,7 @@ func (e *Engine) Clear(n int) {
 	old := e.slots[n]
 	e.slots[n] = slot{}
 	e.drop(old)
+	e.board.forget(n)
 }
 
 // drop lets go of what a slot was using: the model, unless another slot still wants it, and then the
@@ -456,6 +463,7 @@ func (e *Engine) score(frame []int16, source *mic.Source) {
 		if !s.scored {
 			s.scored = true
 			slog.Info("wake word ready", "slot", i+1, "id", s.model.ID)
+			e.board.event(wakeword.ScoreEvent{At: now, Slot: i + 1, What: "ready", ID: s.model.ID})
 			if e.OnReady != nil {
 				n := i
 				safe.Go("wake word ready", func() { e.OnReady(n) })
@@ -473,8 +481,10 @@ func (e *Engine) dropFailed() {
 			for i := range e.slots {
 				if s := e.slots[i]; s.loaded && s.model.Kind == k && s.model.ID == id {
 					slog.Error("wake word taken out of its slot: its model failed", "slot", i+1, "id", id)
+					e.board.event(wakeword.ScoreEvent{At: time.Now(), Slot: i + 1, What: "dropped", ID: id})
 					e.slots[i] = slot{}
 					e.drop(s)
+					e.board.forget(i)
 					if e.OnDropped != nil {
 						n, id := i, id
 						safe.Go("wake word dropped", func() { e.OnDropped(n, id) })
@@ -491,6 +501,8 @@ func (e *Engine) judge(n int, s *slot, score float64, now time.Time, source *mic
 	if e.Threshold != nil {
 		cutoff = e.Threshold(n)
 	}
+	// Every score, the held back ones too, for somebody watching on the setup page.
+	e.board.heard(n, score, now, now.Before(s.quiet))
 
 	if now.Before(s.quiet) {
 		s.suppressed++
@@ -511,6 +523,8 @@ func (e *Engine) judge(n int, s *slot, score float64, now time.Time, source *mic
 
 		slog.Info("wake detected", "slot", n+1, "id", s.model.ID, "peak", s.peak,
 			"crossing", s.crossing, "cutoff", s.crossCutoff, "dropped", source.Dropped())
+		e.board.event(wakeword.ScoreEvent{At: now, Slot: n + 1, What: "detected", ID: s.model.ID, Peak: s.peak,
+			Crossing: s.crossing, Cutoff: s.crossCutoff})
 		if e.OnScored != nil {
 			i, peak, cutoff := n, s.peak, s.crossCutoff
 			safe.Go("wake scored", func() { e.OnScored(i, peak, cutoff) })
@@ -529,6 +543,8 @@ func (e *Engine) judge(n int, s *slot, score float64, now time.Time, source *mic
 		if s.peak >= NearMiss && now.Sub(s.peakAt) > NearMissSettle {
 			slog.Info("wake near miss", "slot", n+1, "id", s.model.ID, "peak", s.peak,
 				"cutoff", cutoff, "dropped", source.Dropped())
+			e.board.event(wakeword.ScoreEvent{At: now, Slot: n + 1, What: "near miss", ID: s.model.ID, Peak: s.peak,
+				Cutoff: cutoff})
 			if e.OnNearMiss != nil {
 				i, peak := n, s.peak
 				safe.Go("wake near miss", func() { e.OnNearMiss(i, peak) })
@@ -580,6 +596,8 @@ func (e *Engine) candidate(n int, s *slot, score, cutoff float64, now time.Time)
 	s.candidate = false
 	s.askedUntil = now.Add(Refractory)
 	slog.Info("wake candidate", "slot", n+1, "id", s.model.ID, "peak", peak, "asked_from", bound, "cutoff", cutoff)
+	e.board.event(wakeword.ScoreEvent{At: now, Slot: n + 1, What: "unsure", ID: s.model.ID, Peak: peak, AskedFrom: bound,
+		Cutoff: cutoff})
 	if e.OnCandidate != nil {
 		safe.Go("wake candidate", func() { e.OnCandidate(n, peak) })
 	}

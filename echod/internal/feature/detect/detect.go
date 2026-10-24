@@ -40,6 +40,10 @@ type Detect struct {
 	busy   *wakeBusy
 	stop   *esphome.Number
 
+	// base is each slot's own threshold, the stop word's apart (thresholdFor), as the scores view
+	// shows it (scores.go).
+	base func(slot int) float64
+
 	// commands are the command words' selects and thresholds, and their loading with the music, in slot
 	// order, and vote is the ones heard together: see command.go.
 	commands []*command
@@ -265,7 +269,7 @@ func newDetect() *Detect {
 		voice.Get().Candidate(slot, peak)
 	}
 
-	d = &Detect{engine: e, busy: newWakeBusy(led.Get().Busy(), e.Ready)}
+	d = &Detect{engine: e, busy: newWakeBusy(led.Get().Busy(), e.Ready), base: base}
 	d.ducker = newDucker()
 	d.ducker.watch(e)
 	d.stop = newStopEntity(d)
@@ -339,6 +343,7 @@ func newDetect() *Detect {
 
 	voice.Get().OnWakeWord(d.load, d.selected)
 	wakeword.Refresh = d.refresh
+	wakeword.ReadScores = d.Scores
 
 	ours := wake.Lib().Ours()
 	slog.Info("wake words installed", "count", len(ours),

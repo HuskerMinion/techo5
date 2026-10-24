@@ -74,7 +74,8 @@ func (f *Feature) serve(w http.ResponseWriter, r *http.Request) {
 	// Only a browser that has been let in keeps the page open. Anything else on the network can ask
 	// for this path as often as it likes, and the idle time is there to close the page when the
 	// person who opened it has walked away — a scanner or a stale tab must not hold it open for them.
-	if _, in := f.session(r); in {
+	// A view polling on its own is not somebody there either (watching).
+	if _, in := f.session(r); in && !watching[strings.TrimSuffix(r.URL.Path, "/")] {
 		f.used()
 	}
 	switch strings.TrimSuffix(r.URL.Path, "/") {
@@ -108,6 +109,10 @@ func (f *Feature) serve(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 	}
 }
+
+// watching is the paths a view left up on the page asks for by itself. Answering them is not the page
+// being used: a tab left watching the scores would otherwise hold the page open for as long as it ran.
+var watching = map[string]bool{"/setup/scores": true}
 
 // diagnostics hands over everything worth having when something is wrong, with the addresses, names,
 // keys and serial numbers already replaced — so that somebody can send it to an issue without
@@ -438,6 +443,7 @@ func (f *Feature) settingsPage(ctx context.Context, w http.ResponseWriter, token
 			houseSection(w, token)
 			phoneBookSection(w, token)
 			wakeWordsSection(w, token)
+			scoresSection(w)
 		} else {
 			fmt.Fprint(w, `<h3>Announcements and sounds</h3>`)
 			houseSection(w, token)

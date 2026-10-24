@@ -16,6 +16,7 @@ func TestNoVoiceSectionsWithoutAMicrophone(t *testing.T) {
 	f, c := in(t)
 	voice := []string{"<legend>Voice assistant</legend>", "<legend>Realtime voice</legend>",
 		"<legend>Listening after an answer</legend>", "<legend>Wake words of your own</legend>",
+		"<legend>Wake word scores</legend>",
 		"<legend>Talk through cameras</legend>", "Sound &amp; Voice"}
 	page := func() string {
 		return get(f, "/setup?tab=sound", c).Body.String() + get(f, "/setup?tab=connections", c).Body.String()
