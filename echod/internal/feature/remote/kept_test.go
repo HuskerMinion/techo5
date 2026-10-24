@@ -38,6 +38,7 @@ var keptByRestore = map[string]keptSetting{
 	"wake_word_during_calls":           {func(c *config.Config) { c.Home.CallWake = true }, func(c config.Config) bool { return c.Home.CallWake }},
 	"assistant_replies_into_calls":     {func(c *config.Config) { c.Home.CallReplies = true }, func(c config.Config) bool { return c.Home.CallReplies }},
 	"hear_call_under_assistant":        {func(c *config.Config) { c.Home.CallUnderlay = true }, func(c config.Config) bool { return c.Home.CallUnderlay }},
+	"phone_plain_sip":                  {func(c *config.Config) { c.Home.PhonePlain = true }, func(c config.Config) bool { return c.Home.PhonePlain }},
 	"hangup_word":                      {func(c *config.Config) { c.Wake.Hangup.ID = config.HangupStop }, func(c config.Config) bool { return c.Wake.Hangup.On() }},
 	"hangup_word_threshold":            {func(c *config.Config) { c.Wake.Hangup.Threshold = 0.6 }, func(c config.Config) bool { return c.Wake.Hangup.Threshold == 0.6 }},
 	"camera_live":                      {func(c *config.Config) { c.Home.CameraLive = true }, func(c config.Config) bool { return c.Home.CameraLive }},

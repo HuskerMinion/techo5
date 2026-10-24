@@ -110,6 +110,12 @@ type Home struct {
 	// a call. Off, they are not heard until the speaker is the call's again.
 	CallUnderlay bool `json:"call_underlay,omitempty"`
 
+	// PhonePlain signs the SIP account in over plain UDP, without TLS and without SRTP for the call,
+	// for a SIP server on the home network that offers neither, such as a FRITZ!Box's own registrar.
+	// Off by default: a call is someone's voice in their home, and with it on, the call and the SIP
+	// password cross the network unencrypted.
+	PhonePlain bool `json:"phone_plain,omitempty"`
+
 	// CallByVoiceOff leaves "call Mom" to Home Assistant. On (false) by default: a sentence that names a
 	// contact in the device's own phone book is a call the device can place itself, and Home Assistant
 	// has no way to do better with it.
@@ -368,6 +374,10 @@ func (w HomeWriter) CallReplies(v bool) error {
 
 func (w HomeWriter) CallUnderlay(v bool) error {
 	return w.st.Update(func(c *Config) { c.Home.CallUnderlay = v })
+}
+
+func (w HomeWriter) PhonePlain(v bool) error {
+	return w.st.Update(func(c *Config) { c.Home.PhonePlain = v })
 }
 
 // CallByVoice turns calling contacts by voice on or off.

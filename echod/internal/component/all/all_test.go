@@ -79,6 +79,7 @@ var registered = []string{
 	"hangup_word_threshold",
 	"headphones",
 	"hear_call_under_assistant",
+	"phone_plain_sip",
 	"call_contacts_by_voice",
 	"home_assistant_sounds",
 	"insecure_tls",

@@ -103,6 +103,7 @@ type Phone struct {
 	// callByVoice lets "call Mom" said to the device dial a contact (feature/voice): config.Home's
 	// CallByVoiceOff, the other way round.
 	callByVoice      *esphome.Switch
+	plainSIP         *esphome.Switch // the account without TLS and SRTP, for a SIP server at home
 	ringSound        *esphome.Select
 	ringLED, callLED *led.Claim
 
@@ -162,6 +163,9 @@ func build() *Phone {
 	p.callByVoice = &esphome.Switch{Base: esphome.Base{ObjectID: "call_contacts_by_voice", Name: "Call contacts by voice",
 		Icon: "mdi:phone-outgoing", Category: esphome.CategoryConfig}}
 	p.callByVoice.OnCommand = p.SetCallByVoice
+	p.plainSIP = &esphome.Switch{Base: esphome.Base{ObjectID: "phone_plain_sip", Name: "Phone without encryption",
+		Icon: "mdi:lock-open-variant", Category: esphome.CategoryConfig}}
+	p.plainSIP.OnCommand = p.SetPlainSIP
 	web.Handle(intercomPath, "", intercomOpen, p.intercomIn)
 	p.hangup.OnPress = func() { p.Hangup() }
 	p.ringLED = led.Get().Claim(led.PriorityAlarm)
@@ -175,7 +179,7 @@ func (p *Phone) Name() string { return "phone" }
 
 func (p *Phone) Entities() []esphome.Entity {
 	list := []esphome.Entity{p.status, p.peer, p.answer, p.hangup, p.dropIn, p.dnd, p.ringSound,
-		p.callWake, p.callReplies, p.callUnderlay}
+		p.callWake, p.callReplies, p.callUnderlay, p.plainSIP}
 	// Calling by voice needs something to hear the words.
 	if layout.HasMicrophone() {
 		list = append(list, p.callByVoice)
@@ -183,8 +187,8 @@ func (p *Phone) Entities() []esphome.Entity {
 	return list
 }
 
-// Restore puts the intercom's two switches, the call ring, what a turn during a call may do and calling
-// contacts by voice back the way they were left.
+// Restore puts the intercom's two switches, the call ring, what a turn during a call may do, calling
+// contacts by voice and the phone without encryption back the way they were left.
 func (p *Phone) Restore(c config.Config) {
 	p.dropIn.Set(c.Home.DropIn)
 	p.ringSound.Set(RingSounds[RingSoundIndex()])
@@ -193,6 +197,23 @@ func (p *Phone) Restore(c config.Config) {
 	p.callReplies.Set(c.Home.CallReplies)
 	p.callUnderlay.Set(c.Home.CallUnderlay)
 	p.callByVoice.Set(!c.Home.CallByVoiceOff)
+	p.plainSIP.Set(c.Home.PhonePlain)
+}
+
+// SetPlainSIP signs the account in over plain UDP, without TLS and SRTP, or back with them: for a SIP
+// server on the home network that offers neither, such as a FRITZ!Box's own registrar. The account
+// signs in again at once, the new way.
+func (p *Phone) SetPlainSIP(on bool) {
+	if err := config.Set().Home().PhonePlain(on); err != nil {
+		slog.Error("phone: saving a setting", "setting", "phone_plain_sip", "err", err)
+		return
+	}
+	p.plainSIP.Set(on)
+	slog.Info("setting changed", "setting", "phone_plain_sip", "using", on)
+	select {
+	case p.reload <- struct{}{}:
+	default:
+	}
 }
 
 // callSwitch is one of the switches for what a turn during a call may do, saved by save.
@@ -446,6 +467,8 @@ func (p *Phone) Run(ctx context.Context) error {
 		if err != nil {
 			slog.Error("phone: reading the account", "err", err)
 		}
+		// Phone without encryption, for a SIP server at home; or the account's own word, as before.
+		acct.Plain = acct.Plain || config.Get().Home.PhonePlain
 		p.set(func(s *State) { s.Configured, s.Registered, s.Problem = acct.valid(), false, "" })
 		if !acct.valid() {
 			select {

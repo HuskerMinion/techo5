@@ -46,6 +46,32 @@ again gets a home's address blocked by most providers.
 The login is kept on the device in its own owner-only file, never in the settings Home Assistant or
 diagnostics can read, and never in an image or a release.
 
+### A SIP server at home (FRITZ!Box)
+
+A SIP server on the home network, such as a FRITZ!Box's own registrar for its IP phones, usually
+offers no TLS. For one of those, turn on **Phone without encryption** (a configuration switch of the
+device, off by default): the device then signs in over plain UDP on port 5060, and calls go without
+SRTP. Turning it on or off signs the device in again at once.
+
+On a FRITZ!Box: **Telefonie → Telefoniegeräte → Neues Gerät einrichten → Telefon (mit und ohne
+Anrufbeantworter) → LAN/WLAN (IP-Telefon)**. Give it a name, and note the username and password it
+asks for. Then:
+
+```yaml
+action: esphome.<device>_phone_account
+data:
+  server: fritz.box          # or the FRITZ!Box's address, e.g. 192.168.178.1
+  username: "<the IP phone's username>"
+  password: "<the IP phone's password>"
+```
+
+Its internal numbers (`**610`, `**620` …) and outside numbers both work, as from any IP phone on the
+box.
+
+> **Without encryption,** the call's audio and the SIP login cross the network unencrypted, and so
+> does the password's digest. Keep it to a SIP server on your own network. With a provider on the
+> internet, leave it off.
+
 ## Using it
 
 | | |

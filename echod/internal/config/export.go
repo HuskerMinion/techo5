@@ -362,6 +362,8 @@ func KeepOwn(c *Config, from Config) {
 	// What may listen during a call or end one by voice: the wake word let through, its answer sent up
 	// the call, the far end played under it, and the hang-up word.
 	c.Home.CallWake, c.Home.CallReplies, c.Home.CallUnderlay = from.Home.CallWake, from.Home.CallReplies, from.Home.CallUnderlay
+	// A call's encryption turned off for a local SIP server: never brought in by a settings file.
+	c.Home.PhonePlain = from.Home.PhonePlain
 	// And what may place one: a contact called by voice.
 	c.Home.CallByVoiceOff = from.Home.CallByVoiceOff
 	c.Wake.Hangup = from.Wake.Hangup
