@@ -2453,6 +2453,40 @@ data:
   number: "15551234567"
 ```
 
+## Place a call to someone by name
+
+In YAML, refer to this action as `esphome.<node>_phone_call_named`.
+
+The same as [Place a call](#place-a-call), with the name of whom it calls: the screen and the **Phone
+call** sensor show the name with the number ("Alex (15551234567)"), as they show a caller whose name the
+network passes on. Without a name, a call shows only the number it dials. The `esphome.techo5_phone`
+events carry the name the same way. For an automation or an assistant that knows whom it is calling
+from somewhere else (a contact list of its own, a FRITZ!Box's phone book), so the device's own phone
+book isn't needed.
+
+It is an action of its own rather than a second argument to `phone_call`, because Home Assistant
+requires every argument of a device's action: a new one would have broken every automation that calls
+`phone_call` with a number alone.
+
+### number (Required)
+
+*string*
+
+As for `phone_call`.
+
+### name (Required)
+
+*string*
+
+Whom the call is to, up to 40 characters. `""` shows the number alone, as `phone_call` does.
+
+```yaml
+action: esphome.office_phone_call_named
+data:
+  number: "15551234567"
+  name: "Alex"
+```
+
 ## Call another device in the house
 
 In YAML, refer to this action as `esphome.<node>_intercom_call`.

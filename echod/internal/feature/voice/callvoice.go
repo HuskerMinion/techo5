@@ -62,7 +62,7 @@ var placeCall = func(who phone.Contact, words string, ready bool) {
 	if !ready {
 		return
 	}
-	if err := phone.Get().CallAfter(who.Number, afterWords); err != nil {
+	if err := phone.Get().CallAfter(who.Number, who.Name, afterWords); err != nil {
 		slog.Warn("call by voice not placed", "err", err)
 	}
 }

@@ -54,7 +54,7 @@ var listeningObjects = map[string]bool{
 
 // listeningActions are the actions that need a microphone: signing the phone in, and calling.
 var listeningActions = map[string]bool{
-	"phone_account": true, "phone_call": true, "phone_contacts": true, "intercom_call": true,
+	"phone_account": true, "phone_call": true, "phone_call_named": true, "phone_contacts": true, "intercom_call": true,
 	"phone_answer": true, "phone_hangup": true,
 }
 

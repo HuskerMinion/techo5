@@ -22,6 +22,7 @@ import (
 	"sync"
 	"time"
 	"unicode"
+	"unicode/utf8"
 
 	"github.com/emiago/diago"
 	"github.com/emiago/sipgo/sip"
@@ -538,7 +539,11 @@ func refused(err error) bool {
 
 // Call places a call to a number or an extension. It returns once the call is under way; what happens
 // to it is reported through State and the Home Assistant event.
-func (p *Phone) Call(number string) error { return p.CallAfter(number, nil) }
+func (p *Phone) Call(number string) error { return p.CallAfter(number, "", nil) }
+
+// CallNamed is Call to someone the caller knows the name of: the screen and Home Assistant show the
+// name with the number, as they do a caller's that the network names. An empty name is Call.
+func (p *Phone) CallNamed(number, name string) error { return p.CallAfter(number, name, nil) }
 
 // CallAfter is Call with a wait before the dialing: the line is taken at once, Dialing and Waiting, and
 // the number dialed only once wait returns true. Taken at once, the call's own page shows with its Hang
@@ -546,7 +551,7 @@ func (p *Phone) Call(number string) error { return p.CallAfter(number, nil) }
 // any of them canceling ends wait's context, and the call ends there, never dialed. A call asked for by
 // voice waits so that it can be called off after the device has said whom it is calling. A nil wait
 // dials straight away. Home Assistant hears of the call (the dialing event) only once it is dialed.
-func (p *Phone) CallAfter(number string, wait func(ctx context.Context) bool) error {
+func (p *Phone) CallAfter(number, name string, wait func(ctx context.Context) bool) error {
 	number = dialable(number)
 	if number == "" {
 		return errors.New("phone: no number to call")
@@ -567,7 +572,7 @@ func (p *Phone) CallAfter(number string, wait func(ctx context.Context) bool) er
 		err = errors.New("phone: not signed in yet")
 	default:
 		p.end = cancel
-		p.claim(Dialing, number, false)
+		p.claim(Dialing, calledPeer(name, number), false)
 		p.state.Waiting = wait != nil
 	}
 	p.mu.Unlock()
@@ -755,7 +760,7 @@ func (p *Phone) Hangup() {
 }
 
 // Actions: phone_account signs the device in (an empty username signs it out); phone_call places a
-// call; intercom_call calls another device in the house; phone_contacts sets who a screen offers to
+// call, and phone_call_named one with the name of whom it calls; intercom_call calls another device in the house; phone_contacts sets who a screen offers to
 // call; phone_answer and phone_hangup act on the call that is up, whichever line it is on.
 func (p *Phone) Actions() []*esphome.Action {
 	return []*esphome.Action{
@@ -788,6 +793,16 @@ func (p *Phone) Actions() []*esphome.Action {
 			Run:  func(c esphome.Call) (any, error) { return nil, p.Call(c.String("number")) },
 		},
 		{
+			// phone_call with the name of whom it calls, for the screen and Home Assistant. An action of
+			// its own: Home Assistant requires every argument of an ESPHome action, so a name added to
+			// phone_call would have broken every automation that calls it with a number alone.
+			Name: "phone_call_named",
+			Args: []esphome.Arg{{Name: "number", Type: esphome.ArgString}, {Name: "name", Type: esphome.ArgString}},
+			Run: func(c esphome.Call) (any, error) {
+				return nil, p.CallNamed(c.String("number"), c.String("name"))
+			},
+		},
+		{
 			Name: "phone_contacts",
 			Args: []esphome.Arg{{Name: "contacts", Type: esphome.ArgString}},
 			Run: func(c esphome.Call) (any, error) {
@@ -815,6 +830,25 @@ func dialable(number string) string {
 		}
 	}
 	return b.String()
+}
+
+// calledPeer is whom a call goes to, as the screen and Home Assistant show it: the name it was placed
+// with and the number, as callerOf gives a caller the network names, or the number alone. The name is
+// kept to what the screen can print, and as long as an intercom caller's.
+func calledPeer(name, number string) string {
+	name = strings.TrimSpace(strings.Map(func(r rune) rune {
+		if r == utf8.RuneError || !unicode.IsPrint(r) {
+			return -1
+		}
+		return r
+	}, name))
+	if utf8.RuneCountInString(name) > nameMost {
+		name = strings.TrimSpace(string([]rune(name)[:nameMost]))
+	}
+	if name == "" || name == number {
+		return number
+	}
+	return name + " (" + number + ")"
 }
 
 // callerOf is who is calling: the display name if the network passed one on, and the number.

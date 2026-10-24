@@ -31,7 +31,7 @@ func TestHangingUpACallStillWaitingDialsNothing(t *testing.T) {
 
 	waiting := make(chan struct{})
 	gaveUp := make(chan bool, 1)
-	err := p.CallAfter("1 555 123 4567", func(ctx context.Context) bool {
+	err := p.CallAfter("1 555 123 4567", "", func(ctx context.Context) bool {
 		close(waiting)
 		<-ctx.Done()
 		gaveUp <- true
