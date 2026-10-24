@@ -4,6 +4,9 @@ package config
 // device (earbuds, a speaker) it plays to when that device is around.
 type Bluetooth struct {
 	Proxy bool `json:"proxy"`
+	// ProxyConnections allows Home Assistant to make active BLE connections through this device.
+	// It is separate from advertisement scanning and off until explicitly enabled.
+	ProxyConnections bool `json:"proxy_connections,omitempty"`
 
 	// Audio is the last audio device paired from this device: its address and the name it gave,
 	// so the daemon can try it again after a reboot and the screen can say what it is waiting for.
@@ -29,6 +32,10 @@ type BluetoothWriter struct{ st *Store }
 
 func (w BluetoothWriter) Proxy(v bool) error {
 	return w.st.Update(func(c *Config) { c.Bluetooth.Proxy = v })
+}
+
+func (w BluetoothWriter) ProxyConnections(v bool) error {
+	return w.st.Update(func(c *Config) { c.Bluetooth.ProxyConnections = v })
 }
 
 // SecureConnections is the controller's Secure Connections: on, as it comes, or off.

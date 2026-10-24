@@ -58,10 +58,11 @@ type beaconState struct {
 // connection's goroutine, and HCI commands wait on the controller, so doing that work inline stops
 // the connection answering anything at all.
 type Proxy struct {
-	proxy  *esphome.BluetoothProxy
-	radio  ble.Scanner
-	enable *esphome.Switch
-	beacon beaconState
+	proxy       *esphome.BluetoothProxy
+	radio       ble.Scanner
+	enable      *esphome.Switch
+	connections *esphome.Switch
+	beacon      beaconState
 
 	wanted  chan struct{}
 	reports chan ble.Advertisement
@@ -84,6 +85,10 @@ func Get() *Proxy {
 func build() *Proxy {
 	mac, _ := layout.FactoryMAC()
 	minor := beaconMinor(mac)
+	// Android owns the panel's radio; this build scans through the app but cannot advertise a beacon.
+	if layout.OnAndroid() {
+		minor = -1
+	}
 	b := &Proxy{
 		proxy:   &esphome.BluetoothProxy{},
 		radio:   ble.Default(),
@@ -100,7 +105,12 @@ func build() *Proxy {
 		},
 	}
 
-	b.proxy.OnSubscribed = func(bool) { b.apply() }
+	b.proxy.OnSubscribed = func(on bool) {
+		b.apply()
+		if !on {
+			b.gattProbeOwner()
+		}
+	}
 	b.proxy.OnMode = func(bool) { b.apply() }
 
 	b.enable.Set(config.Get().Bluetooth.Proxy)
@@ -111,9 +121,30 @@ func build() *Proxy {
 			return
 		}
 		b.apply()
+		if !on {
+			b.gattDisable()
+		}
 
 		// What the device advertises has changed, and that is only read when a client connects.
 		component.Reconnect.Emit(struct{}{})
+	}
+	if layout.OnAndroid() {
+		b.connections = &esphome.Switch{Base: esphome.Base{
+			ObjectID: "bluetooth_proxy_connections", Name: "Bluetooth proxy connections",
+			Icon: "mdi:bluetooth-connect", Category: esphome.CategoryConfig,
+		}}
+		b.connections.Set(config.Get().Bluetooth.ProxyConnections)
+		b.connections.OnCommand = func(on bool) {
+			b.connections.Set(on)
+			if err := config.Set().Bluetooth().ProxyConnections(on); err != nil {
+				slog.Error("saving bluetooth proxy connections failed", "err", err)
+				return
+			}
+			if !on {
+				b.gattDisable()
+			}
+			component.Reconnect.Emit(struct{}{})
+		}
 	}
 
 	safe.Go("ble radio", b.settle)
@@ -132,10 +163,18 @@ func beaconMinor(mac string) int {
 
 func (b *Proxy) Name() string { return "bluetooth proxy" }
 
-func (b *Proxy) Entities() []esphome.Entity { return []esphome.Entity{b.enable} }
+func (b *Proxy) Entities() []esphome.Entity {
+	if b.connections != nil {
+		return []esphome.Entity{b.enable, b.connections}
+	}
+	return []esphome.Entity{b.enable}
+}
 
 // Handle answers the proxy's own protocol messages: subscribe, unsubscribe, set mode.
 func (b *Proxy) Handle(ctx context.Context, conn *esphome.Conn, msg proto.Message) error {
+	if handled, err := b.gattHandle(ctx, conn, msg); handled {
+		return err
+	}
 	return b.proxy.Handle(ctx, conn, msg)
 }
 
@@ -144,6 +183,10 @@ func (b *Proxy) Handle(ctx context.Context, conn *esphome.Conn, msg proto.Messag
 func (b *Proxy) SetEnabled(on bool) { b.enable.OnCommand(on) }
 
 func (b *Proxy) Enabled() bool { return Here && config.Get().Bluetooth.Proxy }
+
+func (b *Proxy) ConnectionsEnabled() bool {
+	return b.Enabled() && config.Get().Bluetooth.ProxyConnections
+}
 
 // Reports is how many advertisements the radio has heard, for diagnostics.
 func (b *Proxy) Reports() uint64 { return b.radio.Reports() }
@@ -157,7 +200,16 @@ func (b *Proxy) Reports() uint64 { return b.radio.Reports() }
 // in that model for a proxy its owner switched off.
 func (b *Proxy) Features() esphome.BluetoothFeature {
 	if b.Enabled() {
-		return bluetoothFeatures
+		features := bluetoothFeatures
+		// Android's public BLE scanner has no passive-scan switch. Advertise active
+		// advertisement scanning only, so Home Assistant does not select a mode we cannot honor.
+		if layout.OnAndroid() {
+			features &^= esphome.BluetoothPassiveScan
+		}
+		if b.ConnectionsEnabled() {
+			features |= b.gattFeatures()
+		}
+		return features
 	}
 	return 0
 }
