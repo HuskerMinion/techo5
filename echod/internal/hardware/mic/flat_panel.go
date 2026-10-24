@@ -10,9 +10,9 @@ package mic
 // other: 2 steps of 65536, about -84 dBFS from top to bottom. A working microphone should never do
 // that, however quiet the room: a MEMS microphone's own noise is around -90 dBFS, which on the voice
 // recognition path the app records from (no noise gate) spans several steps in any second, and a room
-// adds more. Zeros, or a stream stuck at one value, are flat. flatAfter of them in a row, 20 seconds,
-// is long enough that a short dropout while Android hands the microphone over is not reported, and
-// short enough that nobody waits long to be told the tablet cannot hear.
+// adds more. Zeros, or a stream stuck at one value, are flat. Three consecutive flat seconds make
+// the physical cut visible in Home Assistant without taking a brief Android audio handoff as a
+// switch movement.
 type flatWatch struct {
 	lo, hi int16
 	n      int // samples in the second being looked at
@@ -22,7 +22,7 @@ type flatWatch struct {
 
 const (
 	flatSpan  = 2
-	flatAfter = 20 // seconds
+	flatAfter = 3 // seconds
 )
 
 // seed starts a watcher where the last one left off: a new connection to the app after the microphone
