@@ -170,7 +170,7 @@ func (r *renderer) alertPage(s scene) {
 	r.text(r.micro, foot, x, r.h-r.s(62), dim)
 	b := r.alertCloseButton()
 	r.bevel(b, shift(ember, 16), true)
-	r.text(r.small, "Close", b.Min.X+(b.Dx()-r.width(r.small, "Close"))/2, b.Max.Y-r.s(15), cream)
+	r.text(r.small, tr("close"), b.Min.X+(b.Dx()-r.width(r.small, tr("close")))/2, b.Max.Y-r.s(15), cream)
 }
 
 // alertPills lays out the pills for the kinds of alert at home in a row from x, y, as many as fit and

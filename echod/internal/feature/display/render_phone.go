@@ -93,7 +93,7 @@ func (r *renderer) callPage(s scene) {
 	}
 	hang := image.Rect(decline.Min.X, decline.Min.Y, answer.Max.X, decline.Max.Y)
 	r.roundButton(hang, rad, declineRed)
-	r.text(r.title, "Hang up", hang.Min.X+(hang.Dx()-r.width(r.title, "Hang up"))/2, mid+r.s(16), color.White)
+	r.text(r.title, tr("hang_up"), hang.Min.X+(hang.Dx()-r.width(r.title, tr("hang_up")))/2, mid+r.s(16), color.White)
 }
 
 // callTap is a finger on the call page: the left half of the buttons declines or hangs up, the right

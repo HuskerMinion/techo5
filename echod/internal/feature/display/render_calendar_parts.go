@@ -77,11 +77,11 @@ func (r *renderer) countChip(text string, right, cy int, filled bool, f font.Fac
 
 // calSegmented is the Day, Week and Month switch, with its right edge at right on the header line, sel
 // the view shown; Week is there only while the week view is on. It says where the next button goes.
-func (r *renderer) calSegmented(sel string, right int, week bool) int {
-	labels := []string{"Day", "Week", "Month"}
+func (r *renderer) calSegmented(sel calHitKind, right int, week bool) int {
+	labels := []string{tr("day"), tr("week"), tr("month")}
 	kinds := []calHitKind{calViewDay, calViewWeek, calMonthView}
 	if !week {
-		labels, kinds = []string{"Day", "Month"}, []calHitKind{calViewDay, calMonthView}
+		labels, kinds = []string{tr("day"), tr("month")}, []calHitKind{calViewDay, calMonthView}
 	}
 	f, pad := r.tiny, r.s(16)
 	total := 0
@@ -95,7 +95,7 @@ func (r *renderer) calSegmented(sel string, right int, week bool) int {
 		w := r.width(f, l) + 2*pad
 		seg := image.Rect(x, b.Min.Y, x+w, b.Max.Y)
 		ink := dim
-		if l == sel {
+		if kinds[i] == sel {
 			in := seg.Inset(r.s(4))
 			ink = r.buttonFace(in, float64(in.Dy())/2, btnPrimary)
 		} else {
@@ -299,7 +299,7 @@ func (r *renderer) calChipsList(v calendarView) {
 	r.calHitAdd(calHit{r: card, kind: calInside})
 	r.text(r.small, "Calendars", card.Min.X+r.s(28), card.Min.Y+r.s(48), cream)
 	done := image.Rect(card.Max.X-r.s(130), card.Min.Y+r.s(14), card.Max.X-r.s(22), card.Min.Y+r.s(62))
-	r.labelButton(done, "Done", btnSecondary)
+	r.labelButton(done, tr("done"), btnSecondary)
 	r.calHitAdd(calHit{r: done.Inset(-r.s(6)), kind: calChipsDone})
 	// As many columns as the calendars need, each as wide as the widest chip with a gap after it; where
 	// that is more than the card has room for, the names are cut to the columns that fit, so no chip

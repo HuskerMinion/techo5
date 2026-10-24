@@ -217,7 +217,7 @@ func (r *roundRenderer) nowPlayingFace(s roundScene) {
 	r.discAt(doneX-18, doneY, doneR, color.RGBA{36, 42, 52, 255})
 	r.discAt(doneX+18, doneY, doneR, color.RGBA{36, 42, 52, 255})
 	r.line(doneX-18, doneY, doneX+18, doneY, 2*doneR, color.RGBA{36, 42, 52, 255})
-	r.centered2(r.small, "Done", int(doneX), int(doneY)+6, colText)
+	r.centered2(r.small, tr("done"), int(doneX), int(doneY)+6, colText)
 	// The star on the right saves what is playing to favorites, and fills in once it has.
 	r.discAt(starX, starY, starR, color.RGBA{36, 42, 52, 255})
 	starColor := color.RGBA{150, 158, 170, 255}
@@ -384,9 +384,9 @@ func (r *roundRenderer) radarFace(s roundScene) {
 	v := s.radar
 	if len(v.Frames) == 0 {
 		r.centered(r.label, "RADAR", 150, colRadar)
-		msg := "Loading the rain map…"
+		msg := tr("loading_the_rain_map")
 		if !v.Loading && v.Problem != "" {
-			msg = "No rain map: " + v.Problem
+			msg = tr("no_rain_map") + v.Problem
 		}
 		r.paragraph(r.body, msg, 240, colDim, 3)
 		r.centered(r.small, "swipe for the forecast", 400, colDim)

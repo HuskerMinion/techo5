@@ -64,7 +64,7 @@ func (r *renderer) videoWords(s scene) {
 	if s.demo && name != "" {
 		name = "A film"
 	}
-	head, sub := "Loading video…", name
+	head, sub := tr("loading_video"), name
 	if !v.Active() && v.Err != "" {
 		head, sub = "This video can't be played", v.Err
 		if s.demo {
@@ -85,7 +85,7 @@ func (r *renderer) videoWords(s scene) {
 		r.text(r.small, l, (r.w-r.width(r.small, l))/2, cy+r.s(56)+i*r.s(42), dim)
 	}
 	if !v.Active() {
-		hint := "Tap to go back"
+		hint := tr("tap_to_go_back")
 		r.text(r.tiny, hint, (r.w-r.width(r.tiny, hint))/2, r.h-r.s(40), dim)
 	}
 }
@@ -172,7 +172,7 @@ func (r *renderer) videoAskPage(s scene) {
 	rad := float64(r.s(actionRadius))
 	mid := (no.Min.Y + no.Max.Y) / 2
 	fg := r.buttonFace(no, rad, btnSecondary)
-	r.text(r.body, "Not now", no.Min.X+(no.Dx()-r.width(r.body, "Not now"))/2, mid+r.s(14), fg)
+	r.text(r.body, tr("not_now"), no.Min.X+(no.Dx()-r.width(r.body, tr("not_now")))/2, mid+r.s(14), fg)
 	fg = r.buttonFace(yes, rad, btnPrimary)
 	r.text(r.title, "Allow", yes.Min.X+(yes.Dx()-r.width(r.title, "Allow"))/2, mid+r.s(16), fg)
 }

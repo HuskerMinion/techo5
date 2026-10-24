@@ -15,16 +15,16 @@ import (
 // big enough to hit half awake.
 func (r *renderer) ringingPage(s scene) {
 	st := s.ring
-	title := "Alarm"
+	title := tr("alarm")
 	switch {
 	case st.timer != "" && st.alarm != nil:
-		title = "Timer and alarm"
+		title = tr("timer_and_alarm")
 	case st.timer != "":
 		title = st.timer
 		if !strings.Contains(strings.ToLower(title), "timer") {
-			title += " timer"
+			title += tr("timer_suffix")
 		}
-		title += " is done"
+		title += tr("is_done")
 	case st.alarm != nil && st.alarm.Label != "":
 		title = st.alarm.Label
 	}
@@ -34,9 +34,9 @@ func (r *renderer) ringingPage(s scene) {
 	// moment unless it is answered. So say both things — that it is silent, and what the next press
 	// will do with it.
 	if st.silenced {
-		note := "Silenced"
+		note := tr("silenced")
 		if st.snoozable {
-			note = fmt.Sprintf("Silenced · press again to snooze %d min", s.snooze)
+			note = fmt.Sprintf(tr("silenced_press_again_to_snooze_d_min"), s.snooze)
 		}
 		// In the tiny face, on the one band that is clear: the title's descenders end around 92 and
 		// the clock's digits begin around 122, which a 34pt line does not fit inside and this does.
@@ -60,12 +60,13 @@ func (r *renderer) ringingPage(s scene) {
 	stop := image.Rect(left.Min.X, left.Min.Y, right.Max.X, left.Max.Y)
 	if st.snoozable {
 		stop = left
-		label := fmt.Sprintf("Snooze %d min", s.snooze)
+		label := fmt.Sprintf(tr("snooze_d_min"), s.snooze)
 		fg := r.buttonFace(right, rad, btnSecondary)
 		r.text(r.body, label, right.Min.X+(right.Dx()-r.width(r.body, label))/2, mid+r.s(14), fg)
 	}
 	fg := r.buttonFace(stop, rad, btnPrimary)
-	r.text(r.title, "Stop", stop.Min.X+(stop.Dx()-r.width(r.title, "Stop"))/2, mid+r.s(16), fg)
+	stopLabel := tr("stop")
+	r.text(r.title, stopLabel, stop.Min.X+(stop.Dx()-r.width(r.title, stopLabel))/2, mid+r.s(16), fg)
 }
 
 // timersLine is under the date on the clock while timers run: the soonest, and how many more.
@@ -84,10 +85,10 @@ func (r *renderer) timersLine(s scene, y int) {
 	if first.Name != "" {
 		line = first.Name + "  " + line
 	} else {
-		line = "Timer  " + line
+		line = tr("timer") + "  " + line
 	}
 	if n := len(running) - 1; n > 0 {
-		line += fmt.Sprintf("   +%d more", n)
+		line += fmt.Sprintf(tr("d_more"), n)
 	}
 	w := r.width(r.body, line)
 	x := (r.w - w) / 2

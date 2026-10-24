@@ -54,7 +54,7 @@ func (r *renderer) pinPage(p pinView) {
 	}
 	c := r.pinCancel()
 	// The program's button. The keys are the page's own input grid and keep their bevel.
-	r.labelButton(c, "Cancel", btnSecondary)
+	r.labelButton(c, tr("cancel"), btnSecondary)
 
 	for i, k := range r.pinKeyRects() {
 		r.bevel(k, shift(ember, 16), true)

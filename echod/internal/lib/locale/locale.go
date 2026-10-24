@@ -20,6 +20,18 @@ type words struct {
 }
 
 var langs = map[string]*words{
+	"ja": {
+		days:        [7]string{"日曜日", "月曜日", "火曜日", "水曜日", "木曜日", "金曜日", "土曜日"},
+		shortDays:   [7]string{"日", "月", "火", "水", "木", "金", "土"},
+		months:      [12]string{"1月", "2月", "3月", "4月", "5月", "6月", "7月", "8月", "9月", "10月", "11月", "12月"},
+		shortMonths: [12]string{"1月", "2月", "3月", "4月", "5月", "6月", "7月", "8月", "9月", "10月", "11月", "12月"},
+		sky: map[string]string{
+			"clear-night": "晴れ", "cloudy": "曇り", "exceptional": "荒天", "fog": "霧", "hail": "ひょう",
+			"lightning": "雷", "lightning-rainy": "雷雨", "partlycloudy": "晴れ時々曇り",
+			"pouring": "大雨", "rainy": "雨", "snowy": "雪", "snowy-rainy": "みぞれ",
+			"sunny": "晴れ", "windy": "強風", "windy-variant": "強風",
+		},
+	},
 	"de": {
 		days:        [7]string{"Sonntag", "Montag", "Dienstag", "Mittwoch", "Donnerstag", "Freitag", "Samstag"},
 		shortDays:   [7]string{"So", "Mo", "Di", "Mi", "Do", "Fr", "Sa"},
@@ -112,6 +124,9 @@ var langs = map[string]*words{
 // And the words of the clock styles that list a day: the Agenda's (today, tomorrow, an event under way
 // or all day, a calendar with nothing on it) and the World clock's (a place a day ahead or behind).
 var phrases = map[string]map[string]string{
+	"ja": {"here": "現在地", "today": "今日", "alarm": "アラーム", "snoozed": "スヌーズ終了", "tomorrow": "明日", "yesterday": "昨日",
+		"now": "現在", "allday": "終日", "nothing": "予定はありません", "nothingtoday": "今日の予定はありません",
+		"nothingelse": "今日の予定は以上です", "upcoming": "今後の予定", "nothingsoon": "今後の予定はありません"},
 	"de": {"here": "Hier", "today": "Heute", "alarm": "Wecker", "snoozed": "Schlummern bis", "tomorrow": "Morgen", "yesterday": "Gestern",
 		"now": "Jetzt", "allday": "Ganztägig", "nothing": "Keine Termine", "nothingtoday": "Heute nichts",
 		"nothingelse": "Heute nichts mehr", "upcoming": "DEMNÄCHST", "nothingsoon": "Nichts geplant"},
@@ -168,10 +183,7 @@ func Alarm(lang string, snoozed bool) string {
 }
 
 func phrase(lang, key, english string) string {
-	if s, ok := phrases[lang][key]; ok {
-		return s
-	}
-	return english
+	return translated(lang, key, phrases, english)
 }
 
 // english is the condition words where Home Assistant's own word will not do as it is.
@@ -191,10 +203,24 @@ func up(s string) string {
 
 func day(t time.Time) string { return strconv.Itoa(t.Day()) }
 
+// MonthYear is a calendar's month heading in the screen language.
+func MonthYear(t time.Time, lang string) string {
+	if lang == "ja" {
+		return t.Format("2006年1月")
+	}
+	if w, ok := langs[lang]; ok {
+		return up(w.months[t.Month()-1]) + " " + strconv.Itoa(t.Year())
+	}
+	return t.Format("January 2006")
+}
+
 // LongDate is the clock's date: "Monday, January 2", "Montag, 2. Januar", "Lunes, 2 de enero",
 // "Lundi 2 janvier", "Lunedì 2 gennaio", "Maandag 2 januari", "Понедельник, 2 января",
 // "Segunda-feira, 2 de janeiro".
 func LongDate(t time.Time, lang string) string {
+	if lang == "ja" {
+		return t.Format("1月2日") + "（" + langs["ja"].days[t.Weekday()] + "）"
+	}
 	w, ok := langs[lang]
 	if !ok {
 		return t.Format("Monday, January 2")
@@ -213,6 +239,9 @@ func LongDate(t time.Time, lang string) string {
 
 // ShortDate is the date where there is less room: "Mon, Jan 2", "Mo., 2. Jan.", "Lun, 2 ene".
 func ShortDate(t time.Time, lang string) string {
+	if lang == "ja" {
+		return t.Format("1/2") + "（" + langs["ja"].shortDays[t.Weekday()] + "）"
+	}
 	w, ok := langs[lang]
 	if !ok {
 		return t.Format("Mon, Jan 2")
@@ -245,6 +274,9 @@ func ShortWeekday(t time.Time, lang string) string {
 
 // MonthDay is the date without the day's name: "January 2", "2. Januar", "2 de enero".
 func MonthDay(t time.Time, lang string) string {
+	if lang == "ja" {
+		return t.Format("1月2日")
+	}
 	w, ok := langs[lang]
 	if !ok {
 		return t.Format("January 2")
@@ -262,6 +294,9 @@ func MonthDay(t time.Time, lang string) string {
 // PhotoDate is the day a photo was taken, with its year: "January 2, 2019", "2. Januar 2019",
 // "2 de enero de 2019", "2 января 2019".
 func PhotoDate(t time.Time, lang string) string {
+	if lang == "ja" {
+		return t.Format("2006年1月2日")
+	}
 	y := strconv.Itoa(t.Year())
 	if _, ok := langs[lang]; !ok {
 		return MonthDay(t, lang) + ", " + y
@@ -274,6 +309,9 @@ func PhotoDate(t time.Time, lang string) string {
 
 // DayAndNumber is the shortest date, a day's name and its number: "Mon 2", "Mo 2", "Lun 2".
 func DayAndNumber(t time.Time, lang string) string {
+	if lang == "ja" {
+		return day(t) + "日（" + ShortWeekday(t, lang) + "）"
+	}
 	return ShortWeekday(t, lang) + " " + day(t)
 }
 

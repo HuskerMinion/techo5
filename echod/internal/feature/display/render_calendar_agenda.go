@@ -12,9 +12,9 @@ import (
 // weather with the high and the low; today's events carry their countdown, the next one's filled in
 // the accent. Twice the events of the two-line list fit, and a tap does what it does there.
 func (r *renderer) calendarAgendaRefined(v calendarView, l calLook) {
-	x := r.calButton("Done", r.w-r.margin, calDone)
-	x = r.calButton("Month", x, calMonthView)
-	r.text(r.title, clipText(r, r.title, "Coming up", x-r.margin-r.s(10)), r.margin, r.margin+r.s(34), cream)
+	x := r.calButton(tr("done"), r.w-r.margin, calDone)
+	x = r.calButton(tr("month"), x, calMonthView)
+	r.text(r.title, clipText(r, r.title, tr("coming_up"), x-r.margin-r.s(10)), r.margin, r.margin+r.s(34), cream)
 
 	rows := agendaRows(v.events, v.now)
 	top, bottom := r.margin+r.s(52), r.h-r.s(4)
@@ -33,16 +33,16 @@ func (r *renderer) calendarAgendaRefined(v calendarView, l calLook) {
 	r.calAgendaMax = most
 	r.calMu.Unlock()
 	if len(rows) == 0 {
-		msg := "Nothing in the next two weeks"
+		msg := tr("nothing_in_the_next_two_weeks")
 		if !v.loaded {
-			msg = "Reading the calendar…"
+			msg = tr("reading_the_calendar")
 		}
 		r.text(r.body, msg, r.margin, top+r.s(80), dim)
 		return
 	}
 
 	right := r.w - r.margin
-	timeW := max(r.width(r.tiny, clockText(atHour(v.now, 10))), r.width(r.tiny, "All day")) + r.s(14)
+	timeW := max(r.width(r.tiny, clockText(atHour(v.now, 10))), r.width(r.tiny, tr("all_day"))) + r.s(14)
 	first := min(max(v.scroll, 0), most)
 	filled := true // the first countdown is the next event's, in the accent
 	y, shown := top, 0
@@ -82,7 +82,7 @@ func (r *renderer) calendarAgendaRefined(v calendarView, l calLook) {
 		r.roundRect(image.Rect(box.Min.X+r.s(8), cy-r.s(9), box.Min.X+r.s(13), cy+r.s(9)), r.s(2), c)
 		base := cy + capHeight(r.tiny)/2
 		tx := box.Min.X + r.s(24)
-		when := "All day"
+		when := tr("all_day")
 		if !e.AllDay {
 			when = clockText(e.Start)
 			if !sameDay(e.Start, row.day) {

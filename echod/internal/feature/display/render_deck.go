@@ -104,7 +104,7 @@ func (r *renderer) deckPage(s scene) {
 	case !v.connected && v.problem != "":
 		line = v.problem
 	case !v.connected:
-		line = "Connecting to OBS…"
+		line = tr("connecting_to_obs")
 	}
 	if line != "" {
 		fc := r.faces()

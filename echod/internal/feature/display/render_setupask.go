@@ -24,7 +24,7 @@ func (r *renderer) setupAskPage(s scene) {
 	mid := (no.Min.Y + no.Max.Y) / 2
 
 	fg := r.buttonFace(no, rad, btnSecondary)
-	r.text(r.body, "Not now", no.Min.X+(no.Dx()-r.width(r.body, "Not now"))/2, mid+r.s(14), fg)
+	r.text(r.body, tr("not_now"), no.Min.X+(no.Dx()-r.width(r.body, tr("not_now")))/2, mid+r.s(14), fg)
 
 	fg = r.buttonFace(yes, rad, btnPrimary)
 	r.text(r.title, "Allow", yes.Min.X+(yes.Dx()-r.width(r.title, "Allow"))/2, mid+r.s(16), fg)

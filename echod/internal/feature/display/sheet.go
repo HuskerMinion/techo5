@@ -87,89 +87,89 @@ func categoryRows(sv sheetView) (rows []settingRow, note string) {
 	switch st.cat {
 	case catDisplay:
 		rows := []settingRow{
-			{id: "brightness", label: "Brightness", kind: ctlStepper, value: fmt.Sprintf("%d%%", st.brightness)},
-			{id: "auto", label: "Auto-brightness", sub: "Follows the room's light", kind: ctlToggle, on: st.auto},
+			{id: "brightness", label: tr("brightness"), kind: ctlStepper, value: fmt.Sprintf("%d%%", st.brightness)},
+			{id: "auto", label: tr("auto_brightness"), sub: tr("follows_the_room_s_light"), kind: ctlToggle, on: st.auto},
 		}
 		if hasDimmest && st.auto {
-			rows = append(rows, settingRow{id: "dimmest", label: "Dimmest", sub: "How dark auto-brightness goes in a dark room",
+			rows = append(rows, settingRow{id: "dimmest", label: tr("dimmest"), sub: tr("how_dark_auto_brightness_goes_in_a_dark_room"),
 				kind: ctlStepper, value: fmt.Sprintf("%d%%", dimmestSetting())})
 		}
 		// Beside the light's own rows: it is about who else may put the screen out (screen_room.go). The
 		// label is Screen ignores room light commands cut to what fits on the Spot, and the line under it
 		// says only what the setting does, which is true whether or not Home Assistant already exposed
 		// the light to Assist (that one is unticked in Home Assistant, docs/setup.md).
-		rows = append(rows, settingRow{id: "roomlights", label: "Ignore room lights",
-			sub: "Out of area targets in Home Assistant", kind: ctlToggle, on: roomLightsIgnored()})
+		rows = append(rows, settingRow{id: "roomlights", label: tr("ignore_room_lights"),
+			sub: tr("out_of_area_targets_in_home_assistant"), kind: ctlToggle, on: roomLightsIgnored()})
 		rows = append(rows, settingRow{id: "night", label: nightRowLabel, kind: ctlChoice, value: nightRowValue(st.night)})
 		if nightCanHappen(st.night) {
-			rows = append(rows, settingRow{id: "atnight", label: "At night", sub: atNightSub,
+			rows = append(rows, settingRow{id: "atnight", label: tr("at_night"), sub: atNightSub,
 				kind: ctlChoice, value: atNightOptions[atNightIndex()]})
 			if nightClockOn() {
-				rows = append(rows, settingRow{id: "nightstyle", label: "Night clock", sub: "How the night clock looks",
+				rows = append(rows, settingRow{id: "nightstyle", label: tr("night_clock"), sub: tr("how_the_night_clock_looks"),
 					kind: ctlChoice, value: nightStyleLabel()})
 				if hasGlowRow {
-					rows = append(rows, settingRow{id: "nightglow", label: "Night clock brightness", sub: "Shown as you change it, at night",
+					rows = append(rows, settingRow{id: "nightglow", label: tr("night_clock_brightness"), sub: tr("shown_as_you_change_it_at_night"),
 						kind: ctlStepper, value: fmt.Sprintf("%d of %d", glowLevelSet(), len(glowSteps))})
 				}
 			}
 			if hasNightTap && config.Get().Screen.NightLight {
-				rows = append(rows, settingRow{id: "nighttap", label: "Tap lifts the night light",
-					sub: "A tap brings the screen back until the room is quiet", kind: ctlToggle, on: config.Get().Screen.NightTapLifts})
+				rows = append(rows, settingRow{id: "nighttap", label: tr("tap_lifts_the_night_light"),
+					sub: tr("a_tap_brings_the_screen_back_until_the_room_is_quiet"), kind: ctlToggle, on: config.Get().Screen.NightTapLifts})
 			}
 		}
 		// The light first, then each group under its name: what is changed most near the top.
-		rows = append(rows, settingRow{label: "Look", kind: ctlHeading})
+		rows = append(rows, settingRow{label: tr("look"), kind: ctlHeading})
 		if hasSkins {
-			rows = append(rows, settingRow{id: "skin", label: "Skin", sub: "A whole look over the theme and font", kind: ctlChoice, value: skins[skinIndex()].label})
+			rows = append(rows, settingRow{id: "skin", label: tr("skin"), sub: tr("a_whole_look_over_the_theme_and_font"), kind: ctlChoice, value: skins[skinIndex()].label})
 		}
 		rows = append(rows, themeRows()...)
 		rows = append(rows,
 			fontRow(),
 			clockStyleRow(),
-			settingRow{id: "clock", label: "Clock format", kind: ctlChoice, value: clockOptions[clockIndex()]},
+			settingRow{id: "clock", label: tr("clock_format"), kind: ctlChoice, value: clockOptions[clockIndex()]},
 		)
 		rows = append(rows, clockLayoutRows()...)
 		rows = append(rows,
-			settingRow{label: "Home screen", kind: ctlHeading},
-			settingRow{id: "slideshow", label: "Slideshow", sub: "Photos from Home Assistant", kind: ctlChoice, value: slideshowOptions[slideshowIndex()]},
+			settingRow{label: tr("home_screen"), kind: ctlHeading},
+			settingRow{id: "slideshow", label: tr("slideshow"), sub: tr("photos_from_home_assistant"), kind: ctlChoice, value: slideshowOptions[slideshowIndex()]},
 		)
 		if slideshowIndex() != 0 {
 			rows = append(rows, slideshowRows(st.demo)...)
 		}
 		rows = append(rows,
-			settingRow{id: "musicstrip", label: "Now playing", sub: "Full page, or a strip over the clock", kind: ctlChoice, value: stripOptionText()},
-			settingRow{id: "follow", label: "Now playing follows", sub: "Another speaker's music, while this one is quiet", kind: ctlChoice, value: followText(st.demo)},
-			settingRow{id: "lyrics", label: "Lyrics", sub: "The words in time, looked up at LRCLIB", kind: ctlToggle, on: home.LyricsOn()},
+			settingRow{id: "musicstrip", label: tr("now_playing"), sub: tr("full_page_or_a_strip_over_the_clock"), kind: ctlChoice, value: stripOptionText()},
+			settingRow{id: "follow", label: tr("now_playing_follows"), sub: tr("another_speaker_s_music_while_this_one_is_quiet"), kind: ctlChoice, value: followText(st.demo)},
+			settingRow{id: "lyrics", label: tr("lyrics"), sub: tr("the_words_in_time_looked_up_at_lrclib"), kind: ctlToggle, on: home.LyricsOn()},
 		)
 		// Calls, Assist and the turn screen need a microphone: a screen without one leaves them out.
 		if hasMicrophone() {
-			rows = append(rows, settingRow{id: "callbutton", label: "Call button", sub: "On the home screen: devices and contacts", kind: ctlToggle, on: callButton.Load()})
+			rows = append(rows, settingRow{id: "callbutton", label: tr("call_button"), sub: tr("on_the_home_screen_devices_and_contacts"), kind: ctlToggle, on: callButton.Load()})
 		}
 		if hasClockTap {
 			sub := "Start Assist, open the dashboard or the deck, or nothing"
 			if !hasMicrophone() {
 				sub = "Open the dashboard or the deck, or nothing"
 			}
-			rows = append(rows, settingRow{id: "clocktap", label: "Tap on the clock", sub: sub, kind: ctlChoice, value: clockTapChoices()[clockTapIndex()].label})
+			rows = append(rows, settingRow{id: "clocktap", label: tr("tap_on_the_clock"), sub: sub, kind: ctlChoice, value: clockTapChoices()[clockTapIndex()].label})
 		}
 		rows = append(rows,
-			settingRow{label: "Weather", kind: ctlHeading},
-			settingRow{id: "weatherfx", label: "Weather animation", sub: "Rain, snow and storms move on the forecast", kind: ctlToggle, on: weatherAnimation.Load()},
-			settingRow{id: "alerts", label: "Weather alerts", sub: "The NWS's alerts for home, in the U.S.", kind: ctlToggle, on: home.AlertsOn()},
-			settingRow{id: "radarsrc", label: "Radar source", sub: "Automatic uses the NWS in the lower 48", kind: ctlChoice, value: home.RadarSourceOptions()[home.RadarSourceIndex()]},
+			settingRow{label: tr("weather"), kind: ctlHeading},
+			settingRow{id: "weatherfx", label: tr("weather_animation"), sub: tr("rain_snow_and_storms_move_on_the_forecast"), kind: ctlToggle, on: weatherAnimation.Load()},
+			settingRow{id: "alerts", label: tr("weather_alerts"), sub: tr("the_nws_s_alerts_for_home_in_the_u_s"), kind: ctlToggle, on: home.AlertsOn()},
+			settingRow{id: "radarsrc", label: tr("radar_source"), sub: tr("automatic_uses_the_nws_in_the_lower_48"), kind: ctlChoice, value: home.RadarSourceOptions()[home.RadarSourceIndex()]},
 		)
 		// How the calendar looks, on a screen with a calendar page and once it shows a calendar.
 		rows = append(rows, calendarLookRows()...)
 		rows = append(rows,
-			settingRow{label: "Pop-ups", kind: ctlHeading},
-			settingRow{id: "camtime", label: "Camera time", sub: "How long a camera opened here stays up", kind: ctlChoice, value: cameraTimes[cameraTimeIndex()].label},
-			settingRow{id: "answertime", label: "Answer time", sub: "How long an answer stays up; a tap clears it", kind: ctlChoice, value: answerTimes[answerTimeIndex()].label},
+			settingRow{label: tr("pop_ups"), kind: ctlHeading},
+			settingRow{id: "camtime", label: tr("camera_time"), sub: tr("how_long_a_camera_opened_here_stays_up"), kind: ctlChoice, value: cameraTimes[cameraTimeIndex()].label},
+			settingRow{id: "answertime", label: tr("answer_time"), sub: tr("how_long_an_answer_stays_up_a_tap_clears_it"), kind: ctlChoice, value: answerTimes[answerTimeIndex()].label},
 		)
 		if hasTimerStyles {
-			rows = append(rows, settingRow{id: "timerstyle", label: "Timers", sub: "How running timers show on the clock", kind: ctlChoice, value: timerStyles[timerStyleIndex()].label})
+			rows = append(rows, settingRow{id: "timerstyle", label: tr("timers"), sub: tr("how_running_timers_show_on_the_clock"), kind: ctlChoice, value: timerStyles[timerStyleIndex()].label})
 		}
 		if hasEqualizer && hasMicrophone() {
-			rows = append(rows, settingRow{id: "turnstyle", label: "Turn screen", sub: "Classic, or a picture that moves with the voice", kind: ctlChoice, value: turnStyles[turnStyleIndex()].label})
+			rows = append(rows, settingRow{id: "turnstyle", label: tr("turn_screen"), sub: tr("classic_or_a_picture_that_moves_with_the_voice"), kind: ctlChoice, value: turnStyles[turnStyleIndex()].label})
 		}
 		return withPresence(rows), ""
 	case catSound:
@@ -179,52 +179,52 @@ func categoryRows(sv sheetView) (rows []settingRow, note string) {
 		}
 		// The speaker first, then each group under its name: what is changed most near the top.
 		rows := []settingRow{
-			{id: "volume", label: "Volume", kind: ctlStepper, value: fmt.Sprintf("%d of %d", st.volume, sheetVolumeSteps)},
-			{id: "bass", label: "Bass", sub: toneSub(), kind: ctlStepper, value: toneValue(config.Get().Speaker.Bass)},
-			{id: "treble", label: "Treble", kind: ctlStepper, value: toneValue(config.Get().Speaker.Treble)},
+			{id: "volume", label: tr("volume"), kind: ctlStepper, value: fmt.Sprintf("%d of %d", st.volume, sheetVolumeSteps)},
+			{id: "bass", label: tr("bass"), sub: toneSub(), kind: ctlStepper, value: toneValue(config.Get().Speaker.Bass)},
+			{id: "treble", label: tr("treble"), kind: ctlStepper, value: toneValue(config.Get().Speaker.Treble)},
 		}
 		if speaker.HasJack {
-			rows = append(rows, settingRow{id: "output", label: "Audio output", sub: "Where the sound goes with headphones in",
+			rows = append(rows, settingRow{id: "output", label: tr("audio_output"), sub: tr("where_the_sound_goes_with_headphones_in"),
 				kind: ctlChoice, value: media.Get().Output()})
 		}
 		if media.Get().SpeakerGainAvailable() {
-			rows = append(rows, settingRow{id: "speakergain", label: "Speaker gain",
-				sub:  "0 dB is normal; boosts can distort, especially with more bass",
+			rows = append(rows, settingRow{id: "speakergain", label: tr("speaker_gain"),
+				sub:  tr("0_db_is_normal_boosts_can_distort_especially_with_more_bass"),
 				kind: ctlStepper, value: gainText(media.Get().SpeakerGain())})
 		}
 		// Without a microphone there is no voice to set up and no intercom to turn away: only the
 		// sounds for timers are left of the Voice group.
 		if hasMicrophone() {
 			rows = append(rows, []settingRow{
-				{label: "Voice", kind: ctlHeading},
-				{id: "mic", label: "Microphone", sub: "The mute button does this too", kind: ctlToggle, on: !st.muted, value: mic},
-				{id: "wakeword", label: "Wake word", kind: ctlChoice, value: st.wakeWord},
-				{id: "wakesens", label: "Wake word threshold", sub: "Higher wakes by mistake less often", kind: ctlStepper,
+				{label: tr("voice"), kind: ctlHeading},
+				{id: "mic", label: tr("microphone"), sub: tr("the_mute_button_does_this_too"), kind: ctlToggle, on: !st.muted, value: mic},
+				{id: "wakeword", label: tr("wake_word"), kind: ctlChoice, value: st.wakeWord},
+				{id: "wakesens", label: tr("wake_word_threshold"), sub: tr("higher_wakes_by_mistake_less_often"), kind: ctlStepper,
 					value: fmt.Sprintf("%.2f", config.Get().Wake.Slot(0).Threshold)},
-				{id: "waketone", label: "Wake sound", kind: ctlChoice, value: config.Get().Wake.Slot(0).Tone.Label()},
+				{id: "waketone", label: tr("wake_sound"), kind: ctlChoice, value: config.Get().Wake.Slot(0).Tone.Label()},
 				voiceRow(),
-				{id: "hasounds", label: "Home Assistant sounds", sub: "For muting and timers", kind: ctlToggle, on: !config.Get().Speaker.ClassicSounds},
+				{id: "hasounds", label: tr("home_assistant_sounds"), sub: tr("for_muting_and_timers"), kind: ctlToggle, on: !config.Get().Speaker.ClassicSounds},
 			}...)
 		} else {
 			rows = append(rows,
-				settingRow{label: "Sounds", kind: ctlHeading},
-				settingRow{id: "hasounds", label: "Home Assistant sounds", sub: "For timers", kind: ctlToggle, on: !config.Get().Speaker.ClassicSounds})
+				settingRow{label: tr("sounds"), kind: ctlHeading},
+				settingRow{id: "hasounds", label: tr("home_assistant_sounds"), sub: tr("for_timers"), kind: ctlToggle, on: !config.Get().Speaker.ClassicSounds})
 		}
 		rows = append(rows, []settingRow{
-			{label: "Quiet", kind: ctlHeading},
-			{id: "quiet", label: "Quiet hours", sub: quietSub(), kind: ctlChoice, value: quietValue()},
-			{id: "sleep", label: "Sleep timer", sub: sleepSub(), kind: ctlChoice, value: sleepValue()},
+			{label: tr("quiet"), kind: ctlHeading},
+			{id: "quiet", label: tr("quiet_hours"), sub: quietSub(), kind: ctlChoice, value: quietValue()},
+			{id: "sleep", label: tr("sleep_timer"), sub: sleepSub(), kind: ctlChoice, value: sleepValue()},
 		}...)
 		if hasMicrophone() {
-			rows = append(rows, settingRow{id: "dnd", label: "Do not disturb", sub: "Intercom calls from other rooms are turned away", kind: ctlToggle, on: config.Get().Home.DoNotDisturb})
+			rows = append(rows, settingRow{id: "dnd", label: tr("do_not_disturb"), sub: tr("intercom_calls_from_other_rooms_are_turned_away"), kind: ctlToggle, on: config.Get().Home.DoNotDisturb})
 		}
 		rows = append(rows, []settingRow{
-			{label: "Music", kind: ctlHeading},
-			{id: "sendspin", label: "Music Assistant player", sub: "Play music in sync with other rooms", kind: ctlToggle, on: st.sendspin},
+			{label: tr("music"), kind: ctlHeading},
+			{id: "sendspin", label: tr("music_assistant_player"), sub: tr("play_music_in_sync_with_other_rooms"), kind: ctlToggle, on: st.sendspin},
 		}...)
 		return append(withStreaming(rows),
-			settingRow{label: "Cameras", kind: ctlHeading},
-			settingRow{id: "camerasound", label: "Camera sound", sub: "A camera's own audio, while its view is up", kind: ctlToggle, on: home.CameraSound()},
+			settingRow{label: tr("cameras"), kind: ctlHeading},
+			settingRow{id: "camerasound", label: tr("camera_sound"), sub: tr("a_camera_s_own_audio_while_its_view_is_up"), kind: ctlToggle, on: home.CameraSound()},
 		), ""
 	case catConnections:
 		return connectionRows(sv), ""
@@ -242,11 +242,11 @@ func withStreaming(rows []settingRow) []settingRow {
 	c := config.Get().Streaming
 	if streaming.Here {
 		rows = append(rows,
-			settingRow{id: "airplay", label: "AirPlay", sub: "Play to it from an iPhone, iPad or Mac", kind: ctlToggle, on: c.AirPlay},
-			settingRow{id: "spotify", label: "Spotify Connect", sub: "Play to it from the Spotify app (Premium)", kind: ctlToggle, on: c.Spotify})
+			settingRow{id: "airplay", label: "AirPlay", sub: tr("play_to_it_from_an_iphone_ipad_or_mac"), kind: ctlToggle, on: c.AirPlay},
+			settingRow{id: "spotify", label: "Spotify Connect", sub: tr("play_to_it_from_the_spotify_app_premium"), kind: ctlToggle, on: c.Spotify})
 	}
 	return append(rows,
-		settingRow{id: "dlna", label: "DLNA", sub: "Play to it from music apps and servers", kind: ctlToggle, on: c.DLNA})
+		settingRow{id: "dlna", label: "DLNA", sub: tr("play_to_it_from_music_apps_and_servers"), kind: ctlToggle, on: c.DLNA})
 }
 
 // securityRows are the Privacy & Security card's: how the device can be reached, and how it reaches
@@ -274,35 +274,35 @@ func securityRows(sv sheetView) []settingRow {
 		}
 		rows = append(rows,
 			settingRow{id: "ssh", label: "SSH", sub: sub, kind: ctlToggle, on: sec.SSH},
-			settingRow{label: "SSH keys", sub: "Sent from Home Assistant", kind: ctlValue, value: keys})
+			settingRow{label: tr("ssh_keys"), sub: tr("sent_from_home_assistant"), kind: ctlValue, value: keys})
 	}
 	lockSub := "A PIN before most settings change"
 	if security.LockSet() {
 		lockSub = "On: turn off to remove the PIN"
 	}
-	rows = append(rows, settingRow{id: "settingslock", label: "Settings lock", sub: lockSub, kind: ctlToggle, on: security.LockSet()})
-	rows = append(rows, settingRow{id: "dropin", label: "Allow Drop In", sub: "Intercom calls connect by themselves, after a chime",
+	rows = append(rows, settingRow{id: "settingslock", label: tr("settings_lock"), sub: lockSub, kind: ctlToggle, on: security.LockSet()})
+	rows = append(rows, settingRow{id: "dropin", label: tr("allow_drop_in"), sub: tr("intercom_calls_connect_by_themselves_after_a_chime"),
 		kind: ctlToggle, on: config.Get().Home.DropIn})
 	remoteSub := "Scripts signed with this device's key"
 	if !remote.HasKey() {
 		remoteSub = "Make a key on the setup page first"
 	}
-	rows = append(rows, settingRow{id: "remoteapi", label: "Remote API", sub: remoteSub, kind: ctlToggle, on: config.Get().Remote.On})
-	rows = append(rows, settingRow{id: "callring", label: "Call ring", sub: "How a call rings here",
+	rows = append(rows, settingRow{id: "remoteapi", label: tr("remote_api"), sub: remoteSub, kind: ctlToggle, on: config.Get().Remote.On})
+	rows = append(rows, settingRow{id: "callring", label: tr("call_ring"), sub: tr("how_a_call_rings_here"),
 		kind: ctlChoice, value: phone.RingSounds[phone.RingSoundIndex()]})
-	link := settingRow{label: "Home Assistant link", sub: "Encrypted with this device's key", kind: ctlValue, value: "Encrypted"}
+	link := settingRow{label: tr("home_assistant_link"), sub: tr("encrypted_with_this_device_s_key"), kind: ctlValue, value: "Encrypted"}
 	if !sec.Encrypted {
 		link.sub, link.value = "Add the device in Home Assistant to encrypt it", "Not encrypted"
 	}
-	certs := settingRow{label: "Certificate checks", sub: "For downloads; updates always check", kind: ctlValue, value: "On"}
+	certs := settingRow{label: tr("certificate_checks"), sub: tr("for_downloads_updates_always_check"), kind: ctlValue, value: "On"}
 	if st.insecureTLS {
 		certs.sub, certs.value = "Turned off in Home Assistant", "Off"
 	}
 	rows = append(rows, cameraTestRows()...)
 	return append(rows,
-		settingRow{id: "camweb", label: "Camera on the network", sub: "No login", kind: ctlToggle, on: sec.Camera},
-		settingRow{id: "screenweb", label: "Screen on the network", sub: "No login", kind: ctlToggle, on: sec.Screen},
-		settingRow{id: "talkback", label: "Talk through cameras", sub: "Talk on the camera page", kind: ctlToggle, on: sec.TalkBack},
+		settingRow{id: "camweb", label: tr("camera_on_the_network"), sub: tr("no_login"), kind: ctlToggle, on: sec.Camera},
+		settingRow{id: "screenweb", label: tr("screen_on_the_network"), sub: tr("no_login"), kind: ctlToggle, on: sec.Screen},
+		settingRow{id: "talkback", label: tr("talk_through_cameras"), sub: tr("talk_on_the_camera_page"), kind: ctlToggle, on: sec.TalkBack},
 		setupRow(st.demo),
 		link, certs)
 }
@@ -311,7 +311,7 @@ func securityRows(sv sheetView) []settingRow {
 func generalRows(sv sheetView) []settingRow {
 	st := sv.st
 	fw := firmware.Get()
-	updates := settingRow{id: "updates", label: "Updates", sub: "This is " + st.version, kind: ctlChoice,
+	updates := settingRow{id: "updates", label: tr("updates"), sub: "This is " + st.version, kind: ctlChoice,
 		value: capitalize(fw.Channel().Label()), button: "Check now"}
 	switch {
 	case st.checking:
@@ -323,19 +323,19 @@ func generalRows(sv sheetView) []settingRow {
 		// A panel's app updates it from one place: no channel to choose, only the button.
 		updates.kind, updates.value = ctlButton, ""
 	}
-	restart := settingRow{id: "restart", label: "Restart", sub: "Back in about a minute", kind: ctlDanger, button: "Restart"}
+	restart := settingRow{id: "restart", label: tr("restart"), sub: tr("back_in_about_a_minute"), kind: ctlDanger, button: "Restart"}
 	if !st.restartArm.IsZero() && st.now.Sub(st.restartArm) < restartWindow {
 		restart.sub, restart.button = "Tap again to restart now", "Confirm"
 	}
-	rows := []settingRow{{label: "Name", sub: "Change it on the setup page", kind: ctlValue, value: st.name}}
+	rows := []settingRow{{label: tr("name"), sub: tr("change_it_on_the_setup_page"), kind: ctlValue, value: st.name}}
 	rows = append(rows, calendarRows()...)
 	return append(rows,
-		settingRow{id: "weather", label: "Weather", sub: "Shown with the clock", kind: ctlChoice, value: st.weather, button: "Show"},
-		settingRow{id: "timezone", label: "Time zone", sub: zoneSub(), kind: ctlChoice, value: zoneValue()},
-		settingRow{id: "screenlang", label: "Screen language", sub: "Its dates, its weather, and what it listens for",
+		settingRow{id: "weather", label: tr("weather"), sub: tr("shown_with_the_clock"), kind: ctlChoice, value: st.weather, button: "Show"},
+		settingRow{id: "timezone", label: tr("time_zone"), sub: zoneSub(), kind: ctlChoice, value: zoneValue()},
+		settingRow{id: "screenlang", label: tr("screen_language"), sub: tr("its_dates_its_weather_and_what_it_listens_for"),
 			kind: ctlChoice, value: langOptions[langIndex()]},
 		updates,
-		settingRow{label: "About", kind: ctlValue, value: deviceModel + " · slot " + st.slot},
+		settingRow{label: tr("about"), kind: ctlValue, value: deviceModel + " · slot " + st.slot},
 		restart,
 	)
 }
@@ -343,7 +343,7 @@ func generalRows(sv sheetView) []settingRow {
 // forgetRow is Forget for the earbuds or speaker the device plays to, under its row: it asks twice,
 // the second tap within restartWindow of the first.
 func forgetRow(sv sheetView, name string) settingRow {
-	row := settingRow{id: "btforget", label: "Forget " + name, sub: "Asks twice", kind: ctlDanger, button: "Forget"}
+	row := settingRow{id: "btforget", label: "Forget " + name, sub: tr("asks_twice"), kind: ctlDanger, button: "Forget"}
 	if !sv.st.forgetArm.IsZero() && sv.now.Sub(sv.st.forgetArm) < restartWindow {
 		row.sub, row.button = "Tap again to forget it", "Confirm"
 	}
@@ -354,7 +354,7 @@ func forgetRow(sv sheetView, name string) settingRow {
 // Bluetooth proxy.
 func connectionRows(sv sheetView) []settingRow {
 	st, bt := sv.st, sv.bt
-	wifiRow := settingRow{label: "Wi-Fi", sub: st.address, kind: ctlValue, value: st.wifiName}
+	wifiRow := settingRow{label: tr("wi_fi"), sub: st.address, kind: ctlValue, value: st.wifiName}
 	if st.wifiOK {
 		wifiRow.id, wifiRow.kind, wifiRow.button = "wifi", ctlButton, "Change"
 	}
@@ -363,36 +363,36 @@ func connectionRows(sv sheetView) []settingRow {
 	}
 	rows := []settingRow{wifiRow}
 	if st.addressSet != "" {
-		rows = append(rows, settingRow{id: "address", label: "Network address", sub: st.addressSet, kind: ctlButton, button: "Change"})
+		rows = append(rows, settingRow{id: "address", label: tr("network_address"), sub: st.addressSet, kind: ctlButton, button: "Change"})
 	}
 	switch {
 	case !bt.Available:
-		rows = append(rows, settingRow{label: "Bluetooth audio", sub: "Not available on this build", kind: ctlValue})
+		rows = append(rows, settingRow{label: tr("bluetooth_audio"), sub: tr("not_available_on_this_build"), kind: ctlValue})
 	case bt.Connected != "":
 		rows = append(rows, settingRow{id: "bt", label: bt.Connected, sub: cmpOr(bt.Status, "Bluetooth audio · Connected"), kind: ctlButton, button: "Disconnect"})
 	case bt.Remembered != "":
 		// What it is doing, while it does something; otherwise plainly not connected.
-		row := settingRow{id: "bt", label: bt.Remembered, sub: "Bluetooth audio", kind: ctlButton, value: "Not connected", button: "Connect"}
+		row := settingRow{id: "bt", label: bt.Remembered, sub: tr("bluetooth_audio"), kind: ctlButton, value: "Not connected", button: "Connect"}
 		if bt.Status != "" {
 			row.sub, row.value = bt.Status, ""
 		}
 		rows = append(rows, row)
 	default:
-		rows = append(rows, settingRow{label: "Bluetooth audio", sub: cmpOr(bt.Status, "Earbuds or a speaker"), kind: ctlValue, value: "None yet"})
+		rows = append(rows, settingRow{label: tr("bluetooth_audio"), sub: cmpOr(bt.Status, "Earbuds or a speaker"), kind: ctlValue, value: "None yet"})
 	}
 	if name := cmpOr(bt.Connected, bt.Remembered); bt.Available && name != "" {
 		rows = append(rows, forgetRow(sv, name))
 	}
 	if bt.Available {
-		rows = append(rows, settingRow{id: "pair", label: "Pair a new device", sub: "Put it in pairing mode first", kind: ctlButton, button: "Pair"})
+		rows = append(rows, settingRow{id: "pair", label: tr("pair_a_new_device"), sub: tr("put_it_in_pairing_mode_first"), kind: ctlButton, button: "Pair"})
 	}
 	// Off for a phone that pairs and is dropped a second or two later (#183). Changing it powers the
 	// controller off and on, so what is connected drops for a moment, and the row says so.
 	if bt.Available && !st.btSCFixed {
-		rows = append(rows, settingRow{id: "btsc", label: "Bluetooth Secure Connections",
-			sub: "Off if a phone pairs, then drops. Drops devices briefly", kind: ctlToggle, on: !st.btSCOff})
+		rows = append(rows, settingRow{id: "btsc", label: tr("bluetooth_secure_connections"),
+			sub: tr("off_if_a_phone_pairs_then_drops_drops_devices_briefly"), kind: ctlToggle, on: !st.btSCOff})
 	}
-	return append(rows, settingRow{id: "btproxy", label: "Bluetooth proxy", sub: "Lets Home Assistant hear nearby devices",
+	return append(rows, settingRow{id: "btproxy", label: tr("bluetooth_proxy"), sub: tr("lets_home_assistant_hear_nearby_devices"),
 		kind: ctlToggle, on: st.btProxy})
 }
 
@@ -515,7 +515,7 @@ func pickerFor(id string, sv sheetView) (pickerView, bool) {
 	}
 	switch id {
 	case "alarmsound":
-		p := pickerView{title: "Alarm sound", opts: speaker.AlarmSounds(), cur: -1}
+		p := pickerView{title: tr("alarm_sound"), opts: speaker.AlarmSounds(), cur: -1}
 		for i, o := range p.opts {
 			if o == alarm.Get().Sound() {
 				p.cur = i
@@ -524,10 +524,10 @@ func pickerFor(id string, sv sheetView) (pickerView, bool) {
 		return p, true
 	case "alarmwords":
 		says := config.AlarmSays()
-		p := pickerView{title: "Said as it rings", opts: config.Labels(says), cur: slices.Index(says, alarm.Get().Say())}
+		p := pickerView{title: tr("said_as_it_rings"), opts: config.Labels(says), cur: slices.Index(says, alarm.Get().Say())}
 		return p, true
 	case "e.repeat":
-		p := pickerView{title: "Repeat", opts: repeatNames, cur: -1}
+		p := pickerView{title: tr("repeat"), opts: repeatNames, cur: -1}
 		if sv.draft != nil {
 			for i, days := range repeats {
 				if days == sv.draft.alarm.Days {
@@ -538,13 +538,13 @@ func pickerFor(id string, sv sheetView) (pickerView, bool) {
 		return p, true
 	case "e.sunrise":
 		labels, _ := alarmSunrise()
-		p := pickerView{title: "Wake with light", opts: labels, cur: 0}
+		p := pickerView{title: tr("wake_with_light"), opts: labels, cur: 0}
 		if sv.draft != nil {
 			p.cur = alarmSunriseIndex(sv.draft.alarm)
 		}
 		return p, true
 	case "atnight":
-		return pickerView{title: "At night", opts: atNightOptions, cur: atNightIndex()}, true
+		return pickerView{title: tr("at_night"), opts: atNightOptions, cur: atNightIndex()}, true
 	case "nightstyle":
 		return nightStylePicker()
 	case "night":
@@ -588,7 +588,7 @@ func pickerFor(id string, sv sheetView) (pickerView, bool) {
 		}
 		return p, true
 	case "wakeword":
-		p := pickerView{title: "Wake word", cur: -1}
+		p := pickerView{title: tr("wake_word"), cur: -1}
 		cur := config.Get().Wake.Slot(0).ID
 		for i, m := range wake.Lib().Ours() {
 			p.opts = append(p.opts, cmpOr(m.Phrase, strings.ReplaceAll(m.ID, "_", " ")))
@@ -600,7 +600,7 @@ func pickerFor(id string, sv sheetView) (pickerView, bool) {
 	case "ttsvoice":
 		return voicePicker()
 	case "waketone":
-		p := pickerView{title: "Wake sound", opts: config.Labels(speaker.WakeTones()), cur: -1}
+		p := pickerView{title: tr("wake_sound"), opts: config.Labels(speaker.WakeTones()), cur: -1}
 		cur := config.Get().Wake.Slot(0).Tone.Label()
 		for i, o := range p.opts {
 			if o == cur {
@@ -622,9 +622,9 @@ func pickerFor(id string, sv sheetView) (pickerView, bool) {
 				names[i] = fmt.Sprintf("Weather %d", n)
 			}
 		}
-		return pickerView{title: "Weather", opts: names, cur: cur}, len(names) > 0
+		return pickerView{title: tr("weather"), opts: names, cur: cur}, len(names) > 0
 	case "updates":
-		p := pickerView{title: "Updates", cur: -1}
+		p := pickerView{title: tr("updates"), cur: -1}
 		for i, c := range update.Channels() {
 			p.opts = append(p.opts, capitalize(c.Label()))
 			if c == firmware.Get().Channel() {
@@ -635,57 +635,57 @@ func pickerFor(id string, sv sheetView) (pickerView, bool) {
 	case "folder":
 		return folderPicker(sv.st.folder, sv.st.demo), true
 	case "clock":
-		return pickerView{title: "Clock format", opts: clockOptions, cur: clockIndex()}, true
+		return pickerView{title: tr("clock_format"), opts: clockOptions, cur: clockIndex()}, true
 	case "clockstyle":
 		return clockStylePicker()
 	case "font":
 		return fontPicker()
 	case "skin":
-		return pickerView{title: "Skin", opts: skinOptions(), cur: skinIndex()}, true
+		return pickerView{title: tr("skin"), opts: skinOptions(), cur: skinIndex()}, true
 	case "clockpos", "datecolor":
 		return clockLayoutPicker(id)
 	case "camtime":
-		return pickerView{title: "Camera time", opts: cameraTimeOptions(), cur: cameraTimeIndex()}, true
+		return pickerView{title: tr("camera_time"), opts: cameraTimeOptions(), cur: cameraTimeIndex()}, true
 	case "callring":
-		return pickerView{title: "Call ring", opts: phone.RingSounds, cur: phone.RingSoundIndex()}, true
+		return pickerView{title: tr("call_ring"), opts: phone.RingSounds, cur: phone.RingSoundIndex()}, true
 	case "answertime":
-		return pickerView{title: "Answer time", opts: answerTimeOptions(), cur: answerTimeIndex()}, true
+		return pickerView{title: tr("answer_time"), opts: answerTimeOptions(), cur: answerTimeIndex()}, true
 	case "timerstyle":
-		return pickerView{title: "Timers", opts: timerStyleOptions(), cur: timerStyleIndex()}, true
+		return pickerView{title: tr("timers"), opts: timerStyleOptions(), cur: timerStyleIndex()}, true
 	case "turnstyle":
-		return pickerView{title: "Turn screen", opts: turnStyleOptions(), cur: turnStyleIndex()}, true
+		return pickerView{title: tr("turn_screen"), opts: turnStyleOptions(), cur: turnStyleIndex()}, true
 	case "clocktap":
-		return pickerView{title: "Tap on the clock", opts: clockTapOptions(), cur: clockTapIndex()}, true
+		return pickerView{title: tr("tap_on_the_clock"), opts: clockTapOptions(), cur: clockTapIndex()}, true
 	case "radarsrc":
-		return pickerView{title: "Radar source", opts: home.RadarSourceOptions(), cur: home.RadarSourceIndex()}, true
+		return pickerView{title: tr("radar_source"), opts: home.RadarSourceOptions(), cur: home.RadarSourceIndex()}, true
 	case "calendars":
 		return calendarsPicker(), true
 	case "calpopwhen":
-		return pickerView{title: "Pop up", opts: popupLeadLabels, cur: popupLeadIndex()}, true
+		return pickerView{title: tr("pop_up"), opts: popupLeadLabels, cur: popupLeadIndex()}, true
 	case "calpopallday":
-		return pickerView{title: "All-day events", opts: popupAllDayOpts, cur: popupAllDayIndex()}, true
+		return pickerView{title: tr("all_day_events"), opts: popupAllDayOpts, cur: popupAllDayIndex()}, true
 	case "calpopcals":
 		return popupCalendarsPicker(), true
 	case "musicstrip":
-		return pickerView{title: "Now playing", opts: stripChoices(), cur: stripIndexShared()}, true
+		return pickerView{title: tr("now_playing"), opts: stripChoices(), cur: stripIndexShared()}, true
 	case "awayoff":
-		return pickerView{title: "Screen off when nobody is near", opts: awayLabels(), cur: awayIndex()}, true
+		return pickerView{title: tr("screen_off_when_nobody_is_near"), opts: awayLabels(), cur: awayIndex()}, true
 	case "follow":
 		_, names, cur := home.Get().FollowChoices()
 		if sv.st.demo {
 			names = demoPlayers(names)
 		}
-		return pickerView{title: "Now playing follows", opts: names, cur: cur}, len(names) > 0
+		return pickerView{title: tr("now_playing_follows"), opts: names, cur: cur}, len(names) > 0
 	case "screenlang":
-		return pickerView{title: "Screen language", opts: langOptions, cur: langIndex()}, true
+		return pickerView{title: tr("screen_language"), opts: langOptions, cur: langIndex()}, true
 	case "newtimer":
-		return pickerView{title: "New timer", opts: timerLabels, cur: -1}, true
+		return pickerView{title: tr("new_timer"), opts: timerLabels, cur: -1}, true
 	case "sleep":
-		return pickerView{title: "Sleep timer", opts: sleepLabels(), cur: sleepIndex()}, true
+		return pickerView{title: tr("sleep_timer"), opts: sleepLabels(), cur: sleepIndex()}, true
 	case "quiet":
-		return pickerView{title: "Quiet hours", opts: quietLabels(), cur: quietIndex()}, true
+		return pickerView{title: tr("quiet_hours"), opts: quietLabels(), cur: quietIndex()}, true
 	case "output":
-		p := pickerView{title: "Audio output", opts: media.OutputChoices(), cur: -1}
+		p := pickerView{title: tr("audio_output"), opts: media.OutputChoices(), cur: -1}
 		for i, o := range p.opts {
 			if o == media.Get().Output() {
 				p.cur = i
@@ -693,17 +693,17 @@ func pickerFor(id string, sv sheetView) (pickerView, bool) {
 		}
 		return p, speaker.HasJack
 	case "sunrise":
-		return pickerView{title: "Wake with light", opts: sunriseLabels(), cur: sunriseIndex()}, true
+		return pickerView{title: tr("wake_with_light"), opts: sunriseLabels(), cur: sunriseIndex()}, true
 	case "timezone":
-		p := pickerView{title: "Time zone", opts: append([]string{followHA, common}, timezone.Regions()...), cur: -1}
+		p := pickerView{title: tr("time_zone"), opts: append([]string{followHA, common}, timezone.Regions()...), cur: -1}
 		if !timezone.Get().SetHere() {
 			p.cur = 0
 		}
 		return p, len(p.opts) > 1
 	case "slideshow":
-		return pickerView{title: "Slideshow", opts: slideshowOptions, cur: slideshowIndex()}, true
+		return pickerView{title: tr("slideshow"), opts: slideshowOptions, cur: slideshowIndex()}, true
 	case "photoevery":
-		return pickerView{title: "Time per photo", opts: everyOptions, cur: everyIndex()}, true
+		return pickerView{title: tr("time_per_photo"), opts: everyOptions, cur: everyIndex()}, true
 	}
 	return devicePicker(id, sv)
 }

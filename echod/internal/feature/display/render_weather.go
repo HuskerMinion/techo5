@@ -130,9 +130,9 @@ func (r *renderer) radarPage(s scene) {
 	draw.Draw(r.dst, r.dst.Bounds(), image.NewUniform(walnut), image.Point{}, draw.Src)
 	if len(v.Frames) == 0 {
 		r.text(r.small, "Radar", r.margin, r.margin+r.s(26), amber)
-		msg := "Loading the rain map…"
+		msg := tr("loading_the_rain_map")
 		if !v.Loading && v.Problem != "" {
-			msg = "No rain map: " + v.Problem
+			msg = tr("no_rain_map") + v.Problem
 		}
 		for i, line := range r.wrap(r.body, msg, r.w-2*r.margin) {
 			r.text(r.body, line, r.margin, r.s(200)+i*r.s(44), dim)

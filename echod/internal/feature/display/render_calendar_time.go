@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/HuskerMinion/techo5/echod/internal/lib/hass"
+	"github.com/HuskerMinion/techo5/echod/internal/lib/locale"
 )
 
 // The day and the week on their hours: hours down the left, each event a box as long as it lasts,
@@ -72,10 +73,10 @@ func timelineFor(auto, shown float64, scroll int) (start float64, t timeline) {
 // calendarTimeline is a day on its hours.
 func (r *renderer) calendarTimeline(v calendarView, l calLook) {
 	today := sameDay(v.day, v.now)
-	x := r.calButton("Done", r.w-r.margin, calBack)
+	x := r.calButton(tr("done"), r.w-r.margin, calBack)
 	x = r.calIconButton("chevron-right", "›", x, calNext)
 	x = r.calIconButton("chevron-left", "‹", x, calPrev)
-	title := clipText(r, r.title, v.day.Format("Monday, January 2"), x-r.margin-r.s(10))
+	title := clipText(r, r.title, locale.LongDate(v.day, screenLang()), x-r.margin-r.s(10))
 	r.text(r.title, title, r.margin, r.margin+r.s(34), cream)
 	if today {
 		tx := r.margin + r.width(r.title, title) + r.s(16)
@@ -93,7 +94,7 @@ func (r *renderer) calendarTimeline(v calendarView, l calLook) {
 
 	// The all-day strip, with the day's weather at its right end.
 	sy0, sy1 := r.margin+r.s(58), r.margin+r.s(92)
-	r.text(r.micro, "All day", r.margin, sy0+r.s(23), dim)
+	r.text(r.micro, tr("all_day"), r.margin, sy0+r.s(23), dim)
 	wx := r.dayWeather(v.forecast, v.day, right, sy0+r.s(25), r.tiny, 28, true)
 	ax := gx + r.s(6)
 	var allDay []hass.Event
@@ -197,7 +198,7 @@ func (r *renderer) calendarTimeline(v calendarView, l calLook) {
 		r.calHitAdd(calHit{r: b.Inset(-r.s(6)), kind: calLater, ev: e})
 	}
 	if len(evs) == 0 && !v.loaded {
-		msg := "Reading the calendar…"
+		msg := tr("reading_the_calendar")
 		r.text(r.tiny, msg, gx+r.s(20), top+r.s(40), dim)
 	}
 }
@@ -412,10 +413,10 @@ func weekTitle(first time.Time, short bool) string {
 // its weather; today's column tinted and the now line across it.
 func (r *renderer) calendarWeek(v calendarView, l calLook) {
 	first := weekStart(v.day)
-	x := r.calButton("Done", r.w-r.margin, calDone)
+	x := r.calButton(tr("done"), r.w-r.margin, calDone)
 	x = r.calIconButton("chevron-right", "›", x, calNext)
 	x = r.calIconButton("chevron-left", "‹", x, calPrev)
-	x = r.calSegmented("Week", x, true)
+	x = r.calSegmented(calViewWeek, x, true)
 	title := weekTitle(first, false)
 	if r.margin+r.width(r.title, title) > x-r.s(10) {
 		title = clipText(r, r.title, weekTitle(first, true), x-r.margin-r.s(10))
@@ -509,7 +510,7 @@ func (r *renderer) calendarWeek(v calendarView, l calLook) {
 		r.calHitAdd(calHit{r: image.Rect(cx0, hy-r.s(4), cx0+colW, hy+hdrH), kind: calDay, day: day})
 	}
 
-	r.text(r.micro, "All day", r.margin, allTop+r.s(19), dim)
+	r.text(r.micro, tr("all_day"), r.margin, allTop+r.s(19), dim)
 	half := lerp(walnut, ember, 0.4)
 	line := max(r.s(1), 1)
 	for h := startH; h <= endH; h++ {
@@ -596,7 +597,7 @@ func (r *renderer) calendarWeek(v calendarView, l calLook) {
 		}
 	}
 	if !v.loaded {
-		msg := "Reading the calendar…"
+		msg := tr("reading_the_calendar")
 		r.text(r.tiny, msg, gx+r.s(20), top+r.s(40), dim)
 	}
 }
