@@ -19,6 +19,7 @@ import (
 	"errors"
 	"fmt"
 	"image"
+	"image/color"
 	"image/jpeg"
 	"log/slog"
 	"net"
@@ -154,6 +155,7 @@ func build() *Feature {
 		if err := config.Set().CamStream().On(on); err != nil {
 			slog.Error("saving camera streaming failed", "err", err)
 		}
+		panelCameraSwitch(on)
 		f.poke()
 	}
 	return f
@@ -206,6 +208,7 @@ var setCredentials = func(user, pass string) error {
 
 func (f *Feature) Restore(c config.Config) {
 	f.on.Set(c.CamStream.On)
+	panelCameraSwitch(c.CamStream.On)
 	f.discovery.Set(c.CamStream.Discovery)
 	f.loginFromHA.Set(c.CamStream.LoginFromHA)
 }
@@ -484,6 +487,10 @@ func (f *Feature) unsubscribe(ch chan rtpjpeg.Frame) {
 // comes too soon is kept and sent when its time comes, so the last one always goes out: when the
 // sensor stops for the mute, its last frame is the black one, and none follows it.
 func (f *Feature) pump(frames <-chan frame, stop <-chan struct{}) {
+	interval := time.Second / maxFPS
+	if layout.OnAndroid() {
+		interval = time.Second / 15 // Android already encoded the frame; the daemon only packetizes it.
+	}
 	var last time.Time
 	var held frame
 	var due <-chan time.Time
@@ -512,7 +519,7 @@ func (f *Feature) pump(frames <-chan frame, stop <-chan struct{}) {
 				}
 				return
 			}
-			if wait := time.Second/maxFPS - time.Since(last); wait > 0 {
+			if wait := interval - time.Since(last); wait > 0 {
 				held = next // the newest waiting one
 				if due == nil {
 					due = time.After(wait)
@@ -526,7 +533,13 @@ func (f *Feature) pump(frames <-chan frame, stop <-chan struct{}) {
 		if img == nil {
 			continue
 		}
-		b, err := encode(eighths(img))
+		var b []byte
+		var err error
+		if raw, ok := img.(interface{ RawJPEG() []byte }); ok {
+			b = raw.RawJPEG()
+		} else {
+			b, err = encode(eighths(img))
+		}
 		if err != nil {
 			continue
 		}
@@ -547,9 +560,8 @@ func (f *Feature) pump(frames <-chan frame, stop <-chan struct{}) {
 	}
 }
 
-// offered is a camera, on the Linux image: under Android, the vendor's firewall drops the port, and the
-// camera is Android's.
-func offered() bool { return camera.Available() && !layout.OnAndroid() }
+// offered is a camera whose Android or Linux capture path is available.
+func offered() bool { return camera.Available() }
 
 // cameraFrames starts the camera and hands its pictures over, the newest only.
 func cameraFrames() (<-chan frame, func(), error) {
@@ -560,6 +572,9 @@ func cameraFrames() (<-chan frame, func(), error) {
 	out := make(chan frame, 1)
 	stop := camera.Get().Frames.Listen(func(fr *camera.Frame) {
 		next := func() image.Image {
+			if raw, ok := any(fr).(interface{ RawJPEG() []byte }); ok && len(raw.RawJPEG()) > 0 {
+				return panelJPEGImage{frame: fr, jpeg: raw.RawJPEG()}
+			}
 			if img := fr.Image(); img != nil {
 				return img
 			}
@@ -580,6 +595,28 @@ func cameraFrames() (<-chan frame, func(), error) {
 		}
 	})
 	return out, func() { stop(); release() }, nil
+}
+
+// panelJPEGImage lets RTP/JPEG send Android's already encoded preview frame. Its
+// image methods decode only when another consumer actually needs pixels.
+type panelJPEGImage struct {
+	frame *camera.Frame
+	jpeg  []byte
+}
+
+func (p panelJPEGImage) RawJPEG() []byte         { return p.jpeg }
+func (p panelJPEGImage) ColorModel() color.Model { return color.RGBAModel }
+func (p panelJPEGImage) Bounds() image.Rectangle {
+	if img := p.frame.Image(); img != nil {
+		return img.Bounds()
+	}
+	return image.Rectangle{}
+}
+func (p panelJPEGImage) At(x, y int) color.Color {
+	if img := p.frame.Image(); img != nil {
+		return img.At(x, y)
+	}
+	return color.Black
 }
 
 // encode is a picture as the stream's JPEG.
