@@ -2,9 +2,11 @@ package phone
 
 import (
 	"context"
+	"io"
 	"log/slog"
 	"math"
 	"sync"
+	"time"
 
 	"github.com/emiago/diago"
 	"github.com/emiago/diago/audio"
@@ -89,21 +91,64 @@ func (g *progress) stopLocked() {
 // playEarlyMedia plays the network's audio before the answer, as a call's far end is played (receive),
 // until ctx ends. The reader is the call's own: once ctx ends it stops reading at the next packet, and
 // the call's audio (talk) reads on from there.
+//
+// It sends silence the other way meanwhile. The device's firewall lets a call's audio in only once the
+// device has sent some itself (and so does a router's NAT on the way to a provider), which a call does
+// from the microphones the moment it is answered; before that nothing had gone out, and the network's
+// ringing was dropped at the device.
 func playEarlyMedia(ctx context.Context, m *diago.DialogMedia) {
-	var props diago.MediaProps
-	r, err := m.AudioReader(diago.WithAudioReaderMediaProps(&props))
+	var rprops, wprops diago.MediaProps
+	r, err := m.AudioReader(diago.WithAudioReaderMediaProps(&rprops))
 	if err != nil {
 		slog.Warn("phone: early media", "err", err)
 		return
 	}
-	dec, err := audio.NewPCMDecoderReader(props.Codec.PayloadType, r)
+	dec, err := audio.NewPCMDecoderReader(rprops.Codec.PayloadType, r)
 	if err != nil {
 		slog.Warn("phone: early media", "err", err)
 		return
 	}
-	slog.Info("phone: early media", "codec", props.Codec.Name)
+	slog.Info("phone: early media", "codec", rprops.Codec.Name)
+
+	var wg sync.WaitGroup
+	if w, err := m.AudioWriter(diago.WithAudioWriterMediaProps(&wprops)); err != nil {
+		slog.Warn("phone: early media: no way to send", "err", err)
+	} else if enc, err := audio.NewPCMEncoderWriter(wprops.Codec.PayloadType, w); err != nil {
+		slog.Warn("phone: early media: no way to send", "err", err)
+	} else {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			sendSilence(ctx, enc, int(wprops.Codec.SampleRate))
+		}()
+	}
 	var st stats
 	_ = receive(ctx, dec, false, &st)
+	wg.Wait() // the writer is the call's own too: done with before the call's audio writes to it
+}
+
+// sendSilence writes 20 ms of silence to w every 20 ms until ctx ends, at rate samples a second (8000
+// for the narrowband codecs a call uses).
+func sendSilence(ctx context.Context, w io.Writer, rate int) {
+	if rate <= 0 {
+		rate = 8000
+	}
+	frame := make([]byte, 2*rate/50)
+	tick := time.NewTicker(20 * time.Millisecond)
+	defer tick.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-tick.C:
+			if _, err := w.Write(frame); err != nil {
+				if ctx.Err() == nil {
+					slog.Warn("phone: early media: sending", "err", err)
+				}
+				return
+			}
+		}
+	}
 }
 
 // ringbackTone is one cycle of the tone a caller hears while the far end rings, as European networks

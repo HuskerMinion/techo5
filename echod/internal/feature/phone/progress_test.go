@@ -125,3 +125,42 @@ func TestRingbackTone(t *testing.T) {
 		t.Errorf("the tone starts at %d: it should rise from nothing, not click", abs)
 	}
 }
+
+// countingWriter counts what is written to it, and how much each time.
+type countingWriter struct {
+	mu     sync.Mutex
+	writes []int
+}
+
+func (w *countingWriter) Write(p []byte) (int, error) {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	w.writes = append(w.writes, len(p))
+	return len(p), nil
+}
+
+// Silence goes out in 20 ms frames, which opens the way back through the firewall for the network's
+// audio, and stops with its context.
+func TestSendSilence(t *testing.T) {
+	w := &countingWriter{}
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan struct{})
+	go func() { sendSilence(ctx, w, 8000); close(done) }()
+	time.Sleep(110 * time.Millisecond)
+	cancel()
+	select {
+	case <-done:
+	case <-time.After(time.Second):
+		t.Fatal("sendSilence went on after its context ended")
+	}
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	if len(w.writes) < 3 {
+		t.Fatalf("%d frames in 110 ms, want about five", len(w.writes))
+	}
+	for _, n := range w.writes {
+		if n != 320 {
+			t.Fatalf("a frame of %d bytes, want 320 (20 ms of 16-bit samples at 8 kHz)", n)
+		}
+	}
+}
