@@ -7,6 +7,7 @@ import (
 	"crypto/rand"
 	"crypto/tls"
 	"crypto/x509"
+	"errors"
 	"fmt"
 	"log/slog"
 	"math/big"
@@ -141,17 +142,49 @@ func (l *line) register(ctx context.Context, registered func()) error {
 	})
 }
 
-// dial places a call and returns once it is answered, refused, or ctx ends.
-func (l *line) dial(ctx context.Context, number string) (*diago.DialogClientSession, error) {
+// dial places a call and returns once it is answered, refused, or ctx ends. Meanwhile the far end's
+// network is listened to: ringing is called when it says the far end rings with nothing to hear (a 180,
+// or a 183 without media), and early when it sends audio of its own before the answer (a 183 with
+// media: its ringing tone, or an announcement such as "the number you have dialed is not available"),
+// with the media to play it from. Either may be called more than once, and neither once the call is
+// answered.
+func (l *line) dial(ctx context.Context, number string, ringing func(), early func(*diago.DialogMedia)) (*diago.DialogClientSession, error) {
 	u, err := l.uri(number)
 	if err != nil {
 		return nil, err
 	}
-	return l.dg.Invite(ctx, u, diago.InviteOptions{
-		Username:  l.acct.Username,
-		Password:  l.acct.Password,
-		Transport: l.tran,
+	d, err := l.dg.NewDialog(u, diago.NewDialogOptions{Transport: l.tran})
+	if err != nil {
+		return nil, err
+	}
+	onResponse := func(res *sip.Response) error {
+		if res.StatusCode == sip.StatusRinging || (res.StatusCode == sip.StatusSessionInProgress && len(res.Body()) == 0) {
+			ringing()
+		}
+		return nil
+	}
+	err = d.Invite(ctx, diago.InviteClientOptions{
+		Username:         l.acct.Username,
+		Password:         l.acct.Password,
+		OnResponse:       onResponse,
+		EarlyMediaDetect: true,
 	})
+	if errors.Is(err, diago.ErrClientEarlyMedia) {
+		// The media is set up already: it plays until the far end answers, and the call goes on.
+		early(&d.DialogMedia)
+		err = d.WaitAnswer(ctx, sipgo.AnswerOptions{
+			Username:   l.acct.Username,
+			Password:   l.acct.Password,
+			OnResponse: onResponse,
+		})
+	}
+	if err == nil {
+		err = d.Ack(ctx)
+	}
+	if err != nil {
+		return nil, errors.Join(err, d.Close())
+	}
+	return d, nil
 }
 
 // localAddr is the address this device reaches the provider from, which is what goes into the call's
