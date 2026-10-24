@@ -16,7 +16,7 @@ import (
 func TestCalledPeer(t *testing.T) {
 	long := strings.Repeat("x", nameMost+10)
 	for _, tc := range []struct{ name, number, want string }{
-		{"Stefan Handy", "015112345678", "Stefan Handy (015112345678)"},
+		{"Alex Mobile", "015112345678", "Alex Mobile (015112345678)"},
 		{"  Küche  ", "**612", "Küche (**612)"},
 		{"", "**612", "**612"},
 		{"**612", "**612", "**612"},
@@ -45,7 +45,7 @@ func TestANamedCallShowsItsName(t *testing.T) {
 	})
 
 	waiting := make(chan struct{})
-	err := p.CallAfter("+49 151 1234-5678", "Stefan Handy", func(ctx context.Context) bool {
+	err := p.CallAfter("+49 151 1234-5678", "Alex Mobile", func(ctx context.Context) bool {
 		close(waiting)
 		<-ctx.Done()
 		return false
@@ -54,7 +54,7 @@ func TestANamedCallShowsItsName(t *testing.T) {
 		t.Fatal(err)
 	}
 	<-waiting
-	if st := p.State(); st.Peer != "Stefan Handy (4915112345678)" {
+	if st := p.State(); st.Peer != "Alex Mobile (4915112345678)" {
 		t.Errorf("peer %q, want the name with the number dialed", st.Peer)
 	}
 	p.Hangup()
