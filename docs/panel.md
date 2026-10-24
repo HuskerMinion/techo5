@@ -46,8 +46,10 @@ Android does for the app instead:
 - **`.local` names.** A Show looks up a name like `homeassistant.local` itself. A panel leaves
   names to Android, so a `.local` address works only where Android itself resolves it, which older
   versions don't. Home Assistant's IP address always works.
-- **Microphone mute.** The daemon's own, as on the Spot: while it's on, what the app records is handed
-  on as silence, so nothing is heard, kept or sent. Android still shows the microphone in use.
+- **Microphone mute.** Home Assistant and the screen can apply a software cut to what the app records.
+  A physical microphone switch may also silence Android capture without posting a switch event. The
+  panel reports that flat capture as muted after three seconds, but does not save it as a software
+  preference. Android still shows the microphone in use.
 - **Microphone silenced.** Android can take the microphone away from an app (its privacy switch,
   another app). When the app has heard nothing but silence for 20 seconds, Home Assistant shows a
   Microphone silenced problem, which clears as soon as there's sound again.
