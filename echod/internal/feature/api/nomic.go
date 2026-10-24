@@ -49,6 +49,7 @@ var listeningObjects = map[string]bool{
 	"cancel_request": true,
 	// feature/phone: calls and the intercom
 	"phone": true, "phone_answer": true, "phone_hangup": true, "phone_peer": true, "phone_ring_sound": true,
+	"phone_plain_sip":  true,
 	"intercom_drop_in": true, "intercom_do_not_disturb": true, "screen_call_button": true,
 }
 
