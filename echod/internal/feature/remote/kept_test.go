@@ -25,6 +25,7 @@ var keptByRestore = map[string]keptSetting{
 	"remote_adb":                       {func(c *config.Config) { c.Diag.RemoteADB = true }, func(c config.Config) bool { return c.Diag.RemoteADB }},
 	"insecure_tls":                     {func(c *config.Config) { c.Diag.InsecureTLS = true }, func(c config.Config) bool { return c.Diag.InsecureTLS }},
 	"airplay":                          {func(c *config.Config) { c.Streaming.AirPlay = true }, func(c config.Config) bool { return c.Streaming.AirPlay }},
+	"airplay_2":                        {func(c *config.Config) { c.Streaming.AirPlayClassic = true }, func(c config.Config) bool { return c.Streaming.AirPlayClassic }},
 	"spotify_connect":                  {func(c *config.Config) { c.Streaming.Spotify = true }, func(c config.Config) bool { return c.Streaming.Spotify }},
 	"dlna":                             {func(c *config.Config) { c.Streaming.DLNA = true }, func(c config.Config) bool { return c.Streaming.DLNA }},
 	"video":                            {func(c *config.Config) { c.Video.On = true }, func(c config.Config) bool { return c.Video.On }},

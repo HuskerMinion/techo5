@@ -7,6 +7,11 @@ type Streaming struct {
 	AirPlay bool `json:"airplay,omitempty"`
 	Spotify bool `json:"spotify,omitempty"`
 
+	// AirPlayClassic keeps AirPlay to the classic receiver where the image also carries AirPlay 2
+	// (feature/streaming): for somebody whose group it will not play in step with. Off, so AirPlay 2, on a
+	// new device and on one that had AirPlay before there was a choice.
+	AirPlayClassic bool `json:"airplay_classic,omitempty"`
+
 	// DLNA makes the device a DLNA renderer (feature/dlna): apps and music servers on the network send
 	// it songs. Off on a new device, as the others are.
 	DLNA bool `json:"dlna,omitempty"`
@@ -20,6 +25,10 @@ type StreamingWriter struct{ st *Store }
 
 func (w StreamingWriter) AirPlay(v bool) error {
 	return w.st.Update(func(c *Config) { c.Streaming.AirPlay = v })
+}
+
+func (w StreamingWriter) AirPlayClassic(v bool) error {
+	return w.st.Update(func(c *Config) { c.Streaming.AirPlayClassic = v })
 }
 
 func (w StreamingWriter) DLNAID(v string) error {

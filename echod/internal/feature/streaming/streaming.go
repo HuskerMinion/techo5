@@ -15,6 +15,9 @@
 // names none: a pause on the device stops its track, and the phone plays on to a speaker that drops
 // what it sends until it goes quiet.
 //
+// Where the image carries it, AirPlay is AirPlay 2 (airplay.go), which an iPhone can group with other speakers;
+// otherwise, or when it will not start, it is the classic receiver, which plays on its own.
+//
 // AirPlay has been tried with an iPhone on a Show: playing, pausing and skipping from either end, and
 // stopping. Spotify Connect has been tried on a Show as well.
 package streaming
@@ -43,11 +46,15 @@ func init() {
 	}
 }
 
-// Where the programs are in the image (tools/linux/packages-rootfs.txt, build-librespot.sh).
+// Where the programs are in the image (tools/linux/packages-rootfs.txt, build-librespot.sh,
+// build-shairport-sync.sh). The classic AirPlay receiver is Alpine's; the AirPlay 2 one, and nqptp, the clock
+// it needs, are built here, and an image may not carry them.
 var (
-	avahiPath     = "/usr/sbin/avahi-daemon"
-	shairportPath = "/usr/bin/shairport-sync"
-	librespotPath = "/usr/local/bin/techo5-librespot"
+	avahiPath      = "/usr/sbin/avahi-daemon"
+	shairportPath  = "/usr/bin/shairport-sync"
+	shairport2Path = "/usr/local/bin/techo5-shairport-sync"
+	nqptpPath      = "/usr/local/bin/techo5-nqptp"
+	librespotPath  = "/usr/local/bin/techo5-librespot"
 )
 
 // runDir holds what the programs are given: their configuration, and the pipes for what they say.
@@ -55,11 +62,12 @@ const runDir = "/run/techo5-streaming"
 
 type Feature struct {
 	airplay, spotify *esphome.Switch
+	airplay2         *esphome.Switch // where the image carries AirPlay 2 (Has2)
 
 	mu      sync.Mutex
 	running context.CancelFunc // what runs for the switches as they were last settled
 	done    chan struct{}      // closed once what running stops has stopped
-	wanted  [2]bool            // AirPlay, Spotify, as last settled
+	wanted  [3]bool            // AirPlay, Spotify, AirPlay as the classic receiver, as last settled
 	wake    chan struct{}
 
 	// Changed fires when a switch changes; listeners must not block.
@@ -80,21 +88,50 @@ func build() *Feature {
 		Base:      esphome.Base{ObjectID: "spotify_connect", Name: "Spotify Connect", Icon: "mdi:spotify", Category: esphome.CategoryConfig},
 		OnCommand: f.SetSpotify,
 	}
+	f.airplay2 = &esphome.Switch{
+		Base:      esphome.Base{ObjectID: "airplay_2", Name: "AirPlay 2", Icon: "mdi:speaker-multiple", Category: esphome.CategoryConfig},
+		OnCommand: f.SetAirPlay2,
+	}
 	return f
 }
 
 func (f *Feature) Name() string { return "streaming" }
 
-func (f *Feature) Entities() []esphome.Entity { return []esphome.Entity{f.airplay, f.spotify} }
+// Entities are the switches; AirPlay 2's only where the image carries it, since elsewhere it could only
+// ever be on and do nothing.
+func (f *Feature) Entities() []esphome.Entity {
+	if Has2() {
+		return []esphome.Entity{f.airplay, f.airplay2, f.spotify}
+	}
+	return []esphome.Entity{f.airplay, f.spotify}
+}
+
+// Has2 is whether this image carries AirPlay 2: its receiver and nqptp. Whether it runs is up to the
+// AirPlay 2 switch, and to the loopback and /dev/shm being there (airplay2Missing).
+func Has2() bool {
+	for _, p := range []string{shairport2Path, nqptpPath} {
+		if _, err := os.Stat(p); err != nil {
+			return false
+		}
+	}
+	return true
+}
 
 func (f *Feature) Restore(c config.Config) {
 	f.airplay.Set(c.Streaming.AirPlay)
+	f.airplay2.Set(!c.Streaming.AirPlayClassic)
 	f.spotify.Set(c.Streaming.Spotify)
 }
 
 // SetAirPlay and SetSpotify are the switches, from Home Assistant, the screen or the setup page.
 func (f *Feature) SetAirPlay(on bool) { f.set(f.airplay, on, config.Set().Streaming().AirPlay) }
 func (f *Feature) SetSpotify(on bool) { f.set(f.spotify, on, config.Set().Streaming().Spotify) }
+
+// SetAirPlay2 is the AirPlay 2 switch: off keeps AirPlay to the classic receiver, which plays on its own
+// rather than in a group. AirPlay starts again on the one chosen.
+func (f *Feature) SetAirPlay2(on bool) {
+	f.set(f.airplay2, on, func(on bool) error { return config.Set().Streaming().AirPlayClassic(!on) })
+}
 
 func (f *Feature) set(s *esphome.Switch, on bool, save func(bool) error) {
 	if err := save(on); err != nil {
@@ -115,7 +152,8 @@ func (f *Feature) set(s *esphome.Switch, on bool, save func(bool) error) {
 // without them, offers the switches but cannot keep them.
 func Installed() (airplay, spotify bool) {
 	have := func(p string) bool { _, err := os.Stat(p); return err == nil }
-	return have(avahiPath) && have(shairportPath), have(avahiPath) && have(librespotPath)
+	return have(avahiPath) && (have(shairportPath) || have(shairport2Path) && have(nqptpPath)),
+		have(avahiPath) && have(librespotPath)
 }
 
 // Run keeps what runs matching the switches.
@@ -136,7 +174,7 @@ func (f *Feature) Run(ctx context.Context) error {
 // order (avahi first) simple.
 func (f *Feature) settle(parent context.Context) {
 	c := config.Get().Streaming
-	want := [2]bool{c.AirPlay, c.Spotify}
+	want := [3]bool{c.AirPlay, c.Spotify, c.AirPlayClassic}
 	f.mu.Lock()
 	same := want == f.wanted && (f.running != nil || (!want[0] && !want[1]))
 	f.mu.Unlock()

@@ -19,7 +19,7 @@ import (
 var readOnly = []string{
 	// Doors on the network, and this API itself.
 	"remote_api", "ssh", "setup_page", "camera_web_access", "screen_web_access", "remote_adb", "insecure_tls",
-	"airplay", "spotify_connect", "dlna", "dlna_video", "video", "sendspin", "bluetooth_proxy",
+	"airplay", "airplay_2", "spotify_connect", "dlna", "dlna_video", "video", "sendspin", "bluetooth_proxy",
 	// Listening, watching and keeping.
 	"mic_mute", "intercom_drop_in", "talk_back", "camera_live", "keep_wake_clips", "keep_recordings_1",
 	"keep_recordings_2", "presence", "presence_detection", "gestures", "wake_word_on_home_assistant",

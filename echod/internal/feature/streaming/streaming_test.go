@@ -6,6 +6,7 @@ import (
 	"encoding/binary"
 	"encoding/hex"
 	"fmt"
+	"io"
 	"net"
 	"os"
 	"os/exec"
@@ -17,6 +18,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/HuskerMinion/techo5/echod/internal/config"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/home"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/media"
 )
@@ -718,7 +720,7 @@ func TestTheSpotifyEventProgram(t *testing.T) {
 // A name is a libconfig string whatever was typed for it, and covers are asked for only where there is
 // a screen to show them.
 func TestShairportConf(t *testing.T) {
-	c := shairportConf(`Den's "Desk" \ one`+"\x01", "/run/x")
+	c := shairportConf(`Den's "Desk" \ one`+"\x01", "/run/x", false)
 	if !strings.Contains(c, `name = "Den's \"Desk\" \\ one";`) {
 		t.Errorf("conf:\n%s", c)
 	}
@@ -728,6 +730,118 @@ func TestShairportConf(t *testing.T) {
 	// One session at a time, which airplaySession counts on.
 	if strings.Contains(c, "allow_session_interruption") {
 		t.Errorf("conf lets a sender break in:\n%s", c)
+	}
+	// The classic receiver on the ports the firewall lets through, and nothing of AirPlay 2.
+	if !strings.Contains(c, fmt.Sprintf("port = %d;", airplayPort)) || strings.Contains(c, "service_type") {
+		t.Errorf("classic conf:\n%s", c)
+	}
+}
+
+// The AirPlay 2 receiver is that alone, never classic AirPlay under a "(Classic)" name, and hands audio
+// over early by the device's own lag.
+func TestShairportConfAirPlay2(t *testing.T) {
+	c := shairportConf("Kitchen", "/run/x", true)
+	if !strings.Contains(c, `service_type = "airplay2";`) {
+		t.Errorf("conf is not AirPlay 2 only:\n%s", c)
+	}
+	if airplay2Offset >= 0 {
+		t.Errorf("airplay2Offset %v is not earlier", airplay2Offset)
+	}
+	if want := fmt.Sprintf("audio_backend_latency_offset_in_seconds = %.3f;", airplay2Offset.Seconds()); !strings.Contains(c, want) {
+		t.Errorf("conf without %s:\n%s", want, c)
+	}
+	if strings.Contains(c, "udp_port_base") || !strings.Contains(c, `name = "Kitchen";`) {
+		t.Errorf("conf:\n%s", c)
+	}
+}
+
+// AirPlay 2 runs only where the image carries it and the switch is on; turned off, AirPlay stays classic.
+func TestTheAirPlay2Switch(t *testing.T) {
+	config.Use(filepath.Join(t.TempDir(), "state.json"))
+	wasRecv, wasClock := shairport2Path, nqptpPath
+	t.Cleanup(func() { shairport2Path, nqptpPath = wasRecv, wasClock })
+	shairport2Path, nqptpPath = "/nonexistent/receiver", "/nonexistent/nqptp"
+	if Has2() || airplay2Missing() == "" {
+		t.Error("AirPlay 2 without its programs")
+	}
+	if n := len(Get().Entities()); n != 2 {
+		t.Errorf("%d switches without AirPlay 2 in the image", n)
+	}
+	dir := t.TempDir()
+	shairport2Path, nqptpPath = filepath.Join(dir, "receiver"), filepath.Join(dir, "nqptp")
+	for _, p := range []string{shairport2Path, nqptpPath} {
+		if err := os.WriteFile(p, nil, 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if !Has2() || len(Get().Entities()) != 3 {
+		t.Error("no AirPlay 2 switch with AirPlay 2 in the image")
+	}
+	if config.Get().Streaming.AirPlayClassic {
+		t.Error("a new device keeps AirPlay classic")
+	}
+	if err := config.Set().Streaming().AirPlayClassic(true); err != nil {
+		t.Fatal(err)
+	}
+	if why := airplay2Missing(); why != "AirPlay 2 is turned off" {
+		t.Errorf("turned off, AirPlay 2 is missing for %q", why)
+	}
+}
+
+// A program that keeps stopping as it starts is given up on after the tries it was given; one that runs
+// on is not, and supervise never gives up.
+func TestSuperviseTriesGivesUp(t *testing.T) {
+	was, wasMost := restartFirst, restartMost
+	restartFirst, restartMost = 10*time.Millisecond, 20*time.Millisecond
+	t.Cleanup(func() { restartFirst, restartMost = was, wasMost })
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	if !superviseTries(ctx, program{name: "test", path: "/bin/sh", args: []string{"-c", "exit 1"}}, 3) {
+		t.Error("a program that never starts was not given up on")
+	}
+	if ctx.Err() != nil {
+		t.Error("giving up took until the end")
+	}
+	short, stop := context.WithTimeout(context.Background(), 300*time.Millisecond)
+	defer stop()
+	if superviseTries(short, program{name: "test", path: "/bin/sh", args: []string{"-c", "exec sleep 5"}}, 3) {
+		t.Error("a program that runs on was given up on")
+	}
+}
+
+// AirPlay 2 is given up on when its receiver or nqptp keeps stopping as it starts, so the classic receiver
+// can take over; with both running, it runs until it is stopped.
+func TestAirPlay2GivesUpWhenItWontStart(t *testing.T) {
+	was, wasMost, wasRecv, wasClock, wasShm := restartFirst, restartMost, shairport2Path, nqptpPath, nqptpShm
+	restartFirst, restartMost = 10*time.Millisecond, 20*time.Millisecond
+	t.Cleanup(func() {
+		restartFirst, restartMost, shairport2Path, nqptpPath, nqptpShm = was, wasMost, wasRecv, wasClock, wasShm
+	})
+	dir := t.TempDir()
+	script := func(name, body string) string {
+		p := filepath.Join(dir, name)
+		if err := os.WriteFile(p, []byte("#!/bin/sh\n"+body+"\n"), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		return p
+	}
+	runs, fails := script("runs", "exec sleep 5"), script("fails", "exit 1")
+	// nqptp's clock is there, as a running nqptp leaves it, so the receiver starts at once.
+	nqptpShm = script("shm", "")
+	for _, c := range []struct {
+		name, recv, clock string
+		failed            bool
+	}{
+		{"receiver fails", fails, runs, true},
+		{"nqptp fails", runs, fails, true},
+		{"both run", runs, runs, false},
+	} {
+		shairport2Path, nqptpPath = c.recv, c.clock
+		ctx, cancel := context.WithTimeout(context.Background(), 1500*time.Millisecond)
+		if got := runAirPlay2(ctx, "/nonexistent", io.Discard, nil); got != c.failed {
+			t.Errorf("%s: failed = %v", c.name, got)
+		}
+		cancel()
 	}
 }
 
@@ -1325,7 +1439,7 @@ func TestAirPlayNameFitsALabel(t *testing.T) {
 	if got := airplayName("Kitchen"); got != "Kitchen" {
 		t.Errorf("a short name came back %q", got)
 	}
-	if c := shairportConf(long, "/run/x"); strings.Contains(c, long) {
+	if c := shairportConf(long, "/run/x", false); strings.Contains(c, long) {
 		t.Error("shairport-sync was given the name uncut")
 	}
 }

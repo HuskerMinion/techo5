@@ -31,6 +31,11 @@ func streamingSection(w http.ResponseWriter, token string) {
 	 <p><label><input type="checkbox" name="airplay" value="yes" style="width:auto"%s> AirPlay: from an iPhone, iPad or Mac</label></p>
 	 <p><label><input type="checkbox" name="spotify" value="yes" style="width:auto"%s> Spotify Connect: from the Spotify app (needs Spotify Premium)</label></p>`,
 			checked(c.AirPlay), checked(c.Spotify))
+		if streaming.Has2() {
+			fmt.Fprintf(w, `
+	 <p><label><input type="checkbox" name="airplay2" value="yes" style="width:auto"%s> AirPlay 2: group it with
+	  other AirPlay 2 speakers; off keeps classic AirPlay, which plays on its own</label></p>`, checked(!c.AirPlayClassic))
+		}
 	}
 	fmt.Fprintf(w, `
 	 <p><label><input type="checkbox" name="dlna" value="yes" style="width:auto"%s> DLNA: from music apps and servers
@@ -53,7 +58,11 @@ func saveStreaming(r *http.Request) string {
 		if on("spotify") != config.Get().Streaming.Spotify {
 			streaming.Get().SetSpotify(on("spotify"))
 		}
-		if config.Get().Streaming.AirPlay != on("airplay") || config.Get().Streaming.Spotify != on("spotify") {
+		if streaming.Has2() && on("airplay2") == config.Get().Streaming.AirPlayClassic {
+			streaming.Get().SetAirPlay2(on("airplay2"))
+		}
+		if config.Get().Streaming.AirPlay != on("airplay") || config.Get().Streaming.Spotify != on("spotify") ||
+			streaming.Has2() && config.Get().Streaming.AirPlayClassic == on("airplay2") {
 			return "could not save it"
 		}
 	}
