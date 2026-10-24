@@ -136,9 +136,8 @@ func (d *Diag) Entities() []esphome.Entity {
 	if bluetooth.Here {
 		out = append(out, d.ads)
 	}
-	// adbd is Android's. On the Linux image there is none to reach, and the saved setting is read by
-	// the Android daemon the unit falls back to, where it would open root adb to the network. A panel
-	// has no firewall of its own to open it in (adbHere).
+	// Echo Android opens a firewall rule; an explicitly permitted Panel app changes Android's own
+	// debugging setting. The Panel entity is present only where that app reported the capability.
 	if layout.OnAndroid() && adbHere {
 		out = append(out, d.adb)
 	}
@@ -254,14 +253,18 @@ func (d *Diag) remote() {
 			Category: esphome.CategoryDiagnostic,
 		},
 	}
+	if adbViaPanel {
+		panelADBSetup(d)
+	} else {
 
-	d.adb.OnCommand = func(on bool) {
-		if err := d.reachable(on); err != nil {
-			d.adb.Set(!on)
-			return
-		}
-		if err := config.Set().Diag().RemoteADB(on); err != nil {
-			slog.Error("saving a setting failed", "setting", d.adb.ObjectID, "err", err)
+		d.adb.OnCommand = func(on bool) {
+			if err := d.reachable(on); err != nil {
+				d.adb.Set(!on)
+				return
+			}
+			if err := config.Set().Diag().RemoteADB(on); err != nil {
+				slog.Error("saving a setting failed", "setting", d.adb.ObjectID, "err", err)
+			}
 		}
 	}
 
@@ -659,7 +662,15 @@ func (d *Diag) Restore(c config.Config) {
 
 	// The chain is empty after a reboot but not after an echod restart, so the rule is put back or
 	// taken away rather than either being assumed.
-	if !layout.OnAndroid() || !adbHere {
+	if adbViaPanel {
+		// Android owns this setting. The app reports its actual state over the control line; a saved
+		// Echo firewall preference must never switch the tablet's daemon on or off during restore.
+		if c.Diag.RemoteADB {
+			if err := config.Set().Diag().RemoteADB(false); err != nil {
+				slog.Error("clearing obsolete remote adb preference failed", "err", err)
+			}
+		}
+	} else if !layout.OnAndroid() || !adbHere {
 		// Off the Linux image the switch is not offered; one saved on before is cleared, so the Fire OS
 		// fallback does not open adb to the network from this file. Nor on a panel.
 		if c.Diag.RemoteADB {
