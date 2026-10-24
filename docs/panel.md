@@ -36,21 +36,31 @@ Android does for the app instead:
   channel and no A/B slots on a panel. The update card in Home Assistant shows the app's version.
   Checking only looks; Install asks the app to install. With **Install updates automatically** on,
   it installs by itself in the same night hours as an Echo (2 to 5 am), when nothing is playing.
-- **What it leaves out.** No LED ring and no camera of its own: a tablet on the Show 5's chip (the
-  8th gen Fire HD 8) simply has no camera, rather than trying the Show's and failing. No button
-  events: the app passes on no keys, so the four button event entities aren't there. No Bluetooth
-  at all: no Bluetooth proxy and no Bluetooth speaker or phone (Android keeps the radio). No video player, live camera
-  video or camera sound (the Echos' video decoder isn't in the app; cameras show Home Assistant's
-  snapshots). No AirPlay or Spotify Connect, no remote adb, and no firewall of its own. A call to a
-  SIP account rings only when it comes from the provider.
+- **Android camera.** Where Android exposes a front camera and the app has permission, it opens
+  the camera on demand and offers Home Assistant a camera entity. With a camera login and Camera
+  streaming enabled, it serves RTP/JPEG over RTSP on port 8554. The app selects 1280×720 preview
+  where advertised, falling back to 640×480, and sends Android's JPEG without decoding and
+  re-encoding it in the daemon. A separate full-size still request uses the camera's largest
+  advertised picture mode. Home Assistant stills are cached in memory for one minute to avoid
+  repeatedly pausing video preview. On a JBL Link View running Android Things 8.1, RTSP delivered
+  1280×720 at about 14.5 fps and stills were 2592×1944; a fresh still caused a longest measured
+  video-frame gap of 0.38 seconds. Other devices need testing. RTP/JPEG's 2040-pixel dimension
+  limit applies to live video, not to the full-size stills.
+- **What it leaves out.** No LED ring or button events: the app passes on no keys, so the four button
+  event entities aren't there. No Bluetooth proxy or Bluetooth speaker or phone support from TECHO5
+  (Android keeps the radio). No video player, live camera video from Home Assistant or camera sound
+  (the Echos' video decoder isn't in the app; other cameras show Home Assistant snapshots). No AirPlay
+  or Spotify Connect, no remote adb, and no firewall of its own. A call to a SIP account rings only
+  when it comes from the provider.
 - **`.local` names.** A Show looks up a name like `homeassistant.local` itself. A panel leaves
   names to Android, so a `.local` address works only where Android itself resolves it, which older
   versions don't. Home Assistant's IP address always works.
 - **Microphone mute.** The daemon's own, as on the Spot: while it's on, what the app records is handed
   on as silence, so nothing is heard, kept or sent. Android still shows the microphone in use.
 - **Microphone silenced.** Android can take the microphone away from an app (its privacy switch,
-  another app). When the app has heard nothing but silence for 20 seconds, Home Assistant shows a
-  Microphone silenced problem, which clears as soon as there's sound again.
+  another app). After three seconds of flat capture, Home Assistant shows a Microphone silenced
+  problem and the panel's mute state follows it. It clears when sound returns. Home Assistant's
+  mute switch also supplies a separate software cut, which cannot override a physical cut.
 
 ## The panel build
 

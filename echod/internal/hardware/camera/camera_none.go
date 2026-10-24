@@ -1,4 +1,4 @@
-//go:build dot || panel
+//go:build dot
 
 // Package camera is the front camera. The Dot has none, and neither has a panel: a tablet's camera is
 // Android's, and the app hands none to the daemon. A panel leaves the Echo camera out altogether rather
