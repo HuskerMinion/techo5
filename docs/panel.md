@@ -36,13 +36,18 @@ Android does for the app instead:
   channel and no A/B slots on a panel. The update card in Home Assistant shows the app's version.
   Checking only looks; Install asks the app to install. With **Install updates automatically** on,
   it installs by itself in the same night hours as an Echo (2 to 5 am), when nothing is playing.
+- **ADB debugging.** On a tested JBL Link View with Android's development-only
+  `WRITE_SECURE_SETTINGS` permission explicitly granted, Home Assistant gets an **ADB debugging
+  (USB + Wi-Fi)** diagnostic switch. Android 8.1's setting controls both transports; the switch
+  reports Android's actual state. If TECHO5 turned ADB off and its app service restarts, the app
+  turns ADB back on for recovery. Other panels do not offer this switch.
 - **What it leaves out.** No LED ring and no camera of its own: a tablet on the Show 5's chip (the
   8th gen Fire HD 8) simply has no camera, rather than trying the Show's and failing. No button
   events: the app passes on no keys, so the four button event entities aren't there. No Bluetooth
-  at all: no Bluetooth proxy and no Bluetooth speaker or phone (Android keeps the radio). No video player, live camera
-  video or camera sound (the Echos' video decoder isn't in the app; cameras show Home Assistant's
-  snapshots). No AirPlay or Spotify Connect, no remote adb, and no firewall of its own. A call to a
-  SIP account rings only when it comes from the provider.
+  proxy or Bluetooth speaker or phone support from TECHO5 (Android keeps the radio). No video player,
+  live camera video or camera sound (the Echos' video decoder isn't in the app; cameras show Home
+  Assistant snapshots). No AirPlay or Spotify Connect, and no firewall of its own. A call to a SIP
+  account rings only when it comes from the provider.
 - **`.local` names.** A Show looks up a name like `homeassistant.local` itself. A panel leaves
   names to Android, so a `.local` address works only where Android itself resolves it, which older
   versions don't. Home Assistant's IP address always works.
