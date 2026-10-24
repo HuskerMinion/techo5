@@ -2,13 +2,38 @@
 
 package privacy
 
-// A panel has no mute line of its own: the tablet's microphone is Android's, and the app hands the
-// daemon what it records. The Shows' latch is not looked for at all, because a tablet on the Echo Show
-// 5's MediaTek chip (the 8th gen Fire HD 8) can carry nodes with the Shows' names, and they are not a
-// mute the daemon may drive. The mute is the daemon's own, as on the Spot (software.go): while it is
-// on, what the app records is handed on as silence. Android's own privacy switch silences the app as
-// well, which the capture notices (hardware/mic, flat_panel.go).
-func platformMute() (Mute, error) { return software{}, nil }
+import (
+	"time"
+
+	"github.com/HuskerMinion/techo5/echod/internal/lib/micsilent"
+)
+
+// Android's physical switch can cut capture without changing AudioManager's mute flag or posting an
+// input event. The capture's flat-stream detector observes that cut. Home Assistant and the screen
+// also have a software cut; Get reports either one, while Set changes only the software cut. A
+// physical cut is never saved as a software preference across a restart.
+type panelMute struct{}
+
+func (panelMute) Get() (bool, error) { return softwareCut.Load() || micsilent.Cut(), nil }
+func (panelMute) Set(muted bool) error {
+	softwareCut.Store(muted)
+	return nil
+}
+func (p panelMute) Toggle() (bool, error) {
+	was, _ := p.Get()
+	if err := p.Set(!was); err != nil {
+		return was, err
+	}
+	return p.Get()
+}
+func (panelMute) HardwareActs(bool) bool { return false }
+func (panelMute) Lag() time.Duration     { return 0 }
+func (panelMute) Persisted() bool        { return softwareCut.Load() }
+func (panelMute) Observe(fn func()) (cancel func()) {
+	return micsilent.CutChanged.Listen(func(bool) { fn() })
+}
+
+func platformMute() (Mute, error) { return panelMute{}, nil }
 
 // noLED stands in for a mute light a tablet does not have.
 type noLED struct{}
@@ -18,6 +43,5 @@ func (noLED) Bright() (bool, error) { return true, nil }
 
 func platformLight() (LED, error) { return noLED{}, nil }
 
-// The cut is the daemon's own, so a mute saved from last time is in force before capture opens. See
-// privacy.Seed.
+// A software mute saved from Home Assistant must apply before microphone capture starts.
 func seedSoftwareCut(muted bool) { softwareCut.Store(muted) }

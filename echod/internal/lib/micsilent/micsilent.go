@@ -12,9 +12,14 @@ import (
 )
 
 var silent atomic.Bool
+var cut atomic.Bool
 
 // Changed fires with the new state each time it changes. Listeners must not block.
 var Changed hook.Hook[bool]
+
+// CutChanged reports the short flat-stream threshold used for the panel's mute state. The longer
+// Silent/Changed threshold remains the diagnostic problem sensor.
+var CutChanged hook.Hook[bool]
 
 // Set records whether the microphone is silent now, and tells the listeners if that changed.
 func Set(on bool) {
@@ -25,3 +30,14 @@ func Set(on bool) {
 
 // Silent is whether the microphone is silent now.
 func Silent() bool { return silent.Load() }
+
+// SetCut reports a likely physical microphone cut after the short flat-stream threshold. It does
+// not save a software mute preference and does not change the diagnostic problem sensor.
+func SetCut(on bool) {
+	if cut.Swap(on) != on {
+		CutChanged.Emit(on)
+	}
+}
+
+// Cut is whether the microphone has crossed the short mute threshold.
+func Cut() bool { return cut.Load() }

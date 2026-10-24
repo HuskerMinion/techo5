@@ -20,3 +20,23 @@ func TestSetSaysEachChangeOnce(t *testing.T) {
 		t.Fatalf("heard %v, want [true false]", heard)
 	}
 }
+
+func TestCutDoesNotRaiseDiagnosticProblem(t *testing.T) {
+	Set(false)
+	SetCut(false)
+	t.Cleanup(func() { Set(false); SetCut(false) })
+	var cuts, problems []bool
+	stopCut := CutChanged.Listen(func(on bool) { cuts = append(cuts, on) })
+	defer stopCut()
+	stopProblem := Changed.Listen(func(on bool) { problems = append(problems, on) })
+	defer stopProblem()
+
+	SetCut(true)
+	if !Cut() || Silent() || len(problems) != 0 {
+		t.Fatal("short mute cut raised the diagnostic problem")
+	}
+	SetCut(false)
+	if len(cuts) != 2 || !cuts[0] || cuts[1] {
+		t.Fatalf("cut transitions: %v", cuts)
+	}
+}

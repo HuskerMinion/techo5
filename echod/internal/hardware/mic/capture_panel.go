@@ -129,8 +129,8 @@ func openDevice() (capture, error) {
 		conn, err := panelsock.Dial(micSocket)
 		if err == nil {
 			c := &socketCapture{conn: conn, lag: savedLag()}
-			// Silent as the last connection left it, so sound on this one clears it (flat_panel.go).
-			c.flat.seed(micsilent.Silent())
+			// Keep both thresholds across an app-socket reconnect; sound clears them (flat_panel.go).
+			c.flat.seed(micsilent.Cut(), micsilent.Silent())
 			if c.lag > 0 {
 				slog.Info("echo reference delay remembered", "delay_ms", c.lag*1000/Rate)
 			}
@@ -162,6 +162,7 @@ func (c *socketCapture) Read(p []byte) (int, error) {
 	if err := c.readFull(in); err != nil {
 		return 0, err
 	}
+	wasCut := c.flat.cut
 	if silent, changed := c.flat.add(in); changed {
 		if silent {
 			slog.Error("the microphone has been silent for a while: Android may have taken it away (its microphone switch, or another app); the wake word cannot be heard", "seconds", flatAfter)
@@ -169,6 +170,9 @@ func (c *socketCapture) Read(p []byte) (int, error) {
 			slog.Info("the microphone hears again")
 		}
 		micsilent.Set(silent)
+	}
+	if c.flat.cut != wasCut {
+		micsilent.SetCut(c.flat.cut)
 	}
 
 	c.lineUp()

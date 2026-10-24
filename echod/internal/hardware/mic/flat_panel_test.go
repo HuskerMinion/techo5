@@ -41,6 +41,19 @@ func TestZerosAreSilenceUntilSoundReturns(t *testing.T) {
 	}
 }
 
+func TestMuteCutPrecedesDiagnosticProblem(t *testing.T) {
+	var w flatWatch
+	if silent, changed := w.add(seconds(cutAfter, func(int) int16 { return 0 })); !w.cut || silent || changed {
+		t.Fatalf("after %d flat seconds: cut %v, problem %v, changed %v", cutAfter, w.cut, silent, changed)
+	}
+	if silent, changed := w.add(seconds(flatAfter-cutAfter, func(int) int16 { return 0 })); !w.cut || !silent || !changed {
+		t.Fatalf("after %d flat seconds: cut %v, problem %v, changed %v", flatAfter, w.cut, silent, changed)
+	}
+	if silent, changed := w.add(seconds(1, func(i int) int16 { return int16(i % 200) })); w.cut || silent || !changed {
+		t.Fatalf("after sound: cut %v, problem %v, changed %v", w.cut, silent, changed)
+	}
+}
+
 // A stream stuck at one value, or wobbling by a step, is as flat as zeros.
 func TestAStuckStreamIsSilence(t *testing.T) {
 	var w flatWatch
@@ -73,7 +86,7 @@ func TestSoundInTheMiddleStartsTheCountAgain(t *testing.T) {
 // sound; seeded hearing, it starts the count from nothing.
 func TestASeededWatchClearsOnSound(t *testing.T) {
 	var w flatWatch
-	w.seed(true)
+	w.seed(true, true)
 	if s, ch := w.add(seconds(2, func(int) int16 { return 0 })); !s || ch {
 		t.Fatalf("seeded silent, zeros: silent %v changed %v", s, ch)
 	}
@@ -82,7 +95,7 @@ func TestASeededWatchClearsOnSound(t *testing.T) {
 	}
 
 	var v flatWatch
-	v.seed(false)
+	v.seed(false, false)
 	if s, _ := v.add(seconds(flatAfter-1, func(int) int16 { return 0 })); s {
 		t.Fatal("seeded hearing, silent too soon")
 	}
