@@ -183,10 +183,7 @@ func Alarm(lang string, snoozed bool) string {
 }
 
 func phrase(lang, key, english string) string {
-	if s, ok := phrases[lang][key]; ok {
-		return s
-	}
-	return english
+	return translated(lang, key, phrases, english)
 }
 
 // english is the condition words where Home Assistant's own word will not do as it is.
@@ -205,6 +202,17 @@ func up(s string) string {
 }
 
 func day(t time.Time) string { return strconv.Itoa(t.Day()) }
+
+// MonthYear is a calendar's month heading in the screen language.
+func MonthYear(t time.Time, lang string) string {
+	if lang == "ja" {
+		return t.Format("2006年1月")
+	}
+	if w, ok := langs[lang]; ok {
+		return up(w.months[t.Month()-1]) + " " + strconv.Itoa(t.Year())
+	}
+	return t.Format("January 2006")
+}
 
 // LongDate is the clock's date: "Monday, January 2", "Montag, 2. Januar", "Lunes, 2 de enero",
 // "Lundi 2 janvier", "Lunedì 2 gennaio", "Maandag 2 januari", "Понедельник, 2 января",

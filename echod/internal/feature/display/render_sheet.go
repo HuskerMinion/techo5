@@ -66,13 +66,14 @@ type baseKey struct {
 	g, a, t, d, rl color.RGBA
 	w, h           int
 	font           fontKey
+	lang           string
 }
 
 // settingsBase paints the ground, the rail and the empty card with its heading. It is the costly
 // part, soft shadows and gradients a pixel at a time, and the same every frame until the category, the
-// heading, the theme or the font changes, so it is kept and copied.
+// heading, the theme, the font or the language changes, so it is kept and copied.
 func (r *renderer) settingsBase(sel category, title, blurb string) {
-	key := baseKey{sel, title, blurb, walnut, amber, cream, dim, ember, r.w, r.h, fontKey{r.font, r.fontGen}}
+	key := baseKey{sel, title, blurb, walnut, amber, cream, dim, ember, r.w, r.h, fontKey{r.font, r.fontGen}, screenLang()}
 	if r.base != nil && r.baseKey == key {
 		copy(r.dst.Pix, r.base.Pix)
 		return
@@ -114,9 +115,9 @@ func (r *renderer) settingsBase(sel category, title, blurb string) {
 }
 
 // settingsShell paints what every category shares, the ground, Done and the empty card, from a copy
-// kept until the theme or the font changes: its gradients and the card's shadow are most of the drawing.
+// kept until the theme, font or language changes: its gradients and the card's shadow are most of the drawing.
 func (r *renderer) settingsShell() {
-	key := baseKey{g: walnut, a: amber, t: cream, d: dim, rl: ember, w: r.w, h: r.h, font: fontKey{r.font, r.fontGen}}
+	key := baseKey{g: walnut, a: amber, t: cream, d: dim, rl: ember, w: r.w, h: r.h, font: fontKey{r.font, r.fontGen}, lang: screenLang()}
 	if r.shell != nil && r.shellKey == key {
 		copy(r.dst.Pix, r.shell.Pix)
 		return
@@ -128,7 +129,7 @@ func (r *renderer) settingsShell() {
 	r.roundShadow(done, rad, r.sf(8), r.s(3), shadowAlpha()*0.6)
 	r.roundFill(done, rad, surface(3), surface(2))
 	r.roundStroke(done, rad, r.sf(100)/100*1.2, ember)
-	r.text(fc.button, jpUI("Done"), done.Min.X+(done.Dx()-r.width(fc.button, jpUI("Done")))/2, done.Min.Y+r.s(33), cream)
+	r.text(fc.button, tr("done"), done.Min.X+(done.Dx()-r.width(fc.button, tr("done")))/2, done.Min.Y+r.s(33), cream)
 
 	// The card, floating over the ground.
 	card := r.nextCard(r.w, r.h)

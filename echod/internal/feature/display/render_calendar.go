@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/HuskerMinion/techo5/echod/internal/lib/hass"
+	"github.com/HuskerMinion/techo5/echod/internal/lib/locale"
 )
 
 // The calendar page (docs/calendar-and-night-plan.md): the month as a grid with each day's events on
@@ -179,15 +180,15 @@ func (r *renderer) calIconButton(icon, label string, right int, kind calHitKind)
 func (r *renderer) calendarDay(v calendarView) {
 	// Done here goes back to the month or the agenda it was opened from; their own Done puts the
 	// calendar away.
-	x := r.calButton(jpUI("Done"), r.w-r.margin, calBack)
-	r.text(r.title, clipText(r, r.title, v.day.Format("Monday, January 2"), x-r.margin-r.s(10)), r.margin, r.margin+r.s(34), cream)
+	x := r.calButton(tr("done"), r.w-r.margin, calBack)
+	r.text(r.title, clipText(r, r.title, locale.LongDate(v.day, screenLang()), x-r.margin-r.s(10)), r.margin, r.margin+r.s(34), cream)
 
 	evs := eventsOn(v.events, v.day)
 	top := r.margin + r.s(74)
 	if len(evs) == 0 {
 		msg := "Nothing on this day"
 		if !v.loaded {
-			msg = "Reading the calendar…"
+			msg = tr("reading_the_calendar")
 		}
 		r.text(r.body, msg, r.margin, top+r.s(60), dim)
 		return
@@ -263,19 +264,19 @@ func agendaRows(events []hass.Event, now time.Time) []agendaRow {
 func agendaDayName(day, now time.Time) string {
 	switch {
 	case sameDay(day, now):
-		return "Today"
+		return locale.Today(screenLang())
 	case sameDay(day, now.AddDate(0, 0, 1)):
-		return "Tomorrow"
+		return locale.Tomorrow(screenLang())
 	}
-	return day.Format("Monday, January 2")
+	return locale.LongDate(day, screenLang())
 }
 
 // calendarAgenda is the coming days' events as one list, each day under its heading. A tap on an event
 // opens its window, a tap on a heading that day's list.
 func (r *renderer) calendarAgenda(v calendarView) {
-	x := r.calButton(jpUI("Done"), r.w-r.margin, calDone)
-	x = r.calButton(jpUI("Month"), x, calMonthView)
-	r.text(r.title, clipText(r, r.title, jpUI("Coming up"), x-r.margin-r.s(10)), r.margin, r.margin+r.s(34), cream)
+	x := r.calButton(tr("done"), r.w-r.margin, calDone)
+	x = r.calButton(tr("month"), x, calMonthView)
+	r.text(r.title, clipText(r, r.title, tr("coming_up"), x-r.margin-r.s(10)), r.margin, r.margin+r.s(34), cream)
 
 	rows := agendaRows(v.events, v.now)
 	top := r.margin + r.s(74)
@@ -291,9 +292,9 @@ func (r *renderer) calendarAgenda(v calendarView) {
 	r.calAgendaStep = max(r.calendarDayRows()-1, 1)
 	r.calMu.Unlock()
 	if len(rows) == 0 {
-		msg := jpUI("Nothing in the next two weeks")
+		msg := tr("nothing_in_the_next_two_weeks")
 		if !v.loaded {
-			msg = "Reading the calendar…"
+			msg = tr("reading_the_calendar")
 		}
 		r.text(r.body, msg, r.margin, top+r.s(60), dim)
 		return
@@ -430,7 +431,7 @@ func (r *renderer) calendarDetail(v calendarView, e hass.Event) {
 			y += r.s(32)
 		}
 	}
-	r.labelButton(closeB, jpUI("Close"), btnSecondary)
+	r.labelButton(closeB, tr("close"), btnSecondary)
 	r.calHitAdd(calHit{r: closeB.Inset(-r.s(8)), kind: calClose})
 }
 

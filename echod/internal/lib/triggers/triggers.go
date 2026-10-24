@@ -40,7 +40,7 @@ type Set struct {
 // is what happens today anyway, so they are worth shipping and worth correcting.
 var Languages = map[string]Set{
 	"ja": {
-		Weather:    []string{"天気", "天気予報", "気温", "温度", "降水確率", "雨", "雪", "雷雨", "雨雲", "レーダー"},
+		Weather:    []string{"天気", "天気予報", "気温", "降水確率", "雨", "雪", "雷雨", "雨雲", "レーダー"},
 		Radar:      []string{"雨雲レーダー", "雨雲", "雨の地図", "降水レーダー"},
 		NotWeather: []string{"雨の音", "雨音", "雨の曲", "雨の音楽"},
 		GoHome:     []string{"ホーム画面", "時計に戻って", "時計を表示", "ホームに戻って"},

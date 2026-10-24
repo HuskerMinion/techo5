@@ -5,6 +5,24 @@ import (
 	"testing"
 )
 
+func TestJapaneseWeatherDoesNotInterceptTemperatureCommands(t *testing.T) {
+	for _, lang := range []string{"ja", MatchAll} {
+		for _, heard := range []string{"エアコンの温度を24度にして", "お風呂の温度を上げて", "雨の音を再生して"} {
+			if AboutWeather(heard, lang) {
+				t.Errorf("%q under %q opened the forecast", heard, lang)
+			}
+		}
+		for _, heard := range []string{"今日の天気は", "明日の気温を教えて", "雨雲レーダーを見せて"} {
+			if !AboutWeather(heard, lang) {
+				t.Errorf("%q under %q missed the forecast", heard, lang)
+			}
+		}
+		if !AboutRadar("雨雲レーダーを見せて", lang) {
+			t.Errorf("%q missed the radar", lang)
+		}
+	}
+}
+
 // One sentence per language for each thing the screen does, as someone would actually say it.
 var spoken = map[string]struct{ weather, radar, home, camera string }{
 	"en": {"what's the weather", "show me the rain map", "go home", "show the front door"},

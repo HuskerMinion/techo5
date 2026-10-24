@@ -122,11 +122,8 @@ var updateTranslations = map[string]map[string]string{
 // used for English, empty or unsupported languages, and unknown keys are returned as-is so a missing
 // translation cannot silently render an empty label.
 func UpdateText(lang, key string) string {
-	if translated, ok := updateTranslations[lang][key]; ok {
-		return translated
-	}
 	if english, ok := updateEnglish[key]; ok {
-		return english
+		return translated(lang, key, updateTranslations, english)
 	}
 	return key
 }

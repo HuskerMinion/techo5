@@ -548,11 +548,11 @@ func (r *roundRenderer) classicClockFace(s roundScene) {
 	}
 	switch {
 	case s.setupAsking:
-		r.centered(r.label, jpUI("A BROWSER IS ASKING"), 118, colMuted)
+		r.centered(r.label, tr("a_browser_is_asking"), 118, colMuted)
 	case s.muted:
-		r.centered(r.label, jpUI("MICROPHONE OFF"), 118, colMuted)
+		r.centered(r.label, tr("microphone_off"), 118, colMuted)
 	case s.btPairing:
-		r.centered(r.label, jpUI("BLUETOOTH PAIRING"), 118, colBluetooth)
+		r.centered(r.label, tr("bluetooth_pairing"), 118, colBluetooth)
 	case s.playing:
 		r.centered(r.label, "PLAYING", 118, colDim)
 	case s.paused:
