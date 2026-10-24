@@ -51,6 +51,7 @@ diagnostics can read, and never in an image or a release.
 | | |
 |---|---|
 | **Place a call** | `esphome.<device>_phone_call` with `number`: a phone number (`15551234567`) or another account's extension. Spaces, dashes and a leading `+` are dropped. |
+| **While it rings out** | Whatever the far end's network sends before the answer is played: its ringing tone, or an announcement such as "the number you have dialed is not available". A network that only says the far end is ringing gets the device's own ringing tone (425 Hz, a second on, four off). |
 | **Answer** | The action button on a Dot, a tap on a Show or Spot, the **Answer call** button in Home Assistant, `esphome.<device>_phone_answer`, or by voice with **Wake word during calls** on (below). |
 | **Decline or hang up** | The same button again, a sideways swipe on the Spot, **Decline** / **Hang up** on the Show, the **Hang up** button, `esphome.<device>_phone_hangup`, the hang-up word, or by voice with **Wake word during calls** on (below). |
 | **Say something into a call** | `assist_satellite.announce` on the same device while a call is up: the message plays in the room and goes into the call. |
