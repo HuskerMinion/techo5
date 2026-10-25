@@ -47,6 +47,9 @@ func (l hintListener) Accept() (net.Conn, error) {
 // is set, a plaintext hello told the device needs a key. The hint is the outer of the two, so the count
 // sees every byte as it is, and the hint's Close ends the sending side through the count's.
 func servedListener(ln net.Listener, n *atomic.Int32, hint bool) net.Listener {
+	if !hint {
+		ln = awayListener{ln} // no key of its own: nobody from away, over the tailnet
+	}
 	var served net.Listener = countListener{ln, n}
 	if hint {
 		served = hintListener{served}

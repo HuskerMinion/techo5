@@ -1,7 +1,7 @@
-//go:build !spot && !panel
+//go:build !panel
 
 package streaming
 
-// Here: the Show and the Dot are speakers other apps play to. The Spot is left out: its speaker is
-// small, and nobody asked for it there.
+// Here: every Echo is a speaker other apps play to: the Shows, the Spot (its headphone jack too), the
+// Dots, athena and the Skylight. The panel is an app, with none of the receivers' programs (here_panel.go).
 const Here = true

@@ -5,10 +5,10 @@ import (
 	"testing"
 )
 
-// The calendar's look is shared under Calendar, all eight of its switches; which calendars a screen
+// The calendar's look is shared under Calendar, all eight of its switches and the view it opens on; which calendars a screen
 // hides is not a setting to share at all (it has no entity), and nor is which calendars it shows.
 func TestTheCalendarLookIsShared(t *testing.T) {
-	look := []string{"calendar_day_timeline", "calendar_coming_up_refined", "calendar_month_details",
+	look := []string{"calendar_opens_on", "calendar_day_timeline", "calendar_coming_up_refined", "calendar_month_details",
 		"calendar_event_icons", "calendar_countdowns", "calendar_week_view", "calendar_next_up", "calendar_weather"}
 	for _, id := range look {
 		if !Shareable(id) {

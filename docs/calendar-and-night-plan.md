@@ -128,6 +128,9 @@ Added after the rest, as switches, each on the screen (Settings, Display, Calend
 page (Weather & Calendar) and in Home Assistant. Shared settings can keep them the same on every
 screen. The Spot keeps its own Today and Next.
 
+- **Opens on** (Month): the view the clock's date, a voice request and `calendar_show` open: Month,
+  Week (this week; the month while Week view is off), Day (today) or Coming up. The clock's next-up
+  card still opens its own day.
 - **Day timeline** (on): a day on its hours. Events are boxes as long as they last, side by side when
   they overlap. All-day events and the day's weather are in a strip under the header. ‹ › and a
   swipe go to the day before or after. Today has a Today tag, the now line and its past hours shaded,

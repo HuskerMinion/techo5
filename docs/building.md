@@ -189,13 +189,14 @@ image goes on with `fastboot flash boot` (with the Show in fastboot, docs/instal
 [tools/linux/build-aec.sh](../tools/linux/build-aec.sh) compiles the WebRTC echo canceller helper for
 armv7 (Linux or WSL). `deploy-rootfs.sh` includes `bin/techo5-aec-arm` when it exists.
 
-## Optional: AirPlay 2
+## AirPlay 2
 
 [tools/linux/build-shairport-sync.sh](../tools/linux/build-shairport-sync.sh) builds
 `bin/techo5-shairport-sync-arm`, shairport-sync with AirPlay 2, and `bin/techo5-nqptp-arm`, the clock it
-needs (Linux or WSL, with zig). A device that carries both can be grouped with other AirPlay 2 speakers on an
-iPhone; one without them keeps the classic receiver from Alpine. Its sources are checked against the SHA-256s
-in the script, and it prints the binaries' own.
+needs (Linux or WSL, with zig). Every image `deploy-rootfs.sh` builds carries both, and it stops when they
+are missing; a release built from a worktree needs them copied into its `bin/`. On the device they let an
+iPhone group it with other AirPlay 2 speakers; where they can't run, the daemon keeps the classic receiver
+from Alpine. Its sources are checked against the SHA-256s in the script, and it prints the binaries' own.
 
 ## The video decoder
 
@@ -213,6 +214,17 @@ Every image carries a small ffmpeg for the video player and live cameras. It is 
   with Alpine's current packages.
 
 Both go in `bin/`, which git ignores. A release built from a worktree needs both copied into its `bin/`.
+
+## Tailscale
+
+Every image `deploy-rootfs.sh` builds carries Tailscale's daemon ([docs/tailscale.md](tailscale.md)), and
+it stops when it is missing.
+[tools/linux/build-tailscaled.sh](../tools/linux/build-tailscaled.sh) builds `bin/tailscaled-arm64` and
+its license from Tailscale's own release source, pinned and checked by SHA-256, with Go (Linux or WSL,
+under a minute). One static arm64 build serves every image, on the devices' 64-bit kernels; on a 32-bit
+one (an athena on Amazon's kernel) the daemon doesn't offer Tailscale. The build is
+reproducible: the same script gives the same bytes on any machine. A release built from a worktree needs
+it copied into its `bin/` as well, with `tailscaled-arm64.LICENSE`.
 
 ## Optional: a CPU profile from a device
 

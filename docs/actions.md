@@ -1716,7 +1716,8 @@ data:
 
 In YAML, refer to this action as `esphome.<node>_calendar_show`.
 
-Opens the calendar page on a Show, on this month, as a tap on the date under the clock does. The page
+Opens the calendar page on a Show, as a tap on the date under the clock does: on this month, or on
+the view its **Opens on** setting names. The page
 shows the month with each day's events on it; a tap on a day lists its events, and a tap on an event
 opens its details. It closes after two minutes untouched, or with Done. At night it lights a screen
 the night has put out, at the night light's level (or at half brightness with no night light), and
@@ -2368,6 +2369,33 @@ action: esphome.office_ssh_keys
 data:
   keys: |
     ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIExample you@your-pc
+```
+
+## Join a tailnet
+
+In YAML, refer to this action as `esphome.<node>_tailscale_login`.
+
+Joins the device to your Tailscale network with an auth key, and turns its **Tailscale** switch on.
+The key is handed to Tailscale once and not kept: after that the device rejoins by itself. It waits
+up to 30 seconds to see the device connect, so a key that's used up or expired is an error here
+rather than a device that quietly never joins. Echo Shows, the Echo Spot and the Skylight only. See
+[Tailscale: reaching a device from away](tailscale.md).
+
+> **Good to know**
+>
+> This needs an API encryption key: it's refused unless Home Assistant's *ESPHome* link to the device
+> already has a real encryption key set, since otherwise the key would cross the network in the clear.
+
+### auth_key (Required)
+
+*string*
+
+An auth key from the Tailscale admin console (`tskey-auth-…`), pre-approved and tagged `tag:techo5`.
+
+```yaml
+action: esphome.office_tailscale_login
+data:
+  auth_key: tskey-auth-example
 ```
 
 ## Set the settings lock's PIN

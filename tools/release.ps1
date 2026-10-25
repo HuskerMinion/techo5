@@ -269,12 +269,30 @@ if ($AthenaImage) { Test-Image $AthenaImage }
 if ($Rootfs) { Test-Image $Rootfs }
 if ($AthenaRootfs) { Test-Image $AthenaRootfs }
 # Every Show rootfs carries the echo canceller and Spotify Connect: deploy-rootfs.sh copies them only when
-# bin/ has them, so a worktree without the prebuilts copied in would ship without either.
+# bin/ has them, so a worktree without the prebuilts copied in would ship without either. And Tailscale,
+# which deploy-rootfs.sh requires, checked here too with its license; and AirPlay 2 (its receiver and nqptp).
 foreach ($t in @($Rootfs, $AthenaRootfs, $SkylightRootfs) | Where-Object { $_ }) {
     $names = @(& tar -tzf $t) -replace '^\./', ''
-    foreach ($b in 'techo5-aec', 'techo5-librespot') {
+    foreach ($b in 'techo5-aec', 'techo5-librespot', 'techo5-shairport-sync', 'techo5-nqptp') {
         if ($names -notcontains "usr/local/bin/$b") { throw "$t has no usr/local/bin/${b}: copy bin/$b-arm into bin/ before building" }
     }
+    if ($names -notcontains 'usr/local/bin/tailscaled' -or $names -notcontains 'usr/share/licenses/tailscale/LICENSE') {
+        throw "$t has no Tailscale, or not its license: build bin/tailscaled-arm64 with tools/linux/build-tailscaled.sh"
+    }
+}
+# And the same build of each of these in every image, as with ffmpeg64.
+foreach ($b in 'tailscaled', 'techo5-shairport-sync', 'techo5-nqptp') {
+    $sums = @(foreach ($t in @($Rootfs, $AthenaRootfs, $SkylightRootfs) | Where-Object { $_ }) {
+        $d = Join-Path ([System.IO.Path]::GetTempPath()) ("techo5-bin-" + [guid]::NewGuid())
+        New-Item -ItemType Directory $d | Out-Null
+        try {
+            & tar -xzf $t -C $d ./usr/local/bin/$b
+            if ($LASTEXITCODE -ne 0) { throw "${t}: usr/local/bin/$b could not be read" }
+            (Get-FileHash -Algorithm SHA256 (Join-Path $d "usr/local/bin/$b")).Hash.ToLower()
+        } finally { Remove-Item -Recurse -Force $d }
+    })
+    if (@($sums | Select-Object -Unique).Count -gt 1) { throw "the images carry different builds of $b ($($sums -join ', ')): build them all from one bin/" }
+    if ($sums) { Write-Host "== ${b}: sha256 $($sums[0])" }
 }
 
 # The Skylight: its three images and the kernel's source from one release, with its rootfs. install-skylight.py

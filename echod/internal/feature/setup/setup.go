@@ -95,6 +95,9 @@ type Feature struct {
 	// Changed fires when the page opens or closes, or when a browser starts or stops waiting, so the
 	// screen can say what is going on.
 	Changed hook.Hook[struct{}]
+
+	// remote is Remote setup (remote.go).
+	remote remoteSetup
 }
 
 var (
@@ -115,6 +118,7 @@ func Get() *Feature {
 		// The press is the whole port's authorization, not only this page's: a screenshot is one
 		// thing to let the network have and driving the screen from it is another.
 		web.Guard(shared.letInRequest)
+		shared.wireRemote()
 	})
 	return shared
 }
@@ -138,12 +142,19 @@ func build() *Feature {
 			f.Close()
 		},
 	}
+	f.buildRemote()
 	return f
 }
 
 func (f *Feature) Name() string { return "setup page" }
 
-func (f *Feature) Entities() []esphome.Entity { return []esphome.Entity{f.sw} }
+func (f *Feature) Entities() []esphome.Entity {
+	// Remote setup is the tailnet's, and a device with no Tailscale has nothing to offer it over.
+	if !hasTailnet() {
+		return []esphome.Entity{f.sw}
+	}
+	return []esphome.Entity{f.sw, f.remote.sw, f.remote.btn, f.remote.asking}
+}
 
 // On is whether the page is being served at all.
 func (f *Feature) On() bool {
@@ -161,12 +172,17 @@ func (f *Feature) on(now time.Time) bool {
 func (f *Feature) Open() {
 	now := time.Now()
 	f.mu.Lock()
-	if !f.on(now) {
+	fresh := !f.on(now)
+	if fresh {
 		f.openedAt = now
 		slog.Info("setup page open", "idle", idle, "at most", life)
 	}
 	f.openUntil = now.Add(idle)
 	f.mu.Unlock()
+	if fresh {
+		// A page opened anew is this house's, whatever it was the last time it was up (remote.go).
+		f.remoteOff()
+	}
 
 	f.sw.Set(true)
 	web.Wake()
@@ -186,6 +202,8 @@ func (f *Feature) Close() {
 	if was {
 		slog.Info("setup page closed")
 	}
+	f.remoteOff()
+	f.showAsking()
 	f.sw.Set(false)
 	web.Wake()
 	f.Changed.Emit(struct{}{})
@@ -270,11 +288,21 @@ func (f *Feature) press() bool { return f.pressFor("") }
 // pressFor is press for the browser asking (Asking) when the press began, or for whoever is asking
 // for "": a press that took a while, a PIN typed first, lets in only the browser it was made for.
 func (f *Feature) pressFor(asking string) bool {
+	ok := f.admit(asking, "a press on the device")
+	f.showAsking()
+	return ok
+}
+
+// admit lets in the browser asking, as pressFor says, and by says who did it, for the log.
+func (f *Feature) admit(asking, by string) bool {
 	now := time.Now()
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	if !f.on(now) || f.waiting == "" || now.After(f.waitingEnd) || (asking != "" && f.waiting != asking) {
 		return false
+	}
+	if by == byHA && !f.remote.on.Load() {
+		return false // Remote setup went off on the way here (remote.go)
 	}
 	if len(f.live) >= sessions {
 		// Forget the oldest rather than refuse: the newest press is the one somebody just made.
@@ -287,10 +315,11 @@ func (f *Feature) pressFor(asking string) bool {
 		delete(f.live, oldest)
 	}
 	f.live[f.waiting] = now
+	f.keepRemote(f.waiting)
 	f.waiting, f.waitingEnd = "", time.Time{}
 	f.took = now
 	f.unanswered = 0 // a press clears the run
-	slog.Info("setup page: a browser was let in by a press on the device")
+	slog.Info("setup page: a browser was let in", "by", by)
 	return true
 }
 
@@ -328,6 +357,7 @@ func (f *Feature) refuse() bool {
 	had := f.waiting != ""
 	f.waiting, f.waitingEnd = "", time.Time{}
 	f.mu.Unlock()
+	f.showAsking()
 	if had {
 		slog.Info("setup page: a browser was refused at the device")
 		f.Changed.Emit(struct{}{})
@@ -338,7 +368,11 @@ func (f *Feature) refuse() bool {
 // await starts a browser waiting to be let in and hands back the cookie it will hold if the press
 // comes. Only one browser waits at a time: a second is refused, so that whoever presses knows which
 // browser they are letting in. Asking over and over without a press stops being allowed for a while.
-func (f *Feature) await() (token string, ok bool) {
+func (f *Feature) await() (token string, ok bool) { return f.awaitFrom("", false) }
+
+// awaitFrom is await for a browser asking from an address, and away whether over the tailnet: noted
+// with the asking itself, for Home Assistant's let in (remote.go).
+func (f *Feature) awaitFrom(from string, away bool) (token string, ok bool) {
 	now := time.Now()
 	f.mu.Lock()
 	defer f.mu.Unlock()
@@ -358,6 +392,7 @@ func (f *Feature) await() (token string, ok bool) {
 		return "", false
 	}
 	f.waiting, f.waitingEnd = newToken(), now.Add(pressWait)
+	f.remote.token, f.remote.from, f.remote.away = f.waiting, from, away
 	return f.waiting, true
 }
 
