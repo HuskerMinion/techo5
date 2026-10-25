@@ -50,6 +50,11 @@ type Calendar struct {
 	Week         string `json:"week,omitempty"`
 	MonthDetails string `json:"month_details,omitempty"`
 
+	// Opens is the view the calendar opens on, from the clock's date, a voice request or calendar_show:
+	// "week", "day" (today) or "agenda" (Coming up). Empty is the month. The clock's next event still
+	// opens Coming up, and an event's day still opens that day.
+	Opens string `json:"opens,omitempty"`
+
 	// Hidden are the calendars turned off with the calendar page's chips: their events are left out of
 	// this screen's calendar and the clock's next event. This device's alone, like the calendars it
 	// shows: never shared, and a settings file neither carries nor changes it (KeepOwn).
@@ -62,6 +67,13 @@ const (
 	CalendarOff = "off"
 	MonthFull   = "full"
 	MonthSimple = "simple"
+)
+
+// The views Opens takes besides empty, the month.
+const (
+	OpensWeek   = "week"
+	OpensDay    = "day"
+	OpensAgenda = "agenda"
 )
 
 // WeekOn is whether the week view is on, wide saying the panel is bigger than the Show 5's.
@@ -194,6 +206,11 @@ func (w CalendarWriter) MonthDetails(full bool) error {
 		v = MonthFull
 	}
 	return w.st.Update(func(c *Config) { c.Calendar.MonthDetails = v })
+}
+
+// Opens sets the view the calendar opens on: one of the Opens values, or empty for the month.
+func (w CalendarWriter) Opens(v string) error {
+	return w.st.Update(func(c *Config) { c.Calendar.Opens = v })
 }
 
 func (w CalendarWriter) Hidden(v []string) error {

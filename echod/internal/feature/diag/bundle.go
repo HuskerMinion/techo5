@@ -77,6 +77,13 @@ func Redactor() *redact.Redactor {
 	if from, ok := phonePlaying(media.Get().Receiving()); ok {
 		r.Known("bluetooth", from)
 	}
+	// This device's name and address on its tailnet (feature/tailscale): the name is often a person's
+	// or a room's, and the tailnet's own name is part of it.
+	for _, name := range TailnetNames() {
+		if strings.TrimSpace(name) != "" {
+			r.Known("tailnet", name)
+		}
+	}
 	// The phone book's names are often people's, and a turn's transcript in the log can carry one.
 	for _, c := range phone.Get().Contacts() {
 		for _, name := range c.Names() {
@@ -94,6 +101,10 @@ func Redactor() *redact.Redactor {
 	}
 	return r
 }
+
+// TailnetNames is this device's name and address on its tailnet, set by feature/tailscale, which
+// this package cannot import.
+var TailnetNames = func() []string { return nil }
 
 // commonName is a device name too short, or too common a word, to take out wherever it appears: a
 // device named Show would take the word out of the whole bundle.

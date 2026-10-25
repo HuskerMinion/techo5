@@ -228,8 +228,8 @@ type Display struct {
 	// shotPlain is whether the frame last sent went to the panel without the skin's filter (unskinned), so
 	// a screenshot of it is left plain too (skinnedCopy).
 	shotPlain bool
-	dev   *screen.Device
-	r     *renderer
+	dev       *screen.Device
+	r         *renderer
 
 	// booting is the splash: from the first frame until Home Assistant is listening and at least
 	// splashMin has passed.
@@ -2889,7 +2889,8 @@ func (d *Display) frame() (next time.Duration) {
 	}
 	if (s.phase == "idle" || s.phase == "lingering") && !s.showVolume {
 		if d.r.c64Drawn {
-			return time.Until(now.Truncate(c64Blink).Add(c64Blink)) // the cursor blinks (skin_c64.go)
+			// The cursor blinks (skin_c64.go), on the same grid of Unix milliseconds its phase is read on.
+			return c64Blink - time.Duration(now.UnixMilli()%c64Blink.Milliseconds())*time.Millisecond
 		}
 		// On the next whole second, so the clock changes when the second does.
 		return time.Until(now.Truncate(idleFrame).Add(idleFrame))

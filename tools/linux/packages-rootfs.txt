@@ -22,6 +22,13 @@ bluez-btmgmt
 webrtc-audio-processing-1
 # AirPlay receiver (feature/streaming); pulls in avahi, which it announces itself through.
 shairport-sync
+# AirPlay 2 (tools/linux/build-shairport-sync.sh, bin/techo5-shairport-sync and bin/techo5-nqptp): what its
+# receiver links to beyond what the classic one brings (libgcrypt brings libgpg-error). Its FFmpeg is built
+# in; nqptp is static.
+libplist
+libsodium
+libgcrypt
+libuuid
 # The Wi-Fi firewall (usr/local/sbin/techo5-firewall): the kernel has iptables, not nftables.
 iptables          # the extensions (/usr/lib/xtables), which the legacy tools load too
 iptables-legacy

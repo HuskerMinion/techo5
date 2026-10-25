@@ -192,9 +192,11 @@ func (p *Player) ampSleep() {
 		p.idle.settled(ampAwake)
 		return
 	}
+	// Asleep even when a write failed: half a sleep (the line-out muted, the amplifier left on, or the
+	// other way round) counted as awake would never be undone, and a ring would play into it unheard.
+	// Asleep, the next sound runs the whole wake, which puts both back.
 	if !gateWrite(p, p.gate.sleep()) {
-		p.idle.settled(ampAwake)
-		return
+		slog.Warn("speaker: putting the amplifier to sleep failed; the next sound wakes it in full")
 	}
 	p.idle.settled(ampAsleep)
 }

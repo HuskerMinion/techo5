@@ -103,14 +103,30 @@ for c in fbprobe audioprobe rebootto btbridge; do cp "$ROOT/bin/$c-arm" "$STAGE/
 # The WebRTC echo canceller helper is C++ built separately (tools/linux/build-aec.sh in WSL); ship it when it is there.
 [ -e "$ROOT/bin/techo5-aec-arm" ] && cp "$ROOT/bin/techo5-aec-arm" "$STAGE/bin/techo5-aec"
 # The Spotify Connect receiver (librespot, Rust) is built separately too (tools/linux/build-librespot.sh in WSL).
-# The Spot's daemon offers neither receiver (feature/streaming), so its image carries neither.
-[ "$BUILD_TAGS" != spot ] && [ -e "$ROOT/bin/techo5-librespot-arm" ] && cp "$ROOT/bin/techo5-librespot-arm" "$STAGE/bin/techo5-librespot"
+[ -e "$ROOT/bin/techo5-librespot-arm" ] && cp "$ROOT/bin/techo5-librespot-arm" "$STAGE/bin/techo5-librespot"
+# AirPlay 2's receiver and nqptp, the clock it needs (tools/linux/build-shairport-sync.sh, Linux or WSL): in
+# every image, which the daemon runs where it can and keeps the classic receiver where it can't
+# (feature/streaming). Not optional: an image without them would quietly be classic AirPlay only.
+for b in techo5-shairport-sync techo5-nqptp; do
+	[ -e "$ROOT/bin/$b-arm" ] || { echo "bin/$b-arm is missing: build it with tools/linux/build-shairport-sync.sh" >&2; exit 1; }
+	cp "$ROOT/bin/$b-arm" "$STAGE/bin/$b"
+	echo "== $b: sha256 $(sha256sum "$ROOT/bin/$b-arm" | cut -d' ' -f1)"
+done
 # The video player's decoder (ffmpeg, C, tools/linux/build-ffmpeg.sh in WSL), for the Show's and the Spot's video
 # player (feature/video). Not optional: an image without it offers Video and plays nothing, so a build that
 # lacks it stops here rather than ship that. Its SHA-256 is said, to check against the one build-ffmpeg.sh printed.
 [ -e "$ROOT/bin/techo5-ffmpeg-arm" ] || { echo "bin/techo5-ffmpeg-arm is missing: build it with tools/linux/build-ffmpeg.sh (in WSL)" >&2; exit 1; }
 cp "$ROOT/bin/techo5-ffmpeg-arm" "$STAGE/bin/techo5-ffmpeg"
 echo "== ffmpeg: sha256 $(sha256sum "$ROOT/bin/techo5-ffmpeg-arm" | cut -d' ' -f1)"
+# Tailscale's daemon (tools/linux/build-tailscaled.sh), for reaching the device from away (feature/tailscale,
+# docs/tailscale.md): off until somebody gives it a key. Every image this script builds carries it, and its
+# license (BSD-3-Clause) beside it. One static arm64 build serves them all, on their 64-bit kernels; on a
+# 32-bit one (an athena on Amazon's kernel) the daemon doesn't offer it (feature/tailscale Available).
+TS=$ROOT/bin/tailscaled-arm64
+[ -e "$TS" ] && [ -e "$TS.LICENSE" ] || { echo "bin/tailscaled-arm64 (and its .LICENSE) is missing: build it with tools/linux/build-tailscaled.sh" >&2; exit 1; }
+[ "$(od -An -tx1 -j4 -N1 "$TS" | tr -d ' ')" = 02 ] && [ "$(od -An -tu2 -j18 -N2 "$TS" | tr -d ' ')" = 183 ] && ! grep -q 'ld-musl-\|ld-linux-' "$TS" 	|| { echo "bin/tailscaled-arm64 is not a static aarch64 binary: build it with tools/linux/build-tailscaled.sh" >&2; exit 1; }
+cp "$TS" "$STAGE/bin/tailscaled"
+echo "== tailscaled: sha256 $(sha256sum "$TS" | cut -d' ' -f1)"
 # athena and the Skylight carry the 64-bit build beside it (tools/linux/build-ffmpeg-arm64.sh in WSL: static,
 # with H.265, VP8 and VP9), which the daemon runs on their 64-bit kernels; an athena on Amazon's 32-bit
 # kernel keeps the one above. Not optional for them either, and checked for what it must be.
@@ -127,11 +143,11 @@ athena|skylight)
 	;;
 esac
 cp "$ROOT/tools/linux/slotctl" "$ROOT/tools/linux/techo5-lib.sh" "$ROOT/tools/linux/mkrootfs.sh" "$ROOT/tools/linux/packages-rootfs.txt" "$STAGE/tools/"
-[ "$BUILD_TAGS" = spot ] && sed -i '/^shairport-sync/d' "$STAGE/tools/packages-rootfs.txt"
 # EXTRA_PACKAGES: Alpine packages a device needs on top of the list (athena: busybox-extras, for udhcpd).
 [ -n "${EXTRA_PACKAGES:-}" ] && printf '%s\n' $EXTRA_PACKAGES >> "$STAGE/tools/packages-rootfs.txt"
 cp -r "$ROOT/tools/linux/rootfs/." "$STAGE/overlay/"
 [ -n "$DEVICE_OVERLAY" ] && cp -r "$DEVICE_OVERLAY/." "$STAGE/overlay/"
+mkdir -p "$STAGE/overlay/usr/share/licenses/tailscale" && cp "$TS.LICENSE" "$STAGE/overlay/usr/share/licenses/tailscale/LICENSE"
 cp "$INPUTS"/alpine-minirootfs-*-armv7.tar.gz "$STAGE/inputs/"
 [ -n "$VENDOR_TGZ" ] && cp "$VENDOR_TGZ" "$STAGE/inputs/vendor.tar.gz"
 cp "$INPUTS"/apks312/wpa_supplicant-2.9-*.apk "$INPUTS"/apks312/libssl1.1-*.apk "$INPUTS"/apks312/libcrypto1.1-*.apk "$STAGE/inputs/apks312/"

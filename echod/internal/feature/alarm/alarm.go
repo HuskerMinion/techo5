@@ -517,10 +517,12 @@ func (a *Alarms) fire(s source, now time.Time) {
 		return
 	}
 	key := strings.TrimPrefix(s.key, "snooze:")
-	a.ringing = &Ring{Key: key, Label: s.label, At: now, local: s.local || (isSnooze(s) && localAlarm(key)), lit: lights(s)}
+	r := &Ring{Key: key, Label: s.label, At: now, local: s.local || (isSnooze(s) && localAlarm(key)), lit: lights(s)}
+	a.ringing = r
 	// Started under the lock, so there is no moment where an alarm is ringing and Stop finds
 	// nothing to stop. The bell calls rang from its own goroutine, never from here.
-	a.silence = ring.StartRising("alarm", s.label, speaker.AlarmSound(a.Sound()), config.Get().Alarms.Rise.Duration(), a.rang)
+	rise := config.Get().Alarms.Rise.Duration()
+	a.silence = ring.StartRising("alarm", s.label, speaker.AlarmSound(a.Sound()), rise, a.rang)
 	a.mu.Unlock()
 
 	if spent {
@@ -530,7 +532,21 @@ func (a *Alarms) fire(s source, now time.Time) {
 	a.Changed.Emit(struct{}{})
 	fireEvent("ringing", s.key, s.label, now)
 	if words := spokenNow(s.label, now); words != "" {
-		safe.Go("alarm words", func() { sayOverRing(words) })
+		safe.Go("alarm words", func() {
+			// An alarm that gets louder says its words once it is at full: said at the assistant's own
+			// volume at the start, they would wake somebody before the quiet chime could, and their
+			// pause would take the quietest part of the rise. Not at all if it has stopped by then.
+			if rise > 0 {
+				time.Sleep(rise)
+				a.mu.Lock()
+				still := a.ringing == r && !r.snoozed
+				a.mu.Unlock()
+				if !still {
+					return
+				}
+			}
+			sayOverRing(words)
+		})
 	}
 }
 

@@ -275,6 +275,7 @@ var registered = []string{
 	"screen_volume_swipe",
 	"screen_dashboard_return",
 	"screen_dashboard_tiles",
+	"calendar_opens_on",
 	"calendar_day_timeline",
 	"calendar_coming_up_refined",
 	"calendar_month_details",

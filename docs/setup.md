@@ -374,7 +374,7 @@ captured login to the same page for a few minutes, and could see the pictures an
   one for that request: "play Taylor Swift on YouTube Music". This is for a device whose voice
   assistant [answers directly](#voice-without-home-assistant); under Home Assistant, its own Music Assistant support decides. It needs
   Music Assistant 2.10 or later.
-- **AirPlay and Spotify Connect.** On the Show and the Dot, two switches make the device a
+- **AirPlay and Spotify Connect.** On every device but the Panel app, two switches make the device a
   speaker other apps play to, under its own name: **AirPlay** from an iPhone, iPad or Mac, and
   **Spotify Connect** from the Spotify app (Spotify Premium). Both are off until turned on, under
   Settings → Sound, on the setup page (Sound & Voice), or in Home Assistant. What they play shows as
@@ -388,9 +388,11 @@ captured login to the same page for a few minutes, and could see the pictures an
   on the device stops the stream there; the phone keeps going until it is paused too. Anyone on the
   same network can play to the device while one is on, as with any AirPlay or Spotify speaker, and
   Spotify Connect keeps the login a phone hands it until it is turned off. Where the image carries the
-  AirPlay 2 receiver, an iPhone can group the device with other AirPlay 2 speakers (a HomePod, a Sonos)
+  AirPlay 2 receiver (every image from v1.6.8 and dot-v1.0.35), an iPhone can group the
+  device with other AirPlay 2 speakers (a HomePod, a Sonos)
   and play to all of them at once; without it, or when it will not start, the device is a classic
-  AirPlay speaker, which plays on its own. A third switch there, **AirPlay 2** (on unless turned off),
+  AirPlay speaker, which plays on its own; so is one whose kernel can't take the firewall's AirPlay 2
+  rules (the firewall's log says so). A third switch there, **AirPlay 2** (on unless turned off),
   keeps it to classic AirPlay: for a group it will not play in step with, since it can still drift a few
   milliseconds from the other speakers, more just after it joins one that is already playing. If something does not work, open an issue.
 - **DLNA.** On every device, the **DLNA** switch (Settings → Sound, the setup page's Play to
@@ -706,6 +708,9 @@ The calendar page opens from the date under the clock. Under Settings → **Disp
 once a calendar is shown, and on the setup page's Weather & Calendar tab. Each is also in Home
 Assistant.
 
+- **Opens on**: the view the date opens, and the voice assistant and `calendar_show` too: *Month*
+  (the default), *Week*, *Day* (today) or *Coming up*. *Week* opens the month while Week view is off.
+  The next event on the clock still opens its own day.
 - **Day timeline**: a day on its hours, with the day's weather, the now line on today, ‹ › and a
   swipe for the day before or after. Off shows the day as a list.
 - **Coming up, one line each**: one line per event, each day with its weather.
@@ -1528,6 +1533,12 @@ taken out, as the diagnostics download does, along with addresses and logins, an
 answered replaced by how long it was; it still names rooms and other devices, so treat it as private. Turning the API off or making a new key ends a log being followed. An address that
 sends requests that do not check out is turned away for a minute after ten of them; nobody else is,
 except that a public IPv6 address is counted with the rest of its /64.
+
+## 12. Reaching the device from away
+
+An Echo Show, Echo Spot or Skylight can join your Tailscale network, so a device in another house
+stays in your own Home Assistant, and its setup page can be opened from afar with **Remote setup**.
+Off until you give it a key: see [Tailscale: reaching a device from away](tailscale.md).
 
 ## More
 

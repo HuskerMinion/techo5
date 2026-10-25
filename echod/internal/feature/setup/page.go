@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"html"
 	"log/slog"
+	"net"
 	"net/http"
 	"strconv"
 	"strings"
@@ -57,6 +58,7 @@ func (f *Feature) Run(ctx context.Context) error {
 			return nil
 		case <-t.C:
 		}
+		f.showAsking() // a browser that gave up asking is not still asking in Home Assistant
 		if !f.On() {
 			f.mu.Lock()
 			stale := !f.openedAt.IsZero()
@@ -157,7 +159,11 @@ func (f *Feature) wait(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "post to ask", http.StatusMethodNotAllowed)
 		return
 	}
-	token, ok := f.await()
+	from, _, err := net.SplitHostPort(r.RemoteAddr)
+	if err != nil {
+		from = r.RemoteAddr
+	}
+	token, ok := f.awaitFrom(from, web.AwayRequest(r)) // for Home Assistant's let in (remote.go)
 	if !ok {
 		if f.ShutOut() {
 			http.Error(w, "too many tries without a press on the device; try again in a few minutes",
@@ -175,8 +181,9 @@ func (f *Feature) wait(w http.ResponseWriter, r *http.Request) {
 		Name: cookieName, Value: token, Path: "/",
 		HttpOnly: true, SameSite: http.SameSiteStrictMode, MaxAge: int(life / time.Second),
 	})
+	f.showAsking()
 	f.Changed.Emit(struct{}{}) // the device says a browser is asking
-	slog.Info("setup page: a browser is asking to be let in")
+	slog.Info("setup page: a browser is asking to be let in", "from", from)
 	http.Redirect(w, r, "/setup", http.StatusSeeOther)
 }
 
@@ -332,6 +339,8 @@ func (f *Feature) save(w http.ResponseWriter, r *http.Request) {
 		problem = saveDeckPC(r)
 	case "video":
 		problem = saveVideo(r)
+	case "tailscale":
+		problem = saveTailscale(r)
 	case "timezone":
 		zone := strings.TrimSpace(r.PostFormValue("zone"))
 		switch {
@@ -449,6 +458,7 @@ func (f *Feature) settingsPage(ctx context.Context, w http.ResponseWriter, token
 		cameraListSection(w, token)
 		cameraButtonsSection(w, token)
 		doorbellSection(w, token)
+		tailscaleSection(w, token)
 		if layout.HasMicrophone() {
 			talkBackSection(w, token) // the microphones to a camera's speaker
 		}

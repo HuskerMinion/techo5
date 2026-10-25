@@ -89,6 +89,9 @@ var airplay2Missing = func() string {
 	if config.Get().Streaming.AirPlayClassic {
 		return "AirPlay 2 is turned off"
 	}
+	if _, err := os.Stat(noAirPlay2); err == nil {
+		return "the firewall could not let AirPlay 2 in (techo5-firewall)"
+	}
 	if lo, err := net.InterfaceByName("lo"); err != nil || lo.Flags&net.FlagUp == 0 {
 		return "the loopback is down"
 	}
@@ -97,6 +100,10 @@ var airplay2Missing = func() string {
 	}
 	return ""
 }
+
+// noAirPlay2 is where the firewall says it could not let AirPlay 2's sessions in (techo5-firewall: a kernel
+// without the recent match): its receiver would be found by an iPhone and never play. A variable for tests.
+var noAirPlay2 = "/run/techo5-no-airplay2"
 
 // airplay2Tries is how many times in a row nqptp or the AirPlay 2 receiver may stop soon after starting
 // before the classic receiver is run instead.
