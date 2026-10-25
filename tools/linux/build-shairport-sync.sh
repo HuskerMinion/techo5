@@ -26,6 +26,12 @@
 # nqptp and shairport-sync talk through shared memory whose layout each names by a version (smi11 here),
 # so the two are only ever moved on together.
 #
+# One change is made to nqptp: nqptp-run-as-user.patch, beside this script, adds -u <user>. nqptp needs
+# root only to bind PTP's ports (319 and 320); with -u it then becomes that user, with its groups, before it
+# reads anything from the network, as nqptp already does on OpenBSD. The daemon runs it with -u streaming.
+# (Capabilities would do it too, but the Dot's 3.18 kernel has no ambient ones, and a file capability does
+# not survive the rootfs tarball.)
+#
 # Environment:
 #   TECHO5_INPUTS  where the Alpine armv7 minirootfs is (default: inputs/ in this repository)
 #   APK            a static apk for this machine (default ~/apk/apk.static, as build-ffmpeg.sh uses)
@@ -55,7 +61,7 @@ done
 
 for z in "$HOME"/zig/zig-*/; do [ -x "$z/zig" ] && PATH="$z:$PATH"; done
 command -v zig >/dev/null || { echo "zig is not on PATH" >&2; exit 1; }
-for t in autoreconf make pkg-config xxd plistutil; do
+for t in autoreconf make patch pkg-config xxd plistutil; do
 	command -v $t >/dev/null || { echo "$t is not installed (see the top of this script)" >&2; exit 1; }
 done
 
@@ -110,6 +116,7 @@ rm -rf "$FF"
 
 echo "== nqptp $NQPTP_VERSION"
 unpack nqptp-$NQPTP_VERSION.tar.gz nqptp
+(cd "$WORK/nqptp" && patch -p1 --forward --no-backup-if-mismatch < "$ROOT/tools/linux/nqptp-run-as-user.patch")
 (cd "$WORK/nqptp" && autoreconf -fi >/dev/null 2>&1 && ./configure $HOSTS --prefix=/usr >/dev/null && make -j"$J" >/dev/null)
 
 echo "== shairport-sync $SPS_VERSION with AirPlay 2"
@@ -120,21 +127,21 @@ export PKG_CONFIG_SYSROOT_DIR= PKG_CONFIG_LIBDIR="$FF/lib/pkgconfig:$SYS/usr/lib
 	--with-airplay-2 --with-avahi --with-ssl=openssl --with-soxr --with-stdout --with-metadata >/dev/null &&
 	make -j"$J" >/dev/null)
 
-mkdir -p "$OUT"
-for b in shairport-sync nqptp; do
-	f=$WORK/$b/$b
-	# Debug paths would name whoever built it; the binaries ship as built, so they must not.
-	if grep -a -q -F "$HOME" "$f"; then
-		echo "$f names $HOME; not copying it" >&2
-		exit 1
-	fi
-	cp "$f" "$OUT/techo5-$b-arm"
-done
+# Checked before anything is copied, so a build that fails a check never lands in bin/.
 # The two must speak the same shared memory, and shairport-sync must be the AirPlay 2 build.
 smi() { grep -o 'NQPTP_SHM_STRUCTURES_VERSION [0-9]*' "$1/nqptp-shm-structures.h" | cut -d' ' -f2; }
 sv=$(smi "$WORK/shairport-sync") nv=$(smi "$WORK/nqptp")
 grep -q '^#define CONFIG_AIRPLAY_2 1' "$WORK/shairport-sync/config.h" || { echo "shairport-sync was built without AirPlay 2" >&2; exit 1; }
 [ -n "$sv" ] && [ "$sv" = "$nv" ] || { echo "shairport-sync wants nqptp's smi$sv, nqptp is smi$nv" >&2; exit 1; }
+for b in shairport-sync nqptp; do
+	# Debug paths would name whoever built it; the binaries ship as built, so they must not.
+	if grep -a -q -F "$HOME" "$WORK/$b/$b"; then
+		echo "$WORK/$b/$b names $HOME; not copying it" >&2
+		exit 1
+	fi
+done
+mkdir -p "$OUT"
+for b in shairport-sync nqptp; do cp "$WORK/$b/$b" "$OUT/techo5-$b-arm"; done
 file "$OUT/techo5-shairport-sync-arm" "$OUT/techo5-nqptp-arm" 2>/dev/null || true
 ls -la "$OUT/techo5-shairport-sync-arm" "$OUT/techo5-nqptp-arm"
 echo "built: shairport-sync $SPS_VERSION with AirPlay 2, nqptp $NQPTP_VERSION (smi$nv)"
