@@ -60,7 +60,8 @@ Android, with one Go daemon, `echod`, doing everything the device does:
   [phone.md](phone.md).
 - **Bluetooth audio** to earbuds or a speaker, and from a phone on the Show, the Spot and the Dot; a
   Bluetooth proxy for Home Assistant, off by default: scanning, and on the Show and the Spot active
-  connections too (through BlueZ), so integrations that control a BLE device can reach it.
+  connections too (through BlueZ) behind a switch of their own, also off by default, so integrations
+  that control a BLE device can reach it.
 - **Security**: nothing is open to the network by default except Home Assistant's encrypted link
   and the Sendspin player. SSH (keys only), the camera page and the screen page each have a switch
   on the settings screen (Privacy) and in Home Assistant, all off on a new device. SSH keys come only from Home

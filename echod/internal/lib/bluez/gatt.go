@@ -145,11 +145,18 @@ func (c *Central) objects() (map[dbus.ObjectPath]map[string]map[string]dbus.Vari
 
 func (c *Central) watch() error {
 	opts := [][]dbus.MatchOption{
-		{dbus.WithMatchInterface(propsIfc), dbus.WithMatchMember("PropertiesChanged"), dbus.WithMatchArg(0, deviceIfc)},
-		{dbus.WithMatchInterface(propsIfc), dbus.WithMatchMember("PropertiesChanged"), dbus.WithMatchArg(0, gattCharIfc)},
+		{dbus.WithMatchInterface(propsIfc), dbus.WithMatchMember("PropertiesChanged"), dbus.WithMatchArg(0, deviceIfc),
+			dbus.WithMatchSender(service), dbus.WithMatchPathNamespace(c.adapter)},
+		{dbus.WithMatchInterface(propsIfc), dbus.WithMatchMember("PropertiesChanged"), dbus.WithMatchArg(0, gattCharIfc),
+			dbus.WithMatchSender(service), dbus.WithMatchPathNamespace(c.adapter)},
+		// A device can go without Connected ever turning false: hci0 set up again (the Secure
+		// Connections switch does that) takes the adapter and its devices away, and bluetoothd
+		// restarting takes everything.
+		{dbus.WithMatchInterface(objMgrIfc), dbus.WithMatchMember("InterfacesRemoved"), dbus.WithMatchSender(service)},
+		{dbus.WithMatchInterface("org.freedesktop.DBus"), dbus.WithMatchMember("NameOwnerChanged"),
+			dbus.WithMatchSender("org.freedesktop.DBus"), dbus.WithMatchArg(0, service)},
 	}
 	for _, o := range opts {
-		o = append(o, dbus.WithMatchSender(service), dbus.WithMatchPathNamespace(c.adapter))
 		if err := c.conn.AddMatchSignal(o...); err != nil {
 			return fmt.Errorf("bluez: match: %w", err)
 		}
@@ -176,7 +183,30 @@ func (c *Central) watch() error {
 }
 
 func (c *Central) signal(s *dbus.Signal) {
-	if s.Name != propsIfc+".PropertiesChanged" || len(s.Body) < 2 {
+	switch s.Name {
+	case objMgrIfc + ".InterfacesRemoved":
+		if len(s.Body) < 2 {
+			return
+		}
+		path, _ := s.Body[0].(dbus.ObjectPath)
+		ifcs, _ := s.Body[1].([]string)
+		for _, i := range ifcs {
+			if i == deviceIfc || i == adapterIfc {
+				c.gone(func(l *link) bool {
+					return l.path == path || strings.HasPrefix(string(l.path), string(path)+"/")
+				})
+			}
+		}
+		return
+	case "org.freedesktop.DBus.NameOwnerChanged":
+		// bluetoothd went (or came back with nothing connected): every link went with it.
+		c.gone(func(*link) bool { return true })
+		return
+	case propsIfc + ".PropertiesChanged":
+	default:
+		return
+	}
+	if len(s.Body) < 2 {
 		return
 	}
 	ifc, _ := s.Body[0].(string)
@@ -187,18 +217,7 @@ func (c *Central) signal(s *dbus.Signal) {
 		if on, _ := v.Value().(bool); !ok || on {
 			return
 		}
-		c.mu.Lock()
-		var gone string
-		for a, l := range c.links {
-			if l.path == s.Path && !l.closing {
-				gone = a
-				c.drop(a, l)
-			}
-		}
-		c.mu.Unlock()
-		if gone != "" && c.lost != nil {
-			c.lost(gone)
-		}
+		c.gone(func(l *link) bool { return l.path == s.Path })
 	case gattCharIfc:
 		// Only for a characteristic notifying through StartNotify: bluetoothd also changes Value
 		// after a read, and a read is answered on its own.
@@ -231,12 +250,41 @@ func (c *Central) notifier(path dbus.ObjectPath) (string, uint16, bool) {
 	return "", 0, false
 }
 
-// drop forgets a link and stops its notifications. Called with mu held.
-func (c *Central) drop(address string, l *link) {
+// gone forgets the links that match, which went without being asked to, and tells lost of each.
+func (c *Central) gone(match func(*link) bool) {
+	var addrs []string
+	var stops []func()
+	c.mu.Lock()
+	for a, l := range c.links {
+		if !l.closing && match(l) {
+			addrs = append(addrs, a)
+			stops = append(stops, c.drop(a, l)...)
+		}
+	}
+	c.mu.Unlock()
+	stopAll(stops)
+	if c.lost != nil {
+		for _, a := range addrs {
+			c.lost(a)
+		}
+	}
+}
+
+// drop forgets a link and returns what stops its notifications. Called with mu held; the caller runs
+// them after letting go of it, since each can be a call to bluetoothd.
+func (c *Central) drop(address string, l *link) []func() {
+	stops := make([]func(), 0, len(l.notifying))
 	for _, stop := range l.notifying {
-		stop()
+		stops = append(stops, stop)
 	}
 	delete(c.links, address)
+	return stops
+}
+
+func stopAll(stops []func()) {
+	for _, stop := range stops {
+		stop()
+	}
 }
 
 // Connected reports whether there is a link to the device.
@@ -279,28 +327,34 @@ func (c *Central) Connect(ctx context.Context, address string, random bool) (int
 	}
 
 	l := &link{path: path, notifying: map[uint16]func(){}}
+	var stops []func()
 	c.mu.Lock()
 	if old, ok := c.links[address]; ok {
-		c.drop(address, old)
+		stops = c.drop(address, old)
 	}
 	c.links[address] = l
 	c.mu.Unlock()
+	stopAll(stops)
 
 	mtu := defaultMTU
 	if _, err := c.Services(address); err == nil {
+		// Any characteristic says the link's MTU.
+		var char dbus.ObjectPath
 		c.mu.Lock()
 		for _, a := range l.attrs {
-			if a.ifc != gattCharIfc {
-				continue
+			if a.ifc == gattCharIfc {
+				char = a.path
+				break
 			}
-			if v, err := c.conn.Object(service, a.path).GetProperty(gattCharIfc + ".MTU"); err == nil {
+		}
+		c.mu.Unlock()
+		if char != "" {
+			if v, err := c.conn.Object(service, char).GetProperty(gattCharIfc + ".MTU"); err == nil {
 				if m, ok := v.Value().(uint16); ok && int(m) > mtu {
 					mtu = int(m)
 				}
 			}
-			break
 		}
-		c.mu.Unlock()
 	}
 	return mtu, nil
 }
@@ -328,22 +382,23 @@ func (c *Central) resolved(ctx context.Context, path dbus.ObjectPath) error {
 	}
 }
 
-// devicePath finds the device under the adapter, or "" when bluetoothd doesn't know it.
+// devicePath is where bluetoothd has the device, or "" when it doesn't know it. bluetoothd names a
+// device's object after its address, so this asks about that one object rather than reading every
+// device it knows, which near a busy street is hundreds.
 func (c *Central) devicePath(address string) (dbus.ObjectPath, error) {
-	objs, err := c.objects()
+	path := dbus.ObjectPath(string(c.adapter) + "/dev_" + strings.ReplaceAll(strings.ToUpper(address), ":", "_"))
+	v, err := c.conn.Object(service, path).GetProperty(deviceIfc + ".Address")
 	if err != nil {
-		return "", err
-	}
-	for path, ifcs := range objs {
-		props, ok := ifcs[deviceIfc]
-		if !ok || !strings.HasPrefix(string(path), string(c.adapter)+"/") {
-			continue
+		var de dbus.Error
+		if errors.As(err, &de) && strings.HasPrefix(de.Name, "org.freedesktop.DBus.Error.") {
+			return "", nil // no such object, or no Device1 on it
 		}
-		if a, _ := props["Address"].Value().(string); strings.EqualFold(a, address) {
-			return path, nil
-		}
+		return "", fmt.Errorf("bluez: %s: %w", address, err)
 	}
-	return "", nil
+	if a, _ := v.Value().(string); !strings.EqualFold(a, address) {
+		return "", nil
+	}
+	return path, nil
 }
 
 // Known waits for bluetoothd to know the device, which it forgets a while after a connection ends
@@ -369,14 +424,16 @@ func (c *Central) Disconnect(ctx context.Context, address string) error {
 	address = strings.ToUpper(address)
 	c.mu.Lock()
 	l, ok := c.links[address]
+	var stops []func()
 	if ok {
 		l.closing = true
-		c.drop(address, l)
+		stops = c.drop(address, l)
 	}
 	c.mu.Unlock()
 	if !ok {
 		return nil
 	}
+	stopAll(stops)
 	err := c.conn.Object(service, l.path).CallWithContext(ctx, deviceIfc+".Disconnect", 0).Err
 	if err != nil && strings.Contains(err.Error(), "NotConnected") {
 		return nil
@@ -486,25 +543,27 @@ func (c *Central) attribute(address string, handle uint16) (attribute, error) {
 	c.mu.Lock()
 	l, ok := c.links[address]
 	var a attribute
-	found := false
+	found, loaded := false, false
 	if ok {
 		a, found = l.attrs[handle]
+		loaded = l.attrs != nil
 	}
 	c.mu.Unlock()
 	if !ok {
 		return attribute{}, fmt.Errorf("bluez: %s not connected", address)
 	}
-	if !found {
-		// A client with services it read on an earlier connection asks without reading them again.
+	if !found && !loaded {
+		// A client with services it read on an earlier connection asks without reading them again;
+		// they are read once for the connection. An unknown handle after that is the client's.
 		if _, err := c.Services(address); err != nil {
 			return attribute{}, err
 		}
 		c.mu.Lock()
 		a, found = l.attrs[handle]
 		c.mu.Unlock()
-		if !found {
-			return attribute{}, fmt.Errorf("bluez: %s has no handle 0x%04x", address, handle)
-		}
+	}
+	if !found {
+		return attribute{}, fmt.Errorf("bluez: %s has no handle 0x%04x", address, handle)
 	}
 	return a, nil
 }

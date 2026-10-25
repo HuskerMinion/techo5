@@ -39,6 +39,7 @@ var registered = []string{
 	"bluetooth_pairing",
 	"bluetooth_phone_pairing",
 	"bluetooth_proxy",
+	"bluetooth_proxy_connections",
 	"bluetooth_reconnect",
 	"bluetooth_reconnect_phone",
 	"bluetooth_secure_connections",

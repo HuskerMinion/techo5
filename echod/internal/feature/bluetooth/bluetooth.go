@@ -41,8 +41,8 @@ const (
 	queued = 512
 )
 
-// bluetoothFeatures is what the device advertises when the proxy is on, and connecting adds active
-// connections where there is a GATT client to lend.
+// bluetoothFeatures is what the device advertises when the proxy is on, and connectingFeatures what
+// it adds when its connections switch is on too, where there is a GATT client to lend.
 const (
 	bluetoothFeatures = esphome.BluetoothPassiveScan |
 		esphome.BluetoothRawAdvertisements |
@@ -65,8 +65,11 @@ type Proxy struct {
 	proxy  *esphome.BluetoothProxy
 	radio  ble.Scanner
 	enable *esphome.Switch
-	beacon beaconState
-	links  *connections
+	// connect is the "Bluetooth proxy connections" switch: whether Home Assistant may connect to
+	// devices through the proxy. Only where there is a GATT client (openCentral).
+	connect *esphome.Switch
+	beacon  beaconState
+	links   *connections
 
 	wanted  chan struct{}
 	reports chan ble.Advertisement
@@ -104,12 +107,28 @@ func build() *Proxy {
 				Category: esphome.CategoryConfig,
 			},
 		},
+		connect: &esphome.Switch{
+			Base: esphome.Base{
+				ObjectID: "bluetooth_proxy_connections",
+				Name:     "Bluetooth proxy connections",
+				Icon:     "mdi:bluetooth-connect",
+				Category: esphome.CategoryConfig,
+			},
+		},
 	}
 
 	if p, ok := b.radio.(interface{ Pause() func() }); ok {
 		b.links.pause = p.Pause
 	}
-	b.proxy.OnSubscribed = func(bool) { b.apply() }
+	b.links.allowed = b.Connecting
+	// Home Assistant stopping listening is usually its connection gone (the library notices on the
+	// next batch of advertisements), and the devices it connected have nobody to answer to.
+	b.proxy.OnSubscribed = func(on bool) {
+		b.apply()
+		if !on {
+			b.links.ReleaseGone()
+		}
+	}
 	b.proxy.OnMode = func(bool) { b.apply() }
 
 	b.enable.Set(config.Get().Bluetooth.Proxy)
@@ -128,8 +147,24 @@ func build() *Proxy {
 		component.Reconnect.Emit(struct{}{})
 	}
 
+	b.connect.Set(config.Get().Bluetooth.Connections)
+	b.connect.OnCommand = func(on bool) {
+		b.connect.Set(on)
+		if !on {
+			b.links.ReleaseAll()
+		}
+		if err := config.Set().Bluetooth().Connections(on); err != nil {
+			slog.Error("saving the bluetooth proxy connections setting failed", "err", err)
+			return
+		}
+		component.Reconnect.Emit(struct{}{})
+	}
+
 	safe.Go("ble radio", b.settle)
 	safe.Go("ble reports", b.deliver)
+	if openCentral != nil {
+		safe.Go("ble links", b.links.watch)
+	}
 	b.apply()
 	return b
 }
@@ -144,7 +179,12 @@ func beaconMinor(mac string) int {
 
 func (b *Proxy) Name() string { return "bluetooth proxy" }
 
-func (b *Proxy) Entities() []esphome.Entity { return []esphome.Entity{b.enable} }
+func (b *Proxy) Entities() []esphome.Entity {
+	if openCentral == nil {
+		return []esphome.Entity{b.enable}
+	}
+	return []esphome.Entity{b.enable, b.connect}
+}
 
 // Handle answers the proxy's own protocol messages: subscribe, unsubscribe, set mode, and the
 // connections Home Assistant makes through it.
@@ -161,6 +201,12 @@ func (b *Proxy) SetEnabled(on bool) { b.enable.OnCommand(on) }
 
 func (b *Proxy) Enabled() bool { return Here && config.Get().Bluetooth.Proxy }
 
+// Connecting reports whether Home Assistant may connect to devices through the proxy: the proxy on,
+// its connections switch on, and a GATT client to lend.
+func (b *Proxy) Connecting() bool {
+	return b.Enabled() && openCentral != nil && config.Get().Bluetooth.Connections
+}
+
 // Reports is how many advertisements the radio has heard, for diagnostics.
 func (b *Proxy) Reports() uint64 { return b.radio.Reports() }
 
@@ -175,7 +221,7 @@ func (b *Proxy) Features() esphome.BluetoothFeature {
 	if !b.Enabled() {
 		return 0
 	}
-	if openCentral != nil {
+	if b.Connecting() {
 		return bluetoothFeatures | connectingFeatures
 	}
 	return bluetoothFeatures

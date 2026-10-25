@@ -40,7 +40,12 @@ const (
 	// after scanning stops can fail in the kernel (ENOSYS from the ATT socket) and the next one work.
 	connectTries = 3
 	retryWait    = 500 * time.Millisecond
-	opTimeout    = 15 * time.Second
+
+	// goneCheck is how often connections held for Home Assistant are checked for a closed session. The
+	// first send to a socket whose other end went usually still succeeds, so a closed session is seen
+	// on the second check: about ten seconds.
+	goneCheck = 5 * time.Second
+	opTimeout = 15 * time.Second
 
 	// queuedOps is how many requests for one device may wait for the ones before them.
 	queuedOps = 64
@@ -80,6 +85,9 @@ type connections struct {
 	open func(value func(string, uint16, []byte), lost func(string)) (central, error)
 	// pause, when set, stops scanning while a connection is made, and returns what resumes it.
 	pause func() (resume func())
+	// allowed, when set, says whether connections are lent at all (the proxy and its connections
+	// switch on). Requests while it says no are refused, whoever sends them.
+	allowed func() bool
 
 	mu      sync.Mutex
 	central central
@@ -90,10 +98,21 @@ type connections struct {
 // peer is one device Home Assistant has connected, or is connecting. mtu is set once it is connected.
 type peer struct {
 	conn sender
-	work chan func()
+	work chan op
 	quit chan struct{}
 	mtu  int
 }
+
+// op is one request for a device: run does it and answers; fail answers with an error instead, for a
+// request still queued when the device goes, so Home Assistant is not left waiting for a timeout.
+type op struct {
+	run  func()
+	fail func()
+}
+
+// address48 is a device address as the radio has it: Home Assistant sends 64 bits, and a value with
+// anything above the low 48 must not become a second peer for the same device.
+func address48(a uint64) uint64 { return a & 0xFFFF_FFFF_FFFF }
 
 func newConnections(open func(func(string, uint16, []byte), func(string)) (central, error)) *connections {
 	return &connections{open: open, peers: map[uint64]*peer{}}
@@ -113,6 +132,9 @@ func handles(msg proto.Message) bool {
 
 // Handle answers one active connection message. It never waits on the radio.
 func (c *connections) Handle(conn sender, msg proto.Message) error {
+	if c.allowed != nil && !c.allowed() {
+		return refuse(conn, msg)
+	}
 	switch m := msg.(type) {
 	case *api.SubscribeBluetoothConnectionsFreeRequest:
 		// A new Home Assistant session: devices the last one connected have nobody to answer to.
@@ -172,6 +194,24 @@ func (c *connections) Handle(conn sender, msg proto.Message) error {
 	return nil
 }
 
+// refuse answers a request made while connections are not lent, as a device with no free slot would.
+func refuse(conn sender, msg proto.Message) error {
+	switch m := msg.(type) {
+	case *api.SubscribeBluetoothConnectionsFreeRequest:
+		return conn.Send(&api.BluetoothConnectionsFreeResponse{})
+	case *api.BluetoothDeviceRequest:
+		return conn.Send(&api.BluetoothDeviceConnectionResponse{Address: address48(m.GetAddress()), Error: espNoResources})
+	case interface {
+		GetAddress() uint64
+		GetHandle() uint32
+	}:
+		return conn.Send(&api.BluetoothGATTErrorResponse{Address: address48(m.GetAddress()), Handle: m.GetHandle(), Error: espGattError})
+	case *api.BluetoothGATTGetServicesRequest:
+		return conn.Send(&api.BluetoothGATTErrorResponse{Address: address48(m.GetAddress()), Error: espGattError})
+	}
+	return nil
+}
+
 func (c *connections) read(conn sender, address uint64, handle uint32) error {
 	return c.queue(conn, address, handle, func(ct central, addr string) error {
 		ctx, cancel := context.WithTimeout(context.Background(), opTimeout)
@@ -197,7 +237,7 @@ func (c *connections) write(conn sender, address uint64, handle uint32, data []b
 
 // device connects or disconnects one.
 func (c *connections) device(conn sender, m *api.BluetoothDeviceRequest) error {
-	address := m.GetAddress()
+	address := address48(m.GetAddress())
 	switch m.GetRequestType() {
 	case api.BluetoothDeviceRequestType_BLUETOOTH_DEVICE_REQUEST_TYPE_CONNECT,
 		api.BluetoothDeviceRequestType_BLUETOOTH_DEVICE_REQUEST_TYPE_CONNECT_V3_WITH_CACHE,
@@ -240,14 +280,16 @@ func (c *connections) device(conn sender, m *api.BluetoothDeviceRequest) error {
 		slog.Warn("ble: no gatt client", "err", err)
 		return conn.Send(&api.BluetoothDeviceConnectionResponse{Address: address, Error: espGattError})
 	}
-	p := &peer{conn: conn, work: make(chan func(), queuedOps), quit: make(chan struct{})}
+	p := &peer{conn: conn, work: make(chan op, queuedOps), quit: make(chan struct{})}
 	c.peers[address] = p
 	c.mu.Unlock()
 	c.announce()
 
 	safe.Go("ble link", func() { p.run() })
 	random := m.GetHasAddressType() && m.GetAddressType() == 1
-	p.work <- func() {
+	p.work <- op{fail: func() {
+		_ = conn.Send(&api.BluetoothDeviceConnectionResponse{Address: address, Error: espGattError})
+	}, run: func() {
 		ctx, cancel := context.WithTimeout(context.Background(), connectTimeout)
 		defer cancel()
 		addr := addressString(address)
@@ -264,7 +306,7 @@ func (c *connections) device(conn sender, m *api.BluetoothDeviceRequest) error {
 		if err := conn.Send(&api.BluetoothDeviceConnectionResponse{Address: address, Connected: true, Mtu: uint32(mtu)}); err != nil {
 			c.release(address, false)
 		}
-	}
+	}}
 	return nil
 }
 
@@ -302,7 +344,8 @@ func (c *connections) connect(ctx context.Context, ct central, addr string, rand
 }
 
 // queue runs op on the device's worker, answering with an error if it fails.
-func (c *connections) queue(conn sender, address uint64, handle uint32, op func(central, string) error) error {
+func (c *connections) queue(conn sender, address uint64, handle uint32, do func(central, string) error) error {
+	address = address48(address)
 	c.mu.Lock()
 	p, ok := c.peers[address]
 	ct := c.central
@@ -310,13 +353,16 @@ func (c *connections) queue(conn sender, address uint64, handle uint32, op func(
 	if !ok || ct == nil {
 		return conn.Send(&api.BluetoothGATTErrorResponse{Address: address, Handle: handle, Error: espGattError})
 	}
+	fail := func() {
+		_ = conn.Send(&api.BluetoothGATTErrorResponse{Address: address, Handle: handle, Error: espGattError})
+	}
 	select {
-	case p.work <- func() {
-		if err := op(ct, addressString(address)); err != nil {
+	case p.work <- op{fail: fail, run: func() {
+		if err := do(ct, addressString(address)); err != nil {
 			slog.Debug("ble: gatt request failed", "address", addressString(address), "handle", handle, "err", err)
 			_ = conn.Send(&api.BluetoothGATTErrorResponse{Address: address, Handle: handle, Error: gattError(err)})
 		}
-	}:
+	}}:
 		return nil
 	default:
 		return conn.Send(&api.BluetoothGATTErrorResponse{Address: address, Handle: handle, Error: espNoResources})
@@ -328,8 +374,8 @@ func (p *peer) run() {
 		select {
 		case <-p.quit:
 			return
-		case op := <-p.work:
-			op()
+		case o := <-p.work:
+			o.run()
 		}
 	}
 }
@@ -344,7 +390,7 @@ func (c *connections) release(address uint64, tell bool) {
 		return
 	}
 	// Behind whatever the device's worker is already doing, so a connect in flight finishes first.
-	op := func() {
+	disconnect := func() {
 		if ct != nil {
 			ctx, cancel := context.WithTimeout(context.Background(), opTimeout)
 			if err := ct.Disconnect(ctx, addressString(address)); err != nil {
@@ -358,10 +404,11 @@ func (c *connections) release(address uint64, tell bool) {
 		}
 		c.forget(address, p, notice)
 	}
+	// Already gone by the time it would run: what forgot the device answered for it.
 	select {
-	case p.work <- op:
+	case p.work <- op{run: disconnect, fail: func() {}}:
 	default:
-		safe.Go("ble release", op)
+		safe.Go("ble release", disconnect)
 	}
 }
 
@@ -393,7 +440,49 @@ func (c *connections) forget(address uint64, p *peer, notice proto.Message) {
 	if notice != nil {
 		_ = p.conn.Send(notice)
 	}
+	// What was still queued is answered with an error at once.
+	for {
+		select {
+		case o := <-p.work:
+			o.fail()
+			continue
+		default:
+		}
+		break
+	}
 	c.announce()
+}
+
+// ReleaseGone releases the devices of every Home Assistant connection that has closed, as ESPHome
+// does: the link and the slot otherwise stay taken until a new session asks for free slots, and many
+// BLE devices take one connection only, so a phone app could not reach a lock meanwhile. The library
+// says nothing when a connection closes; a send to it fails, and the free slots are a harmless thing
+// to send.
+func (c *connections) ReleaseGone() {
+	c.mu.Lock()
+	byConn := map[sender][]uint64{}
+	for a, p := range c.peers {
+		byConn[p.conn] = append(byConn[p.conn], a)
+	}
+	c.mu.Unlock()
+	for conn, addrs := range byConn {
+		if conn.Send(c.free()) == nil {
+			continue
+		}
+		for _, a := range addrs {
+			c.release(a, false)
+		}
+	}
+}
+
+// watch looks for closed Home Assistant connections every so often, behind OnSubscribed, which
+// notices only while advertisements flow.
+func (c *connections) watch() {
+	t := time.NewTicker(goneCheck)
+	defer t.Stop()
+	for range t.C {
+		c.ReleaseGone()
+	}
 }
 
 // value passes a notification on to whoever connected the device.

@@ -60,3 +60,27 @@ func TestTree(t *testing.T) {
 		t.Errorf("attributes %d, want 4", len(attrs))
 	}
 }
+
+func TestLinksGoWithTheirDevice(t *testing.T) {
+	for _, s := range []*dbus.Signal{
+		{Name: objMgrIfc + ".InterfacesRemoved", Body: []any{dbus.ObjectPath("/org/bluez/hci0/dev_C0_FF_EE_12_34_56"), []string{deviceIfc}}},
+		{Name: objMgrIfc + ".InterfacesRemoved", Body: []any{dbus.ObjectPath("/org/bluez/hci0"), []string{adapterIfc}}},
+		{Name: "org.freedesktop.DBus.NameOwnerChanged", Body: []any{service, ":1.0", ""}},
+		{Name: propsIfc + ".PropertiesChanged", Path: "/org/bluez/hci0/dev_C0_FF_EE_12_34_56",
+			Body: []any{deviceIfc, map[string]dbus.Variant{"Connected": dbus.MakeVariant(false)}, []string{}}},
+	} {
+		var lost []string
+		stopped := false
+		c := &Central{adapter: "/org/bluez/hci0", lost: func(a string) { lost = append(lost, a) }, links: map[string]*link{
+			"C0:FF:EE:12:34:56": {path: "/org/bluez/hci0/dev_C0_FF_EE_12_34_56", notifying: map[uint16]func(){0x0e: func() { stopped = true }}},
+			"AA:BB:CC:DD:EE:FF": {path: "/org/bluez/hci0/dev_AA_BB_CC_DD_EE_FF", notifying: map[uint16]func(){}},
+		}}
+		c.signal(s)
+		if len(lost) == 0 || lost[0] != "C0:FF:EE:12:34:56" && lost[len(lost)-1] != "C0:FF:EE:12:34:56" || !stopped {
+			t.Errorf("%s: lost %v, notifications stopped %v", s.Name, lost, stopped)
+		}
+		if _, still := c.links["C0:FF:EE:12:34:56"]; still {
+			t.Errorf("%s: link kept", s.Name)
+		}
+	}
+}

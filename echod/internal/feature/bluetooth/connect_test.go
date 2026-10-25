@@ -24,6 +24,7 @@ type fakeCentral struct {
 	failWrite error
 	onConnect func()
 	failFirst int
+	readGate  chan struct{}
 	value     func(string, uint16, []byte)
 	lost      func(string)
 }
@@ -65,6 +66,9 @@ func (f *fakeCentral) Services(string) ([]bluez.Service, error) {
 }
 
 func (f *fakeCentral) Read(context.Context, string, uint16) ([]byte, error) {
+	if f.readGate != nil {
+		<-f.readGate
+	}
 	return []byte{1, 2, 3}, nil
 }
 
@@ -80,9 +84,18 @@ func (f *fakeCentral) Write(_ context.Context, a string, _ uint16, data []byte, 
 
 func (f *fakeCentral) Notify(context.Context, string, uint16, bool) error { return nil }
 
-type fakeConn struct{ got chan proto.Message }
+type fakeConn struct {
+	got  chan proto.Message
+	dead bool
+}
 
-func (c *fakeConn) Send(m proto.Message) error { c.got <- m; return nil }
+func (c *fakeConn) Send(m proto.Message) error {
+	if c.dead {
+		return errors.New("closed")
+	}
+	c.got <- m
+	return nil
+}
 
 func newFakes() (*connections, *fakeCentral, *fakeConn) {
 	f := &fakeCentral{connected: map[string]bool{}}
@@ -339,5 +352,72 @@ func TestConnectRetriesAFailedAttempt(t *testing.T) {
 	f.failFirst = connectTries - 1
 	if r := connect(t, c, conn, testAddr); !r.Connected {
 		t.Fatalf("not connected after %d failures: %v", connectTries-1, r)
+	}
+}
+
+func TestRefusedWhileConnectionsAreOff(t *testing.T) {
+	c, f, conn := newFakes()
+	c.allowed = func() bool { return false }
+	if r := connect(t, c, conn, testAddr); r.Connected || r.Error != espNoResources {
+		t.Fatalf("connect with connections off: %v", r)
+	}
+	_ = c.Handle(conn, &api.BluetoothGATTReadRequest{Address: testAddr, Handle: 3})
+	if e := next[*api.BluetoothGATTErrorResponse](t, conn); e.Handle != 3 || e.Error == 0 {
+		t.Fatalf("read with connections off: %v", e)
+	}
+	_ = c.Handle(conn, &api.SubscribeBluetoothConnectionsFreeRequest{})
+	if free := next[*api.BluetoothConnectionsFreeResponse](t, conn); free.Free != 0 || free.Limit != 0 {
+		t.Fatalf("free slots with connections off: %v", free)
+	}
+	if len(f.connected) != 0 {
+		t.Fatalf("central asked anyway: %v", f.connected)
+	}
+}
+
+func TestClosedSessionReleasesItsDevices(t *testing.T) {
+	c, f, conn := newFakes()
+	other := &fakeConn{got: make(chan proto.Message, 64)}
+	connect(t, c, conn, testAddr)
+	connect(t, c, other, testAddr+1)
+
+	conn.dead = true
+	c.ReleaseGone()
+	deadline := time.Now().Add(2 * time.Second)
+	for c.free().Free != slots-1 && time.Now().Before(deadline) {
+		time.Sleep(10 * time.Millisecond)
+	}
+	if free := c.free(); free.Free != slots-1 || len(free.Allocated) != 1 || free.Allocated[0] != testAddr+1 {
+		t.Fatalf("after the session closed: %v", free)
+	}
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if f.connected["C0:FF:EE:12:34:56"] || !f.connected["C0:FF:EE:12:34:57"] {
+		t.Fatalf("central: %v", f.connected)
+	}
+}
+
+func TestQueuedRequestsAnsweredWhenTheDeviceGoes(t *testing.T) {
+	c, f, conn := newFakes()
+	connect(t, c, conn, testAddr)
+	f.readGate = make(chan struct{})
+	_ = c.Handle(conn, &api.BluetoothGATTReadRequest{Address: testAddr, Handle: 1}) // holds the worker
+	time.Sleep(20 * time.Millisecond)
+	_ = c.Handle(conn, &api.BluetoothGATTReadRequest{Address: testAddr, Handle: 2}) // waits behind it
+
+	f.lost("C0:FF:EE:12:34:56")
+	if e := next[*api.BluetoothGATTErrorResponse](t, conn); e.Handle != 2 {
+		t.Fatalf("queued read not answered: %v", e)
+	}
+	close(f.readGate)
+}
+
+func TestAddressIsMaskedTo48Bits(t *testing.T) {
+	c, _, conn := newFakes()
+	connect(t, c, conn, testAddr|1<<48)
+	if r := connect(t, c, conn, testAddr); !r.Connected {
+		t.Fatalf("same device by its 48 bits: %v", r)
+	}
+	if free := c.free(); free.Free != slots-1 || free.Allocated[0] != testAddr {
+		t.Fatalf("one device became two peers: %v", free)
 	}
 }

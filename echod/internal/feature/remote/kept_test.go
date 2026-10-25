@@ -31,6 +31,7 @@ var keptByRestore = map[string]keptSetting{
 	"dlna_video":                       {func(c *config.Config) { c.Video.DLNA = true }, func(c config.Config) bool { return c.Video.DLNA }},
 	"sendspin":                         {func(c *config.Config) { c.Sendspin.Enabled = !c.Sendspin.Enabled }, nil},
 	"bluetooth_proxy":                  {func(c *config.Config) { c.Bluetooth.Proxy = true }, func(c config.Config) bool { return c.Bluetooth.Proxy }},
+	"bluetooth_proxy_connections":      {func(c *config.Config) { c.Bluetooth.Connections = true }, func(c config.Config) bool { return c.Bluetooth.Connections }},
 	"bluetooth_secure_connections":     {func(c *config.Config) { c.Bluetooth.SecureConnectionsOff = true }, func(c config.Config) bool { return c.Bluetooth.SecureConnectionsOff }},
 	"mic_mute":                         {func(c *config.Config) { c.Microphone.Muted = !c.Microphone.Muted }, nil},
 	"intercom_drop_in":                 {func(c *config.Config) { c.Home.DropIn = true }, func(c config.Config) bool { return c.Home.DropIn }},
