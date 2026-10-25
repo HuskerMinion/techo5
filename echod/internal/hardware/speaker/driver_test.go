@@ -578,3 +578,24 @@ func TestClaimTurnPlaysAtOnceOnAFreeSpeaker(t *testing.T) {
 		t.Error("the chime did not play on a free speaker")
 	}
 }
+
+// Taking the speaker tells the player before anything is queued, and letting it go tells it again.
+func TestClaimHoldsTheSpeaker(t *testing.T) {
+	p := New()
+	d := NewDriver(p)
+	started := make(chan struct{})
+	c := d.Claim("test", func(ctx context.Context, _ *Player) error {
+		close(started)
+		<-ctx.Done()
+		return nil
+	})
+	<-started
+	if !p.claimed.Load() {
+		t.Error("a claim holding the speaker was not passed on")
+	}
+	d.Silence()
+	waitFor(t, c)
+	if p.claimed.Load() {
+		t.Error("the speaker was let go, and the player still thinks it held")
+	}
+}

@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/HuskerMinion/techo5/echod/internal/config"
+	"github.com/HuskerMinion/techo5/echod/internal/layout"
 )
 
 // The Show's curve is linear in dB: −45 dB at the first step, −24 dB at half, −6 dB at the top.
@@ -68,6 +69,33 @@ func TestShowInit(t *testing.T) {
 	}
 	if AmpSwitch != "" {
 		t.Error("AmpSwitch must stay empty: switching it resets the 2nd gen's amplifier and silences the 1st gen's")
+	}
+}
+
+// Only the 1st gen Show 5 puts its amplifier to sleep while idle, and its switch is active low: "Off"
+// wakes it, "On" puts it to sleep, the reverse of what showInit's start would suggest if read by name.
+// Every other Show (cronos, whose switch is the MAX98396's reset; crown, untested; athena; the
+// Skylight) has no gate, and its amplifier is left exactly as before.
+func TestShowIdleGate(t *testing.T) {
+	if g := showIdleGate(false); g != nil {
+		t.Errorf("a Show other than checkers has an idle gate: %+v", g)
+	}
+	g := showIdleGate(true)
+	if g == nil {
+		t.Fatal("checkers has no idle gate")
+	}
+	if *g != *testGate {
+		t.Errorf("checkers gate %+v, want %+v", *g, *testGate)
+	}
+	start := showInit(true)
+	if start[0].name != g.control || start[0].value != g.on {
+		t.Errorf("the gate's on (%q) is not what showInit starts the amplifier with (%+v)", g.on, start[0])
+	}
+	if idleGate != nil {
+		t.Errorf("the test board %q has an idle gate", layout.Board)
+	}
+	if New().gate != nil {
+		t.Error("a player off checkers carries an idle gate")
 	}
 }
 

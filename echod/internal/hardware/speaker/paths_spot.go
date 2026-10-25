@@ -175,6 +175,9 @@ const AmpSwitch = "Ext_Speaker_Amp_Switch"
 // MuteSwitch is a mute on the amplifier besides AmpSwitch: none on the Spot.
 const MuteSwitch = ""
 
+// idleGate is none: the amplifier is AmpSwitch's to gate (idle.go).
+var idleGate *ampGate
+
 // mayHaveTAS5805M is whether a board of this build can carry the TAS5805M amplifier (GainAvailable):
 // the Spot plays through its TLV320AIC32x4 and an external amplifier gated by AmpSwitch.
 const mayHaveTAS5805M = false

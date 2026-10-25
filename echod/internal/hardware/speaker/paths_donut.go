@@ -242,6 +242,9 @@ const AmpSwitch = ""
 // MuteSwitch is empty: no separate amplifier mute.
 const MuteSwitch = ""
 
+// idleGate is none: nothing on this card to put to sleep (idle.go).
+var idleGate *ampGate
+
 // mayHaveTAS5805M is false: the amplifier is a TAS2770.
 const mayHaveTAS5805M = false
 

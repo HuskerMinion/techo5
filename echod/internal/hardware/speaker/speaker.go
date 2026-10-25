@@ -164,6 +164,12 @@ type Player struct {
 	// amplifier mute (MuteSwitch) may be let go.
 	playing atomic.Bool
 
+	// gate is the amplifier switched off while idle (idleGate), nil on every board that keeps it as it
+	// is; idle decides when, and claimed is a claim holding the speaker (Hold). See idle.go.
+	gate    *ampGate
+	idle    idleAmp
+	claimed atomic.Bool
+
 	// underruns is the card running out while we were away. Write blocks against the whole ring, so
 	// each one means the loop was starved for as long as the ring is deep.
 	underruns atomic.Uint64
@@ -290,6 +296,7 @@ func New() *Player {
 		jack:      detected,
 		canStereo: stereoInternalSpeakers(layout.Board, true),
 		swapLR:    layout.Board == "athena",
+		gate:      idleGate,
 	}
 	p.stereo.Store(stereoInternalSpeakers(layout.Board, config.Get().Speaker.Stereo))
 	if p.canStereo {
@@ -344,7 +351,8 @@ func init() {
 	// one to Android is what a restart takes back, which is why the handle outlives the service.
 	//
 	// The speaker also feeds silence while idle, because the amplifier hisses when nothing drives the
-	// DAC and toggling it pops.
+	// DAC and toggling it pops. Where the amplifier can be put to sleep without a pop (idleGate, the
+	// 1st gen Show 5), it is, and the silence goes on under it: see idle.go.
 	component.Register(component.Hardware, Get(), component.Order(6),
 		component.Supervise(service.Restart(time.Second, 30*time.Second)))
 }
@@ -411,7 +419,19 @@ func (p *Player) path(out Output) []kctl {
 // amp switches the speaker amplifier, where the device has a switch that is safe to touch: see
 // AmpSwitch in paths_dot.go and paths_cronos.go. Turning it on also lets go of the amplifier's mute
 // (MuteSwitch) once the stream is playing; before then Run lets go of it itself.
+//
+// A board with an idle gate (idleGate) switches that instead, in its own pop-free order, and on any
+// output: switching on there is also waking it from an idle sleep, which a path written again (a
+// start, a change of output, Reopen) is the moment for.
 func (p *Player) amp(on bool) {
+	if p.gate != nil {
+		if on {
+			p.ampWake()
+		} else {
+			p.ampSleep()
+		}
+		return
+	}
 	if AmpSwitch == "" && MuteSwitch == "" {
 		return
 	}
@@ -722,7 +742,13 @@ func (p *Player) Run(ctx context.Context) error {
 			upFor(cur)
 		}
 
-		p.fill(buf)
+		// An amplifier waking from its idle sleep (idle.go) is not ready for what is queued: the queue
+		// waits, and the card gets silence, until it is.
+		if p.gate != nil && p.idleStep() {
+			clear(buf)
+		} else {
+			p.fill(buf)
+		}
 		spectrum.Speaker.PushStereo(buf)
 		to := buf
 		if s := p.sink.Load(); s != nil {
