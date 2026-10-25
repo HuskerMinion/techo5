@@ -58,9 +58,18 @@ func fitFilter(w, h int) string {
 	return fmt.Sprintf("scale=%d:%d:force_original_aspect_ratio=decrease:flags=fast_bilinear,pad=%d:%d:(ow-iw)/2:(oh-ih)/2", w, h, w, h)
 }
 
+// tileFPS is the most frames a second a picture filling a tile is decoded at: a tile is one among many
+// on a page that is drawn whole for each.
+const tileFPS = 12
+
 // coverFilter scales a picture to cover w×h with its shape kept, cut to it about its middle.
 func coverFilter(w, h int) string {
 	return fmt.Sprintf("scale=%d:%d:force_original_aspect_ratio=increase:flags=fast_bilinear,crop=%d:%d", w, h, w, h)
+}
+
+// fillFilter is coverFilter at no more than tileFPS.
+func fillFilter(w, h int) string {
+	return fmt.Sprintf("fps=%d,%s", tileFPS, coverFilter(w, h))
 }
 
 // OpenCamera starts decoding a camera's stream at url (Home Assistant's HLS playlist for it) into w×h
@@ -322,7 +331,7 @@ func rtspInput(track string) []string {
 }
 
 // cameraRTSPArgs reads a camera's picture straight from its RTSP address: the video track alone, put into
-// w×h by filter (fitFilter, coverFilter) and made the page's pixels.
+// w×h by filter (fitFilter, fillFilter) and made the page's pixels.
 func cameraRTSPArgs(addr string, w, h int, filter string) []string {
 	a := []string{"-hide_banner", "-nostdin", "-loglevel", "error", "-max_pixels", maxPixels}
 	a = append(a, rtspInput("video")...)
@@ -356,6 +365,12 @@ func OpenCameraRTSP(ctx context.Context, addr, user, pass string, w, h int) (*Ca
 // barred: the camera view with Camera picture set to fill the screen.
 func OpenCameraRTSPCovering(ctx context.Context, addr, user, pass string, w, h int) (*Camera, error) {
 	return openCameraRTSP(ctx, addr, user, pass, w, h, coverFilter(w, h))
+}
+
+// OpenCameraRTSPFilling is OpenCameraRTSP with the picture filling w×h, cut to its shape rather than
+// barred, as a tile shows it.
+func OpenCameraRTSPFilling(ctx context.Context, addr, user, pass string, w, h int) (*Camera, error) {
+	return openCameraRTSP(ctx, addr, user, pass, w, h, fillFilter(w, h))
 }
 
 func openCameraRTSP(ctx context.Context, addr, user, pass string, w, h int, filter string) (*Camera, error) {

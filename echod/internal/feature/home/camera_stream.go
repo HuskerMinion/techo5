@@ -292,6 +292,21 @@ func pictureAddress(entity string) (addr, user, pass string, ok bool) {
 	return "", "", "", false
 }
 
+// LiveRTSP is where entity's live picture is read from over RTSP and its login, with Live camera video on
+// and a decoder that reads RTSP: go2rtc's own stream for one of its cameras, else the picture address the
+// setup page gave it (pictureAddress). The Tessera page's camera tiles play it; one without it is shown
+// from snapshots.
+func LiveRTSP(entity string) (addr, user, pass string, ok bool) {
+	if !CameraLive() || !video.Installed() || !video.CanRTSP() {
+		return "", "", "", false
+	}
+	if isGo2RTC(entity) {
+		addr, ok = go2rtcRTSP(entity)
+		return addr, "", "", ok
+	}
+	return pictureAddress(entity)
+}
+
 // haCanStream is whether Home Assistant says it can stream the camera.
 func haCanStream(entity string) bool {
 	st, err := hass.Get().State(entity)

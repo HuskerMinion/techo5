@@ -593,3 +593,25 @@ func TestAThermostatWithNoRangeHasNoLevel(t *testing.T) {
 		t.Error("a thermostat with the usual range has no level")
 	}
 }
+
+// A camera's picture choices come through on its placed tile; a camera without display live shows no
+// picture, and the choices go with it.
+func TestCameraPictureOptions(t *testing.T) {
+	slot := func(n int) *int { return &n }
+	l := &Layout{
+		Rev:   "camera0123456789",
+		Begin: Begin{Pages: 1, Tiles: 2, Home: 0},
+		Pages: []Page{{P: 0, Title: "Home", Items: json.RawMessage(`[]`)}},
+		Tiles: []Tile{
+			{I: 0, Slot: slot(0), Entity: "camera.front_door", Name: "Front door", State: "idle", O: json.RawMessage(`{"display":"live","fit":"contain","overlay":"none","refresh":15}`)},
+			{I: 1, Slot: slot(1), Entity: "camera.yard", Name: "Yard", State: "idle", O: json.RawMessage(`{"fit":"contain","overlay":"none"}`)},
+		},
+	}
+	tiles := Place(l, 4, 3).Pages[0].Tiles
+	if p := tiles[0]; !p.Picture || !p.Whole || !p.Bare || p.Refresh != 15*time.Second {
+		t.Errorf("display live, contain, no name, 15 s: %+v", p)
+	}
+	if p := tiles[1]; p.Picture {
+		t.Errorf("a camera without display live shows a picture: %+v", p)
+	}
+}

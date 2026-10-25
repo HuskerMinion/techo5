@@ -17,6 +17,7 @@ import (
 
 	"github.com/HuskerMinion/techo5/echod/internal/config"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/dashboard"
+	"github.com/HuskerMinion/techo5/echod/internal/feature/home"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/tessera"
 	"github.com/HuskerMinion/techo5/echod/internal/lib/locale"
 )
@@ -284,7 +285,7 @@ func (r *paint) tesseraPage(v tessera.View, on bool, page int, adj dashAdjusting
 		if l := t.Level; l != nil {
 			z.adjust = &dashboard.Adjust{Entity: t.Entity, Kind: l.Kind, Value: l.Value, Min: l.Min, Max: l.Max, Step: l.Step}
 		}
-		if t.Taps || z.adjust != nil {
+		if t.Taps || z.adjust != nil || tesseraDomain(t.Entity) == "camera" && !t.Gone {
 			zones = append(zones, z)
 		}
 	}
@@ -360,6 +361,19 @@ func (r *paint) tessTile(b image.Rectangle, t tessera.Placed, pal dashPal, adj d
 		card = lerp(pal.card, swatches["red"], 0.3)
 	}
 	r.roundFill(b, pal.rad, card, card)
+	if tesseraDomain(t.Entity) == "camera" && t.Picture && !t.Gone {
+		if shot := tessCams.frame(t.Entity, b.Size(), t.Whole, t.Refresh); shot != nil {
+			draw.Draw(r.dst, b, shot, image.Point{}, draw.Src)
+			if !t.Bare {
+				fc := r.faces()
+				fadeFoot(r.dst, b)
+				r.text(fc.label, r.fit(fc.label, t.Name, b.Dx()-2*r.s(cardPad)), b.Min.X+r.s(cardPad), b.Max.Y-r.s(12), color.RGBA{255, 255, 255, 255})
+			}
+			r.roundPicture(b, pal.rad, pal.bg)
+			return nil
+		}
+		// Until the first snapshot comes, the tile as any other: its icon and name.
+	}
 
 	// A level: a bar along the foot shows where it is, and is the sign a finger can slide it. While one
 	// does, the whole tile fills to the level instead.
@@ -790,6 +804,9 @@ func (d *Display) tessTap(x, y int) {
 		d.tessGo(t.page - 1)
 	case t.tess > 0 && t.ctl != "":
 		d.tessControl(t.tess-1, t.entity, t.ctl)
+	case t.tess > 0 && tesseraDomain(t.entity) == "camera":
+		slog.Info("tessera camera", "entity", t.entity)
+		go home.Get().ShowCamera(t.entity, cameraScreenTime())
 	case t.tess > 0:
 		if tessera.Tap(t.tess-1, t.entity) {
 			d.tessSheet(t.entity)

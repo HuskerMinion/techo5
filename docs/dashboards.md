@@ -185,8 +185,8 @@ You need the Tessera add-on installed in Home Assistant.
 
 1. On the device's page in Home Assistant, turn on **Tessera screen** in the **Configuration** card.
    The device restarts. After that it has a second device in Home Assistant, "*name* tessera", with
-   the entities Tessera looks for: **Tile settings**, **Screen firmware**, **Device name** and
-   **Screen layout**.
+   the entities Tessera looks for: **Tile settings**, **Screen firmware**, **Device name**,
+   **Screen layout** and **Screen features**.
 2. Open Tessera. The device is listed as a screen. Its grid is 4 by 2 on the Show 5, 4 by 3 on the
    Show 8 and 5 by 3 on the Skylight. On a tablet it follows the screen: 3 cells on the short side
    (2 below 600 pixels) and as many on the long side as fit, so 4 by 3 on a 2560x1600 tablet. A
@@ -225,6 +225,17 @@ On the page:
   dashboard, and the favorites need it to belong to an administrator.
 - Slide a finger along a light to set its brightness, along a fan to set its speed, along a cover to
   set its position, or along a thermostat to set its temperature.
+- A camera's tile set in Tessera to show the camera (its display `live`) shows it filling the tile, or
+  all of the picture with fit `contain`, with its name along the foot over a shade (none with overlay
+  `none`). It is the camera's latest snapshot, fetched with the device's Home Assistant token every few
+  seconds while the page is up (the tile's refresh, where it gives one), so it needs the
+  `home_assistant` action, as the drawn dashboard does. Where the camera view plays the camera live
+  over RTSP (**Live camera video** on, and go2rtc's stream or a picture address on the setup page; see
+  [Cameras](setup.md#4-cameras)), the tile plays it live too, at a few frames a second. Until the first
+  picture comes, and for a camera tile not set to show the camera, it is an icon and a name. Tap it to
+  put the camera up on its own. The device says `own_pictures` in its **Screen features**, which is
+  what has the add-on offer cameras for it; an add-on that does not know the word yet offers them only
+  to its own boards that draw pictures, and turns a layout with a camera down.
 - A weather tile two cells wide or two rows high shows the forecast: days side by side, or one a line
   on a tile one cell wide.
 - Bigger tiles show the controls Tessera gives them (the tile's **Controls** in the editor): a
@@ -241,7 +252,7 @@ What the device tells Tessera it takes: every tile size its grid has room for (s
 square, the whole page, and spans like 3x2), and up to eight pages. Tessera leaves out everything
 else. A tile Tessera sets to open its card on a tap opens the sheet, where there is one.
 
-Not drawn yet: graphs, camera pictures, album art, meters, the vacuum and alarm cards, Tessera's
+Not drawn yet: graphs, album art, meters, the vacuum and alarm cards, Tessera's
 alerts and screensaver. The sheets' changes go to Home Assistant as the device's own actions, the
 same way taps do. The layout is kept on the device, so a restart doesn't lose it.
 

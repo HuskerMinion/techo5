@@ -68,6 +68,11 @@ type Placed struct {
 	// Modes are a thermostat's modes, for its mode row; Volume is a player's, from 0 to 1, or -1.
 	Modes  []string
 	Volume float64
+	// Picture is a camera's tile that shows its picture (the layout's display live) rather than its
+	// icon: Whole for all of the picture rather than the tile filled, Bare for no name on it, Refresh
+	// between one snapshot and the next, zero for the screen's own pace.
+	Picture, Whole, Bare bool
+	Refresh              time.Duration
 }
 
 // Day is a day of a forecast: its short name, its weather and its icon, and its high and low.
@@ -111,6 +116,12 @@ type options struct {
 	Tap        string          `json:"tap"`
 	Guard      string          `json:"guard"`
 	Controls   string          `json:"controls"`
+	// How a camera's tile shows its picture: display live (else its icon), fit contain (the whole
+	// picture, else it fills the tile), overlay none (no name on it), refresh (seconds between pictures).
+	Display string `json:"display"`
+	Fit     string `json:"fit"`
+	Overlay string `json:"overlay"`
+	Refresh int    `json:"refresh"`
 }
 
 // lockOnly is the guard of a lock a tap only locks.
@@ -192,6 +203,10 @@ func view(l *Layout, g grid, now time.Time, held map[int]pending) View {
 			t = p.over(t)
 		}
 		pl := describe(t, o)
+		if domain(t.Entity) == "camera" && o.Display == "live" {
+			pl.Picture, pl.Whole, pl.Bare = true, o.Fit == "contain", o.Overlay == "none"
+			pl.Refresh = time.Duration(max(o.Refresh, 0)) * time.Second
+		}
 		if holding && p.confirm && pl.Taps {
 			pl.Confirm, pl.Value = true, "Tap again to unlock"
 			if domain(t.Entity) == "cover" {

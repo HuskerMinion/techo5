@@ -560,6 +560,9 @@ func build() *Display {
 	d.watchRoom()
 	dashboard.Get().Changed.Listen(func(struct{}) { d.wake() })
 	tessera.Changed.Listen(func(struct{}) { d.wake() })
+	tessCams.mu.Lock()
+	tessCams.wake = d.wake
+	tessCams.mu.Unlock()
 	dashboard.Get().Asked.Listen(d.dashboardAsked)
 	deck.Get().Changed.Listen(d.deckChanged)
 	video.Get().Changed.Listen(func(struct{}) { d.wake() })

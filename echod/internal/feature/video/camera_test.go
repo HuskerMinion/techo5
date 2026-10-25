@@ -121,9 +121,9 @@ func TestACameraOverRTSP(t *testing.T) {
 			{"-allowed_media_types", "video"}, {"-threads", "2"}, {"-map", "0:v:0", "-an"},
 			{"-max_pixels", "2088960"}, {"-f", "rawvideo", "-pix_fmt", "rgba", "pipe:3"},
 		}},
-		{"filling the screen", cameraRTSPArgs(addr, 1280, 800, coverFilter(1280, 800)), [][]string{
+		{"tile", cameraRTSPArgs(addr, 320, 240, fillFilter(320, 240)), [][]string{
 			{"-allowed_media_types", "video"}, {"-map", "0:v:0", "-an"},
-			{"-vf", "scale=1280:800:force_original_aspect_ratio=increase:flags=fast_bilinear,crop=1280:800"},
+			{"-vf", "fps=12,scale=320:240:force_original_aspect_ratio=increase:flags=fast_bilinear,crop=320:240"},
 		}},
 		{"sound", cameraSoundRTSPArgs(addr), [][]string{
 			{"-allowed_media_types", "audio"}, {"-map", "0:a:0", "-vn"},
