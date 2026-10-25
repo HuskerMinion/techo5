@@ -102,12 +102,23 @@ var airplay2Missing = func() string {
 // before the classic receiver is run instead.
 const airplay2Tries = 3
 
+// nqptpArgs is nqptp's arguments: -u, which our build adds (tools/linux/nqptp-run-as-user.patch), to drop
+// root for the receivers' user once PTP's ports are bound. On an image without that user it stays root, as
+// the receivers do (receiverCred).
+func nqptpArgs(cred *syscall.Credential) []string {
+	if cred == nil {
+		return nil
+	}
+	return []string{"-u", receiverUser}
+}
+
 // nqptpShm is where nqptp keeps the clock the receiver reads; a variable for the tests.
 var nqptpShm = "/dev/shm/nqptp"
 
 // runAirPlay2 runs nqptp and the AirPlay 2 receiver until ctx ends, and says whether either of them kept
-// stopping as it started (airplay2Tries); both have stopped by the time it returns. nqptp runs as root: PTP's
-// ports (319 and 320) are privileged, and the receiver's user only reads what it shares.
+// stopping as it started (airplay2Tries); both have stopped by the time it returns. nqptp starts as root,
+// since PTP's ports (319 and 320) are privileged, and becomes the receivers' user as soon as it has them
+// (nqptpArgs), before it reads anything from the network.
 func runAirPlay2(ctx context.Context, conf string, out io.Writer, cred *syscall.Credential) (failed bool) {
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
@@ -115,7 +126,7 @@ func runAirPlay2(ctx context.Context, conf string, out io.Writer, cred *syscall.
 	clockDone := make(chan struct{})
 	safe.Go("nqptp", func() {
 		defer close(clockDone)
-		if superviseTries(ctx, program{name: "nqptp", path: nqptpPath}, airplay2Tries) {
+		if superviseTries(ctx, program{name: "nqptp", path: nqptpPath, args: nqptpArgs(cred)}, airplay2Tries) {
 			clockFailed.Store(true)
 			cancel()
 		}

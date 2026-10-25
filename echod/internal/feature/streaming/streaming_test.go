@@ -788,6 +788,16 @@ func TestTheAirPlay2Switch(t *testing.T) {
 	}
 }
 
+// nqptp drops root for the receivers' user where there is one, and stays as it is where there is none.
+func TestNqptpDropsRoot(t *testing.T) {
+	if got := nqptpArgs(&syscall.Credential{Uid: 88, Gid: 88}); strings.Join(got, " ") != "-u "+receiverUser {
+		t.Errorf("nqptp's arguments with a receivers' user: %q", got)
+	}
+	if got := nqptpArgs(nil); got != nil {
+		t.Errorf("nqptp's arguments without one: %q", got)
+	}
+}
+
 // A program that keeps stopping as it starts is given up on after the tries it was given; one that runs
 // on is not, and supervise never gives up.
 func TestSuperviseTriesGivesUp(t *testing.T) {
