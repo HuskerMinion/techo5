@@ -73,3 +73,17 @@ func (s *Source) remember(frame []int16) { s.history.add(frame) }
 // Recent returns up to d of the audio captured before now, oldest first. A turn sends this ahead of
 // its live frames so the speech that ran on from the wake word is not lost.
 func (s *Source) Recent(d time.Duration) []int16 { return s.history.recent(d) }
+
+// ListenHistory subscribes and copies up to d of recent audio at the same capture
+// boundary. The first live frame follows the history without a gap or overlap.
+// Live delivery has the same bounded queue and drop policy as Listen.
+func (s *Source) ListenHistory(name string, d time.Duration) (<-chan []int16, []int16, func()) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	frames, unlisten := s.listenLocked(name)
+	var pre []int16
+	if d > 0 {
+		pre = s.Recent(d)
+	}
+	return frames, pre, unlisten
+}

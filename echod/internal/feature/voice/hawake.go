@@ -468,15 +468,19 @@ func (c *conversation) openWatch(mode watchMode, slot int, peak float64) {
 	c.runOpen = true
 
 	w := &watching{mode: mode, slot: slot, peak: peak, at: c.now()}
-	var pre []int16
+	var history time.Duration
 	if mode == watchConfirm {
-		pre = c.source.Recent(mic.Confirming)
+		history = mic.Confirming
 		w.timeout = time.NewTimer(confirmFor)
 	}
 	ctx, cancel := context.WithCancel(context.Background())
 	w.stop = cancel
 	c.watch = w
-	safe.Go("wake word audio", func() { c.watchAudio(ctx, pre) })
+	frames, pre, unlisten := c.source.ListenHistory("wake word on home assistant", history)
+	safe.Go("wake word audio", func() {
+		defer unlisten()
+		c.watchAudio(ctx, pre, frames)
+	})
 
 	if mode == watchConfirm {
 		slog.Info("asking home assistant about a wake", "slot", slot+1, "peak", peak)
@@ -535,9 +539,7 @@ const confirmChunk = mic.Rate / 2
 
 // watchAudio sends the microphones to a run at the wake word stage until told to stop. Nothing is sent
 // while a call or a talk through a camera has them.
-func (c *conversation) watchAudio(ctx context.Context, pre []int16) {
-	frames, unlisten := c.source.Listen("wake word on home assistant")
-	defer unlisten()
+func (c *conversation) watchAudio(ctx context.Context, pre []int16, frames <-chan []int16) {
 
 	var buf []byte
 	send := func(samples []int16) {

@@ -243,13 +243,17 @@ type listener struct {
 // Listen returns a channel of mono frames and a function that stops the subscription. The name is
 // what a dropped frame is reported against.
 func (s *Source) Listen(name string) (<-chan []int16, func()) {
-	l := &listener{name: name, ch: make(chan []int16, 8)}
-
 	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.listenLocked(name)
+}
+
+// listenLocked registers a listener with mu held, including while history is copied.
+func (s *Source) listenLocked(name string) (<-chan []int16, func()) {
+	l := &listener{name: name, ch: make(chan []int16, 8)}
 	id := s.next
 	s.next++
 	s.listeners[id] = l
-	s.mu.Unlock()
 
 	return l.ch, func() {
 		s.mu.Lock()
