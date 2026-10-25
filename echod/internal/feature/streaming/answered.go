@@ -29,15 +29,23 @@ import (
 // the device's own addresses, since any other AirPlay speaker on the network answers too.
 //
 // The watch stands down where it proves nothing. It counts no miss until avahi has answered once since it
-// started: an avahi that never answers the ask (an image where it cannot) is never restarted for it, as
-// before. And it restarts nothing while a receiver is sending audio (receivedWithin), which a restart
-// would cut off: a phone playing to the speaker has found it already.
+// started. An avahi that has not answered at all for neverHeardAfter asks is started again too, since
+// one can come up without AirPlay's service registered and stay that way across reboots (techo5-dot#22),
+// but only neverHeardTries times in a row: an image where avahi cannot answer the ask stops being
+// restarted for it after that, and an answer at any point resets the count. And the watch restarts
+// nothing while a receiver is sending audio (receivedWithin), which a restart would cut off: a phone
+// playing to the speaker has found it already.
 var (
-	answerEvery  = time.Minute
-	answerMisses = 3
-	answered     = airplayAnswered
-	canAsk       = routeToGroup
+	answerEvery     = time.Minute
+	answerMisses    = 3
+	neverHeardAfter = 10
+	neverHeardTries = int32(3)
+	answered        = airplayAnswered
+	canAsk          = routeToGroup
 )
+
+// neverHeardUsed is how many times in a row avahi has been started again for never answering.
+var neverHeardUsed atomic.Int32
 
 // pausedFor is how long after a receiver's last audio a restart still waits: a session that is only
 // paused would be cut too, and the phone that holds it has found the speaker already.
@@ -70,7 +78,7 @@ const airplayService = "_raop._tcp.local"
 // watchAnswers asks avahi for AirPlay every answerEvery until ctx ends, and closes gone, and returns,
 // once avahi has stopped answering (answered, above).
 func watchAnswers(ctx context.Context, gone chan<- struct{}) {
-	heard, misses := false, 0
+	heard, misses, silent := false, 0, 0
 	for {
 		select {
 		case <-ctx.Done():
@@ -82,9 +90,21 @@ func watchAnswers(ctx context.Context, gone chan<- struct{}) {
 				slog.Info("streaming: avahi answers for AirPlay; watching that it goes on")
 			}
 			heard, misses = true, 0
+			neverHeardUsed.Store(0)
 			continue
 		}
-		if !heard || ctx.Err() != nil || !canAsk() {
+		if ctx.Err() != nil || !canAsk() {
+			continue
+		}
+		if !heard {
+			silent++
+			if silent >= neverHeardAfter && neverHeardUsed.Load() < neverHeardTries && !receivedWithin(pausedFor) {
+				n := neverHeardUsed.Add(1)
+				slog.Warn("streaming: avahi has not answered for AirPlay since it started; starting it and the receivers again",
+					"asked", silent, "try", n, "of", neverHeardTries)
+				close(gone)
+				return
+			}
 			continue
 		}
 		misses++

@@ -29,6 +29,7 @@ import (
 	"github.com/HuskerMinion/techo5/echod/internal/feature/sendspin"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/setup"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/streaming"
+	"github.com/HuskerMinion/techo5/echod/internal/feature/tailscale"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/timer"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/timezone"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/voice"
@@ -406,8 +407,29 @@ func connectionRows(sv sheetView) []settingRow {
 		rows = append(rows, settingRow{id: "btsc", label: "Bluetooth Secure Connections",
 			sub: "Off if a phone pairs, then drops. Drops devices briefly", kind: ctlToggle, on: !st.btSCOff})
 	}
-	return append(rows, settingRow{id: "btproxy", label: "Bluetooth proxy", sub: "Lets Home Assistant hear nearby devices",
+	rows = append(rows, settingRow{id: "btproxy", label: "Bluetooth proxy", sub: "Lets Home Assistant hear nearby devices",
 		kind: ctlToggle, on: st.btProxy})
+	// Tailscale: its row says where it stands; the key goes in on the setup page.
+	if !tailscale.Available() {
+		return rows
+	}
+	ts := tailscale.Get().State()
+	return append(rows, settingRow{id: "tailscale", label: "Tailscale", sub: tailscaleSub(ts), kind: ctlToggle, on: ts.On})
+}
+
+// tailscaleSub is the Tailscale row's line: where the device stands on the tailnet.
+func tailscaleSub(s tailscale.Status) string {
+	switch {
+	case !s.On:
+		return "Reach this device from away: off"
+	case s.State == "Running" && s.Name != "":
+		return "Connected as " + s.Name
+	case s.State == "NeedsLogin":
+		return "Needs a key: the setup page, Connections"
+	case s.Problem != "":
+		return s.Problem
+	}
+	return "Starting"
 }
 
 // catByName is a category from its rail name or card title in any case, for /screen.png?sheet= and
@@ -659,7 +681,7 @@ func pickerFor(id string, sv sheetView) (pickerView, bool) {
 		return fontPicker()
 	case "skin":
 		return pickerView{title: "Skin", opts: skinOptions(), cur: skinIndex()}, true
-	case "clockpos", "datecolor":
+	case "clockpos", "weatherpos", "datecolor":
 		return clockLayoutPicker(id)
 	case "camtime":
 		return pickerView{title: "Camera time", opts: cameraTimeOptions(), cur: cameraTimeIndex()}, true
@@ -803,7 +825,7 @@ func (d *Display) choose(id string, i int) {
 		d.setFont(i)
 	case "skin":
 		setSkin(d.skinSel(), i)
-	case "clockpos", "datecolor":
+	case "clockpos", "weatherpos", "datecolor":
 		d.chooseClockLayout(id, i)
 	case "clock":
 		on := i == 1
@@ -1129,6 +1151,8 @@ func (d *Display) rowTap(id string, p part, opt int) {
 		sp.SetEnabled(!sp.Enabled())
 	case "ssh":
 		security.Get().SetSSH(!config.Get().Security.SSH)
+	case "tailscale":
+		go func() { _ = tailscale.Get().SetOn(!config.Get().Tailscale.On) }()
 	case "remoteapi":
 		remote.Get().SetOn(!config.Get().Remote.On)
 	case "camweb":
@@ -1240,7 +1264,7 @@ func (d *Display) rowTap(id string, p part, opt int) {
 		home.Get().SetSlideshowCaption(!home.Get().SlideshowCaption())
 	case "immichfav":
 		home.Get().SetImmichFavorites(!home.Get().ImmichFavorites())
-	case "night", "atnight", "nightstyle", "clock", "clockstyle", "font", "skin", "clockpos", "datecolor", "camtime", "camfit", "cambands", "camshade", "answertime", "callring", "turnstyle", "timerstyle", "radarsrc", "calendars", "calpopwhen", "calpopallday", "calpopcals", "musicstrip", "follow", "awayoff", "slideshow", "photoevery", "screenlang", "newtimer", "sleep", "sunrise",
+	case "night", "atnight", "nightstyle", "clock", "clockstyle", "font", "skin", "clockpos", "weatherpos", "datecolor", "camtime", "camfit", "cambands", "camshade", "answertime", "callring", "turnstyle", "timerstyle", "radarsrc", "calendars", "calpopwhen", "calpopallday", "calpopcals", "musicstrip", "follow", "awayoff", "slideshow", "photoevery", "screenlang", "newtimer", "sleep", "sunrise",
 		"timezone", "wakeword", "waketone", "ttsvoice", "quiet", "output", "clocktap":
 		d.openPicker(id)
 	}

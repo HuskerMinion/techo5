@@ -56,7 +56,7 @@ var groups = []group{
 	{"Photos", []string{"slideshow_interval", "slideshow_shuffle", "slideshow_subfolders", "slideshow_whole_photo",
 		"slideshow_pairs", "slideshow_caption", "slideshow_weather_art", "slideshow_screensaver_idle",
 		"slideshow_screensaver_overlay"}},
-	{"Calendar", []string{"calendar_popup_before", "calendar_popup_all_day", "calendar_popup_chime",
+	{"Calendar", []string{"calendar_opens_on", "calendar_popup_before", "calendar_popup_all_day", "calendar_popup_chime",
 		"calendar_day_timeline", "calendar_coming_up_refined", "calendar_month_details", "calendar_event_icons", "calendar_countdowns", "calendar_week_view", "calendar_next_up", "calendar_weather"}},
 	{"Dashboard", []string{"screen_dashboard_idle", "screen_dashboard_kiosk", "screen_dashboard_return",
 		"screen_dashboard_tiles"}},

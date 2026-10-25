@@ -16,6 +16,8 @@
 #   bin/techo5-aec                                         WebRTC echo canceller helper (C++, build-aec.sh), optional
 #   bin/techo5-librespot                                   Spotify Connect receiver (Rust, build-librespot.sh), optional
 #   bin/techo5-ffmpeg                                      the Show's video decoder (C, build-ffmpeg.sh), optional
+#   bin/techo5-shairport-sync, bin/techo5-nqptp            AirPlay 2's receiver and clock (build-shairport-sync.sh), optional
+#   bin/tailscaled                                         Tailscale's daemon, static arm64 (build-tailscaled.sh), optional
 #   bin/techo5-ffmpeg64                                    its static aarch64 build (build-ffmpeg-arm64.sh), athena's
 #                                                          and the Skylight's, for their 64-bit kernels, optional
 #   bin/techo5-gpu                                         the GPU helper, 64-bit builds only, optional
@@ -135,7 +137,7 @@ fi
 
 # Our binaries and scripts.
 install -d "$R/usr/local/bin" "$R/usr/local/sbin" "$R/lib" "$R/var/lib/bluetooth" "$R/var/lib/bluealsa" "$R/usr/var/lib/bluealsa"
-for b in techo5 fbprobe audioprobe rebootto btbridge techo5-aec techo5-librespot techo5-ffmpeg techo5-ffmpeg64 techo5-gpu techo5-jpeg; do
+for b in techo5 fbprobe audioprobe rebootto btbridge techo5-aec techo5-librespot techo5-ffmpeg techo5-ffmpeg64 techo5-gpu techo5-jpeg tailscaled techo5-shairport-sync techo5-nqptp; do
 	[ -e "$IN/bin/$b" ] && install -m 755 "$IN/bin/$b" "$R/usr/local/bin/$b"
 done
 

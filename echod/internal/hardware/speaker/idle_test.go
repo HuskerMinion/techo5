@@ -184,7 +184,8 @@ func writesWork(t *testing.T, ok bool) {
 }
 
 // A sleep overtaken while it waited, by a wake or by something wanting the speaker, leaves the
-// amplifier on; so does one whose writes fail.
+// amplifier on. One whose writes fail counts as asleep, so the next sound's wake puts back whatever
+// half of it went through.
 func TestAmpSleepOvertaken(t *testing.T) {
 	writesWork(t, true)
 	p := &Player{gate: testGate, out: OutputSpeaker}
@@ -203,8 +204,8 @@ func TestAmpSleepOvertaken(t *testing.T) {
 	p = &Player{gate: testGate, out: OutputSpeaker}
 	p.idle.state = ampSleeping
 	p.ampSleep()
-	if p.idle.state != ampAwake {
-		t.Error("a sleep that failed counts as asleep")
+	if p.idle.state != ampAsleep {
+		t.Error("a sleep that failed counts as awake: half of it would never be undone")
 	}
 }
 

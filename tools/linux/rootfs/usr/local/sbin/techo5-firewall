@@ -6,7 +6,8 @@
 # while the SSH switch is on and a key is set), Sendspin audio (8928/tcp), the setup page and the camera
 # and screen views (8181/tcp; each served only while it is on), AirPlay (5000/tcp, 6001-6010/udp) and
 # Spotify Connect (4070/tcp), the camera over RTSP (8554/tcp), WS-Discovery's searches for it (3702/udp,
-# feature/camstream) and DLNA's SSDP searches (1900/udp, IPv4),
+# feature/camstream) and DLNA's SSDP searches (1900/udp, IPv4), and AirPlay 2 (7000/tcp, 319-320/udp, and
+# its senders' own ports, from a chain of its own below),
 # which nothing listens on unless their switches are on; DHCP replies, ping,
 # IPv6 neighbor discovery, and anything answering a connection the device made (calls included).
 # Out: everything, as before.
@@ -24,6 +25,8 @@ command -v iptables-legacy > /dev/null || { echo "techo5-firewall: no iptables-l
 
 CHAIN=TECHO5-IN
 ok=1
+# What an earlier run said about AirPlay 2 holds no longer: said again below if it still holds.
+rm -f /run/techo5-no-airplay2
 for T in iptables-legacy ip6tables-legacy; do
 	$T -N $CHAIN 2> /dev/null
 	$T -F $CHAIN || { ok=; continue; }
@@ -65,6 +68,80 @@ if [ -z "$ok" ]; then
 	exit 1
 fi
 echo "techo5-firewall: Wi-Fi inbound closed except 6053, 5353, 22, 8928, 8181, 5000, 6001-6010, 4070, 8554, 3702" >&2
+
+# AirPlay 2 (feature/streaming), where the image carries its receiver: its session (7000/tcp), nqptp's PTP
+# (319-320/udp), and the event, data and audio ports the receiver opens for each session, which the kernel
+# picks, from a sender seen on 7000 within ten minutes. Every packet to 7000 marks its sender, so one playing
+# for hours stays marked: the first thing TECHO5-IN does, before what is already established is taken in.
+# A chain of its own, made after TECHO5-IN is whole: it needs the kernel's recent match, and where a rule of
+# it fails, the chain goes, Wi-Fi stays closed as above, and /run/techo5-no-airplay2 tells the daemon to keep
+# the classic receiver.
+APCHAIN=TECHO5-AP2
+for T in iptables-legacy ip6tables-legacy; do
+	$T -D $CHAIN -j $APCHAIN 2> /dev/null
+	$T -F $APCHAIN 2> /dev/null
+	$T -X $APCHAIN 2> /dev/null
+done
+if [ -x /usr/local/bin/techo5-shairport-sync ] && [ -x /usr/local/bin/techo5-nqptp ]; then
+	apok=1
+	for T in iptables-legacy ip6tables-legacy; do
+		$T -N $APCHAIN &&
+			$T -A $APCHAIN -p tcp --dport 7000 -m recent --name AIRPLAY --set &&
+			$T -A $APCHAIN -p tcp --dport 7000 -j ACCEPT &&
+			$T -A $APCHAIN -p udp --dport 319:320 -j ACCEPT &&
+			$T -A $APCHAIN -p tcp --dport 1024:65535 -m recent --name AIRPLAY --rcheck --seconds 600 -j ACCEPT &&
+			$T -A $APCHAIN -p udp --dport 1024:65535 -m recent --name AIRPLAY --rcheck --seconds 600 -j ACCEPT &&
+			$T -I $CHAIN 1 -j $APCHAIN || apok=
+	done
+	if [ -n "$apok" ]; then
+		echo "techo5-firewall: AirPlay 2 in on Wi-Fi: 7000, 319-320/udp and its senders' ports" >&2
+	else
+		for T in iptables-legacy ip6tables-legacy; do
+			$T -D $CHAIN -j $APCHAIN 2> /dev/null
+			$T -F $APCHAIN 2> /dev/null
+			$T -X $APCHAIN 2> /dev/null
+		done
+		: > /run/techo5-no-airplay2
+		echo "techo5-firewall: AirPlay 2's rules failed (no recent match in this kernel?); AirPlay stays classic" >&2
+	fi
+fi
+
+# The tailnet (feature/tailscale, docs/tailscale.md), on the interface tailscaled is started with: Home
+# Assistant's API (6053/tcp), the web port (8181/tcp, which serves the tailnet nothing but the setup page
+# while Remote setup is on), SSH (22/tcp, while its switch is on), ping, and anything answering a
+# connection the device made. Nothing else: not the music receivers, the camera stream or announcements,
+# which are this house's. By the interface, not by address, so a house numbered in the tailnet's own
+# range (100.64.0.0/10) changes nothing. Made before tailscaled runs: a rule names an interface that
+# need not exist yet. A rule that fails leaves this chain empty too, and says so.
+TSCHAIN=TECHO5-TS
+tsok=1
+for T in iptables-legacy ip6tables-legacy; do
+	$T -N $TSCHAIN 2> /dev/null
+	$T -F $TSCHAIN || { tsok=; continue; }
+	$T -C INPUT -i tailscale0 -j $TSCHAIN 2> /dev/null || $T -I INPUT -i tailscale0 -j $TSCHAIN || { tsok=; continue; }
+	if ! {
+		$T -A $TSCHAIN -m state --state ESTABLISHED,RELATED -j ACCEPT &&
+		$T -A $TSCHAIN -p tcp --dport 6053 -j ACCEPT &&
+		$T -A $TSCHAIN -p tcp --dport 8181 -j ACCEPT &&
+		$T -A $TSCHAIN -p tcp --dport 22 -j ACCEPT
+	}; then
+		$T -F $TSCHAIN
+		tsok=
+	fi
+done
+if [ -n "$tsok" ]; then
+	iptables-legacy -A $TSCHAIN -p icmp -j ACCEPT &&
+		ip6tables-legacy -A $TSCHAIN -p ipv6-icmp -j ACCEPT &&
+		iptables-legacy -A $TSCHAIN -j DROP &&
+		ip6tables-legacy -A $TSCHAIN -j DROP || tsok=
+fi
+if [ -z "$tsok" ]; then
+	iptables-legacy -F $TSCHAIN 2> /dev/null
+	ip6tables-legacy -F $TSCHAIN 2> /dev/null
+	echo "techo5-firewall: a tailnet rule failed; the tailnet left open" >&2
+else
+	echo "techo5-firewall: tailnet inbound closed except 6053, 8181, 22" >&2
+fi
 
 # The video decoder (feature/video, as techo5-video): out to anywhere but the device itself. It follows
 # names and redirects on its own, so this is where a name for 127.0.0.1 or a redirect to the device's

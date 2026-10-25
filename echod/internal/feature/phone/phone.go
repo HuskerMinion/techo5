@@ -625,8 +625,10 @@ func (p *Phone) CallAfter(number, name string, wait func(ctx context.Context) bo
 		// call: a timeout on it would cut the audio the moment the call was answered. Nobody answering
 		// is limited by canceling the whole call instead.
 		unanswered := time.AfterFunc(dialFor, cancel)
-		d, err := l.dial(ctx, number)
+		prog := newProgress(ctx) // the ringing tone, or the far end's network, until the answer
+		d, err := l.dial(ctx, number, prog.ringing, prog.earlyMedia)
 		unanswered.Stop()
+		prog.stop()
 		if err != nil {
 			reason := "failed"
 			if ctx.Err() != nil {

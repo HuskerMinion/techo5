@@ -96,6 +96,9 @@ chmod +x "$WORK/bin/armcc" "$WORK/bin/armcxx"
 export PATH="$WORK/bin:$PATH" CC=armcc CXX=armcxx AR="zig ar" RANLIB="zig ranlib" LDFLAGS=-s
 export ZIG_GLOBAL_CACHE_DIR=$WORK/zig-cache ZIG_LOCAL_CACHE_DIR=$WORK/zig-cache
 HOSTS="--host=arm-linux-musleabihf --build=$(uname -m)-linux-gnu"
+# A cross configure can't run malloc(0) to see that it returns memory, so it would link nqptp to an
+# rpl_malloc nothing provides. musl's does.
+export ac_cv_func_malloc_0_nonnull=yes ac_cv_func_realloc_0_nonnull=yes
 
 unpack() { # tarball dir
 	rm -rf "$WORK/$2"; mkdir -p "$WORK/$2"

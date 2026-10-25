@@ -13,7 +13,7 @@ import (
 	"github.com/HuskerMinion/techo5/echod/internal/feature/setup"
 )
 
-// How the calendar looks (docs/calendar-and-night-plan.md, 6): eight switches, each on the screen
+// How the calendar looks (docs/calendar-and-night-plan.md, 6): eight switches and the view it opens on, each on the screen
 // under Settings, Display, Calendar, on the setup page's Weather & Calendar tab, and in Home Assistant,
 // where Shared settings can keep them the same on every screen in the house. Two go by the panel's
 // size until somebody chooses: the week view and the month in full are on where there is room for
@@ -30,13 +30,29 @@ type calLook struct {
 	week       bool // the week view, and the Day, Week and Month switch over the month
 	nextUp     bool // the next event at the foot of the clock
 	weather    bool // the forecast on the calendar's days
+	opens      int  // the view it opens on, in opensOpts
 	wide       bool // a panel bigger than the Show 5's
 }
+
+// The views the calendar can open on, in order: opensOpts are their names, opensVals each one's
+// config.Calendar.Opens.
+const (
+	opensMonth = iota
+	opensWeek
+	opensDay
+	opensAgenda
+)
+
+var (
+	opensOpts = []string{"Month", "Week", "Day", "Coming up"}
+	opensVals = []string{"", config.OpensWeek, config.OpensDay, config.OpensAgenda}
+)
 
 // lookFor is the switches as c has them, on a panel wide or not.
 func lookFor(c config.Calendar, wide bool) calLook {
 	return calLook{timeline: !c.DayList, refined: !c.AgendaPlain, monthFull: c.MonthFullOn(wide), icons: !c.NoIcons,
-		countdowns: !c.NoCountdowns, week: c.WeekOn(wide), nextUp: !c.NoNextUp, weather: !c.NoWeather, wide: wide}
+		countdowns: !c.NoCountdowns, week: c.WeekOn(wide), nextUp: !c.NoNextUp, weather: !c.NoWeather,
+		opens: max(0, slices.Index(opensVals, c.Opens)), wide: wide}
 }
 
 // wideScreen is whether a panel w by h is bigger than the Show 5's 960 by 480: the Show 8, and
@@ -56,18 +72,24 @@ func deviceLook() calLook { return lookFor(config.Get().Calendar, panelWide.Load
 
 // lookSwitch is one of the switches: its name and the words under it on the screen, its icon in Home
 // Assistant, and how it is read and set. id is the settings row's, after "cal_", and Home Assistant's,
-// after "calendar_". A choice of two (the month's details) has its two words; a switch has none.
+// after "calendar_". A choice of two (the month's details) has its two words; a switch has none. A
+// choice of more (the view it opens on) has its words and pick and choose in place of get and set.
 type lookSwitch struct {
 	id, label, sub, icon string
 	opts                 []string
 	get                  func(calLook) bool
 	set                  func(bool) error
+	pick                 func(calLook) int
+	choose               func(int) error
 }
 
 // monthDetailOpts are the month's two choices, the first being on.
 var monthDetailOpts = []string{"Full", "Simple"}
 
 var lookSwitches = []lookSwitch{
+	{id: "opens_on", label: "Opens on", sub: "The view a tap on the date opens", icon: "mdi:calendar-start",
+		opts: opensOpts,
+		pick: func(l calLook) int { return l.opens }, choose: func(i int) error { return config.Set().Calendar().Opens(opensVals[i]) }},
 	{id: "day_timeline", label: "Day timeline", sub: "A day's events on its hours", icon: "mdi:calendar-clock",
 		get: func(l calLook) bool { return l.timeline }, set: func(on bool) error { return config.Set().Calendar().DayList(!on) }},
 	{id: "coming_up_refined", label: "Coming up, one line each", sub: "With each day's weather", icon: "mdi:format-list-bulleted",
@@ -107,17 +129,22 @@ func calendarLookRows() []settingRow {
 	l := deviceLook()
 	rows := []settingRow{{label: "Calendar", kind: ctlHeading}}
 	for _, s := range lookSwitches {
-		row := settingRow{id: lookRowPrefix + s.id, label: s.label, sub: s.sub, kind: ctlToggle, on: s.get(l)}
+		row := settingRow{id: lookRowPrefix + s.id, label: s.label, sub: s.sub, kind: ctlChoice}
 		if len(s.opts) > 0 {
-			row.kind, row.value = ctlChoice, s.opts[lookOpt(s, l)]
+			row.value = s.opts[lookOpt(s, l)]
+		} else {
+			row.kind, row.on = ctlToggle, s.get(l)
 		}
 		rows = append(rows, row)
 	}
 	return rows
 }
 
-// lookOpt is which of a choice's two options is in force.
+// lookOpt is which of a choice's options is in force.
 func lookOpt(s lookSwitch, l calLook) int {
+	if s.pick != nil {
+		return s.pick(l)
+	}
 	if s.get(l) {
 		return 0
 	}
@@ -153,9 +180,7 @@ func (d *Display) lookChoose(id string, i int) bool {
 	if !ok || len(s.opts) == 0 {
 		return false
 	}
-	if i == 0 || i == 1 {
-		d.setLook(s, i == 0)
-	}
+	d.pickLook(s, i)
 	return true
 }
 
@@ -169,7 +194,27 @@ func (d *Display) setLook(s lookSwitch, on bool) {
 	d.lookChanged()
 }
 
-// buildLookEntities makes the switches' entities, a switch each and a select for the month.
+// pickLook makes the i'th of a choice's options the one in force, however it was chosen. A switch's
+// two are on and off.
+func (d *Display) pickLook(s lookSwitch, i int) {
+	if s.choose == nil {
+		if i == 0 || i == 1 {
+			d.setLook(s, i == 0)
+		}
+		return
+	}
+	if i < 0 || i >= len(s.opts) {
+		return
+	}
+	if err := s.choose(i); err != nil {
+		slog.Error("saving the calendar's look failed", "setting", s.id, "err", err)
+		return
+	}
+	slog.Info("screen: calendar look", "setting", s.id, "choice", s.opts[i])
+	d.lookChanged()
+}
+
+// buildLookEntities makes the switches' entities, a switch each and a select for each choice.
 func (d *Display) buildLookEntities() {
 	d.lookEnts = make([]esphome.Entity, len(lookSwitches))
 	for i, s := range lookSwitches {
@@ -178,11 +223,7 @@ func (d *Display) buildLookEntities() {
 		}
 		if len(s.opts) > 0 {
 			sel := &esphome.Select{Base: base(), Options: s.opts}
-			sel.OnCommand = func(v string) {
-				if j := slices.Index(s.opts, v); j >= 0 {
-					d.setLook(s, j == 0)
-				}
-			}
+			sel.OnCommand = func(v string) { d.pickLook(s, slices.Index(s.opts, v)) }
 			d.lookEnts[i] = sel
 			continue
 		}
@@ -220,7 +261,7 @@ func (d *Display) lookChoices() []setup.CalendarChoice {
 		}
 		out = append(out, setup.CalendarChoice{Key: s.id, Label: s.label, Note: s.sub, Options: opts,
 			Now:    func() int { return lookOpt(s, deviceLook()) },
-			Choose: func(i int) { d.setLook(s, i == 0) }})
+			Choose: func(i int) { d.pickLook(s, i) }})
 	}
 	return out
 }
