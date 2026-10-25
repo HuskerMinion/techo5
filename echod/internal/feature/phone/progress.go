@@ -6,6 +6,7 @@ import (
 	"log/slog"
 	"math"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/emiago/diago"
@@ -89,8 +90,11 @@ func (g *progress) stopLocked() {
 }
 
 // playEarlyMedia plays the network's audio before the answer, as a call's far end is played (receive),
-// until ctx ends. The reader is the call's own: once ctx ends it stops reading at the next packet, and
-// the call's audio (talk) reads on from there.
+// until ctx ends. The reader is the call's own, and the call's audio (talk) reads on from it once this
+// returns, so the read is ended for sure before then (endRead), and the moment ctx ends: left to stop
+// at the next packet, it would still be waiting in a read when talk opened the same reader, or take
+// the first packet after the answer and drop it, which is the start of whatever the far end said
+// first.
 //
 // It sends silence the other way meanwhile. The device's firewall lets a call's audio in only once the
 // device has sent some itself (and so does a router's NAT on the way to a provider), which a call does
@@ -103,7 +107,13 @@ func playEarlyMedia(ctx context.Context, m *diago.DialogMedia) {
 		slog.Warn("phone: early media", "err", err)
 		return
 	}
-	dec, err := audio.NewPCMDecoderReader(rprops.Codec.PayloadType, r)
+	read := newEndRead(r, func() { stopRTPRead(m) }, func() { startRTPRead(m) })
+	stopEnding := context.AfterFunc(ctx, read.end)
+	defer func() {
+		stopEnding()
+		read.end() // waits for the one ctx started, if it did
+	}()
+	dec, err := audio.NewPCMDecoderReader(rprops.Codec.PayloadType, read)
 	if err != nil {
 		slog.Warn("phone: early media", "err", err)
 		return
@@ -125,6 +135,58 @@ func playEarlyMedia(ctx context.Context, m *diago.DialogMedia) {
 	var st stats
 	_ = receive(ctx, dec, false, &st)
 	wg.Wait() // the writer is the call's own too: done with before the call's audio writes to it
+}
+
+// stopRTPRead makes a read of the call's audio under way return now, and startRTPRead lets reads wait
+// for packets again. Seams for the tests, which have no media session.
+var (
+	stopRTPRead = func(m *diago.DialogMedia) {
+		if s := m.MediaSession(); s != nil {
+			_ = s.StopRTP(1, 0)
+		}
+	}
+	startRTPRead = func(m *diago.DialogMedia) {
+		if s := m.MediaSession(); s != nil {
+			_ = s.StartRTP(1)
+		}
+	}
+)
+
+// endRead is a reader that can be ended for sure: once end returns, no read is under way and none
+// starts, and the reader underneath reads normally again for whoever reads it next.
+type endRead struct {
+	r              io.Reader
+	interrupt, run func()
+
+	mu    sync.Mutex // held for the length of each read
+	ended atomic.Bool
+	once  sync.Once
+}
+
+func newEndRead(r io.Reader, interrupt, run func()) *endRead {
+	return &endRead{r: r, interrupt: interrupt, run: run}
+}
+
+func (e *endRead) Read(p []byte) (int, error) {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	if e.ended.Load() {
+		return 0, io.EOF
+	}
+	return e.r.Read(p)
+}
+
+// end interrupts a read under way, waits for it to return, and lets the reader underneath read again.
+// A read that checks ended just before it is set still meets the interrupt, which is in place before
+// end waits. A second end, at the same time or after, returns once the first is done.
+func (e *endRead) end() {
+	e.once.Do(func() {
+		e.ended.Store(true)
+		e.interrupt()
+		e.mu.Lock()
+		defer e.mu.Unlock()
+		e.run()
+	})
 }
 
 // sendSilence writes 20 ms of silence to w every 20 ms until ctx ends, at rate samples a second (8000

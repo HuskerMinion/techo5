@@ -2,7 +2,11 @@ package phone
 
 import (
 	"context"
+	"errors"
+	"io"
+	"os"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -162,5 +166,76 @@ func TestSendSilence(t *testing.T) {
 		if n != 320 {
 			t.Fatalf("a frame of %d bytes, want 320 (20 ms of 16-bit samples at 8 kHz)", n)
 		}
+	}
+}
+
+// blockingReader waits in Read until interrupted, as a read of a call's audio waits for the next
+// packet, and counts the reads that are under way.
+type blockingReader struct {
+	unblock chan struct{}
+	inside  atomic.Int32
+}
+
+func (b *blockingReader) Read(p []byte) (int, error) {
+	b.inside.Add(1)
+	defer b.inside.Add(-1)
+	<-b.unblock
+	return 0, os.ErrDeadlineExceeded
+}
+
+// Ending the early media's read interrupts the read waiting for a packet, and lets the reader read
+// again only once that read has returned, so the call's audio never reads alongside it. Nothing reads
+// through it after.
+func TestEndReadEndsTheReadUnderWay(t *testing.T) {
+	b := &blockingReader{unblock: make(chan struct{})}
+	var resumedInside int32 = -1
+	e := newEndRead(b, func() { close(b.unblock) }, func() { resumedInside = b.inside.Load() })
+
+	returned := make(chan error, 1)
+	go func() {
+		_, err := e.Read(make([]byte, 320))
+		returned <- err
+	}()
+	eventually(t, "a read under way", func() bool { return b.inside.Load() == 1 })
+
+	e.end()
+	if resumedInside != 0 {
+		t.Fatalf("the reader was let go with %d reads still under way", resumedInside)
+	}
+	if b.inside.Load() != 0 {
+		t.Fatal("a read is still under way after end")
+	}
+	if err := <-returned; !errors.Is(err, os.ErrDeadlineExceeded) {
+		t.Fatalf("the read under way returned %v", err)
+	}
+	if _, err := e.Read(make([]byte, 320)); err != io.EOF {
+		t.Fatalf("a read after end returned %v, want EOF", err)
+	}
+	e.end() // twice is harmless
+}
+
+// The read is ended the moment the call is answered, and playEarlyMedia ends it again on its way out:
+// that second end returns only once the first has let the reader go, or talk could read alongside it.
+func TestEndReadSecondEndWaitsForTheFirst(t *testing.T) {
+	release := make(chan struct{})
+	var resumed atomic.Bool
+	e := newEndRead(&blockingReader{}, func() { <-release }, func() { resumed.Store(true) })
+
+	go e.end()
+	eventually(t, "the first end under way", func() bool { return e.ended.Load() })
+	second := make(chan struct{})
+	go func() {
+		e.end()
+		close(second)
+	}()
+	select {
+	case <-second:
+		t.Fatal("the second end returned while the first was still ending the read")
+	case <-time.After(50 * time.Millisecond):
+	}
+	close(release)
+	<-second
+	if !resumed.Load() {
+		t.Fatal("the second end returned before the reader was let go")
 	}
 }
