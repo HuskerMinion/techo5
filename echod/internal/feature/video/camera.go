@@ -42,13 +42,13 @@ type Camera struct {
 // stream whose shape the caller did not know) and made the page's pixels. The playlist's address
 // carries the stream's token: it is an argument to the decoder, so the image mounts /proc so that only
 // root sees another user's arguments (boot.sh), and it is never logged (hideTokens).
-func cameraArgs(url string, w, h int, insecure bool, proxy string) []string {
+func cameraArgs(url string, w, h int, insecure bool, proxy string, filter string) []string {
 	a := []string{"-hide_banner", "-nostdin", "-loglevel", "error", "-max_pixels", maxPixels}
 	a = append(a, netArgs(url, caFileIf(), insecure, proxy)...)
 	a = append(a, "-threads", strconv.Itoa(threads(h)), "-re", "-live_start_index", "-1",
 		"-fflags", "nobuffer", "-i", url,
 		"-map", "0:v:0", "-an", "-sn", "-dn",
-		"-vf", fitFilter(w, h), "-fps_mode", "passthrough",
+		"-vf", filter, "-fps_mode", "passthrough",
 		"-f", "rawvideo", "-pix_fmt", "rgba", "pipe:3")
 	return a
 }
@@ -58,9 +58,24 @@ func fitFilter(w, h int) string {
 	return fmt.Sprintf("scale=%d:%d:force_original_aspect_ratio=decrease:flags=fast_bilinear,pad=%d:%d:(ow-iw)/2:(oh-ih)/2", w, h, w, h)
 }
 
+// coverFilter scales a picture to cover w×h with its shape kept, cut to it about its middle.
+func coverFilter(w, h int) string {
+	return fmt.Sprintf("scale=%d:%d:force_original_aspect_ratio=increase:flags=fast_bilinear,crop=%d:%d", w, h, w, h)
+}
+
 // OpenCamera starts decoding a camera's stream at url (Home Assistant's HLS playlist for it) into w×h
 // frames. Close ends it.
 func OpenCamera(ctx context.Context, url string, w, h int) (*Camera, error) {
+	return openCamera(ctx, url, w, h, fitFilter(w, h))
+}
+
+// OpenCameraCovering is OpenCamera with the picture covering w×h, cut to its shape rather than barred:
+// the camera view with Camera picture set to fill the screen.
+func OpenCameraCovering(ctx context.Context, url string, w, h int) (*Camera, error) {
+	return openCamera(ctx, url, w, h, coverFilter(w, h))
+}
+
+func openCamera(ctx context.Context, url string, w, h int, filter string) (*Camera, error) {
 	if w <= 0 || h <= 0 || w&1 != 0 || h&1 != 0 {
 		return nil, fmt.Errorf("video: a camera picture of %dx%d", w, h)
 	}
@@ -73,7 +88,7 @@ func OpenCamera(ctx context.Context, url string, w, h int) (*Camera, error) {
 		release()
 		return nil, err
 	}
-	d, err := start(ctx, cameraArgs(url, w, h, config.Get().Diag.InsecureTLS, proxy), true, false)
+	d, err := start(ctx, cameraArgs(url, w, h, config.Get().Diag.InsecureTLS, proxy, filter), true, false)
 	if err != nil {
 		release()
 		return nil, err
@@ -306,14 +321,14 @@ func rtspInput(track string) []string {
 		"-fflags", "nobuffer", "-flags", "low_delay", "-probesize", "500000", "-analyzeduration", "0"}
 }
 
-// cameraRTSPArgs reads a camera's picture straight from its RTSP address: the video track alone, fitted
-// into w×h and made the page's pixels.
-func cameraRTSPArgs(addr string, w, h int) []string {
+// cameraRTSPArgs reads a camera's picture straight from its RTSP address: the video track alone, put into
+// w×h by filter (fitFilter, coverFilter) and made the page's pixels.
+func cameraRTSPArgs(addr string, w, h int, filter string) []string {
 	a := []string{"-hide_banner", "-nostdin", "-loglevel", "error", "-max_pixels", maxPixels}
 	a = append(a, rtspInput("video")...)
 	a = append(a, "-threads", strconv.Itoa(threads(h)), "-i", addr,
 		"-map", "0:v:0", "-an", "-sn", "-dn",
-		"-vf", fitFilter(w, h), "-fps_mode", "passthrough",
+		"-vf", filter, "-fps_mode", "passthrough",
 		"-f", "rawvideo", "-pix_fmt", "rgba", "pipe:3")
 	return a
 }
@@ -334,6 +349,16 @@ func cameraSoundRTSPArgs(addr string) []string {
 // OpenCameraRTSP starts decoding a camera's picture from its RTSP address into w×h frames, where the
 // decoder reads RTSP and the fence holds. Close ends it.
 func OpenCameraRTSP(ctx context.Context, addr, user, pass string, w, h int) (*Camera, error) {
+	return openCameraRTSP(ctx, addr, user, pass, w, h, fitFilter(w, h))
+}
+
+// OpenCameraRTSPCovering is OpenCameraRTSP with the picture covering w×h, cut to its shape rather than
+// barred: the camera view with Camera picture set to fill the screen.
+func OpenCameraRTSPCovering(ctx context.Context, addr, user, pass string, w, h int) (*Camera, error) {
+	return openCameraRTSP(ctx, addr, user, pass, w, h, coverFilter(w, h))
+}
+
+func openCameraRTSP(ctx context.Context, addr, user, pass string, w, h int, filter string) (*Camera, error) {
 	if w <= 0 || h <= 0 || w&1 != 0 || h&1 != 0 {
 		return nil, fmt.Errorf("video: a camera picture of %dx%d", w, h)
 	}
@@ -347,7 +372,7 @@ func OpenCameraRTSP(ctx context.Context, addr, user, pass string, w, h int) (*Ca
 	if err != nil {
 		return nil, err
 	}
-	d, err := start(ctx, cameraRTSPArgs(u, w, h), true, false)
+	d, err := start(ctx, cameraRTSPArgs(u, w, h, filter), true, false)
 	if err != nil {
 		return nil, err
 	}

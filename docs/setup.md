@@ -167,6 +167,24 @@ Each of these is a connection of its own to the camera: with Talk in use as well
 (picture, sound, Talk) on top of Home Assistant's own. A camera that allows fewer
 refuses the last to ask: a picture or a sound then falls back as above, and Talk does not connect.
 
+### How the camera view looks
+
+Three settings choose how a camera put up on the screen looks. They are on the device's own settings
+(Display → Pop-ups, under Camera time) and in Home Assistant, in the device's **Configuration** card.
+Not on the Spot.
+
+- **Camera picture**: *Whole picture* (the default) shows all of the camera's picture, as large as the
+  screen takes it, with bars where its shape is not the screen's. *Fill the screen* fills the screen
+  and cuts off what does not fit, at the top and the foot or at the sides; live video too. *Camera's
+  own size* shows a snapshot at the size the camera sends it, in the middle of the screen, when it is
+  smaller than the screen; a bigger one, and live video, are shown as with *Whole picture*.
+- **Camera strips**: the strips at the top (the camera's name and the time) and at the foot (*tap to
+  close*). *Solid* (the default) is a band of shade. *Fade* is a shade that fades into the picture,
+  with the words centered in it, as far from the sides as from the top and the foot.
+- **Camera strips shade**: how dark the strips are: *Light*, *Medium* (the default) or *Strong*.
+
+The pictures in notifications are not changed by them.
+
 ### Talking through a camera
 
 On the Show and the Spot, **Talk** on the camera page sends the device's microphones to the camera's

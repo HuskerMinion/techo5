@@ -328,3 +328,6 @@ func (r *roundRenderer) discImage(img *image.RGBA, cx, cy, rad float64) {
 		}
 	}
 }
+
+// hasCameraLook is false on the Spot: its round camera view has no strips, and its picture its own fit.
+const hasCameraLook = false

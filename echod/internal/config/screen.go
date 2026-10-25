@@ -82,6 +82,18 @@ type Screen struct {
 	// -1 until it is tapped closed.
 	CameraMinutes int `json:"camera_minutes,omitempty"`
 
+	// CameraFit is how a camera's picture takes the screen on its view: "" whole and as large as the
+	// screen takes it, "fill" the whole screen with the rest cut off, "native" at the size the camera
+	// sends it, never larger.
+	CameraFit string `json:"camera_fit,omitempty"`
+
+	// CameraBands is how the camera view's strips at the top and the foot are drawn: "" a solid shade,
+	// "fade" a shade that fades into the picture.
+	CameraBands string `json:"camera_bands,omitempty"`
+
+	// CameraShade is how dark those strips are: "light", "" the usual, "strong".
+	CameraShade string `json:"camera_shade,omitempty"`
+
 	// AnswerSeconds is how long a voice turn's words stay on the screen after it ends: 0 for the
 	// default five seconds, -1 until they are tapped away.
 	AnswerSeconds int `json:"answer_seconds,omitempty"`
@@ -310,6 +322,18 @@ func (w ScreenWriter) Clock24(v bool) error {
 
 func (w ScreenWriter) CameraMinutes(v int) error {
 	return w.st.Update(func(c *Config) { c.Screen.CameraMinutes = v })
+}
+
+func (w ScreenWriter) CameraFit(v string) error {
+	return w.st.Update(func(c *Config) { c.Screen.CameraFit = v })
+}
+
+func (w ScreenWriter) CameraBands(v string) error {
+	return w.st.Update(func(c *Config) { c.Screen.CameraBands = v })
+}
+
+func (w ScreenWriter) CameraShade(v string) error {
+	return w.st.Update(func(c *Config) { c.Screen.CameraShade = v })
 }
 
 func (w ScreenWriter) NightByHA(v bool) error {

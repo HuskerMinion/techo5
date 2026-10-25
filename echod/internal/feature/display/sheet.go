@@ -163,6 +163,15 @@ func categoryRows(sv sheetView) (rows []settingRow, note string) {
 		rows = append(rows,
 			settingRow{label: "Pop-ups", kind: ctlHeading},
 			settingRow{id: "camtime", label: "Camera time", sub: "How long a camera opened here stays up", kind: ctlChoice, value: cameraTimes[cameraTimeIndex()].label},
+		)
+		if hasCameraLook {
+			rows = append(rows,
+				settingRow{id: "camfit", label: "Camera picture", sub: "Whole, filling the screen, or the camera's own size", kind: ctlChoice, value: cameraFits[cameraFitIndex()].label},
+				settingRow{id: "cambands", label: "Camera strips", sub: "Under its name and at its foot: solid, or fading into it", kind: ctlChoice, value: cameraBandStyles[cameraBandsIndex()].label},
+				settingRow{id: "camshade", label: "Camera strips shade", sub: "How dark those strips are", kind: ctlChoice, value: cameraShades[cameraShadeIndex()].label},
+			)
+		}
+		rows = append(rows,
 			settingRow{id: "answertime", label: "Answer time", sub: "How long an answer stays up; a tap clears it", kind: ctlChoice, value: answerTimes[answerTimeIndex()].label},
 		)
 		if hasTimerStyles {
@@ -654,6 +663,12 @@ func pickerFor(id string, sv sheetView) (pickerView, bool) {
 		return clockLayoutPicker(id)
 	case "camtime":
 		return pickerView{title: "Camera time", opts: cameraTimeOptions(), cur: cameraTimeIndex()}, true
+	case "camfit":
+		return pickerView{title: "Camera picture", opts: cameraLookLabels(cameraFits), cur: cameraFitIndex()}, true
+	case "cambands":
+		return pickerView{title: "Camera strips", opts: cameraLookLabels(cameraBandStyles), cur: cameraBandsIndex()}, true
+	case "camshade":
+		return pickerView{title: "Camera strips shade", opts: cameraLookLabels(cameraShades), cur: cameraShadeIndex()}, true
 	case "callring":
 		return pickerView{title: "Call ring", opts: phone.RingSounds, cur: phone.RingSoundIndex()}, true
 	case "answertime":
@@ -799,6 +814,12 @@ func (d *Display) choose(id string, i int) {
 		setClock24(d.clock, on)
 	case "camtime":
 		setCameraTime(d.camTime, i)
+	case "camfit":
+		setCameraFit(i)
+	case "cambands":
+		setCameraBands(i)
+	case "camshade":
+		setCameraShade(i)
 	case "answertime":
 		setAnswerTime(d.answerTime, i)
 	case "callring":
@@ -1219,7 +1240,7 @@ func (d *Display) rowTap(id string, p part, opt int) {
 		home.Get().SetSlideshowCaption(!home.Get().SlideshowCaption())
 	case "immichfav":
 		home.Get().SetImmichFavorites(!home.Get().ImmichFavorites())
-	case "night", "atnight", "nightstyle", "clock", "clockstyle", "font", "skin", "clockpos", "datecolor", "camtime", "answertime", "callring", "turnstyle", "timerstyle", "radarsrc", "calendars", "calpopwhen", "calpopallday", "calpopcals", "musicstrip", "follow", "awayoff", "slideshow", "photoevery", "screenlang", "newtimer", "sleep", "sunrise",
+	case "night", "atnight", "nightstyle", "clock", "clockstyle", "font", "skin", "clockpos", "datecolor", "camtime", "camfit", "cambands", "camshade", "answertime", "callring", "turnstyle", "timerstyle", "radarsrc", "calendars", "calpopwhen", "calpopallday", "calpopcals", "musicstrip", "follow", "awayoff", "slideshow", "photoevery", "screenlang", "newtimer", "sleep", "sunrise",
 		"timezone", "wakeword", "waketone", "ttsvoice", "quiet", "output", "clocktap":
 		d.openPicker(id)
 	}

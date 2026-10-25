@@ -151,7 +151,11 @@ func (f *Feature) streamFrames(ctx context.Context, entity string, gen uint64) b
 	// The camera's own address first, given for its picture: live, where Home Assistant's HLS of it is
 	// a keyframe interval and more behind. If it cannot be read, or brings no picture, HLS.
 	if rtsp {
-		cam, err := video.OpenCameraRTSP(ctx, picAddr, user, pass, w, h)
+		open := video.OpenCameraRTSP
+		if CameraFit() == "fill" {
+			open = video.OpenCameraRTSPCovering
+		}
+		cam, err := open(ctx, picAddr, user, pass, w, h)
 		if err == nil {
 			done, shown := f.showStream(ctx, entity, gen, cam, w, h, "rtsp", &streaming)
 			if done {
@@ -179,7 +183,11 @@ func (f *Feature) streamFrames(ctx context.Context, entity string, gen uint64) b
 		streamFailed(ctx, entity)
 		return false
 	}
-	cam, err := video.OpenCamera(ctx, url, w, h)
+	openHLS := video.OpenCamera
+	if CameraFit() == "fill" {
+		openHLS = video.OpenCameraCovering
+	}
+	cam, err := openHLS(ctx, url, w, h)
 	if err != nil {
 		slog.Info("camera: stream not opened, showing snapshots", "entity", entity, "err", err)
 		streamFailed(ctx, entity)

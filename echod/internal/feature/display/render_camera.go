@@ -14,6 +14,10 @@ import (
 
 // The camera view: the latest frame centered on the panel, the camera's name and the time in the
 // corners, and a hint that a tap closes it. Below it, the cameras page: a list, like the radio's.
+// hasCameraLook is whether the screen offers Camera picture and Camera strips (camera_look.go): the
+// Show's camera view draws them.
+const hasCameraLook = true
+
 const (
 	// cameraVoiceShow is how long a camera asked for by voice stays up; one picked from the list
 	// stays for the Camera time setting (cameraScreenTime).
@@ -44,12 +48,32 @@ func (r *renderer) cameraView(s scene, v home.CameraView) {
 	// A picture a notification sent with no words is the picture alone: no name, no clock and no
 	// caption over it, only the strip at the foot that says how to close it.
 	wordless := v.Caption != nil && v.Caption.Wordless()
+	fade := cameraBandsFade()
+	stripShade := cameraStripShade(fade)
+	// Where the words go: the name and the clock on the top strip, the hint on the foot's. Fading strips
+	// have no edge to sit the words against, so there both lines are in one face and each in the middle
+	// of a strip as high as the foot's, the same way from the top and from the foot.
+	nameBase, hintBase, hintFace, side := r.s(32), r.h-r.s(11), r.tiny, r.margin
+	if fade {
+		m := r.small.Metrics()
+		mid := (m.Ascent.Ceil() - m.Descent.Ceil()) / 2
+		band := r.cameraStrip()
+		nameBase, hintBase, hintFace = band/2+mid, r.h-band/2+mid, r.small
+		// The sides as far in as the top and the foot: the space above a capital, about seven tenths of
+		// the face's ascent high.
+		side = max((band-m.Ascent.Ceil()*7/10)/2, r.s(12))
+	}
 	if !wordless {
-		// Corners on a dark strip so they read over any picture.
-		washOver(r.dst, image.Rect(0, 0, r.w, r.s(44)), shade)
-		r.text(r.small, name, r.margin, r.s(32), captionText)
+		// Corners on a dark strip so they read over any picture; with Camera strips at Fade, a deeper one
+		// that fades into it.
+		if fade {
+			fadeStrip(r.dst, image.Rect(0, 0, r.w, r.s(110)), stripShade, true)
+		} else {
+			washOver(r.dst, image.Rect(0, 0, r.w, r.s(44)), stripShade)
+		}
+		r.text(r.small, name, side, nameBase, captionText)
 		t := clockHM(s.now)
-		r.text(r.small, t, r.w-r.margin-r.width(r.small, t), r.s(32), captionDim)
+		r.text(r.small, t, r.w-side-r.width(r.small, t), nameBase, captionDim)
 	}
 	left := time.Until(v.Until).Round(time.Second)
 	hint := "tap to close"
@@ -63,7 +87,11 @@ func (r *renderer) cameraView(s scene, v home.CameraView) {
 	if v.Caption != nil && !wordless {
 		r.captionBar(*v.Caption)
 	}
-	draw.Draw(r.dst, image.Rect(0, r.h-r.cameraStrip(), r.w, r.h), image.NewUniform(shade), image.Point{}, draw.Over)
+	if fade {
+		fadeStrip(r.dst, image.Rect(0, r.h-max(r.cameraStrip(), r.s(110)), r.w, r.h), stripShade, false)
+	} else {
+		draw.Draw(r.dst, image.Rect(0, r.h-r.cameraStrip(), r.w, r.h), image.NewUniform(stripShade), image.Point{}, draw.Over)
+	}
 
 	// The view's action buttons, in a row above the strip, and above a notification's words when they
 	// are up, so neither Talk nor the words are under one.
@@ -100,7 +128,7 @@ func (r *renderer) cameraView(s scene, v home.CameraView) {
 	} else if s.cameraSound {
 		end = r.cameraSoundBox(r.cameraSoundLabel(s)).Min.X - r.s(10)
 	}
-	r.text(r.tiny, r.clipTo(r.tiny, hint, end-r.margin), r.margin, r.h-r.s(11), captionDim)
+	r.text(hintFace, r.clipTo(hintFace, hint, end-side), side, hintBase, captionDim)
 
 	// The sound's control, at the end of that strip and clear of the hint: a tap on it silences what
 	// the camera is saying and leaves the view up. Only while there is a sound to silence, and the
