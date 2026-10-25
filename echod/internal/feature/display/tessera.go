@@ -280,12 +280,12 @@ func (r *paint) tesseraPage(v tessera.View, on bool, page int, adj dashAdjusting
 		x, y := area.Min.X+t.Col*(cw+gap), area.Min.Y+t.Row*(ch+gap)
 		box := image.Rect(x, y, x+t.Cols*cw+(t.Cols-1)*gap, y+t.Rows*ch+(t.Rows-1)*gap)
 		// A tile's controls go first, for a finger on one to find it rather than the tile.
-		zones = append(zones, r.tessTile(box, t, pal, adj)...)
+		zones = append(zones, r.tessTile(box, t, pal, adj, now)...)
 		z := dashTile{r: box, entity: t.Entity, tess: t.I + 1}
 		if l := t.Level; l != nil {
 			z.adjust = &dashboard.Adjust{Entity: t.Entity, Kind: l.Kind, Value: l.Value, Min: l.Min, Max: l.Max, Step: l.Step}
 		}
-		if t.Taps || z.adjust != nil || tesseraDomain(t.Entity) == "camera" && !t.Gone {
+		if t.Taps || z.adjust != nil || tesseraDomain(t.Entity) == "camera" && !t.Gone || t.Plugin != "" {
 			zones = append(zones, z)
 		}
 	}
@@ -352,7 +352,7 @@ func agoText(d time.Duration) string {
 // tessTile draws one tile in its cells: the badge with its icon at the top, and the name and what it is
 // doing at the foot, larger as the tile is. A reading - a sensor's - is the tile's largest words.
 // It says where the tile's controls are, if it has any drawn.
-func (r *paint) tessTile(b image.Rectangle, t tessera.Placed, pal dashPal, adj dashAdjusting) []dashTile {
+func (r *paint) tessTile(b image.Rectangle, t tessera.Placed, pal dashPal, adj dashAdjusting, now time.Time) []dashTile {
 	card := pal.card
 	if c, ok := swatches[t.Background]; ok {
 		card = lerp(pal.card, c, 0.24)
@@ -361,6 +361,10 @@ func (r *paint) tessTile(b image.Rectangle, t tessera.Placed, pal dashPal, adj d
 		card = lerp(pal.card, swatches["red"], 0.3)
 	}
 	r.roundFill(b, pal.rad, card, card)
+	if t.Plugin != "" {
+		r.tessPlugin(b, t, pal, card, now)
+		return nil
+	}
 	if tesseraDomain(t.Entity) == "camera" && t.Picture && !t.Gone {
 		if shot := tessCams.frame(t.Entity, b.Size(), t.Whole, t.Refresh); shot != nil {
 			draw.Draw(r.dst, b, shot, image.Point{}, draw.Src)
@@ -804,6 +808,11 @@ func (d *Display) tessTap(x, y int) {
 		d.tessGo(t.page - 1)
 	case t.tess > 0 && t.ctl != "":
 		d.tessControl(t.tess-1, t.entity, t.ctl)
+	case t.tess > 0 && strings.HasPrefix(t.entity, "plugin:"):
+		plugin, _, _ := strings.Cut(strings.TrimPrefix(t.entity, "plugin:"), ".")
+		if tessPluginTap(plugin) {
+			d.wake()
+		}
 	case t.tess > 0 && tesseraDomain(t.entity) == "camera":
 		slog.Info("tessera camera", "entity", t.entity)
 		go home.Get().ShowCamera(t.entity, cameraScreenTime())

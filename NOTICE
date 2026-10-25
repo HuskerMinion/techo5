@@ -318,6 +318,13 @@ FFmpeg, https://ffmpeg.org (LGPL-2.1-or-later)
   used; the first release's were musl 1.2.6-r2, openssl-libs-static 3.5.9-r0, zlib-static 1.3.2-r1
   and libgcc 15.2.0-r5.
 
+echod: Tessera's World clock and Custom card plugins (echod/internal/feature/display/tessera_plugins.go,
+tessera_card.go)
+  Ported to Go from world_clock.cpp in tessera-plugin-world-clock 0.4.0,
+  https://github.com/stofle/tessera-plugin-world-clock, and from custom_card.cpp in
+  tessera-plugin-custom-card 0.7.0, https://github.com/stofle/tessera-plugin-custom-card, both
+  Copyright (c) 2026 StofLE — MIT License. The MIT License's text is as above, under EchoLocal.
+
 Alpine Linux packages
   The root filesystems and the athena and Skylight stores are built from Alpine Linux v3.24 packages,
   unmodified, each under its own license (several GPL, among them e2fsprogs, wireless-tools and

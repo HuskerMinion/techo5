@@ -504,3 +504,26 @@ func TestSaveLeavesNoTemporaryFile(t *testing.T) {
 		t.Errorf("loaded %v, %v", l, err)
 	}
 }
+
+// A plugin's tile comes through as one: its plugin, its tile and its options, no entity behind it and
+// nothing for a tap to send to Home Assistant.
+func TestAPluginTileIsPlaced(t *testing.T) {
+	slot := func(n int) *int { return &n }
+	l := &Layout{
+		Rev:   "plugin0123456789",
+		Begin: Begin{Pages: 1, Tiles: 1, Home: 0},
+		Pages: []Page{{P: 0, Title: "Home", Items: json.RawMessage(`[]`)}},
+		Tiles: []Tile{{I: 0, Slot: slot(0), Entity: "plugin:world_clock.clocks", Name: "World clock", State: "ok",
+			A: json.RawMessage(`{}`), O: json.RawMessage(`{"size":"wide","plugin":{"zone_1":"Asia/Tokyo","face":"calm"}}`)}},
+	}
+	p := Place(l, 4, 3).Pages[0].Tiles[0]
+	if p.Plugin != "world_clock" || p.PluginTile != "clocks" || p.Taps || p.Gone {
+		t.Errorf("placed %+v", p)
+	}
+	if p.PluginOptions["zone_1"] != "Asia/Tokyo" || p.PluginOptions["face"] != "calm" {
+		t.Errorf("options %v", p.PluginOptions)
+	}
+	if _, _, ok := pluginTile("plugin:world_clock"); ok {
+		t.Error("a plugin with no tile was taken for a tile")
+	}
+}

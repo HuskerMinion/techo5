@@ -247,6 +247,13 @@ On the page:
   one playing, as on the drawn dashboard, so every grouped speaker follows.
 - A tile shows what you asked for at once, then whatever Home Assistant says. Tile backgrounds from
   Tessera are drawn as tints, in the device's own colors.
+- Two of Tessera's plugins are drawn by the device itself: **World clock** (up to three places, each
+  with its dial, or its time in digits, and how far it is from here; a tap on the tile turns the dials
+  to digits and back) and **Custom card** (the parts a template sensor lists in its `elements`
+  attribute: values, bars, rings, rows and text). The device names them as its own when the add-on
+  asks, so the add-on sends it their tiles; install the plugin in Tessera to have it in the editor. A
+  tile of any other plugin says *Plugin missing*, and a Custom card's `image` part shows its number,
+  as the device takes no pictures from plugins.
 
 What the device tells Tessera it takes: every tile size its grid has room for (single, wide, tall,
 square, the whole page, and spans like 3x2), and up to eight pages. Tessera leaves out everything

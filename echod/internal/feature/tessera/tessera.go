@@ -5,6 +5,7 @@ package tessera
 import (
 	"log/slog"
 	"path/filepath"
+	"slices"
 	"sync"
 	"sync/atomic"
 
@@ -131,7 +132,20 @@ func capabilities(g grid) Capabilities {
 		MaxBarItems: 6,
 		TileSizes:   sizes(g),
 		FreePages:   true,
+		Features:    []string{"plugins"},
+		PluginAPI:   pluginAPI,
+		Plugins:     slices.Clone(builtInPlugins),
 	}
+}
+
+// A plugin runs on a Tessera board as code built into its firmware; here, the plugins whose tiles the
+// display draws itself, from the options the add-on sends (display/tessera_plugins.go), are named as the
+// board's own, and any other plugin's tile is a card that says it is missing, as a board's is.
+const pluginAPI = "0.13"
+
+var builtInPlugins = []Plugin{
+	{ID: "world_clock", Version: "0.4.0", Tiles: []string{"clocks"}},
+	{ID: "custom_card", Version: "0.7.0", Tiles: []string{"card"}},
 }
 
 func (t *Tessera) Name() string { return "tessera screen" }
