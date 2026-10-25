@@ -26,7 +26,7 @@ func (t *conversation) announce(a esphome.Announce) {
 			if url == "" {
 				continue
 			}
-			if err := t.play(ctx, url, nil); err != nil {
+			if err := t.play(ctx, url, nil, true); err != nil {
 				return err
 			}
 		}
@@ -55,8 +55,9 @@ func (t *conversation) announce(a esphome.Announce) {
 // play fetches audio and queues it. Home Assistant serves it converted to media.Formats. Waiting
 // for it to be heard is the driver's, not ours: this returns as soon as it has been handed over.
 // playing is told just before the audio is queued, which is a reply's evPlaying; an announcement has
-// none, since it is not what the turn's deadline is waiting for.
-func (t *conversation) play(ctx context.Context, url string, playing func()) error {
+// none, since it is not what the turn's deadline is waiting for. intoCall sends it into a call that is
+// up as well: always for an announcement, and for a reply when Assistant replies go into calls is on.
+func (t *conversation) play(ctx context.Context, url string, playing func(), intoCall bool) error {
 	samples, err := media.Fetch(ctx, url)
 	if err != nil {
 		return err
@@ -64,8 +65,8 @@ func (t *conversation) play(ctx context.Context, url string, playing func()) err
 	samples = media.Normalize(samples)
 	// An announcement made while a call is up is for the call as well, which is how an automation
 	// tells whoever answered a call it placed what the call is about.
-	if phone.Get().Say(samples) {
-		slog.Info("announcement sent into the call", "samples", len(samples))
+	if intoCall && phone.Get().Say(samples) {
+		slog.Info("sent into the call", "samples", len(samples), "reply", playing != nil)
 	}
 	slog.Info("playing announcement", "samples", len(samples))
 

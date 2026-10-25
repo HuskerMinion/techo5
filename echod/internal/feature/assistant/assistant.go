@@ -31,6 +31,9 @@ func init() {
 // keeps asking for tools is not going to stop by being asked once more.
 const rounds = 6
 
+// lookupReasoning is how hard a thinking model is asked to think once a turn has searched the web.
+const lookupReasoning = "medium"
+
 // memory is how long the conversation so far is kept for a follow-up; a question asked after that is
 // a new conversation.
 const memory = 5 * time.Minute
@@ -91,6 +94,11 @@ func (a *Assistant) Think(ctx context.Context, heard string) (string, error) {
 			return spoken(m.Content), nil
 		}
 		for _, call := range m.ToolCalls {
+			if n := call.Function.Name; n == "web_search" || n == "read_page" {
+				// Low effort keeps a voice answer quick, but on a lookup it picked a poor page or gave
+				// up on a good one; the rounds after a search are worth a second more.
+				c.Reasoning = lookupReasoning
+			}
 			result := g.Run(call)
 			slog.Info("assistant: tool", "name", call.Function.Name, "args", call.Function.Arguments, "result", result)
 			r := llm.Message{Role: "tool", ToolCallID: call.ID, Name: call.Function.Name, Content: result}
@@ -98,6 +106,14 @@ func (a *Assistant) Think(ctx context.Context, heard string) (string, error) {
 			added = append(added, r)
 		}
 		g.EndRound()
+	}
+	// Out of rounds, most often still searching: one last ask with no tools, so what was found is said
+	// (or that nothing was) rather than nothing at all.
+	msgs = append(msgs, llm.Message{Role: "user", Content: "Answer now from what you have found, or say you couldn't find it."})
+	if m, err := c.Chat(ctx, msgs, nil); err == nil && strings.TrimSpace(m.Content) != "" {
+		added = append(added, m)
+		a.remember(added, g.Read())
+		return spoken(m.Content), nil
 	}
 	a.remember(added, g.Read())
 	return "Sorry, I got stuck on that one.", nil
@@ -147,6 +163,10 @@ func instructions(b config.Brain, now time.Time) string {
 	}
 	s.WriteString(strings.Join(days, ", "))
 	s.WriteString(": use these rather than working a date out. ")
+	if p := config.Get().Home.Place; p.Name != "" {
+		// Without it a search for a store's hours went out with no town, and found other towns' stores.
+		fmt.Fprintf(&s, "This device is in %s. ", p.Name)
+	}
 	s.WriteString("Everything you write is spoken aloud, exactly as written, so write only the answer - no notes ")
 	s.WriteString("to yourself. Answer in one or two short sentences, with no lists, ")
 	s.WriteString("markdown, emoji or symbols, and write numbers the way they are said. ")
@@ -172,12 +192,20 @@ func instructions(b config.Brain, now time.Time) string {
 		s.WriteString("and play_radio only for radio stations. ")
 	}
 	if b.Search != "" {
-		s.WriteString("For anything current or that you are not sure of - sports schedules and scores, news, ")
-		s.WriteString("business hours, prices, events - use web_search, then read_page on the most useful result, ")
-		s.WriteString("and answer from what they say, not from memory. State only what a tool result actually says: ")
-		s.WriteString("never make up or guess dates, times, opponents, scores or facts. If a page does not have it, ")
-		s.WriteString("read another result; if none do, say you couldn't find it. A time from a page is said with ")
-		s.WriteString("the time zone the page gives it in, like three o'clock Central. ")
+		// Told to answer nothing from memory, the model searched for settled facts too, and a search
+		// that missed became "I don't know" to a question it knew the answer to.
+		s.WriteString("Settled general knowledge you are sure of - history, science, geography, word meanings, ")
+		s.WriteString("how things work - answer from what you know, without searching. For anything that changes - ")
+		s.WriteString("sports schedules and scores, news, business hours, prices, events, who holds a job now - use ")
+		s.WriteString("web_search, then read_page on the most useful result, saying what you are looking for, and ")
+		s.WriteString("answer from what they say, not from memory. A search for something near by - a store's hours, ")
+		s.WriteString("a local event - names this device's town unless another place was asked about. ")
+		s.WriteString("For those, state only what a tool result says: ")
+		s.WriteString("never make up or guess dates, times, opponents, scores or prices. A search result's own words ")
+		s.WriteString("or a quick answer are enough when they answer it. If a page does not have it, read another ")
+		s.WriteString("result, or search again with other words; say you couldn't find it only after that, and ")
+		s.WriteString("give whatever part you did find. A time from a page is said with the time zone the page ")
+		s.WriteString("gives it in, like three o'clock Central. ")
 	} else {
 		s.WriteString("Beyond the tools you cannot look anything up: no internet, no news, no sports schedules or ")
 		s.WriteString("scores, and nothing that happened after your training. Never make up dates, times, scores or ")

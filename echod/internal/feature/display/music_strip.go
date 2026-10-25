@@ -72,6 +72,7 @@ func (r *renderer) stripSong() image.Rectangle {
 func (r *renderer) musicStrip(s scene) {
 	rd := s.radio
 	b := r.stripRect()
+	r.footControls(b.Min.Y - r.s(8))
 	rad := float64(r.s(16))
 	r.roundFill(b, rad, shift(walnut, 6), shift(walnut, 2))
 	r.roundStroke(b, rad, 2, ember)

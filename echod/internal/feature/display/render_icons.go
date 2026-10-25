@@ -73,7 +73,7 @@ func (r *renderer) cloud(cx, y, w int, c color.Color) {
 	r.disc(cx-w/4, y-h/2, h/2, c)
 	r.disc(cx+w/6, y-h/2, h*2/3, c)
 	r.disc(cx-w/16, y-h*5/6, h*3/5, c)
-	draw.Draw(r.dst, image.Rect(cx-w/4, y-h/2, cx+w/6+h*2/3, y), image.NewUniform(c), image.Point{}, draw.Over)
+	washOver(r.dst, image.Rect(cx-w/4, y-h/2, cx+w/6+h*2/3, y), c)
 }
 
 func (r *renderer) sun(cx, cy, rad int) {
@@ -96,7 +96,7 @@ func (r *renderer) moon(cx, cy, rad int) {
 func (r *renderer) drops(cx, y, w int, c color.Color, n int) {
 	for i := 0; i < n; i++ {
 		x := cx - w/3 + i*(w*2/3)/max(n-1, 1)
-		r.stroke(x+4, y+4, x-2, y+w/5, max(w/16, 2), c)
+		r.stroke(x+r.s(4), y+r.s(4), x-r.s(2), y+w/5, max(w/16, r.s(2)), c)
 	}
 }
 

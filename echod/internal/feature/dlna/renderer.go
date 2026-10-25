@@ -23,6 +23,7 @@ import (
 	"github.com/HuskerMinion/techo5/echod/internal/feature/media"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/video"
 	"github.com/HuskerMinion/techo5/echod/internal/hardware/speaker"
+	"github.com/HuskerMinion/techo5/echod/internal/lib/netguard"
 	"github.com/HuskerMinion/techo5/echod/internal/lib/safe"
 )
 
@@ -108,20 +109,11 @@ func refuseOwn(network, address string, _ syscall.RawConn) error {
 	return nil
 }
 
-// ownAddress is whether ip is one of the device's own interface addresses. Read at each connection:
-// the address can change with the network.
-func ownAddress(ip net.IP) bool {
-	addrs, err := net.InterfaceAddrs()
-	if err != nil {
-		return true // not knowing its own addresses, the device fetches nothing rather than maybe itself
-	}
-	for _, a := range addrs {
-		if n, ok := a.(*net.IPNet); ok && n.IP.Equal(ip) {
-			return true
-		}
-	}
-	return false
-}
+// ownAddress is whether ip is one of the device's own addresses, as netguard knows them: read at each
+// connection, since the address can change with the network, and on a panel from what the app reports
+// (Android 11 and later refuse an app the list, and every song was refused). Not knowing them, the
+// device fetches nothing rather than maybe itself.
+func ownAddress(ip net.IP) bool { return netguard.OwnIP(ip) }
 
 // coverMost bounds a cover's size.
 const coverMost = 4 << 20

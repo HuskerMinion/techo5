@@ -17,12 +17,25 @@ DATA_DEV=/dev/mmcblk0p16
 STORE_DEV=/dev/mmcblk0p12
 WIFI_MODULE=/vendor/lib/modules/mt76x8_wlan.ko
 BT_MODULE=/vendor/lib/modules/mt76x8_bt.ko
+# The SDIO host the MT7668 sits on, on the mainline kernel: t5_wifi_up powers the chip off and on
+# through it when the driver makes no wlan0 (t5_wifi_reset). Only on a mainline kernel (6.x and later):
+# a vendor driver taken out and the host rebound on Amazon's or LineageOS's 4.x could hang the unit.
+WIFI_SDIO_HOST=
+[ "$(uname -r | cut -d. -f1)" -ge 6 ] 2>/dev/null && WIFI_SDIO_HOST=/sys/bus/platform/drivers/mtk-msdc/11250000.mmc
 [ -r /etc/techo5/device.conf ] && . /etc/techo5/device.conf
 export T5_PRODUCT
 . /lib/techo5-lib.sh
 
 # --- Mounts the initramfs normally provides, for a boot that did not come through it.
 mountpoint -q /proc || mount -t proc proc /proc
+# On the 2nd gen Show 5's mainline kernel, an RCU stall is a wedged core: panic, and the kernel's
+# panic timeout reboots (as do its lockup detectors), rather than a unit that hangs for good. The Show 8
+# 2nd gen's kernel does the same from its own command line (tools/linux/athena/kernel/pack.py). Amazon's
+# and LineageOS's kernels (4.x) are left as they are.
+if grep -q 'amazon,cronos' /proc/device-tree/compatible 2>/dev/null &&
+	[ "$(uname -r | cut -d. -f1)" -ge 6 ] 2>/dev/null; then
+	echo 1 > /proc/sys/kernel/panic_on_rcu_stall 2>/dev/null
+fi
 # Each user sees only its own processes. The daemon hands the camera decoder a camera's login, and the
 # Home Assistant stream link with its token, on the command line, which /proc/<pid>/cmdline shows to
 # anyone otherwise: the receivers (streaming), the decoder (techo5-video), avahi and dbus-daemon
@@ -45,6 +58,8 @@ mountpoint -q /store || mount -t ext4 -o ro,noatime $STORE_DEV /store
 mount -t tmpfs tmpfs /var/log
 mount -t tmpfs tmpfs /var/tmp
 mkdir -p /run/lock /run/techo5 $LOGDIR /data/misc/techo5/models
+# /etc/hosts is a symlink to it: localhost here, and echod adds the .local names it looks up.
+[ -e /run/hosts ] || printf '127.0.0.1\tlocalhost localhost.localdomain\n::1\t\tlocalhost localhost.localdomain\n' > /run/hosts
 # The clock's zone lives on userdata (echod sets it from Home Assistant); a unit without one starts
 # on the image's default.
 if [ ! -e /data/misc/techo5/timezone ] || [ ! -e /data/misc/techo5/localtime ]; then
@@ -56,14 +71,21 @@ fi
 mkdir -p -m 700 /data/misc/techo5/ssh
 # The kernel keeps its last words in RAM across a restart (pstore). Mounting it makes them readable,
 # and a copy on userdata outlives the next boot; a power cut clears the RAM, so this only catches a
-# device that restarted itself.
+# device that restarted itself. The cronos kernel keeps its console there too, so every restart leaves
+# the boot before's kernel log. The clock is not set yet (1970), so a copy is named by this boot's id
+# as well, or each would replace the last; the newest 20 are kept.
 if mount -t pstore pstore /sys/fs/pstore 2>/dev/null || [ -d /sys/fs/pstore ]; then
+	# Named by a count of the boots that kept one, which orders them where the time cannot (the clock
+	# is not set yet), the newest 20 kept.
+	n=
 	for f in /sys/fs/pstore/*; do
 		[ -e "$f" ] || continue
 		mkdir -p /data/techo5-linux/crash
-		cp "$f" "/data/techo5-linux/crash/$(date +%Y%m%d-%H%M%S)-${f##*/}" 2>/dev/null &&
+		[ -n "$n" ] || { n=$(($(cat /data/techo5-linux/crash/.count 2>/dev/null || echo 0) + 1)); echo $n > /data/techo5-linux/crash/.count; }
+		cp "$f" "/data/techo5-linux/crash/$(printf %05d $n)-$(cut -c1-8 /proc/sys/kernel/random/boot_id 2>/dev/null)-${f##*/}" 2>/dev/null &&
 			log "kernel crash record kept: ${f##*/}" && rm -f "$f"
 	done
+	ls -1 /data/techo5-linux/crash/[0-9][0-9][0-9][0-9][0-9]-* 2>/dev/null | sort -r | tail -n +21 | while read -r f; do rm -f "$f"; done
 fi
 # The wake word models the image carries, any this unit does not have yet: a fresh unit gets them
 # all, and one set up before a model joined the image gets it at its next update, so every unit
@@ -81,8 +103,48 @@ fi
 
 echo /sbin/mdev > /proc/sys/kernel/hotplug
 mdev -s
+# mdev, with no rules, makes every node root's alone (0660), these too, which every program may use
+# (the video decoder's user among them).
+chmod 666 /dev/null /dev/zero /dev/full /dev/random /dev/urandom /dev/tty 2>/dev/null
 mkdir -p /dev/graphics
 [ -e /dev/fb0 ] && ln -sf /dev/fb0 /dev/graphics/fb0
+# The 2nd gen Show 5 on mainline (mtk-cpufreq, schedutil): let schedutil change the CPU frequency at
+# most every 10 ms rather than every 1 ms. The driver gives no transition latency, so the default is
+# 1 ms, and every change costs I2C to the sym827 (cpufreq's Vproc): the switch runs the cores on the
+# 1092 MHz intermediate clock, whose OPP is 1.2 V, so even a change between two 1.15 V OPPs raises
+# and lowers the voltage. At 1 ms the daemon's idle load made 4 000-4 400 I2C interrupts a second
+# and kept sugov:0 at 13-15% of a core; at 10 ms, about 400-600 and 1.5-2.5%. The wake word's
+# per-frame time got shorter, and the camera stream kept its rate at 4 and 20 ms. Amazon's kernel has
+# neither the driver nor the governor.
+if grep -q 'amazon,cronos' /proc/device-tree/compatible 2>/dev/null &&
+	[ "$(cat /sys/devices/system/cpu/cpufreq/policy0/scaling_driver 2>/dev/null)" = mtk-cpufreq ] &&
+	[ -w /sys/devices/system/cpu/cpufreq/policy0/schedutil/rate_limit_us ]; then
+	echo 10000 > /sys/devices/system/cpu/cpufreq/policy0/schedutil/rate_limit_us ||
+		log "cpufreq: schedutil rate limit not set"
+fi
+# The 2nd gen Show 5 on mainline (mediatek-drm): on about one boot in twenty the bootloader times out
+# (its boot takes over 10 s rather than 4.2) and leaves the display engine unstarted, which the kernel
+# cannot recover: the panel gets no frames and the screen is drawn on the cores. Such a boot says so
+# on the command line (the bootloader's fps=6000, against 6206 or 6226 on a good one), so it is
+# restarted at once, at most twice in a row (the count in /data is cleared by any good boot) so a
+# unit that always boots this way still comes up. Amazon's and LineageOS's kernels are left alone.
+if grep -q 'amazon,cronos' /proc/device-tree/compatible 2>/dev/null &&
+	[ -d /sys/bus/platform/drivers/mediatek-drm ]; then
+	stalls=/data/techo5-linux/display-stall-reboots
+	if grep -qw 'fps=6000' /proc/cmdline; then
+		n=$(cat "$stalls" 2>/dev/null || echo 0)
+		if [ "$n" -lt 2 ]; then
+			echo $((n + 1)) > "$stalls"
+			sync
+			log "display: the bootloader left the display unstarted (fps=6000); restarting ($((n + 1)) of 2)"
+			reboot
+			sleep 60
+		fi
+		log "display: the bootloader left the display unstarted again; carrying on"
+	else
+		rm -f "$stalls"
+	fi
+fi
 hostname -F /etc/hostname
 log "slot $(cat /run/techo5/slot 2>/dev/null || echo '?'): $(cat /etc/techo5-release 2>/dev/null)"
 
@@ -98,7 +160,9 @@ if [ -n "${VENDOR_DEV:-}" ] && ! mountpoint -q /vendor; then
 		log "vendor tree: mounting $VENDOR_DEV failed"
 fi
 [ -n "${FIRMWARE_PATH:-}" ] && printf %s "$FIRMWARE_PATH" > /sys/module/firmware_class/parameters/path 2>/dev/null
-if [ -z "${VENDOR_DEV:-}" ] && [ ! -e "/store/vendor/$VMOD" ]; then
+# A unit whose Wi-Fi driver is built into its kernel and that has no vendor partition (the Skylight)
+# has no vendor tree to keep at all.
+if [ -z "${VENDOR_DEV:-}" ] && [ "$WIFI_MODULE" != builtin ] && [ ! -e "/store/vendor/$VMOD" ]; then
 	src=
 	for d in /vendor /store/slots/a/vendor /store/slots/b/vendor; do
 		[ -e "$d/$VMOD" ] && { src=$d; break; }
@@ -155,7 +219,7 @@ t5_wifi_up $WIFI_MODULE $LOGDIR/wpa_supplicant.conf
 # SSH is echod's (feature/security): off unless switched on, and only with a key on userdata.
 if [ -n "$IP" ]; then
 	t5_ntp
-	ntpd $(t5_ntp_peers) > /dev/null 2>&1
+	ntpd -S /etc/techo5/ntp-event.sh $(t5_ntp_peers) > /dev/null 2>&1
 fi
 
 # --- Bluetooth (only on a kernel that has it; see t5_bt_up).
@@ -197,7 +261,7 @@ t5_bt_up "$BT_MODULE" /var/log
 			fi
 			if ! pidof ntpd >/dev/null; then
 				t5_ntp
-				ntpd $(t5_ntp_peers) > /dev/null 2>&1
+				ntpd -S /etc/techo5/ntp-event.sh $(t5_ntp_peers) > /dev/null 2>&1
 			fi
 			# A fixed address whose gateway stays silent gives way to DHCP until it answers again
 			# (techo5-net check): without it, a device whose router moved to another subnet, or
@@ -254,9 +318,21 @@ done
 # and a boot where that never happens within TRIAL_TIMEOUT seconds reboots on
 # its own: a slot whose daemon keeps dying must not sit there reachable but
 # useless, it must use up its tries and let the initramfs fall back.
+# TRIAL_NEEDS_NETWORK=1 (trial.conf; off by default) also wants a network, an
+# address with a default route, before committing: a slot that cannot reach
+# the network (its Wi-Fi driver does not fit the kernel, say) then uses up its
+# tries rather than leaving the unit unreachable for good. It is off because
+# a network without a gateway never has a default route, and an update there
+# would never be committed.
 TRIAL_SETTLE=${TRIAL_SETTLE:-300}
 TRIAL_TIMEOUT=${TRIAL_TIMEOUT:-900}
+TRIAL_NEEDS_NETWORK=${TRIAL_NEEDS_NETWORK:-0}
 [ -r /etc/techo5/trial.conf ] && . /etc/techo5/trial.conf
+# trial_network: whether the trial has the network it needs (always, unless TRIAL_NEEDS_NETWORK=1).
+trial_network() {
+	[ "$TRIAL_NEEDS_NETWORK" = 1 ] || return 0
+	ip route show default 2>/dev/null | grep -q default
+}
 (
 	s=$(cat /run/techo5/slot 2>/dev/null)
 	[ -n "$s" ] || exit 0
@@ -267,14 +343,18 @@ TRIAL_TIMEOUT=${TRIAL_TIMEOUT:-900}
 		pid=$(pidof techo5 | cut -d' ' -f1)
 		if [ -n "$pid" ]; then
 			started=$(awk '{print int($22/100)}' /proc/$pid/stat 2>/dev/null)
-			if [ -n "$started" ] && [ $((now-started)) -ge $TRIAL_SETTLE ]; then
+			if [ -n "$started" ] && [ $((now-started)) -ge $TRIAL_SETTLE ] && trial_network; then
 				log "slot $s: daemon up for $TRIAL_SETTLE s, committing"
 				slotctl commit >> /run/boot.log 2>&1
 				exit 0
 			fi
 		fi
 		if [ $now -ge $TRIAL_TIMEOUT ]; then
-			log "slot $s: daemon did not settle within $TRIAL_TIMEOUT s; rebooting to use up a try"
+			if trial_network; then
+				log "slot $s: daemon did not settle within $TRIAL_TIMEOUT s; rebooting to use up a try"
+			else
+				log "slot $s: no network within $TRIAL_TIMEOUT s; rebooting to use up a try"
+			fi
 			cp /run/boot.log $LOGDIR/boot.log 2>/dev/null
 			sync
 			reboot
@@ -282,9 +362,10 @@ TRIAL_TIMEOUT=${TRIAL_TIMEOUT:-900}
 	done
 ) &
 
-# --- Kernel (KERNEL_UPDATE, device.conf: athena on mainline). The slot carries the kernel it was
-# tested with, and once the slot is good that kernel goes to the boot partition with the unit's own
-# amp tuning (`techo5 tools kernel`, echod/internal/update/kernel). A new kernel is on trial as a new
+# --- Kernel (KERNEL_UPDATE, device.conf: athena on mainline, the Skylight). The slot carries the
+# kernel it was tested with, and once the slot is good that kernel goes to the kernel's partition:
+# athena's boot, with the unit's own amp tuning; the Skylight's recovery, as it is (`techo5 tools
+# kernel`, echod/internal/update/kernel). A new kernel is on trial as a new
 # slot is: every boot takes a try, a daemon that settles commits it, and one that never settles
 # reboots at TRIAL_TIMEOUT to use up a try; out of tries, the previous kernel is put back.
 # Settled means more for a kernel than for a slot: Wi-Fi, the sound card and the backlight are the

@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/HuskerMinion/techo5/echod/internal/hardware/speaker"
+	"github.com/HuskerMinion/techo5/echod/internal/lib/audio"
 	"github.com/HuskerMinion/techo5/echod/internal/lib/safe"
 )
 
@@ -118,6 +119,17 @@ func (m *Stream) senderPausedOn(t *track) bool {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	return m.track == t && m.paused && m.bySender
+}
+
+// SenderPaused is whether the track loaded is a received one its sender paused on its own
+// (ReceiverPaused), rather than one paused from here.
+func (m *Stream) SenderPaused() bool {
+	if m == nil {
+		return false
+	}
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return m.track != nil && m.track.received && m.paused && m.bySender
 }
 
 // pauseSeq is which pause is in effect, or was last (pauses), for pauseTook to tell its answer by.
@@ -324,20 +336,93 @@ func (a *playingAgain) heard(senderPaused bool, now time.Time, audio bool) bool 
 	return now.Sub(a.since) >= sendingAgain
 }
 
-// toSpeaker turns what a remote sends (mono or stereo, at its own rate: phones pick 44.1 or 48 kHz)
-// into the speaker's interleaved stereo at its rate. Linear interpolation, carried across calls so a
-// stream read in pieces comes out continuous.
+// PhonePlays follows what a phone sends for whether it is playing music. Its stream says nothing of
+// that: a phone starts it for any app that opens its audio, playing or not (a browser coming back
+// to the screen sends nothing but silence, for seconds or for half a minute), and holds it open for
+// seconds after a pause, or for as long as it likes. It starts playing with sendingAgain of audible
+// audio with no break of sendingBreak, as a phone that paused on its own plays again
+// (playingAgain), and stops with receiveQuiet of nothing audible, as its track here would end.
+type PhonePlays struct {
+	again   playingAgain
+	last    time.Time // the last audible read while it plays
+	on      bool
+	asked   bool      // asked to pause from here (Asked)
+	askedAt time.Time // the first read after the ask, zero until then
+}
+
+// Asked says whether the phone has been asked to pause from here. For receiveQuiet after that, a
+// break of sendingBreak with nothing audible ends its play, as a phone that takes the pause stops
+// within moments, so its music after that is heard starting again: played again moments later, a
+// phone whose play had not yet ended went on playing to nobody. One that plays on through those
+// seconds ignored the pause, and the gaps between its songs are not taken for it stopping.
+func (p *PhonePlays) Asked(pause bool) { p.asked, p.askedAt = pause, time.Time{} }
+
+// Hear takes one read of what the phone sends, raw S16_LE, none for a read that waited for nothing,
+// at now, and says whether the phone started or stopped playing with it.
+func (p *PhonePlays) Hear(pcm []byte, now time.Time) (changed bool) {
+	audio := audibleS16(pcm)
+	if p.asked && p.askedAt.IsZero() {
+		p.askedAt = now // measured on the reader's clock, which the ask is not read on
+	}
+	if p.on {
+		quiet := now.Sub(p.last)
+		if audio {
+			p.last = now
+			if p.asked && now.Sub(p.askedAt) >= receiveQuiet {
+				p.asked = false // it played on through the pause
+			}
+		} else if quiet >= receiveQuiet || (p.asked && quiet >= sendingBreak) {
+			*p = PhonePlays{}
+			return true
+		}
+		return false
+	}
+	if p.again.heard(true, now, audio) {
+		*p = PhonePlays{on: true, last: now}
+		return true
+	}
+	return false
+}
+
+// Playing is whether the phone is playing music, as last heard.
+func (p *PhonePlays) Playing() bool { return p.on }
+
+// audibleS16 is audible for raw S16_LE.
+func audibleS16(pcm []byte) bool {
+	for i := 0; i+1 < len(pcm); i += 2 {
+		if v := int16(uint16(pcm[i]) | uint16(pcm[i+1])<<8); v > audibleFloor || v < -audibleFloor {
+			return true
+		}
+	}
+	return false
+}
+
+// toSpeaker turns what a remote sends (mono or stereo, at its own rate: phones pick 44.1 or 48 kHz,
+// AirPlay sends 44.1) into the speaker's interleaved stereo at its rate. Another rate goes through
+// lib/audio's band-limited converter, as a station does (resampler): straight lines between
+// neighboring samples fold the treble's images back into it, a 10 kHz tone with a ghost at 13.9 kHz
+// only 21 dB under it. Both keep their state across calls, so a stream read in pieces comes out
+// continuous.
 type toSpeaker struct {
 	channels int
+	rate     int
 	step     float64 // input frames per output frame
-	pos      float64 // where the next output frame falls between prev and the next input frame
-	prevL    int16
-	prevR    int16
-	primed   bool
+	conv     *audio.Converter
+	in       []int16
+
+	// Straight lines, for a rate with no small ratio to the speaker's (NewConverter).
+	pos    float64 // where the next output frame falls between prev and the next input frame
+	prevL  int16
+	prevR  int16
+	primed bool
 }
 
 func newToSpeaker(rate, channels int) *toSpeaker {
-	return &toSpeaker{channels: channels, step: float64(rate) / speaker.Rate}
+	c := &toSpeaker{channels: channels, rate: rate, step: float64(rate) / speaker.Rate}
+	if rate != speaker.Rate {
+		c.conv = audio.NewConverter(rate, speaker.Rate, channels)
+	}
+	return c
 }
 
 // run converts whole input frames. The result is freshly allocated, since queue scales it in place.
@@ -350,7 +435,31 @@ func (c *toSpeaker) run(pcm []byte) []int16 {
 		}
 		return out
 	}
+	if c.conv == nil && c.step != 1 {
+		return c.lines(pcm, frames)
+	}
 
+	c.in = c.in[:0]
+	for i := range frames * c.channels {
+		c.in = append(c.in, int16(uint16(pcm[i*2])|uint16(pcm[i*2+1])<<8))
+	}
+	samples := c.in
+	if c.conv != nil {
+		samples = c.conv.Run(c.in, make([]int16, 0, len(c.in)*speaker.Rate/c.rate+4*c.channels))
+	}
+	if c.channels == speaker.Channels {
+		return samples
+	}
+	out := make([]int16, 0, len(samples)*speaker.Channels)
+	for _, v := range samples {
+		out = append(out, v, v)
+	}
+	return out
+}
+
+// lines is the fallback: straight lines between neighboring samples, the last frame of each call
+// carried into the next.
+func (c *toSpeaker) lines(pcm []byte, frames int) []int16 {
 	out := make([]int16, 0, int(float64(frames)/c.step+2)*speaker.Channels)
 	for f := 0; f < frames; f++ {
 		o := f * c.channels * 2

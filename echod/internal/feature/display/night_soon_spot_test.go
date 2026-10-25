@@ -91,6 +91,15 @@ func TestChoosingTheNightClockBringsItSoon(t *testing.T) {
 // keeps it in range, and shows it on the backlight at night.
 func TestTheSpotNightClockBrightnessRow(t *testing.T) {
 	d := spotNightDisplay(t, true)
+	// The step's relight at the end of its preview is this test's, not the next one's: left to run it
+	// reads the settings while the next test points them at its own file.
+	t.Cleanup(func() {
+		d.mu.Lock()
+		defer d.mu.Unlock()
+		if d.glowTimer != nil {
+			d.glowTimer.Stop()
+		}
+	})
 	if glowSteps[0] != 3 {
 		t.Errorf("the night clock's lowest step is backlight %d, want 3", glowSteps[0])
 	}

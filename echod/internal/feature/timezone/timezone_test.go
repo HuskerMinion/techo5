@@ -20,51 +20,6 @@ func TestValid(t *testing.T) {
 	}
 }
 
-// A zone from Home Assistant lands on userdata as a name and a link into zoneinfo, and asks for the
-// restart that puts it in force; one this image does not have changes nothing.
-func TestApply(t *testing.T) {
-	saved := time.Local.String()
-	if _, err := time.LoadLocation("Europe/Berlin"); err != nil {
-		t.Skip("no zoneinfo on this machine:", err)
-	}
-	system := "/usr/share/zoneinfo"
-	if _, err := os.Stat(filepath.Join(system, "Europe/Berlin")); err != nil {
-		t.Skip("no zoneinfo directory:", err)
-	}
-	dir := t.TempDir()
-	nameFile, linkFile, zoneinfo = filepath.Join(dir, "timezone"), filepath.Join(dir, "localtime"), system
-	drainRestarts()
-
-	z := &Zone{}
-	if err := z.apply("Europe/Berlin"); err != nil {
-		t.Fatal(err)
-	}
-	if got := z.Current(); got != "Europe/Berlin" {
-		t.Errorf("saved zone = %q", got)
-	}
-	if target, err := os.Readlink(linkFile); err != nil || target != filepath.Join(system, "Europe/Berlin") {
-		t.Errorf("link = %q, %v", target, err)
-	}
-	// The new zone is in force once the process is a new one, so what a successful apply leaves behind
-	// is a restart request. time.Local is not touched: reassigning it races every goroutine reading it.
-	if why := restartAsked(); why != "time zone Europe/Berlin" {
-		t.Errorf("restart asked for %q", why)
-	}
-	if time.Local.String() != saved {
-		t.Errorf("time.Local was changed to %s", time.Local)
-	}
-
-	if err := z.apply("Nowhere/Atlantis!"); err == nil {
-		t.Error("an unknown zone was applied")
-	}
-	if got := z.Current(); got != "Europe/Berlin" {
-		t.Errorf("an unknown zone replaced the saved one: %q", got)
-	}
-	if err := z.apply(""); err != nil || z.Current() != "Europe/Berlin" {
-		t.Errorf("an empty zone changed something: %v %q", err, z.Current())
-	}
-}
-
 // The rule Home Assistant sends becomes a zoneinfo file with the right offsets either side of the
 // daylight saving change, in Go and for anything else that reads /etc/localtime.
 func TestApplyPOSIXRule(t *testing.T) {

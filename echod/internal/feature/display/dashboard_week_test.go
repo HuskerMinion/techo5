@@ -51,7 +51,7 @@ func TestDashboardWeekDraws(t *testing.T) {
 	withTimer := s
 	withTimer.timers = []timer.Countdown{{Name: "Pasta", Left: 4 * time.Minute, Total: 10 * time.Minute, Active: true}}
 	t.Cleanup(func() { _ = config.Set().Screen().Language("") })
-	for _, lang := range []string{"", "de", "es", "fr", "it", "nl", "ru"} {
+	for _, lang := range []string{"", "de", "es", "fr", "it", "nl", "pt", "ru"} {
 		if err := config.Set().Screen().Language(lang); err != nil {
 			t.Fatal(err)
 		}
@@ -60,9 +60,9 @@ func TestDashboardWeekDraws(t *testing.T) {
 			scene      scene
 			wide, high int
 			h12        bool
-		}{{"week", s, showWide, showHigh, false}, {"week", s, show8Wide, show8High, false}, {"empty", empty, showWide, showHigh, false},
-			{"week-12h", s, showWide, showHigh, true}, {"week-12h", s, show8Wide, show8High, true},
-			{"timer", withTimer, showWide, showHigh, false}, {"timer", withTimer, show8Wide, show8High, false}} {
+		}{{"week", s, showWide, showHigh, false}, {"week", s, show8Wide, show8High, false}, {"week", s, skylightWide, skylightHigh, false}, {"empty", empty, showWide, showHigh, false},
+			{"week-12h", s, showWide, showHigh, true}, {"week-12h", s, show8Wide, show8High, true}, {"week-12h", s, skylightWide, skylightHigh, true},
+			{"timer", withTimer, showWide, showHigh, false}, {"timer", withTimer, show8Wide, show8High, false}, {"timer", withTimer, skylightWide, skylightHigh, false}} {
 			clock24.Store(!p.h12)
 			img := image.NewRGBA(image.Rect(0, 0, p.wide, p.high))
 			newRenderer(img).draw(p.scene)
@@ -74,8 +74,11 @@ func TestDashboardWeekDraws(t *testing.T) {
 			if lang != "" {
 				name += "-" + lang
 			}
-			if p.wide == show8Wide {
+			switch p.wide {
+			case show8Wide:
 				name += "-show8"
+			case skylightWide:
+				name += "-skylight"
 			}
 			f, err := os.Create(filepath.Join(dir, name+".png"))
 			if err != nil {
@@ -126,7 +129,7 @@ func dashEvents(at time.Time, from, n int, allDay bool) []hass.Event {
 	return out
 }
 
-var dashSizes = []image.Point{{showWide, showHigh}, {show8Wide, show8High}}
+var dashSizes = []image.Point{{showWide, showHigh}, {show8Wide, show8High}, {skylightWide, skylightHigh}}
 
 // The temperature now keeps one place all day and for any reading: on a 12-hour clock it does not
 // jump when the hour gains a digit, and a three-figure reading sits where a two-figure one does.

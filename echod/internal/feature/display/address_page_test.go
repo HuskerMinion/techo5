@@ -9,9 +9,10 @@ import (
 )
 
 // Every key, field and mode button of the network address page is where a finger lands on it, at the
-// Show 5's size and the Show 8's: what is drawn and what a tap means come from the same rectangles.
+// Show 5's size, the Show 8's and the Skylight's: what is drawn and what a tap means come from the
+// same rectangles.
 func TestTheAddressPageIsTappedWhereItIsDrawn(t *testing.T) {
-	for _, size := range []image.Point{{960, 480}, {1280, 800}} {
+	for _, size := range []image.Point{{960, 480}, {1280, 800}, {skylightWide, skylightHigh}} {
 		img := image.NewRGBA(image.Rect(0, 0, size.X, size.Y))
 		r := newRenderer(img)
 		f := &addrForm{fixed: true, field: addrFieldGateway}

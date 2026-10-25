@@ -11,6 +11,10 @@ import (
 // FormatS16_LE is 16-bit little endian, the only format the playback codec accepts.
 const FormatS16_LE = 2
 
+// FormatS24_LE is 24-bit samples in the low three bytes of a 32-bit container: Bits is the container's
+// 32, and the sample width is left for the kernel to take from the format.
+const FormatS24_LE = 6
+
 var (
 	ioctlWritei = ioc(1, 'A', 0x50, xferiSize)
 	ioctlDrain  = ioc(0, 'A', 0x44, 0)
@@ -89,7 +93,9 @@ func OpenPlayback(card, device int, cfg Config) (*Playback, error) {
 	p.setMask(paramAccess, accessRWInterleaved)
 	p.setMask(paramFormat, cfg.Format)
 	p.setMask(paramSubformat, subformatStd)
-	p.setInterval(paramSampleBits, uint32(cfg.Bits))
+	if cfg.Format != FormatS24_LE { // its sample width (24) is not its container's (Bits)
+		p.setInterval(paramSampleBits, uint32(cfg.Bits))
+	}
 	p.setInterval(paramFrameBits, uint32(cfg.Bits*cfg.Channels))
 	p.setInterval(paramChannels, uint32(cfg.Channels))
 	p.setInterval(paramRate, uint32(cfg.Rate))

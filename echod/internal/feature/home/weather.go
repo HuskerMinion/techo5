@@ -40,8 +40,17 @@ func (f *Feature) buildWeatherSelect() {
 }
 
 // Entities is the weather source select, what the radio is playing and what is played to the device,
-// plus the radar source's and the slideshow's own on a device with a screen to show them on.
+// plus the radar source's and the slideshow's own on a device with a screen to show them on, and the
+// camera view's where it can play a camera's stream (cameraStreamHere).
 func (f *Feature) Entities() []esphome.Entity {
+	out := f.entities()
+	if cameraStreamHere {
+		return out
+	}
+	return slices.DeleteFunc(out, func(e esphome.Entity) bool { return e == f.cameraSoundSw || e == f.cameraLiveSw })
+}
+
+func (f *Feature) entities() []esphome.Entity {
 	if hasScreen && !hasLyrics {
 		return []esphome.Entity{f.weatherSel, f.followSel, f.radarSel, f.alertsSw, f.cameraSoundSw, f.cameraLiveSw, f.slideshowSel, f.slideshowOverlaySel, f.slideshowIdleNum,
 			f.slideshowEveryNum, f.slideshowShuffleSw, f.slideshowSubfoldersSw, f.slideshowArtSw, f.slideshowWholeSw, f.slideshowFolderTxt,

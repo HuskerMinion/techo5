@@ -45,8 +45,9 @@ func dashboardPanelSection(w http.ResponseWriter, token string) {
 	fmt.Fprint(w, `<fieldset><legend>Dashboard</legend><form method="post" action="/setup/save">`)
 	hidden(w, token, "dashpanel", "photos")
 	fmt.Fprint(w, `<label for="dashmode">Dashboard</label><select id="dashmode" name="mode">`)
-	for _, m := range config.DashboardModes() {
-		fmt.Fprintf(w, `<option value="%s"%s>%s</option>`, m, selected(m == d.Mode), html.EscapeString(m.Label()))
+	for _, m := range dashboard.Modes() {
+		// The mode in force, as the dashboard reads it: one this device does not have is Off here too.
+		fmt.Fprintf(w, `<option value="%s"%s>%s</option>`, m, selected(m == dashboard.Get().Mode()), html.EscapeString(m.Label()))
 	}
 	fmt.Fprint(w, `</select>`)
 	if dashboard.HasTiles() {
@@ -62,6 +63,11 @@ func dashboardPanelSection(w http.ResponseWriter, token string) {
 	for _, l := range dashboard.BackChoices() {
 		fmt.Fprintf(w, `<option%s>%s</option>`, selected(l == now), html.EscapeString(l))
 	}
+	tesseraNote := ""
+	if slices.Contains(dashboard.Modes(), config.DashboardTessera) {
+		tesseraNote = ` <strong>Tessera</strong> shows the layout the Tessera add-on sends, with
+	  <strong>Tessera screen</strong> on in Home Assistant.`
+	}
 	idle := ""
 	if d.Idle {
 		idle = " checked"
@@ -69,16 +75,16 @@ func dashboardPanelSection(w http.ResponseWriter, token string) {
 	fmt.Fprintf(w, `</select>
 	 <p><label><input type="checkbox" name="idle" value="yes" style="width:auto"%s> Show it in place of the clock when idle</label></p>
 	 <p class="note"><strong>Drawn on the device</strong> needs nothing else. <strong>Streamed</strong> needs a
-	  dashcast server, set under Connections. <strong>Back to the clock after</strong> is for a dashboard
+	  dashcast server, set under Connections.%s <strong>Back to the clock after</strong> is for a dashboard
 	  opened by hand; one Home Assistant shows stays until it is hidden.</p>
-	 <p><button type="submit">Save</button></p></form></fieldset>`, idle)
+	 <p><button type="submit">Save</button></p></form></fieldset>`, idle, tesseraNote)
 }
 
 // saveDashboardPanel keeps what dashboardPanelSection asked, refusing a choice the page did not offer.
 func saveDashboardPanel(r *http.Request) string {
 	f := dashboard.Get()
 	mode := config.DashboardMode(r.PostFormValue("mode"))
-	if !slices.Contains(config.DashboardModes(), mode) {
+	if !slices.Contains(dashboard.Modes(), mode) {
 		return "that is not a way this device shows a dashboard"
 	}
 	back := r.PostFormValue("back")

@@ -13,8 +13,9 @@ import (
 	"github.com/HuskerMinion/techo5/echod/internal/feature/home"
 )
 
-// In a corner, the date under a style stays on the screen and on its own side of it, even with the next
-// alarm after it making it as long as it gets.
+// At the foot, the date under a style stays on the screen and on its own side of it, or in the middle
+// at Bottom center (beside the dial, for Analog), even with the next alarm after it making it as long
+// as it gets.
 func TestACornerDateStaysInItsCorner(t *testing.T) {
 	config.Use(filepath.Join(t.TempDir(), "state.json"))
 	previewFont(t)
@@ -34,7 +35,7 @@ func TestACornerDateStaysInItsCorner(t *testing.T) {
 			t.Fatal(err)
 		}
 		for _, pos := range clockPositions {
-			if pos.value != "bottom-left" && pos.value != "bottom-right" {
+			if pos.value == "" {
 				continue
 			}
 			if err := config.Set().Screen().ClockPosition(pos.value); err != nil {
@@ -43,7 +44,7 @@ func TestACornerDateStaysInItsCorner(t *testing.T) {
 			for _, panel := range []struct {
 				name       string
 				wide, high int
-			}{{"show5", showWide, showHigh}, {"show8", show8Wide, show8High}} {
+			}{{"show5", showWide, showHigh}, {"show8", show8Wide, show8High}, {"skylight", skylightWide, skylightHigh}} {
 				r := newRenderer(image.NewRGBA(image.Rect(0, 0, panel.wide, panel.high)))
 				r.draw(s)
 				if r.dateAt.Empty() {
@@ -58,6 +59,11 @@ func TestACornerDateStaysInItsCorner(t *testing.T) {
 					pos.value == "bottom-right" && date.Min.X < panel.wide*45/100 {
 					t.Errorf("%s %s %s: the date runs over the middle, x %d to %d of %d",
 						panel.name, st.label, pos.label, date.Min.X, date.Max.X, panel.wide)
+				}
+				if pos.value == "bottom-center" && (date.Min.X < panel.wide*20/100 ||
+					date.Max.X > panel.wide*80/100 || date.Max.Y < panel.high/2) {
+					t.Errorf("%s %s %s: the date is not in the middle at the foot, %v of %dx%d",
+						panel.name, st.label, pos.label, date, panel.wide, panel.high)
 				}
 			}
 		}

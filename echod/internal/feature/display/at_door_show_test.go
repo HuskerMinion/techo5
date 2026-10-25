@@ -23,7 +23,7 @@ func TestAtTheDoorOnTheCallPage(t *testing.T) {
 	for _, panel := range []struct {
 		name       string
 		wide, high int
-	}{{"", showWide, showHigh}, {"-show8", show8Wide, show8High}} {
+	}{{"", showWide, showHigh}, {"-show8", show8Wide, show8High}, {"-skylight", skylightWide, skylightHigh}} {
 		draw := func(s scene) *image.RGBA {
 			s.now, s.phase, s.call = at, "idle", call
 			img := image.NewRGBA(image.Rect(0, 0, panel.wide, panel.high))

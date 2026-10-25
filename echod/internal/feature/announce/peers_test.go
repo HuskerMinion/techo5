@@ -51,3 +51,24 @@ func TestIPv6WhenThereIsNothingElse(t *testing.T) {
 		t.Errorf("address %q, want the v6 one", got)
 	}
 }
+
+// A device without microphones says so, and one that says nothing hears: every release before the
+// Skylight said nothing, and each of those devices had microphones.
+func TestWhetherADeviceHears(t *testing.T) {
+	for _, c := range []struct {
+		text []string
+		want bool
+	}{
+		{[]string{"name=Kitchen"}, true},
+		{[]string{"name=Kitchen", "hears=0"}, false},
+		{[]string{"hears=1", "name=Kitchen"}, true},
+		{nil, true},
+	} {
+		if got := hearsOf(&zeroconf.ServiceEntry{Text: c.text}); got != c.want {
+			t.Errorf("%q: hears %v, want %v", c.text, got, c.want)
+		}
+	}
+	if !(Peer{}).Hears() || (Peer{NoMicrophone: true}).Hears() {
+		t.Error("Hears is not the record's word")
+	}
+}

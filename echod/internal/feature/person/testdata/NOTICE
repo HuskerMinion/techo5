@@ -1,0 +1,8 @@
+person.gray and no_person.gray are TensorFlow Lite Micro's person detection test pictures,
+tensorflow/lite/micro/examples/person_detection/testdata/person.bmp and no_person.bmp, from
+https://github.com/tensorflow/tflite-micro at commit cefb91622f507275fc6690f475ccec6650edd076.
+Copyright The TensorFlow Authors. Licensed under the Apache License, Version 2.0.
+See https://www.apache.org/licenses/LICENSE-2.0
+
+Changes: converted from 8-bit BMP to raw 96x96 gray, one byte a pixel, top row first. person.bmp
+holds its pixels as the model's int8 (the byte less 128); they were turned back into plain gray.

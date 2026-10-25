@@ -70,23 +70,42 @@ func (m *noiseMeter) add(raw []byte, frame []int16) {
 	m.mu.Unlock()
 }
 
-// read ends the window and starts the next. It answers false when the window has nothing to say about
-// the room: nothing was heard, the device played something, or what was heard is digital silence, which
-// is the microphones cut rather than a quiet room.
+// Why a window gave no reading, in words for the log. The sensor only says unknown or holds what it
+// had, which looks the same whatever the reason, so the log is the one place to tell a muted device
+// from one that never stops playing or from microphones that hand on nothing but zeros.
+const (
+	NoiseOff     = "measuring is off"
+	NoiseUnheard = "no frames from the microphones"
+	NoisePlayed  = "the device played something"
+	NoiseSilent  = "the microphones heard digital silence"
+)
+
+// read ends the window and starts the next, and says whether there is a reading.
 func (m *noiseMeter) read() (float64, bool) {
+	v, miss := m.measure()
+	return v, miss == ""
+}
+
+// measure ends the window and starts the next. It answers with why there is no reading when the window
+// has nothing to say about the room: nothing was heard, the device played something, or what was heard
+// is digital silence, which is the microphones cut rather than a quiet room. Empty is a reading.
+func (m *noiseMeter) measure() (float64, string) {
 	m.mu.Lock()
 	sum, n, played := m.sum, m.n, m.played
 	m.sum, m.n, m.played = 0, 0, false
 	m.mu.Unlock()
 
-	if n == 0 || played {
-		return 0, false
+	switch {
+	case n == 0:
+		return 0, NoiseUnheard
+	case played:
+		return 0, NoisePlayed
 	}
 	mean := sum / float64(n)
 	if mean < 1 {
-		return 0, false
+		return 0, NoiseSilent
 	}
-	return 10 * math.Log10(mean/(fullScale*fullScale)), true
+	return 10 * math.Log10(mean/(fullScale*fullScale)), ""
 }
 
 // SetNoise starts or stops measuring the room for the ambient noise sensor. Either way the window starts
@@ -98,11 +117,12 @@ func (s *Source) SetNoise(on bool) {
 }
 
 // Noise is how loud the room was since the last time it was asked, in dBFS, and asking starts a new
-// window. False when there is no reading: measuring is off, nothing was heard, the device played
-// something in that time, or the microphones are cut.
-func (s *Source) Noise() (float64, bool) {
+// window. When there is no reading it says why instead (the Noise constants): measuring is off,
+// nothing was heard, the device played something in that time, or the microphones are cut. Empty is a
+// reading.
+func (s *Source) Noise() (float64, string) {
 	if !s.noise.on.Load() {
-		return 0, false
+		return 0, NoiseOff
 	}
-	return s.noise.read()
+	return s.noise.measure()
 }

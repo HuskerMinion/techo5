@@ -10,17 +10,43 @@ import (
 	"github.com/HuskerMinion/techo5/echod/internal/config"
 )
 
-// What a voice turn looks like on the screen: Classic, the title and the words, or Equalizer, bars
-// moving with the voice being heard and the answer being spoken. Classic until somebody chooses.
+// What a voice turn looks like on the screen: Classic, the title and the words, or a picture moving
+// with the voice being heard and the answer being spoken: the wave, the bars, VU meters, the orb,
+// HAL 9000's eye or a face (turn_draw.go, turn_visual.go, turn_face.go). Or a cue: the page stays as
+// it was and the turn is a light along its edge, with the words as captions over the page's foot if
+// asked for (turn_cue.go); or Rainbow, a glow of colors round the whole edge with the words on a card
+// of glass (render_rainbow.go).
+// Classic until somebody chooses.
 
-// turnStyles are the choices, with what the config keeps for each; Classic is kept as nothing.
-var turnStyles = []struct {
+// turnStyle is a choice, with what the config keeps for it.
+type turnStyle struct {
 	label string
 	value string
-}{
+}
+
+// turnStyles are the choices; Classic is kept as nothing. Rainbow only where the screen offers it.
+var turnStyles = offered([]turnStyle{
 	{"Classic", ""},
 	{"Wave", "wave"},
 	{"Bars", "equalizer"},
+	{"VU meters", "vu"},
+	{"Orb", "orb"},
+	{"HAL 9000", "hal"},
+	{"Face", "face"},
+	{"Cue light", "cue"},
+	{"Cue and captions", "captions"},
+	{"Rainbow", "rainbow"},
+})
+
+// offered is styles without those this screen does not offer.
+func offered(styles []turnStyle) []turnStyle {
+	out := styles[:0]
+	for _, t := range styles {
+		if t.value != "rainbow" || hasRainbow {
+			out = append(out, t)
+		}
+	}
+	return out
 }
 
 func turnStyleOptions() []string {

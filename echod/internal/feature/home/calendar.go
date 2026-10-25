@@ -7,6 +7,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	esphome "github.com/ygelfand/go-esphome-device"
@@ -28,7 +29,50 @@ const (
 
 	// monthsKept is how many months' events are kept at once: this one, the next, and a few looked at.
 	monthsKept = 6
+
+	// titleRunes and descriptionRunes are the most of an event's title (and its place) and of its
+	// description that are kept. The words come from whoever can write to the calendar, and a title of
+	// thousands of letters is measured and cut on every frame that draws it.
+	titleRunes       = 200
+	descriptionRunes = 2000
+
+	// monthEventsKept is the most events a month keeps, from all its calendars together. Whoever can
+	// write to a calendar can fill a month with thousands (a repeat every minute), and every one of them
+	// is sorted, merged and laid out again each time the screen works out a view; a month a person keeps
+	// is a few hundred at the most.
+	monthEventsKept = 2000
+
+	// dayEventsKept is the most events a day keeps, the earliest, before the month is counted: a flood
+	// of them early in a month would otherwise fill all it keeps and leave the later days blank. A
+	// month's share for each of its days, so even a month flooded on every day keeps some on each.
+	dayEventsKept = monthEventsKept / 31
 )
+
+// calendarVersion counts the changes to the events kept, for a screen that works something out from
+// them to know when to work it out again (CalendarVersion).
+var calendarVersion atomic.Uint64
+
+// CalendarVersion is a number that changes whenever the events kept change.
+func (f *Feature) CalendarVersion() uint64 { return calendarVersion.Load() }
+
+// capRunes is s cut to at most n runes.
+func capRunes(s string, n int) string {
+	if len(s) <= n {
+		return s
+	}
+	if r := []rune(s); len(r) > n {
+		return string(r[:n])
+	}
+	return s
+}
+
+// capEvent keeps an event's words to a size the screen can draw at once.
+func capEvent(e hass.Event) hass.Event {
+	e.Summary = capRunes(e.Summary, titleRunes)
+	e.Location = capRunes(e.Location, titleRunes)
+	e.Description = capRunes(e.Description, descriptionRunes)
+	return e
+}
 
 var calendar struct {
 	sync.Mutex
@@ -106,6 +150,7 @@ func (f *Feature) SetCalendarSources(ids []string) error {
 	calendar.Lock()
 	calendar.months = nil // read for the old choice
 	calendar.Unlock()
+	calendarVersion.Add(1)
 	slog.Info("calendar: sources set", "count", len(clean))
 	f.Changed.Emit(struct{}{})
 	return nil
@@ -163,10 +208,13 @@ func (f *Feature) readMonth(key string, first time.Time, sources []string, joine
 			slog.Warn("calendar: reading events failed", "calendar", src, "month", key, "err", err)
 			continue
 		}
-		events, ok = append(events, ev...), true
+		for _, e := range ev {
+			events = append(events, capEvent(e))
+		}
+		ok = true
 	}
 	slices.SortStableFunc(events, func(a, b hass.Event) int { return a.Start.Compare(b.Start) })
-	events = mergeSame(events)
+	events = capMonth(key, mergeSame(events))
 
 	calendar.Lock()
 	m := calendar.months[key]
@@ -182,7 +230,51 @@ func (f *Feature) readMonth(key string, first time.Time, sources []string, joine
 	}
 	m.events, m.sources, m.at = events, joined, time.Now()
 	calendar.Unlock()
+	calendarVersion.Add(1)
 	f.Changed.Emit(struct{}{})
+}
+
+// cappedMonths is the months already logged as having more events than are kept, so a month read
+// again every eventsEvery says so once.
+var cappedMonths sync.Map
+
+// capMonth keeps a day's events to dayEventsKept and then the month's to monthEventsKept, the earliest
+// of each, since events is sorted by start: a flood on one day is cut there, and every other day keeps
+// what it has. A day is the one an event starts on, here. The log says how many, never what they are,
+// once a month.
+func capMonth(key string, events []hass.Event) []hass.Event {
+	if len(events) <= dayEventsKept {
+		return events
+	}
+	type date struct {
+		year  int
+		month time.Month
+		day   int
+	}
+	perDay := map[date]int{}
+	over := map[date]bool{}
+	out := make([]hass.Event, 0, min(len(events), monthEventsKept))
+	for _, e := range events {
+		s := e.Start.Local()
+		d := date{s.Year(), s.Month(), s.Day()}
+		if perDay[d] >= dayEventsKept {
+			over[d] = true
+			continue
+		}
+		if len(out) == monthEventsKept {
+			break
+		}
+		perDay[d]++
+		out = append(out, e)
+	}
+	if len(out) == len(events) {
+		return events
+	}
+	if _, told := cappedMonths.LoadOrStore(key, true); !told {
+		slog.Warn("calendar: more events than are kept, a day's or the month's latest left out", "month", key,
+			"events", len(events), "kept", len(out), "days over", len(over))
+	}
+	return slices.Clip(out)
 }
 
 // mergeSame shows an event that is on more than one of the calendars once: the same name, start, end

@@ -17,6 +17,7 @@ func TestDates(t *testing.T) {
 		{"fr", "Lundi 5 janvier", "Lun. 5 janv.", "5 janvier", "Lun. 5"},
 		{"it", "Lunedì 5 gennaio", "Lun 5 gen", "5 gennaio", "Lun 5"},
 		{"nl", "Maandag 5 januari", "Ma 5 jan", "5 januari", "Ma 5"},
+		{"pt", "Segunda-feira, 5 de janeiro", "Seg, 5 jan", "5 de janeiro", "Seg 5"},
 		{"ru", "Понедельник, 5 января", "Пн, 5 янв", "5 января", "Пн 5"},
 	} {
 		if got := LongDate(mon, c.lang); got != c.long {
@@ -72,6 +73,7 @@ func TestTheClockStylesWords(t *testing.T) {
 		"": {"Tomorrow", "All day", "Nothing on the calendar"}, "de": {"Morgen", "Ganztägig", "Keine Termine"},
 		"es": {"Mañana", "Todo el día", "Nada en el calendario"}, "fr": {"Demain", "Toute la journée", "Rien au calendrier"},
 		"it": {"Domani", "Tutto il giorno", "Niente in calendario"}, "nl": {"Morgen", "Hele dag", "Niets in de agenda"},
+		"pt": {"Amanhã", "Dia inteiro", "Nada na agenda"},
 		"ru": {"Завтра", "Весь день", "В календаре пусто"},
 		"xx": {"Tomorrow", "All day", "Nothing on the calendar"},
 	} {

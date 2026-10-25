@@ -1,4 +1,4 @@
-//go:build !dot && !spot
+//go:build !dot && !spot && !panel
 
 package camera
 
@@ -34,6 +34,8 @@ func meter(bayer []byte) float64 {
 			}
 			// The group's second pixel: green on an even row.
 			v := float64(uint16(line[i+1])>>2 | (uint16(line[i+2])&0xF)<<6)
+			// Above the sensor's black level, so the target means the same on every sensor.
+			v = math.Max(0, v-float64(sensor.pedestal))
 			zx := g * zoneCols / groups
 			sum[zy][zx] += v
 			count[zy][zx]++
@@ -87,9 +89,14 @@ func gammaFor(median, top int) float64 {
 // Black. The sensor's floor sits above zero — the darkest pixels of a real room read about 43 on the
 // summed-green scale (2026-09-16) — and with nothing mapped to black the picture looks milky, more so
 // under a steeper gamma. The frame's darkest 0.1% is taken as black, but never more than blackCap: a
-// frame with nothing dark in it must not have its shadows cut.
-const blackCap = 64
+// frame with nothing dark in it must not have its shadows cut. The OV13855 (athena) sits higher, on a
+// pedestal of 64 a pixel, 128 summed (measured 2026-10-19), so its cap is its own.
+var blackCap = sensor.blackCap
 
 func blackFor(low, white int) int {
-	return max(0, min(low, blackCap, white/4))
+	// A quarter of the way to white at most, counted from the sensor's own floor: a dim frame on a
+	// sensor with a pedestal must still lose all of it.
+	floor := 2 * sensor.pedestal
+	// And always below white: a flat dark frame on such a sensor has low == white == its floor.
+	return max(0, min(low, blackCap, floor+max(0, white-floor)/4, white-1))
 }

@@ -261,13 +261,13 @@ func TestPagesOnlyFromTheInternet(t *testing.T) {
 		w.Write([]byte("<html><body><main>the router's page</main></body></html>"))
 	}))
 	t.Cleanup(srv.Close)
-	if out, err := readPage(srv.URL); err == nil {
+	if out, err := readPage(srv.URL, ""); err == nil {
 		t.Errorf("read a page on this machine: %q", out)
 	}
 	was := pageAddrOK
 	pageAddrOK = func(netip.AddrPort) bool { return true }
 	t.Cleanup(func() { pageAddrOK = was })
-	if _, err := readPage(srv.URL); err != nil {
+	if _, err := readPage(srv.URL, ""); err != nil {
 		t.Errorf("with the guard opened for the test, the page did not read: %v", err)
 	}
 }
@@ -290,7 +290,7 @@ func TestARedirectHomeIsNotFollowed(t *testing.T) {
 	was := pageAddrOK
 	pageAddrOK = func(a netip.AddrPort) bool { return a == outside } // only the "internet" page
 	t.Cleanup(func() { pageAddrOK = was })
-	if _, err := readPage(out.URL); err == nil {
+	if _, err := readPage(out.URL, ""); err == nil {
 		t.Error("the redirect home was followed")
 	}
 }

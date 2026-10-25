@@ -40,7 +40,7 @@ func TestDashboardTilesFillTheScreen(t *testing.T) {
 	for _, panel := range []struct {
 		name       string
 		wide, high int
-	}{{"", showWide, showHigh}, {"-show8", show8Wide, show8High}} {
+	}{{"", showWide, showHigh}, {"-show8", show8Wide, show8High}, {"-skylight", skylightWide, skylightHigh}} {
 		sizes := map[string]int{}
 		for _, size := range []string{"", "large", "fill"} {
 			img := image.NewRGBA(image.Rect(0, 0, panel.wide, panel.high))

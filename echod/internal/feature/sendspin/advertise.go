@@ -48,7 +48,7 @@ func advertise(ctx context.Context, name string, port int) {
 		srv, err := zeroconf.RegisterProxy(
 			label, service, domain, port, label, addrs,
 			[]string{"path=" + path, "name=" + name},
-			nil,
+			metrics.MulticastInterfaces(),
 		)
 		if err != nil {
 			// Only the first failure is worth a warning: after that it is the expected state of a

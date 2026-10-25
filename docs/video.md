@@ -3,14 +3,20 @@
 An Echo Show or Spot can play a video full screen, with its sound. Home Assistant sends it an address, or a
 DLNA app on your phone or computer sends it one, and the Show plays it.
 
-The Echo Show 5, the Show 8 and the Spot. The Dot has no screen. On the Spot's round screen a wide
+The Echo Show 5, the Show 8, the Spot and the Skylight Calendar. The Dot has no screen. On the Spot's round screen a wide
 picture fills the width, and the edge of the glass takes its corners.
 
 ## What plays
 
 - **Addresses:** `http://` and `https://` only. MP4, MKV, MPEG-TS and HLS (`.m3u8`) streams.
 - **Picture:** H.264 (and old MPEG-4). 720p or less plays best. 1080p plays on a Show 5 but uses
-  almost all of it. HEVC (H.265), VP9 and AV1 don't play.
+  almost all of it. AV1 doesn't play anywhere.
+- **H.265 (HEVC), VP8 and VP9:** on the Echo Show 8 2nd gen and the Skylight Calendar only, on
+  TECHO5's own kernel (an Echo Show 8 2nd gen still on Amazon's kernel plays what the other Shows do). Each plays only
+  as fast as the device decodes it in time; a faster one is refused rather than played behind. The
+  Show 8 2nd gen plays H.265 up to 1080p at 30 frames a second, and VP8 and VP9 up to 1080p at 120. The
+  Skylight plays H.265, VP8 and VP9 up to 1080p at 30. The other Shows and the
+  Spot don't play them.
 - **Sound:** AAC, MP3, Opus, AC-3 and E-AC-3 (Dolby Digital), surround mixed down to stereo. A
   video whose sound is something else (DTS, TrueHD) plays without it.
 - **Loudness:** films are mixed much quieter than music, so the Show evens a video's sound out to

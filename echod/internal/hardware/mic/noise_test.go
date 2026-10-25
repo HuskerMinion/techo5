@@ -82,3 +82,29 @@ func TestDigitalSilenceIsNoReading(t *testing.T) {
 		t.Error("microphones reading nothing at all gave a reading")
 	}
 }
+
+func TestAWindowWithNoReadingSaysWhy(t *testing.T) {
+	var m noiseMeter
+	m.on.Store(true)
+	if _, why := m.measure(); why != NoiseUnheard {
+		t.Errorf("an empty window: %q, want %q", why, NoiseUnheard)
+	}
+	m.add(rawFrame(0, true), steady(1000))
+	if _, why := m.measure(); why != NoisePlayed {
+		t.Errorf("a window with playback: %q, want %q", why, NoisePlayed)
+	}
+	m.hold = 0
+	m.add(rawFrame(1, false), steady(0))
+	if _, why := m.measure(); why != NoiseSilent {
+		t.Errorf("a window of zeros: %q, want %q", why, NoiseSilent)
+	}
+	m.add(rawFrame(2, false), steady(1000))
+	if _, why := m.measure(); why != "" {
+		t.Errorf("a room: %q, want a reading", why)
+	}
+
+	s := New()
+	if _, why := s.Noise(); why != NoiseOff {
+		t.Errorf("measuring off: %q, want %q", why, NoiseOff)
+	}
+}

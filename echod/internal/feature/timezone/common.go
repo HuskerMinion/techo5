@@ -2,8 +2,6 @@ package timezone
 
 import (
 	"errors"
-	"os"
-	"path/filepath"
 )
 
 // Common are the zones most people setting a device up will want, in the order they are offered.
@@ -66,10 +64,3 @@ var commonRules = map[string]string{
 
 // errNoDatabase is a zone name asked for on a unit with no zone database, and not one of Common.
 var errNoDatabase = errors.New("this device has no time zone database, so only the common zones and Home Assistant's zone work here; choose one of those")
-
-// HasDatabase is whether this image carries the zone database, and so every zone, rather than only
-// Common.
-func HasDatabase() bool {
-	_, err := os.Stat(filepath.Join(zoneinfo, "UTC"))
-	return err == nil
-}

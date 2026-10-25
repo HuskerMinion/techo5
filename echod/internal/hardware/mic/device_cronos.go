@@ -1,8 +1,10 @@
-//go:build !dot && !spot
+//go:build !dot && !spot && !panel
 
 package mic
 
 import (
+	"errors"
+
 	"github.com/HuskerMinion/techo5/echod/internal/layout"
 	"github.com/HuskerMinion/techo5/echod/internal/lib/alsa"
 )
@@ -66,6 +68,10 @@ const (
 	CancelOnMix = false
 )
 
+// boardKernel is nil: on this build athena's capture is chosen by the kernel it runs on
+// (athenaRunning). The Echo Dot 3 build sets its own (device_donut.go).
+var boardKernel *athenaKernel
+
 // onShow8 picks the Show 8's value over the Show 5's, which covers both Show 5 generations and both
 // Show 8 generations.
 func onShow8[T any](show5, show8 T) T {
@@ -80,7 +86,7 @@ func onShow8[T any](show5, show8 T) T {
 // converter is another part with controls of its own (athenaControls).
 var adcs = func() []string {
 	switch {
-	case layout.Athena():
+	case layout.Athena(), layout.Skylight():
 		return nil
 	case layout.Crown():
 		return []string{"A", "B"}
@@ -88,9 +94,18 @@ var adcs = func() []string {
 	return []string{"A"}
 }()
 
+// ErrNoMicrophone is what opening the capture says on a device built without microphones: the
+// Skylight Calendar 15. Its RK809 codec has a capture path, but nothing is wired to it, so recording
+// would only feed silence to the wake word. The service group logs the error and carries on without
+// the microphone.
+var ErrNoMicrophone = errors.New("mic: this device has no microphone")
+
 // openDevice is the capture as the reader sees it: on athena the two devices made into one frame,
 // anywhere else the one device.
 func openDevice() (capture, error) {
+	if layout.Skylight() {
+		return nil, ErrNoMicrophone
+	}
 	if layout.Athena() {
 		return openAthena()
 	}

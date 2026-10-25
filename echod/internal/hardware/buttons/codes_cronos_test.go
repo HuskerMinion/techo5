@@ -1,4 +1,4 @@
-//go:build !dot && !spot
+//go:build !dot && !spot && !panel
 
 package buttons
 
@@ -18,11 +18,12 @@ func TestShowMuteCodes(t *testing.T) {
 }
 
 // Devices that declare the mute's code but are not the mute button: the FocalTech touchscreen's
-// gestures and the 2nd gen Show 8's PMIC power key on mainline. The real buttons are read.
+// gestures, the 2nd gen Show 8's PMIC power key on mainline and the Skylight's RK809 power key. The
+// real buttons, the Skylight's adc-keys among them, are read.
 func TestShowNotButtons(t *testing.T) {
 	for name, want := range map[string]bool{
-		"fts_ts": true, "mtk-pmic-keys": true,
-		"gpio-keys": false, "gpio-privacy-button": false, "goodix-ts": false,
+		"fts_ts": true, "mtk-pmic-keys": true, "rk805 pwrkey": true,
+		"gpio-keys": false, "gpio-privacy-button": false, "goodix-ts": false, "adc-keys": false,
 	} {
 		if notButtons[name] != want {
 			t.Errorf("notButtons[%q] = %v, want %v", name, notButtons[name], want)

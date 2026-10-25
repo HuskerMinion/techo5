@@ -21,7 +21,9 @@ import (
 
 // videoCoveredSpot is whether something in the scene goes over the video.
 func videoCoveredSpot(s roundScene) bool {
-	turn := s.phase == "listening" || s.phase == "thinking" || s.phase == "replying"
+	// A cue's rim, and its captions while they stay: the video stays paused until they are gone.
+	turn := s.phase == "listening" || s.phase == "thinking" || s.phase == "replying" || cueLit(s.cue) ||
+		(s.cue != "" && cueWords(s.cue, s.heard, s.reply) != "")
 	return s.call.Phase != phone.Idle || s.ringing.any() || s.pin.open || s.setupAsking || s.showVideoAsk || s.btPairing ||
 		s.showCamera || s.sheetOpen || s.menuOpen || s.announceRecording || s.showReminder || s.showAnnouncement || turn
 }

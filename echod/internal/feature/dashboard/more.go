@@ -96,6 +96,18 @@ func tilesSelect(f *Feature) *esphome.Select {
 // HasTiles is whether this device offers the Dashboard tiles setting: the Show does.
 func HasTiles() bool { return hasTiles }
 
+// Modes is the ways this device shows a dashboard, in the order a list shows them: Tessera only where
+// the device can be a Tessera screen.
+func Modes() []config.DashboardMode {
+	var out []config.DashboardMode
+	for _, m := range config.DashboardModes() {
+		if m != config.DashboardTessera || hasTessera {
+			out = append(out, m)
+		}
+	}
+	return out
+}
+
 // Back and Tiles are the two settings' current choices, by label.
 func Back() string  { return backLabel(config.Get().Dashboard.ReturnAfter) }
 func Tiles() string { return tilesLabel(config.Get().Dashboard.Tiles) }

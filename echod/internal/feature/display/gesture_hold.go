@@ -92,7 +92,7 @@ var fireGesture = func(name string) {
 func (d *Display) clockHeld() {
 	now := time.Now()
 	d.mu.Lock()
-	on := d.clockHolds && d.view.Phase == "idle" && !now.Before(d.weatherUntil)
+	on := d.clockHolds && pageIdle(d.view.Phase) && !now.Before(d.weatherUntil)
 	d.mu.Unlock()
 	if !on || d.answerUp(now) || d.wakeLight(now) > 0 {
 		return

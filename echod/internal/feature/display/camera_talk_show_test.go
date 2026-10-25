@@ -24,7 +24,7 @@ func TestTheCameraTalkControl(t *testing.T) {
 	for _, panel := range []struct {
 		name       string
 		wide, high int
-	}{{"", showWide, showHigh}, {"-show8", show8Wide, show8High}} {
+	}{{"", showWide, showHigh}, {"-show8", show8Wide, show8High}, {"-skylight", skylightWide, skylightHigh}} {
 		frame := testPhoto("sky", panel.wide*9/10, panel.high*9/10)
 		view := home.CameraView{Entity: door, Name: "Front door", Frame: frame, Until: at.Add(time.Hour)}
 		scenes := map[string]scene{

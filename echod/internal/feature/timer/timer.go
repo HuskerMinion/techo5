@@ -160,7 +160,7 @@ func Get() *Timers {
 }
 
 func build() *Timers {
-	return &Timers{
+	t := &Timers{
 		countdown: led.Get().Claim(led.PriorityTimer),
 		names: &esphome.TextSensor{
 			Base: esphome.Base{
@@ -173,6 +173,10 @@ func build() *Timers {
 		woke: make(chan struct{}, 1),
 		held: map[string]*timer{},
 	}
+	// No timers yet, the state the sensor returns to when the last one ends; until something was set,
+	// Home Assistant showed it as unknown.
+	t.names.Set("")
+	return t
 }
 
 func (t *Timers) Name() string { return "timers" }

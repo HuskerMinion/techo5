@@ -189,6 +189,23 @@ image goes on with `fastboot flash boot` (with the Show in fastboot, docs/instal
 [tools/linux/build-aec.sh](../tools/linux/build-aec.sh) compiles the WebRTC echo canceller helper for
 armv7 (Linux or WSL). `deploy-rootfs.sh` includes `bin/techo5-aec-arm` when it exists.
 
+## The video decoder
+
+Every image carries a small ffmpeg for the video player and live cameras. It is not optional:
+`deploy-rootfs.sh` stops when it is missing.
+
+- [tools/linux/build-ffmpeg.sh](../tools/linux/build-ffmpeg.sh) builds `bin/techo5-ffmpeg-arm`, the
+  32-bit one every image carries (Linux or WSL).
+- [tools/linux/build-ffmpeg-arm64.sh](../tools/linux/build-ffmpeg-arm64.sh) builds
+  `bin/techo5-ffmpeg-arm64`: the same ffmpeg for aarch64, fully static, with H.265, VP8 and VP9 added. It
+  is a cross build in WSL or on x86_64 Linux (under a minute once its build root is made). Only the
+  Show 8 2nd gen (athena) and Skylight images carry it, beside the 32-bit one, and the daemon runs it
+  on their 64-bit kernels. `deploy-rootfs.sh` stops when it is missing from either image.
+  OpenSSL is linked into it, so an OpenSSL fix needs a rebuild: `ROOTS=fresh` makes the build root again
+  with Alpine's current packages.
+
+Both go in `bin/`, which git ignores. A release built from a worktree needs both copied into its `bin/`.
+
 ## Optional: a CPU profile from a device
 
 To see where the daemon spends its time on a unit, turn SSH on and write the number of seconds to a

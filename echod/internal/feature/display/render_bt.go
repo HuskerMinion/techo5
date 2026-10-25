@@ -11,7 +11,8 @@ import (
 // The pairing page: a title, a line saying what to do, the devices the scan has found as rows a
 // finger can hit, and a bar at the bottom that ends pairing. Geometry is shared with the gesture
 // handler, which maps a tap back to a row.
-// The panel is 960 by 480 in landscape: title, hint, four rows, and the bar fit in 480.
+// The sizes are the Show 5's, 960 by 480 in landscape, where title, hint, four rows and the bar fit
+// in 480; a larger panel scales them (r.s), and the tap is mapped back through the same scale.
 const (
 	btRowTop    = 112 // first row's top edge
 	btRowHeight = 58
@@ -21,13 +22,13 @@ const (
 
 // btRowAt maps a tap to the row it landed on, or -1; the bottom bar is btRows.
 func (r *renderer) btRowAt(y int) int {
-	if y >= r.h-btDoneBar {
+	if y >= r.h-r.s(btDoneBar) {
 		return btRows
 	}
-	if y < btRowTop {
+	if y < r.s(btRowTop) {
 		return -1
 	}
-	row := (y - btRowTop) / btRowHeight
+	row := (y - r.s(btRowTop)) / r.s(btRowHeight)
 	if row >= btRows {
 		return -1
 	}
@@ -35,31 +36,32 @@ func (r *renderer) btRowAt(y int) int {
 }
 
 func (r *renderer) pairingPage(s scene) {
-	r.text(r.body, "Bluetooth", r.margin, 52, amber)
+	r.text(r.body, "Bluetooth", r.margin, r.s(52), amber)
 	t := clockHM(s.now)
-	r.text(r.small, t, r.w-r.margin-r.width(r.small, t), 52, dim)
+	r.text(r.small, t, r.w-r.margin-r.width(r.small, t), r.s(52), dim)
 	hint := s.bt.Status
 	if hint == "" {
 		hint = "Put your earbuds in pairing mode"
 	}
-	r.text(r.tiny, hint, r.margin, 92, dim)
+	r.text(r.tiny, hint, r.margin, r.s(92), dim)
 
+	rowTop, rowH := r.s(btRowTop), r.s(btRowHeight)
 	if len(s.bt.Devices) == 0 {
 		// A dot that walks while the scan runs, so a still list reads as searching rather than stuck.
 		n := int(s.now.UnixMilli() / 400 % 4)
-		r.text(r.small, fmt.Sprintf("Searching%s", "..."[:n]), r.margin, btRowTop+38, dim)
+		r.text(r.small, fmt.Sprintf("Searching%s", "..."[:n]), r.margin, rowTop+r.s(38), dim)
 	}
 	for i, d := range s.bt.Devices {
 		if i >= btRows {
 			break
 		}
-		top := btRowTop + i*btRowHeight
-		draw.Draw(r.dst, image.Rect(r.margin, top+btRowHeight-2, r.w-r.margin, top+btRowHeight), image.NewUniform(ember), image.Point{}, draw.Src)
+		top := rowTop + i*rowH
+		draw.Draw(r.dst, image.Rect(r.margin, top+rowH-r.s(2), r.w-r.margin, top+rowH), image.NewUniform(ember), image.Point{}, draw.Src)
 		c := cream
 		if d.Busy {
 			c = amber
 		}
-		r.text(r.small, d.Name, r.margin, top+40, c)
+		r.text(r.small, d.Name, r.margin, top+r.s(40), c)
 		var right string
 		switch {
 		case d.Busy:
@@ -71,12 +73,12 @@ func (r *renderer) pairingPage(s scene) {
 		default:
 			right = "tap to pair"
 		}
-		r.text(r.tiny, right, r.w-r.margin-r.width(r.tiny, right), top+38, dim)
+		r.text(r.tiny, right, r.w-r.margin-r.width(r.tiny, right), top+r.s(38), dim)
 	}
 
 	// The bar that ends it.
-	top := r.h - btDoneBar
+	top := r.h - r.s(btDoneBar)
 	draw.Draw(r.dst, image.Rect(0, top, r.w, r.h), image.NewUniform(ember), image.Point{}, draw.Src)
 	label := "Done"
-	r.text(r.body, label, (r.w-r.width(r.body, label))/2, top+45, cream)
+	r.text(r.body, label, (r.w-r.width(r.body, label))/2, top+r.s(45), cream)
 }

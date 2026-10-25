@@ -5,6 +5,8 @@ import (
 	"html"
 	"net/http"
 	"net/url"
+
+	"github.com/HuskerMinion/techo5/echod/internal/layout"
 )
 
 // The page's tabs: the device's own settings sections, in the order its screen lists them, so what is
@@ -12,27 +14,32 @@ import (
 // is drawn: no script, and a save comes back to the tab it was made on.
 //
 // There is no Display tab. What the screen shows is set on the screen, which is where it can be seen
-// changing - except the clock's look, what a tap on it does, the dashboard and the slideshow, which a
-// device far from its owner or on a wall still needs set from a phone, and which are on Screen & Photos.
+// changing - except the clock's look, what a tap on it does, the themes, the dashboard and the slideshow,
+// which a device far from its owner or on a wall still needs set from a phone, and which are on Screen &
+// Photos.
 
 type tab struct{ id, title, blurb string }
 
 var tabs = []tab{
 	{"sound", "Sound & Voice", "Music, radio, voice assistant"},
 	{"alarms", "Alarms & Timers", "Alarms, timers and reminders"},
-	{"connections", "Connections", "Wi-Fi and cameras"},
+	{"connections", "Connections", "Wi-Fi, Bluetooth and cameras"},
 	{"weather", "Weather & Calendar", "Where it is, units, calendars"},
 	{"photos", "Screen & Photos", "Clock, dashboard, slideshow, pictures"},
 	{"privacy", "Privacy & Security", "What this device shares"},
 	{"general", "General", "Name, updates, time zone, help"},
 }
 
-// shownTabs are the tabs this device has: Screen & Photos only where there is a screen.
+// shownTabs are the tabs this device has: Screen & Photos only where there is a screen, and no voice
+// in the Sound tab's name where there is no microphone (layout.HasMicrophone).
 func shownTabs() []tab {
 	out := make([]tab, 0, len(tabs))
 	for _, t := range tabs {
 		if t.id == "photos" && !hasScreen {
 			continue
+		}
+		if t.id == "sound" && !layout.HasMicrophone() {
+			t.title, t.blurb = "Sound", "Music, radio, the speaker"
 		}
 		out = append(out, t)
 	}

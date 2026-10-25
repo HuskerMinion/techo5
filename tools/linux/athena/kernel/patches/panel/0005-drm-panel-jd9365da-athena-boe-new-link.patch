@@ -1,0 +1,47 @@
+athena: the JD9365 BOE (new) panel, jd936x_id 0x35, on Amazon's DSI link
+
+On this panel mainline's link (continuous clock lane, no EoT packets, 415 Mbps
+per lane) flickers (#187). Amazon's settings fix it: the clock lane rests in LP
+between lines, the link runs at 478 Mbps per lane with a longer front porch so
+it stays at 60 Hz, and EoT packets are on. Only the 0x35 panel changes.
+
+--- a/drivers/gpu/drm/panel/panel-jadard-jd9365da-h3.c
++++ b/drivers/gpu/drm/panel/panel-jadard-jd9365da-h3.c
+@@ -2050,12 +2050,17 @@
+ 
+ static const struct jadard_panel_desc athena_jd_boe_new_desc = {
+ 	.mode = {
+-		.clock		= 69217,	/* 870 x 1326 at 60 Hz */
++		/*
++		 * athena: boe-new link. Amazon's 478 Mbps per lane (PLL_CLOCK 239 MHz):
++		 * 79.68 MHz x 24 bit / 4 lanes. The front porch takes the extra time,
++		 * as the burst idle does on stock, so it stays at 60 Hz (1001 x 1326).
++		 */
++		.clock		= 79680,
+ 
+ 		.hdisplay	= 800,
+-		.hsync_start	= 800 + 30,
+-		.hsync_end	= 800 + 30 + 20,
+-		.htotal		= 800 + 30 + 20 + 20,
++		.hsync_start	= 800 + 161,
++		.hsync_end	= 800 + 161 + 20,
++		.htotal		= 800 + 161 + 20 + 20,
+ 
+ 		.vdisplay	= 1280,
+ 		.vsync_start	= 1280 + 30,
+@@ -2320,6 +2325,15 @@
+ 	desc = of_device_get_match_data(dev);
+ 	dsi->mode_flags = MIPI_DSI_MODE_VIDEO | MIPI_DSI_MODE_VIDEO_BURST |
+ 			  MIPI_DSI_MODE_NO_EOT_PACKET;
++	/*
++	 * athena: boe-new link. Clock lane in LP between lines (Amazon's
++	 * clk_lp_per_line_enable = 1) and EoT packets, or the panel flickers (#187).
++	 */
++	if (desc == &athena_jd_boe_new_desc) {
++		dsi->mode_flags |= MIPI_DSI_CLOCK_NON_CONTINUOUS;
++		dsi->mode_flags &= ~MIPI_DSI_MODE_NO_EOT_PACKET;
++		dev_info(dev, "athena: boe-new link: clock lane non-continuous, 478 Mbps per lane, EoT on\n");
++	}
+ 	dsi->format = desc->format;
+ 	dsi->lanes = desc->lanes;
+ 

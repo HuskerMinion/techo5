@@ -81,8 +81,11 @@ func (f *Feature) Entities() []esphome.Entity {
 	if sshAvailable() {
 		out = append(out, f.ssh)
 	}
+	if webPages && cameraPage {
+		out = append(out, f.camera)
+	}
 	if webPages {
-		out = append(out, f.camera, f.screen, f.talk, f.lockSw)
+		out = append(out, f.screen, f.talk, f.lockSw)
 	}
 	return out
 }
@@ -308,6 +311,9 @@ func keyLabel(k string) string {
 	}
 	return fields[0]
 }
+
+// Encrypted reports whether the Home Assistant link has a key of its own (encrypted).
+func Encrypted() bool { return encrypted() }
 
 // encrypted reports whether the Home Assistant link has a key of its own rather than the reserved
 // all-zeros one an unprovisioned device answers with.

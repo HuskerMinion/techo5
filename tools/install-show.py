@@ -348,8 +348,19 @@ def boot_image(rel, work, dev):
 # The unlock the Show 5 2nd gen install is tested on, amonet-cronos v2.0.1, as its bootloader names
 # itself to fastboot (getvar kaeru-version). Other builds of the unlock exist: one that prints
 # "[amonet] Injecting microloader..." while flashing rewrites the front of the boot image on its way in,
-# and then refuses it with "image is not a boot image" (#168).
+# and then refuses it with "image is not a boot image" (#168). A build tag may follow the version: the
+# genuine v2.0.1 download reports 2.0.0-g7b11500 (#257).
 TESTED_KAERU = '2.0.0'
+
+
+# How long a fastboot continue sent to nudge a stopped boot may take: the unit answers at once if it
+# is still there.
+NUDGE_WAIT = 15
+
+
+def tested_kaeru(kaeru):
+    """Whether fastboot's kaeru-version is the tested unlock's, with or without a build tag."""
+    return kaeru == TESTED_KAERU or kaeru.startswith(TESTED_KAERU + '-')
 
 
 def getvar(out, name):
@@ -384,7 +395,7 @@ def unlock_problem(dev, kaeru, unlocked):
         return ''
     if unlocked == 'false':
         return 'fastboot says unlock_status: false, as the amonet-cronos 1.x unlock does'
-    if kaeru and kaeru != TESTED_KAERU:
+    if kaeru and not tested_kaeru(kaeru):
         return 'fastboot reports kaeru-version %s, and amonet-cronos v2.0.1 reports %s' % (kaeru, TESTED_KAERU)
     return ''
 
@@ -681,7 +692,9 @@ def main():
             return True
         # A leftover bootloader request can stop the boot at "hacked fastboot" once; continue it.
         if not nudged[0] and fastboot.present():
-            fastboot.run('continue')
+            # Bounded: the unit can leave fastboot between the two, and a continue to a unit that is
+            # gone waits for it forever (#257).
+            fastboot.run('continue', timeout=NUDGE_WAIT)
             nudged[0] = True
         return False
 
@@ -762,7 +775,9 @@ def main():
         if re.search(r'slot=a- daemon=\d', console.run('echo slot=$(cat /run/techo5/slot 2>/dev/null)- daemon=$(pidof techo5)-', 4) or ''):
             return True
         if not nudged[0] and fastboot.present():
-            fastboot.run('continue')
+            # Bounded: the unit can leave fastboot between the two, and a continue to a unit that is
+            # gone waits for it forever (#257).
+            fastboot.run('continue', timeout=NUDGE_WAIT)
             nudged[0] = True
         return False
     wait_for('slot a with the daemon running', 300, slot_up, hint=console.waiting_hint)

@@ -1,13 +1,14 @@
 //go:build !dot
 
 // Package person tells a person from anything else that moves: a curtain in a draft, a pet, the light
-// changing. While presence detection (feature/presence) has seen movement, a small model looks at the
-// camera's picture about twice a second, and a Person sensor says whether it saw somebody.
+// changing, or somebody sitting still. While it is on, a small model looks at the camera's picture every
+// second and a half, whether anything moved or not, and a Person sensor says whether it saw somebody,
+// with a Person confidence sensor for how sure it was.
 //
 // Off until it is turned on, and only with presence detection on: it reads the frames presence already
 // has the camera make, and starts no camera of its own. Nothing the camera sees is kept or sent; the
-// picture is read as 96 by 96 shades of gray, run through the model, and let go. The model is its own,
-// on its own goroutine and buffers, apart from the wake word engine's.
+// middle of the picture is read as 96 by 96 shades of gray, run through the model, and let go. The
+// model is its own, on its own goroutine and buffers, apart from the wake word engine's.
 //
 // The model is TensorFlow's person detection example (MobileNet v1, int8, 96x96 grayscale): small
 // enough for these processors, and a modest judge. A person far from the camera, or half out of the
@@ -19,6 +20,7 @@ import (
 	_ "embed"
 	"errors"
 	"log/slog"
+	"math"
 	"sync"
 	"time"
 
@@ -44,8 +46,10 @@ const (
 	// side is the model's picture, square and gray.
 	side = 96
 
-	// every is how often a frame is looked at while somebody is near.
-	every = 500 * time.Millisecond
+	// every is how often a frame is looked at. A look is about 3.4 ms on a desktop (BenchmarkScore);
+	// the Show 5's cores are perhaps twenty to thirty times slower, not measured, so every second and
+	// a half is a few percent of one core, and the judge's three looks still come within five seconds.
+	every = 1500 * time.Millisecond
 	// everySlack is how much sooner than every a frame may come and still be looked at.
 	everySlack = 50 * time.Millisecond
 
@@ -55,8 +59,9 @@ const (
 )
 
 type Feature struct {
-	sw     *esphome.Switch
-	sensor *esphome.BinarySensor
+	sw         *esphome.Switch
+	sensor     *esphome.BinarySensor
+	confidence *esphome.Sensor
 
 	wake chan struct{}
 
@@ -87,6 +92,12 @@ func Get() *Feature {
 			Base:        esphome.Base{ObjectID: "person", Name: "Person", Icon: "mdi:account"},
 			DeviceClass: "occupancy",
 		}
+		f.confidence = &esphome.Sensor{
+			Base: esphome.Base{ObjectID: "person_confidence", Name: "Person confidence", Icon: "mdi:account-question",
+				Category: esphome.CategoryDiagnostic},
+			Unit:       "%",
+			StateClass: esphome.StateClassMeasurement,
+		}
 		shared = f
 	})
 	return shared
@@ -94,12 +105,17 @@ func Get() *Feature {
 
 func (f *Feature) Name() string { return "person" }
 
-func (f *Feature) Entities() []esphome.Entity { return []esphome.Entity{f.sw, f.sensor} }
+func (f *Feature) Entities() []esphome.Entity { return []esphome.Entity{f.sw, f.sensor, f.confidence} }
 
 func (f *Feature) Restore(c config.Config) {
 	f.sw.Set(c.Presence.Person)
 	f.sensor.Set(false)
+	f.forget()
 }
+
+// forget tells Home Assistant there is no confidence while nothing is looked at, rather than leaving the
+// last one, which would read as a room that never changes.
+func (f *Feature) forget() { f.confidence.Set(float32(math.NaN())) }
 
 // SetOn is the switch.
 func (f *Feature) SetOn(on bool) {
@@ -172,6 +188,7 @@ func (f *Feature) look(ctx context.Context) {
 		f.judge = judge{}
 		f.mu.Unlock()
 		f.sensor.Set(false)
+		f.forget()
 		slog.Info("person detection: not looking")
 	}()
 
@@ -194,12 +211,13 @@ func (f *Feature) look(ctx context.Context) {
 		case fr := <-frames:
 			now := time.Now()
 			// A frame a little early is taken: frames come about every so often, and one just short
-			// of every skipped would make it a look every other frame.
-			if now.Sub(last) < every-everySlack || !presence.Present() {
+			// of every skipped would make it a look every other frame. Whether anything moved does
+			// not matter: somebody sitting still is somebody.
+			if now.Sub(last) < every-everySlack {
 				continue
 			}
 			last = now
-			gray := fr.Luma(side, side)
+			gray := picture(fr)
 			if gray == nil {
 				continue // held off by the mute
 			}
@@ -210,11 +228,56 @@ func (f *Feature) look(ctx context.Context) {
 			}
 			f.mu.Lock()
 			f.judge.add(p, now)
+			mean := f.judge.mean()
 			f.mu.Unlock()
 			f.update(now)
+			// In whole percents, and only when it changes, so Home Assistant is not sent a
+			// new number every look.
+			if pct := float32(math.Round(float64(mean) * 100)); pct != f.confidence.Get() {
+				f.confidence.Set(pct)
+			}
 		}
 	}
 }
+
+// picture is a frame as the model wants it: the middle square of the picture, not the whole of it
+// squeezed, at side by side, and brightened the way a photograph is. The sensor's brightness is
+// linear, so a room reads dark and its shadows black; the model learned on photographs.
+func picture(fr *camera.Frame) []uint8 {
+	w := max(side, side*camera.Width/camera.Height)
+	g := fr.Luma(w, side)
+	if g == nil {
+		return nil
+	}
+	return square(g, w)
+}
+
+// square is the middle side by side of a w by side grid, through the gamma table.
+func square(g []uint8, w int) []uint8 {
+	out := make([]uint8, side*side)
+	x0 := (w - side) / 2
+	for y := range side {
+		row := g[y*w+x0 : y*w+x0+side]
+		for x, v := range row {
+			out[y*side+x] = gamma[v]
+		}
+	}
+	return out
+}
+
+// gamma is sRGB's curve, from linear brightness to a photograph's.
+var gamma = func() (t [256]uint8) {
+	for i := range t {
+		v := float64(i) / 255
+		if v <= 0.0031308 {
+			v *= 12.92
+		} else {
+			v = 1.055*math.Pow(v, 1/2.4) - 0.055
+		}
+		t[i] = uint8(math.Round(v * 255))
+	}
+	return t
+}()
 
 // update sets the sensor from the judge.
 func (f *Feature) update(now time.Time) {
@@ -247,16 +310,24 @@ func (j *judge) add(p float32, now time.Time) {
 	if len(j.recent) < looks {
 		return
 	}
-	var sum float32
-	for _, v := range j.recent {
-		sum += v
-	}
-	if sum/float32(len(j.recent)) >= threshold {
+	if j.mean() >= threshold {
 		j.until = now.Add(hold)
 	}
 }
 
 func (j *judge) seen(now time.Time) bool { return now.Before(j.until) }
+
+// mean is the mean of the last few looks: what is held against threshold.
+func (j *judge) mean() float32 {
+	if len(j.recent) == 0 {
+		return 0
+	}
+	var sum float32
+	for _, v := range j.recent {
+		sum += v
+	}
+	return sum / float32(len(j.recent))
+}
 
 var errSize = errors.New("the picture or the model's answer is not the size expected")
 

@@ -71,6 +71,12 @@ func (u *Firmware) autoLoop(ctx context.Context) {
 			continue
 		}
 		tried = now.Format("2006-01-02")
+		if !update.Published() {
+			// A panel's app looks and installs in one go (askApp), and installs nothing that is not newer.
+			slog.Info("asking the app to install an update by itself, overnight")
+			u.Install(ctx)
+			continue
+		}
 		u.Check(ctx)
 		if v := u.Offered(); v != "" {
 			slog.Info("installing an update by itself, overnight", "version", v)

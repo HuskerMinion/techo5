@@ -9,6 +9,11 @@
 // the microphones' loopback; a voice request, a call or a talk through a camera, which are people
 // talking to the device rather than the room, and a ring, are kept out here. With the microphones
 // muted there is no room to hear, so it reads unknown until they are back.
+//
+// From Home Assistant all of those look alike: unknown, or a number that does not move. So whenever the
+// reason there is no reading changes, the log says what it is, and says so again when readings start.
+// It is once per change rather than once per window, so a device that plays music all evening logs it
+// once.
 package noise
 
 import (
@@ -52,14 +57,21 @@ type Noise struct {
 	level *esphome.Sensor
 
 	// busy says whether the device is doing something that is not the room, muted whether the
-	// microphones are cut, and read is the room's level since it was last asked; replaced in tests.
+	// microphones are cut, read is the room's level since it was last asked or why there is none, and
+	// say puts a change in that reason in the log; replaced in tests.
 	busy  func() bool
 	muted func() bool
-	read  func() (float64, bool)
+	read  func() (float64, string)
+	say   func(why string, value float64)
 
 	mu      sync.Mutex
 	enabled bool
 	last    held
+
+	// why is the reason the last window gave no reading, empty for a reading, and told whether the
+	// log has had one since the switch last moved.
+	why  string
+	told bool
 }
 
 // window is the reading being gathered: when it started, and whether the device was busy during it.
@@ -108,7 +120,8 @@ func build() *Noise {
 		},
 		busy:  busy,
 		muted: muted,
-		read:  func() (float64, bool) { return mic.Get().Noise() },
+		read:  func() (float64, string) { return mic.Get().Noise() },
+		say:   say,
 	}
 
 	n.on.OnCommand = func(on bool) {
@@ -125,6 +138,15 @@ func busy() bool {
 	return voice.Get().Busy() || phone.Get().Busy() || talkback.Get().Busy() || ring.IsSounding()
 }
 
+// say logs why the sensor has no reading, or that it has one again.
+func say(why string, value float64) {
+	if why == "" {
+		slog.Info("ambient noise measuring", "dbfs", value)
+		return
+	}
+	slog.Info("ambient noise has no reading", "why", why)
+}
+
 // muted is whether the microphones are cut. One whose mute cannot be read counts as live, as it does
 // for the wake word.
 func muted() bool {
@@ -139,6 +161,7 @@ func (n *Noise) set(on bool) {
 	mic.Get().SetNoise(on)
 	n.mu.Lock()
 	n.enabled = on
+	n.told = false
 	n.mu.Unlock()
 	if !on {
 		n.forget()
@@ -195,6 +218,7 @@ func (n *Noise) beat(now time.Time, w *window) {
 			n.forget()
 		}
 		n.read()
+		n.explain(mutedWhy, 0)
 		*w = window{started: now}
 		return
 	}
@@ -203,9 +227,33 @@ func (n *Noise) beat(now time.Time, w *window) {
 	if now.Sub(w.started) < windowLength {
 		return
 	}
-	v, ok := n.read()
-	n.take(v, ok && !w.busy)
+	v, why := n.read()
+	if w.busy {
+		// The device's own business comes first: a reply is played as well as listened to, and what
+		// was played is the consequence, not the reason.
+		why = busyWhy
+	}
+	n.take(v, why == "")
+	n.explain(why, math.Round(v))
 	*w = window{started: now}
+}
+
+// The reasons a window gives no reading that are this package's own; the microphones' are mic.Noise*.
+const (
+	mutedWhy = "the microphones are muted"
+	busyWhy  = "the device was busy with a request, a call, a talk or a ring"
+)
+
+// explain tells the log why there is no reading, or that there is one, when that is not what it last
+// said.
+func (n *Noise) explain(why string, value float64) {
+	n.mu.Lock()
+	same := n.told && n.why == why
+	n.why, n.told = why, true
+	n.mu.Unlock()
+	if !same {
+		n.say(why, value)
+	}
 }
 
 // take is one window's reading: sent when there is one and it moved far enough from the last, held

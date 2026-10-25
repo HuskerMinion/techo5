@@ -69,6 +69,11 @@ var whenIdle = &idleReconnect{
 	gap:     reconnectGap,
 }
 
+// ReconnectWhenIdle has Home Assistant reconnect once the device is idle, for something else it reads only
+// as it connects: the screen's light standing apart from the room's lights (display, screen_room.go). It
+// joins a reconnect already waiting for a wake word, and keeps the same gap between them.
+func ReconnectWhenIdle() { whenIdle.ask() }
+
 // ask has Home Assistant reconnect once the device is idle. Asking while a reconnect is already
 // waiting joins it.
 func (r *idleReconnect) ask() {
@@ -110,6 +115,6 @@ func (r *idleReconnect) wait() {
 	r.pending = false
 	r.last = time.Now()
 	r.mu.Unlock()
-	slog.Info("setup page: Home Assistant reconnects to see the wake words", "waited", time.Since(start).Round(time.Second))
+	slog.Info("Home Assistant reconnects to see what changed", "waited", time.Since(start).Round(time.Second))
 	r.emit()
 }

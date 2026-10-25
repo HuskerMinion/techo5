@@ -1,6 +1,7 @@
 package metrics
 
 import (
+	"math"
 	"path/filepath"
 	"strconv"
 )
@@ -15,6 +16,17 @@ func (r Reader) LuxPath() string {
 		at := r.path("sys/bus/iio/devices/iio:device"+strconv.Itoa(i)) + "/illuminance0_input"
 
 		if _, err := number(at); err == nil {
+			return at
+		}
+	}
+	iio, _ := filepath.Glob(r.path("sys/bus/iio/devices/iio:device*"))
+	for _, dir := range iio {
+		name, _ := text(filepath.Join(dir, "name"))
+		if name != "jsa1214" {
+			continue
+		}
+		at := filepath.Join(dir, "in_illuminance_raw")
+		if r.Lux(at).Known {
 			return at
 		}
 	}
@@ -40,6 +52,16 @@ func (r Reader) Lux(path string) Reading {
 
 	lux, err := number(path)
 	if err != nil {
+		return Reading{}
+	}
+	if filepath.Base(path) == "in_illuminance_raw" {
+		scale, err := number(filepath.Join(filepath.Dir(path), "in_illuminance_scale"))
+		if err != nil || scale <= 0 {
+			return Reading{}
+		}
+		lux *= scale
+	}
+	if lux < 0 || math.IsNaN(lux) || math.IsInf(lux, 0) {
 		return Reading{}
 	}
 	return known(lux)

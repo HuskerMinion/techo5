@@ -25,7 +25,7 @@ func TestWeatherArtDraws(t *testing.T) {
 	at := time.Date(2026, 9, 16, 14, 7, 38, 0, time.Local)
 	for c, cond := range artConds {
 		for when := artDawn; when <= artNight; when++ {
-			for _, p := range [][2]int{{showWide, showHigh}, {show8Wide, show8High}} {
+			for _, p := range [][2]int{{showWide, showHigh}, {show8Wide, show8High}, {skylightWide, skylightHigh}} {
 				land := paintLandscape(artKey{c, when, p[0], p[1], 42})
 				frame := image.NewRGBA(land.base.Rect)
 				composeArt(frame, land, artBodies{moon: moonAt(0, 0, false, at)}, at.Unix())
@@ -106,7 +106,7 @@ func TestWeatherArtMoonPreviews(t *testing.T) {
 	for _, p := range []struct {
 		name string
 		w, h int
-	}{{"show5", showWide, showHigh}, {"show8", show8Wide, show8High}} {
+	}{{"show5", showWide, showHigh}, {"show8", show8Wide, show8High}, {"skylight", skylightWide, skylightHigh}} {
 		writeMoonPreviews(t, dir, p.name, p.w, p.h, func(art *image.RGBA, cond string) *image.RGBA {
 			img := image.NewRGBA(image.Rect(0, 0, p.w, p.h))
 			newRenderer(img).draw(scene{now: at, phase: "idle", weather: home.Weather{Condition: cond, Temp: "48°"}, slideshow: art, artFx: fxFor(cond)})

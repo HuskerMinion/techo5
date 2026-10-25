@@ -63,6 +63,8 @@ type settings struct {
 	wifiOK      bool   // Wi-Fi is managed here, so it can be changed
 	addressSet  string // how the address is set, for its row; empty where the screen cannot change it
 	btProxy     bool
+	btSCOff     bool       // the controller's Secure Connections turned off (btaudio secureconn.go)
+	btSCFixed   bool       // and not this device's to change: athena on mainline has them off for good
 	checking    bool       // an update check from the screen is out
 	colors      bool       // the custom colors editor is open
 	demo        bool       // placeholders for the owner's details, for published screenshots

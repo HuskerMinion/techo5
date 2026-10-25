@@ -52,7 +52,7 @@ func (d *Display) alertUpSpot() bool {
 	}
 	d.mu.Lock()
 	defer d.mu.Unlock()
-	return time.Now().Before(d.alertUntil) && here > 0 && d.view.Phase == "idle"
+	return time.Now().Before(d.alertUntil) && here > 0 && pageIdle(d.view.Phase)
 }
 
 // alertSceneSpot fills in the alerts the faces may show, and the alert face when it is up. Only while

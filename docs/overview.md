@@ -70,6 +70,11 @@ Android, with one Go daemon, `echod`, doing everything the device does:
   away; a new unit is on UTC until its first connection. A zone chosen on the device (Settings,
   General, Time zone) holds over Home Assistant's until Home Assistant is chosen again; the Common
   zones work even on an early image with no zone database.
+- **Clock**: set from time servers on the internet (NTP). A time server on your own network, like a
+  router's, can be set on the setup page (General, Time server) and is asked first. A device that
+  reaches no time server at all takes Home Assistant's time when it connects; once NTP has set the
+  clock, Home Assistant's time doesn't change it. On a Dot, a new time server is asked from its next
+  restart.
 - **Updates**: two root filesystem slots with a trial and automatic fallback; a release that
   carries a rootfs tarball installs over the air from Home Assistant's update entity.
 

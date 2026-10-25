@@ -91,6 +91,9 @@ func parseGains(s string) []int {
 	return gains
 }
 
+// close has nothing to let go of: every reading opens and closes its own files.
+func (t *tcs3400) close() error { return nil }
+
 func (t *tcs3400) write(attr, v string) error {
 	if err := os.WriteFile(filepath.Join(t.dir, attr), []byte(v), 0o644); err != nil {
 		return fmt.Errorf("ambient: setting %s: %w", attr, err)
@@ -214,16 +217,16 @@ func (s *Sensor) startIIO() error {
 		return fmt.Errorf("ambient: %w", err)
 	}
 	s.mu.Lock()
-	s.iio = t
+	s.poll = t
 	s.mu.Unlock()
 	slog.Info("light sensor on", "device", t.dir, "period", period, "integration", t.itime,
 		"gain", t.gains[t.gain])
 	return nil
 }
 
-// runIIO polls the sensor every period. Every reading refreshes Current; Lux fires only when the
+// runPoll polls the sensor every period. Every reading refreshes Current; Lux fires only when the
 // rounded value changes, as the hwmsensor path only hears of changes.
-func (s *Sensor) runIIO(ctx context.Context, t *tcs3400) error {
+func (s *Sensor) runPoll(ctx context.Context, t poller) error {
 	tick := time.NewTicker(period)
 	defer tick.Stop()
 	failed := 0

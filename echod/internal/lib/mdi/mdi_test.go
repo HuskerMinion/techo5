@@ -25,3 +25,12 @@ func TestIconsAreInTheFont(t *testing.T) {
 		t.Error("a made-up icon was found")
 	}
 }
+
+func TestNameIsRuneBackwards(t *testing.T) {
+	if n, ok := Name(0xF0335); !ok || n != "lightbulb" {
+		t.Errorf("Name(F0335) = %q, %v; want lightbulb", n, ok)
+	}
+	if _, ok := Name('a'); ok {
+		t.Error("a letter was named as an icon")
+	}
+}

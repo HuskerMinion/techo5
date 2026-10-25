@@ -13,6 +13,7 @@ import (
 	xdraw "golang.org/x/image/draw"
 
 	"github.com/HuskerMinion/techo5/echod/internal/lib/hass"
+	"github.com/HuskerMinion/techo5/echod/internal/lib/picscale"
 )
 
 // The camera grid: several cameras on the screen at once, from their snapshots, each refreshed on its own.
@@ -131,7 +132,8 @@ func (f *Feature) ShowGrid(entities []string, d time.Duration) error {
 
 	slog.Info("camera grid up", "cameras", len(cells), "for", d)
 	cols, rows := GridLayout(len(cells))
-	w, h := cameraFrameW/cols, cameraFrameH/rows
+	fw, fh := cameraFrameSize()
+	w, h := fw/cols, fh/rows
 	for i, c := range cells {
 		f.spawn(func() { f.gridFrames(ctx, gen, i, c.Entity, w, h) })
 	}
@@ -206,6 +208,6 @@ func FitInto(src image.Image, w, h int) *image.RGBA {
 		dw, dh = sw*h/sh, h
 	}
 	dst := image.NewRGBA(image.Rect(0, 0, max(dw, 1), max(dh, 1)))
-	xdraw.ApproxBiLinear.Scale(dst, dst.Bounds(), src, src.Bounds(), xdraw.Src, nil)
+	picscale.CatmullRom.Scale(dst, dst.Bounds(), src, src.Bounds(), xdraw.Src)
 	return dst
 }

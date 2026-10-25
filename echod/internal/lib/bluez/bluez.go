@@ -92,6 +92,11 @@ type Adapter struct {
 	// playing or not. Listeners must not block.
 	PlayerChanged hook.Hook[PlayerStatus]
 
+	// Returned fires when bluetoothd puts the adapter back at its path: a new hci0 under the same name,
+	// as a bridge that restarted brings up (techo5-lib.sh t5_bt_again). What was set on the controller
+	// before, rather than kept by bluetoothd, is gone. Listeners must not block.
+	Returned hook.Hook[struct{}]
+
 	mu      sync.Mutex
 	devices map[dbus.ObjectPath]*Device
 	// players is the AVRCP side of what bluetoothd exports, as GetManagedObjects gives it but only
@@ -377,7 +382,7 @@ func (a *Adapter) signal(s *dbus.Signal) {
 		}
 		return
 	}
-	changed := false
+	changed, returned := false, false
 	var heard *Device
 	a.mu.Lock()
 	switch s.Name {
@@ -385,6 +390,9 @@ func (a *Adapter) signal(s *dbus.Signal) {
 		if len(s.Body) == 2 {
 			path, _ := s.Body[0].(dbus.ObjectPath)
 			ifcs, _ := s.Body[1].(map[string]map[string]dbus.Variant)
+			if _, ok := ifcs[adapterIfc]; ok && path == a.path {
+				returned = true
+			}
 			addPlayers(a.players, path, ifcs)
 			if props, ok := ifcs[deviceIfc]; ok {
 				a.devices[path] = deviceFrom(path, props)
@@ -432,6 +440,9 @@ func (a *Adapter) signal(s *dbus.Signal) {
 		}
 	}
 	a.mu.Unlock()
+	if returned {
+		a.Returned.Emit(struct{}{})
+	}
 	if changed {
 		a.Changed.Emit(struct{}{})
 	}

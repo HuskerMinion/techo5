@@ -8,6 +8,7 @@ import (
 	"github.com/zserge/microwakeword"
 	"github.com/zserge/microwakeword/audiofrontend"
 
+	"github.com/HuskerMinion/techo5/echod/internal/lib/mwwfront"
 	"github.com/HuskerMinion/techo5/echod/internal/lib/oww"
 	"github.com/HuskerMinion/techo5/echod/internal/lib/wake"
 )
@@ -47,8 +48,16 @@ func newBackend(k wake.Kind) (backend, error) {
 		}
 		return &owwBackend{front: front, scores: map[string]float64{}}, nil
 	}
-	return newMicroBackend(), nil
+	return newMicroBackend(ExactFrontEnd), nil
 }
+
+// ExactFrontEnd picks microWakeWord's feature front end. False, the default, is
+// github.com/zserge/microwakeword's: a float approximation of TensorFlow Lite Micro's front end, which
+// is what has always run. True is mwwfront, the reference's own integer arithmetic, bit for bit the
+// features the models were trained on. They score differently enough that the sensitivity settings
+// mean different things on each, so it is a switch for now: TECHO5_WAKE_FRONTEND=exact in the daemon's
+// environment, read when it starts. A backend keeps the one it was made with.
+var ExactFrontEnd = os.Getenv("TECHO5_WAKE_FRONTEND") == "exact"
 
 // microBackend is microWakeWord. Each wake word is its own streaming model, but they all read the same
 // features of the same audio, so the feature front end runs once per step size and every model is fed
@@ -59,6 +68,7 @@ type microBackend struct {
 	fronts map[int]*microFront
 	scores map[string]float64
 	gone   []string // dropped by feed, for failed
+	exact  bool     // mwwfront rather than zserge's audiofrontend; see ExactFrontEnd
 }
 
 // microDetector is what the backend asks of a loaded model: microwakeword.Detector, or a stand-in in
@@ -68,19 +78,26 @@ type microDetector interface {
 	SlidingAverage() float64
 }
 
+// featureFront is a microWakeWord feature front end: one window of audio in, a frame of 40 features
+// out. Both kinds keep state between windows (noise estimates), so each is fed every window in order.
+type featureFront interface {
+	ProcessFrame(window []int16) []uint16
+}
+
 // microFront is one feature front end and the audio it has not read yet.
 type microFront struct {
-	fe           *audiofrontend.Frontend
+	fe           featureFront
 	buf          []int16
 	window, step int // in samples
 }
 
-func newMicroBackend() *microBackend {
+func newMicroBackend(exact bool) *microBackend {
 	return &microBackend{
 		dets:   map[string]microDetector{},
 		step:   map[string]int{},
 		fronts: map[int]*microFront{},
 		scores: map[string]float64{},
+		exact:  exact,
 	}
 }
 
@@ -90,24 +107,28 @@ func (b *microBackend) front(stepMs int) *microFront {
 	if f, ok := b.fronts[stepMs]; ok {
 		return f
 	}
-	cfg := audiofrontend.DefaultConfig(stepMs)
-	f := &microFront{
-		fe:     audiofrontend.New(cfg),
-		window: cfg.SampleRate * cfg.WindowSizeMs / 1000,
-		step:   cfg.SampleRate * cfg.StepSizeMs / 1000,
+	var f *microFront
+	if b.exact {
+		fe := mwwfront.New(stepMs)
+		f = &microFront{fe: fe, window: fe.WindowSamples(), step: fe.StepSamples()}
+	} else {
+		cfg := audiofrontend.DefaultConfig(stepMs)
+		f = &microFront{
+			fe:     audiofrontend.New(cfg),
+			window: cfg.SampleRate * cfg.WindowSizeMs / 1000,
+			step:   cfg.SampleRate * cfg.StepSizeMs / 1000,
+		}
 	}
 	b.fronts[stepMs] = f
 	return f
 }
 
 // features quantizes a front end's output exactly as the detector does its own (ProcessAudio in
-// microwakeword.go), so a model fed here scores what it would have scored alone.
+// microwakeword.go), so a model fed here scores what it would have scored alone. mwwfront.Quantize is
+// the same arithmetic, ESPHome's.
 func features(raw []uint16) []int8 {
-	frame := make([]int8, 40)
-	for i, v := range raw {
-		val := (int32(v)*256+333)/666 - 128
-		frame[i] = int8(max(-128, min(127, val)))
-	}
+	frame := make([]int8, mwwfront.Channels)
+	mwwfront.Quantize(raw, frame)
 	return frame
 }
 
@@ -138,10 +159,7 @@ func (b *microBackend) load(m wake.Model) (err error) {
 	if err != nil {
 		return fmt.Errorf("wake: loading %s: %w", m.Path, err)
 	}
-	step := cfg.FeaturesStepMs
-	if step == 0 {
-		step = 20 // what NewDetector takes zero to mean
-	}
+	step := mwwfront.StepMs(cfg.FeaturesStepMs)
 	if _, ok := b.dets[m.ID]; ok {
 		b.unload(m.ID) // a reload may change the step
 	}

@@ -43,8 +43,9 @@ On the device's setup page, **Screen & Photos → Deck**:
 
 - **Open it** with a swipe up from the bottom edge of the clock: start right at the bottom of the
   screen. Once a deck has buttons, a swipe up that starts there opens it; anywhere else, and on the
-  now-playing and weather pages, a swipe up is still the volume. You can also set **Tap on the clock** to
-  **Deck** (setup page, Screen & Photos, or Settings → Display on the device).
+  now-playing and weather pages, a swipe up is still the volume (unless **Swipe for volume** is off).
+  You can also set **Tap on the clock** to **Deck** (setup page, Screen & Photos, or Settings →
+  Display on the device).
 - **Press** a button. It lights up and sinks while the press goes out, and turns red for a moment if
   it failed.
 - **Swipe left and right** for the pages, and **down** to put the deck away. It stays up until you

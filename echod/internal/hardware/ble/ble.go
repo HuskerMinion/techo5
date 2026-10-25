@@ -169,7 +169,7 @@ func (r *Radio) openController() (int, error) {
 	}
 	r.kernel = false
 	// A blocking open never returns: the driver powers the chip on inside it.
-	fd, err := syscall.Open(Node, syscall.O_RDWR|syscall.O_NONBLOCK, 0)
+	fd, err := syscall.Open(Node, syscall.O_RDWR|syscall.O_NONBLOCK|syscall.O_CLOEXEC, 0)
 	if err != nil {
 		return -1, fmt.Errorf("ble: opening %s: %w", Node, err)
 	}

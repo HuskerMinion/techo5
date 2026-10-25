@@ -24,6 +24,9 @@ import (
 )
 
 func init() {
+	if !Here {
+		return
+	}
 	component.Register(component.Device, Get(), component.Order(40))
 }
 
@@ -156,7 +159,7 @@ func (b *Proxy) Handle(ctx context.Context, conn *esphome.Conn, msg proto.Messag
 // SetEnabled turns the proxy on or off as Home Assistant's switch would, for the screen.
 func (b *Proxy) SetEnabled(on bool) { b.enable.OnCommand(on) }
 
-func (b *Proxy) Enabled() bool { return config.Get().Bluetooth.Proxy }
+func (b *Proxy) Enabled() bool { return Here && config.Get().Bluetooth.Proxy }
 
 // Reports is how many advertisements the radio has heard, for diagnostics.
 func (b *Proxy) Reports() uint64 { return b.radio.Reports() }

@@ -1,4 +1,4 @@
-//go:build !dot && !spot
+//go:build !dot && !spot && !panel
 
 package touch
 
@@ -84,15 +84,37 @@ func TestALandscapeControllerIsScaledNotTurned(t *testing.T) {
 	}
 }
 
-// onShow8 has to hand back the Show 5's value on a Show 5, which is what a workstation build looks
-// like: layout.Show8() is false with no crown panel in the kernel command line and no athena device
-// tree.
-func TestOnShow8DefaultsToTheShow5(t *testing.T) {
-	if got := onShow8("goodix-ts", "fts_ts"); got != "goodix-ts" {
+// onBoard has to hand back the Show 5's value on a Show 5, which is what a workstation build looks
+// like: no crown panel in the kernel command line, no athena or Skylight device tree.
+func TestOnBoardDefaultsToTheShow5(t *testing.T) {
+	if got := onBoard("goodix-ts", "fts_ts", "Goodix Capacitive TouchScreen"); got != "goodix-ts" {
 		t.Errorf("device name %q, want goodix-ts", got)
 	}
-	if got := onShow8(960, 1280); got != 960 {
+	if got := onBoard(960, 1280, 1920); got != 960 {
 		t.Errorf("width %d, want 960", got)
+	}
+}
+
+// The Skylight's GT911 reports 1920 by 1200 over a 1920 by 1080 screen. The corners the user tapped on
+// the unit on 2026-10-17 have to land in the matching corners of the frame, the y axis squeezed.
+func TestTheSkylightCornersLandInTheFrameCorners(t *testing.T) {
+	w, h := Width, Height
+	Width, Height = 1920, 1080
+	defer func() { Width, Height = w, h }()
+	const rawW, rawH = 1920, 1200
+	for _, c := range []struct {
+		corner       string
+		rx, ry       int
+		wantX, wantY int
+	}{
+		{"top left", 18, 55, 18, 49},
+		{"top right", 1887, 38, 1887, 34},
+		{"bottom left", 34, 1159, 34, 1043},
+		{"bottom right", 1886, 1179, 1886, 1061},
+	} {
+		if x, y := toFrame(rawW, rawH, c.rx, c.ry); x != c.wantX || y != c.wantY {
+			t.Errorf("%s: raw (%d,%d) became (%d,%d), want (%d,%d)", c.corner, c.rx, c.ry, x, y, c.wantX, c.wantY)
+		}
 	}
 }
 

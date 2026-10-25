@@ -122,7 +122,7 @@ func TestDashboardNextTap(t *testing.T) {
 	facts := styleFactsFor("", at)
 	facts.kind, facts.chosen = styleDashboard, true
 	facts.next = []hass.Event{{Summary: "Dentist", Start: at.Add(time.Hour), End: at.Add(2 * time.Hour)}}
-	for _, size := range []image.Point{{showWide, showHigh}, {show8Wide, show8High}} {
+	for _, size := range []image.Point{{showWide, showHigh}, {show8Wide, show8High}, {skylightWide, skylightHigh}} {
 		r := newRenderer(image.NewRGBA(image.Rect(0, 0, size.X, size.Y)))
 		r.draw(scene{now: at, phase: "idle", style: facts})
 		r.weatherMu.Lock()
@@ -213,7 +213,7 @@ func TestAgendaClockHeads(t *testing.T) {
 	for d := 15; d < 22; d++ {
 		facts.next = append(facts.next, ev(d, 11), ev(d, 15))
 	}
-	for _, size := range []image.Point{{showWide, showHigh}, {show8Wide, show8High}} {
+	for _, size := range []image.Point{{showWide, showHigh}, {show8Wide, show8High}, {skylightWide, skylightHigh}} {
 		r := newRenderer(image.NewRGBA(image.Rect(0, 0, size.X, size.Y)))
 		r.draw(scene{now: now, phase: "idle", style: facts})
 	}

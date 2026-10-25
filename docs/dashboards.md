@@ -24,7 +24,8 @@ Everything is on the device's page in Home Assistant: **Settings → Devices & s
 your device. In the **Configuration** card (expand it if it ends in "+ N entities not shown"). The
 setup page's **Screen & Photos** tab has the same settings, except which dashboard to show:
 
-- **Dashboard**: *Off*, *Drawn on the device* or *Streamed*.
+- **Dashboard**: *Off*, *Drawn on the device* or *Streamed*, and on the Show, the Skylight and the Panel app *Tessera*
+  ([Tessera screens](#tessera-screens-preview)).
 - **Dashboard to show**: which dashboard, from a list of yours and their views. The list updates by
   itself within five minutes of a dashboard being added, renamed or removed. *Automatic* is the Rooms
   dashboard when drawn, and your default dashboard when streamed. Home Assistant's built-in pages are
@@ -122,6 +123,10 @@ thermostats, covers, players, locks, doors and windows.
 
 A change you save in Home Assistant's dashboard editor shows on the device within a second or two.
 
+A tap that opens another view keeps the page you tapped on up until the new view and its
+full-screen pictures are ready, for a second and a half at most. The last few pictures are kept, so
+going back to a view you just left draws it at once.
+
 ### A dashboard for the screen
 
 The simplest way to get a good drawn dashboard is to make one for it: in Home Assistant, **Settings
@@ -165,3 +170,80 @@ A device asks for a page by its name only, and dashcast opens it apart from Home
 sign-in in it, and keeps it on its own site. A web page can't be drawn on the device: it needs
 *Streamed*. If the screen says a page's address "goes on to" another site, list that address in
 `DASHCAST_PAGES` instead.
+
+## Tessera screens (preview)
+
+**Preview.** Tried with the Tessera add-on on a Show 5: the layout arrives, the page draws it and taps
+work. Not every kind of tile is drawn yet (see the end of this section).
+
+[Tessera](https://github.com/MaxGramser/homeassistant_espscreen) is a Home Assistant add-on that lays
+out pages of tiles in an editor and sends them to the screens it knows. The Echo Show can be one of
+those screens, and so can the Skylight and a tablet with the Panel app. Not the Spot: Tessera has no
+layout for its round screen.
+
+You need the Tessera add-on installed in Home Assistant.
+
+1. On the device's page in Home Assistant, turn on **Tessera screen** in the **Configuration** card.
+   The device restarts. After that it has a second device in Home Assistant, "*name* tessera", with
+   the entities Tessera looks for: **Tile settings**, **Screen firmware**, **Device name** and
+   **Screen layout**.
+2. Open Tessera. The device is listed as a screen. Its grid is 4 by 2 on the Show 5, 4 by 3 on the
+   Show 8 and 5 by 3 on the Skylight. On a tablet it follows the screen: 3 cells on the short side
+   (2 below 600 pixels) and as many on the long side as fit, so 4 by 3 on a 2560x1600 tablet. A
+   tablet's first start with Tessera on tells the add-on a Show 8's grid until the screen opens.
+   For more or bigger tiles, pick another grid in **Tessera grid** (the device's **Configuration**
+   card): it offers the grids whose cells stay at least 120 pixels each way, such as 6 by 3 or 8 by 4
+   on the Show 5. *Automatic* goes back to the screen's own. Re-arrange the tiles in Tessera after a
+   change.
+3. Add tiles to its pages and save. **Tile settings** on the tessera device says *Synced* once the
+   layout has arrived.
+4. Set **Dashboard** to *Tessera*. The layout is now the dashboard page: swipe in from the left edge
+   to open it, or turn on **Dashboard when idle** to have it in place of the clock.
+
+Taps call Home Assistant actions from the device, so the device needs **Allow the device to perform
+Home Assistant actions** turned on in its ESPHome integration options.
+
+On the page:
+
+- The top bar has the page's title, its items from Tessera, and the time.
+- Swipe left or right to go to the next page. The dots along the foot show where you are. A detail
+  page has a back arrow at the top left.
+- Tap a tile to do what it's for: lights, switches, fans, input booleans and automations turn on or
+  off; a cover opens, closes or stops; a scene or script runs; a button is pressed; a media player
+  plays or pauses (on Music Assistant's player when it is the one playing, as its play/pause key does).
+  Sensors show their value and unit, large.
+- Tap a thermostat to open its controls: the temperature with − and +, and its modes.
+- Locks: a tap on an unlocked lock locks it. A tap on a locked lock asks first: the tile turns red
+  and says *Tap again to unlock*. Tap again within 4 seconds to unlock. If the lock's tile in
+  Tessera is set to lock only, a tap never unlocks it.
+- Garage doors, gates and doors (a cover whose device class is garage, gate or door) ask first in the
+  same way: a tap on a closed one, or on its open key, turns the tile red and says *Tap again to open*.
+  Tap again within 4 seconds to open it. Closing one takes a single tap.
+- Press and hold a tile to open the same sheets the drawn dashboard has: a light's whites and colors,
+  a thermostat's controls, a media player's controls, volume, Music Assistant favorites and speakers.
+  The favorites and speakers are read with the device's Home Assistant token, as on the drawn
+  dashboard, and the favorites need it to belong to an administrator.
+- Slide a finger along a light to set its brightness, along a fan to set its speed, along a cover to
+  set its position, or along a thermostat to set its temperature.
+- A weather tile two cells wide or two rows high shows the forecast: days side by side, or one a line
+  on a tile one cell wide.
+- Bigger tiles show the controls Tessera gives them (the tile's **Controls** in the editor): a
+  thermostat's − and + and its modes, a media player's back, play/pause and next or its volume, a
+  cover's open, stop and close or its position, a light's brightness, a fan's speed. A tile two or
+  more cells wide and one row high gets its first control beside its name. Press and hold still opens
+  the full sheet.
+- The play/pause, next and back keys, on a tile or its sheet, go to Music Assistant's player when it is the
+  one playing, as on the drawn dashboard, so every grouped speaker follows.
+- A tile shows what you asked for at once, then whatever Home Assistant says. Tile backgrounds from
+  Tessera are drawn as tints, in the device's own colors.
+
+What the device tells Tessera it takes: every tile size its grid has room for (single, wide, tall,
+square, the whole page, and spans like 3x2), and up to eight pages. Tessera leaves out everything
+else. A tile Tessera sets to open its card on a tap opens the sheet, where there is one.
+
+Not drawn yet: graphs, camera pictures, album art, meters, the vacuum and alarm cards, Tessera's
+alerts and screensaver. The sheets' changes go to Home Assistant as the device's own actions, the
+same way taps do. The layout is kept on the device, so a restart doesn't lose it.
+
+Turn **Tessera screen** off to stop. The device restarts and no longer offers the tessera device.
+If Home Assistant still lists it as unavailable, delete it from the device's page.

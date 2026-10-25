@@ -46,6 +46,12 @@ func (f *Feature) ClimateNow(entity string) (ClimateNow, bool) {
 	return climateNow(e), true
 }
 
+// ClimateOf is a thermostat read from a state and attributes that came from elsewhere than the drawn
+// page: a tile of the Tessera page, whose sheet is this one.
+func ClimateOf(entity, state string, attrs map[string]any) ClimateNow {
+	return climateNow(hass.LiveEntity{ID: entity, State: state, Attrs: attrs})
+}
+
 // climateNow reads a thermostat's state.
 func climateNow(e hass.LiveEntity) ClimateNow {
 	c := ClimateNow{Entity: e.ID, State: e.State}

@@ -202,6 +202,15 @@ type session struct {
 	width    int
 	reload   bool // the connection was closed to read the dashboard again, not because it failed
 	view     Drawn
+	gen      int // f.recent's when the session began (recent.put)
+
+	// hold is the page that was up when a tap went to this view, shown instead of this one until it
+	// is ready (ready) or until holdUntil, whichever is first: a view and its picture take a fraction
+	// of a second, and the page between, then "Loading the picture…", only flicker.
+	hold      *Drawn
+	holdUntil time.Time
+	loaded    bool     // the dashboard has been read, and the pictures it shows are known
+	wide      []string // its pictures kept as wide as the screen, by key: what a held page waits for
 
 	// soon is a rebuild waiting to happen: a house changes a lot of entities at once, and the page
 	// is rebuilt a few times a second at most, not once for each of them.
@@ -253,7 +262,19 @@ func (f *Feature) Drawn(width int) Drawn {
 	f.mu.Lock()
 	s := f.drawn
 	if s == nil || f.drawnPath != path {
+		var held *Drawn
 		if s != nil {
+			// A tap that went to this view keeps the page it was tapped on up until this one is ready.
+			// Any other change, a dashboard chosen in setup or from Home Assistant, starts afresh and lets
+			// the last one's pictures go.
+			if f.navTo == path {
+				s.mu.Lock()
+				old := s.shown()
+				s.mu.Unlock()
+				held = &old
+			} else {
+				f.recent.empty()
+			}
 			safe.Go("drawn dashboard close", s.close)
 		}
 		var src source = &roomsSource{}
@@ -261,22 +282,106 @@ func (f *Feature) Drawn(width int) Drawn {
 			src = newLovelace(path)
 		}
 		s = &session{f: f, src: src, width: width, states: map[string]hass.LiveEntity{}, rendered: map[int]string{}, pending: map[string]pending{},
-			history: map[string][]point{}, graphs: map[string]int{}, pictures: map[string]shot{}}
+			history: map[string][]point{}, graphs: map[string]int{}, pictures: map[string]shot{}, gen: f.recent.generation()}
+		if held != nil {
+			s.hold, s.holdUntil = held, time.Now().Add(holdFor)
+			// Nothing else may say there is something new by then: a dashboard that never loads.
+			time.AfterFunc(holdFor, func() { f.Changed.Emit(struct{}{}) })
+		}
 		f.drawn, f.drawnPath = s, path
-		safe.Go("drawn dashboard", s.run)
+		run := runDrawn
+		safe.Go("drawn dashboard", func() { run(s) })
+	}
+	if f.navTo == path {
+		f.navTo = ""
 	}
 	f.drawnUsed = time.Now()
 	f.mu.Unlock()
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	return s.shown()
+}
+
+// holdFor is the longest a page is held after a tap went to another view: long enough for a view
+// and its pictures on a slow link, short enough that a picture that never comes doesn't leave the
+// tap looking undone.
+const holdFor = 1500 * time.Millisecond
+
+// runDrawn keeps a session going; a variable so that a test can drive one by hand, without a Home
+// Assistant.
+var runDrawn = (*session).run
+
+// shown is the page to draw: the one held from before a tap, while it is held, or this one. With
+// s.mu held.
+func (s *session) shown() Drawn {
+	if s.hold != nil {
+		if time.Now().Before(s.holdUntil) {
+			return *s.hold
+		}
+		s.hold = nil
+	}
 	return s.view
+}
+
+// ready is whether the page can be shown in place of a held one: read, and with every picture kept
+// as wide as the screen there, or said to be too large or not loading. A picture on a card shows
+// "Loading" on its card alone, so it is not waited for. With s.mu held.
+func (s *session) ready() bool {
+	if !s.loaded {
+		return false
+	}
+	for _, k := range s.wide {
+		if _, has := s.pictures[k]; !has {
+			return false
+		}
+	}
+	return true
+}
+
+// seed starts the pictures from the ones kept between pages (recent), so a view opened again draws
+// at once while its pictures are fetched again behind it, and notes what a held page waits for.
+// With s.mu held.
+func (s *session) seed(list []wanted) {
+	s.wide = nil
+	for _, w := range list {
+		k := w.key()
+		if _, has := s.pictures[k]; !has {
+			if sh, ok := s.f.recent.get(k); ok {
+				s.pictures[k] = sh
+			}
+		}
+		if w.wide {
+			s.wide = append(s.wide, k)
+		}
+	}
+	s.loaded = true
+}
+
+// got is a picture as it arrives. While a page is held for this one, it is rebuilt at once rather
+// than within publishEvery: the picture may be all it was waiting for.
+func (s *session) got(key string, sh shot) {
+	s.mu.Lock()
+	// A camera's snapshot missed once leaves the last one up rather than saying it failed.
+	if !sh.failed || s.pictures[key].img == nil {
+		s.pictures[key] = sh
+	}
+	kept, holding := s.pictures[key], s.hold != nil
+	s.mu.Unlock()
+	s.f.recent.put(s.gen, key, kept)
+	if holding {
+		s.publish()
+	} else {
+		s.publishSoon()
+	}
 }
 
 // CloseDrawn ends the drawn session, if there is one.
 func (f *Feature) CloseDrawn() {
 	f.mu.Lock()
 	s := f.drawn
-	f.drawn = nil
+	f.drawn, f.navTo = nil, ""
+	// Under f.mu, so a session asked for right after starts with the new generation.
+	f.recent.empty()
 	f.mu.Unlock()
 	if s != nil {
 		s.close()
@@ -287,8 +392,19 @@ func (f *Feature) CloseDrawn() {
 func (f *Feature) Tap(a Action) {
 	if a.View != "" {
 		// A navigation path names the dashboard as well as the view: "home-refresh/climate".
-		if err := config.Set().Dashboard().Path(navPath(a.View)); err != nil {
+		path := navPath(a.View)
+		f.mu.Lock()
+		f.navTo = path
+		f.mu.Unlock()
+		if err := config.Set().Dashboard().Path(path); err != nil {
 			slog.Warn("dashboard: going to a view failed", "err", err)
+			// A save that failed on the flash still changed the path in memory, and the view
+			// changes all the same: it is still a navigate unless the path did not move.
+			if config.Get().Dashboard.Path != path {
+				f.mu.Lock()
+				f.navTo = ""
+				f.mu.Unlock()
+			}
 		}
 		f.listBoards(config.Get().Dashboard)
 		f.Changed.Emit(struct{}{})
@@ -440,6 +556,7 @@ func (s *session) problem(text string) {
 	s.mu.Lock()
 	s.view.Problem = text
 	s.view.Version++
+	s.hold = nil // what went wrong is said now, not after the held page's time is up
 	s.mu.Unlock()
 	s.f.Changed.Emit(struct{}{})
 }
@@ -519,19 +636,12 @@ func (s *session) once() error {
 	s.mu.Lock()
 	s.view.Problem, s.view.Theme = "", theme
 	s.history, s.graphs = history, need.graphs
+	s.seed(need.pictures)
 	s.mu.Unlock()
 	s.publish()
 
 	safe.Go("dashboard pictures", func() {
-		keepPictures(ctx, need.pictures, func(key string, sh shot) {
-			s.mu.Lock()
-			// A camera's snapshot missed once leaves the last one up rather than saying it failed.
-			if !sh.failed || s.pictures[key].img == nil {
-				s.pictures[key] = sh
-			}
-			s.mu.Unlock()
-			s.publishSoon()
-		})
+		keepPictures(ctx, need.pictures, s.got)
 	})
 
 	fctx, fcancel := context.WithTimeout(ctx, 30*time.Second)
@@ -613,6 +723,9 @@ func (s *session) publish() {
 	}
 	s.view.Sections = sections
 	s.view.Version++
+	if s.hold != nil && s.ready() {
+		s.hold = nil
+	}
 	s.mu.Unlock()
 	s.f.Changed.Emit(struct{}{})
 }

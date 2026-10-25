@@ -16,6 +16,8 @@ import (
 
 	"golang.org/x/image/font"
 	"golang.org/x/image/font/gofont/gobold"
+	"golang.org/x/image/font/gofont/gomono"
+	"golang.org/x/image/font/gofont/gomonobold"
 	"golang.org/x/image/font/gofont/goregular"
 	"golang.org/x/image/font/opentype"
 	"golang.org/x/image/font/sfnt"
@@ -51,7 +53,32 @@ var families = []Family{
 	{"Comic Neue", "comicneue", 1.06},
 	{"Open Sans", "opensans", 0.98},
 	{"Google Sans Flex", "googlesansflex", 1},
+	{"Go Mono", GoMono, 0.755},
 }
+
+// skinFonts are fonts a screen skin draws in that are not on offer by themselves: sized for the skin's
+// own layouts rather than to keep Go's line widths. Antonio, tall and narrow, is LCARS's.
+var skinFonts = []Family{
+	{"Antonio", Antonio, 1.0},
+}
+
+// Antonio is the LCARS skin's font.
+const Antonio = "antonio"
+
+// family is the family saved as value, on offer or a skin's, and whether there is one.
+func family(value string) (Family, bool) {
+	for _, list := range [][]Family{families, skinFonts} {
+		for _, f := range list {
+			if f.Value == value {
+				return f, true
+			}
+		}
+	}
+	return Family{}, false
+}
+
+// GoMono is Go's own monospaced cut, the terminal look; built in, like Go.
+const GoMono = "gomono"
 
 // Families are the fonts on offer, Go first.
 func Families() []Family { return families }
@@ -94,7 +121,7 @@ var parsed struct {
 
 // fontsOf is the family saved as value, read once: Go's own for Go or anything not on offer.
 func fontsOf(value string) ([2]*sfnt.Font, error) {
-	if !Known(value) {
+	if _, ok := family(value); !ok {
 		value = Go
 	}
 	parsed.mu.Lock()
@@ -103,9 +130,12 @@ func fontsOf(value string) ([2]*sfnt.Font, error) {
 		return f, nil
 	}
 	var src [2][]byte
-	if value == Go {
+	switch value {
+	case Go:
 		src = [2][]byte{goregular.TTF, gobold.TTF}
-	} else {
+	case GoMono:
+		src = [2][]byte{gomono.TTF, gomonobold.TTF}
+	default:
 		for i, name := range []string{"Regular.ttf", "Bold.ttf"} {
 			b, err := files.ReadFile(path.Join("files", value, name))
 			if err != nil {
@@ -162,7 +192,10 @@ func Face(value string, bold bool, size float64) (font.Face, error) {
 	if err != nil {
 		return nil, err
 	}
-	fam := families[Index(value)]
+	fam, ok := family(value)
+	if !ok {
+		fam = families[0]
+	}
 	var layers []Layer
 	if fam.Value != Go {
 		f, err := fontsOf(fam.Value)

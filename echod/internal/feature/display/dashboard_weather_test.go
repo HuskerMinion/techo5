@@ -26,7 +26,7 @@ func TestDashboardWeatherAtTheFoot(t *testing.T) {
 	facts := styleFacts{kind: styleDashboard, chosen: true, days: week}
 	sky := home.Weather{Condition: "sunny", Temp: "72°"}
 	running := []timer.Countdown{{Name: "Pasta", Left: 4 * time.Minute, Total: 10 * time.Minute, Active: true}}
-	for _, size := range []image.Point{{showWide, showHigh}, {show8Wide, show8High}} {
+	for _, size := range []image.Point{{showWide, showHigh}, {show8Wide, show8High}, {skylightWide, skylightHigh}} {
 		r := newRenderer(image.NewRGBA(image.Rect(0, 0, size.X, size.Y)))
 		r.draw(scene{now: at, phase: "idle", weather: sky, style: facts})
 		r.weatherMu.Lock()
@@ -49,7 +49,7 @@ func TestDashboardWeatherAtTheFoot(t *testing.T) {
 		if withTimer.Empty() || withTimer.Max.Y >= row.Max.Y {
 			t.Errorf("%v: with a timer the weather is at %v, not above it", size, withTimer)
 		}
-		if isRow := withTimer.Dy() == r.s(150); isRow != (size.X == show8Wide) {
+		if isRow := withTimer.Dy() == r.s(150); isRow != (size.X != showWide) {
 			t.Errorf("%v: with a timer the weather drawn as a row is %v", size, isRow)
 		}
 
@@ -82,7 +82,7 @@ func TestDashboardWeatherLineStaysLeftOfTheEvents(t *testing.T) {
 	at := time.Date(2026, 10, 8, 18, 42, 0, 0, time.Local)
 	s := dashScene(at, "27°", false, dashEvents(at, 0, 6, false))
 	s.weather.Condition = "partlycloudy"
-	for _, lang := range []string{"", "de", "es", "fr", "it", "nl", "ru"} {
+	for _, lang := range []string{"", "de", "es", "fr", "it", "nl", "pt", "ru"} {
 		if err := config.Set().Screen().Language(lang); err != nil {
 			t.Fatal(err)
 		}

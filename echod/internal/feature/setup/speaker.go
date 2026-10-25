@@ -35,7 +35,7 @@ func speakerSection(w http.ResponseWriter, token string) {
 		gain := p.SpeakerGain()
 		fmt.Fprintf(w, `<label for="gain">Speaker gain, dB (0 is normal)</label>
 	 <input id="gain" name="gain" type="number" min="0" max="%d" step="1" value="%d"><input type="hidden" name="was_gain" value="%d">
-	 <p>Boosts can distort, especially at high volume or with raised bass or treble. Set 0 dB to restore normal gain.</p>`,
+	 <p>Boosts can distort, especially at high volume or with raised bass or treble, and make the wake word harder to catch over loud music. Set 0 dB to restore normal gain.</p>`,
 			config.SpeakerGainMax, gain, gain)
 	}
 
@@ -72,6 +72,11 @@ func speakerSection(w http.ResponseWriter, token string) {
 		media.VolumeSteps, night, night)
 	if speaker.HasJack {
 		choiceField(w, "output", "Audio output", media.OutputChoices(), p.Output())
+	}
+	if speaker.Get().CanStereo() {
+		st := p.Stereo()
+		fmt.Fprintf(w, `<p><label><input type="checkbox" name="stereo" value="yes" style="width:auto"%s> Stereo speakers:
+	  left and right on their own speakers; can make the wake word harder to catch over music</label><input type="hidden" name="was_stereo" value="%t"></p>`, checkedIf(st), st)
 	}
 
 	dnd := c.Home.DoNotDisturb
@@ -169,7 +174,12 @@ func saveSpeaker(r *http.Request) string {
 		}
 		p.SetOutput(v)
 	}
-	// A checkbox left clear sends nothing, so do not disturb is read from whether it came.
+	// A checkbox left clear sends nothing, so these are read from whether they came.
+	if was := r.PostFormValue("was_stereo"); was != "" && speaker.Get().CanStereo() {
+		if on := r.PostFormValue("stereo") == "yes"; strconv.FormatBool(on) != was {
+			p.SetStereo(on)
+		}
+	}
 	if was := r.PostFormValue("was_dnd"); was != "" {
 		if on := r.PostFormValue("dnd") == "yes"; strconv.FormatBool(on) != was {
 			phone.Get().SetDoNotDisturb(on)

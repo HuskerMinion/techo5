@@ -55,6 +55,9 @@ func jumpRule(chain string) []string {
 // Open allows a port. The chain is rebuilt rather than added to, so calling this twice leaves the same
 // single rule.
 func Open(chain string, port int) error {
+	if !managed {
+		return nil
+	}
 	ready.Lock()
 	defer ready.Unlock()
 	return open(chain, port)
@@ -74,6 +77,9 @@ func open(chain string, port int) error {
 // Close shuts the port by emptying the chain. The chain and its jump stay, so nothing has to be put
 // back into INPUT ahead of the vendor's DROP the next time this opens.
 func Close(chain string) error {
+	if !managed {
+		return nil
+	}
 	ready.Lock()
 	defer ready.Unlock()
 
@@ -86,6 +92,9 @@ func Close(chain string) error {
 // Opened reports whether the port is allowed right now, which is the only honest answer after a
 // restart: the process does not outlive its own rules, but they do outlive it.
 func Opened(chain string, port int) (bool, error) {
+	if !managed {
+		return true, nil
+	}
 	return has(acceptRule(chain, port))
 }
 
@@ -93,6 +102,9 @@ func Opened(chain string, port int) (bool, error) {
 // and takes them with it; the chains and their contents survive, so making them reachable again is the
 // whole job. What is in a chain is its owner's business.
 func Ensure() error {
+	if !managed {
+		return nil
+	}
 	ready.Lock()
 	defer ready.Unlock()
 

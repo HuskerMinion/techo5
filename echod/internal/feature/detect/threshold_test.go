@@ -30,6 +30,30 @@ func TestTheStopWordGetsTheSlackTheOtherSlotsGet(t *testing.T) {
 	}
 }
 
+// The command words are judged at their own thresholds with or without the canceller: they are only
+// listened for over music, and act with no turn after them to show a mistake.
+func TestTheCommandWordsGetNoSlack(t *testing.T) {
+	base := func(slot int) float64 {
+		if isCommandSlot(slot) {
+			return 0.9
+		}
+		return 0.8
+	}
+	for _, slot := range []int{CommandSlot, VolumeUpSlot, NextSongSlot} {
+		for _, canceling := range []bool{false, true} {
+			for _, onCall := range []bool{false, true} {
+				slack := slackFor(slot, canceling, onCall, false)
+				if got := thresholdFor(slot, base, 0.7, slack); got != 0.9 {
+					t.Errorf("slot %d canceling=%v onCall=%v: judged at %v, want its own 0.9", slot, canceling, onCall, got)
+				}
+			}
+		}
+	}
+	if got, want := thresholdFor(0, base, 0.7, slackFor(0, true, false, false)), base(0)-playingSlack; got != want {
+		t.Errorf("the wake word is judged at %v, want %v with the slack", got, want)
+	}
+}
+
 // The slack never drags a threshold below the floor, however low it was configured.
 func TestTheSlackStopsAtTheFloor(t *testing.T) {
 	base := func(int) float64 { return 0.52 }
@@ -49,6 +73,31 @@ func TestTheSlotsKeepTheirOwnThresholds(t *testing.T) {
 	for _, slot := range []int{0, 1, 2} {
 		if got, want := thresholdFor(slot, base, 0.7, false), base(slot); got != want {
 			t.Errorf("slot %d judged at %v, want its own %v", slot, got, want)
+		}
+	}
+}
+
+// During a call with nothing ringing, the stop word and the hang-up word get no allowance for the
+// speaker: the call keeps the canceller running even with the far end silent, so they would always be
+// judged low, and each fires to end the call. A ring during a call keeps the allowance for the stop
+// word, which has to be heard over it. Wake words keep it as before.
+func TestNoSlackForEndingACall(t *testing.T) {
+	for _, c := range []struct {
+		name               string
+		slot               int
+		canceling, onCall  bool
+		ringing, wantSlack bool
+	}{
+		{"stop word, no call", StopSlot, true, false, false, true},
+		{"stop word, on a call", StopSlot, true, true, false, false},
+		{"stop word over a ring on a call", StopSlot, true, true, true, true},
+		{"hang-up word, on a call", HangupSlot, true, true, false, false},
+		{"hang-up word over a ring on a call", HangupSlot, true, true, true, false},
+		{"wake word, on a call", 0, true, true, false, true},
+		{"nothing playing", StopSlot, false, false, false, false},
+	} {
+		if got := slackFor(c.slot, c.canceling, c.onCall, c.ringing); got != c.wantSlack {
+			t.Errorf("%s: slack %v, want %v", c.name, got, c.wantSlack)
 		}
 	}
 }

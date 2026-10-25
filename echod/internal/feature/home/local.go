@@ -251,7 +251,11 @@ const listedFor = time.Minute
 // Naming the player is also what lets two quick taps arrive out of order: the second sets the chosen
 // station while the first is still looking the player up, and the first then reaches Home Assistant after
 // the second and starts the station the finger has moved off. Only the station still chosen is asked for.
-func (f *Feature) callFavorite(h config.Radio, station string) {
+//
+// watch is whether what comes of the call is watched for (hint.go): a station somebody asked for, not
+// one the device puts back on by itself.
+func (f *Feature) callFavorite(h config.Radio, station string, watch bool) {
+	wait := startWaitFor(h.Service)
 	safe.Go("radio: playing a favorite", func() {
 		speaker := speakerEntity()
 		f.mu.Lock()
@@ -260,10 +264,35 @@ func (f *Feature) callFavorite(h config.Radio, station string) {
 		if chosen != station {
 			return
 		}
+		unheard := false
+		// The watch counts from just before the call: a script Home Assistant turns on at once can say
+		// so before Emit has even returned, and a sign from before the watch began would not count.
+		asked := time.Now()
 		component.CallService.Emit(component.Call{
 			Service: h.Service,
 			Data:    map[string]string{h.Field: askFor(station), h.SpeakerField: speaker},
+			Unheard: func() { unheard = true },
 		})
+		if unheard {
+			// No Home Assistant was connected to take it: nothing about its settings to point at, so no
+			// note, and the station is not left starting.
+			slog.Warn("radio: Home Assistant is not connected to this device; the station was not asked for", "station", station)
+			f.unask(station)
+			f.mu.Lock()
+			if f.chosen == station {
+				f.chosen = ""
+			}
+			f.mu.Unlock()
+			f.Changed.Emit(struct{}{})
+			return
+		}
+		if !watch {
+			return
+		}
+		// The call has no answer: Home Assistant that refuses it says so only in its own log. So what
+		// comes of it is watched for instead (hint.go), from the call rather than from the tap, since
+		// naming the player can take seconds of its own.
+		f.watchStart(h.Service, station, wait, asked)
 	})
 }
 

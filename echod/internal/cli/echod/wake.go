@@ -11,11 +11,12 @@ import (
 	"time"
 
 	"github.com/spf13/cobra"
-	"github.com/zserge/microwakeword"
 
 	"github.com/HuskerMinion/techo5/echod/internal/config"
+	"github.com/HuskerMinion/techo5/echod/internal/feature/detect"
 	"github.com/HuskerMinion/techo5/echod/internal/hardware/mic"
 	"github.com/HuskerMinion/techo5/echod/internal/layout"
+	"github.com/HuskerMinion/techo5/echod/internal/lib/mwwfront"
 	"github.com/HuskerMinion/techo5/echod/internal/lib/wake"
 )
 
@@ -33,7 +34,8 @@ func newWakeCmd() *cobra.Command {
 		Short: "Listen for a wake word and report detections",
 		Long: "Runs microWakeWord over the microphone array and prints every detection with the\n" +
 			"sliding-window score, plus how long inference takes per frame.\n\n" +
-			"The model is a .tflite file on the device. Nothing is sent anywhere.",
+			"The model is a .tflite file on the device. Nothing is sent anywhere. The feature front end is\n" +
+			"the daemon's: the exact one when TECHO5_WAKE_FRONTEND=exact is set.",
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			models, err := wake.Installed(dir)
@@ -44,7 +46,7 @@ func newWakeCmd() *cobra.Command {
 			// Same selection the agent uses: Home Assistant's, via the saved config.
 			m := wake.Pick(models, config.Get().Wake.Slot(0).ID)
 
-			det, err := microwakeword.NewDetector(m.Config)
+			det, err := detect.NewDetector(m.Config)
 			if err != nil {
 				return err
 			}
@@ -77,8 +79,9 @@ func newWakeCmd() *cobra.Command {
 			frames, unlisten := source.Listen("tools wake")
 			defer unlisten()
 
-			fmt.Fprintf(out, "listening on the center mic for %.0fs: %q (%s), cutoff %.2f, window %d, step %dms\n",
-				secs, m.Phrase, m.ID, m.Config.ProbabilityCutoff, m.Config.SlidingWindowSize, m.Config.FeaturesStepMs)
+			fmt.Fprintf(out, "listening on the center mic for %.0fs: %q (%s), cutoff %.2f, window %d, step %dms, front end %s\n",
+				secs, m.Phrase, m.ID, m.Config.ProbabilityCutoff, m.Config.SlidingWindowSize,
+				mwwfront.StepMs(m.Config.FeaturesStepMs), detect.FrontEnd())
 
 			deadline := time.Now().Add(time.Duration(secs * float64(time.Second)))
 			var (
@@ -157,7 +160,7 @@ func newWakeCmd() *cobra.Command {
 }
 
 // wakeFromWAV checks the model and the interpreter without the microphones in the way.
-func wakeFromWAV(out io.Writer, det *microwakeword.Detector, path string) error {
+func wakeFromWAV(out io.Writer, det *detect.Detector, path string) error {
 	data, err := os.ReadFile(path)
 	if err != nil {
 		return err
@@ -171,7 +174,8 @@ func wakeFromWAV(out io.Writer, det *microwakeword.Detector, path string) error 
 	for i := range samples {
 		samples[i] = int16(binary.LittleEndian.Uint16(pcm[i*2:]))
 	}
-	fmt.Fprintf(out, "%s: %d samples, %.2fs at 16 kHz\n", path, len(samples), float64(len(samples))/mic.Rate)
+	fmt.Fprintf(out, "%s: %d samples, %.2fs at 16 kHz, front end %s\n",
+		path, len(samples), float64(len(samples))/mic.Rate, detect.FrontEnd())
 
 	var (
 		hits  int

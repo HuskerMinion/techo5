@@ -1,6 +1,10 @@
 package config
 
-import "slices"
+import (
+	"maps"
+	"slices"
+	"strings"
+)
 
 // Home is what the device shows and reaches for in Home Assistant beyond its own entities: a
 // weather entity for the clock screen, and the radio — the selects whose options are the
@@ -45,6 +49,21 @@ type Home struct {
 
 	// Cameras are camera.* entities and the names to say for them, in the order the list shows.
 	Cameras []Camera `json:"cameras,omitempty"`
+	// CamerasChosen is a camera list chosen on purpose (the home_cameras action or the setup page).
+	// With it, an empty Cameras is None: no Home Assistant camera at all. Without it, an empty Cameras
+	// is a device never told, which lists every camera Home Assistant has (AllHACameras).
+	CamerasChosen bool `json:"cameras_chosen,omitempty"`
+	// OwnCameraLeftOut leaves the device's own camera off the camera list (the setup page). It is on the
+	// list unless this is set.
+	OwnCameraLeftOut bool `json:"own_camera_left_out,omitempty"`
+	// CameraOrder is the camera list's order, by entity, chosen on the setup page: these first, in this
+	// order, and the rest after them in the usual order. Empty is the usual order.
+	CameraOrder []string `json:"camera_order,omitempty"`
+	// CameraButtons are the buttons on a camera's view that run a Home Assistant action ("Open gate",
+	// "Unlock"), by the camera's entity as the list has it ("camera.front_door", "go2rtc:porch",
+	// "reolink:0", "local"): four at most for a camera, in the order drawn (home_camera_buttons, the
+	// setup page).
+	CameraButtons map[string][]CameraButton `json:"camera_buttons,omitempty"`
 
 	// Reolink is a Reolink NVR, Home Hub or camera read directly, for a device with no Home Assistant
 	// to proxy its cameras (feature/home/reolink.go). Its cameras join the list.
@@ -78,6 +97,29 @@ type Home struct {
 
 	// DoNotDisturb turns intercom calls away: the caller is told, and nothing rings here.
 	DoNotDisturb bool `json:"do_not_disturb,omitempty"`
+
+	// CallWake lets the wake word open a turn while a call is up, which is how a call is hung up by
+	// voice: Home Assistant hears "hang up" and calls phone_hangup. Off unless chosen.
+	CallWake bool `json:"call_wake,omitempty"`
+
+	// CallReplies sends the assistant's reply to a turn during a call into the call as well, so the
+	// far end hears it. Off, only the room does. An announcement goes into the call either way.
+	CallReplies bool `json:"call_replies,omitempty"`
+
+	// CallUnderlay keeps the far end playing, quieter, under the chime and the reply of a turn during
+	// a call. Off, they are not heard until the speaker is the call's again.
+	CallUnderlay bool `json:"call_underlay,omitempty"`
+
+	// PhonePlain signs the SIP account in over plain UDP, without TLS and without SRTP for the call,
+	// for a SIP server on the home network that offers neither, such as a FRITZ!Box's own registrar.
+	// Off by default: a call is someone's voice in their home, and with it on, the call and the SIP
+	// password cross the network unencrypted.
+	PhonePlain bool `json:"phone_plain,omitempty"`
+
+	// CallByVoiceOff leaves "call Mom" to Home Assistant. On (false) by default: a sentence that names a
+	// contact in the device's own phone book is a call the device can place itself, and Home Assistant
+	// has no way to do better with it.
+	CallByVoiceOff bool `json:"call_by_voice_off,omitempty"`
 
 	// RadarSource is where the rain map's radar comes from: RadarNWS (the U.S. National Weather
 	// Service's national composite, lower 48 only), RadarRainViewer (worldwide), or empty for
@@ -158,10 +200,25 @@ type Slideshow struct {
 // PhotoDay is the form ImmichFrom and ImmichTo are kept in.
 const PhotoDay = "2006-01-02"
 
+// AllHACameras is whether the list is every camera Home Assistant has: never chosen, or chosen as All.
+// A list saved before CamerasChosen existed has cameras in it, and stays that list.
+func (h Home) AllHACameras() bool { return !h.CamerasChosen && len(h.Cameras) == 0 }
+
+// NoHACameras is None chosen: no Home Assistant camera on the list.
+func (h Home) NoHACameras() bool { return h.CamerasChosen && len(h.Cameras) == 0 }
+
 // Camera is one camera on the screen's list.
 type Camera struct {
 	Entity string `json:"entity"`
 	Name   string `json:"name"`
+}
+
+// CameraButton is one button on a camera's view: what it says, and the Home Assistant action a tap runs
+// ("script.open_gate", or "lock.unlock" on "lock.front_door").
+type CameraButton struct {
+	Label   string `json:"label"`
+	Service string `json:"service"`
+	Entity  string `json:"entity,omitempty"`
 }
 
 // Radio is how the screen's radio page is wired to the house's own radio setup.
@@ -307,6 +364,27 @@ func (w HomeWriter) RingSound(v string) error {
 	return w.st.Update(func(c *Config) { c.Home.RingSound = v })
 }
 
+func (w HomeWriter) CallWake(v bool) error {
+	return w.st.Update(func(c *Config) { c.Home.CallWake = v })
+}
+
+func (w HomeWriter) CallReplies(v bool) error {
+	return w.st.Update(func(c *Config) { c.Home.CallReplies = v })
+}
+
+func (w HomeWriter) CallUnderlay(v bool) error {
+	return w.st.Update(func(c *Config) { c.Home.CallUnderlay = v })
+}
+
+func (w HomeWriter) PhonePlain(v bool) error {
+	return w.st.Update(func(c *Config) { c.Home.PhonePlain = v })
+}
+
+// CallByVoice turns calling contacts by voice on or off.
+func (w HomeWriter) CallByVoice(on bool) error {
+	return w.st.Update(func(c *Config) { c.Home.CallByVoiceOff = !on })
+}
+
 func (w HomeWriter) DoNotDisturb(v bool) error {
 	return w.st.Update(func(c *Config) { c.Home.DoNotDisturb = v })
 }
@@ -351,8 +429,55 @@ func (w HomeWriter) Glance(entities []string) error {
 	return w.st.Update(func(c *Config) { c.Home.Glance = entities })
 }
 
+// Cameras sets the list of Home Assistant's cameras. Empty is All: every camera Home Assistant has.
 func (w HomeWriter) Cameras(cams []Camera) error {
-	return w.st.Update(func(c *Config) { c.Home.Cameras = cams })
+	return w.st.Update(func(c *Config) { c.Home.Cameras, c.Home.CamerasChosen = cams, len(cams) > 0 })
+}
+
+// NoCameras sets the list to None: no Home Assistant camera, chosen on purpose.
+func (w HomeWriter) NoCameras() error {
+	return w.st.Update(func(c *Config) { c.Home.Cameras, c.Home.CamerasChosen = nil, true })
+}
+
+// CameraList sets whether the device's own camera is left off the camera list, and the list's order.
+func (w HomeWriter) CameraList(ownLeftOut bool, order []string) error {
+	return w.st.Update(func(c *Config) { c.Home.OwnCameraLeftOut, c.Home.CameraOrder = ownLeftOut, order })
+}
+
+// CameraButtons sets the buttons on camera's view; none takes them off.
+func (w HomeWriter) CameraButtons(camera string, buttons []CameraButton) error {
+	return w.st.Update(func(c *Config) {
+		m := maps.Clone(c.Home.CameraButtons)
+		if len(buttons) == 0 {
+			delete(m, camera)
+		} else {
+			if m == nil {
+				m = map[string][]CameraButton{}
+			}
+			m[camera] = slices.Clone(buttons)
+		}
+		if len(m) == 0 {
+			m = nil
+		}
+		c.Home.CameraButtons = m
+	})
+}
+
+// AllCameraButtons sets every camera's buttons at once (the setup page): a camera left out has none.
+func (w HomeWriter) AllCameraButtons(all map[string][]CameraButton) error {
+	return w.st.Update(func(c *Config) {
+		var m map[string][]CameraButton
+		for cam, buttons := range all {
+			if len(buttons) == 0 {
+				continue
+			}
+			if m == nil {
+				m = map[string][]CameraButton{}
+			}
+			m[cam] = slices.Clone(buttons)
+		}
+		c.Home.CameraButtons = m
+	})
 }
 
 func (w HomeWriter) Slideshow(s Slideshow) error {
@@ -429,6 +554,21 @@ type Go2RTC struct {
 
 func (w HomeWriter) Go2RTC(g Go2RTC) error {
 	return w.st.Update(func(c *Config) { c.Home.Go2RTC = g })
+}
+
+// Go2RTCNames sets the names shown and said for go2rtc's streams, by entity ("go2rtc:porch"). A stream
+// given no name, or an empty one, is called by its name in go2rtc.
+func (w HomeWriter) Go2RTCNames(names map[string]string) error {
+	return w.st.Update(func(c *Config) {
+		for i, cam := range c.Home.Go2RTC.Cameras {
+			if n, ok := names[cam.Entity]; ok {
+				if n = strings.TrimSpace(n); n == "" {
+					n = strings.TrimPrefix(cam.Entity, "go2rtc:")
+				}
+				c.Home.Go2RTC.Cameras[i].Name = n
+			}
+		}
+	})
 }
 
 func (w HomeWriter) Reolink(r Reolink) error {

@@ -48,7 +48,7 @@ func TestPhotoCaptionsOnTheScreensaver(t *testing.T) {
 	for _, panel := range []struct {
 		name       string
 		wide, high int
-	}{{"", showWide, showHigh}, {"-show8", show8Wide, show8High}} {
+	}{{"", showWide, showHigh}, {"-show8", show8Wide, show8High}, {"-skylight", skylightWide, skylightHigh}} {
 		photo := gradientPair(panel.wide, panel.high)
 		for _, overlay := range []string{config.SlideshowOverlayOff, config.SlideshowOverlaySmall, ""} {
 			draw := func(c []home.PhotoCaption) *image.RGBA {

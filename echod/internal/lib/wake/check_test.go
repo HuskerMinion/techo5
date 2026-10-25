@@ -62,6 +62,15 @@ func TestBundledModelsPassTheModelCheck(t *testing.T) {
 	}
 }
 
+// A model with ADD, AVERAGE_POOL_2D and MAX_POOL_2D, as residual and pooled MixedNet models have, is
+// taken: the engine runs all three (#190). The engine's own tests check what they give.
+func TestModelCheckTakesAddAndPools(t *testing.T) {
+	path := filepath.Join("..", "..", "..", "third_party", "microwakeword", "testdata", "add_pool.tflite")
+	if err := CheckMicro(path); err != nil {
+		t.Fatal(err)
+	}
+}
+
 func stopModel(t *testing.T) []byte {
 	t.Helper()
 	b, err := os.ReadFile(stopPath)
@@ -123,13 +132,15 @@ func TestModelCheckRefusesWhatNoWakeWordModelIs(t *testing.T) {
 	}{
 		{"three subgraphs", &tflite.Model{Subgraphs: []*tflite.Subgraph{graph(), graph(), graph()}}, "subgraphs"},
 		{"a dimension past the limit", &tflite.Model{Subgraphs: []*tflite.Subgraph{{
-			Tensors: []*tflite.TensorDesc{tensor(1, 3, 40), tensor(1, 5000)}, Inputs: []int{0}, Outputs: []int{1}}}}, "dimension"},
+			Tensors: []*tflite.TensorDesc{tensor(1, 3, 40), tensor(1, 70000)}, Inputs: []int{0}, Outputs: []int{1}}}}, "dimension"},
 		{"a negative dimension", &tflite.Model{Subgraphs: []*tflite.Subgraph{{
 			Tensors: []*tflite.TensorDesc{tensor(1, 3, 40), tensor(1, -1)}, Inputs: []int{0}, Outputs: []int{1}}}}, "dimension"},
 		{"too many dimensions", &tflite.Model{Subgraphs: []*tflite.Subgraph{{
 			Tensors: []*tflite.TensorDesc{tensor(1, 3, 40), tensor(1, 1, 1, 1, 1, 1, 1, 1, 1)}, Inputs: []int{0}, Outputs: []int{1}}}}, "dimensions"},
 		{"a tensor of too many elements", &tflite.Model{Subgraphs: []*tflite.Subgraph{{
 			Tensors: []*tflite.TensorDesc{tensor(1, 3, 40), tensor(4096, 4096)}, Inputs: []int{0}, Outputs: []int{1}}}}, "elements"},
+		{"long dimensions multiplying past the elements", &tflite.Model{Subgraphs: []*tflite.Subgraph{{
+			Tensors: []*tflite.TensorDesc{tensor(1, 3, 40), tensor(60000, 60000, 60000)}, Inputs: []int{0}, Outputs: []int{1}}}}, "elements"},
 		{"tensors too big together", &tflite.Model{Subgraphs: []*tflite.Subgraph{{
 			Tensors: big, Inputs: []int{0}, Outputs: []int{1}}}}, "MB"},
 		{"too many operators", &tflite.Model{Subgraphs: []*tflite.Subgraph{graph(many...)}}, "operators"},
@@ -162,5 +173,16 @@ func TestCheckMicroRefusesAnOversizedFile(t *testing.T) {
 	f.Close()
 	if err := CheckMicro(path); err == nil || !strings.Contains(err.Error(), "bigger than") {
 		t.Errorf("err = %v", err)
+	}
+}
+
+// A newer trainer's wider window makes a tensor with one long dimension (4736 in #267); it is small all
+// told, and is taken.
+func TestModelCheckTakesALongDimension(t *testing.T) {
+	m := &tflite.Model{Subgraphs: []*tflite.Subgraph{{
+		Tensors: []*tflite.TensorDesc{{Type: tflite.Int8, Shape: []int{1, 3, 40}}, {Type: tflite.Int8, Shape: []int{1, 4736}}},
+		Inputs:  []int{0}, Outputs: []int{1}}}}
+	if err := microGraph(m, 1<<20); err != nil {
+		t.Errorf("refused: %v", err)
 	}
 }

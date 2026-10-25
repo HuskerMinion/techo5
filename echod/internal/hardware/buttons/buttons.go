@@ -123,8 +123,13 @@ func Get() *Controller {
 func (c *Controller) Name() string { return "buttons" }
 
 // Start opens the input nodes. It is an error to find none: the buttons are the one part of the
-// device that should work whatever else is wrong, so silently having none is worth a restart.
+// device that should work whatever else is wrong, so silently having none is worth a restart. A
+// device without buttons of its own (Here) opens nothing, and Run waits for the end.
 func (c *Controller) Start(context.Context) error {
+	if !Here {
+		slog.Info("no buttons of the device's own to read")
+		return nil
+	}
 	devices, err := input.List()
 	if err != nil {
 		return fmt.Errorf("buttons: listing input devices: %w", err)

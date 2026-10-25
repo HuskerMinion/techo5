@@ -24,8 +24,9 @@ func dropCache(f *os.File) {
 // syncAll flushes every filesystem, the data partition's journal with the rest.
 func syncAll() { unix.Sync() }
 
-// BootDevice is the eMMC partition named boot (mmcblk0p20 on athena's mainline kernel).
-func BootDevice() (string, error) {
+// PartitionDevice is the eMMC partition with this name: boot is mmcblk0p20 on athena's mainline
+// kernel, recovery mmcblk0p8 on the Skylight.
+func PartitionDevice(name string) (string, error) {
 	ms, _ := filepath.Glob("/sys/class/block/mmcblk*p*/uevent")
 	for _, m := range ms {
 		f, err := os.Open(m)
@@ -34,12 +35,12 @@ func BootDevice() (string, error) {
 		}
 		s := bufio.NewScanner(f)
 		for s.Scan() {
-			if strings.TrimSpace(s.Text()) == "PARTNAME=boot" {
+			if strings.TrimSpace(s.Text()) == "PARTNAME="+name {
 				f.Close()
 				return "/dev/" + filepath.Base(filepath.Dir(m)), nil
 			}
 		}
 		f.Close()
 	}
-	return "", errors.New("no eMMC partition named boot")
+	return "", errors.New("no eMMC partition named " + name)
 }

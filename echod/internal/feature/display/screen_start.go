@@ -23,7 +23,11 @@ func (d *Display) settleScreen(dev *screen.Device) {
 	if !on {
 		c := dev.Canvas()
 		draw.Draw(c, c.Rect, image.NewUniform(color.RGBA{0, 0, 0, 255}), image.Point{}, draw.Src)
+		// Present returns before the frame is on the panel: lit before then, the logo would flash.
 		if err := dev.Present(); err != nil {
+			slog.Warn("blanking the screen failed", "err", err)
+		}
+		if err := dev.Settle(); err != nil {
 			slog.Warn("blanking the screen failed", "err", err)
 		}
 		if err := screen.SetBacklight(1); err != nil {

@@ -44,6 +44,15 @@ func (p *paint) drawerSeg() int  { return p.s(drawerSegBase) }
 
 var drawerTabs = []string{"Cameras", "Radio", "Announce", "Call"}
 
+// shownTabs are the tabs this screen offers: no Announce or Call tab where there is no microphone to
+// talk with.
+func shownTabs() []string {
+	if !hasMicrophone() {
+		return drawerTabs[:drawerAnnounce]
+	}
+	return drawerTabs
+}
+
 func (r *renderer) drawer(s scene) {
 	fc := r.faces()
 	r.pending = r.pending[:0]
@@ -51,7 +60,7 @@ func (r *renderer) drawer(s scene) {
 
 	panel := image.Rect(r.w-r.cardIn()-r.drawerW(), r.cardIn(), r.w-r.cardIn(), r.h-r.cardIn())
 	r.addZone(zone{r: image.Rect(0, 0, panel.Min.X-r.s(4), r.h), kind: zoneDone}) // the dimmed clock closes it
-	r.roundShadow(panel, r.cardRad(), 26, 8, shadowAlpha()*1.2)
+	r.roundShadow(panel, r.cardRad(), r.sf(26), r.s(8), shadowAlpha()*1.2)
 	r.roundFill(panel, r.cardRad(), surface(3), surface(2))
 	r.roundHighlight(panel, r.cardRad())
 
@@ -61,9 +70,9 @@ func (r *renderer) drawer(s scene) {
 	segRad := r.sf(23)
 	r.roundFill(seg, segRad, surface(1), surface(1))
 	r.roundStroke(seg, segRad, r.sf(1), ember)
-	half := seg.Dx() / len(drawerTabs)
+	half := seg.Dx() / len(shownTabs())
 	inset, tabRad := r.s(4), r.sf(19)
-	for i, name := range drawerTabs {
+	for i, name := range shownTabs() {
 		b := image.Rect(seg.Min.X+i*half+inset, seg.Min.Y+inset, seg.Min.X+(i+1)*half-inset, seg.Max.Y-inset)
 		fg, face := lerp(dim, cream, 0.3), fc.nav
 		if i == s.drawerTab {
@@ -126,6 +135,9 @@ func drawerRows(s scene) ([]settingRow, string) {
 	}
 	if s.drawerTab == drawerCameras {
 		if len(s.cameras) == 0 {
+			if config.Get().Home.NoHACameras() {
+				return nil, "No cameras: None is chosen for Home Assistant's cameras, on the setup page or with the home_cameras action."
+			}
 			return nil, "No cameras yet. Set a Home Assistant token to list them all, or pick some with the home_cameras action."
 		}
 		var rows []settingRow

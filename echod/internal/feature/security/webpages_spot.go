@@ -3,4 +3,7 @@
 package security
 
 // webPages: the Echo Spot's camera and screen pages each have a switch, as on the Show.
-const webPages = true
+const (
+	webPages   = true
+	cameraPage = true
+)

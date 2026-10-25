@@ -37,6 +37,17 @@ func (f *Feature) FavoriteNow() error {
 		return errors.New("nothing playing to save")
 	}
 	slog.Info("favorite: radio station", "station", station)
+	if err := addFavorite(station); err != nil {
+		// Nothing on the screen said so before (#174): the star stayed as it was, and the reason was a
+		// line in the log.
+		f.favoriteFailed()
+		return err
+	}
+	return nil
+}
+
+// addFavorite asks Home Assistant's script to add a station to the favorites; a variable for the tests.
+var addFavorite = func(station string) error {
 	return hass.Get().Call("script", "radio_favorite_add_station", map[string]any{"station": station})
 }
 

@@ -6,8 +6,7 @@ import (
 	"io"
 	"math"
 
-	"github.com/zserge/microwakeword"
-
+	"github.com/HuskerMinion/techo5/echod/internal/feature/detect"
 	"github.com/HuskerMinion/techo5/echod/internal/hardware/mic"
 	"github.com/HuskerMinion/techo5/echod/internal/lib/wake"
 )
@@ -20,7 +19,7 @@ type variant struct {
 	// sum says whether to average all seven microphones instead of taking the center one.
 	sum bool
 
-	det  *microwakeword.Detector
+	det  *detect.Detector
 	best float64
 	hits int
 }
@@ -36,7 +35,7 @@ func compareMixes(ctx context.Context, out io.Writer, source *mic.Source, m wake
 		{name: "mean of 7 x4", gain: 4, sum: true},
 	}
 	for _, v := range variants {
-		det, err := microwakeword.NewDetector(m.Config)
+		det, err := detect.NewDetector(m.Config)
 		if err != nil {
 			return err
 		}
@@ -46,8 +45,8 @@ func compareMixes(ctx context.Context, out io.Writer, source *mic.Source, m wake
 	raw, unlisten := source.ListenRaw()
 	defer unlisten()
 
-	fmt.Fprintf(out, "scoring %d mixes on the same audio, cutoff %.2f — say the wake word a few times\n\n",
-		len(variants), m.Config.ProbabilityCutoff)
+	fmt.Fprintf(out, "scoring %d mixes on the same audio, cutoff %.2f, front end %s — say the wake word a few times\n\n",
+		len(variants), m.Config.ProbabilityCutoff, detect.FrontEnd())
 
 	for range frames {
 		select {

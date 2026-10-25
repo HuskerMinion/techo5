@@ -104,16 +104,16 @@ func TestGatheredForAnotherSourceIsDropped(t *testing.T) {
 	f.mu.Unlock()
 	f.ResetImmich()
 	src := config.Get().Home.Slideshow.Source
-	if f.keepGathered(gen, src, []hass.Media{{ID: "old"}}) {
+	if f.keepGathered(gen, src, []hass.Media{{ID: "old"}}, false) {
 		t.Error("a list gathered before the change was kept")
 	}
 	f.mu.Lock()
 	gen = f.slideshowGen
 	f.mu.Unlock()
-	if f.keepGathered(gen, src+"-another", []hass.Media{{ID: "other"}}) {
+	if f.keepGathered(gen, src+"-another", []hass.Media{{ID: "other"}}, false) {
 		t.Error("a list gathered for another source was kept")
 	}
-	if !f.keepGathered(gen, src, []hass.Media{{ID: "new"}}) {
+	if !f.keepGathered(gen, src, []hass.Media{{ID: "new"}}, false) {
 		t.Error("a list gathered after the change was dropped")
 	}
 }

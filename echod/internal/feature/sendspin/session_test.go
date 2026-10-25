@@ -1,6 +1,7 @@
 package sendspin
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -14,6 +15,7 @@ import (
 	"github.com/gorilla/websocket"
 
 	"github.com/HuskerMinion/techo5/echod/internal/config"
+	"github.com/HuskerMinion/techo5/echod/internal/hardware/speaker"
 )
 
 // What an end gives back, and when. A stream ending is what a skip and a pause both look like from here,
@@ -194,6 +196,52 @@ func TestStateSaysMutedAndVolumeEvenWhenOff(t *testing.T) {
 	if p["state"] != "synchronized" || payload["available"] != true {
 		t.Errorf("state = %v, available = %v, want synchronized and true: %s", p["state"], payload["available"], b)
 	}
+}
+
+// A level moved on the device - Home Assistant, the buttons, a voice request - goes to the server at the
+// level just applied, not the saved one, which is written only after the hook has run. Music Assistant's
+// slider stayed where it was before this (techo5-athena#3).
+func TestALevelMovedOnTheDeviceIsReported(t *testing.T) {
+	config.Use(filepath.Join(t.TempDir(), "state.json"))
+	if err := config.Set().Speaker().Volume(0); err != nil {
+		t.Fatal(err)
+	}
+
+	step := speaker.VolumeSteps / 2
+	payload, b := stateSent(t, converged(), func(s *session) {
+		telling(t, s)
+		s.levelMoved(step)
+	})
+	p, _ := payload["player"].(map[string]any)
+	if v := p["volume"]; v != float64(step*100/speaker.VolumeSteps) {
+		t.Errorf("volume = %v, want %d: %s", v, step*100/speaker.VolumeSteps, b)
+	}
+}
+
+// A mute or unmute on the device - Home Assistant, or a volume button bringing a muted speaker back -
+// goes to the server too. Before, the state carried only the mute the server had set, so a button press
+// after Music Assistant's mute told it muted again while the speaker played.
+func TestAMuteOnTheDeviceIsReported(t *testing.T) {
+	config.Use(filepath.Join(t.TempDir(), "state.json"))
+
+	payload, b := stateSent(t, converged(), func(s *session) {
+		telling(t, s)
+		s.muteMoved(true)
+	})
+	p, _ := payload["player"].(map[string]any)
+	if p["muted"] != true {
+		t.Errorf("muted = %v, want true: %s", p["muted"], b)
+	}
+}
+
+// telling starts a session's sender, as run does, for as long as the test.
+func telling(t *testing.T, s *session) {
+	t.Helper()
+	ctx, cancel := context.WithCancel(context.Background())
+	t.Cleanup(cancel)
+	s.changed = make(chan struct{}, 1)
+	s.live.Store(true)
+	go s.tell(ctx)
 }
 
 // The spec: a player must not say it is available until its clock filter has converged. Before the

@@ -22,6 +22,7 @@ import (
 	"github.com/HuskerMinion/techo5/echod/internal/feature/announce"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/web"
 	"github.com/HuskerMinion/techo5/echod/internal/hardware/speaker"
+	"github.com/HuskerMinion/techo5/echod/internal/layout"
 	"github.com/HuskerMinion/techo5/echod/internal/lib/safe"
 	"github.com/HuskerMinion/techo5/echod/internal/lib/sealed"
 )
@@ -67,7 +68,27 @@ const (
 	msgBye     = 'X' // hung up
 )
 
-func intercomOpen() bool { return config.Get().Home.HouseWord != "" }
+// A device without microphones (the Skylight Calendar) neither takes nor makes intercom calls: it could
+// not talk back.
+func intercomOpen() bool { return hasMicrophone() && config.Get().Home.HouseWord != "" }
+
+// hasMicrophone is layout's, a variable for the tests.
+var hasMicrophone = layout.HasMicrophone
+
+// callable is the other devices an intercom call can reach: the ones that hear. A Skylight says it has
+// no microphones and is left out; a device on an older release says nothing and is in. peersNow is
+// announce's list, a variable for the tests.
+func callable() []announce.Peer {
+	var out []announce.Peer
+	for _, pe := range peersNow() {
+		if pe.Hears() {
+			out = append(out, pe)
+		}
+	}
+	return out
+}
+
+var peersNow = announce.Peers
 
 func intercomKey() []byte { return sealed.Key(intercomLabel, config.Get().Home.HouseWord) }
 
@@ -413,6 +434,9 @@ func (p *Phone) intercomIn(w http.ResponseWriter, r *http.Request) {
 // what happens to it is reported through State and the Home Assistant event, as a phone call's is.
 func (p *Phone) CallDevice(name string) error {
 	name = strings.TrimSpace(name)
+	if !hasMicrophone() {
+		return errors.New("intercom: this device has no microphone and cannot place calls")
+	}
 	if !intercomOpen() {
 		return errors.New("intercom: this device has no house word; set one on the setup page")
 	}
@@ -525,12 +549,13 @@ func chime(ctx context.Context) bool {
 }
 
 // knownDevice reports whether a caller is a device this one already knows, calling from that
-// device's own address. A variable, so a test can stand in for the devices announcing themselves.
+// device's own address, and one that could call at all (callable). A variable, so a test can stand in
+// for the devices announcing themselves.
 var knownDevice = func(name, from string) bool {
 	if from == "" {
 		return false
 	}
-	for _, pe := range announce.Peers() {
+	for _, pe := range callable() {
 		if strings.EqualFold(pe.Name, name) && pe.Address == from {
 			return true
 		}
@@ -538,9 +563,10 @@ var knownDevice = func(name, from string) bool {
 	return false
 }
 
-// findPeer is the device in the house with this name, however it is capitalized.
+// findPeer is the device in the house with this name, however it is capitalized, among those a call
+// can reach.
 func findPeer(name string) (announce.Peer, bool) {
-	for _, pe := range announce.Peers() {
+	for _, pe := range callable() {
 		if strings.EqualFold(pe.Name, name) {
 			return pe, true
 		}

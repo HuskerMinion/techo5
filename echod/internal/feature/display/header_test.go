@@ -51,6 +51,7 @@ func showPanels() []struct {
 	}{
 		{"show5", showWide, showHigh},
 		{"show8", show8Wide, show8High},
+		{"skylight", skylightWide, skylightHigh},
 	}
 }
 

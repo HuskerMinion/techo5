@@ -166,10 +166,13 @@ func (r *renderer) deckButton(b image.Rectangle, v deckButtonView) {
 	r.glassBevel(b, rad, r.sf(7), 0.45)
 	r.glassRim(b, rad, r.sf(1)*1.2, white, 0.30)
 
-	// The icon in the upper part, the words under it, both scaled to the button.
+	// The icon in the upper part, the words under it, both scaled to the button. The words' most and
+	// least, in the panel's own pixels, grow with a panel wider than the Show 8's: held at 30, the
+	// words on the Skylight Calendar's 1920 by 1080 buttons came out smaller for their size than on
+	// any Show. On the Show 5 and the Show 8 they are 30 and 16 as before.
 	unit := min(b.Dx(), b.Dy())
 	isz := min(unit*42/100, b.Dy()*45/100) * r.sDenOr1() / r.sNumOr1()
-	labelSize := max(min(unit*16/100, 30), 16) * r.sDenOr1() / r.sNumOr1()
+	labelSize := max(min(unit*16/100, max(30, r.s(22))), max(16, r.s(12))) * r.sDenOr1() / r.sNumOr1()
 	face := r.textFace(true, labelSize)
 	words := r.fit(face, v.label, b.Dx()-r.s(16))
 	lh := r.s(labelSize)

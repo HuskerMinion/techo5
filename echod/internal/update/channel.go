@@ -23,18 +23,26 @@ func (c Channel) Label() string {
 	return "stable"
 }
 
-// URL is where that channel's manifest lives.
+// URL is where that channel's manifest lives, and nowhere on a build that publishes none (Published):
+// a panel's app updates it.
 //
 // Both are plain asset downloads rather than api.github.com: the REST API allows sixty unauthenticated
 // requests an hour per address, which several devices behind one router would share with everything else
 // on the network. Asset paths do not count against it.
 func (c Channel) URL() string {
+	if !Published() {
+		return ""
+	}
 	switch c {
 	case Dev:
 		return releases + "/download/dev/manifest.json"
 	}
 	return releases + "/latest/download/manifest.json"
 }
+
+// Published is whether this build has releases to check at all: a panel's daemon comes inside its
+// app, which updates itself.
+func Published() bool { return releases != "" }
 
 // Channels is every channel, in the order Home Assistant should offer them.
 func Channels() []Channel { return []Channel{Stable, Dev} }

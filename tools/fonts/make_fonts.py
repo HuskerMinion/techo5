@@ -17,7 +17,9 @@ all under the SIL Open Font License 1.1, whose OFL.txt is copied beside them. Tw
 Needs fontTools (pip install fonttools). Give it the folder that holds google/fonts' ofl/ folders,
 each one as downloaded (inter/, exo/, ...):
 
-    python3 tools/fonts/make_fonts.py path/to/ofl
+    python3 tools/fonts/make_fonts.py path/to/ofl [name ...]
+
+Names after the folder make only those (antonio, inter, ...); with none, every one.
 """
 import os
 import shutil
@@ -40,11 +42,13 @@ FONTS = [
     ("comicneue", ["ComicNeue-Regular.ttf", "ComicNeue-Bold.ttf"], {}),
     ("opensans", ["OpenSans[wdth,wght].ttf"], {"wdth": 100}),
     ("googlesansflex", ["GoogleSansFlex[ROND,opsz,slnt,wdth,wght].ttf"], {"opsz": 18, "wdth": 100, "ROND": 0, "slnt": 0}),
+    ("antonio", ["Antonio[wght].ttf"], {}),
 ]
 
 # What each is called, as its own name table says it.
 NAMES = {"inter": "Inter", "museomoderno": "MuseoModerno", "exo": "Exo", "overpass": "Overpass", "saira": "Saira",
-         "comicneue": "Comic Neue", "opensans": "Open Sans", "googlesansflex": "Google Sans Flex"}
+         "comicneue": "Comic Neue", "opensans": "Open Sans", "googlesansflex": "Google Sans Flex",
+         "antonio": "Antonio"}
 
 # The characters kept, as ranges of code points (both ends included). The font keeps those it has.
 KEEP = [
@@ -111,10 +115,12 @@ def rename(f, family, style):
 
 
 def main():
-    if len(sys.argv) != 2:
+    if len(sys.argv) < 2:
         sys.exit(__doc__)
-    src = sys.argv[1]
+    src, only = sys.argv[1], set(sys.argv[2:])
     for name, files, pins in FONTS:
+        if only and name not in only:
+            continue
         where = os.path.join(src, name)
         dst = os.path.join(OUT, name)
         os.makedirs(dst, exist_ok=True)

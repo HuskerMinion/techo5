@@ -230,7 +230,7 @@ func TestCloseBeforeOrDuringRun(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		return &Sensor{iio: tcs}
+		return &Sensor{poll: tcs}
 	}
 
 	s := open()

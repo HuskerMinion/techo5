@@ -342,3 +342,55 @@ func TestACutLineLeavesTheValueWhole(t *testing.T) {
 		}
 	}
 }
+
+// A screen without a microphone (the Skylight Calendar) offers nothing that needs one: no calls, no
+// voice settings, no intercom, no Assist on the clock and no Announce or Call tab in the drawer.
+func TestNoMicrophoneRows(t *testing.T) {
+	config.Use(t.TempDir() + "/state.json")
+	restore := hasMicrophone
+	t.Cleanup(func() { hasMicrophone = restore })
+	ids := func() map[string]bool {
+		m := map[string]bool{}
+		for _, cat := range []category{catDisplay, catSound} {
+			rows, _ := categoryRows(sheetView{st: settings{cat: cat}})
+			for _, r := range rows {
+				m[r.id] = true
+			}
+		}
+		return m
+	}
+	needMic := []string{"callbutton", "turnstyle", "mic", "wakeword", "wakesens", "waketone", "dnd"}
+	hasMicrophone = func() bool { return true }
+	with := ids()
+	for _, id := range append(needMic, "clocktap", "hasounds") {
+		if !with[id] {
+			t.Errorf("with a microphone, no %s row", id)
+		}
+	}
+	if len(shownTabs()) != len(drawerTabs) || clockTapOptions()[0] != "Assist" {
+		t.Error("with a microphone, a drawer tab or the Assist tap is missing")
+	}
+	hasMicrophone = func() bool { return false }
+	without := ids()
+	for _, id := range needMic {
+		if without[id] {
+			t.Errorf("without a microphone, the %s row is still there", id)
+		}
+	}
+	if !without["clocktap"] || !without["hasounds"] {
+		t.Error("without a microphone, the clock tap or the sounds row went too")
+	}
+	for _, o := range clockTapOptions() {
+		if o == "Assist" {
+			t.Error("without a microphone, the clock tap still offers Assist")
+		}
+	}
+	if config.Get().Screen.ClockTap == "" && clockTapOptions()[clockTapIndex()] != "Dashboard" {
+		t.Error("a tap kept as Assist does not read as Dashboard without a microphone")
+	}
+	for _, tab := range shownTabs() {
+		if tab == "Announce" || tab == "Call" {
+			t.Errorf("without a microphone, the drawer has a %s tab", tab)
+		}
+	}
+}

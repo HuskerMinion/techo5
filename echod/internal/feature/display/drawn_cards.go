@@ -9,10 +9,9 @@ import (
 	"math"
 	"strings"
 
-	xdraw "golang.org/x/image/draw"
-
 	"github.com/HuskerMinion/techo5/echod/internal/feature/dashboard"
 	"github.com/HuskerMinion/techo5/echod/internal/lib/mdi"
+	"github.com/HuskerMinion/techo5/echod/internal/lib/picscale"
 )
 
 // The drawn dashboard's layout: sections in columns, the way Home Assistant lays a sections view out,
@@ -326,6 +325,25 @@ func (r *paint) mdiIcon(name string, x, y, size int, c color.RGBA) {
 	r.text(face, string(g), x, y+r.s(size)-r.s(2), c)
 }
 
+// mdiIconIn draws an icon-font glyph centered in b, and centered by the ink of the glyph itself. mdiIcon
+// places the baseline at the bottom of its box, and the ink of a symbol sits at its own height above that
+// baseline, which differs per glyph: two pixels for the transport marks, three for the star, four for the
+// strip's cross. Asking the face for the glyph's own bounds is what puts them all on the middle.
+func (r *paint) mdiIconIn(name string, b image.Rectangle, size int, c color.RGBA) {
+	face := r.iconFace(size)
+	g, ok := mdi.Rune(name)
+	if face == nil || !ok {
+		return
+	}
+	bounds, _, ok := face.GlyphBounds(g)
+	if !ok {
+		return
+	}
+	mid := ((bounds.Min.Y + bounds.Max.Y) / 2).Round()
+	side := r.s(size)
+	r.text(face, string(g), b.Min.X+(b.Dx()-side)/2, b.Min.Y+b.Dy()/2-mid, c)
+}
+
 // tile draws one thing as Home Assistant's tile card does: a round badge with its icon, lit when it
 // is on, then its name, and what it is doing underneath.
 func (r *paint) tile(b image.Rectangle, t dashboard.Tile, pal dashPal, adj dashAdjusting) {
@@ -490,7 +508,7 @@ func (r *paint) graphCard(b image.Rectangle, g dashboard.Graph, pal dashPal) {
 		}
 		v := a + (c-a)*(f-float64(i))
 		y := yAt(v)
-		draw.Draw(r.dst, image.Rect(px, y, px+1, area.Max.Y), image.NewUniform(fill), image.Point{}, draw.Over)
+		washOver(r.dst, image.Rect(px, y, px+1, area.Max.Y), fill)
 		top, bottom := y, y
 		if prev >= 0 {
 			top, bottom = min(prev, y), max(prev, y)
@@ -557,11 +575,11 @@ func (r *paint) pictureCard(b image.Rectangle, p dashboard.Picture, pal dashPal)
 		r.text(fc.sub, msg, b.Min.X+(b.Dx()-r.width(fc.sub, msg))/2, b.Min.Y+b.Dy()/2, pal.sub)
 	} else {
 		inner := b.Inset(r.s(2))
-		xdraw.ApproxBiLinear.Scale(r.dst, inner, p.Image, cover(p.Image.Bounds(), inner), draw.Src, nil)
+		picscale.CatmullRom.Scale(r.dst, inner, p.Image, cover(p.Image.Bounds(), inner), draw.Src)
 	}
 	if p.Name != "" {
 		band := image.Rect(b.Min.X, b.Max.Y-r.s(40), b.Max.X, b.Max.Y)
-		draw.Draw(r.dst, band, image.NewUniform(color.RGBA{0, 0, 0, 140}), image.Point{}, draw.Over)
+		washOver(r.dst, band, color.RGBA{0, 0, 0, 140})
 		r.text(fc.label, r.fit(fc.label, p.Name, b.Dx()-2*r.s(cardPad)), b.Min.X+r.s(cardPad), b.Max.Y-r.s(12), color.RGBA{255, 255, 255, 255})
 	}
 }

@@ -33,6 +33,60 @@ echod
   OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
   SOFTWARE.
 
+echod: the exact microWakeWord feature front end (echod/internal/lib/mwwfront)
+  Ported to Go from mww_features.c in echo-dot-assist, https://github.com/Gamer92000/echo-dot-assist
+  (commit b9ed1848), MIT License:
+
+  Copyright (c) 2026 Julian Imhof
+
+  Permission is hereby granted, free of charge, to any person obtaining a copy
+  of this software and associated documentation files (the "Software"), to deal
+  in the Software without restriction, including without limitation the rights
+  to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+  copies of the Software, and to permit persons to whom the Software is
+  furnished to do so, subject to the following conditions:
+
+  The above copyright notice and this permission notice shall be included in all
+  copies or substantial portions of the Software.
+
+  THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+  IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+  FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+  AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+  LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+  OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+  SOFTWARE.
+
+  That code is in turn derived from two others, whose licenses apply to it too:
+  - TensorFlow Lite Micro's audio front end (tensorflow/lite/experimental/microfrontend/lib),
+    https://github.com/tensorflow/tflite-micro, Copyright 2018 The TensorFlow Authors. All Rights
+    Reserved. Licensed under the Apache License, Version 2.0
+    (https://www.apache.org/licenses/LICENSE-2.0). Changes: rewritten in Go with microWakeWord's
+    settings fixed in place of the configurable ones.
+  - KISS FFT's fixed point real FFT, https://github.com/mborgerding/kissfft, Copyright (c) 2003-2010
+    Mark Borgerding. All rights reserved. BSD 3-Clause License: redistribution and use in source and
+    binary forms, with or without modification, are permitted provided that the following conditions
+    are met: redistributions of source code must retain the above copyright notice, this list of
+    conditions and the following disclaimer; redistributions in binary form must reproduce the above
+    copyright notice, this list of conditions and the following disclaimer in the documentation
+    and/or other materials provided with the distribution; neither the author nor the names of any
+    contributors may be used to endorse or promote products derived from this software without
+    specific prior written permission. THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND
+    CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+    IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO
+    EVENT SHALL THE COPYRIGHT OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
+    SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE,
+    EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+
+echod (dependency, vendored and changed)
+  github.com/zserge/microwakeword — MIT License, Copyright (c) 2025 Serge Zaitsev
+  The wake word engine, kept in echod/third_party/microwakeword: the upstream module at commit
+  bfaf3840114e (v0.0.0-20260330234603-bfaf3840114e), its license in that directory's LICENSE, with
+  TECHO5's changes marked "techo5:" in the code. Its testdata (not shipped in any release): the
+  .tflite models are from https://github.com/kahrendt/micro-wake-word-models, Apache License 2.0
+  (testdata/NOTICE), except add_pool.tflite, which testdata/add_pool.py makes up; the test audio is
+  as distributed in upstream's MIT-licensed repository.
+
 echod (dependency)
   github.com/emiago/diago — Mozilla Public License 2.0
   SIP calls and their media (feature/phone). Used unmodified; its source is at
@@ -84,6 +138,7 @@ Text fonts (embedded in the Show and Spot daemons, not the Dot's)
     Saira, Copyright 2020 The Saira Project Authors (https://github.com/Omnibus-Type/Saira)
     Comic Neue, Copyright 2014 The Comic Neue Project Authors (https://github.com/crozynski/comicneue)
     Open Sans, Copyright 2020 The Open Sans Project Authors (https://github.com/googlefonts/opensans)
+    Antonio, Copyright 2013 The Antonio Project Authors (https://github.com/googlefonts/antonioFont)
     Google Sans Flex, Copyright 2015 The Google Sans Flex Authors
       (https://github.com/googlefonts/googlesans-flex). "Google", "Google Sans" and "Google Sans Flex"
       are trademarks of Google LLC; see TRADEMARKS.md beside the files. TECHO5 is not affiliated with
@@ -91,7 +146,8 @@ Text fonts (embedded in the Show and Spot daemons, not the Dot's)
   Taken from Google Fonts (https://github.com/google/fonts) and changed by tools/fonts/make_fonts.py:
   variable fonts cut to static Regular (400) and Bold (700) instances, every font cut down to the
   characters the screen draws, with hinting and all layout features but kerning removed. Go Regular
-  and Go Bold, the default, come from golang.org/x/image/font/gofont (BSD 3-Clause, the Go license).
+  and Go Bold, the default, and Go Mono and Go Mono Bold come from golang.org/x/image/font/gofont
+  (BSD 3-Clause, the Go license).
 
 Sounds (embedded in the daemon)
   Home Assistant Voice sounds, echod/internal/hardware/speaker/sounds — Creative Commons Attribution
@@ -122,6 +178,13 @@ Person detection model (embedded in the daemon, Show and Spot)
   aeac6f39e5c7475cea20c54e86d41e3a38312546: an int8 MobileNet v1 trained on the Visual Wake Words
   dataset. Unchanged.
 
+Test pictures, echod/internal/feature/person/testdata (not shipped in any release)
+  person.gray and no_person.gray, TensorFlow Lite Micro's person detection test pictures
+  (tensorflow/lite/micro/examples/person_detection/testdata, https://github.com/tensorflow/tflite-micro
+  at commit cefb91622f507275fc6690f475ccec6650edd076), Copyright The TensorFlow Authors, Apache
+  License 2.0. Changes: converted from BMP to raw 96x96 gray, which the model is checked against; a
+  NOTICE beside them says how.
+
 Wake word models (in the root filesystem, /usr/share/techo5/models)
   okay_nabu, hey_jarvis, hey_mycroft, alexa — Apache License 2.0
   esphome/micro-wake-word-models, https://github.com/esphome/micro-wake-word-models, at commit
@@ -134,6 +197,11 @@ Wake word models (in the root filesystem, /usr/share/techo5/models)
   8bcd2f20bb7b76c351b2eff871fa1ce873fe9be2. The repository is MIT-licensed as a whole. It is a
   community collection: it records no separate license, author or training data for each model, so
   MIT from the repository is all that can be said about them here.
+
+Test audio, echod/internal/lib/mwwfront/testdata (not shipped in any release)
+  hey_jarvis.wav and hey_jarvis_features.bin, from github.com/zserge/microwakeword's testdata
+  (MIT License, Copyright (c) 2025 Serge Zaitsev): a spoken "Hey Jarvis" and microWakeWord's own
+  features of it, which the front end is checked against. Unchanged.
 
 Linux kernel, https://git.kernel.org (GPL-2.0)
   Releases ship a kernel inside the boot images techo5-boot-<version>.img (Echo Show 5 2nd gen,
@@ -187,7 +255,96 @@ Linux kernel patches for the Echo Show 8 2nd gen, tools/linux/athena/kernel
   mt8183-mt6358-ts3a227-max98357.c), all GPL-2.0 like the kernel (the device tree GPL-2.0 OR MIT).
   The panel init tables in patches/panel are taken from Amazon's GPL-2.0 kernel for the device
   (the sequences its LCM drivers send).
+  The camera drivers in src/camera/isp (MediaTek's sensor interface and CAMSV, from BayLibre's
+  MT8365 ISP 3.0 series with MT8183 support) are from https://github.com/vpavlin/mt8183-camera,
+  GPL-2.0, with their copyright and SPDX headers kept; the changes are marked "athena:". The
+  OV13855 driver in src/camera is new, GPL-2.0; its register tables (ov13855-tables.inc) are from
+  Rockchip's GPL-2.0 driver (drivers/media/i2c/ov13855.c in rockchip-linux/kernel, develop-6.1,
+  Copyright (C) 2021 Rockchip Electronics Co., Ltd.).
   In the boot image built from them the kernel is under the GPL-2.0. MediaTek's MT7663 Wi-Fi and
   Bluetooth firmware, from linux-firmware, is not linked into the kernel: it ships as separate
   files in the boot image's ramdisk (lib/firmware), under MediaTek's own license, whose text
   (LICENCE.mediatek) is in the ramdisk with them.
+  Releases ship it as Linux 6.18.56 for arm64 in techo5-boot-athena-<version>.img; its source is
+  published with each release as linux-6.18.56-techo5-athena-<version>-source.tar.xz. The panel
+  picker, src/panel/panel-athena-select.c (GPL-2.0), is TECHO5's own: it chooses the unit's screen
+  from the name the bootloader passes.
+
+Linux kernel for the Skylight Calendar 15, tools/linux/skylight/kernel
+  Releases ship Linux 6.18.56 for arm64 in techo5-boot-skylight-<version>.img and the installer
+  image techo5-installer-skylight-<version>.img, under the GPL-2.0. Its source is published with each
+  release as linux-6.18.56-techo5-skylight-<version>-source.tar.xz: the kernel.org tree with the board
+  files, the panel driver and the build's configuration (techo5-skylight.config) in it.
+  The board device tree, rk3566-skylight-cal150.dts ((GPL-2.0+ OR MIT), like the kernel's Rockchip
+  trees), is TECHO5's, with its PMIC layout following rk3566-bigtreetech-cb2.dtsi and its display path
+  rk3566-pinetab2.dtsi from the kernel's own tree. Its values, and the panel driver's
+  (panel-skylight-cal150.c, GPL-2.0) 38 bridge init writes and timing, are taken from the unit's stock
+  device tree.
+  The Wi-Fi and Bluetooth firmware is not shipped: each unit's own goes into its store at install,
+  from its vendor partition.
+
+Light sensor, echod/internal/hardware/ambient/em3071x.go
+  The Everlight EM3071X's register addresses and the value that switches it on are the ones Rockchip's
+  GPL-2.0 driver uses (drivers/input/sensors/lsensor/ls_em3071x.c in Rockchip's kernel). They are
+  facts about the chip; the Go code that uses them is TECHO5's own, written fresh.
+
+BusyBox, https://busybox.net (GPL-2.0)
+  The Skylight's installer and bench images carry it as bin/busybox, and the Skylight and athena
+  stores as /bin/busybox.static (PID 1's interpreter): Alpine Linux's busybox-static package (armv7,
+  busybox-static-1.37.0-r31 from Alpine v3.24), unmodified. Its source is
+  https://busybox.net/downloads/busybox-1.37.0.tar.bz2 with Alpine's build files and patches,
+  https://gitlab.alpinelinux.org/alpine/aports/-/tree/3.24-stable/main/busybox. The Skylight's
+  installer and bench images say so in a SOURCES file beside it.
+
+FFmpeg, https://ffmpeg.org (LGPL-2.1-or-later)
+  Every root filesystem carries ffmpeg 8.1.2 for the video player and live cameras as
+  /usr/local/bin/techo5-ffmpeg (armv7). The Echo Show 8 2nd gen (athena) and Skylight Calendar root
+  filesystems and stores also carry it as /usr/local/bin/techo5-ffmpeg64 (aarch64, statically linked),
+  with the H.265, VP8 and VP9 decoders added. Both are built under the LGPL only: no --enable-gpl, no
+  --enable-nonfree.
+    - Source: ffmpeg's release tarball, https://ffmpeg.org/releases/ffmpeg-8.1.2.tar.xz (its SHA-256 is
+      in the build scripts).
+    - Changes: one, to libavformat/rtsp.c, so an RTSP camera's Basic login is ignored rather than
+      answered with the password in the clear. It is a modification of that LGPL source, so it is
+      LGPL-2.1-or-later too. The patch and the configure flags are in tools/linux/build-ffmpeg.sh.
+    - Build: tools/linux/build-ffmpeg.sh (armv7) and tools/linux/build-ffmpeg-arm64.sh (aarch64), and
+      docs/building.md is how to run them. They rebuild the shipped binaries from the source above, and
+      the binaries can be relinked or replaced the same way.
+  The armv7 build uses the root filesystem's own Alpine OpenSSL and zlib libraries. The aarch64 build
+  has these linked into it, all from Alpine Linux v3.24's aarch64 packages, unmodified: musl (MIT
+  License), OpenSSL 3 (Apache License 2.0), zlib (zlib License) and GCC's libgcc (GPL-3.0 with the GCC
+  Runtime Library Exception). Their sources are Alpine's,
+  https://gitlab.alpinelinux.org/alpine/aports/-/tree/3.24-stable. The build prints the versions it
+  used; the first release's were musl 1.2.6-r2, openssl-libs-static 3.5.9-r0, zlib-static 1.3.2-r1
+  and libgcc 15.2.0-r5.
+
+Alpine Linux packages
+  The root filesystems and the athena and Skylight stores are built from Alpine Linux v3.24 packages,
+  unmodified, each under its own license (several GPL, among them e2fsprogs, wireless-tools and
+  busybox-extras). The images' package list is tools/linux/packages-rootfs.txt (and each store's
+  mkstore.sh); their sources are Alpine's, https://gitlab.alpinelinux.org/alpine/aports/-/tree/3.24-stable,
+  with the source archives at https://dl-cdn.alpinelinux.org/alpine/v3.24/.
+
+echod (dependency)
+  github.com/miekg/dns — BSD 3-Clause License
+  Copyright (c) 2009, The Go Authors. Extensions copyright (c) 2011, Miek Gieben. All rights reserved.
+  Multicast DNS questions for .local names (lib/localname). BSD 3-Clause License: redistribution
+  and use in source and binary forms, with or without modification, are permitted provided that the
+  following conditions are met: redistributions of source code must retain the above copyright
+  notice, this list of conditions and the following disclaimer; redistributions in binary form must
+  reproduce the above copyright notice, this list of conditions and the following disclaimer in the
+  documentation and/or other materials provided with the distribution; neither the name of the
+  copyright holder nor the names of its contributors may be used to endorse or promote products
+  derived from this software without specific prior written permission. THIS SOFTWARE IS PROVIDED BY
+  THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING,
+  BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+  ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT,
+  INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES ARISING IN ANY WAY OUT OF THE
+  USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+
+echod (dependency)
+  github.com/libp2p/zeroconf/v2 — MIT License
+  Copyright (c) 2016 Stefan Smarzly, Copyright (c) 2014 Oleksandr Lobunets
+  Finding other TECHO5 devices and the deck's computers, and being found by Music Assistant, over
+  mDNS (feature/announce, feature/deck, feature/sendspin). The MIT License's text is as above, under
+  EchoLocal.

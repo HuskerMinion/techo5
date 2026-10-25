@@ -14,34 +14,6 @@ import (
 	"github.com/HuskerMinion/techo5/echod/internal/lib/palette"
 )
 
-// Themes: five colors make the whole screen — the ground, the accent, the text, a dim text and
-// the rules and boxes. The palette lives in package variables the renderer reads on every frame,
-// so switching is a matter of assigning them; the choice is saved with the screen settings. A
-// preset is picked by name; a color changed in the custom colors editor makes the theme "Custom", saved as
-// its five colors.
-type theme struct {
-	name   string
-	colors [roles]color.RGBA
-}
-
-// The five roles, in the order the custom colors editor lists them.
-const (
-	roleGround = iota
-	roleAccent
-	roleText
-	roleDim
-	roleRules
-	roles
-)
-
-var roleNames = [roles]string{"Ground", "Accent", "Text", "Dim text", "Rules"}
-
-func rgb(v uint32) color.RGBA { return color.RGBA{uint8(v >> 16), uint8(v >> 8), uint8(v), 0xff} }
-
-func preset(name string, ground, accent, text, dim, rules uint32) theme {
-	return theme{name, [roles]color.RGBA{rgb(ground), rgb(accent), rgb(text), rgb(dim), rgb(rules)}}
-}
-
 // themes are the presets, from lib/palette, where the setup page reads them too.
 var themes = func() []theme {
 	out := make([]theme, len(palette.Presets))
@@ -63,26 +35,29 @@ func themeIndex(name string) int {
 	return 0
 }
 
-// current is the palette in force, from the config.
+// current is the palette in force, from the config: the theme of the mode the screen wears.
 func current() theme {
-	sc := config.Get().Screen
-	if sc.Theme == customName {
-		t := theme{name: customName}
-		for i, hex := range [roles]string{sc.Palette.Ground, sc.Palette.Accent, sc.Palette.Text, sc.Palette.Dim, sc.Palette.Rules} {
-			c, err := parseHex(hex)
-			if err != nil {
-				return themes[0]
-			}
-			t.colors[i] = c
-		}
+	light := lightShown(config.Get().Screen)
+	name := config.Get().Screen.ThemeFor(light)
+	if name != customName {
+		return themes[themeIndex(name)]
+	}
+	if t, ok := savedCustom(light); ok {
 		return t
 	}
-	return themes[themeIndex(sc.Theme)]
+	return themes[0]
 }
 
-// savedCustom is the custom palette saved, whether or not it is in force.
-func savedCustom() (theme, bool) {
-	p := config.Get().Screen.Palette
+// shownName is the name of the theme in force as it is saved: a preset's, or Custom.
+func shownName() string {
+	sc := config.Get().Screen
+	return sc.ThemeFor(lightShown(sc))
+}
+
+// savedCustom is the light mode's custom palette saved, or the dark mode's, whether or not it is in
+// force.
+func savedCustom(light bool) (theme, bool) {
+	p := config.Get().Screen.PaletteFor(light)
 	t := theme{name: customName}
 	for i, hex := range [roles]string{p.Ground, p.Accent, p.Text, p.Dim, p.Rules} {
 		c, err := parseHex(hex)
@@ -96,15 +71,20 @@ func savedCustom() (theme, bool) {
 
 // applyTheme sets the palette the renderer draws with. Called from the display's goroutine only.
 func applyTheme(t theme) {
+	// A skin's palette wins over any theme while it is on (skin_show.go).
+	if st := skinLooks[skin()].theme; st != nil {
+		t = *st
+	}
 	walnut, amber, cream, dim, ember = t.colors[roleGround], t.colors[roleAccent], t.colors[roleText], t.colors[roleDim], t.colors[roleRules]
 }
 
-// setRole changes one color of the palette in force and saves the result as Custom.
+// setRole changes one color of the palette in force and saves the result as Custom, the theme of the
+// mode in force.
 func setRole(role int, c color.RGBA) {
 	t := current()
 	t.colors[role] = c
 	p := config.Palette{Ground: hex(t.colors[0]), Accent: hex(t.colors[1]), Text: hex(t.colors[2]), Dim: hex(t.colors[3]), Rules: hex(t.colors[4])}
-	if err := config.Set().Screen().Custom(p); err != nil {
+	if err := config.Set().Screen().CustomFor(lightShown(config.Get().Screen), p); err != nil {
 		slog.Warn("saving the custom theme failed", "err", err)
 	}
 	slog.Info("theme", "role", roleNames[role], "color", hex(c))
@@ -187,9 +167,9 @@ func (r *renderer) bevel(rect image.Rectangle, fill color.RGBA, raised bool) {
 	}
 	if raised {
 		sh := image.Rect(rect.Min.X+3, rect.Max.Y, rect.Max.X+3, rect.Max.Y+3)
-		draw.Draw(r.dst, sh, image.NewUniform(shade), image.Point{}, draw.Over)
+		washOver(r.dst, sh, shade)
 		sh = image.Rect(rect.Max.X, rect.Min.Y+3, rect.Max.X+3, rect.Max.Y)
-		draw.Draw(r.dst, sh, image.NewUniform(shade), image.Point{}, draw.Over)
+		washOver(r.dst, sh, shade)
 	}
 	draw.Draw(r.dst, rect, image.NewUniform(fill), image.Point{}, draw.Src)
 	draw.Draw(r.dst, image.Rect(rect.Min.X, rect.Min.Y, rect.Max.X, rect.Min.Y+2), image.NewUniform(light), image.Point{}, draw.Src)
@@ -199,19 +179,20 @@ func (r *renderer) bevel(rect image.Rectangle, fill color.RGBA, raised bool) {
 }
 
 // swatchStrip draws a ctlSwatches row's colors for one role of the theme, the one in force ringed in
-// the text color; a tap on one picks it.
+// the text color; a tap on one picks it. Sized in the Show 5's pixels and scaled to the screen.
 func (r *paint) swatchStrip(row settingRow, right, cy, top int) {
-	const d, gap = 28, 6
+	d, gap, k := r.s(28), r.s(6), r.sk()
 	x0 := right - swatchCount*d - (swatchCount-1)*gap
 	in := current().colors[row.role]
+	rad := float64(d) / 2
 	for i := range swatchCount {
 		c := swatch(row.role, i)
 		cx, cyf := float64(x0+i*(d+gap)+d/2), float64(cy)
-		r.aaDisc(cx, cyf+1.5, d/2, lerp(c, color.RGBA{0, 0, 0, 255}, 0.5)) // a little depth under it
-		r.aaDisc(cx, cyf, d/2, c)
-		r.aaRing(cx, cyf, d/2-0.5, 1, 0, 2*math.Pi, lerp(c, color.RGBA{255, 255, 255, 255}, 0.25))
+		r.aaDisc(cx, cyf+1.5*k, rad, lerp(c, color.RGBA{0, 0, 0, 255}, 0.5)) // a little depth under it
+		r.aaDisc(cx, cyf, rad, c)
+		r.aaRing(cx, cyf, rad-0.5*k, k, 0, 2*math.Pi, lerp(c, color.RGBA{255, 255, 255, 255}, 0.25))
 		if c == in {
-			r.aaRing(cx, cyf, d/2+4, 2.4, 0, 2*math.Pi, cream)
+			r.aaRing(cx, cyf, rad+4*k, 2.4*k, 0, 2*math.Pi, cream)
 		}
 		if row.id != "" {
 			x := x0 + i*(d+gap)

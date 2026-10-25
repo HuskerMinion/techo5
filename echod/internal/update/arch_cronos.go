@@ -1,4 +1,4 @@
-//go:build !dot && !spot
+//go:build !dot && !spot && !panel
 
 package update
 
@@ -8,8 +8,11 @@ import "github.com/HuskerMinion/techo5/echod/internal/layout"
 // architecture name.
 const archSuffix = ""
 
-// onAthena is layout.Athena, a variable so a test can stand on another board.
-var onAthena = layout.Athena
+// onAthena and onSkylight are the layout's, variables so a test can stand on another board.
+var (
+	onAthena   = layout.Athena
+	onSkylight = layout.Skylight
+)
 
 // rootfsArch is the key this device's root filesystem is published under in a manifest's Rootfs.
 //
@@ -20,9 +23,16 @@ var onAthena = layout.Athena
 // (tools/linux/athena). Another Show's rootfs would not come up there, and athena's would not on
 // them, so athena's is keyed "arm-athena" and an athena never takes the plain "arm" one. A release
 // carrying no athena rootfs leaves athenas where they are.
+//
+// The Skylight Calendar 15 is keyed the same way, "arm-skylight": the Show's arm daemon on TECHO5's
+// mainline RK3566 kernel, booted from a store in what was Android's userdata. No other Show's rootfs
+// may land on it, nor its on them.
 func rootfsArch() string {
-	if onAthena() {
+	switch {
+	case onAthena():
 		return arch + "-athena"
+	case onSkylight():
+		return arch + "-skylight"
 	}
 	return arch
 }

@@ -8,6 +8,7 @@ tools/linux/slotctl text eol=lf
 tools/linux/readmisc.sh text eol=lf
 tools/linux/rootfs/** text eol=lf
 tools/linux/athena/** text eol=lf
+tools/linux/skylight/** text eol=lf
 tools/linux/*.txt text eol=lf
 tools/linux/*.patch text eol=lf
 tools/*.sh text eol=lf
@@ -27,3 +28,12 @@ echod/internal/lib/mdi/names.txt text eol=lf
 # Recorded sounds embedded in the daemon: raw audio, which a line-ending conversion would corrupt.
 *.pcm binary
 tools/boot-logo/*.bin binary
+
+# The wake word front end's golden test audio and features: binary, byte for byte.
+echod/internal/lib/mwwfront/testdata/* binary
+
+# The engine's golden features and TensorFlow Lite outputs: binary, byte for byte.
+echod/third_party/microwakeword/testdata/*.bin binary
+
+# The person model's golden test pictures, raw gray: binary, byte for byte.
+echod/internal/feature/person/testdata/*.gray binary

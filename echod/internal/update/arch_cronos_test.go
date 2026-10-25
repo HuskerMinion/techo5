@@ -1,4 +1,4 @@
-//go:build !dot && !spot
+//go:build !dot && !spot && !panel
 
 package update
 
@@ -47,5 +47,38 @@ func TestAthenaTakesOnlyItsOwnRootfs(t *testing.T) {
 	// Off slots (Android) the binary decides, as before, on either board.
 	if !athenaOnly.serves(false) {
 		t.Error("an Android Show was not offered the arm binary")
+	}
+}
+
+// The Skylight Calendar 15 is keyed "arm-skylight": it takes only its own rootfs, never the Shows' or
+// athena's, and theirs never take it.
+func TestSkylightTakesOnlyItsOwnRootfs(t *testing.T) {
+	restoreArch, restoreAthena, restoreSkylight := arch, onAthena, onSkylight
+	t.Cleanup(func() { arch, onAthena, onSkylight = restoreArch, restoreAthena, restoreSkylight })
+	arch = "arm"
+	onAthena = func() bool { return false }
+	onSkylight = func() bool { return true }
+
+	rootfs := func(key string) Binary {
+		return Binary{URL: "https://example/techo5-rootfs-" + key + ".tar.gz", SHA256: strings.Repeat("d", 64), Size: 60 << 20}
+	}
+	bin := map[string]Binary{"arm": {URL: "https://example/echod-arm", SHA256: strings.Repeat("b", 64), Size: 22 << 20}}
+	others := Manifest{Version: "1.3.0", Binaries: bin, Rootfs: map[string]Binary{"arm": rootfs("arm"), "arm-athena": rootfs("athena")}}
+	all := Manifest{Version: "1.3.0", Binaries: bin, Rootfs: map[string]Binary{"arm": rootfs("arm"), "arm-skylight": rootfs("skylight")}}
+
+	if got := rootfsArch(); got != "arm-skylight" {
+		t.Fatalf("the Skylight's rootfs key is %q, want arm-skylight", got)
+	}
+	if others.serves(true) {
+		t.Error("a release with only the Shows' and athena's rootfs was offered to a Skylight")
+	}
+	if !all.serves(true) {
+		t.Error("a release carrying the Skylight's rootfs was not offered to it")
+	}
+
+	onSkylight = func() bool { return false }
+	skylightOnly := Manifest{Version: "1.3.0", Binaries: bin, Rootfs: map[string]Binary{"arm-skylight": rootfs("skylight")}}
+	if skylightOnly.serves(true) {
+		t.Error("a release with only the Skylight's rootfs was offered to a Show on slots")
 	}
 }

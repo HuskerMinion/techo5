@@ -11,9 +11,10 @@
 // a question about the weather.
 //
 // Touch: a tap starts or ends a turn (on a dark screen it only lights it); a swipe up or down is the
-// volume, a step per 60 pixels; a held finger opens the ring menu (menu_spot.go). While the menu is open
-// the touch screen follows every moving finger, so dragging round the ring turns the dial (or, for a
-// value, is a jog wheel), and a tap in the middle does the item at the top.
+// volume, a step per 60 pixels, while Swipe for volume is on; a held finger opens the ring menu
+// (menu_spot.go). While the menu is open the touch screen follows every moving finger, so dragging
+// round the ring turns the dial (or, for a value, is a jog wheel), and a tap in the middle does the
+// item at the top.
 //
 // The backlight: the panel shows almost nothing below about 120 of 255 and glares at 255, so a
 // brightness in percent spans backlightMin to the top. Through the night hours, 22:00 to 07:00 unless
@@ -76,6 +77,19 @@ func init() {
 // hasEqualizer is whether this screen offers the Wave and Bars turn screens (render_turn_spot.go).
 const hasEqualizer = true
 
+// hasRainbow is whether this screen offers the Rainbow turn screen: not the Spot's, which is round.
+const hasRainbow = false
+
+// hasTimerStyles: the Spot's timers stay around its rim, whatever the Show's are set to.
+const hasTimerStyles = false
+
+// hasSkins: the Spot has the skins too, in their colors, fonts and filters (skin_spot.go); what the
+// Show draws around its own clock is the Show's.
+const hasSkins = true
+
+// hasMicrophone: the Spot always has its microphones (the Show's is render_welcome.go).
+var hasMicrophone = func() bool { return true }
+
 const (
 	// volumeShow is how long the level stays up after it last moved.
 	volumeShow = 2 * time.Second
@@ -113,9 +127,16 @@ const (
 )
 
 type Display struct {
+	// camButtons is the camera page's action buttons between taps: the one armed (camera_buttons.go).
+	camButtons cameraButtons
+
 	light *esphome.Light
 	auto  *esphome.Switch
-	clock *esphome.Select
+	// power is Screen power, the screen's on and off as a switch, and roomSw Screen ignores room light
+	// commands (screen_room.go).
+	power  *esphome.Switch
+	roomSw *esphome.Switch
+	clock  *esphome.Select
 	// clockStyleSel is Clock style, how the clock looks all day (clock_style.go).
 	clockStyleSel *esphome.Select
 	// clockPos is Clock position, the clock across the middle or at the foot (clock_layout_spot.go).
@@ -134,10 +155,13 @@ type Display struct {
 	camTime    *esphome.Select
 	answerTime *esphome.Select
 	turnStyle  *esphome.Select // Turn screen: Classic, Wave or Bars
+	skinSl     *esphome.Select // Screen skin
 	// callBtn is the home screen's Call button, on or off (callbutton.go).
 	callBtn *esphome.Switch
 	// styleSwipeSw is Swipe between clock styles (style_swipe.go).
 	styleSwipeSw *esphome.Switch
+	// volumeSwipeSw is Swipe for volume (volume_swipe.go).
+	volumeSwipeSw *esphome.Switch
 	// weatherFx is the weather page's sky moving, on or off (weatherfx.go).
 	weatherFx *esphome.Switch
 	// muteRing is the muted ring drawn thin and dim, on or off (mutering_spot.go).
@@ -232,6 +256,10 @@ type Display struct {
 	// glowUntil is the end of a step of the night clock's brightness showing on the backlight, from
 	// the settings sheet at night (stepGlow).
 	glowUntil time.Time
+	// glowTimer relights the face once a step's glowPreview is over: one timer, put off by each step,
+	// so a run of steps ends in one relight rather than one for each, and something that holds the
+	// face (a test, here) can stop it. Under mu.
+	glowTimer *time.Timer
 
 	// The night's settings in Home Assistant, as on the Show (night_select.go): its hours, their two
 	// ends to the quarter hour, what it does to the face, the red clock's look and brightness.
@@ -267,6 +295,11 @@ type Display struct {
 	radioCue time.Time
 	radar    bool
 	radioSel int
+	// musicQuiet is how long the music on the face has been paused or stopped, and musicAway whether
+	// that has gone on past pausedAway: the clock comes back, and the face's taps go back to it, while
+	// the track stays held for play to pick up again.
+	musicQuiet quietTimer
+	musicAway  bool
 	// cameraSel is the camera list's middle row.
 	cameraSel int
 	// contactTop is the first contact the Call list shows.
@@ -336,6 +369,7 @@ func build() *Display {
 	}
 	d.light.OnCommand = d.command
 	d.auto.OnCommand = func(on bool) { d.setAuto(on, true) }
+	d.buildRoomLights()
 	d.clock = clockSelect(d.wake)
 	d.clockStyleSel = clockStyleSelect(d)
 	d.clockPos = clockPositionSelect(d.wake)
@@ -343,12 +377,15 @@ func build() *Display {
 	setup.SetScreen(&setup.ScreenChoices{Styles: clockStyleOptions(), Current: clockStyleIndex, Choose: d.setClockStyle,
 		Fonts: fonts.Names(), FontNow: fontIndex, ChooseFont: d.setFont,
 		OwnFonts: ownFonts, AddFont: d.addOwnFont, RemoveFont: d.removeOwnFont, MaxFont: fonts.MaxOwnFile,
-		Places: spotWorld, Swipe: func(on bool) { setStyleSwipe(d.styleSwipeSw, on) }})
+		Places: spotWorld, Swipe: func(on bool) { setStyleSwipe(d.styleSwipeSw, on) }, VolumeSwipe: func(on bool) { setVolumeSwipe(d.volumeSwipeSw, on) },
+		IgnoreRoomLights: d.setRoomLightsIgnored})
 	d.camTime = cameraTimeSelect()
 	d.answerTime = answerTimeSelect()
 	d.turnStyle = turnStyleSelect(d.wake)
+	d.skinSl = skinSelect(d.wake)
 	d.callBtn = callButtonSwitch(d.wake)
 	d.styleSwipeSw = styleSwipeSwitch()
+	d.volumeSwipeSw = volumeSwipeSwitch()
 	d.weatherFx = weatherAnimationSwitch(d.wake)
 	d.muteRing = muteRingSwitch(d.wake)
 	d.nightHours = nightHoursSelect(d)
@@ -410,22 +447,32 @@ func (d *Display) Name() string { return "screen" }
 // turnStyleSel is the Turn screen setting in Home Assistant.
 func (d *Display) turnStyleSel() *esphome.Select { return d.turnStyle }
 
+// timerStyleSel: the Spot has no Timers setting.
+func (d *Display) timerStyleSel() *esphome.Select { return nil }
+
+// skinSel is the Screen skin setting in Home Assistant.
+func (d *Display) skinSel() *esphome.Select { return d.skinSl }
+
 func (d *Display) Entities() []esphome.Entity {
-	return []esphome.Entity{d.light, d.auto, d.clock, d.clockStyleSel, d.clockPos, d.camTime, d.answerTime, d.turnStyle, d.callBtn, d.weatherFx, d.muteRing, d.lang, d.styleSwipeSw, d.fontSel,
+	return []esphome.Entity{d.light, d.power, d.roomSw, d.auto, d.clock, d.clockStyleSel, d.clockPos, d.camTime, d.answerTime, d.turnStyle, d.skinSl, d.callBtn, d.weatherFx, d.muteRing, d.lang, d.styleSwipeSw, d.volumeSwipeSw, d.fontSel,
 		d.nightHours, d.nightStart, d.nightEnd, d.nightMode, d.atNight, d.nightStyle, d.glowLevel}
 }
 
 // Restore lights the panel the way it was left.
 func (d *Display) Restore(c config.Config) {
 	setClock24(d.clock, c.Screen.Clock24)
+	d.roomSw.Set(c.Screen.IgnoreRoomLights)
+	d.describeScreen()
 	d.clockStyleSel.Set(clockStyles[clockStyleIndex()].label)
 	d.clockPos.Set(clockPositions[clockPositionIndex()].label)
 	d.fontSel.Set(fonts.Names()[fontIndex()])
 	d.camTime.Set(cameraTimes[cameraTimeIndex()].label)
 	d.answerTime.Set(answerTimes[answerTimeIndex()].label)
 	d.turnStyle.Set(turnStyles[turnStyleIndex()].label)
+	d.skinSl.Set(skins[skinIndex()].label)
 	setCallButton(d.callBtn, c.Screen.CallButton)
 	d.styleSwipeSw.Set(!c.Screen.NoStyleSwipe)
+	d.volumeSwipeSw.Set(!c.Screen.NoVolumeSwipe)
 	setWeatherAnimation(d.weatherFx, !c.Screen.WeatherStill)
 	setMuteRingSubtle(d.muteRing, c.Screen.MuteRingSubtle)
 	d.nightHoursChanged()
@@ -464,6 +511,9 @@ func (d *Display) apply(on bool, pct int, save bool) {
 	d.relight(true)
 
 	d.light.Set(esphome.LightState{On: on, Brightness: float32(pct) / 100, ColorMode: esphome.ColorModeBrightness})
+	if d.power != nil {
+		d.power.Set(on)
+	}
 	d.wake()
 
 	if save {
@@ -779,6 +829,11 @@ func (d *Display) gesture(g touch.Gesture) {
 		d.menuGesture(g)
 		return
 	}
+	// A cue turn's captions over the dashboard, the music or the clock: a tap on them puts them away,
+	// and anywhere else is the face's (turn_cue.go).
+	if d.captionsTap(g) {
+		return
+	}
 	d.mu.Lock()
 	dashUp := d.dashShowing
 	d.mu.Unlock()
@@ -792,7 +847,14 @@ func (d *Display) gesture(g touch.Gesture) {
 		case touch.Tap:
 			// The sound's control silences the sound and leaves the view up, which is the whole use of
 			// it at a doorbell; anywhere else on the face takes the view down as it always has. Talk
-			// starts or ends talking through the camera.
+			// starts or ends talking through the camera, and an action button arms or runs its action.
+			if d.r != nil {
+				if i := d.r.cameraButtonTapped(g.X, g.Y); i >= 0 {
+					d.camButtons.tap(v.Entity, i, cameraButtonsFor(v), time.Now())
+					d.wake()
+					return
+				}
+			}
 			if d.r != nil && d.r.cameraSoundTapped(g.X, g.Y) {
 				// Silence it, or ask for it again: the control is a toggle, and the view stays either way.
 				go home.Get().ToggleCameraSound()
@@ -824,7 +886,7 @@ func (d *Display) gesture(g touch.Gesture) {
 			return
 		}
 	}
-	if d.showsNowPlaying() {
+	if d.musicFaceUp() {
 		switch g.Kind {
 		case touch.Tap:
 			if onDone(g.X, g.Y) {
@@ -878,14 +940,14 @@ func (d *Display) gesture(g touch.Gesture) {
 		}
 		voice.Get().Action()
 	case touch.SwipeUp:
-		media.Get().Adjust(+1)
+		swipeVolume(+1)
 	case touch.SwipeDown:
-		media.Get().Adjust(-1)
+		swipeVolume(-1)
 	case touch.SwipeLeft, touch.SwipeRight:
 		// Across the clock face, the next clock style or the one before: only on the face itself, not
 		// while a turn is on or its words are up, nor over the screensaver or the light before an alarm.
 		d.mu.Lock()
-		idle, up := d.view.Phase == "idle", d.clockUp
+		idle, up := pageIdle(d.view.Phase), d.clockUp
 		d.mu.Unlock()
 		if !idle || !up || d.answerUp(time.Now()) || !styleSwipeOn() {
 			return
@@ -1301,9 +1363,14 @@ func (d *Display) Run(ctx context.Context) error {
 	}
 }
 
-func (d *Display) frame() time.Duration {
+func (d *Display) frame() (next time.Duration) {
 	d.videoPainting, d.vp.dark = false, false
 	now := time.Now()
+	if d.dev != nil {
+		applySkin(d.dev, side, side)
+	} else {
+		applySkin(nil, side, side)
+	}
 	d.mu.Lock()
 	nightChanged := d.wasNight != nightNow(now)
 	d.mu.Unlock()
@@ -1421,6 +1488,7 @@ func (d *Display) frame() time.Duration {
 		// frame), at the dimmest light (relight), so the room can tell. Looked at again until the
 		// watching ends.
 		d.r.watchedDark()
+		unskinned(d.dev, true)
 		if err := d.dev.Present(); err != nil {
 			slog.Warn("presenting the frame failed", "err", err)
 		}
@@ -1444,6 +1512,9 @@ func (d *Display) frame() time.Duration {
 	if quiet && (s.phase == "thinking" || s.phase == "replying" || s.phase == "lingering") {
 		// A screen command: the screen it asked for is the answer, not the words.
 		s.phase, s.heard, s.reply = "idle", "", ""
+	}
+	if cueOn() {
+		s.cue, s.phase, s.heard, s.reply = cueTurn(s.phase, s.heard, s.reply, captionsOn())
 	}
 	if equalizerOn() && (s.phase == "listening" || s.phase == "thinking" || s.phase == "replying" || s.phase == "lingering") {
 		s.eq = eqFor(s.phase, nightNow(now), now)
@@ -1499,6 +1570,7 @@ func (d *Display) frame() time.Duration {
 	s.cameraSound, s.cameraSoundLive = home.Get().CameraSoundOn(), home.Get().CameraSoundLive()
 	if s.showCamera {
 		s.talkOffered, s.talk = talkback.Offered(s.camera.Entity), talkback.Get().State()
+		s.camButtons = d.camButtons.faces(s.camera.Entity, cameraButtonsFor(s.camera), now)
 	}
 	s.cameraLive = camera.Get().Running()
 	bt := btaudio.Get().State()
@@ -1519,12 +1591,25 @@ func (d *Display) frame() time.Duration {
 			s.sky = skyNow(weatherNow(s.weather, s.forecast, s.now))
 		}
 	}
-	s.nowPlaying = s.phase == "idle" && d.showsNowPlaying()
+	music := d.showsNowPlaying()
+	s.nowPlaying = s.phase == "idle" && music
 	if s.nowPlaying || (s.menuOpen && s.menuMode == modeRadio) {
 		s.radio = home.Get().Radio()
 		if s.radio.Followed {
 			s.playing, s.paused = s.radio.Playing, s.radio.Paused
 		}
+	}
+	// Music quiet for pausedAway gives the face back to the clock; playing again brings it back. The
+	// time runs through a turn, so a question asked while the music is paused does not bring the face
+	// back for another half minute after its answer.
+	d.mu.Lock()
+	away := d.musicQuiet.over(now, music, s.playing)
+	d.musicAway = away
+	d.mu.Unlock()
+	if away {
+		s.nowPlaying = false
+	}
+	if s.nowPlaying || (s.menuOpen && s.menuMode == modeRadio) {
 		if rows := radioRows(s.radio, s.playing || s.paused); s.radioSel >= len(rows) || s.radioSel < 0 {
 			s.radioSel = min(max(s.radioSel, 0), max(len(rows)-1, 0))
 			d.mu.Lock()
@@ -1574,16 +1659,19 @@ func (d *Display) frame() time.Duration {
 			s.slideshowTrouble = home.Get().SlideshowTrouble()
 		}
 	}
+	wait := home.Get().SlideshowIdleTimeout()
 	d.mu.Lock()
 	d.clockUp = boring && s.sunrise == 0 && s.slideshowScreensaver == nil && !s.redClock
 	if !boring {
 		d.slideshowIdleSince = time.Time{}
-	} else if d.slideshowIdleSince.IsZero() {
+	} else if d.slideshowIdleSince.IsZero() || (s.cue != "" && now.Sub(d.slideshowIdleSince) < wait) {
+		// A turn under a cue is somebody at the screen, as any turn is: the screensaver's wait starts
+		// again from it. One already up stays up under the light, as any page under a cue does.
 		d.slideshowIdleSince = now
 	}
 	idleSince := d.slideshowIdleSince
 	d.mu.Unlock()
-	if boring && !idleSince.IsZero() && now.Sub(idleSince) >= home.Get().SlideshowIdleTimeout() {
+	if boring && !idleSince.IsZero() && now.Sub(idleSince) >= wait {
 		s.slideshowScreensaver = home.Get().SlideshowScreensaverPhoto()
 		if home.Get().SlideshowMode() == config.SlideshowScreensaver && !s.redClock && s.sunrise == 0 {
 			if art, fx := sceneArt(now, side, side); art != nil {
@@ -1630,6 +1718,7 @@ func (d *Display) frame() time.Duration {
 	d.callShown = d.r.callDrawn
 	d.mu.Unlock()
 	painted := time.Now()
+	unskinned(d.dev, s.nightClockFace() || s.muted || s.cameraLive)
 	if err := d.dev.Present(); err != nil {
 		slog.Warn("presenting the frame failed", "err", err)
 	}
@@ -1650,6 +1739,11 @@ func (d *Display) frame() time.Duration {
 		}
 	}
 
+	if cueFace(s) && cueLit(s.cue) {
+		// The cue's rim breathes and runs over whatever face is up; a face that moves faster keeps
+		// its own pace.
+		defer func() { next = min(next, cueFrame) }()
+	}
 	switch {
 	case turning || (s.menuOpen && d.isSpinning()):
 		return dialFrame
@@ -1670,9 +1764,9 @@ func (d *Display) frame() time.Duration {
 		return artFxFrame // rain or snow is falling over the weather art on the screen
 	case s.eq != nil && !s.showVolume && !s.menuOpen && !s.sheetOpen && !s.showCamera && s.call.Phase == phone.Idle &&
 		!s.ringing.any() && !s.setupAsking && !s.announceRecording && !s.showReminder && !s.showAnnouncement && !s.showNotification &&
-		!s.showAlert && !(s.phase == "lingering" && s.eq.quiet):
-		if s.eq.wave {
-			return waveFrame
+		!s.showAlert && !(s.phase == "lingering" && s.eq.quiet && faceSettled(s.eq)):
+		if s.eq.wave || s.eq.style == "orb" || s.eq.style == "face" {
+			return waveFrame // ten a second: the orb and the face are soft and need no more
 		}
 		return eqFrame // the bars are moving
 	case s.phase == "listening" || s.phase == "thinking" || s.phase == "replying" || s.showVolume || s.menuOpen || s.btPairing || s.call.Phase != phone.Idle || s.ringing.any():

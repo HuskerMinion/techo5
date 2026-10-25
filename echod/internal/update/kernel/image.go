@@ -8,6 +8,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"strings"
 )
 
 // An athena boot image is an Android boot image (header version 1) as tools/linux/athena/kernel's
@@ -182,7 +183,8 @@ func (im *image) withTable(table []byte) ([]byte, error) {
 	return out, nil
 }
 
-// checkShipped: the kernel a slot carries, as released: a valid image, its id right, its slot empty.
+// checkShipped: the athena kernel a slot carries, as released: a valid image, its id right, its slot
+// empty.
 func checkShipped(data []byte) (*image, error) {
 	im, err := parseImage(data)
 	if err != nil {
@@ -202,6 +204,60 @@ func checkShipped(data []byte) (*image, error) {
 		if b != 0 {
 			return nil, errors.New("its amp tuning slot is not empty")
 		}
+	}
+	if im.extent != len(data) {
+		return nil, fmt.Errorf("%d bytes after the image's end", len(data)-im.extent)
+	}
+	return im, nil
+}
+
+// A Skylight boot image is header version 2 as tools/linux/skylight/kernel's pack-sky.py makes it:
+// the kernel, an empty ramdisk, a Rockchip resource image and the device tree, nothing of the unit's
+// own. Its command line tells TECHO5's kernel (the store as the root) from the installer image, which
+// boots the same kernel for one install (rdinit=/init techo5.installer=1).
+
+// cmdline is the header's command line.
+func (im *image) cmdline() []string {
+	c := im.data[64 : 64+512]
+	if i := bytes.IndexByte(c, 0); i >= 0 {
+		c = c[:i]
+	}
+	return strings.Fields(string(c))
+}
+
+// skylightBoot is whether im is TECHO5's Skylight kernel: header version 2 with a device tree, and
+// the command line build.sh gives the boot image, not the installer's.
+func skylightBoot(im *image) bool {
+	if im.version != 2 || len(im.dtb) == 0 {
+		return false
+	}
+	root := false
+	for _, w := range im.cmdline() {
+		switch {
+		case w == "root=PARTLABEL=techo5-store":
+			root = true
+		case strings.HasPrefix(w, "rdinit=") || strings.HasPrefix(w, "techo5.installer"):
+			return false
+		}
+	}
+	return root
+}
+
+// checkShipped is checkShipped for the board: athena's (the function), or the Skylight's: a valid
+// image, its id right, TECHO5's Skylight kernel, and nothing after its end.
+func (b Board) checkShipped(data []byte) (*image, error) {
+	if b != Skylight {
+		return checkShipped(data)
+	}
+	im, err := parseImage(data)
+	if err != nil {
+		return nil, err
+	}
+	if !im.idOK() {
+		return nil, errors.New("its header id does not match its contents")
+	}
+	if !skylightBoot(im) {
+		return nil, errors.New("it is not TECHO5's Skylight kernel (pack-sky.py, root=PARTLABEL=techo5-store)")
 	}
 	if im.extent != len(data) {
 		return nil, fmt.Errorf("%d bytes after the image's end", len(data)-im.extent)

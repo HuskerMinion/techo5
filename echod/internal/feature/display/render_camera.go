@@ -5,6 +5,7 @@ package display
 import (
 	"image"
 	"image/draw"
+	"slices"
 	"time"
 
 	"github.com/HuskerMinion/techo5/echod/internal/feature/home"
@@ -45,10 +46,10 @@ func (r *renderer) cameraView(s scene, v home.CameraView) {
 	wordless := v.Caption != nil && v.Caption.Wordless()
 	if !wordless {
 		// Corners on a dark strip so they read over any picture.
-		draw.Draw(r.dst, image.Rect(0, 0, r.w, 44), image.NewUniform(shade), image.Point{}, draw.Over)
-		r.text(r.small, name, r.margin, 32, captionText)
+		washOver(r.dst, image.Rect(0, 0, r.w, r.s(44)), shade)
+		r.text(r.small, name, r.margin, r.s(32), captionText)
 		t := clockHM(s.now)
-		r.text(r.small, t, r.w-r.margin-r.width(r.small, t), 32, captionDim)
+		r.text(r.small, t, r.w-r.margin-r.width(r.small, t), r.s(32), captionDim)
 	}
 	left := time.Until(v.Until).Round(time.Second)
 	hint := "tap to close"
@@ -64,6 +65,14 @@ func (r *renderer) cameraView(s scene, v home.CameraView) {
 	}
 	draw.Draw(r.dst, image.Rect(0, r.h-r.cameraStrip(), r.w, r.h), image.NewUniform(shade), image.Point{}, draw.Over)
 
+	// The view's action buttons, in a row above the strip, and above a notification's words when they
+	// are up, so neither Talk nor the words are under one.
+	foot := r.h - r.cameraStrip()
+	if v.Caption != nil && !wordless {
+		foot = r.captionRect(*v.Caption).Min.Y
+	}
+	r.cameraButtons(s.camButtons, foot)
+
 	// Talk, left of the sound's control (or at the end of the strip without one): a tap sends the
 	// microphones to the camera's speaker, and another ends it. Why a talk failed takes the hint's place
 	// for a few seconds.
@@ -73,16 +82,10 @@ func (r *renderer) cameraView(s scene, v home.CameraView) {
 		if s.cameraSound {
 			end = r.cameraSoundBox(r.cameraSoundLabel(s)).Min.X - r.s(10)
 		}
-		label, fill := talkLabel(s.talk, v.Entity), shift(ember, 16)
-		if talking {
-			fill = talkLive
-		}
+		label := talkLabel(s.talk, v.Entity)
 		b := r.cameraSoundBox(label)
 		b = b.Add(image.Pt(end-b.Max.X, 0))
-		r.bevel(b, fill, true)
-		m := r.tiny.Metrics()
-		mid := b.Min.Y + (b.Dy()+m.Ascent.Ceil()-m.Descent.Ceil())/2
-		r.text(r.tiny, label, b.Min.X+(b.Dx()-r.width(r.tiny, label))/2, mid, cream)
+		r.cameraControl(b, label, talking)
 		r.setCameraTalkAt(b)
 		// A talk goes on only while this is on the screen. The strips and cards drawn over the page
 		// afterward (an announcement, a recording, a reminder, a pop-up) cover it, so with one up it
@@ -97,7 +100,7 @@ func (r *renderer) cameraView(s scene, v home.CameraView) {
 	} else if s.cameraSound {
 		end = r.cameraSoundBox(r.cameraSoundLabel(s)).Min.X - r.s(10)
 	}
-	r.text(r.tiny, r.clipTo(r.tiny, hint, end-r.margin), r.margin, r.h-11, captionDim)
+	r.text(r.tiny, r.clipTo(r.tiny, hint, end-r.margin), r.margin, r.h-r.s(11), captionDim)
 
 	// The sound's control, at the end of that strip and clear of the hint: a tap on it silences what
 	// the camera is saying and leaves the view up. Only while there is a sound to silence, and the
@@ -106,14 +109,65 @@ func (r *renderer) cameraView(s scene, v home.CameraView) {
 		// The control says what it does: silence the sound, or ask for it.
 		label := r.cameraSoundLabel(s)
 		b := r.cameraSoundBox(label)
-		r.bevel(b, shift(ember, 16), true)
-		m := r.tiny.Metrics()
-		mid := b.Min.Y + (b.Dy()+m.Ascent.Ceil()-m.Descent.Ceil())/2
-		r.text(r.tiny, label, b.Min.X+(b.Dx()-r.width(r.tiny, label))/2, mid, cream)
+		r.cameraControl(b, label, false)
 		r.setCameraSoundAt(b)
 		return
 	}
 	r.setCameraSoundAt(image.Rectangle{})
+}
+
+// cameraButtons draws the camera page's action buttons in a row ending above foot, from the left: each as
+// wide as what it says and as tall as a finger needs, and all cut short alike when the row would run
+// off the page, the widest first. Where they went is kept for a tap (cameraButtonTapped).
+func (r *renderer) cameraButtons(faces []camButtonFace, foot int) {
+	if len(faces) == 0 {
+		return
+	}
+	faces = append([]camButtonFace(nil), faces...) // the words are cut in this frame's copy, not the scene's
+	face := r.faces().button
+	pad, gap := r.s(18), r.s(14)
+	h := max(r.s(44), face.Metrics().Height.Ceil()+r.s(16))
+	bottom := foot - r.s(10)
+	room := r.w - 2*r.margin - (len(faces)-1)*gap
+	widths := make([]int, len(faces))
+	total := 0
+	for i, f := range faces {
+		widths[i] = max(r.width(face, f.label)+2*pad, r.s(80))
+		total += widths[i]
+	}
+	if total > room {
+		// Too wide for the page: the widest are cut to what the row has left once the narrower ones
+		// have theirs, so an armed button's question is cut no more than it must be.
+		most := fairWidth(widths, room)
+		for i := range faces {
+			if widths[i] > most {
+				faces[i].label = r.clipTo(face, faces[i].label, most-2*pad)
+				widths[i] = most
+			}
+		}
+	}
+	at := make([]image.Rectangle, len(faces))
+	x := r.margin
+	for i, f := range faces {
+		b := image.Rect(x, bottom-h, x+widths[i], bottom)
+		r.cameraButton(b, f)
+		at[i] = b
+		x = b.Max.X + gap
+	}
+	r.drawnButtons = at
+}
+
+// fairWidth is the most any one of widths may have for them all to fit in room: the narrow ones keep
+// theirs, and the rest share what is left alike.
+func fairWidth(widths []int, room int) int {
+	sorted := slices.Sorted(slices.Values(widths))
+	for i, w := range sorted {
+		if share := room / (len(sorted) - i); w > share {
+			return share
+		}
+		room -= w
+	}
+	return room
 }
 
 // cameraSoundLabel is what the sound's control says: what a tap on it does.

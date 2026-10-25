@@ -44,6 +44,7 @@ var colorWords = map[string][4]string{
 	"es": {"cálido", "frío", "Listo", "Grupo · las luces sin color quedan blancas"},
 	"fr": {"chaud", "froid", "OK", "Groupe · les lampes sans couleur restent blanches"},
 	"it": {"caldo", "freddo", "Fatto", "Gruppo · le luci senza colore restano bianche"},
+	"pt": {"quente", "frio", "Pronto", "Grupo · luzes sem cor ficam brancas"},
 	"ru": {"тёплый", "холодный", "Готово", "Группа · лампы без цвета остаются белыми"},
 }
 
@@ -178,7 +179,7 @@ func (d *Display) sliderBegins(s sheetSlider) {
 	}
 	main := m.volume
 	if main < 0 {
-		now, _ := dashboard.Get().MediaNow(m.entity)
+		now, _ := sheets().MediaNow(m.entity)
 		main = now.Volume
 	}
 	d.editMedia(func(n *mediaSheet) {
@@ -236,7 +237,7 @@ const sheetSendEvery = 300 * time.Millisecond
 
 // sliderTap is how a slider's value reaches Home Assistant; a variable so that a test can see what
 // is sent, and when.
-var sliderTap = func(a dashboard.Action) { dashboard.Get().Tap(a) }
+var sliderTap = func(a dashboard.Action) { sheets().Tap(a) }
 
 // sliderSent is what a sheet's slider last sent, and the value waiting to be sent while sends are held
 // back. gen is which wait a held-back send belongs to: a send, or the finger lifting, starts the next,
@@ -398,12 +399,12 @@ func (d *Display) colorTap(x, y int) bool {
 		d.mu.Unlock()
 	case z.kind == colorPartWhite:
 		slog.Info("dashboard color", "entity", c.Entity, "kelvin", z.value)
-		dashboard.Get().Tap(dashboard.Action{Entity: c.Entity, Service: "light.turn_on",
+		sheets().Tap(dashboard.Action{Entity: c.Entity, Service: "light.turn_on",
 			Data: map[string]any{"color_temp_kelvin": int(z.value)}})
 		d.setShownColor(z.value)
 	case z.kind == colorPartHue:
 		slog.Info("dashboard color", "entity", c.Entity, "hue", z.value)
-		dashboard.Get().Tap(dashboard.Action{Entity: c.Entity, Service: "light.turn_on",
+		sheets().Tap(dashboard.Action{Entity: c.Entity, Service: "light.turn_on",
 			Data: map[string]any{"hs_color": []any{z.value, 100.0}}})
 		d.setShownHue(z.value)
 	}
@@ -444,7 +445,7 @@ func (r *renderer) colorSheet(c *dashboard.LightColor, th dashboard.Theme) {
 	}
 	pal := r.palette(th)
 	fc := r.faces()
-	draw.Draw(r.dst, r.dst.Rect, image.NewUniform(color.RGBA{0, 0, 0, 150}), image.Point{}, draw.Over)
+	washOver(r.dst, r.dst.Rect, color.RGBA{0, 0, 0, 150})
 
 	pad, gap := r.s(20), r.s(14)
 	bandH, swatchH, btnH, wordsH, noteH := r.s(64), r.s(60), r.s(52), r.s(30), r.s(30)

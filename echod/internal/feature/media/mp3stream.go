@@ -12,6 +12,7 @@ import (
 	"github.com/hajimehoshi/go-mp3"
 
 	"github.com/HuskerMinion/techo5/echod/internal/hardware/speaker"
+	"github.com/HuskerMinion/techo5/echod/internal/lib/audio"
 )
 
 // A stream the device fetches itself - a station kept on it, one the voice assistant found, one typed
@@ -237,20 +238,36 @@ func (m *mp3Samples) resync(err error) error {
 	return nil
 }
 
-// resampler brings interleaved stereo from one rate to another as it streams past, by straight lines
-// between neighboring samples: a station's 44.1 kHz to the speaker's 48. The last frame of each chunk
-// is carried into the next, so the joins are as smooth as the middles.
+// resampler brings interleaved stereo from one rate to another as it streams past: a station's
+// 44.1 kHz to the speaker's 48. It runs lib/audio's band-limited converter, which keeps its history
+// between chunks, so the joins are as smooth as the middles. A rate with no small whole-number ratio
+// to the output (none of the usual ones) gets straight lines between neighboring samples instead.
 type resampler struct {
 	from, to int
-	pos      float64 // where the next output falls, in input frames from the start of the chunk
-	prev     [2]int16
-	primed   bool
+	conv     *audio.Converter
+	tried    bool
+
+	pos    float64 // straight lines: where the next output falls, in input frames from the start of the chunk
+	prev   [2]int16
+	primed bool
 }
 
 func (r *resampler) run(in []int16) []int16 {
 	if r.from == r.to || r.from <= 0 || r.to <= 0 {
 		return in
 	}
+	if !r.tried {
+		r.conv, r.tried = audio.NewConverter(r.from, r.to, 2), true
+	}
+	if r.conv != nil {
+		return r.conv.Run(in, make([]int16, 0, len(in)*r.to/r.from+4))
+	}
+	return r.lines(in)
+}
+
+// lines is the fallback: straight lines between neighboring samples, the last frame of each chunk
+// carried into the next.
+func (r *resampler) lines(in []int16) []int16 {
 	n := len(in) / 2
 	if n == 0 {
 		return nil

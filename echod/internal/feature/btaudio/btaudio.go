@@ -20,8 +20,9 @@
 //
 // To Home Assistant: a switch for pairing mode, a "Bluetooth phone" switch (on while phone pairing
 // is on or a phone is connected; off disconnects it), a sensor saying what is connected (a phone
-// too), buttons to reconnect or disconnect the remembered device, and buttons to call the phones
-// back or forget them.
+// too), buttons to reconnect or disconnect the remembered device, buttons to call the phones back or
+// forget them, a switch for the controller's Secure Connections (secureconn.go), and one for whether a
+// phone's volume is the device's (volume.go).
 package btaudio
 
 import (
@@ -109,6 +110,11 @@ type Feature struct {
 	callPhone  *esphome.Button
 	forget     *esphome.Button
 	forgetOne  *esphome.Button // the earbuds or speaker the device plays to (Forget)
+	secure     *esphome.Switch // the controller's Secure Connections (secureconn.go)
+	setsVolume *esphome.Switch // Bluetooth sets the volume (volume.go)
+
+	// sc puts the Secure Connections setting on the controller.
+	sc *secureConn
 
 	// Changed fires when State does; listeners must not block.
 	Changed hook.Hook[State]
@@ -155,19 +161,20 @@ type Feature struct {
 	// path. It answers the guess pairing mode makes: something wants to play here, so no speaker is
 	// picked, and pairing mode ends once it has connected.
 	incoming string
-	// received is whether each receivable stream was running at the last look, so a remote that starts
-	// playing takes the speaker once, and whatever is started after it is not taken back.
+	// received is whether each receivable stream was running at the last look, by PCM path: one
+	// that starts takes a free speaker (choose).
 	received map[string]bool
-	// displaced is the remotes, by the name their audio plays under, that another remote took the
-	// speaker from while they were still sending: once nothing is playing, one still sending takes it
-	// back (refresh).
+	// streams is each connected phone's stream, by PCM path, read while the phone is connected.
+	streams map[string]*inStream
+	// unopened is the phones' streams that did not open, by PCM path, until one does or the phone
+	// goes: each is tried again at every look, and its failure logged once.
+	unopened map[string]bool
+	// displaced is the phones, by item, that another phone took the speaker from while they were
+	// playing: one still playing takes it back once that one stops (choose).
 	displaced map[string]bool
 	// pausedAway is the phones paused for playing to nobody, by item, while they go on sending
 	// (pauseAway): each is asked once.
 	pausedAway map[string]bool
-	// openFailed is how many looks in a row each phone's stream, by item, failed to open as it started
-	// (receive): one failing is not paused away while it is still being tried (stillOpening).
-	openFailed map[string]int
 	// kept ends a phone's track left paused too long (keep), one timer for each phone by item.
 	kept map[string]*time.Timer
 	// levels is each received stream's level as last seen or set, by PCM path: a phone's volume slider,
@@ -179,6 +186,12 @@ type Feature struct {
 	// (sliderMove): a short while, since most phones say nothing back, and a press after it always
 	// counts.
 	ours map[string]time.Time
+	// volModes is, for each received stream by PCM path, the volume mode last put on it and when: its
+	// volume made the device's, or left to scale its own audio. A look puts right a stream whose mode
+	// is not what Bluetooth sets the volume says now, or that bluez-alsa no longer has (volumeMode).
+	// modeMu puts one mode on at a time, each read from the setting as it is put on (putMode).
+	volModes map[string]volMode
+	modeMu   sync.Mutex
 	// levelTo hands the device's volume step to the one goroutine that tells the phone (tellPhone), the
 	// latest only, so two steps in quick succession reach the phone in order.
 	levelTo chan int
@@ -249,17 +262,27 @@ func build() *Feature {
 		received:   map[string]bool{},
 		displaced:  map[string]bool{},
 		pausedAway: map[string]bool{},
-		openFailed: map[string]int{},
+		streams:    map[string]*inStream{},
+		unopened:   map[string]bool{},
 		kept:       map[string]*time.Timer{},
 		levels:     map[string]int{},
 		ours:       map[string]time.Time{},
+		volModes:   map[string]volMode{},
 		hushed:     map[string]time.Time{},
 		levelTo:    make(chan int, 1),
 		linked:     map[string]bool{},
 		phoneAudio: map[string]bool{},
 		poke:       make(chan struct{}, 1),
 		state:      State{Status: notConnected},
+		secure:     newSecureConnSwitch(),
+		setsVolume: newSetsVolumeSwitch(),
+		sc:         newSecureConn(),
 	}
+	f.secure.Set(f.SecureConnections())
+	f.secure.OnCommand = func(on bool) { _ = f.SetSecureConnections(on) }
+	f.setsVolume.Set(f.SetsVolume())
+	f.setsVolume.OnCommand = func(on bool) { _ = f.SetSetsVolume(on) }
+	safe.Go("bluetooth secure connections", f.sc.loop)
 	f.pairing.OnCommand = func(on bool) { f.SetPairing(on) }
 	f.phonePair.OnCommand = func(on bool) {
 		f.mu.Lock()
@@ -282,9 +305,14 @@ func build() *Feature {
 func (f *Feature) Name() string { return "bluetooth audio" }
 
 func (f *Feature) Entities() []esphome.Entity {
-	return []esphome.Entity{
+	e := []esphome.Entity{
 		f.pairing, f.phonePair, f.status, f.reconnect, f.disconnect, f.forgetOne, f.callPhone, f.forget,
+		f.setsVolume,
 	}
+	if secureConnHere() {
+		e = append(e, f.secure)
+	}
+	return e
 }
 
 // State is a copy of what the screen shows.
@@ -347,6 +375,10 @@ func (f *Feature) open(ctx context.Context) error {
 	f.mu.Unlock()
 	a.Changed.Listen(func(struct{}) { f.wake() })
 	a.PlayerChanged.Listen(f.followPlayer)
+	// The Secure Connections setting goes on each hci0: this one, and every new one under the same
+	// adapter, which bluetoothd sets up with Secure Connections on again.
+	a.Returned.Listen(func(struct{}) { f.sc.up() })
+	f.sc.up()
 	al.Changed.Listen(func(struct{}) { f.wake() })
 	// Sound starting is when a stream that stopped under it is opened again: looked at once it has
 	// had reopenSounding to start the stream itself.
@@ -362,7 +394,14 @@ func (f *Feature) Close() error {
 	a, al := f.adapter, f.alsa
 	f.adapter, f.alsa = nil, nil
 	f.state.Available = false
+	streams := f.streams
+	f.streams = map[string]*inStream{}
+	clear(f.received)
+	clear(f.unopened)
 	f.mu.Unlock()
+	for _, s := range streams {
+		s.stop()
+	}
 	f.detach()
 	if al != nil {
 		al.Close()
@@ -514,79 +553,128 @@ func (f *Feature) refresh() {
 		f.mu.Unlock()
 	}
 
-	// A remote playing to the device (a phone using it as a speaker): the moment its stream starts, it
-	// takes the speaker. Only on that edge, so Home Assistant media started afterwards is not taken
-	// back while the phone keeps its transport open.
-	var sending []received
-	taken := map[string]bool{}   // streams taken this look: their level is the one handed to them, not one read
-	opening := map[string]bool{} // streams that failed to open this look and are tried again at the next
+	// Phones playing to the device (a phone using it as a speaker). Each connected phone's stream
+	// is read for as long as it is there (inStream), and the speaker goes by what the phones play
+	// (choose), not by their streams starting.
+	var looks []heard
+	streams := map[string]*inStream{} // by item
+	present := map[string]bool{}      // by PCM path
 	for _, p := range al.PCMs() {
 		if !p.Receivable() {
 			continue
 		}
 		d, ok := byPath[string(p.Device)]
-		running := p.Running && ok && d.Connected
+		if !ok || !d.Connected {
+			continue
+		}
+		path := string(p.Path)
+		present[path] = true
 		f.mu.Lock()
-		was := f.received[string(p.Path)]
-		f.received[string(p.Path)] = running
+		was := f.received[path]
+		f.received[path] = p.Running
+		s := f.streams[path]
 		f.mu.Unlock()
-		r := received{pcm: p, dev: d, item: media.BluetoothPrefix + displayName(d)}
-		if !running {
-			f.mu.Lock()
-			delete(f.openFailed, r.item)
-			f.mu.Unlock()
-			continue
+		if s != nil && s.stale(p) {
+			s.stop() // its reading ended, or the phone came back with another format: read afresh
+			s = nil
 		}
-		sending = append(sending, r)
-		if was {
-			continue
-		}
-		holder := media.Get().Receiving()
-		taken[string(p.Path)] = true
-		if !f.receive(al, p, d) {
-			// Tried again at the next look rather than never: the stream a remote paused and resumed
-			// quickly can still be held by the track that was playing it until that track lets go.
+		known := s != nil
+		if !known {
+			var err error
+			if s, err = f.watch(al, p, d); err != nil {
+				f.mu.Lock()
+				first := !f.unopened[path]
+				f.unopened[path] = true
+				f.mu.Unlock()
+				if first {
+					slog.Warn("bluetooth: opening a phone's stream", "device", displayName(d), "err", err)
+				}
+				continue // tried again at the next look
+			}
 			f.mu.Lock()
-			f.received[string(p.Path)] = false
-			f.openFailed[r.item]++
-			opening[r.item] = f.openFailed[r.item] < openTries
+			if f.alsa != al {
+				// Closed while it opened: Close stopped the streams it knew of, not this one.
+				f.mu.Unlock()
+				s.stop()
+				return
+			}
+			delete(f.unopened, path)
+			f.streams[path] = s
 			f.mu.Unlock()
-			continue
 		}
-		f.mu.Lock()
-		delete(f.openFailed, r.item)
-		f.mu.Unlock()
-		if holder != "" && holder != r.item {
-			f.mu.Lock()
-			f.displaced[holder] = true
-			f.mu.Unlock()
+		s.seen(p) // its level and volume mode as they are now, for phoneSlider and give
+		l := s.look()
+		// Seen starting, not found running: at the daemon's start, or a phone connecting, a stream
+		// already running can be one held open for silence; a phone that plays is heard doing so.
+		l.started = known && p.Running && !was
+		looks = append(looks, l)
+		streams[s.item] = s
+	}
+	var gone []*inStream
+	f.mu.Lock()
+	for path, s := range f.streams {
+		if !present[path] {
+			gone = append(gone, s)
+			delete(f.streams, path)
+			delete(f.received, path)
 		}
 	}
-	// A remote another took the speaker from, still sending once that one has finished and nothing is
-	// playing, takes it back, as a speaker goes on playing the phone that is still playing to it. A
-	// remote that went quiet, or was stopped here, was not displaced and stays let go.
+	for path := range f.unopened {
+		if !present[path] {
+			delete(f.unopened, path)
+		}
+	}
+	f.mu.Unlock()
+	for _, s := range gone {
+		s.stop()
+	}
+
 	// Music Assistant (or any remote) taking the speaker is the room going its own way: no phone is owed
 	// it afterward, as none is after a stop here (OnStop).
 	m := media.Get()
 	external := m.ExternalPlaying()
-	playing, paused := m.Playing()
+	playing, paused := loaded()
+	holder := m.Receiving()
 	f.mu.Lock()
-	if othersHadIt(m.Receiving(), external) {
+	if othersHadIt(holder, external) {
 		clear(f.displaced)
 	}
-	back := takeBack(f.displaced, sending, speakerFree(playing, paused, external))
-	f.mu.Unlock()
-	if back != nil {
-		slog.Info("bluetooth: a device still sending takes the speaker back", "device", displayName(back.dev))
-		taken[string(back.pcm.Path)] = true
-		f.receive(al, back.pcm, back.dev)
+	for item := range f.displaced {
+		if streams[item] == nil {
+			delete(f.displaced, item) // gone: owed nothing
+		}
 	}
-	f.pauseAway(stillOpening(playingToNobody(sending, m.Receiving(), playing, paused, external), opening))
-	if cur := m.Receiving(); cur != "" {
-		for _, r := range sending {
-			if r.item == cur && !taken[string(r.pcm.Path)] {
-				f.phoneSlider(r.pcm)
-			}
+	give := choose(looks, holding{holder, playing, paused, external, m.SenderPaused()}, f.displaced)
+	if give != "" {
+		delete(f.displaced, give)
+		if strings.HasPrefix(holder, media.BluetoothPrefix) && holder != give && playing {
+			// A phone playing that another takes the speaker from is owed it back.
+			f.displaced[holder] = true
+		}
+	}
+	f.mu.Unlock()
+	if s := streams[give]; s != nil {
+		f.give(al, s)
+	}
+
+	// A phone playing that does not have the speaker is paused: under Music Assistant, AirPlay or a
+	// station its audio goes nowhere, and two phones sending at once share the device's one radio,
+	// and the one heard stutters. Playing it again takes the speaker back (choose).
+	playing, paused = loaded()
+	var sending []received
+	for _, l := range looks {
+		if l.plays {
+			s := streams[l.item]
+			sending = append(sending, received{pcm: s.pcm, dev: s.dev, item: l.item})
+		}
+	}
+	away := playingToNobody(sending, m.Receiving(), playing, paused, m.ExternalPlaying())
+	for _, r := range f.pauseAway(away) {
+		streams[r.item].askedToPause()
+	}
+	if cur := m.Receiving(); cur != "" && cur != give {
+		if s := streams[cur]; s != nil {
+			f.followSlider(al, s)
 		}
 	}
 
@@ -726,23 +814,27 @@ func (f *Feature) refresh() {
 	}
 }
 
-// receive plays what a remote is sending through the speaker, as a media track, and reports whether it
-// is: a remote that paused and resumed before its track went quiet is still playing on that track.
-func (f *Feature) receive(al *bluealsa.Client, p bluealsa.PCM, d bluez.Device) bool {
-	item := media.BluetoothPrefix + displayName(d)
-	if media.Get().Receiving() == item {
-		return true
+// loaded is the player's track playing or paused, a remote's track paused from here (media's Held)
+// counted as paused: Music Assistant ends its Sendspin stream on a pause, so its paused track is
+// only the held one, which the screen and Home Assistant show as paused, with play on it. Taken as
+// nothing loaded, a phone sending silence took the speaker from it.
+func loaded() (playing, paused bool) {
+	m := media.Get()
+	playing, paused = m.Playing()
+	_, _, _, held := m.Held()
+	return playing, paused || held
+}
+
+// give plays what the phone s sends through the speaker, as a media track.
+func (f *Feature) give(al *bluealsa.Client, s *inStream) {
+	if media.Get().Receiving() == s.item {
+		return
 	}
-	s, err := al.OpenRead(p)
-	if err != nil {
-		slog.Warn("bluetooth: opening a received stream", "device", displayName(d), "err", err)
-		return false
-	}
-	slog.Info("bluetooth: playing what a device sends", "device", displayName(d), "codec", p.Codec, "rate", p.Rate, "channels", p.Channels)
-	media.ReceiverControl(item, f.control(d.Path, displayName(d)))
-	media.Get().PlayReceived(item, s, p.Rate, p.Channels)
-	f.oneVolume(al, p)
-	return true
+	slog.Info("bluetooth: playing what a device sends", "device", displayName(s.dev),
+		"codec", s.pcm.Codec, "rate", s.pcm.Rate, "channels", s.pcm.Channels)
+	media.ReceiverControl(s.item, f.control(s.dev.Path, displayName(s.dev)))
+	media.Get().PlayReceived(s.item, s.hand(), s.pcm.Rate, s.pcm.Channels)
+	f.oneVolume(al, s.latest())
 }
 
 // A phone playing here has one volume, the device's: its slider is the device's volume, as on any
@@ -752,7 +844,8 @@ func (f *Feature) receive(al *bluealsa.Client, p bluealsa.PCM, d bluez.Device) b
 // is handed the device's level as it starts playing here, a move of its slider sets the device's
 // volume (phoneSlider), and the device's volume changing, by the buttons, Home Assistant or night
 // volume, moves the slider (tellPhone). A phone that does not do AVRCP volume scales its own audio, and
-// the level handed to it goes nowhere.
+// the level handed to it goes nowhere. With Bluetooth sets the volume off, none of that: the device
+// keeps its own volume and bluez-alsa scales the audio by the phone's level (volume.go, #245).
 
 // levelFor is a phone's level, 0..bluealsa.VolumeMax, for the device's volume step.
 func levelFor(step int) int {
@@ -765,7 +858,8 @@ func stepFor(level int) int {
 }
 
 // oneVolume makes p's volume the device's: bluez-alsa stops scaling it, and the phone is handed the
-// device's level.
+// device's level; or, with Bluetooth sets the volume off, leaves the phone's level to scale its own
+// audio (volumeMode).
 func (f *Feature) oneVolume(al *bluealsa.Client, p bluealsa.PCM) {
 	f.levelOnce.Do(func() {
 		media.Get().OnLevel.Listen(f.handLevel)
@@ -783,17 +877,7 @@ func (f *Feature) oneVolume(al *bluealsa.Client, p bluealsa.PCM) {
 			}
 		})
 	})
-	if err := al.SetSoftVolume(p, false); err != nil {
-		slog.Warn("bluetooth: leaving a phone's audio unscaled", "err", err)
-	}
-	level := levelFor(media.Get().Volume())
-	if err := al.SetLevel(p, level); err != nil {
-		slog.Warn("bluetooth: handing a phone the volume", "err", err)
-	}
-	f.mu.Lock()
-	f.levels[string(p.Path)] = level
-	f.ours[string(p.Path)] = time.Now().Add(echoFor)
-	f.mu.Unlock()
+	f.putMode(al, p)
 }
 
 // echoing is whether a level read from the stream at path at now may be the phone saying back the
@@ -857,17 +941,37 @@ func sliderMove(level, last int, known, ours bool) bool {
 // phoneSlider is a look at the stream playing here: its level other than last seen or set is the
 // phone's slider moved, and sets the device's volume. A raise stops where night volume says
 // (media.CapRaise); the slider is then moved back to where the device ended up (tellPhone, by way of
-// OnLevel).
-func (f *Feature) phoneSlider(p bluealsa.PCM) {
+// OnLevel). With Bluetooth sets the volume off the level is only noted, and the device's volume left
+// alone. A stream whose volume mode is not what the setting says now is put right first: the switch
+// was turned while it played, and whatever its level did meanwhile is no slider move.
+func (f *Feature) phoneSlider(al pcmSetter, p bluealsa.PCM) {
+	shared := bluetoothSetsVolume()
+	f.mu.Lock()
+	m, applied := f.volModes[string(p.Path)]
+	f.mu.Unlock()
+	if modeStale(m, applied, shared, p.SoftVolume, time.Now()) {
+		f.putMode(al, p)
+		return
+	}
 	level := p.Level()
 	f.mu.Lock()
 	last, known := f.levels[string(p.Path)]
 	ours := f.echoing(string(p.Path), time.Now())
 	f.levels[string(p.Path)] = level
 	f.mu.Unlock()
-	if !sliderMove(level, last, known, ours) {
+	if !sliderSets(shared, level, last, known, ours) {
 		return
 	}
+	sliderTo(level)
+}
+
+// followSlider is a look's turn at the phone that has the speaker: its stream as this look found it,
+// never the copy taken when it was opened, whose level is the one it started with (#245).
+func (f *Feature) followSlider(al pcmSetter, s *inStream) { f.phoneSlider(al, s.latest()) }
+
+// sliderTo sets the device's volume to the step for a phone's level. A raise stops where night volume
+// says (media.CapRaise). A variable for the tests.
+var sliderTo = func(level int) {
 	m := media.Get()
 	from, to := m.Volume(), stepFor(level)
 	if to > from {
@@ -881,27 +985,15 @@ func (f *Feature) phoneSlider(p bluealsa.PCM) {
 
 // tellPhone moves the slider of the phone playing here to the device's volume step, unless it is at
 // that step already: a slider being dragged is left alone, and the level it was dragged to is not
-// handed back to it.
+// handed back to it. With Bluetooth sets the volume off the slider is the phone's own, and never moved
+// from here.
 func (f *Feature) tellPhone(step int) {
-	f.mu.Lock()
-	al := f.alsa
-	f.mu.Unlock()
-	cur := media.Get().Receiving()
-	if al == nil || cur == "" {
+	if !bluetoothSetsVolume() {
 		return
 	}
-	f.mu.Lock()
-	a := f.adapter
-	f.mu.Unlock()
-	if a == nil {
-		return
-	}
-	names := map[string]string{}
-	for _, d := range a.Devices() {
-		names[string(d.Path)] = media.BluetoothPrefix + displayName(d)
-	}
-	for _, p := range al.PCMs() {
-		if !p.Receivable() || !p.Running || names[string(p.Device)] != cur || stepFor(p.Level()) == step {
+	al, pcms := f.receivingPCMs()
+	for _, p := range pcms {
+		if !p.Running || stepFor(p.Level()) == step {
 			continue
 		}
 		level := levelFor(step)
@@ -969,33 +1061,83 @@ var InCall = func() bool { return false }
 
 func inCall() bool { return InCall() }
 
-// received is a remote's stream that is running: what it sends, under the name it plays as.
+// received is a phone playing, for asking it to pause (pauseAway): its stream, its device, and the
+// name its audio plays under.
 type received struct {
 	pcm  bluealsa.PCM
 	dev  bluez.Device
 	item string
 }
 
-// takeBack picks the displaced remote that takes the speaker back, if the speaker is free, and keeps
-// displaced to the remotes still sending: one that stopped sending is no longer owed the speaker. The
-// one picked is no longer displaced either, so a phone paused since is tried once, goes quiet and is
-// let go. Called with mu held.
-func takeBack(displaced map[string]bool, sending []received, free bool) *received {
-	for item := range displaced {
-		if !slices.ContainsFunc(sending, func(r received) bool { return r.item == item }) {
-			delete(displaced, item)
+// heard is a phone's stream as the speaker is chosen by it (inStream.look).
+type heard struct {
+	item    string
+	plays   bool      // it is playing music
+	since   time.Time // since when
+	fresh   bool      // it started playing since the last look
+	started bool      // its stream started running this look
+}
+
+// holding is what has the speaker as choose sees it: the received track's name (holder), the
+// player's track playing or paused, a remote playing, and whether a phone's track was paused by the
+// phone itself.
+type holding struct {
+	holder                    string
+	playing, paused, external bool
+	senderPaused              bool
+}
+
+// choose is the phone that takes the speaker, if any, from what the phones play, what has it (h)
+// and the phones owed it (displaced), as a speaker goes:
+//
+//   - A phone that starts playing takes it, from anything, the last to start first. Silence, a
+//     click or an app opening the phone's audio does not.
+//   - With the speaker free, a phone whose stream starts takes it at once, playing or not yet:
+//     there is nothing to take it from, and its first moments are heard.
+//   - Once the phone that has it stops (paused on the phone, or its track over), the phone it took
+//     it from takes it back if it is still playing. One that took the pause asked of it
+//     (playingToNobody) is not asked to play: it takes the speaker back by playing again, as any
+//     phone that starts, so a pause on one phone, or an app opening a video on it, does not start
+//     another. A pause from here pauses the room, and gives nobody the speaker.
+//
+// Called with mu held.
+func choose(phones []heard, h holding, displaced map[string]bool) string {
+	holder := h.holder
+	var started *heard
+	for i := range phones {
+		p := &phones[i]
+		if p.fresh && p.item != holder && (started == nil || p.since.After(started.since)) {
+			started = p
 		}
 	}
-	if !free {
-		return nil
+	if started != nil {
+		return started.item
 	}
-	for i := range sending {
-		if displaced[sending[i].item] {
-			delete(displaced, sending[i].item)
-			return &sending[i]
+	free := speakerFree(h.playing, h.paused, h.external)
+	if free {
+		for _, p := range phones {
+			if p.started {
+				return p.item
+			}
 		}
 	}
-	return nil
+	if !free && !(strings.HasPrefix(holder, media.BluetoothPrefix) && h.senderPaused) {
+		return ""
+	}
+	var back *heard
+	for i := range phones {
+		p := &phones[i]
+		if !displaced[p.item] || p.item == holder || !p.plays {
+			continue
+		}
+		if back == nil || p.since.After(back.since) {
+			back = p
+		}
+	}
+	if back == nil {
+		return ""
+	}
+	return back.item
 }
 
 // pairedIncoming is the agent telling us a remote paired with the device (rather than the device

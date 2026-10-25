@@ -1,4 +1,4 @@
-//go:build !dot
+//go:build !dot && !panel
 
 package screen
 

@@ -69,6 +69,8 @@ type Radio struct {
 type Feature struct {
 	// Changed fires when anything shown changes; listeners must not block.
 	Changed hook.Hook[struct{}]
+	// Hint fires with a note for the screen (hint.go); listeners must not block.
+	Hint hook.Hook[Hint]
 
 	mu     sync.Mutex
 	chosen string
@@ -150,6 +152,14 @@ type Feature struct {
 	// stationGen counts the stations asked for and forgotten, so a put-back waiting its seconds can
 	// tell a Stop or another station came in between (putBack).
 	stationGen uint64
+
+	// startSeq counts the stations asked of Home Assistant through the radio script, heardAt is when it
+	// last gave a sign of starting one, and hinted is a note up that said it did not (hint.go).
+	startSeq uint64
+	heardAt  time.Time
+	hinted   bool
+	// external stands in for whether Music Assistant plays on the device, in a test (externalPlaying).
+	external func() bool
 
 	// resumed counts how many times a dropped stream has been put back on lately, and resumedAt when
 	// the last of those was, so a station that will not stay up is eventually left off (resume.go).
@@ -332,6 +342,7 @@ func Get() *Feature {
 // played is a new stream starting: whatever was tapped is no longer the answer to "what is
 // this", so its name is looked up from the URL.
 func (f *Feature) played(url string) {
+	f.streamArrived()
 	f.mu.Lock()
 	f.url, f.urlName, f.chosen = url, "", ""
 	f.urlAt = time.Now()
@@ -542,7 +553,7 @@ func (f *Feature) locationAction() *esphome.Action {
 func (f *Feature) Actions() []*esphome.Action {
 	actions := append(append(f.cameraActions(), f.gridActions()...), f.accessAction(), f.go2rtcAction())
 	if hasScreen {
-		actions = append(actions, f.slideshowAction(), f.calendarAction(), f.locationAction())
+		actions = append(actions, f.slideshowAction(), f.calendarAction(), f.locationAction(), f.cameraButtonsAction())
 	}
 	if hasGlance {
 		actions = append(actions, f.glanceAction())
@@ -855,7 +866,9 @@ func (f *Feature) play(station string, gen *uint64) {
 	f.mu.Lock()
 	f.chosen = station
 	f.mu.Unlock()
-	f.callFavorite(h, station)
+	// Watched only when somebody asked for it (hint.go): a put-back, after a stream dropped, is the
+	// device's own doing, and a note about it would be about nothing anybody did.
+	f.callFavorite(h, station, gen == nil)
 	f.Changed.Emit(struct{}{})
 	f.pokeMeta()
 }

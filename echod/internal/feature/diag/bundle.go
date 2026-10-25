@@ -18,8 +18,10 @@ import (
 	"github.com/HuskerMinion/techo5/echod/internal/feature/announce"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/btaudio"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/media"
+	"github.com/HuskerMinion/techo5/echod/internal/feature/phone"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/timezone"
 	"github.com/HuskerMinion/techo5/echod/internal/layout"
+	"github.com/HuskerMinion/techo5/echod/internal/lib/hass"
 	"github.com/HuskerMinion/techo5/echod/internal/lib/redact"
 	"github.com/HuskerMinion/techo5/echod/internal/lib/wifi"
 )
@@ -75,10 +77,20 @@ func Redactor() *redact.Redactor {
 	if from, ok := phonePlaying(media.Get().Receiving()); ok {
 		r.Known("bluetooth", from)
 	}
+	// The phone book's names are often people's, and a turn's transcript in the log can carry one.
+	for _, c := range phone.Get().Contacts() {
+		for _, name := range c.Names() {
+			if !commonName(name) {
+				r.Known("contact", name)
+			}
+		}
+	}
 	// The secrets themselves, in case a line ever carries one: the patterns only catch a secret that
-	// says what it is.
-	for _, s := range secrets(c) {
-		r.Known("secret", s)
+	// says what it is. Home Assistant's token too, which the panel's whole log could carry bare.
+	for _, s := range append(secrets(c), hass.Get().Token()) {
+		if len([]rune(strings.TrimSpace(s))) >= shortestSecret {
+			r.Known("secret", s)
+		}
 	}
 	return r
 }
@@ -169,11 +181,11 @@ func Bundle() string {
 	}, "\n"))
 
 	section("settings", settingsSummary(c))
-	section("network", networkSummary(ctx))
+	section("network", networkSection(ctx))
 	// The log is where this device's own start script puts it, which is not the same file on all of
-	// them, and not under StateDir on any: an empty log section is the one thing a bundle cannot be
-	// missing, since it is what somebody asked for the bundle to see.
-	last, wakes := readLog(layout.LogPath, logTail, wakeTail)
+	// them, and not under StateDir on any; a panel's is in memory (daemonLog): an empty log section is
+	// the one thing a bundle cannot be missing, since it is what somebody asked for the bundle to see.
+	last, wakes := daemonLog(logTail, wakeTail)
 	section("daemon log (last "+fmt.Sprint(logTail)+" lines)", last)
 	section("wake words (last "+fmt.Sprint(wakeTail)+" detections and near misses)", wakes)
 	if layout.BootLog != "" {
@@ -215,8 +227,8 @@ func settingsSummary(c config.Config) string {
 	add("alarms: %d set, %d followed, sunrise=%d min", len(c.Alarms.List), len(c.Alarms.Follow), c.Alarms.SunriseMinutes)
 	add("radio: source=%q own=%d favorites wired=%t", c.Home.RadioSource, len(c.Home.Radio.Own), c.Home.Radio.Configured())
 	add("security: ssh=%t camera_web=%t screen_web=%t talk_back=%t settings_lock=%t", c.Security.SSH, c.Security.Camera, c.Security.Screen, c.Security.TalkBack, c.Security.LockPIN != "")
-	add("switches: remote_api=%t camera_streaming=%t nearest=%t noise_sensor=%t claps=%t clock_hold=%t",
-		c.Remote.On, c.CamStream.On, c.Nearest.On, c.Microphone.Noise, c.Microphone.Claps, c.Screen.ClockHold)
+	add("switches: remote_api=%t camera_streaming=%t camera_discovery=%t camera_login_from_ha=%t nearest=%t noise_sensor=%t claps=%t clock_hold=%t",
+		c.Remote.On, c.CamStream.On, c.CamStream.Discovery, c.CamStream.LoginFromHA, c.Nearest.Enabled(), c.Microphone.Noise, c.Microphone.Claps, c.Screen.ClockHold)
 	add("updates: channel=%q", c.Update.Channel)
 	add("deck: set=%t pages=%d obs=%t obs_password=%t", c.Deck.Set(), len(c.Deck.Pages), c.Deck.OBS.Addr != "", c.Deck.OBS.Password != "")
 	return strings.Join(out, "\n")
@@ -285,22 +297,31 @@ func readLog(path string, n, wakeN int) (last, wakes string) {
 		return "", ""
 	}
 	defer f.Close()
-	lines, found := newRing(n), newRing(wakeN)
+	s := newLogScan(n, wakeN)
 	r := bufio.NewReaderSize(f, 64<<10)
 	for {
 		line, err := r.ReadString('\n')
 		if line != "" {
-			line = strings.TrimRight(line, "\r\n")
-			lines.add(line)
-			if wakeLine.MatchString(line) {
-				found.add(line)
-			}
+			s.add(strings.TrimRight(line, "\r\n"))
 		}
 		if err != nil {
 			break
 		}
 	}
-	return lines.String(), found.String()
+	return s.lines.String(), s.found.String()
+}
+
+// logScan is the two rings a log is read into: the last n lines, and the last wakeN of the wake
+// engine's.
+type logScan struct{ lines, found *ring }
+
+func newLogScan(n, wakeN int) logScan { return logScan{newRing(n), newRing(wakeN)} }
+
+func (s logScan) add(line string) {
+	s.lines.add(line)
+	if wakeLine.MatchString(line) {
+		s.found.add(line)
+	}
 }
 
 // wakeLine is one of the wake engine's own lines: the message comes straight after the level and the

@@ -49,9 +49,18 @@ func SetGo2RTC(address string) (int, error) {
 	if err != nil {
 		return 0, err
 	}
+	// A stream given a name of its own on the setup page keeps it when the list is read again.
+	given := map[string]string{}
+	for _, c := range config.Get().Home.Go2RTC.Cameras {
+		given[c.Entity] = c.Name
+	}
 	cams := make([]config.Camera, 0, len(names))
 	for _, n := range names {
-		cams = append(cams, config.Camera{Entity: go2rtcPrefix + n, Name: n})
+		name := n
+		if g := given[go2rtcPrefix+n]; g != "" {
+			name = g
+		}
+		cams = append(cams, config.Camera{Entity: go2rtcPrefix + n, Name: name})
 	}
 	if err := config.Set().Home().Go2RTC(config.Go2RTC{Base: base.String(), Cameras: cams}); err != nil {
 		return 0, err

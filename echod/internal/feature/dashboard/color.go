@@ -60,6 +60,12 @@ func (f *Feature) LightColor(entity string) (LightColor, bool) {
 	return c, c.Some()
 }
 
+// LightColorOf is a light's colors read from a state and attributes that came from elsewhere than the
+// drawn page: a tile of the Tessera page, whose sheet is this one.
+func LightColorOf(entity, state string, attrs map[string]any) LightColor {
+	return lightColor(hass.LiveEntity{ID: entity, State: state, Attrs: attrs})
+}
+
 // lightColor reads a light's color modes and its range of whites.
 func lightColor(e hass.LiveEntity) LightColor {
 	c := LightColor{Entity: e.ID}

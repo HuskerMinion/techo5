@@ -15,8 +15,9 @@ import (
 // voice is and the ring's whine and the room's hum are not. It is taken before the noise reduction, which
 // would lower the floor and so make a device that has it on stand out more for nothing.
 //
-// It runs only while something has asked for it, which is nearly never on a device that is not taking
-// part.
+// It runs only while something has asked for it: while nearest device answers is on, which it is by
+// default, with or without a house word to take part with. What it costs is a band filter and a sum on
+// each frame.
 type standout struct {
 	on atomic.Bool
 

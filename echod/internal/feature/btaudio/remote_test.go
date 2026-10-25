@@ -14,8 +14,8 @@ import (
 	"github.com/HuskerMinion/techo5/echod/internal/lib/bluez"
 )
 
-// A phone still sending is playing to nobody once the speaker is something else's that is not a
-// phone; not while another phone has it (that one owes it back), and not with the speaker free.
+// A phone playing is playing to nobody once the speaker is something else's, another phone's
+// included; not when it is its own, and not with the speaker free.
 func TestWhoIsPlayingToNobody(t *testing.T) {
 	pixel := received{item: media.BluetoothPrefix + "Pixel"}
 	sending := []received{pixel}
@@ -28,7 +28,7 @@ func TestWhoIsPlayingToNobody(t *testing.T) {
 		"AirPlay took it":            {"AirPlay", true, false, false, 1},
 		"a station of the device's":  {"", true, false, false, 1},
 		"a station paused here":      {"", false, true, false, 1},
-		"another phone has it":       {media.BluetoothPrefix + "Redmi", true, false, false, 0},
+		"another phone has it":       {media.BluetoothPrefix + "Redmi", true, false, false, 1},
 		"its own track, paused here": {pixel.item, false, true, false, 0},
 		"the speaker is free":        {"", false, false, false, 0},
 	} {
@@ -152,20 +152,6 @@ func TestAWaitGoesWithItsTrack(t *testing.T) {
 	f.letGoKept("")
 	if len(f.kept) != 0 {
 		t.Errorf("with nothing loaded, waits left %v", f.kept)
-	}
-}
-
-// A phone whose stream failed to open as it started is not paused away while it is still being tried:
-// it is tried again at the next look, and paused only once that has failed openTries times.
-func TestAPhoneStillOpeningIsNotPausedAway(t *testing.T) {
-	pixel, redmi := received{item: media.BluetoothPrefix + "Pixel"}, received{item: media.BluetoothPrefix + "Redmi"}
-	away := []received{pixel, redmi}
-	got := stillOpening(away, map[string]bool{pixel.item: true})
-	if len(got) != 1 || got[0].item != redmi.item {
-		t.Fatalf("paused away %v, want only the phone not being tried again", got)
-	}
-	if got := stillOpening(away, map[string]bool{pixel.item: false}); len(got) != 2 {
-		t.Errorf("a phone out of tries was not paused away: %v", got)
 	}
 }
 

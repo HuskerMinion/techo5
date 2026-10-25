@@ -49,7 +49,7 @@ func (r *renderer) videoPage(s scene) (over image.Rectangle) {
 	}
 	if s.showVolume {
 		r.volumeBar(s)
-		over = over.Union(image.Rect(0, r.h-110, r.w, r.h))
+		over = over.Union(image.Rect(0, r.h-r.s(volumeBarH), r.w, r.h))
 	}
 	return over
 }

@@ -207,6 +207,12 @@ func TestSpeakerGainAsksAgainUntilSure(t *testing.T) {
 		}
 		return gainTestMixer(), nil
 	}
+	if gainOnPath {
+		if !GainAvailable() || opened != 0 {
+			t.Fatalf("the gain goes with the codec's path: available %v, opened the mixer %d times", GainAvailable(), opened)
+		}
+		return
+	}
 	if !mayHaveTAS5805M {
 		openErr = nil
 		if GainAvailable() || opened != 0 {
@@ -262,6 +268,12 @@ func TestSpeakerGainPossibleBeforeSure(t *testing.T) {
 		return nil, nil
 	}
 	gainSeen.ok, gainSeen.sure = false, false
+	if gainOnPath {
+		if !GainPossible() {
+			t.Error("the codec's own gain was not possible")
+		}
+		return
+	}
 	if GainPossible() != mayHaveTAS5805M {
 		t.Errorf("not sure yet: possible %v, want %v", GainPossible(), mayHaveTAS5805M)
 	}

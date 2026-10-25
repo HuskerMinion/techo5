@@ -135,7 +135,7 @@ func (f *Feature) streamFrames(ctx context.Context, entity string, gen uint64) b
 			f.showFrame(entity, gen, frame, nil)
 		}
 	})
-	w, h := cameraFrameW, cameraFrameH
+	w, h := cameraFrameSize()
 	select {
 	case p := <-shape:
 		w, h = p.X, p.Y

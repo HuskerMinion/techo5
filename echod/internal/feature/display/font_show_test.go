@@ -22,7 +22,7 @@ func TestTheShowTakesANewFontAtOnce(t *testing.T) {
 	ownFontDir(t)
 	fonts.Rescan()
 	s := scene{now: time.Date(2026, 9, 16, 14, 7, 0, 0, time.Local), phase: "idle", weather: home.Weather{Condition: "sunny", Temp: "72°"}}
-	for _, size := range []image.Point{{showWide, showHigh}, {show8Wide, show8High}} {
+	for _, size := range []image.Point{{showWide, showHigh}, {show8Wide, show8High}, {skylightWide, skylightHigh}} {
 		img := image.NewRGBA(image.Rect(0, 0, size.X, size.Y))
 		r := newRenderer(img)
 		r.draw(s)

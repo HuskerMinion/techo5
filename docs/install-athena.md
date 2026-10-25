@@ -28,9 +28,9 @@ On TECHO5's kernel:
 
 Known limits:
 
-- **Only one screen is supported: the ILI9881C panel with BOE glass.** Amazon built this model with
-  several panels. The installer checks which one your unit has and stops on any other (see
-  [Which screen](#which-screen)).
+- **Two screens are tested: the ILI9881C panel with BOE glass, and the JD9365 with KD/HSD glass.**
+  Amazon built this model with several panels. TECHO5's kernel has the others' settings too, but they
+  haven't been tried on a unit yet. The installer checks which one your unit has (see [Which screen](#which-screen)).
 - The light sensor works but its lux values aren't calibrated yet.
 - The microphone beamformer is off; the microphones are used without it.
 
@@ -115,21 +115,46 @@ with the unit's address and port 6053. The rest of the setup is as on the other 
 
 ## Which screen
 
-TECHO5's kernel drives one panel: the **ILI9881C with BOE glass**. The boot loader tells the kernel
-which panel the unit has with `jd936x_id=` on its command line. The low digit is the panel: `6` is the
-ILI9881C BOE (this unit type's `jd936x_id=0x36`). The boot loader's own name for it is
-`ili9881c_wxga_dsi_vdo_st_boe`.
+Amazon built this model with several panels, on two controllers (ILI9881C and JD9365). The boot
+loader tells the kernel which one the unit has: by name in its framebuffer entry in the device tree,
+and with `jd936x_id=` on the command line, whose low digit is the panel. TECHO5's kernel picks the
+panel's settings from that at boot, so one kernel covers every unit.
 
-The installer reads both in TWRP (`/proc/cmdline` and the boot loader's framebuffer entry in the
-device tree) and stops on any other panel, or when it can't tell. To check by hand:
+Two have been tested on units: the **ILI9881C with BOE glass** (`jd936x_id=0x36`, the boot
+loader's name `ili9881c_wxga_dsi_vdo_st_boe`) and the **JD9365 with KD/HSD glass** (`jd936x_id=0x31`,
+`jd936x_wxga_dsi_vdo_athena_st_kd_hsd`, reported in #187). All of them:
+
+| `jd936x_id` low digit | Boot loader's name | Panel |
+|---|---|---|
+| 1 | `jd936x_wxga_dsi_vdo_athena_st_kd_hsd` | JD9365, KD/HSD glass (tested) |
+| 2 | `jd936x_wxga_dsi_vdo_athena_st_kd_hsd_new` | JD9365, KD/HSD glass (new) |
+| 3 | `jd936x_wxga_dsi_vdo_athena_st_kd_hsd_proto` or `ili9881c_wxga_dsi_vdo_st_kd_hsd` | JD9365 or ILI9881C, KD/HSD glass |
+| 4 | `jd936x_wxga_dsi_vdo_athena_st_boe` | JD9365, BOE glass |
+| 5 | `jd936x_wxga_dsi_vdo_athena_st_boe_new` | JD9365, BOE glass (new) |
+| 6 | `ili9881c_wxga_dsi_vdo_st_boe` | ILI9881C, BOE glass (tested) |
+| 7 | `jd936x_wxga_dsi_vdo_athena_st_inx` | JD9365, INX glass |
+| 8 | `ili9881c_wxga_dsi_vdo_st_inx` | ILI9881C, INX glass |
+| 9 | `ili9881c_wxga_dsi_vdo_st_kd_hsd_onyx` | ILI9881C, KD/HSD glass (onyx) |
+| a | `ili9881c_wxga_dsi_vdo_st_kd_inx_o` | ILI9881C, KD/INX glass |
+
+The installer reads both in TWRP (`/proc/cmdline` and the device tree) and goes on by itself only on
+a tested panel. On one of the others it stops and says which panel it found: add `--force-panel`
+to try it, with `--wifi` and `--ssh-key` too, so you can still reach the unit if its screen stays
+dark (without a screen there's no other way to set up Wi-Fi). On a panel it doesn't know, or when it can't tell, it stops too. To check by hand:
 
 ```
 adb shell cat /proc/cmdline
 ```
 
-Look for `jd936x_id=0x?6`. Other values are other panels: TECHO5's kernel would leave the screen
-dark on them. Use `--kernel amazon` on those units. `--force-panel` installs the mainline kernel
-anyway, if you know better.
+Look for `jd936x_id=`. Running TECHO5's kernel, `dmesg | grep "athena panel"` shows which panel it
+picked.
+
+If you try a panel that isn't tested and the screen stays dark, TECHO5 should still start: Home Assistant
+should find it as before. Please tell us on GitHub which panel it was. To go back to Amazon's kernel,
+which drives every screen: hold Volume Up while the unit powers on to start TWRP (TWRP shows on the
+screen with its own kernel), write `p20-boot.img` back from your backup (see
+[The way back to Fire OS](#the-way-back-to-fire-os), the `p20` line only), then install with
+`--kernel amazon`.
 
 ## The speaker tuning
 
@@ -167,11 +192,27 @@ letter. Only do that after checking the tables: the speaker-config 0 table must 
 driver uses for 0 (table A), the other for 1. Please open an issue with the Fire OS version and the
 hashes so the next release knows them.
 
-## The store fills the partition on the first boot
+## Stereo speakers
+
+The Show 8 2nd gen has two speakers. TECHO5 plays them in mono by default: left and right are mixed
+and both speakers play the mix. To hear left and right on their own speakers, turn on **Stereo
+speakers** in the **Configuration** card of the device's page in Home Assistant, or on the setup
+page under **Speaker and voice**. It changes at once, no restart.
+
+In stereo each speaker gets its own EQ and limiter, and the speaker EQ, bass and treble apply to
+both. Amazon wired the speakers the other way round from the usual left/right order, so TECHO5
+swaps them back. A Bluetooth speaker always gets stereo, with or without this switch.
+
+**Stereo can make the wake word harder to catch while music plays.** The echo canceller works from
+one reference, the mix of the two speakers, so a sound panned hard to one side is canceled less
+well than in mono. If the wake word gets missed over music, turn stereo back off.
+
+## The store fills the partition
 
 The image is only as big as its contents (about 200 MB), so it writes in seconds. The `system`
-partition is 3 GB, and a second slot needs that room. At every boot, before anything else writes to
-the store, `/init` runs `slotctl grow` on the `system` partition:
+partition is 3 GB, and a second slot needs that room. Since v1.2.24 the installer grows the store to
+fill it right after writing it, from TWRP, with nothing mounted. As a second chance, at every boot,
+before anything else writes to the store, `/init` runs `slotctl grow` on the `system` partition:
 
 - It does nothing once the store fills the partition, so in practice it runs once.
 - It grows the filesystem online with `resize2fs`, with the root remounted read-write for the moment
@@ -189,6 +230,28 @@ reinstall.
 
 The eMMC is `mmcblk0` under TECHO5's kernel and `mmcblk1` under Amazon's and TWRP's. The partition
 numbers are the same.
+
+### The store did not grow
+
+A unit installed before v1.2.24 on **Amazon's kernel** (`--kernel amazon`) may never have grown: that
+kernel marks the store as having errors each time it mounts it, so the online grow is refused at every
+boot, and `e2fsck` from TWRP doesn't help for long ([#192](https://github.com/HuskerMinion/techo5/issues/192)).
+The store stays at about 200 MB, and an update fails with "the store has no room for the new slot"
+(`tar: write error: No space left on device` in the log). `STORE=/store slotctl status` shows the size,
+and `/data/techo5-linux/grow.log` says why it wasn't grown.
+
+Grow it once from TWRP, with nothing mounted (thanks to the reporter of #192 for working this out):
+
+```
+adb shell e2fsck -fy /dev/block/mmcblk1p21
+adb shell resize2fs /dev/block/mmcblk1p21
+adb shell e2fsck -fn /dev/block/mmcblk1p21
+adb reboot
+```
+
+The last `e2fsck` should report the filesystem clean. Afterwards the store is about 3 GB and updates
+install again. Units installed with v1.2.24's installer or later are grown this way by the installer,
+and the store image it writes no longer gives Amazon's kernel the reason to flag it.
 
 ## Updates
 
@@ -284,7 +347,7 @@ install instead.
 ## Amazon's kernel instead
 
 `--kernel amazon` keeps Amazon's 32-bit kernel on `boot` and writes only `system`. Use it on a unit
-whose screen isn't the ILI9881C BOE, or to compare. Amazon's kernel drives every screen. TECHO5 then
+whose screen TECHO5's kernel doesn't drive yet, or to compare. Amazon's kernel drives every screen. TECHO5 then
 uses Amazon's drivers from the `vendor` partition (mounted read-only).
 
 ```

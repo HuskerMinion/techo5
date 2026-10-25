@@ -103,7 +103,7 @@ func (d *Display) popupTick(now time.Time) {
 	// Due and not yet shown; an event already waiting its turn, or up now, is not queued twice. An event
 	// counts as shown - and is saved as shown - only once it comes up, so a restart while it waits loses
 	// nothing.
-	due := duePopups(events, now, c, popupShownNow())
+	due := duePopups(popupCandidates(events, c), now, c, popupShownNow())
 	d.mu.Lock()
 	for _, e := range due {
 		k := popupKey(e)
@@ -208,4 +208,10 @@ func (d *Display) popupUp() *hass.Event {
 	d.mu.Lock()
 	defer d.mu.Unlock()
 	return d.popup
+}
+
+// popupCandidates is the events that may pop up: not those of a calendar hidden on this screen's
+// calendar page, which are hidden here everywhere, pop-ups as well.
+func popupCandidates(events []hass.Event, c config.Calendar) []hass.Event {
+	return visibleEvents(events, hiddenHere(c))
 }

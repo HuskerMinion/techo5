@@ -16,6 +16,13 @@ import (
 // notifyFaceLines is as many lines of the message as the face holds.
 const notifyFaceLines = 3
 
+// A note of the device's own (notify.Note) says what to check, which takes more words than a
+// notification's news: they are smaller, and there are more lines of them.
+const (
+	noteFaceLines = 5
+	noteFaceStep  = 30
+)
+
 func (r *roundRenderer) notifyFace(s roundScene) {
 	n := s.notification
 	y := 150
@@ -30,14 +37,18 @@ func (r *roundRenderer) notifyFace(s roundScene) {
 	}
 	r.centered(r.label, clip(r.label, r, head, 340), y, colAccent)
 
-	lines := r.wrap(r.title, n.Message, 340)
-	if len(lines) > notifyFaceLines {
-		lines = append(lines[:notifyFaceLines-1], clip(r.title, r, strings.Join(lines[notifyFaceLines-1:], " "), 340))
+	face, most, step := r.title, notifyFaceLines, 40
+	if n.Own {
+		face, most, step = r.small, noteFaceLines, noteFaceStep
+	}
+	lines := r.wrap(face, n.Message, 340)
+	if len(lines) > most {
+		lines = append(lines[:most-1], clip(face, r, strings.Join(lines[most-1:], " "), 340))
 	}
 	y += 60
 	for _, line := range lines {
-		r.centered(r.title, line, y, colText)
-		y += 40
+		r.centered(face, line, y, colText)
+		y += step
 	}
 	r.centered(r.small, "tap to dismiss", y+16, colDim)
 }

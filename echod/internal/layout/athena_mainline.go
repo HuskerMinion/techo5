@@ -1,4 +1,4 @@
-//go:build !dot && !spot
+//go:build !dot && !spot && !panel
 
 package layout
 
@@ -18,6 +18,12 @@ var athenaMainline = Board == boardAthena && mainlineRelease(kernelRelease())
 // AthenaMainline is whether this is the 2nd gen Show 8 on TECHO5's mainline kernel.
 func AthenaMainline() bool { return athenaMainline }
 
+// cronosMainline is the same question for the 2nd gen Show 5, whose vendor kernel is LineageOS's 4.9.
+var cronosMainline = Board == boardCronos && mainlineRelease(kernelRelease())
+
+// CronosMainline is whether this is the 2nd gen Show 5 on a mainline kernel.
+func CronosMainline() bool { return cronosMainline }
+
 // mainlineRelease: Amazon's athena kernel is 4.4 (4.4.146+ on the units read 2026-10-14); ours is
 // 6.x. Anything that is not 4.x is taken as mainline.
 func mainlineRelease(release string) bool {
@@ -34,8 +40,15 @@ func kernelRelease() string {
 // serves it as /proc/idme; mainline has no idme driver, so it is read from here, read only.
 const idmeBootArea = "/dev/mmcblk0boot1"
 
-// idmeFallback reads one idme field from the eMMC where /proc/idme is missing.
+// idmeFallback reads one idme field from the eMMC where /proc/idme is missing. On the Skylight,
+// which has no idme at all, only the MAC has a stand-in (skylight.go).
 func idmeFallback(name string) (string, bool) {
+	if Skylight() {
+		if name == "mac_addr" {
+			return skylightMAC()
+		}
+		return "", false
+	}
 	if !athenaMainline {
 		return "", false
 	}

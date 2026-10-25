@@ -281,7 +281,8 @@ of every 13th five-byte group and aims for a mean of 290 on the 10-bit scale.
 
 `cmd/camprobe` and `cmd/camframe` were removed; `echod/internal/hardware/camera` is the working
 version of everything above and the place to read. The probes are in git history if a register
-experiment is ever needed again.
+experiment is ever needed again. (A later `cmd/camprobe` is a different tool: the bench check for the
+2nd gen Show 8's V4L2 camera on its mainline kernel, not this MT8163 probe.)
 
 ## The Echo Spot's GC0312 (2026-09-16, night)
 

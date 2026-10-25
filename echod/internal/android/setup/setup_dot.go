@@ -3,6 +3,8 @@
 package setup
 
 import (
+	"errors"
+	"io/fs"
 	"os"
 
 	"github.com/HuskerMinion/techo5/echod/internal/android/firewall"
@@ -33,8 +35,13 @@ var deviceActions = []Action{
 		// inside system_server then retries forever and says so every time.
 		//
 		// Every boot: sysfs modes are the kernel's defaults again after a restart, and the vendor
-		// script re-grants it.
-		Do: func() error { return os.Chmod(pinControl, 0o644) },
+		// script re-grants it. A kernel without the file (the Echo Dot 3's) has nothing to take back.
+		Do: func() error {
+			if err := os.Chmod(pinControl, 0o644); err != nil && !errors.Is(err, fs.ErrNotExist) {
+				return err
+			}
+			return nil
+		},
 	},
 	{
 		Name:   "silence AmazonUsageStatsService",

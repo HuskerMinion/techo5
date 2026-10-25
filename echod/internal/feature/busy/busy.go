@@ -1,6 +1,7 @@
 // Package busy keeps a marker saying the device is in the middle of something a reboot would cut off,
-// for the boot script's loops that reboot on their own: the 2nd gen Show 8's kernel update, which
-// reboots into a new kernel, and its trial, which reboots to use up a try (etc/techo5/boot.sh).
+// for the boot script's loops that reboot on their own: the kernel update of the boards on TECHO5's own
+// kernel (the 2nd gen Show 8, the Skylight), which reboots into a new kernel, and its trial, which
+// reboots to use up a try (etc/techo5/boot.sh).
 //
 // The marker is Path, written while the device is busy and removed when it is not. Its first lines
 // are the daemon's pid and the uptime it was written at, "pid <n>" and "at <seconds>"; it is written
@@ -191,10 +192,14 @@ func look(now time.Time) Snapshot {
 	return s
 }
 
-// Run keeps the marker, on the one device whose boot script reads it. A marker from before this start
+// keepsMarker is whether this board's boot script reads the marker: the ones that update their own
+// kernel (device.conf KERNEL_UPDATE, cli/echod's kernel command). A variable for the tests.
+var keepsMarker = func() bool { return layout.AthenaMainline() || layout.Skylight() }
+
+// Run keeps the marker, on the devices whose boot script reads it. A marker from before this start
 // goes first: whatever it said is over.
 func (b *Busy) Run(ctx context.Context) error {
-	if !layout.AthenaMainline() {
+	if !keepsMarker() {
 		<-ctx.Done()
 		return nil
 	}

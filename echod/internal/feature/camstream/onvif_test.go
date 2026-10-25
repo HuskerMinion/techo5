@@ -192,3 +192,16 @@ func TestONVIFOtherwise(t *testing.T) {
 		t.Errorf("GET: %d", w.Code)
 	}
 }
+
+// ONVIF says the rate the stream is sent at, not a number of its own.
+func TestONVIFStatesTheStreamRate(t *testing.T) {
+	want := fmt.Sprintf("<tt:FrameRateLimit>%d</tt:FrameRateLimit>", maxFPS)
+	if p := profileXML("trt:Profile"); !strings.Contains(p, want) {
+		t.Errorf("profile without %s:\n%s", want, p)
+	}
+	f := &Feature{}
+	body, ok := f.answer("GetVideoSources", "", "192.0.2.10", true)
+	if want := fmt.Sprintf("<tt:Framerate>%d</tt:Framerate>", maxFPS); !ok || !strings.Contains(body, want) {
+		t.Errorf("video sources without %s:\n%s", want, body)
+	}
+}

@@ -153,11 +153,13 @@ func CheckOwn(manifestJSON, model []byte) (Model, error) {
 // not for a file made to make it fall over. The published models have two subgraphs, under 100
 // operators, no dimension over a few hundred and well under a megabyte of tensors all told; these
 // leave room for a bigger one trained at home and none for a file that would run the daemon out of
-// memory, which is fatal rather than a panic anything can recover.
+// memory, which is fatal rather than a panic anything can recover. The elements and bytes are what
+// bound the memory; a single dimension may be long (a trainer's wider window makes one of 4736,
+// #267) as long as the tensor stays within them.
 const (
 	microMaxSubgraphs = 2
 	microMaxRank      = 8
-	microMaxDim       = 4096
+	microMaxDim       = 1 << 16
 	microMaxElements  = 1 << 20
 	microMaxBytes     = 4 << 20
 	microMaxOperators = 256
@@ -166,14 +168,16 @@ const (
 	MaxMicroFile = 4 << 20
 )
 
-// microOps is every operator the engine runs, which is every one the published models use. Anything
-// else the engine would refuse at the first inference; refusing it here says so at once.
+// microOps is every operator the engine runs: every one the published models use, and ADD,
+// AVERAGE_POOL_2D and MAX_POOL_2D, which models trained with residual connections or pooling use
+// (#190). Anything else the engine would refuse at the first inference; refusing it here says so at
+// once.
 var microOps = map[tflite.Op]bool{
 	tflite.OpCallOnce: true, tflite.OpVarHandle: true, tflite.OpReadVariable: true,
 	tflite.OpAssignVariable: true, tflite.OpReshape: true, tflite.OpConcatenation: true,
 	tflite.OpStridedSlice: true, tflite.OpConv2D: true, tflite.OpDepthwiseConv: true,
 	tflite.OpFullyConnected: true, tflite.OpLogistic: true, tflite.OpQuantize: true,
-	tflite.OpSplitV: true,
+	tflite.OpSplitV: true, tflite.OpAdd: true, tflite.OpAveragePool2D: true, tflite.OpMaxPool2D: true,
 }
 
 // microInput checks that a model reads as a microWakeWord model the engine can be trusted with, and
@@ -233,7 +237,11 @@ func microGraph(m *tflite.Model, size int) error {
 				if d < 0 || d > microMaxDim {
 					return fmt.Errorf("tensor %d has a dimension of %d; the most is %d", i, d, microMaxDim)
 				}
-				n *= d // at most 4096 per step, so it cannot overflow before the check below
+				// Checked before multiplying, so it cannot overflow an int on the 32-bit boards.
+				if d > 0 && n > microMaxElements/d {
+					return fmt.Errorf("tensor %d has more than %d elements", i, microMaxElements)
+				}
+				n *= d
 				if n > microMaxElements {
 					return fmt.Errorf("tensor %d has more than %d elements", i, microMaxElements)
 				}
@@ -255,7 +263,10 @@ func microGraph(m *tflite.Model, size int) error {
 				return fmt.Errorf("it has more than %d operators", microMaxOperators)
 			}
 			if !microOps[o.Op] {
-				return fmt.Errorf("operator %d is %s, which microWakeWord models do not use", i, o.Op)
+				// The operation first, by name: its place in the graph (i) means nothing to the
+				// person adding the model (#190).
+				return fmt.Errorf("it uses %s, which this device's microWakeWord engine does not run "+
+					"(operator %d); some models made for ESPHome need it", o.Op, i)
 			}
 			// CALL_ONCE runs another subgraph to set up the first. Anywhere else, or pointed back at
 			// the first, it would call itself without end.
@@ -334,6 +345,10 @@ func runs(path string, cfg microwakeword.Config, frames int) (err error) {
 		silence[i] = make([]int8, featureDims)
 	}
 	det.ProcessFeatures(silence)
+	// A model the engine loads but cannot run (an operator's check fails) would score nothing ever after.
+	if err := det.Err(); err != nil {
+		return fmt.Errorf("the engine could not run the .tflite: %v", err)
+	}
 	return nil
 }
 

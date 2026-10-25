@@ -1,4 +1,4 @@
-//go:build dot
+//go:build dot && !donut
 
 package speaker
 
@@ -67,7 +67,7 @@ func radarPaths(speaker, jack []byte) map[Output][]kctl {
 			{name: "Right Channel Only", value: "Off"},
 			{name: eqControl, blob: speaker},
 			{name: "DRC Control", value: "Disabled"},
-			{name: driverGain, level: 6},
+			{name: driverGain, level: speakerDriverUnity},
 		},
 		OutputHeadphone: {
 			{name: "HPL Output Mixer L_DAC Switch", level: 1},

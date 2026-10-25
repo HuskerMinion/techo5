@@ -67,7 +67,7 @@ func (a *API) advertise(ctx context.Context, port int) {
 		keyed := a.keyed.Load()
 		encrypted, provisionable := keyTXT(keyed)
 		info := a.server().Info
-		adv, err := mdns.Advertise(mdns.Config{
+		adv, err := advertiseMDNS(mdns.Config{
 			Name:          a.name,
 			FriendlyName:  info.FriendlyName,
 			Port:          port,

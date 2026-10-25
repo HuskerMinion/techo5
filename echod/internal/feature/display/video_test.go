@@ -31,7 +31,7 @@ func TestTheVideoPage(t *testing.T) {
 	for _, panel := range []struct {
 		name       string
 		wide, high int
-	}{{"", showWide, showHigh}, {"-show8", show8Wide, show8High}} {
+	}{{"", showWide, showHigh}, {"-show8", show8Wide, show8High}, {"-skylight", skylightWide, skylightHigh}} {
 		scenes := map[string]scene{
 			"video-picture":  {video: playing, showVideo: true, videoLive: true},
 			"video-controls": {video: playing, showVideo: true, videoLive: true, videoControls: true},
@@ -122,6 +122,11 @@ func TestWhatCoversAVideo(t *testing.T) {
 		"ask":       {scene{phase: "idle", showVideoAsk: true}, true},
 		"wifi":      {scene{phase: "idle", showWifi: true}, true},
 		"pin":       {scene{phase: "idle", pin: pinView{open: true}}, true},
+		// A cue: its light, and its captions while they stay, which the video would cover.
+		"cue":            {scene{phase: "idle", cue: "thinking"}, true},
+		"cue captions":   {scene{phase: "idle", cue: "lingering", reply: "It's noon."}, true},
+		"cue, no words":  {scene{phase: "idle", cue: "lingering"}, false},
+		"classic answer": {scene{phase: "lingering", reply: "It's noon."}, false},
 	} {
 		if got := videoCovered(tc.s); got != tc.want {
 			t.Errorf("%s: covered %v, want %v", name, got, tc.want)

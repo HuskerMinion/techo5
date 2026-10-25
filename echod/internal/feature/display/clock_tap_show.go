@@ -23,7 +23,7 @@ func clockTapSelect() *esphome.Select {
 		Options: clockTapOptions(),
 	}
 	s.OnCommand = func(v string) {
-		for i, c := range clockTaps {
+		for i, c := range clockTapChoices() {
 			if c.label == v {
 				setClockTap(s, i)
 				return

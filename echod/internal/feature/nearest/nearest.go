@@ -35,9 +35,11 @@ import (
 	"github.com/HuskerMinion/techo5/echod/internal/component"
 	"github.com/HuskerMinion/techo5/echod/internal/config"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/announce"
+	"github.com/HuskerMinion/techo5/echod/internal/feature/phone"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/voice"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/web"
 	"github.com/HuskerMinion/techo5/echod/internal/hardware/mic"
+	"github.com/HuskerMinion/techo5/echod/internal/layout"
 	"github.com/HuskerMinion/techo5/echod/internal/lib/safe"
 )
 
@@ -99,17 +101,22 @@ type Nearest struct {
 	offset *esphome.Number
 
 	// The device, replaced in tests: which wakes open a turn, whether one could, how well this device
-	// heard the word, the others, how a claim reaches them, and the clock.
+	// heard the word, whether it hears at all, the others, how a claim reaches them, and the clock.
 	woke      func(slot int, at time.Time)
 	wokeNow   func(slot int)
 	busy      func() bool
 	canAnswer func(slot int) bool
 	wakeWord  func(slot int) string
 	score     func() float64
-	peers     func() []announce.Peer
-	fanout    func(peers []announce.Peer, mine *pending)
-	now       func() time.Time
-	after     func(d time.Duration, f func())
+	hears     func() bool
+	// onCall is whether a call is up here and lets the wake word through (phone.WakeAllowed): a wake word
+	// heard during one is most likely for this device, the one somebody wants to hang up, so its claim
+	// leads by onCallLead. Only then: a device on a call that does not take wake words claims as any other.
+	onCall func() bool
+	peers  func() []announce.Peer
+	fanout func(peers []announce.Peer, mine *pending)
+	now    func() time.Time
+	after  func(d time.Duration, f func())
 
 	mu      sync.Mutex
 	enabled bool
@@ -156,9 +163,11 @@ func build() *Nearest {
 			}
 			return ""
 		},
-		score: func() float64 { return mic.Get().Standout(heard) },
-		peers: announce.Peers,
-		now:   time.Now,
+		score:  func() float64 { return mic.Get().Standout(heard) },
+		hears:  layout.HasMicrophone,
+		onCall: func() bool { return phone.Get().Busy() && phone.Get().WakeAllowed() },
+		peers:  announce.Peers,
+		now:    time.Now,
 		after: func(d time.Duration, f func()) {
 			time.AfterFunc(d, func() { safe.Go("nearest device decision", f) })
 		},
@@ -202,14 +211,14 @@ func (n *Nearest) Name() string { return "nearest device" }
 func (n *Nearest) Entities() []esphome.Entity { return []esphome.Entity{n.on, n.window, n.offset} }
 
 func (n *Nearest) Restore(c config.Config) {
-	n.set(c.Nearest.On)
+	n.set(c.Nearest.Enabled())
 	n.window.Set(float32(c.Nearest.Window() / time.Millisecond))
 	n.offset.Set(float32(c.Nearest.Offset))
-	slog.Info("restored", "what", n.on.ObjectID, "using", c.Nearest.On)
+	slog.Info("restored", "what", n.on.ObjectID, "using", c.Nearest.Enabled())
 }
 
 // set turns taking part on or off. The loudness is measured from now on, so it has learned the room by
-// the time a wake word comes. A wake word already waiting on the others is still answered as it would
+// the time a wake word comes; with no house word yet too, since nothing comes back here when one is set. A wake word already waiting on the others is still answered as it would
 // have been: turning this off must not lose it.
 func (n *Nearest) set(on bool) {
 	if on {
@@ -226,17 +235,31 @@ func (n *Nearest) set(on bool) {
 	web.Wake()
 }
 
-// open is whether claims are taken: only while this device takes part and the house has a word to
-// sign them with.
+// open is whether claims are taken: only while this device takes part, can hear a wake word at all
+// (not a Skylight), and the house has a word to sign them with.
 func (n *Nearest) open() bool {
 	n.mu.Lock()
 	on := n.enabled
 	n.mu.Unlock()
-	return on && config.Get().Home.HouseWord != ""
+	return on && n.hears() && config.Get().Home.HouseWord != ""
+}
+
+// hearing is the others that could claim a wake word: a device without microphones (a Skylight) never
+// does, and waiting on it would only cost the window. A device on an older release says nothing either
+// way and is asked; one that had this off, as it was by default, still costs the window until it is
+// updated.
+func hearing(peers []announce.Peer) []announce.Peer {
+	var out []announce.Peer
+	for _, p := range peers {
+		if p.Hears() {
+			out = append(out, p)
+		}
+	}
+	return out
 }
 
 // Woke is a wake word heard here, in place of voice's Woke. It opens the turn at once unless this device
-// takes part, could answer, and has somebody to ask; otherwise it claims the word, and opens the turn
+// takes part, could answer, and has somebody to ask who could hear it too; otherwise it claims the word, and opens the turn
 // after the window only if no device claimed it better or had already answered it.
 func (n *Nearest) Woke(slot int) {
 	at := n.now()
@@ -244,7 +267,7 @@ func (n *Nearest) Woke(slot int) {
 		n.wokeNow(slot)
 		return
 	}
-	peers := n.peers()
+	peers := hearing(n.peers())
 	if len(peers) == 0 {
 		n.wokeNow(slot)
 		return
@@ -254,7 +277,7 @@ func (n *Nearest) Woke(slot int) {
 	window := c.Nearest.Window()
 	mine := &pending{
 		claim: claim{From: c.Device.Name, Turn: newTurn(), Word: n.wakeWord(slot),
-			Score: n.score() + float64(c.Nearest.Offset)},
+			Score: n.score() + float64(c.Nearest.Offset) + n.callBonus()},
 		at:     at,
 		window: window,
 	}
@@ -312,6 +335,19 @@ func (n *Nearest) decide(slot int, mine *pending) {
 			"waited", n.now().Sub(mine.at).Round(time.Millisecond))
 		n.woke(slot, mine.at)
 	}
+}
+
+// onCallLead is added to a claim from a device on a call, in the same dB of standout the claims are
+// made of. Enough to win a word another device heard about as well, the call being what somebody most
+// likely meant; not so much that a word somebody said to a device in another room, and heard faintly
+// here, goes to the call.
+const onCallLead = 6
+
+func (n *Nearest) callBonus() float64 {
+	if n.onCall != nil && n.onCall() {
+		return onCallLead
+	}
+	return 0
 }
 
 // bestSince is the best claim from another device since from, and whether it beats mine. Called with

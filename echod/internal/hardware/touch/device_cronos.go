@@ -1,4 +1,4 @@
-//go:build !dot && !spot
+//go:build !dot && !spot && !panel
 
 package touch
 
@@ -22,27 +22,33 @@ import "github.com/HuskerMinion/techo5/echod/internal/layout"
 // landscape is scaled and not turned. Not yet checked with a finger on that unit: if its corners come
 // out mirrored, toFrame is the place to say so.
 //
-// These are variables rather than constants because one build serves all four screens and the
+// The Skylight Calendar 15 has a Goodix GT911 (ID 9110) behind its 1920 by 1080 landscape panel. The
+// controller's own configuration says 1920 by 1200, so its y axis runs 0 to 1200 over a screen 1080
+// tall; toFrame scales by the ranges the driver reports, which maps that onto the frame. Checked on
+// the unit on 2026-10-17 by tapping the corners: top left (18, 55), top right (1887, 38), bottom
+// left (34, 1159), bottom right (1886, 1179), so landscape and the right way round as it is.
+//
+// These are variables rather than constants because one build serves all five screens and the
 // board is only known at run time; nothing outside this package reads them.
 var (
-	deviceName = onShow8("goodix-ts", "fts_ts")
+	deviceName = onBoard("goodix-ts", "fts_ts", "Goodix Capacitive TouchScreen")
 
 	// Width and Height are the frame coordinates are reported in.
-	Width  = onShow8(960, 1280)
-	Height = onShow8(480, 800)
+	Width  = onBoard(960, 1280, 1920)
+	Height = onBoard(480, 800, 1080)
 
 	// rawFallbackW and rawFallbackH stand in when the driver will not say what its axes run to.
-	rawFallbackW = onShow8(480, 800)
-	rawFallbackH = onShow8(960, 1280)
+	rawFallbackW = onBoard(480, 800, 1920)
+	rawFallbackH = onBoard(960, 1280, 1200)
 
 	// tapMove is how far a finger may wander and still be a tap, in frame pixels, so the Show 8's
 	// larger screen gets the same allowance in proportion. Not yet re-measured on a Show 8: the
 	// Spot's comment records that a still finger on that controller drifts, and a FocalTech may
 	// differ from a Goodix.
-	tapMove = onShow8(24, 32)
+	tapMove = onBoard(24, 32, 48)
 
 	// notch is the vertical travel per volume step, scaled the same way.
-	notch = onShow8(40, 56)
+	notch = onBoard(40, 56, 80)
 )
 
 const (
@@ -50,10 +56,13 @@ const (
 	holdGestures = false
 )
 
-// onShow8 picks the Show 8's value over the Show 5's: both Show 8 generations against both Show 5
-// generations.
-func onShow8[T any](show5, show8 T) T {
-	if layout.Show8() {
+// onBoard picks the value for this screen: both Show 5 generations, both Show 8 generations, or the
+// Skylight.
+func onBoard[T any](show5, show8, skylight T) T {
+	switch {
+	case layout.Skylight():
+		return skylight
+	case layout.Show8():
 		return show8
 	}
 	return show5

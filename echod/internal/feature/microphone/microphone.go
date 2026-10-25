@@ -180,7 +180,8 @@ func build() *Microphone {
 func (m *Microphone) Name() string { return "microphone settings" }
 
 func (m *Microphone) Entities() []esphome.Entity {
-	return []esphome.Entity{m.mixing, m.gain, m.leveling, m.cancel, m.engine, m.denoise, m.ends, m.sensitivity}
+	return append([]esphome.Entity{m.mixing, m.gain, m.leveling, m.cancel, m.engine, m.denoise, m.ends, m.sensitivity},
+		buildEntities()...)
 }
 
 // setEngine applies a canceller choice and reports what the source settled on, which is the

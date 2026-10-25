@@ -34,6 +34,7 @@ import (
 	_ "github.com/HuskerMinion/techo5/echod/internal/feature/hastate"
 	_ "github.com/HuskerMinion/techo5/echod/internal/feature/home"
 	_ "github.com/HuskerMinion/techo5/echod/internal/feature/light"
+	_ "github.com/HuskerMinion/techo5/echod/internal/feature/localnames"
 	_ "github.com/HuskerMinion/techo5/echod/internal/feature/maintenance"
 	_ "github.com/HuskerMinion/techo5/echod/internal/feature/media"
 	_ "github.com/HuskerMinion/techo5/echod/internal/feature/microphone"
@@ -51,6 +52,7 @@ import (
 	_ "github.com/HuskerMinion/techo5/echod/internal/feature/sendspin"
 	_ "github.com/HuskerMinion/techo5/echod/internal/feature/setup"
 	_ "github.com/HuskerMinion/techo5/echod/internal/feature/share"
+	_ "github.com/HuskerMinion/techo5/echod/internal/feature/tessera"
 	_ "github.com/HuskerMinion/techo5/echod/internal/feature/timer"
 	_ "github.com/HuskerMinion/techo5/echod/internal/feature/timezone"
 	_ "github.com/HuskerMinion/techo5/echod/internal/feature/video"
@@ -58,4 +60,5 @@ import (
 	_ "github.com/HuskerMinion/techo5/echod/internal/feature/wakeword"
 	_ "github.com/HuskerMinion/techo5/echod/internal/feature/web"
 	_ "github.com/HuskerMinion/techo5/echod/internal/feature/wifiwatch"
+	_ "github.com/HuskerMinion/techo5/echod/internal/hardware/cpuplug"
 )

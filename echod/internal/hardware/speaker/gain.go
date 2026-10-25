@@ -3,6 +3,7 @@ package speaker
 import (
 	"errors"
 	"fmt"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"strings"
@@ -56,6 +57,9 @@ func gainAnswer(err error) (ok, sure bool) {
 // process once it is sure: the amplifier's control found, or the amplifier absent.
 // A card that could not be opened yet is asked again next time.
 var GainAvailable = func() bool {
+	if gainOnPath {
+		return true // the gain goes with the path: the Dot codec's driver gain, athena's amplifier volume
+	}
 	gainSeen.mu.Lock()
 	defer gainSeen.mu.Unlock()
 	if gainSeen.sure {
@@ -71,6 +75,9 @@ var GainAvailable = func() bool {
 // can build its gain control while the card is not up yet, and a late sure yes still finds the saved
 // gain waiting (SetSpeakerGain) and the control there.
 var GainPossible = func() bool {
+	if gainOnPath {
+		return true
+	}
 	gainSeen.mu.Lock()
 	defer gainSeen.mu.Unlock()
 	if gainSeen.sure {
@@ -191,6 +198,9 @@ func (p *Player) SetSpeakerGain(db int) error {
 	if !GainPossible() {
 		return errNoGain
 	}
+	if gainOnPath {
+		return p.setPathGain(db)
+	}
 	p.gainMu.Lock()
 	defer p.gainMu.Unlock()
 	if _, m := p.device(); m != nil {
@@ -207,6 +217,43 @@ func (p *Player) SetSpeakerGain(db int) error {
 }
 
 var errNoGain = fmt.Errorf("speaker gain is not supported on this amplifier")
+
+// pathGainMixer is the one write setPathGain makes; *alsa.Mixer, or a stand-in in the tests.
+type pathGainMixer interface {
+	SetInt(name string, v uint32) error
+}
+
+// heldPathMixer is the mixer setPathGain writes to: the one the speaker holds, or nil before Start.
+// A variable for the tests.
+var heldPathMixer = func(p *Player) pathGainMixer {
+	if _, m := p.device(); m != nil {
+		return m
+	}
+	return nil
+}
+
+// setPathGain is SetSpeakerGain where the gain goes with the speaker's path (gainOnPath). It is kept
+// for every path written from now on (Player.path), and written at once if the speaker is the output
+// and the mixer is held. On the jack, or before Start, it waits for the speaker's path to be written.
+// gainDB is changed under pathMu as well as gainMu, so a path being written reads one value or the
+// other, never half of a change. It is kept first: a write that fails now is said in the log, and the
+// gain still goes on with the speaker's next path, as it would have from the jack.
+func (p *Player) setPathGain(db int) error {
+	p.gainMu.Lock()
+	defer p.gainMu.Unlock()
+	p.pathMu.Lock()
+	defer p.pathMu.Unlock()
+	p.gainDB = db
+	if m := heldPathMixer(p); m != nil && p.out == OutputSpeaker && !p.draining {
+		for _, c := range speakerGainControls(db) {
+			if err := m.SetInt(c.name, uint32(c.level)); err != nil {
+				slog.Warn("speaker gain: writing it now failed; it goes on with the next path", "db", db, "err", err)
+				break
+			}
+		}
+	}
+	return nil
+}
 
 func (p *Player) applySpeakerGain() error {
 	p.gainMu.Lock()

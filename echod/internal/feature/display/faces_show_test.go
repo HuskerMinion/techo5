@@ -28,7 +28,7 @@ func BenchmarkGlowFrame(b *testing.B) {
 		for _, panel := range []struct {
 			name       string
 			wide, high int
-		}{{"show5", showWide, showHigh}, {"show8", show8Wide, show8High}} {
+		}{{"show5", showWide, showHigh}, {"show8", show8Wide, show8High}, {"skylight", skylightWide, skylightHigh}} {
 			b.Run(name+"-"+panel.name, func(b *testing.B) {
 				r := newRenderer(image.NewRGBA(image.Rect(0, 0, panel.wide, panel.high)))
 				s := scene{now: at, phase: "idle", weather: home.Weather{Condition: "sunny", Temp: "72°"}}

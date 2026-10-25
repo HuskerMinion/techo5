@@ -4,8 +4,11 @@ package display
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"net"
 	"net/url"
+	"regexp"
 	"strings"
 	"time"
 
@@ -114,7 +117,7 @@ func folderPicker(f folderView, demo bool) pickerView {
 	case f.loading:
 		return pickerView{title: title, opts: []string{"Opening…"}, cur: -1}
 	case f.problem != "":
-		return pickerView{title: title, opts: []string{"Couldn't open this folder", "‹ Back"}, cur: -1}
+		return pickerView{title: title, opts: []string{"Couldn't open this folder", f.problem, "‹ Back"}, cur: -1}
 	}
 	use := "Use this folder"
 	switch {
@@ -156,9 +159,12 @@ func (d *Display) openFolder(id string, stack []string) {
 			return // moved on meanwhile
 		}
 		d.folder.loading = false
-		if err != nil {
-			d.folder.problem = err.Error()
-		} else {
+		switch {
+		case err != nil && home.IsImmich(id):
+			d.folder.problem = err.Error() // Immich's own, not Home Assistant's
+		case err != nil:
+			d.folder.problem = folderProblem(err)
+		default:
 			if m.Title != "" && id != photosRoot {
 				d.folder.title = m.Title
 			}
@@ -176,6 +182,30 @@ func (d *Display) openFolder(id string, stack []string) {
 	}()
 }
 
+// folderProblem is the line under Couldn't open this folder: why, in words, for the reasons a folder
+// list most often fails - no Home Assistant access given yet, an address the device can't look up or
+// reach, a token Home Assistant turned down - and Home Assistant's own words for any other.
+func folderProblem(err error) string {
+	s := err.Error()
+	var dns *net.DNSError
+	var nerr net.Error
+	switch {
+	case strings.Contains(s, "no access configured"):
+		return "Home Assistant isn't set up here"
+	case errors.As(err, &dns):
+		return "Address not found: use its IP"
+	case strings.Contains(s, "auth_invalid") || refusedStatus.MatchString(s):
+		return "Home Assistant refused the token"
+	case errors.As(err, &nerr):
+		return "Can't reach Home Assistant"
+	}
+	return s
+}
+
+// refusedStatus is an HTTP status of 401 or 403 in an error, as "GET /api/...: 401 Unauthorized" has
+// it: a number standing alone, so a port like :8403 in an address is not taken for one.
+var refusedStatus = regexp.MustCompile(`(^|\s)40[13](\s|$)`)
+
 // folderChoice is a tap on the folder list's i'th line.
 func (d *Display) folderChoice(i int) {
 	d.mu.Lock()
@@ -190,7 +220,7 @@ func (d *Display) folderChoice(i int) {
 	case f.loading:
 		d.reopen("folder")
 	case f.problem != "":
-		if i == 1 {
+		if i == 2 {
 			up()
 			return
 		}

@@ -20,8 +20,8 @@ IS_WINDOWS = os.name == 'nt'
 IS_MACOS = sys.platform == 'darwin'
 
 # Alpine's base image, pinned: boot images' initramfs is built on it.
-ALPINE_URL = 'https://dl-cdn.alpinelinux.org/alpine/v3.24/releases/armv7/alpine-minirootfs-3.24.1-armv7.tar.gz'
-ALPINE_SHA256 = '50942d567e6ee422c16cb46d5c282ed9d8adc9007c2a483faf4148a18c64ce32'
+ALPINE_URL = 'https://dl-cdn.alpinelinux.org/alpine/v3.24/releases/armv7/alpine-minirootfs-3.24.2-armv7.tar.gz'
+ALPINE_SHA256 = '5552f1ef2398cee46ef2cf733f8f1258f39a77ad065dfd47282fc0df9fe1976c'
 
 # The public half of the key releases are signed with, the same one the daemon's updater trusts
 # (echod/internal/update/trust.go, releaseKey). An installer writes a root filesystem to a unit, so a
@@ -412,11 +412,20 @@ class Fastboot:
         self.base = tool(exe)
 
     def present(self):
-        r = subprocess.run(self.base + ['devices'], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        try:
+            r = subprocess.run(self.base + ['devices'], stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=30)
+        except subprocess.TimeoutExpired:
+            return False
         return any(line.split()[:1] == [self.serial] for line in r.stdout.decode('utf-8', 'replace').splitlines())
 
-    def run(self, *args):
-        r = subprocess.run(self.base + ['-s', self.serial] + list(args), stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+    def run(self, *args, timeout=None):
+        """Runs fastboot for this unit: its exit code and what it printed. With timeout, a fastboot still
+        waiting after that many seconds (for a unit that left) is stopped, and the code is -1."""
+        try:
+            r = subprocess.run(self.base + ['-s', self.serial] + list(args), stdout=subprocess.PIPE,
+                               stderr=subprocess.STDOUT, timeout=timeout)
+        except subprocess.TimeoutExpired:
+            return -1, 'no answer from fastboot in %d s' % timeout
         return r.returncode, r.stdout.decode('utf-8', 'replace').strip()
 
 

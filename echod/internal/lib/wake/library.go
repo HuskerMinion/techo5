@@ -11,6 +11,8 @@ import (
 	esphome "github.com/ygelfand/go-esphome-device"
 
 	"github.com/HuskerMinion/techo5/echod/internal/layout"
+
+	"github.com/HuskerMinion/techo5/echod/internal/lib/hook"
 )
 
 // Library is the models a device has and the ones Home Assistant is offering it.
@@ -26,6 +28,10 @@ import (
 type Library struct {
 	dir string
 
+	// Changed fires after the list of models is read again (Reload): a word added, removed or fetched.
+	// Listeners must not block.
+	Changed hook.Hook[struct{}]
+
 	// ours is cached because reading it parses every model to work out which engine runs it.
 	muOurs sync.Mutex
 	ours   []Model
@@ -39,6 +45,10 @@ type Library struct {
 	// selecting is the ids the latest selection asked for (Ensure), then the ones it loaded (Loaded).
 	// Guarded by muOwn.
 	selecting []string
+
+	// failed is the hash each id last failed to download as, under muOffers. A model that cannot be
+	// fetched is not tried again on every connect, only once Home Assistant offers a different one.
+	failed map[string]string
 }
 
 // adoptTimeout bounds a download, since it happens while Home Assistant waits for a selection to be
@@ -62,7 +72,7 @@ func Lib() *Library {
 // NewLibrary is for a library somewhere other than the device's own directory, which in practice means
 // a test.
 func NewLibrary(dir string) *Library {
-	l := &Library{dir: dir, offers: map[string]esphome.ExternalWakeWord{}}
+	l := &Library{dir: dir, offers: map[string]esphome.ExternalWakeWord{}, failed: map[string]string{}}
 	sweepUploads(dir)
 	l.Reload()
 	return l
@@ -89,6 +99,7 @@ func (l *Library) Reload() {
 	l.muOurs.Lock()
 	l.ours = models
 	l.muOurs.Unlock()
+	l.Changed.Emit(struct{}{})
 }
 
 // Offered records what Home Assistant is hosting, replacing what it offered before.
@@ -187,6 +198,56 @@ func (l *Library) Ensure(ids []string) []Model {
 	return l.Ours()
 }
 
+// Stale is the ids a slot is running from an old download: Home Assistant now offers a different model
+// under the same id. A selection is the only thing that downloads, and Home Assistant sends none when
+// its files change, so without this a new model sat unused until somebody chose another word and back.
+func (l *Library) Stale() []string {
+	l.muOwn.Lock()
+	running := slices.Clone(l.selecting)
+	l.muOwn.Unlock()
+
+	var stale []string
+	for _, id := range running {
+		o := l.offer(id)
+		if id == "" || o.URL == "" {
+			continue
+		}
+		// One that is not here yet is the selection's to fetch, one sent from the setup page stays, and
+		// one that already failed as this hash waits for a new one.
+		if m, ok := Find(l.Ours(), id); !ok || m.Uploaded || Have(l.dir, o) || l.failedAs(id) == o.Hash {
+			continue
+		}
+		stale = append(stale, id)
+	}
+	return stale
+}
+
+// Refetch downloads these again and reports the ones that now match what is offered. A download that
+// fails leaves the old model where it was.
+func (l *Library) Refetch(ids []string) []string {
+	var fresh []string
+	for _, id := range ids {
+		o := l.offer(id)
+		if o.URL == "" {
+			continue
+		}
+		l.fetch(o)
+		if Have(l.dir, o) {
+			fresh = append(fresh, id)
+		}
+	}
+	if len(fresh) > 0 {
+		l.Reload()
+	}
+	return fresh
+}
+
+func (l *Library) failedAs(id string) string {
+	l.muOffers.Lock()
+	defer l.muOffers.Unlock()
+	return l.failed[id]
+}
+
 // Loaded is the selection over: ids is what the engine took of what Ensure was asked for. A model it
 // refused is in no slot, so it is free to be removed or replaced from the setup page again; it used to
 // count as in use until the next selection.
@@ -214,6 +275,13 @@ func (l *Library) fetch(o esphome.ExternalWakeWord) {
 	defer cancel()
 
 	m, err := Adopt(ctx, l.dir, o)
+	l.muOffers.Lock()
+	if err != nil {
+		l.failed[o.ID] = o.Hash
+	} else {
+		delete(l.failed, o.ID)
+	}
+	l.muOffers.Unlock()
 	if err != nil {
 		slog.Error("adopting a wake word failed", "id", o.ID, "err", err)
 		return

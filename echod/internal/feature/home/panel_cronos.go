@@ -8,9 +8,11 @@ import "github.com/HuskerMinion/techo5/echod/internal/layout"
 // Show 5 generations are 960x480; both Show 8 generations are 1280x800, and a photo fetched at the Show 5's size
 // and drawn on it would be soft and letterboxed.
 //
-// Variables rather than constants because one build serves all three screens and the board is only
+// Variables rather than constants because one build serves all four screens and the board is only
 // known at run time. That is also why this file no longer covers the Dot: the board predicates only
-// exist where there is a board to tell apart, and the Dot keeps its own copy in panel_dot.go.
+// exist where there is a board to tell apart, and the Dot keeps its own copy in panel_dot.go. A TECHO5
+// Panel has no board to go by: these are only where it starts, until its screen says its own size
+// (SetPanelSize, size.go). Read them through slideshowSize and the rest there.
 var (
 	// cameraFrameW and H are the size frames are scaled to fit.
 	cameraFrameW, cameraFrameH = panelSize()
@@ -31,7 +33,11 @@ var (
 const roundPanel = false
 
 func panelSize() (w, h int) {
-	if layout.Show8() {
+	switch {
+	case layout.Skylight():
+		// The Skylight Calendar 15: a 1920x1080 landscape panel.
+		return 1920, 1080
+	case layout.Show8():
 		return 1280, 800
 	}
 	return 960, 480

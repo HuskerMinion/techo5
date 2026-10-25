@@ -149,6 +149,80 @@ func TestTheSwipeSettingOnTheSetupPage(t *testing.T) {
 	}
 }
 
+// Swipe for volume on the setup page (#243): ticked on a new device, saved unticked, and back on when
+// ticked again.
+func TestTheVolumeSwipeSettingOnTheSetupPage(t *testing.T) {
+	config.Use(filepath.Join(t.TempDir(), "state.json"))
+	set := 0
+	SetScreen(&ScreenChoices{Styles: []string{"Classic"}, Current: func() int { return 0 }, Choose: func(int) {},
+		VolumeSwipe: func(on bool) { set++; _ = config.Set().Screen().NoVolumeSwipe(!on) }})
+	t.Cleanup(func() { SetScreen(nil) })
+	w := httptest.NewRecorder()
+	screenSection(w, "tok")
+	if !strings.Contains(w.Body.String(), `name="volumeswipe" value="yes" style="width:auto" checked`) {
+		t.Error("not ticked on a new device")
+	}
+	if p := saveScreen(form(screenForm("0", "", false))); p != "" {
+		t.Fatal(p)
+	}
+	if set != 1 || !config.Get().Screen.NoVolumeSwipe {
+		t.Error("unticking it did not turn it off")
+	}
+	on := screenForm("0", "", false)
+	on.Set("volumeswipe", "yes")
+	if p := saveScreen(form(on)); p != "" {
+		t.Fatal(p)
+	}
+	if set != 2 || config.Get().Screen.NoVolumeSwipe {
+		t.Error("ticking it did not turn it back on")
+	}
+	if p := saveScreen(form(on)); p != "" || set != 2 {
+		t.Errorf("a save that left it as it was set it again (%s)", p)
+	}
+}
+
+// Screen ignores room light commands on the setup page (#179): unticked on a new device, so nothing
+// changes on an update, saved ticked, not set again by a save that leaves it as it is, and not offered by
+// a screen that has not handed in the way to set it.
+func TestTheRoomLightsSettingOnTheSetupPage(t *testing.T) {
+	config.Use(filepath.Join(t.TempDir(), "state.json"))
+	var got []bool
+	SetScreen(&ScreenChoices{Styles: []string{"Classic"}, Current: func() int { return 0 }, Choose: func(int) {},
+		IgnoreRoomLights: func(on bool) { got = append(got, on); _ = config.Set().Screen().IgnoreRoomLights(on) }})
+	t.Cleanup(func() { SetScreen(nil) })
+	w := httptest.NewRecorder()
+	screenSection(w, "tok")
+	if !strings.Contains(w.Body.String(), `name="roomlights" value="yes" style="width:auto">`) {
+		t.Error("not offered unticked on a new device")
+	}
+	if p := saveScreen(form(screenForm("0", "", false))); p != "" {
+		t.Fatal(p)
+	}
+	if len(got) != 0 {
+		t.Errorf("a save that left it unticked set it %v", got)
+	}
+	ticked := screenForm("0", "", false)
+	ticked.Set("roomlights", "yes")
+	if p := saveScreen(form(ticked)); p != "" {
+		t.Fatal(p)
+	}
+	if len(got) != 1 || !got[0] || !config.Get().Screen.IgnoreRoomLights {
+		t.Errorf("ticking it: set %v, ignored %v; want it set on once", got, config.Get().Screen.IgnoreRoomLights)
+	}
+	w = httptest.NewRecorder()
+	screenSection(w, "tok")
+	if !strings.Contains(w.Body.String(), `name="roomlights" value="yes" style="width:auto" checked`) {
+		t.Error("not ticked once it is on")
+	}
+
+	SetScreen(&ScreenChoices{Styles: []string{"Classic"}, Current: func() int { return 0 }, Choose: func(int) {}})
+	w = httptest.NewRecorder()
+	screenSection(w, "tok")
+	if strings.Contains(w.Body.String(), `name="roomlights"`) {
+		t.Error("offered without a way to set it")
+	}
+}
+
 // The note tying swiping to Tap on the clock shows only where there is a Tap on the clock (the Show,
 // not the Spot).
 func TestTheSwipeNoteOnlyWithATapOnTheClock(t *testing.T) {

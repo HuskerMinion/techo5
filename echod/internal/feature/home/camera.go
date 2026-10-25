@@ -16,6 +16,7 @@ import (
 	"github.com/HuskerMinion/techo5/echod/internal/config"
 	"github.com/HuskerMinion/techo5/echod/internal/hardware/camera"
 	"github.com/HuskerMinion/techo5/echod/internal/lib/hass"
+	"github.com/HuskerMinion/techo5/echod/internal/lib/picscale"
 	"github.com/HuskerMinion/techo5/echod/internal/lib/triggers"
 )
 
@@ -88,17 +89,108 @@ const LocalCamera = "local"
 
 // Cameras is the configured list, with the device's own camera first where it has one.
 func (f *Feature) Cameras() []config.Camera {
-	cams := config.Get().Home.Cameras
-	if len(cams) == 0 {
-		// No list chosen (the home_cameras action): every camera Home Assistant has, by its own name.
-		cams = f.homeAssistantCameras()
+	h := config.Get().Home
+	cams := slices.Clone(h.Cameras)
+	if h.AllHACameras() {
+		// No list chosen (the home_cameras action or the setup page): every camera Home Assistant has,
+		// by its own name. None chosen leaves cams empty.
+		cams = listHACameras(f)
 	}
-	cams = append(cams, config.Get().Home.Reolink.Cameras...)
-	cams = append(cams, config.Get().Home.Go2RTC.Cameras...)
-	if camera.Available() {
-		return append([]config.Camera{{Entity: LocalCamera, Name: localCameraName}}, cams...)
+	cams = append(cams, h.Reolink.Cameras...)
+	cams = append(cams, h.Go2RTC.Cameras...)
+	if camera.Available() && !h.OwnCameraLeftOut {
+		cams = append([]config.Camera{{Entity: LocalCamera, Name: localCameraName}}, cams...)
 	}
-	return cams
+	return ordered(cams, h.CameraOrder)
+}
+
+// ordered puts the cameras named in order first, in that order, and the rest after them as they were.
+// A camera in order that is not on the list is passed over.
+func ordered(cams []config.Camera, order []string) []config.Camera {
+	if len(order) == 0 {
+		return cams
+	}
+	out := make([]config.Camera, 0, len(cams))
+	used := make([]bool, len(cams))
+	for _, e := range order {
+		for i, c := range cams {
+			if !used[i] && c.Entity == e {
+				out, used[i] = append(out, c), true
+				break
+			}
+		}
+	}
+	for i, c := range cams {
+		if !used[i] {
+			out = append(out, c)
+		}
+	}
+	return out
+}
+
+// listHACameras is Home Assistant's own camera list; a test puts a list of its own in.
+var listHACameras = (*Feature).homeAssistantCameras
+
+// CamerasNone is the word that chooses no Home Assistant camera, in home_cameras and on the setup page.
+const CamerasNone = "none"
+
+// ParseCameras reads a camera list as home_cameras takes it: "camera.x=Front door,camera.y=Deck", the
+// name left off for the entity's own. none is the word CamerasNone (any case); an empty list is All.
+func ParseCameras(s string) (cams []config.Camera, none bool) {
+	if strings.EqualFold(strings.TrimSpace(s), CamerasNone) {
+		return nil, true
+	}
+	for _, item := range strings.Split(s, ",") {
+		entity, name, _ := strings.Cut(strings.TrimSpace(item), "=")
+		entity, name = strings.TrimSpace(entity), strings.TrimSpace(name)
+		if entity == "" {
+			continue
+		}
+		if name == "" {
+			name = strings.TrimPrefix(entity, "camera.")
+		}
+		cams = append(cams, config.Camera{Entity: entity, Name: name})
+	}
+	return cams, false
+}
+
+// SetCameraList saves whether the device's own camera is left off the camera list, and the list's
+// order (entities, first to last), and redraws what shows it.
+func SetCameraList(ownLeftOut bool, order []string) error {
+	if err := config.Set().Home().CameraList(ownLeftOut, order); err != nil {
+		return err
+	}
+	Get().Changed.Emit(struct{}{})
+	return nil
+}
+
+// SetGo2RTCNames saves the names shown and said for go2rtc's streams, by entity, and redraws what
+// shows them.
+func SetGo2RTCNames(names map[string]string) error {
+	if err := config.Set().Home().Go2RTCNames(names); err != nil {
+		return err
+	}
+	Get().Changed.Emit(struct{}{})
+	return nil
+}
+
+// SetCameras saves which of Home Assistant's cameras the device lists: none, the list, or every one
+// when the list is empty, and redraws what shows them.
+func SetCameras(cams []config.Camera, none bool) error { return Get().setCameras(cams, none) }
+
+func (f *Feature) setCameras(cams []config.Camera, none bool) error {
+	var err error
+	if none {
+		err = config.Set().Home().NoCameras()
+	} else {
+		err = config.Set().Home().Cameras(cams)
+	}
+	if err != nil {
+		return err
+	}
+	slog.Info("home: cameras set", "none", none, "count", len(cams))
+	f.Changed.Emit(struct{}{})
+	return nil
 }
 
 // haCamerasEvery is how often Home Assistant's own camera list is looked at again.
@@ -171,6 +263,9 @@ func (f *Feature) showCameraCaptioned(entity string, d time.Duration, sound bool
 		return // the grid's name, not a camera's: the grid goes up with ShowGrid
 	}
 	name, listed := entity, false
+	if entity == LocalCamera {
+		name = localCameraName // left off the list, an automation can still put it up
+	}
 	for _, cam := range f.Cameras() {
 		if cam.Entity == entity {
 			name, listed = cam.Name, true
@@ -473,14 +568,12 @@ func (f *Feature) localFrames() {
 		return
 	}
 	defer release()
-	dst := image.NewRGBA(image.Rect(0, 0, cameraFrameH*camera.Width/camera.Height, cameraFrameH))
+	_, fh := cameraFrameSize()
+	dst := image.NewRGBA(image.Rect(0, 0, fh*camera.Width/camera.Height, fh))
 	frames := make(chan *camera.Frame, 1)
-	cancel := camera.Get().Frames.Listen(func(fr *camera.Frame) {
-		select {
-		case frames <- fr:
-		default:
-		}
-	})
+	// The newest frame replaces one still waiting (see ListenLatest): dropping the new one instead
+	// kept a stale picture on screen when the sensor stopped for the mute or the lens cover.
+	cancel := camera.Get().ListenLatest(frames)
 	defer cancel()
 	for {
 		f.mu.Lock()
@@ -492,7 +585,7 @@ func (f *Feature) localFrames() {
 		select {
 		case fr := <-frames:
 			src := fr.Image()
-			xdraw.ApproxBiLinear.Scale(dst, dst.Bounds(), src, src.Bounds(), xdraw.Src, nil)
+			picscale.CatmullRom.Scale(dst, dst.Bounds(), src, src.Bounds(), xdraw.Src)
 			shown := image.NewRGBA(dst.Bounds())
 			copy(shown.Pix, dst.Pix)
 			f.mu.Lock()
@@ -537,7 +630,8 @@ func (f *Feature) snapshot(entity string) (*image.RGBA, error) {
 		b, err = reolinkSnap(entity)
 	case isGo2RTC(entity):
 		ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
-		b, err = go2rtcSnap(ctx, entity, cameraFrameW)
+		fw, _ := cameraFrameSize()
+		b, err = go2rtcSnap(ctx, entity, fw)
 		cancel()
 	default:
 		b, err = hass.Get().Fetch("/api/camera_proxy/" + entity)
@@ -555,12 +649,13 @@ func (f *Feature) snapshot(entity string) (*image.RGBA, error) {
 // fitFrame scales a picture to fit the panel, keeping its shape.
 func fitFrame(src image.Image) *image.RGBA {
 	sw, sh := src.Bounds().Dx(), src.Bounds().Dy()
-	w, h := cameraFrameW, sh*cameraFrameW/sw
-	if h > cameraFrameH {
-		w, h = sw*cameraFrameH/sh, cameraFrameH
+	fw, fh := cameraFrameSize()
+	w, h := fw, sh*fw/sw
+	if h > fh {
+		w, h = sw*fh/sh, fh
 	}
 	dst := image.NewRGBA(image.Rect(0, 0, w, h))
-	xdraw.ApproxBiLinear.Scale(dst, dst.Bounds(), src, src.Bounds(), xdraw.Src, nil)
+	picscale.CatmullRom.Scale(dst, dst.Bounds(), src, src.Bounds(), xdraw.Src)
 	return dst
 }
 
@@ -592,25 +687,10 @@ func (f *Feature) cameraActions() []*esphome.Action {
 		{
 			Name: "home_cameras",
 			Args: []esphome.Arg{{Name: "cameras", Type: esphome.ArgString}}, // "camera.x=Front door,camera.y=Deck"
+			// "none" for no Home Assistant camera, empty for every one.
 			Run: func(c esphome.Call) (any, error) {
-				var cams []config.Camera
-				for _, item := range strings.Split(c.String("cameras"), ",") {
-					entity, name, _ := strings.Cut(strings.TrimSpace(item), "=")
-					entity, name = strings.TrimSpace(entity), strings.TrimSpace(name)
-					if entity == "" {
-						continue
-					}
-					if name == "" {
-						name = strings.TrimPrefix(entity, "camera.")
-					}
-					cams = append(cams, config.Camera{Entity: entity, Name: name})
-				}
-				if err := config.Set().Home().Cameras(cams); err != nil {
-					return nil, err
-				}
-				slog.Info("home: cameras set", "count", len(cams))
-				f.Changed.Emit(struct{}{})
-				return nil, nil
+				cams, none := ParseCameras(c.String("cameras"))
+				return nil, f.setCameras(cams, none)
 			},
 		},
 		{

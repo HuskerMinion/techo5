@@ -74,13 +74,18 @@ func brainSection(w http.ResponseWriter, token string) {
 	 <input id="search" name="search" value="%s" placeholder="http://192.168.1.20:8888" autocomplete="off">
 	 <p class="note">To look up what the chat model cannot know: games, news, opening hours. SearXNG needs
 	  its JSON format turned on (search.formats in its settings.yml). Empty: no looking things up.</p>
+	 <label for="reader">Page reader</label>
+	 <input id="reader" name="reader" value="%s" placeholder="http://192.168.1.20:8891" autocomplete="off">
+	 <p class="note">Optional: a browser that reads pages that fill themselves in with scripts, like a
+	  store's hours (TECHO5's tools/page-reader). Used only when a page has almost no text as it comes,
+	  or the site turns the device away with an error.</p>
 	 <label for="prompt">Anything the assistant should know</label>
 	 <textarea id="prompt" name="prompt" rows="3" maxlength="2000">%s</textarea>
 	 <p><button type="submit">Save</button></p></form></fieldset>`,
 		selected(b.Mode == config.BrainHomeAssistant), selected(b.Mode == config.BrainDirect),
 		html.EscapeString(b.STT), html.EscapeString(b.TTS), html.EscapeString(b.Voice), html.EscapeString(b.Language),
 		html.EscapeString(b.LLM), html.EscapeString(b.Model), keyHint(b.Key != ""), html.EscapeString(b.Search),
-		html.EscapeString(b.Prompt))
+		html.EscapeString(b.Reader), html.EscapeString(b.Prompt))
 }
 
 func keyHint(set bool) string {
@@ -103,6 +108,7 @@ func saveBrain(r *http.Request) string {
 		LLM:      strings.TrimRight(v("llm"), "/"),
 		Model:    v("model"),
 		Search:   strings.TrimRight(v("search"), "/"),
+		Reader:   strings.TrimRight(v("reader"), "/"),
 		Prompt:   strings.TrimSpace(r.PostFormValue("prompt")),
 	}
 	if b.Mode != config.BrainHomeAssistant && b.Mode != config.BrainDirect {
@@ -126,6 +132,12 @@ func saveBrain(r *http.Request) string {
 		u, err := url.Parse(b.Search)
 		if err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" {
 			return "the search server should be an address like http://192.168.1.20:8888"
+		}
+	}
+	if b.Reader != "" {
+		u, err := url.Parse(b.Reader)
+		if err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" {
+			return "the page reader should be an address like http://192.168.1.20:8891"
 		}
 	}
 	if b.Mode == config.BrainDirect && (b.STT == "" || b.TTS == "" || b.LLM == "") {

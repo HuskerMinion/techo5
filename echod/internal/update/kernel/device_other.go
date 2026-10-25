@@ -11,5 +11,7 @@ func dropCache(*os.File) {}
 
 func syncAll() {}
 
-// BootDevice exists only on the device.
-func BootDevice() (string, error) { return "", errors.New("no boot partition here") }
+// PartitionDevice exists only on the device.
+func PartitionDevice(name string) (string, error) {
+	return "", errors.New("no " + name + " partition here")
+}

@@ -426,13 +426,59 @@ class Panel(unittest.TestCase):
         self.assertIn('ILI9881C', inst.check_panel(0x36, 'ili9881c_wxga_dsi_vdo_st_boe', False))
         self.assertIn('ILI9881C', inst.check_panel(0x36, None, False))
         self.assertIn('ILI9881C', inst.check_panel(None, 'ili9881c_wxga_dsi_vdo_st_boe', False))
+        # The JD9365 with KD/HSD glass, tested by a user (#187), goes on by itself too.
+        self.assertIn('tested on', inst.check_panel(0x31, None, False))
+        self.assertIn('JD9365, KD/HSD glass', inst.check_panel(0x31, 'jd936x_wxga_dsi_vdo_athena_st_kd_hsd', False))
 
     def test_others_refused(self):
-        for pid, name in ((0x31, None), (0x34, 'jd936x_wxga_dsi_vdo_athena_st_boe'), (0x38, None),
+        for pid, name in ((0x32, None), (0x34, 'jd936x_wxga_dsi_vdo_athena_st_boe'), (0x38, None),
                           (0x36, 'ili9881c_wxga_dsi_vdo_st_inx'), (None, None)):
             with self.assertRaisesRegex(Fail, 'kernel amazon'):
                 inst.check_panel(pid, name, False)
             self.assertIn('--force-panel', inst.check_panel(pid, name, True))
+
+    def test_untested_known(self):
+        with self.assertRaisesRegex(Fail, 'JD9365, BOE glass \\(new\\).*not been tested'):
+            inst.check_panel(0x35, 'jd936x_wxga_dsi_vdo_athena_st_boe_new', False)
+        said = inst.check_panel(0x35, 'jd936x_wxga_dsi_vdo_athena_st_boe_new', True)
+        self.assertIn('JD9365, BOE glass (new)', said)
+        self.assertIn('--force-panel', said)
+        self.assertIn('JD9365, KD/HSD glass (new)', inst.check_panel(0x32, None, True))
+        self.assertIn('ILI9881C, KD/HSD glass', inst.check_panel(0x33, 'ili9881c_wxga_dsi_vdo_st_kd_hsd', True))
+
+    def test_which(self):
+        boe_new = 'jd936x_wxga_dsi_vdo_athena_st_boe_new'
+        inx = 'ili9881c_wxga_dsi_vdo_st_inx'
+        self.assertEqual(inst.panel_which(0x35, None), (boe_new, None))
+        self.assertEqual(inst.panel_which(None, inx), (inx, None))
+        self.assertEqual(inst.panel_which(0x33, None), (None, None), 'nibble 3 is on both controllers')
+        which, doubt = inst.panel_which(0x36, inx)
+        self.assertEqual(which, inx, 'the kernel goes by the name')
+        self.assertIn('disagree', doubt)
+        which, doubt = inst.panel_which(0x36, 'some_other_dsi_panel')
+        self.assertEqual(which, 'ili9881c_wxga_dsi_vdo_st_boe', 'the kernel falls back to the nibble')
+        self.assertIn('does not know', doubt)
+        self.assertEqual(inst.panel_which(0x3b, None), (None, None))
+        self.assertEqual(inst.panel_which(None, None), (None, None))
+
+    def test_doubt_needs_force(self):
+        with self.assertRaisesRegex(Fail, 'disagree'):
+            inst.check_panel(0x36, 'ili9881c_wxga_dsi_vdo_st_inx', False)
+        with self.assertRaisesRegex(Fail, 'does not know'):
+            inst.check_panel(0x36, 'some_other_dsi_panel', False)
+        self.assertIn('--force-panel', inst.check_panel(0x36, 'some_other_dsi_panel', True))
+        with self.assertRaisesRegex(Fail, '--ssh-key'):
+            inst.check_panel(0x35, None, False)
+
+    def test_same_table_as_the_kernel(self):
+        src = os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                           'linux', 'athena', 'kernel', 'src', 'panel', 'panel-athena-select.c')
+        with open(src) as f:
+            rows = re.findall(r'ATHENA_(ILI|JD)\("(\w+)", (-1|0x[0-9a-f]+|\d+), "[\w-]+"\)', f.read())
+        prefix = {'ILI': 'ili9881c_wxga_dsi_vdo_st_', 'JD': 'jd936x_wxga_dsi_vdo_athena_st_'}
+        kernel = {prefix[ic] + name: (None if nib == '-1' else int(nib, 0)) for ic, name, nib in rows}
+        self.assertEqual(kernel, {n: nib for n, (nib, _) in inst.PANELS.items()})
+        self.assertEqual(rows[0][:2], ('ILI', 'boe'), "the kernel's first row is the device tree's own")
 
 
 @unittest.skipUnless(BASH, 'needs a POSIX shell (Git Bash on Windows)')
@@ -462,6 +508,20 @@ class SimulatedTWRP(unittest.TestCase):
 
     def mainline_args(self):
         return ['--image', self.store, '--boot', self.boot]
+
+    def test_store_grown_after_written(self):
+        # #192: the store is grown from TWRP once written and read back, before the boot partition
+        # and the reboot; a grow that cannot be done says so and leaves it to the first boot.
+        u = self.unit()
+        out, err = self.install(u, *self.mainline_args())
+        self.assertIsNone(err, out)
+        system = next(i for i, c in enumerate(u.log) if 'of=/dev/block/mmcblk1p21' in c)
+        boot = next(i for i, c in enumerate(u.log) if 'of=/dev/block/mmcblk1p20' in c)
+        grow = [i for i, c in enumerate(u.log) if 'resize2fs /dev/block/mmcblk1p21' in c]
+        self.assertTrue(grow and system < grow[0] < boot, u.log)
+        # The simulated partition holds no real ext4: the grow is not done, and that is said.
+        self.assertIn('the store was not grown here', out)
+        self.assertTrue(u.rebooted)
 
     def test_mainline_install(self):
         u = self.unit()
@@ -518,7 +578,7 @@ class SimulatedTWRP(unittest.TestCase):
         self.assertEqual(u.changed(), [20, 21])
 
     def test_other_panel_refused(self):
-        for kw in ({'cmdline': 'jd936x_id=0x31', 'lk_panel': 'jd936x_wxga_dsi_vdo_athena_st_kd_hsd'},
+        for kw in ({'cmdline': 'jd936x_id=0x32', 'lk_panel': 'jd936x_wxga_dsi_vdo_athena_st_kd_hsd_new'},
                    {'cmdline': '', 'lk_panel': None}):
             u = self.unit(**kw)
             out, err = self.install(u, *self.mainline_args())
@@ -526,7 +586,7 @@ class SimulatedTWRP(unittest.TestCase):
             self.assertEqual(u.changed(), [])
             self.assertFalse(any('dd if=' in c for c in u.log), 'nothing read before the panel check')
             shutil.rmtree(os.path.join(self.tmp, 'unit'))
-        u = self.unit(cmdline='jd936x_id=0x31', lk_panel=None)
+        u = self.unit(cmdline='jd936x_id=0x32', lk_panel=None)
         out, err = self.install(u, '--force-panel', '--dry-run', *self.mainline_args())
         self.assertIsNone(err, out)
         self.assertIn('--force-panel', out)

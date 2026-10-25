@@ -51,11 +51,14 @@ const (
 	DashboardOff      DashboardMode = ""
 	DashboardDrawn    DashboardMode = "drawn"
 	DashboardStreamed DashboardMode = "streamed"
+	// DashboardTessera is the layout the Tessera add-on sent the screen (feature/tessera), on the Show.
+	DashboardTessera DashboardMode = "tessera"
 )
 
-// DashboardModes is every mode, in the order a list shows them.
+// DashboardModes is every mode, in the order a list shows them. Not every device offers every one
+// (dashboard.Modes).
 func DashboardModes() []DashboardMode {
-	return []DashboardMode{DashboardOff, DashboardDrawn, DashboardStreamed}
+	return []DashboardMode{DashboardOff, DashboardDrawn, DashboardStreamed, DashboardTessera}
 }
 
 // Label is how Home Assistant and the screen name a mode.
@@ -65,6 +68,8 @@ func (m DashboardMode) Label() string {
 		return "Drawn on the device"
 	case DashboardStreamed:
 		return "Streamed"
+	case DashboardTessera:
+		return "Tessera"
 	}
 	return "Off"
 }

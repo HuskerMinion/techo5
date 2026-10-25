@@ -6,6 +6,7 @@ import (
 	"encoding/binary"
 	"encoding/hex"
 	"fmt"
+	"net"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -941,6 +942,192 @@ func TestTheReceiversFollowAvahi(t *testing.T) {
 	<-done
 	if _, _, _, r := get(); r != 0 {
 		t.Errorf("%d receivers still running after the group ended", r)
+	}
+}
+
+// fakeGroup stands in for avahi and the receivers, for runGroup to run: avahi is up as soon as it
+// starts and runs until it is stopped, and avahi's answers for AirPlay are whatever answering says.
+type fakeGroup struct {
+	mu                     sync.Mutex
+	answering              bool
+	avahis, airplays, asks int
+}
+
+func newFakeGroup(t *testing.T) *fakeGroup {
+	wasRun, wasUp, wasAir, wasSpot, wasFirst, wasLeft := runAvahi, avahiUp, runAirPlay, runSpotify, restartFirst, leftovers
+	wasEvery, wasMisses, wasAnswered, wasCanAsk, wasPaused := answerEvery, answerMisses, answered, canAsk, pausedFor
+	t.Cleanup(func() {
+		runAvahi, avahiUp, runAirPlay, runSpotify, restartFirst, leftovers = wasRun, wasUp, wasAir, wasSpot, wasFirst, wasLeft
+		answerEvery, answerMisses, answered, canAsk, pausedFor = wasEvery, wasMisses, wasAnswered, wasCanAsk, wasPaused
+		receivedAt.Store(0)
+	})
+	receivedAt.Store(0)
+	g := &fakeGroup{answering: true}
+	leftovers = func() {}
+	restartFirst = 10 * time.Millisecond
+	answerEvery, answerMisses = 20*time.Millisecond, 2
+	pausedFor = 60 * time.Millisecond // a pause outlasts a few asks, as 10 minutes do a few minutes
+	runAvahi = func(ctx context.Context) {
+		g.mu.Lock()
+		g.avahis++
+		g.mu.Unlock()
+		<-ctx.Done()
+	}
+	avahiUp = func(context.Context) bool { return true }
+	canAsk = func() bool { return true }
+	runAirPlay = func(ctx context.Context, _ string) {
+		g.mu.Lock()
+		g.airplays++
+		g.mu.Unlock()
+		<-ctx.Done()
+	}
+	runSpotify = func(ctx context.Context, _ string) { <-ctx.Done() }
+	answered = func(context.Context) bool {
+		g.mu.Lock()
+		defer g.mu.Unlock()
+		g.asks++
+		return g.answering
+	}
+	return g
+}
+
+func (g *fakeGroup) answer(on bool) { g.mu.Lock(); g.answering = on; g.mu.Unlock() }
+
+func (g *fakeGroup) counts() (avahis, airplays, asks int) {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	return g.avahis, g.airplays, g.asks
+}
+
+// run runs the group until the test ends.
+func (g *fakeGroup) run(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan struct{})
+	go func() { runGroup(ctx, "Kitchen", true, true); close(done) }()
+	t.Cleanup(func() { cancel(); <-done })
+}
+
+// An avahi that runs on but has stopped answering for AirPlay is started again, and AirPlay with it, as
+// turning AirPlay off and on did (techo5-dot#14).
+func TestAQuietAvahiIsStartedAgain(t *testing.T) {
+	g := newFakeGroup(t)
+	g.run(t)
+	waitUntil(t, func() bool { _, _, asks := g.counts(); return asks >= 2 })
+	g.answer(false)
+	waitUntil(t, func() bool { n, a, _ := g.counts(); return n == 2 && a == 2 })
+	// Answering again, the new one is left be.
+	g.answer(true)
+	_, _, at := g.counts()
+	waitUntil(t, func() bool { _, _, asks := g.counts(); return asks >= at+5 })
+	if n, _, _ := g.counts(); n != 2 {
+		t.Errorf("avahi started %d times; want 2", n)
+	}
+}
+
+// With no way to ask (Wi-Fi down, no route to the group) nothing counts as a miss: an outage is not
+// avahi failing.
+func TestNoRouteIsNoMiss(t *testing.T) {
+	g := newFakeGroup(t)
+	g.run(t)
+	waitUntil(t, func() bool { _, _, asks := g.counts(); return asks >= 2 })
+	canAsk = func() bool { return false }
+	g.answer(false)
+	_, _, at := g.counts()
+	waitUntil(t, func() bool { _, _, asks := g.counts(); return asks >= at+5 })
+	if n, _, _ := g.counts(); n != 1 {
+		t.Errorf("avahi started %d times with no route; want 1", n)
+	}
+}
+
+// An avahi that has never answered the ask since it started is never restarted for it: the ask proves
+// nothing there.
+func TestAnAvahiNeverHeardIsLeftBe(t *testing.T) {
+	g := newFakeGroup(t)
+	g.answer(false)
+	g.run(t)
+	waitUntil(t, func() bool { _, _, asks := g.counts(); return asks >= 8 })
+	if n, _, _ := g.counts(); n != 1 {
+		t.Errorf("avahi started %d times; want 1", n)
+	}
+}
+
+// Nothing is restarted while a receiver sends audio, which a restart would cut off; once it stops, the
+// quiet avahi is started again.
+func TestAQuietAvahiWaitsForTheMusicToStop(t *testing.T) {
+	g := newFakeGroup(t)
+	playing := make(chan struct{})
+	go func() {
+		for {
+			select {
+			case <-playing:
+				return
+			case <-time.After(5 * time.Millisecond):
+				received(4096)
+			}
+		}
+	}()
+	g.run(t)
+	waitUntil(t, func() bool { _, _, asks := g.counts(); return asks >= 2 })
+	g.answer(false)
+	_, _, at := g.counts()
+	waitUntil(t, func() bool { _, _, asks := g.counts(); return asks >= at+6 })
+	if n, _, _ := g.counts(); n != 1 {
+		t.Errorf("avahi started again while audio played (%d starts)", n)
+	}
+	close(playing)
+	waitUntil(t, func() bool { n, a, _ := g.counts(); return n == 2 && a == 2 })
+}
+
+// The ask is a PTR query for AirPlay's service, and only an answer with records, to that query, from
+// the device itself counts.
+func TestTheAskForAirPlay(t *testing.T) {
+	wasGroup, wasWait := mdnsGroup, answerWait
+	t.Cleanup(func() { mdnsGroup, answerWait = wasGroup, wasWait })
+	answerWait = 300 * time.Millisecond
+	avahi, err := net.ListenUDP("udp4", &net.UDPAddr{IP: net.IPv4(127, 0, 0, 1)})
+	if err != nil {
+		t.Skip("no loopback socket:", err)
+	}
+	defer avahi.Close()
+	mdnsGroup = avahi.LocalAddr().(*net.UDPAddr)
+	want := mdnsQuery(0, airplayService)[2:]
+	for _, c := range []struct {
+		name    string
+		answers int // -1 for no answer at all
+		sameID  bool
+		ok      bool
+	}{
+		{"answered", 1, true, true},
+		{"no records", 0, true, false},
+		{"another query's answer", 1, false, false},
+		{"silence", -1, true, false},
+	} {
+		got := make(chan bool, 1)
+		go func() { got <- airplayAnswered(context.Background()) }()
+		buf := make([]byte, 1500)
+		_ = avahi.SetReadDeadline(time.Now().Add(2 * time.Second))
+		n, from, err := avahi.ReadFromUDP(buf)
+		if err != nil {
+			t.Fatalf("%s: no query came: %v", c.name, err)
+		}
+		if q := buf[:n]; len(q) < 12 || string(q[2:]) != string(want) {
+			t.Fatalf("%s: the query is % x; want an id then % x", c.name, q, want)
+		}
+		if c.answers >= 0 {
+			reply := make([]byte, 12)
+			copy(reply, buf[:2])
+			if !c.sameID {
+				reply[0] ^= 0xff
+			}
+			reply[2] = 0x84 // a response, authoritative
+			binary.BigEndian.PutUint16(reply[6:], uint16(c.answers))
+			if _, err := avahi.WriteToUDP(reply, from); err != nil {
+				t.Fatal(err)
+			}
+		}
+		if ok := <-got; ok != c.ok {
+			t.Errorf("%s: answered = %v; want %v", c.name, ok, c.ok)
+		}
 	}
 }
 

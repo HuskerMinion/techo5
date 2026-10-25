@@ -125,12 +125,21 @@ func (d *Diag) Entities() []esphome.Entity {
 		d.cached, d.free, d.purge, d.restart,
 		d.temperature, d.radioTemp, d.cores, d.coresOnline, d.load, d.memory, d.booted, d.lux,
 		d.roomLevel, d.roomFloor,
-		d.tls, d.ip, d.color, d.signal, d.rxRate, d.txRate, d.ads,
-		d.testPlayback, d.interval, d.minCores,
+		d.tls, d.ip, d.color, d.signal, d.rxRate, d.txRate,
+		d.testPlayback, d.interval,
+	}
+	// Holding cores online is the hotplug governor's, which an app on a tablet may not touch (coresHere).
+	if coresHere {
+		out = append(out, d.minCores)
+	}
+	// What the BLE radio hears, where the daemon has the radio (bluetooth.Here).
+	if bluetooth.Here {
+		out = append(out, d.ads)
 	}
 	// adbd is Android's. On the Linux image there is none to reach, and the saved setting is read by
-	// the Android daemon the unit falls back to, where it would open root adb to the network.
-	if layout.OnAndroid() {
+	// the Android daemon the unit falls back to, where it would open root adb to the network. A panel
+	// has no firewall of its own to open it in (adbHere).
+	if layout.OnAndroid() && adbHere {
 		out = append(out, d.adb)
 	}
 	if d.lensCover != nil {
@@ -650,14 +659,14 @@ func (d *Diag) Restore(c config.Config) {
 
 	// The chain is empty after a reboot but not after an echod restart, so the rule is put back or
 	// taken away rather than either being assumed.
-	if !layout.OnAndroid() {
+	if !layout.OnAndroid() || !adbHere {
 		// Off the Linux image the switch is not offered; one saved on before is cleared, so the Fire OS
-		// fallback does not open adb to the network from this file.
+		// fallback does not open adb to the network from this file. Nor on a panel.
 		if c.Diag.RemoteADB {
 			if err := config.Set().Diag().RemoteADB(false); err != nil {
 				slog.Error("clearing remote adb failed", "err", err)
 			} else {
-				slog.Warn("remote adb was saved on; cleared, since this is not Android")
+				slog.Warn("remote adb was saved on; cleared, since this device does not offer it")
 			}
 		}
 	} else if err := d.reachable(c.Diag.RemoteADB); err == nil {
@@ -668,6 +677,9 @@ func (d *Diag) Restore(c config.Config) {
 	d.tls.Set(c.Diag.InsecureTLS)
 	slog.Info("restored", "what", d.tls.ObjectID, "using", c.Diag.InsecureTLS)
 
+	if !coresHere {
+		return
+	}
 	if err := setup.MinCores(c.Diag.MinCores); err != nil {
 		slog.Error("holding cores online failed", "cores", c.Diag.MinCores, "err", err)
 	} else {
@@ -783,7 +795,8 @@ func set(s *esphome.Sensor, r metrics.Reading) {
 	}
 }
 
-// inUse is what the slots are set to, which is what a purge has to leave alone.
+// inUse is what the slots are set to, the hang-up word and the command words, which is what a purge has
+// to leave alone.
 func inUse() []string {
 	saved := config.Get().Wake
 
@@ -791,6 +804,14 @@ func inUse() []string {
 	for slot := range wakeword.Slots {
 		if id := saved.Slot(slot).ID; id != "" {
 			ids = append(ids, id)
+		}
+	}
+	if id := saved.Hangup.ModelID(); id != "" {
+		ids = append(ids, id)
+	}
+	for _, w := range saved.CommandWords() {
+		if w.ID != "" {
+			ids = append(ids, w.ID)
 		}
 	}
 	return ids

@@ -41,7 +41,18 @@ type Peer struct {
 	Name    string
 	Address string
 	Port    int
+	// NoMicrophone is a device that cannot hear (the Skylight Calendar): it takes no intercom call and
+	// answers no wake word. It says so in its record (hearsKey); one on an older release says nothing
+	// and is taken to hear, as every device before the Skylight did.
+	NoMicrophone bool
 }
+
+// Hears reports whether the device has microphones: whether it can be called, and can answer a wake word.
+func (p Peer) Hears() bool { return !p.NoMicrophone }
+
+// hearsKey is the record's word for a device without microphones, "hears=0". A device that hears
+// leaves it out, as every release before it did.
+const hearsKey = "hears="
 
 // known is one device and when it was last heard from.
 type known struct {
@@ -104,8 +115,12 @@ func (f *Feature) advertise(ctx context.Context) {
 		// The instance and host are each one DNS label; the name in full goes in the TXT record, which
 		// is what a peer is known by (nameOf).
 		label := layout.CutName(name, layout.LabelMax)
+		text := []string{"name=" + name}
+		if !layout.HasMicrophone() {
+			text = append(text, hearsKey+"0")
+		}
 		srv, err := zeroconf.RegisterProxy(label, service, domain, web.Port, label, addrs,
-			[]string{"name=" + name}, nil)
+			text, metrics.MulticastInterfaces())
 		if err != nil {
 			slog.Debug("announce: advertising failed", "err", err)
 			if !pause(ctx, advertiseRetry) {
@@ -149,7 +164,7 @@ func (f *Feature) browse(ctx context.Context) {
 				continue
 			}
 			seen[strings.ToLower(name)] = true
-			heard = append(heard, Peer{Name: name, Address: addr, Port: e.Port})
+			heard = append(heard, Peer{Name: name, Address: addr, Port: e.Port, NoMicrophone: !hearsOf(e)})
 		}
 	}()
 
@@ -160,7 +175,11 @@ func (f *Feature) browse(ctx context.Context) {
 	// ever assigned — so every device decided it was the only one in the house and played its own
 	// announcements to itself. The supervisor caught it and restarted the feature every few seconds,
 	// which is why nothing looked broken from outside.
-	if err := zeroconf.Browse(look, service, domain, found); err != nil {
+	var opts []zeroconf.ClientOption
+	if ifaces := metrics.MulticastInterfaces(); len(ifaces) > 0 {
+		opts = append(opts, zeroconf.SelectIfaces(ifaces))
+	}
+	if err := zeroconf.Browse(look, service, domain, found, opts...); err != nil {
 		slog.Warn("announce: looking for the other devices failed", "err", err)
 		closeQuietly(found)
 		<-done
@@ -213,6 +232,16 @@ func nameOf(e *zeroconf.ServiceEntry) string {
 		}
 	}
 	return e.Instance
+}
+
+// hearsOf is whether the entry's device has microphones: yes unless its record says "hears=0".
+func hearsOf(e *zeroconf.ServiceEntry) bool {
+	for _, t := range e.Text {
+		if v, ok := strings.CutPrefix(t, hearsKey); ok {
+			return v != "0"
+		}
+	}
+	return true
 }
 
 // addressOf is the first routable address the entry carries, IPv4 for preference: an announcement

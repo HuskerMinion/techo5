@@ -47,7 +47,8 @@ func testNoise() *Noise {
 	n := build()
 	n.busy = func() bool { return false }
 	n.muted = func() bool { return false }
-	n.read = func() (float64, bool) { return -50, true }
+	n.read = func() (float64, string) { return -50, "" }
+	n.say = func(string, float64) {}
 	n.enabled = true
 	return n
 }
@@ -99,8 +100,80 @@ func TestOffLooksAtNothing(t *testing.T) {
 	n := testNoise()
 	n.enabled = false
 	n.busy = func() bool { t.Error("asked whether the device is busy with the switch off"); return false }
-	n.read = func() (float64, bool) { t.Error("read the room with the switch off"); return 0, false }
+	n.read = func() (float64, string) { t.Error("read the room with the switch off"); return 0, "off" }
 	start := time.Now()
 	w := window{started: start}
 	n.beat(start.Add(windowLength), &w)
+}
+
+// told is a test sensor whose log is kept, one line per reason given.
+func told(n *Noise) *[]string {
+	var said []string
+	n.say = func(why string, _ float64) { said = append(said, why) }
+	return &said
+}
+
+func TestWhyThereIsNoReadingIsLoggedOncePerChange(t *testing.T) {
+	n := testNoise()
+	said := told(n)
+	muted := true
+	n.muted = func() bool { return muted }
+	start := time.Now()
+	w := window{started: start}
+	for i := range 3 {
+		n.beat(start.Add(time.Duration(i)*time.Second), &w)
+	}
+	muted = false
+	at := start.Add(3 * time.Second)
+	w = window{started: at}
+	n.beat(at.Add(windowLength), &w)
+	n.beat(at.Add(2*windowLength), &w)
+
+	want := []string{mutedWhy, ""}
+	if len(*said) != len(want) || (*said)[0] != want[0] || (*said)[1] != want[1] {
+		t.Errorf("logged %q, want %q", *said, want)
+	}
+}
+
+func TestTheMicrophonesReasonIsLogged(t *testing.T) {
+	n := testNoise()
+	said := told(n)
+	n.read = func() (float64, string) { return 0, "the device played something" }
+	start := time.Now()
+	w := window{started: start}
+	n.beat(start.Add(windowLength), &w)
+	if len(*said) != 1 || (*said)[0] != "the device played something" {
+		t.Errorf("logged %q, want the microphones' reason", *said)
+	}
+	if n.last.known {
+		t.Errorf("a window with no reading gave one: %+v", n.last)
+	}
+}
+
+func TestABusyWindowSaysBusy(t *testing.T) {
+	n := testNoise()
+	said := told(n)
+	n.busy = func() bool { return true }
+	n.read = func() (float64, string) { return 0, "the device played something" }
+	start := time.Now()
+	w := window{started: start}
+	n.beat(start.Add(windowLength), &w)
+	if len(*said) != 1 || (*said)[0] != busyWhy {
+		t.Errorf("logged %q, want %q", *said, busyWhy)
+	}
+}
+
+func TestTurningOnLogsAgain(t *testing.T) {
+	n := testNoise()
+	said := told(n)
+	start := time.Now()
+	w := window{started: start}
+	n.beat(start.Add(windowLength), &w)
+	n.set(false)
+	n.set(true)
+	w = window{started: start}
+	n.beat(start.Add(2*windowLength), &w)
+	if len(*said) != 2 {
+		t.Errorf("logged %q, want the first reading said again after the switch moved", *said)
+	}
 }

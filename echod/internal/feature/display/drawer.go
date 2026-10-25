@@ -15,6 +15,9 @@ import (
 
 // openDrawer brings the drawer in on a tab.
 func (d *Display) openDrawer(tab int) {
+	if tab < 0 || tab >= len(shownTabs()) {
+		tab = drawerCameras // one this screen does not offer
+	}
 	d.mu.Lock()
 	d.drawer, d.drawerTab, d.drawerScroll, d.drawerPick, d.pickScroll = true, tab, 0, "", 0
 	d.weatherUntil, d.radar = time.Time{}, false

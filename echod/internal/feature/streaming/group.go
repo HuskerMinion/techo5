@@ -21,7 +21,8 @@ var (
 
 // runGroup runs avahi and the receivers wanted until ctx ends. The receivers register with avahi once,
 // as they start, and neither registers again when avahi comes back: so they start only once avahi
-// says it is running, and when avahi stops they are stopped with it and everything starts again.
+// says it is running, and when avahi stops they are stopped with it and everything starts again. So
+// does an avahi that runs on but no longer answers for AirPlay (watchAnswers).
 func runGroup(ctx context.Context, name string, airplay, spotify bool) {
 	wait := restartFirst
 	for ctx.Err() == nil {
@@ -43,11 +44,17 @@ func runGroup(ctx context.Context, name string, airplay, spotify bool) {
 				wg.Add(1)
 				go func() { defer wg.Done(); runSpotify(gctx, name) }()
 			}
+			unanswered := make(chan struct{})
+			if airplay {
+				wg.Add(1)
+				go func() { defer wg.Done(); watchAnswers(gctx, unanswered) }()
+			}
 			select {
 			case <-avahiDone:
 				if ctx.Err() == nil {
 					slog.Warn("streaming: avahi stopped; starting the receivers again with it")
 				}
+			case <-unanswered:
 			case <-ctx.Done():
 			}
 		} else if ctx.Err() == nil {

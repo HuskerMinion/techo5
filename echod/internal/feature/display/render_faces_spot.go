@@ -9,11 +9,13 @@ import (
 	"sync"
 	"time"
 
+	"golang.org/x/image/font"
+
 	"github.com/HuskerMinion/techo5/echod/internal/lib/locale"
 )
 
-// The Spot's Binary, World, Agenda and Glow clock styles (clock_style.go), laid out for the circle,
-// and the name a swipe that turned to a style shows for a moment.
+// The Spot's Binary, World, Agenda, Glow, Nixie, Stack and Overlap clock styles (clock_style.go), laid
+// out for the circle, and the name a swipe that turned to a style shows for a moment.
 
 // binaryFace is the time in lights, a column per digit, each counted up from the bottom light (1, 2,
 // 4, 8); the time written small under them, and the day.
@@ -148,6 +150,50 @@ func (r *roundRenderer) glowFace(s roundScene) {
 	r.timeLine(s.now, 262)
 	r.centered(r.small, locale.LongDate(s.now, screenLang()), 312, colText)
 	r.footLine(s, 360, "")
+}
+
+// nixieFace is the time in Nixie tubes (nixie.go) across the middle, the date and one more line under
+// them.
+func (r *roundRenderer) nixieFace(s roundScene) {
+	r.statusWord(s, 118)
+	r.nixieClock(&r.nixie, faceDigits(s.now), clockSuffix(s.now), image.Rect(70, 150, side-70, 296), r.label, colAccent, colBackground)
+	r.centered(r.small, locale.LongDate(s.now, screenLang()), 338, colDim)
+	r.footLine(s, 378, "")
+}
+
+// stackFace is the hours over the minutes, two figures each and set close (figures.go), the minutes in
+// the accent and the AM/PM beside them; the date and one more line under them.
+func (r *roundRenderer) stackFace(s roundScene) {
+	r.statusWord(s, 118)
+	d := stackDigits(s.now)
+	f := r.styleFace(true, 146)
+	h := figureHeight(f)
+	top := 130
+	base := top + 2*h + int(float64(h)*stackLead) // the minutes'
+	r.stackLine(&r.figures, f, [2]int{d[0], d[1]}, center, top+h, colText)
+	minutes := r.stackLine(&r.figures, f, [2]int{d[2], d[3]}, center, base, colAccent)
+	if ampm := clockSuffix(s.now); ampm != "" {
+		r.text(r.label, ampm, minutes.Max.X+8, minutes.Min.Y+capHeightOf(r.label), colDim)
+	}
+	r.centered(r.small, locale.LongDate(s.now, screenLang()), base+38, colDim)
+	r.footLine(s, base+74, "")
+}
+
+// overlapFace is the time's figures very large across the middle, each reaching over the one before it
+// (figures.go); the AM/PM with the day under them, and one more line.
+func (r *roundRenderer) overlapFace(s roundScene) {
+	r.statusWord(s, 118)
+	digits := faceDigits(s.now)
+	f := overlapFit(func(size int) font.Face { return r.styleFace(true, size) }, 200, digits, 372, 150)
+	_, w, h := overlapRow(f, digits)
+	base := 232 + h/2
+	r.overlapClock(&r.figures, f, digits, center-w/2, base, colAccent, colText, colDim)
+	line := shortDay(s)
+	if ampm := clockSuffix(s.now); ampm != "" {
+		line = ampm + "  ·  " + line
+	}
+	r.centered(r.small, line, base+48, colDim)
+	r.footLine(s, base+88, "")
 }
 
 // glowMask is the face inside the status ring, its edge smoothed, made once.

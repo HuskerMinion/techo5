@@ -34,6 +34,7 @@
 #include <dt-bindings/input/input.h>
 #include <dt-bindings/interrupt-controller/irq.h>
 #include <dt-bindings/leds/common.h>
+#include <dt-bindings/phy/phy.h>
 #include "mt8183.dtsi"
 #include "mt6358.dtsi"
 
@@ -251,7 +252,10 @@
 			debounce-interval = <50>;
 		};
 
-		/* camera shutter slider. Confirmed GPIO152, input, read low */
+		/*
+		 * Camera shutter slider. Confirmed GPIO152, input. As described it reports 1
+		 * only while the slider is closed (checked on a unit, 2026-10-19).
+		 */
 		switch-camera-lens-cover {
 			label = "Camera Lens Cover";
 			gpios = <&pio 152 GPIO_ACTIVE_LOW>;
@@ -925,12 +929,14 @@
  * 4 lanes, burst video, 478 Mbps/lane: from Amazon's LCM driver, added to
  * panel-ilitek-ili9881c by patches/panel/0002 (patch-display.py).
  *
- * Other units: only this panel has been tested. The other variants' tables
- * are in patches/panel (amazon,athena-ili9881c-* and amazon,athena-jd9365-*),
- * untested; using one means changing the compatible below.
- * The JD9365 ones bind panel-jadard-jd9365da-h3 instead and take
- * vccio-supply = <&mt6358_vcama2_reg> and vdd-supply = <&lcd_avee> in
- * place of power-supply.
+ * Other units: the compatible below is unit 1's. At boot
+ * panel-athena-select.c (patch-display.py) sets it to the unit's own
+ * screen, by LK's LCM name in atag,videolfb (or the jd936x_id nibble), from
+ * the other variants' tables in patches/panel (amazon,athena-ili9881c-* and
+ * amazon,athena-jd9365-*). Only the ILI9881C BOE has been tested on a unit.
+ * The JD9365 ones bind panel-jadard-jd9365da-h3, which takes vccio-supply
+ * and vdd-supply where the ILI9881C driver takes power-supply: the node
+ * has all three, and each driver reads its own.
  *
  * mediatek-dsi finds the panel through the graph (dsi_out -> panel_in),
  * as on kukui. No pinctrl for GPIO45: kukui's panel pins drive it low,
@@ -950,10 +956,14 @@
 		reg = <0>;
 		/* the bias chain above: vcama2 -> P (GPIO176) -> N (GPIO175) */
 		power-supply = <&lcd_avee>;
+		/* the same rails for the JD9365 driver: vio first, then the bias */
+		vccio-supply = <&mt6358_vcama2_reg>;
+		vdd-supply = <&lcd_avee>;
 		/*
 		 * GPIO45 LCM_RST: stock idles high and pulses low, so active
-		 * low. The driver requests it deasserted (high), which keeps
-		 * LK's picture until the first modeset.
+		 * low. Both drivers request it deasserted (high; the JD9365
+		 * one by patch-display.py), which keeps LK's picture until
+		 * the first modeset.
 		 */
 		reset-gpios = <&pio 45 GPIO_ACTIVE_LOW>;
 		backlight = <&backlight_lcd0>;
@@ -1281,7 +1291,8 @@
  * first access under mainline (2026-10-15), so the
  * same pads run i2c-gpio: GPIO103 = SCL2, GPIO104 = SDA2. Stock runs the
  * bus at 400 kHz; delay-us 2 gives about 100 kHz, as on i2c4_gpio.
- * The camera sensor (0x36) and its EEPROM (0x54) on this bus are left out.
+ * The camera sensor (0x36) is added to this bus in the camera section below; its EEPROM
+ * (0x54) is left out.
  *
  * Stock node: compatible "ams,tcs3400", reg 0x29, GPIO9 level low, no
  * supply property (the sensor's VDD is not switched by the stock kernel).
@@ -1345,6 +1356,138 @@
 			pinmux = <PINMUX_GPIO9__FUNC_GPIO9>;
 			input-enable;
 			bias-pull-up;
+		};
+	};
+};
+
+/* ======================= Camera ======================= */
+
+/*
+ * Front camera: OmniVision OV13855 (13 MP, 4-lane CSI-2) on I2C2 0x36, its OTP EEPROM at 0x54
+ * (not described). The stock kernel builds only ov13855_mipi_raw. Read off the stock DT and
+ * regulator summary: avdd vcama1 2.8 V, dvdd vcamd 1.2 V, dovdd vcamio 1.8 V, reset GPIO102,
+ * powerdown GPIO177 (both low = held), MCLK GPIO99 CMMCLK0 (CAMTG).
+ *
+ * The receive path is CSI0 -> seninf -> CAMSV1 -> memory (patches/patch-camera.py): the ISP
+ * proper needs the SCP firmware, which is off here. The lane mux is the one MediaTek's reference
+ * boards use (as on kukui): CSI0A_L0 D2, A_L1 D0, A_L2 clock, B_L0 D1, B_L1 D3. Confirmed on a
+ * unit: the sensor's color bars come through whole and in order (2026-10-19).
+ */
+&mt6358_vcama1_reg {
+	regulator-min-microvolt = <2800000>;
+	regulator-max-microvolt = <2800000>;
+};
+
+&mt6358_vcamd_reg {
+	regulator-min-microvolt = <1200000>;
+	regulator-max-microvolt = <1200000>;
+};
+
+&pio {
+	camera_pins: camera-pins {
+		pins-mclk {
+			pinmux = <PINMUX_GPIO99__FUNC_CMMCLK0>;
+		};
+
+		pins-ctrl {
+			pinmux = <PINMUX_GPIO102__FUNC_GPIO102>,
+				 <PINMUX_GPIO177__FUNC_GPIO177>;
+			output-low;
+		};
+	};
+};
+
+&i2c2_gpio {
+	camera@36 {
+		compatible = "ovti,ov13855";
+		reg = <0x36>;
+		pinctrl-names = "default";
+		pinctrl-0 = <&camera_pins>;
+		clocks = <&topckgen CLK_TOP_MUX_CAMTG>;
+		assigned-clocks = <&topckgen CLK_TOP_MUX_CAMTG>;
+		assigned-clock-parents = <&topckgen CLK_TOP_UNIVP_192M_D8>;	/* 24 MHz */
+		reset-gpios = <&pio 102 GPIO_ACTIVE_LOW>;
+		powerdown-gpios = <&pio 177 GPIO_ACTIVE_LOW>;
+		avdd-supply = <&mt6358_vcama1_reg>;
+		dvdd-supply = <&mt6358_vcamd_reg>;
+		dovdd-supply = <&mt6358_vcamio_reg>;
+		orientation = <0>;	/* front */
+
+		port {
+			ov13855_ep: endpoint {
+				remote-endpoint = <&seninf_in0_ep>;
+				clock-lanes = <0>;
+				data-lanes = <1 2 3 4>;
+				link-frequencies = /bits/ 64 <540000000 270000000>;
+			};
+		};
+	};
+};
+
+&{/soc} {
+	mipi_csi0: phy@11c80000 {
+		compatible = "mediatek,mt8183-csi-rx";
+		reg = <0 0x11c80000 0 0x2000>;
+		num-lanes = <4>;
+		#phy-cells = <1>;	/* C/D-PHY combo, D-PHY mode */
+	};
+
+	seninf: seninf@1a040000 {
+		compatible = "mediatek,mt8183-seninf";
+		reg = <0 0x1a040000 0 0x8000>;
+		interrupts = <GIC_SPI 251 IRQ_TYPE_LEVEL_LOW>;
+		clocks = <&camsys CLK_CAM_SENINF>, <&topckgen CLK_TOP_MUX_SENINF>;
+		clock-names = "camsys", "top_mux";
+		power-domains = <&spm MT8183_POWER_DOMAIN_CAM>;
+		phys = <&mipi_csi0 PHY_TYPE_DPHY>;
+		phy-names = "csi0";
+
+		ports {
+			#address-cells = <1>;
+			#size-cells = <0>;
+
+			port@0 {
+				reg = <0>;
+				seninf_in0_ep: endpoint {
+					remote-endpoint = <&ov13855_ep>;
+					clock-lanes = <2>;
+					data-lanes = <1 3 0 4>;
+				};
+			};
+
+			port@4 {
+				reg = <4>;
+				seninf_out0_ep: endpoint {
+					remote-endpoint = <&camsv1_ep>;
+				};
+			};
+		};
+	};
+
+	/* the first CAMSV (stock calls it camsv1, its clock gate is CAMSV0); three windows in its page */
+	camsv1: camsv@1a050510 {
+		compatible = "mediatek,mt8183-camsv";
+		reg = <0 0x1a050510 0 0x40>,	/* top */
+		      <0 0x1a050020 0 0x28>,	/* IMGO */
+		      <0 0x1a050220 0 0x90>;	/* TG */
+		interrupts = <GIC_SPI 258 IRQ_TYPE_LEVEL_LOW>;
+		clocks = <&camsys CLK_CAM_CAM>, <&camsys CLK_CAM_CAMTG>, <&camsys CLK_CAM_CAMSV0>;
+		clock-names = "cam", "camtg", "camsv";
+		/* the CAMSV write port is one of these (one shared M4U domain) */
+		iommus = <&iommu M4U_PORT_CAM_SOCO>, <&iommu M4U_PORT_CAM_SOC1>,
+			 <&iommu M4U_PORT_CAM_SOC2>, <&iommu M4U_PORT_CAM_IMGO>;
+		power-domains = <&spm MT8183_POWER_DOMAIN_CAM>;
+
+		ports {
+			#address-cells = <1>;
+			#size-cells = <0>;
+
+			port@0 {
+				reg = <0>;
+				camsv1_ep: endpoint {
+					remote-endpoint = <&seninf_out0_ep>;
+				};
+			};
 		};
 	};
 };

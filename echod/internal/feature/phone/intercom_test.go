@@ -7,6 +7,7 @@ import (
 	"net/http/httptest"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -242,4 +243,55 @@ func TestIntercomDropInOnlyForAKnownDevice(t *testing.T) {
 	}
 	p.Hangup()
 	waitFor(t, "idle", func() bool { return p.State().Phase == Idle })
+}
+
+// A device without microphones (a Skylight) is not offered as a callee and cannot be called, by name
+// or from Home Assistant; one on an older release, which says nothing either way, still can.
+func TestIntercomLeavesOutADeviceThatCannotHear(t *testing.T) {
+	p, _ := house(t)
+	was := peersNow
+	peersNow = func() []announce.Peer {
+		return []announce.Peer{
+			{Name: "Kitchen", Address: "192.0.2.1"},
+			{Name: "Office Skylight", Address: "192.0.2.2", NoMicrophone: true},
+		}
+	}
+	t.Cleanup(func() { peersNow = was })
+
+	var names []string
+	for _, c := range p.Callees() {
+		if c.Device {
+			names = append(names, c.Name)
+		}
+	}
+	if len(names) != 1 || names[0] != "Kitchen" {
+		t.Errorf("callees %q, want only the Kitchen", names)
+	}
+	if _, ok := findPeer("office skylight"); ok {
+		t.Error("found the Skylight to call")
+	}
+	if err := p.CallDevice("Office Skylight"); err == nil || !strings.Contains(err.Error(), "no device called") {
+		t.Errorf("calling the Skylight: %v", err)
+	}
+	if knownDevice("Office Skylight", "192.0.2.2") {
+		t.Error("a Skylight is a device that could call")
+	}
+	if !knownDevice("Kitchen", "192.0.2.1") {
+		t.Error("the Kitchen is not known")
+	}
+}
+
+// On the Skylight itself, a call says why it cannot be placed, not that the house word is missing.
+func TestIntercomFromADeviceWithoutMicrophones(t *testing.T) {
+	p, _ := house(t)
+	was := hasMicrophone
+	hasMicrophone = func() bool { return false }
+	t.Cleanup(func() { hasMicrophone = was })
+	err := p.CallDevice("Kitchen")
+	if err == nil || !strings.Contains(err.Error(), "cannot place calls") {
+		t.Errorf("calling from a Skylight: %v", err)
+	}
+	if p.Callees() != nil {
+		t.Errorf("a Skylight offered callees: %v", p.Callees())
+	}
 }

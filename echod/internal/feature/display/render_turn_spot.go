@@ -4,7 +4,7 @@ package display
 
 import "image"
 
-// The Spot's turn screen in the Wave or Bars style (turn_draw.go): the picture across the upper
+// The Spot's turn screen in the Wave, Bars, VU, Orb, HAL 9000 or Face style (turn_draw.go, turn_visual.go): the picture across the upper
 // middle of the face, clear of the rim, which still says listening, thinking or muted around it, and
 // the words beneath, narrowing with the circle.
 
@@ -23,12 +23,21 @@ const (
 // turnFace draws a turn with its picture.
 func (r *roundRenderer) turnFace(s roundScene) {
 	v := s.eq
-	if v.wave {
+	switch {
+	case v.wave:
 		if r.wb == nil {
 			r.wb = &waveBuf{}
 		}
 		drawWave(r.dst, r.wb, turnWaveBand, turnWavePad, v, colBackground, s.now, 2, 0.22)
-	} else {
+	case v.style == "vu":
+		drawVU(r.dst, turnBarsBand, v, colBackground)
+	case v.style == "orb":
+		drawOrb(r.dst, turnWaveBand, v, v.phase, s.now)
+	case v.style == "hal":
+		drawHAL(r.dst, turnWaveBand, v, v.phase, s.now)
+	case v.style == "face":
+		drawFace(r.dst, turnWaveBand, v, s.now, colBackground)
+	default:
 		drawBars(r.dst, turnBarsBand, v, colBackground, 1, 3)
 	}
 

@@ -9,6 +9,7 @@ package dns
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"net"
@@ -56,17 +57,174 @@ func dial(ctx context.Context, network, _ string) (net.Conn, error) {
 	if len(servers) == 0 {
 		return nil, fmt.Errorf("dns: the device reports no nameservers")
 	}
+	addrs := make([]string, len(servers))
+	for i, s := range servers {
+		addrs[i] = net.JoinHostPort(s, "53")
+	}
+	return dialAny(ctx, network, addrs, perServer)
+}
+
+// perServer is how long a nameserver that is not the last is waited on before the query goes to the
+// next. A home router answers in milliseconds; this only has to be well short of the whole lookup's
+// timeout so the next nameserver still gets most of it.
+const perServer = 2 * time.Second
+
+// dialAny connects to the first of addrs that will have it. Over UDP that is always the first, since
+// a UDP dial sends nothing and cannot fail, so the connection it returns moves the query on to the next
+// nameserver itself when one does not answer within wait (failover). Go's resolver dials once per
+// attempt, so every lookup starts again at the first.
+func dialAny(ctx context.Context, network string, addrs []string, wait time.Duration) (net.Conn, error) {
+	if network == "udp" || network == "udp4" || network == "udp6" {
+		f := &failover{ctx: ctx, network: network, addrs: addrs, wait: wait}
+		if err := f.next(); err != nil {
+			return nil, err
+		}
+		return f, nil
+	}
 
 	var err error
-	for _, server := range servers {
+	for i, addr := range addrs {
 		d := net.Dialer{Timeout: timeout}
+		if i < len(addrs)-1 {
+			d.Timeout = wait
+		}
 
 		var conn net.Conn
-		if conn, err = d.DialContext(ctx, network, net.JoinHostPort(server, "53")); err == nil {
+		if conn, err = d.DialContext(ctx, network, addr); err == nil {
 			return conn, nil
 		}
 	}
 	return nil, err
+}
+
+// failover is a UDP connection to the nameservers in turn. Go's resolver writes one query and reads
+// until the answer to it arrives; a read that gets nothing from the current nameserver within wait, or
+// an error from it (port unreachable), sends the same query to the next one and reads from that. The
+// last nameserver gets whatever is left of the resolver's deadline. It is a PacketConn so the resolver
+// speaks plain UDP over it rather than the stream framing it uses for TCP.
+type failover struct {
+	ctx     context.Context
+	network string
+	addrs   []string
+	wait    time.Duration
+
+	at       int // index into addrs of conn
+	conn     net.Conn
+	query    []byte
+	deadline time.Time
+}
+
+// next connects to the next nameserver, sending it the query if one was already written.
+func (f *failover) next() error {
+	if f.conn != nil {
+		f.conn.Close()
+		f.conn = nil
+		f.at++
+	}
+	err := errNoAnswer
+	for ; f.at < len(f.addrs); f.at++ {
+		var d net.Dialer
+		var conn net.Conn
+		if conn, err = d.DialContext(f.ctx, f.network, f.addrs[f.at]); err != nil {
+			continue
+		}
+		conn.SetDeadline(f.deadline)
+		if f.query != nil {
+			if _, err = conn.Write(f.query); err != nil {
+				conn.Close()
+				continue
+			}
+		}
+		f.conn = conn
+		return nil
+	}
+	return err
+}
+
+var errNoAnswer = errors.New("dns: no nameserver answered")
+
+func (f *failover) last() bool { return f.at >= len(f.addrs)-1 }
+
+func (f *failover) Write(b []byte) (int, error) {
+	if f.conn == nil {
+		return 0, errNoAnswer
+	}
+	f.query = slices.Clone(b)
+	return f.conn.Write(b)
+}
+
+func (f *failover) Read(b []byte) (int, error) {
+	for {
+		if f.conn == nil {
+			return 0, errNoAnswer
+		}
+		d := f.deadline
+		if !f.last() {
+			if w := time.Now().Add(f.wait); d.IsZero() || w.Before(d) {
+				d = w
+			}
+		}
+		f.conn.SetReadDeadline(d)
+		n, err := f.conn.Read(b)
+		if err == nil || f.last() || f.query == nil {
+			return n, err
+		}
+		if !f.deadline.IsZero() && !time.Now().Before(f.deadline) {
+			return n, err
+		}
+		if err := f.next(); err != nil {
+			return 0, err
+		}
+	}
+}
+
+func (f *failover) ReadFrom(b []byte) (int, net.Addr, error) {
+	n, err := f.Read(b)
+	return n, f.RemoteAddr(), err
+}
+
+func (f *failover) WriteTo(b []byte, _ net.Addr) (int, error) { return f.Write(b) }
+
+func (f *failover) Close() error {
+	if f.conn == nil {
+		return nil
+	}
+	return f.conn.Close()
+}
+
+func (f *failover) LocalAddr() net.Addr {
+	if f.conn == nil {
+		return nil
+	}
+	return f.conn.LocalAddr()
+}
+
+func (f *failover) RemoteAddr() net.Addr {
+	if f.conn == nil {
+		return nil
+	}
+	return f.conn.RemoteAddr()
+}
+
+// The deadlines are the resolver's, for the whole exchange; Read narrows the read one per nameserver.
+func (f *failover) SetDeadline(t time.Time) error {
+	f.deadline = t
+	if f.conn == nil {
+		return nil
+	}
+	return f.conn.SetDeadline(t)
+}
+
+func (f *failover) SetReadDeadline(t time.Time) error {
+	f.deadline = t
+	return nil
+}
+
+func (f *failover) SetWriteDeadline(t time.Time) error {
+	if f.conn == nil {
+		return nil
+	}
+	return f.conn.SetWriteDeadline(t)
 }
 
 var (

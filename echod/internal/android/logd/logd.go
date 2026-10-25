@@ -139,6 +139,9 @@ func (h *Handler) Handle(_ context.Context, r slog.Record) error {
 	line := b.String()
 
 	out.publish(Line{Level: r.Level, Text: line})
+	if keepRecent {
+		recent.add(Letter(r.Level) + " " + line)
+	}
 
 	h.mu.Lock()
 	defer h.mu.Unlock()

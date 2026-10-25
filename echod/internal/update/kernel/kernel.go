@@ -1,4 +1,5 @@
-// Package kernel updates the 2nd gen Show 8's kernel with the root filesystem.
+// Package kernel updates the kernel of a unit that runs TECHO5's own mainline kernel (the 2nd gen
+// Show 8, the Skylight Calendar 15) with the root filesystem.
 //
 // athena boots TECHO5's mainline kernel from its boot partition, which an update of the system slots
 // never touched: a kernel fix reached a unit only through the installer. So the athena rootfs carries
@@ -15,6 +16,18 @@
 // the only way back from one is the way the unit was installed (mtkclient), so kernels are tested on
 // units before they are released.
 //
+// The Skylight's kernel (Board Skylight) is the same story in another partition: the stock U-Boot
+// starts the recovery partition (misc says boot-recovery), and that is where TECHO5's kernel lives.
+// Nothing of the unit's own is in it, so the slot's image is written as it is, and only over an image
+// that is TECHO5's Skylight kernel already: never over Android's recovery, never as the installer
+// image. A kernel on trial that reaches the store's /init but cannot hand over to a slot is put back
+// by that /init (tools/linux/skylight/init). Recovery is the only partition the stock U-Boot starts
+// TECHO5 from, and the trial kernel is written over the previous one there, so two cases have no way
+// back from the unit itself: a power cut during writeBoot (recovery holds part of each image), and a
+// kernel that panics before /init (panic=10 restarts it for good). Both need Loader mode
+// (docs/install-skylight.md). A spare partition with a one-shot boot from misc would close that
+// window, but it rests on U-Boot behavior no unit has tried.
+//
 // Except when every try failed for want of a network alone: the daemon settled and the hardware was
 // there, but there was never a default route (NoRoute, from boot.sh). That may be the kernel's Wi-Fi,
 // or only the router being down, which says nothing about the kernel. Its tries are used up and the
@@ -27,7 +40,7 @@
 //	            | good <written sha256> <written length> <shipped sha256>
 //	            | failed <shipped sha256>   (the previous kernel could not be put back: nothing more
 //	                                         is done until someone looks; Restore, or the installer)
-//	prev.img    the boot partition's image before the last write (its own length)
+//	prev.img    the kernel partition's image before the last write (its own length)
 //	prev.sha256 its sha256
 //	bad         shipped kernels that failed their trial, one sha256 a line
 //	noroute     <shipped sha256> <n> <tries>: boots of the kernel on trial that had everything but a
@@ -59,19 +72,49 @@ const RetryAfter = 24 * time.Hour
 // now is the clock; tests set their own.
 var now = time.Now
 
-// Paths are where everything is. Default is the unit's; tests use their own.
+// Board is whose kernel it is: which partition holds it, and how the slot's image becomes the one
+// written there.
+type Board int
+
+const (
+	// Athena is the 2nd gen Show 8: the boot partition, the slot's image filled with the unit's own amp
+	// tuning from the image there.
+	Athena Board = iota
+	// Skylight is the Skylight Calendar 15: the recovery partition, the slot's image as it is.
+	Skylight
+)
+
+// Partition is the name of the eMMC partition the board's kernel is in.
+func (b Board) Partition() string {
+	if b == Skylight {
+		return "recovery"
+	}
+	return "boot"
+}
+
+// Paths are where everything is. Default and SkylightDefault are the units'; tests use their own.
 type Paths struct {
-	Shipped    string // the slot's boot image, slot empty
+	Board      Board
+	Shipped    string // the slot's boot image, as released (athena's: its tuning slot empty)
 	ShippedSum string // its sha256, hex (sha256sum's format is taken too)
-	Boot       string // the boot partition
+	Boot       string // the partition the kernel is in (Board.Partition)
 	Dir        string // the state directory
 }
 
-// Default are the unit's paths. Boot is found by its partition name at run time (BootDevice).
+// Default are athena's paths. Boot is found by its partition name at run time (PartitionDevice).
 var Default = Paths{
+	Board:      Athena,
 	Shipped:    "/usr/share/techo5/kernel/boot-athena.img",
 	ShippedSum: "/usr/share/techo5/kernel/boot-athena.img.sha256",
 	Dir:        "/data/techo5-linux/kernel",
+}
+
+// SkylightDefault are the Skylight's, with the same state directory: OnTrial reads either.
+var SkylightDefault = Paths{
+	Board:      Skylight,
+	Shipped:    "/usr/share/techo5/kernel/boot-skylight.img",
+	ShippedSum: "/usr/share/techo5/kernel/boot-skylight.img.sha256",
+	Dir:        Default.Dir,
 }
 
 // Log takes the lines worth keeping in the boot log.
@@ -220,7 +263,7 @@ func (p Paths) markBad(shipped string) error {
 	return writeFile(p.file("bad"), append(b, []byte(shipped+"\n")...))
 }
 
-// readBoot is the whole boot partition.
+// readBoot is the whole partition the kernel is in.
 func (p Paths) readBoot() ([]byte, error) {
 	f, err := os.Open(p.Boot)
 	if err != nil {
@@ -231,7 +274,9 @@ func (p Paths) readBoot() ([]byte, error) {
 	return io.ReadAll(f)
 }
 
-// writeBoot writes img at the start of the boot partition, syncs, and reads it back past the cache.
+// writeBoot writes img at the start of the kernel's partition, syncs, and reads it back past the cache.
+// On the Skylight this overwrites the only kernel the unit boots: a power cut before the sync leaves
+// it needing Loader mode (see the package comment).
 func (p Paths) writeBoot(img []byte) error {
 	f, err := os.OpenFile(p.Boot, os.O_RDWR, 0)
 	if err != nil {
@@ -241,7 +286,7 @@ func (p Paths) writeBoot(img []byte) error {
 	if size, err := f.Seek(0, io.SeekEnd); err != nil {
 		return err
 	} else if int64(len(img)) > size {
-		return fmt.Errorf("%d bytes do not fit the %d-byte boot partition", len(img), size)
+		return fmt.Errorf("%d bytes do not fit the %d-byte %s partition", len(img), size, p.Board.Partition())
 	}
 	if _, err := f.WriteAt(img, 0); err != nil {
 		return err
@@ -255,7 +300,7 @@ func (p Paths) writeBoot(img []byte) error {
 		return err
 	}
 	if !bytes.Equal(back, img) {
-		return errors.New("the boot partition does not read back what was written")
+		return fmt.Errorf("the %s partition does not read back what was written", p.Board.Partition())
 	}
 	return nil
 }
@@ -279,7 +324,7 @@ func (p Paths) shipped() (img []byte, sum string, ok bool, err error) {
 	if len(want) == 0 || !strings.EqualFold(want[0], sum) {
 		return nil, "", false, fmt.Errorf("the slot's kernel is %s, its sum says %s", sum, strings.TrimSpace(string(s)))
 	}
-	if _, err := checkShipped(img); err != nil {
+	if _, err := p.Board.checkShipped(img); err != nil {
 		return nil, "", false, fmt.Errorf("the slot's kernel: %w", err)
 	}
 	return img, sum, true, nil
@@ -390,7 +435,7 @@ func Boot(p Paths) (reboot bool, err error) {
 	if len(boot) < s.length || sha(boot[:s.length]) != s.written {
 		// The state went down before the write, and the write never happened (or the image was
 		// replaced since by other means): there is nothing on trial.
-		Log("the boot partition does not hold the kernel on trial; the trial is dropped")
+		Log("the %s partition does not hold the kernel on trial; the trial is dropped", p.Board.Partition())
 		return false, p.writeState(state{})
 	}
 	if s.tries > 0 {
@@ -410,7 +455,7 @@ func Boot(p Paths) (reboot bool, err error) {
 		}
 	}
 	if err := p.restore(); err != nil {
-		Log("THE PREVIOUS KERNEL COULD NOT BE PUT BACK: %v; leaving the boot partition as it is", err)
+		Log("THE PREVIOUS KERNEL COULD NOT BE PUT BACK: %v; leaving the %s partition as it is", err, p.Board.Partition())
 		return false, errors.Join(err, p.writeState(state{kind: "failed", shipped: s.shipped}))
 	}
 	if netOnly {
@@ -447,10 +492,11 @@ func Settled(p Paths) error {
 	return nil
 }
 
-// Apply writes the slot's kernel to the boot partition when it holds another one. reboot says it was
+// Apply writes the slot's kernel to its partition when that holds another one. reboot says it was
 // written, and the unit should boot into it now. Nothing is written while a kernel is on trial or
-// after a failed restore, for a kernel that failed, or when the tuning in the boot partition is not
-// one the installer knows.
+// after a failed restore, for a kernel that failed, or when the partition does not hold what this
+// board's installer put there: on athena, a tuning the installer knows; on the Skylight, TECHO5's own
+// Skylight kernel.
 func Apply(p Paths) (reboot bool, err error) {
 	s, err := p.readState()
 	if err != nil {
@@ -494,34 +540,20 @@ func Apply(p Paths) (reboot bool, err error) {
 	if s.kind == "good" && s.shipped == sum && s.length > 0 && len(part) >= s.length && sha(part[:s.length]) == s.written {
 		return false, nil
 	}
+	partName := p.Board.Partition()
 	cur, err := parseImage(part)
 	if err != nil {
-		return false, fmt.Errorf("the boot partition: %w", err)
+		return false, fmt.Errorf("the %s partition: %w", partName, err)
 	}
 	if !cur.idOK() {
-		return false, errors.New("the boot partition's header id does not match its contents; not touching it")
+		return false, fmt.Errorf("the %s partition's header id does not match its contents; not touching it", partName)
 	}
-	table, err := cur.table()
-	if err != nil {
-		return false, fmt.Errorf("the boot partition's amp tuning: %w", err)
-	}
-	if table == nil {
-		return false, errors.New("the boot partition's amp tuning slot is empty; run the installer")
-	}
-	name, known := knownTables[sha(table)]
-	if !known {
-		return false, fmt.Errorf("the boot partition's amp tuning (%s) is not one the installer knows", sha(table))
-	}
-	if same, err := cur.withTable(nil); err == nil && bytes.Equal(same, img) {
-		return false, nil // up to date
-	}
-	ship, _ := parseImage(img)
-	filled, err := ship.withTable(table)
-	if err != nil {
-		return false, err
+	filled, what, err := p.Board.toWrite(cur, img)
+	if err != nil || filled == nil {
+		return false, err // nil and no error: up to date
 	}
 	if f, err := parseImage(filled); err != nil || !f.idOK() {
-		return false, errors.New("the filled kernel does not check out")
+		return false, errors.New("the kernel to write does not check out")
 	}
 	prev := part[:cur.extent]
 	if err := writeFile(p.file("prev.img"), prev); err != nil {
@@ -537,9 +569,9 @@ func Apply(p Paths) (reboot bool, err error) {
 	// A new trial counts its own boots without a network.
 	p.removeFile("noroute")
 	p.removeFile("retry")
-	// Everything about the trial is on the disk before the boot partition changes.
+	// Everything about the trial is on the disk before the kernel's partition changes.
 	syncAll()
-	Log("writing the slot's kernel %s with this unit's amp tuning (%s)", sum, name)
+	Log("writing the slot's kernel %s into %s%s", sum, partName, what)
 	if err := p.writeBoot(filled); err != nil {
 		Log("the write failed (%v); putting the previous kernel back", err)
 		if rerr := p.restore(); rerr != nil {
@@ -589,4 +621,41 @@ func (p Paths) restore() error {
 		return errors.New("the kept previous kernel is not a whole boot image; not writing it")
 	}
 	return p.writeBoot(prev)
+}
+
+// toWrite is what goes into the board's partition for the slot's kernel img (checked by
+// checkShipped), given the image there now (parsed, its id right): nil when that is up to date, and
+// a few words for the log on what was done to it.
+func (b Board) toWrite(cur *image, img []byte) (out []byte, what string, err error) {
+	if b == Skylight {
+		// Only over TECHO5's own Skylight kernel: anything else there (Android's recovery, the
+		// installer image) means the unit is not as an install left it.
+		if !skylightBoot(cur) {
+			return nil, "", errors.New("the recovery partition does not hold TECHO5's Skylight kernel; not touching it")
+		}
+		if bytes.Equal(cur.data[:cur.extent], img) {
+			return nil, "", nil
+		}
+		return img, "", nil
+	}
+	table, err := cur.table()
+	if err != nil {
+		return nil, "", fmt.Errorf("the boot partition's amp tuning: %w", err)
+	}
+	if table == nil {
+		return nil, "", errors.New("the boot partition's amp tuning slot is empty; run the installer")
+	}
+	name, known := knownTables[sha(table)]
+	if !known {
+		return nil, "", fmt.Errorf("the boot partition's amp tuning (%s) is not one the installer knows", sha(table))
+	}
+	if same, err := cur.withTable(nil); err == nil && bytes.Equal(same, img) {
+		return nil, "", nil
+	}
+	ship, _ := parseImage(img)
+	filled, err := ship.withTable(table)
+	if err != nil {
+		return nil, "", err
+	}
+	return filled, fmt.Sprintf(" with this unit's amp tuning (%s)", name), nil
 }

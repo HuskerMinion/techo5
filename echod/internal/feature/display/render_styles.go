@@ -56,23 +56,28 @@ func capHeight(face font.Face) int {
 
 // styledClock is the home screen in a clock style other than the classic one.
 func (r *renderer) styledClock(s scene, style string) {
-	timers := false
-	for _, t := range s.timers {
-		timers = timers || t.Active
-	}
-	glance := len(s.glance) > 0 && !timers && !s.strip
+	timers := timersAtFoot(s)
+	// The next-up card, in place of the glance strip, unless the style lists the events itself or the clock
+	// is in a bottom corner where the card would be.
+	_, foot := clockAlign()
+	card := s.nextUp != nil && len(s.glance) == 0 && !timers && !s.strip && !(foot && cornerStyle(style))
+	glance := len(s.glance) > 0 && !timers && !s.strip && !card
 	bottom := r.h - r.s(50) // clear of the footer's words
 	switch {
 	case s.strip:
 		bottom = r.stripRect().Min.Y - r.s(14)
+	case card:
+		box, _ := r.nextUpRect(s)
+		bottom = box.Min.Y - r.s(14)
 	case glance:
 		bottom = r.h - r.s(50) - r.s(46) - r.s(16)
 	}
 	if style == styleGlow {
 		r.glowGround(s)
+		r.skinBackdrop(s)
 	}
 	if timers {
-		r.timersLine(s, bottom-r.s(16))
+		r.timersFoot(s, bottom-r.s(16))
 		bottom -= r.s(64)
 	}
 	box := image.Rect(r.margin, r.s(84), r.w-r.margin, bottom)
@@ -116,9 +121,18 @@ func (r *renderer) styledClock(s scene, style string) {
 		r.agendaStyle(s, box)
 	case styleGlow:
 		r.glowStyle(s, box)
+	case styleNixie:
+		r.nixieStyle(s, box)
+	case styleStack:
+		r.stackStyle(s, box)
+	case styleOverlap:
+		r.overlapStyle(s, box)
 	}
 	if glance {
 		r.glanceStrip(s.glance, s.callButton)
+	}
+	if card {
+		r.drawNextUp(s)
 	}
 	if corner {
 		r.weatherCorner(s)
@@ -206,6 +220,7 @@ func (r *renderer) analogStyle(s scene, box image.Rectangle) {
 	at := func(n int) int { return int(float64(n) * k) }
 	cx := float64(box.Min.X) + rad + float64(r.s(8))
 	cy := float64(box.Min.Y+box.Dy()/2) - float64(r.s(10))
+	r.dialWedge(s, cx, cy, rad)
 	r.dial(s.now, cx, cy, rad)
 
 	x := int(cx+rad) + r.s(at(64))
@@ -221,9 +236,12 @@ func (r *renderer) analogStyle(s scene, box image.Rectangle) {
 		wy := mid + r.s(82)
 		ix := x
 		if s.weather.Condition != "" {
-			r.weatherIcon(s.weather.Condition, x+weatherMark/2, wy-r.s(12), weatherMark)
-			ix += weatherMark + r.s(14)
+			mark := r.s(weatherMark)
+			r.weatherIcon(s.weather.Condition, x+mark/2, wy-r.s(12), mark)
+			ix += mark + r.s(14)
 		}
+		// Clipped like the date: a long condition (French, Russian) ran off the screen.
+		line = r.clipTo(r.small, line, box.Max.X-ix)
 		r.text(r.small, line, ix, wy, dim)
 		r.setWeatherAt(image.Rect(x, wy-r.s(40), ix+r.width(r.small, line), wy+r.s(14)))
 	}
@@ -535,8 +553,9 @@ func (r *renderer) dashboardStyle(s scene, box image.Rectangle) {
 			y := min(base+r.s(100), box.Max.Y)
 			ix := box.Min.X
 			if s.weather.Condition != "" {
-				r.weatherIcon(s.weather.Condition, ix+weatherMark/2, y-r.s(12), weatherMark)
-				ix += weatherMark + r.s(14)
+				mark := r.s(weatherMark)
+				r.weatherIcon(s.weather.Condition, ix+mark/2, y-r.s(12), mark)
+				ix += mark + r.s(14)
 			}
 			// Kept left of the divider, as the date is: a long condition would otherwise run into the
 			// events, which go further down without the row.
@@ -633,8 +652,8 @@ func cornerStyle(style string) bool {
 // cornerPct is the share of the width a style gets in a corner, the most of it the date may take.
 const cornerPct = 44
 
-// cornerBox is the box a style is drawn in at the foot, in the corner align says: the left (clear of
-// the Call button) or the right, its foot where the whole screen's box ends. The dial and the binary
+// cornerBox is the box a style is drawn in at the foot, where align says: the left corner (clear of
+// the Call button), the middle or the right corner, its foot where the whole screen's box ends. The dial and the binary
 // lights are wide for their height, so theirs is narrower, to keep them clear of the middle.
 func (r *renderer) cornerBox(s scene, style string, align, bottom int) image.Rectangle {
 	pct := cornerPct
@@ -651,6 +670,9 @@ func (r *renderer) cornerBox(s scene, style string, align, bottom int) image.Rec
 	}
 	w, h := r.w*pct/100, r.s(190)
 	x := r.w - r.margin - w
+	if align == 0 {
+		x = (r.w - w) / 2
+	}
 	if align < 0 {
 		x = r.margin
 		if s.callButton {

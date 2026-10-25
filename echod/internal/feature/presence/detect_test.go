@@ -61,6 +61,65 @@ func TestSomebodyWalkingIsSeen(t *testing.T) {
 	}
 }
 
+// far is the room with somebody small and faint at x: across the room, a few cells that change less
+// than somebody close does.
+func far(r *rand.Rand, x int) []uint8 {
+	g := room(r, -1, 0)
+	for y := 10; y < 14; y++ {
+		for c := x; c < x+3 && c < gridW; c++ {
+			g[y*gridW+c] += 18
+		}
+	}
+	return g
+}
+
+// walkFar reports whether somebody small and faint walking across is seen at a sensitivity.
+func walkFar(sensitivity int) bool {
+	r := rand.New(rand.NewPCG(5, 6))
+	d := newDetector(sensitivity)
+	for range 40 {
+		d.step(room(r, -1, 0))
+	}
+	for i := range 6 {
+		if d.step(far(r, 2+i*3)) {
+			return true
+		}
+	}
+	return false
+}
+
+// #238: maxing the sensitivity has to reach across the room, which a smaller patch alone did not.
+// The default stays as it was.
+func TestSomebodyFarIsSeenAtTheHighestSensitivity(t *testing.T) {
+	if !walkFar(100) {
+		t.Error("somebody far away not seen at sensitivity 100")
+	}
+	if walkFar(50) {
+		t.Error("somebody far away seen at sensitivity 50, which should be unchanged")
+	}
+}
+
+func TestAStillRoomIsEmptyAtTheHighestSensitivity(t *testing.T) {
+	r := rand.New(rand.NewPCG(7, 8))
+	d := newDetector(100)
+	for i := range 200 {
+		if d.step(room(r, -1, 0)) {
+			t.Fatalf("frame %d: noise taken for somebody at sensitivity 100", i)
+		}
+	}
+}
+
+func TestTheDefaultBarIsUnchanged(t *testing.T) {
+	for _, s := range []int{1, 25, 50} {
+		if got := cellFor(s); got != cellStep {
+			t.Errorf("cellFor(%d) = %v, want %v", s, got, float64(cellStep))
+		}
+	}
+	if got := cellFor(100); got != cellNear {
+		t.Errorf("cellFor(100) = %v, want %v", got, float64(cellNear))
+	}
+}
+
 // A light switched on changes every cell at once: that is not somebody, and the next frame is compared
 // with the room as newly lit.
 func TestALightIsNotSomebody(t *testing.T) {

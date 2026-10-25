@@ -32,18 +32,29 @@ talk to the device is not enough for this.
      token: "paste the token here"
    ```
 
-Use Home Assistant's local IP address, as above with your own. The device can't look up `.local`
-names like `homeassistant.local`, and an external or Nabu Casa address does not work either.
+Use Home Assistant's local IP address, as above with your own. A Show, a Spot or the Skylight
+Calendar can also take a `.local` name like `homeassistant.local`: it looks the name up itself. The
+Dot and the Echo 2nd gen can't, and on a panel it works only where Android looks `.local` names up.
+Any address the device can reach on your own network works, including an `https://` name that your
+local DNS points at Home Assistant or a reverse proxy on the LAN, as long as its certificate is valid
+for that name (for a self-signed one, see "Home Assistant on HTTPS with its own certificate" in
+[getting-started.md](getting-started.md)). An address that only works from outside your home, such
+as a Nabu Casa URL, does not.
 
-If a photo folder says **Couldn't open this folder**, or a camera shows `hass: no access configured`,
-this step is missing or the address is wrong.
+If a photo folder says **Couldn't open this folder**, the line under it says why: *Home Assistant
+isn't set up here* is this step missing, *Address not found* a name the device can't look up (give the
+IP address), *Can't reach Home Assistant* a wrong address or port, and *Home Assistant refused the
+token* a token that was deleted or mistyped. A camera that shows `hass: no access configured` is this
+step missing too. A panel needs this step like any other device.
 
 Also turn on **Allow the device to perform Home Assistant actions** on the device's ESPHome entry
 (Configure), as in [Getting started](getting-started.md#after-installing-every-device).
 
 ## 2. Photos
 
-The slideshow shows photos from Home Assistant's media library. Nothing is stored on the device.
+The slideshow shows photos from one of three places: Home Assistant's media library, an Immich
+server the device reads itself, or photos kept on the device. Home Assistant's media library is the
+usual one, and the steps below start with it.
 
 1. **Put the photos where Home Assistant's Media page can see them.** The simplest is a folder in
    Home Assistant's media folder:
@@ -70,6 +81,11 @@ The slideshow shows photos from Home Assistant's media library. Nothing is store
    when and where each photo was taken at its foot on the screensaver, as Immich knows it. All are off
    until set, and are also entities in Home Assistant (**Immich favorites only**, **Immich first day**,
    **Immich last day**, **Immich person**, **Slideshow date and place**).
+
+   **Photos on this device.** On the setup page, **Screen & Photos**, **Photos on this device**,
+   **Add photos** takes pictures from a phone or computer. They are made screen-sized there before
+   they are sent, and the device keeps up to 1,000. The slideshow shows them when it has no Home
+   Assistant photos to show. **Remove all photos** deletes them.
 2. **Check** that the photos show in Home Assistant under **Media → My media**. If Home Assistant
    can see them, the device can too.
 3. **On the device**, swipe down for Settings, then **Display**:
@@ -84,7 +100,9 @@ The slideshow shows photos from Home Assistant's media library. Nothing is store
    - With an Immich source, **Date and place** and **Favorites only** are here too.
 
 The same settings are entities in Home Assistant, and the folder can be set with the
-[`home_slideshow` action](actions.md#set-the-slideshows-photo-source).
+[`home_slideshow` action](actions.md#set-the-slideshows-photo-source). Given the folder that is
+already showing, the action reads it again, for photos added since; the photo up stays until the
+next one from the new list is ready. Otherwise the device reads the list again every hour.
 
 ## 3. Weather
 
@@ -97,8 +115,17 @@ National Weather Service).
 ## 4. Cameras
 
 With access set up, the Cameras drawer (swipe in from the right edge) lists every camera Home
-Assistant has. To show only some, with friendlier names, use
-[`home_cameras`](actions.md#choose-which-cameras-the-device-shows).
+Assistant has. That is the default (All) for a device never set. To show only some, with friendlier
+names (These), or none of them (None), use the setup page (Connections → Home Assistant cameras) or
+[`home_cameras`](actions.md#choose-which-cameras-the-device-shows). A device that shares a Home
+Assistant with other homes should be set to None or a list, so it does not offer the other homes'
+cameras. An automation calling `home_show_camera` can still show any camera.
+
+The setup page's **Camera list** (Connections) sets the order of the drawer and the grid: the
+cameras by name, one a line, the first at the top. Cameras not in the box go after the others, and an
+empty box puts them back in the usual order. It also has **List this device's own camera**, on by
+default. Turned off, the device's own camera is not in the drawer or the grid, and "show" does not
+find it; an automation can still put it up.
 
 To show a camera when something happens, like the doorbell, call
 [`home_show_camera`](actions.md#show-a-camera-on-screen) from an automation:
@@ -110,18 +137,20 @@ data:
   seconds: 60
 ```
 
-With **Live camera video** on (a switch of the device's in Home Assistant, under its configuration;
-off on a new device), a camera Home Assistant can stream (one that plays live in its own dashboard,
-from an RTSP camera or an integration with a stream) is shown as live video, decoded on the device from
-Home Assistant's HLS stream. Snapshots keep coming until the first moving frame, which takes a few
-seconds, more when Home Assistant still has to start the camera's stream. The picture is a few seconds
-behind the camera: HLS comes in parts a keyframe interval long. Other cameras, and any whose stream
-fails or that the device cannot decode (H.265, or a stream over 1080p), are shown from snapshots, a few
-a second, as with the switch off. A streamed camera's sound, when the view has one, comes from the same
-stream, decoded on the device: as far behind the camera as the picture, where the stream converted by
-Home Assistant and sent back was some twenty seconds. A stream with no sound in it falls back to Home
-Assistant's way. A camera's sub stream (often called *fluent* or *sub*) is the better choice: it is
-sharper than the panel needs anyway, starts sooner and costs less.
+With **Live camera video** on (a switch of the device's in Home Assistant, under its configuration; off
+on a new device), a camera Home Assistant can stream (one that plays live in its own dashboard, from an
+RTSP camera or an integration with a stream) is shown as live video, decoded on the device from Home
+Assistant's HLS stream. Snapshots keep coming until the first moving frame, which takes a few seconds,
+more when Home Assistant still has to start the camera's stream. The picture is a few seconds behind the
+camera: HLS comes in parts a keyframe interval long. Other cameras, and any whose stream fails or that
+the device cannot decode, are shown from snapshots, a few a second, as with the switch off. That's H.265
+on most devices, and any stream over 1080p. The Echo Show 8 2nd gen and the Skylight Calendar play H.265
+cameras live too (on TECHO5's own kernel), both up to 1080p at 30 frames a second, so pick a camera's
+sub stream when its main one is bigger. A streamed camera's sound, when the view has one,
+comes from the same stream, decoded on the device: as far behind the camera as the picture, where the
+stream converted by Home Assistant and sent back was some twenty seconds. A stream with no sound in it
+falls back to Home Assistant's way. A camera's sub stream (often called *fluent* or *sub*) is the better
+choice: it is sharper than the panel needs anyway, starts sooner and costs less.
 
 Where the image's decoder reads RTSP, a camera given an RTSP address for talking through it (below) is
 heard from that address instead: live, a word said at the device comes back out of it through a
@@ -168,6 +197,30 @@ a camera on the recorder that has no speaker shows Talk too, and says it has no 
 Cameras read straight from a Reolink recorder have no sound on the device, so for those Talk is
 one-way: you are heard at the door, but the visitor is not heard on the device.
 
+### Camera buttons
+
+On the Show and the Spot, a camera's view can have up to four buttons that each run a Home Assistant
+action: **Open gate** on the gate's camera, **Unlock** on the front door's. They sit along the foot of
+the view, above the strip with Talk (on the Spot, stacked above Talk). They open gates and doors, so
+every one asks first: the first tap lights it up with "Tap again: Open gate", and a second tap within
+4 seconds runs it. The button says **Sent** for a moment once it has gone to Home Assistant, or why it
+could not. A tap on a button never closes the view.
+
+Set them on the setup page under **Connections** → **Camera buttons**, one camera a line: the camera's
+entity as the camera list has it (the section lists them), a colon, then the buttons split by commas,
+each `Label=domain.service`, or `Label=domain.service:domain.object` for an action on an entity:
+
+```text
+camera.front_door: Unlock=lock.unlock:lock.front_door, Porch light=light.toggle:light.porch
+go2rtc:gate: Open gate=script.open_gate
+```
+
+A label is 24 characters at most. An empty box takes every button off. An automation can set them with
+[`home_camera_buttons`](actions.md#buttons-on-a-cameras-view). Home Assistant runs the actions as the
+device's own, so they need **Allow the device to perform Home Assistant actions** turned on for the device
+in its ESPHome integration's options; without it Home Assistant refuses them, and says so only in its own
+log. The buttons stay on the device: a settings file neither carries them nor brings any in.
+
 ### Cameras from go2rtc
 
 A [go2rtc](https://github.com/AlexxIT/go2rtc) server, which many homes run beside Home Assistant (or
@@ -179,11 +232,16 @@ picture comes from go2rtc, and with **Live camera video** on, live video from go
 (8554), with no camera's own login. Home Assistant is not asked, so they work with it down. Their
 sound is not played yet.
 
+Each stream can have a name of its own on the setup page, like "Doorbell" for `front_door_sub`. That
+name is shown in the drawer and is what "show the doorbell" listens for. Nothing changes in go2rtc,
+so other things that use the stream's name keep working. Left empty, the stream is called by its
+name in go2rtc. Reading go2rtc's list again keeps the names.
+
 A go2rtc with a login takes it in the address, as `http://user:password@host:1984`; the setup page
 does not show the password again, and saving the address as shown keeps it. Saving the address again
 reads go2rtc's list again; clearing it takes the cameras away. Live video uses the same login on
 go2rtc's RTSP port, and only with Digest: a go2rtc whose RTSP login differs from its API's, or whose
-RTSP offers only Basic, shows snapshots instead (untested). The login goes to go2rtc's API over plain
+RTSP offers only Basic, shows snapshots instead. The login goes to go2rtc's API over plain
 HTTP, so give go2rtc a password of its own.
 
 ### A doorbell
@@ -214,8 +272,8 @@ automation that wants to know too.
 > Reolink serves ONVIF over plain HTTP. The password itself is never sent, only a one-time digest of
 > it, but anybody on the network can see the traffic, and could try to guess a weak password from
 > it. A strong password, on a login of its own with as few rights as the Hub allows, is the tidy
-> way. Whether a view-only user may follow the Hub's events has not been tried: if the Doorbell
-> section says the login was refused, use an administrator's.
+> way. A view-only user may not be allowed to follow the Hub's events: if the Doorbell section says
+> the login was refused, use an administrator's.
 
 ### Recording this device's camera
 
@@ -224,7 +282,11 @@ The camera of a Show or a Spot can be recorded like any other camera, by Frigate
 
 1. On the setup page, under **Privacy & Security** → **Camera streaming**, set a password (12
    characters or more) and, if you like, a user name (`camera` unless changed). Save. The password is
-   never shown again; leave the field empty to keep it.
+   never shown again; leave the field empty to keep it. Home Assistant can set the same login with the
+   device's `camera_credentials` action (`username`, `password`), by the same rules, once you turn on
+   **Camera login from Home Assistant**, a switch of the device's under its configuration (off by
+   default), and only while the device has its encryption key, so the password never crosses the
+   network in the clear.
 2. Turn on **Camera streaming**, a switch of the device's in Home Assistant, under its configuration.
 
 It never runs without a password. Turning it off, saving a new login and closing the lens cover each
@@ -261,13 +323,21 @@ cameras:
 
 A recorder that adds cameras by ONVIF can take it from `http://<device address>:8181/onvif/device_service`
 with the same login: one profile, its stream, and its snapshot while **Camera web access** is on. The
-snapshot is the camera page's `/camera.jpg`, which asks for no login and does not light the green dot:
-it is there for anybody on the network whenever Camera web access is on, ONVIF or not. The
-device is not found by ONVIF discovery: give the recorder its address. ONVIF here is a login digest over
-plain HTTP, as on most cameras, and the password itself is never sent.
-
-So far it has been tried off the device only, with
-ffmpeg and an ONVIF client library, not against a recorder on a device.
+snapshot is the camera page's `/camera.jpg`, which takes the same login and lights the green dot while
+it is read. The camera pages (`/camera.jpg` and `/camera.mjpeg`, there while Camera web access is on)
+ask for that login too, so set a camera password before you use them; a browser the setup page has let
+in needs none. **Since v1.2.24:** a Home Assistant Generic Camera, MJPEG camera or recorder that read
+`/camera.jpg` or `/camera.mjpeg` with no login gets "401" until you set a camera password and give it the
+user and password with **Digest** authentication (Basic is not taken). Changing the password ends the
+pages' open streams, and so does closing the lens cover. The device is not found by ONVIF discovery
+unless you turn on **Camera discovery (ONVIF)**, a switch of the device's in Home Assistant, under its
+configuration: then, while the stream is on, it answers WS-Discovery searches (3702/udp), so Home
+Assistant's ONVIF integration lists it among the discovered devices. The answer tells anyone on your
+network who asks the device's name, model and MAC address, which is why it is off by default; without
+it, give the recorder the device's address. ONVIF and the pages are a login digest over plain HTTP, as on most
+cameras: the password itself is never sent, but anyone who can watch your Wi-Fi traffic could replay a
+captured login to the same page for a few minutes, and could see the pictures anyway. `/screen.png`
+(Screen web access) has no login: if the screen is showing the camera, a screenshot shows it too.
 
 ## 5. Music
 
@@ -284,9 +354,9 @@ ffmpeg and an ONVIF client library, not against a recorder on a device.
   under the same section, picks a service to search first (YouTube Music, Spotify, a folder of files);
   the rest of the library is searched only when it has nothing by that name. Naming the service picks
   one for that request: "play Taylor Swift on YouTube Music". This is for a device whose voice
-  assistant answers directly; under Home Assistant, its own Music Assistant support decides. It needs
+  assistant [answers directly](#voice-without-home-assistant); under Home Assistant, its own Music Assistant support decides. It needs
   Music Assistant 2.10 or later.
-- **AirPlay and Spotify Connect (new).** On the Show and the Dot, two switches make the device a
+- **AirPlay and Spotify Connect.** On the Show and the Dot, two switches make the device a
   speaker other apps play to, under its own name: **AirPlay** from an iPhone, iPad or Mac, and
   **Spotify Connect** from the Spotify app (Spotify Premium). Both are off until turned on, under
   Settings → Sound, on the setup page (Sound & Voice), or in Home Assistant. What they play shows as
@@ -299,9 +369,9 @@ ffmpeg and an ONVIF client library, not against a recorder on a device.
   well. With Spotify Connect, and with an AirPlay app that gives the device no way back to it, a pause
   on the device stops the stream there; the phone keeps going until it is paused too. Anyone on the
   same network can play to the device while one is on, as with any AirPlay or Spotify speaker, and
-  Spotify Connect keeps the login a phone hands it until it is turned off. Both have been tried on a
-  Show, AirPlay with an iPhone. If something does not work, open an issue.
-- **DLNA (new).** On every device, the **DLNA** switch (Settings → Sound, the setup page's Play to
+  Spotify Connect keeps the login a phone hands it until it is turned off. If something does not
+  work, open an issue.
+- **DLNA.** On every device, the **DLNA** switch (Settings → Sound, the setup page's Play to
   this device box, or Home Assistant) makes the device a DLNA speaker, a "media renderer", under its
   own name. Music apps and servers on the network find it and play to it: BubbleUPnP on a phone,
   Jellyfin, Plex or Emby, a NAS's music app, foobar2000, Windows' Cast to device. It plays MP3, FLAC
@@ -312,7 +382,7 @@ ffmpeg and an ONVIF client library, not against a recorder on a device.
   playing, including the song's address (some servers put a login token in it, as with any DLNA
   speaker). With **Video** and **DLNA video** on as well (Show and Spot), it takes videos too
   ([Video](video.md)).
-- **A phone over Bluetooth (new).** On the Show, the Spot and the Dot, the **Bluetooth phone**
+- **A phone over Bluetooth.** On the Show, the Spot and the Dot, the **Bluetooth phone**
   switch, in Home Assistant, lets a phone play to the device as to any Bluetooth speaker. For two
   minutes the device can be found and paired with, with no scan for speakers, and a phone connects
   from its own Bluetooth settings, a new one or one paired before; on the Dot the ring pulses blue
@@ -327,29 +397,59 @@ ffmpeg and an ONVIF client library, not against a recorder on a device.
   the Dot is connected to a Bluetooth speaker. Tried on a Dot, a Show and a Spot.
   **Turn the Bluetooth proxy off** on a device a phone plays to: the proxy keeps scanning on the same
   radio, and the phone's sound stutters or drops while it does (#105).
-- **Bluetooth proxy connections (new).** On the Show and the Spot the **Bluetooth proxy** also lends
-  Home Assistant connections, up to three at a time, the way an ESP32 proxy does: an integration
-  that controls a BLE device (a humidifier, a lock, a light) can reach it through the device, not only
-  read what it advertises. Scanning pauses for the second or two a connection takes, which this
-  controller needs. Pairing (bonding) and clearing the cache from Home Assistant are not offered;
-  devices that authenticate in their own protocol work. Tried on a Spot with a Boneco H400 through
-  the Boneco integration.
-- **Bluetooth, the rest of it (new).** A phone playing to the device has one volume, the device's: its
+- **Bluetooth proxy connections (new).** On the Show and the Spot, the **Bluetooth proxy connections**
+  switch in Home Assistant, off by default, lets Home Assistant connect to BLE devices through the
+  device, up to three at a time, the way an ESP32 proxy does: an integration that controls a device (a
+  humidifier, a lock, a light) can reach it, not only read what it advertises. It works only while the
+  **Bluetooth proxy** is on too. With it on, Home Assistant may route any such device through this one
+  whenever it hears it best, and many BLE devices take one connection only, so leave it off unless a
+  device needs it. Connections end when Home Assistant disconnects or either switch is turned off.
+  Scanning pauses for the second or two a connection takes. Pairing (bonding) and clearing the cache
+  from Home Assistant are not offered; devices that authenticate in their own protocol work. Tried on
+  a Spot with a Boneco H400 through the Boneco integration; the Show has not made an LE connection yet.
+- **Bluetooth, the rest of it.** A phone playing to the device has one volume, the device's: its
   volume slider moves the device's volume, and the device's buttons and Home Assistant move the
-  slider (night volume still caps a raise from the phone). Pause and play on the device, by voice or
+  slider (night volume still caps a raise from the phone), unless **Bluetooth sets the volume** is
+  off (below). Pause and play on the device, by voice or
   from Home Assistant, reach the phone over Bluetooth, and so do next and previous on the screen of
   a Show or a Spot; a pause or a play on the phone is followed here, so the song picks up where it
-  was paused whichever side plays it again, for half an hour after the pause. A phone still playing
-  when something other than a phone takes the speaker (Music Assistant, AirPlay, Spotify Connect,
-  DLNA, the radio) is paused, and playing it again on the phone takes the speaker back. With two
-  phones, the last to start playing has the speaker, and the first takes it back when the second
-  stops, if it is still playing; not
-  after AirPlay, Spotify Connect or Music Assistant played, or after a stop on the device. While
-  earbuds or a speaker are connected, a phone's audio goes on to them. A short rising tone says a
-  Bluetooth device connected and a falling one that it went, except in quiet hours and during a
-  call. **Forget**, under the earbuds or speaker in **Settings > Connections** (it asks twice), or the
-  **Bluetooth forget** button in Home Assistant on any device, forgets them, so new ones can be
-  paired.
+  was paused whichever side plays it again, for half an hour after the pause. A phone takes the
+  speaker once it plays: after a second and a half of music, which is not heard, over anything
+  playing or paused here (Music Assistant, AirPlay, Spotify Connect, DLNA, the radio, another phone).
+  An app that opens the phone's audio without playing anything (a browser does, coming back to the
+  screen) or a click does not take it, and with nothing loaded a phone takes it at once. A phone
+  still playing when something else takes the speaker is paused, another phone included, and playing
+  it again on the phone takes the speaker back; with two phones, the last to start playing has it. A
+  phone that ignored the pause takes the speaker back once the phone that has it is paused on the
+  phone or stops, but not after AirPlay, Spotify Connect or Music Assistant played, or after a pause
+  or a stop on the device. While earbuds or a speaker are connected, a phone's audio goes on to them.
+  A short rising tone says a Bluetooth device connected and a falling one that it went, except in
+  quiet hours and during a call. **Forget**, under the earbuds or speaker in **Settings >
+  Connections** (it asks twice), or the **Bluetooth forget** button in Home Assistant on any device,
+  forgets them, so new ones can be paired.
+- **Bluetooth sets the volume (new).** On the Show, the Spot and the Dot, the **Bluetooth sets the
+  volume** switch (the setup page's Connections tab, or Home Assistant) is on by default, as it
+  always was: a phone's or a computer's volume slider is the device's volume. **The device jumps to
+  full volume when a computer plays to it: turn it off.** A Linux computer (PipeWire or PulseAudio)
+  often reports full volume once and then turns its own sound down itself, which took the device to
+  100% and left it there, for Music Assistant afterward too (#245). Off, the device keeps its own
+  volume: the phone's or the computer's slider only makes its own sound quieter, never louder than the
+  device's volume, nothing a phone sends changes the device's volume, and the device's buttons and
+  Home Assistant no longer move the phone's slider. Turning it either way takes effect at once, on
+  a phone that is playing too. Turned off while a phone plays, the phone's slider stays where it was
+  and now turns its own sound down from there; turned on, the phone's slider jumps to the device's
+  volume. Shared with the other devices like the rest of the speaker settings, when sharing is on.
+- **Bluetooth Secure Connections (new).** On the Show, the Spot and the Dot, the **Bluetooth Secure
+  Connections** switch (Settings > Connections, the setup page's Connections tab, or Home Assistant)
+  is on by default, as it always was. **A phone pairs, then drops after a second or two: turn off
+  Bluetooth Secure Connections.** Some newer phones do that with it on (a POCO F8 Pro on Android 16,
+  #183); with it off they pair the older way and stay. What it costs: a phone set to pair
+  only with Secure Connections cannot pair at all, and Low Energy pairing falls back to the older,
+  weaker kind too. The device itself pairs only over classic Bluetooth (speakers, earbuds and phones
+  playing to it), and the Bluetooth proxy never pairs, its connections included, so nothing of
+  the device's own uses LE pairing. Changing it turns Bluetooth off and on again: whatever is connected drops for a moment and
+  may need connecting again. It is this device's own, never shared with the other devices or carried
+  by a settings file. The 2nd gen Show 8 on TECHO5's own kernel has it off already, and no switch.
 - **Radio.** The Radio drawer and its favorites are set with
   [the radio actions](actions.md#wire-up-the-radio-page). While a station plays, the **Radio station**,
   **Radio artist** and **Radio title** sensors say what's on (the artist and title when the station's
@@ -365,8 +465,9 @@ ffmpeg and an ONVIF client library, not against a recorder on a device.
   device keeps the track paused or lets it go a few seconds after the phone stops sending, depending
   on the app, so an automation should go by the state rather than by how long a pause takes. A Music
   Assistant track paused or stopped while it played here stays named, with the state paused, for up to
-  half an hour from the pause, as Now Playing keeps it with play on it until **Done**, though the media
-  player reads idle meanwhile. Something else played to the device in that time is named while it
+  half an hour from the pause, held with play on it until **Done**, though the media player reads idle
+  meanwhile. The full Now Playing page puts itself away 30 seconds after the pause (see **Now playing**
+  under the screen settings). Something else played to the device in that time is named while it
   plays, and the paused track comes back once it ends. A video, and a followed player's song (below),
   are not named here. The Spot has no AirPlay or Spotify Connect, so those never show there. Anyone
   who can play to the device can put a title there, and the titles go into Home Assistant's history
@@ -383,11 +484,52 @@ ffmpeg and an ONVIF client library, not against a recorder on a device.
   Words are only kept in time for music whose position is known: Music Assistant, DLNA when the app
   says how long the song is, and a followed player. Radio stations, AirPlay and Spotify show the song
   without words.
+- **Sleep sounds.** Two selects in Home Assistant, **White noise layer 1** and **White noise layer
+  2**, each play a sound the device makes itself: white, pink or brown noise, rain, ocean, a brook,
+  wind, fire, crickets, a fan or a cabin. Pick one alone, or one in each to mix them, crickets under
+  wind say. They are made as they play, so they never loop and take no storage. **None** in both
+  stops them.
+- **Sleep timer** (Settings > Sound, or the **Sleep timer** select in Home Assistant): whatever is
+  playing stops after 15 minutes to 2 hours. Nothing rings when it does. It isn't kept over a
+  restart, so a device that restarts in the night comes back quiet.
+- **Bass and treble** (Settings > Sound, or **Bass** and **Treble** in Home Assistant): -6 to +6 dB
+  each. They change the speaker's own tuning, so they need **Speaker EQ** on, a switch in Home
+  Assistant that is on unless you turn it off.
 
 ## 6. The screen
 
 These are on the Show under Settings → **Display**, and are entities in Home Assistant. Most are on
 the Spot too, in its settings.
+
+### The screen and the room's lights
+
+The screen is a light in Home Assistant (`light.<node>_screen`), in the device's area. Assist picks the
+lights a sentence like "lights off" or "turn off the kitchen lights" means by their domain and area,
+so a screen that is exposed to Assist goes out with the lamps, on every device in the room.
+
+There are two ways to keep the screen out of them:
+
+- **Untick the screen's light** under **Settings → Voice assistants → Expose** in Home Assistant (or on
+  the entity's own **Voice assistants** settings). Assist then leaves the screen alone, and nothing
+  else about the light changes.
+- **Turn on Screen ignores room light commands** (off at first; on the Show and the Spot under
+  Settings → **Display** as **Ignore room lights**, on the setup page's **Screen & Photos** tab, and in
+  Home Assistant). The screen's light keeps its entity ID and does what it always did, but Home
+  Assistant shows it under the device's **Configuration**, and does not expose a configuration entity
+  to Assist when it first sees it. Home Assistant also leaves a configuration entity out of what an
+  area, a device or a label targets, and out of the dashboards it makes itself: an automation that
+  turns off a room's lights no longer turns off the screen, while one that names `light.<node>_screen`
+  by its entity ID still does. Use **Screen power**, or the light's entity ID, where the screen should
+  still go out with the room. The device reconnects to Home Assistant to tell it, once it is idle.
+
+A device Home Assistant already knows keeps the exposure Home Assistant chose for its screen before:
+it does not look again when the entity changes. So with the setting on, untick the screen's light
+once under **Settings → Voice assistants → Expose** as well, and keep Screen power exposed.
+
+**Screen power** (`switch.<node>_screen_power`) is there whichever way the setting is. It turns the
+screen off and on again at its brightness. It is a switch, not a light, so "lights off" never reaches
+it, and it is the one to name by voice: "turn off the kitchen echo screen power", or give it an alias
+like "kitchen screen" under its **Voice assistants** settings in Home Assistant.
 
 ### Night
 
@@ -405,6 +547,8 @@ the Spot too, in its settings.
   press and hold lights it and opens the ring menu; the night clock comes back, or the screen goes off
   again, after a minute and a half. When the night starts, Night clock is chosen, or the settings or
   the menu close, the Spot's night clock comes up after 10 seconds instead. A Spot with no hours set has a night of 10 PM to 7 AM.
+- **Night warmth** (Show, a switch in Home Assistant, off at first): a warmer, lamp-like white on the
+  screen through the night hours. Not on the Spot or the Panel app.
 - **Night mode** switch in Home Assistant: start or end the night now, from a bedtime automation for
   example. Set Night hours to **Controlled by Home Assistant** to leave the night to the switch alone.
   See [Turning the night on from an automation](actions.md#turning-the-night-on-from-an-automation).
@@ -412,31 +556,81 @@ the Spot too, in its settings.
 ### Clock and home screen
 
 - **Clock format**, **Clock position** and **Date color** (Date color on the Show only). Clock
-  position puts a smaller clock in a bottom corner, so a photo stays in view. Every style goes there
+  position puts a smaller clock at the foot of the screen, in a bottom corner or between them
+  (*Bottom left*, *Bottom center*, *Bottom right*), so a photo stays in view. Every style goes there
   except *Dashboard*, *Agenda* and *World*, which keep the whole screen. On the Spot, Clock position is
   *Center* or *Bottom*: the *Classic*, *Flip*, *LED*, *Sun* and *Glow* styles go small at the foot of
   the circle, and the others stay in the middle. Also in Home Assistant.
+- **Weather position** (on the Show): *Top left*, where the weather has always been, or *Top right*.
+  At the top right, a weather alert's badge sits beside it (the weather shortens to the temperature and
+  its icon to make room) and a Corner timer goes under it. Also in Home Assistant.
 - **Clock style**: how the clock looks all day. *Classic*, *Big*, *Flip*, *LED*, *Analog*, *Words*
   (the time in words), *Sun* (the sun's path from sunrise to sunset), *Dashboard* (the next events
   and the week's weather), *Binary* (the time in lights, one column per digit, counted 1, 2, 4, 8
   from the bottom), *World* (the time here and in other places), *Agenda* (the coming week's
-  events beside the time, each day under its heading) and *Glow* (soft colors drifting behind the time). Swipe left or right
+  events beside the time, each day under its heading), *Glow* (soft colors drifting behind the
+  time), *Nixie* (each figure glowing orange in a glass tube), *Stack* (the hours over the minutes,
+  large) and *Overlap* (very large figures, each laid a little over the next). Swipe left or right
   across the clock for the next style or the one before; its name shows for a moment, and a swipe
   the other way puts the last style back. The night clock keeps its own look. Also in Home Assistant
   and on the setup page's Screen & Photos tab.
+- **Auto-brightness** (Settings > Display, or **Screen auto-brightness** in Home Assistant): on a
+  device with a light sensor, the screen follows the room's light, up to the brightness you set. On
+  the Show, **Dimmest** (**Auto-brightness dimmest** in Home Assistant) sets how dark it goes in a
+  dark room.
 - **Font**: the font of every word the screen draws: the clock, the date, the weather, the settings
   and the rest (not the icons). *Go*, the screen's own and the default, *Inter*, *MuseoModerno*,
-  *Exo*, *Overpass*, *Saira*, *Comic Neue*, *Open Sans* or *Google Sans Flex*. Each is sized so a line
+  *Exo*, *Overpass*, *Saira*, *Comic Neue*, *Open Sans*, *Google Sans Flex* or *Go Mono*. Each is sized so a line
   takes about the room it takes in Go, and a new choice shows at once. A character a font doesn't
   have, like the ♪ in "♪ playing", is drawn in Go. Under Look, also **Screen font** in Home Assistant
   and on the setup page's Screen & Photos tab.
+- **Skin** (Show, Spot and the Panel app; Settings > Display > Look, or **Screen skin** in Home
+  Assistant): a whole look over the theme and the font. The Panel app wears skins as the Show does. On
+  the Spot a skin brings its colors, font and filter; the frames, backdrops and the eye drawn around
+  the clock are the Show's. The theme and custom colors you chose, and your font when the skin has
+  its own, are kept for when the skin is taken off, and their rows say so. The red night clock stays
+  red under any skin, and on the Spot so do the muted ring and the camera's mark: while one of them is
+  up, the one-color skins' tint is off. On the Show it's the same for the "microphone off" pill at the
+  top and the red Talk button while a camera's Talk is on: while either is on the screen, the tint is
+  off. **Pip-Boy** turns the screen into a green phosphor terminal: every screen in one
+  green, in Go Mono, with faint scanlines and edges darker like an old tube's. Photos and cameras turn
+  green too; a video plays in its own colors. **LCARS** is a starship console: black, with orange,
+  peach, lavender and blue, the tall narrow Antonio font, and the console's frame of elbows and colored
+  bars around the home clock. **Amber terminal** is Pip-Boy in amber. **E-ink** is ink on paper, and
+  photos turn black and white. **Blueprint** is white on blueprint blue over a faint grid. **Game Boy**
+  is the handheld's four greens. **Matrix** is green on black with code falling behind the clock.
+  **Synthwave** is a neon sunset over a grid, the sun only behind a clock in the middle. **HAL 9000** is
+  black and red with the computer's eye at the top right (not behind the Overlap style, whose figures
+  reach into that corner). On the turn screens a skin brings its ground and colors too, except at
+  night. **None** puts back the theme and font you chose. It costs a little time on each frame.
 - **Swipe between clock styles**: on by default. Turn it off (setup page, Screen & Photos, or the
   switch in Home Assistant) so a swipe across the clock leaves its style alone. It's off whenever
   **Tap on the clock** is *Nothing*, too.
+- **Swipe for volume**: on by default. Turn it off (setup page, Screen & Photos, or the switch in Home
+  Assistant) so a swipe up or down on the clock, now playing, the weather or the Bluetooth page leaves
+  the volume alone, for a screen that hands keep brushing. The volume buttons still work, and so do
+  the swipe down from the top for Settings and the swipe up from the bottom for the Deck.
 - **World clock places** (setup page, Screen & Photos tab): the World style's places, as time zone
   names with commas between them, like `America/Chicago, Europe/Paris, Asia/Tokyo`. Up to three; the
   Spot shows the first two. Leave it empty for New York, London and Tokyo.
-- **Theme**, **Answer time** and **Now playing** (the full page, or a strip over the clock).
+- **Answer time** and **Now playing** (the full page, or a strip over the clock). Once the music is
+  paused or stopped for 30 seconds, the full page goes by itself: to the strip when the setting uses
+  one, otherwise back to the clock, or to the dashboard when **Dashboard when idle** is on (the Spot
+  has no strip, so its clock face). The track is still held
+  for half an hour, so play picks it up again and the page comes back. A page you bring back while it
+  is paused, with the clock's word for the music or a tap on the strip's song, stays another 30 seconds.
+- **Theme** (Show): a preset, or **Custom colors** of your own. On the screen, tap a color for each part.
+  On the setup page's Screen & Photos tab, **Themes**, each of the five colors has a color picker and a
+  `#rrggbb` box; they start from the theme the screen wears now. **Match the accent** fills in the
+  ground, text, dim text and rules from the accent's hue, for a dark or a light theme, and you can
+  change any of them after. The dark and light themes each keep a Custom of their own.
+- **Theme mode** (Show): the screen has a dark theme (the Theme it always had) and a light theme
+  (*Paper* until you choose another), both set on the setup page. *Dark*, the default, wears the dark
+  theme as before. *Light* wears the light one. *Auto* follows the light sensor: the light theme in a
+  lit room, the dark one in a dim room, once the room has stayed that way about a minute. In Home
+  Assistant: **Theme mode** (*Dark*, *Light*, *Auto*), **Theme** (the dark theme) and **Light theme**;
+  neither theme select changes when the mode does. On the screen, Settings > Display > Theme sets the
+  theme it is wearing. The night clock keeps its own look.
 - **Tap on the clock** (Show): *Assist*, as it always was, *Dashboard* to open the dashboard, *Deck*
   to open TECHO5 Deck (until a deck has buttons, a tap still starts Assist), or *Nothing*, for a panel
   you only talk to. A voice request under way still
@@ -449,13 +643,84 @@ the Spot too, in its settings.
   [Video](video.md).
 - **Screen language** (Settings → General): the clock's day and date, the forecast's days, the
   weather's words and the alarm after the date are written in it: German, Spanish, French, Italian,
-  Dutch or Russian, and English for *Match all* or *English*. It also picks which words the screen
-  listens for. It doesn't change what the assistant understands or says, and the rest of the screen
-  stays in English.
-- **Turn screen**: how a voice request looks. **Classic** is the words, **Wave** is glowing lines and
-  **Bars** is an LED-style equalizer, both moving with the voice. This one is on the Spot too.
+  Dutch, Portuguese or Russian, and English for *Match all* or *English*. It also picks which words
+  the screen listens for. It doesn't change what the assistant understands or says, and the rest of
+  the screen stays in English.
+- **Turn screen**: how a voice request looks. This one is on the Spot too. **Classic** is the words,
+  **Wave** is glowing lines, **Bars** is an LED-style equalizer, **VU meters** are two moving-needle
+  meters, **Orb** is a ball of light (cool while it listens, violet while it thinks, warm while it
+  answers) and **HAL 9000** is the computer's red eye, all moving with the voice. **Face** is a little
+  face of glowing strokes with the words beside it (under it on the Spot): wide eyes while it listens,
+  a squint and a sideways mouth while it thinks, a mouth moving with the answer, and smiling eyes after
+  ([see it move](screenshots/turn-face.gif)). **Cue light** leaves
+  the screen as it is (the clock, the dashboard, the music, the photos, the night clock) and shows the
+  request as a light along the top edge instead, with a microphone on it while the device listens: it
+  breathes while the device listens, runs while it thinks and stays on while it answers. On the Spot
+  it's the rim. **Cue and captions** adds what was heard and the answer as captions at the bottom of
+  the screen, up to four lines (three on the Spot), cut with "…" if the answer is longer. They sit
+  above the music strip, the Now Playing buttons and the Tessera page's dots rather than over them.
+  **Rainbow** (the Show; not the Spot or the Panel app) is a cue too: a glow of
+  pinks, violets, blues and oranges round the whole edge of the screen that moves with the voice,
+  along the top and bottom only while the device thinks, and what was heard and the answer on a card
+  of frosted glass a little above the middle. A request opens with a gold globe at the right edge and
+  a wave of pink crossing the screen. During night hours it is Cue and captions instead (red over the
+  night clock), so the colors don't light the room.
+  The screen under a cue keeps working: a tap there does what it always does, and a tap on the
+  captions (or Rainbow's card) puts them away. Stop a request by voice or with the stop word. A page
+  with buttons to answer (a call, a ringing alarm, the settings, a camera) gets neither the light nor
+  captions over it.
+- **Timers** (Show; **Timers on the clock** in Home Assistant): how running timers show on the clock.
+  **Line** is the soonest under the date with a thin bar, as before. **Ring** is a ring for each (up
+  to three) that empties as it runs, and on the Analog style a wedge on the dial from the minute hand
+  to where it will be when the soonest ends. **Corner** is a small badge at the top right, so the
+  clock keeps the whole screen. **Banner** is a card for each across the foot. **Big** puts the
+  soonest's countdown in place of the clock, with the time of day under it. A finished timer rings
+  the same way in every style.
 - **Subtle mute ring** (Spot, in Home Assistant): the red ring shown while the microphones are muted
   is drawn thin and in a dimmer red, so it doesn't light up a dark room.
+
+### Calendar
+
+The calendar page opens from the date under the clock. Under Settings → **Display** → **Calendar**,
+once a calendar is shown, and on the setup page's Weather & Calendar tab. Each is also in Home
+Assistant.
+
+- **Day timeline**: a day on its hours, with the day's weather, the now line on today, ‹ › and a
+  swipe for the day before or after. Off shows the day as a list.
+- **Coming up, one line each**: one line per event, each day with its weather.
+- **Month details**: *Full* shows start times and the coming week's weather on the month, and event
+  icons on screens bigger than the Show 5. *Simple* shows events of several days as spanning bars,
+  the past days dimmed and today's number in a pill, and the rest as bars. It starts at Full on the
+  Show 8 and bigger, Simple on the Show 5.
+- **Event icons**: a small picture before a title like "Birthday", "Trash day" or "Dentist".
+- **Countdowns**: "in 25 min" on today's events.
+- **Week view**: seven days on their hours, and a Day, Week and Month switch over the month. It
+  starts on for the Show 8 and bigger, off for the Show 5.
+- **Next up on the clock**: the next event at the foot of the clock, with its countdown, when the
+  glance strip has nothing else to show. A tap opens its day.
+- **Weather in the calendar**: the forecast on the days.
+
+**Calendars from Home Assistant.** Every calendar Home Assistant already has is offered here, with
+nothing more to set up on the device: Google Calendar, CalDAV (iCloud and others), Microsoft 365, a
+Remote Calendar, its own Local Calendar, each a `calendar.` entity. Pick them under Settings →
+**General** → **Calendars**, or with the
+[`calendar_sources` action](actions.md#choose-the-calendars-shown). Each device keeps its own list, so a
+desk can show one person's calendar and the kitchen the family's. The device reads them with the
+token from [step 1](#1-give-the-device-access-to-home-assistant); no calendar password is ever on it.
+
+**Calendars from a link.** A calendar that isn't in Home Assistant can be added by its iCal
+address, on the setup page's **Weather & Calendar** tab, under **Calendars from a link**: a name and
+the address. Google Calendar has it under Settings, the calendar, **Secret address in iCal format**;
+iCloud gives a link when you share a calendar as a **Public Calendar**; Outlook has **Publish a
+calendar** under Settings, Calendar, Shared calendars (the ICS link). Anyone with the address can
+read the calendar, so the page never shows it again. The device reads it itself every 15 minutes.
+
+Sharing Week view or Month details from a big screen sets that value on a linked Show 5 too, as if
+it had been chosen there.
+
+With more than one calendar, the chips over the month turn a calendar off or on for this screen:
+its events leave every view, the clock and its event pop-ups. With many calendars, "+N" opens a list
+of them all. That choice stays on the device: it isn't shared or saved in a settings file.
 
 ### Fonts of your own
 
@@ -484,9 +749,13 @@ device's fonts folder over SSH ([Set the SSH authorized keys](actions.md#set-the
 
 - **Presence detection** (Show and Spot, off by default; Settings → Display → Presence, or the
   **Presence detection** switch in Home Assistant): the camera notices somebody moving near the device.
-  Home Assistant gets a **Presence** sensor (occupancy) for automations, and **Screen off when nobody
-  is near** (5 minutes to start with, or Never) puts the screen out once the room has been empty that
-  long and lights it again when somebody comes near. Never at night, and never during a conversation,
+  Home Assistant gets a **Motion** sensor (motion) for automations. It sees movement, not somebody
+  sitting still, and turns off 90 seconds after the last movement. **Presence sensitivity** (1 to
+  100, 50 to start with) sets how much has to move: above 50 it also counts smaller changes, so
+  somebody across the room is seen, at the cost of more false triggers. It was named Presence before; on
+  a device already set up its entity ID still ends in `_presence`, so automations keep working.
+  **Screen off when nobody is near** (5 minutes to start with, or Never) puts the screen out once the
+  room has been empty that long and lights it again when somebody comes near. Never at night, and never during a conversation,
   a call, an alarm or with the settings open. Nothing the camera sees is kept or sent: a couple of
   times a second the newest frame is compared with the last as a small grid of brightness, on the
   device. The mute button and the lens shutter stop it, and then the screen is left as it is. On a
@@ -496,43 +765,45 @@ device's fonts folder over SSH ([Set the SSH authorized keys](actions.md#set-the
   camera stills come back, or restart.
   The v1.0.1 boot image fixes it ([updating the boot image](install.md#updating-the-boot-image)); with
   it, holding the button mutes like a tap. The 2nd gen Show 5 is not affected.
-- **Person detection** (Show and Spot, experimental, off by default; the **Person detection** switch in
+- **Person detection** (Show and Spot, off by default; the **Person detection** switch in
   Home Assistant, which works only with Presence detection on): tells a person from anything else
-  that moves, such as a curtain, a pet or the light changing. While Presence has seen movement, a small
-  model looks at the camera's picture twice a second, as 96 by 96 shades of gray, on the device, and
-  Home Assistant gets a **Person** sensor (occupancy). It turns on when the last three looks score 0.6
-  or more on average, where 1 is surely a person, and stays on for a minute after the last time they
-  did. The model is TensorFlow's
-  person detection example: small enough for these processors, and a modest judge. It often misses a
-  person far from the camera or half out of the picture, and it has not yet been tried on a device.
+  that moves, such as a curtain, a pet or the light changing, and can see somebody sitting still.
+  While it is on, a small model looks at the middle square of the camera's picture every second and a
+  half, whether anything moved or not, as 96 by 96 shades of gray, on the device, and Home Assistant
+  gets a **Person** sensor (occupancy). It turns on when the last three looks score 0.6 or more on
+  average, where 1 is surely a person, and stays on for a minute after the last time they did.
+  **Person confidence** (diagnostic, 0 to 100%) is that average; it is unknown while the switch is
+  off or the camera is not watching. The model is TensorFlow's person detection example: small
+  enough for these processors, and a modest judge. It often misses a person far from the camera or
+  half out of the picture.
   Nothing it sees is kept or sent.
-- **Gestures** (Show and Spot, experimental, off by default; the **Gestures** switch in Home
+- **Gestures** (Show and Spot, off by default; the **Gestures** switch in Home
   Assistant): cover the camera with your palm, hand on or almost on the lens, for half a second to
   three seconds. It stops a ringing alarm or timer, and Home Assistant gets an `esphome.techo5_gesture`
   event (`gesture: cover`, `device`) for automations. A hand held a few inches away is not counted:
   the camera cannot tell it from somebody leaning in. While Gestures is on the camera looks eight
   times a second, which costs a little more than presence alone.
 
-- **Clap gesture** (every device, experimental, off by default; the **Clap gesture** switch in Home
+- **Clap gesture** (every device, off by default; the **Clap gesture** switch in Home
   Assistant): two sharp claps 0.15 to 0.7 seconds apart, then quiet, send Home Assistant an
   `esphome.techo5_gesture` event with `gesture: double_clap` and the `device`, for an automation to
   act on. One clap, applause, a knock at the door, a door, footsteps or somebody talking is not two
   claps. It does not listen while the device plays music or a sound of its own, rings, or is in a
   request or a call. Only the event leaves the device: one microphone is read on it, as the wake
-  word already reads them. Its thresholds are worked out on made-up sound and not yet on a room, so
-  how near and how loud a clap has to be may change.
+  word already reads them.
 - **Hold on the clock** (Show, off by default; the **Hold on the clock** switch in Home Assistant):
   a finger held on the clock for half a second sends the same event with `gesture: hold`. Only on
   the clock itself, with nothing else on the screen (not over the screensaver, a card or the night
   clock): every other page keeps its taps as they are. With it on, a slow tap on the clock is a
-  hold, so tap quickly to open what a tap opens. So far it has been tried off the device only, not on a device.
+  hold, so tap quickly to open what a tap opens.
 
 ## 7. Voice
 
-**Speaker gain** is an optional amplifier boost on Show 5 2nd gen units with a TI TAS5805M.
+**Speaker gain** is an optional amplifier boost on Show 5 2nd gen units with a TI TAS5805M,
+and on the Show 8 2nd gen, whose TAS5805M takes the same 1 dB steps on both channels.
 It appears beside the speaker controls in Settings → **Sound**, on the setup page under
-**Sound & Voice**, and in Home Assistant's **Playback** configuration. Units with another
-amplifier do not offer it. The setting is saved and restored before audio starts, including
+**Speaker and voice**, and in Home Assistant's **Playback** configuration. Other Show units
+do not offer it. The setting is saved and restored before audio starts, including
 after reboots and software updates.
 
 The default is **0 dB**, the amplifier's normal gain. Choose 0 to reset it, or raise it in
@@ -540,6 +811,13 @@ The default is **0 dB**, the amplifier's normal gain. Choose 0 to reset it, or r
 alarms; the usual volume and night volume still work. Higher gain can distort or crackle,
 especially at high volume or with raised bass or treble. Start low and reduce the boost if
 that happens; +6 dB is a setting limit, not a guarantee of clean output on every track.
+
+On the **Echo Dot (2nd gen) and the Echo (2nd gen)** the same setting raises the speaker driver
+in the audio chip, in Home Assistant's **Playback** configuration and on the setup page (the Dot
+has no screen). It is off (0 dB) by default. Each dB is added at every volume step, most
+noticeable near the top. It applies to the speaker only: the headphone jack and Bluetooth speakers are not changed.
+High settings can distort, and they make the wake word harder to catch over loud music, since
+the music reaching the microphones is louder too.
 
 Under Settings → **Sound**, or on the device's Assist satellite in Home Assistant:
 
@@ -573,6 +851,50 @@ night volume turns it down, and during quiet hours it cannot turn the device up 
 The Music Assistant volume slider cannot turn the device up past the night volume during quiet hours
 either, but it does not move when night volume turns the device down.
 
+### Two wake words, two assistants
+
+The device listens for two wake words at once, and each one starts its own voice assistant. Use one
+for a local assistant and the other for a cloud one, or one for each person in the house.
+
+On the device's page in Home Assistant, the Assist satellite has an **Assistant** and a **Wake word**
+for each of the two. Pick the first pair, then the second. A wake word left empty is off. The screen
+and the setup page choose the first wake word; the second is chosen in Home Assistant.
+
+Each wake word's own settings are on a sub-device of its own in Home Assistant, **<name> assistant
+1** and **<name> assistant 2**:
+
+- **Wake**: a button that starts that assistant by hand, as its wake word would.
+- **Wake word threshold**: how sure the device has to be (see above).
+- **Wake word tone**: the sound it makes when it wakes.
+- **Wake word effect**, **Thinking effect** and **Replying effect**: what the ring shows.
+- **Reply delivery**: the answer as a whole file, or streamed as it comes.
+- **Follow-up time**, **Follow-ups in a row** and **Follow-up tone**: listening after an answer,
+  below.
+- **Max listening time** (5 to 60 seconds) and **Max thinking time** (5 to 300 seconds): how long a
+  request may listen, and how long it waits for an answer.
+- **Recordings kept**: how many of the last requests are kept as audio
+  ([actions.md](actions.md#list-saved-voice-recordings)).
+
+Either wake word can also be answered by [realtime voice](#realtime-voice) instead. The
+[voice request events](actions.md#voice-request-events) say which one was heard (`slot` is `1` or
+`2`).
+
+**Listening after an answer.** After an answer, the device can listen again without the wake word.
+**Follow-up time** (0 to 30 seconds) is how long, and **Follow-ups in a row** (0 to 10, 0 for no
+limit) how many times. At 0 seconds it listens again only when the assistant asks a question, which
+it always does. **Follow-up tone** is the sound it makes as it listens again. For the first wake
+word, the setup page has the same under **Sound & Voice**, **Listening after an answer**.
+
+**The stop word.** Say "stop", with no wake word, while the device is making a sound: it stops a
+ringing alarm or timer, an answer, an announcement or the music. After an alarm it also lets go of a
+wake light held on. With nothing playing it does nothing, so "stop the timer" said to Home Assistant
+isn't cut off. **Stop word threshold** (on the device's microphone in Home Assistant, 0.70 to start
+with) sets how sure it has to be. At the top of its range, the stop word is off.
+
+**What was said, in Home Assistant.** The **Last wake word**, **Last heard** and **Last reply**
+sensors say which wake word started the last request, what the device heard and what it answered,
+for the logbook or a dashboard. Like any sensor, they go into Home Assistant's history.
+
 ### Realtime voice
 
 A wake word can be answered by a speech-to-speech model at OpenAI, xAI (Grok) or Google (Gemini) in
@@ -601,9 +923,9 @@ other. Its speech plays as any
 answer does, so an alarm, a ring or a call cuts it off. A turn ends after five minutes whatever
 happens. The minutes a day count all the time a session is open, not only speech, and once they are
 used up the wake word chimes and sounds its failure tone until the next day. The setup page shows the
-minutes used today. The provider's model and voice are its own unless you name them; the defaults the
-device names (gpt-realtime and marin for OpenAI, grok-voice and Ara for xAI, Gemini's native audio
-model and Puck) are untried.
+minutes used today. The provider's model and voice are its own unless you name them; the device names
+gpt-realtime and marin for OpenAI, grok-voice and Ara for xAI, and Gemini's native audio model and
+Puck.
 
 To do things in the house, add Home Assistant's **Model Context Protocol Server** integration, make a
 Home Assistant user of its own for it with no administrator rights, and give a long-lived token of that
@@ -618,15 +940,66 @@ An entity whose state is free text written by someone outside your home can carr
 at the model: a media player's title (an internet radio station names its songs), the companion app's
 last notification sensor, a mail or feed sensor, a text helper, a calendar. Home Assistant hands those
 to the model with the rest of the house when it reads the house's state, which this device does not
-treat as outside words. Do not expose such entities to Assist. Untried with the providers so far:
-built and tested against their published formats, not yet against their servers.
+treat as outside words. Do not expose such entities to Assist.
+
+### Voice without Home Assistant
+
+The device can answer with no Home Assistant at all: your own speech servers and a chat model of
+your choice. What you say goes to a speech-to-text server, the words to the chat model, and the
+answer to a text-to-speech server, then out of the speaker as any answer is.
+
+- The speech servers are Wyoming ones, the kind Home Assistant uses: faster-whisper for speech to
+  text and Piper for text to speech, each given as `host:port`.
+- The chat model is any server with an OpenAI-style endpoint, such as llama.cpp's server or
+  Ollama, given as an address like `http://192.168.x.y:8080/v1`, with a model name if the server has
+  several, and a key if it needs one.
+
+What the model can do is the device's own: start, list and cancel timers; set, list and delete
+alarms and reminders; stop what is ringing or playing; set the volume; find, play and keep radio
+stations; play music from Music Assistant, once one is set up on the device; call another device in
+the house; read the device's calendars and the weather, here or somewhere else; and put the
+forecast, the rain map or the calendar on the screen. It remembers the conversation for five minutes,
+for a follow-up. The town set under **Where this device is** goes into what the model is told, so
+its answers and web searches are about your town unless you name another place.
+
+With a [SearXNG](https://github.com/searxng/searxng) server's address it can also look things up on
+the web, like scores, news or opening hours, and read the pages it finds. SearXNG needs its JSON
+format turned on (`search.formats` in its `settings.yml`). Once a request has read the web or a
+calendar, nothing in that request can change anything, so words from outside can't make it act.
+
+To set it up, open the setup page, **Sound & Voice**, **Voice assistant**:
+
+1. **Answered by**: *Speech and a chat model, directly*.
+2. **Speech to text** and **Text to speech**: the two Wyoming servers. **Voice** is the Piper voice
+   (like `en_US-lessac-medium`; empty is the server's own), and **Language** what you speak (empty
+   is English).
+3. **Chat model endpoint**, and **Model** and **Key** if the server needs them. The key is never
+   shown again; **Remove the key** clears it.
+4. **Web search**, if you want it: the SearXNG server's address. **Page reader**, if you want that
+   too: a [page reader](../tools/page-reader/README.md)'s address. A page is read through it when it
+   has almost no text as it comes (it fills itself in with scripts, like a store's hours) or the site
+   answers with an error, as some do to anything that is not a browser.
+5. **Anything the assistant should know**: a name, a tone, or what the house wants it to know.
+6. **Save**. All three servers are needed, or the page says so and keeps what you had.
+
+Every wake word is answered this way then, except one set for [realtime voice](#realtime-voice).
+**Answered by** *Home Assistant* puts it back on Assist.
+
+What it doesn't do: control the house. It has no lights, switches or other Home Assistant entities,
+only what the device itself can do. For the house, use Home Assistant's Assist, or realtime voice
+with Home Assistant's MCP server.
 
 ### A wake word of your own
 
-Any microWakeWord model works, from a collection like
+Most microWakeWord models work, from a collection like
 [TaterTotterson/microWakeWords](https://github.com/TaterTotterson/microWakeWords) or one you train
 yourself ([training-wake-word.md](training-wake-word.md) covers how, other languages too). Each comes as two files, a `.json` and a `.tflite` with the same name (for example
 `echo.json` and `echo.tflite`).
+
+Not every one does: the device runs microWakeWord models with its own small engine, which doesn't
+have every operation ESPHome's does. A model that needs one it lacks is refused when you add it, with
+the operation named ([#190](https://github.com/HuskerMinion/techo5/issues/190)). Models built with
+residual connections or pooling (`ADD`, `AVERAGE_POOL_2D`, `MAX_POOL_2D`) run.
 
 The quickest way is the device's setup page:
 
@@ -642,7 +1015,11 @@ The quickest way is the device's setup page:
 Only microWakeWord models are taken (`"type": "micro"` in the `.json`), with a `.tflite` of at most
 1 MB, and up to 20 sent this way. **Remove** takes one sent from the page off the device; the wake
 words that came with the device or from Home Assistant can't be removed there. A wake word the device
-is listening for can't be removed either: pick another one first.
+is listening for can't be removed or sent again either: pick another one first. Neither can one
+chosen as the [volume down word](#the-volume-down-word), the [volume up or next song
+word](#the-volume-up-and-next-song-words) or the [hang-up word](phone.md#a-hang-up-word), even while
+it's off (for being a wake word too, or with no music or call): set that word's list to **None** or
+another word first. The page says "listening for that wake word" in each case.
 
 Or, through Home Assistant:
 
@@ -652,6 +1029,65 @@ Or, through Home Assistant:
    only shows up after a restart; reloading the device's ESPHome entry is not enough.
 3. Pick the new wake word in the device's **Wake word** list, on the Assist satellite in Home
    Assistant. The device downloads it from Home Assistant and keeps it.
+
+### The volume down word
+
+Music loud enough can drown out the wake word. A word of your own can turn it down with no wake
+word before it, and with the music down the wake word is heard again.
+
+- **Volume down word** (on the device's microphone in Home Assistant) picks it from the wake word
+  models the device has. **None**, the default, is off. Send yours from the setup page first
+  ([A wake word of your own](#a-wake-word-of-your-own)). Home Assistant reads the list as it connects:
+  one sent from the setup page shows up within seconds, but one Home Assistant downloaded (by choosing
+  it as a wake word) only at the next connection, so reload the device's ESPHome entry to see it
+  sooner. One word can't do both: while the word chosen is also a wake word (or has a wake word's
+  phrase), it is off as the volume down word, and it comes back once it isn't.
+- Heard while music plays, it turns the volume down five steps, with the volume chime. Said again, it
+  goes down again. It does nothing during a call, a talk through a camera or a request, or while an
+  alarm or timer rings (say "stop" to end a ring or a request), and nothing with the speaker muted or
+  with only the device's own white noise playing.
+- It is listened for only while music plays, and for ten seconds after, so the gap between two
+  tracks doesn't turn it off. With nothing playing, it costs nothing. If its model goes from the
+  device, the list shows **None** and the word is off, but the choice is kept: send the model again
+  and it comes back. One that fails to load, or fails on the music, is left off: the
+  list still shows it and the device's log says why. It comes back when you choose it again (pick
+  **None**, then the word), when a model is sent or removed, or when the device starts again.
+- **Volume down word threshold** (0.90 to start with) sets how sure it has to be. It gets none of the
+  allowance the wake words and the stop word get while the speaker plays: it is only ever said over
+  music, and it acts at once (a moment later with the volume up or next song word listening too: see
+  below). At the top of its range, it is off. Its scores don't show in **Last wake score**, and **Keep
+  wake clips** keeps none of it: the device's log has each one (`wake detected` and `wake near miss`,
+  with `slot=103`).
+
+Each time it acts, it fires a [command word event](actions.md#command-word-events). Train it the
+way [Training a wake word of your own](training-wake-word.md) describes, with the device's own music
+recorded as a negative set: that is what it has to tell the word apart from.
+
+### The volume up and next song words
+
+Two more words act on the music the same way, with no wake word: **Volume up word** turns it up five
+steps, and **Next song word** skips to the next song. Each has its own list and threshold next to
+**Volume down word** on the device's microphone, works as the volume down word does (heard only while
+music plays, never during a call, a talk through a camera, a request or a ring, nothing with the
+speaker muted, no allowance while the speaker plays), and is off until you choose a word.
+
+- **Next song word** asks whoever is sending the music for the next song when the device can ask:
+  Music Assistant, or a phone playing over AirPlay or Bluetooth. With nobody to ask (a client that
+  sends one track at a time, the device's own radio stations, or a sender like Spotify Connect or DLNA that
+  can't be asked) it only fires the [command word event](actions.md#command-word-events), with
+  `asked: false`, and whoever plays the music skips on that.
+- One model can't be two of these: chosen for more than one, it listens only as the first, in the
+  order volume down, volume up, next song. The others keep their choice and listen again once it's
+  free. A wake word can't be one either, as for the volume down word.
+- With more than one of them listening, a word acts a moment later (about half a second): one thing
+  said can reach two of them ("turn it down" scoring for the volume up word too), so the words heard
+  together wait until each has peaked, and only the surest acts. The device's log names the one left
+  out.
+- Each device acts on what it hears by itself. Devices playing together in one Music Assistant or
+  AirPlay group each ask for the next song when they hear the word, so with the next song word on more
+  than one of them, one "next song" can skip more than once. Choose it on one device in the group.
+- Each one loaded is one more model running while music plays. The device's log has their scores
+  with `slot=104` (volume up) and `slot=105` (next song).
 
 ### Wake word clips
 
@@ -742,12 +1178,12 @@ What to know before turning them on:
 
 ### The nearest device answers
 
-**Nearest device answers** (a switch of the device's in Home Assistant, under its configuration; off
-on a new device). With two devices in earshot, Home Assistant answers whichever reaches it first,
+**Nearest device answers** (a switch of the device's in Home Assistant, under its configuration; on
+by default, and it does nothing until the devices share a house word). With two devices in earshot, Home Assistant answers whichever reaches it first,
 which is the faster one and not always the one you spoke to. With this on, a device that hears its
 wake word tells the others how clearly it heard it and waits a moment to hear from them, and only
-the one that heard it best answers. The others go back to listening without a sound. Turn it on on
-every device that should take part; they need the same house word, set on each device's setup page,
+the one that heard it best answers. The others go back to listening without a sound. It is on on
+every device unless you turn it off; they need the same house word, set on each device's setup page,
 which signs what they tell each other so nothing else on the network can silence them. Make it a long
 phrase, 16 characters or more: anything on the network that hears the devices can try words until one
 fits. The house word is case-sensitive: it has to match exactly, capitals included. When another device refuses this one's
@@ -772,8 +1208,6 @@ speak right beside it, lower it on one that answers from across the room. The lo
 device's score on every wake word. If the device that heard you best loses Home Assistant during the
 wait, the others have already stood down: you hear that one's error, as you would with only one
 device, and say it again.
-
-So far it has been tried off the device only, not on a device.
 
 ### Sounds of your own
 
@@ -867,7 +1301,9 @@ unknown.
 It holds its last reading while the device makes a sound of its own (an answer, music, an
 announcement, a ring) and for a second after, and through a voice request, a call or a talk through
 a camera, so the device's own voice and yours talking to it never show in it. It reads unknown while
-the microphones are muted.
+the microphones are muted (**Microphone mute** on, red light lit). If it stays unknown with the
+microphones live, the device log says why each time the reason changes: look for `ambient noise has no
+reading`.
 
 dBFS is measured against the loudest sound the microphones can take, which is 0, so a room reads
 below it, and a quieter room reads lower. It is not a calibrated sound level. **Microphone gain**
@@ -876,8 +1312,6 @@ and **Delay and sum** read a steady room lower than **Center mic** does, and **B
 on some devices) leans toward the loudest thing in the room. Set both first, then watch the sensor
 for a day to learn your room's quiet and loud readings. Sound from another speaker in the room
 counts, like any other noise.
-
-So far it has been tried off the device only, not on a device.
 
 ## 8. Settings lock
 
@@ -993,7 +1427,7 @@ here.
   passed on to the rest of the link as a change made there would be.
 
 Only everyday settings can be shared: the speaker's sound, how an answer is shown and spoken, alarms'
-sound and snooze, the screen, night, photos' timing and look, calendar pop-up timing, and the
+sound and snooze, the screen, night, photos' timing and look, calendar pop-up timing and the calendar's look, and the
 dashboard's behavior. Never what opens the device to the network or has it listen or
 watch (the same list a restore leaves alone, above), and never a password, a key, a server's address
 or the device's name. Also never anything about the microphones: what they hear, how readily and how
@@ -1063,8 +1497,6 @@ taken out, as the diagnostics download does, along with addresses and logins, an
 answered replaced by how long it was; it still names rooms and other devices, so treat it as private. Turning the API off or making a new key ends a log being followed. An address that
 sends requests that do not check out is turned away for a minute after ten of them; nobody else is,
 except that a public IPv6 address is counted with the rest of its /64.
-
-So far it has been tried off the device only, not on a device.
 
 ## More
 

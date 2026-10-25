@@ -23,5 +23,15 @@ func Answer(offered []esphome.ExternalWakeWord) []esphome.WakeWord {
 
 	slog.Info("wake words offered", "count", len(offered),
 		"ours", len(lib.Ours()), "advertised", len(words), "shadowed", shadowed)
+
+	// A word that is running but offered with a new model is fetched and loaded again. Not here: Home
+	// Assistant is waiting for this answer, and a download can take seconds.
+	if stale := lib.Stale(); len(stale) > 0 && Refresh != nil {
+		slog.Info("wake words offered with a new model, fetching", "ids", stale)
+		go Refresh()
+	}
 	return words
 }
+
+// Refresh loads the running wake words again, downloading any that changed. Detection sets it.
+var Refresh func()

@@ -43,7 +43,10 @@ func reolinkClient() (*reolink.Client, error) {
 	return rl.c, nil
 }
 
-func reolinkSnap(entity string) ([]byte, error) { return reolinkSnapAt(entity, cameraFrameW) }
+func reolinkSnap(entity string) ([]byte, error) {
+	fw, _ := cameraFrameSize()
+	return reolinkSnapAt(entity, fw)
+}
 
 // reolinkSnapAt is a Reolink camera's snapshot about width wide, as the recorder makes it.
 func reolinkSnapAt(entity string, width int) ([]byte, error) {

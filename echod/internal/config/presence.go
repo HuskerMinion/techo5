@@ -1,7 +1,7 @@
 package config
 
 // Presence is the camera watching the room for somebody near (feature/presence): off on a new device.
-// While it is on, Home Assistant has a Presence sensor, and with ScreenOff set the screen goes dark
+// While it is on, Home Assistant has a Motion sensor, and with ScreenOff set the screen goes dark
 // once nobody has been near for that many minutes, and lights again when somebody is.
 type Presence struct {
 	On bool `json:"on,omitempty"`
@@ -17,7 +17,7 @@ type Presence struct {
 	// Gestures: a hand held over the camera stops a ring and is an event for Home Assistant.
 	Gestures bool `json:"gestures,omitempty"`
 
-	// Person: a model looks for a person in what moved (feature/person).
+	// Person: a model looks for a person in the camera's picture (feature/person).
 	Person bool `json:"person,omitempty"`
 }
 

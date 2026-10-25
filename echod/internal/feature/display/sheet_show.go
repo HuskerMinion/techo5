@@ -54,12 +54,29 @@ func (s scene) view() sheetView {
 		snooze: s.snooze, now: s.now, radio: s.radio, timers: s.timers}
 }
 
-// themeRows are the Display card's rows for the theme.
+// themeRows are the Display card's rows for the theme. Under a skin they still change the theme, which
+// comes back when the skin is taken off, and say so.
 func themeRows() []settingRow {
-	return []settingRow{
-		{id: "theme", label: "Theme", kind: ctlChoice, value: current().name},
-		{id: "colors", label: "Custom colors", sub: "Make the theme your own", kind: ctlButton, button: "Edit"},
+	theme, colors := "", "Make the theme your own"
+	if skin() != skinNone {
+		theme, colors = skinKeeps, skinKeeps
 	}
+	return []settingRow{
+		{id: "theme", label: themeRowLabel(), sub: theme, kind: ctlChoice, value: current().name},
+		{id: "colors", label: "Custom colors", sub: colors, kind: ctlButton, button: "Edit"},
+	}
+}
+
+// themeRowLabel names the theme the row changes: the one worn. In Dark mode that is simply Theme, as it
+// always was; in Light or Auto it is the dark theme or the light one, whichever the screen wears now.
+func themeRowLabel() string {
+	switch {
+	case themeModeIndex() == 0:
+		return "Theme"
+	case lightShown(config.Get().Screen):
+		return "Light theme"
+	}
+	return "Dark theme"
 }
 
 // deviceCard is a card of the Show's own in place of the category's: the custom colors editor.
@@ -90,8 +107,8 @@ func adaptRows(rows []settingRow, _ sheetView) []settingRow { return rows }
 func devicePicker(id string, sv sheetView) (pickerView, bool) {
 	switch id {
 	case "theme":
-		p := pickerView{title: "Theme", cur: -1}
-		name := config.Get().Screen.Theme
+		p := pickerView{title: themeRowLabel(), cur: -1}
+		name := shownName()
 		for i, t := range themes {
 			p.opts = append(p.opts, t.name)
 			p.swatches = append(p.swatches, [2]color.RGBA{t.colors[roleGround], t.colors[roleAccent]})
@@ -100,7 +117,7 @@ func devicePicker(id string, sv sheetView) (pickerView, bool) {
 			}
 		}
 		// Custom, once there is one to go back to.
-		if c, ok := savedCustom(); ok {
+		if c, ok := savedCustom(lightShown(config.Get().Screen)); ok {
 			if name == customName {
 				p.cur = len(p.opts)
 			}
@@ -118,19 +135,19 @@ func devicePicker(id string, sv sheetView) (pickerView, bool) {
 		}
 		return p, len(p.opts) > 0
 	}
-	return pickerView{}, false
+	return lookPicker(id)
 }
 
 // deviceChoose puts a choice from one of the Show's own lists in force.
 func (d *Display) deviceChoose(id string, i int) {
-	if id != "theme" {
+	if d.lookChoose(id, i) || id != "theme" {
 		return
 	}
 	switch {
 	case i < len(themes):
 		d.SetTheme(themes[i].name)
 	case i == len(themes):
-		if err := config.Set().Screen().Theme(customName); err != nil {
+		if err := config.Set().Screen().ThemeFor(lightShown(config.Get().Screen), customName); err != nil {
 			slog.Warn("saving the theme failed", "err", err)
 		}
 	}
@@ -162,8 +179,14 @@ func (d *Display) deviceRowTap(id string, p part, opt int) bool {
 			d.openAddress()
 			d.showSheet(false)
 		}
+	case "camtest":
+		// The same way round as the address page.
+		if camTestAvailable() {
+			d.openCameraTest()
+			d.showSheet(false)
+		}
 	default:
-		return false
+		return d.lookRowTap(id)
 	}
 	return true
 }

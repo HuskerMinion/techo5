@@ -95,6 +95,10 @@ type Engine struct {
 	// this is the difference.
 	OnReady func(slot int)
 
+	// OnDropped runs, off the audio path, when a slot's model failed on the audio and was taken out of
+	// it (dropFailed), with the id it held.
+	OnDropped func(slot int, id string)
+
 	// Load puts the wake words in once the engine is up. It runs on every start, including a restart,
 	// because an engine that came back empty would leave the device deaf while claiming otherwise.
 	// Which words those are depends on what the user last chose, which is not this package's business.
@@ -306,6 +310,18 @@ func (e *Engine) Loaded(n int) (wake.Model, bool) {
 	return e.slots[n].model, e.slots[n].loaded
 }
 
+// Crossing is the score a slot's latest detection crossed its threshold at: what OnDetect fired on.
+// The peak the utterance went on to reach is only known when the hold ends (OnScored).
+func (e *Engine) Crossing(n int) float64 {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+
+	if n < 0 || n >= len(e.slots) {
+		return 0
+	}
+	return e.slots[n].crossing
+}
+
 // Ready reports whether a slot has scored, and so whether its wake word can be heard yet. A slot with
 // nothing loaded is never ready.
 func (e *Engine) Ready(n int) bool {
@@ -447,6 +463,10 @@ func (e *Engine) dropFailed() {
 					slog.Error("wake word taken out of its slot: its model failed", "slot", i+1, "id", id)
 					e.slots[i] = slot{}
 					e.drop(s)
+					if e.OnDropped != nil {
+						n, id := i, id
+						safe.Go("wake word dropped", func() { e.OnDropped(n, id) })
+					}
 				}
 			}
 		}

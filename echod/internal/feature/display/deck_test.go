@@ -49,7 +49,7 @@ func TestDeckPageDrawsTheGrid(t *testing.T) {
 	for _, panel := range []struct {
 		name       string
 		wide, high int
-	}{{"", showWide, showHigh}, {"-show8", show8Wide, show8High}} {
+	}{{"", showWide, showHigh}, {"-show8", show8Wide, show8High}, {"-skylight", skylightWide, skylightHigh}} {
 		for _, connected := range []bool{true, false} {
 			img := image.NewRGBA(image.Rect(0, 0, panel.wide, panel.high))
 			r := newRenderer(img)

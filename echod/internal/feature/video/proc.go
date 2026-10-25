@@ -19,8 +19,15 @@ import (
 )
 
 // ffmpegPath is the decoder, when the tests set one; else TECHO5_FFMPEG names it (a test daemon run
-// with its own), else it is the image's (tools/linux/build-ffmpeg.sh).
+// with its own), else it is the image's: its 64-bit build on a 64-bit kernel where the image carries one
+// (athena's and the Skylight's, tools/linux/build-ffmpeg-arm64.sh), else its 32-bit one
+// (tools/linux/build-ffmpeg.sh).
 var ffmpegPath string
+
+const (
+	decoder32 = "/usr/local/bin/techo5-ffmpeg"
+	decoder64 = "/usr/local/bin/techo5-ffmpeg64"
+)
 
 func decoderPath() string {
 	if ffmpegPath != "" {
@@ -29,8 +36,62 @@ func decoderPath() string {
 	if p := os.Getenv("TECHO5_FFMPEG"); p != "" {
 		return p
 	}
-	return "/usr/local/bin/techo5-ffmpeg"
+	return imageDecoder()
 }
+
+// imageDecoder is the image's decoder, chosen once. The 64-bit build is static (it needs nothing of the
+// 32-bit userspace) but runs only on a 64-bit kernel: an athena still on Amazon's 32-bit kernel has the
+// file and cannot run it, so it keeps the 32-bit one, without H.265, VP8 and VP9.
+var imageDecoder = sync.OnceValue(func() string {
+	return pickDecoder(kernelMachine(), fileExists(decoder64))
+})
+
+func pickDecoder(machine string, have64 bool) string {
+	// A 64-bit ARM kernel says aarch64 to the 32-bit processes on it too; a 32-bit one never does
+	// (armv7l, or armv8l on ARMv8 cores).
+	if have64 && machine == "aarch64" {
+		return decoder64
+	}
+	return decoder32
+}
+
+func kernelMachine() string {
+	var u unix.Utsname
+	if unix.Uname(&u) != nil {
+		return ""
+	}
+	return unix.ByteSliceToString(u.Machine[:])
+}
+
+func fileExists(path string) bool {
+	_, err := os.Stat(path)
+	return err == nil
+}
+
+// The image's ffmpeg decodes H.265 when it carries the decoder (build-ffmpeg-arm64.sh builds it in, with
+// its parser): a message only the decoder has, as CanRTSP looks for RTSP. Looked for once.
+func init() {
+	decodesHEVC = sync.OnceValue(func() bool {
+		ok, err := fileHas(decoderPath(), hevcDecoder)
+		return err == nil && ok
+	})
+}
+
+var hevcDecoder = []byte("Two slices reporting being the first in the same frame")
+
+// The same for VP8 and VP9, which build-ffmpeg-arm64.sh builds in together: a message each of their
+// decoders alone has.
+func init() {
+	decodesVPx = sync.OnceValue(func() bool {
+		ok, err := fileHas(decoderPath(), vp8Decoder, vp9Decoder)
+		return err == nil && ok
+	})
+}
+
+var (
+	vp8Decoder = []byte("Discarding interframe without a prior keyframe!")
+	vp9Decoder = []byte("Invalid compressed header size")
+)
 
 // caFile is where the image keeps the certificate authorities, for https.
 const caFile = "/etc/ssl/certs/ca-certificates.crt"

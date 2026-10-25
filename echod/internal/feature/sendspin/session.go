@@ -54,7 +54,17 @@ type session struct {
 	// lastTS is the newest chunk's timestamp, kept to measure what a new stream overlaps.
 	lastTS int64
 	opened bool
-	muted  bool
+
+	// muted and level are the device's own mute and level, as the player last applied them, whoever
+	// changed them: Music Assistant, Home Assistant, a button or a voice request. They are atomics
+	// because the hooks that set them run on whoever made the change.
+	muted atomic.Bool
+	level atomic.Int32
+
+	// changed hands a change of level or mute to the session's own sender (tell), so the network write
+	// is never made on the caller's goroutine: a button press or a night volume change is not held up
+	// by a slow link. It holds one: a burst of changes sends only the newest.
+	changed chan struct{}
 
 	// converged is set once the clock filter has converged, and stays set: available in client/state.
 	converged atomic.Bool
@@ -142,7 +152,7 @@ func newSession(conn *websocket.Conn, o *out, bg *speaker.Arbiter, name string, 
 	}, conn)
 
 	return &session{client: client, clock: ssync.NewClockSync(), out: o, bg: bg, report: report,
-		releaseAsked: make(chan struct{}, 1)}
+		releaseAsked: make(chan struct{}, 1), changed: make(chan struct{}, 1)}
 }
 
 // bufferCapacity caps how far ahead the server may send, which is the stall the room can ride out. The
@@ -168,6 +178,17 @@ func (s *session) run(ctx context.Context) error {
 	// can arrive after the cancel.
 	cancelTransport := media.Get().OnTransport.Listen(s.asks)
 	defer cancelTransport()
+	// The same goes for the level. Without this the server only heard of a level it had set itself, so
+	// a change from Home Assistant, the buttons or a voice request left Music Assistant's slider where
+	// it was (techo5-athena#3).
+	p := media.Get()
+	s.level.Store(int32(p.Volume()))
+	s.muted.Store(p.Muted())
+	cancelLevel := p.OnLevel.Listen(s.levelMoved)
+	defer cancelLevel()
+	cancelMute := p.OnMute.Listen(s.muteMoved)
+	defer cancelMute()
+	safe.Go("sendspin state", func() { s.tell(ctx) })
 
 	// A picture left from an earlier connection is not this server's: it sends its own current one
 	// as soon as the artwork stream starts.
@@ -623,7 +644,6 @@ func (s *session) told(cmd protocol.PlayerCommand) {
 	case "volume":
 		s.out.setVolume(cmd.Volume)
 	case "mute":
-		s.muted = cmd.Mute
 		s.out.setMuted(cmd.Mute)
 	}
 	s.reported()
@@ -647,6 +667,47 @@ func (s *session) told(cmd protocol.PlayerCommand) {
 // can play before its clock is good would be scheduled against a wrong offset. The clock loop says it
 // again once it has (noteClock).
 func (s *session) reported() {
+	s.state(config.Get().Speaker.Volume)
+}
+
+// levelMoved and muteMoved note what the player has just applied and wake the sender. The step comes
+// from the hook rather than the settings, which are saved only after the hook has run.
+func (s *session) levelMoved(step int) {
+	s.level.Store(int32(step))
+	s.poke()
+}
+
+func (s *session) muteMoved(muted bool) {
+	s.muted.Store(muted)
+	s.poke()
+}
+
+func (s *session) poke() {
+	if !s.live.Load() {
+		return
+	}
+	select {
+	case s.changed <- struct{}{}:
+	default: // one is waiting already, and it sends the newest
+	}
+}
+
+// tell sends the newest level and mute each time one changes, until the connection ends.
+func (s *session) tell(ctx context.Context) {
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-s.client.Done():
+			return
+		case <-s.changed:
+			s.state(int(s.level.Load()))
+		}
+	}
+}
+
+// state sends client/state with the level at step, of speaker.VolumeSteps.
+func (s *session) state(step int) {
 	available := s.converged.Load()
 	state := "synchronized"
 	if !available {
@@ -656,8 +717,8 @@ func (s *session) reported() {
 		Available: available,
 		Player: playerState{
 			State:              state,
-			Volume:             config.Get().Speaker.Volume * 100 / speaker.VolumeSteps,
-			Muted:              s.muted,
+			Volume:             step * 100 / speaker.VolumeSteps,
+			Muted:              s.muted.Load(),
 			StaticDelayMs:      0,
 			OutputDelayMs:      0,
 			RequiredLeadTimeMs: requiredLeadTimeMs,
@@ -796,11 +857,12 @@ func (s *session) finish() {
 var errSwitchedOff = errors.New("sendspin: switched off")
 
 // goodbyeFor is the client/goodbye reason for a session ctx ended. Music Assistant dials a device
-// set up by address again only after "restart"; after "user_request", or a connection that just
-// drops while nothing plays, it stops dialing for good. A device that restarted, was updated or
-// rebooted was then left out of Music Assistant until Music Assistant itself was restarted. So the
-// daemon stopping is "restart", since the device comes back, and only the switch turned off is
-// "user_request".
+// set up by address again only after "restart"; after any other goodbye, "user_request" among them,
+// it stops dialing for good (aiosendspin's should_retry_server_initiated_connection). A connection
+// that drops with no goodbye at all it takes for a restart. A device that restarted, was updated or
+// rebooted said "user_request" and was then left out of Music Assistant until Music Assistant itself
+// was restarted. So the daemon stopping is "restart", since the device comes back, and only the
+// switch turned off is "user_request".
 func goodbyeFor(ctx context.Context) string {
 	if errors.Is(context.Cause(ctx), errSwitchedOff) {
 		return "user_request"

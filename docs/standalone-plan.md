@@ -221,9 +221,9 @@ kept in its own file and registers with the provider directly, with no Home Assi
 and contacts are a file on the device, so an unpaired device **still rings for incoming calls and can
 still call the names it already has** from the screen.
 
-What it cannot do alone is provisioning: the account (`phone_account`) and the contact list
-(`phone_contacts`) are both set by Home Assistant actions, and dialing by voice needs a pipeline.
-Signing in and editing contacts therefore belong on the setup page — a SIP password is the worst
+What it cannot do alone is provisioning: the account (`phone_account`) is set by a Home Assistant
+action, and dialing by voice needs a pipeline. The contact list can be edited on the setup page as
+well as with `phone_contacts`; signing in belongs there too — a SIP password is the worst
 thing anyone will ever type on a five-inch screen.
 
 ## The Dot, which has no screen

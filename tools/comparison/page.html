@@ -1,0 +1,319 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Echo Project Comparison</title>
+<meta name="description" content="What each project that brings Echo devices and other screens to Home Assistant covers, side by side.">
+<meta property="og:title" content="Echo project comparison">
+<meta property="og:description" content="What each project that brings Echo devices and other screens to Home Assistant covers, side by side.">
+<meta property="og:type" content="website">
+<meta property="og:url" content="{{PAGE_URL}}">
+<meta property="og:image" content="{{PAGE_URL}}og.jpg">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta name="twitter:card" content="summary_large_image">
+<style>
+/* Layout: intro and filters on top; a scrolling table with a fixed header and feature column beside a details panel */
+:root {
+  --bg: #f4f6f7; --panel: #ffffff; --fg: #1d2529; --muted: #5b6970; --line: #d5dde1; --accent: #0f6f74;
+  --yes: #1f7a3a; --yes-bg: #e3f3e7; --part: #8a5a00; --part-bg: #fbf0d5; --no: #a3262a; --no-bg: #f8e1e1;
+  --nf: #55626a; --nf-bg: #e9edef; --prog: #3a4fa3; --prog-bg: #e4e8f8; --na: #8b979d;
+  --body: system-ui, "Segoe UI", sans-serif; /* no web fonts: nothing of a visitor goes elsewhere */
+  --mono: ui-monospace, Consolas, monospace;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) { :root {
+  --bg: #12171a; --panel: #1a2125; --fg: #e3e9ec; --muted: #9aa8af; --line: #2e393f; --accent: #5cc3c8;
+  --yes: #7fd394; --yes-bg: #173525; --part: #f0c264; --part-bg: #3a2f14; --no: #f29a9a; --no-bg: #3d1d1f;
+  --nf: #a9b5bb; --nf-bg: #263036; --prog: #a9b6f2; --prog-bg: #232a48; --na: #6c7980; color-scheme: dark; } }
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--fg); font-family: var(--body); font-size: 15px; line-height: 1.5; }
+.wrap { max-width: 1280px; margin: 0 auto; padding: 24px 16px 64px; }
+h1 { font-size: 28px; margin: 0 0 8px; text-wrap: balance; }
+h2 { font-size: 20px; margin: 36px 0 10px; }
+p { max-width: 75ch; }
+a { color: var(--accent); }
+.intro p { margin: 0 0 10px; }
+.banner { display: block; width: 100%; height: auto; aspect-ratio: 2600 / 470; border-radius: 14px; margin: 0 0 22px; background: #5b2a86; }
+.muted { color: var(--muted); }
+.label { font: 600 11px var(--mono); letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+.legend { display: flex; flex-wrap: wrap; gap: 6px 14px; margin: 16px 0 12px; font-size: 14px; }
+.toolbar { display: flex; flex-wrap: wrap; gap: 8px 14px; align-items: center; margin-bottom: 10px; }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.chip { font: 600 13px var(--body); border: 1px solid var(--line); background: var(--panel); color: var(--fg); border-radius: 999px; padding: 4px 11px; cursor: pointer; }
+.chip[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: var(--panel); }
+.chip:focus-visible, td.cell:focus-visible, input:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.why { margin: 4px 0 10px; padding: 8px 12px; border-radius: 8px; background: var(--part-bg); color: var(--fg); font-size: 14px; max-width: none; }
+.why button { margin-left: 8px; }
+.grid { display: grid; grid-template-columns: minmax(0, 1fr) 320px; gap: 16px; align-items: start; }
+@media (max-width: 960px) { .grid { grid-template-columns: minmax(0, 1fr); } }
+.scroller { max-height: 75vh; overflow: auto; border: 1px solid var(--line); border-radius: 8px; background: var(--panel); }
+table { border-collapse: separate; border-spacing: 0; font-size: 14px; width: 100%; }
+th, td { padding: 6px 10px; border-bottom: 1px solid var(--line); }
+thead th { position: sticky; top: 0; background: var(--panel); z-index: 2; font: 600 12px var(--mono); text-transform: uppercase; letter-spacing: .04em; color: var(--muted); white-space: nowrap; }
+th.feat { position: sticky; left: 0; background: var(--panel); z-index: 1; text-align: left; font-weight: 400; min-width: 200px; max-width: 260px; }
+thead th.feat { z-index: 3; }
+tr.sec th { position: sticky; left: 0; font: 600 12px var(--mono); text-transform: uppercase; letter-spacing: .06em; color: var(--accent); background: var(--bg); text-align: left; }
+tr.sec td { background: var(--bg); }
+td.cell { cursor: pointer; text-align: center; white-space: nowrap; }
+td.cell:hover { background: color-mix(in srgb, var(--accent) 8%, var(--panel)); }
+td.sel { outline: 2px solid var(--accent); outline-offset: -2px; }
+.pill { display: inline-block; font: 600 12px var(--body); border-radius: 4px; padding: 1px 7px; }
+.p-Yes { color: var(--yes); background: var(--yes-bg); } .p-Partly { color: var(--part); background: var(--part-bg); }
+.p-No { color: var(--no); background: var(--no-bg); } .p-Not { color: var(--nf); background: var(--nf-bg); }
+.p-In { color: var(--prog); background: var(--prog-bg); } .p-na { color: var(--na); }
+.dag { color: var(--muted); font-size: 11px; vertical-align: super; }
+.detail { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 14px 16px; position: sticky; top: 12px; min-width: 0; }
+.detail h3 { margin: 4px 0 6px; font-size: 17px; }
+.detail p { margin: 6px 0; overflow-wrap: anywhere; }
+.cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 360px), 1fr)); gap: 12px; }
+.card { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 12px 14px; min-width: 0; }
+.card h3 { margin: 0 0 6px; font-size: 16px; }
+.card dl { margin: 0; display: grid; grid-template-columns: minmax(0, 9em) minmax(0, 1fr); gap: 4px 10px; font-size: 14px; }
+.card dt { color: var(--muted); }
+.card dd { margin: 0; overflow-wrap: anywhere; }
+.card ul { margin: 0; padding-left: 20px; font-size: 14px; }
+footer { margin-top: 40px; font-size: 14px; color: var(--muted); }
+.picker { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; margin: 6px 0 14px; }
+.picker h2 { margin: 0 0 8px; font-size: 17px; }
+.picker p { margin: 8px 0 0; font-size: 14px; }
+.dev { display: block; margin-top: 3px; font: 600 11px var(--body); text-transform: none; letter-spacing: 0; }
+.d-yes { color: var(--yes); background: var(--yes-bg); } .d-lineage { color: var(--part); background: var(--part-bg); }
+.d-progress { color: var(--prog); background: var(--prog-bg); } .d-no { color: var(--no); background: var(--no-bg); }
+.d-unknown { color: var(--nf); background: var(--nf-bg); }
+button.star { border: 0; background: none; color: var(--muted); cursor: pointer; font-size: 15px; padding: 0 6px 0 0; line-height: 1; }
+button.star[aria-pressed="true"] { color: var(--part); }
+button.star:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.devgrid td { text-align: center; white-space: nowrap; }
+.devgrid th[scope="row"] { text-align: left; font-weight: 400; white-space: nowrap; }
+@media (prefers-reduced-motion: reduce) { * { scroll-behavior: auto !important; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <img class="banner" src="banner.jpg" alt="" width="2600" height="470">
+  <header class="intro">
+    <h1>Echo project comparison</h1>
+    <p>People often ask how the projects that bring Echo devices and other screens to Home Assistant compare. This page lists what each one covers. It isn't a ranking: each project is good work with its own focus, and the right one depends on your devices and what you want from them.</p>
+    <p>This page is kept by TECHO5's author, so read it with that in mind. To keep it even, it was built the same way for every project, TECHO5 included: a separate reviewer for each project read only that project's public repos and listed every feature, the rows come from all six lists, and each answer was checked by a second reviewer. Every cell shows only what each project's own GitHub repos say, plus, for devices, what users report in its issues and discussions (the note says so). Reports elsewhere (Reddit, Discord, forums) aren't counted, and nothing here was tested by me. Not found means nothing was found there, not that it can't work.</p>
+    <p><b><a href="choose/">Not sure where to start? Answer a few questions</a></b> about your devices and what you want, and see which projects fit.</p>
+    <p class="muted">Checked {{CHECKED}}. These projects move fast, so some cells will be out of date soon. Spot something wrong or missing? <a href="{{ISSUES}}">Open an issue</a> and it will be fixed. Projects are in alphabetical order.</p>
+  </header>
+
+  <div class="legend" aria-label="What the answers mean">
+    <span><span class="pill p-Yes">Yes</span> in a release</span>
+    <span><span class="pill p-Partly">Partly</span> per the row's definition</span>
+    <span><span class="pill p-No">No</span> the project says so</span>
+    <span><span class="pill p-Not">Not found</span> may still be there</span>
+    <span><span class="pill p-In">In progress</span> not released yet</span>
+    <span><span class="pill p-na">n/a</span> doesn't apply</span>
+    <span><span class="dag">†</span> has a note</span>
+  </div>
+
+  <section class="picker" aria-labelledby="pickTitle">
+    <h2 id="pickTitle">What devices do you have?</h2>
+    <div class="chips" id="devChips"></div>
+    <div class="toolbar" id="devMode" hidden>
+      <span class="label">Show projects that list</span>
+      <div class="chips">
+        <button class="chip" data-mode="all" aria-pressed="true">All of them</button>
+        <button class="chip" data-mode="any" aria-pressed="false">Any of them</button>
+      </div>
+    </div>
+    <p id="devNote" class="muted">Pick one or more to see only the projects that list them.</p>
+  </section>
+
+  <div class="toolbar"><span class="label">Feature group</span><div class="chips" id="secChips"></div></div>
+  <div class="toolbar">
+    <span class="label">Show projects</span><div class="chips" id="projChips"></div>
+    <label><input type="checkbox" id="diffOnly"> Only rows where they differ</label>
+  </div>
+  <div class="toolbar">
+    <span class="label">Features you care about</span>
+    <span class="muted" id="starNote">Click ☆ next to a feature to pick it.</span>
+    <label><input type="checkbox" id="starOnly"> Only picked features</label>
+    <button class="chip" id="starClear" hidden>Clear picks</button>
+  </div>
+
+  <p class="why" id="why" hidden></p>
+  <div class="grid">
+    <div class="scroller"><table id="tbl"></table></div>
+    <aside class="detail" id="detail" aria-live="polite">
+      <span class="label">Details</span>
+      <p class="muted">Click a cell to see its note, its source and what the row counts as Yes or Partly.</p>
+    </aside>
+  </div>
+
+  <h2>Devices</h2>
+  <p class="muted">Which devices each project lists. Click a cell for its note and source.</p>
+  <div class="scroller" style="max-height:none"><table class="devgrid" id="devgrid"></table></div>
+
+  <h2>The projects</h2>
+  <div class="cards" id="facts"></div>
+
+  <h2>Also does</h2>
+  <p class="muted">Released features that no row covers, as each project's reviewer picked them.</p>
+  <div class="cards" id="also"></div>
+
+  <h2>What each project focuses on</h2>
+  <p class="muted">In each project's own terms.</p>
+  <div class="cards" id="focus"></div>
+
+  <footer id="sources"></footer>
+</div>
+<script>
+const D = /*DATA*/null;
+const P = D.projects, R = D.rows, C = D.cells, SECS = D.sections;
+const esc = s => String(s).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+// Links only to https pages: a source from the data is never a script or a page of another kind.
+const link = u => /^https:\/\//.test(String(u)) ? esc(u) : "#";
+const ans = (k, id) => C[k][id];
+const kind = a => a.startsWith("Not") ? "Not" : a.startsWith("In") ? "In" : a === "n/a" ? "na" : a;
+const feat = R.filter(r => !r.fact), facts = R.filter(r => r.fact);
+const DV = D.devices.list, DC = D.devices.cells;
+const DEVWORD = { yes: "Supported", lineage: "With another OS first", progress: "In progress", no: "Not supported", unknown: "Not found" };
+const dev = (k, id) => DC[k][id] || ["unknown", "", ""];
+const st = { sec: "All", hide: new Set(), diff: false, sel: null, dev: new Set(), mode: "all", star: new Set(), starOnly: false };
+const lists = (k, id) => ["yes", "lineage", "progress"].includes(dev(k, id)[0]);
+const fits = k => !st.dev.size || [...st.dev][st.mode === "all" ? "every" : "some"](id => lists(k, id));
+const shown = () => P.filter(p => !st.hide.has(p.key) && fits(p.key));
+const short = id => DV.find(x => x.id === id).name.replace(/^Echo /, "");
+const lower = w => w.replace(/^./, c => c.toLowerCase());
+
+function devChips() {
+  document.getElementById("devChips").innerHTML = [["", "Any device"], ...DV.map(d => [d.id, d.name])].map(([id, n]) =>
+    `<button class="chip" aria-pressed="${id ? st.dev.has(id) : !st.dev.size}" data-dev="${esc(id)}">${esc(n)}</button>`).join("");
+  document.getElementById("devMode").hidden = st.dev.size < 2;
+  document.querySelectorAll("[data-mode]").forEach(b => b.setAttribute("aria-pressed", b.dataset.mode === st.mode));
+  const el = document.getElementById("devNote");
+  if (!st.dev.size) { el.textContent = "Pick one or more to see only the projects that list them."; return; }
+  const ids = [...st.dev], ps = shown();
+  if (ids.length === 1) {
+    const d = DV.find(x => x.id === ids[0]);
+    el.textContent = ps.length
+      ? `${d.name}: ${ps.map(p => `${p.name} (${lower(DEVWORD[dev(p.key, d.id)[0]])})`).join(", ")}. The others don't list it.`
+      : `None of the projects list the ${d.name}.`;
+    return;
+  }
+  const what = st.mode === "all" ? "all of them" : "at least one of them";
+  el.textContent = ps.length
+    ? `Projects that list ${what}: ${ps.map(p => p.name).join(", ")}. Each column header shows every picked device: green supported, amber with another OS first, blue in progress, gray not listed.`
+    : `No project lists ${what}.` + (st.mode === "all" ? " Try Any of them." : "");
+}
+function chips() {
+  document.getElementById("secChips").innerHTML = ["All", ...SECS].map(s =>
+    `<button class="chip" aria-pressed="${st.sec === s}" data-sec="${esc(s)}">${esc(s)}</button>`).join("");
+  document.getElementById("projChips").innerHTML = P.map(p =>
+    `<button class="chip" aria-pressed="${!st.hide.has(p.key)}" data-proj="${esc(p.key)}">${esc(p.name)}</button>`).join("");
+}
+function why() {
+  const el = document.getElementById("why"), ps = shown(), reasons = [];
+  if (st.dev.size) reasons.push(`your device pick${st.dev.size > 1 ? "s" : ""} (${[...st.dev].map(short).join(", ")}${st.dev.size > 1 ? ", " + (st.mode === "all" ? "all of them" : "any of them") : ""})`);
+  if (st.hide.size) reasons.push(`the projects you turned off (${P.filter(p => st.hide.has(p.key)).map(p => p.name).join(", ")})`);
+  const rows = [];
+  if (st.sec !== "All") rows.push(`only the ${st.sec} group`);
+  if (st.diff) rows.push("only rows where they differ");
+  if (st.starOnly) rows.push("only picked features");
+  if (ps.length === P.length && !rows.length) { el.hidden = true; return; }
+  el.hidden = false;
+  el.innerHTML = (ps.length < P.length ? `Showing ${ps.length} of ${P.length} projects because of ${esc(reasons.join(" and "))}. ` : "") +
+    (rows.length ? `Rows: ${esc(rows.join(", "))}. ` : "") + `<button class="chip" id="showAll">Show everything</button>`;
+}
+function table() {
+  why();
+  const ps = shown();
+  let h = `<thead><tr><th class="feat">Feature</th>` + ps.map(p => `<th>${esc(p.name)}` +
+    (st.dev.size === 1 ? [...st.dev].map(id => `<span class="dev pill d-${esc(dev(p.key, id)[0])}">${esc(DEVWORD[dev(p.key, id)[0]])}</span>`).join("")
+      : [...st.dev].map(id => `<span class="dev pill d-${esc(dev(p.key, id)[0])}" title="${esc(short(id))}: ${esc(DEVWORD[dev(p.key, id)[0]])}">${esc(short(id))}</span>`).join("")) +
+    `</th>`).join("") + "</tr></thead><tbody>";
+  let any = false;
+  for (const s of SECS) {
+    if (st.sec !== "All" && st.sec !== s) continue;
+    let rs = feat.filter(r => r.section === s);
+    if (st.diff) rs = rs.filter(r => new Set(ps.map(p => ans(p.key, r.id)[0])).size > 1);
+    if (st.starOnly) rs = rs.filter(r => st.star.has(r.id));
+    if (!rs.length) continue;
+    any = true;
+    h += `<tr class="sec"><th class="feat">${esc(s)}</th>` + ps.map(() => "<td></td>").join("") + "</tr>";
+    for (const r of rs) {
+      const on = st.star.has(r.id);
+      h += `<tr><th class="feat" scope="row"><button class="star" data-star="${esc(r.id)}" aria-pressed="${on}" aria-label="Pick ${esc(r.name)}">${on ? "★" : "☆"}</button>${esc(r.name)}</th>` + ps.map(p => {
+        const [a, n] = ans(p.key, r.id);
+        const sel = st.sel && st.sel[0] === p.key && st.sel[1] === r.id ? " sel" : "";
+        return `<td class="cell${sel}" tabindex="0" data-k="${esc(p.key)}" data-r="${esc(r.id)}"><span class="pill p-${esc(kind(a))}">${esc(a)}</span>${n ? '<span class="dag">†</span>' : ""}</td>`;
+      }).join("") + "</tr>";
+    }
+  }
+  if (!any) h += `<tr><td colspan="${ps.length + 1}" class="muted">${st.starOnly && !st.star.size ? "Click ☆ next to a feature to pick it, or turn off Only picked features." : "No rows match. Turn a filter off to see more."}</td></tr>`;
+  document.getElementById("tbl").innerHTML = h + "</tbody>";
+}
+function devDetail(k, id) {
+  const d = DV.find(x => x.id === id), p = P.find(x => x.key === k), [s, n, u] = dev(k, id);
+  const el = document.getElementById("detail");
+  el.innerHTML = `<span class="label">${esc(p.name)} · Devices</span><h3>${esc(d.name)}</h3>
+    <p><span class="pill d-${esc(s)}">${esc(DEVWORD[s])}</span></p>${n ? `<p>${esc(n)}</p>` : ""}
+    ${u ? `<p><a href="${link(u)}" target="_blank" rel="noopener">Source</a></p>` : ""}`;
+  el.scrollIntoView({ block: "nearest" });
+}
+function devGrid() {
+  let h = "<thead><tr><th>Device</th>" + P.map(p => `<th>${esc(p.name)}</th>`).join("") + "</tr></thead><tbody>";
+  for (const d of DV) h += `<tr><th scope="row">${esc(d.name)}</th>` + P.map(p => { const [s, n] = dev(p.key, d.id);
+    return `<td class="cell" tabindex="0" data-dk="${esc(p.key)}" data-dd="${esc(d.id)}"><span class="pill d-${esc(s)}">${esc(DEVWORD[s])}</span>${n ? '<span class="dag">†</span>' : ""}</td>`; }).join("") + "</tr>";
+  document.getElementById("devgrid").innerHTML = h + "</tbody>";
+}
+function stars() {
+  document.getElementById("starNote").textContent = st.star.size ? `${st.star.size} picked.` : "Click ☆ next to a feature to pick it.";
+  document.getElementById("starClear").hidden = !st.star.size;
+}
+function detail(k, id) {
+  const r = R.find(x => x.id === id), p = P.find(x => x.key === k), [a, n, u] = ans(k, id);
+  const el = document.getElementById("detail");
+  el.innerHTML = `<span class="label">${esc(p.name)} · ${esc(r.section)}</span><h3>${esc(r.name)}</h3>
+    <p><span class="pill p-${esc(kind(a))}">${esc(a)}</span></p>${n ? `<p>${esc(n)}</p>` : ""}
+    ${u ? `<p><a href="${link(u)}" target="_blank" rel="noopener">Source</a></p>` : ""}
+    <p class="muted"><b>What counts:</b> ${esc(r.def)}</p>`;
+  if (window.matchMedia("(max-width: 960px)").matches) el.scrollIntoView({ block: "nearest" });
+}
+document.addEventListener("click", e => {
+  const t = e.target.closest("button.chip, button.star, td.cell");
+  if (!t) return;
+  if (t.id === "showAll") {
+    st.dev.clear(); st.hide.clear(); st.sec = "All"; st.diff = false; st.starOnly = false;
+    document.getElementById("diffOnly").checked = false; document.getElementById("starOnly").checked = false;
+    devChips(); chips(); table();
+  } else if (t.id === "starClear") { st.star.clear(); stars(); table(); }
+  else if (t.dataset.star) { st.star.has(t.dataset.star) ? st.star.delete(t.dataset.star) : st.star.add(t.dataset.star); stars(); table(); }
+  else if (t.dataset.dev !== undefined) {
+    if (!t.dataset.dev) st.dev.clear();
+    else st.dev.has(t.dataset.dev) ? st.dev.delete(t.dataset.dev) : st.dev.add(t.dataset.dev);
+    devChips(); table();
+  } else if (t.dataset.mode) { st.mode = t.dataset.mode; devChips(); table(); }
+  else if (t.dataset.dk) devDetail(t.dataset.dk, t.dataset.dd);
+  else if (t.dataset.sec) { st.sec = t.dataset.sec; chips(); table(); }
+  else if (t.dataset.proj) {
+    st.hide.has(t.dataset.proj) ? st.hide.delete(t.dataset.proj) : st.hide.add(t.dataset.proj);
+    if (st.hide.size === P.length) st.hide.delete(t.dataset.proj);
+    chips(); table();
+  } else if (t.dataset.k) { st.sel = [t.dataset.k, t.dataset.r]; table(); detail(t.dataset.k, t.dataset.r); }
+});
+document.addEventListener("keydown", e => {
+  if ((e.key === "Enter" || e.key === " ") && e.target.matches("td.cell")) { e.preventDefault(); e.target.click(); }
+});
+document.getElementById("diffOnly").addEventListener("change", e => { st.diff = e.target.checked; table(); });
+document.getElementById("starOnly").addEventListener("change", e => { st.starOnly = e.target.checked; table(); });
+
+document.getElementById("facts").innerHTML = P.map(p => `<div class="card"><h3>${esc(p.name)}</h3><dl>` +
+  facts.map(r => { const [a, n, u] = ans(p.key, r.id);
+    return `<dt>${esc(r.name)}</dt><dd>${esc(a)}${n ? " (" + esc(n) + ")" : ""}${u ? ` <a href="${link(u)}" target="_blank" rel="noopener">source</a>` : ""}</dd>`; }).join("") +
+  "</dl></div>").join("");
+document.getElementById("also").innerHTML = P.map(p => `<div class="card"><h3>${esc(p.name)}</h3><ul>` +
+  p.also.map(x => `<li>${esc(x)}</li>`).join("") + "</ul></div>").join("");
+document.getElementById("focus").innerHTML = P.map(p => `<div class="card"><h3>${esc(p.name)}</h3><p>${esc(p.focus)}</p></div>`).join("");
+document.getElementById("sources").innerHTML = "<b>Sources.</b> " + P.map(p => `${esc(p.name)}: ` +
+  p.repos.map(([n, u]) => `<a href="${link(u)}">${esc(n)}</a>`).join(", ")).join(" · ") +
+  ` · Also as a <a href="https://github.com/HuskerMinion/techo5/blob/main/docs/comparison.md">markdown page</a>.`;
+devChips(); chips(); stars(); table(); devGrid();
+</script>
+</body>
+</html>

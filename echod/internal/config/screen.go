@@ -32,9 +32,20 @@ type Screen struct {
 	// does, until the room has been quiet a while. Off, a tap on the night light does nothing.
 	NightTapLifts bool `json:"night_tap_lifts,omitempty"`
 
+	// IgnoreRoomLights has the screen's light in Home Assistant described as a configuration entity, so
+	// it stands apart from the room's lights, and the Screen power switch is what a voice names
+	// (feature/display, screen_room.go). Off, the usual, the light stands with the room's lights as it
+	// always did: shown with the device's controls, and handed to Assist, so "lights off" said in its
+	// area puts the screen out too. Off is its zero value, so a device that never saved it is as it was
+	// before the setting. (#179)
+	IgnoreRoomLights bool `json:"ignore_room_lights,omitempty"`
+
 	// NightClockStyle is how the red clock looks: empty for the ordinary clock face, "led" for an LED
 	// clock's seven segments, "flip" for a flip clock's cards.
 	NightClockStyle string `json:"night_clock_style,omitempty"`
+
+	// NightWarm turns the screen's white to a lamp's through the night (screen.Tint).
+	NightWarm bool `json:"night_warm,omitempty"`
 
 	// NightLightLevel is how bright the night light is, 1 to 10; none is the panel's own default.
 	NightLightLevel int `json:"night_light_level,omitempty"`
@@ -47,9 +58,19 @@ type Screen struct {
 	// Brightness, 1 to 50; none is the default (display.go).
 	AutoDimmest int `json:"auto_dimmest,omitempty"`
 
-	// Theme names the screen's palette; empty is the first one, "Custom" is Palette.
+	// Theme names the screen's palette; empty is the first one, "Custom" is Palette. It is the dark
+	// mode's theme, which is the one worn unless ThemeMode says otherwise.
 	Theme   string  `json:"theme,omitempty"`
 	Palette Palette `json:"palette,omitempty"`
+
+	// LightTheme is the light mode's theme, named as Theme is; empty is DefaultLightTheme. Its
+	// "Custom" is LightPalette, the light mode's own, so a custom theme for each mode can be kept.
+	LightTheme   string  `json:"light_theme,omitempty"`
+	LightPalette Palette `json:"light_palette,omitempty"`
+
+	// ThemeMode is which of the two the screen wears: empty for Theme, always, as before there were
+	// modes; "light" for LightTheme; "auto" for the room's light to choose (display/theme_mode.go).
+	ThemeMode string `json:"theme_mode,omitempty"`
 
 	// Welcomed is the first-run card having been seen and put away.
 	Welcomed bool `json:"welcomed,omitempty"`
@@ -65,15 +86,18 @@ type Screen struct {
 	// default five seconds, -1 until they are tapped away.
 	AnswerSeconds int `json:"answer_seconds,omitempty"`
 
-	// ClockPosition is where the home screen's clock sits: empty for the center, "bottom-left" or
-	// "bottom-right" on a Show, "bottom" on the Spot; DateColor the date's color, empty for the
-	// theme's (display/clock_position.go, clock_layout.go).
+	// ClockPosition is where the home screen's clock sits: empty for the center, "bottom-left",
+	// "bottom-center" or "bottom-right" on a Show, "bottom" on the Spot; DateColor the date's color,
+	// empty for the theme's (display/clock_position.go, clock_layout.go).
 	ClockPosition string `json:"clock_position,omitempty"`
 	DateColor     string `json:"date_color,omitempty"`
+	// WeatherPosition is where the home screen's weather sits: empty for the top left, "top-right"
+	// (display/clock_layout.go). The Show's only.
+	WeatherPosition string `json:"weather_position,omitempty"`
 
 	// ClockStyle is how the home screen's clock looks all day: empty for the classic face, or "big",
-	// "flip", "led", "analog", "words", "sun", "dashboard", "binary", "world", "agenda" or "glow"
-	// (display/clock_style.go). The night clock keeps its own look.
+	// "flip", "led", "analog", "words", "sun", "dashboard", "binary", "world", "agenda", "glow", "nixie",
+	// "stack" or "overlap" (display/clock_style.go). The night clock keeps its own look.
 	ClockStyle string `json:"clock_style,omitempty"`
 
 	// WorldClocks are the World style's places, as time zone names ("Europe/London"); none for its
@@ -90,9 +114,22 @@ type Screen struct {
 	NightOverride   string `json:"night_override,omitempty"`
 	NightOverrideAt int64  `json:"night_override_at,omitempty"`
 
-	// TurnStyle is how a voice turn is drawn: empty for the classic title and words, "equalizer" for
-	// bars moving with the voice.
+	// TurnStyle is how a voice turn is drawn: empty for the classic title and words, "wave" for a wave
+	// moving with the voice, "equalizer" for bars, "vu" for a pair of needle meters, "orb" for a ball of
+	// light, "hal" for the HAL 9000 computer's eye, "face" for a face of glowing strokes, or "cue" and
+	// "captions" for a light over the page left up, with the words as captions for the second, or
+	// "rainbow" for a glow round the edge with the words on a card (the Show's).
 	TurnStyle string `json:"turn_style,omitempty"`
+
+	// TimerStyle is how running timers show on the Show's clock: empty for the line under the date,
+	// "ring", "corner", "banner" or "big".
+	TimerStyle string `json:"timer_style,omitempty"`
+
+	// Skin is a whole look for the screen over the theme and the font, on the Show, the Spot and the
+	// Panel app: empty for none, "pipboy" for the green phosphor terminal, "amber" for the amber one,
+	// "lcars" for the starship console, "eink" for ink on paper, "blueprint", "gameboy" for the
+	// handheld's four greens, "matrix", "synthwave" or "hal9000".
+	Skin string `json:"skin,omitempty"`
 
 	// CallButton puts a Call button on the home screen, which opens the list of devices in the house
 	// and phone contacts to call. Off until somebody wants it, so an update changes nobody's screen.
@@ -111,7 +148,7 @@ type Screen struct {
 	MusicStrip int `json:"music_strip,omitempty"`
 
 	// Language is which words the screen listens for in a turn — "en", "de", "es", "fr", "it", "nl",
-	// "ru" — empty for all of them. It has nothing to do with what the assistant understands or
+	// "pt", "ru" — empty for all of them. It has nothing to do with what the assistant understands or
 	// says, which is Home Assistant's pipeline; it decides only which pages a sentence brings up.
 	Language string `json:"language,omitempty"`
 
@@ -124,6 +161,10 @@ type Screen struct {
 	// this is set; display/style_swipe.go).
 	NoStyleSwipe bool `json:"no_style_swipe,omitempty"`
 
+	// NoVolumeSwipe stops a swipe up or down on the clock from changing the volume (on unless this is
+	// set; display/volume_swipe.go, #243).
+	NoVolumeSwipe bool `json:"no_volume_swipe,omitempty"`
+
 	// Font is the font the screen's words are drawn in: empty for Go, the screen's own, or one of the
 	// others lib/fonts offers ("inter", "comicneue", ...). One this build does not have is Go.
 	Font string `json:"font,omitempty"`
@@ -131,6 +172,34 @@ type Screen struct {
 
 // DefaultTheme is the palette a new device comes up in.
 const DefaultTheme = "Ember"
+
+// DefaultLightTheme is the light mode's theme until another is chosen.
+const DefaultLightTheme = "Paper"
+
+// The theme modes ThemeMode may be; the dark mode is empty.
+const (
+	ThemeModeLight = "light"
+	ThemeModeAuto  = "auto"
+)
+
+// ThemeFor is the name of the light mode's theme, or the dark mode's.
+func (s Screen) ThemeFor(light bool) string {
+	switch {
+	case !light:
+		return s.Theme
+	case s.LightTheme == "":
+		return DefaultLightTheme
+	}
+	return s.LightTheme
+}
+
+// PaletteFor is the light mode's custom palette, or the dark mode's.
+func (s Screen) PaletteFor(light bool) Palette {
+	if light {
+		return s.LightPalette
+	}
+	return s.Palette
+}
 
 // Palette is a custom theme's five colors, as #rrggbb.
 type Palette struct {
@@ -166,6 +235,24 @@ func (w ScreenWriter) Theme(v string) error {
 	return w.st.Update(func(c *Config) { c.Screen.Theme = v })
 }
 
+// ThemeFor saves the light mode's theme, or the dark mode's.
+func (w ScreenWriter) ThemeFor(light bool, v string) error {
+	if !light {
+		return w.Theme(v)
+	}
+	return w.st.Update(func(c *Config) { c.Screen.LightTheme = v })
+}
+
+// ThemeMode saves which theme the screen wears: "", ThemeModeLight or ThemeModeAuto.
+func (w ScreenWriter) ThemeMode(v string) error {
+	return w.st.Update(func(c *Config) { c.Screen.ThemeMode = v })
+}
+
+// Themes saves both modes' themes and the mode at once, as the setup page sets them.
+func (w ScreenWriter) Themes(dark, light, mode string) error {
+	return w.st.Update(func(c *Config) { c.Screen.Theme, c.Screen.LightTheme, c.Screen.ThemeMode = dark, light, mode })
+}
+
 func (w ScreenWriter) NightLightLevel(v int) error {
 	return w.st.Update(func(c *Config) { c.Screen.NightLightLevel = min(max(v, 0), 10) })
 }
@@ -182,8 +269,18 @@ func (w ScreenWriter) NightTapLifts(v bool) error {
 	return w.st.Update(func(c *Config) { c.Screen.NightTapLifts = v })
 }
 
+// IgnoreRoomLights is taken back when it could not be saved, since a change to it asks for a reconnect
+// that a change not kept must not get, nor carry to the next one saved.
+func (w ScreenWriter) IgnoreRoomLights(v bool) error {
+	return w.st.UpdateOrUndo(func(c *Config) { c.Screen.IgnoreRoomLights = v })
+}
+
 func (w ScreenWriter) NightClockStyle(v string) error {
 	return w.st.Update(func(c *Config) { c.Screen.NightClockStyle = v })
+}
+
+func (w ScreenWriter) NightWarm(v bool) error {
+	return w.st.Update(func(c *Config) { c.Screen.NightWarm = v })
 }
 
 // AtNight sets both at once: the night light, and whether it is the red clock. NightDark is cleared.
@@ -245,12 +342,24 @@ func (w ScreenWriter) DateColor(v string) error {
 	return w.st.Update(func(c *Config) { c.Screen.DateColor = v })
 }
 
+func (w ScreenWriter) WeatherPosition(v string) error {
+	return w.st.Update(func(c *Config) { c.Screen.WeatherPosition = v })
+}
+
 func (w ScreenWriter) AnswerSeconds(v int) error {
 	return w.st.Update(func(c *Config) { c.Screen.AnswerSeconds = v })
 }
 
 func (w ScreenWriter) TurnStyle(v string) error {
 	return w.st.Update(func(c *Config) { c.Screen.TurnStyle = v })
+}
+
+func (w ScreenWriter) TimerStyle(v string) error {
+	return w.st.Update(func(c *Config) { c.Screen.TimerStyle = v })
+}
+
+func (w ScreenWriter) Skin(v string) error {
+	return w.st.Update(func(c *Config) { c.Screen.Skin = v })
 }
 
 func (w ScreenWriter) WeatherStill(v bool) error {
@@ -263,6 +372,10 @@ func (w ScreenWriter) MuteRingSubtle(v bool) error {
 
 func (w ScreenWriter) NoStyleSwipe(v bool) error {
 	return w.st.Update(func(c *Config) { c.Screen.NoStyleSwipe = v })
+}
+
+func (w ScreenWriter) NoVolumeSwipe(v bool) error {
+	return w.st.Update(func(c *Config) { c.Screen.NoVolumeSwipe = v })
 }
 
 func (w ScreenWriter) CallButton(v bool) error {
@@ -281,9 +394,16 @@ func (w ScreenWriter) ClockTap(v string) error {
 	return w.st.Update(func(c *Config) { c.Screen.ClockTap = v })
 }
 
-// Custom saves a palette and makes it the theme.
-func (w ScreenWriter) Custom(p Palette) error {
-	return w.st.Update(func(c *Config) { c.Screen.Theme, c.Screen.Palette = "Custom", p })
+// CustomFor saves the light mode's custom palette, or the dark mode's, and makes it that mode's theme.
+// The other mode's is left as it is.
+func (w ScreenWriter) CustomFor(light bool, p Palette) error {
+	return w.st.Update(func(c *Config) {
+		if light {
+			c.Screen.LightPalette, c.Screen.LightTheme = p, "Custom"
+		} else {
+			c.Screen.Palette, c.Screen.Theme = p, "Custom"
+		}
+	})
 }
 
 // ClockHold is whether a finger held on the clock is told to Home Assistant.

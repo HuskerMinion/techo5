@@ -14,11 +14,13 @@ import (
 	"runtime/debug"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	xdraw "golang.org/x/image/draw"
 
 	"github.com/HuskerMinion/techo5/echod/internal/lib/hass"
+	"github.com/HuskerMinion/techo5/echod/internal/lib/picscale"
 )
 
 // Pictures on a drawn dashboard: a camera's latest snapshot, or a picture card's image. A camera is
@@ -195,7 +197,7 @@ func shrink(img image.Image, most int) image.Image {
 	}
 	h := b.Dy() * most / b.Dx()
 	out := image.NewRGBA(image.Rect(0, 0, most, max(h, 1)))
-	xdraw.ApproxBiLinear.Scale(out, out.Rect, img, b, xdraw.Src, nil)
+	picscale.CatmullRom.Scale(out, out.Rect, img, b, xdraw.Src)
 	return out
 }
 
@@ -247,4 +249,113 @@ func keepPictures(ctx context.Context, list []wanted, got func(key string, s sho
 		case <-time.After(time.Second):
 		}
 	}
+}
+
+// recent is the last few pictures the drawn page showed, kept between its views: a view opened
+// again, a room and its pop-up in turn, draws its pictures at once rather than "Loading the
+// picture…", and fetches them again behind that as ever. Few, as a picture as wide as the screen
+// is 4 MB; and let go with the page, and when another dashboard is chosen (empty).
+type recent struct {
+	mu    sync.Mutex
+	shots map[string]shot
+	order []string // their keys, oldest first
+	gen   int      // how many times it has been emptied: a picture for a page from before is not kept
+}
+
+const (
+	recentMost  = 6
+	recentBytes = 24 << 20
+)
+
+// put keeps sh as key's picture, the newest, for a page that began at gen. A picture that would not
+// load is not kept: the next view asks for it afresh.
+func (r *recent) put(gen int, key string, sh shot) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if gen != r.gen || sh.failed {
+		return
+	}
+	r.drop(key)
+	if shotBytes(sh) > recentBytes {
+		return
+	}
+	if r.shots == nil {
+		r.shots = map[string]shot{}
+	}
+	r.shots[key] = sh
+	r.order = append(r.order, key)
+	for len(r.order) > recentMost || r.bytes() > recentBytes {
+		r.drop(r.order[0])
+	}
+}
+
+// get is key's picture, if it is kept, which makes it the newest.
+func (r *recent) get(key string) (shot, bool) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	sh, ok := r.shots[key]
+	if ok {
+		r.drop(key)
+		r.shots[key] = sh
+		r.order = append(r.order, key)
+	}
+	return sh, ok
+}
+
+// generation is the page's to put pictures with.
+func (r *recent) generation() int {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return r.gen
+}
+
+// empty lets every picture go, and any still on its way for a page from before.
+func (r *recent) empty() {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.shots, r.order = nil, nil
+	r.gen++
+}
+
+// drop lets key's picture go. With r.mu held.
+func (r *recent) drop(key string) {
+	if _, ok := r.shots[key]; !ok {
+		return
+	}
+	delete(r.shots, key)
+	for i, k := range r.order {
+		if k == key {
+			r.order = append(r.order[:i], r.order[i+1:]...)
+			break
+		}
+	}
+}
+
+// bytes is about how much memory the pictures kept take, at 4 bytes a pixel. With r.mu held.
+func (r *recent) bytes() int64 {
+	var n int64
+	for _, sh := range r.shots {
+		n += shotBytes(sh)
+	}
+	return n
+}
+
+// shotBytes is about how much memory a picture takes, at 4 bytes a pixel: most are kept so (shrink).
+func shotBytes(sh shot) int64 {
+	if sh.img == nil {
+		return 0
+	}
+	b := sh.img.Bounds()
+	px := int64(b.Dx()) * int64(b.Dy())
+	// What the decoded image really holds: a 16-bit PNG no wider than the screen is kept as decoded,
+	// at 8 bytes a pixel, and counting it as 4 would let the cache hold twice its bound.
+	switch sh.img.(type) {
+	case *image.RGBA64, *image.NRGBA64:
+		return px * 8
+	case *image.Gray16:
+		return px * 2
+	case *image.Gray, *image.Alpha, *image.Paletted:
+		return px
+	}
+	return px * 4 // RGBA and NRGBA; YCbCr holds less, so it is overcounted, on the safe side
 }

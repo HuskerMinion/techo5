@@ -1,10 +1,11 @@
-//go:build dot
+//go:build dot && !donut
 
 package speaker
 
 import (
 	"math"
 	"os"
+	"slices"
 	"strings"
 	"time"
 
@@ -85,7 +86,7 @@ var dotPaths = map[Output][]kctl{
 		{name: "HPR Output Mixer R_DAC Switch", level: 1},
 		{name: "Audio_DacMux_Setting", value: "Off"},
 		{name: "Right Channel Only", value: "On"},
-		{name: driverGain, level: 6},
+		{name: driverGain, level: speakerDriverUnity},
 	},
 	OutputHeadphone: {
 		// The DAC reaches the jack through these too, and the codec boots with them off: without them
@@ -107,6 +108,50 @@ var dotHeadphoneOff = []kctl{
 }
 
 const driverGain = "HP Driver Gain Volume"
+
+// speakerDriverUnity is driverGain's level on the speaker path, both boards': 0 dB. The control runs
+// 0 to 35, -6 to +29 dB at 1 dB a step, and drives the speaker's amplifier; the jack's path writes 11.
+// Found and measured by echo-dot-assist (Gamer92000, MIT: src/hassmic/spkgain.c and docs/re-platform.md),
+// which offers up to +12 dB and has users running +6 to +7 dB clean at full volume. Ext_Amp_Gain, the
+// other control that looks like a gain, does nothing on these boards.
+const speakerDriverUnity = 6
+
+// gainOnPath is whether the Speaker gain setting is this codec's own driver gain, written with the
+// speaker's path (withSpeakerGain) rather than to a TAS5805M (gain.go). It is, on both boards: the
+// codec is the same part on each, so the setting is always there.
+const gainOnPath = true
+
+// withSpeakerGain is seq, out's path, with the Speaker gain in it: the speaker's driver gain raised db
+// dB over speakerDriverUnity. The jack's path, and a gain of 0, are seq as it is. Kept to 0 to
+// config.SpeakerGainMax (+6 dB, level 12), well short of where one Dot speaker variant was reported
+// far too loud (+29, EchoMuse #630).
+//
+// The echo canceller needs nothing for it. Its reference is the card's loopback (softRef is off),
+// the digital stream ahead of this analog gain, so the reference neither grows nor clips with it;
+// the canceller is normalized to the reference and learns the louder path as it learns any other.
+// What grows is the echo at the microphones, by db at every volume step, with whatever distortion
+// the speaker adds on top: wake over music, limited by that echo, gives out db dB lower on the dial
+// (techo5-dot docs/microphones.md, the volume sweep).
+func withSpeakerGain(seq []kctl, out Output, db int) []kctl {
+	db = max(0, min(db, config.SpeakerGainMax))
+	if out != OutputSpeaker || db == 0 {
+		return seq
+	}
+	gained := slices.Clone(seq)
+	for i := range gained {
+		if gained[i].name == driverGain {
+			gained[i].level = int32(speakerDriverUnity + db)
+		}
+	}
+	return gained
+}
+
+// speakerGainControls is what a change of the Speaker gain writes while the speaker plays: its driver
+// gain alone, as withSpeakerGain puts it in the speaker's path.
+func speakerGainControls(db int) []kctl {
+	db = max(0, min(db, config.SpeakerGainMax))
+	return []kctl{{name: driverGain, level: int32(speakerDriverUnity + db)}}
+}
 
 // jackState is the kernel's headphone jack switch: 1 while something is plugged in.
 const jackState = "/sys/class/switch/h2w/state"
@@ -250,4 +295,5 @@ const (
 	PlaybackDevice = 23
 	hwRate         = Rate
 	hwTrimDB       = 0.0
+	hwBits         = Bits
 )

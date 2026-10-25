@@ -101,6 +101,12 @@ func (f *Feature) MediaNow(entity string) (MediaNow, bool) {
 	return mediaNow(e), true
 }
 
+// MediaOf is a media player read from a state and attributes that came from elsewhere than the drawn
+// page: a tile of the Tessera page, whose sheet is this one.
+func MediaOf(entity, state string, attrs map[string]any) MediaNow {
+	return mediaNow(hass.LiveEntity{ID: entity, State: state, Attrs: attrs})
+}
+
 // mediaNow reads a media player's state.
 func mediaNow(e hass.LiveEntity) MediaNow {
 	m := MediaNow{Entity: e.ID, State: e.State, Volume: -1}
@@ -227,6 +233,12 @@ var routes struct {
 
 // routeTransport is transportTo; a variable so that a test can see that a tap waits for none of it.
 var routeTransport = transportTo
+
+// TransportTo is the player a play or pause, next or back on entity go to: Music Assistant's player of
+// the same name while it plays there, else entity itself. It takes a look at Home Assistant, so it is
+// for a goroutine of its own, never the finger's. For the Tessera page, whose tiles and sheets send them
+// the drawn dashboard's way.
+func TransportTo(entity string) string { return routeTransport(entity) }
 
 // transportTo is the player a tile's play or pause, next or back go to.
 func transportTo(entity string) string {

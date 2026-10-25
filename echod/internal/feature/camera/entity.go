@@ -93,12 +93,12 @@ func send(c *esphome.Conn, jpg []byte) error {
 func (f *Feature) single(c *esphome.Conn) {
 	ctx, cancel := context.WithTimeout(context.Background(), snapshotWait)
 	defer cancel()
-	fr, err := camera.Get().Snapshot(ctx)
+	fr, err := stillFrame(ctx)
 	if err != nil {
 		slog.Warn("camera entity: still", "err", err)
 		return
 	}
-	jpg, err := encodeFull(fr)
+	jpg, err := encodeStill(fr)
 	if err != nil {
 		return
 	}
@@ -148,12 +148,7 @@ func (f *Feature) pump(c *esphome.Conn) {
 	}
 	defer release()
 	frames := make(chan *camera.Frame, 1)
-	cancel := camera.Get().Frames.Listen(func(fr *camera.Frame) {
-		select {
-		case frames <- fr:
-		default:
-		}
-	})
+	cancel := camera.Get().ListenLatest(frames)
 	defer cancel()
 	last := time.Time{}
 	for {
@@ -168,7 +163,8 @@ func (f *Feature) pump(c *esphome.Conn) {
 		}
 		select {
 		case fr := <-frames:
-			if time.Since(last) < streamEvery {
+			// The black frame of a sensor that stopped always goes: no other follows it.
+			if time.Since(last) < streamEvery && !fr.Blank() {
 				continue
 			}
 			jpg, err := encode(fr)

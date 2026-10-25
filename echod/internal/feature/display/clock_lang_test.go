@@ -34,7 +34,7 @@ func TestClockInTheScreensLanguage(t *testing.T) {
 	s := scene{now: at, phase: "idle", weather: home.Weather{Condition: "partlycloudy", Temp: "22°"},
 		style: styleFacts{days: week}, alarms: alarm.View{Next: &alarm.Upcoming{At: at.Add(16 * time.Hour)}}}
 	dir := os.Getenv("SHOW_PREVIEW")
-	for _, lang := range []string{"de", "es", "fr", "it", "nl", "ru"} {
+	for _, lang := range []string{"de", "es", "fr", "it", "nl", "pt", "ru"} {
 		if err := config.Set().Screen().Language(lang); err != nil {
 			t.Fatal(err)
 		}
@@ -45,7 +45,7 @@ func TestClockInTheScreensLanguage(t *testing.T) {
 			for _, panel := range []struct {
 				name       string
 				wide, high int
-			}{{"", showWide, showHigh}, {"-show8", show8Wide, show8High}} {
+			}{{"", showWide, showHigh}, {"-show8", show8Wide, show8High}, {"-skylight", skylightWide, skylightHigh}} {
 				img := image.NewRGBA(image.Rect(0, 0, panel.wide, panel.high))
 				newRenderer(img).draw(s)
 				if dir == "" || (lang != "it" && lang != "de") {

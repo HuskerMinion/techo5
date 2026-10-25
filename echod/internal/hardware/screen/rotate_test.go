@@ -1,4 +1,4 @@
-//go:build !dot && !spot
+//go:build !dot && !spot && !panel
 
 package screen
 
@@ -10,11 +10,12 @@ import (
 	"testing"
 )
 
-// fake is a Show's panel in RAM: 480 wide, 960 tall, rows padded as a real framebuffer's can be.
-func fake(shift [4]uint) (*Device, []byte) {
-	d := &Device{panelW: 480, panelH: 960, line: 480*4 + 64, pages: 3, shift: shift}
+// fake is a portrait panel in RAM for a w by h landscape canvas, rows padded as a real framebuffer's
+// can be.
+func fake(w, h int, shift [4]uint) (*Device, []byte) {
+	d := &Device{panelW: h, panelH: w, line: h*4 + 64, pages: 3, shift: shift}
 	d.pageBytes = d.line * d.panelH
-	d.canvas = image.NewRGBA(image.Rect(0, 0, 960, 480))
+	d.canvas = image.NewRGBA(image.Rect(0, 0, w, h))
 	return d, make([]byte, d.pageBytes)
 }
 
@@ -35,32 +36,36 @@ func oldRotate(d *Device, dst []byte) {
 	}
 }
 
+// The Show 5's canvas, the Show 8's, and one whose width is not a whole number of bands, so the last
+// band is a short one (after an odd and an even number of whole bands).
 func TestRotateMatchesThePixelAtATimeWay(t *testing.T) {
-	for _, shift := range [][4]uint{{16, 8, 0, 24}, {0, 8, 16, 24}, {24, 16, 8, 0}} {
-		d, dst := fake(shift)
-		rng := rand.New(rand.NewSource(1))
-		rng.Read(d.canvas.Pix)
-		want := make([]byte, len(dst))
-		oldRotate(d, want)
-		d.rotate(dst, 0)
-		if !bytes.Equal(dst, want) {
-			t.Fatalf("shift %v: the first frame differs", shift)
-		}
-		// A second frame with a little changed, which goes through the rows that are skipped.
-		for i := 0; i < 2000; i++ {
-			d.canvas.Pix[rng.Intn(len(d.canvas.Pix))] ^= 0xff
-		}
-		oldRotate(d, want)
-		d.rotate(dst, 0)
-		if !bytes.Equal(dst, want) {
-			t.Fatalf("shift %v: a changed frame differs", shift)
+	for _, size := range []image.Point{{960, 480}, {1280, 800}, {1003, 600}, {1012, 600}} {
+		for _, shift := range [][4]uint{{16, 8, 0, 24}, {0, 8, 16, 24}, {24, 16, 8, 0}} {
+			d, dst := fake(size.X, size.Y, shift)
+			rng := rand.New(rand.NewSource(1))
+			rng.Read(d.canvas.Pix)
+			want := make([]byte, len(dst))
+			oldRotate(d, want)
+			d.rotate(d.canvas, dst, 0)
+			if !bytes.Equal(dst, want) {
+				t.Fatalf("%v, shift %v: the first frame differs", size, shift)
+			}
+			// A second frame with a little changed, which goes through the rows that are skipped.
+			for i := 0; i < 2000; i++ {
+				d.canvas.Pix[rng.Intn(len(d.canvas.Pix))] ^= 0xff
+			}
+			oldRotate(d, want)
+			d.rotate(d.canvas, dst, 0)
+			if !bytes.Equal(dst, want) {
+				t.Fatalf("%v, shift %v: a changed frame differs", size, shift)
+			}
 		}
 	}
 }
 
 // Every pixel changed every frame, as a page scrolling is: the worst case.
 func BenchmarkRotateEverythingChanged(b *testing.B) {
-	d, dst := fake([4]uint{16, 8, 0, 24})
+	d, dst := fake(960, 480, [4]uint{16, 8, 0, 24})
 	rand.New(rand.NewSource(1)).Read(d.canvas.Pix)
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
@@ -71,12 +76,12 @@ func BenchmarkRotateEverythingChanged(b *testing.B) {
 		for x := 0; x < len(d.canvas.Pix); x += 4 {
 			d.canvas.Pix[x] ^= 1
 		}
-		d.rotate(dst, 0)
+		d.rotate(d.canvas, dst, 0)
 	}
 }
 
 func BenchmarkOldRotate(b *testing.B) {
-	d, dst := fake([4]uint{16, 8, 0, 24})
+	d, dst := fake(960, 480, [4]uint{16, 8, 0, 24})
 	rand.New(rand.NewSource(1)).Read(d.canvas.Pix)
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
@@ -84,5 +89,20 @@ func BenchmarkOldRotate(b *testing.B) {
 			d.canvas.Pix[x] ^= 1
 		}
 		oldRotate(d, dst)
+	}
+}
+
+// The same, with the Show 8's canvas and panel, the changes to the canvas not counted: rotate alone.
+func BenchmarkRotateShow8(b *testing.B) {
+	d, dst := fake(1280, 800, [4]uint{16, 8, 0, 24})
+	rand.New(rand.NewSource(1)).Read(d.canvas.Pix)
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		b.StopTimer()
+		for x := 0; x < len(d.canvas.Pix); x += 4 {
+			d.canvas.Pix[x] ^= 1
+		}
+		b.StartTimer()
+		d.rotate(d.canvas, dst, 0)
 	}
 }

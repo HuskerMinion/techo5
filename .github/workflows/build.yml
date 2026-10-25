@@ -1,6 +1,6 @@
 name: Build release binaries
 
-# Builds echod-arm, echod-arm-dot and echod-arm-spot, and the TECHO5 Deck agent for Windows, macOS
+# Builds echod-arm, echod-arm-dot, echod-arm-donut and echod-arm-spot, and the TECHO5 Deck agent for Windows, macOS
 # and Linux, on GitHub's runners from a tagged commit, and attests that the published binaries were
 # built from that exact source — so anyone can verify a
 # release matches the repo without trusting the maintainer's machine, for all three devices' release
@@ -14,6 +14,13 @@ name: Build release binaries
 # binary, and refuses one whose attestation isn't from that release's tag. A run started by hand is
 # stamped v0.0.0-dev, for testing only: no release script accepts it.
 #
+# The TECHO5 Panel (Android tablets and Meta Portals) carries echod inside its app, as
+# lib/<abi>/libechod.so, packed by the app's own tools/build-apk.sh (github.com/HuskerMinion/techo5-panel).
+# A panel-vX.Y.Z tag builds and attests those two libraries here, from this repo's panel build, and a
+# release of the app carries them as they are (its tools/release.sh downloads them and checks their
+# attestations), as the Echos' images carry this workflow's binaries (docs/panel.md). X.Y.Z is the app
+# release's version (0.1.<code>), stamped into them, so the app and its echod say the same version.
+#
 # Every action is pinned to a full commit SHA, with the release it belongs to in the comment beside
 # it. This workflow is the root of the provenance story — it builds and attests the binaries every
 # device installs — and a major tag is a moving pointer its own author can repoint, so a tag is not
@@ -26,6 +33,7 @@ on:
       - 'v*.*.*'
       - 'dot-v*.*.*'
       - 'spot-v*.*.*'
+      - 'panel-v*.*.*'
   workflow_dispatch:
 
 permissions:
@@ -35,6 +43,8 @@ permissions:
 
 jobs:
   build:
+    # A panel tag is the panel job's alone: it releases no Echo binary.
+    if: ${{ !startsWith(github.ref_name, 'panel-') }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
@@ -64,10 +74,22 @@ jobs:
         run: |
           go test ./...
           go test -tags dot ./...
+          # The Echo Dot 3rd gen (donut): the Dot's build with its own capture and speaker files.
+          go test -tags dot,donut ./...
+          GOOS=linux GOARCH=arm GOARM=7 go vet -tags dot,donut ./...
           go test -tags spot ./...
+          # The panel is built on the Show's code, so a change on main that breaks it shows here, not
+          # only when a panel tag is pushed.
+          go test -tags panel ./...
           # The deck agent's Windows and macOS code doesn't build here otherwise.
           GOOS=windows go vet ./cmd/techo5-deck
           GOOS=darwin go vet ./cmd/techo5-deck
+
+      # The installers, rehearsed against stand-ins for adb, fastboot and the unit's console: a fresh
+      # install's paths are the ones least often run on a real unit (#257).
+      - name: Installer rehearsals
+        working-directory: tools
+        run: python3 -m unittest test_install_show test_install_athena test_install_skylight
 
       - name: Build
         working-directory: echod
@@ -81,6 +103,7 @@ jobs:
           ldflags="-s -w -X '$pkg.Version=${{ steps.ver.outputs.version }}' -X '$pkg.GitCommit=${{ steps.ver.outputs.commit }}' -X '$pkg.BuildDate=${{ steps.ver.outputs.date }}'"
           go build -trimpath -ldflags "$ldflags" -o ../bin/echod-arm ./cmd/echod
           go build -tags dot -trimpath -ldflags "$ldflags" -o ../bin/echod-arm-dot ./cmd/echod
+          go build -tags dot,donut -trimpath -ldflags "$ldflags" -o ../bin/echod-arm-donut ./cmd/echod
           go build -tags spot -trimpath -ldflags "$ldflags" -o ../bin/echod-arm-spot ./cmd/echod
 
       # The TECHO5 Deck agent, for the computers a Show's deck presses keys on. Named without the
@@ -100,7 +123,7 @@ jobs:
 
       - name: Checksums
         working-directory: bin
-        run: sha256sum echod-arm echod-arm-dot echod-arm-spot techo5-deck-* > SHA256SUMS
+        run: sha256sum echod-arm echod-arm-dot echod-arm-donut echod-arm-spot techo5-deck-* > SHA256SUMS
 
       # Cryptographically ties these files to this exact workflow run, source commit and tag (Sigstore,
       # keyless). Check by hand with:
@@ -111,6 +134,7 @@ jobs:
           subject-path: |
             bin/echod-arm
             bin/echod-arm-dot
+            bin/echod-arm-donut
             bin/echod-arm-spot
             bin/techo5-deck-*
 
@@ -120,7 +144,86 @@ jobs:
           path: |
             bin/echod-arm
             bin/echod-arm-dot
+            bin/echod-arm-donut
             bin/echod-arm-spot
             bin/techo5-deck-*
+            bin/SHA256SUMS
+          if-no-files-found: error
+
+  # The panel app's echod: GOOS=android with the NDK's clang, for both of the app's ABIs, exactly as the
+  # app's tools/build-apk.sh builds it for development (tags, -trimpath, -s -w, API 26, the version
+  # stamp); a release of the app packs these. A plain linux build is not the same thing: Android's app
+  # seccomp filter kills it the first time it starts a process. Go and the NDK are pinned to the
+  # versions build-apk.sh pins, so a development build is as near these as another machine's gets
+  # (never byte for byte: the compiler's path is in Go's build ID); move them together.
+  panel:
+    if: ${{ github.event_name == 'workflow_dispatch' || startsWith(github.ref_name, 'panel-') }}
+    runs-on: ubuntu-latest
+    env:
+      # The NDK the app's docs/building.md names. The runner's SDK installs it; nothing else is fetched.
+      NDK_VERSION: 28.2.13676358
+      API: 26
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
+        with:
+          go-version: '1.26.8'
+          cache-dependency-path: echod/go.sum
+
+      - name: Version info
+        id: ver
+        run: |
+          if [ "${GITHUB_REF_TYPE}" = "tag" ]; then
+            name="${GITHUB_REF_NAME}"; version="${name#panel-}"
+          else
+            name="panel-v0.0.0-dev"; version="v0.0.0-dev"
+          fi
+          echo "name=$name" >> "$GITHUB_OUTPUT"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
+      # The panel's tests run on the runner itself (GOOS=linux); the recorder only a debug build has is
+      # tested with its tag.
+      - name: Test
+        working-directory: echod
+        run: |
+          go test -tags panel ./...
+          go test -tags panel,panel_debug ./internal/lib/loopback
+
+      - name: Android NDK
+        run: |
+          yes | "$ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager" --install "ndk;${NDK_VERSION}" >/dev/null
+          echo "NDK=$ANDROID_SDK_ROOT/ndk/${NDK_VERSION}" >> "$GITHUB_ENV"
+
+      - name: Build
+        working-directory: echod
+        env:
+          GOOS: android
+          CGO_ENABLED: "1"
+        run: |
+          bin="$NDK/toolchains/llvm/prebuilt/linux-x86_64/bin"
+          ldflags="-s -w -X github.com/HuskerMinion/techo5/echod/internal/layout.Version=${{ steps.ver.outputs.version }}"
+          mkdir -p ../bin
+          GOARCH=arm64 CC="$bin/aarch64-linux-android${API}-clang" \
+            go build -tags panel -trimpath -ldflags "$ldflags" -o ../bin/libechod-arm64-v8a.so ./cmd/echod
+          GOARCH=arm GOARM=7 CC="$bin/armv7a-linux-androideabi${API}-clang" \
+            go build -tags panel -trimpath -ldflags "$ldflags" -o ../bin/libechod-armeabi-v7a.so ./cmd/echod
+
+      - name: Checksums
+        working-directory: bin
+        run: sha256sum libechod-*.so > SHA256SUMS
+
+      # Check by hand with:
+      #   gh attestation verify libechod-arm64-v8a.so --repo HuskerMinion/techo5 --source-ref refs/tags/<tag>
+      - name: Attest build provenance
+        uses: actions/attest-build-provenance@e8998f949152b193b063cb0ec769d69d929409be # v2.4.0
+        with:
+          subject-path: bin/libechod-*.so
+
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: techo5-${{ steps.ver.outputs.name }}
+          path: |
+            bin/libechod-*.so
             bin/SHA256SUMS
           if-no-files-found: error

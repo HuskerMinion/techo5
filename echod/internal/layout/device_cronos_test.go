@@ -1,4 +1,4 @@
-//go:build !dot && !spot
+//go:build !dot && !spot && !panel
 
 package layout
 
@@ -51,6 +51,9 @@ func TestAthenaIsReadFromTheDeviceTree(t *testing.T) {
 		{"a Chromebook on the same SoC", []string{"google,kukui", "mediatek,mt8183"}, boardCronos},
 		{"a name that only starts the same", []string{"amzn,athenaeum"}, boardCronos},
 		{"no device tree", nil, boardCronos},
+		{"the Skylight's own tree", []string{"skylight,cal150", "rockchip,rk3566"}, boardSkylight},
+		{"another RK3566 board", []string{"pine64,quartz64-a", "rockchip,rk3566"}, boardCronos},
+		{"a Skylight name that only starts the same", []string{"skylight,cal150x"}, boardCronos},
 	} {
 		if got := showBoard("console=tty0 bootopt=64S3,32S1,32S1", gone, c.compatible); got != c.want {
 			t.Errorf("%s: %q, want %q", c.name, got, c.want)
@@ -65,8 +68,8 @@ func TestAthenaIsReadFromTheDeviceTree(t *testing.T) {
 // crown and cronos begin with the same three letters, and the panel match is a substring: neither
 // name may be found inside the other, or a Show 8 reads as a Show 5 and loses half its microphones.
 func TestTheShowNamesDoNotContainEachOther(t *testing.T) {
-	for _, a := range []string{boardCronos, boardCheckers, boardCrown, boardAthena} {
-		for _, b := range []string{boardCronos, boardCheckers, boardCrown, boardAthena} {
+	for _, a := range []string{boardCronos, boardCheckers, boardCrown, boardAthena, boardSkylight} {
+		for _, b := range []string{boardCronos, boardCheckers, boardCrown, boardAthena, boardSkylight} {
 			if a != b && strings.Contains(a, b) {
 				t.Errorf("%q contains %q", a, b)
 			}

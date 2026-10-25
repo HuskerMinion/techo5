@@ -69,7 +69,9 @@ type Player struct {
 	duck       *esphome.Number
 
 	// asp is the driver's tuning: on applies it, off sends the signal as it came.
-	asp          *esphome.Switch
+	asp *esphome.Switch
+	// stereo plays athena's two internal speakers in stereo; there only on a board that can.
+	stereo       *esphome.Switch
 	bass, treble *esphome.Number
 	gain         *esphome.Number
 	gainApply    func(int) error
@@ -166,6 +168,11 @@ type Player struct {
 	// night volume too, which OnVolume leaves out. It is for what keeps its own copy of the level, such
 	// as the Spotify app's slider.
 	OnLevel hook.Hook[int]
+
+	// OnMute fires with the new state whenever the speaker is muted or unmuted, by anyone: Home
+	// Assistant, a button that brings a muted speaker back, or a Music Assistant command. It is for
+	// what keeps its own copy, as OnLevel is.
+	OnMute hook.Hook[bool]
 
 	// OnPlay fires with the URL whenever a track (not an announcement) is started, so a screen can
 	// find out what it is.
@@ -285,6 +292,14 @@ func build() *Player {
 				ObjectID: "speaker_eq",
 				Name:     "Speaker EQ",
 				Icon:     "mdi:equalizer",
+				Category: esphome.CategoryConfig,
+			},
+		},
+		stereo: &esphome.Switch{
+			Base: esphome.Base{
+				ObjectID: "speaker_stereo",
+				Name:     "Stereo speakers",
+				Icon:     "mdi:speaker-multiple",
 				Category: esphome.CategoryConfig,
 			},
 		},
@@ -410,6 +425,8 @@ func build() *Player {
 		slog.Info("setting changed", "setting", p.asp.ObjectID, "using", settled, "asked", want)
 	}
 
+	p.stereo.OnCommand = p.SetStereo
+
 	// Nothing to apply: the stream reads the setting when a turn begins, so changing it takes effect on
 	// the next one rather than in the middle of this one.
 	component.Bind(p.onTurn, onTurns(), func(v config.OnTurn) config.OnTurn { return v },
@@ -527,6 +544,9 @@ func (p *Player) Entities() []esphome.Entity {
 	if speaker.HasJack {
 		out = append(out, p.output)
 	}
+	if speaker.Get().CanStereo() {
+		out = append(out, p.stereo)
+	}
 	for _, sel := range p.layers {
 		out = append(out, sel)
 	}
@@ -629,6 +649,7 @@ func (p *Player) Restore(c config.Config) {
 	settled := speaker.Get().SetASP(want)
 	p.asp.Set(settled)
 	slog.Info("restored", "what", p.asp.ObjectID, "using", settled, "asked", want)
+	p.stereo.Set(speaker.Get().SetStereo(c.Speaker.Stereo))
 
 	restoreQuiet(p.quiet, c)
 	p.night.Set(float32(c.Speaker.NightVolume))
@@ -892,6 +913,18 @@ func (p *Player) fromHA(t Transport) {
 	}
 	p.haFwdAt.Store(now)
 	p.Transport(t)
+}
+
+// SkipReaches reports whether a next or previous asked for now would be passed on: to a remote whose
+// track it is (Music Assistant), or to a received track's sender that can be reached (ReceiverControl).
+// Otherwise Transport has nothing to skip to, and whoever plays one track at a time on the device has to
+// skip it themselves.
+func (p *Player) SkipReaches() bool {
+	if p.remoteIsTheTrack() {
+		return true
+	}
+	from := p.Receiving()
+	return from != "" && receiverControl(from) != nil
 }
 
 func (p *Player) Transport(t Transport) {
@@ -1380,6 +1413,9 @@ func (p *Player) ReceiverPaused(name string, paused bool) {
 	p.stream.Unpause()
 }
 
+// SenderPaused is whether the received track loaded was paused by its sender, not from here.
+func (p *Player) SenderPaused() bool { return p.stream.SenderPaused() }
+
 // senderPlaysAgain is the sender of the received track named name heard playing again (sendingAgain
 // of music, playingAgain), with no word that it plays (ReceiverPaused): a phone that paused on its
 // own and played again without its Status saying so. The track plays again with it, rather than
@@ -1572,10 +1608,18 @@ func (p *Player) Mute(muted bool) {
 	p.mp.SetMuted(muted)
 	if muted {
 		speaker.Get().SetVolume(0)
-		return
+	} else {
+		speaker.Get().SetVolume(p.Volume())
 	}
-	speaker.Get().SetVolume(p.Volume())
+	p.OnMute.Emit(muted)
 }
+
+// Muted reports whether the speaker is muted (Mute): the level is kept, and nothing is heard.
+func (p *Player) Muted() bool { return p.muted.Load() }
+
+// NoisePlaying reports whether what this player plays is noise it generates (Noise), a bed to sleep or
+// work to rather than music somebody would turn down.
+func (p *Player) NoisePlaying() bool { return len(p.stream.Noise()) > 0 }
 
 // Adjust moves the level by a step and says so, which is what the buttons and Home Assistant's own
 // up and down both do.

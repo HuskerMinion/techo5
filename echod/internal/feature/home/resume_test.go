@@ -78,6 +78,7 @@ func TestWhatIsWorthPuttingBackOn(t *testing.T) {
 		if c.set != nil && f.resumed == resumeTries && !c.wantTry {
 			tried = false // the run it started with, not a try this call made
 		}
+		f.forgetStation() // the put-back on its timer is not this test's
 		f.mu.Unlock()
 
 		if tried != c.wantTry {
@@ -97,6 +98,7 @@ func TestTheRunOfTriesIsForgotten(t *testing.T) {
 
 	f.mu.Lock()
 	defer f.mu.Unlock()
+	f.forgetStation() // the put-back on its timer is not this test's
 	if f.resumed != 1 {
 		t.Errorf("after the window passed the count is %d, expected a fresh first try", f.resumed)
 	}

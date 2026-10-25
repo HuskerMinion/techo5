@@ -48,9 +48,14 @@ func fontFace(name string, bold bool, px float64) font.Face {
 	return fontFace(fonts.Go, bold, px)
 }
 
-// fontRow is the setting on the screen, under Display.
+// fontRow is the setting on the screen, under Display. A skin with a font of its own draws in that, and
+// the row says the one chosen waits for the skin to come off.
 func fontRow() settingRow {
-	return settingRow{id: "font", label: "Font", sub: "For all the screen's words", kind: ctlChoice, value: fonts.Names()[fontIndex()]}
+	sub := "For all the screen's words"
+	if skins[skinIndex()].font != "" {
+		sub = skinKeeps
+	}
+	return settingRow{id: "font", label: "Font", sub: sub, kind: ctlChoice, value: fonts.Names()[fontIndex()]}
 }
 
 func fontPicker() (pickerView, bool) {
@@ -172,6 +177,6 @@ func roomFor[V any](m map[fontKey]V, k fontKey) map[fontKey]V {
 // faces were made, looking at the fonts folder now and then (lib/fonts.Refresh).
 func (p *paint) fontChanged() (fontKey, bool) {
 	fonts.Refresh()
-	k := fontKey{screenFont(), fonts.Generation()}
+	k := fontKey{drawnFont(), fonts.Generation()}
 	return k, k != fontKey{p.font, p.fontGen}
 }

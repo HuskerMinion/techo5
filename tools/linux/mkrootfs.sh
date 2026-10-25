@@ -16,12 +16,20 @@
 #   bin/techo5-aec                                         WebRTC echo canceller helper (C++, build-aec.sh), optional
 #   bin/techo5-librespot                                   Spotify Connect receiver (Rust, build-librespot.sh), optional
 #   bin/techo5-ffmpeg                                      the Show's video decoder (C, build-ffmpeg.sh), optional
+#   bin/techo5-ffmpeg64                                    its static aarch64 build (build-ffmpeg-arm64.sh), athena's
+#                                                          and the Skylight's, for their 64-bit kernels, optional
+#   bin/techo5-gpu                                         the GPU helper, 64-bit builds only, optional
+#   bin/techo5-jpeg                                        the JPEG decoder helper, 64-bit builds only, optional
 #   tools/slotctl tools/techo5-lib.sh tools/packages-rootfs.txt
 #   overlay/                                               tools/linux/rootfs from the repo
-#   inputs/alpine-minirootfs-*-armv7.tar.gz
+#   inputs/alpine-minirootfs-*-<arch>.tar.gz               <arch>: -a's, else apk's own (armv7, or
+#                                                          aarch64 for a 64-bit build)
 #   inputs/vendor.tar.gz                                   optional, development only: LineageOS's vendor/.
 #                                                          Published images never carry it: each unit keeps
 #                                                          its own in the store (etc/techo5/boot.sh)
+#   inputs/kernel.tar.gz                                   optional, development only: a mainline kernel's
+#                                                          modules and firmware. Published images never
+#                                                          carry it
 #   inputs/apks312/*.apk                                   wpa_supplicant 2.9 + libssl1.1 + libcrypto1.1
 set -e
 
@@ -45,7 +53,16 @@ R=$WORK/root
 rm -rf "$R"
 mkdir -p "$R"
 
-mini=$(ls "$IN"/inputs/alpine-minirootfs-*-armv7.tar.gz | head -1)
+# The base for the architecture being built, the packages' (-a on a host, else apk's own on the device:
+# not uname's, which says aarch64 for an armv7 userspace on a 64-bit kernel). armv7 for every board,
+# aarch64 for a 64-bit build; a staging directory may hold both.
+base=${ARCH:-$($APK --print-arch 2>/dev/null)}
+base=${base:-armv7}
+mini=$(ls "$IN"/inputs/alpine-minirootfs-*-"$base".tar.gz 2>/dev/null | head -1)
+[ -n "$mini" ] || { echo "mkrootfs: no inputs/alpine-minirootfs-*-$base.tar.gz" >&2; exit 1; }
+# One base only: with an old one beside a new one, the first would be taken, and apk add does not
+# upgrade the packages a base already has.
+[ "$(ls "$IN"/inputs/alpine-minirootfs-*-"$base".tar.gz | wc -l)" -eq 1 ] || { echo "mkrootfs: more than one inputs/alpine-minirootfs-*-$base.tar.gz: keep only the one techo5lib.py names" >&2; exit 1; }
 say "base: $(basename "$mini")"
 tar -xzf "$mini" -C "$R"
 
@@ -110,7 +127,7 @@ if [ -e "$IN/inputs/vendor.tar.gz" ]; then
 	tar -xzf "$IN/inputs/vendor.tar.gz" -C "$R" vendor
 	# The Wi-Fi driver the device boots with (etc/techo5/device.conf in the overlay; the Show's by default).
 	WIFI_MODULE=/vendor/lib/modules/mt76x8_wlan.ko
-	[ -r "$IN/overlay/etc/techo5/device.conf" ] && WIFI_MODULE=$(sed -n 's/^WIFI_MODULE=//p' "$IN/overlay/etc/techo5/device.conf" | tr -d '"')
+	[ -r "$IN/overlay/etc/techo5/device.conf" ] && WIFI_MODULE=$(sed -n 's/^WIFI_MODULE=//p' "$IN/overlay/etc/techo5/device.conf" | tr -d '\r"')
 	[ -e "$R$WIFI_MODULE" ] || { echo "mkrootfs: vendor tree has no $WIFI_MODULE" >&2; exit 1; }
 else
 	say "no vendor tree: the unit's own is mounted at /vendor"
@@ -118,7 +135,7 @@ fi
 
 # Our binaries and scripts.
 install -d "$R/usr/local/bin" "$R/usr/local/sbin" "$R/lib" "$R/var/lib/bluetooth" "$R/var/lib/bluealsa" "$R/usr/var/lib/bluealsa"
-for b in techo5 fbprobe audioprobe rebootto btbridge techo5-aec techo5-librespot techo5-ffmpeg; do
+for b in techo5 fbprobe audioprobe rebootto btbridge techo5-aec techo5-librespot techo5-ffmpeg techo5-ffmpeg64 techo5-gpu techo5-jpeg; do
 	[ -e "$IN/bin/$b" ] && install -m 755 "$IN/bin/$b" "$R/usr/local/bin/$b"
 done
 
@@ -140,11 +157,21 @@ find "$R/etc/techo5" "$R/usr/local/sbin" "$R/lib/techo5-lib.sh" "$R/etc/inittab"
 	-type f -exec sed -i 's/\r$//' {} +
 chmod 755 "$R"/etc/techo5/*.sh "$R"/usr/local/sbin/*
 
+# Optional mainline modules and firmware, built from the same kernel as boot.
+if [ -f "$IN/inputs/kernel.tar.gz" ]; then
+	say "kernel modules and firmware (development image: not for publishing)"
+	tar -xzf "$IN/inputs/kernel.tar.gz" -C "$R"
+fi
+
 # State that must survive an image change lives on userdata.
 rm -rf "$R/etc/dropbear"
 ln -s /data/techo5-linux/dropbear "$R/etc/dropbear"
 rm -f "$R/etc/resolv.conf"
 ln -s /run/resolv.conf "$R/etc/resolv.conf"
+# The hosts file too: boot.sh writes localhost there, and echod adds the .local names it was given
+# (Home Assistant's, Music Assistant's), which nothing else here can look up (internal/lib/localname).
+rm -f "$R/etc/hosts"
+ln -s /run/hosts "$R/etc/hosts"
 
 # Root: no password, and no SSH key in the image. Keys live on userdata and only arrive from Home
 # Assistant (echod's ssh_keys action); echod starts dropbear when the SSH switch is on.

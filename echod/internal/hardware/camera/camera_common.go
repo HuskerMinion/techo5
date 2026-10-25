@@ -1,4 +1,4 @@
-//go:build !dot
+//go:build !dot && !panel
 
 package camera
 
@@ -31,11 +31,12 @@ type Frame struct {
 	Seq uint64
 	At  time.Time
 
-	mu    sync.Mutex
-	raw   []byte // the sensor's frame as it came
-	rgba  *image.RGBA
-	tone  tone
-	toned bool
+	mu        sync.Mutex
+	raw       []byte      // the sensor's frame as it came
+	developed *image.RGBA // Full's picture, made once
+	rgba      *image.RGBA
+	tone      tone
+	toned     bool
 }
 
 // Image is the frame as a Width x Height picture, developed once however many ask for it.
@@ -155,8 +156,15 @@ var errStopStuck = errors.New("the camera is still shutting down: the last strea
 // point it at something that exists everywhere and exercise the lifecycle off the device.
 var nodes = []string{"/dev/camera-isp", "/dev/kd_camera_hw", "/dev/ion", "/proc/m4u"}
 
+// muteSwitch is the privacy latch the camera obeys, failing closed when it cannot be read. It is a
+// variable so that a test off the device can stand in an unmuted one.
+var muteSwitch = privacy.Microphone
+
 // Available reports whether this device has the camera nodes.
 func Available() bool {
+	if is, there := v4l2Board(); is {
+		return there
+	}
 	for _, p := range nodes {
 		if _, err := os.Stat(p); err != nil {
 			return false
@@ -209,12 +217,18 @@ func (c *Camera) acquire(fast bool) (release func(), err error) {
 	if !Available() {
 		return nil, errors.New("no camera on this device")
 	}
-	if m, err := privacy.Microphone(); err == nil {
-		if muted, err := m.Get(); err == nil && muted {
-			return nil, errors.New("privacy is on")
-		}
+	m, err := muteSwitch()
+	if err != nil {
+		return nil, err
 	}
-	if lenscover.Get().Covered() {
+	muted, err := m.Get()
+	if err != nil {
+		return nil, err
+	}
+	if muted {
+		return nil, errors.New("privacy is on")
+	}
+	if coverClosed() {
 		return nil, errors.New("the lens cover is closed")
 	}
 	c.mu.Lock()
@@ -358,6 +372,15 @@ func (c *Camera) Snapshot(ctx context.Context) (*Frame, error) {
 	for {
 		select {
 		case f := <-got:
+			// The mute or the lens cover came between Acquire's check and the sensor: say so
+			// rather than hand out the black frame as a picture.
+			if f.Blank() {
+				why := heldOff()
+				if why == "" {
+					why = "held off"
+				}
+				return nil, errors.New("the camera is off: " + why)
+			}
 			return f, nil
 		case <-ctx.Done():
 			if err := c.startErr(mine); err != nil {
@@ -401,14 +424,15 @@ func (c *Camera) Last() *Frame {
 // run owns the hardware from start to stop. Muting while it runs powers the sensor down and hands
 // out one black frame, so a view on screen goes dark at once; unmuting brings the sensor back for
 // whoever still holds it. On the Show the mute latch cuts the camera's power as well; on the Spot the
-// mute is software, and this is the camera's half of it.
+// mute is software, and this is the camera's half of it. Closing the lens cover does the same: the
+// sensor would only stream black, which the exposure loop turns up until it is a white field.
 func (c *Camera) run(stop, stopped chan struct{}) {
 	defer close(stopped)
 	for {
-		if isMuted() {
+		if why := heldOff(); why != "" {
 			c.emit(&Frame{At: time.Now(), rgba: image.NewRGBA(image.Rect(0, 0, Width, Height))})
-			slog.Info("camera held off: muted")
-			for isMuted() {
+			slog.Info("camera held off: " + why)
+			for heldOff() != "" {
 				select {
 				case <-stop:
 					return
@@ -438,7 +462,7 @@ func (c *Camera) run(stop, stopped chan struct{}) {
 					close(halt)
 					return
 				case <-time.After(mutePoll):
-					if isMuted() {
+					if heldOff() != "" {
 						close(halt)
 						return
 					}
@@ -500,14 +524,52 @@ func (c *Camera) startFailed(err error, stopped chan struct{}) (wedged bool) {
 // mutePoll is how often a running camera checks the mute.
 const mutePoll = 300 * time.Millisecond
 
+// coverClosed is the lens cover, a variable so a test can close it.
+var coverClosed = func() bool { return lenscover.Get().Covered() }
+
+// heldOff says what keeps the sensor off right now: the mute, the lens cover, or nothing ("").
+func heldOff() string {
+	switch {
+	case isMuted():
+		return "muted"
+	case coverClosed():
+		return "lens cover closed"
+	}
+	return ""
+}
+
 func isMuted() bool {
-	m, err := privacy.Microphone()
+	m, err := muteSwitch()
 	if err != nil {
-		return false
+		return true
 	}
 	muted, err := m.Get()
-	return err == nil && muted
+	return err != nil || muted
 }
+
+// ListenLatest hands frames to ch, one waiting at most: a newer frame replaces one not yet taken,
+// so a slow viewer skips frames but always ends on the last one. That matters when the sensor
+// stops (mute, lens cover): its last frame is the black one, and a viewer that kept the frame
+// before it would show a live-looking picture of a camera that is off. ch must have room for one.
+func (c *Camera) ListenLatest(ch chan *Frame) (cancel func()) {
+	return c.Frames.Listen(func(fr *Frame) {
+		for {
+			select {
+			case ch <- fr:
+				return
+			default:
+			}
+			select {
+			case <-ch:
+			default:
+			}
+		}
+	})
+}
+
+// Blank is whether this is the black frame sent when the sensor stops for the mute or the lens
+// cover, rather than a picture.
+func (f *Frame) Blank() bool { return f.raw == nil && f.rgba != nil }
 
 func (c *Camera) emit(f *Frame) {
 	c.mu.Lock()

@@ -1,10 +1,11 @@
-//go:build !dot && !spot
+//go:build !dot && !spot && !panel
 
 package speaker
 
 import (
 	"math"
 	"os"
+	"slices"
 	"strings"
 	"time"
 
@@ -41,9 +42,10 @@ const (
 // DRAM path plays cleanly. Holding any other AFE node marks the SRAM taken, so DL1 takes DRAM.
 // MultiMedia1_Capture is an AFE capture nothing on this device uses.
 //
-// athena on TECHO5's mainline kernel has no such fault, and its pcmC0D1c is the microphones'
-// capture, so nothing is held there.
-var DRAMHold = onMainline("", "/dev/snd/pcmC0D1c")
+// athena on TECHO5's mainline kernels has no such fault, and its pcmC0D1c is the microphones' capture
+// (an older tools/linux/athena kernel) or the echo reference (DL1_AWB_Record), so nothing is held
+// there. Nor on the Skylight, which has no MediaTek AFE.
+var DRAMHold = onSkylight("", onMainline("", "/dev/snd/pcmC0D1c"))
 
 // startFull starts the stream only once the whole ring is written, at open and after every underrun.
 //
@@ -108,9 +110,19 @@ type kctl struct {
 // protection. The first bring-up used 100 (-10 dB); with a phone at full volume over Bluetooth that
 // played clearly quieter than the device can, and 110 measured +10 dB at the microphones with peaks
 // still 12 dB under full scale (unit 1, 2026-10-15).
+//
+// The Skylight Calendar 15 (RK3566 on TECHO5's mainline kernel) plays through the RK809 PMIC's codec
+// into an external amplifier that is fed from the codec's headphone outputs, not its SPKO line out:
+// measured on the unit 2026-10-17 with a Dot's microphones, a -36 dBFS tone reached them
+// only with "Playback Mux" on HP. The amplifier's enable is a GPIO the device tree hands to the
+// kernel (simple-audio-amplifier), powered with the stream. The codec's digital volume is set to its
+// 0 dB top (255) and the volume curve is applied in software, as on every Show.
 var initSequence = boardInit()
 
 func boardInit() []kctl {
+	if layout.Skylight() {
+		return skylightInit
+	}
 	if layout.AthenaMainline() {
 		return athenaMainlineInit
 	}
@@ -120,7 +132,51 @@ func boardInit() []kctl {
 	return showInit(rt5616())
 }
 
-var athenaMainlineInit = append(athenaMainlineRoutes, kctl{name: "Master Playback Volume", level: 110})
+var athenaMainlineInit = append(athenaMainlineRoutes, kctl{name: athenaMaster, level: athenaMasterUnity})
+
+// athenaMaster is the upstream tas5805m driver's digital volume, one level per channel, both written
+// alike. Its table (tas5805m_volume) makes 110 0 dB and each step 1 dB, the same scale as the Show 5's
+// TAS5805M control (gain.go), under another name and with two channels.
+const (
+	athenaMaster      = "Master Playback Volume"
+	athenaMasterUnity = 110
+)
+
+// gainOnPath is whether the Speaker gain setting goes with the speaker's path rather than to the Show
+// 5's TAS5805M control (gain.go): on athena's mainline kernel it does, as the amplifier's digital
+// volume. initSequence writes that volume at 0 dB on every start, Reopen and Close, so a gain written
+// once beside it would be lost on the next Reopen; written with the path, it follows every one. The
+// Skylight's "Master Playback Volume" is another chip's and is never touched.
+var gainOnPath = layout.AthenaMainline()
+
+// withSpeakerGain is seq, out's path, with the Speaker gain in it: on athena's mainline kernel the
+// amplifier's digital volume at db dB over 0 dB, written after initSequence's 0 dB. Kept to 0 to
+// config.SpeakerGainMax (+6 dB). Elsewhere, and on any output but the speaker, seq as it is.
+//
+// The echo reference needs nothing for it: it is made from what the speaker sent (softRef), ahead of
+// the amplifier, so it neither grows nor clips with it. The echo at the microphones grows by db, as on
+// the Dot (paths_dot.go). Amazon's DSP tuning in the amplifier is left as it is.
+func withSpeakerGain(seq []kctl, out Output, db int) []kctl {
+	if !gainOnPath || out != OutputSpeaker {
+		return seq
+	}
+	return append(slices.Clone(seq), speakerGainControls(db)...)
+}
+
+// speakerGainControls is what a change of the Speaker gain writes while the speaker plays: athena's
+// amplifier volume alone, as withSpeakerGain puts it in the speaker's path. Nothing on other boards.
+func speakerGainControls(db int) []kctl {
+	if !gainOnPath {
+		return nil
+	}
+	db = max(0, min(db, config.SpeakerGainMax))
+	return []kctl{{name: athenaMaster, level: int32(athenaMasterUnity + db)}}
+}
+
+var skylightInit = []kctl{
+	{name: "Playback Mux", value: "HP"},
+	{name: "Master Playback Volume", level: 255},
+}
 
 // athenaMainlineRoutes are the AFE's DL1 into I2S1. Without them the DPCM front end has no back end
 // and the playback device does not open ("no backend DAIs enabled for Playback_1", EINVAL), so they
@@ -136,8 +192,9 @@ var openSequence = onMainline(athenaMainlineRoutes, nil)
 
 // PlaybackDevice is the playback PCM: the AFE's DL1 into the codec on the Show 5s and crown, and on
 // athena "I2S0DL1_PLayback", the AFE's DL1 into the TAS5805M (hw:0,7). On athena's mainline kernel
-// DL1 is the card's first front end, Playback_1 (hw:0,0).
-var PlaybackDevice = onMainline(0, onAthena(7, 23))
+// DL1 is the card's first front end, Playback_1 (hw:0,0). The Skylight's simple-audio-card has one
+// playback device, hw:0,0.
+var PlaybackDevice = onSkylight(0, onMainline(0, onAthena(7, 23)))
 
 // hwRate is the rate the card runs at. Everything up to the card works at Rate; athena's amplifier
 // runs at 96 kHz, as Fire OS runs it (AFE.cfg: "Speakers SamplingRate" 48000, "SpeakerHw
@@ -163,14 +220,26 @@ var hwTrimDB = onAthena(athenaTrimDB, 0)
 
 const athenaTrimDB = 0.0
 
-// softRef is whether the speaker feeds the software echo reference (lib/echoref): only athena on the
-// mainline kernel, whose card has no loopback.
+// hwBits is the sample width the card is sent: Bits, as everything up to it works.
+const hwBits = Bits
+
+// softRef is whether the speaker may feed the software echo reference (lib/echoref): only athena on
+// the mainline kernel, and there only while the microphones use it (echoref.InUse), which is when the
+// card's own DL1_AWB_Record did not open (mic/athena.go).
 var softRef = layout.AthenaMainline()
 
 // onMainline picks the value for athena on TECHO5's mainline kernel over any other.
 func onMainline[T any](mainline, other T) T {
 	if layout.AthenaMainline() {
 		return mainline
+	}
+	return other
+}
+
+// onSkylight picks the Skylight's value over any other.
+func onSkylight[T any](skylight, other T) T {
+	if layout.Skylight() {
+		return skylight
 	}
 	return other
 }

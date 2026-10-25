@@ -1,0 +1,64 @@
+#!/bin/busybox sh
+# Skylight bench initramfs, milestone 1.
+# Gives a root shell on the micro-USB port (USB serial, /dev/ttyACM* on the bench PC) and goes back
+# to stock Android by itself after $LIMIT seconds unless /tmp/stay exists. Everything the kernel
+# prints also lands in ramoops, which stock Android shows in /sys/fs/pstore after the reboot.
+/bin/busybox --install -s /bin
+export PATH=/bin
+mkdir -p /proc /sys /dev /tmp /sys/kernel/config
+mount -t proc proc /proc
+mount -t sysfs sysfs /sys
+mount -t devtmpfs devtmpfs /dev
+mount -t configfs configfs /sys/kernel/config
+mount -t tmpfs tmpfs /tmp
+LIMIT=600
+
+log() { echo "skylight-init: $*" > /dev/kmsg; }
+log "up, $(cat /proc/uptime)"
+
+# Android's "reboot recovery" leaves "boot-recovery" at the start of misc, and U-Boot obeys that
+# before anything else, so it would boot this kernel forever. Put the first 2048 bytes back to the
+# zeros the unit's backup has there (the factory message at 16K is left alone).
+MISC=/dev/mmcblk0p4
+for i in 1 2 3 4 5 6 7 8 9 10; do [ -b $MISC ] && break; sleep 0.5; done
+if [ "$(dd if=$MISC bs=13 count=1 2>/dev/null)" = "boot-recovery" ]; then
+	dd if=/dev/zero of=$MISC bs=2048 count=1 conv=notrunc,fsync 2>/dev/null && sync
+	log "cleared boot-recovery from misc: $(dd if=$MISC bs=2048 count=1 2>/dev/null | tr -d '\0' | wc -c) bytes left"
+fi
+
+# USB gadget: one ACM serial function on the OTG port.
+G=/sys/kernel/config/usb_gadget/sky
+if mkdir -p $G; then
+	echo 0x1d6b > $G/idVendor
+	echo 0x0104 > $G/idProduct
+	mkdir -p $G/strings/0x409
+	echo "Skylight bench" > $G/strings/0x409/product
+	echo "TECHO5 bench" > $G/strings/0x409/manufacturer
+	mkdir -p $G/functions/acm.usb0 $G/configs/c.1/strings/0x409
+	echo "acm" > $G/configs/c.1/strings/0x409/configuration
+	ln -s $G/functions/acm.usb0 $G/configs/c.1/
+	UDC=$(ls /sys/class/udc | head -1)
+	log "udc: '$UDC'"
+	[ -n "$UDC" ] && echo "$UDC" > $G/UDC && log "gadget bound"
+fi
+
+# Shell on the USB serial line, restarted whenever it exits.
+(
+	while true; do
+		[ -e /dev/ttyGS0 ] && setsid sh -c 'exec sh -i </dev/ttyGS0 >/dev/ttyGS0 2>&1'
+		sleep 1
+	done
+) &
+
+# Safety net: back to stock Android (boot mode "normal") unless someone touched /tmp/stay.
+(
+	sleep $LIMIT
+	if [ ! -e /tmp/stay ]; then
+		log "no /tmp/stay after ${LIMIT}s, rebooting to stock"
+		sync
+		/bin/reboot-normal
+	fi
+) &
+
+log "ready"
+while true; do sleep 3600; done

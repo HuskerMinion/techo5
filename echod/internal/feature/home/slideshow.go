@@ -16,10 +16,10 @@ import (
 	"time"
 
 	esphome "github.com/ygelfand/go-esphome-device"
-	xdraw "golang.org/x/image/draw"
 
 	"github.com/HuskerMinion/techo5/echod/internal/config"
 	"github.com/HuskerMinion/techo5/echod/internal/lib/hass"
+	"github.com/HuskerMinion/techo5/echod/internal/lib/picscale"
 	"github.com/HuskerMinion/techo5/echod/internal/lib/safe"
 )
 
@@ -125,7 +125,19 @@ type slideshowState struct {
 	trouble   string
 	fails     int
 	waitUntil time.Time
+
+	// rush is how far a re-read of the source (rereadSlideshow) has cut the photo's time short:
+	// rushAsked from the re-read until the look it made due shows a photo, rushShown while that photo is
+	// up, and rushNone once a photo takes over at its own time.
+	rush int
 }
+
+// The states of slideshowState.rush.
+const (
+	rushNone = iota
+	rushAsked
+	rushShown
+)
 
 // PhotoCaption is when and where a photo on the screen was taken (Slideshow.Caption), for the screen to
 // write over it: a photo alone, or one half of a pair. Either of When and Place may be missing.
@@ -364,8 +376,14 @@ func (f *Feature) ChooseSlideshowOverlay(overlay string) {
 }
 
 // SetSlideshowSource sets which media source to show photos from, from the home_slideshow action or
-// the screen's folder list.
+// the screen's folder list. The source already showing is read again (rereadSlideshow) rather than
+// left as it is, which is what a folder whose photos have changed wants (#180).
 func (f *Feature) SetSlideshowSource(source string) {
+	if source != "" && source == config.Get().Home.Slideshow.Source {
+		f.rereadSlideshow()
+		slog.Info("home: slideshow source read again", "source", source)
+		return
+	}
 	if id, ok := strings.CutPrefix(source, ImmichAlbumPrefix); ok {
 		// The album's name is kept with its id, to name it without asking the server. Not known yet (the
 		// list not fetched since a restart, or the album set from Home Assistant), the name of the album
@@ -382,6 +400,38 @@ func (f *Feature) SetSlideshowSource(source string) {
 	}
 	f.changeSlideshow(func(s *config.Slideshow) { s.Source = source })
 	slog.Info("home: slideshow source", "source", source)
+}
+
+// rereadSlideshow gathers the source's photos again on the slideshow's next look, and makes that look
+// due now, for a folder something outside has just filled with new photos (#180). Until then the device
+// trusts the list it has for browseEvery, so new photos took up to an hour to show, and setting the same
+// source again changed nothing: the way round was to clear the source and set it again, which put the
+// screen's photo out in between. It is forgetSlideshowList (photos.go, for a photo sent to the device)
+// with the next look brought forward rather than left to the photo's time.
+//
+// Every kind of source the slideshow shows from goes the same way, since gathering is what reads each
+// one: a Home Assistant media source folder (and its subfolders), Immich, and the device's own photos.
+// The photo up stays up while the new list is gathered and its first photo fetched, and the new one
+// takes over from it as any next photo does, so the screen is never dark between them. A gathering
+// already under way is of the list before: the generation moves on, so what it finds is not kept.
+//
+// The photo's time is cut short once for a run of re-reads: a script that copies photos in one at a time
+// and asks after each would otherwise change the photo every half minute. A re-read asked while the
+// look it made due is still to come, or while the photo that look put up is up, still reads the list
+// again, for that photo's next look, and leaves its time as it is. A slideshow in order keeps its place
+// in the list read again (keepGathered), and the photos ahead still in it.
+func (f *Feature) rereadSlideshow() {
+	f.mu.Lock()
+	f.slideshowGen++
+	f.slideshow.browsed = time.Time{}
+	// A fresh start, as a new source gets: a folder that was empty or unreadable may not be any more.
+	f.slideshow.trouble, f.slideshow.fails, f.slideshow.waitUntil = "", 0, time.Time{}
+	if f.slideshow.image != nil && f.slideshow.rush == rushNone {
+		f.slideshow.at = time.Now().Add(-slideshowEveryMax) // due now
+		f.slideshow.rush = rushAsked
+	}
+	f.mu.Unlock()
+	f.Changed.Emit(struct{}{})
 }
 
 // nameImmichAlbum asks Immich for its albums, to name the album id chosen without its name known.
@@ -436,7 +486,13 @@ func (f *Feature) nameImmichAlbumSoon(id string) {
 
 // keepGathered keeps photos gathered for the slideshow, unless its source has changed since the
 // gathering began (gen): a gathering takes as long as five minutes.
-func (f *Feature) keepGathered(gen uint64, source string, photos []hass.Media) bool {
+//
+// A slideshow in order (inOrder) carries on from the photo up when that photo is in the list gathered:
+// the next is the one after it there, and the photos ahead (a pair's wide ones) that are still in it
+// stay ahead. Read again for a folder that has had photos added (#180), or after browseEvery, it went
+// back to the first photo every time. A photo up that is not in the new list, or a shuffled slideshow,
+// starts the list from its beginning.
+func (f *Feature) keepGathered(gen uint64, source string, photos []hass.Media, inOrder bool) bool {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	// The source as well as the generation: the source is read before the generation is, and a change
@@ -444,7 +500,19 @@ func (f *Feature) keepGathered(gen uint64, source string, photos []hass.Media) b
 	if f.slideshowGen != gen || config.Get().Home.Slideshow.Source != source {
 		return false
 	}
-	f.slideshow.children, f.slideshow.browsed, f.slideshow.idx, f.slideshow.ahead = photos, time.Now(), 0, nil
+	idx, ahead := 0, []string(nil)
+	if n := len(f.slideshow.shown); inOrder && n > 0 {
+		in := func(id string) int { return slices.IndexFunc(photos, func(m hass.Media) bool { return m.ID == id }) }
+		if i := in(f.slideshow.shown[n-1]); i >= 0 {
+			idx = i + 1
+			for _, id := range f.slideshow.ahead {
+				if in(id) >= 0 {
+					ahead = append(ahead, id)
+				}
+			}
+		}
+	}
+	f.slideshow.children, f.slideshow.browsed, f.slideshow.idx, f.slideshow.ahead = photos, time.Now(), idx, ahead
 	f.slideshow.trouble, f.slideshow.fails, f.slideshow.waitUntil = "", 0, time.Time{}
 	return true
 }
@@ -511,22 +579,27 @@ func (f *Feature) SetSlideshowWholePhoto(on bool) {
 	if len(ids) == 0 || f.SlideshowMode() == "" || s.Art {
 		return // nothing up to draw again; the next photo is fetched the new way
 	}
-	go func() {
-		img, err := fetchShown(ids, on)
-		if err != nil {
-			slog.Warn("home: slideshow photo", "id", ids[0], "err", err)
-			return
-		}
-		f.mu.Lock()
-		if !slices.Equal(f.slideshow.shown, ids) || config.Get().Home.Slideshow.WholePhoto != on {
-			f.mu.Unlock()
-			return // moved on, or changed back, while this one was fetched
-		}
-		f.slideshow.prev, f.slideshow.image = f.slideshow.image, img
-		f.slideshow.at = time.Now() // the time per photo starts again too: it is a new look at it
+	go f.refetchShown(ids, on)
+}
+
+// refetchShown fetches and fits the photos up again, whole or not, and puts them up in place of what
+// is there unless the slideshow has moved on or the setting changed back meanwhile.
+func (f *Feature) refetchShown(ids []string, whole bool) {
+	img, err := fetchShown(ids, whole)
+	if err != nil {
+		slog.Warn("home: slideshow photo", "id", ids[0], "err", err)
+		return
+	}
+	f.mu.Lock()
+	if !slices.Equal(f.slideshow.shown, ids) || config.Get().Home.Slideshow.WholePhoto != whole ||
+		img.Rect.Size() != image.Pt(slideshowSize()) {
 		f.mu.Unlock()
-		f.Changed.Emit(struct{}{})
-	}()
+		return // moved on, changed back, or the screen's size changed, while this one was fetched
+	}
+	f.slideshow.prev, f.slideshow.image = f.slideshow.image, img
+	f.slideshow.at = time.Now() // the time per photo starts again too: it is a new look at it
+	f.mu.Unlock()
+	f.Changed.Emit(struct{}{})
 }
 
 // SlideshowWholePhoto is whether photos are shown whole rather than cropped to fill the screen.
@@ -742,6 +815,11 @@ func (f *Feature) advanceSlideshow() {
 			}
 			f.slideshow.prev, f.slideshow.image, f.slideshow.at = f.slideshow.image, img, time.Now()
 			f.slideshow.shown, f.slideshow.captions = ids, caps
+			if f.slideshow.rush == rushAsked {
+				f.slideshow.rush = rushShown // the photo a re-read brought forward gets its whole time
+			} else {
+				f.slideshow.rush = rushNone
+			}
 			f.slideshow.fails, f.slideshow.trouble = 0, ""
 			f.mu.Unlock()
 			f.Changed.Emit(struct{}{})
@@ -868,7 +946,7 @@ func (f *Feature) nextSlideshowChild(h config.Slideshow) (string, bool) {
 		if !h.InOrder {
 			rand.Shuffle(len(photos), func(i, j int) { photos[i], photos[j] = photos[j], photos[i] })
 		}
-		if !f.keepGathered(gen, h.Source, photos) {
+		if !f.keepGathered(gen, h.Source, photos, h.InOrder) {
 			return "", false // the source changed while it was gathered: the next look gathers the new one
 		}
 		slog.Info("home: slideshow photos", "count", len(photos), "subfolders", !h.TopOnly, "shuffled", !h.InOrder)
@@ -1024,14 +1102,15 @@ func fitShown(srcs []image.Image, whole bool) *image.RGBA {
 	if whole {
 		fit = fitWhole
 	}
+	sw, sh := slideshowSize()
 	if len(srcs) < 2 {
-		return fit(srcs[0], slideshowW, slideshowH)
+		return fit(srcs[0], sw, sh)
 	}
-	out := image.NewRGBA(image.Rect(0, 0, slideshowW, slideshowH))
+	out := image.NewRGBA(image.Rect(0, 0, sw, sh))
 	draw.Draw(out, out.Rect, image.Black, image.Point{}, draw.Src)
-	half := (slideshowW - pairGap) / 2
-	draw.Draw(out, image.Rect(0, 0, half, slideshowH), fit(srcs[0], half, slideshowH), image.Point{}, draw.Src)
-	draw.Draw(out, image.Rect(slideshowW-half, 0, slideshowW, slideshowH), fit(srcs[1], half, slideshowH), image.Point{}, draw.Src)
+	half := (sw - pairGap) / 2
+	draw.Draw(out, image.Rect(0, 0, half, sh), fit(srcs[0], half, sh), image.Point{}, draw.Src)
+	draw.Draw(out, image.Rect(sw-half, 0, sw, sh), fit(srcs[1], half, sh), image.Point{}, draw.Src)
 	return out
 }
 
@@ -1097,7 +1176,7 @@ func fitWhole(src image.Image, w, h int) *image.RGBA {
 	}
 	dst := blurredCover(src, w, h, wholeShade)
 	target := image.Rect((w-tw)/2, (h-th)/2, (w-tw)/2+tw, (h-th)/2+th)
-	xdraw.ApproxBiLinear.Scale(dst, target, src, sb, draw.Over, nil)
+	picscale.CatmullRom.Scale(dst, target, src, sb, draw.Over)
 	return dst
 }
 
@@ -1135,7 +1214,7 @@ func blurredCover(src image.Image, w, h, shade int) *image.RGBA {
 		}
 	}
 	out := image.NewRGBA(image.Rect(0, 0, w, h))
-	xdraw.BiLinear.Scale(out, out.Rect, small, small.Rect, draw.Src, nil)
+	picscale.BiLinear.Scale(out, out.Rect, small, small.Rect, draw.Src)
 	return out
 }
 
@@ -1155,7 +1234,7 @@ func cropToFill(src image.Image, w, h int) *image.RGBA {
 		tw, th = sw*h/sh, h
 	}
 	target := image.Rect((w-tw)/2, (h-th)/2, (w-tw)/2+tw, (h-th)/2+th)
-	xdraw.ApproxBiLinear.Scale(dst, target, src, sb, draw.Over, nil)
+	picscale.CatmullRom.Scale(dst, target, src, sb, draw.Over)
 	return dst
 }
 
@@ -1219,9 +1298,13 @@ func (f *Feature) SlideshowTransitioning() bool {
 	return f.slideshow.prev != nil && time.Since(f.slideshow.at) < slideshowFade
 }
 
-// crossfade blends a into b, t running 0 (all a) to 1 (all b). Both are always artW×artH and fully
-// opaque (cropToFill's and fitWhole's draw.Src), so a plain per-byte lerp needs no bounds or alpha handling.
+// crossfade blends a into b, t running 0 (all a) to 1 (all b). Both are the slideshow's size and fully
+// opaque (cropToFill's and fitWhole's draw.Src), so a plain per-byte lerp needs no alpha handling. A
+// panel whose screen said its size between the two has them different sizes: that change is a cut.
 func crossfade(a, b *image.RGBA, t float64) *image.RGBA {
+	if a.Rect != b.Rect {
+		return b
+	}
 	if t < 0 {
 		t = 0
 	} else if t > 1 {

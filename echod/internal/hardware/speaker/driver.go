@@ -319,6 +319,17 @@ func (d *Driver) Busy() bool {
 	return d.now != nil && !d.now.Finished()
 }
 
+// Holder is the name of the claim that holds the speaker, empty when nothing does: what a word heard
+// now may have come out of.
+func (d *Driver) Holder() string {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	if d.now == nil || d.now.Finished() {
+		return ""
+	}
+	return d.now.name
+}
+
 // HardwareTail is how long the playback buffer goes on sounding after the queue has run out, so
 // nothing should conclude the room is quiet until it has passed. It is a margin, generous on purpose,
 // and not the output latency: placing audio in time wants Player.Latency, which is what the card

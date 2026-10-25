@@ -233,33 +233,18 @@ func goneFrom(devices []bluez.Device) {
 	media.Get().ReceiverGone(from)
 }
 
-// playingToNobody is the phones still sending while the speaker is something else's that is not a
-// phone: Music Assistant, AirPlay, Spotify Connect, DLNA, or a station of the device's own. Their
-// audio goes nowhere, and none is owed the speaker back afterward (othersHadIt). A phone that
-// another phone took the speaker from is left playing: it takes the speaker back when that one
-// stops (takeBack). With the speaker free, there is nobody else to have it.
+// playingToNobody is the phones playing music that do not have the speaker while something else
+// does: Music Assistant, AirPlay, Spotify Connect, DLNA, a station of the device's own, or another
+// phone. Paused rather than left playing, a phone does not share the device's one radio with the
+// one heard, which stutters when two send at once, and playing it again takes the speaker back, as
+// any phone that starts (choose). With the speaker free, there is nobody else to have it.
 func playingToNobody(sending []received, receiving string, playing, paused, external bool) []received {
-	if strings.HasPrefix(receiving, media.BluetoothPrefix) {
-		return nil
-	}
 	if receiving == "" && !playing && !paused && !external {
 		return nil
 	}
-	return sending
-}
-
-// openTries is how many looks in a row a phone's stream that starts may fail to open before the phone
-// is paused away for playing to nobody all the same: a stream a phone paused and played again quickly
-// can still be held by the track that was playing it for a look or two (receive), and the play on the
-// phone is the listener's, which a pause at once would undo.
-const openTries = 3
-
-// stillOpening is away without the phones whose stream failed to open this look and is still being
-// tried (opening): each is tried again at the next look rather than paused (pauseAway).
-func stillOpening(away []received, opening map[string]bool) []received {
 	var out []received
-	for _, r := range away {
-		if !opening[r.item] {
+	for _, r := range sending {
+		if r.item != receiving {
 			out = append(out, r)
 		}
 	}

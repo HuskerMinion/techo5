@@ -143,6 +143,17 @@ func (d *Display) showsNowPlaying() bool {
 	return time.Since(d.radioCue) < radioCueFor
 }
 
+// musicFaceUp is whether the face a tap lands on is now playing: music wanting it, and not quiet so
+// long that the clock has taken the face back (musicAway), where a tap is the clock's again.
+func (d *Display) musicFaceUp() bool {
+	if !d.showsNowPlaying() {
+		return false
+	}
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	return !d.musicAway
+}
+
 // pickStation is a tap on the station list: stop, or play the row.
 func pickStation(sel int) {
 	rd := home.Get().Radio()

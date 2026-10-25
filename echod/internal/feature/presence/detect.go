@@ -24,8 +24,32 @@ type detector struct {
 	n      int
 	noise  []float64 // each cell's usual change on a still frame (exponential average)
 
-	// patchMin is how many joined cells make movement: the sensitivity (see patchFor).
+	// patchMin is how many joined cells make movement, and cellMin how far one cell has to change to
+	// have moved: the sensitivity (see patchFor and cellFor). Zero is the default.
 	patchMin int
+	cellMin  float64
+}
+
+// newDetector is a detector at a sensitivity of 1 to 100.
+func newDetector(sensitivity int) detector {
+	return detector{patchMin: patchFor(sensitivity), cellMin: cellFor(sensitivity)}
+}
+
+// sensitive sets the detector to a new sensitivity, keeping what it has learned of the room.
+func (d *detector) sensitive(sensitivity int) {
+	d.patchMin, d.cellMin = patchFor(sensitivity), cellFor(sensitivity)
+}
+
+// cellFor is the change a cell needs for a sensitivity of 1 to 100: cellStep up to 50, then down to
+// cellNear at 100. Somebody across the room fills a few cells and changes them less than somebody
+// close does, so a smaller patch alone did not reach them (#238): the bar has to come down too. Each
+// cell's own noise still sets its bar where that is higher, so a TV or a fan does not get through.
+func cellFor(sensitivity int) float64 {
+	s := min(max(sensitivity, 1), 100)
+	if s <= 50 {
+		return cellStep
+	}
+	return cellStep - (cellStep-cellNear)*float64(s-50)/50
 }
 
 // patchFor is the patch size for a sensitivity of 1 to 100: 50 is defaultPatch cells, 100 is 6, and 1
@@ -40,6 +64,7 @@ func patchFor(sensitivity int) int {
 
 const (
 	cellStep     = 25   // a cell's change, on 0-255, left after the picture's, the row's and the column's
+	cellNear     = 12   // the same at the highest sensitivity
 	saturated    = 235  // a cell this bright has no change left to show
 	defaultPatch = 20   // joined cells that moved, for a frame to have movement, at sensitivity 50 (2.6%)
 	noiseTimes   = 3    // a cell has moved when its change is this many times its usual noise, at least
@@ -101,10 +126,14 @@ func (d *detector) step(cur []uint8) bool {
 			d.noise[i] = cellStep / noiseTimes
 		}
 	}
+	cell := d.cellMin
+	if cell == 0 {
+		cell = cellStep
+	}
 	moved := make([]bool, len(cur))
 	for i, v := range res {
 		bright := min(float64(cur[i]), float64(prev[i])*ratio)
-		step := max(cellStep, noiseTimes*d.noise[i])
+		step := max(cell, noiseTimes*d.noise[i])
 		moved[i] = (v > step || v < -step) && bright < saturated
 	}
 	need := d.patchMin

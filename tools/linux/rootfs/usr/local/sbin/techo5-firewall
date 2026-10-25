@@ -5,7 +5,8 @@
 # In on wlan0: Home Assistant's API (6053/tcp), mDNS (5353/udp), SSH (22/tcp; dropbear listens only
 # while the SSH switch is on and a key is set), Sendspin audio (8928/tcp), the setup page and the camera
 # and screen views (8181/tcp; each served only while it is on), AirPlay (5000/tcp, 6001-6010/udp) and
-# Spotify Connect (4070/tcp), the camera over RTSP (8554/tcp) and DLNA's SSDP searches (1900/udp, IPv4),
+# Spotify Connect (4070/tcp), the camera over RTSP (8554/tcp), WS-Discovery's searches for it (3702/udp,
+# feature/camstream) and DLNA's SSDP searches (1900/udp, IPv4),
 # which nothing listens on unless their switches are on; DHCP replies, ping,
 # IPv6 neighbor discovery, and anything answering a connection the device made (calls included).
 # Out: everything, as before.
@@ -34,6 +35,7 @@ for T in iptables-legacy ip6tables-legacy; do
 		$T -A $CHAIN -p tcp --dport 22 -j ACCEPT &&
 		$T -A $CHAIN -p tcp --dport 8928 -j ACCEPT &&
 		$T -A $CHAIN -p tcp --dport 8181 -j ACCEPT &&
+		$T -A $CHAIN -p udp --dport 3702 -j ACCEPT &&
 		# feature/streaming pins these (airplay.go, spotify.go).
 		$T -A $CHAIN -p tcp --dport 5000 -j ACCEPT &&
 		$T -A $CHAIN -p udp --dport 6001:6010 -j ACCEPT &&
@@ -62,7 +64,7 @@ if [ -z "$ok" ]; then
 	echo "techo5-firewall: a rule failed; Wi-Fi left open" >&2
 	exit 1
 fi
-echo "techo5-firewall: Wi-Fi inbound closed except 6053, 5353, 22, 8928, 8181, 5000, 6001-6010, 4070, 8554" >&2
+echo "techo5-firewall: Wi-Fi inbound closed except 6053, 5353, 22, 8928, 8181, 5000, 6001-6010, 4070, 8554, 3702" >&2
 
 # The video decoder (feature/video, as techo5-video): out to anywhere but the device itself. It follows
 # names and redirects on its own, so this is where a name for 127.0.0.1 or a redirect to the device's

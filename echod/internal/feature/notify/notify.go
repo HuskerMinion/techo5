@@ -48,6 +48,10 @@ const (
 
 	longest = 24 * time.Hour // a time that was asked for is held to a day
 
+	// noteFor is how long a note of the device's own stays (Note): read at the screen that was just
+	// tapped, or not at all.
+	noteFor = 20 * time.Second
+
 	// maxTitle and maxMessage are as much as a card holds, in bytes: a heading and three lines.
 	maxTitle   = 40
 	maxMessage = 240
@@ -72,6 +76,9 @@ type Notification struct {
 	Icon    string // an mdi icon name, "" for none
 	Tag     string // what the caller called it, carried back on the event; "" for none
 	Until   time.Time
+
+	// Own is a note of this device's own (Note), which Home Assistant did not send and hears nothing of.
+	Own bool
 }
 
 // pictures is the camera page, as a picture notification uses it (home.Feature).
@@ -129,6 +136,24 @@ func Get() *Feature {
 			pics = home.Get()
 		}
 		shared = newFeature(pics)
+		if hasScreen {
+			// The notes home has for the screen (home.Hint), put up one after another in the order they
+			// came: a note and the word that takes it down must not pass each other. The hook's listener
+			// must not block, and putting a note up can wait on a picture going up (order).
+			notes := make(chan home.Hint, 8)
+			home.Get().Hint.Listen(func(h home.Hint) {
+				select {
+				case notes <- h:
+				default:
+					slog.Warn("notify: too many notes at once, one dropped")
+				}
+			})
+			safe.Go("notes", func() {
+				for h := range notes {
+					shared.Note(h.Title, h.Message)
+				}
+			})
+		}
 	})
 	return shared
 }
@@ -252,6 +277,32 @@ func (f *Feature) NotifyPicture(message, title, picture, chime, speak, sound, ta
 	}
 	f.put(n, h)
 	return nil
+}
+
+// Note puts up a note of this device's own: words in a card, as a notification's are, for something it
+// asked for that went nowhere (home.Hint). No chime and no words, since it is an answer to a tap and not
+// news, and no events, since Home Assistant did not send it and an automation that follows notifications
+// has nothing of its own to follow up on. It never takes the place of a notification Home Assistant
+// sent, which somebody is meant to see. An empty message takes down the note this device put up, if one
+// is still up.
+func (f *Feature) Note(title, message string) {
+	message = clean(message, maxMessage)
+	f.order.Lock()
+	defer f.order.Unlock()
+	up, showing := f.Showing()
+	if message == "" {
+		if showing && up.Own {
+			f.dismiss(up.ID)
+		}
+		return
+	}
+	if showing && !up.Own {
+		slog.Info("notify: a notification is up, so the device's own note is not shown over it")
+		return
+	}
+	f.put(Notification{
+		ID: f.nextID(), Kind: Text, Title: clean(title, maxTitle), Message: message, Until: f.now().Add(noteFor), Own: true,
+	}, how{silent: true, hushed: f.hushed()})
 }
 
 // how is what a notification is put up with.
@@ -443,8 +494,12 @@ func (f *Feature) tick(now time.Time) {
 }
 
 // report posts an event about n. Callers hold f.mu, so events are posted in the order the changes
-// happen; fire never waits (the outbox), so holding the lock for it costs nothing.
+// happen; fire never waits (the outbox), so holding the lock for it costs nothing. A note of the
+// device's own (Note) is reported to nobody.
 func (f *Feature) report(n Notification, what string) {
+	if n.Own {
+		return
+	}
 	f.fire(component.Event{Name: Event, Data: map[string]string{
 		"event": what, "id": n.ID, "tag": n.Tag, "title": n.Title, "message": n.Message, "kind": string(n.Kind),
 		"device": config.Get().Device.Name,

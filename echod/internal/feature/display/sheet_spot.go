@@ -37,6 +37,10 @@ const deviceModel = "Echo Spot"
 // themeRows are none: the Spot has its own colors and no themes.
 func themeRows() []settingRow { return nil }
 
+// calendarLookRows are none: the Spot's calendar is its own Today and Next (calendar_spot.go), with
+// nothing of the Show's calendar page to set.
+func calendarLookRows() []settingRow { return nil }
+
 // deviceCard, devicePicker, deviceChoose and deviceRowTap are the Show's own cards, lists and rows;
 // the Spot has none of its own.
 func deviceCard(sheetView) (cardView, bool)             { return cardView{}, false }
@@ -150,6 +154,8 @@ func adaptRows(rows []settingRow, sv sheetView) []settingRow {
 			row.sub = "With headphones in"
 		case row.id == "sendspin":
 			row.label = "Music Assistant"
+		case row.id == "btsc":
+			row.label, row.sub = "Secure Connections", "Off if a phone pairs, then drops"
 		case row.id == "screenweb":
 			row.label = "Screen on network"
 		case row.id == "camweb":
@@ -474,6 +480,7 @@ func (d *Display) sheetView(now time.Time) sheetView {
 	st.sendspin = sendspin.Get().Enabled()
 	st.insecureTLS = c.Diag.InsecureTLS
 	st.btProxy = bluetooth.Get().Enabled()
+	st.btSCOff, st.btSCFixed = c.Bluetooth.SecureConnectionsOff, !btaudio.Get().SecureConnectionsHere()
 	if st.demo {
 		st.name, st.address, st.weather = "Kitchen", "192.168.1.50", "Home"
 	}

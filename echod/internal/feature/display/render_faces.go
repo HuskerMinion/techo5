@@ -10,12 +10,14 @@ import (
 	"strings"
 	"time"
 
+	"golang.org/x/image/font"
+
 	"github.com/HuskerMinion/techo5/echod/internal/lib/hass"
 	"github.com/HuskerMinion/techo5/echod/internal/lib/locale"
 )
 
-// The Show's Binary, World, Agenda and Glow clock styles (clock_style.go), each in the box styledClock
-// gives it, and the name a swipe that turned to a style shows for a moment.
+// The Show's Binary, World, Agenda, Glow, Nixie, Stack and Overlap clock styles (clock_style.go), each
+// in the box styledClock gives it, and the name a swipe that turned to a style shows for a moment.
 
 // binaryStyle is the time in lights, a column per digit: hours, minutes and seconds, each digit's
 // value counted up from the bottom light (1, 2, 4, 8). The time is written small under them, with the
@@ -134,8 +136,12 @@ func (r *renderer) agendaStyle(s scene, box image.Rectangle) {
 	base := box.Min.Y + r.s(20) + capHeight(tf)
 	r.text(tf, hm, box.Min.X, base, cream)
 	if suffix := clockSuffix(s.now); suffix != "" {
-		r.text(r.ampm, suffix, box.Min.X, base+r.s(48), dateColor(amber))
-		base += r.s(48)
+		// The fixed step under the digits, or more where the suffix needs it: a small gap, then the
+		// suffix by its own height. The step alone let a taller font's AM or PM reach up into the time;
+		// the screen's own font fits the step exactly, so with it nothing moves.
+		step := max(r.s(48), r.s(6)+capHeight(r.ampm))
+		r.text(r.ampm, suffix, box.Min.X, base+step, dateColor(amber))
+		base += step
 	}
 	day := r.styleFace(true, 34)
 	left := col - r.s(30) - box.Min.X
@@ -225,6 +231,91 @@ func agendaHeads(events []hass.Event, now time.Time, lang string) []string {
 func (r *renderer) glowStyle(s scene, box image.Rectangle) {
 	r.bigStyle(s, image.Rect(box.Min.X, box.Min.Y+r.s(24), box.Max.X, box.Max.Y-r.s(60)))
 	r.styleDateUnder(s, box, box.Max.Y-r.s(8))
+}
+
+// nixieStyle is the time in Nixie tubes (nixie.go), the date under them. Where the box is wider than
+// the tubes at its full height, they are shorter and the date comes up under them, the two kept
+// together in the middle of the box; in a corner, at its foot.
+func (r *renderer) nixieStyle(s scene, box image.Rectangle) {
+	ampm, face := clockSuffix(s.now), r.ampm
+	if r.cornered {
+		face = r.styleFace(true, 36)
+	}
+	under := r.s(60) // the date's line
+	h := r.nixieFit(box.Dx(), box.Dy()-r.s(8)-under, ampm, face)
+	top := box.Min.Y + (box.Dy()-h-under)/2
+	if r.cornered {
+		top = box.Max.Y - h - under
+	}
+	r.nixieClock(&r.nixie, clockDigits(s.now), ampm, image.Rect(box.Min.X, top, box.Max.X, top+h), face, dateColor(amber), walnut)
+	r.styleDateUnder(s, box, top+h+under-r.s(8))
+}
+
+// stackStyle is the hours over the minutes, two figures each (figures.go), as large as the box allows:
+// the hours in the text color, the minutes in the accent, the AM/PM small beside the minutes and the
+// date under. The block keeps to the middle of the box and the AM/PM hangs off its side; in a corner,
+// the two at the box's foot.
+func (r *renderer) stackStyle(s scene, box image.Rectangle) {
+	d := stackDigits(s.now)
+	ampm, af := clockSuffix(s.now), r.ampm
+	if r.cornered {
+		af = r.styleFace(true, 36)
+	}
+	aw := 0
+	if ampm != "" {
+		aw = r.s(14) + r.width(af, ampm)
+	}
+	under := r.s(60) // the date's line
+	const ref = 200
+	slot, gap, h := stackSlots(r.styleFace(true, ref))
+	k := min(float64(box.Dx()-2*aw)*0.96/float64(2*slot+gap), float64(box.Dy()-under-r.s(8))/(float64(h)*(2+stackLead)))
+	f := r.styleFace(true, int(ref*k))
+	h = figureHeight(f)
+	tall := 2*h + int(float64(h)*stackLead)
+	top := box.Min.Y + (box.Dy()-tall-under)/2
+	if r.cornered {
+		top = box.Max.Y - tall - under
+	}
+	mid := box.Min.X + box.Dx()/2
+	hours := r.stackLine(&r.figures, f, [2]int{d[0], d[1]}, mid, top+h, cream)
+	minutes := r.stackLine(&r.figures, f, [2]int{d[2], d[3]}, mid, top+tall, dateColor(amber))
+	if ampm != "" {
+		// Level with the minutes' tops.
+		r.text(af, ampm, minutes.Max.X+r.s(14), minutes.Min.Y+capHeight(af), dim)
+	}
+	// The whole time opens the calendar, as the date does under the classic face.
+	r.setDateAt(hours.Union(minutes).Inset(-r.s(8)))
+	r.styleDateUnder(s, box, top+tall+under-r.s(8))
+}
+
+// overlapStyle is the time's figures very large, each reaching over the one before it (figures.go), the
+// accent and the text color in turn; the AM/PM small after them, level with their tops, and the date
+// under. In a corner, at the box's foot.
+func (r *renderer) overlapStyle(s scene, box image.Rectangle) {
+	digits := clockDigits(s.now)
+	ampm, af := clockSuffix(s.now), r.ampm
+	if r.cornered {
+		af = r.styleFace(true, 36)
+	}
+	aw := 0
+	if ampm != "" {
+		aw = r.s(14) + r.width(af, ampm)
+	}
+	under := r.s(60) // the date's line
+	faceAt := func(size int) font.Face { return r.styleFace(true, size) }
+	f := overlapFit(faceAt, 300, digits, (box.Dx()-aw)*96/100, box.Dy()-under-r.s(8))
+	_, w, h := overlapRow(f, digits)
+	top := box.Min.Y + (box.Dy()-h-under)/2
+	if r.cornered {
+		top = box.Max.Y - h - under
+	}
+	at := r.overlapClock(&r.figures, f, digits, box.Min.X+(box.Dx()-w-aw)/2, top+h, amber, cream, dim)
+	if ampm != "" {
+		r.text(af, ampm, at.Max.X+r.s(14), top+capHeight(af), dateColor(amber))
+	}
+	// The whole time opens the calendar, as the date does under the classic face.
+	r.setDateAt(image.Rect(at.Min.X, at.Min.Y, at.Max.X+aw, at.Max.Y).Inset(-r.s(8)))
+	r.styleDateUnder(s, box, top+h+under-r.s(8))
 }
 
 // glowGround is the Glow style's colors over the whole screen, drawn first so that everything else on

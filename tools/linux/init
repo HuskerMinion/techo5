@@ -40,10 +40,6 @@ crumb "init started, kernel $($BB uname -r) $($BB uname -m)"
 $BB mount -t proc proc /proc
 $BB mount -t sysfs sysfs /sys
 
-# Recovery bootloader message: clear it first, so a crash later still leaves
-# the unit booting normally next time.
-$BB dd if=/dev/zero of=$MISC bs=32 count=1 conv=notrunc 2>/dev/null
-
 $BB mount -t tmpfs -o mode=0755 tmpfs /dev
 $BB mkdir -p /dev/pts /dev/graphics /run /tmp /store /data /android /newroot
 $BB mount -t devpts devpts /dev/pts
@@ -51,6 +47,10 @@ $BB mount -t tmpfs tmpfs /run
 $BB mount -t tmpfs tmpfs /tmp
 $BB mdev -s
 $BB mknod -m 600 /dev/mmcblk0p8 b 179 8 2>/dev/null
+# Recovery bootloader message: clear it first, so a crash later still leaves
+# the unit booting normally next time (and a one-shot boot of the recovery
+# partition stays one-shot). /dev/zero exists only from here on.
+$BB dd if=/dev/zero of=$MISC bs=32 count=1 conv=notrunc 2>/dev/null
 [ -e /dev/fb0 ] && $BB ln -sf /dev/fb0 /dev/graphics/fb0
 echo 7 4 1 7 > /proc/sys/kernel/printk
 crumb "dev populated: $($BB ls /dev | $BB wc -l) nodes, fb0=$([ -e /dev/fb0 ] && echo yes || echo no)"
@@ -100,6 +100,11 @@ snapshot() {
 boot_slot() {
 	slot=$1
 	root=/store/slots/$slot
+	if [ -f /etc/techo5/kernel-release ] &&
+	   [ ! -f "$root/lib/modules/$(uname -r)/extra/mt76x8_wlan.ko" ]; then
+		crumb "slot $slot has no matching kernel modules; staying in rescue"
+		return 1
+	fi
 	[ -x $root/sbin/init ] || [ -L $root/sbin/init ] || { crumb "slot $slot has no /sbin/init"; return 1; }
 	mount --bind $root /newroot || { crumb "bind mount of slot $slot failed"; return 1; }
 	mkdir -p /run/techo5

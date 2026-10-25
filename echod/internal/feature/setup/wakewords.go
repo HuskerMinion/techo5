@@ -6,6 +6,7 @@ import (
 	"html"
 	"io"
 	"net/http"
+	"slices"
 
 	"github.com/HuskerMinion/techo5/echod/internal/config"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/wakeword"
@@ -74,14 +75,22 @@ func tooLarge(err error) bool {
 	return errors.As(err, &big)
 }
 
-// listening is whether a slot is listening for the model, as the selection was last saved.
+// listening is whether a slot is listening for the model, as the selection was last saved, or it is the
+// hang-up word or a command word: a model any of them has loaded would go on running whatever replaced
+// it on disk.
 func listening(id string) bool {
-	for _, s := range config.Get().Wake.Slots(wakeword.Slots) {
+	wake := config.Get().Wake
+	for _, s := range wake.Slots(wakeword.Slots) {
 		if s.ID == id {
 			return true
 		}
 	}
-	return false
+	if id == "" {
+		return false
+	}
+	return wake.Hangup.ModelID() == id || slices.ContainsFunc(wake.CommandWords(), func(w config.CommandWord) bool {
+		return w.ID == id
+	})
 }
 
 // wakeWordUpload takes a model from the page's script: the token, then the .json, then the .tflite,

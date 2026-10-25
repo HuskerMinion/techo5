@@ -1,4 +1,4 @@
-//go:build linux && !dot && !spot
+//go:build linux && !dot && !spot && !panel
 
 package update
 

@@ -70,7 +70,7 @@ func TestShowClockStylesDraw(t *testing.T) {
 			for _, panel := range []struct {
 				name       string
 				wide, high int
-			}{{"", showWide, showHigh}, {"-show8", show8Wide, show8High}} {
+			}{{"", showWide, showHigh}, {"-show8", show8Wide, show8High}, {"-skylight", skylightWide, skylightHigh}} {
 				img := image.NewRGBA(image.Rect(0, 0, panel.wide, panel.high))
 				newRenderer(img).draw(s)
 				if dir == "" {

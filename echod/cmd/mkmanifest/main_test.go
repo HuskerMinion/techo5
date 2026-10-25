@@ -174,6 +174,41 @@ func TestTheDotIsKeyedApart(t *testing.T) {
 	}
 }
 
+// The Echo Dot 3's build and rootfs sit beside the Dot 2's on the same channel, each under its own key:
+// a Dot 2 handed the Dot 3's daemon, or the other way round, would come up on the wrong hardware.
+func TestTheDot3IsKeyedApartFromTheDot2(t *testing.T) {
+	dir := t.TempDir()
+	for name, body := range map[string]string{"echod-arm-dot": "dot", "echod-arm-donut": "donut", "dot.tar.gz": "d", "donut.tar.gz": "n"} {
+		if err := os.WriteFile(filepath.Join(dir, name), []byte(body), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	out := filepath.Join(dir, "manifest.json")
+	err := run(update.Manifest{Version: "1.0.31"}, "https://example/download/dot-v1.0.31",
+		map[string]string{"arm-dot": filepath.Join(dir, "echod-arm-dot"), "arm-donut": filepath.Join(dir, "echod-arm-donut")},
+		map[string]string{"arm-dot": filepath.Join(dir, "dot.tar.gz"), "arm-donut": filepath.Join(dir, "donut.tar.gz")}, nil, out)
+	if err != nil {
+		t.Fatal(err)
+	}
+	encoded, err := os.ReadFile(out)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var m update.Manifest
+	if err := json.Unmarshal(encoded, &m); err != nil {
+		t.Fatal(err)
+	}
+	if got := m.Binaries["arm-donut"].URL; got != "https://example/download/dot-v1.0.31/echod-arm-donut" {
+		t.Errorf("donut binary at %q", got)
+	}
+	if got := m.Rootfs["arm-donut"].URL; got != "https://example/download/dot-v1.0.31/donut.tar.gz" {
+		t.Errorf("donut rootfs at %q", got)
+	}
+	if m.Binaries["arm-dot"].SHA256 == m.Binaries["arm-donut"].SHA256 {
+		t.Error("the two Dots' builds carry the same hash")
+	}
+}
+
 // The 2nd gen Show 8's rootfs is keyed apart from the other Shows' even though the two share the arm
 // binary: each would fail to boot on the other.
 func TestTheAthenaRootfsIsKeyedApart(t *testing.T) {

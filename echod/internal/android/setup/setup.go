@@ -15,7 +15,6 @@ import (
 	"os"
 	"time"
 
-	"github.com/HuskerMinion/techo5/echod/internal/android/dns"
 	"github.com/HuskerMinion/techo5/echod/internal/android/prop"
 	"github.com/HuskerMinion/techo5/echod/internal/component"
 	"github.com/HuskerMinion/techo5/echod/internal/layout"
@@ -38,8 +37,9 @@ func stop(service, reason string) Action {
 }
 
 // Actions is applied in order: the device's own first (setup_dot.go, setup_cronos.go), then what
-// every device needs. Nothing here is allowed to fail a boot.
-var Actions = append(append([]Action{}, deviceActions...), common...)
+// every device needs, then the resolver where Go's has to be pointed somewhere (resolver.go). Nothing
+// here is allowed to fail a boot.
+var Actions = append(append(append([]Action{}, deviceActions...), common...), resolver...)
 
 var common = []Action{
 	{
@@ -48,11 +48,6 @@ var common = []Action{
 		// GOMAXPROCS is read once at start-up. Pinning cores against the governor is the answer we
 		// rejected; counting them and telling the runtime is the one that works.
 		Do: procs,
-	},
-	{
-		Name:   "point the resolver at the nameservers the platform knows",
-		Reason: "there is no /etc/resolv.conf, so Go's resolver has nowhere to look",
-		Do:     android(func() error { dns.Use(); return nil }),
 	},
 	{
 		Name:   "point the verifier at the platform's root certificates",

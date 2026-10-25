@@ -15,6 +15,11 @@ type Call struct {
 	// text: every field in Data is a string, and an action that validates a bool strictly refuses
 	// "false" where "{{ false }}" renders to the real thing.
 	Templates map[string]string
+
+	// Unheard, when set, is called on the caller's goroutine, before Emit returns, when the call went to
+	// nobody: no Home Assistant was connected to the device to take it. Nothing calls it where nothing
+	// serves the device's API at all, since nothing is known then.
+	Unheard func()
 }
 
 var CallService hook.Hook[Call]

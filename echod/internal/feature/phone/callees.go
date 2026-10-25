@@ -1,10 +1,6 @@
 package phone
 
-import (
-	"errors"
-
-	"github.com/HuskerMinion/techo5/echod/internal/feature/announce"
-)
+import "errors"
 
 // Callee is someone a screen offers to call: another device in the house, over the intercom, or one of
 // the phone's contacts, over the phone line.
@@ -16,11 +12,12 @@ type Callee struct {
 
 // Callees is who a screen's Call list shows: the other devices in the house first, by name, while this
 // one has a house word, then the contacts, while the phone is signed in. A device answers only to its house
-// word and a contact only over a signed-in line, so neither is offered where it could not be reached.
+// word and a contact only over a signed-in line, so neither is offered where it could not be reached; nor
+// is a device without microphones (callable).
 func (p *Phone) Callees() []Callee {
 	var out []Callee
 	if intercomOpen() {
-		for _, pe := range announce.Peers() {
+		for _, pe := range callable() {
 			out = append(out, Callee{Name: pe.Name, Device: true})
 		}
 	}

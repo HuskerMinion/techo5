@@ -3,6 +3,8 @@ package audio
 import (
 	"encoding/binary"
 	"math"
+
+	"github.com/HuskerMinion/techo5/echod/internal/lib/vec"
 )
 
 // Whole-number rate changes, for a board whose hardware runs at a multiple of the rate the daemon
@@ -47,6 +49,9 @@ type Decimator struct {
 	hist  []float32
 	at    int
 	phase int
+	// zeros counts the inputs in a row that were exactly zero, up to len(h): with the whole window
+	// zero the output is zero, and silence (a speaker's reference with nothing playing) costs nothing.
+	zeros int
 }
 
 // NewDecimator makes a decimator by factor with taps coefficients. Its delay is (taps-1)/2 input
@@ -57,12 +62,18 @@ func NewDecimator(factor, taps int) *Decimator {
 		factor: factor,
 		h:      lowpass(taps, 0.5/float64(factor), 1),
 		hist:   make([]float32, 2*taps),
+		zeros:  taps, // the history starts silent
 	}
 }
 
 // Push takes one input sample and reports an output sample on every factor-th call.
 func (d *Decimator) Push(x float32) (float32, bool) {
 	n := len(d.h)
+	if x != 0 {
+		d.zeros = 0
+	} else if d.zeros < n {
+		d.zeros++
+	}
 	d.hist[d.at] = x
 	d.hist[d.at+n] = x
 	d.at++
@@ -76,19 +87,18 @@ func (d *Decimator) Push(x float32) (float32, bool) {
 	}
 	d.phase = 0
 
-	win := d.hist[d.at : d.at+n]
-	var y float32
-	for i, c := range d.h {
-		// h is symmetric, so the window's oldest-first order needs no reversing.
-		y += c * win[i]
+	if d.zeros == n {
+		return 0, true
 	}
-	return y, true
+	// h is symmetric, so the window's oldest-first order needs no reversing, and the product is
+	// vec's (NEON on the boards that run this: the filters were most of an idle Show 8's CPU).
+	return vec.Dot(d.h, d.hist[d.at:d.at+n]), true
 }
 
 // Reset forgets the history, for a stream that starts over.
 func (d *Decimator) Reset() {
 	clear(d.hist)
-	d.at, d.phase = 0, 0
+	d.at, d.phase, d.zeros = 0, 0, len(d.h)
 }
 
 // Upsampler takes interleaved 16-bit audio up by a whole factor: each input sample becomes factor
@@ -96,11 +106,17 @@ func (d *Decimator) Reset() {
 type Upsampler struct {
 	factor   int
 	channels int
-	// phases[p] is the polyphase branch for output p of each input: every factor-th coefficient.
+	// phases[p] is the polyphase branch for output p of each input: every factor-th coefficient, last
+	// tap first, so it lines up with the window's oldest-first order for vec.Dot.
 	phases [][]float32
 	// hist is, per channel, the last len(phases[0]) inputs twice over, newest last (as in Decimator).
 	hist [][]float32
 	at   int
+	// zeros counts the frames in a row that were silent on every channel, up to a branch's length:
+	// with every window zero the output is silence, written without the products (the speaker's
+	// stream stays open, and idle, between sounds).
+	zeros   int
+	silence []byte // one input frame's output, silent
 
 	clipped uint64
 }
@@ -109,11 +125,12 @@ type Upsampler struct {
 // coefficients per output phase, scaled by gain (1 keeps the level).
 func NewUpsampler(factor, tapsPerPhase, channels int, gain float64) *Upsampler {
 	h := lowpass(factor*tapsPerPhase, 0.5/float64(factor), float64(factor)*gain)
-	u := &Upsampler{factor: factor, channels: channels}
+	u := &Upsampler{factor: factor, channels: channels, zeros: tapsPerPhase,
+		silence: make([]byte, 2*channels*factor)}
 	for p := range factor {
 		branch := make([]float32, tapsPerPhase)
 		for k := range branch {
-			branch[k] = h[p+k*factor]
+			branch[tapsPerPhase-1-k] = h[p+k*factor]
 		}
 		u.phases = append(u.phases, branch)
 	}
@@ -128,25 +145,32 @@ func (u *Upsampler) S16LE(in, out []byte) []byte {
 	k := len(u.phases[0])
 	frameBytes := 2 * u.channels
 	for f := 0; f+frameBytes <= len(in); f += frameBytes {
+		silent := true
 		for c := range u.channels {
 			x := float32(int16(binary.LittleEndian.Uint16(in[f+2*c:])))
 			u.hist[c][u.at] = x
 			u.hist[c][u.at+k] = x
+			silent = silent && x == 0
 		}
 		u.at++
 		if u.at == k {
 			u.at = 0
 		}
+		if !silent {
+			u.zeros = 0
+		} else if u.zeros < k {
+			u.zeros++
+		}
+		if u.zeros == k {
+			out = append(out, u.silence...)
+			continue
+		}
 		for p := range u.factor {
 			branch := u.phases[p]
 			for c := range u.channels {
-				// Newest input last in the window, and the branch's first tap belongs to the newest
-				// input, so the branch runs backwards against it.
-				win := u.hist[c][u.at : u.at+k]
-				var y float32
-				for i, coef := range branch {
-					y += coef * win[k-1-i]
-				}
+				// The branch's first tap belongs to the newest input, and the branch is stored reversed,
+				// so it runs forward against the oldest-first window.
+				y := vec.Dot(branch, u.hist[c][u.at:u.at+k])
 				out = binary.LittleEndian.AppendUint16(out, uint16(u.clip(y)))
 			}
 		}
@@ -174,5 +198,5 @@ func (u *Upsampler) Reset() {
 	for _, h := range u.hist {
 		clear(h)
 	}
-	u.at = 0
+	u.at, u.zeros = 0, len(u.phases[0])
 }

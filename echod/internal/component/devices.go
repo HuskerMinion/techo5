@@ -1,5 +1,11 @@
 package component
 
+import (
+	"sync"
+
+	esphome "github.com/ygelfand/go-esphome-device"
+)
+
 // Sub-devices Home Assistant shows beneath this one, which entities join by Base.DeviceID. Zero is the
 // device itself and is what most things want.
 //
@@ -31,3 +37,42 @@ const (
 
 // AssistantDevice is the sub-device holding one slot's settings.
 func AssistantDevice(slot int) uint32 { return DeviceAssistant + uint32(slot) }
+
+// DeviceTessera is the screen the Tessera add-on sees (feature/tessera), there only while that is turned
+// on. It is numbered apart from the list above, well past the assistant slots, so adding it moved none of
+// theirs, and a slot added later does not move it.
+const DeviceTessera uint32 = 64
+
+// Offered is a sub-device a component asks for, there only while Wanted says so. Suffix goes after the
+// device's own name, as the others' do. Wanted is asked when the server starts, which is the only time
+// Home Assistant reads the list.
+type Offered struct {
+	ID     uint32
+	Suffix string
+	Wanted func() bool
+}
+
+var (
+	offeredMu sync.Mutex
+	offered   []Offered
+)
+
+// Offer adds a sub-device that comes and goes with a setting. From a component's constructor.
+func Offer(d Offered) {
+	offeredMu.Lock()
+	defer offeredMu.Unlock()
+	offered = append(offered, d)
+}
+
+// OfferedDevices is the offered sub-devices wanted now, named for a device called name.
+func OfferedDevices(name string) []esphome.Device {
+	offeredMu.Lock()
+	defer offeredMu.Unlock()
+	var out []esphome.Device
+	for _, d := range offered {
+		if d.Wanted == nil || d.Wanted() {
+			out = append(out, esphome.Device{ID: d.ID, Name: name + d.Suffix})
+		}
+	}
+	return out
+}

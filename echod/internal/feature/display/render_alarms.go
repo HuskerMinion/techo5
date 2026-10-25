@@ -96,7 +96,8 @@ func (r *renderer) timersLine(s scene, y int) {
 	if first.Total > 0 {
 		frac := float64(first.Left) / float64(first.Total)
 		full := w
-		draw.Draw(r.dst, image.Rect(x, y+10, x+full, y+14), image.NewUniform(ember), image.Point{}, draw.Src)
-		draw.Draw(r.dst, image.Rect(x, y+10, x+int(float64(full)*frac), y+14), image.NewUniform(amber), image.Point{}, draw.Src)
+		y0, y1 := y+r.s(10), y+r.s(14)
+		draw.Draw(r.dst, image.Rect(x, y0, x+full, y1), image.NewUniform(ember), image.Point{}, draw.Src)
+		draw.Draw(r.dst, image.Rect(x, y0, x+int(float64(full)*frac), y1), image.NewUniform(amber), image.Point{}, draw.Src)
 	}
 }

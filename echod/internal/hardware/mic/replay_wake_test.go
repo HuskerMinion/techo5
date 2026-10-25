@@ -1,4 +1,4 @@
-//go:build dot
+//go:build dot && !donut
 
 package mic
 
@@ -16,6 +16,7 @@ import (
 	"github.com/zserge/microwakeword"
 
 	"github.com/HuskerMinion/techo5/echod/internal/config"
+	"github.com/HuskerMinion/techo5/echod/internal/lib/mwwfront"
 	"github.com/HuskerMinion/techo5/echod/internal/lib/wake"
 )
 
@@ -26,7 +27,8 @@ import (
 // TECHO5_MICBENCH is a capture directory (tools/micbench in techo5-dot) and TECHO5_MODELS a directory of
 // microWakeWord models; TECHO5_WAKE picks one (default okay_nabu). When the directory's session.log has
 // prompts for a take, each prompt is scored on its own: the window from the prompt to promptWindow after
-// it holds one utterance, and a crossing anywhere else is a false accept. Reports only.
+// it holds one utterance, and a crossing anywhere else is a false accept. TECHO5_WAKE_FRONTEND=exact
+// scores with the exact feature front end (mwwfront) in place of the detector's own. Reports only.
 func TestReplayWakeScores(t *testing.T) {
 	dir, models := os.Getenv("TECHO5_MICBENCH"), os.Getenv("TECHO5_MODELS")
 	if dir == "" || models == "" {
@@ -214,6 +216,13 @@ func scoreWake(t *testing.T, raw []byte, mixer Mixer, m wake.Model) []float64 {
 	}
 	c, l := newCanceller(), newLeveler()
 	setReplayEngine(c)
+	// The env is read here because detect imports this package; the step goes by mwwfront.StepMs, as
+	// the daemon's does, so a manifest without one is 20 ms here too.
+	var exact *mwwfront.Frontend
+	if os.Getenv("TECHO5_WAKE_FRONTEND") == "exact" {
+		exact = mwwfront.New(m.Config.FeaturesStepMs)
+	}
+	var pending []int16
 
 	frameBytes := Channels * Bits / 8
 	period := FrameSamples * frameBytes
@@ -243,7 +252,17 @@ func scoreWake(t *testing.T, raw []byte, mixer Mixer, m wake.Model) []float64 {
 			}
 		}
 		// The daemon reads the sliding average against the cutoff, not ProcessAudio's result.
-		det.ProcessAudio(frame)
+		if exact == nil {
+			det.ProcessAudio(frame)
+		} else {
+			pending = append(pending, frame...)
+			for len(pending) >= exact.WindowSamples() {
+				q := make([]int8, mwwfront.Channels)
+				mwwfront.Quantize(exact.ProcessFrame(pending[:exact.WindowSamples()]), q)
+				det.ProcessFeatures([][]int8{q})
+				pending = pending[exact.StepSamples():]
+			}
+		}
 		trace = append(trace, det.SlidingAverage())
 	}
 	return trace

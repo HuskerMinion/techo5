@@ -43,6 +43,17 @@ func (l hintListener) Accept() (net.Conn, error) {
 	return &hintConn{Conn: c}, nil
 }
 
+// servedListener is ln as the server is given it: each connection counted (clients.go), and, when hint
+// is set, a plaintext hello told the device needs a key. The hint is the outer of the two, so the count
+// sees every byte as it is, and the hint's Close ends the sending side through the count's.
+func servedListener(ln net.Listener, n *atomic.Int32, hint bool) net.Listener {
+	var served net.Listener = countListener{ln, n}
+	if hint {
+		served = hintListener{served}
+	}
+	return served
+}
+
 // hintConn looks at the first byte the client sends, once.
 type hintConn struct {
 	net.Conn
@@ -73,8 +84,10 @@ func (c *hintConn) Read(p []byte) (int, error) {
 // drop the rejection before reading it. Bounded, so a client that keeps sending cannot hold it.
 func (c *hintConn) Close() error {
 	if c.rejected.Load() {
-		if tc, ok := c.Conn.(*net.TCPConn); ok {
-			_ = tc.CloseWrite()
+		// Asked of whatever the connection is: the count's wrapping (clients.go) is under this one,
+		// and passes it on to the TCP connection.
+		if cw, ok := c.Conn.(interface{ CloseWrite() error }); ok {
+			_ = cw.CloseWrite()
 		}
 		_ = c.Conn.SetReadDeadline(time.Now().Add(250 * time.Millisecond))
 		_, _ = io.Copy(io.Discard, io.LimitReader(c.Conn, 64<<10))

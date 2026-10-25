@@ -61,14 +61,19 @@ var Languages = map[string]Set{
 		Camera: []string{"muestra", "muéstrame", "muestrame", "enseña", "cámara", "camara"},
 	},
 	"fr": {
+		// Matched inside what was heard, and under Match all inside English too: so not "neig"
+		// (neighbor) or "orage" alone (storage).
 		Weather: []string{"météo", "meteo", "quel temps", "prévisions", "previsions", "température", "temperature",
-			"pluie", "pleu", "neige", "neig", "orage", "tempête", "tempete", "ensoleillé", "ensoleille", "nuageux", "radar"},
+			"pluie", "pleu", "neige", "neigé", "un orage", "d'orage", "l'orage", "des orages", "orageux", "tempête", "tempete",
+			"ensoleillé", "ensoleille", "nuageux", "radar"},
 		Radar:  []string{"radar", "carte des pluies", "carte météo", "carte meteo"},
 		GoHome: []string{"écran d'accueil", "ecran d'accueil", "page d'accueil", "retour à l'horloge", "retour a l'horloge", "montre l'horloge"},
 		Camera: []string{"montre", "affiche", "caméra", "camera"},
 	},
 	"it": {
-		Weather: []string{"meteo", "che tempo", "previsioni", "temperatura", "pioggia", "piov", "neve", "nevic",
+		// Not "neve" alone: it is inside the English "never", which Match all would take as the weather.
+		Weather: []string{"meteo", "che tempo", "previsioni", "temperatura", "pioggia", "piov", "la neve", "di neve",
+			"c'è neve", "sarà neve", "neve oggi", "neve domani", "nevic",
 			"temporale", "tempesta", "soleggiato", "nuvoloso", "radar"},
 		Radar:  []string{"radar", "mappa della pioggia", "mappa meteo"},
 		GoHome: []string{"schermata principale", "schermata iniziale", "torna all'orologio", "mostra l'orologio"},
@@ -80,6 +85,25 @@ var Languages = map[string]Set{
 		Radar:  []string{"radar", "regenkaart", "buienradar", "weerkaart"},
 		GoHome: []string{"beginscherm", "startscherm", "terug naar de klok", "laat de klok zien"},
 		Camera: []string{"laat", "toon", "camera"},
+	},
+	"pt": {
+		// Matched inside what was heard, so "tempo" alone is left out: it is in "quanto tempo" (how long)
+		// and timers. The weather is asked for in phrases instead, and "temporal" too: alone, it is the
+		// English "temporal lobe" under Match all. Brazilian Portuguese, as it is spoken.
+		Weather: []string{"previsão do tempo", "previsao do tempo", "como está o tempo", "como esta o tempo", "como tá o tempo",
+			"como ta o tempo", "como vai estar o tempo", "tempo hoje", "tempo amanhã", "tempo amanha", "clima hoje", "clima amanhã",
+			"clima amanha", "mapa do tempo", "qual a temperatura", "qual é a temperatura", "quantos graus", "chuva", "chover",
+			"chove", "nevar", "tempestade", "vai fazer calor", "vai fazer frio", "ensolarado", "nublado", "radar",
+			"previsão", "previsao", "como vai o tempo", "que tempo faz", "tá frio", "ta frio", "tá calor", "ta calor", "faz frio",
+			"fazer sol", "ter temporal", "um temporal", "vem temporal", "temporal hoje", "temporal amanhã", "temporal amanha"},
+		Radar: []string{"radar", "mapa de chuva", "mapa da chuva", "mapa do tempo"},
+		NotWeather: []string{"som de chuva", "som da chuva", "sons de chuva", "barulho de chuva", "barulho da chuva", "ruído", "ruido",
+			"toca chuva", "toca a chuva", "toque chuva", "coloca chuva", "coloca a chuva", "bota chuva", "bota a chuva",
+			"põe chuva", "poe chuva", "põe a chuva", "poe a chuva"},
+		GoHome: []string{"tela inicial", "tela principal", "volta pro relógio", "volta pro relogio", "volta para o relógio",
+			"volta para o relogio", "voltar ao relógio", "voltar ao relogio", "mostra o relógio", "mostra o relogio",
+			"volta pro início", "volta pro inicio", "volta para o início", "volta para o inicio", "tela de início", "tela de inicio"},
+		Camera: []string{"mostra", "mostre", "mostrar", "câmera", "camera"},
 	},
 	"ru": {
 		// Matched inside what was heard, so each form is listed where the stem is inside another word:

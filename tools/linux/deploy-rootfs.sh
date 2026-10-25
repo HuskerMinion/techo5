@@ -36,9 +36,11 @@ WSL_DISTRO=${WSL_DISTRO:-Ubuntu}
 BUILD_TAGS=${BUILD_TAGS:-}
 VENDOR_TGZ=${VENDOR_TGZ:-}
 DEVICE_OVERLAY=${DEVICE_OVERLAY:-}
-# KERNEL_IMAGE (athena): the released boot image (tools/linux/athena/kernel/build.sh's boot-athena.img, its
-# amp tuning slot empty) to carry in the rootfs; once the slot is good it goes to the boot partition with the
-# unit's own tuning (echod/internal/update/kernel). Without it the rootfs leaves the unit's kernel as it is.
+# KERNEL_IMAGE (athena, Skylight): the released boot image to carry in the rootfs; once the slot is good it
+# goes to the kernel's partition (echod/internal/update/kernel). athena's is tools/linux/athena/kernel/build.sh's
+# boot-athena.img, its amp tuning slot empty, and goes to the boot partition with the unit's own tuning; the
+# Skylight's is tools/linux/skylight/kernel/build.sh's boot-skylight.img, and goes to recovery as it is.
+# Without it the rootfs leaves the unit's kernel as it is.
 KERNEL_IMAGE=${KERNEL_IMAGE:-}
 INSTALL=; REBOOT=; ONDEVICE=; KEEP=
 while [ $# -gt 0 ]; do
@@ -73,7 +75,9 @@ echo "== building for armv7 ($VERSION)"
 export GOOS=linux GOARCH=arm GOARM=7 CGO_ENABLED=0
 pkg=github.com/HuskerMinion/techo5/echod/internal/layout
 commit=$(git -C "$ROOT" rev-parse --short HEAD)
-date=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+# BUILD_DATE fixes the date stamped in the daemon, so two images built from one commit (the Show's and
+# the Skylight's, made in one run) carry the same daemon, byte for byte.
+date=${BUILD_DATE:-$(date -u +%Y-%m-%dT%H:%M:%SZ)}
 if [ -n "${PREBUILT_DAEMON:-}" ]; then
 	# Only what CI built from this release's own tag (spot-vX.Y.Z for BUILD_TAGS=spot): anything else
 	# carries another version, and Home Assistant would offer the update forever after it installed.
@@ -107,6 +111,21 @@ for c in fbprobe audioprobe rebootto btbridge; do cp "$ROOT/bin/$c-arm" "$STAGE/
 [ -e "$ROOT/bin/techo5-ffmpeg-arm" ] || { echo "bin/techo5-ffmpeg-arm is missing: build it with tools/linux/build-ffmpeg.sh (in WSL)" >&2; exit 1; }
 cp "$ROOT/bin/techo5-ffmpeg-arm" "$STAGE/bin/techo5-ffmpeg"
 echo "== ffmpeg: sha256 $(sha256sum "$ROOT/bin/techo5-ffmpeg-arm" | cut -d' ' -f1)"
+# athena and the Skylight carry the 64-bit build beside it (tools/linux/build-ffmpeg-arm64.sh in WSL: static,
+# with H.265, VP8 and VP9), which the daemon runs on their 64-bit kernels; an athena on Amazon's 32-bit
+# kernel keeps the one above. Not optional for them either, and checked for what it must be.
+# No overlay (the Show's and the Spot's builds) is no board: sed's failure must not end the script (pipefail).
+board=$( (sed -n 's/^T5_BOARD=//p' "${DEVICE_OVERLAY:-/nonexistent}/etc/techo5/device.conf" 2>/dev/null || true) | tail -1)
+case "$board" in
+athena|skylight)
+	F64=$ROOT/bin/techo5-ffmpeg-arm64
+	[ -e "$F64" ] || { echo "bin/techo5-ffmpeg-arm64 is missing: build it with tools/linux/build-ffmpeg-arm64.sh (in WSL); the $board image carries it" >&2; exit 1; }
+	# An ELF64 for AArch64 (e_machine 183) with no interpreter: nothing of the 32-bit userspace can be linked.
+	[ "$(od -An -tx1 -j4 -N1 "$F64" | tr -d ' ')" = 02 ] && [ "$(od -An -tu2 -j18 -N2 "$F64" | tr -d ' ')" = 183 ] 		&& ! grep -q 'ld-musl-\|ld-linux-' "$F64" 		|| { echo "bin/techo5-ffmpeg-arm64 is not a static aarch64 binary: build it with tools/linux/build-ffmpeg-arm64.sh" >&2; exit 1; }
+	cp "$F64" "$STAGE/bin/techo5-ffmpeg64"
+	echo "== ffmpeg64: sha256 $(sha256sum "$F64" | cut -d' ' -f1)"
+	;;
+esac
 cp "$ROOT/tools/linux/slotctl" "$ROOT/tools/linux/techo5-lib.sh" "$ROOT/tools/linux/mkrootfs.sh" "$ROOT/tools/linux/packages-rootfs.txt" "$STAGE/tools/"
 [ "$BUILD_TAGS" = spot ] && sed -i '/^shairport-sync/d' "$STAGE/tools/packages-rootfs.txt"
 # EXTRA_PACKAGES: Alpine packages a device needs on top of the list (athena: busybox-extras, for udhcpd).
@@ -133,15 +152,18 @@ fi
 
 # The kernel goes in after the line endings are fixed too, and is checked as a whole released image.
 if [ -n "$KERNEL_IMAGE" ]; then
-	grep -q '^T5_BOARD=athena' "$STAGE/overlay/etc/techo5/device.conf" 2>/dev/null \
-		|| { echo "KERNEL_IMAGE is for athena: DEVICE_OVERLAY=tools/linux/athena/overlay" >&2; exit 1; }
+	kboard=$( (sed -n 's/^T5_BOARD=//p' "$STAGE/overlay/etc/techo5/device.conf" 2>/dev/null || true) | tail -1)
+	case "$kboard" in
+	athena|skylight) ;;
+	*) echo "KERNEL_IMAGE is for athena or the Skylight: DEVICE_OVERLAY=tools/linux/athena/overlay or tools/linux/skylight/overlay" >&2; exit 1;;
+	esac
 	PY=$(command -v python3 || command -v python) || { echo "KERNEL_IMAGE needs python to check the image" >&2; exit 1; }
-	"$PY" "$ROOT/tools/linux/athena/kernel/check-boot.py" "$KERNEL_IMAGE" || { echo "KERNEL_IMAGE is not a released athena boot image" >&2; exit 1; }
+	"$PY" "$ROOT/tools/linux/$kboard/kernel/check-boot.py" "$KERNEL_IMAGE" || { echo "KERNEL_IMAGE is not a released $kboard boot image" >&2; exit 1; }
 	mkdir -p "$STAGE/overlay/usr/share/techo5/kernel"
-	cp "$KERNEL_IMAGE" "$STAGE/overlay/usr/share/techo5/kernel/boot-athena.img"
-	cmp -s "$KERNEL_IMAGE" "$STAGE/overlay/usr/share/techo5/kernel/boot-athena.img" || { echo "kernel copy differs" >&2; exit 1; }
+	cp "$KERNEL_IMAGE" "$STAGE/overlay/usr/share/techo5/kernel/boot-$kboard.img"
+	cmp -s "$KERNEL_IMAGE" "$STAGE/overlay/usr/share/techo5/kernel/boot-$kboard.img" || { echo "kernel copy differs" >&2; exit 1; }
 	sum=$(sha256sum "$KERNEL_IMAGE" | cut -d' ' -f1)
-	echo "$sum  boot-athena.img" > "$STAGE/overlay/usr/share/techo5/kernel/boot-athena.img.sha256"
+	echo "$sum  boot-$kboard.img" > "$STAGE/overlay/usr/share/techo5/kernel/boot-$kboard.img.sha256"
 	echo "== kernel: sha256 $sum"
 fi
 

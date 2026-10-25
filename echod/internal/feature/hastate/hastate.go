@@ -12,6 +12,7 @@ import (
 	"slices"
 	"strings"
 	"sync"
+	"sync/atomic"
 
 	"google.golang.org/protobuf/proto"
 
@@ -44,6 +45,9 @@ type Tracker struct {
 	// Changed fires on every value that arrives; listeners must not block.
 	Changed hook.Hook[Update]
 
+	// subscribed is Home Assistant having asked what to follow: it is connected and listening.
+	subscribed atomic.Bool
+
 	mu     sync.Mutex
 	wanted map[string][]Key // by owner, so one feature rebuilding its list leaves the others alone
 	values map[Key]string
@@ -58,6 +62,9 @@ func Get() *Tracker {
 	once.Do(func() { shared = &Tracker{wanted: map[string][]Key{}, values: map[Key]string{}} })
 	return shared
 }
+
+// Subscribed is whether Home Assistant has connected and asked what to follow since start.
+func (t *Tracker) Subscribed() bool { return t.subscribed.Load() }
 
 func (t *Tracker) Name() string { return "home assistant states" }
 
@@ -126,6 +133,7 @@ func (t *Tracker) Handle(ctx context.Context, c *esphome.Conn, msg proto.Message
 			}
 		}
 		slog.Info("following home assistant entities", "count", len(wanted))
+		t.subscribed.Store(true)
 	case *api.HomeAssistantStateResponse:
 		k := Key{Entity: m.EntityId, Attribute: m.Attribute}
 		t.mu.Lock()

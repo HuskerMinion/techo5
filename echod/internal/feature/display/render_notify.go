@@ -17,6 +17,13 @@ import (
 // notifyLines is as many lines as the card gives a message; a longer one ends in an ellipsis.
 const notifyLines = 3
 
+// A note of the device's own (notify.Note) says what to check, which takes more words than a
+// notification's news: they are smaller, and there are more lines of them.
+const (
+	noteLines = 4
+	noteLineH = 44
+)
+
 // notifyBox is where the card sits, for drawing it and for knowing a tap landed on it: the
 // reminder's. The two share the box, so when both are up the reminder is drawn over the notification
 // and its tap is taken first.
@@ -24,6 +31,10 @@ func (r *renderer) notifyBox() image.Rectangle { return r.reminderBox() }
 
 func (r *renderer) notifyCard(s scene) {
 	n := s.notification
+	if n.Own {
+		r.noticeCardIn(r.notifyBox(), 56, 120, n.Icon, n.Title, n.Message, noteLines, r.small, noteLineH)
+		return
+	}
 	r.noticeCard(r.notifyBox(), 56, 126, n.Icon, n.Title, n.Message, notifyLines)
 }
 
@@ -43,7 +54,7 @@ const captionPad = 8
 // Show 5's 36, and tall enough to hold the Mute and Talk boxes, which are sized from the font and so
 // grow on a larger panel.
 func (r *renderer) cameraStrip() int {
-	return max(36, r.h-r.cameraSoundBox("Unmute").Min.Y+r.s(4))
+	return max(r.s(36), r.h-r.cameraSoundBox("Unmute").Min.Y+r.s(4))
 }
 
 // captionRect is where the bar goes: along the foot of the page above the strip, as high as its words

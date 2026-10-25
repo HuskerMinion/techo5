@@ -208,7 +208,7 @@ func TestMicroLoadSurvivesDamagedModels(t *testing.T) {
 		if err := os.WriteFile(path, data, 0o644); err != nil {
 			t.Fatal(err)
 		}
-		b := newMicroBackend()
+		b := newMicroBackend(false)
 		m := wake.Model{ID: name, Path: path, Config: microwakeword.Config{ModelPath: path, SlidingWindowSize: 5, FeaturesStepMs: 10}}
 		func() {
 			defer func() {
@@ -277,7 +277,7 @@ func TestMicroFeedDropsAModelThatPanics(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	b := newMicroBackend()
+	b := newMicroBackend(false)
 	cfg := microwakeword.Config{ModelPath: path, SlidingWindowSize: 5, FeaturesStepMs: 10}
 	for _, id := range []string{"good", "bad"} {
 		if err := b.load(wake.Model{ID: id, Kind: wake.KindMicroWakeWord, Path: path, Config: cfg}); err != nil {
@@ -365,7 +365,7 @@ func TestMicroLoadRefusesAModelTheCheckRefuses(t *testing.T) {
 	if err := os.WriteFile(path, bad, 0o644); err != nil {
 		t.Fatal(err)
 	}
-	b := newMicroBackend()
+	b := newMicroBackend(false)
 	err = b.load(wake.Model{ID: "big", Path: path, Config: microwakeword.Config{ModelPath: path, SlidingWindowSize: 5, FeaturesStepMs: 10}})
 	if err == nil {
 		t.Fatal("loaded a model the check refuses")

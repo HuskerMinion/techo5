@@ -87,7 +87,7 @@ const tapLit = 500 * time.Millisecond
 // ask for. Back, play or pause and next name the tile's own player: the dashboard sends them to Music
 // Assistant's while it plays there (dashboard.Feature.Tap), and to the tile's own while the speaker
 // plays from elsewhere, where Music Assistant's would start its own old queue.
-var sheetTap = func(a dashboard.Action) { dashboard.Get().Tap(a) }
+var sheetTap = func(a dashboard.Action) { sheets().Tap(a) }
 
 // mediaView is the sheet as one frame draws it: the sheet and what the player is doing now.
 type mediaView struct {
@@ -113,6 +113,9 @@ var mediaWords = map[string][]string{
 	"it": {"Riproduci", "Altoparlanti", "Fatto", "Caricamento…", "Ancora nessun preferito in Music Assistant",
 		"Music Assistant non riproduce qui: solo comandi", "In riproduzione", "In pausa", "Inattivo", "Spento",
 		"I preferiti richiedono un token di amministratore di Home Assistant"},
+	"pt": {"Tocar", "Alto-falantes", "Pronto", "Carregando…", "Ainda não há favoritos no Music Assistant",
+		"O Music Assistant não toca aqui: só controles", "Tocando", "Pausado", "Inativo", "Desligado",
+		"Os favoritos precisam de um token de administrador do Home Assistant"},
 	"ru": {"Играть", "Колонки", "Готово", "Загрузка…", "В Music Assistant пока нет избранного",
 		"Music Assistant здесь не воспроизводит: только управление", "Играет", "Пауза", "Ожидание", "Выкл.",
 		"Для избранного нужен токен администратора Home Assistant"},
@@ -151,7 +154,7 @@ func stateWord(state string) string {
 
 // openMedia puts the media sheet up for entity, and asks Home Assistant what it offers.
 func (d *Display) openMedia(entity string) bool {
-	now, ok := dashboard.Get().MediaNow(entity)
+	now, ok := sheets().MediaNow(entity)
 	if !ok {
 		return false
 	}
@@ -263,7 +266,7 @@ func (d *Display) mediaViewNow() *mediaView {
 	if m == nil {
 		return nil
 	}
-	now, _ := dashboard.Get().MediaNow(m.entity)
+	now, _ := sheets().MediaNow(m.entity)
 	if now.Name == "" {
 		now.Name = m.name
 	}
@@ -282,7 +285,7 @@ func (r *renderer) mediaSheet(v *mediaView, th dashboard.Theme) {
 	m, now := v.sheet, v.now
 	pal := r.palette(th)
 	fc := r.faces()
-	draw.Draw(r.dst, r.dst.Rect, image.NewUniform(color.RGBA{0, 0, 0, 150}), image.Point{}, draw.Over)
+	washOver(r.dst, r.dst.Rect, color.RGBA{0, 0, 0, 150})
 
 	pad, gap := r.s(18), r.s(10)
 	titleH, subH, ctrlH, labelH, chipH, btnH := r.s(34), r.s(28), r.s(56), r.s(30), r.s(44), r.s(46)

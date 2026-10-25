@@ -111,6 +111,7 @@ func pump(ctx context.Context, name string, r *os.File, lv *level, starts *start
 			return
 		}
 		lv.fromPipe(n)
+		received(n)
 		if n == 0 {
 			continue
 		}
@@ -178,6 +179,7 @@ func drain(ctx context.Context, r *os.File, buf []byte, lv *level, anew func() b
 		read += int64(n)
 		lv.fromPipe(n)
 		lv.passed(n) // thrown away
+		received(n)
 		if err != nil {
 			if !errors.Is(err, os.ErrDeadlineExceeded) && ctx.Err() == nil {
 				slog.Warn("streaming: reading a receiver's audio failed", "err", err)
@@ -227,6 +229,7 @@ func (s *pipeSource) Read(p []byte) (int, error) {
 	s.mu.Unlock()
 	n, err := s.f.Read(p[lead:])
 	s.lv.fromPipe(n)
+	received(n)
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if s.closed {

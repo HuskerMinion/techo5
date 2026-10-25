@@ -1,7 +1,7 @@
 //go:build !dot
 
 // Package presence watches the room through the device's own camera for somebody near: for Home
-// Assistant (a Presence sensor, as an occupancy sensor would be) and for the screen, which can go dark
+// Assistant (a Motion sensor, since it is movement that is seen) and for the screen, which can go dark
 // once nobody has been near for a while and light again as somebody comes up to it.
 //
 // Off until it is turned on. Nothing the camera sees is kept or sent: a couple of times a second the
@@ -105,9 +105,11 @@ func Get() *Feature {
 			Base:      esphome.Base{ObjectID: "gestures", Name: "Gestures", Icon: "mdi:hand-back-right", Category: esphome.CategoryConfig},
 			OnCommand: f.SetGestures,
 		}
+		// Motion, not occupancy: frames are compared, so somebody sitting still is not seen. The
+		// object ID is still "presence", from when it was named so, to keep entity IDs and automations.
 		f.sensor = &esphome.BinarySensor{
-			Base:        esphome.Base{ObjectID: "presence", Name: "Presence", Icon: "mdi:account-eye"},
-			DeviceClass: "occupancy",
+			Base:        esphome.Base{ObjectID: "presence", Name: "Motion", Icon: "mdi:motion-sensor"},
+			DeviceClass: "motion",
 		}
 		shared = f
 	})
@@ -184,7 +186,7 @@ func (f *Feature) SetSensitivity(v int) {
 	}
 	f.sensNum.Set(float32(v))
 	f.mu.Lock()
-	f.det.patchMin = patchFor(v)
+	f.det.sensitive(v)
 	f.mu.Unlock()
 }
 
@@ -332,7 +334,7 @@ func (f *Feature) watchFor(ctx context.Context, release func()) {
 	now := time.Now()
 	f.mu.Lock()
 	f.watching, f.watchFrom = true, now
-	f.det = detector{patchMin: patchFor(config.Get().Presence.PresenceSensitivity())}
+	f.det = newDetector(config.Get().Presence.PresenceSensitivity())
 	f.cover, f.lastRoom = coverDetector{}, time.Time{}
 	f.skip = startFrames
 	f.mu.Unlock()

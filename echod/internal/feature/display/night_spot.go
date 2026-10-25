@@ -80,8 +80,12 @@ func (d *Display) stepGlow(delta int) {
 	if nightNow(time.Now()) {
 		d.mu.Lock()
 		d.glowUntil = time.Now().Add(glowPreview)
+		if d.glowTimer == nil {
+			d.glowTimer = time.AfterFunc(glowPreview, func() { d.relight(true) })
+		} else {
+			d.glowTimer.Reset(glowPreview)
+		}
 		d.mu.Unlock()
-		time.AfterFunc(glowPreview, func() { d.relight(true) })
 	}
 	d.relight(true)
 	d.wake()

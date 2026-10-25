@@ -1,6 +1,8 @@
 package wake
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"os"
 	"path/filepath"
 	"testing"
@@ -105,5 +107,45 @@ func TestAdvertiseIsStableAcrossCalls(t *testing.T) {
 	}
 	if first[0].ID != "a_first" {
 		t.Errorf("advertised %q, want the first by id", first[0].ID)
+	}
+}
+
+// A running word Home Assistant now offers with a different model is stale, and nothing else is: one
+// that matches, one that is not here yet, one that is not running, and one sent from the setup page.
+func TestStaleIsARunningWordWithANewModel(t *testing.T) {
+	l := installed(t, map[string]string{"alfred": "Hey Alfred", "same": "Same", "idle": "Idle"})
+	sum := sha256.Sum256([]byte("not a model"))
+	have := hex.EncodeToString(sum[:])
+	l.Offered([]esphome.ExternalWakeWord{
+		{ID: "alfred", Phrase: "Hey Alfred", URL: "http://ha/alfred.json", Size: 3, Hash: "new"},
+		{ID: "same", Phrase: "Same", URL: "http://ha/same.json", Size: 11, Hash: have},
+		{ID: "idle", Phrase: "Idle", URL: "http://ha/idle.json", Size: 3, Hash: "new"},
+		{ID: "absent", Phrase: "Absent", URL: "http://ha/absent.json", Size: 3, Hash: "new"},
+	})
+	l.Loaded([]string{"alfred", "same", "absent"})
+
+	if got := l.Stale(); len(got) != 1 || got[0] != "alfred" {
+		t.Errorf("stale %v, want [alfred]", got)
+	}
+
+	body := `{"type":"openwakeword","wake_word":"Hey Alfred","model":"alfred.tflite","techo5_uploaded":true}`
+	if err := os.WriteFile(filepath.Join(l.Dir(), "alfred.json"), []byte(body), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	l.Reload()
+	if got := l.Stale(); len(got) != 0 {
+		t.Errorf("stale %v, want none: a model sent from the setup page is not replaced", got)
+	}
+}
+
+// Whatever reads the library's list hears when it changes, so a list built from it (the hang-up word's)
+// is not left offering a word that is gone, or missing one just added.
+func TestReloadSaysTheLibraryChanged(t *testing.T) {
+	l := NewLibrary(t.TempDir())
+	heard := 0
+	l.Changed.Listen(func(struct{}) { heard++ })
+	l.Reload()
+	if heard != 1 {
+		t.Errorf("heard %d changes, want 1", heard)
 	}
 }

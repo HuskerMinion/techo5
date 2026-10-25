@@ -420,6 +420,36 @@ func TestARestoreKeepsWhatIsOnByDefaultOff(t *testing.T) {
 	}
 }
 
+// Secure Connections is this device's own both ways (#183): a file never carries it, a restore keeps
+// this device's whichever way the file's device had it, and clearing what is a device's own leaves it on.
+func TestSecureConnectionsAreTheDevicesOwn(t *testing.T) {
+	from := Defaults()
+	from.Bluetooth.SecureConnectionsOff = true
+	file, err := Export(from, "m", "v0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(file), "secure_connections") {
+		t.Errorf("the file carries secure connections: %s", file)
+	}
+	for _, off := range []bool{false, true} {
+		here := Defaults()
+		here.Bluetooth.SecureConnectionsOff = off
+		r, err := Restored(here, file, "m")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if r.Config.Bluetooth.SecureConnectionsOff != off || slices.Contains(r.Changed, "bluetooth") {
+			t.Errorf("here off=%v: restored off=%v, changed %v", off, r.Config.Bluetooth.SecureConnectionsOff, r.Changed)
+		}
+	}
+	cleared := from
+	ClearOwn(&cleared)
+	if cleared.Bluetooth.SecureConnectionsOff {
+		t.Error("cleared of what is the device's own, secure connections stay off")
+	}
+}
+
 // A long value with many addresses in it is cleaned in one pass, not one per address.
 func TestManyAddressesAreQuick(t *testing.T) {
 	s := strings.Repeat("a://", 1<<18)
@@ -435,13 +465,14 @@ func TestManyAddressesAreQuick(t *testing.T) {
 func TestARestoreKeepsTheNewSwitchesAndLogins(t *testing.T) {
 	from := Defaults()
 	from.Microphone.Noise, from.Microphone.Claps = true, true
-	from.Nearest.On, from.Screen.ClockHold = true, true
+	from.Screen.ClockHold = true
 	from.Update.Channel, from.Update.AutoInstall = "dev", true
 	from.CamStream = CamStream{On: true, User: "them", Pass: "their-password"}
 	from.Remote = Remote{On: true, Secret: "theirs"}
 	from.Home.Go2RTC.Base = "http://192.0.2.9:1984"
 
 	here := Defaults()
+	here.Nearest.Off = true // turned off here; the file's default (on) must not turn it back on
 	here.CamStream = CamStream{User: "camera", Pass: "my-password"}
 	here.Remote = Remote{Secret: "mine"}
 	here.Home.Go2RTC.Base = "http://admin:secret@192.0.2.9:1984"
@@ -460,7 +491,7 @@ func TestARestoreKeepsTheNewSwitchesAndLogins(t *testing.T) {
 		t.Fatal(err)
 	}
 	c := got.Config
-	if c.Microphone.Noise || c.Microphone.Claps || c.CamStream.On || c.Remote.On || c.Nearest.On || c.Screen.ClockHold {
+	if c.Microphone.Noise || c.Microphone.Claps || c.CamStream.On || c.Remote.On || c.Nearest.Enabled() || c.Screen.ClockHold {
 		t.Errorf("a restore turned on what the device had off: %+v %+v %+v %+v", c.Microphone, c.CamStream, c.Remote, c.Nearest)
 	}
 	if c.Update.Channel != here.Update.Channel || c.Update.AutoInstall {

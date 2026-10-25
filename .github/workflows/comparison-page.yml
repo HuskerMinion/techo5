@@ -1,0 +1,48 @@
+name: comparison page
+
+# Publishes the interactive project comparison to GitHub Pages, and nothing else: the site is built
+# from docs/comparison/data.json by tools/comparison/build.py into an empty folder, so no other file in
+# the repo is served. It also checks docs/comparison.md was rebuilt from the same data. Actions are
+# pinned to commits for the reason build.yml gives.
+
+on:
+  push:
+    branches: [main]
+    paths: ['docs/comparison/**', 'docs/comparison.md', 'tools/comparison/**', '.github/workflows/comparison-page.yml']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+
+      - name: Build the page
+        run: python3 tools/comparison/build.py --site _site
+
+      - name: Check docs/comparison.md matches the data
+        run: git diff --exit-code -- docs/comparison.md
+
+      - uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5.0.0
+        with:
+          path: _site
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@368f82528645a54fb793d4d04e342629a3f51346 # v5.0.1

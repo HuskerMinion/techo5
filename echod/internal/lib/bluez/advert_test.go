@@ -27,6 +27,26 @@ func TestAdvertOnly(t *testing.T) {
 	}
 }
 
+// The adapter put back at its own path is Returned, once; another adapter, or a device, is not.
+func TestTheAdapterComingBackIsReturned(t *testing.T) {
+	a := &Adapter{path: "/org/bluez/hci0", devices: map[dbus.ObjectPath]*Device{}, players: map[dbus.ObjectPath]map[string]map[string]dbus.Variant{}}
+	returned := 0
+	a.Returned.Listen(func(struct{}) { returned++ })
+	added := func(path dbus.ObjectPath, ifc string) *dbus.Signal {
+		return &dbus.Signal{Name: objMgrIfc + ".InterfacesAdded",
+			Body: []any{path, map[string]map[string]dbus.Variant{ifc: {}}}}
+	}
+	a.signal(added("/org/bluez/hci0/dev_00_11_22_33_44_55", deviceIfc))
+	a.signal(added("/org/bluez/hci1", adapterIfc))
+	if returned != 0 {
+		t.Fatalf("a device or another adapter: returned %d", returned)
+	}
+	a.signal(added("/org/bluez/hci0", adapterIfc))
+	if returned != 1 {
+		t.Fatalf("hci0 back: returned %d, want 1", returned)
+	}
+}
+
 // A sensor heard again reaches Advertised but not Changed; a connection change reaches Changed.
 func TestAdvertisementIsNotAChange(t *testing.T) {
 	path := dbus.ObjectPath("/org/bluez/hci0/dev_00_11_22_33_44_55")

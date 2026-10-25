@@ -37,7 +37,8 @@ import (
 // across restarts. Measured on a PC, RainViewer answers in about 0.6 s whatever is asked, so the time
 // was all in asking one frame after another.
 //
-// The picture is built at the panel's own size (radarW and radarH, in the panel_*.go files), because
+// The picture is built at the panel's own size (radarSize, size.go: radarW and radarH from the
+// panel_*.go files, or what a TECHO5 Panel's screen said), because
 // the page draws it at one to one: an image smaller than the screen leaves the rest of the screen
 // empty, which is what a Show 8 got while this was fixed at the Show 5's 960x480. A wider panel
 // therefore sees more country rather than a stretched map — about 450 km across on a Show 5 and
@@ -84,6 +85,7 @@ type RadarView struct {
 // dateline so a place just across it lands beside home rather than a world's width away.
 func (v RadarView) Pixel(lon, lat float64) image.Point {
 	x, y := worldPixel(lat, lon, mapZoom)
+	radarW, _ := radarSize()
 	return image.Pt(wrapX(x, v.Origin.X, radarW), int(math.Round(y))-v.Origin.Y)
 }
 
@@ -124,6 +126,7 @@ var mapDir = layout.StateDir
 func mapFile(lat, lon float64) string {
 	// v2 is Blue Marble with tintBase's look: a change to either has to be a new name, or the old look
 	// comes back from disk.
+	radarW, radarH := radarSize()
 	return filepath.Join(mapDir, fmt.Sprintf("radar-map-v2-%.4f-%.4f-%dx%d.png", lat, lon, radarW, radarH))
 }
 
@@ -135,6 +138,7 @@ func savedMap(lat, lon float64) *image.RGBA {
 	}
 	defer f.Close()
 	img, err := png.Decode(f)
+	radarW, radarH := radarSize()
 	if err != nil || img.Bounds().Dx() != radarW || img.Bounds().Dy() != radarH {
 		return nil
 	}
@@ -269,6 +273,7 @@ func (f *Feature) buildRadarAt(lat, lon float64) error {
 	began := time.Now()
 	var newestAfter time.Duration // how long until the newest frame was there to show
 
+	radarW, radarH := radarSize()
 	cx, cy := worldPixel(lat, lon, mapZoom)
 	x0, y0 := int(cx)-radarW/2, int(cy)-radarH/2
 
@@ -276,7 +281,8 @@ func (f *Feature) buildRadarAt(lat, lon float64) error {
 	r := &f.radar
 	r.mu.Lock()
 	base := r.base
-	if r.lat != lat || r.lon != lon {
+	if r.lat != lat || r.lon != lon || (base != nil && base.Bounds().Size() != image.Pt(radarW, radarH)) {
+		// Somewhere else, or a panel whose screen has said its size since: a new map and new frames.
 		base, r.made = nil, nil
 	}
 	if r.source != src.name {
@@ -345,7 +351,8 @@ func (f *Feature) buildRadarAt(lat, lon float64) error {
 	r.mu.Lock()
 	made := make(map[string]RadarFrame, len(past))
 	for _, p := range past {
-		if fr, ok := r.made[p.key]; ok {
+		// Only frames at today's size: one built before the screen said its size may land here late.
+		if fr, ok := r.made[p.key]; ok && fr.Image.Rect.Size() == image.Pt(radarSize()) {
 			made[p.key] = fr
 		}
 	}

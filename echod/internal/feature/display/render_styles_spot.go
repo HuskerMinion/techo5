@@ -81,6 +81,12 @@ func (r *roundRenderer) styledClockFace(s roundScene, style string) {
 		r.agendaFace(s)
 	case styleGlow:
 		r.glowFace(s)
+	case styleNixie:
+		r.nixieFace(s)
+	case styleStack:
+		r.stackFace(s)
+	case styleOverlap:
+		r.overlapFace(s)
 	}
 }
 
@@ -219,15 +225,7 @@ var segmentsLit = [10]string{"abcdef", "bc", "abdeg", "abcdg", "bcfg", "acdfg", 
 // ledFace is the time in seven-segment digits, the unlit segments faintly behind.
 func (r *roundRenderer) ledFace(s roundScene) {
 	r.statusWord(s, 118)
-	h, m := hourMinute(s.now)
-	digits := []int{-1, -1, -1, -1}
-	if len(h) == 2 {
-		digits[0] = int(h[0] - '0')
-	}
-	digits[1] = int(h[len(h)-1] - '0')
-	if len(m) == 2 {
-		digits[2], digits[3] = int(m[0]-'0'), int(m[1]-'0')
-	}
+	digits := faceDigits(s.now)
 	const dw, dh, t = 40.0, 84.0, 9.0
 	gap, colon := dw*0.42, t*2
 	ampm := clockSuffix(s.now)
@@ -253,6 +251,21 @@ func (r *roundRenderer) ledFace(s roundScene) {
 	}
 	r.centered(r.small, locale.LongDate(s.now, screenLang()), 330, colDim)
 	r.footLine(s, 372, "")
+}
+
+// faceDigits is the time as four digit places, hours then minutes; a 12-hour clock leaves the first
+// place empty (-1) before ten.
+func faceDigits(now time.Time) [4]int {
+	h, m := hourMinute(now)
+	digits := [4]int{-1, -1, -1, -1}
+	if len(h) == 2 {
+		digits[0] = int(h[0] - '0')
+	}
+	digits[1] = int(h[len(h)-1] - '0')
+	if len(m) == 2 {
+		digits[2], digits[3] = int(m[0]-'0'), int(m[1]-'0')
+	}
+	return digits
 }
 
 // segmentDigitAt draws one seven-segment digit, w by h at x, top, each segment t thick.
@@ -316,7 +329,9 @@ func (r *roundRenderer) analogFace(s roundScene) {
 	}
 	day := strings.ToUpper(locale.DayAndNumber(s.now, screenLang()))
 	dw := r.width(r.label, day) + 20
-	r.roundFill(image.Rect(center-dw/2, 302, center+dw/2, 334), 8, color.RGBA{24, 29, 36, 255}, color.RGBA{24, 29, 36, 255})
+	// The window a shade up from the ground, toward the track's color: on a light skin too.
+	window := lerpRGB(colBackground, colTrack, 0.6)
+	r.roundFill(image.Rect(center-dw/2, 302, center+dw/2, 334), 8, window, window)
 	r.centered(r.label, day, 325, colText)
 	r.footLine(s, 362, "")
 	hand := func(deg, length, back, w float64, c color.RGBA) {

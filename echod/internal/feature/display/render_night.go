@@ -14,6 +14,8 @@ import (
 	"golang.org/x/image/font"
 	"golang.org/x/image/math/fixed"
 	"golang.org/x/image/vector"
+
+	"github.com/HuskerMinion/techo5/echod/internal/feature/phone"
 )
 
 // The night clock: the time alone on black, in one of three looks - the ordinary clock face in dim
@@ -30,6 +32,15 @@ type clockInk struct {
 
 // nightInk is the night clock's.
 var nightInk = clockInk{nightRed, nightGhost, flipTop, flipLower, flipHinge, flipInk, flipSplit}
+
+// redClockFace is whether the frame is the red night clock (redClockPage): the night's glow with
+// nothing over it that has to be seen. Its red is the point, so a skin's filter is off for it
+// (unskinned).
+func (s scene) redClockFace() bool {
+	return s.redClock && s.phase == "idle" && s.call.Phase == phone.Idle && !s.setupAsking && !s.showVideoAsk &&
+		!s.showWifi && !s.bt.Pairing && !s.showCamera && !s.showAnnouncement && !s.showReminder &&
+		!(s.showDash && s.dashAsked)
+}
 
 // redClockPage is the night as a clock alone.
 func (r *renderer) redClockPage(s scene) {
@@ -341,7 +352,7 @@ func (r *renderer) flipTurning(card image.Rectangle, from, to string, inset int,
 // shade darkens b by a fraction up to three quarters: a leaf turned away from the light.
 func (r *renderer) shade(b image.Rectangle, by float64) {
 	a := uint8(math.Round(min(max(by, 0), 1) * 190))
-	draw.Draw(r.dst, b, image.NewUniform(color.RGBA{0, 0, 0, a}), image.Point{}, draw.Over)
+	washOver(r.dst, b, color.RGBA{0, 0, 0, a})
 }
 
 // offscreen is what paint draws, over what the screen already has there, into a picture of just b,
@@ -402,7 +413,7 @@ func (r *renderer) digitHeight() int {
 }
 
 func (r *renderer) fillRect(b image.Rectangle, c color.Color) {
-	draw.Draw(r.dst, b, image.NewUniform(c), image.Point{}, draw.Over)
+	washOver(r.dst, b, c)
 }
 
 // roundRect fills b with its corners rounded to radius k.

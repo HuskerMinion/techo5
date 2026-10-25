@@ -1,6 +1,7 @@
 package busy
 
 import (
+	"context"
 	"os"
 	"path/filepath"
 	"slices"
@@ -104,6 +105,37 @@ func TestRingsIn(t *testing.T) {
 	} {
 		if got := ringsIn(c.marker, c.up, alive); got != c.want {
 			t.Errorf("%s: %v, want %v", c.name, got, c.want)
+		}
+	}
+}
+
+// Run writes the marker where the boot script reads it, removes it on the way out, and leaves the path
+// alone everywhere else.
+func TestRunKeepsTheMarkerWhereItIsRead(t *testing.T) {
+	for _, here := range []bool{true, false} {
+		was := keepsMarker
+		keepsMarker = func() bool { return here }
+		p := filepath.Join(t.TempDir(), "busy")
+		b := &Busy{
+			marker: &Marker{path: p, pid: 1234, uptime: func() (int64, error) { return 100, nil }},
+			look:   func(time.Time) Snapshot { return Snapshot{Ring: true} },
+		}
+		ctx, cancel := context.WithCancel(context.Background())
+		done := make(chan struct{})
+		go func() { defer close(done); _ = b.Run(ctx) }()
+		wrote := false
+		for end := time.Now().Add(time.Second); time.Now().Before(end) && !wrote; time.Sleep(10 * time.Millisecond) {
+			_, err := os.Stat(p)
+			wrote = err == nil
+		}
+		cancel()
+		<-done
+		keepsMarker = was
+		if wrote != here {
+			t.Errorf("read here %v: marker written %v", here, wrote)
+		}
+		if _, err := os.Stat(p); !os.IsNotExist(err) {
+			t.Errorf("read here %v: marker left behind", here)
 		}
 	}
 }

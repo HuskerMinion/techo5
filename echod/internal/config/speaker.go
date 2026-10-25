@@ -4,10 +4,15 @@ package config
 // driver's tuning is applied.
 type Speaker struct {
 	Volume int `json:"volume"`
-	// GainDB is an optional TAS5805M amplifier boost in dB; zero is the vendor's gain.
+	// GainDB is an optional boost in dB over the vendor's gain, zero being the vendor's: the TAS5805M
+	// amplifier's on a Show 5 that has one, the codec's speaker driver on the Echo Dot and Echo 2nd gen.
+	// The same 1 dB a step on each, and this device's own (KeepOwn, not shared).
 	GainDB     int        `json:"gain_db,omitempty"`
 	Resampling Resampling `json:"resampling"`
 	ASP        bool       `json:"asp"`
+	// Stereo preserves separate L/R on athena when explicitly chosen.
+	// False/missing means the original mono behavior and survives upgrades.
+	Stereo     bool       `json:"stereo,omitempty"`
 	OutputMode OutputMode `json:"output_mode,omitempty"`
 
 	// QuietHours is when the device makes no sound of its own, as "22-7", empty for never. See
@@ -39,6 +44,11 @@ type Speaker struct {
 	// ClassicSounds is TECHO5's own notes for muting and a finished timer, where the default is the
 	// Home Assistant satellites' recorded ones.
 	ClassicSounds bool `json:"classic_sounds,omitempty"`
+
+	// NoBluetoothVolume keeps the device's volume its own while a phone or a computer plays to it over
+	// Bluetooth: the source's volume level scales only its own audio, and neither side moves the other's
+	// (btaudio's Bluetooth sets the volume, on unless this is set, #245).
+	NoBluetoothVolume bool `json:"no_bluetooth_volume,omitempty"`
 
 	// SoundsMoved is whether the wake sounds have been moved to Home Assistant's: once, for a device
 	// saved when Chirp was the default, and only for a word still on it (config.Load).
@@ -126,6 +136,11 @@ func (w SpeakerWriter) Resampling(v Resampling) error {
 	return w.st.Update(func(c *Config) { c.Speaker.Resampling = v })
 }
 
+// Stereo saves whether athena's internal speakers play in stereo.
+func (w SpeakerWriter) Stereo(on bool) error {
+	return w.st.Update(func(c *Config) { c.Speaker.Stereo = on })
+}
+
 // OutputMode saves the selected audio output mode.
 func (w SpeakerWriter) OutputMode(v OutputMode) error {
 	return w.st.Update(func(c *Config) { c.Speaker.OutputMode = v })
@@ -141,6 +156,10 @@ func (w SpeakerWriter) Bass(v float64) error {
 
 func (w SpeakerWriter) Treble(v float64) error {
 	return w.st.Update(func(c *Config) { c.Speaker.Treble = v })
+}
+
+func (w SpeakerWriter) NoBluetoothVolume(v bool) error {
+	return w.st.Update(func(c *Config) { c.Speaker.NoBluetoothVolume = v })
 }
 
 func (w SpeakerWriter) ClassicSounds(v bool) error {

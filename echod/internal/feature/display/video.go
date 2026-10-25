@@ -25,7 +25,9 @@ import (
 
 // videoCovered is whether something in the scene goes over the video, so it is not the page.
 func videoCovered(s scene) bool {
-	turn := s.phase == "listening" || s.phase == "thinking" || s.phase == "replying"
+	// A cue's light, and its captions while they stay: the video stays paused until they are gone.
+	turn := s.phase == "listening" || s.phase == "thinking" || s.phase == "replying" || cueLit(s.cue) ||
+		(s.cue != "" && cueWords(s.cue, s.heard, s.reply) != "")
 	return s.call.Phase != phone.Idle || s.ring.any() || s.pin.open || s.setupAsking || s.showVideoAsk || s.bt.Pairing ||
 		s.showWifi || s.showCamera || s.showSheet || turn
 }

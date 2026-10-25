@@ -49,6 +49,8 @@ type moreImmich struct {
 	mu       sync.Mutex
 	searches []map[string]any
 	fetched  []string
+	// found is the photos a search answers, in order; none is tallA alone.
+	found []string
 }
 
 var (
@@ -78,8 +80,16 @@ func (m *moreImmich) serve(t *testing.T) *httptest.Server {
 			_ = json.NewDecoder(r.Body).Decode(&q)
 			m.mu.Lock()
 			m.searches = append(m.searches, q)
+			found := slices.Clone(m.found)
 			m.mu.Unlock()
-			fmt.Fprintf(w, `{"assets":{"total":1,"count":1,"items":[{"id":%q,"type":"IMAGE"}],"nextPage":null}}`, tallA)
+			if len(found) == 0 {
+				found = []string{tallA}
+			}
+			var items []string
+			for _, id := range found {
+				items = append(items, fmt.Sprintf(`{"id":%q,"type":"IMAGE"}`, id))
+			}
+			fmt.Fprintf(w, `{"assets":{"total":%d,"count":%d,"items":[%s],"nextPage":null}}`, len(items), len(items), strings.Join(items, ","))
 		case r.Method == http.MethodGet && r.URL.Query().Get("size") == "preview":
 			id := strings.TrimSuffix(strings.TrimPrefix(r.URL.Path, "/api/assets/"), "/thumbnail")
 			m.mu.Lock()

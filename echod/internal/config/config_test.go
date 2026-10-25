@@ -1,6 +1,7 @@
 package config
 
 import (
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"strings"
@@ -233,6 +234,7 @@ func TestReload(t *testing.T) {
 		func() error { return st.Set().Speaker().Resampling(ResampleLinear) },
 		func() error { return st.Set().Wake(1).Threshold(0.6) },
 		func() error { return st.Set().Bluetooth().Proxy(true) },
+		func() error { return st.Set().Bluetooth().SecureConnections(false) },
 	} {
 		if err := set(); err != nil {
 			t.Fatalf("setting: %v", err)
@@ -256,6 +258,46 @@ func TestReload(t *testing.T) {
 	}
 	if !got.Bluetooth.Proxy {
 		t.Error("the bluetooth proxy came back off")
+	}
+	if !got.Bluetooth.SecureConnectionsOff {
+		t.Error("bluetooth secure connections came back on")
+	}
+}
+
+// Secure Connections is on unless turned off: on by default, on in a file from before the setting,
+// and on again once turned back on, with nothing left in the file for it (#183).
+func TestSecureConnectionsOnUnlessTurnedOff(t *testing.T) {
+	if Defaults().Bluetooth.SecureConnectionsOff {
+		t.Fatal("secure connections are off by default")
+	}
+	var old Config
+	if err := json.Unmarshal([]byte(`{"bluetooth":{"proxy":true}}`), &old); err != nil {
+		t.Fatal(err)
+	}
+	if old.Bluetooth.SecureConnectionsOff {
+		t.Error("a file from before the setting turns secure connections off")
+	}
+
+	path := filepath.Join(t.TempDir(), "state.json")
+	st, err := Load(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := st.Set().Bluetooth().SecureConnections(false); err != nil {
+		t.Fatal(err)
+	}
+	if !st.Get().Bluetooth.SecureConnectionsOff {
+		t.Fatal("turned off, it is still on")
+	}
+	if err := st.Set().Bluetooth().SecureConnections(true); err != nil {
+		t.Fatal(err)
+	}
+	b, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if st.Get().Bluetooth.SecureConnectionsOff || strings.Contains(string(b), "secure_connections") {
+		t.Errorf("turned back on: off=%v, file %s", st.Get().Bluetooth.SecureConnectionsOff, b)
 	}
 }
 

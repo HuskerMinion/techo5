@@ -62,7 +62,12 @@ func Get() *Events {
 
 func (e *Events) Name() string { return "button events" }
 
+// Entities are none on a device without buttons of its own (a panel): events that can never fire
+// would only sit at unknown in Home Assistant.
 func (e *Events) Entities() []esphome.Entity {
+	if !buttons.Here {
+		return nil
+	}
 	out := make([]esphome.Entity, 0, len(order))
 	for _, name := range order {
 		out = append(out, e.events[name])

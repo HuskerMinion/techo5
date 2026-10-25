@@ -13,6 +13,20 @@ type Wake struct {
 	// above: Home Assistant does not choose it, and it opens no pipeline.
 	Stop Stop `json:"stop"`
 
+	// Hangup is a word that hangs up a call, heard on the device. Like Stop it is not one of the slots:
+	// it opens no pipeline, and it is listened for only while a call rings or is up.
+	Hangup Hangup `json:"hangup,omitempty"`
+
+	// VolumeDown is a word that turns the volume down with no wake word, heard on the device (#191).
+	// Like Stop it is not one of the slots: it opens no pipeline, and it is listened for only while
+	// something plays.
+	VolumeDown CommandWord `json:"volume_down,omitzero"`
+
+	// VolumeUp and NextSong are the other command words, the same way: one turns the volume up, the
+	// other skips to the next song.
+	VolumeUp CommandWord `json:"volume_up,omitzero"`
+	NextSong CommandWord `json:"next_song,omitzero"`
+
 	// OnHA is Home Assistant's own wake word engine, used beside the device's or in its place.
 	OnHA OnHA `json:"on_ha,omitempty"`
 
@@ -70,6 +84,75 @@ func defaultStop() Stop {
 
 // Listening reports whether the stop word is being listened for.
 func (s Stop) Listening() bool { return s.Threshold < StopOff }
+
+// Hangup is the hang-up word: which word, and the score it has to reach. An empty ID is none, which is
+// the default, so hanging up by voice is something chosen; HangupStop is the stop word, and anything
+// else is a model from the same library as the wake words.
+type Hangup struct {
+	ID string `json:"id,omitempty"`
+
+	// Threshold is the score it has to reach. Zero is DefaultThreshold, a wake word's.
+	Threshold float64 `json:"threshold,omitempty"`
+}
+
+// HangupStop is the stop word doing the hang-up word's work: the stop word that is listened for anyway,
+// so nothing more is loaded for a call, and a ring during the call is still stopped first.
+const HangupStop = "stop_word"
+
+// On reports whether a hang-up word is chosen at all.
+func (h Hangup) On() bool { return h.ID != "" }
+
+// StopWord reports whether the stop word is the hang-up word.
+func (h Hangup) StopWord() bool { return h.ID == HangupStop }
+
+// ModelID is the model the hang-up word takes from the wake word library, empty for none or the stop
+// word: what has to be kept on the device for it.
+func (h Hangup) ModelID() string {
+	if !h.On() || h.StopWord() {
+		return ""
+	}
+	return h.ID
+}
+
+// ThresholdAt is the score the hang-up word has to reach.
+func (h Hangup) ThresholdAt() float64 {
+	if h.Threshold <= 0 {
+		return DefaultThreshold
+	}
+	return h.Threshold
+}
+
+// CommandWord is a word that acts on its own, with no wake word before it: which word, and the score it
+// has to reach. An empty ID is none, which is the default, so nothing acts on a word nobody chose;
+// anything else is a model from the same library as the wake words.
+type CommandWord struct {
+	ID string `json:"id,omitempty"`
+
+	// Threshold is the score it has to reach. Zero is DefaultCommandThreshold, and at StopOff the word
+	// is not listened for, as with the stop word.
+	Threshold float64 `json:"threshold,omitempty"`
+}
+
+// DefaultCommandThreshold is higher than a wake word's. A command word is short, it is said over the
+// music it acts on, and it acts at once: there is no turn after it to show that it was a mistake.
+const DefaultCommandThreshold = 0.90
+
+// On reports whether a word is chosen and can be heard at all.
+func (w CommandWord) On() bool { return w.ID != "" && w.ThresholdAt() < StopOff }
+
+// CommandWords are the command words in the order their slots are in: volume down, volume up, next song.
+// What keeps their models on the device (a purge, the setup page's remove) goes by this list.
+func (w Wake) CommandWords() []CommandWord {
+	return []CommandWord{w.VolumeDown, w.VolumeUp, w.NextSong}
+}
+
+// ThresholdAt is the score the word has to reach.
+func (w CommandWord) ThresholdAt() float64 {
+	if w.Threshold <= 0 {
+		return DefaultCommandThreshold
+	}
+	return w.Threshold
+}
 
 // WakeWord is one slot: which wake word listens there and how it behaves when it fires. An empty ID
 // is the slot switched off, which is also how detection is turned off altogether.
@@ -198,6 +281,50 @@ type StopWriter struct{ st *Store }
 
 func (w StopWriter) Threshold(v float64) error {
 	return w.st.Update(func(c *Config) { c.Wake.Stop.Threshold = v })
+}
+
+// HangupWriter is the hang-up word, which belongs to no slot.
+type HangupWriter struct{ st *Store }
+
+func (w HangupWriter) ID(v string) error {
+	return w.st.Update(func(c *Config) { c.Wake.Hangup.ID = v })
+}
+
+func (w HangupWriter) Threshold(v float64) error {
+	return w.st.Update(func(c *Config) { c.Wake.Hangup.Threshold = v })
+}
+
+// VolumeDownWriter is the volume down word, which belongs to no slot either.
+type VolumeDownWriter struct{ st *Store }
+
+func (w VolumeDownWriter) ID(v string) error {
+	return w.st.Update(func(c *Config) { c.Wake.VolumeDown.ID = v })
+}
+
+func (w VolumeDownWriter) Threshold(v float64) error {
+	return w.st.Update(func(c *Config) { c.Wake.VolumeDown.Threshold = v })
+}
+
+// VolumeUpWriter is the volume up word, which belongs to no slot either.
+type VolumeUpWriter struct{ st *Store }
+
+func (w VolumeUpWriter) ID(v string) error {
+	return w.st.Update(func(c *Config) { c.Wake.VolumeUp.ID = v })
+}
+
+func (w VolumeUpWriter) Threshold(v float64) error {
+	return w.st.Update(func(c *Config) { c.Wake.VolumeUp.Threshold = v })
+}
+
+// NextSongWriter is the next song word, which belongs to no slot either.
+type NextSongWriter struct{ st *Store }
+
+func (w NextSongWriter) ID(v string) error {
+	return w.st.Update(func(c *Config) { c.Wake.NextSong.ID = v })
+}
+
+func (w NextSongWriter) Threshold(v float64) error {
+	return w.st.Update(func(c *Config) { c.Wake.NextSong.Threshold = v })
 }
 
 type WakeWriter struct {

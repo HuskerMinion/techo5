@@ -1,4 +1,4 @@
-//go:build !spot
+//go:build !spot && !panel
 
 package streaming
 

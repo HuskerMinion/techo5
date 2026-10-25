@@ -40,7 +40,7 @@ func TestTheGridIsDrawnWhereItIsTapped(t *testing.T) {
 	for _, panel := range []struct {
 		name       string
 		wide, high int
-	}{{"show 5", 960, 480}, {"show 8", 1280, 800}} {
+	}{{"show 5", 960, 480}, {"show 8", 1280, 800}, {"skylight", skylightWide, skylightHigh}} {
 		for _, n := range []int{2, 3, 6} {
 			var cells []home.GridCell
 			for i := range n {

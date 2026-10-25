@@ -1,4 +1,4 @@
-//go:build !dot && !spot
+//go:build !dot && !spot && !panel
 
 package privacy
 
@@ -162,6 +162,10 @@ func (m mainlineMute) Toggle() (bool, error) {
 }
 
 func platformMute() (Mute, error) {
+	if layout.Skylight() {
+		// No microphone, so no latch and nothing to mute.
+		return nil, fmt.Errorf("privacy: this device has no microphone to mute")
+	}
 	if layout.AthenaMainline() {
 		return mainlineMute{}, nil
 	}

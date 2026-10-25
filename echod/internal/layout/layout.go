@@ -33,7 +33,9 @@ var (
 // so boot.Run logs this rather than detection itself.
 var BoardDoubt string
 
-const (
+// Variables rather than constants, as everything under StateDir is: a panel finds its StateDir when
+// it starts (device_panel.go).
+var (
 	KeyPath  = StateDir + "/psk"
 	NamePath = StateDir + "/name"
 
@@ -50,14 +52,6 @@ const (
 	// has and no plain Linux does.
 	setprop = "/system/bin/setprop"
 )
-
-// OnAndroid reports whether an Android userspace is running around the daemon. Off Android — the
-// Linux image, or a workstation — there are no properties, no init services and no vendor firewall,
-// and everything that would speak to them stands down.
-func OnAndroid() bool {
-	_, err := os.Stat(setprop)
-	return err == nil
-}
 
 func installDir() string {
 	if OnAndroid() {
@@ -78,10 +72,9 @@ func installDir() string {
 }
 
 // BackupSuffix marks the vendor binary an install displaced, and Backup is where it is kept.
-const (
-	BackupSuffix = ".orig"
-	Backup       = Service + BackupSuffix
-)
+const BackupSuffix = ".orig"
+
+var Backup = Service + BackupSuffix
 
 // OurLabel is the SELinux label echod's files carry. A service's domain comes from the label of the
 // file init execs, and system_file has no transition rule, which leaves echod in init's own domain.
@@ -119,11 +112,11 @@ const Platform = "echolocal"
 const MACPath = "/proc/idme/mac_addr"
 
 // StatePath holds echod's runtime settings.
-const StatePath = StateDir + "/state.json"
+var StatePath = StateDir + "/state.json"
 
 // Wake word models live in /data, not /system: Home Assistant can offer new ones at runtime and
 // /system is mounted read-only.
-const ModelDir = StateDir + "/models"
+var ModelDir = StateDir + "/models"
 
 // RecordingDir holds the kept turn audio, one WAV and one metadata file per turn, named by turn id.
 // A variable rather than a constant so that a test can keep recordings somewhere harmless.
@@ -159,7 +152,7 @@ func MAC(raw string) string {
 
 // FactoryMAC reads and normalizes the immutable address recorded for the Wi-Fi device.
 func FactoryMAC() (string, error) {
-	raw, err := os.ReadFile(MACPath)
+	raw, err := readMAC()
 	if err != nil {
 		v, ok := idmeFallback("mac_addr")
 		if !ok {
@@ -189,16 +182,30 @@ func NameFromMAC(mac string) string {
 	return DefaultName + " " + s[len(s)-6:]
 }
 
-// Idme reads a factory identity field from /proc/idme (on the 2nd gen Show 8's mainline kernel,
-// from the eMMC: idmeFallback), empty on any error. These are written at
+// Idme reads a factory identity field from vendor IDME or the device tree (on the 2nd gen Show 8's
+// mainline kernel, from the eMMC: idmeFallback), empty on any error. These are written at
 // manufacture and never change, so a caller reads once and holds it.
 func Idme(name string) string {
-	raw, err := os.ReadFile("/proc/idme/" + name)
+	raw, err := readIDME(name, os.ReadFile)
 	if err != nil {
 		v, _ := idmeFallback(name)
 		return v
 	}
-	return strings.TrimSpace(string(raw))
+	return strings.TrimSpace(strings.TrimRight(string(raw), "\x00"))
+}
+
+func readIDME(name string, readFile func(string) ([]byte, error)) ([]byte, error) {
+	paths := []string{"/proc/idme/" + name, "/proc/device-tree/idme/" + name + "/value"}
+	for _, path := range paths {
+		raw, err := readFile(path)
+		if err == nil {
+			return raw, nil
+		}
+		if !os.IsNotExist(err) {
+			return nil, err
+		}
+	}
+	return nil, fmt.Errorf("IDME field %s: %w", name, os.ErrNotExist)
 }
 
 // Color is the device's shell, worked out from two idme fields: productid2 is 0 on a black unit and a
@@ -261,6 +268,15 @@ func CutName(name string, n int) string {
 		cut = i
 	}
 	return strings.TrimRight(name[:cut], " ")
+}
+
+// NodeName is the ESPHome node's own name, which it is advertised under over mDNS: the device's name as
+// a slug (Slug), one DNS label long at most. A name with nothing in it a slug keeps (one in Greek,
+// Cyrillic or Chinese, say) falls back to the name the device would have had with none, which carries
+// the end of its MAC address, so two such devices are still two nodes. Home Assistant names the
+// device's actions after it: esphome.<node>_<action>, with its dashes made underscores.
+func NodeName(name, mac string) string {
+	return strings.TrimRight(CutName(SlugOr(name, mac), LabelMax), "-")
 }
 
 // SlugOr is name's Slug, or, for a name with nothing in it a slug keeps (one in Greek, Cyrillic or

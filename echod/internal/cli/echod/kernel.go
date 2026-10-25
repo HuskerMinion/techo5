@@ -13,20 +13,26 @@ import (
 	"github.com/HuskerMinion/techo5/echod/internal/update/kernel"
 )
 
-// newKernelCmd is the 2nd gen Show 8's kernel update (update/kernel), which etc/techo5/boot.sh runs:
-// boot early at every boot, settled and then apply once the daemon has settled on a good slot, and
-// noroute when a trial boot had everything but a network.
+// newKernelCmd is the kernel update of the units on TECHO5's own mainline kernel (update/kernel): the
+// 2nd gen Show 8's boot partition, the Skylight Calendar 15's recovery partition. etc/techo5/boot.sh
+// runs it where device.conf says KERNEL_UPDATE: boot early at every boot, settled and then apply once
+// the daemon has settled on a good slot, and noroute when a trial boot had everything but a network.
 func newKernelCmd() *cobra.Command {
 	c := &cobra.Command{
 		Use:   "kernel",
-		Short: "The 2nd gen Show 8's kernel: the one its root filesystem carries, on trial like a slot",
+		Short: "TECHO5's own kernel (2nd gen Show 8, Skylight): the one the root filesystem carries, on trial like a slot",
 	}
 	paths := func() (kernel.Paths, error) {
-		if !layout.AthenaMainline() {
-			return kernel.Paths{}, errors.New("only the 2nd gen Show 8 on TECHO5's mainline kernel updates its kernel")
+		var p kernel.Paths
+		switch {
+		case layout.AthenaMainline():
+			p = kernel.Default
+		case layout.Skylight():
+			p = kernel.SkylightDefault
+		default:
+			return kernel.Paths{}, errors.New("only the 2nd gen Show 8 on TECHO5's mainline kernel and the Skylight update their kernel")
 		}
-		p := kernel.Default
-		dev, err := kernel.BootDevice()
+		dev, err := kernel.PartitionDevice(p.Board.Partition())
 		if err != nil {
 			return p, err
 		}
@@ -91,7 +97,7 @@ func newKernelCmd() *cobra.Command {
 	}
 	apply := &cobra.Command{
 		Use:   "apply",
-		Short: "Write this slot's kernel to the boot partition when it holds another one, and reboot",
+		Short: "Write this slot's kernel to its partition when that holds another one, and reboot",
 		RunE: func(*cobra.Command, []string) error {
 			p, err := paths()
 			if err != nil {

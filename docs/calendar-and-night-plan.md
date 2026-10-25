@@ -122,6 +122,56 @@ and is easy on eyes adjusted to it.
   "Red clock").
 - The Spot's night only dims today; a red clock could come to it later if wanted.
 
+## 6. The calendar's look
+
+Added after the rest, as switches, each on the screen (Settings, Display, Calendar), on the setup
+page (Weather & Calendar) and in Home Assistant. Shared settings can keep them the same on every
+screen. The Spot keeps its own Today and Next.
+
+- **Day timeline** (on): a day on its hours. Events are boxes as long as they last, side by side when
+  they overlap. All-day events and the day's weather are in a strip under the header. ‹ › and a
+  swipe go to the day before or after. Today has a Today tag, the now line and its past hours shaded,
+  and opens an hour before now. Another day opens an hour before its first event. A "Later" pill
+  points to an event below, and a bar at the right edge shows where in the day the page is. Off: the
+  list it was.
+- **Coming up, one line each** (on): the time, the title and the place on one line. Each day's
+  heading has "Today", "Tomorrow" or "in 3 days", and the day's weather with the high and low.
+  Off: the two-line rows.
+- **Month details**: *Full* or *Simple*. Simple is an event of several days as one spanning bar, pointed
+  where it runs past the week or the month and with the day it ends, the past days dimmed and
+  today's number in a pill. Full adds a timed event's start time in its calendar's color ("9a"),
+  icons on a screen bigger than the Show 5, and the next seven days' weather. Full on screens bigger
+  than the Show 5, Simple on the Show 5.
+- **Event icons** (on): a small picture before a title, by whole words in it: birthday, trash day,
+  garbage or recycling, a flight or "fly to", the dentist, the doctor or a checkup, soccer, school,
+  picture day or parent-teacher, vacation or a holiday. A word that means too many things alone, like
+  "practice" or "appointment", gets no picture. In Coming up, the day and the week; on the month only
+  on screens bigger than the Show 5. The words are a table in `calendar_text.go`.
+- **Countdowns** (on): "now", "in 25 min" or "in 1 h 30 min" on today's events, the next one filled
+  in the accent; and "Vacation in 11 days" on the clock's card for an event of several days.
+- **Week view**: seven days on their hours, each headed by its weather, with an all-day strip and
+  today's column tinted. A Day, Week and Month switch sits in the header. On screens bigger than the
+  Show 5, off on the Show 5.
+- **Next up on the clock** (on): while an event is on, or comes up today or within 12 hours, the foot
+  of the clock shows it: its time, its countdown, and under it the long countdown and what comes
+  next. A tap opens that day. Only when the glance strip has nothing of its own to show: a strip with
+  chips (a door, the temperature) stays as it is, with no card. An event on since an earlier day only
+  has the card when nothing else is coming up, and then says "until" its end. Not with the Dashboard
+  or Agenda styles; not with the Classic clock at any bottom position, nor with another style that
+  Clock position puts in a bottom corner. On the night light the countdown is drawn dim, not in the
+  accent.
+- **Weather in the calendar** (on): the device's own forecast on the days. Nothing without one.
+
+A default that goes by the screen's size is not saved until somebody chooses, so a later change to it
+still applies. Sharing Week view or Month details from a big screen sends its value, so a Show 5
+linked to it gets that value as a choice of its own, not its default.
+
+**Which calendars.** With more than one calendar, a chip for each sits over the month, in its color.
+Too many for a row wrap onto a second, and the rest are a "+N" chip that opens a list of them all. A
+tap hides that calendar's events on this screen: in every view, on the clock and in event pop-ups. It
+is remembered on the device and is not shared or put in a settings file. A calendar taken off the
+device is no longer hidden, and with one calendar nothing is.
+
 ## Order of work
 
 Small first, so each can go out in a release on its own:

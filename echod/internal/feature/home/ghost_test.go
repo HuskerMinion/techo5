@@ -108,10 +108,13 @@ func newSlowHA(t *testing.T) *slowHA {
 			return
 		}
 		s.hits.Add(1)
-		_, _ = w.Write(body)
+		// The span ends before the bytes go: once they have, the client may start the next fetch before
+		// this handler gets to take the time, and two fetches one after the other would look like two
+		// at once (a busy CI runner did).
 		s.mu.Lock()
 		s.served = append(s.served, servedSpan{start, time.Now()})
 		s.mu.Unlock()
+		_, _ = w.Write(body)
 	}))
 	t.Cleanup(srv.Close)
 	// Cleanups run last in, first out: a request still waiting is let go before the server is closed,

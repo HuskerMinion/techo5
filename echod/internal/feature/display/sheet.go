@@ -94,6 +94,12 @@ func categoryRows(sv sheetView) (rows []settingRow, note string) {
 			rows = append(rows, settingRow{id: "dimmest", label: "Dimmest", sub: "How dark auto-brightness goes in a dark room",
 				kind: ctlStepper, value: fmt.Sprintf("%d%%", dimmestSetting())})
 		}
+		// Beside the light's own rows: it is about who else may put the screen out (screen_room.go). The
+		// label is Screen ignores room light commands cut to what fits on the Spot, and the line under it
+		// says only what the setting does, which is true whether or not Home Assistant already exposed
+		// the light to Assist (that one is unticked in Home Assistant, docs/setup.md).
+		rows = append(rows, settingRow{id: "roomlights", label: "Ignore room lights",
+			sub: "Out of area targets in Home Assistant", kind: ctlToggle, on: roomLightsIgnored()})
 		rows = append(rows, settingRow{id: "night", label: nightRowLabel, kind: ctlChoice, value: nightRowValue(st.night)})
 		if nightCanHappen(st.night) {
 			rows = append(rows, settingRow{id: "atnight", label: "At night", sub: atNightSub,
@@ -113,6 +119,9 @@ func categoryRows(sv sheetView) (rows []settingRow, note string) {
 		}
 		// The light first, then each group under its name: what is changed most near the top.
 		rows = append(rows, settingRow{label: "Look", kind: ctlHeading})
+		if hasSkins {
+			rows = append(rows, settingRow{id: "skin", label: "Skin", sub: "A whole look over the theme and font", kind: ctlChoice, value: skins[skinIndex()].label})
+		}
 		rows = append(rows, themeRows()...)
 		rows = append(rows,
 			fontRow(),
@@ -131,22 +140,36 @@ func categoryRows(sv sheetView) (rows []settingRow, note string) {
 			settingRow{id: "musicstrip", label: "Now playing", sub: "Full page, or a strip over the clock", kind: ctlChoice, value: stripOptionText()},
 			settingRow{id: "follow", label: "Now playing follows", sub: "Another speaker's music, while this one is quiet", kind: ctlChoice, value: followText(st.demo)},
 			settingRow{id: "lyrics", label: "Lyrics", sub: "The words in time, looked up at LRCLIB", kind: ctlToggle, on: home.LyricsOn()},
-			settingRow{id: "callbutton", label: "Call button", sub: "On the home screen: devices and contacts", kind: ctlToggle, on: callButton.Load()},
 		)
+		// Calls, Assist and the turn screen need a microphone: a screen without one leaves them out.
+		if hasMicrophone() {
+			rows = append(rows, settingRow{id: "callbutton", label: "Call button", sub: "On the home screen: devices and contacts", kind: ctlToggle, on: callButton.Load()})
+		}
 		if hasClockTap {
-			rows = append(rows, settingRow{id: "clocktap", label: "Tap on the clock", sub: "Start Assist, open the dashboard or the deck, or nothing", kind: ctlChoice, value: clockTaps[clockTapIndex()].label})
+			sub := "Start Assist, open the dashboard or the deck, or nothing"
+			if !hasMicrophone() {
+				sub = "Open the dashboard or the deck, or nothing"
+			}
+			rows = append(rows, settingRow{id: "clocktap", label: "Tap on the clock", sub: sub, kind: ctlChoice, value: clockTapChoices()[clockTapIndex()].label})
 		}
 		rows = append(rows,
 			settingRow{label: "Weather", kind: ctlHeading},
 			settingRow{id: "weatherfx", label: "Weather animation", sub: "Rain, snow and storms move on the forecast", kind: ctlToggle, on: weatherAnimation.Load()},
 			settingRow{id: "alerts", label: "Weather alerts", sub: "The NWS's alerts for home, in the U.S.", kind: ctlToggle, on: home.AlertsOn()},
 			settingRow{id: "radarsrc", label: "Radar source", sub: "Automatic uses the NWS in the lower 48", kind: ctlChoice, value: home.RadarSourceOptions()[home.RadarSourceIndex()]},
+		)
+		// How the calendar looks, on a screen with a calendar page and once it shows a calendar.
+		rows = append(rows, calendarLookRows()...)
+		rows = append(rows,
 			settingRow{label: "Pop-ups", kind: ctlHeading},
 			settingRow{id: "camtime", label: "Camera time", sub: "How long a camera opened here stays up", kind: ctlChoice, value: cameraTimes[cameraTimeIndex()].label},
 			settingRow{id: "answertime", label: "Answer time", sub: "How long an answer stays up; a tap clears it", kind: ctlChoice, value: answerTimes[answerTimeIndex()].label},
 		)
-		if hasEqualizer {
-			rows = append(rows, settingRow{id: "turnstyle", label: "Turn screen", sub: "Classic, or a wave or bars that move with the voice", kind: ctlChoice, value: turnStyles[turnStyleIndex()].label})
+		if hasTimerStyles {
+			rows = append(rows, settingRow{id: "timerstyle", label: "Timers", sub: "How running timers show on the clock", kind: ctlChoice, value: timerStyles[timerStyleIndex()].label})
+		}
+		if hasEqualizer && hasMicrophone() {
+			rows = append(rows, settingRow{id: "turnstyle", label: "Turn screen", sub: "Classic, or a picture that moves with the voice", kind: ctlChoice, value: turnStyles[turnStyleIndex()].label})
 		}
 		return withPresence(rows), ""
 	case catSound:
@@ -169,19 +192,33 @@ func categoryRows(sv sheetView) (rows []settingRow, note string) {
 				sub:  "0 dB is normal; boosts can distort, especially with more bass",
 				kind: ctlStepper, value: gainText(media.Get().SpeakerGain())})
 		}
+		// Without a microphone there is no voice to set up and no intercom to turn away: only the
+		// sounds for timers are left of the Voice group.
+		if hasMicrophone() {
+			rows = append(rows, []settingRow{
+				{label: "Voice", kind: ctlHeading},
+				{id: "mic", label: "Microphone", sub: "The mute button does this too", kind: ctlToggle, on: !st.muted, value: mic},
+				{id: "wakeword", label: "Wake word", kind: ctlChoice, value: st.wakeWord},
+				{id: "wakesens", label: "Wake word threshold", sub: "Higher wakes by mistake less often", kind: ctlStepper,
+					value: fmt.Sprintf("%.2f", config.Get().Wake.Slot(0).Threshold)},
+				{id: "waketone", label: "Wake sound", kind: ctlChoice, value: config.Get().Wake.Slot(0).Tone.Label()},
+				voiceRow(),
+				{id: "hasounds", label: "Home Assistant sounds", sub: "For muting and timers", kind: ctlToggle, on: !config.Get().Speaker.ClassicSounds},
+			}...)
+		} else {
+			rows = append(rows,
+				settingRow{label: "Sounds", kind: ctlHeading},
+				settingRow{id: "hasounds", label: "Home Assistant sounds", sub: "For timers", kind: ctlToggle, on: !config.Get().Speaker.ClassicSounds})
+		}
 		rows = append(rows, []settingRow{
-			{label: "Voice", kind: ctlHeading},
-			{id: "mic", label: "Microphone", sub: "The mute button does this too", kind: ctlToggle, on: !st.muted, value: mic},
-			{id: "wakeword", label: "Wake word", kind: ctlChoice, value: st.wakeWord},
-			{id: "wakesens", label: "Wake word threshold", sub: "Higher wakes by mistake less often", kind: ctlStepper,
-				value: fmt.Sprintf("%.2f", config.Get().Wake.Slot(0).Threshold)},
-			{id: "waketone", label: "Wake sound", kind: ctlChoice, value: config.Get().Wake.Slot(0).Tone.Label()},
-			voiceRow(),
-			{id: "hasounds", label: "Home Assistant sounds", sub: "For muting and timers", kind: ctlToggle, on: !config.Get().Speaker.ClassicSounds},
 			{label: "Quiet", kind: ctlHeading},
 			{id: "quiet", label: "Quiet hours", sub: quietSub(), kind: ctlChoice, value: quietValue()},
 			{id: "sleep", label: "Sleep timer", sub: sleepSub(), kind: ctlChoice, value: sleepValue()},
-			{id: "dnd", label: "Do not disturb", sub: "Intercom calls from other rooms are turned away", kind: ctlToggle, on: config.Get().Home.DoNotDisturb},
+		}...)
+		if hasMicrophone() {
+			rows = append(rows, settingRow{id: "dnd", label: "Do not disturb", sub: "Intercom calls from other rooms are turned away", kind: ctlToggle, on: config.Get().Home.DoNotDisturb})
+		}
+		rows = append(rows, []settingRow{
 			{label: "Music", kind: ctlHeading},
 			{id: "sendspin", label: "Music Assistant player", sub: "Play music in sync with other rooms", kind: ctlToggle, on: st.sendspin},
 		}...)
@@ -261,6 +298,7 @@ func securityRows(sv sheetView) []settingRow {
 	if st.insecureTLS {
 		certs.sub, certs.value = "Turned off in Home Assistant", "Off"
 	}
+	rows = append(rows, cameraTestRows()...)
 	return append(rows,
 		settingRow{id: "camweb", label: "Camera on the network", sub: "No login", kind: ctlToggle, on: sec.Camera},
 		settingRow{id: "screenweb", label: "Screen on the network", sub: "No login", kind: ctlToggle, on: sec.Screen},
@@ -280,6 +318,10 @@ func generalRows(sv sheetView) []settingRow {
 		updates.sub = "Checking…"
 	case fw.Offered() != "":
 		updates.sub, updates.button = fw.Offered()+" is ready · this is "+st.version, "Install"
+	}
+	if !update.Published() {
+		// A panel's app updates it from one place: no channel to choose, only the button.
+		updates.kind, updates.value = ctlButton, ""
 	}
 	restart := settingRow{id: "restart", label: "Restart", sub: "Back in about a minute", kind: ctlDanger, button: "Restart"}
 	if !st.restartArm.IsZero() && st.now.Sub(st.restartArm) < restartWindow {
@@ -308,7 +350,8 @@ func forgetRow(sv sheetView, name string) settingRow {
 	return row
 }
 
-// connectionRows are the Connections card's: Wi-Fi, Bluetooth audio, and the Bluetooth proxy.
+// connectionRows are the Connections card's: Wi-Fi, Bluetooth audio, Secure Connections, and the
+// Bluetooth proxy.
 func connectionRows(sv sheetView) []settingRow {
 	st, bt := sv.st, sv.bt
 	wifiRow := settingRow{label: "Wi-Fi", sub: st.address, kind: ctlValue, value: st.wifiName}
@@ -342,6 +385,12 @@ func connectionRows(sv sheetView) []settingRow {
 	}
 	if bt.Available {
 		rows = append(rows, settingRow{id: "pair", label: "Pair a new device", sub: "Put it in pairing mode first", kind: ctlButton, button: "Pair"})
+	}
+	// Off for a phone that pairs and is dropped a second or two later (#183). Changing it powers the
+	// controller off and on, so what is connected drops for a moment, and the row says so.
+	if bt.Available && !st.btSCFixed {
+		rows = append(rows, settingRow{id: "btsc", label: "Bluetooth Secure Connections",
+			sub: "Off if a phone pairs, then drops. Drops devices briefly", kind: ctlToggle, on: !st.btSCOff})
 	}
 	return append(rows, settingRow{id: "btproxy", label: "Bluetooth proxy", sub: "Lets Home Assistant hear nearby devices",
 		kind: ctlToggle, on: st.btProxy})
@@ -591,6 +640,8 @@ func pickerFor(id string, sv sheetView) (pickerView, bool) {
 		return clockStylePicker()
 	case "font":
 		return fontPicker()
+	case "skin":
+		return pickerView{title: "Skin", opts: skinOptions(), cur: skinIndex()}, true
 	case "clockpos", "datecolor":
 		return clockLayoutPicker(id)
 	case "camtime":
@@ -599,6 +650,8 @@ func pickerFor(id string, sv sheetView) (pickerView, bool) {
 		return pickerView{title: "Call ring", opts: phone.RingSounds, cur: phone.RingSoundIndex()}, true
 	case "answertime":
 		return pickerView{title: "Answer time", opts: answerTimeOptions(), cur: answerTimeIndex()}, true
+	case "timerstyle":
+		return pickerView{title: "Timers", opts: timerStyleOptions(), cur: timerStyleIndex()}, true
 	case "turnstyle":
 		return pickerView{title: "Turn screen", opts: turnStyleOptions(), cur: turnStyleIndex()}, true
 	case "clocktap":
@@ -725,6 +778,8 @@ func (d *Display) choose(id string, i int) {
 		d.setClockStyle(i)
 	case "font":
 		d.setFont(i)
+	case "skin":
+		setSkin(d.skinSel(), i)
 	case "clockpos", "datecolor":
 		d.chooseClockLayout(id, i)
 	case "clock":
@@ -744,6 +799,8 @@ func (d *Display) choose(id string, i int) {
 		}
 	case "turnstyle":
 		setTurnStyle(d.turnStyleSel(), i)
+	case "timerstyle":
+		setTimerStyle(d.timerStyleSel(), i)
 	case "clocktap":
 		setClockTap(d.clockTapSel(), i)
 	case "radarsrc":
@@ -964,6 +1021,8 @@ func (d *Display) rowTap(id string, p part, opt int) {
 		safe.Go("lyrics from the screen", func() { home.Get().SetLyricsOn(!home.LyricsOn()) })
 	case "nighttap":
 		d.setNightTapLifts(!config.Get().Screen.NightTapLifts)
+	case "roomlights":
+		d.setRoomLightsIgnored(!roomLightsIgnored())
 	case "weatherfx":
 		setWeatherAnimationSaved(d.weatherFx, !weatherAnimation.Load())
 	case "dnd":
@@ -1081,7 +1140,7 @@ func (d *Display) rowTap(id string, p part, opt int) {
 		d.rowTap("updates", partExtra, opt)
 	case "updates":
 		switch {
-		case p != partExtra:
+		case p != partExtra && update.Published():
 			d.openPicker(id)
 		case firmware.Get().Offered() != "":
 			safe.Go("update install from the screen", func() { firmware.Get().Install(context.Background()) })
@@ -1124,6 +1183,9 @@ func (d *Display) rowTap(id string, p part, opt int) {
 	case "btproxy":
 		p := bluetooth.Get()
 		safe.Go("bluetooth proxy from the screen", func() { p.SetEnabled(!p.Enabled()) })
+	case "btsc":
+		bt := btaudio.Get()
+		safe.Go("bluetooth secure connections from the screen", func() { _ = bt.SetSecureConnections(!bt.SecureConnections()) })
 	case "photofolder":
 		d.openFolder(photosRoot, nil)
 	case "shuffle":
@@ -1143,7 +1205,7 @@ func (d *Display) rowTap(id string, p part, opt int) {
 		home.Get().SetSlideshowCaption(!home.Get().SlideshowCaption())
 	case "immichfav":
 		home.Get().SetImmichFavorites(!home.Get().ImmichFavorites())
-	case "night", "atnight", "nightstyle", "clock", "clockstyle", "font", "clockpos", "datecolor", "camtime", "answertime", "callring", "turnstyle", "radarsrc", "calendars", "calpopwhen", "calpopallday", "calpopcals", "musicstrip", "follow", "awayoff", "slideshow", "photoevery", "screenlang", "newtimer", "sleep", "sunrise",
+	case "night", "atnight", "nightstyle", "clock", "clockstyle", "font", "skin", "clockpos", "datecolor", "camtime", "answertime", "callring", "turnstyle", "timerstyle", "radarsrc", "calendars", "calpopwhen", "calpopallday", "calpopcals", "musicstrip", "follow", "awayoff", "slideshow", "photoevery", "screenlang", "newtimer", "sleep", "sunrise",
 		"timezone", "wakeword", "waketone", "ttsvoice", "quiet", "output", "clocktap":
 		d.openPicker(id)
 	}

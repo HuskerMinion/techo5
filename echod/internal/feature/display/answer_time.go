@@ -92,8 +92,13 @@ func answerTimeSelect() *esphome.Select {
 	return s
 }
 
-// answerUp is whether a finished turn's words are on the screen now.
+// answerUp is whether a finished turn's words are on the screen now, as a page of their own. Not under
+// a cue: there the page is still up and keeps its gestures, with the words as captions over it, which
+// a tap on them puts away (captionsTap), or with no words at all.
 func (d *Display) answerUp(now time.Time) bool {
+	if cueOn() {
+		return false
+	}
 	d.mu.Lock()
 	defer d.mu.Unlock()
 	return d.view.Phase == "idle" && (d.view.Heard != "" || d.view.Reply != "") && !d.quiet &&

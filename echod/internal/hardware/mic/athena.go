@@ -1,4 +1,4 @@
-//go:build !dot && !spot
+//go:build (!dot && !spot && !panel) || donut
 
 package mic
 
@@ -8,6 +8,8 @@ import (
 	"fmt"
 	"log/slog"
 	"math"
+	"os"
+	"strings"
 	"time"
 
 	"github.com/HuskerMinion/techo5/echod/internal/layout"
@@ -137,21 +139,41 @@ const athenaGainControl = "Ch%d Gain A"
 // names; the mics come from the Capture_1 front end (UL1, the AFE's VUL12 in its 4-channel mode),
 // hw:0,2: ch1/ch2 off the converter's first data line (I2S2_DI) and ch3/ch4 off its second
 // (I2S2_DI2), which needs the kernel's AFE patch for the second data line (patches/patch-afe-di2.py
-// there); the samples are 24-bit, left-aligned in 32; and there is no reference device: the speaker
-// amplifier's output reaches no pin the SoC reads, and mainline has no AWB loopback front end.
+// there); the samples are 24-bit, left-aligned in 32. The reference is hw:0,1 "DL1_AWB_Record", as on
+// Amazon's kernel: the AFE's AWB memory interface (UL2) recording what DL1 sends the amplifier's I2S1,
+// through the interconnect switches athenaMainlineRefControls sets (the AFE's routes:
+// tools/linux/athena's patches/patch-afe-awb-dl1.py). The speaker amplifier's own output reaches no pin
+// the SoC reads, so this digital copy is the closest there is. So both kernels run alike: microphones
+// and reference at 96 kHz on the same AFE clocks, decimated by filters of the same delay. A kernel
+// without that device, or one where it does not open, keeps the microphones at 96 kHz and takes
+// lib/echoref's software reference, as before the card had one.
 type athenaKernel struct {
 	micDevice   int
 	micChannels int
 	micFull     float32
 	refDevice   int // -1: none
+	// refName is the reference's PCM id as the kernel lists it (/proc/asound), checked before it is
+	// opened, so an older kernel's device at that number is never taken for it. Empty: not checked.
+	refName string
+	// refControls are written before the reference is opened; one that fails means no reference.
+	refControls []athenaControl
 	controls    []athenaControl
 	gainControl string
-	// softRef: the reference is lib/echoref's, made from what the speaker sent, where the card has
-	// none of its own.
+	// softRef: without the card's reference, it is lib/echoref's, made from what the speaker sent.
 	softRef bool
 	// amazon: the PMIC microphone path and the converter's bias write (athena_bias.go), which
 	// Amazon's drivers leave to userspace. The mainline driver powers the bias itself.
 	amazon bool
+	// micRates are the rates to open the microphones at, the first the card takes. Every athena
+	// kernel opens them at 96 kHz, and the decimators in convert make the 16 kHz stream (lib/audio).
+	micRates []int
+	// refRate is the rate the reference is opened at; at Rate it is used as it comes.
+	refRate int
+	// boostDB is added to the microphones after conversion (athenaMicBoostDB on athena).
+	boostDB float64
+	// micPeriods and refPeriods are the rings' lengths in 10 ms periods; zero is athena's
+	// (athenaMicPeriods, athenaRefPeriods), held to what Amazon's driver set aside.
+	micPeriods, refPeriods int
 }
 
 type athenaControl = struct {
@@ -167,6 +189,9 @@ var athenaAmazonKernel = athenaKernel{
 	controls:    athenaControls,
 	gainControl: athenaGainControl,
 	amazon:      true,
+	micRates:    []int{athenaMicRate},
+	refRate:     athenaRefRate,
+	boostDB:     athenaMicBoostDB,
 }
 
 // athenaMainlineControls are the routes and settings the mainline card needs, as used on unit 1 on
@@ -194,18 +219,36 @@ var athenaMainlineControls = []athenaControl{
 	{"Digital CH4 Out Volume", 201},
 }
 
+// athenaMainlineRefControls are the AFE interconnect from DL1's two channels into UL2's (O05/O06 from
+// I05/I06), the path DL1_AWB_Record records. The switches only take effect while DL1 plays (DAPM
+// powers the path with the stream), so with nothing playing the reference reads zero.
+var athenaMainlineRefControls = []athenaControl{
+	{"UL2_CH1 DL1_CH1", 1},
+	{"UL2_CH2 DL1_CH2", 1},
+}
+
 var athenaMainlineKernel = athenaKernel{
 	micDevice:   2,
 	micChannels: 4,
 	micFull:     1 << 31,
-	refDevice:   -1,
+	refDevice:   1,
+	refName:     "DL1_AWB_Record",
+	refControls: athenaMainlineRefControls,
 	controls:    athenaMainlineControls,
 	gainControl: "Analog CH%d Mic Gain Volume",
 	softRef:     true,
+	// The microphones at 96 kHz, with the reference and without it: without it the software
+	// reference is used, as before the card had one.
+	micRates: []int{athenaMicRate},
+	refRate:  athenaRefRate,
+	boostDB:  athenaMicBoostDB,
 }
 
 // athenaRunning is the kernel this unit is on; a workstation reads as Amazon's.
 func athenaRunning() *athenaKernel {
+	if boardKernel != nil {
+		return boardKernel
+	}
 	if layout.AthenaMainline() {
 		return &athenaMainlineKernel
 	}
@@ -274,6 +317,8 @@ type pairedCapture struct {
 	// the canceller reads as nothing playing, and everything else works.
 	ref *alsa.Capture
 	k   *athenaKernel
+	// micRate is the rate the microphones were opened at (athenaKernel.micRates).
+	micRate int
 
 	micBuf, refBuf []byte
 	micDec         []*audio.Decimator
@@ -293,32 +338,29 @@ func openAthena() (capture, error) {
 	k := athenaRunning()
 	athenaInit(k)
 
-	var ref *alsa.Capture
-	if k.refDevice >= 0 {
-		var err error
-		ref, err = alsa.OpenPrepared(Card, k.refDevice, alsa.Config{
-			Channels:   athenaRefChannels,
-			Rate:       athenaRefRate,
-			Format:     alsa.FormatS16_LE,
-			Bits:       athenaRefBits,
-			PeriodSize: athenaRefPeriod,
-			Periods:    athenaRefPeriods,
-		})
-		if err != nil {
-			slog.Warn("athena: no playback reference, echo cancellation will have nothing to cancel",
-				"device", k.refDevice, "err", err)
-			ref = nil
-		}
-	}
+	ref := openAthenaRef(k)
+	rates := k.micRates
+	soft := ref == nil && k.softRef
+	echoref.Use(soft)
 
-	mics, err := alsa.OpenPrepared(Card, k.micDevice, alsa.Config{
-		Channels:   k.micChannels,
-		Rate:       athenaMicRate,
-		Format:     alsa.FormatS32_LE,
-		Bits:       athenaMicBits,
-		PeriodSize: athenaMicPeriod,
-		Periods:    athenaMicPeriods,
-	})
+	var mics *alsa.Capture
+	var err error
+	micRate := 0
+	for _, rate := range rates {
+		mics, err = alsa.OpenPrepared(Card, k.micDevice, alsa.Config{
+			Channels:   k.micChannels,
+			Rate:       rate,
+			Format:     alsa.FormatS32_LE,
+			Bits:       athenaMicBits,
+			PeriodSize: rate / 100,
+			Periods:    periodsOr(k.micPeriods, athenaMicPeriods),
+		})
+		if err == nil {
+			micRate = rate
+			break
+		}
+		slog.Warn("athena: microphones refused a rate", "rate", rate, "err", err)
+	}
 	if err != nil {
 		if ref != nil {
 			_ = ref.Close()
@@ -326,7 +368,7 @@ func openAthena() (capture, error) {
 		return nil, err
 	}
 
-	c := newPairedCapture(mics, ref)
+	c := newPairedCapture(mics, ref, micRate)
 	if err := c.start(); err != nil {
 		_ = c.Close()
 		return nil, err
@@ -338,21 +380,92 @@ func openAthena() (capture, error) {
 		athenaADCBiasOn()
 	}
 	slog.Info("athena: capture open", "mics", fmt.Sprintf("hw:%d,%d", Card, k.micDevice),
-		"channels", k.micChannels, "reference", ref != nil, "ref_device", k.refDevice,
-		"software_reference", ref == nil && k.softRef)
+		"channels", k.micChannels, "rate", micRate, "reference", ref != nil, "ref_device", k.refDevice,
+		"software_reference", soft)
 	return c, nil
 }
 
-func newPairedCapture(mics, ref *alsa.Capture) *pairedCapture {
-	k := athenaRunning()
-	c := &pairedCapture{mics: mics, ref: ref, k: k, boost: float32(math.Pow(10, athenaMicBoostDB/20)),
-		clock: echoref.NewClock(Rate)}
-	c.micDec = make([]*audio.Decimator, k.micChannels)
-	for i := range c.micDec {
-		c.micDec[i] = audio.NewDecimator(athenaMicRate/Rate, athenaMicTaps)
+// openAthenaRef opens the card's reference, prepared and not started, or says why there is none.
+func openAthenaRef(k *athenaKernel) *alsa.Capture {
+	if k.refDevice < 0 {
+		return nil
 	}
-	for i := range c.refDec {
-		c.refDec[i] = audio.NewDecimator(athenaRefRate/Rate, athenaRefTaps)
+	if k.refName != "" && !athenaPCMIs(k.refDevice, k.refName) {
+		slog.Info("athena: no reference device on this kernel", "device", k.refDevice, "want", k.refName)
+		return nil
+	}
+	if len(k.refControls) > 0 {
+		m, err := alsa.OpenMixer(Card)
+		if err != nil {
+			slog.Warn("athena: no playback reference", "err", err)
+			return nil
+		}
+		ok := true
+		for _, c := range k.refControls {
+			ok = athenaWrite(m, c.name, c.value) && ok
+		}
+		_ = m.Close()
+		if !ok {
+			slog.Warn("athena: no playback reference, its routes could not be set")
+			return nil
+		}
+	}
+	ref, err := alsa.OpenPrepared(Card, k.refDevice, alsa.Config{
+		Channels:   athenaRefChannels,
+		Rate:       k.refRate,
+		Format:     alsa.FormatS16_LE,
+		Bits:       athenaRefBits,
+		PeriodSize: k.refRate / 100,
+		Periods:    periodsOr(k.refPeriods, athenaRefPeriods),
+	})
+	if err != nil {
+		slog.Warn("athena: no playback reference", "device", k.refDevice, "err", err)
+		return nil
+	}
+	return ref
+}
+
+// periodsOr is n, or athena's own count where the kernel sets none.
+func periodsOr(n, athena int) int {
+	if n > 0 {
+		return n
+	}
+	return athena
+}
+
+// athenaPCMIs is whether capture device dev of the card is the PCM named name: the kernel lists its
+// id as the link's stream name, then the codec's DAI ("DL1_AWB_Record snd-soc-dummy-dai-1").
+func athenaPCMIs(dev int, name string) bool {
+	b, err := os.ReadFile(fmt.Sprintf("/proc/asound/card%d/pcm%dc/info", Card, dev))
+	if err != nil {
+		return false
+	}
+	return athenaInfoNames(string(b), name)
+}
+
+func athenaInfoNames(info, name string) bool {
+	for line := range strings.SplitSeq(info, "\n") {
+		if id, ok := strings.CutPrefix(line, "id: "); ok {
+			return id == name || strings.HasPrefix(id, name+" ")
+		}
+	}
+	return false
+}
+
+func newPairedCapture(mics, ref *alsa.Capture, micRate int) *pairedCapture {
+	k := athenaRunning()
+	c := &pairedCapture{mics: mics, ref: ref, k: k, micRate: micRate,
+		boost: float32(math.Pow(10, k.boostDB/20)), clock: echoref.NewClock(Rate)}
+	if micRate != Rate { // at Rate the converter has decimated already
+		c.micDec = make([]*audio.Decimator, k.micChannels)
+		for i := range c.micDec {
+			c.micDec[i] = audio.NewDecimator(micRate/Rate, athenaMicTaps)
+		}
+	}
+	if k.refRate != Rate { // at Rate the reference is used as it comes
+		for i := range c.refDec {
+			c.refDec[i] = audio.NewDecimator(k.refRate/Rate, athenaRefTaps)
+		}
 	}
 	return c
 }
@@ -381,7 +494,9 @@ func (c *pairedCapture) restart() error {
 		d.Reset()
 	}
 	for _, d := range c.refDec {
-		d.Reset()
+		if d != nil {
+			d.Reset()
+		}
 	}
 	c.clock.Reset()
 	c.got = 0
@@ -404,7 +519,7 @@ func (c *pairedCapture) Read(buf []byte) (int, error) {
 		return 0, fmt.Errorf("buffer smaller than one frame (%d bytes)", frameBytes)
 	}
 
-	micBytes := frames * (athenaMicRate / Rate) * c.k.micChannels * athenaMicBits / 8
+	micBytes := frames * (c.micRate / Rate) * c.k.micChannels * athenaMicBits / 8
 	if len(c.micBuf) < micBytes {
 		c.micBuf = make([]byte, micBytes)
 	}
@@ -412,7 +527,7 @@ func (c *pairedCapture) Read(buf []byte) (int, error) {
 		return 0, c.lost(err)
 	}
 
-	refBytes := frames * (athenaRefRate / Rate) * athenaRefChannels * athenaRefBits / 8
+	refBytes := frames * (c.k.refRate / Rate) * athenaRefChannels * athenaRefBits / 8
 	if c.ref != nil {
 		if len(c.refBuf) < refBytes {
 			c.refBuf = make([]byte, refBytes)
@@ -435,8 +550,15 @@ func (c *pairedCapture) Read(buf []byte) (int, error) {
 	return frames * frameBytes, nil
 }
 
-// athenaMicDelay is the microphones' decimator delay: a frame out of it is the input from this far back.
-const athenaMicDelay = time.Duration((athenaMicTaps - 1) * int64(time.Second) / 2 / athenaMicRate)
+// micDelay is the microphones' decimator delay: a frame out of it is the input from this far back.
+// Nothing at Rate, where the converter decimates (its own filter's delay is not counted: `techo5 echo`
+// reports the lag that is left).
+func (c *pairedCapture) micDelay() time.Duration {
+	if c.micDec == nil {
+		return 0
+	}
+	return time.Duration((athenaMicTaps - 1) * int64(time.Second) / 2 / int64(c.micRate))
+}
 
 // softFill stamps the read just made, from the capture's own delay, and takes the reference for it.
 // A read the delay cannot be had for carries silence, as a missing reference does.
@@ -451,7 +573,7 @@ func (c *pairedCapture) softFill(frames int) {
 		return
 	}
 	// The last frame read was recorded d input frames ago, and the decimator holds it back further.
-	last := time.Now().Add(-time.Duration(d)*time.Second/athenaMicRate - athenaMicDelay)
+	last := time.Now().Add(-time.Duration(d)*time.Second/time.Duration(c.micRate) - c.micDelay())
 	c.clock.Mark(c.got+uint64(frames)-1, last)
 	c.softOK = echoref.Fill(c.softL, c.softR, c.clock.At(c.got))
 }
@@ -475,7 +597,17 @@ func (c *pairedCapture) convert(out, mics, ref []byte) {
 
 	f := 0
 	step := c.k.micChannels * 4
-	for at := 0; at+step <= len(mics) && f < frames; at += step {
+	if c.micDec == nil { // the converter's own 16 kHz: a frame in is a frame out
+		for at := 0; at+step <= len(mics) && f < frames; at, f = at+step, f+1 {
+			for ch := range c.k.micChannels {
+				y := float32(int32(binary.LittleEndian.Uint32(mics[at+4*ch:]))) / c.k.micFull * c.boost
+				putS24(out[f*frameBytes+3*ch:], y)
+				c.meter.mic[ch] += float64(y) * float64(y)
+				c.meter.micPeak[ch] = max(c.meter.micPeak[ch], abs32(y))
+			}
+		}
+	}
+	for at := 0; c.micDec != nil && at+step <= len(mics) && f < frames; at += step {
 		var ready bool
 		for ch, d := range c.micDec {
 			x := float32(int32(binary.LittleEndian.Uint32(mics[at+4*ch:]))) / c.k.micFull
@@ -494,10 +626,7 @@ func (c *pairedCapture) convert(out, mics, ref []byte) {
 
 	if ref == nil && c.softOK {
 		for f := range min(frames, len(c.softL)) {
-			for ch, v := range [...]float32{c.softL[f], c.softR[f]} {
-				c.meter.ref[ch] += float64(v) * float64(v)
-				putS24(out[f*frameBytes+3*(RefFirst+ch):], v)
-			}
+			putRef(out[f*frameBytes:], c.softL[f], c.softR[f], &c.meter.ref)
 		}
 		return
 	}
@@ -509,20 +638,32 @@ func (c *pairedCapture) convert(out, mics, ref []byte) {
 	}
 	f = 0
 	for at := 0; at+athenaRefChannels*2 <= len(ref) && f < frames; at += athenaRefChannels * 2 {
+		var ys [athenaRefChannels]float32
 		var ready bool
 		for ch, d := range c.refDec {
 			x := float32(int16(binary.LittleEndian.Uint16(ref[at+2*ch:]))) / (1 << 15)
-			y, ok := d.Push(x)
-			if ok {
-				c.meter.ref[ch] += float64(y) * float64(y)
-				putS24(out[f*frameBytes+3*(RefFirst+ch):], y)
+			if d == nil { // a reference at Rate: a frame in is a frame out
+				ys[ch], ready = x, true
+				continue
 			}
-			ready = ok
+			ys[ch], ready = d.Push(x)
 		}
 		if ready {
+			putRef(out[f*frameBytes:], ys[0], ys[1], &c.meter.ref)
 			f++
 		}
 	}
+}
+
+// putRef writes one frame's playback reference: the first channel, the one the echo canceller reads
+// (referenceInto), is the mix of the two, and the second is the second as it was played. In mono the
+// two are the same and the mix is the first exactly; with the speakers in stereo, a sound mostly on
+// one of them is in the reference either way.
+func putRef(frame []byte, a, b float32, meter *[athenaRefChannels]float64) {
+	meter[0] += float64(a) * float64(a)
+	meter[1] += float64(b) * float64(b)
+	putS24(frame[3*RefFirst:], (a+b)/2)
+	putS24(frame[3*(RefFirst+1):], b)
 }
 
 // putS24 writes a sample in [-1, 1) as S24_3LE, held to full scale.

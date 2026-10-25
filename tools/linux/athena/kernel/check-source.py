@@ -25,12 +25,21 @@ MARKERS = {
     "drivers/devfreq/mtk-cci-devfreq.c": b"athena: sram limits",
     "drivers/thermal/mediatek/auxadc_thermal.c": b"athena: devinfo calibration",
     "sound/soc/mediatek/mt8183/mt8183-afe-pcm.c": b"leave cache-only mode before the clocks are enabled",
+    "drivers/phy/mediatek/phy-mtk-mipi-csi-0-5.c": b"athena: camera",
+    "drivers/media/platform/mediatek/isp/mtk_camsv_hw.c": b"athena: no error interrupts",
+    "drivers/gpu/drm/panel/Makefile": b"athena: panel select",
+    "drivers/gpu/drm/panel/panel-jadard-jd9365da-h3.c": (b"athena: reset deasserted at probe", b"athena: boe-new link"),
 }
 # Files TECHO5 adds to the tree.
 OURS = [
     "arch/arm64/boot/dts/mediatek/mt8183-amazon-athena.dts",
     "arch/arm64/boot/dts/mediatek/mt8183-amazon-athena-dsp-slot.bin",
     "sound/soc/mediatek/mt8183/mt8183-athena.c",
+    "drivers/gpu/drm/panel/panel-athena-select.c",
+    "drivers/media/i2c/ov13855.c",
+    "drivers/media/i2c/ov13855-tables.inc",
+    "drivers/media/platform/mediatek/isp/mtk_seninf.c",
+    "drivers/media/platform/mediatek/isp/mtk_camsv_video.c",
 ]
 CONFIG = "techo5-athena.config"
 # What a build leaves and distclean takes away.
@@ -90,9 +99,10 @@ def check(source, img, config=None):
     v = [re.search(rb"^%s = (\d+)$" % k, mk, re.M) for k in (b"VERSION", b"PATCHLEVEL", b"SUBLEVEL")]
     if kver and (not all(v) or ".".join(x.group(1).decode() for x in v) != kver):
         errors.append("the Makefile is not linux-%s" % kver)
-    for f, mark in MARKERS.items():
-        if mark not in found.get(f, b""):
-            errors.append("%s has no %r: not the patched tree" % (f, mark.decode()))
+    for f, marks in MARKERS.items():
+        for mark in marks if isinstance(marks, tuple) else (marks,):
+            if mark not in found.get(f, b""):
+                errors.append("%s has no %r: not the patched tree" % (f, mark.decode()))
     for f in OURS:
         if f not in found:
             errors.append("%s is missing" % f)

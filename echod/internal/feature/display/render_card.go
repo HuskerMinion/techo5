@@ -6,6 +6,8 @@ import (
 	"image"
 	"strings"
 
+	"golang.org/x/image/font"
+
 	"github.com/HuskerMinion/techo5/echod/internal/lib/mdi"
 )
 
@@ -25,6 +27,12 @@ const cardLineH = 58
 // is an mdi name that comes before the heading, or "" (or a name there is no glyph for) for none. With no
 // heading the hint stands alone.
 func (r *renderer) noticeCard(box image.Rectangle, base, top int, icon, heading, text string, n int) {
+	r.noticeCardIn(box, base, top, icon, heading, text, n, r.title, cardLineH)
+}
+
+// noticeCardIn is noticeCard with the words in face, lineH apart (in the Show 5's pixels): a note of the
+// device's own has more to say than a notification, and is read from closer.
+func (r *renderer) noticeCardIn(box image.Rectangle, base, top int, icon, heading, text string, n int, face font.Face, lineH int) {
 	r.roundShadow(box, r.cardRad(), float64(r.s(34)), r.s(12), shadowAlpha()*1.3)
 	r.roundFill(box, r.cardRad(), surface(4), surface(2))
 	r.roundHighlight(box, r.cardRad())
@@ -45,13 +53,13 @@ func (r *renderer) noticeCard(box image.Rectangle, base, top int, icon, heading,
 		r.text(r.tiny, clipText(r, r.tiny, strings.ToUpper(heading), box.Max.X-in-hintW-r.s(24)-x), x, baseY, amber)
 	}
 
-	lines := r.wrap(r.title, text, width)
+	lines := r.wrap(face, text, width)
 	if len(lines) > n {
 		lines = append(lines[:n-1], strings.Join(lines[n-1:], " "))
 	}
 	y := box.Min.Y + r.s(top)
 	for _, line := range lines {
-		r.text(r.title, clipText(r, r.title, line, width), box.Min.X+in, y, cream)
-		y += r.s(cardLineH)
+		r.text(face, clipText(r, face, line, width), box.Min.X+in, y, cream)
+		y += r.s(lineH)
 	}
 }

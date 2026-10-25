@@ -27,6 +27,11 @@ type Brain struct {
 	// model looks things up there and reads the pages it finds. Empty is no looking anything up.
 	Search string `json:"search,omitempty"`
 
+	// Reader is a page reader's address (tools/page-reader), like http://192.168.1.20:8891: a browser
+	// that loads a page the model wants to read when the page has no text until its scripts run, or
+	// turns away a plain request. Empty is reading pages as they come.
+	Reader string `json:"reader,omitempty"`
+
 	// Prompt is added to the device's own instructions to the model: a name, a tone, what the
 	// household wants it to know.
 	Prompt string `json:"prompt,omitempty"`

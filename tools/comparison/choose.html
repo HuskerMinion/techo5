@@ -1,0 +1,265 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Project Finder</title>
+<meta name="description" content="Answer a few questions about your devices and what you want, and see which Echo projects fit.">
+<meta property="og:title" content="Echo project finder">
+<meta property="og:description" content="Answer a few questions about your devices and what you want, and see which Echo projects fit.">
+<meta property="og:type" content="website">
+<meta property="og:url" content="{{PAGE_URL}}choose/">
+<meta property="og:image" content="{{PAGE_URL}}og.jpg">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta name="twitter:card" content="summary_large_image">
+<style>
+/* One question group at a time, with a live tally of the projects underneath; the answers live in the address */
+:root {
+  --bg: #f4f6f7; --panel: #ffffff; --fg: #1d2529; --muted: #5b6970; --line: #d5dde1; --accent: #0f6f74;
+  --yes: #1f7a3a; --yes-bg: #e3f3e7; --part: #8a5a00; --part-bg: #fbf0d5; --no: #a3262a; --no-bg: #f8e1e1;
+  --nf: #55626a; --nf-bg: #e9edef; --prog: #3a4fa3; --prog-bg: #e4e8f8; --na: #8b979d;
+  --body: system-ui, "Segoe UI", sans-serif; /* no web fonts: nothing of a visitor goes elsewhere */
+  --mono: ui-monospace, Consolas, monospace;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) { :root {
+  --bg: #12171a; --panel: #1a2125; --fg: #e3e9ec; --muted: #9aa8af; --line: #2e393f; --accent: #5cc3c8;
+  --yes: #7fd394; --yes-bg: #173525; --part: #f0c264; --part-bg: #3a2f14; --no: #f29a9a; --no-bg: #3d1d1f;
+  --nf: #a9b5bb; --nf-bg: #263036; --prog: #a9b6f2; --prog-bg: #232a48; --na: #6c7980; color-scheme: dark; } }
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--fg); font-family: var(--body); font-size: 15px; line-height: 1.5; }
+.wrap { max-width: 900px; margin: 0 auto; padding: 24px 16px 140px; }
+h1 { font-size: 28px; margin: 0 0 8px; text-wrap: balance; }
+h2 { font-size: 20px; margin: 0 0 6px; }
+p { max-width: 75ch; }
+a { color: var(--accent); }
+.intro p { margin: 0 0 10px; }
+.banner { display: block; width: 100%; height: auto; aspect-ratio: 2600 / 470; border-radius: 14px; margin: 0 0 22px; background: #5b2a86; }
+.muted { color: var(--muted); }
+.label { font: 600 11px var(--mono); letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.chip { font: 600 13px var(--body); border: 1px solid var(--line); background: var(--panel); color: var(--fg); border-radius: 999px; padding: 4px 11px; cursor: pointer; }
+.chip[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: var(--panel); }
+button:focus-visible, a:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.steps { display: flex; flex-wrap: wrap; gap: 4px 6px; margin: 18px 0 12px; }
+.steps button { font: 600 12px var(--body); border: 0; background: none; color: var(--muted); padding: 2px 4px; cursor: pointer; border-bottom: 2px solid transparent; }
+.steps button[aria-current="step"] { color: var(--accent); border-bottom-color: var(--accent); }
+.steps button.done { color: var(--fg); }
+.card { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 16px 18px; }
+.q { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 6px 16px; align-items: center; padding: 10px 0; border-bottom: 1px solid var(--line); }
+.q:last-child { border-bottom: 0; }
+.q b { font-weight: 600; }
+.q .def { grid-column: 1; font-size: 13px; color: var(--muted); }
+.q .has { font-size: 12px; color: var(--muted); }
+.seg { grid-row: 1 / span 2; grid-column: 2; display: inline-flex; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
+.seg button { font: 600 13px var(--body); border: 0; border-left: 1px solid var(--line); background: var(--panel); color: var(--fg); padding: 6px 10px; cursor: pointer; white-space: nowrap; }
+.seg button:first-child { border-left: 0; }
+.seg button[aria-pressed="true"][data-a="want"] { background: var(--yes-bg); color: var(--yes); }
+.seg button[aria-pressed="true"][data-a="avoid"] { background: var(--no-bg); color: var(--no); }
+.seg button[aria-pressed="true"][data-a=""] { background: var(--nf-bg); color: var(--fg); }
+@media (max-width: 640px) { .q { grid-template-columns: minmax(0, 1fr); } .seg { grid-row: auto; grid-column: 1; } }
+.nav { display: flex; flex-wrap: wrap; gap: 8px; justify-content: space-between; margin-top: 14px; }
+.btn { font: 600 14px var(--body); border: 1px solid var(--accent); background: var(--accent); color: var(--panel); border-radius: 8px; padding: 7px 14px; cursor: pointer; }
+.btn.ghost { background: var(--panel); color: var(--accent); }
+.tally { position: fixed; left: 0; right: 0; bottom: 0; background: var(--panel); border-top: 1px solid var(--line); padding: 8px 16px; z-index: 5; }
+.tally .in { max-width: 900px; margin: 0 auto; display: flex; flex-wrap: wrap; gap: 6px 8px; align-items: center; }
+.pill { display: inline-block; font: 600 12px var(--body); border-radius: 4px; padding: 1px 7px; }
+.p-fit { color: var(--yes); background: var(--yes-bg); } .p-close { color: var(--part); background: var(--part-bg); }
+.p-out { color: var(--nf); background: var(--nf-bg); text-decoration: line-through; }
+.res { margin-top: 12px; }
+.res h3 { margin: 0 0 4px; font-size: 17px; }
+.res ul { margin: 6px 0 0; padding-left: 20px; font-size: 14px; }
+.res li { margin: 2px 0; }
+.tag { font: 600 11px var(--body); border-radius: 4px; padding: 0 6px; margin-right: 4px; }
+.t-Yes { color: var(--yes); background: var(--yes-bg); } .t-Partly { color: var(--part); background: var(--part-bg); }
+.t-No { color: var(--no); background: var(--no-bg); } .t-Not { color: var(--nf); background: var(--nf-bg); }
+.t-In { color: var(--prog); background: var(--prog-bg); } .t-na { color: var(--na); background: var(--nf-bg); }
+.share { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-top: 16px; }
+footer { margin-top: 40px; font-size: 14px; color: var(--muted); }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <img class="banner" src="../banner.jpg" alt="" width="2600" height="470">
+  <header class="intro">
+    <h1>Echo project finder</h1>
+    <p>Answer the questions that matter to you and see which projects fit. Anything left at <b>No preference</b> doesn't count either way, so skip whatever you don't know or don't care about.</p>
+    <p class="muted">The answers come from the same data as the <a href="../">full comparison</a>, checked {{CHECKED}}. This isn't a ranking, and the page is kept by TECHO5's author, so read it with that in mind. Spot something wrong? <a href="{{ISSUES}}">Open an issue</a>.</p>
+  </header>
+  <nav class="steps" id="steps" aria-label="Steps"></nav>
+  <main class="card" id="step" aria-live="polite"></main>
+  <footer>Projects are in alphabetical order wherever they tie. <a href="../">Back to the full comparison</a>.</footer>
+</div>
+<div class="tally" aria-live="polite"><div class="in" id="tally"></div></div>
+<script>
+const D = /*DATA*/null;
+const P = D.projects, R = D.rows.filter(r => !r.fact), C = D.cells, SECS = D.sections.filter(s => R.some(r => r.section === s));
+const DV = D.devices.list, DC = D.devices.cells;
+const esc = s => String(s).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+// Links only to https pages: a source from the data is never a script or a page of another kind.
+const link = u => /^https:\/\//.test(String(u)) ? esc(u) : "#";
+const kind = a => a.startsWith("Not") ? "Not" : a.startsWith("In") ? "In" : a === "n/a" ? "na" : a;
+const dev = (k, id) => DC[k][id] || ["unknown", "", ""];
+const LISTED = ["yes", "lineage", "progress"];
+const DEVWORD = { yes: "supported", lineage: "with another OS first", progress: "in progress", no: "not supported", unknown: "not found" };
+
+// The answers: picked devices, all/any, picked groups, and want/avoid per row.
+const st = { dev: new Set(), mode: "all", secs: new Set(), ans: {}, step: 0 };
+const stepList = () => ["devices", "groups", ...SECS.filter(s => st.secs.has(s)), "results"];
+
+function load() {
+  const h = new URLSearchParams(location.hash.slice(1));
+  (h.get("d") || "").split(",").filter(id => DV.some(x => x.id === id)).forEach(id => st.dev.add(id));
+  if (h.get("m") === "any") st.mode = "any";
+  for (const [key, a] of [["w", "want"], ["x", "avoid"]])
+    (h.get(key) || "").split(",").filter(id => R.some(r => r.id === id)).forEach(id => { st.ans[id] = a; st.secs.add(R.find(r => r.id === id).section); });
+  (h.get("g") || "").split(",").filter(s => SECS.includes(s)).forEach(s => st.secs.add(s));
+  if (h.has("r")) st.step = stepList().length - 1;
+  else if (h.has("s")) st.step = Math.max(0, Math.min(+h.get("s") || 0, stepList().length - 1));
+}
+function save() {
+  const h = new URLSearchParams(), pick = a => R.filter(r => st.ans[r.id] === a).map(r => r.id).join(",");
+  if (st.dev.size) h.set("d", [...st.dev].join(","));
+  if (st.mode === "any") h.set("m", "any");
+  if (st.secs.size) h.set("g", [...st.secs].join(","));
+  if (pick("want")) h.set("w", pick("want"));
+  if (pick("avoid")) h.set("x", pick("avoid"));
+  if (stepList()[st.step] === "results") h.set("r", "1");
+  else if (st.step) h.set("s", st.step);
+  history.replaceState(null, "", h.toString() ? "#" + h.toString().replace(/%2C/g, ",") : location.pathname);
+}
+
+// How one project does against the answers. A miss is a device it doesn't list, a wanted feature it
+// doesn't have, or an unwanted one it does; Partly and Not found are kept apart so the reader can judge them.
+function score(p) {
+  const r = { p, miss: [], part: [], unsure: [], ok: [], devs: [] };
+  if (st.dev.size) {
+    const ids = [...st.dev], has = ids.filter(id => LISTED.includes(dev(p.key, id)[0]));
+    r.devs = ids.map(id => ({ id, s: dev(p.key, id) }));
+    if (st.mode === "all" ? has.length < ids.length : !has.length)
+      r.miss.push(...r.devs.filter(x => !LISTED.includes(x.s[0])).map(x => ({ dev: x })));
+  }
+  for (const row of R) {
+    const a = st.ans[row.id];
+    if (!a) continue;
+    const c = C[p.key][row.id], k = kind(c[0]), it = { row, c, a };
+    if (a === "want") (k === "Yes" ? r.ok : k === "Partly" ? r.part : k === "Not" ? r.unsure : r.miss).push(it);
+    else (k === "Yes" ? r.miss : k === "Partly" ? r.part : r.ok).push(it);
+  }
+  return r;
+}
+const ranked = () => P.map(score).sort((a, b) => a.miss.length - b.miss.length || a.unsure.length - b.unsure.length ||
+  a.part.length - b.part.length || a.p.name.localeCompare(b.p.name));
+const asked = () => st.dev.size + Object.keys(st.ans).length;
+const look = r => r.miss.length ? "p-out" : r.part.length || r.unsure.length ? "p-close" : "p-fit";
+
+function tally() {
+  const rs = ranked(), fit = rs.filter(r => look(r) === "p-fit").length, close = rs.filter(r => look(r) === "p-close").length;
+  document.getElementById("tally").innerHTML = !asked()
+    ? `<span class="muted">Every project fits so far. Answer a question to narrow it down.</span>`
+    : `<span class="label">${fit} fit · ${close} with partly or not found</span>` + rs.map(r =>
+      `<span class="pill ${look(r)}" title="${r.miss.length} miss${r.miss.length === 1 ? "" : "es"}">${esc(r.p.name)}</span>`).join("") +
+      (stepList()[st.step] === "results" ? "" : ` <button class="chip" data-go="results">See results</button>`);
+}
+
+function steps() {
+  const L = stepList(), name = s => s === "devices" ? "Devices" : s === "groups" ? "What matters" : s === "results" ? "Results" : s;
+  document.getElementById("steps").innerHTML = L.map((s, i) =>
+    `<button data-step="${i}" ${i === st.step ? 'aria-current="step"' : ""} class="${i < st.step ? "done" : ""}">${i + 1}. ${esc(name(s))}</button>`).join("");
+}
+
+function nav(nextLabel) {
+  const L = stepList();
+  return `<div class="nav"><span>${st.step ? `<button class="btn ghost" data-move="-1">Back</button>` : ""}</span>` +
+    (st.step < L.length - 1 ? `<button class="btn" data-move="1">${esc(nextLabel || "Next")}</button>` : "") + "</div>";
+}
+
+function devStep() {
+  return `<h2>What devices do you have?</h2><p class="muted">Pick every device you want to use. Leave them all off if you haven't got one yet.</p>
+    <div class="chips">${DV.map(d => `<button class="chip" data-dev="${esc(d.id)}" aria-pressed="${st.dev.has(d.id)}">${esc(d.name)}</button>`).join("")}</div>
+    ${st.dev.size > 1 ? `<p><span class="label">A project has to list</span> <span class="chips" style="display:inline-flex">
+      <button class="chip" data-mode="all" aria-pressed="${st.mode === "all"}">All of them</button>
+      <button class="chip" data-mode="any" aria-pressed="${st.mode === "any"}">Any of them</button></span></p>` : ""}` + nav();
+}
+
+function groupStep() {
+  return `<h2>What matters to you?</h2><p class="muted">Pick the groups you have wishes in. You'll get one page of questions for each; the rest stay at No preference.</p>
+    <div class="chips">${SECS.map(s => `<button class="chip" data-sec="${esc(s)}" aria-pressed="${st.secs.has(s)}">${esc(s)} <span class="muted">${R.filter(r => r.section === s).length}</span></button>`).join("")}
+    <button class="chip" data-sec="*">${st.secs.size === SECS.length ? "None" : "All of them"}</button></div>` +
+    nav(st.secs.size ? "Next" : "Skip to results");
+}
+
+function secStep(s) {
+  const rows = R.filter(r => r.section === s);
+  const seg = r => `<div class="seg" role="group" aria-label="${esc(r.name)}">` + [["want", "Want it"], ["avoid", "Don't want it"], ["", "No preference"]].map(([a, t]) =>
+    `<button data-row="${esc(r.id)}" data-a="${a}" aria-pressed="${(st.ans[r.id] || "") === a}">${t}</button>`).join("") + "</div>";
+  const has = r => P.filter(p => C[p.key][r.id][0] === "Yes").length;
+  return `<h2>${esc(s)}</h2><p class="muted">Each line says what counts. "Don't want it" is for things you'd rather avoid, like a project that replaces the OS.</p>
+    <p><button class="chip" data-clear="${esc(s)}">No preference for this whole group</button></p>` +
+    rows.map(r => `<div class="q"><div><b>${esc(r.name)}</b> <span class="has">· ${has(r)} of ${P.length} have it</span></div>${seg(r)}<div class="def">${esc(r.def)}</div></div>`).join("") + nav();
+}
+
+function line(it) {
+  if (it.dev) return `<li><span class="tag t-No">Device</span>doesn't list the ${esc(DV.find(x => x.id === it.dev.id).name)}` +
+    (it.dev.s[0] === "no" ? " (the project says it isn't supported)" : "") + (it.dev.s[2] ? ` · <a href="${link(it.dev.s[2])}">source</a>` : "") + "</li>";
+  const [a, n, u] = it.c, k = kind(a);
+  return `<li><span class="tag t-${k}">${esc(a)}</span>${esc(it.row.name)}${it.a === "avoid" ? " <span class=\"muted\">(you didn't want it)</span>" : ""}` +
+    (n ? `<span class="muted">: ${esc(n)}</span>` : "") + (u ? ` · <a href="${link(u)}">source</a>` : "") + "</li>";
+}
+
+function results() {
+  if (!asked()) return `<h2>Results</h2><p>You haven't answered anything yet, so every project fits. Go back and pick a device or a few wishes.</p>` + nav();
+  const rs = ranked();
+  const head = r => r.miss.length ? `Misses ${r.miss.length} of what you asked for`
+    : r.part.length || r.unsure.length ? [r.unsure.length && `${r.unsure.length} not found`, r.part.length && `${r.part.length} partly`].filter(Boolean).join(", ") + ", no misses"
+    : "Fits everything you asked for";
+  const block = (t, xs) => xs.length ? `<p class="label" style="margin:10px 0 0">${t}</p><ul>${xs.map(line).join("")}</ul>` : "";
+  return `<h2>Results</h2><p class="muted">Ordered by fewest misses, then fewest "not found", then fewest "partly". Not found means the reviewer didn't find it in the project's public repos; it may still be there, so it's worth asking the project.</p>` +
+    rs.map(r => `<section class="res card"><h3>${esc(r.p.name)} <span class="pill ${look(r)}" style="text-decoration:none">${head(r)}</span></h3>
+      ${r.devs.length ? `<p class="muted" style="margin:0">${r.devs.map(x => `${esc(DV.find(d => d.id === x.id).name)}: ${DEVWORD[x.s[0]]}`).join(" · ")}</p>` : ""}
+      ${block("Misses", r.miss)}${block("Partly", r.part)}${block("Not found", r.unsure)}
+      ${r.ok.length ? `<details><summary class="muted">${r.ok.length} matched</summary><ul>${r.ok.map(line).join("")}</ul></details>` : ""}
+      <p class="muted" style="margin:8px 0 0;font-size:14px">${esc(r.p.focus)}</p></section>`).join("") +
+    `<div class="share"><button class="btn" id="copy">Copy a link to these answers</button><span class="muted" id="copied"></span>
+      <button class="btn ghost" id="restart">Start over</button></div>` + nav();
+}
+
+function render() {
+  const L = stepList();
+  st.step = Math.min(st.step, L.length - 1);
+  const s = L[st.step];
+  document.getElementById("step").innerHTML = s === "devices" ? devStep() : s === "groups" ? groupStep() : s === "results" ? results() : secStep(s);
+  steps(); tally(); save();
+}
+
+document.addEventListener("click", e => {
+  const t = e.target.closest("button");
+  if (!t) return;
+  const top = () => document.getElementById("steps").scrollIntoView({ block: "start" });
+  if (t.dataset.dev) { st.dev.has(t.dataset.dev) ? st.dev.delete(t.dataset.dev) : st.dev.add(t.dataset.dev); render(); }
+  else if (t.dataset.mode) { st.mode = t.dataset.mode; render(); }
+  else if (t.dataset.sec) {
+    if (t.dataset.sec === "*") st.secs.size === SECS.length ? st.secs.clear() : SECS.forEach(s => st.secs.add(s));
+    else st.secs.has(t.dataset.sec) ? st.secs.delete(t.dataset.sec) : st.secs.add(t.dataset.sec);
+    // A group taken off keeps no answers, so nothing hidden still counts.
+    for (const r of R) if (!st.secs.has(r.section)) delete st.ans[r.id];
+    render();
+  }
+  else if (t.dataset.row) { if (t.dataset.a) st.ans[t.dataset.row] = t.dataset.a; else delete st.ans[t.dataset.row]; render(); }
+  else if (t.dataset.clear) { for (const r of R) if (r.section === t.dataset.clear) delete st.ans[r.id]; render(); }
+  else if (t.dataset.move) { st.step += +t.dataset.move; render(); top(); }
+  else if (t.dataset.step) { st.step = +t.dataset.step; render(); top(); }
+  else if (t.dataset.go) { st.step = stepList().length - 1; render(); top(); }
+  else if (t.id === "restart") { st.dev.clear(); st.secs.clear(); st.ans = {}; st.mode = "all"; st.step = 0; render(); top(); }
+  else if (t.id === "copy") {
+    const done = m => { document.getElementById("copied").textContent = m; };
+    navigator.clipboard ? navigator.clipboard.writeText(location.href).then(() => done("Copied."), () => done("Copy the address bar instead.")) : done("Copy the address bar instead.");
+  }
+});
+
+load();
+render();
+</script>
+</body>
+</html>

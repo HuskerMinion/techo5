@@ -12,12 +12,14 @@ import io
 import os
 import sys
 import tempfile
+import time
 import unittest
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 spec = importlib.util.spec_from_file_location('install_show', os.path.join(HERE, 'install-show.py'))
 inst = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(inst)
+lib = sys.modules.get('techo5lib') or __import__('techo5lib')
 
 IDS = ('1d6b', '0104')
 
@@ -61,6 +63,25 @@ class FastbootGetvar(unittest.TestCase):
         self.assertIn('no answer', out.getvalue())
 
 
+class FastbootNudge(unittest.TestCase):
+    """A continue sent to a unit that left fastboot between the check and the command waits for it
+    forever; the nudge gives up after its time and the install carries on (#257)."""
+
+    def test_a_continue_nobody_answers_gives_up(self):
+        fb = lib.Fastboot.__new__(lib.Fastboot)
+        fb.serial, fb.base = 'SERIAL1', [sys.executable, '-c', 'import time; time.sleep(30)']
+        start = time.time()
+        code, out = fb.run('continue', timeout=1)
+        self.assertEqual(code, -1)
+        self.assertIn('no answer', out)
+        self.assertLess(time.time() - start, 10)
+
+    def test_an_answer_comes_back(self):
+        fb = lib.Fastboot.__new__(lib.Fastboot)
+        fb.serial, fb.base = 'SERIAL1', [sys.executable, '-c', 'print("resuming boot")']
+        self.assertEqual(fb.run('continue', timeout=10), (0, 'resuming boot'))
+
+
 class UnlockProblem(unittest.TestCase):
     def test_tested_unlock_passes(self):
         self.assertEqual(inst.unlock_problem('cronos', '2.0.0', 'true'), '')
@@ -69,6 +90,11 @@ class UnlockProblem(unittest.TestCase):
         # The tested unlock not naming itself is no reason to stop.
         self.assertEqual(inst.unlock_problem('cronos', '', ''), '')
         self.assertEqual(inst.unlock_problem('cronos', '', 'true'), '')
+
+    def test_tested_unlock_with_a_build_tag_passes(self):
+        # The genuine amonet-cronos v2.0.1 reports its version with a build tag (#257).
+        self.assertEqual(inst.unlock_problem('cronos', '2.0.0-g7b11500', 'true'), '')
+        self.assertIn('kaeru-version 2.0.01', inst.unlock_problem('cronos', '2.0.01', 'true'))
 
     def test_other_kaeru_stops(self):
         self.assertIn('kaeru-version 1.3', inst.unlock_problem('cronos', '1.3', 'true'))

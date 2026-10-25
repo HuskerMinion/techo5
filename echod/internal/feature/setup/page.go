@@ -264,10 +264,16 @@ func (f *Feature) save(w http.ResponseWriter, r *http.Request) {
 		problem = saveMusic(r)
 	case "streaming":
 		problem = saveStreaming(r)
+	case "bluetooth":
+		problem = saveBluetooth(r)
 	case "speaker":
 		problem = saveSpeaker(r)
 	case "screen":
 		problem = saveScreen(r)
+	case "themes":
+		problem = saveThemes(r)
+	case "theme-colors":
+		problem = saveThemeColors(r)
 	case "listening":
 		problem = saveListening(r)
 	case "photos-remove":
@@ -288,6 +294,8 @@ func (f *Feature) save(w http.ResponseWriter, r *http.Request) {
 		problem = removeSound(r)
 	case "wakeword-remove":
 		problem = removeWakeWord(r)
+	case "hacameras":
+		problem = saveHACameras(r)
 	case "reolink":
 		problem = saveReolink(r)
 	case "doorbell":
@@ -304,6 +312,8 @@ func (f *Feature) save(w http.ResponseWriter, r *http.Request) {
 		problem = saveCalendarLink(r)
 	case "calendar-remove":
 		problem = removeCalendarLink(r)
+	case "calendar-look":
+		problem = saveCalendarLook(r)
 	case "adopt":
 		if _, err := api.Get().OpenAdoption(); err != nil {
 			problem = "could not open the device to a Home Assistant: " + err.Error()
@@ -333,6 +343,10 @@ func (f *Feature) save(w http.ResponseWriter, r *http.Request) {
 			if err := timezone.Get().Choose(zone); err != nil {
 				problem = "that is not a time zone this device knows: " + err.Error()
 			}
+		}
+	case "timeserver":
+		if err := timezone.SetServer(r.PostFormValue("server")); err != nil {
+			problem = err.Error()
 		}
 	default:
 		if save, ok := saves[what]; ok {
@@ -379,7 +393,7 @@ func (f *Feature) settingsPage(ctx context.Context, w http.ResponseWriter, token
 	fmt.Fprintf(w, `<div class="wrap"><h1>%s</h1><p class="sub">Setup</p><div class="layout">`, html.EscapeString(deviceName()))
 	nav(w, tab)
 	fmt.Fprint(w, `<section>`)
-	for _, t := range tabs {
+	for _, t := range shownTabs() {
 		if t.id == tab {
 			fmt.Fprintf(w, `<h2>%s</h2>`, html.EscapeString(t.title))
 		}
@@ -403,12 +417,20 @@ func (f *Feature) settingsPage(ctx context.Context, w http.ResponseWriter, token
 		stationsSection(w, token)
 		musicSection(ctx, w, token)
 		streamingSection(w, token)
-		fmt.Fprint(w, `<h3>Voice</h3>`)
-		brainSection(w, token)
-		realtimeSection(w, token)
-		listeningSection(w, token)
-		houseSection(w, token)
-		wakeWordsSection(w, token)
+		// A device that cannot hear has no voice assistant, wake words or listening to set up: only the
+		// announcements it plays and its sounds are left of the group.
+		if layout.HasMicrophone() {
+			fmt.Fprint(w, `<h3>Voice</h3>`)
+			brainSection(w, token)
+			realtimeSection(w, token)
+			listeningSection(w, token)
+			houseSection(w, token)
+			phoneBookSection(w, token)
+			wakeWordsSection(w, token)
+		} else {
+			fmt.Fprint(w, `<h3>Announcements and sounds</h3>`)
+			houseSection(w, token)
+		}
 		soundsSection(w, token)
 	case "alarms":
 		alarmsSection(w, token)
@@ -420,13 +442,20 @@ func (f *Feature) settingsPage(ctx context.Context, w http.ResponseWriter, token
 			fmt.Fprint(w, `<fieldset><legend>Wi-Fi</legend><p class="note" style="margin:0">This device's network
 			 is not one this page can change.</p></fieldset>`)
 		}
+		bluetoothSection(w, token)
+		haCamerasSection(w, token)
 		reolinkSection(w, token)
 		go2rtcSection(w, token)
+		cameraListSection(w, token)
+		cameraButtonsSection(w, token)
 		doorbellSection(w, token)
-		talkBackSection(w, token)
+		if layout.HasMicrophone() {
+			talkBackSection(w, token) // the microphones to a camera's speaker
+		}
 		dashboardSection(w, token)
 	case "photos":
 		screenSection(w, token)
+		themeSection(w, token)
 		ownFontsSection(w, token)
 		dashboardPanelSection(w, token)
 		deckSection(w, token)
@@ -436,6 +465,7 @@ func (f *Feature) settingsPage(ctx context.Context, w http.ResponseWriter, token
 	case "weather":
 		placeSection(w, token)
 		calendarLinksSection(w, token)
+		calendarLookSection(w, token)
 	case "privacy":
 		lockSection(w, token)
 		camStreamSection(w, token)
@@ -445,6 +475,7 @@ func (f *Feature) settingsPage(ctx context.Context, w http.ResponseWriter, token
 		nameSection(w, token)
 		updatesSection(w, token)
 		timezoneSection(w, token)
+		timeServerSection(w, token)
 		homeAssistantSection(w, token)
 		settingsFileSection(w, token)
 		shareSection(w, token)
@@ -482,6 +513,22 @@ func timezoneSection(w http.ResponseWriter, token string) {
 	 which zone it shows.</p><p><button type="submit">Save</button></p></fieldset></form>`)
 }
 
+// timeServerSection is a time server of the home's own, asked before the internet's.
+func timeServerSection(w http.ResponseWriter, token string) {
+	if !timezone.ServerSettable {
+		return
+	}
+	fmt.Fprint(w, `<form method="post" action="/setup/save"><fieldset><legend>Time server</legend>`)
+	hidden(w, token, "timeserver", "general")
+	fmt.Fprintf(w, `<label for="ntp">Your own time server (optional)</label>
+	 <input id="ntp" name="server" value="%s" placeholder="192.168.1.1" maxlength="253" autocomplete="off">
+	 <p class="note">The device sets its clock from time servers on the internet. A device that cannot
+	  reach them can use one on your network, like your router: it is asked first, and the internet's
+	  after it. %s Leave it empty for the internet's only. Without any time server, the clock is set
+	  from Home Assistant's when it connects.</p>
+	 <p><button type="submit">Save</button></p></fieldset></form>`, html.EscapeString(timezone.Server()), timezone.ServerWhen)
+}
+
 // privacySection says what the device has open, and what this page will never do. It shows and does
 // not change: a web page that could open SSH would be a bigger hole than the convenience is worth, so
 // these stay on the device's own screen and in Home Assistant.
@@ -493,10 +540,22 @@ func privacySection(w http.ResponseWriter) {
 		}
 		return "off"
 	}
+	// A panel has no SSH and no camera page at all (privacy_panel.go): "off" would send somebody
+	// looking for a switch that is not there.
+	ssh, camera, missing := onOff(s.SSH), onOff(s.Camera), ""
+	if !sshHere {
+		ssh = "not available on this device"
+	}
+	if !cameraWebHere {
+		camera = "not available on this device"
+	}
+	if !sshHere || !cameraWebHere {
+		missing = " " + notHereWhy
+	}
 	fmt.Fprintf(w, `<fieldset><legend>What is switched on</legend>
 	 <p style="margin:0">SSH: %s · Camera on the network: %s · Screen on the network: %s</p>
 	 <p class="note">Shown here, not changed here. Change them on the device's own screen, or in Home
-	  Assistant.</p></fieldset>`, onOff(s.SSH), onOff(s.Camera), onOff(s.Screen))
+	  Assistant.%s</p></fieldset>`, ssh, camera, onOff(s.Screen), missing)
 	fmt.Fprint(w, `<fieldset><legend>This page</legend>
 	 <p class="note" style="margin:0">It opens only after a press on the device, and closes itself when it
 	  is left alone. It is on your own network, without encryption. It never touches SSH keys or the

@@ -186,7 +186,7 @@ func open() (*device, error) {
 		return nil, err
 	}
 	var err error
-	if d.isp, err = syscall.Open("/dev/camera-isp", syscall.O_RDWR, 0); err != nil {
+	if d.isp, err = syscall.Open("/dev/camera-isp", syscall.O_RDWR|syscall.O_CLOEXEC, 0); err != nil {
 		return nil, fmt.Errorf("open camera-isp: %w", err)
 	}
 	if d.cam, err = mapWindow(d.isp, ispBase, ispLen); err != nil {
@@ -198,7 +198,7 @@ func open() (*device, error) {
 	if d.mipi, err = mapWindow(d.isp, mipiBase, mipiLen); err != nil {
 		return fail(err)
 	}
-	if d.sens, err = syscall.Open("/dev/kd_camera_hw", syscall.O_RDWR, 0); err != nil {
+	if d.sens, err = syscall.Open("/dev/kd_camera_hw", syscall.O_RDWR|syscall.O_CLOEXEC, 0); err != nil {
 		return fail(fmt.Errorf("open kd_camera_hw: %w", err))
 	}
 
@@ -296,7 +296,7 @@ func (d *device) close() {
 
 func (d *device) allocBuffers() error {
 	var err error
-	if d.ion, err = syscall.Open("/dev/ion", syscall.O_RDWR, 0); err != nil {
+	if d.ion, err = syscall.Open("/dev/ion", syscall.O_RDWR|syscall.O_CLOEXEC, 0); err != nil {
 		return fmt.Errorf("open ion: %w", err)
 	}
 	size := (slots*frameBytes + 4095) &^ 4095
@@ -337,7 +337,7 @@ func (d *device) allocBuffers() error {
 }
 
 func m4uConfig(port int32) error {
-	fd, err := syscall.Open("/proc/m4u", syscall.O_RDWR, 0)
+	fd, err := syscall.Open("/proc/m4u", syscall.O_RDWR|syscall.O_CLOEXEC, 0)
 	if err != nil {
 		return fmt.Errorf("open /proc/m4u: %w", err)
 	}
@@ -680,3 +680,6 @@ func lumaGrid(raw []byte, w, h int) []uint8 {
 	}
 	return out
 }
+
+// v4l2Board: the Spot's camera is never the V4L2 one.
+func v4l2Board() (bool, bool) { return false, false }

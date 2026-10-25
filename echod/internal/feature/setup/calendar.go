@@ -6,6 +6,7 @@ import (
 	"log/slog"
 	"net/http"
 	"net/url"
+	"strconv"
 	"strings"
 
 	"github.com/HuskerMinion/techo5/echod/internal/config"
@@ -67,5 +68,58 @@ func removeCalendarLink(r *http.Request) string {
 	if err := home.Get().RemoveCalendarLink(strings.TrimSpace(r.PostFormValue("id"))); err != nil {
 		return "could not remove it: " + err.Error()
 	}
+	return ""
+}
+
+// calendarLookSection is how the calendar page looks: the screen's switches, each a choice here. A
+// switch whose default goes by the screen's size shows that default until somebody changes it, and
+// saving the form keeps only what was changed, so the default is not kept as if it had been chosen.
+func calendarLookSection(w http.ResponseWriter, token string) {
+	s := screen.Load()
+	if s == nil || len(s.Calendar) == 0 {
+		return
+	}
+	fmt.Fprint(w, `<fieldset><legend>The calendar's look</legend><form method="post" action="/setup/save">`)
+	hidden(w, token, "calendar-look", "weather")
+	for _, c := range s.Calendar {
+		fmt.Fprintf(w, `<label for="look-%s">%s</label><select id="look-%s" name="look-%s">`,
+			c.Key, html.EscapeString(c.Label), c.Key, c.Key)
+		now := c.Now()
+		for i, o := range c.Options {
+			fmt.Fprintf(w, `<option value="%d"%s>%s</option>`, i, selected(i == now), html.EscapeString(o))
+		}
+		fmt.Fprintf(w, `</select><p class="note">%s</p>`, html.EscapeString(c.Note))
+	}
+	fmt.Fprint(w, `<p class="note">Also on the screen, under Settings, Display, Calendar, and in Home Assistant.
+	 Which calendars show is chosen on the calendar page itself, with the chips over the month.</p>
+	 <p><button type="submit">Save</button></p></form></fieldset>`)
+}
+
+func saveCalendarLook(r *http.Request) string {
+	s := screen.Load()
+	if s == nil || len(s.Calendar) == 0 {
+		return "this device has no calendar page"
+	}
+	pick := make([]int, len(s.Calendar))
+	for i, c := range s.Calendar {
+		v := r.PostFormValue("look-" + c.Key)
+		if v == "" {
+			pick[i] = -1 // not on the form sent: left as it is
+			continue
+		}
+		n, err := strconv.Atoi(v)
+		if err != nil || n < 0 || n >= len(c.Options) {
+			return "that is not a choice " + strings.ToLower(c.Label) + " has"
+		}
+		pick[i] = n
+	}
+	changed := 0
+	for i, c := range s.Calendar {
+		if pick[i] >= 0 && pick[i] != c.Now() {
+			c.Choose(pick[i])
+			changed++
+		}
+	}
+	slog.Info("setup page: calendar look set", "changed", changed)
 	return ""
 }

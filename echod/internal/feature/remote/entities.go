@@ -29,14 +29,18 @@ var readOnly = []string{
 	"max_listen_1", "max_listen_2",
 	// New uses of the microphones and the camera: measuring the room, listening for claps, a finger held
 	// on the clock, serving the camera, and which device answers a wake word.
-	"ambient_noise_sensor", "clap_gesture", "clock_hold_gesture", "camera_streaming", "nearest_device_answers",
-	"person_detection",
+	"ambient_noise_sensor", "clap_gesture", "clock_hold_gesture", "camera_streaming", "camera_login_from_ha",
+	"nearest_device_answers", "person_detection",
 	// Taking settings from the other devices.
 	"settings_sharing",
-	// Calls.
-	"phone", "phone_answer", "phone_hangup", "phone_peer",
+	// Calls, and what may end one or listen during one.
+	"phone", "phone_answer", "phone_hangup", "phone_peer", "wake_word_during_calls", "assistant_replies_into_calls",
+	"hear_call_under_assistant", "hangup_word", "hangup_word_threshold", "call_contacts_by_voice",
+	// And whether a call is encrypted at all.
+	"phone_plain_sip",
 	// Who can get in, and what it is paired with.
 	"settings_lock", "bluetooth_pairing", "bluetooth_phone_pairing", "bluetooth_forget", "bluetooth_forget_phones",
+	"bluetooth_secure_connections",
 	// What it runs.
 	"check_for_updates", "update_automatically", "update_channel", "restart", "purge_cache",
 }

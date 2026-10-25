@@ -79,6 +79,7 @@ type roundScene struct {
 	phase        string // idle, listening, thinking, replying, lingering
 	heard, reply string
 	eq           *eqView // a turn's picture, when turns are drawn as the wave or the bars
+	cue          string  // a turn's phase, when turns are a cue over the face and phase is idle (turn_cue.go)
 	muted        bool
 	mutedSubtle  bool // the muted ring drawn thin and dim (mutering_spot.go)
 	playing      bool
@@ -124,6 +125,9 @@ type roundScene struct {
 	// talkOffered is whether that view has Talk (feature/talkback), and talk is where a talk is.
 	talkOffered bool
 	talk        talkback.State
+
+	// camButtons are that view's action buttons as this frame draws them (camera_buttons.go).
+	camButtons []camButtonFace
 
 	btPairing bool
 
@@ -250,9 +254,13 @@ type roundRenderer struct {
 	// cameraTalkAt is the same for the Talk control.
 	cameraTalkAt image.Rectangle
 
-	// drawnSound and drawnTalk are those two in the frame being drawn, published when it is done, so
-	// that a tap while a frame draws never finds them missing (see the Show's renderer).
+	// cameraButtonsAt is the same for the action buttons, in their order.
+	cameraButtonsAt []image.Rectangle
+
+	// drawnSound, drawnTalk and drawnButtons are those in the frame being drawn, published when it is
+	// done, so that a tap while a frame draws never finds them missing (see the Show's renderer).
 	drawnSound, drawnTalk image.Rectangle
+	drawnButtons          []image.Rectangle
 
 	// styleFaces are the clock styles' faces, made as they are first needed (render_styles_spot.go).
 	styleFaces map[spotFaceKey]font.Face
@@ -264,6 +272,10 @@ type roundRenderer struct {
 
 	// glow is the Glow style's images, kept between frames (glow.go).
 	glow glowBuffers
+	// nixie is the Nixie style's tubes, kept between frames (nixie.go).
+	nixie nixieTubes
+	// figures is the Stack and Overlap styles' figures, likewise (figures.go).
+	figures figureShapes
 	// videoZones are the video face's controls as last drawn, under zmu, and videoOver what of the
 	// canvas goes over the picture (render_video_spot.go).
 	videoZones []image.Rectangle
@@ -310,6 +322,7 @@ func (r *roundRenderer) draw(s roundScene) {
 		r.shapes = alertOverlay{} // kept only while the rain map is up
 	}
 	r.videoOver = image.Rectangle{}
+	r.setCaptionsAt(image.Rectangle{}) // until a frame draws them (render_cue_spot.go)
 	// A video is over everything it is not covered by (video_spot.go decides which): the picture is
 	// the face, with no rim.
 	if s.showVideo {
@@ -326,6 +339,10 @@ func (r *roundRenderer) draw(s roundScene) {
 	r.clearAlertTaps()
 	r.clearCameraSoundTap()
 	defer r.publishCameraTaps()
+
+	// A cue turn's rim and captions go over the face it was on, when that face is one to be looked at
+	// rather than answered, the night clock included (render_cue_spot.go).
+	defer r.turnCue(s)
 
 	// The red night clock is the whole face: nothing else, not even the rim, is drawn over it.
 	if s.nightClockFace() {
@@ -460,17 +477,22 @@ func (r *roundRenderer) mutedRim(subtle bool) {
 }
 
 func (r *roundRenderer) rim(s roundScene) {
+	// A cue turn is the rim alone: the face under it is the idle one.
+	phase := s.phase
+	if s.cue != "" {
+		phase = s.cue
+	}
 	switch {
 	case s.muted:
 		r.mutedRim(s.mutedSubtle)
-	case s.phase == "listening":
+	case phase == "listening":
 		pulse := 0.55 + 0.45*math.Sin(float64(s.now.UnixMilli())/180)
 		r.arc(rimIn, rimOut, 0, 2*math.Pi, fade(colListening, pulse))
-	case s.phase == "thinking":
+	case phase == "thinking":
 		start := math.Mod(float64(s.now.UnixMilli())/300, 2*math.Pi)
 		r.arc(rimIn, rimOut, 0, 2*math.Pi, colTrack)
 		r.arc(rimIn, rimOut, start, start+math.Pi/2, colThinking)
-	case s.phase == "replying":
+	case phase == "replying":
 		r.arc(rimIn, rimOut, 0, 2*math.Pi, colReplying)
 	case s.btPairing:
 		pulse := 0.45 + 0.55*math.Abs(math.Sin(float64(s.now.UnixMilli())/500))
@@ -693,7 +715,7 @@ func (r *roundRenderer) clear() {
 
 // dim darkens the whole canvas by alpha.
 func (r *roundRenderer) dim(alpha uint8) {
-	draw.Draw(r.dst, r.dst.Rect, image.NewUniform(color.RGBA{0, 0, 0, alpha}), image.Point{}, draw.Over)
+	washOver(r.dst, r.dst.Rect, color.RGBA{0, 0, 0, alpha})
 }
 
 func (r *roundRenderer) blend(x, y int, c color.RGBA, cover float64) {
@@ -748,6 +770,11 @@ func (r *roundRenderer) paragraph(face font.Face, s string, baseline int, c colo
 		words = words[k:]
 		if n == maxLines-1 && len(words) > 0 {
 			line += "…"
+		}
+		// A word too long for the line on its own, or the ellipsis pushing the last line over: cut to
+		// fit, rather than drawn off the circle.
+		if r.width(face, line) > avail {
+			line = clipRunes(line, 1, func(l string) bool { return r.width(face, l) <= avail })
 		}
 		r.centered(face, line, baseline, c)
 		baseline += lineH

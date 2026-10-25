@@ -56,11 +56,16 @@ var AnimationScripts = []string{StartAnimation, StopAnimation}
 // What differs is the speaker behind the codec (hardware/speaker asks Radar) and the vendor tuning
 // files, which this build reads only on the Dot. DefaultName is the fallback display name when a
 // device has none recorded.
+//
+// The Echo Dot 3rd gen (donut) is built apart (-tags dot,donut): another SoC (MT8516), another sound
+// card and four microphones in place of seven, so its capture and speaker files are its own, but
+// everything that makes a speaker without a screen is the Dot's.
 var Board, Model, DefaultName = boardInfo(detectBoard())
 
 const (
 	boardBiscuit = "biscuit"
 	boardRadar   = "radar"
+	boardDonut   = "donut"
 
 	// deviceTypePath is the factory's product id, which Amazon's kernel serves from idme on Fire OS and
 	// on the Linux image alike. It can end in a NUL.
@@ -68,14 +73,21 @@ const (
 
 	biscuitTypeID = "A3S5BH2HU6VAYF"
 	radarTypeID   = "A7WXQPH584YP"
+	donutTypeID   = "A32DOYMUN6DTXA"
 )
 
 // Radar is whether this is the Echo 2nd gen.
 func Radar() bool { return Board == boardRadar }
 
+// Donut is whether this is the Echo Dot 3rd gen.
+func Donut() bool { return Board == boardDonut }
+
 func boardInfo(board string) (string, string, string) {
-	if board == boardRadar {
+	switch board {
+	case boardRadar:
 		return boardRadar, "Echo 2nd gen (radar)", "Echo"
+	case boardDonut:
+		return boardDonut, "Echo Dot 3 (donut)", "Echo Dot"
 	}
 	return boardBiscuit, "Echo Dot 2 (biscuit)", "Echo Dot"
 }
@@ -121,12 +133,16 @@ func dotBoard(typeID, product string) (board string, ok bool) {
 		return boardRadar, true
 	case biscuitTypeID:
 		return boardBiscuit, true
+	case donutTypeID:
+		return boardDonut, true
 	}
 	switch name, _, _ := strings.Cut(cleanID(product), "_"); name {
 	case boardRadar:
 		return boardRadar, true
 	case boardBiscuit:
 		return boardBiscuit, true
+	case boardDonut:
+		return boardDonut, true
 	}
 	return boardBiscuit, false
 }

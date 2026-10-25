@@ -61,6 +61,9 @@ func rms(x []int16) float64 {
 // better ratio between the two than any one of them has alone. Compared against the center
 // microphone, which is what the single channel path uses.
 func TestBeamformerImprovesSignalToNoise(t *testing.T) {
+	if Mics < 2 {
+		t.Skip("one microphone: nothing to steer")
+	}
 	const (
 		n     = 4800 // 300 ms
 		noise = 3000

@@ -51,7 +51,7 @@ func (r *renderer) slideshowScreensaverPage(s scene) {
 			r.cornerClock(s)
 			return
 		}
-		r.timeAndDate(s.now, r.h/2+60, "")
+		r.timeAndDate(s.now, r.h/2+r.s(60), "")
 	})
 }
 

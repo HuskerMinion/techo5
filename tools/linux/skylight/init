@@ -1,0 +1,320 @@
+#!/bin/busybox.static sh
+# TECHO5 /init for the Skylight Calendar 15 (150-CAL; Rockchip RK3566, Skyworth board D156), on
+# TECHO5's own 64-bit mainline kernel running the Show's 32-bit userspace. It is the athena /init
+# (tools/linux/athena/init) with the Skylight's storage under it.
+#
+# The Skylight keeps its stock bootloader. Android's userdata area is split in two GPT partitions,
+# techo5-store and techo5-data; the boot image (kernel and device tree, with an empty ramdisk) is in
+# the recovery partition, and a "boot-recovery" command at the start of misc makes the stock
+# U-Boot start recovery on every boot, which is TECHO5. This file never clears that command: it is
+# what keeps the unit on TECHO5. Clearing it (the first 2048 bytes of misc back to zeros) boots stock
+# Android again, which then finds no userdata and starts fresh.
+#
+# There is no initramfs: the kernel mounts techo5-store read-only as / (ro rootwait
+# root=PARTLABEL=techo5-store init=/init) and runs this file at its root. Then, as on athena:
+#
+#  1. Pick a slot with slotctl (store = /, made writable only while slotctl writes), then pivot_root
+#     into slots/<x>: the old root, the whole store, lands at /store in the slot, which is where
+#     etc/techo5/boot.sh and slotctl expect it. If pivot_root fails, chroot with the store bound at
+#     /store.
+#
+#  2. Failing that (no bootable slot, a `rescue` marker, the slot's init missing, the hand-over
+#     failing), stay up as the rescue environment on the store root itself: root shell on USB serial
+#     (ACM), RNDIS at 172.16.42.1 with DHCP for the host, dropbear only when /root/.ssh holds a key
+#     (a bench image built with mkstore.sh -k; release images carry none), Wi-Fi when a network is
+#     saved. The USB link is always there, so rescue never reboots by itself, but for one case: a
+#     kernel on trial that could not hand over is put back first, and the unit reboots into the
+#     previous one (kernel_rollback).
+#
+# techo5-data holds TECHO5's state in its techo5 directory, bound to /data. Without it, /data is a
+# tmpfs.
+#
+# Logged to the kernel log, to misc's spare area from byte 4096 (at most 20 blocks, so never as far
+# as the factory recovery command the unit keeps at 16 KiB) and to /data/techo5-linux.
+
+BB=/bin/busybox.static
+export T5_PRODUCT="Skylight Calendar 15 Linux"
+export USB_RNDIS=172.16.42.1
+
+$BB mount -t proc proc /proc
+$BB mount -t sysfs sysfs /sys
+
+# Partitions by their GPT names: the numbers are TECHO5's own choice inside Android's old userdata.
+EMMC=mmcblk0
+part() {
+	for u in /sys/class/block/${EMMC}p*/uevent; do
+		$BB grep -qx "PARTNAME=$1" "$u" 2>/dev/null && { echo "/dev/$($BB basename "$($BB dirname "$u")")"; return 0; }
+	done
+	return 1
+}
+# The kernel mounts devtmpfs on /dev itself before running this (DEVTMPFS_MOUNT).
+$BB grep -q '^devtmpfs /dev ' /proc/mounts || $BB mount -t devtmpfs -o mode=0755 devtmpfs /dev
+$BB mdev -s
+exec > /dev/kmsg 2>&1
+
+MISC=$(part misc)
+STORE_DEV=$(part techo5-store)
+DATA_DEV=$(part techo5-data)
+
+CRUMB=0
+crumb() {
+	# one 512-byte block per stage, starting at misc byte offset 4096, at most 20 of them
+	CRUMB=$((CRUMB+1))
+	echo "techo5 crumb $CRUMB: $*"
+	[ -n "$MISC" ] && [ $CRUMB -le 20 ] &&
+		printf 'TECHO5 %02d %s\n' "$CRUMB" "$*" | $BB dd of=$MISC bs=512 seek=$((7+CRUMB)) count=1 conv=notrunc,sync 2>/dev/null
+}
+log() { crumb "$*"; }
+crumb "skylight init started, kernel $($BB uname -r) $($BB uname -m), store $STORE_DEV data $DATA_DEV misc $MISC"
+
+$BB mkdir -p /dev/pts
+$BB mount -t devpts devpts /dev/pts
+$BB mount -t tmpfs tmpfs /run
+$BB mount -t tmpfs tmpfs /tmp
+echo 7 4 1 7 > /proc/sys/kernel/printk
+crumb "dev populated: $($BB ls /dev | $BB wc -l) nodes"
+
+export PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+. /lib/techo5-lib.sh
+
+# --- techo5-data: TECHO5's own directory on it, as /data.
+if [ -n "$DATA_DEV" ] && mount -t ext4 -o noatime,nosuid,nodev $DATA_DEV /userdata 2>/dev/null &&
+	mkdir -p /userdata/techo5 && mount --bind /userdata/techo5 /data; then
+	crumb "techo5-data mounted; /data is its techo5 directory"
+else
+	mount -t tmpfs -o mode=0755 tmpfs /data
+	crumb "techo5-data mount failed; /data is a tmpfs"
+fi
+mkdir -p /data/techo5-linux
+LOGDIR=/data/techo5-linux
+
+# techo5-data is written small (the installer's is 64 MiB) and grown here, online, to fill its
+# partition. Once it does, resize2fs has nothing to do. A failure leaves it as it was.
+if [ -n "$DATA_DEV" ] && grep -q " /userdata " /proc/mounts && command -v resize2fs >/dev/null; then
+	if resize2fs $DATA_DEV > /tmp/data-grow.log 2>&1; then
+		crumb "techo5-data: $(tail -1 /tmp/data-grow.log)"
+	else
+		crumb "techo5-data: not grown: $(tail -2 /tmp/data-grow.log | tr '\n' ' ')"
+	fi
+	cp /tmp/data-grow.log $LOGDIR/data-grow.log 2>/dev/null
+fi
+
+# --- The store is this root.
+MODE=none
+[ -e /.techo5-store ] && MODE=store
+crumb "store: $MODE, active=$(cat /active 2>/dev/null) a=$(cat /slots/a.state 2>/dev/null) b=$(cat /slots/b.state 2>/dev/null)"
+
+store_rw() { mount -o remount,rw / 2>/dev/null || { crumb "store: remount rw failed"; return 1; }; }
+store_ro() { sync; mount -o remount,ro / 2>/dev/null || crumb "store: remount ro failed"; }
+
+snapshot() {
+	{
+		echo "=== $(date) uptime $(cut -d' ' -f1 /proc/uptime) mode $MODE"
+		echo "--- slots"; STORE=/ slotctl status 2>&1
+		echo "--- dmesg tail"; dmesg | tail -60
+		echo "--- ip"; ip addr 2>&1
+		echo "--- mounts"; cat /proc/mounts
+		echo "--- mem"; head -3 /proc/meminfo
+	} > /tmp/snapshot 2>&1
+	cp /tmp/snapshot $LOGDIR/rescue.log 2>/dev/null
+	sync
+}
+
+MOVED=
+move_mounts() {
+	for m in data run tmp dev sys proc; do
+		mkdir -p /newroot/$m 2>/dev/null
+		mount --move /$m /newroot/$m && MOVED="$m $MOVED" || crumb "moving /$m failed"
+	done
+}
+move_back() {
+	for m in $MOVED; do $BB mount --move /newroot/$m /$m; done
+	MOVED=
+}
+
+# --- Normal path: hand over to a slot.
+boot_slot() {
+	slot=$1
+	root=/slots/$slot
+	[ -x $root/sbin/init ] || [ -L $root/sbin/init ] || { crumb "slot $slot has no /sbin/init"; return 1; }
+	[ -d $root/store ] || { crumb "slot $slot has no /store to put the old root on"; return 1; }
+	mount --bind $root /newroot || { crumb "bind mount of slot $slot failed"; return 1; }
+	mkdir -p /run/techo5
+	echo $slot > /run/techo5/slot
+	crumb "pivoting into slot $slot ($(cat $root/etc/techo5-release 2>/dev/null))"
+	sync
+	# Nothing started here may keep running under the slot.
+	kill -9 -1 2>/dev/null
+	move_mounts
+	cd /newroot
+	if $BB pivot_root . store; then
+		# The old root, the whole store, is /store now; so is this busybox.
+		exec /store/bin/busybox.static chroot . /sbin/init
+		echo "techo5: chroot into slot $slot after pivot_root failed" > /dev/kmsg
+		# Nothing sane is left to do from here: the root has moved. Reboot rather than hang.
+		/store/bin/busybox.static reboot -f
+	fi
+	crumb "pivot_root failed; chroot with the store bound at /store"
+	cd /
+	if mount --bind / /newroot/store; then
+		exec $BB chroot /newroot /sbin/init
+	fi
+	crumb "chroot into slot $slot failed"
+	umount /newroot/store 2>/dev/null
+	cd /
+	move_back
+	umount /newroot 2>/dev/null
+	rm -f /run/techo5/slot
+	return 1
+}
+
+# The store is written smaller than the partition; the first boot grows it to fill it, so the
+# second slot fits (slotctl grow: online, only from a clean filesystem, layout and features kept).
+# A no-op once it fills the partition. A failure leaves the store as it was and the boot goes on.
+if [ $MODE = store ] && [ -n "$STORE_DEV" ]; then
+	if STORE=/ slotctl grow $STORE_DEV > /tmp/grow.log 2>&1; then
+		crumb "store: $(tail -1 /tmp/grow.log)"
+	else
+		crumb "store: not grown: $(tail -2 /tmp/grow.log | tr '\n' ' ')"
+	fi
+	cp /tmp/grow.log $LOGDIR/grow.log 2>/dev/null
+fi
+
+if [ $MODE = store ]; then
+	if [ -e /rescue ]; then
+		store_rw && rm -f /rescue; store_ro
+		crumb "rescue marker found: staying on the store root this boot"
+		: > /tmp/rescue-asked
+	else
+		store_rw
+		if slot=$(STORE=/ slotctl next 2>/tmp/slotctl.err); then
+			store_ro
+			crumb "slotctl: $(tr '\n' ' ' < /tmp/slotctl.err)"
+			boot_slot "$slot"
+		else
+			store_ro
+			crumb "slotctl: $(tr '\n' ' ' < /tmp/slotctl.err)"
+		fi
+	fi
+fi
+
+# --- A kernel on trial that cannot hand over to a slot. Its tries are counted by the slot's boot.sh
+# (echod's kernel.Boot), which this boot never reaches: left alone, the unit would sit in rescue on
+# the new kernel for good. So it is put back from here the way kernel.Boot does when a trial runs out:
+# prev.img, checked against prev.sha256, into recovery and read back; the kernel on trial marked bad,
+# the trial over; then a reboot into the previous kernel. One that cannot be put back is marked failed
+# (nothing more is written; kernel restore, or the installer) and the boot goes on into rescue.
+# Not when rescue was asked for: that is someone at the unit.
+KDIR=/data/techo5-linux/kernel
+kernel_rollback() {
+	[ -e /tmp/rescue-asked ] && return 1
+	set -- $($BB cat $KDIR/state 2>/dev/null)
+	[ "$1" = trial ] && [ $# -eq 5 ] || return 1
+	written=$3 length=$4 shipped=$5
+	rec=$(part recovery) || { crumb "kernel rollback: no recovery partition"; return 1; }
+	# The trial is only this kernel's while recovery holds what it wrote.
+	if [ "$($BB head -c "$length" "$rec" 2>/dev/null | $BB sha256sum | $BB cut -d' ' -f1)" != "$written" ]; then
+		crumb "kernel rollback: recovery does not hold the kernel on trial; trial dropped"
+		$BB rm -f $KDIR/state; sync
+		return 1
+	fi
+	crumb "kernel rollback: the kernel on trial ($shipped) did not reach a slot; putting the previous one back"
+	prev=$KDIR/prev.img
+	want=$($BB cut -d' ' -f1 $KDIR/prev.sha256 2>/dev/null)
+	plen=$($BB stat -c %s $prev 2>/dev/null)
+	ok=
+	if [ -z "$want" ] || [ "$($BB sha256sum < $prev 2>/dev/null | $BB cut -d' ' -f1)" != "$want" ]; then
+		crumb "kernel rollback: the kept previous kernel does not match its sum; not writing it"
+	elif [ "$($BB head -c 8 $prev)" != "ANDROID!" ]; then
+		crumb "kernel rollback: the kept previous kernel is not a boot image; not writing it"
+	elif ! $BB dd if=$prev of=$rec bs=4096 conv=notrunc,fsync 2>/dev/null; then
+		crumb "kernel rollback: writing recovery failed"
+	else
+		sync
+		{ echo 3 > /proc/sys/vm/drop_caches; } 2>/dev/null
+		if [ "$($BB head -c "$plen" "$rec" | $BB sha256sum | $BB cut -d' ' -f1)" = "$want" ]; then
+			ok=1
+		else
+			crumb "kernel rollback: recovery does not read back the previous kernel"
+		fi
+	fi
+	if [ -z "$ok" ]; then
+		crumb "KERNEL ROLLBACK FAILED: the kernel on trial stays; state failed"
+		echo "failed $shipped" > $KDIR/state.tmp && $BB mv $KDIR/state.tmp $KDIR/state
+		sync
+		return 1
+	fi
+	$BB grep -qx "$shipped" $KDIR/bad 2>/dev/null || echo "$shipped" >> $KDIR/bad
+	$BB rm -f $KDIR/state $KDIR/noroute
+	sync
+	crumb "kernel rollback: the previous kernel is back; rebooting into it"
+	return 0
+}
+if kernel_rollback; then
+	$BB reboot -f
+fi
+
+# --- Rescue environment, on the store root (read-only; /run, /tmp and /data are writable).
+crumb "rescue mode ($MODE)"
+echo /sbin/mdev > /proc/sys/kernel/hotplug
+hostname techo5-rescue
+
+rescue_screen() {
+	[ -x /usr/local/bin/fbprobe ] || return 0
+	killall fbprobe 2>/dev/null
+	/usr/local/bin/fbprobe -hold 1000h -title RESCUE -lines \
+"This device could not start its system.|Nothing is lost - your data is intact.|Connect USB and open the serial console.|github.com/HuskerMinion/techo5|$1" \
+		> /tmp/fbprobe.log 2>&1 &
+}
+if [ -e /tmp/rescue-asked ]; then
+	rescue_screen "Rescue was asked for (slotctl rescue)."
+else
+	rescue_screen "No bootable slot; the store is intact."
+fi
+
+# USB first: serial shell, RNDIS, SSH. This is what keeps the unit reachable.
+t5_usb_acm
+n=0; while [ $n -lt 10 ] && [ ! -e /dev/ttyGS0 ]; do sleep 1; mdev -s; n=$((n+1)); done
+(
+	while true; do
+		[ -e /dev/ttyGS0 ] || mdev -s
+		if [ -e /dev/ttyGS0 ]; then
+			setsid sh -c 'exec sh -l < /dev/ttyGS0 > /dev/ttyGS0 2>&1'
+		fi
+		sleep 2
+	done
+) &
+sleep 2
+mdev -s
+t5_usb_net
+# Host keys on techo5-data (or /tmp without it); /etc/dropbear links to /run/dropbear, which points there.
+mkdir -p $LOGDIR/dropbear
+ln -sfn $LOGDIR/dropbear /run/dropbear
+if [ -s /root/.ssh/authorized_keys ]; then
+	t5_dropbear $LOGDIR/dropbear -s
+else
+	crumb "ssh: no key in /root/.ssh; USB serial console only"
+fi
+snapshot
+crumb "rescue: USB up ($(ip -4 addr 2>/dev/null | grep -c 'inet ') addresses)"
+
+# Wi-Fi in the background: brcmfmac is built into the kernel and loads the unit's own firmware, which
+# the installer put in the store's /lib/firmware/brcm, so wlan0 is there already; a network saved in
+# $LOGDIR/wpa_supplicant.conf, or one written into it later (t5_wifi_watch).
+(
+	t5_wifi_conf $LOGDIR/wpa_supplicant.conf
+	if t5_wifi_up builtin $LOGDIR/wpa_supplicant.conf; then
+		crumb "rescue: Wi-Fi $IP"
+		t5_ntp
+	fi
+	t5_wifi_watch $LOGDIR/wpa_supplicant.conf
+	snapshot
+) &
+
+ssh_note=
+[ -s /root/.ssh/authorized_keys ] && ssh_note=", SSH with the bench key"
+crumb "rescue ready: serial, RNDIS $USB_RNDIS$ssh_note"
+while true; do
+	sleep 60
+	snapshot
+done

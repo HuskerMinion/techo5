@@ -1,4 +1,4 @@
-//go:build !dot && !spot
+//go:build !dot && !spot && !panel
 
 package buttons
 
@@ -28,4 +28,8 @@ var codes = map[uint16]Name{
 // On the 2nd gen Show 8's mainline kernel the MT6358 PMIC's keys driver (mtk-pmic-keys) reports its
 // power key as KEY_POWER too. The mute button there is KEY_MICMUTE in gpio-keys, so the PMIC's 116 is
 // never the mute, and is not read.
-var notButtons = map[string]bool{"fts_ts": true, "mtk-pmic-keys": true}
+//
+// The Skylight Calendar 15 has no mute button at all (no microphone). Its RK809 PMIC's power key
+// ("rk805 pwrkey", the rk808 driver's name for the whole family) reports KEY_POWER, which would read
+// as the mute, so it is not read either. Its volume keys are adc-keys, 114 and 115.
+var notButtons = map[string]bool{"fts_ts": true, "mtk-pmic-keys": true, "rk805 pwrkey": true}

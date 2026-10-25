@@ -14,8 +14,9 @@ firmware): releases don't carry it, so it is copied into the store before the pa
 `recovery`, so LineageOS can be put back with TWRP and its zip.
 
 The 2nd gen Show 8 (`athena`) installs differently: no LineageOS, TECHO5's own 64-bit mainline kernel
-written to `boot` and the TECHO5 image written to `system`, both from TWRP. Only units with the ILI9881C
-(BOE) screen panel are supported so far; the installer checks. See [install-athena.md](install-athena.md).
+written to `boot` and the TECHO5 image written to `system`, both from TWRP. Two screen panels
+are tested so far (ILI9881C with BOE glass, JD9365 with KD/HSD glass); the installer checks, and tries
+the others with `--force-panel`. See [install-athena.md](install-athena.md).
 
 ## Unlock the bootloader first
 
@@ -286,7 +287,8 @@ ESPHome integration by hand with host `<address>` and port 6053.
 Then:
 
 - **Time zone**: nothing to set. The unit starts on UTC and takes Home Assistant's zone as soon as it
-  connects, and keeps it from then on.
+  connects, and keeps it from then on. A unit with no internet can use a time server on your own
+  network (setup page, General, Time server), or takes Home Assistant's time when it connects.
 - **Wake word**: the default is "Alexa". Change it on the device (swipe down from the top, Sound,
   Wake word) or in Home Assistant; the other follows.
 - **Home Assistant token** (optional, for the forecast page, local radio stations and the radio's
@@ -364,8 +366,10 @@ Home Assistant.
 script that plays one, wire them up with the `esphome.<device>_home_radio` action (all of it in
 [Wire up the radio page](actions.md#wire-up-the-radio-page)). The device calls the script over its
 ESPHome connection, which needs **Allow the device to perform Home Assistant actions** turned on in
-its ESPHome entry (Configure); without it, picking a favorite does nothing. Every argument has to be
-in the call, even the ones with a default: send `""` for those, or Home Assistant refuses the call
+its ESPHome entry (Configure); without it, picking a favorite does nothing. Home Assistant refuses
+the call without telling the device, so when nothing of the station shows up within a few seconds,
+the screen says so: "Home Assistant didn't start the stream", asking about that setting, and the log
+says `Home Assistant did not start the station`. Every argument has to be in the call, even the ones with a default: send `""` for those, or Home Assistant refuses the call
 with `required key not provided`.
 
 | Argument | What it is |
@@ -462,8 +466,8 @@ star saves:
 **The star on the player.** Tapping the star while a station plays saves it to your favorites. The
 device does that by calling a script named exactly `script.radio_favorite_add_station`, with one
 field, `station` (the station's name), using the Home Assistant token. Nothing creates the script;
-without it the star does nothing on screen, and the log says `saving to favorites failed` with a
-`400`. This one adds the station to the favorites `input_select`:
+without it the screen says "Couldn't save the station" and names the script, and the log says
+`saving to favorites failed` with a `400`. This one adds the station to the favorites `input_select`:
 
 ```yaml
 radio_favorite_add_station:
@@ -515,7 +519,10 @@ address then gets no answer.
 | An update from Home Assistant is slow, or fails with `nothing arrived` or `gave up after 2h0m0s` | The download is slow or keeps stalling. Newer builds keep what they fetched and carry on from there, on their own and on the next press of Install, and give up only after two hours. A download from the internet that crawls under 50 kB/s while the Wi-Fi is up gets one Wi-Fi reassociation (at most once every 6 hours); the log says `a download from the internet is crawling`. If it is still slow, reconnect the unit's Wi-Fi or restart it, then press Install again. |
 | The screen shows "hacked fastboot" | A leftover `reboot bootloader` request: `fastboot -s <serial> continue`. |
 | No SSH after the switch to the slot | SSH is off unless step 5 was done: turn on the SSH switch in Home Assistant and send a key with the `ssh_keys` action, or use the USB serial console. |
+| A phone pairs over Bluetooth, then drops after a second or two | Some newer phones are dropped while the controller has Secure Connections on (#183). Turn off **Bluetooth Secure Connections** (Settings > Connections, the setup page's Connections tab, or Home Assistant), forget the device on the phone and pair again. See [Music](setup.md#5-music) for what it costs. |
+| The device jumps to full volume when a computer plays to it over Bluetooth | The computer reports full volume once and turns its own sound down itself, often on Linux (#245). Turn off **Bluetooth sets the volume** (the setup page's Connections tab, or Home Assistant): the device then keeps its own volume. See [Music](setup.md#5-music). |
 | The radio says playing and stays quiet | The stream never arrived. See "If it says playing and nothing comes out" at the end of [Radio](#radio). |
+| Picking a favorite station shows "Home Assistant didn't start the stream" | Home Assistant refused the device's call to the radio script. Turn on **Allow the device to perform Home Assistant actions** in the device's ESPHome entry (Configure), then pick the station again. See [Radio](#radio). |
 | The unit sits in rescue | The screen says so: **RESCUE**, with the reason on the last line. No bootable slot. `slotctl status` shows why; the daemon still runs from a slot in rescue, so Home Assistant keeps working while you look. |
 
 To go back to LineageOS: boot TWRP from `recovery`, flash the LineageOS zip (which rewrites `system`)

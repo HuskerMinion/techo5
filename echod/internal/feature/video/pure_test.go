@@ -227,9 +227,97 @@ func TestWhatFFmpegSaysIsRead(t *testing.T) {
 	if err == nil || !strings.Contains(err.Error(), "404") {
 		t.Errorf("a 404 gave %v", err)
 	}
-	_, err = ParseProbe(strings.Replace(probeMP4, "h264 (High)", "hevc (Main)", 1))
-	if err == nil || !strings.Contains(err.Error(), "hevc") {
+	// H.265 only from an ffmpeg that has it.
+	hevc := strings.Replace(probeMP4, "h264 (High) (avc1 / 0x31637661)", "hevc (Main) (hvc1 / 0x31637668)", 1)
+	was := decodesHEVC
+	defer func() { decodesHEVC = was }()
+	decodesHEVC = func() bool { return false }
+	_, err = ParseProbe(hevc)
+	if err == nil || !strings.Contains(err.Error(), "hevc") || !strings.Contains(err.Error(), "H.264 and MPEG-4 only") {
 		t.Errorf("hevc gave %v", err)
+	}
+	decodesHEVC = func() bool { return true }
+	if i, err := ParseProbe(hevc); err != nil || i.VideoCodec != "hevc" || i.PixFmt != "yuv420p" || i.Width != 1280 {
+		t.Errorf("hevc with a decoder for it: %+v, %v", i, err)
+	}
+	// VP8 and VP9 the same way, from an ffmpeg that has them.
+	wasVPx := decodesVPx
+	defer func() { decodesVPx = wasVPx }()
+	decodesVPx = func() bool { return false }
+	if _, err := ParseProbe(strings.Replace(probeMP4, "h264 (High)", "vp9 (Profile 0)", 1)); err == nil ||
+		!strings.Contains(err.Error(), "H.264, H.265 and MPEG-4 only") {
+		t.Errorf("vp9 gave %v", err)
+	}
+	decodesVPx = func() bool { return true }
+	for _, c := range []string{"vp8", "vp9 (Profile 0)"} {
+		if i, err := ParseProbe(strings.Replace(probeMP4, "h264 (High)", c, 1)); err != nil ||
+			i.VideoCodec != strings.Fields(c)[0] || i.Width != 1280 {
+			t.Errorf("%s with a decoder for it: %+v, %v", c, i, err)
+		}
+	}
+	// Past 1080p30 (every board but those cores_show.go knows), a faster VP8 or VP9 is refused, saying
+	// why; 720p60 and 1080p30 play, and H.264 is not held to it.
+	wasMost := coresMost
+	defer func() { coresMost = wasMost }()
+	coresMost = map[string]float64{"hevc": p1080 * 30, "vp8": p1080 * 30, "vp9": p1080 * 30}
+	pic := func(codec, size, fps string) string {
+		s := strings.Replace(probeMP4, "h264 (High)", codec, 1)
+		s = strings.Replace(s, "1280x720", size, 1)
+		return strings.Replace(s, "24 fps, 24 tbr", fps+" fps, "+fps+" tbr", 1)
+	}
+	for _, c := range []struct{ codec, size, fps string }{
+		{"vp9 (Profile 0)", "1920x1080", "30"}, {"vp9 (Profile 0)", "1920x1080", "29.97"},
+		{"vp9 (Profile 0)", "1280x720", "60"}, {"vp8", "1920x1080", "30"}, {"h264 (High)", "1920x1080", "60"},
+	} {
+		if _, err := ParseProbe(pic(c.codec, c.size, c.fps)); err != nil {
+			t.Errorf("%s %s at %s: %v", c.codec, c.size, c.fps, err)
+		}
+	}
+	for _, c := range []struct{ codec, size, fps string }{
+		{"vp9 (Profile 0)", "1920x1080", "60"}, {"vp9 (Profile 0)", "1920x1080", "50"}, {"vp8", "1920x1080", "60"},
+	} {
+		_, err := ParseProbe(pic(c.codec, c.size, c.fps))
+		name := strings.ToUpper(strings.Fields(c.codec)[0])
+		if err == nil || !strings.Contains(err.Error(), "1920x1080 and "+c.fps+" frames a second") ||
+			!strings.Contains(err.Error(), name+" up to 1080p at 30 frames a second") {
+			t.Errorf("%s %s at %s gave %v", c.codec, c.size, c.fps, err)
+		}
+	}
+	// H.265 the same; held to 720p30 (the Show 5's), it says so in 720p.
+	hevcPic := func(size, fps string) string { return pic("hevc (Main)", size, fps) }
+	if _, err := ParseProbe(hevcPic("1920x1080", "30")); err != nil {
+		t.Errorf("hevc 1080p30: %v", err)
+	}
+	if _, err := ParseProbe(hevcPic("1920x1080", "60")); err == nil || !strings.Contains(err.Error(), "H.265 up to 1080p at 30") {
+		t.Errorf("hevc 1080p60 gave %v", err)
+	}
+	coresMost["hevc"] = p720 * 30
+	if _, err := ParseProbe(hevcPic("1280x720", "30")); err != nil {
+		t.Errorf("hevc 720p30 held to 720p30: %v", err)
+	}
+	if _, err := ParseProbe(hevcPic("1920x1080", "30")); err == nil || !strings.Contains(err.Error(), "H.265 up to 720p at 30 frames a second") {
+		t.Errorf("hevc 1080p30 held to 720p30 gave %v", err)
+	}
+	// A browser's WebM says no frame rate, only its time base ("1k tbr"): not refused for it.
+	webm := strings.Replace(pic("vp9 (Profile 0)", "1920x1080", "30"), "30 fps, 30 tbr", "1k tbr", 1)
+	if _, err := ParseProbe(webm); err != nil {
+		t.Errorf("vp9 with only a 1k tbr: %v", err)
+	}
+	// Held to 1080p120 (the Show 8's VP9), 1080p60 plays and 4K60 does not.
+	coresMost["vp9"] = p1080 * 120
+	if _, err := ParseProbe(pic("vp9 (Profile 0)", "1920x1080", "60")); err != nil {
+		t.Errorf("vp9 1080p60 held to 1080p120: %v", err)
+	}
+	if _, err := ParseProbe(pic("vp9 (Profile 0)", "3840x2160", "60")); err == nil {
+		t.Error("vp9 4K60 held to 1080p120 played")
+	}
+	// And says the 120 it is held to, not 121 (1088 lines counted against 1080).
+	if _, err := ParseProbe(pic("vp9 (Profile 0)", "1920x1080", "144")); err == nil || !strings.Contains(err.Error(), "VP9 up to 1080p at 120 frames a second") {
+		t.Errorf("vp9 1080p144 held to 1080p120 gave %v", err)
+	}
+	if _, err := ParseProbe(strings.Replace(probeMP4, "h264 (High)", "av1 (Main)", 1)); err == nil ||
+		!strings.Contains(err.Error(), "H.264, H.265, VP8, VP9 and MPEG-4 only") {
+		t.Errorf("av1 gave %v", err)
 	}
 }
 

@@ -8,7 +8,8 @@
 // Wiring (from the stock athena kernel):
 //   I2S1 out -> TAS5805M (i2c4 0x2d) speaker amp, stock 96 kHz, 16-bit words
 //   I2S2 in  <- TLV320ADC5140 (i2c4 0x4c) mics: ch1/ch2 on DI, ch3/ch4 on DI2 (patch-afe-di2.py),
-//              captured 4-channel through UL1 (VUL12); UL2 still takes ch1/ch2
+//              captured 4-channel through UL1 (VUL12), hw:0,2
+//   DL1 -> UL2 (AWB) inside the AFE: the echo reference, hw:0,1 "DL1_AWB_Record" (see below)
 // The AFE is clock master on both links; the codecs are I2S consumers.
 
 #include <linux/module.h>
@@ -97,7 +98,7 @@ SND_SOC_DAILINK_DEFS(playback1,
 	DAILINK_COMP_ARRAY(COMP_DUMMY()),
 	DAILINK_COMP_ARRAY(COMP_EMPTY()));
 
-SND_SOC_DAILINK_DEFS(capture2,
+SND_SOC_DAILINK_DEFS(awb_record,
 	DAILINK_COMP_ARRAY(COMP_CPU("UL2")),
 	DAILINK_COMP_ARRAY(COMP_DUMMY()),
 	DAILINK_COMP_ARRAY(COMP_EMPTY()));
@@ -133,13 +134,22 @@ static struct snd_soc_dai_link athena_dai_links[] = {
 		.playback_only = 1,
 		SND_SOC_DAILINK_REG(playback1),
 	},
+	/*
+	 * The echo reference, hw:0,1, as Amazon's kernel's "DL1_AWB_Record": the AWB memif (UL2)
+	 * records what DL1 sends I2S1, sample for sample, on the AFE's own clocks, so it is locked to
+	 * the microphones (UL1) and to the speaker. Nothing outside the AFE takes part, so this is a plain
+	 * link rather than a DPCM front end, which would need a back end in its path and refuse to open
+	 * ("no backend DAIs enabled"). The path is the AFE's DL1 -> UL2 (patch-afe-awb-dl1.py),
+	 * through the interconnect switches "UL2_CH1 DL1_CH1" and "UL2_CH2 DL1_CH2", set from
+	 * userspace like the others; it powers up only while DL1 plays, so with nothing playing the
+	 * stream runs and reads zero.
+	 * It is the second link so the numbering stays: Playback_1 hw:0,0, Capture_1 (mics) hw:0,2.
+	 */
 	{
-		.name = "Capture_2",
-		.stream_name = "Capture_2",
-		.trigger = {SND_SOC_DPCM_TRIGGER_PRE, SND_SOC_DPCM_TRIGGER_PRE},
-		.dynamic = 1,
+		.name = "DL1_AWB_Record",
+		.stream_name = "DL1_AWB_Record",
 		.capture_only = 1,
-		SND_SOC_DAILINK_REG(capture2),
+		SND_SOC_DAILINK_REG(awb_record),
 	},
 	{
 		.name = "Capture_1",
@@ -188,8 +198,10 @@ static struct snd_soc_dai_link athena_dai_links[] = {
 };
 
 /*
- * DL1 -> I2S1 and I2S2 -> UL2 go through the AFE's interconnect mixers, switched from
- * userspace (amixer: "I2S1_CH1 DL1_CH1", "I2S1_CH2 DL1_CH2", "UL2_CH1 I2S2_CH1", ...).
+ * DL1 -> I2S1, I2S2 -> UL1 and DL1 -> UL2 go through the AFE's interconnect mixers, switched from
+ * userspace (amixer: "I2S1_CH1 DL1_CH1", "UL1_CH1 I2S2_CH1", "UL2_CH1 DL1_CH1", ...). The DL1 -> UL2
+ * routes are the AFE's own (patches/patch-afe-awb-dl1.py): added here, they would come after the
+ * AFE has made its mixers' controls, and the switches would never appear.
  */
 
 /*

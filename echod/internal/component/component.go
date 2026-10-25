@@ -111,6 +111,13 @@ type Restorer interface {
 // server is a component like any other and may not exist.
 var Reconnect hook.Hook[struct{}]
 
+// Between fires while nothing is connected: after one spell of serving has ended, every connection with
+// it, and before the next one begins. It is the one moment something an entity says about itself (its
+// category, say) can be changed with no connection reading it, since each one is told again what every
+// entity is when it connects; so a change like that is made here, and Reconnect is what brings the
+// moment about. Listeners run on the server's own goroutine, between two listens, and must be quick.
+var Between hook.Hook[struct{}]
+
 // Event is something to put on Home Assistant's bus. A hook for the same reason as Reconnect: the server
 // imports the features whose handlers it serves, so they cannot import it back.
 type Event struct {

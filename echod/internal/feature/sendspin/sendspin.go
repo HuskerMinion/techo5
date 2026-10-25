@@ -183,7 +183,10 @@ func (p *Player) stop(cause error) {
 	}
 	cancel(cause)
 
-	if err := firewall.Close(firewall.Sendspin); err != nil {
+	if err := closePort(firewall.Sendspin); err != nil {
 		slog.Warn("closing the sendspin port failed", "port", Port, "err", err)
 	}
 }
+
+// closePort shuts the port behind stop; a variable so that a test of stop does not run iptables.
+var closePort = firewall.Close

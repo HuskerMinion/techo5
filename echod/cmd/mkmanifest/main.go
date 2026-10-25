@@ -32,12 +32,19 @@ func main() {
 		// apart ("arm-dot", see internal/update/arch_dot.go) and a device only ever sees its own.
 		armDot    = flag.String("arm-dot", "", "the Echo Dot build (-tags dot), hashed and measured")
 		rootfsDot = flag.String("rootfs-arm-dot", "", "the Echo Dot rootfs tarball, hashed and measured")
+		// The Echo Dot 3rd gen (donut), published beside the Dot 2's ("arm-donut",
+		// internal/update/arch_donut.go).
+		armDonut    = flag.String("arm-donut", "", "the Echo Dot 3rd gen build (-tags dot,donut), hashed and measured")
+		rootfsDonut = flag.String("rootfs-arm-donut", "", "the Echo Dot 3rd gen rootfs tarball, hashed and measured")
 		// The Echo Spot likewise ("arm-spot", internal/update/arch_spot.go).
 		armSpot    = flag.String("arm-spot", "", "the Echo Spot build (-tags spot), hashed and measured")
 		rootfsSpot = flag.String("rootfs-arm-spot", "", "the Echo Spot rootfs tarball, hashed and measured")
 		// The 2nd gen Echo Show 8 (athena) runs the Show's arm binary but a rootfs of its own, for
 		// Amazon's kernel and its vendor partition ("arm-athena", internal/update/arch_cronos.go).
 		rootfsAthena = flag.String("rootfs-arm-athena", "", "the Echo Show 8 2nd gen (athena) rootfs tarball, hashed and measured")
+		// The Skylight Calendar 15 (RK3566) runs the Show's arm binary on a rootfs of its own
+		// ("arm-skylight", internal/update/arch_cronos.go).
+		rootfsSkylight = flag.String("rootfs-arm-skylight", "", "the Skylight Calendar 15 rootfs tarball, hashed and measured")
 		// Everything else the release publishes that an installer downloads: boot images, kernels,
 		// rescue bundles. Named here so the signature over the manifest covers them too; see
 		// update.Manifest.Assets for why the release's SHA256SUMS is not enough.
@@ -54,8 +61,9 @@ func main() {
 	flag.StringVar(&m.ReleaseURL, "release-url", "", "what the card's link points at")
 	flag.Parse()
 
-	builds := map[string]string{"arm64": *arm64, "arm": *arm, "arm-dot": *armDot, "arm-spot": *armSpot}
-	rootfses := map[string]string{"arm": *rootfs, "arm-dot": *rootfsDot, "arm-spot": *rootfsSpot, "arm-athena": *rootfsAthena}
+	builds := map[string]string{"arm64": *arm64, "arm": *arm, "arm-dot": *armDot, "arm-donut": *armDonut, "arm-spot": *armSpot}
+	rootfses := map[string]string{"arm": *rootfs, "arm-dot": *rootfsDot, "arm-donut": *rootfsDonut, "arm-spot": *rootfsSpot,
+		"arm-athena": *rootfsAthena, "arm-skylight": *rootfsSkylight}
 	if err := run(m, *from, builds, rootfses, assets, *out); err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)

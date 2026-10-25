@@ -74,6 +74,11 @@ type Feature struct {
 	stream    *stream  // while the page is up in streamed mode
 	drawn     *session // while the page is up drawn, for drawnPath
 	drawnPath string
+	// navTo is the path a tap on the page is going to, until the page is asked for it there: the one
+	// change of path that holds the page it left (session.hold).
+	navTo string
+	// recent is the last few pictures the drawn page showed, kept between its views.
+	recent recent
 
 	// When the page last asked for each: a session nobody has asked for in a while is closed, however
 	// the page went away - a turn, the screen going dark, the night.
@@ -151,7 +156,7 @@ func Get() *Feature {
 		f.back, f.tiles = backSelect(f), tilesSelect(f)
 		f.board.OnCommand = f.chooseBoard
 		f.boardOpts = component.NewOptions(f.board)
-		component.Bind(f.mode, config.DashboardModes(), f.setMode, config.Set().Dashboard().Mode)
+		component.Bind(f.mode, Modes(), f.setMode, config.Set().Dashboard().Mode)
 		f.idle.OnCommand = func(on bool) {
 			f.idle.Set(on)
 			if err := config.Set().Dashboard().Idle(on); err != nil {
@@ -365,6 +370,7 @@ func (f *Feature) closeUnused() {
 	}
 	if f.drawn != nil && time.Since(f.drawnUsed) > unused {
 		d, f.drawn = f.drawn, nil
+		f.recent.empty() // nobody is looking: the memory is the device's again
 	}
 	f.mu.Unlock()
 	if s != nil {
@@ -430,7 +436,8 @@ func webChoices(d config.Dashboard) []config.DashboardChoice {
 
 // setMode applies a mode: a stream open in the old one is closed, and the page asks again.
 func (f *Feature) setMode(m config.DashboardMode) config.DashboardMode {
-	if m != config.DashboardOff {
+	m = modeOf(m) // a mode this device does not have, saved by another build, is Off
+	if m != config.DashboardOff && m != config.DashboardTessera {
 		select { // turned on: the list is wanted now, not at the next look
 		case f.look <- struct{}{}:
 		default:
@@ -459,13 +466,20 @@ func (f *Feature) SetServer(addr, key string) error {
 	return nil
 }
 
-// Mode is how the dashboard is shown, off included.
-func (f *Feature) Mode() config.DashboardMode { return config.Get().Dashboard.Mode }
+// Mode is how the dashboard is shown, off included. A mode this device does not have - Tessera
+// restored or imported on a Spot or a panel - is Off, as setMode settles it and Home Assistant shows it.
+func (f *Feature) Mode() config.DashboardMode { return modeOf(config.Get().Dashboard.Mode) }
+
+func modeOf(m config.DashboardMode) config.DashboardMode {
+	if !slices.Contains(Modes(), m) {
+		return config.DashboardOff
+	}
+	return m
+}
 
 // Idle is whether the dashboard stands in for the clock.
 func (f *Feature) Idle() bool {
-	d := config.Get().Dashboard
-	return d.Idle && d.Mode != config.DashboardOff
+	return config.Get().Dashboard.Idle && f.Mode() != config.DashboardOff
 }
 
 func (f *Feature) Actions() []*esphome.Action {

@@ -78,6 +78,7 @@ func TestTheThermostatSheetOffersWhatTheThermostatCanDo(t *testing.T) {
 		{"climate.den", 4, 4, showWide, showHigh},
 		{"climate.attic", 0, 2, showWide, showHigh},
 		{"climate.den", 4, 4, 1280, 800},
+		{"climate.den", 4, 4, skylightWide, skylightHigh},
 	} {
 		img := image.NewRGBA(image.Rect(0, 0, c.wide, c.high))
 		r := newRenderer(img)

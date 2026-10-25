@@ -39,7 +39,7 @@ func TestAChosenDateColorIsKeptOverAPhoto(t *testing.T) {
 		r := newRenderer(img)
 		var at image.Rectangle
 		r.readableOver(photo, walnut, slideshowWash, func() {
-			at = r.timeAndDateAt(time.Date(2026, 9, 28, 14, 5, 0, 0, time.Local), r.h/2, "", 0, 0)
+			at = r.timeAndDateAt(time.Date(2026, 9, 28, 14, 5, 0, 0, time.Local), r.h/2, "", 0, 0, false)
 		})
 		return img, at
 	}

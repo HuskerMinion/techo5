@@ -15,11 +15,12 @@ What works:
 The speaker uses Amazon's own tuning for the amp. TECHO5 doesn't ship it. The installer reads it from
 your unit's backup and checks it against the known versions.
 
-### Only one screen for now
+### Which screens
 
-Amazon used several screens in this model. TECHO5's kernel supports one: the ILI9881C with BOE glass.
-The installer checks your unit and stops if it has a different one. Those units can still run TECHO5
-on Amazon's kernel (`--kernel amazon`).
+Amazon used several screens in this model. TECHO5's kernel has settings for ten of them, and two are
+tested on units: the ILI9881C with BOE glass and the JD9365 with KD/HSD glass. The installer checks
+your unit and stops on any other screen: add `--force-panel` to try it, or run TECHO5 on Amazon's
+kernel (`--kernel amazon`), which drives every screen.
 
 ### How to install
 

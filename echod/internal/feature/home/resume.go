@@ -213,6 +213,9 @@ func (f *Feature) stationStarted(u hastate.Update) {
 	}
 	f.mu.Lock()
 	defer f.mu.Unlock()
+	// Home Assistant took a call to play a station, whichever one: a station asked for here is not
+	// said to have gone nowhere (hint.go).
+	f.startHeard()
 	if !viaScript {
 		// The name of a station the script just started, arriving after the script turned on: it is
 		// that station's, in place of the text's old one.

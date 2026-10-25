@@ -3,6 +3,8 @@ package video
 import (
 	"bufio"
 	"errors"
+	"fmt"
+	"math"
 	"regexp"
 	"strconv"
 	"strings"
@@ -31,25 +33,102 @@ type Info struct {
 	// VideoCodec and AudioCodec are their codecs, for the log.
 	VideoCodec, AudioCodec string
 
+	// PixFmt is the picture's pixel format as ffmpeg names it (yuv420p, yuv420p10le, ...), "" when it
+	// named none; Interlaced, that its frames are two fields.
+	PixFmt     string
+	Interlaced bool
+
 	// Duration is how long it runs, 0 for a live stream or one that does not say.
 	Duration time.Duration
 }
 
-// Usable codecs: what the image's ffmpeg decodes (tools/linux/build-ffmpeg.sh).
+// Usable codecs: what the image's ffmpeg decodes (tools/linux/build-ffmpeg.sh). H.265, VP8 and VP9 only
+// where they were built in (the static aarch64 ffmpeg athena's and the Skylight's images carry,
+// build-ffmpeg-arm64.sh, run on their 64-bit kernels), which decodesHEVC and decodesVPx say.
 var (
 	videoCodecs = map[string]bool{"h264": true, "mpeg4": true}
 	audioCodecs = map[string]bool{"aac": true, "aac_latm": true, "mp3": true, "mp3float": true, "opus": true, "ac3": true, "eac3": true}
 )
 
+// decodesHEVC is whether the image's ffmpeg decodes H.265, on the cores (proc.go looks).
+var decodesHEVC = func() bool { return false }
+
+// decodesVPx is whether the image's ffmpeg decodes VP8 and VP9 (WebM's video), on the cores (proc.go
+// looks).
+var decodesVPx = func() bool { return false }
+
+// coresMost is the most of a codec the cores decode in time, in pixels a second (width by height by
+// frame rate), absent for no limit; a stream past it is not played, rather than played behind. H.265,
+// VP8 and VP9 are held to 1080p30 wherever they are built in, unless the board says otherwise
+// (cores_show.go).
+var coresMost = map[string]float64{"hevc": p1080 * 30, "vp8": p1080 * 30, "vp9": p1080 * 30}
+
+// p1080 and p720 are a 1080p and a 720p picture's pixels, 1080p as the decoders round it (16 lines).
+const (
+	p1080 = 1920 * 1088
+	p720  = 1280 * 720
+)
+
+// tooFast is whether a picture is more than the cores decode in time here. A stream that does not say
+// its rate is not refused, nor one whose rate is past fpsMost: that is a time base (a browser's WebM
+// says "1k tbr"), not frames.
+func tooFast(codec string, w, h int, fps float64) bool {
+	most := coresMost[codec]
+	return most > 0 && fps > 0 && fps <= fpsMost && float64(w)*float64(h)*fps > most
+}
+
+// fpsMost is the highest frame rate believed from a probe.
+const fpsMost = 240
+
+func usableVideo(codec string) bool {
+	switch codec {
+	case "hevc":
+		return decodesHEVC()
+	case "vp8", "vp9":
+		return decodesVPx()
+	}
+	return videoCodecs[codec]
+}
+
+// reach says what coresMost allows of a codec, for a refusal: as a 1080p rate, or a 720p one where that
+// is under 25, which is how streams are offered.
+func reach(codec string) string {
+	name := map[string]string{"hevc": "H.265", "vp8": "VP8", "vp9": "VP9"}[codec]
+	if name == "" {
+		name = codec
+	}
+	most, size, px := coresMost[codec], "1080p", float64(p1080) // the size coresMost counts in
+	if math.Round(most/px) < 25 {
+		size, px = "720p", p720
+	}
+	return name + " up to " + size + " at " + strconv.FormatFloat(math.Round(most/px), 'f', -1, 64) + " frames a second"
+}
+
+// decodable names the video codecs this device plays, for a refusal.
+func decodable() string {
+	c := []string{"H.264"}
+	if decodesHEVC() {
+		c = append(c, "H.265")
+	}
+	if decodesVPx() {
+		c = append(c, "VP8", "VP9")
+	}
+	return strings.Join(c, ", ") + " and MPEG-4 only"
+}
+
 var (
-	reStream   = regexp.MustCompile(`^\s*Stream #\d+:\d+(?:\[[^\]]*\])?(?:\([^)]*\))?: (Video|Audio|Subtitle|Data|Attachment): ([A-Za-z0-9_]+)(.*)$`)
-	reSize     = regexp.MustCompile(`, (\d{1,5})x(\d{1,5})\b`)
-	reSAR      = regexp.MustCompile(`\[SAR (\d+):(\d+) DAR`)
-	reFPS      = regexp.MustCompile(`, ([0-9.]+) fps\b`)
-	reTBR      = regexp.MustCompile(`, ([0-9.]+)(k?) tbr\b`)
-	reRotation = regexp.MustCompile(`rotation of (-?[0-9.]+) degrees`)
-	reDuration = regexp.MustCompile(`Duration: (\d+):(\d\d):(\d\d(?:\.\d+)?)`)
-	reProgram  = regexp.MustCompile(`^\s*Program (\d+)`)
+	reStream = regexp.MustCompile(`^\s*Stream #\d+:\d+(?:\[[^\]]*\])?(?:\([^)]*\))?: (Video|Audio|Subtitle|Data|Attachment): ([A-Za-z0-9_]+)(.*)$`)
+	reSize   = regexp.MustCompile(`, (\d{1,5})x(\d{1,5})\b`)
+	// The pixel format, after the codec's own parenthesis, with what ffmpeg says of the picture in its
+	// own: "yuv420p(tv, bt709, progressive)", "yuv420p(top first)".
+	rePixFmt     = regexp.MustCompile(`, ((?:yuvj?|nv|gray|rgb|bgr|p0)[0-9a-z]*)(?:\(([^)]*)\))?`)
+	reInterlaced = regexp.MustCompile(`\b(top|bottom) first\b|\b[tb][tb]\b`)
+	reSAR        = regexp.MustCompile(`\[SAR (\d+):(\d+) DAR`)
+	reFPS        = regexp.MustCompile(`, ([0-9.]+) fps\b`)
+	reTBR        = regexp.MustCompile(`, ([0-9.]+)(k?) tbr\b`)
+	reRotation   = regexp.MustCompile(`rotation of (-?[0-9.]+) degrees`)
+	reDuration   = regexp.MustCompile(`Duration: (\d+):(\d\d):(\d\d(?:\.\d+)?)`)
+	reProgram    = regexp.MustCompile(`^\s*Program (\d+)`)
 )
 
 // most is the largest picture worth choosing among a stream's variants: past it, a variant only costs
@@ -70,6 +149,9 @@ func ParseProbe(out string) (Info, error) {
 		codec         string
 		usable        bool
 		attachedImage bool
+		pixFmt        string
+		interlaced    bool
+		tooFast       bool
 	}
 	type audioStream struct {
 		idx, n, program int
@@ -114,8 +196,12 @@ func ParseProbe(out string) (Info, error) {
 		kind, codec, rest := m[1], m[2], m[3]
 		switch kind {
 		case "Video":
-			v := videoStream{idx: nv, n: n, program: program, sarN: 1, sarD: 1, codec: codec, usable: videoCodecs[codec],
+			v := videoStream{idx: nv, n: n, program: program, sarN: 1, sarD: 1, codec: codec, usable: usableVideo(codec),
 				attachedImage: strings.Contains(rest, "(attached pic)")}
+			if s := rePixFmt.FindStringSubmatch(rest); s != nil {
+				v.pixFmt = s[1]
+				v.interlaced = reInterlaced.MatchString(s[2])
+			}
 			if s := reSize.FindStringSubmatch(rest); s != nil {
 				v.w, _ = strconv.Atoi(s[1])
 				v.h, _ = strconv.Atoi(s[2])
@@ -131,6 +217,9 @@ func ParseProbe(out string) (Info, error) {
 				if s[2] == "k" {
 					v.fps *= 1000
 				}
+			}
+			if v.usable && tooFast(codec, v.w, v.h, v.fps) {
+				v.usable, v.tooFast = false, true
 			}
 			vids = append(vids, v)
 			lastVideo = len(vids) - 1
@@ -163,8 +252,14 @@ func ParseProbe(out string) (Info, error) {
 		}
 	}
 	if best < 0 {
+		for _, v := range vids {
+			if v.tooFast {
+				return info, fmt.Errorf("its video is %s at %dx%d and %s frames a second, more than this device decodes in time (%s)",
+					v.codec, v.w, v.h, strconv.FormatFloat(v.fps, 'f', -1, 64), reach(v.codec))
+			}
+		}
 		if len(vids) > 0 {
-			return info, errors.New("its video is " + vids[0].codec + ", which this device does not decode (H.264 and MPEG-4 only)")
+			return info, errors.New("its video is " + vids[0].codec + ", which this device does not decode (" + decodable() + ")")
 		}
 		if problem != "" {
 			return info, errors.New(problem)
@@ -174,6 +269,7 @@ func ParseProbe(out string) (Info, error) {
 	v := vids[best]
 	info.VideoIndex, info.VideoCodec = v.idx, v.codec
 	info.Width, info.Height, info.FPS, info.Rotation = v.w, v.h, v.fps, v.rotation
+	info.PixFmt, info.Interlaced = v.pixFmt, v.interlaced
 	if v.sarN > 0 && v.sarD > 0 {
 		info.SARNum, info.SARDen = v.sarN, v.sarD
 	}
