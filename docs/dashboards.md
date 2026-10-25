@@ -236,6 +236,9 @@ On the page:
   one playing, as on the drawn dashboard, so every grouped speaker follows.
 - A tile shows what you asked for at once, then whatever Home Assistant says. Tile backgrounds from
   Tessera are drawn as tints, in the device's own colors.
+- A tile too low for its icon above its words, on a grid of many rows, has its words beside the icon.
+- A tap beside the tiles, where there is none, starts a voice turn while **Tap on the clock** is
+  *Assist*, as a tap on the clock does.
 
 What the device tells Tessera it takes: every tile size its grid has room for (single, wide, tall,
 square, the whole page, and spans like 3x2), and up to eight pages. Tessera leaves out everything

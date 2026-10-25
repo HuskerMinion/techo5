@@ -18,6 +18,7 @@ import (
 	"github.com/HuskerMinion/techo5/echod/internal/config"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/dashboard"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/tessera"
+	"github.com/HuskerMinion/techo5/echod/internal/feature/voice"
 	"github.com/HuskerMinion/techo5/echod/internal/lib/locale"
 )
 
@@ -404,6 +405,12 @@ func (r *paint) tessTile(b image.Rectangle, t tessera.Placed, pal dashPal, adj d
 	pad := r.s(sc(16))
 	badge := r.s(sc(52))
 	ring := image.Rect(b.Min.X+pad, b.Min.Y+pad, b.Min.X+pad+badge, b.Min.Y+pad+badge)
+	// A tile too low for its badge over its words (a grid of many rows) has the words beside the badge,
+	// both in the middle of its height, as Tessera's own small cards do.
+	compact := len(controls) == 0 && !(len(t.Days) > 0 && t.Rows >= 2) && b.Dy() < 2*pad+badge+r.s(sc(66))
+	if compact {
+		ring = ring.Add(image.Pt(0, (b.Dy()-badge)/2-pad))
+	}
 	ic := pal.sub
 	switch {
 	case t.Gone:
@@ -488,6 +495,26 @@ func (r *paint) tessTile(b image.Rectangle, t tessera.Placed, pal dashPal, adj d
 			r.tessDays(image.Rect(b.Min.X+pad, ring.Max.Y+r.s(sc(28)), b.Max.X-pad, b.Max.Y-pad), t.Days, t.Cols == 1, pal, k)
 			return zones
 		}
+	}
+	if compact {
+		x := ring.Max.X + r.s(sc(12))
+		right := b.Min.X + pad + room
+		switch {
+		case pill:
+			right = min(right, b.Max.X-pad-r.width(r.faces().button, "Unlock")-r.s(52))
+		case t.Taps && toggles(t.Entity) && !t.Gone:
+			right = min(right, b.Max.X-pad-r.s(sc(46))-r.s(8))
+		}
+		top, low, first, second, firstC := name, sub, t.Name, value, textC
+		if t.Reading && !sliding {
+			top, first, second = big, reading, under
+		}
+		gap := r.s(sc(9))
+		ha, hb := top.Metrics().Ascent.Ceil(), low.Metrics().Ascent.Ceil()
+		y := ring.Min.Y + (badge-(ha+gap+hb))/2 + ha
+		r.text(top, r.fit(top, first, right-x), x, y, firstC)
+		r.text(low, r.fit(low, second, right-x), x, y+gap+hb, pal.sub)
+		return zones
 	}
 	if t.Reading && !sliding {
 		// The reading large, the name under it.
@@ -778,7 +805,8 @@ func (r *paint) tessSwitch(sw image.Rectangle, on bool, card color.RGBA, pal das
 }
 
 // tessTap is a tap on the Tessera page: a tile does what it is for, a dot or the way back goes to its
-// page.
+// page, and a tap on none of them starts a voice turn, as a tap on the clock does while Tap on the clock
+// is Assist.
 func (d *Display) tessTap(x, y int) {
 	if d.colorTap(x, y) {
 		return // a sheet is up, and takes it
@@ -786,6 +814,9 @@ func (d *Display) tessTap(x, y int) {
 	t := d.tileAt(x, y)
 	switch {
 	case t == nil:
+		if config.Get().Screen.ClockTap == "" {
+			tessAssist()
+		}
 	case t.page > 0:
 		d.tessGo(t.page - 1)
 	case t.tess > 0 && t.ctl != "":
@@ -794,6 +825,14 @@ func (d *Display) tessTap(x, y int) {
 		if tessera.Tap(t.tess-1, t.entity) {
 			d.tessSheet(t.entity)
 		}
+	}
+}
+
+// tessAssist starts a voice turn, or answers or ends the one under way, where there are microphones to
+// take one; a variable for the tests.
+var tessAssist = func() {
+	if hasMicrophone() {
+		voice.Get().Action()
 	}
 }
 
