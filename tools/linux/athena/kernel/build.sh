@@ -49,8 +49,8 @@ export KBUILD_BUILD_USER=techo5 KBUILD_BUILD_HOST=athena-build
 # changes (a patch, the config, the kernel.org version), or a unit cannot tell the new kernel from
 # the one before. 2026-10-15 was v1.2.16 to v1.2.18's, 2026-10-16 v1.2.19 to v1.2.23's, 2026-10-19
 # v1.2.24's, 2026-10-20 12:00 the echo reference and panic on an RCU stall, 2026-10-23 12:00 the
-# 0x35 panel on Amazon's DSI link (#187).
-export KBUILD_BUILD_TIMESTAMP="2026-10-23 12:00:00 UTC" KBUILD_BUILD_VERSION=1
+# 0x35 panel on Amazon's DSI link (#187), 2026-10-26 12:00 the GPU on panfrost.
+export KBUILD_BUILD_TIMESTAMP="2026-10-26 12:00:00 UTC" KBUILD_BUILD_VERSION=1
 export LC_ALL=C TZ=UTC
 
 mkdir -p "$WORK/cache" "$OUT"
@@ -131,7 +131,8 @@ for want in 'CONFIG_SND_SOC_MT8183_ATHENA=y' 'CONFIG_SND_SOC_TAS5805M=y' 'CONFIG
 		'CONFIG_INITRAMFS_SOURCE=""' 'CONFIG_LOCALVERSION="-techo5-athena"' \
 		'CONFIG_ARM_MEDIATEK_CPUFREQ=y' 'CONFIG_ARM_MEDIATEK_CCI_DEVFREQ=y' 'CONFIG_MTK_SOC_THERMAL=y' \
 		'CONFIG_THERMAL_DEFAULT_GOV_POWER_ALLOCATOR=y' 'CONFIG_MEDIA_SUPPORT=y' 'CONFIG_VIDEO_DEV=y' \
-		'CONFIG_MTK_SENINF30=y' 'CONFIG_MTK_CAMSV=y' 'CONFIG_PHY_MTK_MIPI_CSI_0_5=y' 'CONFIG_VIDEO_OV13855=y'; do
+		'CONFIG_MTK_SENINF30=y' 'CONFIG_MTK_CAMSV=y' 'CONFIG_PHY_MTK_MIPI_CSI_0_5=y' 'CONFIG_VIDEO_OV13855=y' \
+		'CONFIG_DRM_PANFROST=y' 'CONFIG_PM_DEVFREQ=y' 'CONFIG_DEVFREQ_GOV_SIMPLE_ONDEMAND=y' 'CONFIG_DEVFREQ_THERMAL=y'; do
 	grep -qxF "$want" .config || { echo "config check failed: $want" >&2; exit 1; }
 done
 # The Wi-Fi firewall (rootfs usr/local/sbin/techo5-firewall) and the video decoder's fence

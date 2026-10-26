@@ -90,6 +90,16 @@ LCM name LK leaves in `/chosen` `atag,videolfb` (or the `jd936x_id=` nibble); th
 JD9365 driver's supplies too (see the comment at `&dsi0`). All the panel init tables, the tested one
 included, are taken from that kernel.
 
+## GPU
+
+The Mali-G72 MP3 runs on mainline's panfrost (`CONFIG_DRM_PANFROST=y`, `mediatek,mt8183b-mali`), as
+on the MT8183 Chromebooks: `/dev/dri/renderD128` beside mediatek-drm's `/dev/dri/card0`. devfreq
+scales it along mt8183.dtsi's OPP table, 300 to 800 MHz, with vgpu and vsram_gpu following (625 and
+850 mV at 300 MHz, 825 and 925 mV at 800 MHz, read on a unit). The DTS also puts it in the die's
+thermal zone beside the two CPU clusters (a power model and a third cooling map on the 80 C trip),
+so the power allocator slows it when the chip is hot, as it does the CPUs. Nothing in the kernel
+uses it by itself; a userspace with Mesa's panfrost driver can.
+
 ## Firmware
 
 The MT7663 Wi-Fi and Bluetooth drivers load their firmware from `/lib/firmware`. `build.sh` fetches

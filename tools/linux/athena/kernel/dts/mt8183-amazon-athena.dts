@@ -571,10 +571,35 @@
 	domain-supply = <&mt6358_vgpu_reg>;
 };
 
-/* GPU (Mali-G72, panfrost) later; not needed to boot */
+/*
+ * GPU: the Mali-G72 MP3, on panfrost (mediatek,mt8183b-mali), as on the
+ * MT8183 Chromebooks. vgpu feeds the core and vsram_gpu the mfg_async domain,
+ * coupled within 100 mV (above); devfreq scales it along mt8183.dtsi's OPP
+ * table, 300 to 800 MHz, with simple_ondemand.
+ *
+ * mt8183.dtsi's cpu-thermal (the power allocator, throttling from 80 C) cools
+ * only the two CPU clusters, so a GPU at full clock would heat the die with
+ * nothing slowing it down. The GPU gets #cooling-cells, a power model and a
+ * third cooling map beside the CPUs'. No dynamic-power-coefficient is
+ * published for this GPU: 1500 (uW/MHz/V^2) is in the range Arm's Mali GPUs
+ * of its size are given, and only weighs its share of the budget against the
+ * CPUs'.
+ */
 &gpu {
 	mali-supply = <&mt6358_vgpu_reg>;
-	status = "disabled";
+	#cooling-cells = <2>;
+	dynamic-power-coefficient = <1500>;
+	status = "okay";
+};
+
+&cpu_thermal {
+	cooling-maps {
+		map2 {
+			trip = <&target>;
+			cooling-device = <&gpu THERMAL_NO_LIMIT THERMAL_NO_LIMIT>;
+			contribution = <1024>;
+		};
+	};
 };
 
 &auxadc {
