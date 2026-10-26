@@ -280,6 +280,8 @@ type Display struct {
 	glowLevel  *esphome.Number
 	// warmthSw is Night warmth (night_warmth.go).
 	warmthSw *esphome.Switch
+	// liftSw is Adaptive backlight (adaptive_backlight.go), offered only where the GPU draws the panel.
+	liftSw *esphome.Switch
 	// dimmestNum is the Dimmest setting in Home Assistant: how dark auto-brightness goes.
 	dimmestNum *esphome.Number
 	// nightMode is Night mode: Home Assistant turning the night on and off; nightShown what it last said.
@@ -510,6 +512,7 @@ func build() *Display {
 	d.weekendStart, d.weekendEnd = weekendEndSelect(d, true), weekendEndSelect(d, false)
 	d.nightStyle = nightStyleSelect(d)
 	d.warmthSw = nightWarmthSwitch(d)
+	d.liftSw = adaptiveBacklightSwitch(d)
 	d.buildPopupEntities()
 	d.buildLookEntities()
 	d.atNight = atNightSelect(d)
@@ -609,6 +612,9 @@ func (d *Display) Entities() []esphome.Entity {
 		// Night warmth tints the frame on its way to the panel, which a tablet's screen does not take.
 		ents = slices.DeleteFunc(ents, func(e esphome.Entity) bool { return e == esphome.Entity(d.warmthSw) })
 	}
+	if liftOffered() {
+		ents = append(ents, d.liftSw)
+	}
 	return ents
 }
 
@@ -647,6 +653,7 @@ func (d *Display) Restore(c config.Config) {
 	d.atNight.Set(atNightOptions[atNightIndex()])
 	d.nightStyle.Set(nightStyleOptions[nightStyleIndex()])
 	d.warmthSw.Set(c.Screen.NightWarm)
+	d.liftSw.Set(c.Screen.AdaptiveBacklight)
 	d.popupSettingsChanged()
 	d.lookChanged()
 	d.glowLevel.Set(float32(d.glowSetting()))
@@ -2400,6 +2407,7 @@ func (d *Display) frame() (next time.Duration) {
 			d.tintShown, d.deckDrawn = t, ""
 			d.dev.SetTint(t)
 		}
+		d.dev.SetLift(config.Get().Screen.AdaptiveBacklight && liftOffered())
 	}
 	if !on && (call.Phase != phone.Idle || (!night && (ring.any() || reminding))) {
 		// A call lights a dark panel, at night to half brightness (relight): its page is how it is

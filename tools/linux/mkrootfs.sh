@@ -20,7 +20,8 @@
 #   bin/tailscaled                                         Tailscale's daemon, static arm64 (build-tailscaled.sh), optional
 #   bin/techo5-ffmpeg64                                    its static aarch64 build (build-ffmpeg-arm64.sh), athena's
 #                                                          and the Skylight's, for their 64-bit kernels, optional
-#   bin/techo5-gpu                                         the GPU helper, 64-bit builds only, optional
+#   bin/techo5-gpu                                         the GPU helper (tools/gpu/build.sh), optional; with it
+#   inputs/techo5-mesa.tar.gz                              the lean Mesa it loads (build-mesa.sh), laid over /usr
 #   bin/techo5-jpeg                                        the JPEG decoder helper, 64-bit builds only, optional
 #   tools/slotctl tools/techo5-lib.sh tools/packages-rootfs.txt
 #   overlay/                                               tools/linux/rootfs from the repo
@@ -160,6 +161,14 @@ find "$R/etc/techo5" "$R/usr/local/sbin" "$R/lib/techo5-lib.sh" "$R/etc/inittab"
 chmod 755 "$R"/etc/techo5/*.sh "$R"/usr/local/sbin/*
 # License texts are read, never run: a checkout on Windows hands every file over as executable.
 [ -d "$R/usr/share/licenses" ] && find "$R/usr/share/licenses" -type f -exec chmod 644 {} +
+
+# The GPU helper's Mesa (panfrost, EGL, GLES, GBM; tools/linux/build-mesa.sh) and what it links to.
+if [ -f "$IN/inputs/techo5-mesa.tar.gz" ]; then
+	say "Mesa for the GPU helper"
+	$APK --root "$R" $arch --no-cache add libdrm expat zlib zstd-libs libstdc++ libgcc
+	tar -xzf "$IN/inputs/techo5-mesa.tar.gz" -C "$R"
+	$APK --root "$R" $arch info -v | sort > "$R/etc/techo5-packages"
+fi
 
 # Optional mainline modules and firmware, built from the same kernel as boot.
 if [ -f "$IN/inputs/kernel.tar.gz" ]; then

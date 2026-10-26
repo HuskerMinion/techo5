@@ -19,7 +19,9 @@ func (d *Device) FrameSize() (w, h int) { return d.panelW, d.panelH }
 // Rotated is whether a landscape picture has to be turned a quarter turn clockwise to become a frame.
 func (d *Device) Rotated() bool { return rotated }
 
-// PixFmt is ffmpeg's name for the panel's pixel layout, or "" for a layout it has no name for.
+// PixFmt is ffmpeg's name for the panel's pixel layout, or "" for a layout it has no name for. It is
+// the framebuffer's, also where the GPU draws the panel: the GPU takes frames in that order as they
+// are, so a video started on one goes on looking right on the other.
 func (d *Device) PixFmt() string { return pixFmt(d.shift) }
 
 func pixFmt(shift [4]uint) string {
@@ -38,6 +40,9 @@ func pixFmt(shift [4]uint) string {
 func (d *Device) PresentFrame(frame []byte, over image.Rectangle) error {
 	if err := d.settle(); err != nil {
 		return err
+	}
+	if d.presentFrameGPU(frame, over) {
+		return nil
 	}
 	next := d.page
 	if d.pages > 1 {

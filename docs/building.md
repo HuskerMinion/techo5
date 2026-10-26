@@ -189,6 +189,16 @@ image goes on with `fastboot flash boot` (with the Show in fastboot, docs/instal
 [tools/linux/build-aec.sh](../tools/linux/build-aec.sh) compiles the WebRTC echo canceller helper for
 armv7 (Linux or WSL). `deploy-rootfs.sh` includes `bin/techo5-aec-arm` when it exists.
 
+## Optional: the GPU helper (Show 8 2nd gen)
+
+[tools/gpu/build.sh](../tools/gpu/build.sh) builds `bin/techo5-gpu-arm`, the helper that draws the
+screen on the Mali-G72 through the kernel's panfrost driver, and
+[tools/linux/build-mesa.sh](../tools/linux/build-mesa.sh) `bin/techo5-mesa-arm.tar.gz`, the cut-down
+Mesa it loads (panfrost, EGL, GLES and GBM, no LLVM). Both run in an armv7 Alpine container with Docker
+(QEMU on an x86_64 host: the helper takes a minute, Mesa about an hour). An athena image
+(`DEVICE_OVERLAY=tools/linux/athena/overlay`) carries them when both are there, and the daemon draws on
+the cores without them, or on a kernel without panfrost.
+
 ## AirPlay 2
 
 [tools/linux/build-shairport-sync.sh](../tools/linux/build-shairport-sync.sh) builds

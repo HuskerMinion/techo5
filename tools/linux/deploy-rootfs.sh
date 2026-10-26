@@ -142,6 +142,25 @@ athena|skylight)
 	echo "== ffmpeg64: sha256 $(sha256sum "$F64" | cut -d' ' -f1)"
 	;;
 esac
+# athena's GPU helper and the lean Mesa it loads (tools/gpu/build.sh and tools/linux/build-mesa.sh, both
+# armv7): with them echod draws the screen on the Mali-G72 where the kernel has panfrost, and on the cores
+# where it has not (hardware/screen). Shipped when both are there; one without the other is a mistake.
+if [ "$board" = athena ]; then
+	G=$ROOT/bin/techo5-gpu-arm M=$ROOT/bin/techo5-mesa-arm.tar.gz
+	if [ -e "$G" ] && [ -e "$M" ]; then
+		# An ELF32 for ARM (class 1, e_machine 40), like the rest of the userspace
+		[ "$(od -An -tx1 -j4 -N1 "$G" | tr -d ' ')" = 01 ] && [ "$(od -An -tu2 -j18 -N2 "$G" | tr -d ' ')" = 40 ] \
+			|| { echo "bin/techo5-gpu-arm is not an armv7 binary: build it with tools/gpu/build.sh" >&2; exit 1; }
+		cp "$G" "$STAGE/bin/techo5-gpu"
+		cp "$M" "$STAGE/inputs/techo5-mesa.tar.gz"
+		echo "== gpu: sha256 $(sha256sum "$G" | cut -d' ' -f1), mesa $(sha256sum "$M" | cut -d' ' -f1)"
+	elif [ -e "$G" ] || [ -e "$M" ]; then
+		echo "bin/techo5-gpu-arm and bin/techo5-mesa-arm.tar.gz go together: build both (tools/gpu/build.sh, tools/linux/build-mesa.sh)" >&2
+		exit 1
+	else
+		echo "== no GPU helper (bin/techo5-gpu-arm, bin/techo5-mesa-arm.tar.gz): the screen is drawn on the cores"
+	fi
+fi
 cp "$ROOT/tools/linux/slotctl" "$ROOT/tools/linux/techo5-lib.sh" "$ROOT/tools/linux/mkrootfs.sh" "$ROOT/tools/linux/packages-rootfs.txt" "$STAGE/tools/"
 # EXTRA_PACKAGES: Alpine packages a device needs on top of the list (athena: busybox-extras, for udhcpd).
 [ -n "${EXTRA_PACKAGES:-}" ] && printf '%s\n' $EXTRA_PACKAGES >> "$STAGE/tools/packages-rootfs.txt"

@@ -16,6 +16,7 @@ package screen
 import (
 	"bytes"
 	"encoding/binary"
+	"errors"
 	"fmt"
 	"image"
 	"os"
@@ -28,6 +29,7 @@ import (
 
 	"golang.org/x/sys/unix"
 
+	"github.com/HuskerMinion/techo5/echod/internal/hardware/gpu"
 	"github.com/HuskerMinion/techo5/echod/internal/layout"
 )
 
@@ -118,12 +120,17 @@ type Device struct {
 	// shadow says: the next Present onto it writes every row.
 	stale []bool
 
-	// tint is what the panel is shown with (tint.go); tintTable applies it to a copy of each frame,
-	// tintImg.
-	tint      Tint
-	tintTable *[3][256]uint8
-	tintImg   *image.RGBA
+	// gpu draws the canvas instead, where techo5-gpu drives the panel (screen_gpu.go); nil otherwise,
+	// and while the cores draw after it failed. gpuPath keeps the display for trying it again.
+	gpu     *gpu.Display
+	gpuPath gpuState
 
+	// tint is what the panel is shown with (tint.go); on the framebuffer tintTable applies it to a
+	// copy of each frame, tintImg.
+	tint       Tint
+	tintTable  *[3][256]uint8
+	tintImg    *image.RGBA
+	tintWarned bool
 	// filter is laid over every row on its way to the panel (SetFilter, filter.go).
 	filter rowFilter
 }
@@ -206,6 +213,7 @@ func Open() (*Device, error) {
 	} else {
 		d.canvas = image.NewRGBA(image.Rect(0, 0, d.panelW, d.panelH))
 	}
+	d.useGPU()
 	return d, nil
 }
 
@@ -244,6 +252,9 @@ func (d *Device) String() string {
 // PresentFrame, or Close) waits for it first, and says if it failed.
 func (d *Device) Present() error {
 	err := d.settle()
+	if d.presentGPU() {
+		return err
+	}
 	// The tint is laid on here, on the caller's goroutine: the canvas is put back before the next frame
 	// is drawn on it, and the background turn below works on the staged copy.
 	if d.tintTable != nil {
@@ -490,6 +501,10 @@ func (d *Device) pan(next int) error {
 		d.page = 0
 		return nil
 	}
+	if d.f == nil { // a Device a test made, in memory
+		d.page = next
+		return nil
+	}
 	v := d.v
 	v.Xoffset = 0
 	v.Yoffset = uint32(next * d.panelH)
@@ -504,9 +519,16 @@ func (d *Device) pan(next int) error {
 // Close unmaps and closes the framebuffer. The last frame stays on the panel.
 func (d *Device) Close() error {
 	_ = d.settle()
+	if d.gpuPath.disp != nil {
+		d.gpuPath.disp.Release(errors.New("screen: closed"))
+		d.gpu = nil
+	}
 	if d.mem != nil {
 		_ = unix.Munmap(d.mem)
 		d.mem = nil
+	}
+	if d.f == nil {
+		return nil
 	}
 	return d.f.Close()
 }
@@ -618,7 +640,8 @@ func SetBacklight(level int) error {
 		}
 		time.Sleep(fullFirst)
 	}
-	if err := os.WriteFile(path, []byte(strconv.Itoa(raw)), 0o644); err != nil {
+	// Through the lift (lift.go), which turns it down by as much as the pixels are drawn brighter.
+	if err := lit.setBacklight(path, top, raw); err != nil {
 		return fmt.Errorf("screen: backlight: %w", err)
 	}
 	backlightOff = raw == 0
@@ -639,6 +662,9 @@ var fullFirst = 10 * time.Millisecond
 // Backlight reads the level the driver holds. The bootloader's own setting reads as 0 until
 // something writes one.
 func Backlight() (int, error) {
+	if level, ok := lit.askedLevel(); ok {
+		return level, nil // the level asked for, not the lift's share of it
+	}
 	path, top := backlightNode()
 	b, err := os.ReadFile(path)
 	if err != nil {

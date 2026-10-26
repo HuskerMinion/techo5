@@ -391,6 +391,11 @@ Alpine Linux packages
   mkstore.sh); their sources are Alpine's, https://gitlab.alpinelinux.org/alpine/aports/-/tree/3.24-stable,
   with the source archives at https://dl-cdn.alpinelinux.org/alpine/v3.24/.
 
+Mesa, https://mesa3d.org (MIT License)
+  The 2nd gen Show 8's root filesystem carries a cut-down Mesa (panfrost, EGL, GLES and GBM) for
+  techo5-gpu (tools/gpu), built unmodified from the Mesa release tools/linux/build-mesa.sh names; its source is
+  https://archive.mesa3d.org.
+
 echod (dependency)
   github.com/miekg/dns — BSD 3-Clause License
   Copyright (c) 2009, The Go Authors. Extensions copyright (c) 2011, Miek Gieben. All rights reserved.
