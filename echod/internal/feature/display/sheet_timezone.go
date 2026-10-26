@@ -30,7 +30,7 @@ func zoneValue() string {
 	zone := timezone.Get().Current()
 	switch {
 	case zone == "":
-		return "Not set"
+		return tr("ui_not_set")
 	case !timezone.Get().SetHere():
 		return zoneShort(zone)
 	}
@@ -40,12 +40,12 @@ func zoneValue() string {
 // zoneSub says where the zone came from, since that is what decides whether it will change again.
 func zoneSub() string {
 	if timezone.Get().SetHere() {
-		return "Chosen here"
+		return tr("ui_chosen_here")
 	}
 	if timezone.Get().Current() == "" {
-		return "Waiting for Home Assistant"
+		return tr("ui_waiting_for_home_assistant")
 	}
-	return "From Home Assistant"
+	return tr("ui_from_home_assistant")
 }
 
 // zoneShort is a zone as the row says it: the city, with the region behind it dropped, since the row

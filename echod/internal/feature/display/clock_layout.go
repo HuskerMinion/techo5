@@ -136,9 +136,9 @@ func setDateColor(s *esphome.Select, i int) {
 // clockLayoutRows are the three settings on the screen, under Display.
 func clockLayoutRows() []settingRow {
 	return []settingRow{
-		{id: "clockpos", label: "Clock position", sub: "Not for Dashboard, Agenda or World", kind: ctlChoice, value: clockPositions[clockPositionIndex()].label},
-		{id: "weatherpos", label: "Weather position", sub: "The weather's corner over the clock", kind: ctlChoice, value: weatherPositions[weatherPositionIndex()].label},
-		{id: "datecolor", label: "Date color", sub: "The date and AM/PM", kind: ctlChoice, value: dateColors[dateColorIndex()].label},
+		{id: "clockpos", label: tr("ui_clock_position"), sub: tr("ui_not_for_dashboard_agenda_or_world"), kind: ctlChoice, value: clockPositions[clockPositionIndex()].label},
+		{id: "weatherpos", label: tr("ui_weather_position"), sub: tr("ui_the_weather_s_corner_over_the_clock"), kind: ctlChoice, value: weatherPositions[weatherPositionIndex()].label},
+		{id: "datecolor", label: tr("ui_date_color"), sub: tr("ui_the_date_and_am_pm"), kind: ctlChoice, value: dateColors[dateColorIndex()].label},
 	}
 }
 
@@ -146,11 +146,11 @@ func clockLayoutRows() []settingRow {
 func clockLayoutPicker(id string) (pickerView, bool) {
 	switch id {
 	case "clockpos":
-		return pickerView{title: "Clock position", opts: clockPositionOptions(), cur: clockPositionIndex()}, true
+		return pickerView{title: tr("ui_clock_position"), opts: clockPositionOptions(), cur: clockPositionIndex()}, true
 	case "weatherpos":
-		return pickerView{title: "Weather position", opts: weatherPositionOptions(), cur: weatherPositionIndex()}, true
+		return pickerView{title: tr("ui_weather_position"), opts: weatherPositionOptions(), cur: weatherPositionIndex()}, true
 	case "datecolor":
-		return pickerView{title: "Date color", opts: dateColorOptions(), cur: dateColorIndex()}, true
+		return pickerView{title: tr("ui_date_color"), opts: dateColorOptions(), cur: dateColorIndex()}, true
 	}
 	return pickerView{}, false
 }

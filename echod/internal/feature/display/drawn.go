@@ -165,6 +165,14 @@ func (r *paint) wrapLines(face font.Face, text string, w int) []string {
 	var lines []string
 	line := ""
 	for _, word := range strings.Fields(text) {
+		if parts := r.characterLines(face, word, w); len(parts) > 0 {
+			if line != "" {
+				lines = append(lines, line)
+			}
+			lines = append(lines, parts[:len(parts)-1]...)
+			line = parts[len(parts)-1]
+			continue
+		}
 		try := word
 		if line != "" {
 			try = line + " " + word

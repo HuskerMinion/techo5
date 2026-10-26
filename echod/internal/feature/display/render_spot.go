@@ -554,9 +554,9 @@ func (r *roundRenderer) classicClockFace(s roundScene) {
 	case s.btPairing:
 		r.centered(r.label, tr("bluetooth_pairing"), 118, colBluetooth)
 	case s.playing:
-		r.centered(r.label, "PLAYING", 118, colDim)
+		r.centered(r.label, tr("ui_playing"), 118, colDim)
 	case s.paused:
-		r.centered(r.label, "PAUSED", 118, colDim)
+		r.centered(r.label, tr("ui_paused"), 118, colDim)
 	}
 }
 
@@ -564,7 +564,7 @@ func (r *roundRenderer) conversation(s roundScene) {
 	title, col := "", colText
 	switch s.phase {
 	case "listening":
-		title, col = "Listening", colListening
+		title, col = tr("ui_listening"), colListening
 	case "thinking":
 		title, col = "Thinking", colThinking
 	}

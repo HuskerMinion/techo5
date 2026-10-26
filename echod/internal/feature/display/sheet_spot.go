@@ -19,6 +19,7 @@ import (
 	"github.com/HuskerMinion/techo5/echod/internal/feature/home"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/media"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/mute"
+	"github.com/HuskerMinion/techo5/echod/internal/feature/ring"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/security"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/sendspin"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/timer"
@@ -140,10 +141,10 @@ func adaptRows(rows []settingRow, sv sheetView) []settingRow {
 			row.value = ""
 		case row.id == "slideshow":
 			row.sub = "" // its choice needs the room
-		case row.id == "ringvol" && row.value == "Silent":
-			row.sub = "No sound at all"
+		case row.id == "ringvol" && ring.Level() == 0:
+			row.sub = tr("ui_no_sound_at_all")
 		case row.id == "ringvol":
-			row.sub = "Not the music's"
+			row.sub = tr("ui_not_the_music_s")
 		case row.id == "musicstrip":
 			continue // the strip is the Show's; the round face has no clock page under it to share
 		case row.id == "lyrics":
@@ -151,21 +152,21 @@ func adaptRows(rows []settingRow, sv sheetView) []settingRow {
 		case row.id == "wakesens":
 			row.label = "Threshold"
 		case row.id == "output":
-			row.sub = "With headphones in"
+			row.sub = tr("ui_with_headphones_in")
 		case row.id == "sendspin":
 			row.label = "Music Assistant"
 		case row.id == "btsc":
-			row.label, row.sub = "Secure Connections", "Off if a phone pairs, then drops"
+			row.label, row.sub = tr("ui_secure_connections"), tr("ui_off_if_a_phone_pairs_then_drops")
 		case row.id == "screenweb":
 			row.label = "Screen on network"
 		case row.id == "camweb":
 			row.label = "Camera on network"
 		case row.id == "talkback":
-			row.label, row.sub = "Talk to cameras", "Talk on camera page"
+			row.label, row.sub = tr("ui_talk_to_cameras"), tr("ui_talk_on_camera_page")
 		case row.id == "e.days":
 			row.label = ""
 		case row.id == "updates":
-			check := settingRow{id: "updatecheck", label: "Check for updates", sub: row.sub, kind: ctlButton, button: row.button}
+			check := settingRow{id: "updatecheck", label: tr("ui_check_for_updates"), sub: row.sub, kind: ctlButton, button: row.button}
 			row.label, row.sub, row.button = "Update channel", "", ""
 			out = append(out, row, check)
 			continue
@@ -185,8 +186,10 @@ func init() {
 	// Empty is the default night here (defaultNight), so Never needs a value of its own, which
 	// inNight reads as no night; the default is offered as a choice of its own.
 	nightPresets = []string{"off", defaultNight, "22-6", "23-6", "0-7", "21-7", "23-8"}
-	categoryBlurbs[catDisplay] = "Brightness, night, clock and photos"
-	categoryBlurbs[catSecurity] = "Remote access and security"
+	categoryBlurbs[catDisplay] = tr("ui_brightness_night_clock_and_photos")
+	categoryBlurbKeys[catDisplay] = "ui_brightness_night_clock_and_photos"
+	categoryBlurbs[catSecurity] = tr("ui_remote_access_and_security")
+	categoryBlurbKeys[catSecurity] = "ui_remote_access_and_security"
 }
 
 // spotFaceCache is spotFaces' faces, per font.
@@ -275,7 +278,7 @@ func (r *roundRenderer) categoryTiles(sel category) {
 			r.roundHighlight(b, 20)
 		}
 		r.paint.icon(c, b.Min.X+tw/2, b.Min.Y+36, fg)
-		name := categoryNames[c]
+		name := tr(categoryNameKeys[c])
 		r.paint.text(fc.navBold, name, b.Min.X+(tw-r.paint.width(fc.navBold, name))/2, b.Min.Y+78, fg)
 		r.addZone(zone{r: b.Inset(-gap / 2), kind: zoneCat, cat: c})
 	}
@@ -311,10 +314,10 @@ func (r *roundRenderer) roundCard(v cardView) int {
 // cardButtons are the card's buttons, side by side at its foot: Back, and the card's own action (Add
 // on the Alarms card); the alarm editor has Cancel and Save instead.
 func (r *roundRenderer) cardButtons(actions []headerAction) {
-	buttons := []headerAction{{id: "back", label: "‹  Back", style: btnSecondary}}
+	buttons := []headerAction{{id: "back", label: tr("ui_back"), style: btnSecondary}}
 	for _, a := range actions {
 		if a.id == "cancel" {
-			buttons = []headerAction{{id: "cancel", label: "Cancel", style: btnSecondary}, {id: "save", label: "Save", style: btnPrimary}}
+			buttons = []headerAction{{id: "cancel", label: tr("cancel"), style: btnSecondary}, {id: "save", label: tr("ui_save"), style: btnPrimary}}
 			break
 		}
 	}
@@ -474,7 +477,7 @@ func (d *Display) sheetView(now time.Time) sheetView {
 	st.address = deviceAddress()
 	st.wifiName = "Connected"
 	if st.address == "" || st.address == "-" {
-		st.wifiName = "Not connected"
+		st.wifiName = tr("not_connected")
 	}
 	st.slot = bootedSlot()
 	st.sendspin = sendspin.Get().Enabled()
@@ -530,3 +533,5 @@ func (d *Display) Demo(for_ time.Duration) {
 	d.mu.Unlock()
 	d.wake()
 }
+
+func atNightSubText() string { return tr("night_description_spot") }

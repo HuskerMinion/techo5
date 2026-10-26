@@ -28,9 +28,9 @@ func quietValue() string { return nightText(config.Get().Speaker.QuietHours) }
 // silent alarm clock.
 func quietSub() string {
 	if config.Get().Speaker.QuietHours == "" {
-		return "Alarms and timers always sound"
+		return tr("ui_alarms_and_timers_always_sound")
 	}
-	return "The device's own tones only; alarms still sound"
+	return tr("ui_the_device_s_own_tones_only_alarms_still_sound")
 }
 
 // quietIndex is which preset is in force, for the picker's tick.

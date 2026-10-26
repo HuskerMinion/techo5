@@ -84,5 +84,5 @@ func nightStyleIndex() int {
 func nightStyleLabel() string { return nightStyleOptions[nightStyleIndex()] }
 
 func nightStylePicker() (pickerView, bool) {
-	return pickerView{title: "Night clock", opts: nightStyleOptions, cur: nightStyleIndex()}, true
+	return pickerView{title: tr("night_clock"), opts: nightStyleOptions, cur: nightStyleIndex()}, true
 }

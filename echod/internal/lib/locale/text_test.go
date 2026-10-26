@@ -91,6 +91,11 @@ func TestDrawingTranslationKeysExist(t *testing.T) {
 			}
 			lit, ok := call.Args[0].(*ast.BasicLit)
 			if !ok {
+				if index, indexed := call.Args[0].(*ast.IndexExpr); indexed {
+					if table, named := index.X.(*ast.Ident); named && (table.Name == "categoryNameKeys" || table.Name == "categoryTitleKeys" || table.Name == "categoryBlurbKeys") {
+						return true // These presentation tables are checked below.
+					}
+				}
 				t.Errorf("%s: use a stable literal key", path)
 				return true
 			}
@@ -100,6 +105,47 @@ func TestDrawingTranslationKeysExist(t *testing.T) {
 			}
 			if _, ok := uiEnglish[key]; !ok {
 				t.Errorf("%s: unknown UI key %q", path, key)
+			}
+			return true
+		})
+		ast.Inspect(f, func(n ast.Node) bool {
+			if declaration, ok := n.(*ast.GenDecl); ok {
+				ast.Inspect(declaration, func(child ast.Node) bool {
+					if call, ok := child.(*ast.CallExpr); ok {
+						if name, ok := call.Fun.(*ast.Ident); ok && name.Name == "tr" {
+							t.Errorf("%s: translation must be evaluated when drawn, not during package initialization", path)
+						}
+					}
+					return true
+				})
+			}
+			check := func(expr ast.Expr) {
+				lit, ok := expr.(*ast.BasicLit)
+				if !ok {
+					t.Errorf("%s: category keys must be literals", path)
+					return
+				}
+				key, err := strconv.Unquote(lit.Value)
+				if err != nil {
+					t.Fatal(err)
+				}
+				if _, ok := uiEnglish[key]; !ok {
+					t.Errorf("%s: unknown category key %q", path, key)
+				}
+			}
+			if spec, ok := n.(*ast.ValueSpec); ok && len(spec.Names) == 1 && (spec.Names[0].Name == "categoryNameKeys" || spec.Names[0].Name == "categoryTitleKeys" || spec.Names[0].Name == "categoryBlurbKeys") {
+				if values, ok := spec.Values[0].(*ast.CompositeLit); ok {
+					for _, value := range values.Elts {
+						check(value)
+					}
+				}
+			}
+			if assign, ok := n.(*ast.AssignStmt); ok && len(assign.Lhs) == 1 && len(assign.Rhs) == 1 {
+				if index, ok := assign.Lhs[0].(*ast.IndexExpr); ok {
+					if table, ok := index.X.(*ast.Ident); ok && table.Name == "categoryBlurbKeys" {
+						check(assign.Rhs[0])
+					}
+				}
 			}
 			return true
 		})

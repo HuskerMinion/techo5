@@ -15,7 +15,7 @@ package display
 // beveled boxes and looked like they had come from a different program.
 
 func (r *renderer) setupAskPage(s scene) {
-	r.text(r.title, "Setup page", r.margin, r.s(96), amber)
+	r.text(r.title, tr("ui_setup_page"), r.margin, r.s(96), amber)
 	r.text(r.body, "A browser is asking to be let in", r.margin, r.s(176), cream)
 	r.text(r.small, "Allow it only if that browser is yours.", r.margin, r.s(224), dim)
 
@@ -27,7 +27,7 @@ func (r *renderer) setupAskPage(s scene) {
 	r.text(r.body, tr("not_now"), no.Min.X+(no.Dx()-r.width(r.body, tr("not_now")))/2, mid+r.s(14), fg)
 
 	fg = r.buttonFace(yes, rad, btnPrimary)
-	r.text(r.title, "Allow", yes.Min.X+(yes.Dx()-r.width(r.title, "Allow"))/2, mid+r.s(16), fg)
+	r.text(r.title, tr("ui_allow"), yes.Min.X+(yes.Dx()-r.width(r.title, tr("ui_allow")))/2, mid+r.s(16), fg)
 }
 
 // askTap is which answer a tap gave: allow, and whether it answered at all. A tap on the words above

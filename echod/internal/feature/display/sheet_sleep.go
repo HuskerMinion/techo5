@@ -28,15 +28,15 @@ func sleepLabels() []string {
 func sleepLabel(d time.Duration) string {
 	switch {
 	case d == 0:
-		return "Off"
+		return tr("ui_off")
 	case d == time.Hour:
-		return "1 hour"
+		return tr("ui_1_hour")
 	case d > time.Hour && d%time.Hour == 0:
-		return fmt.Sprintf("%d hours", int(d/time.Hour))
+		return fmt.Sprintf(tr("ui_d_hours"), int(d/time.Hour))
 	case d > time.Hour:
-		return fmt.Sprintf("1 hour %d minutes", int(d%time.Hour/time.Minute))
+		return fmt.Sprintf(tr("ui_1_hour_d_minutes"), int(d%time.Hour/time.Minute))
 	}
-	return fmt.Sprintf("%d minutes", int(d/time.Minute))
+	return fmt.Sprintf(tr("ui_d_minutes"), int(d/time.Minute))
 }
 
 // sleepIndex is the choice in force: the shortest one still longer than what is left, since the row
@@ -58,19 +58,19 @@ func sleepIndex() int {
 func sleepValue() string {
 	left := media.Get().Sleep().Left()
 	if left == 0 {
-		return "Off"
+		return tr("ui_off")
 	}
 	if left >= time.Hour {
-		return fmt.Sprintf("%d:%02d left", int(left/time.Hour), int(left%time.Hour/time.Minute))
+		return fmt.Sprintf(tr("ui_d_02d_left"), int(left/time.Hour), int(left%time.Hour/time.Minute))
 	}
-	return fmt.Sprintf("%d min left", int(left/time.Minute)+1)
+	return fmt.Sprintf(tr("ui_d_min_left"), int(left/time.Minute)+1)
 }
 
 func sleepSub() string {
 	if media.Get().Sleep().Left() == 0 {
-		return "Stops the music after a while"
+		return tr("ui_stops_the_music_after_a_while")
 	}
-	return "The music stops on its own; nothing rings"
+	return tr("ui_the_music_stops_on_its_own_nothing_rings")
 }
 
 func chooseSleep(i int) {
@@ -88,7 +88,7 @@ func chooseSleep(i int) {
 // as it was made and not an adjustment of nothing.
 func toneValue(db float64) string {
 	if db == 0 {
-		return "Flat"
+		return tr("ui_flat")
 	}
 	return fmt.Sprintf("%+.0f dB", db)
 }
@@ -96,7 +96,7 @@ func toneValue(db float64) string {
 // toneSub says what the pair of them are for, on the first of the two rows.
 func toneSub() string {
 	if !config.Get().Speaker.ASPWanted() {
-		return "Needs Speaker EQ, which is off"
+		return tr("ui_needs_speaker_eq_which_is_off")
 	}
-	return "Adjusts the speaker tuning to the room"
+	return tr("ui_adjusts_the_speaker_tuning_to_the_room")
 }

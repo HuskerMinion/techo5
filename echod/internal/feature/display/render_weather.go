@@ -36,7 +36,7 @@ func (r *renderer) weatherPageKept(s scene) {
 
 func (r *renderer) weatherPage(s scene) {
 	r.cornerClock(s)
-	r.text(r.small, "Weather", r.margin, r.margin+r.s(26), amber)
+	r.text(r.small, tr("weather"), r.margin, r.margin+r.s(26), amber)
 
 	days := s.forecast
 	now := s.weather
@@ -96,7 +96,7 @@ func (r *renderer) weatherPage(s scene) {
 		msg := "No forecast yet: give the device a Home Assistant token, or set where it is on its setup page"
 		r.text(r.tiny, msg, r.w/2-r.s(20), r.s(200), dim)
 	}
-	r.weatherToggle("Radar")
+	r.weatherToggle(tr("ui_radar"))
 }
 
 // forecastDays is a type alias for the scene.
@@ -129,7 +129,7 @@ func (r *renderer) radarPage(s scene) {
 	v := s.radar
 	draw.Draw(r.dst, r.dst.Bounds(), image.NewUniform(walnut), image.Point{}, draw.Src)
 	if len(v.Frames) == 0 {
-		r.text(r.small, "Radar", r.margin, r.margin+r.s(26), amber)
+		r.text(r.small, tr("ui_radar"), r.margin, r.margin+r.s(26), amber)
 		msg := tr("loading_the_rain_map")
 		if !v.Loading && v.Problem != "" {
 			msg = tr("no_rain_map") + v.Problem

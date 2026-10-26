@@ -63,7 +63,7 @@ func themeRows() []settingRow {
 	}
 	return []settingRow{
 		{id: "theme", label: themeRowLabel(), sub: theme, kind: ctlChoice, value: current().name},
-		{id: "colors", label: "Custom colors", sub: colors, kind: ctlButton, button: "Edit"},
+		{id: "colors", label: tr("ui_custom_colors"), sub: colors, kind: ctlButton, button: tr("ui_edit")},
 	}
 }
 
@@ -72,11 +72,11 @@ func themeRows() []settingRow {
 func themeRowLabel() string {
 	switch {
 	case themeModeIndex() == 0:
-		return "Theme"
+		return tr("ui_theme")
 	case lightShown(config.Get().Screen):
-		return "Light theme"
+		return tr("ui_light_theme")
 	}
-	return "Dark theme"
+	return tr("ui_dark_theme")
 }
 
 // deviceCard is a card of the Show's own in place of the category's: the custom colors editor.
@@ -91,8 +91,8 @@ func deviceCard(sv sheetView) (cardView, bool) {
 // on one makes the theme Custom with that color.
 func colorsCard() cardView {
 	v := cardView{
-		title: "Custom colors", blurb: "Tap a color for each part; the theme becomes Custom",
-		actions: []headerAction{{id: "colorsdone", label: "Done", style: btnPrimary}},
+		title: tr("ui_custom_colors"), blurb: tr("ui_tap_a_color_for_each_part_the_theme_becomes_custom"),
+		actions: []headerAction{{id: "colorsdone", label: tr("done"), style: btnPrimary}},
 	}
 	for role := range roles {
 		v.rows = append(v.rows, settingRow{id: "role:" + strconv.Itoa(role), label: roleNames[role], kind: ctlSwatches, role: role})
@@ -126,7 +126,7 @@ func devicePicker(id string, sv sheetView) (pickerView, bool) {
 		}
 		return p, true
 	case "radiosource":
-		p := pickerView{title: "Stations", cur: -1}
+		p := pickerView{title: tr("ui_stations"), cur: -1}
 		for i, src := range home.RadioSources() {
 			p.opts = append(p.opts, home.SourceLabel(src))
 			if src == sv.radio.Source {
@@ -209,3 +209,5 @@ func (d *Display) showForecast() { d.ShowWeather(false) }
 
 // restartNow restarts the device.
 func restartNow() { restart() }
+
+func atNightSubText() string { return tr("night_description_show") }

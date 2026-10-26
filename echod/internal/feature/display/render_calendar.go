@@ -186,7 +186,7 @@ func (r *renderer) calendarDay(v calendarView) {
 	evs := eventsOn(v.events, v.day)
 	top := r.margin + r.s(74)
 	if len(evs) == 0 {
-		msg := "Nothing on this day"
+		msg := tr("ui_nothing_on_this_day")
 		if !v.loaded {
 			msg = tr("reading_the_calendar")
 		}
@@ -353,7 +353,7 @@ func eventWhen(e hass.Event, day time.Time) string {
 	if e.AllDay {
 		last := e.End.AddDate(0, 0, -1)
 		if sameDay(e.Start, last) || !last.After(e.Start) {
-			return "All day"
+			return tr("all_day")
 		}
 		return "All day, " + e.Start.Format("Jan 2") + " – " + last.Format("Jan 2")
 	}
@@ -375,9 +375,9 @@ func eventWhenFull(e hass.Event) (day, at string) {
 	if e.AllDay {
 		last := e.End.AddDate(0, 0, -1)
 		if !last.After(e.Start) {
-			return e.Start.Format("Monday, January 2"), "All day"
+			return e.Start.Format("Monday, January 2"), tr("all_day")
 		}
-		return e.Start.Format("Mon, Jan 2") + " – " + last.Format("Mon, Jan 2"), "All day"
+		return e.Start.Format("Mon, Jan 2") + " – " + last.Format("Mon, Jan 2"), tr("all_day")
 	}
 	if !e.End.After(e.Start) {
 		return e.Start.Format("Monday, January 2"), clockText(e.Start)

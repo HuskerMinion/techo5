@@ -100,7 +100,7 @@ func (r *renderer) settingsBase(sel category, title, blurb string) {
 			fg, face = onAccent(), fc.navBold
 		}
 		r.icon(c, r.s(12+30), top+r.navH()/2, fg)
-		r.text(face, categoryNames[c], r.s(12+58), top+r.navH()/2+r.s(9), fg)
+		r.text(face, tr(categoryNameKeys[c]), r.s(12+58), top+r.navH()/2+r.s(9), fg)
 	}
 	card := r.nextCard(r.w, r.h)
 	r.text(fc.header, title, card.Min.X+r.rowIn(), card.Min.Y+r.s(46), cream)

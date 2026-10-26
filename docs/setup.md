@@ -680,9 +680,10 @@ like "kitchen screen" under its **Voice assistants** settings in Home Assistant.
   [Video](video.md).
 - **Screen language** (Settings → General): the clock's day and date, the forecast's days, the
   weather's words and the alarm after the date are written in it: German, Spanish, French, Italian,
-  Dutch, Portuguese or Russian, and English for *Match all* or *English*. It also picks which words
-  the screen listens for. It doesn't change what the assistant understands or says, and the rest of
-  the screen stays in English.
+  Dutch, Portuguese, Russian or Japanese, and English for *Match all* or *English*. It also picks
+  which words the screen listens for. Japanese additionally translates settings and other screen
+  controls through the shared language tables; untranslated messages fall back to English. It
+  doesn't change what the assistant understands or says, which is set by Home Assistant's pipeline.
 - **Turn screen**: how a voice request looks. This one is on the Spot too. **Classic** is the words,
   **Wave** is glowing lines, **Bars** is an LED-style equalizer, **VU meters** are two moving-needle
   meters, **Orb** is a ball of light (cool while it listens, violet while it thinks, warm while it

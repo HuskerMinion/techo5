@@ -1177,3 +1177,8 @@ func (r *paint) aaDisc(cx, cy, rad float64, c color.RGBA) {
 		}
 	}
 }
+
+// Keys are presentation only; categoryNames remain stable for API lookups.
+var categoryNameKeys = [categories]string{"ui_display", "ui_sound", "ui_alarms", "ui_connections", "ui_privacy", "ui_general"}
+var categoryTitleKeys = [categories]string{"ui_display", "ui_sound_voice", "ui_alarms_timers", "ui_connections", "ui_privacy_security", "ui_general"}
+var categoryBlurbKeys = [categories]string{"ui_brightness_night_theme_home_screen_and_weather", "ui_volume_voice_quiet_hours_and_music", "ui_alarms_on_this_device_and_how_they_ring", "ui_wi_fi_bluetooth_and_the_bluetooth_proxy", "ui_remote_access_and_how_this_device_is_reached", "ui_name_weather_updates_and_restart"}

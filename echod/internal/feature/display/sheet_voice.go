@@ -135,7 +135,7 @@ func pickerVoices(b config.Brain) []string {
 // quality nearly every voice comes in, is left unsaid.
 func voiceLabel(name string) string {
 	if name == "" {
-		return "Server default"
+		return tr("ui_server_default")
 	}
 	parts := strings.Split(name, "-")
 	if len(parts) != 3 {
@@ -156,10 +156,10 @@ func voiceLabel(name string) string {
 func voiceRow() settingRow {
 	b := config.Get().Brain
 	if !b.Direct() {
-		return settingRow{label: "Speaking voice", sub: "Home Assistant: Settings, Voice assistants", kind: ctlValue, value: "Set there"}
+		return settingRow{label: tr("ui_speaking_voice"), sub: tr("ui_home_assistant_settings_voice_assistants"), kind: ctlValue, value: tr("ui_set_there")}
 	}
 	refreshVoices(b)
-	return settingRow{id: "ttsvoice", label: "Speaking voice", sub: "How answers sound", kind: ctlChoice, value: voiceLabel(b.Voice)}
+	return settingRow{id: "ttsvoice", label: tr("ui_speaking_voice"), sub: tr("ui_how_answers_sound"), kind: ctlChoice, value: voiceLabel(b.Voice)}
 }
 
 func voicePicker() (pickerView, bool) {
@@ -167,7 +167,7 @@ func voicePicker() (pickerView, bool) {
 	if !b.Direct() {
 		return pickerView{}, false
 	}
-	p := pickerView{title: "Speaking voice", cur: -1}
+	p := pickerView{title: tr("ui_speaking_voice"), cur: -1}
 	for i, name := range pickerVoices(b) {
 		p.opts = append(p.opts, voiceLabel(name))
 		if name == b.Voice {

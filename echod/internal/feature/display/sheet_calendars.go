@@ -28,7 +28,7 @@ func calendarsValue() string {
 	src := home.Get().CalendarSources()
 	switch len(src) {
 	case 0:
-		return "None"
+		return tr("ui_none")
 	case 1:
 		for _, c := range home.Get().Calendars() {
 			if c.ID == src[0] {
@@ -48,7 +48,7 @@ var calendarsListed struct {
 }
 
 func calendarsPicker() pickerView {
-	p := pickerView{title: "Calendars", cur: -1}
+	p := pickerView{title: tr("ui_calendars"), cur: -1}
 	cals := home.Get().Calendars()
 	calendarsListed.Lock()
 	calendarsListed.ids = calendarsListed.ids[:0]
@@ -131,7 +131,7 @@ func popupCalendarsValue() string {
 	pick := config.Get().Calendar.PopupCalendars
 	switch len(pick) {
 	case 0:
-		return "All"
+		return tr("ui_all")
 	case 1:
 		return calendarName(pick[0])
 	}
@@ -149,22 +149,22 @@ func calendarName(id string) string {
 
 // calendarRows are the Calendars row and, once a calendar is shown, the pop-up rows under it.
 func calendarRows() []settingRow {
-	rows := []settingRow{{id: "calendars", label: "Calendars", sub: "Shown on the calendar page, from Home Assistant",
+	rows := []settingRow{{id: "calendars", label: tr("ui_calendars"), sub: tr("ui_shown_on_the_calendar_page_from_home_assistant"),
 		kind: ctlChoice, value: calendarsValue()}}
 	c := config.Get().Calendar
 	if !hasCalendarPopups || len(c.Sources) == 0 {
 		return rows
 	}
-	rows = append(rows, settingRow{id: "calpop", label: "Event pop-ups", sub: "An event coming up, over the screen",
+	rows = append(rows, settingRow{id: "calpop", label: tr("ui_event_pop_ups"), sub: tr("ui_an_event_coming_up_over_the_screen"),
 		kind: ctlToggle, on: c.Popups})
 	if !c.Popups {
 		return rows
 	}
 	return append(rows,
-		settingRow{id: "calpopwhen", label: "Pop up", kind: ctlChoice, value: popupLeadLabels[popupLeadIndex()]},
-		settingRow{id: "calpopsound", label: "Pop-up chime", sub: "Silent at night and in quiet hours", kind: ctlToggle, on: !c.PopupSilent},
-		settingRow{id: "calpopallday", label: "All-day events", kind: ctlChoice, value: popupAllDayOpts[popupAllDayIndex()]},
-		settingRow{id: "calpopcals", label: "Pop-up calendars", kind: ctlChoice, value: popupCalendarsValue()},
+		settingRow{id: "calpopwhen", label: tr("pop_up"), kind: ctlChoice, value: popupLeadLabels[popupLeadIndex()]},
+		settingRow{id: "calpopsound", label: tr("ui_pop_up_chime"), sub: tr("ui_silent_at_night_and_in_quiet_hours"), kind: ctlToggle, on: !c.PopupSilent},
+		settingRow{id: "calpopallday", label: tr("all_day_events"), kind: ctlChoice, value: popupAllDayOpts[popupAllDayIndex()]},
+		settingRow{id: "calpopcals", label: tr("ui_pop_up_calendars"), kind: ctlChoice, value: popupCalendarsValue()},
 	)
 }
 
@@ -172,7 +172,7 @@ func calendarRows() []settingRow {
 // top, and Done at the foot when there are several.
 func popupCalendarsPicker() pickerView {
 	c := config.Get().Calendar
-	p := pickerView{title: "Pop-up calendars", cur: -1, opts: []string{popupAllCalendars}}
+	p := pickerView{title: tr("ui_pop_up_calendars"), cur: -1, opts: []string{popupAllCalendars}}
 	if len(c.PopupCalendars) == 0 {
 		p.cur = 0
 	}

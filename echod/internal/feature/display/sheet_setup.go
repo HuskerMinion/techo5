@@ -17,7 +17,7 @@ import (
 // demo shows a made-up address in place of this device's, for screenshots that will be published.
 func setupRow(demo bool) settingRow {
 	s := setup.Get()
-	row := settingRow{id: "setuppage", label: "Setup page", sub: "Off", kind: ctlToggle}
+	row := settingRow{id: "setuppage", label: tr("ui_setup_page"), sub: tr("ui_off"), kind: ctlToggle}
 	switch {
 	case s.Waiting():
 		row.sub, row.on = "A browser is asking: press the action button", true

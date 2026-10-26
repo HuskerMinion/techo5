@@ -146,12 +146,12 @@ func (r *renderer) wifiPage(s scene) {
 		r.keyboardPage(s)
 		return
 	}
-	r.text(r.body, "Wi-Fi", r.margin, r.s(52), amber)
+	r.text(r.body, tr("wi_fi"), r.margin, r.s(52), amber)
 	t := clockHM(s.now)
 	r.text(r.small, t, r.w-r.margin-r.width(r.small, t), r.s(52), dim)
 	line := tr("not_connected")
 	if w.status.Connected {
-		line = "Connected to " + w.status.SSID
+		line = fmt.Sprintf(tr("ui_connected_to_s"), w.status.SSID)
 		if w.status.Address != "" {
 			line += "  ·  " + w.status.Address
 		}
@@ -168,7 +168,7 @@ func (r *renderer) wifiPage(s scene) {
 	if len(w.nets) == 0 {
 		msg := tr("no_networks_heard_yet")
 		if w.scanning {
-			msg = "Scanning" + "..."[:int(s.now.UnixMilli()/400%4)]
+			msg = tr("ui_scanning") + "..."[:int(s.now.UnixMilli()/400%4)]
 		}
 		r.text(r.small, msg, r.margin, r.wifiRowTop()+r.s(34), dim)
 	}
@@ -188,7 +188,7 @@ func (r *renderer) wifiPage(s scene) {
 			info += "  ·  locked"
 		}
 		r.text(r.tiny, info, r.w-r.margin-btnW-btnGap-r.width(r.tiny, info), top+r.s(29), dim)
-		label := "Connect"
+		label := tr("connect")
 		if n.SSID == w.status.SSID && w.status.Connected {
 			label = "Joined"
 		}
@@ -197,7 +197,7 @@ func (r *renderer) wifiPage(s scene) {
 	}
 	if more {
 		top := rowTop + (wifiRows-1)*rowH
-		r.text(r.small, "More", r.margin, top+r.s(31), dim)
+		r.text(r.small, tr("ui_more"), r.margin, top+r.s(31), dim)
 		r.bevel(image.Rect(r.w-r.margin-btnW, top+r.s(7), r.w-r.margin, top+rowH-r.s(7)), shift(ember, 12), true)
 		r.text(r.tiny, tr("next"), r.w-r.margin-btnW+(btnW-r.width(r.tiny, tr("next")))/2, top+r.s(29), cream)
 	}
@@ -206,7 +206,7 @@ func (r *renderer) wifiPage(s scene) {
 	top := r.h - r.wifiDoneBar()
 	draw.Draw(r.dst, image.Rect(0, top, r.w, r.h), image.NewUniform(ember), image.Point{}, draw.Src)
 	draw.Draw(r.dst, image.Rect(r.w/2-r.s(1), top+r.s(10), r.w/2+r.s(1), r.h-r.s(10)), image.NewUniform(dim), image.Point{}, draw.Src)
-	r.text(r.body, "Rescan", (r.w/2-r.width(r.body, "Rescan"))/2, top+r.s(45), cream)
+	r.text(r.body, tr("ui_rescan"), (r.w/2-r.width(r.body, tr("ui_rescan")))/2, top+r.s(45), cream)
 	r.text(r.body, tr("done"), r.w/2+(r.w/2-r.width(r.body, tr("done")))/2, top+r.s(45), cream)
 }
 
@@ -242,7 +242,7 @@ func bars(dbm int) string {
 func (r *renderer) keyboardPage(s scene) {
 	w := s.wifi
 	keyTop, keyH, keyGap, keyW, keyMargin := r.keyTop(), r.keyH(), r.keyGap(), r.keyW(), r.keyMargin()
-	title := "Password for " + w.pick.SSID
+	title := fmt.Sprintf(tr("ui_password_for_s"), w.pick.SSID)
 	r.text(r.small, title, r.margin, r.s(46), amber)
 	// The field.
 	field := image.Rect(r.margin, r.s(66), r.w-r.margin, r.s(126))

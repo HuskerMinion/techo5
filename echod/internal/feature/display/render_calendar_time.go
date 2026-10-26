@@ -80,11 +80,11 @@ func (r *renderer) calendarTimeline(v calendarView, l calLook) {
 	r.text(r.title, title, r.margin, r.margin+r.s(34), cream)
 	if today {
 		tx := r.margin + r.width(r.title, title) + r.s(16)
-		tw := r.width(r.tiny, "Today") + r.s(24)
+		tw := r.width(r.tiny, tr("today")) + r.s(24)
 		if tx+tw < x {
 			cy := r.margin + r.s(17)
 			r.roundRect(image.Rect(tx, cy-r.s(16), tx+tw, cy+r.s(16)), r.s(16), amber)
-			r.text(r.tiny, "Today", tx+r.s(12), cy+r.s(9), walnut)
+			r.text(r.tiny, tr("today"), tx+r.s(12), cy+r.s(9), walnut)
 		}
 	}
 

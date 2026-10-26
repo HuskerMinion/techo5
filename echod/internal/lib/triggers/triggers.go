@@ -40,11 +40,14 @@ type Set struct {
 // is what happens today anyway, so they are worth shipping and worth correcting.
 var Languages = map[string]Set{
 	"ja": {
-		Weather:    []string{"天気", "天気予報", "気温", "降水確率", "雨", "雪", "雷雨", "雨雲", "レーダー"},
-		Radar:      []string{"雨雲レーダー", "雨雲", "雨の地図", "降水レーダー"},
-		NotWeather: []string{"雨の音", "雨音", "雨の曲", "雨の音楽"},
-		GoHome:     []string{"ホーム画面", "時計に戻って", "時計を表示", "ホームに戻って"},
-		Camera:     []string{"カメラ", "映して", "見せて"},
+		// Match phrases rather than single kanji: 雨宮 and 雪子 are names, and
+		// 雪見だいふく is food. A bare レーダー can be a car's radar as well.
+		Weather: []string{"天気", "気温", "降水確率", "雨が降", "雨は降", "雨降", "雪が降", "雪は降", "雪降",
+			"雷雨の予報", "雨雲レーダー", "降水レーダー", "雨雲の動き"},
+		Radar:      []string{"雨雲レーダー", "降水レーダー", "雨雲の動き"},
+		NotWeather: []string{"雨の音", "雨音", "雨の曲", "雨の音楽", "雨が降る音", "天気の子", "を再生", "を流して", "という曲"},
+		GoHome:     []string{"ホーム画面に戻", "時計に戻", "時計を表示", "ホームに戻"},
+		Camera:     []string{"カメラ", "の映像", "を映して"},
 	},
 	"en": {
 		Weather:    []string{"weather", "forecast", "temperature", "rain", "snow", "how hot", "how cold", "storm", "radar", "weather map"},

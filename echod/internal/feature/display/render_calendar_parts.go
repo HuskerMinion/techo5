@@ -221,6 +221,14 @@ func (r *renderer) calWrap(f font.Face, s string, w int) []string {
 	var lines []string
 	line := ""
 	for _, word := range words {
+		if parts := r.characterLines(f, word, w); len(parts) > 0 {
+			if line != "" {
+				lines = append(lines, line)
+			}
+			lines = append(lines, parts[:len(parts)-1]...)
+			line = parts[len(parts)-1]
+			continue
+		}
 		try := word
 		if line != "" && !strings.HasSuffix(line, "-") {
 			try = line + " " + word
@@ -297,7 +305,7 @@ func (r *renderer) calChipsList(v calendarView) {
 	}
 	r.roundRect(card, r.s(18), fill)
 	r.calHitAdd(calHit{r: card, kind: calInside})
-	r.text(r.small, "Calendars", card.Min.X+r.s(28), card.Min.Y+r.s(48), cream)
+	r.text(r.small, tr("ui_calendars"), card.Min.X+r.s(28), card.Min.Y+r.s(48), cream)
 	done := image.Rect(card.Max.X-r.s(130), card.Min.Y+r.s(14), card.Max.X-r.s(22), card.Min.Y+r.s(62))
 	r.labelButton(done, tr("done"), btnSecondary)
 	r.calHitAdd(calHit{r: done.Inset(-r.s(6)), kind: calChipsDone})

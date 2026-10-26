@@ -66,7 +66,7 @@ func (r *renderer) videoWords(s scene) {
 	}
 	head, sub := tr("loading_video"), name
 	if !v.Active() && v.Err != "" {
-		head, sub = "This video can't be played", v.Err
+		head, sub = tr("ui_this_video_can_t_be_played"), v.Err
 		if s.demo {
 			sub = "Server returned 404 Not Found"
 		}
@@ -129,7 +129,7 @@ func (r *renderer) videoControls(s scene) image.Rectangle {
 		at += " / " + videoTime(s.video.Dur)
 	}
 	if s.video.Phase == video.Loading || !s.video.Frames {
-		at = "Loading…"
+		at = tr("ui_loading")
 	}
 	mid := strip.Min.Y + strip.Dy()/2
 	r.text(r.small, r.fit(r.small, name, right-left), left, mid-r.s(4), cream)
@@ -174,5 +174,5 @@ func (r *renderer) videoAskPage(s scene) {
 	fg := r.buttonFace(no, rad, btnSecondary)
 	r.text(r.body, tr("not_now"), no.Min.X+(no.Dx()-r.width(r.body, tr("not_now")))/2, mid+r.s(14), fg)
 	fg = r.buttonFace(yes, rad, btnPrimary)
-	r.text(r.title, "Allow", yes.Min.X+(yes.Dx()-r.width(r.title, "Allow"))/2, mid+r.s(16), fg)
+	r.text(r.title, tr("ui_allow"), yes.Min.X+(yes.Dx()-r.width(r.title, tr("ui_allow")))/2, mid+r.s(16), fg)
 }
