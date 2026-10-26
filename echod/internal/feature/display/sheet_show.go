@@ -128,7 +128,7 @@ func devicePicker(id string, sv sheetView) (pickerView, bool) {
 	case "radiosource":
 		p := pickerView{title: tr("ui_stations"), cur: -1}
 		for i, src := range home.RadioSources() {
-			p.opts = append(p.opts, home.SourceLabel(src))
+			p.opts = append(p.opts, radioSourceText(src))
 			if src == sv.radio.Source {
 				p.cur = i
 			}

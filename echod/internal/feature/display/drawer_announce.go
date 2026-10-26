@@ -19,16 +19,15 @@ import (
 // announceRows is what that tab holds: the button, and the reason it will not work when there is one.
 func announceRows(s scene) ([]settingRow, string) {
 	if !s.announceReady {
-		return nil, "Announcements need a house word — the same word on every device here, set on " +
-			"each one's setup page. Until then this device neither sends them nor takes them."
+		return nil, tr("drawer_announce_setup")
 	}
 	if s.announceRecording {
 		return []settingRow{{
 			id:     "announce:0",
-			label:  "Speak now",
-			sub:    "It sends when you stop talking",
+			label:  tr("drawer_speak_now"),
+			sub:    tr("drawer_auto_send"),
 			kind:   ctlValue,
-			value:  "Listening",
+			value:  tr("drawer_recording"),
 			rowTap: false,
 		}}, ""
 	}
@@ -36,16 +35,16 @@ func announceRows(s scene) ([]settingRow, string) {
 	// None found is said plainly. It read "Heard in every room here" before, which is a promise the
 	// device cannot keep when it has not found anybody - and that is exactly the state somebody is
 	// in while they are working out why nothing arrives.
-	sub := "No other devices found yet"
+	sub := tr("drawer_no_peers")
 	if s.announcePeers > 0 {
-		sub = fmt.Sprintf("Heard on %s", devicesText(s.announcePeers))
+		sub = fmt.Sprintf(tr("drawer_heard_on"), announcementDevices(s.announcePeers))
 	}
 	return []settingRow{{
 		id:     "announce:0",
-		label:  "Say something",
+		label:  tr("drawer_say_something"),
 		sub:    sub,
 		kind:   ctlButton,
-		button: "Speak",
+		button: tr("drawer_speak"),
 		rowTap: true,
 	}}, ""
 }
@@ -58,4 +57,12 @@ func (d *Display) announceTap() {
 	}
 	d.closeDrawer()
 	go announce.Get().Speak(context.Background())
+}
+
+func announcementDevices(n int) string {
+	count := tr("drawer_one_device")
+	if n != 1 {
+		count = fmt.Sprintf(tr("drawer_device_count"), n)
+	}
+	return count
 }

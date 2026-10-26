@@ -27,13 +27,13 @@ func (r *renderer) nowPlaying(s scene) {
 		station = rd.Chosen
 	}
 	if station == "" {
-		station = "Radio"
+		station = tr("drawer_radio")
 	}
-	label := "Radio"
+	label := tr("drawer_radio")
 	if s.paused {
-		label = "Paused"
+		label = tr("drawer_paused")
 	} else if s.playing {
-		label = "Playing"
+		label = tr("drawer_playing")
 	}
 
 	headline, sub := station, ""

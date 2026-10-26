@@ -53,7 +53,7 @@ func (r *renderer) callPage(s scene) {
 		if s.ring.timer != "" && s.ring.alarm == nil {
 			what = tr("timer")
 		}
-		note := what + " ringing · tap here to stop"
+		note := fmt.Sprintf(tr("drawer_call_alarm"), what)
 		r.text(r.small, note, (r.w-r.width(r.small, note))/2, r.s(130), dim)
 	}
 

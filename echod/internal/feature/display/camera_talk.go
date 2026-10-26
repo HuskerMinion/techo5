@@ -32,17 +32,17 @@ func (r *paint) cameraControl(b image.Rectangle, label string, live bool) {
 // while a talk runs, how long it has left.
 func talkLabel(st talkback.State, entity string) string {
 	if st.Entity != entity {
-		return "Talk"
+		return tr("drawer_talk")
 	}
 	switch st.Phase {
 	case talkback.Opening:
-		return "Connecting…"
+		return tr("drawer_connecting")
 	case talkback.Talking:
 		left := st.Left.Round(time.Second)
-		return fmt.Sprintf("End talk  %d:%02d", int(left.Minutes()), int(left.Seconds())%60)
+		return fmt.Sprintf(tr("drawer_end_talk"), int(left.Minutes()), int(left.Seconds())%60)
 	}
 	if st.Error != "" {
-		return "Try again"
+		return tr("drawer_try_again")
 	}
-	return "Talk"
+	return tr("drawer_talk")
 }

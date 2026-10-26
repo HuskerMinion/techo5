@@ -3,6 +3,7 @@
 package display
 
 import (
+	"fmt"
 	"image"
 	"image/color"
 	"strings"
@@ -39,7 +40,7 @@ func (r *renderer) announcementStrip(s scene) {
 	m := s.announcement
 	who := m.From
 	if who == "" {
-		who = "Another room"
+		who = tr("drawer_another_room")
 	}
 
 	box := announceBox(r.w, r.h)
@@ -50,11 +51,11 @@ func (r *renderer) announcementStrip(s scene) {
 
 	// The way out, on the right of the heading rather than on a line of its own: the strip is a
 	// hundred and thirty pixels and the message has first claim on them.
-	r.rightText(r.tiny, dismissHint, box.Max.X-r.rowIn(), box.Min.Y+in.s(40), dim)
+	r.rightText(r.tiny, tr("drawer_dismiss"), box.Max.X-r.rowIn(), box.Min.Y+in.s(40), dim)
 
 	if m.Text == "" {
 		// Nothing to read, so the room is the whole of it and is set large.
-		r.text(r.tiny, "ANNOUNCEMENT", box.Min.X+r.rowIn(), box.Min.Y+in.s(40), amber)
+		r.text(r.tiny, tr("drawer_announcement"), box.Min.X+r.rowIn(), box.Min.Y+in.s(40), amber)
 		r.text(r.title, who, box.Min.X+r.rowIn(), box.Min.Y+in.s(92), cream)
 		return
 	}
@@ -65,9 +66,9 @@ func (r *renderer) announcementStrip(s scene) {
 	// above it and the message below, all in a hundred and thirty pixels. The room is context — it
 	// says who, and whoever is reading already knows the rooms in their own house — while the message
 	// is the part that has to be read, so the message keeps the large face and the width.
-	head := "ANNOUNCEMENT  ·  " + strings.ToUpper(who)
+	head := tr("drawer_announcement") + "  ·  " + strings.ToUpper(who)
 	// The heading stops short of the hint on its right.
-	room := box.Dx() - 2*r.rowIn() - r.width(r.tiny, dismissHint) - r.s(24)
+	room := box.Dx() - 2*r.rowIn() - r.width(r.tiny, tr("drawer_dismiss")) - r.s(24)
 	r.text(r.tiny, clipText(r, r.tiny, head, room), box.Min.X+r.rowIn(), box.Min.Y+in.s(44), amber)
 	r.text(r.body, clipText(r, r.body, m.Text, box.Dx()-2*r.rowIn()), box.Min.X+r.rowIn(), box.Min.Y+in.s(100), cream)
 }
@@ -82,16 +83,17 @@ func (r *renderer) recordingStrip(s scene) {
 	r.roundStroke(box, r.cardRad(), r.sf(2), amber)
 	r.roundHighlight(box, r.cardRad())
 
-	r.text(r.tiny, "SPEAKING TO THE HOUSE", box.Min.X+r.rowIn(), box.Min.Y+in.s(40), amber)
-	r.text(r.title, "Go ahead", box.Min.X+r.rowIn(), box.Min.Y+in.s(84), cream)
+	r.text(r.tiny, tr("drawer_speaking_house"), box.Min.X+r.rowIn(), box.Min.Y+in.s(40), amber)
+	r.text(r.title, tr("drawer_go_ahead"), box.Min.X+r.rowIn(), box.Min.Y+in.s(84), cream)
 
-	to := "It sends when you stop talking"
+	to := tr("drawer_auto_send")
 	if s.announcePeers > 0 {
-		to = "Goes to " + devicesText(s.announcePeers)
+		to = fmt.Sprintf(tr("drawer_goes_to"), announcementDevices(s.announcePeers))
 	}
-	r.text(r.body, to, box.Min.X+r.rowIn()+r.s(300), box.Min.Y+in.s(84), dim)
+	x := box.Min.X + r.rowIn() + r.s(300)
+	r.text(r.body, r.fit(r.body, to, box.Max.X-r.rowIn()-x), x, box.Min.Y+in.s(84), dim)
 	// The way out, said on the strip that owns it.
-	r.text(r.tiny, "TAP TO SEND  ·  HOLD TO CANCEL", box.Min.X+r.rowIn(), box.Min.Y+in.s(112), dim)
+	r.text(r.tiny, tr("drawer_send_hint"), box.Min.X+r.rowIn(), box.Min.Y+in.s(112), dim)
 }
 
 // announceBox is where the strip is on a w by h panel, its fixed sizes scaled from the Show 5's

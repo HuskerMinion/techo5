@@ -3,6 +3,7 @@
 package display
 
 import (
+	"fmt"
 	"image"
 	"image/draw"
 	"slices"
@@ -39,7 +40,7 @@ func (r *renderer) cameraView(s scene, v home.CameraView) {
 		y := (r.h - b.Dy()) / 2
 		home.ReadFrame(func() { draw.Draw(r.dst, image.Rect(x, y, x+b.Dx(), y+b.Dy()), v.Frame, b.Min, draw.Src) })
 	} else {
-		msg := "Connecting to " + name + "…"
+		msg := fmt.Sprintf(tr("drawer_camera_connect"), name)
 		if v.Error != "" {
 			msg = name + ": " + v.Error
 		}
@@ -76,13 +77,13 @@ func (r *renderer) cameraView(s scene, v home.CameraView) {
 		r.text(r.small, t, r.w-side-r.width(r.small, t), nameBase, captionDim)
 	}
 	left := time.Until(v.Until).Round(time.Second)
-	hint := "tap to close"
+	hint := tr("drawer_camera_close")
 	talking := s.talk.Entity == v.Entity && s.talk.Phase != talkback.Idle // the view is held: no countdown
 	// A still a notification left until tapped (twelve hours at most) has no countdown to show, and a
 	// view held for a day or more is not counted down either.
 	untilTapped := v.Caption != nil && v.Caption.UntilTapped
 	if left > 0 && left < 24*time.Hour && !untilTapped && !talking {
-		hint = "tap to close  ·  " + left.String()
+		hint = tr("drawer_camera_close") + "  ·  " + left.String()
 	}
 	if v.Caption != nil && !wordless {
 		r.captionBar(*v.Caption)
@@ -123,7 +124,7 @@ func (r *renderer) cameraView(s scene, v home.CameraView) {
 		}
 		end = b.Min.X - r.s(10)
 		if s.talk.Error != "" && s.talk.Entity == v.Entity {
-			hint = "Talk: " + s.talk.Error
+			hint = fmt.Sprintf(tr("drawer_talk_error"), s.talk.Error)
 		}
 	} else if s.cameraSound {
 		end = r.cameraSoundBox(r.cameraSoundLabel(s)).Min.X - r.s(10)
@@ -201,9 +202,9 @@ func fairWidth(widths []int, room int) int {
 // cameraSoundLabel is what the sound's control says: what a tap on it does.
 func (r *renderer) cameraSoundLabel(s scene) string {
 	if s.cameraSoundLive {
-		return "Mute"
+		return tr("drawer_mute")
 	}
-	return "Unmute"
+	return tr("drawer_unmute")
 }
 
 // cameraSoundBox is where the camera page's sound control is drawn: the right end of the strip along the

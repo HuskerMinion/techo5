@@ -3,6 +3,7 @@
 package display
 
 import (
+	"fmt"
 	"image"
 	"slices"
 	"strconv"
@@ -44,6 +45,10 @@ func (p *paint) drawerSeg() int  { return p.s(drawerSegBase) }
 
 var drawerTabs = []string{"Cameras", "Radio", "Announce", "Call"}
 
+func drawerTabLabels() []string {
+	return []string{tr("cameras"), tr("drawer_radio"), tr("drawer_announce"), tr("drawer_call")}
+}
+
 // shownTabs are the tabs this screen offers: no Announce or Call tab where there is no microphone to
 // talk with.
 func shownTabs() []string {
@@ -72,7 +77,7 @@ func (r *renderer) drawer(s scene) {
 	r.roundStroke(seg, segRad, r.sf(1), ember)
 	half := seg.Dx() / len(shownTabs())
 	inset, tabRad := r.s(4), r.sf(19)
-	for i, name := range shownTabs() {
+	for i, name := range drawerTabLabels()[:len(shownTabs())] {
 		b := image.Rect(seg.Min.X+i*half+inset, seg.Min.Y+inset, seg.Min.X+(i+1)*half-inset, seg.Max.Y-inset)
 		fg, face := lerp(dim, cream, 0.3), fc.nav
 		if i == s.drawerTab {
@@ -104,7 +109,7 @@ func (r *renderer) drawer(s scene) {
 	rows, note := drawerRows(s)
 	if len(rows) == 0 && note != "" {
 		y := list.Min.Y + r.s(50)
-		for _, line := range r.wrap(fc.value, note, panel.Dx()-2*r.rowIn()) {
+		for _, line := range r.wrapLines(fc.value, note, panel.Dx()-2*r.rowIn()) {
 			r.text(fc.value, line, panel.Min.X+r.rowIn(), y, dim)
 			y += r.s(36)
 		}
@@ -136,9 +141,9 @@ func drawerRows(s scene) ([]settingRow, string) {
 	if s.drawerTab == drawerCameras {
 		if len(s.cameras) == 0 {
 			if config.Get().Home.NoHACameras() {
-				return nil, "No cameras: None is chosen for Home Assistant's cameras, on the setup page or with the home_cameras action."
+				return nil, tr("drawer_no_cameras_disabled")
 			}
-			return nil, "No cameras yet. Set a Home Assistant token to list them all, or pick some with the home_cameras action."
+			return nil, tr("drawer_no_cameras")
 		}
 		var rows []settingRow
 		// Several cameras at once, when there are several to show.
@@ -149,8 +154,8 @@ func drawerRows(s scene) ([]settingRow, string) {
 			}
 		}
 		if others >= 2 {
-			rows = append(rows, settingRow{id: "grid:0", label: "All cameras",
-				sub: "Up to six at once; tap one to see it alone", kind: ctlButton, button: "Show", rowTap: true})
+			rows = append(rows, settingRow{id: "grid:0", label: tr("drawer_all_cameras"),
+				sub: tr("drawer_camera_grid_hint"), kind: ctlButton, button: tr("ui_show"), rowTap: true})
 		}
 		for i, c := range s.cameras {
 			name := c.Name
@@ -159,17 +164,16 @@ func drawerRows(s scene) ([]settingRow, string) {
 				name = demoCameras[i%len(demoCameras)]
 			}
 			rows = append(rows, settingRow{id: "cam:" + strconv.Itoa(i), label: name,
-				sub: "Or say \"show " + strings.ToLower(name) + "\"", kind: ctlButton, button: "Show", rowTap: true})
+				sub: fmt.Sprintf(tr("drawer_show_camera"), strings.ToLower(name)), kind: ctlButton, button: tr("ui_show"), rowTap: true})
 		}
 		return rows, ""
 	}
 
 	rd := s.radio
 	if !rd.Configured {
-		return nil, "No stations yet. Give the device a Home Assistant token (the home_assistant action) " +
-			"for local and popular stations, or add your own with home_radio."
+		return nil, tr("drawer_no_radio")
 	}
-	source := settingRow{label: "Stations", kind: ctlValue, value: home.SourceLabel(rd.Source)}
+	source := settingRow{label: tr("ui_stations"), kind: ctlValue, value: radioSourceText(rd.Source)}
 	if rd.Sources > 1 {
 		source.id, source.kind = "radiosource", ctlChoice
 	}
@@ -177,22 +181,22 @@ func drawerRows(s scene) ([]settingRow, string) {
 	stations := radioList(rd)
 	switch {
 	case rd.Loading:
-		return append(rows, settingRow{label: "Asking Home Assistant for stations…", kind: ctlValue}), ""
+		return append(rows, settingRow{label: tr("drawer_loading_stations"), kind: ctlValue}), ""
 	case len(stations) == 0 && rd.Problem != "":
-		return append(rows, settingRow{label: "Could not list the stations", sub: rd.Problem, kind: ctlValue}), ""
+		return append(rows, settingRow{label: tr("drawer_station_error"), sub: rd.Problem, kind: ctlValue}), ""
 	case len(stations) == 0 && rd.Source == config.RadioLocal:
-		return append(rows, settingRow{label: "No stations within 100 km", sub: "Try Popular worldwide", kind: ctlValue}), ""
+		return append(rows, settingRow{label: tr("drawer_no_local"), sub: tr("drawer_try_popular"), kind: ctlValue}), ""
 	case len(stations) == 0:
-		return append(rows, settingRow{label: "No stations in this list yet", kind: ctlValue}), ""
+		return append(rows, settingRow{label: tr("drawer_empty_stations"), kind: ctlValue}), ""
 	}
 	for i, name := range stations {
 		id := "st:" + strconv.Itoa(i)
 		if name == "■ Stop" {
 			// A stop in a grouped room stops the group, so the row says so rather than doing something
 			// bigger than its words. The label stays what it is: what changes is who else it reaches.
-			row := settingRow{id: id, label: "Stop the radio", kind: ctlButton, button: "Stop", rowTap: true}
+			row := settingRow{id: id, label: tr("drawer_stop_radio"), kind: ctlButton, button: tr("stop"), rowTap: true}
 			if rd.Grouped {
-				row.sub = "all rooms in the group"
+				row.sub = tr("drawer_group_stop")
 			}
 			rows = append(rows, row)
 			continue
@@ -202,12 +206,12 @@ func drawerRows(s scene) ([]settingRow, string) {
 			// Call letters and local station names say where the owner lives.
 			label = "Station " + strconv.Itoa(i+1)
 		}
-		row := settingRow{id: id, label: label, kind: ctlButton, button: "Play", rowTap: true}
+		row := settingRow{id: id, label: label, kind: ctlButton, button: tr("play"), rowTap: true}
 		switch {
 		case name == rd.Now && rd.Playing:
-			row.bold, row.sub, row.button = true, "Playing now", "Playing"
+			row.bold, row.sub, row.button = true, tr("drawer_playing_now"), tr("drawer_playing")
 		case name == rd.Chosen && rd.Chosen != rd.Now:
-			row.sub, row.button = "Starting…", "Starting"
+			row.sub, row.button = tr("ui_starting"), tr("ui_starting_variant")
 		}
 		rows = append(rows, row)
 	}
@@ -217,14 +221,13 @@ func drawerRows(s scene) ([]settingRow, string) {
 // callRows is the Call tab: the other devices in the house, then the phone's contacts.
 func callRows(s scene) ([]settingRow, string) {
 	if len(s.callees) == 0 {
-		return nil, "Nobody to call yet. Give every device the same house word on its setup page to call " +
-			"between rooms, or sign the phone in (the phone_account action) for your contacts."
+		return nil, tr("drawer_no_calls")
 	}
 	var rows []settingRow
 	for i, c := range s.callees {
-		name, sub := c.Name, "Phone"
+		name, sub := c.Name, tr("drawer_phone")
 		if c.Device {
-			sub = "Intercom, in the house"
+			sub = tr("drawer_intercom")
 		}
 		if s.demo {
 			// A device's name can say whose room it is, and a contact's is somebody's name.
@@ -235,7 +238,7 @@ func callRows(s scene) ([]settingRow, string) {
 			}
 		}
 		rows = append(rows, settingRow{id: "call:" + strconv.Itoa(i), label: name, sub: sub,
-			kind: ctlButton, button: "Call", rowTap: true})
+			kind: ctlButton, button: tr("drawer_call"), rowTap: true})
 	}
 	return rows, ""
 }
@@ -245,3 +248,18 @@ var demoRooms = []string{"Kitchen", "Office", "Living room", "Bedroom", "Garage"
 
 // demoCameras stand in for the owner's camera names in screenshots that will be published.
 var demoCameras = []string{"Front door", "Driveway", "Backyard", "Porch", "Garage"}
+
+// radioSourceText is presentation only; source IDs and HA options stay canonical.
+func radioSourceText(source string) string {
+	switch source {
+	case config.RadioFavorites:
+		return tr("drawer_favorites")
+	case config.RadioLocal:
+		return tr("drawer_local")
+	case config.RadioPopular:
+		return tr("drawer_popular")
+	case config.RadioOwn:
+		return tr("ui_on_this_device")
+	}
+	return home.SourceLabel(source)
+}

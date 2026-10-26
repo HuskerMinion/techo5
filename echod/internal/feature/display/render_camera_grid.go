@@ -117,7 +117,7 @@ func (r *renderer) cameraGrid(s scene, v home.CameraView) {
 			y := box.Min.Y + (box.Dy()-b.Dy())/2
 			draw.Draw(r.dst, image.Rect(x, y, x+b.Dx(), y+b.Dy()), pic, b.Min, draw.Src)
 		} else {
-			msg := "Connecting…"
+			msg := tr("drawer_connecting")
 			if c.Error != "" {
 				msg = c.Error
 			}
@@ -131,11 +131,11 @@ func (r *renderer) cameraGrid(s scene, v home.CameraView) {
 	}
 
 	draw.Draw(r.dst, image.Rect(0, 0, r.w, r.gridTop()), image.NewUniform(shade), image.Point{}, draw.Over)
-	r.text(r.small, "Cameras", r.margin, 32, captionText)
+	r.text(r.small, tr("cameras"), r.margin, 32, captionText)
 	t := clockHM(s.now)
 	r.text(r.small, t, r.w-r.margin-r.width(r.small, t), 32, captionDim)
 
-	hint := "tap a camera to see it alone  ·  tap here to close"
+	hint := tr("drawer_grid_close")
 	if left := time.Until(v.Until).Round(time.Second); left > 0 && left < 24*time.Hour {
 		hint += "  ·  " + left.String()
 	}
