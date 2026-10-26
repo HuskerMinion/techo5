@@ -42,6 +42,7 @@ func init() {
 	if Here {
 		component.Register(component.Network, Get(), component.Order(80))
 		media.ReceiverControl(home.AirPlayName, airplayRemote.control)
+		media.TellPending(home.AirPlayName, airplayPending)
 		media.StopOnPause(home.SpotifyName)
 	}
 }

@@ -26,6 +26,11 @@
 # nqptp and shairport-sync talk through shared memory whose layout each names by a version (smi11 here),
 # so the two are only ever moved on together.
 #
+# One change is made to shairport-sync: shairport-sync-stdout-delay.patch, beside this script, gives its
+# stdout backend a delay(), which it has none of. The daemon says in a file (SPS_STDOUT_DELAY_FILE) how much of
+# what it read is still to be heard; with that and what waits unread in the pipe, shairport-sync keeps in step
+# with the other speakers on its own, as with a sound card, rather than by a fixed offset.
+#
 # One change is made to nqptp: nqptp-run-as-user.patch, beside this script, adds -u <user>. nqptp needs
 # root only to bind PTP's ports (319 and 320); with -u it then becomes that user, with its groups, before it
 # reads anything from the network, as nqptp already does on OpenBSD. The daemon runs it with -u streaming.
@@ -124,6 +129,7 @@ unpack nqptp-$NQPTP_VERSION.tar.gz nqptp
 
 echo "== shairport-sync $SPS_VERSION with AirPlay 2"
 unpack shairport-sync-$SPS_VERSION.tar.gz shairport-sync
+(cd "$WORK/shairport-sync" && patch -p1 --forward --no-backup-if-mismatch < "$ROOT/tools/linux/shairport-sync-stdout-delay.patch")
 # The small FFmpeg is found before anything in the Alpine root, which has none.
 export PKG_CONFIG_SYSROOT_DIR= PKG_CONFIG_LIBDIR="$FF/lib/pkgconfig:$SYS/usr/lib/pkgconfig:$SYS/usr/share/pkgconfig"
 (cd "$WORK/shairport-sync" && autoreconf -fi >/dev/null 2>&1 && ./configure $HOSTS --prefix=/usr --sysconfdir=/etc \

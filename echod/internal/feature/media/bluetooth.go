@@ -41,6 +41,15 @@ func keepsWhileHeld(name string) bool {
 	return ok
 }
 
+// pendingTo names the received tracks whose sender is told how much of what it sent is still to be heard
+// (TellPending).
+var pendingTo sync.Map
+
+// TellPending has tell called, each time audio of the received track named name is queued, with how long
+// until the newest of it is heard: what waits in the speaker's queue, then the speaker's ring. A sender
+// that times its own audio (AirPlay) keeps in step with that, as it would with a sound card it can ask.
+func TellPending(name string, tell func(pending time.Duration)) { pendingTo.Store(name, tell) }
+
 // offeredHook, when set, hears how each offer of received audio went; tests wait on it.
 var offeredHook atomic.Pointer[func(item string, ok bool)]
 
@@ -218,6 +227,9 @@ func (m *Stream) receive(ctx context.Context, t *track, src PCMSource, conv *toS
 				m.offered(t, samples)
 			}
 			carry = append(carry[:0], in[whole:]...)
+			if tell, ok := pendingTo.Load(t.item); ok {
+				tell.(func(time.Duration))(time.Duration(m.out.Queued())*time.Second/speaker.Rate + speaker.OutputLatency)
+			}
 		}
 		switch {
 		case err == nil:

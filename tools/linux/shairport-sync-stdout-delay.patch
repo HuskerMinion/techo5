@@ -1,0 +1,81 @@
+--- a/audio_stdout.c
++++ b/audio_stdout.c
+@@ -34,11 +34,51 @@
+ #include <memory.h>
+ #include <stdio.h>
+ #include <stdlib.h>
++#include <sys/ioctl.h>
++#include <time.h>
+ #include <unistd.h>
+ 
+ static int fd = STDOUT_FILENO;
+ static int warned = 0;
+ static unsigned int bytes_per_frame = 0;
++static unsigned int frame_rate = 0;
++
++// With SPS_STDOUT_DELAY_FILE set, the program reading standard output says in that file how much of what it
++// has read is still to be heard: two numbers, the nanoseconds still pending and the CLOCK_REALTIME
++// nanosecond that was true at, rewritten as it takes more. Without it there is no delay(), as before.
++static const char *delay_file = NULL;
++
++// delay is what has been written and not yet heard, in frames: what waits unread in the pipe, and what the
++// reader last said it holds, less the time since it said so, since that plays on meanwhile.
++static int delay(long *the_delay) {
++  if (delay_file == NULL || frame_rate == 0 || bytes_per_frame == 0)
++    return -ENODEV;
++  int unread = 0;
++  if (ioctl(fd, FIONREAD, &unread) != 0 || unread < 0)
++    unread = 0;
++  long long pending = 0, at = 0;
++  int dfd = open(delay_file, O_RDONLY);
++  if (dfd >= 0) {
++    char b[64];
++    ssize_t n = pread(dfd, b, sizeof(b) - 1, 0);
++    close(dfd);
++    if (n > 0) {
++      b[n] = 0;
++      if (sscanf(b, "%lld %lld", &pending, &at) != 2)
++        pending = 0, at = 0;
++    }
++  }
++  if (at > 0) {
++    struct timespec ts;
++    clock_gettime(CLOCK_REALTIME, &ts);
++    long long now = (long long)ts.tv_sec * 1000000000LL + ts.tv_nsec;
++    pending -= now - at;
++  }
++  if (pending < 0)
++    pending = 0;
++  *the_delay = unread / (int)bytes_per_frame + (long)(pending * frame_rate / 1000000000LL);
++  return 0;
++}
+ 
+ static int play(void *buf, int samples, __attribute__((unused)) int sample_type,
+                 __attribute__((unused)) uint32_t timestamp,
+@@ -59,6 +99,9 @@
+   // set up default values first
+   config.audio_backend_buffer_desired_length = 1.0;
+   config.audio_backend_latency_offset = 0;
++  delay_file = getenv("SPS_STDOUT_DELAY_FILE");
++  if (delay_file != NULL && delay_file[0] == '\0')
++    delay_file = NULL;
+ 
+   // get settings from settings file, passing in defaults for format_set, rate_set and channel_set
+   // Note, these options may be in the "general" stanza or the named stanza
+@@ -87,6 +130,7 @@
+     response = EINVAL;
+   }
+   bytes_per_frame = bytes_per_sample * CHANNELS_FROM_ENCODED_FORMAT(requested_encoded_format);
++  frame_rate = RATE_FROM_ENCODED_FORMAT(requested_encoded_format);
+   return response;
+ }
+ 
+@@ -99,7 +143,7 @@
+                              .stop = NULL,
+                              .is_running = NULL,
+                              .flush = NULL,
+-                             .delay = NULL,
++                             .delay = &delay,
+                              .stats = NULL,
+                              .play = &play,
+                              .volume = NULL,

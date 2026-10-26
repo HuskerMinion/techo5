@@ -394,8 +394,9 @@ captured login to the same page for a few minutes, and could see the pictures an
   can't run (it won't start, or the kernel can't take the firewall's AirPlay 2 rules, which the
   firewall's log says), the device is a classic AirPlay speaker, which plays on its own. A third
   switch, **AirPlay 2** (on unless turned off), keeps it to classic AirPlay: for a group it doesn't
-  play in step with, since it can drift a few milliseconds from the other speakers, more just after
-  it joins one that is already playing. If something doesn't work, open an issue.
+  play in step with. The receiver keeps in step on its own, from how much of what it sent is still
+  to be heard on the device, so it lands in the same place each time it starts or joins a group.
+  If something doesn't work, open an issue.
 - **DLNA.** On every device, the **DLNA** switch (Settings → Sound, the setup page's Play to
   this device box, or Home Assistant) makes the device a DLNA speaker, a "media renderer", under its
   own name. Music apps and servers on the network find it and play to it: BubbleUPnP on a phone,

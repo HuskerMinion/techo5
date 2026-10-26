@@ -744,8 +744,8 @@ func TestShairportConfAirPlay2(t *testing.T) {
 	if !strings.Contains(c, `service_type = "airplay2";`) {
 		t.Errorf("conf is not AirPlay 2 only:\n%s", c)
 	}
-	if airplay2Offset >= 0 {
-		t.Errorf("airplay2Offset %v is not earlier", airplay2Offset)
+	if want := fmt.Sprintf("audio_backend_buffer_desired_length_in_seconds = %.3f;", airplayLead.Seconds()); !strings.Contains(c, want) {
+		t.Errorf("conf without %s:\n%s", want, c)
 	}
 	if want := fmt.Sprintf("audio_backend_latency_offset_in_seconds = %.3f;", airplay2Offset.Seconds()); !strings.Contains(c, want) {
 		t.Errorf("conf without %s:\n%s", want, c)
@@ -812,6 +812,27 @@ func TestNqptpDropsRoot(t *testing.T) {
 	}
 	if got := nqptpArgs(nil); got != nil {
 		t.Errorf("nqptp's arguments without one: %q", got)
+	}
+}
+
+// The AirPlay 2 receiver is told how much is still to be heard: a line of nanoseconds pending and the wall
+// clock it was true at, rewritten at the front, which shairport-sync's stdout backend reads (our patch).
+func TestAirPlayPendingIsWritten(t *testing.T) {
+	f, err := os.Create(filepath.Join(t.TempDir(), "pending"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer f.Close()
+	airplayPending(time.Second) // no receiver running: nothing, and no panic
+	airplayPendingOut.Store(f)
+	t.Cleanup(func() { airplayPendingOut.Store(nil) })
+	airplayPending(2 * time.Second)
+	airplayPending(250 * time.Millisecond)
+	b, _ := os.ReadFile(f.Name())
+	var pending, at int64
+	if n, _ := fmt.Sscanf(string(b), "%d %d", &pending, &at); n != 2 || pending != int64(250*time.Millisecond) ||
+		time.Since(time.Unix(0, at)) > time.Minute || strings.Count(string(b), "\n") != 1 {
+		t.Errorf("pending file %q", b)
 	}
 }
 

@@ -25,7 +25,6 @@ import (
 	"github.com/HuskerMinion/techo5/echod/internal/config"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/home"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/media"
-	"github.com/HuskerMinion/techo5/echod/internal/hardware/speaker"
 	"github.com/HuskerMinion/techo5/echod/internal/layout"
 	"github.com/HuskerMinion/techo5/echod/internal/lib/safe"
 )
@@ -148,7 +147,15 @@ func runAirPlay2(ctx context.Context, conf string, out io.Writer, cred *syscall.
 			break
 		}
 	}
-	failed = superviseTries(ctx, program{name: "shairport-sync", path: shairport2Path, args: []string{"-c", conf}, stdout: out, cred: cred}, airplay2Tries)
+	// Told how much of what it wrote is still to be heard, it keeps in step on its own (airplayPending).
+	if f, err := os.OpenFile(airplayPendingFile, os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0o644); err != nil {
+		slog.Warn("streaming: AirPlay's pending file failed; it keeps time by its offset alone", "err", err)
+	} else {
+		airplayPendingOut.Store(f)
+		defer func() { airplayPendingOut.Store(nil); f.Close() }()
+	}
+	failed = superviseTries(ctx, program{name: "shairport-sync", path: shairport2Path, args: []string{"-c", conf}, stdout: out, cred: cred,
+		env: []string{"SPS_STDOUT_DELAY_FILE=" + airplayPendingFile}}, airplay2Tries)
 	cancel()
 	<-clockDone
 	return failed || clockFailed.Load()
@@ -166,15 +173,32 @@ const (
 	airplay2Port    = 7000
 )
 
-// airplay2Offset is how much earlier than its time the AirPlay 2 receiver hands over audio, so the device
-// plays together with the rest of a group: the receiver takes what it writes as heard at once, but it waits
-// in the daemon a while first (receivedLag), and then for the speaker's own ring (speaker.OutputLatency).
-const airplay2Offset = -(speaker.OutputLatency + receivedLag)
+// airplay2Offset is how much later than its time the AirPlay 2 receiver hands over audio. Our build tells it
+// how much of what it wrote is still to be heard (airplayPending, through SPS_STDOUT_DELAY_FILE), so it keeps
+// in step on its own, as with a sound card; what is left is what that misses. 1 ms, by ear beside a Sonos Amp,
+// which is finer than a microphone between them could tell apart.
+const airplay2Offset = 1 * time.Millisecond
 
-// receivedLag is how long received audio waits in the daemon before the speaker's queue takes it, as heard
-// on an Echo 2nd gen (radar, Dot image) grouped with a Sonos Amp: 0.18 s with the speaker's ring. A fixed
-// figure for a first version; it varies some from one start to the next with how full the queue gets.
-const receivedLag = 75 * time.Millisecond
+// airplayLead is how far ahead of its time shairport-sync keeps audio on its way here: the speaker's queue
+// holds about that, less the ring.
+const airplayLead = 300 * time.Millisecond
+
+// airplayPendingFile is where the daemon says how much AirPlay audio is still to be heard, for the AirPlay 2
+// receiver to read (SPS_STDOUT_DELAY_FILE): nanoseconds pending, and the wall-clock nanosecond it was true
+// at, rewritten at the front as more is queued.
+var airplayPendingFile = filepath.Join(runDir, "airplay-pending")
+
+// airplayPendingOut is that file while the receiver runs, nil otherwise.
+var airplayPendingOut atomic.Pointer[os.File]
+
+// airplayPending writes how long the AirPlay audio queued so far takes to be heard (media.TellPending).
+func airplayPending(pending time.Duration) {
+	f := airplayPendingOut.Load()
+	if f == nil {
+		return
+	}
+	_, _ = f.WriteAt([]byte(fmt.Sprintf("%019d %019d\n", pending.Nanoseconds(), time.Now().UnixNano())), 0)
+}
 
 // shairportConf is shairport-sync's configuration: the name phones show, the audio to standard output
 // as 16-bit stereo at 44.1 kHz, and what is playing to the metadata pipe, with its cover where there is
@@ -190,7 +214,8 @@ func shairportConf(name, metaPipe string, airplay2 bool) string {
 	name = airplayName(name)
 	listen := fmt.Sprintf("\tport = %d;\n\tudp_port_base = %d;\n\tudp_port_range = %d;\n", airplayPort, airplayUDPBase, airplayUDPCount)
 	if airplay2 {
-		listen = fmt.Sprintf("\tservice_type = \"airplay2\";\n\taudio_backend_latency_offset_in_seconds = %.3f;\n", airplay2Offset.Seconds())
+		listen = fmt.Sprintf("\tservice_type = \"airplay2\";\n\taudio_backend_latency_offset_in_seconds = %.3f;\n", airplay2Offset.Seconds()) +
+			fmt.Sprintf("\taudio_backend_buffer_desired_length_in_seconds = %.3f;\n", airplayLead.Seconds())
 	}
 	return fmt.Sprintf(`general = {
 	name = %s;
