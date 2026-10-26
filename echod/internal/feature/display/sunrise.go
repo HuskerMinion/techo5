@@ -54,9 +54,9 @@ var sunriseChoices = []int{0, 5, 10, 15, 20, 30}
 func sunriseLabels() []string {
 	out := make([]string, len(sunriseChoices))
 	for i, m := range sunriseChoices {
-		out[i] = "Off"
+		out[i] = tr("ui_off")
 		if m > 0 {
-			out[i] = fmt.Sprintf("%d minutes before", m)
+			out[i] = fmt.Sprintf(tr("minutes_before"), m)
 		}
 	}
 	return out
@@ -78,9 +78,9 @@ func sunriseValue() string {
 		return fmt.Sprintf("%d%%", int(sunriseLevel(p)*100))
 	}
 	if m := config.Get().Alarms.SunriseMinutes; m > 0 {
-		return fmt.Sprintf("%d min", m)
+		return fmt.Sprintf(tr("ui_d_min"), m)
 	}
-	return "Off"
+	return tr("ui_off")
 }
 
 func sunriseSub() string {
@@ -89,19 +89,19 @@ func sunriseSub() string {
 	if until, snooze, ok := sunriseHold(now); ok {
 		switch {
 		case until.IsZero():
-			return "On while the alarm rings"
+			return tr("sunrise_ringing")
 		case snooze:
-			return "On until the " + clockText(until) + " snooze"
+			return fmt.Sprintf(tr("sunrise_snooze"), clockText(until))
 		}
 		if glow, held := sunriseGlow(now); held && glow.Equal(until) {
-			return "On until " + clockText(until)
+			return fmt.Sprintf(tr("sunrise_until"), clockText(until))
 		}
-		return "On until the " + clockText(until) + " alarm"
+		return fmt.Sprintf(tr("sunrise_alarm"), clockText(until))
 	}
 	if sunriseProgress(now) > 0 {
-		return "The light is coming up now"
+		return tr("sunrise_rising")
 	}
-	return "Before alarms that don't choose their own"
+	return tr("sunrise_default_description")
 }
 
 // anySunrise is whether any alarm will light the room, for whether the sun's face is worth a row.
@@ -117,13 +117,13 @@ func anySunrise() bool {
 
 // alarmSunrise is the alarm editor's Wake with light: the default first, then none, then minutes.
 func alarmSunrise() (labels []string, values []int) {
-	def := "off"
+	def := tr("default_off")
 	if m := config.Get().Alarms.SunriseMinutes; m > 0 {
-		def = fmt.Sprintf("%d min", m)
+		def = fmt.Sprintf(tr("ui_d_min"), m)
 	}
-	labels, values = []string{"Same as the default (" + def + ")", "Off"}, []int{0, config.SunriseOff}
+	labels, values = []string{fmt.Sprintf(tr("same_as_default"), def), tr("ui_off")}, []int{0, config.SunriseOff}
 	for _, m := range sunriseChoices[1:] {
-		labels, values = append(labels, fmt.Sprintf("%d minutes before", m)), append(values, m)
+		labels, values = append(labels, fmt.Sprintf(tr("minutes_before"), m)), append(values, m)
 	}
 	return labels, values
 }
@@ -144,15 +144,15 @@ func alarmSunriseValue(a config.Alarm) string {
 	// A light-only alarm always has a light (config.Alarms.SunriseFor), so where its own says Off, or
 	// Default with no default, the row says the minutes it gets instead.
 	if c := config.Get().Alarms; a.LightOnly && !a.Remind && !a.Silent && (a.Sunrise < 0 || a.Sunrise == 0 && c.SunriseMinutes <= 0) {
-		return fmt.Sprintf("%d min", c.SunriseFor(a))
+		return fmt.Sprintf(tr("ui_d_min"), c.SunriseFor(a))
 	}
 	switch {
 	case a.Sunrise < 0:
-		return "Off"
+		return tr("ui_off")
 	case a.Sunrise > 0:
-		return fmt.Sprintf("%d min", a.Sunrise)
+		return fmt.Sprintf(tr("ui_d_min"), a.Sunrise)
 	}
-	return "Default"
+	return tr("default_option")
 }
 
 func chooseSunrise(i int) {

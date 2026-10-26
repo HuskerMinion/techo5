@@ -65,6 +65,21 @@ func TestJapanesePhrasesAndFalsePositives(t *testing.T) {
 	}
 }
 
+func TestJapaneseSnowForecastAndDeviceRegression(t *testing.T) {
+	for _, lang := range []string{"ja", MatchAll} {
+		for _, heard := range []string{"雪の予報を教えて", "週末の雪の予報は", "降雪予報を教えて", "今日の天気を教えて", "明日は雨が降る？"} {
+			if !AboutWeather(heard, lang) {
+				t.Errorf("%q under %q missed weather", heard, lang)
+			}
+		}
+		for _, heard := range []string{"雨の音を再生して", "雪という曲を流して", "エアコンの温度を上げて", "雪の予報という曲を再生して"} {
+			if AboutWeather(heard, lang) {
+				t.Errorf("%q under %q intercepted an ordinary command", heard, lang)
+			}
+		}
+	}
+}
+
 // Each language's own sentences bring up what they ask for, both when that language is chosen and
 // under Match all.
 func TestEachLanguage(t *testing.T) {

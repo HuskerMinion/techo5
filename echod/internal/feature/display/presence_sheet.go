@@ -16,11 +16,11 @@ var awayChoices = []int{0, 1, 2, 5, 10, 15, 30, 60}
 func awayLabel(m int) string {
 	switch m {
 	case 0:
-		return "Never"
+		return tr("ui_never")
 	case 1:
-		return "1 minute"
+		return tr("one_minute")
 	}
-	return fmt.Sprintf("%d minutes", m)
+	return fmt.Sprintf(tr("ui_d_minutes"), m)
 }
 
 func awayLabels() []string {
@@ -41,12 +41,12 @@ func withPresence(rows []settingRow) []settingRow {
 	}
 	p := config.Get().Presence
 	rows = append(rows,
-		settingRow{label: "Presence", kind: ctlHeading},
-		settingRow{id: "presence", label: "Presence detection", sub: "The camera notices somebody near; nothing is kept",
+		settingRow{label: tr("presence_heading"), kind: ctlHeading},
+		settingRow{id: "presence", label: tr("presence_label"), sub: tr("presence_description"),
 			kind: ctlToggle, on: p.On})
 	if p.On {
-		rows = append(rows, settingRow{id: "awayoff", label: "Screen off when nobody is near",
-			sub: "Lights again when somebody comes near", kind: ctlChoice, value: awayLabel(p.PresenceScreenOff())})
+		rows = append(rows, settingRow{id: "awayoff", label: tr("screen_off_when_nobody_is_near"),
+			sub: tr("presence_return"), kind: ctlChoice, value: awayLabel(p.PresenceScreenOff())})
 	}
 	return rows
 }

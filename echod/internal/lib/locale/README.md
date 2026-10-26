@@ -18,7 +18,13 @@ fallbacks, Japanese dates and the keys used by all build-tagged display files.
 Display tests cover language changes in cached settings images and calendar view
 selection independently of translated labels.
 
-Japanese rendering requires an installed font containing Japanese glyphs; see
-the own-font instructions in `docs/setup.md` at the repository root. Language
-selection does not install fonts. Localized pixels must include the language in
-their cache key (both the settings base and its shared shell do this).
+Since v1.6.8, selecting Japanese as the screen language automatically downloads
+a Noto Sans JP subset when needed. The download is skipped if an existing
+user-added font is judged to support Japanese (using the glyph for `あ`). The
+downloaded archive is verified against a pinned size and SHA-256. The font is
+stored persistently and remains available after restarting. This localization
+uses the existing `cjkfont` implementation without changing its download logic.
+See `docs/setup.md` at the repository root for user-added fonts.
+
+Localized pixels must include the language in their cache key (both the settings
+base and its shared shell do this).

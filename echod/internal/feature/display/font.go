@@ -51,15 +51,15 @@ func fontFace(name string, bold bool, px float64) font.Face {
 // fontRow is the setting on the screen, under Display. A skin with a font of its own draws in that, and
 // the row says the one chosen waits for the skin to come off.
 func fontRow() settingRow {
-	sub := "For all the screen's words"
+	sub := tr("font_description")
 	if skins[skinIndex()].font != "" {
-		sub = skinKeeps
+		sub = tr("skin_keeps")
 	}
-	return settingRow{id: "font", label: "Font", sub: sub, kind: ctlChoice, value: fonts.Names()[fontIndex()]}
+	return settingRow{id: "font", label: tr("font_label"), sub: sub, kind: ctlChoice, value: fonts.Names()[fontIndex()]}
 }
 
 func fontPicker() (pickerView, bool) {
-	return pickerView{title: "Font", opts: fonts.Names(), cur: fontIndex()}, true
+	return pickerView{title: tr("font_label"), opts: fonts.Names(), cur: fontIndex()}, true
 }
 
 // setFont saves the screen's font and shows it at once, so it can be chosen while looking.

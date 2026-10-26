@@ -85,12 +85,12 @@ func clockStyleOptions() []string {
 
 // clockStyleRow is the setting on the screen, under Display.
 func clockStyleRow() settingRow {
-	return settingRow{id: "clockstyle", label: "Clock style", sub: "How the clock looks all day", kind: ctlChoice,
+	return settingRow{id: "clockstyle", label: tr("clock_style_label"), sub: tr("clock_style_description"), kind: ctlChoice,
 		value: clockStyles[clockStyleIndex()].label}
 }
 
 func clockStylePicker() (pickerView, bool) {
-	return pickerView{title: "Clock style", opts: clockStyleOptions(), cur: clockStyleIndex()}, true
+	return pickerView{title: tr("clock_style_label"), opts: clockStyleOptions(), cur: clockStyleIndex()}, true
 }
 
 // setClockStyle saves the clock's look and shows it at once, so it can be chosen while looking.

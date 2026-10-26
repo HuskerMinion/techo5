@@ -295,7 +295,7 @@ func cameraTestRows() []settingRow {
 	if !camTestAvailable() {
 		return nil
 	}
-	return []settingRow{{id: "camtest", label: "Camera test", sub: "Frame rate, picture and how the board makes it", kind: ctlButton, button: "Open"}}
+	return []settingRow{{id: "camtest", label: tr("camera_test_setting"), sub: "Frame rate, picture and how the board makes it", kind: ctlButton, button: "Open"}}
 }
 
 // The page's parts, in the Show 5's units: the picture on the left with Back under it, the words on
@@ -369,7 +369,7 @@ func (r *renderer) cameraTestPage(s scene) int {
 			y += lh
 		}
 	}
-	r.key(r.camTestBackRect(), tr("back"), false)
+	r.key(r.camTestBackRect(), "Back", false)
 
 	// The words, down the right.
 	x := pic.Max.X + r.s(camTestGapBase)

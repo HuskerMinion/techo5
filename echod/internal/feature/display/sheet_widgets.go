@@ -762,6 +762,15 @@ func (r *paint) rowWords(card image.Rectangle, row settingRow, face font.Face) (
 	if row.locked {
 		room -= r.s(lockGap + lockW) // the label gives way to its padlock, which follows it
 	}
+	// A provider's voice name can be arbitrarily long. Keep the setting's name
+	// readable and let the existing value fitting shorten the voice instead.
+	if row.id == "ttsvoice" {
+		available := right - (card.Min.X + r.rowIn()) - r.s(rowGap)
+		if row.locked {
+			available -= r.s(lockGap + lockW)
+		}
+		room = max(room, min(r.width(face, row.label), available/2))
+	}
 	label, sub = r.fit(face, row.label, room), r.fit(fc.sub, row.sub, room)
 	return label, sub, card.Min.X + r.rowIn() + max(r.width(face, label), r.width(fc.sub, sub))
 }

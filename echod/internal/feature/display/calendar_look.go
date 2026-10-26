@@ -127,11 +127,12 @@ func calendarLookRows() []settingRow {
 		return nil
 	}
 	l := deviceLook()
-	rows := []settingRow{{label: "Calendar", kind: ctlHeading}}
+	rows := []settingRow{{label: tr("ui_calendar"), kind: ctlHeading}}
 	for _, s := range lookSwitches {
-		row := settingRow{id: lookRowPrefix + s.id, label: s.label, sub: s.sub, kind: ctlChoice}
+		label, sub := calendarLookText(s)
+		row := settingRow{id: lookRowPrefix + s.id, label: label, sub: sub, kind: ctlChoice}
 		if len(s.opts) > 0 {
-			row.value = s.opts[lookOpt(s, l)]
+			row.value = optionLabel(s.opts[lookOpt(s, l)])
 		} else {
 			row.kind, row.on = ctlToggle, s.get(l)
 		}
@@ -157,7 +158,12 @@ func lookPicker(id string) (pickerView, bool) {
 	if !ok || len(s.opts) == 0 {
 		return pickerView{}, false
 	}
-	return pickerView{title: s.label, opts: s.opts, cur: lookOpt(s, deviceLook())}, true
+	label, _ := calendarLookText(s)
+	opts := make([]string, len(s.opts))
+	for i, value := range s.opts {
+		opts[i] = optionLabel(value)
+	}
+	return pickerView{title: label, opts: opts, cur: lookOpt(s, deviceLook())}, true
 }
 
 // lookRowTap is a tap on one of the rows: a switch turns over, a choice opens its list.

@@ -7,7 +7,10 @@ import (
 	"image"
 	"image/color"
 	"strconv"
+	"strings"
 	"time"
+
+	"golang.org/x/image/font"
 
 	"github.com/HuskerMinion/techo5/echod/internal/lib/hass"
 	"github.com/HuskerMinion/techo5/echod/internal/lib/locale"
@@ -401,38 +404,62 @@ func (r *renderer) calendarDetail(v calendarView, e hass.Event) {
 	c := v.color(e.Calendar)
 	r.fillRect(image.Rect(card.Min.X+r.s(18), card.Min.Y+r.s(22), card.Min.X+r.s(24), card.Min.Y+r.s(74)), c)
 	x, textW := card.Min.X+r.s(40), card.Dx()-r.s(64)
-	y := card.Min.Y + r.s(58)
-	for i, line := range r.wrap(r.title, e.Summary, textW) {
-		if i == 2 {
-			break
-		}
-		r.text(r.title, line, x, y, cream)
-		y += r.s(54)
+	closeB := image.Rect(card.Max.X-r.s(150), card.Max.Y-r.s(66), card.Max.X-r.s(22), card.Max.Y-r.s(18))
+	y := card.Min.Y + r.s(48)
+	titleFace, lineH := r.title, r.s(54)
+	if r.width(titleFace, e.Summary) > textW {
+		titleFace, lineH = r.small, r.s(40)
+	}
+	for _, line := range r.calendarDetailLines(titleFace, e.Summary, textW, 3) {
+		r.text(titleFace, line, x, y, cream)
+		y += lineH
 	}
 	dayLine, atLine := eventWhenFull(e)
-	r.text(r.small, clipText(r, r.small, dayLine, textW), x, y, cream)
-	y += r.s(40)
-	r.text(r.small, clipText(r, r.small, atLine, textW), x, y, cream)
-	y += r.s(42)
-	r.text(r.tiny, clipText(r, r.tiny, v.name(e.Calendar), textW), x, y, c)
-	y += r.s(38)
+	r.text(r.tiny, clipText(r, r.tiny, dayLine, textW), x, y, cream)
+	y += r.s(32)
+	r.text(r.tiny, clipText(r, r.tiny, atLine, textW), x, y, cream)
+	y += r.s(32)
+	r.text(r.micro, clipText(r, r.micro, v.name(e.Calendar), textW), x, y, c)
+	y += r.s(28)
 	if e.Location != "" {
-		r.text(r.small, clipText(r, r.small, e.Location, textW), x, y, dim)
-		y += r.s(42)
+		room := min(2, calendarDetailRoom(closeB.Min.Y-r.s(12), y, r.s(32)))
+		for _, line := range r.calendarDetailLines(r.tiny, e.Location, textW, room) {
+			r.text(r.tiny, line, x, y, dim)
+			y += r.s(32)
+		}
 	}
-	closeB := image.Rect(card.Max.X-r.s(150), card.Max.Y-r.s(66), card.Max.X-r.s(22), card.Max.Y-r.s(18))
 	if e.Description != "" {
-		lines := r.wrap(r.tiny, e.Description, textW)
+		room := calendarDetailRoom(closeB.Min.Y-r.s(12), y, r.s(32))
+		lines := r.calendarDetailLines(r.tiny, e.Description, textW, room)
 		for _, line := range lines {
-			if y+r.s(32) > closeB.Min.Y-r.s(6) {
-				break
-			}
 			r.text(r.tiny, line, x, y, dim)
 			y += r.s(32)
 		}
 	}
 	r.labelButton(closeB, tr("close"), btnSecondary)
 	r.calHitAdd(calHit{r: closeB.Inset(-r.s(8)), kind: calClose})
+}
+
+// calendarDetailLines wraps readable detail text, reserving room for metadata
+// and the close button. Compact month/agenda cells keep their existing clipping.
+func (r *renderer) calendarDetailLines(face font.Face, text string, width, maxLines int) []string {
+	if maxLines <= 0 {
+		return nil
+	}
+	text = strings.Join(strings.Fields(text), " ")
+	lines := r.calWrap(face, text, width)
+	if len(lines) > maxLines {
+		lines = lines[:maxLines]
+		lines[maxLines-1] = clipText(r, face, restOf(text, lines[:maxLines-1]), width)
+	}
+	return lines
+}
+
+func calendarDetailRoom(bottom, baseline, lineHeight int) int {
+	if baseline > bottom {
+		return 0
+	}
+	return (bottom-baseline)/lineHeight + 1
 }
 
 func sameDay(a, b time.Time) bool {

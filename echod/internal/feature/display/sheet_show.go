@@ -57,9 +57,9 @@ func (s scene) view() sheetView {
 // themeRows are the Display card's rows for the theme. Under a skin they still change the theme, which
 // comes back when the skin is taken off, and say so.
 func themeRows() []settingRow {
-	theme, colors := "", "Make the theme your own"
+	theme, colors := "", tr("theme_personalize")
 	if skin() != skinNone {
-		theme, colors = skinKeeps, skinKeeps
+		theme, colors = tr("skin_keeps"), tr("skin_keeps")
 	}
 	return []settingRow{
 		{id: "theme", label: themeRowLabel(), sub: theme, kind: ctlChoice, value: current().name},

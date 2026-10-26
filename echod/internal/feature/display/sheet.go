@@ -63,6 +63,11 @@ func categoryCard(sv sheetView) cardView {
 		rows, note := categoryRows(sv)
 		v = cardView{title: tr(categoryTitleKeys[st.cat]), blurb: tr(categoryBlurbKeys[st.cat]), rows: rows, note: note}
 	}
+	for i := range v.rows {
+		if builtinOptionRow(v.rows[i].id) {
+			v.rows[i].value = optionLabel(v.rows[i].value)
+		}
+	}
 	v.rows = adaptRows(v.rows, sv)
 	v.scroll = st.cardScroll
 	return withLocks(v)
@@ -568,7 +573,7 @@ func hourText(h int) string {
 }
 
 // pickerFor is the list of choices a row opens.
-func pickerFor(id string, sv sheetView) (pickerView, bool) {
+func pickerForRaw(id string, sv sheetView) (pickerView, bool) {
 	if region, ok := strings.CutPrefix(id, "tzzone:"); ok {
 		return zonePicker(region), true
 	}
