@@ -66,6 +66,7 @@ reasoning; each one checks its anchors and is a no-op on a tree it has already p
 | `patch-cci-sram.py` | mtk-cci-devfreq: SRAM voltage limits for MT8183, the same as mediatek-cpufreq has. athena gives the CCI an SRAM supply (Fire OS sets the CPU SRAM rails in software), and without limits the driver asked for a range with a maximum of 0 V and the kernel stopped at boot. |
 | `patch-thermal-devinfo.py` | auxadc_thermal: when the efuse reads as zeros (Amazon's secure firmware hides it from Linux), take the thermal calibration from the copy LK puts in `/chosen` as `atag,devinfo`. Without it the driver used default values and read several degrees off. |
 | `patch-camera.py` | The front camera, OV13855 -> CSI-2 D-PHY -> seninf -> CAMSV -> memory. Mainline has no MediaTek camera receive path, and the MT8183 ISP itself is only ever programmed by the SCP firmware, so CAMSV writes the raw frames and echod develops them. Adds `src/camera/isp` (the seninf and CAMSV drivers from [vpavlin/mt8183-camera](https://github.com/vpavlin/mt8183-camera), with four changes marked `athena:`), the `mediatek,mt8183-csi-rx` compatible in the mainline CSI-2 PHY driver, and `src/camera/ov13855.c`, a sensor driver with Rockchip's register tables. 2112x1568 binned at 30 frames a second, packed 10-bit. |
+| `patch-jpeg-enc-stall.py` | mtk-jpeg: finish an encode whose interrupt is not "done" (the bitstream buffer filled before the picture ended) with both buffers in error, as the timeout does. Upstream returned without finishing the job, so its buffers never came back and STREAMOFF waited for ever, uninterruptibly. See [JPEG encoder](#jpeg-encoder). |
 
 New files, copied into the tree:
 
@@ -99,6 +100,14 @@ scales it along mt8183.dtsi's OPP table, 300 to 800 MHz, with vgpu and vsram_gpu
 thermal zone beside the two CPU clusters (a power model and a third cooling map on the 80 C trip),
 so the power allocator slows it when the chip is hot, as it does the CPUs. Nothing in the kernel
 uses it by itself; a userspace with Mesa's panfrost driver can.
+
+## JPEG encoder
+
+The MT8183's JPEG encoder runs on mainline's mtk-jpeg (`CONFIG_VIDEO_MEDIATEK_JPEG=y`; the
+`venc_jpg` node in mt8183.dtsi, in the VENC power domain): a V4L2 memory-to-memory device,
+`/dev/video*` named `mtk-jpeg-enc`, that takes YUYV, UYVY, NV12 or NV21 and gives back a baseline
+JPEG, its quality a V4L2 control. It reads and writes memory through the IOMMU, so a picture can
+come in as a dmabuf from another device. Nothing in the kernel uses it by itself.
 
 ## Firmware
 
