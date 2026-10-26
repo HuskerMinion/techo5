@@ -159,3 +159,24 @@ func TestTurnPageUnderALightSkin(t *testing.T) {
 		t.Errorf("at night the turn page is %v, want it dark", g)
 	}
 }
+
+// A screenshot shows a one-color skin as the panel does, through its filter, and a frame that went out
+// plain stays plain.
+func TestScreenshotsWearTheSkin(t *testing.T) {
+	t.Cleanup(func() { skinPreview = "" })
+	skinPreview = skinPipBoy
+	src := image.NewRGBA(image.Rect(0, 0, 4, 3))
+	for i := range src.Pix {
+		src.Pix[i] = 0xc0
+	}
+	got := skinnedCopy(src, false)
+	if p := got.RGBAAt(1, 1); p.R == p.G && p.G == p.B {
+		t.Errorf("Pip-Boy's screenshot is gray: %v", p)
+	}
+	if p := skinnedCopy(src, true).RGBAAt(1, 1); p != src.RGBAAt(1, 1) {
+		t.Errorf("a plain frame's screenshot was filtered: %v", p)
+	}
+	if src.Pix[0] != 0xc0 {
+		t.Error("the canvas itself was filtered")
+	}
+}

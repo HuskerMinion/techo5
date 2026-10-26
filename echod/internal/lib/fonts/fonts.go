@@ -57,13 +57,19 @@ var families = []Family{
 }
 
 // skinFonts are fonts a screen skin draws in that are not on offer by themselves: sized for the skin's
-// own layouts rather than to keep Go's line widths. Antonio, tall and narrow, is LCARS's.
+// own layouts rather than to keep Go's line widths. Antonio, tall and narrow, is LCARS's. C64 is the
+// Commodore 64 skins' pixel font (tools/fonts/c64): every character a full em wide, so it is drawn at
+// half size to keep a line of words near Go's width.
 var skinFonts = []Family{
 	{"Antonio", Antonio, 1.0},
+	{"C64", C64, 0.5},
 }
 
 // Antonio is the LCARS skin's font.
 const Antonio = "antonio"
+
+// C64 is the Commodore 64 skins' 8 by 8 pixel font.
+const C64 = "c64"
 
 // family is the family saved as value, on offer or a skin's, and whether there is one.
 func family(value string) (Family, bool) {

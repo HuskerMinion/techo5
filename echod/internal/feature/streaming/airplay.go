@@ -10,18 +10,22 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"net"
 	"net/netip"
 	"os"
 	"path/filepath"
 	"runtime/debug"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"syscall"
 	"time"
 	"unicode/utf8"
 
+	"github.com/HuskerMinion/techo5/echod/internal/config"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/home"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/media"
+	"github.com/HuskerMinion/techo5/echod/internal/hardware/speaker"
 	"github.com/HuskerMinion/techo5/echod/internal/layout"
 	"github.com/HuskerMinion/techo5/echod/internal/lib/safe"
 )
@@ -46,10 +50,6 @@ func runAirPlayReceiver(ctx context.Context, name string) {
 		safe.Go("airplay metadata", func() { readAirPlayMetadata(ctx, meta) })
 	}
 	conf := filepath.Join(runDir, "shairport-sync.conf")
-	if err := os.WriteFile(conf, []byte(shairportConf(name, meta)), 0o644); err != nil {
-		slog.Error("streaming: writing shairport-sync's configuration failed", "err", err)
-		return
-	}
 	// The sender is reached only while this receiver runs, and a track left paused for it has nothing to
 	// wait for once it stops: the session goes with shairport-sync, and no end of it will come.
 	defer func() {
@@ -57,17 +57,120 @@ func runAirPlayReceiver(ctx context.Context, name string) {
 		media.Get().ReceiverGone(home.AirPlayName)
 	}()
 	safe.Go("airplay audio", func() { pump(ctx, home.AirPlayName, r, nil, airplayStarts) })
-	supervise(ctx, program{name: "shairport-sync", path: shairportPath, args: []string{"-c", conf}, stdout: w, cred: cred})
+	if why := airplay2Missing(); why != "" {
+		slog.Info("streaming: AirPlay is the classic receiver here", "why", why)
+	} else if writeConf(conf, shairportConf(name, meta, true)) {
+		if !runAirPlay2(ctx, conf, w, cred) {
+			return
+		}
+		slog.Warn("streaming: AirPlay 2 would not start; the classic receiver takes over until AirPlay starts again")
+	}
+	if writeConf(conf, shairportConf(name, meta, false)) {
+		supervise(ctx, program{name: "shairport-sync", path: shairportPath, args: []string{"-c", conf}, stdout: w, cred: cred})
+	}
 }
 
-// The ports AirPlay is reached on, fixed so a firewall can let them through (the Dot's does): the
-// session on airplayPort, and the audio, control and timing on airplayUDPCount ports from
-// airplayUDPBase.
+// writeConf writes shairport-sync's configuration, and says whether it could.
+func writeConf(path, conf string) bool {
+	if err := os.WriteFile(path, []byte(conf), 0o644); err != nil {
+		slog.Error("streaming: writing shairport-sync's configuration failed", "err", err)
+		return false
+	}
+	return true
+}
+
+// airplay2Missing says what keeps AirPlay 2 from running here, or nothing when it can: both programs, the
+// AirPlay 2 switch on, the loopback nqptp and the receiver talk to each other over, and /dev/shm, where nqptp
+// keeps the clock for the receiver to read. A variable for the tests.
+var airplay2Missing = func() string {
+	if !Has2() {
+		return "no AirPlay 2 in this image"
+	}
+	if config.Get().Streaming.AirPlayClassic {
+		return "AirPlay 2 is turned off"
+	}
+	if _, err := os.Stat(noAirPlay2); err == nil {
+		return "the firewall could not let AirPlay 2 in (techo5-firewall)"
+	}
+	if lo, err := net.InterfaceByName("lo"); err != nil || lo.Flags&net.FlagUp == 0 {
+		return "the loopback is down"
+	}
+	if fi, err := os.Stat("/dev/shm"); err != nil || !fi.IsDir() {
+		return "no /dev/shm"
+	}
+	return ""
+}
+
+// noAirPlay2 is where the firewall says it could not let AirPlay 2's sessions in (techo5-firewall: a kernel
+// without the recent match): its receiver would be found by an iPhone and never play. A variable for tests.
+var noAirPlay2 = "/run/techo5-no-airplay2"
+
+// airplay2Tries is how many times in a row nqptp or the AirPlay 2 receiver may stop soon after starting
+// before the classic receiver is run instead.
+const airplay2Tries = 3
+
+// nqptpArgs is nqptp's arguments: -u, which our build adds (tools/linux/nqptp-run-as-user.patch), to drop
+// root for the receivers' user once PTP's ports are bound. On an image without that user it stays root, as
+// the receivers do (receiverCred).
+func nqptpArgs(cred *syscall.Credential) []string {
+	if cred == nil {
+		return nil
+	}
+	return []string{"-u", receiverUser}
+}
+
+// nqptpShm is where nqptp keeps the clock the receiver reads; a variable for the tests.
+var nqptpShm = "/dev/shm/nqptp"
+
+// runAirPlay2 runs nqptp and the AirPlay 2 receiver until ctx ends, and says whether either of them kept
+// stopping as it started (airplay2Tries); both have stopped by the time it returns. nqptp starts as root,
+// since PTP's ports (319 and 320) are privileged, and becomes the receivers' user as soon as it has them
+// (nqptpArgs), before it reads anything from the network.
+func runAirPlay2(ctx context.Context, conf string, out io.Writer, cred *syscall.Credential) (failed bool) {
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
+	var clockFailed atomic.Bool
+	clockDone := make(chan struct{})
+	safe.Go("nqptp", func() {
+		defer close(clockDone)
+		if superviseTries(ctx, program{name: "nqptp", path: nqptpPath, args: nqptpArgs(cred)}, airplay2Tries) {
+			clockFailed.Store(true)
+			cancel()
+		}
+	})
+	// The receiver finds the clock as it starts, so nqptp is given a moment to set it up.
+	for end := time.Now().Add(3 * time.Second); time.Now().Before(end) && ctx.Err() == nil; time.Sleep(50 * time.Millisecond) {
+		if _, err := os.Stat(nqptpShm); err == nil {
+			break
+		}
+	}
+	failed = superviseTries(ctx, program{name: "shairport-sync", path: shairport2Path, args: []string{"-c", conf}, stdout: out, cred: cred}, airplay2Tries)
+	cancel()
+	<-clockDone
+	return failed || clockFailed.Load()
+}
+
+// The ports the classic receiver is reached on, fixed so a firewall can let them through (the Dot's does):
+// the session on airplayPort, and the audio, control and timing on airplayUDPCount ports from
+// airplayUDPBase. AirPlay 2 is reached on airplay2Port whatever the configuration says, and opens ports of
+// its own choosing for each session; a firewall lets those in for the sender that reached airplay2Port,
+// and PTP's 319 and 320 for nqptp.
 const (
 	airplayPort     = 5000
 	airplayUDPBase  = 6001
 	airplayUDPCount = 10
+	airplay2Port    = 7000
 )
+
+// airplay2Offset is how much earlier than its time the AirPlay 2 receiver hands over audio, so the device
+// plays together with the rest of a group: the receiver takes what it writes as heard at once, but it waits
+// in the daemon a while first (receivedLag), and then for the speaker's own ring (speaker.OutputLatency).
+const airplay2Offset = -(speaker.OutputLatency + receivedLag)
+
+// receivedLag is how long received audio waits in the daemon before the speaker's queue takes it, as heard
+// on an Echo 2nd gen (radar, Dot image) grouped with a Sonos Amp: 0.18 s with the speaker's ring. A fixed
+// figure for a first version; it varies some from one start to the next with how full the queue gets.
+const receivedLag = 75 * time.Millisecond
 
 // shairportConf is shairport-sync's configuration: the name phones show, the audio to standard output
 // as 16-bit stereo at 44.1 kHz, and what is playing to the metadata pipe, with its cover where there is
@@ -76,18 +179,21 @@ const (
 // plays (allow_session_interruption is left off): the metadata then tells of one session at a time,
 // which airplaySession counts on, and allows for the end of one coming late.
 //
-// The name is cut to fit the mDNS instance it is advertised as (airplayName).
-func shairportConf(name, metaPipe string) string {
+// The name is cut to fit the mDNS instance it is advertised as (airplayName). airplay2 is the configuration
+// for the AirPlay 2 receiver: AirPlay 2 only, so it never quietly falls back to classic AirPlay under a name
+// with "(Classic)" after it, and earlier by airplay2Offset.
+func shairportConf(name, metaPipe string, airplay2 bool) string {
 	name = airplayName(name)
+	listen := fmt.Sprintf("\tport = %d;\n\tudp_port_base = %d;\n\tudp_port_range = %d;\n", airplayPort, airplayUDPBase, airplayUDPCount)
+	if airplay2 {
+		listen = fmt.Sprintf("\tservice_type = \"airplay2\";\n\taudio_backend_latency_offset_in_seconds = %.3f;\n", airplay2Offset.Seconds())
+	}
 	return fmt.Sprintf(`general = {
 	name = %s;
 	output_backend = "stdout";
 	mdns_backend = "avahi";
 	interpolation = "soxr";
-	port = %d;
-	udp_port_base = %d;
-	udp_port_range = %d;
-};
+%s};
 sessioncontrol = {
 	session_timeout = 60;
 };
@@ -103,7 +209,7 @@ metadata = {
 	pipe_name = %s;
 	pipe_timeout = 5000;
 };
-`, confString(name), airplayPort, airplayUDPBase, airplayUDPCount, audioRate, audioChannels, yesNo(home.HasScreen()), confString(metaPipe))
+`, confString(name), listen, audioRate, audioChannels, yesNo(home.HasScreen()), confString(metaPipe))
 }
 
 // airplayName is the device's name as AirPlay advertises it: cut to fit one DNS label

@@ -377,3 +377,60 @@ func TestTesseraDateInTheScreensLanguage(t *testing.T) {
 		t.Errorf("German date = %q, want %q", got, "Mi., 16. Sep.")
 	}
 }
+
+// A tap on none of the page's tiles starts a voice turn, as a tap on the clock does, unless Tap on the
+// clock says otherwise; a tap on a tile does only what the tile is for.
+func TestTesseraTapBesideTheTilesTalks(t *testing.T) {
+	config.Use(filepath.Join(t.TempDir(), "state.json"))
+	if err := config.Set().Dashboard().Mode(config.DashboardTessera); err != nil {
+		t.Fatal(err)
+	}
+	slot := func(n int) *int { return &n }
+	l := &tessera.Layout{
+		Rev:   "0123456789abcdef",
+		Begin: tessera.Begin{Pages: 1, Tiles: 1},
+		Pages: []tessera.Page{{P: 0, Title: "Home", Items: json.RawMessage(`[]`)}},
+		Tiles: []tessera.Tile{
+			{I: 0, Slot: slot(0), Entity: "light.kitchen", Name: "Kitchen", State: "on", A: json.RawMessage(`{}`), O: json.RawMessage(`{}`)},
+		},
+	}
+	tessera.Preview(l, 4, 2)
+	t.Cleanup(func() { tessera.Preview(nil, 0, 0) })
+	turns := 0
+	prev := tessAssist
+	tessAssist = func() { turns++ }
+	t.Cleanup(func() { tessAssist = prev })
+	tessCalls(t)
+
+	r := newRenderer(image.NewRGBA(image.Rect(0, 0, showWide, showHigh)))
+	v, _ := tessera.Current()
+	r.draw(scene{now: time.Now(), phase: "idle", showDash: true, dashMode: config.DashboardTessera, tessera: v, tessOn: true})
+	d := &Display{r: r, poke: make(chan struct{}, 1)}
+	var light image.Point
+	zones, _ := r.dash()
+	for _, z := range zones {
+		if z.entity == "light.kitchen" {
+			light = image.Pt((z.r.Min.X+z.r.Max.X)/2, (z.r.Min.Y+z.r.Max.Y)/2)
+		}
+	}
+	empty := image.Pt(showWide*7/8, showHigh*3/4) // the last cell of the foot row, which nothing is in
+	if d.tileAt(empty.X, empty.Y) != nil {
+		t.Fatal("the empty cell has a tile")
+	}
+
+	d.tessTap(light.X, light.Y)
+	if turns != 0 {
+		t.Error("a tap on a tile started a voice turn")
+	}
+	d.tessTap(empty.X, empty.Y)
+	if turns != 1 {
+		t.Errorf("a tap beside the tiles started %d voice turns, want 1", turns)
+	}
+	if err := config.Set().Screen().ClockTap("nothing"); err != nil {
+		t.Fatal(err)
+	}
+	d.tessTap(empty.X, empty.Y)
+	if turns != 1 {
+		t.Error("a tap beside the tiles started a voice turn with Tap on the clock set to nothing")
+	}
+}

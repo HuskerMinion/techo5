@@ -316,6 +316,11 @@ type renderer struct {
 	washed   washedArt
 	artDrawn bool
 
+	// c64Drawn is the Commodore 64 skins' screen in the frame last drawn, whose cursor blinks
+	// (skin_c64.go); c64Faces are its pixel font at the sizes it has drawn in.
+	c64Drawn bool
+	c64Faces map[int]font.Face
+
 	// wb is the wave turn screen's working memory, made the first time it is drawn.
 	wb *waveBuf
 
@@ -524,7 +529,7 @@ func (r *renderer) draw(s scene) {
 		}
 	}
 	defer r.turnCue(s)
-	r.artDrawn = false
+	r.artDrawn, r.c64Drawn = false, false
 	r.weatherRight = false
 	r.setWeatherAt(image.Rectangle{})
 	r.setTempAt(image.Rectangle{})
@@ -825,6 +830,10 @@ func (r *renderer) bigClock(s scene) {
 	defer r.styleNameTag(s)
 	defer r.lcarsFrame()
 	bigTimer := timerStyle() == timerBig && len(runningTimers(s)) > 0
+	if c64Skin() {
+		r.c64Home(s) // the computer's screen, timers and all, whatever the clock style
+		return
+	}
 	if bigTimer || s.style.style() != styleGlow {
 		r.skinBackdrop(s) // Glow's colors cover the screen: its backdrop goes over them (styledClock)
 	}

@@ -2,6 +2,7 @@ package ring
 
 import (
 	"log/slog"
+	"math"
 	"slices"
 	"sync"
 	"time"
@@ -35,9 +36,9 @@ var (
 	ringFor   = RingFor
 	ringEvery = RingEvery
 
-	chime = func(notes []speaker.Note) {
+	chime = func(notes []speaker.Note, gain float64) {
 		step := Level()
-		speaker.Sound().Interject(func(p *speaker.Player) { p.Bell(step, level, notes...) })
+		speaker.Sound().Interject(func(p *speaker.Player) { p.Bell(step, level*gain, notes...) })
 	}
 
 	light = sync.OnceValue(func() *led.Claim { return led.Get().Claim(led.PriorityAlarm) })
@@ -77,6 +78,11 @@ type ringer struct {
 	until   time.Time // when it rings out
 	stopped bool
 
+	// from and rise are a ring that comes up from quiet (StartRising): it started at from, and is at
+	// full once rise has passed. A rise of 0 is full from the first chime.
+	from time.Time
+	rise time.Duration
+
 	// silenced is a ring a button quieted, waiting on the snooze offer. Per ring rather than for the
 	// whole bell, so one that starts during the offer still sounds rather than joining a silence
 	// nobody asked of it, and is not ended when the offer runs out.
@@ -96,8 +102,15 @@ type ringer struct {
 //
 // Start counts as Sounding before it returns, so nothing can see a ring started and not sounding.
 func Start(what, label string, notes []speaker.Note, ended func()) (stop func()) {
+	return StartRising(what, label, notes, 0, ended)
+}
+
+// StartRising is Start for a ring that comes up from quiet to its full level over rise (#284): an
+// alarm that wakes somebody gently. Its first chime is riseFloor below full.
+func StartRising(what, label string, notes []speaker.Note, rise time.Duration, ended func()) (stop func()) {
 	sound, leave := Sounding(), begin(what, label)
-	r := &ringer{what: what, notes: notes, until: time.Now().Add(ringFor), ended: ended, done: func() { sound(); leave() }}
+	now := time.Now()
+	r := &ringer{what: what, notes: notes, until: now.Add(ringFor), from: now, rise: rise, ended: ended, done: func() { sound(); leave() }}
 
 	bell.mu.Lock()
 	bell.rings = append(bell.rings, r)
@@ -148,7 +161,24 @@ func Again() {
 }
 
 // Sample plays one round of a ring's chime as it would ring, for somebody choosing a sound or a level.
-func Sample(notes []speaker.Note) { chime(notes) }
+func Sample(notes []speaker.Note) { chime(notes, 1) }
+
+// riseFloor is how far below full a rising ring starts, in dB: quiet enough to wake rather than
+// startle, still a sound in a quiet bedroom.
+const riseFloor = 30.0
+
+// gain is how loud the ring is at now, as a share of its full level: full for one that does not rise
+// and for one whose rise is over, and in between a steady climb in dB, which the ear hears as even.
+func (r *ringer) gain(now time.Time) float64 {
+	if r.rise <= 0 {
+		return 1
+	}
+	f := float64(now.Sub(r.from)) / float64(r.rise)
+	if f >= 1 {
+		return 1
+	}
+	return math.Pow(10, -riseFloor*(1-max(f, 0))/20)
+}
 
 // Level is how loud a ring goes, in the media volume's steps: its own setting, not the media volume.
 func Level() int {
@@ -195,10 +225,12 @@ func ringBell() {
 		})
 		// What to chime and how long to wait, taken under the lock: Silence and Again change both.
 		var loud [][]speaker.Note
+		var gains []float64
 		wait := time.Duration(-1)
 		for _, r := range bell.rings {
 			if !r.silenced {
 				loud = append(loud, r.notes)
+				gains = append(gains, r.gain(now))
 			}
 			if d := r.until.Sub(now); wait < 0 || d < wait {
 				wait = d
@@ -237,8 +269,8 @@ func ringBell() {
 		// obviously alive while it is silent.
 		if !now.Before(next) {
 			if !Hushed() {
-				for _, notes := range loud {
-					chime(notes)
+				for i, notes := range loud {
+					chime(notes, gains[i])
 				}
 				next = now.Add(roundGap(loud))
 			} else {

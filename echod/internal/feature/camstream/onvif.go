@@ -83,6 +83,10 @@ type envelope struct {
 }
 
 func (f *Feature) onvif(w http.ResponseWriter, r *http.Request) {
+	if web.AwayRequest(r) { // never one from away, over the tailnet
+		http.NotFound(w, r)
+		return
+	}
 	if r.Method != http.MethodPost {
 		w.Header().Set("Allow", "POST")
 		web.Refuse(w, "ONVIF takes POST", http.StatusMethodNotAllowed)

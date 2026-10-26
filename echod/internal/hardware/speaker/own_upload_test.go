@@ -58,7 +58,7 @@ func TestARecordingFromTheSetupPage(t *testing.T) {
 	}
 
 	// A name is one of the sounds or nothing: no path is made from what was sent.
-	for _, name := range []string{"", "../mute_switch_on", "mute_switch_on/../../x", "/etc/passwd", "alarm", "mute_switch_on.wav"} {
+	for _, name := range []string{"", "../mute_switch_on", "mute_switch_on/../../x", "/etc/passwd", "alarm_clock", "mute_switch_on.wav"} {
 		if err := SaveOwn(name, bytes.NewReader(good)); err == nil {
 			t.Errorf("%q was taken as a sound", name)
 		}
@@ -91,7 +91,7 @@ func TestARecordingThatCannotPlaySaysWhy(t *testing.T) {
 	if !has || !strings.Contains(problem, "22050") {
 		t.Errorf("has %v, problem %q", has, problem)
 	}
-	if len(OwnSounds()) != 6 || OwnSounds()[0] != "wake_word_triggered" {
+	if len(OwnSounds()) != 7 || OwnSounds()[0] != "wake_word_triggered" {
 		t.Errorf("sounds %v", OwnSounds())
 	}
 }

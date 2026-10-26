@@ -11,12 +11,18 @@ func platformMute() (Mute, error) {
 	if present(state) {
 		return driver{}, nil
 	}
+	if present(lamp61) {
+		return driver61{}, nil
+	}
 	return exported()
 }
 
 func platformLight() (LED, error) {
 	if present(brightness) {
 		return driverLED{}, nil
+	}
+	if present(lamp61) {
+		return driverLED61{}, nil
 	}
 	return exportedLED()
 }

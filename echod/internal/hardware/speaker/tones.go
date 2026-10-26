@@ -70,17 +70,25 @@ var alarmSounds = []struct {
 	}},
 }
 
+// OwnAlarmSound is the alarm sound that is a recording of the owner's own (ClipAlarm, sent from the setup
+// page's Sounds of your own). Offered last; until there is a recording it rings with the first sound.
+const OwnAlarmSound = "Your own"
+
 // AlarmSounds lists the alarm sounds' names in the order they are offered.
 func AlarmSounds() []string {
-	names := make([]string, len(alarmSounds))
+	names := make([]string, len(alarmSounds), len(alarmSounds)+1)
 	for i, s := range alarmSounds {
 		names[i] = s.name
 	}
-	return names
+	return append(names, OwnAlarmSound)
 }
 
-// AlarmSound is one round of the named alarm sound; an unknown name is the first.
+// AlarmSound is one round of the named alarm sound; an unknown name is the first. The owner's own is
+// read as it rings, so a recording sent after the choice was made is the one heard.
 func AlarmSound(name string) []Note {
+	if name == OwnAlarmSound {
+		return ownOr(ClipAlarm, alarmSounds[0].notes)
+	}
 	for _, s := range alarmSounds {
 		if s.name == name {
 			return s.notes

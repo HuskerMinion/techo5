@@ -26,6 +26,7 @@ var soundTitles = map[string][2]string{
 	"failure":             {"Failure", "when a request cannot be served"},
 	"canceled":            {"Canceled", "when a request is dropped"},
 	"timer_finished":      {"Timer finished", "a finished timer, and the Home Assistant alarm sound"},
+	"alarm":               {"Alarm", "an alarm, where Alarm sound is Your own"},
 	"mute_switch_on":      {"Mute", "muting the microphones"},
 	"mute_switch_off":     {"Unmute", "unmuting the microphones"},
 }

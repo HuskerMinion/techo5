@@ -71,7 +71,7 @@ To keep it even, it was built the same way for every project, TECHO5 included:
 
 1. A separate reviewer for each project read only that project's public repos (code, docs,
    releases and pull requests) and listed every feature it found, with a source link.
-2. The rows come from all six lists: every feature area that two or more projects share has a
+2. The rows come from all seven lists: every feature area that two or more projects share has a
    row, and each project named four of its own central features as rows too.
 3. Each project's reviewer answered every row for that project, using the row definitions at the
    bottom of this page, and a second reviewer checked every answer again.

@@ -96,7 +96,9 @@ func boardInfo(board string) (string, string, string) {
 // says nothing we know. A board neither names is run as a Dot, which is what this build was before it
 // knew another, and BoardDoubt says so for boot.Run to log.
 func detectBoard() string {
-	typeID, err := os.ReadFile(deviceTypePath)
+	// Amazon's kernels have /proc/idme; Linux 6.1 (the Echo 2nd gen's, from LibreEcho) has the same fields
+	// only in the device tree the bootloader hands it, which readIDME reads too.
+	typeID, err := readIDME("device_type_id", os.ReadFile)
 	if board, ok := dotBoard(string(typeID), ""); ok {
 		return board
 	}

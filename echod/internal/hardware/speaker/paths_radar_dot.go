@@ -65,15 +65,17 @@ func radarPaths(speaker, jack []byte) map[Output][]kctl {
 			{name: "HPR Output Mixer R_DAC Switch", level: 1},
 			{name: "Audio_DacMux_Setting", value: "Off"},
 			{name: "Right Channel Only", value: "Off"},
-			{name: eqControl, blob: speaker},
-			{name: "DRC Control", value: "Disabled"},
+			// Amazon's 3.18 only: the Linux 6.1 sound driver loads the Echo 2nd gen's crossover itself on
+			// every speaker prepare and turns DRC off, and has neither control.
+			{name: eqControl, blob: speaker, ifPresent: true},
+			{name: "DRC Control", value: "Disabled", ifPresent: true},
 			{name: driverGain, level: speakerDriverUnity},
 		},
 		OutputHeadphone: {
 			{name: "HPL Output Mixer L_DAC Switch", level: 1},
 			{name: "HPR Output Mixer R_DAC Switch", level: 1},
-			{name: eqControl, blob: jack},
-			{name: "DRC Control", value: "Disabled"},
+			{name: eqControl, blob: jack, ifPresent: true},
+			{name: "DRC Control", value: "Disabled", ifPresent: true},
 			{name: "Ignore Ramp Up", value: "On"},
 			{name: driverGain, level: 11},
 			{name: "Audio_DacMux_Setting", value: "On"},

@@ -138,7 +138,7 @@ func waitForBus(within time.Duration) bool {
 // them on its way out, but one that crashed or was killed leaves them behind, and a second avahi will
 // not start beside the first. Called with none of this daemon's own running.
 func killLeftovers() {
-	ours := map[string]bool{avahiPath: true, shairportPath: true, librespotPath: true}
+	ours := map[string]bool{avahiPath: true, shairportPath: true, shairport2Path: true, nqptpPath: true, librespotPath: true}
 	isOurs := func(pid int) bool {
 		exe, err := os.Readlink(filepath.Join("/proc", strconv.Itoa(pid), "exe"))
 		return err == nil && ours[exe]

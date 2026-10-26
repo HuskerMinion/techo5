@@ -167,6 +167,24 @@ Each of these is a connection of its own to the camera: with Talk in use as well
 (picture, sound, Talk) on top of Home Assistant's own. A camera that allows fewer
 refuses the last to ask: a picture or a sound then falls back as above, and Talk does not connect.
 
+### How the camera view looks
+
+Three settings choose how a camera put up on the screen looks. They are on the device's own settings
+(Display → Pop-ups, under Camera time) and in Home Assistant, in the device's **Configuration** card.
+Not on the Spot.
+
+- **Camera picture**: *Whole picture* (the default) shows all of the camera's picture, as large as the
+  screen takes it, with bars where its shape is not the screen's. *Fill the screen* fills the screen
+  and cuts off what does not fit, at the top and the foot or at the sides; live video too. *Camera's
+  own size* shows a snapshot at the size the camera sends it, in the middle of the screen, when it is
+  smaller than the screen; a bigger one, and live video, are shown as with *Whole picture*.
+- **Camera strips**: the strips at the top (the camera's name and the time) and at the foot (*tap to
+  close*). *Solid* (the default) is a band of shade. *Fade* is a shade that fades into the picture,
+  with the words centered in it, as far from the sides as from the top and the foot.
+- **Camera strips shade**: how dark the strips are: *Light*, *Medium* (the default) or *Strong*.
+
+The pictures in notifications are not changed by them.
+
 ### Talking through a camera
 
 On the Show and the Spot, **Talk** on the camera page sends the device's microphones to the camera's
@@ -356,7 +374,7 @@ captured login to the same page for a few minutes, and could see the pictures an
   one for that request: "play Taylor Swift on YouTube Music". This is for a device whose voice
   assistant [answers directly](#voice-without-home-assistant); under Home Assistant, its own Music Assistant support decides. It needs
   Music Assistant 2.10 or later.
-- **AirPlay and Spotify Connect.** On the Show and the Dot, two switches make the device a
+- **AirPlay and Spotify Connect.** On every device but the Panel app, two switches make the device a
   speaker other apps play to, under its own name: **AirPlay** from an iPhone, iPad or Mac, and
   **Spotify Connect** from the Spotify app (Spotify Premium). Both are off until turned on, under
   Settings → Sound, on the setup page (Sound & Voice), or in Home Assistant. What they play shows as
@@ -369,8 +387,14 @@ captured login to the same page for a few minutes, and could see the pictures an
   well. With Spotify Connect, and with an AirPlay app that gives the device no way back to it, a pause
   on the device stops the stream there; the phone keeps going until it is paused too. Anyone on the
   same network can play to the device while one is on, as with any AirPlay or Spotify speaker, and
-  Spotify Connect keeps the login a phone hands it until it is turned off. If something does not
-  work, open an issue.
+  Spotify Connect keeps the login a phone hands it until it is turned off. Where the image carries the
+  AirPlay 2 receiver (every image from v1.6.8 and dot-v1.0.35), an iPhone can group the
+  device with other AirPlay 2 speakers (a HomePod, a Sonos)
+  and play to all of them at once; without it, or when it will not start, the device is a classic
+  AirPlay speaker, which plays on its own; so is one whose kernel can't take the firewall's AirPlay 2
+  rules (the firewall's log says so). A third switch there, **AirPlay 2** (on unless turned off),
+  keeps it to classic AirPlay: for a group it will not play in step with, since it can still drift a few
+  milliseconds from the other speakers, more just after it joins one that is already playing. If something does not work, open an issue.
 - **DLNA.** On every device, the **DLNA** switch (Settings → Sound, the setup page's Play to
   this device box, or Home Assistant) makes the device a DLNA speaker, a "media renderer", under its
   own name. Music apps and servers on the network find it and play to it: BubbleUPnP on a phone,
@@ -601,7 +625,16 @@ like "kitchen screen" under its **Voice assistants** settings in Home Assistant.
   is the handheld's four greens. **Matrix** is green on black with code falling behind the clock.
   **Synthwave** is a neon sunset over a grid, the sun only behind a clock in the middle. **HAL 9000** is
   black and red with the computer's eye at the top right (not behind the Overlap style, whose figures
-  reach into that corner). On the turn screens a skin brings its ground and colors too, except at
+  reach into that corner). **Commodore 64** is the home computer's blue screen in its light blue
+  border, in an 8 by 8 pixel font drawn in its style: the home clock is its start-up screen, the
+  banner, READY., the time as PRINT TI$ answers it in big characters, the date and weather, a line for
+  each timer and the next alarm, and the cursor blinking as the computer's does (it redraws the screen
+  three times a second for that). The border is thin and even all round, and the screen fills the
+  rest; the characters are always a whole number of the panel's pixels, so they stay sharp and square,
+  with more columns on a wide panel and the clock as big as fits. **TECHO5
+  BASIC** is the same screen with TECHO5's banner: the version running, the device's memory and how
+  much of it is free. On the Spot both bring their colors and font. On the turn screens a skin brings
+  its ground and colors too, except at
   night. **None** puts back the theme and font you chose. It costs a little time on each frame.
 - **Swipe between clock styles**: on by default. Turn it off (setup page, Screen & Photos, or the
   switch in Home Assistant) so a swipe across the clock leaves its style alone. It's off whenever
@@ -685,6 +718,9 @@ The calendar page opens from the date under the clock. Under Settings → **Disp
 once a calendar is shown, and on the setup page's Weather & Calendar tab. Each is also in Home
 Assistant.
 
+- **Opens on**: the view the date opens, and the voice assistant and `calendar_show` too: *Month*
+  (the default), *Week*, *Day* (today) or *Coming up*. *Week* opens the month while Week view is off.
+  The next event on the clock still opens its own day.
 - **Day timeline**: a day on its hours, with the day's weather, the now line on today, ‹ › and a
   swipe for the day before or after. Off shows the day as a list.
 - **Coming up, one line each**: one line per event, each day with its weather.
@@ -1228,6 +1264,7 @@ Or copy a WAVE file named for the sound into the device's sounds folder over SSH
 | `failure.wav` | the falling notes when a request cannot be served |
 | `canceled.wav` | the notes when a request is dropped |
 | `timer_finished.wav` | a finished timer, and the Home Assistant alarm sound |
+| `alarm.wav` | an alarm, where **Alarm sound** is **Your own** (without one it rings with the Home Assistant sound) |
 | `mute_switch_on.wav`, `mute_switch_off.wav` | muting and unmuting the microphones |
 
 The timer and mute files play where **Home Assistant sounds** is on, and an alarm set to the
@@ -1251,6 +1288,15 @@ goes with it; turn it back on and it rings at its next time. A one-time alarm is
 has rung, so delete it instead, or cancel the snoozes: the Snoozed row on the screen, or Cancel snoozes
 on the setup page. An alarm followed from a Home Assistant helper works the same way when its on/off
 switch is turned off.
+
+**Alarm sound** (the Alarms card, the setup page, or Home Assistant) picks what alarms ring with.
+**Your own** rings with `alarm.wav`, sent from **Sounds of your own** above; it can be up to 10 seconds,
+and plays again after a short pause for as long as the alarm rings.
+
+**Gets louder** (the Alarms card, the setup page, or **Alarm gets louder** in Home Assistant) starts an
+alarm quiet, 30 dB under its ring volume, and brings it up evenly to the ring volume over 30 seconds, 1,
+2 or 5 minutes. **Full at once**, the default, rings at the ring volume from the first chime. Timers
+always ring at full.
 
 **Said as it rings** (the Alarms card, the setup page, or **Alarm words** in Home Assistant) is what
 an alarm says after its first chime: **Its words** (the default) says the words an alarm was given,
@@ -1497,6 +1543,12 @@ taken out, as the diagnostics download does, along with addresses and logins, an
 answered replaced by how long it was; it still names rooms and other devices, so treat it as private. Turning the API off or making a new key ends a log being followed. An address that
 sends requests that do not check out is turned away for a minute after ten of them; nobody else is,
 except that a public IPv6 address is counted with the rest of its /64.
+
+## 12. Reaching the device from away
+
+An Echo Show, Echo Spot or Skylight can join your Tailscale network, so a device in another house
+stays in your own Home Assistant, and its setup page can be opened from afar with **Remote setup**.
+Off until you give it a key: see [Tailscale: reaching a device from away](tailscale.md).
 
 ## More
 

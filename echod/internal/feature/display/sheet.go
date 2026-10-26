@@ -29,6 +29,7 @@ import (
 	"github.com/HuskerMinion/techo5/echod/internal/feature/sendspin"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/setup"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/streaming"
+	"github.com/HuskerMinion/techo5/echod/internal/feature/tailscale"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/timer"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/timezone"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/voice"
@@ -163,6 +164,15 @@ func categoryRows(sv sheetView) (rows []settingRow, note string) {
 		rows = append(rows,
 			settingRow{label: "Pop-ups", kind: ctlHeading},
 			settingRow{id: "camtime", label: "Camera time", sub: "How long a camera opened here stays up", kind: ctlChoice, value: cameraTimes[cameraTimeIndex()].label},
+		)
+		if hasCameraLook {
+			rows = append(rows,
+				settingRow{id: "camfit", label: "Camera picture", sub: "Whole, filling the screen, or the camera's own size", kind: ctlChoice, value: cameraFits[cameraFitIndex()].label},
+				settingRow{id: "cambands", label: "Camera strips", sub: "Under its name and at its foot: solid, or fading into it", kind: ctlChoice, value: cameraBandStyles[cameraBandsIndex()].label},
+				settingRow{id: "camshade", label: "Camera strips shade", sub: "How dark those strips are", kind: ctlChoice, value: cameraShades[cameraShadeIndex()].label},
+			)
+		}
+		rows = append(rows,
 			settingRow{id: "answertime", label: "Answer time", sub: "How long an answer stays up; a tap clears it", kind: ctlChoice, value: answerTimes[answerTimeIndex()].label},
 		)
 		if hasTimerStyles {
@@ -242,7 +252,12 @@ func withStreaming(rows []settingRow) []settingRow {
 	c := config.Get().Streaming
 	if streaming.Here {
 		rows = append(rows,
-			settingRow{id: "airplay", label: "AirPlay", sub: "Play to it from an iPhone, iPad or Mac", kind: ctlToggle, on: c.AirPlay},
+			settingRow{id: "airplay", label: "AirPlay", sub: "Play to it from an iPhone, iPad or Mac", kind: ctlToggle, on: c.AirPlay})
+		if streaming.Has2() {
+			rows = append(rows,
+				settingRow{id: "airplay2", label: "AirPlay 2", sub: "Group it with other AirPlay 2 speakers", kind: ctlToggle, on: !c.AirPlayClassic})
+		}
+		rows = append(rows,
 			settingRow{id: "spotify", label: "Spotify Connect", sub: "Play to it from the Spotify app (Premium)", kind: ctlToggle, on: c.Spotify})
 	}
 	return append(rows,
@@ -392,8 +407,29 @@ func connectionRows(sv sheetView) []settingRow {
 		rows = append(rows, settingRow{id: "btsc", label: "Bluetooth Secure Connections",
 			sub: "Off if a phone pairs, then drops. Drops devices briefly", kind: ctlToggle, on: !st.btSCOff})
 	}
-	return append(rows, settingRow{id: "btproxy", label: "Bluetooth proxy", sub: "Lets Home Assistant hear nearby devices",
+	rows = append(rows, settingRow{id: "btproxy", label: "Bluetooth proxy", sub: "Lets Home Assistant hear nearby devices",
 		kind: ctlToggle, on: st.btProxy})
+	// Tailscale: its row says where it stands; the key goes in on the setup page.
+	if !tailscale.Available() {
+		return rows
+	}
+	ts := tailscale.Get().State()
+	return append(rows, settingRow{id: "tailscale", label: "Tailscale", sub: tailscaleSub(ts), kind: ctlToggle, on: ts.On})
+}
+
+// tailscaleSub is the Tailscale row's line: where the device stands on the tailnet.
+func tailscaleSub(s tailscale.Status) string {
+	switch {
+	case !s.On:
+		return "Reach this device from away: off"
+	case s.State == "Running" && s.Name != "":
+		return "Connected as " + s.Name
+	case s.State == "NeedsLogin":
+		return "Needs a key: the setup page, Connections"
+	case s.Problem != "":
+		return s.Problem
+	}
+	return "Starting"
 }
 
 // catByName is a category from its rail name or card title in any case, for /screen.png?sheet= and
@@ -526,6 +562,9 @@ func pickerFor(id string, sv sheetView) (pickerView, bool) {
 		says := config.AlarmSays()
 		p := pickerView{title: "Said as it rings", opts: config.Labels(says), cur: slices.Index(says, alarm.Get().Say())}
 		return p, true
+	case "alarmrise":
+		rises := config.AlarmRises()
+		return pickerView{title: "Gets louder", opts: config.Labels(rises), cur: slices.Index(rises, alarm.Get().Rise())}, true
 	case "e.repeat":
 		p := pickerView{title: "Repeat", opts: repeatNames, cur: -1}
 		if sv.draft != nil {
@@ -642,10 +681,16 @@ func pickerFor(id string, sv sheetView) (pickerView, bool) {
 		return fontPicker()
 	case "skin":
 		return pickerView{title: "Skin", opts: skinOptions(), cur: skinIndex()}, true
-	case "clockpos", "datecolor":
+	case "clockpos", "weatherpos", "datecolor":
 		return clockLayoutPicker(id)
 	case "camtime":
 		return pickerView{title: "Camera time", opts: cameraTimeOptions(), cur: cameraTimeIndex()}, true
+	case "camfit":
+		return pickerView{title: "Camera picture", opts: cameraLookLabels(cameraFits), cur: cameraFitIndex()}, true
+	case "cambands":
+		return pickerView{title: "Camera strips", opts: cameraLookLabels(cameraBandStyles), cur: cameraBandsIndex()}, true
+	case "camshade":
+		return pickerView{title: "Camera strips shade", opts: cameraLookLabels(cameraShades), cur: cameraShadeIndex()}, true
 	case "callring":
 		return pickerView{title: "Call ring", opts: phone.RingSounds, cur: phone.RingSoundIndex()}, true
 	case "answertime":
@@ -780,7 +825,7 @@ func (d *Display) choose(id string, i int) {
 		d.setFont(i)
 	case "skin":
 		setSkin(d.skinSel(), i)
-	case "clockpos", "datecolor":
+	case "clockpos", "weatherpos", "datecolor":
 		d.chooseClockLayout(id, i)
 	case "clock":
 		on := i == 1
@@ -791,6 +836,12 @@ func (d *Display) choose(id string, i int) {
 		setClock24(d.clock, on)
 	case "camtime":
 		setCameraTime(d.camTime, i)
+	case "camfit":
+		setCameraFit(i)
+	case "cambands":
+		setCameraBands(i)
+	case "camshade":
+		setCameraShade(i)
 	case "answertime":
 		setAnswerTime(d.answerTime, i)
 	case "callring":
@@ -861,6 +912,10 @@ func (d *Display) choose(id string, i int) {
 	case "alarmwords":
 		if says := config.AlarmSays(); i >= 0 && i < len(says) {
 			alarm.Get().SetSay(says[i])
+		}
+	case "alarmrise":
+		if rises := config.AlarmRises(); i >= 0 && i < len(rises) {
+			alarm.Get().SetRise(rises[i])
 		}
 	case "e.repeat":
 		if i < len(repeats) {
@@ -1096,6 +1151,8 @@ func (d *Display) rowTap(id string, p part, opt int) {
 		sp.SetEnabled(!sp.Enabled())
 	case "ssh":
 		security.Get().SetSSH(!config.Get().Security.SSH)
+	case "tailscale":
+		go func() { _ = tailscale.Get().SetOn(!config.Get().Tailscale.On) }()
 	case "remoteapi":
 		remote.Get().SetOn(!config.Get().Remote.On)
 	case "camweb":
@@ -1106,6 +1163,8 @@ func (d *Display) rowTap(id string, p part, opt int) {
 		security.Get().SetTalkBack(!config.Get().Security.TalkBack)
 	case "airplay":
 		streaming.Get().SetAirPlay(!config.Get().Streaming.AirPlay)
+	case "airplay2":
+		streaming.Get().SetAirPlay2(config.Get().Streaming.AirPlayClassic)
 	case "spotify":
 		streaming.Get().SetSpotify(!config.Get().Streaming.Spotify)
 	case "dlna":
@@ -1205,7 +1264,7 @@ func (d *Display) rowTap(id string, p part, opt int) {
 		home.Get().SetSlideshowCaption(!home.Get().SlideshowCaption())
 	case "immichfav":
 		home.Get().SetImmichFavorites(!home.Get().ImmichFavorites())
-	case "night", "atnight", "nightstyle", "clock", "clockstyle", "font", "skin", "clockpos", "datecolor", "camtime", "answertime", "callring", "turnstyle", "timerstyle", "radarsrc", "calendars", "calpopwhen", "calpopallday", "calpopcals", "musicstrip", "follow", "awayoff", "slideshow", "photoevery", "screenlang", "newtimer", "sleep", "sunrise",
+	case "night", "atnight", "nightstyle", "clock", "clockstyle", "font", "skin", "clockpos", "weatherpos", "datecolor", "camtime", "camfit", "cambands", "camshade", "answertime", "callring", "turnstyle", "timerstyle", "radarsrc", "calendars", "calpopwhen", "calpopallday", "calpopcals", "musicstrip", "follow", "awayoff", "slideshow", "photoevery", "screenlang", "newtimer", "sleep", "sunrise",
 		"timezone", "wakeword", "waketone", "ttsvoice", "quiet", "output", "clocktap":
 		d.openPicker(id)
 	}

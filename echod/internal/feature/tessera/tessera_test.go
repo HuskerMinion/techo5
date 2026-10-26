@@ -4,6 +4,8 @@ package tessera
 
 import (
 	"path/filepath"
+	"regexp"
+	"slices"
 	"strings"
 	"testing"
 
@@ -70,7 +72,7 @@ func TestEntitiesFollowTheSwitch(t *testing.T) {
 		t.Fatal(err)
 	}
 	tt.Restore(config.Get())
-	want := []string{"tessera_screen", "tessera_grid", "tessera_tile_settings", "tessera_screen_firmware", "tessera_device_name", "tessera_screen_layout"}
+	want := []string{"tessera_screen", "tessera_grid", "tessera_tile_settings", "tessera_screen_firmware", "tessera_device_name", "tessera_screen_layout", "tessera_screen_features"}
 	got := ids(tt.Entities())
 	if len(got) != len(want) {
 		t.Fatalf("on: entities %v, want %v", got, want)
@@ -85,6 +87,12 @@ func TestEntitiesFollowTheSwitch(t *testing.T) {
 	}
 	if tt.firmware.Get() != firmwareClaim || tt.shape.Get() == "" {
 		t.Errorf("firmware %q layout %q", tt.firmware.Get(), tt.shape.Get())
+	}
+	// The add-on reads the Screen features by that name, as words it takes (core.FEATURES_TEXT); own_pictures is what
+	// lets a layout have camera tiles.
+	words := regexp.MustCompile(`^[a-z][a-z0-9_]{0,15}(?: [a-z][a-z0-9_]{0,15}){0,7}$`)
+	if f := tt.features.Get(); tt.features.Name != "Screen features" || !words.MatchString(f) || !slices.Contains(strings.Fields(f), "own_pictures") {
+		t.Errorf("features %q named %q", f, tt.features.Name)
 	}
 	acts := tt.Actions()
 	if len(acts) != 1 || acts[0].Name != "screen_message" || !acts[0].Answers || len(acts[0].Args) != 1 || acts[0].Args[0].Name != "message" {

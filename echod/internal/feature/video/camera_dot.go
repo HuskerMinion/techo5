@@ -25,3 +25,13 @@ func OpenCameraSoundRTSP(context.Context, string, string, string) (io.ReadCloser
 func OpenCameraRTSP(context.Context, string, string, string, int, int) (*Camera, error) {
 	return nil, ErrNotHere
 }
+func OpenCameraRTSPFilling(context.Context, string, string, string, int, int) (*Camera, error) {
+	return nil, ErrNotHere
+}
+func OpenCameraRTSPFitting(context.Context, string, string, string, int, int) (*Camera, error) {
+	return nil, ErrNotHere
+}
+func OpenCameraRTSPCovering(context.Context, string, string, string, int, int) (*Camera, error) {
+	return nil, ErrNotHere
+}
+func OpenCameraCovering(context.Context, string, int, int) (*Camera, error) { return nil, ErrNotHere }

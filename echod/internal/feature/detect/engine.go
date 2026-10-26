@@ -615,9 +615,10 @@ func (e *Engine) Quiet(on bool) {
 			b.close()
 			delete(e.backends, k)
 		}
-		// An utterance cut off by the mute is not asked about after it.
-		for i := range e.slots {
-			e.slots[i].candidate = false
+		// The new backend will be cold. Keep the choice of model, but none of
+		// the old backend's readiness, utterance, or refractory state.
+		for i, s := range e.slots {
+			e.slots[i] = slot{model: s.model, loaded: s.loaded}
 		}
 		slog.Info("wake words stopped: the microphones are cut")
 		return

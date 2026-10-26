@@ -122,6 +122,11 @@ func (f *Remote) open() bool {
 
 // serve checks a request and hands it on.
 func (f *Remote) serve(w http.ResponseWriter, r *http.Request) {
+	// Never for one from away, over the tailnet: the server's gate turns it away first, and so does this.
+	if web.AwayRequest(r) {
+		http.NotFound(w, r)
+		return
+	}
 	now := time.Now()
 	addr := source(r)
 	if turnedAway(addr, now) {

@@ -189,14 +189,19 @@ func prefsSection(w http.ResponseWriter, token string) {
 	for _, v := range config.AlarmSays() {
 		fmt.Fprintf(w, `<option value="%s"%s>%s</option>`, html.EscapeString(string(v)), selected(v == alarm.Get().Say()), html.EscapeString(v.Label()))
 	}
-	fmt.Fprint(w, `</select></div></div><div class="row"><div><label for="sunrise">Wake with light, by default</label><select id="sunrise" name="sunrise">`)
+	fmt.Fprint(w, `</select></div></div><div class="row"><div><label for="rise">Gets louder</label><select id="rise" name="rise">`)
+	for _, v := range config.AlarmRises() {
+		fmt.Fprintf(w, `<option value="%s"%s>%s</option>`, html.EscapeString(string(v)), selected(v == alarm.Get().Rise()), html.EscapeString(v.Label()))
+	}
+	fmt.Fprint(w, `</select></div><div><label for="sunrise">Wake with light, by default</label><select id="sunrise" name="sunrise">`)
 	fmt.Fprintf(w, `<option value="0"%s>Off</option>`, selected(c.Alarms.SunriseMinutes <= 0))
 	for _, m := range wakeLights {
 		fmt.Fprintf(w, `<option value="%d"%s>%d minutes before</option>`, m, selected(c.Alarms.SunriseMinutes == m), m)
 	}
 	fmt.Fprint(w, `</select></div></div>
 	 <p class="note">Ring volume is only for alarms and timers, not the music. At 0 they make no sound. The
-	  default wake light is for alarms that don't choose their own. What an alarm says is spoken by Home
+	  default wake light is for alarms that don't choose their own. Gets louder starts an alarm 30 dB under its
+	  ring volume and brings it up to it. What an alarm says is spoken by Home
 	  Assistant, after the first chime.</p>
 	 <div class="btns"><button type="submit">Save</button></div></form></fieldset>`)
 }
@@ -397,6 +402,12 @@ func prefsFromPage(r *http.Request) string {
 			return "that is not one of the choices for what an alarm says"
 		}
 		alarm.Get().SetSay(v)
+	}
+	if v := config.AlarmRise(r.PostFormValue("rise")); v != alarm.Get().Rise() {
+		if !slices.Contains(config.AlarmRises(), v) {
+			return "that is not one of the choices for how an alarm gets louder"
+		}
+		alarm.Get().SetRise(v)
 	}
 	if sunrise != 0 && !contains(wakeLights, sunrise) {
 		return "that is not one of the wake light choices"

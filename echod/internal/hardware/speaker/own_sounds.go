@@ -15,7 +15,7 @@ import (
 
 // ownable are the clips a recording of the owner's own can stand in for, in the order the setup page
 // lists them.
-var ownable = []*Clip{ClipWake, ClipFailure, ClipCanceled, ClipTimer, ClipMuteOn, ClipMuteOff}
+var ownable = []*Clip{ClipWake, ClipFailure, ClipCanceled, ClipTimer, ClipAlarm, ClipMuteOn, ClipMuteOff}
 
 // MaxOwnUpload is the most a recording sent from the setup page may be: ten seconds of 16-bit stereo
 // at Rate, and room for the header and the extra chunks a converter writes. Anything longer cannot be
@@ -160,6 +160,8 @@ func PreviewOwn(name string) error {
 		notes = FailureSound()
 	case ClipCanceled:
 		notes = CancelSound()
+	case ClipAlarm:
+		notes = AlarmSound(OwnAlarmSound)
 	}
 	Sound().Interject(func(p *Player) { p.Chime(previewLevel, notes...) })
 	return nil

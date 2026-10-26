@@ -1718,7 +1718,8 @@ func (d *Display) frame() (next time.Duration) {
 	d.callShown = d.r.callDrawn
 	d.mu.Unlock()
 	painted := time.Now()
-	unskinned(d.dev, s.nightClockFace() || s.muted || s.cameraLive)
+	plain := s.nightClockFace() || s.muted || s.cameraLive
+	unskinned(d.dev, plain)
 	if err := d.dev.Present(); err != nil {
 		slog.Warn("presenting the frame failed", "err", err)
 	}
@@ -1730,10 +1731,7 @@ func (d *Display) frame() (next time.Duration) {
 	for pending := true; pending; {
 		select {
 		case reply := <-d.shots:
-			src := d.dev.Canvas()
-			cp := image.NewRGBA(src.Rect)
-			copy(cp.Pix, src.Pix)
-			reply <- cp
+			reply <- skinnedCopy(d.dev.Canvas(), plain)
 		default:
 			pending = false
 		}

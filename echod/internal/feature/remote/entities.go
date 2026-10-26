@@ -19,7 +19,7 @@ import (
 var readOnly = []string{
 	// Doors on the network, and this API itself.
 	"remote_api", "ssh", "setup_page", "camera_web_access", "screen_web_access", "remote_adb", "insecure_tls",
-	"airplay", "spotify_connect", "dlna", "dlna_video", "video", "sendspin", "bluetooth_proxy",
+	"airplay", "airplay_2", "spotify_connect", "dlna", "dlna_video", "video", "sendspin", "bluetooth_proxy",
 	"bluetooth_proxy_connections",
 	// Listening, watching and keeping.
 	"mic_mute", "intercom_drop_in", "talk_back", "camera_live", "keep_wake_clips", "keep_recordings_1",
@@ -44,6 +44,8 @@ var readOnly = []string{
 	"bluetooth_secure_connections",
 	// What it runs.
 	"check_for_updates", "update_automatically", "update_channel", "restart", "purge_cache",
+	// The tailnet, and setting up from afar.
+	"tailscale", "setup_remote", "setup_let_in",
 }
 
 // Writable is whether the API may change e. Exported for the test that walks every entity the device has.

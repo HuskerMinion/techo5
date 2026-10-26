@@ -43,6 +43,10 @@ type Alarms struct {
 	// or nothing.
 	Say AlarmSay `json:"say,omitempty"`
 
+	// Rise is how long an alarm takes to come up from quiet to its ring volume (#284); empty rings at
+	// full from the first chime, as alarms always have.
+	Rise AlarmRise `json:"rise,omitempty"`
+
 	// SunriseMinutes is how long before an alarm the screen starts to light, nothing for not at all:
 	// the default, for alarms that do not choose their own (Alarm.Sunrise) and for the Home Assistant
 	// helpers followed as alarms. The light comes up from almost nothing to the brightness the screen
@@ -335,6 +339,54 @@ func (w AlarmsWriter) Sound(name string) error {
 // Say sets what an alarm says as it starts ringing.
 func (w AlarmsWriter) Say(v AlarmSay) error {
 	return w.st.Update(func(c *Config) { c.Alarms.Say = v })
+}
+
+// Rise sets how long an alarm takes to get up to its ring volume.
+func (w AlarmsWriter) Rise(v AlarmRise) error {
+	return w.st.Update(func(c *Config) { c.Alarms.Rise = v })
+}
+
+// AlarmRise is how long an alarm takes to come up from quiet to its ring volume.
+type AlarmRise string
+
+const (
+	RiseNone AlarmRise = ""
+	Rise30s  AlarmRise = "30s"
+	Rise1m   AlarmRise = "1m"
+	Rise2m   AlarmRise = "2m"
+	Rise5m   AlarmRise = "5m"
+)
+
+// AlarmRises is the choice, for a select.
+func AlarmRises() []AlarmRise { return []AlarmRise{RiseNone, Rise30s, Rise1m, Rise2m, Rise5m} }
+
+// Duration is how long the rise takes; 0 for none, and for a value this version does not know.
+func (v AlarmRise) Duration() time.Duration {
+	switch v {
+	case Rise30s:
+		return 30 * time.Second
+	case Rise1m:
+		return time.Minute
+	case Rise2m:
+		return 2 * time.Minute
+	case Rise5m:
+		return 5 * time.Minute
+	}
+	return 0
+}
+
+func (v AlarmRise) Label() string {
+	switch v {
+	case Rise30s:
+		return "Over 30 seconds"
+	case Rise1m:
+		return "Over 1 minute"
+	case Rise2m:
+		return "Over 2 minutes"
+	case Rise5m:
+		return "Over 5 minutes"
+	}
+	return "Full at once"
 }
 
 // AlarmSay is what an alarm says as it starts ringing.

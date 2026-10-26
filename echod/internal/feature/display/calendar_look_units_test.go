@@ -418,32 +418,34 @@ func TestCalendarLookDefaults(t *testing.T) {
 	if c := config.Get().Calendar; c.Week != "" || c.MonthDetails != "" {
 		t.Errorf("a default was saved as chosen: %+v", c)
 	}
+	// Each is turned over, or moved to its next choice, from Home Assistant, then back from the screen.
+	next := func(s lookSwitch) int { return (lookOpt(s, deviceLook()) + 1) % max(len(s.opts), 2) }
 	for i, s := range lookSwitches {
-		before := s.get(deviceLook())
+		before := lookOpt(s, deviceLook())
 		switch e := d.lookEnts[i].(type) {
 		case *esphome.Switch:
-			if e.Get() != before {
-				t.Errorf("%s: Home Assistant shows %v, the screen %v", s.id, e.Get(), before)
+			if e.Get() != s.get(deviceLook()) {
+				t.Errorf("%s: Home Assistant shows %v, the screen %v", s.id, e.Get(), s.get(deviceLook()))
 			}
-			e.OnCommand(!before)
+			e.OnCommand(!s.get(deviceLook()))
 		case *esphome.Select:
-			if e.Get() != s.opts[lookOpt(s, deviceLook())] {
+			if e.Get() != s.opts[before] {
 				t.Errorf("%s: Home Assistant shows %q", s.id, e.Get())
 			}
-			e.OnCommand(s.opts[lookOpt(s, deviceLook())^1])
+			e.OnCommand(s.opts[next(s)])
 		}
-		if s.get(deviceLook()) == before {
+		if lookOpt(s, deviceLook()) == before {
 			t.Errorf("%s: Home Assistant's command changed nothing", s.id)
 		}
 		if len(s.opts) > 0 {
-			if p, ok := lookPicker(lookRowPrefix + s.id); !ok || len(p.opts) != 2 {
+			if p, ok := lookPicker(lookRowPrefix + s.id); !ok || len(p.opts) != len(s.opts) {
 				t.Errorf("%s: its list %+v", s.id, p)
 			}
-			d.lookChoose(lookRowPrefix+s.id, lookOpt(s, deviceLook())^1)
+			d.lookChoose(lookRowPrefix+s.id, before)
 		} else if !d.lookRowTap(lookRowPrefix + s.id) {
 			t.Errorf("%s: its row is not a row", s.id)
 		}
-		if s.get(deviceLook()) != before {
+		if lookOpt(s, deviceLook()) != before {
 			t.Errorf("%s: the screen's row did not turn it back", s.id)
 		}
 	}
@@ -453,7 +455,7 @@ func TestCalendarLookDefaults(t *testing.T) {
 	// The setup page's choices change the same switches.
 	for i, c := range d.lookChoices() {
 		now := c.Now()
-		c.Choose(now ^ 1)
+		c.Choose((now + 1) % len(c.Options))
 		if c.Now() == now {
 			t.Errorf("%s: the setup page's choice changed nothing", lookSwitches[i].id)
 		}
@@ -555,5 +557,57 @@ func TestOpenCalendarDay(t *testing.T) {
 	_ = config.Set().Calendar().Sources(lookOrder)
 	if !d.OpenCalendarDay(oct(19, 9, 0)) || !sameDay(d.calDay, octDay(19)) || d.calWeek || d.calMonth.Month() != time.October {
 		t.Errorf("opened %v week=%v month %v", d.calDay, d.calWeek, d.calMonth)
+	}
+}
+
+// Opens on: the date opens the month, this week (the month while the week view is off), today or
+// Coming up; the clock's day card still opens its own day.
+func TestCalendarOpensOn(t *testing.T) {
+	d, _ := calTestDisplay(t)
+	_ = config.Set().Calendar().Sources(lookOrder)
+	was := panelWide.Load()
+	t.Cleanup(func() { panelWide.Store(was) })
+	panelWide.Store(true)
+	now := time.Now()
+	today := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, time.Local)
+	open := func(v string) {
+		t.Helper()
+		_ = config.Set().Calendar().Opens(v)
+		d.calUntil = time.Time{}
+		if !d.OpenCalendar() {
+			t.Fatalf("%q: not opened", v)
+		}
+	}
+	if deviceLook().opens != opensMonth {
+		t.Errorf("opens on %d by default", deviceLook().opens)
+	}
+	open("")
+	if !d.calDay.IsZero() || d.calWeek || d.calAgenda {
+		t.Errorf("month: day %v week %v agenda %v", d.calDay, d.calWeek, d.calAgenda)
+	}
+	open(config.OpensWeek)
+	if !d.calWeek || !d.calDay.Equal(weekStart(now)) {
+		t.Errorf("week: day %v week %v", d.calDay, d.calWeek)
+	}
+	open(config.OpensDay)
+	if d.calWeek || !d.calDay.Equal(today) {
+		t.Errorf("day: day %v week %v", d.calDay, d.calWeek)
+	}
+	open(config.OpensAgenda)
+	if !d.calAgenda || !d.calDay.IsZero() {
+		t.Errorf("Coming up: agenda %v day %v", d.calAgenda, d.calDay)
+	}
+	_ = config.Set().Calendar().Week(false)
+	open(config.OpensWeek)
+	if d.calWeek || !d.calDay.IsZero() {
+		t.Errorf("week with the week view off: day %v week %v", d.calDay, d.calWeek)
+	}
+	if !d.OpenCalendarDay(today.AddDate(0, 0, 2)) || !d.calDay.Equal(today.AddDate(0, 0, 2)) || d.calWeek {
+		t.Errorf("the day card: day %v week %v", d.calDay, d.calWeek)
+	}
+	// An unknown value read from a settings file is the month.
+	_ = config.Set().Calendar().Opens("year")
+	if deviceLook().opens != opensMonth {
+		t.Errorf("unknown opens on %d", deviceLook().opens)
 	}
 }

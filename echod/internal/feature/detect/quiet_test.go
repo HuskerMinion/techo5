@@ -1,7 +1,9 @@
 package detect
 
 import (
+	"reflect"
 	"testing"
+	"time"
 
 	"github.com/HuskerMinion/techo5/echod/internal/lib/wake"
 )
@@ -102,5 +104,95 @@ func TestNothingIsScoredWhileQuiet(t *testing.T) {
 	}
 	if len(e.backends) != 0 {
 		t.Error("scoring while quiet built an engine")
+	}
+}
+
+// A backend rebuilt after mute has no scores yet. Its slot must not retain an
+// utterance, readiness, or refractory period from the backend that was closed.
+func TestQuietClearsUtteranceState(t *testing.T) {
+	fakes(t)
+	e := New(2, nil)
+	m := model("test_word", wake.KindMicroWakeWord)
+	if err := e.Use(0, m); err != nil {
+		t.Fatal(err)
+	}
+	at := time.Now()
+	e.slots[0] = slot{model: m, loaded: true, scored: true, quiet: at.Add(time.Hour),
+		peak: 0.9, peakAt: at, suppressed: 5, holding: true, holdEnds: at.Add(Hold),
+		crossing: 0.8, crossCutoff: 0.7, candidate: true, candidateAt: at,
+		candidatePeak: 0.6, askedUntil: at.Add(Refractory)}
+	e.Quiet(true)
+	if got, want := e.slots[0], (slot{model: m, loaded: true}); !reflect.DeepEqual(got, want) {
+		t.Errorf("muted slot retains utterance state: %+v", got)
+	}
+	if e.Ready(0) {
+		t.Error("closed model is still ready")
+	}
+	// The unmute protection is a new hold, installed after Quiet(false).
+	e.Quiet(false)
+	if e.Ready(0) {
+		t.Error("reloaded model is ready before scoring")
+	}
+	e.Settle(time.Second)
+	if !e.slots[0].quiet.After(at) {
+		t.Error("unmute settling was lost")
+	}
+	if got, loaded := e.Loaded(0); !loaded || !reflect.DeepEqual(got, m) {
+		t.Error("model choice was lost")
+	}
+}
+
+type warmingAfterQuiet struct {
+	fake
+	frames int
+}
+
+func (f *warmingAfterQuiet) feed(frame []int16) (map[string]float64, bool) {
+	f.frames++
+	if f.frames < 4 {
+		return nil, false
+	}
+	return f.loaded, true
+}
+
+func TestQuietReadinessWaitsForNewScores(t *testing.T) {
+	was := build
+	build = func(wake.Kind) (backend, error) {
+		return &warmingAfterQuiet{fake: fake{loaded: map[string]float64{}}}, nil
+	}
+	t.Cleanup(func() { build = was })
+	e := New(1, nil)
+	if err := e.Use(0, model("test_word", wake.KindMicroWakeWord)); err != nil {
+		t.Fatal(err)
+	}
+	ready := make(chan int, 2)
+	e.OnReady = func(n int) { ready <- n }
+	for range 4 {
+		e.score([]int16{0}, nil)
+	}
+	select {
+	case <-ready:
+	case <-time.After(time.Second):
+		t.Fatal("initial score did not report ready")
+	}
+	e.Quiet(true)
+	e.Quiet(false)
+	if e.Ready(0) {
+		t.Error("old readiness survived reload")
+	}
+	for range 3 {
+		e.score([]int16{0}, nil)
+		if e.Ready(0) {
+			t.Error("ready before new model's first score")
+		}
+	}
+	e.score([]int16{0}, nil)
+	select {
+	case <-ready:
+	case <-time.After(time.Second):
+		t.Fatal("reloaded model did not report ready")
+	}
+	if !e.Ready(0) {
+		t.Error("not ready after new score")
 	}
 }

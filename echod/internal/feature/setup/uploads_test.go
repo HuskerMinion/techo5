@@ -122,7 +122,7 @@ func TestASoundIsSentFromThePage(t *testing.T) {
 			t.Errorf("%s: %d", what, w.Code)
 		}
 	}
-	for _, name := range []string{"../failure", "failure.wav", "/tmp/x", "", "alarm"} {
+	for _, name := range []string{"../failure", "failure.wav", "/tmp/x", "", "alarm_clock"} {
 		if w := send(up(c.Value, name, good, c)); !refused(w, "") {
 			t.Errorf("sound %q: %d %s", name, w.Code, w.Header().Get("Location"))
 		}

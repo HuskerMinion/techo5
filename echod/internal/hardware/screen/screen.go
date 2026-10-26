@@ -562,11 +562,29 @@ func SetBacklight(level int) error {
 	level = min(max(level, 0), BacklightMax)
 	path, top := backlightNode()
 	raw := level * top / BacklightMax
+	backlightMu.Lock()
+	defer backlightMu.Unlock()
+	if raw > 0 && backlightOff && layout.AthenaMainline() {
+		// Some 2nd gen Show 8 panels (JD9365, #253) stop following the level once it has been 0, until
+		// the PWM is driven full once; so a backlight coming back from off goes full first, for less
+		// than a millisecond, before the level it is set to.
+		if err := os.WriteFile(path, []byte(strconv.Itoa(top)), 0o644); err != nil {
+			return fmt.Errorf("screen: backlight: %w", err)
+		}
+	}
 	if err := os.WriteFile(path, []byte(strconv.Itoa(raw)), 0o644); err != nil {
 		return fmt.Errorf("screen: backlight: %w", err)
 	}
+	backlightOff = raw == 0
 	return nil
 }
+
+// backlightOff is whether the last level written was 0: until a level is written the backlight is taken
+// as off, so the first one written after a start also goes full first.
+var (
+	backlightMu  sync.Mutex
+	backlightOff = true
+)
 
 // Backlight reads the level the driver holds. The bootloader's own setting reads as 0 until
 // something writes one.

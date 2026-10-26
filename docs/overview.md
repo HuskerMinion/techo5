@@ -20,12 +20,17 @@ Android, with one Go daemon, `echod`, doing everything the device does:
   Connections, Privacy, General) and each one's settings on a card beside them, a drawer in from the
   right edge with Cameras and Radio, and Wi-Fi setup with an on-screen keyboard. A first-run card
   shows once.
+
+  What each touch and swipe on a Show's clock does:
+
+  ![Touch map of the clock](images/touch-map.svg)
+
 - **Timers and alarms**: voice timers from Home Assistant count down under the clock; alarms are set
   on the settings screen (Alarms) or with the `alarm_set` action, or followed from Home Assistant `input_datetime`
   helpers (`alarms_follow`), and ring from the device's own clock even when Home Assistant is down.
   A ringing timer or alarm takes the whole screen, lights a dark one, and offers Stop and Snooze
-  (9 minutes unless changed); the alarm sound (Home Assistant, Beeps, Chimes, Bells, Gentle or Pulse) and the snooze
-  length are set on the Alarms card or in Home Assistant; the stop word, the action button and Home Assistant's Stop/Snooze buttons work too.
+  (9 minutes unless changed); the alarm sound (Home Assistant, Beeps, Chimes, Bells, Gentle, Pulse or a recording of your own), whether it
+  starts quiet and gets louder, and the snooze length are set on the Alarms card or in Home Assistant; the stop word, the action button and Home Assistant's Stop/Snooze buttons work too.
   Home Assistant can see one ringing: `binary_sensor.sounding` is on while any ring is active (including one a button silenced and not yet answered), `alarm_sounding` and `timer_sounding` say which kind, and the `sounding_what` text sensor names them (`alarm "Wake up", timer "Pasta"`). All three devices have them.
 - **Weather**: a new device shows Home Assistant's own forecast (`weather.forecast_home`), or, when
   Home Assistant has none, the first weather entity it lists; any other

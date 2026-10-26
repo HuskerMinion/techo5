@@ -273,8 +273,12 @@ func (d *Driver) release(c *Claim) {
 
 // settle tells the background whether it may play, which is whenever nothing holds the speaker. Every
 // change to now goes through here, so the two cannot drift apart.
+//
+// It tells the player too, which wakes an amplifier asleep while idle (idle.go) as soon as a claim
+// is taken, before the errand has anything queued, so the wake is over by the time the sound is.
 func (d *Driver) settle() {
 	d.mu.Lock()
+	d.p.Hold(d.now != nil)
 	want := d.now != nil && !d.now.over
 	if want == d.yielded {
 		d.mu.Unlock()

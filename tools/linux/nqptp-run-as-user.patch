@@ -1,0 +1,53 @@
+--- a/nqptp.c
++++ b/nqptp.c
+@@ -31,6 +31,8 @@
+ 
+ #include <arpa/inet.h> // inet_ntop
+ #include <stdio.h>     // fprint
++#include <pwd.h>       // getpwnam, for -u
++#include <grp.h>       // initgroups, for -u
+ #include <stdlib.h>    // malloc;
+ #include <string.h>    // memset
+ 
+@@ -143,6 +145,7 @@
+ }
+ 
+ int main(int argc, char **argv) {
++  const char *run_as_user = NULL; // -u: the user to run as once PTP's ports are open
+ #ifdef CONFIG_FOR_OPENBSD
+   if (pledge("stdio rpath tmppath inet dns id", NULL) == -1) {
+     die("pledge: %s", strerror(errno));
+@@ -170,6 +173,8 @@
+         debug_level = 2;
+       } else if (strcmp(argv[i] + 1, "v") == 0) {
+         debug_level = 1;
++      } else if (strcmp(argv[i] + 1, "u") == 0 && i + 1 < argc) {
++        run_as_user = argv[++i];
+       } else if (strcmp(argv[i] + 1, "h") == 0) {
+         fprintf(stdout, "    -V     print version,\n"
+                         "    -v     verbose log,\n"
+@@ -230,6 +235,24 @@
+   act2.sa_handler = termHandler;
+   sigaction(SIGTERM, &act2, NULL);
+ 
++  // With -u, root is needed only to bind PTP's privileged ports, done above: everything after, reading
++  // what the network sends, runs as that user, with its supplementary groups (on Android kernels the inet
++  // group is what lets it open the control socket below).
++  if (run_as_user != NULL) {
++    struct passwd *rpw = getpwnam(run_as_user);
++    if (rpw == NULL) {
++      die("unknown user %s", run_as_user);
++    }
++    if (initgroups(rpw->pw_name, rpw->pw_gid) == -1 ||
++        setgid(rpw->pw_gid) == -1 ||
++        setuid(rpw->pw_uid) == -1) {
++      die("cannot drop privileges to %s", run_as_user);
++    }
++    if (setuid(0) == 0) {
++      die("privileges to %s were not dropped for good", run_as_user);
++    }
++  }
++
+ #ifdef CONFIG_FOR_OPENBSD
+   // shm_open(3) prohibits sharing between different UIDs, so nqptp must run as
+   // the same user shairport-sync does.

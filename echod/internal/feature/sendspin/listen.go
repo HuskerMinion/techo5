@@ -12,6 +12,7 @@ import (
 
 	"github.com/gorilla/websocket"
 
+	"github.com/HuskerMinion/techo5/echod/internal/feature/web"
 	"github.com/HuskerMinion/techo5/echod/internal/hardware/speaker"
 )
 
@@ -50,6 +51,12 @@ func (l *listener) serve(ctx context.Context, name string) error {
 
 	mux := http.NewServeMux()
 	mux.HandleFunc(path, func(w http.ResponseWriter, r *http.Request) {
+		// Music Assistant is this house's: never a server from away, over the tailnet (the firewall's
+		// tailnet chain turns it away first).
+		if web.AwayRequest(r) {
+			http.NotFound(w, r)
+			return
+		}
 		if !l.take() {
 			http.Error(w, "already connected", http.StatusConflict)
 			return

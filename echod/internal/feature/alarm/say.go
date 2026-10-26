@@ -83,3 +83,29 @@ func spoken(label string, now time.Time, say config.AlarmSay, clock24, inEnglish
 	}
 	return words
 }
+
+// riseChoice is how long an alarm takes to come up from quiet to its ring volume, in Home Assistant.
+func (a *Alarms) riseChoice() *esphome.Select {
+	sel := &esphome.Select{
+		Base: esphome.Base{ObjectID: "alarm_gets_louder", Name: "Alarm gets louder", Icon: "mdi:volume-plus", Category: esphome.CategoryConfig},
+	}
+	component.Bind(sel, config.AlarmRises(), func(v config.AlarmRise) config.AlarmRise { return v }, config.Set().Alarms().Rise)
+	return sel
+}
+
+// Rise is how long alarms take to come up from quiet.
+func (a *Alarms) Rise() config.AlarmRise { return config.Get().Alarms.Rise }
+
+// SetRise chooses how long alarms take to come up from quiet, from the screen or the setup page.
+func (a *Alarms) SetRise(v config.AlarmRise) {
+	if !slices.Contains(config.AlarmRises(), v) {
+		slog.Warn("unknown alarm rise choice", "value", v)
+		return
+	}
+	if err := config.Set().Alarms().Rise(v); err != nil {
+		slog.Error("saving the alarm rise failed", "err", err)
+		return
+	}
+	a.rise.Set(v.Label())
+	slog.Info("alarm gets louder", "over", v.Duration())
+}

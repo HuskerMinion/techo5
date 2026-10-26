@@ -225,8 +225,11 @@ type Display struct {
 
 	// shots are screenshot requests, answered with a copy of the next frame drawn.
 	shots chan chan *image.RGBA
-	dev   *screen.Device
-	r     *renderer
+	// shotPlain is whether the frame last sent went to the panel without the skin's filter (unskinned), so
+	// a screenshot of it is left plain too (skinnedCopy).
+	shotPlain bool
+	dev       *screen.Device
+	r         *renderer
 
 	// booting is the splash: from the first frame until Home Assistant is listening and at least
 	// splashMin has passed.
@@ -479,6 +482,7 @@ func build() *Display {
 		IgnoreRoomLights: d.setRoomLightsIgnored, Calendar: d.lookChoices(),
 		Themes: &setup.ThemeChoices{LightNow: lightThemeShown, Changed: d.themesChanged, Auto: hasLightSensor()}})
 	d.camTime = cameraTimeSelect()
+	cameraFitSel, cameraBandsSel, cameraShadeSel = cameraFitSelect(), cameraBandsSelect(), cameraShadeSelect()
 	d.answerTime = answerTimeSelect()
 	d.clockPos, d.dateCol, d.weatherPos = clockLayoutSelects(d.wake)
 	d.turnStyle = turnStyleSelect(d.wake)
@@ -556,6 +560,9 @@ func build() *Display {
 	d.watchRoom()
 	dashboard.Get().Changed.Listen(func(struct{}) { d.wake() })
 	tessera.Changed.Listen(func(struct{}) { d.wake() })
+	tessCams.mu.Lock()
+	tessCams.wake = d.wake
+	tessCams.mu.Unlock()
 	dashboard.Get().Asked.Listen(d.dashboardAsked)
 	deck.Get().Changed.Listen(d.deckChanged)
 	video.Get().Changed.Listen(func(struct{}) { d.wake() })
@@ -586,7 +593,7 @@ func (d *Display) skinSel() *esphome.Select { return d.skinSl }
 func (d *Display) clockTapSel() *esphome.Select { return d.clockTap }
 
 func (d *Display) Entities() []esphome.Entity {
-	ents := append([]esphome.Entity{d.light, d.power, d.roomSw, d.auto, d.clock, d.clockStyleSel, d.clockPos, d.dateCol, d.weatherPos, d.camTime, d.answerTime, d.turnStyle, d.timerStyle, d.skinSl, d.callBtn, d.weatherFx, d.warmthSw, d.lang, d.strip, d.themeSel, d.lightThemeSel, d.themeModeSel, d.nightHours, d.nightStart, d.nightEnd, d.nightMode, d.atNight, d.nightStyle, d.glowLevel, d.dimmestNum,
+	ents := append([]esphome.Entity{d.light, d.power, d.roomSw, d.auto, d.clock, d.clockStyleSel, d.clockPos, d.dateCol, d.weatherPos, d.camTime, cameraFitSel, cameraBandsSel, cameraShadeSel, d.answerTime, d.turnStyle, d.timerStyle, d.skinSl, d.callBtn, d.weatherFx, d.warmthSw, d.lang, d.strip, d.themeSel, d.lightThemeSel, d.themeModeSel, d.nightHours, d.nightStart, d.nightEnd, d.nightMode, d.atNight, d.nightStyle, d.glowLevel, d.dimmestNum,
 		d.pop.on, d.pop.lead, d.pop.chime, d.pop.allDay, d.clockTap, d.styleSwipeSw, d.volumeSwipeSw, d.nightTapSw, d.fontSel}, d.lookEnts...)
 	if !screen.CanTint {
 		// Night warmth tints the frame on its way to the panel, which a tablet's screen does not take.
@@ -604,6 +611,9 @@ func (d *Display) Restore(c config.Config) {
 	d.clockStyleSel.Set(clockStyles[clockStyleIndex()].label)
 	d.fontSel.Set(fonts.Names()[fontIndex()])
 	d.camTime.Set(cameraTimes[cameraTimeIndex()].label)
+	cameraFitSel.Set(cameraFits[cameraFitIndex()].label)
+	cameraBandsSel.Set(cameraBandStyles[cameraBandsIndex()].label)
+	cameraShadeSel.Set(cameraShades[cameraShadeIndex()].label)
 	d.answerTime.Set(answerTimes[answerTimeIndex()].label)
 	d.clockPos.Set(clockPositions[clockPositionIndex()].label)
 	d.dateCol.Set(dateColors[dateColorIndex()].label)
@@ -2105,8 +2115,7 @@ func (d *Display) answerShots() {
 		case ch := <-d.shots:
 			var img *image.RGBA
 			if d.r != nil {
-				img = image.NewRGBA(d.r.dst.Rect)
-				copy(img.Pix, d.r.dst.Pix)
+				img = skinnedCopy(d.r.dst, d.shotPlain)
 			}
 			ch <- img
 		default:
@@ -2478,6 +2487,7 @@ func (d *Display) frame() (next time.Duration) {
 		// again until the watching ends.
 		d.r.watchedDark()
 		unskinned(d.dev, true)
+		d.shotPlain = true
 		if err := d.dev.Present(); err != nil {
 			slog.Warn("presenting the frame failed", "err", err)
 		}
@@ -2828,7 +2838,8 @@ func (d *Display) frame() (next time.Duration) {
 		// have the processor for a moment.
 		defer func() { next = min(next, max(rainbowFrame-time.Since(began), rainbowBreath)) }()
 	}
-	unskinned(d.dev, s.redClockFace() || d.r.marked)
+	d.shotPlain = s.redClockFace() || d.r.marked
+	unskinned(d.dev, d.shotPlain)
 	if err := d.dev.Present(); err != nil {
 		slog.Warn("presenting the frame failed", "err", err)
 	}
@@ -2880,6 +2891,10 @@ func (d *Display) frame() (next time.Duration) {
 		return wait
 	}
 	if (s.phase == "idle" || s.phase == "lingering") && !s.showVolume {
+		if d.r.c64Drawn {
+			// The cursor blinks (skin_c64.go), on the same grid of Unix milliseconds its phase is read on.
+			return c64Blink - time.Duration(now.UnixMilli()%c64Blink.Milliseconds())*time.Millisecond
+		}
 		// On the next whole second, so the clock changes when the second does.
 		return time.Until(now.Truncate(idleFrame).Add(idleFrame))
 	}

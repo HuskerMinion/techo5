@@ -214,6 +214,22 @@ var worldZones struct {
 	locs map[string]*time.Location
 }
 
+// cachedZone is a time zone by its name, read once and kept with the style's (worldZones): the World
+// clock plugin's tiles (tessera_plugins.go) ask for theirs every frame too. Nil for a name not known.
+func cachedZone(z string) *time.Location {
+	worldZones.mu.Lock()
+	defer worldZones.mu.Unlock()
+	if worldZones.locs == nil {
+		worldZones.locs = map[string]*time.Location{}
+	}
+	loc, seen := worldZones.locs[z]
+	if !seen {
+		loc, _ = time.LoadLocation(z)
+		worldZones.locs[z] = loc
+	}
+	return loc
+}
+
 // worldPlaces is the places named, those whose zone is known, at most maxWorld; none named are the
 // style's own.
 func worldPlaces(zones []string) []worldPlace {

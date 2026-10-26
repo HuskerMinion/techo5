@@ -52,6 +52,10 @@ if ! mountpoint -q /dev; then
 fi
 mountpoint -q /run || mount -t tmpfs tmpfs /run
 mountpoint -q /tmp || mount -t tmpfs tmpfs /tmp
+# POSIX shared memory, where nqptp keeps the clock AirPlay 2's receiver reads (feature/streaming): mdev and
+# devtmpfs make no /dev/shm, and without it the daemon keeps the classic receiver.
+mkdir -p /dev/shm
+mountpoint -q /dev/shm || mount -t tmpfs -o mode=1777,size=1m tmpfs /dev/shm
 mountpoint -q /data || mount -t ext4 -o noatime $DATA_DEV /data
 mountpoint -q /store || mount -t ext4 -o ro,noatime $STORE_DEV /store
 # The root is read-only; what needs writing lives on tmpfs or userdata.

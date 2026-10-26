@@ -61,6 +61,11 @@ type Capabilities struct {
 	// Features are the newer options taken, by the names the add-on gives them.
 	Features []string
 
+	// PluginAPI is the plugin API the screen speaks and Plugins the plugins it has, with Features naming
+	// "plugins": a layout with a plugin's tile goes only to a screen that says both (docs/PLUGINS.md).
+	PluginAPI string
+	Plugins   []Plugin
+
 	// The older options, each a flag of its own.
 	BarValues, AppearanceUpdates, GroupLamps, TileKeys, TileRepeats, FreePages bool
 }
@@ -89,6 +94,16 @@ type Answer struct {
 
 	Features  []string `json:"features"`
 	TileSizes []string `json:"tile_sizes"`
+
+	PluginAPI string   `json:"plugin_api,omitempty"`
+	Plugins   []Plugin `json:"plugins,omitempty"`
+}
+
+// Plugin is a plugin the screen has, as its hello names it: its id, its version and its tiles' ids.
+type Plugin struct {
+	ID      string   `json:"id"`
+	Version string   `json:"version"`
+	Tiles   []string `json:"tiles"`
 }
 
 // envelope is what every message carries, whatever it is.
@@ -703,5 +718,7 @@ func (r *Receiver) answer(status string) Answer {
 		MaxBarItems: r.caps.MaxBarItems,
 		Features:    features,
 		TileSizes:   slices.Clone(r.caps.TileSizes),
+		PluginAPI:   r.caps.PluginAPI,
+		Plugins:     slices.Clone(r.caps.Plugins),
 	}
 }

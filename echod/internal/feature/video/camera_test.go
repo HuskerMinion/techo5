@@ -3,6 +3,7 @@
 package video
 
 import (
+	"fmt"
 	"slices"
 	"strings"
 	"testing"
@@ -12,7 +13,7 @@ import (
 // scaled to the page and made its pixels, with the network as the only thing the decoder may open.
 func TestTheCameraArguments(t *testing.T) {
 	url := "http://192.0.2.10:8123/api/hls/0123abcd/master_playlist.m3u8"
-	a := cameraArgs(url, 640, 480, false, "")
+	a := cameraArgs(url, 640, 480, false, "", fitFilter(640, 480))
 	has := func(seq ...string) bool {
 		for i := 0; i+len(seq) <= len(a); i++ {
 			if slices.Equal(a[i:i+len(seq)], seq) {
@@ -37,7 +38,7 @@ func TestTheCameraArguments(t *testing.T) {
 		}
 	}
 	// Where the kernel cannot fence the decoder, it fetches through the guard, as a video does.
-	if p := cameraArgs(url, 640, 480, false, "http://video:x@127.0.0.1:1"); !slices.Contains(p, "-http_proxy") {
+	if p := cameraArgs(url, 640, 480, false, "http://video:x@127.0.0.1:1", fitFilter(640, 480)); !slices.Contains(p, "-http_proxy") {
 		t.Errorf("no proxy: %q", p)
 	}
 	// The input's options come before it, or they are taken as the output's.
@@ -56,7 +57,7 @@ func TestTheCameraArguments(t *testing.T) {
 	if has("-tls_verify", "1") {
 		t.Error("certificate options for plain http")
 	}
-	if a := cameraArgs("https://ha.example.com/api/hls/x/master_playlist.m3u8", 640, 480, false, ""); !slices.Contains(a, "-tls_verify") {
+	if a := cameraArgs("https://ha.example.com/api/hls/x/master_playlist.m3u8", 640, 480, false, "", fitFilter(640, 480)); !slices.Contains(a, "-tls_verify") {
 		t.Errorf("no certificate check for https: %q", a)
 	}
 }
@@ -117,9 +118,13 @@ func TestACameraOverRTSP(t *testing.T) {
 		a    []string
 		want [][]string
 	}{
-		{"picture", cameraRTSPArgs(addr, 640, 480), [][]string{
+		{"picture", cameraRTSPArgs(addr, 640, 480, fitFilter(640, 480)), [][]string{
 			{"-allowed_media_types", "video"}, {"-threads", "2"}, {"-map", "0:v:0", "-an"},
 			{"-max_pixels", "2088960"}, {"-f", "rawvideo", "-pix_fmt", "rgba", "pipe:3"},
+		}},
+		{"tile", cameraRTSPArgs(addr, 320, 240, fillFilter(320, 240)), [][]string{
+			{"-allowed_media_types", "video"}, {"-map", "0:v:0", "-an"},
+			{"-vf", "fps=12,scale=320:240:force_original_aspect_ratio=increase:flags=fast_bilinear,crop=320:240"},
 		}},
 		{"sound", cameraSoundRTSPArgs(addr), [][]string{
 			{"-allowed_media_types", "audio"}, {"-map", "0:a:0", "-vn"},
@@ -164,5 +169,12 @@ func TestALoginInTheAddressWins(t *testing.T) {
 	}
 	if _, err := rtspURL("http://192.0.2.20/s", "admin", "x"); err == nil {
 		t.Error("an http address taken for RTSP")
+	}
+}
+
+// A tile showing the whole picture is decoded no faster than one filling its tile.
+func TestTileFitFilterCapsTheRate(t *testing.T) {
+	if f := tileFitFilter(320, 240); !strings.HasPrefix(f, fmt.Sprintf("fps=%d,", tileFPS)) || !strings.Contains(f, fitFilter(320, 240)) {
+		t.Errorf("tileFitFilter = %q", f)
 	}
 }

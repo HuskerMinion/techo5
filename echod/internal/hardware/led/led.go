@@ -167,7 +167,7 @@ func (r *Ring) Off() error { return r.Fill(0) }
 
 // Current reads the global drive-current setting.
 func (r *Ring) Current() (int, error) {
-	if r.absent {
+	if r.absent || !r.hasCurrent() {
 		return 0, nil
 	}
 	b, err := os.ReadFile(r.attr("led_current"))
@@ -179,10 +179,18 @@ func (r *Ring) Current() (int, error) {
 
 // SetCurrent sets the global drive current.
 func (r *Ring) SetCurrent(v int) error {
-	if r.absent {
+	if r.absent || !r.hasCurrent() {
 		return nil
 	}
 	return os.WriteFile(r.attr("led_current"), []byte(strconv.Itoa(v)), 0o644)
+}
+
+// hasCurrent is whether the driver has the one current setting for all the ring: Amazon's 3.18 driver
+// does; the is31fl32xx driver of the Echo 2nd gen's Linux 6.1 kernel writes frame at full current
+// already, so there is nothing to set.
+func (r *Ring) hasCurrent() bool {
+	_, err := os.Stat(r.attr("led_current"))
+	return err == nil
 }
 
 // SetBootAnimation toggles the driver's built-in boot animation.

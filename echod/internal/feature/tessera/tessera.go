@@ -5,6 +5,7 @@ package tessera
 import (
 	"log/slog"
 	"path/filepath"
+	"slices"
 	"sync"
 	"sync/atomic"
 
@@ -26,6 +27,12 @@ func init() {
 // whose protocol this was written from; what it says it takes beyond that is in the hello (capabilities).
 const firmwareClaim = "0.57.0"
 
+// featuresClaim is what the screen says it can do, in the add-on's Screen features words: its backlight dims and
+// goes dark, as the add-on takes a screen of no board of its own to, and it draws a camera's picture on the
+// camera's tile itself (own_pictures), from Home Assistant with the device's token (display/tessera_camera.go),
+// so the add-on lets a layout have camera tiles while it sends the screen no pictures.
+const featuresClaim = "dimmable standby own_pictures"
+
 // path is where the layout in force is kept. A variable so a test keeps it somewhere harmless.
 var path = filepath.Join(layout.StateDir, "tessera-layout.json")
 
@@ -42,6 +49,7 @@ type Tessera struct {
 	firmware *esphome.TextSensor
 	node     *esphome.TextSensor
 	shape    *esphome.TextSensor
+	features *esphome.TextSensor
 	// gridSel is the grid the screen tells the add-on: the screen's own, or one chosen (choice.go).
 	gridSel *esphome.Select
 
@@ -88,6 +96,7 @@ func build() *Tessera {
 		firmware: &esphome.TextSensor{Base: onDevice("tessera_screen_firmware", "Screen firmware", "mdi:chip")},
 		node:     &esphome.TextSensor{Base: onDevice("tessera_device_name", "Device name", "mdi:label-outline")},
 		shape:    &esphome.TextSensor{Base: onDevice("tessera_screen_layout", "Screen layout", "mdi:grid")},
+		features: &esphome.TextSensor{Base: onDevice("tessera_screen_features", "Screen features", "mdi:format-list-checks")},
 	}
 	// The inbox is the screen's to set: the add-on reads its status there. A value written to it from Home
 	// Assistant (the oldest firmware took layouts that way, in pieces) is not taken; the status goes back.
@@ -123,7 +132,20 @@ func capabilities(g grid) Capabilities {
 		MaxBarItems: 6,
 		TileSizes:   sizes(g),
 		FreePages:   true,
+		Features:    []string{"plugins"},
+		PluginAPI:   pluginAPI,
+		Plugins:     slices.Clone(builtInPlugins),
 	}
+}
+
+// A plugin runs on a Tessera board as code built into its firmware; here, the plugins whose tiles the
+// display draws itself, from the options the add-on sends (display/tessera_plugins.go), are named as the
+// board's own, and any other plugin's tile is a card that says it is missing, as a board's is.
+const pluginAPI = "0.13"
+
+var builtInPlugins = []Plugin{
+	{ID: "world_clock", Version: "0.4.0", Tiles: []string{"clocks"}},
+	{ID: "custom_card", Version: "0.7.0", Tiles: []string{"card"}},
 }
 
 func (t *Tessera) Name() string { return "tessera screen" }
@@ -139,7 +161,7 @@ func (t *Tessera) Entities() []esphome.Entity {
 	if !t.enabled.Load() {
 		return []esphome.Entity{t.on}
 	}
-	return []esphome.Entity{t.on, t.gridSel, t.inbox, t.firmware, t.node, t.shape}
+	return []esphome.Entity{t.on, t.gridSel, t.inbox, t.firmware, t.node, t.shape, t.features}
 }
 
 // Actions is screen_message while it is on: the add-on hands every message to it, as
@@ -170,6 +192,7 @@ func (t *Tessera) Restore(cfg config.Config) {
 	t.showGrid(screenGrid(), cfg.Tessera.Grid)
 	t.recv.takes(capabilities(g))
 	t.firmware.Set(firmwareClaim)
+	t.features.Set(featuresClaim)
 	t.node.Set(layout.NodeName(cfg.Device.Name, mac()))
 	t.shape.Set(g.String())
 	l, err := Load(path)

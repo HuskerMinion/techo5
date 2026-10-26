@@ -418,6 +418,24 @@ const AmpSwitch = ""
 // MuteSwitch is a mute on the amplifier besides AmpSwitch: none on any Show.
 const MuteSwitch = ""
 
+// idleGate is the amplifier the player puts to sleep while nothing plays (idle.go): the 1st gen Show
+// 5's alone. There Ext_Speaker_Amp_Switch is not the cronos reset line AmpSwitch warns of but a plain
+// enable on a GPIO (amp_gpio, pio 35), active low, so it is the reverse of its name: "Off" plays, "On"
+// is the amplifier off (amp_gpio hi). Left on all the time it amplifies the RT5616's idle output,
+// which is the hum of #291; switched On by hand on a unit (2026-10-25) the hum was gone. The line-out's
+// OUT Playback Switch is the mute in front of it, the same one the headphone path uses.
+//
+// crown has the same codec and the same active-low switch (showInit), and very likely the same hum,
+// but nobody has listened to this on one yet, so it keeps its amplifier on.
+var idleGate = showIdleGate(layout.Checkers())
+
+func showIdleGate(checkers bool) *ampGate {
+	if !checkers {
+		return nil
+	}
+	return &ampGate{control: "Ext_Speaker_Amp_Switch", on: "Off", off: "On", mute: "OUT Playback Switch"}
+}
+
 // mayHaveTAS5805M is whether a board of this build can carry the TAS5805M amplifier (GainAvailable):
 // some 2nd gen Show 5 units do, and the Show 8's kernel carries its driver too.
 const mayHaveTAS5805M = true

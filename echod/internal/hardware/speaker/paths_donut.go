@@ -133,12 +133,17 @@ func DetectOutput() Output {
 const VolumeSteps = config.VolumeSteps
 
 // volumeCurves are the board's volume curves: index is the volume step, value is attenuation in dB.
-// The Dot 2's for now, until the Dot 3's are read off its VolumeCurves.xml and listened to.
+//
+// The speaker's low end is its own. The Dot 2's curve, which it started with, has its first step at
+// -33 dB, and through the Dot 3's TAS2770 that was still far from quiet (the user, 2026-10-25, on
+// dot-v1.0.33). Fire OS's files carry no curve to read: Amazon set the volume in its own audio service.
+// So the first step is -55 dB, and the low steps come up 3 to 4 dB at a time to meet the Dot 2's
+// curve at step 12; from there up it is the Dot 2's, smoothed where that one repeats a value.
 var volumeCurves = map[Output][VolumeSteps + 1]float64{
 	OutputSpeaker: {
-		-90, -33, -30, -26, -25, -23, -21, -19, -17, -16,
-		-14, -13, -12, -10, -9, -8, -7, -5, -5, -4,
-		-4, -4, -4, -3, -3, -3, -3, -3, -2, -1, 0,
+		-90, -55, -51, -47, -43, -39, -35, -31, -27, -23,
+		-20, -17, -14, -12, -10, -9, -8, -7, -6, -5,
+		-4.5, -4, -3.5, -3, -2.5, -2, -1.5, -1, -0.5, -0.25, 0,
 	},
 	OutputHeadphone: {
 		-100, -39, -38, -36, -34, -33, -31, -29, -27, -26,
@@ -236,6 +241,9 @@ const AmpSwitch = ""
 
 // MuteSwitch is empty: no separate amplifier mute.
 const MuteSwitch = ""
+
+// idleGate is none: nothing on this card to put to sleep (idle.go).
+var idleGate *ampGate
 
 // mayHaveTAS5805M is false: the amplifier is a TAS2770.
 const mayHaveTAS5805M = false

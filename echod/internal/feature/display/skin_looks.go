@@ -3,6 +3,7 @@
 package display
 
 import (
+	"image"
 	"math"
 	"sync"
 )
@@ -28,6 +29,25 @@ func unskinned(p skinPanel, plain bool) {
 	}
 }
 
+// skinnedCopy is a copy of src as the panel shows it, for a screenshot: through the skin's filter, the
+// one-color skins' tint and scanlines, unless the frame went out plain (unskinned). Without it a
+// screenshot of Pip-Boy or Matrix came out in the grays they are drawn in.
+func skinnedCopy(src *image.RGBA, plain bool) *image.RGBA {
+	cp := image.NewRGBA(src.Rect)
+	copy(cp.Pix, src.Pix)
+	if plain {
+		return cp
+	}
+	w, h := src.Rect.Dx(), src.Rect.Dy()
+	if f := skinFilterFor(w, h); f != nil {
+		for y := 0; y < h; y++ {
+			at := y * cp.Stride
+			f(cp.Pix[at:at+w*4], y)
+		}
+	}
+	return cp
+}
+
 // skinLook is what a skin brings besides its font: its palette and its filter. Either may be left out.
 type skinLook struct {
 	theme *theme
@@ -45,6 +65,8 @@ var skinLooks = map[string]skinLook{
 	skinMatrix:    {theme: &matrixTheme, mono: &matrixSpec},
 	skinSynthwave: {theme: &synthwaveTheme},
 	skinHAL:       {theme: &halTheme},
+	skinC64:       {theme: &c64Theme},
+	skinBASIC:     {theme: &c64Theme},
 }
 
 // skinFilterFor is the skin in force's filter for a panel w by h, or nil for none.
@@ -71,6 +93,9 @@ var (
 	matrixTheme    = preset("Matrix", 0x000000, 0xffffff, 0xc8c8c8, 0x6e6e6e, 0x2e2e2e)
 	synthwaveTheme = preset("Synthwave", 0x1a0b2e, 0xff2a6d, 0xfde7ff, 0xb967ff, 0x05d9e8)
 	halTheme       = preset("HAL 9000", 0x050505, 0xff2a1a, 0xe2e2e2, 0x8c8c8c, 0x3a3a3a)
+	// c64Theme is the home computer's: light blue on its blue, white for what the theme marks, the
+	// border's lighter blue for the rules.
+	c64Theme = preset("Commodore 64", 0x3e3196, 0xffffff, 0x8f82e0, 0x7a6ccf, 0x7a6ccf)
 )
 
 // monoSpec is a one-color skin's filter: the color each brightness, 0 to 255, comes out as, and what is

@@ -96,7 +96,7 @@ func everyday(id string) bool {
 		}
 	}
 	switch id {
-	case "snoozed", "snooze", "ringvol", "alarmsound", "alarmwords", "sunrise", "sunface", "newtimer", // Alarms & Timers
+	case "snoozed", "snooze", "ringvol", "alarmsound", "alarmwords", "alarmrise", "sunrise", "sunface", "newtimer", // Alarms & Timers
 		"volume", "bass", "treble", "output", "mic", "waketone", "sleep", // Sound
 		"brightness", "auto", "dimmest": // Display
 		return true

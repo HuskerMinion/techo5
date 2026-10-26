@@ -65,3 +65,21 @@ func TestBoardDoubt(t *testing.T) {
 		t.Errorf("Fire OS with an unknown product: %q", got)
 	}
 }
+
+// On Linux 6.1 there is no /proc/idme: the Echo 2nd gen's device type is read from the device tree's
+// idme node, NUL-terminated as the bootloader writes it, and still names the board.
+func TestBoardFromTheDeviceTree(t *testing.T) {
+	read := func(path string) ([]byte, error) {
+		if path == "/proc/device-tree/idme/device_type_id/value" {
+			return []byte(radarTypeID + "\x00"), nil
+		}
+		return nil, &fs.PathError{Op: "open", Path: path, Err: fs.ErrNotExist}
+	}
+	raw, err := readIDME("device_type_id", read)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if board, ok := dotBoard(string(raw), ""); !ok || board != boardRadar {
+		t.Errorf("board %q (%v)", board, ok)
+	}
+}

@@ -17,7 +17,9 @@ import (
 
 	"github.com/HuskerMinion/techo5/echod/internal/config"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/dashboard"
+	"github.com/HuskerMinion/techo5/echod/internal/feature/home"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/tessera"
+	"github.com/HuskerMinion/techo5/echod/internal/feature/voice"
 	"github.com/HuskerMinion/techo5/echod/internal/lib/locale"
 )
 
@@ -279,12 +281,12 @@ func (r *paint) tesseraPage(v tessera.View, on bool, page int, adj dashAdjusting
 		x, y := area.Min.X+t.Col*(cw+gap), area.Min.Y+t.Row*(ch+gap)
 		box := image.Rect(x, y, x+t.Cols*cw+(t.Cols-1)*gap, y+t.Rows*ch+(t.Rows-1)*gap)
 		// A tile's controls go first, for a finger on one to find it rather than the tile.
-		zones = append(zones, r.tessTile(box, t, pal, adj)...)
+		zones = append(zones, r.tessTile(box, t, pal, adj, now)...)
 		z := dashTile{r: box, entity: t.Entity, tess: t.I + 1}
 		if l := t.Level; l != nil {
 			z.adjust = &dashboard.Adjust{Entity: t.Entity, Kind: l.Kind, Value: l.Value, Min: l.Min, Max: l.Max, Step: l.Step}
 		}
-		if t.Taps || z.adjust != nil {
+		if t.Taps || z.adjust != nil || tesseraDomain(t.Entity) == "camera" && !t.Gone || t.Plugin != "" {
 			zones = append(zones, z)
 		}
 	}
@@ -351,7 +353,7 @@ func agoText(d time.Duration) string {
 // tessTile draws one tile in its cells: the badge with its icon at the top, and the name and what it is
 // doing at the foot, larger as the tile is. A reading - a sensor's - is the tile's largest words.
 // It says where the tile's controls are, if it has any drawn.
-func (r *paint) tessTile(b image.Rectangle, t tessera.Placed, pal dashPal, adj dashAdjusting) []dashTile {
+func (r *paint) tessTile(b image.Rectangle, t tessera.Placed, pal dashPal, adj dashAdjusting, now time.Time) []dashTile {
 	card := pal.card
 	if c, ok := swatches[t.Background]; ok {
 		card = lerp(pal.card, c, 0.24)
@@ -360,6 +362,23 @@ func (r *paint) tessTile(b image.Rectangle, t tessera.Placed, pal dashPal, adj d
 		card = lerp(pal.card, swatches["red"], 0.3)
 	}
 	r.roundFill(b, pal.rad, card, card)
+	if t.Plugin != "" {
+		r.tessPlugin(b, t, pal, card, now)
+		return nil
+	}
+	if tesseraDomain(t.Entity) == "camera" && t.Picture && !t.Gone {
+		if shot := tessCams.frame(t.Entity, b.Size(), t.Whole, t.Refresh); shot != nil {
+			draw.Draw(r.dst, b, shot, image.Point{}, draw.Src)
+			if !t.Bare {
+				fc := r.faces()
+				fadeFoot(r.dst, b)
+				r.text(fc.label, r.fit(fc.label, t.Name, b.Dx()-2*r.s(cardPad)), b.Min.X+r.s(cardPad), b.Max.Y-r.s(12), color.RGBA{255, 255, 255, 255})
+			}
+			r.roundPicture(b, pal.rad, pal.bg)
+			return nil
+		}
+		// Until the first snapshot comes, the tile as any other: its icon and name.
+	}
 
 	// A level: a bar along the foot shows where it is, and is the sign a finger can slide it. While one
 	// does, the whole tile fills to the level instead.
@@ -404,6 +423,12 @@ func (r *paint) tessTile(b image.Rectangle, t tessera.Placed, pal dashPal, adj d
 	pad := r.s(sc(16))
 	badge := r.s(sc(52))
 	ring := image.Rect(b.Min.X+pad, b.Min.Y+pad, b.Min.X+pad+badge, b.Min.Y+pad+badge)
+	// A tile too low for its badge over its words (a grid of many rows) has the words beside the badge,
+	// both in the middle of its height, as Tessera's own small cards do.
+	compact := len(controls) == 0 && !(len(t.Days) > 0 && t.Rows >= 2) && b.Dy() < 2*pad+badge+r.s(sc(66))
+	if compact {
+		ring = ring.Add(image.Pt(0, (b.Dy()-badge)/2-pad))
+	}
 	ic := pal.sub
 	switch {
 	case t.Gone:
@@ -488,6 +513,26 @@ func (r *paint) tessTile(b image.Rectangle, t tessera.Placed, pal dashPal, adj d
 			r.tessDays(image.Rect(b.Min.X+pad, ring.Max.Y+r.s(sc(28)), b.Max.X-pad, b.Max.Y-pad), t.Days, t.Cols == 1, pal, k)
 			return zones
 		}
+	}
+	if compact {
+		x := ring.Max.X + r.s(sc(12))
+		right := b.Min.X + pad + room
+		switch {
+		case pill:
+			right = min(right, b.Max.X-pad-r.width(r.faces().button, "Unlock")-r.s(52))
+		case t.Taps && toggles(t.Entity) && !t.Gone:
+			right = min(right, b.Max.X-pad-r.s(sc(46))-r.s(8))
+		}
+		top, low, first, second, firstC := name, sub, t.Name, value, textC
+		if t.Reading && !sliding {
+			top, first, second = big, reading, under
+		}
+		gap := r.s(sc(9))
+		ha, hb := top.Metrics().Ascent.Ceil(), low.Metrics().Ascent.Ceil()
+		y := ring.Min.Y + (badge-(ha+gap+hb))/2 + ha
+		r.text(top, r.fit(top, first, right-x), x, y, firstC)
+		r.text(low, r.fit(low, second, right-x), x, y+gap+hb, pal.sub)
+		return zones
 	}
 	if t.Reading && !sliding {
 		// The reading large, the name under it.
@@ -778,7 +823,8 @@ func (r *paint) tessSwitch(sw image.Rectangle, on bool, card color.RGBA, pal das
 }
 
 // tessTap is a tap on the Tessera page: a tile does what it is for, a dot or the way back goes to its
-// page.
+// page, and a tap on none of them starts a voice turn, as a tap on the clock does while Tap on the clock
+// is Assist.
 func (d *Display) tessTap(x, y int) {
 	if d.colorTap(x, y) {
 		return // a sheet is up, and takes it
@@ -786,14 +832,33 @@ func (d *Display) tessTap(x, y int) {
 	t := d.tileAt(x, y)
 	switch {
 	case t == nil:
+		if config.Get().Screen.ClockTap == "" {
+			tessAssist()
+		}
 	case t.page > 0:
 		d.tessGo(t.page - 1)
 	case t.tess > 0 && t.ctl != "":
 		d.tessControl(t.tess-1, t.entity, t.ctl)
+	case t.tess > 0 && strings.HasPrefix(t.entity, "plugin:"):
+		plugin, _, _ := strings.Cut(strings.TrimPrefix(t.entity, "plugin:"), ".")
+		if tessPluginTap(plugin) {
+			d.wake()
+		}
+	case t.tess > 0 && tesseraDomain(t.entity) == "camera":
+		slog.Info("tessera camera", "entity", t.entity)
+		go home.Get().ShowCamera(t.entity, cameraScreenTime())
 	case t.tess > 0:
 		if tessera.Tap(t.tess-1, t.entity) {
 			d.tessSheet(t.entity)
 		}
+	}
+}
+
+// tessAssist starts a voice turn, or answers or ends the one under way, where there are microphones to
+// take one; a variable for the tests.
+var tessAssist = func() {
+	if hasMicrophone() {
+		voice.Get().Action()
 	}
 }
 

@@ -25,6 +25,7 @@ var keptByRestore = map[string]keptSetting{
 	"remote_adb":                       {func(c *config.Config) { c.Diag.RemoteADB = true }, func(c config.Config) bool { return c.Diag.RemoteADB }},
 	"insecure_tls":                     {func(c *config.Config) { c.Diag.InsecureTLS = true }, func(c config.Config) bool { return c.Diag.InsecureTLS }},
 	"airplay":                          {func(c *config.Config) { c.Streaming.AirPlay = true }, func(c config.Config) bool { return c.Streaming.AirPlay }},
+	"airplay_2":                        {func(c *config.Config) { c.Streaming.AirPlayClassic = true }, func(c config.Config) bool { return c.Streaming.AirPlayClassic }},
 	"spotify_connect":                  {func(c *config.Config) { c.Streaming.Spotify = true }, func(c config.Config) bool { return c.Streaming.Spotify }},
 	"dlna":                             {func(c *config.Config) { c.Streaming.DLNA = true }, func(c config.Config) bool { return c.Streaming.DLNA }},
 	"video":                            {func(c *config.Config) { c.Video.On = true }, func(c config.Config) bool { return c.Video.On }},
@@ -60,6 +61,7 @@ var keptByRestore = map[string]keptSetting{
 	"settings_sharing":                 {func(c *config.Config) { c.Share.On = true }, func(c config.Config) bool { return c.Share.On }},
 	"update_automatically":             {func(c *config.Config) { c.Update.AutoInstall = true }, func(c config.Config) bool { return c.Update.AutoInstall }},
 	"update_channel":                   {func(c *config.Config) { c.Update.Channel = "dev" }, func(c config.Config) bool { return c.Update.Channel == "dev" }},
+	"tailscale":                        {func(c *config.Config) { c.Tailscale.On = true }, func(c config.Config) bool { return c.Tailscale.On }},
 }
 
 // notASetting is the read-only entities with no setting behind them for a file to carry: presses,
@@ -69,7 +71,7 @@ var notASetting = []string{
 	"setup_page", "presence", "wake_assistant_1", "wake_assistant_2", "wake_threshold_1", "wake_threshold_2",
 	"confirm_threshold", "max_listen_1", "max_listen_2", "phone", "phone_answer", "phone_hangup", "phone_peer",
 	"bluetooth_pairing", "bluetooth_phone_pairing", "bluetooth_forget", "bluetooth_forget_phones",
-	"check_for_updates", "restart", "purge_cache",
+	"check_for_updates", "restart", "purge_cache", "setup_remote", "setup_let_in",
 }
 
 func setRecordings(slot int) func(*config.Config) {

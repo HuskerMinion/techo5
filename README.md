@@ -79,6 +79,11 @@ How it compares with EchoLocal, EchoMuse, echo-dot-assist, Kiosk Satellite and V
 
 The bigger changes of September and October 2026. Every release lists the rest.
 
+- 🌐 **Reach a device from away** (v1.6.7). An Echo Show, Echo Spot or Skylight can join your
+  Tailscale network, so a device in another house stays in your own Home Assistant, and its setup page
+  can be opened from afar with Remote setup. Off until you give it a key; over the tailnet only Home
+  Assistant's encrypted connection, the setup page while Remote setup is on, and SSH when it's on get
+  in. [docs/tailscale.md](docs/tailscale.md)
 - 🆕 **The Skylight Calendar 15** (v1.3.0). Not an Echo: the 15-inch wall calendar (150-CAL) runs
   TECHO5 on its own 64-bit mainline Linux kernel. Touch, the calendar, photos, dashboards, music and
   the radio, Bluetooth, the light sensor and the clock work. It has no microphone, so there's no wake

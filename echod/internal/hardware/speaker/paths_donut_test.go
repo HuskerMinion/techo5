@@ -69,3 +69,20 @@ func TestEveryRingIsInDRAMAndInsideTheMargin(t *testing.T) {
 		}
 	}
 }
+
+// The speaker gets quieter at every step down, and its first step is really quiet: through the TAS2770
+// the Dot 2's -33 dB was not (2026-10-25). The top is unity, so the loudest the Dot 3 plays is unchanged.
+func TestTheSpeakersCurveFallsAllTheWayToQuiet(t *testing.T) {
+	curve := volumeCurves[OutputSpeaker]
+	if curve[1] > -50 {
+		t.Errorf("step 1 at %v dB, want -50 dB or lower", curve[1])
+	}
+	if curve[VolumeSteps] != 0 {
+		t.Errorf("step %d at %v dB, want 0", VolumeSteps, curve[VolumeSteps])
+	}
+	for step := 2; step <= VolumeSteps; step++ {
+		if curve[step] <= curve[step-1] {
+			t.Errorf("step %d at %v dB, not louder than step %d at %v dB", step, curve[step], step-1, curve[step-1])
+		}
+	}
+}

@@ -273,6 +273,15 @@ speaker stays silent, with the DAC still "powering up" normally in the log, unti
 Found 2026-09-14 when the daemon's speaker start sequence did exactly that. Leave the amplifier
 as the kernel brought it up; volume is applied in software.
 
+This is cronos only. On the 1st gen Show 5 (checkers) the same control is a plain enable for the
+external amplifier (`amp_gpio`, pio 35), active low: `Off` plays (`amp_gpio` reads `lo`), `On` is the
+amplifier off (`hi`). Left on, it amplifies the RT5616's idle output while the daemon streams silence,
+which is a hum TWRP does not have (#291). So on checkers the daemon puts the amplifier to sleep after
+10 s with nothing to play, the line-out's `OUT Playback Switch` muted first, and wakes it, amplifier
+first and the mute let go after a short settle, before the next sound goes out
+(`echod/internal/hardware/speaker/idle.go`). The Show 8 1st gen (crown) has the same switch but has
+not been tried, so its amplifier stays on.
+
 ### Android's audio stack cannot share the devices
 
 With the daemon holding `pcmC0D22c`/`pcmC0D23p` on LineageOS, the vendor HAL fails to open

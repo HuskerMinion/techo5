@@ -18,7 +18,9 @@ import (
 // and ink; Blueprint to white on blue over a grid; Game Boy to the handheld's four greens; Matrix to
 // green on black with code falling behind the clock. LCARS is a starship's console, with its frame
 // around the home clock; Synthwave a neon sunset over a grid; HAL 9000 black and red with the
-// computer's eye. While a skin is on, the theme and the font chosen are kept and come back when it is
+// computer's eye. Commodore 64 is the home computer's blue screen, its border and its READY prompt
+// (skin_c64.go); TECHO5 BASIC is the same screen saying which TECHO5 it is and how much memory it has.
+// While a skin is on, the theme and the font chosen are kept and come back when it is
 // taken off. None until somebody chooses.
 
 const (
@@ -32,6 +34,8 @@ const (
 	skinMatrix    = "matrix"
 	skinSynthwave = "synthwave"
 	skinHAL       = "hal9000"
+	skinC64       = "c64"
+	skinBASIC     = "techo5basic"
 )
 
 // skins are the choices, as the screen and Home Assistant name them, with what the config keeps.
@@ -49,6 +53,8 @@ var skins = []struct {
 	{"Matrix", skinMatrix, fonts.GoMono},
 	{"Synthwave", skinSynthwave, "exo"},
 	{"HAL 9000", skinHAL, ""},
+	{"Commodore 64", skinC64, fonts.C64},
+	{"TECHO5 BASIC", skinBASIC, fonts.C64},
 }
 
 func skinOptions() []string {

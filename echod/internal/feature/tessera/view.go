@@ -68,6 +68,17 @@ type Placed struct {
 	// Modes are a thermostat's modes, for its mode row; Volume is a player's, from 0 to 1, or -1.
 	Modes  []string
 	Volume float64
+	// Picture is a camera's tile that shows its picture (the layout's display live) rather than its
+	// icon: Whole for all of the picture rather than the tile filled, Bare for no name on it, Refresh
+	// between one snapshot and the next, zero for the screen's own pace.
+	Picture, Whole, Bare bool
+	Refresh              time.Duration
+	// Plugin and PluginTile are a plugin tile's plugin and tile ("world_clock", "clocks"), and
+	// PluginOptions its options and PluginData what the add-on fetched for it (a sensor's state, name and
+	// attributes, for a tile that belongs to one); such a tile has no entity behind it.
+	Plugin, PluginTile string
+	PluginOptions      map[string]any
+	PluginData         map[string]any
 }
 
 // Day is a day of a forecast: its short name, its weather and its icon, and its high and low.
@@ -111,6 +122,14 @@ type options struct {
 	Tap        string          `json:"tap"`
 	Guard      string          `json:"guard"`
 	Controls   string          `json:"controls"`
+	// How a camera's tile shows its picture: display live (else its icon), fit contain (the whole
+	// picture, else it fills the tile), overlay none (no name on it), refresh (seconds between pictures).
+	Display string `json:"display"`
+	Fit     string `json:"fit"`
+	Overlay string `json:"overlay"`
+	Refresh int    `json:"refresh"`
+	// Plugin is a plugin tile's own options, with the defaults of its manifest.
+	Plugin json.RawMessage `json:"plugin"`
 }
 
 // lockOnly is the guard of a lock a tap only locks.
@@ -192,6 +211,15 @@ func view(l *Layout, g grid, now time.Time, held map[int]pending) View {
 			t = p.over(t)
 		}
 		pl := describe(t, o)
+		if plugin, tile, ok := pluginTile(t.Entity); ok {
+			pl.Plugin, pl.PluginTile, pl.Taps, pl.Value, pl.On, pl.Gone = plugin, tile, false, "", false, false
+			_ = json.Unmarshal(o.Plugin, &pl.PluginOptions)
+			_ = json.Unmarshal(t.X, &pl.PluginData)
+		}
+		if domain(t.Entity) == "camera" && o.Display == "live" {
+			pl.Picture, pl.Whole, pl.Bare = true, o.Fit == "contain", o.Overlay == "none"
+			pl.Refresh = time.Duration(max(o.Refresh, 0)) * time.Second
+		}
 		if holding && p.confirm && pl.Taps {
 			pl.Confirm, pl.Value = true, "Tap again to unlock"
 			if domain(t.Entity) == "cover" {
@@ -286,6 +314,16 @@ func num(a map[string]any, key string) (float64, bool) {
 func str(a map[string]any, key string) string {
 	s, _ := a[key].(string)
 	return s
+}
+
+// pluginTile is the plugin and tile of a plugin tile's entity ("plugin:world_clock.clocks").
+func pluginTile(entity string) (plugin, tile string, ok bool) {
+	rest, ok := strings.CutPrefix(entity, "plugin:")
+	if !ok {
+		return "", "", false
+	}
+	plugin, tile, ok = strings.Cut(rest, ".")
+	return plugin, tile, ok && plugin != "" && tile != ""
 }
 
 // domain is an entity's domain: "light" for light.kitchen.

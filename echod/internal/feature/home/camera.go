@@ -643,7 +643,52 @@ func (f *Feature) snapshot(entity string) (*image.RGBA, error) {
 	if err != nil {
 		return nil, err
 	}
-	return fitFrame(src), nil
+	return cameraFrame(src), nil
+}
+
+// CameraFit is the Camera picture setting: "" whole and as large as the screen takes it, "fill" the
+// whole screen with the rest cut off, "native" at the size the camera sends it, never larger.
+func CameraFit() string {
+	switch f := config.Get().Screen.CameraFit; f {
+	case "fill", "native":
+		return f
+	}
+	return ""
+}
+
+// cameraFrame is a camera's picture for its view, as Camera picture says: fitted to the panel, filling
+// it, or at its own size where that is smaller than the panel.
+func cameraFrame(src image.Image) *image.RGBA {
+	switch CameraFit() {
+	case "fill":
+		return fillFrame(src)
+	case "native":
+		fw, fh := cameraFrameSize()
+		if b := src.Bounds(); b.Dx() <= fw && b.Dy() <= fh {
+			dst := image.NewRGBA(image.Rect(0, 0, b.Dx(), b.Dy()))
+			xdraw.Copy(dst, image.Point{}, src, b, xdraw.Src, nil)
+			return dst
+		}
+	}
+	return fitFrame(src)
+}
+
+// fillFrame scales a picture to cover the panel, keeping its shape, cut to it about its middle.
+func fillFrame(src image.Image) *image.RGBA {
+	fw, fh := cameraFrameSize()
+	b := src.Bounds()
+	sw, sh := b.Dx(), b.Dy()
+	part := b
+	if sw*fh > sh*fw { // wider than the panel: its sides cut off
+		w := sh * fw / fh
+		part = image.Rect(b.Min.X+(sw-w)/2, b.Min.Y, b.Min.X+(sw-w)/2+w, b.Max.Y)
+	} else {
+		h := sw * fh / fw
+		part = image.Rect(b.Min.X, b.Min.Y+(sh-h)/2, b.Max.X, b.Min.Y+(sh-h)/2+h)
+	}
+	dst := image.NewRGBA(image.Rect(0, 0, fw, fh))
+	picscale.CatmullRom.Scale(dst, dst.Bounds(), src, part, xdraw.Src)
+	return dst
 }
 
 // fitFrame scales a picture to fit the panel, keeping its shape.

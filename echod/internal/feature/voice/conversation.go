@@ -1366,19 +1366,18 @@ func (c *conversation) stopStreaming() {
 
 // stream sends microphone frames until it is told to stop.
 func (c *conversation) stream(ctx context.Context, be backend, slot int, followUp, continued bool, id string, waited time.Duration) {
-	frames, unlisten := c.source.Listen("turn")
+	frames, pre, unlisten := c.source.ListenHistory("turn", mic.History+waited)
 	defer unlisten()
 
 	buf := make([]byte, 0, mic.FrameSamples*2)
 
 	// Send what was already said before this turn began. The wake word can only be recognized after
 	// it has been spoken, and people run straight on into the request, so the opening words exist only
-	// in the microphone's history. Subscribing first means no audio falls between the two.
+	// in the microphone's history. History and subscription share one capture boundary.
 	//
 	// A slot that chimes does not send it: whoever is talking waits for the tone, so the history holds
 	// the wake word rather than the request, and the tone itself is louder at the array than they are.
 	// That is as true of a wake Home Assistant's engine heard.
-	pre := c.source.Recent(mic.History + waited)
 	if wakeword.Tones(slot, followUp) {
 		pre = nil
 	}

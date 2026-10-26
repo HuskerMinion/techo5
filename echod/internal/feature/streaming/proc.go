@@ -39,8 +39,13 @@ type program struct {
 }
 
 // supervise runs p until ctx ends, starting it again whenever it stops.
-func supervise(ctx context.Context, p program) {
+func supervise(ctx context.Context, p program) { superviseTries(ctx, p, 0) }
+
+// superviseTries is supervise, but gives up once p has stopped soon after starting (within ranLong) tries
+// times in a row, and says whether it did; with tries 0 it never does.
+func superviseTries(ctx context.Context, p program, tries int) (gaveUp bool) {
 	wait := restartFirst
+	quick := 0
 	for ctx.Err() == nil {
 		if p.started != nil {
 			p.started()
@@ -48,20 +53,24 @@ func supervise(ctx context.Context, p program) {
 		start := time.Now()
 		err := runProgram(ctx, p)
 		if ctx.Err() != nil {
-			return
+			return false
 		}
 		slog.Warn("streaming: a program stopped", "program", p.name, "after", time.Since(start).Round(time.Second), "err", err)
 		if time.Since(start) > ranLong {
-			wait = restartFirst
+			wait, quick = restartFirst, 0
 		} else {
-			wait = min(wait*2, restartMost)
+			wait, quick = min(wait*2, restartMost), quick+1
+		}
+		if tries > 0 && quick >= tries {
+			return true
 		}
 		select {
 		case <-ctx.Done():
-			return
+			return false
 		case <-time.After(wait):
 		}
 	}
+	return false
 }
 
 // runProgram runs p once, until it stops or ctx ends. Asked to stop, it gets a moment to say goodbye

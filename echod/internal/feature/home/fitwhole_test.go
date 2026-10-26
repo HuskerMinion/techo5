@@ -4,7 +4,10 @@ import (
 	"image"
 	"image/color"
 	"image/draw"
+	"path/filepath"
 	"testing"
+
+	"github.com/HuskerMinion/techo5/echod/internal/config"
 )
 
 func solid(w, h int, c color.RGBA) *image.RGBA {
@@ -87,5 +90,33 @@ func TestWholePhotoOddSizes(t *testing.T) {
 		if got.Bounds() != image.Rect(0, 0, tc.w, tc.h) {
 			t.Errorf("%dx%d on %dx%d: got %v", tc.sw, tc.sh, tc.w, tc.h, got.Bounds())
 		}
+	}
+}
+
+// A camera's picture on its view, as Camera picture says: fitted whole, filling the panel with the rest
+// cut off, or at its own size where that is smaller than the panel.
+func TestCameraFrameFollowsCameraPicture(t *testing.T) {
+	config.Use(filepath.Join(t.TempDir(), "state.json"))
+	p := image.Pt(1280, 800)
+	screenSize.Store(&p)
+	t.Cleanup(func() { screenSize.Store(nil) })
+	src := solid(640, 480, color.RGBA{200, 0, 0, 255})
+	if b := cameraFrame(src).Bounds(); b.Dx() != 1066 || b.Dy() != 800 {
+		t.Errorf("whole: %v, want 1066x800", b.Size())
+	}
+	if err := config.Set().Screen().CameraFit("fill"); err != nil {
+		t.Fatal(err)
+	}
+	if b := cameraFrame(src).Bounds(); b.Dx() != 1280 || b.Dy() != 800 {
+		t.Errorf("fill: %v, want the panel's 1280x800", b.Size())
+	}
+	if err := config.Set().Screen().CameraFit("native"); err != nil {
+		t.Fatal(err)
+	}
+	if b := cameraFrame(src).Bounds(); b.Dx() != 640 || b.Dy() != 480 {
+		t.Errorf("native: %v, want the camera's 640x480", b.Size())
+	}
+	if b := cameraFrame(solid(1920, 1080, color.RGBA{0, 0, 200, 255})).Bounds(); b.Dx() != 1280 || b.Dy() > 800 {
+		t.Errorf("native, a picture larger than the panel: %v, want it fitted", b.Size())
 	}
 }

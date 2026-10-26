@@ -415,6 +415,11 @@ func (n *Nearest) receive(w http.ResponseWriter, r *http.Request) {
 		web.Refuse(w, "post a claim", http.StatusMethodNotAllowed)
 		return
 	}
+	// A claim is this house's only: never one from away, over the tailnet.
+	if web.AwayRequest(r) {
+		http.NotFound(w, r)
+		return
+	}
 	// The header first, and the body only with a deadline: nothing that has not signed is waited on.
 	if err := looksSigned(r.Header.Get(authHeader), time.Now()); err != nil {
 		warn(n.now(), "nearest device: a claim that does not check out", "from", r.RemoteAddr, "err", err)
