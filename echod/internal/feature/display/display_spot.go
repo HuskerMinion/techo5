@@ -56,6 +56,7 @@ import (
 	"github.com/HuskerMinion/techo5/echod/internal/feature/presence"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/remind"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/setup"
+	"github.com/HuskerMinion/techo5/echod/internal/feature/takes"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/talkback"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/timer"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/video"
@@ -335,6 +336,7 @@ type Display struct {
 	videoOver     image.Rectangle
 	vp            videoPainter
 	vask          askLatch
+	pask          askLatch // the setup page's asking, drawn (pageAsk)
 	videoLit      uint64
 
 	// notifyLit is the last notification that lit the face, once per notification like videoLit.
@@ -748,11 +750,25 @@ func (d *Display) gesture(g touch.Gesture) {
 	if d.callGesture(g) || d.ringGesture(g) || d.pinGesture(g) {
 		return
 	}
-	// A browser asking to be let in: its face takes every tap, and only the two answers decide.
-	if setup.Get().Waiting() {
+	// The setup page asking something of whoever is at the device: a browser to be let in, or takes of
+	// a word to start, and Stop, where Start was, while they record. Its face takes every tap, and only
+	// the answers on the face that was drawn decide, once it has been up long enough to have been read
+	// (pageAsk), since the yes is in the same place on each of them.
+	if asking, c := setup.Get().Asking(), takes.Get().Card(); asking != "" || c.Up() {
 		if g.Kind == touch.Tap {
-			if allow, answered := askTapSpot(g.Y); answered {
-				answerSetup(allow)
+			drawn, settled := d.pask.answerable(time.Now())
+			yes, answered := askTapSpot(g.Y)
+			switch {
+			case !settled || !answered:
+			case asking != "":
+				if drawn == letInKey(asking) {
+					answerSetup(yes, asking)
+				}
+			case drawn != takesKey(c):
+			case c.Phase == takes.Armed:
+				answerTakes(yes, c.ID)
+			case yes:
+				takes.Get().Stop()
 			}
 		}
 		d.wake()
@@ -1453,7 +1469,7 @@ func (d *Display) frame() (next time.Duration) {
 	_, reminding := remind.Get().Showing()
 	vs := video.Get().State()
 	busy := view.Phase != "idle" || sheetOpen || ringingNow(now).any() || phone.Get().Busy() || pinIsOpen() ||
-		sunriseProgress(now) > 0 || setup.Get().Waiting() || reminding || vs.Active()
+		sunriseProgress(now) > 0 || asksAtDevice() || reminding || vs.Active()
 	if d.awayTick(now, on, busy, nightNow(now)) {
 		d.mu.Lock()
 		on = d.on
@@ -1635,6 +1651,12 @@ func (d *Display) frame() (next time.Duration) {
 	// still standing in it. It was set only on the idle page once, and the press could not be given
 	// without leaving settings first.
 	s.setupAsking = setup.Get().Waiting()
+	// Takes of a word asked for there are the same kind of face, and wait their turn behind a browser
+	// asking to be let in.
+	if !s.setupAsking {
+		s.takes = takes.Get().Card()
+		s.setupAsking = s.takes.Up()
+	}
 	s.announceReady = config.Get().Home.HouseWord != ""
 	s.announceRecording = announce.Get().Recording()
 	s.announcePeers = len(announce.Peers())

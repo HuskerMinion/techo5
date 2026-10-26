@@ -21,6 +21,7 @@ var keptByRestore = map[string]keptSetting{
 	"camera_web_access":                {func(c *config.Config) { c.Security.Camera = true }, func(c config.Config) bool { return c.Security.Camera }},
 	"screen_web_access":                {func(c *config.Config) { c.Security.Screen = true }, func(c config.Config) bool { return c.Security.Screen }},
 	"talk_back":                        {func(c *config.Config) { c.Security.TalkBack = true }, func(c config.Config) bool { return c.Security.TalkBack }},
+	"record_takes":                     {func(c *config.Config) { c.Security.Takes = true }, func(c config.Config) bool { return c.Security.Takes }},
 	"settings_lock":                    {func(c *config.Config) { c.Security.LockPIN = "2468" }, func(c config.Config) bool { return c.Security.LockPIN != "" }},
 	"remote_adb":                       {func(c *config.Config) { c.Diag.RemoteADB = true }, func(c config.Config) bool { return c.Diag.RemoteADB }},
 	"insecure_tls":                     {func(c *config.Config) { c.Diag.InsecureTLS = true }, func(c config.Config) bool { return c.Diag.InsecureTLS }},

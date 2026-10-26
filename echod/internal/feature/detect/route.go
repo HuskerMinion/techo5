@@ -28,6 +28,7 @@ type heard struct {
 	farEnd   bool // the far end was talking just now
 	turnOpen bool // a turn is running: listening, thinking or replying
 	waiting  bool // a call is being placed and has not been dialed yet (phone.State.Waiting)
+	takes    bool // takes of a word are being recorded (feature/takes), or just were
 }
 
 // routeFor decides what a word heard in slot does.
@@ -54,9 +55,16 @@ type heard struct {
 // The command words do nothing in any phase of a call or during a talk through a camera, whatever Wake
 // word during calls says: the music they act on is not what is playing then. Otherwise they go to
 // command.heard, which has its own checks (a turn, a ring, no music), and never open a turn.
+//
+// While takes of a word are recorded, every word heard is a take of it, said on purpose and over and
+// over: thirty takes of a wake word must not open thirty turns, nor takes of "stop" interrupt anything.
+// Only the stop word over a ring is let through, so an alarm that rings into the recording can still be
+// stopped by voice.
 func routeFor(slot int, h heard) route {
 	inCall := h.phase != phone.Idle
 	switch {
+	case h.takes && !(slot == StopSlot && h.ringing):
+		return routeIgnore
 	case isCommandSlot(slot) && (inCall || h.talkBack):
 		return routeIgnore
 	case isCommandSlot(slot):

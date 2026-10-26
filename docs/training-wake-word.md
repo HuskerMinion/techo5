@@ -216,6 +216,11 @@ ffmpeg converts other recordings:
 ffmpeg -i take.m4a -ac 1 -ar 16000 -c:a pcm_s16le take.wav
 ```
 
+**Or record them on the device itself.** The setup page's **Record takes of a word** (see
+[Recording takes of a word](setup.md#recording-takes-of-a-word)) records up to two minutes on the
+device's own microphones, mixed and leveled the way the wake word hears them, cuts it into takes and
+hands them over as a zip of WAVs in this format, one folder per word. No phone, ffmpeg or script.
+
 A hundred takes is small next to thousands of synthetic ones, so they're repeated with different
 augmentation each time (step 5) and weighted higher in training (step 6). Keep a few takes out of
 training to test with.

@@ -443,8 +443,8 @@ func haAnswers(slot int) bool {
 	return !(slot >= 0 && slot < len(w) && w[slot].Realtime)
 }
 
-// micBusy is the microphones being cut or somebody else's: a call, or a talk through a camera. A test
-// sets busy in its place.
+// micBusy is the microphones being cut or somebody else's: a call, a talk through a camera, or takes
+// being recorded. A test sets busy in its place.
 func (c *conversation) micBusy() bool {
 	if c.busy != nil {
 		return c.busy()

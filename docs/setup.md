@@ -1263,6 +1263,56 @@ The scores are numbers, never audio, and are kept only in memory: the last 64 ev
 from moment to moment only while the page is watching, for ten seconds after its last look. They are
 behind the press like the rest of the page, and watching doesn't keep the page open.
 
+### Recording takes of a word
+
+For training a wake word, or a command word, on what this device really hears, the setup page can
+record takes of it on the device's own microphones and hand them over as WAVs ready for step 5 of
+[training your own wake word](training-wake-word.md#4-add-your-own-voices). It is under **Sound &
+Voice**, after **Wake word scores**, on a device with microphones.
+
+It needs **Record takes of a word** switched on, under Privacy & Security on the device's screen or in
+Home Assistant (a Dot has the switch in Home Assistant). It is off on a new device, the Remote API can
+only read it, and a settings file never turns it on.
+
+1. Type the word the way you say it, choose whether the takes are of the word or of something that
+   sounds like it (a negative set, for the model to learn is not the word), and press **Record**.
+2. The device plays a short note and waits a minute for a press: the action button on a Dot (its ring
+   pulses white while it waits), or **Start** on the screen of a Show or a Spot, behind the settings
+   lock if there is one. The setup page alone can't start a recording. Pressing **Record** again while it
+   waits changes the word but not the minute, and after three in a row that nobody started, asking is
+   refused for ten minutes.
+3. A chime says it has started. Say the word, wait a second and say it again, 20 to 30 times, near and
+   far, facing the device and facing away. The screen says it is recording, with **Stop** on it, and a
+   Dot's ring pulses amber. Mute the other devices nearby first: they hear it too.
+4. **Stop** on the page or the screen, the action button, or two minutes ends it with a second chime,
+   and it is cut into one take for each time the word was said.
+
+Then listen to the takes on the page and download them: a zip with a folder of 16 kHz mono 16-bit
+WAVs, one take each with a little of the room either side, and a `takes.json` that says where each came
+from in the recording and what was left out and why (too short or too long for a word, said while the
+device was making a sound, cut off by the start or the end of the recording, or more than 60 takes; a word begun in the second after the start chime is left out, since part of it may have been lost to the chime). A
+folder of takes of something like the word is named `not_` and the word.
+
+It won't start while the microphones are muted, during a call, the intercom, a talk through a camera,
+an announcement being recorded or a ring, while a request is running, or while anything is playing,
+since the takes would carry it. A mute, a call, a talk through a camera or an announcement during a
+recording throws it away; a ring ends it and keeps the takes from before, and the stop word still stops
+the ring. A word said while it records, or in the second after, doesn't wake the device, act as a
+command or the stop word, or get kept as a wake clip.
+
+How this differs from [Wake word clips](#wake-word-clips): clips are kept only around a detection or a
+near miss, so a word with no model yet gives none, and each is the four seconds up to the event rather
+than a take with the room either side. Takes are the word said on purpose, into this device's own
+microphones, before there is any model. And unlike a phone next to the device, they are what the wake
+word itself hears: the microphones mixed and leveled the same way.
+
+The takes are kept only in memory, never on the device's storage, and only for the browser that asked
+for them: another browser let into the page can't see them, download them or record over them. They
+are gone when you throw them away, record again, switch Record takes of a word off, restart the device,
+or within a few seconds of the setup page closing, and a download still running stops there too. They come to your browser over
+the setup page, on your own network without encryption. They are your own voices: keep them on your
+own machine.
+
 ### Wake word on Home Assistant
 
 The device listens for the wake word itself. Two switches on the device in Home Assistant let Home
@@ -1521,7 +1571,7 @@ address the file changes, old and new, and names what will need entering again, 
 links and paired computers that only the device the file came from has.
 
 A restore never opens a door on the device or has it listen or watch. Its privacy switches (SSH, the
-camera and screen pages, talking through cameras), AirPlay, Spotify Connect, DLNA, Sendspin, the
+camera and screen pages, talking through cameras, recording takes of a word), AirPlay, Spotify Connect, DLNA, Sendspin, the
 Bluetooth proxy, video and the addresses allowed to send it video, the diagnostics settings, Drop
 In, sending the room to Home Assistant's wake word engine (streaming or confirming), keeping wake
 word clips and recordings, presence and gestures, the remote API, camera streaming and its login, the

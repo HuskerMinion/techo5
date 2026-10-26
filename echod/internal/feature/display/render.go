@@ -24,6 +24,7 @@ import (
 	"github.com/HuskerMinion/techo5/echod/internal/feature/phone"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/remind"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/security"
+	"github.com/HuskerMinion/techo5/echod/internal/feature/takes"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/talkback"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/tessera"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/timer"
@@ -250,9 +251,12 @@ type scene struct {
 	showReminder bool
 	reminderFrom string
 
-	// setupAsking is a browser waiting to be let into the setup page. It is said on the screen so
-	// that a request for a press is never something only the browser knows about.
+	// setupAsking is the setup page asking something of whoever is at the device: a browser waiting to
+	// be let in, or takes of a word to start or a recording of them running (takes, when nobody is
+	// waiting to be let in). It is said on the screen so that a request for a press is never something
+	// only the browser knows about.
 	setupAsking bool
+	takes       takes.Card
 
 	// sunrise is how far the light before an alarm has come, 0 to 1, and sunriseFace whether the sun
 	// is drawn with a face on it.
@@ -571,7 +575,11 @@ func (r *renderer) draw(s scene) {
 	// A browser waiting to be let in: the answer is a tap here, since this device has no button for
 	// it. Under a call and under a ringing alarm, both of which are somebody already being answered.
 	if s.setupAsking {
-		r.setupAskPage(s)
+		if s.takes.Up() {
+			r.takesPage(s)
+		} else {
+			r.setupAskPage(s)
+		}
 		return
 	}
 	// A DLNA video asking to be shown, the same way: an answer from somebody at the device.
@@ -1237,6 +1245,8 @@ func (r *renderer) playingButton() image.Rectangle {
 func (r *renderer) footer(s scene) {
 	y := r.h - r.s(24)
 	switch {
+	case s.setupAsking && s.takes.Up():
+		r.text(r.tiny, "setup: takes of a word", r.margin, y, amber)
 	case s.setupAsking:
 		r.text(r.tiny, "setup: a browser is asking to be let in", r.margin, y, amber)
 	case s.missed != "":

@@ -15,9 +15,13 @@ import (
 // the time the second arrives — that is deliberate, since a talk button that waits to see whether
 // another tap is coming feels broken — so this cancels that turn on its way, the way the long hold
 // already does for the turn its hold began.
+//
+// Not while something else has the microphones, or just had them: the two taps then were the press that
+// started a recording of takes and the one that stopped it (feature/takes), and music is not what either
+// was for.
 func init() {
 	buttons.Get().Events.Listen(func(e buttons.Event) {
-		if e.Name != buttons.Action || e.Kind != buttons.DoubleTap {
+		if e.Name != buttons.Action || e.Kind != buttons.DoubleTap || voice.MicTaken() {
 			return
 		}
 		safe.Go("radio button", func() {

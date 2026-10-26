@@ -1247,6 +1247,22 @@ func (p *Player) Queued() int {
 	return len(p.pending) / Channels
 }
 
+// Sounding is whether anything is on its way out of the speaker: a sound queued, the music's bed, an
+// underlay, a bell, or a source placing audio by frame (Attach). The silence fill pads in when nothing is
+// queued is not. For whoever needs to know whether the room is hearing the device now (feature/takes),
+// which Backgrounds' top cannot say: a paused track keeps its place there.
+func (p *Player) Sounding() bool {
+	p.mu.Lock()
+	queued := len(p.pending)+len(p.bed)+len(p.under)+len(p.bell) > 0
+	p.mu.Unlock()
+	if queued {
+		return true
+	}
+	p.srcMu.Lock()
+	defer p.srcMu.Unlock()
+	return p.src != nil
+}
+
 // Note is one tone in a chime. A zero frequency is a rest.
 type Note struct {
 	Freq float64

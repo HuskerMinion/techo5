@@ -11,6 +11,10 @@ type Security struct {
 	// TalkBack lets the camera page send the microphones to a camera's speaker (config.TalkBack).
 	TalkBack bool `json:"talk_back,omitempty"`
 
+	// Takes lets the setup page record takes of a word on the microphones (feature/takes), each
+	// recording started by a press on the device.
+	Takes bool `json:"takes,omitempty"`
+
 	// LockPIN is the settings lock's PIN, salted and hashed (feature/security lock.go); empty for no lock.
 	LockPIN string `json:"lock_pin,omitempty"`
 
@@ -22,7 +26,7 @@ type Security struct {
 
 // Everything closed on a device nobody has set: SSH has no key until Home Assistant sends one, the
 // web pages have no login, so they are for someone who asked for them, and a device that talks out of
-// the house's cameras is one somebody chose.
+// the house's cameras, or records takes of a word, is one somebody chose.
 func defaultSecurity() Security { return Security{} }
 
 type SecurityWriter struct{ st *Store }
@@ -49,4 +53,8 @@ func (w SecurityWriter) LockTries(fails int, blockedUntil int64) error {
 
 func (w SecurityWriter) TalkBack(v bool) error {
 	return w.st.Update(func(c *Config) { c.Security.TalkBack = v })
+}
+
+func (w SecurityWriter) Takes(v bool) error {
+	return w.st.Update(func(c *Config) { c.Security.Takes = v })
 }

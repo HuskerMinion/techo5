@@ -16,6 +16,7 @@ import (
 	"github.com/HuskerMinion/techo5/echod/internal/feature/mute"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/phone"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/ring"
+	"github.com/HuskerMinion/techo5/echod/internal/feature/takes"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/talkback"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/voice"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/wakeword"
@@ -205,6 +206,7 @@ func newDetect() *Detect {
 			farEnd:   phone.Get().FarEndTalking(),
 			turnOpen: voice.Get().Busy(),
 			waiting:  st.Waiting,
+			takes:    takes.Get().Holding(),
 		}
 		switch routeFor(slot, h) {
 		case routeHangUp:

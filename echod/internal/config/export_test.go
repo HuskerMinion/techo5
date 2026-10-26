@@ -303,15 +303,17 @@ func TestARestoreDoesNotStartListening(t *testing.T) {
 	from.Wake.OnHA.Stream, from.Wake.OnHA.Confirm = true, true
 	from.Wake.KeepClips = true
 	from.Presence.On, from.Presence.Gestures = true, true
+	from.Security.Takes = true
 	file, _ := Export(from, "m", "v0")
 	r, err := Restored(Defaults(), file, "m")
 	if err != nil {
 		t.Fatal(err)
 	}
 	c := r.Config
-	if c.Home.DropIn || c.Wake.OnHA.Stream || c.Wake.OnHA.Confirm || c.Wake.KeepClips || c.Presence.On || c.Presence.Gestures {
-		t.Errorf("a restore turned listening or watching on: drop-in %v stream %v confirm %v clips %v presence %v gestures %v",
-			c.Home.DropIn, c.Wake.OnHA.Stream, c.Wake.OnHA.Confirm, c.Wake.KeepClips, c.Presence.On, c.Presence.Gestures)
+	if c.Home.DropIn || c.Wake.OnHA.Stream || c.Wake.OnHA.Confirm || c.Wake.KeepClips || c.Presence.On || c.Presence.Gestures ||
+		c.Security.Takes {
+		t.Errorf("a restore turned listening or watching on: drop-in %v stream %v confirm %v clips %v presence %v gestures %v takes %v",
+			c.Home.DropIn, c.Wake.OnHA.Stream, c.Wake.OnHA.Confirm, c.Wake.KeepClips, c.Presence.On, c.Presence.Gestures, c.Security.Takes)
 	}
 }
 

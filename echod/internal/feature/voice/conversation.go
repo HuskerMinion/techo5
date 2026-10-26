@@ -870,10 +870,11 @@ func (c *conversation) start(n nextTurn) bool {
 	}
 	c.clearPending()
 
-	// The microphones are going out of a camera (feature/talkback): no turn opens on them, however
-	// it was asked for - a wake word, the button, Home Assistant's announcement, or a follow-up.
+	// The microphones are going out of a camera (feature/talkback) or into takes of a word
+	// (feature/takes): no turn opens on them, however it was asked for - a wake word, the button,
+	// Home Assistant's announcement, or a follow-up.
 	if micTaken() {
-		slog.Info("turn not started: the microphones are talking through a camera", "follow_up", n.followUp)
+		slog.Info("turn not started: the microphones are taken", "by", heldBy(), "follow_up", n.followUp)
 		return false
 	}
 

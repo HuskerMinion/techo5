@@ -47,6 +47,7 @@ import (
 	"github.com/HuskerMinion/techo5/echod/internal/feature/mute"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/phone"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/recording"
+	"github.com/HuskerMinion/techo5/echod/internal/feature/takes"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/talkback"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/voice"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/wakeword"
@@ -182,19 +183,22 @@ func startClips(e *Engine, publish func(total int, kinds string)) *clips {
 	mute.Get().Changed.Listen(c.muted)
 	phone.Get().Changed.Listen(func(phone.State) { c.roomChanged() })
 	talkback.Get().Changed.Listen(func(struct{}) { c.roomChanged() })
+	takes.Get().Changed.Listen(func(struct{}) { c.roomChanged() })
 	c.roomChanged()
 	return c
 }
 
-// clipsBlocked is whether a call, the intercom or a talk through a camera has the room. The detector
-// goes on scoring through all of them, and none of them is anybody talking to the device.
+// clipsBlocked is whether a call, the intercom, a talk through a camera or takes being recorded has the
+// room. The detector goes on scoring through all of them, and none of them is anybody talking to the
+// device: takes are kept by the recorder, cut and padded, and a clip of each would be thirty more of the
+// same word sorted as wakes.
 func clipsBlocked() bool {
-	return phone.Get().Busy() || talkback.Get().Busy()
+	return phone.Get().Busy() || talkback.Get().Busy() || takes.Get().Holding()
 }
 
-// roomChanged is the phone or the talkback saying something changed. As a call or a talk starts and
-// as it ends, the ring is emptied and nothing is kept for the next four seconds; held keeps the ring
-// from taking anything in between. So nothing heard during one is ever in a clip.
+// roomChanged is the phone, the talkback or the recorder saying something changed. As a call, a talk or
+// a recording starts and as it ends, the ring is emptied and nothing is kept for the next four seconds;
+// held keeps the ring from taking anything in between. So nothing heard during one is ever in a clip.
 //
 // Asked before mu, as allowed does: the phone and the talkback are never waited on under mu.
 func (c *clips) roomChanged() {

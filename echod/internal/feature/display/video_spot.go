@@ -40,6 +40,12 @@ func (d *Display) videoSceneSpot(s *roundScene, now time.Time) {
 		drawnAsk = s.videoAsk.id
 	}
 	d.vask.drawn(drawnAsk, now)
+	// The setup page's asking the same way (pageAsk): what is drawn over it leaves it unanswerable.
+	drawnPage := uint64(0)
+	if s.setupAsking && s.call.Phase == phone.Idle && !s.ringing.any() && !s.pin.open {
+		drawnPage = pageKey(s.takes)
+	}
+	d.pask.drawn(drawnPage, now)
 	d.mu.Lock()
 	failedRecently := st.Failed != 0 && st.Failed == d.videoTried && now.Sub(st.ErrAt) < videoFailShown
 	up := st.Active() && st.Phase != video.Asking

@@ -78,6 +78,23 @@ Never, whatever the request says:
 
 Every write is logged as what changed, never with a secret's value.
 
+## What it may hear
+
+The page never listens on its own. Recording takes of a word, for training a wake word, is the one
+thing on it that uses the microphones, and only:
+
+- **While Record takes of a word is switched on.** Only the device's screen or Home Assistant can
+  switch it; the page shows it and the Remote API reads it, and it is off on a new device.
+- **After a press on the device, for each recording.** The page asks; the action button, or Start on
+  the screen behind the settings lock, starts it, as letting a browser in is done.
+- **For two minutes at most**, with a chime at the start and the end, and the screen, or a Dot's ring,
+  saying so for as long as it runs.
+
+The takes stay in memory, for the browser that asked for them, until they are thrown away, recorded
+over, or the page closes. Nothing is written to the device's storage and nothing is sent anywhere by the
+device: the browser downloads them, over plain HTTP on your own network. The log says what was
+recorded and why it ended, never the word typed.
+
 ## The shape of it
 
 - **One page, served from the binary.** No framework, no fonts or scripts fetched from the internet,
@@ -130,6 +147,8 @@ Every write is logged as what changed, never with a secret's value.
   allowed for ten minutes. The screen and the Spot's face say when a browser is asking.
 - The page writes the **time zone** and **Wi-Fi**: it scans, adds a network keeping the ones already
   saved, and forgets one on request.
+- **Wake word scores**, to pick a threshold by watching, and **recording takes of a word** (What it may
+  hear, above).
 
 ## Still to build
 

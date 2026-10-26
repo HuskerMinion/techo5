@@ -346,6 +346,8 @@ var uiEnglish = map[string]string{
 	"sunrise_until":                             "On until %s",
 	"talk_on_the_camera_page":                   "Talk on the camera page",
 	"talk_through_cameras":                      "Talk through cameras",
+	"record_takes_of_a_word":                    "Record takes of a word",
+	"on_the_setup_page_started_here":            "Asked on the setup page, started here",
 	"tap_lifts_the_night_light":                 "Tap lifts the night light",
 	"tap_on_the_clock":                          "Tap on the clock",
 	"tap_to_go_back":                            "Tap to go back",

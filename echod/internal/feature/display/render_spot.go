@@ -20,6 +20,7 @@ import (
 	"github.com/HuskerMinion/techo5/echod/internal/feature/notify"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/phone"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/remind"
+	"github.com/HuskerMinion/techo5/echod/internal/feature/takes"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/talkback"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/timer"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/video"
@@ -198,9 +199,12 @@ type roundScene struct {
 	alertIdx    int
 	alertScroll int
 
-	// setupAsking is a browser waiting to be let into the setup page, said on the face so that a
-	// request for a press is never something only the browser knows about.
+	// setupAsking is the setup page asking something of whoever is at the device: a browser waiting to
+	// be let in, or takes of a word to start or a recording of them running (takes, when nobody is
+	// waiting to be let in). Said on the face so that a request for a press is never something only the
+	// browser knows about.
 	setupAsking bool
+	takes       takes.Card
 
 	// sunrise is how far the light before an alarm has come, 0 to 1, and sunriseFace whether the sun
 	// is drawn with a face on it.
@@ -373,7 +377,11 @@ func (r *roundRenderer) draw(s roundScene) {
 		return
 	}
 	if s.setupAsking {
-		r.setupAskFace(s)
+		if s.takes.Up() {
+			r.takesFace(s)
+		} else {
+			r.setupAskFace(s)
+		}
 		return
 	}
 	if s.showVideoAsk {
