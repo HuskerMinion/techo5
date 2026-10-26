@@ -17,11 +17,11 @@ type Bluetooth struct {
 	// of Bluetooth is (KeepOwn): which phones pair with it is a matter of this one's radio.
 	SecureConnectionsOff bool `json:"secure_connections_off,omitempty"`
 
-	// Connections lets Home Assistant connect to BLE devices through the proxy, not only hear them
+	// ProxyConnections lets Home Assistant connect to BLE devices through the proxy, not only hear them
 	// (the Show and the Spot). Off unless asked for: with it on, Home Assistant routes a lock or a
 	// sensor through the device whenever it has the best signal, and many BLE devices take one
 	// connection only.
-	Connections bool `json:"connections,omitempty"`
+	ProxyConnections bool `json:"proxy_connections,omitempty"`
 }
 
 // Off unless asked for: it keeps a radio scanning that shares an antenna with wifi.
@@ -37,9 +37,9 @@ func (w BluetoothWriter) Proxy(v bool) error {
 	return w.st.Update(func(c *Config) { c.Bluetooth.Proxy = v })
 }
 
-// Connections is whether the proxy lends Home Assistant connections.
-func (w BluetoothWriter) Connections(v bool) error {
-	return w.st.Update(func(c *Config) { c.Bluetooth.Connections = v })
+// ProxyConnections is whether the proxy lends Home Assistant connections.
+func (w BluetoothWriter) ProxyConnections(v bool) error {
+	return w.st.Update(func(c *Config) { c.Bluetooth.ProxyConnections = v })
 }
 
 // SecureConnections is the controller's Secure Connections: on, as it comes, or off.
