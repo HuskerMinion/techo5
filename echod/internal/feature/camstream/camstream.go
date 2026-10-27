@@ -4,7 +4,8 @@
 //
 // The device has no video encoder, so the stream is JPEGs, carried as RTP/JPEG (lib/rtpjpeg), which ffmpeg
 // and everything built on it reads. Each picture is encoded once, at most maxFPS a second, and sent to
-// every viewer. RTP goes over the RTSP connection itself (TCP, interleaved): one port to let through, and
+// every viewer. On the 2nd gen Show 8 whose kernel has the MT8183's JPEG encoder (hardware/jpegenc), the
+// encoder makes them instead of the cores, at most hwFPS a second (hwStream). RTP goes over the RTSP connection itself (TCP, interleaved): one port to let through, and
 // nothing to lose on Wi-Fi.
 //
 // Off on a new device, and never on without a password: a camera that anybody on the network could watch
@@ -25,6 +26,7 @@ import (
 	"net"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	esphome "github.com/ygelfand/go-esphome-device"
@@ -34,6 +36,7 @@ import (
 	"github.com/HuskerMinion/techo5/echod/internal/feature/security"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/web"
 	"github.com/HuskerMinion/techo5/echod/internal/hardware/camera"
+	"github.com/HuskerMinion/techo5/echod/internal/hardware/jpegenc"
 	"github.com/HuskerMinion/techo5/echod/internal/layout"
 	"github.com/HuskerMinion/techo5/echod/internal/lib/hook"
 	"github.com/HuskerMinion/techo5/echod/internal/lib/rtpjpeg"
@@ -59,6 +62,12 @@ const (
 	// maxFPS is the most pictures a second the stream sends: enough for a recorder's detection, and a
 	// JPEG encode each on a small CPU.
 	maxFPS = 10
+
+	// hwFPS is the same where the JPEG encoder makes the pictures (hwStream): half the sensor's rate. The
+	// cores are left the half-size picture and its YUYV, so the stream goes at two to three times the
+	// rate it reached with the encode on a core, for about the same CPU; the armv7 daemon reaches about
+	// 10 a second. A picture at quality is about 56 KB of a lit room and 120 KB of a dark one.
+	hwFPS = 15
 
 	// quality is the JPEG quality of the stream: a recorder's picture, not a still.
 	quality = 70
@@ -487,7 +496,7 @@ func (f *Feature) unsubscribe(ch chan rtpjpeg.Frame) {
 // comes too soon is kept and sent when its time comes, so the last one always goes out: when the
 // sensor stops for the mute, its last frame is the black one, and none follows it.
 func (f *Feature) pump(frames <-chan frame, stop <-chan struct{}) {
-	interval := time.Second / maxFPS
+	interval := time.Second / time.Duration(streamFPS())
 	if layout.OnAndroid() {
 		interval = time.Second / 15 // Android already encoded the frame; the daemon only packetizes it.
 	}
@@ -619,8 +628,36 @@ func (p panelJPEGImage) At(x, y int) color.Color {
 	return color.Black
 }
 
-// encode is a picture as the stream's JPEG.
+// hwStream is whether the stream's JPEGs are made by the 2nd gen Show 8's JPEG encoder: its mainline
+// kernel, with the encoder there (mtk-jpeg-enc). No other board looks for it.
+var hwStream = layout.AthenaMainline() && jpegenc.Available()
+
+// streamFPS is the most pictures a second the stream sends, and says it sends (ONVIF).
+func streamFPS() int {
+	if hwStream {
+		return hwFPS
+	}
+	return maxFPS
+}
+
+// hwFailed is when the encoder last failed a picture, so a failing encoder is logged now and then, not
+// for every picture.
+var hwFailed atomic.Int64
+
+// encode is a picture as the stream's JPEG: by the JPEG encoder where hwStream, else, or if it fails
+// the picture, on a core.
 func encode(img image.Image) ([]byte, error) {
+	if rgba, ok := img.(*image.RGBA); ok && hwStream && jpegenc.Fits(rgba.Bounds()) {
+		b, err := jpegenc.Encode(rgba, quality)
+		if err == nil {
+			return b, nil
+		}
+		// Refused while jpegenc backs off after a failure: that failure was logged.
+		if now := time.Now().UnixNano(); !errors.Is(err, jpegenc.ErrBackingOff) && now-hwFailed.Load() > int64(time.Minute) {
+			hwFailed.Store(now)
+			slog.Warn("camera streaming: hardware jpeg failed, encoding on a core", "err", err)
+		}
+	}
 	var b bytes.Buffer
 	if err := jpeg.Encode(&b, img, &jpeg.Options{Quality: quality}); err != nil {
 		return nil, err

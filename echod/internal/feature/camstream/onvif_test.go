@@ -193,15 +193,26 @@ func TestONVIFOtherwise(t *testing.T) {
 	}
 }
 
-// ONVIF says the rate the stream is sent at, not a number of its own.
+// ONVIF says the rate the stream is sent at, not a number of its own: maxFPS, or hwFPS where the JPEG
+// encoder makes the pictures.
 func TestONVIFStatesTheStreamRate(t *testing.T) {
-	want := fmt.Sprintf("<tt:FrameRateLimit>%d</tt:FrameRateLimit>", maxFPS)
+	was := hwStream
+	t.Cleanup(func() { hwStream = was })
+	for _, hw := range []bool{false, true} {
+		hwStream = hw
+		onvifStatesRate(t, map[bool]int{false: maxFPS, true: hwFPS}[hw])
+	}
+}
+
+func onvifStatesRate(t *testing.T, fps int) {
+	t.Helper()
+	want := fmt.Sprintf("<tt:FrameRateLimit>%d</tt:FrameRateLimit>", fps)
 	if p := profileXML("trt:Profile"); !strings.Contains(p, want) {
 		t.Errorf("profile without %s:\n%s", want, p)
 	}
 	f := &Feature{}
 	body, ok := f.answer("GetVideoSources", "", "192.0.2.10", true)
-	if want := fmt.Sprintf("<tt:Framerate>%d</tt:Framerate>", maxFPS); !ok || !strings.Contains(body, want) {
+	if want := fmt.Sprintf("<tt:Framerate>%d</tt:Framerate>", fps); !ok || !strings.Contains(body, want) {
 		t.Errorf("video sources without %s:\n%s", want, body)
 	}
 }

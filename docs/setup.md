@@ -314,7 +314,8 @@ While somebody is being sent the camera, a Show draws a small green dot in the t
 screen, over everything; a Spot shows its camera dot, as it does whenever its camera runs. With the
 screen off, it lights at its dimmest to show the dot alone on black, so the room can still tell.
 
-Two viewers at most watch at once, at up to 10 pictures a second. The login is checked with Digest, so
+Two viewers at most watch at once, at up to 10 pictures a second (15 on a 2nd gen Show 8 whose kernel
+has the JPEG encoder, below). The login is checked with Digest, so
 the password does not cross the network in the clear, but the picture itself is not encrypted, and
 Digest is MD5: somebody on your network who records a login can try passwords against it offline. Use a
 long password of its own, not one you use anywhere else. An address that gets the login wrong 10 times
@@ -325,8 +326,10 @@ the last day is not kept out by that, only by wrong logins from its own address;
 address with a guesser (behind the same router, say) is refused with it.
 
 The device has no video encoder, so the stream is a series of JPEGs (RTP/JPEG, over TCP only), not
-H.264. ffmpeg, and Frigate and go2rtc with it, read it; a recorder that wants H.264 has to re-encode it,
-which in Frigate is an ffmpeg output argument:
+H.264. On a 2nd gen Show 8 whose kernel has the MT8183's JPEG encoder, that encoder makes them rather
+than the cores: the same 1056x784 pictures at up to 15 a second instead of 10, for about the CPU the
+cores took for fewer, and about 5 Mbit/s in a lit room (15 in a dark one). ffmpeg, and Frigate and go2rtc with it, read
+it; a recorder that wants H.264 has to re-encode it, which in Frigate is an ffmpeg output argument:
 
 ```yaml
 cameras:

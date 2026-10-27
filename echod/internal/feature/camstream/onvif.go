@@ -220,7 +220,7 @@ func (f *Feature) answer(op, profile, host string, media bool) (string, bool) {
 		w, h := size()
 		return fmt.Sprintf(`<trt:GetVideoSourcesResponse><trt:VideoSources token="camera"><tt:Framerate>%d</tt:Framerate>
 <tt:Resolution><tt:Width>%d</tt:Width><tt:Height>%d</tt:Height></tt:Resolution></trt:VideoSources>
-</trt:GetVideoSourcesResponse>`, maxFPS, w, h), true
+</trt:GetVideoSourcesResponse>`, streamFPS(), w, h), true
 	case "GetStreamUri":
 		return `<trt:GetStreamUriResponse><trt:MediaUri><tt:Uri>` + html.EscapeString(streamURL) + `</tt:Uri>
 <tt:InvalidAfterConnect>false</tt:InvalidAfterConnect><tt:InvalidAfterReboot>false</tt:InvalidAfterReboot>
@@ -276,7 +276,7 @@ func profileXML(tag string) string {
 <tt:Encoding>JPEG</tt:Encoding><tt:Resolution><tt:Width>%d</tt:Width><tt:Height>%d</tt:Height></tt:Resolution>
 <tt:Quality>%d</tt:Quality><tt:RateControl><tt:FrameRateLimit>%d</tt:FrameRateLimit><tt:EncodingInterval>1</tt:EncodingInterval>
 <tt:BitrateLimit>0</tt:BitrateLimit></tt:RateControl><tt:SessionTimeout>PT60S</tt:SessionTimeout></tt:VideoEncoderConfiguration>
-</%s>`, tag, w, h, w, h, quality, maxFPS, tag)
+</%s>`, tag, w, h, w, h, quality, streamFPS(), tag)
 }
 
 // tokenOK is whether a request's UsernameToken is the stream's login, as a digest made within skew of now,
