@@ -30,9 +30,6 @@ import (
 // bluez.Central.Write). Pairing and cache clearing are not advertised.
 
 const (
-	// slots is how many devices may be connected at once, ESPHome's default.
-	slots = 3
-
 	connectTimeout = 30 * time.Second
 	// knownTimeout is how long to wait for the device to be heard again before connecting anyway.
 	knownTimeout = 5 * time.Second
@@ -641,6 +638,10 @@ func (e readError) Unwrap() error { return e.error }
 // gattError is the status for a failed request: the ATT error the device answered with when
 // bluetoothd says, else ESP-IDF's generic GATT error.
 func gattError(err error) int32 {
+	var native interface{ GATTStatus() int32 }
+	if errors.As(err, &native) {
+		return native.GATTStatus()
+	}
 	var r readError
 	read := errors.As(err, &r)
 	var de dbus.Error

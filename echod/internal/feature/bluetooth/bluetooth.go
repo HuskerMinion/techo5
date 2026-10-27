@@ -94,6 +94,9 @@ func Get() *Proxy {
 func build() *Proxy {
 	mac, _ := layout.FactoryMAC()
 	minor := beaconMinor(mac)
+	if !proxyBeaconSupported {
+		minor = -1
+	}
 	b := &Proxy{
 		proxy:   &esphome.BluetoothProxy{},
 		radio:   ble.Default(),
@@ -135,6 +138,7 @@ func build() *Proxy {
 	b.proxy.OnMode = func(bool) { b.apply() }
 
 	b.enable.Set(config.Get().Bluetooth.Proxy)
+	proxyPermission(config.Get().Bluetooth.Proxy)
 	b.enable.OnCommand = func(on bool) {
 		b.enable.Set(on)
 		// Saved first: until it is, a connection asked for would still be let in, after the release.
@@ -145,6 +149,7 @@ func build() *Proxy {
 		if !on {
 			b.links.ReleaseAll()
 		}
+		proxyPermission(on)
 		b.apply()
 
 		// What the device advertises has changed, and that is only read when a client connects.

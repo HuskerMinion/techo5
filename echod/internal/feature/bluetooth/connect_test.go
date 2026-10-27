@@ -378,20 +378,26 @@ func TestClosedSessionReleasesItsDevices(t *testing.T) {
 	c, f, conn := newFakes()
 	other := &fakeConn{got: make(chan proto.Message, 64)}
 	connect(t, c, conn, testAddr)
-	connect(t, c, other, testAddr+1)
+	if slots > 1 {
+		connect(t, c, other, testAddr+1)
+	}
 
 	conn.dead = true
 	c.ReleaseGone()
+	remaining := 0
+	if slots > 1 {
+		remaining = 1
+	}
 	deadline := time.Now().Add(2 * time.Second)
-	for c.free().Free != slots-1 && time.Now().Before(deadline) {
+	for c.free().Free != uint32(slots-remaining) && time.Now().Before(deadline) {
 		time.Sleep(10 * time.Millisecond)
 	}
-	if free := c.free(); free.Free != slots-1 || len(free.Allocated) != 1 || free.Allocated[0] != testAddr+1 {
+	if free := c.free(); free.Free != uint32(slots-remaining) || len(free.Allocated) != remaining || (remaining != 0 && free.Allocated[0] != testAddr+1) {
 		t.Fatalf("after the session closed: %v", free)
 	}
 	f.mu.Lock()
 	defer f.mu.Unlock()
-	if f.connected["C0:FF:EE:12:34:56"] || !f.connected["C0:FF:EE:12:34:57"] {
+	if f.connected["C0:FF:EE:12:34:56"] || (remaining != 0 && !f.connected["C0:FF:EE:12:34:57"]) {
 		t.Fatalf("central: %v", f.connected)
 	}
 }
