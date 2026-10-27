@@ -996,6 +996,74 @@ func developRow(out []uint8, px []uint16, lo, w, h, y int, luts *[3][2048]uint8)
 	}
 }
 
+// FullYUYV develops the frame as Full does, straight into YUYV, w*2 bytes a row in dst, for a JPEG
+// encoder that takes YUYV (hardware/jpegenc). Each band develops a row at a time into a row of its own
+// and converts it from there, so no full-size RGBA picture goes through memory on the way. Full range
+// BT.601, as JFIF has it; the chroma of each pair of pixels is their average. A frame Full has already
+// developed is converted from that. false if the frame is not a raw one or dst is too small.
+func (f *Frame) FullYUYV(dst []byte) bool {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	g := streamed()
+	w, h := g.w, g.h
+	if f.raw == nil || len(dst) < w*h*2 || w%2 != 0 {
+		return false
+	}
+	luts := f.level().tables()
+	img := f.developed
+	bands := runtime.NumCPU()
+	var wg sync.WaitGroup
+	for b := range bands {
+		y0, y1 := h*b/bands, h*(b+1)/bands
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			if img != nil {
+				for y := y0; y < y1; y++ {
+					rgbaToYUYV(dst[y*w*2:(y+1)*w*2], img.Pix[y*img.Stride:y*img.Stride+w*4])
+				}
+				return
+			}
+			lo, hi := max(y0-1, 0), min(y1+1, h)
+			px := make([]uint16, (hi-lo)*w)
+			for y := lo; y < hi; y++ {
+				unpackLine(f.raw[y*g.bpl:(y+1)*g.bpl], px[(y-lo)*w:(y-lo+1)*w])
+			}
+			row := make([]uint8, w*4)
+			for y := y0; y < y1; y++ {
+				developRow(row, px, lo, w, h, y, luts)
+				rgbaToYUYV(dst[y*w*2:(y+1)*w*2], row)
+			}
+		}()
+	}
+	wg.Wait()
+	return true
+}
+
+// rgbaToYUYV is one row of RGBA as YUYV, two pixels a step.
+func rgbaToYUYV(out, src []uint8) {
+	for len(out) >= 4 && len(src) >= 8 {
+		r0, g0, b0 := int32(src[0]), int32(src[1]), int32(src[2])
+		r1, g1, b1 := int32(src[4]), int32(src[5]), int32(src[6])
+		r, g, b := r0+r1, g0+g1, b0+b1
+		out[0] = uint8((19595*r0 + 38470*g0 + 7471*b0 + 1<<15) >> 16)
+		out[1] = clamp8((-11059*r - 21709*g + 32768*b + 257<<16) >> 17)
+		out[2] = uint8((19595*r1 + 38470*g1 + 7471*b1 + 1<<15) >> 16)
+		out[3] = clamp8((32768*r - 27439*g - 5329*b + 257<<16) >> 17)
+		out, src = out[4:], src[8:]
+	}
+}
+
+func clamp8(v int32) uint8 {
+	if v < 0 {
+		return 0
+	}
+	if v > 255 {
+		return 255
+	}
+	return uint8(v)
+}
+
 // lumaGrid samples one green pair per grid cell, at the cell's middle, from the packed frame: the
 // Bayer cell (x, y) is pixels (2x, 2y) to (2x+1, 2y+1), and its greens are (2x+1, 2y) and (2x, 2y+1).
 func lumaGrid(raw []byte, w, h int) []uint8 {

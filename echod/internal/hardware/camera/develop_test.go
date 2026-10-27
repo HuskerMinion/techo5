@@ -83,3 +83,41 @@ func TestFullMatchesTheReference(t *testing.T) {
 		}
 	}
 }
+
+// FullYUYV is Full's picture in YUYV, whether Full has developed the frame already or not.
+func TestFullYUYVIsFullsPicture(t *testing.T) {
+	g := streamed()
+	raw := make([]byte, g.bpl*g.h)
+	rand.New(rand.NewSource(11)).Read(raw)
+	img := (&Frame{raw: raw}).Full()
+	want := make([]byte, g.w*g.h*2)
+	for y := range g.h {
+		rgbaToYUYV(want[y*g.w*2:(y+1)*g.w*2], img.Pix[y*img.Stride:])
+	}
+	fresh := make([]byte, len(want))
+	if !(&Frame{raw: raw}).FullYUYV(fresh) || !bytes.Equal(fresh, want) {
+		t.Error("FullYUYV of a frame not developed yet is not Full's picture")
+	}
+	developed := &Frame{raw: raw}
+	developed.Full()
+	again := make([]byte, len(want))
+	if !developed.FullYUYV(again) || !bytes.Equal(again, want) {
+		t.Error("FullYUYV of a frame Full developed is not its picture")
+	}
+	if (&Frame{raw: raw}).FullYUYV(make([]byte, len(want)-1)) {
+		t.Error("FullYUYV took a buffer too small")
+	}
+}
+
+// YUYV of known colors: white, black, red and blue, full-range BT.601.
+func TestRGBAToYUYV(t *testing.T) {
+	out := make([]byte, 8)
+	rgbaToYUYV(out, []uint8{255, 255, 255, 255, 0, 0, 0, 255, 255, 0, 0, 255, 0, 0, 255, 255})
+	// The pairs are white with black, red with blue: luma each, chroma their average.
+	want := []byte{255, 128, 0, 128, 76, 170, 29, 181}
+	for i := range want {
+		if d := int(out[i]) - int(want[i]); d < -1 || d > 1 {
+			t.Fatalf("YUYV %v, want %v", out, want)
+		}
+	}
+}
