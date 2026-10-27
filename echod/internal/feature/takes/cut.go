@@ -22,8 +22,9 @@ const (
 	// a third of a second.
 	shortest = 250 * time.Millisecond
 
-	// longestTake is the most of a word, so that a take with its padding fits in the 3.2 seconds
-	// training-wake-word.md's step 5 cuts its clips to. Longer is somebody talking, not a take.
+	// longestTake is the most of a word, so that a take with its padding fits in the 3.2 seconds that
+	// step 5 of training by hand (training-wake-word.md) cuts its clips to. Longer is somebody talking,
+	// not a take.
 	longestTake = 2600 * time.Millisecond
 
 	// bridge is the longest dip inside one take: the gap between the words of "hey jarvis" or "turn it

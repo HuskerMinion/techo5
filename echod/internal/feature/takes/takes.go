@@ -1,8 +1,8 @@
 // Package takes records takes of a word on the device's own microphones, for training a wake word
-// model on what this device really hears (docs/training-wake-word.md, step 4). The setup page asks
-// for a recording, a press on the device starts it, and it runs for up to two minutes while somebody
-// says the word over and over. Then it is cut into one take per word, and the takes wait in memory for
-// the setup page to download them as a zip of 16 kHz mono WAVs.
+// model on what this device really hears (docs/training-wake-word.md: wakesmith's real voices, or
+// step 4 by hand). The setup page asks for a recording, a press on the device starts it, and it runs
+// for up to two minutes while somebody says the word over and over. Then it is cut into one take per
+// word, and the takes wait in memory for the setup page to download them as a zip of 16 kHz mono WAVs.
 //
 // It is a new use of the microphones, so it has a switch of its own, Record takes of a word, under
 // Privacy & Security on the screen and in Home Assistant, off on a new device. On top of the switch,
@@ -52,9 +52,9 @@ const (
 	armFor = 60 * time.Second
 
 	// tries is how many recordings may be asked for in a row with no press to start them before asking
-	// is refused for coolOff, as the page's own asking to be let in is (feature/setup). While one waits,
-	// a Dot's next tap starts it rather than a question: a browser asking over and over must not keep the
-	// device that way.
+	// is refused for coolOff, as the page's own asking to be let in is (feature/setup). In a row is each
+	// within coolOff of the one before. While one waits, a Dot's next tap starts it rather than a
+	// question: a browser asking over and over must not keep the device that way.
 	tries   = 3
 	coolOff = 10 * time.Minute
 
@@ -190,9 +190,11 @@ type Feature struct {
 	finish     chan struct{}
 
 	// unanswered is the recordings asked for in a row with no press, and shutUntil when asking is
-	// allowed again once there have been tries of them.
+	// allowed again once there have been tries of them. lastAsked is when the latest of them was asked
+	// for: a run that went quiet for coolOff is over.
 	unanswered int
 	shutUntil  time.Time
+	lastAsked  time.Time
 
 	// What was kept: the recording, the takes cut from it and what was left out of them.
 	pcm  []int16
@@ -347,6 +349,12 @@ func (f *Feature) Arm(word string, kind Kind, session string) error {
 		f.mu.Unlock()
 		return errors.New("recording was asked for too many times with nobody pressing on the device; try again in a few minutes")
 	}
+	// Askings spread out are not a browser keeping the device waiting: three over a day would otherwise
+	// shut out the next one.
+	if t.Sub(f.lastAsked) >= coolOff {
+		f.unanswered = 0
+	}
+	f.lastAsked = t
 	f.unanswered++
 	if f.unanswered > tries {
 		f.unanswered, f.shutUntil = 0, t.Add(coolOff)
@@ -437,7 +445,7 @@ func (f *Feature) refusal() string {
 	case f.dev.ringing():
 		return "an alarm or timer is ringing"
 	case !own && f.dev.audible():
-		return "something is playing; stop it first, or the takes would carry it"
+		return "something is playing; pause or stop it first, or the takes would carry it"
 	}
 	return ""
 }

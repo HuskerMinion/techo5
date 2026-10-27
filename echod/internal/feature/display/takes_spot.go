@@ -23,5 +23,5 @@ func (r *roundRenderer) takesFace(s roundScene) {
 	r.centered(r.title, "Recording", 130, colText)
 	r.centered(r.small, takesWhat(c, 14), 176, colDim)
 	r.centered(r.small, takesTime(c.Elapsed), 206, colDim)
-	r.pillButton(right("Stop"), askYesY, "Stop", btnPrimary)
+	r.pillButton(right(tr("stop")), askYesY, tr("stop"), btnPrimary)
 }

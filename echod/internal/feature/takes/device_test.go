@@ -175,6 +175,19 @@ func stopped(t *testing.T, m *fakeMic) {
 	}
 }
 
+// chimed waits for the device to have played n notes in all. A recording thrown away winds down on its
+// own, its stop note last, and that note moves when the recorder's own notes stop being heard.
+func chimed(t *testing.T, d *fake, n int32) {
+	t.Helper()
+	deadline := time.Now().Add(5 * time.Second)
+	for d.chimes.Load() < n {
+		if time.Now().After(deadline) {
+			t.Fatalf("%d notes played, want %d", d.chimes.Load(), n)
+		}
+		time.Sleep(5 * time.Millisecond)
+	}
+}
+
 // press puts the action button down now, and lift lets it up once every listener has heard it.
 func (d *fake) press() {
 	d.downAt.Store(d.now().UnixNano())

@@ -9,6 +9,7 @@ import (
 	"log/slog"
 	"math"
 	"os"
+	"slices"
 	"sync"
 	"sync/atomic"
 	"syscall"
@@ -214,7 +215,15 @@ type Player struct {
 	srcMu  sync.Mutex
 	src    Source
 	srcBuf []int16
+	// srcQuiet counts the periods in a row the Source has placed nothing but silence, for Sounding: a
+	// Source can stay attached with nothing to play, as Sendspin's does while Music Assistant has it
+	// paused. Written only by the write loop, and put back to 0 by Attach.
+	srcQuiet atomic.Int32
 }
+
+// srcQuietAfter is how many silent periods before an attached Source is no longer Sounding: about two
+// seconds, as for a sink (sinkQuietAfter), so the gap between two tracks is still the music playing.
+const srcQuietAfter = 2 * Rate / period
 
 // Source is asked for the frames the card is about to play, addressed by absolute output frame index.
 // A room playing along with the house needs that: where audio lands has to follow from when the server
@@ -230,6 +239,7 @@ func (p *Player) Attach(s Source) {
 	p.srcMu.Lock()
 	defer p.srcMu.Unlock()
 	p.src = s
+	p.srcQuiet.Store(0)
 }
 
 // Written is the output frame index of the next frame to be handed to the card.
@@ -1108,6 +1118,12 @@ func (p *Player) render() []int16 {
 	clear(p.srcBuf)
 
 	src.Render(p.written.Load(), p.srcBuf)
+	if slices.ContainsFunc(p.srcBuf, func(s int16) bool { return s != 0 }) {
+		p.srcQuiet.Store(0)
+	} else if q := p.srcQuiet.Load(); q < srcQuietAfter {
+		// A swap, not a store: an Attach in between has put the count back for a new Source.
+		p.srcQuiet.CompareAndSwap(q, q+1)
+	}
 	return p.srcBuf
 }
 
@@ -1248,9 +1264,10 @@ func (p *Player) Queued() int {
 }
 
 // Sounding is whether anything is on its way out of the speaker: a sound queued, the music's bed, an
-// underlay, a bell, or a source placing audio by frame (Attach). The silence fill pads in when nothing is
-// queued is not. For whoever needs to know whether the room is hearing the device now (feature/takes),
-// which Backgrounds' top cannot say: a paused track keeps its place there.
+// underlay, a bell, or a source placing audio by frame (Attach) that has placed some in the last two
+// seconds. The silence fill pads in when nothing is queued is not, and nor is a source with nothing to
+// place, such as a stream paused at the server. For whoever needs to know whether the room is hearing
+// the device now (feature/takes), which Backgrounds' top cannot say: a paused track keeps its place there.
 func (p *Player) Sounding() bool {
 	p.mu.Lock()
 	queued := len(p.pending)+len(p.bed)+len(p.under)+len(p.bell) > 0
@@ -1260,7 +1277,7 @@ func (p *Player) Sounding() bool {
 	}
 	p.srcMu.Lock()
 	defer p.srcMu.Unlock()
-	return p.src != nil
+	return p.src != nil && p.srcQuiet.Load() < srcQuietAfter
 }
 
 // Note is one tone in a chime. A zero frequency is a rest.

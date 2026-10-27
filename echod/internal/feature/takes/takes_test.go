@@ -368,6 +368,35 @@ func TestAskingCannotKeepTheDeviceWaiting(t *testing.T) {
 	}
 }
 
+// A run is askings close together. However many there are, ones a cool-off apart are not a browser
+// keeping the device waiting, and ones closer than that still add up.
+func TestAskingsSpreadOutDoNotAddUp(t *testing.T) {
+	d, f := newDevice(t)
+	ask := func() error {
+		err := f.Arm("Hey Jarvis", Word, "browser")
+		if err == nil {
+			f.Decline(f.Card().ID)
+			settled(t, f, Idle)
+		}
+		return err
+	}
+	for n := range tries + 2 {
+		if err := ask(); err != nil {
+			t.Fatalf("asking %d, a cool-off after the one before: %v", n+1, err)
+		}
+		d.wait(coolOff)
+	}
+	for n := range tries {
+		if err := ask(); err != nil {
+			t.Fatalf("asking %d of a run: %v", n+1, err)
+		}
+		d.wait(coolOff - time.Minute)
+	}
+	if err := ask(); err == nil || !strings.Contains(err.Error(), "too many") {
+		t.Errorf("asked a fourth time, each within a cool-off of the one before: %v", err)
+	}
+}
+
 // Another browser cannot ask over takes kept for the one that recorded them, and so throw them away.
 func TestAnotherBrowsersTakesAreLeftAlone(t *testing.T) {
 	d, f := newDevice(t)
@@ -509,6 +538,7 @@ func TestTheAskNoteIsNotSomethingPlaying(t *testing.T) {
 	}
 	<-d.mics
 	f.Discard("again")
+	chimed(t, d, 3) // asked, started and stopped: the clock moves on from the stop note
 
 	d.wait(2 * time.Second)
 	if err := f.Arm("Hey Jarvis", Word, "browser"); err != nil {

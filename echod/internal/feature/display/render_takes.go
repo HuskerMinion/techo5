@@ -36,5 +36,5 @@ func (r *renderer) takesPage(s scene) {
 	y0, y1 := r.actionBand()
 	stop := image.Rect(r.margin, y0, r.w-r.margin, y1)
 	fg := r.buttonFace(stop, float64(r.s(actionRadius)), btnPrimary)
-	r.text(r.title, "Stop", stop.Min.X+(stop.Dx()-r.width(r.title, "Stop"))/2, (y0+y1)/2+r.s(16), fg)
+	r.text(r.title, tr("stop"), stop.Min.X+(stop.Dx()-r.width(r.title, tr("stop")))/2, (y0+y1)/2+r.s(16), fg)
 }

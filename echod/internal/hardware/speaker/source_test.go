@@ -107,3 +107,46 @@ func TestDetachingStopsTheSource(t *testing.T) {
 		t.Errorf("detached = %d, want silence", got)
 	}
 }
+
+// An attached source is something playing while it places sound, and through two seconds of silence
+// after, the gap between two tracks. One left attached with nothing to place, as Sendspin's is while
+// Music Assistant has it paused, is not, or feature/takes would refuse to record over a pause.
+func TestASourceWithNothingToPlaceIsNotSounding(t *testing.T) {
+	p := newTestPlayer()
+	if p.Sounding() {
+		t.Fatal("nothing attached is sounding")
+	}
+	rec := &recorder{}
+	p.Attach(rec)
+	if !p.Sounding() {
+		t.Fatal("a source just attached is not sounding")
+	}
+	for range srcQuietAfter - 1 {
+		played(t, p)
+	}
+	if !p.Sounding() {
+		t.Fatal("a source silent for less than two seconds is not sounding")
+	}
+	played(t, p)
+	if p.Sounding() {
+		t.Fatal("a source silent for two seconds is still sounding")
+	}
+
+	rec.fill = 10
+	played(t, p)
+	if !p.Sounding() {
+		t.Fatal("a source placing sound again is not sounding")
+	}
+	rec.fill = 0
+	for range srcQuietAfter {
+		played(t, p)
+	}
+	p.Attach(&recorder{})
+	if !p.Sounding() {
+		t.Fatal("a new source took the silence of the one before it")
+	}
+	p.Attach(nil)
+	if p.Sounding() {
+		t.Fatal("a detached source is sounding")
+	}
+}

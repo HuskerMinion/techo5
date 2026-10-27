@@ -18,10 +18,11 @@ import (
 
 // What the takes go out as.
 //
-// Each take is a WAV of its own, 16 kHz mono 16-bit PCM, which is what training-wake-word.md's step 4
-// asks for, byte for byte the format feature/detect writes its clips in. The zip holds them in one
-// folder named for the word, the way step 5 reads a folder of takes, and a takes.json that says where
-// each came from in the recording and what was left out of it. Nothing in it names the device.
+// Each take is a WAV of its own, 16 kHz mono 16-bit PCM, which is what wakesmith and
+// training-wake-word.md's step 4 by hand ask for, byte for byte the format feature/detect writes its
+// clips in. The zip holds them in one folder named for the word, the way both read a folder of takes,
+// and a takes.json that says where each came from in the recording and what was left out of it.
+// Nothing in it names the device.
 //
 // The WAVs are stored rather than deflated: speech barely compresses, and a Dot has little CPU to
 // spare. They are made one take at a time as the zip is written, straight to the browser.

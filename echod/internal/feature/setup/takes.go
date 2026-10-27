@@ -299,7 +299,8 @@ func keptSection(w http.ResponseWriter, token string, st takes.State) {
 		}
 		fmt.Fprintf(w, `</div></details>
 		 <p><a href="/setup/takes.zip">Download the takes</a> (.zip, about %s): a folder of 16 kHz mono WAVs, one take
-		  each, for step 5 of training a wake word, and a takes.json of where each came from.</p>`, kb(st.Bytes))
+		  each, for wakesmith's Real voices or for training a wake word by hand, and a takes.json of where
+		  each came from.</p>`, kb(st.Bytes))
 	}
 	takesButtons(w, token, "discard", "Throw away")
 	fmt.Fprint(w, `<p class="note">Recording again replaces these.</p>`)

@@ -1266,9 +1266,10 @@ behind the press like the rest of the page, and watching doesn't keep the page o
 ### Recording takes of a word
 
 For training a wake word, or a command word, on what this device really hears, the setup page can
-record takes of it on the device's own microphones and hand them over as WAVs ready for step 5 of
-[training your own wake word](training-wake-word.md#4-add-your-own-voices). It is under **Sound &
-Voice**, after **Wake word scores**, on a device with microphones.
+record takes of it on the device's own microphones and hand them over as a folder of WAVs, ready to
+import into wakesmith as [real voices](training-wake-word.md#3-add-real-voices), or to use as
+[your own voices](training-wake-word.md#4-add-your-own-voices) when training by hand. It is under
+**Sound & Voice**, after **Wake word scores**, on a device with microphones.
 
 It needs **Record takes of a word** switched on, under Privacy & Security on the device's screen or in
 Home Assistant (a Dot has the switch in Home Assistant). It is off on a new device, the Remote API can
@@ -1279,8 +1280,8 @@ only read it, and a settings file never turns it on.
 2. The device plays a short note and waits a minute for a press: the action button on a Dot (its ring
    pulses white while it waits), or **Start** on the screen of a Show or a Spot, behind the settings
    lock if there is one. The setup page alone can't start a recording. Pressing **Record** again while it
-   waits changes the word but not the minute, and after three in a row that nobody started, asking is
-   refused for ten minutes.
+   waits changes the word but not the minute, and after three in a row that nobody started (each
+   within ten minutes of the one before), asking is refused for ten minutes.
 3. A chime says it has started. Say the word, wait a second and say it again, 20 to 30 times, near and
    far, facing the device and facing away. The screen says it is recording, with **Stop** on it, and a
    Dot's ring pulses amber. Mute the other devices nearby first: they hear it too.
@@ -1290,15 +1291,16 @@ only read it, and a settings file never turns it on.
 Then listen to the takes on the page and download them: a zip with a folder of 16 kHz mono 16-bit
 WAVs, one take each with a little of the room either side, and a `takes.json` that says where each came
 from in the recording and what was left out and why (too short or too long for a word, said while the
-device was making a sound, cut off by the start or the end of the recording, or more than 60 takes; a word begun in the second after the start chime is left out, since part of it may have been lost to the chime). A
-folder of takes of something like the word is named `not_` and the word.
+device was making a sound, cut off by the start or the end of the recording, or more than 60 takes; a
+word begun in the second after the start chime is left out, since part of it may have been lost to the
+chime). A folder of takes of something like the word is named `not_` and the word.
 
 It won't start while the microphones are muted, during a call, the intercom, a talk through a camera,
-an announcement being recorded or a ring, while a request is running, or while anything is playing,
-since the takes would carry it. A mute, a call, a talk through a camera or an announcement during a
-recording throws it away; a ring ends it and keeps the takes from before, and the stop word still stops
-the ring. A word said while it records, or in the second after, doesn't wake the device, act as a
-command or the stop word, or get kept as a wake clip.
+an announcement being recorded or a ring, while a request is running, or while anything is playing
+(pausing it is enough), since the takes would carry it. A mute, a call, a talk through a camera or an
+announcement during a recording throws it away; a ring ends it and keeps the takes from before, and the
+stop word still stops the ring. A word said while it records, or in the second after, doesn't wake the
+device, act as a command or the stop word, or get kept as a wake clip.
 
 How this differs from [Wake word clips](#wake-word-clips): clips are kept only around a detection or a
 near miss, so a word with no model yet gives none, and each is the four seconds up to the event rather
@@ -1309,9 +1311,9 @@ word itself hears: the microphones mixed and leveled the same way.
 The takes are kept only in memory, never on the device's storage, and only for the browser that asked
 for them: another browser let into the page can't see them, download them or record over them. They
 are gone when you throw them away, record again, switch Record takes of a word off, restart the device,
-or within a few seconds of the setup page closing, and a download still running stops there too. They come to your browser over
-the setup page, on your own network without encryption. They are your own voices: keep them on your
-own machine.
+or within a few seconds of the setup page closing, and a download still running stops there too. They
+come to your browser over the setup page, on your own network without encryption. They are your own
+voices: keep them on your own machine.
 
 ### Wake word on Home Assistant
 
@@ -1571,7 +1573,8 @@ address the file changes, old and new, and names what will need entering again, 
 links and paired computers that only the device the file came from has.
 
 A restore never opens a door on the device or has it listen or watch. Its privacy switches (SSH, the
-camera and screen pages, talking through cameras, recording takes of a word), AirPlay, Spotify Connect, DLNA, Sendspin, the
+camera and screen pages, talking through cameras, recording takes of a word), AirPlay, Spotify
+Connect, DLNA, Sendspin, the
 Bluetooth proxy, video and the addresses allowed to send it video, the diagnostics settings, Drop
 In, sending the room to Home Assistant's wake word engine (streaming or confirming), keeping wake
 word clips and recordings, presence and gestures, the remote API, camera streaming and its login, the
@@ -1640,7 +1643,7 @@ screen) says so and is left alone, and so does one with sharing off.
 For scripts and tools that are not Home Assistant. It reads what the device is and what its settings
 say, changes its everyday settings, and follows its log as it is written. It never changes a privacy or
 security setting (SSH, the camera and screen pages, the setup page, Drop In, talking through cameras,
-presence and gestures, sending the room to Home Assistant, keeping clips, calls, Bluetooth pairing and
+recording takes of a word, presence and gestures, sending the room to Home Assistant, keeping clips, calls, Bluetooth pairing and
 the proxy, AirPlay, Spotify Connect, DLNA, video, Sendspin, the settings lock, updates, restarts, camera
 streaming, the ambient noise sensor, the clap gesture, hold on the clock, nearest device answers, or the
 API itself): those it can read, not change. It never runs Home Assistant actions, and it carries none
