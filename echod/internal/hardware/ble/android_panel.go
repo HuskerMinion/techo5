@@ -20,6 +20,17 @@ import (
 // advertisements only; Android does not expose the controller or a public address-type API on 8.1.
 const panelSocket = "@techo5.ble"
 
+type panelScanStatus byte
+
+func (s panelScanStatus) Error() string {
+	return fmt.Sprintf("Android BLE scan rejected: %d", s)
+}
+
+func (s panelScanStatus) Is(target error) bool {
+	// The app reserves 1 for missing permission and 2 for a disabled adapter.
+	return target == ErrScanUnavailable && (s == 1 || s == 2)
+}
+
 type androidScanner struct {
 	mu       sync.Mutex
 	conn     net.Conn
@@ -71,7 +82,7 @@ func (s *androidScanner) Start(scan, active bool, advertisement []byte, found fu
 		var status [1]byte
 		_, err = io.ReadFull(c, status[:])
 		if err == nil && status[0] != 0 {
-			err = fmt.Errorf("Android BLE scan rejected: %d", status[0])
+			err = panelScanStatus(status[0])
 		}
 	}
 	if err != nil {

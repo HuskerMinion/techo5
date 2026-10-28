@@ -166,6 +166,25 @@ func TestPanelNativeError(t *testing.T) {
 		t.Fatalf("status: %v", err)
 	}
 }
+
+func TestPanelDropsZeroHandleNotifications(t *testing.T) {
+	c, events, _ := panelFixture(t, nil)
+	got := make(chan panelEvent, 2)
+	c.value = func(a string, h uint16, data []byte) {
+		got <- panelEvent{Addr: a, Handle: h, Data: data}
+	}
+	connectPanel(t, c)
+	events <- panelEvent{Type: "notify_data", Addr: panelTestRaw, Handle: 0, Data: []byte{9}}
+	events <- panelEvent{Type: "notify_data", Addr: panelTestRaw, Handle: 3, Data: []byte{7}}
+	select {
+	case e := <-got:
+		if e.Addr != panelTestAddress || e.Handle != 3 || len(e.Data) != 1 || e.Data[0] != 7 {
+			t.Fatalf("unexpected notification: %+v", e)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("valid notification did not arrive after dropping handle zero")
+	}
+}
 func TestPanelTimeoutClosesSession(t *testing.T) {
 	c, _, lost := panelFixture(t, func(cmd map[string]json.RawMessage) *panelEvent {
 		if string(cmd["op"]) == `"read"` {

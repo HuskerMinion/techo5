@@ -158,7 +158,7 @@ func (p *panelPeer) listen() {
 			p.mu.Lock()
 			active := p.connected && !p.closing
 			p.mu.Unlock()
-			if active && p.owner.value != nil {
+			if active && e.Handle != 0 && p.owner.value != nil {
 				p.owner.value(p.address, e.Handle, e.Data)
 			}
 			continue

@@ -54,11 +54,11 @@ Android does for the app instead:
   the shared proxy manager owns requests, retries and cleanup. Service discovery, characteristic
   and descriptor reads/writes, and notifications use real ATT handles, including when Home
   Assistant caches services. Pairing and cache clearing are not advertised. Android 8.1 descriptor
-  handles require a framework accessor; if unavailable, the connection is refused. Ordinary
-  Bluetooth audio pairing stays in Android.
+  handles require a framework accessor; if unavailable, the connection is refused. Devices with
+  random Bluetooth addresses may not connect on Android 8.1. Bluetooth audio pairing stays in Android.
 - **What it leaves out.** No LED ring or button events: the app passes on no keys, so the four button
-  event entities aren't there. No Bluetooth proxy or Bluetooth speaker or phone support from TECHO5
-  (Android keeps the radio). No video player, live camera video from Home Assistant or camera sound
+  event entities aren't there. No Bluetooth audio, speaker or phone support from TECHO5
+  (pair those in Android). No video player, live camera video from Home Assistant or camera sound
   (the Echos' video decoder isn't in the app; other cameras show Home Assistant snapshots). No AirPlay
   or Spotify Connect, no remote adb, and no firewall of its own. A call to a SIP account rings only
   when it comes from the provider.

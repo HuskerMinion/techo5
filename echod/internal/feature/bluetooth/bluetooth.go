@@ -5,6 +5,7 @@ package bluetooth
 import (
 	"context"
 	"encoding/binary"
+	"errors"
 	"log/slog"
 	"net"
 	"os"
@@ -316,6 +317,10 @@ func (b *Proxy) tune(beacon beaconState) bool {
 	}
 
 	if err := b.radio.Start(scan, active, beacon.advertisement, b.found); err != nil {
+		if errors.Is(err, ble.ErrScanUnavailable) {
+			slog.Debug("ble scan waiting for permission or adapter", "err", err)
+			return false
+		}
 		slog.Error("ble radio failed to start", "err", err)
 		if scan {
 			_ = b.proxy.Report(esphome.ScannerFailed)
