@@ -33,6 +33,7 @@ import (
 	"github.com/HuskerMinion/techo5/echod/internal/feature/btaudio"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/web"
 	"github.com/HuskerMinion/techo5/echod/internal/hardware/led"
+	"github.com/HuskerMinion/techo5/echod/internal/hardware/mic"
 	"github.com/HuskerMinion/techo5/echod/internal/layout"
 	"github.com/HuskerMinion/techo5/echod/internal/lib/hook"
 	"github.com/HuskerMinion/techo5/echod/internal/lib/safe"
@@ -104,6 +105,7 @@ type Phone struct {
 	// callByVoice lets "call Mom" said to the device dial a contact (feature/voice): config.Home's
 	// CallByVoiceOff, the other way round.
 	callByVoice      *esphome.Switch
+	callCanceller    *esphome.Select // the echo canceller for the length of a call (callCanceller)
 	plainSIP         *esphome.Switch // the account without TLS and SRTP, for a SIP server at home
 	ringSound        *esphome.Select
 	ringLED, callLED *led.Claim
@@ -161,6 +163,14 @@ func build() *Phone {
 		"mdi:account-voice", config.Set().Home().CallReplies)
 	p.callUnderlay = callSwitch("hear_call_under_assistant", "Hear the call under the assistant",
 		"mdi:phone-in-talk", config.Set().Home().CallUnderlay)
+	// On the microphone device, where its name sorts it under Microphone echo canceller, the one it
+	// stands in for during a call. Nothing to apply as it is chosen: each call reads it as it starts.
+	p.callCanceller = &esphome.Select{Base: esphome.Base{ObjectID: "microphone_echo_canceller_in_calls",
+		Name: "Microphone echo canceller in calls", Icon: "mdi:waveform", Category: esphome.CategoryConfig,
+		DeviceID: component.DeviceMicrophone}}
+	component.Bind(p.callCanceller, config.CallCancelEngines(),
+		func(e config.CallCancelEngine) config.CallCancelEngine { return e },
+		config.Set().Microphone().CallCancelEngine)
 	p.callByVoice = &esphome.Switch{Base: esphome.Base{ObjectID: "call_contacts_by_voice", Name: "Call contacts by voice",
 		Icon: "mdi:phone-outgoing", Category: esphome.CategoryConfig}}
 	p.callByVoice.OnCommand = p.SetCallByVoice
@@ -185,11 +195,15 @@ func (p *Phone) Entities() []esphome.Entity {
 	if layout.HasMicrophone() {
 		list = append(list, p.callByVoice)
 	}
+	// Only offered where there is a choice of canceller.
+	if layout.HasMicrophone() && mic.HaveWebRTC() {
+		list = append(list, p.callCanceller)
+	}
 	return list
 }
 
-// Restore puts the intercom's two switches, the call ring, what a turn during a call may do, calling
-// contacts by voice and the phone without encryption back the way they were left.
+// Restore puts the intercom's two switches, the call ring, what a turn during a call may do, the
+// call's echo canceller, calling contacts by voice and the phone without encryption back the way they were left.
 func (p *Phone) Restore(c config.Config) {
 	p.dropIn.Set(c.Home.DropIn)
 	p.ringSound.Set(RingSounds[RingSoundIndex()])
@@ -197,6 +211,7 @@ func (p *Phone) Restore(c config.Config) {
 	p.callWake.Set(c.Home.CallWake)
 	p.callReplies.Set(c.Home.CallReplies)
 	p.callUnderlay.Set(c.Home.CallUnderlay)
+	p.callCanceller.Set(c.Microphone.CallCancelEngine.Label())
 	p.callByVoice.Set(!c.Home.CallByVoiceOff)
 	p.plainSIP.Set(c.Home.PhonePlain)
 }

@@ -84,6 +84,7 @@ func talk(ctx context.Context, m *diago.DialogMedia, say <-chan []int16) error {
 func carry(ctx context.Context, enc io.Writer, dec io.Reader, wide bool, say <-chan []int16) error {
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
+	defer callCanceller(mic.Get().SetCancelEngine)()
 
 	var st stats
 	defer func() {
@@ -110,6 +111,49 @@ func carry(ctx context.Context, enc io.Writer, dec io.Reader, wide bool, say <-c
 	<-ctx.Done()
 	wg.Wait()
 	return nil
+}
+
+// callsUp counts calls carrying audio, so the canceller chosen for calls goes back only once the last
+// of them is over (an intercom call can be up beside a phone call).
+var callsUp struct {
+	sync.Mutex
+	n int
+}
+
+// callCanceller puts the echo canceller chosen in Microphone.CallCancelEngine on for a call, and
+// returns what puts the one in Microphone.CancelEngine back after. The built-in filter leaves the far
+// end a faint echo of themselves, lifted by the leveler after it; WebRTC's suppressor takes that out,
+// at the cost of the wake word, which matters less during a call than the call does. set is
+// mic.Source.SetCancelEngine, which falls back to the built-in filter where the helper cannot run.
+func callCanceller(set func(string) string) (restore func()) {
+	c := config.Get().Microphone
+	want := config.CancelEngine(c.CallCancelEngine)
+	if want == "" || want == outsideCalls(c) {
+		return func() {}
+	}
+	callsUp.Lock()
+	defer callsUp.Unlock()
+	callsUp.n++
+	if callsUp.n == 1 {
+		slog.Info("phone: echo canceller for the call", "engine", set(string(want)))
+	}
+	return func() {
+		callsUp.Lock()
+		defer callsUp.Unlock()
+		if callsUp.n--; callsUp.n > 0 {
+			return
+		}
+		// Read now, not as the call began: a choice made during the call is the one to go back to.
+		slog.Info("phone: echo canceller after the call", "engine", set(string(outsideCalls(config.Get().Microphone))))
+	}
+}
+
+// outsideCalls is the canceller chosen for the rest of the time.
+func outsideCalls(c config.Microphone) config.CancelEngine {
+	if c.CancelEngine == "" {
+		return config.CancelBuiltin
+	}
+	return c.CancelEngine
 }
 
 // send is the microphones, and anything to say, out to the call.

@@ -22,6 +22,11 @@ type Microphone struct {
 	// process where the image has it.
 	CancelEngine CancelEngine `json:"cancel_engine,omitempty"`
 
+	// CallCancelEngine is which canceller runs while a call is up; empty is CancelEngine's, as at any
+	// other time. WebRTC's takes out the echo the far end hears with the built-in filter, which is
+	// kept outside calls for the wake word.
+	CallCancelEngine CallCancelEngine `json:"call_cancel_engine,omitempty"`
+
 	// Sensitivity is how far over the room's own floor, in dB, counts as something happening. Lower
 	// notices a chair being moved; higher waits for someone to speak.
 	Sensitivity int `json:"sensitivity"`
@@ -112,6 +117,10 @@ func (w MicrophoneWriter) CancelEngine(v CancelEngine) error {
 	return w.st.Update(func(c *Config) { c.Microphone.CancelEngine = v })
 }
 
+func (w MicrophoneWriter) CallCancelEngine(v CallCancelEngine) error {
+	return w.st.Update(func(c *Config) { c.Microphone.CallCancelEngine = v })
+}
+
 // CancelEngine is which echo canceller runs.
 type CancelEngine string
 
@@ -136,6 +145,24 @@ func (e CancelEngine) Label() string {
 		return "Built-in"
 	}
 	return string(e)
+}
+
+// CallCancelEngine is which echo canceller runs during a call: the one chosen for the rest of the
+// time (CallCancelSame), or one of CancelEngine's.
+type CallCancelEngine string
+
+const CallCancelSame CallCancelEngine = ""
+
+// CallCancelEngines is the choice, for a select.
+func CallCancelEngines() []CallCancelEngine {
+	return []CallCancelEngine{CallCancelSame, CallCancelEngine(CancelBuiltin), CallCancelEngine(CancelWebRTC)}
+}
+
+func (e CallCancelEngine) Label() string {
+	if e == CallCancelSame {
+		return "Same as outside calls"
+	}
+	return CancelEngine(e).Label()
 }
 
 func (w MicrophoneWriter) Sensitivity(db int) error {
