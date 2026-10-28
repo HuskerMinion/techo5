@@ -17,6 +17,11 @@ import (
 // read loop: fetching and playing must not block it.
 func (t *conversation) announce(a esphome.Announce) {
 	slog.Info("announce", "text", a.Text, "start_conversation", a.StartConversation)
+	// One that asks for an answer is a question to whoever is here: its words go on the screen.
+	asks := a.StartConversation && a.Text != ""
+	if asks {
+		t.post(event{kind: evAnnouncing, text: a.Text})
+	}
 
 	// One claim covers both urls, so silencing an announcement stops the whole thing rather than
 	// letting the second one start once the first has been drained.
@@ -48,6 +53,8 @@ func (t *conversation) announce(a esphome.Announce) {
 		// was cut off was cut off on purpose, so nothing follows it.
 		if a.StartConversation && !claim.Stopped() {
 			t.post(event{kind: evStart, slot: 0, asked: true, at: time.Now()})
+		} else if asks {
+			t.post(event{kind: evAnnounced})
 		}
 	})
 }

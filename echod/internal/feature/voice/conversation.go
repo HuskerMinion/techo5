@@ -101,6 +101,8 @@ const (
 	evCandidate                    // a wake the device was not sure of (event.slot, event.peak)
 	evWatch                        // something a stream to Home Assistant depends on may have changed
 	evRunStart                     // Home Assistant opened a run
+	evAnnouncing                   // an announcement that asks for an answer is being said (event.text)
+	evAnnounced                    // and was cut off, so no answer follows
 )
 
 type event struct {
@@ -504,6 +506,20 @@ func (c *conversation) turnEvent(e event) {
 	case evLookHere:
 		if c.phase != phaseIdle {
 			c.lookHere = true
+		}
+
+	case evAnnouncing:
+		// A question from Home Assistant (start_conversation) is on the screen as a reply would be,
+		// while it is said; the turn that answers it opens after it. Not over a turn of its own.
+		if c.phase == phaseIdle {
+			c.shown = State{Phase: phaseReplying.String(), Reply: e.text}
+			Changed.Emit(c.shown)
+		}
+
+	case evAnnounced:
+		if c.phase == phaseIdle && c.shown.Phase == phaseReplying.String() {
+			c.shown.Phase = phaseIdle.String()
+			Changed.Emit(c.shown)
 		}
 
 	case evEffect:
