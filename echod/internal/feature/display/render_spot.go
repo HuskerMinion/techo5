@@ -566,7 +566,7 @@ func (r *roundRenderer) conversation(s roundScene) {
 	case "listening":
 		title, col = tr("ui_listening"), colListening
 	case "thinking":
-		title, col = "Thinking", colThinking
+		title, col = tr("ui_thinking"), colThinking
 	}
 	y := 150
 	if title != "" {

@@ -703,9 +703,9 @@ func (r *renderer) draw(s scene) {
 	var behind *image.RGBA // the photo behind the idle page, when it has one
 	switch s.phase {
 	case "listening":
-		r.status(s, "Listening…", true)
+		r.status(s, tr("ui_listening_turn"), true)
 	case "thinking":
-		r.status(s, "Thinking…", true)
+		r.status(s, tr("ui_thinking_turn"), true)
 		r.words(s.heard, "", r.s(200))
 	case "replying", "lingering":
 		r.cornerClock(s)

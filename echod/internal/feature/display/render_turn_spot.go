@@ -44,10 +44,10 @@ func (r *roundRenderer) turnFace(s roundScene) {
 	y := turnWordsTop
 	switch s.phase {
 	case "listening":
-		r.centered(r.body, "Listening…", y, colListening)
+		r.centered(r.body, tr("ui_listening_turn"), y, colListening)
 		return
 	case "thinking":
-		r.centered(r.body, "Thinking…", y, colThinking)
+		r.centered(r.body, tr("ui_thinking_turn"), y, colThinking)
 		y += 36
 	}
 	answer := s.reply != "" && (s.phase == "replying" || s.phase == "lingering")
