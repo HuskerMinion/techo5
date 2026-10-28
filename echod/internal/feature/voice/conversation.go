@@ -1401,9 +1401,18 @@ func (c *conversation) stream(ctx context.Context, be backend, slot int, followU
 		sent += len(frame)
 		if endpointAt == 0 && ep.Feed(frame) {
 			endpointAt = float64(sent) / float64(mic.Rate)
+			// What the decision was made on, not just that it was made: the loudest window of the
+			// turn (usually the wake word), the level a window had to fall below to count as quiet,
+			// and how many windows counted as speech. A turn cut while someone was still talking
+			// shows a peak set by the wake word and a request too soft to reach off of it.
+			peak, off, speech := ep.Heard()
 			slog.Info("end of speech heard here", "slot", slot+1, "acted", acts,
 				"spoke_s", math.Round(float64(ep.EndedAt())/float64(mic.Rate)*10)/10,
-				"at_s", math.Round(endpointAt*10)/10)
+				"at_s", math.Round(endpointAt*10)/10,
+				"peak", math.Round(peak),
+				"off", math.Round(off),
+				"speech", speech,
+				"quiet_needed", ep.Settings().Quiet)
 			if acts {
 				c.post(event{kind: evSpokeEnd, text: id})
 			}

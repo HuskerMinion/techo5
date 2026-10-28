@@ -4,6 +4,7 @@ import (
 	"encoding/binary"
 	"fmt"
 	"math"
+	"math/rand"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -66,6 +67,137 @@ func TestQuietAloneNeverEnds(t *testing.T) {
 	if feed(d, tone(40, 30)) {
 		t.Fatal("four seconds of quiet with nobody talking ended the turn")
 	}
+}
+
+// softRequest is a loud wake word followed by a request between Off and On (0.4 * peak), with a
+// breath between each word: the shape the device logs show when a turn is cut early.
+func softRequest() [][]int16 {
+	parts := [][]int16{tone(3, 1500)}
+	for i := 0; i < 8; i++ {
+		parts = append(parts, tone(1, 600), tone(1, 30))
+	}
+	return parts
+}
+
+// Quiet ends a turn only when it is quiet in a row. A window between Off and On is the speaker still
+// talking, more softly than their loudest moment: it breaks the run rather than adding to it, or a
+// longer sentence collects six quiet windows across its breaths and is cut while they are speaking.
+func TestQuietMustBeConsecutive(t *testing.T) {
+	cases := []struct {
+		name  string
+		parts [][]int16
+		ended bool
+		at    int
+	}{
+		{
+			name:  "a request softer than the wake word, with breaths",
+			parts: softRequest(),
+			ended: false,
+		},
+		{
+			name:  "a soft window breaks the run",
+			parts: [][]int16{tone(3, 1500), tone(3, 30), tone(1, 600), tone(3, 30)},
+			ended: false,
+		},
+		{
+			name:  "six quiet windows in a row end it",
+			parts: [][]int16{tone(3, 1500), tone(6, 30)},
+			ended: true,
+			at:    3 * Window,
+		},
+		{
+			name:  "a window at the speaker's level breaks the run",
+			parts: [][]int16{tone(3, 1500), tone(4, 30), tone(1, 1500), tone(4, 30)},
+			ended: false,
+		},
+		{
+			name:  "speech below the gate does not end it",
+			parts: [][]int16{tone(2, 1500), tone(6, 30)},
+			ended: false,
+		},
+		{
+			name:  "the last heard window sets EndedAt",
+			parts: [][]int16{tone(3, 1500), tone(1, 600), tone(6, 30)},
+			ended: true,
+			at:    4 * Window,
+		},
+		{
+			// A breath before the last word is not counted towards the run that ends the turn:
+			// the soft word breaks it, so the six quiet windows start after it and EndedAt is
+			// its end, keeping the word in the audio.
+			name:  "a soft final word is not cut off",
+			parts: [][]int16{tone(3, 1500), tone(2, 30), tone(1, 600), tone(6, 30)},
+			ended: true,
+			at:    6 * Window,
+		},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			d := New(Default)
+			if got := feed(d, c.parts...); got != c.ended {
+				t.Fatalf("ended = %v, want %v", got, c.ended)
+			}
+			if got := d.EndedAt(); got != c.at {
+				t.Errorf("ended at %d samples, want %d", got, c.at)
+			}
+		})
+	}
+}
+
+// TestQuietIsConsecutive is the invariant the table cases illustrate, over generated sequences of the
+// three levels there are: the turn ends at the first run of Quiet windows below Off*peak, and only
+// once enough windows at or above On have counted as speech to open it. EndedAt is the end of the
+// window before that run - the last one heard, because nothing in the run reached Off.
+//
+// Every sequence opens with a loud window, so the peak the thresholds are relative to is fixed and
+// the levels mean the same thing throughout. Deterministic and small: one seed, a few hundred
+// sequences.
+func TestQuietIsConsecutive(t *testing.T) {
+	const (
+		loud   = 1500.0 // at or above On*peak
+		voiced = 600.0  // between Off*peak and On*peak, 0.4 of the peak
+		quiet  = 30.0   // below Off*peak
+	)
+	levels := []float64{loud, voiced, quiet}
+	rng := rand.New(rand.NewSource(1))
+	for i := 0; i < 400; i++ {
+		seq := []float64{loud}
+		for n := rng.Intn(31); n > 0; n-- {
+			seq = append(seq, levels[rng.Intn(len(levels))])
+		}
+		parts := make([][]int16, len(seq))
+		for j, r := range seq {
+			parts[j] = tone(1, r)
+		}
+		d := New(Default)
+		ended := feed(d, parts...)
+		wantEnded, wantAt := endsAt(seq, Default)
+		if ended != wantEnded || d.EndedAt() != wantAt {
+			t.Fatalf("%v: ended %v at %d, want %v at %d", seq, ended, d.EndedAt(), wantEnded, wantAt)
+		}
+	}
+}
+
+// endsAt is the invariant over what was fed, stated without the detector: a window is speech at or
+// above On*peak and quiet below Off*peak; the turn ends at Quiet quiet windows in a row once Speech
+// has counted; and EndedAt is the end of the window just before that run.
+func endsAt(seq []float64, s Settings) (ended bool, at int) {
+	peak, speech, run := 0.0, 0, 0
+	for i, r := range seq {
+		peak = math.Max(peak, r)
+		if r >= s.On*peak {
+			speech++
+		}
+		if r < s.Off*peak {
+			run++
+		} else {
+			run = 0
+		}
+		if run == s.Quiet && speech >= s.Speech {
+			return true, (i + 1 - s.Quiet) * Window
+		}
+	}
+	return false, 0
 }
 
 // Recordings of real turns, when there are some: where the detector would have ended each one, and
