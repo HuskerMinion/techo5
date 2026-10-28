@@ -1,0 +1,6 @@
+FROM ubuntu:24.04
+
+RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+    build-essential bc bison flex libssl-dev libelf-dev python3 curl xz-utils \
+    ca-certificates gcc-aarch64-linux-gnu patch \
+    && rm -rf /var/lib/apt/lists/*

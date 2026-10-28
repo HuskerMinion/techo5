@@ -23,8 +23,19 @@ python3 curl xz-utils`):
 
     tools/linux/athena/kernel/build.sh
 
-It downloads the kernel tarball and the Wi-Fi firmware (both checked against the sha256 sums in the
-script), unpacks a fresh tree under `$WORK` (default `~/techo5-athena-kbuild`), applies the patches
+On an Apple silicon Mac with Docker running:
+
+    bash tools/linux/athena/kernel/build-in-docker.sh
+
+The wrapper mounts the checkout read-only, builds in the `techo5-athena-kbuild` Docker volume, and
+writes the image and source archive under `build/athena-kernel/`. Set `OUT` to choose another output
+directory and `JOBS` to choose compile concurrency (default 4 to limit Docker memory use).
+The volume caches downloads; each invocation unpacks a clean kernel tree and recompiles it.
+The fixed container name prevents concurrent builds from writing the same volume. The wrapper
+does not connect to a device.
+
+The native build downloads the kernel tarball and Wi-Fi firmware (checked against the sha256 sums
+in the script), unpacks a fresh tree under `$WORK` (default `~/techo5-athena-kbuild`), applies the patches
 below in order, builds `Image.gz` and the DTB, packs the boot image and checks it with
 `check-boot.py`. Output in `$WORK/out`:
 
