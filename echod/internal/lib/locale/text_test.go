@@ -14,10 +14,16 @@ import (
 )
 
 func TestTextFallback(t *testing.T) {
-	for _, lang := range []string{"", "en", "de", "es", "fr", "it", "nl", "pt", "ru", "unknown"} {
+	for _, lang := range []string{"", "en", "es", "fr", "it", "nl", "pt", "ru", "unknown"} {
 		if got := Text(lang, "done"); got != "Done" {
 			t.Errorf("%q: %q", lang, got)
 		}
+	}
+	if got := Text("de", "done"); got != "Fertig" {
+		t.Fatal(got)
+	}
+	if got := Text("de", "missing_key"); got != "missing_key" {
+		t.Fatal(got)
 	}
 	if got := Text("ja", "done"); got != "完了" {
 		t.Fatal(got)

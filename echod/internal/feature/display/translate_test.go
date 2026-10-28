@@ -16,7 +16,7 @@ func TestInlineSettingsMessagesFollowScreenLanguage(t *testing.T) {
 	for _, c := range []struct{ lang, ssh, lock, check string }{
 		{"en", "On, but no key yet, so nothing listens", "A PIN before most settings change", "Checking…"},
 		{"ja", "有効ですが、SSHキーがないため接続できません", "多くの設定変更にPINを要求", "確認中…"},
-		{"de", "On, but no key yet, so nothing listens", "A PIN before most settings change", "Checking…"},
+		{"es", "On, but no key yet, so nothing listens", "A PIN before most settings change", "Checking…"},
 	} {
 		if err := config.Set().Screen().Language(c.lang); err != nil {
 			t.Fatal(err)

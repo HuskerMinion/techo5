@@ -40,7 +40,7 @@ func TestDisplayCalendarSettingsUseJapanesePresentationOnly(t *testing.T) {
 		"next_up":           {"時計に次の予定", "時計の下部に今日の次の予定を表示"},
 		"weather":           {"カレンダーの天気", "各日の天気予報を表示"},
 	}
-	for _, lang := range []string{"en", "ja", "de"} {
+	for _, lang := range []string{"en", "ja", "es"} {
 		if err := config.Set().Screen().Language(lang); err != nil {
 			t.Fatal(err)
 		}
@@ -189,7 +189,7 @@ func TestCameraTestLocalizesOnlyItsSettingsLabel(t *testing.T) {
 	camTestAvailable = func() bool { return true }
 	t.Cleanup(func() { camTestAvailable = wasAvailable })
 	var englishPage []byte
-	for _, lang := range []string{"en", "ja", "de"} {
+	for _, lang := range []string{"en", "ja", "es"} {
 		_ = config.Set().Screen().Language(lang)
 		rows := cameraTestRows()
 		want := "Camera test"

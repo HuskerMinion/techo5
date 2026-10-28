@@ -19,7 +19,7 @@ func TestV168CameraSettingsTranslateWithoutChangingValues(t *testing.T) {
 	_ = config.Set().Screen().CameraFit("native")
 	_ = config.Set().Screen().CameraBands("fade")
 	_ = config.Set().Screen().CameraShade("strong")
-	for _, lang := range []string{"en", "ja", "de"} {
+	for _, lang := range []string{"en", "ja", "es"} {
 		_ = config.Set().Screen().Language(lang)
 		for _, tc := range []struct {
 			id, english, japanese string
@@ -52,7 +52,7 @@ func TestV168CameraSettingsTranslateWithoutChangingValues(t *testing.T) {
 func TestV168NetbirdAndStreamingMessages(t *testing.T) {
 	config.Use(filepath.Join(t.TempDir(), "state.json"))
 	t.Cleanup(func() { _ = config.Set().Screen().Language("") })
-	for _, lang := range []string{"en", "ja", "de"} {
+	for _, lang := range []string{"en", "ja", "es"} {
 		_ = config.Set().Screen().Language(lang)
 		for _, tc := range []struct {
 			state             netbird.Status
@@ -95,7 +95,7 @@ func TestV168WeekendHomeAssistantOptionsStayStable(t *testing.T) {
 	t.Cleanup(func() { _ = config.Set().Screen().Language("") })
 	_ = config.Set().Screen().Night("22-7")
 	d := &Display{poke: make(chan struct{}, 1)}
-	for _, lang := range []string{"en", "ja", "de"} {
+	for _, lang := range []string{"en", "ja", "es"} {
 		_ = config.Set().Screen().Language(lang)
 		d.weekendStart, d.weekendEnd = weekendEndSelect(d, true), weekendEndSelect(d, false)
 		if d.weekendStart.ObjectID != "screen_weekend_night_start" || d.weekendEnd.Name != "Weekend night ends" || d.weekendEnd.Options[0] != sameAsNights {

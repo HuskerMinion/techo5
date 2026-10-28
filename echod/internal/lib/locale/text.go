@@ -1153,4 +1153,1138 @@ var uiTranslations = map[string]map[string]string{
 		"where_the_sound_goes_with_headphones_in": "ヘッドホン接続時の音声出力先",
 		"wi_fi": "Wi-Fi",
 	},
+
+	// de is the German catalog. The English of every entry is above it, so a
+	// review can compare the two without the other map. Keys left out fall back
+	// to English. Format arguments are the same as the English ones.
+	"de": {
+		// Listening
+		"drawer_recording": "Hört zu",
+		// Talk
+		"drawer_talk": "Sprechen",
+		// End talk  %d:%02d
+		"drawer_end_talk": "Gespräch beenden  %d:%02d",
+		// Try again
+		"drawer_try_again": "Erneut versuchen",
+		// All cameras
+		"drawer_all_cameras": "Alle Kameras",
+		// Announce
+		"drawer_announce": "Ansagen",
+		// Announcements need a house word — the same word on every device here, set on each one's setup page. Until then this device neither sends them nor takes them.
+		"drawer_announce_setup": "Ansagen brauchen ein Hauswort: dasselbe Wort auf jedem Gerät hier, auf jeder Einrichtungsseite gesetzt. Bis dahin sendet dieses Gerät keine Ansagen und nimmt auch keine an.",
+		// ANNOUNCEMENT
+		"drawer_announcement": "ANSAGE",
+		// Another room
+		"drawer_another_room": "Anderer Raum",
+		// It sends when you stop talking
+		"drawer_auto_send": "Sendet, sobald das Sprechen endet",
+		// Call
+		"drawer_call": "Anrufen",
+		// %s ringing · tap here to stop
+		"drawer_call_alarm": "%s klingelt · zum Stoppen tippen",
+		// tap to close
+		"drawer_camera_close": "zum Schließen tippen",
+		// Connecting to %s…
+		"drawer_camera_connect": "Verbinde mit %s…",
+		// Up to six at once; tap one to see it alone
+		"drawer_camera_grid_hint": "Bis zu sechs gleichzeitig; eine antippen, um sie allein zu sehen",
+		// Connecting…
+		"drawer_connecting": "Verbinde…",
+		// %d other devices
+		"drawer_device_count": "%d weitere Geräte",
+		// TAP TO DISMISS
+		"drawer_dismiss": "ZUM AUSBLENDEN TIPPEN",
+		// No stations in this list yet
+		"drawer_empty_stations": "Noch keine Sender in dieser Liste",
+		// Favorites
+		"drawer_favorites": "Favoriten",
+		// Go ahead
+		"drawer_go_ahead": "Bitte sprechen",
+		// Goes to %s
+		"drawer_goes_to": "Geht an %s",
+		// tap a camera to see it alone  ·  tap here to close
+		"drawer_grid_close": "eine Kamera antippen, um sie allein zu sehen  ·  zum Schließen hier tippen",
+		// all rooms in the group
+		"drawer_group_stop": "alle Räume der Gruppe",
+		// Heard on %s
+		"drawer_heard_on": "Gehört auf %s",
+		// Intercom, in the house
+		"drawer_intercom": "Gegensprechanlage, im Haus",
+		// Asking Home Assistant for stations…
+		"drawer_loading_stations": "Frage Sender bei Home Assistant ab…",
+		// Local stations
+		"drawer_local": "Sender aus der Nähe",
+		// Mute
+		"drawer_mute": "Stumm",
+		// Nobody to call yet. Give every device the same house word on its setup page to call between rooms, or sign the phone in (the phone_account action) for your contacts.
+		"drawer_no_calls": "Noch niemand zum Anrufen. Allen Geräten dasselbe Hauswort auf der Einrichtungsseite geben, um zwischen Räumen zu telefonieren, oder das Telefon anmelden (Aktion phone_account) für die eigenen Kontakte.",
+		// No cameras yet. Set a Home Assistant token to list them all, or pick some with the home_cameras action.
+		"drawer_no_cameras": "Noch keine Kameras. Ein Home-Assistant-Token setzen, um alle aufzulisten, oder mit der Aktion home_cameras welche auswählen.",
+		// No cameras: None is chosen for Home Assistant's cameras, on the setup page or with the home_cameras action.
+		"drawer_no_cameras_disabled": "Keine Kameras: Für die Home-Assistant-Kameras ist „Keine“ ausgewählt, auf der Einrichtungsseite oder mit der Aktion home_cameras.",
+		// No stations within 100 km
+		"drawer_no_local": "Keine Sender im Umkreis von 100 km",
+		// No other devices found yet
+		"drawer_no_peers": "Noch keine anderen Geräte gefunden",
+		// No stations yet. Give the device a Home Assistant token (the home_assistant action) for local and popular stations, or add your own with home_radio.
+		"drawer_no_radio": "Noch keine Sender. Dem Gerät ein Home-Assistant-Token geben (Aktion home_assistant) für lokale und beliebte Sender, oder eigene mit home_radio hinzufügen.",
+		// 1 other device
+		"drawer_one_device": "1 weiteres Gerät",
+		// Paused
+		"drawer_paused": "Pausiert",
+		// Phone
+		"drawer_phone": "Telefon",
+		// Playing
+		"drawer_playing": "Spielt",
+		// Playing now
+		"drawer_playing_now": "Läuft gerade",
+		// Popular worldwide
+		"drawer_popular": "Weltweit beliebt",
+		// Radio
+		"drawer_radio": "Radio",
+		// Say something
+		"drawer_say_something": "Etwas sagen",
+		// TAP TO SEND  ·  HOLD TO CANCEL
+		"drawer_send_hint": "ZUM SENDEN TIPPEN  ·  ZUM ABBRECHEN HALTEN",
+		// Or say \"show %s\"
+		"drawer_show_camera": "Oder \"zeige %s\" sagen",
+		// Speak
+		"drawer_speak": "Sprechen",
+		// Speak now
+		"drawer_speak_now": "Jetzt sprechen",
+		// SPEAKING TO THE HOUSE
+		"drawer_speaking_house": "SPRICHT INS GANZE HAUS",
+		// Could not list the stations
+		"drawer_station_error": "Sender konnten nicht geladen werden",
+		// Stop the radio
+		"drawer_stop_radio": "Radio stoppen",
+		// Talk: %s
+		"drawer_talk_error": "Sprechen: %s",
+		// Try Popular worldwide
+		"drawer_try_popular": "Weltweit beliebte Sender probieren",
+		// Unmute
+		"drawer_unmute": "Ton an",
+		// 0 dB is normal; boosts can distort, especially with more bass
+		"0_db_is_normal_boosts_can_distort_especially_with_more_bass": "0 dB ist normal; Verstärkung kann verzerren, besonders mit mehr Bass",
+		// A BROWSER IS ASKING
+		"a_browser_is_asking": "EIN BROWSER FRAGT AN",
+		// A camera's own audio, while its view is up
+		"a_camera_s_own_audio_while_its_view_is_up": "Der eigene Ton einer Kamera, solange ihre Ansicht offen ist",
+		// A tap brings the screen back until the room is quiet
+		"a_tap_brings_the_screen_back_until_the_room_is_quiet": "Ein Tippen holt den Bildschirm zurück, bis der Raum ruhig ist",
+		// A whole look over the theme and font
+		"a_whole_look_over_the_theme_and_font": "Ein komplettes Aussehen für Design und Schrift",
+		// About
+		"about": "Über",
+		// Alarm
+		"alarm": "Wecker",
+		// Alarm sound
+		"alarm_sound": "Weckerton",
+		// All day
+		"all_day": "Ganztägig",
+		// All-day events
+		"all_day_events": "Ganztägige Termine",
+		// Allow Drop In
+		"allow_drop_in": "Drop In erlauben",
+		// Another speaker's music, while this one is quiet
+		"another_speaker_s_music_while_this_one_is_quiet": "Musik eines anderen Lautsprechers, während dieser still ist",
+		// Answer time
+		"answer_time": "Antwortdauer",
+		// Dim after idle
+		"dim_after_idle": "Nach Leerlauf dimmen",
+		// Down to Dimmest until touched, spoken to or somebody near
+		"down_to_dimmest_until_touched_spoken_to_or_somebody_near": "Bis zur dunkelsten Stufe, bis getippt, gesprochen oder jemand in der Nähe ist",
+		// Asks twice
+		"asks_twice": "Fragt zweimal",
+		// At night
+		"at_night": "Nachts",
+		// Audio output
+		"audio_output": "Audioausgabe",
+		// Auto-brightness
+		"auto_brightness": "Automatische Helligkeit",
+		// Automatic uses the NWS in the lower 48
+		"automatic_uses_the_nws_in_the_lower_48": "Automatisch nutzt den NWS in den unteren 48 Staaten",
+		// Back
+		"back": "Zurück",
+		// Back in about a minute
+		"back_in_about_a_minute": "In etwa einer Minute zurück",
+		// Background
+		"background": "Hintergrund",
+		// Bass
+		"bass": "Bass",
+		// Bluetooth audio
+		"bluetooth_audio": "Bluetooth-Audio",
+		// BLUETOOTH PAIRING
+		"bluetooth_pairing": "BLUETOOTH-KOPPLUNG",
+		// Bluetooth proxy
+		"bluetooth_proxy": "Bluetooth-Proxy",
+		// Bluetooth Secure Connections
+		"bluetooth_secure_connections": "Sichere Bluetooth-Verbindungen",
+		// Brightness
+		"brightness": "Helligkeit",
+		// Coming up, one line each
+		"calendar_look_coming_up_refined_label": "Demnächst, eine Zeile je Termin",
+		// With each day's weather
+		"calendar_look_coming_up_refined_sub": "Mit dem Wetter jedes Tages",
+		// Countdowns
+		"calendar_look_countdowns_label": "Countdowns",
+		// \"in 25 min\" on today's events
+		"calendar_look_countdowns_sub": "\"in 25 min\" bei den heutigen Terminen",
+		// Day timeline
+		"calendar_look_day_timeline_label": "Tageszeitstrahl",
+		// A day's events on its hours
+		"calendar_look_day_timeline_sub": "Die Termine des Tages im Stundenraster",
+		// Event icons
+		"calendar_look_event_icons_label": "Terminsymbole",
+		// A small picture for a birthday, trash day, a flight…
+		"calendar_look_event_icons_sub": "Ein kleines Bild für Geburtstag, Müllabfuhr, Flug…",
+		// Month details
+		"calendar_look_month_details_label": "Monatsdetails",
+		// Full: times, icons and weather on the days
+		"calendar_look_month_details_sub": "Vollansicht: Uhrzeiten, Symbole und Wetter pro Tag",
+		// Next up on the clock
+		"calendar_look_next_up_label": "Als Nächstes auf der Uhr",
+		// Today's next event at the foot of the clock
+		"calendar_look_next_up_sub": "Der nächste Termin heute am Fuß der Uhr",
+		// Opens on
+		"calendar_look_opens_on_label": "Öffnet mit",
+		// The view a tap on the date opens
+		"calendar_look_opens_on_sub": "Die Ansicht, die ein Tippen auf das Datum öffnet",
+		// Weather in the calendar
+		"calendar_look_weather_label": "Wetter im Kalender",
+		// The forecast on each day
+		"calendar_look_weather_sub": "Die Vorhersage an jedem Tag",
+		// Week view
+		"calendar_look_week_view_label": "Wochenansicht",
+		// Seven days on their hours
+		"calendar_look_week_view_sub": "Sieben Tage im Stundenraster",
+		// Call button
+		"call_button": "Anruftaste",
+		// Call ring
+		"call_ring": "Anrufklingeln",
+		// Camera on the network
+		"camera_on_the_network": "Kamera im Netzwerk",
+		// Camera sound
+		"camera_sound": "Kameraton",
+		// Camera test
+		"camera_test_setting": "Kameratest",
+		// Camera time
+		"camera_time": "Kameradauer",
+		// Cameras
+		"cameras": "Kameras",
+		// Cancel
+		"cancel": "Abbrechen",
+		// Certificate checks
+		"certificate_checks": "Zertifikatsprüfung",
+		// Change it on the setup page
+		"change_it_on_the_setup_page": "Auf der Einrichtungsseite ändern",
+		// Classic, or a picture that moves with the voice
+		"classic_or_a_picture_that_moves_with_the_voice": "Klassisch, oder ein Bild, das sich mit der Stimme bewegt",
+		// Clock format
+		"clock_format": "Uhrzeitformat",
+		// How the clock looks all day
+		"clock_style_description": "Wie die Uhr den ganzen Tag aussieht",
+		// Clock style
+		"clock_style_label": "Uhrstil",
+		// Close
+		"close": "Schließen",
+		// Coming up
+		"coming_up": "Demnächst",
+		// Connect
+		"connect": "Verbinden",
+		// Connected as %s
+		"connected_as": "Verbunden als %s",
+		// Connecting to OBS…
+		"connecting_to_obs": "Verbinde mit OBS…",
+		//    +%d more
+		"d_more": "   +%d weitere",
+		// Day
+		"day": "Tag",
+		// off
+		"default_off": "aus",
+		// Default
+		"default_option": "Standard",
+		// Dimmest
+		"dimmest": "Dunkelste",
+		// Do not disturb
+		"do_not_disturb": "Nicht stören",
+		// Done
+		"done": "Fertig",
+		// Encrypted with this device's key
+		"encrypted_with_this_device_s_key": "Mit dem Schlüssel dieses Geräts verschlüsselt",
+		// Every day
+		"every_day": "Jeden Tag",
+		// Follows the room's light
+		"follows_the_room_s_light": "Folgt dem Licht im Raum",
+		// For all the screen's words
+		"font_description": "Für alle Texte auf dem Bildschirm",
+		// Font
+		"font_label": "Schrift",
+		// For downloads; updates always check
+		"for_downloads_updates_always_check": "Für Downloads; Updates werden immer geprüft",
+		// For muting and timers
+		"for_muting_and_timers": "Zum Stummschalten und für Timer",
+		// Louder speech
+		"louder_speech": "Sprache lauter",
+		// Replies and announcements
+		"replies_and_announcements": "Antworten und Ansagen",
+		// For timers
+		"for_timers": "Für Timer",
+		// Forget %s
+		"forget_device": "%s entfernen",
+		// Full page, or a strip over the clock
+		"full_page_or_a_strip_over_the_clock": "Ganze Seite, oder ein Streifen über der Uhr",
+		// Hang up
+		"hang_up": "Auflegen",
+		// Higher wakes by mistake less often
+		"higher_wakes_by_mistake_less_often": "Höher: weniger Fehlauslösungen",
+		// Home Assistant link
+		"home_assistant_link": "Home-Assistant-Verbindung",
+		// Home Assistant sounds
+		"home_assistant_sounds": "Home-Assistant-Töne",
+		// Home screen
+		"home_screen": "Startbildschirm",
+		// How a call rings here
+		"how_a_call_rings_here": "Wie ein Anruf hier klingelt",
+		// How dark auto-brightness goes in a dark room
+		"how_dark_auto_brightness_goes_in_a_dark_room": "Wie dunkel die automatische Helligkeit in einem dunklen Raum wird",
+		// How long a camera opened here stays up
+		"how_long_a_camera_opened_here_stays_up": "Wie lange eine hier geöffnete Kamera sichtbar bleibt",
+		// How long an answer stays up; a tap clears it
+		"how_long_an_answer_stays_up_a_tap_clears_it": "Wie lange eine Antwort sichtbar bleibt; ein Tippen löscht sie",
+		// How running timers show on the clock
+		"how_running_timers_show_on_the_clock": "Wie laufende Timer auf der Uhr erscheinen",
+		// How the night clock looks
+		"how_the_night_clock_looks": "Wie die Nachtuhr aussieht",
+		// Ignore room lights
+		"ignore_room_lights": "Raumlicht ignorieren",
+		// Intercom calls connect by themselves, after a chime
+		"intercom_calls_connect_by_themselves_after_a_chime": "Gegensprechanrufe verbinden sich nach einem Signalton von selbst",
+		// Intercom calls from other rooms are turned away
+		"intercom_calls_from_other_rooms_are_turned_away": "Gegensprechanrufe aus anderen Räumen werden abgewiesen",
+		//  is done
+		"is_done": " ist fertig",
+		// Its dates, its weather, and what it listens for
+		"its_dates_its_weather_and_what_it_listens_for": "Seine Termine, sein Wetter und worauf es hört",
+		// Lets Home Assistant hear nearby devices
+		"lets_home_assistant_hear_nearby_devices": "Lässt Home Assistant Geräte in der Nähe hören",
+		// %d of %d
+		"level_of": "%d von %d",
+		// Loading the rain map…
+		"loading_the_rain_map": "Regenradar wird geladen…",
+		// Loading video…
+		"loading_video": "Video wird geladen…",
+		// Look
+		"look": "Aussehen",
+		// Lyrics
+		"lyrics": "Songtext",
+		// Microphone
+		"microphone": "Mikrofon",
+		// MICROPHONE OFF
+		"microphone_off": "MIKROFON AUS",
+		// %d minutes before
+		"minutes_before": "%d Minuten vorher",
+		// Month
+		"month": "Monat",
+		// Music
+		"music": "Musik",
+		// Music Assistant player
+		"music_assistant_player": "Music-Assistant-Player",
+		// Name
+		"name": "Name",
+		// Downloading NetBird, %d%%
+		"netbird_downloading": "NetBird wird heruntergeladen, %d%%",
+		// Network address
+		"network_address": "Netzwerkadresse",
+		// New timer
+		"new_timer": "Neuer Timer",
+		// Next
+		"next": "Weiter",
+		// Controlled by Home Assistant
+		"night_by_ha": "Von Home Assistant gesteuert",
+		// Night clock
+		"night_clock": "Nachtuhr",
+		// Night clock brightness
+		"night_clock_brightness": "Helligkeit der Nachtuhr",
+		// Custom…
+		"night_custom": "Eigene…",
+		// Dark, a faint glow, or a clock alone until touched
+		"night_description_show": "Dunkel, ein schwaches Leuchten, oder nur eine Uhr bis zum Tippen",
+		// Dim, a red clock, or dark
+		"night_description_spot": "Gedimmt, eine rote Uhr, oder dunkel",
+		// Night hours
+		"night_hours": "Nachtstunden",
+		// No login
+		"no_login": "Keine Anmeldung",
+		// No networks heard yet
+		"no_networks_heard_yet": "Noch keine Netzwerke gefunden",
+		// No rain map:
+		"no_rain_map": "Kein Regenradar: ",
+		// Not available on this build
+		"not_available_on_this_build": "Auf diesem Build nicht verfügbar",
+		// Not connected
+		"not_connected": "Nicht verbunden",
+		// Not now
+		"not_now": "Nicht jetzt",
+		// Nothing in the next two weeks
+		"nothing_in_the_next_two_weeks": "Nichts in den nächsten zwei Wochen",
+		// Now playing
+		"now_playing": "Läuft gerade",
+		// Now playing follows
+		"now_playing_follows": "„Läuft gerade“ folgt",
+		// Off if a phone pairs, then drops. Drops devices briefly
+		"off_if_a_phone_pairs_then_drops_drops_devices_briefly": "Aus für Telefone, die koppeln und kurz darauf trennen; beim Umschalten trennen Verbindungen kurz",
+		// On the home screen: devices and contacts
+		"on_the_home_screen_devices_and_contacts": "Auf dem Startbildschirm: Geräte und Kontakte",
+		// Once
+		"once": "Einmal",
+		// 1 minute
+		"one_minute": "1 Minute",
+		// 10 minutes
+		"option_10_minutes": "10 Minuten",
+		// 10 seconds
+		"option_10_seconds": "10 Sekunden",
+		// 12-hour
+		"option_12_hour": "12-Stunden-Format",
+		// 15 seconds
+		"option_15_seconds": "15 Sekunden",
+		// 1 hour
+		"option_1_hour": "1 Stunde",
+		// 1 hour before
+		"option_1_hour_before": "1 Stunde vorher",
+		// 1 minute
+		"option_1_minute": "1 Minute",
+		// 24-hour
+		"option_24_hour": "24-Stunden-Format",
+		// 2 minutes
+		"option_2_minutes": "2 Minuten",
+		// 30 seconds
+		"option_30_seconds": "30 Sekunden",
+		// 5 minutes
+		"option_5_minutes": "5 Minuten",
+		// 5 seconds
+		"option_5_seconds": "5 Sekunden",
+		// Always
+		"option_always": "Immer",
+		// As it starts
+		"option_as_it_starts": "Beim Start",
+		// Automatic
+		"option_automatic": "Automatisch",
+		// Both
+		"option_both": "Beides",
+		// Bottom
+		"option_bottom": "Unten",
+		// Bottom center
+		"option_bottom_center": "Unten mittig",
+		// Bottom left
+		"option_bottom_left": "Unten links",
+		// Bottom right
+		"option_bottom_right": "Unten rechts",
+		// Camera's own size
+		"option_camera_s_own_size": "Eigene Größe der Kamera",
+		// Center
+		"option_center": "Mitte",
+		// Coming up
+		"option_coming_up": "Demnächst",
+		// Day
+		"option_day": "Tag",
+		// Default
+		"option_default": "Standard",
+		// Dim
+		"option_dim": "Gedimmt",
+		// Every day
+		"option_every_day": "Jeden Tag",
+		// Fade
+		"option_fade": "Überblenden",
+		// Fill the screen
+		"option_fill_the_screen": "Bildschirm füllen",
+		// Full
+		"option_full": "Vollständig",
+		// Full at once
+		"option_full_at_once": "Sofort voll",
+		// Full page
+		"option_full_page": "Ganze Seite",
+		// Gold
+		"option_gold": "Gold",
+		// Headphones
+		"option_headphones": "Kopfhörer",
+		// Headphones / AUX
+		"option_headphones_aux": "Kopfhörer / AUX",
+		// Hide
+		"option_hide": "Ausblenden",
+		// In the morning
+		"option_in_the_morning": "Morgens",
+		// Internal speaker
+		"option_internal_speaker": "Interner Lautsprecher",
+		// Its words
+		"option_its_words": "Nur die Worte",
+		// Light
+		"option_light": "Schwach",
+		// Medium
+		"option_medium": "Mittel",
+		// Mint
+		"option_mint": "Minze",
+		// Month
+		"option_month": "Monat",
+		// Never
+		"option_never": "Nie",
+		// Night clock
+		"option_night_clock": "Nachtuhr",
+		// Night light
+		"option_night_light": "Nachtlicht",
+		// None
+		"option_none": "Keine",
+		// Nothing
+		"option_nothing": "Nichts",
+		// Off
+		"option_off": "Aus",
+		// On
+		"option_on": "An",
+		// Once
+		"option_once": "Einmal",
+		// Over 1 minute
+		"option_over_1_minute": "1 Minute lang",
+		// Over 2 minutes
+		"option_over_2_minutes": "2 Minuten lang",
+		// Over 30 seconds
+		"option_over_30_seconds": "30 Sekunden lang",
+		// Over 5 minutes
+		"option_over_5_minutes": "5 Minuten lang",
+		// Red
+		"option_red": "Rot",
+		// Red LED
+		"option_red_led": "Rote LED",
+		// Rose
+		"option_rose": "Rosé",
+		// Screen off
+		"option_screen_off": "Bildschirm aus",
+		// Show
+		"option_show": "Anzeigen",
+		// Silent
+		"option_silent": "Still",
+		// Simple
+		"option_simple": "Einfach",
+		// Sky
+		"option_sky": "Himmel",
+		// Solid
+		"option_solid": "Durchgehend",
+		// Speaker
+		"option_speaker": "Lautsprecher",
+		// Speaker and headphones
+		"option_speaker_and_headphones": "Lautsprecher und Kopfhörer",
+		// Strip
+		"option_strip": "Streifen",
+		// Strip after 10 s
+		"option_strip_after_10_s": "Streifen nach 10 s",
+		// Strip after 30 s
+		"option_strip_after_30_s": "Streifen nach 30 s",
+		// Strip at once
+		"option_strip_at_once": "Sofort Streifen",
+		// Strong
+		"option_strong": "Stark",
+		// The time and its words
+		"option_the_time_and_its_words": "Die Zeit und ihre Worte",
+		// Top left
+		"option_top_left": "Oben links",
+		// Top right
+		"option_top_right": "Oben rechts",
+		// Until tapped
+		"option_until_tapped": "Bis zum Tippen",
+		// Week
+		"option_week": "Woche",
+		// Weekdays
+		"option_weekdays": "Wochentags",
+		// Weekends
+		"option_weekends": "Wochenende",
+		// White
+		"option_white": "Weiß",
+		// Whole picture
+		"option_whole_picture": "Ganzes Bild",
+		// Out of area targets in Home Assistant
+		"out_of_area_targets_in_home_assistant": "Ziele außerhalb des Gebiets in Home Assistant",
+		// Pair a new device
+		"pair_a_new_device": "Neues Gerät koppeln",
+		// Photos from Home Assistant
+		"photos_from_home_assistant": "Fotos aus Home Assistant",
+		// Play
+		"play": "Abspielen",
+		// Play music in sync with other rooms
+		"play_music_in_sync_with_other_rooms": "Musik synchron mit anderen Räumen abspielen",
+		// Play to it from an iPhone, iPad or Mac
+		"play_to_it_from_an_iphone_ipad_or_mac": "Von iPhone, iPad oder Mac darauf abspielen",
+		// Play to it from music apps and servers
+		"play_to_it_from_music_apps_and_servers": "Aus Musik-Apps und -Servern darauf abspielen",
+		// Play to it from the Spotify app (Premium)
+		"play_to_it_from_the_spotify_app_premium": "Aus der Spotify-App abspielen (Premium)",
+		// Pop up
+		"pop_up": "Pop-up",
+		// Pop-ups
+		"pop_ups": "Pop-ups",
+		// The camera notices somebody near; nothing is kept
+		"presence_description": "Die Kamera bemerkt jemanden in der Nähe; nichts wird gespeichert",
+		// Presence
+		"presence_heading": "Anwesenheit",
+		// Presence detection
+		"presence_label": "Anwesenheitserkennung",
+		// Lights again when somebody comes near
+		"presence_return": "Leuchtet wieder, wenn jemand näher kommt",
+		// Put it in pairing mode first
+		"put_it_in_pairing_mode_first": "Erst in den Kopplungsmodus versetzen",
+		// Quiet
+		"quiet": "Ruhig",
+		// Quiet hours
+		"quiet_hours": "Ruhezeiten",
+		// Radar source
+		"radar_source": "Radarquelle",
+		// Rain, snow and storms move on the forecast
+		"rain_snow_and_storms_move_on_the_forecast": "Regen, Schnee und Gewitter ziehen über die Vorhersage",
+		// Reading the calendar…
+		"reading_the_calendar": "Kalender wird gelesen…",
+		// Remote API
+		"remote_api": "Remote-API",
+		// Repeat
+		"repeat": "Wiederholen",
+		// Restart
+		"restart": "Neu starten",
+		// Said as it rings
+		"said_as_it_rings": "Wird beim Klingeln angesagt",
+		// Same as the default (%s)
+		"same_as_default": "Wie der Standard (%s)",
+		// Screen language
+		"screen_language": "Bildschirmsprache",
+		// Screen off when nobody is near
+		"screen_off_when_nobody_is_near": "Bildschirm aus, wenn niemand in der Nähe ist",
+		// Screen on the network
+		"screen_on_the_network": "Bildschirm im Netzwerk",
+		// Screensaver
+		"screensaver": "Bildschirmschoner",
+		// %d seconds
+		"seconds_option": "%d Sekunden",
+		// Sent from Home Assistant
+		"sent_from_home_assistant": "Von Home Assistant gesendet",
+		// Settings
+		"settings": "Einstellungen",
+		// Settings lock
+		"settings_lock": "Einstellungssperre",
+		// Shown as you change it, at night
+		"shown_as_you_change_it_at_night": "Wird beim Ändern nachts angezeigt",
+		// Shown with the clock
+		"shown_with_the_clock": "Wird mit der Uhr angezeigt",
+		// Silenced
+		"silenced": "Stummgeschaltet",
+		// Silenced · press again to snooze %d min
+		"silenced_press_again_to_snooze_d_min": "Stumm · erneut drücken für %d min Schlummern",
+		// Skin
+		"skin": "Skin",
+		// Kept for when the skin is off
+		"skin_keeps": "Bleibt erhalten, wenn der Skin aus ist",
+		// Sleep timer
+		"sleep_timer": "Einschlaftimer",
+		// Slideshow
+		"slideshow": "Diashow",
+		// Snooze %d min
+		"snooze_d_min": "Schlummern %d min",
+		// Sounds
+		"sounds": "Töne",
+		// Speaker gain
+		"speaker_gain": "Lautsprecherverstärkung",
+		// Speakers
+		"speakers": "Lautsprecher",
+		// SSH keys
+		"ssh_keys": "SSH-Schlüssel",
+		// Stop
+		"stop": "Stopp",
+		// On until the %s alarm
+		"sunrise_alarm": "An bis zum Wecker %s",
+		// Before alarms that don't choose their own
+		"sunrise_default_description": "Vor Weckern, die keinen eigenen wählen",
+		// On while the alarm rings
+		"sunrise_ringing": "An, während der Wecker klingelt",
+		// The light is coming up now
+		"sunrise_rising": "Das Licht kommt jetzt",
+		// On until the %s snooze
+		"sunrise_snooze": "An bis zum Schlummern %s",
+		// On until %s
+		"sunrise_until": "An bis %s",
+		// Talk on the camera page
+		"talk_on_the_camera_page": "Auf der Kameraseite sprechen",
+		// Talk through cameras
+		"talk_through_cameras": "Durch Kameras sprechen",
+		// Tap lifts the night light
+		"tap_lifts_the_night_light": "Tippen hebt das Nachtlicht an",
+		// Tap on the clock
+		"tap_on_the_clock": "Tippen auf die Uhr",
+		// Tap to go back
+		"tap_to_go_back": "Zum Zurückgehen tippen",
+		// The mute button does this too
+		"the_mute_button_does_this_too": "Die Stummtaste macht das auch",
+		// The NWS's alerts for home, in the U.S.
+		"the_nws_s_alerts_for_home_in_the_u_s": "Die NWS-Warnungen für zu Hause, in den USA",
+		// The words in time, looked up at LRCLIB
+		"the_words_in_time_looked_up_at_lrclib": "Der Songtext im Takt, nachgeschlagen bei LRCLIB",
+		// Make the theme your own
+		"theme_personalize": "Design anpassen",
+		// This is %s
+		"this_version": "Das ist %s",
+		// Time per photo
+		"time_per_photo": "Zeit pro Foto",
+		// Time zone
+		"time_zone": "Zeitzone",
+		// Timer
+		"timer": "Timer",
+		// Timer and alarm
+		"timer_and_alarm": "Timer und Wecker",
+		//  timer
+		"timer_suffix": " Timer",
+		// Timers
+		"timers": "Timer",
+		// Today
+		"today": "Heute",
+		// Tomorrow
+		"tomorrow": "Morgen",
+		// Treble
+		"treble": "Höhen",
+		// Turn screen
+		"turn_screen": "Sprachansicht",
+		// 1 hour
+		"ui_1_hour": "1 Stunde",
+		// 1 hour %d minutes
+		"ui_1_hour_d_minutes": "1 Stunde %d Minuten",
+		// A face on it, for whoever has to look at it
+		"ui_a_face_on_it_for_whoever_has_to_look_at_it": "Ein Gesicht darauf, für alle, die es ansehen müssen",
+		// A landscape for the weather, in place of photos
+		"ui_a_landscape_for_the_weather_in_place_of_photos": "Eine Landschaft für das Wetter, statt Fotos",
+		// A PIN before most settings change
+		"ui_a_pin_before_most_settings_change": "Eine PIN, bevor sich die meisten Einstellungen ändern",
+		// + Add alarm
+		"ui_add_alarm": "+ Wecker hinzufügen",
+		// Add one here, or from Home Assistant
+		"ui_add_one_here_or_from_home_assistant": "Hier einen hinzufügen, oder aus Home Assistant",
+		// Add the device in Home Assistant to encrypt it
+		"ui_add_the_device_in_home_assistant_to_encrypt_it": "Das Gerät in Home Assistant hinzufügen, um es zu verschlüsseln",
+		// Address not found: use its IP
+		"ui_address_not_found_use_its_ip": "Adresse nicht gefunden: die IP verwenden",
+		// Adjusts the speaker tuning to the room
+		"ui_adjusts_the_speaker_tuning_to_the_room": "Passt die Lautsprecherabstimmung an den Raum an",
+		// Alarms
+		"ui_alarms": "Wecker",
+		// Alarms and timers always sound
+		"ui_alarms_and_timers_always_sound": "Wecker und Timer klingen immer",
+		// Alarms and timers, not the music
+		"ui_alarms_and_timers_not_the_music": "Wecker und Timer, nicht die Musik",
+		// Alarms and timers will make no sound
+		"ui_alarms_and_timers_will_make_no_sound": "Wecker und Timer geben keinen Ton",
+		// Alarms on this device and how they ring
+		"ui_alarms_on_this_device_and_how_they_ring": "Wecker auf diesem Gerät und wie sie klingen",
+		// Alarms & Timers
+		"ui_alarms_timers": "Wecker & Timer",
+		// All
+		"ui_all": "Alle",
+		// All of it, with blurred sides; off fills the screen
+		"ui_all_of_it_with_blurred_sides_off_fills_the_screen": "Alles davon, mit weichgezeichneten Seiten; aus füllt den Bildschirm",
+		// All photos
+		"ui_all_photos": "Alle Fotos",
+		// Allow
+		"ui_allow": "Erlauben",
+		// An event coming up, over the screen
+		"ui_an_event_coming_up_over_the_screen": "Ein anstehender Termin über dem Bildschirm",
+		// Answer
+		"ui_answer": "Annehmen",
+		// ‹  Back
+		"ui_back": "‹  Zurück",
+		// Bluetooth audio · Connected
+		"ui_bluetooth_audio_connected": "Bluetooth-Audio · Verbunden",
+		// Brightness, night, clock and photos
+		"ui_brightness_night_clock_and_photos": "Helligkeit, Nacht, Uhr und Fotos",
+		// Brightness, night, theme, home screen and weather
+		"ui_brightness_night_theme_home_screen_and_weather": "Helligkeit, Nacht, Design, Startbildschirm und Wetter",
+		// Calendar
+		"ui_calendar": "Kalender",
+		// Calendars
+		"ui_calendars": "Kalender",
+		// Calling…
+		"ui_calling": "Rufe an…",
+		// Calling
+		"ui_calling_variant": "Rufe an",
+		// Camera picture
+		"ui_camera_picture": "Kamerabild",
+		// Camera strips
+		"ui_camera_strips": "Kamerastreifen",
+		// Camera strips shade
+		"ui_camera_strips_shade": "Abdunklung der Kamerastreifen",
+		// Can't play it
+		"ui_can_t_play_it": "Kann es nicht abspielen",
+		// Can't reach Home Assistant
+		"ui_can_t_reach_home_assistant": "Home Assistant nicht erreichbar",
+		// Change
+		"ui_change": "Ändern",
+		// Check for updates
+		"ui_check_for_updates": "Nach Updates suchen",
+		// Check now
+		"ui_check_now": "Jetzt prüfen",
+		// Checking…
+		"ui_checking": "Wird geprüft…",
+		// Chosen here
+		"ui_chosen_here": "Hier gewählt",
+		// Clock position
+		"ui_clock_position": "Position der Uhr",
+		// Closed
+		"ui_closed": "Geschlossen",
+		// Confirm
+		"ui_confirm": "Bestätigen",
+		// Connected to %s
+		"ui_connected_to_s": "Verbunden mit %s",
+		// Connections
+		"ui_connections": "Verbindungen",
+		// Custom
+		"ui_custom": "Eigene",
+		// Custom colors
+		"ui_custom_colors": "Eigene Farben",
+		// %d:%02d left
+		"ui_d_02d_left": "%d:%02d übrig",
+		// %d hours
+		"ui_d_hours": "%d Stunden",
+		// %d min
+		"ui_d_min": "%d Min.",
+		// %d min left
+		"ui_d_min_left": "%d Min. übrig",
+		// %d minutes
+		"ui_d_minutes": "%d Minuten",
+		// Dark theme
+		"ui_dark_theme": "Dunkles Design",
+		// Date and place
+		"ui_date_and_place": "Datum und Ort",
+		// Date color
+		"ui_date_color": "Datumsfarbe",
+		// Days
+		"ui_days": "Tage",
+		// Decline
+		"ui_decline": "Ablehnen",
+		// Delete
+		"ui_delete": "Löschen",
+		// Delete alarm
+		"ui_delete_alarm": "Wecker löschen",
+		// Disconnect
+		"ui_disconnect": "Trennen",
+		// Display
+		"ui_display": "Anzeige",
+		// Drop In
+		"ui_drop_in": "Drop In",
+		// Earbuds or a speaker
+		"ui_earbuds_or_a_speaker": "Ohrhörer oder ein Lautsprecher",
+		// Edit
+		"ui_edit": "Bearbeiten",
+		// Encrypted
+		"ui_encrypted": "Verschlüsselt",
+		// Event pop-ups
+		"ui_event_pop_ups": "Termin-Pop-ups",
+		// Every folder inside the one chosen
+		"ui_every_folder_inside_the_one_chosen": "Alle Unterordner des gewählten Ordners",
+		// Favorites only
+		"ui_favorites_only": "Nur Favoriten",
+		// Flat
+		"ui_flat": "Neutral",
+		// For all the screen's words
+		"ui_for_all_the_screen_s_words": "Für alle Texte auf dem Bildschirm",
+		// Forget
+		"ui_forget": "Entfernen",
+		// From Home Assistant
+		"ui_from_home_assistant": "Aus Home Assistant",
+		// From Home Assistant · %s
+		"ui_from_home_assistant_s": "Aus Home Assistant · %s",
+		// From quiet up to the ring volume
+		"ui_from_quiet_up_to_the_ring_volume": "Von leise bis zur Klingeltonlautstärke",
+		// General
+		"ui_general": "Allgemein",
+		// Gets louder
+		"ui_gets_louder": "Wird lauter",
+		// Group it with other AirPlay 2 speakers
+		"ui_group_it_with_other_airplay_2_speakers": "Mit anderen AirPlay-2-Lautsprechern gruppieren",
+		// The iPhone's volume slider moves the device's volume
+		"ui_the_iphone_slider_is_the_device_s_volume": "Die Lautstärke folgt der Quelle",
+		// Home Assistant isn't set up here
+		"ui_home_assistant_isn_t_set_up_here": "Home Assistant ist hier nicht eingerichtet",
+		// Home Assistant refused the token
+		"ui_home_assistant_refused_the_token": "Home Assistant hat das Token abgelehnt",
+		// Home Assistant: Settings, Voice assistants
+		"ui_home_assistant_settings_voice_assistants": "Home Assistant: Einstellungen, Sprachassistenten",
+		// Hour
+		"ui_hour": "Stunde",
+		// How answers sound
+		"ui_how_answers_sound": "Wie Antworten klingen",
+		// How dark those strips are
+		"ui_how_dark_those_strips_are": "Wie dunkel diese Streifen sind",
+		// In Home Assistant
+		"ui_in_home_assistant": "In Home Assistant",
+		// Include subfolders
+		"ui_include_subfolders": "Unterordner einbeziehen",
+		// Incoming call
+		"ui_incoming_call": "Eingehender Anruf",
+		// Install
+		"ui_install": "Installieren",
+		// Light only
+		"ui_light_only": "Nur Licht",
+		// Light theme
+		"ui_light_theme": "Helles Design",
+		// Listening
+		"ui_listening": "Hört zu",
+		// Loading…
+		"ui_loading": "Lädt…",
+		// Make a key on the setup page first
+		"ui_make_a_key_on_the_setup_page_first": "Zuerst einen Schlüssel auf der Einrichtungsseite anlegen",
+		// Minute
+		"ui_minute": "Minute",
+		// More
+		"ui_more": "Mehr",
+		// Muted
+		"ui_muted": "Stumm",
+		// Name, weather, updates and restart
+		"ui_name_weather_updates_and_restart": "Name, Wetter, Updates und Neustart",
+		// Needs a key: the setup page, Connections
+		"ui_needs_a_key_the_setup_page_connections": "Braucht einen Schlüssel: Einrichtungsseite, Verbindungen",
+		// Needs a setup key: the setup page, Connections
+		"ui_needs_a_setup_key_the_setup_page_connections": "Braucht einen Einrichtungsschlüssel: Einrichtungsseite, Verbindungen",
+		// Needs Speaker EQ, which is off
+		"ui_needs_speaker_eq_which_is_off": "Braucht den Lautsprecher-EQ, der aus ist",
+		// Never
+		"ui_never": "Nie",
+		// New alarm
+		"ui_new_alarm": "Neuer Wecker",
+		// Night ends
+		"ui_night_ends": "Nacht endet",
+		// Night ends at
+		"ui_night_ends_at": "Nacht endet um",
+		// Night starts
+		"ui_night_starts": "Nacht beginnt",
+		// Night starts at
+		"ui_night_starts_at": "Nacht beginnt um",
+		// No address yet
+		"ui_no_address_yet": "Noch keine Adresse",
+		// No alarms yet
+		"ui_no_alarms_yet": "Noch keine Wecker",
+		// No sound at all
+		"ui_no_sound_at_all": "Gar kein Ton",
+		// No sound: the light, then the night ends
+		"ui_no_sound_the_light_then_the_night_ends": "Kein Ton: das Licht, dann endet die Nacht",
+		// No stations
+		"ui_no_stations": "Keine Sender",
+		// None
+		"ui_none": "Keine",
+		// None chosen
+		"ui_none_chosen": "Keine gewählt",
+		// None yet
+		"ui_none_yet": "Noch keine",
+		// Not encrypted
+		"ui_not_encrypted": "Nicht verschlüsselt",
+		// Not for Dashboard, Agenda or World
+		"ui_not_for_dashboard_agenda_or_world": "Nicht für Dashboard, Agenda oder Welt",
+		// Not managed here
+		"ui_not_managed_here": "Nicht hier verwaltet",
+		// Not set
+		"ui_not_set": "Nicht gesetzt",
+		// Not the music's
+		"ui_not_the_music_s": "Gilt nicht für Musik",
+		// Nothing on this day
+		"ui_nothing_on_this_day": "Nichts an diesem Tag",
+		// Off
+		"ui_off": "Aus",
+		// Off if a phone pairs, then drops
+		"ui_off_if_a_phone_pairs_then_drops": "Aus für Telefone, die koppeln und kurz darauf trennen",
+		// On
+		"ui_on": "An",
+		// On a call
+		"ui_on_a_call": "In einem Anruf",
+		// On, but no key yet, so nothing listens
+		"ui_on_but_no_key_yet_so_nothing_listens": "An, aber noch kein Schlüssel, also hört nichts zu",
+		// On the screensaver, under each photo
+		"ui_on_the_screensaver_under_each_photo": "Im Bildschirmschoner, unter jedem Foto",
+		// On this device
+		"ui_on_this_device": "Auf diesem Gerät",
+		// On: turn off to remove the PIN
+		"ui_on_turn_off_to_remove_the_pin": "An: zum Entfernen der PIN ausschalten",
+		// Open the dashboard or the deck, or nothing
+		"ui_open_the_dashboard_or_the_deck_or_nothing": "Dashboard oder Deck öffnen, oder nichts",
+		// Pair
+		"ui_pair": "Koppeln",
+		// Password for %s
+		"ui_password_for_s": "Passwort für %s",
+		// PAUSED
+		"ui_paused": "PAUSIERT",
+		// Photo folder
+		"ui_photo_folder": "Fotoordner",
+		// Photo pairs
+		"ui_photo_pairs": "Fotopaare",
+		// PLAYING
+		"ui_playing": "SPIELT",
+		// Plays once when you choose it
+		"ui_plays_once_when_you_choose_it": "Spielt einmal beim Auswählen",
+		// Pop-up calendars
+		"ui_pop_up_calendars": "Kalender-Pop-ups",
+		// Pop-up chime
+		"ui_pop_up_chime": "Signalton bei Pop-ups",
+		// Port 22, keys only
+		"ui_port_22_keys_only": "Port 22, nur Schlüssel",
+		// Privacy
+		"ui_privacy": "Datenschutz",
+		// Privacy & Security
+		"ui_privacy_security": "Datenschutz & Sicherheit",
+		// Radar
+		"ui_radar": "Radar",
+		// RADAR
+		"ui_radar_variant": "RADAR",
+		// Radio needs a Home Assistant token
+		"ui_radio_needs_a_home_assistant_token": "Radio braucht ein Home-Assistant-Token",
+		// Reach this device from away: off
+		"ui_reach_this_device_from_away_off": "Dieses Gerät von unterwegs erreichen: aus",
+		// Remote access and how this device is reached
+		"ui_remote_access_and_how_this_device_is_reached": "Fernzugriff und wie dieses Gerät erreichbar ist",
+		// Remote access and security
+		"ui_remote_access_and_security": "Fernzugriff und Sicherheit",
+		// Rescan
+		"ui_rescan": "Erneut suchen",
+		// Ring volume
+		"ui_ring_volume": "Klingeltonlautstärke",
+		// Rings from this device itself
+		"ui_rings_from_this_device_itself": "Klingelt über dieses Gerät selbst",
+		// Save
+		"ui_save": "Speichern",
+		// Scanning
+		"ui_scanning": "Sucht…",
+		// Scripts signed with this device's key
+		"ui_scripts_signed_with_this_device_s_key": "Mit dem Schlüssel dieses Geräts signierte Skripte",
+		// Secure Connections
+		"ui_secure_connections": "Sichere Verbindungen",
+		// Server default
+		"ui_server_default": "Serverstandard",
+		// Set
+		"ui_set": "Setzen",
+		// Set there
+		"ui_set_there": "Dort setzen",
+		// Setup page
+		"ui_setup_page": "Einrichtungsseite",
+		// Show
+		"ui_show": "Anzeigen",
+		// Show whole photo
+		"ui_show_whole_photo": "Ganzes Foto zeigen",
+		// Shown on the calendar page, from Home Assistant
+		"ui_shown_on_the_calendar_page_from_home_assistant": "Auf der Kalenderseite angezeigt, aus Home Assistant",
+		// Shuffle photos
+		"ui_shuffle_photos": "Fotos mischen",
+		// Silent
+		"ui_silent": "Lautlos",
+		// Silent at night and in quiet hours
+		"ui_silent_at_night_and_in_quiet_hours": "Nachts und in Ruhezeiten still",
+		// Snooze length
+		"ui_snooze_length": "Schlummerdauer",
+		// Snoozed until %s
+		"ui_snoozed_until_s": "Schlummert bis %s",
+		// Someone's at the door
+		"ui_someone_s_at_the_door": "Jemand steht vor der Tür",
+		// Sound
+		"ui_sound": "Ton",
+		// Sound & Voice
+		"ui_sound_voice": "Ton & Stimme",
+		// Speaking voice
+		"ui_speaking_voice": "Sprechstimme",
+		// Spoken by Home Assistant
+		"ui_spoken_by_home_assistant": "Von Home Assistant gesprochen",
+		// Start Assist, open the dashboard or the deck, or nothing
+		"ui_start_assist_open_the_dashboard_or_the_deck_or_nothing": "Assist starten, Dashboard oder Deck öffnen, oder nichts",
+		// Starting…
+		"ui_starting": "Startet…",
+		// Starting
+		"ui_starting_variant": "Startet",
+		// Stations
+		"ui_stations": "Sender",
+		// Stopping…
+		"ui_stopping": "Stoppt…",
+		// Stops the music after a while
+		"ui_stops_the_music_after_a_while": "Stoppt die Musik nach einer Weile",
+		// Sun with a face
+		"ui_sun_with_a_face": "Sonne mit Gesicht",
+		// swipe for the forecast
+		"ui_swipe_for_the_forecast": "Für die Vorhersage wischen",
+		// Talk on camera page
+		"ui_talk_on_camera_page": "Auf der Kameraseite sprechen",
+		// Talk to cameras
+		"ui_talk_to_cameras": "Zu Kameras sprechen",
+		// Tap a color for each part; the theme becomes Custom
+		"ui_tap_a_color_for_each_part_the_theme_becomes_custom": "Für jeden Teil eine Farbe antippen; das Design wird „Eigene“",
+		// Tap again to delete it
+		"ui_tap_again_to_delete_it": "Zum Löschen erneut tippen",
+		// Tap again to forget it
+		"ui_tap_again_to_forget_it": "Zum Entfernen erneut tippen",
+		// Tap again to restart now
+		"ui_tap_again_to_restart_now": "Zum sofortigen Neustart erneut tippen",
+		// The date and AM/PM
+		"ui_the_date_and_am_pm": "Das Datum und AM/PM",
+		// The device's own tones only; alarms still sound
+		"ui_the_device_s_own_tones_only_alarms_still_sound": "Nur die eigenen Töne des Geräts; Wecker klingen weiterhin",
+		// The music stops on its own; nothing rings
+		"ui_the_music_stops_on_its_own_nothing_rings": "Die Musik stoppt von selbst; nichts klingelt",
+		// The photos marked as favorites in Immich
+		"ui_the_photos_marked_as_favorites_in_immich": "Die in Immich als Favoriten markierten Fotos",
+		// The weather's corner over the clock
+		"ui_the_weather_s_corner_over_the_clock": "Die Wettersecke über der Uhr",
+		// Theme
+		"ui_theme": "Design",
+		// This video can't be played
+		"ui_this_video_can_t_be_played": "Dieses Video kann nicht abgespielt werden",
+		// Turned off in Home Assistant
+		"ui_turned_off_in_home_assistant": "In Home Assistant ausgeschaltet",
+		// Two tall photos side by side
+		"ui_two_tall_photos_side_by_side": "Zwei hohe Fotos nebeneinander",
+		// Under its name and at its foot: solid, or fading into it
+		"ui_under_its_name_and_at_its_foot_solid_or_fading_into_it": "Unter seinem Namen und an seinem Fuß: durchgehend, oder darin übergehend",
+		// Unknown
+		"ui_unknown": "Unbekannt",
+		// Volume, voice, quiet hours and music
+		"ui_volume_voice_quiet_hours_and_music": "Lautstärke, Stimme, Ruhezeiten und Musik",
+		// Waiting for Home Assistant
+		"ui_waiting_for_home_assistant": "Warte auf Home Assistant",
+		// Weather art
+		"ui_weather_art": "Wetterbild",
+		// Weather position
+		"ui_weather_position": "Wetterposition",
+		// Whole, filling the screen, or the camera's own size
+		"ui_whole_filling_the_screen_or_the_camera_s_own_size": "Ganz, den Bildschirm füllend, oder die eigene Größe der Kamera",
+		// Wi-Fi, Bluetooth and the Bluetooth proxy
+		"ui_wi_fi_bluetooth_and_the_bluetooth_proxy": "WLAN, Bluetooth und der Bluetooth-Proxy",
+		// With headphones in
+		"ui_with_headphones_in": "Mit Kopfhörern",
+		// %s is ready · this is %s
+		"update_ready": "%s ist bereit · dies ist %s",
+		// Updates
+		"updates": "Updates",
+		// Voice
+		"voice": "Stimme",
+		// Volume
+		"volume": "Lautstärke",
+		// Wake sound
+		"wake_sound": "Weckton",
+		// Wake with light
+		"wake_with_light": "Mit Licht wecken",
+		// Wake word
+		"wake_word": "Weckwort",
+		// Wake word threshold
+		"wake_word_threshold": "Weckwort-Schwelle",
+		// Weather
+		"weather": "Wetter",
+		// Weather alerts
+		"weather_alerts": "Wetterwarnungen",
+		// Weather animation
+		"weather_animation": "Wetteranimation",
+		// Weather %d
+		"weather_number": "Wetter %d",
+		// Week
+		"week": "Woche",
+		// Weekdays
+		"weekdays": "Wochentags",
+		// Weekends
+		"weekends": "Wochenende",
+		// Where the sound goes with headphones in
+		"where_the_sound_goes_with_headphones_in": "Wohin der Ton geht, wenn Kopfhörer stecken",
+		// Wi-Fi
+		"wi_fi": "WLAN",
+	},
 }

@@ -14,7 +14,7 @@ import (
 func TestDeviceReportedJapaneseLabelsAndOptions(t *testing.T) {
 	config.Use(filepath.Join(t.TempDir(), "state.json"))
 	t.Cleanup(func() { _ = config.Set().Screen().Language("") })
-	for _, lang := range []string{"en", "ja", "de"} {
+	for _, lang := range []string{"en", "ja", "es"} {
 		if err := config.Set().Screen().Language(lang); err != nil {
 			t.Fatal(err)
 		}
@@ -86,7 +86,7 @@ func TestJapaneseSunriseDescriptionsAndTimingChoices(t *testing.T) {
 	sunriseProgress = func(time.Time) float64 { return 0 }
 	sunriseHold = func(time.Time) (time.Time, bool, bool) { return time.Time{}, false, false }
 	sunriseGlow = func(time.Time) (time.Time, bool) { return time.Time{}, false }
-	for _, lang := range []string{"en", "ja", "de"} {
+	for _, lang := range []string{"en", "ja", "es"} {
 		_ = config.Set().Screen().Language(lang)
 		wantSub, wantTime := "Before alarms that don't choose their own", "5 minutes before"
 		if lang == "ja" {
