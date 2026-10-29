@@ -615,6 +615,7 @@ func (c *conversation) turnEvent(e event) {
 		c.log.Replied(e.text)
 		c.turn.Replying(e.text)
 		c.shown.Reply = e.text
+		replyArrived(time.Now())
 		Changed.Emit(c.shown)
 		if c.phase == phaseListening {
 			c.think()

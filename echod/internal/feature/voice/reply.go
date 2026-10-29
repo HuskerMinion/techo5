@@ -96,6 +96,13 @@ func (s *stream) play(ctx context.Context, p *speaker.Player, started func()) er
 			if !ok {
 				// Whatever is still held will never be joined by more, so it just plays.
 				s.flush(p)
+				if s.bytes > 0 {
+					at := s.playingAt
+					if at.IsZero() {
+						at = time.Now() // a reply shorter than the cushion starts here
+					}
+					replyPlaying(at, replyAudioSeconds(s.bytes), true)
+				}
 				return nil
 			}
 			s.take(data, p, started)
@@ -142,6 +149,7 @@ func (s *stream) take(data []byte, p *speaker.Player, started func()) {
 	}
 	s.flowing = true
 	s.flush(p)
+	replyPlaying(s.playingAt, replyAudioSeconds(s.bytes), false)
 }
 
 // flush queues what is held, brought toward the speech loudness target. The gain follows the

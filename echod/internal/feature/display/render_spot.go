@@ -78,6 +78,7 @@ type roundScene struct {
 	now          time.Time
 	phase        string // idle, listening, thinking, replying, lingering
 	heard, reply string
+	said         float64 // how much of the reply the voice has said, 0 to 1 (voice.Spoken)
 	eq           *eqView // a turn's picture, when turns are drawn as the wave or the bars
 	cue          string  // a turn's phase, when turns are a cue over the face and phase is idle (turn_cue.go)
 	muted        bool
@@ -578,7 +579,7 @@ func (r *roundRenderer) conversation(s roundScene) {
 		y += 12
 	}
 	if s.reply != "" && (s.phase == "replying" || s.phase == "lingering") {
-		r.paragraph(r.body, s.reply, y, colText, 5)
+		r.replyParagraph(r.body, s.reply, y, colText, 5, s.said)
 	}
 }
 
@@ -755,7 +756,27 @@ func (r *roundRenderer) centered(face font.Face, s string, baseline int, c color
 // centered. It returns the baseline after the last line.
 func (r *roundRenderer) paragraph(face font.Face, s string, baseline int, c color.Color, maxLines int) int {
 	lineH := face.Metrics().Height.Round() + 4
-	words := strings.Fields(s)
+	lines, more := r.paragraphLines(face, strings.Fields(s), baseline, maxLines)
+	for n, line := range lines {
+		avail := chord(baseline-10) - 56
+		if n == len(lines)-1 && more {
+			line += "…"
+		}
+		// A word too long for the line on its own, or the ellipsis pushing the last line over: cut to
+		// fit, rather than drawn off the circle.
+		if r.width(face, line) > avail {
+			line = clipRunes(line, 1, func(l string) bool { return r.width(face, l) <= avail })
+		}
+		r.centered(face, line, baseline, c)
+		baseline += lineH
+	}
+	return baseline
+}
+
+// paragraphLines is how words wrap to the circle from baseline down, up to maxLines, and whether any
+// are left over.
+func (r *roundRenderer) paragraphLines(face font.Face, words []string, baseline, maxLines int) (lines []string, more bool) {
+	lineH := face.Metrics().Height.Round() + 4
 	for n := 0; n < maxLines && len(words) > 0; n++ {
 		avail := chord(baseline-10) - 56
 		line := words[0]
@@ -768,18 +789,28 @@ func (r *roundRenderer) paragraph(face font.Face, s string, baseline int, c colo
 			line = try
 		}
 		words = words[k:]
-		if n == maxLines-1 && len(words) > 0 {
-			line += "…"
-		}
-		// A word too long for the line on its own, or the ellipsis pushing the last line over: cut to
-		// fit, rather than drawn off the circle.
-		if r.width(face, line) > avail {
-			line = clipRunes(line, 1, func(l string) bool { return r.width(face, l) <= avail })
-		}
-		r.centered(face, line, baseline, c)
+		lines = append(lines, line)
 		baseline += lineH
 	}
-	return baseline
+	return lines, len(words) > 0
+}
+
+// replyParagraph is paragraph for a reply: one too long for maxLines is shown a page at a time as the
+// voice gets to it, said being how much of it has been said (voice.Spoken), as on the Show (replyPage).
+func (r *roundRenderer) replyParagraph(face font.Face, s string, baseline int, c color.Color, maxLines int, said float64) int {
+	words := strings.Fields(s)
+	at := int(said * float64(len([]rune(strings.Join(words, " ")))))
+	chars := 0
+	for {
+		lines, more := r.paragraphLines(face, words, baseline, maxLines)
+		page := len([]rune(strings.Join(lines, " "))) + 1
+		if !more || chars+page > at {
+			break
+		}
+		chars += page
+		words = words[len(strings.Fields(strings.Join(lines, " "))):]
+	}
+	return r.paragraph(face, strings.Join(words, " "), baseline, c, maxLines)
 }
 
 // chord is the width of the circle at height y.

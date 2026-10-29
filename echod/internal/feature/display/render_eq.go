@@ -55,7 +55,7 @@ func (r *renderer) eqWords(s scene, room, maxW int) []eqLine {
 		face, lineH = r.small, r.s(42)
 		lines = r.wrap(face, s.reply, maxW)
 	}
-	for _, l := range lines {
+	for _, l := range replyPage(lines, (room-used)/lineH, s.said) {
 		out = append(out, eqLine{face, l, replyCol, lineH})
 	}
 	return out

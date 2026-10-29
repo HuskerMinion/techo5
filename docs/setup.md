@@ -721,7 +721,8 @@ like "kitchen screen" under its **Voice assistants** settings in Home Assistant.
   which words the screen listens for. Japanese additionally translates settings and other screen
   controls through the shared language tables; untranslated messages fall back to English. It
   doesn't change what the assistant understands or says, which is set by Home Assistant's pipeline.
-- **Turn screen**: how a voice request looks. This one is on the Spot too. **Classic** is the words,
+- **Turn screen**: how a voice request looks. This one is on the Spot too. An answer too long for the
+  screen is shown a page at a time, turning as the voice reads it. **Classic** is the words,
   **Wave** is glowing lines, **Bars** is an LED-style equalizer, **VU meters** are two moving-needle
   meters, **Orb** is a ball of light (cool while it listens, violet while it thinks, warm while it
   answers) and **HAL 9000** is the computer's red eye, all moving with the voice. **Face** is a little

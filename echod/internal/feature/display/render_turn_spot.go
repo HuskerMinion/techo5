@@ -60,6 +60,6 @@ func (r *roundRenderer) turnFace(s roundScene) {
 		y += 6
 	}
 	if answer {
-		r.paragraph(r.body, s.reply, y, colText, 3)
+		r.replyParagraph(r.body, s.reply, y, colText, 3, s.said)
 	}
 }

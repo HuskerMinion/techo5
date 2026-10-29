@@ -49,6 +49,7 @@ type scene struct {
 	cue     string  // a turn's phase, when turns are a cue over the page and phase is idle (turn_cue.go)
 	heard   string
 	reply   string
+	said    float64 // how much of the reply the voice has said, 0 to 1 (voice.Spoken)
 	since   time.Time
 	playing bool
 	paused  bool
@@ -706,10 +707,10 @@ func (r *renderer) draw(s scene) {
 		r.status(s, tr("ui_listening_turn"), true)
 	case "thinking":
 		r.status(s, tr("ui_thinking_turn"), true)
-		r.words(s.heard, "", r.s(200))
+		r.words(s.heard, "", 0, r.s(200))
 	case "replying", "lingering":
 		r.cornerClock(s)
-		r.words(s.heard, s.reply, r.s(70))
+		r.words(s.heard, s.reply, s.said, r.s(70))
 	default:
 		if s.sunrise > 0 {
 			// The light before an alarm takes the whole screen: the panel is the lamp in the room, and
@@ -1108,8 +1109,9 @@ func (r *renderer) status(s scene, title string, breathe bool) {
 }
 
 // words lays out what was heard, dimmed, and the reply beneath it, starting at top (in this panel's
-// pixels) and stopping at the footer. A long reply is shrunk one step before being cut.
-func (r *renderer) words(heard, reply string, top int) {
+// pixels) and stopping at the footer. A long reply is shrunk one step, and one still too long is shown a
+// page at a time as the voice gets to it, said being how much of it has been said (replyPage).
+func (r *renderer) words(heard, reply string, said float64, top int) {
 	y := top
 	maxW := r.w - 2*r.margin
 	bottom := r.h - r.s(70)
@@ -1132,13 +1134,7 @@ func (r *renderer) words(heard, reply string, top int) {
 		face, lineH = r.small, r.s(42)
 		lines = r.wrap(face, reply, maxW)
 	}
-	for i, line := range lines {
-		if y+lineH > bottom {
-			if i > 0 {
-				r.text(face, "…", r.margin, y, cream)
-			}
-			break
-		}
+	for _, line := range replyPage(lines, (bottom-y)/lineH, said) {
 		r.text(face, line, r.margin, y+lineH-r.s(12), cream)
 		y += lineH
 	}
