@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
-"""Offline tests for the OS side of the boot layer: bootctl and slotctl. No unit, no network.
+"""Offline tests for the OS side of the boot layer: bootctl, slotctl, the command line checks in
+techo5-lib.sh and boot.sh's trial check. No unit, no network.
 
     python3 tools/test_boot_layer.py
 
@@ -47,9 +48,11 @@ def setUpModule():
             raise RuntimeError(why)  # Docker is there in CI: a run that cannot start is a failure
         skip(why)
     C = r.stdout.strip()
-    for name in ('bootctl', 'slotctl'):
+    for name in ('bootctl', 'slotctl', 'techo5-lib.sh'):
         with open(os.path.join(LINUX, name), 'rb') as f:
             put('/src/' + name, f.read().replace(b'\r\n', b'\n'))
+    with open(os.path.join(LINUX, 'rootfs', 'etc', 'techo5', 'boot.sh'), 'rb') as f:
+        put('/src/boot.sh', f.read().replace(b'\r\n', b'\n'))
 
 
 def tearDownModule():
@@ -399,6 +402,63 @@ class Slotctl(unittest.TestCase):
            .format(d=self.d))
         self.slotctl('a', 'commit', env=env)
         self.assertEqual(get(self.d + '/store/slots/a/boot/boot.img')[64:576].rstrip(b'\0'), want)
+
+
+# ------------------------------------------------------------------------------------------ the command line
+
+class CommandLine(unittest.TestCase):
+    """techo5-lib.sh's t5_ab_slot and t5_boot_layer (the inits' and boot.sh's switch), t5_watchdog, and
+    boot.sh's on_trial."""
+
+    def lib(self, cmdline, call):
+        put('/t/cmdline', cmdline.encode() + b'\n')
+        return sh('log() { echo "log: $*"; }; . /src/techo5-lib.sh; T5_CMDLINE=/t/cmdline; ' + call)
+
+    def test_ab_slot(self):
+        for cmdline, want in (('console=ttyS0 lcm=cronos root=/dev/ram', (1, '')),
+                              ('console=ttyS0 ab.slot=b ab.kernel=b watchdog.open_timeout=120', (0, 'b\n')),
+                              ('ab.slot=a', (0, 'a\n')),
+                              ('ab.kernel=rescue', (1, '')),
+                              ('ab.slot=c xab.slot=a', (1, ''))):
+            self.assertEqual(self.lib(cmdline, 't5_ab_slot'), want, cmdline)
+
+    def test_boot_layer(self):
+        for cmdline, want in (('console=ttyS0 lcm=cronos root=/dev/ram', 1),
+                              ('ab.slot=b ab.kernel=b', 0),
+                              ('ab.kernel=rescue', 0)):
+            self.assertEqual(self.lib(cmdline, 't5_boot_layer')[0], want, cmdline)
+
+    def test_watchdog_without_a_device_does_nothing(self):
+        rc, out = self.lib('ab.slot=a', 't5_watchdog; echo rc=$?; pidof watchdog || echo none')
+        self.assertEqual(out, 'log: watchdog: no /dev/watchdog\nrc=0\nnone\n')
+
+    def on_trial(self, state, cmdline, rec):
+        put('/t/misc', misc(rec))
+        put('/store/slots/a.state', state.encode() + b'\n')
+        put('/t/cmdline', cmdline.encode() + b'\n')
+        rc, out = sh('''mkdir -p /t/bin; cp /src/bootctl /t/bin/bootctl; chmod 755 /t/bin/bootctl
+            export PATH=/t/bin:$PATH BOOTCTL_MISC=/t/misc BOOTCTL_CMDLINE=/t/cmdline BOOTCTL_CONF=/nonexistent
+            log() { :; }; . /src/techo5-lib.sh; T5_CMDLINE=/t/cmdline
+            eval "$(sed -n '/^on_trial() {/,/^}/p' /src/boot.sh)"
+            on_trial a''')
+        return rc
+
+    def test_on_trial(self):
+        good = record((15, 3, 1), (14, 0, 1))
+        trial = record((15, 2, 0), (14, 0, 1))
+        self.assertEqual(self.on_trial('trial 2', 'root=/dev/ram', None), 0)
+        self.assertEqual(self.on_trial('good', 'root=/dev/ram', None), 1, 'without the boot layer: as before')
+        self.assertEqual(self.on_trial('good', 'root=/dev/ram', trial), 1, 'not booted by the boot layer')
+        self.assertEqual(self.on_trial('good', 'ab.slot=a ab.kernel=a', trial), 0)
+        self.assertEqual(self.on_trial('good', 'ab.slot=a ab.kernel=a', good), 1)
+
+    def test_the_scripts_parse_under_busybox(self):
+        for f in ('bootctl', 'slotctl', 'techo5-lib.sh', 'boot.sh'):
+            self.assertEqual(sh('sh -n /src/' + f), (0, ''), f)
+        for f in ('init', os.path.join('athena', 'init')):
+            with open(os.path.join(LINUX, f), 'rb') as fh:
+                put('/src/init.check', fh.read().replace(b'\r\n', b'\n'))
+            self.assertEqual(sh('sh -n /src/init.check'), (0, ''), f)
 
 
 if __name__ == '__main__':

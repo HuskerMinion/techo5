@@ -254,6 +254,40 @@ its store (`.techo5-store`: `board=athena`) makes `slotctl install` refuse any r
 On the mainline path athena boots TECHO5's own Linux 6.18 kernel; its source, patches and build
 script are in tools/linux/athena/kernel (README.md there).
 
+### The boot layer (opt-in)
+
+The boot layer is U-Boot with an A/B boot menu, from
+[u-boot-amazon-echo](https://github.com/nuno407/u-boot-amazon-echo) (its SPEC.md is the contract
+below; issue #336). It is not installed by anything here yet. Where it is, it keeps an A/B record in
+the misc partition, picks the slot, counts its tries, starts that slot's own kernel from
+`slots/<x>/boot/boot.img` and says which on the kernel command line (`ab.slot=<x>`, `ab.kernel=`).
+The OS side, in this tree:
+
+- `bootctl` (a copy of the boot layer's own) reads and changes the record. Without a record it
+  changes nothing and exits 3.
+- `slotctl` keeps its files as before and tells the record the same through bootctl: install,
+  commit, switch and rollback. Where there is a record, install also puts the slot's kernel at
+  `slots/<x>/boot/boot.img` (a hard link) and a label at `slots/<x>/boot/label`. A rootfs with no
+  kernel of its own keeps the one the unit runs with now (the booted slot's `boot/boot.img`, else
+  the other slot's), and slotctl says so.
+- The initramfs `init` (and athena's `/init`) boot the slot named by `ab.slot=` without
+  `slotctl next`, and start busybox's watchdog daemon on `/dev/watchdog`, which the boot layer's
+  command line asks for (the kernel feeds it only for the first 120 s).
+- `boot.sh`'s slot trial (commit after five healthy minutes, reboot after 15 minutes if the slot
+  never gets there) also covers a slot the boot layer still has on trial. Its commit marks the slot
+  good in the record too, and its reboot is a try the boot layer counts. The kernel update
+  (`KERNEL_UPDATE`) is off: the kernel comes with the slot.
+
+Without the boot layer there is no `ab.slot=` and no record, and all of this stays off.
+
+Moving an existing unit: nothing changes until the boot layer is installed. Its installer (the next
+step of #336) writes the A/B record with the slot running now marked good, and fills in
+`slots/<x>/boot/` for both existing slots before U-Boot replaces the boot partition: from each
+rootfs's own kernel image where there is one, otherwise from the kernel in the boot partition that
+the unit runs today. After that, every release brings its kernel in the slot, or keeps the current one.
+`python3 tools/test_boot_layer.py` runs bootctl, slotctl and the command line checks under
+busybox, in Docker, both with and without a record.
+
 ## Next
 
 The camera: the kernel at this commit already carries the OV02B10 sensor

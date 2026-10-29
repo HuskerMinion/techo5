@@ -142,6 +142,7 @@ boot_slot() {
 	sync
 	# Nothing started here may keep running under the slot.
 	kill -9 -1 2>/dev/null
+	[ -n "$AB_SLOT" ] && t5_watchdog && WATCHDOG=1
 	move_mounts
 	cd /newroot
 	if $BB pivot_root . store; then
@@ -177,11 +178,26 @@ if [ $MODE = store ]; then
 	cp /tmp/grow.log $LOGDIR/grow.log 2>/dev/null
 fi
 
+# The boot layer (techo5-lib.sh, t5_ab_slot), where it is installed, has picked the slot, started
+# that slot's own kernel and counted the try. That slot is booted without slotctl next, which would
+# take a second try and might pick the other slot. If it cannot start, slotctl decides as before.
+# Without ab.slot= on the command line (no boot layer) none of this runs.
+AB_SLOT=$(t5_ab_slot)
+WATCHDOG=
+ab_boot() {
+	crumb "the boot layer booted slot $AB_SLOT: no slotctl next"
+	boot_slot "$AB_SLOT"
+	crumb "slot $AB_SLOT from the boot layer did not start; slotctl decides"
+	return 1
+}
+
 if [ $MODE = store ]; then
 	if [ -e /rescue ]; then
 		store_rw && rm -f /rescue; store_ro
 		crumb "rescue marker found: staying on the store root this boot"
 		: > /tmp/rescue-asked
+	elif [ -n "$AB_SLOT" ] && ab_boot; then
+		: # not reached: ab_boot only returns when the slot did not start
 	else
 		store_rw
 		if slot=$(STORE=/ slotctl next 2>/tmp/slotctl.err); then
@@ -197,6 +213,9 @@ fi
 
 # --- Rescue environment, on the store root (read-only; /run, /tmp and /data are writable).
 crumb "rescue mode ($MODE)"
+# A slot's command line from the boot layer asks for the watchdog to be fed (t5_watchdog): here
+# too, so the rescue environment is not reset under the person using it.
+[ -n "$AB_SLOT" ] && [ -z "$WATCHDOG" ] && t5_watchdog
 echo /sbin/mdev > /proc/sys/kernel/hotplug
 hostname techo5-rescue
 

@@ -829,3 +829,40 @@ t5_bt_again_pass() {
 # t5_bt_class: say the device is a loudspeaker (major 4, audio/video; minor 5, given to btmgmt as the
 # class byte: 20), and report whether the controller took it.
 t5_bt_class() { timeout 5 btmgmt class 4 20 2>/dev/null | grep -q succeeded; }
+
+# --- The boot layer (U-Boot with abboot, github.com/nuno407/u-boot-amazon-echo; opt-in). Where it
+# is installed it picks the slot, counts its tries in an A/B record in misc and starts the slot's own
+# kernel, and says so on the kernel command line: ab.slot=<x> for a slot, ab.kernel= for which
+# kernel (ab.kernel=rescue, no ab.slot=, when no slot could be booted). Without it neither word is
+# there, and everything that depends on these functions stays off. T5_CMDLINE: another file (tests).
+
+# t5_ab_slot: the slot the boot layer booted. Prints nothing and returns non-zero without one.
+t5_ab_slot() {
+	for w in $(cat "${T5_CMDLINE:-/proc/cmdline}" 2>/dev/null); do
+		case $w in ab.slot=a|ab.slot=b) echo "${w#ab.slot=}"; return 0 ;; esac
+	done
+	return 1
+}
+
+# t5_boot_layer: whether the boot layer started this kernel (a slot's, or its rescue kernel).
+t5_boot_layer() {
+	for w in $(cat "${T5_CMDLINE:-/proc/cmdline}" 2>/dev/null); do
+		case $w in ab.slot=?*|ab.kernel=?*) return 0 ;; esac
+	done
+	return 1
+}
+
+# t5_watchdog: open /dev/watchdog and feed it, for good. The boot layer starts a slot's kernel with
+# watchdog.open_timeout=120 and nowayout: the kernel feeds the watchdog only until user space opens
+# it, and for 120 s at most, so a slot that hangs before then resets the unit and the boot layer
+# counts the try. Busybox's watchdog daemon, a 31 s timeout fed every 5 s. Call it after anything
+# that kills every process (the init's hand-over), so it lives on under the slot. If it cannot
+# start, the unit resets 120 s into the boot and the boot layer counts the try, as for a hang.
+t5_watchdog() {
+	[ -c /dev/watchdog ] || { log "watchdog: no /dev/watchdog"; return 0; }
+	if ${BB:-busybox} watchdog -T 31 -t 5 /dev/watchdog 2>/dev/null; then
+		log "watchdog: busybox feeds it (31 s timeout, every 5 s)"
+	else
+		log "watchdog: busybox's watchdog did not start; the unit will reset"
+	fi
+}
