@@ -9,7 +9,8 @@ no LineageOS for it. TECHO5 brings its own 64-bit mainline Linux kernel and writ
 
 The kernel mounts `system` read-only as `/` and runs `/init` there. TECHO5 keeps its state in one
 folder on `userdata` (`userdata/techo5`, which is `/data` on the unit) and touches nothing else there.
-`vendor`, `recovery` (TWRP) and the unlock's own partitions are never written.
+`vendor`, `recovery` (TWRP) and the unlock's own partitions are never written. The
+[boot layer](#the-boot-layer-opt-in), opt-in, puts a boot menu in `boot` instead of the kernel.
 
 There is also an older way that keeps Amazon's 32-bit kernel: see
 [Amazon's kernel instead](#amazons-kernel-instead) at the end.
@@ -310,6 +311,65 @@ the kernel is being written is the same. The way back from those is the way the 
 
 Running the installer again from TWRP still works too. It keeps the name, the Home Assistant key
 and the first backup.
+
+## The boot layer (opt-in)
+
+The boot layer is a small boot menu that runs before TECHO5: U-Boot with
+[u-boot-amazon-echo](https://github.com/nuno407/u-boot-amazon-echo)'s A/B layer, built by TECHO5's
+release workflow from source. It takes the kernel's place in `boot`, and each slot then brings its
+own kernel (`slots/<x>/boot/boot.img` on the store). It counts each new slot's tries itself: a
+release whose kernel doesn't boot, panics or hangs gets three tries, then the unit starts the other
+slot again. Without it, a kernel that doesn't boot needs mtkclient to fix.
+
+It is new, and off unless you ask for it. Try it on a unit you can open up or reflash.
+
+**Opting in.** The unit must already run TECHO5's mainline kernel, from a release that knows the boot
+layer, with the slot it runs committed (five healthy minutes after an update). Start TWRP (hold
+Volume Up while it powers on), then:
+
+```
+python3 tools/install-athena.py --boot-layer
+```
+
+It changes nothing until you confirm, and then does four things, in this order:
+
+1. saves `boot` and `misc` as they are into `backups/<serial>/boot-layer/`;
+2. writes the A/B record into `misc` (32 bytes at byte 2048), with the slot running now marked good;
+3. puts each slot's kernel at `slots/<x>/boot/boot.img`: the release's own kernel where the slot's
+   root filesystem carries one, otherwise the kernel in `boot` the unit runs today;
+4. writes U-Boot to `boot`, with the unit's speaker tuning filled in as for the kernel.
+
+The store, the slots' files, your settings, `recovery` (TWRP) and the unlock are not touched. A slot
+holding an older release that doesn't know the boot layer is marked bad in the record, so U-Boot
+never starts it; the next update replaces it.
+
+**What you see.** At power-on a menu shows both slots for 5 seconds: Volume Up or Down moves the bar,
+both together start the selected slot. Without a key press the chosen slot starts. Volume Up held at
+power-on still starts TWRP, and Volume Down still starts fastboot: those belong to the bootloader
+before U-Boot.
+
+**Going back.** From TWRP:
+
+```
+python3 tools/install-athena.py --boot-layer-off
+```
+
+It writes the saved `p20-boot.img` back to `boot` and clears the record. The slots keep their files;
+the kernel in `boot` starts the active slot as before. By hand, from TWRP:
+
+```
+adb exec-in "dd of=/dev/block/mmcblk1p20 bs=1048576" < backups/<serial>/boot-layer/p20-boot.img
+adb shell "dd if=/dev/zero of=/dev/block/mmcblk1p6 bs=32 seek=64 count=1 conv=notrunc; sync"
+```
+
+or, if TWRP doesn't start, from fastboot (hold Volume Down while it powers on):
+`fastboot flash boot backups/<serial>/boot-layer/p20-boot.img`. A unit put back that way still has
+the record, which does no harm; clear it from TWRP later. A normal install (`install-athena.py`
+without `--boot-layer`) stops on a unit with the boot layer; with `--replace-uboot` it installs
+afresh, the kernel over U-Boot, and clears the record.
+
+`recovery` keeps TWRP, so there is no rescue kernel there: when neither slot can start, U-Boot says
+so on the screen and waits, and TWRP (Volume Up at power-on) is the way back.
 
 ## The USB cable is a root shell
 

@@ -27,6 +27,7 @@ import subprocess
 import sys
 import tempfile
 import unittest
+import zlib
 from contextlib import redirect_stdout, redirect_stderr
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -201,7 +202,7 @@ class FakeTWRP:
     """An athena in TWRP: adb's calls, run in a scratch folder that stands for the unit's root."""
 
     def __init__(self, root, mmc='mmcblk1', cmdline='jd936x_id=0x36', lk_panel='ili9881c_wxga_dsi_vdo_st_boe',
-                 boot=None, live_cfg=1, compat=('amzn,athena-pvt', 'amzn,athena-dvt', 'amzn,athena')):
+                 boot=None, live_cfg=1, compat=('amzn,athena-pvt', 'amzn,athena-dvt', 'amzn,athena'), sizes=None):
         self.root = root
         self.mmc = mmc
         self.log = []
@@ -212,7 +213,7 @@ class FakeTWRP:
         for d in ('dev/block', 'sys/class/block', 'proc/sys/vm', 'proc/device-tree/chosen', 'tmp', 'data'):
             os.makedirs(os.path.join(root, d), exist_ok=True)
         for n, name in LAYOUT.items():
-            size = SIZES.get(n, 16 << 10)
+            size = (sizes or SIZES).get(n, 16 << 10)
             content = (hashlib.sha256(name.encode()).digest() * (size // 32 + 1))[:size]
             if n == 20:
                 content = (boot or b'').ljust(size, b'\0')
@@ -755,6 +756,336 @@ class SimulatedTWRP(unittest.TestCase):
         self.assertIsNone(err, out)
         self.assertEqual(u.writes(), [21, 21, 20])
         self.assertIn('second try', out)
+
+
+# ------------------------------------------------------------------------------------------ the boot layer
+
+def arm64_payload(text, size=6000):
+    """An arm64 Image as far as the packer and the checks look: its header, then text and filler."""
+    img = bytearray(64)
+    img[0x38:0x3c] = b'ARM\x64'
+    return bytes(img) + text.encode() + b'\0' + bytes((i * 7) & 0xff for i in range(size))
+
+
+def shipped_kernel():
+    """A made-up release boot image shaped as pack.py makes it: Image.gz, then a DTB holding the empty
+    tuning slot, then a ramdisk; its id right. pack-uboot.py takes it apart as it would a real one."""
+    dtb = fdt({'compatible': 'amazon,athena', 'sound': {'compatible': 'ti,tas5805m',
+                                                         'techo5,dsp-config': empty_slot()}})
+    return boot_image(gzip.compress(arm64_payload('Linux version 6.18.56-techo5-athena'), mtime=0) + dtb,
+                      ramdisk=b'\x1f\x8b firmware' * 100)
+
+
+def uboot_bin(marker=inst.UBOOT_MARKER):
+    return arm64_payload('U-Boot 2026.10 ' + marker.decode())
+
+
+def ref_record(raw):
+    """The record as the SPEC lays it out, decoded here apart from the installer's code."""
+    assert raw[4:8] == b'BCAB' and raw[8] == 1 and raw[9] & 7 == 2, raw[:12].hex()
+    assert struct.unpack('<I', raw[28:32])[0] == zlib.crc32(raw[:28]) & 0xffffffff
+    assert not any(raw[20:28])
+    return raw[0:2].decode(), {s: (raw[12 + 2 * i] & 15, (raw[12 + 2 * i] >> 4) & 7, raw[12 + 2 * i] >> 7)
+                               for i, s in enumerate('ab')}
+
+
+class StoreTWRP(FakeTWRP):
+    """The simulated unit with its store: the store's files are a folder that stands for system mounted at
+    /tmp/t5-store (mount succeeds for that one only, and is logged)."""
+
+    STORE = 'tmp/t5-store'
+
+    def prelude(self):
+        return super().prelude() + (
+            'mount() { case "$*" in *t5-store*) echo "mount $*" >> %s/mounts.log; return 0;; esac; return 1; }\n'
+            % self.sh_root)
+
+    def store(self, rel, content):
+        self.put(self.STORE + '/' + rel, content)
+
+    def stored(self, rel):
+        return self.get(self.STORE + '/' + rel)
+
+
+class BootLayer(unittest.TestCase):
+    """--boot-layer and --boot-layer-off on a simulated unit that runs TECHO5's kernel and store."""
+
+    def setUp(self):
+        self.tmp = tempfile.mkdtemp(prefix='t5-athena-bl-')
+        self.saved = dict(inst.KNOWN_AMP_TABLES)
+        inst.KNOWN_AMP_TABLES.update(known_for_made_up())
+        self.table = inst.mainline_table(TABLE_B)
+        self.shipped = shipped_kernel()
+        self.kernel_now = inst.fill_slot(self.shipped, self.table)
+        self.boot = os.path.join(self.tmp, 'boot.img')
+        self.uboot = os.path.join(self.tmp, 'u-boot.bin')
+        with open(self.boot, 'wb') as f:
+            f.write(self.shipped)
+        with open(self.uboot, 'wb') as f:
+            f.write(uboot_bin())
+
+    def tearDown(self):
+        inst.KNOWN_AMP_TABLES.clear()
+        inst.KNOWN_AMP_TABLES.update(self.saved)
+        shutil.rmtree(self.tmp, ignore_errors=True)
+
+    def unit(self, b='aware', a_state='good', b_state='good', init=True, misc=None, args=None):
+        """A unit on TECHO5: slot a runs (a release with its own kernel), slot b as asked: aware (a
+        release that knows the boot layer, without a kernel of its own), old (one that does not), or
+        None (empty)."""
+        u = StoreTWRP(os.path.join(self.tmp, 'unit'), boot=self.kernel_now,
+                      sizes={**SIZES, 6: 64 << 10, 20: 4 << 20})
+        u.put('dev/block/mmcblk1p6', misc if misc is not None else b'\0' * (64 << 10))
+        u.store('.techo5-store', 'board=athena\n')
+        u.store('active', 'a\n')
+        u.store('init', '#!/bin/sh\nAB_SLOT=$(t5_ab_slot)\n' if init else '#!/bin/sh\nslotctl next\n')
+        u.store('lib/techo5-lib.sh', 't5_ab_slot() { :; }\nt5_watchdog() { :; }\n' if init else 't5_log() { :; }\n')
+        u.store('usr/local/sbin/bootctl', '#!/bin/sh\n')
+        u.store('slots/a.state', a_state + '\n')
+        u.store('slots/a/etc/techo5/boot.sh', 'if t5_boot_layer; then :; fi\n')
+        u.store('slots/a/etc/techo5-release', 'techo5 rootfs v1.5.0 built 2026-10-28 12:00 UTC\n')
+        u.store('slots/a/' + inst.SLOT_KERNEL, self.shipped)
+        if args:
+            u.store('slots/a/' + inst.HDR_ARGS, args + '\n')
+        if b:
+            u.store('slots/b.state', b_state + '\n')
+            u.store('slots/b/etc/techo5/boot.sh', 'if t5_boot_layer; then :; fi\n' if b == 'aware' else 'echo old\n')
+            u.store('slots/b/etc/techo5-release', 'techo5 rootfs v1.4.9 built 2026-09-02 08:00 UTC\n')
+        u.before = u.snapshot()
+        return u
+
+    def run_layer(self, u, *extra):
+        return run_installer(u, list(extra), self.tmp)
+
+    def layer_args(self):
+        return ['--boot-layer', '--uboot', self.uboot, '--boot', self.boot]
+
+    def index(self, u, pattern, last=False):
+        hits = [i for i, c in enumerate(u.log) if re.search(pattern, c)]
+        self.assertTrue(hits, 'no command matching %s in\n%s' % (pattern, '\n'.join(u.log)))
+        return hits[-1] if last else hits[0]
+
+    def test_steps_in_order(self):
+        u = self.unit()
+        out, err = self.run_layer(u, *self.layer_args())
+        self.assertIsNone(err, out)
+        # Only misc (the record) and boot (U-Boot) are written, in that order; the store's files change
+        # through its mount, between the two.
+        self.assertEqual(u.writes(), [6, 20])
+        self.assertEqual(u.changed(), [6, 20])
+        backup = self.index(u, r'dd if=/dev/block/mmcblk1p6 bs=1048576', last=True)
+        record = self.index(u, r'of=/dev/block/mmcblk1p6 ')
+        slots = self.index(u, r'ln -f .*t5-store/slots/a/boot/boot\.img')
+        boot = self.index(u, r'of=/dev/block/mmcblk1p20 ')
+        # boot is read when the unit is checked, and saved again with misc once the install is confirmed.
+        self.assertGreaterEqual(len([i for i, c in enumerate(u.log)
+                                     if i < backup and 'dd if=/dev/block/mmcblk1p20 bs=1048576' in c]), 2)
+        self.assertTrue(backup < record < slots < boot, (backup, record, slots, boot))
+        self.assertIn('-o rw,noatime', u.get('mounts.log').decode())
+
+        # The backup: boot and misc as they were.
+        folder = os.path.join(self.tmp, 'backups', 'SIMULATED', 'boot-layer')
+        with open(os.path.join(folder, 'p20-boot.img'), 'rb') as f:
+            self.assertEqual(hashlib.sha256(f.read()).hexdigest(), u.before[20])
+        with open(os.path.join(folder, 'p6-misc.img'), 'rb') as f:
+            self.assertEqual(hashlib.sha256(f.read()).hexdigest(), u.before[6])
+
+        # The record: slot a (running) good and first, slot b good; nothing else in misc changed.
+        misc = u.part(6)
+        last, slots_ = ref_record(misc[2048:2080])
+        self.assertEqual(last, '_a')
+        self.assertEqual(slots_, {'a': (15, 3, 1), 'b': (14, 3, 1)})
+        self.assertFalse(any(misc[:2048]) or any(misc[2080:]))
+
+        # Each slot's kernel: a's own (linked, as slotctl links it), b the kernel the unit ran.
+        a_img = os.path.join(u.root, StoreTWRP.STORE, 'slots/a/boot/boot.img')
+        self.assertEqual(u.stored('slots/a/boot/boot.img'), self.shipped)
+        self.assertEqual(os.stat(a_img).st_ino,
+                         os.stat(os.path.join(u.root, StoreTWRP.STORE, 'slots/a', inst.SLOT_KERNEL)).st_ino)
+        self.assertEqual(u.stored('slots/b/boot/boot.img'), self.kernel_now)
+        self.assertEqual(u.stored('slots/a/boot/label'), b'28 Oct 2026\n')
+        self.assertEqual(u.stored('slots/b/boot/label'), b'2 Sep 2026\n')
+
+        # boot: U-Boot in the shipped image's shape, the unit's tuning in its slot, the id right.
+        now = u.part(20)
+        img = inst.BootImage(now)
+        self.assertTrue(inst.is_techo5_uboot(now))
+        self.assertFalse(inst.is_techo5_boot(now))
+        self.assertEqual(inst.read_slot(now), self.table)
+        self.assertEqual(img.stored_id(), img.computed_id())
+        self.assertEqual(now[64:576], self.shipped[64:576])  # the header command line
+        self.assertEqual(img.ramdisk(), inst.BootImage(self.shipped).ramdisk())
+        self.assertGreaterEqual(img.kernel_size, 0x210000)  # the 2 MB rule
+        self.assertTrue(u.rebooted)
+        self.assertIn('--boot-layer-off', out)
+
+    def test_old_release_in_the_other_slot_is_marked_bad(self):
+        u = self.unit(b='old')
+        out, err = self.run_layer(u, *self.layer_args())
+        self.assertIsNone(err, out)
+        self.assertEqual(ref_record(u.part(6)[2048:2080])[1], {'a': (15, 3, 1), 'b': (0, 0, 0)})
+        self.assertIn('does not know the boot layer', out)
+
+    def test_other_slot_on_trial_keeps_its_tries(self):
+        u = self.unit(b_state='trial 2')
+        out, err = self.run_layer(u, *self.layer_args())
+        self.assertIsNone(err, out)
+        self.assertEqual(ref_record(u.part(6)[2048:2080])[1], {'a': (15, 3, 1), 'b': (14, 2, 0)})
+
+    def test_one_slot(self):
+        u = self.unit(b=None)
+        out, err = self.run_layer(u, *self.layer_args())
+        self.assertIsNone(err, out)
+        self.assertEqual(ref_record(u.part(6)[2048:2080])[1], {'a': (15, 3, 1), 'b': (0, 0, 0)})
+        self.assertFalse(os.path.exists(os.path.join(u.root, StoreTWRP.STORE, 'slots/b')))
+
+    def test_header_args(self):
+        # A rootfs asking for words in its header command line gets a copy with them, the store's GPT GUID in.
+        u = self.unit(args='root=PARTUUID=@STORE_PARTUUID@ rootwait')
+        gpt = bytearray(512 * 34)
+        gpt[512:520] = b'EFI PART'
+        struct.pack_into('<QII', gpt, 512 + 72, 2, 128, 128)
+        at = 2 * 512 + 20 * 128
+        gpt[at + 16:at + 32] = bytes.fromhex('33221100554477668899aabbccddeeff')
+        u.put('dev/block/mmcblk1', bytes(gpt))
+        out, err = self.run_layer(u, *self.layer_args())
+        self.assertIsNone(err, out)
+        img = u.stored('slots/a/boot/boot.img')
+        self.assertIn(b' root=PARTUUID=00112233-4455-6677-8899-aabbccddeeff rootwait\0', img[64:576])
+        self.assertEqual(img[576:], self.shipped[576:])
+        self.assertEqual(u.stored('slots/a/' + inst.SLOT_KERNEL), self.shipped)
+
+    def test_refusals_write_nothing(self):
+        cases = [
+            (dict(init=False), "store's /init does not know the boot layer"),
+            (dict(a_state='trial 2'), 'not good: let it commit'),
+            (dict(misc=b'\0' * 2048 + b'someone else' + b'\0' * (62 << 10)), 'not an A/B record'),
+        ]
+        for kw, want in cases:
+            u = self.unit(**kw)
+            out, err = self.run_layer(u, *self.layer_args())
+            self.assertIn(want, err or '', out)
+            self.assertEqual(u.writes(), [], kw)
+            self.assertEqual(u.changed(), [], kw)
+            self.assertFalse(os.path.exists(os.path.join(u.root, StoreTWRP.STORE, 'slots/a/boot')), kw)
+            shutil.rmtree(u.root)
+
+    def test_refuses_amazon_kernel_and_a_uboot_without_marker(self):
+        u = self.unit()
+        u.put('dev/block/mmcblk1p20', stock_boot().ljust(4 << 20, b'\0'))
+        out, err = self.run_layer(u, *self.layer_args())
+        self.assertIn("holds Amazon's kernel", err or '', out)
+        shutil.rmtree(u.root)
+        u = self.unit()
+        with open(self.uboot, 'wb') as f:
+            f.write(uboot_bin(b'abboot-echo-show-8-gen2-self'))
+        out, err = self.run_layer(u, *self.layer_args())
+        self.assertIn("not TECHO5's athena U-Boot", err or '', out)
+        self.assertEqual(u.writes(), [])
+
+    def test_dry_run_writes_nothing(self):
+        u = self.unit()
+        out, err = self.run_layer(u, '--dry-run', *self.layer_args())
+        self.assertIsNone(err, out)
+        self.assertEqual(u.writes(), [])
+        self.assertEqual(u.changed(), [])
+        self.assertNotIn('-o rw', u.get('mounts.log').decode())
+        self.assertIn('slot a good (priority 15), slot b good (priority 14)', out)
+
+    def test_again_and_the_way_back(self):
+        u = self.unit()
+        out, err = self.run_layer(u, *self.layer_args())
+        self.assertIsNone(err, out)
+        # Again: already on the boot layer.
+        out, err = self.run_layer(u, *self.layer_args())
+        self.assertIn('already holds', err or '', out)
+        # A normal install stops at U-Boot (the guard), and writes nothing.
+        store = os.path.join(self.tmp, 'system.img')
+        with open(store, 'wb') as f:
+            f.write(store_image())
+        n = len(u.log)
+        out, err = self.run_layer(u, '--image', store, '--boot', self.boot)
+        self.assertIn("holds TECHO5's U-Boot", err or '', out)
+        self.assertNotIn('of=/dev/block', ' '.join(u.log[n:]))
+        # The way back: the kernel saved before, the record cleared.
+        n = len(u.log)
+        out, err = self.run_layer(u, '--boot-layer-off')
+        self.assertIsNone(err, out)
+        self.assertEqual(hashlib.sha256(u.part(20)).hexdigest(), u.before[20])
+        self.assertEqual(hashlib.sha256(u.part(6)).hexdigest(), u.before[6])
+        writes = [int(m.group(1)) for c in u.log[n:] for m in [re.search(r'of=/dev/block/mmcblk\dp(\d+)', c)] if m]
+        self.assertEqual(writes, [20, 6])
+        out, err = self.run_layer(u, '--boot-layer-off')
+        self.assertIn('not on the boot layer', err or '', out)
+
+    def test_replace_uboot_clears_the_record(self):
+        u = self.unit()
+        out, err = self.run_layer(u, *self.layer_args())
+        self.assertIsNone(err, out)
+        store = os.path.join(self.tmp, 'system.img')
+        with open(store, 'wb') as f:
+            f.write(store_image())
+        # The amp tuning of a fresh install comes from Fire OS's boot, as always.
+        out, err = self.run_layer(u, '--replace-uboot', '--image', store, '--boot', self.boot,
+                                  '--stock-boot', self.write_stock())
+        self.assertIsNone(err, out)
+        self.assertFalse(inst.is_techo5_uboot(u.part(20)))
+        self.assertEqual(inst.read_slot(u.part(20)[:len(self.shipped)]), self.table)
+        self.assertFalse(any(u.part(6)[2048:2080]))
+        self.assertIn('record cleared', out)
+
+    def write_stock(self):
+        path = os.path.join(self.tmp, 'stock.img')
+        with open(path, 'wb') as f:
+            f.write(stock_boot())
+        return path
+
+    def test_without_the_flag_nothing_of_it_runs(self):
+        # A normal install on the same unit: system and boot written, misc and the store's files never.
+        u = self.unit()
+        store = os.path.join(self.tmp, 'system.img')
+        with open(store, 'wb') as f:
+            f.write(store_image())
+        out, err = self.run_layer(u, '--image', store, '--boot', self.boot, '--stock-boot', self.write_stock())
+        self.assertIsNone(err, out)
+        self.assertEqual(u.writes(), [21, 20])
+        self.assertEqual(u.changed(), [21])  # boot gets the same kernel and tuning it holds
+        self.assertFalse(any('t5-store' in c or 'of=/dev/block/mmcblk1p6' in c for c in u.log), u.log)
+        self.assertFalse(os.path.exists(os.path.join(u.root, 'mounts.log')))
+
+    def test_options_that_do_not_go_together(self):
+        u = self.unit()
+        for args, want in ((['--boot-layer', '--image', self.boot], 'write boot and misc only'),
+                           (['--boot-layer', '--uboot', self.uboot], 'give both --uboot and --boot'),
+                           (['--uboot', self.uboot, '--boot', self.boot], '--uboot goes with --boot-layer'),
+                           (['--boot-layer', '--boot-layer-off'], 'not both')):
+            out, err = self.run_layer(u, *args)
+            self.assertIn(want, err or '', args)
+        self.assertEqual(u.writes(), [])
+
+
+class ABRecord(unittest.TestCase):
+    def test_as_bootctl_leaves_it(self):
+        # bootctl init, set-active a, mark-good a; b good: a 15/3/good, b 14/3/good, last a.
+        rec = inst.ab_record('a', {'a': 'good', 'b': 'good'})
+        self.assertEqual(ref_record(rec), ('_a', {'a': (15, 3, 1), 'b': (14, 3, 1)}))
+        self.assertEqual(ref_record(inst.ab_record('b', {'a': 'bad', 'b': 'good'})),
+                         ('_b', {'a': (0, 0, 0), 'b': (15, 3, 1)}))
+        self.assertEqual(ref_record(inst.ab_record('a', {'a': 'good', 'b': 'trial 0'}))[1]['b'], (0, 0, 0))
+        self.assertEqual(inst.ab_decode(rec), {'last': 'a', 'a': (15, 3, 1), 'b': (14, 3, 1)})
+
+    def test_area(self):
+        self.assertTrue(inst.area_free(bytes(2048)))
+        self.assertTrue(inst.area_free(inst.ab_record('a', {}) + bytes(2016)))
+        bad = bytearray(inst.ab_record('a', {}) + bytes(2016))
+        bad[12] ^= 1
+        self.assertFalse(inst.area_free(bytes(bad)))
+        self.assertFalse(inst.area_free(bytes(100) + b'x' + bytes(1947)))
+
+    def test_label(self):
+        self.assertEqual(inst.slot_label('techo5 rootfs v1.5.0 built 2026-01-05 10:00 UTC'), '5 Jan 2026')
+        self.assertIsNone(inst.slot_label('techo5 rootfs dev'))
+        self.assertIsNone(inst.slot_label(None))
 
 
 class TargetCheck(unittest.TestCase):

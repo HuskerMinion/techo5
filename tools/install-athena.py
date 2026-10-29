@@ -11,6 +11,8 @@ one folder on userdata (userdata/techo5); nothing else of Fire OS's data is touc
     python3 tools/install-athena.py --release v1.4.0 --name Kitchen --wifi MyNetwork
     python3 tools/install-athena.py --image system.img --boot boot.img --dry-run
     python3 tools/install-athena.py --kernel amazon --image system.img
+    python3 tools/install-athena.py --boot-layer --release v1.4.0
+    python3 tools/install-athena.py --boot-layer-off
 
 The kernel's speaker amp needs Amazon's tuning for it (a TI TAS5805M register sequence). TECHO5
 doesn't ship it: Amazon's kernel on the unit's own `boot` partition carries it. The installer reads it
@@ -47,12 +49,22 @@ recovery). Each step is checked before the next:
                starts; the install watches for the daemon over the USB serial console
 
 Writes go to two partitions, system (p21) and boot (p20), and only after the partition table names
-them so. Never tee1 or tee1_real (the unlock: writing them bricks the unit), lk, lk_real, lk2_real,
-preloader, boot0, recovery (TWRP), vendor or anything else.
+them so; --boot-layer also writes misc (p6), the 32 bytes of the A/B record and nothing else. Never tee1
+or tee1_real (the unlock: writing them bricks the unit), lk, lk_real, lk2_real, preloader, boot0,
+recovery (TWRP), vendor or anything else.
 
 Windows, Linux and macOS alike; needs Python 3 and adb. The Home Assistant key is kept in
 backups/<serial>/home-assistant.key; a unit that already has one keeps it, so Home Assistant keeps the
 device. The way back to Fire OS is printed at the end, and in docs/install-athena.md.
+
+`--boot-layer` (opt-in) moves a unit that already runs TECHO5's mainline kernel to the boot layer:
+TECHO5's U-Boot in `boot`, an A/B record in `misc`, and each slot starting its own kernel from the
+store. It keeps the store, both slots and the settings, and works in this order: boot and misc saved
+into backups/<serial>/boot-layer/; the record written, the slot running now good; each slot's kernel
+put at slots/<x>/boot/boot.img (its rootfs's own, else the kernel in boot today); then U-Boot, packed
+into the release's boot image with the unit's amp tuning filled in as for the kernel, written to
+boot. `--boot-layer-off` is the way back: the saved kernel back in boot, the record cleared.
+docs/install-athena.md, "The boot layer".
 
 `--show-amp-tables <stock boot image>` reads a Fire OS boot image on this computer and prints the amp
 tunings found in it and their sha256, to add a firmware version this installer doesn't know yet. It
@@ -65,6 +77,7 @@ import os
 import re
 import shutil
 import struct
+import subprocess
 import sys
 import time
 import zlib
@@ -105,7 +118,8 @@ LAYOUT = {
 USERDATA = 23
 
 # Never written, whatever a table says: the unlock (tee1, and the original lk it replaces), the real
-# bootloader and TEE it loads, the boot ROM's area, TWRP, the drivers.
+# bootloader and TEE it loads, the boot ROM's area, TWRP, the drivers. misc is written by nothing but the
+# boot layer's record (write_record, clear_record): its 32 bytes at byte 2048, with --boot-layer.
 PROTECTED = {'tee1', 'tee2', 'tee1_real', 'tee2_real', 'lk', 'lk2', 'lk_real', 'lk2_real', 'boot0', 'boot1',
              'preloader', 'recovery', 'vendor', 'kb', 'dkb', 'persist', 'misc', 'nvcfg', 'boot_para',
              'metadata', 'spmfw', 'sspm_1', 'userdata'}
@@ -941,6 +955,548 @@ def write_partition(adb, parts, n, image, want):
          '   (see the way back in docs/install-athena.md).' % name)
 
 
+# ------------------------------------------------------------------------------------------ the boot layer
+#
+# The boot layer (opt-in; issue #336, tools/linux/README.md, docs/install-athena.md "The boot layer"):
+# TECHO5's U-Boot with abboot in boot (p20) in place of the kernel. It keeps an A/B record in misc,
+# picks the slot, counts its tries and starts that slot's own kernel from slots/<x>/boot/boot.img on
+# the store. --boot-layer moves a unit that runs TECHO5's mainline kernel there, keeping its store and
+# both slots; --boot-layer-off puts the kernel it ran before back. U-Boot is built by the release
+# workflow (tools/linux/athena/uboot/build.sh) and packed here, by u-boot-amazon-echo's pack-uboot.py,
+# into the release's own boot image shape, so its device tree holds the tuning slot the installer fills.
+
+MISC = 6
+# The A/B record: 32 bytes at byte 2048 of misc, the layout of AOSP's bootloader_control
+# (u-boot-amazon-echo SPEC.md, "The A/B record"). Bytes 2048-4095 hold the record and nothing else.
+RECORD_AT = 2048
+AREA_SIZE = 2048
+AB_MAGIC = 0x42414342
+PACKER = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'linux', 'athena', 'uboot', 'pack-uboot.py')
+# Where the store is mounted in TWRP while the slots' boot files are put in.
+STORE_MNT = '/tmp/t5-store'
+# What a store's /init and a slot's boot.sh must hold to run under the boot layer (#338): /init boots
+# the slot named by ab.slot= and feeds the watchdog, boot.sh marks the slot good and keeps the kernel
+# update off.
+STORE_NEEDS = (('init', 't5_ab_slot'), ('lib/techo5-lib.sh', 't5_watchdog'))
+SLOT_NEEDS = ('etc/techo5/boot.sh', 't5_boot_layer')
+SLOT_KERNEL = 'usr/share/techo5/kernel/boot-athena.img'
+HDR_ARGS = 'usr/share/techo5/kernel/boot-header-args'
+
+
+def uboot_name(version):
+    """What a release calls athena's U-Boot (the boot layer), as CI built it."""
+    return 'techo5-uboot-athena-%s.bin' % version
+
+
+def ab_crc(b):
+    return zlib.crc32(bytes(b[:28])) & 0xffffffff
+
+
+def ab_decode(raw):
+    """{'last': 'a'|'b'|'-', 'a': (priority, tries, successful), 'b': ...} of a valid record, else None."""
+    if len(raw) < 32 or struct.unpack_from('<I', raw, 4)[0] != AB_MAGIC:
+        return None
+    if struct.unpack_from('<I', raw, 28)[0] != ab_crc(raw):
+        return None
+    if raw[8] != 1 or (raw[9] & 7) < 2:
+        return None
+    rec = {'last': chr(raw[1]) if raw[0:1] == b'_' and raw[1:2] in (b'a', b'b') else '-'}
+    for i, s in enumerate('ab'):
+        b = raw[12 + 2 * i]
+        rec[s] = (b & 15, (b >> 4) & 7, b >> 7)
+    return rec
+
+
+def ab_record(current, states):
+    """The record a unit moving to the boot layer starts with: what bootctl init, set-active <current>
+    and mark-good <current> leave, the running slot good and first; the other slot as its files on the
+    store say (slotctl's slots/<x>.state): good, on trial with the tries it has left, or not bootable.
+    states maps a slot to good, 'trial N', bad or none (empty, or not fit for the boot layer)."""
+    slots = {}
+    for s in 'ab':
+        st = states.get(s, 'none')
+        if s == current:
+            slots[s] = (15, 3, 1)
+        elif st == 'good':
+            slots[s] = (14, 3, 1)
+        elif re.fullmatch(r'trial [1-7]', st):
+            slots[s] = (14, int(st.split()[1]), 0)
+        else:
+            slots[s] = (0, 0, 0)
+    b = bytearray(32)
+    b[0:4] = b'_' + current.encode() + b'\0\0'
+    struct.pack_into('<I', b, 4, AB_MAGIC)
+    b[8], b[9] = 1, 2
+    for i, s in enumerate('ab'):
+        p, t, ok = slots[s]
+        b[12 + 2 * i] = p | t << 4 | (0x80 if ok else 0)
+    struct.pack_into('<I', b, 28, ab_crc(b))
+    return bytes(b)
+
+
+def ab_words(raw):
+    rec = ab_decode(raw)
+    if not rec:
+        return 'no record'
+    word = lambda x: 'bad' if not (x[0] and (x[2] or x[1])) else ('good' if x[2] else 'trial')  # noqa: E731
+    return ', '.join('slot %s %s (priority %d)' % (s, word(rec[s]), rec[s][0]) for s in 'ab')
+
+
+def misc_ok(adb, parts):
+    """misc, checked right before it is read for a write or written: partition 6, so named, a block
+    device that is no link to anything else. Only the record's 32 bytes are ever written."""
+    name = parts.get(MISC, ('(none)', 0))[0]
+    if name != 'misc':
+        fail('refusing to write: partition %d is %s, not misc' % (MISC, name))
+    d = dev(MISC)
+    out = adb.sh('[ -b {d} ] && echo BLOCK; readlink -f {d}; sed -n "s/^PARTNAME=//p" /sys/class/block/{m}p{n}/uevent'
+                 .format(d=d, m=MMC, n=MISC)).split('\n')
+    if len(out) < 3 or out[0] != 'BLOCK' or out[1] != d or out[2] != 'misc':
+        fail('refusing to write: %s is not the misc partition as expected (%s)' % (d, ' / '.join(out)))
+
+
+def read_area(adb, work):
+    """misc bytes 2048-4095, from the flash."""
+    tmp = os.path.join(work, 'athena-misc-area.bin')
+    adb.exec_out_to_file('sync; echo 3 > /proc/sys/vm/drop_caches; dd if=%s bs=%d skip=1 count=1 2>/dev/null'
+                         % (dev(MISC), AREA_SIZE), tmp)
+    data = read_file(tmp)
+    os.remove(tmp)
+    if len(data) != AREA_SIZE:
+        fail('reading misc gave %d bytes, not %d' % (len(data), AREA_SIZE))
+    return data
+
+
+def area_free(area):
+    """Whether the record may be written: the area is all zero, or holds a valid record (the SPEC's rule,
+    as bootctl keeps it). Other data there belongs to someone else and is never written over."""
+    return not any(area) or ab_decode(area) is not None
+
+
+def write_record(adb, parts, work, rec):
+    """The 32 bytes of the record into misc at byte 2048, nothing else, read back from the flash."""
+    misc_ok(adb, parts)
+    if not area_free(read_area(adb, work)):
+        fail('misc bytes 2048-4095 hold data that is not an A/B record; not writing over it')
+    tmp = os.path.join(work, 'athena-ab-record.bin')
+    with open(tmp, 'wb') as f:
+        f.write(rec)
+    remote = '/tmp/techo5-ab-record.bin'
+    adb.push(tmp, remote)
+    os.remove(tmp)
+    if first_word(adb.sh('sha256sum ' + remote)) != hashlib.sha256(rec).hexdigest():
+        fail('the A/B record changed on its way to the unit; nothing was written')
+    misc_ok(adb, parts)
+    adb.sh('dd if=%s of=%s bs=32 seek=%d count=1 conv=notrunc 2>/dev/null; sync; rm -f %s'
+           % (remote, dev(MISC), RECORD_AT // 32, remote))
+    if read_area(adb, work)[:32] != rec:
+        fail('misc did not read back with the A/B record written. Do not restart the unit from here: boot\n'
+             '   still holds the kernel, so it would start as before; run this again.')
+
+
+def clear_record(adb, parts, work):
+    """The record gone (the 32 bytes zero, as before the boot layer), where there is one. Returns whether
+    there was."""
+    misc_ok(adb, parts)
+    area = read_area(adb, work)
+    if ab_decode(area) is None:
+        return False
+    write_zero = os.path.join(work, 'athena-ab-zero.bin')
+    with open(write_zero, 'wb') as f:
+        f.write(bytes(32))
+    adb.push(write_zero, '/tmp/techo5-ab-zero.bin')
+    os.remove(write_zero)
+    misc_ok(adb, parts)
+    adb.sh('dd if=/tmp/techo5-ab-zero.bin of=%s bs=32 seek=%d count=1 conv=notrunc 2>/dev/null; sync; '
+           'rm -f /tmp/techo5-ab-zero.bin' % (dev(MISC), RECORD_AT // 32))
+    if any(read_area(adb, work)[:32]):
+        fail('misc did not read back with the A/B record cleared')
+    return True
+
+
+def boot_image_bytes(data, what):
+    """A boot image without the partition's padding after it: the header page, kernel and ramdisk (no
+    second stage or dtbo, as TECHO5's kernels have none), each to the page."""
+    img = BootImage(data, what)
+    if img.second_size or img.dtbo or img.dtb:
+        fail('%s has a second stage or a separate device tree; not a TECHO5 athena kernel' % what)
+    if img.stored_id() != img.computed_id():
+        fail('%s: its header id does not match its contents' % what)
+    return data[:img.ramdisk_at + (img.ramdisk_size + img.page - 1) // img.page * img.page]
+
+
+def check_uboot_bin(data, what):
+    if data[0x38:0x3c] != b'ARM\x64':
+        fail('%s has no arm64 Image header: it is not a U-Boot build LK can start' % what)
+    if UBOOT_MARKER not in data:
+        fail("%s does not carry %s: it is not TECHO5's athena U-Boot (tools/linux/athena/uboot/build.sh)"
+             % (what, UBOOT_MARKER.decode()))
+
+
+def pack_uboot(shipped_path, uboot_path, work):
+    """U-Boot as the kernel of the release's boot image (u-boot-amazon-echo's pack-uboot.py, a copy in
+    tools/linux/athena/uboot): its header, device tree (tuning slot empty) and ramdisk kept."""
+    out = os.path.join(work, 'athena-uboot-packed.img')
+    r = subprocess.run([sys.executable, '-I', PACKER, '--boot', shipped_path, '--uboot', uboot_path, '--out', out,
+                        '--marker', UBOOT_MARKER.decode()], stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+    if r.returncode != 0 or not os.path.exists(out):
+        fail('packing U-Boot into the boot image failed: %s' % r.stdout.decode('utf-8', 'replace').strip())
+    data = read_file(out)
+    os.remove(out)
+    return data
+
+
+def store_probe(adb, m):
+    """{key: value} of what the boot layer needs from the store mounted at m (read only)."""
+    lines = ['echo store=$([ -e {m}/.techo5-store ] && echo yes)',
+             "echo board=$(sed -n 's/^board=//p' {m}/.techo5-store 2>/dev/null | tail -1)",
+             'echo active=$(cat {m}/active 2>/dev/null)',
+             'echo bootctl=$([ -f {m}/usr/local/sbin/bootctl ] && echo yes)']
+    for i, (f, word) in enumerate(STORE_NEEDS):
+        lines.append("echo need%d=$(sed -n '/%s/{s/.*/yes/p;q}' {m}/%s 2>/dev/null)" % (i, word, f))
+    for s in 'ab':
+        r = '{m}/slots/' + s
+        lines += ['echo %s.dir=$([ -d %s ] && echo yes)' % (s, r),
+                  'echo %s.state=$(cat %s.state 2>/dev/null)' % (s, r),
+                  "echo %s.aware=$(sed -n '/%s/{s/.*/yes/p;q}' %s/%s 2>/dev/null)"
+                  % (s, SLOT_NEEDS[1], r, SLOT_NEEDS[0]),
+                  'echo %s.kernel=$([ -f %s/%s ] && echo yes)' % (s, r, SLOT_KERNEL),
+                  'echo %s.args=$([ -f %s/%s ] && echo yes)' % (s, r, HDR_ARGS),
+                  'echo %s.bootimg=$([ -f %s/boot/boot.img ] && echo yes)' % (s, r),
+                  'echo %s.label=$([ -s %s/boot/label ] && echo yes)' % (s, r),
+                  'echo %s.release=$(head -1 %s/etc/techo5-release 2>/dev/null)' % (s, r)]
+    out = adb.sh('; '.join(lines).replace('{m}', m))
+    return dict(line.split('=', 1) for line in out.split('\n') if '=' in line)
+
+
+def mount_store(adb, rw=False):
+    """Where the store (system, p21) can be read: (mount point, whether this installer mounted it). For
+    the checks, read-only: where TWRP has it mounted, else at STORE_MNT, read-only. Once the install is
+    confirmed, read-write at STORE_MNT, any mount TWRP made unmounted first."""
+    if not rw:
+        mounted = mounts_of(adb, dev(SYSTEM))
+        if mounted:
+            return mounted[0], False
+    unmount(adb, SYSTEM)
+    out = adb.sh('mkdir -p {m} && mount -t ext4 -o {o},noatime {d} {m} && echo MOUNTED'
+                 .format(m=STORE_MNT, o='rw' if rw else 'ro', d=dev(SYSTEM)))
+    if 'MOUNTED' not in out:
+        fail('the store (%s) could not be mounted in TWRP%s: %s' % (dev(SYSTEM), ' read-write' if rw else '', out))
+    return STORE_MNT, True
+
+
+def unmount_store(adb, check=False):
+    """The store unmounted; checked after it was written to, as grow_store does: TWRP's kernel may have
+    flagged it while it was mounted (#192), which e2fsck clears."""
+    adb.sh('sync; umount %s' % STORE_MNT)
+    if not check:
+        return
+    out = adb.sh('command -v e2fsck >/dev/null || { echo no-tools; exit; }; e2fsck -fy %s >/dev/null 2>&1; '
+                 '[ $? -le 1 ] || { echo e2fsck-failed; exit; }; e2fsck -fn %s >/dev/null 2>&1 && echo CLEAN'
+                 % (dev(SYSTEM), dev(SYSTEM)))
+    if 'CLEAN' in out:
+        note('store unmounted and checked clean')
+    else:
+        note('the store was not checked here (%s)' % (out.strip() or 'no answer'))
+
+
+def store_partuuid(adb, work):
+    """The store partition's GPT unique GUID, lower case, from the eMMC's GPT (what slotctl reads)."""
+    tmp = os.path.join(work, 'athena-gpt.bin')
+    adb.exec_out_to_file('dd if=/dev/block/%s bs=512 count=34 2>/dev/null' % MMC, tmp)
+    gpt = read_file(tmp)
+    os.remove(tmp)
+    if gpt[512:520] != b'EFI PART':
+        fail("the eMMC's GPT could not be read for the store's partition GUID")
+    lba, _, esize = struct.unpack_from('<QII', gpt, 512 + 72)
+    at = lba * 512 + (SYSTEM - 1) * esize
+    e = gpt[at + 16:at + 32]
+    if len(e) != 16 or not any(e):
+        fail("the store's entry in the eMMC's GPT could not be read")
+    h = e.hex()
+    le = lambda s: ''.join(reversed([s[i:i + 2] for i in range(0, len(s), 2)]))  # noqa: E731
+    return '%s-%s-%s-%s-%s' % (le(h[0:8]), le(h[8:12]), le(h[12:16]), h[16:20], h[20:32])
+
+
+def with_header_args(image, words):
+    """A boot image with words added to its header command line (slotctl's boot_image_with_args); the id
+    covers only the parts, so it stays right."""
+    cmd = image[64:576].split(b'\0')[0].decode('ascii', 'replace')
+    new = (cmd + ' ' if cmd else '') + words
+    if len(new) >= 512:
+        fail('the header command line would be too long with "%s"' % words)
+    out = bytearray(image)
+    out[64:576] = new.encode().ljust(512, b'\0')
+    return bytes(out)
+
+
+def slot_label(release):
+    """slotctl's label: the build date of etc/techo5-release's line, as '28 Oct 2026'."""
+    m = re.search(r' built (\d{4})-(\d{2})-(\d{2})', release or '')
+    if not m or not 1 <= int(m.group(2)) <= 12:
+        return None
+    month = 'Jan Feb Mar Apr May Jun Jul Aug Sep Oct Nov Dec'.split()[int(m.group(2)) - 1]
+    return '%d %s %s' % (int(m.group(3)), month, m.group(1))
+
+
+def slot_boot_files(adb, work, probe, slots, kernel_now):
+    """slots/<x>/boot/ for each slot, as slotctl puts them where there is a record: boot.img from the
+    rootfs's own kernel (a hard link, as slotctl makes it), else the kernel the unit runs today
+    (kernel_now, boot's image), and a label. A slot that has them keeps them. The store is mounted
+    read-write at STORE_MNT. Returns {slot: what its boot.img is}."""
+    done = {}
+    now_remote = None
+    uuid = None
+    for s in slots:
+        r = '%s/slots/%s' % (STORE_MNT, s)
+        if probe.get(s + '.bootimg') == 'yes':
+            done[s] = 'its own boot/boot.img, kept'
+        else:
+            adb.sh('mkdir -p %s/boot' % r)
+            if probe.get(s + '.kernel') == 'yes' and probe.get(s + '.args') == 'yes':
+                if uuid is None:
+                    uuid = store_partuuid(adb, work)
+                local = os.path.join(work, 'athena-slot-kernel.img')
+                adb.exec_out_to_file('cat %s/%s' % (r, SLOT_KERNEL), local)
+                words = ' '.join(adb.sh('cat %s/%s' % (r, HDR_ARGS)).replace('@STORE_PARTUUID@', uuid).split())
+                img = with_header_args(read_file(local), words)
+                with open(local, 'wb') as f:
+                    f.write(img)
+                want = hashlib.sha256(img).hexdigest()
+                adb.push(local, r + '/boot/boot.img.tmp')
+                os.remove(local)
+                adb.sh('mv -f %s/boot/boot.img.tmp %s/boot/boot.img' % (r, r))
+                done[s] = 'the rootfs\'s own kernel, its header with "%s"' % words
+            elif probe.get(s + '.kernel') == 'yes':
+                want = first_word(adb.sh('sha256sum %s/%s' % (r, SLOT_KERNEL)))
+                adb.sh('ln -f {r}/{k} {r}/boot/boot.img 2>/dev/null || cp {r}/{k} {r}/boot/boot.img'
+                       .format(r=r, k=SLOT_KERNEL))
+                done[s] = "the rootfs's own kernel"
+            else:
+                want = hashlib.sha256(kernel_now).hexdigest()
+                if now_remote is None:
+                    local = os.path.join(work, 'athena-kernel-now.img')
+                    with open(local, 'wb') as f:
+                        f.write(kernel_now)
+                    now_remote = '/tmp/techo5-kernel-now.img'
+                    adb.push(local, now_remote)
+                    os.remove(local)
+                    if first_word(adb.sh('sha256sum ' + now_remote)) != want:
+                        fail('the kernel changed on its way to the unit; the boot partition is not written')
+                adb.sh('cp %s %s/boot/boot.img.tmp && mv -f %s/boot/boot.img.tmp %s/boot/boot.img'
+                       % (now_remote, r, r, r))
+                done[s] = 'the kernel the unit runs today (no kernel in this rootfs)'
+            adb.sh('sync')
+            if first_word(adb.sh('sha256sum %s/boot/boot.img' % r)) != want:
+                fail("slot %s's boot/boot.img did not check out; the boot partition is not written" % s)
+        label = slot_label(probe.get(s + '.release'))
+        if probe.get(s + '.label') != 'yes' and label:
+            put_file(adb, work, label + '\n', r + '/boot/label', '644')
+    if now_remote:
+        adb.sh('rm -f ' + now_remote)
+    adb.sh('sync')
+    return done
+
+
+def boot_layer_install(a, adb, parts, backup, current_boot):
+    """--boot-layer: in order, the backup of boot and misc, the A/B record, the slots' boot files, then
+    U-Boot in boot. Nothing on the unit changes before the install is confirmed."""
+    # ------------------------------------------------------------------------------------ checks
+    if is_techo5_uboot(current_boot):
+        fail("boot (p%d) already holds TECHO5's U-Boot: the unit is on the boot layer. To go back, run this\n"
+             '   with --boot-layer-off.' % BOOT)
+    if not is_techo5_boot(current_boot):
+        fail("boot (p%d) holds Amazon's kernel: the boot layer moves a unit that runs TECHO5's mainline kernel.\n"
+             '   Install TECHO5 first (this installer without --boot-layer), let slot a commit, then run this.'
+             % BOOT)
+    kernel_now = boot_image_bytes(current_boot, 'the kernel in boot')
+    table = read_slot(kernel_now)
+    if table is None:
+        fail('the kernel in boot carries no amp tuning in its slot; install TECHO5 again first')
+    known = KNOWN_AMP_TABLES.get(hashlib.sha256(table).hexdigest())
+    note("boot holds TECHO5's kernel; its amp tuning: %s, %d bytes" % (known[1] if known else 'not one this installer '
+         'knows, kept as the unit has it', len(table)))
+    mnt, ours = mount_store(adb)
+    try:
+        probe = store_probe(adb, mnt)
+    finally:
+        if ours:
+            unmount_store(adb)
+    if probe.get('store') != 'yes':
+        fail('system (p%d) holds no TECHO5 store' % SYSTEM)
+    if probe.get('board') not in ('', 'athena'):
+        fail("the store is for board '%s', not athena" % probe.get('board'))
+    if not (probe.get('bootctl') == 'yes' and probe.get('need0') == 'yes' and probe.get('need1') == 'yes'):
+        fail("the store's /init does not know the boot layer yet (it would not boot the slot U-Boot picks, nor\n"
+             '   feed its watchdog). Install a release that does with this installer first (the store is\n'
+             '   written again), let it commit, then run this.')
+    cur = probe.get('active')
+    if cur not in ('a', 'b') or probe.get(cur + '.dir') != 'yes':
+        fail("the store names no active slot ('%s')" % cur)
+    if probe.get(cur + '.state') != 'good':
+        fail("slot %s, the one the unit runs, is '%s', not good: let it commit (five healthy minutes) first"
+             % (cur, probe.get(cur + '.state') or 'none'))
+    if probe.get(cur + '.aware') != 'yes':
+        fail('slot %s holds a release that does not know the boot layer; update it first, then run this' % cur)
+    states = {}
+    slots = []
+    for s in 'ab':
+        if probe.get(s + '.dir') != 'yes':
+            continue
+        st = probe.get(s + '.state') or 'none'
+        if probe.get(s + '.aware') != 'yes':
+            note("slot %s (%s, %s) does not know the boot layer: the record marks it bad, so U-Boot never starts\n"
+                 '   it; an update puts a release there that does' % (s, probe.get(s + '.release') or '-', st))
+            st = 'bad'
+        states[s] = st
+        slots.append(s)
+    rec = ab_record(cur, states)
+    misc_ok(adb, parts)
+    if not area_free(read_area(adb, a.work)):
+        fail('misc bytes 2048-4095 hold data that is not an A/B record; the boot layer cannot keep its record there')
+    for s in slots:
+        what = ('boot/boot.img there, kept' if probe.get(s + '.bootimg') == 'yes' else
+                "the rootfs's own kernel" if probe.get(s + '.kernel') == 'yes' else 'the kernel the unit runs today')
+        note('slot %s: %s, %s; its kernel: %s' % (s, probe.get(s + '.release') or '-', states[s], what))
+    note('the record: %s (slot %s runs now)' % (ab_words(rec), cur))
+
+    # ------------------------------------------------------------------------------------ images
+    step('the images')
+    if a.uboot:
+        uboot_src, boot_src, version = os.path.abspath(a.uboot), os.path.abspath(a.boot), 'your build'
+        note('U-Boot: your own, %s; packed into %s' % (uboot_src, boot_src))
+    else:
+        rel = Release(REPO, a.release, a.work)
+        version = rel.version
+        uboot_src = rel.asset(uboot_name(rel.version))
+        boot_src = rel.asset(boot_name(rel.version))
+        note('%s and %s checked against the signed manifest'
+             % (os.path.basename(uboot_src), os.path.basename(boot_src)))
+    check_uboot_bin(read_file(uboot_src), os.path.basename(uboot_src))
+    check_techo5_boot(read_file(boot_src), os.path.basename(boot_src))
+    packed = pack_uboot(boot_src, uboot_src, a.work)
+    if not is_techo5_uboot(packed):
+        fail("the packed image is not recognised as TECHO5's U-Boot; nothing was written")
+    filled = fill_slot(packed, table, 'the packed U-Boot image')
+    if read_slot(filled) != table or BootImage(filled).stored_id() != BootImage(filled).computed_id():
+        fail('the filled U-Boot image does not check out; nothing was written')
+    if len(filled) > parts[BOOT][1]:
+        fail('the U-Boot image (%d bytes) is larger than the boot partition' % len(filled))
+    uboot_image = os.path.join(a.work, 'athena-uboot-filled.img')
+    with open(uboot_image, 'wb') as f:
+        f.write(filled)
+    uboot_want = hashlib.sha256(filled).hexdigest()
+    note("U-Boot packed in %s's shape, the unit's amp tuning in its slot: %d bytes, sha256 %s"
+         % (os.path.basename(boot_src), len(filled), uboot_want))
+
+    if a.dry_run:
+        print('\nDry run: the unit and the images check out; nothing was written to the unit.')
+        return
+    folder = os.path.join(backup, 'boot-layer')
+    lines = ["About to put the boot layer (%s) on %s (%s), from TWRP:" % (version, a.serial, BOARD_NAME),
+             '  1. save boot and misc as they are now into %s;' % folder,
+             '  2. write the A/B record into misc (%s, 32 bytes at byte 2048);' % ab_words(rec),
+             "  3. put each slot's kernel at slots/<x>/boot/boot.img on the store;",
+             "  4. write TECHO5's U-Boot to the boot partition (%s), in place of the kernel." % dev(BOOT),
+             'The slots, userdata, recovery (TWRP) and the unlock are not touched otherwise. The way back:',
+             'this installer with --boot-layer-off.']
+    confirm(a.force, lines)
+
+    # ------------------------------------------------------------------------------------ 1. backup
+    step('backup of boot and misc')
+    os.makedirs(folder, exist_ok=True)
+    saved = []
+    for n, name in ((BOOT, 'boot'), (MISC, 'misc')):
+        path = read_partition(adb, n, parts[n][1], os.path.join(folder, 'p%d-%s.img' % (n, name)))
+        saved.append('%s  %s' % (sha256_file(path), os.path.basename(path)))
+    with open(os.path.join(folder, 'SHA256SUMS'), 'w') as f:
+        f.write('\n'.join(saved) + '\n')
+    if read_file(os.path.join(folder, 'p%d-boot.img' % BOOT)) != current_boot:
+        fail('boot changed since it was read; nothing was written')
+    note('boot and misc saved, checked by sha256: %s' % folder)
+
+    # ------------------------------------------------------------------------------------ 2. record
+    step('the A/B record')
+    write_record(adb, parts, a.work, rec)
+    note('misc: the record written and read back (%s)' % ab_words(rec))
+
+    # ------------------------------------------------------------------------------------ 3. slots
+    step("the slots' kernels")
+    mount_store(adb, rw=True)
+    try:
+        done = slot_boot_files(adb, a.work, probe, slots, kernel_now)
+    finally:
+        unmount_store(adb, check=True)
+    for s in slots:
+        note('slot %s: boot/boot.img: %s' % (s, done[s]))
+
+    # ------------------------------------------------------------------------------------ 4. boot
+    step('write the boot partition')
+    again = os.path.join(a.work, 'athena-boot-now.img')
+    if read_file(read_partition(adb, BOOT, parts[BOOT][1], again)) != current_boot:
+        fail('boot changed since it was saved; not writing it')
+    os.remove(again)
+    tries = write_partition(adb, parts, BOOT, uboot_image, uboot_want)
+    note("%s: TECHO5's U-Boot written and read back from the flash (sha256 matches%s)"
+         % (dev(BOOT), '' if tries == 1 else ', second try'))
+
+    step('first boot')
+    adb.reboot()
+    note('restarting: U-Boot shows its menu for 5 seconds (Volume Up or Down moves the bar, both together '
+         'start the slot), then starts slot %s' % cur)
+    if not a.no_watch:
+        console = Console(a.serial, CONSOLE_TECHO5)
+        deadline = time.time() + 300
+        seen = ''
+        while time.time() < deadline:
+            seen = console.run('echo ab=$(sed -n "s/.*ab\\.slot=\\([ab]\\).*/\\1/p" /proc/cmdline)- '
+                               'daemon=$(pidof techo5)-', 4) or ''
+            if re.search(r'ab=[ab]- daemon=\d', seen):
+                break
+            time.sleep(5)
+        if re.search(r'ab=[ab]- daemon=\d', seen):
+            note('the boot layer started slot %s, and TECHO5 runs' % re.search(r'ab=([ab])-', seen).group(1))
+        else:
+            note('the USB serial console did not show a slot started by the boot layer within 5 minutes. That may\n'
+                 "   only be this computer not seeing the console: the Show's screen says what it is doing.")
+    print('\nDone: %s starts from the boot layer. The way back:\n'
+          '    python3 tools/install-athena.py --boot-layer-off\n'
+          '(from TWRP: hold Volume Up while the unit powers on). It writes %s back to boot and clears the\n'
+          'record; docs/install-athena.md, "The boot layer", has the way by hand.'
+          % (a.serial, os.path.join(folder, 'p%d-boot.img' % BOOT)))
+
+
+def boot_layer_off(a, adb, parts, backup, current_boot):
+    """--boot-layer-off: the kernel the unit ran before --boot-layer back in boot, and the record cleared."""
+    folder = os.path.join(backup, 'boot-layer')
+    saved = os.path.join(folder, 'p%d-boot.img' % BOOT)
+    if not is_techo5_uboot(current_boot):
+        fail("boot (p%d) does not hold TECHO5's U-Boot: the unit is not on the boot layer, so there is nothing to "
+             'undo' % BOOT)
+    if not os.path.exists(saved):
+        fail('there is no %s, the boot partition saved by --boot-layer. Install TECHO5 again with\n'
+             '   --replace-uboot instead: it writes the release\'s kernel over U-Boot (and the store afresh).' % saved)
+    old = read_file(saved)
+    if is_techo5_uboot(old) or not is_techo5_boot(old) or read_slot(boot_image_bytes(old, saved)) is None:
+        fail("%s is not TECHO5's kernel with its amp tuning; not writing it" % saved)
+    note('%s: the kernel the unit ran before the boot layer' % saved)
+    if a.dry_run:
+        print('\nDry run: the unit and the backup check out; nothing was written to the unit.')
+        return
+    confirm(a.force, ['About to take the boot layer off %s (%s), from TWRP:' % (a.serial, BOARD_NAME),
+                      '  1. write %s back to the boot partition (%s);' % (saved, dev(BOOT)),
+                      '  2. clear the A/B record in misc.',
+                      'The slots keep their files; the kernel in boot starts the active slot, as before.'])
+    step('write the boot partition')
+    tries = write_partition(adb, parts, BOOT, saved, sha256_file(saved))
+    note('%s: the kernel written back and read back from the flash (sha256 matches%s)'
+         % (dev(BOOT), '' if tries == 1 else ', second try'))
+    step('the A/B record')
+    note('misc: the record cleared' if clear_record(adb, parts, a.work) else 'misc: there was no record')
+    adb.reboot()
+    print('\nDone: %s starts its kernel from boot again, without the boot layer.' % a.serial)
+
+
 # ------------------------------------------------------------------------------------------ settings
 
 def unit_file(adb, path):
@@ -1054,6 +1610,13 @@ def main(argv=None):
     ap.add_argument('--force', action='store_true', help='do not ask before writing')
     ap.add_argument('--replace-uboot', action='store_true',
                     help="write the kernel over TECHO5's U-Boot in boot (p20): back to the layout without U-Boot")
+    ap.add_argument('--boot-layer', action='store_true',
+                    help="opt-in: move a unit running TECHO5's mainline kernel to the boot layer (U-Boot in boot, "
+                    'an A/B record in misc, each slot its own kernel); its store and slots are kept')
+    ap.add_argument('--boot-layer-off', action='store_true',
+                    help='the way back from --boot-layer: the kernel saved then back in boot, the record cleared')
+    ap.add_argument('--uboot',
+                    help='with --boot-layer and --boot: a U-Boot you built (tools/linux/athena/uboot/build.sh)')
     ap.add_argument('--no-watch', action='store_true', help='restart the unit and stop; do not watch the first boot')
     ap.add_argument('--show-amp-tables', metavar='BOOT_IMG',
                     help="print the amp tunings in a Fire OS boot image and their sha256; needs no unit")
@@ -1071,13 +1634,26 @@ def main(argv=None):
     # ------------------------------------------------------------------------------------ 1. checks
     step('checks')
     need(a.adb, 'install the Android platform tools (adb)')
-    for opt in ('image', 'boot', 'stock_boot'):
+    for opt in ('image', 'boot', 'stock_boot', 'uboot'):
         path = getattr(a, opt)
         if path and not os.path.exists(path):
             fail('no file at %s' % path)
     if a.boot and not mainline:
         fail('--boot is for the mainline kernel; --kernel amazon leaves boot as it is')
-    if mainline and bool(a.image) != bool(a.boot):
+    layer = a.boot_layer or a.boot_layer_off
+    if a.boot_layer and a.boot_layer_off:
+        fail('--boot-layer or --boot-layer-off, not both')
+    if layer and (a.image or not mainline or a.stock_boot or a.replace_uboot):
+        fail('--boot-layer and --boot-layer-off write boot and misc only: not with --image, --kernel amazon,\n'
+             '   --stock-boot or --replace-uboot')
+    if a.uboot and not a.boot_layer:
+        fail('--uboot goes with --boot-layer')
+    if a.boot_layer_off and a.boot:
+        fail('--boot-layer-off writes back the kernel --boot-layer saved; it takes no --boot')
+    if a.boot_layer and bool(a.uboot) != bool(a.boot):
+        fail('give both --uboot and --boot (your builds: U-Boot is packed into that boot image), or neither '
+             "(the release's)")
+    if mainline and not layer and bool(a.image) != bool(a.boot):
         fail('give both --image and --boot (images you built), or neither (the release\'s): a store and a '
              'kernel from different builds may not fit')
     a.serial = pick_unit(a.serial, a.adb, ('recovery',), 'Echo Show 8 in TWRP')
@@ -1097,9 +1673,15 @@ def main(argv=None):
     note('%s: an athena in TWRP; boot is %s, system %s (%d MiB)' % (a.serial, dev(BOOT), dev(SYSTEM),
                                                                     parts[SYSTEM][1] >> 20))
     os.makedirs(a.work, exist_ok=True)
-    if mainline:
+    if mainline and not layer:
         note(check_panel(*panel_of(adb, a.work), force=a.force_panel))
     backup = os.path.join(a.backups, a.serial)
+    if layer:
+        # The boot layer changes boot and misc, and the slots' boot/ folders on the store; nothing else.
+        current_boot = read_file(read_partition(adb, BOOT, parts[BOOT][1], os.path.join(a.work, 'athena-boot-now.img')))
+        os.remove(os.path.join(a.work, 'athena-boot-now.img'))
+        (boot_layer_install if a.boot_layer else boot_layer_off)(a, adb, parts, backup, current_boot)
+        return
     key_file = a.key_file or os.path.join(backup, 'home-assistant.key')
     pub = None
     if a.ssh_key:
@@ -1157,13 +1739,16 @@ def main(argv=None):
     # What boot holds now, read fresh (the backup may be older than the last install).
     current_boot = read_file(read_partition(adb, BOOT, parts[BOOT][1], os.path.join(a.work, 'athena-boot-now.img')))
     os.remove(os.path.join(a.work, 'athena-boot-now.img'))
-    if is_techo5_uboot(current_boot) and not a.replace_uboot:
+    replacing_uboot = is_techo5_uboot(current_boot)
+    if replacing_uboot and not (a.replace_uboot and mainline):
         fail("boot (p%d) holds TECHO5's U-Boot, which starts each slot's own kernel: this installer would\n"
              "   put a kernel over it. Install the store from the unit instead (slotctl install), or, to go\n"
-             "   back to booting a kernel from p%d without U-Boot, run this again with --replace-uboot."
+             "   back to booting a kernel from p%d without U-Boot, run this again with --boot-layer-off (the\n"
+             "   kernel and slots kept), or with --replace-uboot (a fresh install, the record cleared)."
              % (BOOT, BOOT))
     boot_is_techo5 = is_techo5_boot(current_boot)
-    note('boot now holds %s' % ("TECHO5's mainline kernel" if boot_is_techo5 else "Amazon's kernel"))
+    note('boot now holds %s' % ("TECHO5's U-Boot (replaced: --replace-uboot)" if replacing_uboot else
+                                "TECHO5's mainline kernel" if boot_is_techo5 else "Amazon's kernel"))
     # A backup made with TECHO5 already on the unit holds TECHO5, not Fire OS.
     backup_not_fire_os = os.path.exists(saved_boot) and is_techo5_boot(read_file(saved_boot))
     if backup_not_fire_os:
@@ -1266,6 +1851,8 @@ def main(argv=None):
         step('write the boot partition')
         tries = write_partition(adb, parts, BOOT, boot_image, boot_want)
         note('%s written and read back from the flash (sha256 matches%s)' % (dev(BOOT), '' if tries == 1 else ', second try'))
+        if replacing_uboot and clear_record(adb, parts, a.work):
+            note("misc: the boot layer's A/B record cleared (U-Boot is gone)")
 
     # ------------------------------------------------------------------------------------ 6. settings
     step('settings')
