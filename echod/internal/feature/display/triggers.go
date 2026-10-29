@@ -18,8 +18,8 @@ import (
 
 // The Screen language row's choices. Match all is first, and is what a device comes up in.
 var (
-	langOptions = []string{"Match all", "English", "Deutsch", "Español", "Français", "Italiano", "Nederlands", "Português", "Русский", "日本語"}
-	langCodes   = []string{triggers.MatchAll, "en", "de", "es", "fr", "it", "nl", "pt", "ru", "ja"}
+	langOptions = []string{"Match all", "English", "Deutsch", "Español", "Français", "Italiano", "Nederlands", "Português", "Русский", "Türkçe", "日本語"}
+	langCodes   = []string{triggers.MatchAll, "en", "de", "es", "fr", "it", "nl", "pt", "ru", "tr", "ja"}
 )
 
 func langIndex() int {

@@ -116,6 +116,18 @@ var updateTranslations = map[string]map[string]string{
 		UpdatePowerHint:    "Не выключайте устройство",
 		UpdateRetryHint:    "Повторите попытку: Settings > General > Updates",
 	},
+	"tr": {
+		UpdateSystemTitle:  "Sistem güncellemesi",
+		UpdateFailedTitle:  "Güncelleme başarısız",
+		UpdateDownloading:  "Güncelleme indiriliyor · %d%%",
+		UpdateInstalling:   "Kuruluyor…",
+		UpdateRestartingIn: "Uygulama %d saniye içinde yeniden başlayacak…",
+		UpdateRestarting:   "Yeniden başlatılıyor…",
+		UpdateRebootingIn:  "%d saniye içinde yeniden başlatılacak…",
+		UpdateRebooting:    "Yeniden başlatılıyor…",
+		UpdatePowerHint:    "Cihazı açık tutun",
+		UpdateRetryHint:    "Tekrar deneyin: Settings > General > Updates",
+	},
 }
 
 // UpdateText returns one string from the update dialog in the requested screen language. English is
