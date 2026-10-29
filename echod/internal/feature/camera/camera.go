@@ -166,15 +166,22 @@ var encoded struct {
 }
 
 // encodeFrame is a frame, streamed or still, as a JPEG where fullPages. On the 2nd gen Show 8 with its
-// JPEG encoder (hwEncode), the cores develop it at full size straight into the encoder's YUYV buffer
-// (FullYUYV) and the encoder makes the JPEG at qualityEncoder: a fraction of the time, and of the
-// power, the cores take to encode it. Elsewhere, or if the encoder fails a picture, it is developed on
-// the cores (Full) and encoded in strips across them (encodeStripes) at qualityFull.
+// JPEG encoder (hwEncode), the GPU develops it at full size into a buffer of its own that the encoder
+// reads in place (inPlaceEncoders, encodeOnGPU), so its pixels never pass through the cores. Where the
+// GPU can't, the cores develop it straight into the encoder's YUYV buffer (FullYUYV), as before. Either
+// way the encoder makes the JPEG at qualityEncoder: a fraction of the time, and of the power, the cores
+// take to encode it. Elsewhere, or if the encoder fails a picture, it is developed on the cores (Full)
+// and encoded in strips across them (encodeStripes) at qualityFull.
 //
 // The black frame of a stopped sensor has no size for the encoder, and goes the cores' way quietly. A
 // failing encoder is logged once a minute at most, and left alone a minute by jpegenc (ErrBackingOff).
 func encodeFrame(f *camera.Frame) ([]byte, error) {
 	if hwEncode && !f.Blank() {
+		for _, enc := range inPlaceEncoders {
+			if b, ok := enc(f); ok {
+				return b, nil
+			}
+		}
 		b, err := encodeOnEncoder(f)
 		if err == nil {
 			return b, nil
@@ -184,20 +191,83 @@ func encodeFrame(f *camera.Frame) ([]byte, error) {
 	return encodeStripes(f.Full(), qualityFull)
 }
 
-// hwWarned is when a failing encoder was last logged.
-var hwWarned atomic.Int64
+// inPlaceEncoders make a frame's JPEG on the encoder without the cores touching its pixels, tried in
+// order before encodeOnEncoder; ok is false to go on to the next, and then to encodeOnEncoder.
+var inPlaceEncoders = []func(f *camera.Frame) (jpeg []byte, ok bool){encodeOnGPU}
+
+// gpuFrame is a frame the GPU can develop into a buffer the encoder reads in place: the Show's
+// (camera.Frame.GPUYUYV).
+type gpuFrame interface {
+	GPUYUYV() (fd, stride, w, h int, ok bool)
+}
+
+// gpuPipe keeps a frame's development on the GPU and its encode together, one frame at a time: the
+// GPU's buffer is reused by the next development. gpuRest is until when frames are left to the cores
+// after the GPU or the encoder could not take one, so a path that fails costs a frame a minute at most.
+var (
+	gpuPipe sync.Mutex
+	gpuRest time.Time
+)
+
+// gpuRestFor is how long frames go the cores' way after the GPU's path failed one.
+const gpuRestFor = time.Minute
+
+// encodeDMABuf is the encoder reading a picture from a dmabuf; tests replace it.
+var encodeDMABuf = jpegenc.EncodeDMABuf
+
+// encodeOnGPU is a frame developed by the GPU and encoded in place by the JPEG encoder at
+// qualityEncoder. ok is false where the GPU does not develop it (no GPU helper, or it failed) or the
+// encoder fails it (logged once a minute at most), and for gpuRestFor after either, for
+// encodeOnEncoder.
+func encodeOnGPU(f *camera.Frame) ([]byte, bool) {
+	g, ok := any(f).(gpuFrame)
+	if !ok {
+		return nil, false
+	}
+	return encodeGPUFrame(g, time.Now)
+}
+
+func encodeGPUFrame(g gpuFrame, now func() time.Time) ([]byte, bool) {
+	gpuPipe.Lock()
+	defer gpuPipe.Unlock()
+	if now().Before(gpuRest) {
+		return nil, false
+	}
+	fd, stride, w, h, ok := g.GPUYUYV()
+	if !ok {
+		gpuRest = now().Add(gpuRestFor)
+		return nil, false
+	}
+	b, err := encodeDMABuf(fd, w, h, stride, qualityEncoder)
+	if err != nil {
+		gpuRest = now().Add(gpuRestFor)
+		warnOnceAMinute(&gpuWarned, err, now(), "camera: hardware jpeg of the GPU's picture failed, developing on the cores")
+		return nil, false
+	}
+	return b, true
+}
+
+// hwWarned and gpuWarned are when a failing encoder was last logged, on its own and reading the
+// GPU's picture.
+var hwWarned, gpuWarned atomic.Int64
 
 // hwFailure logs a picture the encoder failed, once a minute at most, and not the pictures refused while
 // jpegenc backs off after it; it reports whether it logged.
 func hwFailure(err error, now time.Time) bool {
+	return warnOnceAMinute(&hwWarned, err, now, "camera: hardware jpeg failed, encoding on the cores")
+}
+
+// warnOnceAMinute logs msg with err, once a minute at most since last, and not for a picture refused
+// while jpegenc backs off; it reports whether it logged.
+func warnOnceAMinute(last *atomic.Int64, err error, now time.Time, msg string) bool {
 	if errors.Is(err, jpegenc.ErrBackingOff) {
 		return false
 	}
-	last := hwWarned.Load()
-	if now.UnixNano()-last < int64(time.Minute) || !hwWarned.CompareAndSwap(last, now.UnixNano()) {
+	at := last.Load()
+	if now.UnixNano()-at < int64(time.Minute) || !last.CompareAndSwap(at, now.UnixNano()) {
 		return false
 	}
-	slog.Warn("camera: hardware jpeg failed, encoding on the cores", "err", err)
+	slog.Warn(msg, "err", err)
 	return true
 }
 

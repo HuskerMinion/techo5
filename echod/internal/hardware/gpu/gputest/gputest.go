@@ -27,6 +27,7 @@ const (
 	envPanel  = "TECHO5_FAKE_GPU_PANEL" // the panel it drives, WxH
 	envDie    = "TECHO5_FAKE_GPU_DIE"   // a file: while it exists, the helper exits at its Nth present (its content)
 	envRefuse = "TECHO5_FAKE_GPU_REFUSE"
+	envNoDev  = "TECHO5_FAKE_GPU_REFUSE_DEVELOP"
 )
 
 // Main runs the fake helper when the test binary was started as one, and does not return then. Call
@@ -54,6 +55,8 @@ type Config struct {
 	DieAt int
 	// Refuse, when not 0, has every present refused with that errno.
 	Refuse syscall.Errno
+	// RefuseDevelop, when not 0, has every development refused with that errno.
+	RefuseDevelop syscall.Errno
 }
 
 // Log is what the helpers wrote.
@@ -75,6 +78,7 @@ func Use(t testing.TB, cfg Config) *Log {
 	t.Setenv(envPanel, cfg.Panel)
 	t.Setenv(envDie, l.die)
 	t.Setenv(envRefuse, strconv.Itoa(int(cfg.Refuse)))
+	t.Setenv(envNoDev, strconv.Itoa(int(cfg.RefuseDevelop)))
 	exe, err := os.Executable()
 	if err != nil {
 		t.Fatal(err)
@@ -144,6 +148,7 @@ func serve() {
 	pw, ph := 0, 0
 	fmt.Sscanf(os.Getenv(envPanel), "%dx%d", &pw, &ph)
 	refuse, _ := strconv.Atoi(os.Getenv(envRefuse))
+	refuseDevelop, _ := strconv.Atoi(os.Getenv(envNoDev))
 	dieAt := 0
 	if b, err := os.ReadFile(os.Getenv(envDie)); err == nil {
 		dieAt, _ = strconv.Atoi(strings.TrimSpace(string(b)))
@@ -151,6 +156,7 @@ func serve() {
 	}
 	var canvas []byte
 	presents := 0
+	dmaW, dmaH := 0, 0 // the size of the dmabuf YUYV target last made
 	const sock = 3
 	for {
 		var req request
@@ -169,6 +175,7 @@ func serve() {
 			}
 		}
 		var rep reply
+		replyFD := -1
 		switch req.op {
 		case 1: // hello
 			copy(rep.text[:], "Fake GPU")
@@ -201,6 +208,30 @@ func serve() {
 			say("present first=%s", first)
 		case 4: // present a frame
 			say("frame %dx%d layout=%d", req.a[0], req.a[1], req.a[6])
+		case 5: // develop
+			w, h, mode := int(req.a[0]), int(req.a[1]), req.a[4]
+			switch {
+			case refuseDevelop != 0:
+				rep.status = -int32(refuseDevelop)
+				say("develop refused")
+			case mode != 2:
+				rep.status = -int32(syscall.ENOSYS)
+				say("develop mode=%d", mode)
+			default:
+				// The YUYV target, a dmabuf of the GPU's in the real helper: a memfd of mid-gray
+				// here, w*2 bytes a row, passed with the reply only when it is made anew, as there.
+				if w != dmaW || h != dmaH {
+					fd, err := makeTarget(w, h)
+					if err != nil {
+						rep.status = -int32(syscall.ENOMEM)
+						break
+					}
+					replyFD, dmaW, dmaH = fd, w, h
+					rep.a[0] = 1
+				}
+				rep.a[1] = uint32(w * 2)
+				say("develop %dx%d bpl=%d blue=%d mode=2 fds=%d new=%v", w, h, req.a[2], req.a[3], len(fds), replyFD >= 0)
+			}
 		case 8: // color
 			rep.a[1] = 1
 			say("color %d", req.a[0])
@@ -213,8 +244,33 @@ func serve() {
 			unix.Close(fd)
 		}
 		rb := unsafe.Slice((*byte)(unsafe.Pointer(&rep)), unsafe.Sizeof(rep))
-		if _, err := unix.Write(sock, rb); err != nil {
+		var rights []byte
+		if replyFD >= 0 {
+			rights = unix.UnixRights(replyFD)
+		}
+		err = unix.Sendmsg(sock, rb, rights, nil, 0)
+		if replyFD >= 0 {
+			unix.Close(replyFD)
+		}
+		if err != nil {
 			return
 		}
 	}
+}
+
+// makeTarget is a w x h YUYV picture of mid-gray in a memfd, standing in for the GPU's dmabuf.
+func makeTarget(w, h int) (int, error) {
+	fd, err := unix.MemfdCreate("fake-gpu-yuyv", unix.MFD_CLOEXEC)
+	if err != nil {
+		return -1, err
+	}
+	pic := make([]byte, w*h*2)
+	for i := range pic {
+		pic[i] = 128
+	}
+	if _, err := unix.Write(fd, pic); err != nil {
+		unix.Close(fd)
+		return -1, err
+	}
+	return fd, nil
 }
