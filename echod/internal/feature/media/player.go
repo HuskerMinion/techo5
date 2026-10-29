@@ -1183,9 +1183,17 @@ func (p *Player) ExternalTrack(title, artist, album string) {
 	p.extTrack.Store(remoteTrack{Title: title, Artist: artist, Album: album})
 	if title != "" {
 		p.lastExt.Store(lastTrack{remoteTrack: remoteTrack{Title: title, Artist: artist, Album: album}})
-	} else if l, _ := p.lastExt.Load().(lastTrack); l.Title != "" && l.clearedAt.IsZero() {
-		l.clearedAt = time.Now()
-		p.lastExt.Store(l)
+	} else {
+		if l, _ := p.lastExt.Load().(lastTrack); l.Title != "" && l.clearedAt.IsZero() {
+			l.clearedAt = time.Now()
+			p.lastExt.Store(l)
+		}
+		// Music Assistant keeps a stopped queue's track named, and clears it once the queue is emptied:
+		// a track held from a pause is over then (#150). The clear that comes with a pause comes within
+		// lastFor of its hold (after it, for a pause from the screen), so it leaves that alone.
+		if h, _ := p.held.Load().(heldTrack); !h.at.IsZero() && time.Since(h.at) > lastFor {
+			p.held.Store(heldTrack{})
+		}
 	}
 	p.refresh()
 }

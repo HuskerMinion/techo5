@@ -63,6 +63,32 @@ func TestAHoldTakesTheLastTrackNamed(t *testing.T) {
 	}
 }
 
+// A held track goes once the remote stops naming it: Music Assistant does that when its queue is
+// emptied, and the page and the strip then have nothing left to offer (#150).
+func TestAHeldTrackGoesWhenTheRemoteClearsIt(t *testing.T) {
+	p := &Player{stream: &Stream{}, mp: &esphome.MediaPlayer{}}
+	p.ExternalTrack("Africa", "Toto", "Toto IV")
+	p.HoldRemote()
+	h, _ := p.held.Load().(heldTrack)
+	h.at = time.Now().Add(-time.Minute)
+	p.held.Store(h)
+	p.ExternalTrack("", "", "")
+	if title, _, _, ok := p.Held(); ok {
+		t.Errorf("still held %q after the remote cleared its track", title)
+	}
+}
+
+// The clear that comes with a pause from the screen arrives just after the hold, and the track stays.
+func TestTheClearAfterAPauseKeepsTheHold(t *testing.T) {
+	p := &Player{stream: &Stream{}, mp: &esphome.MediaPlayer{}}
+	p.ExternalTrack("Africa", "Toto", "Toto IV")
+	p.HoldRemote()
+	p.ExternalTrack("", "", "")
+	if title, _, _, ok := p.Held(); !ok || title != "Africa" {
+		t.Errorf("held %q (%v) after the pause's own clear, want the track kept", title, ok)
+	}
+}
+
 // A stop on a remote's track paused from here reaches the remote as well as emptying the hold. The row
 // means the music, and the queue is what a play would start again: dropping the hold alone left Music
 // Assistant's queue waiting to be picked up, which is not what the person pressing stop asked for.
