@@ -199,6 +199,15 @@ Mesa it loads (panfrost, EGL, GLES and GBM, no LLVM). Both run in an armv7 Alpin
 (`DEVICE_OVERLAY=tools/linux/athena/overlay`) carries them when both are there, and the daemon draws on
 the cores without them, or on a kernel without panfrost.
 
+## Optional: the JPEG decoder (Show 8 2nd gen)
+
+[tools/jpeg/build.sh](../tools/jpeg/build.sh) builds `bin/techo5-jpeg-arm`, a small static helper that
+decodes photos and camera pictures with libjpeg-turbo's NEON code, at a half, a quarter or an eighth of
+their size where that still covers the screen. It builds libjpeg-turbo itself from the release it names,
+in an armv7 Alpine container with Docker (a few minutes under QEMU); `arm64` as an argument builds it for
+a 64-bit root filesystem. An athena image carries it when it is there, and the daemon decodes in Go
+without it.
+
 ## AirPlay 2
 
 [tools/linux/build-shairport-sync.sh](../tools/linux/build-shairport-sync.sh) builds

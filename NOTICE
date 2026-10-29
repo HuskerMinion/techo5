@@ -365,9 +365,38 @@ Mesa, https://mesa3d.org (MIT, with some files under other licenses)
   the others it uses are with it in tools/linux/licenses/mesa and, where it is carried,
   /usr/share/licenses/mesa.
 
-The source archives of FFmpeg, Shairport Sync, nqptp, librespot and Mesa, with the patches, licenses and
-build scripts, are also attached to each release from v1.6.8 on (Mesa's from the first release that
-carries it) as techo5-third-party-sources-<version>.tar.gz.
+libjpeg-turbo, https://libjpeg-turbo.org (IJG License and Modified BSD License)
+  The Echo Show 8 2nd gen's (athena) root filesystem carries /usr/local/bin/techo5-jpeg (TECHO5's own,
+  tools/jpeg), linked statically against libjpeg-turbo 3.1.3, built unmodified by tools/jpeg/build.sh from
+  https://github.com/libjpeg-turbo/libjpeg-turbo/releases/download/3.1.3/libjpeg-turbo-3.1.3.tar.gz (its
+  SHA-512 is in the build script). Its licenses are in tools/linux/licenses/libjpeg-turbo and, where it is
+  carried, /usr/share/licenses/libjpeg-turbo.
+  This software is based in part on the work of the Independent JPEG Group.
+  The libjpeg library is copyright (C) 1991-2020, Thomas G. Lane, Guido Vollbeding.
+  The TurboJPEG API library is under the Modified (3-clause) BSD License:
+
+  Copyright (C)2009-2025 D. R. Commander.  All Rights Reserved.
+  Copyright (C)2015 Viktor Szathmáry.  All Rights Reserved.
+
+  Redistribution and use in source and binary forms, with or without modification, are permitted
+  provided that the following conditions are met: redistributions of source code must retain the
+  above copyright notice, this list of conditions and the following disclaimer; redistributions in
+  binary form must reproduce the above copyright notice, this list of conditions and the following
+  disclaimer in the documentation and/or other materials provided with the distribution; neither the
+  name of the libjpeg-turbo Project nor the names of its contributors may be used to endorse or
+  promote products derived from this software without specific prior written permission. THIS
+  SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS", AND ANY EXPRESS OR IMPLIED
+  WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
+  A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDERS OR CONTRIBUTORS BE
+  LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES
+  (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR
+  PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
+  CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF
+  THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+
+The source archives of FFmpeg, Shairport Sync, nqptp, librespot, Mesa and libjpeg-turbo, with the patches,
+licenses and build scripts, are also attached to each release from v1.6.8 on (Mesa's and libjpeg-turbo's
+from the first release that carries them) as techo5-third-party-sources-<version>.tar.gz.
 
 Tailscale, https://github.com/tailscale/tailscale (BSD 3-Clause License)
   Every root filesystem carries tailscaled, Copyright (c) 2020 Tailscale Inc & contributors, built from its

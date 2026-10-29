@@ -234,9 +234,18 @@ if ($AthenaRootfs) {
     if ($gpu -ne $mesa) { throw "$AthenaRootfs carries the GPU helper or Mesa without the other: build both (bin/techo5-gpu-arm, bin/techo5-mesa-arm.tar.gz)" }
     if ($gpu -and -not $mesaLicense) { throw "$AthenaRootfs carries Mesa without its licenses (usr/share/licenses/mesa)" }
     if (-not $gpu) { throw "$AthenaRootfs has no GPU helper: build bin/techo5-gpu-arm and bin/techo5-mesa-arm.tar.gz before deploy-rootfs.sh" }
+    # The JPEG decoder (tools/jpeg/build.sh) carries libjpeg-turbo, whose licenses go with it: without it
+    # every unit decodes its pictures in the daemon, so a release says so.
+    $jpeg = $names -contains 'usr/local/bin/techo5-jpeg'
+    if (-not $jpeg) { throw "$AthenaRootfs has no JPEG decoder: build bin/techo5-jpeg-arm (tools/jpeg/build.sh) before deploy-rootfs.sh" }
+    if (-not ($names -contains 'usr/share/licenses/libjpeg-turbo/LICENSE.md' -and $names -contains 'usr/share/licenses/libjpeg-turbo/README.ijg')) {
+        throw "$AthenaRootfs carries the JPEG decoder without libjpeg-turbo's licenses (usr/share/licenses/libjpeg-turbo)"
+    }
 }
 foreach ($t in @($Rootfs, $SkylightRootfs) | Where-Object { $_ }) {
-    if (@(& tar -tzf $t) -replace '^\./', '' -contains 'usr/local/bin/techo5-gpu') { throw "$t carries the GPU helper, which only athena's rootfs does" }
+    $names = @(& tar -tzf $t) -replace '^\./', ''
+    if ($names -contains 'usr/local/bin/techo5-gpu') { throw "$t carries the GPU helper, which only athena's rootfs does" }
+    if ($names -contains 'usr/local/bin/techo5-jpeg') { throw "$t carries the JPEG decoder, which only athena's rootfs does" }
 }
 # A kernel is published only with its source (the GPL), and the source must be what built it.
 if ($AthenaBoot -and -not $AthenaKernelSource) {
