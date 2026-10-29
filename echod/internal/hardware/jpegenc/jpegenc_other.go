@@ -23,5 +23,8 @@ func Encode(*image.RGBA, int) ([]byte, error) { return nil, errNone }
 // EncodeYUYV always fails off Linux.
 func EncodeYUYV(int, int, int, func([]byte)) ([]byte, error) { return nil, errNone }
 
+// EncodeDMABuf always fails off Linux.
+func EncodeDMABuf(int, int, int, int, int) ([]byte, error) { return nil, errNone }
+
 // ErrBackingOff is Linux's; off Linux the encoder is never there to back off from.
 var ErrBackingOff = errors.New("jpegenc: backing off after a failure")

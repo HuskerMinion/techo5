@@ -191,3 +191,58 @@ func TestBackOffAfterAFailure(t *testing.T) {
 		t.Fatalf("after a size refused: %v, %d tries", err, tries)
 	}
 }
+
+// A dmabuf picture the encoder fails leaves EncodeDMABuf alone for backOff, but not EncodeYUYV: a
+// caller that falls back to it after the dmabuf failed still has the encoder. The descriptor, size and
+// stride reach the device as given, and pictures it can't take start no back-off.
+func TestDMABufBacksOffOnItsOwn(t *testing.T) {
+	findOnce.Do(func() {})
+	wasPath, wasNow, wasAttempt, wasDMA := path, now, attempt, attemptDMABuf
+	t.Cleanup(func() {
+		path, now, attempt, attemptDMABuf = wasPath, wasNow, wasAttempt, wasDMA
+		failed.set(time.Time{})
+		failedDMABuf.set(time.Time{})
+	})
+	path = "/dev/video-test"
+	clock := time.Date(2026, 10, 1, 12, 0, 0, 0, time.UTC)
+	now = func() time.Time { return clock }
+	var given [5]int
+	dmaTries, fail := 0, true
+	attemptDMABuf = func(fd, w, h, stride, q int) ([]byte, error) {
+		dmaTries++
+		given = [5]int{fd, w, h, stride, q}
+		if fail {
+			return nil, errors.New("jpegenc: dmabuf picture buffer: invalid argument")
+		}
+		return []byte{0xFF, 0xD8, 0xFF, 0xD9}, nil
+	}
+	yuyvTries := 0
+	attempt = func(w, h, q int, fill func([]byte)) ([]byte, error) {
+		yuyvTries++
+		return []byte{0xFF, 0xD8, 0xFF, 0xD9}, nil
+	}
+	if _, err := EncodeDMABuf(9, 2112, 1568, 4224, 80); err == nil || dmaTries != 1 || given != [5]int{9, 2112, 1568, 4224, 80} {
+		t.Fatalf("the failing picture: %v after %d tries, given %v", err, dmaTries, given)
+	}
+	clock = clock.Add(time.Second)
+	if _, err := EncodeDMABuf(9, 2112, 1568, 4224, 80); !errors.Is(err, ErrBackingOff) || dmaTries != 1 {
+		t.Fatalf("a second after: %v, %d tries; want backing off with the device left alone", err, dmaTries)
+	}
+	if b, err := EncodeYUYV(2112, 1568, 80, func([]byte) {}); err != nil || len(b) != 4 || yuyvTries != 1 {
+		t.Fatalf("EncodeYUYV after a dmabuf failure: %v, %d tries; want the encoder", err, yuyvTries)
+	}
+	clock = clock.Add(backOff)
+	fail = false
+	if b, err := EncodeDMABuf(9, 2112, 1568, 4224, 80); err != nil || len(b) != 4 || dmaTries != 2 {
+		t.Fatalf("after the back-off: %v, %d tries", err, dmaTries)
+	}
+	// Pictures the encoder doesn't take are refused before the device, with no back-off.
+	for _, c := range [][4]int{{-1, 2112, 1568, 4224}, {9, 2100, 1568, 4200}, {9, 2112, 1568, 4000}} {
+		if _, err := EncodeDMABuf(c[0], c[1], c[2], c[3], 80); err == nil || errors.Is(err, ErrBackingOff) {
+			t.Fatalf("fd %d, %dx%d, %d a row: %v", c[0], c[1], c[2], c[3], err)
+		}
+	}
+	if _, err := EncodeDMABuf(9, 2112, 1568, 4224, 80); err != nil || dmaTries != 3 {
+		t.Fatalf("after pictures refused: %v, %d tries", err, dmaTries)
+	}
+}

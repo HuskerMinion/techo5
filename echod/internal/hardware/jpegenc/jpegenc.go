@@ -4,7 +4,8 @@
 // mainline's mtk-jpeg driver offers as a V4L2 memory-to-memory device named mtk-jpeg-enc (in the athena
 // kernel since CONFIG_VIDEO_MEDIATEK_JPEG). A picture goes in as YUYV and comes back a baseline JPEG,
 // with the cores doing no more than the color conversion, which is far cheaper in time and power than
-// encoding on them.
+// encoding on them. A picture already in a dmabuf (the GPU's, developed there) is read where it is,
+// without even that (EncodeDMABuf).
 //
 // The device is the multi-planar M2M kind: an OUTPUT queue the picture is written to and a CAPTURE
 // queue the JPEG is read from. Each open of the device is a context of its own, so a session is kept
@@ -34,6 +35,7 @@ const (
 	bufTypeOutputMplane  = 10 // V4L2_BUF_TYPE_VIDEO_OUTPUT_MPLANE
 	bufTypeCaptureMplane = 9  // V4L2_BUF_TYPE_VIDEO_CAPTURE_MPLANE
 	memoryMmap           = 1
+	memoryDMABuf         = 4
 	fieldNone            = 1
 	bufFlagError         = 0x40 // V4L2_BUF_FLAG_ERROR
 	pixYUYV              = 'Y' | 'U'<<8 | 'Y'<<16 | 'V'<<24
@@ -167,12 +169,15 @@ func Fits(r image.Rectangle) bool {
 	return r.Dx() > 0 && r.Dy() > 0 && r.Dx()%32 == 0 && r.Dy()%8 == 0
 }
 
-// session is the device opened for one picture size and quality, with its two buffers mapped.
+// session is the device opened for one picture size and quality, with its two buffers: the JPEG's
+// mapped, and the picture's mapped too or, with stride set, a dmabuf of the GPU's imported at each
+// encode.
 type session struct {
 	mu       sync.Mutex // one picture at a time: one buffer a side
 	fd       int
 	w, h     int
 	quality  int
+	stride   int // >0: the picture comes as a dmabuf with this many bytes a row
 	in, out  []byte
 	streamed bool
 	broken   bool // failed a picture: closed once nobody uses it, and opened afresh next time
@@ -245,7 +250,7 @@ var (
 
 // encodeOnDevice is one picture through the session for its size and quality.
 func encodeOnDevice(w, h, quality int, fill func(dst []byte)) ([]byte, error) {
-	s, err := take(w, h, quality)
+	s, err := take(w, h, quality, 0)
 	if err != nil {
 		return nil, err
 	}
@@ -253,7 +258,7 @@ func encodeOnDevice(w, h, quality int, fill func(dst []byte)) ([]byte, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	fill(s.in)
-	jpg, err := s.encode()
+	jpg, err := s.encode(-1)
 	if err != nil {
 		mu.Lock()
 		s.broken = true
@@ -262,13 +267,13 @@ func encodeOnDevice(w, h, quality int, fill func(dst []byte)) ([]byte, error) {
 	return jpg, err
 }
 
-// take is the open session for the size and quality, opened if there is none. Past sessions, the one
-// least recently used that nobody is using is closed.
-func take(w, h, quality int) (*session, error) {
+// take is the open session for the size, quality and stride (0: a mapped picture buffer), opened if
+// there is none. Past sessions, the one least recently used that nobody is using is closed.
+func take(w, h, quality, stride int) (*session, error) {
 	mu.Lock()
 	defer mu.Unlock()
 	for _, s := range open {
-		if s.w == w && s.h == h && s.quality == quality && !s.broken {
+		if s.w == w && s.h == h && s.quality == quality && s.stride == stride && !s.broken {
 			s.users++
 			s.used = time.Now()
 			return s, nil
@@ -286,7 +291,7 @@ func take(w, h, quality int) (*session, error) {
 			open = append(open[:idle], open[idle+1:]...)
 		}
 	}
-	s, err := start(w, h, quality)
+	s, err := start(w, h, quality, stride)
 	if err != nil {
 		return nil, err
 	}
@@ -312,12 +317,12 @@ func give(s *session) {
 	s.close()
 }
 
-func start(w, h, quality int) (*session, error) {
+func start(w, h, quality, stride int) (*session, error) {
 	fd, err := syscall.Open(path, syscall.O_RDWR|syscall.O_NONBLOCK|syscall.O_CLOEXEC, 0)
 	if err != nil {
 		return nil, fmt.Errorf("jpegenc: %w", err)
 	}
-	s := &session{fd: fd, w: w, h: h, quality: quality}
+	s := &session{fd: fd, w: w, h: h, quality: quality, stride: stride}
 	if err := s.setup(); err != nil {
 		s.close()
 		return nil, err
@@ -328,12 +333,19 @@ func start(w, h, quality int) (*session, error) {
 func (s *session) setup() error {
 	in := format{typ: bufTypeOutputMplane}
 	in.union.pix = pixFormatMplane{width: uint32(s.w), height: uint32(s.h), pixelformat: pixYUYV, field: fieldNone, numPlanes: 1}
-	in.union.pix.planes[0].bytesperline = uint32(s.w * 2)
+	// mtk-jpeg sets the row length itself, w*2 for YUYV, so a dmabuf with longer rows is refused here
+	// and its caller goes the mapped way.
+	bpl := s.w * 2
+	if s.stride > 0 {
+		bpl = s.stride
+		in.union.pix.planes[0].sizeimage = uint32(s.stride * s.h)
+	}
+	in.union.pix.planes[0].bytesperline = uint32(bpl)
 	if err := ioctl(s.fd, vidiocSFmt, unsafe.Pointer(&in)); err != nil {
 		return fmt.Errorf("jpegenc: picture format: %w", err)
 	}
 	if in.union.pix.width != uint32(s.w) || in.union.pix.height != uint32(s.h) || in.union.pix.pixelformat != pixYUYV ||
-		in.union.pix.planes[0].bytesperline != uint32(s.w*2) {
+		in.union.pix.planes[0].bytesperline != uint32(bpl) {
 		return fmt.Errorf("jpegenc: the encoder took %dx%d, %d bytes a row", in.union.pix.width, in.union.pix.height,
 			in.union.pix.planes[0].bytesperline)
 	}
@@ -350,11 +362,22 @@ func (s *session) setup() error {
 		return fmt.Errorf("jpegenc: quality: %w", err)
 	}
 	var err error
-	if s.in, err = s.mapBuffer(bufTypeOutputMplane); err != nil {
-		return err
-	}
-	if len(s.in) < s.w*s.h*2 {
-		return fmt.Errorf("jpegenc: a %d-byte picture buffer for %dx%d", len(s.in), s.w, s.h)
+	if s.stride > 0 {
+		// Nothing to map: the picture's buffer is the caller's dmabuf, imported at each encode.
+		rb := requestBuffers{count: 1, typ: bufTypeOutputMplane, memory: memoryDMABuf}
+		if err := ioctl(s.fd, vidiocReqbufs, unsafe.Pointer(&rb)); err != nil {
+			return fmt.Errorf("jpegenc: dmabuf picture buffer: %w", err)
+		}
+		if rb.count < 1 {
+			return errors.New("jpegenc: the encoder gave no dmabuf picture buffer")
+		}
+	} else {
+		if s.in, err = s.mapBuffer(bufTypeOutputMplane); err != nil {
+			return err
+		}
+		if len(s.in) < s.w*s.h*2 {
+			return fmt.Errorf("jpegenc: a %d-byte picture buffer for %dx%d", len(s.in), s.w, s.h)
+		}
 	}
 	if s.out, err = s.mapBuffer(bufTypeCaptureMplane); err != nil {
 		return err
@@ -388,14 +411,22 @@ func (s *session) mapBuffer(typ uint32) ([]byte, error) {
 	return m, nil
 }
 
-// encode queues the picture in s.in and an empty JPEG buffer, and waits for the JPEG.
-func (s *session) encode() ([]byte, error) {
+// encode queues the picture (in s.in, or the dmabuf where the session has a stride) and an empty JPEG
+// buffer, and waits for the JPEG.
+func (s *session) encode(dmabuf int) ([]byte, error) {
 	pin, pout, dout, din := &s.planes[0], &s.planes[1], &s.planes[2], &s.planes[3]
 	s.planes = [4]plane{}
 	pin.bytesused = uint32(s.w * s.h * 2)
 	pin.length = uint32(len(s.in))
+	memory := uint32(memoryMmap)
+	if s.stride > 0 {
+		memory = memoryDMABuf
+		pin.m = uintptr(dmabuf)
+		pin.bytesused = uint32(s.stride * s.h)
+		pin.length = uint32(s.stride * s.h)
+	}
 	pout.length = uint32(len(s.out))
-	in := buffer{typ: bufTypeOutputMplane, memory: memoryMmap, m: uintptr(unsafe.Pointer(pin)), length: 1, field: fieldNone}
+	in := buffer{typ: bufTypeOutputMplane, memory: memory, m: uintptr(unsafe.Pointer(pin)), length: 1, field: fieldNone}
 	out := buffer{typ: bufTypeCaptureMplane, memory: memoryMmap, m: uintptr(unsafe.Pointer(pout)), length: 1}
 	if err := ioctl(s.fd, vidiocQbuf, unsafe.Pointer(&out)); err != nil {
 		return nil, fmt.Errorf("jpegenc: queue jpeg buffer: %w", err)
@@ -421,7 +452,7 @@ func (s *session) encode() ([]byte, error) {
 	if err := ioctl(s.fd, vidiocDqbuf, unsafe.Pointer(&got)); err != nil {
 		return nil, fmt.Errorf("jpegenc: take jpeg: %w", err)
 	}
-	done := buffer{typ: bufTypeOutputMplane, memory: memoryMmap, m: uintptr(unsafe.Pointer(din)), length: 1}
+	done := buffer{typ: bufTypeOutputMplane, memory: memory, m: uintptr(unsafe.Pointer(din)), length: 1}
 	if err := ioctl(s.fd, vidiocDqbuf, unsafe.Pointer(&done)); err != nil {
 		return nil, fmt.Errorf("jpegenc: take picture back: %w", err)
 	}
