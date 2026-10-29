@@ -90,3 +90,39 @@ func TestAReminderArrivingIsNotAnAnnouncement(t *testing.T) {
 		t.Error("a reminder was put up as an announcement")
 	}
 }
+
+// A pop-up tapped away elsewhere goes to PopupDismissed, and only with the event it names.
+func TestAPopupDismissedArrivesWithItsEvent(t *testing.T) {
+	config.Use(filepath.Join(t.TempDir(), "state.json"))
+	if err := config.Set().Home().HouseWord("bluebird"); err != nil {
+		t.Fatal(err)
+	}
+	f := &Feature{}
+	var dismissed []Message
+	f.PopupDismissed.Listen(func(m Message) { dismissed = append(dismissed, m) })
+
+	post := func(m Message) int {
+		body, headers := encode(m)
+		r := httptest.NewRequest(http.MethodPost, "/announce", bytes.NewReader(body))
+		for k, v := range headers {
+			r.Header.Set(k, v)
+		}
+		r.Header.Set(header, "bluebird")
+		w := httptest.NewRecorder()
+		f.receive(w, r)
+		return w.Code
+	}
+
+	if code := post(Message{From: "Kitchen", Kind: KindPopupDismissed, ID: "popup-1"}); code != http.StatusNoContent {
+		t.Fatalf("dismissal answered %d", code)
+	}
+	if code := post(Message{From: "Kitchen", Kind: KindPopupDismissed}); code != http.StatusBadRequest {
+		t.Errorf("a dismissal naming no event answered %d", code)
+	}
+	if len(dismissed) != 1 || dismissed[0].ID != "popup-1" {
+		t.Errorf("dismissed %+v", dismissed)
+	}
+	if _, showing := f.Showing(); showing {
+		t.Error("a dismissal was put up as an announcement")
+	}
+}

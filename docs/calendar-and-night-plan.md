@@ -82,7 +82,9 @@ Settings, on the screen, the setup page and in Home Assistant:
 - **At night:** a pop-up during night hours shows but makes no sound and does not light a dark
   screen; it is waiting when the screen next wakes.
 
-A pop-up stays up until tapped or until the event has started and 10 minutes have passed. Home
+A pop-up stays up until tapped or until the event has started and 10 minutes have passed. A tap
+takes it down on the other Shows in the house as well, over the same link reminders use: the one up
+there, or waiting its turn, or still to come where its lead time is shorter. Home
 Assistant gets an event (`esphome.techo5_calendar`) when one shows, for anyone who wants to add to
 it.
 

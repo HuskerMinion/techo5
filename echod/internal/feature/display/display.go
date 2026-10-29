@@ -409,8 +409,9 @@ type Display struct {
 	popup      *hass.Event
 	popupUntil time.Time
 	popupNext  time.Time
-	popupQueue []hass.Event  // due while another was up: shown next
-	pop        popupEntities // the pop-ups' settings in Home Assistant
+	popupQueue []hass.Event         // due while another was up: shown next
+	popupGone  map[string]time.Time // events tapped away on another device (popupMatch), and when
+	pop        popupEntities        // the pop-ups' settings in Home Assistant
 
 	// The alert page (alerts.go): up until alertUntil, on alertIdx of the alerts at home, scrolled
 	// alertScroll lines.
@@ -634,6 +635,7 @@ func build() *Display {
 	talkback.Get().Changed.Listen(func(struct{}) { d.wake() })
 	alarm.Get().Changed.Listen(func(struct{}) { d.wake() })
 	remind.Get().Changed.Listen(func(struct{}) { d.wake() })
+	announce.Get().PopupDismissed.Listen(func(m announce.Message) { d.popupDismissedElsewhere(m.ID, time.Now()) })
 	notify.Get().Changed.Listen(func(struct{}) { d.wake() })
 	notify.SetNight(nightNow)
 	timer.Get().Changed.Listen(func(struct{}) { d.wake() })
@@ -1326,7 +1328,7 @@ func (d *Display) gesture(g touch.Gesture) {
 	// A reminder: a tap on its card puts it away, here and on every device it went off on. Only the
 	// card, as with the strip, so a finger meant for the music behind it still reaches the music.
 	if g.Kind == touch.Tap && d.r != nil && d.r.popupTapped(image.Pt(g.X, g.Y)) {
-		d.dismissPopup()
+		d.tapPopupAway()
 		d.wake()
 		return
 	}

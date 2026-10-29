@@ -3,13 +3,17 @@
 package display
 
 import (
+	"crypto/sha256"
+	"fmt"
 	"log/slog"
+	"maps"
 	"slices"
 	"strings"
 	"time"
 
 	"github.com/HuskerMinion/techo5/echod/internal/component"
 	"github.com/HuskerMinion/techo5/echod/internal/config"
+	"github.com/HuskerMinion/techo5/echod/internal/feature/announce"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/home"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/notify"
 	"github.com/HuskerMinion/techo5/echod/internal/lib/hass"
@@ -34,6 +38,19 @@ const (
 func popupKey(e hass.Event) string {
 	return e.Calendar + "\x00" + e.Start.Format(time.RFC3339) + "\x00" + e.Summary
 }
+
+// popupMatch names an event the same way on every device in the house, so a pop-up tapped away on one
+// comes down on the others: its start and its title, without the calendar, which a device showing the
+// event merged from two calendars may name differently. Hashed, to fit the link between devices.
+func popupMatch(e hass.Event) string {
+	sum := sha256.Sum256([]byte(e.Start.UTC().Format(time.RFC3339) + "\x00" + e.Summary))
+	return fmt.Sprintf("popup-%x", sum[:12])
+}
+
+// popupGoneFor is how long an event tapped away on another device is kept from popping up here: past
+// the longest it could still be due, an hour's lead and the ten minutes after it starts, or an
+// all-day one's morning.
+const popupGoneFor = 24 * time.Hour
 
 // popupMorning is when all-day events pop up on day: as the night ends, or seven o'clock without one.
 func popupMorning(day time.Time) time.Time {
@@ -105,7 +122,11 @@ func (d *Display) popupTick(now time.Time) {
 	// nothing.
 	due := duePopups(popupCandidates(events, c), now, c, popupShownNow())
 	d.mu.Lock()
+	maps.DeleteFunc(d.popupGone, func(_ string, at time.Time) bool { return now.Sub(at) > popupGoneFor })
 	for _, e := range due {
+		if _, gone := d.popupGone[popupMatch(e)]; gone {
+			continue
+		}
 		k := popupKey(e)
 		if (d.popup != nil && popupKey(*d.popup) == k) || slices.ContainsFunc(d.popupQueue, func(q hass.Event) bool { return popupKey(q) == k }) {
 			continue
@@ -132,6 +153,9 @@ func (d *Display) popupTick(now time.Time) {
 	var e hass.Event
 	for len(d.popupQueue) > 0 {
 		e, d.popupQueue = d.popupQueue[0], d.popupQueue[1:]
+		if _, gone := d.popupGone[popupMatch(e)]; gone {
+			continue
+		}
 		if e.AllDay || now.Before(e.End) || now.Before(e.Start.Add(popupAfter)) {
 			d.popup = &e
 			break
@@ -201,6 +225,49 @@ func (d *Display) dismissPopup() {
 	d.popup = nil
 	d.popupNext = time.Time{}
 	d.mu.Unlock()
+}
+
+// sendPopupDismissed tells every other device in the house that the event's pop-up was tapped away
+// here; replaced in tests.
+var sendPopupDismissed = func(id string) {
+	announce.Get().SendTo(nil, announce.Message{Kind: announce.KindPopupDismissed, ID: id})
+}
+
+// tapPopupAway is a tap on the pop-up: it comes down here and on every other device showing it, or
+// about to, since whoever tapped it has seen it. A device without the event, or with its pop-up
+// already gone, has nothing to do.
+func (d *Display) tapPopupAway() {
+	d.mu.Lock()
+	e := d.popup
+	d.mu.Unlock()
+	d.dismissPopup()
+	if e == nil {
+		return
+	}
+	id := popupMatch(*e)
+	go sendPopupDismissed(id)
+}
+
+// popupDismissedElsewhere takes down an event's pop-up tapped away on another device: the one up, or
+// one waiting its turn, and keeps it from popping up later, as one whose lead time here is shorter
+// would. Nothing is sent on: the device it was tapped on told every one.
+func (d *Display) popupDismissedElsewhere(id string, now time.Time) {
+	d.mu.Lock()
+	if d.popupGone == nil {
+		d.popupGone = map[string]time.Time{}
+	}
+	d.popupGone[id] = now
+	up := d.popup != nil && popupMatch(*d.popup) == id
+	if up {
+		d.popup = nil
+		d.popupNext = time.Time{}
+	}
+	d.popupQueue = slices.DeleteFunc(d.popupQueue, func(e hass.Event) bool { return popupMatch(e) == id })
+	d.mu.Unlock()
+	if up {
+		slog.Info("calendar: pop-up tapped away on another device")
+		d.wake()
+	}
 }
 
 // popupUp is the pop-up on the screen, if one is.
