@@ -743,7 +743,9 @@ func (d *Display) relight(jump bool) {
 			target = idleDimLevel(target, d.ceiling)
 		}
 		if d.nightGlow {
-			target = float64(d.glowBacklight()) // relight holds mu
+			// The night light turns the screen down, never up: a dark room can already have auto-brightness
+			// under it (#335).
+			target = math.Min(target, float64(d.glowBacklight())) // relight holds mu
 		} else if (phone.Get().Busy() || video.Get().State().Active() || d.askedUp(time.Now())) && nightNow(time.Now()) {
 			target = math.Min(target, screen.BacklightMax/2) // a call at night: enough to see who it is
 		}

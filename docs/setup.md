@@ -587,8 +587,8 @@ like "kitchen screen" under its **Voice assistants** settings in Home Assistant.
   default. **At night** picks what the night does: on a Show,
   dark, a faint glow, or a clock alone; on a Spot, dimmed, a clock alone, or dark. The clock alone is the
   night clock, the time in dim red on black (**Night clock** picks *Red*, *Red LED* or *Flip*), with
-  **Night light brightness** in Home Assistant setting how bright it is; on a Spot also **Night clock
-  brightness** under Display, 1 to 10 from a faint glow, shown on the screen as it is
+  **Night light brightness** in Home Assistant setting how bright it is (on a Show, never brighter than
+  the screen already is); on a Spot also **Night clock brightness** under Display, 1 to 10 from a faint glow, shown on the screen as it is
   changed at night. During the night only a call
   wakes a Show's screen, or a tap when **Tap on the clock** is set to *Dashboard*, which opens the
   dashboard ([docs/dashboards.md](dashboards.md)). A press and hold on a Show's glow or night clock
