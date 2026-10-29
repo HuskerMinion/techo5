@@ -111,8 +111,17 @@ func newSlowHA(t *testing.T) *slowHA {
 		// The span ends before the bytes go: once they have, the client may start the next fetch before
 		// this handler gets to take the time, and two fetches one after the other would look like two
 		// at once (a busy CI runner did).
+		end := time.Now()
+		// A request the device gave up on just before the release can still be waiting here, the server
+		// not having noticed yet: it is given a moment to, so it is not counted as served beside the
+		// fetch that replaced it (a CI runner did that too).
+		select {
+		case <-r.Context().Done():
+			return
+		case <-time.After(200 * time.Millisecond):
+		}
 		s.mu.Lock()
-		s.served = append(s.served, servedSpan{start, time.Now()})
+		s.served = append(s.served, servedSpan{start, end})
 		s.mu.Unlock()
 		_, _ = w.Write(body)
 	}))
