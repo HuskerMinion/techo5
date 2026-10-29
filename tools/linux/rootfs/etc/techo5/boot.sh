@@ -62,6 +62,12 @@ mountpoint -q /store || mount -t ext4 -o ro,noatime $STORE_DEV /store
 mount -t tmpfs tmpfs /var/log
 mount -t tmpfs tmpfs /var/tmp
 mkdir -p /run/lock /run/techo5 $LOGDIR /data/misc/techo5/models
+# With the boot layer (techo5-lib.sh, t5_boot_layer) the kernel comes with the slot
+# (slots/<x>/boot/boot.img) and the boot partition holds the boot layer: the kernel update is off.
+if [ -n "${KERNEL_UPDATE:-}" ] && t5_boot_layer; then
+	log "kernel: the boot layer starts this slot's own kernel; no kernel update"
+	KERNEL_UPDATE=
+fi
 # /etc/hosts is a symlink to it: localhost here, and echod adds the .local names it looks up.
 [ -e /run/hosts ] || printf '127.0.0.1\tlocalhost localhost.localdomain\n::1\t\tlocalhost localhost.localdomain\n' > /run/hosts
 # The clock's zone lives on userdata (echod sets it from Home Assistant); a unit without one starts
@@ -328,6 +334,11 @@ done
 # tries rather than leaving the unit unreachable for good. It is off because
 # a network without a gateway never has a default route, and an update there
 # would never be committed.
+#
+# With the boot layer (techo5-lib.sh, t5_ab_slot) the slot it booted is also on
+# trial while its A/B record has not marked it successful, and the boot layer,
+# not the initramfs, counts the tries; slotctl commit marks the record too.
+# Without the boot layer this is the slot trial it always was.
 TRIAL_SETTLE=${TRIAL_SETTLE:-300}
 TRIAL_TIMEOUT=${TRIAL_TIMEOUT:-900}
 TRIAL_NEEDS_NETWORK=${TRIAL_NEEDS_NETWORK:-0}
@@ -337,10 +348,16 @@ trial_network() {
 	[ "$TRIAL_NEEDS_NETWORK" = 1 ] || return 0
 	ip route show default 2>/dev/null | grep -q default
 }
+# on_trial <slot>: whether the slot still has to commit.
+on_trial() {
+	case "$(cat /store/slots/$1.state 2>/dev/null)" in trial*) return 0;; esac
+	[ "$(t5_ab_slot)" = "$1" ] && bootctl -q status 2>/dev/null | grep -q "^slot $1: .*successful 0"
+}
 (
 	s=$(cat /run/techo5/slot 2>/dev/null)
 	[ -n "$s" ] || exit 0
-	case "$(cat /store/slots/$s.state 2>/dev/null)" in trial*) ;; *) exit 0;; esac
+	on_trial "$s" || exit 0
+	t5_ab_slot >/dev/null && log "slot $s: on trial; the boot layer counts its tries"
 	while true; do
 		sleep 15
 		now=$(cut -d. -f1 /proc/uptime)

@@ -5,6 +5,7 @@
 *.py text eol=lf
 tools/linux/init text eol=lf
 tools/linux/slotctl text eol=lf
+tools/linux/bootctl text eol=lf
 tools/linux/readmisc.sh text eol=lf
 tools/linux/rootfs/** text eol=lf
 tools/linux/athena/** text eol=lf

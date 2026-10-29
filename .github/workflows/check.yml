@@ -38,3 +38,6 @@ jobs:
       - name: Installer tests
         run: |
           python3 tools/test_install_show.py
+
+      - name: Boot layer tests (bootctl, slotctl, under busybox in Docker)
+        run: python3 tools/test_boot_layer.py

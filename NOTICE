@@ -299,6 +299,13 @@ Light sensor, echod/internal/hardware/ambient/em3071x.go
   GPL-2.0 driver uses (drivers/input/sensors/lsensor/ls_em3071x.c in Rockchip's kernel). They are
   facts about the chip; the Go code that uses them is TECHO5's own, written fresh.
 
+bootctl, tools/linux/bootctl
+  From u-boot-amazon-echo, https://github.com/nuno407/u-boot-amazon-echo (tools/bootctl, commit
+  1cc4c33) — MIT License, Copyright (c) 2026 The u-boot-amazon-echo authors
+  The boot layer's tool for its A/B record, carried in the root filesystem and the boot images.
+  Copied unchanged but for the comment naming where it comes from. The MIT License's text is as
+  above, under EchoLocal.
+
 BusyBox, https://busybox.net (GPL-2.0)
   The Skylight's installer and bench images carry it as bin/busybox, and the Skylight and athena
   stores as /bin/busybox.static (PID 1's interpreter): Alpine Linux's busybox-static package (armv7,
