@@ -79,6 +79,11 @@ How it compares with EchoLocal, EchoMuse, echo-dot-assist, Kiosk Satellite and V
 
 The bigger changes of September and October 2026. Every release lists the rest.
 
+- 📖 **Long answers page along with the voice** (v1.6.14). An Assist answer too long for the screen
+  is shown a page at a time, turning as the voice reads it, on the Show and the Spot
+  ([#333](https://github.com/HuskerMinion/techo5/discussions/333)). The glance chips under the clock
+  can keep one size ([#332](https://github.com/HuskerMinion/techo5/issues/332)), and a second AirPlay
+  sender can take over from the first ([#334](https://github.com/HuskerMinion/techo5/issues/334)).
 - 🌍 **German, Spanish and Italian on the screen** (v1.6.13). **Screen language** gains German
   ([#322](https://github.com/HuskerMinion/techo5/pull/322)), Spanish
   ([#327](https://github.com/HuskerMinion/techo5/pull/327)) and a first Italian draft
