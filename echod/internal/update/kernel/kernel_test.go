@@ -2,6 +2,7 @@ package kernel
 
 import (
 	"bytes"
+	"compress/gzip"
 	"crypto/sha256"
 	"encoding/binary"
 	"os"
@@ -25,8 +26,7 @@ func mkImage(t *testing.T, tag string, table []byte) []byte {
 		copy(slot[12:], s[:])
 		copy(slot[slotHead:], table)
 	}
-	k := append([]byte("kernel "+tag+" "), bytes.Repeat([]byte{0x5a}, 3000)...)
-	k = append(k, slot...)
+	k := append(gzKernel(t, tag, "Linux version test "+tag), slot...)
 	r := []byte("ramdisk " + tag)
 	img := make([]byte, page+pad(len(k), page)+pad(len(r), page))
 	copy(img, "ANDROID!")
@@ -42,6 +42,21 @@ func mkImage(t *testing.T, tag string, table []byte) []byte {
 	}
 	copy(img[headerID:], im.computedID())
 	return img
+}
+
+// gzKernel is a kernel part as athena's are: an arm64 Image (here only its header and a string),
+// gzip'd. The tuning slot (in the DTB, in a real one) goes after the gzip stream.
+func gzKernel(t *testing.T, tag, text string) []byte {
+	t.Helper()
+	img := make([]byte, 64)
+	copy(img[56:], "ARM\x64")
+	img = append(img, []byte(text+" ")...)
+	img = append(img, bytes.Repeat([]byte(tag), 300)...)
+	var b bytes.Buffer
+	w := gzip.NewWriter(&b)
+	w.Write(img)
+	w.Close()
+	return b.Bytes()
 }
 
 var tableB = bytes.Repeat([]byte{0x01, 0x02}, 600)

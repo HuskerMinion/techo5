@@ -278,6 +278,16 @@ func (p Paths) readBoot() ([]byte, error) {
 // On the Skylight this overwrites the only kernel the unit boots: a power cut before the sync leaves
 // it needing Loader mode (see the package comment).
 func (p Paths) writeBoot(img []byte) error {
+	// Never over anything but TECHO5's athena kernel (uboot.go): U-Boot in the boot partition stays.
+	if p.Board == Athena {
+		part, err := p.readBoot()
+		if err != nil {
+			return err
+		}
+		if err := p.checkBootPartition(part); err != nil {
+			return fmt.Errorf("the boot partition: %w; not writing it", err)
+		}
+	}
 	f, err := os.OpenFile(p.Boot, os.O_RDWR, 0)
 	if err != nil {
 		return err
@@ -547,6 +557,9 @@ func Apply(p Paths) (reboot bool, err error) {
 	}
 	if !cur.idOK() {
 		return false, fmt.Errorf("the %s partition's header id does not match its contents; not touching it", partName)
+	}
+	if err := p.checkBootPartition(part); err != nil {
+		return false, fmt.Errorf("the %s partition: %w; not touching it", partName, err)
 	}
 	filled, what, err := p.Board.toWrite(cur, img)
 	if err != nil || filled == nil {

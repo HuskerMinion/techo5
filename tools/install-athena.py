@@ -70,7 +70,7 @@ import time
 import zlib
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from techo5lib import (CONSOLE_TECHO5, Adb, Console, Release, ask_name, ask_wifi, confirm,  # noqa: E402
+from techo5lib import (CONSOLE_TECHO5, Adb, Console, Fail, Release, ask_name, ask_wifi, confirm,  # noqa: E402
                        default_dir, fail, need, new_api_key, note, pick_unit, run_main, step, valid_api_key,
                        wifi_conf, write_private)
 
@@ -273,7 +273,28 @@ def slot_offset(data, what='the boot image'):
 
 
 def is_techo5_boot(data):
-    return SLOT_MAGIC in data
+    return SLOT_MAGIC in data and not is_techo5_uboot(data)
+
+
+# Every TECHO5 athena U-Boot build carries this string (u-boot-amazon-echo's CONFIG_AB_SELF_MARKER,
+# as TECHO5's athena build sets it).
+UBOOT_MARKER = b'techo5-athena-uboot-' + b'image'
+
+
+def is_techo5_uboot(data):
+    """Whether a boot image is TECHO5's U-Boot (the boot layer, tools/linux/README.md): its kernel part, gunzipped (or as
+    it is, for a raw build), holds the U-Boot marker. Its DTB carries a tuning slot like a kernel's, so
+    is_techo5_boot alone would take it for one."""
+    try:
+        img = BootImage(data)
+    except Fail:
+        return False
+    k = data[img.kernel_at:img.kernel_at + img.kernel_size]
+    try:
+        payload = zlib.decompressobj(16 + zlib.MAX_WBITS).decompress(k, 64 << 20)
+    except zlib.error:
+        payload = k
+    return UBOOT_MARKER in payload or UBOOT_MARKER in k
 
 
 def check_techo5_boot(data, what='the boot image'):
@@ -1031,6 +1052,8 @@ def main(argv=None):
     ap.add_argument('--wifi-passphrase-file', help='a file holding the --wifi passphrase, for running from a script')
     ap.add_argument('--dry-run', action='store_true', help='check the unit and the images; write nothing')
     ap.add_argument('--force', action='store_true', help='do not ask before writing')
+    ap.add_argument('--replace-uboot', action='store_true',
+                    help="write the kernel over TECHO5's U-Boot in boot (p20): back to the layout without U-Boot")
     ap.add_argument('--no-watch', action='store_true', help='restart the unit and stop; do not watch the first boot')
     ap.add_argument('--show-amp-tables', metavar='BOOT_IMG',
                     help="print the amp tunings in a Fire OS boot image and their sha256; needs no unit")
@@ -1134,6 +1157,11 @@ def main(argv=None):
     # What boot holds now, read fresh (the backup may be older than the last install).
     current_boot = read_file(read_partition(adb, BOOT, parts[BOOT][1], os.path.join(a.work, 'athena-boot-now.img')))
     os.remove(os.path.join(a.work, 'athena-boot-now.img'))
+    if is_techo5_uboot(current_boot) and not a.replace_uboot:
+        fail("boot (p%d) holds TECHO5's U-Boot, which starts each slot's own kernel: this installer would\n"
+             "   put a kernel over it. Install the store from the unit instead (slotctl install), or, to go\n"
+             "   back to booting a kernel from p%d without U-Boot, run this again with --replace-uboot."
+             % (BOOT, BOOT))
     boot_is_techo5 = is_techo5_boot(current_boot)
     note('boot now holds %s' % ("TECHO5's mainline kernel" if boot_is_techo5 else "Amazon's kernel"))
     # A backup made with TECHO5 already on the unit holds TECHO5, not Fire OS.

@@ -377,6 +377,27 @@ class SlotAndHeader(unittest.TestCase):
             inst.fill_slot(techo5_boot(), b'\x01\x02' * 5000)
 
 
+class UBootInBoot(unittest.TestCase):
+    """p20 holding TECHO5's U-Boot (the boot layer) is never taken for a kernel."""
+
+    def uboot(self, raw=False):
+        payload = b'\x00' * 100 + b'U-Boot 2026.10 ' + inst.UBOOT_MARKER + b'\0' + b'\x11' * 5000
+        body = payload if raw else gzip.compress(payload)
+        slot = bytearray(empty_slot())
+        return boot_image(body + bytes(slot) + fdt({'compatible': 'amazon,athena'}))
+
+    def test_uboot_is_recognised(self):
+        for raw in (False, True):
+            img = self.uboot(raw)
+            self.assertTrue(inst.is_techo5_uboot(img))
+            self.assertFalse(inst.is_techo5_boot(img))
+
+    def test_kernels_are_not_uboot(self):
+        self.assertFalse(inst.is_techo5_uboot(techo5_boot()))
+        self.assertTrue(inst.is_techo5_boot(techo5_boot()))
+        self.assertFalse(inst.is_techo5_uboot(b'not a boot image' * 200))
+
+
 class MadeUpStock(unittest.TestCase):
     def setUp(self):
         self.saved = dict(inst.KNOWN_AMP_TABLES)
