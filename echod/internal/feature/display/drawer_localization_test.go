@@ -23,7 +23,7 @@ import (
 func TestDrawerTranslationsKeepNamesAndActions(t *testing.T) {
 	config.Use(filepath.Join(t.TempDir(), "state.json"))
 	t.Cleanup(func() { _ = config.Set().Screen().Language("") })
-	for _, lang := range []string{"en", "ja", "fr", "pt", "en", "ja"} {
+	for _, lang := range []string{"en", "ja", "nl", "pt", "en", "ja"} {
 		_ = config.Set().Screen().Language(lang)
 		wantTabs := []string{"Cameras", "Radio", "Announce", "Call"}
 		if lang == "ja" {
@@ -126,7 +126,7 @@ func TestJapaneseDrawerEmptyAndProgressStates(t *testing.T) {
 func TestDrawerCameraControlsAndAnnouncementCounts(t *testing.T) {
 	config.Use(filepath.Join(t.TempDir(), "state.json"))
 	t.Cleanup(func() { _ = config.Set().Screen().Language("") })
-	for _, lang := range []string{"en", "ja", "fr", "pt"} {
+	for _, lang := range []string{"en", "ja", "nl", "pt"} {
 		_ = config.Set().Screen().Language(lang)
 		want := []string{"Talk", "Connecting…", "End talk  1:05", "Try again", "Mute", "Unmute", "1 other device", "3 other devices"}
 		if lang == "ja" {
