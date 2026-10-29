@@ -179,6 +179,7 @@ var registered = []string{
 	"screen_font",
 	"screen_date_color",
 	"screen_weather_position",
+	"screen_glance_chip_size",
 	"screen_ignores_room_lights",
 	"screen_language",
 	"screen_light_theme",

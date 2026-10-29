@@ -117,6 +117,10 @@ type Screen struct {
 	// WeatherPosition is where the home screen's weather sits: empty for the top left, "top-right"
 	// (display/clock_layout.go). The Show's only.
 	WeatherPosition string `json:"weather_position,omitempty"`
+	// GlanceChipSize is the size of the glance strip's text on the clock page: empty for Automatic (the
+	// small face, the tiny one when that fits more chips), "small" or "tiny" to keep to one
+	// (display/render_glance.go).
+	GlanceChipSize string `json:"glance_chip_size,omitempty"`
 
 	// ClockStyle is how the home screen's clock looks all day: empty for the classic face, or "big",
 	// "flip", "led", "analog", "words", "sun", "dashboard", "binary", "world", "agenda", "glow", "nixie",
@@ -388,6 +392,10 @@ func (w ScreenWriter) DateColor(v string) error {
 
 func (w ScreenWriter) WeatherPosition(v string) error {
 	return w.st.Update(func(c *Config) { c.Screen.WeatherPosition = v })
+}
+
+func (w ScreenWriter) GlanceChipSize(v string) error {
+	return w.st.Update(func(c *Config) { c.Screen.GlanceChipSize = v })
 }
 
 func (w ScreenWriter) DimAfterMinutes(v int) error {

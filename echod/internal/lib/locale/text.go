@@ -441,6 +441,10 @@ var uiEnglish = map[string]string{
 	"ui_general":                                           "General",
 	"ui_gets_louder":                                       "Gets louder",
 	"ui_group_it_with_other_airplay_2_speakers":            "Group it with other AirPlay 2 speakers",
+	"ui_glance_chip_size":                                  "Glance chip size",
+	"ui_small":                                             "Small",
+	"ui_tiny":                                              "Tiny",
+	"ui_the_text_under_the_clock":                          "The size of the text under the clock",
 	"ui_the_iphone_slider_is_the_device_s_volume": "The iPhone's volume slider moves the device's volume",
 	"ui_home_assistant_isn_t_set_up_here":         "Home Assistant isn't set up here",
 	"ui_home_assistant_refused_the_token":         "Home Assistant refused the token",
@@ -726,6 +730,10 @@ var uiTranslations = map[string]map[string]string{
 		"one_minute":                    "1 minuto",
 		"option_always":                 "Siempre",
 		"option_automatic":              "Automático",
+		"ui_glance_chip_size":           "Tamaño de los chips",
+		"ui_small":                      "Pequeño",
+		"ui_tiny":                       "Diminuto",
+		"ui_the_text_under_the_clock":   "El tamaño del texto bajo el reloj",
 		"option_never":                  "Nunca",
 		"option_none":                   "Ninguno",
 		"option_nothing":                "Nada",
@@ -1279,6 +1287,10 @@ var uiTranslations = map[string]map[string]string{
 		"ui_general":                                           "Generale",
 		"ui_gets_louder":                                       "Aumenta di volume",
 		"ui_group_it_with_other_airplay_2_speakers":            "Raggruppalo con altri altoparlanti AirPlay 2",
+		"ui_glance_chip_size":                                  "Dimensione dei chip",
+		"ui_small":                                             "Piccolo",
+		"ui_tiny":                                              "Minuscolo",
+		"ui_the_text_under_the_clock":                          "La dimensione del testo sotto l'orologio",
 		"ui_home_assistant_isn_t_set_up_here":                  "Home Assistant non è configurato qui",
 		"ui_home_assistant_refused_the_token":                  "Home Assistant ha rifiutato il token",
 		"ui_home_assistant_settings_voice_assistants": "Home Assistant: Impostazioni, Assistenti vocali",
@@ -1883,6 +1895,10 @@ var uiTranslations = map[string]map[string]string{
 		"ui_general":                                           "一般",
 		"ui_gets_louder":                                       "徐々に音量を上げる",
 		"ui_group_it_with_other_airplay_2_speakers":            "ほかのAirPlay 2スピーカーとグループ化",
+		"ui_glance_chip_size":                                  "チップの大きさ",
+		"ui_small":                                             "小",
+		"ui_tiny":                                              "極小",
+		"ui_the_text_under_the_clock":                          "時計の下の文字の大きさ",
 		"ui_the_iphone_slider_is_the_device_s_volume": "iPhoneの音量スライダーで本体の音量を変更",
 		"ui_home_assistant_isn_t_set_up_here":         "Home Assistantが未設定です",
 		"ui_home_assistant_refused_the_token":         "Home Assistantがトークンを拒否しました",
@@ -2912,6 +2928,14 @@ var uiTranslations = map[string]map[string]string{
 		"ui_gets_louder": "Wird lauter",
 		// Group it with other AirPlay 2 speakers
 		"ui_group_it_with_other_airplay_2_speakers": "Mit anderen AirPlay-2-Lautsprechern gruppieren",
+		// Glance chip size
+		"ui_glance_chip_size": "Chip-Größe",
+		// Small
+		"ui_small": "Klein",
+		// Tiny
+		"ui_tiny": "Winzig",
+		// The size of the text under the clock
+		"ui_the_text_under_the_clock": "Die Größe des Textes unter der Uhr",
 		// The iPhone's volume slider moves the device's volume
 		"ui_the_iphone_slider_is_the_device_s_volume": "Der Lautstärkeregler des iPhones steuert die Gerätelautstärke",
 		// Home Assistant isn't set up here

@@ -615,6 +615,10 @@ like "kitchen screen" under its **Voice assistants** settings in Home Assistant.
 - **Weather position** (on the Show): *Top left*, where the weather has always been, or *Top right*.
   At the top right, a weather alert's badge sits beside it (the weather shortens to the temperature and
   its icon to make room) and a Corner timer goes under it. Also in Home Assistant.
+- **Glance chip size** (on the Show): the text size of the glance strip
+  under the clock. *Automatic* uses the small text and drops to the tiny text when that fits more
+  chips, so the size can change as chips come and go. *Small* and *Tiny* keep one size; with *Small*,
+  a chip that does not fit is left off. Also in Home Assistant.
 - **Clock style**: how the clock looks all day. *Classic*, *Big*, *Flip*, *LED*, *Analog*, *Words*
   (the time in words), *Sun* (the sun's path from sunrise to sunset), *Dashboard* (the next events
   and the week's weather), *Binary* (the time in lights, one column per digit, counted 1, 2, 4, 8

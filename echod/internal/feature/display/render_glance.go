@@ -32,11 +32,16 @@ func (r *renderer) glanceStrip(chips []home.Chip, callButton bool) {
 		}
 		return ws
 	}
-	// The small face when every chip fits in it; otherwise the tiny one, when that fits more.
+	// The small face when every chip fits in it; otherwise the tiny one, when that fits more. Glance chip
+	// size keeps to one of them: the chips that do not fit in it drop off.
 	face, lift := r.small, r.s(10)
+	size := glanceSize()
+	if size == "tiny" {
+		face, lift = r.tiny, r.s(8)
+	}
 	widths := widthsIn(face)
 	keep, total := fitChips(widths, gap, room)
-	if len(keep) < len(chips) {
+	if size == "" && len(keep) < len(chips) {
 		tinyWidths := widthsIn(r.tiny)
 		if k, t := fitChips(tinyWidths, gap, room); len(k) > len(keep) {
 			face, lift, widths, keep, total = r.tiny, r.s(8), tinyWidths, k, t
