@@ -116,6 +116,7 @@ type aPlayer struct {
 	holding bool
 	own     [2]bool
 	screen  [2]bool
+	title   *media.Title
 }
 
 func (p aPlayer) ReceivedTrack() (from, title, artist, album string) {
@@ -128,6 +129,7 @@ func (p aPlayer) Held() (title, artist, album string, ok bool) {
 }
 func (p aPlayer) Playing() (playing, paused bool)     { return p.own[0], p.own[1] }
 func (p aPlayer) ScreenState() (playing, paused bool) { return p.screen[0], p.screen[1] }
+func (p aPlayer) OwnTitle() *media.Title              { return p.title }
 
 // What the sensors read is what the player says, each field where it belongs.
 func TestTheSnapshotIsWhatThePlayerSays(t *testing.T) {
@@ -139,6 +141,7 @@ func TestTheSnapshotIsWhatThePlayerSays(t *testing.T) {
 		holding: true,
 		own:     [2]bool{false, true},
 		screen:  [2]bool{true, false},
+		title:   &media.Title{Title: "Message from Alex", Subtitle: "today 14:12", Source: "Answering machine"},
 	})
 	want := playingSnapshot{
 		recvFrom: DLNAName, recvTitle: "Africa", recvArtist: "Toto", recvAlbum: "Toto IV",
@@ -148,6 +151,8 @@ func TestTheSnapshotIsWhatThePlayerSays(t *testing.T) {
 		heldTitle: "Rosanna", heldArtist: "David Paich", heldAlbum: "Toto IV (2018)",
 		ownPaused:     true,
 		screenPlaying: true,
+		titled:        true,
+		own:           media.Title{Title: "Message from Alex", Subtitle: "today 14:12", Source: "Answering machine"},
 	}
 	if got != want {
 		t.Errorf("%+v, want %+v", got, want)
@@ -629,4 +634,18 @@ func (l *lockedBuffer) String() string {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 	return l.b.String()
+}
+
+// A track Home Assistant named (media_title) is named so, over a station the radio sensors still name,
+// with its subtitle where an artist goes; without a source it is Playback.
+func TestATitledTrackIsNamedAsItWasTold(t *testing.T) {
+	s := playingSnapshot{ownPlaying: true, radioStation: "Old Station", radioTitle: "Old Song",
+		titled: true, own: media.Title{Title: "Message from Alex", Subtitle: "today 14:12", Source: "Answering machine"}}
+	if got, want := nowPlayingOf(playing(s)), (nowPlaying{"Answering machine", "Message from Alex", "today 14:12", "", "playing"}); got != want {
+		t.Errorf("%+v, want %+v", got, want)
+	}
+	s.own.Source = ""
+	if got := nowPlayingOf(playing(s)); got.source != PlaybackName {
+		t.Errorf("without a source: named as from %q, want %q", got.source, PlaybackName)
+	}
 }

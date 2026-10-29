@@ -2020,6 +2020,54 @@ action: esphome.office_stop_video
 data: {}
 ```
 
+## Name what plays next
+
+In YAML, refer to this action as `esphome.<node>_media_title`.
+
+Names the next `media_player.play_media` on the device's media player, for the player screen and the
+**Now playing** sensors. Home Assistant's `play_media` sends only the address, so without it the screen
+names the device's own playback as the radio, with the last station's song, or not at all. A recording
+off an answering machine, say, then shows as "Message from Alex", "today 14:12", "Answering machine".
+
+- It names only the next `play_media` that is not an announcement, once: the one after it has no name
+  again. A station, a phone over Bluetooth or Music Assistant starting first drops the name unused.
+- The name stays for as long as that track is on the player, paused too (`media_player.media_stop`
+  pauses), and goes when it ends, is stopped for good or something else plays.
+- Without it, `play_media` is named as before.
+
+### title (Required)
+
+*string*
+
+The name, shown large. `""` names nothing and drops a name given before.
+
+### subtitle (Can be empty)
+
+*string*
+
+A second line under it, such as when it was recorded.
+
+### source (Can be empty)
+
+*string*
+
+Where it comes from, shown where "Radio" or "Bluetooth" would be. `""` shows the screen's own word for
+it ("Playback"); the **Now playing source** sensor reads `Playback`.
+
+```yaml
+- action: esphome.office_media_title
+  data:
+    title: "Message from Alex"
+    subtitle: "today 14:12"
+    source: "Answering machine"
+- action: media_player.play_media
+  target:
+    entity_id: media_player.office
+  data:
+    media_content_id: "media-source://media_source/local/message.wav"
+    media_content_type: music
+```
+
 ## Choose the weather shown on the idle screen
 
 In YAML, refer to this action as `esphome.<node>_home_weather`.

@@ -46,6 +46,10 @@ type playingSnapshot struct {
 
 	// The station the radio sensors name, and what they say is on (meta.go).
 	radioStation, radioTitle, radioArtist, radioAlbum string
+
+	// titled is this player's own track named by Home Assistant (media_title), as own.
+	titled bool
+	own    media.Title
 }
 
 // nowPlayer is as much of media's Player as the sensors read.
@@ -56,6 +60,7 @@ type nowPlayer interface {
 	Held() (title, artist, album string, ok bool)
 	Playing() (playing, paused bool)
 	ScreenState() (playing, paused bool)
+	OwnTitle() *media.Title
 }
 
 // takeSnapshot reads the player and f's radio; tests put a room of their own in its place.
@@ -77,6 +82,9 @@ func snapshotOf(p nowPlayer) playingSnapshot {
 	s.heldTitle, s.heldArtist, s.heldAlbum, s.held = p.Held()
 	s.ownPlaying, s.ownPaused = p.Playing()
 	s.screenPlaying, s.screenPaused = p.ScreenState()
+	if t := p.OwnTitle(); t != nil {
+		s.titled, s.own = true, *t
+	}
 	return s
 }
 
@@ -117,6 +125,18 @@ func whosePlaying(s playingSnapshot, heldOverUnnamed bool) playingWhose {
 	return playingOwn
 }
 
+// PlaybackName is what the sensors call a track Home Assistant named without saying where it comes
+// from. The screen says it in its own language.
+const PlaybackName = "Playback"
+
+// titledSource is where a named track comes from: what it was named as coming from, else fallback.
+func titledSource(t media.Title, fallback string) string {
+	if t.Source != "" {
+		return t.Source
+	}
+	return fallback
+}
+
 // bluetoothFrom is whether a received track's name is a phone's over Bluetooth (feature/btaudio).
 func bluetoothFrom(from string) bool { return strings.HasPrefix(from, media.BluetoothPrefix) }
 
@@ -126,7 +146,7 @@ func bluetoothFrom(from string) bool { return strings.HasPrefix(from, media.Blue
 // has let go of the speaker nothing drops the hold, so the held track is named again when that ends, as
 // on the page.
 //
-// This device's own track is named when it is a phone over Bluetooth (with a song only if the device
+// This device's own track is named when Home Assistant named it (media_title), when it is a phone over Bluetooth (with a song only if the device
 // was told one; nothing reads one from a phone yet) or a station the radio sensors name, with what they
 // say is on.
 func nowPlayingOf(s playingSnapshot) nowPlaying {
@@ -140,6 +160,10 @@ func nowPlayingOf(s playingSnapshot) nowPlaying {
 		n = nowPlaying{source: "Music Assistant", title: s.heldTitle, artist: s.heldArtist, album: s.heldAlbum}
 	case playingOwn:
 		switch {
+		case s.titled:
+			// Named by Home Assistant before it was played: what it was named, before anything a station
+			// or a phone left behind.
+			n = nowPlaying{source: titledSource(s.own, PlaybackName), title: s.own.Title, artist: s.own.Subtitle}
 		case bluetoothFrom(s.recvFrom):
 			n = nowPlaying{source: "Bluetooth", title: s.recvTitle, artist: s.recvArtist, album: s.recvAlbum}
 		case s.recvFrom == "" && (s.ownPlaying || s.ownPaused) && s.radioStation != "":

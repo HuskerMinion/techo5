@@ -66,7 +66,7 @@ func TestATrackThatIsNotAStationIsNotFetchedAgainWhenItEnds(t *testing.T) {
 	url, hits := endingStream(t)
 	liveOnly(t, "http://station.invalid/live")
 	s := liveStream(t)
-	tr := s.play(url, false)
+	tr := s.play(url, false, nil)
 	waitDone(t, tr)
 	if n := hits.Load(); n != 1 {
 		t.Errorf("a track that ended cleanly was fetched %d times, want once", n)
@@ -83,11 +83,11 @@ func TestAClipAfterTheRadioIsPlayedOnce(t *testing.T) {
 	clip, hits := endingStream(t)
 	liveOnly(t, station)
 	s := liveStream(t)
-	radio := s.play(station, false)
+	radio := s.play(station, false, nil)
 	if !radio.live.Load() {
 		t.Fatal("the station was not taken for live radio")
 	}
-	tr := s.play(clip, false)
+	tr := s.play(clip, false, nil)
 	waitDone(t, tr)
 	if n := hits.Load(); n != 1 {
 		t.Errorf("a clip after the radio was fetched %d times, want once", n)
@@ -101,8 +101,8 @@ func TestASwitchGoesByTheNewTrack(t *testing.T) {
 	b, _ := endingStream(t)
 	asked := liveOnly(t, a)
 	s := liveStream(t)
-	first := s.play(a, false)
-	second := s.play(b, false)
+	first := s.play(a, false, nil)
+	second := s.play(b, false, nil)
 	waitDone(t, second)
 	if !first.live.Load() || second.live.Load() {
 		t.Errorf("live: first %t, second %t; want true, false", first.live.Load(), second.live.Load())
@@ -124,7 +124,7 @@ func TestALiveStationThatEndsIsFetchedAgain(t *testing.T) {
 		ended++
 		mu.Unlock()
 	})
-	tr := s.play(url, false)
+	tr := s.play(url, false, nil)
 	waitDone(t, tr)
 	if n := hits.Load(); n != resumeTries+1 {
 		t.Errorf("a station that kept ending at once was fetched %d times, want %d", n, resumeTries+1)
@@ -146,7 +146,7 @@ func TestATrackMarkedLiveAsItStartsIsLive(t *testing.T) {
 	other, _ := endingStream(t)
 	liveOnly(t) // the radio feature knows of no station as the track starts
 	s := liveStream(t)
-	tr := s.play(station, false)
+	tr := s.play(station, false, nil)
 	if tr.live.Load() {
 		t.Fatal("the track was live before it was marked")
 	}
@@ -156,7 +156,7 @@ func TestATrackMarkedLiveAsItStartsIsLive(t *testing.T) {
 	if !s.markLive(station) || !tr.live.Load() {
 		t.Fatal("the track playing was not made live")
 	}
-	next := s.play(other, false)
+	next := s.play(other, false, nil)
 	waitDone(t, next)
 	if s.markLive(station) {
 		t.Fatal("a track no longer playing was marked live")
