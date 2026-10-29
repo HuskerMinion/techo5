@@ -26,9 +26,9 @@ func withHelper(t *testing.T) {
 }
 
 func use(t *testing.T, path string, ok bool) {
-	oldPath, oldPresent := helperPath, present
-	helperPath, present = path, func() bool { return ok }
-	t.Cleanup(func() { helperPath, present = oldPath, oldPresent })
+	oldPath, oldPresent, oldMin := helperPath, present, minHelperPixels
+	helperPath, present, minHelperPixels = path, func() bool { return ok }, 0 // the test pictures are small
+	t.Cleanup(func() { helperPath, present, minHelperPixels = oldPath, oldPresent, oldMin })
 }
 
 // testdata is Go's own set of JPEGs, every subsampling image/jpeg reads, baseline and progressive.
@@ -242,5 +242,64 @@ func TestDenominator(t *testing.T) {
 		if d := Denominator(c.sw, c.sh, c.w, c.h); d != c.d {
 			t.Errorf("Denominator(%d, %d, %d, %d) = %d, want %d", c.sw, c.sh, c.w, c.h, d, c.d)
 		}
+	}
+}
+
+// TestSmallInGo: a picture under minHelperPixels never starts the helper, and one at it does. The fake
+// helper decodes at the scale asked for, image/jpeg only whole, so the size tells which one decoded.
+func TestSmallInGo(t *testing.T) {
+	useFake(t, "ok")
+	minHelperPixels = 1 << 19
+	for _, c := range []struct {
+		w, h   int
+		helper bool
+	}{
+		{333, 217, false}, // a tile
+		{1023, 512, false},
+		{1024, 512, true}, // half a megapixel
+		{1600, 1200, true},
+	} {
+		var b bytes.Buffer
+		if err := jpeg.Encode(&b, image.NewGray(image.Rect(0, 0, c.w, c.h)), nil); err != nil {
+			t.Fatal(err)
+		}
+		img, err := DecodeAtLeast(b.Bytes(), 1, 1)
+		if err != nil {
+			t.Fatal(err)
+		}
+		want := image.Rect(0, 0, c.w, c.h)
+		if c.helper {
+			want = image.Rect(0, 0, scaled(c.w, 8), scaled(c.h, 8))
+		}
+		if img.Bounds() != want {
+			t.Errorf("%d×%d: decoded at %v, want %v (helper %v)", c.w, c.h, img.Bounds().Size(), want.Size(), c.helper)
+		}
+	}
+}
+
+// TestMaxPixels: a JPEG over the limit is not decoded, by either decoder.
+func TestMaxPixels(t *testing.T) {
+	old := MaxPixels
+	t.Cleanup(func() { MaxPixels = old })
+	MaxPixels = 100 * 100
+	var b bytes.Buffer
+	if err := jpeg.Encode(&b, image.NewGray(image.Rect(0, 0, 101, 100)), nil); err != nil {
+		t.Fatal(err)
+	}
+	for _, ok := range []bool{false, true} {
+		use(t, "/nonexistent/techo5-jpeg", ok)
+		if _, err := Decode(b.Bytes()); err == nil {
+			t.Errorf("helper %v: Decode took a picture over MaxPixels", ok)
+		}
+		if _, err := DecodeAtLeast(b.Bytes(), 10, 10); err == nil {
+			t.Errorf("helper %v: DecodeAtLeast took a picture over MaxPixels", ok)
+		}
+	}
+	b.Reset()
+	if err := jpeg.Encode(&b, image.NewGray(image.Rect(0, 0, 100, 100)), nil); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := Decode(b.Bytes()); err != nil {
+		t.Errorf("a picture at MaxPixels: %v", err)
 	}
 }

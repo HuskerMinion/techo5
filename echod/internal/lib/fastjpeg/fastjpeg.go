@@ -17,6 +17,9 @@
 // A picture wanted only at some smaller size is decoded smaller with DecodeAtLeast: at a half, a
 // quarter or an eighth, by the scaled inverse DCT, which averages the picture down where shrinking a
 // whole decode with a bilinear filter skips most of it.
+//
+// A small picture, under about half a megapixel (minHelperPixels), is decoded in Go: there starting
+// the helper would cost more than it saves. A picture over MaxPixels is not decoded at all.
 package fastjpeg
 
 import (
@@ -40,6 +43,15 @@ import (
 // (tools/linux/deploy-rootfs.sh).
 var helperPath = "/usr/local/bin/techo5-jpeg"
 
+// minHelperPixels is the smallest picture the helper decodes. Below it, the few milliseconds the helper
+// takes to start are more than image/jpeg needs for the whole picture: a dashboard tile or a radar tile.
+var minHelperPixels int64 = 1 << 19
+
+// MaxPixels is the most pixels a JPEG may have to be decoded: 64 megapixels, twice what any caller
+// here takes. Every caller checks its own, smaller bound first; this one keeps a future caller from
+// unpacking a header's claim of gigabytes.
+var MaxPixels int64 = 64 << 20
+
 // helperWait bounds one decode: a twelve megapixel photo takes the helper about a quarter of a second.
 var helperWait = 10 * time.Second
 
@@ -53,23 +65,15 @@ var (
 
 // Decode decodes a JPEG whole, as jpeg.Decode does.
 func Decode(b []byte) (image.Image, error) {
-	return decode(b, 1)
+	return decode(b, 0, 0)
 }
 
 // DecodeAtLeast decodes a JPEG at the smallest of its whole size, a half, a quarter and an eighth of
 // it that is still at least w×h, so that a picture fitted to cover w×h is never enlarged. A w or h of
-// zero or less is the whole picture. Where the helper is not there the picture comes back whole, as
-// jpeg.Decode returns it.
+// zero or less is the whole picture. Where the helper is not there, or the picture is small, it comes
+// back whole, as jpeg.Decode returns it.
 func DecodeAtLeast(b []byte, w, h int) (image.Image, error) {
-	d := 1
-	if w > 0 && h > 0 && present() {
-		cfg, err := jpeg.DecodeConfig(bytes.NewReader(b))
-		if err != nil {
-			return nil, err
-		}
-		d = Denominator(cfg.Width, cfg.Height, w, h)
-	}
-	return decode(b, d)
+	return decode(b, w, h)
 }
 
 // Denominator is the largest of 1, 2, 4 and 8 that leaves a sw×sh picture at least w×h.
@@ -86,8 +90,20 @@ func Denominator(sw, sh, w, h int) int {
 // scaled is a side of n decoded at 1/d, rounded up as libjpeg rounds it.
 func scaled(n, d int) int { return (n + d - 1) / d }
 
-func decode(b []byte, d int) (image.Image, error) {
-	if present() {
+func decode(b []byte, w, h int) (image.Image, error) {
+	cfg, err := jpeg.DecodeConfig(bytes.NewReader(b))
+	if err != nil {
+		return nil, err
+	}
+	pixels := int64(cfg.Width) * int64(cfg.Height)
+	if pixels > MaxPixels {
+		return nil, fmt.Errorf("fastjpeg: a %d×%d JPEG, more than %d pixels", cfg.Width, cfg.Height, MaxPixels)
+	}
+	if present() && pixels >= minHelperPixels {
+		d := 1
+		if w > 0 && h > 0 {
+			d = Denominator(cfg.Width, cfg.Height, w, h)
+		}
 		img, err := helper(b, d)
 		if err == nil {
 			return img, nil
