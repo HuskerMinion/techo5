@@ -206,9 +206,10 @@ func airplayPending(pending time.Duration) {
 // a screen to show it. Its volume stays its own: the phone's slider scales what it sends, and the
 // device's volume is applied on top as for anything else. With AirPlay sets the volume (setsVolume,
 // #312) shairport-sync is told to ignore the slider and pass the audio as it comes, and the slider
-// moves the device's volume instead (airplayvolume.go); it still reports every move of it (pvol). A second sender is turned away while one
-// plays (allow_session_interruption is left off): the metadata then tells of one session at a time,
-// which airplaySession counts on, and allows for the end of one coming late.
+// moves the device's volume instead (airplayvolume.go); it still reports every move of it (pvol). A second sender takes over from one
+// playing (allow_session_interruption, #334), as switching from a computer to a phone wants: the next
+// session's setup then comes before the last one's end, which airplaySession allows for (next is kept
+// through a pend).
 //
 // The name is cut to fit the mDNS instance it is advertised as (airplayName). airplay2 is the configuration
 // for the AirPlay 2 receiver: AirPlay 2 only, so it never quietly falls back to classic AirPlay under a name
@@ -231,6 +232,7 @@ func shairportConf(name, metaPipe string, airplay2, setsVolume bool) string {
 %s};
 sessioncontrol = {
 	session_timeout = 60;
+	allow_session_interruption = "yes";
 };
 stdout = {
 	output_rate = %d;
@@ -328,9 +330,9 @@ func readAirPlayMetadata(ctx context.Context, path string) {
 // shairport-sync (5.0.4, classic AirPlay) tells of a session in one order: the sender announcing it
 // (snam, snua, each only if the sender names itself), setting it up (acre, daid, each only if the
 // sender gives it, then clip), and playing (pbeg); dapo comes from avahi apart from these, once the
-// session plays, and pend ends it. The next session's items all come after that pend (shairportConf).
-// 5.5.1 can send the pend of a sender that vanished after the next session's setup has begun, which is
-// why next is not reset at pend. disc (AirPlay 2) carries the address of the client leaving, and can
+// session plays, and pend ends it. A sender taking over (shairportConf) has its setup before the last
+// session's pend, and 5.5.1 can send the pend of a sender that vanished after the next session's setup
+// has begun, which is why next is not reset at pend. disc (AirPlay 2) carries the address of the client leaving, and can
 // come after the next session has started: it ends the session only if that is the one it came from
 // (from). So what a session says of its sender is gathered as it is set up (next), and taken whole as
 // it plays (take): a session that gave no DACP-ID or token has none, rather than the last one's.

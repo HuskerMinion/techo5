@@ -348,8 +348,8 @@ func TestASessionGivesOnlyTheTokenItGave(t *testing.T) {
 // What a session says of its sender as it is set up is taken only as it plays (pbeg): until then the
 // sender is the last one. What was said for a setup that never played (failed, then another sender
 // announced) is not taken for the next session; the last session's end coming late, between the next
-// one's setup and its play (as shairport-sync 5.5.1 can send it for a sender that vanished), does not
-// lose that setup.
+// one's setup and its play (as a sender taking over brings it, and shairport-sync 5.5.1 can send it for
+// a sender that vanished), does not lose that setup.
 func TestASendersSetupIsTakenAsItPlays(t *testing.T) {
 	keptTimers(t)
 	f := newFollowed()

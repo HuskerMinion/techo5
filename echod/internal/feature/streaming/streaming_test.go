@@ -727,9 +727,9 @@ func TestShairportConf(t *testing.T) {
 	if want := fmt.Sprintf(`include_cover_art = "%s";`, yesNo(home.HasScreen())); !strings.Contains(c, want) {
 		t.Errorf("conf without %s:\n%s", want, c)
 	}
-	// One session at a time, which airplaySession counts on.
-	if strings.Contains(c, "allow_session_interruption") {
-		t.Errorf("conf lets a sender break in:\n%s", c)
+	// Another sender takes over from one playing (#334); airplaySession allows for the order that brings.
+	if !strings.Contains(c, `allow_session_interruption = "yes";`) {
+		t.Errorf("conf turns a second sender away:\n%s", c)
 	}
 	// The classic receiver on the ports the firewall lets through, and nothing of AirPlay 2.
 	if !strings.Contains(c, fmt.Sprintf("port = %d;", airplayPort)) || strings.Contains(c, "service_type") {
