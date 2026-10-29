@@ -160,6 +160,17 @@ if [ "$board" = athena ]; then
 	else
 		echo "== no GPU helper (bin/techo5-gpu-arm, bin/techo5-mesa-arm.tar.gz): the screen is drawn on the cores"
 	fi
+	# The JPEG decoder (tools/jpeg/build.sh, armv7, static, libjpeg-turbo in it): photos and camera pictures
+	# decode on it, and with image/jpeg in the daemon where it is not there (lib/fastjpeg).
+	J=$ROOT/bin/techo5-jpeg-arm
+	if [ -e "$J" ]; then
+		[ "$(od -An -tx1 -j4 -N1 "$J" | tr -d ' ')" = 01 ] && [ "$(od -An -tu2 -j18 -N2 "$J" | tr -d ' ')" = 40 ] && ! grep -q 'ld-musl-\|ld-linux-' "$J" \
+			|| { echo "bin/techo5-jpeg-arm is not a static armv7 binary: build it with tools/jpeg/build.sh" >&2; exit 1; }
+		cp "$J" "$STAGE/bin/techo5-jpeg"
+		echo "== jpeg: sha256 $(sha256sum "$J" | cut -d' ' -f1)"
+	else
+		echo "== no JPEG decoder (bin/techo5-jpeg-arm): pictures are decoded in the daemon"
+	fi
 fi
 cp "$ROOT/tools/linux/slotctl" "$ROOT/tools/linux/techo5-lib.sh" "$ROOT/tools/linux/mkrootfs.sh" "$ROOT/tools/linux/packages-rootfs.txt" "$STAGE/tools/"
 # EXTRA_PACKAGES: Alpine packages a device needs on top of the list (athena: busybox-extras, for udhcpd).
@@ -168,10 +179,12 @@ cp -r "$ROOT/tools/linux/rootfs/." "$STAGE/overlay/"
 [ -n "$DEVICE_OVERLAY" ] && cp -r "$DEVICE_OVERLAY/." "$STAGE/overlay/"
 mkdir -p "$STAGE/overlay/usr/share/licenses/tailscale" && cp "$TS.LICENSE" "$STAGE/overlay/usr/share/licenses/tailscale/LICENSE"
 # The licenses of the other programs built from others' sources above (tools/linux/licenses: Shairport Sync,
-# nqptp, librespot, FFmpeg, Mesa), beside Tailscale's; librespot's and Mesa's only when the image carries them.
+# nqptp, librespot, FFmpeg, Mesa, libjpeg-turbo), beside Tailscale's; librespot's, Mesa's and libjpeg-turbo's
+# only when the image carries them.
 cp -r "$ROOT/tools/linux/licenses/." "$STAGE/overlay/usr/share/licenses/"
 [ -e "$STAGE/bin/techo5-librespot" ] || rm -rf "$STAGE/overlay/usr/share/licenses/librespot"
 [ -e "$STAGE/bin/techo5-gpu" ] || rm -rf "$STAGE/overlay/usr/share/licenses/mesa"
+[ -e "$STAGE/bin/techo5-jpeg" ] || rm -rf "$STAGE/overlay/usr/share/licenses/libjpeg-turbo"
 cp "$INPUTS"/alpine-minirootfs-*-armv7.tar.gz "$STAGE/inputs/"
 [ -n "$VENDOR_TGZ" ] && cp "$VENDOR_TGZ" "$STAGE/inputs/vendor.tar.gz"
 cp "$INPUTS"/apks312/wpa_supplicant-2.9-*.apk "$INPUTS"/apks312/libssl1.1-*.apk "$INPUTS"/apks312/libcrypto1.1-*.apk "$STAGE/inputs/apks312/"

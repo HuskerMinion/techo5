@@ -201,7 +201,7 @@ func (f *Feature) gridSnapshot(ctx context.Context, entity string, w, h int) (*i
 		return nil, ctx.Err()
 	}
 	defer func() { <-decoding }()
-	src, err := decodeWithin(b, maxFramePixels, "camera "+entity)
+	src, err := decodeWithin(b, maxFramePixels, "camera "+entity, w, h)
 	if err != nil {
 		return nil, err
 	}

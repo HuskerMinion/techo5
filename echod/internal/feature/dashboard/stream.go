@@ -19,6 +19,7 @@ import (
 	"time"
 
 	"github.com/HuskerMinion/techo5/echod/internal/config"
+	"github.com/HuskerMinion/techo5/echod/internal/lib/fastjpeg"
 	"github.com/HuskerMinion/techo5/echod/internal/lib/safe"
 )
 
@@ -346,7 +347,7 @@ func decodeWithin(b []byte, w, h int) (image.Image, error) {
 	if cfg.Width <= 0 || cfg.Height <= 0 || cfg.Width > w || cfg.Height > h {
 		return nil, errors.New("dashboard stream: a picture larger than the screen")
 	}
-	return jpeg.Decode(bytes.NewReader(b))
+	return fastjpeg.Decode(b)
 }
 
 // paint puts a picture into the frame where it belongs. Pictures are painted as they arrive, however

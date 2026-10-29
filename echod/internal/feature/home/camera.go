@@ -625,12 +625,12 @@ func (f *Feature) Prewarm() {
 func (f *Feature) snapshot(entity string) (*image.RGBA, error) {
 	var b []byte
 	var err error
+	fw, fh := cameraFrameSize()
 	switch {
 	case isReolink(entity):
 		b, err = reolinkSnap(entity)
 	case isGo2RTC(entity):
 		ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
-		fw, _ := cameraFrameSize()
 		b, err = go2rtcSnap(ctx, entity, fw)
 		cancel()
 	default:
@@ -639,7 +639,7 @@ func (f *Feature) snapshot(entity string) (*image.RGBA, error) {
 	if err != nil {
 		return nil, err
 	}
-	src, err := decodeWithin(b, maxFramePixels, "camera "+entity)
+	src, err := decodeWithin(b, maxFramePixels, "camera "+entity, fw, fh)
 	if err != nil {
 		return nil, err
 	}

@@ -170,7 +170,7 @@ func TestImmichPhoto(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := decodeWithin(b, maxPhotoPixels, "test"); err != nil {
+	if _, err := decodeWithin(b, maxPhotoPixels, "test", 0, 0); err != nil {
 		t.Errorf("the preview does not decode: %v", err)
 	}
 	if _, err := immichPhoto(context.Background(), s, immichAssetPrefix+"x/../../albums"); err == nil {

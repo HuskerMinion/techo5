@@ -4,6 +4,8 @@ import (
 	"bytes"
 	"fmt"
 	"image"
+
+	"github.com/HuskerMinion/techo5/echod/internal/lib/fastjpeg"
 )
 
 // Everything on this screen arrives as somebody else's picture: a photo out of a Home Assistant media
@@ -39,7 +41,12 @@ const (
 // decodeWithin decodes an image only if its header declares something this screen could use. what
 // names the picture in the error, since every caller here logs the failure and carries on with the
 // picture it had.
-func decodeWithin(b []byte, maxPixels int64, what string) (image.Image, error) {
+//
+// w×h is the most the picture will be drawn at, or zero for its own size. A JPEG much larger than that
+// is decoded at a half, a quarter or an eighth of its size where that still covers w×h (lib/fastjpeg):
+// a twelve megapixel photo for the Show 8's panel needs only a quarter of its pixels, and decoding
+// fewer costs less. Its shape is the same, so everything that fits it to the panel works as before.
+func decodeWithin(b []byte, maxPixels int64, what string, w, h int) (image.Image, error) {
 	cfg, format, err := image.DecodeConfig(bytes.NewReader(b))
 	if err != nil {
 		return nil, fmt.Errorf("%s: reading the image header: %w", what, err)
@@ -54,7 +61,12 @@ func decodeWithin(b []byte, maxPixels int64, what string) (image.Image, error) {
 		return nil, fmt.Errorf("%s: %d×%d is %d pixels, more than the %d this screen will decode", what, cfg.Width, cfg.Height, pixels, maxPixels)
 	}
 
-	img, _, err := image.Decode(bytes.NewReader(b))
+	var img image.Image
+	if format == "jpeg" {
+		img, err = fastjpeg.DecodeAtLeast(b, w, h)
+	} else {
+		img, _, err = image.Decode(bytes.NewReader(b))
+	}
 	if err != nil {
 		return nil, fmt.Errorf("%s: %w", what, err)
 	}

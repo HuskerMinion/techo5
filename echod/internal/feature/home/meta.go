@@ -195,11 +195,11 @@ func fetchArt(ctx context.Context, u string, logo bool) (*image.RGBA, *image.RGB
 // layoutArt decodes a picture and lays it out for the panel, by fetchArt's rule. It is the half that
 // does not care where the bytes came from: a URL here, or Music Assistant sending the picture itself.
 func layoutArt(b []byte, logo bool, what string) (*image.RGBA, *image.RGBA, error) {
-	src, err := decodeWithin(b, maxArtPixels, what)
+	artW, artH := artSize()
+	src, err := decodeWithin(b, maxArtPixels, what, artW, artH)
 	if err != nil {
 		return nil, nil, err
 	}
-	artW, artH := artSize()
 	dst := image.NewRGBA(image.Rect(0, 0, artW, artH))
 	sb := src.Bounds()
 	sw, sh := sb.Dx(), sb.Dy()

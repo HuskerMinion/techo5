@@ -342,7 +342,8 @@ func still(ctx context.Context, path string, wanted func() bool) (*image.RGBA, e
 		return nil, errReplaced
 	}
 	stillsDecoded.Add(1)
-	src, err := decodeWithin(b, maxFramePixels, "picture")
+	fw, fh := cameraFrameSize()
+	src, err := decodeWithin(b, maxFramePixels, "picture", fw, fh)
 	if err != nil {
 		return nil, err
 	}

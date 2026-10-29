@@ -22,7 +22,7 @@
 #                                                          and the Skylight's, for their 64-bit kernels, optional
 #   bin/techo5-gpu                                         the GPU helper (tools/gpu/build.sh), optional; with it
 #   inputs/techo5-mesa.tar.gz                              the lean Mesa it loads (build-mesa.sh), laid over /usr
-#   bin/techo5-jpeg                                        the JPEG decoder helper, 64-bit builds only, optional
+#   bin/techo5-jpeg                                        the JPEG decoder (tools/jpeg/build.sh), athena's, optional
 #   tools/slotctl tools/techo5-lib.sh tools/packages-rootfs.txt
 #   overlay/                                               tools/linux/rootfs from the repo
 #   inputs/alpine-minirootfs-*-<arch>.tar.gz               <arch>: -a's, else apk's own (armv7, or

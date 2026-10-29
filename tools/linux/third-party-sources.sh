@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # third-party-sources.sh — the source archive every release attaches for the programs its images carry that
-# are built from others' sources: FFmpeg, Shairport Sync, nqptp, librespot and Mesa (NOTICE). Each source is the
-# one its build script names and checks by SHA-256 (Mesa's by SHA-512); beside them go the patches, the license files
-# (tools/linux/licenses) and the build scripts themselves.
+# are built from others' sources: FFmpeg, Shairport Sync, nqptp, librespot, Mesa and libjpeg-turbo (NOTICE). Each
+# source is the one its build script names and checks by SHA-256 (Mesa's and libjpeg-turbo's by SHA-512); beside
+# them go the patches, the license files (tools/linux/licenses) and the build scripts themselves.
 #
 #   tools/linux/third-party-sources.sh VERSION [OUT]
 #
@@ -21,8 +21,9 @@ NQ=$(val build-shairport-sync.sh NQPTP_VERSION) NQ_SHA=$(val build-shairport-syn
 FF=$(val build-ffmpeg.sh FFVER) FF_SHA=$(val build-ffmpeg.sh SHA256)
 LR=$(val build-librespot.sh VERSION) LR_SHA=$(val build-librespot.sh SHA256)
 MESA=$(val build-mesa.sh VERSION) MESA_SHA=$(val build-mesa.sh SHA512)
+JT=$(val ../jpeg/build.sh VERSION) JT_SHA=$(val ../jpeg/build.sh SHA512)
 [ "$FF" = "$(val build-shairport-sync.sh FF_VERSION)" ] || { echo "build-ffmpeg.sh and build-shairport-sync.sh name different FFmpegs" >&2; exit 1; }
-for v in SPS SPS_SHA NQ NQ_SHA FF FF_SHA LR LR_SHA MESA MESA_SHA; do [ -n "${!v}" ] || { echo "no $v in the build scripts" >&2; exit 1; }; done
+for v in SPS SPS_SHA NQ NQ_SHA FF FF_SHA LR LR_SHA MESA MESA_SHA JT JT_SHA; do [ -n "${!v}" ] || { echo "no $v in the build scripts" >&2; exit 1; }; done
 
 STAGE=$(mktemp -d)
 trap 'rm -rf "$STAGE"' EXIT
@@ -37,8 +38,10 @@ fetch "shairport-sync-$SPS.tar.gz" "https://github.com/mikebrady/shairport-sync/
 fetch "nqptp-$NQ.tar.gz" "https://github.com/mikebrady/nqptp/archive/refs/tags/$NQ.tar.gz" "$NQ_SHA"
 fetch "librespot-$LR.crate" "https://crates.io/api/v1/crates/librespot/$LR/download" "$LR_SHA"
 fetch "mesa-$MESA.tar.xz" "https://mesa.freedesktop.org/archive/mesa-$MESA.tar.xz" "$MESA_SHA" sha512sum
+fetch "libjpeg-turbo-$JT.tar.gz" "https://github.com/libjpeg-turbo/libjpeg-turbo/releases/download/$JT/libjpeg-turbo-$JT.tar.gz" "$JT_SHA" sha512sum
 cp "$L/shairport-sync-stdout-delay.patch" "$L/nqptp-run-as-user.patch" "$L/librespot-volume-fifo.patch" "$STAGE/patches/"
 cp "$L/build-ffmpeg.sh" "$L/build-ffmpeg-arm64.sh" "$L/build-shairport-sync.sh" "$L/build-librespot.sh" "$L/build-mesa.sh" "$STAGE/build-scripts/"
+cp "$ROOT/tools/jpeg/build.sh" "$STAGE/build-scripts/build-jpeg.sh"
 cp -r "$L/licenses" "$STAGE/licenses"
 
 cat > "$STAGE/README.txt" <<EOF
@@ -62,6 +65,9 @@ build script names and checks by SHA-256. Their licenses are in licenses/.
 - Mesa's libraries in /usr/lib (the Echo Show 8 2nd gen's images only, for its GPU helper): Mesa
   $MESA, built with only panfrost, EGL, GLES and GBM. Mostly MIT, with some files under the other
   licenses in licenses/mesa (each source file names its own).
+- techo5-jpeg (/usr/local/bin; the Echo Show 8 2nd gen's images only), TECHO5's JPEG decoder, linked
+  statically against libjpeg-turbo $JT, unmodified (build-scripts/build-jpeg.sh, from tools/jpeg/build.sh).
+  The IJG License and the Modified BSD License; see licenses/libjpeg-turbo.
 
 sources/
   ffmpeg-$FF.tar.xz           https://ffmpeg.org/releases/ffmpeg-$FF.tar.xz
@@ -69,6 +75,7 @@ sources/
   nqptp-$NQ.tar.gz            https://github.com/mikebrady/nqptp/archive/refs/tags/$NQ.tar.gz
   librespot-$LR.crate         https://crates.io/api/v1/crates/librespot/$LR/download
   mesa-$MESA.tar.xz           https://mesa.freedesktop.org/archive/mesa-$MESA.tar.xz
+  libjpeg-turbo-$JT.tar.gz    https://github.com/libjpeg-turbo/libjpeg-turbo/releases/download/$JT/libjpeg-turbo-$JT.tar.gz
 
 The packages that come from Alpine Linux are Alpine's, with their sources at
 https://gitlab.alpinelinux.org/alpine/aports. TECHO5's own code and the rest of its notices are in
