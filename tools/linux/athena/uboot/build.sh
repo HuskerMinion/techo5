@@ -11,8 +11,10 @@
 # u-boot-amazon-echo's own uboot/build.sh, which must name the same tag and commit. That script
 # builds in Docker (its uboot/docker/Dockerfile; the U-Boot tree in the Docker volume
 # u-boot-amazon-echo-src) the board's "final" variant, the one for the boot partition, with
-# techo5-athena.config here applied on top of its defconfig. The build is reproducible: the same
-# commits and options give the same bytes.
+# techo5-athena.config here applied on top of its defconfig. The Dockerfile pins its base image by
+# digest, but its Debian packages (the compiler among them) come from the archive at build time, so
+# two builds give the same bytes only while those packages stay the same; the release's own bytes
+# are the attested ones.
 #
 # OUT (default build/athena-uboot) gets:
 #   techo5-uboot-athena.bin               U-Boot, as built (u-boot.bin): what a release publishes as
@@ -31,7 +33,7 @@
 # when the packer changed): read what changed there first.
 set -eu
 REPO=https://github.com/nuno407/u-boot-amazon-echo.git
-COMMIT=1cc4c335deb7da27ae1cd2a1d288f517d99f8b07
+COMMIT=8f780fb7ee802186c57326a68434299182b359e8
 UBOOT_REPO=https://github.com/u-boot/u-boot.git
 UBOOT_TAG=v2026.10
 UBOOT_SHA=5508406582f6f7120dce0c4b3059819a41788db2

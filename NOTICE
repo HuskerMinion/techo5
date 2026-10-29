@@ -301,14 +301,14 @@ Light sensor, echod/internal/hardware/ambient/em3071x.go
 
 bootctl, tools/linux/bootctl
   From u-boot-amazon-echo, https://github.com/nuno407/u-boot-amazon-echo (tools/bootctl, commit
-  1cc4c33) — MIT License, Copyright (c) 2026 The u-boot-amazon-echo authors
+  8f780fb) — MIT License, Copyright (c) 2026 The u-boot-amazon-echo authors
   The boot layer's tool for its A/B record, carried in the root filesystem and the boot images.
   Copied unchanged but for the comment naming where it comes from. The MIT License's text is as
   above, under EchoLocal.
 
 pack-uboot.py, tools/linux/athena/uboot/pack-uboot.py
   From u-boot-amazon-echo, https://github.com/nuno407/u-boot-amazon-echo (tools/pack-uboot.py,
-  commit 1cc4c33) — MIT License, Copyright (c) 2026 The u-boot-amazon-echo authors
+  commit 8f780fb) — MIT License, Copyright (c) 2026 The u-boot-amazon-echo authors
   Packs U-Boot as the kernel of the release's athena boot image, for install-athena.py --boot-layer.
   Copied unchanged but for the two comment lines naming where it comes from (build.sh there checks
   it). The MIT License's text is as above, under EchoLocal.
@@ -316,7 +316,7 @@ pack-uboot.py, tools/linux/athena/uboot/pack-uboot.py
 U-Boot, https://u-boot.org (GPL-2.0-or-later), with the boot layer of u-boot-amazon-echo
   The Echo Show 8 2nd gen's boot layer (opt-in): upstream U-Boot v2026.10 (commit 5508406), with
   abboot, its patches and the athena board from https://github.com/nuno407/u-boot-amazon-echo at
-  commit 1cc4c33 (GPL-2.0-or-later), and TECHO5's settings (tools/linux/athena/uboot/techo5-athena.config).
+  commit 8f780fb (GPL-2.0-or-later), and TECHO5's settings (tools/linux/athena/uboot/techo5-athena.config).
   None of that source is in this repository: tools/linux/athena/uboot/build.sh fetches both at those
   commits and builds it, in the release workflow. Releases ship it as techo5-uboot-athena-<version>.bin,
   with its whole source as techo5-uboot-athena-<version>-source.tar.gz.

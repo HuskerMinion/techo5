@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # SPDX-License-Identifier: MIT
-# A copy of tools/pack-uboot.py from github.com/nuno407/u-boot-amazon-echo (commit 1cc4c33): build.sh checks
+# A copy of tools/pack-uboot.py from github.com/nuno407/u-boot-amazon-echo (commit 8f780fb): build.sh checks
 # that it is the same but for these two lines. install-athena.py --boot-layer packs U-Boot with it.
 """Pack U-Boot as the kernel of a device's own boot image, in that image's shape (the Echo boards).
 
