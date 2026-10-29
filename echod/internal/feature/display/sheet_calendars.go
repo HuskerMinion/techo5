@@ -3,9 +3,9 @@
 package display
 
 import (
+	"fmt"
 	"log/slog"
 	"slices"
-	"strconv"
 	"sync"
 
 	"github.com/HuskerMinion/techo5/echod/internal/config"
@@ -18,10 +18,12 @@ import (
 
 // The marks beside each calendar. The screen's typeface has these circles and no check mark.
 const (
-	calendarOn    = "●  "
-	calendarOff   = "○  "
-	calendarsDone = "Done"
+	calendarOn  = "●  "
+	calendarOff = "○  "
 )
+
+// calendarsDone is the list's last entry when it has several calendars.
+func calendarsDone() string { return tr("done") }
 
 // calendarsValue is the row's value: the one calendar shown, how many, or none.
 func calendarsValue() string {
@@ -37,7 +39,7 @@ func calendarsValue() string {
 		}
 		return src[0]
 	}
-	return strconv.Itoa(len(src)) + " calendars"
+	return fmt.Sprintf(tr("ui_d_calendars"), len(src))
 }
 
 // calendarsListed are the calendars the Calendars list last showed, in its order: a choice in it is one
@@ -57,7 +59,7 @@ func calendarsPicker() pickerView {
 	}
 	calendarsListed.Unlock()
 	if len(cals) == 0 {
-		p.opts = []string{"None in Home Assistant yet"}
+		p.opts = []string{tr("ui_none_in_home_assistant_yet")}
 		return p
 	}
 	src := home.Get().CalendarSources()
@@ -69,7 +71,7 @@ func calendarsPicker() pickerView {
 		p.opts = append(p.opts, mark+cmpOr(c.Name, c.ID))
 	}
 	if len(cals) > 1 {
-		p.opts = append(p.opts, calendarsDone)
+		p.opts = append(p.opts, calendarsDone())
 	}
 	return p
 }
@@ -107,7 +109,8 @@ var (
 	popupAllDayOpts = []string{"In the morning", "Never"}
 )
 
-const popupAllCalendars = "All calendars shown"
+// popupAllCalendars is the Pop-up calendars list's first entry.
+func popupAllCalendars() string { return tr("ui_all_calendars_shown") }
 
 func popupLeadIndex() int {
 	lead := config.Get().Calendar.PopupLead()
@@ -135,7 +138,7 @@ func popupCalendarsValue() string {
 	case 1:
 		return calendarName(pick[0])
 	}
-	return strconv.Itoa(len(pick)) + " calendars"
+	return fmt.Sprintf(tr("ui_d_calendars"), len(pick))
 }
 
 func calendarName(id string) string {
@@ -172,7 +175,7 @@ func calendarRows() []settingRow {
 // top, and Done at the foot when there are several.
 func popupCalendarsPicker() pickerView {
 	c := config.Get().Calendar
-	p := pickerView{title: tr("ui_pop_up_calendars"), cur: -1, opts: []string{popupAllCalendars}}
+	p := pickerView{title: tr("ui_pop_up_calendars"), cur: -1, opts: []string{popupAllCalendars()}}
 	if len(c.PopupCalendars) == 0 {
 		p.cur = 0
 	}
@@ -184,7 +187,7 @@ func popupCalendarsPicker() pickerView {
 		p.opts = append(p.opts, mark+calendarName(id))
 	}
 	if len(c.Sources) > 1 {
-		p.opts = append(p.opts, calendarsDone)
+		p.opts = append(p.opts, calendarsDone())
 	}
 	return p
 }

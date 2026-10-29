@@ -97,7 +97,8 @@ func categoryRows(sv sheetView) (rows []settingRow, note string) {
 			{id: "brightness", label: tr("brightness"), kind: ctlStepper, value: fmt.Sprintf("%d%%", st.brightness)},
 			{id: "auto", label: tr("auto_brightness"), sub: tr("follows_the_room_s_light"), kind: ctlToggle, on: st.auto},
 		}
-		if hasDimmest && st.auto {
+		// Dim after idle goes down to Dimmest too, so the row is there for it with auto-brightness off (#310).
+		if hasDimmest && (st.auto || idleDimAfter() > 0) {
 			rows = append(rows, settingRow{id: "dimmest", label: tr("dimmest"), sub: tr("how_dark_auto_brightness_goes_in_a_dark_room"),
 				kind: ctlStepper, value: fmt.Sprintf("%d%%", dimmestSetting())})
 		}
@@ -323,7 +324,7 @@ func securityRows(sv sheetView) []settingRow {
 	}
 	certs := settingRow{label: tr("certificate_checks"), sub: tr("for_downloads_updates_always_check"), kind: ctlValue, value: tr("ui_on")}
 	if st.insecureTLS {
-		certs.sub, certs.value = tr("ui_turned_off_in_home_assistant"), "Off"
+		certs.sub, certs.value = tr("ui_turned_off_in_home_assistant"), tr("ui_off")
 	}
 	rows = append(rows, cameraTestRows()...)
 	return append(rows,
@@ -352,7 +353,7 @@ func generalRows(sv sheetView) []settingRow {
 	}
 	restart := settingRow{id: "restart", label: tr("restart"), sub: tr("back_in_about_a_minute"), kind: ctlDanger, button: tr("restart")}
 	if !st.restartArm.IsZero() && st.now.Sub(st.restartArm) < restartWindow {
-		restart.sub, restart.button = tr("ui_tap_again_to_restart_now"), "Confirm"
+		restart.sub, restart.button = tr("ui_tap_again_to_restart_now"), tr("ui_confirm")
 	}
 	rows := []settingRow{{label: tr("name"), sub: tr("change_it_on_the_setup_page"), kind: ctlValue, value: st.name}}
 	rows = append(rows, calendarRows()...)
@@ -372,7 +373,7 @@ func generalRows(sv sheetView) []settingRow {
 func forgetRow(sv sheetView, name string) settingRow {
 	row := settingRow{id: "btforget", label: fmt.Sprintf(tr("forget_device"), name), sub: tr("asks_twice"), kind: ctlDanger, button: tr("ui_forget")}
 	if !sv.st.forgetArm.IsZero() && sv.now.Sub(sv.st.forgetArm) < restartWindow {
-		row.sub, row.button = tr("ui_tap_again_to_forget_it"), "Confirm"
+		row.sub, row.button = tr("ui_tap_again_to_forget_it"), tr("ui_confirm")
 	}
 	return row
 }
@@ -383,7 +384,7 @@ func connectionRows(sv sheetView) []settingRow {
 	st, bt := sv.st, sv.bt
 	wifiRow := settingRow{label: tr("wi_fi"), sub: st.address, kind: ctlValue, value: st.wifiName}
 	if st.wifiOK {
-		wifiRow.id, wifiRow.kind, wifiRow.button = "wifi", ctlButton, "Change"
+		wifiRow.id, wifiRow.kind, wifiRow.button = "wifi", ctlButton, tr("ui_change")
 	}
 	if st.address == "-" {
 		wifiRow.sub = tr("ui_no_address_yet")
@@ -757,7 +758,7 @@ func pickerForRaw(id string, sv sheetView) (pickerView, bool) {
 	case "screenlang":
 		return pickerView{title: tr("screen_language"), opts: langOptions, cur: langIndex()}, true
 	case "newtimer":
-		return pickerView{title: tr("new_timer"), opts: timerLabels, cur: -1}, true
+		return pickerView{title: tr("new_timer"), opts: timerLabels(), cur: -1}, true
 	case "sleep":
 		return pickerView{title: tr("sleep_timer"), opts: sleepLabels(), cur: sleepIndex()}, true
 	case "quiet":

@@ -44,7 +44,7 @@ func followPicker(demo bool) pickerView {
 		}
 	}
 	if len(entities) > 2 {
-		p.opts = append(p.opts, calendarsDone)
+		p.opts = append(p.opts, calendarsDone())
 	}
 	return p
 }

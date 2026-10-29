@@ -162,16 +162,16 @@ func adaptRows(rows []settingRow, sv sheetView) []settingRow {
 		case row.id == "btsc":
 			row.label, row.sub = tr("ui_secure_connections"), tr("ui_off_if_a_phone_pairs_then_drops")
 		case row.id == "screenweb":
-			row.label = "Screen on network"
+			row.label = tr("screen_on_network")
 		case row.id == "camweb":
-			row.label = "Camera on network"
+			row.label = tr("camera_on_network")
 		case row.id == "talkback":
 			row.label, row.sub = tr("ui_talk_to_cameras"), tr("ui_talk_on_camera_page")
 		case row.id == "e.days":
 			row.label = ""
 		case row.id == "updates":
 			check := settingRow{id: "updatecheck", label: tr("ui_check_for_updates"), sub: row.sub, kind: ctlButton, button: row.button}
-			row.label, row.sub, row.button = "Update channel", "", ""
+			row.label, row.sub, row.button = tr("update_channel"), "", ""
 			out = append(out, row, check)
 			continue
 		case row.kind == ctlChoice:
