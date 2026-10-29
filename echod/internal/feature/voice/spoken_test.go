@@ -13,7 +13,7 @@ func TestSpokenFollowsTheReplysAudio(t *testing.T) {
 	text := strings.Repeat("x", 150) // 10 seconds at spokenPace
 	t0 := time.Now()
 
-	replyArrived(t0)
+	replyArrived(t0, false)
 	if got := Spoken(text, t0.Add(5*time.Second)); got != 0.5 {
 		t.Errorf("no audio, 5 of 10 seconds: said %.2f, want 0.5", got)
 	}
@@ -31,8 +31,14 @@ func TestSpokenFollowsTheReplysAudio(t *testing.T) {
 		t.Errorf("after the audio: said %.2f, want 1", got)
 	}
 
-	replyArrived(t0.Add(time.Minute))
+	replyArrived(t0.Add(time.Minute), false)
 	if got := Spoken(text, t0.Add(time.Minute)); got != 0 {
 		t.Errorf("the next reply's words: said %.2f, want 0", got)
+	}
+
+	// Realtime voice has the words only once it has said them.
+	replyArrived(t0, true)
+	if got := Spoken(text, t0); got != 1 {
+		t.Errorf("words already said: said %.2f, want 1", got)
 	}
 }

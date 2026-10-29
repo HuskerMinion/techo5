@@ -1134,7 +1134,12 @@ func (r *renderer) words(heard, reply string, said float64, top int) {
 		face, lineH = r.small, r.s(42)
 		lines = r.wrap(face, reply, maxW)
 	}
-	for _, line := range replyPage(lines, (bottom-y)/lineH, said) {
+	fit := (bottom - y) / lineH
+	if len(lines) > fit {
+		// Paged: room at the end of each line for the "…" a page with more after it ends in.
+		lines = r.wrap(face, reply, maxW-r.width(face, " …"))
+	}
+	for _, line := range replyPage(lines, fit, said) {
 		r.text(face, line, r.margin, y+lineH-r.s(12), cream)
 		y += lineH
 	}

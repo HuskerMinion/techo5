@@ -22,19 +22,26 @@ type replyClock struct {
 
 var spoken atomic.Pointer[replyClock]
 
-// replyArrived starts the clock for a reply's words.
-func replyArrived(now time.Time) {
+// replyArrived starts the clock for a reply's words, or for words already said ends it: the screen
+// then shows the end of the reply, as it does once a reply's audio is over.
+func replyArrived(now time.Time, said bool) {
+	if said {
+		spoken.Store(&replyClock{text: now, at: now, whole: true})
+		return
+	}
 	spoken.Store(&replyClock{text: now})
 }
 
 // replyPlaying says the reply's audio is playing since at, seconds of it so far, and whole once that is
-// all of it. It runs on the errand that plays the reply.
+// all of it. It runs on the errand that plays the reply: when the next reply's words arrive meanwhile,
+// the clock is theirs and is left alone.
 func replyPlaying(at time.Time, seconds float64, whole bool) {
 	c := spoken.Load()
-	if c == nil {
-		c = &replyClock{text: at}
+	text := at
+	if c != nil {
+		text = c.text
 	}
-	spoken.Store(&replyClock{text: c.text, at: at, seconds: seconds, whole: whole})
+	spoken.CompareAndSwap(c, &replyClock{text: text, at: at, seconds: seconds, whole: whole})
 }
 
 // replyAudioSeconds is how long bytes of reply audio play for.

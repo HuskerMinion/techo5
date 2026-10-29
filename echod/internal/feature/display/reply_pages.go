@@ -2,9 +2,12 @@
 
 package display
 
+import "slices"
+
 // replyPage is the lines of a reply to show when only fit of them fit: all of them when they do,
 // otherwise the page of fit lines the voice is on, said being how much of the reply it has said (0 to
-// 1). Pages are counted in characters, the way the voice gets through them (#333).
+// 1). Pages are counted in characters, the way the voice gets through them (#333). A page with more
+// after it ends in "…", as the Spot's do.
 func replyPage(lines []string, fit int, said float64) []string {
 	if fit <= 0 {
 		return nil
@@ -27,5 +30,9 @@ func replyPage(lines []string, fit int, said float64) []string {
 			chars += len([]rune(l))
 		}
 	}
-	return lines[start:min(start+fit, len(lines))]
+	page := slices.Clone(lines[start:min(start+fit, len(lines))])
+	if start+fit < len(lines) {
+		page[len(page)-1] += " …"
+	}
+	return page
 }

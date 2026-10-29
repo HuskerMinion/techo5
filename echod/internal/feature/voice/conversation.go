@@ -132,6 +132,10 @@ type event struct {
 
 	// peak is an evCandidate's score.
 	peak float64
+
+	// spoken is an evReplyText whose words have already been said: realtime voice has them only once
+	// the answer is over.
+	spoken bool
 }
 
 // conversation runs one turn at a time: microphone audio up, pipeline events back, spoken reply out.
@@ -615,7 +619,7 @@ func (c *conversation) turnEvent(e event) {
 		c.log.Replied(e.text)
 		c.turn.Replying(e.text)
 		c.shown.Reply = e.text
-		replyArrived(time.Now())
+		replyArrived(time.Now(), e.spoken)
 		Changed.Emit(c.shown)
 		if c.phase == phaseListening {
 			c.think()

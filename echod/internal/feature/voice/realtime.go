@@ -436,7 +436,7 @@ func (r *rtBackend) finish(t *rtTurn) {
 	// know what the question was.
 	if said != "" {
 		slog.Info("realtime: replying", "text", said)
-		r.postFor(t, event{kind: evReplyText, text: said})
+		r.postFor(t, event{kind: evReplyText, text: said, spoken: spoke})
 	}
 	if spoke {
 		r.postFor(t, event{kind: evStreamEnd})

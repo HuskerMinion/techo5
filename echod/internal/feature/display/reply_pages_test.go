@@ -14,10 +14,10 @@ func TestALongReplyTurnsItsPagesWithTheVoice(t *testing.T) {
 		said float64
 		want []string
 	}{
-		{0, []string{"aaaa", "bbbb"}},
-		{0.35, []string{"aaaa", "bbbb"}},
-		{0.45, []string{"cccc", "dddd"}},
-		{0.79, []string{"cccc", "dddd"}},
+		{0, []string{"aaaa", "bbbb …"}},
+		{0.35, []string{"aaaa", "bbbb …"}},
+		{0.45, []string{"cccc", "dddd …"}},
+		{0.79, []string{"cccc", "dddd …"}},
 		{0.85, []string{"eeee"}},
 		{1, []string{"eeee"}},
 	} {
