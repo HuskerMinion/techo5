@@ -23,7 +23,7 @@
 #   bin/techo5-gpu                                         the GPU helper (tools/gpu/build.sh), optional; with it
 #   inputs/techo5-mesa.tar.gz                              the lean Mesa it loads (build-mesa.sh), laid over /usr
 #   bin/techo5-jpeg                                        the JPEG decoder (tools/jpeg/build.sh), athena's, optional
-#   tools/slotctl tools/techo5-lib.sh tools/packages-rootfs.txt
+#   tools/slotctl tools/bootctl tools/techo5-lib.sh tools/packages-rootfs.txt
 #   overlay/                                               tools/linux/rootfs from the repo
 #   inputs/alpine-minirootfs-*-<arch>.tar.gz               <arch>: -a's, else apk's own (armv7, or
 #                                                          aarch64 for a 64-bit build)
@@ -151,6 +151,8 @@ if [ -e "$IN/bin/techo5-ffmpeg" ]; then
 	grep -Eq "^inet:.*[:,]techo5-video(,|\$)" "$R/etc/group" || sed -i -E "/^inet:/{s/:\$/:techo5-video/;t;s/\$/,techo5-video/}" "$R/etc/group"
 fi
 install -m 755 "$IN/tools/slotctl" "$R/usr/local/sbin/slotctl"
+# The boot layer's A/B record tool: slotctl and boot.sh use it, and it changes nothing without one.
+install -m 755 "$IN/tools/bootctl" "$R/usr/local/sbin/bootctl"
 install -m 644 "$IN/tools/techo5-lib.sh" "$R/lib/techo5-lib.sh"
 
 # Overlay from the repo (tools/linux/rootfs), CRLF-safe.

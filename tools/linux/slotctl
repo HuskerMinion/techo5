@@ -26,6 +26,12 @@
 # slot, if good, is booted; with no good slot the initramfs stays up as the
 # rescue environment, reachable over SSH.
 #
+# The boot layer (U-Boot with abboot, github.com/nuno407/u-boot-amazon-echo, opt-in) changes who
+# decides: where it is installed it keeps an A/B record in the misc partition, picks the slot,
+# counts its tries and starts that slot's own kernel. slotctl still keeps the files above, and tells
+# the boot layer the same through bootctl. Without a record (every unit without the boot layer)
+# bootctl changes nothing and slotctl works on the files alone, exactly as before.
+#
 # Under a running slot the store is mounted read-only (the root is a bind mount
 # of one slot, so the whole partition shares the flag); every write here
 # remounts it writable and back.
@@ -40,7 +46,8 @@ usage: slotctl [-s store] <command>
   install <rootfs.tar.gz> unpack into the inactive slot, put it on trial, make it active
                           (--keep-active: install without switching)
   commit                  mark the booted slot good (no-op if it is)
-  switch <a|b>            boot this slot next; a bad slot goes back on trial
+  switch <a|b>            boot this slot next; a bad slot goes back on trial (with the boot
+                          layer, any slot switched to is on trial until it commits again)
   rollback                mark the booted slot bad and boot the other, good, one next
   rescue [off]            stay in the initramfs at the next boot (one boot only)
   next                    initramfs: choose the slot to boot and take a try; prints its name
@@ -90,6 +97,144 @@ valid_slot() { case "$1" in a|b) return 0;; esac; return 1; }
 # The board the store is for (.techo5-store: board=<name>), empty for any.
 store_board() { sed -n 's/^board=//p' "$STORE/.techo5-store" 2>/dev/null | tail -1; }
 
+# --- The boot layer: its A/B record, through bootctl (beside slotctl, or installed with it).
+# SLOTCTL_MISC names the misc device (tests).
+[ -n "${SLOTCTL_MISC:-}" ] && export BOOTCTL_MISC="$SLOTCTL_MISC"
+BOOTCTL=
+for f in "$(dirname "$0")/bootctl" /usr/local/sbin/bootctl; do
+	[ -f "$f" ] && { BOOTCTL=$f; break; }
+done
+# Whether there is a valid A/B record: the boot layer is installed.
+has_record() { [ -n "$BOOTCTL" ] && sh "$BOOTCTL" -q status >/dev/null 2>&1; }
+# The slot the boot layer booted (ab.slot=), empty if none. Only that slot is ever marked good in
+# the record: a slot booted by slotctl next on the boot layer's rescue kernel is not, since its own
+# kernel may be what failed.
+boot_layer_slot() { [ -n "$BOOTCTL" ] && sh "$BOOTCTL" current 2>/dev/null; }
+# bootctl, quiet without a record; "no record" (3) is not a failure here.
+bootctl_q() {
+	[ -n "$BOOTCTL" ] || return 0
+	sh "$BOOTCTL" -q "$@"
+	r=$?
+	[ $r = 3 ] && return 0
+	[ $r = 0 ] || echo "slotctl: bootctl $* failed ($r); the boot layer's record may not match the files" >&2
+	return 0
+}
+
+# The slot convention (u-boot-amazon-echo SPEC.md): the boot layer starts slot <x>'s kernel from
+# slots/<x>/boot/boot.img and shows slots/<x>/boot/label in its menu. A rootfs carries its kernel
+# at usr/share/techo5/kernel/boot-<board>.img; it is linked into boot/ (the same file, no copy),
+# and the label is the rootfs's build date ("28 Oct 2026", from etc/techo5-release). A rootfs with
+# no kernel of its own (a device whose kernel lives only in the boot partition, an older release)
+# keeps the kernel the unit runs with now: the booted slot's boot/boot.img, else the other slot's,
+# as both slots share one kernel today. Only where the boot layer is installed; run while the
+# store is writable.
+#
+# The boot layer gives the kernel the previous bootloader's command line with the slot image's own
+# header command line in its place, so the image can name its root. A rootfs whose kernel needs
+# that (athena: its bootloader names no root on a recovery boot) carries
+# usr/share/techo5/kernel/boot-header-args, the words to add to the image's header command line,
+# with @STORE_PARTUUID@ for the store partition's GPT GUID: the unit's own, read here, never in a
+# release. boot/boot.img is then a copy with those words, and the rootfs's own image stays as
+# released.
+HDR_ARGS=usr/share/techo5/kernel/boot-header-args
+
+# le_hex <hex bytes, no spaces> <count> <offset>: those bytes as a little-endian hex number
+le_hex() { echo "$1" | cut -c$(( $3 * 2 + 1 ))-$(( ($3 + $2) * 2 )) | sed 's/\(..\)/\1 /g' |
+	awk '{ for (i = NF; i > 0; i--) printf "%s", $i }'; }
+
+# The store partition's GPT unique GUID (lower case), from the GPT of the disk it is on.
+store_partuuid() {
+	if [ -n "${SLOTCTL_STORE_DISK:-}" ]; then	# tests: a disk image and a partition number
+		dev=$SLOTCTL_STORE_DISK n=$SLOTCTL_STORE_PARTN
+	else
+		# busybox prints the numbers but exits 1 when the store is the root (athena): trust the output
+		mm=$(mountpoint -d "$STORE" 2>/dev/null); [ -n "$mm" ] || return 1
+		sys=/sys/dev/block/$mm
+		n=$(cat "$sys/partition" 2>/dev/null) || return 1
+		dev=/dev/$(basename "$(readlink -f "$sys/..")")
+		[ -b "$dev" ] || return 1
+	fi
+	h=$(dd if="$dev" bs=512 skip=1 count=1 2>/dev/null | od -An -tx1 -v | tr -d ' \n')
+	[ "$(echo "$h" | cut -c1-16)" = 4546492050415254 ] || return 1	# "EFI PART"
+	lba=$((0x$(le_hex "$h" 8 72)))
+	esz=$((0x$(le_hex "$h" 4 84)))
+	off=$(( lba * 512 + (n - 1) * esz ))
+	e=$(dd if="$dev" bs=512 skip=$(( off / 512 )) count=1 2>/dev/null | od -An -tx1 -v | tr -d ' \n' |
+		cut -c$(( (off % 512 + 16) * 2 + 1 ))-$(( (off % 512 + 32) * 2 )))
+	[ ${#e} = 32 ] || return 1
+	b() { echo "$e" | cut -c$(( $1 * 2 + 1 ))-$(( $1 * 2 + 2 )); }
+	echo "$(b 3)$(b 2)$(b 1)$(b 0)-$(b 5)$(b 4)-$(b 7)$(b 6)-$(b 8)$(b 9)-$(b 10)$(b 11)$(b 12)$(b 13)$(b 14)$(b 15)"
+}
+
+# The byte offset of a boot image's Android header: 0x400 behind a 1 KB stub, else 0.
+hdr_off() { [ "$(dd if="$1" bs=1 skip=1024 count=8 2>/dev/null)" = "ANDROID!" ] && echo 1024 || echo 0; }
+hdr_cmdline() { dd if="$1" bs=1 skip=$(( $(hdr_off "$1") + 64 )) count=512 2>/dev/null | tr -d '\000'; }
+
+# boot_image_with_args <image> <copy> <words>: the copy, with the words added to its header command
+# line. Fails, and writes nothing, if the line would not fit its 512 bytes.
+boot_image_with_args() {
+	cl=$(hdr_cmdline "$1")
+	new="${cl:+$cl }$3"
+	[ ${#new} -lt 512 ] || { echo "slotctl: the header command line would be too long" >&2; return 1; }
+	cp "$1" "$2.tmp" &&
+		printf '%s' "$new" | dd of="$2.tmp" bs=1 seek=$(( $(hdr_off "$1") + 64 )) conv=notrunc 2>/dev/null &&
+		mv -f "$2.tmp" "$2" || { rm -f "$2.tmp"; return 1; }
+}
+
+# Whether the slot's boot/boot.img lacks the header words its rootfs asks for.
+boot_img_stale() {
+	[ -f "$1/$HDR_ARGS" ] && [ -f "$1/boot/boot.img" ] || return 1
+	case " $(hdr_cmdline "$1/boot/boot.img") " in *" root="*) return 1;; esac
+	return 0
+}
+
+# slot_boot_files <slot>: boot/boot.img and boot/label, where missing (or the image stale).
+slot_boot_files() {
+	x=$1
+	r=$STORE/slots/$x
+	if [ ! -e "$r/boot/boot.img" ] || boot_img_stale "$r"; then
+		set -- "$r"/usr/share/techo5/kernel/boot-*.img
+		if [ $# -eq 1 ] && [ -f "$1" ]; then
+			mkdir -p "$r/boot"
+			args=
+			if [ -f "$r/$HDR_ARGS" ]; then
+				if u=$(store_partuuid); then
+					args=$(sed "s/@STORE_PARTUUID@/$u/g" "$r/$HDR_ARGS" | tr '\n' ' ' | sed 's/ *$//')
+				else
+					echo "slotctl: the store's partition GUID could not be read: boot/boot.img without its root" >&2
+				fi
+			fi
+			if [ -n "$args" ] && boot_image_with_args "$1" "$r/boot/boot.img" "$args"; then
+				echo "slotctl: boot/boot.img: the slot's kernel, its header with \"$args\""
+			else
+				rm -f "$r/boot/boot.img"
+				ln -f "$1" "$r/boot/boot.img" 2>/dev/null || cp "$1" "$r/boot/boot.img" ||
+					echo "slotctl: the slot's kernel could not be put at boot/boot.img" >&2
+			fi
+		else
+			for o in $(booted) $(other $x); do
+				[ "$o" != "$x" ] && [ -f "$STORE/slots/$o/boot/boot.img" ] || continue
+				mkdir -p "$r/boot"
+				ln -f "$STORE/slots/$o/boot/boot.img" "$r/boot/boot.img" 2>/dev/null ||
+					cp "$STORE/slots/$o/boot/boot.img" "$r/boot/boot.img" || continue
+				echo "slotctl: slot $x: no kernel in this rootfs; boot/boot.img: slot $o's, the kernel the unit runs with now"
+				break
+			done
+			[ -f "$r/boot/boot.img" ] ||
+				echo "slotctl: slot $x: no kernel in this rootfs or in the other slot; the boot layer cannot start this slot" >&2
+		fi
+	fi
+	[ -d "$r/boot" ] || return 0
+	if [ ! -s "$r/boot/label" ]; then
+		d=$(sed -n 's/.* built \([0-9][0-9][0-9][0-9]\)-\([0-9][0-9]\)-\([0-9][0-9]\).*/\3 \2 \1/p' "$r/etc/techo5-release" 2>/dev/null | head -1)
+		set -- $d
+		if [ $# -eq 3 ]; then
+			m=$(echo "Jan Feb Mar Apr May Jun Jul Aug Sep Oct Nov Dec" | cut -d' ' -f$(( ${2#0} )) 2>/dev/null)
+			[ -n "$m" ] && put "$r/boot/label" "${1#0} $m $3"
+		fi
+	fi
+}
+
 cmd_status() {
 	[ -e "$STORE/.techo5-store" ] || die "$STORE is not a store"
 	echo "store:  $STORE ($(is_ro && echo read-only || echo writable))"
@@ -103,6 +248,10 @@ cmd_status() {
 			echo "slot $s: empty"
 		fi
 	done
+	if [ -n "$BOOTCTL" ] && out=$(sh "$BOOTCTL" -q status 2>&1); then
+		echo "boot layer (bootctl status; it decides which slot boots):"
+		echo "$out" | sed 's/^/  /'
+	fi
 }
 
 cmd_next() {
@@ -166,6 +315,8 @@ cmd_install() {
 			die "this store is for board $want and $tar is for ${got:-another board (it names none)}; nothing installed"
 	fi
 	writable
+	# With the boot layer, the slot is marked bad before its files change, so it is never booted half written.
+	bootctl_q mark-bad $t
 	rm -rf "$STORE/slots/$t" "$STORE/slots/$t.state"
 	mkdir -p "$STORE/slots/$t"
 	echo "slotctl: unpacking $tar into slot $t"
@@ -187,24 +338,33 @@ cmd_install() {
 		cp -a "$STORE/vendor/." "$STORE/slots/$t/vendor/" || { rm -rf "$STORE/slots/$t"; done_writing; die "copying the vendor tree into slot $t failed"; }
 		echo "slotctl: slot $t: vendor tree from the store"
 	fi
+	has_record && slot_boot_files $t
 	set_state $t "trial $TRIES"
 	[ -n "$keep" ] || set_active $t
 	done_writing
 	echo "slotctl: slot $t: $(release $t) — trial $TRIES; active: $(active)"
+	if [ -n "$keep" ]; then bootctl_q set $t priority=14 tries=$TRIES successful=0
+	else bootctl_q set-active $t; fi
 }
 
 cmd_commit() {
 	s=$(booted)
 	[ -n "$s" ] || die "not booted from a slot"
 	case "$(state $s)" in
-	good) echo "slotctl: slot $s is already good"; return 0;;
+	good) echo "slotctl: slot $s is already good"
+		[ "$(boot_layer_slot)" = "$s" ] && bootctl_q mark-good $s
+		return 0;;
 	trial*) ;;
 	*) die "slot $s is $(state $s); use switch to put it back on trial";;
 	esac
 	writable
 	set_state $s good
+	# A slot installed before the boot layer was may lack its boot files.
+	has_record && slot_boot_files $s
 	done_writing
 	echo "slotctl: slot $s committed (good)"
+	[ "$(boot_layer_slot)" = "$s" ] && bootctl_q mark-good $s
+	return 0
 }
 
 cmd_switch() {
@@ -219,6 +379,7 @@ cmd_switch() {
 	set_active $s
 	done_writing
 	echo "slotctl: next boot: slot $s ($(state $s))"
+	bootctl_q set-active $s
 }
 
 cmd_rollback() {
@@ -231,6 +392,7 @@ cmd_rollback() {
 	set_active $o
 	done_writing
 	echo "slotctl: slot $s marked bad; next boot: slot $o"
+	bootctl_q mark-bad $s
 }
 
 cmd_rescue() {

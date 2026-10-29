@@ -1,0 +1,240 @@
+#!/bin/sh
+# SPDX-License-Identifier: MIT
+# bootctl: the boot layer's A/B record from the running system. A copy of tools/bootctl from
+# github.com/nuno407/u-boot-amazon-echo (commit 1cc4c33), whose SPEC.md, "bootctl", describes it.
+# POSIX sh and an awk with and(), xor() and rshift() (busybox awk or gawk); no other dependency.
+#
+# The record is 32 bytes at byte 2048 of the misc partition, in the layout of AOSP's struct
+# bootloader_control. misc is found by its PARTNAME (MISC_PARTNAME in /etc/bootctl.conf, or
+# -p NAME; by default "misc" or "MISC", the two spellings devices use). On a
+# device without a record (no boot layer, or one that has not booted yet) every command but init
+# changes nothing and says so; init writes the default record, and only where bytes 2048-4095 are
+# all zero. Only the record's 32 bytes are ever written (block 4 read, changed, written back, read
+# again), and reserved1 (bytes 20-27) is left zero, as AOSP has it.
+#
+# Exit status: 0 done (or nothing to change), 1 an error, 2 usage, 3 no record (nothing done).
+
+CONF=${BOOTCTL_CONF:-/etc/bootctl.conf}
+MISC_PARTNAME="misc MISC"
+[ -r "$CONF" ] && . "$CONF"
+CMDLINE=${BOOTCTL_CMDLINE:-/proc/cmdline}
+QUIET=
+DEV=${BOOTCTL_MISC:-}
+TRIES=3
+
+usage() {
+	cat >&2 <<EOF
+usage: bootctl [-q] [-p PARTNAME | -d DEVICE] <command>
+  status              the record, decoded, and the slot booted
+  current             the slot the boot layer booted (ab.slot=); exit 1 if none
+  set-active <a|b>    boot this slot next, on trial: priority 15, tries $TRIES, successful 0;
+                      the other slot priority 14
+  mark-good [a|b]     successful 1 (default: the slot booted)
+  mark-bad <a|b>      priority 0, tries 0, successful 0
+  set <a|b> [priority=N] [tries=N] [successful=0|1]
+                      change those fields only
+  init                write the default record (a priority 15, b 14, both $TRIES tries, neither
+                      successful) where misc 2048-4095 is all zero
+  -q: no message when there is no record. -d: the misc device itself (tests).
+EOF
+	exit 2
+}
+
+say() { echo "bootctl: $*" >&2; }
+die() { say "$*"; exit 1; }
+
+# The misc device: -d, or the block device whose PARTNAME is MISC_PARTNAME.
+misc_dev() {
+	[ -n "$DEV" ] && { echo "$DEV"; return 0; }
+	for n in $MISC_PARTNAME; do
+		for u in /sys/class/block/*/uevent; do
+			grep -qx "PARTNAME=$n" "$u" 2>/dev/null || continue
+			d=${u%/uevent}
+			[ -b "/dev/${d##*/}" ] && { echo "/dev/${d##*/}"; return 0; }
+		done
+	done
+	return 1
+}
+
+# Block 4 (bytes 2048-2559), or blocks 4-7 with a count, as decimal numbers.
+blocks() { dd if="$1" bs=512 skip=4 count="${2:-1}" 2>/dev/null | od -An -v -tu1; }
+
+# awk over block 4: MODE check | show | default | an edit (set-active, mark-good, mark-bad, set,
+# with SLOT and P, T, S for set: -1 keeps a field), which prints the new block as octal escapes.
+# Exit 3: the edit changes nothing.
+AWK='
+function crc32(a, n,   c, i, k) {
+	c = 4294967295
+	for (i = 0; i < n; i++) {
+		c = xor(c, a[i])
+		for (k = 0; k < 8; k++)
+			c = and(c, 1) ? xor(rshift(c, 1), 3988292384) : rshift(c, 1)
+	}
+	return xor(c, 4294967295)
+}
+function le32(o) { return b[o] + b[o+1] * 256 + b[o+2] * 65536 + b[o+3] * 16777216 }
+function put32(o, v) { b[o] = v % 256; b[o+1] = int(v / 256) % 256; b[o+2] = int(v / 65536) % 256; b[o+3] = int(v / 16777216) % 256 }
+function valid() {
+	if (n < 32) return "short"
+	if (le32(4) != 1111573314) return "no record"
+	if (le32(28) != crc32(b, 28)) return "bad crc"
+	if (b[8] != 1 || and(b[9], 7) < 2) return "bad version"
+	return "ok"
+}
+function boot(i) { return P[i] > 0 && (S[i] || T[i] > 0) && !and(b[13 + 2 * i], 1) }
+function word(i) { return !boot(i) ? "bad" : (S[i] ? "good" : "trial") }
+function encode(   i) {
+	for (i = 0; i < 2; i++)
+		b[12 + 2 * i] = P[i] + T[i] * 16 + S[i] * 128
+	b[4] = 66; b[5] = 67; b[6] = 65; b[7] = 66; b[8] = 1
+	b[9] = b[9] - b[9] % 8 + 2
+	for (i = 20; i < 28; i++) b[i] = 0
+	put32(28, crc32(b, 28))
+}
+{ for (i = 1; i <= NF; i++) b[n++] = $i }
+END {
+	if (MODE == "default") {
+		for (i = 0; i < 32; i++) b[i] = 0
+		b[0] = 95; b[1] = 97
+		P[0] = 15; P[1] = 14; T[0] = T[1] = TRIES; S[0] = S[1] = 0
+		encode()
+		for (i = 0; i < n; i++) printf "\\%03o", b[i]
+		exit
+	}
+	v = valid()
+	if (MODE == "check") { print v; exit }
+	if (v != "ok") { print v; exit 1 }
+	for (i = 0; i < 2; i++) {
+		x = b[12 + 2 * i]
+		P[i] = x % 16; T[i] = int(x / 16) % 8; S[i] = int(x / 128)
+	}
+	last = (b[0] == 95 && (b[1] == 97 || b[1] == 98)) ? sprintf("%c", b[1]) : "-"
+	if (MODE == "show") {
+		printf "last booted: %s\n", last
+		for (i = 0; i < 2; i++)
+			printf "slot %c: priority %d, tries %d, successful %d%s (%s)\n", 97 + i, P[i], T[i], S[i],
+				and(b[13 + 2 * i], 1) ? ", verity corrupted" : "", word(i)
+		exit
+	}
+	for (i = 0; i < n; i++) ob[i] = b[i]
+	x = (SLOT == "b") ? 1 : 0; o = 1 - x
+	if (MODE == "set-active") { P[x] = 15; T[x] = TRIES; S[x] = 0; P[o] = 14 }
+	else if (MODE == "mark-good") { S[x] = 1 }
+	else if (MODE == "mark-bad") { P[x] = 0; T[x] = 0; S[x] = 0 }
+	else if (MODE == "set") { if (SP >= 0) P[x] = SP; if (ST >= 0) T[x] = ST; if (SS >= 0) S[x] = SS }
+	else { print "unknown edit " MODE; exit 1 }
+	encode()
+	same = 1
+	for (i = 0; i < 32; i++) if (b[i] != ob[i]) same = 0
+	if (same) { print "unchanged"; exit 3 }
+	for (i = 0; i < n; i++) printf "\\%03o", b[i]
+}'
+
+# The slot the boot layer booted: ab.slot= on the kernel command line.
+current() {
+	s=
+	for t in $(cat "$CMDLINE" 2>/dev/null); do
+		case $t in
+		ab.slot=a|ab.slot=b) s=${t#ab.slot=};;
+		esac
+	done
+	[ -n "$s" ] && echo "$s"
+}
+
+kernel() {
+	for t in $(cat "$CMDLINE" 2>/dev/null); do
+		case $t in ab.kernel=*) echo "${t#*=}"; return;; esac
+	done
+}
+
+# The device with a valid record on stdout, or a message and exit 3.
+record() {
+	m=$(misc_dev) || { [ -n "$QUIET" ] || say "no partition named $MISC_PARTNAME: no A/B record, nothing done"; exit 3; }
+	v=$(blocks "$m" | awk -v MODE=check "$AWK")
+	[ "$v" = ok ] || { [ -n "$QUIET" ] || say "no A/B record in $m ($v): nothing done"; exit 3; }
+	echo "$m"
+}
+
+show() { blocks "$1" | awk -v MODE=show "$AWK"; }
+
+# edit <mode> <slot> [set fields]: change the record, write it, read it back.
+edit() {
+	m=$(record) || exit $?
+	esc=$(blocks "$m" | awk -v MODE="$1" -v SLOT="$2" -v TRIES=$TRIES -v SP="${SP:--1}" -v ST="${ST:--1}" \
+		-v SS="${SS:--1}" "$AWK")
+	case $? in
+	0) ;;
+	3) echo "bootctl: slot $2 already so"; return 0;;
+	*) die "not changed: $esc";;
+	esac
+	before=$(blocks "$m" | tr -s ' \n' ' ')
+	printf "$esc" | dd of="$m" bs=512 seek=4 count=1 conv=notrunc,fsync 2>/dev/null ||
+		die "writing $m failed"
+	[ "$(blocks "$m" | awk -v MODE=check "$AWK")" = ok ] || die "the record read back from $m is not valid (it was: $before)"
+	echo "bootctl: $1 $2: $(show "$m" | tr '\n' ';' | sed 's/;$//; s/;/; /g')"
+}
+
+slot_arg() { case "$1" in a|b) ;; *) usage;; esac; }
+
+while [ $# -gt 0 ]; do
+	case "$1" in
+	-q) QUIET=1; shift;;
+	-p) MISC_PARTNAME=$2; shift 2;;
+	-d) DEV=$2; shift 2;;
+	-h|--help) usage;;
+	*) break;;
+	esac
+done
+[ $# -gt 0 ] || usage
+cmd=$1; shift
+case "$cmd" in
+status)
+	c=$(current)
+	m=$(record) || exit $?
+	echo "misc: $m (PARTNAME $MISC_PARTNAME)"
+	show "$m"
+	echo "booted: ${c:--} (kernel $(kernel))"
+	;;
+current)
+	c=$(current) || true
+	[ -n "$c" ] || exit 1
+	echo "$c"
+	;;
+set-active|mark-bad)
+	[ $# -eq 1 ] || usage
+	slot_arg "$1"
+	edit "$cmd" "$1"
+	;;
+mark-good)
+	s=${1:-$(current)}
+	[ -n "$s" ] || die "not booted by the boot layer (no ab.slot=): name the slot"
+	slot_arg "$s"
+	edit mark-good "$s"
+	;;
+set)
+	[ $# -ge 2 ] || usage
+	slot_arg "$1"
+	s=$1; shift
+	SP=; ST=; SS=
+	for f in "$@"; do
+		case $f in
+		priority=[0-9]|priority=1[0-5]) SP=${f#*=};;
+		tries=[0-7]) ST=${f#*=};;
+		successful=[01]) SS=${f#*=};;
+		*) usage;;
+		esac
+	done
+	edit set "$s"
+	;;
+init)
+	m=$(misc_dev) || die "no partition named $MISC_PARTNAME"
+	[ "$(blocks "$m" | awk -v MODE=check "$AWK")" = ok ] && { echo "bootctl: $m already holds a record"; show "$m"; exit 0; }
+	[ -z "$(blocks "$m" 4 | tr -d ' 0\n')" ] || die "$m: bytes 2048-4095 are not all zero; not writing a record over them"
+	esc=$(blocks "$m" | awk -v MODE=default -v TRIES=$TRIES "$AWK")
+	printf "$esc" | dd of="$m" bs=512 seek=4 count=1 conv=notrunc,fsync 2>/dev/null || die "writing $m failed"
+	[ "$(blocks "$m" | awk -v MODE=check "$AWK")" = ok ] || die "the record read back from $m is not valid"
+	echo "bootctl: default record written to $m"
+	show "$m"
+	;;
+*) usage;;
+esac

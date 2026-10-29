@@ -172,7 +172,7 @@ if [ "$board" = athena ]; then
 		echo "== no JPEG decoder (bin/techo5-jpeg-arm): pictures are decoded in the daemon"
 	fi
 fi
-cp "$ROOT/tools/linux/slotctl" "$ROOT/tools/linux/techo5-lib.sh" "$ROOT/tools/linux/mkrootfs.sh" "$ROOT/tools/linux/packages-rootfs.txt" "$STAGE/tools/"
+cp "$ROOT/tools/linux/slotctl" "$ROOT/tools/linux/bootctl" "$ROOT/tools/linux/techo5-lib.sh" "$ROOT/tools/linux/mkrootfs.sh" "$ROOT/tools/linux/packages-rootfs.txt" "$STAGE/tools/"
 # EXTRA_PACKAGES: Alpine packages a device needs on top of the list (athena: busybox-extras, for udhcpd).
 [ -n "${EXTRA_PACKAGES:-}" ] && printf '%s\n' $EXTRA_PACKAGES >> "$STAGE/tools/packages-rootfs.txt"
 cp -r "$ROOT/tools/linux/rootfs/." "$STAGE/overlay/"
@@ -190,7 +190,7 @@ cp "$INPUTS"/alpine-minirootfs-*-armv7.tar.gz "$STAGE/inputs/"
 cp "$INPUTS"/apks312/wpa_supplicant-2.9-*.apk "$INPUTS"/apks312/libssl1.1-*.apk "$INPUTS"/apks312/libcrypto1.1-*.apk "$STAGE/inputs/apks312/"
 # scripts must reach the device with LF endings whatever the checkout did
 # (perl rather than sed -i, which macOS's sed spells differently)
-for f in "$STAGE"/tools/*.sh "$STAGE"/tools/slotctl "$STAGE"/tools/*.txt; do perl -pi -e 's/\r$//' "$f"; done
+for f in "$STAGE"/tools/*.sh "$STAGE"/tools/slotctl "$STAGE"/tools/bootctl "$STAGE"/tools/*.txt; do perl -pi -e 's/\r$//' "$f"; done
 find "$STAGE/overlay" -type f -exec perl -pi -e 's/\r$//' {} +
 # Wake word models ship in the image so a fresh unit answers to its default word; boot.sh copies
 # them into the state directory when it is empty. They go in after the line endings are fixed:

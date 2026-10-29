@@ -83,6 +83,7 @@ key=(--copy "$I/techo5_ed25519.pub=/root/.ssh/authorized_keys"); [ -n "$NOKEY" ]
 	--add "$R/bin/rebootto-arm=/usr/local/bin/rebootto" \
 	--add "$R/bin/btbridge-arm=/usr/local/bin/btbridge" \
 	--script "$R/tools/linux/slotctl=/usr/local/sbin/slotctl" \
+	--script "$R/tools/linux/bootctl=/usr/local/sbin/bootctl" \
 	--script "$R/tools/linux/techo5-lib.sh=/lib/techo5-lib.sh" \
 	--script "$R/tools/linux/rescue-profile.sh=/etc/profile.d/rescue.sh" \
 	"${key[@]}" \
