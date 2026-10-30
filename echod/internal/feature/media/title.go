@@ -3,6 +3,7 @@ package media
 import (
 	"log/slog"
 	"strings"
+	"time"
 
 	esphome "github.com/ygelfand/go-esphome-device"
 )
@@ -16,11 +17,31 @@ import (
 // "Bluetooth" is named, empty for the device's own word for it.
 type Title struct{ Title, Subtitle, Source string }
 
-// TitleNext names the next play_media that is not an announcement. One shot: that track takes it, and
-// the one after it has none again. Anything else of this player's starting first (a station, a phone
-// over Bluetooth) or Music Assistant taking the speaker drops it unused.
+// titleFor is how long a title waits for its play_media. An automation sends the two one after the
+// other; one whose play_media never came (an error in between) must not name whatever plays hours later,
+// a Music Assistant track sent the same way included.
+const titleFor = time.Minute
+
+// pendingTitle is a title not yet used, and when it was given.
+type pendingTitle struct {
+	Title
+	at time.Time
+}
+
+// fresh is the title if it was given within titleFor, nil otherwise.
+func (n *pendingTitle) fresh() *Title {
+	if n == nil || time.Since(n.at) > titleFor {
+		return nil
+	}
+	return &n.Title
+}
+
+// TitleNext names the next play_media that is not an announcement, if it comes within titleFor. One
+// shot: that track takes it, and the one after it has none again. Anything else of this player's
+// starting first (a station, a phone over Bluetooth) or Music Assistant taking the speaker drops it
+// unused.
 func (p *Player) TitleNext(t Title) {
-	p.nextTitle.Store(&t)
+	p.nextTitle.Store(&pendingTitle{Title: t, at: time.Now()})
 }
 
 // OwnTitle is what the loaded track was named by TitleNext, while it plays or is paused; nil otherwise.

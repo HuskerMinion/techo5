@@ -139,8 +139,8 @@ type Player struct {
 	// Spotify Connect), for the screen, with the name of the track it belongs to.
 	recvTrack atomic.Value // receivedTrack
 
-	// nextTitle is what the next play_media is to be named (title.go), nil for nothing.
-	nextTitle atomic.Pointer[Title]
+	// nextTitle is what the next play_media is to be named, and when (title.go); nil for nothing.
+	nextTitle atomic.Pointer[pendingTitle]
 
 	// lastExt is the last track a remote named, kept when it stops naming one: Music Assistant clears
 	// the track just before it says it stopped, so what was playing has to come from here. Only just
@@ -756,7 +756,7 @@ func (p *Player) command(c esphome.MediaCommand) {
 			// last-station memory is told is playing.
 		default:
 			// Taken before ours, which drops a title nothing used: this is what it was for.
-			title := p.nextTitle.Swap(nil)
+			title := p.nextTitle.Swap(nil).fresh()
 			p.ours()
 			// Home Assistant converts what it sends to what the device plays; one it did not is not
 			// handed on to the music library, which would be given Home Assistant's own address.

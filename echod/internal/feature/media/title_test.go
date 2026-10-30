@@ -5,6 +5,7 @@ import (
 	"net/http/httptest"
 	"path/filepath"
 	"testing"
+	"time"
 
 	esphome "github.com/ygelfand/go-esphome-device"
 
@@ -78,6 +79,22 @@ func TestAStationDropsATitleNotYetUsed(t *testing.T) {
 	playMedia(p, url)
 	if got := p.OwnTitle(); got != nil {
 		t.Fatalf("the play_media after the station is named %v, want nothing", got)
+	}
+}
+
+// A title whose play_media did not come within titleFor names nothing: not that play_media, nor any
+// after it.
+func TestATitleExpires(t *testing.T) {
+	p, url := titledPlayer(t)
+	p.nextTitle.Store(&pendingTitle{Title: aMessage, at: time.Now().Add(-titleFor - time.Second)})
+
+	playMedia(p, url)
+	if got := p.OwnTitle(); got != nil {
+		t.Fatalf("named %v, want nothing", got)
+	}
+	playMedia(p, url)
+	if got := p.OwnTitle(); got != nil {
+		t.Fatalf("the next play_media is named %v, want nothing", got)
 	}
 }
 

@@ -2031,6 +2031,8 @@ off an answering machine, say, then shows as "Message from Alex", "today 14:12",
 
 - It names only the next `play_media` that is not an announcement, once: the one after it has no name
   again. A station, a phone over Bluetooth or Music Assistant starting first drops the name unused.
+- The name waits 60 seconds for its `play_media`, so call this right before it. One that comes later
+  is not named, nor is anything after it.
 - The name stays for as long as that track is on the player, paused too (`media_player.media_stop`
   pauses), and goes when it ends, is stopped for good or something else plays.
 - Without it, `play_media` is named as before.
