@@ -780,7 +780,7 @@ func pickerForRaw(id string, sv sheetView) (pickerView, bool) {
 	case "sunrise":
 		return pickerView{title: tr("wake_with_light"), opts: sunriseLabels(), cur: sunriseIndex()}, true
 	case "timezone":
-		p := pickerView{title: tr("time_zone"), opts: append([]string{followHA, common}, timezone.Regions()...), cur: -1}
+		p := pickerView{title: tr("time_zone"), opts: append([]string{tr("ui_tz_follow_ha"), tr("ui_tz_common")}, timezone.Regions()...), cur: -1}
 		if !timezone.Get().SetHere() {
 			p.cur = 0
 		}

@@ -14,12 +14,11 @@ import (
 // device and no use at all to one that has never met a Home Assistant — it sits on UTC with nothing
 // able to change it. Choosing here holds until Follow Home Assistant is chosen again.
 
-// followHA is the first choice in the region list: give the zone back to Home Assistant. common is
-// the second, a short list that saves swiping through the 174 zones under America to reach Denver.
-const (
-	followHA = "Home Assistant"
-	common   = "Common"
-)
+// The first choice in the region list gives the zone back to Home Assistant (ui_tz_follow_ha); common
+// is the second (ui_tz_common), a short list that saves swiping through the 174 zones under America to
+// reach Denver. The list is read by position, so both are shown in the screen's language; common is the
+// picker's id for that list.
+const common = "Common"
 
 // commonZones are the ones most people setting this up will want, in the order they are offered.
 // Everything else is still there, a region at a time.
@@ -78,7 +77,7 @@ func isRule(zone string) bool {
 // zonePicker lists one region's zones, or the common ones, which are written as they are.
 func zonePicker(region string) pickerView {
 	if region == common {
-		p := pickerView{title: common, cur: -1}
+		p := pickerView{title: tr("ui_tz_common"), cur: -1}
 		current := timezone.Get().Current()
 		for i, z := range commonZones {
 			p.opts = append(p.opts, strings.ReplaceAll(z, "_", " "))

@@ -683,6 +683,9 @@ var uiEnglish = map[string]string{
 	"ui_address_saved_at":            "Saved. The address is %s.",
 	"ui_certificate_checks_on":       "On",
 	"ui_certificate_checks_off":      "Off",
+	// The time zone picker (display/sheet_timezone.go, #354).
+	"ui_tz_follow_ha": "Follow Home Assistant",
+	"ui_tz_common":    "Common",
 }
 
 var uiTranslations = map[string]map[string]string{
@@ -975,6 +978,9 @@ var uiTranslations = map[string]map[string]string{
 		"ui_address_saved_at":            "Guardado. La dirección es %s.",
 		"ui_certificate_checks_on":       "Encendido",
 		"ui_certificate_checks_off":      "Apagado",
+		// The time zone picker (display/sheet_timezone.go, #354).
+		"ui_tz_follow_ha": "Seguir a Home Assistant",
+		"ui_tz_common":    "Comunes",
 	},
 	"fr": {
 		"drawer_recording":              "Écoute en cours",
@@ -1640,6 +1646,9 @@ var uiTranslations = map[string]map[string]string{
 		"ui_address_saved_at":            "Enregistré. L'adresse est %s.",
 		"ui_certificate_checks_on":       "Activées",
 		"ui_certificate_checks_off":      "Désactivées",
+		// The time zone picker (display/sheet_timezone.go, #354).
+		"ui_tz_follow_ha": "Suivre Home Assistant",
+		"ui_tz_common":    "Courants",
 	},
 	"it": {
 		"drawer_recording":           "In ascolto",
@@ -2305,6 +2314,9 @@ var uiTranslations = map[string]map[string]string{
 		"ui_address_saved_at":            "Salvato. L'indirizzo è %s.",
 		"ui_certificate_checks_on":       "Attiva",
 		"ui_certificate_checks_off":      "Disattivata",
+		// The time zone picker (display/sheet_timezone.go, #354).
+		"ui_tz_follow_ha": "Segui Home Assistant",
+		"ui_tz_common":    "Comuni",
 	},
 	"ja": {
 		"drawer_recording":           "録音中",
@@ -2970,6 +2982,9 @@ var uiTranslations = map[string]map[string]string{
 		"ui_address_saved_at":            "保存しました。アドレスは%sです。",
 		"ui_certificate_checks_on":       "オン",
 		"ui_certificate_checks_off":      "オフ",
+		// The time zone picker (display/sheet_timezone.go, #354).
+		"ui_tz_follow_ha": "Home Assistantに従う",
+		"ui_tz_common":    "よく使う",
 	},
 
 	// de is the German catalog. The English of every entry is above it, so a
@@ -4241,6 +4256,9 @@ var uiTranslations = map[string]map[string]string{
 		"ui_address_saved_at":            "Gespeichert. Die Adresse ist %s.",
 		"ui_certificate_checks_on":       "An",
 		"ui_certificate_checks_off":      "Aus",
+		// The time zone picker (display/sheet_timezone.go, #354).
+		"ui_tz_follow_ha": "Home Assistant folgen",
+		"ui_tz_common":    "Häufige",
 	},
 	"tr": {
 		"ui_listening_turn":          "Dinleniyor…",
@@ -4907,5 +4925,8 @@ var uiTranslations = map[string]map[string]string{
 		"ui_address_saved_at":            "Kaydedildi. Adres %s.",
 		"ui_certificate_checks_on":       "Açık",
 		"ui_certificate_checks_off":      "Kapalı",
+		// The time zone picker (display/sheet_timezone.go, #354).
+		"ui_tz_follow_ha": "Home Assistant'ı izle",
+		"ui_tz_common":    "Yaygın",
 	},
 }

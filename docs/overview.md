@@ -74,7 +74,7 @@ Android, with one Go daemon, `echod`, doing everything the device does:
 - **Time zone**: taken from Home Assistant on each connection (the POSIX rule it sends ESPHome devices)
   and kept on userdata, so the images carry none and a unit keeps its zone while Home Assistant is
   away; a new unit is on UTC until its first connection. A zone chosen on the device (Settings,
-  General, Time zone) holds over Home Assistant's until Home Assistant is chosen again; the Common
+  General, Time zone) holds over Home Assistant's until Follow Home Assistant is chosen again; the Common
   zones work even on an early image with no zone database.
 - **Clock**: set from time servers on the internet (NTP). A time server on your own network, like a
   router's, can be set on the setup page (General, Time server) and is asked first. A device that
