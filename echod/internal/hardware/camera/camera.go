@@ -30,6 +30,7 @@ import (
 
 	"golang.org/x/sys/unix"
 
+	"github.com/HuskerMinion/techo5/echod/internal/hardware/gpu"
 	"github.com/HuskerMinion/techo5/echod/internal/layout"
 )
 
@@ -1038,6 +1039,31 @@ func (f *Frame) FullYUYV(dst []byte) bool {
 	}
 	wg.Wait()
 	return true
+}
+
+// gpuDevelops is whether GPUYUYV develops frames on the GPU: on the 2nd gen Show 8, the one board whose
+// camera pages have a JPEG encoder to hand the GPU's picture to.
+var gpuDevelops = layout.AthenaMainline()
+
+// GPUYUYV develops the frame as FullYUYV does, on the GPU (gpu.DevelopDMABuf), into a buffer of the
+// GPU's, and returns that buffer's dmabuf (stride bytes a row) for the JPEG encoder to read in place:
+// the picture never comes back through the cores, which read GPU memory uncached on these SoCs. The
+// buffer and its descriptor stay the gpu package's and are reused by the next development, so the
+// caller encodes it before it develops another frame. ok is false where frames are not developed on
+// the GPU, there is no GPU helper, or it failed; the caller then develops on the cores.
+func (f *Frame) GPUYUYV() (fd, stride, w, h int, ok bool) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if f.raw == nil || !gpuDevelops || !gpu.Available() {
+		return -1, 0, 0, 0, false
+	}
+	g := streamed()
+	fd, stride, err := gpu.DevelopDMABuf(f.raw, g.w, g.h, g.bpl, f.level().tables(), sensor.blueFirst)
+	if err != nil {
+		slog.Debug("camera: gpu development", "err", err)
+		return -1, 0, 0, 0, false
+	}
+	return fd, stride, g.w, g.h, true
 }
 
 // rgbaToYUYV is one row of RGBA as YUYV, two pixels a step.
