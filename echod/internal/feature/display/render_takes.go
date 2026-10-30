@@ -17,7 +17,7 @@ func (r *renderer) takesPage(s scene) {
 	if c.Phase == takes.Armed {
 		r.text(r.title, "Record takes", r.margin, r.s(96), amber)
 		r.text(r.body, takesWhat(c, 28), r.margin, r.s(176), cream)
-		r.text(r.small, "The setup page asked. Up to two minutes from these microphones.", r.margin, r.s(224), dim)
+		r.text(r.small, "The setup page asked. Up to two minutes.", r.margin, r.s(224), dim)
 
 		no, yes := r.actionHalves()
 		rad := float64(r.s(actionRadius))

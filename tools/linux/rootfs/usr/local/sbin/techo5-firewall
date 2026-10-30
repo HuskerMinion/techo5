@@ -79,7 +79,8 @@ echo "techo5-firewall: Wi-Fi inbound closed except 6053, 5353, 22, 8928, 8181, 5
 # AirPlay 2 receiver runs (feature/streaming, airplay2_door.go), where /run/techo5-airplay2-jump says, so a
 # sender is never let in to those ports while AirPlay is off. Over IPv6 a sender is marked by its /64: one with
 # privacy addresses (macOS by default) can open the session from its stable address and send the audio from a
-# temporary one (#343).
+# temporary one (#343). On a home network that /64 is the whole LAN, so for those ten minutes any IPv6 host on
+# it reaches the ports above 1023, as the sender does.
 APCHAIN=TECHO5-AP2
 rm -f /run/techo5-airplay2-jump
 for T in iptables-legacy ip6tables-legacy; do

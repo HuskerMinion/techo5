@@ -39,6 +39,8 @@ These are left as they are on purpose, so they aren't missing translations:
 - **The local camera's name** ("This Show"): it's saved and matched by voice, so it stays as it is
   until the name and its label are split.
 
+Not translated yet: the **Record takes** cards on the screen (new in v1.6.16), apart from their buttons.
+
 ## Sending a translation
 
 You don't need to build or edit code. Open an issue (or comment on your language's issue if there is

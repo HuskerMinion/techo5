@@ -720,7 +720,7 @@ like "kitchen screen" under its **Voice assistants** settings in Home Assistant.
   video** on, from DLNA apps. Off on a new device. On the setup page's Screen & Photos tab. See
   [Video](video.md).
 - **Screen language** (Settings → General): the language of the screen. German, French, Italian,
-  Japanese and Turkish translate the whole screen, settings included; Spanish translates most of it.
+  Japanese and Turkish translate the whole screen, settings included; Spanish translates part of it.
   Dutch, Portuguese and Russian write the clock's day and date, the forecast's days, the weather's
   words and the alarm after the date; the rest stays in English, as with *Match all* or *English*.
   Untranslated messages fall back to English ([how far each language is](translating.md)). It also
