@@ -1122,6 +1122,12 @@ The quickest way is the device's setup page:
 4. Say it a few times from where you'll use it, and watch it on the setup page's
    [wake word scores](#watching-the-wake-word-scores) to pick its **Wake word threshold**.
 
+A wake word sent from the page is scored on exactly the features its model was trained on. The words
+that came with the device, and ones added through Home Assistant, run on an approximation that
+their thresholds are set for, and some models of your own score next to nothing on it
+([#352](https://github.com/HuskerMinion/techo5/issues/352)). If one added through Home Assistant
+hardly ever wakes, send it from the setup page instead.
+
 Only microWakeWord models are taken (`"type": "micro"` in the `.json`), with a `.tflite` of at most
 1 MB, and up to 20 sent this way. **Remove** takes one sent from the page off the device; the wake
 words that came with the device or from Home Assistant can't be removed there. A wake word the device

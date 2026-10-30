@@ -46,7 +46,7 @@ func newWakeCmd() *cobra.Command {
 			// Same selection the agent uses: Home Assistant's, via the saved config.
 			m := wake.Pick(models, config.Get().Wake.Slot(0).ID)
 
-			det, err := detect.NewDetector(m.Config)
+			det, err := detect.NewDetector(m)
 			if err != nil {
 				return err
 			}
@@ -54,7 +54,7 @@ func newWakeCmd() *cobra.Command {
 			out := cmd.OutOrStdout()
 
 			if wav != "" {
-				return wakeFromWAV(out, det, wav)
+				return wakeFromWAV(out, det, detect.FrontEnd(m), wav)
 			}
 
 			source, err := mic.Acquire()
@@ -81,7 +81,7 @@ func newWakeCmd() *cobra.Command {
 
 			fmt.Fprintf(out, "listening on the center mic for %.0fs: %q (%s), cutoff %.2f, window %d, step %dms, front end %s\n",
 				secs, m.Phrase, m.ID, m.Config.ProbabilityCutoff, m.Config.SlidingWindowSize,
-				mwwfront.StepMs(m.Config.FeaturesStepMs), detect.FrontEnd())
+				mwwfront.StepMs(m.Config.FeaturesStepMs), detect.FrontEnd(m))
 
 			deadline := time.Now().Add(time.Duration(secs * float64(time.Second)))
 			var (
@@ -160,7 +160,7 @@ func newWakeCmd() *cobra.Command {
 }
 
 // wakeFromWAV checks the model and the interpreter without the microphones in the way.
-func wakeFromWAV(out io.Writer, det *detect.Detector, path string) error {
+func wakeFromWAV(out io.Writer, det *detect.Detector, front, path string) error {
 	data, err := os.ReadFile(path)
 	if err != nil {
 		return err
@@ -175,7 +175,7 @@ func wakeFromWAV(out io.Writer, det *detect.Detector, path string) error {
 		samples[i] = int16(binary.LittleEndian.Uint16(pcm[i*2:]))
 	}
 	fmt.Fprintf(out, "%s: %d samples, %.2fs at 16 kHz, front end %s\n",
-		path, len(samples), float64(len(samples))/mic.Rate, detect.FrontEnd())
+		path, len(samples), float64(len(samples))/mic.Rate, front)
 
 	var (
 		hits  int

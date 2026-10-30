@@ -35,7 +35,7 @@ func compareMixes(ctx context.Context, out io.Writer, source *mic.Source, m wake
 		{name: "mean of 7 x4", gain: 4, sum: true},
 	}
 	for _, v := range variants {
-		det, err := detect.NewDetector(m.Config)
+		det, err := detect.NewDetector(m)
 		if err != nil {
 			return err
 		}
@@ -46,7 +46,7 @@ func compareMixes(ctx context.Context, out io.Writer, source *mic.Source, m wake
 	defer unlisten()
 
 	fmt.Fprintf(out, "scoring %d mixes on the same audio, cutoff %.2f, front end %s — say the wake word a few times\n\n",
-		len(variants), m.Config.ProbabilityCutoff, detect.FrontEnd())
+		len(variants), m.Config.ProbabilityCutoff, detect.FrontEnd(m))
 
 	for range frames {
 		select {

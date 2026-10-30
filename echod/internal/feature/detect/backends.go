@@ -51,6 +51,19 @@ func newBackend(k wake.Kind) (backend, error) {
 	return newMicroBackend(ExactFrontEnd), nil
 }
 
+// exactFor is whether a model runs on the exact front end. A model sent from the setup page always
+// does: it was trained on the reference's features, which the approximate front end only roughly
+// makes, and a model of one's own has no tuned sensitivity on the approximate one to keep. Some score
+// next to nothing on it while the exact one wakes them at full score (#352). The image's and Home
+// Assistant's words follow ExactFrontEnd, so their sensitivity settings keep meaning what they did.
+func exactFor(m wake.Model, exact bool) bool { return exact || m.Uploaded }
+
+// frontKey is one feature front end: its step in ms, and whether it is the exact one.
+type frontKey struct {
+	step  int
+	exact bool
+}
+
 // ExactFrontEnd picks microWakeWord's feature front end. False, the default, is
 // github.com/zserge/microwakeword's: a float approximation of TensorFlow Lite Micro's front end, which
 // is what has always run. True is mwwfront, the reference's own integer arithmetic, bit for bit the
@@ -62,13 +75,15 @@ var ExactFrontEnd = os.Getenv("TECHO5_WAKE_FRONTEND") == "exact"
 // microBackend is microWakeWord. Each wake word is its own streaming model, but they all read the same
 // features of the same audio, so the feature front end runs once per step size and every model is fed
 // what it made: another wake word, or the stop word, costs its inference and not a second front end.
+// A model of one's own on the exact front end next to the image's on the approximate one is the
+// exception: those are two front ends (exactFor).
 type microBackend struct {
 	dets   map[string]microDetector
-	step   map[string]int // each model's feature step, in ms
-	fronts map[int]*microFront
+	step   map[string]frontKey // each model's front end
+	fronts map[frontKey]*microFront
 	scores map[string]float64
 	gone   []string // dropped by feed, for failed
-	exact  bool     // mwwfront rather than zserge's audiofrontend; see ExactFrontEnd
+	exact  bool     // mwwfront rather than zserge's audiofrontend for every model; see ExactFrontEnd
 }
 
 // microDetector is what the backend asks of a loaded model: microwakeword.Detector, or a stand-in in
@@ -94,8 +109,8 @@ type microFront struct {
 func newMicroBackend(exact bool) *microBackend {
 	return &microBackend{
 		dets:   map[string]microDetector{},
-		step:   map[string]int{},
-		fronts: map[int]*microFront{},
+		step:   map[string]frontKey{},
+		fronts: map[frontKey]*microFront{},
 		scores: map[string]float64{},
 		exact:  exact,
 	}
@@ -103,12 +118,13 @@ func newMicroBackend(exact bool) *microBackend {
 
 // front is the front end for a feature step, made the first time a model wants it. A step of zero is
 // the library's default, 20 ms.
-func (b *microBackend) front(stepMs int) *microFront {
-	if f, ok := b.fronts[stepMs]; ok {
+func (b *microBackend) front(k frontKey) *microFront {
+	if f, ok := b.fronts[k]; ok {
 		return f
 	}
+	stepMs := k.step
 	var f *microFront
-	if b.exact {
+	if k.exact {
 		fe := mwwfront.New(stepMs)
 		f = &microFront{fe: fe, window: fe.WindowSamples(), step: fe.StepSamples()}
 	} else {
@@ -119,7 +135,7 @@ func (b *microBackend) front(stepMs int) *microFront {
 			step:   cfg.SampleRate * cfg.StepSizeMs / 1000,
 		}
 	}
-	b.fronts[stepMs] = f
+	b.fronts[k] = f
 	return f
 }
 
@@ -159,12 +175,12 @@ func (b *microBackend) load(m wake.Model) (err error) {
 	if err != nil {
 		return fmt.Errorf("wake: loading %s: %w", m.Path, err)
 	}
-	step := mwwfront.StepMs(cfg.FeaturesStepMs)
+	key := frontKey{mwwfront.StepMs(cfg.FeaturesStepMs), exactFor(m, b.exact)}
 	if _, ok := b.dets[m.ID]; ok {
 		b.unload(m.ID) // a reload may change the step
 	}
-	b.dets[m.ID], b.step[m.ID] = det, step
-	b.front(step)
+	b.dets[m.ID], b.step[m.ID] = det, key
+	b.front(key)
 	return nil
 }
 
@@ -199,12 +215,12 @@ func (b *microBackend) unload(id string) {
 // feed runs each front end over the frame once and hands every frame of features it makes to each
 // model on that step. The cutoff is neverFires, so a detector never stops partway through a frame.
 func (b *microBackend) feed(frame []int16) (map[string]float64, bool) {
-	for stepMs, f := range b.fronts {
+	for key, f := range b.fronts {
 		f.buf = append(f.buf, frame...)
 		for len(f.buf) >= f.window {
 			feat := [][]int8{features(f.fe.ProcessFrame(f.buf[:f.window]))}
 			for id, det := range b.dets {
-				if b.step[id] == stepMs && !b.run(id, det, feat) {
+				if b.step[id] == key && !b.run(id, det, feat) {
 					b.unload(id)
 					b.gone = append(b.gone, id)
 				}
