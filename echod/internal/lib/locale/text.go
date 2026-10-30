@@ -633,6 +633,8 @@ var uiEnglish = map[string]string{
 	"ui_chips_while_music_plays":     "Chips while music plays",
 	"ui_chips_while_music_plays_sub": "Where the glance chips go while the music strip is up",
 	"option_above_the_strip":         "Above the strip",
+	// The same wake word in both slots (display/sheet.go, #344).
+	"ui_same_wake_word_twice": "Same word in both slots: only one answers",
 }
 
 var uiTranslations = map[string]map[string]string{
@@ -877,6 +879,8 @@ var uiTranslations = map[string]map[string]string{
 		// Chips while music plays (display/clock_layout.go).
 		"ui_chips_while_music_plays":     "Chips con música",
 		"ui_chips_while_music_plays_sub": "Dónde van los chips mientras está la barra de música",
+		// The same wake word in both slots (display/sheet.go, #344).
+		"ui_same_wake_word_twice": "La misma palabra en las dos ranuras: solo una responde",
 	},
 	"fr": {
 		"drawer_recording":              "Écoute en cours",
@@ -1492,6 +1496,8 @@ var uiTranslations = map[string]map[string]string{
 		"ui_chips_while_music_plays":     "Pastilles pendant la musique",
 		"ui_chips_while_music_plays_sub": "Où vont les pastilles quand la barre de musique est affichée",
 		"option_above_the_strip":         "Au-dessus de la barre",
+		// The same wake word in both slots (display/sheet.go, #344).
+		"ui_same_wake_word_twice": "Même mot dans les deux emplacements : un seul répond",
 	},
 	"it": {
 		"drawer_recording":           "In ascolto",
@@ -2107,6 +2113,8 @@ var uiTranslations = map[string]map[string]string{
 		"ui_chips_while_music_plays":     "Chip durante la musica",
 		"ui_chips_while_music_plays_sub": "Dove vanno i chip quando c'è la barra della musica",
 		"option_above_the_strip":         "Sopra la barra",
+		// The same wake word in both slots (display/sheet.go, #344).
+		"ui_same_wake_word_twice": "Stessa parola in entrambi gli slot: ne risponde solo uno",
 	},
 	"ja": {
 		"drawer_recording":           "録音中",
@@ -2722,6 +2730,8 @@ var uiTranslations = map[string]map[string]string{
 		"ui_chips_while_music_plays":     "音楽再生中のチップ",
 		"ui_chips_while_music_plays_sub": "音楽バーが出ているときのチップの位置",
 		"option_above_the_strip":         "バーの上",
+		// The same wake word in both slots (display/sheet.go, #344).
+		"ui_same_wake_word_twice": "両方のスロットが同じ言葉です。応答するのは片方だけです",
 	},
 
 	// de is the German catalog. The English of every entry is above it, so a
@@ -3941,6 +3951,8 @@ var uiTranslations = map[string]map[string]string{
 		"ui_chips_while_music_plays":     "Chips bei Musik",
 		"ui_chips_while_music_plays_sub": "Wo die Chips stehen, wenn die Musikleiste angezeigt wird",
 		"option_above_the_strip":         "Über der Leiste",
+		// The same wake word in both slots (display/sheet.go, #344).
+		"ui_same_wake_word_twice": "Gleiches Wort in beiden Plätzen: nur einer antwortet",
 	},
 	"tr": {
 		"ui_listening_turn":          "Dinleniyor…",
@@ -4556,5 +4568,7 @@ var uiTranslations = map[string]map[string]string{
 		"ui_chips_while_music_plays":     "Müzik çalarken çipler",
 		"ui_chips_while_music_plays_sub": "Müzik şeridi açıkken bakış çiplerinin yeri",
 		"option_above_the_strip":         "Şeridin üstünde",
+		// The same wake word in both slots (display/sheet.go, #344).
+		"ui_same_wake_word_twice": "İki yuvada aynı kelime: yalnızca biri yanıt verir",
 	},
 }

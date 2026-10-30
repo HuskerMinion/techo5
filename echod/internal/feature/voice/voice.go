@@ -107,6 +107,7 @@ func build() *Voice {
 	}
 	v.turn = newConversation(v.vs)
 	slog.Info("wake words", "ours", len(ours), "active", active)
+	warnRepeatedWord()
 
 	v.vs.OnTimer = timer.Get().Event
 	v.vs.OnSubscribed = func(subscribed bool) {
@@ -469,6 +470,7 @@ func (v *Voice) OnWakeWord(load func(ids []string) []string, selected func()) {
 		if len(accepted) != len(ids) {
 			slog.Warn("some wake words were refused", "asked", ids, "running", accepted)
 		}
+		warnRepeatedWord()
 		selected()
 	}
 }
@@ -500,4 +502,12 @@ func (v *Voice) ActiveWakeWords() []string { return v.vs.ActiveWakeWords }
 func (v *Voice) SetActiveWakeWords(ids []string) {
 	v.vs.ActiveWakeWords = ids
 	slog.Info("wake words listening", "active", ids)
+}
+
+// warnRepeatedWord says so in the log when the same wake word is in two slots: both fire at once, and
+// only the one that fires first answers, which looks like the other assistant missing requests.
+func warnRepeatedWord() {
+	if id := config.Get().Wake.RepeatedWord(); id != "" {
+		slog.Warn("the same wake word is in two slots: only one of them answers each time, whichever fires first; give one slot a different word", "word", id)
+	}
 }

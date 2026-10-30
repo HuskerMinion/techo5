@@ -252,6 +252,20 @@ func (w Wake) Slot(n int) WakeWord {
 	return w.Words[n]
 }
 
+// RepeatedWord is a wake word set in more than one slot, or empty when there is none. The same word
+// in two slots fires both at once, and only the slot that fires first answers, so which assistant gets
+// the request is down to chance (#344).
+func (w Wake) RepeatedWord() string {
+	for i, a := range w.Words {
+		for _, b := range w.Words[i+1:] {
+			if a.ID != "" && a.ID == b.ID {
+				return a.ID
+			}
+		}
+	}
+	return ""
+}
+
 // Slots is the first n slots, one entry each whether or not any has been set.
 func (w Wake) Slots(n int) []WakeWord {
 	out := make([]WakeWord, n)

@@ -219,7 +219,7 @@ func categoryRows(sv sheetView) (rows []settingRow, note string) {
 			rows = append(rows, []settingRow{
 				{label: tr("voice"), kind: ctlHeading},
 				{id: "mic", label: tr("microphone"), sub: tr("the_mute_button_does_this_too"), kind: ctlToggle, on: !st.muted, value: mic},
-				{id: "wakeword", label: tr("wake_word"), kind: ctlChoice, value: st.wakeWord},
+				{id: "wakeword", label: tr("wake_word"), sub: repeatedWordNote(), kind: ctlChoice, value: st.wakeWord},
 				{id: "wakesens", label: tr("wake_word_threshold"), sub: tr("higher_wakes_by_mistake_less_often"), kind: ctlStepper,
 					value: fmt.Sprintf("%.2f", config.Get().Wake.Slot(0).Threshold)},
 				{id: "waketone", label: tr("wake_sound"), kind: ctlChoice, value: config.Get().Wake.Slot(0).Tone.Label()},
@@ -1388,4 +1388,13 @@ func (d *Display) checkUpdates() {
 func (d *Display) stepBrightness(by int) {
 	pct := min(max(d.ceilingOrDefault()+by, 25), 100)
 	d.apply(true, pct, true)
+}
+
+// repeatedWordNote is the line under Wake word when the same word is in both slots (set in Home
+// Assistant): only one of them answers each time, which otherwise looks like missed requests.
+func repeatedWordNote() string {
+	if config.Get().Wake.RepeatedWord() != "" {
+		return tr("ui_same_wake_word_twice")
+	}
+	return ""
 }
