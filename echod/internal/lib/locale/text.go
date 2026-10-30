@@ -154,6 +154,7 @@ var uiEnglish = map[string]string{
 	"for_downloads_updates_always_check":             "For downloads; updates always check",
 	"for_muting_and_timers":                          "For muting and timers",
 	"louder_speech":                                  "Louder speech",
+	"media_playback":                                 "Playback",
 	"replies_and_announcements":                      "Replies and announcements",
 	"for_timers":                                     "For timers",
 	"forget_device":                                  "Forget %s",
@@ -641,6 +642,7 @@ var uiEnglish = map[string]string{
 
 var uiTranslations = map[string]map[string]string{
 	"es": {
+		"media_playback":                "Reproducción",
 		"ui_listening_turn":             "Escuchando…",
 		"ui_thinking_turn":              "Pensando…",
 		"ui_thinking":                   "Pensando",
@@ -968,6 +970,7 @@ var uiTranslations = map[string]map[string]string{
 		"loading_video":                 "Chargement de la vidéo…",
 		"look":                          "Apparence",
 		"lyrics":                        "Paroles",
+		"media_playback":                "Lecture",
 		"microphone":                    "Microphone",
 		"microphone_off":                "MICROPHONE DÉSACTIVÉ",
 		"minutes_before":                "%d minutes avant",
@@ -1638,6 +1641,7 @@ var uiTranslations = map[string]map[string]string{
 		"for_downloads_updates_always_check":             "Per i download; per gli aggiornamenti verifica sempre",
 		"for_muting_and_timers":                          "Per silenziamento e timer",
 		"louder_speech":                                  "Voce più alta",
+		"media_playback":                                 "Riproduzione",
 		"replies_and_announcements":                      "Risposte e annunci",
 		"for_timers":                                     "Per i timer",
 		"forget_device":                                  "Dimentica %s",
@@ -2257,6 +2261,7 @@ var uiTranslations = map[string]map[string]string{
 		"for_downloads_updates_always_check":             "ダウンロード用。更新時は常に確認",
 		"for_muting_and_timers":                          "ミュートとタイマー用",
 		"louder_speech":                                  "音声を大きく",
+		"media_playback":                                 "再生",
 		"replies_and_announcements":                      "応答とアナウンス",
 		"for_timers":                                     "タイマー用",
 		"forget_device":                                  "%sの登録を解除",
@@ -3015,6 +3020,7 @@ var uiTranslations = map[string]map[string]string{
 		// Louder speech
 		"louder_speech": "Sprache lauter",
 		// Replies and announcements
+		"media_playback":            "Wiedergabe",
 		"replies_and_announcements": "Antworten und Ansagen",
 		// For timers
 		"for_timers": "Für Timer",
@@ -4584,5 +4590,7 @@ var uiTranslations = map[string]map[string]string{
 		"option_above_the_strip":         "Şeridin üstünde",
 		// The same wake word in both slots (display/sheet.go, #344).
 		"ui_same_wake_word_twice": "İki yuvada aynı kelime: yalnızca biri yanıt verir",
+		// The player screen (feature/media/title.go, #348).
+		"media_playback": "Oynatma",
 	},
 }

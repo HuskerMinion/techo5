@@ -25,6 +25,7 @@ import (
 	"github.com/HuskerMinion/techo5/echod/internal/feature/media"
 	"github.com/HuskerMinion/techo5/echod/internal/lib/hass"
 	"github.com/HuskerMinion/techo5/echod/internal/lib/hook"
+	"github.com/HuskerMinion/techo5/echod/internal/lib/locale"
 	"github.com/HuskerMinion/techo5/echod/internal/lib/openmeteo"
 	"github.com/HuskerMinion/techo5/echod/internal/lib/safe"
 )
@@ -747,6 +748,18 @@ func carried(r Radio) Radio {
 	s := snapshotOf(media.Get())
 	switch whosePlaying(s, false) {
 	case playingOwn:
+		if s.titled {
+			// A track Home Assistant named before it played it (media_title): the page names what it
+			// was told, not the station last chosen here or Home Assistant's "last station" text, which
+			// went on saying "Radio" over a recording with an old station's song.
+			r.Chosen = ""
+			r.Playing, r.Paused = s.ownPlaying, s.ownPaused
+			r.Now = titledSource(s.own, locale.Text(config.Get().Screen.Language, "media_playback"))
+			r.Title, r.Artist, r.Album = s.own.Title, s.own.Subtitle, ""
+			r.Art, r.Thumb = nil, nil
+			r.Logo, r.Music = false, false
+			break
+		}
 		if !bluetoothFrom(s.recvFrom) {
 			break
 		}

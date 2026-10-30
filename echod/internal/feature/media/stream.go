@@ -139,6 +139,10 @@ type track struct {
 	// PlayChecked's caller is waiting for the answer, and hands it on itself.
 	handOff bool
 
+	// title is what Home Assistant named it before it was played (media_title), nil for none. It is the
+	// track's, so it goes when the track does.
+	title *Title
+
 	// ask is the stream's asks when this track was started.
 	ask uint64
 
@@ -214,11 +218,29 @@ func (m *Stream) Duck(db int) {
 //
 // It does not take the speaker from a reply or an announcement that is sounding. Those are seconds
 // long and end on their own, and the track waits behind them rather than talking over them.
-func (m *Stream) Play(url string) { m.play(url, true) }
+func (m *Stream) Play(url string) { m.play(url, true, nil) }
 
 // PlayOnly is Play for a url the device must play itself or not at all: never handed to the music
 // library when it cannot be decoded.
-func (m *Stream) PlayOnly(url string) { m.play(url, false) }
+func (m *Stream) PlayOnly(url string) { m.play(url, false, nil) }
+
+// PlayTitled is PlayOnly for a url Home Assistant named first (media_title): title goes with the track,
+// for the screen and the sensors, for as long as it is loaded. A nil title is PlayOnly.
+func (m *Stream) PlayTitled(url string, title *Title) { m.play(url, false, title) }
+
+// Title is what the loaded track was named, playing or paused; nil when it was not named or nothing is
+// loaded.
+func (m *Stream) Title() *Title {
+	if m == nil {
+		return nil
+	}
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if m.track == nil {
+		return nil
+	}
+	return m.track.title
+}
 
 // PlayChecked starts a url as Play does and waits, up to within, for audio the device can play to arrive
 // from it: nil once it has, or why it did not. A station that does not play says so, rather than the
@@ -226,7 +248,7 @@ func (m *Stream) PlayOnly(url string) { m.play(url, false) }
 // (the assistant asking for the station is one) would otherwise hold the answer until after it is given.
 // One that does not arrive in time is stopped, so it cannot start later with nobody expecting it.
 func (m *Stream) PlayChecked(url string, within time.Duration) error {
-	t := m.play(url, false)
+	t := m.play(url, false, nil)
 	if t == nil {
 		return errors.New("this device has no speaker")
 	}
@@ -258,14 +280,14 @@ func (m *Stream) drop(t *track) {
 	t.stop()
 }
 
-func (m *Stream) play(url string, handOff bool) *track {
+func (m *Stream) play(url string, handOff bool, title *Title) *track {
 	if m == nil {
 		slog.Warn("asked to play media with no speaker", "url", url)
 		return nil
 	}
 
 	live := liveURL(url)
-	t := &track{item: url, heard: make(chan struct{}), done: make(chan struct{}), handOff: handOff}
+	t := &track{item: url, heard: make(chan struct{}), done: make(chan struct{}), handOff: handOff, title: title}
 	t.live.Store(live)
 	t, ctx := m.start(t)
 	slog.Info("playing media", "url", url, "live", live)
