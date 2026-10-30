@@ -14,7 +14,6 @@ import (
 	"github.com/HuskerMinion/techo5/echod/internal/feature/home"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/notify"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/remind"
-	"github.com/HuskerMinion/techo5/echod/internal/feature/setup"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/video"
 	"github.com/HuskerMinion/techo5/echod/internal/hardware/touch"
 )
@@ -218,7 +217,7 @@ func (d *Display) overDashboard(s *scene) bool {
 	// The video's own state, not videoUp: that is what the last frame drew, and videoScene runs after
 	// this one, so the first frame of a video would still hold. The alert page is drawn in the
 	// dashboard's place (alertScene runs before this).
-	return s.pin.open || setup.Get().Waiting() || announce.Get().Recording() || announcing || reminding || notifying ||
+	return s.pin.open || asksAtDevice() || announce.Get().Recording() || announcing || reminding || notifying ||
 		d.popupUp() != nil || videoAsking || d.videoUp() || video.Get().State().Active() || s.showAlert
 }
 

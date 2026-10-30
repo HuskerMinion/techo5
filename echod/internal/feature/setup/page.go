@@ -112,7 +112,7 @@ func (f *Feature) serve(w http.ResponseWriter, r *http.Request) {
 
 // watching is the paths a view left up on the page asks for by itself. Answering them is not the page
 // being used: a tab left watching the scores would otherwise hold the page open for as long as it ran.
-var watching = map[string]bool{"/setup/scores": true}
+var watching = map[string]bool{"/setup/scores": true, "/setup/takes/state": true}
 
 // diagnostics hands over everything worth having when something is wrong, with the addresses, names,
 // keys and serial numbers already replaced — so that somebody can send it to an issue without
@@ -444,6 +444,7 @@ func (f *Feature) settingsPage(ctx context.Context, w http.ResponseWriter, token
 			phoneBookSection(w, token)
 			wakeWordsSection(w, token)
 			scoresSection(w)
+			takesSection(w, token)
 		} else {
 			fmt.Fprint(w, `<h3>Announcements and sounds</h3>`)
 			houseSection(w, token)
@@ -579,7 +580,9 @@ func privacySection(w http.ResponseWriter) {
 	 <p class="note" style="margin:0">It opens only after a press on the device, and closes itself when it
 	  is left alone. It is on your own network, without encryption. It never touches SSH keys or the
 	  software the device runs, and never shows the Home Assistant key. It can let a Home Assistant add
-	  the device for 15 minutes (General), which sets a new key.</p></fieldset>`)
+	  the device for 15 minutes (General), which sets a new key. It can record takes of a word from the
+	  microphones (Sound &amp; Voice) only while Record takes of a word is switched on, and only after a
+	  press on the device for each recording; the takes stay in memory, and come to you over this page.</p></fieldset>`)
 }
 
 // wifiSection is the networks: what the device is on, what it remembers, and how to add another.

@@ -113,7 +113,7 @@ type Feature struct {
 var shared = &Feature{poke: make(chan struct{}, 1)}
 
 // A talk has the microphones: no voice turn starts over it, and the action button ends it.
-func init() { voice.YieldTo(shared.Busy, shared.Stop) }
+func init() { voice.YieldTo("a talk through a camera", shared.Busy, shared.Stop) }
 
 func Get() *Feature { return shared }
 

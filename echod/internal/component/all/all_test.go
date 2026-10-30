@@ -149,6 +149,7 @@ var registered = []string{
 	"radio_station",
 	"radio_temperature",
 	"radio_title",
+	"record_takes",
 	"remote_api",
 	"reply_buffer_1",
 	"reply_buffer_2",

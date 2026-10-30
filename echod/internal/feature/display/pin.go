@@ -156,18 +156,21 @@ func relockOnClose(open bool) {
 // answerSetup answers a browser asking to be let in to the setup page. Allow is behind the settings
 // lock too: the setup page is every setting and more.
 //
-// The PIN lets in the browser that was asking when Allow was tapped, and no other: one that asked
-// while the PIN was being typed was never seen. Nor does the PIN leave the settings open behind it.
-func answerSetup(allow bool) {
-	if allow && security.Locked() {
-		asking := setup.Get().Asking()
+// Allow lets in asking, the browser whose page was tapped, and no other, with the PIN or without: one
+// that asked while the PIN was being typed, or since the page was drawn, was never seen. Nor does the
+// PIN leave the settings open behind it.
+func answerSetup(allow bool, asking string) {
+	switch {
+	case !allow:
+		setup.Get().Answer(false)
+	case security.Locked():
 		openPIN(tr("ui_setup_page"), func() {
 			setup.Get().AllowAsking(asking)
 			security.Relock()
 		})
-		return
+	default:
+		setup.Get().AllowAsking(asking)
 	}
-	setup.Get().Answer(allow)
 }
 
 // pinPress is a key on the pad: a digit, back, ok, or cancel.

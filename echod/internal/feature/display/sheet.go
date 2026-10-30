@@ -37,6 +37,7 @@ import (
 	"github.com/HuskerMinion/techo5/echod/internal/feature/wakeword"
 	"github.com/HuskerMinion/techo5/echod/internal/hardware/speaker"
 	"github.com/HuskerMinion/techo5/echod/internal/hardware/touch"
+	"github.com/HuskerMinion/techo5/echod/internal/layout"
 	"github.com/HuskerMinion/techo5/echod/internal/lib/asp"
 	"github.com/HuskerMinion/techo5/echod/internal/lib/safe"
 	"github.com/HuskerMinion/techo5/echod/internal/lib/wake"
@@ -327,10 +328,15 @@ func securityRows(sv sheetView) []settingRow {
 		certs.sub, certs.value = tr("ui_turned_off_in_home_assistant"), tr("ui_off")
 	}
 	rows = append(rows, cameraTestRows()...)
-	return append(rows,
+	rows = append(rows,
 		settingRow{id: "camweb", label: tr("camera_on_the_network"), sub: tr("no_login"), kind: ctlToggle, on: sec.Camera},
 		settingRow{id: "screenweb", label: tr("screen_on_the_network"), sub: tr("no_login"), kind: ctlToggle, on: sec.Screen},
-		settingRow{id: "talkback", label: tr("talk_through_cameras"), sub: tr("talk_on_the_camera_page"), kind: ctlToggle, on: sec.TalkBack},
+		settingRow{id: "talkback", label: tr("talk_through_cameras"), sub: tr("talk_on_the_camera_page"), kind: ctlToggle, on: sec.TalkBack})
+	if layout.HasMicrophone() {
+		rows = append(rows, settingRow{id: "takes", label: tr("record_takes_of_a_word"), sub: tr("on_the_setup_page_started_here"),
+			kind: ctlToggle, on: sec.Takes})
+	}
+	return append(rows,
 		setupRow(st.demo),
 		link, certs)
 }
@@ -1200,6 +1206,8 @@ func (d *Display) rowTap(id string, p part, opt int) {
 		security.Get().SetScreen(!config.Get().Security.Screen)
 	case "talkback":
 		security.Get().SetTalkBack(!config.Get().Security.TalkBack)
+	case "takes":
+		security.Get().SetTakes(!config.Get().Security.Takes)
 	case "airplay":
 		streaming.Get().SetAirPlay(!config.Get().Streaming.AirPlay)
 	case "airplay2":

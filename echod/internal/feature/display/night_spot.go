@@ -12,7 +12,6 @@ import (
 	"github.com/HuskerMinion/techo5/echod/internal/feature/announce"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/phone"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/remind"
-	"github.com/HuskerMinion/techo5/echod/internal/feature/setup"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/talkback"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/video"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/voice"
@@ -168,7 +167,7 @@ func (d *Display) night(now time.Time, on bool, view voice.State) bool {
 	}
 	clock, out := in && on && nightClockOn(), in && on && nightDarkOn()
 	if clock || out {
-		lift := phone.Get().Busy() || talkback.Get().Busy() || sunriseProgress(now) > 0 || setup.Get().Waiting()
+		lift := phone.Get().Busy() || talkback.Get().Busy() || sunriseProgress(now) > 0 || asksAtDevice()
 		recent := now.Sub(touched) < nightIdle || now.Sub(viewAt) < nightIdle
 		if clock && !soonAt.IsZero() && !touched.After(soonAt) && !viewAt.After(soonAt) {
 			// Asked for since the last touch or turn: only a short wait from then, never a longer one.

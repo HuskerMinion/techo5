@@ -43,6 +43,14 @@ This is optional, and the biggest gain:
 
 - **Record takes** in the browser: close, across the room, with the TV on, quietly. Each person in
   the house saying it a few times helps most. Every fourth take is kept aside for the test.
+- **Takes recorded on the device.** The setup page can record them on the device's own microphones,
+  mixed and leveled the way the wake word hears them
+  ([Recording takes of a word](setup.md#recording-takes-of-a-word)). On the machine wakesmith runs
+  on, unzip each download into a folder of its own, all inside one folder for the word, and add that
+  folder under **Real voices**, **Folders**, as **Recordings of the phrase**: wakesmith reads every
+  WAV below it, and every download names its takes the same way. `not_` downloads go in another
+  folder, as **"Not the phrase" clips**. Only the takes listed in a `HELDOUT.txt` in that folder are
+  kept aside for the test, so list one recording's takes there (paths from that folder, one per line).
 - **Your device's clips.** Turn on **Keep wake clips** on the device
   ([Wake word clips](setup.md#wake-word-clips)), use it for a while, then copy the clips off (the
   `wake_clips` and `wake_clip_audio` actions, or SSH) into a folder and import it under **Real
@@ -215,6 +223,11 @@ ffmpeg converts other recordings:
 ```sh
 ffmpeg -i take.m4a -ac 1 -ar 16000 -c:a pcm_s16le take.wav
 ```
+
+**Or record them on the device itself.** The setup page's **Record takes of a word** (see
+[Recording takes of a word](setup.md#recording-takes-of-a-word)) records up to two minutes on the
+device's own microphones, mixed and leveled the way the wake word hears them, cuts it into takes and
+hands them over as a zip of WAVs in this format, one folder per word. No phone, ffmpeg or script.
 
 A hundred takes is small next to thousands of synthetic ones, so they're repeated with different
 augmentation each time (step 5) and weighted higher in training (step 6). Keep a few takes out of

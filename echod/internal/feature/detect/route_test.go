@@ -17,6 +17,15 @@ func TestRouteFor(t *testing.T) {
 		h    heard
 		want route
 	}{
+		// Takes of a word being recorded: every word heard is a take, and does nothing, but the stop word
+		// over a ring, which still ends it.
+		{"wake word, takes", wake, heard{takes: true}, routeIgnore},
+		{"stop word, takes", StopSlot, heard{takes: true}, routeIgnore},
+		{"hang-up word, takes", HangupSlot, heard{takes: true}, routeIgnore},
+		{"command word, takes", CommandSlot, heard{takes: true}, routeIgnore},
+		{"stop word over a ring, takes", StopSlot, heard{takes: true, ringing: true}, routeInterrupt},
+		{"wake word over a ring, takes", wake, heard{takes: true, ringing: true}, routeIgnore},
+
 		// No call: as before any of this.
 		{"wake word, no call", wake, heard{}, routeTurn},
 		{"stop word, no call", StopSlot, heard{}, routeInterrupt},

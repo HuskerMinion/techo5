@@ -346,6 +346,8 @@ var uiEnglish = map[string]string{
 	"sunrise_until":                             "On until %s",
 	"talk_on_the_camera_page":                   "Talk on the camera page",
 	"talk_through_cameras":                      "Talk through cameras",
+	"record_takes_of_a_word":                    "Record takes of a word",
+	"on_the_setup_page_started_here":            "Asked on the setup page, started here",
 	"tap_lifts_the_night_light":                 "Tap lifts the night light",
 	"tap_on_the_clock":                          "Tap on the clock",
 	"tap_to_go_back":                            "Tap to go back",
@@ -1225,6 +1227,8 @@ var uiTranslations = map[string]map[string]string{
 		"sunrise_until":                                         "Activé jusqu'à %s",
 		"talk_on_the_camera_page":                               "Parler depuis la page de la caméra",
 		"talk_through_cameras":                                  "Parler via les caméras",
+		"record_takes_of_a_word":                                "Enregistrer un mot plusieurs fois",
+		"on_the_setup_page_started_here":                        "Demandé depuis la page de configuration, démarré ici",
 		"tap_lifts_the_night_light":                             "Touchez l'écran pour augmenter la luminosité de la veilleuse",
 		"tap_on_the_clock":                                      "Touchez l'horloge",
 		"tap_to_go_back":                                        "Touchez pour revenir",
@@ -1826,6 +1830,8 @@ var uiTranslations = map[string]map[string]string{
 		"sunrise_until":                             "Luce accesa fino alle %s",
 		"talk_on_the_camera_page":                   "Parla dalla pagina della telecamera",
 		"talk_through_cameras":                      "Parla attraverso le telecamere",
+		"record_takes_of_a_word":                    "Registra una parola più volte",
+		"on_the_setup_page_started_here":            "Richiesta dalla pagina di configurazione, avviata qui",
 		"tap_lifts_the_night_light":                 "Tocca per riattivare lo schermo",
 		"tap_on_the_clock":                          "Azione al tocco dell'orologio",
 		"tap_to_go_back":                            "Tocca per tornare indietro",
@@ -2443,6 +2449,8 @@ var uiTranslations = map[string]map[string]string{
 		"sunrise_until":                             "%sまで点灯",
 		"talk_on_the_camera_page":                   "カメラ画面から会話",
 		"talk_through_cameras":                      "カメラ経由で会話",
+		"record_takes_of_a_word":                    "単語を繰り返し録音",
+		"on_the_setup_page_started_here":            "セットアップ画面で依頼、ここで開始",
 		"tap_lifts_the_night_light":                 "タップで通常表示に戻る",
 		"tap_on_the_clock":                          "時計をタップ",
 		"tap_to_go_back":                            "タップして戻る",
@@ -3390,6 +3398,10 @@ var uiTranslations = map[string]map[string]string{
 		"talk_on_the_camera_page": "Auf der Kameraseite sprechen",
 		// Talk through cameras
 		"talk_through_cameras": "Durch Kameras sprechen",
+		// Record takes of a word
+		"record_takes_of_a_word": "Ein Wort mehrfach aufnehmen",
+		// Asked on the setup page, started here
+		"on_the_setup_page_started_here": "Auf der Einrichtungsseite angefordert, hier gestartet",
 		// Tap lifts the night light
 		"tap_lifts_the_night_light": "Tippen hebt das Nachtlicht an",
 		// Tap on the clock
@@ -4285,6 +4297,8 @@ var uiTranslations = map[string]map[string]string{
 		"sunrise_until":                             "%s kadar açık",
 		"talk_on_the_camera_page":                   "Kamera sayfasında konuş",
 		"talk_through_cameras":                      "Kameralar üzerinden konuş",
+		"record_takes_of_a_word":                    "Bir kelimeyi birkaç kez kaydet",
+		"on_the_setup_page_started_here":            "Kurulum sayfasından istenir, burada başlatılır",
 		"tap_lifts_the_night_light":                 "Dokunmak gece lambasını yükseltir",
 		"tap_on_the_clock":                          "Saate dokun",
 		"tap_to_go_back":                            "Geri dönmek için dokun",

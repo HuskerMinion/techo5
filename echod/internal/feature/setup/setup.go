@@ -175,13 +175,19 @@ func (f *Feature) Open() {
 	fresh := !f.on(now)
 	if fresh {
 		f.openedAt = now
+		// A page that ran out on its own is closed by Run's next look, up to a tick later: opened again
+		// before then, it is still a new page, and the browsers let into the old one are not in this one.
+		clear(f.live)
+		f.waiting, f.waitingEnd = "", time.Time{}
 		slog.Info("setup page open", "idle", idle, "at most", life)
 	}
 	f.openUntil = now.Add(idle)
 	f.mu.Unlock()
 	if fresh {
-		// A page opened anew is this house's, whatever it was the last time it was up (remote.go).
+		// A page opened anew is this house's, whatever it was the last time it was up (remote.go), and
+		// nothing the last one asked for is kept for it.
 		f.remoteOff()
+		discardTakes("the setup page closed")
 	}
 
 	f.sw.Set(true)
@@ -202,6 +208,8 @@ func (f *Feature) Close() {
 	if was {
 		slog.Info("setup page closed")
 	}
+	// Takes of a word belong to the page that asked for them, and nothing outlives it.
+	discardTakes("the setup page closed")
 	f.remoteOff()
 	f.showAsking()
 	f.sw.Set(false)
@@ -235,8 +243,12 @@ func (f *Feature) Waiting() bool {
 // with no screen there is nothing else to tell the button so.
 //
 // It is true while a browser is waiting and for pressGrace after the press was taken, because the
-// listeners run in no fixed order and this may be asked either side of the page answering.
+// listeners run in no fixed order and this may be asked either side of the page answering. A recording
+// of takes asked for on the page waits for a press the same way, and says the same (feature/takes).
 func (f *Feature) TookPress() bool {
+	if takesTookPress() {
+		return true
+	}
 	now := time.Now()
 	f.mu.Lock()
 	defer f.mu.Unlock()
@@ -247,7 +259,7 @@ func (f *Feature) TookPress() bool {
 }
 
 // button is the action button: a hold opens the page on a device that has no other way to ask, and a
-// tap answers a browser that is waiting to be let in.
+// tap answers a browser that is waiting to be let in, or else starts the takes the page asked for.
 //
 // A longer hold on the Dot is Bluetooth pairing, and every one of those passes through this hold on
 // its way there. Opening the page for somebody who was reaching for pairing puts a device on the
@@ -277,7 +289,9 @@ func (f *Feature) button(e buttons.Event) {
 			f.Close()
 		}
 	case buttons.Tap:
-		f.press()
+		if !f.press() {
+			takesPressed()
+		}
 	}
 }
 

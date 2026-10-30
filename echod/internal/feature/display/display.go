@@ -52,6 +52,7 @@ import (
 	"github.com/HuskerMinion/techo5/echod/internal/feature/remind"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/security"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/setup"
+	"github.com/HuskerMinion/techo5/echod/internal/feature/takes"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/talkback"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/tessera"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/timer"
@@ -443,7 +444,8 @@ type Display struct {
 	videoOver     image.Rectangle
 	vp            videoPainter
 	vask          askLatch
-	videoLit      uint64 // the last video that lit the panel (frame)
+	pask          askLatch // the setup page's asking, drawn (pageAsk)
+	videoLit      uint64   // the last video that lit the panel (frame)
 
 	// notifyLit is the last notification that lit the panel (frame), once per notification like
 	// videoLit. notifySeen is the notification the screen may show at night: the one that came up by
@@ -1073,7 +1075,7 @@ func (d *Display) gesture(g touch.Gesture) {
 	_, _, _, asking := video.Get().Asking()
 	// Not on the video page either: its controls work at night as by day (the night light's rule is
 	// the clock's, a hand in the dark more likely a knock than a request).
-	glowing := d.nightGlow && !d.wifiOpen && !setup.Get().Waiting() && !asking && !d.videoOnScreen
+	glowing := d.nightGlow && !d.wifiOpen && !asksAtDevice() && !asking && !d.videoOnScreen
 	// A dashboard a tap on the night light opened is used as by day, at the night light's level. Only
 	// that one: a dashboard left up from the day, or put up by Home Assistant, stays under the night.
 	// And only while it is what is drawn: the settings or the drawer opened from it are not shown over
@@ -1166,13 +1168,26 @@ func (d *Display) gesture(g touch.Gesture) {
 		return
 	}
 
-	// A browser asking to be let in: its page takes every tap, and only the answers decide.
-	if setup.Get().Waiting() {
-		if g.Kind == touch.Tap {
-			if d.r != nil {
-				if allow, answered := d.r.askTap(g.X, g.Y); answered {
-					answerSetup(allow)
+	// The setup page asking something of whoever is at the device: a browser to be let in, or takes of
+	// a word to start, and Stop while they record. Its page takes every tap, and only the answers decide:
+	// the answers on the page that was drawn, once it has been up long enough to have been read
+	// (pageAsk), since the yes is in the same place on each of them.
+	if asking, c := setup.Get().Asking(), takes.Get().Card(); asking != "" || c.Up() {
+		if g.Kind == touch.Tap && d.r != nil {
+			drawn, settled := d.pask.answerable(time.Now())
+			switch {
+			case !settled:
+			case asking != "":
+				if allow, answered := d.r.askTap(g.X, g.Y); answered && drawn == letInKey(asking) {
+					answerSetup(allow, asking)
 				}
+			case drawn != takesKey(c):
+			case c.Phase == takes.Armed:
+				if start, answered := d.r.askTap(g.X, g.Y); answered {
+					answerTakes(start, c.ID)
+				}
+			case d.r.actionDecided(g.Y):
+				takes.Get().Stop()
 			}
 		}
 		d.wake()
@@ -1899,7 +1914,7 @@ func (d *Display) night(now time.Time, on bool, view voice.State) bool {
 		// and whoever is asking is standing at the device.
 		// A talk through a camera is a conversation at the door: the screen it needs stays lit.
 		// And a video: somebody asked for it to be watched.
-		lift := phone.Get().Busy() || talkback.Get().Busy() || d.wakeLight(now) > 0 || wifiUp || setup.Get().Waiting()
+		lift := phone.Get().Busy() || talkback.Get().Busy() || d.wakeLight(now) > 0 || wifiUp || asksAtDevice()
 		// A video playing keeps the screen as it is: lit at the night light's level if it came on at
 		// night (frame), not put out under it.
 		// A page Home Assistant asked for keeps it while it is up (askedAtNight).
@@ -2470,7 +2485,7 @@ func (d *Display) frame() (next time.Duration) {
 	updateVisible := d.updateShown(now)
 	d.mu.Unlock()
 	busy := updateVisible || view.Phase != "idle" || call.Phase != phone.Idle || ring.any() || reminding || sheetUp || pinIsOpen() ||
-		d.wakeLight(now) > 0 || d.popupUp() != nil || setup.Get().Waiting() || wifiUp || camUp || video.Get().State().Active()
+		d.wakeLight(now) > 0 || d.popupUp() != nil || asksAtDevice() || wifiUp || camUp || video.Get().State().Active()
 	if d.awayTick(now, on, busy, night) {
 		d.mu.Lock()
 		on = d.on
@@ -2758,6 +2773,18 @@ func (d *Display) frame() (next time.Duration) {
 	// still standing in it. It was set only on the idle page once, and the press could not be given
 	// without leaving settings first.
 	s.setupAsking = setup.Get().Waiting()
+	// Takes of a word asked for there are the same kind of page, and wait their turn behind a browser
+	// asking to be let in.
+	if !s.setupAsking {
+		s.takes = takes.Get().Card()
+		s.setupAsking = s.takes.Up()
+	}
+	// What draw() puts over the page (a call, a ring, the PIN pad) leaves it undrawn, and so unanswerable.
+	drawnPage := uint64(0)
+	if s.setupAsking && s.call.Phase == phone.Idle && !s.ring.any() && !s.pin.open {
+		drawnPage = pageKey(s.takes)
+	}
+	d.pask.drawn(drawnPage, now)
 	d.videoScene(&s, now)
 	if s.showVideo {
 		boring = false
