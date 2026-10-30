@@ -104,3 +104,32 @@ func TestADatedOneOffTurnedBackOnLosesItsPastDate(t *testing.T) {
 		t.Errorf("turned back on, it kept a date that has gone by: %q", got.Date)
 	}
 }
+
+// A skipped occurrence is kept by alarm and moment, with the alarm's on and days untouched, and it
+// goes when the alarm it belongs to is deleted.
+func TestASkippedOccurrenceIsSavedAndGoesWithItsAlarm(t *testing.T) {
+	st := load(t)
+	if err := st.Set().Alarms().Put(Alarm{ID: "a", Hour: 7, Minute: 30, Days: DaysWeekdays, Label: "Wake", On: true}); err != nil {
+		t.Fatal(err)
+	}
+	at := time.Date(2026, 10, 19, 7, 30, 0, 0, time.UTC)
+	if err := st.Set().Alarms().ChangeStrict(func(a *Alarms) error {
+		a.Skipped = []Skip{{ID: "a", At: at}}
+		return nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+	got := st.Get().Alarms
+	if len(got.List) != 1 || !got.List[0].On || got.List[0].Days != DaysWeekdays {
+		t.Errorf("leaving an occurrence out changed its alarm: %+v", got.List)
+	}
+	if len(got.Skipped) != 1 || got.Skipped[0].ID != "a" || !got.Skipped[0].At.Equal(at) {
+		t.Errorf("skipped = %+v, want a at %v", got.Skipped, at)
+	}
+	if err := st.Set().Alarms().Delete("a"); err != nil {
+		t.Fatal(err)
+	}
+	if got := st.Get().Alarms.Skipped; len(got) != 0 {
+		t.Errorf("deleting an alarm left its skipped occurrence: %+v", got)
+	}
+}

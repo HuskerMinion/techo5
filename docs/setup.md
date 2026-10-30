@@ -1487,6 +1487,21 @@ the light is held keeps it off until that light is over or the next alarm rings.
 brightness** (percent) and **Wake light color** (like `#ff9b1a`, empty while off) show it in Home
 Assistant, for room lights to follow; see [docs/actions.md](actions.md#follow-the-wake-light).
 
+On a Show, while the light is coming up before an alarm, its page offers **Skip**: the
+alarm's own label and time are on the button, and a tap leaves that one occurrence out. The alarm stays
+on with the same days and rings at its usual time on its next scheduled day. It is offered for a
+recurring alarm set on the device with a wake light — a normal alarm, or a light-only one, whose light
+is all it is — and only while the sunrise on the screen is that alarm's own ramp, not for a reminder
+or silent alarm, helper or snooze. Leaving a light-only alarm's morning out takes that morning's light
+with it, and the night is not ended at its time, since nothing came.
+The **Alarms on** switch must also be on. Where two lights overlap it is the one further along — the more
+of its own window behind it, an even way along going to the earlier moment and then to the lower id — and
+where the light on the screen cannot be tied to the alarm offered, no button is shown rather than one
+about another alarm.
+The foot of the page confirms the skip or says it was not skipped, for example if the alarm changed
+or the choice could not be saved. Another alarm's window can keep the light up, so the answer does
+not promise that all light is off. A tap on the button is never a tap on the clock.
+
 **Light only** in an alarm's editor (and on the setup page) makes it a wake light and nothing more:
 the light comes up as above, and at the alarm's time there is no sound and nothing to dismiss; the
 night ends instead, so the screen is back as by day until the night hours next start. The light

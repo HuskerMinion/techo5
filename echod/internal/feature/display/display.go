@@ -196,6 +196,12 @@ type Display struct {
 	// nanoseconds, until that light is seen again: a helper's hold is not held until Home Assistant
 	// has said what the helper is set to, and that moment is not the light being over.
 	lightOffWaits atomic.Int64
+	// skipNote is what the foot of the page says about the last tap on the wake light page's button to
+	// leave one occurrence out — the answer as it was given, with the alarm, the moment and whether it
+	// was left out — and skipNoteUntil when that goes (sunrise_skip.go). It is fitted to the foot where
+	// the line is drawn rather than when the tap lands.
+	skipNote      skipAnswer
+	skipNoteUntil time.Time
 
 	view   voice.State
 	viewAt time.Time
@@ -416,12 +422,12 @@ type Display struct {
 	// favedKey is the track the star was last pressed for, so the star shows it was saved.
 	favedKey string
 
-	// showingPlaying and showingWord are what the last painted screen was: whether the now-playing
-	// page was on it, and whether the footer was drawing the word for the music. The touch handler acts
-	// on what is on the screen, rather than working the same thing out a second way and drifting from
-	// it — which is how a tap out of an empty corner came to send a play/pause.
+	// showingPlaying is what the last painted screen was: whether the now-playing page was on it. The
+	// touch handler acts on what is on the screen, rather than working the same thing out a second way
+	// and drifting from it — which is how a tap out of an empty corner came to send a play/pause. The
+	// footer's word for the music is the same question asked of the frame itself, which knows whether it
+	// drew the word: the renderer publishes that (musicWordShown, sunrise_skip.go).
 	showingPlaying bool
-	showingWord    bool
 
 	// ringPreview shows the ringing page silently until then.
 	ringPreview time.Time
@@ -1418,6 +1424,14 @@ func (d *Display) gesture(g touch.Gesture) {
 			d.wake()
 			return
 		}
+		// The wake light's page, while the light is only coming up: the button on it leaves one
+		// occurrence out. The tap is the button's whatever the alarm feature says about the occurrence — a
+		// press refused because the alarm changed is answered on the page, and must not fall through to
+		// the clock under it and open the microphone (sunrise_skip.go).
+		if idle && !weatherUp && d.sunriseSkipTap(image.Pt(g.X, g.Y), now) {
+			d.wake()
+			return
+		}
 		// The alert badge on the clock opens the alert, and a pill over the rain map opens its alert.
 		// Both sit in the top band too.
 		if idle && !weatherUp && d.r != nil && d.r.badgeTapped(image.Pt(g.X, g.Y)) && d.OpenAlert(0) {
@@ -1490,14 +1504,17 @@ func (d *Display) gesture(g touch.Gesture) {
 		// no way back at all. It brings the page back and does nothing else: playing or pausing is the
 		// page's own button, and a tap made to look at the song should not stop it.
 		d.mu.Lock()
-		showing, away, inStrip, word := d.showingPlaying, d.away, d.showingStrip, d.showingWord
+		showing, away, inStrip := d.showingPlaying, d.away, d.showingStrip
 		d.mu.Unlock()
-		// Only while the word is really drawn, and only when the page is really away: this is the way back
-		// to it, so taking a tap out of the bottom-right corner of the clock is worth it only when there
-		// is both something to come back to and something drawn there. Nothing playing leaves the corner
-		// free, which is where a tap meant for a voice turn lands. Not with the strip up, either: the
-		// word is not drawn then, and its corner is the strip's.
-		if d.r != nil && idle && word && !showing && away && !inStrip &&
+		// Only while the word is really on the screen, as the last frame left it: the footer gives the foot
+		// to the answer to a press on the light's page while that lasts, and draws no word there
+		// (render.go), so the corner is not a way back until a frame draws the word again. And only when
+		// the page is really away: this is the way back to it, so taking a tap out of the bottom-right
+		// corner of the clock is worth it only when there is both something to come back to and something
+		// drawn there. Nothing playing leaves the corner free, which is where a tap meant for a voice turn
+		// lands. Not with the strip up, either: the word is not drawn then, and its corner is the strip's.
+		word := d.r != nil && d.r.musicWordShown()
+		if idle && word && !showing && away && !inStrip &&
 			image.Pt(g.X, g.Y).In(d.r.playingButton()) {
 			d.mu.Lock()
 			d.away, d.awayTrack, d.awayStation, d.awayPlaying = false, "", "", false
@@ -2736,7 +2753,7 @@ func (d *Display) frame() (next time.Duration) {
 	if s.nowPlaying {
 		s.lyric, s.hasLyric = home.Get().LyricNow(s.radio, now)
 	}
-	d.showingPlaying, d.showingStrip, d.showingWord = s.nowPlaying, s.strip, playingWord(s) != ""
+	d.showingPlaying, d.showingStrip = s.nowPlaying, s.strip
 	d.mu.Unlock()
 	s.weather = home.Get().Weather()
 	s.style = styleFactsFor(clockStyle(), now)
@@ -2804,9 +2821,15 @@ func (d *Display) frame() (next time.Duration) {
 		s.reminderFrom = s.reminder.From
 	}
 	s.missed = missedNote(now, false)
+	s.skipNote = d.skipNoteNow(now)
 
 	if boring {
 		s.sunrise, s.sunriseFace = d.wakeLight(now), config.Get().Alarms.SunriseFace
+		if s.sunrise > 0 {
+			// The page the light makes offers to leave today's alarm out, while that alarm is still
+			// ahead (sunrise_skip.go).
+			s.skip = sunriseSkip(now)
+		}
 		// The weather art only where it will be seen: not under the night clock or the light before an
 		// alarm, which take the whole screen, where composing it each second is work for nothing.
 		artSeen := !s.redClock && s.sunrise == 0

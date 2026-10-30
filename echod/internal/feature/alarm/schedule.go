@@ -32,24 +32,77 @@ type source struct {
 
 	// lightOnly is a wake light and no more: at its time the night ends, without a sound.
 	lightOnly bool
+
+	// skips are the occurrences of this alarm left out, by exact moment. They belong to an alarm set
+	// on the device that repeats: leaving one out neither turns it off nor changes its days, so its
+	// next occurrence after the marked one is found as usual. They are kept until the alarm is
+	// deleted, their moment behind them included (skip.go), so a search may have to step over
+	// several.
+	skips []time.Time
 }
 
-// next is the first time at or after from that s rings, and false if it never will again.
+// next is the first time at or after from that s rings, and false if it never will again. An
+// occurrence marked as left out is stepped over, and the search looks far enough for the one after
+// it: a mark hides at most one matching day, so one match past the number of marks is the furthest
+// the first one not marked can be, which for a weekly alarm is a week per mark. The marks are what a
+// device left out and keeps until the alarm goes, so the count is its own history; the cap is only so
+// that no file, however strange, is walked without an end.
 func (s source) next(from time.Time) (time.Time, bool) {
 	if !s.once.IsZero() {
-		return s.once, !s.once.Before(from)
+		return s.once, !s.once.Before(from) && !s.skipped(s.once)
 	}
 	day := time.Date(from.Year(), from.Month(), from.Day(), s.hour, s.min, 0, 0, from.Location())
-	for d := 0; d < 8; d++ {
+	for d, days := 0, min(weekPerMark*(len(s.skips)+1)+1, nextDays); d <= days; d++ {
 		at := day.AddDate(0, 0, d)
 		if at.Before(from) {
 			continue
 		}
-		if s.days == config.DaysOnce || s.days&(1<<at.Weekday()) != 0 {
-			return at, true
+		if s.days != config.DaysOnce && s.days&(1<<at.Weekday()) == 0 {
+			continue
 		}
+		if s.skipped(at) {
+			// A one-off has this occurrence only; stepping over it must not make another day.
+			if s.days == config.DaysOnce {
+				return time.Time{}, false
+			}
+			continue
+		}
+		return at, true
 	}
 	return time.Time{}, false
+}
+
+const (
+	// weekPerMark is how many days one mark may put between two matching days: a week, for the widest
+	// an alarm's days can be apart.
+	weekPerMark = 7
+
+	// nextDays caps source.next: a year and more, which is further than a week, so a weekly alarm
+	// whose next occurrence is left out still finds the one after it, and further than the marks a
+	// device can hold — only the occurrence whose window is open can be left out, so there is at most
+	// one ahead. The cap is only so that a strange file cannot make a look walk without an end.
+	nextDays = 400
+)
+
+// skipped is whether at is one of the occurrences left out for this source.
+func (s source) skipped(at time.Time) bool {
+	for _, x := range s.skips {
+		if x.Equal(at) {
+			return true
+		}
+	}
+	return false
+}
+
+// skipMoments is the moments left out for the alarm with this ID, for a source to step over.
+func skipMoments(skipped []config.Skip, id string) []time.Time {
+	var out []time.Time
+	for _, s := range skipped {
+		if s.ID == id {
+			out = append(out, s.At)
+		}
+	}
+	return out
 }
 
 // stale is how late a ring may still happen: a device that was off, or whose clock jumped forward

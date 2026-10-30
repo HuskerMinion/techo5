@@ -259,9 +259,13 @@ type scene struct {
 	takes       takes.Card
 
 	// sunrise is how far the light before an alarm has come, 0 to 1, and sunriseFace whether the sun
-	// is drawn with a face on it.
+	// is drawn with a face on it. skip is the occurrence that page offers to leave out, and skipNote
+	// what the foot of the page says about the last tap on its button (sunrise_skip.go): the answer as
+	// it was given, fitted to the foot when it is drawn.
 	sunrise     float64
 	sunriseFace bool
+	skip        *skipOffer
+	skipNote    skipAnswer
 
 	// style is what the clock style in force shows beyond the time (clock_style.go).
 	style styleFacts
@@ -373,6 +377,22 @@ type renderer struct {
 	// draws, in which a tap on Talk finds nothing there and closes the view.
 	drawnSound, drawnTalk image.Rectangle
 	drawnButtons          []image.Rectangle
+
+	// skipAt and skipShown are where the wake light page's button was drawn in the frame last drawn,
+	// and the occurrence it offered, published together under skipMu for a tap there to act on exactly
+	// what was on the screen; skipDrawn and skipDrawnOffer are the same for the frame being drawn, by
+	// the drawing goroutine alone (sunrise_skip.go).
+	skipMu         sync.Mutex
+	skipAt         image.Rectangle
+	skipShown      skipOffer
+	skipDrawn      image.Rectangle
+	skipDrawnOffer skipOffer
+
+	// musicDrawn is the frame being drawn having put the footer's word for the music on the screen,
+	// and musicShown the same for the frame last drawn, published with the button above for the touch
+	// handler: a word that is not on the screen is no way back to the music (sunrise_skip.go).
+	musicDrawn bool
+	musicShown bool
 
 	// badgeAt, pillsAt and pillsIdx are where the alert badge and the rain map's alert pills were drawn
 	// in the frame last drawn, and the alert each pill opens, for a tap there.
@@ -500,6 +520,12 @@ func (r *renderer) useFont() {
 func (r *renderer) draw(s scene) {
 	r.useFont()
 	r.marked, r.footAt, r.lcarsDrawn = false, 0, false
+	// What this frame finally puts on the screen for a finger is published once, at its end: this is
+	// registered before the overlays' own defers, which therefore run first, so a card, a strip, the
+	// drawer, the volume bar or the update dialog drawn over the page is taken into account
+	// (sunrise_skip.go). A page that returns early publishes what it drew, and a frame that draws no
+	// button or word publishes none.
+	defer r.publishFrame(s)
 	defer r.streamingDot(s)  // over everything, the update overlay included: deferred first, drawn last
 	defer r.updateOverlay(s) // Draw update overlay at the end of frame using defer
 
@@ -514,6 +540,11 @@ func (r *renderer) draw(s scene) {
 	}
 	r.videoOver = image.Rectangle{}
 	r.setCaptionsAt(image.Rectangle{}) // until a frame draws them (render_cue.go)
+	// Nothing a page this frame does not draw put on the screen is actionable: the wake light page's
+	// button and the footer's word for the music are reset here, before the video's and Rainbow's
+	// returns, and put back only by the drawing that really does them (sunrise_skip.go).
+	r.setSkipDrawn(image.Rectangle{}, skipOffer{})
+	r.musicDrawn = false
 	// A video is over everything it is not covered by (video.go decides which), the night clock
 	// included, and has no header: the picture is the screen.
 	if s.showVideo {
@@ -1255,22 +1286,49 @@ func (r *renderer) playingButton() image.Rectangle {
 // pages and the microphone is true on all of them.
 func (r *renderer) footer(s scene) {
 	y := r.h - r.s(24)
-	switch {
-	case s.setupAsking && s.takes.Up():
-		r.text(r.tiny, "setup: takes of a word", r.margin, y, amber)
-	case s.setupAsking:
-		r.text(r.tiny, tr("ui_setup_footer_asking"), r.margin, y, amber)
-	case s.missed != "":
-		r.text(r.tiny, s.missed, r.margin, y, amber)
-	case s.slideshowTrouble != "":
-		r.text(r.tiny, s.slideshowTrouble, r.margin, y, dim)
-	}
+	// The word at the right end is read first: the line at the left is clipped to what is left of the
+	// foot rather than run under it. An alarm's name has no length limit, and a line that runs off the
+	// page is a line with no end to read.
 	right := playingWord(s)
 	if s.bt.Connected != "" {
 		if right != "" {
 			right += "  ·  "
 		}
 		right += "BT " + s.bt.Connected
+	}
+	if s.skipNote.exists() {
+		// The brief skip result is the only answer to a press. Secondary status,
+		// especially an unbounded Bluetooth name, must not squeeze it out.
+		right = ""
+	}
+	room := r.w - 2*r.margin
+	if right != "" {
+		room -= r.width(r.tiny, right) + r.s(16)
+	}
+	// The word for the music is the way back to the page only while it is on the screen: this frame's
+	// is published at the end of it (sunrise_skip.go), and a frame whose foot the skip answer has is
+	// no way back. A connected device named beside it is not the word.
+	r.musicDrawn = playingWord(s) != "" && right != ""
+	switch {
+	case s.setupAsking && s.takes.Up():
+		r.text(r.tiny, "setup: takes of a word", r.margin, y, amber)
+	case s.setupAsking:
+		r.text(r.tiny, tr("ui_setup_footer_asking"), r.margin, y, amber)
+	case s.skipNote.exists():
+		// The answer to a press on the wake light page's button, while it lasts: what was left out, or
+		// that it was not. It is the news of the moment, so it has the foot until it goes.
+		if s.sunrise > 0 {
+			// Over the light the foot's amber is not read: the sky below the button ends pale gold.
+			r.sunriseSkipNote(s.skipNote, s.sunrise, room)
+		} else {
+			// The whole sentence with the alarm's name fitted to the room it has: the result and the
+			// hour are never the part cut (skipLine).
+			r.text(r.tiny, r.skipLine(s.skipNote, r.tiny, room), r.margin, y, amber)
+		}
+	case s.missed != "":
+		r.text(r.tiny, s.missed, r.margin, y, amber)
+	case s.slideshowTrouble != "":
+		r.text(r.tiny, s.slideshowTrouble, r.margin, y, dim)
 	}
 	if right != "" {
 		r.text(r.tiny, right, r.w-r.margin-r.width(r.tiny, right), y, dim)

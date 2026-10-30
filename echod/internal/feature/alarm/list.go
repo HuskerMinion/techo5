@@ -73,7 +73,7 @@ func listing(now time.Time, v View, timers []timer.Countdown) Listing {
 	for _, al := range v.Local {
 		next := ""
 		if al.On {
-			src := source{hour: al.Hour, min: al.Minute, days: al.Days}
+			src := source{hour: al.Hour, min: al.Minute, days: al.Days, skips: skipMoments(v.Skipped, al.ID)}
 			if at, ok := al.OnDate(); ok {
 				src.once = at
 			}

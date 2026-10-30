@@ -31,6 +31,11 @@ type Alarms struct {
 	// as the process restarting, and means the same thing whatever the clock did in between.
 	Snoozed []Snooze `json:"snoozed,omitempty"`
 
+	// Skipped is the occurrences left out, by alarm and moment. One alarm's next time is then the one
+	// after it, while its On and Days stay as they are: a recurring alarm is left out once, not turned
+	// off or moved. Written when one is left out, never on a tick, and only trusted once on disk.
+	Skipped []Skip `json:"skipped,omitempty"`
+
 	// Held is the alarm the wake light is held at full for, after a ring with a wake light ended
 	// inside that alarm's window (#161), so a restart in between keeps the light up as a snooze keeps
 	// it. Nothing for none.
@@ -180,6 +185,14 @@ type Held struct {
 	At  time.Time `json:"at"`
 }
 
+// Skip is one occurrence left out: the ID of the alarm it belongs to, and the moment it would have
+// rung. The moment is exact, so it leaves out that occurrence alone and the alarm's next one is its
+// usual one.
+type Skip struct {
+	ID string    `json:"id"`
+	At time.Time `json:"at"`
+}
+
 const (
 	DefaultSnoozeMinutes = 9
 	MinSnoozeMinutes     = 1
@@ -290,7 +303,18 @@ func (w AlarmsWriter) Put(a Alarm) error {
 func (w AlarmsWriter) Delete(id string) error {
 	return w.st.Update(func(c *Config) {
 		c.Alarms.List = slices.DeleteFunc(c.Alarms.List, func(x Alarm) bool { return x.ID == id })
+		// Its occurrence left out has no alarm to leave it out of now.
+		c.Alarms.Skipped = slices.DeleteFunc(c.Alarms.Skipped, func(x Skip) bool { return x.ID == id })
 	})
+}
+
+// ChangeStrict applies f to the alarms and writes the file only when f accepts the change and the
+// file takes it. A change that could not be saved, or that f refused, is taken back whole, even when
+// the file was never readable: unlike UpdateOrUndo there is no run-long exception, because what this
+// is for is a promise — an occurrence somebody was told is left out — that must not be reported from
+// memory alone.
+func (w AlarmsWriter) ChangeStrict(f func(*Alarms) error) error {
+	return w.st.UpdateChecked(func(c *Config) error { return f(&c.Alarms) })
 }
 
 // SnoozeMinutes sets the snooze length, held between MinSnoozeMinutes and MaxSnoozeMinutes.

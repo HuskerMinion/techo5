@@ -99,10 +99,12 @@ type Followed struct {
 
 // View is what the screen shows.
 type View struct {
-	Ringing  *Ring
-	Next     *Upcoming
-	Snoozed  []Upcoming
-	Local    []config.Alarm // by time of day
+	Ringing *Ring
+	Next    *Upcoming
+	Snoozed []Upcoming
+	Local   []config.Alarm // by time of day
+	// Skipped are the occurrences left out, so a caller showing a next time knows it is not one.
+	Skipped  []config.Skip
 	Followed []Followed
 }
 
@@ -157,6 +159,11 @@ type Alarms struct {
 	since   time.Time
 
 	mu sync.Mutex
+	// editMu serializes the scheduler's look — and what it rings — with leaving an occurrence out and
+	// with changing an alarm: an occurrence cannot be left out once it has started to ring, and a mark
+	// cannot be written for an alarm that changed or went in between. It is taken before the store's
+	// lock, never after.
+	editMu sync.Mutex
 	// saveMu keeps one save of the snoozes at a time, each writing the list as it is then, so two
 	// changes saved at once cannot leave the older list on disk (saveSnoozes).
 	saveMu  sync.Mutex
@@ -426,8 +433,7 @@ func (a *Alarms) Run(ctx context.Context) error {
 			for _, m := range overdue(a.sources(now), last, a.since, now) {
 				a.missed(m)
 			}
-			for _, s := range due(a.sources(now), last, now) {
-				a.fire(s, now)
+			if a.ringDue(last, now) {
 				rang = true
 			}
 			// After firing, because a snooze due in this very window has just rung and pruned
@@ -492,14 +498,7 @@ func (a *Alarms) sources(now time.Time) []source {
 	var out []source
 	for _, al := range c.List {
 		if al.On && (al.Remind || !c.AllOff) {
-			src := source{key: al.ID, label: al.Label, hour: al.Hour, min: al.Minute, days: al.Days, local: true,
-				remind: al.Remind, ringOn: al.RingOn, sunrise: c.SunriseFor(al), silent: al.Silent,
-				lightOnly: al.LightOnly && !al.Remind && !al.Silent}
-			// A dated one-off is a fixed moment, the way a snooze is.
-			if at, ok := al.OnDate(); ok {
-				src.once = at
-			}
-			out = append(out, src)
+			out = append(out, localSource(c, al))
 		}
 	}
 	for _, f := range a.followed(now) {
@@ -516,6 +515,34 @@ func (a *Alarms) sources(now time.Time) []source {
 	out = append(out, a.snoozed...)
 	a.mu.Unlock()
 	return out
+}
+
+// localSource is an alarm set on the device as a source, with the occurrences left out attached so
+// next steps over them. A source built for a helper has none: only device alarms can be left out.
+func localSource(c config.Alarms, al config.Alarm) source {
+	src := source{key: al.ID, label: al.Label, hour: al.Hour, min: al.Minute, days: al.Days, local: true,
+		remind: al.Remind, ringOn: al.RingOn, sunrise: c.SunriseFor(al), silent: al.Silent,
+		lightOnly: al.LightOnly && !al.Remind && !al.Silent, skips: skipMoments(c.Skipped, al.ID)}
+	// A dated one-off is a fixed moment, the way a snooze is.
+	if at, ok := al.OnDate(); ok {
+		src.once = at
+	}
+	return src
+}
+
+// ringDue rings what fell due in (last, now], under the gate an occurrence is left out through: the
+// sources are read with the gate held, so a mark written first is honoured and a mark asked for after
+// the ring started is refused as stale rather than reported done.
+func (a *Alarms) ringDue(last, now time.Time) bool {
+	a.editMu.Lock()
+	defer a.editMu.Unlock()
+
+	rang := false
+	for _, s := range due(a.sources(now), last, now) {
+		a.fire(s, now)
+		rang = true
+	}
+	return rang
 }
 
 // fire starts ringing, or folds into what is already ringing: one sound covers alarms that meet.
@@ -633,12 +660,16 @@ func (a *Alarms) rang() {
 	a.ringing, a.silence = nil, nil
 	a.mu.Unlock()
 	// A lit ring that ended for good hands the light to the next alarm whose window is already open,
-	// or lets it go. A snoozed one holds it through its snooze instead.
+	// or lets it go. A snoozed one holds it through its snooze instead. The gate is the scheduler's
+	// and a leap-out's: the sources are read with it held, so a mark written first is seen and one
+	// written at the same moment cannot leave the light waiting for an occurrence that will not ring.
 	if r != nil && r.lit && !r.snoozed {
+		a.editMu.Lock()
 		now := time.Now()
 		if a.endLight(a.sources(now), now) {
 			a.saveBridge()
 		}
+		a.editMu.Unlock()
 	}
 	// A snoozed ring has said so already, and rings again later; any other end is a stop, and a stop
 	// ends the light a light-only alarm left up as well: the alarm that woke somebody is done with.
@@ -818,7 +849,7 @@ func (a *Alarms) SnoozeFor(minutes int) bool {
 // View is the alarms as the screen shows them.
 func (a *Alarms) View(now time.Time) View {
 	c := config.Get().Alarms
-	v := View{Local: c.List, Followed: a.followed(now)}
+	v := View{Local: c.List, Skipped: c.Skipped, Followed: a.followed(now)}
 	slices.SortFunc(v.Local, func(x, y config.Alarm) int {
 		return cmp.Or(cmp.Compare(x.Hour, y.Hour), cmp.Compare(x.Minute, y.Minute), cmp.Compare(x.ID, y.ID))
 	})
@@ -976,8 +1007,11 @@ func devices(s string) []string {
 // snooze pressed by mistake is undone the way a phone's is, by turning the alarm off, and on again if
 // it should ring tomorrow.
 func (a *Alarms) Put(al config.Alarm) error {
+	a.editMu.Lock()
 	wasOn := slices.ContainsFunc(config.Get().Alarms.List, func(x config.Alarm) bool { return x.ID == al.ID && x.On })
-	if err := config.Set().Alarms().Put(al); err != nil {
+	err := config.Set().Alarms().Put(al)
+	a.editMu.Unlock()
+	if err != nil {
 		return err
 	}
 	if !wasOn {
@@ -995,7 +1029,10 @@ func (a *Alarms) Put(al config.Alarm) error {
 // Delete removes an alarm set on the device, and its snooze with it, and the light it left up if it
 // is light only.
 func (a *Alarms) Delete(id string) error {
-	if err := config.Set().Alarms().Delete(id); err != nil {
+	a.editMu.Lock()
+	err := config.Set().Alarms().Delete(id)
+	a.editMu.Unlock()
+	if err != nil {
 		return err
 	}
 	a.dropSnooze(id)
