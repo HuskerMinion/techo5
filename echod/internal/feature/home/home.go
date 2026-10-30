@@ -558,6 +558,7 @@ func (f *Feature) Actions() []*esphome.Action {
 	if hasGlance {
 		actions = append(actions, f.glanceAction())
 	}
+	actions = append(actions, f.stationAction())
 	return append(actions, []*esphome.Action{
 		{
 			Name: "home_weather",

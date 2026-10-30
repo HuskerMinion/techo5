@@ -2203,6 +2203,38 @@ data:
   speaker: media_player.office
 ```
 
+## Name the station that plays next
+
+In YAML, refer to this action as `esphome.<node>_media_station`.
+
+Tells the device that the next `media_player.play_media`, within a minute, is a radio station, by
+its name. Home Assistant sends every stream through its own converter, which keeps neither the
+station's address nor its name, so a station started by a voice command or an automation shows as
+"Radio" with no logo. Named this way, it shows as one tapped on the Radio page does: the station's
+name and logo, and the song where the station tells it.
+
+- The name is looked up on Radio Browser, as for a tapped station, so give the name the station goes
+  by there.
+- It names only the next `play_media`; one that comes more than a minute later is not named.
+- `""` drops a name not yet used.
+
+### name (Required)
+
+*string*
+
+The station's name.
+
+```yaml
+- action: esphome.office_media_station
+  data:
+    name: "SWR3"
+- action: media_player.play_media
+  target: { entity_id: media_player.office }
+  data:
+    media_content_id: "media-source://radio_browser/<stationuuid>"
+    media_content_type: music
+```
+
 ## Play rain sounds by voice
 
 The device has no sounds of its own to fall asleep to. What it does is leave "play the sounds of
