@@ -235,9 +235,10 @@ On the page:
   over RTSP (**Live camera video** on, and go2rtc's stream or a picture address on the setup page; see
   [Cameras](setup.md#4-cameras)), the tile plays it live too, at a few frames a second. Until the first
   picture comes, and for a camera tile not set to show the camera, it is an icon and a name. Tap it to
-  put the camera up on its own. The device says `own_pictures` in its **Screen features**, which is
-  what has the add-on offer cameras for it; an add-on that does not know the word yet offers them only
-  to its own boards that draw pictures, and turns a layout with a camera down.
+  put the camera up on its own. The device says `own_pictures` in its **Screen features**, the word for
+  a screen that fetches its cameras' pictures itself. Tessera doesn't take that word yet: it offers
+  cameras only to its own boards that draw pictures, and turns a layout with a camera down
+  ([#356](https://github.com/HuskerMinion/techo5/issues/356)).
 - A weather tile two cells wide or two rows high shows the forecast: days side by side, or one a line
   on a tile one cell wide.
 - Bigger tiles show the controls Tessera gives them (the tile's **Controls** in the editor): a
