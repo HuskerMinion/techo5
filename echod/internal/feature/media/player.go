@@ -1155,6 +1155,21 @@ func (p *Player) RemoteGone() {
 // what the screen asks before it says what the room is playing.
 func (p *Player) ExternalPlaying() bool { return p.remote.playing() }
 
+// ExternalShowing is whether a remote holding the speaker has something for a screen to show: it is
+// playing, or has said nothing yet, or it is paused or stopped with its track still named. Music
+// Assistant goes on holding the speaker after its queue is emptied, with no track named and nothing
+// playing, and the page and the strip then have nothing left to offer (#150).
+func (p *Player) ExternalShowing() bool {
+	if !p.remote.playing() {
+		return false
+	}
+	if playing, _ := p.CarriedState(); playing {
+		return true
+	}
+	t, _ := p.extTrack.Load().(remoteTrack)
+	return t.Title != ""
+}
+
 // Carried reports whether what the room is hearing is somebody else's: a remote holds the speaker and is
 // the thing playing.
 //

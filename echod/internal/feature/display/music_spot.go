@@ -129,7 +129,7 @@ func (d *Display) showsNowPlaying() bool {
 	// A stream this player is only carrying is still what the room is doing, so the face is its as
 	// much as the radio's: the state it draws was already being worked out and only this gate was
 	// missing, because a carried stream never satisfies Playing().
-	if media.Get().ExternalPlaying() {
+	if media.Get().ExternalShowing() {
 		return true
 	}
 	if _, _, _, ok := media.Get().Held(); ok {

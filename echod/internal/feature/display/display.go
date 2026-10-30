@@ -1749,7 +1749,7 @@ func (d *Display) quietAway(now time.Time, rd home.Radio, music, wants, playing 
 // reason the page exists at all, so it is asked first: its audio never passes through this player's own
 // stream, which is what Playing() reports on.
 func (d *Display) nowPlaying() bool {
-	if media.Get().ExternalPlaying() || home.Following() {
+	if media.Get().ExternalShowing() || home.Following() {
 		return true
 	}
 	if _, _, _, ok := media.Get().Held(); ok {
