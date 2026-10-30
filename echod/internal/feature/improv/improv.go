@@ -75,6 +75,10 @@ type Improv struct {
 
 	mu   sync.Mutex
 	open bool
+
+	// cannot is set once neither bluetoothd nor the proxy's radio could advertise: that does not
+	// change while the kernel stays the same, so it is said once and not tried again.
+	cannot bool
 }
 
 var (
@@ -164,6 +168,9 @@ func (m *Improv) Run(ctx context.Context) error {
 
 // session is one offer, from the advertisement going up to it coming down.
 func (m *Improv) session(ctx context.Context, w why) {
+	if m.cannot {
+		return
+	}
 	m.mu.Lock()
 	m.open = true
 	m.mu.Unlock()
@@ -221,6 +228,17 @@ func (m *Improv) session(ctx context.Context, w why) {
 		return
 	}
 	defer p.Close()
+	// bluetoothd serves the service but cannot advertise it on a kernel before Add Advertising (the
+	// Dot's 3.18): the proxy's radio, held above, advertises it instead, over the same hci0.
+	if !p.Advertising() {
+		done, err := offer(proto.Advertisement(state, caps), proto.ScanResponse(name))
+		if err != nil {
+			slog.Info("improv: this device's Bluetooth cannot advertise, Wi-Fi setup over Bluetooth is off", "err", err)
+			m.cannot = true
+			return
+		}
+		defer done()
+	}
 
 	wifi.SettingUp(true)
 	defer wifi.SettingUp(false)
@@ -290,6 +308,14 @@ func (m *Improv) session(ctx context.Context, w why) {
 	}
 }
 
+// offer advertises the service through the proxy's held radio.
+func offer(advertisement, scanResponse []byte) (done func(), err error) {
+	if !bluetooth.Here {
+		return nil, bluetooth.ErrCannotOffer
+	}
+	return bluetooth.Get().Offer(advertisement, scanResponse)
+}
+
 type joinResult struct{ err error }
 
 // chars is where a session's values go: the Peripheral, or a test's record of them.
@@ -299,15 +325,13 @@ type chars interface {
 
 // run is the characteristics' side of a session: what they hold, and changing it.
 type run struct {
-	p       chars
-	state   proto.State
-	joining bool
-	scan    func(context.Context) ([]wifi.Network, error)
+	p     chars
+	state proto.State
+	scan  func(context.Context) ([]wifi.Network, error)
 }
 
 func (s *run) setState(st proto.State) {
 	s.state = st
-	s.joining = st == proto.Provisioning
 	s.p.Set(proto.StateUUID, []byte{byte(st)})
 }
 
@@ -324,11 +348,12 @@ func (s *run) command(ctx context.Context, b []byte) (proto.WiFi, bool) {
 	s.setError(proto.ErrNone)
 	switch f.Command {
 	case proto.CmdWiFiSettings:
-		if s.state == proto.AuthorizationRequired {
-			s.setError(proto.ErrNotAuthorized)
-			return proto.WiFi{}, false
-		}
-		if s.joining {
+		// Only while Authorized: not before the press, not while one is being joined, and not in
+		// the seconds after one was, before the session closes.
+		if s.state != proto.Authorized {
+			if s.state != proto.Provisioning {
+				s.setError(proto.ErrNotAuthorized)
+			}
 			return proto.WiFi{}, false
 		}
 		w, err := proto.ParseWiFi(f.Data)
@@ -342,8 +367,17 @@ func (s *run) command(ctx context.Context, b []byte) (proto.WiFi, bool) {
 	case proto.CmdIdentify:
 		chime(speaker.TonePairing)
 	case proto.CmdDeviceInfo:
+		if s.state == proto.AuthorizationRequired {
+			s.setError(proto.ErrNotAuthorized)
+			return proto.WiFi{}, false
+		}
 		s.result(proto.Result(proto.CmdDeviceInfo, "TECHO5", layout.Version, hardware(), deviceName()))
 	case proto.CmdScan:
+		// Before the press, anyone in range could list the networks around the device.
+		if s.state == proto.AuthorizationRequired {
+			s.setError(proto.ErrNotAuthorized)
+			return proto.WiFi{}, false
+		}
 		nets, err := s.scan(ctx)
 		if err != nil {
 			slog.Warn("improv: scan failed", "err", err)

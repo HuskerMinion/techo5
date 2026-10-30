@@ -21,6 +21,7 @@ const (
 	cmdReset               = 0x0C03
 	cmdLEAdvertisingParams = 0x2006
 	cmdLEAdvertisingData   = 0x2008
+	cmdLEScanResponseData  = 0x2009
 	cmdLEAdvertisingEnable = 0x200A
 	cmdLEScanParams        = 0x200B
 	cmdLEScanEnable        = 0x200C
@@ -32,6 +33,9 @@ const (
 	scanInterval        = 320
 	scanWindow          = 30
 	advertisingInterval = 1600
+
+	// offerInterval is Offer's: 100 ms, so a phone scanning for a few seconds finds it at once.
+	offerInterval = 160
 )
 
 // Advertisement is one LE advertising report.
@@ -56,11 +60,20 @@ func (a Advertisement) Addr() uint64 {
 
 // Radio is the controller. One node, one owner.
 type Radio struct {
+	// life is held for the whole of a Start, an Offer or a Stop. Stop lets go of mu while it waits for
+	// the reader, and Running is already false then; without life, a Start or Offer in that second
+	// opened a new fd that the Stop finishing afterwards took for its own.
+	life sync.Mutex
+
 	mu       sync.Mutex
 	fd       int
 	kernel   bool // fd is a raw socket on hci0, not the node
 	open     bool
 	scanning bool
+	// offering is Offer's connectable advertisement, which the controller ends by itself when a central
+	// connects and the reader turns on again when it disconnects. Set before the reader starts and
+	// cleared after it has finished, so the reader reads it without mu.
+	offering bool
 	stop     context.CancelFunc
 	// finished is both the reader's completion signal and its handoff of an unfinished H4 event.
 	finished chan []byte
@@ -104,6 +117,8 @@ func (r *Radio) Reports() uint64 { return r.reports.Load() }
 // Active asks for scan responses, which transmits rather than only listening. Advertisement is raw
 // advertising data; nil disables advertising.
 func (r *Radio) Start(scan, active bool, advertisement []byte, found func(Advertisement)) error {
+	r.life.Lock()
+	defer r.life.Unlock()
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
@@ -134,8 +149,84 @@ func (r *Radio) Start(scan, active bool, advertisement []byte, found func(Advert
 	return nil
 }
 
+// Offer advertises a GATT service that bluetoothd serves, for something nearby to connect to:
+// connectable advertising (ADV_IND) with advertisement as its data and scanResponse as the scan
+// response, both raw AD structures of at most 31 bytes. It is for a bluetoothd whose kernel is too old
+// to advertise for it (no Add Advertising, before 4.1), so only through hci0, where the kernel's stack
+// owns the controller and takes the connection to bluetoothd. A central that disconnects finds it
+// advertising again. Stop ends it.
+func (r *Radio) Offer(advertisement, scanResponse []byte) error {
+	if len(advertisement) > 31 || len(scanResponse) > 31 {
+		return errors.New("ble: advertising data exceeds 31 bytes")
+	}
+	r.life.Lock()
+	defer r.life.Unlock()
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if r.open {
+		return errors.New("ble: the radio is in use")
+	}
+	if !viaKernel() {
+		return errors.New("ble: offering a service needs the kernel's Bluetooth stack on hci0")
+	}
+	fd, err := r.openController()
+	if err != nil {
+		return err
+	}
+	r.fd = fd
+	if err := r.offer(advertisement, scanResponse); err != nil {
+		_ = r.send("advertising disable", cmdLEAdvertisingEnable, []byte{0x00})
+		_ = syscall.Close(fd)
+		r.fd = -1
+		r.held = nil
+		return err
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	r.stop, r.finished, r.open, r.offering = cancel, make(chan []byte, 1), true, true
+	held := r.held
+	r.held = nil
+	// Reports still arrive while bluetoothd scans for its own reasons; nobody here wants them.
+	go r.read(ctx, func(Advertisement) {}, held, r.finished)
+	return nil
+}
+
+// offer sets up Offer's advertising. Held with mu.
+func (r *Radio) offer(advertisement, scanResponse []byte) error {
+	// A daemon that restarted without its Stop may have left advertising on, and new parameters are
+	// refused while it is.
+	_ = r.send("advertising disable", cmdLEAdvertisingEnable, []byte{0x00})
+
+	params := make([]byte, 15)
+	binary.LittleEndian.PutUint16(params[0:], offerInterval)
+	binary.LittleEndian.PutUint16(params[2:], offerInterval)
+	params[4] = 0x00 // ADV_IND: connectable and scannable
+	params[13] = 0x07
+	if err := r.send("advertising parameters", cmdLEAdvertisingParams, params); err != nil {
+		return err
+	}
+	if err := r.send("advertising data", cmdLEAdvertisingData, adData(advertisement)); err != nil {
+		return err
+	}
+	if err := r.send("scan response data", cmdLEScanResponseData, adData(scanResponse)); err != nil {
+		return err
+	}
+	return r.send("advertising enable", cmdLEAdvertisingEnable, []byte{0x01})
+}
+
+// adData is the parameter LE Set Advertising Data and LE Set Scan Response Data take: a length, then
+// the data padded to 31 bytes.
+func adData(b []byte) []byte {
+	data := make([]byte, 32)
+	data[0] = byte(len(b))
+	copy(data[1:], b)
+	return data
+}
+
 // Stop ends scanning and advertising and closes the node.
 func (r *Radio) Stop() {
+	r.life.Lock()
+	defer r.life.Unlock()
 	r.mu.Lock()
 	if !r.open {
 		r.mu.Unlock()
@@ -148,6 +239,7 @@ func (r *Radio) Stop() {
 
 	stop()
 	held := <-done
+	r.offering = false
 
 	held, _ = command(fd, held, cmdLEScanEnable, []byte{0x00, 0x00})
 	_, _ = command(fd, held, cmdLEAdvertisingEnable, []byte{0x00})
@@ -225,14 +317,10 @@ func (r *Radio) advertise(advertisement []byte) error {
 	params[4] = 0x03 // ADV_NONCONN_IND
 	params[13] = 0x07
 
-	data := make([]byte, 32)
-	data[0] = byte(len(advertisement))
-	copy(data[1:], advertisement)
-
 	if err := r.send("advertising parameters", cmdLEAdvertisingParams, params); err != nil {
 		return err
 	}
-	if err := r.send("advertising data", cmdLEAdvertisingData, data); err != nil {
+	if err := r.send("advertising data", cmdLEAdvertisingData, adData(advertisement)); err != nil {
 		return err
 	}
 	return r.send("advertising enable", cmdLEAdvertisingEnable, []byte{0x01})
@@ -289,9 +377,17 @@ func (r *Radio) parse(b []byte, found func(Advertisement)) ([]byte, error) {
 			return append([]byte(nil), remainder...), nil
 		}
 
-		if event[1] == evtLEMeta {
+		switch {
+		case event[1] == evtLEMeta:
 			r.reports.Add(1)
 			reports(event[3:], found)
+		case event[1] == evtDisconnectionComplete && r.offering:
+			// The controller stopped advertising when the central connected. Its Command Complete
+			// comes back to this reader, which has no use for it; a refusal (another link still up)
+			// is left until the next disconnect.
+			if err := write(r.fd, cmdLEAdvertisingEnable, []byte{0x01}); err != nil {
+				slog.Warn("ble: advertising again after a disconnect", "err", err)
+			}
 		}
 		b = remainder
 	}
@@ -323,15 +419,20 @@ func reports(p []byte, found func(Advertisement)) {
 	}
 }
 
-// command writes one HCI command and waits for its Command Complete.
-func command(fd int, held []byte, opcode uint16, params []byte) ([]byte, error) {
+// write sends one HCI command without waiting for its answer.
+func write(fd int, opcode uint16, params []byte) error {
 	pkt := make([]byte, 4, 4+len(params))
 	pkt[0] = h4Command
 	binary.LittleEndian.PutUint16(pkt[1:], opcode)
 	pkt[3] = byte(len(params))
 	pkt = append(pkt, params...)
+	_, err := syscall.Write(fd, pkt)
+	return err
+}
 
-	if _, err := syscall.Write(fd, pkt); err != nil {
+// command writes one HCI command and waits for its Command Complete.
+func command(fd int, held []byte, opcode uint16, params []byte) ([]byte, error) {
+	if err := write(fd, opcode, params); err != nil {
 		return held, err
 	}
 

@@ -44,6 +44,8 @@ type Peripheral struct {
 	adapter dbus.ObjectPath
 	root    dbus.ObjectPath
 	advert  dbus.ObjectPath
+	// advertising is bluetoothd advertising the service; without it, someone else has to (Advertising).
+	advertising bool
 
 	mu      sync.Mutex
 	objects map[dbus.ObjectPath]map[string]map[string]*prop.Prop
@@ -61,6 +63,10 @@ type charObj struct {
 // OpenPeripheral connects to bluetoothd, exports the service under root (a path of this process's
 // own, such as /org/techo5/improv) and registers it and its advertisement with the first adapter,
 // turning the adapter on if it is off. Close takes it all down again.
+//
+// An adapter that can serve GATT but not advertise (a kernel before Add Advertising, such as 3.18)
+// still gets the service: Advertising then reports false, and the caller advertises it some other
+// way or closes it.
 func OpenPeripheral(root dbus.ObjectPath, serviceUUID string, chars []CharSpec, ad AdvertSpec) (*Peripheral, error) {
 	conn, err := SystemBus()
 	if err != nil {
@@ -88,6 +94,9 @@ func OpenPeripheral(root dbus.ObjectPath, serviceUUID string, chars []CharSpec, 
 		conn.Close()
 		return nil, fmt.Errorf("bluez: register application: %w", err)
 	}
+	if !p.advertising {
+		return p, nil
+	}
 	if err := adapter.Call(advertMgrIfc+".RegisterAdvertisement", 0, p.advert, map[string]dbus.Variant{}).Err; err != nil {
 		_ = adapter.Call(gattMgrIfc+".UnregisterApplication", 0, root).Err
 		conn.Close()
@@ -96,23 +105,46 @@ func OpenPeripheral(root dbus.ObjectPath, serviceUUID string, chars []CharSpec, 
 	return p, nil
 }
 
+// Advertising reports whether bluetoothd advertises the service. bluetoothd only offers
+// LEAdvertisingManager1 when the kernel's management interface has the Add Advertising commands, which
+// came after 3.18.
+func (p *Peripheral) Advertising() bool { return p.advertising }
+
 func (p *Peripheral) findAdapter() error {
 	var objs map[dbus.ObjectPath]map[string]map[string]dbus.Variant
 	if err := p.conn.Object(service, "/").Call(objMgrIfc+".GetManagedObjects", 0).Store(&objs); err != nil {
 		return fmt.Errorf("bluez: managed objects: %w", err)
 	}
+	adapter, advertising, err := pickAdapter(objs)
+	p.adapter, p.advertising = adapter, advertising
+	return err
+}
+
+// pickAdapter is the first adapter, by path, that can serve GATT and advertise; failing that, the
+// first that can serve GATT, which advertising reports.
+func pickAdapter(objs map[dbus.ObjectPath]map[string]map[string]dbus.Variant) (adapter dbus.ObjectPath, advertising bool, err error) {
+	var gattOnly dbus.ObjectPath
 	for path, ifcs := range objs {
 		_, isAdapter := ifcs[adapterIfc]
 		_, canGATT := ifcs[gattMgrIfc]
 		_, canAdvertise := ifcs[advertMgrIfc]
-		if isAdapter && canGATT && canAdvertise && (p.adapter == "" || path < p.adapter) {
-			p.adapter = path
+		if !isAdapter || !canGATT {
+			continue
+		}
+		if canAdvertise && (adapter == "" || path < adapter) {
+			adapter = path
+		}
+		if !canAdvertise && (gattOnly == "" || path < gattOnly) {
+			gattOnly = path
 		}
 	}
-	if p.adapter == "" {
-		return errors.New("bluez: no adapter that can serve GATT and advertise (LE off, or BlueZ too old)")
+	switch {
+	case adapter != "":
+		return adapter, true, nil
+	case gattOnly != "":
+		return gattOnly, false, nil
 	}
-	return nil
+	return "", false, errors.New("bluez: no adapter that can serve GATT (LE off, or BlueZ too old)")
 }
 
 // export puts the service, its characteristics and the advertisement on the bus. bluetoothd finds the
@@ -196,7 +228,9 @@ func (p *Peripheral) Close() error {
 	p.closed = true
 	p.mu.Unlock()
 	adapter := p.conn.Object(service, p.adapter)
-	_ = adapter.Call(advertMgrIfc+".UnregisterAdvertisement", 0, p.advert).Err
+	if p.advertising {
+		_ = adapter.Call(advertMgrIfc+".UnregisterAdvertisement", 0, p.advert).Err
+	}
 	_ = adapter.Call(gattMgrIfc+".UnregisterApplication", 0, p.root).Err
 	return p.conn.Close()
 }

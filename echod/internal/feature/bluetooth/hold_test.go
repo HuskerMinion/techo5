@@ -1,6 +1,7 @@
 package bluetooth
 
 import (
+	"errors"
 	"path/filepath"
 	"testing"
 
@@ -65,5 +66,69 @@ func TestAHoldTakesTheRadioOffUntilReleased(t *testing.T) {
 	}
 	if radio.starts != 2 {
 		t.Fatalf("started %d times", radio.starts)
+	}
+}
+
+// offerRadio is a holdRadio that can also be lent out to advertise a service.
+type offerRadio struct {
+	holdRadio
+	offered []byte
+}
+
+func (r *offerRadio) Offer(advertisement, _ []byte) error {
+	r.running, r.offered = true, advertisement
+	return nil
+}
+
+// The held radio, lent out, is left advertising by tune until it is given back; then the release
+// brings the proxy back as before.
+func TestAHeldRadioIsLentUntilGivenBack(t *testing.T) {
+	config.Use(filepath.Join(t.TempDir(), "config.json"))
+	if err := config.Set().Bluetooth().Proxy(true); err != nil {
+		t.Fatal(err)
+	}
+	was := holdWait
+	holdWait = 0
+	t.Cleanup(func() { holdWait = was })
+	radio := &offerRadio{}
+	beacon := beaconState{advertisement: []byte{0x02, 0x01, 0x06}, minor: 7}
+	b := &Proxy{proxy: &esphome.BluetoothProxy{}, radio: radio, wanted: make(chan struct{}, 1)}
+	b.tune(beacon)
+
+	if _, err := b.Offer([]byte{1}, nil); err == nil {
+		t.Fatal("lent without a hold")
+	}
+	release := b.Hold()
+	b.tune(beacon)
+	done, err := b.Offer([]byte{1}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := b.Offer([]byte{2}, nil); err == nil {
+		t.Fatal("lent twice")
+	}
+	b.tune(beacon)
+	if !radio.running || radio.offered == nil || radio.scanning {
+		t.Fatalf("not advertising the service while lent: %+v", radio)
+	}
+
+	done()
+	done()
+	if radio.running {
+		t.Fatal("still running once given back")
+	}
+	release()
+	b.tune(beacon)
+	if !radio.running || !radio.scanning || radio.advertisement == nil {
+		t.Fatalf("not back as it was: %+v", radio)
+	}
+}
+
+// A radio with no Offer, such as the Shows' BlueZ scanner, says so.
+func TestARadioWithoutOfferSaysSo(t *testing.T) {
+	b := &Proxy{proxy: &esphome.BluetoothProxy{}, radio: &holdRadio{}, wanted: make(chan struct{}, 1)}
+	b.held = 1
+	if _, err := b.Offer([]byte{1}, nil); !errors.Is(err, ErrCannotOffer) {
+		t.Fatalf("got %v", err)
 	}
 }

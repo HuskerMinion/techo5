@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"errors"
 	"testing"
+	"unicode/utf8"
 )
 
 func TestParseWiFiRoundTrip(t *testing.T) {
@@ -107,5 +108,39 @@ func TestResultFits(t *testing.T) {
 func TestServiceData(t *testing.T) {
 	if !bytes.Equal(ServiceData(Authorized, CanIdentify|CanScan), []byte{0x02, 0x05, 0, 0, 0, 0}) {
 		t.Fatal("service data")
+	}
+}
+
+// The advertisement fills a legacy advertisement exactly, the service UUID least significant byte
+// first, as an ESPHome device sends it.
+func TestAdvertisement(t *testing.T) {
+	got := Advertisement(Authorized, CanIdentify|CanScan)
+	if len(got) != 31 {
+		t.Fatalf("%d bytes, want 31", len(got))
+	}
+	want := []byte{
+		0x02, 0x01, 0x06,
+		0x11, 0x07, 0x00, 0x80, 0x26, 0x78, 0x74, 0x27, 0x63, 0x46, 0x72, 0x22, 0x28, 0x62, 0x68, 0x77, 0x46, 0x00,
+		0x09, 0x16, 0x77, 0x46, byte(Authorized), byte(CanIdentify | CanScan), 0, 0, 0, 0,
+	}
+	if !bytes.Equal(got, want) {
+		t.Fatalf("got  % x\nwant % x", got, want)
+	}
+}
+
+func TestScanResponse(t *testing.T) {
+	if got, want := ScanResponse("Kitchen"), append([]byte{8, 0x09}, "Kitchen"...); !bytes.Equal(got, want) {
+		t.Fatalf("got % x, want % x", got, want)
+	}
+	long := ScanResponse("A speaker with a much longer name than fits")
+	if len(long) != 31 || long[1] != 0x08 || !utf8.Valid(long[2:]) {
+		t.Fatalf("long name: % x", long)
+	}
+	cut := ScanResponse("abcdefghijklmnopqrstuvwxyzabü") // ü's second byte would be the 30th
+	if len(cut) > 31 || !utf8.Valid(cut[2:]) || string(cut[2:]) != "abcdefghijklmnopqrstuvwxyzab" {
+		t.Fatalf("cut name: %q", cut[2:])
+	}
+	if ScanResponse("") != nil {
+		t.Fatal("empty name")
 	}
 }
