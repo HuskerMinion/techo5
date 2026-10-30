@@ -151,3 +151,36 @@ func TestDeviceInfo(t *testing.T) {
 		t.Fatalf("no firmware name in % x", got)
 	}
 }
+
+// Before the press only Identify is answered: a scan would list the networks around the device to
+// anyone in range, and device info its name.
+func TestOnlyIdentifyBeforeAuthorization(t *testing.T) {
+	s, r := session(t, proto.AuthorizationRequired)
+	scanned := false
+	s.scan = func(context.Context) ([]wifi.Network, error) { scanned = true; return nil, nil }
+	ctx := context.Background()
+	for _, cmd := range []proto.Command{proto.CmdScan, proto.CmdDeviceInfo} {
+		s.command(ctx, proto.Frame{Command: cmd}.Bytes())
+		if got := r.last(proto.ErrorUUID); !bytes.Equal(got, []byte{byte(proto.ErrNotAuthorized)}) {
+			t.Fatalf("command %#x: error % x", cmd, got)
+		}
+	}
+	if scanned || r.all(proto.RPCResultUUID) != nil {
+		t.Fatalf("answered before the press: scanned %v, results %v", scanned, r.all(proto.RPCResultUUID))
+	}
+	s.command(ctx, proto.Frame{Command: proto.CmdIdentify}.Bytes())
+	if got := r.last(proto.ErrorUUID); !bytes.Equal(got, []byte{byte(proto.ErrNone)}) {
+		t.Fatalf("identify: error % x", got)
+	}
+}
+
+// Once a network was joined, another is not taken in the seconds before the session closes.
+func TestNoSecondNetworkOnceProvisioned(t *testing.T) {
+	s, r := session(t, proto.Provisioned)
+	if _, ok := s.command(context.Background(), proto.WiFiFrame(proto.WiFi{SSID: "Other", Passphrase: "password1"})); ok {
+		t.Fatal("took a network after one was joined")
+	}
+	if got := r.last(proto.ErrorUUID); !bytes.Equal(got, []byte{byte(proto.ErrNotAuthorized)}) {
+		t.Fatalf("error % x", got)
+	}
+}

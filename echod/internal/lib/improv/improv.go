@@ -10,8 +10,12 @@
 package improv
 
 import (
+	"encoding/hex"
 	"errors"
 	"fmt"
+	"slices"
+	"strings"
+	"unicode/utf8"
 )
 
 // The service and its characteristics. All of them are cleartext: Improv has no pairing of its own,
@@ -87,6 +91,45 @@ const (
 // state before it connects.
 func ServiceData(s State, c Capabilities) []byte {
 	return []byte{byte(s), byte(c), 0, 0, 0, 0}
+}
+
+// Advertisement is the raw LE advertising data, for a radio that advertises without bluetoothd:
+// flags, the service UUID and the service data under 0x4677. That is 31 bytes, all a legacy
+// advertisement holds, so the name goes in the scan response (ScanResponse).
+func Advertisement(s State, c Capabilities) []byte {
+	b := []byte{0x02, 0x01, 0x06} // flags: LE general discoverable, no BR/EDR
+	b = append(b, 17, 0x07)       // complete list of 128-bit service UUIDs
+	b = append(b, uuid128(ServiceUUID)...)
+	b = append(b, 9, 0x16, 0x77, 0x46) // service data, 16-bit UUID 0x4677
+	return append(b, ServiceData(s, c)...)
+}
+
+// ScanResponse is the scan response carrying name: its complete local name, or as much of it as fits
+// in 29 bytes, cut at a character and marked shortened.
+func ScanResponse(name string) []byte {
+	kind := byte(0x09) // complete local name
+	if len(name) > 29 {
+		kind = 0x08 // shortened local name
+		cut := 29
+		for cut > 0 && !utf8.RuneStart(name[cut]) {
+			cut--
+		}
+		name = name[:cut]
+	}
+	if name == "" {
+		return nil
+	}
+	return append([]byte{byte(len(name) + 1), kind}, name...)
+}
+
+// uuid128 is a UUID in the byte order it goes on the air: least significant byte first.
+func uuid128(s string) []byte {
+	b, err := hex.DecodeString(strings.ReplaceAll(s, "-", ""))
+	if err != nil || len(b) != 16 {
+		panic("improv: bad UUID " + s)
+	}
+	slices.Reverse(b)
+	return b
 }
 
 // Frame is one command.

@@ -8,10 +8,11 @@ import (
 const (
 	h4Event = 0x04
 
-	evtCommandComplete  = 0x0E
-	evtCommandStatus    = 0x0F
-	evtLEMeta           = 0x3E
-	leAdvertisingReport = 0x02
+	evtDisconnectionComplete = 0x05
+	evtCommandComplete       = 0x0E
+	evtCommandStatus         = 0x0F
+	evtLEMeta                = 0x3E
+	leAdvertisingReport      = 0x02
 )
 
 // nextEvent removes one complete H4 event from the front. Remainder is the partial packet to hold,
