@@ -156,3 +156,32 @@ func TestPeripheralAsBluetoothdSeesIt(t *testing.T) {
 		t.Fatalf("%d writes", len(written))
 	}
 }
+
+// An adapter with LEAdvertisingManager1 is taken first; one without, as bluetoothd has it on a 3.18
+// kernel, still serves the service and is reported as not advertising.
+func TestPickAdapter(t *testing.T) {
+	ifcs := func(names ...string) map[string]map[string]dbus.Variant {
+		m := map[string]map[string]dbus.Variant{}
+		for _, n := range names {
+			m[n] = nil
+		}
+		return m
+	}
+	objs := map[dbus.ObjectPath]map[string]map[string]dbus.Variant{
+		"/org/bluez/hci0": ifcs(adapterIfc, gattMgrIfc),
+		"/org/bluez/hci2": ifcs(adapterIfc, gattMgrIfc, advertMgrIfc),
+		"/org/bluez/hci1": ifcs(adapterIfc, gattMgrIfc, advertMgrIfc),
+	}
+	if got, adv, err := pickAdapter(objs); err != nil || got != "/org/bluez/hci1" || !adv {
+		t.Fatalf("got %q %v %v, want hci1 advertising", got, adv, err)
+	}
+
+	old := map[dbus.ObjectPath]map[string]map[string]dbus.Variant{"/org/bluez/hci0": ifcs(adapterIfc, gattMgrIfc)}
+	if got, adv, err := pickAdapter(old); err != nil || got != "/org/bluez/hci0" || adv {
+		t.Fatalf("no advertising manager: got %q %v %v", got, adv, err)
+	}
+
+	if _, _, err := pickAdapter(map[dbus.ObjectPath]map[string]map[string]dbus.Variant{"/org/bluez/hci0": ifcs(adapterIfc)}); err == nil {
+		t.Fatal("an adapter without GATT was taken")
+	}
+}

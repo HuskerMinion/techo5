@@ -1515,7 +1515,8 @@ Home Assistant has Bluetooth), and so does [improv-wifi.com](https://www.improv-
 Edge on a phone or a computer with Bluetooth.
 
 - **Hold the mute button for five seconds.** The Dot plays the pairing tone and is ready for a
-  network at once. Hold it again to stop.
+  network at once. Hold it again to stop. The mute button is the hardware mute, so holding it also
+  mutes the microphones: press it once more afterwards to unmute them.
 - **Or let it start by itself.** A Dot that still has no address 45 seconds after starting offers
   Improv once, by itself. Then it takes a network only after a press of any of its buttons, so
   nobody else in Bluetooth range can move it onto a network of theirs.
@@ -1526,6 +1527,10 @@ had, and it says so with the failure tone. It stops offering Improv after five m
 sent, after fifteen minutes in any case, and ten seconds after a network was joined. Improv itself is
 not encrypted, which is why it is only offered this briefly. While it is offered, the Bluetooth proxy
 pauses, and Home Assistant sees its scanner stopped; it carries on by itself afterwards.
+
+On the stock 3.18 kernel of the Echo Dot 2nd gen and the Echo 2nd gen, bluetoothd cannot advertise
+by itself. The Dot then advertises Improv through the same radio the Bluetooth proxy uses, and
+bluetoothd still serves it, so it works the same.
 
 ## 10. Saving the settings
 
