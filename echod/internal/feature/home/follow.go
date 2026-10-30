@@ -382,9 +382,10 @@ func (f *Feature) heard(entity string, e hass.LiveEntity) {
 	state := e.State
 	// Music Assistant pauses some players (a Sonos) by stopping them where they are: the player goes
 	// idle with its track still named, and a play picks it up there (#345). An idle straight from
-	// playing is taken as that pause; one after a pause is the music over (the queue emptied, #150).
+	// playing is taken as that pause; one after a pause is the music over (the queue emptied, #150), and
+	// so is one with the song played to its end: the last of the queue finished.
 	idlePause := state == "idle" && str("app_id") == "music_assistant" && str("media_title") != "" &&
-		(p.state == "playing" || p.idlePause)
+		(p.state == "playing" || p.idlePause) && !playedToTheEnd(e)
 	if idlePause {
 		state = "paused"
 	}
@@ -429,6 +430,14 @@ func (f *Feature) heard(entity string, e hass.LiveEntity) {
 		safe.Go("followed cover", func() { fetchFollowedArt(entity, pic) })
 	}
 	f.Changed.Emit(struct{}{})
+}
+
+// playedToTheEnd is whether a player's song is at its end, by media_position and media_duration: within
+// a few seconds of it, for a position taken a moment before the last of it played.
+func playedToTheEnd(e hass.LiveEntity) bool {
+	pos, ok := e.Attrs["media_position"].(float64)
+	dur, _ := e.Attrs["media_duration"].(float64)
+	return ok && dur > 0 && pos >= dur-3
 }
 
 // followedPosition reads where the song is from a player's attributes: media_position seconds into it

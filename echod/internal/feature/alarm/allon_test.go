@@ -64,3 +64,63 @@ func TestTheScheduledAlarmLeavesOutSnoozes(t *testing.T) {
 		t.Errorf("only a snooze and a reminder: scheduled = %q, want nothing", got)
 	}
 }
+
+// An alarm asked to ring while every alarm is off turns Alarms on back on: one set by voice or Home
+// Assistant, even one already there, and one switched on. A reminder, and an edit of an alarm that was
+// on already, leave it off.
+func TestAnAlarmSetWhileAllAreOffTurnsThemBackOn(t *testing.T) {
+	config.Use(filepath.Join(t.TempDir(), "state.json"))
+	a := build()
+	allOff := func() {
+		t.Helper()
+		a.SetAllOn(false)
+	}
+	on := func() bool { return !config.Get().Alarms.AllOff && a.allOn.Get() }
+
+	wake := config.Alarm{ID: "wake", Hour: 6, Minute: 30, Days: config.DaysEvery, On: true}
+	if err := a.Put(wake); err != nil {
+		t.Fatal(err)
+	}
+	allOff()
+	wake.Label = "Work"
+	if err := a.Put(wake); err != nil {
+		t.Fatal(err)
+	}
+	if on() {
+		t.Error("editing an alarm that was on turned every alarm back on")
+	}
+	if _, err := a.SetReminder(19, 0, config.DaysEvery, "Bins out", nil); err != nil {
+		t.Fatal(err)
+	}
+	if on() {
+		t.Error("a reminder turned every alarm back on")
+	}
+
+	if _, err := a.Set(7, 0, config.DaysEvery, ""); err != nil {
+		t.Fatal(err)
+	}
+	if !on() {
+		t.Error("an alarm set while all were off is kept silent")
+	}
+
+	allOff()
+	if _, err := a.Set(7, 0, config.DaysEvery, ""); err != nil {
+		t.Fatal(err)
+	}
+	if !on() {
+		t.Error("setting an alarm that is already there, while all were off, keeps it silent")
+	}
+
+	allOff()
+	spare := config.Alarm{ID: "spare", Hour: 9, Minute: 0, Days: config.DaysEvery}
+	if err := a.Put(spare); err != nil {
+		t.Fatal(err)
+	}
+	spare.On = true
+	if err := a.Put(spare); err != nil {
+		t.Fatal(err)
+	}
+	if !on() {
+		t.Error("switching an alarm on while all were off keeps it silent")
+	}
+}

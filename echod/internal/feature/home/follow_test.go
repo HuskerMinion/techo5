@@ -185,6 +185,15 @@ func TestAMusicAssistantIdleAfterPlayingIsAPause(t *testing.T) {
 		t.Error("an idle with no track named is on the page")
 	}
 
+	// The last song of the queue played out: idle at its end is the music over, not a pause.
+	f.heard(office, hass.LiveEntity{ID: office, State: "playing", Attrs: ma})
+	f.heard(office, hass.LiveEntity{ID: office, State: "idle", Attrs: map[string]any{
+		"media_title": "Song One", "media_artist": "A Band", "app_id": "music_assistant",
+		"media_position": 213.0, "media_duration": 214.0}})
+	if Following() {
+		t.Error("an idle at the end of the song (the queue finished) is taken as a pause")
+	}
+
 	track := map[string]any{"media_title": "Song Two", "media_artist": "A Band"}
 	f.heard(den, hass.LiveEntity{ID: den, State: "playing", Attrs: track})
 	f.heard(den, hass.LiveEntity{ID: den, State: "idle", Attrs: track})

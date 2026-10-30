@@ -17,6 +17,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	esphome "github.com/ygelfand/go-esphome-device"
@@ -108,6 +109,10 @@ type View struct {
 type Alarms struct {
 	// Changed fires when anything the screen shows changes; listeners must not block.
 	Changed hook.Hook[struct{}]
+
+	// backOn is Alarms on turned back on since Run last looked: what came due while every alarm was
+	// off is not rung on the next look, which would otherwise reach back over it.
+	backOn atomic.Bool
 
 	next   *esphome.TextSensor
 	stop   *esphome.Button
@@ -367,6 +372,9 @@ func (a *Alarms) SetAllOn(on bool) {
 		return
 	}
 	a.allOn.Set(on)
+	if on {
+		a.backOn.Store(true)
+	}
 	if !on {
 		a.CancelSnoozes()
 		a.dropBridge()
@@ -410,6 +418,9 @@ func (a *Alarms) Run(ctx context.Context) error {
 			// A clock still behind the last record after an hour is not going to catch up, and
 			// the record is what is wrong: give up on it rather than never record again.
 			looked = a.away(now) || time.Since(started) > time.Hour
+		}
+		if a.backOn.Swap(false) {
+			last = now
 		}
 		if clockSet(now) && clockSet(last) {
 			for _, m := range overdue(a.sources(now), last, a.since, now) {
@@ -855,6 +866,7 @@ func (a *Alarms) setOn(hour, minute int, days uint8, label, date string, k *alar
 				}
 				al.Silent, al.LightOnly = k.silent, k.lightOnly
 			}
+			a.allOnFor(al)
 			return al, a.Put(al)
 		}
 	}
@@ -863,6 +875,16 @@ func (a *Alarms) setOn(hour, minute int, days uint8, label, date string, k *alar
 		al.Silent, al.LightOnly = k.silent, k.lightOnly
 	}
 	return al, a.Put(al)
+}
+
+// allOnFor turns Alarms on back on for an alarm asked to ring while every alarm is off: one set by voice,
+// from Home Assistant or the setup page, or switched on, is meant to ring, and would otherwise be kept
+// and confirmed but stay silent. A reminder is not held by Alarms on, so it changes nothing.
+func (a *Alarms) allOnFor(al config.Alarm) {
+	if al.On && !al.Remind && config.Get().Alarms.AllOff {
+		slog.Info("an alarm was set while every alarm was off: alarms are on again", "id", al.ID)
+		a.SetAllOn(true)
+	}
 }
 
 // SetReminder adds a reminder, said once at that time on those days, here and on ringOn; or turns on
@@ -957,6 +979,9 @@ func (a *Alarms) Put(al config.Alarm) error {
 	wasOn := slices.ContainsFunc(config.Get().Alarms.List, func(x config.Alarm) bool { return x.ID == al.ID && x.On })
 	if err := config.Set().Alarms().Put(al); err != nil {
 		return err
+	}
+	if !wasOn {
+		a.allOnFor(al)
 	}
 	if wasOn && !al.On {
 		a.dropSnooze(al.ID)

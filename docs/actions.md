@@ -942,7 +942,8 @@ The **Alarms on** switch (`switch.<node>_alarms_on`) turns all of a device's ala
 a trip, and back on when you're home. Each alarm keeps its own switch, so turning it back on brings
 back the ones that were on. While it's off, no alarm rings, including Home Assistant helpers the
 device follows, and snoozes are dropped. Reminders still go off. The same switch is at the top of
-Alarms & Timers on the screen when there's more than one alarm.
+Alarms & Timers on the screen when there's more than one alarm. Setting a new alarm, or switching one
+on, while it's off turns it back on, so the alarm you just asked for rings.
 
 ```yaml
 # Leaving for a few days: no alarms on the bedroom device.
