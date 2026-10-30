@@ -719,11 +719,11 @@ like "kitchen screen" under its **Voice assistants** settings in Home Assistant.
 - **Video** (Show and Spot): videos full screen from Home Assistant's `play_video` action and, with **DLNA
   video** on, from DLNA apps. Off on a new device. On the setup page's Screen & Photos tab. See
   [Video](video.md).
-- **Screen language** (Settings → General): the clock's day and date, the forecast's days, the
-  weather's words and the alarm after the date are written in it: German, Spanish, French, Italian,
-  Dutch, Portuguese, Russian or Japanese, and English for *Match all* or *English*. It also picks
-  which words the screen listens for. Japanese additionally translates settings and other screen
-  controls through the shared language tables; untranslated messages fall back to English. It
+- **Screen language** (Settings → General): the language of the screen. German, French, Italian,
+  Japanese and Turkish translate the whole screen, settings included; Spanish translates most of it.
+  Dutch, Portuguese and Russian write the clock's day and date, the forecast's days, the weather's
+  words and the alarm after the date; the rest stays in English, as with *Match all* or *English*.
+  Untranslated messages fall back to English. It also picks which words the screen listens for. It
   doesn't change what the assistant understands or says, which is set by Home Assistant's pipeline.
 - **Turn screen**: how a voice request looks. This one is on the Spot too. An answer too long for the
   screen is shown a page at a time, turning as the voice reads it. **Classic** is the words,
