@@ -4,6 +4,7 @@ package display
 
 import (
 	"context"
+	"fmt"
 	"image"
 	"image/draw"
 	"log/slog"
@@ -27,7 +28,16 @@ const (
 	addrFields
 )
 
-var addrLabels = [addrFields]string{"Address", "Gateway", "DNS"}
+// addrLabel is a field's name above it; DNS is the same in every language.
+func addrLabel(i int) string {
+	switch i {
+	case addrFieldAddress:
+		return tr("ui_address_field_address")
+	case addrFieldGateway:
+		return tr("ui_address_field_gateway")
+	}
+	return "DNS"
+}
 
 // addrForm is the page's state.
 type addrForm struct {
@@ -75,7 +85,7 @@ func newAddrForm(current string) *addrForm {
 		}
 	}
 	if why := wifi.AddressFallback(); why != "" {
-		f.note = "Not kept: " + why
+		f.note = fmt.Sprintf(tr("ui_address_not_kept"), why)
 	}
 	return f
 }
@@ -134,17 +144,17 @@ func (r *renderer) addrHit(x, y int) string {
 
 func (r *renderer) addressPage(s scene) {
 	f := s.wifi.addr
-	r.text(r.body, "Network address", r.margin, r.s(52), amber)
+	r.text(r.body, tr("network_address"), r.margin, r.s(52), amber)
 	t := clockHM(s.now)
 	r.text(r.small, t, r.w-r.margin-r.width(r.small, t), r.s(52), dim)
 
 	auto, fixed := r.addrModeRects()
-	r.key(auto, "Automatic (DHCP)", !f.fixed)
-	r.key(fixed, "Fixed", f.fixed)
+	r.key(auto, tr("ui_address_mode_automatic"), !f.fixed)
+	r.key(fixed, tr("ui_address_mode_fixed"), f.fixed)
 
 	for i := 0; i < addrFields; i++ {
 		rect := r.addrFieldRect(i)
-		r.text(r.tiny, addrLabels[i], rect.Min.X, rect.Min.Y-r.s(8), dim)
+		r.text(r.tiny, addrLabel(i), rect.Min.X, rect.Min.Y-r.s(8), dim)
 		fill := shift(walnut, 8)
 		if f.fixed && i == f.field {
 			fill = shift(ember, 24)
@@ -158,7 +168,7 @@ func (r *renderer) addressPage(s scene) {
 			shown += "|"
 		}
 		if shown == "" && i == addrFieldDNS {
-			shown, c = "the gateway", dim
+			shown, c = tr("ui_address_gateway_placeholder"), dim
 		}
 		for r.width(r.small, shown) > rect.Dx()-r.s(20) && len(shown) > 1 {
 			shown = shown[1:]
@@ -166,7 +176,7 @@ func (r *renderer) addressPage(s scene) {
 		r.text(r.small, shown, rect.Min.X+r.s(10), rect.Min.Y+rect.Dy()/2+r.s(11), c)
 	}
 
-	line, c := "No prefix means /24. Up to three DNS servers, with commas.", dim
+	line, c := tr("ui_address_no_prefix_help"), dim
 	switch {
 	case f.busy != "":
 		line, c = f.busy, cream
@@ -175,7 +185,7 @@ func (r *renderer) addressPage(s scene) {
 	case f.note != "":
 		line, c = f.note, cream
 	case !f.fixed:
-		line = "The router hands out the address."
+		line = tr("ui_address_router_assigns")
 	}
 	for r.width(r.tiny, line) > r.w-2*r.margin && len(line) > 1 {
 		line = line[:len(line)-1]
@@ -281,7 +291,7 @@ func (d *Display) saveAddress() {
 	if f.fixed {
 		in = f.vals[addrFieldAddress]
 		if strings.TrimSpace(in) == "" {
-			f.err = "Type the address, or choose Automatic."
+			f.err = tr("ui_address_enter_or_automatic")
 			d.mu.Unlock()
 			return
 		}
@@ -292,7 +302,11 @@ func (d *Display) saveAddress() {
 		d.mu.Unlock()
 		return
 	}
-	f.busy, f.note = "Trying "+a.String()+"…", ""
+	trying := a.String()
+	if !a.Fixed {
+		trying = tr("ui_address_mode_automatic")
+	}
+	f.busy, f.note = fmt.Sprintf(tr("ui_address_trying"), trying), ""
 	d.mu.Unlock()
 	d.wake()
 	safe.Go("network address", func() {
@@ -300,21 +314,21 @@ func (d *Display) saveAddress() {
 		// seconds: here, not on the touch.
 		var note string
 		if wifi.AddressUnchanged(context.Background(), a) {
-			note = "Nothing changed: that is the setting in use."
+			note = tr("ui_address_nothing_changed")
 		} else {
 			slog.Info("network address set on the screen", "address", a.String())
 			moved, err := wifi.ChangeAddress(context.Background(), a)
 			switch why := wifi.AddressFallback(); {
 			case err != nil:
-				note = "Could not be applied: " + err.Error()
+				note = fmt.Sprintf(tr("ui_address_could_not_apply"), err.Error())
 				slog.Warn("the network address could not be applied", "err", err)
 			case why != "":
-				note = "Not kept: " + why
+				note = fmt.Sprintf(tr("ui_address_not_kept"), why)
 				slog.Warn("the network address set on the screen was not kept", "address", a.String(), "reason", why)
 			case moved:
-				note = "Now at " + address() + ". Home Assistant follows within about two minutes."
+				note = fmt.Sprintf(tr("ui_address_now_at"), address())
 			default:
-				note = "Saved. The address is " + address() + "."
+				note = fmt.Sprintf(tr("ui_address_saved_at"), address())
 			}
 		}
 		d.mu.Lock()

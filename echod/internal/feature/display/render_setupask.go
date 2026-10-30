@@ -16,8 +16,8 @@ package display
 
 func (r *renderer) setupAskPage(s scene) {
 	r.text(r.title, tr("ui_setup_page"), r.margin, r.s(96), amber)
-	r.text(r.body, "A browser is asking to be let in", r.margin, r.s(176), cream)
-	r.text(r.small, "Allow it only if that browser is yours.", r.margin, r.s(224), dim)
+	r.text(r.body, tr("ui_setup_ask_title"), r.margin, r.s(176), cream)
+	r.text(r.small, tr("ui_setup_ask_hint"), r.margin, r.s(224), dim)
 
 	no, yes := r.actionHalves()
 	rad := float64(r.s(actionRadius))

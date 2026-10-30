@@ -230,7 +230,7 @@ func (r *renderer) pillTapped(p image.Point) int {
 
 // micPillRight is where the header's "microphone off" pill ends, in the middle of the top row.
 func (r *renderer) micPillRight() int {
-	return (r.w+r.width(r.tiny, "microphone off"))/2 + r.s(14)
+	return (r.w+r.width(r.tiny, tr("microphone_off")))/2 + r.s(14)
 }
 
 // alertBadge is the clock's word that something is in force: the most severe alert's name, and how

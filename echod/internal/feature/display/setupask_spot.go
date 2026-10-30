@@ -21,15 +21,16 @@ const (
 )
 
 func (r *roundRenderer) setupAskFace(s roundScene) {
-	r.centered(r.title, "Setup page", 130, colText)
-	r.centered(r.small, "A browser is asking", 176, colDim)
-	r.centered(r.small, "to be let in", 206, colDim)
+	r.centered(r.title, tr("ui_setup_page"), 130, colText)
+	r.centered(r.small, tr("ui_setup_ask_spot_1"), 176, colDim)
+	r.centered(r.small, tr("ui_setup_ask_spot_2"), 206, colDim)
 
 	// pillButton is placed by its right edge; these are centered, so each is offset by half its own.
 	fc := r.faces()
 	right := func(label string) int { return center + (r.paint.width(fc.button, label)+44)/2 }
-	r.pillButton(right("Not now"), askNoY, "Not now", btnSecondary)
-	r.pillButton(right("Allow"), askYesY, "Allow", btnPrimary)
+	notNow, allow := tr("not_now"), tr("ui_allow")
+	r.pillButton(right(notNow), askNoY, notNow, btnSecondary)
+	r.pillButton(right(allow), askYesY, allow, btnPrimary)
 }
 
 // askTapSpot is which answer a tap gave, and whether it answered at all: a tap on the words decides

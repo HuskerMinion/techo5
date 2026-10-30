@@ -1193,7 +1193,7 @@ func (r *renderer) header(s scene) {
 	var line string
 	switch {
 	case s.muted:
-		line = "microphone off"
+		line = tr("microphone_off")
 	default:
 		return
 	}
@@ -1259,7 +1259,7 @@ func (r *renderer) footer(s scene) {
 	case s.setupAsking && s.takes.Up():
 		r.text(r.tiny, "setup: takes of a word", r.margin, y, amber)
 	case s.setupAsking:
-		r.text(r.tiny, "setup: a browser is asking to be let in", r.margin, y, amber)
+		r.text(r.tiny, tr("ui_setup_footer_asking"), r.margin, y, amber)
 	case s.missed != "":
 		r.text(r.tiny, s.missed, r.margin, y, amber)
 	case s.slideshowTrouble != "":

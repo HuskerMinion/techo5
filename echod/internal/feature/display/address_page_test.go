@@ -29,7 +29,7 @@ func TestTheAddressPageIsTappedWhereItIsDrawn(t *testing.T) {
 		for i := 0; i < addrFields; i++ {
 			want := "field:" + string(rune('0'+i))
 			if got := r.addrHit(center(r.addrFieldRect(i))); got != want {
-				t.Errorf("%v: the %s field reads as %q", size, addrLabels[i], got)
+				t.Errorf("%v: the %s field reads as %q", size, addrLabel(i), got)
 			}
 		}
 		for row := range addrKeys {

@@ -323,9 +323,9 @@ func securityRows(sv sheetView) []settingRow {
 	if !sec.Encrypted {
 		link.sub, link.value = tr("ui_add_the_device_in_home_assistant_to_encrypt_it"), tr("ui_not_encrypted")
 	}
-	certs := settingRow{label: tr("certificate_checks"), sub: tr("for_downloads_updates_always_check"), kind: ctlValue, value: tr("ui_on")}
+	certs := settingRow{label: tr("certificate_checks"), sub: tr("for_downloads_updates_always_check"), kind: ctlValue, value: tr("ui_certificate_checks_on")}
 	if st.insecureTLS {
-		certs.sub, certs.value = tr("ui_turned_off_in_home_assistant"), tr("ui_off")
+		certs.sub, certs.value = tr("ui_turned_off_in_home_assistant"), tr("ui_certificate_checks_off")
 	}
 	rows = append(rows, cameraTestRows()...)
 	rows = append(rows,

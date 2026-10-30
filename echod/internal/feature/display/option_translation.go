@@ -178,6 +178,32 @@ func optionLabel(english string) string {
 		return tr("option_headphones_aux")
 	case "Speaker and headphones":
 		return tr("option_speaker_and_headphones")
+	case "Line":
+		return tr("ui_timer_style_line")
+	case "Ring":
+		return tr("ui_timer_style_ring")
+	case "Corner":
+		return tr("ui_timer_style_corner")
+	case "Banner":
+		return tr("ui_timer_style_banner")
+	case "Big":
+		return tr("ui_timer_style_big")
+	case "Old phone":
+		return tr("ui_call_ring_old_phone")
+	case "Chime":
+		return tr("ui_call_ring_chime")
+	case "Chimes":
+		return tr("ui_alarm_sound_chimes")
+	case "Beeps":
+		return tr("ui_alarm_sound_beeps")
+	case "Bells":
+		return tr("ui_alarm_sound_bells")
+	case "Gentle":
+		return tr("ui_alarm_sound_gentle")
+	case "Pulse":
+		return tr("ui_alarm_sound_pulse")
+	case "Your own":
+		return tr("ui_alarm_sound_own")
 
 	// The weather source the device itself offers; other sources are Home Assistant's names.
 	case "Home Assistant forecast":
@@ -207,7 +233,7 @@ func weekdayInitials() []string {
 
 func builtinOptionRow(id string) bool {
 	switch id {
-	case "photoevery", "clocktap", "alarmwords", "alarmrise", "clock", "clockpos", "weatherpos", "datecolor", "glancesize", "glancemusic", "camtime", "camfit", "cambands", "camshade", "answertime", "idledim", "timerstyle", "turnstyle", "musicstrip", "atnight", "nightstyle", "radarsrc", "output", "cal_open", "cal_opens_on", "cal_month_details", "calpopallday", "calpopwhen",
+	case "photoevery", "clocktap", "alarmwords", "alarmrise", "clock", "clockpos", "weatherpos", "datecolor", "glancesize", "glancemusic", "camtime", "camfit", "cambands", "camshade", "answertime", "idledim", "timerstyle", "callring", "alarmsound", "turnstyle", "musicstrip", "atnight", "nightstyle", "radarsrc", "output", "cal_open", "cal_opens_on", "cal_month_details", "calpopallday", "calpopwhen",
 		"skin", "weather":
 		return true
 	}

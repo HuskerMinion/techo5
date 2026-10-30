@@ -115,22 +115,23 @@ func folderPicker(f folderView, demo bool) pickerView {
 	}
 	switch {
 	case f.loading:
-		return pickerView{title: title, opts: []string{"Opening…"}, cur: -1}
+		return pickerView{title: title, opts: []string{tr("ui_photo_picker_opening")}, cur: -1}
 	case f.problem != "":
-		return pickerView{title: title, opts: []string{"Couldn't open this folder", f.problem, "‹ Back"}, cur: -1}
+		return pickerView{title: title, opts: []string{tr("ui_photo_picker_open_failed"), f.problem, "‹ " + tr("back")}, cur: -1}
 	}
-	use := "Use this folder"
+	use := tr("ui_photo_picker_use_folder")
 	switch {
 	case f.photos > 0 && len(f.folders) > 0:
-		use += fmt.Sprintf(" · %d photos + %d folders", f.photos, len(f.folders))
+		use += " · " + photosText(f.photos) +
+			" + " + foldersText(len(f.folders))
 	case f.photos > 0:
-		use += fmt.Sprintf(" · %d photos", f.photos)
+		use += " · " + photosText(f.photos)
 	case len(f.folders) > 0:
-		use += fmt.Sprintf(" · %d folders", len(f.folders))
+		use += " · " + foldersText(len(f.folders))
 	}
 	p := pickerView{title: title, opts: []string{use}, cur: 0}
 	if len(f.stack) > 0 {
-		p.opts = append(p.opts, "‹ Back")
+		p.opts = append(p.opts, "‹ "+tr("back"))
 	}
 	for i, c := range f.folders {
 		name := c.Title
@@ -140,6 +141,21 @@ func folderPicker(f folderView, demo bool) pickerView {
 		p.opts = append(p.opts, name+"  ›")
 	}
 	return p
+}
+
+// photosText and foldersText are "1 photo" or "3 photos", "1 folder" or "3 folders", in the screen's language.
+func photosText(n int) string {
+	if n == 1 {
+		return fmt.Sprintf(tr("ui_photo_picker_photo_one"), n)
+	}
+	return fmt.Sprintf(tr("ui_photo_picker_photos"), n)
+}
+
+func foldersText(n int) string {
+	if n == 1 {
+		return fmt.Sprintf(tr("ui_photo_picker_folder_one"), n)
+	}
+	return fmt.Sprintf(tr("ui_photo_picker_folders"), n)
 }
 
 // openFolder shows a folder in the list, asking Home Assistant for what is in it.
