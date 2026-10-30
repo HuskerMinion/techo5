@@ -115,10 +115,10 @@ func (r *roundRenderer) ringFace(s roundScene) {
 			if !strings.Contains(strings.ToLower(name), "timer") {
 				name += " timer"
 			}
-			title = strings.ToUpper(name) + " DONE"
+			title = upper(name) + " DONE"
 		}
 	case st.alarm != nil && st.alarm.Label != "":
-		title = strings.ToUpper(st.alarm.Label)
+		title = upper(st.alarm.Label)
 	}
 	r.centered(r.label, clip(r.label, r, title, 330), 130, colRing)
 	r.timeLine(s.now, 262)

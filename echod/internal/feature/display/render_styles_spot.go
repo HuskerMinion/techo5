@@ -327,7 +327,7 @@ func (r *roundRenderer) analogFace(s roundScene) {
 		}
 		r.text(r.small, w.Temp, left+int(2*u)+8, 150, colText)
 	}
-	day := strings.ToUpper(locale.DayAndNumber(s.now, screenLang()))
+	day := upper(locale.DayAndNumber(s.now, screenLang()))
 	dw := r.width(r.label, day) + 20
 	// The window a shade up from the ground, toward the track's color: on a light skin too.
 	window := lerpRGB(colBackground, colTrack, 0.6)

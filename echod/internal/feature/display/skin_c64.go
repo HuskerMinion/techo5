@@ -99,14 +99,14 @@ func (r *renderer) c64Home(s scene) {
 
 	var lines []string
 	for _, t := range runningTimers(s) {
-		name := strings.ToUpper(t.Name)
+		name := upper(t.Name)
 		if name == "" {
 			name = "TIMER"
 		}
 		lines = append(lines, fmt.Sprintf("%s %s", name, c64Left(t.Left)))
 	}
 	if next := s.alarms.Next; next != nil && next.At.Sub(s.now) < 24*time.Hour {
-		lines = append(lines, strings.ToUpper(locale.Alarm(screenLang(), next.Snoozed)+" "+clockText(next.At)))
+		lines = append(lines, upper(locale.Alarm(screenLang(), next.Snoozed)+" "+clockText(next.At)))
 	}
 
 	// On a panel taller than wide what the screen shows is centered among its rows, the rest left blue.
@@ -158,14 +158,14 @@ func (r *renderer) c64Home(s scene) {
 	clock := put(row, -1, clockHM(s.now), c64White, big)
 	if ampm := clockSuffix(s.now); ampm != "" {
 		// Beside the figures' foot, a column clear of them.
-		put(row+big-1, (clock.Max.X-x0)/cell+1, strings.ToUpper(ampm), c64Ink, 1)
+		put(row+big-1, (clock.Max.X-x0)/cell+1, upper(ampm), c64Ink, 1)
 	}
 	row += big + 1
 
-	date := strings.ToUpper(locale.ShortDate(s.now, screenLang()))
+	date := upper(locale.ShortDate(s.now, screenLang()))
 	line := date
 	if w := s.weather; w.Temp != "" || w.Condition != "" {
-		line += "   " + strings.ToUpper(strings.TrimSpace(w.Temp+" "+conditionWords(w.Condition)))
+		line += "   " + upper(strings.TrimSpace(w.Temp+" "+conditionWords(w.Condition)))
 	}
 	r.setDateAt(put(row, -1, line, c64Ink, 1).Inset(-r.s(16)))
 	row += 2
@@ -205,9 +205,9 @@ func c64Banner(sk string) (string, string) {
 	if sk != skinBASIC {
 		return "**** COMMODORE 64 BASIC V2 ****", "64K RAM SYSTEM  38911 BASIC BYTES FREE"
 	}
-	top := "**** TECHO5 BASIC " + strings.ToUpper(layout.Version) + " ****"
+	top := "**** TECHO5 BASIC " + upper(layout.Version) + " ****"
 	if len(top) > c64Cols {
-		top = "TECHO5 BASIC " + strings.ToUpper(layout.Version)
+		top = "TECHO5 BASIC " + upper(layout.Version)
 	}
 	total, free := memory()
 	second := fmt.Sprintf("%dM RAM SYSTEM  %d BYTES FREE", total>>20, free)

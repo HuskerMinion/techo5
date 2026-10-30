@@ -124,7 +124,7 @@ func initials(name string) string {
 	out := ""
 	for _, w := range strings.Fields(name) {
 		if r := []rune(w); len(r) > 0 && len(out) < 2 {
-			out += strings.ToUpper(string(r[0]))
+			out += upper(string(r[0]))
 		}
 	}
 	return out

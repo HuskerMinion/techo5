@@ -8,7 +8,9 @@ import (
 	"path/filepath"
 	"reflect"
 	"regexp"
+	"slices"
 	"strconv"
+	"strings"
 	"testing"
 	"time"
 )
@@ -175,5 +177,44 @@ func TestJapaneseDatesAndWeather(t *testing.T) {
 		if got != want {
 			t.Errorf("%q, want %q", got, want)
 		}
+	}
+}
+
+// completeCatalogs are the screen languages translated in full. A key added to uiEnglish has to be
+// added to each of them too, or that line shows in English on their screens.
+var completeCatalogs = []string{"de", "fr", "it", "ja", "tr"}
+
+func TestCompleteCatalogsHaveEveryKey(t *testing.T) {
+	for _, lang := range completeCatalogs {
+		catalog, ok := uiTranslations[lang]
+		if !ok {
+			t.Errorf("%s: no catalog", lang)
+			continue
+		}
+		var missing []string
+		for key := range uiEnglish {
+			if catalog[key] == "" {
+				missing = append(missing, key)
+			}
+		}
+		if len(missing) > 0 {
+			slices.Sort(missing)
+			t.Errorf("%s: %d keys not translated: %s", lang, len(missing), strings.Join(missing, " "))
+		}
+	}
+}
+
+// Turkish capitals: i is a dotted İ and ı a plain I; every other language as strings.ToUpper has it.
+func TestTurkishCapitals(t *testing.T) {
+	for _, c := range []struct{ lang, in, want string }{
+		{"tr", "Pazartesi", "PAZARTESİ"}, {"tr", "Salı", "SALI"}, {"tr", "Ekim", "EKİM"},
+		{"en", "Friday", "FRIDAY"}, {"", "pizza", "PIZZA"},
+	} {
+		if got := Upper(c.lang, c.in); got != c.want {
+			t.Errorf("Upper(%q, %q) = %q, want %q", c.lang, c.in, got, c.want)
+		}
+	}
+	if got := UpperRune("tr", 'i'); got != 'İ' {
+		t.Errorf("UpperRune(tr, i) = %q, want İ", got)
 	}
 }

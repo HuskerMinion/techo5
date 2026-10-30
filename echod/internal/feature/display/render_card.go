@@ -50,7 +50,7 @@ func (r *renderer) noticeCardIn(box image.Rectangle, base, top int, icon, headin
 		x += r.s(cardIcon + 12)
 	}
 	if heading != "" {
-		r.text(r.tiny, clipText(r, r.tiny, strings.ToUpper(heading), box.Max.X-in-hintW-r.s(24)-x), x, baseY, amber)
+		r.text(r.tiny, clipText(r, r.tiny, upper(heading), box.Max.X-in-hintW-r.s(24)-x), x, baseY, amber)
 	}
 
 	lines := r.wrap(face, text, width)

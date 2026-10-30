@@ -9,6 +9,7 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"unicode"
 	"unicode/utf8"
 )
 
@@ -116,6 +117,18 @@ var langs = map[string]*words{
 			"sunny": "Солнечно", "windy": "Ветрено", "windy-variant": "Ветрено",
 		},
 	},
+	"tr": {
+		days:        [7]string{"Pazar", "Pazartesi", "Salı", "Çarşamba", "Perşembe", "Cuma", "Cumartesi"},
+		shortDays:   [7]string{"Paz", "Pzt", "Sal", "Çar", "Per", "Cum", "Cmt"},
+		months:      [12]string{"Ocak", "Şubat", "Mart", "Nisan", "Mayıs", "Haziran", "Temmuz", "Ağustos", "Eylül", "Ekim", "Kasım", "Aralık"},
+		shortMonths: [12]string{"Oca", "Şub", "Mar", "Nis", "May", "Haz", "Tem", "Ağu", "Eyl", "Eki", "Kas", "Ara"},
+		sky: map[string]string{
+			"clear-night": "Açık", "cloudy": "Bulutlu", "exceptional": "Şiddetli", "fog": "Sisli", "hail": "Dolu",
+			"lightning": "Şimşek", "lightning-rainy": "Fırtına", "partlycloudy": "Parçalı bulutlu",
+			"pouring": "Şiddetli yağmur", "rainy": "Yağmurlu", "snowy": "Karlı", "snowy-rainy": "Karla karışık yağmur",
+			"sunny": "Güneşli", "windy": "Rüzgârlı", "windy-variant": "Rüzgârlı",
+		},
+	},
 }
 
 // phrases are the few words written beside a date: today, as the forecast heads its first day, and
@@ -148,6 +161,9 @@ var phrases = map[string]map[string]string{
 	"ru": {"here": "Здесь", "today": "Сегодня", "alarm": "Будильник", "snoozed": "Отложен до", "tomorrow": "Завтра", "yesterday": "Вчера",
 		"now": "Сейчас", "allday": "Весь день", "nothing": "В календаре пусто", "nothingtoday": "Сегодня ничего",
 		"nothingelse": "Больше ничего сегодня", "upcoming": "СКОРО", "nothingsoon": "Ничего не запланировано"},
+	"tr": {"here": "Burada", "today": "Bugün", "alarm": "Alarm", "snoozed": "Ertelendi", "tomorrow": "Yarın", "yesterday": "Dün",
+		"now": "Şimdi", "allday": "Tüm gün", "nothing": "Takvimde bir şey yok", "nothingtoday": "Bugün bir şey yok",
+		"nothingelse": "Bugün başka bir şey yok", "upcoming": "YAKLAŞAN", "nothingsoon": "Yaklaşan bir şey yok"},
 }
 
 // Here is the World clock's own place.
@@ -231,7 +247,7 @@ func LongDate(t time.Time, lang string) string {
 		return up(d) + ", " + day(t) + ". " + m
 	case "es", "pt":
 		return up(d) + ", " + day(t) + " de " + m
-	case "ru":
+	case "ru", "tr":
 		return up(d) + ", " + day(t) + " " + m
 	}
 	return up(d) + " " + day(t) + " " + m
@@ -250,7 +266,7 @@ func ShortDate(t time.Time, lang string) string {
 	switch lang {
 	case "de":
 		return up(d) + "., " + day(t) + ". " + m
-	case "es", "pt", "ru":
+	case "es", "pt", "ru", "tr":
 		return up(d) + ", " + day(t) + " " + m
 	}
 	return up(d) + " " + day(t) + " " + m
@@ -337,4 +353,21 @@ func Sky(cond, lang string) string {
 	}
 	// "sunny", "cloudy", "rainy", "pouring", "fog", "hail", "snowy", "windy", "lightning"…
 	return up(cond)
+}
+
+// Upper is s in capitals as lang writes them. Turkish capitalizes i as a dotted İ (and ı as I), which
+// strings.ToUpper does not know: "Pazartesi" is PAZARTESİ, not PAZARTESI.
+func Upper(lang, s string) string {
+	if lang == "tr" {
+		return strings.ToUpperSpecial(unicode.TurkishCase, s)
+	}
+	return strings.ToUpper(s)
+}
+
+// UpperRune is Upper for one letter.
+func UpperRune(lang string, r rune) rune {
+	if lang == "tr" {
+		return unicode.TurkishCase.ToUpper(r)
+	}
+	return unicode.ToUpper(r)
 }

@@ -5,7 +5,6 @@ package display
 import (
 	"image"
 	"image/color"
-	"strings"
 
 	"github.com/HuskerMinion/techo5/echod/internal/feature/home"
 )
@@ -78,7 +77,7 @@ func (r *renderer) captionBar(c home.Caption) {
 	y := bar.Min.Y + r.s(captionPad)
 	if c.Title != "" {
 		m := r.tiny.Metrics()
-		r.text(r.tiny, clipText(r, r.tiny, strings.ToUpper(c.Title), width), r.margin, y+m.Ascent.Ceil(), captionAccent)
+		r.text(r.tiny, clipText(r, r.tiny, upper(c.Title), width), r.margin, y+m.Ascent.Ceil(), captionAccent)
 		y += m.Height.Ceil()
 	}
 	r.text(r.small, clipText(r, r.small, c.Message, width), r.margin, y+r.small.Metrics().Ascent.Ceil(), captionText)

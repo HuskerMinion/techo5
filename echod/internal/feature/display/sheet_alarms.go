@@ -7,7 +7,6 @@ import (
 	"log/slog"
 	"strings"
 	"time"
-	"unicode"
 	"unicode/utf8"
 
 	"github.com/HuskerMinion/techo5/echod/internal/config"
@@ -240,7 +239,7 @@ func capitalize(s string) string {
 	}
 	// By letter, not byte: a name like élodie starts with two bytes.
 	r, size := utf8.DecodeRuneInString(s)
-	return string(unicode.ToUpper(r)) + s[size:]
+	return string(locale.UpperRune(screenLang(), r)) + s[size:]
 }
 
 // dayWord is when t falls, from now: Today, Tomorrow, or the weekday within the week.

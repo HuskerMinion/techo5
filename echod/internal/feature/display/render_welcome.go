@@ -30,7 +30,7 @@ func (r *renderer) welcome(s scene) {
 	if word == "" {
 		word = "the wake word"
 	} else {
-		word = strings.ToUpper(word[:1]) + word[1:]
+		word = upper(word[:1]) + word[1:]
 	}
 	lines := []string{
 		"This is " + name + ". Say \"" + word + "\" and ask for anything.",

@@ -66,7 +66,7 @@ func (r *renderer) announcementStrip(s scene) {
 	// above it and the message below, all in a hundred and thirty pixels. The room is context — it
 	// says who, and whoever is reading already knows the rooms in their own house — while the message
 	// is the part that has to be read, so the message keeps the large face and the width.
-	head := tr("drawer_announcement") + "  ·  " + strings.ToUpper(who)
+	head := tr("drawer_announcement") + "  ·  " + upper(who)
 	// The heading stops short of the hint on its right.
 	room := box.Dx() - 2*r.rowIn() - r.width(r.tiny, tr("drawer_dismiss")) - r.s(24)
 	r.text(r.tiny, clipText(r, r.tiny, head, room), box.Min.X+r.rowIn(), box.Min.Y+in.s(44), amber)

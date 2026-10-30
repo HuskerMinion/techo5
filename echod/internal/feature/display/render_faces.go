@@ -157,7 +157,7 @@ func (r *renderer) agendaStyle(s scene, box image.Rectangle) {
 	head := r.styleFace(true, 20)
 	y := box.Min.Y + r.s(28)
 	lang := screenLang()
-	r.text(head, strings.ToUpper(locale.Today(lang)), col, y, dim)
+	r.text(head, upper(locale.Today(lang)), col, y, dim)
 	y += r.s(48)
 	if len(s.style.next) == 0 {
 		r.text(r.small, locale.NothingOn(lang), col, y, dim)
@@ -184,7 +184,7 @@ func (r *renderer) agendaStyle(s scene, box image.Rectangle) {
 				return
 			}
 			y += r.s(10)
-			r.text(head, r.clipTo(head, strings.ToUpper(heads[i]), box.Max.X-col), col, y, dim)
+			r.text(head, r.clipTo(head, upper(heads[i]), box.Max.X-col), col, y, dim)
 			y += r.s(46)
 		}
 		if y > box.Max.Y {

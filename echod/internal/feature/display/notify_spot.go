@@ -33,7 +33,7 @@ func (r *roundRenderer) notifyFace(s roundScene) {
 	}
 	head := "NOTIFICATION"
 	if n.Title != "" {
-		head = strings.ToUpper(n.Title)
+		head = upper(n.Title)
 	}
 	r.centered(r.label, clip(r.label, r, head, 340), y, colAccent)
 
