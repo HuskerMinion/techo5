@@ -80,6 +80,8 @@ type Proxy struct {
 
 	mu     sync.Mutex
 	active bool
+	// held counts Holds: while any is out the radio is off, scanning and iBeacon both.
+	held int
 }
 
 var (
@@ -271,6 +273,50 @@ func (b *Proxy) Features() esphome.BluetoothFeature {
 	return bluetoothFeatures
 }
 
+// Hold turns the radio off, scanning and the iBeacon both, until release is called: for something
+// that needs the controller to itself, such as Improv advertising through bluetoothd
+// (feature/improv), which the iBeacon this radio sends on its own would otherwise talk over. It waits
+// up to holdWait for the radio to be off, and the proxy starts again as it was once the last hold is
+// released. Holds nest, and release may be called more than once.
+func (b *Proxy) Hold() (release func()) {
+	b.mu.Lock()
+	b.held++
+	b.mu.Unlock()
+	b.apply()
+	for deadline := time.Now().Add(holdWait); b.radio.Running() && time.Now().Before(deadline); {
+		time.Sleep(50 * time.Millisecond)
+	}
+	if b.radio.Running() {
+		slog.Warn("ble: still running after being held")
+	} else {
+		slog.Info("ble: held")
+	}
+
+	var once sync.Once
+	return func() {
+		once.Do(func() {
+			b.mu.Lock()
+			b.held--
+			last := b.held == 0
+			b.mu.Unlock()
+			if last {
+				slog.Info("ble: released")
+			}
+			b.apply()
+		})
+	}
+}
+
+// holdWait is how long Hold waits for the radio to stop: a stop is a couple of HCI commands. A
+// variable for tests, which have no settle goroutine to stop it.
+var holdWait = 3 * time.Second
+
+func (b *Proxy) holding() bool {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return b.held > 0
+}
+
 // apply asks for the radio to be brought in line, without waiting for it.
 func (b *Proxy) apply() {
 	select {
@@ -296,6 +342,9 @@ func (b *Proxy) tune(beacon beaconState) bool {
 	scan := enabled
 	if !enabled {
 		beacon = beaconState{minor: -1}
+	}
+	if b.holding() {
+		scan, beacon = false, beaconState{minor: -1}
 	}
 	want := scan || len(beacon.advertisement) != 0
 	active := b.proxy.Active()
