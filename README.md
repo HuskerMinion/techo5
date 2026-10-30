@@ -79,6 +79,12 @@ How it compares with EchoLocal, EchoMuse, echo-dot-assist, Kiosk Satellite and V
 
 The bigger changes of September and October 2026. Every release lists the rest.
 
+- 🌍 **French and Turkish on the screen** (v1.6.15). **Screen language** gains French
+  ([#346](https://github.com/HuskerMinion/techo5/pull/346)) and Turkish
+  ([#349](https://github.com/HuskerMinion/techo5/pull/349)). Every alarm can be turned off at once for a
+  trip, and Home Assistant gets a Next scheduled alarm sensor
+  ([#350](https://github.com/HuskerMinion/techo5/discussions/350)). A wake word sent from the setup page
+  scores on the features it was trained on ([#352](https://github.com/HuskerMinion/techo5/issues/352)).
 - 📖 **Long answers page along with the voice** (v1.6.14). An Assist answer too long for the screen
   is shown a page at a time, turning as the voice reads it, on the Show and the Spot
   ([#333](https://github.com/HuskerMinion/techo5/discussions/333)). The glance chips under the clock
