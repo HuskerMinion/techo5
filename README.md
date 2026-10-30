@@ -79,6 +79,12 @@ How it compares with EchoLocal, EchoMuse, echo-dot-assist, Kiosk Satellite and V
 
 The bigger changes of September and October 2026. Every release lists the rest.
 
+- 🎙️ **Record takes of a word** (v1.6.16). The setup page can record takes of a wake word on the device's
+  own microphones, after a press at the device, and hand them over as a zip for training
+  ([#315](https://github.com/HuskerMinion/techo5/pull/315)). AirPlay 2 plays from a Mac or iPhone that
+  connects over IPv6 ([#343](https://github.com/HuskerMinion/techo5/issues/343)), Now Playing goes once
+  Music Assistant's queue is emptied ([#150](https://github.com/HuskerMinion/techo5/issues/150)), and
+  more of the screen follows **Screen language**, with a [translation status page](docs/translating.md).
 - 🌍 **French and Turkish on the screen** (v1.6.15). **Screen language** gains French
   ([#346](https://github.com/HuskerMinion/techo5/pull/346)) and Turkish
   ([#349](https://github.com/HuskerMinion/techo5/pull/349)). Every alarm can be turned off at once for a
