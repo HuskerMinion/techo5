@@ -139,6 +139,60 @@ func TestAPausedFollowedPlayerLetsThePageGo(t *testing.T) {
 	}
 }
 
+// Music Assistant pauses a Sonos by stopping it where it is: idle with the track still named (#345).
+// An idle straight from playing is a pause, kept for followPausedFor and shown paused so the page's play
+// resumes it; it stays one as the player's details change. An idle after a real pause is the queue
+// emptied, and so is one with no track named, and another player's idle is not a pause at all.
+func TestAMusicAssistantIdleAfterPlayingIsAPause(t *testing.T) {
+	const office, den = "media_player.office", "media_player.den"
+	setFollowed(t, office, den)
+	f := Get()
+	ma := map[string]any{"media_title": "Song One", "media_artist": "A Band", "app_id": "music_assistant"}
+	paused := func() bool {
+		followed.mu.Lock()
+		defer followed.mu.Unlock()
+		p := shownLocked()
+		return p != nil && p.state == "paused"
+	}
+
+	f.heard(office, hass.LiveEntity{ID: office, State: "playing", Attrs: ma})
+	f.heard(office, hass.LiveEntity{ID: office, State: "idle", Attrs: ma})
+	if !Following() || !paused() {
+		t.Fatal("a Music Assistant idle straight from playing is not shown paused")
+	}
+	f.heard(office, hass.LiveEntity{ID: office, State: "idle", Attrs: map[string]any{
+		"media_title": "Song One", "media_artist": "A Band", "app_id": "music_assistant", "volume_level": 0.3}})
+	if !Following() || !paused() {
+		t.Error("a second idle (a volume change) ended the pause")
+	}
+	followed.mu.Lock()
+	followedPlayer(office).pausedAt = time.Now().Add(-followPausedFor - time.Second)
+	followed.mu.Unlock()
+	if Following() {
+		t.Error("an idle pause outlasts followPausedFor")
+	}
+
+	f.heard(office, hass.LiveEntity{ID: office, State: "playing", Attrs: ma})
+	f.heard(office, hass.LiveEntity{ID: office, State: "paused", Attrs: ma})
+	f.heard(office, hass.LiveEntity{ID: office, State: "idle", Attrs: ma})
+	if Following() {
+		t.Error("an idle after a real pause (the queue emptied) is still on the page")
+	}
+
+	f.heard(office, hass.LiveEntity{ID: office, State: "playing", Attrs: ma})
+	f.heard(office, hass.LiveEntity{ID: office, State: "idle", Attrs: map[string]any{"app_id": "music_assistant"}})
+	if Following() {
+		t.Error("an idle with no track named is on the page")
+	}
+
+	track := map[string]any{"media_title": "Song Two", "media_artist": "A Band"}
+	f.heard(den, hass.LiveEntity{ID: den, State: "playing", Attrs: track})
+	f.heard(den, hass.LiveEntity{ID: den, State: "idle", Attrs: track})
+	if Following() {
+		t.Error("an idle from a player that is not Music Assistant's is taken as a pause")
+	}
+}
+
 // With several players followed, the page shows the one that started playing last; when it stops, one
 // still playing takes the page; Done on one hands the page to another; and the buttons and the lyrics'
 // place go with whichever is on the page.
