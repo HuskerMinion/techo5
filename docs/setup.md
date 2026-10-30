@@ -619,6 +619,10 @@ like "kitchen screen" under its **Voice assistants** settings in Home Assistant.
   under the clock. *Automatic* uses the small text and drops to the tiny text when that fits more
   chips, so the size can change as chips come and go. *Small* and *Tiny* keep one size; with *Small*,
   a chip that does not fit is left off. Also in Home Assistant.
+- **Chips while music plays** (on the Show): *Hide*, the default, puts the glance chips away while the
+  music strip is up. *Above the strip* keeps them in a row over the strip, and the clock and date move
+  up to make room. That row always uses the tiny text, whatever Glance chip size says. Also in Home
+  Assistant.
 - **Clock style**: how the clock looks all day. *Classic*, *Big*, *Flip*, *LED*, *Analog*, *Words*
   (the time in words), *Sun* (the sun's path from sunrise to sunset), *Dashboard* (the next events
   and the week's weather), *Binary* (the time in lights, one column per digit, counted 1, 2, 4, 8

@@ -17,12 +17,19 @@ import (
 	"github.com/HuskerMinion/techo5/echod/internal/lib/hass"
 )
 
-// Every clock style draws on both panels, alone, with a timer running, with the glance strip and
-// with the music strip; with SHOW_PREVIEW set, each is written there to look at.
+// Every clock style draws on both panels, alone, with a timer running, with the glance strip, with
+// the music strip and with the chips over it; with SHOW_PREVIEW set, each is written there to look at.
 func TestShowClockStylesDraw(t *testing.T) {
 	config.Use(filepath.Join(t.TempDir(), "state.json"))
 	previewFont(t)
-	t.Cleanup(func() { _ = config.Set().Screen().ClockStyle("") })
+	t.Cleanup(func() {
+		_ = config.Set().Screen().ClockStyle("")
+		_ = config.Set().Screen().GlanceWithMusic("")
+	})
+	// Chips while music plays: Above the strip, for the scene with both; the others have one or neither.
+	if err := config.Set().Screen().GlanceWithMusic("above"); err != nil {
+		t.Fatal(err)
+	}
 	at := time.Date(2026, 9, 16, 14, 7, 38, 0, time.Local)
 	sky := home.Weather{Condition: "partlycloudy", Temp: "72°"}
 	var week []hass.Day
@@ -53,6 +60,8 @@ func TestShowClockStylesDraw(t *testing.T) {
 		"-timer":  {now: at, phase: "idle", weather: sky, style: facts, timers: running},
 		"-glance": {now: at, phase: "idle", weather: sky, style: facts, glance: chips},
 		"-strip": {now: at, phase: "idle", weather: sky, style: facts, strip: true, playing: true,
+			radio: home.Radio{Now: "KXYZ 101.1", Title: "Take It Easy", Artist: "Eagles"}},
+		"-strip-glance": {now: at, phase: "idle", weather: sky, style: facts, glance: chips, strip: true, playing: true,
 			radio: home.Radio{Now: "KXYZ 101.1", Title: "Take It Easy", Artist: "Eagles"}},
 		"-dawn": {now: time.Date(2026, 9, 16, 5, 30, 0, 0, time.Local), phase: "idle", weather: sky, style: facts},
 		// The next alarm makes the date line longer; an event tomorrow at a time makes the when longer.

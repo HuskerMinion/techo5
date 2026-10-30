@@ -13,11 +13,17 @@ import (
 // glanceStrip draws the chips centered along the foot of the clock page, above the footer's line: a
 // pill each, the entity's icon in the accent and its line in the text color. The small face is tried
 // first and the tiny one when that does not fit them all; then as many as fit are drawn, in order.
-func (r *renderer) glanceStrip(chips []home.Chip, callButton bool) {
-	const icon = 24 // mdiIcon scales it
+// While the music strip is up (Chips while music plays: Above the strip) the row sits over it instead,
+// smaller and always in the tiny face, so the clock has to move up only a little for it.
+func (r *renderer) glanceStrip(chips []home.Chip, callButton, overStrip bool) {
+	icon := 24 // mdiIcon scales it
 	h := r.s(46)
 	bottom := r.h - r.s(50)
 	gap, pad, iconGap := r.s(12), r.s(16), r.s(10)
+	if overStrip {
+		icon, h, bottom = 18, r.s(overStripChipHigh), r.stripRect().Min.Y-r.s(overStripChipGap)
+		gap, pad, iconGap = r.s(10), r.s(12), r.s(6)
+	}
 	room := r.w - 2*r.margin
 	if callButton {
 		// The Call button has the bottom-left corner: the strip keeps as clear of it on the right as on
@@ -36,6 +42,9 @@ func (r *renderer) glanceStrip(chips []home.Chip, callButton bool) {
 	// size keeps to one of them: the chips that do not fit in it drop off.
 	face, lift := r.small, r.s(10)
 	size := glanceSize()
+	if overStrip {
+		size = "tiny"
+	}
 	if size == "tiny" {
 		face, lift = r.tiny, r.s(8)
 	}
@@ -58,6 +67,10 @@ func (r *renderer) glanceStrip(chips []home.Chip, callButton bool) {
 	}
 }
 
+// overStripChipHigh is how tall the chips are over the music strip, and overStripChipGap the room
+// between them and the strip, before scaling: the clock moves up by about the two together.
+const overStripChipHigh, overStripChipGap = 32, 6
+
 // fitChips is which chips fit in room, in order, given each one's width and the gap between them, and
 // how wide they are together. A chip too wide for what is left is skipped rather than ending the strip,
 // so a shorter one after it still shows.
@@ -73,4 +86,10 @@ func fitChips(widths []int, gap, room int) (keep []int, total int) {
 		keep, total = append(keep, i), next
 	}
 	return keep, total
+}
+
+// glanceShows is whether the clock page has the glance chips: there is news, no running timer has the
+// foot, and the music strip is down or Chips while music plays puts them over it.
+func glanceShows(s scene, timers bool) bool {
+	return len(s.glance) > 0 && !timers && (!s.strip || glanceOverStrip())
 }

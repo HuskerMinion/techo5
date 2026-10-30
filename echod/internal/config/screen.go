@@ -121,6 +121,9 @@ type Screen struct {
 	// small face, the tiny one when that fits more chips), "small" or "tiny" to keep to one
 	// (display/render_glance.go).
 	GlanceChipSize string `json:"glance_chip_size,omitempty"`
+	// GlanceWithMusic is where the glance chips go while the music strip is up: empty to hide them, as
+	// they always did, or "above" for a row over the strip (display/render.go).
+	GlanceWithMusic string `json:"glance_with_music,omitempty"`
 
 	// ClockStyle is how the home screen's clock looks all day: empty for the classic face, or "big",
 	// "flip", "led", "analog", "words", "sun", "dashboard", "binary", "world", "agenda", "glow", "nixie",
@@ -396,6 +399,10 @@ func (w ScreenWriter) WeatherPosition(v string) error {
 
 func (w ScreenWriter) GlanceChipSize(v string) error {
 	return w.st.Update(func(c *Config) { c.Screen.GlanceChipSize = v })
+}
+
+func (w ScreenWriter) GlanceWithMusic(v string) error {
+	return w.st.Update(func(c *Config) { c.Screen.GlanceWithMusic = v })
 }
 
 func (w ScreenWriter) DimAfterMinutes(v int) error {

@@ -716,7 +716,7 @@ func pickerForRaw(id string, sv sheetView) (pickerView, bool) {
 		return fontPicker()
 	case "skin":
 		return pickerView{title: tr("skin"), opts: skinOptions(), cur: skinIndex()}, true
-	case "clockpos", "weatherpos", "datecolor", "glancesize":
+	case "clockpos", "weatherpos", "datecolor", "glancesize", "glancemusic":
 		return clockLayoutPicker(id)
 	case "camtime":
 		return pickerView{title: tr("camera_time"), opts: cameraTimeOptions(), cur: cameraTimeIndex()}, true
@@ -859,7 +859,7 @@ func (d *Display) choose(id string, i int) {
 		d.setFont(i)
 	case "skin":
 		setSkin(d.skinSel(), i)
-	case "clockpos", "weatherpos", "datecolor", "glancesize":
+	case "clockpos", "weatherpos", "datecolor", "glancesize", "glancemusic":
 		d.chooseClockLayout(id, i)
 	case "clock":
 		on := i == 1
@@ -1307,7 +1307,7 @@ func (d *Display) rowTap(id string, p part, opt int) {
 		home.Get().SetSlideshowCaption(!home.Get().SlideshowCaption())
 	case "immichfav":
 		home.Get().SetImmichFavorites(!home.Get().ImmichFavorites())
-	case "night", "atnight", "nightstyle", "clock", "clockstyle", "font", "skin", "clockpos", "weatherpos", "datecolor", "glancesize", "camtime", "camfit", "cambands", "camshade", "answertime", "idledim", "callring", "turnstyle", "timerstyle", "radarsrc", "calendars", "calpopwhen", "calpopallday", "calpopcals", "musicstrip", "follow", "awayoff", "slideshow", "photoevery", "screenlang", "newtimer", "sleep", "sunrise",
+	case "night", "atnight", "nightstyle", "clock", "clockstyle", "font", "skin", "clockpos", "weatherpos", "datecolor", "glancesize", "glancemusic", "camtime", "camfit", "cambands", "camshade", "answertime", "idledim", "callring", "turnstyle", "timerstyle", "radarsrc", "calendars", "calpopwhen", "calpopallday", "calpopcals", "musicstrip", "follow", "awayoff", "slideshow", "photoevery", "screenlang", "newtimer", "sleep", "sunrise",
 		"timezone", "wakeword", "waketone", "ttsvoice", "quiet", "output", "clocktap":
 		d.openPicker(id)
 	}

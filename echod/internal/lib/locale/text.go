@@ -629,6 +629,10 @@ var uiEnglish = map[string]string{
 	"screen_on_network":             "Screen on network",
 	"camera_on_network":             "Camera on network",
 	"update_channel":                "Update channel",
+	// Chips while music plays (display/clock_layout.go).
+	"ui_chips_while_music_plays":     "Chips while music plays",
+	"ui_chips_while_music_plays_sub": "Where the glance chips go while the music strip is up",
+	"option_above_the_strip":         "Above the strip",
 }
 
 var uiTranslations = map[string]map[string]string{
@@ -870,6 +874,9 @@ var uiTranslations = map[string]map[string]string{
 		"screen_on_network":             "Pantalla en la red",
 		"camera_on_network":             "Cámara en la red",
 		"update_channel":                "Canal de actualizaciones",
+		// Chips while music plays (display/clock_layout.go).
+		"ui_chips_while_music_plays":     "Chips con música",
+		"ui_chips_while_music_plays_sub": "Dónde van los chips mientras está la barra de música",
 	},
 	"fr": {
 		"drawer_recording":              "Écoute en cours",
@@ -1481,6 +1488,10 @@ var uiTranslations = map[string]map[string]string{
 		"ui_the_text_under_the_clock":                          "La taille du texte sous l'horloge",
 		"ui_tiny":                                              "Très petite",
 		"update_channel":                                       "Canal de mise à jour",
+		// Chips while music plays (display/clock_layout.go).
+		"ui_chips_while_music_plays":     "Pastilles pendant la musique",
+		"ui_chips_while_music_plays_sub": "Où vont les pastilles quand la barre de musique est affichée",
+		"option_above_the_strip":         "Au-dessus de la barre",
 	},
 	"it": {
 		"drawer_recording":           "In ascolto",
@@ -2092,6 +2103,10 @@ var uiTranslations = map[string]map[string]string{
 		"screen_on_network":             "Schermo in rete",
 		"camera_on_network":             "Fotocamera in rete",
 		"update_channel":                "Canale di aggiornamento",
+		// Chips while music plays (display/clock_layout.go).
+		"ui_chips_while_music_plays":     "Chip durante la musica",
+		"ui_chips_while_music_plays_sub": "Dove vanno i chip quando c'è la barra della musica",
+		"option_above_the_strip":         "Sopra la barra",
 	},
 	"ja": {
 		"drawer_recording":           "録音中",
@@ -2703,6 +2718,10 @@ var uiTranslations = map[string]map[string]string{
 		"screen_on_network":             "画面をネットワークに",
 		"camera_on_network":             "カメラをネットワークに",
 		"update_channel":                "アップデートチャネル",
+		// Chips while music plays (display/clock_layout.go).
+		"ui_chips_while_music_plays":     "音楽再生中のチップ",
+		"ui_chips_while_music_plays_sub": "音楽バーが出ているときのチップの位置",
+		"option_above_the_strip":         "バーの上",
 	},
 
 	// de is the German catalog. The English of every entry is above it, so a
@@ -3918,6 +3937,10 @@ var uiTranslations = map[string]map[string]string{
 		"screen_on_network":             "Bildschirm im Netz",
 		"camera_on_network":             "Kamera im Netz",
 		"update_channel":                "Update-Kanal",
+		// Chips while music plays (display/clock_layout.go).
+		"ui_chips_while_music_plays":     "Chips bei Musik",
+		"ui_chips_while_music_plays_sub": "Wo die Chips stehen, wenn die Musikleiste angezeigt wird",
+		"option_above_the_strip":         "Über der Leiste",
 	},
 	"tr": {
 		"ui_listening_turn":          "Dinleniyor…",
@@ -4529,5 +4552,9 @@ var uiTranslations = map[string]map[string]string{
 		"screen_on_network":             "Ağdaki ekran",
 		"camera_on_network":             "Ağdaki kamera",
 		"update_channel":                "Güncelleme kanalı",
+		// Chips while music plays (display/clock_layout.go).
+		"ui_chips_while_music_plays":     "Müzik çalarken çipler",
+		"ui_chips_while_music_plays_sub": "Müzik şeridi açıkken bakış çiplerinin yeri",
+		"option_above_the_strip":         "Şeridin üstünde",
 	},
 }

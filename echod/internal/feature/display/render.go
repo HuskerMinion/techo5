@@ -866,10 +866,14 @@ func (r *renderer) bigClock(s scene) {
 	if s.strip {
 		// The music strip takes the foot of the panel; the clock and date move up out of its way.
 		base -= r.s(30)
+		if foot {
+			base -= r.s(34) // the compact clock's date sits right where the strip's top is
+		}
 	}
 	// The glance strip takes the foot too, when there is news and nothing else is using it: a running
-	// timer is news enough on its own, and the music strip is where the hand already is.
-	glance := len(s.glance) > 0 && !timers && !s.strip
+	// timer is news enough on its own, and the music strip is where the hand already is, unless Chips
+	// while music plays puts the chips over it.
+	glance := glanceShows(s, timers)
 	// The next-up card takes the strip's place when an event is coming up, the clock centered: the clock
 	// and the date move up clear of it.
 	card := s.nextUp != nil && len(s.glance) == 0 && !timers && !s.strip && !foot
@@ -878,7 +882,14 @@ func (r *renderer) bigClock(s scene) {
 		box, _ := r.nextUpRect(s)
 		base = min(base, box.Min.Y-r.s(102))
 	}
-	if glance {
+	switch {
+	case glance && s.strip:
+		// The chips' row over the music strip is small: the clock and date move up only a little more.
+		base -= r.s(20)
+		if foot {
+			base -= r.s(20)
+		}
+	case glance:
 		base -= r.s(30)
 		if foot {
 			base -= r.s(26) // at the foot the date sits where the strip goes: it moves up clear of it
@@ -900,7 +911,7 @@ func (r *renderer) bigClock(s scene) {
 		r.timersFoot(s, base+timersAt)
 	}
 	if glance {
-		r.glanceStrip(s.glance, s.callButton)
+		r.glanceStrip(s.glance, s.callButton, s.strip)
 	}
 	if card {
 		r.drawNextUp(s)

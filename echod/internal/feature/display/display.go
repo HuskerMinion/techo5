@@ -144,7 +144,8 @@ type Display struct {
 	clockPos   *esphome.Select // Clock position, dateCol Date color and weatherPos Weather position (clock_layout.go)
 	dateCol    *esphome.Select
 	weatherPos *esphome.Select
-	glanceSz   *esphome.Select // Glance chip size (clock_layout.go)
+	glanceSz   *esphome.Select // Glance chip size and glanceMus Chips while music plays (clock_layout.go)
+	glanceMus  *esphome.Select
 	answerTime *esphome.Select
 	// idleDimSel is Dim after idle (idle_dim.go).
 	idleDimSel *esphome.Select
@@ -495,7 +496,7 @@ func build() *Display {
 	d.camTime = cameraTimeSelect()
 	cameraFitSel, cameraBandsSel, cameraShadeSel = cameraFitSelect(), cameraBandsSelect(), cameraShadeSelect()
 	d.answerTime = answerTimeSelect()
-	d.clockPos, d.dateCol, d.weatherPos, d.glanceSz = clockLayoutSelects(d.wake)
+	d.clockPos, d.dateCol, d.weatherPos, d.glanceSz, d.glanceMus = clockLayoutSelects(d.wake)
 	d.turnStyle = turnStyleSelect(d.wake)
 	d.timerStyle = timerStyleSelect(d.wake)
 	d.skinSl = skinSelect(d.wake)
@@ -607,7 +608,7 @@ func (d *Display) skinSel() *esphome.Select { return d.skinSl }
 func (d *Display) clockTapSel() *esphome.Select { return d.clockTap }
 
 func (d *Display) Entities() []esphome.Entity {
-	ents := append([]esphome.Entity{d.light, d.power, d.roomSw, d.auto, d.clock, d.clockStyleSel, d.clockPos, d.dateCol, d.weatherPos, d.glanceSz, d.camTime, cameraFitSel, cameraBandsSel, cameraShadeSel, d.answerTime, d.turnStyle, d.timerStyle, d.skinSl, d.callBtn, d.weatherFx, d.warmthSw, d.lang, d.strip, d.themeSel, d.lightThemeSel, d.themeModeSel, d.nightHours, d.nightStart, d.nightEnd, d.weekendStart, d.weekendEnd, d.nightMode, d.atNight, d.nightStyle, d.glowLevel, d.dimmestNum, d.idleDimSel,
+	ents := append([]esphome.Entity{d.light, d.power, d.roomSw, d.auto, d.clock, d.clockStyleSel, d.clockPos, d.dateCol, d.weatherPos, d.glanceSz, d.glanceMus, d.camTime, cameraFitSel, cameraBandsSel, cameraShadeSel, d.answerTime, d.turnStyle, d.timerStyle, d.skinSl, d.callBtn, d.weatherFx, d.warmthSw, d.lang, d.strip, d.themeSel, d.lightThemeSel, d.themeModeSel, d.nightHours, d.nightStart, d.nightEnd, d.weekendStart, d.weekendEnd, d.nightMode, d.atNight, d.nightStyle, d.glowLevel, d.dimmestNum, d.idleDimSel,
 		d.pop.on, d.pop.lead, d.pop.chime, d.pop.allDay, d.clockTap, d.styleSwipeSw, d.volumeSwipeSw, d.nightTapSw, d.fontSel}, d.lookEnts...)
 	if !screen.CanTint {
 		// Night warmth tints the frame on its way to the panel, which a tablet's screen does not take.
@@ -637,6 +638,7 @@ func (d *Display) Restore(c config.Config) {
 	d.dateCol.Set(dateColors[dateColorIndex()].label)
 	d.weatherPos.Set(weatherPositions[weatherPositionIndex()].label)
 	d.glanceSz.Set(glanceSizes[glanceSizeIndex()].label)
+	d.glanceMus.Set(glanceMusic[glanceMusicIndex()].label)
 	d.turnStyle.Set(turnStyles[turnStyleIndex()].label)
 	d.timerStyle.Set(timerStyles[timerStyleIndex()].label)
 	d.skinSl.Set(skins[skinIndex()].label)

@@ -2088,7 +2088,8 @@ short line) along the foot of the clock page, each only while it has something t
 only; the Spot and the Dot don't have it. The list persists and the device follows the entities itself, so a chip comes and goes with its
 entity's state and nothing has to be sent again. A value that leaves the chips as they were
 does not redraw the screen. The text size of the chips is the Glance chip size setting, on the screen
-and in Home Assistant: Automatic, Small or Tiny.
+and in Home Assistant: Automatic, Small or Tiny. While the music strip is up the chips are hidden,
+unless Chips while music plays is set to Above the strip.
 
 What each entity shows:
 

@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"slices"
 	"testing"
+	"time"
 
 	"github.com/HuskerMinion/techo5/echod/internal/config"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/home"
@@ -46,7 +47,7 @@ func TestGlanceChipSize(t *testing.T) {
 			t.Fatal(err)
 		}
 		img := image.NewRGBA(image.Rect(0, 0, showWide, showHigh))
-		newRenderer(img).glanceStrip(chips, false)
+		newRenderer(img).glanceStrip(chips, false, false)
 		return img
 	}
 	same := func(a, b *image.RGBA) bool { return bytes.Equal(a.Pix, b.Pix) }
@@ -82,5 +83,59 @@ func TestGlanceChipSize(t *testing.T) {
 	}
 	if same(draw("small", many), tiny) {
 		t.Error("Small went tiny to fit more chips")
+	}
+}
+
+// Chips while music plays: Hide leaves the clock page with the music strip as it always was; Above the
+// strip puts the chips in a row over the strip, and the date moves up clear of them wherever the clock
+// sits.
+func TestChipsWhileMusicPlays(t *testing.T) {
+	config.Use(filepath.Join(t.TempDir(), "state.json"))
+	previewFont(t)
+	t.Cleanup(func() {
+		_ = config.Set().Screen().GlanceWithMusic("")
+		_ = config.Set().Screen().ClockPosition("")
+	})
+	at := time.Date(2026, 9, 16, 14, 7, 38, 0, time.Local)
+	chips := []home.Chip{{Icon: "mdi:calendar", Text: "Standup in 12 min"}}
+	radio := home.Radio{Now: "KXYZ 101.1", Title: "Take It Easy", Artist: "Eagles"}
+	strip := scene{now: at, phase: "idle", strip: true, playing: true, radio: radio}
+	both := strip
+	both.glance = chips
+	draw := func(s scene) (*image.RGBA, *renderer) {
+		img := image.NewRGBA(image.Rect(0, 0, showWide, showHigh))
+		r := newRenderer(img)
+		r.draw(s)
+		return img, r
+	}
+
+	if glanceShows(both, false) {
+		t.Error("Hide shows the chips while the music strip is up")
+	}
+	hidden, _ := draw(both)
+	alone, _ := draw(strip)
+	if !bytes.Equal(hidden.Pix, alone.Pix) {
+		t.Error("Hide drew something more than the music strip")
+	}
+
+	if err := config.Set().Screen().GlanceWithMusic("above"); err != nil {
+		t.Fatal(err)
+	}
+	if !glanceShows(both, false) || glanceShows(both, true) {
+		t.Error("Above the strip: the chips show over the strip, and still give way to a running timer")
+	}
+	for _, p := range clockPositions {
+		if err := config.Set().Screen().ClockPosition(p.value); err != nil {
+			t.Fatal(err)
+		}
+		if _, r := draw(strip); r.dateAt.Inset(r.s(16)).Max.Y > r.stripRect().Min.Y {
+			t.Errorf("%s: the date reaches %d, under the music strip from %d", p.label, r.dateAt.Inset(r.s(16)).Max.Y, r.stripRect().Min.Y)
+		}
+		img, r := draw(both)
+		writePreview(t, img, "chips-over-strip-"+p.label+".png")
+		chipTop := r.stripRect().Min.Y - r.s(overStripChipGap+overStripChipHigh)
+		if date := r.dateAt.Inset(r.s(16)); date.Max.Y > chipTop {
+			t.Errorf("%s: the date reaches %d, into the chips' row from %d", p.label, date.Max.Y, chipTop)
+		}
 	}
 }
