@@ -115,6 +115,11 @@ type Alarms struct {
 	words  *esphome.Select
 	rise   *esphome.Select // how long a ring takes to come up from quiet (#284)
 
+	// scheduled is when the next alarm is set for, snoozes left out, as a timestamp: something to
+	// start an automation before (D#350). allOn turns every alarm off and on (Alarms.AllOff).
+	scheduled *esphome.TextSensor
+	allOn     *esphome.Switch
+
 	// sun is the ring while the light before an alarm comes up, under a ringing alarm and over
 	// everything quieter; lighting is whether it is showing anything.
 	sun      *led.Claim
@@ -182,6 +187,10 @@ func build() *Alarms {
 		sun:  led.Get().Claim(led.PriorityTimer),
 		wake: make(chan struct{}, 1),
 	}
+	// A text sensor, as Last boot is: a sensor's float32 holds a date only to the nearest minutes.
+	a.scheduled = &esphome.TextSensor{Base: esphome.Base{ObjectID: "next_scheduled_alarm", Name: "Next scheduled alarm",
+		Icon: "mdi:alarm-check"}, DeviceClass: "timestamp"}
+	a.allOn = &esphome.Switch{Base: esphome.Base{ObjectID: "alarms_on", Name: "Alarms on", Icon: "mdi:alarm-multiple"}}
 	// The wake light as it is now, for a lamp in the room to follow (sunrise.go).
 	a.lightLevel = &esphome.Sensor{Base: esphome.Base{ObjectID: "wake_light_brightness", Name: "Wake light brightness", Icon: "mdi:weather-sunset-up"}, Unit: "%"}
 	a.lightColor = &esphome.TextSensor{Base: esphome.Base{ObjectID: "wake_light_color", Name: "Wake light color", Icon: "mdi:palette"}}
@@ -200,6 +209,7 @@ func build() *Alarms {
 			a.dropBridge()
 		}
 	}}
+	a.allOn.OnCommand = a.SetAllOn
 	a.snooze = &esphome.Button{Base: esphome.Base{ObjectID: "alarm_snooze", Name: "Snooze alarm", Icon: "mdi:alarm-snooze"}, OnPress: func() { a.Snooze() }}
 	a.sound = &esphome.Select{
 		Base:      esphome.Base{ObjectID: "alarm_sound", Name: "Alarm sound", Icon: "mdi:alarm-bell", Category: esphome.CategoryConfig},
@@ -227,11 +237,12 @@ func build() *Alarms {
 func (a *Alarms) Name() string { return "alarms" }
 
 func (a *Alarms) Entities() []esphome.Entity {
-	return []esphome.Entity{a.next, a.stop, a.snooze, a.sound, a.words, a.rise, a.snoozeFor, a.ringVol, a.lightLevel, a.lightColor}
+	return []esphome.Entity{a.next, a.scheduled, a.allOn, a.stop, a.snooze, a.sound, a.words, a.rise, a.snoozeFor, a.ringVol, a.lightLevel, a.lightColor}
 }
 
 func (a *Alarms) Restore(c config.Config) {
 	a.sound.Set(soundName(c.Alarms.Sound))
+	a.allOn.Set(!c.Alarms.AllOff)
 	a.words.Set(c.Alarms.Say.Label())
 	a.rise.Set(c.Alarms.Rise.Label())
 	a.snoozeFor.Set(float32(c.Alarms.Snooze()))
@@ -347,6 +358,35 @@ func (a *Alarms) SetRingVolume(step int, preview bool) {
 	}
 }
 
+// SetAllOn turns every alarm on or off at once (Alarms.AllOff), from Home Assistant. Off drops the
+// snoozes and the wake light held for an alarm, as turning one alarm off does; one ringing rings on
+// until it is stopped, and a snooze of it stops it.
+func (a *Alarms) SetAllOn(on bool) {
+	if err := config.Set().Alarms().AllOff(!on); err != nil {
+		slog.Error("saving alarms on failed", "err", err)
+		return
+	}
+	a.allOn.Set(on)
+	if !on {
+		a.CancelSnoozes()
+		a.dropBridge()
+		a.dropGlow()
+	}
+	slog.Info("alarms on", "on", on)
+	a.poke()
+	a.Changed.Emit(struct{}{})
+}
+
+// scheduledText is when the soonest alarm of sources is set for, as the Next scheduled alarm sensor
+// says it, or "" for none: snoozes and reminders left out.
+func scheduledText(sources []source, now time.Time) string {
+	sources = slices.DeleteFunc(sources, func(s source) bool { return isSnooze(s) || s.remind })
+	if _, at, ok := soonest(sources, now); ok {
+		return at.UTC().Format(time.RFC3339)
+	}
+	return ""
+}
+
 func (a *Alarms) poke() {
 	select {
 	case a.wake <- struct{}{}:
@@ -360,6 +400,7 @@ func (a *Alarms) Run(ctx context.Context) error {
 	// Published on the first pass even when it is "" (no alarm), so Home Assistant does not show the
 	// sensor as unknown on a device with no alarms set.
 	published, sent := "", false
+	scheduled, schedSent := "", false
 	looked, started, edited := false, time.Now(), false
 	for {
 		now := time.Now()
@@ -408,6 +449,10 @@ func (a *Alarms) Run(ctx context.Context) error {
 			published, sent = label, true
 			a.Changed.Emit(struct{}{})
 		}
+		if at := scheduledText(a.sources(now), now); at != scheduled || !schedSent {
+			a.scheduled.Set(at)
+			scheduled, schedSent = at, true
+		}
 
 		wait := look
 		if _, at, ok := soonest(a.sources(now), now); ok && time.Until(at) < wait {
@@ -435,7 +480,7 @@ func (a *Alarms) sources(now time.Time) []source {
 	c := config.Get().Alarms
 	var out []source
 	for _, al := range c.List {
-		if al.On {
+		if al.On && (al.Remind || !c.AllOff) {
 			src := source{key: al.ID, label: al.Label, hour: al.Hour, min: al.Minute, days: al.Days, local: true,
 				remind: al.Remind, ringOn: al.RingOn, sunrise: c.SunriseFor(al), silent: al.Silent,
 				lightOnly: al.LightOnly && !al.Remind && !al.Silent}
@@ -447,7 +492,7 @@ func (a *Alarms) sources(now time.Time) []source {
 		}
 	}
 	for _, f := range a.followed(now) {
-		if !f.Armed || f.At.IsZero() {
+		if !f.Armed || f.At.IsZero() || c.AllOff {
 			continue
 		}
 		if s, ok := a.helperSource(f.Entity, now); ok {
@@ -736,7 +781,7 @@ func (a *Alarms) SnoozeFor(minutes int) bool {
 	}
 	// Deleted or turned off while it rang: a snooze would bring back an alarm nobody wants, so it is
 	// stopped instead (#159).
-	if (r.local && alarmGone(r.Key)) || helperOff(r.Key) {
+	if (r.local && alarmGone(r.Key)) || helperOff(r.Key) || config.Get().Alarms.AllOff {
 		// Remembered, so alarm_snooze_for arriving a moment after a spoken snooze answers that it
 		// stopped rather than that nothing is ringing.
 		a.lastSnooze = snoozeMade{made: time.Now(), stopped: true}

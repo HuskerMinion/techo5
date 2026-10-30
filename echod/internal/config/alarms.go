@@ -18,6 +18,11 @@ type Alarms struct {
 	// SnoozeMinutes is how long Snooze puts an alarm off.
 	SnoozeMinutes int `json:"snooze_minutes,omitempty"`
 
+	// AllOff turns every alarm off at once and leaves each one's own switch as it is, for a trip
+	// (D#350): none of them rings, the ones followed in Home Assistant included, and turning them back
+	// on brings back the ones that were on. Reminders still go off.
+	AllOff bool `json:"all_off,omitempty"`
+
 	// Snoozed is the alarms put off and not yet rung, as absolute times. A snooze used to live only
 	// in memory, so a restart between pressing Snooze and the alarm coming back lost it silently —
 	// and somebody who pressed Snooze has been told the alarm is coming back.
@@ -323,6 +328,11 @@ func (w AlarmsWriter) SunriseMinutes(n int) error {
 
 func (w AlarmsWriter) SunriseFace(on bool) error {
 	return w.st.Update(func(c *Config) { c.Alarms.SunriseFace = on })
+}
+
+// AllOff turns every alarm off at once, or back on (Alarms.AllOff).
+func (w AlarmsWriter) AllOff(off bool) error {
+	return w.st.Update(func(c *Config) { c.Alarms.AllOff = off })
 }
 
 // Sound sets what alarms ring with, by name.

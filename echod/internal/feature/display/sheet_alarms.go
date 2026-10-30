@@ -58,6 +58,14 @@ func alarmsCard(sv sheetView) cardView {
 	}
 	if len(v.rows) == 0 {
 		v.rows = append(v.rows, settingRow{label: tr("ui_no_alarms_yet"), sub: tr("ui_add_one_here_or_from_home_assistant"), kind: ctlValue})
+	} else if off := config.Get().Alarms.AllOff; off || len(sv.alarms.Local)+len(sv.alarms.Followed) > 1 {
+		// Every alarm at once, for a trip (D#350): over the list, so a list of alarms each switched on
+		// does not look like it will ring while they are all off.
+		sub := tr("ui_all_alarms_on_sub")
+		if off {
+			sub = tr("ui_all_alarms_off_sub")
+		}
+		v.rows = append([]settingRow{{id: "allalarms", label: tr("ui_all_alarms"), sub: sub, kind: ctlToggle, on: !off}}, v.rows...)
 	}
 	v.rows = append(v.rows, timerRows(sv)...)
 	rows := []settingRow{

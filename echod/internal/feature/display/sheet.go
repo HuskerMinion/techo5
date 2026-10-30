@@ -1220,6 +1220,8 @@ func (d *Display) rowTap(id string, p part, opt int) {
 		} else {
 			openPINSet() // a new PIN, typed twice on the pad
 		}
+	case "allalarms":
+		alarm.Get().SetAllOn(config.Get().Alarms.AllOff)
 	case "sunface":
 		if err := config.Set().Alarms().SunriseFace(!config.Get().Alarms.SunriseFace); err != nil {
 			slog.Warn("saving the sun's face failed", "err", err)

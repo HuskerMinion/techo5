@@ -936,6 +936,44 @@ data:
   id: "{{ listing.alarms[0].id }}"
 ```
 
+## Turn every alarm off for a while
+
+The **Alarms on** switch (`switch.<node>_alarms_on`) turns all of a device's alarms off at once, for
+a trip, and back on when you're home. Each alarm keeps its own switch, so turning it back on brings
+back the ones that were on. While it's off, no alarm rings, including Home Assistant helpers the
+device follows, and snoozes are dropped. Reminders still go off. The same switch is at the top of
+Alarms & Timers on the screen when there's more than one alarm.
+
+```yaml
+# Leaving for a few days: no alarms on the bedroom device.
+- action: switch.turn_off
+  target:
+    entity_id: switch.bedroom_echo_alarms_on
+```
+
+## Do something before the next alarm
+
+The **Next scheduled alarm** sensor (`sensor.<node>_next_scheduled_alarm`) is when the next alarm is
+set for, as a timestamp. Unlike **Next alarm**, it doesn't follow a snooze, and it leaves out
+reminders. It's empty when no alarm is coming, or when **Alarms on** is off. A time trigger with an
+offset runs an automation before it:
+
+```yaml
+alias: Bedroom lights up before the alarm
+triggers:
+  - trigger: time
+    at:
+      entity_id: sensor.bedroom_echo_next_scheduled_alarm
+      offset: "-00:30:00"
+actions:
+  - action: light.turn_on
+    target:
+      entity_id: light.bedroom
+    data:
+      brightness_pct: 30
+      transition: 1800
+```
+
 ## List alarms and timers
 
 In YAML, refer to this action as `esphome.<node>_alarms_list`.
