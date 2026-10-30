@@ -7,9 +7,18 @@ import (
 	"github.com/HuskerMinion/techo5/echod/internal/hardware/speaker"
 )
 
-// spokenPace is how many characters of a reply a voice says in a second, near enough: what a reply's
-// length is taken to be until its audio has all arrived, and the whole of it for one with no audio here.
+// spokenPace is how many characters of a reply a voice says in a second, near enough: the whole of a
+// reply's length for one with no audio here.
 const spokenPace = 15.0
+
+// arrivingPace is spokenPace for a reply whose audio is still arriving: a slow voice's, so the guess
+// errs late. Some voices read slower than spokenPace (Nabu in Italian), and a page turned before the
+// voice got to its end took words off the screen before they were said (#333).
+const arrivingPace = 11.0
+
+// spokenLag is how far the pages run behind where the voice is reckoned to be, for the same reason: a
+// voice is not even, and a page that turns a moment late loses nothing.
+const spokenLag = time.Second
 
 // replyClock is the reply being said, for Spoken: when its words arrived, and once its audio plays here,
 // when that began, how long the audio that has come so far is, and whether that is all of it.
@@ -50,10 +59,10 @@ func replyAudioSeconds(bytes int) float64 {
 }
 
 // Spoken is how much of text has been said by now, from 0 to 1, for a screen that turns the pages of a
-// reply too long for it (#333). While the reply's audio plays here it goes by that audio: its length is
-// what has arrived, or what the words would take at spokenPace when that is longer, until all of it has.
-// A reply with no audio here, played from an address or not spoken at all, goes at spokenPace from when
-// its words arrived.
+// reply too long for it (#333). While the reply's audio plays here it goes by that audio, spokenLag
+// behind: its length is what has arrived, or what the words would take at arrivingPace when that is
+// longer, until all of it has. A reply with no audio here, played from an address or not spoken at all,
+// goes at spokenPace from when its words arrived.
 func Spoken(text string, now time.Time) float64 {
 	c := spoken.Load()
 	if c == nil || text == "" {
@@ -62,9 +71,9 @@ func Spoken(text string, now time.Time) float64 {
 	paced := float64(len([]rune(text))) / spokenPace
 	start, length := c.text, paced
 	if !c.at.IsZero() {
-		start, length = c.at, c.seconds
+		start, length = c.at.Add(spokenLag), c.seconds
 		if !c.whole {
-			length = max(length, paced)
+			length = max(length, float64(len([]rune(text)))/arrivingPace)
 		}
 	}
 	if length <= 0 {
