@@ -723,7 +723,8 @@ like "kitchen screen" under its **Voice assistants** settings in Home Assistant.
   Japanese and Turkish translate the whole screen, settings included; Spanish translates most of it.
   Dutch, Portuguese and Russian write the clock's day and date, the forecast's days, the weather's
   words and the alarm after the date; the rest stays in English, as with *Match all* or *English*.
-  Untranslated messages fall back to English. It also picks which words the screen listens for. It
+  Untranslated messages fall back to English ([how far each language is](translating.md)). It also
+  picks which words the screen listens for. It
   doesn't change what the assistant understands or says, which is set by Home Assistant's pipeline.
 - **Turn screen**: how a voice request looks. This one is on the Spot too. An answer too long for the
   screen is shown a page at a time, turning as the voice reads it. **Classic** is the words,

@@ -1,0 +1,11 @@
+{
+ "_note": "Hand-kept columns for docs/translating.md: who translated each screen language, and where it was tried on a device. The coverage numbers are counted by status.py, not kept here.",
+ "languages": {
+  "de": {"name": "German", "by": "christianschmidt (#322)", "device": "Echo Show 5 1st gen, v1.6.12 (#322)"},
+  "es": {"name": "Spanish", "by": "KOPYk4T (#327)", "device": "Echo Show 5 2nd gen, v1.6.12 (#327)"},
+  "fr": {"name": "French", "by": "royto (#346)", "device": "Not yet"},
+  "it": {"name": "Italian", "by": "angelor87 (#310, #353)", "device": "Echo Show 5 1st gen (#353)"},
+  "ja": {"name": "Japanese", "by": "lem0njuice0 (#270)", "device": "Echo Show 5 2nd gen (#270)"},
+  "tr": {"name": "Turkish", "by": "senolsun (#349)", "device": "Not yet"}
+ }
+}

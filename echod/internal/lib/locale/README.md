@@ -55,4 +55,8 @@ echod.
    left scripts and scripts that join their letters (Arabic, Hebrew, the Indic scripts) need text
    shaping the screen doesn't have yet.
 
+8. **Status.** Add the language to `tools/locale/status.json` (its name, who translated it, where it
+   was tried) and run `python3 tools/locale/status.py`, which updates the table in
+   `docs/translating.md`. CI checks that table against the catalogs.
+
 Run `go test ./internal/lib/locale ./internal/lib/triggers` with each build tag before the PR.

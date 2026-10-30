@@ -35,6 +35,9 @@ jobs:
           done
           test -z "$(gofmt -l .)" || { gofmt -l .; echo "not gofmt'd"; exit 1; }
 
+      - name: Translation status (docs/translating.md is what the catalogs say)
+        run: python3 tools/locale/status.py --check
+
       - name: Installer tests
         run: |
           python3 tools/test_install_show.py
