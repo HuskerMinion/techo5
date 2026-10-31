@@ -79,6 +79,14 @@ How it compares with EchoLocal, EchoMuse, echo-dot-assist, Kiosk Satellite and V
 
 The bigger changes of September and October 2026. Every release lists the rest.
 
+- 🔠 **Text size and a dashboard layout** (v1.6.17). A **Text size** setting draws every word on the
+  screen from 70% to 125% ([#363](https://github.com/HuskerMinion/techo5/pull/363)), and **Brightness**
+  steps down to 5% for a dark room ([#362](https://github.com/HuskerMinion/techo5/pull/362)). Drawn
+  dashboards wrap long tile names ([#357](https://github.com/HuskerMinion/techo5/pull/357)), show a
+  dimmer's level as a bar ([#358](https://github.com/HuskerMinion/techo5/pull/358)), offer a *Name below*
+  tile layout, and drop the room from a name under its room's heading. AirPlay 2 over IPv6 now really
+  plays ([#343](https://github.com/HuskerMinion/techo5/issues/343)), and a third Show 8 2nd gen screen is
+  tested ([#361](https://github.com/HuskerMinion/techo5/issues/361)).
 - 🎙️ **Record takes of a word** (v1.6.16). The setup page can record takes of a wake word on the device's
   own microphones, after a press at the device, and hand them over as a zip for training
   ([#315](https://github.com/HuskerMinion/techo5/pull/315)). AirPlay 2 plays from a Mac or iPhone that
