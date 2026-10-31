@@ -20,7 +20,8 @@ Placeholders: `<serial>` is the unit's adb serial, `<version>` a release version
 
 On TECHO5's kernel:
 
-- the screen (a real display driver, not the boot loader's framebuffer) and touch;
+- the screen (a real display driver, not the boot loader's framebuffer), drawn on the GPU, and touch;
+- the front camera, as a Home Assistant camera and on the screen;
 - the four microphones and the speaker, with Amazon's own tuning for the amp;
 - Bluetooth audio with phones;
 - the light sensor;
@@ -28,7 +29,8 @@ On TECHO5's kernel:
 
 Known limits:
 
-- **Two screens are tested: the ILI9881C panel with BOE glass, and the JD9365 with KD/HSD glass.**
+- **Three screens are tested: the ILI9881C panel with BOE glass, the JD9365 with KD/HSD glass and the
+  JD9365 with BOE glass (new).**
   Amazon built this model with several panels. TECHO5's kernel has the others' settings too, but they
   haven't been tried on a unit yet. The installer checks which one your unit has (see [Which screen](#which-screen)).
 - The light sensor works but its lux values aren't calibrated yet.
@@ -37,7 +39,7 @@ Known limits:
 ## Before you start
 
 - **Unlock the unit with saiyaku-athena** (by R0rt1z2 with bengris32 and FieryFlames; see
-  [Credits](#credits)), from the XDA thread [[UNLOCK][ROOT][TWRP][UNBRICK] Amazon Echo Show 8 2nd Gen - 2021 (athena)](https://xdaforums.com/t/unlock-root-twrp-unbrick-amazon-echo-show-8-2nd-gen-2021-athena.4804958/). It needs Fire OS 7080 (PS7574.1.7080N): update the Show to the latest Fire OS first. The
+  [Credits](#credits)), from the XDA thread [[UNLOCK][ROOT][TWRP][UNBRICK] Amazon Echo Show 8 2nd Gen - 2021 (athena)](https://xdaforums.com/t/unlock-root-twrp-unbrick-amazon-echo-show-8-2nd-gen-2021-athena.4804958/). It needs Fire OS 7080 (PS7574.1.7080N), the version tested. A newer one (7082) is out and hasn't been tried; if your unit is on a version the installer doesn't know, see [A Fire OS version the installer doesn't know](#a-fire-os-version-the-installer-doesnt-know). The
   unlock can take several tries; that's normal. When it's done, the unit has TWRP in `recovery`.
 - **Never write `tee1`, `lk` or the preloader.** That is where the unlock lives, and writing any of
   them bricks the unit. The installer only ever writes `system` and `boot`, and checks each by name
@@ -180,7 +182,7 @@ example, a backup made after an earlier install), the installer stops: pass Fire
 
 ### A Fire OS version the installer doesn't know
 
-The known tunings are those of Fire OS 7080, the version the unlock needs. If the installer says
+The known tunings are those of Fire OS 7080, the version tested. A newer version (7082) hasn't been tried. If the installer says
 the tuning isn't known:
 
 ```

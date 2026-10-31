@@ -76,7 +76,7 @@ GOOS=linux GOARCH=arm GOARM=7 CGO_ENABLED=0 go build -o ../bin/echod-arm ./cmd/e
 cd ..
 ```
 
-(`go test` runs everywhere; a few hardware packages only build for Linux.) To try a daemon on a Show
+(Run `go test` on Linux, or in WSL on Windows: the daemon is Linux-only, and a few hardware packages only build there. The Dot and the Spot have their own builds, so also run it with `-tags dot` and `-tags spot`.) To try a daemon on a Show
 already running TECHO5: turn on its SSH switch in Home Assistant with a key sent through the
 `ssh_keys` action, copy the binary over, and bind it in place until the next reboot. The devices
 have no SFTP server, which `scp` uses by default since OpenSSH 9, so `-O` asks for the old way:
@@ -307,7 +307,7 @@ publishing its own releases needs its own key, a daemon built with its public ke
 `TECHO5_SIGN_KEY` never leaves the maintainer's machine — it is not a GitHub Actions secret, and the
 build itself does not need to happen locally to keep that true. Pushing a release tag runs
 [.github/workflows/build.yml](../.github/workflows/build.yml), which tests every device's build and
-builds `echod-arm`, `echod-arm-dot` and `echod-arm-spot` on GitHub's own runners, attesting (via
+builds `echod-arm`, `echod-arm-dot`, `echod-arm-donut` and `echod-arm-spot`, and the TECHO5 Deck agents, on GitHub's own runners, attesting (via
 Sigstore, keyless) that they came from that exact commit and tag — so anyone, not just the maintainer,
 can check a release actually matches this repo's source instead of trusting that it does.
 
@@ -328,6 +328,11 @@ NOTICE), with their licenses in `/usr/share/licenses`. Their licenses want the s
 binaries, so every release attaches it: `third-party-sources.sh` downloads each source the build scripts
 name, checks its SHA-256, and packs it with the patches, licenses and build scripts. The three release
 scripts refuse to publish without `-ThirdPartySources`; the Dot and the Spot take the same archive.
+
+The Show release also carries the Show 8 2nd gen (athena) and Skylight files: `-AthenaRootfs`,
+`-AthenaImage`, `-AthenaBoot` and `-AthenaKernelSource` for the first, `-SkylightRootfs`,
+`-SkylightStore`, `-SkylightBoot`, `-SkylightInstaller` and `-SkylightKernelSource` for the second
+(`-NoSkylight` to leave them out). The param block in `tools/release.ps1` says what each one is.
 
 All three Shows share the tag `vX.Y.Z` and the one `echod-arm`: which board a unit is settles itself at
 run time from the panel name in its kernel command line. What is per-board is the boot image, and each

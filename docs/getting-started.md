@@ -20,12 +20,13 @@ The model number is on the bottom of the device, or in the Alexa app under the d
 | <img src="images/badges/rook.png" alt="" width="36" align="absmiddle"> **Echo Spot, 1st gen** (2017) | `rook` | VN94DQ | [TECHO5 Spot](https://github.com/HuskerMinion/techo5-spot) | Moderate: the unlock and LineageOS by hand, then a one-command installer |
 | <img src="images/badges/checkers.png" alt="" width="36" align="absmiddle"> **Echo Show 5, 1st gen** (2019) | `checkers` | H23K37 | [TECHO5](https://github.com/HuskerMinion/techo5) | Moderate: the unlock and LineageOS by hand, then the same one-command installer |
 | <img src="images/badges/crown.png" alt="" width="36" align="absmiddle"> **Echo Show 8, 1st gen** (2019) | `crown` | C7H6N3 | [TECHO5](https://github.com/HuskerMinion/techo5) | Moderate: the unlock and LineageOS by hand, then the same one-command installer |
+| <img src="images/badges/athena.png" alt="" width="36" align="absmiddle"> **Echo Show 8, 2nd gen** (2021) | `athena` | A8H3N2 | [TECHO5](https://github.com/HuskerMinion/techo5) | Harder: the saiyaku-athena unlock, then `install-athena.py` from TWRP, see [install-athena.md](install-athena.md) |
+| **Skylight Calendar 15** | `150-CAL` | | [TECHO5](https://github.com/HuskerMinion/techo5) | Different: no unlock, adb is open on its stock firmware; `install-skylight.py`, see [install-skylight.md](install-skylight.md) |
 
-All three Shows install with the same command and run the same build, which tells them apart when it
+All three LineageOS-based Shows (the Show 5 1st and 2nd gen and the Show 8 1st gen) install with the same command and run the same build, which tells them apart when it
 starts; the installer picks each one's boot image out of the release. The Show 5 1st gen has been
-tested end to end, though on one unit so far. The Show 8 is newer still: it has been through an
-install, a slot update and a reboot on one unit, with the screen, microphones, wake word, speaker,
-camera, lens cover and mute latch all working, and nothing else has run on it for long. Two things a
+tested end to end, though on one unit so far. The Show 8 1st gen has the screen, microphones, wake word, speaker,
+camera, lens cover and mute latch all working, and two of them are in daily use. Two things a
 Show 8 owner should know before starting. The 1st gen's label says C7H6N3; the 2nd gen (2021) looks
 almost the same, says A8H3N2, and has its own install: it can be unlocked (thanks to R0rt1z2 on
 XDA) and runs TECHO5 on its own kernel, see [install-athena.md](install-athena.md). When buying second-hand go by that label, not the
@@ -347,7 +348,7 @@ is built on, runs on the unlocked Dot's Fire OS 6 with its own installer, and is
 
    That is a deliberate choice for a device on a home network, not an oversight, and it is the one
    thing on from the start that trusts the network rather than a key. AirPlay and Spotify Connect, on
-   the Show and the Dot, trust it the same way, but only once you turn them on. If your Wi-Fi has
+   every device but the Panel app, trust it the same way, but only once you turn them on. If your Wi-Fi has
    guests on it, or anything you would not hand a speaker to, turn the player off per device with the
    Sendspin switch in Home Assistant, and leave those two off.
 
@@ -419,6 +420,8 @@ pipeline rather than the device: Home Assistant is replying in text only.
 | Fire OS 6574.1, root, adb key (Dot) | Yes | Yes | Yes |
 | Install TECHO5 Dot (`install-dot.py`) | **Yes** | **Yes** | **Yes** |
 | Install TECHO5 Spot (`install-spot.py`) | **Yes** | **Yes** | **Yes** |
+| Install TECHO5 on the Show 8 2nd gen (`install-athena.py`) | **Yes** | **Yes** | **Yes** |
+| Install TECHO5 on the Skylight (`install-skylight.py`) | **Yes** | **Yes** | **Yes** |
 | Updates after that | Home Assistant | Home Assistant | Home Assistant |
 
 **On Linux:**

@@ -107,7 +107,7 @@ Each device has its own settings, so the kitchen and a bedroom can show differen
 
 | Home Assistant card | On the device |
 |---|---|
-| Tile, button, entity, light, thermostat, and the Mushroom entity cards | A tile: icon, name, state, tap; a slider for lights, covers, thermostats and media players. A name too long for its tile is drawn smaller, then on two lines, and only what still does not fit is cut short with …. Under a heading, a name Home Assistant gives the entity is shown without the heading in front of it: under *Master Bedroom*, "Master Bedroom ceiling light" is "Ceiling light". A name the card gives is shown as it is |
+| Tile, button, entity, light, thermostat, and the Mushroom entity cards | A tile: icon, name, state, tap; a slider for lights, covers, thermostats and media players. A name too long for its tile is drawn smaller, then on two lines, and only what still does not fit is cut short with …. Under a heading (or a Glance or Entities card with a title, for its own tiles or rows), a name Home Assistant gives the entity is shown without the heading in front of it: under *Master Bedroom*, "Master Bedroom ceiling light" is "Ceiling light". A name the card gives is shown as it is |
 | Entities | A card of rows, with a switch for anything on or off |
 | Glance, Mushroom chips | Tiles |
 | Heading, Mushroom title | A heading |

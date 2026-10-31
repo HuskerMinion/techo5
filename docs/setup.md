@@ -401,7 +401,7 @@ captured login to the same page for a few minutes, and could see the pictures an
   play in step with. The receiver keeps in step on its own, from how much of what it sent is still
   to be heard on the device, so it lands in the same place each time it starts or joins a group.
   If something doesn't work, open an issue.
-- **AirPlay sets the volume (new).** Wherever AirPlay is (the Show, the Spot and the Dot), the
+- **AirPlay sets the volume.** Wherever AirPlay is (the Show, the Spot and the Dot), the
   **AirPlay sets the volume** switch (Settings > Sound, the setup page's Play to this device, or Home
   Assistant) is off by default, so nothing changes for a device that has AirPlay already (#312). Off,
   the volume slider on an iPhone, iPad or Mac only scales the stream, and the device's own volume,
@@ -472,7 +472,7 @@ captured login to the same page for a few minutes, and could see the pictures an
   quiet hours and during a call. **Forget**, under the earbuds or speaker in **Settings >
   Connections** (it asks twice), or the **Bluetooth forget** button in Home Assistant on any device,
   forgets them, so new ones can be paired.
-- **Bluetooth sets the volume (new).** On the Show, the Spot and the Dot, the **Bluetooth sets the
+- **Bluetooth sets the volume.** On the Show, the Spot and the Dot, the **Bluetooth sets the
   volume** switch (the setup page's Connections tab, or Home Assistant) is on by default, as it
   always was: a phone's or a computer's volume slider is the device's volume. **The device jumps to
   full volume when a computer plays to it: turn it off.** A Linux computer (PipeWire or PulseAudio)
@@ -484,7 +484,7 @@ captured login to the same page for a few minutes, and could see the pictures an
   a phone that is playing too. Turned off while a phone plays, the phone's slider stays where it was
   and now turns its own sound down from there; turned on, the phone's slider jumps to the device's
   volume. Shared with the other devices like the rest of the speaker settings, when sharing is on.
-- **Bluetooth Secure Connections (new).** On the Show, the Spot and the Dot, the **Bluetooth Secure
+- **Bluetooth Secure Connections.** On the Show, the Spot and the Dot, the **Bluetooth Secure
   Connections** switch (Settings > Connections, the setup page's Connections tab, or Home Assistant)
   is on by default, as it always was. **A phone pairs, then drops after a second or two: turn off
   Bluetooth Secure Connections.** Some newer phones do that with it on (a POCO F8 Pro on Android 16,
@@ -633,6 +633,9 @@ like "kitchen screen" under its **Voice assistants** settings in Home Assistant.
   across the clock for the next style or the one before; its name shows for a moment, and a swipe
   the other way puts the last style back. The night clock keeps its own look. Also in Home Assistant
   and on the setup page's Screen & Photos tab.
+- **Brightness** (Settings > Display): on the screen it moves in steps of 5 from 5 to 30, then in
+  steps of 10 up to 100. With auto-brightness on, it is the most the screen goes to. In Home
+  Assistant it is the brightness of the **Screen** light.
 - **Auto-brightness** (Settings > Display, or **Screen auto-brightness** in Home Assistant): on a
   device with a light sensor, the screen follows the room's light, up to the brightness you set. On
   the Show, **Dimmest** (**Auto-brightness dimmest** in Home Assistant) sets how dark it goes in a
@@ -696,7 +699,10 @@ like "kitchen screen" under its **Voice assistants** settings in Home Assistant.
 - **World clock places** (setup page, Screen & Photos tab): the World style's places, as time zone
   names with commas between them, like `America/Chicago, Europe/Paris, Asia/Tokyo`. Up to three; the
   Spot shows the first two. Leave it empty for New York, London and Tokyo.
-- **Answer time** and **Now playing** (the full page, or a strip over the clock). Once the music is
+- **Answer time** (Settings > Display > Pop-ups, or **Answer time on screen** in Home Assistant): how
+  long a voice turn's words stay on the screen once it is over: 5 seconds (the default), 10 or
+  20 seconds, or until tapped. A tap clears them at any length.
+- **Now playing** (the full page, or a strip over the clock). Once the music is
   paused or stopped for 30 seconds, the full page goes by itself: to the strip when the setting uses
   one, otherwise back to the clock, or to the dashboard when **Dashboard when idle** is on (the Spot
   has no strip, so its clock face). The track is still held

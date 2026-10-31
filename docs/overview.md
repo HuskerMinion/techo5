@@ -5,8 +5,11 @@ is the state.
 
 ## What a TECHO5 is
 
-An Amazon Echo Show 5 (MediaTek MT8163, "cronos") running our own Linux image instead of
-Android, with one Go daemon, `echod`, doing everything the device does:
+An Amazon Echo (the Show 5 and Show 8, both generations, the Spot, the Dot and the Echo 2nd gen), a
+Skylight Calendar 15 or an Android tablet (the Panel app) running our own Linux image instead of
+the vendor's system. One Go daemon, `echod`, does everything the device does; only the boot image and
+kernel differ per device. This page describes the Show 5 (MediaTek MT8163, "cronos"), the one the
+project started on:
 
 - **Voice satellite for Home Assistant** over the ESPHome API: local wake word (microWakeWord on
   the CPU), streaming to Home Assistant's pipeline, spoken replies, echo cancellation so the
@@ -31,7 +34,7 @@ Android, with one Go daemon, `echod`, doing everything the device does:
   A ringing timer or alarm takes the whole screen, lights a dark one, and offers Stop and Snooze
   (9 minutes unless changed); the alarm sound (Home Assistant, Beeps, Chimes, Bells, Gentle, Pulse or a recording of your own), whether it
   starts quiet and gets louder, and the snooze length are set on the Alarms card or in Home Assistant; the stop word, the action button and Home Assistant's Stop/Snooze buttons work too.
-  Home Assistant can see one ringing: `binary_sensor.sounding` is on while any ring is active (including one a button silenced and not yet answered), `alarm_sounding` and `timer_sounding` say which kind, and the `sounding_what` text sensor names them (`alarm "Wake up", timer "Pasta"`). All three devices have them.
+  Home Assistant can see one ringing: `binary_sensor.sounding` is on while any ring is active (including one a button silenced and not yet answered), `alarm_sounding` and `timer_sounding` say which kind, and the `sounding_what` text sensor names them (`alarm "Wake up", timer "Pasta"`). They are on every device.
 - **Weather**: a new device shows Home Assistant's own forecast (`weather.forecast_home`), or, when
   Home Assistant has none, the first weather entity it lists; any other
   weather entity is chosen on the settings screen (General, Weather), with the "Weather source"
@@ -90,6 +93,7 @@ Android, with one Go daemon, `echod`, doing everything the device does:
 |---|---|---|
 | Bootloader | Amazon's LK, patched for our logo and unlocked with the amonet/kaeru chain | `tools/linux/patch-lk-logo.py`, `docs/hardware.md` |
 | Kernel | LineageOS cronos 4.9 rebuilt with Bluetooth and MODVERSIONS, vendor Wi-Fi/BT modules | `tools/linux/build-kernel.sh`, `patch-dtb.py`, `build-image.sh` |
+| Mainline kernel | The Show 8 2nd gen (athena) and the Skylight run TECHO5's own 64-bit mainline kernel instead of a vendor one | `tools/linux/athena/kernel`, `tools/linux/skylight/kernel` |
 | Root filesystem | Alpine armv7 plus our overlay, built in WSL, two slots on the userdata partition | `tools/linux/mkrootfs.sh`, `wsl-build.sh`, `deploy-rootfs.sh`, `rootfs/` overlay, `slotctl` |
 | Daemon | Go, one binary, features as components registered at init | `echod/` |
 | Audio | ALSA directly on the vendor PCM devices; MAX98396 amplifier controls; echo canceller in `hardware/mic` | `echod/internal/hardware/{speaker,mic}` |
@@ -118,18 +122,17 @@ Android, with one Go daemon, `echod`, doing everything the device does:
   kernel.
 - **Slots**: `slotctl status`, `slotctl install <tar.gz>`, `slotctl switch <a|b>`; a trial slot
   commits after five minutes of a healthy daemon.
-- **Release**: `tools/release.ps1 -Version vX.Y.Z -Notes "..." -Rootfs <tarball> [-Boot <image>] -Agents <dir>` builds the
-  daemon, writes the manifest, and publishes the release Home Assistant will offer. `-Boot` attaches a
-  boot image built with `build-image.sh --no-key` for new units, and refuses one that carries a key.
-  `-Agents` is the CI run's TECHO5 Deck agent files (`-NoAgents` to release without them).
+- **Release**: `tools/release.ps1` builds the daemon, writes the manifest and publishes the release
+  Home Assistant will offer. The switches it needs, and the order of the steps, are in the Releases
+  section of [building.md](building.md#releases-maintainer).
 
 ## Known gaps
 
 - The Bluetooth proxy on the Show and the Spot has no beacon: BlueZ owns the controller. Its active
   connections have no pairing or cache clearing, and the Dot's proxy only scans. It stays off by
   default until it has run a while.
-- The camera and screen pages have no login: they are for a trusted network, and off until
-  switched on. The rescue environment (boot image) still trusts the key built into that image.
+- The screen page has no login, and the camera pages take the stream's Digest login (or a browser
+  the setup page has let in). Both are for a trusted network, and off until switched on. The rescue environment (boot image) still trusts the key built into that image.
 - Song metadata rests on two undocumented service endpoints; when one changes shape the page
   falls back to the station logo.
 - Exposure knows the middle of the frame, not faces: somebody off to one side of a window is still

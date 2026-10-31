@@ -14,7 +14,7 @@ Items marked *unverified* have not been confirmed on a unit by this project.
 | Storage | 7.6 GB eMMC (`8GTF4R`), partitions below |
 | Display | 5.5-inch 960×480 IPS, DSI video mode, panel `st7701s` (cmdline `lcm=1-st7701s_wsvga_dsi_vdo_cronos_st_truly`), 59.64 Hz, backlight `/sys/class/leds/lcd-backlight` (0–255) |
 | Touch | Goodix GT9xx (`gt9xx`, I²C 2-0x5d), input `goodix-ts`, raw axes 480×960 (panel is mounted rotated), 16 slots |
-| Audio in | 4-mic array into a TI **TLV320AIC3101** ADC (I²C 0-0x18) |
+| Audio in | Two-microphone array (see "Two microphones" below) into a TI **TLV320AIC3101** ADC (I²C 0-0x18) |
 | Audio out | one speaker on a Maxim **MAX98396** class-D amp (I²C 2-0x3d, reset on `gpio-392`). Some units carry a TI **TAS5805M** at I²C 2-0x2c instead (the kernel has both drivers, and only the one fitted probes); its mixer controls differ, see [#59](https://github.com/HuskerMinion/techo5/issues/59). Which one: `cat /sys/bus/i2c/devices/2-*/name` |
 | Wi-Fi / BT | MediaTek **MT7668** SDIO combo (`mt76x8_wlan.ko`, `mt76x8_bt.ko`, firmware in `/vendor/firmware`) |
 | Sensors | ambient light only: a Solteam **JSA1214** (`alsps`, I²C 0-0x44, kernel `CONFIG_MTK_JSA1214`), exposed as input `m_alsps_input` and Android "Light Sensor". The driver is Amazon's copy of Sensortek's stk3x1x and keeps its proximity attributes, but the chip has no proximity half: nothing ever reports one |
@@ -355,8 +355,7 @@ GPIO block: `gpiochip0`, GPIOs 357–511 on `1000b000.pinctrl`.
 ## LEDs and light sensor
 
 - `/sys/class/leds` only exposes `lcd-backlight`. The red mute indicator is not
-  a Linux LED; it is most likely driven by the privacy circuit alongside
-  `privacy-enable-gpio`. *(unverified — test by toggling gpio-384.)*
+  a Linux LED; it follows the privacy latch (see the mute button section above).
 - Light sensor: `alsps` at I²C 0-0x44, read through the input device or the
   Android sensor HAL (`android.hardware.sensors@1.0-service`, sensor
   "Light Sensor" by `amazon-oss`). Calibration in `/proc/idme/alscal`.
@@ -515,15 +514,20 @@ and `productid2` read `0` on the unit seen.
 
 ## Open questions
 
-- Whether toggling `privacy-enable-gpio` (gpio-384) from userspace mutes the
-  array and lights the red indicator, and whether the latch can be cleared
-  after a button press.
 - Whether the AIC3101 needs any mixer setup beyond what the vendor HAL leaves
   behind at boot when the HAL is not running.
-- Why capture channels 0 and 1 are identical: mono ADC, AFE duplication, or a
-  second mic that needs routing. The `ADC_A` mute had no effect on it.
-- Whether the arm64 LineageOS kernel boots a non-Android initramfs as cleanly
-  as the 32-bit TWRP kernel does (first M4 boot will tell).
 - Whether the DL1 SRAM-ring panic and the amplifier safe-mode cap also apply
   on the 4.9.77 kernel (`audioprobe` with the default hold worked there;
   nothing else measured).
+
+## Other boards
+
+This page is about the Show 5 (cronos). The other devices have their own notes:
+
+- Echo Show 8 2nd gen (athena): [install-athena.md](install-athena.md) and
+  [tools/linux/athena/kernel/README.md](../tools/linux/athena/kernel/README.md).
+- Skylight Calendar 15: [install-skylight.md](install-skylight.md),
+  [tools/linux/skylight/README.md](../tools/linux/skylight/README.md) and
+  [tools/linux/skylight/kernel/README.md](../tools/linux/skylight/kernel/README.md).
+- Echo Show 5 1st gen, Echo Spot and Echo Dot: [getting-started.md](getting-started.md) links each
+  one's repository.

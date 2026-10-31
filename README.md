@@ -40,7 +40,7 @@ turning the Show into a fast, private Home Assistant voice satellite with a touc
 It started on the Show 5, which is where the name comes from.
 
 **Every Echo that can be unlocked now runs it.** The bootloader exploit these devices are opened with,
-[amonet](https://github.com/R0rt1z2/amonet), reaches five Amazon Echos, and saiyaku-athena unlocks a sixth. All six run the same daemon:
+[amonet](https://github.com/R0rt1z2/amonet), opens most of these Echos, and saiyaku-athena unlocks the Show 8 2nd gen. All of them run the same daemon:
 
 | Device | Model | Repository | Status |
 |---|---|---|---|
@@ -168,7 +168,7 @@ The bigger changes of September and October 2026. Every release lists the rest.
   been turned off. The Show 8 (both generations) draws some controls larger to fit its screen. The
   Show 8 2nd gen's kernel now picks its screen from the name the bootloader passes, so a unit
   installed with `--force-panel` gets its own screen's driver with the kernel update (ten screens
-  known; only the BOE ILI9881C one tried on a unit).
+  known; only the BOE ILI9881C one tried on a unit; three tried since v1.6.17).
 - 📷 **The Echo Show 8 2nd gen's camera works** (v1.2.24). Live on its own screen, a Home Assistant
   camera, and everything else the other Shows do with theirs (presence, person detection, gestures,
   your recorder). It's off while the device is muted or the shutter is closed. It comes with a new
@@ -416,7 +416,7 @@ slot system, phone calls, and a minimal Alpine root filesystem in place of Andro
 | 🧠 **Voice without Home Assistant, if you want** | Instead of Assist, the device can use your own speech servers (Wyoming: faster-whisper and Piper) and a chat model (llama.cpp, Ollama or anything OpenAI-style). It sets timers and alarms, plays the radio and Music Assistant, changes the volume and calls other devices, and can look things up with SearXNG. Or answer a wake word with a realtime voice at OpenAI, xAI or Gemini, with your own key. [docs/setup.md](docs/setup.md#voice-without-home-assistant) |
 | 🔐 **Secure by default** | SSH is keys-only and off until you turn it on; keys arrive only through Home Assistant. The camera and screen web pages start closed, and a firewall lets in nothing on Wi-Fi but what the device serves. No password logins, not even in rescue. |
 | 🔄 **Updates that can't brick it** | Signed releases install over the air from Home Assistant's update card into the spare of two root filesystem slots, boot on trial, and fall back on their own if the new one doesn't settle. Follow the stable or the dev channel, and let it install on its own between 2 and 5 AM if you like. |
-| 📺 **A screen that's actually useful** | Clock and weather, the conversation as it happens, a glance strip of chips from Home Assistant along the foot of the clock, a calendar, now playing with song, cover art and lyrics, your Home Assistant dashboards, forecasts, a live rain radar, the National Weather Service's alerts (in the U.S.), live cameras from Home Assistant or go2rtc, up to six at once, notifications, timers and alarms, Wi-Fi setup, 13 themes, ten fonts, eight languages, and 15 clock styles you swipe between. Auto-brightness follows the room's light. |
+| 📺 **A screen that's actually useful** | Clock and weather, the conversation as it happens, a glance strip of chips from Home Assistant along the foot of the clock, a calendar, now playing with song, cover art and lyrics, your Home Assistant dashboards, forecasts, a live rain radar, the National Weather Service's alerts (in the U.S.), live cameras from Home Assistant or go2rtc, up to six at once, notifications, timers and alarms, Wi-Fi setup, 13 themes, ten fonts, ten languages (five with the whole screen translated, Spanish part of it, and Dutch, Portuguese and Russian the clock and weather), and 15 clock styles you swipe between. Auto-brightness follows the room's light. |
 | 📅 **A calendar on the screen** | Home Assistant's calendars, or any calendar's own iCal link: a day and a week on their hours, the month, Coming up with the weather, event icons and countdowns, pop-ups for the calendars you choose, and the next event under the clock. [docs/setup.md](docs/setup.md#calendar) |
 | 🖼️ **Your photos, three ways** | From anything Home Assistant's media library can browse (its media folder, network shares, Immich), from Immich directly (an album, favorites, dates, a person), or kept on the device from the setup page. Behind the clock or as a screensaver, whole photos with blurred sides, two tall ones side by side, with date and place. [docs/setup.md](docs/setup.md#2-photos) |
 | 🏠 **The whole house, even with Home Assistant down** | Announce to every device, in typed words or your own voice. Call one device from another, with an optional Drop In. Only the nearest device answers a wake word, on by default once the devices share a house word. Settings stay in step between the devices you pick. All of it goes device to device, signed with a house word you set. [docs/phone.md](docs/phone.md#calling-another-device-in-the-house), [docs/actions.md](docs/actions.md#announce-to-the-house) |
@@ -488,6 +488,7 @@ Echo Show 8 and the Echo Spot, are in [docs/screenshots](docs/screenshots/README
 | Echo Show 8, 1st and 2nd gen | 4 |
 | Echo Spot | 4 |
 | Echo Dot, 2nd gen | 7 |
+| Echo Dot, 3rd gen | 4 |
 | Echo, 2nd gen | 7 |
 
 The Dot's seven are a ring of six plus one in the middle, the best array of the bunch.
@@ -554,8 +555,8 @@ the USB serial console, and prints where the Home Assistant key is kept. Later u
 Assistant. Every step by hand, and the fixes for what can go wrong: **[docs/install.md](docs/install.md)**.
 
 > **Status:** in daily use on at least five 2nd gen Echo Show 5s, a 1st gen Show 5, two 1st gen
-> Show 8s and two 2nd gen Show 8s, plus the Spot and the Dot, and working on an Echo 2nd gen and a
-> Skylight Calendar 15. It's a hobby project, not a product: keep your backups, and expect rough edges.
+> Show 8s and two 2nd gen Show 8s, plus the Spot and the Dot, and working on an Echo 2nd gen, an
+> Echo Dot 3rd gen and a Skylight Calendar 15. It's a hobby project, not a product: keep your backups, and expect rough edges.
 
 **Echo Show 5 1st gen (2019, `checkers`)** installs with the same command: the installer sees which
 generation it is talking to and takes that unit's boot image from the release. Everything works on it:
@@ -573,8 +574,8 @@ v1.0.1 needs the new boot image so a quick tap to unmute no longer leaves the ca
 
 **Echo Show 8 2nd gen (2021, `athena`)** installs differently. There's no LineageOS for it: after
 the saiyaku-athena unlock, `tools/install-athena.py` puts TECHO5's own 64-bit mainline kernel and the
-system on it from TWRP, backing up every partition first. Only one of the screen panels Amazon used is
-supported on that kernel so far, and the installer checks yours. Every step:
+system on it from TWRP, backing up every partition first. Three of the screen panels Amazon used are
+tested on that kernel; the installer checks yours, and others install with `--force-panel`. Every step:
 **[docs/install-athena.md](docs/install-athena.md)**. The story and the hardware:
 [TECHO5 ATHENA](https://github.com/HuskerMinion/techo5-athena).
 
