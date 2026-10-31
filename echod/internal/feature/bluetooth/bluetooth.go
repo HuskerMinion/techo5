@@ -80,6 +80,14 @@ type Proxy struct {
 
 	mu     sync.Mutex
 	active bool
+	// held counts Holds: while any is out the radio is off, scanning and iBeacon both.
+	held int
+	// lent is the held radio out on Offer: tune leaves it alone until it comes back.
+	lent bool
+
+	// steer is held for the whole of a tune and of lending the radio out or taking it back, so a tune
+	// that began before the radio was lent cannot stop it once it is.
+	steer sync.Mutex
 }
 
 var (
@@ -271,6 +279,105 @@ func (b *Proxy) Features() esphome.BluetoothFeature {
 	return bluetoothFeatures
 }
 
+// Hold turns the radio off, scanning and the iBeacon both, until release is called: for something
+// that needs the controller to itself, such as Improv advertising through bluetoothd
+// (feature/improv), which the iBeacon this radio sends on its own would otherwise talk over. It waits
+// up to holdWait for the radio to be off, and the proxy starts again as it was once the last hold is
+// released. Holds nest, and release may be called more than once.
+func (b *Proxy) Hold() (release func()) {
+	b.mu.Lock()
+	b.held++
+	b.mu.Unlock()
+	b.apply()
+	for deadline := time.Now().Add(holdWait); b.radio.Running() && time.Now().Before(deadline); {
+		time.Sleep(50 * time.Millisecond)
+	}
+	if b.radio.Running() {
+		slog.Warn("ble: still running after being held")
+	} else {
+		slog.Info("ble: held")
+	}
+
+	var once sync.Once
+	return func() {
+		once.Do(func() {
+			b.mu.Lock()
+			b.held--
+			last := b.held == 0
+			b.mu.Unlock()
+			if last {
+				slog.Info("ble: released")
+			}
+			b.apply()
+		})
+	}
+}
+
+// offerer is a radio that can advertise a service of bluetoothd's itself: the Dot's raw HCI Radio.
+type offerer interface {
+	Offer(advertisement, scanResponse []byte) error
+}
+
+// ErrCannotOffer is a radio that cannot advertise for someone else.
+var ErrCannotOffer = errors.New("bluetooth: this radio cannot advertise a service")
+
+// Offer lends the radio, while held, to advertise a GATT service bluetoothd serves but cannot advertise
+// itself (ble.Radio.Offer): connectable, with advertisement and scanResponse as its raw data. Done gives
+// the radio back off, for the hold's release to bring the proxy back. One at a time, and only under a
+// Hold of the caller's own.
+func (b *Proxy) Offer(advertisement, scanResponse []byte) (done func(), err error) {
+	o, ok := b.radio.(offerer)
+	if !ok {
+		return nil, ErrCannotOffer
+	}
+	b.steer.Lock()
+	defer b.steer.Unlock()
+	b.mu.Lock()
+	if b.held == 0 || b.lent {
+		b.mu.Unlock()
+		return nil, errors.New("bluetooth: Offer needs a Hold, and the radio not already lent")
+	}
+	b.lent = true
+	b.mu.Unlock()
+	if b.radio.Running() {
+		b.radio.Stop()
+	}
+	if err := o.Offer(advertisement, scanResponse); err != nil {
+		b.mu.Lock()
+		b.lent = false
+		b.mu.Unlock()
+		return nil, err
+	}
+	slog.Info("ble: advertising a service for bluetoothd")
+	var once sync.Once
+	return func() {
+		once.Do(func() {
+			b.steer.Lock()
+			defer b.steer.Unlock()
+			b.radio.Stop()
+			b.mu.Lock()
+			b.lent = false
+			b.mu.Unlock()
+		})
+	}, nil
+}
+
+// holdWait is how long Hold waits for the radio to stop: a stop is a couple of HCI commands. A
+// variable for tests, which have no settle goroutine to stop it.
+var holdWait = 3 * time.Second
+
+func (b *Proxy) isLent() bool {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return b.lent
+}
+
+func (b *Proxy) holding() bool {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return b.held > 0
+}
+
 // apply asks for the radio to be brought in line, without waiting for it.
 func (b *Proxy) apply() {
 	select {
@@ -289,6 +396,8 @@ func (b *Proxy) settle() {
 // scan activity is a restart: both scanning and advertising are fixed when the controller starts.
 // It reports whether the requested state was reached; failures are retried by settle.
 func (b *Proxy) tune(beacon beaconState) bool {
+	b.steer.Lock()
+	defer b.steer.Unlock()
 	enabled := b.Enabled()
 	// Home Assistant keeps its requested scan mode while the proxy reconnects. Reporting NONE until
 	// it subscribes makes that requested/current mismatch look like a broken scanner, so subscription
@@ -296,6 +405,12 @@ func (b *Proxy) tune(beacon beaconState) bool {
 	scan := enabled
 	if !enabled {
 		beacon = beaconState{minor: -1}
+	}
+	if b.holding() {
+		if b.isLent() {
+			return true
+		}
+		scan, beacon = false, beaconState{minor: -1}
 	}
 	want := scan || len(beacon.advertisement) != 0
 	active := b.proxy.Active()
