@@ -68,6 +68,18 @@ var updateTranslations = map[string]map[string]string{
 		UpdatePowerHint:    "Gardez l’appareil allumé",
 		UpdateRetryHint:    "Réessayez dans Settings > General > Updates",
 	},
+	"gl": {
+		UpdateSystemTitle:  "Actualización do sistema",
+		UpdateFailedTitle:  "Fallou a actualización",
+		UpdateDownloading:  "Descargando a actualización · %d%%",
+		UpdateInstalling:   "Instalando…",
+		UpdateRestartingIn: "A aplicación reiníciase en %d…",
+		UpdateRestarting:   "Reiniciando a aplicación…",
+		UpdateRebootingIn:  "Reiniciando en %d…",
+		UpdateRebooting:    "Reiniciando…",
+		UpdatePowerHint:    "Mantén o dispositivo acendido",
+		UpdateRetryHint:    "Téntao de novo en Axustes > Xeral > Actualizacións",
+	},
 	"it": {
 		UpdateSystemTitle:  "Aggiornamento del sistema",
 		UpdateFailedTitle:  "Aggiornamento non riuscito",

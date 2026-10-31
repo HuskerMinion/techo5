@@ -80,6 +80,15 @@ var Languages = map[string]Set{
 		GoHome: []string{"écran d'accueil", "ecran d'accueil", "page d'accueil", "retour à l'horloge", "retour a l'horloge", "montre l'horloge"},
 		Camera: []string{"montre", "affiche", "caméra", "camera"},
 	},
+	"gl": {
+		// Not "neve" alone: it is inside the English "never", which Match all would take as the weather.
+		Weather: []string{"o tempo", "que tempo", "previsión", "temperatura", "choiva", "chove", "choverá", "a neve", "de neve",
+			"neve hoxe", "neve mañá", "nevará", "nevando",
+			"treboada", "tormenta", "soleado", "anubrado", "radar"},
+		Radar:  []string{"radar", "mapa da choiva", "mapa do tempo"},
+		GoHome: []string{"pantalla de inicio", "pantalla principal", "volve ao reloxo", "amosa o reloxo"},
+		Camera: []string{"amosa", "ensina", "móstrame", "cámara"},
+	},
 	"it": {
 		// Not "neve" alone: it is inside the English "never", which Match all would take as the weather.
 		Weather: []string{"meteo", "che tempo", "previsioni", "temperatura", "pioggia", "piov", "la neve", "di neve",
