@@ -245,7 +245,7 @@ Amazon's sound tuning files, and the volume curve is a first guess.
 The 2018 Echo Dot 3rd gen (model D9N29T, `donut`) is a different machine from the Dot 2, with four
 microphones and another chip, but it takes the same release, installer and updates, with a build of
 the daemon of its own. It keeps its own kernel, and Bluetooth comes as modules built for it.
-Supported, tested on one unit so far. The 2019 refresh and the Dot with a clock have no known unlock.
+Supported, tested on two units so far. The 2019 refresh and the Dot with a clock have no known unlock.
 
 It's unlocked with the kamakiri-donut kit, over wires soldered to test pads under the base. TECHO5
 goes where the kit put TWRP (`swdl`, which the unlock boots as recovery), and its store is on
