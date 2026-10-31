@@ -9,6 +9,8 @@ import (
 	"math"
 	"strings"
 
+	"golang.org/x/image/font"
+
 	"github.com/HuskerMinion/techo5/echod/internal/feature/dashboard"
 	"github.com/HuskerMinion/techo5/echod/internal/lib/mdi"
 	"github.com/HuskerMinion/techo5/echod/internal/lib/picscale"
@@ -412,8 +414,49 @@ func (r *paint) tile(b image.Rectangle, t dashboard.Tile, pal dashPal, adj dashA
 	}
 	x := bx + badge + r.s(scale(12))
 	room := b.Max.X - pad - x
-	r.text(name, r.fit(name, t.Name, room), x, b.Min.Y+b.Dy()/2-r.s(scale(3)), pal.text)
-	r.text(value, r.fit(value, t.Value, room), x, b.Min.Y+b.Dy()/2+r.s(scale(24)), pal.sub)
+	lines, nameFace := r.tileName(name, func() font.Face { return r.textFace(false, scale(21)) }, t.Name, room)
+	mid := b.Min.Y + b.Dy()/2
+	if len(lines) == 1 {
+		r.text(nameFace, lines[0], x, mid-r.s(scale(3)), pal.text)
+		r.text(value, r.fit(value, t.Value, room), x, mid+r.s(scale(24)), pal.sub)
+		return
+	}
+	// Two lines of name and the value fill the tile; with no value the two sit about its middle.
+	first, second := -21, 2
+	if t.Value == "" {
+		first, second = -11, 11
+	}
+	r.text(nameFace, lines[0], x, mid+r.s(scale(first)), pal.text)
+	r.text(nameFace, lines[1], x, mid+r.s(scale(second)), pal.text)
+	if t.Value != "" {
+		r.text(value, r.fit(value, t.Value, room), x, mid+r.s(scale(25)), pal.sub)
+	}
+}
+
+// tileName is a tile's name as it is drawn, in lines and the face to draw them in. A name that fits on
+// one line is drawn at the usual size. One that does not is drawn in the smaller face (small is asked
+// for only then), on one line if that is enough and on two if not, and only what still does not fit on
+// two is cut short, at the end of the second line.
+func (r *paint) tileName(usual font.Face, small func() font.Face, name string, room int) ([]string, font.Face) {
+	if name == "" || r.width(usual, name) <= room {
+		return []string{name}, usual
+	}
+	face := small()
+	if face == nil {
+		face = usual
+	}
+	lines := r.wrapLines(face, name, room)
+	switch {
+	case len(lines) == 0:
+		return []string{r.fit(face, name, room)}, face
+	case len(lines) > 2:
+		// The second line is what is left of the name after the first, with its words a space apart as
+		// wrapLines read them. Not the lines it made, joined again: a word too long for a line is
+		// split by it, and joining the pieces would put a space in the word.
+		rest := strings.TrimLeft(strings.TrimPrefix(strings.Join(strings.Fields(name), " "), lines[0]), " ")
+		lines = []string{lines[0], r.fit(face, rest, room)}
+	}
+	return lines, face
 }
 
 // row draws one line of an entities card: icon, name, and at the end a switch or the state.
