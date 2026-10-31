@@ -59,6 +59,24 @@ func TestNextDimmest(t *testing.T) {
 	}
 }
 
+// The Brightness row steps by 5 at the bottom, so a bedroom panel can go down to a 5% ceiling, and
+// lands on a step from a value Home Assistant set between two.
+func TestNextBrightness(t *testing.T) {
+	for _, c := range []struct{ cur, by, want int }{
+		{25, -1, 20},
+		{10, -1, 5},
+		{5, -1, 5},
+		{100, +1, 100},
+		{60, +1, 70},
+		{33, +1, 40},
+		{33, -1, 30},
+	} {
+		if got := nextStep(brightnessSteps[:], c.cur, c.by); got != c.want {
+			t.Errorf("nextStep(brightness, %d, %+d) = %d, want %d", c.cur, c.by, got, c.want)
+		}
+	}
+}
+
 // The backlight a dark bedroom gets, as on a Show 8 at 25% Brightness reading 1 lux: about 8 of 255 at
 // the default dimmest, where the old curve gave about 14, and the floor of 4 at the lowest setting.
 // Without auto, or without a reading, it is the Brightness setting as it was.

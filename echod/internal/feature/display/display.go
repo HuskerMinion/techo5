@@ -831,22 +831,7 @@ func (d *Display) stepDimmest(by int) {
 }
 
 // nextDimmest is the step by steps from cur, which Home Assistant may have set between two steps.
-func nextDimmest(cur, by int) int {
-	i := 0
-	for i < len(dimmestSteps)-1 && dimmestSteps[i] < cur {
-		i++
-	}
-	if dimmestSteps[i] != cur {
-		// Between two steps, as Home Assistant can set it: i is the higher one, which is a step up;
-		// a step down is the lower one.
-		if by < 0 {
-			i--
-		}
-		by = 0
-	}
-	i = min(max(i+by, 0), len(dimmestSteps)-1)
-	return dimmestSteps[i]
-}
+func nextDimmest(cur, by int) int { return nextStep(dimmestSteps[:], cur, by) }
 
 // setDimmest saves the Dimmest setting, tells Home Assistant and relights at once, so it can be set
 // while looking at the screen in the dark.

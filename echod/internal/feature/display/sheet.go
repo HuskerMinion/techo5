@@ -1078,9 +1078,9 @@ func (d *Display) rowTap(id string, p part, opt int) {
 	case "brightness":
 		switch p {
 		case partMinus:
-			d.stepBrightness(-25)
+			d.stepBrightness(-1)
 		case partPlus:
-			d.stepBrightness(+25)
+			d.stepBrightness(+1)
 		}
 	case "dimmest":
 		switch p {
@@ -1392,10 +1392,32 @@ func (d *Display) checkUpdates() {
 	})
 }
 
-// stepBrightness moves the brightness ceiling by pct, between a quarter and full.
+// brightnessSteps are the Brightness row's steps on the screen: fine at the bottom, like Dimmest's,
+// so a dark room can have a dim ceiling.
+var brightnessSteps = [...]int{5, 10, 15, 20, 25, 30, 40, 50, 60, 70, 80, 90, 100}
+
+// nextStep is the step by steps from cur in steps, cur being possibly between two of them, as
+// Home Assistant can set it.
+func nextStep(steps []int, cur, by int) int {
+	i := 0
+	for i < len(steps)-1 && steps[i] < cur {
+		i++
+	}
+	if steps[i] != cur {
+		// Between two steps, as Home Assistant can set it: i is the higher one, which is a step up;
+		// a step down is the lower one.
+		if by < 0 {
+			i--
+		}
+		by = 0
+	}
+	i = min(max(i+by, 0), len(steps)-1)
+	return steps[i]
+}
+
+// stepBrightness moves the brightness ceiling one of brightnessSteps.
 func (d *Display) stepBrightness(by int) {
-	pct := min(max(d.ceilingOrDefault()+by, 25), 100)
-	d.apply(true, pct, true)
+	d.apply(true, nextStep(brightnessSteps[:], d.ceilingOrDefault(), by), true)
 }
 
 // repeatedWordNote is the line under Wake word when the same word is in both slots (set in Home
