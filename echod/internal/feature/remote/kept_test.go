@@ -71,6 +71,7 @@ var keptByRestore = map[string]keptSetting{
 // what is on or paired right now.
 var notASetting = []string{
 	"setup_page", "presence", "wake_assistant_1", "wake_assistant_2", "wake_threshold_1", "wake_threshold_2",
+	"wake_playing_threshold_1", "wake_playing_threshold_2",
 	"confirm_threshold", "max_listen_1", "max_listen_2", "phone", "phone_answer", "phone_hangup", "phone_peer",
 	"bluetooth_pairing", "bluetooth_phone_pairing", "bluetooth_forget", "bluetooth_forget_phones",
 	"check_for_updates", "restart", "purge_cache", "setup_remote", "setup_let_in",

@@ -587,6 +587,7 @@ var uiEnglish = map[string]string{
 	"wake_with_light":                                      "Wake with light",
 	"wake_word":                                            "Wake word",
 	"wake_word_threshold":                                  "Wake word threshold",
+	"wake_word_threshold_playing":                          "WW threshold (playing)",
 	"weather":                                              "Weather",
 	"weather_alerts":                                       "Weather alerts",
 	"weather_animation":                                    "Weather animation",
@@ -1556,6 +1557,7 @@ var uiTranslations = map[string]map[string]string{
 		"wake_sound":                                           "Son du réveil",
 		"wake_with_light":                                      "Réveil avec lumière",
 		"wake_word_threshold":                                  "Seuil du mot d'activation",
+		"wake_word_threshold_playing":                          "Seuil d'activation (lecture)",
 		"weather_animation":                                    "Animation météo",
 		"weather_number":                                       "Météo %d",
 		"where_the_sound_goes_with_headphones_in":              "Sortie audio lorsque le casque est connecté",
@@ -2224,6 +2226,7 @@ var uiTranslations = map[string]map[string]string{
 		"wake_with_light":                                      "Sveglia con luce",
 		"wake_word":                                            "Parola di attivazione",
 		"wake_word_threshold":                                  "Soglia della parola di attivazione",
+		"wake_word_threshold_playing":                          "Soglia attivazione (riprod.)",
 		"weather":                                              "Meteo",
 		"weather_alerts":                                       "Avvisi meteo",
 		"weather_animation":                                    "Animazioni meteo",
@@ -2894,6 +2897,7 @@ var uiTranslations = map[string]map[string]string{
 		"wake_with_light":                                      "ライトで目覚める",
 		"wake_word":                                            "ウェイクワード",
 		"wake_word_threshold":                                  "ウェイクワードの感度",
+		"wake_word_threshold_playing":                          "再生中のウェイク感度",
 		"weather":                                              "天気",
 		"weather_alerts":                                       "気象警報",
 		"weather_animation":                                    "天気のアニメーション",
@@ -4133,7 +4137,8 @@ var uiTranslations = map[string]map[string]string{
 		// Wake word
 		"wake_word": "Weckwort",
 		// Wake word threshold
-		"wake_word_threshold": "Weckwort-Schwelle",
+		"wake_word_threshold":         "Weckwort-Schwelle",
+		"wake_word_threshold_playing": "Weckschwelle (Wiedergabe)",
 		// Weather
 		"weather": "Wetter",
 		// Weather alerts
@@ -4844,6 +4849,7 @@ var uiTranslations = map[string]map[string]string{
 		"wake_with_light":                                      "Işıkla uyandır",
 		"wake_word":                                            "Uyandırma sözcüğü",
 		"wake_word_threshold":                                  "Uyandırma sözcüğü eşiği",
+		"wake_word_threshold_playing":                          "Uyandırma eşiği (çalarken)",
 		"weather":                                              "Hava durumu",
 		"weather_alerts":                                       "Hava uyarıları",
 		"weather_animation":                                    "Hava animasyonu",

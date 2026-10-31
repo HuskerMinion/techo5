@@ -2,7 +2,7 @@ package detect
 
 import "testing"
 
-// The stop word is judged with the same allowance for the speaker as every other word.
+// The stop word keeps its existing fixed allowance when the speaker plays.
 //
 // While the canceller runs, what reaches the detector is the residual and the word scores lower, so
 // every slot's threshold drops by playingSlack. The stop word used to return before that adjustment
@@ -22,8 +22,7 @@ func TestTheStopWordGetsTheSlackTheOtherSlotsGet(t *testing.T) {
 		t.Errorf("stop threshold while the canceller runs is %v, want %v", playing, want)
 	}
 
-	// The same drop the other slots get, so the stop word is no harder to say over a speaker than
-	// the wake word is.
+	// Before an explicit override, the wake word retains the same allowance.
 	other := base(0) - thresholdFor(0, base, stop, true)
 	if got := stop - playing; got != other {
 		t.Errorf("the stop word drops by %v while slot 0 drops by %v; they should match", got, other)
@@ -54,7 +53,7 @@ func TestTheCommandWordsGetNoSlack(t *testing.T) {
 	}
 }
 
-// The slack never drags a threshold below the floor, however low it was configured.
+// The legacy slack never drags a threshold below the floor, however low it was configured.
 func TestTheSlackStopsAtTheFloor(t *testing.T) {
 	base := func(int) float64 { return 0.52 }
 
@@ -63,6 +62,28 @@ func TestTheSlackStopsAtTheFloor(t *testing.T) {
 	}
 	if got := thresholdFor(0, base, 0.7, true); got != slackFloor {
 		t.Errorf("a wake threshold of 0.52 with slack is %v, want the floor %v", got, slackFloor)
+	}
+}
+
+func TestWakeThresholdOverrideOnlyAppliesDuringPlayback(t *testing.T) {
+	base := func(int) float64 { return 0.85 }
+	playing := func(slot int) float64 {
+		if slot == 1 {
+			return 0.97
+		}
+		return 0.92
+	}
+	if got := thresholdWithPlayback(0, base, 0.7, false, playing); got != 0.85 {
+		t.Fatalf("quiet threshold = %v, want 0.85", got)
+	}
+	if got := thresholdWithPlayback(0, base, 0.7, true, playing); got != 0.92 {
+		t.Fatalf("playing threshold = %v, want 0.92", got)
+	}
+	if got := thresholdWithPlayback(1, base, 0.7, true, playing); got != 0.97 {
+		t.Fatalf("second assistant playing threshold = %v, want 0.97", got)
+	}
+	if got := thresholdWithPlayback(StopSlot, base, 0.7, true, playing); got != 0.7-playingSlack {
+		t.Fatalf("stop word threshold = %v, want legacy slack", got)
 	}
 }
 

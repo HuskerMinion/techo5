@@ -931,6 +931,10 @@ Under Settings → **Sound**, or on the device's Assist satellite in Home Assist
   scored 0.91 is gone at 0.93. The setup page shows the scores as they come too
   ([Watching the wake word scores](#watching-the-wake-word-scores)). Called Wake word sensitivity
   before v1.2.8.
+- **WW threshold (playing)** (0.5 to 0.99): the wake word's separate cutoff while the speaker
+  plays and echo cancellation is active. Until you change it, the device keeps the old behavior:
+  0.10 below the normal threshold, but no lower than 0.50. Once set, it is independent of the
+  normal threshold. The screen sets the first wake word; Home Assistant has one for each assistant.
 - **Wake word on Home Assistant** and **Confirm wake with Home Assistant** (both off by default):
   let Home Assistant's own wake word engine listen as well as the device, or check a wake the device
   wasn't sure of. See [Wake word on Home Assistant](#wake-word-on-home-assistant) below.
@@ -969,6 +973,7 @@ Each wake word's own settings are on a sub-device of its own in Home Assistant, 
 
 - **Wake**: a button that starts that assistant by hand, as its wake word would.
 - **Wake word threshold**: how sure the device has to be (see above).
+- **WW threshold (playing)**: its independent threshold during playback (see above).
 - **Wake word tone**: the sound it makes when it wakes.
 - **Wake word effect**, **Thinking effect** and **Replying effect**: what the ring shows (the Dot
   only: a Show or Spot has no ring).
@@ -1265,9 +1270,10 @@ your own**, on a device with microphones.
 
 - The table has each word listened for right now: the wake words, the stop word, the hang-up word
   during a call, and the command words while music plays. For each it gives the model, its slot as the
-  log numbers it (`slot=104`), its threshold, and what a score is judged against now. For the wake words
-  and the stop word that is lower while the speaker plays and the echo canceller runs; the command words,
-  and the hang-up word on a call, never get that allowance.
+  log numbers it (`slot=104`), its threshold, and what a score is judged against now. During
+  playback with echo cancellation active, wake words use their **WW threshold (playing)**, which can
+  be higher or lower than the normal threshold. The stop word keeps its fixed 0.10 allowance;
+  command words and the hang-up word during a call do not get that allowance.
 - **Last heard** lists the latest detections, near misses, wakes the device was unsure of (with
   **Confirm wake with Home Assistant** on: a score over its threshold but under the wake word's), and
   words that became ready or were taken out, each with the numbers its line in the log has.

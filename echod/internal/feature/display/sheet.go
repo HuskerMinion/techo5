@@ -224,6 +224,8 @@ func categoryRows(sv sheetView) (rows []settingRow, note string) {
 				{id: "wakeword", label: tr("wake_word"), sub: repeatedWordNote(), kind: ctlChoice, value: st.wakeWord},
 				{id: "wakesens", label: tr("wake_word_threshold"), sub: tr("higher_wakes_by_mistake_less_often"), kind: ctlStepper,
 					value: fmt.Sprintf("%.2f", config.Get().Wake.Slot(0).Threshold)},
+				{id: "wakesensplaying", label: tr("wake_word_threshold_playing"), sub: tr("higher_wakes_by_mistake_less_often"), kind: ctlStepper,
+					value: fmt.Sprintf("%.2f", config.Get().Wake.Slot(0).PlayingThresholdAt())},
 				{id: "waketone", label: tr("wake_sound"), kind: ctlChoice, value: config.Get().Wake.Slot(0).Tone.Label()},
 				voiceRow(),
 				{id: "hasounds", label: tr("home_assistant_sounds"), sub: tr("for_muting_and_timers"), kind: ctlToggle, on: !config.Get().Speaker.ClassicSounds},
@@ -1167,6 +1169,17 @@ func (d *Display) rowTap(id string, p part, opt int) {
 			return
 		}
 		wakeword.Get().SetThreshold(0, math.Round(min(max(v, 0.5), 0.99)*100)/100)
+	case "wakesensplaying":
+		v := config.Get().Wake.Slot(0).PlayingThresholdAt()
+		switch p {
+		case partMinus:
+			v -= 0.02
+		case partPlus:
+			v += 0.02
+		default:
+			return
+		}
+		wakeword.Get().SetPlayingThreshold(0, math.Round(min(max(v, 0.5), 0.99)*100)/100)
 	case "bass", "treble":
 		c := config.Get().Speaker
 		v := c.Bass

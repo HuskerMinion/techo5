@@ -162,6 +162,10 @@ type WakeWord struct {
 	// Threshold is the score a detection has to reach. Per word, because models disagree on scale.
 	Threshold float64 `json:"threshold"`
 
+	// PlayingThreshold is the independent cutoff while echo cancellation is active. Zero means an
+	// older config: retain its original 0.10 allowance, including the 0.50 floor.
+	PlayingThreshold float64 `json:"playing_threshold,omitempty"`
+
 	Tone   Tone   `json:"tone"`
 	Effect string `json:"effect"`
 
@@ -204,10 +208,12 @@ type WakeWord struct {
 }
 
 const (
-	DefaultThreshold = 0.85
-	DefaultEffect    = "Pulse"
-	DefaultTone      = ToneHA
-	DefaultDelivery  = DeliveryWhole
+	DefaultThreshold    = 0.85
+	DefaultPlayingSlack = 0.10
+	MinWakeThreshold    = 0.50
+	DefaultEffect       = "Pulse"
+	DefaultTone         = ToneHA
+	DefaultDelivery     = DeliveryWhole
 
 	DefaultMaxListen = 15
 	DefaultMaxThink  = 90
@@ -219,6 +225,15 @@ const (
 	// measured, 384 gave 8 seams in a 13 second reply and 650 gave one.
 	DefaultBuffer = 650
 )
+
+// PlayingThresholdAt is the effective playback cutoff. Missing settings retain the old formula,
+// so an existing custom threshold keeps exactly its former behavior after an update.
+func (w WakeWord) PlayingThresholdAt() float64 {
+	if w.PlayingThreshold > 0 {
+		return w.PlayingThreshold
+	}
+	return max(w.Threshold-DefaultPlayingSlack, MinWakeThreshold)
+}
 
 // DefaultWakeWord is a slot nobody has set: switched off, and everything else ready for when it is.
 func DefaultWakeWord() WakeWord {
@@ -352,6 +367,10 @@ func (w WakeWriter) ID(v string) error {
 
 func (w WakeWriter) Threshold(v float64) error {
 	return w.word(func(word *WakeWord) { word.Threshold = v })
+}
+
+func (w WakeWriter) PlayingThreshold(v float64) error {
+	return w.word(func(word *WakeWord) { word.PlayingThreshold = v })
 }
 
 func (w WakeWriter) Tone(v Tone) error {
