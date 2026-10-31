@@ -27,6 +27,7 @@ const (
 	dashGap     = 12  // between sections, and between blocks and tiles
 	sectionMinW = 360 // a column is at least this wide, so a Show 5 has two
 	tileH       = 84
+	tileBelowH  = 116 // a tile with its name under its badge and state, which needs the height
 	tileWide    = 220 // a usual tile's width, two abreast in a Show section, for scaling a bigger one
 	headingH    = 46
 	rowH        = 52
@@ -54,10 +55,12 @@ func (r *paint) palette(t dashboard.Theme) dashPal {
 // dashPage draws a drawn dashboard into area, scrolled down by scroll: the whole panel on the Show,
 // the part of the Spot's round one a column fits in. size is the Dashboard tiles setting: "" for the
 // usual size, "large" for taller tiles across the whole width, and "fill" for a view of a few tiles laid out
-// over the whole of area (fillGrid), which is large for any other view.
-func (r *paint) dashPage(v dashboard.Drawn, scroll int, adj dashAdjusting, area image.Rectangle, size string) {
+// over the whole of area (fillGrid), which is large for any other view. layout is the Dashboard tile
+// layout setting: "" for a tile's name beside its badge, "below" for the name under the badge and state.
+func (r *paint) dashPage(v dashboard.Drawn, scroll int, adj dashAdjusting, area image.Rectangle, size, layout string) {
 	pal := r.palette(v.Theme)
 	r.bigTiles = size == "large" || size == "fill"
+	r.nameBelow = layout == "below"
 	draw.Draw(r.dst, r.dst.Rect, image.NewUniform(pal.bg), image.Point{}, draw.Src)
 	fc := r.faces()
 	if len(v.Sections) == 0 {
@@ -179,8 +182,11 @@ func (r *paint) block(b dashboard.Block, x, y, w int, pal dashPal, adj dashAdjus
 		}
 		tw := (w - gap*(per-1)) / per
 		th := r.s(tileH)
+		if r.nameBelow {
+			th = r.s(tileBelowH)
+		}
 		if r.bigTiles {
-			th = r.s(tileH) * 3 / 2
+			th = th * 3 / 2
 		}
 		rows := (len(b.Tiles) + per - 1) / per
 		for i, t := range b.Tiles {
@@ -354,7 +360,11 @@ func (r *paint) tile(b image.Rectangle, t dashboard.Tile, pal dashPal, adj dashA
 
 	// A tile bigger than the usual one, set large or filling the screen, scales its badge and words
 	// with it: by its height, and no further than its width leaves room for the name.
-	k := min(float64(b.Dy())/float64(r.s(tileH)), float64(b.Dx())/float64(r.s(tileWide)), 2.5)
+	ref := r.s(tileH)
+	if r.nameBelow {
+		ref = r.s(tileBelowH)
+	}
+	k := min(float64(b.Dy())/float64(ref), float64(b.Dx())/float64(r.s(tileWide)), 2.5)
 	big := k > 1.05
 	if !big {
 		k = 1
@@ -397,23 +407,15 @@ func (r *paint) tile(b image.Rectangle, t dashboard.Tile, pal dashPal, adj dashA
 		}
 	}
 
+	if r.nameBelow {
+		r.tileBelow(b, t, pal, scale, big)
+		return
+	}
 	pad := r.s(scale(12))
 	badge := r.s(scale(44))
 	bx, by := b.Min.X+pad, b.Min.Y+(b.Dy()-badge)/2
 	ring := image.Rect(bx, by, bx+badge, by+badge)
-	ic := pal.sub
-	switch {
-	case t.Gone:
-		ic = lerp(pal.sub, pal.card, 0.5)
-		r.roundFill(ring, float64(badge)/2, lerp(pal.card, pal.sub, 0.12), lerp(pal.card, pal.sub, 0.12))
-	case t.On:
-		ic = pal.active
-		r.roundFill(ring, float64(badge)/2, lerp(pal.card, pal.active, 0.22), lerp(pal.card, pal.active, 0.22))
-	default:
-		r.roundFill(ring, float64(badge)/2, lerp(pal.card, pal.sub, 0.14), lerp(pal.card, pal.sub, 0.14))
-	}
-	isz := scale(26)
-	r.mdiIcon(t.Icon, bx+(badge-r.s(isz))/2, by+(badge-r.s(isz))/2, isz, ic)
+	r.tileBadge(ring, t, pal, scale(26))
 
 	name, value := fc.label, fc.sub
 	if big {
@@ -464,6 +466,49 @@ func (r *paint) tileName(usual font.Face, small func() font.Face, name string, r
 		lines = []string{lines[0], r.fit(face, rest, room)}
 	}
 	return lines, face
+}
+
+// tileBadge draws a tile's round badge in ring, with its icon isz tall: dimmed for a tile that is gone,
+// lit for one that is on.
+func (r *paint) tileBadge(ring image.Rectangle, t dashboard.Tile, pal dashPal, isz int) {
+	fill, ic := lerp(pal.card, pal.sub, 0.14), pal.sub
+	switch {
+	case t.Gone:
+		fill, ic = lerp(pal.card, pal.sub, 0.12), lerp(pal.sub, pal.card, 0.5)
+	case t.On:
+		fill, ic = lerp(pal.card, pal.active, 0.22), pal.active
+	}
+	r.roundFill(ring, float64(ring.Dx())/2, fill, fill)
+	r.mdiIcon(t.Icon, ring.Min.X+(ring.Dx()-r.s(isz))/2, ring.Min.Y+(ring.Dy()-r.s(isz))/2, isz, ic)
+}
+
+// tileBelow is a tile with its badge, smaller, and what it is doing along the top, and its name under
+// them across the tile's whole width, so a long name has the room it would not have beside the badge;
+// one that still does not fit goes to two lines, as tileName has it. scale is tile's: the tile's size
+// against the usual one, and big whether it is larger.
+func (r *paint) tileBelow(b image.Rectangle, t dashboard.Tile, pal dashPal, scale func(int) int, big bool) {
+	fc := r.faces()
+	// A tile taller than its words need - the words grow with its width, not its height - has them in
+	// the middle of it, with the same room above and below.
+	y0 := b.Min.Y + max(0, (b.Dy()-r.s(scale(tileBelowH)))/2)
+	pad := r.s(scale(12))
+	badge := r.s(scale(36))
+	x, top := b.Min.X+pad, y0+r.s(scale(12))
+	r.tileBadge(image.Rect(x, top, x+badge, top+badge), t, pal, scale(22))
+
+	name, value := fc.label, fc.sub
+	if big {
+		name, value = r.textFace(false, scale(29)), r.textFace(false, scale(21))
+	}
+	vx := x + badge + r.s(scale(10))
+	r.text(value, r.fit(value, t.Value, b.Max.X-pad-vx), vx, top+badge/2+r.s(scale(7)), pal.sub)
+	lines, nameFace := r.tileName(name, func() font.Face { return r.textFace(false, scale(21)) }, t.Name, b.Dx()-2*pad)
+	if len(lines) == 2 {
+		r.text(nameFace, lines[0], x, y0+r.s(scale(76)), pal.text)
+		r.text(nameFace, lines[1], x, y0+r.s(scale(99)), pal.text)
+	} else {
+		r.text(nameFace, lines[0], x, y0+r.s(scale(86)), pal.text)
+	}
 }
 
 // row draws one line of an entities card: icon, name, and at the end a switch or the state.

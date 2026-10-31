@@ -205,7 +205,7 @@ func (d *Display) dashGestureSpot(g touch.Gesture) {
 // dashFace draws the dashboard over the round panel.
 func (r *roundRenderer) dashFace(s roundScene) {
 	if s.dashMode == config.DashboardDrawn {
-		r.dashPage(s.drawn, s.dashScroll, s.dashAdjust, spotDashArea, "")
+		r.dashPage(s.drawn, s.dashScroll, s.dashAdjust, spotDashArea, "", "")
 		return
 	}
 	v := s.dash

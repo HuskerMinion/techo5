@@ -65,10 +65,11 @@ type Feature struct {
 	// boardOpts keeps board's options.
 	boardOpts *component.Options
 
-	// back and tiles are how long a dashboard opened by hand stays up, and on the Show how big a drawn
-	// one's tiles are (more.go).
-	back  *esphome.Select
-	tiles *esphome.Select
+	// back, tiles and layout are how long a dashboard opened by hand stays up, and on the Show how big a
+	// drawn one's tiles are and how a tile sets its icon and words (more.go).
+	back   *esphome.Select
+	tiles  *esphome.Select
+	layout *esphome.Select
 
 	mu        sync.Mutex
 	stream    *stream  // while the page is up in streamed mode
@@ -153,7 +154,7 @@ func Get() *Feature {
 				},
 			},
 		}
-		f.back, f.tiles = backSelect(f), tilesSelect(f)
+		f.back, f.tiles, f.layout = backSelect(f), tilesSelect(f), layoutSelect(f)
 		f.board.OnCommand = f.chooseBoard
 		f.boardOpts = component.NewOptions(f.board)
 		component.Bind(f.mode, Modes(), f.setMode, config.Set().Dashboard().Mode)
@@ -183,7 +184,7 @@ func (f *Feature) Name() string { return "dashboard" }
 func (f *Feature) Entities() []esphome.Entity {
 	es := []esphome.Entity{f.mode, f.idle, f.kiosk, f.board, f.back}
 	if hasTiles {
-		es = append(es, f.tiles)
+		es = append(es, f.tiles, f.layout)
 	}
 	return es
 }
@@ -198,6 +199,7 @@ func (f *Feature) Restore(c config.Config) {
 	f.board.Set(chosen)
 	f.back.Set(backLabel(c.Dashboard.ReturnAfter))
 	f.tiles.Set(tilesLabel(c.Dashboard.Tiles))
+	f.layout.Set(layoutLabel(c.Dashboard.Layout))
 }
 
 // boardsMax and boardBytes cap the dashboard list (listBoards).

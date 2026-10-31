@@ -80,6 +80,7 @@ type scene struct {
 	dashScroll  int
 	dashAdjust  dashAdjusting         // a level a finger is sliding
 	dashTiles   string                // the Dashboard tiles setting: "", "large" or "fill"
+	dashLayout  string                // the Dashboard tile layout setting: "" or "below"
 	dashColor   *dashboard.LightColor // the color sheet over the page, while it is up
 	dashMedia   *mediaView            // the media sheet over the page, while it is up
 	dashClimate *climateView          // the thermostat sheet over the page, while it is up

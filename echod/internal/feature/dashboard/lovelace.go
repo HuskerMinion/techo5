@@ -3,6 +3,7 @@
 package dashboard
 
 import (
+	"cmp"
 	"context"
 	"encoding/json"
 	"html"
@@ -138,8 +139,16 @@ func (l *lovelaceSource) sections(lk look) []Section {
 	var out []Section
 	for _, nodes := range sects {
 		var blocks []Block
+		under := lk
+		under.room = ""
 		for _, n := range nodes {
-			blocks = append(blocks, n.blocks(lk)...)
+			got := n.blocks(under)
+			for _, b := range got {
+				if b.Heading != "" {
+					under.room = b.Heading
+				}
+			}
+			blocks = append(blocks, got...)
 		}
 		// Tiles one after another make one grid, however many cards they came from: a section of
 		// tile cards is one grid in Home Assistant too.
@@ -593,12 +602,14 @@ type listNode struct {
 
 func (n listNode) blocks(l look) []Block {
 	var out []Block
+	room := l.room
 	if t := n.title.get(l.rendered); t != "" {
 		out = append(out, Block{Heading: t})
+		room = t
 	}
 	var tiles []Tile
 	for _, it := range n.items {
-		tiles = append(tiles, it.tile(l.states))
+		tiles = append(tiles, it.tile(l.states, room))
 	}
 	if len(tiles) > 0 {
 		out = append(out, Block{Tiles: tiles})
@@ -615,15 +626,17 @@ type rowsNode struct {
 func (n rowsNode) blocks(l look) []Block {
 	var out []Block
 	cur := Block{Title: n.title.get(l.rendered)}
+	room := cmp.Or(cur.Title, l.room)
 	for _, it := range n.items {
 		if it.section != "" {
 			if len(cur.Rows) > 0 || cur.Title != "" {
 				out = append(out, cur)
 			}
 			cur = Block{Title: it.section}
+			room = it.section
 			continue
 		}
-		t := it.tile(l.states)
+		t := it.tile(l.states, room)
 		t.Switch = t.Tap != nil && strings.HasSuffix(t.Tap.Service, "toggle") && (t.Value == "On" || t.Value == "Off" || strings.HasPrefix(t.Value, "On ·"))
 		cur.Rows = append(cur.Rows, t)
 	}
@@ -633,7 +646,9 @@ func (n rowsNode) blocks(l look) []Block {
 	return out
 }
 
-func (it tileItem) tile(states map[string]hass.LiveEntity) Tile {
+// tile is the item as a tile. An entity's own name, when the card gives none, is shown without the
+// room it is under in front of it (withoutRoom); a name the card gives is shown as it is.
+func (it tileItem) tile(states map[string]hass.LiveEntity, room string) Tile {
 	if it.fixed {
 		t := Tile{Name: it.name, Icon: orIcon(it.icon, "gesture-tap"), Value: it.value, Tap: it.action}
 		if t.Tap != nil && t.Tap.Service == "" && t.Tap.View == "" {
@@ -651,6 +666,7 @@ func (it tileItem) tile(states map[string]hass.LiveEntity) Tile {
 		if name == "" {
 			name = it.entity
 		}
+		name = withoutRoom(name, room)
 	}
 	t := describe(e, name)
 	if it.icon != "" {
@@ -681,7 +697,7 @@ type templateNode struct {
 func (t templateNode) blocks(l look) []Block {
 	tile := Tile{Name: t.primary.get(l.rendered), Value: t.secondary.get(l.rendered), Icon: orIcon(t.icon.get(l.rendered), "card-text-outline")}
 	if t.item.entity != "" {
-		base := t.item.tile(l.states)
+		base := t.item.tile(l.states, l.room)
 		tile.On, tile.Tap = base.On, base.Tap
 	} else if t.item.action != nil && (t.item.action.Service != "" || t.item.action.View != "") {
 		tile.Tap = t.item.action

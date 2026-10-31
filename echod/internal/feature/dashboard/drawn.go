@@ -169,6 +169,9 @@ type look struct {
 	history  map[string][]point
 	pictures map[string]shot
 	width    int // the screen's, for a card shown only on a wide or a narrow one
+	// room is the heading the cards are under in their section, often a room: an entity's own name
+	// is shown without it in front, as on the Rooms dashboard (withoutRoom).
+	room string
 }
 
 // source is where a drawn dashboard comes from.

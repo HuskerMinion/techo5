@@ -10,6 +10,8 @@ import (
 	"slices"
 	"strings"
 	"sync"
+	"unicode"
+	"unicode/utf8"
 
 	"github.com/HuskerMinion/techo5/echod/internal/feature/home"
 	"github.com/HuskerMinion/techo5/echod/internal/lib/hass"
@@ -274,12 +276,23 @@ func nameOf(e hass.LiveEntity, room string) string {
 	if name == "" {
 		_, name, _ = strings.Cut(e.ID, ".")
 	}
-	if len(name) > len(room)+1 && strings.EqualFold(name[:len(room)], room) {
-		if rest := strings.TrimLeft(name[len(room):], " -:"); rest != "" {
-			name = strings.ToUpper(rest[:1]) + rest[1:]
-		}
+	return withoutRoom(name, room)
+}
+
+// withoutRoom is name without room in front of it, its first letter made a capital: under Kitchen,
+// "Kitchen ceiling light" is "Ceiling light". Only a whole word or words: "Kitchenette light" stays
+// as it is, and so does a name that is nothing but the room.
+func withoutRoom(name, room string) string {
+	if room == "" || len(name) <= len(room)+1 || !strings.EqualFold(name[:len(room)], room) ||
+		!strings.ContainsRune(" -:", rune(name[len(room)])) {
+		return name
 	}
-	return name
+	rest := strings.TrimLeft(name[len(room):], " -:")
+	if rest == "" {
+		return name
+	}
+	r, size := utf8.DecodeRuneInString(rest)
+	return string(unicode.ToUpper(r)) + rest[size:]
 }
 
 func onOff(s string) string {
