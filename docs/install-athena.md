@@ -120,9 +120,10 @@ loader tells the kernel which one the unit has: by name in its framebuffer entry
 and with `jd936x_id=` on the command line, whose low digit is the panel. TECHO5's kernel picks the
 panel's settings from that at boot, so one kernel covers every unit.
 
-Two have been tested on units: the **ILI9881C with BOE glass** (`jd936x_id=0x36`, the boot
-loader's name `ili9881c_wxga_dsi_vdo_st_boe`) and the **JD9365 with KD/HSD glass** (`jd936x_id=0x31`,
-`jd936x_wxga_dsi_vdo_athena_st_kd_hsd`, reported in #187). All of them:
+Three have been tested on units: the **ILI9881C with BOE glass** (`jd936x_id=0x36`, the boot
+loader's name `ili9881c_wxga_dsi_vdo_st_boe`), the **JD9365 with KD/HSD glass** (`jd936x_id=0x31`,
+`jd936x_wxga_dsi_vdo_athena_st_kd_hsd`, reported in #187) and the **JD9365 with BOE glass (new)**
+(`jd936x_id=0x35`, `jd936x_wxga_dsi_vdo_athena_st_boe_new`, reported in #361). All of them:
 
 | `jd936x_id` low digit | Boot loader's name | Panel |
 |---|---|---|
@@ -130,7 +131,7 @@ loader's name `ili9881c_wxga_dsi_vdo_st_boe`) and the **JD9365 with KD/HSD glass
 | 2 | `jd936x_wxga_dsi_vdo_athena_st_kd_hsd_new` | JD9365, KD/HSD glass (new) |
 | 3 | `jd936x_wxga_dsi_vdo_athena_st_kd_hsd_proto` or `ili9881c_wxga_dsi_vdo_st_kd_hsd` | JD9365 or ILI9881C, KD/HSD glass |
 | 4 | `jd936x_wxga_dsi_vdo_athena_st_boe` | JD9365, BOE glass |
-| 5 | `jd936x_wxga_dsi_vdo_athena_st_boe_new` | JD9365, BOE glass (new) |
+| 5 | `jd936x_wxga_dsi_vdo_athena_st_boe_new` | JD9365, BOE glass (new) (tested) |
 | 6 | `ili9881c_wxga_dsi_vdo_st_boe` | ILI9881C, BOE glass (tested) |
 | 7 | `jd936x_wxga_dsi_vdo_athena_st_inx` | JD9365, INX glass |
 | 8 | `ili9881c_wxga_dsi_vdo_st_inx` | ILI9881C, INX glass |

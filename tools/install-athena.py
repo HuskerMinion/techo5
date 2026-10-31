@@ -166,8 +166,10 @@ PANELS = {
     'jd936x_wxga_dsi_vdo_athena_st_boe_new': (5, 'JD9365, BOE glass (new)'),
     'jd936x_wxga_dsi_vdo_athena_st_inx': (7, 'JD9365, INX glass'),
 }
-# The screens tested on units: ILI9881C with BOE glass on ours, JD9365 with KD/HSD glass by a user (#187).
-PANELS_TESTED = ('ili9881c_wxga_dsi_vdo_st_boe', 'jd936x_wxga_dsi_vdo_athena_st_kd_hsd')
+# The screens tested on units: ILI9881C with BOE glass on ours, JD9365 with KD/HSD glass (#187) and JD9365
+# with BOE glass (new) (#361) by users.
+PANELS_TESTED = ('ili9881c_wxga_dsi_vdo_st_boe', 'jd936x_wxga_dsi_vdo_athena_st_kd_hsd',
+                 'jd936x_wxga_dsi_vdo_athena_st_boe_new')
 
 
 def image_name(version):

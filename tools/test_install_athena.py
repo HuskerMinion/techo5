@@ -429,6 +429,9 @@ class Panel(unittest.TestCase):
         # The JD9365 with KD/HSD glass, tested by a user (#187), goes on by itself too.
         self.assertIn('tested on', inst.check_panel(0x31, None, False))
         self.assertIn('JD9365, KD/HSD glass', inst.check_panel(0x31, 'jd936x_wxga_dsi_vdo_athena_st_kd_hsd', False))
+        # And the JD9365 with BOE glass (new) (#361).
+        self.assertIn('tested on', inst.check_panel(0x35, None, False))
+        self.assertIn('BOE glass (new)', inst.check_panel(0x35, 'jd936x_wxga_dsi_vdo_athena_st_boe_new', False))
 
     def test_others_refused(self):
         for pid, name in ((0x32, None), (0x34, 'jd936x_wxga_dsi_vdo_athena_st_boe'), (0x38, None),
@@ -438,10 +441,10 @@ class Panel(unittest.TestCase):
             self.assertIn('--force-panel', inst.check_panel(pid, name, True))
 
     def test_untested_known(self):
-        with self.assertRaisesRegex(Fail, 'JD9365, BOE glass \\(new\\).*not been tested'):
-            inst.check_panel(0x35, 'jd936x_wxga_dsi_vdo_athena_st_boe_new', False)
-        said = inst.check_panel(0x35, 'jd936x_wxga_dsi_vdo_athena_st_boe_new', True)
-        self.assertIn('JD9365, BOE glass (new)', said)
+        with self.assertRaisesRegex(Fail, 'JD9365, BOE glass .*not been tested'):
+            inst.check_panel(0x34, 'jd936x_wxga_dsi_vdo_athena_st_boe', False)
+        said = inst.check_panel(0x34, 'jd936x_wxga_dsi_vdo_athena_st_boe', True)
+        self.assertIn('JD9365, BOE glass', said)
         self.assertIn('--force-panel', said)
         self.assertIn('JD9365, KD/HSD glass (new)', inst.check_panel(0x32, None, True))
         self.assertIn('ILI9881C, KD/HSD glass', inst.check_panel(0x33, 'ili9881c_wxga_dsi_vdo_st_kd_hsd', True))
@@ -468,7 +471,7 @@ class Panel(unittest.TestCase):
             inst.check_panel(0x36, 'some_other_dsi_panel', False)
         self.assertIn('--force-panel', inst.check_panel(0x36, 'some_other_dsi_panel', True))
         with self.assertRaisesRegex(Fail, '--ssh-key'):
-            inst.check_panel(0x35, None, False)
+            inst.check_panel(0x34, None, False)
 
     def test_same_table_as_the_kernel(self):
         src = os.path.join(os.path.dirname(os.path.abspath(__file__)),

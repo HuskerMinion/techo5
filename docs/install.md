@@ -14,8 +14,8 @@ firmware): releases don't carry it, so it is copied into the store before the pa
 `recovery`, so LineageOS can be put back with TWRP and its zip.
 
 The 2nd gen Show 8 (`athena`) installs differently: no LineageOS, TECHO5's own 64-bit mainline kernel
-written to `boot` and the TECHO5 image written to `system`, both from TWRP. Two screen panels
-are tested so far (ILI9881C with BOE glass, JD9365 with KD/HSD glass); the installer checks, and tries
+written to `boot` and the TECHO5 image written to `system`, both from TWRP. Three screen panels
+are tested so far (ILI9881C with BOE glass, JD9365 with KD/HSD glass, JD9365 with BOE glass (new)); the installer checks, and tries
 the others with `--force-panel`. See [install-athena.md](install-athena.md).
 
 ## Unlock the bootloader first
