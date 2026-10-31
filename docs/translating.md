@@ -14,6 +14,7 @@ can be complete and still never have been looked at on a real screen.
 | Language | Strings | Coverage | Translated by | Tried on a device |
 |---|---:|---:|---|---|
 | English | 664 | source | | |
+| Dutch (nl) | 104 | 15% | christianschmidt (#365) | Not yet |
 | French (fr) | 664 | 100% | royto (#346) | Not yet |
 | German (de) | 664 | 100% | christianschmidt (#322) | Echo Show 5 1st gen, v1.6.12 (#322) |
 | Italian (it) | 664 | 100% | angelor87 (#310, #353) | Echo Show 5 1st gen (#353) |
@@ -22,8 +23,9 @@ can be complete and still never have been looked at on a real screen.
 | Turkish (tr) | 664 | 100% | senolsun (#349) | Not yet |
 <!-- status:end -->
 
-Dutch, Portuguese and Russian write the clock's day and date, the forecast and the weather's words;
-the rest of their screen is English. They don't have a catalog of their own yet.
+Portuguese and Russian write the clock's day and date, the forecast and the weather's words;
+the rest of their screen is English, and neither has a catalog of its own yet. Dutch has one now,
+but only its labels and buttons: the sentences, the camera and the calendar are still English.
 
 ## What stays the same in every language
 
