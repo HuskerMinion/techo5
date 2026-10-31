@@ -105,6 +105,9 @@ func (a *Alarms) away(now time.Time) bool {
 	if !since.Before(now) {
 		return false
 	}
+	a.editMu.Lock()
+	defer a.editMu.Unlock()
+
 	a.since = since
 	resume, missed := splitAway(a.sources(now), since, now)
 	for _, m := range missed {

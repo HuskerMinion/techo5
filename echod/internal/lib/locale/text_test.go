@@ -218,3 +218,59 @@ func TestTurkishCapitals(t *testing.T) {
 		t.Errorf("UpperRune(tr, i) = %q, want İ", got)
 	}
 }
+
+// The way out of one occurrence of an alarm, in the words the catalogs give it: the action, and the
+// two answers with the moment as their one argument — never the alarm's name, which is the card's
+// heading and has a limit of its own. A complete catalog without its own wording says the English one
+// until it is translated, as the project does for new keys; the words are otherwise each catalog's
+// own, so the loop below checks their shape, not the English text.
+func TestSkipWords(t *testing.T) {
+	formats := regexp.MustCompile(`%[+# .0-9\[\]-]*[a-zA-Z%]`)
+	one := func(lang, key string) string {
+		s := Text(lang, key)
+		if s == "" {
+			t.Errorf("%s/%s: empty", lang, key)
+		} else if got := formats.FindAllString(s, -1); len(got) != 1 || got[0] != "%s" {
+			t.Errorf("%s/%s: %q does not take the moment as its one argument", lang, key, s)
+		}
+		return s
+	}
+	if got := Text("es", "sunrise_skip_action"); got != "Omitir" {
+		t.Errorf("es action is %q", got)
+	}
+	if got := one("es", "sunrise_skip_done"); got != "Omitida la alarma de las %s" {
+		t.Errorf("es done is %q", got)
+	}
+	if got := one("es", "sunrise_skip_refused"); got != "No se pudo omitir la alarma de las %s" {
+		t.Errorf("es refused is %q", got)
+	}
+	check := func(lang string) {
+		if action := Text(lang, "sunrise_skip_action"); action == "" {
+			t.Errorf("%s: empty sunrise_skip_action", lang)
+		} else if formats.MatchString(action) {
+			t.Errorf("%s: action %q takes an argument", lang, action)
+		}
+		for _, key := range []string{"sunrise_skip_done", "sunrise_skip_refused"} {
+			one(lang, key)
+		}
+	}
+	for _, lang := range completeCatalogs {
+		check(lang)
+	}
+	// The checks are on the shape, not on the English words, so a complete catalog that translates
+	// these lines keeps passing: the day one does, this test does not hold it back.
+	was := uiTranslations["de"]
+	translated := make(map[string]string, len(was)+3)
+	for key, value := range was {
+		translated[key] = value
+	}
+	translated["sunrise_skip_action"] = "Überspringen"
+	translated["sunrise_skip_done"] = "Übersprungen: der Alarm um %s"
+	translated["sunrise_skip_refused"] = "Nicht übersprungen: der Alarm um %s"
+	uiTranslations["de"] = translated
+	t.Cleanup(func() { uiTranslations["de"] = was })
+	check("de")
+	if got := Text("de", "sunrise_skip_done"); got != "Übersprungen: der Alarm um %s" {
+		t.Errorf("de done is %q", got)
+	}
+}

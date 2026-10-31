@@ -352,6 +352,9 @@ var uiEnglish = map[string]string{
 	"sunrise_rising":                            "The light is coming up now",
 	"sunrise_snooze":                            "On until the %s snooze",
 	"sunrise_until":                             "On until %s",
+	"sunrise_skip_action":                       "Skip",
+	"sunrise_skip_done":                         "Skipped: the alarm at %s",
+	"sunrise_skip_refused":                      "Not skipped: the alarm at %s",
 	"talk_on_the_camera_page":                   "Talk on the camera page",
 	"talk_through_cameras":                      "Talk through cameras",
 	"record_takes_of_a_word":                    "Record takes of a word",
@@ -698,6 +701,9 @@ var uiEnglish = map[string]string{
 
 var uiTranslations = map[string]map[string]string{
 	"es": {
+		"sunrise_skip_action":           "Omitir",
+		"sunrise_skip_done":             "Omitida la alarma de las %s",
+		"sunrise_skip_refused":          "No se pudo omitir la alarma de las %s",
 		"media_playback":                "Reproducción",
 		"ui_listening_turn":             "Escuchando…",
 		"ui_thinking_turn":              "Pensando…",
@@ -1344,6 +1350,9 @@ var uiTranslations = map[string]map[string]string{
 		"sunrise_rising":                            "La lumière s'intensifie maintenant",
 		"sunrise_snooze":                            "Activé jusqu'à la répétition de %s",
 		"sunrise_until":                             "Activé jusqu'à %s",
+		"sunrise_skip_action":                       "Skip",
+		"sunrise_skip_done":                         "Skipped: the alarm at %s",
+		"sunrise_skip_refused":                      "Not skipped: the alarm at %s",
 		"talk_on_the_camera_page":                   "Parler depuis la page de la caméra",
 		"talk_through_cameras":                      "Parler via les caméras",
 		"record_takes_of_a_word":                    "Enregistrer un mot plusieurs fois",
@@ -2004,6 +2013,9 @@ var uiTranslations = map[string]map[string]string{
 		"sunrise_rising":                            "A luz está a subir agora",
 		"sunrise_snooze":                            "Acesa ata o aprazamento das %s",
 		"sunrise_until":                             "Acesa ata as %s",
+		"sunrise_skip_action":                       "Skip",
+		"sunrise_skip_done":                         "Skipped: the alarm at %s",
+		"sunrise_skip_refused":                      "Not skipped: the alarm at %s",
 		"talk_on_the_camera_page":                   "Falar na páxina da cámara",
 		"talk_through_cameras":                      "Falar a través das cámaras",
 		"record_takes_of_a_word":                    "Gravar tomas dunha palabra",
@@ -2676,6 +2688,9 @@ var uiTranslations = map[string]map[string]string{
 		"sunrise_rising":                            "Lo schermo si sta illuminando gradualmente",
 		"sunrise_snooze":                            "Luce accesa fino alla fine del posticipo, alle %s",
 		"sunrise_until":                             "Luce accesa fino alle %s",
+		"sunrise_skip_action":                       "Skip",
+		"sunrise_skip_done":                         "Skipped: the alarm at %s",
+		"sunrise_skip_refused":                      "Not skipped: the alarm at %s",
 		"talk_on_the_camera_page":                   "Parla dalla pagina della telecamera",
 		"talk_through_cameras":                      "Parla attraverso le telecamere",
 		"record_takes_of_a_word":                    "Registra una parola più volte",
@@ -3562,6 +3577,9 @@ var uiTranslations = map[string]map[string]string{
 		"sunrise_rising":                            "徐々に明るくしています",
 		"sunrise_snooze":                            "%sのスヌーズ終了まで点灯",
 		"sunrise_until":                             "%sまで点灯",
+		"sunrise_skip_action":                       "Skip",
+		"sunrise_skip_done":                         "Skipped: the alarm at %s",
+		"sunrise_skip_refused":                      "Not skipped: the alarm at %s",
 		"talk_on_the_camera_page":                   "カメラ画面から会話",
 		"talk_through_cameras":                      "カメラ経由で会話",
 		"record_takes_of_a_word":                    "単語を繰り返し録音",
@@ -4568,6 +4586,12 @@ var uiTranslations = map[string]map[string]string{
 		"sunrise_snooze": "An bis zum Schlummern %s",
 		// On until %s
 		"sunrise_until": "An bis %s",
+		// Skip
+		"sunrise_skip_action": "Skip",
+		// Skipped: the alarm at %s
+		"sunrise_skip_done": "Skipped: the alarm at %s",
+		// Not skipped: the alarm at %s
+		"sunrise_skip_refused": "Not skipped: the alarm at %s",
 		// Talk on the camera page
 		"talk_on_the_camera_page": "Auf der Kameraseite sprechen",
 		// Talk through cameras
@@ -5525,6 +5549,9 @@ var uiTranslations = map[string]map[string]string{
 		"sunrise_rising":                            "Işık şu an yükseliyor",
 		"sunrise_snooze":                            "%s ertelemesine kadar açık",
 		"sunrise_until":                             "%s kadar açık",
+		"sunrise_skip_action":                       "Skip",
+		"sunrise_skip_done":                         "Skipped: the alarm at %s",
+		"sunrise_skip_refused":                      "Not skipped: the alarm at %s",
 		"talk_on_the_camera_page":                   "Kamera sayfasında konuş",
 		"talk_through_cameras":                      "Kameralar üzerinden konuş",
 		"record_takes_of_a_word":                    "Bir kelimeyi birkaç kez kaydet",

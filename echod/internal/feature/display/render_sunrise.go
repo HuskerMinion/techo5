@@ -26,6 +26,13 @@ func (r *renderer) sunrisePage(s scene, p float64, face bool) {
 	r.sunriseSky(p)
 	r.sunriseSun(p, face)
 	r.sunriseClock(s, p)
+	if offer := sunriseSkip(s.now); offer != nil && !skipOccluded(s) && !r.rainbowCovering(s) {
+		// The volume bar along the foot is drawn over this page, and it covers the button: what cannot be
+		// seen cannot be tapped, as the camera page's controls have it (render.go). A card, a strip, the
+		// drawer or the update dialog over the page, and Rainbow's own drawing over it while a turn is
+		// composed or fading, leave it out the same way (skipOccluded, rainbowCovering).
+		r.sunriseSkipButton(*offer, p)
+	}
 }
 
 // sunriseSky fills the screen, dark red at the start and pale gold by the end, with the horizon
