@@ -13,11 +13,11 @@ import (
 	"github.com/HuskerMinion/techo5/echod/internal/feature/setup"
 )
 
-// How the calendar looks (docs/calendar-and-night-plan.md, 6): eight switches and the view it opens on, each on the screen
+// How the calendar looks (docs/calendar-and-night-plan.md, 6): nine switches and the view it opens on, each on the screen
 // under Settings, Display, Calendar, on the setup page's Weather & Calendar tab, and in Home Assistant,
 // where Shared settings can keep them the same on every screen in the house. Two go by the panel's
 // size until somebody chooses: the week view and the month in full are on where there is room for
-// them, bigger than the Show 5, and off on the Show 5. Which calendars are hidden is the ninth, set on
+// them, bigger than the Show 5, and off on the Show 5. Which calendars are hidden is the tenth, set on
 // the calendar page itself and this screen's alone.
 
 // calLook is the switches as this frame draws them, the panel's size worked in.
@@ -28,6 +28,7 @@ type calLook struct {
 	icons      bool // a small picture before a title, by a word in it
 	countdowns bool // "in 25 min" on today's events, and the days to a long event on the clock
 	week       bool // the week view, and the Day, Week and Month switch over the month
+	monday     bool // weeks start on Monday, rather than Sunday
 	nextUp     bool // the next event at the foot of the clock
 	weather    bool // the forecast on the calendar's days
 	opens      int  // the view it opens on, in opensOpts
@@ -51,7 +52,7 @@ var (
 // lookFor is the switches as c has them, on a panel wide or not.
 func lookFor(c config.Calendar, wide bool) calLook {
 	return calLook{timeline: !c.DayList, refined: !c.AgendaPlain, monthFull: c.MonthFullOn(wide), icons: !c.NoIcons,
-		countdowns: !c.NoCountdowns, week: c.WeekOn(wide), nextUp: !c.NoNextUp, weather: !c.NoWeather,
+		countdowns: !c.NoCountdowns, week: c.WeekOn(wide), monday: c.MondayFirst, nextUp: !c.NoNextUp, weather: !c.NoWeather,
 		opens: max(0, slices.Index(opensVals, c.Opens)), wide: wide}
 }
 
@@ -86,6 +87,9 @@ type lookSwitch struct {
 // monthDetailOpts are the month's two choices, the first being on.
 var monthDetailOpts = []string{"Full", "Simple"}
 
+// weekStartOpts are the days a week can start on, the first (the default) being on.
+var weekStartOpts = []string{"Sunday", "Monday"}
+
 var lookSwitches = []lookSwitch{
 	{id: "opens_on", label: "Opens on", sub: "The view a tap on the date opens", icon: "mdi:calendar-start",
 		opts: opensOpts,
@@ -103,6 +107,9 @@ var lookSwitches = []lookSwitch{
 		get: func(l calLook) bool { return l.countdowns }, set: func(on bool) error { return config.Set().Calendar().NoCountdowns(!on) }},
 	{id: "week_view", label: "Week view", sub: "Seven days on their hours", icon: "mdi:calendar-week",
 		get: func(l calLook) bool { return l.week }, set: func(on bool) error { return config.Set().Calendar().Week(on) }},
+	{id: "week_starts", label: "Week starts on", sub: "The first day of the month's rows and the week", icon: "mdi:calendar-week-begin",
+		opts: weekStartOpts,
+		get:  func(l calLook) bool { return !l.monday }, set: func(on bool) error { return config.Set().Calendar().MondayFirst(!on) }},
 	{id: "next_up", label: "Next up on the clock", sub: "Today's next event at the foot of the clock", icon: "mdi:calendar-arrow-right",
 		get: func(l calLook) bool { return l.nextUp }, set: func(on bool) error { return config.Set().Calendar().NoNextUp(!on) }},
 	{id: "weather", label: "Weather in the calendar", sub: "The forecast on each day", icon: "mdi:weather-partly-cloudy",

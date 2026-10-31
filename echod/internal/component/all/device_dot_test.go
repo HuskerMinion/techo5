@@ -16,7 +16,7 @@ var notOnThisDevice = []string{
 	"screen_clock_tap", "screen_dashboard_return", "screen_dashboard_tiles", "screen_dashboard_layout", "screen_clock_style_swipe", "screen_volume_swipe", "screen_night_tap_lifts",
 	"screen_font", "screen_text_size", "screen_power", "screen_ignores_room_lights", "tessera_screen",
 	"screen_camera_picture", "screen_camera_strips", "screen_camera_strips_shade",
-	"calendar_opens_on", "calendar_day_timeline", "calendar_coming_up_refined", "calendar_month_details", "calendar_event_icons", "calendar_countdowns", "calendar_week_view", "calendar_next_up", "calendar_weather",
+	"calendar_opens_on", "calendar_day_timeline", "calendar_coming_up_refined", "calendar_month_details", "calendar_event_icons", "calendar_countdowns", "calendar_week_view", "calendar_week_starts", "calendar_next_up", "calendar_weather",
 }
 
 // speaker_gain is the codec's driver gain on the Dot (hardware/speaker/paths_dot.go), always there:

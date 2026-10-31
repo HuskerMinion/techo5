@@ -17,7 +17,7 @@ import (
 	"github.com/HuskerMinion/techo5/echod/internal/lib/locale"
 )
 
-// calendarMonth is the month as a grid, Sunday first. An event of several days is one bar across its
+// calendarMonth is the month as a grid, Sunday or Monday first as Week starts on says. An event of several days is one bar across its
 // days, pointed where it runs on past the week or the month, with the day it ends; the days that are
 // over are dimmed and today's number sits in the accent. In full (the month details switch) a timed
 // event reads "9a Team standup", its start time in its calendar's color, with an icon on a panel
@@ -58,15 +58,15 @@ func (r *renderer) calendarMonth(v calendarView, l calLook) {
 
 	colW := (r.w - 2*r.margin) / 7
 	for i := range 7 {
-		day := v.month.AddDate(0, 0, i-int(v.month.Weekday()))
+		day := v.month.AddDate(0, 0, i-dayInWeek(v.month))
 		label := locale.ShortWeekday(day, screenLang())
 		r.text(r.tiny, label, r.margin+i*colW+(colW-r.width(r.tiny, label))/2, top+r.s(20), dim)
 	}
 	gridTop := top + r.s(28)
 	first := v.month
-	start := first.AddDate(0, 0, -int(first.Weekday()))
+	start := first.AddDate(0, 0, -dayInWeek(first))
 	days := time.Date(first.Year(), first.Month()+1, 0, 0, 0, 0, 0, time.Local).Day()
-	weeks := (int(first.Weekday()) + days + 6) / 7
+	weeks := (dayInWeek(first) + days + 6) / 7
 	rowH := (r.h - r.s(8) - gridTop) / weeks
 	today := time.Date(v.now.Year(), v.now.Month(), v.now.Day(), 0, 0, 0, 0, time.Local)
 

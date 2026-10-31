@@ -86,6 +86,10 @@ func optionLabel(english string) string {
 		return tr("option_full_page")
 	case "Strip":
 		return tr("option_strip")
+	case "Sunday":
+		return tr("option_sunday")
+	case "Monday":
+		return tr("option_monday")
 	case "Full":
 		return tr("option_full")
 	case "Simple":
@@ -233,7 +237,7 @@ func weekdayInitials() []string {
 
 func builtinOptionRow(id string) bool {
 	switch id {
-	case "photoevery", "clocktap", "alarmwords", "alarmrise", "clock", "clockpos", "weatherpos", "datecolor", "glancesize", "glancemusic", "camtime", "camfit", "cambands", "camshade", "answertime", "idledim", "timerstyle", "callring", "alarmsound", "turnstyle", "musicstrip", "atnight", "nightstyle", "radarsrc", "output", "cal_open", "cal_opens_on", "cal_month_details", "calpopallday", "calpopwhen",
+	case "photoevery", "clocktap", "alarmwords", "alarmrise", "clock", "clockpos", "weatherpos", "datecolor", "glancesize", "glancemusic", "camtime", "camfit", "cambands", "camshade", "answertime", "idledim", "timerstyle", "callring", "alarmsound", "turnstyle", "musicstrip", "atnight", "nightstyle", "radarsrc", "output", "cal_open", "cal_opens_on", "cal_month_details", "cal_week_starts", "calpopallday", "calpopwhen",
 		"skin", "weather":
 		return true
 	}
