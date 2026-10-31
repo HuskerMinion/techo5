@@ -2326,6 +2326,216 @@ var uiTranslations = map[string]map[string]string{
 		"ui_tz_follow_ha": "Segui Home Assistant",
 		"ui_tz_common":    "Comuni",
 	},
+	"nl": {
+		// Audio output
+		"audio_output": "Geluidsuitgang",
+		// Back
+		"back": "Terug",
+		// Background
+		"background": "Achtergrond",
+		// Bass
+		"bass": "Bass",
+		// Brightness
+		"brightness": "Helderheid",
+		// Cancel
+		"cancel": "Annuleren",
+		// Clear
+		"clear": "Wissen",
+		// Close
+		"close": "Sluiten",
+		// Connect
+		"connect": "Verbinden",
+		// Day
+		"day": "Dag",
+		// Default
+		"default_option": "Standaard",
+		// Do not disturb
+		"do_not_disturb": "Niet storen",
+		// Done
+		"done": "Gereed",
+		// ANNOUNCEMENT
+		"drawer_announcement": "AANKONDIGING",
+		// Call
+		"drawer_call": "Bellen",
+		// Favorites
+		"drawer_favorites": "Favorieten",
+		// Mute
+		"drawer_mute": "Geluid uit",
+		// Paused
+		"drawer_paused": "Gepauzeerd",
+		// Phone
+		"drawer_phone": "Telefoon",
+		// Radio
+		"drawer_radio": "Radio",
+		// Speak
+		"drawer_speak": "Spreken",
+		// Unmute
+		"drawer_unmute": "Geluid aan",
+		// Font
+		"font_label": "Lettertype",
+		// Hang up
+		"hang_up": "Ophangen",
+		// Home screen
+		"home_screen": "Beginscherm",
+		// Playback
+		"media_playback": "Weergave",
+		// Microphone
+		"microphone": "Microfoon",
+		// Month
+		"month": "Maand",
+		// Music
+		"music": "Muziek",
+		// Name
+		"name": "Naam",
+		// Network address
+		"network_address": "Netwerkadres",
+		// Next
+		"next": "Volgende",
+		// Now playing
+		"now_playing": "Speelt nu",
+		// OK
+		"ok": "OK",
+		// Automatic
+		"option_automatic": "Automatisch",
+		// Center
+		"option_center": "Midden",
+		// Day
+		"option_day": "Dag",
+		// Default
+		"option_default": "Standaard",
+		// Fade
+		"option_fade": "Vervaging",
+		// Gold
+		"option_gold": "Goud",
+		// Hide
+		"option_hide": "Verbergen",
+		// Month
+		"option_month": "Maand",
+		// Night light
+		"option_night_light": "Nachtlamp",
+		// Red
+		"option_red": "Rood",
+		// Show
+		"option_show": "Weergeven",
+		// Silent
+		"option_silent": "Stil",
+		// Simple
+		"option_simple": "Eenvoudig",
+		// Solid
+		"option_solid": "Effen",
+		// Speaker
+		"option_speaker": "Luidspreker",
+		// Play
+		"play": "Afspelen",
+		// Presence
+		"presence_heading": "Aanwezigheid",
+		// Quiet
+		"quiet": "Rustig",
+		// Quiet hours
+		"quiet_hours": "Stille uren",
+		// Repeat
+		"repeat": "Herhalen",
+		// Restart
+		"restart": "Opnieuw opstarten",
+		// Screen language
+		"screen_language": "Schermtaal",
+		// Settings
+		"settings": "Instellingen",
+		// Slideshow
+		"slideshow": "Diavoorstelling",
+		// Threshold
+		"spot_threshold": "Drempelwaarde",
+		// Stop
+		"stop": "Stoppen",
+		// Time zone
+		"time_zone": "Tijdzone",
+		// Timer
+		"timer": "Timer",
+		//  timer
+		"timer_suffix": " timer",
+		// Today
+		"today": "Vandaag",
+		// Gateway
+		"ui_address_field_gateway": "Gateway",
+		// Alarms
+		"ui_alarms": "Wekkers",
+		// Allow
+		"ui_allow": "Toestaan",
+		// Answer
+		"ui_answer": "Opnemen",
+		// Calendar
+		"ui_calendar": "Agenda",
+		// Change
+		"ui_change": "Wijzigen",
+		// Closed
+		"ui_closed": "Gesloten",
+		// Confirm
+		"ui_confirm": "Bevestigen",
+		// Days
+		"ui_days": "Dagen",
+		// Decline
+		"ui_decline": "Weigeren",
+		// Delete
+		"ui_delete": "Verwijderen",
+		// Disconnect
+		"ui_disconnect": "Ontkoppelen",
+		// Display
+		"ui_display": "Scherm",
+		// Edit
+		"ui_edit": "Bewerken",
+		// Hour
+		"ui_hour": "Uur",
+		// Incoming call
+		"ui_incoming_call": "Inkomende oproep",
+		// Install
+		"ui_install": "Installeren",
+		// Listening
+		"ui_listening": "Luistert",
+		// Minute
+		"ui_minute": "Minuut",
+		// More
+		"ui_more": "Meer",
+		// Muted
+		"ui_muted": "Gedempt",
+		// Pair
+		"ui_pair": "Koppelen",
+		// PAUSED
+		"ui_paused": "GEPAUZEERD",
+		// Privacy
+		"ui_privacy": "Privacy",
+		// Rescan
+		"ui_rescan": "Opnieuw scannen",
+		// Running
+		"ui_running": "Actief",
+		// Save
+		"ui_save": "Opslaan",
+		// Show
+		"ui_show": "Weergeven",
+		// Silent
+		"ui_silent": "Stil",
+		// Sound
+		"ui_sound": "Geluid",
+		// Theme
+		"ui_theme": "Thema",
+		// Thinking
+		"ui_thinking": "Denkt na",
+		// Line
+		"ui_timer_style_line": "Regel",
+		// Unknown
+		"ui_unknown": "Onbekend",
+		// Update channel
+		"update_channel": "Updatekanaal",
+		// Updates
+		"updates": "Updates",
+		// Voice
+		"voice": "Stem",
+		// Volume
+		"volume": "Volume",
+		// Weather
+		"weather": "Weer",
+		// Wi-Fi
+		"wi_fi": "Wifi",
+	},
 	"ja": {
 		"drawer_recording":           "録音中",
 		"drawer_talk":                "話す",

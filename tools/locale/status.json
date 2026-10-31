@@ -6,6 +6,7 @@
   "fr": {"name": "French", "by": "royto (#346)", "device": "Not yet"},
   "it": {"name": "Italian", "by": "angelor87 (#310, #353)", "device": "Echo Show 5 1st gen (#353)"},
   "ja": {"name": "Japanese", "by": "lem0njuice0 (#270)", "device": "Echo Show 5 2nd gen (#270)"},
+  "nl": {"name": "Dutch", "by": "christianschmidt (#365)", "device": "Not yet"},
   "tr": {"name": "Turkish", "by": "senolsun (#349)", "device": "Not yet"}
  }
 }
