@@ -1404,6 +1404,10 @@ var brightnessSteps = [...]int{5, 10, 15, 20, 25, 30, 40, 50, 60, 70, 80, 90, 10
 // nextStep is the step by steps from cur in steps, cur being possibly between two of them, as
 // Home Assistant can set it.
 func nextStep(steps []int, cur, by int) int {
+	// Below the lowest step, as Home Assistant can set it, a step down is no step up.
+	if by < 0 && cur < steps[0] {
+		return cur
+	}
 	i := 0
 	for i < len(steps)-1 && steps[i] < cur {
 		i++

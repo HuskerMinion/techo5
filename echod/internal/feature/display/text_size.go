@@ -28,7 +28,7 @@ var textSteps = []int{70, 80, 90, 100, 110, 125}
 // textSize is the text size in force: the one chosen, or the device's own (layout.DefaultTextSize).
 func textSize() int {
 	if v := config.Get().Screen.TextSize; v > 0 {
-		return v
+		return min(max(v, config.TextSizeLeast), config.TextSizeMost)
 	}
 	return layout.DefaultTextSize()
 }

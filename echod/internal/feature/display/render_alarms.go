@@ -49,10 +49,10 @@ func (r *renderer) ringingPage(s scene) {
 	if ampm == "" {
 		gap = 0
 	}
-	hw, aw := r.width(r.clock, hour), r.width(r.ampm, ampm)
+	hw, aw := r.width(r.ringClock, hour), r.width(r.ringAmpm, ampm)
 	x := (r.w - hw - gap - aw) / 2
-	r.text(r.clock, hour, x, r.s(290), cream)
-	r.text(r.ampm, ampm, x+hw+gap, r.s(290), amber)
+	r.text(r.ringClock, hour, x, r.s(290), cream)
+	r.text(r.ringAmpm, ampm, x+hw+gap, r.s(290), amber)
 
 	left, right := r.actionHalves()
 	rad := float64(r.s(actionRadius))

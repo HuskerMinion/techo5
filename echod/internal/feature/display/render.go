@@ -413,6 +413,10 @@ type renderer struct {
 	micro  font.Face // an event's words on a day of the month
 	margin int
 
+	// ringClock and ringAmpm are the ringing page's time at 100% whatever the text size: it already
+	// fills the band between the title and the buttons.
+	ringClock, ringAmpm font.Face
+
 	// base keeps the settings screen's unchanging part.
 	base    *image.RGBA
 	baseKey baseKey
@@ -476,6 +480,8 @@ func (r *renderer) makeFaces(k fontKey) {
 	r.clock = face(true, 230)
 	r.big = face(true, 100)
 	r.ampm = face(true, 56)
+	at100 := fontKey{k.name, k.gen, 0}
+	r.ringClock, r.ringAmpm = at100.face(true, float64(r.s(230))), at100.face(true, float64(r.s(56)))
 	r.title = face(true, 48)
 	r.body = face(false, 42)
 	r.small = face(false, 34)

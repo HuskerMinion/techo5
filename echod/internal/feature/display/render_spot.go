@@ -57,14 +57,21 @@ var (
 const ampmGap = 10
 
 // timeLine draws the time centered on the face at baseline, with its AM/PM beside it in the accent
-// the way the Show sets it; on a 24-hour clock the time stands alone.
+// the way the Show sets it; on a 24-hour clock the time stands alone. At a large text size the two
+// move left together as far as it takes to keep the AM/PM on the face.
 func (r *roundRenderer) timeLine(now time.Time, baseline int) {
-	hm := clockHM(now)
-	r.centered(r.clock, hm, baseline, colText)
-	if s := clockSuffix(now); s != "" {
-		r.text(r.title, s, center+r.width(r.clock, hm)/2+ampmGap, baseline, colAccent)
+	hm, s := clockHM(now), clockSuffix(now)
+	hw := r.width(r.clock, hm)
+	x := center - hw/2
+	if s != "" {
+		x -= max(0, x+hw+ampmGap+r.width(r.title, s)-(2*center-ampmEdge))
+		r.text(r.title, s, x+hw+ampmGap, baseline, colAccent)
 	}
+	r.text(r.clock, hm, x, baseline, colText)
 }
+
+// ampmEdge is how far in from the face's edge an AM/PM ends at the most: inside the ring around it.
+const ampmEdge = 48
 
 type roundScene struct {
 	pin pinView // the settings lock's PIN pad (pin.go), over everything but a call or a ring

@@ -3,6 +3,7 @@
 package display
 
 import (
+	"os"
 	"path/filepath"
 	"testing"
 
@@ -78,5 +79,17 @@ func TestEveryFaceFollowsTheTextSize(t *testing.T) {
 	}
 	if got := big.atTextSize(40); got != 50 {
 		t.Errorf("40 at 125%% is %d", got)
+	}
+}
+
+// A size from a hand-edited file is drawn held to the setting's range, as the writer would have held it.
+func TestAHandEditedTextSizeIsHeld(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "state.json")
+	if err := os.WriteFile(path, []byte(`{"screen":{"text_size":100000}}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	config.Use(path)
+	if got := textSize(); got != config.TextSizeMost {
+		t.Errorf("drawn at %d%%, want %d%%", got, config.TextSizeMost)
 	}
 }

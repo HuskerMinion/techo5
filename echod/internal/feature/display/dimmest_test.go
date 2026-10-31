@@ -70,6 +70,7 @@ func TestNextBrightness(t *testing.T) {
 		{60, +1, 70},
 		{33, +1, 40},
 		{33, -1, 30},
+		{3, -1, 3},
 	} {
 		if got := nextStep(brightnessSteps[:], c.cur, c.by); got != c.want {
 			t.Errorf("nextStep(brightness, %d, %+d) = %d, want %d", c.cur, c.by, got, c.want)
