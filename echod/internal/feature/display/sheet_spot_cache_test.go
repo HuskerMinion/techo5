@@ -10,11 +10,11 @@ func TestSpotFacesOfAnOlderGenerationAreLetGo(t *testing.T) {
 	spotFaceCache.faces = nil
 	spotFaceCache.mu.Unlock()
 	name := screenFont()
-	spotFaces(fontKey{name, 2001})
-	spotFaces(fontKey{name, 2002})
+	spotFaces(fontKey{name, 2001, 100})
+	spotFaces(fontKey{name, 2002, 100})
 	spotFaceCache.mu.Lock()
 	defer spotFaceCache.mu.Unlock()
-	if _, kept := spotFaceCache.faces[fontKey{name, 2001}]; kept || len(spotFaceCache.faces) != 1 {
+	if _, kept := spotFaceCache.faces[fontKey{name, 2001, 100}]; kept || len(spotFaceCache.faces) != 1 {
 		t.Errorf("the cache holds %d fonts' faces, the older generation's among them: %v", len(spotFaceCache.faces), kept)
 	}
 }

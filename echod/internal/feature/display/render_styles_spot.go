@@ -25,11 +25,11 @@ type spotFaceKey struct {
 	size int
 }
 
-// styleFace is a face at size pixels in the screen font, kept once made; sizes are rounded to a few
-// pixels so a style that fits its words to the circle keeps a handful rather than one per pixel. A new
-// font empties the set (useFont).
+// styleFace is a face at size pixels in the screen font at the text size, kept once made; sizes are
+// rounded to a few pixels so a style that fits its words to the circle keeps a handful rather than one
+// per pixel. A new font or text size empties the set (useFont).
 func (r *roundRenderer) styleFace(bold bool, size int) font.Face {
-	px := max(size/2*2, 8)
+	px := max(r.atTextSize(size)/2*2, 8)
 	k := spotFaceKey{bold, px}
 	if f, ok := r.styleFaces[k]; ok {
 		return f

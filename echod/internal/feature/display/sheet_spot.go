@@ -210,7 +210,7 @@ func spotFaces(k fontKey) *sheetFaces {
 	if fc, ok := spotFaceCache.faces[k]; ok {
 		return fc
 	}
-	f := func(bold bool, size float64) font.Face { return fontFace(k.name, bold, size) }
+	f := func(bold bool, size float64) font.Face { return k.face(bold, size) }
 	fc := &sheetFaces{
 		header: f(true, 30), label: f(false, 24), labelBold: f(true, 24), sub: f(false, 16),
 		value: f(false, 20), nav: f(false, 20), navBold: f(true, 20), button: f(true, 19),

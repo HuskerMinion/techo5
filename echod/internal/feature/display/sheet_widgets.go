@@ -56,10 +56,12 @@ type paint struct {
 	// captions sit above them (captions), so a tap on them does what it does.
 	footAt int
 
-	// font is the screen font the faces in use were made in (font.go), "" for Go, and fontGen the
-	// fonts of the owner's own when they were (lib/fonts.Generation).
-	font    string
-	fontGen uint64
+	// font is the screen font the faces in use were made in (font.go), "" for Go, fontGen the
+	// fonts of the owner's own when they were (lib/fonts.Generation), and textSize the text size they
+	// were drawn at (text_size.go).
+	font     string
+	fontGen  uint64
+	textSize int
 
 	// The drawn dashboard's tiles where they were last drawn, and how far it can scroll; bigTiles is
 	// the Dashboard tiles setting asking for them larger, and nameBelow the Dashboard tile layout asking
@@ -116,8 +118,8 @@ func (p *paint) navH() int        { return p.s(navHBase) }
 func (p *paint) navGap() int      { return p.s(navGapBase) }
 func (p *paint) cardIn() int      { return p.s(cardInBase) }
 func (p *paint) cardRad() float64 { return float64(p.s(cardRadBase)) }
-func (p *paint) headerH() int     { return p.s(headerHBase) }
-func (p *paint) rowH() int        { return p.s(rowHBase) }
+func (p *paint) headerH() int     { return p.grownForText(p.s(headerHBase)) }
+func (p *paint) rowH() int        { return p.grownForText(p.s(rowHBase)) }
 func (p *paint) rowIn() int       { return p.s(rowInBase) }
 
 // rowHeight is how tall row is drawn: a heading is shorter than a row with something on it.
@@ -152,7 +154,7 @@ func (r *paint) faces() sheetFaces {
 	if r.fc != nil {
 		return *r.fc
 	}
-	return facesFor(fontKey{r.font, r.fontGen})
+	return facesFor(r.faceKey())
 }
 
 func (r *paint) text(face font.Face, s string, x, baseline int, c color.Color) {
@@ -160,14 +162,14 @@ func (r *paint) text(face font.Face, s string, x, baseline int, c color.Color) {
 		return
 	}
 	if r.over.record {
-		if face.Metrics().Height.Ceil() <= r.s(scrimTallest) {
+		if face.Metrics().Height.Ceil() <= r.atTextSize(r.s(scrimTallest)) {
 			r.over.noteText(face, s, x, baseline)
 		}
 		return
 	}
 	if r.over.photo != nil {
 		r.over.halo(r.dst, face, s, x, baseline)
-		if _, chosen := c.(chosenColor); !chosen && face.Metrics().Height.Ceil() <= r.s(scrimTallest) {
+		if _, chosen := c.(chosenColor); !chosen && face.Metrics().Height.Ceil() <= r.atTextSize(r.s(scrimTallest)) {
 			c = overPhotoColor(c)
 		}
 	}
@@ -378,11 +380,11 @@ const (
 // sheetFaces are the settings screen's own sizes of the font the rest of the screen uses.
 type sheetFaces struct{ header, label, labelBold, sub, value, nav, navBold, button font.Face }
 
-// sheetFacesAt builds them in the font named through a scale: 1:1 for the panel these sizes were
+// sheetFacesAt builds them in the font k names through a scale: 1:1 for the panel these sizes were
 // chosen on (facesFor keeps those), or a renderer's own for another. Not cached: a renderer builds its
 // own once per font.
-func sheetFacesAt(name string, s func(int) int) sheetFaces {
-	f := func(bold bool, size int) font.Face { return fontFace(name, bold, float64(s(size))) }
+func sheetFacesAt(k fontKey, s func(int) int) sheetFaces {
+	f := func(bold bool, size int) font.Face { return k.face(bold, float64(s(size))) }
 	return sheetFaces{
 		header: f(true, 36), label: f(false, 29), labelBold: f(true, 29), sub: f(false, 21),
 		value: f(false, 25), nav: f(false, 24), navBold: f(true, 24), button: f(true, 23),
@@ -643,13 +645,18 @@ func (r *paint) settingRow(card image.Rectangle, top int, row settingRow) {
 	right, cy := card.Max.X-r.s(26), top+r.rowH()/2
 	var labelEnd int
 	row.label, row.sub, labelEnd = r.rowWords(card, row, face)
-	base := top + r.s(40)
+	// The lines' baselines, in the Show 5's pixels at 100%, move apart or together around a middle as
+	// the text size grows or shrinks them, so two lines neither run into each other nor out of the row.
+	// A row grown for large text keeps them in its middle.
+	mid := top + (r.rowH()-r.s(rowHBase))/2
+	line := func(at, middle int) int { return mid + r.s(middle) + r.atTextSize(r.s(at)-r.s(middle)) }
+	base := line(40, 30)
 	if row.sub == "" {
 		r.text(face, row.label, card.Min.X+r.rowIn(), base, cream)
 	} else {
-		base = top + r.s(30)
+		base = line(30, 40)
 		r.text(face, row.label, card.Min.X+r.rowIn(), base, cream)
-		r.text(fc.sub, row.sub, card.Min.X+r.rowIn(), top+r.s(53), dim)
+		r.text(fc.sub, row.sub, card.Min.X+r.rowIn(), line(53, 40), dim)
 	}
 	if row.locked {
 		x := card.Min.X + r.rowIn() + r.width(face, row.label) + r.s(lockGap)

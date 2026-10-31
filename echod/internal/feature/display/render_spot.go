@@ -296,15 +296,14 @@ func newRoundRenderer(dst *image.RGBA) *roundRenderer {
 
 // makeFaces makes the renderer's faces in the font named (font.go).
 func (r *roundRenderer) makeFaces(k fontKey) {
-	name := k.name
 	face := func(bold bool, size float64) font.Face {
-		fc := fontFace(name, bold, size)
+		fc := k.face(bold, size)
 		if fc == nil {
 			panic("no font face at all, not even Go's")
 		}
 		return fc
 	}
-	r.font, r.fontGen, r.fc, r.styleFaces = name, k.gen, spotFaces(k), nil
+	r.font, r.fontGen, r.textSize, r.fc, r.styleFaces = k.name, k.gen, k.size, spotFaces(k), nil
 	r.clock = face(true, 104)
 	r.title = face(true, 34)
 	r.body = face(false, 26)
@@ -313,8 +312,8 @@ func (r *roundRenderer) makeFaces(k fontKey) {
 	r.tiny = face(false, 16)
 }
 
-// useFont makes the faces again when the screen font, or the owner's own fonts, have changed since
-// they were made, so a new choice is drawn from the next frame on.
+// useFont makes the faces again when the screen font, the owner's own fonts or the text size have
+// changed since they were made, so a new choice is drawn from the next frame on.
 func (r *roundRenderer) useFont() {
 	if k, changed := r.fontChanged(); changed {
 		r.makeFaces(k)

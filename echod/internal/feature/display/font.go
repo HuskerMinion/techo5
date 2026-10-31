@@ -128,11 +128,22 @@ func (d *Display) removeOwnFont(file string) error {
 	return nil
 }
 
-// fontKey is a set of faces' fonts, for keeping them: the screen font's name, and the generation of
-// the owner's own fonts (lib/fonts.Generation) they were made with.
+// fontKey is a set of faces' fonts, for keeping them: the screen font's name, the generation of the
+// owner's own fonts (lib/fonts.Generation) they were made with, and the text size they were drawn at
+// (textSize).
 type fontKey struct {
 	name string
 	gen  uint64
+	size int
+}
+
+// face is k's font at px of the layout's pixels, regular or bold, drawn at k's text size: what makes
+// every face for the screen's words, so all of them follow the setting alike.
+func (k fontKey) face(bold bool, px float64) font.Face {
+	if k.size > 0 {
+		px *= float64(k.size) / 100
+	}
+	return fontFace(k.name, bold, px)
 }
 
 // keptFonts is how many fonts' faces the caches below keep before starting again.
@@ -152,7 +163,7 @@ func facesFor(k fontKey) sheetFaces {
 	if f, ok := sheetFaceCache.faces[k]; ok {
 		return f
 	}
-	f := sheetFacesAt(k.name, func(n int) int { return n })
+	f := sheetFacesAt(k, func(n int) int { return n })
 	sheetFaceCache.faces = roomFor(sheetFaceCache.faces, k)
 	sheetFaceCache.faces[k] = f
 	return f
@@ -173,10 +184,13 @@ func roomFor[V any](m map[fontKey]V, k fontKey) map[fontKey]V {
 	return m
 }
 
-// fontChanged is whether the screen font, or the owner's own fonts, have changed since a paint's
-// faces were made, looking at the fonts folder now and then (lib/fonts.Refresh).
+// fontChanged is whether the screen font, the owner's own fonts or the text size have changed since
+// a paint's faces were made, looking at the fonts folder now and then (lib/fonts.Refresh).
 func (p *paint) fontChanged() (fontKey, bool) {
 	fonts.Refresh()
-	k := fontKey{drawnFont(), fonts.Generation()}
-	return k, k != fontKey{p.font, p.fontGen}
+	k := fontKey{drawnFont(), fonts.Generation(), textSize()}
+	return k, k != p.faceKey()
 }
+
+// faceKey is the fonts a paint's faces are made in.
+func (p *paint) faceKey() fontKey { return fontKey{p.font, p.fontGen, p.textSize} }

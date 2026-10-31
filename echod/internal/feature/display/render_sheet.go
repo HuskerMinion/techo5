@@ -73,7 +73,7 @@ type baseKey struct {
 // part, soft shadows and gradients a pixel at a time, and the same every frame until the category, the
 // heading, the theme, the font or the language changes, so it is kept and copied.
 func (r *renderer) settingsBase(sel category, title, blurb string) {
-	key := baseKey{sel, title, blurb, walnut, amber, cream, dim, ember, r.w, r.h, fontKey{r.font, r.fontGen}, screenLang()}
+	key := baseKey{sel, title, blurb, walnut, amber, cream, dim, ember, r.w, r.h, r.faceKey(), screenLang()}
 	if r.base != nil && r.baseKey == key {
 		copy(r.dst.Pix, r.base.Pix)
 		return
@@ -100,11 +100,13 @@ func (r *renderer) settingsBase(sel category, title, blurb string) {
 			fg, face = onAccent(), fc.navBold
 		}
 		r.icon(c, r.s(12+30), top+r.navH()/2, fg)
-		r.text(face, tr(categoryNameKeys[c]), r.s(12+58), top+r.navH()/2+r.s(9), fg)
+		// Cut rather than run off the pill into the card, as a long name could at a large text size.
+		r.text(face, r.fit(face, tr(categoryNameKeys[c]), pill.Max.X-r.s(12+58+6)), r.s(12+58), top+r.navH()/2+r.s(9), fg)
 	}
 	card := r.nextCard(r.w, r.h)
-	r.text(fc.header, title, card.Min.X+r.rowIn(), card.Min.Y+r.s(46), cream)
-	r.text(fc.sub, blurb, card.Min.X+r.rowIn(), card.Min.Y+r.s(72), dim)
+	room := card.Dx() - 2*r.rowIn()
+	r.text(fc.header, r.fit(fc.header, title, room), card.Min.X+r.rowIn(), card.Min.Y+r.grownForText(r.s(46)), cream)
+	r.text(fc.sub, r.fit(fc.sub, blurb, room), card.Min.X+r.rowIn(), card.Min.Y+r.grownForText(r.s(72)), dim)
 	r.rule(card.Min.X+r.s(22), card.Max.X-r.s(22), card.Min.Y+r.headerH()-r.s(2), 1)
 
 	if r.base == nil || r.base.Rect != r.dst.Rect {
@@ -117,7 +119,7 @@ func (r *renderer) settingsBase(sel category, title, blurb string) {
 // settingsShell paints what every category shares, the ground, Done and the empty card, from a copy
 // kept until the theme, font or language changes: its gradients and the card's shadow are most of the drawing.
 func (r *renderer) settingsShell() {
-	key := baseKey{g: walnut, a: amber, t: cream, d: dim, rl: ember, w: r.w, h: r.h, font: fontKey{r.font, r.fontGen}, lang: screenLang()}
+	key := baseKey{g: walnut, a: amber, t: cream, d: dim, rl: ember, w: r.w, h: r.h, font: r.faceKey(), lang: screenLang()}
 	if r.shell != nil && r.shellKey == key {
 		copy(r.dst.Pix, r.shell.Pix)
 		return

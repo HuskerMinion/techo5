@@ -180,6 +180,7 @@ var registered = []string{
 	"screen_dashboard_view",
 	"screen_dim_after_idle",
 	"screen_font",
+	"screen_text_size",
 	"screen_date_color",
 	"screen_weather_position",
 	"screen_glance_chip_size",

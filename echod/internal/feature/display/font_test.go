@@ -51,15 +51,15 @@ func TestChoosingTheFont(t *testing.T) {
 // The settings screen's faces are kept per font and per generation of one's own fonts: a change of
 // either is a new set, and asking again is the same set.
 func TestSheetFacesPerFont(t *testing.T) {
-	a := facesFor(fontKey{fonts.Go, 0})
-	b := facesFor(fontKey{"inter", 0})
+	a := facesFor(fontKey{fonts.Go, 0, 100})
+	b := facesFor(fontKey{"inter", 0, 100})
 	if a.label == b.label {
 		t.Error("Inter's settings faces are Go's")
 	}
-	if facesFor(fontKey{"inter", 0}).label != b.label {
+	if facesFor(fontKey{"inter", 0, 100}).label != b.label {
 		t.Error("asking again made the faces again")
 	}
-	if facesFor(fontKey{"inter", 1}).label == b.label {
+	if facesFor(fontKey{"inter", 1, 100}).label == b.label {
 		t.Error("a new generation kept the old faces")
 	}
 }
@@ -115,7 +115,7 @@ func TestTileFacesOfAnOldFontGo(t *testing.T) {
 	p.fontGen = 8
 	p.textFace(false, 40)
 	textFaces.Range(func(k, _ any) bool {
-		if k.(textKey).font != (fontKey{"inter", 8}) {
+		if k.(textKey).font != (fontKey{"inter", 8, 0}) {
 			t.Errorf("a face of %+v is still kept", k)
 		}
 		return true
