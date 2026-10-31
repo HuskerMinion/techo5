@@ -14,5 +14,11 @@ fi
 killall dropbear ntpd udhcpc wpa_supplicant fbprobe 2>/dev/null
 cp /run/boot.log /data/techo5-linux/boot.log 2>/dev/null
 sync
+# Whatever still runs (a board's helpers, a shell) holds files open, and umount -a then only
+# remounts those filesystems read-only: a FAT one keeps its dirty bit and is "not properly
+# unmounted" at the next boot.
+killall5 -TERM
+sleep 1
+killall5 -KILL
 umount -a -r 2>/dev/null
 sync
