@@ -182,7 +182,7 @@ func TestJapaneseDatesAndWeather(t *testing.T) {
 
 // completeCatalogs are the screen languages translated in full. A key added to uiEnglish has to be
 // added to each of them too, or that line shows in English on their screens.
-var completeCatalogs = []string{"de", "fr", "it", "ja", "tr"}
+var completeCatalogs = []string{"de", "fr", "gl", "it", "ja", "tr"}
 
 func TestCompleteCatalogsHaveEveryKey(t *testing.T) {
 	for _, lang := range completeCatalogs {

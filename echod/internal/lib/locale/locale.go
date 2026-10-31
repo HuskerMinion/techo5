@@ -69,6 +69,18 @@ var langs = map[string]*words{
 			"sunny": "Ensoleillé", "windy": "Venteux", "windy-variant": "Venteux",
 		},
 	},
+	"gl": {
+		days:        [7]string{"domingo", "luns", "martes", "mércores", "xoves", "venres", "sábado"},
+		shortDays:   [7]string{"dom", "lun", "mar", "mér", "xov", "ven", "sáb"},
+		months:      [12]string{"xaneiro", "febreiro", "marzo", "abril", "maio", "xuño", "xullo", "agosto", "setembro", "outubro", "novembro", "decembro"},
+		shortMonths: [12]string{"xan", "feb", "mar", "abr", "maio", "xuñ", "xul", "ago", "set", "out", "nov", "dec"},
+		sky: map[string]string{
+			"clear-night": "Despexado", "cloudy": "Anubrado", "exceptional": "Extremo", "fog": "Néboa", "hail": "Sarabia",
+			"lightning": "Raios", "lightning-rainy": "Treboadas", "partlycloudy": "Parcialmente anubrado",
+			"pouring": "Choiva intensa", "rainy": "Choiva", "snowy": "Neve", "snowy-rainy": "Auganeve",
+			"sunny": "Soleado", "windy": "Ventoso", "windy-variant": "Ventoso",
+		},
+	},
 	"it": {
 		days:        [7]string{"domenica", "lunedì", "martedì", "mercoledì", "giovedì", "venerdì", "sabato"},
 		shortDays:   [7]string{"dom", "lun", "mar", "mer", "gio", "ven", "sab"},
@@ -149,6 +161,9 @@ var phrases = map[string]map[string]string{
 	"fr": {"here": "Ici", "today": "Aujourd'hui", "alarm": "Réveil", "snoozed": "Reporté à", "tomorrow": "Demain", "yesterday": "Hier",
 		"now": "Maintenant", "allday": "Toute la journée", "nothing": "Rien au calendrier",
 		"nothingtoday": "Rien aujourd'hui", "nothingelse": "Plus rien aujourd'hui", "upcoming": "À VENIR", "nothingsoon": "Rien de prévu"},
+	"gl": {"here": "Aquí", "today": "Hoxe", "alarm": "Alarma", "snoozed": "Aprazada ata as", "tomorrow": "Mañá", "yesterday": "Onte",
+		"now": "Agora", "allday": "Todo o día", "nothing": "Nada no calendario", "nothingtoday": "Nada hoxe",
+		"nothingelse": "Nada máis hoxe", "upcoming": "PRÓXIMOS", "nothingsoon": "Nada próximo"},
 	"it": {"here": "Qui", "today": "Oggi", "alarm": "Sveglia", "snoozed": "Posticipata alle", "tomorrow": "Domani", "yesterday": "Ieri",
 		"now": "Ora", "allday": "Tutto il giorno", "nothing": "Niente in calendario", "nothingtoday": "Niente oggi",
 		"nothingelse": "Nient'altro oggi", "upcoming": "PROSSIMI", "nothingsoon": "Niente in programma"},
@@ -245,7 +260,7 @@ func LongDate(t time.Time, lang string) string {
 	switch lang {
 	case "de":
 		return up(d) + ", " + day(t) + ". " + m
-	case "es", "pt":
+	case "es", "gl", "pt":
 		return up(d) + ", " + day(t) + " de " + m
 	case "ru", "tr":
 		return up(d) + ", " + day(t) + " " + m
@@ -266,7 +281,7 @@ func ShortDate(t time.Time, lang string) string {
 	switch lang {
 	case "de":
 		return up(d) + "., " + day(t) + ". " + m
-	case "es", "pt", "ru", "tr":
+	case "es", "gl", "pt", "ru", "tr":
 		return up(d) + ", " + day(t) + " " + m
 	}
 	return up(d) + " " + day(t) + " " + m
@@ -301,7 +316,7 @@ func MonthDay(t time.Time, lang string) string {
 	switch lang {
 	case "de":
 		return day(t) + ". " + m
-	case "es", "pt":
+	case "es", "gl", "pt":
 		return day(t) + " de " + m
 	}
 	return day(t) + " " + m
@@ -317,7 +332,7 @@ func PhotoDate(t time.Time, lang string) string {
 	if _, ok := langs[lang]; !ok {
 		return MonthDay(t, lang) + ", " + y
 	}
-	if lang == "es" || lang == "pt" {
+	if lang == "es" || lang == "gl" || lang == "pt" {
 		return MonthDay(t, lang) + " de " + y
 	}
 	return MonthDay(t, lang) + " " + y
