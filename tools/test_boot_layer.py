@@ -203,6 +203,181 @@ class Bootctl(unittest.TestCase):
             self.assertEqual(self.bc(cmdline, 'current'), want, cmdline)
 
 
+# ------------------------------------------------------------------------------------------ bootctl on systemd-boot
+
+ENTRY = 'title Slot %s (%s) 2026-10-30 12:00\nsort-key slot-%s\nlinux /%s/vmlinuz\noptions root=PARTUUID=x rw ab.slot=%s ab.kernel=%s\n'
+
+
+class SystemdBoot(unittest.TestCase):
+    """bootctl's systemd-boot backend (the Surface RT): the record kept as loader entries with boot
+    counters and loader.conf's default and preferred, on a copy of an ESP."""
+
+    def setUp(self):
+        self.d = '/t/sdboot-' + self._testMethodName
+        self.n = 0
+        sh('rm -rf %s; mkdir -p %s/esp/loader/entries %s/efivars' % (self.d, self.d, self.d))
+
+    def esp(self, entries, default, preferred=None):
+        """entries: {file name: word in its title}."""
+        for name, word in entries.items():
+            s = name[len('slot-')]
+            put('%s/esp/loader/entries/%s' % (self.d, name), (ENTRY % (s.upper(), word, s, s.upper(), s, s)).encode())
+        put(self.d + '/esp/loader/loader.conf', ('timeout 5\nauto-entries no\ndefault %s\n' % default +
+                                                 ('preferred %s\n' % preferred if preferred else '')).encode())
+
+    def bc(self, cmdline, args, env='BOOTCTL_ESP={d}/esp'):
+        self.n += 1
+        put('%s/cmdline.%d' % (self.d, self.n), cmdline.encode() + b'\n')
+        return sh(('BOOTCTL_CMDLINE={d}/cmdline.{n} BOOTCTL_CONF=/nonexistent BOOTCTL_EFIVARS={d}/efivars ' + env +
+                   ' sh /src/bootctl {a}').format(d=self.d, n=self.n, a=args))
+
+    def entries(self):
+        rc, out = sh('ls %s/esp/loader/entries' % self.d)
+        return out.split()
+
+    def loader(self):
+        """loader.conf's default and preferred, the rest checked to be kept."""
+        lines = get(self.d + '/esp/loader/loader.conf').decode().splitlines()
+        self.assertEqual(lines[:2], ['timeout 5', 'auto-entries no'])
+        kv = dict(l.split(None, 1) for l in lines[2:])
+        return kv.get('default'), kv.get('preferred')
+
+    def title(self, name):
+        return get('%s/esp/loader/entries/%s' % (self.d, name)).decode().splitlines()[0]
+
+    def tree(self):
+        return sh('cd %s/esp && find . | sort | while read f; do [ -f "$f" ] && sha256sum "$f" || echo "$f"; done'
+                  % self.d)[1]
+
+    def try_boot(self, name):
+        """What systemd-boot does when it boots a counted entry: one try, by renaming it."""
+        stem, c = name[:-len('.conf')].rsplit('+', 1)
+        left, done = (c.split('-') + ['0'])[:2]
+        new = '%s+%d-%d.conf' % (stem, max(int(left) - 1, 0), int(done) + 1)
+        sh('cd %s/esp/loader/entries && mv %s %s' % (self.d, name, new))
+        return new
+
+    def test_status_reads_the_entries_as_the_record(self):
+        self.esp({'slot-a.conf': 'good', 'slot-b+2-1.conf': 'trial'}, 'slot-a.conf', 'slot-b.conf')
+        rc, out = self.bc('console=ttyS0 ab.slot=b ab.kernel=b', 'status')
+        self.assertEqual(rc, 0, out)
+        self.assertIn('slot a: priority 14, tries 0, successful 1 (good)', out)
+        self.assertIn('slot b: priority 15, tries 2, successful 0 (trial)', out)
+        self.assertIn('booted: b (kernel b)', out)
+        # tries used up: systemd-boot skips the preferred entry, the default boots
+        sh('mv {d}/esp/loader/entries/slot-b+2-1.conf {d}/esp/loader/entries/slot-b+0-3.conf'.format(d=self.d))
+        rc, out = self.bc('ab.slot=a ab.kernel=a', 'status')
+        self.assertIn('slot a: priority 15, tries 0, successful 1 (good)', out)
+        self.assertIn('slot b: priority 0, tries 0, successful 0 (bad)', out)
+        sh('rm %s/esp/loader/entries/slot-b+0-3.conf' % self.d)
+        rc, out = self.bc('', 'status')
+        self.assertIn('slot b: priority 0, tries 0, successful 0, no entry (bad)', out)
+        self.assertIn('booted: - (kernel )', out)
+
+    def test_the_os_side_of_a_slot_update(self):
+        """SPEC.md's "What the OS does", step by step, as systemd-boot's files."""
+        self.esp({'slot-a.conf': 'good', 'slot-b.conf': 'good'}, 'slot-a.conf')
+        steps = [
+            # installing into b (a runs): marked bad before its files change, then on trial
+            ('ab.slot=a ab.kernel=a', 'mark-bad b', ['slot-a.conf', 'slot-b+0.conf'], ('slot-a.conf', None)),
+            ('ab.slot=a ab.kernel=a', 'set-active b', ['slot-a.conf', 'slot-b+3.conf'], ('slot-a.conf', 'slot-b.conf')),
+        ]
+        for cmdline, args, ents, ldr in steps:
+            rc, out = self.bc(cmdline, args)
+            self.assertEqual(rc, 0, args + ': ' + out)
+            self.assertEqual((self.entries(), self.loader()), (ents, ldr), args)
+        self.assertEqual(self.title('slot-b+3.conf'), 'title Slot B (trial) 2026-10-30 12:00')
+        self.try_boot('slot-b+3.conf')  # b boots: systemd-boot takes a try
+        rc, out = self.bc('ab.slot=b ab.kernel=b', 'status')
+        self.assertIn('slot b: priority 15, tries 2, successful 0 (trial)', out)
+        # the OS's health check: b works
+        rc, out = self.bc('ab.slot=b ab.kernel=b', 'mark-good')
+        self.assertEqual(rc, 0, out)
+        self.assertEqual((self.entries(), self.loader()), (['slot-a.conf', 'slot-b.conf'], ('slot-b.conf', None)))
+        self.assertEqual(self.title('slot-b.conf'), 'title Slot B (good) 2026-10-30 12:00')
+        before = self.tree()
+        rc, out = self.bc('ab.slot=b ab.kernel=b', 'mark-good')
+        self.assertEqual((rc, out), (0, 'bootctl: slot b already so\n'))
+        self.assertEqual(self.tree(), before, 'an edit that changes nothing wrote')
+        # the user wants the other slot: on trial again
+        self.bc('ab.slot=b ab.kernel=b', 'set-active a')
+        self.assertEqual((self.entries(), self.loader()), (['slot-a+3.conf', 'slot-b.conf'], ('slot-b.conf', 'slot-a.conf')))
+        self.try_boot('slot-a+3.conf')
+        # the running slot is known broken: the other boots next
+        rc, out = self.bc('ab.slot=a ab.kernel=a', 'mark-bad a')
+        self.assertEqual(rc, 0, out)
+        self.assertEqual((self.entries(), self.loader()), (['slot-a+0-1.conf', 'slot-b.conf'], ('slot-b.conf', None)))
+        self.assertEqual(self.title('slot-a+0-1.conf'), 'title Slot A (bad) 2026-10-30 12:00')
+        # slotctl install --keep-active: on trial, not first
+        rc, out = self.bc('ab.slot=b ab.kernel=b', 'set a priority=14 tries=3 successful=0')
+        self.assertEqual(rc, 0, out)
+        self.assertEqual((self.entries(), self.loader()), (['slot-a+3-1.conf', 'slot-b.conf'], ('slot-b.conf', None)))
+        self.assertIn('slot a: priority 14, tries 3, successful 0 (trial)', out)
+        rc, out = self.bc('', 'mark-good')
+        self.assertEqual(rc, 1, 'mark-good with no slot booted: ' + out)
+        self.assertEqual(self.bc('', 'set a priority=16')[0], 2)
+
+    def test_a_trial_without_a_good_slot_has_no_preferred(self):
+        self.esp({'slot-a+0-3.conf': 'trial', 'slot-b.conf': 'good'}, 'slot-b.conf')
+        rc, out = self.bc('ab.slot=b ab.kernel=b', 'mark-bad b')
+        self.assertEqual(rc, 0, out)
+        self.assertEqual(self.loader(), ('slot-b.conf', None))
+        rc, out = self.bc('ab.slot=b ab.kernel=b', 'set-active a')
+        self.assertEqual((self.entries(), self.loader()), (['slot-a+3.conf', 'slot-b+0.conf'], ('slot-a.conf', None)))
+
+    def test_entries_it_cannot_read_are_left_alone(self):
+        self.esp({'slot-a.conf': 'good', 'slot-a+1.conf': 'trial', 'slot-b.conf': 'good'}, 'slot-a.conf')
+        before = self.tree()
+        for args in ('status', 'mark-bad b', 'set-active a'):
+            rc, out = self.bc('ab.slot=a', args)
+            self.assertEqual(rc, 1, args + ': ' + out)
+            self.assertIn('slot a has 2 entries', out)
+        self.assertEqual(self.tree(), before)
+        rc, out = self.bc('ab.slot=a', 'set-active b', env='BOOTCTL_BACKEND=systemd-boot BOOTCTL_ESP=%s/nowhere' % self.d)
+        self.assertEqual(rc, 3, out)
+        self.assertIn('no slot-a or slot-b entries', out)
+
+    def test_which_backend(self):
+        """The record where misc holds one, systemd-boot's entries where only the ESP has them, as
+        configured where /etc/bootctl.conf says; a unit with neither stays as it was."""
+        self.esp({'slot-a.conf': 'good', 'slot-b.conf': 'good'}, 'slot-a.conf')
+        put(self.d + '/misc', misc(record((15, 2, 1), (14, 0, 1))))
+        esp = 'BOOTCTL_ESP=%s/esp ' % self.d
+        rc, out = self.bc('ab.slot=a', 'status', env=esp + 'BOOTCTL_MISC=%s/misc' % self.d)
+        self.assertIn('misc: ', out)
+        rc, out = self.bc('ab.slot=a', 'status', env=esp)
+        self.assertIn('esp: %s/esp (systemd-boot' % self.d, out)
+        rc, out = self.bc('ab.slot=a', '-e %s/esp status' % self.d, env='')
+        self.assertIn('esp: ', out)
+        put(self.d + '/bootctl.conf', b'BACKEND=misc\n')
+        rc, out = sh('BOOTCTL_CONF={d}/bootctl.conf BOOTCTL_ESP={d}/esp sh /src/bootctl status'.format(d=self.d))
+        self.assertEqual(rc, 3, out)
+        self.assertIn('no partition named', out)
+        put(self.d + '/bootctl.conf', ('BACKEND=systemd-boot\nESP=%s/esp\n' % self.d).encode())
+        rc, out = sh('BOOTCTL_CONF={d}/bootctl.conf BOOTCTL_CMDLINE=/nonexistent sh /src/bootctl status'.format(d=self.d))
+        self.assertEqual(rc, 0, out)
+        rc, out = self.bc('ab.slot=a', 'status', env='BOOTCTL_ESP=%s/nowhere' % self.d)
+        self.assertEqual(rc, 3, out)
+        self.assertIn('no partition named', out)
+
+    def test_init_writes_nothing(self):
+        self.esp({'slot-a.conf': 'good', 'slot-b+1.conf': 'trial'}, 'slot-a.conf', 'slot-b.conf')
+        before = self.tree()
+        rc, out = self.bc('', 'init')
+        self.assertEqual(rc, 0, out)
+        self.assertIn('already holds', out)
+        self.assertEqual(self.tree(), before)
+
+    def test_current_is_ab_slot_else_the_entry_systemd_boot_booted(self):
+        self.esp({'slot-a.conf': 'good', 'slot-b.conf': 'good'}, 'slot-a.conf')
+        self.assertEqual(self.bc('console=ttyS0 ab.slot=b ab.kernel=b', 'current'), (0, 'b\n'))
+        self.assertEqual(self.bc('console=ttyS0', 'current'), (1, ''))
+        # LoaderEntrySelected: 4 bytes of attributes, then the id in UTF-16, NUL ended
+        put(self.d + '/efivars/LoaderEntrySelected-4a67b082-0a4c-41cf-b6c7-440b29bb8c4f',
+            b'\x06\0\0\0' + 'slot-a.conf\0'.encode('utf-16-le'))
+        self.assertEqual(self.bc('console=ttyS0', 'current'), (0, 'a\n'))
+
+
 # ------------------------------------------------------------------------------------------ slotctl
 
 class Slotctl(unittest.TestCase):
@@ -481,6 +656,23 @@ class CommandLine(unittest.TestCase):
         self.assertEqual(self.on_trial('good', 'root=/dev/ram', trial), 1, 'not booted by the boot layer')
         self.assertEqual(self.on_trial('good', 'ab.slot=a ab.kernel=a', trial), 0)
         self.assertEqual(self.on_trial('good', 'ab.slot=a ab.kernel=a', good), 1)
+
+    def test_on_trial_on_systemd_boot(self):
+        """boot.sh's check, unchanged, on a board with no store whose bootctl reads systemd-boot's entries."""
+        def check(cmdline, entry):
+            put('/t/cmdline', cmdline.encode() + b'\n')
+            rc, out = sh('''rm -rf /t/esp /store/slots/a.state; mkdir -p /t/esp/loader/entries /t/bin
+                printf 'default slot-b.conf\\npreferred slot-a.conf\\n' > /t/esp/loader/loader.conf
+                : > /t/esp/loader/entries/{e}; : > /t/esp/loader/entries/slot-b.conf
+                cp /src/bootctl /t/bin/bootctl; chmod 755 /t/bin/bootctl
+                export PATH=/t/bin:$PATH BOOTCTL_ESP=/t/esp BOOTCTL_CMDLINE=/t/cmdline BOOTCTL_CONF=/nonexistent
+                log() {{ :; }}; . /src/techo5-lib.sh; T5_CMDLINE=/t/cmdline
+                eval "$(sed -n '/^on_trial() {{/,/^}}/p' /src/boot.sh)"
+                on_trial a'''.format(e=entry))
+            return rc
+        self.assertEqual(check('ab.slot=a ab.kernel=a', 'slot-a+2-1.conf'), 0)
+        self.assertEqual(check('ab.slot=a ab.kernel=a', 'slot-a.conf'), 1)
+        self.assertEqual(check('root=PARTUUID=x', 'slot-a+2-1.conf'), 1, 'not booted by the boot layer')
 
     def test_the_scripts_parse_under_busybox(self):
         for f in ('bootctl', 'slotctl', 'techo5-lib.sh', 'boot.sh'):

@@ -13,10 +13,32 @@
 # again), and reserved1 (bytes 20-27) is left zero, as AOSP has it.
 #
 # Exit status: 0 done (or nothing to change), 1 an error, 2 usage, 3 no record (nothing done).
+#
+# The systemd-boot backend (not in u-boot-amazon-echo): the same commands and output on a board
+# whose bootloader is systemd-boot rather than U-Boot (the Surface RT, tools/linux/surface-rt). The
+# record is then systemd-boot's own files on the ESP, kept the way systemd's bootctl and
+# systemd-bless-boot keep them: slot x's entry is loader/entries/<ESP_ENTRY_PREFIX>x.conf (good) or
+# <prefix>x+LEFT[-DONE].conf (boot counting: systemd-boot takes a try by renaming it at every boot
+# of it; +0 is bad), and loader/loader.conf's "preferred" (skipped once it has no tries left,
+# systemd-boot >= 262) and "default" say which slot boots first. In the record's words: the slot
+# systemd-boot boots first has priority 15, the other 14 if bootable and 0 if not; an entry without
+# a counter is successful; tries are the counter's LEFT. Every write keeps "default" on a bootable
+# slot, the fallback for a "preferred" one on trial, renames entries (never copies them) and puts
+# "(good)", "(trial)" or "(bad)" in their titles. The board's slot tool writes the entries'
+# contents, with ab.slot=<x> ab.kernel=<x> on their command lines, so the rest of the OS reads the
+# slot as under U-Boot. Chosen by BACKEND=systemd-boot in /etc/bootctl.conf (BACKEND=misc: the
+# record), or, with neither, where no misc partition holds a valid record and the ESP (ESP=, default
+# /boot; -e) has such entries.
 
 CONF=${BOOTCTL_CONF:-/etc/bootctl.conf}
 MISC_PARTNAME="misc MISC"
+BACKEND=
+ESP=/boot
+ESP_ENTRY_PREFIX=slot-
 [ -r "$CONF" ] && . "$CONF"
+BACKEND=${BOOTCTL_BACKEND:-$BACKEND}
+ESP=${BOOTCTL_ESP:-$ESP}
+EFIVARS=${BOOTCTL_EFIVARS:-/sys/firmware/efi/efivars}
 CMDLINE=${BOOTCTL_CMDLINE:-/proc/cmdline}
 QUIET=
 DEV=${BOOTCTL_MISC:-}
@@ -24,7 +46,7 @@ TRIES=3
 
 usage() {
 	cat >&2 <<EOF
-usage: bootctl [-q] [-p PARTNAME | -d DEVICE] <command>
+usage: bootctl [-q] [-p PARTNAME | -d DEVICE | -e ESP] <command>
   status              the record, decoded, and the slot booted
   current             the slot the boot layer booted (ab.slot=); exit 1 if none
   set-active <a|b>    boot this slot next, on trial: priority 15, tries $TRIES, successful 0;
@@ -36,6 +58,7 @@ usage: bootctl [-q] [-p PARTNAME | -d DEVICE] <command>
   init                write the default record (a priority 15, b 14, both $TRIES tries, neither
                       successful) where misc 2048-4095 is all zero
   -q: no message when there is no record. -d: the misc device itself (tests).
+  -e: the ESP whose systemd-boot entries are the record (the systemd-boot backend).
 EOF
 	exit 2
 }
@@ -176,16 +199,245 @@ edit() {
 
 slot_arg() { case "$1" in a|b) ;; *) usage;; esac; }
 
+# --- The systemd-boot backend (see the top). Slot x's state: F_x its entry's file name (empty:
+# none), G_x 1 for good, L_x and D_x the counter's tries left and done; LD and LP loader.conf's
+# default and preferred; FIRST the slot systemd-boot boots first.
+ENTRIES=
+LCONF=
+
+# esp_slot <entry id or loader.conf value>: a or b, or nothing for anything else (another OS, a glob)
+esp_slot() {
+	v=${1%.conf}; v=${v%+*}
+	case $v in "${ESP_ENTRY_PREFIX}a") echo a;; "${ESP_ENTRY_PREFIX}b") echo b;; esac
+}
+
+esp_has_entries() {
+	for _e in "$ENTRIES/${ESP_ENTRY_PREFIX}"[ab].conf "$ENTRIES/${ESP_ENTRY_PREFIX}"[ab]+*.conf; do
+		[ -f "$_e" ] && return 0
+	done
+	return 1
+}
+
+# esp_efivar <name>: systemd-boot's loader variable, as text; nothing where Linux cannot read them.
+esp_efivar() {
+	_v=$EFIVARS/$1-4a67b082-0a4c-41cf-b6c7-440b29bb8c4f
+	[ -r "$_v" ] && dd if="$_v" bs=1 skip=4 2>/dev/null | tr -d '\000'
+}
+
+# The slot booted: ab.slot=, else the entry systemd-boot says it booted.
+esp_current() { current || esp_slot "$(esp_efivar LoaderEntrySelected)"; }
+
+esp_ok() { eval "[ -n \"\$F_$1\" ] && { [ \$G_$1 = 1 ] || [ \$L_$1 -gt 0 ]; }"; }
+
+esp_read() {
+	for _x in a b; do
+		_f=; _n=0; _g=0; _l=0; _d=0
+		for _e in "$ENTRIES/$ESP_ENTRY_PREFIX$_x.conf" "$ENTRIES/$ESP_ENTRY_PREFIX$_x"+*.conf; do
+			[ -f "$_e" ] || continue
+			_n=$((_n + 1)); _f=${_e##*/}
+		done
+		[ $_n -le 1 ] || { say "slot $_x has $_n entries in $ENTRIES: nothing done; remove all but one"; return 1; }
+		case $_f in
+		'') ;;
+		"$ESP_ENTRY_PREFIX$_x.conf") _g=1;;
+		*)	_c=${_f%.conf}; _c=${_c##*+}; _l=${_c%%-*}
+			case $_c in *-*) _d=${_c#*-};; esac
+			case "$_l:$_d" in *[!0-9:]*|:*|*:) say "$_f: not a boot counter: nothing done"; return 1;; esac;;
+		esac
+		eval "F_$_x=\$_f G_$_x=\$_g L_$_x=\$_l D_$_x=\$_d"
+	done
+	LD=$(awk '$1 == "default" { v = $2 } END { print v }' "$LCONF" 2>/dev/null)
+	LP=$(awk '$1 == "preferred" { v = $2 } END { print v }' "$LCONF" 2>/dev/null)
+	# systemd-boot's pick: preferred while it has tries, else default, else the first entry (bootable
+	# ones first, then by sort key).
+	FIRST=
+	_p=$(esp_slot "$LP"); _d=$(esp_slot "$LD")
+	if [ -n "$_p" ] && esp_ok "$_p"; then FIRST=$_p
+	elif [ -n "$_d" ] && eval "[ -n \"\$F_$_d\" ]"; then FIRST=$_d
+	else
+		for _x in a b; do esp_ok $_x && { FIRST=$_x; break; }; done
+		[ -n "$FIRST" ] || for _x in a b; do eval "[ -n \"\$F_$_x\" ]" && { FIRST=$_x; break; }; done
+	fi
+	return 0
+}
+
+# esp_record: the state, or a message and exit 3 (no entries) or 1 (entries it cannot read).
+esp_record() {
+	esp_has_entries || { [ -n "$QUIET" ] || say "no ${ESP_ENTRY_PREFIX}a or ${ESP_ENTRY_PREFIX}b entries in $ENTRIES: nothing done"; exit 3; }
+	esp_read || exit 1
+}
+
+esp_word() {
+	if eval "[ \$G_$1 = 1 ]" && esp_ok $1; then echo good; elif esp_ok $1; then echo trial; else echo bad; fi
+}
+
+esp_show() {
+	last=$(esp_slot "$(esp_efivar LoaderEntrySelected)")
+	[ -n "$last" ] || last=$(current)
+	echo "last booted: ${last:--}"
+	for _x in a b; do
+		eval "_f=\$F_$_x _g=\$G_$_x _l=\$L_$_x"
+		if ! esp_ok $_x; then _p=0; elif [ "$_x" = "$FIRST" ]; then _p=15; else _p=14; fi
+		[ "$_g" = 1 ] && _l=0
+		printf 'slot %s: priority %d, tries %d, successful %d%s (%s)\n' $_x $_p "$_l" "$_g" \
+			"$([ -n "$_f" ] || echo ', no entry')" "$(esp_word $_x)"
+	done
+}
+
+# esp_edit <mode> <slot>: change the state as the record would change (SP, ST, SS for set), write it
+# (renames and loader.conf, synced), read it back.
+esp_edit() {
+	esp_record
+	x=$2; o=a; [ $x = a ] && o=b
+	eval "f=\$F_$x g=\$G_$x l=\$L_$x d=\$D_$x"
+	first=$FIRST
+	case $1 in
+	set-active) [ -n "$f" ] || die "slot $x has no entry in $ENTRIES"
+		g=0; l=$TRIES; d=0; first=$x;;
+	mark-good) [ -n "$f" ] || die "slot $x has no entry in $ENTRIES"
+		g=1;;
+	mark-bad) [ -n "$f" ] || { echo "bootctl: slot $x already so"; return 0; }
+		g=0; l=0; [ "$first" = $x ] && first=$o;;
+	set) [ -n "$f" ] || die "slot $x has no entry in $ENTRIES"
+		[ "$g" = 1 ] && l=0
+		if [ "$SS" = 1 ]; then g=1
+		elif [ "$SS" = 0 ]; then g=0; [ -n "$ST" ] && l=$ST
+		elif [ "$g" = 0 ] && [ -n "$ST" ]; then l=$ST
+		fi
+		[ "$SP" = 0 ] && { g=0; l=0; }
+		if [ -n "$SP" ] && [ "$SP" -ge 15 ]; then first=$x
+		elif [ -n "$SP" ] && [ "$first" = $x ]; then
+			# priority 1-14 (or 0): the other first, if it can boot
+			esp_ok $o && first=$o
+		fi;;
+	esac
+	if [ "$g" = 1 ]; then nf=$ESP_ENTRY_PREFIX$x.conf
+	elif [ "$d" -gt 0 ]; then nf=$ESP_ENTRY_PREFIX$x+$l-$d.conf
+	else nf=$ESP_ENTRY_PREFIX$x+$l.conf; fi
+	[ -n "$f" ] || nf=
+	# loader.conf: default on the first slot if it is good, else preferred on it and default on the
+	# other as its fallback (default on the first itself where the other cannot boot).
+	ok_new() { if [ "$1" = $x ]; then [ -n "$nf" ] && { [ $g = 1 ] || [ $l -gt 0 ]; }; else esp_ok "$1"; fi; }
+	np=; nd=$LD
+	if [ -n "$first" ]; then
+		if [ "$first" = $x ]; then fg=$g; else eval "fg=\$G_$first"; fi
+		ff=$o; [ "$first" = $o ] && ff=$x
+		if [ "$fg" = 1 ] && ok_new "$first"; then nd=$ESP_ENTRY_PREFIX$first.conf
+		elif ok_new "$first"; then
+			if ok_new $ff; then np=$ESP_ENTRY_PREFIX$first.conf nd=$ESP_ENTRY_PREFIX$ff.conf
+			else nd=$ESP_ENTRY_PREFIX$first.conf; fi
+		elif ok_new $ff; then nd=$ESP_ENTRY_PREFIX$ff.conf
+		fi
+	fi
+	if [ "$nf" = "$f" ] && [ "$nd" = "$LD" ] && [ "$np" = "$LP" ]; then
+		echo "bootctl: slot $x already so"
+		return 0
+	fi
+	if [ -n "$f" ] && [ "$nf" != "$f" ]; then
+		mv "$ENTRIES/$f" "$ENTRIES/$nf" || die "renaming $f to $nf failed"
+	fi
+	# the titles say the state, for the menu
+	for y in a b; do
+		eval "e=\$F_$y"; [ $y = $x ] && e=$nf
+		[ -n "$e" ] || continue
+		w=$(eval "F_$x=\$nf G_$x=\$g L_$x=\$l"; esp_word $y)
+		sed -E "s/^(title[[:space:]].*)\((good|trial|failed|bad)\)/\1($w)/" "$ENTRIES/$e" > "$ENTRIES/.$e.tmp" &&
+			if cmp -s "$ENTRIES/$e" "$ENTRIES/.$e.tmp"; then rm -f "$ENTRIES/.$e.tmp"
+			else mv "$ENTRIES/.$e.tmp" "$ENTRIES/$e"; fi || { rm -f "$ENTRIES/.$e.tmp"; say "$e: title not changed"; }
+	done
+	if [ "$nd" != "$LD" ] || [ "$np" != "$LP" ]; then
+		{
+			awk '$1 != "default" && $1 != "preferred"' "$LCONF" 2>/dev/null
+			[ -z "$nd" ] || echo "default $nd"
+			[ -z "$np" ] || echo "preferred $np"
+		} > "$LCONF.tmp" && mv "$LCONF.tmp" "$LCONF" || { rm -f "$LCONF.tmp"; die "writing $LCONF failed"; }
+	fi
+	sync
+	esp_read || die "the entries read back are not valid"
+	eval "[ \"\$F_$x\" = \"\$nf\" ]" && [ "$LD" = "$nd" ] && [ "$LP" = "$np" ] ||
+		die "the entries read back are not what was written"
+	echo "bootctl: $1 $2: $(esp_show | tr '\n' ';' | sed 's/;$//; s/;/; /g')"
+}
+
+esp_main() {
+	cmd=$1; shift
+	case "$cmd" in
+	status)
+		esp_record
+		echo "esp: $ESP (systemd-boot: ${F_a:--} ${F_b:--}; default ${LD:--}, preferred ${LP:--})"
+		esp_show
+		c=$(esp_current)
+		echo "booted: ${c:--} (kernel $(kernel))"
+		;;
+	current)
+		c=$(esp_current) || true
+		[ -n "$c" ] || exit 1
+		echo "$c"
+		;;
+	set-active|mark-bad)
+		[ $# -eq 1 ] || usage
+		slot_arg "$1"
+		esp_edit "$cmd" "$1"
+		;;
+	mark-good)
+		s=${1:-$(esp_current)}
+		[ -n "$s" ] || die "not booted by the boot layer (no ab.slot=): name the slot"
+		slot_arg "$s"
+		esp_edit mark-good "$s"
+		;;
+	set)
+		[ $# -ge 2 ] || usage
+		slot_arg "$1"
+		s=$1; shift
+		SP=; ST=; SS=
+		for f in "$@"; do
+			case $f in
+			priority=[0-9]|priority=1[0-5]) SP=${f#*=};;
+			tries=[0-7]) ST=${f#*=};;
+			successful=[01]) SS=${f#*=};;
+			*) usage;;
+			esac
+		done
+		esp_edit set "$s"
+		;;
+	init)
+		esp_has_entries || die "no ${ESP_ENTRY_PREFIX}a or ${ESP_ENTRY_PREFIX}b entries in $ENTRIES; the board's slot tool writes them"
+		esp_read || exit 1
+		echo "bootctl: $ENTRIES already holds the slots' entries"
+		esp_show
+		;;
+	*) usage;;
+	esac
+}
+
 while [ $# -gt 0 ]; do
 	case "$1" in
 	-q) QUIET=1; shift;;
-	-p) MISC_PARTNAME=$2; shift 2;;
-	-d) DEV=$2; shift 2;;
+	-p) MISC_PARTNAME=$2; BACKEND=misc; shift 2;;
+	-d) DEV=$2; BACKEND=misc; shift 2;;
+	-e) ESP=$2; BACKEND=systemd-boot; shift 2;;
 	-h|--help) usage;;
 	*) break;;
 	esac
 done
 [ $# -gt 0 ] || usage
+ENTRIES=$ESP/loader/entries
+LCONF=$ESP/loader/loader.conf
+# The backend: as configured, else the record where misc holds one (or is named: -d,
+# BOOTCTL_MISC), else systemd-boot's entries where the ESP has them, else the record (which then
+# says there is none).
+if [ -z "$BACKEND" ]; then
+	BACKEND=misc
+	if [ -z "$DEV" ] && ! { m=$(misc_dev) && [ "$(blocks "$m" | awk -v MODE=check "$AWK")" = ok ]; } &&
+		esp_has_entries; then
+		BACKEND=systemd-boot
+	fi
+fi
+case $BACKEND in
+misc) ;;
+systemd-boot) esp_main "$@"; exit $?;;
+*) die "BACKEND=$BACKEND: misc or systemd-boot";;
+esac
 cmd=$1; shift
 case "$cmd" in
 status)
