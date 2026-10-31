@@ -60,7 +60,7 @@ var groups = []group{
 	{"Calendar", []string{"calendar_opens_on", "calendar_popup_before", "calendar_popup_all_day", "calendar_popup_chime",
 		"calendar_day_timeline", "calendar_coming_up_refined", "calendar_month_details", "calendar_event_icons", "calendar_countdowns", "calendar_week_view", "calendar_next_up", "calendar_weather"}},
 	{"Dashboard", []string{"screen_dashboard_idle", "screen_dashboard_kiosk", "screen_dashboard_return",
-		"screen_dashboard_tiles"}},
+		"screen_dashboard_tiles", "screen_dashboard_layout"}},
 	{"Calls and cameras", []string{"phone_ring_sound", "camera_sound"}},
 }
 

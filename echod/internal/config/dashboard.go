@@ -36,6 +36,10 @@ type Dashboard struct {
 	// Tiles is how big a drawn dashboard's tiles are on the Show: empty for the usual size, "large",
 	// or "fill", which lays a view of a few tiles out over the whole screen.
 	Tiles string `json:"tiles,omitempty"`
+
+	// Layout is how a drawn dashboard's tile sets its icon and words on the Show: empty for the icon
+	// beside the words, or "stacked", the icon over the words, both centered.
+	Layout string `json:"layout,omitempty"`
 }
 
 // DashboardChoice is one dashboard view: how a list names it, and its path.
@@ -108,6 +112,10 @@ func (w DashboardWriter) ReturnAfter(seconds int) error {
 
 func (w DashboardWriter) Tiles(v string) error {
 	return w.st.Update(func(c *Config) { c.Dashboard.Tiles = v })
+}
+
+func (w DashboardWriter) Layout(v string) error {
+	return w.st.Update(func(c *Config) { c.Dashboard.Layout = v })
 }
 
 // Return is how long a dashboard opened by hand stays up untouched; ok is false when it

@@ -285,6 +285,7 @@ var registered = []string{
 	"screen_volume_swipe",
 	"screen_dashboard_return",
 	"screen_dashboard_tiles",
+	"screen_dashboard_layout",
 	"screen_camera_picture",
 	"screen_camera_strips",
 	"screen_camera_strips_shade",

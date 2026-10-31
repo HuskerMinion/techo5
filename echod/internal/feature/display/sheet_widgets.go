@@ -62,10 +62,12 @@ type paint struct {
 	fontGen uint64
 
 	// The drawn dashboard's tiles where they were last drawn, and how far it can scroll; bigTiles is
-	// the Dashboard tiles setting asking for them larger, for the frame being drawn.
+	// the Dashboard tiles setting asking for them larger, and stacked the Dashboard tile layout asking
+	// for the icon over the words, for the frame being drawn.
 	dashTiles   []dashTile
 	dashContent int
 	bigTiles    bool
+	stacked     bool
 
 	// The color sheet's parts and the sheet itself where they were last drawn, under zmu: empty while
 	// no sheet is up (color_sheet.go).

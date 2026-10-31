@@ -39,6 +39,9 @@ setup page's **Screen & Photos** tab has the same settings, except which dashboa
 - **Dashboard tiles** (Show only, drawn only): *Normal*; *Large*, taller tiles across the whole
   width; or *Fill the screen*, which lays a view of up to nine tiles out over the whole page, like
   four lights in a 2×2 grid. A view with anything other than tiles on it is drawn *Large*.
+- **Dashboard tile layout** (Show only, drawn only): *Side by side*, a tile's icon beside its name and
+  state; or *Stacked*, the icon over the name and state, all centered. Stacked tiles are taller, and
+  give a long name the tile's whole width. It works with every size of **Dashboard tiles**.
 - **Dashboard without its header** (streamed only): hides Home Assistant's top bar, which on a small
   screen takes a real slice of it. It works on your dashboards and on the built-in pages (Energy,
   History, Logbook and the rest), with nothing to install and no change to the dashboards themselves,
@@ -101,7 +104,7 @@ Each device has its own settings, so the kitchen and a bedroom can show differen
 
 | Home Assistant card | On the device |
 |---|---|
-| Tile, button, entity, light, thermostat, and the Mushroom entity cards | A tile: icon, name, state, tap; a slider for lights, covers, thermostats and media players |
+| Tile, button, entity, light, thermostat, and the Mushroom entity cards | A tile: icon, name, state, tap; a slider for lights, covers, thermostats and media players. A name too long for its tile is drawn smaller, then on two lines, and only what still does not fit is cut short with … |
 | Entities | A card of rows, with a switch for anything on or off |
 | Glance, Mushroom chips | Tiles |
 | Heading, Mushroom title | A heading |

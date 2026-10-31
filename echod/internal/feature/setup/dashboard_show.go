@@ -65,7 +65,7 @@ func checkNote(server string) string {
 
 // dashboardPanelSection is the dashboard as a panel by a door wants it, on the Screen & Photos tab:
 // whether there is one and how it is shown, whether it stands in for the clock, how big its tiles are
-// on the Show, and how long one opened by hand stays up. The same settings are in Home Assistant;
+// and how they are laid out on the Show, and how long one opened by hand stays up. The same settings are in Home Assistant;
 // which dashboard to show is there too, where the list of them is.
 func dashboardPanelSection(w http.ResponseWriter, token string) {
 	d := config.Get().Dashboard
@@ -82,6 +82,12 @@ func dashboardPanelSection(w http.ResponseWriter, token string) {
 		now := dashboard.Tiles()
 		for _, l := range dashboard.TilesChoices() {
 			fmt.Fprintf(w, `<option%s>%s</option>`, selected(l == now), html.EscapeString(l))
+		}
+		fmt.Fprint(w, `</select>`)
+		fmt.Fprint(w, `<label for="dashlayout">Tile layout</label><select id="dashlayout" name="layout">`)
+		layout := dashboard.Layout()
+		for _, l := range dashboard.LayoutChoices() {
+			fmt.Fprintf(w, `<option%s>%s</option>`, selected(l == layout), html.EscapeString(l))
 		}
 		fmt.Fprint(w, `</select>`)
 	}
@@ -118,11 +124,18 @@ func saveDashboardPanel(r *http.Request) string {
 	if !slices.Contains(dashboard.BackChoices(), back) {
 		return "that is not a time the dashboard can stay up"
 	}
-	tiles := ""
+	tiles, layout := "", ""
 	if dashboard.HasTiles() {
 		tiles = r.PostFormValue("tiles")
 		if !slices.Contains(dashboard.TilesChoices(), tiles) {
 			return "that is not a tile size this device has"
+		}
+		// A form from before the setting, or one that leaves it out, leaves it as it is.
+		if posted, ok := r.PostForm["layout"]; ok && len(posted) > 0 {
+			layout = posted[0]
+			if !slices.Contains(dashboard.LayoutChoices(), layout) {
+				return "that is not a tile layout this device has"
+			}
 		}
 	}
 	if mode != f.Mode() {
@@ -140,6 +153,9 @@ func saveDashboardPanel(r *http.Request) string {
 	}
 	if tiles != "" && tiles != dashboard.Tiles() {
 		f.SetTiles(tiles)
+	}
+	if layout != "" && layout != dashboard.Layout() {
+		f.SetLayout(layout)
 	}
 	return ""
 }
