@@ -22,8 +22,9 @@ import (
 func (d *Display) setMusicStrip(i int) { setStrip(d.strip, i) }
 
 // stripDue reports whether the music goes in the strip rather than on the full page: a page put away
-// by a swipe always does when the strip is on, and a page on the screen does once the setting's time
-// has gone by for the track. Called with d.mu held.
+// by a swipe always does when the strip is on, one put away by the quiet does until the music has been
+// quiet for stripQuietAway, and a page on the screen does once the setting's time has gone by for the
+// track. Called with d.mu held.
 func (d *Display) stripDue(now time.Time, rd home.Radio, page bool) bool {
 	secs := config.Get().Screen.MusicStrip
 	if secs <= 0 {
@@ -33,13 +34,18 @@ func (d *Display) stripDue(now time.Time, rd home.Radio, page bool) bool {
 		d.stripKey, d.stripSince = key, now
 	}
 	if !page {
-		return true
+		return !d.awayQuiet || now.Sub(d.musicQuiet.since) < stripQuietAway
 	}
 	if now.Before(d.stripFullUntil) {
 		return false
 	}
 	return now.Sub(d.stripSince) >= time.Duration(secs)*time.Second
 }
+
+// stripQuietAway is how long a paused track stays in the strip, for a tap on play, before it goes too:
+// Music Assistant leaves a cleared queue's last track paused and named, which looks the same as a pause
+// (#150).
+const stripQuietAway = 10 * time.Minute
 
 // stripRect is the strip, across the foot of the panel.
 func (r *renderer) stripRect() image.Rectangle {

@@ -388,6 +388,9 @@ type Display struct {
 	awayTrack   string
 	awayStation string
 	awayPlaying bool
+	// awayQuiet is a page put away by the quiet (quietAway) rather than by a swipe: it goes into the strip
+	// only until the music has been quiet for stripQuietAway (#150).
+	awayQuiet bool
 	// musicQuiet is how long the music on the page has been paused or stopped: past pausedAway the page
 	// puts itself away, as a swipe would, and playing again brings it back.
 	musicQuiet quietTimer
@@ -1636,7 +1639,7 @@ func (d *Display) gesture(g touch.Gesture) {
 		// still has a page, and a dismissal made on one of those is over too.
 		playing, _ := media.Get().ScreenState()
 		d.mu.Lock()
-		d.away, d.awayTrack, d.awayStation, d.awayPlaying = true, rd.Title, rd.Now, playing
+		d.away, d.awayTrack, d.awayStation, d.awayPlaying, d.awayQuiet = true, rd.Title, rd.Now, playing, false
 		d.mu.Unlock()
 		d.wake()
 	}
@@ -1684,7 +1687,7 @@ func (d *Display) endMusic() {
 	// music just ended is not playing however the page went.
 	rd := home.Get().Radio()
 	d.mu.Lock()
-	d.away, d.awayTrack, d.awayStation, d.awayPlaying = true, rd.Title, rd.Now, false
+	d.away, d.awayTrack, d.awayStation, d.awayPlaying, d.awayQuiet = true, rd.Title, rd.Now, false, false
 	d.mu.Unlock()
 	d.wake()
 }
@@ -1727,7 +1730,7 @@ func (d *Display) quietAway(now time.Time, rd home.Radio, music, wants, playing 
 	d.mu.Lock()
 	defer d.mu.Unlock()
 	if d.musicQuiet.over(now, music, playing) && wants {
-		d.away, d.awayTrack, d.awayStation, d.awayPlaying = true, rd.Title, rd.Now, false
+		d.away, d.awayTrack, d.awayStation, d.awayPlaying, d.awayQuiet = true, rd.Title, rd.Now, false, true
 	}
 }
 

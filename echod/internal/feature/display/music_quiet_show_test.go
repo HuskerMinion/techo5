@@ -55,7 +55,8 @@ func TestAPausedPageGoesToTheClock(t *testing.T) {
 }
 
 // With the strip in use the paused page goes to the strip, and playing again is whatever the setting
-// says for a playing track: here the strip, since the track has played past its 30 s.
+// says for a playing track: here the strip, since the track has played past its 30 s. Left paused, the
+// strip goes too after stripQuietAway, as a cleared Music Assistant queue leaves its track (#150).
 func TestAPausedPageGoesToTheStrip(t *testing.T) {
 	config.Use(filepath.Join(t.TempDir(), "state.json"))
 	if err := config.Set().Screen().MusicStrip(30); err != nil {
@@ -76,6 +77,18 @@ func TestAPausedPageGoesToTheStrip(t *testing.T) {
 	}
 	if _, strip := showFrame(d, paused.Add(40*time.Second), song, true); !strip {
 		t.Error("playing again did not follow the setting")
+	}
+
+	again := paused.Add(time.Minute)
+	showFrame(d, again, song, false)
+	if _, strip := showFrame(d, again.Add(stripQuietAway-time.Second), song, false); !strip {
+		t.Error("the strip went before its time")
+	}
+	if page, strip := showFrame(d, again.Add(stripQuietAway+time.Second), song, false); page || strip {
+		t.Errorf("left paused: page %v, strip %v; want the clock", page, strip)
+	}
+	if _, strip := showFrame(d, again.Add(stripQuietAway+time.Minute), song, true); !strip {
+		t.Error("playing again did not bring the strip back")
 	}
 }
 
