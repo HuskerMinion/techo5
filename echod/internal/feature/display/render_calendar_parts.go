@@ -107,10 +107,14 @@ func (r *renderer) calSegmented(sel calHitKind, right int, week bool) int {
 	return b.Min.X - r.s(14)
 }
 
+// compactChip is whether a chip is drawn at the header line's size: in the header line, and on a row
+// of its own too when Calendar chips is Small.
+func (r *renderer) compactChip(inLine bool) bool { return inLine || r.look().smallChips }
+
 // chipFace is the calendars' chips' words and height: small in the header line, larger on a row of
 // their own.
 func (r *renderer) chipFace(inLine bool) (font.Face, int) {
-	if inLine {
+	if r.compactChip(inLine) {
 		return r.micro, r.s(32)
 	}
 	return r.tiny, r.s(38)
@@ -128,7 +132,7 @@ func (r *renderer) chipName(v calendarView, cal string, inLine bool, most int) s
 
 // chipPad is what a chip adds around its name: the dot or the eye, and the room at its ends.
 func (r *renderer) chipPad(inLine bool) int {
-	if inLine {
+	if r.compactChip(inLine) {
 		return r.s(42)
 	}
 	return r.s(60)
@@ -197,7 +201,7 @@ func (r *renderer) chipRows(v calendarView, room int) (rows [][]string, more int
 
 // chipGap is the room between two chips.
 func (r *renderer) chipGap(inLine bool) int {
-	if inLine {
+	if r.compactChip(inLine) {
 		return r.s(6)
 	}
 	return r.s(8)
@@ -254,7 +258,7 @@ func (r *renderer) calWrap(f font.Face, s string, w int) []string {
 func (r *renderer) calChips(v calendarView, cals []string, x, cy int, inLine bool, most int) int {
 	f, h := r.chipFace(inLine)
 	dot, eye, gap := r.s(6), 16, r.s(30)
-	if !inLine {
+	if !r.compactChip(inLine) {
 		dot, eye, gap = r.s(8), 20, r.s(36)
 	}
 	for _, cal := range cals {

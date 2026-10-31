@@ -45,14 +45,19 @@ func (r *renderer) calendarMonth(v calendarView, l calLook) {
 			r.calChips(v, v.order, at, r.margin+r.s(17), true, r.s(chipNameMost))
 		} else {
 			rows, more := r.chipRows(v, r.w-2*r.margin)
+			// Small chips sit closer together and take less of the month.
+			first, step, room := r.s(80), r.s(46), r.s(50)
+			if l.smallChips {
+				first, step, room = r.s(76), r.s(38), r.s(44)
+			}
 			end := 0
 			for i, row := range rows {
-				end = r.calChips(v, row, r.margin, r.margin+r.s(80)+i*r.s(46), false, r.s(chipNameMost))
+				end = r.calChips(v, row, r.margin, r.margin+first+i*step, false, r.s(chipNameMost))
 			}
 			if more > 0 {
-				r.moreChip(more, end, r.margin+r.s(80)+(len(rows)-1)*r.s(46))
+				r.moreChip(more, end, r.margin+first+(len(rows)-1)*step)
 			}
-			top += r.s(50) + (len(rows)-1)*r.s(46)
+			top += room + (len(rows)-1)*step
 		}
 	}
 

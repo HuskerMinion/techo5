@@ -138,6 +138,7 @@ func TestCalendarLookPreviews(t *testing.T) {
 		{"-full", func() { _ = config.Set().Calendar().MonthDetails(true) }},
 		{"-simple", func() { _ = config.Set().Calendar().MonthDetails(false) }},
 		{"-week-on", func() { _ = config.Set().Calendar().Week(true) }},
+		{"-small-chips", func() { _ = config.Set().Calendar().SmallChips(true) }},
 		{"-plain", func() {
 			_ = config.Set().Calendar().DayList(true)
 			_ = config.Set().Calendar().AgendaPlain(true)
