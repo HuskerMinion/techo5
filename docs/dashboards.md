@@ -79,7 +79,9 @@ Each device has its own settings, so the kitchen and a bedroom can show differen
 - **Tap** a tile or a row to do what it says: lights, switches and fans toggle, covers open or close,
   players play or pause, scenes and scripts run, a card's own tap action does what it is set to.
 - **Slide** a finger along a light, cover, thermostat or media player to set its brightness,
-  position, temperature or volume. The tile fills as you slide, and it is set when you let go.
+  position, temperature or volume. The tile fills as you slide, and it is set when you let go. A tile
+  you can slide has a track along its foot, with a bar on it up to the level; a light that is off keeps
+  the empty track.
 - **Tap a thermostat** whose card sets no tap of its own:
   - on the Show (a long press too), for a sheet over the page: the temperature where it is, the one
     it is set to with a step down and up (the low and the high of a range in heat/cool), its modes,
