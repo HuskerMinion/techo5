@@ -41,8 +41,8 @@ setup page's **Screen & Photos** tab has the same settings, except which dashboa
   four lights in a 2×2 grid. A view with anything other than tiles on it is drawn *Large*.
 - **Dashboard tile layout** (Show only, drawn only): *Side by side*, a tile's icon beside its name and
   state; or *Name below*, a smaller icon and the state along the top and the name under them, across
-  the tile's whole width. Name below tiles are a little taller, and a long name has more room. It works
-  with every size of **Dashboard tiles**.
+  the tile's whole width. Name below tiles are a little taller, and a long name has more room, which
+  suits a large **Text size**. It works with every size of **Dashboard tiles**.
 - **Dashboard without its header** (streamed only): hides Home Assistant's top bar, which on a small
   screen takes a real slice of it. It works on your dashboards and on the built-in pages (Energy,
   History, Logbook and the rest), with nothing to install and no change to the dashboards themselves,
