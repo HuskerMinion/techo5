@@ -350,8 +350,17 @@ func (r *paint) tile(b image.Rectangle, t dashboard.Tile, pal dashPal, adj dashA
 	fc := r.faces()
 	r.roundFill(b, pal.rad, pal.card, pal.card)
 
-	// A level: a bar along the foot of the tile showing where it is, which is also the sign that a
-	// finger can slide it. While one does, the whole tile fills to the level instead.
+	// A tile bigger than the usual one, set large or filling the screen, scales its badge and words
+	// with it: by its height, and no further than its width leaves room for the name.
+	k := min(float64(b.Dy())/float64(r.s(tileH)), float64(b.Dx())/float64(r.s(tileWide)), 2.5)
+	big := k > 1.05
+	if !big {
+		k = 1
+	}
+	scale := func(n int) int { return int(float64(n) * k) }
+
+	// A level: a track along the foot of the tile, the sign that a finger can slide it, with a bar on it
+	// showing where the level is. While one slides it, the whole tile fills to the level instead.
 	sliding := t.Adjust != nil && adj.entity == t.Adjust.Entity
 	if a := t.Adjust; a != nil && a.Max > a.Min {
 		v := a.Value
@@ -365,29 +374,27 @@ func (r *paint) tile(b image.Rectangle, t dashboard.Tile, pal dashPal, adj dashA
 				r.roundFill(fill, pal.rad, lerp(pal.card, pal.active, 0.35), lerp(pal.card, pal.active, 0.35))
 			}
 			t.Value = a.Label(v)
-		} else if frac > 0 && (t.On || a.Kind == "temperature") {
-			// A thermostat's always, so its slide can be found: dimmer while it is not heating or
-			// cooling.
-			inset := r.s(14)
-			bar := image.Rect(b.Min.X+inset, b.Max.Y-r.s(7), b.Min.X+inset+int(float64(b.Dx()-2*inset)*frac), b.Max.Y-r.s(4))
-			c := pal.active
-			if !t.On {
-				c = lerp(pal.card, pal.sub, 0.6)
-			}
-			if bar.Dx() > 0 {
-				r.roundFill(bar, r.sf(2), c, c)
+		} else {
+			// The track is there whether the level is or not, a light that is off included. The bar on
+			// it is a level that is on, and a thermostat's always, dimmer while it is not heating or
+			// cooling. Both grow with the tile, as its badge and words do.
+			inset := r.s(scale(14))
+			track := image.Rect(b.Min.X+inset, b.Max.Y-r.s(scale(9)), b.Max.X-inset, b.Max.Y-r.s(scale(4)))
+			tc := lerp(pal.card, pal.sub, 0.22)
+			r.roundFill(track, float64(track.Dy())/2, tc, tc)
+			if frac > 0 && (t.On || a.Kind == "temperature") {
+				bar := image.Rect(track.Min.X, track.Min.Y, track.Min.X+int(float64(track.Dx())*frac), track.Max.Y)
+				c := pal.active
+				if !t.On {
+					c = lerp(pal.card, pal.sub, 0.6)
+				}
+				if bar.Dx() > 0 {
+					r.roundFill(bar, float64(track.Dy())/2, c, c)
+				}
 			}
 		}
 	}
 
-	// A tile bigger than the usual one, set large or filling the screen, scales its badge and words
-	// with it: by its height, and no further than its width leaves room for the name.
-	k := min(float64(b.Dy())/float64(r.s(tileH)), float64(b.Dx())/float64(r.s(tileWide)), 2.5)
-	big := k > 1.05
-	if !big {
-		k = 1
-	}
-	scale := func(n int) int { return int(float64(n) * k) }
 	pad := r.s(scale(12))
 	badge := r.s(scale(44))
 	bx, by := b.Min.X+pad, b.Min.Y+(b.Dy()-badge)/2
