@@ -299,6 +299,7 @@ var registered = []string{
 	"calendar_event_icons",
 	"calendar_countdowns",
 	"calendar_week_view",
+	"calendar_chip_size",
 	"calendar_next_up",
 	"calendar_weather",
 }

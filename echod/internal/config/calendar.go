@@ -50,6 +50,10 @@ type Calendar struct {
 	Week         string `json:"week,omitempty"`
 	MonthDetails string `json:"month_details,omitempty"`
 
+	// SmallChips draws the calendars' chips over the month at the header line's smaller size wherever
+	// they are, so a long list of calendars takes less of the month. Off unless somebody chooses it.
+	SmallChips bool `json:"small_chips,omitempty"`
+
 	// Opens is the view the calendar opens on, from the clock's date, a voice request or calendar_show:
 	// "week", "day" (today) or "agenda" (Coming up). Empty is the month. The clock's next event still
 	// opens Coming up, and an event's day still opens that day.
@@ -176,6 +180,10 @@ func (w CalendarWriter) AgendaPlain(v bool) error {
 
 func (w CalendarWriter) NoIcons(v bool) error {
 	return w.st.Update(func(c *Config) { c.Calendar.NoIcons = v })
+}
+
+func (w CalendarWriter) SmallChips(v bool) error {
+	return w.st.Update(func(c *Config) { c.Calendar.SmallChips = v })
 }
 
 func (w CalendarWriter) NoCountdowns(v bool) error {

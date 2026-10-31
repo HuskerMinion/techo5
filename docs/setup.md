@@ -791,6 +791,9 @@ Assistant.
 - **Countdowns**: "in 25 min" on today's events.
 - **Week view**: seven days on their hours, and a Day, Week and Month switch over the month. It
   starts on for the Show 8 and bigger, off for the Show 5.
+- **Calendar chips**: *Normal* (the default) or *Small*: with Small, the calendars' names over the
+  month stay at the header line's smaller size on rows of their own too, so many calendars take less
+  of the month.
 - **Next up on the clock**: the next event at the foot of the clock, with its countdown, when the
   glance strip has nothing else to show. A tap opens its day.
 - **Weather in the calendar**: the forecast on the days.
