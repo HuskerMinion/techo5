@@ -24,3 +24,22 @@ func TestRepeatedWord(t *testing.T) {
 		}
 	}
 }
+
+func TestPlayingThresholdFallback(t *testing.T) {
+	for _, tc := range []struct{ threshold, want float64 }{
+		{0.85, 0.75}, {0.95, 0.85}, {0.52, 0.50},
+	} {
+		w := WakeWord{Threshold: tc.threshold}
+		if got := w.PlayingThresholdAt(); got-tc.want > 1e-9 || tc.want-got > 1e-9 {
+			t.Errorf("threshold %v: got %v, want %v", tc.threshold, got, tc.want)
+		}
+	}
+	w := WakeWord{Threshold: 0.85, PlayingThreshold: 0.93}
+	if got := w.PlayingThresholdAt(); got != 0.93 {
+		t.Errorf("explicit threshold = %v, want 0.93", got)
+	}
+	w.Threshold = 0.91
+	if got := w.PlayingThresholdAt(); got != 0.93 {
+		t.Errorf("changing the normal threshold changed the explicit playing threshold to %v", got)
+	}
+}

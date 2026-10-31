@@ -270,6 +270,8 @@ var registered = []string{
 	"wake_effect_2",
 	"wake_light_brightness",
 	"wake_light_color",
+	"wake_playing_threshold_1",
+	"wake_playing_threshold_2",
 	"wake_threshold_1",
 	"wake_word_during_calls",
 	"wake_threshold_2",

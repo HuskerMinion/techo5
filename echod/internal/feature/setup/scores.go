@@ -125,7 +125,7 @@ func scoreRow(w http.ResponseWriter, row wakeword.ScoreRow) {
 	}
 	judged := fmt.Sprintf("%.2f", row.Cutoff)
 	if row.Slack {
-		judged += ` <span class="note">(lower while the speaker plays)</span>`
+		judged += ` <span class="note">(different while the speaker plays)</span>`
 	}
 	fmt.Fprintf(w, `<tr data-slot="%d" data-id="%s"><td class="scname">%s%s</td><td class="scmodel">%s <span class="note">%s</span></td><td>slot=%d</td>
 	 <td class="scthr">%.2f</td><td class="sccut">%s</td><td class="sclate">%s</td></tr>`,
@@ -244,7 +244,7 @@ const scoresScript = `<script>
       cell(tr, 'scname').textContent = row.role + (row.ready ? '' : ' (starting)');
       cell(tr, 'scmodel').textContent = row.phrase + ' (' + row.id + ')';
       cell(tr, 'scthr').textContent = row.threshold.toFixed(2);
-      cell(tr, 'sccut').textContent = row.cutoff.toFixed(2) + (row.slack ? ' (lower while the speaker plays)' : '');
+      cell(tr, 'sccut').textContent = row.cutoff.toFixed(2) + (row.slack ? ' (different while the speaker plays)' : '');
       const p = peaks[row.slot] || (peaks[row.slot] = {});
       (row.best || []).forEach((b, i) => { p[s.from + i] = {b: b, held: !!(row.settling || [])[i]}; });
       for (const k of Object.keys(p)) if (k < s.bucket - 120) delete p[k];

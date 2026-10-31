@@ -100,14 +100,16 @@ func Get() *Detect {
 	return shared
 }
 
-// playingSlack is how much lower the wake threshold sits while the echo canceller is running.
-const playingSlack = 0.10
+// playingSlack is how much lower a threshold sits while the echo canceller is running, for the stop
+// word and the other words, and for a wake word with no threshold of its own for playing.
+const playingSlack = config.DefaultPlayingSlack
 
 // slackFloor is as low as the slack is allowed to drag a threshold, whatever it started at.
-const slackFloor = 0.5
+const slackFloor = config.MinWakeThreshold
 
 // thresholdFor is the cutoff a slot's score is judged against. base supplies the per-slot wake word
-// threshold; stop is the stop word's own, which is configured separately.
+// threshold; stop is the stop word's own, which is configured separately. The wake words' own
+// threshold for playing goes through thresholdWithPlayback.
 //
 // While the speaker plays and the canceller runs, what reaches the detector is the residual of the
 // music plus the voice, and the word scores lower than it does in a quiet room. A little slack here
@@ -117,7 +119,7 @@ const slackFloor = 0.5
 // The stop word takes the same slack as every other slot. It needs it more than they do, not less:
 // it is the one word said while the speaker is certainly playing, because playing is what it is
 // asked to stop. Exempting it made the one word whose job is to interrupt a sound the only word
-// judged with no allowance for the sound.
+// judged with no allowance for the sound. Hang-up and command words are still governed by slackFor.
 func thresholdFor(slot int, base func(int) float64, stop float64, canceling bool) float64 {
 	t := stop
 	if slot != StopSlot {
@@ -127,6 +129,15 @@ func thresholdFor(slot int, base func(int) float64, stop float64, canceling bool
 		t = max(t-playingSlack, slackFloor)
 	}
 	return t
+}
+
+// thresholdWithPlayback changes only the two wake word slots. All other words keep their existing
+// allowance and call/ring exceptions; canceling is still the existing AEC gate.
+func thresholdWithPlayback(slot int, base func(int) float64, stop float64, canceling bool, playing func(int) float64) float64 {
+	if canceling && slot >= 0 && slot < wakeword.Slots {
+		return playing(slot)
+	}
+	return thresholdFor(slot, base, stop, canceling)
 }
 
 // slackFor reports whether a slot is judged with the allowance for the speaker (thresholdFor): while the
@@ -189,7 +200,7 @@ func newDetect() *Detect {
 		// stop word keeps the slack it has over any announcement.
 		onCall := phone.Get().Busy() && !phone.Get().State().Waiting
 		slack := slackFor(slot, mic.Get().Canceling(), onCall, ring.IsSounding())
-		return thresholdFor(slot, base, config.Get().Wake.Stop.Threshold, slack)
+		return thresholdWithPlayback(slot, base, config.Get().Wake.Stop.Threshold, slack, wakeword.PlayingThreshold)
 	}
 
 	// d is made below, once the hooks it chains onto are in place; a detection only arrives after Start.

@@ -15,7 +15,7 @@ func TestTheScoresSectionWorksWithoutScript(t *testing.T) {
 
 	for _, want := range []string{
 		"<legend>Wake word scores</legend>", `<td>slot=104</td>`, `<td class="scmodel">Hey Jarvis`,
-		`<td class="scthr">0.85</td><td class="sccut">0.75 <span class="note">(lower while the speaker plays)</span></td>`,
+		`<td class="scthr">0.85</td><td class="sccut">0.75 <span class="note">(different while the speaker plays)</span></td>`,
 		`<td class="scthr">0.80</td><td class="sccut">0.80</td>`,
 		`<td class="sclate">0.60</td>`, "Volume up word: near miss, peak 0.62 against 0.80",
 		`href="/setup?tab=sound&amp;scores=`, `#scores">Refresh</a>`, `data-after="5"`,

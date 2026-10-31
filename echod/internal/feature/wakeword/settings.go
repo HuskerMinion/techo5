@@ -16,6 +16,9 @@ func saved(slot int) config.WakeWord { return config.Get().Wake.Slot(slot) }
 // Threshold is the score a slot's detection has to reach.
 func Threshold(slot int) float64 { return saved(slot).Threshold }
 
+// PlayingThreshold is the cutoff while the echo canceller is active, per wake word.
+func PlayingThreshold(slot int) float64 { return saved(slot).PlayingThresholdAt() }
+
 // toneFor is what a turn on this slot sounds like. A follow-up sounds like the wake word that started
 // the conversation unless the slot gives it a tone of its own, and a tone of its own may be None.
 // Quiet hours are taken away by Tones, which is the one question the turn asks before it makes any

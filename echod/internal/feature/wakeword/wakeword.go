@@ -47,18 +47,19 @@ type WakeWord struct {
 type slot struct {
 	wake *esphome.Button
 
-	threshold    *esphome.Number
-	tone         *esphome.Select
-	effect       *esphome.Select
-	thinking     *esphome.Select
-	replying     *esphome.Select
-	delivery     *esphome.Select
-	buffer       *esphome.Number
-	followUp     *esphome.Number
-	followUps    *esphome.Number
-	followUpTone *esphome.Select
-	maxListen    *esphome.Number
-	maxThink     *esphome.Number
+	threshold        *esphome.Number
+	playingThreshold *esphome.Number
+	tone             *esphome.Select
+	effect           *esphome.Select
+	thinking         *esphome.Select
+	replying         *esphome.Select
+	delivery         *esphome.Select
+	buffer           *esphome.Number
+	followUp         *esphome.Number
+	followUps        *esphome.Number
+	followUpTone     *esphome.Select
+	maxListen        *esphome.Number
+	maxThink         *esphome.Number
 }
 
 var (
@@ -113,6 +114,16 @@ func newSlot(n int) slot {
 			Base: esphome.Base{
 				ObjectID: fmt.Sprintf("wake_threshold_%d", n+1),
 				Name:     "Wake word threshold",
+				Icon:     "mdi:tune",
+				Category: esphome.CategoryConfig,
+			},
+			Min: 0.5, Max: 0.99, Step: 0.01,
+			Mode: esphome.NumberBox,
+		},
+		playingThreshold: &esphome.Number{
+			Base: esphome.Base{
+				ObjectID: fmt.Sprintf("wake_playing_threshold_%d", n+1),
+				Name:     "Wake word threshold (playing)",
 				Icon:     "mdi:tune",
 				Category: esphome.CategoryConfig,
 			},
@@ -223,9 +234,9 @@ func newSlot(n int) slot {
 		},
 	}
 
-	// All thirteen on a page of their own.
+	// All the slot settings on an assistant page of their own.
 	for _, b := range []*esphome.Base{
-		&s.wake.Base, &s.threshold.Base, &s.tone.Base, &s.effect.Base,
+		&s.wake.Base, &s.threshold.Base, &s.playingThreshold.Base, &s.tone.Base, &s.effect.Base,
 		&s.thinking.Base, &s.replying.Base, &s.delivery.Base,
 		&s.buffer.Base, &s.followUp.Base, &s.followUps.Base, &s.followUpTone.Base,
 		&s.maxListen.Base, &s.maxThink.Base,
@@ -237,8 +248,18 @@ func newSlot(n int) slot {
 		s.threshold.Set(v)
 		if err := config.Set().Wake(n).Threshold(float64(v)); err != nil {
 			slog.Error("saving the wake threshold failed", "slot", n+1, "err", err)
+		} else if config.Get().Wake.Slot(n).PlayingThreshold == 0 {
+			// Older configurations continue to use the 0.10 allowance until explicitly tuned.
+			s.playingThreshold.Set(float32(config.Get().Wake.Slot(n).PlayingThresholdAt()))
 		}
 		slog.Info("wake threshold", "slot", n+1, "cutoff", v)
+	}
+	s.playingThreshold.OnCommand = func(v float32) {
+		s.playingThreshold.Set(v)
+		if err := config.Set().Wake(n).PlayingThreshold(float64(v)); err != nil {
+			slog.Error("saving the playing wake threshold failed", "slot", n+1, "err", err)
+		}
+		slog.Info("wake threshold while playing", "slot", n+1, "cutoff", v)
 	}
 	s.tone.OnCommand = func(label string) {
 		tone, ok := config.ByLabel(speaker.WakeTones(), label)
@@ -343,6 +364,13 @@ func (w *WakeWord) SetThreshold(n int, v float64) {
 	}
 }
 
+// SetPlayingThreshold sets the threshold used while echo cancellation is active, for the screen.
+func (w *WakeWord) SetPlayingThreshold(n int, v float64) {
+	if n >= 0 && n < len(w.slots) {
+		w.slots[n].playingThreshold.OnCommand(float32(v))
+	}
+}
+
 // SetTone sets slot n's wake word tone by its label as Home Assistant would, for the screen.
 // FallBackToStream puts a slot on streamed delivery, for a reply Home Assistant served at a url the
 // device could not fetch: the download is the default because it cannot gap, but a device that cannot
@@ -386,7 +414,7 @@ func (w *WakeWord) Name() string { return "wake word settings" }
 func (w *WakeWord) Entities() []esphome.Entity {
 	ents := []esphome.Entity{w.cancel}
 	for _, s := range w.slots {
-		ents = append(ents, s.wake, s.threshold, s.tone)
+		ents = append(ents, s.wake, s.threshold, s.playingThreshold, s.tone)
 		// What the ring shows for each phase, where there is a ring to show it (#325).
 		if led.HasRing {
 			ents = append(ents, s.effect, s.thinking, s.replying)
@@ -400,6 +428,7 @@ func (w *WakeWord) Restore(c config.Config) {
 	for i, s := range w.slots {
 		saved := c.Wake.Slot(i)
 		s.threshold.Set(float32(saved.Threshold))
+		s.playingThreshold.Set(float32(saved.PlayingThresholdAt()))
 		s.tone.Set(saved.Tone.Label())
 
 		component.RestoreEffect(s.effect, saved.Effect, nil,
