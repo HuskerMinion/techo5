@@ -471,9 +471,8 @@ func newRenderer(dst *image.RGBA) *renderer {
 // makeFaces makes the renderer's faces in the font named (font.go). Sizes are points at 72 DPI, which
 // makes them pixels, so they scale with everything else.
 func (r *renderer) makeFaces(k fontKey) {
-	name := k.name
-	face := func(bold bool, size int) font.Face { return fontFace(name, bold, float64(r.s(size))) }
-	r.font, r.fontGen, r.styleFaces = name, k.gen, nil
+	face := func(bold bool, size int) font.Face { return k.face(bold, float64(r.s(size))) }
+	r.font, r.fontGen, r.textSize, r.styleFaces = k.name, k.gen, k.size, nil
 	r.clock = face(true, 230)
 	r.big = face(true, 100)
 	r.ampm = face(true, 56)
@@ -483,13 +482,13 @@ func (r *renderer) makeFaces(k fontKey) {
 	r.tiny = face(false, 26)
 	r.micro = face(false, 18)
 	if r.scaled() {
-		fc := sheetFacesAt(name, r.s)
+		fc := sheetFacesAt(k, r.s)
 		r.fc = &fc
 	}
 }
 
-// useFont makes the faces again when the screen font, or the owner's own fonts, have changed since
-// they were made, so a new choice is drawn from the next frame on.
+// useFont makes the faces again when the screen font, the owner's own fonts or the text size have
+// changed since they were made, so a new choice is drawn from the next frame on.
 func (r *renderer) useFont() {
 	if k, changed := r.fontChanged(); changed {
 		r.makeFaces(k)

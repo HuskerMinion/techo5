@@ -648,6 +648,10 @@ like "kitchen screen" under its **Voice assistants** settings in Home Assistant.
   takes about the room it takes in Go, and a new choice shows at once. A character a font doesn't
   have, like the ♪ in "♪ playing", is drawn in Go. Under Look, also **Screen font** in Home Assistant
   and on the setup page's Screen & Photos tab.
+- **Text size** (70% to 125%, 100% by default): how large every word the screen draws is, in every
+  font and skin. The rows, buttons and tiles keep their size; a word too long for its place is cut
+  short with an ellipsis, as it is in a language with longer words. A new size shows at once. Under
+  Look, below Font, also **Screen text size** in Home Assistant.
 - **Skin** (Show, Spot and the Panel app; Settings > Display > Look, or **Screen skin** in Home
   Assistant): a whole look over the theme and the font. The Panel app wears skins as the Show does. On
   the Spot a skin brings its colors, font and filter; the frames, backdrops and the eye drawn around

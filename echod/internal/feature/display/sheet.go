@@ -138,6 +138,7 @@ func categoryRows(sv sheetView) (rows []settingRow, note string) {
 		rows = append(rows, themeRows()...)
 		rows = append(rows,
 			fontRow(),
+			textSizeRow(),
 			clockStyleRow(),
 			settingRow{id: "clock", label: tr("clock_format"), kind: ctlChoice, value: clockOptions[clockIndex()]},
 		)
@@ -720,6 +721,8 @@ func pickerForRaw(id string, sv sheetView) (pickerView, bool) {
 		return clockStylePicker()
 	case "font":
 		return fontPicker()
+	case "textsize":
+		return textSizePicker()
 	case "skin":
 		return pickerView{title: tr("skin"), opts: skinOptions(), cur: skinIndex()}, true
 	case "clockpos", "weatherpos", "datecolor", "glancesize", "glancemusic":
@@ -863,6 +866,8 @@ func (d *Display) choose(id string, i int) {
 		d.setClockStyle(i)
 	case "font":
 		d.setFont(i)
+	case "textsize":
+		d.setTextSize(i)
 	case "skin":
 		setSkin(d.skinSel(), i)
 	case "clockpos", "weatherpos", "datecolor", "glancesize", "glancemusic":
@@ -1315,7 +1320,7 @@ func (d *Display) rowTap(id string, p part, opt int) {
 		home.Get().SetSlideshowCaption(!home.Get().SlideshowCaption())
 	case "immichfav":
 		home.Get().SetImmichFavorites(!home.Get().ImmichFavorites())
-	case "night", "atnight", "nightstyle", "clock", "clockstyle", "font", "skin", "clockpos", "weatherpos", "datecolor", "glancesize", "glancemusic", "camtime", "camfit", "cambands", "camshade", "answertime", "idledim", "callring", "turnstyle", "timerstyle", "radarsrc", "calendars", "calpopwhen", "calpopallday", "calpopcals", "musicstrip", "follow", "awayoff", "slideshow", "photoevery", "screenlang", "newtimer", "sleep", "sunrise",
+	case "night", "atnight", "nightstyle", "clock", "clockstyle", "font", "textsize", "skin", "clockpos", "weatherpos", "datecolor", "glancesize", "glancemusic", "camtime", "camfit", "cambands", "camshade", "answertime", "idledim", "callring", "turnstyle", "timerstyle", "radarsrc", "calendars", "calpopwhen", "calpopallday", "calpopcals", "musicstrip", "follow", "awayoff", "slideshow", "photoevery", "screenlang", "newtimer", "sleep", "sunrise",
 		"timezone", "wakeword", "waketone", "ttsvoice", "quiet", "output", "clocktap":
 		d.openPicker(id)
 	}

@@ -39,8 +39,9 @@ const (
 	// scrimMost is the darkest a patch gets, so even a white photo shows through it.
 	scrimMost = 0.45
 
-	// scrimTallest is the tallest line that gets a patch, as the face's height in the Show 5's pixels:
-	// the title size (59) and below do, the AM/PM (70) and the time do not.
+	// scrimTallest is the tallest line that gets a patch, as the face's height in the Show 5's pixels
+	// at 100% text size: the title size (59) and below do, the AM/PM (70) and the time do not, at any
+	// text size.
 	scrimTallest = 64
 
 	// A patch reaches scrimPad of its line's height past the words at full strength, then fades out

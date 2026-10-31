@@ -26,11 +26,12 @@ type styleFaceKey struct {
 	size int
 }
 
-// styleFace is a face at size in the screen font, in the Show 5's pixels and scaled to this panel.
-// Sizes are rounded to a few pixels, so a style that fits its text to the box keeps a handful of faces
-// rather than one per fraction of a pixel. A new font empties the set (useFont).
+// styleFace is a face at size in the screen font, in the Show 5's pixels and scaled to this panel and
+// the text size. Sizes are rounded to a few pixels, so a style that fits its text to the box keeps a
+// handful of faces rather than one per fraction of a pixel. A new font or text size empties the set
+// (useFont).
 func (r *renderer) styleFace(bold bool, size int) font.Face {
-	px := max(r.s(size)/4*4, 8)
+	px := max(r.atTextSize(r.s(size))/4*4, 8)
 	k := styleFaceKey{bold, px}
 	if f, ok := r.styleFaces[k]; ok {
 		return f

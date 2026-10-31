@@ -115,11 +115,11 @@ type textKey struct {
 // textFace is the screen's own font at size, regular or bold, made once: for the dashboard's bigger
 // tiles, whose words grow with them past the fixed sizes the rest of the page uses.
 func (r *paint) textFace(bold bool, size int) font.Face {
-	key := textKey{fontKey{r.font, r.fontGen}, bold, r.s(size)}
+	key := textKey{r.faceKey(), bold, r.s(size)}
 	if fc, ok := textFaces.Load(key); ok {
 		return fc.(font.Face)
 	}
-	fc := fontFace(r.font, bold, float64(key.px))
+	fc := key.font.face(bold, float64(key.px))
 	if fc == nil {
 		return nil
 	}

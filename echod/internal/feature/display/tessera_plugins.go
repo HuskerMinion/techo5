@@ -166,7 +166,7 @@ var wcDigitFaces = struct {
 }{by: map[string][]font.Face{}}
 
 func (r *paint) wcFaces() []font.Face {
-	key := fmt.Sprintf("%s/%d/%d", r.font, r.fontGen, r.s(100))
+	key := fmt.Sprintf("%s/%d/%d/%d", r.font, r.fontGen, r.textSize, r.s(100))
 	wcDigitFaces.Lock()
 	defer wcDigitFaces.Unlock()
 	if f, ok := wcDigitFaces.by[key]; ok {
@@ -174,7 +174,7 @@ func (r *paint) wcFaces() []font.Face {
 	}
 	var f []font.Face
 	for _, px := range []int{72, 56, 44, 34, 28, 24} {
-		f = append(f, fontFace(r.font, false, float64(r.s(px))))
+		f = append(f, r.faceKey().face(false, float64(r.s(px))))
 	}
 	wcDigitFaces.by[key] = f
 	return f

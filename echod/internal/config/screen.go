@@ -198,7 +198,18 @@ type Screen struct {
 	// Font is the font the screen's words are drawn in: empty for Go, the screen's own, or one of the
 	// others lib/fonts offers ("inter", "comicneue", ...). One this build does not have is Go.
 	Font string `json:"font,omitempty"`
+
+	// TextSize is how large the screen's words are drawn, in percent of the size the layout gives them;
+	// 0 for the device's own (display.textSize). The boxes they sit in keep their size.
+	TextSize int `json:"text_size,omitempty"`
 }
+
+// The text sizes TextSize may be other than 0: a size from a newer build or a hand-edited file is held
+// to them rather than drawing words too small to read or too big for any box.
+const (
+	TextSizeLeast = 50
+	TextSizeMost  = 200
+)
 
 // DefaultTheme is the palette a new device comes up in.
 const DefaultTheme = "Ember"
@@ -378,6 +389,17 @@ func (w ScreenWriter) ClockPosition(v string) error {
 
 func (w ScreenWriter) Font(v string) error {
 	return w.st.Update(func(c *Config) { c.Screen.Font = v })
+}
+
+// TextSize saves the size of the screen's words in percent, held to TextSizeLeast..TextSizeMost; 0 or
+// less goes back to the device's own.
+func (w ScreenWriter) TextSize(v int) error {
+	if v > 0 {
+		v = min(max(v, TextSizeLeast), TextSizeMost)
+	} else {
+		v = 0
+	}
+	return w.st.Update(func(c *Config) { c.Screen.TextSize = v })
 }
 
 func (w ScreenWriter) ClockStyle(v string) error {
