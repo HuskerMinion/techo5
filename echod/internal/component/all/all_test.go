@@ -301,6 +301,7 @@ var registered = []string{
 	"calendar_week_view",
 	"calendar_next_up",
 	"calendar_weather",
+	"calendar_week_starts_monday",
 }
 
 func TestEveryComponentStillRegisters(t *testing.T) {

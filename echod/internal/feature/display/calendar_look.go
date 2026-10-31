@@ -13,7 +13,7 @@ import (
 	"github.com/HuskerMinion/techo5/echod/internal/feature/setup"
 )
 
-// How the calendar looks (docs/calendar-and-night-plan.md, 6): eight switches and the view it opens on, each on the screen
+// How the calendar looks (docs/calendar-and-night-plan.md, 6): nine switches and the view it opens on, each on the screen
 // under Settings, Display, Calendar, on the setup page's Weather & Calendar tab, and in Home Assistant,
 // where Shared settings can keep them the same on every screen in the house. Two go by the panel's
 // size until somebody chooses: the week view and the month in full are on where there is room for
@@ -30,6 +30,7 @@ type calLook struct {
 	week       bool // the week view, and the Day, Week and Month switch over the month
 	nextUp     bool // the next event at the foot of the clock
 	weather    bool // the forecast on the calendar's days
+	monday     bool // the month's and the week's rows start on Monday, rather than Sunday
 	opens      int  // the view it opens on, in opensOpts
 	wide       bool // a panel bigger than the Show 5's
 }
@@ -52,7 +53,7 @@ var (
 func lookFor(c config.Calendar, wide bool) calLook {
 	return calLook{timeline: !c.DayList, refined: !c.AgendaPlain, monthFull: c.MonthFullOn(wide), icons: !c.NoIcons,
 		countdowns: !c.NoCountdowns, week: c.WeekOn(wide), nextUp: !c.NoNextUp, weather: !c.NoWeather,
-		opens: max(0, slices.Index(opensVals, c.Opens)), wide: wide}
+		monday: c.MondayFirst, opens: max(0, slices.Index(opensVals, c.Opens)), wide: wide}
 }
 
 // wideScreen is whether a panel w by h is bigger than the Show 5's 960 by 480: the Show 8, and
@@ -103,6 +104,8 @@ var lookSwitches = []lookSwitch{
 		get: func(l calLook) bool { return l.countdowns }, set: func(on bool) error { return config.Set().Calendar().NoCountdowns(!on) }},
 	{id: "week_view", label: "Week view", sub: "Seven days on their hours", icon: "mdi:calendar-week",
 		get: func(l calLook) bool { return l.week }, set: func(on bool) error { return config.Set().Calendar().Week(on) }},
+	{id: "week_starts_monday", label: "Week starts Monday", sub: "Rather than Sunday", icon: "mdi:calendar-week-begin",
+		get: func(l calLook) bool { return l.monday }, set: func(on bool) error { return config.Set().Calendar().MondayFirst(on) }},
 	{id: "next_up", label: "Next up on the clock", sub: "Today's next event at the foot of the clock", icon: "mdi:calendar-arrow-right",
 		get: func(l calLook) bool { return l.nextUp }, set: func(on bool) error { return config.Set().Calendar().NoNextUp(!on) }},
 	{id: "weather", label: "Weather in the calendar", sub: "The forecast on each day", icon: "mdi:weather-partly-cloudy",

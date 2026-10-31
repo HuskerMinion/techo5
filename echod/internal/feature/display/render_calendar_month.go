@@ -57,16 +57,16 @@ func (r *renderer) calendarMonth(v calendarView, l calLook) {
 	}
 
 	colW := (r.w - 2*r.margin) / 7
+	first := v.month
+	lead := intoWeek(first)
+	start := first.AddDate(0, 0, -lead)
 	for i := range 7 {
-		day := v.month.AddDate(0, 0, i-int(v.month.Weekday()))
-		label := locale.ShortWeekday(day, screenLang())
+		label := locale.ShortWeekday(start.AddDate(0, 0, i), screenLang())
 		r.text(r.tiny, label, r.margin+i*colW+(colW-r.width(r.tiny, label))/2, top+r.s(20), dim)
 	}
 	gridTop := top + r.s(28)
-	first := v.month
-	start := first.AddDate(0, 0, -int(first.Weekday()))
 	days := time.Date(first.Year(), first.Month()+1, 0, 0, 0, 0, 0, time.Local).Day()
-	weeks := (int(first.Weekday()) + days + 6) / 7
+	weeks := (lead + days + 6) / 7
 	rowH := (r.h - r.s(8) - gridTop) / weeks
 	today := time.Date(v.now.Year(), v.now.Month(), v.now.Day(), 0, 0, 0, 0, time.Local)
 

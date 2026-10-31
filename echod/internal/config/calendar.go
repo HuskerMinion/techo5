@@ -55,6 +55,10 @@ type Calendar struct {
 	// opens Coming up, and an event's day still opens that day.
 	Opens string `json:"opens,omitempty"`
 
+	// MondayFirst starts the month's and the week's rows on Monday rather than Sunday. Off unless
+	// somebody turns it on.
+	MondayFirst bool `json:"monday_first,omitempty"`
+
 	// Hidden are the calendars turned off with the calendar page's chips: their events are left out of
 	// this screen's calendar and the clock's next event. This device's alone, like the calendars it
 	// shows: never shared, and a settings file neither carries nor changes it (KeepOwn).
@@ -188,6 +192,10 @@ func (w CalendarWriter) NoNextUp(v bool) error {
 
 func (w CalendarWriter) NoWeather(v bool) error {
 	return w.st.Update(func(c *Config) { c.Calendar.NoWeather = v })
+}
+
+func (w CalendarWriter) MondayFirst(v bool) error {
+	return w.st.Update(func(c *Config) { c.Calendar.MondayFirst = v })
 }
 
 // Week turns the week view on or off; the choice is kept from then on, whatever the panel's default.

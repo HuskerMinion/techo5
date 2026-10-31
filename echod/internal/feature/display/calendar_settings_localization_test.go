@@ -30,15 +30,16 @@ func TestDisplayCalendarSettingsUseJapanesePresentationOnly(t *testing.T) {
 		t.Fatal(err)
 	}
 	wantJapanese := map[string][2]string{
-		"opens_on":          {"最初に開く表示", "日付をタップしたときの表示"},
-		"day_timeline":      {"日の時間軸表示", "その日の予定を時刻に沿って表示"},
-		"coming_up_refined": {"予定を1行ずつ表示", "各日の天気も表示"},
-		"month_details":     {"月表示の詳細", "時刻・アイコン・天気を表示"},
-		"event_icons":       {"予定のアイコン", "誕生日・ごみ出し・旅行などの目印"},
-		"countdowns":        {"開始までの時間", "今日の予定に「あと25分」などを表示"},
-		"week_view":         {"週表示", "7日分の予定を時刻に沿って表示"},
-		"next_up":           {"時計に次の予定", "時計の下部に今日の次の予定を表示"},
-		"weather":           {"カレンダーの天気", "各日の天気予報を表示"},
+		"opens_on":           {"最初に開く表示", "日付をタップしたときの表示"},
+		"day_timeline":       {"日の時間軸表示", "その日の予定を時刻に沿って表示"},
+		"coming_up_refined":  {"予定を1行ずつ表示", "各日の天気も表示"},
+		"month_details":      {"月表示の詳細", "時刻・アイコン・天気を表示"},
+		"event_icons":        {"予定のアイコン", "誕生日・ごみ出し・旅行などの目印"},
+		"countdowns":         {"開始までの時間", "今日の予定に「あと25分」などを表示"},
+		"week_view":          {"週表示", "7日分の予定を時刻に沿って表示"},
+		"week_starts_monday": {"週の始まりを月曜日に", "日曜日ではなく月曜日から"},
+		"next_up":            {"時計に次の予定", "時計の下部に今日の次の予定を表示"},
+		"weather":            {"カレンダーの天気", "各日の天気予報を表示"},
 	}
 	for _, lang := range []string{"en", "ja", "pt"} {
 		if err := config.Set().Screen().Language(lang); err != nil {

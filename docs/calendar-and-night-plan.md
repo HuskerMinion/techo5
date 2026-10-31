@@ -155,6 +155,8 @@ screen. The Spot keeps its own Today and Next.
 - **Week view**: seven days on their hours, each headed by its weather, with an all-day strip and
   today's column tinted. A Day, Week and Month switch sits in the header. On screens bigger than the
   Show 5, off on the Show 5.
+- **Week starts Monday** (off): the month's rows, its day names and the week view start on Monday
+  rather than Sunday.
 - **Next up on the clock** (on): while an event is on, or comes up today or within 12 hours, the foot
   of the clock shows it: its time, its countdown, and under it the long countdown and what comes
   next. A tap opens that day. Only when the glance strip has nothing of its own to show: a strip with

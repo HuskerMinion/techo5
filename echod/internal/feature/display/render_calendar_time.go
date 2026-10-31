@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/HuskerMinion/techo5/echod/internal/config"
 	"github.com/HuskerMinion/techo5/echod/internal/lib/hass"
 	"github.com/HuskerMinion/techo5/echod/internal/lib/locale"
 )
@@ -389,10 +390,20 @@ func restOf(title string, lines []string) string {
 	return title
 }
 
-// weekStart is the Sunday of the week holding day.
+// weekStart is the first day of the week holding day: its Sunday, or its Monday with the week set to
+// start on Monday.
 func weekStart(day time.Time) time.Time {
 	d := time.Date(day.Year(), day.Month(), day.Day(), 0, 0, 0, 0, time.Local)
-	return d.AddDate(0, 0, -int(d.Weekday()))
+	return d.AddDate(0, 0, -intoWeek(d))
+}
+
+// intoWeek is how many days day is past the first of its week: 0 for a Sunday, or for a Monday with
+// the week set to start on Monday.
+func intoWeek(day time.Time) int {
+	if config.Get().Calendar.MondayFirst {
+		return (int(day.Weekday()) + 6) % 7
+	}
+	return int(day.Weekday())
 }
 
 // weekTitle is the week's title: "October 18 – 24", or shorter, "Oct 18 – 24"; across two months,
@@ -409,7 +420,7 @@ func weekTitle(first time.Time, short bool) string {
 	return first.Format(layout) + " – " + last.Format(layout)
 }
 
-// calendarWeek is the week on its hours: a column a day, Sunday first, under its name, its number and
+// calendarWeek is the week on its hours: a column a day, Sunday or Monday first, under its name, its number and
 // its weather; today's column tinted and the now line across it.
 func (r *renderer) calendarWeek(v calendarView, l calLook) {
 	first := weekStart(v.day)

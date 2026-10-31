@@ -9,7 +9,7 @@ var notOnThisDevice = append(ringOnly, "calendar_popup_all_day", "calendar_popup
 	"tessera_screen",
 	// The Show's calendar page and its look; the Spot's calendar is its own.
 	"screen_camera_picture", "screen_camera_strips", "screen_camera_strips_shade",
-	"calendar_opens_on", "calendar_day_timeline", "calendar_coming_up_refined", "calendar_month_details", "calendar_event_icons", "calendar_countdowns", "calendar_week_view", "calendar_next_up", "calendar_weather")
+	"calendar_opens_on", "calendar_day_timeline", "calendar_coming_up_refined", "calendar_month_details", "calendar_event_icons", "calendar_countdowns", "calendar_week_view", "calendar_next_up", "calendar_weather", "calendar_week_starts_monday")
 
 // deviceSpecific: the audio output, and the subtle muted ring, since only the Spot draws its mute on
 // the screen; the video player (feature/video), which the Show has too and the Dot does not; and the
