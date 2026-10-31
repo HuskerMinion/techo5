@@ -7,6 +7,9 @@ import (
 	"image/color"
 	"image/draw"
 	"math"
+	"time"
+
+	"github.com/HuskerMinion/techo5/echod/internal/lib/locale"
 )
 
 // The sunrise page: what the screen shows while the light before an alarm comes up.
@@ -26,6 +29,19 @@ func (r *renderer) sunrisePage(s scene, p float64, face bool) {
 	r.sunriseSky(p)
 	r.sunriseSun(p, face)
 	r.sunriseClock(s, p)
+	if s.skip != nil && !skipOccluded(s) && !r.rainbowCovering(s) {
+		// The volume bar along the foot is drawn over this page, and it covers the button: what cannot
+		// be seen cannot be tapped, as the camera page's controls have it (render.go). The bar is up for
+		// two seconds after the level last moved; the change wakes the frame loop, and the frame that
+		// draws the bar is the one that drops the button and the place a tap was matched to with it.
+		// While the bar is up the frames come every activeFrame rather than once a second, so the
+		// button is back on the screen, and tappable, within a fifth of a second of the bar going.
+		//
+		// A card, a strip, the drawer or the update dialog over the page, and Rainbow's own drawing over
+		// it while a turn is composed or fading, leave it out the same way (skipOccluded,
+		// rainbowCovering): a button under them is one somebody never saw, and the fade had it covered.
+		r.sunriseSkipButton(*s.skip, p)
+	}
 }
 
 // sunriseSky fills the screen, dark red at the start and pale gold by the end, with the horizon
@@ -92,6 +108,82 @@ func (r *renderer) sunriseClock(s scene, p float64) {
 	r.text(r.ampm, ampm, x+hw+gap, base, ink)
 	date := s.now.Format("Monday, January 2")
 	r.text(r.small, date, (r.w-r.width(r.small, date))/2, base+r.s(64), ink)
+}
+
+// sunriseSkipButton draws the way to leave today's alarm out while the light comes up before it: what
+// a press does, and the alarm and the moment it would leave out, so that the finger knows what it is
+// about without a list to look at. It sits between the date and the foot, clear of the clock, and is
+// drawn dark on a sky that goes from the dark red of the first minutes to a pale gold: the page is the
+// only lamp in the room, and what is on it has to read at both ends of the light.
+//
+// Where it was drawn, and the occurrence it offered, are kept for the tap (setSkipDrawn): a finger
+// acts on what it saw, not on what the alarms say by the time it lands.
+func (r *renderer) sunriseSkipButton(offer skipOffer, p float64) {
+	label := offer.label
+	if label == "" {
+		label = locale.Alarm(screenLang(), false)
+	}
+	action := skipAction()
+	// A pill around both lines, measured from the faces in hand: a screen font of the owner's is not
+	// the same height as Go's, and a line that overflows the button it is on reads as a mistake.
+	padX, padY, gap := r.s(48), r.s(12), r.s(6)
+	am, sm := r.title.Metrics(), r.small.Metrics()
+	wide := r.w - 2*r.margin - 2*padX
+	action = r.clipTo(r.title, action, wide)
+	what := r.skipWhat(label, offer.token.At, wide)
+	w := max(r.width(r.title, action), r.width(r.small, what)) + 2*padX
+	tall := am.Ascent.Ceil() + am.Descent.Ceil() + gap + sm.Ascent.Ceil() + sm.Descent.Ceil() + 2*padY
+	b := image.Rect((r.w-w)/2, r.h-r.s(64)-tall, (r.w+w)/2, r.h-r.s(64))
+	rad := min(float64(r.s(30)), float64(b.Dy())/2)
+	r.roundFill(b, rad, color.RGBA{0x2b, 0x13, 0x0b, 0xff}, color.RGBA{0x17, 0x09, 0x05, 0xff})
+	// The edge is warm against the dark end of the sky and deepens as the sky pales, so the button
+	// keeps its shape on the way up rather than glowing into the gold.
+	r.roundStroke(b, rad, r.sf(2), lerpRGB(color.RGBA{0xf0, 0xa9, 0x3f, 0xff}, color.RGBA{0x7a, 0x33, 0x12, 0xff}, p))
+	titleY := b.Min.Y + padY + am.Ascent.Ceil()
+	whatY := titleY + am.Descent.Ceil() + gap + sm.Ascent.Ceil()
+	r.text(r.title, action, b.Min.X+(b.Dx()-r.width(r.title, action))/2, titleY, color.RGBA{0xff, 0xf6, 0xe8, 0xff})
+	r.text(r.small, what, b.Min.X+(b.Dx()-r.width(r.small, what))/2, whatY, color.RGBA{0xf3, 0xc3, 0x8a, 0xff})
+	// The captions of a cue sit above the page's controls (footAt, turn_cue.go), and this is one: the
+	// foot's room is taken from the top of the finger's area rather than the button's pixels, since a
+	// tap just outside the button is still the button's (skipTapped) and a caption over that ring would
+	// take the press.
+	r.footControls(b.Min.Y - r.s(8))
+	r.setSkipDrawn(b, offer)
+}
+
+// sunriseSkipNote draws the foot's line about the last press on the button above it: the same dark
+// pill and the same pale ink. The foot's amber is read on the clock's ground, but not on the sky below
+// the button, which goes from the dark red of the first minutes to a pale gold that swallows it — and
+// this line is the only answer a press gets, so it is drawn dark on light the whole way up. room is
+// what the foot has for it beside the word at the right end, padding included: the line is fitted to
+// the pill at the face it is drawn in — the alarm's name shortened, the result and the hour kept — and
+// the pill is measured from the line, so it stays on the page rather than running off it.
+func (r *renderer) sunriseSkipNote(a skipAnswer, p float64, room int) {
+	base := r.h - r.s(24)
+	am := r.tiny.Metrics()
+	padX, padY := r.s(14), r.s(7)
+	line := r.skipLine(a, r.tiny, room-2*padX)
+	b := image.Rect(r.margin, base-am.Ascent.Ceil()-padY, r.margin+r.width(r.tiny, line)+2*padX,
+		base+am.Descent.Ceil()+padY)
+	rad := float64(b.Dy()) / 2
+	r.roundFill(b, rad, color.RGBA{0x2b, 0x13, 0x0b, 0xff}, color.RGBA{0x17, 0x09, 0x05, 0xff})
+	r.roundStroke(b, rad, r.sf(2), lerpRGB(color.RGBA{0xf0, 0xa9, 0x3f, 0xff}, color.RGBA{0x7a, 0x33, 0x12, 0xff}, p))
+	r.text(r.tiny, line, r.margin+padX, base, color.RGBA{0xff, 0xf6, 0xe8, 0xff})
+}
+
+// skipWhat is the button's second line: the alarm the button is about and the moment it would leave
+// out. An alarm's name has no length limit, and a translated line is not always as short as the
+// English one, so where the two do not fit together it is the name that is clipped, to the room left
+// beside the moment. Clipping the whole line instead would cut the hour off first, and the hour is
+// what says which occurrence a press is about.
+func (r *renderer) skipWhat(label string, at time.Time, wide int) string {
+	moment := " · " + clockText(at)
+	room := wide - r.width(r.small, moment)
+	if room <= r.width(r.small, "…") {
+		// If even an elided name will not fit, the identifying time takes priority.
+		return r.clipTo(r.small, clockText(at), wide)
+	}
+	return r.clipTo(r.small, label, room) + moment
 }
 
 // faded is a color at a given alpha, premultiplied — which is what Go's RGBA holds, so dimming the

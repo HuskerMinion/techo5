@@ -47,6 +47,68 @@ func TestTextFallback(t *testing.T) {
 	}
 }
 
+// The sunrise page's button and the foot that answers a press are the screen's catalog's: one whole
+// message each, with the alarm and the hour as its two arguments, so a language says them in its own
+// order and with its own punctuation. The action is short and localized; only English and Spanish
+// have translated feedback so far. The
+// complete catalogs carry English feedback rather than missing entries, while short actions have
+// equivalents. The rest of the screen languages fall back to English through Text, as
+// every other line of the screen's own text does.
+func TestSunriseSkipMessagesInEveryScreenLanguage(t *testing.T) {
+	keys := []string{"sunrise_skip_action", "sunrise_skip_done", "sunrise_skip_refused"}
+	actions := map[string]string{"": "Skip", "en": "Skip", "es": "Omitir", "de": "Überspringen", "fr": "Ignorer", "it": "Salta", "ja": "スキップ", "tr": "Atla", "nl": "Skip", "pt": "Skip", "ru": "Skip", "xx": "Skip"}
+	for _, key := range keys {
+		if uiEnglish[key] == "" {
+			t.Fatalf("no English for %s", key)
+		}
+	}
+	// screenLanguages are the languages the screen's setting offers, and English: "" is the language
+	// the screen starts in, and "xx" one with no catalog of its own at all.
+	screenLanguages := []string{"", "en", "es", "de", "fr", "it", "nl", "pt", "ru", "tr", "ja", "xx"}
+	for _, lang := range screenLanguages {
+		if got, want := Text(lang, "sunrise_skip_action"), actions[lang]; got != want {
+			t.Errorf("%q: action says %q, want %q", lang, got, want)
+		}
+		for _, key := range keys {
+			if got := Text(lang, key); got == "" || got == key {
+				t.Errorf("%q: %s says %q", lang, key, got)
+			}
+		}
+		// Both arguments are in the line, and nothing is left unformatted: a message that lost one of
+		// them would put the alarm or the hour out of the line somebody reads.
+		for _, key := range keys[1:] {
+			line := fmt.Sprintf(Text(lang, key), "Wake up", "7:00 AM")
+			if !strings.Contains(line, "Wake up") || !strings.Contains(line, "7:00 AM") || strings.Contains(line, "%") {
+				t.Errorf("%q: %s says %q", lang, key, line)
+			}
+		}
+	}
+	// Feedback is translated in Spanish; other catalogs retain the maintainer-approved English
+	// placeholders. Short action words are checked independently above.
+	for _, key := range keys[1:] {
+		if Text("es", key) == uiEnglish[key] {
+			t.Errorf("es: %s is the English text %q", key, uiEnglish[key])
+		}
+		for _, lang := range screenLanguages {
+			if lang == "es" {
+				continue
+			}
+			if got := Text(lang, key); got != uiEnglish[key] {
+				t.Errorf("%q: %s says %q, want the English %q until a native speaker writes it", lang, key, got, uiEnglish[key])
+			}
+		}
+	}
+	// Complete catalogs retain explicit feedback placeholders rather than missing keys; short
+	// action equivalents were checked above.
+	for _, lang := range completeCatalogs {
+		for _, key := range keys[1:] {
+			if got := uiTranslations[lang][key]; got != uiEnglish[key] {
+				t.Errorf("%s: %s says %q, want the English %q until a native speaker writes it", lang, key, got, uiEnglish[key])
+			}
+		}
+	}
+}
+
 func TestAdditionalUILanguageNeedsOnlyACatalog(t *testing.T) {
 	uiTranslations["test"] = map[string]string{"done": "Finished"}
 	t.Cleanup(func() { delete(uiTranslations, "test") })

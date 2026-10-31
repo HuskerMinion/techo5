@@ -438,6 +438,9 @@ func KeepOwn(c *Config, from Config) {
 	c.Microphone.Muted = from.Microphone.Muted
 
 	c.Alarms.Snoozed = slices.Clone(from.Alarms.Snoozed)
+	// Which occurrence is left out is the device's own, like a snooze: it is what this device is in
+	// the middle of, not a setting for another one to inherit.
+	c.Alarms.Skipped = slices.Clone(from.Alarms.Skipped)
 	c.Alarms.Held = nil
 	if from.Alarms.Held != nil {
 		held := *from.Alarms.Held

@@ -123,6 +123,7 @@ func (st *Store) Get() Config {
 	}
 	c.Alarms.Follow = slices.Clone(st.c.Alarms.Follow)
 	c.Alarms.Snoozed = slices.Clone(st.c.Alarms.Snoozed)
+	c.Alarms.Skipped = slices.Clone(st.c.Alarms.Skipped)
 	if h := st.c.Alarms.Held; h != nil {
 		held := *h
 		c.Alarms.Held = &held
@@ -180,6 +181,37 @@ func (st *Store) UpdateOrUndo(f func(*Config)) error {
 		st.c = before
 	}
 	return err
+}
+
+// UpdateChecked applies a change and writes the file only when f accepts it. A change f refuses, or
+// one that could not be saved, is taken back whole — even when the file was never readable. Unlike
+// UpdateOrUndo there is no run-long exception for an unreadable file, because this is for something
+// the caller reports as done only once it is on disk, and memory alone must not be able to say so.
+//
+// f may change st.c before returning an error; the change is taken back either way.
+func (st *Store) UpdateChecked(f func(*Config) error) error {
+	st.mu.Lock()
+	defer st.mu.Unlock()
+
+	before := deepCopy(st.c)
+	if err := f(&st.c); err != nil {
+		st.c = before
+		return err
+	}
+	err := st.write()
+	var renamed afterRename
+	switch {
+	case err == nil:
+		return nil
+	case errors.As(err, &renamed):
+		// As UpdateOrUndo: the new file is in place, only not yet flushed with its folder. Memory
+		// keeps the change to match what is on disk, and the caller is told it was saved.
+		slog.Warn("config: saved, but the folder could not be flushed after", "path", st.path, "err", err)
+		return nil
+	default:
+		st.c = before
+		return err
+	}
 }
 
 // afterRename is write failing after the new file took the old one's place: what is on disk is the

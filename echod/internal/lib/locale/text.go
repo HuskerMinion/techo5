@@ -343,6 +343,9 @@ var uiEnglish = map[string]string{
 	"sunrise_default_description":               "Before alarms that don't choose their own",
 	"sunrise_ringing":                           "On while the alarm rings",
 	"sunrise_rising":                            "The light is coming up now",
+	"sunrise_skip_action":                       "Skip",
+	"sunrise_skip_done":                         "Alarm skipped: %s at %s",
+	"sunrise_skip_refused":                      "Not skipped: %s at %s",
 	"sunrise_snooze":                            "On until the %s snooze",
 	"sunrise_until":                             "On until %s",
 	"talk_on_the_camera_page":                   "Talk on the camera page",
@@ -981,6 +984,12 @@ var uiTranslations = map[string]map[string]string{
 		// The time zone picker (display/sheet_timezone.go, #354).
 		"ui_tz_follow_ha": "Seguir a Home Assistant",
 		"ui_tz_common":    "Comunes",
+		// Skip
+		"sunrise_skip_action": "Omitir",
+		// Alarm skipped: %s at %s
+		"sunrise_skip_done": "Alarma omitida: %s a las %s",
+		// Not skipped: %s at %s
+		"sunrise_skip_refused": "No se pudo omitir: %s a las %s",
 	},
 	"fr": {
 		"drawer_recording":              "Écoute en cours",
@@ -1342,7 +1351,11 @@ var uiTranslations = map[string]map[string]string{
 		"turn_screen":                                           "Écran",
 		"ui_1_hour":                                             "1 heure",
 		"ui_1_hour_d_minutes":                                   "1 heure %d minutes",
-		"ui_a_face_on_it_for_whoever_has_to_look_at_it":     "Un visage à regarder pour la personne qui doit le consulter",
+		"ui_a_face_on_it_for_whoever_has_to_look_at_it": "Un visage à regarder pour la personne qui doit le consulter",
+		// The action is short; feedback stays in English pending native review.
+		"sunrise_skip_action":                               "Ignorer",
+		"sunrise_skip_done":                                 "Alarm skipped: %s at %s",
+		"sunrise_skip_refused":                              "Not skipped: %s at %s",
 		"ui_a_landscape_for_the_weather_in_place_of_photos": "Un paysage météo à la place des photos",
 		"ui_a_pin_before_most_settings_change":              "Un code PIN avant de modifier la plupart des paramètres",
 		"ui_add_alarm":                                      "+ Ajouter une alarme",
@@ -2000,6 +2013,10 @@ var uiTranslations = map[string]map[string]string{
 		"turn_screen":                               "Stile della schermata vocale",
 		"ui_1_hour":                                 "1 ora",
 		"ui_1_hour_d_minutes":                       "1 ora %d minuti",
+		// The action is short; feedback stays in English pending native review.
+		"sunrise_skip_action":                               "Salta",
+		"sunrise_skip_done":                                 "Alarm skipped: %s at %s",
+		"sunrise_skip_refused":                              "Not skipped: %s at %s",
 		"ui_a_face_on_it_for_whoever_has_to_look_at_it":     "Una faccina sul sole, per chi lo guarda",
 		"ui_a_landscape_for_the_weather_in_place_of_photos": "Mostra un paesaggio a tema meteo al posto delle foto",
 		"ui_a_pin_before_most_settings_change":              "Richiede un PIN per quasi tutte le impostazioni",
@@ -2668,6 +2685,10 @@ var uiTranslations = map[string]map[string]string{
 		"turn_screen":                               "音声応答画面",
 		"ui_1_hour":                                 "1時間",
 		"ui_1_hour_d_minutes":                       "1時間%d分",
+		// The action is short; feedback stays in English pending native review.
+		"sunrise_skip_action":                               "スキップ",
+		"sunrise_skip_done":                                 "Alarm skipped: %s at %s",
+		"sunrise_skip_refused":                              "Not skipped: %s at %s",
 		"ui_a_face_on_it_for_whoever_has_to_look_at_it":     "太陽に顔を表示",
 		"ui_a_landscape_for_the_weather_in_place_of_photos": "写真の代わりに天気に合った風景を表示",
 		"ui_a_pin_before_most_settings_change":              "多くの設定変更にPINを要求",
@@ -3636,6 +3657,10 @@ var uiTranslations = map[string]map[string]string{
 		"sunrise_ringing": "An, während der Wecker klingelt",
 		// The light is coming up now
 		"sunrise_rising": "Das Licht kommt jetzt",
+		// The action is short; feedback stays in English pending native review.
+		"sunrise_skip_action":  "Überspringen",
+		"sunrise_skip_done":    "Alarm skipped: %s at %s",
+		"sunrise_skip_refused": "Not skipped: %s at %s",
 		// On until the %s snooze
 		"sunrise_snooze": "An bis zum Schlummern %s",
 		// On until %s
@@ -4613,6 +4638,10 @@ var uiTranslations = map[string]map[string]string{
 		"turn_screen":                               "Ekranı çevir",
 		"ui_1_hour":                                 "1 saat",
 		"ui_1_hour_d_minutes":                       "1 saat %d dakika",
+		// The action is short; feedback stays in English pending native review.
+		"sunrise_skip_action":                               "Atla",
+		"sunrise_skip_done":                                 "Alarm skipped: %s at %s",
+		"sunrise_skip_refused":                              "Not skipped: %s at %s",
 		"ui_a_face_on_it_for_whoever_has_to_look_at_it":     "Bakması gereken kişi için üzerine bir yüz",
 		"ui_a_landscape_for_the_weather_in_place_of_photos": "Fotoğraflar yerine hava durumu için bir manzara",
 		"ui_a_pin_before_most_settings_change":              "Çoğu ayar değişikliğinden önce PIN",
