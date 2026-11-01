@@ -4,6 +4,7 @@ package microphone
 
 import (
 	"log/slog"
+	"math"
 	"sync"
 
 	esphome "github.com/ygelfand/go-esphome-device"
@@ -28,6 +29,7 @@ type Microphone struct {
 	engine      *esphome.Select
 	denoise     *esphome.Switch
 	ends        *esphome.Switch
+	pause       *esphome.Number // how long a pause ends a turn
 	sensitivity *esphome.Number
 }
 
@@ -91,6 +93,16 @@ func build() *Microphone {
 				Category: esphome.CategoryConfig,
 			},
 		},
+		pause: &esphome.Number{
+			Base: esphome.Base{
+				ObjectID: "microphone_end_of_speech_pause",
+				Name:     "End of speech pause",
+				Icon:     "mdi:timer-sand",
+				Category: esphome.CategoryConfig,
+			},
+			Min: config.MinEndPause / 10.0, Max: config.MaxEndPause / 10.0, Step: 0.1, Unit: "s",
+			Mode: esphome.NumberBox,
+		},
 		sensitivity: &esphome.Number{
 			Base: esphome.Base{
 				ObjectID: "microphone_sensitivity",
@@ -115,7 +127,7 @@ func build() *Microphone {
 
 	for _, b := range []*esphome.Base{
 		&m.mixing.Base, &m.gain.Base, &m.leveling.Base, &m.cancel.Base, &m.engine.Base, &m.denoise.Base,
-		&m.ends.Base, &m.sensitivity.Base,
+		&m.ends.Base, &m.pause.Base, &m.sensitivity.Base,
 	} {
 		b.DeviceID = component.DeviceMicrophone
 	}
@@ -160,6 +172,15 @@ func build() *Microphone {
 		}
 	}
 
+	// Read by each turn as it opens too.
+	m.pause.OnCommand = func(v float32) {
+		tenths := config.Microphone{EndPause: int(math.Round(float64(v) * 10))}.EndPauseTenths()
+		m.pause.Set(float32(tenths) / 10)
+		if err := config.Set().Microphone().EndPause(tenths); err != nil {
+			slog.Error("saving the end of speech pause failed", "err", err)
+		}
+	}
+
 	m.sensitivity.OnCommand = func(v float32) {
 		m.sensitivity.Set(v)
 		source.SetSensitivity(int(v))
@@ -180,7 +201,8 @@ func build() *Microphone {
 func (m *Microphone) Name() string { return "microphone settings" }
 
 func (m *Microphone) Entities() []esphome.Entity {
-	return append([]esphome.Entity{m.mixing, m.gain, m.leveling, m.cancel, m.engine, m.denoise, m.ends, m.sensitivity},
+	return append([]esphome.Entity{m.mixing, m.gain, m.leveling, m.cancel, m.engine, m.denoise, m.ends, m.pause,
+		m.sensitivity},
 		buildEntities()...)
 }
 
@@ -216,6 +238,9 @@ func (m *Microphone) Restore(c config.Config) {
 
 	m.ends.Set(!c.Microphone.PipelineEnds)
 	slog.Info("restored", "what", m.ends.ObjectID, "using", !c.Microphone.PipelineEnds)
+
+	m.pause.Set(float32(c.Microphone.EndPauseTenths()) / 10)
+	slog.Info("restored", "what", m.pause.ObjectID, "using", c.Microphone.EndPauseTenths())
 
 	m.sensitivity.Set(float32(c.Microphone.Sensitivity))
 	source.SetSensitivity(c.Microphone.Sensitivity)

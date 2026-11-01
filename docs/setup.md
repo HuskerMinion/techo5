@@ -965,6 +965,17 @@ Under Settings → **Sound**, or on the device's Assist satellite in Home Assist
   [`voice_effect`](actions.md#show-an-effect-on-the-ring-during-a-request).
 - **Quiet hours** and **Do not disturb**.
 
+**End of speech pause** (0.6 to 2 seconds, 0.6 by default; the device's microphone settings in Home
+Assistant, beside **End of speech on the device**) is how long you have to stay quiet before the
+device takes you as finished. If a pause to think cuts your request off, raise it a few tenths at a
+time. A longer pause means a television or other voices in the room, when one of their words falls
+into it, keep a turn going longer. With Home Assistant, it applies after a wake word with **End of
+speech on the device** on; Home Assistant decides for a follow-up. Home Assistant also ends a turn
+itself, after 0.7 seconds of quiet by default, so for a longer pause here set the device's **Finished
+speaking detection** (**Sprechpausen-Erkennung** in German; Home Assistant names it, in its own
+language) to **Relaxed**, 1.25 seconds. In a quiet room nothing longer than that has an effect with
+Home Assistant. With realtime voice and voice without Home Assistant it applies to every turn.
+
 On the setup page (Sound & Voice) or in Home Assistant, **Night volume** turns the device down to that
 level as quiet hours start, if it is louder, and back to where it was as they end. Turned up or down
 during the night, it stays where it was put. Changing Night volume during the night moves the device to

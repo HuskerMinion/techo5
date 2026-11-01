@@ -113,6 +113,7 @@ var registered = []string{
 	"microphone_cancel_echo",
 	"microphone_echo_canceller",
 	"microphone_end_of_speech",
+	"microphone_end_of_speech_pause",
 	"microphone_gain",
 	"microphone_leveling",
 	"microphone_mixing",

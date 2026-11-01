@@ -38,6 +38,11 @@ type Microphone struct {
 	// is the default, the device ends a turn itself when it hears the speaker stop.
 	PipelineEnds bool `json:"pipeline_ends,omitempty"`
 
+	// EndPause is how long the speaker has to stay quiet before the device ends a turn, in tenths of a
+	// second; 0 is DefaultEndPause. Longer lets a pause to think go by, at the cost of a turn that a
+	// television's words keep from ending.
+	EndPause int `json:"end_pause,omitempty"`
+
 	// Noise measures how loud the room is for the ambient noise sensor. Off unless somebody turns it on:
 	// it is a new use of the microphones, even if only a number leaves them.
 	Noise bool `json:"noise,omitempty"`
@@ -75,6 +80,11 @@ const (
 	DefaultSensitivity = 8
 
 	DefaultDenoise = false
+
+	// What the recordings of real turns were measured at (lib/endpoint), and how far it can be set.
+	DefaultEndPause = 6
+	MinEndPause     = 6
+	MaxEndPause     = 20
 )
 
 func defaultMicrophone() Microphone {
@@ -180,6 +190,25 @@ func (w MicrophoneWriter) Denoise(v bool) error {
 // DeviceEnds is whether the device ends a turn when it hears the speaker stop.
 func (w MicrophoneWriter) DeviceEnds(v bool) error {
 	return w.st.Update(func(c *Config) { c.Microphone.PipelineEnds = !v })
+}
+
+// EndPause is how long the speaker has to stay quiet before the device ends a turn, in tenths of a
+// second.
+func (w MicrophoneWriter) EndPause(tenths int) error {
+	return w.st.Update(func(c *Config) { c.Microphone.EndPause = tenths })
+}
+
+// EndPauseTenths is EndPause with the default for none and within the range a number can be set to.
+func (m Microphone) EndPauseTenths() int {
+	switch {
+	case m.EndPause == 0:
+		return DefaultEndPause
+	case m.EndPause < MinEndPause:
+		return MinEndPause
+	case m.EndPause > MaxEndPause:
+		return MaxEndPause
+	}
+	return m.EndPause
 }
 
 // Noise is whether the room is measured for the ambient noise sensor.

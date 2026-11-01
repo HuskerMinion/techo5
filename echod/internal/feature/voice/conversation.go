@@ -995,6 +995,14 @@ func (c *conversation) listenFor(n nextTurn) time.Duration {
 	return wakeword.MaxListen(n.slot)
 }
 
+// endpointSettings is endpoint.Default with the pause set on the device (End of speech pause): a
+// window is a tenth of a second, as the setting is.
+func endpointSettings() endpoint.Settings {
+	s := endpoint.Default
+	s.Quiet = config.Get().Microphone.EndPauseTenths()
+	return s
+}
+
 // deviceEnds is whether the device hearing the speaker stop ends a turn on be: always where nobody else
 // would (the direct pipeline, and realtime voice, which is told when the speaker has finished), follow-ups
 // too, or a follow-up would run to its limit and be dropped as nothing said; for Home Assistant, only
@@ -1428,7 +1436,7 @@ func (c *conversation) stream(ctx context.Context, be backend, slot int, followU
 	//
 	// The direct pipeline and realtime voice have nobody else to decide (deviceEnds).
 	acts := deviceEnds(be, followUp)
-	ep := endpoint.New(endpoint.Default)
+	ep := endpoint.New(endpointSettings())
 	var sent int
 	var endpointAt float64
 	see := func(frame []int16) {

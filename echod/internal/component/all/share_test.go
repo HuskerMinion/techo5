@@ -119,7 +119,7 @@ func contains(list []string, s string) bool {
 // shows, and which outside services are told where the house is or what is playing (share/catalog.go).
 var neverShared = []string{
 	"microphone_gain", "microphone_noise_reduction", "microphone_cancel_echo", "microphone_leveling",
-	"microphone_end_of_speech", "microphone_sensitivity", "mute_led_brightness", "stop_word_sensitivity",
+	"microphone_end_of_speech", "microphone_end_of_speech_pause", "microphone_sensitivity", "mute_led_brightness", "stop_word_sensitivity",
 	"wake_threshold_1", "wake_threshold_2", "confirm_threshold", "max_listen_1", "max_listen_2",
 	"follow_ups_1", "follow_ups_2", "follow_up_1", "follow_up_2", "follow_up_tone_1", "follow_up_tone_2",
 	"wake_tone_1", "wake_tone_2", "wake_effect_1", "wake_effect_2", "ring_volume", "intercom_do_not_disturb",
