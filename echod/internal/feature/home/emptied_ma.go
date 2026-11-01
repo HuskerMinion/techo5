@@ -42,7 +42,12 @@ func checkEmptied(title string) {
 		return
 	}
 	st, ok := maState()
-	if !ok || st.State == "paused" || st.State == "playing" {
+	if !ok || st.State == "paused" || st.State == "playing" || st.State == "buffering" {
+		return
+	}
+	// Still a player with its media attributes, only no track: an entity off or unavailable has none of
+	// them, and says nothing about the queue.
+	if kind, _ := st.Attributes["media_content_type"].(string); kind == "" {
 		return
 	}
 	if named, _ := st.Attributes["media_title"].(string); named != "" {

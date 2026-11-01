@@ -34,8 +34,8 @@ func TestAnEmptiedQueueLetsTheHeldTrackGo(t *testing.T) {
 	}
 }
 
-// A pause from the Music Assistant app keeps its track named, and Home Assistant out of reach changes
-// nothing: the held track stays, with play on it.
+// A pause from the Music Assistant app keeps its track named, and an entity off or unavailable, or Home
+// Assistant out of reach, says nothing about the queue: the held track stays, with play on it.
 func TestAPauseOrNoHomeAssistantKeepsTheHeldTrack(t *testing.T) {
 	for name, c := range map[string]struct {
 		st hass.State
@@ -44,6 +44,8 @@ func TestAPauseOrNoHomeAssistantKeepsTheHeldTrack(t *testing.T) {
 		"paused":            {hass.State{State: "paused", Attributes: map[string]any{"media_title": "Africa"}}, true},
 		"stopped and named": {hass.State{State: "idle", Attributes: map[string]any{"media_title": "Africa"}}, true},
 		"no Home Assistant": {hass.State{}, false},
+		"off":               {hass.State{State: "off", Attributes: map[string]any{"friendly_name": "Office"}}, true},
+		"unavailable":       {hass.State{State: "unavailable"}, true},
 	} {
 		t.Run(name, func(t *testing.T) {
 			holdTrack(t, "Africa")
@@ -59,7 +61,7 @@ func TestAPauseOrNoHomeAssistantKeepsTheHeldTrack(t *testing.T) {
 // A different track held by the time the check runs is left alone.
 func TestALaterHoldIsLeftAlone(t *testing.T) {
 	holdTrack(t, "Rosanna")
-	fakeMA(t, hass.State{State: "idle"}, true)
+	fakeMA(t, hass.State{State: "idle", Attributes: map[string]any{"media_content_type": "music"}}, true)
 	checkEmptied("Africa")
 	if _, _, _, ok := media.Get().Held(); !ok {
 		t.Fatal("a later held track went")

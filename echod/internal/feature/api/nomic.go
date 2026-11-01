@@ -29,7 +29,7 @@ var listeningObjects = map[string]bool{
 	// feature/microphone
 	"microphone_mixing": true, "microphone_leveling": true, "microphone_noise_reduction": true,
 	"microphone_cancel_echo": true, "microphone_echo_canceller": true, "microphone_end_of_speech": true,
-	"microphone_gain": true, "microphone_sensitivity": true,
+	"microphone_gain": true, "microphone_sensitivity": true, "microphone_end_of_speech_pause": true,
 	// feature/detect
 	"confirm_threshold": true, "confirm_wake_with_home_assistant": true, "wake_word_on_home_assistant": true,
 	"keep_wake_clips": true, "last_wake_score": true, "stop_word_sensitivity": true,
