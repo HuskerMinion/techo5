@@ -79,6 +79,11 @@ How it compares with EchoLocal, EchoMuse, echo-dot-assist, Kiosk Satellite and V
 
 The bigger changes of September to November 2026. Every release lists the rest.
 
+- ⏸️ **A longer pause before the device stops listening** (v1.6.20). **End of speech pause** sets how long
+  a pause ends what you say, from 0.6 to 2 seconds, for anyone who stops to think mid-sentence
+  ([#374](https://github.com/HuskerMinion/techo5/pull/374)). Clearing Music Assistant's queue now clears
+  Now Playing at once ([#150](https://github.com/HuskerMinion/techo5/issues/150)), and a Tessera "go to page"
+  tile opens its page ([#376](https://github.com/HuskerMinion/techo5/issues/376)).
 - 👏 **A stricter clap, and "Alexa, stop" over a ring** (v1.6.19). **Clap sensitivity** adds a Strict
   choice for a room where a desk passes for a double clap, and the clap event carries what it measured
   ([#373](https://github.com/HuskerMinion/techo5/issues/373)). A wake word nearly heard over a ringing
