@@ -615,3 +615,17 @@ func TestCameraPictureOptions(t *testing.T) {
 		t.Errorf("a camera without display live shows a picture: %+v", p)
 	}
 }
+
+// screen.page_N is page N counted from 1; anything else is no page (#376).
+func TestPageOf(t *testing.T) {
+	for entity, want := range map[string]int{"screen.page_1": 0, "screen.page_2": 1, "screen.page_12": 11} {
+		if got, ok := PageOf(entity); !ok || got != want {
+			t.Errorf("PageOf(%q) = %d, %v; want %d", entity, got, ok, want)
+		}
+	}
+	for _, entity := range []string{"screen.page_0", "screen.page_", "screen.page_x", "light.page_2", "screen.home"} {
+		if _, ok := PageOf(entity); ok {
+			t.Errorf("PageOf(%q) is a page", entity)
+		}
+	}
+}

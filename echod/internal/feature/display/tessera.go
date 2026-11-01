@@ -844,6 +844,9 @@ func (d *Display) tessTap(x, y int) {
 		if tessPluginTap(plugin) {
 			d.wake()
 		}
+	case t.tess > 0 && isTessPage(t.entity):
+		p, _ := tessera.PageOf(t.entity)
+		d.tessGo(p)
 	case t.tess > 0 && tesseraDomain(t.entity) == "camera":
 		slog.Info("tessera camera", "entity", t.entity)
 		go home.Get().ShowCamera(t.entity, cameraScreenTime())
@@ -852,6 +855,12 @@ func (d *Display) tessTap(x, y int) {
 			d.tessSheet(t.entity)
 		}
 	}
+}
+
+// isTessPage is whether a tile is Tessera's "go to page" one.
+func isTessPage(entity string) bool {
+	_, ok := tessera.PageOf(entity)
+	return ok
 }
 
 // tessAssist starts a voice turn, or answers or ends the one under way, where there are microphones to

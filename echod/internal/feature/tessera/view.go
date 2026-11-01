@@ -332,6 +332,16 @@ func domain(entity string) string {
 	return d
 }
 
+// PageOf is the page a Tessera navigation tile goes to, counted from 0: Tessera sends one as the entity
+// screen.page_N, N counted from 1 (#376).
+func PageOf(entity string) (int, bool) {
+	n, err := strconv.Atoi(strings.TrimPrefix(entity, "screen.page_"))
+	if err != nil || n < 1 || !strings.HasPrefix(entity, "screen.page_") {
+		return 0, false
+	}
+	return n - 1, true
+}
+
 // describe is a tile in words and an icon, and what a finger can do to it.
 func describe(t Tile, o options) Placed {
 	a := attrs(t.A)
@@ -356,6 +366,9 @@ func describe(t Tile, o options) Placed {
 	p.Value = words(d, state, a)
 	p.Reading = d == "sensor" || d == "input_number" || d == "number" || d == "weather"
 	_, p.Taps = tapService(t.Entity, state)
+	if _, ok := PageOf(t.Entity); ok {
+		p.Taps = true // Tessera's "go to page" tile
+	}
 	switch {
 	case o.Tap == "none":
 		p.Taps = false

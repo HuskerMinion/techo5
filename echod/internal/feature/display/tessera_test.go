@@ -81,6 +81,34 @@ func TestTesseraZones(t *testing.T) {
 	}
 }
 
+// Tessera's "go to page" tile, sent as screen.page_N, opens page N on a tap: the way into a detail page
+// with swiping off (#376).
+func TestAPageTileOpensItsPage(t *testing.T) {
+	config.Use(filepath.Join(t.TempDir(), "state.json"))
+	l := tessLayout()
+	slot := 3
+	l.Tiles = append(l.Tiles, tessera.Tile{I: 3, Slot: &slot, Entity: "screen.page_3", Name: "Detail", A: json.RawMessage(`{}`), O: json.RawMessage(`{}`)})
+	l.Begin.Tiles = len(l.Tiles)
+	v := tessera.Place(l, 4, 2)
+	r := newRenderer(image.NewRGBA(image.Rect(0, 0, showWide, showHigh)))
+	r.draw(scene{now: time.Now(), phase: "idle", showDash: true, dashMode: config.DashboardTessera, tessera: v, tessOn: true})
+	zones, _ := r.dash()
+	var at image.Rectangle
+	for _, z := range zones {
+		if z.entity == "screen.page_3" {
+			at = z.r
+		}
+	}
+	if at.Empty() {
+		t.Fatal("the page tile takes no tap")
+	}
+	d := &Display{r: r, poke: make(chan struct{}, 1)}
+	d.tessTap(at.Min.X+at.Dx()/2, at.Min.Y+at.Dy()/2)
+	if d.tessPage != 2 {
+		t.Fatalf("the tap opened page %d, want 2 (the detail page)", d.tessPage)
+	}
+}
+
 func TestTurnPage(t *testing.T) {
 	v := tessera.Place(tessLayout(), 4, 2)
 	for _, c := range []struct {
