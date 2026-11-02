@@ -268,6 +268,7 @@ func (t *Turn) send() {
 		t.heard, t.reply = "", ""
 	}
 	fields, legacy := t.fields(t.how), t.legacy(t.how)
+	remember(t.ended, fields, wordsKept())
 	t.mu.Unlock()
 
 	// A device that was never named has none to give, and an empty field says nothing a missing one
