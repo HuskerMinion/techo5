@@ -171,3 +171,28 @@ func TestOnColorReads(t *testing.T) {
 		t.Errorf("on amber: %v, want near black", c)
 	}
 }
+
+// A lone tile with a slider or a switch keeps the usual full-screen tile, with its slider.
+func TestLoneLightKeepsItsSlider(t *testing.T) {
+	at := time.Date(2026, 10, 4, 14, 7, 0, 0, time.Local)
+	light := dashboard.Block{Tiles: []dashboard.Tile{{Entity: "light.x", Name: "Lamp", Icon: "lightbulb", Value: "On", On: true,
+		Tap:    &dashboard.Action{Service: "light.toggle", Entity: "light.x"},
+		Adjust: &dashboard.Adjust{Entity: "light.x", Kind: "brightness", Value: 50, Min: 0, Max: 100}}}}
+	if _, ok := loneCard(warningView(light)); ok {
+		t.Fatal("a tile with a slider counted as a lone card")
+	}
+	light.Tiles[0].Adjust, light.Tiles[0].Switch = nil, true
+	if _, ok := loneCard(warningView(light)); ok {
+		t.Fatal("a tile with a switch counted as a lone card")
+	}
+	light.Tiles[0].Switch = false
+	if _, ok := loneCard(warningView(light)); !ok {
+		t.Fatal("a plain tile is not a lone card")
+	}
+	light.Tiles[0].Adjust = &dashboard.Adjust{Entity: "light.x", Kind: "brightness", Value: 50, Min: 0, Max: 100}
+	r := newRenderer(image.NewRGBA(image.Rect(0, 0, showWide, showHigh)))
+	r.draw(scene{now: at, phase: "idle", showDash: true, dashMode: config.DashboardDrawn, drawn: warningView(light), dashTiles: "fill"})
+	if tiles, _ := r.dash(); len(tiles) != 1 || tiles[0].adjust == nil {
+		t.Errorf("the lone light has %d zones, slider kept: %v", len(tiles), len(tiles) == 1 && tiles[0].adjust != nil)
+	}
+}

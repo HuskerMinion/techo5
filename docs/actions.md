@@ -1509,6 +1509,9 @@ data:
   size: huge
 ```
 
+As in `notify`, an empty `chime` means the usual chime plays, an empty `speak` means nothing is said,
+and `seconds: 0` keeps it up until somebody taps it.
+
 On a Spot, `large` and `huge` give the message more of the round face and larger letters, and `huge`
 drops the icon. A Dot has no screen and ignores `size`.
 

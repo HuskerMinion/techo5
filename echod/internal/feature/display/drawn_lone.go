@@ -36,7 +36,7 @@ func loneCard(v dashboard.Drawn) (lone, bool) {
 		return lone{main: []string{b.Heading}, title: b.Right, color: b.Color}, true
 	case len(b.Text) > 0 && b.Heading == "" && len(b.Tiles) == 0 && len(b.Rows) == 0 && b.Graph == nil && b.Gauge == nil && b.Picture == nil:
 		return lone{main: b.Text, title: b.Title, titleA: true, color: b.Color}, true
-	case len(b.Tiles) == 1 && b.Heading == "" && b.Title == "" && len(b.Rows) == 0 && len(b.Text) == 0 && b.Graph == nil && b.Gauge == nil && b.Picture == nil:
+	case len(b.Tiles) == 1 && b.Tiles[0].Adjust == nil && !b.Tiles[0].Switch && b.Heading == "" && b.Title == "" && len(b.Rows) == 0 && len(b.Text) == 0 && b.Graph == nil && b.Gauge == nil && b.Picture == nil:
 		t := b.Tiles[0]
 		l := lone{icon: t.Icon, title: t.Name, tile: &t, color: t.Color}
 		if t.Value != "" {

@@ -4,6 +4,7 @@ package display
 
 import (
 	"strings"
+	"sync"
 
 	"golang.org/x/image/font"
 
@@ -46,6 +47,52 @@ func (r *paint) fitWords(bold bool, text string, w, h int, sizes []int) ([]strin
 
 // fitParagraphs is fitWords for words in paragraphs, each wrapped on its own and none run into the next.
 func (r *paint) fitParagraphs(bold bool, paras []string, w, h int, sizes []int) ([]string, font.Face, int) {
+	if len(sizes) == 0 {
+		return nil, nil, 0
+	}
+	key := wordsKey{r.faceKey(), r.s(100), bold, strings.Join(paras, "\n"), w, h, sizes[0], sizes[len(sizes)-1], len(sizes)}
+	fitMu.Lock()
+	hit, ok := fitCache[key]
+	fitMu.Unlock()
+	if ok {
+		return hit.lines, hit.face, hit.lineH
+	}
+	lines, face, lineH := r.fitUncached(bold, paras, w, h, sizes)
+	fitMu.Lock()
+	if len(fitCache) >= fitKept {
+		clear(fitCache)
+	}
+	fitCache[key] = wordsResult{lines, face, lineH}
+	fitMu.Unlock()
+	return lines, face, lineH
+}
+
+// wordsKey is what a fit depends on: the font and text size (faceKey), the panel's scale, the words, the
+// box and the sizes tried.
+type wordsKey struct {
+	face                 fontKey
+	scale                int
+	bold                 bool
+	text                 string
+	w, h, first, last, n int
+}
+
+type wordsResult struct {
+	lines []string
+	face  font.Face
+	lineH int
+}
+
+// fitKept is how many fits are kept before they start again: a pop-up or warning page redrawn every
+// frame fits once.
+const fitKept = 16
+
+var (
+	fitMu    sync.Mutex
+	fitCache = map[wordsKey]wordsResult{}
+)
+
+func (r *paint) fitUncached(bold bool, paras []string, w, h int, sizes []int) ([]string, font.Face, int) {
 	var face font.Face
 	var lines []string
 	var lineH int

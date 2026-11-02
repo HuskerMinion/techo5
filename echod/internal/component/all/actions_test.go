@@ -26,6 +26,8 @@ var actions = []string{
 	// where nothing else imports notify - fails the whole automation.
 	"notify",
 	"notify_picture",
+	"notify_sized",
+	"notify_picture_sized",
 }
 
 // The actions other devices depend on still register.

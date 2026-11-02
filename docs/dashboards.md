@@ -151,13 +151,15 @@ read across a room:
 
 - **Heading**: one big line (or a few, for a long one) in bold, with the subtitle under it.
 - **Markdown**: its title, smaller, above its paragraphs; the paragraphs are set as large as they fit.
-- **Tile or entity card**: the icon, the state in very large letters, and the name under it. If the
+- **Tile or entity card** with no slider or switch: the icon, the state in very large letters, and the name under it. If the
   tile has no state to show, the name is the large line. A tap on the page does what the tile's tap does.
 
 A `color` on the card fills the whole page with it, with white or black words, whichever reads better.
 A heading and a markdown card take `color` the same way (Home Assistant doesn't define one for them;
 the device reads it). With no color, the page uses the theme's. A view with anything more than that one
-card, or any other **Dashboard tiles** setting, is laid out as usual.
+card, or any other **Dashboard tiles** setting, is laid out as usual. A single tile that has a slider
+(a light's brightness, a cover's position, a thermostat) or a switch keeps its usual full-screen tile, so
+the slider and switch still work; only a tile without controls gets the full page.
 
 This takes the place of a separate "drawn text size": the page's words are fitted to the screen's size,
 so **Text size** does not change them. To use it, make a dashboard whose view has just that card, for
