@@ -128,3 +128,61 @@ To mute instead of stopping, replace the last step with:
 
 Run it from the script's page, put it on the dashboard as a button card, or call it from a voice
 command or an automation.
+
+## A settings dashboard for all your devices
+
+The dashboard above shows each device's main controls. If you have several devices and want to change
+their settings in one place, a script makes a bigger dashboard for you: pick a device from a list, see
+all its settings grouped by section, and change them. It also has:
+
+- **All devices.** Turn it on and each change you make to the selected device is copied to every other
+  device that has that setting. Settings that belong to one device (microphone mute, screen power, LED
+  ring, Bluetooth, SSH and web access) are never copied.
+- **Copy all to others.** Copies every copyable setting from the selected device to the rest.
+- **Update all** and **Check all for updates.**
+- A **Compare** page with one table per section that marks the settings that differ between devices.
+
+Devices come from Home Assistant, so nothing needs editing. A row a device doesn't have, such as the
+screen settings on an Echo Dot, is hidden for it. TECHO5 Panel devices are shown, but left out of
+copy-to-all; add `--include-panels` to include them.
+
+### Run it
+
+You need Python 3 (nothing else to install) and a long-lived access token: in Home Assistant, open your
+profile page, **Security**, and at the bottom **Create token**. The token is used only to read the
+device list and is never saved.
+
+Get `tools/ha/echo_settings.py` from this repository, then, in PowerShell:
+
+```powershell
+$env:HA_TOKEN = "paste the token here"
+python tools\ha\echo_settings.py --url http://homeassistant.local:8123
+```
+
+Or on Linux and macOS:
+
+```sh
+HA_TOKEN="paste the token here" python3 tools/ha/echo_settings.py --url http://homeassistant.local:8123
+```
+
+Leave out `HA_TOKEN` and it asks for the token instead. It reads Home Assistant's registry and changes
+nothing there. It writes two files in the current folder (`--out` picks another):
+
+1. `echo_settings_package.yaml` holds the helpers and scripts. Copy it to `/config/packages/` (add
+   `homeassistant: packages: !include_dir_named packages` to `configuration.yaml` if you don't use
+   packages yet), then restart Home Assistant. It needs Home Assistant 2024.10 or newer.
+2. `echo_settings_dashboard.yaml` is the dashboard. Create a dashboard (**Settings → Dashboards → Add
+   dashboard**), open it, then **⋮ → Edit dashboard → ⋮ → Raw configuration editor**, and paste the file.
+
+Add `--push` to save the dashboard for you, at `/echo-settings`, instead of pasting it. It asks before
+replacing a dashboard that is already there, and touches nothing else. The package is always yours to
+copy.
+
+It uses only standard cards. For frosted-glass cards, install **card_mod** from HACS and add `--card-mod`.
+
+### After you add a device
+
+Run the script again, replace the package file, restart Home Assistant (or reload scripts, automations
+and helpers), and paste the dashboard again. The device list and the copy rules are made from what Home
+Assistant has at that moment, so a device you add, rename or remove is picked up only when you re-run it.
+If you renamed a device in Home Assistant, the old name stays in the list until you re-run it.
