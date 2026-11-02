@@ -1953,4 +1953,4 @@ page, and it stops when the page closes. Two browsers can follow at once. A line
 the diagnostics download before it leaves the device; names of rooms and devices can still show, so look
 before you share it. The log is kept in memory only (the last 500 lines), and a browser that cannot keep up
 misses lines rather than slowing the device. The words of voice requests are hidden here as they are in the
-log itself unless **Send voice text** is on.
+log itself unless **Send voice text** is on; the text of an announcement you send the device is shown.
