@@ -119,6 +119,9 @@ type Display struct {
 	// camButtons is the camera page's action buttons between taps: the one armed (camera_buttons.go).
 	camButtons cameraButtons
 
+	// customs is the custom screens between frames (custom_screens.go).
+	customs customState
+
 	// holdsMu makes reading whether holds are wanted and telling the touchscreen one step (applyHolds).
 	holdsMu sync.Mutex
 
@@ -131,6 +134,8 @@ type Display struct {
 	clock  *esphome.Select
 	// clockStyleSel is Clock style, how the clock looks all day (clock_style.go).
 	clockStyleSel *esphome.Select
+	// idleScreenSel is Idle screen, the clock or a custom screen in its place (custom_screens.go).
+	idleScreenSel *esphome.Select
 	// fontSel is Screen font, the font of every word the screen draws (font.go).
 	fontSel *esphome.Select
 	// textSizeSel is Screen text size, how large those words are drawn (text_size.go).
@@ -496,6 +501,7 @@ func build() *Display {
 	d.buildRoomLights()
 	d.clock = clockSelect(d.wake)
 	d.clockStyleSel = clockStyleSelect(d)
+	d.idleScreenSel = idleScreenSelect(d)
 	d.fontSel = fontSelect(d)
 	d.textSizeSel = textSizeSelect(d)
 	setup.SetScreen(&setup.ScreenChoices{Todo: true, Styles: clockStyleOptions(), Current: clockStyleIndex, Choose: d.setClockStyle,
@@ -635,6 +641,9 @@ func (d *Display) Entities() []esphome.Entity {
 	if liftOffered() {
 		ents = append(ents, d.liftSw)
 	}
+	if len(offeredScreens()) > 0 {
+		ents = append(ents, d.idleScreenSel)
+	}
 	return ents
 }
 
@@ -645,6 +654,7 @@ func (d *Display) Restore(c config.Config) {
 	d.roomSw.Set(c.Screen.IgnoreRoomLights)
 	d.describeScreen()
 	d.clockStyleSel.Set(clockStyles[clockStyleIndex()].label)
+	d.idleScreenSel.Set(idleScreenOptions()[idleScreenIndex()])
 	d.fontSel.Set(fonts.Names()[fontIndex()])
 	d.textSizeSel.Set(textSizeOptions()[textSizeIndex()])
 	d.camTime.Set(cameraTimes[cameraTimeIndex()].label)
@@ -925,6 +935,7 @@ func (d *Display) changed(s voice.State) {
 			d.closeAlert()
 			d.sheet, d.quiet = false, true
 			d.dash, d.deckUp = false, false
+			d.customs.up, d.customs.awayUntil = "", time.Time{} // home is the idle screen, when there is one
 			go home.Get().HideCamera()
 			go d.endMusic()
 			slog.Info("screen: home by voice")
@@ -950,6 +961,9 @@ func (d *Display) showPage(page string) bool {
 		return true
 	case "calendar":
 		return d.OpenCalendar()
+	}
+	if _, ok := customByID(page); ok {
+		return d.openCustom(page)
 	}
 	return false
 }
@@ -1321,7 +1335,12 @@ func (d *Display) gesture(g touch.Gesture) {
 		return
 	}
 
-	// The deck: every finger is its while it is up.
+	// The deck: every finger is its while it is up. A custom screen, the same way (custom_screens.go).
+	if d.customShowing() {
+		d.customGesture(g)
+		d.wake()
+		return
+	}
 	if d.deckShowing() {
 		d.deckGesture(g)
 		d.wake()
@@ -1619,7 +1638,7 @@ func (d *Display) gesture(g touch.Gesture) {
 		// From the bottom edge of the clock it is the deck, once there is one; anywhere else, and on the
 		// pages the clock's swipes also reach (now playing, the weather), it is the volume, while Swipe for
 		// volume is on.
-		if d.fromBottomEdge(g.Y) && d.onClock() && d.openDeck() {
+		if d.fromBottomEdge(g.Y) && d.onClock() && (d.openDeck() || d.openCustom("")) {
 			return
 		}
 		swipeVolume(+1)
@@ -1634,8 +1653,9 @@ func (d *Display) gesture(g touch.Gesture) {
 		}
 		swipeVolume(-1)
 	case touch.SwipeRight:
-		// From the left edge it brings the dashboard up, the drawer's gesture mirrored.
-		if d.r != nil && g.X < d.r.drawerEdge() && d.openDashboard() {
+		// From the left edge it brings the dashboard up, the drawer's gesture mirrored; with no
+		// dashboard set up, the custom screens (custom_screens.go).
+		if d.r != nil && g.X < d.r.drawerEdge() && (d.openDashboard() || d.openCustom("")) {
 			return
 		}
 		// Across the clock it is the clock style before.
@@ -2781,10 +2801,11 @@ func (d *Display) frame() (next time.Duration) {
 	// bigClock/nowPlaying. Background mode rides along with it; Screensaver only takes over once it
 	// has held for the configured wait, tracked by how long it has run continuously.
 	d.deckScene(&s, now)
+	d.customScene(&s, now)
 	d.dashScene(&s, s.showSheet || s.showDrawer || ring.any() || call.Phase != phone.Idle)
 	boring := s.phase == "idle" && call.Phase == phone.Idle && !ring.any() && !s.bt.Pairing &&
 		!s.showWifi && !s.showSheet && !s.showCamera && !s.showRadar && !s.showWeather && !s.showCalendar && !s.showAlert && !s.nowPlaying &&
-		!s.showDash && !s.showDeck
+		!s.showDash && !s.showDeck && s.custom.name == ""
 	// A browser waiting to be let in is a page of its own, over whatever is on the screen: asking for
 	// the setup page is done from the settings screen, so the answer has to reach somebody who is
 	// still standing in it. It was set only on the idle page once, and the press could not be given
@@ -2875,7 +2896,7 @@ func (d *Display) frame() (next time.Duration) {
 
 	// The Call button is on the clock itself and only there: on any other page a tap where it would be
 	// still does what that page does.
-	s.callButton = callButton.Load() && hasMicrophone() && s.phase == "idle" && !s.nowPlaying && !s.strip && !s.showWeather && !s.showCalendar && !s.showDeck &&
+	s.callButton = callButton.Load() && hasMicrophone() && s.phase == "idle" && !s.nowPlaying && !s.strip && !s.showWeather && !s.showCalendar && !s.showDeck && s.custom.name == "" &&
 		s.sunrise == 0 && s.slideshowScreensaver == nil && !s.showDrawer && !s.showSheet
 	d.mu.Lock()
 	d.callShown = s.callButton
@@ -2894,6 +2915,9 @@ func (d *Display) frame() (next time.Duration) {
 		d.dropVideoFrame()
 	}
 	key := deckFrameKey(s, ring.any(), call.Phase != phone.Idle)
+	if key == "" {
+		key = customFrameKey(s, ring.any(), call.Phase != phone.Idle)
+	}
 	if rainbowHere(s) && d.r.rainbow.Busy() {
 		key = "" // the Rainbow light still going out over the deck, or its card going away
 	}
@@ -2943,6 +2967,9 @@ func (d *Display) frame() (next time.Duration) {
 	}
 	if s.bt.Pairing || s.showSheet || s.showWifi || s.showDrawer {
 		return 500 * time.Millisecond
+	}
+	if s.custom.name != "" {
+		return customNext(s)
 	}
 	if s.showRadar && len(s.radar.Frames) > 1 {
 		return radarStep

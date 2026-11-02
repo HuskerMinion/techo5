@@ -159,6 +159,7 @@ type scene struct {
 
 	// showDeck is the deck page, deck what it shows (render_deck.go).
 	showDeck bool
+	custom   customView // a custom screen, when custom.name is set (custom_screens.go)
 	deck     deckView
 
 	// alerts are the weather alerts at home and nearby (the clock's badge, the rain map's pills and
@@ -685,6 +686,13 @@ func (r *renderer) draw(s scene) {
 	}
 	if s.showCalendar {
 		r.calendarPage(s)
+		if s.showVolume {
+			r.volumeBar(s)
+		}
+		return
+	}
+	if s.custom.name != "" {
+		r.customPage(s)
 		if s.showVolume {
 			r.volumeBar(s)
 		}
