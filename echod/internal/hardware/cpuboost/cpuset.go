@@ -19,9 +19,10 @@ const (
 	// freeName is the group beside it that keeps every core: what the daemon starts that is not the
 	// interface is moved there.
 	freeName = "techo5-ui-free"
-	// own is what a process of the daemon's own is named (techo5, techo5-gpu): those stay in the narrowed
-	// group.
-	own = "techo5"
+	// The names of the daemon's own programs, which stay in the narrowed group: the daemon and its
+	// renderer. Whole names: the video decoder is techo5-ffmpeg64, and is not the interface.
+	ownDaemon   = "techo5"
+	ownRenderer = "techo5-gpu"
 )
 
 // cpuset is the group the daemon's interface lives in: every core most of the time, the fast ones only
@@ -85,7 +86,8 @@ func (c *cpuset) ours(pid int) bool {
 		return true
 	}
 	b, err := os.ReadFile(filepath.Join(c.root, "proc", strconv.Itoa(pid), "comm"))
-	return err == nil && strings.HasPrefix(strings.TrimSpace(string(b)), own)
+	name := strings.TrimSpace(string(b))
+	return err == nil && (name == ownDaemon || name == ownRenderer)
 }
 
 // ownChildren are the daemon's own programs that are its children now.

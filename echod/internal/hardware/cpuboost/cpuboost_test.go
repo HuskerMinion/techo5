@@ -342,7 +342,9 @@ func TestWhatTheDaemonStartedIsMovedOutWhileNarrowed(t *testing.T) {
 	cpus := bigLittle(t, root)
 	// A video player (4242) was born in the group, as everything the daemon starts is; the renderer
 	// (777) is the daemon's own program.
-	for pid, comm := range map[string]string{"4242": "ffmpeg", "777": "techo5-gpu"} {
+	// The decoder is techo5-ffmpeg64 (techo5-ffmpeg on a 32-bit kernel): it starts like the daemon's own
+	// names and is not one of them.
+	for pid, comm := range map[string]string{"4242": "techo5-ffmpeg64", "777": "techo5-gpu"} {
 		d := filepath.Join(root, "proc", pid)
 		if err := os.MkdirAll(d, 0o755); err != nil {
 			t.Fatal(err)
