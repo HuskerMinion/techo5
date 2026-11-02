@@ -365,6 +365,12 @@ t5_wifi_up() {
 		sleep 1
 	done
 	[ $n -gt 0 ] && log "wifi: wlan0 up after ${n}s"
+	# Power save is on in the kernel's default: the radio sleeps between beacons and the access point holds
+	# what it is sent until the next one, which adds delay and jitter that received audio can stall on.
+	# device.conf WIFI_POWER_SAVE=off (athena on mainline) turns it off.
+	if [ "${WIFI_POWER_SAVE:-}" = off ]; then
+		iw dev wlan0 set power_save off 2>/tmp/wifi-ps.err || log "wifi: power save not turned off: $(cat /tmp/wifi-ps.err)"
+	fi
 	if ! pidof wpa_supplicant >/dev/null; then
 		wpa_supplicant -B -i wlan0 -c "$conf" -P /run/wpa.pid > /tmp/wpa.log 2>&1
 	fi
