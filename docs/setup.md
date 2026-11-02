@@ -1511,7 +1511,7 @@ The timer and mute files play where **Home Assistant sounds** is on, and an alar
 Home Assistant sound plays `timer_finished.wav` either way. A file has to be 16-bit, at
 48 kHz, mono or stereo, and at most 10 seconds long. It plays at the level it was recorded at, as the
 stock sounds do. The microphones stay open while the wake sound plays, and echo cancellation takes the
-sound out of what is sent, so a long wake sound does not cut off the first words. If you turn **Echo
+sound out of what is sent, so a long wake sound does not cut off the first words. If you turn **Microphone echo
 cancellation** off, the device goes back to waiting for the wake sound to fade before it listens, and a
 long one then cuts off the first words, so keep it short. The wake word is not acted on while the unmute
 sound plays and for a moment after, so the device does not take its own sound for the word: a long
