@@ -552,6 +552,18 @@ captured login to the same page for a few minutes, and could see the pictures an
 - **Bass and treble** (Settings > Sound, or **Bass** and **Treble** in Home Assistant): -6 to +6 dB
   each. They change the speaker's own tuning, so they need **Speaker EQ** on, a switch in Home
   Assistant that is on unless you turn it off.
+- **Light ring that follows the music** (Echo Dot 2nd and 3rd generation and Echo 2nd generation, in
+  Home Assistant): choose **Follows the Music** in **Ring follows the room**, the same select that
+  lights the ring from the sound of the room. While music plays (music, radio, AirPlay, Spotify or
+  Sendspin) the ring gets brighter and dimmer with the level, the bass, middle and treble each light a
+  third of the ring, and every beat swells the light and moves the colors on a step. The colors are a
+  calm run of blue, teal, violet and magenta. It listens to what the device plays, not to the
+  microphones, so it follows the music at any volume, and the assistant's replies, alarms and the
+  wake sound do not move it. When nothing plays the ring is dark and shows what it would otherwise:
+  the **LED ring** light as you set it, or nothing. Its brightness follows the **LED
+  ring** light's brightness, so turn that down for a dimmer ring; with that light off it shows at
+  full. A conversation, a muted microphone, a timer or an error covers it as they cover the other
+  choices, and it comes back afterward. **None** turns it off and stops the analysis, which takes well under 1% of the processor while it runs.
 
 ## 6. The screen
 
