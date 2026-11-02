@@ -46,6 +46,29 @@ type Brain struct {
 	// Prompt is added to the device's own instructions to the model: a name, a tone, what the
 	// household wants it to know.
 	Prompt string `json:"prompt,omitempty"`
+
+	// ReplyPlayer is a Home Assistant media_player entity id that the assistant's spoken replies play
+	// on instead of this device's speaker. Empty is this device's own speaker.
+	ReplyPlayer string `json:"reply_player,omitempty"`
+}
+
+// ValidReplyPlayer cleans up an entity id typed for Brain.ReplyPlayer and says whether it is one: empty
+// (this device's speaker) or media_player. followed by lowercase letters, digits and underscores.
+func ValidReplyPlayer(s string) (string, bool) {
+	s = strings.ToLower(strings.TrimSpace(s))
+	if s == "" {
+		return "", true
+	}
+	name, ok := strings.CutPrefix(s, "media_player.")
+	if !ok || name == "" {
+		return s, false
+	}
+	for _, r := range name {
+		if r != '_' && (r < 'a' || r > 'z') && (r < '0' || r > '9') {
+			return s, false
+		}
+	}
+	return s, true
 }
 
 type BrainMode string
@@ -66,9 +89,10 @@ type BrainWriter struct{ st *Store }
 // "set" and posts nothing for it must not clear it.
 func (w BrainWriter) Set(b Brain) error {
 	return w.st.Update(func(c *Config) {
-		key := c.Brain.Key
+		key, player := c.Brain.Key, c.Brain.ReplyPlayer
 		c.Brain = b
 		c.Brain.Key = key
+		c.Brain.ReplyPlayer = player
 	})
 }
 
@@ -76,6 +100,16 @@ func (w BrainWriter) Set(b Brain) error {
 // cannot undo a setup page save made at the same moment.
 func (w BrainWriter) SetVoice(voice string) error {
 	return w.st.Update(func(c *Config) { c.Brain.Voice = voice })
+}
+
+// SetReplyPlayer chooses where replies play: "" for this device, or a media_player entity id. An id
+// that is not one is refused.
+func (w BrainWriter) SetReplyPlayer(id string) error {
+	id, ok := ValidReplyPlayer(id)
+	if !ok {
+		return fmt.Errorf("not a media_player entity id, like media_player.kitchen_dot")
+	}
+	return w.st.Update(func(c *Config) { c.Brain.ReplyPlayer = id })
 }
 
 func (w BrainWriter) SetKey(key string) error {

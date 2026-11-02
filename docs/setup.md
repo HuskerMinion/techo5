@@ -1147,6 +1147,30 @@ last notification sensor, a mail or feed sensor, a text helper, a calendar. Home
 to the model with the rest of the house when it reads the house's state, which this device does not
 treat as outside words. Do not expose such entities to Assist.
 
+### Replies on another speaker
+
+By default the assistant's replies come out of this device. Under **Replies play on** (Settings, Sound,
+Voice) you can type a Home Assistant media player instead, like `media_player.kitchen_dot`, for a room
+with a better speaker. Each reply is then sent to that player as an announcement, so music there is
+turned down while it speaks and carries on afterwards. The device uses its own Home Assistant access
+for this. Leave the box empty to go back to this device. Anything that is not a `media_player.` id is
+refused.
+
+What goes and what stays:
+
+- Replies from Home Assistant's voice assistant go to the player.
+- The built-in assistant ([Voice without Home Assistant](#voice-without-home-assistant)) and
+  [realtime voice](#realtime-voice) make their audio on this device and have no address to hand over,
+  so their replies stay on this device.
+- This device's own sounds stay on it too: the wake sound, timers, alarms and announcements.
+- If Home Assistant or the player does not take a reply, that reply plays on this device, and the log
+  says so once until it works again.
+
+Listening again after a reply: this device cannot hear when another speaker finishes. It waits for the
+length of the reply plus two seconds, then listens, so a question gets its answer without the wake
+word. If the player is in the same room it may hear the end of the reply: turn continued conversation
+off for that wake word. Saying "stop" silences this device, not the other player.
+
 ### Voice without Home Assistant
 
 The device can answer with no Home Assistant at all: your own speech servers and a chat model of
