@@ -277,6 +277,9 @@ type Display struct {
 	weekendStart, weekendEnd *esphome.Select
 	nightStyle               *esphome.Select
 	glowLevel                *esphome.Number
+	// nightInfoSw is Night clock shows Next up and notifications (night_info.go): on the Spot, the
+	// notification alone.
+	nightInfoSw *esphome.Switch
 	// nightMode is Night mode: Home Assistant turning the night on and off; nightShown what it last said.
 	nightMode  *esphome.Switch
 	nightShown bool
@@ -406,6 +409,7 @@ func build() *Display {
 	d.atNight = atNightSelect(d)
 	d.nightStyle = nightStyleSelect(d)
 	d.glowLevel = glowNumber(d)
+	d.nightInfoSw = nightInfoSwitch(d)
 	d.nightMode = nightModeSwitch(d)
 	d.lang = langSelect()
 	voice.Changed.Listen(d.changed)
@@ -472,7 +476,7 @@ func (d *Display) skinSel() *esphome.Select { return d.skinSl }
 
 func (d *Display) Entities() []esphome.Entity {
 	return []esphome.Entity{d.light, d.power, d.roomSw, d.auto, d.clock, d.clockStyleSel, d.clockPos, d.camTime, d.answerTime, d.turnStyle, d.skinSl, d.callBtn, d.weatherFx, d.muteRing, d.lang, d.styleSwipeSw, d.volumeSwipeSw, d.fontSel, d.textSizeSel,
-		d.nightHours, d.nightStart, d.nightEnd, d.weekendStart, d.weekendEnd, d.nightMode, d.atNight, d.nightStyle, d.glowLevel}
+		d.nightHours, d.nightStart, d.nightEnd, d.weekendStart, d.weekendEnd, d.nightMode, d.atNight, d.nightStyle, d.glowLevel, d.nightInfoSw}
 }
 
 // Restore lights the panel the way it was left.
@@ -497,6 +501,7 @@ func (d *Display) Restore(c config.Config) {
 	d.atNight.Set(atNightOptions[atNightIndex()])
 	d.nightStyle.Set(nightStyleOptions[nightStyleIndex()])
 	d.glowLevel.Set(float32(d.glowSetting()))
+	d.nightInfoSw.Set(c.Screen.NightInfo)
 	d.setAuto(c.Screen.Auto, false)
 	d.apply(c.Screen.On, c.Screen.Brightness, false)
 }
@@ -740,6 +745,13 @@ func (d *Display) gesture(g touch.Gesture) {
 		}
 		if held {
 			d.releaseHeld()
+			d.wake()
+			return
+		}
+		if n, up := notify.Get().Card(); up && g.Kind == touch.Tap && nightInfoOn() {
+			// Night clock shows Next up and notifications: the card on the night clock is tapped away,
+			// and the night light stays.
+			go notify.Get().DismissID(n.ID)
 			d.wake()
 			return
 		}
@@ -1507,6 +1519,7 @@ func (d *Display) frame() (next time.Duration) {
 	d.mu.Lock()
 	on = d.on
 	s.redClock, s.redStyle = d.nightGlow && nightClockOn(), config.Get().Screen.NightClockStyle
+	s.nightInfo = s.redClock && config.Get().Screen.NightInfo
 	d.mu.Unlock()
 	if !on && !video.Get().State().Active() {
 		d.vp.drop() // a video that ended while the panel was dark: its frame goes with it

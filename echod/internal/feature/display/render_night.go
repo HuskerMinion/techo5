@@ -46,17 +46,34 @@ func (s scene) redClockFace() bool {
 func (r *renderer) redClockPage(s scene) {
 	draw.Draw(r.dst, r.dst.Rect, image.NewUniform(color.Black), image.Point{}, draw.Src)
 	r.ink = nightInk
+	// With Night clock shows Next up and notifications, the clock keeps clear of the foot when there is
+	// something along it (render_night_info.go); with nothing, or the setting off, it is as it was.
+	area := r.dst.Rect
+	if reserve := r.nightInfoReserve(s); reserve > 0 {
+		area.Max.Y -= reserve
+	}
+	shrunk := area != r.dst.Rect
 	switch s.redStyle {
 	case nightStyleLED:
-		r.ledClock(s.now, r.dst.Rect, r.ampm)
+		box := r.dst.Rect
+		if shrunk {
+			box = nightInfoBox(area, r.w, min(r.h*52/100, area.Dy()*92/100))
+		}
+		r.ledClock(s.now, box, r.ampm)
 	case nightStyleFlip:
-		r.flipClock(s.now, r.dst.Rect)
+		box := r.dst.Rect
+		if shrunk {
+			box = nightInfoBox(area, r.w, min(r.h*90/100, area.Dy()*95/100))
+		}
+		r.flipClock(s.now, box)
 	default:
-		r.plainRedClock(s.now)
+		r.plainRedClock(s.now, (area.Min.Y+area.Max.Y)/2)
 	}
+	r.nightInfoOver(s)
 }
 
-func (r *renderer) plainRedClock(now time.Time) {
+// plainRedClock is the time in dim red, centered top to bottom on cy.
+func (r *renderer) plainRedClock(now time.Time, cy int) {
 	hour, ampm := clockHM(now), clockSuffix(now)
 	hw, aw := r.width(r.clock, hour), r.width(r.ampm, ampm)
 	gap := r.s(18)
@@ -64,7 +81,7 @@ func (r *renderer) plainRedClock(now time.Time) {
 		gap = 0
 	}
 	x := (r.w - hw - gap - aw) / 2
-	base := r.h/2 + r.digitHeight()/2 // the digits centered top to bottom
+	base := cy + r.digitHeight()/2 // the digits centered top to bottom
 	r.text(r.clock, hour, x, base, nightRed)
 	r.text(r.ampm, ampm, x+hw+gap, base, nightRed)
 }

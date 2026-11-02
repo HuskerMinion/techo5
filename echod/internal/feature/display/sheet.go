@@ -124,6 +124,8 @@ func categoryRows(sv sheetView) (rows []settingRow, note string) {
 					rows = append(rows, settingRow{id: "nightglow", label: tr("night_clock_brightness"), sub: tr("shown_as_you_change_it_at_night"),
 						kind: ctlStepper, value: fmt.Sprintf(tr("level_of"), glowLevelSet(), len(glowSteps))})
 				}
+				rows = append(rows, settingRow{id: "nightinfo", label: tr("night_clock_next_up_and_alerts"),
+					sub: tr("dim_red_and_no_brighter"), kind: ctlToggle, on: config.Get().Screen.NightInfo})
 			}
 			if hasNightTap && config.Get().Screen.NightLight {
 				rows = append(rows, settingRow{id: "nighttap", label: tr("tap_lifts_the_night_light"),
@@ -1124,6 +1126,8 @@ func (d *Display) rowTap(id string, p part, opt int) {
 		home.Get().SetCameraSound(!home.CameraSound())
 	case "lyrics":
 		safe.Go("lyrics from the screen", func() { home.Get().SetLyricsOn(!home.LyricsOn()) })
+	case "nightinfo":
+		d.setNightInfo(!config.Get().Screen.NightInfo)
 	case "nighttap":
 		d.setNightTapLifts(!config.Get().Screen.NightTapLifts)
 	case "roomlights":
