@@ -152,3 +152,20 @@ func BenchmarkHistoryBroadcast(b *testing.B) {
 		s.broadcast(raw)
 	}
 }
+
+// A turn asks for the history plus how long ago the wake word was heard: it starts that far back from
+// the newest frame, with the live frames following straight on.
+func TestListenHistoryReachesBackByTheAsk(t *testing.T) {
+	s := testSource()
+	s.mixer = &reusedBuffer{}
+	for i := range 100 {
+		s.broadcast(rawFrame(i, false))
+	}
+	// 50 ms after the detection: 300 ms is 15 frames.
+	_, pre, stop := s.ListenHistory("turn", History+50*time.Millisecond)
+	defer stop()
+	got := historyFrameNumbers(pre)
+	if len(got) != 15 || got[0] != 86 || got[14] != 100 {
+		t.Fatalf("history frames %v, want the last 15 ending at the newest", got)
+	}
+}

@@ -1424,17 +1424,37 @@ func (c *conversation) stopStreaming() {
 func (c *conversation) stream(ctx context.Context, be backend, slot int, followUp, continued bool, id string, waited time.Duration) {
 	frames, pre, unlisten := c.source.ListenHistory("turn", mic.History+waited)
 	defer unlisten()
+	c.pump(ctx, be, slot, followUp, continued, holdsForTone(slot, followUp), id, pre, frames)
+}
 
+// holdsForTone is whether a turn keeps the microphones from its wake sound, as it did before the
+// echo canceller was trusted with it. The canceller removes the sound, so with it on the microphones
+// stay open and the words that follow the wake word are sent. With it off nothing takes the sound out
+// of the microphones, a speaker a few centimeters from them is loud, and the turn waits out the sound
+// and sends no history, which holds the wake word and the sound rather than the request.
+func holdsForTone(slot int, followUp bool) bool {
+	return wakeword.Tones(slot, followUp) && !config.Get().Microphone.Cancel
+}
+
+// toneEnds is how long after a turn opens its wake sound is loud enough to matter to the microphones.
+func toneEnds(slot int, followUp bool) time.Duration {
+	return wakeword.ChimeLength(slot, followUp) + speaker.HardwareTail
+}
+
+// pump sends the history and then the frames to the backend until it is told to stop. hold is
+// holdsForTone.
+func (c *conversation) pump(ctx context.Context, be backend, slot int, followUp, continued, hold bool, id string, pre []int16, frames <-chan []int16) {
 	buf := make([]byte, 0, mic.FrameSamples*2)
 
 	// Send what was already said before this turn began. The wake word can only be recognized after
 	// it has been spoken, and people run straight on into the request, so the opening words exist only
 	// in the microphone's history. History and subscription share one capture boundary.
 	//
-	// A slot that chimes does not send it: whoever is talking waits for the tone, so the history holds
-	// the wake word rather than the request, and the tone itself is louder at the array than they are.
-	// That is as true of a wake Home Assistant's engine heard.
-	if wakeword.Tones(slot, followUp) {
+	// With a tone and no echo canceller it is not sent: whoever is talking waits for the tone, so the
+	// history holds the wake word rather than the request, and the tone itself is louder at the array
+	// than they are (holdsForTone). With the canceller the tone is taken out of what is sent, and the
+	// history reaches back to the end of the wake word whether or not there is one.
+	if hold {
 		pre = nil
 	}
 
@@ -1453,7 +1473,19 @@ func (c *conversation) stream(ctx context.Context, be backend, slot int, followU
 	ep := endpoint.New(endpointSettings())
 	var sent int
 	var endpointAt float64
+	// A tone that is not held back plays into the stream, and its fade is what the canceller leaves.
+	// The detector measures against the loudest thing it hears, so it would take that for the speaker
+	// and end the turn on the quiet after it; and the wake word at the front of the history, with the
+	// pause people leave for the tone, would do the same. It starts listening once the tone is done,
+	// and what is sent before then is only for speech recognition.
+	var deafUntil time.Time
+	if tone := wakeword.Tones(slot, followUp); tone && !hold {
+		deafUntil = time.Now().Add(toneEnds(slot, followUp))
+	}
 	see := func(frame []int16) {
+		if time.Now().Before(deafUntil) {
+			return
+		}
 		sent += len(frame)
 		if endpointAt == 0 && ep.Feed(frame) {
 			endpointAt = float64(sent) / float64(mic.Rate)
@@ -1495,12 +1527,12 @@ func (c *conversation) stream(ctx context.Context, be backend, slot int, followU
 
 	// What the microphone actually sends is the input to speech recognition, and a quiet or clipped
 	// stream explains a bad transcript better than anything downstream does.
-	// The tone plays as the turn opens and is louder at the array than a talker across the room, so
-	// nothing is sent while it is sounding. What the speaker still has queued says when that is, and
-	// hardwareTail is what the driver holds after the queue runs out.
+	// Without the canceller the tone plays as the turn opens and is louder at the array than a talker
+	// across the room, so nothing is sent while it is sounding. What the speaker still has queued says
+	// when that is, and hardwareTail is what the driver holds after the queue runs out.
 	var sounding time.Time
-	if wakeword.Tones(slot, followUp) {
-		sounding = time.Now().Add(wakeword.ChimeLength(slot, followUp) + speaker.HardwareTail)
+	if hold {
+		sounding = time.Now().Add(toneEnds(slot, followUp))
 	}
 	var held int
 
