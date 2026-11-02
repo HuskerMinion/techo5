@@ -257,6 +257,9 @@ func networkID(ctx context.Context, ssid string) (string, error) {
 	return "", fmt.Errorf("wifi: %q is not among the saved networks", ssid)
 }
 
+// RenewLease gets an address on the network joined now, as a join does (#384).
+func RenewLease() { renewLease() }
+
 // renewLease gets the address on the new network: through techo5-net when the setting is a fixed
 // address (address.go), which decides whether it holds there; otherwise by poking udhcpc for a lease,
 // as always. Never through a techo5-net that is not the one that knows fixed addresses (AddressSupported).
