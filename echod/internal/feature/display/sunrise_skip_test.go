@@ -369,6 +369,9 @@ func TestTheRealEngineOffersAndMarksANormalAlarmOnly(t *testing.T) {
 // Real Rainbow frames must hide the button through entry/fade, then restore it; a result card
 // appearing and disappearing within the same second must not leave its pixels in the kept page.
 func TestRainbowFramesKeepOnlyTheVisibleSkipAndResult(t *testing.T) {
+	if !hasRainbow {
+		t.Skip("no Rainbow on this device")
+	}
 	skipState(t)
 	skipLight(t)
 	if err := config.Set().Screen().TurnStyle("rainbow"); err != nil {
