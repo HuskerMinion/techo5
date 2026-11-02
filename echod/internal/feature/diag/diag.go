@@ -211,7 +211,7 @@ func (d *Diag) collector() {
 		d.fastCores = &esphome.Switch{
 			Base: esphome.Base{
 				ObjectID: "touch_boost_fast_cores",
-				Name:     "Touch boost: fast cores",
+				Name:     "Touch boost: fast cores (experimental)",
 				Icon:     "mdi:speedometer",
 				Category: esphome.CategoryConfig,
 			},

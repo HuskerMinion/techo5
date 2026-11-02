@@ -598,7 +598,7 @@ starts (a video, AirPlay) keeps every core. Both go back as they were when the f
 Two switches in Home Assistant (configuration entities, both on by default) work at once, with no restart:
 
 - **Touch boost** turns the whole thing off and on again.
-- **Touch boost: fast cores** is the part that runs the Show's own screen code on the faster cores. Off, a
+- **Touch boost: fast cores (experimental)** is the part that runs the Show's own screen code on the faster cores. Off, a
   touch still raises the clocks but moves nothing; on a Show 8 2nd gen that is noticeably less smooth, so
   it is there to turn off if something misbehaves while you touch the screen. It only matters while
   **Touch boost** is on.
