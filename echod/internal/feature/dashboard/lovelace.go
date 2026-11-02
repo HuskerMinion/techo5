@@ -7,6 +7,7 @@ import (
 	"context"
 	"encoding/json"
 	"html"
+	"image/color"
 	"math"
 	"regexp"
 	"strconv"
@@ -269,10 +270,10 @@ func (c *compiler) cardItself(card raw) node {
 		if title == "" {
 			title = str(card, "title")
 		}
-		return headingNode{text: c.render(title, ""), sub: c.render(str(card, "subtitle"), "")}
+		return headingNode{text: c.render(title, ""), sub: c.render(str(card, "subtitle"), ""), color: cardColorOf(card)}
 
 	case kind == "markdown":
-		return textNode{title: c.render(str(card, "title"), ""), body: c.render(str(card, "content"), "")}
+		return textNode{title: c.render(str(card, "title"), ""), body: c.render(str(card, "content"), ""), color: cardColorOf(card)}
 
 	case kind == "entities":
 		return c.rowsCard(card)
@@ -467,7 +468,7 @@ func (c *compiler) items(v any) []tileItem {
 // item is an entity as a card or a row presents it: its own name and icon if it gives them, and its
 // tap.
 func (c *compiler) item(m raw, entity string) tileItem {
-	return tileItem{entity: entity, name: str(m, "name"), icon: str(m, "icon"), action: actionOf(m, entity)}
+	return tileItem{entity: entity, name: str(m, "name"), icon: str(m, "icon"), action: actionOf(m, entity), color: cardColorOf(m)}
 }
 
 func hoursOf(card raw, fallback int) int {
@@ -564,19 +565,25 @@ func (g group) blocks(l look) []Block {
 	return out
 }
 
-type headingNode struct{ text, sub textRef }
+type headingNode struct {
+	text, sub textRef
+	color     color.RGBA
+}
 
 func (h headingNode) blocks(l look) []Block {
 	if t := h.text.get(l.rendered); t != "" {
-		return []Block{{Heading: t, Right: h.sub.get(l.rendered)}}
+		return []Block{{Heading: t, Right: h.sub.get(l.rendered), Color: h.color}}
 	}
 	return nil
 }
 
-type textNode struct{ title, body textRef }
+type textNode struct {
+	title, body textRef
+	color       color.RGBA
+}
 
 func (t textNode) blocks(l look) []Block {
-	b := Block{Title: t.title.get(l.rendered), Text: plainText(t.body.get(l.rendered))}
+	b := Block{Title: t.title.get(l.rendered), Text: plainText(t.body.get(l.rendered)), Color: t.color}
 	if b.Title == "" && len(b.Text) == 0 {
 		return nil
 	}
@@ -591,7 +598,8 @@ type tileItem struct {
 	entity, name, icon, value string
 	section                   string // a heading within a list instead
 	action                    *Action
-	fixed                     bool // not an entity's: drawn as given
+	color                     color.RGBA // the card's color; zero for none
+	fixed                     bool       // not an entity's: drawn as given
 }
 
 // listNode is tiles.
@@ -669,6 +677,11 @@ func (it tileItem) tile(states map[string]hass.LiveEntity, room string) Tile {
 		name = withoutRoom(name, room)
 	}
 	t := describe(e, name)
+	if it.color.A != 0 && !t.Gone {
+		if domain, _, _ := strings.Cut(it.entity, "."); t.On || !colorsOnlyWhenActive[domain] {
+			t.Color = it.color
+		}
+	}
 	if it.icon != "" {
 		t.Icon = it.icon
 	}

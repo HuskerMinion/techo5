@@ -86,6 +86,10 @@ func (r *paint) dashPage(v dashboard.Drawn, scroll int, adj dashAdjusting, area 
 	}
 
 	if size == "fill" {
+		if l, ok := loneCard(v); ok {
+			r.lonePage(l, area, pal)
+			return
+		}
 		if few, ok := fewTiles(v); ok {
 			r.fillGrid(few, area, pal, adj)
 			return
@@ -477,6 +481,10 @@ func (r *paint) tileBadge(ring image.Rectangle, t dashboard.Tile, pal dashPal, i
 		fill, ic = lerp(pal.card, pal.sub, 0.12), lerp(pal.sub, pal.card, 0.5)
 	case t.On:
 		fill, ic = lerp(pal.card, pal.active, 0.22), pal.active
+	}
+	if t.Color.A != 0 && !t.Gone {
+		// The card's own color, as Home Assistant's tile card tints its badge with it.
+		fill, ic = lerp(pal.card, t.Color, 0.22), t.Color
 	}
 	r.roundFill(ring, float64(ring.Dx())/2, fill, fill)
 	r.mdiIcon(t.Icon, ring.Min.X+(ring.Dx()-r.s(isz))/2, ring.Min.Y+(ring.Dy()-r.s(isz))/2, isz, ic)
