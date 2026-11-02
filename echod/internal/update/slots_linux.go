@@ -12,6 +12,7 @@ import (
 	"path/filepath"
 	"syscall"
 
+	"github.com/HuskerMinion/techo5/echod/internal/lib/bootreason"
 	"github.com/HuskerMinion/techo5/echod/internal/update/kernel"
 )
 
@@ -101,6 +102,7 @@ func installRootfs(ctx context.Context, m Manifest, progress func(float32), phas
 // dies with the process (seen on the first over-the-air install, 2026-09-16 — the slot was ready,
 // the device sat on the old one until someone rebooted it).
 func rebootIntoSlot() error {
+	bootreason.Mark(bootreason.Update)
 	syscall.Sync()
 	if err := syscall.Reboot(syscall.LINUX_REBOOT_CMD_RESTART); err != nil {
 		return fmt.Errorf("update: rootfs installed but the reboot failed: %w", err)

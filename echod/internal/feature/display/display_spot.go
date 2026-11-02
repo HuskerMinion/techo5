@@ -66,6 +66,7 @@ import (
 	"github.com/HuskerMinion/techo5/echod/internal/hardware/camera"
 	"github.com/HuskerMinion/techo5/echod/internal/hardware/screen"
 	"github.com/HuskerMinion/techo5/echod/internal/hardware/touch"
+	"github.com/HuskerMinion/techo5/echod/internal/lib/bootreason"
 	"github.com/HuskerMinion/techo5/echod/internal/lib/fonts"
 	"github.com/HuskerMinion/techo5/echod/internal/service"
 )
@@ -1286,6 +1287,7 @@ func (d *Display) locked(f func()) {
 
 // restartDevice reboots; the slot store and the daemon's state are on disk already.
 func restartDevice() {
+	bootreason.Mark(bootreason.Restart)
 	syscall.Sync()
 	if err := syscall.Reboot(syscall.LINUX_REBOOT_CMD_RESTART); err != nil {
 		slog.Error("restart failed", "err", err)

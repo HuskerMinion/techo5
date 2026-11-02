@@ -79,6 +79,36 @@ if [ ! -e /data/misc/techo5/timezone ] || [ ! -e /data/misc/techo5/localtime ]; 
 	echo "$zone" > /data/misc/techo5/timezone
 fi
 mkdir -p -m 700 /data/misc/techo5/ssh
+# Why this boot happened, for Last boot reason (feature/diag). A restart on purpose leaves its reason
+# in restart-reason (shutdown.sh for any reboot through init, the daemon for its own, and the restarts
+# below); a kernel that panicked leaves a dmesg record in pstore (a console record is there after every
+# restart on some kernels, and says nothing); anything else is what the bootloader says. On MediaTek
+# boards a restart on purpose goes through the watchdog and the bootloader calls it a watchdog reset
+# (boot_reason=4, wdt_by_pass_pwk), which is why the mark is read first.
+t5_boot_reason() {
+	r=$(cat $LOGDIR/restart-reason 2>/dev/null)
+	rm -f $LOGDIR/restart-reason
+	case "$r" in update | restart | recovery)
+		echo "$r"
+		return
+		;;
+	esac
+	if ls /sys/fs/pstore/dmesg-* >/dev/null 2>&1; then
+		echo panic
+		return
+	fi
+	case " $(cat /proc/cmdline) " in
+	*" androidboot.bootreason=kernel_panic "* | *" boot_reason=8 "*) echo panic ;;
+	*" androidboot.bootreason=wdt"* | *" boot_reason=3 "* | *" boot_reason=4 "* | *" boot_reason=9 "* | *" boot_reason=10 "*) echo watchdog ;;
+	*" androidboot.bootreason=power_key "* | *" androidboot.bootreason=usb "* | *" boot_reason=0 "* | *" boot_reason=1 "*) echo power ;;
+	*) echo unknown ;;
+	esac
+}
+mount -t pstore pstore /sys/fs/pstore 2>/dev/null
+reason=$(t5_boot_reason)
+echo "$reason" > /run/techo5/boot-reason
+log "boot reason: $reason"
+
 # The kernel keeps its last words in RAM across a restart (pstore). Mounting it makes them readable,
 # and a copy on userdata outlives the next boot; a power cut clears the RAM, so this only catches a
 # device that restarted itself. The cronos kernel keeps its console there too, so every restart leaves
@@ -147,6 +177,7 @@ if grep -q 'amazon,cronos' /proc/device-tree/compatible 2>/dev/null &&
 			echo $((n + 1)) > "$stalls"
 			sync
 			log "display: the bootloader left the display unstarted (fps=6000); restarting ($((n + 1)) of 2)"
+			echo recovery > $LOGDIR/restart-reason
 			reboot
 			sleep 60
 		fi
@@ -301,6 +332,7 @@ t5_bt_up "$BT_MODULE" /var/log
 				[ $down -eq 15 ] && log "network: down, but a kernel is on trial; its own loop reboots"
 			else
 				log "network: rebooting"
+				echo recovery > $LOGDIR/restart-reason
 				sync
 				reboot
 			fi
@@ -382,6 +414,7 @@ on_trial() {
 				log "slot $s: no network within $TRIAL_TIMEOUT s; rebooting to use up a try"
 			fi
 			cp /run/boot.log $LOGDIR/boot.log 2>/dev/null
+			echo recovery > $LOGDIR/restart-reason
 			sync
 			reboot
 		fi

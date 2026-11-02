@@ -26,6 +26,7 @@ import (
 	"github.com/HuskerMinion/techo5/echod/internal/hardware/mic"
 	"github.com/HuskerMinion/techo5/echod/internal/hardware/speaker"
 	"github.com/HuskerMinion/techo5/echod/internal/layout"
+	"github.com/HuskerMinion/techo5/echod/internal/lib/bootreason"
 	"github.com/HuskerMinion/techo5/echod/internal/lib/wake"
 	"github.com/HuskerMinion/techo5/echod/internal/update"
 )
@@ -63,17 +64,20 @@ type Diag struct {
 	cores       *esphome.Sensor
 	coresOnline *esphome.Sensor
 	load        *esphome.Sensor
+	// bootReason is why the device last started (lib/bootreason), there only on an image whose boot
+	// works it out.
+	bootReason *esphome.TextSensor
 	// cpu is CPU usage: the share of the online cores' time spent busy since the last reading, which
 	// cpuBusy and cpuTotal hold. The load average counts threads asleep in the vendor drivers and
 	// reads 3 to 8 on an idle speaker; this is what says how hard the processor is working.
 	cpu               *esphome.Sensor
 	cpuBusy, cpuTotal uint64
-	memory      *esphome.Sensor
-	booted      *esphome.TextSensor
-	lux         *esphome.Sensor
-	lensCover   *esphome.BinarySensor
-	roomLevel   *esphome.Sensor
-	roomFloor   *esphome.Sensor
+	memory            *esphome.Sensor
+	booted            *esphome.TextSensor
+	lux               *esphome.Sensor
+	lensCover         *esphome.BinarySensor
+	roomLevel         *esphome.Sensor
+	roomFloor         *esphome.Sensor
 
 	luxPath string
 
@@ -140,6 +144,9 @@ func (d *Diag) Entities() []esphome.Entity {
 	}
 	if luxHere() {
 		out = append(out, d.lux)
+	}
+	if _, ok := bootreason.Last(); ok {
+		out = append(out, d.bootReason)
 	}
 	// An app on a tablet may not read /proc/stat; a sensor that could never have a value is left out.
 	if _, _, ok := (metrics.Reader{}).CPUTime(); ok {
@@ -593,6 +600,16 @@ func (d *Diag) hardware() {
 	// timestamp as "3 hours ago" and keeps that current itself, where an uptime in seconds would be a
 	// new state on every sample and fill the recorder with them. A text sensor because a sensor's
 	// state is a float32, which holds a date only to the nearest two minutes.
+	d.bootReason = &esphome.TextSensor{
+		Base: esphome.Base{
+			ObjectID: "last_boot_reason", Name: "Last boot reason", Icon: "mdi:restart-alert",
+			Category: esphome.CategoryDiagnostic,
+		},
+	}
+	if r, ok := bootreason.Last(); ok {
+		d.bootReason.Set(r)
+		slog.Info("last boot", "reason", r)
+	}
 	d.booted = &esphome.TextSensor{
 		Base: esphome.Base{
 			ObjectID: "last_boot", Name: "Last boot", Icon: "mdi:restart",

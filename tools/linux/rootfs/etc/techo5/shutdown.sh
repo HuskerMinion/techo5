@@ -3,6 +3,9 @@
 # daemon first — it gates the amplifier before letting go of the speaker, and
 # a stop on purpose is not a failed trial — then everything else.
 PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+# A reboot through init is one on purpose, for the next boot's reason (boot.sh), unless whoever asked
+# for it left a more exact one.
+[ -s /data/techo5-linux/restart-reason ] || echo restart > /data/techo5-linux/restart-reason
 pid=$(pidof techo5)
 if [ -n "$pid" ]; then
 	kill -TERM $pid
