@@ -1424,7 +1424,9 @@ func (c *conversation) stopStreaming() {
 func (c *conversation) stream(ctx context.Context, be backend, slot int, followUp, continued bool, id string, waited time.Duration) {
 	frames, pre, unlisten := c.source.ListenHistory("turn", mic.History+waited)
 	defer unlisten()
-	c.pump(ctx, be, slot, followUp, continued, holdsForTone(slot, followUp), id, pre, frames)
+	hold := holdsForTone(slot, followUp)
+	slog.Info("turn: wake sound", "tone", wakeword.Tones(slot, followUp), "held", hold, "history_ms", len(pre)*1000/mic.Rate)
+	c.pump(ctx, be, slot, followUp, continued, hold, id, pre, frames)
 }
 
 // holdsForTone is whether a turn keeps the microphones from its wake sound, as it did before the
