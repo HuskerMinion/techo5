@@ -76,6 +76,7 @@ type Notification struct {
 	Icon    string // an mdi icon name, "" for none
 	Tag     string // what the caller called it, carried back on the event; "" for none
 	Until   time.Time
+	Size    Size // how large the words are drawn; "" is the same as SizeNormal
 
 	// Own is a note of this device's own (Note), which Home Assistant did not send and hears nothing of.
 	Own bool
@@ -210,6 +211,24 @@ func newFeature(pics pictures) *Feature {
 			},
 		},
 		{
+			// notify with a size. Home Assistant requires every argument on every call, so a size added to
+			// notify would break each automation that does not pass one: this is its own action.
+			Name: "notify_sized",
+			Args: []esphome.Arg{
+				{Name: "message", Type: esphome.ArgString},
+				{Name: "title", Type: esphome.ArgString},
+				{Name: "icon", Type: esphome.ArgString},
+				{Name: "chime", Type: esphome.ArgString},
+				{Name: "speak", Type: esphome.ArgString},
+				{Name: "tag", Type: esphome.ArgString},
+				{Name: "seconds", Type: esphome.ArgInt},
+				{Name: "size", Type: esphome.ArgString},
+			},
+			Run: func(c esphome.Call) (any, error) {
+				return nil, f.NotifySized(c.String("message"), c.String("title"), c.String("icon"), c.String("chime"), c.String("speak"), c.String("tag"), c.Int("seconds"), c.String("size"))
+			},
+		},
+		{
 			Name: "notify_picture",
 			Args: []esphome.Arg{
 				{Name: "message", Type: esphome.ArgString},
@@ -225,6 +244,23 @@ func newFeature(pics pictures) *Feature {
 				return nil, f.NotifyPicture(c.String("message"), c.String("title"), c.String("picture"), c.String("chime"), c.String("speak"), c.String("sound"), c.String("tag"), c.Int("seconds"))
 			},
 		},
+		{
+			Name: "notify_picture_sized", // notify_picture with a size, as notify_sized is notify with one
+			Args: []esphome.Arg{
+				{Name: "message", Type: esphome.ArgString},
+				{Name: "title", Type: esphome.ArgString},
+				{Name: "picture", Type: esphome.ArgString},
+				{Name: "chime", Type: esphome.ArgString},
+				{Name: "speak", Type: esphome.ArgString},
+				{Name: "sound", Type: esphome.ArgString},
+				{Name: "tag", Type: esphome.ArgString},
+				{Name: "seconds", Type: esphome.ArgInt},
+				{Name: "size", Type: esphome.ArgString},
+			},
+			Run: func(c esphome.Call) (any, error) {
+				return nil, f.NotifyPictureSized(c.String("message"), c.String("title"), c.String("picture"), c.String("chime"), c.String("speak"), c.String("sound"), c.String("tag"), c.Int("seconds"), c.String("size"))
+			},
+		},
 	}
 	return f
 }
@@ -236,6 +272,11 @@ func (f *Feature) Actions() []*esphome.Action { return f.actions }
 // Notify puts words up in a card. chime and speak read on and off as sound does (chime is on unless
 // off, speak is off unless on), and tag is carried back on the notification's events.
 func (f *Feature) Notify(message, title, icon, chime, speak, tag string, seconds int) error {
+	return f.NotifySized(message, title, icon, chime, speak, tag, seconds, "")
+}
+
+// NotifySized is Notify with the size of its words (ParseSize).
+func (f *Feature) NotifySized(message, title, icon, chime, speak, tag string, seconds int, size string) error {
 	message = clean(message, maxMessage)
 	if message == "" {
 		return errors.New("notify: the message is empty")
@@ -247,6 +288,7 @@ func (f *Feature) Notify(message, title, icon, chime, speak, tag string, seconds
 	f.put(Notification{
 		ID: f.nextID(), Kind: Text, Title: clean(title, maxTitle), Message: message,
 		Icon: strings.TrimSpace(icon), Tag: strings.TrimSpace(tag), Until: f.now().Add(lasting(seconds, false)),
+		Size: ParseSize(size),
 	}, how{silent: !home.ParseOnOff(chime, true), aloud: home.ParseOnOff(speak, false), hushed: f.hushed(), untilDone: seconds <= 0})
 	return nil
 }
@@ -257,6 +299,11 @@ func (f *Feature) Notify(message, title, icon, chime, speak, tag string, seconds
 // as home_show_camera_sound takes it (on or off, or anything else for the device's Camera sound
 // setting); it stays off at night and in quiet hours.
 func (f *Feature) NotifyPicture(message, title, picture, chime, speak, sound, tag string, seconds int) error {
+	return f.NotifyPictureSized(message, title, picture, chime, speak, sound, tag, seconds, "")
+}
+
+// NotifyPictureSized is NotifyPicture with the size of its words (ParseSize).
+func (f *Feature) NotifyPictureSized(message, title, picture, chime, speak, sound, tag string, seconds int, size string) error {
 	message, picture = clean(message, maxMessage), strings.TrimSpace(picture)
 	if err := home.CheckPicture(picture); err != nil {
 		return err
@@ -270,11 +317,11 @@ func (f *Feature) NotifyPicture(message, title, picture, chime, speak, sound, ta
 	if h.hushed {
 		sound = "off"
 	}
-	n := Notification{ID: f.nextID(), Kind: Picture, Title: clean(title, maxTitle), Message: message, Tag: strings.TrimSpace(tag), Until: f.now().Add(d)}
+	n := Notification{ID: f.nextID(), Kind: Picture, Title: clean(title, maxTitle), Message: message, Tag: strings.TrimSpace(tag), Until: f.now().Add(d), Size: ParseSize(size)}
 	// The view first, then the notification: the ticker counts a picture as over when its view is, and
 	// must never look between the two.
 	if f.pics != nil {
-		if err := f.pics.ShowPicture(picture, home.Caption{ID: n.ID, Title: n.Title, Message: n.Message, UntilTapped: seconds <= 0 && !home.PictureIsLive(picture)}, d, sound); err != nil {
+		if err := f.pics.ShowPicture(picture, home.Caption{ID: n.ID, Title: n.Title, Message: n.Message, Size: string(n.Size), UntilTapped: seconds <= 0 && !home.PictureIsLive(picture)}, d, sound); err != nil {
 			return err
 		}
 	}

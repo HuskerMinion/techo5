@@ -28,6 +28,7 @@ type Caption struct {
 	ID      string
 	Title   string
 	Message string
+	Size    string // the notification's size (large, huge), "" for normal
 	// UntilTapped is a still a notification gave no time to, which stays until somebody taps it (twelve
 	// hours at most): the page shows no countdown for it. A live camera's no-time is thirty seconds,
 	// which does count down.
