@@ -33,7 +33,7 @@
 # when the packer changed): read what changed there first.
 set -eu
 REPO=https://github.com/nuno407/u-boot-amazon-echo.git
-COMMIT=8f780fb7ee802186c57326a68434299182b359e8
+COMMIT=011601f1edef4d546ffcb8398b1773b839416245
 UBOOT_REPO=https://github.com/u-boot/u-boot.git
 UBOOT_TAG=v2026.10
 UBOOT_SHA=5508406582f6f7120dce0c4b3059819a41788db2
