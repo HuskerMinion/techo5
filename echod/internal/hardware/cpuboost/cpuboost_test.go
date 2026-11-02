@@ -376,3 +376,120 @@ func TestOneKindOfCoreHasNoGroup(t *testing.T) {
 		t.Fatal("a group for cores that are all alike")
 	}
 }
+
+func TestSwitchedOffTheBoostIsNotRaised(t *testing.T) {
+	SetEnabled(false)
+	defer SetEnabled(true)
+	root, path := board(t, "793000", "1989000")
+	cpus := bigLittle(t, root)
+	f := &fake{}
+	stop := start(t, root, f, 50*time.Millisecond)
+	defer stop()
+
+	f.set(true)
+	f.set(false)
+	time.Sleep(250 * time.Millisecond)
+	if got := contents(t, path); got != "793000" {
+		t.Fatalf("minimum %s with the boost off, want it left at 793000", got)
+	}
+	if got := contents(t, cpus); got != "0,1,2,3,4,5,6,7" {
+		t.Fatalf("cores %s with the boost off, want all", got)
+	}
+}
+
+func TestSwitchingOffGivesEverythingBackAtOnce(t *testing.T) {
+	defer SetEnabled(true)
+	root, path := board(t, "793000", "1989000")
+	cpus := bigLittle(t, root)
+	f := &fake{}
+	stop := start(t, root, f, time.Hour)
+	defer stop()
+
+	f.set(true)
+	waitFor(t, path, "1989000")
+	waitFor(t, cpus, "4,5,6,7")
+	SetEnabled(false) // a finger is still down
+	waitFor(t, path, "793000")
+	waitFor(t, cpus, "0,1,2,3,4,5,6,7")
+}
+
+func TestSwitchingOnAgainBoostsTheNextTouch(t *testing.T) {
+	SetEnabled(false)
+	defer SetEnabled(true)
+	root, path := board(t, "793000", "1989000")
+	f := &fake{}
+	stop := start(t, root, f, 50*time.Millisecond)
+	defer stop()
+
+	SetEnabled(true)
+	f.set(true)
+	waitFor(t, path, "1989000")
+	f.set(false)
+	waitFor(t, path, "793000")
+}
+
+func TestTheRenderersAdoptedWhenItIsNotInTheGroup(t *testing.T) {
+	root, _ := board(t, "793000", "1989000")
+	cpus := bigLittle(t, root)
+	// The renderer (777) is the daemon's child and its own program, but is in no group.
+	d := filepath.Join(root, "proc", "777")
+	if err := os.MkdirAll(d, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	stat := "777 (techo5-gpu) S " + strconv.Itoa(os.Getpid()) + " 1 1 0\n"
+	if err := os.WriteFile(filepath.Join(d, "stat"), []byte(stat), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(d, "comm"), []byte("techo5-gpu\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	f := &fake{}
+	stop := start(t, root, f, time.Hour)
+	defer stop()
+
+	group := filepath.Join(root, cgroupDir, setName, "cgroup.procs")
+	if err := os.WriteFile(group, []byte(strconv.Itoa(os.Getpid())+"\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	f.set(true)
+	waitFor(t, cpus, "4,5,6,7")
+	if got := contents(t, group); got != "777" {
+		t.Fatalf("group members %q after a touch, want the renderer adopted (777)", got)
+	}
+}
+
+func TestFastCoresOffKeepsTheClocksAndTheCores(t *testing.T) {
+	SetFastCores(false)
+	defer SetFastCores(true)
+	root, path := board(t, "793000", "1989000")
+	cpus := bigLittle(t, root)
+	f := &fake{}
+	stop := start(t, root, f, 300*time.Millisecond)
+	defer stop()
+
+	f.set(true)
+	waitFor(t, path, "1989000")
+	time.Sleep(100 * time.Millisecond)
+	if got := contents(t, cpus); got != "0,1,2,3,4,5,6,7" {
+		t.Fatalf("cores %s with fast cores off, want all", got)
+	}
+	f.set(false)
+	waitFor(t, path, "793000")
+}
+
+func TestSwitchingFastCoresOffGivesTheCoresBackAtOnce(t *testing.T) {
+	defer SetFastCores(true)
+	root, path := board(t, "793000", "1989000")
+	cpus := bigLittle(t, root)
+	f := &fake{}
+	stop := start(t, root, f, time.Hour)
+	defer stop()
+
+	f.set(true)
+	waitFor(t, cpus, "4,5,6,7")
+	SetFastCores(false) // a finger is still down
+	waitFor(t, cpus, "0,1,2,3,4,5,6,7")
+	if got := contents(t, path); got != "1989000" {
+		t.Fatalf("minimum %s, want the clocks kept while the boost is on", got)
+	}
+}

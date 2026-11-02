@@ -12,6 +12,14 @@ type Diag struct {
 
 	// MinCores holds cores online that the governor would otherwise park.
 	MinCores int `json:"min_cores"`
+
+	// TouchBoostOff turns off the clocks and cores held up while the screen is touched (hardware/cpuboost,
+	// the 2nd gen Show 8). Off is the exception: the boost is on unless this says not.
+	TouchBoostOff bool `json:"touch_boost_off,omitempty"`
+
+	// TouchBoostSlowCores turns off the part of the boost that moves the daemon onto the fast cores,
+	// leaving its clocks. Like TouchBoostOff it is the exception; it matters only while the boost is on.
+	TouchBoostSlowCores bool `json:"touch_boost_slow_cores,omitempty"`
 }
 
 // DefaultInterval is five minutes. The readings move slowly and every one of them costs a read of
@@ -37,6 +45,14 @@ func (w DiagWriter) RemoteADB(v bool) error {
 
 func (w DiagWriter) InsecureTLS(v bool) error {
 	return w.st.Update(func(c *Config) { c.Diag.InsecureTLS = v })
+}
+
+func (w DiagWriter) TouchBoostOff(v bool) error {
+	return w.st.Update(func(c *Config) { c.Diag.TouchBoostOff = v })
+}
+
+func (w DiagWriter) TouchBoostSlowCores(v bool) error {
+	return w.st.Update(func(c *Config) { c.Diag.TouchBoostSlowCores = v })
 }
 
 func (w DiagWriter) MinCores(v int) error {

@@ -588,6 +588,24 @@ screen off and on again at its brightness. It is a switch, not a light, so "ligh
 it, and it is the one to name by voice: "turn off the kitchen echo screen power", or give it an alias
 like "kitchen screen" under its **Voice assistants** settings in Home Assistant.
 
+### Smoother touch (Show 8 2nd gen)
+
+On the Show 8 2nd gen, the screen is drawn by the processor, which on its own speeds up only after a swipe
+has started. While a finger is on the screen, and for about four seconds after the last one lifts, the Show
+holds both processor clusters at their top speed and runs its own screen code on the faster cores. What it
+starts (a video, AirPlay) keeps every core. Both go back as they were when the four seconds are up.
+
+Two switches in Home Assistant (configuration entities, both on by default) work at once, with no restart:
+
+- **Touch boost** turns the whole thing off and on again.
+- **Touch boost: fast cores** is the part that runs the Show's own screen code on the faster cores. Off, a
+  touch still raises the clocks but moves nothing; on a Show 8 2nd gen that is noticeably less smooth, so
+  it is there to turn off if something misbehaves while you touch the screen. It only matters while
+  **Touch boost** is on.
+
+Leave both on unless the Show runs warm or something behaves differently while you touch the screen. The
+other Shows don't have the switches.
+
 ### Night
 
 - **Night hours**: when the night starts and ends. **Weekend night starts** and **Weekend night ends** in

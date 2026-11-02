@@ -115,10 +115,30 @@ func (c *cpuset) sweep() {
 	}
 }
 
-// narrow limits the group to the fast cores, after moving out what is not the interface.
+// adopt puts the daemon's own programs that are not in the group into it: the renderer may have been
+// started where the group did not hold it yet, and it is the interface's too.
+func (c *cpuset) adopt() {
+	b, _ := os.ReadFile(filepath.Join(c.dir, "cgroup.procs"))
+	in := map[int]bool{}
+	for _, f := range strings.Fields(string(b)) {
+		if pid, err := strconv.Atoi(f); err == nil {
+			in[pid] = true
+		}
+	}
+	for _, pid := range c.ownChildren() {
+		if !in[pid] {
+			_ = os.WriteFile(filepath.Join(c.dir, "cgroup.procs"), []byte(strconv.Itoa(pid)), 0o644)
+		}
+	}
+}
+
+// narrow limits the group to the fast cores, after moving out what is not the interface and in what is.
 func (c *cpuset) narrow() {
 	if c == nil {
 		return
+	}
+	if !c.narrowed {
+		c.adopt()
 	}
 	c.sweep()
 	if c.narrowed {

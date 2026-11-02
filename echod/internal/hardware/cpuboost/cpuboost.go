@@ -246,6 +246,18 @@ func run(ctx context.Context, root string, src source, after time.Duration) erro
 	}
 	defer stopSweep()
 
+	// release gives the cores and the clocks back, as the end of the hold does.
+	release := func(idle *time.Timer) {
+		cs.widen()
+		stopSweep()
+		if !lower(root, ps) {
+			idle.Reset(retryAfter)
+		}
+	}
+
+	for len(kick) > 0 {
+		<-kick
+	}
 	idle := time.NewTimer(after)
 	if !idle.Stop() {
 		<-idle.C
@@ -254,15 +266,34 @@ func run(ctx context.Context, root string, src source, after time.Duration) erro
 		select {
 		case <-ctx.Done():
 			return nil
+		case <-kick:
+			// A switch moved. Off gives everything back now; on waits for the next touch. Fast cores
+			// off gives the cores back and keeps the clocks to the end of the hold.
+			if !Enabled() {
+				idle.Stop()
+				select {
+				case <-idle.C:
+				default:
+				}
+				release(idle)
+			} else if !FastCores() {
+				cs.widen()
+				stopSweep()
+			}
 		case <-wake:
+			if !Enabled() {
+				continue
+			}
 			// A finger that landed and lifted between two looks is still a touch: a tap changes the
 			// screen, and that is drawn on the raised clocks too.
 			raise(root, ps)
-			if cs != nil && ticker == nil {
-				ticker = time.NewTicker(sweepEvery)
-				sweepC = ticker.C
+			if FastCores() {
+				if cs != nil && ticker == nil {
+					ticker = time.NewTicker(sweepEvery)
+					sweepC = ticker.C
+				}
+				cs.narrow()
 			}
-			cs.narrow()
 			idle.Stop()
 			select {
 			case <-idle.C:
@@ -277,11 +308,7 @@ func run(ctx context.Context, root string, src source, after time.Duration) erro
 			if src.Touched() {
 				continue
 			}
-			cs.widen()
-			stopSweep()
-			if !lower(root, ps) {
-				idle.Reset(retryAfter)
-			}
+			release(idle)
 		}
 	}
 }
