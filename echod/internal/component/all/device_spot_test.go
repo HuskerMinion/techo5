@@ -4,7 +4,7 @@ package all
 
 // notOnThisDevice: what the Echo Spot build leaves out of the shared list: the LED ring's entities, as
 // on the Show, and the Show's own screen settings.
-var notOnThisDevice = append(ringOnly, "calendar_popup_all_day", "calendar_popup_before", "calendar_popup_chime", "calendar_popups", "screen_now_playing", "screen_theme", "screen_theme_mode", "screen_timer_style", "screen_night_warmth", "screen_light_theme", "screen_auto_brightness_dimmest", "screen_dim_after_idle", "screen_date_color", "screen_glance_chip_size", "screen_glance_with_music", "screen_weather_position", "screen_clock_tap", "screen_dashboard_tiles", "screen_dashboard_layout", "lyrics", "screen_night_tap_lifts", "slideshow_pairs",
+var notOnThisDevice = append(ringOnly, "calendar_popup_all_day", "calendar_popup_before", "calendar_popup_chime", "calendar_popup_sources_chosen", "calendar_popups", "calendar_sources_chosen", "screen_now_playing", "screen_theme", "screen_theme_mode", "screen_timer_style", "screen_night_warmth", "screen_light_theme", "screen_auto_brightness_dimmest", "screen_dim_after_idle", "screen_date_color", "screen_glance_chip_size", "screen_glance_with_music", "screen_weather_position", "screen_clock_tap", "screen_dashboard_tiles", "screen_dashboard_layout", "lyrics", "screen_night_tap_lifts", "slideshow_pairs",
 	// Tessera screens are the Show's for now (feature/tessera): a round screen wants a layout of its own.
 	"tessera_screen",
 	// The Spot's Wi-Fi chip reports no temperature (feature/diag board_spot.go).

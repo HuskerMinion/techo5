@@ -3,10 +3,12 @@
 package display
 
 import (
+	"context"
 	"fmt"
 	"log/slog"
 	"slices"
 	"strings"
+	"time"
 
 	esphome "github.com/ygelfand/go-esphome-device"
 
@@ -18,9 +20,15 @@ import (
 type popupEntities struct {
 	on, chime    *esphome.Switch
 	lead, allDay *esphome.Select
+	// shown and popping are the calendars chosen, as text (calendar_sources, calendar_popup_sources).
+	shown, popping *esphome.TextSensor
 }
 
 func (d *Display) buildPopupEntities() {
+	d.pop.shown = &esphome.TextSensor{Base: esphome.Base{ObjectID: "calendar_sources_chosen", Name: "Calendars shown",
+		Icon: "mdi:calendar-multiple", Category: esphome.CategoryDiagnostic}}
+	d.pop.popping = &esphome.TextSensor{Base: esphome.Base{ObjectID: "calendar_popup_sources_chosen", Name: "Calendars that pop up",
+		Icon: "mdi:calendar-alert", Category: esphome.CategoryDiagnostic}}
 	d.pop.on = &esphome.Switch{Base: esphome.Base{ObjectID: "calendar_popups", Name: "Event pop-ups",
 		Icon: "mdi:calendar-alert", Category: esphome.CategoryConfig}}
 	d.pop.on.OnCommand = func(on bool) {
@@ -69,6 +77,7 @@ func (d *Display) popupSettingsChanged() {
 	d.pop.chime.Set(!c.PopupSilent)
 	d.pop.lead.Set(popupLeadLabels[popupLeadIndex()])
 	d.pop.allDay.Set(popupAllDayOpts[popupAllDayIndex()])
+	d.calendarListsChanged()
 	d.wake()
 }
 
@@ -87,4 +96,55 @@ func setPopupCalendars(list string) error {
 		pick = append(pick, id)
 	}
 	return config.Set().Calendar().PopupCalendars(pick)
+}
+
+// calendarListText is a list of calendar entities as Home Assistant reads it back: the ids separated by
+// commas, the same way the actions take them, cut at a whole id and ended with the number left out when
+// the list would pass the 255 characters a state can hold. "none" for an empty list.
+func calendarListText(ids []string) string {
+	if len(ids) == 0 {
+		return "none"
+	}
+	const limit = 255
+	out := strings.Join(ids, ", ")
+	if len(out) <= limit {
+		return out
+	}
+	for n := len(ids) - 1; n > 0; n-- {
+		cut := strings.Join(ids[:n], ", ") + fmt.Sprintf(", +%d more", len(ids)-n)
+		if len(cut) <= limit {
+			return cut
+		}
+	}
+	return fmt.Sprintf("%d calendars", len(ids))
+}
+
+// calendarListsChanged shows the calendars chosen, however they were chosen: here, on the screen, on the
+// setup page or by the actions. The popup list says every one this device shows when none is picked.
+func (d *Display) calendarListsChanged() {
+	if d.pop.shown == nil {
+		return
+	}
+	c := config.Get().Calendar
+	d.pop.shown.Set(calendarListText(c.Sources))
+	popping := c.PopupCalendars
+	if len(popping) == 0 {
+		popping = c.Sources
+	}
+	d.pop.popping.Set(calendarListText(popping))
+}
+
+// watchCalendarLists keeps the two text sensors current when the lists are changed from somewhere that
+// does not tell the display (the actions and the setup page write the settings directly).
+func (d *Display) watchCalendarLists(ctx context.Context) {
+	t := time.NewTicker(10 * time.Second)
+	defer t.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-t.C:
+			d.calendarListsChanged()
+		}
+	}
 }

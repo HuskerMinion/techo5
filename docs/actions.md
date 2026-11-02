@@ -1809,6 +1809,12 @@ data:
   calendars: calendar.family, calendar.work
 ```
 
+**Reading them back.** Two text sensors in the device's diagnostic entities, **Calendars shown** and
+**Calendars that pop up**, list the calendar entities now chosen, separated by commas, whichever way
+they were set (the screen, the setup page or these actions). They read `none` for an empty list, and a
+list too long for a state (255 characters) is cut at a whole entity and ends with `+N more`. The pop-up
+sensor lists every shown calendar while none is picked. They are read-only.
+
 ## Show the calendar
 
 In YAML, refer to this action as `esphome.<node>_calendar_show`.
