@@ -202,6 +202,7 @@ var registered = []string{
 	"screen_night_clock_style",
 	"screen_night_end",
 	"screen_night_hours",
+	"screen_night_info",
 	"screen_night_light_level",
 	"screen_night_mode",
 	"screen_night_start",

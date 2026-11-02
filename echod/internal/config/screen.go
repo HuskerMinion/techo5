@@ -35,6 +35,11 @@ type Screen struct {
 	// does, until the room has been quiet a while. Off, a tap on the night light does nothing.
 	NightTapLifts bool `json:"night_tap_lifts,omitempty"`
 
+	// NightInfo keeps the Next up strip, the glance chips and notifications on the night clock, drawn in
+	// its dim red at the night brightness. Off, the night clock is the time alone and a notification
+	// waits for a touch. (#397)
+	NightInfo bool `json:"night_info,omitempty"`
+
 	// IgnoreRoomLights has the screen's light in Home Assistant described as a configuration entity, so
 	// it stands apart from the room's lights, and the Screen power switch is what a voice names
 	// (feature/display, screen_room.go). Off, the usual, the light stands with the room's lights as it
@@ -304,6 +309,10 @@ func (w ScreenWriter) AutoDimmest(v int) error {
 
 func (w ScreenWriter) NightLight(v bool) error {
 	return w.st.Update(func(c *Config) { c.Screen.NightLight = v })
+}
+
+func (w ScreenWriter) NightInfo(v bool) error {
+	return w.st.Update(func(c *Config) { c.Screen.NightInfo = v })
 }
 
 func (w ScreenWriter) NightTapLifts(v bool) error {
