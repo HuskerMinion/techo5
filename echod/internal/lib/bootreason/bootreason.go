@@ -1,7 +1,7 @@
 // Package bootreason is why the device last started, as boot.sh worked it out at boot, and the mark a
 // restart on purpose leaves for the next boot to find.
 //
-// The reasons are update, restart (asked for: the settings, Home Assistant, a reboot over SSH),
+// The reasons are update, restart (asked for: the device's settings, a reboot over SSH),
 // recovery (the device restarting itself to get out of a fault: no network, an update that did not
 // settle), watchdog, panic, power and unknown, each only as far as the board can tell them apart.
 package bootreason

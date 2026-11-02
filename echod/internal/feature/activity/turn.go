@@ -133,8 +133,12 @@ func (t *Turn) Heard(text string) {
 		return
 	}
 
+	// Not after the turn ended: its events may still be held for the score, and what comes late is
+	// another run's.
 	t.mu.Lock()
-	t.heard = text
+	if t.ended.IsZero() {
+		t.heard = text
+	}
 	t.mu.Unlock()
 
 	t.at(&t.thinking)
@@ -147,7 +151,9 @@ func (t *Turn) Replying(text string) {
 	}
 
 	t.mu.Lock()
-	t.reply = text
+	if t.ended.IsZero() {
+		t.reply = text
+	}
 	t.mu.Unlock()
 
 	t.at(&t.replying)

@@ -513,6 +513,7 @@ if [ -n "${KERNEL_UPDATE:-}" ]; then
 				# Read again at the last moment: a ring may have started meanwhile. noroute counts
 				# a boot once, so going round again is safe.
 				t5_busy && continue
+				echo recovery > $LOGDIR/restart-reason
 				reboot
 				exit 0
 			fi
