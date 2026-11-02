@@ -395,6 +395,32 @@ func TestAPictureNotificationWaitsOutTheNightToo(t *testing.T) {
 	}
 }
 
+// With Night clock shows Next up and notifications on, a picture notification at night is still held for a
+// touch: only a text card is shown at once.
+func TestAPictureNotificationStaysHeldWithNightInfo(t *testing.T) {
+	d := noticeDisplay(t, showWide, showHigh)
+	atNight(t)
+	if err := config.Set().Screen().AtNight(true, true); err != nil {
+		t.Fatal(err)
+	}
+	if err := config.Set().Screen().NightInfo(true); err != nil {
+		t.Fatal(err)
+	}
+	if err := notify.Get().NotifyPicture("Someone is here", "Doorbell", "camera.front_door", "", "", "", "", 600); err != nil {
+		t.Fatal(err)
+	}
+	v, up := home.Get().Camera()
+	if !up {
+		t.Fatal("the picture's view is not up")
+	}
+	if _, shown := d.gateCamera(v, up, true); shown {
+		t.Error("a picture notification was shown at once on the night clock")
+	}
+	if !d.noticeHeld() {
+		t.Error("the picture notification is not waiting for a touch")
+	}
+}
+
 // A long press that releases a held notification on the night light only releases it: the night light
 // stays, with the card on it, where a long press otherwise lifts the night light to full screen.
 func TestAHoldThatReleasesANotificationKeepsTheNightLight(t *testing.T) {

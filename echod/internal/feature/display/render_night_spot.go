@@ -34,8 +34,7 @@ func (r *roundRenderer) nightFace(s roundScene) {
 	if s.nightInfo && s.showNotification {
 		// Night clock shows Next up and notifications: the card takes the face, as by day, in the
 		// night's tone (night_info.go), and the clock comes back once it is tapped away.
-		layer := image.NewRGBA(r.dst.Rect)
-		draw.Draw(layer, layer.Rect, image.NewUniform(color.Black), image.Point{}, draw.Src)
+		layer := nightLayerFor(&r.nightBuf, r.dst.Rect)
 		screen := r.dst
 		r.dst = layer
 		r.notifyFace(s)
