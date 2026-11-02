@@ -612,6 +612,13 @@ like "kitchen screen" under its **Voice assistants** settings in Home Assistant.
 - **Night mode** switch in Home Assistant: start or end the night now, from a bedtime automation for
   example. Set Night hours to **Controlled by Home Assistant** to leave the night to the switch alone.
   See [Turning the night on from an automation](actions.md#turning-the-night-on-from-an-automation).
+- **Wi-Fi quiet hours** (a switch in Home Assistant, off at first), with **Wi-Fi quiet hours start**
+  and **Wi-Fi quiet hours end** (1:00 AM to 7:00 AM until set): for a home that turns its access point
+  off at night. The device leaves the Wi-Fi as the hours start and joins again as they end, instead of
+  joining another network it knows or searching all night. Meanwhile Home Assistant can't reach it and
+  nothing that needs the network works, but alarms and timers set on the device still ring. These
+  hours are separate from Night hours. A device restarted during them, or whose clock isn't set yet,
+  stays on the Wi-Fi.
 
 ### Clock and home screen
 
