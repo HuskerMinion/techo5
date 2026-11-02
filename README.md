@@ -79,6 +79,11 @@ How it compares with EchoLocal, EchoMuse, echo-dot-assist, Kiosk Satellite and V
 
 The bigger changes of September to November 2026. Every release lists the rest.
 
+- 🌧️ **Rain on the glass, and a news update by voice** (v1.6.22). Rain on the weather page and
+  the weather art gathers on the glass and runs down, and lightning strikes at random with a new bolt
+  each time. The direct assistant plays a news update when asked. **Wi-Fi quiet hours** keeps the device
+  off the Wi-Fi at night ([#391](https://github.com/HuskerMinion/techo5/pull/391)), and a repeating alarm
+  can skip one morning from its wake-up light ([#360](https://github.com/HuskerMinion/techo5/pull/360)).
 - 📊 **Wake scores, a privacy switch and new diagnostics** (v1.6.21). Voice request events carry
   the wake word's score and why a request was canceled ([#381](https://github.com/HuskerMinion/techo5/issues/381)),
   and **Send voice text** keeps what you say out of Home Assistant
