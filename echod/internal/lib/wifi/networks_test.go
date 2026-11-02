@@ -232,3 +232,31 @@ func TestANameFromTheSupplicantIsReadBackPlain(t *testing.T) {
 		}
 	}
 }
+
+// A network forgotten leaves the file and the copy Join keeps, with a supplicant that says yes to
+// everything, and the file is replaced whole (#384).
+func TestForgetRemovesItFromTheFileAndTheCopy(t *testing.T) {
+	withConf(t, conf([]string{block("MAIN", "hunter2hunter"), block("OLD-IOT", "another-one")}))
+	if err := os.WriteFile(Conf+".prev", []byte(conf([]string{block("OLD-IOT", "another-one")})), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	bin := t.TempDir()
+	if err := os.WriteFile(bin+"/wpa_cli", []byte("#!/bin/sh\necho OK\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", bin+string(os.PathListSeparator)+os.Getenv("PATH"))
+
+	if err := Forget(context.Background(), "OLD-IOT"); err != nil {
+		t.Fatal(err)
+	}
+	if got := Saved(); len(got) != 1 || got[0] != "MAIN" {
+		t.Errorf("saved %v, want MAIN alone", got)
+	}
+	prev, _ := os.ReadFile(Conf + ".prev")
+	if strings.Contains(string(prev), "network={") {
+		t.Errorf("the copy still holds a network:\n%s", prev)
+	}
+	if _, err := os.Stat(Conf + ".tmp"); err == nil {
+		t.Error("a temporary file was left behind")
+	}
+}

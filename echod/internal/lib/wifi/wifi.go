@@ -189,11 +189,11 @@ func Join(ctx context.Context, ssid, passphrase string) error {
 			kept = append(kept, b)
 		}
 	}
-	if err := os.WriteFile(Conf, []byte(conf(kept)), 0o600); err != nil {
+	if err := writeFile(Conf, conf(kept)); err != nil {
 		return err
 	}
 	if len(old) > 0 {
-		_ = os.WriteFile(Conf+".prev", old, 0o600)
+		_ = writeFile(Conf+".prev", string(old))
 	}
 	if _, err := cli(ctx, "reconfigure"); err != nil {
 		return err
@@ -235,7 +235,7 @@ func Join(ctx context.Context, ssid, passphrase string) error {
 	}
 	// Back to what worked. The reconfigure re-reads the file, which undoes the select above with it.
 	if len(old) > 0 {
-		_ = os.WriteFile(Conf, old, 0o600)
+		_ = writeFile(Conf, string(old))
 	}
 	_, _ = cli(ctx, "reconfigure")
 	return fmt.Errorf("wifi: could not join %q (%s)", ssid, Current(ctx).State)
