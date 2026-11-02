@@ -173,6 +173,14 @@ func TestNightInfoShowsANotificationAtOnce(t *testing.T) {
 	if samePixels(shown, clock) {
 		t.Fatal("the notification is not drawn")
 	}
+	// Under a notification the Next up card and the chips are not drawn, so the card never cuts across them.
+	with := nightInfoFrame(at, nightStylePlain, true, false)
+	with.showNotification, with.notification = true, s.notification
+	without := with
+	without.nextUp = nil
+	if !samePixels(drawNight(showWide, showHigh, with), drawNight(showWide, showHigh, without)) {
+		t.Error("the Next up card is drawn under the notification")
+	}
 	if p, c, bad := brighterThanNight(shown, false); bad {
 		t.Errorf("the notification lights a pixel the night cannot make at %v: %v", p, c)
 	}

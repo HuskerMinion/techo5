@@ -34,6 +34,8 @@ func nightInfoCard(s scene) bool { return s.nightInfo && len(s.glance) == 0 && s
 // nightInfoReserve is how much of the screen's height the foot takes: what the clock keeps clear of.
 func (r *renderer) nightInfoReserve(s scene) int {
 	switch {
+	case s.showNotification:
+		return 0 // the card is the one thing drawn; the foot is empty under it
 	case nightInfoChips(s):
 		return r.s(96 + nightInfoGap)
 	case nightInfoCard(s):
@@ -73,6 +75,9 @@ func (r *renderer) nightInfoOver(s scene) {
 	}
 	foot := image.Rect(0, r.h-r.nightInfoReserve(s)+r.s(nightInfoGap), r.w, r.h)
 	switch {
+	case s.showNotification:
+		// A notification is the one thing on the night clock: the strip and chips wait under it, so the
+		// card never cuts across them.
 	case nightInfoChips(s):
 		r.nightLayer(foot, func() { r.glanceStrip(s.glance, false, false) })
 	case nightInfoCard(s):
