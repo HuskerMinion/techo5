@@ -462,8 +462,8 @@ captured login to the same page for a few minutes, and could see the pictures an
   Bluetooth bulb, can be paired and unpaired from Home Assistant through the device, with no code to
   enter. Only that device is bonded or forgotten; the phones and speakers paired to the device are not
   touched. Cache clearing is not supported.
-  Scanning pauses for the second or two a connection takes. Pairing (bonding) and clearing the cache
-  from Home Assistant are not offered; devices that authenticate in their own protocol work. Tried on
+  Scanning pauses for the second or two a connection takes. Pairing is offered, as above;
+  clearing the cache from Home Assistant is not. Devices that authenticate in their own protocol work. Tried on
   a Spot with a Boneco H400 through the Boneco integration; the Show has not made an LE connection yet.
 - **Bluetooth, the rest of it.** A phone playing to the device has one volume, the device's: its
   volume slider moves the device's volume, and the device's buttons and Home Assistant move the
@@ -503,9 +503,9 @@ captured login to the same page for a few minutes, and could see the pictures an
   Bluetooth Secure Connections.** Some newer phones do that with it on (a POCO F8 Pro on Android 16,
   #183); with it off they pair the older way and stay. What it costs: a phone set to pair
   only with Secure Connections cannot pair at all, and Low Energy pairing falls back to the older,
-  weaker kind too. The device itself pairs only over classic Bluetooth (speakers, earbuds and phones
-  playing to it), and the Bluetooth proxy pairs only a device Home Assistant asks it to, so nothing of
-  the device's own uses LE pairing. Changing it turns Bluetooth off and on again: whatever is connected drops for a moment and
+  weaker kind too. The device's own pairings (speakers, earbuds and phones playing to it) are
+  classic Bluetooth only, so none of them uses LE pairing. The Bluetooth proxy's pairing of other
+  devices at Home Assistant's request is separate and not affected. Changing it turns Bluetooth off and on again: whatever is connected drops for a moment and
   may need connecting again. It is this device's own, never shared with the other devices or carried
   by a settings file. The 2nd gen Show 8 on TECHO5's own kernel has it off already, and no switch.
 - **Radio.** The Radio drawer and its favorites are set with

@@ -456,6 +456,10 @@ func (c *Central) Pair(ctx context.Context, address string) error {
 	defer proxyPairingSet(path, false)
 	obj := c.conn.Object(service, path)
 	err = obj.CallWithContext(ctx, deviceIfc+".Pair", 0).Err
+	if err != nil && ctx.Err() != nil {
+		// Out of time: tell bluetoothd to stop, or it keeps trying to bond.
+		_ = obj.Call(deviceIfc+".CancelPairing", dbus.FlagNoReplyExpected).Err
+	}
 	if err != nil && !strings.Contains(err.Error(), "AlreadyExists") {
 		return err
 	}
@@ -472,7 +476,42 @@ func (c *Central) Unpair(ctx context.Context, address string) error {
 	if err != nil || path == "" {
 		return err
 	}
+	props := map[string]dbus.Variant{}
+	if err := c.conn.Object(service, path).CallWithContext(ctx, propsIfc+".GetAll", 0, deviceIfc).Store(&props); err != nil {
+		return fmt.Errorf("bluez: %s: %w", address, err)
+	}
+	if ownPairing(props) {
+		return fmt.Errorf("bluez: %s is paired for audio or calls on this device, not unpaired", address)
+	}
 	return c.conn.Object(service, c.adapter).CallWithContext(ctx, adapterIfc+".RemoveDevice", 0, path).Err
+}
+
+// ownPairing is whether a device's properties say it is one of the device's own pairings: bonded
+// and an audio or hands-free peer (a phone or a speaker), by profile, icon or class of device.
+func ownPairing(props map[string]dbus.Variant) bool {
+	if paired, _ := props["Paired"].Value().(bool); !paired {
+		return false
+	}
+	uuids, _ := props["UUIDs"].Value().([]string)
+	for _, u := range uuids {
+		u = strings.ToLower(u)
+		if strings.HasPrefix(u, "0000") && strings.HasSuffix(u, "-0000-1000-8000-00805f9b34fb") {
+			switch u[4:8] {
+			case "110a", "110b", "110c", "110e", "111e", "111f", "1108", "1112":
+				return true
+			}
+		}
+	}
+	switch icon, _ := props["Icon"].Value().(string); icon {
+	case "phone", "audio-headset", "audio-headphones", "audio-card":
+		return true
+	}
+	if class, ok := props["Class"].Value().(uint32); ok {
+		if major := class >> 8 & 0x1f; major == 0x02 || major == 0x04 {
+			return true
+		}
+	}
+	return false
 }
 
 // Services reads a connected device's attributes, in handle order.
