@@ -145,6 +145,33 @@ func (r Reader) BootTime() (time.Time, bool) {
 	return time.Time{}, false
 }
 
+// CPUTime is the time the online cores have spent busy, and in all, since boot, in clock ticks, from
+// /proc/stat's first line: two readings apart say how busy they were between them. Idle and waiting
+// for I/O are not busy, so threads asleep in a driver, which push the load average up, are not.
+func (r Reader) CPUTime() (busy, total uint64, ok bool) {
+	body, err := os.ReadFile(r.path("proc/stat"))
+	if err != nil {
+		return 0, 0, false
+	}
+	line, _, _ := strings.Cut(string(body), "\n")
+	fields := strings.Fields(line)
+	if len(fields) < 5 || fields[0] != "cpu" {
+		return 0, 0, false
+	}
+	var idle uint64
+	for i, f := range fields[1:] {
+		v, err := strconv.ParseUint(f, 10, 64)
+		if err != nil {
+			return 0, 0, false
+		}
+		total += v
+		if i == 3 || i == 4 { // idle, iowait
+			idle += v
+		}
+	}
+	return total - idle, total, true
+}
+
 // Cores is how many the kernel could use and how many are online. They differ: this kernel hotplugs
 // cores, so a device with four can be running two, and any figure about CPU usage means something
 // different depending on which it is.

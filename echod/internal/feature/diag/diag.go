@@ -6,6 +6,7 @@ import (
 	"context"
 	"crypto/tls"
 	"log/slog"
+	"math"
 	"net"
 	"net/http"
 	"strings"
@@ -62,6 +63,11 @@ type Diag struct {
 	cores       *esphome.Sensor
 	coresOnline *esphome.Sensor
 	load        *esphome.Sensor
+	// cpu is CPU usage: the share of the online cores' time spent busy since the last reading, which
+	// cpuBusy and cpuTotal hold. The load average counts threads asleep in the vendor drivers and
+	// reads 3 to 8 on an idle speaker; this is what says how hard the processor is working.
+	cpu               *esphome.Sensor
+	cpuBusy, cpuTotal uint64
 	memory      *esphome.Sensor
 	booted      *esphome.TextSensor
 	lux         *esphome.Sensor
@@ -134,6 +140,10 @@ func (d *Diag) Entities() []esphome.Entity {
 	}
 	if luxHere() {
 		out = append(out, d.lux)
+	}
+	// An app on a tablet may not read /proc/stat; a sensor that could never have a value is left out.
+	if _, _, ok := (metrics.Reader{}).CPUTime(); ok {
+		out = append(out, d.cpu)
 	}
 	// Holding cores online is the hotplug governor's, which an app on a tablet may not touch (coresHere).
 	if coresHere {
@@ -561,6 +571,14 @@ func (d *Diag) hardware() {
 		StateClass: esphome.StateClassMeasurement,
 		Decimals:   2,
 	}
+	d.cpu = &esphome.Sensor{
+		Base: esphome.Base{
+			ObjectID: "cpu_usage", Name: "CPU usage", Icon: "mdi:cpu-64-bit",
+			Category: esphome.CategoryDiagnostic,
+		},
+		Unit:       "%",
+		StateClass: esphome.StateClassMeasurement,
+	}
 	d.memory = &esphome.Sensor{
 		Base: esphome.Base{
 			ObjectID: "memory_available", Name: "Memory available", Icon: "mdi:memory",
@@ -756,6 +774,7 @@ func (d *Diag) board() {
 
 	one, _ := r.Load()
 	set(d.load, one)
+	d.cpuUsage(r)
 
 	available, _ := r.Memory()
 	set(d.memory, available)
@@ -763,6 +782,19 @@ func (d *Diag) board() {
 	d.boot(r)
 
 	set(d.lux, roomLux(r, d.luxPath))
+}
+
+// cpuUsage publishes how busy the cores were since the last reading. The first reading only sets the
+// mark.
+func (d *Diag) cpuUsage(r metrics.Reader) {
+	busy, total, ok := r.CPUTime()
+	if !ok {
+		return
+	}
+	if d.cpuTotal > 0 && total > d.cpuTotal && busy >= d.cpuBusy {
+		d.cpu.Set(float32(math.Round(100 * float64(busy-d.cpuBusy) / float64(total-d.cpuTotal))))
+	}
+	d.cpuBusy, d.cpuTotal = busy, total
 }
 
 // boot publishes when the device started. Not before the clock is set: until NTP has run the kernel

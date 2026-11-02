@@ -33,7 +33,7 @@ var listeningObjects = map[string]bool{
 	// feature/detect
 	"confirm_threshold": true, "confirm_wake_with_home_assistant": true, "wake_word_on_home_assistant": true,
 	"keep_wake_clips": true, "last_wake_score": true, "stop_word_sensitivity": true,
-	"wake_clips": true, "wake_clips_by_kind": true,
+	"wake_clips": true, "wake_clips_by_kind": true, "wake_word_load": true, "wake_frames": true, "worst_wake_frame": true,
 	// feature/security: recording takes of a word from the setup page (feature/takes)
 	"record_takes": true,
 	// feature/activity

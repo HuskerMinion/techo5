@@ -68,6 +68,9 @@ type Detect struct {
 	// score is the last wake's peak, for setting the threshold by: see newScoreEntity.
 	score *esphome.Sensor
 
+	// frames is how the wake word loop keeps up: see newFrameEntities.
+	frames frameEntities
+
 	// clipsTotal and clipsKinds are how many wake clips the device keeps, and keepClips is Keep wake
 	// clips, which turns the recorder on: see clips.go.
 	clipsTotal *esphome.Sensor
@@ -295,6 +298,8 @@ func newDetect() *Detect {
 	d.score = newScoreEntity()
 	d.onHA = newOnHAEntities()
 	e.OnScored = func(slot int, peak, _ float64) { d.scored(slot, peak) }
+	d.frames = newFrameEntities()
+	e.OnFrames = d.frames.set
 	// A wake Home Assistant confirmed is a wake, and its score is what says how far under the threshold
 	// the word is landing. One it did not confirm is not shown: it opened nothing.
 	voice.Confirmed.Listen(func(c voice.Confirmation) { d.score.Set(float32(c.Peak)) })

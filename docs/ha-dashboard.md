@@ -54,8 +54,10 @@ views:
                 name: Wi-Fi
               - entity: sensor.kitchen_echo_cpu_temperature
                 name: CPU
-              - entity: sensor.kitchen_echo_load_average
-                name: Load
+              - entity: sensor.kitchen_echo_cpu_usage
+                name: CPU usage
+              - entity: sensor.kitchen_echo_wake_word_load
+                name: Wake word
               - entity: sensor.kitchen_echo_memory_available
                 name: Memory
               - entity: sensor.kitchen_echo_free_space
@@ -67,6 +69,12 @@ views:
 
 The health sensors are diagnostic entities, updated every **Metrics interval** (five minutes unless you
 change it). **CPU temperature** shows *Unknown* on a device whose kernel reports no CPU temperature.
+**CPU usage** is how busy the processor was since the last reading. **Load average** is there too, but
+reads high on these devices, 3 to 8 on an idle speaker: it counts threads asleep in the vendor's
+drivers, which use almost no processor time, so don't go chasing it. **Wake word load** is the share of
+a core the wake word takes, updated every 30 seconds: about 10 percent for Okay Nabu, Hey Jarvis, Hey
+Mycroft and Alexa, and around 75 percent for the other built-in words on a Dot or Spot. **Wake frames**
+should read 50 a second, and **Worst wake frame** shows stalls, the slowest frame in milliseconds.
 **Last boot** is the time the device started, which the card shows as "3 hours ago".
 
 ## Stop every device at once

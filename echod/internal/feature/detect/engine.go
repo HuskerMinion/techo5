@@ -82,6 +82,10 @@ type Engine struct {
 	// threshold has to go up to be rid of it.
 	OnScored func(slot int, peak, cutoff float64)
 
+	// OnFrames runs every framesEvery, off the audio path, with how the loop kept up since the last
+	// time: what the "wake frames" log line says.
+	OnFrames func(Frames)
+
 	// Candidate is the lowest score worth asking Home Assistant about, per slot; zero, or nil, asks
 	// about nothing. OnCandidate runs, off the audio path, when an utterance went over it and fell
 	// away again without reaching the slot's threshold, with the peak it reached: a wake that is
@@ -397,7 +401,7 @@ func (e *Engine) Run(ctx context.Context) error {
 			took += spent
 			worst = max(worst, spent)
 
-			if elapsed := time.Since(since); elapsed >= 30*time.Second {
+			if elapsed := time.Since(since); elapsed >= framesEvery {
 				e.mu.Lock()
 				by := make([]any, 0, 8)
 				for k, d := range e.spent {
@@ -406,16 +410,33 @@ func (e *Engine) Run(ctx context.Context) error {
 				}
 				e.mu.Unlock()
 
+				f := Frames{PerSecond: float64(got) / elapsed.Seconds(), Busy: int(100 * took.Seconds() / elapsed.Seconds()),
+					Worst: worst}
 				slog.Info("wake frames", append([]any{
-					"per_second", float64(got) / elapsed.Seconds(),
+					"per_second", f.PerSecond,
 					"mean_us", took.Microseconds() / int64(max(got, 1)),
-					"worst_ms", worst.Milliseconds(),
-					"busy_pct", int(100 * took.Seconds() / elapsed.Seconds()),
+					"worst_ms", f.Worst.Milliseconds(),
+					"busy_pct", f.Busy,
 				}, by...)...)
+				if e.OnFrames != nil {
+					safe.Go("wake frames", func() { e.OnFrames(f) })
+				}
 				took, worst, got, since = 0, 0, 0, time.Now()
 			}
 		}
 	}
+}
+
+// framesEvery is how often the loop says how it kept up.
+const framesEvery = 30 * time.Second
+
+// Frames is how the wake word loop kept up over framesEvery: frames scored a second (fifty when none
+// are lost), the share of the time scoring took, and the slowest frame. Busy is what a wake word costs
+// the device: an openWakeWord word runs around 75 percent of a core on a Dot, a microWakeWord one 10.
+type Frames struct {
+	PerSecond float64
+	Busy      int
+	Worst     time.Duration
 }
 
 // score feeds one frame and acts on what came back. The lock is held across the whole of it: an
