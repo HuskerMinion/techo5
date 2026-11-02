@@ -50,6 +50,15 @@ func (d *Display) Actions() []*esphome.Action {
 			return nil, nil
 		},
 	}, {
+		Name: "todo_show",
+		Run: func(esphome.Call) (any, error) {
+			if !d.OpenTodo() {
+				return nil, errors.New("todo: this device shows no to-do list; choose one with todo_lists")
+			}
+			d.askedAtNight(time.Now())
+			return nil, nil
+		},
+	}, {
 		Name: "weather_show",
 		Run:  func(esphome.Call) (any, error) { return nil, d.weatherShown(false) },
 	}, {
@@ -107,7 +116,7 @@ func (d *Display) askedUp(now time.Time) bool {
 	if !d.askedNight {
 		return false
 	}
-	if now.Before(d.weatherUntil) || now.Before(d.calUntil) {
+	if now.Before(d.weatherUntil) || now.Before(d.calUntil) || (d.drawer && d.drawerTab == drawerTodo) {
 		return true
 	}
 	d.askedNight = false

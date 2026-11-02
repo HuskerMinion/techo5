@@ -854,6 +854,28 @@ With more than one calendar, the chips over the month turn a calendar off or on 
 its events leave every view, the clock and its event pop-ups. With many calendars, "+N" opens a list
 of them all. That choice stays on the device: it isn't shared or saved in a settings file.
 
+### To-do and shopping lists
+
+The Show, the Skylight and the Panel app can show Home Assistant's to-do lists: the Shopping List
+integration, Local To-do, Google Tasks, Todoist, anything that makes a `todo.` entity. They are off
+until you choose lists. Pick them on the setup page's **Weather & Calendar** tab, under **To-do
+lists**, or with the [`todo_lists` action](actions.md#choose-the-to-do-lists-shown). Each device keeps
+its own, so the kitchen can show the shopping list and a desk the chores.
+
+Once a list is chosen the drawer (swipe in from the right edge) has a **To-do** tab: each list is a
+heading with its open items under it. A tap on an item marks it done in Home Assistant, and it leaves
+the list. Items already done aren't shown. The tab reads each list from Home Assistant with the token
+from [step 1](#1-give-the-device-access-to-home-assistant), reads it again when Home Assistant says it
+changed, and at least once a minute while it is open. The
+[`todo_show` action](actions.md#show-the-to-do-lists) opens it from an automation.
+
+By voice, with Home Assistant's Assist, "add milk to the shopping list" already works: Assist handles
+its lists itself, and nothing here is needed. With the
+[voice assistant without Home Assistant](#voice-without-home-assistant) the device has the same two
+requests of its own, for the lists chosen here: "add milk to the shopping list", and "what's on the
+shopping list". Name the list as Home Assistant does ("shopping" finds "Shopping List"); with one list
+chosen the name can be left out.
+
 ### Fonts of your own
 
 The screen's fonts draw Latin letters, and Go adds Greek and Cyrillic. Words in other scripts, such as
@@ -1140,15 +1162,16 @@ answer to a text-to-speech server, then out of the speaker as any answer is.
 What the model can do is the device's own: start, list and cancel timers; set, list and delete
 alarms and reminders; stop what is ringing or playing; set the volume; find, play and keep radio
 stations; play a news update; play music from Music Assistant, once one is set up on the device; call another device in
-the house; read the device's calendars and the weather, here or somewhere else; and put the
-forecast, the rain map or the calendar on the screen. It remembers the conversation for five minutes,
+the house; read the device's calendars and the weather, here or somewhere else; add to and read
+the device's [to-do lists](#to-do-and-shopping-lists); and put the forecast, the rain map or the
+calendar on the screen. It remembers the conversation for five minutes,
 for a follow-up. The town set under **Where this device is** goes into what the model is told, so
 its answers and web searches are about your town unless you name another place.
 
 With a [SearXNG](https://github.com/searxng/searxng) server's address it can also look things up on
 the web, like scores, news or opening hours, and read the pages it finds. SearXNG needs its JSON
-format turned on (`search.formats` in its `settings.yml`). Once a request has read the web or a
-calendar, nothing in that request can change anything, so words from outside can't make it act.
+format turned on (`search.formats` in its `settings.yml`). Once a request has read the web, a
+calendar or a to-do list, nothing in that request can change anything, so words from outside can't make it act.
 
 To set it up, open the setup page, **Sound & Voice**, **Voice assistant**:
 

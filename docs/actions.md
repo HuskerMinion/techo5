@@ -1827,6 +1827,48 @@ General, Calendars). No arguments.
 action: esphome.office_calendar_show
 ```
 
+## Choose the to-do lists shown
+
+In YAML, refer to this action as `esphome.<node>_todo_lists`.
+
+Chooses which of Home Assistant's to-do and shopping lists this device shows, on the To-do tab of its
+drawer. Each device keeps its own: the kitchen can show the shopping list and a desk the chores.
+Screen devices only (the Show, the Skylight and the Panel app show the tab). Any `todo.` entity works:
+the Shopping List integration, Local To-do, Google Tasks, Todoist. Off until a list is chosen. Needs
+`home_assistant` set up first. A tap on an item on the tab marks it done in Home Assistant.
+
+With the voice assistant that answers without Home Assistant, the lists chosen here are also the ones
+it adds to and reads out ("add milk to the shopping list"). With Home Assistant's Assist as the voice
+assistant you don't need this for that: Assist handles its lists itself.
+
+### lists (Required)
+
+*string*
+
+To-do list entities, separated by commas, in the order to show them. Empty shows none, and takes the
+To-do tab away.
+
+```yaml
+action: esphome.kitchen_todo_lists
+data:
+  lists: todo.shopping_list, todo.chores
+```
+
+## Show the to-do lists
+
+In YAML, refer to this action as `esphome.<node>_todo_show`.
+
+Opens the drawer on its To-do tab on a Show, Skylight or Panel app, as a swipe in from the right
+edge and a tap on the tab do. A tap on the screen outside the drawer, or its close button, puts it
+away. At night it lights a screen the night has put out, at the night light's level (or at half
+brightness with no night light), and the drawer shows over the red night clock until it is closed. A
+screen somebody turned off stays off. Fails on a device that has no list chosen (choose them with
+`todo_lists`, or on the setup page's Weather & Calendar tab). No arguments.
+
+```yaml
+action: esphome.kitchen_todo_show
+```
+
 ## Show the forecast or the rain map
 
 In YAML, refer to these actions as `esphome.<node>_weather_show` and `esphome.<node>_radar_show`.

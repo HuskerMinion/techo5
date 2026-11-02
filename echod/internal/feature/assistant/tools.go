@@ -67,7 +67,7 @@ var toolList = tools
 
 // tools is what the model may do, as the device is now: the lists it reads are read when asked.
 func tools() []tool {
-	return append(append(append(append(append(deviceTools(), radioTools()...), newsTools()...), musicTools()...), screenTools()...), webTools()...)
+	return append(append(append(append(append(append(deviceTools(), radioTools()...), newsTools()...), musicTools()...), screenTools()...), webTools()...), todoTools()...)
 }
 
 func deviceTools() []tool {

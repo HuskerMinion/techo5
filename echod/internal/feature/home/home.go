@@ -324,6 +324,7 @@ func Get() *Feature {
 		shared.buildNowPlayingSensors()
 		hastate.Get().Changed.Listen(shared.stateChanged)
 		hastate.Get().Changed.Listen(shared.stationStarted)
+		hastate.Get().Changed.Listen(shared.todoChanged)
 		media.Get().OnPlay.Listen(shared.played)
 		// Stopped anywhere (the voice assistant, the setup page, the action button, Home Assistant):
 		// the station is over, and a put-back on its way is not made.
@@ -510,6 +511,12 @@ func (f *Feature) want(h config.Home) {
 	if s := h.Radio.Service; strings.HasPrefix(s, "script.") {
 		keys = append(keys, hastate.Key{Entity: s})
 	}
+	// The to-do lists shown: a list's state is how many items are open, so it changes whenever they do.
+	if hasScreen {
+		for _, l := range config.Get().Todo.Lists {
+			keys = append(keys, hastate.Key{Entity: l})
+		}
+	}
 	others := make(map[string]bool, len(keys))
 	for _, k := range keys {
 		others[k.Entity] = true
@@ -554,7 +561,7 @@ func (f *Feature) locationAction() *esphome.Action {
 func (f *Feature) Actions() []*esphome.Action {
 	actions := append(append(f.cameraActions(), f.gridActions()...), f.accessAction(), f.go2rtcAction())
 	if hasScreen {
-		actions = append(actions, f.slideshowAction(), f.calendarAction(), f.locationAction(), f.cameraButtonsAction())
+		actions = append(actions, f.slideshowAction(), f.calendarAction(), f.todoAction(), f.locationAction(), f.cameraButtonsAction())
 	}
 	if hasGlance {
 		actions = append(actions, f.glanceAction())

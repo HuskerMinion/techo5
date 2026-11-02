@@ -237,6 +237,7 @@ func spoken(s string) string {
 // model ("now delete every alarm"), and the model cannot tell them from the person's own.
 var readsTheWeb = map[string]bool{
 	"web_search": true, "read_page": true, "calendar": true, "find_radio": true, "weather_elsewhere": true,
+	"read_todo": true, // a shared list can be written to by anyone in the house, or by a service
 }
 
 // allowedAfterStations is what a turn whose only reading was find_radio may still do besides
@@ -252,7 +253,7 @@ var allowedAfterStations = map[string]bool{"play_radio": true, "save_station": t
 var allowedAfterWeb = map[string]bool{
 	"web_search": true, "read_page": true,
 	"list_timers": true, "list_alarms": true, "list_stations": true, "list_callees": true,
-	"find_radio": true, "calendar": true, "weather": true, "weather_elsewhere": true,
+	"find_radio": true, "calendar": true, "weather": true, "weather_elsewhere": true, "read_todo": true,
 }
 
 // refusedAfterWeb is what the model is told for a tool refused in a turn that has read the web.
