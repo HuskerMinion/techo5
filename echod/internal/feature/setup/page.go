@@ -266,6 +266,8 @@ func (f *Feature) save(w http.ResponseWriter, r *http.Request) {
 		default:
 			problem = saveStations(r)
 		}
+	case "replyplayer":
+		problem = saveReplyPlayer(r.PostFormValue("player"))
 	case "house":
 		problem = saveHouse(r.PostFormValue("word"))
 	case "update-install", "update-check", "update-auto":
@@ -438,6 +440,7 @@ func (f *Feature) settingsPage(ctx context.Context, w http.ResponseWriter, token
 		if layout.HasMicrophone() {
 			fmt.Fprint(w, `<h3>Voice</h3>`)
 			brainSection(w, token)
+			replyPlayerSection(w, token)
 			realtimeSection(w, token)
 			listeningSection(w, token)
 			houseSection(w, token)

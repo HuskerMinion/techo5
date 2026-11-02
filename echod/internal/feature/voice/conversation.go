@@ -637,7 +637,7 @@ func (c *conversation) turnEvent(e event) {
 		// The turn has to be claimed before the audio arrives: Home Assistant closes the run as soon
 		// as it has handed over the text, and a turn still only thinking would take that as the end
 		// and go idle, discarding everything that followed.
-		if c.phase != phaseIdle && wakeword.Delivery(c.slot) == config.DeliveryStream {
+		if c.phase != phaseIdle && wakeword.Delivery(c.slot) == config.DeliveryStream && replyPlayer() == "" {
 			c.speak("")
 		}
 
@@ -652,7 +652,8 @@ func (c *conversation) turnEvent(e event) {
 		if c.phase == phaseIdle {
 			return
 		}
-		if wakeword.Delivery(c.slot) == config.DeliveryStream {
+		// A player chosen for replies needs the url, whatever the slot's setting is.
+		if wakeword.Delivery(c.slot) == config.DeliveryStream && replyPlayer() == "" {
 			return
 		}
 		c.speak(e.url)
@@ -1059,6 +1060,9 @@ func (c *conversation) speak(url string) {
 	// audio, and the limit it was given when the device stopped listening goes on running until some
 	// of that audio turns up.
 	errand := func(ctx context.Context, p *speaker.Player) error {
+		if c.playElsewhere(ctx, url, playing) {
+			return nil
+		}
 		return c.play(ctx, url, playing, phone.RepliesIntoCall())
 	}
 	if url == "" {
