@@ -1690,7 +1690,7 @@ func (p *Player) Adjust(delta int) {
 		p.Mute(false)
 	}
 	p.Set(p.Volume() + delta)
-	speaker.Sound().Chime(speaker.ToneVolume)
+	speaker.Sound().Chime(speaker.VolumeSound())
 }
 
 // show lights the level as a clockwise arc, the leading segment dimmed by the fraction of a segment

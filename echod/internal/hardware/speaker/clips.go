@@ -34,12 +34,14 @@ var SoundsDir = filepath.Join(layout.StateDir, "sounds")
 // it is twice a 10-second stereo file, so headers and extra chunks never decide it.
 const (
 	longestOwn = 10 * Rate
+	shortOwn   = 2 * Rate
 	largestOwn = 2 * longestOwn * 2 * 2
 )
 
 // Clip is one recorded sound.
 type Clip struct {
 	file string
+	most int  // the most samples an owner's recording may hold; 0 is longestOwn
 	made bool // made in code (Synth): no file of its own or of the owner's, its samples are all there is
 
 	// Everything below is guarded by mu, and is what load last read.
@@ -81,7 +83,25 @@ var (
 	ClipFailure  = &Clip{file: "failure"}
 	ClipCanceled = &Clip{file: "canceled"}
 	ClipAlarm    = &Clip{file: "alarm"}
+
+	// The quick sounds below have no stock recording either: they stay the notes in tones.go until the
+	// owner sends one, and a recording may be two seconds at most (shortOwn), since each plays in a
+	// moment's notice. ClipListenEnd is new: the device is silent as listening ends until there is one.
+	// ClipDropIn is the chime that warns a room's microphones are about to open.
+	ClipListenEnd = &Clip{file: "listening_ended", most: shortOwn}
+	ClipButton    = &Clip{file: "button_press", most: shortOwn}
+	ClipVolume    = &Clip{file: "volume_change", most: shortOwn}
+	ClipBTConnect = &Clip{file: "bluetooth_connected", most: shortOwn}
+	ClipDropIn    = &Clip{file: "drop_in", most: shortOwn}
 )
+
+// limit is the most samples this clip's recording may hold.
+func (c *Clip) limit() int {
+	if c.most > 0 {
+		return c.most
+	}
+	return longestOwn
+}
 
 func (c *Clip) ownPath() string { return filepath.Join(SoundsDir, c.file+".wav") }
 
@@ -110,7 +130,7 @@ func (c *Clip) load() {
 	}
 	c.loaded, c.from, c.own, c.last = true, from, false, nil
 	if from != (recording{}) {
-		samples, err := readOwn(from.path)
+		samples, err := readOwn(from.path, c.limit())
 		if err == nil {
 			c.own = true
 			c.set(samples)
@@ -147,7 +167,7 @@ func (c *Clip) set(samples []int16) {
 //
 // What is checked is what was opened, so a file swapped for something else on the way is still
 // caught: opening does not wait on a pipe, and no more is read than the size allowed.
-func readOwn(path string) ([]int16, error) {
+func readOwn(path string, most int) ([]int16, error) {
 	file, err := os.OpenFile(path, os.O_RDONLY|syscall.O_NONBLOCK, 0)
 	if err != nil {
 		return nil, err
@@ -170,13 +190,13 @@ func readOwn(path string) ([]int16, error) {
 	if len(b) > largestOwn {
 		return nil, fmt.Errorf("more than %d bytes is longer than a sound needs to be", largestOwn)
 	}
-	return checkOwn(b)
+	return checkOwn(b, most)
 }
 
 // checkOwn is a recording's bytes as the device plays them, or why it cannot play them. The setup
 // page asks the same of a file before it keeps it, so nothing is kept that would only play the stock
 // sound in its place.
-func checkOwn(b []byte) ([]int16, error) {
+func checkOwn(b []byte, most int) ([]int16, error) {
 	samples, f, err := MonoWAV(b)
 	if err != nil {
 		return nil, err
@@ -187,7 +207,7 @@ func checkOwn(b []byte) ([]int16, error) {
 	if len(samples) == 0 {
 		return nil, fmt.Errorf("holds no sound")
 	}
-	if len(samples) > longestOwn {
+	if len(samples) > most {
 		return nil, fmt.Errorf("%d ms is longer than a sound needs to be", len(samples)*1000/Rate)
 	}
 	return samples, nil

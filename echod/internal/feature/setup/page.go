@@ -93,6 +93,8 @@ func (f *Feature) serve(w http.ResponseWriter, r *http.Request) {
 		f.font(w, r)
 	case "/setup/sound":
 		f.sound(w, r)
+	case "/setup/soundpack":
+		f.soundPack(w, r)
 	case "/setup/wakeword":
 		f.wakeWordUpload(w, r)
 	case "/setup/diagnostics.txt":

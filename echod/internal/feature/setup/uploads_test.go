@@ -362,3 +362,48 @@ func TestUnfinishedSoundUploadsAreSweptOnce(t *testing.T) {
 		t.Errorf("Run again deleted an upload under way: %v", err)
 	}
 }
+
+// A sound pack is saved by a browser let in and loaded from the page with its token ahead of the file;
+// a pack with anything else in it is refused.
+func TestASoundPackFromThePage(t *testing.T) {
+	ownSoundsHere(t)
+	f, c := letInPage(t)
+	send := func(r *http.Request) *httptest.ResponseRecorder {
+		w := httptest.NewRecorder()
+		f.serve(w, r)
+		return w
+	}
+	if err := speaker.SaveOwn("drop_in", strings.NewReader(wav(48000, 1, 500))); err != nil {
+		t.Fatal(err)
+	}
+	get := httptest.NewRequest(http.MethodGet, "/setup/soundpack", nil)
+	if w := send(get); w.Code != http.StatusForbidden {
+		t.Errorf("saving without the cookie: %d", w.Code)
+	}
+	get = httptest.NewRequest(http.MethodGet, "/setup/soundpack", nil)
+	get.AddCookie(c)
+	w := send(get)
+	if w.Code != http.StatusOK || !strings.Contains(w.Header().Get("Content-Disposition"), ".soundpack") {
+		t.Fatalf("save: %d %v", w.Code, w.Header())
+	}
+	pack := w.Body.String()
+	if err := speaker.RemoveOwn("drop_in"); err != nil {
+		t.Fatal(err)
+	}
+	up := func(token, body string, c *http.Cookie) *http.Request {
+		fields := [][2]string{{"token", token}, {"file", body}}
+		return multipartPost("/setup/soundpack", fields, map[string]bool{"file": true}, "x.soundpack", c)
+	}
+	if w := send(up("wrong", pack, c)); w.Code != http.StatusForbidden {
+		t.Errorf("load with another token: %d", w.Code)
+	}
+	if w := send(up(c.Value, "not a pack", c)); !refused(w, "not a sound pack") {
+		t.Errorf("garbage: %d %s", w.Code, w.Header().Get("Location"))
+	}
+	if w := send(up(c.Value, pack, c)); w.Code != http.StatusSeeOther || !strings.Contains(w.Header().Get("Location"), "saved=1") {
+		t.Errorf("load: %d %s", w.Code, w.Header().Get("Location"))
+	}
+	if has, _ := speaker.OwnState("drop_in"); !has {
+		t.Error("the loaded sound is not there")
+	}
+}

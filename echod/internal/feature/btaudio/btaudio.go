@@ -768,6 +768,9 @@ func (f *Feature) refresh() {
 		f.status.Set(text)
 	}
 	if tone != nil && !config.Get().Speaker.Quiet(time.Now()) && !inCall() {
+		if slices.Equal(tone, speaker.ToneBTConnect) {
+			tone = speaker.BTConnectSound()
+		}
 		speaker.Sound().Chime(tone)
 	}
 	f.showPhone()
