@@ -948,7 +948,11 @@ the music reaching the microphones is louder too.
 Under Settings → **Sound**, or on the device's Assist satellite in Home Assistant:
 
 - **Wake word**: Okay Nabu, Hey Jarvis, Alexa and others. Choosing none is fine if you only want
-  the screen and music.
+  the screen and music. Okay Nabu, Hey Jarvis, Hey Mycroft and Alexa run on microWakeWord and cost
+  little. The other eight (Computer, Jarvis, Hey Friday, GLaDOS, HAL, Terminator, Marvin and Home
+  Assistant) run on openWakeWord, which takes about seven times the processor time: around three
+  quarters of a core on an Echo Dot, Echo 2nd gen or Spot, against about a tenth. They work, with less
+  headroom for everything else, so on those devices pick one of the first four if any of them suits.
 - **Wake word threshold** (0.5 to 0.99): the score the wake word has to reach. Higher wakes by
   mistake less often; lower hears you more easily. If it wakes by mistake, raise it a step at a time
   (0.90, 0.93, 0.95) and watch **Last wake score** on the device in Home Assistant: a false wake that

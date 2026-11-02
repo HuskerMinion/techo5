@@ -326,7 +326,9 @@ is built on, runs on the unlocked Dot's Fire OS 6 with its own installer, and is
    **Allow the device to perform Home Assistant actions**. The radio favorites, phone call events and
    some screen features need it.
 3. **Pick a wake word** on the device's Assist satellite: Okay Nabu, Hey Jarvis, Hey Mycroft, Alexa,
-   and eight more (Computer, Jarvis, Home Assistant and others), the same on every device.
+   and eight more (Computer, Jarvis, Home Assistant and others), the same on every device. The first
+   four are the light ones; the other eight take about seven times the processor time (see the
+   [voice settings](setup.md#7-voice)).
 4. **Updates** from then on come from Home Assistant's update card: signed releases install into the
    spare slot and roll back on their own if they don't come up healthy. **Update channel** in Home
    Assistant is *stable* unless you change it; *dev* follows test builds, for a device being worked
