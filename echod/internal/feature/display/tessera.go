@@ -789,7 +789,7 @@ func tessFrac(v, lo, hi float64) float64 {
 // toggles is whether an entity's tap turns it on and off, which its tile shows with a switch.
 func toggles(entity string) bool {
 	switch tesseraDomain(entity) {
-	case "light", "switch", "input_boolean", "fan", "automation", "humidifier", "siren":
+	case "light", "switch", "input_boolean", "fan", "automation", "humidifier", "siren", "remote":
 		return true
 	}
 	return false

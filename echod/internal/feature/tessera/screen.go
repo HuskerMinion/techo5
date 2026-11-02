@@ -285,7 +285,7 @@ func tapService(entity, state string) (string, bool) {
 	}
 	d := domain(entity)
 	switch d {
-	case "light", "switch", "input_boolean", "fan", "automation", "humidifier", "siren":
+	case "light", "switch", "input_boolean", "fan", "automation", "humidifier", "siren", "remote":
 		return d + ".toggle", true
 	case "cover":
 		switch state {
@@ -319,7 +319,7 @@ func tapService(entity, state string) (string, bool) {
 // show, a scene or a button's.
 func tapOutcome(entity, state string) (string, bool) {
 	switch domain(entity) {
-	case "light", "switch", "input_boolean", "fan", "automation", "humidifier", "siren":
+	case "light", "switch", "input_boolean", "fan", "automation", "humidifier", "siren", "remote":
 		if state == "on" {
 			return "off", true
 		}

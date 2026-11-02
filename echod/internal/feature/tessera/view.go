@@ -372,6 +372,10 @@ func describe(t Tile, o options) Placed {
 	switch {
 	case o.Tap == "none":
 		p.Taps = false
+	case o.Tap == "action" && d == "remote":
+		// A key of a remote (Perform action, Send command) sends a command, which isn't read here; a
+		// toggle would switch the whole remote off.
+		p.Taps = false
 	case o.Tap == "detail":
 		// Its card, where the screen has one; nothing where it has none.
 		p.Taps = hasSheet(d) && !p.Gone

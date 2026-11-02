@@ -216,10 +216,12 @@ On the page:
 - The top bar has the page's title, its items from Tessera, and the time.
 - Swipe left or right to go to the next page. The dots along the foot show where you are. A detail
   page has a back arrow at the top left.
-- Tap a tile to do what it's for: lights, switches, fans, input booleans and automations turn on or
+- Tap a tile to do what it's for: lights, switches, fans, input booleans, automations and remotes turn on or
   off; a cover opens, closes or stops; a scene or script runs; a button is pressed; a media player
   plays or pauses (on Music Assistant's player when it is the one playing, as its play/pause key does).
   Sensors show their value and unit, large.
+- A remote's tile turns it on or off. Tessera's remote card, with its activities and keypad, isn't drawn
+  here, and a remote's key set to *Perform action* does nothing on a tap.
 - Tap a thermostat to open its controls: the temperature with − and +, and its modes.
 - Locks: a tap on an unlocked lock locks it. A tap on a locked lock asks first: the tile turns red
   and says *Tap again to unlock*. Tap again within 4 seconds to unlock. If the lock's tile in

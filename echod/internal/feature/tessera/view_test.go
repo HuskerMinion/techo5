@@ -208,6 +208,7 @@ func TestASlideSetsTheLevel(t *testing.T) {
 func TestTapServices(t *testing.T) {
 	for _, c := range []struct{ entity, state, want string }{
 		{"switch.a", "on", "switch.toggle"},
+		{"remote.a", "off", "remote.toggle"},
 		{"cover.a", "closed", "cover.open_cover"},
 		{"cover.a", "open", "cover.close_cover"},
 		{"cover.a", "opening", "cover.stop_cover"},
@@ -337,6 +338,25 @@ func TestTapsThatOpenTheCard(t *testing.T) {
 	v := s.View(now).Pages[0].Tiles
 	if !v[0].Taps || !v[0].Detail || v[2].Taps || v[3].Taps {
 		t.Errorf("taps %v %v %v %v", v[0].Taps, v[0].Detail, v[2].Taps, v[3].Taps)
+	}
+}
+
+// A remote's tile turns it on and off; a key of it, set to Perform action, sends a command that isn't read
+// here, so its tap does nothing rather than switch the whole remote off (#388).
+func TestARemoteTogglesAndItsKeysDoNot(t *testing.T) {
+	got := calls(t)
+	s := screenOf(t,
+		[5]string{"remote.tv", "off", `{}`, `{}`, ""},
+		[5]string{"remote.tv", "on", `{}`, `{"tap":"action"}`, ""},
+	)
+	now := time.Now()
+	s.Tap(0, "remote.tv", now)
+	s.Tap(1, "remote.tv", now)
+	if c := got(); len(c) != 1 || c[0].Service != "remote.toggle" {
+		t.Errorf("taps called %+v, want one remote.toggle", c)
+	}
+	if v := s.View(now).Pages[0].Tiles; !v[0].Taps || v[1].Taps {
+		t.Errorf("taps %v %v, want true false", v[0].Taps, v[1].Taps)
 	}
 }
 
