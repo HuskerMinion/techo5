@@ -560,10 +560,10 @@ captured login to the same page for a few minutes, and could see the pictures an
   calm run of blue, teal, violet and magenta. It listens to what the device plays, not to the
   microphones, so it follows the music at any volume, and the assistant's replies, alarms and the
   wake sound do not move it. When nothing plays the ring is dark and shows what it would otherwise:
-  the **LED ring** light as you set it, or nothing. Its brightness follows the **LED
-  ring** light's brightness, so turn that down for a dimmer ring; with that light off it shows at
-  full. A conversation, a muted microphone, a timer or an error covers it as they cover the other
-  choices, and it comes back afterward. **None** turns it off and stops the analysis, which takes well under 1% of the processor while it runs.
+  the **LED ring** light as you set it, or nothing. Its brightness follows the **LED ring** light's
+  brightness, so turn that down for a dimmer ring; with that light off it shows at full. A
+  conversation, a muted microphone, a timer or an error covers it as they cover the other choices,
+  and it comes back afterward. The listening takes little of the processor, and **None** stops it.
 
 ## 6. The screen
 
