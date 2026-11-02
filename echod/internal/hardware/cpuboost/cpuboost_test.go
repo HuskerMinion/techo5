@@ -15,9 +15,20 @@ import (
 
 // fake is a screen a test touches.
 type fake struct {
-	mu   sync.Mutex
-	down bool
-	fns  []func(bool)
+	mu    sync.Mutex
+	down  bool
+	fns   []func(bool)
+	ready chan struct{}
+	once  sync.Once
+}
+
+func (f *fake) readyCh() chan struct{} {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if f.ready == nil {
+		f.ready = make(chan struct{})
+	}
+	return f.ready
 }
 
 func (f *fake) Touched() bool {
@@ -27,9 +38,11 @@ func (f *fake) Touched() bool {
 }
 
 func (f *fake) Listen(fn func(bool)) func() {
+	ch := f.readyCh()
 	f.mu.Lock()
 	f.fns = append(f.fns, fn)
 	f.mu.Unlock()
+	f.once.Do(func() { close(ch) })
 	return func() {}
 }
 
@@ -43,15 +56,15 @@ func (f *fake) set(v bool) {
 	}
 }
 
-// board is a root with one cluster whose minimum is cur, lowest the hardware's, top its maximum.
-func board(t *testing.T, cur, lowest, top string) (root, minPath string) {
+// board is a root with one cluster whose minimum is cur and whose maximum is top.
+func board(t *testing.T, cur, top string) (root, minPath string) {
 	t.Helper()
 	root = t.TempDir()
 	d := filepath.Join(root, cpufreqDir, "policy4")
 	if err := os.MkdirAll(d, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	for name, v := range map[string]string{"scaling_min_freq": cur, "cpuinfo_min_freq": lowest, "cpuinfo_max_freq": top} {
+	for name, v := range map[string]string{"scaling_min_freq": cur, "cpuinfo_max_freq": top} {
 		if err := os.WriteFile(filepath.Join(d, name), []byte(v+"\n"), 0o644); err != nil {
 			t.Fatal(err)
 		}
@@ -59,7 +72,7 @@ func board(t *testing.T, cur, lowest, top string) (root, minPath string) {
 	return root, filepath.Join(d, "scaling_min_freq")
 }
 
-func minimum(t *testing.T, path string) string {
+func contents(t *testing.T, path string) string {
 	t.Helper()
 	b, err := os.ReadFile(path)
 	if err != nil {
@@ -70,97 +83,171 @@ func minimum(t *testing.T, path string) string {
 
 func waitFor(t *testing.T, path, want string) {
 	t.Helper()
-	for i := 0; i < 200; i++ {
-		if minimum(t, path) == want {
+	for i := 0; i < 400; i++ {
+		if contents(t, path) == want {
 			return
 		}
 		time.Sleep(5 * time.Millisecond)
 	}
-	t.Fatalf("minimum is %s, want %s", minimum(t, path), want)
+	t.Fatalf("%s holds %q, want %q", filepath.Base(path), contents(t, path), want)
 }
 
-func start(t *testing.T, root string, f *fake, hold time.Duration) (stop func()) {
+// start runs the boost and returns once it is listening for touches.
+func start(t *testing.T, root string, f *fake, after time.Duration) (stop func()) {
 	t.Helper()
 	ctx, cancel := context.WithCancel(context.Background())
 	done := make(chan struct{})
-	go func() { _ = run(ctx, root, f, hold); close(done) }()
-	time.Sleep(20 * time.Millisecond) // the listener is in before the first touch
+	go func() { _ = run(ctx, root, f, after); close(done) }()
+	select {
+	case <-f.readyCh():
+	case <-time.After(5 * time.Second):
+		t.Fatal("the boost never started listening")
+	}
 	return func() { cancel(); <-done }
 }
 
 func TestRaisedWhileTouchedAndAfterTheHold(t *testing.T) {
-	root, path := board(t, "793000", "793000", "1989000")
+	root, path := board(t, "793000", "1989000")
 	f := &fake{}
-	stop := start(t, root, f, 80*time.Millisecond)
+	stop := start(t, root, f, 300*time.Millisecond)
 	defer stop()
 
 	f.set(true)
 	waitFor(t, path, "1989000")
 	f.set(false)
-	time.Sleep(30 * time.Millisecond)
-	if got := minimum(t, path); got != "1989000" {
+	time.Sleep(60 * time.Millisecond)
+	if got := contents(t, path); got != "1989000" {
 		t.Fatalf("minimum %s inside the hold, want it kept up", got)
 	}
 	waitFor(t, path, "793000")
 }
 
 func TestATouchInsideTheHoldKeepsItUp(t *testing.T) {
-	root, path := board(t, "793000", "793000", "1989000")
+	root, path := board(t, "793000", "1989000")
 	f := &fake{}
-	stop := start(t, root, f, 80*time.Millisecond)
+	stop := start(t, root, f, 300*time.Millisecond)
 	defer stop()
 
 	f.set(true)
 	f.set(false)
-	time.Sleep(50 * time.Millisecond)
-	f.set(true)
 	time.Sleep(100 * time.Millisecond)
-	if got := minimum(t, path); got != "1989000" {
+	f.set(true)
+	time.Sleep(450 * time.Millisecond) // past where the first hold would have ended
+	if got := contents(t, path); got != "1989000" {
 		t.Fatalf("minimum %s while a finger is down, want it up", got)
 	}
 	f.set(false)
 	waitFor(t, path, "793000")
 }
 
+func TestATapBetweenTwoLooksStillBoosts(t *testing.T) {
+	root, path := board(t, "793000", "1989000")
+	f := &fake{}
+	stop := start(t, root, f, 300*time.Millisecond)
+	defer stop()
+
+	f.set(true)
+	f.set(false) // lifted before the loop looked
+	waitFor(t, path, "1989000")
+	waitFor(t, path, "793000")
+}
+
 func TestPutBackWhenTheDaemonStops(t *testing.T) {
-	root, path := board(t, "793000", "793000", "1989000")
+	root, path := board(t, "793000", "1989000")
 	f := &fake{}
 	stop := start(t, root, f, time.Hour)
 
 	f.set(true)
 	waitFor(t, path, "1989000")
 	stop()
-	if got := minimum(t, path); got != "793000" {
+	if got := contents(t, path); got != "793000" {
 		t.Fatalf("minimum %s after stopping, want 793000", got)
 	}
 }
 
-func TestAMinimumLeftAtTheMaximumGoesBackToTheLowest(t *testing.T) {
-	// A daemon that died while boosted left the minimum at the maximum; the next one must not take
-	// that for the board's own setting.
-	root, path := board(t, "1989000", "500000", "1989000")
+func TestWhatWasThereAtTheTouchIsWhatGoesBack(t *testing.T) {
+	// Somebody changed the minimum after the daemon started: that, not the value at start-up, is what
+	// the boost replaced and what it puts back.
+	root, path := board(t, "793000", "1989000")
 	f := &fake{}
-	stop := start(t, root, f, 20*time.Millisecond)
+	stop := start(t, root, f, 100*time.Millisecond)
 	defer stop()
 
-	if got := minimum(t, path); got != "500000" {
-		t.Fatalf("minimum %s at start, want the hardware's lowest, 500000", got)
+	if err := os.WriteFile(path, []byte("910000\n"), 0o644); err != nil {
+		t.Fatal(err)
 	}
 	f.set(true)
 	waitFor(t, path, "1989000")
 	f.set(false)
-	waitFor(t, path, "500000")
+	waitFor(t, path, "910000")
 }
 
-func TestATapBetweenTwoLooksStillBoosts(t *testing.T) {
-	root, path := board(t, "793000", "793000", "1989000")
+func TestAMinimumSetToTheMaximumOnPurposeStays(t *testing.T) {
+	root, path := board(t, "1989000", "1989000")
 	f := &fake{}
-	stop := start(t, root, f, 200*time.Millisecond)
+	stop := start(t, root, f, 100*time.Millisecond)
+	defer stop()
+
+	if got := contents(t, path); got != "1989000" {
+		t.Fatalf("minimum %s at start-up, want the one somebody set", got)
+	}
+	f.set(true)
+	f.set(false)
+	time.Sleep(250 * time.Millisecond)
+	if got := contents(t, path); got != "1989000" {
+		t.Fatalf("minimum %s after a touch, want the one somebody set", got)
+	}
+}
+
+func TestAMinimumARaisedDaemonLeftGoesBack(t *testing.T) {
+	// A daemon that died while boosted left the minimum at the maximum and its marker: the next one
+	// puts back what the marker says.
+	root, path := board(t, "1989000", "1989000")
+	marker := filepath.Join(root, markerPath)
+	if err := os.MkdirAll(filepath.Dir(marker), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(marker, []byte(path+" 793000\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	stop := start(t, root, &fake{}, 100*time.Millisecond)
+	defer stop()
+
+	if got := contents(t, path); got != "793000" {
+		t.Fatalf("minimum %s at start-up, want the marker's 793000", got)
+	}
+	if _, err := os.Stat(marker); err == nil {
+		t.Fatal("the marker is still there after it was used")
+	}
+}
+
+func TestAMinimumThatWouldNotGoBackIsTriedAgain(t *testing.T) {
+	old := retryAfter
+	retryAfter = 20 * time.Millisecond
+	defer func() { retryAfter = old }()
+
+	root, path := board(t, "793000", "1989000")
+	f := &fake{}
+	stop := start(t, root, f, 50*time.Millisecond)
 	defer stop()
 
 	f.set(true)
-	f.set(false) // lifted before the loop looked
 	waitFor(t, path, "1989000")
+	// The file cannot be written for a while: a directory stands where it is.
+	if err := os.Remove(path); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Mkdir(path, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	f.set(false)
+	time.Sleep(200 * time.Millisecond) // the hold ends and several tries fail
+	if err := os.Remove(path); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(path, []byte("1989000\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
 	waitFor(t, path, "793000")
 }
 
@@ -174,7 +261,7 @@ func TestNoClustersIsNoWork(t *testing.T) {
 func bigLittle(t *testing.T, root string) (cpus string) {
 	t.Helper()
 	for n := 0; n < 8; n++ {
-		d := filepath.Join(root, cpuDir, "cpu"+string(rune('0'+n)))
+		d := filepath.Join(root, cpuDir, "cpu"+strconv.Itoa(n))
 		if err := os.MkdirAll(d, 0o755); err != nil {
 			t.Fatal(err)
 		}
@@ -199,44 +286,43 @@ func bigLittle(t *testing.T, root string) (cpus string) {
 }
 
 func TestCoresNarrowedOnlyWhileTouched(t *testing.T) {
-	root, path := board(t, "793000", "793000", "1989000")
+	root, path := board(t, "793000", "1989000")
 	cpus := bigLittle(t, root)
 	f := &fake{}
-	stop := start(t, root, f, 80*time.Millisecond)
+	stop := start(t, root, f, 300*time.Millisecond)
 	defer stop()
 
-	if got := minimum(t, cpus); got != "0,1,2,3,4,5,6,7" {
+	if got := contents(t, cpus); got != "0,1,2,3,4,5,6,7" {
 		t.Fatalf("cores %s at start, want all", got)
 	}
 	f.set(true)
 	waitFor(t, cpus, "4,5,6,7")
 	waitFor(t, path, "1989000")
 	f.set(false)
-	time.Sleep(30 * time.Millisecond)
-	if got := minimum(t, cpus); got != "4,5,6,7" {
+	time.Sleep(60 * time.Millisecond)
+	if got := contents(t, cpus); got != "4,5,6,7" {
 		t.Fatalf("cores %s inside the hold, want the fast ones kept", got)
 	}
 	waitFor(t, cpus, "0,1,2,3,4,5,6,7")
 }
 
 func TestTheDaemonIsPutInTheGroupAndLeavesIt(t *testing.T) {
-	root, _ := board(t, "793000", "793000", "1989000")
+	root, _ := board(t, "793000", "1989000")
 	bigLittle(t, root)
-	f := &fake{}
-	stop := start(t, root, f, time.Hour)
+	stop := start(t, root, &fake{}, time.Hour)
 
 	procs := filepath.Join(root, cgroupDir, setName, "cgroup.procs")
-	if got := minimum(t, procs); got != strconv.Itoa(os.Getpid()) {
+	if got := contents(t, procs); got != strconv.Itoa(os.Getpid()) {
 		t.Fatalf("group members %q, want this process", got)
 	}
 	stop()
-	if got := minimum(t, filepath.Join(root, cgroupDir, "cgroup.procs")); got != strconv.Itoa(os.Getpid()) {
+	if got := contents(t, filepath.Join(root, cgroupDir, "cgroup.procs")); got != strconv.Itoa(os.Getpid()) {
 		t.Fatalf("root group members %q after stopping, want this process back", got)
 	}
 }
 
 func TestAGroupLeftNarrowStartsWide(t *testing.T) {
-	root, _ := board(t, "793000", "793000", "1989000")
+	root, _ := board(t, "793000", "1989000")
 	cpus := bigLittle(t, root)
 	if err := os.MkdirAll(filepath.Dir(cpus), 0o755); err != nil {
 		t.Fatal(err)
@@ -246,15 +332,43 @@ func TestAGroupLeftNarrowStartsWide(t *testing.T) {
 	}
 	stop := start(t, root, &fake{}, time.Hour)
 	defer stop()
-	if got := minimum(t, cpus); got != "0,1,2,3,4,5,6,7" {
+	if got := contents(t, cpus); got != "0,1,2,3,4,5,6,7" {
 		t.Fatalf("cores %s, want all after a daemon died narrowed", got)
 	}
+}
+
+func TestWhatTheDaemonStartedIsMovedOutWhileNarrowed(t *testing.T) {
+	root, _ := board(t, "793000", "1989000")
+	cpus := bigLittle(t, root)
+	// A video player (4242) was born in the group, as everything the daemon starts is; the renderer
+	// (777) is the daemon's own program.
+	for pid, comm := range map[string]string{"4242": "ffmpeg", "777": "techo5-gpu"} {
+		d := filepath.Join(root, "proc", pid)
+		if err := os.MkdirAll(d, 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(d, "comm"), []byte(comm+"\n"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	f := &fake{}
+	stop := start(t, root, f, time.Hour)
+	defer stop()
+
+	group := filepath.Join(root, cgroupDir, setName, "cgroup.procs")
+	free := filepath.Join(root, cgroupDir, freeName, "cgroup.procs")
+	if err := os.WriteFile(group, []byte(strconv.Itoa(os.Getpid())+"\n777\n4242\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	f.set(true)
+	waitFor(t, cpus, "4,5,6,7")
+	waitFor(t, free, "4242") // moved out, and only that; the renderer and the daemon stay
 }
 
 func TestOneKindOfCoreHasNoGroup(t *testing.T) {
 	root := t.TempDir()
 	for n := 0; n < 4; n++ {
-		d := filepath.Join(root, cpuDir, "cpu"+string(rune('0'+n)))
+		d := filepath.Join(root, cpuDir, "cpu"+strconv.Itoa(n))
 		_ = os.MkdirAll(d, 0o755)
 		_ = os.WriteFile(filepath.Join(d, "cpu_capacity"), []byte("1024\n"), 0o644)
 	}

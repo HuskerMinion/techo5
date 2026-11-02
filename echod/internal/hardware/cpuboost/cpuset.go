@@ -16,20 +16,28 @@ const (
 	cpuDir    = "/sys/devices/system/cpu"
 	cgroupDir = "/sys/fs/cgroup"
 	setName   = "techo5-ui"
+	// freeName is the group beside it that keeps every core: what the daemon starts that is not the
+	// interface is moved there.
+	freeName = "techo5-ui-free"
+	// own is what a process of the daemon's own is named (techo5, techo5-gpu): those stay in the narrowed
+	// group.
+	own = "techo5"
 )
 
-// cpuset is the group the daemon lives in: every core most of the time, the fast ones only while a
-// finger is on the screen. It is nil where the kernel has no cpusets or the board has one kind of core,
-// and all its methods then do nothing.
+// cpuset is the group the daemon's interface lives in: every core most of the time, the fast ones only
+// while a finger is on the screen. It is nil where the kernel has no cpusets or the board has one kind of
+// core, and all its methods then do nothing.
 type cpuset struct {
-	dir       string // the group's directory
+	root      string
+	dir, free string // the narrowed group's directory, and the one that keeps every core
 	rootProcs string // cgroup.procs of the root group, where the members go when the daemon stops
 	all, fast string // cpu lists
+	self      int
 	narrowed  bool
 }
 
-// newCpuset makes the group, mounting cgroup2 first where nothing has, and puts the daemon and what it
-// has already started in it.
+// newCpuset makes the groups, mounting cgroup2 first where nothing has, and puts the daemon and its
+// renderer in the first. What the daemon starts later is born in it too, and is moved out (sweep).
 func newCpuset(root string) *cpuset {
 	fast, all := cores(root)
 	if fast == "" {
@@ -38,7 +46,8 @@ func newCpuset(root string) *cpuset {
 	cg := filepath.Join(root, cgroupDir)
 	if _, err := os.Stat(filepath.Join(cg, "cgroup.controllers")); err != nil {
 		_ = os.MkdirAll(cg, 0o755)
-		if err := syscall.Mount("none", cg, "cgroup2", 0, ""); err != nil {
+		// As systemd mounts it: nothing on it is run, no device node on it is used.
+		if err := syscall.Mount("none", cg, "cgroup2", syscall.MS_NOSUID|syscall.MS_NODEV|syscall.MS_NOEXEC, ""); err != nil {
 			slog.Warn("cpuboost: no cgroups, so no fast-core preference", "err", err)
 			return nil
 		}
@@ -49,26 +58,70 @@ func newCpuset(root string) *cpuset {
 			return nil
 		}
 	}
-	c := &cpuset{dir: filepath.Join(cg, setName), rootProcs: filepath.Join(cg, "cgroup.procs"), all: all, fast: fast}
-	if err := os.MkdirAll(c.dir, 0o755); err != nil {
-		slog.Warn("cpuboost: no cpuset group", "err", err)
-		return nil
+	c := &cpuset{
+		root: root, dir: filepath.Join(cg, setName), free: filepath.Join(cg, freeName),
+		rootProcs: filepath.Join(cg, "cgroup.procs"), all: all, fast: fast, self: os.Getpid(),
 	}
-	// A daemon that died while narrowed left the group narrow: it starts wide.
-	if err := os.WriteFile(filepath.Join(c.dir, "cpuset.cpus"), []byte(all), 0o644); err != nil {
-		slog.Warn("cpuboost: the cpuset would not take its cores", "err", err)
-		return nil
+	for _, d := range []string{c.dir, c.free} {
+		if err := os.MkdirAll(d, 0o755); err != nil {
+			slog.Warn("cpuboost: no cpuset group", "err", err)
+			return nil
+		}
+		// A daemon that died while narrowed left the group narrow: it starts wide.
+		if err := os.WriteFile(filepath.Join(d, "cpuset.cpus"), []byte(all), 0o644); err != nil {
+			slog.Warn("cpuboost: the cpuset would not take its cores", "err", err)
+			return nil
+		}
 	}
-	self := os.Getpid()
-	for _, pid := range append([]int{self}, children(root, self)...) {
+	for _, pid := range append([]int{c.self}, c.ownChildren()...) {
 		_ = os.WriteFile(filepath.Join(c.dir, "cgroup.procs"), []byte(strconv.Itoa(pid)), 0o644)
 	}
 	return c
 }
 
-// narrow limits the group to the fast cores.
+// ours is whether pid is the daemon or one of its own programs (its renderer): the interface.
+func (c *cpuset) ours(pid int) bool {
+	if pid == c.self {
+		return true
+	}
+	b, err := os.ReadFile(filepath.Join(c.root, "proc", strconv.Itoa(pid), "comm"))
+	return err == nil && strings.HasPrefix(strings.TrimSpace(string(b)), own)
+}
+
+// ownChildren are the daemon's own programs that are its children now.
+func (c *cpuset) ownChildren() []int {
+	var out []int
+	for _, pid := range children(c.root, c.self) {
+		if c.ours(pid) {
+			out = append(out, pid)
+		}
+	}
+	return out
+}
+
+// sweep moves what is in the narrowed group and is not the interface to the group that keeps every core:
+// a video player or AirPlay is decoded and played on all of them, touch or no touch.
+func (c *cpuset) sweep() {
+	if c == nil {
+		return
+	}
+	b, _ := os.ReadFile(filepath.Join(c.dir, "cgroup.procs"))
+	for _, f := range strings.Fields(string(b)) {
+		pid, err := strconv.Atoi(f)
+		if err != nil || c.ours(pid) {
+			continue
+		}
+		_ = os.WriteFile(filepath.Join(c.free, "cgroup.procs"), []byte(f), 0o644)
+	}
+}
+
+// narrow limits the group to the fast cores, after moving out what is not the interface.
 func (c *cpuset) narrow() {
-	if c == nil || c.narrowed {
+	if c == nil {
+		return
+	}
+	c.sweep()
+	if c.narrowed {
 		return
 	}
 	if os.WriteFile(filepath.Join(c.dir, "cpuset.cpus"), []byte(c.fast), 0o644) == nil {
@@ -86,16 +139,18 @@ func (c *cpuset) widen() {
 	}
 }
 
-// close widens the group and sends its members back to the root group, so that what outlives the
-// daemon is limited by nothing.
+// close widens the group and sends the members of both back to the root group, so that what outlives
+// the daemon is limited by nothing.
 func (c *cpuset) close() {
 	if c == nil {
 		return
 	}
 	_ = os.WriteFile(filepath.Join(c.dir, "cpuset.cpus"), []byte(c.all), 0o644)
-	b, _ := os.ReadFile(filepath.Join(c.dir, "cgroup.procs"))
-	for _, pid := range strings.Fields(string(b)) {
-		_ = os.WriteFile(c.rootProcs, []byte(pid), 0o644)
+	for _, d := range []string{c.dir, c.free} {
+		b, _ := os.ReadFile(filepath.Join(d, "cgroup.procs"))
+		for _, pid := range strings.Fields(string(b)) {
+			_ = os.WriteFile(c.rootProcs, []byte(pid), 0o644)
+		}
 	}
 }
 

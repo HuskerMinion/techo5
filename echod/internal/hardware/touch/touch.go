@@ -91,8 +91,9 @@ type Screen struct {
 	// Gestures fires as they happen, on the reader's goroutine: listeners must not block.
 	Gestures hook.Hook[Gesture]
 
-	// Down fires as a finger lands (true) and as the last one lifts (false), on the reader's goroutine:
-	// listeners must not block. A listener that wants the current state reads Touched.
+	// Down fires as the finger the screen follows lands (true) and lifts (false), on the reader's
+	// goroutine: listeners must not block. That is the first finger down, and a second one that lands
+	// while it is followed does not fire it. A listener that wants the current state reads Touched.
 	Down hook.Hook[bool]
 
 	dev  *input.Device

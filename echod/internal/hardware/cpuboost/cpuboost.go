@@ -33,7 +33,18 @@ const (
 	// hold is how long the clocks stay up after the last finger lifts: a second swipe usually follows a
 	// first, and a pause between them is no reason to drop and climb again.
 	hold = 4 * time.Second
+
+	// sweepEvery is how often, while the daemon is narrowed, what it has started since is moved out of
+	// its group (cpuset.go).
+	sweepEvery = 500 * time.Millisecond
+
+	// markerPath records the minimums that are raised, so the next daemon can put back what a daemon
+	// that died while boosted left. It is under /run: a reboot resets the minimums too.
+	markerPath = "run/techo5/cpuboost-raised"
 )
+
+// retryAfter is how long after a minimum would not go back that it is tried again; a variable for the tests.
+var retryAfter = time.Second
 
 func init() {
 	// Only the 2nd gen Show 8 on TECHO5's mainline kernel, where it was measured: the 2nd gen Show 5
@@ -69,27 +80,21 @@ func (b *Boost) Run(ctx context.Context) error {
 // policy is one cluster's frequency files, and the minimum it is put back to.
 type policy struct {
 	min, max string // paths: scaling_min_freq, cpuinfo_max_freq
-	floor    string // the minimum to restore, as the kernel writes it
+	floor    string // the minimum as it was when the boost raised it, as the kernel writes it
 	raised   bool
 }
 
-// policies finds the clusters under root, each with the minimum to put back: the one it has now, unless
-// a daemon that died while boosted left it at the maximum, when it is the hardware's lowest.
+// policies finds the clusters under root.
 func policies(root string) []*policy {
 	dirs, _ := filepath.Glob(filepath.Join(root, cpufreqDir, "policy*"))
 	var out []*policy
 	for _, d := range dirs {
 		p := &policy{min: filepath.Join(d, "scaling_min_freq"), max: filepath.Join(d, "cpuinfo_max_freq")}
-		cur, errC := read(p.min)
-		top, errT := read(p.max)
-		if errC != nil || errT != nil {
+		if _, err := read(p.min); err != nil {
 			continue
 		}
-		p.floor = cur
-		if cur == top {
-			if lowest, err := read(filepath.Join(d, "cpuinfo_min_freq")); err == nil {
-				p.floor = lowest
-			}
+		if _, err := read(p.max); err != nil {
+			continue
 		}
 		out = append(out, p)
 	}
@@ -108,49 +113,113 @@ func read(path string) (string, error) {
 	return v, nil
 }
 
-var warned sync.Once
+// lastWarned is the failure last logged: a write that keeps failing says so once, not at every touch.
+var (
+	warnMu     sync.Mutex
+	lastWarned string
+)
 
-func write(path, v string) {
-	if err := os.WriteFile(path, []byte(v), 0o644); err != nil {
-		warned.Do(func() { slog.Warn("cpuboost: a cluster's minimum frequency", "path", path, "err", err) })
+func write(path, v string) error {
+	err := os.WriteFile(path, []byte(v), 0o644)
+	if err != nil {
+		warnMu.Lock()
+		if msg := path + ": " + err.Error(); msg != lastWarned {
+			lastWarned = msg
+			slog.Warn("cpuboost: a write", "path", path, "err", err)
+		}
+		warnMu.Unlock()
 	}
+	return err
 }
 
-func raise(ps []*policy) {
+// raise puts every cluster's minimum at its maximum, remembering the minimum it replaced. One that
+// would not take it is not counted as raised.
+func raise(root string, ps []*policy) {
+	changed := false
 	for _, p := range ps {
 		if p.raised {
 			continue
 		}
-		if top, err := read(p.max); err == nil {
-			write(p.min, top)
-			p.raised = true
+		cur, errC := read(p.min)
+		top, errT := read(p.max)
+		if errC != nil || errT != nil || write(p.min, top) != nil {
+			continue
 		}
+		p.floor, p.raised = cur, true
+		changed = true
+	}
+	if changed {
+		saveMarker(root, ps)
 	}
 }
 
-func lower(ps []*policy) {
+// lower puts back the minimums that were raised, and says whether every one went back: one that did not
+// stays raised, to be tried again.
+func lower(root string, ps []*policy) bool {
+	done := true
+	for _, p := range ps {
+		if !p.raised {
+			continue
+		}
+		if write(p.min, p.floor) != nil {
+			done = false
+			continue
+		}
+		p.raised = false
+	}
+	if done {
+		_ = os.Remove(filepath.Join(root, markerPath))
+	} else {
+		saveMarker(root, ps)
+	}
+	return done
+}
+
+// saveMarker writes the raised minimums as lines of path and the value to put back.
+func saveMarker(root string, ps []*policy) {
+	var b strings.Builder
 	for _, p := range ps {
 		if p.raised {
-			write(p.min, p.floor)
-			p.raised = false
+			b.WriteString(p.min + " " + p.floor + "\n")
 		}
 	}
+	path := filepath.Join(root, markerPath)
+	_ = os.MkdirAll(filepath.Dir(path), 0o755)
+	_ = os.WriteFile(path, []byte(b.String()), 0o644)
 }
 
-// run holds the clusters at their maximum while src has a finger down and for hold after, and puts
-// the minimums back when it returns.
-func run(ctx context.Context, root string, src source, hold time.Duration) error {
+// repair puts back the minimums a daemon that died while boosted left raised, as its marker lists them,
+// each only if it is still at its maximum: anything else was set by somebody since. With no marker nothing
+// is touched, so a minimum that somebody set to the maximum on purpose stays.
+func repair(root string) {
+	path := filepath.Join(root, markerPath)
+	b, err := os.ReadFile(path)
+	if err != nil {
+		return
+	}
+	for _, line := range strings.Split(string(b), "\n") {
+		f := strings.Fields(line)
+		if len(f) != 2 {
+			continue
+		}
+		cur, errC := read(f[0])
+		top, errT := read(filepath.Join(filepath.Dir(f[0]), "cpuinfo_max_freq"))
+		if errC == nil && errT == nil && cur == top {
+			_ = write(f[0], f[1])
+		}
+	}
+	_ = os.Remove(path)
+}
+
+// run holds the clusters at their maximum while src has a finger down and for after, and puts the
+// minimums back when it returns.
+func run(ctx context.Context, root string, src source, after time.Duration) error {
 	ps := policies(root)
 	if len(ps) == 0 {
 		return nil
 	}
-	// Starting is not boosted: a minimum a daemon that died left at the maximum goes back now.
-	for _, p := range ps {
-		if cur, err := read(p.min); err == nil && cur != p.floor {
-			write(p.min, p.floor)
-		}
-	}
-	defer lower(ps)
+	repair(root)
+	defer lower(root, ps)
 
 	cs := newCpuset(root)
 	defer cs.close()
@@ -165,9 +234,19 @@ func run(ctx context.Context, root string, src source, hold time.Duration) error
 	})
 	defer cancel()
 
-	active := src.Touched
+	// While narrowed, a ticker moves out of the group what the daemon has started since (a video
+	// player, AirPlay): they are not the interface and keep every core.
+	var ticker *time.Ticker
+	var sweepC <-chan time.Time
+	stopSweep := func() {
+		if ticker != nil {
+			ticker.Stop()
+			ticker, sweepC = nil, nil
+		}
+	}
+	defer stopSweep()
 
-	idle := time.NewTimer(hold)
+	idle := time.NewTimer(after)
 	if !idle.Stop() {
 		<-idle.C
 	}
@@ -178,20 +257,30 @@ func run(ctx context.Context, root string, src source, hold time.Duration) error
 		case <-wake:
 			// A finger that landed and lifted between two looks is still a touch: a tap changes the
 			// screen, and that is drawn on the raised clocks too.
-			raise(ps)
+			raise(root, ps)
+			if cs != nil && ticker == nil {
+				ticker = time.NewTicker(sweepEvery)
+				sweepC = ticker.C
+			}
 			cs.narrow()
 			idle.Stop()
 			select {
 			case <-idle.C:
 			default:
 			}
-			if !active() {
-				idle.Reset(hold)
+			if !src.Touched() {
+				idle.Reset(after)
 			}
+		case <-sweepC:
+			cs.sweep()
 		case <-idle.C:
-			if !active() {
-				lower(ps)
-				cs.widen()
+			if src.Touched() {
+				continue
+			}
+			cs.widen()
+			stopSweep()
+			if !lower(root, ps) {
+				idle.Reset(retryAfter)
 			}
 		}
 	}
