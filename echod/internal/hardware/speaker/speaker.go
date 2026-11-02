@@ -112,6 +112,15 @@ type Player struct {
 
 	volume atomic.Uint32 // linear gain, derived from step and the current output's curve
 	step   atomic.Int32
+
+	// voiceOff and callOff are how far the queue lane's replies and a call's audio sit from the media
+	// volume, in steps (SetLaneOffsets); ceiling is the most they are raised to through quiet hours,
+	// 0 for no limit (SetLaneCeiling). role says what the queue lane carries now (SetRole). See lanes.
+	voiceOff, callOff, ceiling atomic.Int32
+	role                       atomic.Int32
+	// held is how many more periods a lane that sounds louder than the media volume still counts, so
+	// the output level does not jump in the gaps of one reply (fill only).
+	held [2]int
 	// gainMu serializes amplifier writes and the saved gain reapplied when the stream starts.
 	gainMu sync.Mutex
 	gainDB int
@@ -990,17 +999,47 @@ func (p *Player) fill(buf []byte) {
 	// repeat values near the top).
 	// A panel plays at Android's volume, which a ring raises for as long as it sounds (paths_panel.go);
 	// an Echo's volume is all here.
+	//
+	// The queue (replies, announcements, a call's far end) and the underlay (a call's, under a reply)
+	// sit at their own steps when a voice or call volume is set (lanes), and join the same balance.
+	// One that sounds louder than the media volume counts for as long as it has audio, and a second
+	// after, so the level does not jump in the gaps of one reply.
 	ringing := rang > 0 || p.ringing.Load()
-	p.followRing(ringing, int(p.bellStep.Load()))
-	gain, step := p.Volume(), int(p.step.Load())
-	mediaK, bellK := float32(1), float32(0)
-	if ringing {
+	mainStep := int(p.step.Load())
+	queueStep, underStep := p.laneSteps(mainStep)
+	for i, on := range [2]bool{take > 0, underTake > 0} {
+		if on {
+			p.held[i] = Rate / period
+		} else if p.held[i] > 0 {
+			p.held[i]--
+		}
+	}
+	queueOn := queueStep > mainStep && p.held[0] > 0
+	underOn := underStep > mainStep && p.held[1] > 0
+	need, needOn := int(p.bellStep.Load()), ringing
+	if queueOn {
+		need, needOn = max(need, queueStep), true
+	}
+	if underOn {
+		need, needOn = max(need, underStep), true
+	}
+	p.followRing(needOn, need)
+	gain, step := p.Volume(), mainStep
+	mediaK, bellK, queueK, underK := float32(1), float32(0), float32(1), float32(1)
+	if ringing || queueStep != mainStep || underStep != mainStep {
 		var first *[VolumeSteps + 1]float64
 		if tuned {
 			first = p.first
 		}
 		bs := int(p.bellStep.Load())
-		mediaK, bellK, gain, step = ringBalance(first, out, gain, step, p.gainFor(bs), bs)
+		var k [nLanes]float32
+		k, gain, step = laneBalance(first, out, [nLanes]laneIn{
+			laneMedia: {true, step, gain},
+			laneQueue: {queueOn, queueStep, p.gainFor(queueStep)},
+			laneUnder: {underOn, underStep, p.gainFor(underStep)},
+			laneBell:  {ringing, bs, p.gainFor(bs)},
+		})
+		mediaK, queueK, underK, bellK = k[laneMedia], k[laneQueue], k[laneUnder], k[laneBell]
 	}
 
 	// Where the tuning has a curve of its own the volume goes in front of it, as the vendor's chain
@@ -1052,7 +1091,13 @@ func (p *Player) fill(buf []byte) {
 		if i+1 < len(rendered) {
 			r += int32(rendered[i+1])
 		}
-		if mediaK != 1 || bellK != 0 {
+		if queueK != mediaK || underK != mediaK {
+			// Lanes at levels of their own are scaled apart, from the samples rather than the sum.
+			for c, to := range [2]*int32{&l, &r} {
+				*to = int32((sampleAt(bed, i+c)+sampleAt(rendered, i+c))*mediaK +
+					sampleAt(chunk, i+c)*queueK + sampleAt(under, i+c)*underK + sampleAt(bell, i+c)*bellK)
+			}
+		} else if mediaK != 1 || bellK != 0 {
 			var bl, br float32
 			if i < len(bell) {
 				bl = float32(bell[i])
@@ -1434,20 +1479,120 @@ func firstRatio(first *[VolumeSteps + 1]float64, out Output, step int) float32 {
 // compared at the level they come out at, which with a curve in front of the tuning (first, nil when
 // untuned) is the curve's.
 func ringBalance(first *[VolumeSteps + 1]float64, out Output, gain float32, step int, bg float32, bs int) (mediaK, bellK, g float32, s int) {
-	level := func(s int, g float32) float32 {
+	k, g, s := laneBalance(first, out, [nLanes]laneIn{laneMedia: {true, step, gain}, laneBell: {true, bs, bg}})
+	return k[laneMedia], k[laneBell], g, s
+}
+
+// The lanes that go out at a level of their own: the media (a track's and a Source's audio), the queue
+// (replies, announcements, a call's far end), the underlay and the bell.
+const (
+	laneMedia = iota
+	laneQueue
+	laneUnder
+	laneBell
+	nLanes
+)
+
+// laneIn is one lane: whether it counts toward the output's level, the step it plays at and that step's
+// linear gain.
+type laneIn struct {
+	on   bool
+	step int
+	gain float32
+}
+
+// laneBalance shares the one gain after the tuning between the lanes: the output goes at the loudest
+// lane that counts (the media on a tie), and each lane is scaled by how far below that it sits. A lane
+// that does not count is scaled the same way but never raises the output; the bell, off, is scaled to 0.
+// Compared at the level they come out at (see ringBalance).
+func laneBalance(first *[VolumeSteps + 1]float64, out Output, in [nLanes]laneIn) (k [nLanes]float32, g float32, s int) {
+	level := func(l laneIn) float32 {
 		if first != nil {
-			return g * firstRatio(first, out, s)
+			return l.gain * firstRatio(first, out, l.step)
 		}
-		return g
+		return l.gain
 	}
-	lb, lm := level(bs, bg), level(step, gain)
-	if lb > lm {
-		return lm / lb, 1, bg, bs
+	best, top := laneMedia, level(in[laneMedia])
+	for i := laneQueue; i < nLanes; i++ {
+		if lv := level(in[i]); in[i].on && lv > top {
+			best, top = i, lv
+		}
 	}
-	if lm > 0 {
-		return 1, lb / lm, gain, step
+	g, s = in[best].gain, in[best].step
+	if top <= 0 {
+		k[laneMedia] = 1
+		return k, g, s
 	}
-	return 1, 0, gain, step
+	for i := range in {
+		switch {
+		case i == best:
+			k[i] = 1
+		case i == laneBell && !in[i].on:
+			k[i] = 0
+		default:
+			k[i] = min(level(in[i])/top, 1)
+		}
+	}
+	return k, g, s
+}
+
+// sampleAt is s[i] as a float, 0 past the end.
+func sampleAt(s []int16, i int) float32 {
+	if i < len(s) {
+		return float32(s[i])
+	}
+	return 0
+}
+
+// What the queue lane carries, for the volume it plays at (SetRole): the device's own sounds follow the
+// media volume, a reply or an announcement the voice volume, a call the call volume.
+const (
+	RoleMedia = iota
+	RoleVoice
+	RoleCall
+)
+
+// SetRole says what the queue lane carries from here on. The driver sets it as a claim takes the
+// speaker (roleOf).
+func (p *Player) SetRole(role int) { p.role.Store(int32(role)) }
+
+// SetLaneOffsets sets how far replies and announcements (voice) and a call's audio (call) sit from the
+// media volume, in steps either way. Zero is the media volume itself, which is how a device plays that
+// never set them.
+func (p *Player) SetLaneOffsets(voice, call int) {
+	p.voiceOff.Store(int32(max(-VolumeSteps, min(voice, VolumeSteps))))
+	p.callOff.Store(int32(max(-VolumeSteps, min(call, VolumeSteps))))
+}
+
+// SetLaneCeiling is the most voice and call are raised above the media volume to, through quiet hours
+// (the night volume), 0 for no limit. The media volume itself is above it only if somebody put it there,
+// and then they follow it.
+func (p *Player) SetLaneCeiling(step int) { p.ceiling.Store(int32(max(0, min(step, VolumeSteps)))) }
+
+// LaneStep is the step a lane plays at for a media step and an offset: the media volume muted or at
+// zero keeps everything silent, and the night ceiling holds a raise.
+func LaneStep(media, off, ceiling int) int {
+	if media <= 0 {
+		return 0
+	}
+	step := max(0, min(media+off, VolumeSteps))
+	if ceiling > 0 && step > media {
+		step = min(step, max(media, ceiling))
+	}
+	return step
+}
+
+// laneSteps are the steps the queue lane and the underlay play at, for the media step now.
+func (p *Player) laneSteps(media int) (queue, under int) {
+	ceil := int(p.ceiling.Load())
+	voice, call := LaneStep(media, int(p.voiceOff.Load()), ceil), LaneStep(media, int(p.callOff.Load()), ceil)
+	switch int(p.role.Load()) {
+	case RoleVoice:
+		return voice, call
+	case RoleCall:
+		return call, call
+	}
+	return media, call
 }
 
 // gainFor is the linear gain for a step on whatever the audio is going to now.

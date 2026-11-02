@@ -109,6 +109,7 @@ func (p *Player) Run(ctx context.Context) error {
 	} else {
 		p.nightEnd()
 	}
+	p.pushLanes()
 	t := time.NewTicker(nightCheck)
 	defer t.Stop()
 	for {
@@ -125,6 +126,7 @@ func (p *Player) Run(ctx context.Context) error {
 			p.nightEnd()
 		}
 		quiet = now
+		p.pushLanes()
 	}
 }
 
@@ -218,6 +220,7 @@ func (p *Player) SetNightVolume(n int) {
 	}
 	p.night.Set(float32(n))
 	slog.Info("setting changed", "setting", p.night.ObjectID, "using", n)
+	p.pushLanes()
 	if !quietNow() {
 		return
 	}

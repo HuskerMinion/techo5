@@ -1042,6 +1042,27 @@ night volume turns it down, and during quiet hours it cannot turn the device up 
 The Music Assistant volume slider cannot turn the device up past the night volume during quiet hours
 either, but it does not move when night volume turns the device down.
 
+### Voice volume and call volume
+
+The device's **volume** is what the buttons and Home Assistant's media player move, and it is what music
+plays at. Two more levels sit beside it, as steps from the volume (the same 30 steps), so a home can have
+quiet replies over loud music, or the other way round.
+
+- **Voice volume** is for the assistant: replies, announcements (`tts.speak` and the announce action) and
+  what the device says. Never music.
+- **Call volume** is for the intercom and phone calls.
+
+Both are set in Settings → **Sound** on the device, on the setup page (Sound & Voice) and as number
+entities in Home Assistant. **0 is the same as the volume**, which is how a device plays that never
+touched them, so nothing changes until you do. -5 is five steps quieter than the volume, 5 is five steps
+louder. They move with the volume: turn the music up and the replies and calls go up with it, keeping
+the gap. A muted device, or one at volume 0, is silent. In quiet hours a raise stops at the night volume
+(or where the volume already is, if somebody turned it up past that); lowering is never held back. A
+call volume of -30 makes calls inaudible, so keep it above that where calls matter. They are saved over
+a restart, are in a settings file, and are not shared between devices, since how loud a room wants them
+depends on the room. Music stays on the volume itself. Alarms and
+timers keep their own **Ring volume**.
+
 ### Two wake words, two assistants
 
 The device listens for two wake words at once, and each one starts its own voice assistant. Use one

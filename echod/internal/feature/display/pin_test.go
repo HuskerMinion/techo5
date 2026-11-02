@@ -118,7 +118,7 @@ func TestWhichRowsAreEveryday(t *testing.T) {
 		t.Errorf("Display: open rows %q, want the brightness ones", got)
 	}
 	for _, id := range open[catSound] {
-		if !strings.Contains(" volume bass treble output mic waketone sleep ", " "+id+" ") {
+		if !strings.Contains(" volume voicevol callvol bass treble output mic waketone sleep ", " "+id+" ") {
 			t.Errorf("Sound: %q is open", id)
 		}
 	}
