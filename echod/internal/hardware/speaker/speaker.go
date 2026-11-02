@@ -21,6 +21,7 @@ import (
 	"github.com/HuskerMinion/techo5/echod/internal/lib/alsa"
 	"github.com/HuskerMinion/techo5/echod/internal/lib/asp"
 	"github.com/HuskerMinion/techo5/echod/internal/lib/audio"
+	"github.com/HuskerMinion/techo5/echod/internal/lib/beat"
 	"github.com/HuskerMinion/techo5/echod/internal/lib/echoref"
 	"github.com/HuskerMinion/techo5/echod/internal/lib/hook"
 	"github.com/HuskerMinion/techo5/echod/internal/lib/safe"
@@ -219,6 +220,12 @@ type Player struct {
 	// Source can stay attached with nothing to play, as Sendspin's does while Music Assistant has it
 	// paused. Written only by the write loop, and put back to 0 by Attach.
 	srcQuiet atomic.Int32
+
+	// music follows the level and beat of the music for the ring (MusicTap). It only listens while a
+	// ring effect wants it, and only to the lanes music comes through: a track's bed and an attached
+	// Source, never the queue that replies, chimes and alarms use.
+	music   beat.Analyzer
+	musicOn atomic.Bool
 }
 
 // srcQuietAfter is how many silent periods before an attached Source is no longer Sounding: about two
@@ -947,6 +954,10 @@ func (p *Player) fill(buf []byte) {
 	// The queue and a Source place audio differently — one in order, one by frame index — so they are
 	// summed rather than one replacing the other, and a reply still sounds over a room stream.
 	rendered := p.render()
+
+	if p.musicOn.Load() {
+		p.music.Feed(bed, rendered, Rate, period)
+	}
 
 	// The internal speakers are mixed to mono unless athena has explicitly enabled
 	// stereo, which preserves independent driver processing including EQ.
