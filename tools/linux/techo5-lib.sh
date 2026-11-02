@@ -369,7 +369,7 @@ t5_wifi_up() {
 	# what it is sent until the next one, which adds delay and jitter that received audio can stall on.
 	# device.conf WIFI_POWER_SAVE=off (athena on mainline) turns it off.
 	if [ "${WIFI_POWER_SAVE:-}" = off ]; then
-		iw dev wlan0 set power_save off 2>/tmp/wifi-ps.err || log "wifi: power save not turned off: $(cat /tmp/wifi-ps.err)"
+		ps_err=$(iw dev wlan0 set power_save off 2>&1) || log "wifi: power save not turned off: $ps_err"
 	fi
 	if ! pidof wpa_supplicant >/dev/null; then
 		wpa_supplicant -B -i wlan0 -c "$conf" -P /run/wpa.pid > /tmp/wpa.log 2>&1

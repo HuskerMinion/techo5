@@ -14,6 +14,7 @@ type world struct {
 	now             time.Time
 	pauses, resumes int
 	failPause       bool
+	failResume      bool
 	saved           []config.WifiQuiet
 	offNetwork      bool // what the supplicant was last told
 }
@@ -31,6 +32,9 @@ func (w *world) quiet(c config.WifiQuiet) *Quiet {
 		return nil
 	}
 	q.resume = func(context.Context) error {
+		if w.failResume {
+			return errors.New("wpa_cli reconnect: timed out")
+		}
 		w.resumes++
 		w.offNetwork = false
 		return nil
@@ -156,6 +160,21 @@ func TestAFailedPauseIsTriedAgain(t *testing.T) {
 	q.look(ctx)
 	if w.pauses != 1 || !w.offNetwork {
 		t.Fatalf("after a failed pause: pauses %d off %v, want 1 true", w.pauses, w.offNetwork)
+	}
+}
+
+// A failed resume at the first look after a start, out of the hours, is tried again: a device stopped in
+// the night and started after it must not stay off the network.
+func TestAFailedFirstResumeIsTriedAgain(t *testing.T) {
+	w := &world{now: at(3, 8, 0), failResume: true, offNetwork: true}
+	q := w.quiet(night)
+	ctx := context.Background()
+	q.look(ctx)
+	w.failResume = false
+	w.now = at(3, 8, 1)
+	q.look(ctx)
+	if w.resumes != 1 || w.offNetwork {
+		t.Fatalf("after a failed first resume: resumes %d off %v, want 1 false", w.resumes, w.offNetwork)
 	}
 }
 

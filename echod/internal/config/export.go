@@ -399,6 +399,8 @@ func KeepOwn(c *Config, from Config) {
 		// Sending a slot's voice to a company is chosen on the device, never by a file.
 		c.Wake.Words[i].Realtime = i < len(from.Wake.Words) && from.Wake.Words[i].Realtime
 	}
+	// Hours off the network take the device out of reach: chosen on the device, never by a file.
+	c.WifiQuiet = from.WifiQuiet
 	// What realtime voice has used today is the device's count.
 	c.Realtime.UsedDay, c.Realtime.UsedSeconds = from.Realtime.UsedDay, from.Realtime.UsedSeconds
 

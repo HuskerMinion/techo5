@@ -30,10 +30,14 @@ import (
 
 	"github.com/HuskerMinion/techo5/echod/internal/component"
 	"github.com/HuskerMinion/techo5/echod/internal/config"
+	"github.com/HuskerMinion/techo5/echod/internal/layout"
 	"github.com/HuskerMinion/techo5/echod/internal/lib/wifi"
 )
 
 func init() {
+	if layout.OnAndroid() {
+		return // a tablet's Wi-Fi is Android's
+	}
 	component.Register(component.Network, New(), component.Order(96))
 }
 
@@ -193,7 +197,6 @@ func (q *Quiet) look(ctx context.Context) {
 	q.mu.Lock()
 	c := q.cfg
 	first := !q.looked
-	q.looked = true
 	wasIn, paused := q.wasIn, q.paused
 	q.mu.Unlock()
 
@@ -212,7 +215,7 @@ func (q *Quiet) look(ctx context.Context) {
 		// off the air, and on a device that is on the network this changes nothing.
 		if err := q.resume(ctx); err != nil {
 			slog.Warn("wifi quiet hours: could not look for the network again; trying again shortly", "err", err)
-			return
+			return // looked stays false after a start, so the next look tries again
 		}
 		if paused {
 			slog.Info("wifi quiet hours: looking for the network again")
@@ -220,7 +223,7 @@ func (q *Quiet) look(ctx context.Context) {
 		paused = false
 	}
 	q.mu.Lock()
-	q.wasIn, q.paused = in, paused
+	q.wasIn, q.paused, q.looked = in, paused, true
 	q.mu.Unlock()
 }
 

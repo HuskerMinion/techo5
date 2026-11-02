@@ -200,7 +200,10 @@ func (p *paint) glassDrop(cx, cy, r, stretch float64, seed int, alpha float64) {
 				cr, cg, cb = cr+(sr-cr)*dark, cg+(sg-cg)*dark, cb+(sb-cb)*dark
 			}
 			hdx, hdy := (float64(x)+0.5-hx)/hr, (float64(y)+0.5-hy)/hr
-			light := 0.85 * math.Exp(-2*(hdx*hdx+hdy*hdy))
+			light := 0.0
+			if h2 := hdx*hdx + hdy*hdy; h2 < 4 { // past that the highlight is under a thousandth
+				light = 0.85 * math.Exp(-2*h2)
+			}
 			if q > 0.4 && top < 0.5 {
 				light += 0.4 * smooth(0.4, 0.82, q) * (1 - smooth(0.82, 1, q)) * (1 - top)
 			}

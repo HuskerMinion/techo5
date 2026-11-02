@@ -613,12 +613,15 @@ like "kitchen screen" under its **Voice assistants** settings in Home Assistant.
   example. Set Night hours to **Controlled by Home Assistant** to leave the night to the switch alone.
   See [Turning the night on from an automation](actions.md#turning-the-night-on-from-an-automation).
 - **Wi-Fi quiet hours** (a switch in Home Assistant, off at first), with **Wi-Fi quiet hours start**
-  and **Wi-Fi quiet hours end** (1:00 AM to 7:00 AM until set): for a home that turns its access point
+  and **Wi-Fi quiet hours end** (01:00 to 07:00 until set): for a home that turns its access point
   off at night. The device leaves the Wi-Fi as the hours start and joins again as they end, instead of
   joining another network it knows or searching all night. Meanwhile Home Assistant can't reach it and
   nothing that needs the network works, but alarms and timers set on the device still ring. These
   hours are separate from Night hours. A device restarted during them, or whose clock isn't set yet,
-  stays on the Wi-Fi.
+  stays on the Wi-Fi. Turned on during the hours, it leaves the Wi-Fi at once, and Home Assistant can't
+  turn it off again until they end: change it on the device's screen or setup page instead. Not in the
+  Panel app, whose Wi-Fi is the tablet's. The device's remote API can read these three settings but not
+  change them, and a settings file neither carries them nor brings them in.
 
 ### Clock and home screen
 
