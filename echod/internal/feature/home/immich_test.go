@@ -161,6 +161,25 @@ func TestImmichPhotos(t *testing.T) {
 	}
 }
 
+// Archived photos are not the slideshow's to show: the search asks for the timeline alone, since
+// Immich's search would otherwise answer with the archive as well.
+func TestImmichAsksForTheTimelineOnly(t *testing.T) {
+	letLoopback(t)
+	srv, searches := fakeImmich(t)
+	s := config.Immich{Server: srv.URL, Key: testKey}
+	if _, err := immichPhotos(context.Background(), s, ImmichAll, immichFilter{favorites: true}, 10); err != nil {
+		t.Fatal(err)
+	}
+	if len(*searches) == 0 {
+		t.Fatal("no search was made")
+	}
+	for i, q := range *searches {
+		if q["visibility"] != "timeline" {
+			t.Errorf("search %d asked for visibility %v, want timeline", i+1, q["visibility"])
+		}
+	}
+}
+
 // A photo is Immich's preview, fetched by its id; an id that is not one is refused before any request.
 func TestImmichPhoto(t *testing.T) {
 	letLoopback(t)
