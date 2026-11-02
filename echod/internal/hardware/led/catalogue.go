@@ -86,4 +86,8 @@ var roomEffects = []Effect{
 	{Name: EffectRoomAurora, Palette: aurora, Senses: byRoom(drift)},
 	{Name: EffectRoomTwinkle, Palette: wheel, Senses: byRoom(twinkle)},
 	{Name: EffectRoomEmbers, Palette: fire, Senses: byRoom(embers)},
+
+	// The one that listens to what the device plays rather than to the room. Dark when nothing plays, so
+	// what the ring would otherwise show comes through.
+	{Name: EffectMusic, Palette: calm, Senses: followsMusic},
 }

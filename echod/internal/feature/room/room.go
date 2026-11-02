@@ -17,6 +17,7 @@ import (
 	"github.com/HuskerMinion/techo5/echod/internal/feature/light"
 	"github.com/HuskerMinion/techo5/echod/internal/hardware/led"
 	"github.com/HuskerMinion/techo5/echod/internal/hardware/mic"
+	"github.com/HuskerMinion/techo5/echod/internal/hardware/speaker"
 )
 
 // After the light, whose color it inherits.
@@ -61,7 +62,14 @@ func build() *Reaction {
 	}
 
 	source := mic.Get()
-	r.room = led.Room{Level: source.Level, Facing: source.Facing}
+	r.room = led.Room{
+		Level:  source.Level,
+		Facing: source.Facing,
+		Music:  music,
+		// The light's brightness is the ceiling for the music effect, which brings colors of its own.
+		// A light that is off has none to give, and leaves the effect at full.
+		Brightness: r.brightness,
+	}
 
 	component.BindEffect(r.sel, led.Names(led.KindRoom), r.show, config.Set().Ring().Reaction)
 
@@ -69,6 +77,23 @@ func build() *Reaction {
 	// looking it up, so a change has to be handed over.
 	light.Get().OnColor(r.recolor)
 	return r
+}
+
+// music is what the speaker's tap reads, in the ring's own terms.
+func music() led.Music {
+	m := speaker.Get().Music()
+	return led.Music{Playing: m.Playing, Level: m.Level, Bass: m.Bass, Mid: m.Mid, Treble: m.Treble,
+		Beat: m.Beat, Beats: m.Beats}
+}
+
+// brightness is the light's brightest channel, 0 to 1, or 1 when the light is off.
+func (r *Reaction) brightness() float64 {
+	c := r.base()
+	top := max(c.R, c.G, c.B)
+	if top == 0 {
+		return 1
+	}
+	return float64(top) / 255
 }
 
 func (r *Reaction) Name() string { return "room reaction" }
@@ -93,11 +118,16 @@ func (r *Reaction) Restore(c config.Config) {
 // show puts the chosen reaction on the ring, or takes it off. Empty is None: the claim is cleared
 // rather than released, so whatever the light was set to comes back on its own.
 func (r *Reaction) show(name string) {
+	// Listening to what is played costs a little on every period, so it is only on while it is wanted.
+	speaker.Get().MusicTap(wantsMusic(name))
 	if name == "" {
 		r.claim.Clear()
 		return
 	}
 	r.claim.React(name, r.base(), r.room)
 }
+
+// wantsMusic is whether a choice follows the music, and so needs the speaker to analyze it.
+func wantsMusic(name string) bool { return name == led.EffectMusic }
 
 func (r *Reaction) recolor() { r.show(config.Get().Ring.Reaction) }

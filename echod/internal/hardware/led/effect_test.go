@@ -34,6 +34,11 @@ func built(t *testing.T, e Effect, base Color) Frame {
 			return math.Abs(math.Sin(float64(heard) / 40))
 		},
 		Facing: func() (float64, bool) { return math.Mod(float64(heard)/120, 1), true },
+		// And music that swells and beats, for the one that listens to that.
+		Music: func() Music {
+			l := math.Abs(math.Sin(float64(heard) / 40))
+			return Music{Playing: true, Level: l, Bass: l, Mid: 1 - l, Treble: l / 2, Beats: uint64(heard / 25)}
+		},
 	})
 	if err != nil {
 		t.Fatalf("building it failed: %v", err)

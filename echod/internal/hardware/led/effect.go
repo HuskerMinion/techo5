@@ -56,6 +56,14 @@ type Room struct {
 	// Facing is where the loudest sound is, as a fraction clockwise round the ring from segment 0, and
 	// whether that is known: it takes a frame of asking, and a room with nothing in it has no answer.
 	Facing func() (float64, bool)
+
+	// Music is what the music playing now is doing, for the effect that follows it. Nil for a room with no
+	// way to hear what the device itself plays.
+	Music func() Music
+
+	// Brightness is how bright the light was set, 0 to 1, as a ceiling for an effect that brings colors of
+	// its own. Nil is full.
+	Brightness func() float64
 }
 
 // Effect is one animation the ring can run: a motion paired with the colors it runs in. Keeping
@@ -134,6 +142,7 @@ const (
 	EffectRoomAurora  = "Room Aurora"
 	EffectRoomTwinkle = "Room Twinkle"
 	EffectRoomEmbers  = "Room Embers"
+	EffectMusic       = "Follows the Music"
 
 	// Motion, in their own.
 	EffectRainbow         = "Rainbow"
