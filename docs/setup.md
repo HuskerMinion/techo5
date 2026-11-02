@@ -1117,7 +1117,7 @@ answer to a text-to-speech server, then out of the speaker as any answer is.
 
 What the model can do is the device's own: start, list and cancel timers; set, list and delete
 alarms and reminders; stop what is ringing or playing; set the volume; find, play and keep radio
-stations; play music from Music Assistant, once one is set up on the device; call another device in
+stations; play a news update; play music from Music Assistant, once one is set up on the device; call another device in
 the house; read the device's calendars and the weather, here or somewhere else; and put the
 forecast, the rain map or the calendar on the screen. It remembers the conversation for five minutes,
 for a follow-up. The town set under **Where this device is** goes into what the model is told, so
@@ -1140,8 +1140,14 @@ To set it up, open the setup page, **Sound & Voice**, **Voice assistant**:
    too: a [page reader](../tools/page-reader/README.md)'s address. A page is read through it when it
    has almost no text as it comes (it fills itself in with scripts, like a store's hours) or the site
    answers with an error, as some do to anything that is not a browser.
-5. **Anything the assistant should know**: a name, a tone, or what the house wants it to know.
-6. **Save**. All three servers are needed, or the page says so and keeps what you had.
+5. **News updates**, if you want your own. Asked for the news, the assistant plays the newest
+   episode of a short news podcast, one that is put out again every hour or so: "play the Fox news
+   update", "play NPR News Now", "what's the news". ABC News Update, Fox News Hourly Update and NPR
+   News Now are built in. Add others one a line, a name and then the podcast's feed address, like
+   `City Radio https://example.com/news.xml`. The first one you add is the one played when no
+   source is named; with none added, the assistant asks which.
+6. **Anything the assistant should know**: a name, a tone, or what the house wants it to know.
+7. **Save**. All three servers are needed, or the page says so and keeps what you had.
 
 Every wake word is answered this way then, except one set for [realtime voice](#realtime-voice).
 **Answered by** *Home Assistant* puts it back on Assist.

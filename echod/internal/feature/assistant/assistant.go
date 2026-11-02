@@ -185,6 +185,8 @@ func instructions(b config.Brain, now time.Time) string {
 	s.WriteString("A station asked for by its frequency, like 106.7, or its call letters is a local one: play it ")
 	s.WriteString("by what was said, and if the station that plays is from somewhere else, say where. If a ")
 	s.WriteString("frequency is not found, try the call letters of the station you know is on it here, if you do. ")
+	s.WriteString("Asked to hear the news, or for a news update or briefing, play one with play_news; if it says to ask which, ")
+	s.WriteString("ask, naming the sources it gives. ")
 	s.WriteString("Your tools are the only music this device has: never name a music service, app or account ")
 	s.WriteString("that a tool did not name, and never offer one. ")
 	if config.Get().MusicAssistant.Set() {

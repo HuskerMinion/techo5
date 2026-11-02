@@ -248,7 +248,13 @@ func (m *Stream) Title() *Title {
 // (the assistant asking for the station is one) would otherwise hold the answer until after it is given.
 // One that does not arrive in time is stopped, so it cannot start later with nobody expecting it.
 func (m *Stream) PlayChecked(url string, within time.Duration) error {
-	t := m.play(url, false, nil)
+	return m.PlayTitledChecked(url, nil, within)
+}
+
+// PlayTitledChecked is PlayChecked for a url named by the device itself, like a news update: title goes
+// with the track, as PlayTitled's does.
+func (m *Stream) PlayTitledChecked(url string, title *Title, within time.Duration) error {
+	t := m.play(url, false, title)
 	if t == nil {
 		return errors.New("this device has no speaker")
 	}
