@@ -116,6 +116,13 @@ type leveler struct {
 	lpA, hpA           float32
 	bandRMS, bandFloor float32
 
+	// unclamped follows the band the way bandFloor does without the least it may go to, and lowest is the
+	// least it reached since the last log line, unclampedFrames frames ago: how quiet the room really is,
+	// which bandFloor cannot show below quietest. Logged hourly, it is what quietest is to be set from on
+	// boards it was never measured on (#377).
+	unclamped, lowest float32
+	unclampedFrames   int
+
 	// published is the gain, for anything outside the reader that wants to log it. level is how loud
 	// the room is, for anything that wants to show it. bandPublished is bandFloor, copied out for the
 	// same reason: the reader updates it every frame and diagnostics ask for it from its own
@@ -158,6 +165,8 @@ func newLeveler() *leveler {
 		levelDown: float32(1 - math.Exp(-frame/levelRelease.Seconds())),
 
 		bandFloor: fullScale,
+		unclamped: fullScale,
+		lowest:    fullScale,
 		lpA:       float32(1 - math.Exp(-2*math.Pi*levelHighHz/Rate)),
 		hpA:       float32(1 - math.Exp(-2*math.Pi*levelLowHz/Rate)),
 	}
@@ -213,6 +222,7 @@ func (l *leveler) observe(frame []int16) (rms, peak float32) {
 	l.floor = follow(l.floor, rms, l.floorDown, l.floorUp, least)
 	l.bandFloor = follow(l.bandFloor, l.bandRMS, l.floorDown, l.floorUp, least)
 	l.bandPublished.Store(math.Float32bits(l.bandFloor))
+	l.logUnclamped(least)
 
 	l.publishLevel(l.bandRMS)
 	return rms, peak
@@ -235,6 +245,23 @@ const (
 	quietestGainDB = config.DefaultMicGain
 	quietestLimit  = 2.0
 )
+
+// unclampedEvery is how many frames apart the unclamped floor is logged: an hour.
+const unclampedEvery = int(time.Hour / time.Second * Rate / FrameSamples)
+
+// logUnclamped follows the room's band with no least, and once an hour logs the quietest it got beside
+// the least the floor is held to. A room that is quieter than that least shows it here and nowhere else.
+func (l *leveler) logUnclamped(least float32) {
+	l.unclamped = follow(l.unclamped, l.bandRMS, l.floorDown, l.floorUp, 0)
+	l.lowest = min(l.lowest, l.unclamped)
+	if l.unclampedFrames++; l.unclampedFrames < unclampedEvery {
+		return
+	}
+	dB := func(v float32) float64 { return math.Round(200*math.Log10(float64(max(v, 0.01))/fullScale)) / 10 }
+	slog.Info("room floor, unclamped", "lowest_dbfs", dB(l.lowest), "least_dbfs", dB(least),
+		"lowest", math.Round(float64(l.lowest)*10)/10, "least", math.Round(float64(least)*10)/10)
+	l.lowest, l.unclampedFrames = fullScale, 0
+}
 
 // quietest is the lowest a floor may go at a given analog gain.
 func quietest(db int) float32 {
