@@ -1754,7 +1754,8 @@ def main(argv=None):
     note('boot now holds %s' % ("TECHO5's U-Boot (replaced: --replace-uboot)" if replacing_uboot else
                                 "TECHO5's mainline kernel" if boot_is_techo5 else "Amazon's kernel"))
     # A backup made with TECHO5 already on the unit holds TECHO5, not Fire OS.
-    backup_not_fire_os = os.path.exists(saved_boot) and is_techo5_boot(read_file(saved_boot))
+    saved_img = read_file(saved_boot) if os.path.exists(saved_boot) else None
+    backup_not_fire_os = saved_img is not None and (is_techo5_boot(saved_img) or is_techo5_uboot(saved_img))
     if backup_not_fire_os:
         note('WARNING: the backup in %s is NOT a Fire OS backup.\n'
              '   It was made with TECHO5 already installed: its p%d-boot.img holds TECHO5\'s kernel, and\n'
@@ -1805,7 +1806,7 @@ def main(argv=None):
         else:
             stock_path, what = None, "Fire OS's boot on the unit"
         stock = read_file(stock_path) if stock_path else current_boot
-        if is_techo5_boot(stock):
+        if is_techo5_boot(stock) or is_techo5_uboot(stock):
             fail("%s is TECHO5's, not Fire OS's, so it has no speaker tuning to read. Pass Fire OS's boot\n"
                  '   with --stock-boot (the p20-boot.img of the backup made before TECHO5 was first installed).' % what)
         live = compat.split()

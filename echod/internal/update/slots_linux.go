@@ -105,6 +105,7 @@ func rebootIntoSlot() error {
 	bootreason.Mark(bootreason.Update)
 	syscall.Sync()
 	if err := syscall.Reboot(syscall.LINUX_REBOOT_CMD_RESTART); err != nil {
+		bootreason.Unmark()
 		return fmt.Errorf("update: rootfs installed but the reboot failed: %w", err)
 	}
 	return nil

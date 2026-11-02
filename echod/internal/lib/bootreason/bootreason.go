@@ -37,6 +37,10 @@ func Mark(reason string) {
 	_ = os.WriteFile(markFile, []byte(reason+"\n"), 0o644)
 }
 
+// Unmark takes a mark back, for a restart that did not happen: left there, it would name the next boot,
+// whatever caused that.
+func Unmark() { _ = os.Remove(markFile) }
+
 // Last is the reason boot.sh found for this boot, and false on an image whose boot does not work one out.
 func Last() (string, bool) {
 	b, err := os.ReadFile(lastFile)

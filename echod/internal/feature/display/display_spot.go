@@ -1290,6 +1290,7 @@ func restartDevice() {
 	bootreason.Mark(bootreason.Restart)
 	syscall.Sync()
 	if err := syscall.Reboot(syscall.LINUX_REBOOT_CMD_RESTART); err != nil {
+		bootreason.Unmark()
 		slog.Error("restart failed", "err", err)
 	}
 }

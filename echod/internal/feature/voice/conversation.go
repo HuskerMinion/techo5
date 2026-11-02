@@ -564,7 +564,7 @@ func (c *conversation) turnEvent(e event) {
 			c.lookHere = true
 		}
 		if e.text != "" {
-			slog.Info("heard", "slot", c.slot+1, "text", e.text)
+			slog.Info("heard", "slot", c.slot+1, "text", activity.Said(e.text))
 			c.log.Heard(e.text)
 			c.shown.Heard = e.text
 			Changed.Emit(c.shown)
@@ -573,10 +573,10 @@ func (c *conversation) turnEvent(e event) {
 		// "snooze for ten minutes" are acted on here, whatever it goes on to answer.
 		if ring.IsSounding() {
 			if stopsRing(e.text) {
-				slog.Info("heard a stop over a ring, ending it", "text", e.text)
+				slog.Info("heard a stop over a ring, ending it", "text", activity.Said(e.text))
 				ring.End()
 			} else if minutes, ok := ring.SnoozeAsked(e.text); ok {
-				slog.Info("heard a snooze over a ring", "text", e.text, "minutes", minutes)
+				slog.Info("heard a snooze over a ring", "text", activity.Said(e.text), "minutes", minutes)
 				ring.SnoozeFor(minutes)
 			}
 		}
@@ -622,7 +622,7 @@ func (c *conversation) turnEvent(e event) {
 		if c.phase == phaseIdle {
 			return
 		}
-		slog.Info("replying", "slot", c.slot+1, "text", e.text)
+		slog.Info("replying", "slot", c.slot+1, "text", activity.Said(e.text))
 		c.log.Replied(e.text)
 		c.turn.Replying(e.text)
 		c.shown.Reply = e.text

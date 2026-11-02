@@ -50,3 +50,19 @@ func TestSendVoiceTextOffKeepsTheWords(t *testing.T) {
 		t.Errorf("Last heard %q after turning it back on", l.heard.Get())
 	}
 }
+
+// The daemon's log leaves the words out too while Send voice text is off: it goes into a diagnostics
+// bundle that may be posted.
+func TestSaidIsLeftOutOfTheLogWhileOff(t *testing.T) {
+	config.Use(filepath.Join(t.TempDir(), "state.json"))
+	if got := Said("what time is it"); got != "what time is it" {
+		t.Errorf("Said is %q with Send voice text on", got)
+	}
+	Get().sendText(false)
+	if got := Said("what time is it"); got == "what time is it" || got == "" {
+		t.Errorf("Said is %q with Send voice text off", got)
+	}
+	if got := Said(""); got != "" {
+		t.Errorf("Said is %q for nothing said", got)
+	}
+}

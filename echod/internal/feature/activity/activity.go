@@ -81,6 +81,15 @@ func (l *Log) sendText(on bool) {
 // wordsKept is whether what was heard and the reply stay on the device (Send voice text off).
 func wordsKept() bool { return config.Get().Security.WordsKept }
 
+// Said is text somebody said, or the reply to it, as the daemon's log may carry it: left out while Send
+// voice text is off, since the log goes into a diagnostics bundle that may be posted.
+func Said(text string) string {
+	if wordsKept() && text != "" {
+		return "(not logged: Send voice text is off)"
+	}
+	return text
+}
+
 func (l *Log) Name() string { return "activity" }
 
 func (l *Log) Entities() []esphome.Entity {

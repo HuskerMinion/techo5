@@ -169,6 +169,9 @@ jobs:
       name: ${{ steps.ver.outputs.name }}
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          # The build runs another repository's script in this workspace: no token left behind for it.
+          persist-credentials: false
 
       - name: Version info
         id: ver

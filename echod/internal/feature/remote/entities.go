@@ -25,6 +25,8 @@ var readOnly = []string{
 	"mic_mute", "intercom_drop_in", "talk_back", "record_takes", "camera_live", "keep_wake_clips", "keep_recordings_1",
 	"keep_recordings_2", "presence", "presence_detection", "gestures", "wake_word_on_home_assistant",
 	"confirm_wake_with_home_assistant",
+	// The words of a request kept off Home Assistant's history (Send voice text).
+	"send_voice_text",
 	// When the microphones open: a press that starts listening, and how readily a word or a sound does.
 	"wake_assistant_1", "wake_assistant_2", "wake_threshold_1", "wake_threshold_2",
 	"wake_playing_threshold_1", "wake_playing_threshold_2", "confirm_threshold",

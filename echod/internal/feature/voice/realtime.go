@@ -11,6 +11,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/HuskerMinion/techo5/echod/internal/config"
+	"github.com/HuskerMinion/techo5/echod/internal/feature/activity"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/media"
 	"github.com/HuskerMinion/techo5/echod/internal/lib/hass"
 	"github.com/HuskerMinion/techo5/echod/internal/lib/llm"
@@ -373,7 +374,7 @@ func (r *rtBackend) pump(t *rtTurn) {
 		}
 		switch e.Kind {
 		case realtime.Heard:
-			slog.Info("realtime: heard", "text", e.Text)
+			slog.Info("realtime: heard", "text", activity.Said(e.Text))
 			r.postFor(t, event{kind: evHeard, text: strings.TrimSpace(e.Text)})
 		case realtime.Saying:
 			r.mu.Lock()
@@ -435,7 +436,7 @@ func (r *rtBackend) finish(t *rtTurn) {
 	// No listening after it, even for a question: the next turn is a session of its own, which would not
 	// know what the question was.
 	if said != "" {
-		slog.Info("realtime: replying", "text", said)
+		slog.Info("realtime: replying", "text", activity.Said(said))
 		r.postFor(t, event{kind: evReplyText, text: said, spoken: spoke})
 	}
 	if spoke {

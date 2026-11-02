@@ -362,7 +362,7 @@ the kernel in `boot` starts the active slot as before. By hand, from TWRP:
 
 ```
 adb exec-in "dd of=/dev/block/mmcblk1p20 bs=1048576" < backups/<serial>/boot-layer/p20-boot.img
-adb shell "dd if=/dev/zero of=/dev/block/mmcblk1p6 bs=32 seek=64 count=1 conv=notrunc; sync"
+adb shell "dd if=/dev/zero of=/dev/block/mmcblk1p6 bs=32 seek=64 count=1; sync"
 ```
 
 or, if TWRP doesn't start, from fastboot (hold Volume Down while it powers on):

@@ -44,7 +44,11 @@ func newKernelCmd() *cobra.Command {
 	reboot := func(why string) error {
 		bootreason.Mark(why)
 		syscall.Sync()
-		return syscall.Reboot(syscall.LINUX_REBOOT_CMD_RESTART)
+		err := syscall.Reboot(syscall.LINUX_REBOOT_CMD_RESTART)
+		if err != nil {
+			bootreason.Unmark()
+		}
+		return err
 	}
 	status := &cobra.Command{
 		Use:   "status",

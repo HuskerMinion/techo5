@@ -46,6 +46,7 @@ var keptByRestore = map[string]keptSetting{
 	"hangup_word_threshold":            {func(c *config.Config) { c.Wake.Hangup.Threshold = 0.6 }, func(c config.Config) bool { return c.Wake.Hangup.Threshold == 0.6 }},
 	"camera_live":                      {func(c *config.Config) { c.Home.CameraLive = true }, func(c config.Config) bool { return c.Home.CameraLive }},
 	"keep_wake_clips":                  {func(c *config.Config) { c.Wake.KeepClips = true }, func(c config.Config) bool { return c.Wake.KeepClips }},
+	"send_voice_text":                  {func(c *config.Config) { c.Security.WordsKept = true }, func(c config.Config) bool { return c.Security.WordsKept }},
 	"keep_recordings_1":                {setRecordings(0), recordings(0)},
 	"keep_recordings_2":                {setRecordings(1), recordings(1)},
 	"presence_detection":               {func(c *config.Config) { c.Presence.On = true }, func(c config.Config) bool { return c.Presence.On }},
