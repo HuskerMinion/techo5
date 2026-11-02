@@ -79,6 +79,12 @@ How it compares with EchoLocal, EchoMuse, echo-dot-assist, Kiosk Satellite and V
 
 The bigger changes of September to November 2026. Every release lists the rest.
 
+- 📊 **Wake scores, a privacy switch and new diagnostics** (v1.6.21). Voice request events carry
+  the wake word's score and why a request was canceled ([#381](https://github.com/HuskerMinion/techo5/issues/381)),
+  and **Send voice text** keeps what you say out of Home Assistant
+  ([#383](https://github.com/HuskerMinion/techo5/issues/383)). New sensors show CPU usage, wake word load and
+  the last boot reason ([#386](https://github.com/HuskerMinion/techo5/issues/386)). The Show 8 2nd gen gets an
+  opt-in boot layer that falls back to the other slot by itself ([#340](https://github.com/HuskerMinion/techo5/pull/340)).
 - ⏸️ **A longer pause before the device stops listening** (v1.6.20). **End of speech pause** sets how long
   a pause ends what you say, from 0.6 to 2 seconds, for anyone who stops to think mid-sentence
   ([#374](https://github.com/HuskerMinion/techo5/pull/374)). Clearing Music Assistant's queue now clears
