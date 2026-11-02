@@ -445,6 +445,7 @@ func (f *Feature) settingsPage(ctx context.Context, w http.ResponseWriter, token
 			wakeWordsSection(w, token)
 			scoresSection(w)
 			takesSection(w, token)
+			historySection(w, token)
 		} else {
 			fmt.Fprint(w, `<h3>Announcements and sounds</h3>`)
 			houseSection(w, token)

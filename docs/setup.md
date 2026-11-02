@@ -1402,6 +1402,20 @@ or within a few seconds of the setup page closing, and a download still running 
 come to your browser over the setup page, on your own network without encryption. They are your own
 voices: keep them on your own machine.
 
+### Recent voice requests
+
+The last 10 voice requests the device took are listed on the setup page, under **Sound & Voice**, after
+**Record takes of a word**, on a device with microphones. Newest first, each line shows the time, which
+assistant (slot) answered, the wake word's score, what was heard, the reply, how it ended (completed,
+stopped, interrupted, cut_off or answered_elsewhere, or no_speech or error), and how long listening,
+thinking and replying took, where the device has those times. Refresh brings it up to date, and Clear
+empties it.
+
+It is kept only in memory: never written to storage, never in the diagnostics download, never sent
+anywhere, and gone when the device restarts. It is filled from the same place as the
+`esphome.techo5_voice` event, so it matches it, and it follows **Send voice text**: with that off, the
+words are not kept here either, and the lines say so. A device without microphones doesn't have it.
+
 ### Wake word on Home Assistant
 
 The device listens for the wake word itself. Two switches on the device in Home Assistant let Home
