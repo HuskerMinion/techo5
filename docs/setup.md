@@ -1558,8 +1558,8 @@ before a normal repeating alarm: the alarm keeps its on/off and its days, and it
 usual one. A light-only alarm is not offered it — its light is all it is — and neither is a one-off,
 a reminder or a silent alarm. The press is answered on the device by a card that names the alarm and
 says what came of it and which moment it was about, shown at night as soon as the press releases it;
-Home Assistant hears nothing of that card, which is the device's own. A skipped occurrence is kept in
-the device's settings: it is not in a settings file, and deleting the alarm takes its marks with it.
+Home Assistant hears nothing of that card, which is the device's own. The skip stays through a restart,
+isn't saved in a settings file, and goes when the alarm is deleted.
 
 **Light only** in an alarm's editor (and on the setup page) makes it a wake light and nothing more:
 the light comes up as above, and at the alarm's time there is no sound and nothing to dismiss; the
