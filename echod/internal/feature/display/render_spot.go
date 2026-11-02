@@ -91,6 +91,7 @@ type roundScene struct {
 	cue          string  // a turn's phase, when turns are a cue over the face and phase is idle (turn_cue.go)
 	muted        bool
 	mutedSubtle  bool // the muted ring drawn thin and dim (mutering_spot.go)
+	listening    bool // the room is being listened to in a browser (feature/babymon)
 	playing      bool
 	paused       bool
 	volume       int
@@ -329,6 +330,7 @@ func (r *roundRenderer) useFont() {
 
 func (r *roundRenderer) draw(s roundScene) {
 	r.useFont()
+	defer r.listeningDot(s) // over everything, however the frame ends
 	if !(s.menuOpen && s.menuMode == modeWeather && s.radarOn) {
 		r.shapes = alertOverlay{} // kept only while the rain map is up
 	}

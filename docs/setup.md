@@ -1642,6 +1642,39 @@ on some devices) leans toward the loudest thing in the room. Set both first, the
 for a day to learn your room's quiet and loud readings. Sound from another speaker in the room
 counts, like any other noise.
 
+### The baby monitor
+
+**Baby monitor** (a switch under Privacy & Security on a Show's or a Spot's screen, and in Home
+Assistant on every device with microphones; off on a new device) plays the room's sound, live, in a
+browser on your home network. It is for listening to a nursery or a sickroom from a phone in the next
+room. A Skylight Calendar has no microphone and does not offer it.
+
+**Who can hear.** Only a browser that has the link, on your own network. Turn the switch on and the
+setup page shows the link under Privacy & Security, **Baby monitor**: this device's address and `/baby`,
+with a long random key in it (128 random bits, which nobody can guess). Open it on a phone or computer
+and tap **Tap to listen** (a browser plays sound only after a tap). It works in Safari on an iPhone, in
+Chrome and in Firefox, with no app, but only while the page is open on the screen: a phone that locks
+or a tab left for another stops the sound. To listen through the night, keep the screen on and the
+phone charging, or use a computer or tablet that stays awake. Back on the page, the sound comes back by
+itself. Keep the link private, as you would a password: anyone who has it
+can listen while the switch is on. **New link** on the setup page replaces the key, ends everyone
+listening and stops the old link working. The link is on your network without encryption, as the setup
+page is, so use it on a network you trust. Up to three browsers can listen at once. With the switch
+off, the monitor's pages are not there, and an open page is cut off. The key is kept while the switch
+is off, so a link you saved still works when you turn it on again.
+
+**What shows it.** While anyone listens, a Show or a Spot draws an amber dot at the top of the screen
+(a dark screen keeps its dimmest light to show it), a Dot pulses its light ring amber, and Home
+Assistant has a **Baby monitor listening now** sensor, so an automation can tell you. The **mute**
+stops the sound at once, ends the listeners, and the page says the microphones are muted; an open
+page starts again by itself a few seconds after you unmute. Voice keeps working while someone listens.
+
+**The sound.** It is what the wake word hears, after echo cancellation and leveling, at 16 kHz mono,
+a fraction of a second behind the room (the page keeps about a fifth of a second in hand). On an
+iPhone, turn the ringer switch on and the volume up, or the browser plays nothing. The remote API cannot see or change the switch, and a saved settings file,
+settings sharing and the diagnostics download neither carry it nor change it. After a restart it comes
+back as you left it.
+
 ## 8. Settings lock
 
 A **settings lock** (Show and Spot, off by default) is a PIN the device asks for before its settings
@@ -1703,7 +1736,7 @@ address the file changes, old and new, and names what will need entering again, 
 links and paired computers that only the device the file came from has.
 
 A restore never opens a door on the device or has it listen or watch. Its privacy switches (SSH, the
-camera and screen pages, talking through cameras, recording takes of a word), AirPlay, Spotify
+camera and screen pages, talking through cameras, recording takes of a word, the baby monitor), AirPlay, Spotify
 Connect, DLNA, Sendspin, the
 Bluetooth proxy, video and the addresses allowed to send it video, the diagnostics settings, Drop
 In, sending the room to Home Assistant's wake word engine (streaming or confirming), keeping wake
@@ -1773,7 +1806,7 @@ screen) says so and is left alone, and so does one with sharing off.
 For scripts and tools that are not Home Assistant. It reads what the device is and what its settings
 say, changes its everyday settings, and follows its log as it is written. It never changes a privacy or
 security setting (SSH, the camera and screen pages, the setup page, Drop In, talking through cameras,
-recording takes of a word, presence and gestures, sending the room to Home Assistant, keeping clips, calls, Bluetooth pairing and
+recording takes of a word, the baby monitor, presence and gestures, sending the room to Home Assistant, keeping clips, calls, Bluetooth pairing and
 the proxy, AirPlay, Spotify Connect, DLNA, video, Sendspin, the settings lock, updates, restarts, camera
 streaming, the ambient noise sensor, the clap gesture, hold on the clock, nearest device answers, or the
 API itself): those it can read, not change. It never runs Home Assistant actions, and it carries none

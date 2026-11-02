@@ -280,6 +280,7 @@ func ClearSecrets(c *Config) {
 	c.Home.Reolink.Pass = ""
 	c.TalkBack = TalkBack{}
 	c.Security.LockPIN = ""
+	c.Security.BabyKey = ""
 	c.Deck.OBS.Password = ""
 	c.Remote.Secret = ""
 	c.CamStream.Pass = ""
@@ -335,6 +336,7 @@ func KeepSecrets(c *Config, from Config) (reenter []string) {
 	// These have no server of their own to follow: the device's own, kept whole.
 	c.Home.HouseWord = from.Home.HouseWord
 	c.Security.LockPIN = from.Security.LockPIN
+	c.Security.BabyKey = from.Security.BabyKey
 	c.Remote.Secret = from.Remote.Secret
 	c.CamStream.Pass = from.CamStream.Pass
 	c.TalkBack = from.TalkBack
@@ -352,9 +354,9 @@ func ClearOwn(c *Config) { KeepOwn(c, Config{}) }
 
 // KeepOwn puts from's own things into c, in place of whatever c has.
 func KeepOwn(c *Config, from Config) {
-	lockPIN := c.Security.LockPIN // a secret, kept or cleared by its own list
+	lockPIN, babyKey := c.Security.LockPIN, c.Security.BabyKey // secrets, kept or cleared by their own list
 	c.Security = from.Security
-	c.Security.LockPIN = lockPIN
+	c.Security.LockPIN, c.Security.BabyKey = lockPIN, babyKey
 
 	c.Diag = from.Diag
 

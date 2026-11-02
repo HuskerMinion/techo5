@@ -43,6 +43,7 @@ These are left as they are on purpose, so they aren't missing translations:
   until the name and its label are split.
 
 Not translated yet: the **Record takes** cards on the screen (new in v1.6.16), apart from their buttons.
+Not translated yet: the **Baby monitor** row on the settings screen.
 
 ## Sending a translation
 

@@ -10,6 +10,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/HuskerMinion/techo5/echod/internal/feature/babymon"
+	"github.com/HuskerMinion/techo5/echod/internal/feature/camstream"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/home"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/talkback"
 )
@@ -267,10 +269,28 @@ func (r *roundRenderer) cameraDot() {
 	r.discAt(center, float64(center-(rimIn+rimOut)/2), 6, colCameraOn)
 }
 
-// watchedDark is the frame of a dark face while the camera is streamed: black, and the camera's mark.
+// colRoomHeard is the mark that says the room is being listened to in a browser (feature/babymon):
+// amber, as a Dot's ring is.
+var colRoomHeard = color.RGBA{0xE0, 0x8A, 0x10, 255}
+
+// listeningDot is that mark, at the top of the rim beside the camera's.
+func (r *roundRenderer) listeningDot(s roundScene) {
+	if !s.listening {
+		return
+	}
+	x, y := float64(center+26), float64(center-(rimIn+rimOut)/2)
+	r.discAt(x, y, 9, colIconGround)
+	r.discAt(x, y, 6, colRoomHeard)
+}
+
+// watchedDark is the frame of a dark face while the camera is streamed or the room is listened to:
+// black, and the marks.
 func (r *roundRenderer) watchedDark() {
 	draw.Draw(r.dst, r.dst.Rect, image.NewUniform(color.Black), image.Point{}, draw.Src)
-	r.cameraDot()
+	if camstream.Watching() {
+		r.cameraDot()
+	}
+	r.listeningDot(roundScene{listening: babymon.Listening()})
 }
 
 // cameraIndex is where entity is on the camera list, or 0.

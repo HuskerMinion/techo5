@@ -492,6 +492,7 @@ func (f *Feature) settingsPage(ctx context.Context, w http.ResponseWriter, token
 	case "privacy":
 		lockSection(w, token)
 		camStreamSection(w, token)
+		babySection(w, token)
 		privacySection(w)
 		remoteSection(w, token)
 	case "general":
@@ -585,7 +586,8 @@ func privacySection(w http.ResponseWriter) {
 	  software the device runs, and never shows the Home Assistant key. It can let a Home Assistant add
 	  the device for 15 minutes (General), which sets a new key. It can record takes of a word from the
 	  microphones (Sound &amp; Voice) only while Record takes of a word is switched on, and only after a
-	  press on the device for each recording; the takes stay in memory, and come to you over this page.</p></fieldset>`)
+	  press on the device for each recording; the takes stay in memory, and come to you over this page.
+	  It shows the baby monitor's link, and can replace it, but cannot switch the monitor on.</p></fieldset>`)
 }
 
 // wifiSection is the networks: what the device is on, what it remembers, and how to add another.

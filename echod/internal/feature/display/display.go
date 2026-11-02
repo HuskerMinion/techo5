@@ -36,6 +36,7 @@ import (
 	"github.com/HuskerMinion/techo5/echod/internal/feature/alarm"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/announce"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/assistant"
+	"github.com/HuskerMinion/techo5/echod/internal/feature/babymon"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/btaudio"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/camstream"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/dashboard"
@@ -571,6 +572,10 @@ func build() *Display {
 		d.relight(true) // a dark panel keeps a little light while the camera is watched (watchedLight)
 		d.wake()
 	})
+	babymon.Get().Changed.Listen(func(struct{}) {
+		d.relight(true) // and while the room is listened to: the mark that says so has to be seen
+		d.wake()
+	})
 	security.Get().Changed.Listen(func(struct{}) { d.wake() })
 	talkback.Get().Changed.Listen(func(struct{}) { d.wake() })
 	alarm.Get().Changed.Listen(func(struct{}) { d.wake() })
@@ -768,7 +773,7 @@ func (d *Display) relight(jump bool) {
 	if p := d.wakeLight(time.Now()); p > 0 && d.on {
 		target = float64(d.ceiling) * screen.BacklightMax / 100 * sunriseLevel(p)
 	}
-	target = watchedLight(target, d.on, camstream.Watching(), float64(glowSteps[0]))
+	target = watchedLight(target, d.on, watched(), float64(glowSteps[0]))
 	if jump || d.level == 0 {
 		d.level = target
 	} else {
@@ -2524,7 +2529,7 @@ func (d *Display) frame() (next time.Duration) {
 		video.Get().Covered(false)
 		d.videoPainting, d.vp.dark, d.videoOver = true, true, image.Rectangle{}
 	}
-	if !on && camstream.Watching() {
+	if !on && watched() {
 		// Dark, with the camera watched over the network: the dot that says so, alone on black (not a
 		// video's last frame), at the panel's lowest light (relight), so the room can tell. Looked at
 		// again until the watching ends.
@@ -2684,7 +2689,7 @@ func (d *Display) frame() (next time.Duration) {
 		}
 		d.mu.Unlock()
 	}
-	s.streaming = camstream.Watching()
+	s.streaming, s.listening = camstream.Watching(), babymon.Listening()
 	s.camera, s.showCamera = home.Get().Camera()
 	s.camera, s.showCamera = d.gateCamera(s.camera, s.showCamera, nightNow(now))
 	s.cameraSound, s.cameraSoundLive = home.Get().CameraSoundOn(), home.Get().CameraSoundLive()
