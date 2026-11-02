@@ -24,7 +24,7 @@ var readOnly = []string{
 	// Off the network for hours: a caller could take the device out of its own reach (Wi-Fi quiet hours).
 	"wifi_quiet_hours", "wifi_quiet_hours_start", "wifi_quiet_hours_end",
 	// Listening, watching and keeping.
-	"mic_mute", "intercom_drop_in", "talk_back", "record_takes", "camera_live", "keep_wake_clips", "keep_recordings_1",
+	"mic_mute", "intercom_drop_in", "talk_back", "record_takes", "baby_monitor", "camera_live", "keep_wake_clips", "keep_recordings_1",
 	"keep_recordings_2", "presence", "presence_detection", "gestures", "wake_word_on_home_assistant",
 	"confirm_wake_with_home_assistant",
 	// The words of a request kept off Home Assistant's history (Send voice text).

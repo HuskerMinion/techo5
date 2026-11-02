@@ -15,6 +15,13 @@ type Security struct {
 	// recording started by a press on the device.
 	Takes bool `json:"takes,omitempty"`
 
+	// Baby lets the baby monitor page play the room's microphone audio live to a browser given the link
+	// (feature/babymon). BabyKey is the secret in that link: made when the switch is first turned on,
+	// kept while it is off, and replaced from the setup page. Both are this device's own (KeepOwn), and
+	// the key is a secret a settings file neither carries nor changes.
+	Baby    bool   `json:"baby,omitempty"`
+	BabyKey string `json:"baby_key,omitempty"`
+
 	// WordsKept keeps the words of a voice request on the device: Last heard and Last reply stay empty,
 	// and the voice events leave out what was heard and the reply (feature/activity). Off, as it always
 	// was, since dashboards show Last heard.
@@ -62,6 +69,14 @@ func (w SecurityWriter) TalkBack(v bool) error {
 
 func (w SecurityWriter) Takes(v bool) error {
 	return w.st.Update(func(c *Config) { c.Security.Takes = v })
+}
+
+func (w SecurityWriter) Baby(v bool) error {
+	return w.st.Update(func(c *Config) { c.Security.Baby = v })
+}
+
+func (w SecurityWriter) BabyKey(v string) error {
+	return w.st.Update(func(c *Config) { c.Security.BabyKey = v })
 }
 
 func (w SecurityWriter) WordsKept(v bool) error {

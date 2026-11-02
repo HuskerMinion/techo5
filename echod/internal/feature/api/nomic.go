@@ -36,6 +36,8 @@ var listeningObjects = map[string]bool{
 	"wake_clips": true, "wake_clips_by_kind": true, "wake_word_load": true, "wake_frames": true, "worst_wake_frame": true,
 	// feature/security: recording takes of a word from the setup page (feature/takes)
 	"record_takes": true,
+	// feature/babymon: the baby monitor's switch and its listening-now sensor
+	"baby_monitor": true, "baby_monitor_listening": true,
 	// feature/activity
 	"last_heard": true, "last_reply": true, "last_wake_word": true, "send_voice_text": true,
 	// feature/room and diag's room readings; feature/noise, feature/clap

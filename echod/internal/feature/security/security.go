@@ -10,6 +10,7 @@ package security
 
 import (
 	"context"
+	"crypto/rand"
 	"encoding/base64"
 	"encoding/binary"
 	"errors"
@@ -38,6 +39,7 @@ const recheck = time.Minute
 type Feature struct {
 	ssh, camera, screen, talk *esphome.Switch
 	takes                     *esphome.Switch // recording takes of a word (feature/takes)
+	baby                      *esphome.Switch // the baby monitor page (feature/babymon)
 	lockSw                    *esphome.Switch // the settings lock (lock.go)
 	wake                      chan struct{}
 
@@ -55,6 +57,7 @@ type State struct {
 	Screen       bool
 	TalkBack     bool
 	Takes        bool
+	Baby         bool
 	Encrypted    bool // Home Assistant's link has a real key
 }
 
@@ -74,6 +77,7 @@ func build() *Feature {
 	f.screen = sw("screen_web_access", "Screen web access", "mdi:monitor-screenshot", f.SetScreen)
 	f.talk = sw("talk_back", "Talk through cameras", "mdi:account-voice", f.SetTalkBack)
 	f.takes = sw("record_takes", "Record takes of a word", "mdi:microphone-message", f.SetTakes)
+	f.baby = sw("baby_monitor", "Baby monitor", "mdi:baby-face-outline", f.SetBaby)
 	f.buildLock()
 	return f
 }
@@ -93,7 +97,7 @@ func (f *Feature) Entities() []esphome.Entity {
 	}
 	// On a Dot too: its action button is the press that starts each recording.
 	if layout.HasMicrophone() {
-		out = append(out, f.takes)
+		out = append(out, f.takes, f.baby)
 	}
 	return out
 }
@@ -104,6 +108,7 @@ func (f *Feature) Restore(c config.Config) {
 	f.screen.Set(c.Security.Screen)
 	f.talk.Set(c.Security.TalkBack)
 	f.takes.Set(c.Security.Takes)
+	f.baby.Set(c.Security.Baby)
 	f.lockSw.Set(webPages && c.Security.LockPIN != "")
 }
 
@@ -180,6 +185,39 @@ func (f *Feature) SetTalkBack(on bool) { f.set(f.talk, on, config.Set().Security
 // (feature/takes listens for the change) and takes recording away.
 func (f *Feature) SetTakes(on bool) { f.set(f.takes, on, config.Set().Security().Takes) }
 
+// SetBaby allows the baby monitor page to play the room's microphones live to a browser given its link
+// (feature/babymon, which ends the listening when it sees the change). The link's key is made the first
+// time the switch goes on; the setup page can replace it.
+func (f *Feature) SetBaby(on bool) {
+	if on && config.Get().Security.BabyKey == "" {
+		if err := config.Set().Security().BabyKey(NewBabyKey()); err != nil {
+			slog.Error("baby monitor: saving the link's key failed; staying off", "err", err)
+			f.baby.Set(false)
+			return
+		}
+	}
+	f.set(f.baby, on, config.Set().Security().Baby)
+}
+
+// NewBabyKey is a new secret for the baby monitor's link: 128 random bits, which nobody can guess.
+func NewBabyKey() string {
+	b := make([]byte, 16)
+	if _, err := rand.Read(b); err != nil {
+		panic(err) // the system's random source failing is not something to go on from
+	}
+	return base64.RawURLEncoding.EncodeToString(b)
+}
+
+// ReplaceBabyKey gives the link a new key, so the old link stops working at once.
+func (f *Feature) ReplaceBabyKey() error {
+	if err := config.Set().Security().BabyKey(NewBabyKey()); err != nil {
+		return err
+	}
+	slog.Info("security", "setting", "baby_monitor link", "replaced", true)
+	f.Changed.Emit(struct{}{})
+	return nil
+}
+
 func (f *Feature) set(s *esphome.Switch, on bool, save func(bool) error) {
 	s.Set(on)
 	if err := save(on); err != nil {
@@ -192,7 +230,7 @@ func (f *Feature) set(s *esphome.Switch, on bool, save func(bool) error) {
 // State is read by the screen each frame; a few small file reads.
 func (f *Feature) State() State {
 	c := config.Get().Security
-	st := State{SSHAvailable: sshAvailable(), SSH: c.SSH, Camera: c.Camera, Screen: c.Screen, TalkBack: c.TalkBack, Takes: c.Takes, Encrypted: encrypted()}
+	st := State{SSHAvailable: sshAvailable(), SSH: c.SSH, Camera: c.Camera, Screen: c.Screen, TalkBack: c.TalkBack, Takes: c.Takes, Baby: c.Baby, Encrypted: encrypted()}
 	if st.SSHAvailable {
 		st.SSHRunning = sshRunning()
 		for _, k := range readKeys() {

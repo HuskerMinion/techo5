@@ -31,6 +31,8 @@ var registered = []string{
 	"alarm_gets_louder",
 	"ambient_noise",
 	"ambient_noise_sensor",
+	"baby_monitor",
+	"baby_monitor_listening",
 	"bass",
 	"ble_advertisements",
 	"bluetooth_audio",

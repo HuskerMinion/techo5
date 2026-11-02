@@ -304,6 +304,7 @@ func TestARestoreDoesNotStartListening(t *testing.T) {
 	from.Wake.KeepClips = true
 	from.Presence.On, from.Presence.Gestures = true, true
 	from.Security.Takes = true
+	from.Security.Baby, from.Security.BabyKey = true, "the-file-s-key"
 	file, _ := Export(from, "m", "v0")
 	r, err := Restored(Defaults(), file, "m")
 	if err != nil {
@@ -311,9 +312,23 @@ func TestARestoreDoesNotStartListening(t *testing.T) {
 	}
 	c := r.Config
 	if c.Home.DropIn || c.Wake.OnHA.Stream || c.Wake.OnHA.Confirm || c.Wake.KeepClips || c.Presence.On || c.Presence.Gestures ||
-		c.Security.Takes {
-		t.Errorf("a restore turned listening or watching on: drop-in %v stream %v confirm %v clips %v presence %v gestures %v takes %v",
-			c.Home.DropIn, c.Wake.OnHA.Stream, c.Wake.OnHA.Confirm, c.Wake.KeepClips, c.Presence.On, c.Presence.Gestures, c.Security.Takes)
+		c.Security.Takes || c.Security.Baby {
+		t.Errorf("a restore turned listening or watching on: drop-in %v stream %v confirm %v clips %v presence %v gestures %v takes %v baby %v",
+			c.Home.DropIn, c.Wake.OnHA.Stream, c.Wake.OnHA.Confirm, c.Wake.KeepClips, c.Presence.On, c.Presence.Gestures, c.Security.Takes, c.Security.Baby)
+	}
+	if strings.Contains(string(file), "the-file-s-key") || c.Security.BabyKey != "" {
+		t.Errorf("the baby monitor's link key travels in a settings file: %q", c.Security.BabyKey)
+	}
+
+	// A device that has the monitor on keeps its switch and its key through a restore.
+	here := Defaults()
+	here.Security.Baby, here.Security.BabyKey = true, "mine"
+	r, err = Restored(here, file, "m")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !r.Config.Security.Baby || r.Config.Security.BabyKey != "mine" {
+		t.Errorf("a restore changed this device's baby monitor: %v %q", r.Config.Security.Baby, r.Config.Security.BabyKey)
 	}
 }
 
