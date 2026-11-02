@@ -34,9 +34,19 @@ const (
 	// seconds late and people talk over each other.
 	maxBehind = 300 * time.Millisecond
 
-	// farEndLoud is the mean square per sample, at int16 scale, over which a frame from the far end
-	// counts as somebody talking: about -45 dBFS, well under speech on a call and over a line's hiss.
+	// farEndLoud is the mean square per sample, at int16 scale, under which a frame from the far end
+	// never counts as somebody talking: about -45 dBFS, well under speech on a call and over a line's
+	// hiss. An intercom's far end is a room, whose noise can sit over it, so a frame also has to be
+	// farEndOver its call's noise floor (farEnd).
 	farEndLoud = 3.2e-5 * 32768 * 32768
+
+	// farEndOver is how far over the far end's noise floor a frame has to be to count as talking: 10 dB.
+	farEndOver = 10.0
+
+	// farEndRise is how fast the floor follows the far end up, per frame: about 10% a second, so a room's
+	// noise is learned in seconds while a voice, which comes and goes, takes the best part of a minute
+	// of talking without a pause to be.
+	farEndRise = 1.002
 
 	// farEndHold is how long after a loud frame arrives the far end still counts as talking. The frame
 	// plays up to maxBehind later, the room rings with it after that, and a word is reported a moment
@@ -52,6 +62,24 @@ var farEndAt atomic.Int64
 func farEndTalking(now time.Time) bool {
 	at := farEndAt.Load()
 	return at != 0 && now.Sub(time.Unix(0, at)) < farEndHold
+}
+
+// farEnd is the far end's noise floor, as a mean square per sample: it drops at once to a quieter frame
+// and rises slowly, so it sits at the noise of a room or a line between words (#392).
+type farEnd struct {
+	floor float64
+	heard bool // a frame has set the floor
+}
+
+// talking takes a frame's mean square and reports whether it is somebody talking: over farEndLoud, and
+// farEndOver the floor.
+func (f *farEnd) talking(ms float64) bool {
+	if ms < f.floor || !f.heard {
+		f.floor, f.heard = ms, true
+	} else {
+		f.floor = min(ms, f.floor*farEndRise+1)
+	}
+	return ms > farEndLoud && ms > f.floor*farEndOver
 }
 
 // talk carries a call's audio both ways until the call ends or ctx does: the microphones (after echo
@@ -241,6 +269,7 @@ func receive(ctx context.Context, dec io.Reader, wide bool, st *stats) error {
 	errCh := make(chan error, 1)
 	safe.Go("phone: read", func() {
 		u := newUp()
+		var far farEnd
 		buf := make([]byte, 2*wideFrame)
 		for {
 			n, err := dec.Read(buf)
@@ -249,7 +278,7 @@ func receive(ctx context.Context, dec io.Reader, wide bool, st *stats) error {
 				for i := range s {
 					s[i] = int16(binary.LittleEndian.Uint16(buf[2*i:]))
 				}
-				if st.add(&st.received, &st.recvSq, s) > farEndLoud {
+				if far.talking(st.add(&st.received, &st.recvSq, s)) {
 					farEndAt.Store(time.Now().UnixNano())
 				}
 				if !wide {

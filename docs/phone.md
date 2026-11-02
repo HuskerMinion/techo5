@@ -181,7 +181,8 @@ word do it, and every wake word the device has but the ones chosen as wake words
 - A call being placed is never ended this way, only one ringing here or one that is up. The
   exception is a call by voice that has not been dialed yet (above), which the word calls off.
 - It is not acted on while the other party is talking, or for a moment after: their voice comes out
-  of the speaker. Wait for a gap.
+  of the speaker. Wait for a gap. Talking means louder than the background noise their end sends, so
+  a quiet room or a line's hiss doesn't hold the word back.
 - A talk through a camera is not ended this way, and neither is a call while the device is making a
   sound of its own (an announcement, the assistant's answer, a chime): the word in it is the device's.
 - With **Stop**, an alarm or timer ringing during the call is stopped first, and the next "stop" hangs
