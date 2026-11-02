@@ -37,11 +37,25 @@ const (
 	drawerRadio    = 1
 	drawerAnnounce = 2
 	drawerCall     = 3
+	drawerTodo     = 4 // only while lists are chosen (config.Todo)
 )
 
-func (p *paint) drawerW() int    { return p.s(drawerWBase) }
+func (p *paint) drawerW() int {
+	if len(shownTabs()) > len(drawerTabs) {
+		return p.s(drawerWBase + drawerTodoExtra) // five tabs need the room "Announce" has with four
+	}
+	return p.s(drawerWBase)
+}
 func (p *paint) drawerEdge() int { return p.s(drawerEdgeBase) }
-func (p *paint) drawerSeg() int  { return p.s(drawerSegBase) }
+func (p *paint) drawerSeg() int {
+	if len(shownTabs()) > len(drawerTabs) {
+		return p.s(drawerSegBase + drawerTodoExtra)
+	}
+	return p.s(drawerSegBase)
+}
+
+// drawerTodoExtra is how much wider the drawer and its strip are with the To-do tab beside the other four.
+const drawerTodoExtra = 130
 
 var drawerTabs = []string{"Cameras", "Radio", "Announce", "Call"}
 
@@ -49,13 +63,41 @@ func drawerTabLabels() []string {
 	return []string{tr("cameras"), tr("drawer_radio"), tr("drawer_announce"), tr("drawer_call")}
 }
 
-// shownTabs are the tabs this screen offers: no Announce or Call tab where there is no microphone to
-// talk with.
-func shownTabs() []string {
-	if !hasMicrophone() {
-		return drawerTabs[:drawerAnnounce]
+// shownTabIDs are the tabs this screen offers, as the drawerCameras to drawerTodo they are: no Announce
+// or Call tab where there is no microphone to talk with, and a To-do tab only once a list is chosen.
+func shownTabIDs() []int {
+	ids := []int{drawerCameras, drawerRadio}
+	if hasMicrophone() {
+		ids = append(ids, drawerAnnounce, drawerCall)
 	}
-	return drawerTabs
+	if len(config.Get().Todo.Lists) > 0 {
+		ids = append(ids, drawerTodo)
+	}
+	return ids
+}
+
+// shownTabs are those tabs' names, as drawerTabs has them.
+func shownTabs() []string {
+	var names []string
+	for _, id := range shownTabIDs() {
+		names = append(names, tabName(id))
+	}
+	return names
+}
+
+func tabName(id int) string {
+	if id == drawerTodo {
+		return "To-do"
+	}
+	return drawerTabs[id]
+}
+
+// tabLabel is a tab's name in the screen's language.
+func tabLabel(id int) string {
+	if id == drawerTodo {
+		return tr("drawer_todo")
+	}
+	return drawerTabLabels()[id]
 }
 
 func (r *renderer) drawer(s scene) {
@@ -75,12 +117,14 @@ func (r *renderer) drawer(s scene) {
 	segRad := r.sf(23)
 	r.roundFill(seg, segRad, surface(1), surface(1))
 	r.roundStroke(seg, segRad, r.sf(1), ember)
-	half := seg.Dx() / len(shownTabs())
+	ids := shownTabIDs()
+	half := seg.Dx() / len(ids)
 	inset, tabRad := r.s(4), r.sf(19)
-	for i, name := range drawerTabLabels()[:len(shownTabs())] {
+	for i, id := range ids {
+		name := tabLabel(id)
 		b := image.Rect(seg.Min.X+i*half+inset, seg.Min.Y+inset, seg.Min.X+(i+1)*half-inset, seg.Max.Y-inset)
 		fg, face := lerp(dim, cream, 0.3), fc.nav
-		if i == s.drawerTab {
+		if id == s.drawerTab {
 			r.roundShadow(b, tabRad, r.sf(8), r.s(3), shadowAlpha()*0.8)
 			r.roundFill(b, tabRad, shift(amber, 14), shift(amber, -14))
 			r.roundHighlight(b, tabRad)
@@ -89,7 +133,7 @@ func (r *renderer) drawer(s scene) {
 		// No shrinking to fit here: the strip scales with the type, so a name that fits its pill on
 		// one panel fits it on the other. Shrinking instead of scaling was what made these look wrong.
 		r.text(face, name, b.Min.X+(b.Dx()-r.width(face, name))/2, b.Min.Y+b.Dy()/2+r.s(9), fg)
-		r.addZone(zone{r: image.Rect(seg.Min.X+i*half, seg.Min.Y-r.s(8), seg.Min.X+(i+1)*half, seg.Max.Y+r.s(8)), kind: zoneTab, opt: i})
+		r.addZone(zone{r: image.Rect(seg.Min.X+i*half, seg.Min.Y-r.s(8), seg.Min.X+(i+1)*half, seg.Max.Y+r.s(8)), kind: zoneTab, opt: id})
 	}
 
 	// Close, a round button with an ×.
@@ -137,6 +181,9 @@ func drawerRows(s scene) ([]settingRow, string) {
 	}
 	if s.drawerTab == drawerCall {
 		return callRows(s)
+	}
+	if s.drawerTab == drawerTodo {
+		return todoRows(s)
 	}
 	if s.drawerTab == drawerCameras {
 		if len(s.cameras) == 0 {

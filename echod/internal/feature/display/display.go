@@ -494,7 +494,7 @@ func build() *Display {
 	d.clockStyleSel = clockStyleSelect(d)
 	d.fontSel = fontSelect(d)
 	d.textSizeSel = textSizeSelect(d)
-	setup.SetScreen(&setup.ScreenChoices{Styles: clockStyleOptions(), Current: clockStyleIndex, Choose: d.setClockStyle,
+	setup.SetScreen(&setup.ScreenChoices{Todo: true, Styles: clockStyleOptions(), Current: clockStyleIndex, Choose: d.setClockStyle,
 		Fonts: fonts.Names(), FontNow: fontIndex, ChooseFont: d.setFont,
 		OwnFonts: ownFonts, AddFont: d.addOwnFont, RemoveFont: d.removeOwnFont, MaxFont: fonts.MaxOwnFile,
 		Taps: clockTapOptions(), TapNow: clockTapIndex, ChooseTap: func(i int) { setClockTap(d.clockTap, i) }, Places: maxWorld,
@@ -2715,6 +2715,9 @@ func (d *Display) frame() (next time.Duration) {
 		d.mu.Lock()
 		d.callees = s.callees
 		d.mu.Unlock()
+	}
+	if s.showDrawer && s.drawerTab == drawerTodo {
+		s.todo = todoSections()
 	}
 	if (s.showDrawer && s.drawerTab == drawerRadio) || wants {
 		s.radio = home.Get().Radio()

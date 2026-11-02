@@ -202,6 +202,9 @@ type scene struct {
 	callees    []phone.Callee
 	callButton bool
 
+	// todo are the lists the drawer's To-do tab shows (todo.go).
+	todo []todoSection
+
 	// sky is the forecast page's weather moving (weatherfx.go), fxNone for a still one.
 	sky skyFx
 

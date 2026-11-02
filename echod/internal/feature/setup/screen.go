@@ -62,6 +62,10 @@ type ScreenChoices struct {
 	// Weather & Calendar tab, under the calendars.
 	Calendar []CalendarChoice
 
+	// Todo is whether the screen has a To-do tab in its drawer (the Show), which the to-do lists section
+	// of the Weather & Calendar tab chooses the lists for (todo.go).
+	Todo bool
+
 	// Themes is the screen's themes and light and dark mode, where it has them (the Show); nil leaves
 	// the Themes section off the page (theme.go).
 	Themes *ThemeChoices

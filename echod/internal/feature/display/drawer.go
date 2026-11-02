@@ -4,6 +4,7 @@ package display
 
 import (
 	"log/slog"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -15,7 +16,7 @@ import (
 
 // openDrawer brings the drawer in on a tab.
 func (d *Display) openDrawer(tab int) {
-	if tab < 0 || tab >= len(shownTabs()) {
+	if !slices.Contains(shownTabIDs(), tab) {
 		tab = drawerCameras // one this screen does not offer
 	}
 	d.mu.Lock()
@@ -30,7 +31,7 @@ func (d *Display) openDrawer(tab int) {
 		// before it is pressed. See home.PokeGroup.
 		go home.Get().PokeGroup()
 	}
-	slog.Info("drawer", "open", drawerTabs[tab])
+	slog.Info("drawer", "open", tabName(tab))
 	d.wake()
 }
 
@@ -114,6 +115,10 @@ func (d *Display) drawerRowTap(id string) {
 		d.mu.Lock()
 		d.drawerPick, d.pickScroll = id, 0
 		d.mu.Unlock()
+		return
+	}
+	if strings.HasPrefix(id, "todo:") {
+		d.todoTap(id)
 		return
 	}
 	kind, n, ok := strings.Cut(id, ":")
