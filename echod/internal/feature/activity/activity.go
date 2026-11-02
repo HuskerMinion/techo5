@@ -6,22 +6,30 @@
 package activity
 
 import (
+	"log/slog"
 	"sync"
 
 	esphome "github.com/ygelfand/go-esphome-device"
 
 	"github.com/HuskerMinion/techo5/echod/internal/component"
+	"github.com/HuskerMinion/techo5/echod/internal/config"
 )
 
 func init() {
 	component.Register(component.Device, Get())
 }
 
-// Log is the three sensors. It has no hardware and no loop: something else has a turn, and tells it.
+// Log is the three sensors, and the switch that keeps the words off them. It has no hardware and no
+// loop: something else has a turn, and tells it.
 type Log struct {
 	word  *esphome.TextSensor
 	heard *esphome.TextSensor
 	reply *esphome.TextSensor
+
+	// send is Send voice text: off, what was heard and the reply stay on the device. What people say
+	// goes into Home Assistant's history as plain text, for as long as the recorder keeps it, and not
+	// everyone in a house chose that.
+	send *esphome.Switch
 }
 
 var (
@@ -42,15 +50,41 @@ func Get() *Log {
 			reply: &esphome.TextSensor{
 				Base: esphome.Base{ObjectID: "last_reply", Name: "Last reply", Icon: "mdi:message-text"},
 			},
+			send: &esphome.Switch{
+				Base: esphome.Base{ObjectID: "send_voice_text", Name: "Send voice text", Icon: "mdi:message-lock",
+					Category: esphome.CategoryConfig},
+			},
 		}
+		shared.send.OnCommand = shared.sendText
 	})
 	return shared
 }
 
+// Restore shows the saved choice.
+func (l *Log) Restore(c config.Config) { l.send.Set(!c.Security.WordsKept) }
+
+// sendText is Send voice text turned on or off. Off empties the two sensors at once, so the last
+// request's words do not sit there afterwards.
+func (l *Log) sendText(on bool) {
+	if err := config.Set().Security().WordsKept(!on); err != nil {
+		slog.Error("saving send voice text failed", "err", err)
+		return
+	}
+	l.send.Set(on)
+	if !on {
+		l.heard.Set("")
+		l.reply.Set("")
+	}
+	slog.Info("send voice text", "on", on)
+}
+
+// wordsKept is whether what was heard and the reply stay on the device (Send voice text off).
+func wordsKept() bool { return config.Get().Security.WordsKept }
+
 func (l *Log) Name() string { return "activity" }
 
 func (l *Log) Entities() []esphome.Entity {
-	return []esphome.Entity{l.word, l.heard, l.reply}
+	return []esphome.Entity{l.word, l.heard, l.reply, l.send}
 }
 
 // Woke records which wake word started a turn, so the transcript that follows can be attributed.
@@ -62,14 +96,14 @@ func (l *Log) Woke(phrase string) {
 }
 
 func (l *Log) Heard(text string) {
-	if text == "" {
+	if text == "" || wordsKept() {
 		return
 	}
 	l.heard.Set(component.Fit(text))
 }
 
 func (l *Log) Replied(text string) {
-	if text == "" {
+	if text == "" || wordsKept() {
 		return
 	}
 	l.reply.Set(component.Fit(text))

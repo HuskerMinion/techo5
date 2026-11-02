@@ -37,7 +37,7 @@ var listeningObjects = map[string]bool{
 	// feature/security: recording takes of a word from the setup page (feature/takes)
 	"record_takes": true,
 	// feature/activity
-	"last_heard": true, "last_reply": true, "last_wake_word": true,
+	"last_heard": true, "last_reply": true, "last_wake_word": true, "send_voice_text": true,
 	// feature/room and diag's room readings; feature/noise, feature/clap
 	"room_reaction": true, "room_level": true, "room_floor": true,
 	"ambient_noise": true, "ambient_noise_sensor": true, "clap_gesture": true, "clap_sensitivity": true,

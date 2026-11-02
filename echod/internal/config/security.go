@@ -15,6 +15,11 @@ type Security struct {
 	// recording started by a press on the device.
 	Takes bool `json:"takes,omitempty"`
 
+	// WordsKept keeps the words of a voice request on the device: Last heard and Last reply stay empty,
+	// and the voice events leave out what was heard and the reply (feature/activity). Off, as it always
+	// was, since dashboards show Last heard.
+	WordsKept bool `json:"words_kept,omitempty"`
+
 	// LockPIN is the settings lock's PIN, salted and hashed (feature/security lock.go); empty for no lock.
 	LockPIN string `json:"lock_pin,omitempty"`
 
@@ -57,4 +62,8 @@ func (w SecurityWriter) TalkBack(v bool) error {
 
 func (w SecurityWriter) Takes(v bool) error {
 	return w.st.Update(func(c *Config) { c.Security.Takes = v })
+}
+
+func (w SecurityWriter) WordsKept(v bool) error {
+	return w.st.Update(func(c *Config) { c.Security.WordsKept = v })
 }

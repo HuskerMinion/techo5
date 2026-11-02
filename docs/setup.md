@@ -1050,7 +1050,11 @@ with) sets how sure it has to be. At the top of its range, the stop word is off.
 
 **What was said, in Home Assistant.** The **Last wake word**, **Last heard** and **Last reply**
 sensors say which wake word started the last request, what the device heard and what it answered,
-for the logbook or a dashboard. Like any sensor, they go into Home Assistant's history.
+for the logbook or a dashboard. Like any sensor, they go into Home Assistant's history, as plain text
+for as long as the recorder keeps it, and so do the [voice request events](actions.md#voice-request-events).
+To keep the words on the device, turn off **Send voice text** on it in Home Assistant: **Last heard**
+and **Last reply** stay empty, and the events leave out what was heard and the reply, keeping the rest
+(how it ended, the timings).
 
 ### Realtime voice
 

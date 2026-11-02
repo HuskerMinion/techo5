@@ -258,6 +258,9 @@ func (t *Turn) send() {
 		return
 	}
 	t.sent = true
+	if wordsKept() {
+		t.heard, t.reply = "", ""
+	}
 	fields, legacy := t.fields(t.how), t.legacy(t.how)
 	t.mu.Unlock()
 

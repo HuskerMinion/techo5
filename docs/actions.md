@@ -300,8 +300,8 @@ Assistant's bus, with:
 | `wake_word` | The slot's wake word. It picked the pipeline, so it is there for a button or follow-up too |
 | `wake_score` | Only on a turn the device's own wake word opened: the highest score the word reached, as `Last wake score` shows it. Logged beside `heard`, it shows how close mistaken wakes come to the threshold |
 | `slot` | The wake word slot, `1` or `2` |
-| `heard` | What speech-to-text heard, up to 1000 characters |
-| `reply` | The reply's text, up to 1000 characters |
+| `heard` | What speech-to-text heard, up to 1000 characters. Left out while the device's **Send voice text** is off |
+| `reply` | The reply's text, up to 1000 characters. Left out while **Send voice text** is off |
 | `listen_ms`, `think_ms`, `reply_ms` | How long each phase took, in milliseconds. A phase the turn never reached is left out |
 | `audio_seconds` | Seconds of recording kept for this turn, when one was |
 | `id` | The turn's id |
