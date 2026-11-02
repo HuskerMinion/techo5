@@ -1417,7 +1417,8 @@ Voice assistants). Home Assistant listens for one wake word per voice assistant.
   Assistant all the time, and Home Assistant's engine listens for the wake word too. It uses the first
   voice assistant's wake word. When Home Assistant hears it, the device chimes and the request goes on
   as usual, with no extra delay. You can speak right after the wake word, without waiting for the
-  chime, as with the device's own wake word. The device's own wake words still work alongside: a wake the device hears itself first closes
+  chime, as with the device's own wake word. The device's own wake words still work alongside: a wake
+  the device hears itself first closes
   the stream, which can add up to about a second before the chime, and a word both hear opens one
   request. After a request, an announcement or a question from Home Assistant, the stream starts again
   on its own.
@@ -1510,10 +1511,12 @@ Or copy a WAVE file named for the sound into the device's sounds folder over SSH
 The timer and mute files play where **Home Assistant sounds** is on, and an alarm set to the
 Home Assistant sound plays `timer_finished.wav` either way. A file has to be 16-bit, at
 48 kHz, mono or stereo, and at most 10 seconds long. It plays at the level it was recorded at, as the
-stock sounds do. The microphones stay open while the wake sound plays, and echo cancellation takes the
-sound out of what is sent, so a long wake sound does not cut off the first words. If you turn **Microphone echo
-cancellation** off, the device goes back to waiting for the wake sound to fade before it listens, and a
-long one then cuts off the first words, so keep it short. The wake word is not acted on while the unmute
+stock sounds do. The microphones stay open while the wake sound plays, and echo cancellation takes most
+of the sound out of what is sent, so words said straight after the wake word are kept. Some of a loud or
+long wake sound can still reach speech-to-text, mostly in the first request after a restart, before the
+canceller has learned the speaker, so a short, quiet wake sound works best. If you turn **Microphone
+echo cancellation** off, the device goes back to waiting for the wake sound to fade before it listens,
+and a long one then cuts off the first words. The wake word is not acted on while the unmute
 sound plays and for a moment after, so the device does not take its own sound for the word: a long
 `mute_switch_off.wav` keeps it deaf for as long. ffmpeg converts anything else:
 
