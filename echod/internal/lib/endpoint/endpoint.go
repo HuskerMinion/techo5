@@ -48,6 +48,8 @@ type Detector struct {
 	quiet  int     // windows in a row below Off since the last window at or above it
 
 	ended int // the window the turn ended at, or 0
+
+	holding bool // windows are counted but cannot end the turn (Hold)
 }
 
 // New starts a turn.
@@ -85,8 +87,17 @@ func (d *Detector) window(rms float64) {
 	} else {
 		d.quiet = 0
 	}
-	if d.speech >= d.s.Speech && d.quiet >= d.s.Quiet {
+	if d.speech >= d.s.Speech && d.quiet >= d.s.Quiet && !d.holding {
 		d.ended = d.windows
+	}
+}
+
+// Hold sets whether the detector only watches: it counts speech and keeps the peak, but cannot end the
+// turn. Letting go starts the count of quiet over, so the pause is measured from that moment.
+func (d *Detector) Hold(on bool) {
+	d.holding = on
+	if !on {
+		d.quiet = 0
 	}
 }
 

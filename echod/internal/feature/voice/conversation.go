@@ -1438,6 +1438,9 @@ func holdsForTone(slot int, followUp bool) bool {
 	return wakeword.Tones(slot, followUp) && !config.Get().Microphone.Cancel
 }
 
+// clock is the time the turn's wake sound is measured by; a test replaces it.
+var clock = time.Now
+
 // toneEnds is how long after a turn opens its wake sound is loud enough to matter to the microphones.
 func toneEnds(slot int, followUp bool) time.Duration {
 	return wakeword.ChimeLength(slot, followUp) + speaker.HardwareTail
@@ -1480,15 +1483,27 @@ func (c *conversation) pump(ctx context.Context, be backend, slot int, followUp,
 	// and end the turn on the quiet after it; and the wake word at the front of the history, with the
 	// pause people leave for the tone, would do the same. It starts listening once the tone is done,
 	// and what is sent before then is only for speech recognition.
+	//
+	// A request said in one breath fits inside that time, though, so the detector still watches until
+	// then, counting speech but unable to end the turn. When the sound is over, a detector that saw
+	// no speech starts afresh, so the sound's level sets nothing; one that did keeps its peak and ends
+	// the turn on the first pause of quiet after the sound.
 	var deafUntil time.Time
 	if tone := wakeword.Tones(slot, followUp); tone && !hold {
-		deafUntil = time.Now().Add(toneEnds(slot, followUp))
+		deafUntil = clock().Add(toneEnds(slot, followUp))
+		ep.Hold(true)
 	}
+	watching := !deafUntil.IsZero()
 	see := func(frame []int16) {
-		if time.Now().Before(deafUntil) {
-			return
-		}
 		sent += len(frame)
+		if watching && !clock().Before(deafUntil) {
+			watching = false
+			if _, _, speech := ep.Heard(); speech < ep.Settings().Speech {
+				ep = endpoint.New(endpointSettings())
+			} else {
+				ep.Hold(false)
+			}
+		}
 		if endpointAt == 0 && ep.Feed(frame) {
 			endpointAt = float64(sent) / float64(mic.Rate)
 			// What the decision was made on, not just that it was made: the loudest window of the

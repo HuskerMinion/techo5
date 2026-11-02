@@ -4,6 +4,7 @@ import (
 	"context"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/HuskerMinion/techo5/echod/internal/config"
 	"github.com/HuskerMinion/techo5/echod/internal/hardware/mic"
@@ -125,5 +126,65 @@ func TestHistoryDoesNotEndATurnEarly(t *testing.T) {
 	}
 	if got := endpoint.Window; got == 0 {
 		t.Fatal("window")
+	}
+}
+
+// stepping makes the turn's clock move a tenth of a second at each look, which is one frame of
+// voiceAt's, so a test needs no real waiting. It returns the number of frames the wake sound lasts.
+func stepping(t *testing.T) int {
+	t.Helper()
+	now := time.Unix(1000, 0)
+	clock = func() time.Time { now = now.Add(100 * time.Millisecond); return now }
+	t.Cleanup(func() { clock = time.Now })
+	config.Use(filepath.Join(t.TempDir(), "state.json"))
+	_ = config.Set().Wake(0).Tone(config.ToneHA)
+	_ = config.Set().Microphone().Cancel(true)
+	return int(toneEnds(0, false)/(100*time.Millisecond)) + 1
+}
+
+// A request said in one breath after the wake word fits inside the wake sound. The turn ends on the
+// quiet after the sound, not at the listening limit.
+func TestRequestInsideTheWakeSoundEndsAfterIt(t *testing.T) {
+	n := stepping(t)
+	var frames [][]int16
+	frames = append(frames, voiceAt(1, 1500), voiceAt(1, 1500), voiceAt(1, 1500), voiceAt(1, 1500))
+	for len(frames) < n {
+		frames = append(frames, voiceAt(1, 20))
+	}
+	if _, ended := run(t, config.ToneHA, true, nil, frames...); ended {
+		t.Fatal("the turn ended inside the wake sound")
+	}
+	// the same, with the quiet after the sound
+	for range 8 {
+		frames = append(frames, voiceAt(1, 20))
+	}
+	if _, ended := run(t, config.ToneHA, true, nil, frames...); !ended {
+		t.Fatal("a request spoken inside the wake sound did not end the turn on the quiet after it")
+	}
+}
+
+// Someone who says the wake word, waits for the sound and then speaks is not cut off, and the wake
+// word in the history does not count as speech.
+func TestSpeakingAfterTheWakeSoundIsNotCutOff(t *testing.T) {
+	n := stepping(t)
+	var frames [][]int16
+	for range n + 3 {
+		frames = append(frames, voiceAt(1, 20))
+	}
+	frames = append(frames, voiceAt(5, 1500))
+	if _, ended := run(t, config.ToneHA, true, nil, frames...); ended {
+		t.Fatal("quiet after the wake word ended the turn before the request")
+	}
+}
+
+// Nothing said still ends the turn only as before: never from the detector, since there was no speech.
+func TestSilenceAfterTheWakeSoundEndsAsBefore(t *testing.T) {
+	n := stepping(t)
+	var frames [][]int16
+	for range n + 15 {
+		frames = append(frames, voiceAt(1, 0))
+	}
+	if _, ended := run(t, config.ToneHA, true, nil, frames...); ended {
+		t.Fatal("silence ended the turn")
 	}
 }
