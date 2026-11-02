@@ -78,6 +78,9 @@ type Proxy struct {
 	reports chan ble.Advertisement
 	dropped atomic.Uint64
 
+	// lost says the controller dropped the scan under a radio that still runs it (ble.PowerCycled).
+	lost atomic.Bool
+
 	mu     sync.Mutex
 	active bool
 }
@@ -192,6 +195,10 @@ func build() *Proxy {
 	}
 	safe.Go("ble rest", b.restWhilePlaying)
 	ble.ScanLost.Listen(func(struct{}) { b.apply() })
+	ble.PowerCycled.Listen(func(struct{}) {
+		b.lost.Store(true)
+		b.apply()
+	})
 	b.apply()
 	return b
 }
@@ -300,9 +307,11 @@ func (b *Proxy) tune(beacon beaconState) bool {
 	want := scan || len(beacon.advertisement) != 0
 	active := b.proxy.Active()
 
+	lost := b.lost.Swap(false)
+
 	b.mu.Lock()
 	settled := want == b.radio.Running() && scan == b.radio.Scanning() &&
-		(!scan || active == b.active)
+		(!scan || active == b.active) && !lost
 	b.active = active
 	b.mu.Unlock()
 

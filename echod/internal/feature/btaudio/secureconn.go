@@ -15,6 +15,7 @@ import (
 	esphome "github.com/ygelfand/go-esphome-device"
 
 	"github.com/HuskerMinion/techo5/echod/internal/config"
+	"github.com/HuskerMinion/techo5/echod/internal/hardware/ble"
 	"github.com/HuskerMinion/techo5/echod/internal/layout"
 )
 
@@ -261,6 +262,7 @@ func (s *secureConn) apply(ctx context.Context, on bool) (bool, error) {
 	}
 	if c.powered {
 		s.powerOn(ctx)
+		ble.PowerCycled.Emit(struct{}{})
 	}
 
 	info, _ = s.run(ctx, mgmtRead, "info")
