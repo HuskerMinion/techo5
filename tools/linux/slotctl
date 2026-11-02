@@ -49,6 +49,8 @@ usage: slotctl [-s store] <command>
   switch <a|b>            boot this slot next; a bad slot goes back on trial (with the boot
                           layer, any slot switched to is on trial until it commits again)
   rollback                mark the booted slot bad and boot the other, good, one next
+  follow                  with the boot layer: name the slot it booted active, after it fell
+                          back from the active one (run at every boot)
   rescue [off]            stay in the initramfs at the next boot (one boot only)
   next                    initramfs: choose the slot to boot and take a try; prints its name
   rw | ro                 remount the store
@@ -395,6 +397,27 @@ cmd_rollback() {
 	bootctl_q mark-bad $s
 }
 
+# With the boot layer, the slot it booted is the one the store names active. When it fell back
+# from the active slot (that slot used up its tries and the record marks it bad), the store is
+# told: otherwise it still names the slot that failed, and the next install, into "the other
+# slot", is refused as the running root. Run at every boot (etc/techo5/boot.sh); without the
+# boot layer, or when the store already agrees, nothing changes.
+cmd_follow() {
+	s=$(booted)
+	[ -n "$s" ] && [ "$(boot_layer_slot)" = "$s" ] || return 0
+	o=$(other $s)
+	[ "$(active)" = "$o" ] || return 0
+	writable
+	why=
+	if sh "$BOOTCTL" -q status 2>/dev/null | grep -q "^slot $o: .*(bad)" && [ "$(state $o)" != bad ]; then
+		set_state $o bad
+		why=" and marks slot $o bad, as the boot layer has it"
+	fi
+	set_active $s
+	done_writing
+	echo "slotctl: the boot layer booted slot $s, not slot $o: the store names slot $s active$why"
+}
+
 cmd_rescue() {
 	writable
 	if [ "$1" = off ]; then
@@ -506,6 +529,7 @@ install) cmd_install "$@";;
 commit) cmd_commit;;
 switch) cmd_switch "$@";;
 rollback) cmd_rollback;;
+follow) cmd_follow;;
 rescue) cmd_rescue "$@";;
 rw) writable; WAS_RO=; echo "slotctl: $STORE writable";;
 ro) sync; mount -o remount,ro "$STORE" && echo "slotctl: $STORE read-only";;

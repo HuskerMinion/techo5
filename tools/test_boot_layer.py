@@ -364,6 +364,36 @@ class Slotctl(unittest.TestCase):
         self.assertEqual(self.state('a'), 'good')
         self.assertEqual(sha(self.d + '/misc'), before)
 
+    def test_follow_after_the_boot_layer_fell_back(self):
+        """b was on trial and used up its tries; the boot layer booted a. The store follows, and the
+        next install goes into b instead of being refused as the running root."""
+        put(self.d + '/misc', misc(record((14, 3, 1), (0, 0, 0))))
+        put(self.d + '/store/slots/b.state', b'trial 1\n')
+        before = sha(self.d + '/misc')
+        rc, out = self.slotctl('a', 'follow')
+        self.assertIn('marks slot b bad', out)
+        self.assertEqual((self.active(), self.state('a'), self.state('b')), ('a', 'good', 'bad'))
+        self.assertEqual(sha(self.d + '/misc'), before, 'follow wrote misc')
+        self.slotctl('a', 'install %s/rootfs.tar.gz' % self.d)
+        self.assertEqual((self.active(), self.state('b')), ('b', 'trial 3'))
+
+    def test_follow_after_a_slot_chosen_in_the_menu(self):
+        """The person picked a in the boot menu while b, good, was active: a is named active, b stays good."""
+        put(self.d + '/misc', misc(record((14, 3, 1), (15, 3, 1))))
+        self.slotctl('a', 'follow')
+        self.assertEqual((self.active(), self.state('b')), ('a', 'good'))
+
+    def test_follow_changes_nothing_otherwise(self):
+        """Without the boot layer, when the store agrees, or on the rescue kernel, the store is left as it is."""
+        put(self.d + '/misc', misc())
+        before = self.tree()
+        self.slotctl('a', 'follow', cmdline='root=/dev/mmcblk0p12')
+        self.assertEqual(self.tree(), before)
+        put(self.d + '/misc', misc(record((14, 3, 1), (15, 3, 1), last=b'b')))
+        self.slotctl('b', 'follow')
+        self.slotctl('a', 'follow', cmdline='ab.kernel=rescue')
+        self.assertEqual(self.tree(), before)
+
     def test_a_broken_record_is_left_alone(self):
         m = bytearray(misc(record((14, 0, 1), (15, 0, 1))))
         m[2060] ^= 0xff

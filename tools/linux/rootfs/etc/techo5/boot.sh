@@ -335,6 +335,11 @@ done
 # a network without a gateway never has a default route, and an update there
 # would never be committed.
 #
+# With the boot layer, a fallback it made (the active slot used up its tries) goes
+# to the store too, so the next update goes into the slot that failed rather than
+# being refused as the running root (slotctl follow).
+t5_ab_slot >/dev/null && slotctl follow >> /run/boot.log 2>&1
+#
 # With the boot layer (techo5-lib.sh, t5_ab_slot) the slot it booted is also on
 # trial while its A/B record has not marked it successful, and the boot layer,
 # not the initramfs, counts the tries; slotctl commit marks the record too.
