@@ -108,25 +108,29 @@ func wrap(v, n float64) float64 {
 	return v
 }
 
-// sky draws fx over area at time t; a thunderstorm's lightning strikes within bolt. Sizes are the
+// sky draws fx over area at time t; a thunderstorm's lightning strikes within bolt and lights area. Sizes are the
 // Show 5's, through p.s.
 func (p *paint) sky(fx skyFx, t time.Time, area, bolt image.Rectangle) {
 	secs := float64(t.UnixMilli()) / 1000 // a float64 keeps a tenth of a microsecond at this size
 	switch fx {
 	case fxRain:
-		p.rain(secs, area, 55, 1.0, 0.32)
+		p.rain(secs, area, 45, 1.0, 0.22)
+		p.glassRain(secs, area, 48, 0.9)
 	case fxPour:
-		p.rain(secs, area, 120, 1.35, 0.38)
+		p.rain(secs, area, 100, 1.35, 0.28)
+		p.glassRain(secs, area, 75, 0.95)
 	case fxSnow:
 		p.snow(secs, area, 45, 0.85)
 	case fxSleet:
-		p.rain(secs, area, 35, 1.0, 0.3)
+		p.rain(secs, area, 35, 1.0, 0.24)
 		p.snow(secs, area, 22, 0.7)
+		p.glassRain(secs, area, 24, 0.8)
 	case fxHail:
 		p.hail(secs, area, 40)
 	case fxStorm:
-		p.rain(secs, area, 90, 1.25, 0.34)
-		p.lightning(secs, bolt)
+		p.rain(secs, area, 80, 1.25, 0.26)
+		p.glassRain(secs, area, 60, 0.95)
+		p.lightning(secs, area, bolt)
 	case fxFog:
 		p.fog(secs, area)
 	case fxWind:
@@ -134,17 +138,18 @@ func (p *paint) sky(fx skyFx, t time.Time, area, bolt image.Rectangle) {
 	}
 }
 
-// rain is n falling streaks, a little slanted, at speed times the page's height per second.
+// rain is n falling streaks beyond the glass, a little slanted, at speed times the page's height per
+// second: the nearer ones longer, brighter and faster, the far ones short and faint.
 func (p *paint) rain(secs float64, a image.Rectangle, n int, speed, alpha float64) {
 	w, h := float64(a.Dx()), float64(a.Dy())
-	length := float64(p.s(22))
-	slant := length * 0.18
 	for i := range n {
-		v := h * speed * (0.75 + 0.5*rnd(i, 1))
+		near := rnd(i, 4)
+		length := float64(p.s(12)) + float64(p.s(22))*near
+		v := h * speed * (0.6 + 0.4*near + 0.3*rnd(i, 1))
 		x := float64(a.Min.X) + rnd(i, 0)*w
 		y := float64(a.Min.Y) + wrap(rnd(i, 2)*(h+length)+secs*v, h+length) - length
-		c := fxRainColor
-		p.fxLine(x+slant, y, x, y+length, math.Max(1, float64(p.s(2))*0.75), c, alpha*(0.6+0.4*rnd(i, 3)))
+		width := math.Max(1, float64(p.s(1))*(0.6+0.8*near))
+		p.fxLine(x+length*0.18, y, x, y+length, width, fxRainColor, alpha*(0.35+0.65*near)*(0.7+0.3*rnd(i, 3)))
 	}
 }
 
@@ -192,63 +197,6 @@ func (p *paint) hail(secs float64, a image.Rectangle, n int) {
 		x := float64(a.Min.X) + rnd(i, 0)*w
 		y := float64(a.Min.Y) + wrap(rnd(i, 2)*(h+2*r)+secs*v, h+2*r) - r
 		p.fxDisc(x, y, r, fxSnowColor, 0.7)
-	}
-}
-
-// fxBoltColor is lightning: near white with a little warmth, the page's cream at its brightest.
-var fxBoltColor = color.RGBA{0xff, 0xf6, 0xd8, 0xff}
-
-// lightning is a bolt striking down through b every nine seconds or so: it flickers twice and fades,
-// never at the same moment of the nine twice in a row, and each strike has a shape of its own - a
-// jagged path from the top of b to the bottom, and a short branch from partway down.
-func (p *paint) lightning(secs float64, b image.Rectangle) {
-	cycle := int(secs / 9)
-	at := secs - float64(cycle)*9 - rnd(cycle, 7)*5 // somewhere in the first five seconds of each nine
-	var level float64
-	switch {
-	case at >= 0 && at < 0.10:
-		level = 1
-	case at >= 0.10 && at < 0.18:
-		level = 0.25
-	case at >= 0.18 && at < 0.30:
-		level = 0.85
-	case at >= 0.30 && at < 0.60:
-		level = 0.85 * (1 - (at-0.30)/0.30) // the fade after the second flicker
-	}
-	if level <= 0 || b.Empty() {
-		return
-	}
-	// The path: segments down the height of b, each stepping sideways by up to a fifth of b's width.
-	const segs = 9
-	xs, ys := make([]float64, segs+1), make([]float64, segs+1)
-	mid, step := float64(b.Min.X+b.Max.X)/2, float64(b.Dx())/3
-	x := mid + (rnd(cycle, 11)-0.5)*step
-	for k := range segs + 1 {
-		xs[k] = math.Max(float64(b.Min.X), math.Min(float64(b.Max.X), x))
-		ys[k] = float64(b.Min.Y) + float64(b.Dy())*float64(k)/segs
-		x += (rnd(cycle, 20+k) - 0.5) * 2 * step
-	}
-	wide, glow, core := float64(p.s(26)), float64(p.s(12)), math.Max(2, float64(p.s(5)))
-	stroke := func(x0, y0, x1, y1 float64) {
-		p.fxLine(x0, y0, x1, y1, wide, fxBoltColor, 0.08*level)
-		p.fxLine(x0, y0, x1, y1, glow, fxBoltColor, 0.22*level)
-		p.fxLine(x0, y0, x1, y1, core, fxBoltColor, level)
-	}
-	for k := range segs {
-		stroke(xs[k], ys[k], xs[k+1], ys[k+1])
-	}
-	// Two branches, one from each half of the way down, off to either side and thinning out.
-	for n, k := range []int{2 + int(rnd(cycle, 40)*2), 5 + int(rnd(cycle, 43)*2)} {
-		dir := 1.0
-		if (rnd(cycle, 41) < 0.5) != (n == 1) {
-			dir = -1
-		}
-		bx, by := xs[k], ys[k]
-		ex, ey := bx+dir*step*1.4, by+float64(b.Dy())/segs*1.8
-		mx, my := (bx+ex)/2+(rnd(cycle, 42+n)-0.5)*step*0.8, (by+ey)/2
-		p.fxLine(bx, by, mx, my, glow*0.6, fxBoltColor, 0.15*level)
-		p.fxLine(bx, by, mx, my, core*0.6, fxBoltColor, 0.8*level)
-		p.fxLine(mx, my, ex, ey, core*0.4, fxBoltColor, 0.5*level)
 	}
 }
 

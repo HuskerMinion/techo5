@@ -47,6 +47,9 @@ type paint struct {
 	fc    *sheetFaces
 	round bool
 
+	// glass holds what is behind a raindrop on the glass while it is drawn (weatherfx_glass.go).
+	glass []uint8
+
 	// marked is a mark in a color that means something drawn in the frame being drawn: the header's
 	// "microphone off" pill, Talk red while live. The Show takes the skin's filter off for that frame
 	// (unskinned), so those keep their colors.
