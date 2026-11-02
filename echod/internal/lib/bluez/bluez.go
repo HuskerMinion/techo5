@@ -695,6 +695,29 @@ func (a *Adapter) RegisterAgent(pairing func() bool, paired func(path string), c
 	return nil
 }
 
+// proxied is the devices Home Assistant has asked the Bluetooth proxy to pair, by object path. The
+// agent says yes to their pairing even outside pairing mode: it was asked for, from Home Assistant.
+var proxied = struct {
+	sync.Mutex
+	paths map[dbus.ObjectPath]int
+}{paths: map[dbus.ObjectPath]int{}}
+
+func proxyPairing(path dbus.ObjectPath) bool {
+	proxied.Lock()
+	defer proxied.Unlock()
+	return proxied.paths[path] > 0
+}
+
+func proxyPairingSet(path dbus.ObjectPath, on bool) {
+	proxied.Lock()
+	defer proxied.Unlock()
+	if on {
+		proxied.paths[path]++
+	} else if proxied.paths[path]--; proxied.paths[path] <= 0 {
+		delete(proxied.paths, path)
+	}
+}
+
 // agent is org.bluez.Agent1. Methods return *dbus.Error; nil is yes.
 type agent struct {
 	pairing func() bool
@@ -721,6 +744,9 @@ func rejected(what string) *dbus.Error {
 
 // open is whether a pairing may go ahead now.
 func (g agent) open(path dbus.ObjectPath, what string) *dbus.Error {
+	if proxyPairing(path) {
+		return nil
+	}
 	if g.pairing != nil && g.pairing() {
 		if g.paired != nil {
 			g.paired(string(path))

@@ -441,6 +441,79 @@ func (c *Central) Disconnect(ctx context.Context, address string) error {
 	return err
 }
 
+// Pair bonds with a device the way a light bulb is bonded: no code on either side (Just Works), and
+// the bond kept and the device trusted so it can reconnect. A device already paired is a success.
+// Only this device is touched; the pairings of phones and speakers are not.
+func (c *Central) Pair(ctx context.Context, address string) error {
+	path, err := c.devicePath(strings.ToUpper(address))
+	if err != nil {
+		return err
+	}
+	if path == "" {
+		return fmt.Errorf("bluez: %s not known", address)
+	}
+	proxyPairingSet(path, true)
+	defer proxyPairingSet(path, false)
+	obj := c.conn.Object(service, path)
+	err = obj.CallWithContext(ctx, deviceIfc+".Pair", 0).Err
+	if err != nil && ctx.Err() != nil {
+		// Out of time: tell bluetoothd to stop, or it keeps trying to bond.
+		_ = obj.Call(deviceIfc+".CancelPairing", dbus.FlagNoReplyExpected).Err
+	}
+	if err != nil && !strings.Contains(err.Error(), "AlreadyExists") {
+		return err
+	}
+	return obj.SetProperty(deviceIfc+".Trusted", dbus.MakeVariant(true))
+}
+
+// Unpair drops a device's bond and forgets the device, which removes its keys and cached services.
+// Other devices are not touched. A device bluetoothd does not know is a success.
+func (c *Central) Unpair(ctx context.Context, address string) error {
+	if err := c.Disconnect(ctx, address); err != nil {
+		return err
+	}
+	path, err := c.devicePath(strings.ToUpper(address))
+	if err != nil || path == "" {
+		return err
+	}
+	props := map[string]dbus.Variant{}
+	if err := c.conn.Object(service, path).CallWithContext(ctx, propsIfc+".GetAll", 0, deviceIfc).Store(&props); err != nil {
+		return fmt.Errorf("bluez: %s: %w", address, err)
+	}
+	if ownPairing(props) {
+		return fmt.Errorf("bluez: %s is paired for audio or calls on this device, not unpaired", address)
+	}
+	return c.conn.Object(service, c.adapter).CallWithContext(ctx, adapterIfc+".RemoveDevice", 0, path).Err
+}
+
+// ownPairing is whether a device's properties say it is one of the device's own pairings: bonded
+// and an audio or hands-free peer (a phone or a speaker), by profile, icon or class of device.
+func ownPairing(props map[string]dbus.Variant) bool {
+	if paired, _ := props["Paired"].Value().(bool); !paired {
+		return false
+	}
+	uuids, _ := props["UUIDs"].Value().([]string)
+	for _, u := range uuids {
+		u = strings.ToLower(u)
+		if strings.HasPrefix(u, "0000") && strings.HasSuffix(u, "-0000-1000-8000-00805f9b34fb") {
+			switch u[4:8] {
+			case "110a", "110b", "110c", "110e", "111e", "111f", "1108", "1112":
+				return true
+			}
+		}
+	}
+	switch icon, _ := props["Icon"].Value().(string); icon {
+	case "phone", "audio-headset", "audio-headphones", "audio-card":
+		return true
+	}
+	if class, ok := props["Class"].Value().(uint32); ok {
+		if major := class >> 8 & 0x1f; major == 0x02 || major == 0x04 {
+			return true
+		}
+	}
+	return false
+}
+
 // Services reads a connected device's attributes, in handle order.
 func (c *Central) Services(address string) ([]Service, error) {
 	address = strings.ToUpper(address)
