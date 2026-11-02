@@ -210,11 +210,13 @@ func (a *API) Start(ctx context.Context) error {
 		FriendlyName: device.Name,
 		MACAddress:   mac,
 		Manufacturer: layout.Manufacturer,
-		// The model carries the daemon's own release, since the version field is Home Assistant's
-		// ESPHome version: given this daemon's release number there, it reads an ancient ESPHome and
-		// raises a repair to update firmware the device does not run (compat.go).
-		Model:             layout.Model + " · TECHO5 " + layout.Version,
-		Version:           ESPHomeCompat,
+		Model:        layout.Model,
+		// The daemon's release goes as the project's version, beside the ESPHome release it speaks
+		// (compat.go): Home Assistant shows the firmware as "v1.6.21 (ESPHome 2026.5.1)", takes the
+		// manufacturer and model from the project name, and leaves the outdated-firmware check to a
+		// project it does not know. The model stays the same from one release to the next.
+		ProjectName:       layout.Manufacturer + "." + layout.Model,
+		Version:           layout.Version,
 		ESPHomeVersion:    ESPHomeCompat,
 		VoiceFeatures:     voiceFeatures(),
 		BluetoothFeatures: bluetooth.Get().Features(),

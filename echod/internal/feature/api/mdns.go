@@ -72,7 +72,7 @@ func (a *API) advertise(ctx context.Context, port int) {
 			FriendlyName:  info.FriendlyName,
 			Port:          port,
 			MACAddress:    info.MACAddress,
-			Version:       info.Version,
+			Version:       info.ESPHomeVersion,
 			Platform:      layout.Platform,
 			Board:         layout.Board,
 			Encrypted:     encrypted,
