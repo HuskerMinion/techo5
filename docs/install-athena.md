@@ -39,7 +39,7 @@ Known limits:
 ## Before you start
 
 - **Unlock the unit with saiyaku-athena** (by R0rt1z2 with bengris32 and FieryFlames; see
-  [Credits](#credits)), from the XDA thread [[UNLOCK][ROOT][TWRP][UNBRICK] Amazon Echo Show 8 2nd Gen - 2021 (athena)](https://xdaforums.com/t/unlock-root-twrp-unbrick-amazon-echo-show-8-2nd-gen-2021-athena.4804958/). It needs Fire OS 7080 (PS7574.1.7080N), the version tested. A newer one (7082) is out and hasn't been tried; if your unit is on a version the installer doesn't know, see [A Fire OS version the installer doesn't know](#a-fire-os-version-the-installer-doesnt-know). The
+  [Credits](#credits)), from the XDA thread [[UNLOCK][ROOT][TWRP][UNBRICK] Amazon Echo Show 8 2nd Gen - 2021 (athena)](https://xdaforums.com/t/unlock-root-twrp-unbrick-amazon-echo-show-8-2nd-gen-2021-athena.4804958/). It was tested on Fire OS 7080 (PS7574.1.7080N). The unlock also works on 7082, whose speaker tunings are the same as 7080's ([#263](https://github.com/HuskerMinion/techo5/issues/263)), so the installer takes it too; a full install on 7082 hasn't been reported yet. If your unit is on a version the installer doesn't know, see [A Fire OS version the installer doesn't know](#a-fire-os-version-the-installer-doesnt-know). The
   unlock can take several tries; that's normal. When it's done, the unit has TWRP in `recovery`.
 - **Never write `tee1`, `lk` or the preloader.** That is where the unlock lives, and writing any of
   them bricks the unit. The installer only ever writes `system` and `boot`, and checks each by name
@@ -182,7 +182,7 @@ example, a backup made after an earlier install), the installer stops: pass Fire
 
 ### A Fire OS version the installer doesn't know
 
-The known tunings are those of Fire OS 7080, the version tested. A newer version (7082) hasn't been tried. If the installer says
+The known tunings are those of Fire OS 7080, the version tested; 7082's are the same. If the installer says
 the tuning isn't known:
 
 ```
