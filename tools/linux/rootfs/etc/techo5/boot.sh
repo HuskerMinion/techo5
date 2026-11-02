@@ -243,6 +243,8 @@ t5_bt_up "$BT_MODULE" /var/log
 		sleep 60
 		# Someone is choosing a network on the screen: not a fault, no reboot.
 		[ -e /run/techo5/wifi-setup ] && { down=0; lost=0; continue; }
+		# Wi-Fi quiet hours (echod, feature/wifiquiet): off the network on purpose until they end.
+		[ -e /run/techo5/wifi-quiet ] && { down=0; lost=0; continue; }
 		# A lease stays on wlan0 after the link is lost, until it runs out, hours later: an address
 		# is not a network. Not associated for three minutes in a row counts as down (#111).
 		if t5_wifi_joined; then lost=0; else lost=$((lost+1)); fi
