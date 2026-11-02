@@ -54,6 +54,12 @@ func (d *Display) gateNotice(s *scene, night bool) {
 	if !s.showNotification {
 		return
 	}
+	if night && s.nightInfo {
+		// Night clock shows Next up and notifications: not held, and not given the day's page. It is
+		// drawn on the red clock in the night's palette (render_night_info.go), and tapped away there.
+		d.noticeOut(s.notification.ID, false)
+		return
+	}
 	if !d.noticeOut(s.notification.ID, night) {
 		s.notification, s.showNotification = notify.Notification{}, false
 		return

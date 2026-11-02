@@ -53,6 +53,12 @@ func noticeID() string {
 
 // gateNotice holds back a notification's card at night until a touch has released it.
 func (d *Display) gateNotice(s *roundScene, night bool) {
+	if night && s.nightInfo && s.showNotification {
+		// Night clock shows Next up and notifications: not held; the night clock shows it in the night's
+		// tone (render_night_spot.go), and a tap puts it away.
+		d.noticeOut(s.notification.ID, false)
+		return
+	}
 	if s.showNotification && !d.noticeOut(s.notification.ID, night) {
 		s.notification, s.showNotification = notify.Notification{}, false
 	}

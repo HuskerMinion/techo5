@@ -619,6 +619,15 @@ like "kitchen screen" under its **Voice assistants** settings in Home Assistant.
   press and hold lights it and opens the ring menu; the night clock comes back, or the screen goes off
   again, after a minute and a half. When the night starts, Night clock is chosen, or the settings or
   the menu close, the Spot's night clock comes up after 10 seconds instead. A Spot with no hours set has a night of 10 PM to 7 AM.
+- **Night clock shows Next up and notifications** (a switch in Home Assistant and a row under Display, off
+  at first; it applies when **At night** is the clock alone): by default the night clock is the time
+  alone and a notification waits for the first touch. With the switch on, a Show's night clock also
+  carries the **Next up** card, or the glance chips when there are any, along the foot, and a
+  notification sent at night is drawn on it at once and tapped away as usual. Everything is drawn in the
+  night clock's dim red and the screen never gets brighter than the night light, so nothing lights the
+  room. A picture notification still waits for a touch. A Spot has no Next up card or glance chips, so
+  there the switch covers notifications only: the card takes the round face in dim red, and a tap puts it
+  away and leaves the night clock.
 - **Night warmth** (Show, a switch in Home Assistant, off at first): a warmer, lamp-like white on the
   screen through the night hours. Not on the Spot or the Panel app.
 - **Night mode** switch in Home Assistant: start or end the night now, from a bedtime automation for

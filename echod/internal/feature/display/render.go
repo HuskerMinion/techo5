@@ -171,6 +171,9 @@ type scene struct {
 	// redClock is the night light as the red clock alone, in redStyle (render_night.go).
 	redClock bool
 	redStyle string
+	// nightInfo adds the Next up card, the glance chips and a notification to the red clock, drawn in the
+	// night's palette (render_night_info.go).
+	nightInfo bool
 
 	// demo puts placeholders in for the owner's details, for screenshots that will be published.
 	demo bool

@@ -223,6 +223,8 @@ type roundScene struct {
 	// else has to be shown.
 	redClock bool
 	redStyle string
+	// nightInfo has a notification shown on the night clock, in the night's tone (render_night_spot.go).
+	nightInfo bool
 
 	// style is what the clock style in force shows beyond the time (clock_style.go).
 	style styleFacts

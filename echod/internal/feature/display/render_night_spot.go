@@ -25,12 +25,24 @@ import (
 func (s roundScene) nightClockFace() bool {
 	return s.redClock && s.phase == "idle" && !s.showVideo && s.call.Phase == phone.Idle && !s.pin.open &&
 		!s.setupAsking && !s.showVideoAsk && !s.announceRecording && !s.showReminder && !s.showAnnouncement &&
-		!s.showNotification && !s.showAlert && !s.sheetOpen && !s.menuOpen && !s.showCamera && !s.btPairing
+		!(s.showNotification && !s.nightInfo) && !s.showAlert && !s.sheetOpen && !s.menuOpen && !s.showCamera && !s.btPairing
 }
 
 // nightFace draws the night clock in its style.
 func (r *roundRenderer) nightFace(s roundScene) {
 	draw.Draw(r.dst, r.dst.Rect, image.NewUniform(color.Black), image.Point{}, draw.Src)
+	if s.nightInfo && s.showNotification {
+		// Night clock shows Next up and notifications: the card takes the face, as by day, in the
+		// night's tone (night_info.go), and the clock comes back once it is tapped away.
+		layer := image.NewRGBA(r.dst.Rect)
+		draw.Draw(layer, layer.Rect, image.NewUniform(color.Black), image.Point{}, draw.Src)
+		screen := r.dst
+		r.dst = layer
+		r.notifyFace(s)
+		r.dst = screen
+		nightToneOnto(screen, layer, layer.Rect)
+		return
+	}
 	switch s.redStyle {
 	case nightStyleLED:
 		r.nightLED(s.now)
