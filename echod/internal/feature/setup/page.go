@@ -114,7 +114,7 @@ func (f *Feature) serve(w http.ResponseWriter, r *http.Request) {
 
 // watching is the paths a view left up on the page asks for by itself. Answering them is not the page
 // being used: a tab left watching the scores would otherwise hold the page open for as long as it ran.
-var watching = map[string]bool{"/setup/scores": true, "/setup/takes/state": true}
+var watching = map[string]bool{"/setup/scores": true, "/setup/takes/state": true, "/setup/log/stream": true}
 
 // diagnostics hands over everything worth having when something is wrong, with the addresses, names,
 // keys and serial numbers already replaced — so that somebody can send it to an issue without
@@ -660,6 +660,7 @@ func diagnosticsSection(w http.ResponseWriter) {
 	  itself, the last of its log, its recent wake words, and what it is set to.</p>
 	 <p class="note">Addresses, network names, keys and serial numbers are replaced before you get it,
 	  so it can go straight into an issue. Worth a look before you send it all the same.</p>
+	 <p><a href="/setup/log">Follow the log live</a> — the same log, with the same parts replaced, as it is written.</p>
 	 </fieldset>`)
 }
 

@@ -1919,3 +1919,14 @@ in Home Assistant opens it), go to **General** and press
 **Download diagnostics**. It holds the last of the device's log, its recent wake word detections and
 near misses, and what it is set to. Addresses, network names, keys and
 serial numbers are replaced before you get it, but give it a read before you post it.
+
+To watch the log as it happens, press **Follow the log live** next to it. The page shows the last few hundred
+lines, newest at the bottom, then each new line as the device writes it. **Pause** stops the page scrolling
+(lines that come meanwhile are held and shown when you press **Follow**), the menu hides everything below a
+level (info, warnings, errors only), the box keeps only lines with the text you type, and **Download** saves
+what is shown. It needs a browser that has been let in with a press on the device, like the rest of the setup
+page, and it stops when the page closes. Two browsers can follow at once. A line is cleaned the same way as in
+the diagnostics download before it leaves the device; names of rooms and devices can still show, so look
+before you share it. The log is kept in memory only (the last 500 lines), and a browser that cannot keep up
+misses lines rather than slowing the device. The words of voice requests are hidden here as they are in the
+log itself unless **Send voice text** is on.
