@@ -123,10 +123,17 @@ func (d *Diag) Name() string { return "diagnostics" }
 func (d *Diag) Entities() []esphome.Entity {
 	out := []esphome.Entity{
 		d.cached, d.free, d.purge, d.restart,
-		d.temperature, d.radioTemp, d.cores, d.coresOnline, d.load, d.memory, d.booted, d.lux,
+		d.temperature, d.cores, d.coresOnline, d.load, d.memory, d.booted,
 		d.roomLevel, d.roomFloor,
 		d.tls, d.ip, d.color, d.signal, d.rxRate, d.txRate,
 		d.testPlayback, d.interval,
+	}
+	// Only where the board has them to read (board_*.go).
+	if radioHere() {
+		out = append(out, d.radioTemp)
+	}
+	if luxHere() {
+		out = append(out, d.lux)
 	}
 	// Holding cores online is the hotplug governor's, which an app on a tablet may not touch (coresHere).
 	if coresHere {
