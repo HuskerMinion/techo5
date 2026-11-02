@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/HuskerMinion/techo5/echod/internal/android/prop"
+	"github.com/HuskerMinion/techo5/echod/internal/asp"
 	"github.com/HuskerMinion/techo5/echod/internal/component"
 	"github.com/HuskerMinion/techo5/echod/internal/config"
 	"github.com/HuskerMinion/techo5/echod/internal/hardware/privacy"
@@ -52,10 +53,21 @@ type Source struct {
 	devMu sync.Mutex
 	pcm   capture
 
-	mu        sync.Mutex
-	listeners map[int]*listener
-	raw       map[int]chan []byte
-	next      int
+	mu sync.Mutex
+
+	// Resident External session: synchronized with final shared mono publish.
+	aspParent        context.Context
+	aspCurrent       *aspAttempt
+	aspSelected      config.ASPMode
+	aspActive        config.ASPMode
+	aspLaunchWanted  bool
+	aspStopped       bool
+	aspJobs          sync.WaitGroup
+	aspOpen          func(context.Context, asp.Descriptor) (aspProcess, error)
+	aspActiveChanged func(config.ASPMode)
+	listeners        map[int]*listener
+	raw              map[int]chan []byte
+	next             int
 
 	// dropped counts frames a listener was too slow to take. It matters more than it looks: the
 	// wake model is streaming, so a missing frame corrupts its state rather than just losing audio.
@@ -122,7 +134,12 @@ func (s *Source) Mixing() config.Mixing {
 func New() *Source {
 	mixer, mixing := NewMixer(config.Get().Microphone.Mixing)
 	s := &Source{
-		listeners: map[int]*listener{},
+		listeners:   map[int]*listener{},
+		aspSelected: config.ASPBuiltin,
+		aspActive:   config.ASPBuiltin,
+		aspOpen: func(ctx context.Context, d asp.Descriptor) (aspProcess, error) {
+			return asp.Start(ctx, d)
+		},
 		raw:       map[int]chan []byte{},
 		mixer:     mixer,
 		mixing:    mixing,
@@ -160,7 +177,16 @@ func Get() *Source {
 func (s *Source) Name() string { return "capture" }
 
 // Start takes the capture device, off Android if it got there first, the same way the speaker does.
-func (s *Source) Start(context.Context) error {
+func (s *Source) Start(ctx context.Context) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	s.mu.Lock()
+	stopped := s.aspStopped
+	s.mu.Unlock()
+	if stopped {
+		return context.Canceled
+	}
 	// Before the device is opened, so that a unit whose mute is the daemon's own is already cutting
 	// when the first frame arrives. The mute feature restores the same value later in the Device
 	// phase; this is only about the frames captured before it gets there. See privacy.Seed.
@@ -182,6 +208,15 @@ func (s *Source) Start(context.Context) error {
 	}()
 
 	for range acquireAttempts {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+		s.mu.Lock()
+		stopped := s.aspStopped
+		s.mu.Unlock()
+		if stopped {
+			return context.Canceled
+		}
 		time.Sleep(acquireRetry)
 
 		err = s.open()
@@ -219,9 +254,16 @@ func (s *Source) open() error {
 		return fmt.Errorf("mic: opening capture: %w", err)
 	}
 
+	s.mu.Lock()
+	if s.aspStopped {
+		s.mu.Unlock()
+		_ = pcm.Close()
+		return context.Canceled
+	}
 	s.devMu.Lock()
 	s.pcm = pcm
 	s.devMu.Unlock()
+	s.mu.Unlock()
 
 	afterOpen()
 	return nil
@@ -341,8 +383,33 @@ func (s *Source) Run(ctx context.Context) error {
 		default:
 		}
 
-		n, err := pcm.Read(raw)
+		// The optional native tap is synchronous and finishes IPC before next Read.
+		// Startup itself is asynchronous: stock frames continue while READY waits.
+		s.mu.Lock()
+		wantNative := !s.aspStopped && s.aspSelected == config.ASPExternal &&
+			(s.aspLaunchWanted || s.aspCurrent != nil)
+		s.mu.Unlock()
+		var external *aspResponse
+		var visit func(NativeBlock)
+		if wantNative {
+			_, paired := pcm.(captureReadWithNative)
+			_, plain := pcm.(interface{ Config() alsa.Config })
+			if !paired && !plain {
+				s.failNative(errors.New("native capture unavailable on backend"))
+			} else {
+				visit = func(b NativeBlock) { external = s.captureNative(b) }
+			}
+		}
+		// One SoftwareCut policy decision at the shared native/stock boundary.
+		n, cut, err := readCaptured(pcm, raw, privacy.SoftwareCut, visit)
 		if err != nil {
+			// An invalid native descriptor must fail only External, not stock.
+			// readCaptured returns an already valid stock frame if n > 0.
+			if visit != nil && n > 0 && errors.Is(err, errNativeGeometry) {
+				s.failNative(err)
+				s.broadcastSelected(raw[:n], cut, nil)
+				continue
+			}
 			if errors.Is(err, alsa.ErrOverrun) {
 				if overruns++; overruns == 1 || overruns%100 == 0 {
 					slog.Warn("capture overrun", "times", overruns)
@@ -356,7 +423,7 @@ func (s *Source) Run(ctx context.Context) error {
 			}
 			return err
 		}
-		s.broadcast(raw[:n])
+		s.broadcastSelected(raw[:n], cut, external)
 	}
 }
 
@@ -382,12 +449,21 @@ func (s *Source) reportDrops() {
 // broadcast hands the frame to every listener, dropping it for any that is behind. The mono mix is
 // only computed when something wants it.
 func (s *Source) broadcast(raw []byte) {
+	s.broadcastWithCut(raw, privacy.SoftwareCut())
+}
+
+// broadcastWithCut shares the capture block's single SoftwareCut decision.
+func (s *Source) broadcastWithCut(raw []byte, cut bool) {
+	s.broadcastSelected(raw, cut, nil)
+}
+
+func (s *Source) broadcastSelected(raw []byte, cut bool, external *aspResponse) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
 	// A software-only mute cuts here, before anything reads the frame: what is not handed on cannot
 	// be heard, kept or streamed.
-	if privacy.SoftwareCut() {
+	if cut {
 		clear(raw)
 	}
 
@@ -458,6 +534,9 @@ func (s *Source) broadcast(raw []byte) {
 		}
 	}
 	s.wasLeveling = on
+	// Stock DSP and sensors above always process stock data; one final
+	// synchronized selection governs all history, wake, STT and mono listeners.
+	frame = s.aspFrameLocked(external, frame)
 	s.remember(frame)
 	spectrum.Mic.Push(frame)
 

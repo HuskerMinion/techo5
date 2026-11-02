@@ -19,10 +19,11 @@ import (
 // read as a list than to derive. Anything that needs to wait for another service waits on a signal of
 // its own rather than on being constructed later.
 type Group struct {
-	mu       sync.Mutex
-	entries  []*entry
-	started  bool
-	stopping bool
+	mu         sync.Mutex
+	entries    []*entry
+	started    bool
+	stopping   bool
+	beforeWait func()
 }
 
 type entry struct {
@@ -62,6 +63,17 @@ func (g *Group) Add(svc Service, opts ...Option) {
 	})
 }
 
+// SetBeforeWait connects one resident shutdown callback to both normal stop
+// and required-service early failure, before any blocked Run is joined.
+func (g *Group) SetBeforeWait(f func()) {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	if g.started {
+		panic("service: late shutdown hook")
+	}
+	g.beforeWait = f
+}
+
 // Run starts everything and blocks until ctx is canceled and every service has stopped.
 //
 // A required service that cannot be acquired is fatal: Run returns its error without starting what
@@ -77,6 +89,11 @@ func (g *Group) Run(ctx context.Context) error {
 	entries := append([]*entry(nil), g.entries...)
 	g.mu.Unlock()
 
+	// A required Start failure also has to cancel already-running services,
+	// not merely invoke the pre-Wait ASP hook.
+	running, cancel := context.WithCancel(ctx)
+	defer cancel()
+
 	var wg sync.WaitGroup
 	started := make([]*entry, 0, len(entries))
 
@@ -84,9 +101,10 @@ func (g *Group) Run(ctx context.Context) error {
 		// Acquire before running, in order, so a service that has to take a device off Android does
 		// it while nothing else is competing for it.
 		began := time.Now()
-		if err := e.start(ctx); err != nil {
+		if err := e.start(running); err != nil {
 			e.set(StateFailed, err)
 			if e.policy.required {
+				cancel()
 				slog.Error("required service unavailable, giving up", "service", e.svc.Name(), "err", err)
 				g.stop(started, &wg)
 				return fmt.Errorf("service: %s: %w", e.svc.Name(), err)
@@ -100,11 +118,12 @@ func (g *Group) Run(ctx context.Context) error {
 		wg.Add(1)
 		safe.Go("service "+e.svc.Name(), func() {
 			defer wg.Done()
-			g.supervise(ctx, e)
+			g.supervise(running, e)
 		})
 	}
 
 	<-ctx.Done()
+	cancel()
 	g.stop(started, &wg)
 	return nil
 }
@@ -113,8 +132,12 @@ func (g *Group) Run(ctx context.Context) error {
 func (g *Group) stop(started []*entry, wg *sync.WaitGroup) {
 	g.mu.Lock()
 	g.stopping = true
+	beforeWait := g.beforeWait
 	g.mu.Unlock()
 
+	if beforeWait != nil {
+		beforeWait()
+	}
 	wg.Wait()
 
 	for i := len(started) - 1; i >= 0; i-- {

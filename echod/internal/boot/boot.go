@@ -19,6 +19,7 @@ import (
 	"github.com/HuskerMinion/techo5/echod/internal/feature/voice"
 	"github.com/HuskerMinion/techo5/echod/internal/hardware/led"
 	"github.com/HuskerMinion/techo5/echod/internal/hardware/metrics"
+	"github.com/HuskerMinion/techo5/echod/internal/hardware/mic"
 	"github.com/HuskerMinion/techo5/echod/internal/layout"
 	"github.com/HuskerMinion/techo5/echod/internal/service"
 	"github.com/HuskerMinion/techo5/echod/internal/update"
@@ -99,13 +100,24 @@ func Run(ctx context.Context) error {
 func run(ctx context.Context, group *service.Group, restarting *string) error {
 	inner, stop := context.WithCancel(ctx)
 	defer stop()
+	resident := mic.Get()
+	resident.BindASP(inner)
+	// Required-service early errors enter Group.stop without ctx cancellation;
+	// the hook cancels a blocked exchange BEFORE Group waits for Run.
+	group.SetBeforeWait(resident.StopASP)
+	defer resident.WaitASP() // only after Group's capture wait
 
 	done := make(chan error, 1)
 	go func() { done <- group.Run(inner) }()
 
 	select {
 	case err := <-done:
+		resident.StopASP()
 		return err
+	case <-ctx.Done():
+		stop()
+		resident.StopASP()
+		return <-done
 	case why := <-update.Wanted():
 		*restarting = why
 		slog.Info("restarting", "why", why)
@@ -114,6 +126,7 @@ func run(ctx context.Context, group *service.Group, restarting *string) error {
 		led.Get().HoldOnStop(led.UpdateColor)
 
 		stop()
+		resident.StopASP()
 		return <-done
 	}
 }
