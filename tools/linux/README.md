@@ -258,7 +258,8 @@ script are in tools/linux/athena/kernel (README.md there).
 
 The boot layer is U-Boot with an A/B boot menu, from
 [u-boot-amazon-echo](https://github.com/nuno407/u-boot-amazon-echo) (its SPEC.md is the contract
-below; issue #336). It is not installed by anything here yet. Where it is, it keeps an A/B record in
+below; issue #336). It is opt-in: `tools/install-athena.py --boot-layer` installs it on an athena
+(docs/install-athena.md, "The boot layer"). Where it is, it keeps an A/B record in
 the misc partition, picks the slot, counts its tries, starts that slot's own kernel from
 `slots/<x>/boot/boot.img` and says which on the kernel command line (`ab.slot=<x>`, `ab.kernel=`).
 The OS side, in this tree:
@@ -280,11 +281,20 @@ The OS side, in this tree:
 
 Without the boot layer there is no `ab.slot=` and no record, and all of this stays off.
 
-Moving an existing unit: nothing changes until the boot layer is installed. Its installer (the next
-step of #336) writes the A/B record with the slot running now marked good, and fills in
-`slots/<x>/boot/` for both existing slots before U-Boot replaces the boot partition: from each
-rootfs's own kernel image where there is one, otherwise from the kernel in the boot partition that
-the unit runs today. After that, every release brings its kernel in the slot, or keeps the current one.
+Moving an existing unit: nothing changes until the boot layer is installed. `install-athena.py
+--boot-layer` saves boot and misc, writes the A/B record with the slot running now marked good, and
+fills in `slots/<x>/boot/` for both existing slots before U-Boot replaces the boot partition: from
+each rootfs's own kernel image where there is one, otherwise from the kernel in the boot partition
+that the unit runs today. After that, every release brings its kernel in the slot, or keeps the
+current one. `--boot-layer-off` puts the saved kernel back and clears the record. echod's kernel
+update never writes over U-Boot (echod/internal/update/kernel/uboot.go).
+
+U-Boot itself is built from source by `tools/linux/athena/uboot/build.sh`, at the u-boot-amazon-echo
+and upstream U-Boot commits it pins, with TECHO5's settings (`techo5-athena.config`: the marker the
+guards look for, and `CONFIG_AB_DT_CARRY="techo5,dsp-config"`, so each slot's kernel gets the unit's
+amp tuning from U-Boot's own image). The release workflow runs it and attests the binary and its
+source; a release names the binary in its signed manifest (`techo5-uboot-athena-<version>.bin`). The
+installer packs it into that release's boot image with `pack-uboot.py` and fills in the tuning.
 `python3 tools/test_boot_layer.py` runs bootctl, slotctl and the command line checks under
 busybox, in Docker, both with and without a record.
 

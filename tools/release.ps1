@@ -44,6 +44,14 @@ param(
     # (-AthenaBoot, which an athena rootfs carrying a kernel needs), and refused unless check-source.py
     # finds it the patched tree, with the configuration the boot image's kernel carries.
     [string]$AthenaKernelSource = '',
+    # The Echo Show 8 2nd gen's U-Boot (the boot layer, opt-in; install-athena.py --boot-layer):
+    # techo5-uboot-athena.bin and techo5-uboot-athena-source.tar.gz from the "Build release binaries"
+    # workflow run for this release's tag (its uboot job, tools/linux/athena/uboot/build.sh). Each is
+    # taken only once `gh attestation verify` confirms CI built it from refs/tags/$Version. The binary
+    # is published as techo5-uboot-athena-<version>.bin, named in the signed manifest; the source,
+    # for the GPL, as techo5-uboot-athena-<version>-source.tar.gz.
+    [string]$AthenaUBoot = '',
+    [string]$AthenaUBootSource = '',
     # The Skylight Calendar 15 rootfs tarball: deploy-rootfs.sh --out with
     # DEVICE_OVERLAY=tools/linux/skylight/overlay EXTRA_PACKAGES=busybox-extras KERNEL_IMAGE=<-SkylightBoot>.
     # The Show's binary on a rootfs of its own, keyed arm-skylight in the manifest and published as
@@ -246,6 +254,13 @@ foreach ($t in @($Rootfs, $SkylightRootfs) | Where-Object { $_ }) {
     $names = @(& tar -tzf $t) -replace '^\./', ''
     if ($names -contains 'usr/local/bin/techo5-gpu') { throw "$t carries the GPU helper, which only athena's rootfs does" }
     if ($names -contains 'usr/local/bin/techo5-jpeg') { throw "$t carries the JPEG decoder, which only athena's rootfs does" }
+}
+# U-Boot likewise: published only with its source, both from CI.
+if (($AthenaUBoot -and -not $AthenaUBootSource) -or ($AthenaUBootSource -and -not $AthenaUBoot)) {
+    throw "AthenaUBoot and AthenaUBootSource go together: U-Boot is published only with its source (the GPL)"
+}
+if ($AthenaUBoot -and -not $AthenaBoot) {
+    throw "-AthenaUBoot needs -AthenaBoot: install-athena.py packs U-Boot into that release's boot image"
 }
 # A kernel is published only with its source (the GPL), and the source must be what built it.
 if ($AthenaBoot -and -not $AthenaKernelSource) {
@@ -498,6 +513,28 @@ try {
         Copy-Item $AthenaBoot $named -Force
         $bootAssets += $named
     }
+    # athena's U-Boot, as CI built and attested it for this tag: an arm64 Image carrying TECHO5's marker
+    # (CONFIG_AB_SELF_MARKER, by which echod and install-athena.py never write a kernel over it).
+    $ubootSourceNamed = $null
+    if ($AthenaUBoot) {
+        foreach ($f in @($AthenaUBoot, $AthenaUBootSource)) {
+            if (-not (Test-Path -LiteralPath $f -PathType Leaf)) { throw "not found: $f" }
+            & gh attestation verify $f --repo $repo --source-ref "refs/tags/$Version" | Out-Null
+            if ($LASTEXITCODE -ne 0) { throw "$f is not attested as built by CI from tag $Version" }
+        }
+        $isUBoot = "import sys; b=open(sys.argv[1],'rb').read(); sys.exit(0 if b[56:60]==b'ARM\x64' and b'techo5-athena-uboot-image' in b else 1)"
+        python -I -c $isUBoot $AthenaUBoot
+        if ($LASTEXITCODE -ne 0) { throw "$AthenaUBoot is not TECHO5's athena U-Boot (no arm64 Image header, or no marker)" }
+        $named = Join-Path $bin "techo5-uboot-athena-$Version.bin"
+        Copy-Item $AthenaUBoot $named -Force
+        $bootAssets += $named
+        $ubootSourceNamed = Join-Path $bin "techo5-uboot-athena-$Version-source.tar.gz"
+        Copy-Item $AthenaUBootSource $ubootSourceNamed -Force
+        $ubootSum = (Get-FileHash -Algorithm SHA256 $named).Hash.ToLower()
+        Write-Host "== techo5-uboot-athena-$Version.bin: sha256 $ubootSum"
+    } else {
+        Write-Warning "no -AthenaUBoot: install-athena.py --boot-layer cannot install the boot layer from this release"
+    }
     # The Skylight's: the store image, the boot image and the installer image, each named in the signed
     # manifest for install-skylight.py.
     foreach ($img in @(@{ Path = $SkylightStore; Name = "techo5-store-skylight-$Version.img.gz" },
@@ -588,6 +625,7 @@ if ($athenaSourceName) {
     Copy-Item $AthenaKernelSource $named -Force
     $args += $named
 }
+if ($ubootSourceNamed) { $args += $ubootSourceNamed }
 if ($skylightSourceName) {
     $named = Join-Path $bin $skylightSourceName
     Copy-Item $SkylightKernelSource $named -Force
@@ -641,7 +679,7 @@ if (-not $devVersion -or (Test-VersionNewer $Version $devVersion)) {
 $published = @(& gh release view $Version --repo $repo --json assets -q '.assets[].name')
 $named = @((Get-Content (Join-Path $bin 'manifest.json') -Raw | ConvertFrom-Json).assets.PSObject.Properties.Name)
 $unsigned = @($published | Where-Object { ($_ -like 'techo5-boot-*' -or $_ -like 'techo5-deck-*' -or $_ -like 'techo5-system-*' -or
-    $_ -like 'techo5-store-*' -or $_ -like 'techo5-installer-*') -and $named -notcontains $_ })
+    $_ -like 'techo5-store-*' -or $_ -like 'techo5-installer-*' -or $_ -like 'techo5-uboot-*.bin') -and $named -notcontains $_ })
 if ($unsigned) {
     throw "published, but these are not named in the signed manifest and nothing will trust them: $($unsigned -join ', ')"
 }

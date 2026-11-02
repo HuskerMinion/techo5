@@ -1,7 +1,8 @@
 name: Build release binaries
 
-# Builds echod-arm, echod-arm-dot, echod-arm-donut and echod-arm-spot, and the TECHO5 Deck agent for Windows, macOS
-# and Linux, on GitHub's runners from a tagged commit, and attests that the published binaries were
+# Builds echod-arm, echod-arm-dot, echod-arm-donut and echod-arm-spot, the TECHO5 Deck agent for Windows, macOS
+# and Linux, and the Echo Show 8 2nd gen's U-Boot (the boot layer, job uboot), on GitHub's runners from a tagged
+# commit, and attests that the published binaries were
 # built from that exact source — so anyone can verify a
 # release matches the repo without trusting the maintainer's machine, for all three devices' release
 # scripts (this repo's release.ps1, techo5-dot's release-dot.ps1, techo5-spot's release-spot.ps1 /
@@ -149,6 +150,69 @@ jobs:
             bin/techo5-deck-*
             bin/SHA256SUMS
           if-no-files-found: error
+
+  # The boot layer for the Echo Show 8 2nd gen (athena, opt-in; issue #336): U-Boot with abboot, built
+  # from source at the commits tools/linux/athena/uboot/build.sh pins (u-boot-amazon-echo and upstream
+  # U-Boot), with the whole source beside it for the GPL. It runs on an arm64 runner: the build runs in
+  # an arm64 Docker image (u-boot-amazon-echo's uboot/docker/Dockerfile), natively there. A release
+  # publishes the binary as techo5-uboot-athena-<version>.bin, named in its signed manifest
+  # (release.ps1 -AthenaUBoot, which takes it only with this job's attestation for the release's tag),
+  # and install-athena.py --boot-layer installs it.
+  # U-Boot is built from u-boot-amazon-echo's own build script and Dockerfile, so that job runs with
+  # read access only and hands the files on; uboot-attest, which runs none of that code, attests them.
+  uboot:
+    if: ${{ github.event_name == 'workflow_dispatch' || startsWith(github.ref_name, 'v') }}
+    runs-on: ubuntu-24.04-arm
+    permissions:
+      contents: read
+    outputs:
+      name: ${{ steps.ver.outputs.name }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+
+      - name: Version info
+        id: ver
+        run: |
+          if [ "${GITHUB_REF_TYPE}" = "tag" ]; then name="${GITHUB_REF_NAME}"; else name="v0.0.0-dev"; fi
+          echo "name=$name" >> "$GITHUB_OUTPUT"
+
+      - name: Build
+        run: sh tools/linux/athena/uboot/build.sh bin
+
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: techo5-uboot-athena-${{ steps.ver.outputs.name }}
+          path: |
+            bin/techo5-uboot-athena.bin
+            bin/techo5-uboot-athena.config
+            bin/techo5-uboot-athena-source.tar.gz
+            bin/SHA256SUMS
+          if-no-files-found: error
+
+  uboot-attest:
+    needs: uboot
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      id-token: write
+      attestations: write
+    steps:
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: techo5-uboot-athena-${{ needs.uboot.outputs.name }}
+          path: bin
+
+      - name: Check the files against the build's own sums
+        run: cd bin && sha256sum -c SHA256SUMS
+
+      # Check by hand with:
+      #   gh attestation verify techo5-uboot-athena.bin --repo HuskerMinion/techo5 --source-ref refs/tags/<tag>
+      - name: Attest build provenance
+        uses: actions/attest-build-provenance@e8998f949152b193b063cb0ec769d69d929409be # v2.4.0
+        with:
+          subject-path: |
+            bin/techo5-uboot-athena.bin
+            bin/techo5-uboot-athena-source.tar.gz
 
   # The panel app's echod: GOOS=android with the NDK's clang, for both of the app's ABIs, exactly as the
   # app's tools/build-apk.sh builds it for development (tags, -trimpath, -s -w, API 26, the version
