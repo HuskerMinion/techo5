@@ -1618,7 +1618,10 @@ room. A Skylight Calendar has no microphone and does not offer it.
 setup page shows the link under Privacy & Security, **Baby monitor**: this device's address and `/baby`,
 with a long random key in it (128 random bits, which nobody can guess). Open it on a phone or computer
 and tap **Tap to listen** (a browser plays sound only after a tap). It works in Safari on an iPhone, in
-Chrome and in Firefox, with no app. Keep the link private, as you would a password: anyone who has it
+Chrome and in Firefox, with no app, but only while the page is open on the screen: a phone that locks
+or a tab left for another stops the sound. To listen through the night, keep the screen on and the
+phone charging, or use a computer or tablet that stays awake. Back on the page, the sound comes back by
+itself. Keep the link private, as you would a password: anyone who has it
 can listen while the switch is on. **New link** on the setup page replaces the key, ends everyone
 listening and stops the old link working. The link is on your network without encryption, as the setup
 page is, so use it on a network you trust. Up to three browsers can listen at once. With the switch
@@ -1628,12 +1631,12 @@ is off, so a link you saved still works when you turn it on again.
 **What shows it.** While anyone listens, a Show or a Spot draws an amber dot at the top of the screen
 (a dark screen keeps its dimmest light to show it), a Dot pulses its light ring amber, and Home
 Assistant has a **Baby monitor listening now** sensor, so an automation can tell you. The **mute**
-stops the sound at once, ends the listeners, and the page says the microphones are muted; it will not
-start again until you unmute and tap again. Voice keeps working while someone listens.
+stops the sound at once, ends the listeners, and the page says the microphones are muted; an open
+page starts again by itself a few seconds after you unmute. Voice keeps working while someone listens.
 
-**The sound.** It is what the wake word hears, after echo cancellation and levelling, at 16 kHz mono,
-a fraction of a second behind the room (the page keeps about a fifth of a second in hand). On an iPhone, turn the ringer switch on and the volume up,
-or the browser plays nothing. The remote API cannot see or change the switch, and a saved settings file,
+**The sound.** It is what the wake word hears, after echo cancellation and leveling, at 16 kHz mono,
+a fraction of a second behind the room (the page keeps about a fifth of a second in hand). On an
+iPhone, turn the ringer switch on and the volume up, or the browser plays nothing. The remote API cannot see or change the switch, and a saved settings file,
 settings sharing and the diagnostics download neither carry it nor change it. After a restart it comes
 back as you left it.
 

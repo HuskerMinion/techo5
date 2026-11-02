@@ -117,17 +117,19 @@ p{color:#aaa;font-size:.9em;max-width:28em;margin:1em auto}
 <div id="s" role="status"></div>
 <p>The device shows that someone is listening. On an iPhone, turn the ringer switch on and the volume up.</p>
 <script>
-var RATE=16000,ctx,ws,next=0,lock;
+var RATE=16000,ctx,ws,next=0,lock,want=false,retry;
 var go=document.getElementById('go'),st=document.getElementById('s');
 go.onclick=function(){
   var AC=window.AudioContext||window.webkitAudioContext;
   if(!ctx)ctx=new AC();
   ctx.resume();
+  want=true;
   try{if(navigator.wakeLock)navigator.wakeLock.request('screen').then(function(l){lock=l},function(){});}catch(e){}
   start();
 };
 function start(){
-  if(ws)ws.close();
+  clearTimeout(retry);
+  if(ws){ws.onclose=null;ws.close();}
   var k=new URLSearchParams(location.search).get('k')||'';
   ws=new WebSocket((location.protocol==='https:'?'wss://':'ws://')+location.host+'/baby/audio?k='+encodeURIComponent(k));
   ws.binaryType='arraybuffer';
@@ -135,8 +137,18 @@ function start(){
   st.textContent='Connecting...';
   go.hidden=true;
   ws.onmessage=function(e){if(typeof e.data!=='string'){st.textContent='Listening';play(e.data);}};
-  ws.onclose=function(e){st.textContent=e.reason||'Not connected';go.textContent='Tap to listen again';go.hidden=false;};
+  ws.onclose=function(e){
+    st.textContent=(e.reason||'Not connected')+(want?', trying again':'');
+    go.textContent='Tap to listen again';go.hidden=false;
+    if(want&&document.visibilityState==='visible')retry=setTimeout(start,3000);
+  };
 }
+// Back on the page after the phone slept or the tab was left: sound on again, and the stream back.
+document.addEventListener('visibilitychange',function(){
+  if(document.visibilityState!=='visible'||!want)return;
+  if(ctx)ctx.resume();
+  if(!ws||ws.readyState>1)start();
+});
 function play(buf){
   var s=new Int16Array(buf),f=new Float32Array(s.length);
   for(var i=0;i<s.length;i++)f[i]=s[i]/32768;
