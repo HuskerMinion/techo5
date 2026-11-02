@@ -332,6 +332,7 @@ func (c *conversation) heardOnHA() {
 		return
 	}
 	if w.mode == watchConfirm {
+		c.turn.Scored(w.peak)
 		Confirmed.Emit(Confirmation{Slot: w.slot, Peak: w.peak})
 	}
 }

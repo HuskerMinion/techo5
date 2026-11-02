@@ -294,9 +294,11 @@ Assistant's bus, with:
 | Field | |
 |---|---|
 | `ended` | `answered`, `no_speech` (nothing said, or only what speech-to-text writes for noise), `canceled` (stopped, interrupted, cut off by another sound, or answered by another device), or `error` |
+| `reason` | Only when `ended` is `canceled`: `stopped` (the button, the stop word or Home Assistant ended it), `interrupted` (the wake word again, once it was thinking or answering), `cut_off` (another sound took the speaker from the reply), or `answered_elsewhere` (another device heard the wake word first, which is the nearest device feature working) |
 | `error` | Only when `ended` is `error`: Home Assistant's error code, like `stt-stream-failed`, or `timeout` when the pipeline took longer than the slot allows |
 | `trigger` | What opened it: `wake_word`, `button`, `follow_up` (listening again after a reply), or `home_assistant` (an announcement that asked for an answer) |
 | `wake_word` | The slot's wake word. It picked the pipeline, so it is there for a button or follow-up too |
+| `wake_score` | Only on a turn the device's own wake word opened: the highest score the word reached, as `Last wake score` shows it. Logged beside `heard`, it shows how close mistaken wakes come to the threshold |
 | `slot` | The wake word slot, `1` or `2` |
 | `heard` | What speech-to-text heard, up to 1000 characters |
 | `reply` | The reply's text, up to 1000 characters |

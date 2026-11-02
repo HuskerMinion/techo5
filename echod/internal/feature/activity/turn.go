@@ -35,8 +35,19 @@ type Ending string
 const (
 	Answered Ending = "answered"
 	NoSpeech Ending = "no_speech" // nothing said, or only what speech-to-text writes for noise
-	Canceled Ending = "canceled"  // stopped, interrupted, cut off, or answered by another device
+	Canceled Ending = "canceled"  // stopped, interrupted, cut off, or answered by another device (Reason)
 	Failed   Ending = "error"     // the pipeline failed or gave up; the event's error says which
+)
+
+// Reason is why a turn was canceled, which the event's ended does not say: a device that stood aside
+// for a nearer one has done its job, and one that was stopped has not.
+type Reason string
+
+const (
+	Stopped           Reason = "stopped"            // the button, the stop word or Home Assistant ended it
+	Interrupted       Reason = "interrupted"        // a new turn took its place
+	CutOff            Reason = "cut_off"            // another sound took the speaker from the reply
+	AnsweredElsewhere Reason = "answered_elsewhere" // another device heard the wake word first
 )
 
 // Trigger is what opened a turn.
@@ -52,6 +63,10 @@ const (
 // textLimit is the longest transcript or reply an event carries. Longer than a state, since a reply
 // is often a paragraph, and far short of what the wire allows: every event goes into the recorder.
 const textLimit = 1000
+
+// scoreWait is how long a finished turn holds its events for the wake word's peak, which is known only
+// once the detection's hold ends (detect.Hold): a turn another device answered can be over before then.
+const scoreWait = time.Second
 
 // queued is how many events, two to a turn, may wait for a Home Assistant that has stopped reading.
 // Turns are seconds apart, so a full queue is a connection that is gone, and the newest is dropped.
@@ -75,6 +90,14 @@ type Turn struct {
 	failure  string
 	timedOut bool
 
+	// reason is why a canceled turn was.
+	reason Reason
+
+	// score is the peak the wake word reached, for a turn the device's own engine opened. scoreDue says
+	// one is on its way, and a turn that ends first holds its events for it (scoreWait).
+	score    float64
+	scoreDue bool
+
 	// audio is seconds of recording kept for this turn, zero when none was.
 	audio float64
 
@@ -83,6 +106,11 @@ type Turn struct {
 	thinking  time.Time
 	replying  time.Time
 	ended     time.Time
+
+	// how is how it ended; wait holds its events for the score, and sent says they have gone.
+	how  Ending
+	wait *time.Timer
+	sent bool
 }
 
 // Begin starts a turn. The id lives as long as the device holds the turn's audio, which is what asks
@@ -136,6 +164,53 @@ func (t *Turn) Fails(code string) {
 	t.failure = code
 }
 
+// Cancels says why the turn about to end as canceled is.
+func (t *Turn) Cancels(why Reason) {
+	if t == nil {
+		return
+	}
+
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	t.reason = why
+}
+
+// AwaitsScore says the device's own engine heard the wake word that opened this turn, and the peak it
+// reached is on its way (Scored).
+func (t *Turn) AwaitsScore() {
+	if t == nil {
+		return
+	}
+
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	t.scoreDue = true
+}
+
+// Scored gives the turn its wake word's peak. A turn already over and holding its events for it sends
+// them now; one whose events have gone is past adding to.
+func (t *Turn) Scored(peak float64) {
+	if t == nil {
+		return
+	}
+
+	t.mu.Lock()
+	if t.sent {
+		t.mu.Unlock()
+		return
+	}
+	t.score = peak
+	held := t.wait != nil
+	if held {
+		t.wait.Stop()
+	}
+	t.mu.Unlock()
+
+	if held {
+		t.send()
+	}
+}
+
 // TimesOut says the turn is about to end because the device gave up waiting.
 func (t *Turn) TimesOut() {
 	if t == nil {
@@ -151,7 +226,8 @@ func (t *Turn) TimesOut() {
 // over, and the one that noticed first is the one that timed it.
 //
 // The events are sent from a goroutine of their own. Ending is on the voice loop, and a write to a
-// connection that has died waits out its timeout; the next wake must not.
+// connection that has died waits out its timeout; the next wake must not. A turn still owed its wake
+// word's score holds them for it, up to scoreWait.
 func (t *Turn) Ends(how Ending) {
 	if t == nil {
 		return
@@ -162,8 +238,27 @@ func (t *Turn) Ends(how Ending) {
 		t.mu.Unlock()
 		return
 	}
-	t.ended = time.Now()
-	fields, legacy := t.fields(how), t.legacy(how)
+	t.ended, t.how = time.Now(), how
+	if t.scoreDue && t.score == 0 {
+		t.wait = time.AfterFunc(scoreWait, t.send)
+		t.mu.Unlock()
+		return
+	}
+	t.mu.Unlock()
+
+	t.send()
+}
+
+// send reports the finished turn, once: the score arriving and the wait for it running out can both
+// call it.
+func (t *Turn) send() {
+	t.mu.Lock()
+	if t.sent {
+		t.mu.Unlock()
+		return
+	}
+	t.sent = true
+	fields, legacy := t.fields(t.how), t.legacy(t.how)
 	t.mu.Unlock()
 
 	// A device that was never named has none to give, and an empty field says nothing a missing one
@@ -272,6 +367,12 @@ func (t *Turn) fields(how Ending) map[string]string {
 	}
 	if how == Failed && t.failure != "" {
 		out["error"] = component.Fit(t.failure)
+	}
+	if how == Canceled && t.reason != "" {
+		out["reason"] = string(t.reason)
+	}
+	if t.score > 0 {
+		out["wake_score"] = strconv.FormatFloat(t.score, 'f', 2, 64)
 	}
 	t.durations(out, "reply_ms")
 	return out

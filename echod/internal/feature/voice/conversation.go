@@ -103,6 +103,7 @@ const (
 	evRunStart                     // Home Assistant opened a run
 	evAnnouncing                   // an announcement that asks for an answer is being said (event.text)
 	evAnnounced                    // and was cut off, so no answer follows
+	evScored                       // the peak a wake word reached (event.slot, event.peak)
 )
 
 type event struct {
@@ -130,7 +131,7 @@ type event struct {
 	// (WokeAt): what was said meanwhile is in the history, and the turn sends that much more of it.
 	waited time.Duration
 
-	// peak is an evCandidate's score.
+	// peak is an evCandidate's or an evScored's score.
 	peak float64
 
 	// spoken is an evReplyText whose words have already been said: realtime voice has them only once
@@ -230,6 +231,9 @@ type conversation struct {
 	// turn measures the one that is open and reports it when it closes. Nil while idle, and every
 	// method on it tolerates that, so the phases do not each have to check.
 	turn *activity.Turn
+
+	// scores matches a wake word's peak to the turn it opened (wakescore.go).
+	scores wakeScores
 
 	// pending is a turn owed once the current one has finished closing, nil when none.
 	//
@@ -497,6 +501,9 @@ func (c *conversation) dropQuestion() {
 
 func (c *conversation) turnEvent(e event) {
 	switch e.kind {
+	case evScored:
+		c.scored(e.slot, e.peak, e.at)
+
 	case evStart:
 		// A turn that could not open (no pipeline, the microphones on a camera call) leaves no answer
 		// to follow an announced question, so the question goes as a cut-off one does. One only put off
@@ -720,6 +727,7 @@ func (c *conversation) turnEvent(e event) {
 		}
 		slog.Info("the reply was cut off by another sound", "slot", c.slot+1)
 		c.clearPending()
+		c.turn.Cancels(activity.CutOff)
 		c.idle("cut off", activity.Canceled)
 
 	case evError:
@@ -730,6 +738,7 @@ func (c *conversation) turnEvent(e event) {
 		if e.code == errDuplicate {
 			slog.Info("another device answered first", "slot", c.slot+1, "message", e.msg)
 			c.clearPending()
+			c.turn.Cancels(activity.AnsweredElsewhere)
 			c.idle("answered elsewhere", activity.Canceled)
 			c.leds.Busy().Flash(led.WorkElsewhere, yieldFlash)
 			return
@@ -768,6 +777,7 @@ func (c *conversation) turnEvent(e event) {
 			return
 		}
 		slog.Info("canceled", "phase", c.phase, "slot", c.slot+1, "sounding", sounding)
+		c.turn.Cancels(activity.Stopped)
 		c.idle("canceled", activity.Canceled)
 		feedback.Canceled()
 
@@ -862,6 +872,7 @@ func (c *conversation) start(n nextTurn) bool {
 		// Held back before the turn ends, so that ending it does not hand the speaker back to a track
 		// for the moment it takes the next turn to open.
 		c.pending = &nextTurn{slot: slot, woke: n.woke, asked: n.asked, at: n.at}
+		c.turn.Cancels(activity.Interrupted)
 		c.idle("interrupted", activity.Canceled)
 
 		// The stopped run has yet to close, and its last events are still on their way.
@@ -933,6 +944,9 @@ func (c *conversation) start(n nextTurn) bool {
 		c.log.Woke(phrase)
 	}
 	c.turn = c.log.Begin(slot+1, phrase, n.trigger())
+	if n.woke && !n.continued {
+		c.wakeOpened(slot, n.at)
+	}
 	recording.Get().Opens(c.turn.ID(), slot)
 	be := c.be
 	if !n.continued {

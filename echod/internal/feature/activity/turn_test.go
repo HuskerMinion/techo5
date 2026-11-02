@@ -169,6 +169,9 @@ func TestNoTurnIsSafeToMark(t *testing.T) {
 	turn.Heard("nothing")
 	turn.Replying("nothing")
 	turn.Fails("timeout")
+	turn.Cancels(Stopped)
+	turn.AwaitsScore()
+	turn.Scored(0.9)
 	turn.Ends(Canceled)
 
 	if turn.ID() != "" {
@@ -348,5 +351,50 @@ func TestTheDeviceFieldIsLeftOutWithoutAName(t *testing.T) {
 		if name != "" && device != name {
 			t.Errorf("device is %q, want %q", device, name)
 		}
+	}
+}
+
+// A turn owed its wake word's score holds its events for it, and sends them as soon as it comes.
+func TestAFinishedTurnWaitsForItsScore(t *testing.T) {
+	got := caught(t)
+
+	turn := Get().Begin(1, "okay nabu", WakeWord)
+	turn.AwaitsScore()
+	turn.Cancels(AnsweredElsewhere)
+	turn.Ends(Canceled)
+	select {
+	case e := <-got:
+		t.Fatalf("fired %v before the score came", e.Data)
+	case <-time.After(50 * time.Millisecond):
+	}
+	turn.Scored(0.968)
+
+	data := one(t, got)
+	if data["wake_score"] != "0.97" || data["reason"] != "answered_elsewhere" {
+		t.Errorf("wake_score %q, reason %q; want 0.97, answered_elsewhere", data["wake_score"], data["reason"])
+	}
+	turn.Scored(0.5) // too late: nothing more goes out
+	select {
+	case e := <-got:
+		t.Errorf("a second event fired: %v", e.Data)
+	case <-time.After(50 * time.Millisecond):
+	}
+}
+
+// A score that never comes holds the events no longer than scoreWait.
+func TestAScoreThatNeverComesHoldsNothingLong(t *testing.T) {
+	got := caught(t)
+
+	turn := Get().Begin(1, "okay nabu", WakeWord)
+	turn.AwaitsScore()
+	start := time.Now()
+	turn.Ends(NoSpeech)
+
+	data := one(t, got)
+	if waited := time.Since(start); waited < scoreWait/2 || waited > scoreWait+time.Second {
+		t.Errorf("sent after %v, want about %v", waited, scoreWait)
+	}
+	if data["wake_score"] != "" {
+		t.Errorf("wake_score is %q, and none came", data["wake_score"])
 	}
 }

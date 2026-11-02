@@ -495,12 +495,13 @@ func (d *Detect) loadLocked(ids []string) []string {
 	return accepted
 }
 
-// scored is a word's peak, the Hold after it fired (Engine.OnScored). Last wake score is only Home
-// Assistant's wake words: the stop word, and any other word listened for past them, has its own threshold
+// scored is a word's peak, the Hold after it fired (Engine.OnScored). Last wake score, and the score in
+// the turn the word opened, are only Home Assistant's wake words: the stop word, and any other word listened for past them, has its own threshold
 // and says nothing about theirs. A command word's peak is for the vote between them (command.go).
 func (d *Detect) scored(slot int, peak float64) {
 	if slot < wakeword.Slots {
 		d.score.Set(float32(peak))
+		voice.Get().WakeScored(slot, peak)
 	}
 	if isCommandSlot(slot) {
 		d.commandScored(slot, peak)
