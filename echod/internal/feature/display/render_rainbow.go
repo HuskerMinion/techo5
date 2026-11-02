@@ -59,7 +59,10 @@ type rainbowPageKey struct {
 }
 
 func rainbowKeyOf(s scene) (rainbowPageKey, bool) {
-	quiet := !s.showCamera && !s.showRadar && !s.showVolume && s.popup == nil
+	// Nor a page the light before an alarm, an answer to a press on that page's button, or anything
+	// skipOccluded names is laid over: those come and go by themselves, and a kept copy of one carries
+	// a button, a line or a card from a frame that is no longer on the screen (skipCacheable).
+	quiet := !s.showCamera && !s.showRadar && !s.showVolume && skipCacheable(s)
 	return rainbowPageKey{
 		second: s.now.Unix(), dash: s.showDash, sheet: s.showSheet, weather: s.showWeather, drawer: s.showDrawer,
 		calendar: s.showCalendar, deck: s.showDeck, alert: s.showAlert, strip: s.strip, tess: s.tessPage,
@@ -70,6 +73,7 @@ func rainbowKeyOf(s scene) (rainbowPageKey, bool) {
 // and what drawing it said about itself (draw clears it first), so the frame is skinned as it was.
 func (r *renderer) rainbowKept(s scene) bool {
 	k, quiet := rainbowKeyOf(s)
+	r.rainbowReused = false // the frame's answer, whether or not the page is kept
 	if !quiet || !r.rainbowPageOK || k != r.rainbowKey || !r.rainbow.Active() || r.rainbowPage == nil || r.rainbowPage.Rect != r.dst.Rect {
 		return false
 	}
@@ -87,15 +91,22 @@ type rainbowDrew struct {
 
 // rainbowTurn draws the turn over the page the frame drew.
 func (r *renderer) rainbowTurn(s scene) {
+	k, quiet := rainbowKeyOf(s)
 	if !r.rainbowReused && r.rainbow.Active() {
-		// The page as drawn, to put back while it stays the same (rainbowKept).
-		if r.rainbowPage == nil || r.rainbowPage.Rect != r.dst.Rect {
-			r.rainbowPage = image.NewRGBA(r.dst.Rect)
+		if !quiet {
+			// Nothing is kept of a page a card, a strip, the light before an alarm or a skip answer is
+			// over: the copy would outlive what was laid over it (rainbowKeyOf).
+			r.rainbowPageOK = false
+		} else {
+			// The page as drawn, to put back while it stays the same (rainbowKept).
+			if r.rainbowPage == nil || r.rainbowPage.Rect != r.dst.Rect {
+				r.rainbowPage = image.NewRGBA(r.dst.Rect)
+			}
+			copy(r.rainbowPage.Pix, r.dst.Pix)
+			r.rainbowKey = k
+			r.rainbowDrew = rainbowDrew{marked: r.marked, lcars: r.lcarsDrawn, footAt: r.footAt}
+			r.rainbowPageOK = true
 		}
-		copy(r.rainbowPage.Pix, r.dst.Pix)
-		r.rainbowKey, _ = rainbowKeyOf(s)
-		r.rainbowDrew = rainbowDrew{marked: r.marked, lcars: r.lcarsDrawn, footAt: r.footAt}
-		r.rainbowPageOK = true
 	}
 	r.rainbowReused = false
 	at := r.rainbow.Finish(r.dst, rainbow.Faces{Heard: r.tiny, Reply: r.small})

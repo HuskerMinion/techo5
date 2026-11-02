@@ -29,7 +29,8 @@ import (
 //     Connect, DLNA, video and the addresses allowed to send it), and what has its microphones or camera
 //     take in the room (drop-in calls, sending the room to Home Assistant's wake word engine, keeping
 //     wake word clips, presence and gestures), which are changed on purpose, one device at a time; the speaker it is paired with; the amplifier's gain, which is the hardware's; and what it
-//     is in the middle of (snoozes, timers, a held wake light, calendar pop-ups shown, the calendars hidden
+//     is in the middle of (snoozes, occurrences left out, timers, a held wake light, calendar pop-ups
+//     shown, the calendars hidden
 //     on its calendar page, the lock's count of wrong tries, the version it last ran).
 //
 // Everything else is the settings, and a restore replaces them. Settings this build has no field for,
@@ -439,6 +440,9 @@ func KeepOwn(c *Config, from Config) {
 	c.Microphone.Muted = from.Microphone.Muted
 
 	c.Alarms.Snoozed = slices.Clone(from.Alarms.Snoozed)
+	// Which occurrence is left out is the device's own, like a snooze: it is what this device is in
+	// the middle of, not a setting for another one to inherit.
+	c.Alarms.Skipped = slices.Clone(from.Alarms.Skipped)
 	c.Alarms.Held = nil
 	if from.Alarms.Held != nil {
 		held := *from.Alarms.Held

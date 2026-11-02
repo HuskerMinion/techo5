@@ -330,6 +330,15 @@ type renderer struct {
 	// wb is the wave turn screen's working memory, made the first time it is drawn.
 	wb *waveBuf
 
+	// skipDrawn and skipDrawnOffer are the light before an alarm's button as the frame in hand draws
+	// it, by the drawing goroutine alone; skipAt and skipShown are the finished frame's, what a finger
+	// acts on, under skipMu (sunrise_skip.go).
+	skipMu         sync.Mutex
+	skipDrawn      image.Rectangle
+	skipDrawnOffer skipOffer
+	skipAt         image.Rectangle
+	skipShown      skipOffer
+
 	// rainbow is the Rainbow turn screen, kept between frames, and the page under it, kept while it
 	// does not change (render_rainbow.go).
 	rainbow       rainbow.Screen
@@ -506,6 +515,11 @@ func (r *renderer) useFont() {
 func (r *renderer) draw(s scene) {
 	r.useFont()
 	r.marked, r.footAt, r.lcarsDrawn = false, 0, false
+	// The button offered by the frame before is not this frame's, whatever this one does: every return
+	// below, the early ones of a video and of Rainbow's kept page alike, publishes the frame as it was
+	// drawn (publishSkip, registered before the overlays' own defers so it runs after them).
+	r.skipDrawn, r.skipDrawnOffer = image.Rectangle{}, skipOffer{}
+	defer r.publishSkip(s)
 	defer r.streamingDot(s)  // over everything, the update overlay included: deferred first, drawn last
 	defer r.updateOverlay(s) // Draw update overlay at the end of frame using defer
 

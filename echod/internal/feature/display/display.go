@@ -1404,6 +1404,12 @@ func (d *Display) gesture(g touch.Gesture) {
 			d.clearAnswer()
 			return
 		}
+		// The wake light's page's own button, while the light is coming up before an alarm: a tap on it
+		// leaves that occurrence out, and is the button's whether or not the alarm feature agreed. Only
+		// a button the finished frame drew is one to find, and only while the page is the light's.
+		if idle && !weatherUp && d.sunriseSkipTap(image.Pt(g.X, g.Y), time.Now()) {
+			return
+		}
 		// The wake light's page, held at full after an alarm with nothing ringing: a tap lets it go, as
 		// stop does (#161). While it is only coming up before an alarm, the tap is the clock's as ever.
 		if idle && !weatherUp && d.wakeLight(time.Now()) > 0 && tapLetsGoOfLight(time.Now()) {
