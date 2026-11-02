@@ -3,6 +3,7 @@
 package display
 
 import (
+	"fmt"
 	"image"
 	"time"
 
@@ -156,4 +157,13 @@ func cmpOr(a, b string) string {
 		return a
 	}
 	return b
+}
+
+// offsetText is a voice or call volume as the row reads it: how far from the volume, or that it is the
+// volume itself.
+func offsetText(n int) string {
+	if n == 0 {
+		return tr("ui_same_as_volume")
+	}
+	return fmt.Sprintf("%+d", n)
 }

@@ -73,6 +73,12 @@ func speakerSection(w http.ResponseWriter, token string) {
 	fmt.Fprintf(w, `<label for="night">Night volume: turned down to this as quiet hours start, and back after; 0 for none</label>
 	 <input id="night" name="night" type="number" min="0" max="%d" value="%d"><input type="hidden" name="was_night" value="%d">`,
 		media.VolumeSteps, night, night)
+	voiceOff, callOff := p.VoiceOffset(), p.CallOffset()
+	fmt.Fprintf(w, `<label for="voicevol">Voice volume: replies and announcements, in steps from the volume (0 is the same, -5 quieter, 5 louder; never the music)</label>
+	 <input id="voicevol" name="voicevol" type="number" min="-%d" max="%d" value="%d"><input type="hidden" name="was_voicevol" value="%d">
+	 <label for="callvol">Call volume: intercom and phone calls, in steps from the volume</label>
+	 <input id="callvol" name="callvol" type="number" min="-%d" max="%d" value="%d"><input type="hidden" name="was_callvol" value="%d">`,
+		media.VolumeSteps, media.VolumeSteps, voiceOff, voiceOff, media.VolumeSteps, media.VolumeSteps, callOff, callOff)
 	if speaker.HasJack {
 		choiceField(w, "output", "Audio output", media.OutputChoices(), p.Output())
 	}
@@ -126,6 +132,19 @@ func level(r *http.Request, name, what string) (n int, ok bool, problem string) 
 	return n, true, ""
 }
 
+// offset reads a -VolumeSteps..VolumeSteps field that changed, as level does for a level.
+func offset(r *http.Request, name, what string) (n int, ok bool, problem string) {
+	v, ok := changed(r, name)
+	if !ok {
+		return 0, false, ""
+	}
+	n, err := strconv.Atoi(strings.TrimSpace(v))
+	if err != nil || n < -media.VolumeSteps || n > media.VolumeSteps {
+		return 0, false, fmt.Sprintf("the %s is a number from -%d to %d", what, media.VolumeSteps, media.VolumeSteps)
+	}
+	return n, true, ""
+}
+
 func saveSpeaker(r *http.Request) string {
 	_ = r.ParseForm()
 	p := media.Get()
@@ -135,6 +154,14 @@ func saveSpeaker(r *http.Request) string {
 		return problem
 	}
 	night, nightChanged, problem := level(r, "night", "night volume")
+	if problem != "" {
+		return problem
+	}
+	voiceOff, voiceChanged, problem := offset(r, "voicevol", "voice volume")
+	if problem != "" {
+		return problem
+	}
+	callOff, callChanged, problem := offset(r, "callvol", "call volume")
 	if problem != "" {
 		return problem
 	}
@@ -170,6 +197,12 @@ func saveSpeaker(r *http.Request) string {
 	}
 	if nightChanged {
 		p.SetNightVolume(night)
+	}
+	if voiceChanged {
+		p.SetVoiceOffset(voiceOff)
+	}
+	if callChanged {
+		p.SetCallOffset(callOff)
 	}
 	if v, ok := changed(r, "output"); ok && speaker.HasJack {
 		if !oneOf(v, media.OutputChoices()) {

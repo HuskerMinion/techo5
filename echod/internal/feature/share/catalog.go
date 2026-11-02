@@ -33,7 +33,7 @@ type group struct {
 // sensitivity), and how readily a stop word stops something (stop and cancel off, or stopping at every
 // sound), as the remote API holds them. The signs that the device is listening or muted (wake tones and
 // effects, the follow-up tone, the mute light's brightness), which another device must never be able to
-// turn off, and quiet hours, which silence the wake tone. How loud an alarm rings, which another device
+// turn off, and quiet hours, which silence the wake tone. How loud an alarm rings, and how far replies and calls sit from the volume, which another device
 // could turn down to nothing; severe weather alerts, which it could turn off. Do not disturb for
 // the intercom, which blocks calls. Which photos and calendar events a screen shows (a shared room's
 // screen showing one person's). Which outside service is told where the house is or what is playing (the

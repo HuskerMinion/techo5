@@ -271,6 +271,20 @@ func (d *Driver) release(c *Claim) {
 	d.settle()
 }
 
+// roleOf is what a claim's audio is, for the volume the queue plays at: a call, its ring and a drop in
+// are calls; the rest of what a claim says (a reply, an announcement) is the assistant's voice, and a
+// chime held in a claim of its own rides with them. Nothing holding the speaker leaves the device's own
+// sounds on the media volume.
+func roleOf(c *Claim) int {
+	switch {
+	case c == nil:
+		return RoleMedia
+	case c.name == "call" || c.name == "ringing" || c.name == "drop in":
+		return RoleCall
+	}
+	return RoleVoice
+}
+
 // settle tells the background whether it may play, which is whenever nothing holds the speaker. Every
 // change to now goes through here, so the two cannot drift apart.
 //
@@ -279,6 +293,7 @@ func (d *Driver) release(c *Claim) {
 func (d *Driver) settle() {
 	d.mu.Lock()
 	d.p.Hold(d.now != nil)
+	d.p.SetRole(roleOf(d.now))
 	want := d.now != nil && !d.now.over
 	if want == d.yielded {
 		d.mu.Unlock()

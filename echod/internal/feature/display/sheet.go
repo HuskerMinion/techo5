@@ -203,6 +203,8 @@ func categoryRows(sv sheetView) (rows []settingRow, note string) {
 		// The speaker first, then each group under its name: what is changed most near the top.
 		rows := []settingRow{
 			{id: "volume", label: tr("volume"), kind: ctlStepper, value: fmt.Sprintf(tr("level_of"), st.volume, sheetVolumeSteps)},
+			{id: "voicevol", label: tr("ui_voice_volume"), sub: tr("replies_and_announcements"), kind: ctlStepper, value: offsetText(config.Get().Speaker.VoiceOffset)},
+			{id: "callvol", label: tr("ui_call_volume"), sub: tr("ui_steps_from_the_volume"), kind: ctlStepper, value: offsetText(config.Get().Speaker.CallOffset)},
 			{id: "bass", label: tr("bass"), sub: toneSub(), kind: ctlStepper, value: toneValue(config.Get().Speaker.Bass)},
 			{id: "treble", label: tr("treble"), kind: ctlStepper, value: toneValue(config.Get().Speaker.Treble)},
 		}
@@ -1142,6 +1144,22 @@ func (d *Display) rowTap(id string, p part, opt int) {
 			media.Get().Adjust(-1)
 		case partPlus:
 			media.Get().Adjust(+1)
+		}
+	case "voicevol":
+		n := media.Get().VoiceOffset()
+		switch p {
+		case partMinus:
+			media.Get().SetVoiceOffset(n - 1)
+		case partPlus:
+			media.Get().SetVoiceOffset(n + 1)
+		}
+	case "callvol":
+		n := media.Get().CallOffset()
+		switch p {
+		case partMinus:
+			media.Get().SetCallOffset(n - 1)
+		case partPlus:
+			media.Get().SetCallOffset(n + 1)
 		}
 	case "mic":
 		mute.Get().Flip()

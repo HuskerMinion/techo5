@@ -81,6 +81,9 @@ type Player struct {
 	// night is the night volume, the most quiet hours play at (night.go).
 	night *esphome.Number
 
+	// voiceVol and callVol are the assistant's voice and a call's audio, as steps from the volume (lanes.go).
+	voiceVol, callVol *esphome.Number
+
 	// nearMiss ducks a playing track for a few seconds after a wake word that nearly fired, so the
 	// next try is heard; see feature/detect/nearmiss.go.
 	nearMiss *esphome.Switch
@@ -355,6 +358,8 @@ func build() *Player {
 	}
 	p.quiet = newQuiet()
 	p.night = newNight()
+	p.voiceVol = newLaneOffset("voice_volume", "Voice volume", "mdi:account-voice")
+	p.callVol = newLaneOffset("call_volume", "Call volume", "mdi:phone-in-talk")
 	p.layers = noiseLayers()
 	// Built wherever the amplifier may be (GainPossible), not only where the mixer has already said
 	// so: the card may not be up yet as this builds, and the saved gain is restored then all the same,
@@ -372,7 +377,7 @@ func build() *Player {
 
 	// The player itself stays on the device: it is what people reach for. These are how it behaves.
 	bases := []*esphome.Base{&p.resampling.Base, &p.onTurn.Base, &p.duck.Base, &p.jack.Base, &p.asp.Base,
-		&p.bass.Base, &p.treble.Base, &p.quiet.Base, &p.night.Base, &p.nearMiss.Base, &p.haSounds.Base, &p.louder.Base}
+		&p.bass.Base, &p.treble.Base, &p.quiet.Base, &p.night.Base, &p.voiceVol.Base, &p.callVol.Base, &p.nearMiss.Base, &p.haSounds.Base, &p.louder.Base}
 	if speaker.HasJack {
 		bases = append(bases, &p.output.Base)
 	}
@@ -462,6 +467,8 @@ func build() *Player {
 	p.haSounds.OnCommand = p.SetHASounds
 	p.louder.OnCommand = p.SetLouderSpeech
 	p.night.OnCommand = func(v float32) { p.SetNightVolume(int(v)) }
+	p.voiceVol.OnCommand = func(v float32) { p.SetVoiceOffset(int(v)) }
+	p.callVol.OnCommand = func(v float32) { p.SetCallOffset(int(v)) }
 
 	p.nearMiss.OnCommand = func(v bool) {
 		p.nearMiss.Set(v)
@@ -559,7 +566,7 @@ func (p *Player) SetLouderSpeech(on bool) {
 
 func (p *Player) Entities() []esphome.Entity {
 	out := []esphome.Entity{p.mp, p.jack, p.resampling, p.onTurn, p.duck, p.asp, p.bass, p.treble,
-		p.quiet, p.night, p.nearMiss, p.haSounds, p.louder, p.sleep.sel}
+		p.quiet, p.night, p.voiceVol, p.callVol, p.nearMiss, p.haSounds, p.louder, p.sleep.sel}
 	// Asked as the entities are listed (once, as the API starts): the mixer if it opens by then,
 	// which leaves out a board that turned out not to have the amplifier, or still may have it.
 	if p.gain != nil && (speaker.GainAvailable() || speaker.GainPossible()) {
@@ -678,6 +685,9 @@ func (p *Player) Restore(c config.Config) {
 
 	restoreQuiet(p.quiet, c)
 	p.night.Set(float32(c.Speaker.NightVolume))
+	p.voiceVol.Set(float32(c.Speaker.VoiceOffset))
+	p.callVol.Set(float32(c.Speaker.CallOffset))
+	p.pushLanes()
 	slog.Info("restored", "what", p.night.ObjectID, "using", c.Speaker.NightVolume, "daytime", c.Speaker.DayVolume)
 	p.bass.Set(float32(c.Speaker.Bass))
 	p.treble.Set(float32(c.Speaker.Treble))

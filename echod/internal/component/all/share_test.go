@@ -115,14 +115,15 @@ func contains(list []string, s string) bool {
 
 // neverShared is settings kept off the share list on purpose, beyond what the test above finds: what the
 // microphones hear and how readily they listen, the signs that they are listening or muted, how readily a
-// stop word stops something, how loud an alarm rings, do not disturb, which photos and events a screen
+// stop word stops something, how loud an alarm rings and how loud replies and calls sit (which another
+// device could turn down to nothing), do not disturb, which photos and events a screen
 // shows, and which outside services are told where the house is or what is playing (share/catalog.go).
 var neverShared = []string{
 	"microphone_gain", "microphone_noise_reduction", "microphone_cancel_echo", "microphone_leveling",
 	"microphone_end_of_speech", "microphone_end_of_speech_pause", "microphone_sensitivity", "mute_led_brightness", "stop_word_sensitivity",
 	"wake_threshold_1", "wake_threshold_2", "confirm_threshold", "max_listen_1", "max_listen_2",
 	"follow_ups_1", "follow_ups_2", "follow_up_1", "follow_up_2", "follow_up_tone_1", "follow_up_tone_2",
-	"wake_tone_1", "wake_tone_2", "wake_effect_1", "wake_effect_2", "ring_volume", "intercom_do_not_disturb",
+	"wake_tone_1", "wake_tone_2", "wake_effect_1", "wake_effect_2", "ring_volume", "voice_volume", "call_volume", "intercom_do_not_disturb",
 	"slideshow_mode", "immich_favorites", "calendar_popups", "weather_source", "radar_source", "lyrics",
 	"quiet_hours", "weather_alerts",
 }
