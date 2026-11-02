@@ -1035,6 +1035,9 @@ func (c *conversation) think() {
 	c.stopStreaming()
 	c.enter(phaseThinking)
 	c.arm(wakeword.MaxThink(c.slot))
+	if !config.Quiet() {
+		speaker.Sound().Chime(speaker.ListenEndSound())
+	}
 
 	c.showPhase(wakeword.ThinkingEffect(c.slot))
 }

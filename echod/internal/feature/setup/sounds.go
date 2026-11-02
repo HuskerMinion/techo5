@@ -1,6 +1,7 @@
 package setup
 
 import (
+	"bytes"
 	"fmt"
 	"html"
 	"io"
@@ -29,6 +30,11 @@ var soundTitles = map[string][2]string{
 	"alarm":               {"Alarm", "an alarm, where Alarm sound is Your own"},
 	"mute_switch_on":      {"Mute", "muting the microphones"},
 	"mute_switch_off":     {"Unmute", "unmuting the microphones"},
+	"listening_ended":     {"Listening ended", "when the device stops listening and waits for the answer"},
+	"button_press":        {"Button", "a button held (the mute button's hold)"},
+	"volume_change":       {"Volume", "each press of volume up or down"},
+	"bluetooth_connected": {"Bluetooth connected", "a Bluetooth device connecting"},
+	"drop_in":             {"Drop In", "the chime before a Drop In opens the microphones"},
 }
 
 // soundsSection lists the sounds, whether each is the device's own or one sent here, and takes a file
@@ -70,7 +76,9 @@ func soundsSection(w http.ResponseWriter, token string) {
 		}
 		fmt.Fprint(w, `</div>`)
 	}
-	fmt.Fprint(w, `<p class="note">A WAVE (.wav) file, 16-bit, 48 kHz, mono or stereo, at most 10 seconds.
+	soundPackSection(w, token)
+	fmt.Fprint(w, `<p class="note">A WAVE (.wav) file, 16-bit, 48 kHz, mono or stereo, at most 10 seconds
+	  (2 seconds for the volume, button, Bluetooth, listening-ended and Drop In sounds).
 	  Other formats are not converted here; ffmpeg makes one from anything:
 	  <code>ffmpeg -i chime.mp3 -ac 1 -ar 48000 -c:a pcm_s16le chime.wav</code>. Keep the wake sound short: the
 	  device listens for the request only once it has played.</p></fieldset>`)
@@ -186,4 +194,84 @@ func removeSound(r *http.Request) string {
 		return "could not remove it: " + err.Error()
 	}
 	return ""
+}
+
+// soundPackSection saves every sound of your own as one file, and loads such a file.
+func soundPackSection(w http.ResponseWriter, token string) {
+	fmt.Fprintf(w, `<p style="margin:1.2rem 0 0"><strong>Sound pack</strong>. All your sounds in one file, to keep or to
+	 use on another device. Loading one replaces the sounds it holds and leaves the others as they are.</p>
+	 <div class="btns" style="margin-top:.4rem">
+	 <a href="/setup/soundpack" download>Save sound pack</a>
+	 <form method="post" action="/setup/soundpack" enctype="multipart/form-data"
+	  style="margin:0;display:flex;gap:.5rem;flex:1;flex-wrap:wrap;align-items:center">
+	  <input type="hidden" name="token" value="%s">
+	  <input type="file" name="file" accept="%s" required style="width:auto;flex:1;min-width:12rem"
+	   aria-label="A sound pack">
+	  <button type="submit" class="quiet">Load sound pack</button></form></div>`,
+		html.EscapeString(token), speaker.PackExt)
+}
+
+// soundPack is the pack for download (GET) and for loading (POST). Both need a browser let in, and a
+// load needs the page's token ahead of the file, as a sound does.
+func (f *Feature) soundPack(w http.ResponseWriter, r *http.Request) {
+	token, in := f.session(r)
+	if !in {
+		http.Error(w, "not let in", http.StatusForbidden)
+		return
+	}
+	if r.Method == http.MethodGet {
+		var buf bytes.Buffer
+		if err := speaker.PackSounds(&buf); err != nil {
+			http.Redirect(w, r, back("sound", "problem", err.Error()), http.StatusSeeOther)
+			return
+		}
+		w.Header().Set("Content-Type", "application/zip")
+		w.Header().Set("Content-Disposition", `attachment; filename="sounds`+speaker.PackExt+`"`)
+		w.Header().Set("Cache-Control", "no-store")
+		_, _ = w.Write(buf.Bytes())
+		return
+	}
+	if r.Method != http.MethodPost {
+		http.Error(w, "get or post a sound pack", http.StatusMethodNotAllowed)
+		return
+	}
+	r.Body = http.MaxBytesReader(w, r.Body, speaker.MaxPack+64<<10)
+	mr, err := r.MultipartReader()
+	if err != nil {
+		http.Error(w, "that was not a sound pack sent from this page", http.StatusBadRequest)
+		return
+	}
+	p, err := mr.NextPart()
+	if err != nil || p.FormName() != "token" {
+		http.Error(w, "that did not come from this page", http.StatusForbidden)
+		return
+	}
+	got, err := io.ReadAll(io.LimitReader(p, 256))
+	if err != nil || !sameToken(string(got), token) {
+		http.Error(w, "that did not come from this page", http.StatusForbidden)
+		return
+	}
+	problem := ""
+	p, err = mr.NextPart()
+	switch {
+	case tooLarge(err):
+		problem = fmt.Sprintf("that file is too big for a sound pack: the most is %d MB", speaker.MaxPack>>20)
+	case err != nil || p.FormName() != "file":
+		problem = "no file was sent"
+	default:
+		body := &readErr{r: p}
+		b, _ := io.ReadAll(io.LimitReader(body, speaker.MaxPack+1))
+		if tooLarge(body.err) {
+			problem = fmt.Sprintf("that file is too big for a sound pack: the most is %d MB", speaker.MaxPack>>20)
+		} else if _, err := speaker.LoadPack(b); err != nil {
+			problem = err.Error()
+		}
+	}
+	if problem != "" {
+		slog.Warn("setup page: a sound pack was refused", "problem", problem)
+		http.Redirect(w, r, back("sound", "problem", problem), http.StatusSeeOther)
+		return
+	}
+	f.used()
+	http.Redirect(w, r, back("sound", "saved", "1"), http.StatusSeeOther)
 }

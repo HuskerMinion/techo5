@@ -528,11 +528,8 @@ const chimeFloor = 8
 // played to its end; one cut short - by something else taking the speaker, or by the call ending -
 // has warned nobody.
 func chime(ctx context.Context) bool {
-	notes := []speaker.Note{{Freq: 880, Ms: 160}, {Freq: 0, Ms: 70}, {Freq: 1100, Ms: 220}}
-	var ms int
-	for _, n := range notes {
-		ms += n.Ms
-	}
+	notes := speaker.DropInSound()
+	ms := int(speaker.Length(notes).Milliseconds())
 	played := false
 	claim := speaker.Sound().Claim("drop in", func(cctx context.Context, pl *speaker.Player) error {
 		pl.Bell(max(pl.Step(), chimeFloor), 0.6, notes...)

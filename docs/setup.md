@@ -1541,6 +1541,11 @@ Or copy a WAVE file named for the sound into the device's sounds folder over SSH
 | `timer_finished.wav` | a finished timer, and the Home Assistant alarm sound |
 | `alarm.wav` | an alarm, where **Alarm sound** is **Your own** (without one it rings with the Home Assistant sound) |
 | `mute_switch_on.wav`, `mute_switch_off.wav` | muting and unmuting the microphones |
+| `listening_ended.wav` | the moment the device stops listening and waits for the answer (silent without one) |
+| `button_press.wav` | a button held (the mute button's hold) |
+| `volume_change.wav` | each press of volume up or down |
+| `bluetooth_connected.wav` | a Bluetooth device connecting |
+| `drop_in.wav` | the chime before a Drop In opens a room's microphones |
 
 The timer and mute files play where **Home Assistant sounds** is on, and an alarm set to the
 Home Assistant sound plays `timer_finished.wav` either way. A file has to be 16-bit, at
@@ -1553,6 +1558,18 @@ sound plays and for a moment after, so the device does not take its own sound fo
 ```sh
 ffmpeg -i chime.flac -ac 1 -ar 48000 -c:a pcm_s16le wake_word_triggered.wav
 ```
+
+The volume, button, Bluetooth, listening-ended and Drop In sounds are quick, so they may be at most
+2 seconds long; the others keep 10 seconds. A sound that is too long is refused with the reason.
+The wake sound is the one for **Wake sound: Home Assistant** on each assistant; the built-in tones
+(chirp, ding, rise) stay as they are.
+
+**Sound packs** keep all of this together. **Save sound pack** (under **Sounds of your own**)
+downloads one `sounds.soundpack` file holding every sound of your own, and **Load sound pack** puts
+the sounds from such a file on a device. A pack holds sounds only: no settings and nothing private. Loading
+checks every sound the way an upload is checked, and refuses the whole pack if anything is wrong
+or if it holds anything else (other file types, folders, paths, or more than 12 MB). The sounds a
+pack does not hold stay as they are.
 
 A new or changed file plays the next time its sound does, with no restart, and deleting it brings the
 stock sound back. A file the device cannot play leaves the stock sound playing, and the log says why.

@@ -15,7 +15,8 @@ import (
 
 // ownable are the clips a recording of the owner's own can stand in for, in the order the setup page
 // lists them.
-var ownable = []*Clip{ClipWake, ClipFailure, ClipCanceled, ClipTimer, ClipAlarm, ClipMuteOn, ClipMuteOff}
+var ownable = []*Clip{ClipWake, ClipFailure, ClipCanceled, ClipTimer, ClipAlarm, ClipMuteOn, ClipMuteOff,
+	ClipListenEnd, ClipButton, ClipVolume, ClipBTConnect, ClipDropIn}
 
 // MaxOwnUpload is the most a recording sent from the setup page may be: ten seconds of 16-bit stereo
 // at Rate, and room for the header and the extra chunks a converter writes. Anything longer cannot be
@@ -62,7 +63,7 @@ func OwnState(name string) (has bool, problem string) {
 	if c.Own() {
 		return true, ""
 	}
-	if _, err := readOwn(from.path); err != nil {
+	if _, err := readOwn(from.path, c.limit()); err != nil {
 		return true, err.Error()
 	}
 	return true, ""
@@ -83,9 +84,26 @@ func SaveOwn(name string, r io.Reader) error {
 	if len(b) > MaxOwnUpload {
 		return fmt.Errorf("that file is bigger than ten seconds of sound; the most is %d KB", MaxOwnUpload>>10)
 	}
-	if _, err := checkOwn(b); err != nil {
-		return fmt.Errorf("the device cannot play that file: %v. It needs a WAVE file, 16-bit, 48 kHz, mono or stereo, at most 10 seconds", err)
+	if err := CheckOwn(name, b); err != nil {
+		return err
 	}
+	return keepOwn(c, b)
+}
+
+// CheckOwn is nil when b is a recording the device would play for the sound, else why not.
+func CheckOwn(name string, b []byte) error {
+	c := ownClip(name)
+	if c == nil {
+		return fmt.Errorf("%q is not one of the sounds", name)
+	}
+	if _, err := checkOwn(b, c.limit()); err != nil {
+		return fmt.Errorf("the device cannot play that file: %v. It needs a WAVE file, 16-bit, 48 kHz, mono or stereo, at most %d seconds", err, c.limit()/Rate)
+	}
+	return nil
+}
+
+// keepOwn writes b, already checked, as the clip's recording.
+func keepOwn(c *Clip, b []byte) error {
 	if err := os.MkdirAll(SoundsDir, 0o755); err != nil {
 		return err
 	}
@@ -112,7 +130,7 @@ func SaveOwn(name string, r io.Reader) error {
 	if err := os.Rename(tmp.Name(), c.ownPath()); err != nil {
 		return err
 	}
-	slog.Info("a sound of one's own was kept", "sound", name, "bytes", len(b))
+	slog.Info("a sound of one's own was kept", "sound", c.file, "bytes", len(b))
 	return nil
 }
 
@@ -162,6 +180,14 @@ func PreviewOwn(name string) error {
 		notes = CancelSound()
 	case ClipAlarm:
 		notes = AlarmSound(OwnAlarmSound)
+	case ClipVolume:
+		notes = VolumeSound()
+	case ClipButton:
+		notes = ButtonSound()
+	case ClipBTConnect:
+		notes = BTConnectSound()
+	case ClipDropIn:
+		notes = DropInSound()
 	}
 	Sound().Interject(func(p *Player) { p.Chime(previewLevel, notes...) })
 	return nil
