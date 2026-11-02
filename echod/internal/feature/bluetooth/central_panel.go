@@ -19,6 +19,9 @@ import (
 	"github.com/google/uuid"
 )
 
+// pairable is nothing: the Panel app has no bluetoothd to bond with.
+const pairable = 0
+
 // The shared connections manager owns API clients, slots, queues and retries. This
 // adapter supplies only Android's GATT transport, checked in both directions by UID.
 var openCentral = func(value func(string, uint16, []byte), lost func(string)) (central, error) {

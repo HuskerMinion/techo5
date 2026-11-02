@@ -266,7 +266,7 @@ func (b *Proxy) Features() esphome.BluetoothFeature {
 		return 0
 	}
 	if b.ConnectionsEnabled() {
-		return bluetoothFeatures | connectingFeatures
+		return bluetoothFeatures | connectingFeatures | pairable
 	}
 	return bluetoothFeatures
 }

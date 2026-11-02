@@ -458,6 +458,10 @@ captured login to the same page for a few minutes, and could see the pictures an
   reach those devices. With it on, Home Assistant may route any such device through this one
   whenever it hears it best, and many BLE devices take one connection only, so leave it off unless a
   device needs it. Connections end when Home Assistant disconnects or either switch is turned off.
+  Pairing is supported too: a device that must be bonded before it works, such as a Philips Hue
+  Bluetooth bulb, can be paired and unpaired from Home Assistant through the device, with no code to
+  enter. Only that device is bonded or forgotten; the phones and speakers paired to the device are not
+  touched. Cache clearing is not supported.
   Scanning pauses for the second or two a connection takes. Pairing (bonding) and clearing the cache
   from Home Assistant are not offered; devices that authenticate in their own protocol work. Tried on
   a Spot with a Boneco H400 through the Boneco integration; the Show has not made an LE connection yet.
@@ -500,7 +504,7 @@ captured login to the same page for a few minutes, and could see the pictures an
   #183); with it off they pair the older way and stay. What it costs: a phone set to pair
   only with Secure Connections cannot pair at all, and Low Energy pairing falls back to the older,
   weaker kind too. The device itself pairs only over classic Bluetooth (speakers, earbuds and phones
-  playing to it), and the Bluetooth proxy never pairs, its connections included, so nothing of
+  playing to it), and the Bluetooth proxy pairs only a device Home Assistant asks it to, so nothing of
   the device's own uses LE pairing. Changing it turns Bluetooth off and on again: whatever is connected drops for a moment and
   may need connecting again. It is this device's own, never shared with the other devices or carried
   by a settings file. The 2nd gen Show 8 on TECHO5's own kernel has it off already, and no switch.
