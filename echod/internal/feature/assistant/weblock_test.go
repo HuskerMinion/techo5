@@ -175,6 +175,7 @@ func TestAllowedAfterWebNamesRealTools(t *testing.T) {
 	if err := config.Set().Brain().Set(config.Brain{Mode: config.BrainDirect, LLM: "http://x:1", STT: "x:1", TTS: "x:1", Search: "http://x:2"}); err != nil {
 		t.Fatal(err)
 	}
+	_ = config.Set().Todo().Lists([]string{"todo.shopping"}) // the to-do tools are there once a list is
 	have := map[string]bool{}
 	for _, tl := range tools() {
 		have[tl.Name] = true
