@@ -6,6 +6,7 @@ import (
 	"crypto/sha1"
 	"encoding/hex"
 	"os"
+	"path/filepath"
 	"strings"
 )
 
@@ -41,11 +42,59 @@ func Forget(ctx context.Context, ssid string) error {
 			kept = append(kept, block)
 		}
 	}
-	if err := os.WriteFile(Conf, []byte(conf(kept)), 0o600); err != nil {
+	if err := writeFile(Conf, conf(kept)); err != nil {
 		return err
+	}
+	// The copy Join keeps must not bring it back either.
+	if prev, err := os.ReadFile(Conf + ".prev"); err == nil {
+		all := blocks(string(prev))
+		var left []string
+		for _, block := range all {
+			if ssidOf(block) != ssid {
+				left = append(left, block)
+			}
+		}
+		if len(left) != len(all) {
+			_ = writeFile(Conf+".prev", conf(left))
+		}
 	}
 	_, err = cli(ctx, "reconfigure")
 	return err
+}
+
+// writeFile replaces a file whole and has it on the flash before it returns: written beside it,
+// synced, renamed over it, and the directory synced. A plain WriteFile leaves the new contents in
+// memory for half a minute, and the device reboots without a sync (an update, a power cut), so a
+// network forgotten on the setup page could come back with the old file, old date and all (#384).
+func writeFile(path, body string) error {
+	tmp := path + ".tmp"
+	f, err := os.OpenFile(tmp, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0o600)
+	if err != nil {
+		return err
+	}
+	if _, err := f.WriteString(body); err != nil {
+		f.Close()
+		os.Remove(tmp)
+		return err
+	}
+	if err := f.Sync(); err != nil {
+		f.Close()
+		os.Remove(tmp)
+		return err
+	}
+	if err := f.Close(); err != nil {
+		os.Remove(tmp)
+		return err
+	}
+	if err := os.Rename(tmp, path); err != nil {
+		os.Remove(tmp)
+		return err
+	}
+	if d, err := os.Open(filepath.Dir(path)); err == nil {
+		_ = d.Sync()
+		d.Close()
+	}
+	return nil
 }
 
 // conf is a whole configuration file: the header the boot scripts expect, then the networks.
