@@ -4961,7 +4961,7 @@
    ],
    "turn-history": [
     "Partly",
-    "last-turn sensors, kept in HA history",
+    "last-turn sensors, kept in HA history; a switch leaves the words out",
     "https://github.com/HuskerMinion/techo5/blob/v1.6.20/docs/setup.md#two-wake-words-two-assistants"
    ],
    "last-turn-sensors": [
@@ -5386,7 +5386,7 @@
    ],
    "health-sensors": [
     "Yes",
-    "Wi-Fi signal, load, memory, free space",
+    "Wi-Fi signal, load, CPU, memory, free space, last boot reason",
     "https://github.com/HuskerMinion/techo5/blob/v1.6.20/echod/internal/feature/diag/diag.go"
    ],
    "sound-events": [
@@ -5481,7 +5481,7 @@
    ],
    "update-rollback": [
     "Yes",
-    "Echos (A/B slots); the Panel app has no A/B slots",
+    "Echos (A/B slots); the Show 8 2nd gen's kernel too, with the opt-in boot layer; the Panel app has no A/B slots",
     "https://github.com/HuskerMinion/techo5/blob/v1.6.20/README.md#why-techo5"
    ],
    "signed-updates": [

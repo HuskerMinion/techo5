@@ -604,7 +604,8 @@ v1.0.1 needs the new boot image so a quick tap to unmute no longer leaves the ca
 **Echo Show 8 2nd gen (2021, `athena`)** installs differently. There's no LineageOS for it: after
 the saiyaku-athena unlock, `tools/install-athena.py` puts TECHO5's own 64-bit mainline kernel and the
 system on it from TWRP, backing up every partition first. Three of the screen panels Amazon used are
-tested on that kernel; the installer checks yours, and others install with `--force-panel`. Every step:
+tested on that kernel; the installer checks yours, and others install with `--force-panel`. An opt-in
+boot layer falls back to the other slot by itself if a new kernel doesn't start. Every step:
 **[docs/install-athena.md](docs/install-athena.md)**. The story and the hardware:
 [TECHO5 ATHENA](https://github.com/HuskerMinion/techo5-athena).
 
@@ -619,7 +620,7 @@ the backup. Every step: **[docs/install-skylight.md](docs/install-skylight.md)**
 
 | Layer | What |
 |---|---|
-| Boot | Amazon's LK, unlocked with amonet; the LineageOS 4.9 kernel rebuilt with Bluetooth; a rescue initramfs that picks a slot. On the 2nd gen Show 8: saiyaku-athena and TECHO5's own Linux 6.18 kernel ([source](tools/linux/athena/kernel)). On the Skylight Calendar 15: its stock U-Boot and TECHO5's own Linux 6.18 kernel ([source](tools/linux/skylight/kernel)) |
+| Boot | Amazon's LK, unlocked with amonet; the LineageOS 4.9 kernel rebuilt with Bluetooth; a rescue initramfs that picks a slot. On the 2nd gen Show 8: saiyaku-athena and TECHO5's own Linux 6.18 kernel ([source](tools/linux/athena/kernel)), with an opt-in U-Boot boot layer that gives each slot its own kernel. On the Skylight Calendar 15: its stock U-Boot and TECHO5's own Linux 6.18 kernel ([source](tools/linux/skylight/kernel)) |
 | System | Alpine Linux armv7 in two root filesystem slots, read-only, with a trial-and-commit boot counter |
 | Daemon | `echod`, one Go binary: audio, wake word, echo cancellation, screen renderer, touch, camera ISP, Bluetooth, updates |
 | Home Assistant | The native ESPHome API: voice satellite, media player, camera, update entity, dozens of settings |
@@ -659,6 +660,9 @@ table are photos from Wikimedia Commons; who took each one, and its license, is 
 - **saiyaku-athena** ([R0rt1z2](https://github.com/R0rt1z2) with bengris32 and FieryFlames
   (jackmthws); thanks to nuno407 for the META mode idea): the unlock for the 2nd gen Echo Show 8,
   [on XDA](https://xdaforums.com/t/unlock-root-twrp-unbrick-amazon-echo-show-8-2nd-gen-2021-athena.4804958/).
+- [u-boot-amazon-echo](https://github.com/nuno407/u-boot-amazon-echo) ([@nuno407](https://github.com/nuno407)):
+  the A/B layer for U-Boot behind the 2nd gen Show 8's opt-in boot layer, and its installer support
+  ([#340](https://github.com/HuskerMinion/techo5/pull/340)).
 - The mainline Linux kernel, and everyone who brought the MT8183 into it for its Chromebooks: the
   2nd gen Show 8's kernel is built on their work.
 - [vpavlin/mt8183-camera](https://github.com/vpavlin/mt8183-camera) (Václav Pavlín): cameras on MT8183
