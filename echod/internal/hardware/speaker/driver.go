@@ -64,6 +64,13 @@ func (d *Driver) Yields(b Background) {
 	d.bg = b
 }
 
+// ClaimCall is Claim for a call: the call itself, its ring and a drop in. The queue plays them at the
+// call volume. It is the one way to make a call claim, so a claim's name can change without changing
+// its volume.
+func (d *Driver) ClaimCall(name string, play func(ctx context.Context, p *Player) error) *Claim {
+	return d.claim(name, claimSpec{call: true}, play)
+}
+
 // Claim takes the speaker and does whatever it takes to make the sound: play queues audio and
 // returns, and the claim ends once what it queued has played out. It must return when ctx is done,
 // which is what being silenced means.
@@ -131,6 +138,7 @@ func duckDB(deep bool) int {
 // words ducks the background, and a sound over the music ducks it too, but it is not words — it never
 // displaces what is being said, and it needs more room than words do.
 type claimSpec struct {
+	call  bool // a call, its ring or a drop in (ClaimCall): played at the call volume
 	over  bool // sounds over the background rather than standing it down
 	waits bool // waits for whatever holds the speaker rather than displacing it
 	deep  bool // ducks deeper than words: a sound whose own level is low, heard over the room's music
@@ -143,7 +151,7 @@ type claimSpec struct {
 
 func (d *Driver) claim(name string, spec claimSpec, play func(ctx context.Context, p *Player) error) *Claim {
 	ctx, cancel := context.WithCancel(context.Background())
-	c := &Claim{name: name, over: spec.over, overlay: spec.overlay, cancel: cancel, done: make(chan struct{})}
+	c := &Claim{name: name, call: spec.call, over: spec.over, overlay: spec.overlay, cancel: cancel, done: make(chan struct{})}
 	if spec.over {
 		// Only a claim that sounds over the background ducks anything, and working out how far is the
 		// only thing here that reads the listener's setting. A plain claim must not read it: a ring left
@@ -279,7 +287,7 @@ func roleOf(c *Claim) int {
 	switch {
 	case c == nil:
 		return RoleMedia
-	case c.name == "call" || c.name == "ringing" || c.name == "drop in":
+	case c.call:
 		return RoleCall
 	}
 	return RoleVoice
@@ -393,6 +401,7 @@ func (d *Driver) await(ctx context.Context) time.Time {
 // Claim is a hold on the speaker.
 type Claim struct {
 	name    string
+	call    bool // a call, its ring or a drop in (ClaimCall)
 	over    bool // sounds over the background rather than standing it down
 	overlay bool // a sound over the music that is not words (ClaimOver)
 	cancel  context.CancelFunc

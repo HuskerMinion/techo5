@@ -534,7 +534,7 @@ func chime(ctx context.Context) bool {
 		ms += n.Ms
 	}
 	played := false
-	claim := speaker.Sound().Claim("drop in", func(cctx context.Context, pl *speaker.Player) error {
+	claim := speaker.Sound().ClaimCall("drop in", func(cctx context.Context, pl *speaker.Player) error {
 		pl.Bell(max(pl.Step(), chimeFloor), 0.6, notes...)
 		select {
 		case <-cctx.Done():

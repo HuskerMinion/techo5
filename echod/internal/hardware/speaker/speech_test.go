@@ -81,7 +81,7 @@ func TestAnAnswerPlaysOverTheTrackUnlessMusicPauses(t *testing.T) {
 		t.Error("the track stayed ducked after the answer")
 	}
 
-	waitFor(t, d.Claim("call", func(context.Context, *Player) error { return nil }))
+	waitFor(t, d.Claim("other", func(context.Context, *Player) error { return nil }))
 	if track.suspends != 1 || track.resumes != 1 {
 		t.Errorf("another sound did not stand the track down and back up: %d suspends, %d resumes",
 			track.suspends, track.resumes)

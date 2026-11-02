@@ -303,7 +303,7 @@ func receive(ctx context.Context, dec io.Reader, wide bool, st *stats) error {
 	sound := speaker.Sound()
 	limit := int(maxBehind * speaker.Rate / time.Second)
 	for ctx.Err() == nil {
-		claim := sound.Claim("call", func(cctx context.Context, p *speaker.Player) error {
+		claim := sound.ClaimCall("call", func(cctx context.Context, p *speaker.Player) error {
 			for {
 				select {
 				case <-cctx.Done():
@@ -488,7 +488,7 @@ func buildBellRing() []int16 {
 func ring(ctx context.Context, tone []int16) {
 	sound := speaker.Sound()
 	for ctx.Err() == nil {
-		claim := sound.Claim("ringing", func(cctx context.Context, p *speaker.Player) error {
+		claim := sound.ClaimCall("ringing", func(cctx context.Context, p *speaker.Player) error {
 			return ringCycles(ctx, cctx, p, tone)
 		})
 		select {

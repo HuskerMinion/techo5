@@ -1,8 +1,10 @@
 package speaker
 
 import (
+	"context"
 	"encoding/binary"
 	"testing"
+	"time"
 )
 
 // mixed fills one period with a track in the bed, a reply in the queue and a far end in the underlay
@@ -117,12 +119,24 @@ func TestTheNightVolumeCapsTheLanes(t *testing.T) {
 	}
 }
 
-// A call and its ring are calls; the rest of what a claim says is the assistant's voice; nothing
-// holding the speaker is the device's own sounds, on the volume.
+// A call, its ring and a drop in are made with ClaimCall and play at the call volume whatever they are
+// named; the rest of what a claim says is the assistant's voice; nothing holding the speaker is the
+// device's own sounds, on the volume.
 func TestWhatAClaimIsForItsVolume(t *testing.T) {
-	for name, want := range map[string]int{"call": RoleCall, "ringing": RoleCall, "drop in": RoleCall,
-		"reply": RoleVoice, "announce": RoleVoice, "announcement": RoleVoice, "notification": RoleVoice} {
-		if got := roleOf(&Claim{name: name}); got != want {
+	d := driver()
+	play := func(context.Context, *Player) error { return nil }
+	for name, c := range map[string]*Claim{
+		"call":   d.ClaimCall("renamed", play),
+		"plain":  d.Claim("call", play),
+		"speech": d.ClaimSpeech("call", play),
+		"over":   d.ClaimOver("call", play),
+		"turn":   d.ClaimTurn("call", time.Second, play),
+	} {
+		want := RoleVoice
+		if name == "call" {
+			want = RoleCall
+		}
+		if got := roleOf(c); got != want {
 			t.Errorf("%s: role %d, want %d", name, got, want)
 		}
 	}
