@@ -408,6 +408,10 @@ crosses the network. Devices from before that change still send it as it is, so 
 together: a device on the older release also turns away announcements from an updated one. On a Dot,
 which has no screen, both are the Home Assistant switches, and the action button answers and hangs up.
 
+To listen to a room from a phone's browser instead, without a call, there is the baby monitor
+([setup.md](setup.md#the-baby-monitor)): a switch, off by default, and a private link; the device shows
+on its screen, or its ring, while anyone listens.
+
 ## How it works
 
 - `echod/internal/feature/phone`: the component. SIP and RTP through
