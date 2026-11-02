@@ -44,6 +44,7 @@ import (
 	"github.com/HuskerMinion/techo5/echod/internal/feature/alarm"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/announce"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/assistant"
+	"github.com/HuskerMinion/techo5/echod/internal/feature/babymon"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/btaudio"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/camstream"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/doorbell"
@@ -424,6 +425,10 @@ func build() *Display {
 		d.relight(true) // a dark face keeps a little light while the camera is watched (watchedLight)
 		d.wake()
 	})
+	babymon.Get().Changed.Listen(func(struct{}) {
+		d.relight(true) // and while the room is listened to: the mark that says so has to be seen
+		d.wake()
+	})
 	d.watchRoom()
 	talkback.Get().Changed.Listen(func(struct{}) { d.wake() })
 	onMissed(d.wake)
@@ -593,7 +598,7 @@ func (d *Display) relight(jump bool) {
 		full := backlightMin + (screen.BacklightMax-backlightMin)*float64(min(max(d.ceiling, 0), 100))/100
 		target = backlightMin + (full-backlightMin)*sunriseLevel(p)
 	}
-	target = watchedLight(target, d.on, camstream.Watching(), backlightMin)
+	target = watchedLight(target, d.on, watched(), backlightMin)
 	if jump || d.level == 0 {
 		d.level = target
 	} else {
@@ -1512,7 +1517,7 @@ func (d *Display) frame() (next time.Duration) {
 		video.Get().Covered(false)
 		d.videoPainting, d.vp.dark, d.videoOver = true, true, image.Rectangle{}
 	}
-	if !on && camstream.Watching() {
+	if !on && watched() {
 		// Dark, with the camera watched over the network: its mark, alone on black (not a video's last
 		// frame), at the dimmest light (relight), so the room can tell. Looked at again until the
 		// watching ends.
@@ -1552,6 +1557,7 @@ func (d *Display) frame() (next time.Duration) {
 	}
 	s.muted, _ = mute.Get().Muted()
 	s.mutedSubtle = muteRingSubtle.Load()
+	s.listening = babymon.Listening()
 	// A stream this player is carrying is the room's when it is what is being heard: the face names it,
 	// and says what it is doing, though the audio never passes through this player's own stream. Both,
 	// not just playing: the face tests paused first, so a station left paused underneath would label

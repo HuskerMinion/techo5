@@ -43,6 +43,7 @@ var shade = color.RGBA{0x00, 0x00, 0x00, 0x90}
 // scene is one frame's worth of facts.
 type scene struct {
 	streaming bool // the camera is being streamed (feature/camstream)
+	listening bool // the room is being listened to in a browser (feature/babymon)
 
 	now     time.Time
 	phase   string  // idle, listening, thinking, replying, lingering

@@ -338,6 +338,8 @@ func securityRows(sv sheetView) []settingRow {
 	if layout.HasMicrophone() {
 		rows = append(rows, settingRow{id: "takes", label: tr("record_takes_of_a_word"), sub: tr("on_the_setup_page_started_here"),
 			kind: ctlToggle, on: sec.Takes})
+		rows = append(rows, settingRow{id: "baby", label: tr("baby_monitor"), sub: tr("room_sound_in_a_browser_with_the_link"),
+			kind: ctlToggle, on: sec.Baby})
 	}
 	return append(rows,
 		setupRow(st.demo),
@@ -1226,6 +1228,8 @@ func (d *Display) rowTap(id string, p part, opt int) {
 		security.Get().SetTalkBack(!config.Get().Security.TalkBack)
 	case "takes":
 		security.Get().SetTakes(!config.Get().Security.Takes)
+	case "baby":
+		security.Get().SetBaby(!config.Get().Security.Baby)
 	case "airplay":
 		streaming.Get().SetAirPlay(!config.Get().Streaming.AirPlay)
 	case "airplay2":
