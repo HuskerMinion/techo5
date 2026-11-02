@@ -7,6 +7,7 @@ import (
 	"image/color"
 
 	"github.com/HuskerMinion/techo5/echod/internal/feature/home"
+	"github.com/HuskerMinion/techo5/echod/internal/feature/notify"
 )
 
 // A notification from Home Assistant: its words in a card in the middle of the screen, the reminder's
@@ -34,6 +35,10 @@ func (r *renderer) notifyCard(s scene) {
 		r.noticeCardIn(r.notifyBox(), 56, 120, n.Icon, n.Title, n.Message, noteLines, r.small, noteLineH)
 		return
 	}
+	if n.Size != notify.SizeNormal {
+		r.sizedNoticeCard(r.sizedBox(n.Size), n.Size, n.Icon, n.Title, n.Message)
+		return
+	}
 	r.noticeCard(r.notifyBox(), 56, 126, n.Icon, n.Title, n.Message, notifyLines)
 }
 
@@ -59,6 +64,15 @@ func (r *renderer) cameraStrip() int {
 // captionRect is where the bar goes: along the foot of the page above the strip, as high as its words
 // need in the fonts this panel draws them in (the message in r.small, the title above it in r.tiny).
 func (r *renderer) captionRect(c home.Caption) image.Rectangle {
+	if size := notify.ParseSize(c.Size); size != notify.SizeNormal && c.Message != "" {
+		f := r.sizedCaption(c.Title, c.Message, size)
+		h := 2*r.s(captionPad) + len(f.lines)*f.lineH
+		if f.titleFace != nil {
+			h += f.titleFace.Metrics().Height.Ceil()
+		}
+		strip := r.cameraStrip()
+		return image.Rect(0, r.h-strip-h, r.w, r.h-strip)
+	}
 	h := 2*r.s(captionPad) + r.small.Metrics().Height.Ceil()
 	if c.Title != "" {
 		h += r.tiny.Metrics().Height.Ceil()
@@ -75,6 +89,19 @@ func (r *renderer) captionBar(c home.Caption) {
 	r.fillRect(bar, shade)
 	width := r.w - 2*r.margin
 	y := bar.Min.Y + r.s(captionPad)
+	if size := notify.ParseSize(c.Size); size != notify.SizeNormal && c.Message != "" {
+		f := r.sizedCaption(c.Title, c.Message, size)
+		if f.titleFace != nil {
+			m := f.titleFace.Metrics()
+			r.text(f.titleFace, r.fit(f.titleFace, upper(c.Title), width), r.margin, y+m.Ascent.Ceil(), captionAccent)
+			y += m.Height.Ceil()
+		}
+		for _, line := range f.lines {
+			r.text(f.face, line, r.margin, y+f.face.Metrics().Ascent.Ceil(), captionText)
+			y += f.lineH
+		}
+		return
+	}
 	if c.Title != "" {
 		m := r.tiny.Metrics()
 		r.text(r.tiny, clipText(r, r.tiny, upper(c.Title), width), r.margin, y+m.Ascent.Ceil(), captionAccent)

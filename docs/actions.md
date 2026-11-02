@@ -1477,6 +1477,44 @@ Emoji aren't drawn: none of the screen's fonts have them, so one shows as an emp
   (`home_show_camera`) is shown over a text card nobody has read; the card shows when the view ends. A
   picture notification replaces the card instead.
 
+### Reading it from across the room
+
+`esphome.<node>_notify_sized` is `notify` with one more argument, `size`. It does everything `notify`
+does; only the card changes.
+
+| `size` | What you get |
+|---|---|
+| `normal` (or `""`, or anything else) | The usual card: three lines of the message. |
+| `large` | A card over most of the screen, with the title and the message in much larger letters. The message wraps over as many lines as fit. |
+| `huge` | A card over nearly all of the screen. The message is set as large as it can be and still fit, in the middle of the card, so a short message such as "Server down" spans most of the screen's width. A longer one gets smaller letters, down to a limit, and ends in "…" past that. |
+
+`size` is a separate action, not a new argument on `notify`, because Home Assistant requires every
+argument on every call: a new argument on `notify` would stop every automation and blueprint that
+doesn't pass it. `notify` and `notify_picture` are unchanged.
+
+The usual card follows **Text size** (Settings, Look; also **Screen text size** in Home Assistant), as
+every word on the screen does. `large` and `huge` always take the largest letters that fit, so Text size
+makes no difference to them.
+
+```yaml
+action: esphome.bedroom_notify_sized
+data:
+  message: "Home server down"
+  title: "Warning"
+  icon: "mdi:server-off"
+  chime: ""
+  speak: ""
+  tag: ""
+  seconds: 0
+  size: huge
+```
+
+As in `notify`, an empty `chime` means the usual chime plays, an empty `speak` means nothing is said,
+and `seconds: 0` keeps it up until somebody taps it.
+
+On a Spot, `large` and `huge` give the message more of the round face and larger letters, and `huge`
+drops the icon. A Dot has no screen and ignores `size`.
+
 ### The event
 
 Each notification fires an `esphome.techo5_notification` event on Home Assistant's bus: once as it
@@ -1577,7 +1615,12 @@ actions:
 
 ## Show a picture notification
 
-In YAML, refer to this action as `esphome.<node>_notify_picture`.
+In YAML, refer to this action as `esphome.<node>_notify_picture`. For larger words over the picture, use
+`esphome.<node>_notify_picture_sized`, which takes the same arguments and then `size`
+(`normal`, `large` or `huge`), set out under [Reading it from across the room](#reading-it-from-across-the-room).
+On a Show the caption bar grows to hold the larger message, up to a third of the screen for `large` and
+more than half for `huge`; the picture shows above it. On a Spot, `size` has no effect on a picture
+notification.
 
 Puts a picture up full screen on this device, with a notification's words over it: a camera's live
 view for a doorbell, a snapshot an automation saved, or any picture Home Assistant or another web

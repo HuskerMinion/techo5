@@ -510,8 +510,10 @@ func TestADeviceWithNoScreen(t *testing.T) {
 func TestTheActionsAreTheOnesHomeAssistantKnows(t *testing.T) {
 	r := newRig(t, true)
 	want := map[string]string{
-		"notify":         "message,title,icon,chime,speak,tag,seconds",
-		"notify_picture": "message,title,picture,chime,speak,sound,tag,seconds",
+		"notify":               "message,title,icon,chime,speak,tag,seconds",
+		"notify_picture":       "message,title,picture,chime,speak,sound,tag,seconds",
+		"notify_sized":         "message,title,icon,chime,speak,tag,seconds,size",
+		"notify_picture_sized": "message,title,picture,chime,speak,sound,tag,seconds,size",
 	}
 	for _, a := range r.f.Actions() {
 		var args []string
