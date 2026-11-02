@@ -4,8 +4,6 @@ package display
 
 import (
 	"image"
-	"image/color"
-	"image/draw"
 	"time"
 )
 
@@ -58,8 +56,7 @@ func (r *renderer) nightLayer(b image.Rectangle, paint func()) {
 	if b.Empty() {
 		return
 	}
-	layer := image.NewRGBA(b)
-	draw.Draw(layer, b, image.NewUniform(color.Black), image.Point{}, draw.Src)
+	layer := nightLayerFor(&r.nightBuf, b)
 	screen := r.dst
 	r.dst = layer
 	paint()

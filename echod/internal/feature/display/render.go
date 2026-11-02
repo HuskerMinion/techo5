@@ -292,8 +292,9 @@ type scene struct {
 // renderer draws scenes onto one canvas. Faces are made once: parsing a font is cheap, but
 // building a face at each size is not something to do per frame.
 type renderer struct {
-	paint        // the canvas, its size, and the settings screen's tap zones
-	climateParts // the thermostat sheet's, where it was last drawn (climate_sheet.go)
+	nightBuf     *image.RGBA // the night layer kept between frames (nightLayerFor)
+	paint                    // the canvas, its size, and the settings screen's tap zones
+	climateParts             // the thermostat sheet's, where it was last drawn (climate_sheet.go)
 	// glow is the Glow style's images, kept between frames (glow.go).
 	glow glowBuffers
 	// nixie is the Nixie style's tubes, kept between frames (nixie.go).

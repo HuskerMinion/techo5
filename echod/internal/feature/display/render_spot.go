@@ -247,8 +247,9 @@ type roundScene struct {
 }
 
 type roundRenderer struct {
-	paint                                 // the canvas, and the settings screen's tap zones
-	callDrawn                        bool // the frame last drawn has the Call button on it; for taps
+	nightBuf                         *image.RGBA // the night layer kept between frames (nightLayerFor)
+	paint                                        // the canvas, and the settings screen's tap zones
+	callDrawn                        bool        // the frame last drawn has the Call button on it; for taps
 	clock, title, body, small, label font.Face
 	tiny                             font.Face
 

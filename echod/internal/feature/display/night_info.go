@@ -62,6 +62,19 @@ func nightTone(c color.RGBA) color.RGBA {
 	return color.RGBA{uint8(l * int(nightRed.R) / 255), uint8(l * int(nightRed.G) / 255), 0, 255}
 }
 
+// nightLayerFor is a black layer over b, kept in *buf between frames: allocated when the box changes,
+// otherwise cleared for reuse, so a night redraw does not allocate.
+func nightLayerFor(buf **image.RGBA, b image.Rectangle) *image.RGBA {
+	if *buf == nil || (*buf).Rect != b {
+		*buf = image.NewRGBA(b)
+	}
+	l := *buf
+	for i := 0; i < len(l.Pix); i += 4 {
+		l.Pix[i], l.Pix[i+1], l.Pix[i+2], l.Pix[i+3] = 0, 0, 0, 255
+	}
+	return l
+}
+
 // nightToneOnto copies the pixels of src that are not black into dst in the night's tone, in b.
 func nightToneOnto(dst, src *image.RGBA, b image.Rectangle) {
 	b = b.Intersect(dst.Rect).Intersect(src.Rect)
