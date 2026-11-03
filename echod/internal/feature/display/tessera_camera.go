@@ -10,7 +10,6 @@ import (
 	"fmt"
 	"image"
 	"image/color"
-	"image/draw"
 	_ "image/jpeg" // camera snapshots
 	"log/slog"
 	"math"
@@ -245,7 +244,7 @@ func (s *tessCamSet) snapshot(entity string, size image.Point, whole bool) (*ima
 	}
 	dst := image.NewRGBA(image.Rectangle{Max: size})
 	if whole {
-		draw.Draw(dst, dst.Rect, image.NewUniform(color.RGBA{0, 0, 0, 255}), image.Point{}, draw.Src)
+		fillCanvas(dst, color.RGBA{0, 0, 0, 255})
 		picscale.CatmullRom.Scale(dst, contain(src.Bounds(), dst.Rect), src, src.Bounds(), xdraw.Src)
 		return dst, nil
 	}

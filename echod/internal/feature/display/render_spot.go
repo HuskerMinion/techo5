@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"image"
 	"image/color"
-	"image/draw"
 	"math"
 	"strings"
 	"time"
@@ -350,7 +349,7 @@ func (r *roundRenderer) draw(s roundScene) {
 	r.zmu.Lock()
 	r.videoZones = nil
 	r.zmu.Unlock()
-	draw.Draw(r.dst, r.dst.Rect, image.NewUniform(colBackground), image.Point{}, draw.Src)
+	fillCanvas(r.dst, colBackground)
 	r.callDrawn, r.artDrawn = false, false
 	r.clearAlertTaps()
 	r.clearCameraSoundTap()
@@ -730,7 +729,7 @@ func (r *roundRenderer) triangle(ax, ay, bx, by, cx, cy float64, c color.RGBA) {
 
 // clear paints the canvas the icon ground.
 func (r *roundRenderer) clear() {
-	draw.Draw(r.dst, r.dst.Rect, image.NewUniform(colIconGround), image.Point{}, draw.Src)
+	fillCanvas(r.dst, colIconGround)
 }
 
 // dim darkens the whole canvas by alpha.

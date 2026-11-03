@@ -3,9 +3,7 @@
 package display
 
 import (
-	"image"
 	"image/color"
-	"image/draw"
 
 	"github.com/HuskerMinion/techo5/echod/internal/feature/babymon"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/camstream"
@@ -37,6 +35,6 @@ func (r *renderer) streamingDot(s scene) {
 
 // watchedDark is the frame of a dark panel while something is sent out of the room: black, and the dots.
 func (r *renderer) watchedDark() {
-	draw.Draw(r.dst, r.dst.Rect, image.NewUniform(color.Black), image.Point{}, draw.Src)
+	fillCanvas(r.dst, color.Black)
 	r.streamingDot(scene{streaming: camstream.Watching(), listening: babymon.Listening()})
 }

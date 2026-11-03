@@ -3,9 +3,7 @@
 package display
 
 import (
-	"image"
 	"image/color"
-	"image/draw"
 	"log/slog"
 
 	"github.com/HuskerMinion/techo5/echod/internal/hardware/screen"
@@ -22,7 +20,7 @@ func (d *Display) settleScreen(dev *screen.Device) {
 	d.mu.Unlock()
 	if !on {
 		c := dev.Canvas()
-		draw.Draw(c, c.Rect, image.NewUniform(color.RGBA{0, 0, 0, 255}), image.Point{}, draw.Src)
+		fillCanvas(c, color.RGBA{0, 0, 0, 255})
 		// Present returns before the frame is on the panel: lit before then, the logo would flash.
 		if err := dev.Present(); err != nil {
 			slog.Warn("blanking the screen failed", "err", err)

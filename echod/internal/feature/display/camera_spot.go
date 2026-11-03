@@ -5,7 +5,6 @@ package display
 import (
 	"image"
 	"image/color"
-	"image/draw"
 	"math"
 	"strings"
 	"time"
@@ -286,7 +285,7 @@ func (r *roundRenderer) listeningDot(s roundScene) {
 // watchedDark is the frame of a dark face while the camera is streamed or the room is listened to:
 // black, and the marks.
 func (r *roundRenderer) watchedDark() {
-	draw.Draw(r.dst, r.dst.Rect, image.NewUniform(color.Black), image.Point{}, draw.Src)
+	fillCanvas(r.dst, color.Black)
 	if camstream.Watching() {
 		r.cameraDot()
 	}

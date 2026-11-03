@@ -187,7 +187,7 @@ func (d *Display) tessSheetViews(s *scene) {
 // tesseraPage draws the Tessera page over the whole panel.
 func (r *paint) tesseraPage(v tessera.View, on bool, page int, adj dashAdjusting, now time.Time) {
 	pal := r.palette(dashboard.Theme{})
-	draw.Draw(r.dst, r.dst.Rect, image.NewUniform(pal.bg), image.Point{}, draw.Src)
+	fillCanvas(r.dst, pal.bg)
 	fc := r.faces()
 	if !on || len(v.Pages) == 0 {
 		msg := "Waiting for a layout from Tessera. Add tiles for this screen in the Tessera add-on."
