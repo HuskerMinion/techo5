@@ -30,3 +30,11 @@ func TestShowNotButtons(t *testing.T) {
 		}
 	}
 }
+
+// No Show has a power key of its own: 116 is the mute there, so Has(Power) is false and Home Assistant
+// is not offered one.
+func TestNoShowHasAPowerKey(t *testing.T) {
+	if Has(Power) {
+		t.Error("a Show reports a power key")
+	}
+}
