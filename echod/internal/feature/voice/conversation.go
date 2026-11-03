@@ -1453,7 +1453,13 @@ var clock = time.Now
 // saidQuiet is how long nothing near the speaker's level has to be heard, after the wake sound, before
 // a request heard inside the sound is taken as the whole of it, in windows: longer than the pause of
 // someone who waited for the sound and then thought what to ask.
-const saidQuiet = 25
+const saidQuiet = 30
+
+// saidOff is how far below the loudest window inside the sound a window after it still counts as
+// someone talking, for saidCheck: well under the detector's own Off, since that loudest window is
+// often the end of the wake word or what the canceller left of the sound, and a request from across
+// the room is far softer than either. A room's own noise is softer again.
+const saidOff = 0.1
 
 // saidCheck ends a turn whose request was said inside the wake sound (pump). Off is the level a window
 // after the sound has to reach to count as someone talking, from what was heard inside it; zero when
@@ -1552,8 +1558,10 @@ func (c *conversation) pump(ctx context.Context, be backend, slot int, followUp,
 		sent += len(frame)
 		if watching && !clock().Before(deafUntil) {
 			watching = false
-			if peak, off, speech := ep.Heard(); speech >= ep.Settings().Speech {
-				said = saidCheck{off: off, peak: peak}
+			// After a wake word only: a follow-up opens on the reply's own tail and its sound, which are
+			// not a request.
+			if peak, _, speech := ep.Heard(); speech >= ep.Settings().Speech && !followUp {
+				said = saidCheck{off: saidOff * peak, peak: peak}
 			}
 			ep = endpoint.New(endpointSettings())
 		}

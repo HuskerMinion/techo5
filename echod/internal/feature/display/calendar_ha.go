@@ -126,12 +126,18 @@ func (d *Display) calendarListsChanged() {
 		return
 	}
 	c := config.Get().Calendar
-	d.pop.shown.Set(calendarListText(c.Sources))
 	popping := c.PopupCalendars
 	if len(popping) == 0 {
 		popping = c.Sources
 	}
-	d.pop.popping.Set(calendarListText(popping))
+	// Only a change is sent: the watch below asks every ten seconds, and each Set is a message to Home
+	// Assistant.
+	if v := calendarListText(c.Sources); v != d.pop.shown.Get() {
+		d.pop.shown.Set(v)
+	}
+	if v := calendarListText(popping); v != d.pop.popping.Get() {
+		d.pop.popping.Set(v)
+	}
 }
 
 // watchCalendarLists keeps the two text sensors current when the lists are changed from somewhere that

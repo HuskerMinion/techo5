@@ -220,3 +220,20 @@ func TestSilenceAfterTheWakeSoundEndsAsBefore(t *testing.T) {
 		t.Fatal("silence ended the turn")
 	}
 }
+
+// A request from across the room, at a quarter of the wake word's level, after the sound and a
+// pause, is not cut off by the check for a request said inside the sound.
+func TestASoftRequestAfterTheWakeSoundIsNotCutOff(t *testing.T) {
+	n := stepping(t)
+	var frames [][]int16
+	frames = append(frames, voiceAt(1, 1100), voiceAt(1, 1100), voiceAt(1, 1100))
+	for len(frames) < n+20 {
+		frames = append(frames, voiceAt(1, 20))
+	}
+	for range 30 {
+		frames = append(frames, voiceAt(1, 275))
+	}
+	if _, ended := run(t, config.ToneHA, true, nil, frames...); ended {
+		t.Fatal("a soft request after the wake sound was cut off")
+	}
+}

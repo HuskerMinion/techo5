@@ -469,9 +469,8 @@ func (c *Central) Pair(ctx context.Context, address string) error {
 // Unpair drops a device's bond and forgets the device, which removes its keys and cached services.
 // Other devices are not touched. A device bluetoothd does not know is a success.
 func (c *Central) Unpair(ctx context.Context, address string) error {
-	if err := c.Disconnect(ctx, address); err != nil {
-		return err
-	}
+	// The device's own pairings are refused before anything is done to them: a phone or a speaker
+	// playing through the device keeps its link.
 	path, err := c.devicePath(strings.ToUpper(address))
 	if err != nil || path == "" {
 		return err
@@ -482,6 +481,9 @@ func (c *Central) Unpair(ctx context.Context, address string) error {
 	}
 	if ownPairing(props) {
 		return fmt.Errorf("bluez: %s is paired for audio or calls on this device, not unpaired", address)
+	}
+	if err := c.Disconnect(ctx, address); err != nil {
+		return err
 	}
 	return c.conn.Object(service, c.adapter).CallWithContext(ctx, adapterIfc+".RemoveDevice", 0, path).Err
 }

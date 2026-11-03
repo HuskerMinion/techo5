@@ -294,6 +294,9 @@ func roleOf(c *Claim) int {
 		return RoleMedia
 	case c.call:
 		return RoleCall
+	case c.overlay:
+		// A camera's own sound over the music is the street, not the assistant: it plays at the volume.
+		return RoleMedia
 	}
 	return RoleVoice
 }

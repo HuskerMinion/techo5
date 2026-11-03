@@ -120,8 +120,8 @@ func TestTheNightVolumeCapsTheLanes(t *testing.T) {
 }
 
 // A call, its ring and a drop in are made with ClaimCall and play at the call volume whatever they are
-// named; the rest of what a claim says is the assistant's voice; nothing holding the speaker is the
-// device's own sounds, on the volume.
+// named; a camera's own sound over the music (ClaimOver) plays at the volume; the rest of what a claim
+// says is the assistant's voice; nothing holding the speaker is the device's own sounds, on the volume.
 func TestWhatAClaimIsForItsVolume(t *testing.T) {
 	d := driver()
 	play := func(context.Context, *Player) error { return nil }
@@ -133,8 +133,11 @@ func TestWhatAClaimIsForItsVolume(t *testing.T) {
 		"turn":   d.ClaimTurn("call", time.Second, play),
 	} {
 		want := RoleVoice
-		if name == "call" {
+		switch name {
+		case "call":
 			want = RoleCall
+		case "over":
+			want = RoleMedia
 		}
 		if got := roleOf(c); got != want {
 			t.Errorf("%s: role %d, want %d", name, got, want)

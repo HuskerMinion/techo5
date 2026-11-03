@@ -1076,7 +1076,7 @@ plays at. Two more levels sit beside it, as steps from the volume (the same 30 s
 quiet replies over loud music, or the other way round.
 
 - **Voice volume** is for the assistant: replies, announcements (`tts.speak` and the announce action) and
-  what the device says. Never music.
+  what the device says. Never music, and not a camera's own sound, which plays at the volume.
 - **Call volume** is for the intercom and phone calls.
 
 Both are set in Settings → **Sound** on the device, on the setup page (Sound & Voice) and as number

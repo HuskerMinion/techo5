@@ -17,7 +17,8 @@ func fakePlayer(t *testing.T, err error) *[]sent {
 	t.Helper()
 	var mu sync.Mutex
 	var got []sent
-	oldCall, oldMargin := callPlayer, elsewhereMargin
+	oldCall, oldMargin, oldUp := callPlayer, elsewhereMargin, playerUp
+	playerUp = func(string) bool { return true }
 	callPlayer = func(e, u string) error {
 		mu.Lock()
 		defer mu.Unlock()
@@ -26,7 +27,7 @@ func fakePlayer(t *testing.T, err error) *[]sent {
 	}
 	elsewhereMargin = 0
 	failedElsewhere.Store(false)
-	t.Cleanup(func() { callPlayer, elsewhereMargin = oldCall, oldMargin })
+	t.Cleanup(func() { callPlayer, elsewhereMargin, playerUp = oldCall, oldMargin, oldUp })
 	return &got
 }
 
@@ -92,6 +93,23 @@ func TestAFailedPlayerFallsBackOnce(t *testing.T) {
 	}
 	if !failedElsewhere.Load() {
 		t.Error("the failure was not remembered, so it would be logged every reply")
+	}
+}
+
+// A player Home Assistant reports unavailable is not called, since the call would succeed and play
+// nothing: the reply plays here.
+func TestAnUnavailablePlayerIsNotCalled(t *testing.T) {
+	got := fakePlayer(t, nil)
+	playerUp = func(string) bool { return false }
+	c := thinkingTurn(t)
+	config.Set().Brain().SetReplyPlayer("media_player.dot")
+	url, release := heldSpeech(t)
+	close(release)
+	if c.playElsewhere(t.Context(), url, nil) {
+		t.Fatal("an unavailable player counted as played elsewhere")
+	}
+	if len(*got) != 0 {
+		t.Fatalf("an unavailable player was called: %v", *got)
 	}
 }
 
