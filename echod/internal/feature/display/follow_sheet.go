@@ -73,6 +73,9 @@ func followText(demo bool) string {
 	if demo && name != "None" {
 		return "Kitchen speaker"
 	}
+	if name == "None" {
+		return tr("option_none") // the stand-in for no player; a player's own name is left as it is
+	}
 	return name
 }
 

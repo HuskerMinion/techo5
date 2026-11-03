@@ -332,7 +332,7 @@ func (r *roundRenderer) cardButtons(actions []headerAction) {
 	if len(buttons) == 1 && len(actions) > 0 {
 		a := actions[0]
 		if a.id == "add" {
-			a.label = "+  Add"
+			a.label = tr("ui_add_alarm")
 		}
 		buttons = append(buttons, a)
 	}
@@ -483,7 +483,7 @@ func (d *Display) sheetView(now time.Time) sheetView {
 	st.version = layout.Version
 	st.night = cmpOr(c.Screen.Night, defaultNight)
 	st.address = deviceAddress()
-	st.wifiName = "Connected"
+	st.wifiName = tr("wifi_connected")
 	if st.address == "" || st.address == "-" {
 		st.wifiName = tr("not_connected")
 	}

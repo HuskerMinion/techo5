@@ -104,18 +104,19 @@ func (r *roundRenderer) ringFace(s roundScene) {
 	pulse := 0.4 + 0.6*math.Abs(math.Sin(float64(s.now.UnixMilli())/350))
 	r.arc(rimIn, rimOut, 0, 2*math.Pi, fade(colRing, pulse))
 
-	title := "ALARM"
+	title := upper(tr("alarm"))
 	switch {
 	case st.timerOn && st.alarm != nil:
-		title = "TIMER AND ALARM"
+		title = upper(tr("timer_and_alarm"))
 	case st.timerOn:
-		title = "TIMER DONE"
+		title = upper(tr("timer_done"))
 		if st.timer != "" {
-			name := st.timer
-			if !strings.Contains(strings.ToLower(name), "timer") {
-				name += " timer"
+			// A name that does not say it is a timer is said to be one: "Pasta timer done".
+			done := tr("timer_name_done")
+			if !strings.Contains(strings.ToLower(st.timer), "timer") {
+				done = tr("timer_named_done")
 			}
-			title = upper(name) + " DONE"
+			title = upper(fmt.Sprintf(done, st.timer))
 		}
 	case st.alarm != nil && st.alarm.Label != "":
 		title = upper(st.alarm.Label)
@@ -126,15 +127,15 @@ func (r *roundRenderer) ringFace(s roundScene) {
 	// A silenced ring says so where it used to say what to do, because what to do has changed: the
 	// noise is already gone and the only question left is whether it comes back.
 	if st.silenced {
-		r.centered(r.title, "Silenced", 372, colText)
+		r.centered(r.title, tr("silenced"), 372, colText)
 		if st.alarm != nil {
-			r.centered(r.small, fmt.Sprintf("press again to snooze %d min", st.snoozeIn), 410, colDim)
+			r.centered(r.small, fmt.Sprintf(tr("press_again_to_snooze_d_min"), st.snoozeIn), 410, colDim)
 		}
 		return
 	}
 
-	r.centered(r.title, "Tap to stop", 372, colText)
+	r.centered(r.title, tr("tap_to_stop"), 372, colText)
 	if st.alarm != nil {
-		r.centered(r.small, fmt.Sprintf("swipe to snooze %d min", st.snoozeIn), 410, colDim)
+		r.centered(r.small, fmt.Sprintf(tr("swipe_to_snooze_d_min"), st.snoozeIn), 410, colDim)
 	}
 }

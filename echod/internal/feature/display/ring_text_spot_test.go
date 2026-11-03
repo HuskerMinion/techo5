@@ -4,11 +4,14 @@ package display
 
 import (
 	"image"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
 
+	"github.com/HuskerMinion/techo5/echod/internal/config"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/timer"
+	"github.com/HuskerMinion/techo5/echod/internal/lib/locale"
 )
 
 // ringScenes are the states that change what the ring's hints say.
@@ -80,5 +83,51 @@ func TestRingNameIsCutToTheIcons(t *testing.T) {
 	got := r.paint.fit(r.title, long, ringRoom(r.title, 252))
 	if !strings.HasSuffix(got, "…") || r.width(r.title, got) > ringRoom(r.title, 252) {
 		t.Errorf("name %q is not cut to the ring", got)
+	}
+}
+
+// screenLangs are the languages with a full catalog, and "" for English.
+var screenLangs = []string{"", "de", "fr", "gl", "it", "ja", "tr"}
+
+// In every language with a catalog, each hint still fits inside the icons on two lines, and the names
+// of the items on one, without being cut short.
+func TestRingTextFitsInEveryLanguage(t *testing.T) {
+	config.Use(filepath.Join(t.TempDir(), "state.json"))
+	t.Cleanup(func() { _ = config.Set().Screen().Language("") })
+	r := newRoundRenderer(image.NewRGBA(image.Rect(0, 0, side, side)))
+	for _, lang := range screenLangs {
+		if err := config.Set().Screen().Language(lang); err != nil {
+			t.Fatal(err)
+		}
+		checkRingHints(t, r, 100, false)
+		for _, s := range ringScenes() {
+			for _, it := range mainItems {
+				name := itemName(s, it.id)
+				if got := r.paint.fit(r.body, name, ringRoom(r.body, 252)); got != name {
+					t.Errorf("%q: the name %q is cut to %q", lang, name, got)
+				}
+			}
+		}
+	}
+}
+
+// The empty contact list's messages are said in full in every language, on the four lines it has.
+func TestContactMessagesFitInEveryLanguage(t *testing.T) {
+	config.Use(filepath.Join(t.TempDir(), "state.json"))
+	t.Cleanup(func() { _ = config.Set().Screen().Language("") })
+	r := newRoundRenderer(image.NewRGBA(image.Rect(0, 0, side, side)))
+	for _, lang := range screenLangs {
+		if err := config.Set().Screen().Language(lang); err != nil {
+			t.Fatal(err)
+		}
+		for _, key := range []string{"ui_no_contacts_yet", "ui_set_house_word_to_call_other_devices", "drawer_no_peers", "weather_no_reading_from_home_assistant", "weather_forecast_needs_a_home_assistant_token"} {
+			lines, more := r.paragraphLines(r.body, strings.Fields(locale.Text(lang, key)), 230, 4)
+			if key[0] == 'w' {
+				lines, more = r.paragraphLines(r.small, strings.Fields(locale.Text(lang, key)), 310, 2)
+			}
+			if more {
+				t.Errorf("%q: %s is cut after %d lines: %q", lang, key, len(lines), lines)
+			}
+		}
 	}
 }

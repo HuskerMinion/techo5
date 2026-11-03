@@ -52,7 +52,7 @@ func (d *Display) gather(s scene, restartArm time.Time) settings {
 	st.night = config.Get().Screen.Night
 	d.mu.Lock()
 	st.wifi = wifiSummary(d.wifi.status)
-	st.wifiName = cmpOr(d.wifi.status.SSID, "Not connected")
+	st.wifiName = cmpOr(d.wifi.status.SSID, tr("not_connected"))
 	if ws := d.wifi.status; !ws.Connected && ws.SSID != "" && ws.State != "" {
 		st.wifiName = ws.SSID + " · " + ws.State
 	}

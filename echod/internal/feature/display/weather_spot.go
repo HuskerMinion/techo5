@@ -79,8 +79,8 @@ func (r *roundRenderer) weatherFace(s roundScene) (bolt image.Rectangle) {
 	r.centered(r.label, clockHM(s.now), 62, colDim)
 	if cond == "" && big == "" {
 		r.weatherIcon("cloudy", center, 170, 44)
-		r.centered(r.title, "No weather yet", 272, colText)
-		r.paragraph(r.small, "Home Assistant has not sent a reading", 310, colDim, 2)
+		r.centered(r.title, clip(r.title, r, tr("weather_no_weather_yet"), chord(262)-56), 272, colText)
+		r.paragraph(r.small, tr("weather_no_reading_from_home_assistant"), 310, colDim, 2)
 		return image.Rectangle{}
 	}
 
@@ -103,9 +103,9 @@ func (r *roundRenderer) weatherFace(s roundScene) (bolt image.Rectangle) {
 	}
 	r.centered(r.body, conditionWords(cond), 232, colText)
 	if len(days) > 0 {
-		today := fmt.Sprintf("High %.0f°  Low %.0f°", days[0].High, days[0].Low)
+		today := fmt.Sprintf("%s %.0f°  %s %.0f°", tr("weather_high"), days[0].High, tr("weather_low"), days[0].Low)
 		if days[0].Rain > 0 {
-			today += fmt.Sprintf("  Rain %d%%", days[0].Rain)
+			today += fmt.Sprintf("  %s %d%%", tr("weather_rain_probability"), days[0].Rain)
 		}
 		r.centered(r.small, today, 266, colDim)
 	}
@@ -115,7 +115,7 @@ func (r *roundRenderer) weatherFace(s roundScene) (bolt image.Rectangle) {
 		next = next[1:]
 	}
 	if len(next) == 0 {
-		r.paragraph(r.small, "Forecast needs a Home Assistant token", 330, colDim, 2)
+		r.paragraph(r.small, tr("weather_forecast_needs_a_home_assistant_token"), 330, colDim, 2)
 		return
 	}
 	r.line(110, 290, 370, 290, 1.5, colTrack)

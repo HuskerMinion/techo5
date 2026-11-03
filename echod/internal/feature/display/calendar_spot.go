@@ -3,13 +3,14 @@
 package display
 
 import (
+	"fmt"
 	"math"
 	"slices"
-	"strconv"
 	"time"
 
 	"github.com/HuskerMinion/techo5/echod/internal/feature/home"
 	"github.com/HuskerMinion/techo5/echod/internal/lib/hass"
+	"github.com/HuskerMinion/techo5/echod/internal/lib/locale"
 )
 
 // The Spot's calendar: no month on a screen this small, only what is coming. Today's events still to
@@ -22,10 +23,10 @@ const calendarIdle = time.Minute
 // spotWhen is an event's time as the face says it: All day, or when it starts.
 func spotWhen(e hass.Event, now time.Time) string {
 	if e.AllDay {
-		return "All day"
+		return tr("all_day")
 	}
 	if e.Start.Before(now) {
-		return "Now, until " + clockText(e.End)
+		return fmt.Sprintf(tr("calendar_now_until"), clockText(e.End))
 	}
 	return clockText(e.Start)
 }
@@ -40,13 +41,13 @@ func chordAt(y int) int {
 func (r *roundRenderer) calendarFace(s roundScene) {
 	r.clear()
 	r.centered(r.label, clockHM(s.now), 62, colDim)
-	heading, rows := "Today", s.calToday
+	heading, rows := tr("today"), s.calToday
 	if len(rows) == 0 {
-		heading, rows = "Next", s.calNext
+		heading, rows = tr("next"), s.calNext
 	}
 	r.centered(r.title, heading, 116, colText)
 	if len(rows) == 0 {
-		r.centered(r.body, "Nothing coming up", 250, colDim)
+		r.centered(r.body, tr("calendar_nothing_coming_up"), 250, colDim)
 		return
 	}
 	y := 178
@@ -58,14 +59,14 @@ func (r *roundRenderer) calendarFace(s roundScene) {
 		r.discAt(float64(center-tw/2-16), float64(y-9), 6, calendarColor(s.calOrder, e.Calendar))
 		r.centered(r.body, title, y, colText)
 		when := spotWhen(e, s.now)
-		if heading == "Next" {
+		if len(s.calToday) == 0 {
 			when = comingDay(e.Start, s.now) + " · " + when
 		}
 		r.centered(r.small, clip(r.small, r, when, chordAt(y+30)), y+30, colDim)
 		y += 76
 	}
-	if more := len(s.calToday) - len(shown); heading == "Today" && more > 0 {
-		r.centered(r.small, "and "+strconv.Itoa(more)+" more today", y-8, colDim)
+	if more := len(s.calToday) - len(shown); len(s.calToday) > 0 && more > 0 {
+		r.centered(r.small, fmt.Sprintf(tr("calendar_and_d_more_today"), more), y-8, colDim)
 	}
 }
 
@@ -101,9 +102,9 @@ func comingDay(day, now time.Time) string {
 	d := time.Date(day.Year(), day.Month(), day.Day(), 0, 0, 0, 0, time.Local)
 	switch days := int(d.Sub(d0).Hours() / 24); {
 	case days == 1:
-		return "Tomorrow"
+		return tr("tomorrow")
 	case days > 1 && days < 7:
-		return day.Format("Monday")
+		return locale.Weekday(day, screenLang())
 	}
-	return day.Format("Mon, Jan 2")
+	return locale.ShortDate(day, screenLang())
 }

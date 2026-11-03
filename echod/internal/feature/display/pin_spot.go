@@ -52,9 +52,9 @@ func (r *roundRenderer) pinFace(p pinView) {
 		label, face := k, r.title
 		switch k {
 		case "back":
-			label, face = "Back", r.small
+			label, face = tr("back"), r.small
 		case "ok":
-			label, face = "OK", r.body
+			label, face = tr("ok"), r.body
 		}
 		lift := 11
 		if face == r.body {

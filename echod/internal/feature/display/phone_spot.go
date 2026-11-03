@@ -62,24 +62,24 @@ func (r *roundRenderer) callFace(s roundScene) {
 	}
 	r.arc(rimIn, rimOut, 0, 2*math.Pi, fade(colCall, pulse))
 
-	title := "CALLING"
+	title := upper(tr("ui_calling_variant"))
 	switch st.Phase {
 	case phone.Ringing:
-		title = "INCOMING CALL"
+		title = upper(tr("ui_incoming_call"))
 	case phone.Talking:
-		title = "ON A CALL"
+		title = upper(tr("ui_on_a_call"))
 	}
 	if st.DropIn {
-		title = "DROP IN"
+		title = upper(tr("ui_drop_in"))
 	}
 	r.centered(r.label, title, 150, colCall)
 	if s.atDoor { // the doorbell, pressed during the call: said here instead of rung (feature/doorbell)
-		r.centered(r.small, "Someone's at the door", 192, colText)
+		r.centered(r.small, tr("ui_someone_s_at_the_door"), 192, colText)
 	}
 
 	who := st.Peer
 	if who == "" {
-		who = "Unknown"
+		who = tr("ui_unknown")
 	}
 	face := r.small
 	for _, f := range []font.Face{r.title, r.body} {
@@ -94,12 +94,12 @@ func (r *roundRenderer) callFace(s roundScene) {
 	case phone.Talking:
 		d := s.now.Sub(st.Since).Round(time.Second)
 		r.centered(r.body, fmt.Sprintf("%d:%02d", int(d.Minutes()), int(d.Seconds())%60), 290, colDim)
-		r.centered(r.small, "Tap to hang up", 370, colDim)
+		r.centered(r.small, tr("ui_tap_to_hang_up"), 370, colDim)
 	case phone.Ringing:
-		r.centered(r.small, "Tap to answer", 350, colText)
-		r.centered(r.small, "Swipe to decline", 385, colDim)
+		r.centered(r.small, tr("ui_tap_to_answer"), 350, colText)
+		r.centered(r.small, tr("ui_swipe_to_decline"), 385, colDim)
 	default:
-		r.centered(r.small, "Tap to hang up", 370, colDim)
+		r.centered(r.small, tr("ui_tap_to_hang_up"), 370, colDim)
 	}
 }
 
@@ -147,16 +147,16 @@ func contactTopFor(top, n int) int { return min(max(top, 0), max(n-contactRows, 
 // calls them.
 func (r *roundRenderer) contactList(s roundScene) {
 	r.clear()
-	r.centered(r.label, "CALL", 84, colCall)
+	r.centered(r.label, upper(tr("drawer_call")), 84, colCall)
 	if len(s.contacts) == 0 {
-		msg := "No contacts yet: Home Assistant's phone_contacts action sets them"
+		msg := tr("ui_no_contacts_yet")
 		switch {
 		case !s.phoneReady && !s.houseReady:
-			msg = "Set a house word on the setup page to call the other devices"
+			msg = tr("ui_set_house_word_to_call_other_devices")
 		case !s.phoneReady:
-			msg = "No other devices found yet"
+			msg = tr("drawer_no_peers")
 		}
-		r.paragraph(r.body, msg, 230, colDim, 3)
+		r.paragraph(r.body, msg, 230, colDim, 4)
 		return
 	}
 	top := contactTopFor(s.contactTop, len(s.contacts))
@@ -181,6 +181,6 @@ func (r *roundRenderer) contactList(s roundScene) {
 		r.triangle(center-16, 438, center+16, 438, center, 454, colCall)
 	}
 	if len(s.contacts) > contactRows {
-		r.centered(r.tiny, "swipe for more", 426, colDim)
+		r.centered(r.tiny, tr("ui_swipe_for_more"), 426, colDim)
 	}
 }

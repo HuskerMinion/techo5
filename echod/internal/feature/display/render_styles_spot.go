@@ -95,7 +95,7 @@ func (r *roundRenderer) styledClockFace(s roundScene, style string) {
 func (r *roundRenderer) footLine(s roundScene, baseline int, otherwise string) {
 	switch {
 	case len(s.timers) > 0:
-		r.centered(r.body, "Timer "+clockDuration(s.timers[0].Left), baseline, colTimer)
+		r.centered(r.body, tr("timer")+" "+clockDuration(s.timers[0].Left), baseline, colTimer)
 	case s.missed != "":
 		r.centered(r.small, s.missed, baseline, colTimer)
 	case s.slideshowTrouble != "":
@@ -397,7 +397,7 @@ func (r *roundRenderer) sunFace(s roundScene) {
 		line += 34
 	}
 	warm := color.RGBA{230, 170, 120, 255}
-	r.centered(r.tiny, "Sun up "+clockText(s.style.rise)+"  ·  down "+clockText(s.style.set), line+4, warm)
+	r.centered(r.tiny, fmt.Sprintf(tr("ui_sunrise_sunset_times"), clockText(s.style.rise), clockText(s.style.set)), line+4, warm)
 }
 
 // sunRim is the rim as the whole day: noon at the top, midnight at the bottom, daylight from sunrise
@@ -491,7 +491,7 @@ func (r *roundRenderer) dashboardFace(s roundScene) {
 
 	f := r.styleFace(false, 20)
 	if len(s.style.next) == 0 {
-		r.centered(f, "Nothing coming up", 246, colDim)
+		r.centered(f, tr("calendar_nothing_coming_up"), 246, colDim)
 	}
 	for i, e := range s.style.next[:min(len(s.style.next), 2)] {
 		y := 232 + i*36
@@ -510,7 +510,7 @@ func (r *roundRenderer) dashboardFace(s roundScene) {
 		cx := center - 100 + i*100
 		name := locale.ShortWeekday(d.When, screenLang())
 		if i == 0 {
-			name = "Now"
+			name = tr("today")
 		}
 		r.centered2(r.styleFace(true, 18), name, cx, 318, colDim)
 		r.weatherIcon(d.Condition, float64(cx), 350, 13)
@@ -524,13 +524,13 @@ func dashWhenSpot(start time.Time, allDay bool, now time.Time) string {
 	tomorrow := today.AddDate(0, 0, 1)
 	switch {
 	case !allDay && !start.After(now):
-		return "Now"
+		return tr("ui_running")
 	case allDay && start.Before(tomorrow):
 		return tr("today")
 	case start.Before(tomorrow):
 		return clockText(start)
 	case start.Before(tomorrow.AddDate(0, 0, 1)):
-		return "Tmrw"
+		return tr("tomorrow")
 	}
 	return locale.ShortWeekday(start, screenLang())
 }

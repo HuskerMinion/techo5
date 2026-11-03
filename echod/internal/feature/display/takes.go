@@ -65,7 +65,7 @@ func answerTakes(start bool, id uint64) {
 		return
 	}
 	if security.Locked() {
-		openPIN("Record takes", func() {
+		openPIN(tr("record_takes_of_a_word"), func() {
 			takes.Get().Begin(id)
 			security.Relock()
 		})
@@ -82,14 +82,14 @@ func takesWhat(c takes.Card, most int) string {
 		word = string(w[:most-1]) + "…"
 	}
 	if c.Kind == takes.NotWord {
-		return "like “" + word + "”"
+		return fmt.Sprintf(tr("ui_takes_like_word"), word)
 	}
-	return "of “" + word + "”"
+	return fmt.Sprintf(tr("ui_takes_of_word"), word)
 }
 
 // takesTime is how far a recording has come, against its ceiling.
 func takesTime(d time.Duration) string {
 	s, most := int(d.Seconds()), int(takes.Longest.Seconds())
 	s = min(s, most)
-	return fmt.Sprintf("%d:%02d of %d:%02d", s/60, s%60, most/60, most%60)
+	return fmt.Sprintf(tr("ui_takes_time_progress"), s/60, s%60, most/60, most%60)
 }
