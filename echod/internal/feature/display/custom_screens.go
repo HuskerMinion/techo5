@@ -13,6 +13,7 @@ import (
 	esphome "github.com/ygelfand/go-esphome-device"
 
 	"github.com/HuskerMinion/techo5/echod/internal/config"
+	"github.com/HuskerMinion/techo5/echod/internal/feature/phone"
 	"github.com/HuskerMinion/techo5/echod/internal/hardware/touch"
 )
 
@@ -66,6 +67,10 @@ type customScreen struct {
 	next func(s scene) time.Duration
 	// follow is a screen that wants every finger as it moves (touch's follow mode): a map to drag.
 	follow bool
+	// keeps is a screen that draws over the page it drew in the frame before, when that page is still
+	// on the canvas with nothing over it, only what changed (renderer.customKept): the canvas is then not
+	// cleared for the frame. A list that scrolls under a page that is slow to draw wants that.
+	keeps bool
 }
 
 // customScreens are the screens registered, in their ranks' order.
@@ -292,6 +297,39 @@ func (r *renderer) customPage(s scene) {
 		return
 	}
 	setCustomZones(c.draw(r, s))
+	if c.keeps && customAlonePage(s) {
+		r.customAlone = c.id
+	}
+}
+
+// customCache is the custom screen id's own state between frames, made by mk the first time it is
+// asked for and kept with the renderer after that: a page drawn once and kept while it shows the
+// same, the rows' words drawn once. Asked for from the screen's draw, on the renderer's goroutine.
+func customCache[T any](r *renderer, id string, mk func() *T) *T {
+	if v, ok := r.customCache[id].(*T); ok {
+		return v
+	}
+	if r.customCache == nil {
+		r.customCache = map[string]any{}
+	}
+	v := mk()
+	r.customCache[id] = v
+	return v
+}
+
+// customAlonePage is a frame of a custom screen with nothing drawn over it: no card, strip, cue or
+// pill, nor any page that takes its place.
+func customAlonePage(s scene) bool {
+	return customFrameKey(s, s.ring.any(), s.call.Phase != phone.Idle) != "" && !s.muted && s.camtest == nil
+}
+
+// keptCustom is whether the canvas holds the page the custom screen up drew in the frame before, alone,
+// for a screen that keeps it (customScreen.keeps), and this frame is that screen's alone too. Asked once
+// a frame, as it begins.
+func (r *renderer) keptCustom(s scene) bool {
+	alone := r.customAlone
+	r.customAlone = ""
+	return alone != "" && alone == s.custom.name && customAlonePage(s) && !s.showVideo
 }
 
 // customFrameKey is what a frame of a custom screen shows, or "" when the frame is not just that
