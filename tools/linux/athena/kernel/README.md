@@ -23,7 +23,8 @@ python3 curl xz-utils`):
 
     tools/linux/athena/kernel/build.sh
 
-On an Apple silicon Mac with Docker running:
+Anywhere Docker runs (an Apple silicon Mac, Linux, Windows): the container is built for the host and
+cross compiles as above, so nothing runs under emulation:
 
     bash tools/linux/athena/kernel/build-in-docker.sh
 
