@@ -258,7 +258,10 @@ func immichPersonID(ctx context.Context, srv config.Immich, name string) (string
 // immichPhotos lists the photos of a source, ImmichAll or an album, as narrowed by fl, page by page up
 // to max. Videos are left out; every photo is shown as Immich's JPEG preview, whatever it was taken as.
 func immichPhotos(ctx context.Context, srv config.Immich, source string, fl immichFilter, max int) ([]hass.Media, error) {
-	query := map[string]any{"type": "IMAGE", "size": immichPage}
+	// Timeline only, so archived photos stay out: Immich's search asks for no visibility of its own,
+	// and with none it answers with the archive as well as the timeline (what it leaves out is only
+	// what is locked).
+	query := map[string]any{"type": "IMAGE", "size": immichPage, "visibility": "timeline"}
 	if id, ok := strings.CutPrefix(source, ImmichAlbumPrefix); ok {
 		if !immichID.MatchString(id) {
 			return nil, errors.New("immich: that is not an album")
