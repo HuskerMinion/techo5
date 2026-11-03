@@ -40,3 +40,26 @@ func TestMainlineIlluminanceUsesReportedScale(t *testing.T) {
 		t.Fatalf("missing scale reported %+v", got)
 	}
 }
+
+// The Surface RT's HID sensor hub light sensor is "als", and its reading is (raw + offset) × scale.
+func TestTheHIDSensorHubIlluminanceIsFound(t *testing.T) {
+	root := t.TempDir()
+	dir := filepath.Join(root, "sys/bus/iio/devices/iio:device5")
+	if err := os.MkdirAll(dir, 0755); err != nil {
+		t.Fatal(err)
+	}
+	for name, value := range map[string]string{"name": "als\n", "in_illuminance_raw": "238\n",
+		"in_illuminance_scale": "1.000000000\n", "in_illuminance_offset": "2\n"} {
+		if err := os.WriteFile(filepath.Join(dir, name), []byte(value), 0600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	r := Reader{Root: root}
+	path := r.LuxPath()
+	if path != filepath.Join(dir, "in_illuminance_raw") {
+		t.Fatalf("unexpected sensor %q", path)
+	}
+	if got := r.Lux(path); !got.Known || got.Value != 240 {
+		t.Fatalf("reading: %+v", got)
+	}
+}
