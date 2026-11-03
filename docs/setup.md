@@ -556,6 +556,10 @@ captured login to the same page for a few minutes, and could see the pictures an
 - **Bass and treble** (Settings > Sound, or **Bass** and **Treble** in Home Assistant): -6 to +6 dB
   each. They change the speaker's own tuning, so they need **Speaker EQ** on, a switch in Home
   Assistant that is on unless you turn it off.
+- **LED ring** (Echo Dot 2nd and 3rd generation and Echo 2nd generation): a light in Home Assistant,
+  under the device's configuration. Assist leaves it alone unless you expose it (**Settings → Voice
+  assistants → Expose**), so "lights on" in its room doesn't light the ring too. A Home Assistant that
+  already had it exposed keeps it that way until you change it there.
 - **Light ring that follows the music** (Echo Dot 2nd and 3rd generation and Echo 2nd generation, in
   Home Assistant): choose **Follows the Music** in **Ring follows the room**, the same select that
   lights the ring from the sound of the room. While music plays (music, radio, AirPlay, Spotify or

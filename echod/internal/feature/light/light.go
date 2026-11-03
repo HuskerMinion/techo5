@@ -52,7 +52,11 @@ func Get() *Light {
 func build() *Light {
 	l := &Light{
 		light: &esphome.Light{
-			Base:                esphome.Base{ObjectID: "ring", Name: "LED ring", DeviceID: component.DeviceRing},
+			// A configuration entity, as Voice PE has its ring: Home Assistant then leaves it out of what
+			// Assist can switch by default, so "lights on" in its room does not light the ring too. It can
+			// still be exposed in Home Assistant, and an install that had it exposed keeps that.
+			Base: esphome.Base{ObjectID: "ring", Name: "LED ring", DeviceID: component.DeviceRing,
+				Category: esphome.CategoryConfig},
 			SupportedColorModes: []esphome.ColorMode{esphome.ColorModeRGB},
 
 			// None comes first, because an effect list with no way out of it is a light that can be
