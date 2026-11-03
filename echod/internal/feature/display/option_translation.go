@@ -13,6 +13,18 @@ func optionLabel(english string) string {
 	switch english {
 	case "Nothing":
 		return tr("option_nothing")
+	case "Coming week":
+		return tr("option_coming_week")
+	case "Today only":
+		return tr("option_today_only")
+	case "Today or 12 hours":
+		return tr("option_today_or_12_hours")
+	case "3 hours":
+		return tr("option_3_hours")
+	case "6 hours":
+		return tr("option_6_hours")
+	case "12 hours":
+		return tr("option_12_hours")
 	case "Its words":
 		return tr("option_its_words")
 	case "The time and its words":
@@ -235,7 +247,7 @@ func weekdayInitials() []string {
 
 func builtinOptionRow(id string) bool {
 	switch id {
-	case "photoevery", "clocktap", "alarmwords", "alarmrise", "clock", "clockpos", "weatherpos", "datecolor", "glancesize", "glancemusic", "camtime", "camfit", "cambands", "camshade", "answertime", "idledim", "timerstyle", "callring", "alarmsound", "turnstyle", "musicstrip", "atnight", "nightstyle", "radarsrc", "output", "cal_open", "cal_opens_on", "cal_month_details", "cal_chip_size", "calpopallday", "calpopwhen",
+	case "photoevery", "clocktap", "alarmwords", "alarmrise", "clock", "clockpos", "weatherpos", "datecolor", "glancesize", "glancemusic", "camtime", "camfit", "cambands", "camshade", "answertime", "idledim", "timerstyle", "callring", "alarmsound", "turnstyle", "musicstrip", "atnight", "nightstyle", "radarsrc", "output", "cal_open", "cal_opens_on", "cal_dashboard_events", "cal_next_up_within", "cal_month_details", "cal_chip_size", "calpopallday", "calpopwhen",
 		"skin", "weather":
 		return true
 	}

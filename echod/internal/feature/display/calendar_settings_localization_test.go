@@ -41,6 +41,8 @@ func TestDisplayCalendarSettingsUseJapanesePresentationOnly(t *testing.T) {
 		"chip_size":          {"カレンダーのラベル", "月表示の上に並ぶカレンダー名"},
 		"next_up":            {"時計に次の予定", "時計の下部に今日の次の予定を表示"},
 		"weather":            {"カレンダーの天気", "各日の天気予報を表示"},
+		"dashboard_events":   {"ダッシュボード", "時計に出す予定の範囲"},
+		"next_up_within":     {"次の予定", "何時間先まで表示"},
 	}
 	for _, lang := range []string{"en", "ja", "pt"} {
 		if err := config.Set().Screen().Language(lang); err != nil {

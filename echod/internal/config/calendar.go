@@ -50,6 +50,13 @@ type Calendar struct {
 	Week         string `json:"week,omitempty"`
 	MonthDetails string `json:"month_details,omitempty"`
 
+	// DashboardToday keeps the Dashboard clock style's list of events to today's, rather than the coming
+	// week's. NextUpWithin is how many hours ahead "Next up on the clock" looks (1, 3, 6 or 12); 0 is its
+	// own way, an event that is on, starts today or starts within 12 hours. Both zero values are what the
+	// panel did before the choices were added, so a saved file without them needs no change.
+	DashboardToday bool `json:"dashboard_today,omitempty"`
+	NextUpWithin   int  `json:"next_up_within,omitempty"`
+
 	// SmallChips draws the calendars' chips over the month at the header line's smaller size wherever
 	// they are, so a long list of calendars takes less of the month. Off unless somebody chooses it.
 	SmallChips bool `json:"small_chips,omitempty"`
@@ -196,6 +203,15 @@ func (w CalendarWriter) NoCountdowns(v bool) error {
 
 func (w CalendarWriter) NoNextUp(v bool) error {
 	return w.st.Update(func(c *Config) { c.Calendar.NoNextUp = v })
+}
+
+func (w CalendarWriter) DashboardToday(v bool) error {
+	return w.st.Update(func(c *Config) { c.Calendar.DashboardToday = v })
+}
+
+// NextUpWithin sets how many hours ahead the clock's next event looks; 0 is its default.
+func (w CalendarWriter) NextUpWithin(hours int) error {
+	return w.st.Update(func(c *Config) { c.Calendar.NextUpWithin = max(0, hours) })
 }
 
 func (w CalendarWriter) NoWeather(v bool) error {
