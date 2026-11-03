@@ -64,6 +64,10 @@ const (
 	noHomeAssistantWait = 60 * time.Second
 )
 
+// splashInProportion is whether the mark is drawn in proportion to the panel (splashScale): on the
+// Skylight. A variable, which a board of this build sets.
+var splashInProportion = layout.Skylight
+
 var (
 	// navy is the mark's own background, so it sits on the screen without a rectangle.
 	navy = color.RGBA{28, 31, 36, 255}
@@ -73,9 +77,10 @@ var (
 // splashScale is how large the mark is drawn on a panel w wide. The Shows keep logoScale: their
 // bootloaders paint the mark at that size, and the splash has to take over without a jump. The
 // Skylight's panel is twice the Show 5's width, and its kernel paints the mark scaled the same way
-// (logoScale × 2, centered on navy), so there it is drawn in proportion.
+// (logoScale × 2, centered on navy), so there it is drawn in proportion, and so it is on a board that
+// says so (splashInProportion): one where nothing paints the mark before the daemon.
 func splashScale(w int) float64 {
-	if layout.Skylight() {
+	if splashInProportion() {
 		return logoScale * float64(w) / drawnFor
 	}
 	return logoScale
