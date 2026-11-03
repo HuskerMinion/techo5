@@ -81,7 +81,7 @@ func (b *Band) apply(stay bool) {
 }
 
 // applyLocked puts the flag where the keeper reads it and shows the switch for what is in force: a flag
-// that would not go up leaves the switch on, the keeper's behaviour being what it is.
+// that would not go up leaves the switch on, the keeper's behavior being what it is.
 func (b *Band) applyLocked(stay bool) {
 	if err := b.set(stay); err != nil {
 		slog.Error("setting the 5 GHz flag failed", "stay", stay, "err", err)

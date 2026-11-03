@@ -531,7 +531,7 @@ func localSource(c config.Alarms, al config.Alarm) source {
 }
 
 // ringDue rings what fell due in (last, now], under the gate an occurrence is left out through: the
-// sources are read with the gate held, so a mark written first is honoured and a mark asked for after
+// sources are read with the gate held, so a mark written first is honored and a mark asked for after
 // the ring started is refused as stale rather than reported done.
 func (a *Alarms) ringDue(last, now time.Time) bool {
 	a.editMu.Lock()
