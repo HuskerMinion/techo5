@@ -14,6 +14,10 @@ var (
 	onSkylight = layout.Skylight
 )
 
+// boardRootfs, where a board of this build sets it, is the name its own rootfs is keyed by after the
+// architecture ("arm-<boardRootfs>"), ahead of athena's and the Skylight's. Empty on every Show.
+var boardRootfs string
+
 // rootfsArch is the key this device's root filesystem is published under in a manifest's Rootfs.
 //
 // The Show 5s and the 1st gen Show 8 share one daemon binary and one rootfs ("arm"): the same
@@ -27,7 +31,12 @@ var (
 // The Skylight Calendar 15 is keyed the same way, "arm-skylight": the Show's arm daemon on TECHO5's
 // mainline RK3566 kernel, booted from a store in what was Android's userdata. No other Show's rootfs
 // may land on it, nor its on them.
+//
+// A board that sets boardRootfs is keyed by it the same way, and takes no other board's rootfs.
 func rootfsArch() string {
+	if boardRootfs != "" {
+		return arch + "-" + boardRootfs
+	}
 	switch {
 	case onAthena():
 		return arch + "-athena"
