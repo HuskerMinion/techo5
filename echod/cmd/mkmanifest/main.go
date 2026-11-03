@@ -15,6 +15,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"sort"
 	"strings"
 
 	"github.com/HuskerMinion/techo5/echod/internal/update"
@@ -49,11 +50,15 @@ func main() {
 		// rescue bundles. Named here so the signature over the manifest covers them too; see
 		// update.Manifest.Assets for why the release's SHA256SUMS is not enough.
 		assets assetFiles
-		out    = flag.String("out", "", "where to write the manifest, or stdout")
+		// A rootfs under a key no flag here names: a board's own, keyed "<arch>-<board>"
+		// (internal/update/arch_cronos.go, boardRootfs).
+		extraRootfs = rootfsFiles{}
+		out         = flag.String("out", "", "where to write the manifest, or stdout")
 		// Devices believe a manifest only with the release key's signature beside it
 		// (internal/update/trust.go), so a release without one offers nothing.
 		signKey = flag.String("sign-key", "", "the release signing key file; writes <out>.sig next to the manifest")
 	)
+	flag.Var(extraRootfs, "rootfs", "KEY=FILE: a rootfs tarball published under KEY, hashed and measured; repeat for each")
 	flag.Var(&assets, "asset", "another file this release publishes, hashed and measured under its own name; repeat for each")
 	flag.StringVar(&m.Version, "version", "", "version as Home Assistant will compare it")
 	flag.StringVar(&m.Title, "title", "", "title for Home Assistant's update card")
@@ -64,6 +69,10 @@ func main() {
 	builds := map[string]string{"arm64": *arm64, "arm": *arm, "arm-dot": *armDot, "arm-donut": *armDonut, "arm-spot": *armSpot}
 	rootfses := map[string]string{"arm": *rootfs, "arm-dot": *rootfsDot, "arm-donut": *rootfsDonut, "arm-spot": *rootfsSpot,
 		"arm-athena": *rootfsAthena, "arm-skylight": *rootfsSkylight}
+	if err := withRootfs(rootfses, extraRootfs); err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		os.Exit(1)
+	}
 	if err := run(m, *from, builds, rootfses, assets, *out); err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
@@ -89,6 +98,42 @@ func (a *assetFiles) Set(path string) error {
 		return fmt.Errorf("mkmanifest: -asset needs a file")
 	}
 	*a = append(*a, path)
+	return nil
+}
+
+// rootfsFiles collects the repeated -rootfs KEY=FILE flag, by key.
+type rootfsFiles map[string]string
+
+func (r rootfsFiles) String() string {
+	var kv []string
+	for k, v := range r {
+		kv = append(kv, k+"="+v)
+	}
+	sort.Strings(kv)
+	return strings.Join(kv, ",")
+}
+
+func (r rootfsFiles) Set(v string) error {
+	key, path, ok := strings.Cut(v, "=")
+	if !ok || key == "" || path == "" || strings.ContainsAny(key, " \t/") {
+		return fmt.Errorf("mkmanifest: -rootfs needs KEY=FILE, not %q", v)
+	}
+	if _, seen := r[key]; seen {
+		return fmt.Errorf("mkmanifest: -rootfs %s was given twice", key)
+	}
+	r[key] = path
+	return nil
+}
+
+// withRootfs adds the -rootfs files to the ones the named flags gave, refusing a key given both ways:
+// one of the two would quietly be dropped.
+func withRootfs(rootfses map[string]string, extra rootfsFiles) error {
+	for key, path := range extra {
+		if rootfses[key] != "" {
+			return fmt.Errorf("mkmanifest: -rootfs %s=%s: the %s rootfs is already given by -rootfs-%s", key, path, key, key)
+		}
+		rootfses[key] = path
+	}
 	return nil
 }
 
