@@ -299,7 +299,8 @@ type roundRenderer struct {
 }
 
 func newRoundRenderer(dst *image.RGBA) *roundRenderer {
-	r := &roundRenderer{paint: paint{dst: dst, w: side, h: side, round: true}}
+	r := &roundRenderer{paint: paint{dst: dst, w: side, h: side, round: true,
+		rowCard: image.Rect(spotCardLeft, 0, spotCardRight, side)}}
 	k, _ := r.fontChanged()
 	r.makeFaces(k)
 	return r

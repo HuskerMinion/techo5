@@ -217,6 +217,7 @@ func spotFaces(k fontKey) *sheetFaces {
 	fc := &sheetFaces{
 		header: f(true, 30), label: f(false, 24), labelBold: f(true, 24), sub: f(false, 16),
 		value: f(false, 20), nav: f(false, 20), navBold: f(true, 20), button: f(true, 19),
+		labelSm: f(false, 21), labelBoldSm: f(true, 21), valueSm: f(false, 18),
 	}
 	spotFaceCache.faces = roomFor(spotFaceCache.faces, k)
 	spotFaceCache.faces[k] = fc

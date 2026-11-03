@@ -10,6 +10,8 @@ import (
 	"slices"
 	"strings"
 
+	"golang.org/x/image/font"
+
 	"github.com/HuskerMinion/techo5/echod/internal/config"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/dashboard"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/home"
@@ -333,17 +335,17 @@ func itemHint(s roundScene, id itemID) string {
 		case len(s.timers) > 1:
 			return fmt.Sprintf("%s left · %d timers", clockDuration(s.timers[0].Left), len(s.timers))
 		}
-		return "none running · ask to set one"
+		return "none running"
 	case itemSettings:
-		return "display, sound, alarms…"
+		return "display, sound, alarms"
 	case itemDashboard:
 		switch {
 		case s.showDash:
 			return "back to the clock"
 		case dashboard.Get().Mode() == config.DashboardOff:
-			return "turn it on in Home Assistant"
+			return "turn on in Home Assistant"
 		}
-		return "Home Assistant's"
+		return "from Home Assistant"
 	case itemSleep:
 		return "tap the screen to wake"
 	}
@@ -400,10 +402,75 @@ func (r *roundRenderer) dial(s roundScene) {
 		case modeCameras:
 			header = "CAMERAS"
 		}
-		r.centered(r.label, header, 206, colDim)
-		r.centered(r.title, itemName(s, it.id), 252, colText)
-		r.centered(r.small, itemHint(s, it.id), 286, colDim)
+		r.ringLine(r.label, header, 206, colDim)
+		r.ringLine(r.title, itemName(s, it.id), 252, colText)
+		r.ringHint(itemHint(s, it.id), 286)
 	}
+}
+
+// ringClear is the radius of the clear space inside the ring's icons: the ring they sit on, less an
+// icon's half size and a margin for its stroke and the space it needs to breathe. The words in the
+// middle (the header, the name and the hint) stay inside it, so they never run into an icon.
+const ringClear = dialR - 18 - 8
+
+// ringRoom is how wide a line of face with its baseline at baseline can be and stay inside the clear
+// space, judged at the line's top or its foot, whichever is further from the middle.
+func ringRoom(face font.Face, baseline int) int {
+	m := face.Metrics()
+	dy := max(abs(baseline-m.Ascent.Ceil()-center), abs(baseline+m.Descent.Ceil()-center))
+	if dy >= ringClear {
+		return 0
+	}
+	return int(2*math.Sqrt(float64(ringClear*ringClear-dy*dy))) - 12
+}
+
+// ringLine draws s on one line in the middle of the ring, cut with an ellipsis to the room there is.
+func (r *roundRenderer) ringLine(face font.Face, s string, baseline int, c color.Color) {
+	r.centered(face, r.paint.fit(face, s, ringRoom(face, baseline)), baseline, c)
+}
+
+// ringHint draws the hint under an item's name, on up to two lines inside the ring.
+func (r *roundRenderer) ringHint(s string, baseline int) {
+	lineH := r.small.Metrics().Height.Round() + 4
+	for n, line := range r.ringLines(r.small, s, baseline, 2) {
+		r.centered(r.small, line, baseline+n*lineH, colDim)
+	}
+}
+
+// ringLines is how s wraps inside the ring from baseline down: each line as wide as the ring is at its
+// own height, the last one cut with an ellipsis when words are left over. A line that would end on or
+// begin with the middot between two halves of a hint breaks there instead.
+func (r *roundRenderer) ringLines(face font.Face, s string, baseline, maxLines int) []string {
+	words := strings.Fields(s)
+	lineH := face.Metrics().Height.Round() + 4
+	var lines []string
+	for n := 0; n < maxLines && len(words) > 0; n++ {
+		room := ringRoom(face, baseline+n*lineH)
+		line, k := words[0], 1
+		for ; k < len(words); k++ {
+			try := line + " " + words[k]
+			if r.width(face, try) > room {
+				break
+			}
+			line = try
+		}
+		if k < len(words) && words[k-1] == "·" && k > 1 {
+			k-- // not a middot hanging at the end of the line
+			line = strings.TrimSuffix(line, " ·")
+		}
+		words = words[k:]
+		if len(words) > 0 && words[0] == "·" {
+			words = words[1:]
+		}
+		if n == maxLines-1 && len(words) > 0 {
+			line += " " + strings.Join(words, " ")
+		}
+		if r.width(face, line) > room {
+			line = clipRunes(line, 1, func(l string) bool { return r.width(face, l) <= room })
+		}
+		lines = append(lines, line)
+	}
+	return lines
 }
 
 // jog draws the ring as a jog wheel for one value.
