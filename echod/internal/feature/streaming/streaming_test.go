@@ -1477,12 +1477,12 @@ func TestTheFallbackSliderAcrossSessions(t *testing.T) {
 // unscaled, with nothing for the pump to undo; without one it starts at full and scales linearly,
 // which the pump undoes.
 func TestSpotifyArgs(t *testing.T) {
-	args, lv := spotifyArgs("Kitchen", "/c", "/s", "/run/v")
+	args, lv := spotifyArgs("Kitchen", "/c", "/s", "/run/v", config.Streaming{})
 	j := strings.Join(args, " ")
 	if lv != nil || !strings.Contains(j, "--volume-fifo /run/v") || strings.Contains(j, "--initial-volume") || strings.Contains(j, "--volume-ctrl") {
 		t.Errorf("with the pipe: %v, level %v", args, lv)
 	}
-	args, lv = spotifyArgs("Kitchen", "/c", "/s", "")
+	args, lv = spotifyArgs("Kitchen", "/c", "/s", "", config.Streaming{})
 	j = strings.Join(args, " ")
 	if lv != spotifyLevel || strings.Contains(j, "--volume-fifo") || !strings.Contains(j, "--initial-volume 100 --volume-ctrl linear") {
 		t.Errorf("without: %v, level %v", args, lv)
@@ -1492,9 +1492,31 @@ func TestSpotifyArgs(t *testing.T) {
 	}
 	// A long name in two-byte letters is cut to fit its mDNS instance name, one DNS label.
 	long := strings.Repeat("ü", 31)
-	args, _ = spotifyArgs(long, "/c", "/s", "")
+	args, _ = spotifyArgs(long, "/c", "/s", "", config.Streaming{})
 	if i := slices.Index(args, "--name"); i < 0 || len(args[i+1]) > 63 || !strings.HasPrefix(long, args[i+1]) {
 		t.Errorf("a long name went to librespot as %q", args[i+1])
+	}
+}
+
+// Spotify's quality is the one chosen, 160 kbit/s for none or one Spotify does not offer, and the
+// normalization is only asked for when it is on.
+func TestSpotifyArgsChoices(t *testing.T) {
+	for _, c := range []struct {
+		set  config.Streaming
+		want string
+		norm bool
+	}{
+		{config.Streaming{}, "--bitrate 160", false},
+		{config.Streaming{SpotifyBitrate: 320}, "--bitrate 320", false},
+		{config.Streaming{SpotifyBitrate: 96, SpotifyNormalize: true}, "--bitrate 96", true},
+		{config.Streaming{SpotifyBitrate: 128}, "--bitrate 160", false},
+	} {
+		args, _ := spotifyArgs("Kitchen", "/c", "/s", "", c.set)
+		j := strings.Join(args, " ")
+		if !strings.Contains(j, c.want) || strings.Contains(j, "--enable-volume-normalisation") != c.norm ||
+			c.norm && !strings.Contains(j, "--normalisation-gain-type auto") {
+			t.Errorf("%+v: %v", c.set, args)
+		}
 	}
 }
 

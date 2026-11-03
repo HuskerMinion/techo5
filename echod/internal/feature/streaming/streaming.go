@@ -69,7 +69,7 @@ type Feature struct {
 	mu      sync.Mutex
 	running context.CancelFunc // what runs for the switches as they were last settled
 	done    chan struct{}      // closed once what running stops has stopped
-	wanted  [4]bool            // AirPlay, Spotify, AirPlay as the classic receiver, AirPlay sets the volume, as last settled
+	wanted  wanted             // the switches and Spotify's choices, as last settled
 	wake    chan struct{}
 
 	// Changed fires when a switch changes; listeners must not block.
@@ -146,6 +146,24 @@ func (f *Feature) SetAirPlaySetsVolume(on bool) {
 	f.set(f.airplayVolume, on, config.Set().Streaming().AirPlaySetsVolume)
 }
 
+// SetSpotifyChoices saves Spotify Connect's quality, in kbit/s, and whether it evens out the loudness
+// between songs, from the setup page. librespot takes them as it starts, so it starts again with them
+// (settle), as for the switches.
+func (f *Feature) SetSpotifyChoices(kbps int, normalize bool) error {
+	if err := config.Set().Streaming().SpotifyBitrate(kbps); err != nil {
+		return err
+	}
+	if err := config.Set().Streaming().SpotifyNormalize(normalize); err != nil {
+		return err
+	}
+	slog.Info("setting changed", "setting", "spotify", "bitrate", kbps, "normalize", normalize)
+	select {
+	case f.wake <- struct{}{}:
+	default:
+	}
+	return nil
+}
+
 func (f *Feature) set(s *esphome.Switch, on bool, save func(bool) error) {
 	if err := save(on); err != nil {
 		slog.Error("saving a setting failed", "setting", s.ObjectID, "err", err)
@@ -185,23 +203,31 @@ func (f *Feature) Run(ctx context.Context) error {
 	}
 }
 
+// wanted is what settle last started the receivers for. Spotify's quality and normalization are in it:
+// librespot takes them as it starts, so a change starts it again, as a switch does.
+type wanted struct {
+	airplay, spotify, airplayClassic, airplaySetsVolume bool
+	spotifyKbps                                         int
+	spotifyNormalize                                    bool
+}
+
 // settle starts or stops the receivers, and avahi with them, to match the switches. Any change stops
 // everything and starts again what is wanted: the switches are seldom touched, and one start keeps the
 // order (avahi first) simple.
 func (f *Feature) settle(parent context.Context) {
 	c := config.Get().Streaming
-	want := [4]bool{c.AirPlay, c.Spotify, c.AirPlayClassic, c.AirPlaySetsVolume}
+	want := wanted{c.AirPlay, c.Spotify, c.AirPlayClassic, c.AirPlaySetsVolume, c.SpotifyKbps(), c.SpotifyNormalize}
 	f.mu.Lock()
-	same := want == f.wanted && (f.running != nil || (!want[0] && !want[1]))
+	same := want == f.wanted && (f.running != nil || (!want.airplay && !want.spotify))
 	f.mu.Unlock()
 	if same {
 		return
 	}
 	f.stop()
-	if !want[1] {
+	if !want.spotify {
 		forgetSpotify()
 	}
-	if !want[0] && !want[1] {
+	if !want.airplay && !want.spotify {
 		f.mu.Lock()
 		f.wanted = want
 		f.mu.Unlock()
@@ -209,13 +235,13 @@ func (f *Feature) settle(parent context.Context) {
 		return
 	}
 	haveAirPlay, haveSpotify := Installed()
-	if want[0] && !haveAirPlay {
+	if want.airplay && !haveAirPlay {
 		slog.Error("streaming: AirPlay is on, but this image does not carry shairport-sync and avahi")
 	}
-	if want[1] && !haveSpotify {
+	if want.spotify && !haveSpotify {
 		slog.Error("streaming: Spotify Connect is on, but this image does not carry librespot and avahi")
 	}
-	runAirPlay, runSpotify := want[0] && haveAirPlay, want[1] && haveSpotify
+	runAirPlay, runSpotify := want.airplay && haveAirPlay, want.spotify && haveSpotify
 	ctx, cancel := context.WithCancel(parent)
 	f.mu.Lock()
 	f.running, f.wanted = cancel, want
