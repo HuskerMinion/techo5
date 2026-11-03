@@ -1138,7 +1138,7 @@ Home Assistant has two entities under the device's microphone settings:
 
 **Built-in** uses TECHO5's normal microphone processing. **External** requests a separately installed,
 compatible audio processing helper. Choosing External does not install a helper, and a standard TECHO5
-installation works without one.
+installation works without one. The helper runs as root with no sandbox isolation.
 
 With Built-in selected, External ASP is dormant: no external helper is launched, no PCM is exchanged with
 an external process, and no external audio processing is performed. The normal TECHO5 audio pipeline and
@@ -1156,6 +1156,8 @@ independently of the selected processor.
 Only the final mono audio supplied to wake word detection, speech recognition and microphone history is
 switched to External. Keeping Built-in processing running also allows TECHO5 to fall back immediately if
 the external helper fails.
+
+A malfunctioning or stuck helper can briefly interrupt listening before TECHO5 falls back to Built-in.
 
 If the helper is missing, incompatible, fails to start or stops processing correctly, TECHO5 falls back
 to Built-in. The selected value remains External, so the two entities can show different values. TECHO5

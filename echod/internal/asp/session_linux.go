@@ -9,6 +9,7 @@ import (
 	"io"
 	"os"
 	"os/exec"
+	"runtime"
 	"sync"
 	"syscall"
 	"time"
@@ -228,12 +229,16 @@ func startPinned(ctx, startup context.Context, p *pinnedLaunch, d Descriptor, wi
 	cmd.ExtraFiles = []*os.File{p.executable, p.assets}
 	cmd.Stdin, cmd.Stdout, cmd.Stderr = inR, outW, os.Stderr
 	cmd.Env = env
+	cmd.SysProcAttr = &syscall.SysProcAttr{Pdeathsig: syscall.SIGKILL}
 	if e := startup.Err(); e != nil {
 		_ = inW.Close()
 		_ = outR.Close()
 		return nil, e
 	}
-	if e := cmd.Start(); e != nil {
+	// Pdeathsig follows the creating Linux thread, not the Go process. Keep
+	// that thread locked until the sole reaper has finished with the child.
+	done := make(chan struct{})
+	if e := startOnLockedThread(cmd, done); e != nil {
 		_ = inW.Close()
 		_ = outR.Close()
 		return nil, fmt.Errorf("start pinned ASP: %w", e)
@@ -246,7 +251,7 @@ func startPinned(ctx, startup context.Context, p *pinnedLaunch, d Descriptor, wi
 	p.executable, p.assets = nil, nil
 	s := &Session{
 		cmd: cmd, in: inW, out: outR, gate: make(chan struct{}, 1),
-		stopped: make(chan struct{}), done: make(chan struct{}),
+		stopped: make(chan struct{}), done: done,
 	}
 	for _, b := range d.Buffers {
 		s.lengths = append(s.lengths, b.Length)
@@ -273,6 +278,23 @@ func startPinned(ctx, startup context.Context, p *pinnedLaunch, d Descriptor, wi
 		return nil, fmt.Errorf("invalid READY byte %#x", ready[0])
 	}
 	return s, nil
+}
+
+// startOnLockedThread keeps the Linux thread that created the helper alive
+// until the one cmd.Wait completes. Without this, Go may retire that thread
+// while the daemon is healthy, delivering the kernel's parent-death signal.
+func startOnLockedThread(cmd *exec.Cmd, exited <-chan struct{}) error {
+	started := make(chan error)
+	go func() {
+		runtime.LockOSThread()
+		defer runtime.UnlockOSThread()
+		err := cmd.Start()
+		started <- err
+		if err == nil {
+			<-exited
+		}
+	}()
+	return <-started
 }
 
 func writeFull(w io.Writer, b []byte) error {
