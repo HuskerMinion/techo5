@@ -111,6 +111,7 @@ type Feature struct {
 	subs    map[chan rtpjpeg.Frame]struct{}
 	stopPic func() // ends the pictures, while anybody watches
 	pages   int    // camera web pages being sent (webpages.go)
+	toHA    int    // Home Assistant's camera entity being sent pictures (HomeAssistantWatching)
 	pageGen uint64 // moves on when open page streams must end: a new login, the lens cover (PageGen)
 }
 

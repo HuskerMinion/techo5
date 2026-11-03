@@ -157,3 +157,40 @@ func PageWatching() func() {
 		})
 	}
 }
+
+// HomeAssistantWatching marks pictures going to Home Assistant's camera entity (feature/camera), a live
+// view or a still, until the func it gives back is called and lingerFor after. Apart from Watching: the
+// Shows' mark has always been the stream's and the pages', and a dashboard left open on a wall would keep
+// it lit. The Spot's camera dot set to Only when watched reads both (ToHomeAssistant).
+func HomeAssistantWatching() func() {
+	f := Get()
+	f.mu.Lock()
+	f.toHA++
+	first := f.toHA == 1
+	f.mu.Unlock()
+	if first {
+		f.Changed.Emit(struct{}{})
+	}
+	var once sync.Once
+	return func() {
+		once.Do(func() {
+			time.AfterFunc(lingerFor, func() {
+				f.mu.Lock()
+				f.toHA--
+				last := f.toHA == 0
+				f.mu.Unlock()
+				if last {
+					f.Changed.Emit(struct{}{})
+				}
+			})
+		})
+	}
+}
+
+// ToHomeAssistant is whether Home Assistant's camera entity is being sent the camera.
+func ToHomeAssistant() bool {
+	f := Get()
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return f.toHA > 0
+}

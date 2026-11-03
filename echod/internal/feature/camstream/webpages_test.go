@@ -144,3 +144,26 @@ func TestPageWatchingLightsAndLingers(t *testing.T) {
 		t.Error("still watching after the page was done")
 	}
 }
+
+// Home Assistant's camera entity lights its own mark, which the Spot's Only when watched dot reads, and
+// not Watching, which is the Shows'.
+func TestHomeAssistantWatchingIsItsOwnMark(t *testing.T) {
+	old := lingerFor
+	lingerFor = 50 * time.Millisecond
+	defer func() { lingerFor = old }()
+	done := HomeAssistantWatching()
+	if !ToHomeAssistant() {
+		t.Fatal("Home Assistant being sent the camera is not marked")
+	}
+	if Watching() {
+		t.Error("Home Assistant's camera entity lit the Shows' mark")
+	}
+	done()
+	deadline := time.Now().Add(2 * time.Second)
+	for ToHomeAssistant() && time.Now().Before(deadline) {
+		time.Sleep(10 * time.Millisecond)
+	}
+	if ToHomeAssistant() {
+		t.Error("still marked after Home Assistant was done")
+	}
+}

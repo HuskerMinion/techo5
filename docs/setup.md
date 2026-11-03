@@ -844,8 +844,8 @@ other Shows don't have the switches.
   is drawn thin and in a dimmer red, so it doesn't light up a dark room.
 - **Camera dot** (Spot, in Home Assistant): **Whenever the camera runs** (the default) lights the green
   dot at the top of the rim for presence and person detection too, which stay on the device. **Only when
-  watched** lights it only while a picture leaves the device: a stream, a camera page, or a snapshot for
-  Home Assistant's camera entity, as on a Show.
+  watched** lights it only while a picture leaves the device: a stream, a camera page, or Home
+  Assistant's camera entity, a live view or a snapshot.
 - **Idle ring** (Spot, in Home Assistant): the gray ring around the screen while nothing else is on it.
   Turn it off for a dashboard or a clock without it. Mute, listening, replies, timers and Bluetooth
   pairing still show on the rim.

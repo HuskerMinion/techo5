@@ -1628,7 +1628,7 @@ func (d *Display) frame() (next time.Duration) {
 		s.talkOffered, s.talk = talkback.Offered(s.camera.Entity), talkback.Get().State()
 		s.camButtons = d.camButtons.faces(s.camera.Entity, cameraButtonsFor(s.camera), now)
 	}
-	s.cameraLive = camera.Get().Running() && (!cameraDotWatchedOnly.Load() || camstream.Watching())
+	s.cameraLive = camera.Get().Running() && (!cameraDotWatchedOnly.Load() || camstream.Watching() || camstream.ToHomeAssistant())
 	bt := btaudio.Get().State()
 	s.btPairing = bt.Pairing
 	if s.menuOpen {

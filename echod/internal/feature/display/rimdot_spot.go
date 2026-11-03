@@ -12,7 +12,7 @@ import (
 )
 
 // Two quieter rims for the Spot (#431). The camera dot can light only while a picture leaves the
-// device - a stream, a camera page, a snapshot for Home Assistant's camera - as on a Show, rather than
+// device - a stream, a camera page, Home Assistant's camera entity - rather than
 // whenever the camera runs, which presence and person detection do on the device alone. And the idle
 // rim's gray track can go, for a dashboard or a clock with nothing round about it; muted, listening,
 // timers and the rest still draw. Both as they were until somebody chooses.

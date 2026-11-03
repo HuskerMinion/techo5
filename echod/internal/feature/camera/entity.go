@@ -10,6 +10,7 @@ import (
 	"github.com/ygelfand/go-esphome-device/api"
 	"google.golang.org/protobuf/proto"
 
+	"github.com/HuskerMinion/techo5/echod/internal/feature/camstream"
 	"github.com/HuskerMinion/techo5/echod/internal/hardware/camera"
 	"github.com/HuskerMinion/techo5/echod/internal/lib/safe"
 )
@@ -102,6 +103,7 @@ func (f *Feature) single(c *esphome.Conn) {
 	if err != nil {
 		return
 	}
+	defer camstream.HomeAssistantWatching()()
 	if err := send(c, jpg); err != nil {
 		slog.Debug("camera entity: send", "err", err)
 	}
@@ -147,6 +149,7 @@ func (f *Feature) pump(c *esphome.Conn) {
 		return
 	}
 	defer release()
+	defer camstream.HomeAssistantWatching()()
 	frames := make(chan *camera.Frame, 1)
 	cancel := camera.Get().ListenLatest(frames)
 	defer cancel()
