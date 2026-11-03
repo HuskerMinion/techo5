@@ -40,9 +40,16 @@ func kernelRelease() string {
 // serves it as /proc/idme; mainline has no idme driver, so it is read from here, read only.
 const idmeBootArea = "/dev/mmcblk0boot1"
 
+// boardIdme, where a board of this build sets it, answers for idme on a board that has none of its
+// own, in place of everything below: its stand-in for a field, or false. Nil on every board here.
+var boardIdme func(name string) (string, bool)
+
 // idmeFallback reads one idme field from the eMMC where /proc/idme is missing. On the Skylight,
 // which has no idme at all, only the MAC has a stand-in (skylight.go).
 func idmeFallback(name string) (string, bool) {
+	if boardIdme != nil {
+		return boardIdme(name)
+	}
 	if Skylight() {
 		if name == "mac_addr" {
 			return skylightMAC()
