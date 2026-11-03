@@ -10,9 +10,11 @@ OUT=${OUT:-$ROOT/build/athena-kernel}
 
 mkdir -p "$OUT"
 OUT=$(cd "$OUT" && pwd)
-docker build --platform linux/arm64 -t "$IMAGE" -f "$HERE/Dockerfile.build" "$HERE"
+# The image is for the host: build.sh cross compiles with aarch64-linux-gnu-, so an arm64 image on
+# another host would only run the cross compiler under emulation.
+docker build -t "$IMAGE" -f "$HERE/Dockerfile.build" "$HERE"
 docker volume create "$VOLUME" >/dev/null
-CONTAINER=$(docker create --rm --platform linux/arm64 --name techo5-athena-kbuild \
+CONTAINER=$(docker create --rm --name techo5-athena-kbuild \
     -v "$ROOT:/repo:ro" \
     --mount "type=volume,src=$VOLUME,dst=/techo5-athena-kbuild" \
     -v "$OUT:/out" \
