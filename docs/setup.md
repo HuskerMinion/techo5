@@ -1858,6 +1858,14 @@ After a change the setup page is at the new address, and the browser has to be l
 Home Assistant follows the device by itself, about two minutes after the change: it first has to notice
 that the old connection is gone. To go back to DHCP, choose **Automatic**.
 
+### Wi-Fi country
+
+A Show 8 2nd gen and a Skylight take their Wi-Fi country from their time zone (America/Chicago is the
+US, Europe/Berlin is Germany), so the radio can use that country's 5 GHz channels. Before, they stayed on
+the world setting, where most 5 GHz channels can't be joined. A time zone with no country, such as UTC,
+keeps the world setting. A new time zone takes effect the next time the Wi-Fi starts, a restart, for
+example. Other devices keep their Wi-Fi driver's own setting.
+
 ### Staying on one band
 
 Every few minutes the Show looks for a stronger 5 GHz radio of your network and moves its link to one it finds.

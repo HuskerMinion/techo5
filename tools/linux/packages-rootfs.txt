@@ -5,6 +5,10 @@ dropbear
 dropbear-scp
 iw
 wireless-tools
+# The Wi-Fi regulatory database (/lib/firmware/regulatory.db), which a mainline kernel's cfg80211 reads
+# for the country t5_wifi_country sets; without it the radio stays on the world domain, where most
+# 5 GHz channels cannot be joined.
+wireless-regdb
 e2fsprogs
 tzdata
 alsa-utils

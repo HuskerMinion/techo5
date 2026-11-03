@@ -368,6 +368,10 @@ t5_wifi_up() {
 	# Power save is on in the kernel's default: the radio sleeps between beacons and the access point holds
 	# what it is sent until the next one, which adds delay and jitter that received audio can stall on.
 	# device.conf WIFI_POWER_SAVE=off (athena on mainline) turns it off.
+	# A mainline kernel's radio starts on the world domain (country 00), where most 5 GHz channels are
+	# passive only; the country goes in before the supplicant starts (t5_wifi_country). The vendor 4.9
+	# drivers keep their own.
+	[ "$mod" = builtin ] && t5_wifi_country
 	if [ "${WIFI_POWER_SAVE:-}" = off ]; then
 		ps_err=$(iw dev wlan0 set power_save off 2>&1) || log "wifi: power save not turned off: $ps_err"
 	fi
@@ -450,6 +454,25 @@ t5_ip() { ip -4 addr show wlan0 2>/dev/null | sed -n 's/.*inet \([0-9.]*\).*/\1/
 # t5_wifi_joined: whether the supplicant is associated. An address alone does not say so: a lease
 # stays on wlan0 after the link is lost, until it runs out.
 t5_wifi_joined() { wpa_cli -p /run/wpa -i wlan0 status 2>/dev/null | grep -q '^wpa_state=COMPLETED'; }
+
+# t5_wifi_country: set the Wi-Fi regulatory country from the device's time zone, the country zone.tab
+# gives it (America/Chicago is US), so a mainline kernel allows that country's 5 GHz channels rather than
+# the world domain's. A zone with no country (UTC) leaves the world domain, as before. A change of zone
+# takes effect at the next start of the Wi-Fi.
+t5_wifi_country() {
+	zone=$(cat /data/misc/techo5/timezone 2>/dev/null)
+	[ -n "$zone" ] || return 0
+	cc=$(awk -v z="$zone" '!/^#/ && $3 == z { print $1; exit }' /usr/share/zoneinfo/zone.tab 2>/dev/null)
+	if [ -z "$cc" ]; then
+		log "wifi: no country for the time zone $zone; the radio stays on the world domain"
+		return 0
+	fi
+	if ! err=$(iw reg set "$cc" 2>&1); then
+		log "wifi: country $cc not set: $err"
+		return 0
+	fi
+	log "wifi: country $cc, from the time zone $zone"
+}
 
 # t5_wifi_unpin: take off the channel pin t5_wifi_prefer5 made, for the keeper once Prefer 5 GHz is off
 # (echod, feature/wifiband): the supplicant looks on every band again. Taking it off the network in use
