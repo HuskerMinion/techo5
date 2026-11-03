@@ -33,7 +33,7 @@ func Gateway() net.IP {
 func gatewayIn(table string) net.IP {
 	for _, line := range strings.Split(table, "\n")[1:] {
 		f := strings.Fields(line)
-		if len(f) < 3 || f[0] != iface || f[1] != "00000000" {
+		if len(f) < 3 || f[0] != iface() || f[1] != "00000000" {
 			continue
 		}
 		raw, err := hex.DecodeString(f[2])

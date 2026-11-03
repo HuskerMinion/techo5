@@ -14,6 +14,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/HuskerMinion/techo5/echod/internal/layout"
 )
 
 // Paths are relative to a root so a test can point them at a directory of fixtures rather than at the
@@ -225,7 +227,7 @@ func (r Reader) Wifi() (signal, rx, tx Reading) {
 	if body, err := os.ReadFile(r.path("proc/net/wireless")); err == nil {
 		for line := range strings.SplitSeq(string(body), "\n") {
 			name, rest, ok := strings.Cut(line, ":")
-			if !ok || strings.TrimSpace(name) != wifiInterface {
+			if !ok || strings.TrimSpace(name) != r.wifiInterface() {
 				continue
 			}
 			if fields := strings.Fields(rest); len(fields) >= 3 {
@@ -246,7 +248,7 @@ func (r Reader) Wifi() (signal, rx, tx Reading) {
 
 	for line := range strings.SplitSeq(string(body), "\n") {
 		name, rest, ok := strings.Cut(line, ":")
-		if !ok || strings.TrimSpace(name) != wifiInterface {
+		if !ok || strings.TrimSpace(name) != r.wifiInterface() {
 			continue
 		}
 		if fields := strings.Fields(rest); len(fields) >= 9 {
@@ -256,8 +258,14 @@ func (r Reader) Wifi() (signal, rx, tx Reading) {
 	return signal, rx, tx
 }
 
-// wifiInterface is the only one on this board.
-const wifiInterface = "wlan0"
+// wifiInterface is the only one on this board: wlan0 on every Echo, mlan0 on the Surface RT
+// (layout.WifiInterface). A Reader with a Root of fixtures reads wlan0's.
+func (r Reader) wifiInterface() string {
+	if r.Root != "" {
+		return "wlan0"
+	}
+	return layout.WifiInterface()
+}
 
 // count reads a cpu list like "0-3" or "0-1,3" and reports how many it names.
 func (r Reader) count(path string) Reading {
