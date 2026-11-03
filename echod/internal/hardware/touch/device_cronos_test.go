@@ -118,6 +118,34 @@ func TestTheSkylightCornersLandInTheFrameCorners(t *testing.T) {
 	}
 }
 
+// A controller with square ranges over a landscape screen reads as portrait and would be turned; with
+// reportsLandscape it is scaled as it is.
+func TestAControllerThatReportsLandscapeIsScaledNotTurned(t *testing.T) {
+	defer func(w, h int, l bool) { Width, Height, reportsLandscape = w, h, l }(Width, Height, reportsLandscape)
+	Width, Height = 1600, 900
+
+	const rawW, rawH = 4096, 4096
+	reportsLandscape = false
+	if x, y := toFrame(rawW, rawH, 4095, 0); x == 1599 && y == 0 {
+		t.Fatal("square ranges were not turned without reportsLandscape")
+	}
+	reportsLandscape = true
+	for _, c := range []struct {
+		corner       string
+		rx, ry       int
+		wantX, wantY int
+	}{
+		{"top left", 0, 0, 0, 0},
+		{"top right", 4095, 0, 1599, 0},
+		{"bottom right", 4095, 4095, 1599, 899},
+		{"bottom left", 0, 4095, 0, 899},
+	} {
+		if x, y := toFrame(rawW, rawH, c.rx, c.ry); x != c.wantX || y != c.wantY {
+			t.Errorf("%s: raw (%d,%d) became (%d,%d), want (%d,%d)", c.corner, c.rx, c.ry, x, y, c.wantX, c.wantY)
+		}
+	}
+}
+
 // rawFrame is a portrait panel exactly the landscape screen turned, so frame and raw pixels match.
 func rawFrame() (rawW, rawH int, toRaw func(x, y int) (int, int)) {
 	return Height, Width, func(x, y int) (int, int) { return Height - 1 - y, x }

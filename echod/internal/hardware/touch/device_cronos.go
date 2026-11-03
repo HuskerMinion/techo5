@@ -49,6 +49,11 @@ var (
 
 	// notch is the vertical travel per volume step, scaled the same way.
 	notch = onBoard(40, 56, 80)
+
+	// reportsLandscape is a controller that reports the landscape frame whatever its ranges look like
+	// (square ones, say, which would otherwise read as portrait): toFrame only scales it. False on
+	// every Show; a board of this build sets it.
+	reportsLandscape = false
 )
 
 const (
@@ -69,9 +74,10 @@ func onBoard[T any](show5, show8, skylight T) T {
 }
 
 // toFrame turns a reading into frame coordinates. A controller whose axes run portrait, the panel's
-// own way, is turned a quarter; one that already reports landscape (athena's) is only scaled.
+// own way, is turned a quarter; one that already reports landscape (athena's, or one that says so:
+// reportsLandscape) is only scaled.
 func toFrame(rawW, rawH, rx, ry int) (x, y int) {
-	if rawW > rawH {
+	if rawW > rawH || reportsLandscape {
 		x = rx * Width / max(rawW, 1)
 		y = ry * Height / max(rawH, 1)
 		return x, y
