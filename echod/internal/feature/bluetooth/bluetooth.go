@@ -66,6 +66,7 @@ type beaconState struct {
 // the connection answering anything at all.
 type Proxy struct {
 	proxy  *esphome.BluetoothProxy
+	taken  takeover
 	radio  ble.Scanner
 	enable *esphome.Switch
 	// connect is the "Bluetooth proxy connections" switch: whether Home Assistant may connect to
@@ -225,6 +226,12 @@ func (b *Proxy) Entities() []esphome.Entity {
 func (b *Proxy) Handle(ctx context.Context, conn *esphome.Conn, msg proto.Message) error {
 	if handles(msg) {
 		return b.links.Handle(conn, msg)
+	}
+	switch msg.(type) {
+	case *api.SubscribeBluetoothLEAdvertisementsRequest:
+		b.taken.note(conn, true)
+	case *api.UnsubscribeBluetoothLEAdvertisementsRequest:
+		b.taken.note(conn, false)
 	}
 	return b.proxy.Handle(ctx, conn, msg)
 }
