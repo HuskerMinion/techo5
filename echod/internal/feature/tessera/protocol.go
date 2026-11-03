@@ -440,7 +440,8 @@ func (r *Receiver) receive(raw string) (Answer, bool) {
 	// Anything else belongs to a session, and comes in order. One that does not is from before a restart, or
 	// another add-on, or a call that was retried: it changes nothing and the add-on is told to start again.
 	if r.session == "" || env.Session != r.session || env.Seq <= r.seq {
-		slog.Debug("tessera: out of session", "op", env.Op, "session", env.Session, "seq", env.Seq, "have", r.seq)
+		// Info, not debug: a layout that never arrives is these, a line per try (#387).
+		slog.Info("tessera: out of session", "op", env.Op, "session", env.Session, "seq", env.Seq, "have", r.seq)
 		return r.answer(StatusResend), false
 	}
 
@@ -552,6 +553,7 @@ func (r *Receiver) begin(env envelope, raw []byte) (string, bool) {
 		a.Begin.Numbers, a.Begin.GroupMin, a.Begin.PercentSpace = b.Numbers, b.GroupMin, b.PercentSpace
 		return r.set(StatusSynced), false
 	}
+	slog.Info("tessera: layout coming", "rev", env.Rev, "pages", b.Pages, "tiles", b.Tiles)
 	r.pending = &Layout{
 		Rev: env.Rev, Begin: b,
 		Pages: make([]Page, b.Pages), Tiles: make([]Tile, b.Tiles),

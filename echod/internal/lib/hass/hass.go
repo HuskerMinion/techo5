@@ -176,11 +176,17 @@ func (c *Client) doContext(ctx context.Context, method, path string, body any) (
 	if err != nil {
 		return nil, err
 	}
+	if resp.StatusCode == http.StatusNotFound {
+		return nil, fmt.Errorf("hass: %s %s: %w", method, path, ErrNotFound)
+	}
 	if resp.StatusCode/100 != 2 {
 		return nil, fmt.Errorf("hass: %s %s: %s", method, path, resp.Status)
 	}
 	return out, nil
 }
+
+// ErrNotFound is Home Assistant saying there is no such thing: for a state, an entity it does not have.
+var ErrNotFound = errors.New("404 Not Found")
 
 // Day is one day of a forecast.
 type Day struct {
