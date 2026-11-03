@@ -9,7 +9,11 @@
 # what makes `apk add bluez` possible later.
 #
 #   mkrootfs.sh -i <indir> -o <out.tar.gz> [-w <workdir>] [-V <version>] [-z <timezone>]
-#               [-a <arch>] [-A <apk binary>]
+#               [-a <arch>] [-A <apk binary>] [-W alpine]
+#
+# -W alpine: wpa_supplicant from the board's package list, not the pinned 2.9 set (a board on a
+# mainline kernel whose Wi-Fi works with Alpine's own; the Echos' needs 2.9). Without it the build
+# fails when inputs/apks312 is missing, as it always has.
 #
 # <indir> layout (what deploy-rootfs.sh stages):
 #   bin/techo5 bin/fbprobe bin/audioprobe bin/rebootto bin/btbridge  Go binaries, armv7
@@ -33,10 +37,11 @@
 #   inputs/kernel.tar.gz                                   optional, development only: a mainline kernel's
 #                                                          modules and firmware. Published images never
 #                                                          carry it
-#   inputs/apks312/*.apk                                   wpa_supplicant 2.9 + libssl1.1 + libcrypto1.1
+#   inputs/apks312/*.apk                                   wpa_supplicant 2.9 + libssl1.1 + libcrypto1.1,
+#                                                          unless -W alpine
 set -e
 
-IN=; OUT=; WORK=/data/techo5-linux/build; VERSION=dev; TZNAME=UTC; ARCH=; APK=apk
+IN=; OUT=; WORK=/data/techo5-linux/build; VERSION=dev; TZNAME=UTC; ARCH=; APK=apk; WPA=
 while [ $# -gt 0 ]; do
 	case "$1" in
 	-i) IN=$2; shift 2;;
@@ -46,10 +51,16 @@ while [ $# -gt 0 ]; do
 	-z) TZNAME=$2; shift 2;;
 	-a) ARCH=$2; shift 2;;
 	-A) APK=$2; shift 2;;
+	-W) WPA=$2; shift 2;;
 	*) echo "mkrootfs: unknown argument $1" >&2; exit 1;;
 	esac
 done
-[ -n "$IN" ] && [ -n "$OUT" ] || { echo "usage: mkrootfs.sh -i indir -o out.tar.gz [-w workdir] [-V version] [-z timezone]" >&2; exit 1; }
+[ -n "$IN" ] && [ -n "$OUT" ] || { echo "usage: mkrootfs.sh -i indir -o out.tar.gz [-w workdir] [-V version] [-z timezone] [-a arch] [-A apk] [-W alpine]" >&2; exit 1; }
+case "$WPA" in '' | alpine) ;; *) echo "mkrootfs: -W takes alpine, not $WPA" >&2; exit 1;; esac
+# Every Echo image needs the pinned wpa_supplicant 2.9: without -W alpine a build that did not stage
+# it stops before it starts.
+[ "$WPA" = alpine ] || ls "$IN"/inputs/apks312/*.apk >/dev/null 2>&1 ||
+	{ echo "mkrootfs: no $IN/inputs/apks312/*.apk (wpa_supplicant 2.9); -W alpine takes Alpine's own instead" >&2; exit 1; }
 
 say() { echo "mkrootfs: $*"; }
 R=$WORK/root
@@ -78,9 +89,9 @@ arch=
 pkgs=$(sed 's/#.*//' "$IN/tools/packages-rootfs.txt" | tr '\n' ' ')
 say "apk add: $pkgs"
 $APK --root "$R" $arch --no-cache add $pkgs
-# A board whose Wi-Fi works with Alpine's own wpa_supplicant (the Surface RT, a mainline kernel)
-# stages no apks312 and has wpa_supplicant in its package list instead.
-if ls "$IN"/inputs/apks312/*.apk >/dev/null 2>&1; then
+# A board whose Wi-Fi works with Alpine's own wpa_supplicant (the Surface RT, a mainline kernel) asks
+# for it with -W alpine, stages no apks312 and has wpa_supplicant in its package list instead.
+if [ "$WPA" != alpine ]; then
 	say "apk add (local): $(ls "$IN"/inputs/apks312/*.apk | xargs -n1 basename | tr '\n' ' ')"
 	# Alpine 3.12's packages are signed by the -524d27bb key, which Alpine still ships for armv7 and which
 	# the minirootfs puts in /etc/apk/keys, so apk verifies these like any other package and no
@@ -94,7 +105,7 @@ if ls "$IN"/inputs/apks312/*.apk >/dev/null 2>&1; then
 		$APK --root "$R" $arch --no-cache add --allow-untrusted "$IN"/inputs/apks312/*.apk
 	fi
 else
-	say "no inputs/apks312: wpa_supplicant comes from the package list"
+	say "-W alpine: wpa_supplicant comes from the package list"
 fi
 $APK --root "$R" $arch info -v | sort > "$R/etc/techo5-packages"
 
