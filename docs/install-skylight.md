@@ -122,7 +122,7 @@ screen once TECHO5 starts.
 
 It takes the images from the latest release (`--release <tag>` for another one), checked against
 the release's signed manifest. To use images you built, pass all three: `--installer`, `--boot` and
-`--store` (see [tools/linux/skylight/README.md](../tools/linux/skylight/README.md)).
+`--store` (see [tools/linux/skylight/README.md](../tools/linux/skylight/README.md)). A download that fails its checksum is tried once more; if it fails again, the error says how many bytes arrived, to compare with the size on the release page (fewer means the connection dropped; the same number means antivirus or a proxy changed the file).
 
 What happens:
 

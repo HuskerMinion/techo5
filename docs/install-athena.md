@@ -62,7 +62,7 @@ python3 tools/install-athena.py --dry-run
 It takes the images from the latest release (`--release <tag>` for another one), checked against the
 release's signed manifest: `techo5-system-athena-<version>.img.gz` for `system` and
 `techo5-boot-athena-<version>.img` for `boot`. To install images you built, pass both:
-`--image system.img --boot boot.img`.
+`--image system.img --boot boot.img`. A download that fails its checksum is tried once more; if it fails again, the error says how many bytes arrived, to compare with the size on the release page (fewer means the connection dropped; the same number means antivirus or a proxy changed the file).
 
 What it does, each step checked before the next:
 

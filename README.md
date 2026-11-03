@@ -79,6 +79,19 @@ How it compares with EchoLocal, EchoMuse, echo-dot-assist, Kiosk Satellite and V
 
 The bigger changes of September to November 2026. Every release lists the rest.
 
+- 📝 **To-do lists, a baby monitor and your own sounds** (v1.6.23). With echo cancellation on, you can
+  speak right after the wake word, without waiting for the sound. A **To-do** tab in the drawer shows
+  Home Assistant's to-do and shopping lists on the Show, the Skylight and the Panel. A private link
+  plays the room's sound live in a phone's browser (**Baby monitor**, off until you turn it on), and the
+  wake, volume, button, Bluetooth and Drop In sounds can be your own. **Voice volume** and **Call volume**
+  sit beside the music volume, and the assistant's replies can play on another speaker. Pop-ups can be
+  large or huge for reading across a room ([#396](https://github.com/HuskerMinion/techo5/issues/396)), the night clock can keep Next up
+  ([#397](https://github.com/HuskerMinion/techo5/issues/397)), and a fan on a drawn dashboard opens speed, direction and presets on a long
+  press ([#410](https://github.com/HuskerMinion/techo5/issues/410)). The Echo Dot and Echo 2nd gen get a ring that follows the music, and
+  all of them a **Clearer speech** switch. Bluetooth devices such as Hue bulbs can be paired through the
+  proxy ([#398](https://github.com/HuskerMinion/techo5/issues/398)), the Show 8 2nd gen uses the ondemand CPU governor
+  ([#413](https://github.com/HuskerMinion/techo5/issues/413)), and the installers try a failed download again
+  ([#393](https://github.com/HuskerMinion/techo5/issues/393)).
 - 🌧️ **Rain on the glass, and a news update by voice** (v1.6.22). Rain on the weather page and
   the weather art gathers on the glass and runs down, and lightning strikes at random with a new bolt
   each time. The direct assistant plays a news update when asked. **Wi-Fi quiet hours** keeps the device
@@ -450,7 +463,7 @@ slot system, phone calls, and a minimal Alpine root filesystem in place of Andro
 | 🧠 **Voice without Home Assistant, if you want** | Instead of Assist, the device can use your own speech servers (Wyoming: faster-whisper and Piper) and a chat model (llama.cpp, Ollama or anything OpenAI-style). It sets timers and alarms, plays the radio, the news update you ask for (Fox, NPR, ABC or your own) and Music Assistant, changes the volume and calls other devices, and can look things up with SearXNG. Or answer a wake word with a realtime voice at OpenAI, xAI or Gemini, with your own key. [docs/setup.md](docs/setup.md#voice-without-home-assistant) |
 | 🔐 **Secure by default** | SSH is keys-only and off until you turn it on; keys arrive only through Home Assistant. The camera and screen web pages start closed, and a firewall lets in nothing on Wi-Fi but what the device serves. No password logins, not even in rescue. |
 | 🔄 **Updates that can't brick it** | Signed releases install over the air from Home Assistant's update card into the spare of two root filesystem slots, boot on trial, and fall back on their own if the new one doesn't settle. Follow the stable or the dev channel, and let it install on its own between 2 and 5 AM if you like. |
-| 📺 **A screen that's actually useful** | Clock and weather, the conversation as it happens, a glance strip of chips from Home Assistant along the foot of the clock, a calendar, now playing with song, cover art and lyrics, your Home Assistant dashboards, forecasts, a live rain radar, the National Weather Service's alerts (in the U.S.), live cameras from Home Assistant or go2rtc, up to six at once, notifications, timers and alarms, Wi-Fi setup, 13 themes, ten fonts, ten languages (five with the whole screen translated, Spanish part of it, and Dutch, Portuguese and Russian the clock and weather), and 15 clock styles you swipe between. Auto-brightness follows the room's light. |
+| 📺 **A screen that's actually useful** | Clock and weather, the conversation as it happens, a glance strip of chips from Home Assistant along the foot of the clock, a calendar, now playing with song, cover art and lyrics, your Home Assistant dashboards, forecasts, a live rain radar, the National Weather Service's alerts (in the U.S.), live cameras from Home Assistant or go2rtc, up to six at once, notifications, timers and alarms, Wi-Fi setup, Home Assistant's to-do and shopping lists, 13 themes, ten fonts, ten languages (five with the whole screen translated, Spanish part of it, and Dutch, Portuguese and Russian the clock and weather), and 15 clock styles you swipe between. Auto-brightness follows the room's light. |
 | 📅 **A calendar on the screen** | Home Assistant's calendars, or any calendar's own iCal link: a day and a week on their hours, the month, Coming up with the weather, event icons and countdowns, pop-ups for the calendars you choose, and the next event under the clock. [docs/setup.md](docs/setup.md#calendar) |
 | 🖼️ **Your photos, three ways** | From anything Home Assistant's media library can browse (its media folder, network shares, Immich), from Immich directly (an album, favorites, dates, a person), or kept on the device from the setup page. Behind the clock or as a screensaver, whole photos with blurred sides, two tall ones side by side, with date and place. [docs/setup.md](docs/setup.md#2-photos) |
 | 🏠 **The whole house, even with Home Assistant down** | Announce to every device, in typed words or your own voice. Call one device from another, with an optional Drop In. Only the nearest device answers a wake word, on by default once the devices share a house word. Settings stay in step between the devices you pick. All of it goes device to device, signed with a house word you set. [docs/phone.md](docs/phone.md#calling-another-device-in-the-house), [docs/actions.md](docs/actions.md#announce-to-the-house) |
@@ -461,6 +474,8 @@ slot system, phone calls, and a minimal Alpine root filesystem in place of Andro
 | ⏰ **Alarms that ring on their own** | Set on the screen, by Home Assistant, or followed from its helpers; they ring from the Show's own clock even when Home Assistant is down. Snooze included, and the screen can wake you with a sunrise before the sound. |
 | 🎧 **Bluetooth, rebuilt** | Earbuds and speakers over A2DP, plus a Home Assistant Bluetooth proxy, on a kernel rebuilt with Bluetooth from the LineageOS source. |
 | 📞 **A speakerphone again** | Calls through your own SIP provider: "call Alex" by voice, calls that ring on the screen, calls between your own devices, and a help call that alerts your phones and dials people in turn. Encrypted end to end to the provider, and off until you sign it in. [docs/phone.md](docs/phone.md) |
+| 👶 **A baby monitor** | A private link plays the room's sound live in a phone's browser, on the Show, the Spot and the Dot. Off until you turn it on; the screen (or the Dot's light ring) shows when someone is listening, and the mute switch stops it. [docs/setup.md](docs/setup.md#the-baby-monitor) |
+| 🔊 **Sounds and levels of your own** | Replace the volume, button, Bluetooth, listening-ended and Drop In sounds with your own, one at a time or as a sound pack. Replies and announcements, and calls, can each sit above or below the music volume, and spoken replies can play on any Home Assistant media player. [docs/setup.md](docs/setup.md#sounds-of-your-own) |
 | 📷 **A camera you control** | The front camera becomes a Home Assistant camera entity, off unless something is watching, and physically off while the mute button is engaged. |
 | 🛟 **Always recoverable** | A rescue environment with a USB serial console, and TWRP left in place: LineageOS is one flash away. |
 
@@ -512,7 +527,7 @@ Echo Show 8 and the Echo Spot, are in [docs/screenshots](docs/screenshots/README
 | Remote access | None | SSH with keys, off by default |
 | Listening on your network | Amazon's services | Home Assistant's encrypted API and the Sendspin player; SSH, web pages, AirPlay and Spotify Connect only when switched on, behind a Wi-Fi firewall. A signed-in phone keeps its own connection out to the provider |
 | Calling | Alexa calling and Drop In | Phone calls through your own SIP provider (TLS and SRTP), placed from Home Assistant or by voice, answered on the screen; device to device calls and announcements in the house, even with Home Assistant down, and Drop In if you turn it on |
-| Shopping, skills | Yes | **No.** Those are Alexa cloud services |
+| Shopping, skills | Yes | **No** Amazon shopping or skills: those are Alexa cloud services. Home Assistant's to-do and shopping lists show on the Show's screen |
 
 ## How well does it hear?
 

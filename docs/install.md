@@ -79,7 +79,7 @@ script, give everything as switches instead: `--serial <serial> --name "Kitchen"
 nothing (it also asks nothing, and stops rather than guess, when its input or output isn't a terminal).
 
 It does steps 1 to 6 below: downloads the latest release and checks the boot image and root filesystem
-against their checksums, keeps LineageOS's boot image in `backups/<serial>/` when adb is root, flashes,
+against their checksums (a download that fails its checksum is tried once more, and the error says how many bytes arrived), keeps LineageOS's boot image in `backups/<serial>/` when adb is root, flashes,
 creates the slot store over the USB serial console, provisions the name and
 the Home Assistant key (kept in `backups/<serial>/home-assistant.key`), and waits for the first boot.
 `--ssh-key ~/.ssh/id_ed25519.pub` also turns SSH on with your key. Then go to

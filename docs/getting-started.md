@@ -339,6 +339,9 @@ is built on, runs on the unlocked Dot's Fire OS 6 with its own installer, and is
    - [phone calls](phone.md) through your own SIP provider;
    - SSH (keys only) through the `ssh_keys` action and the SSH switch;
    - cameras, radio lists and weather from the device's Home Assistant actions (see each README);
+   - [to-do and shopping lists](setup.md#to-do-and-shopping-lists) on a Show, the Skylight or the Panel;
+   - the [baby monitor](setup.md#the-baby-monitor), on a device with microphones;
+   - one settings dashboard for all your devices ([ha-dashboard.md](ha-dashboard.md#a-settings-dashboard-for-all-your-devices));
    - multi-room audio through [Music Assistant](https://www.music-assistant.io/) (each device is a
      Sendspin player).
 
@@ -459,6 +462,7 @@ pipeline rather than the device: Home Assistant is replying in text only.
   with a USB serial console, if a boot doesn't come up healthy. The Show and Spot keep TWRP; the
   Dot keeps a copy of it (see [Going back to TWRP or Fire OS](#going-back-to-twrp-or-fire-os)). Each
   repository's docs describe the way back to LineageOS or Fire OS.
+- **The installer stops on a checksum:** A download that fails its checksum is tried once more; if it fails again, the error says how many bytes arrived, to compare with the size on the release page (fewer means the connection dropped; the same number means antivirus or a proxy changed the file).
 - Ask in the project's GitHub issues, with the device, the step and what it printed.
 
 ## Credits
