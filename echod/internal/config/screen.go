@@ -178,6 +178,12 @@ type Screen struct {
 	// somebody wants it, so an update changes nobody's screen.
 	MuteRingSubtle bool `json:"mute_ring_subtle,omitempty"`
 
+	// CameraDotWatchedOnly lights the Spot's camera dot only while a picture leaves the device, not
+	// whenever the camera runs (#431). NoIdleRing leaves out the Spot's gray rim while nothing else is
+	// on it. Both off until somebody wants them, so an update changes nobody's screen.
+	CameraDotWatchedOnly bool `json:"camera_dot_watched_only,omitempty"`
+	NoIdleRing           bool `json:"no_idle_ring,omitempty"`
+
 	// MusicStrip is how many seconds music plays on the full now-playing page before the Show goes
 	// back to its clock with the music in a strip at the foot; none keeps the full page.
 	MusicStrip int `json:"music_strip,omitempty"`
@@ -462,6 +468,14 @@ func (w ScreenWriter) WeatherStill(v bool) error {
 
 func (w ScreenWriter) MuteRingSubtle(v bool) error {
 	return w.st.Update(func(c *Config) { c.Screen.MuteRingSubtle = v })
+}
+
+func (w ScreenWriter) CameraDotWatchedOnly(v bool) error {
+	return w.st.Update(func(c *Config) { c.Screen.CameraDotWatchedOnly = v })
+}
+
+func (w ScreenWriter) NoIdleRing(v bool) error {
+	return w.st.Update(func(c *Config) { c.Screen.NoIdleRing = v })
 }
 
 func (w ScreenWriter) NoStyleSwipe(v bool) error {

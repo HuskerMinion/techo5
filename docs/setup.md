@@ -310,7 +310,8 @@ The camera of a Show or a Spot can be recorded like any other camera, by Frigate
 It never runs without a password. Turning it off, saving a new login and closing the lens cover each
 cut off whoever is watching; the mute button stops the picture, as it stops the camera everywhere else.
 While somebody is being sent the camera, a Show draws a small green dot in the top right corner of the
-screen, over everything; a Spot shows its camera dot, as it does whenever its camera runs. With the
+screen, over everything; a Spot shows its camera dot, as it does whenever its camera runs, unless its **Camera dot** setting is
+**Only when watched**. With the
 screen off, it lights at its dimmest to show the dot alone on black, so the room can still tell.
 
 Two viewers at most watch at once, at up to 10 pictures a second (15 on a 2nd gen Show 8 whose kernel
@@ -823,6 +824,13 @@ like "kitchen screen" under its **Voice assistants** settings in Home Assistant.
   the same way in every style.
 - **Subtle mute ring** (Spot, in Home Assistant): the red ring shown while the microphones are muted
   is drawn thin and in a dimmer red, so it doesn't light up a dark room.
+- **Camera dot** (Spot, in Home Assistant): **Whenever the camera runs** (the default) lights the green
+  dot at the top of the rim for presence and person detection too, which stay on the device. **Only when
+  watched** lights it only while a picture leaves the device: a stream, a camera page, or a snapshot for
+  Home Assistant's camera entity, as on a Show.
+- **Idle ring** (Spot, in Home Assistant): the gray ring around the screen while nothing else is on it.
+  Turn it off for a dashboard or a clock without it. Mute, listening, replies, timers and Bluetooth
+  pairing still show on the rim.
 
 ### Calendar
 

@@ -5,6 +5,7 @@ package display
 import (
 	"fmt"
 	"image"
+	"image/color"
 	"image/png"
 	"math"
 	"os"
@@ -338,5 +339,28 @@ func TestTheCameraSoundControlIsWhereItIsDrawnOnTheSpot(t *testing.T) {
 		if b := cameraSoundBox(r.width(r.label, label) + 24); b.Dx() < r.width(r.label, label) {
 			t.Errorf("%q does not fit the bar it is drawn in", label)
 		}
+	}
+}
+
+// The idle ring's gray track goes with the setting, and a timer still draws its rim (#431).
+func TestIdleRingHidden(t *testing.T) {
+	previewFont(t)
+	at := time.Date(2026, 9, 16, 14, 7, 0, 0, time.Local)
+	foot := image.Pt(center, center+(rimIn+rimOut)/2)
+	rimAt := func(s roundScene) color.RGBA {
+		img := image.NewRGBA(image.Rect(0, 0, side, side))
+		faceState.set = false
+		newRoundRenderer(img).draw(s)
+		return img.RGBAAt(foot.X, foot.Y)
+	}
+	if got := rimAt(roundScene{now: at, phase: "idle"}); got != colTrack {
+		t.Errorf("idle rim = %v, want the track %v", got, colTrack)
+	}
+	if got := rimAt(roundScene{now: at, phase: "idle", noIdleRing: true}); got == colTrack {
+		t.Errorf("idle rim with the ring hidden is still the track")
+	}
+	countdown := []timer.Countdown{{Left: 30 * time.Second, Total: time.Minute}}
+	if got := rimAt(roundScene{now: at, phase: "idle", noIdleRing: true, timers: countdown}); got == colBackground {
+		t.Errorf("a timer's rim was hidden with the idle ring")
 	}
 }
