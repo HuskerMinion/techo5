@@ -94,19 +94,39 @@ func (s *stream) play(ctx context.Context, p *speaker.Player, started func()) er
 			return nil
 		case data, ok := <-s.chunks:
 			if !ok {
-				// Whatever is still held will never be joined by more, so it just plays.
-				s.flush(p)
-				if s.bytes > 0 {
-					at := s.playingAt
-					if at.IsZero() {
-						at = time.Now() // a reply shorter than the cushion starts here
-					}
-					replyPlaying(at, replyAudioSeconds(s.bytes), true)
-				}
+				s.finish(p)
 				return nil
 			}
 			s.take(data, p, started)
 		}
+	}
+}
+
+// fetch is the errand for a reply fetched from its url while Home Assistant is still writing it: the
+// body arrives the way a streamed reply does, and goes through the same cushion. A fetch that fails
+// before any audio is the url's fault, and is said; one that fails part way has played what came.
+func (s *stream) fetch(ctx context.Context, p *speaker.Player, url string, started func()) error {
+	err := media.FetchVoice(ctx, url, func(data []byte) { s.take(data, p, started) })
+	if ctx.Err() != nil {
+		return nil
+	}
+	s.finish(p)
+	if err != nil && s.bytes > 0 {
+		slog.Warn("the early reply ended early", "err", err, "bytes", s.bytes)
+		return nil
+	}
+	return err
+}
+
+// finish plays whatever is still held, which will never be joined by more.
+func (s *stream) finish(p *speaker.Player) {
+	s.flush(p)
+	if s.bytes > 0 {
+		at := s.playingAt
+		if at.IsZero() {
+			at = time.Now() // a reply shorter than the cushion starts here
+		}
+		replyPlaying(at, replyAudioSeconds(s.bytes), true)
 	}
 }
 

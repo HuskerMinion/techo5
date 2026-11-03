@@ -1108,7 +1108,8 @@ Each wake word's own settings are on a sub-device of its own in Home Assistant, 
 - **Wake word tone**: the sound it makes when it wakes.
 - **Wake word effect**, **Thinking effect** and **Replying effect**: what the ring shows (the Dot
   only: a Show or Spot has no ring).
-- **Reply delivery**: the answer as a whole file, or streamed as it comes.
+- **Reply delivery**: the answer as a whole file, streamed as it comes, or early, while the agent is
+  still writing it.
 - **Follow-up time**, **Follow-ups in a row** and **Follow-up tone**: listening after an answer,
   below.
 - **Max listening time** (5 to 60 seconds) and **Max thinking time** (5 to 300 seconds): how long a

@@ -336,7 +336,7 @@ func newSlot(n int) slot {
 
 // deliveries is how a reply can arrive, in the order it is offered.
 func deliveries() []config.Delivery {
-	return []config.Delivery{config.DeliveryWhole, config.DeliveryStream}
+	return []config.Delivery{config.DeliveryWhole, config.DeliveryStream, config.DeliveryEarly}
 }
 
 // followUpToneFor is what the select's label means as a setting: Default is the wake word's own tone,
