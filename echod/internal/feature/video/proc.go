@@ -43,10 +43,17 @@ func decoderPath() string {
 // 32-bit userspace) but runs only on a 64-bit kernel: an athena still on Amazon's 32-bit kernel has the
 // file and cannot run it, so it keeps the 32-bit one, without H.265, VP8 and VP9.
 var imageDecoder = sync.OnceValue(func() string {
-	return pickDecoder(kernelMachine(), fileExists(decoder64))
+	return pickDecoder(kernelMachine(), fileExists(decoder64), fileExists(decoder32), fileExists(systemDecoder))
 })
 
-func pickDecoder(machine string, have64 bool) string {
+// systemDecoder is the distribution's own ffmpeg, which an image that carries neither of TECHO5's
+// builds has in their place (a board on a mainline kernel that takes Alpine's package).
+const systemDecoder = "/usr/bin/ffmpeg"
+
+func pickDecoder(machine string, have64, have32, haveSystem bool) string {
+	if !have64 && !have32 && haveSystem {
+		return systemDecoder
+	}
 	// A 64-bit ARM kernel says aarch64 to the 32-bit processes on it too; a 32-bit one never does
 	// (armv7l, or armv8l on ARMv8 cores).
 	if have64 && machine == "aarch64" {
