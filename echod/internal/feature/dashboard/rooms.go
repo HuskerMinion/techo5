@@ -443,7 +443,7 @@ func iconOf(e hass.LiveEntity, domain, class string, on bool) string {
 const volumeSet = 4
 
 // adjustOf is the level a finger sliding along the entity's tile sets, if it has one: a light that
-// dims, a cover that stops part way, a thermostat's temperature, a media player's volume.
+// dims, a cover that stops part way, a thermostat's temperature, a fan's speed, a media player's volume.
 func adjustOf(e hass.LiveEntity, domain string) *Adjust {
 	switch domain {
 	case "light":
@@ -475,6 +475,13 @@ func adjustOf(e hass.LiveEntity, domain string) *Adjust {
 		}
 		lo, hi, step := climateLimits(e, t)
 		return &Adjust{Entity: e.ID, Kind: "temperature", Value: t, Min: lo, Max: hi, Step: step}
+	case "fan":
+		// A fan that takes a speed (set speed): a slide sets it, on the steps it says it takes.
+		n := fanNow(e)
+		if !n.HasSpeed {
+			return nil
+		}
+		return &Adjust{Entity: e.ID, Kind: "speed", Value: n.Percentage, Min: 0, Max: 100, Step: n.Step}
 	case "media_player":
 		// Only a player that says its volume and takes one (MediaPlayerEntityFeature.VOLUME_SET): one
 		// that is off says none, and a slide would set nothing anybody could see.

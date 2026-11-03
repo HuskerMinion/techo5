@@ -47,7 +47,7 @@ type Tile struct {
 // Adjust is a tile's level: what it is now and how far it goes.
 type Adjust struct {
 	Entity   string
-	Kind     string // brightness, position, temperature
+	Kind     string // brightness, position, temperature, speed, volume
 	Value    float64
 	Min, Max float64
 	Step     float64
@@ -493,6 +493,9 @@ func (f *Feature) SetLevel(a Adjust, v float64) {
 	case "temperature":
 		domain, service = "climate", "set_temperature"
 		data["temperature"] = v
+	case "speed":
+		domain, service = "fan", "set_percentage"
+		data["percentage"] = int(v + 0.5)
 	case "volume":
 		domain, service = "media_player", "volume_set"
 		data["volume_level"] = float64(int(v+0.5)) / 100

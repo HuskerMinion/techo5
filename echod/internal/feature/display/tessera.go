@@ -86,6 +86,7 @@ type tessSheets struct{}
 // dashboard, or the Tessera page.
 type sheetSource interface {
 	ClimateNow(entity string) (dashboard.ClimateNow, bool)
+	FanNow(entity string) (dashboard.FanNow, bool)
 	LightColor(entity string) (dashboard.LightColor, bool)
 	MediaNow(entity string) (dashboard.MediaNow, bool)
 	Tap(a dashboard.Action)
@@ -107,6 +108,14 @@ func (tessSheets) ClimateNow(entity string) (dashboard.ClimateNow, bool) {
 		return dashboard.ClimateNow{}, false
 	}
 	return dashboard.ClimateOf(entity, state, a), true
+}
+
+func (tessSheets) FanNow(entity string) (dashboard.FanNow, bool) {
+	state, a, ok := tessera.Entity(entity)
+	if !ok || tesseraDomain(entity) != "fan" {
+		return dashboard.FanNow{}, false
+	}
+	return dashboard.FanOf(entity, state, a), true
 }
 
 func (tessSheets) LightColor(entity string) (dashboard.LightColor, bool) {
@@ -156,13 +165,15 @@ func (tessSheets) SetHVACMode(entity, mode string) {
 }
 
 // tessSheet opens the sheet of entity, where it has one: a light's colors, a thermostat's controls, a
-// player's music. It says whether one opened.
+// player's music, a fan's controls. It says whether one opened.
 func (d *Display) tessSheet(entity string) bool {
 	switch tesseraDomain(entity) {
 	case "media_player":
 		return d.openMedia(entity)
 	case "climate":
 		return d.openClimate(entity)
+	case "fan":
+		return d.openFan(entity)
 	case "light":
 		c, ok := sheets().LightColor(entity)
 		if !ok {
@@ -182,6 +193,7 @@ func (d *Display) tessSheet(entity string) bool {
 func (d *Display) tessSheetViews(s *scene) {
 	s.dashMedia = d.mediaViewNow()
 	s.dashClimate = d.climateViewNow()
+	s.dashFan = d.fanViewNow()
 }
 
 // tesseraPage draws the Tessera page over the whole panel.
