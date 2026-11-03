@@ -36,3 +36,42 @@ func TestSeedingDoesNothingOnABoardWhoseHardwareCuts(t *testing.T) {
 		t.Error("a Show seeded the software cut, which nothing on a Show ever clears")
 	}
 }
+
+// fakeMute is a board's mute of its own.
+type fakeMute struct{ software }
+
+// A board's own mute is the one platformMute gives, whatever latch the board might seem to have, and
+// only the software mute is seeded from the saved state.
+func TestABoardMuteComesFirst(t *testing.T) {
+	defer func(m Mute, cut bool) { boardMute = m; softwareCut.Store(cut) }(boardMute, softwareCut.Load())
+
+	boardMute = fakeMute{}
+	if m, err := platformMute(); err != nil || m != (fakeMute{}) {
+		t.Errorf("platformMute() = %v, %v; want the board's", m, err)
+	}
+	softwareCut.Store(false)
+	seedSoftwareCut(true)
+	if softwareCut.Load() {
+		t.Error("a board mute that is not the software one was seeded")
+	}
+
+	boardMute = software{}
+	if m, err := platformMute(); err != nil || m != (software{}) {
+		t.Errorf("platformMute() = %v, %v; want the software mute", m, err)
+	}
+	seedSoftwareCut(true)
+	if !softwareCut.Load() {
+		t.Error("the software mute was not seeded with the saved state")
+	}
+}
+
+// With no board mute nothing is seeded: the hardware holds the microphones.
+func TestNoBoardMuteSeedsNothing(t *testing.T) {
+	defer func(m Mute, cut bool) { boardMute = m; softwareCut.Store(cut) }(boardMute, softwareCut.Load())
+	boardMute = nil
+	softwareCut.Store(false)
+	seedSoftwareCut(true)
+	if softwareCut.Load() {
+		t.Error("a Show's software cut was seeded")
+	}
+}
