@@ -1045,7 +1045,10 @@ func (d *Display) gesture(g touch.Gesture) {
 		return
 	}
 	d.mu.Unlock()
-	slog.Info("touch", "gesture", g.String())
+	if g.Kind != touch.Drag {
+		// Not each step of a finger dragging the map or a dashboard: those come many a second.
+		slog.Info("touch", "gesture", g.String())
+	}
 	// A notification that came up at night waits for a touch (releaseNotice), but not for one that
 	// stops a ring: that one is for the alarm. The touch that releases it only releases: whoever
 	// touched the screen has not seen the card yet, so it is not a tap on anything.
