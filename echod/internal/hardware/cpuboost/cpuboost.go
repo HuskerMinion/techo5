@@ -119,15 +119,20 @@ var (
 	lastWarned string
 )
 
+// warn says a write failed, once for as long as the message stays the same.
+func warn(path string, err error) {
+	warnMu.Lock()
+	defer warnMu.Unlock()
+	if msg := path + ": " + err.Error(); msg != lastWarned {
+		lastWarned = msg
+		slog.Warn("cpuboost: a write", "path", path, "err", err)
+	}
+}
+
 func write(path, v string) error {
 	err := os.WriteFile(path, []byte(v), 0o644)
 	if err != nil {
-		warnMu.Lock()
-		if msg := path + ": " + err.Error(); msg != lastWarned {
-			lastWarned = msg
-			slog.Warn("cpuboost: a write", "path", path, "err", err)
-		}
-		warnMu.Unlock()
+		warn(path, err)
 	}
 	return err
 }

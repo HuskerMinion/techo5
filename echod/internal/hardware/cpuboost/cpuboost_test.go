@@ -3,7 +3,9 @@
 package cpuboost
 
 import (
+	"bytes"
 	"context"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -493,5 +495,41 @@ func TestSwitchingFastCoresOffGivesTheCoresBackAtOnce(t *testing.T) {
 	waitFor(t, cpus, "0,1,2,3,4,5,6,7")
 	if got := contents(t, path); got != "1989000" {
 		t.Fatalf("minimum %s, want the clocks kept while the boost is on", got)
+	}
+}
+
+func TestAFailedMoveIsLoggedOnceWhileTheMessageStaysTheSame(t *testing.T) {
+	var buf bytes.Buffer
+	old := slog.Default()
+	slog.SetDefault(slog.New(slog.NewTextHandler(&buf, nil)))
+	defer slog.SetDefault(old)
+	warnMu.Lock()
+	lastWarned = ""
+	warnMu.Unlock()
+
+	root, _ := board(t, "793000", "1989000")
+	bigLittle(t, root)
+	c := newCpuset(root)
+	if c == nil {
+		t.Fatal("no group")
+	}
+	// Three programs the daemon started sit in the group, and the group they are to be moved to cannot be
+	// written: a directory stands where its cgroup.procs is.
+	if err := os.WriteFile(filepath.Join(c.dir, "cgroup.procs"), []byte("4242\n4243\n4244\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Remove(filepath.Join(c.free, "cgroup.procs")); err != nil && !os.IsNotExist(err) {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(filepath.Join(c.free, "cgroup.procs"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	c.sweep()
+	c.sweep()
+	if got := strings.Count(buf.String(), "cpuboost: a write"); got != 1 {
+		t.Fatalf("logged %d times for six failed moves of one kind, want once:\n%s", got, buf.String())
+	}
+	if !strings.Contains(buf.String(), "cgroup.procs") {
+		t.Fatalf("the log does not say which file:\n%s", buf.String())
 	}
 }

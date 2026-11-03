@@ -3,6 +3,7 @@
 package cpuboost
 
 import (
+	"errors"
 	"log/slog"
 	"os"
 	"path/filepath"
@@ -75,9 +76,17 @@ func newCpuset(root string) *cpuset {
 		}
 	}
 	for _, pid := range append([]int{c.self}, c.ownChildren()...) {
-		_ = os.WriteFile(filepath.Join(c.dir, "cgroup.procs"), []byte(strconv.Itoa(pid)), 0o644)
+		move(filepath.Join(c.dir, "cgroup.procs"), strconv.Itoa(pid))
 	}
 	return c
+}
+
+// move puts the process in the group whose cgroup.procs is path. One that has already ended is not a
+// failure; anything else is logged, as every other write here is (warn).
+func move(path string, pid string) {
+	if err := os.WriteFile(path, []byte(pid), 0o644); err != nil && !errors.Is(err, syscall.ESRCH) {
+		warn(path, err)
+	}
 }
 
 // ours is whether pid is the daemon or one of its own programs (its renderer): the interface.
@@ -113,7 +122,7 @@ func (c *cpuset) sweep() {
 		if err != nil || c.ours(pid) {
 			continue
 		}
-		_ = os.WriteFile(filepath.Join(c.free, "cgroup.procs"), []byte(f), 0o644)
+		move(filepath.Join(c.free, "cgroup.procs"), f)
 	}
 }
 
@@ -129,7 +138,7 @@ func (c *cpuset) adopt() {
 	}
 	for _, pid := range c.ownChildren() {
 		if !in[pid] {
-			_ = os.WriteFile(filepath.Join(c.dir, "cgroup.procs"), []byte(strconv.Itoa(pid)), 0o644)
+			move(filepath.Join(c.dir, "cgroup.procs"), strconv.Itoa(pid))
 		}
 	}
 }
@@ -146,7 +155,7 @@ func (c *cpuset) narrow() {
 	if c.narrowed {
 		return
 	}
-	if os.WriteFile(filepath.Join(c.dir, "cpuset.cpus"), []byte(c.fast), 0o644) == nil {
+	if write(filepath.Join(c.dir, "cpuset.cpus"), c.fast) == nil {
 		c.narrowed = true
 	}
 }
@@ -156,7 +165,7 @@ func (c *cpuset) widen() {
 	if c == nil || !c.narrowed {
 		return
 	}
-	if os.WriteFile(filepath.Join(c.dir, "cpuset.cpus"), []byte(c.all), 0o644) == nil {
+	if write(filepath.Join(c.dir, "cpuset.cpus"), c.all) == nil {
 		c.narrowed = false
 	}
 }
@@ -167,11 +176,11 @@ func (c *cpuset) close() {
 	if c == nil {
 		return
 	}
-	_ = os.WriteFile(filepath.Join(c.dir, "cpuset.cpus"), []byte(c.all), 0o644)
+	_ = write(filepath.Join(c.dir, "cpuset.cpus"), c.all)
 	for _, d := range []string{c.dir, c.free} {
 		b, _ := os.ReadFile(filepath.Join(d, "cgroup.procs"))
 		for _, pid := range strings.Fields(string(b)) {
-			_ = os.WriteFile(c.rootProcs, []byte(pid), 0o644)
+			move(c.rootProcs, pid)
 		}
 	}
 }
