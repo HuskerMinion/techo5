@@ -109,6 +109,7 @@ var registered = []string{
 	"wake_frames",
 	"worst_wake_frame",
 	"louder_speech",
+	"clearer_speech",
 	"lux",
 	"lyrics",
 	"max_listen_1",
