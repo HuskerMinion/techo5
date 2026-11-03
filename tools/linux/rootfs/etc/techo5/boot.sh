@@ -327,7 +327,12 @@ t5_bt_up "$BT_MODULE" /var/log
 			# (techo5-net check): without it, a device whose router moved to another subnet, or
 			# whose supplicant hung, would keep an address and a route and never be noticed.
 			[ -x /usr/local/sbin/techo5-net ] && /usr/local/sbin/techo5-net check
-			t5_wifi_prefer5
+			# Prefer 5 GHz off (echod, feature/wifiband): the link stays on the band it is on.
+			if [ -e /run/techo5/wifi-keep-band ]; then
+				t5_wifi_unpin
+			else
+				t5_wifi_prefer5
+			fi
 			continue
 		fi
 		# No network saved: nothing a restart or a reboot could join. The supplicant only has to

@@ -403,6 +403,8 @@ func KeepOwn(c *Config, from Config) {
 	}
 	// Hours off the network take the device out of reach: chosen on the device, never by a file.
 	c.WifiQuiet = from.WifiQuiet
+	// Which band a device stays on is about the network it is on and where it stands: its own.
+	c.WifiBand = from.WifiBand
 	// What realtime voice has used today is the device's count.
 	c.Realtime.UsedDay, c.Realtime.UsedSeconds = from.Realtime.UsedDay, from.Realtime.UsedSeconds
 

@@ -295,6 +295,7 @@ var registered = []string{
 	"wake_word_on_home_assistant",
 	"weather_alerts",
 	"weather_source",
+	"wifi_prefer_5ghz",
 	"wifi_quiet_hours",
 	"wifi_quiet_hours_end",
 	"wifi_quiet_hours_start",

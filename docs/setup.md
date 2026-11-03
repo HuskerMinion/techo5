@@ -1858,6 +1858,19 @@ After a change the setup page is at the new address, and the browser has to be l
 Home Assistant follows the device by itself, about two minutes after the change: it first has to notice
 that the old connection is gone. To go back to DHCP, choose **Automatic**.
 
+### Staying on one band
+
+Every few minutes the Show looks for a stronger 5 GHz radio of your network and moves its link to one it finds.
+On a mesh that steers its devices between its own units, the radio it moves to can be one it cannot join: the
+link is gone until it gives up after half a minute, and tries again half an hour later. A song or a stream does
+not ride that out.
+
+The **Prefer 5 GHz** switch in Home Assistant (a configuration entity, on by default) turns that off. With it off
+the Show stays on the band its Wi-Fi joined, and takes off a channel it had held the link to. The Wi-Fi still
+picks a band when it joins, and the network can still move the device itself; to keep it on 2.4 GHz for good,
+do that in the router or the mesh app (pin the device, or give it a 2.4 GHz-only network). It is saved on the
+device and is not copied by a settings file from another.
+
 ## 10. Saving the settings
 
 On the setup page, **General**, **Download settings** saves everything the device is set to as a

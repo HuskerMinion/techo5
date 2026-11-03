@@ -25,7 +25,7 @@ var notOnPanel = []string{
 	// The hotplug governor is the kernel's, which an app may not write (diag's coresHere).
 	"min_cores",
 	// A tablet's Wi-Fi is Android's (wifiquiet).
-	"wifi_quiet_hours", "wifi_quiet_hours_end", "wifi_quiet_hours_start",
+	"wifi_prefer_5ghz", "wifi_quiet_hours", "wifi_quiet_hours_end", "wifi_quiet_hours_start",
 }
 
 // onlyOnPanel is what a panel adds: Android can silence a tablet's microphone under the app.
