@@ -52,7 +52,7 @@ WPA="wpa_cli -p /run/wpa -i $IF"
 NAMES='^(search|domain)[[:blank:]]+[A-Za-z0-9._[:blank:]-]+$'
 
 log() {
-	[ -n "$ROOT" ] || echo "techo5-net: $*" 2>/dev/null > /dev/kmsg
+	[ -n "$ROOT" ] || echo "<14>techo5-net: $*" 2>/dev/null > /dev/kmsg
 	echo "$(date '+%Y-%m-%d %H:%M:%S') $*" >> $RUN/network.log 2>/dev/null
 }
 

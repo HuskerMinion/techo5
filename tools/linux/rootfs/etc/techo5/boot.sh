@@ -10,7 +10,7 @@
 PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 export PATH
 LOGDIR=/data/techo5-linux
-log() { echo "techo5-boot: $*" > /dev/kmsg; echo "$(cut -d' ' -f1 /proc/uptime) $*" >> /run/boot.log; }
+log() { echo "<14>techo5-boot: $*" > /dev/kmsg; echo "$(cut -d' ' -f1 /proc/uptime) $*" >> /run/boot.log; }
 
 # What differs between devices; the Echo Show 5's values unless the image carries its own.
 DATA_DEV=/dev/mmcblk0p16
