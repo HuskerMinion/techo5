@@ -385,6 +385,8 @@ func KeepOwn(c *Config, from Config) {
 	c.Video.On, c.Video.DLNA = from.Video.On, from.Video.DLNA
 	c.Video.Allowed = slices.Clone(from.Video.Allowed)
 	c.Home.CameraLive = from.Home.CameraLive
+	// The Spot's camera dot is how the room sees the camera running: a file does not make it quieter.
+	c.Screen.CameraDotWatchedOnly = from.Screen.CameraDotWatchedOnly
 	// Which of Home Assistant's cameras the device lists: a file that says All (or is from a build that
 	// had no choice) does not undo None or a list chosen here, so a device that shares a Home Assistant
 	// with other homes is not given every camera in it by a file.

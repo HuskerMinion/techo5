@@ -15,7 +15,7 @@ import (
 var privacyish = regexp.MustCompile(`(^|_)(ssh|remote|adb|tls|lock|talk|clips|recordings?|presence|gestures?|proxy|` +
 	`pairing|forget|airplay|spotify|dlna|video|sendspin|phone|update|restart|purge|reset|wipe|install|listen|` +
 	`wake_assistant|wake_threshold|confirm_threshold|noise|claps?|stream|streaming|nearest)(_|$)|` +
-	`web_access|setup_page|baby_monitor|drop_in|camera_live|mic_mute|on_home_assistant|with_home_assistant|hold_gesture|voice_text|wifi_quiet`)
+	`web_access|setup_page|baby_monitor|drop_in|camera_live|camera_dot|mic_mute|on_home_assistant|with_home_assistant|hold_gesture|voice_text|wifi_quiet`)
 
 // harmless is every entity whose name says privacy or security and that is not: the API may change it.
 var harmless = []string{

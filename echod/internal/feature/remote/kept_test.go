@@ -46,6 +46,7 @@ var keptByRestore = map[string]keptSetting{
 	"hangup_word":                      {func(c *config.Config) { c.Wake.Hangup.ID = config.HangupStop }, func(c config.Config) bool { return c.Wake.Hangup.On() }},
 	"hangup_word_threshold":            {func(c *config.Config) { c.Wake.Hangup.Threshold = 0.6 }, func(c config.Config) bool { return c.Wake.Hangup.Threshold == 0.6 }},
 	"camera_live":                      {func(c *config.Config) { c.Home.CameraLive = true }, func(c config.Config) bool { return c.Home.CameraLive }},
+	"screen_camera_dot":                {func(c *config.Config) { c.Screen.CameraDotWatchedOnly = true }, func(c config.Config) bool { return c.Screen.CameraDotWatchedOnly }},
 	"keep_wake_clips":                  {func(c *config.Config) { c.Wake.KeepClips = true }, func(c config.Config) bool { return c.Wake.KeepClips }},
 	"wifi_quiet_hours":                 {func(c *config.Config) { c.WifiQuiet.On = true }, func(c config.Config) bool { return c.WifiQuiet.On }},
 	"wifi_quiet_hours_start":           {func(c *config.Config) { c.WifiQuiet.Hours = "02:00-06:00" }, func(c config.Config) bool { return c.WifiQuiet.Hours == "02:00-06:00" }},

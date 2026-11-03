@@ -25,8 +25,8 @@ import (
 )
 
 func init() {
-	if layout.OnAndroid() {
-		return // a tablet's Wi-Fi is Android's
+	if layout.OnAndroid() || !hasKeeper {
+		return // a tablet's Wi-Fi is Android's, and a Dot has no keeper to tell (keeper_dot.go)
 	}
 	component.Register(component.Network, New(), component.Order(97))
 }
