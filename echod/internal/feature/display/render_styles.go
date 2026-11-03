@@ -12,6 +12,7 @@ import (
 
 	"golang.org/x/image/font"
 
+	"github.com/HuskerMinion/techo5/echod/internal/config"
 	"github.com/HuskerMinion/techo5/echod/internal/lib/hass"
 	"github.com/HuskerMinion/techo5/echod/internal/lib/locale"
 )
@@ -492,7 +493,15 @@ func (r *renderer) dashboardStyle(s scene, box image.Rectangle) {
 	r.text(r.styleFace(true, 20), locale.Upcoming(screenLang()), col, top+r.s(20), dim)
 	y := top + r.s(62)
 	if len(s.style.next) == 0 {
-		r.text(r.tiny, locale.NothingSoon(screenLang()), col, y, dim)
+		none := locale.NothingSoon(screenLang())
+		if config.Get().Calendar.DashboardToday {
+			// "Today only" has nothing to wait for but today, as the Agenda says it.
+			none = locale.NothingToday(screenLang())
+			if s.style.hadToday {
+				none = locale.NothingElse(screenLang())
+			}
+		}
+		r.text(r.tiny, none, col, y, dim)
 	}
 	// As many events as fit above the row, or the foot, a line each.
 	shown, fit := s.style.next, 0

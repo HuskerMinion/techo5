@@ -318,6 +318,8 @@ var registered = []string{
 	"calendar_week_view",
 	"calendar_chip_size",
 	"calendar_next_up",
+	"calendar_dashboard_events",
+	"calendar_next_up_within",
 	"calendar_weather",
 	"calendar_week_starts_monday",
 }

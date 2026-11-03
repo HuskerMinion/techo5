@@ -9,7 +9,7 @@ import (
 // hides is not a setting to share at all (it has no entity), and nor is which calendars it shows.
 func TestTheCalendarLookIsShared(t *testing.T) {
 	look := []string{"calendar_opens_on", "calendar_day_timeline", "calendar_coming_up_refined", "calendar_month_details",
-		"calendar_event_icons", "calendar_countdowns", "calendar_week_view", "calendar_chip_size", "calendar_next_up", "calendar_weather", "calendar_week_starts_monday"}
+		"calendar_event_icons", "calendar_countdowns", "calendar_week_view", "calendar_chip_size", "calendar_next_up", "calendar_dashboard_events", "calendar_next_up_within", "calendar_weather", "calendar_week_starts_monday"}
 	for _, id := range look {
 		if !Shareable(id) {
 			t.Errorf("%s is not on the share list", id)

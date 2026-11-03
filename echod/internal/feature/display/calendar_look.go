@@ -33,6 +33,8 @@ type calLook struct {
 	weather    bool // the forecast on the calendar's days
 	monday     bool // the month's and the week's rows start on Monday, rather than Sunday
 	opens      int  // the view it opens on, in opensOpts
+	dashToday  bool // the Dashboard style lists today's events only
+	nextWithin int  // how far ahead the clock's next event looks, in nextWithinOpts
 	wide       bool // a panel bigger than the Show 5's
 }
 
@@ -50,11 +52,21 @@ var (
 	opensVals = []string{"", config.OpensWeek, config.OpensDay, config.OpensAgenda}
 )
 
+var (
+	// dashEventsOpts are the Dashboard style's two lists of events, the week being the default.
+	dashEventsOpts = []string{"Coming week", "Today only"}
+	// nextWithinOpts are how far ahead the clock's next event looks, nextWithinHours each one's hours:
+	// 0 is the default, an event that is on, starts today or starts within 12 hours.
+	nextWithinOpts  = []string{"Today or 12 hours", "1 hour", "3 hours", "6 hours", "12 hours"}
+	nextWithinHours = []int{0, 1, 3, 6, 12}
+)
+
 // lookFor is the switches as c has them, on a panel wide or not.
 func lookFor(c config.Calendar, wide bool) calLook {
 	return calLook{timeline: !c.DayList, refined: !c.AgendaPlain, monthFull: c.MonthFullOn(wide), icons: !c.NoIcons,
 		countdowns: !c.NoCountdowns, week: c.WeekOn(wide), smallChips: c.SmallChips, nextUp: !c.NoNextUp, weather: !c.NoWeather,
-		monday: c.MondayFirst, opens: max(0, slices.Index(opensVals, c.Opens)), wide: wide}
+		monday: c.MondayFirst, opens: max(0, slices.Index(opensVals, c.Opens)), wide: wide,
+		dashToday: c.DashboardToday, nextWithin: max(0, slices.Index(nextWithinHours, c.NextUpWithin))}
 }
 
 // wideScreen is whether a panel w by h is bigger than the Show 5's 960 by 480: the Show 8, and
@@ -115,8 +127,21 @@ var lookSwitches = []lookSwitch{
 		get:  func(l calLook) bool { return !l.smallChips }, set: func(on bool) error { return config.Set().Calendar().SmallChips(!on) }},
 	{id: "next_up", label: "Next up on the clock", sub: "Today's next event at the foot of the clock", icon: "mdi:calendar-arrow-right",
 		get: func(l calLook) bool { return l.nextUp }, set: func(on bool) error { return config.Set().Calendar().NoNextUp(!on) }},
+	{id: "dashboard_events", label: "Dashboard events", sub: "Which events the Dashboard clock style lists", icon: "mdi:view-dashboard-outline",
+		opts: dashEventsOpts,
+		pick: func(l calLook) int { return b2i(l.dashToday) }, choose: func(i int) error { return config.Set().Calendar().DashboardToday(i == 1) }},
+	{id: "next_up_within", label: "Next up within", sub: "How far ahead the clock's next event looks", icon: "mdi:clock-time-four-outline",
+		opts: nextWithinOpts,
+		pick: func(l calLook) int { return l.nextWithin }, choose: func(i int) error { return config.Set().Calendar().NextUpWithin(nextWithinHours[i]) }},
 	{id: "weather", label: "Weather in the calendar", sub: "The forecast on each day", icon: "mdi:weather-partly-cloudy",
 		get: func(l calLook) bool { return l.weather }, set: func(on bool) error { return config.Set().Calendar().NoWeather(!on) }},
+}
+
+func b2i(b bool) int {
+	if b {
+		return 1
+	}
+	return 0
 }
 
 // lookRowPrefix begins the settings rows' ids.

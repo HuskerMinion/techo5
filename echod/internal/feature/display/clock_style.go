@@ -186,6 +186,11 @@ func styleFactsFor(style string, now time.Time) (f styleFacts) {
 	case styleDashboard:
 		f.days = home.Get().Forecast()
 		f.next = upcomingEvents(now, 8) // the style draws as many as fit above the coming days: 4 on a Show 5, 7 on a Show 8
+		if config.Get().Calendar.DashboardToday {
+			f.next = onlyToday(f.next, now)
+			events, _ := home.Get().EventsOn(now)
+			f.hadToday = slices.ContainsFunc(events, func(e hass.Event) bool { return !e.End.After(now) })
+		}
 	case styleAgenda:
 		f.next = upcomingEvents(now, 8)
 		events, _ := home.Get().EventsOn(now)
@@ -333,6 +338,19 @@ func upcomingEvents(now time.Time, n int) []hass.Event {
 	out = visibleEvents(out, hiddenHere(config.Get().Calendar))
 	slices.SortStableFunc(out, func(a, b hass.Event) int { return a.Start.Compare(b.Start) })
 	return out[:min(len(out), n)]
+}
+
+// onlyToday is the events that start before the next local midnight: the Dashboard's "Today only", where
+// one on since an earlier day still counts.
+func onlyToday(events []hass.Event, now time.Time) []hass.Event {
+	tomorrow := time.Date(now.Year(), now.Month(), now.Day()+1, 0, 0, 0, 0, now.Location())
+	var out []hass.Event
+	for _, e := range events {
+		if e.Start.Before(tomorrow) {
+			out = append(out, e)
+		}
+	}
+	return out
 }
 
 // numberWords are the numbers the words style says.

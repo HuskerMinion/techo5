@@ -393,10 +393,19 @@ const (
 // later comes first; one on since an earlier day (a conference, a night shift) only has the card while
 // nothing else does, so it cannot keep it all day.
 func pickNextUp(events []hass.Event, now time.Time) (nextUpCard, bool) {
+	return pickNextUpWithin(events, now, 0)
+}
+
+// pickNextUpWithin is pickNextUp with the "Next up within" choice: within hours ahead, an event that is
+// on counting, and 0 the default of today or the next nextAhead.
+func pickNextUpWithin(events []hass.Event, now time.Time, within int) (nextUpCard, bool) {
 	today := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, time.Local)
 	limit := today.AddDate(0, 0, 1)
 	if l := now.Add(nextAhead); l.After(limit) {
 		limit = l
+	}
+	if within > 0 {
+		limit = now.Add(time.Duration(within) * time.Hour)
 	}
 	var timed, since []hass.Event // since: on since before today
 	var c nextUpCard

@@ -30,7 +30,7 @@ type nextUpKept struct {
 // card is nextUpFor, worked out again only when its key has changed.
 func (k *nextUpKept) card(style string, now time.Time) *nextUpCard {
 	c := config.Get().Calendar
-	key := fmt.Sprint(style, now.Unix()/60, home.Get().CalendarVersion(), c.NoNextUp, c.NoCountdowns, c.Sources, c.Hidden)
+	key := fmt.Sprint(style, now.Unix()/60, home.Get().CalendarVersion(), c.NoNextUp, c.NextUpWithin, c.NoCountdowns, c.Sources, c.Hidden)
 	if key != k.key {
 		k.key, k.kept = key, nextUpFor(style, now)
 	}
@@ -44,7 +44,7 @@ func nextUpFor(style string, now time.Time) *nextUpCard {
 		return nil
 	}
 	events, _ := agendaEvents(now)
-	card, ok := pickNextUp(visibleEvents(events, hiddenHere(c)), now)
+	card, ok := pickNextUpWithin(visibleEvents(events, hiddenHere(c)), now, c.NextUpWithin)
 	if !ok {
 		return nil
 	}

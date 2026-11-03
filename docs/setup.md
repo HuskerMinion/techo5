@@ -847,6 +847,12 @@ Assistant.
   of the month.
 - **Next up on the clock**: the next event at the foot of the clock, with its countdown, when the
   glance strip has nothing else to show. A tap opens its day.
+- **Next up within**: how far ahead the next event on the clock looks, and the one after it: *Today
+  or 12 hours* (the default: an event that is on, starts any time today or starts within 12 hours),
+  or *1 hour*, *3 hours*, *6 hours* or *12 hours*. An event that is already on always counts.
+- **Dashboard events**: which events the Dashboard clock style lists: *Coming week* (the default) or
+  *Today only*. With nothing left today, the list says "Nothing else today" (or "Nothing today" on a
+  day that had no events at all).
 - **Weather in the calendar**: the forecast on the days.
 
 **Calendars from Home Assistant.** Every calendar Home Assistant already has is offered here, with
