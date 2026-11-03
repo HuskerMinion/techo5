@@ -52,7 +52,7 @@ func runningProcess(pid int) bool {
 func TestHelperDiesWhenDaemonIsSIGKILLed(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
-	parent := exec.CommandContext(ctx, selfExecutable(t), "-test.run=^TestIsolatedHelperParent$")
+	parent := exec.CommandContext(ctx, selfExecutable(t), "-test.run=^TestIsolatedHelperParent$", "-test.timeout=15s")
 	parent.Env = append(os.Environ(), "ASP_ISOLATED_PARENT=1", "TMPDIR="+t.TempDir())
 	stdout, err := parent.StdoutPipe()
 	if err != nil {

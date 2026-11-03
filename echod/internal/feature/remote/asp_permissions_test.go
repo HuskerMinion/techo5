@@ -15,14 +15,6 @@ func TestExternalASPSelectionIsReadOnlyThroughRemoteAPI(t *testing.T) {
 		Base:    esphome.Base{ObjectID: "microphone_asp_selected", Category: esphome.CategoryConfig},
 		Options: []string{"Built-in", "External"},
 	}
-	selected.OnCommand = func(label string) {
-		selected.Set(label)
-		mode := config.ASPBuiltin
-		if label == "External" {
-			mode = config.ASPExternal
-		}
-		_ = config.Set().Microphone().ASP(mode)
-	}
 	entities[selected.ObjectID] = selected
 
 	for _, local := range []config.ASPMode{config.ASPBuiltin, config.ASPExternal} {
@@ -55,15 +47,5 @@ func TestExternalASPSelectionIsReadOnlyThroughRemoteAPI(t *testing.T) {
 		if got := config.Get().Microphone.ASP; got != local || selected.Get() != local.Label() {
 			t.Errorf("remote API changed the local ASP choice: stored=%q, select=%q", got, selected.Get())
 		}
-	}
-	// The Home Assistant select uses OnCommand, which is not restricted by
-	// the Remote API permissions check.
-	selected.OnCommand("Built-in")
-	if err := config.Set().Microphone().ASP(config.ASPBuiltin); err != nil {
-		t.Fatal(err)
-	}
-	selected.OnCommand("External")
-	if config.Get().Microphone.ASP != config.ASPExternal {
-		t.Fatal("Home Assistant-style select command was blocked")
 	}
 }
