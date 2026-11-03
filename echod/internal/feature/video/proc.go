@@ -46,7 +46,14 @@ var imageDecoder = sync.OnceValue(func() string {
 	return pickDecoder(kernelMachine(), fileExists(decoder64))
 })
 
+// systemDecoder is the distribution's own ffmpeg, which an image that carries neither of TECHO5's
+// builds has in their place (a board on a mainline kernel that takes Alpine's package).
+const systemDecoder = "/usr/bin/ffmpeg"
+
 func pickDecoder(machine string, have64 bool) string {
+	if !have64 && !fileExists(decoder32) && fileExists(systemDecoder) {
+		return systemDecoder
+	}
 	// A 64-bit ARM kernel says aarch64 to the 32-bit processes on it too; a 32-bit one never does
 	// (armv7l, or armv8l on ARMv8 cores).
 	if have64 && machine == "aarch64" {
