@@ -82,3 +82,29 @@ func TestSkylightTakesOnlyItsOwnRootfs(t *testing.T) {
 		t.Error("a release with only the Skylight's rootfs was offered to a Show on slots")
 	}
 }
+
+// A board that names its own rootfs is keyed by it, and none of the Shows' rootfs is offered to it.
+func TestABoardRootfsIsItsOwn(t *testing.T) {
+	restoreArch, restoreBoard := arch, boardRootfs
+	t.Cleanup(func() { arch, boardRootfs = restoreArch, restoreBoard })
+	arch = "arm"
+	boardRootfs = "tablet"
+
+	rootfs := func(key string) Binary {
+		return Binary{URL: "https://example/techo5-rootfs-" + key + ".tar.gz", SHA256: strings.Repeat("d", 64), Size: 60 << 20}
+	}
+	bin := map[string]Binary{"arm": {URL: "https://example/echod-arm", SHA256: strings.Repeat("b", 64), Size: 22 << 20}}
+	shows := Manifest{Version: "1.3.0", Binaries: bin, Rootfs: map[string]Binary{"arm": rootfs("arm"),
+		"arm-athena": rootfs("athena"), "arm-skylight": rootfs("skylight")}}
+	own := Manifest{Version: "1.3.0", Binaries: bin, Rootfs: map[string]Binary{"arm": rootfs("arm"), "arm-tablet": rootfs("tablet")}}
+
+	if got := rootfsArch(); got != "arm-tablet" {
+		t.Fatalf("the board's rootfs key is %q, want arm-tablet", got)
+	}
+	if shows.serves(true) {
+		t.Error("the Shows' rootfs was offered to a board with its own")
+	}
+	if !own.serves(true) {
+		t.Error("a release carrying the board's rootfs was not offered to it")
+	}
+}
