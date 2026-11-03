@@ -368,3 +368,22 @@ func (m *athenaGainWrites) SetInt(name string, v uint32) error {
 	m.levels = append(m.levels, v)
 	return nil
 }
+
+// A board's own jack sense decides the output where it is set, and the speaker stays where there is
+// no jack at all.
+func TestABoardJackSenseDecidesTheOutput(t *testing.T) {
+	defer func(j bool, s func() bool) { HasJack, jackSense = j, s }(HasJack, jackSense)
+	in := false
+	HasJack, jackSense = true, func() bool { return in }
+	if got := DetectOutput(); got != OutputSpeaker {
+		t.Errorf("nothing plugged in: %q, want the speaker", got)
+	}
+	in = true
+	if got := DetectOutput(); got != OutputHeadphone {
+		t.Errorf("headphones in: %q, want the headphones", got)
+	}
+	HasJack = false
+	if got := DetectOutput(); got != OutputSpeaker {
+		t.Errorf("no jack: %q, want the speaker", got)
+	}
+}
