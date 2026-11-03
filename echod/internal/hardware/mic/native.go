@@ -133,6 +133,29 @@ func readCaptured(pcm capture, raw []byte, policy func() bool, visit func(Native
 	if err != nil {
 		return n, false, err
 	}
+	// Only ordinary ALSA native capture requires a full block. Stock and
+	// non-ALSA backends retain their single-Read contract; paired capture
+	// already assembles its own native buffers above.
+	if visit != nil {
+		if _, ok := pcm.(interface{ Config() alsa.Config }); ok {
+			if n < 0 || n > len(raw) {
+				return n, false, fmt.Errorf("mic: invalid native capture read length %d", n)
+			}
+			for n < len(raw) {
+				if n <= 0 {
+					return n, false, errors.New("mic: native capture returned no frames")
+				}
+				more, readErr := pcm.Read(raw[n:])
+				if readErr != nil {
+					return n, false, readErr
+				}
+				if more <= 0 || more > len(raw)-n {
+					return n, false, fmt.Errorf("mic: invalid native capture read length %d", more)
+				}
+				n += more
+			}
+		}
+	}
 	cut := policy()
 	if visit == nil {
 		if cut {
