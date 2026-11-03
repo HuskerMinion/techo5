@@ -67,8 +67,9 @@ const (
 	VoiceUpsample = Rate / VoiceRate
 )
 
-// Card is the sound card; PlaybackDevice, the PCM on it, is the board's own (paths_*.go).
-const Card = 0
+// Card is the sound card, found by its id on a board that names one (layout.SoundCard), card 0
+// otherwise; PlaybackDevice, the PCM on it, is the board's own (paths_*.go).
+var Card = alsa.CardByID(layout.SoundCard())
 
 // OutputMode selects automatic routing, the speaker, headphones when plugged in, or both at once.
 type OutputMode int32

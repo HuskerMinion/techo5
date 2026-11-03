@@ -29,11 +29,12 @@ const (
 	Rate = 16000
 	Bits = 24
 
-	Card = 0
-
 	period  = FrameSamples
 	periods = 8
 )
+
+// Card is the sound card, the speaker's (speaker.Card): found by its id on a board that names one.
+var Card = alsa.CardByID(layout.SoundCard())
 
 // FrameSamples is the frame size handed to listeners, 20 ms at 16 kHz.
 const FrameSamples = Rate / 50

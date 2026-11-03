@@ -14,6 +14,29 @@ func FindPCM(cardID, stream string, capture bool) (card, device int, found bool,
 	return findPCM("/sys/class/sound", "/proc/asound/pcm", cardID, stream, capture)
 }
 
+// CardByID is the number of the card whose id is id (as /proc/asound/cards lists it), independently of
+// enumeration order. An empty id, or one no card has, is card 0: the one card every Echo has.
+func CardByID(id string) int {
+	return cardByID("/sys/class/sound", id)
+}
+
+func cardByID(soundDir, id string) int {
+	if id == "" {
+		return 0
+	}
+	paths, _ := filepath.Glob(filepath.Join(soundDir, "card*", "id"))
+	for _, path := range paths {
+		raw, err := os.ReadFile(path)
+		if err != nil || strings.TrimSpace(string(raw)) != id {
+			continue
+		}
+		if card, err := strconv.Atoi(strings.TrimPrefix(filepath.Base(filepath.Dir(path)), "card")); err == nil {
+			return card
+		}
+	}
+	return 0
+}
+
 func findPCM(soundDir, pcmPath, cardID, stream string, capture bool) (card, device int, found bool, err error) {
 	paths, err := filepath.Glob(filepath.Join(soundDir, "card*", "id"))
 	if err != nil {
