@@ -3,7 +3,7 @@
 # Busybox sh. The caller may define log() before sourcing; the default goes to
 # the kernel log.
 
-type log >/dev/null 2>&1 || log() { echo "techo5: $*" > /dev/kmsg; }
+type log >/dev/null 2>&1 || log() { echo "<14>techo5: $*" > /dev/kmsg; }
 
 # t5_board: which Echo this is, from the panel the bootloader names in the kernel command
 # line. The daemon reads the same thing (internal/layout); this side needs it because one

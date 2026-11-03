@@ -10,7 +10,7 @@
 PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 export PATH
 LOGDIR=/data/techo5-linux
-log() { echo "techo5-boot: $*" > /dev/kmsg; echo "$(cut -d' ' -f1 /proc/uptime) $*" >> /run/boot.log; }
+log() { echo "<14>techo5-boot: $*" > /dev/kmsg; echo "$(cut -d' ' -f1 /proc/uptime) $*" >> /run/boot.log; }
 
 # What differs between devices; the Echo Show 5's values unless the image carries its own.
 DATA_DEV=/dev/mmcblk0p16
@@ -57,7 +57,9 @@ mountpoint -q /tmp || mount -t tmpfs tmpfs /tmp
 mkdir -p /dev/shm
 mountpoint -q /dev/shm || mount -t tmpfs -o mode=1777,size=1m tmpfs /dev/shm
 mountpoint -q /data || mount -t ext4 -o noatime $DATA_DEV /data
-mountpoint -q /store || mount -t ext4 -o ro,noatime $STORE_DEV /store
+# A board with no store (STORE_DEV=none: the Surface RT) skips it: mounting a name that is no block
+# device leaves "Can't lookup blockdev" in the kernel log.
+mountpoint -q /store || { [ -b "$STORE_DEV" ] && mount -t ext4 -o ro,noatime $STORE_DEV /store; }
 # The root is read-only; what needs writing lives on tmpfs or userdata.
 mount -t tmpfs tmpfs /var/log
 mount -t tmpfs tmpfs /var/tmp

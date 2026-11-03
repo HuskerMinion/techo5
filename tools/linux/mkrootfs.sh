@@ -9,7 +9,11 @@
 # what makes `apk add bluez` possible later.
 #
 #   mkrootfs.sh -i <indir> -o <out.tar.gz> [-w <workdir>] [-V <version>] [-z <timezone>]
-#               [-a <arch>] [-A <apk binary>]
+#               [-a <arch>] [-A <apk binary>] [-W alpine]
+#
+# -W alpine: wpa_supplicant from the board's package list, not the pinned 2.9 set (a board on a
+# mainline kernel whose Wi-Fi works with Alpine's own; the Echos' needs 2.9). Without it the build
+# fails when inputs/apks312 is missing, as it always has.
 #
 # <indir> layout (what deploy-rootfs.sh stages):
 #   bin/techo5 bin/fbprobe bin/audioprobe bin/rebootto bin/btbridge  Go binaries, armv7
@@ -33,10 +37,11 @@
 #   inputs/kernel.tar.gz                                   optional, development only: a mainline kernel's
 #                                                          modules and firmware. Published images never
 #                                                          carry it
-#   inputs/apks312/*.apk                                   wpa_supplicant 2.9 + libssl1.1 + libcrypto1.1
+#   inputs/apks312/*.apk                                   wpa_supplicant 2.9 + libssl1.1 + libcrypto1.1,
+#                                                          unless -W alpine
 set -e
 
-IN=; OUT=; WORK=/data/techo5-linux/build; VERSION=dev; TZNAME=UTC; ARCH=; APK=apk
+IN=; OUT=; WORK=/data/techo5-linux/build; VERSION=dev; TZNAME=UTC; ARCH=; APK=apk; WPA=
 while [ $# -gt 0 ]; do
 	case "$1" in
 	-i) IN=$2; shift 2;;
@@ -46,10 +51,16 @@ while [ $# -gt 0 ]; do
 	-z) TZNAME=$2; shift 2;;
 	-a) ARCH=$2; shift 2;;
 	-A) APK=$2; shift 2;;
+	-W) WPA=$2; shift 2;;
 	*) echo "mkrootfs: unknown argument $1" >&2; exit 1;;
 	esac
 done
-[ -n "$IN" ] && [ -n "$OUT" ] || { echo "usage: mkrootfs.sh -i indir -o out.tar.gz [-w workdir] [-V version] [-z timezone]" >&2; exit 1; }
+[ -n "$IN" ] && [ -n "$OUT" ] || { echo "usage: mkrootfs.sh -i indir -o out.tar.gz [-w workdir] [-V version] [-z timezone] [-a arch] [-A apk] [-W alpine]" >&2; exit 1; }
+case "$WPA" in '' | alpine) ;; *) echo "mkrootfs: -W takes alpine, not $WPA" >&2; exit 1;; esac
+# Every Echo image needs the pinned wpa_supplicant 2.9: without -W alpine a build that did not stage
+# it stops before it starts.
+[ "$WPA" = alpine ] || ls "$IN"/inputs/apks312/*.apk >/dev/null 2>&1 ||
+	{ echo "mkrootfs: no $IN/inputs/apks312/*.apk (wpa_supplicant 2.9); -W alpine takes Alpine's own instead" >&2; exit 1; }
 
 say() { echo "mkrootfs: $*"; }
 R=$WORK/root
@@ -78,17 +89,23 @@ arch=
 pkgs=$(sed 's/#.*//' "$IN/tools/packages-rootfs.txt" | tr '\n' ' ')
 say "apk add: $pkgs"
 $APK --root "$R" $arch --no-cache add $pkgs
-say "apk add (local): $(ls "$IN"/inputs/apks312/*.apk | xargs -n1 basename | tr '\n' ' ')"
-# Alpine 3.12's packages are signed by the -524d27bb key, which Alpine still ships for armv7 and which
-# the minirootfs puts in /etc/apk/keys, so apk verifies these like any other package and no
-# --allow-untrusted is needed. It stays as a fallback for a root whose keyring does not have that key
-# (a different base image, or a host apk pointed at its own keys) rather than as the normal path: an
-# unsigned install of four packages that go into every image is not something to do without noticing.
-# What they are is checked before they get here — fetch-inputs.py matches each one against Alpine's
-# package index and against the package's own datahash.
-if ! $APK --root "$R" $arch --no-cache add "$IN"/inputs/apks312/*.apk; then
-	say "warning: the v3.12 packages did not verify against $R/etc/apk/keys; installing them untrusted"
-	$APK --root "$R" $arch --no-cache add --allow-untrusted "$IN"/inputs/apks312/*.apk
+# A board whose Wi-Fi works with Alpine's own wpa_supplicant (the Surface RT, a mainline kernel) asks
+# for it with -W alpine, stages no apks312 and has wpa_supplicant in its package list instead.
+if [ "$WPA" != alpine ]; then
+	say "apk add (local): $(ls "$IN"/inputs/apks312/*.apk | xargs -n1 basename | tr '\n' ' ')"
+	# Alpine 3.12's packages are signed by the -524d27bb key, which Alpine still ships for armv7 and which
+	# the minirootfs puts in /etc/apk/keys, so apk verifies these like any other package and no
+	# --allow-untrusted is needed. It stays as a fallback for a root whose keyring does not have that key
+	# (a different base image, or a host apk pointed at its own keys) rather than as the normal path: an
+	# unsigned install of four packages that go into every image is not something to do without noticing.
+	# What they are is checked before they get here — fetch-inputs.py matches each one against Alpine's
+	# package index and against the package's own datahash.
+	if ! $APK --root "$R" $arch --no-cache add "$IN"/inputs/apks312/*.apk; then
+		say "warning: the v3.12 packages did not verify against $R/etc/apk/keys; installing them untrusted"
+		$APK --root "$R" $arch --no-cache add --allow-untrusted "$IN"/inputs/apks312/*.apk
+	fi
+else
+	say "-W alpine: wpa_supplicant comes from the package list"
 fi
 $APK --root "$R" $arch info -v | sort > "$R/etc/techo5-packages"
 
@@ -207,6 +224,13 @@ mkdir -p "$R/store" "$R/data" "$R/run" "$R/proc" "$R/sys" "$R/dev" "$R/tmp" "$R/
 chmod 1777 "$R/tmp"
 # The daemon's own version line comes from running it, which on a host goes through QEMU.
 echo "techo5 rootfs $VERSION built $(date -u '+%Y-%m-%dT%H:%MZ'), daemon $("$R/usr/local/bin/techo5" --version 2>/dev/null | head -1)" > "$R/etc/techo5-release"
+
+# A board's own last changes to the root (users, permissions: the Surface RT's image makes one),
+# staged as tools/rootfs-post.sh. Run here, by sh, with the root as its argument.
+if [ -f "$IN/tools/rootfs-post.sh" ]; then
+	say "rootfs-post.sh"
+	sh "$IN/tools/rootfs-post.sh" "$R"
+fi
 
 say "packing"
 rm -f "$OUT"
