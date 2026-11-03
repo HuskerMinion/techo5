@@ -647,7 +647,7 @@ t5_bt_native() {
 	# good (unit 1, 2026-10-15). So nothing talks mgmt for 3 s after hci0 appears; if mgmt still does
 	# not list it, the driver is bound again once, which lists it (seen on the unit).
 	sleep 3
-	t5_bt_listed() { n=0; while [ $n -lt 10 ]; do timeout 3 btmgmt info 2>/dev/null | grep -q '^hci0:' && return 0; sleep 1; n=$((n+1)); done; return 1; }
+	t5_bt_listed() { n=0; while [ $n -lt 10 ]; do t5_btmgmt 3 info 2>/dev/null | grep -q '^hci0:' && return 0; sleep 1; n=$((n+1)); done; return 1; }
 	if ! t5_bt_listed; then
 		f=$(basename "$(readlink -f /sys/class/bluetooth/hci0/device 2>/dev/null)")
 		d=$(readlink -f "/sys/bus/sdio/devices/$f/driver" 2>/dev/null)
@@ -663,13 +663,13 @@ t5_bt_native() {
 	# the index is busy or powered, and the address is refused. Tried for up to 15 seconds.
 	n=0
 	while [ $n -lt 15 ]; do
-		cur=$(timeout 3 btmgmt -i hci0 info 2>/dev/null | awk '$1 == "addr" { print $2; exit }')
+		cur=$(t5_btmgmt 3 -i hci0 info 2>/dev/null | awk '$1 == "addr" { print $2; exit }')
 		[ "$cur" = "$a" ] && { log "bt: factory address in place"; return 0; }
-		timeout 3 btmgmt -i hci0 power off >/dev/null 2>&1
-		timeout 5 btmgmt -i hci0 public-addr "$a" >/dev/null 2>&1
+		t5_btmgmt 3 -i hci0 power off >/dev/null 2>&1
+		t5_btmgmt 5 -i hci0 public-addr "$a" >/dev/null 2>&1
 		# The kernel programs a new address on the next power-on; without one the check above
 		# only passed when something else happened to power hci0 up in time.
-		timeout 5 btmgmt -i hci0 power on >/dev/null 2>&1
+		t5_btmgmt 5 -i hci0 power on >/dev/null 2>&1
 		sleep 1; n=$((n+1))
 	done
 	log "bt: the factory address was not taken; keeping the controller's own"
@@ -764,14 +764,14 @@ t5_bt_stack() {
 	[ -x "$bd" ] && "$bd" -n --noplugin=input,hog,network,sap >> "$logdir/bluetoothd.log" 2>&1 &
 	# Seen on the bench: after the first power-on the controller answers commands but never
 	# reports an inquiry result or an advertisement until it has been powered off and on once.
-	n=0; while [ $n -lt 10 ] && ! timeout 3 btmgmt info 2>/dev/null | grep -q "current settings: powered"; do sleep 1; n=$((n+1)); done
-	timeout 5 btmgmt power off >/dev/null 2>&1; sleep 1; timeout 5 btmgmt power on >/dev/null 2>&1
+	n=0; while [ $n -lt 10 ] && ! t5_btmgmt 3 info 2>/dev/null | grep -q "current settings: powered"; do sleep 1; n=$((n+1)); done
+	t5_btmgmt 5 power off >/dev/null 2>&1; sleep 1; t5_btmgmt 5 power on >/dev/null 2>&1
 	# BT_SC=off (device.conf: athena on mainline): no Secure Connections on BR/EDR, so a phone pairs
 	# with a P-192 key. It does what btbridge's -p192-keys does on the other Shows (#105), without a
 	# bridge to rewrite the key on its way: a MediaTek controller that makes a P-256 key but encrypts
 	# with E0 has the kernel drop the phone ("Missing AES-CCM usage"). After bluetoothd has set the
 	# controller up, which turns it on; the kernel keeps it across power cycles.
-	[ "${BT_SC:-}" = off ] && timeout 5 btmgmt sc off >/dev/null 2>&1
+	[ "${BT_SC:-}" = off ] && t5_btmgmt 5 sc off >/dev/null 2>&1
 	# bluez-alsa registers its A2DP endpoints with bluetoothd, so it must come after it. A source, to
 	# play to earbuds and speakers, and a sink, so a phone can play to the device, which then says it
 	# is a loudspeaker (major 4, audio/video; minor 5, loudspeaker). btmgmt takes the minor as the
@@ -788,7 +788,7 @@ t5_bt_stack() {
 		[ $n -lt 5 ] || { log "bt: the loudspeaker class did not take"; break; }
 		sleep 1; n=$((n+1))
 	done
-	log "bt: hci0 up; bluetoothd and bluealsa started; class $(timeout 3 btmgmt info 2>/dev/null | sed -n 's/.*class \(0x[0-9a-f]*\).*/\1/p' | head -1)") &
+	log "bt: hci0 up; bluetoothd and bluealsa started; class $(t5_btmgmt 3 info 2>/dev/null | sed -n 's/.*class \(0x[0-9a-f]*\).*/\1/p' | head -1)") &
 	return 0
 }
 
@@ -825,16 +825,22 @@ t5_bt_again_pass() {
 		sleep 5
 		n=$((n+1))
 	done
-	timeout 5 btmgmt discov off >/dev/null 2>&1
+	t5_btmgmt 5 discov off >/dev/null 2>&1
 	sleep 5
 	[ "$(cat /run/techo5-bt-again 2>/dev/null)" = "$g" ] || return 0
 	t5_bt_class
-	timeout 5 btmgmt discov off >/dev/null 2>&1
+	t5_btmgmt 5 discov off >/dev/null 2>&1
 }
+
+# t5_btmgmt <seconds> <command...>: btmgmt under a timeout, with a stdin that stays open while it
+# runs. btmgmt (bluez 5.86, the Surface RT's Alpine) quits as soon as its stdin ends, before the
+# controller has answered: in a background job (stdin /dev/null) "class" and "info" did nothing and
+# printed nothing, so the class never took. The sleep holds the pipe open and is left to run out.
+t5_btmgmt() { _t5_bt_t=$1; shift; { sleep "$_t5_bt_t" & } | timeout "$_t5_bt_t" btmgmt "$@"; }
 
 # t5_bt_class: say the device is a loudspeaker (major 4, audio/video; minor 5, given to btmgmt as the
 # class byte: 20), and report whether the controller took it.
-t5_bt_class() { timeout 5 btmgmt class 4 20 2>/dev/null | grep -q succeeded; }
+t5_bt_class() { t5_btmgmt 5 class 4 20 2>/dev/null | grep -q succeeded; }
 
 # --- The boot layer (U-Boot with abboot, github.com/nuno407/u-boot-amazon-echo; opt-in). Where it
 # is installed it picks the slot, counts its tries in an A/B record in misc and starts the slot's own
