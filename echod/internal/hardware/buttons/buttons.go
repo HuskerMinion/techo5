@@ -1,4 +1,4 @@
-// Package buttons owns the four buttons on top of the device.
+// Package buttons owns the four buttons on top of the device, and the power key of one that has one.
 //
 // It reads the input nodes and says what happened. It does not know what any of it means: that a long
 // press of the action button reaches the second assistant belongs to whatever is listening, and
@@ -33,6 +33,10 @@ const (
 	VolumeDown Name = "volume_down"
 	VolumeUp   Name = "volume_up"
 	Action     Name = "action"
+
+	// Power is a power key that is not the mute. None of the Echos has one (the Show 5's KEY_POWER is
+	// its mute button), so only a device whose codes name it reports it.
+	Power Name = "power"
 )
 
 // LongPress is how long a button must be held to count as held rather than pressed, and
@@ -77,6 +81,16 @@ const doubleTap = 400 * time.Millisecond
 
 // LongHolds reports whether this device reports LongHold at all.
 func LongHolds() bool { return longHoldAfter > 0 }
+
+// Has reports whether this device has the button at all, for listing only the buttons it has.
+func Has(n Name) bool {
+	for _, c := range codes {
+		if c == n {
+			return true
+		}
+	}
+	return false
+}
 
 // Event is one thing a button did.
 type Event struct {

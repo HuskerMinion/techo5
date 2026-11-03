@@ -539,6 +539,7 @@ func build() *Display {
 	media.Get().OnVolume.Listen(d.volumeMoved)
 	ambient.Get().Lux.Listen(d.lux)
 	touch.Get().Gestures.Listen(d.gesture)
+	d.listenPowerKey()
 	// A device with no address a while after boot gets the Wi-Fi page without being asked: a
 	// fresh unit, or one carried to another house. The page ends the splash (frame), which would
 	// otherwise wait for Home Assistant forever on a device that cannot reach it.
