@@ -39,7 +39,7 @@ type group struct {
 // screen showing one person's). Which outside service is told where the house is or what is playing (the
 // weather, the rain map, lyrics). The test in component/all keeps them off (neverShared).
 var groups = []group{
-	{"Speaker", []string{"bass", "treble", "speaker_eq", "night_volume", "home_assistant_sounds", "louder_speech",
+	{"Speaker", []string{"bass", "treble", "speaker_eq", "night_volume", "home_assistant_sounds", "louder_speech", "clearer_speech",
 		"media_duck_level", "duck_on_near_miss", "bluetooth_sets_volume", "airplay_sets_volume"}},
 	{"Voice: first wake word", []string{"thinking_effect_1", "replying_effect_1", "reply_delivery_1",
 		"reply_buffer_1", "max_think_1"}},

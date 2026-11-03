@@ -553,6 +553,10 @@ captured login to the same page for a few minutes, and could see the pictures an
 - **Sleep timer** (Settings > Sound, or the **Sleep timer** select in Home Assistant): whatever is
   playing stops after 15 minutes to 2 hours. Nothing rings when it does. It isn't kept over a
   restart, so a device that restarts in the night comes back quiet.
+- **Clearer speech** (a switch in Home Assistant, off by default): while a reply or an announcement
+  plays, the speaker's tuning takes its bass lift down, so words come through with less boom. Music
+  keeps the full tuning. It needs **Speaker EQ** on. On a Dot 2nd generation it can also let you use
+  **Speaker gain** for louder replies without the bass distorting.
 - **Bass and treble** (Settings > Sound, or **Bass** and **Treble** in Home Assistant): -6 to +6 dB
   each. They change the speaker's own tuning, so they need **Speaker EQ** on, a switch in Home
   Assistant that is on unless you turn it off.

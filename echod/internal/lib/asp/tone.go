@@ -25,13 +25,24 @@ const (
 	// ToneRange bounds either shelf in dB. Wide enough to be worth having, narrow enough that nobody
 	// can put the driver somewhere the tuning was not designed for.
 	ToneRange = 6.0
+
+	// speechHinge is where Clearer speech's shelf turns: above the tuning's 125-400 Hz lift, so the
+	// whole of it comes down and the voice above it does not.
+	speechHinge = 400.0
+
+	// SpeechCut is that shelf's gain in dB while words play with Clearer speech on. The Dot's tuning
+	// lifts the low band so far that its compressor holds that band near its ceiling on speech
+	// (techo5-dot#25): music wants the lift, a voice gets boom and buzz from it, and the band's
+	// headroom goes to the boom rather than the words.
+	SpeechCut = -9.0
 )
 
-// Tone is a pair of shelf gains in dB, zero for the tuning as the vendor left it.
-type Tone struct{ Bass, Treble float64 }
+// Tone is a pair of shelf gains in dB, zero for the tuning as the vendor left it, and Speech, the
+// Clearer speech shelf's gain (SpeechCut while words play, otherwise zero).
+type Tone struct{ Bass, Treble, Speech float64 }
 
 // Flat is a tone control that does nothing, which is what a device nobody has touched has.
-func (t Tone) Flat() bool { return t.Bass == 0 && t.Treble == 0 }
+func (t Tone) Flat() bool { return t.Bass == 0 && t.Treble == 0 && t.Speech == 0 }
 
 // clamped keeps a stored value inside what the control offers, so a configuration written by hand
 // cannot ask for something the driver was never meant to do.
@@ -39,13 +50,15 @@ func (t Tone) clamped() Tone {
 	return Tone{
 		Bass:   math.Max(-ToneRange, math.Min(ToneRange, t.Bass)),
 		Treble: math.Max(-ToneRange, math.Min(ToneRange, t.Treble)),
+		Speech: math.Max(SpeechCut, math.Min(0, t.Speech)),
 	}
 }
 
-// tone is the running state: one shelf each, or nothing at all while both are zero.
+// tone is the running state: one shelf each, or nothing at all while they are zero.
 type tone struct {
-	low  *biquad
-	high *biquad
+	low   *biquad
+	high  *biquad
+	words *biquad
 }
 
 func newTone(t Tone, rate int) *tone {
@@ -56,6 +69,9 @@ func newTone(t Tone, rate int) *tone {
 	}
 	if t.Treble != 0 {
 		s.high = newShelf(trebleHinge, t.Treble, rate, true)
+	}
+	if t.Speech != 0 {
+		s.words = newShelf(speechHinge, t.Speech, rate, false)
 	}
 	return s
 }
@@ -71,10 +87,15 @@ func (s *tone) process(x []float32) {
 			x[i] = s.high.step(v)
 		}
 	}
+	if s.words != nil {
+		for i, v := range x {
+			x[i] = s.words.step(v)
+		}
+	}
 }
 
 func (s *tone) reset() {
-	for _, f := range []*biquad{s.low, s.high} {
+	for _, f := range []*biquad{s.low, s.high, s.words} {
 		if f != nil {
 			f.z1, f.z2 = 0, 0
 		}

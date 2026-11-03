@@ -82,7 +82,7 @@ func (d *Driver) Claim(name string, play func(ctx context.Context, p *Player) er
 // for a turn, the background keeps playing under it, at whatever level it has been ducked to, rather
 // than standing aside until the words are done.
 func (d *Driver) ClaimSpeech(name string, play func(ctx context.Context, p *Player) error) *Claim {
-	return d.claim(name, claimSpec{over: config.Get().Media.OnTurn != config.OnTurnPause}, play)
+	return d.claim(name, claimSpec{over: config.Get().Media.OnTurn != config.OnTurnPause, words: true}, play)
 }
 
 // ClaimOver takes the speaker for something that is not words but still belongs over the music rather
@@ -145,6 +145,7 @@ type claimSpec struct {
 
 	overlay bool // a sound over the music that is not words (ClaimOver), which a claim that waits plays beside
 	beside  bool // waits for words, and plays beside an overlay without taking the speaker (ClaimTurn)
+	words   bool // words (ClaimSpeech), which Clearer speech tunes for while they play
 
 	within time.Duration // how long a claim that waits waits for its turn before giving up; 0 is for ever
 }
@@ -220,6 +221,10 @@ func (d *Driver) claim(name string, spec claimSpec, play func(ctx context.Contex
 		}
 		if bg != nil {
 			c.startDuck()
+		}
+		if spec.words && d.p != nil {
+			d.p.speaking.Add(1)
+			defer d.p.speaking.Add(-1)
 		}
 		if err := play(ctx, d.p); err != nil {
 			c.fail(err)
