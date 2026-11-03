@@ -10,6 +10,10 @@ import (
 // turn up across units: a tsl2584tsv on an IIO driver, or a tsl2540 on a vendor one with no IIO device
 // at all. Looked for once, at start-up.
 //
+// On mainline kernels: the Echo Show 5's JSA1214, and the Surface RT's ambient light sensor behind its
+// HID sensor hub, which hid-sensor-als names "als" (lux in in_illuminance_raw, scale 1, offset 0 on the
+// unit, 2026-10-30).
+//
 // Reading the calibrated value either driver offers beside these crashes the device.
 func (r Reader) LuxPath() string {
 	for i := range 8 {
@@ -22,7 +26,7 @@ func (r Reader) LuxPath() string {
 	iio, _ := filepath.Glob(r.path("sys/bus/iio/devices/iio:device*"))
 	for _, dir := range iio {
 		name, _ := text(filepath.Join(dir, "name"))
-		if name != "jsa1214" {
+		if name != "jsa1214" && name != "als" {
 			continue
 		}
 		at := filepath.Join(dir, "in_illuminance_raw")
@@ -59,7 +63,11 @@ func (r Reader) Lux(path string) Reading {
 		if err != nil || scale <= 0 {
 			return Reading{}
 		}
-		lux *= scale
+		offset, err := number(filepath.Join(filepath.Dir(path), "in_illuminance_offset"))
+		if err != nil {
+			offset = 0
+		}
+		lux = (lux + offset) * scale
 	}
 	if lux < 0 || math.IsNaN(lux) || math.IsInf(lux, 0) {
 		return Reading{}
