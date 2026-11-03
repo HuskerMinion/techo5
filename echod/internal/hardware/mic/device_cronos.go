@@ -69,7 +69,8 @@ const (
 )
 
 // boardKernel is nil: on this build athena's capture is chosen by the kernel it runs on
-// (athenaRunning). The Echo Dot 3 build sets its own (device_donut.go).
+// (athenaRunning). The Echo Dot 3 build sets its own (device_donut.go), and so may a board of this
+// build, whose capture then goes the same way as athena's (openDevice).
 var boardKernel *athenaKernel
 
 // onShow8 picks the Show 8's value over the Show 5's, which covers both Show 5 generations and both
@@ -100,17 +101,22 @@ var adcs = func() []string {
 // the microphone.
 var ErrNoMicrophone = errors.New("mic: this device has no microphone")
 
-// openDevice is the capture as the reader sees it: on athena the two devices made into one frame,
-// anywhere else the one device.
+// openDevice is the capture as the reader sees it: on athena, or on a board of this build that sets
+// its own boardKernel, the microphones and the reference made into one frame (athena.go); anywhere
+// else the one device.
 func openDevice() (capture, error) {
 	if layout.Skylight() {
 		return nil, ErrNoMicrophone
 	}
-	if layout.Athena() {
+	if paired() {
 		return openAthena()
 	}
 	return openPlain()
 }
+
+// paired is whether the capture is athena's kind (openAthena): athena itself, or a board whose
+// boardKernel says how its microphones and reference are read.
+func paired() bool { return layout.Athena() || boardKernel != nil }
 
 // setBoardGain sets athena's analog gain (athenaGain), and is false anywhere else, where the
 // converters' PGA controls carry it.

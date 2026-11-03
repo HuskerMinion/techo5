@@ -2,7 +2,11 @@
 
 package mic
 
-import "testing"
+import (
+	"testing"
+
+	"github.com/HuskerMinion/techo5/echod/internal/layout"
+)
 
 // A workstation build reads as a Show 5, so onShow8 hands back the Show 5's value here and the
 // shared frame test only ever checks that branch. These check the other one, against what a Show 8
@@ -45,5 +49,22 @@ func TestAWorkstationReadsAsAShow5(t *testing.T) {
 	if Mics != show5Mics || Channels != show5Channels || RefFirst != show5RefFirst {
 		t.Errorf("frame reads Mics=%d Channels=%d RefFirst=%d, want %d/%d/%d",
 			Mics, Channels, RefFirst, show5Mics, show5Channels, show5RefFirst)
+	}
+}
+
+// A board's own kernel takes the capture athena's way, with the kernel it names.
+func TestABoardKernelIsPaired(t *testing.T) {
+	defer func(k *athenaKernel) { boardKernel = k }(boardKernel)
+	boardKernel = nil
+	if paired() && !layout.Athena() {
+		t.Error("a Show 5 is read athena's way with no board kernel")
+	}
+	fake := &athenaKernel{micDevice: 3, micChannels: 2, micBits: 16, refDevice: -1, softRef: true}
+	boardKernel = fake
+	if !paired() {
+		t.Error("a board kernel is not read athena's way")
+	}
+	if athenaRunning() != fake {
+		t.Error("athena's capture does not run the board's kernel")
 	}
 }
