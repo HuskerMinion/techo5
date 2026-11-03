@@ -45,3 +45,23 @@ func TestFindPCMEnumeration(t *testing.T) {
 		t.Fatalf("missing stream: %v %v", found, err)
 	}
 }
+
+// A board whose codec is its second card, after an HDMI output (the Surface RT's WM8962): found by its
+// id, whatever its number. No id, or an id no card has, is card 0.
+func TestCardByID(t *testing.T) {
+	root := t.TempDir()
+	for name, id := range map[string]string{"card0": "tegrahda", "card1": "WM8962"} {
+		dir := filepath.Join(root, name)
+		if err := os.MkdirAll(dir, 0755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(dir, "id"), []byte(id+"\n"), 0644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	for id, want := range map[string]int{"WM8962": 1, "tegrahda": 0, "": 0, "absent": 0} {
+		if got := cardByID(root, id); got != want {
+			t.Errorf("card %q is %d, want %d", id, got, want)
+		}
+	}
+}

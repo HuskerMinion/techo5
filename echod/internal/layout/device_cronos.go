@@ -102,6 +102,11 @@ func Athena() bool { return Board == boardAthena }
 // no microphone, a speaker on the RK809's headphone outputs.
 func Skylight() bool { return Board == boardSkylight }
 
+// SoundCard is the id of the sound card the speaker and the microphones are on (as /proc/asound/cards
+// lists it), on a board whose codec is not card 0; empty on every Echo, whose one card is 0. Read by
+// speaker.Card and mic.Card through alsa.CardByID.
+func SoundCard() string { return "" }
+
 // HasMicrophone is whether the device can hear: every Show but the Skylight, which was built
 // without microphones.
 func HasMicrophone() bool { return !Skylight() }
