@@ -451,6 +451,16 @@ t5_ip() { ip -4 addr show wlan0 2>/dev/null | sed -n 's/.*inet \([0-9.]*\).*/\1/
 # stays on wlan0 after the link is lost, until it runs out.
 t5_wifi_joined() { wpa_cli -p /run/wpa -i wlan0 status 2>/dev/null | grep -q '^wpa_state=COMPLETED'; }
 
+# t5_wifi_unpin: take off the channel pin t5_wifi_prefer5 made, for the keeper once Prefer 5 GHz is off
+# (echod, feature/wifiband): the supplicant looks on every band again. Taking it off the network in use
+# does not drop the link.
+t5_wifi_unpin() {
+	pin=/run/techo5/prefer5-pin
+	[ -s $pin ] || return 0
+	wpa_cli -p /run/wpa -i wlan0 set_network "$(cut -d' ' -f1 $pin)" freq_list "" >/dev/null 2>&1
+	rm -f $pin $pin.miss
+}
+
 # t5_wifi_prefer5: keep the link on the network's strongest worthwhile radio, 5 GHz first.
 #
 # The supplicant picks a radio at connect time and often takes 2.4 GHz, where the Bluetooth half of the

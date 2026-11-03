@@ -58,6 +58,7 @@ type Config struct {
 	Realtime       Realtime       `json:"realtime,omitempty"`
 	Tessera        Tessera        `json:"tessera,omitempty"`
 	WifiQuiet      WifiQuiet      `json:"wifi_quiet,omitempty"`
+	WifiBand       WifiBand       `json:"wifi_band,omitempty"`
 }
 
 // Defaults is a device nobody has set anything on.
@@ -130,6 +131,7 @@ func (w Writer) Share() ShareWriter                   { return ShareWriter(w) }
 func (w Writer) Realtime() RealtimeWriter             { return RealtimeWriter(w) }
 func (w Writer) Tessera() TesseraWriter               { return TesseraWriter(w) }
 func (w Writer) WifiQuiet() WifiQuietWriter           { return WifiQuietWriter(w) }
+func (w Writer) WifiBand() WifiBandWriter             { return WifiBandWriter(w) }
 
 // Wake names one slot, since every wake word setting belongs to one.
 func (w Writer) Wake(slot int) WakeWriter { return WakeWriter{st: w.st, slot: slot} }
