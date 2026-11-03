@@ -168,6 +168,11 @@ type Player struct {
 	tone    atomic.Value // asp.Tone
 	applied asp.Tone
 
+	// speaking is how many claims for words are playing (Driver.ClaimSpeech), and clearer the Clearer
+	// speech switch: with both, the write loop adds the speech shelf to the listener's own.
+	speaking atomic.Int32
+	clearer  atomic.Bool
+
 	// fed is whether the last block had anything in it, and belongs to the write loop alone.
 	fed bool
 
@@ -1057,7 +1062,11 @@ func (p *Player) fill(buf []byte) {
 		for _, chain := range p.chains {
 			chain.Volume(share)
 		}
-		if want, ok := p.tone.Load().(asp.Tone); ok && want != p.applied {
+		want, _ := p.tone.Load().(asp.Tone)
+		if p.clearer.Load() && p.speaking.Load() > 0 {
+			want.Speech = asp.SpeechCut
+		}
+		if want != p.applied {
 			for _, chain := range p.chains {
 				chain.SetTone(want)
 			}
@@ -1283,6 +1292,10 @@ func (p *Player) SetASP(on bool) bool {
 // SetTone hands the write loop the listener's own shelves. It is the tuning's own stage, so it does
 // nothing on a device playing untuned — there is no chain to put it in.
 func (p *Player) SetTone(t asp.Tone) { p.tone.Store(t) }
+
+// SetClearerSpeech turns Clearer speech on or off: while words play, the tuning's low band comes down
+// (asp.SpeechCut). It is the tuning's own stage, so it does nothing where the tuning is off.
+func (p *Player) SetClearerSpeech(on bool) { p.clearer.Store(on) }
 
 // Tone is what the shelves are set to.
 func (p *Player) Tone() asp.Tone {

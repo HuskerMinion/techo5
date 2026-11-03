@@ -284,8 +284,9 @@ func (t *Tuning) Chain(block int) (*Chain, error) {
 }
 
 // Volume tells the chain what fraction of full volume is playing, so it uses the filter the vendor
-// meant for it. The quieter buckets are not the same shape turned down: they carry more bass and
-// more treble, which is the loudness compensation the tuning exists for.
+// meant for it. On the Show the quieter buckets are not the same shape turned down: they carry more
+// bass and treble, which is the loudness compensation the tuning exists for. The Dot's are one shape
+// at different gains (Set).
 func (c *Chain) Volume(of float64) { c.fir.use(c.tuning.Bucket(of)) }
 
 // SetTone puts the listener's own shelves in front of the tuning, or takes them out. It is called

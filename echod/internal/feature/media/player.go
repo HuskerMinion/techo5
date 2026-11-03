@@ -93,6 +93,8 @@ type Player struct {
 	haSounds *esphome.Switch
 	// louder is the Louder speech switch (Louder, #304).
 	louder *esphome.Switch
+	// clearer is the Clearer speech switch (speaker.Player.SetClearerSpeech, techo5-dot#25).
+	clearer *esphome.Switch
 
 	// sleep stops what is playing after a while, the way a clock radio does.
 	sleep *sleeper
@@ -347,6 +349,14 @@ func build() *Player {
 				Category: esphome.CategoryConfig,
 			},
 		},
+		clearer: &esphome.Switch{
+			Base: esphome.Base{
+				ObjectID: "clearer_speech",
+				Name:     "Clearer speech",
+				Icon:     "mdi:account-voice",
+				Category: esphome.CategoryConfig,
+			},
+		},
 		nearMiss: &esphome.Switch{
 			Base: esphome.Base{
 				ObjectID: "duck_on_near_miss",
@@ -377,7 +387,7 @@ func build() *Player {
 
 	// The player itself stays on the device: it is what people reach for. These are how it behaves.
 	bases := []*esphome.Base{&p.resampling.Base, &p.onTurn.Base, &p.duck.Base, &p.jack.Base, &p.asp.Base,
-		&p.bass.Base, &p.treble.Base, &p.quiet.Base, &p.night.Base, &p.voiceVol.Base, &p.callVol.Base, &p.nearMiss.Base, &p.haSounds.Base, &p.louder.Base}
+		&p.bass.Base, &p.treble.Base, &p.quiet.Base, &p.night.Base, &p.voiceVol.Base, &p.callVol.Base, &p.nearMiss.Base, &p.haSounds.Base, &p.louder.Base, &p.clearer.Base}
 	if speaker.HasJack {
 		bases = append(bases, &p.output.Base)
 	}
@@ -466,6 +476,7 @@ func build() *Player {
 
 	p.haSounds.OnCommand = p.SetHASounds
 	p.louder.OnCommand = p.SetLouderSpeech
+	p.clearer.OnCommand = p.SetClearerSpeech
 	p.night.OnCommand = func(v float32) { p.SetNightVolume(int(v)) }
 	p.voiceVol.OnCommand = func(v float32) { p.SetVoiceOffset(int(v)) }
 	p.callVol.OnCommand = func(v float32) { p.SetCallOffset(int(v)) }
@@ -554,6 +565,17 @@ func (p *Player) SetHASounds(on bool) {
 	slog.Info("setting changed", "setting", p.haSounds.ObjectID, "using", on)
 }
 
+// SetClearerSpeech turns Clearer speech on or off, from Home Assistant.
+func (p *Player) SetClearerSpeech(on bool) {
+	if err := config.Set().Speaker().ClearerSpeech(on); err != nil {
+		slog.Error("saving a setting failed", "setting", p.clearer.ObjectID, "err", err)
+		return
+	}
+	speaker.Get().SetClearerSpeech(on)
+	p.clearer.Set(on)
+	slog.Info("setting changed", "setting", p.clearer.ObjectID, "using", on)
+}
+
 // SetLouderSpeech turns Louder speech on or off, from Home Assistant, the setup page or the screen.
 func (p *Player) SetLouderSpeech(on bool) {
 	if err := config.Set().Speaker().LouderSpeech(on); err != nil {
@@ -566,7 +588,7 @@ func (p *Player) SetLouderSpeech(on bool) {
 
 func (p *Player) Entities() []esphome.Entity {
 	out := []esphome.Entity{p.mp, p.jack, p.resampling, p.onTurn, p.duck, p.asp, p.bass, p.treble,
-		p.quiet, p.night, p.voiceVol, p.callVol, p.nearMiss, p.haSounds, p.louder, p.sleep.sel}
+		p.quiet, p.night, p.voiceVol, p.callVol, p.nearMiss, p.haSounds, p.louder, p.clearer, p.sleep.sel}
 	// Asked as the entities are listed (once, as the API starts): the mixer if it opens by then,
 	// which leaves out a board that turned out not to have the amplifier, or still may have it.
 	if p.gain != nil && (speaker.GainAvailable() || speaker.GainPossible()) {
@@ -662,6 +684,9 @@ func (p *Player) Restore(c config.Config) {
 	p.haSounds.Set(!c.Speaker.ClassicSounds)
 	slog.Info("restored", "what", p.haSounds.ObjectID, "using", !c.Speaker.ClassicSounds)
 	p.louder.Set(c.Speaker.LouderSpeech)
+	p.clearer.Set(c.Speaker.ClearerSpeech)
+	speaker.Get().SetClearerSpeech(c.Speaker.ClearerSpeech)
+	slog.Info("restored", "what", p.clearer.ObjectID, "using", c.Speaker.ClearerSpeech)
 
 	p.duck.Set(float32(c.Media.DuckDB))
 	slog.Info("restored", "what", p.duck.ObjectID, "using", c.Media.DuckDB)

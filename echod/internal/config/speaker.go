@@ -62,6 +62,10 @@ type Speaker struct {
 	// parts of words are heard (media.Louder, #304). Off by default.
 	LouderSpeech bool `json:"louder_speech,omitempty"`
 
+	// ClearerSpeech takes the tuning's low-band lift down while replies and announcements play
+	// (speaker.Player.SetClearerSpeech, techo5-dot#25). Off by default.
+	ClearerSpeech bool `json:"clearer_speech,omitempty"`
+
 	// SoundsMoved is whether the wake sounds have been moved to Home Assistant's: once, for a device
 	// saved when Chirp was the default, and only for a word still on it (config.Load).
 	SoundsMoved bool `json:"sounds_moved,omitempty"`
@@ -176,6 +180,10 @@ func (w SpeakerWriter) NoBluetoothVolume(v bool) error {
 
 func (w SpeakerWriter) LouderSpeech(v bool) error {
 	return w.st.Update(func(c *Config) { c.Speaker.LouderSpeech = v })
+}
+
+func (w SpeakerWriter) ClearerSpeech(v bool) error {
+	return w.st.Update(func(c *Config) { c.Speaker.ClearerSpeech = v })
 }
 
 func (w SpeakerWriter) ClassicSounds(v bool) error {

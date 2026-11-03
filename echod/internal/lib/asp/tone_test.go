@@ -37,6 +37,8 @@ func TestShelvesMoveOnlyTheirOwnEnd(t *testing.T) {
 		{"treble down leaves 500 Hz", Tone{Treble: -4}, 500, 0, 0.5},
 		{"flat leaves 60 Hz", Tone{}, 60, 0, 0.01},
 		{"flat leaves 12 kHz", Tone{}, 12000, 0, 0.01},
+		{"clearer speech down at 120 Hz", Tone{Speech: SpeechCut}, 120, SpeechCut, 1},
+		{"clearer speech leaves 2 kHz", Tone{Speech: SpeechCut}, 2000, 0, 0.7},
 	} {
 		got := level(newTone(c.tone, Rate), c.hz)
 		if math.Abs(got-c.want) > c.slop {
@@ -50,5 +52,15 @@ func TestToneIsBounded(t *testing.T) {
 	got := Tone{Bass: 40, Treble: -40}.clamped()
 	if got.Bass != ToneRange || got.Treble != -ToneRange {
 		t.Errorf("a tone of 40 and -40 clamped to %+v, expected ±%v", got, ToneRange)
+	}
+}
+
+// Clearer speech only ever cuts, and no deeper than SpeechCut.
+func TestSpeechShelfIsBounded(t *testing.T) {
+	if got := (Tone{Speech: -40}).clamped().Speech; got != SpeechCut {
+		t.Errorf("a speech shelf of -40 clamped to %v, expected %v", got, SpeechCut)
+	}
+	if got := (Tone{Speech: 5}).clamped().Speech; got != 0 {
+		t.Errorf("a speech shelf of +5 clamped to %v, expected 0", got)
 	}
 }
