@@ -28,7 +28,7 @@ func footStyle(style string) bool {
 // clockLayoutRows is Clock position on the screen, under Display.
 func clockLayoutRows() []settingRow {
 	return []settingRow{
-		{id: "clockpos", label: "Clock position", sub: "Classic, Flip, LED, Sun and Glow", kind: ctlChoice, value: clockPositions[clockPositionIndex()].label},
+		{id: "clockpos", label: tr("ui_clock_position"), sub: tr("ui_clock_position_styles"), kind: ctlChoice, value: clockPositions[clockPositionIndex()].label},
 	}
 }
 
@@ -37,7 +37,7 @@ func clockLayoutPicker(id string) (pickerView, bool) {
 	if id != "clockpos" {
 		return pickerView{}, false
 	}
-	return pickerView{title: "Clock position", opts: clockPositionOptions(), cur: clockPositionIndex()}, true
+	return pickerView{title: tr("ui_clock_position"), opts: clockPositionOptions(), cur: clockPositionIndex()}, true
 }
 
 // chooseClockLayout takes a choice from it, and says whether id was it.

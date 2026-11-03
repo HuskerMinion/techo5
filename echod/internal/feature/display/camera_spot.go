@@ -57,9 +57,9 @@ func (r *roundRenderer) cameraView(s roundScene) {
 	if f := v.Frame; f != nil {
 		home.ReadFrame(func() { r.coverCircle(f, v.Entity == home.LocalCamera) })
 	} else {
-		msg := "Connecting…"
+		msg := tr("drawer_connecting")
 		if v.Error != "" {
-			msg = "No picture"
+			msg = tr("drawer_no_picture")
 		}
 		r.centered(r.title, msg, 250, colDim)
 		if v.Error != "" {
@@ -114,9 +114,9 @@ func (r *roundRenderer) cameraView(s roundScene) {
 	// drawn. A circle has no corner to put one in, so it is the same bar of words as the name above it:
 	// a tap silences what the camera is saying and leaves the view up.
 	if s.cameraSound {
-		label := "Unmute"
+		label := tr("drawer_unmute")
 		if s.cameraSoundLive {
-			label = "Mute"
+			label = tr("drawer_mute")
 		}
 		b := cameraSoundBox(r.width(r.label, label) + 24)
 		r.cameraControl(b, label, false)
@@ -126,7 +126,7 @@ func (r *roundRenderer) cameraView(s roundScene) {
 	// free: the Show's page has always said so, and a picture somebody else put up is one a person
 	// standing here may not know is theirs to dismiss.
 	if v.Caption != nil && !s.cameraSound && !s.talkOffered {
-		const label = "tap to close"
+		label := tr("drawer_camera_close")
 		b := cameraSoundBox(r.width(r.label, label) + 24)
 		r.line(float64(b.Min.X), float64(b.Min.Y+b.Dy()/2), float64(b.Max.X), float64(b.Min.Y+b.Dy()/2), float64(b.Dy()), color.RGBA{0, 0, 0, 150})
 		r.centered(r.label, label, b.Min.Y+b.Dy()/2+8, colText)

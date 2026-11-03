@@ -217,6 +217,7 @@ func spotFaces(k fontKey) *sheetFaces {
 	fc := &sheetFaces{
 		header: f(true, 30), label: f(false, 24), labelBold: f(true, 24), sub: f(false, 16),
 		value: f(false, 20), nav: f(false, 20), navBold: f(true, 20), button: f(true, 19),
+		labelSm: f(false, 21), labelBoldSm: f(true, 21), valueSm: f(false, 18),
 	}
 	spotFaceCache.faces = roomFor(spotFaceCache.faces, k)
 	spotFaceCache.faces[k] = fc
@@ -331,7 +332,7 @@ func (r *roundRenderer) cardButtons(actions []headerAction) {
 	if len(buttons) == 1 && len(actions) > 0 {
 		a := actions[0]
 		if a.id == "add" {
-			a.label = "+  Add"
+			a.label = tr("ui_add_alarm")
 		}
 		buttons = append(buttons, a)
 	}
@@ -482,7 +483,7 @@ func (d *Display) sheetView(now time.Time) sheetView {
 	st.version = layout.Version
 	st.night = cmpOr(c.Screen.Night, defaultNight)
 	st.address = deviceAddress()
-	st.wifiName = "Connected"
+	st.wifiName = tr("wifi_connected")
 	if st.address == "" || st.address == "-" {
 		st.wifiName = tr("not_connected")
 	}

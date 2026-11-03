@@ -212,7 +212,7 @@ func (r *roundRenderer) dashFace(s roundScene) {
 	drawn := v.Ready && dashboard.Get().DrawStream(r.dst)
 	msg := v.Problem
 	if msg == "" && !drawn {
-		msg = "Connecting to the dashboard…"
+		msg = tr("drawer_connecting")
 	}
 	if msg == "" {
 		return

@@ -4,6 +4,7 @@ package display
 
 import (
 	"log/slog"
+	"slices"
 
 	esphome "github.com/ygelfand/go-esphome-device"
 
@@ -21,6 +22,15 @@ var (
 	langOptions = []string{"Match all", "English", "Deutsch", "Español", "Français", "Galego", "Italiano", "Nederlands", "Português", "Русский", "Türkçe", "日本語"}
 	langCodes   = []string{triggers.MatchAll, "en", "de", "es", "fr", "gl", "it", "nl", "pt", "ru", "tr", "ja"}
 )
+
+// langLabels are the choices as the screen shows them: the same names, except the first, which says
+// what it does in the screen's own language. Home Assistant keeps langOptions' English, which is the
+// value it stores.
+func langLabels() []string {
+	out := slices.Clone(langOptions)
+	out[0] = tr("ui_match_all_languages")
+	return out
+}
 
 func langIndex() int {
 	cur := config.Get().Screen.Language

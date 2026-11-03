@@ -10,6 +10,8 @@ import (
 	"slices"
 	"strings"
 
+	"golang.org/x/image/font"
+
 	"github.com/HuskerMinion/techo5/echod/internal/config"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/dashboard"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/home"
@@ -224,41 +226,41 @@ func itemName(s roundScene, id itemID) string {
 		if i < len(s.cameras) {
 			return s.cameras[i].Name
 		}
-		return "Camera"
+		return tr("camera")
 	}
 	switch id {
 	case itemTalk:
-		return "Talk"
+		return tr("drawer_talk")
 	case itemCall:
-		return "Call"
+		return tr("drawer_call")
 	case itemMute:
 		if s.muted {
-			return "Unmute"
+			return tr("drawer_unmute")
 		}
-		return "Mute"
+		return tr("drawer_mute")
 	case itemMusic:
-		return "Music"
+		return tr("music")
 	case itemVolume:
-		return "Volume"
+		return tr("volume")
 	case itemWeather:
-		return "Weather"
+		return tr("weather")
 	case itemCalendar:
-		return "Calendar"
+		return tr("ui_calendar")
 	case itemCamera:
-		return "Camera"
+		return tr("camera")
 	case itemDashboard:
 		if s.showDash {
-			return "Clock"
+			return tr("clock")
 		}
-		return "Dashboard"
+		return tr("dashboard")
 	case itemTimers:
-		return "Timers"
+		return tr("timers")
 	case itemAnnounce:
-		return "Announce"
+		return tr("drawer_announce")
 	case itemSettings:
-		return "Settings"
+		return tr("settings")
 	case itemSleep:
-		return "Sleep"
+		return tr("sleep")
 	}
 	return ""
 }
@@ -266,56 +268,56 @@ func itemName(s roundScene, id itemID) string {
 func itemHint(s roundScene, id itemID) string {
 	if i := cameraOf(id); i >= 0 {
 		if i < len(s.cameras) && s.cameras[i].Entity == s.camera.Entity {
-			return "showing now"
+			return tr("drawer_camera_showing_now")
 		}
-		return "tap to show"
+		return tr("drawer_camera_tap_to_show")
 	}
 	switch id {
 	case itemTalk:
-		return "tap to ask"
+		return tr("drawer_talk_tap_to_ask")
 	case itemAnnounce:
 		switch {
 		case s.announceRecording:
-			return "speak now"
+			return tr("drawer_speak_now")
 		case !s.announceReady:
-			return "needs a house word"
+			return tr("drawer_needs_a_house_word")
 		case s.announcePeers > 0:
-			return "heard on " + devicesText(s.announcePeers)
+			return fmt.Sprintf(tr("drawer_heard_on"), devicesText(s.announcePeers))
 		}
-		return "no other devices found"
+		return tr("drawer_no_other_devices")
 	case itemCall:
 		switch {
 		case s.contactCount > 0:
-			return fmt.Sprintf("%d to call", s.contactCount)
+			return fmt.Sprintf(tr("drawer_d_contacts_to_call"), s.contactCount)
 		case !s.phoneReady && !s.houseReady:
-			return "needs a house word"
+			return tr("drawer_needs_a_house_word")
 		}
-		return "nobody to call yet"
+		return tr("drawer_nobody_to_call_yet")
 	case itemMute:
 		if s.muted {
-			return "microphone is off"
+			return tr("drawer_microphone_is_off")
 		}
-		return "microphone is on"
+		return tr("drawer_microphone_is_on")
 	case itemMusic:
 		switch {
 		case s.playing:
-			return "playing · pick a station"
+			return tr("drawer_playing_pick_a_station")
 		case s.paused:
-			return "paused · pick a station"
+			return tr("drawer_paused_pick_a_station")
 		}
-		return "radio stations"
+		return tr("drawer_radio_stations")
 	case itemVolume:
-		return fmt.Sprintf("%d · tap, then turn", s.volume)
+		return fmt.Sprintf(tr("drawer_d_tap_then_turn"), s.volume)
 	case itemCamera:
 		if s.muted {
-			return "off while muted"
+			return tr("drawer_camera_off_while_muted")
 		}
-		return "this Spot · hold for the list"
+		return tr("drawer_this_spot_hold_for_the_list")
 	case itemWeather:
 		if l := weatherLine(s.weather); l != "" {
 			return l
 		}
-		return "forecast"
+		return tr("drawer_forecast")
 	case itemCalendar:
 		switch {
 		case len(s.calToday) > 0:
@@ -323,29 +325,29 @@ func itemHint(s roundScene, id itemID) string {
 		case len(s.calNext) > 0:
 			return comingDay(s.calNext[0].Start, s.now) + " · " + s.calNext[0].Summary
 		}
-		return "nothing coming up"
+		return tr("calendar_nothing_coming_up")
 	case itemTimers:
 		switch {
 		case s.timerRinging:
-			return "ringing · tap to stop"
+			return tr("drawer_timer_ringing_tap_to_stop")
 		case len(s.timers) == 1:
-			return clockDuration(s.timers[0].Left) + " left"
+			return fmt.Sprintf(tr("drawer_timer_s_left"), clockDuration(s.timers[0].Left))
 		case len(s.timers) > 1:
-			return fmt.Sprintf("%s left · %d timers", clockDuration(s.timers[0].Left), len(s.timers))
+			return fmt.Sprintf(tr("drawer_timer_s_left_d_timers"), clockDuration(s.timers[0].Left), len(s.timers))
 		}
-		return "none running · ask to set one"
+		return tr("drawer_timer_none_running")
 	case itemSettings:
-		return "display, sound, alarms…"
+		return tr("drawer_settings_display_sound_alarms")
 	case itemDashboard:
 		switch {
 		case s.showDash:
-			return "back to the clock"
+			return tr("drawer_back_to_the_clock")
 		case dashboard.Get().Mode() == config.DashboardOff:
-			return "turn it on in Home Assistant"
+			return tr("drawer_turn_on_in_home_assistant")
 		}
-		return "Home Assistant's"
+		return tr("drawer_dashboard_from_home_assistant")
 	case itemSleep:
-		return "tap the screen to wake"
+		return tr("drawer_sleep_tap_the_screen_to_wake")
 	}
 	return ""
 }
@@ -398,12 +400,87 @@ func (r *roundRenderer) dial(s roundScene) {
 		header := clockHM(s.now)
 		switch s.menuMode {
 		case modeCameras:
-			header = "CAMERAS"
+			header = upper(tr("cameras"))
 		}
-		r.centered(r.label, header, 206, colDim)
-		r.centered(r.title, itemName(s, it.id), 252, colText)
-		r.centered(r.small, itemHint(s, it.id), 286, colDim)
+		r.ringLine(r.label, header, 206, colDim)
+		r.ringName(itemName(s, it.id), 252)
+		r.ringHint(itemHint(s, it.id), 286)
 	}
+}
+
+// ringClear is the radius of the clear space inside the ring's icons: the ring they sit on, less an
+// icon's half size and a margin for its stroke and the space it needs to breathe. The words in the
+// middle (the header, the name and the hint) stay inside it, so they never run into an icon.
+const ringClear = dialR - 18 - 8
+
+// ringRoom is how wide a line of face with its baseline at baseline can be and stay inside the clear
+// space, judged at the line's top or its foot, whichever is further from the middle.
+func ringRoom(face font.Face, baseline int) int {
+	m := face.Metrics()
+	dy := max(abs(baseline-m.Ascent.Ceil()-center), abs(baseline+m.Descent.Ceil()-center))
+	if dy >= ringClear {
+		return 0
+	}
+	return int(2*math.Sqrt(float64(ringClear*ringClear-dy*dy))) - 12
+}
+
+// ringLine draws s on one line in the middle of the ring, cut with an ellipsis to the room there is.
+func (r *roundRenderer) ringLine(face font.Face, s string, baseline int, c color.Color) {
+	r.centered(face, r.paint.fit(face, s, ringRoom(face, baseline)), baseline, c)
+}
+
+// ringName draws an item's name in the middle of the ring, in the title's face, or in the body's when a
+// longer word in some language (Tableau de bord, Temporizadores) would not fit in the title's.
+func (r *roundRenderer) ringName(s string, baseline int) {
+	face := r.title
+	if r.width(face, s) > ringRoom(face, baseline) {
+		face = r.body
+	}
+	r.ringLine(face, s, baseline, colText)
+}
+
+// ringHint draws the hint under an item's name, on up to two lines inside the ring.
+func (r *roundRenderer) ringHint(s string, baseline int) {
+	lineH := r.small.Metrics().Height.Round() + 4
+	for n, line := range r.ringLines(r.small, s, baseline, 2) {
+		r.centered(r.small, line, baseline+n*lineH, colDim)
+	}
+}
+
+// ringLines is how s wraps inside the ring from baseline down: each line as wide as the ring is at its
+// own height, the last one cut with an ellipsis when words are left over. A line that would end on or
+// begin with the middot between two halves of a hint breaks there instead.
+func (r *roundRenderer) ringLines(face font.Face, s string, baseline, maxLines int) []string {
+	words := strings.Fields(s)
+	lineH := face.Metrics().Height.Round() + 4
+	var lines []string
+	for n := 0; n < maxLines && len(words) > 0; n++ {
+		room := ringRoom(face, baseline+n*lineH)
+		line, k := words[0], 1
+		for ; k < len(words); k++ {
+			try := line + " " + words[k]
+			if r.width(face, try) > room {
+				break
+			}
+			line = try
+		}
+		if k < len(words) && words[k-1] == "·" && k > 1 {
+			k-- // not a middot hanging at the end of the line
+			line = strings.TrimSuffix(line, " ·")
+		}
+		words = words[k:]
+		if len(words) > 0 && words[0] == "·" {
+			words = words[1:]
+		}
+		if n == maxLines-1 && len(words) > 0 {
+			line += " " + strings.Join(words, " ")
+		}
+		if r.width(face, line) > room {
+			line = clipRunes(line, 1, func(l string) bool { return r.width(face, l) <= room })
+		}
+		lines = append(lines, line)
+	}
+	return lines
 }
 
 // jog draws the ring as a jog wheel for one value.
@@ -414,7 +491,7 @@ func (r *roundRenderer) jog(s roundScene) {
 	col := color.RGBA{58, 160, 255, 255}
 	switch s.menuMode {
 	case modeVolume:
-		title, value, hint = "VOLUME", fmt.Sprintf("%d", s.volume), "turn the ring · tap when done"
+		title, value, hint = upper(tr("volume")), fmt.Sprintf("%d", s.volume), tr("drawer_turn_the_ring_tap_when_done")
 		if s.maxVolume > 0 {
 			frac = float64(s.volume) / float64(s.maxVolume)
 		}
