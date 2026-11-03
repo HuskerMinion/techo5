@@ -229,9 +229,9 @@ func (b *Proxy) Handle(ctx context.Context, conn *esphome.Conn, msg proto.Messag
 	}
 	switch msg.(type) {
 	case *api.SubscribeBluetoothLEAdvertisementsRequest:
-		b.taken.note(conn, true)
+		b.taken.note(conn, true, b.freeNow)
 	case *api.UnsubscribeBluetoothLEAdvertisementsRequest:
-		b.taken.note(conn, false)
+		b.taken.note(conn, false, nil)
 	}
 	return b.proxy.Handle(ctx, conn, msg)
 }
@@ -241,6 +241,15 @@ func (b *Proxy) Handle(ctx context.Context, conn *esphome.Conn, msg proto.Messag
 func (b *Proxy) SetEnabled(on bool) { b.enable.OnCommand(on) }
 
 func (b *Proxy) Enabled() bool { return Here && config.Get().Bluetooth.Proxy }
+
+// freeNow is the free-slots reply as it stands: the lent slots, or none where connections are not lent,
+// as refuse answers.
+func (b *Proxy) freeNow() proto.Message {
+	if b.ConnectionsEnabled() {
+		return b.links.free()
+	}
+	return &api.BluetoothConnectionsFreeResponse{}
+}
 
 // ConnectionsEnabled reports whether Home Assistant may connect to devices through the proxy: the proxy on,
 // its connections switch on, a GATT client to lend, and the Home Assistant link keyed.

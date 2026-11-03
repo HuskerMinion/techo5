@@ -4,7 +4,6 @@ import (
 	"log/slog"
 	"sync"
 
-	"github.com/ygelfand/go-esphome-device/api"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -30,8 +29,9 @@ type takeover struct {
 	curN int
 }
 
-// note records a subscribe (want) or unsubscribe message from c, before the library handles it.
-func (t *takeover) note(c subscriber, want bool) {
+// note records a subscribe (want) or unsubscribe message from c, before the library handles it. free is
+// the free-slots reply as it stands, sent to the previous subscriber to learn whether it is still there.
+func (t *takeover) note(c subscriber, want bool, free func() proto.Message) {
 	t.mu.Lock()
 	prev, prevN := t.cur, t.curN
 	switch {
@@ -50,9 +50,9 @@ func (t *takeover) note(c subscriber, want bool) {
 	if !want || prev == nil {
 		return
 	}
-	// The library says nothing when a connection closes; a send to it fails. The free-slots reply is
-	// the harmless message connections.ReleaseGone uses for the same question.
-	if prev.Send(&api.BluetoothConnectionsFreeResponse{}) != nil {
+	// The library says nothing when a connection closes; a send to it fails. The free-slots reply, with
+	// the slots as they are, only tells it again what it already knows.
+	if prev.Send(free()) != nil {
 		return
 	}
 	slog.Warn("ble: a second Home Assistant took over the Bluetooth proxy; the first still connected gets no advertisements now",
