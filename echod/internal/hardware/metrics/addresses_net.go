@@ -7,6 +7,8 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+
+	"github.com/HuskerMinion/techo5/echod/internal/layout"
 )
 
 // Addresses is every address something else on the network could reach the device at. Loopback and
@@ -83,7 +85,7 @@ func gadgetDevice(dir string) bool {
 // WiFiAddresses is the addresses of Addresses on the Wi-Fi interface alone: the network's own, without a
 // VPN's beside them.
 func WiFiAddresses() []net.IP {
-	i, err := net.InterfaceByName(wifiInterface)
+	i, err := net.InterfaceByName(layout.WifiInterface())
 	if err != nil {
 		return nil
 	}

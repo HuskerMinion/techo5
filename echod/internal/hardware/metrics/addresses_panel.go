@@ -69,7 +69,7 @@ func Addresses() []net.IP {
 // here, which only means an IPv4 move goes unnoticed and is advertised like any other change (api's
 // nextHeld).
 func WiFiAddresses() []net.IP {
-	return reported(func(name string) bool { return name == wifiInterface })
+	return reported(func(name string) bool { return name == layout.WifiInterface() })
 }
 
 // reported is the reachable addresses of the interfaces that are up and whose name passes keep.

@@ -16,10 +16,14 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/HuskerMinion/techo5/echod/internal/layout"
 )
 
+// iface is the Wi-Fi interface: wlan0 on every Echo, mlan0 on the Surface RT.
+var iface = layout.WifiInterface
+
 const (
-	iface   = "wlan0"
 	ctrlDir = "/run/wpa"
 
 	// SetupFlag, while present, tells the boot scripts' network keeper that someone is setting the
@@ -55,7 +59,7 @@ func Available() bool {
 func cli(ctx context.Context, args ...string) (string, error) {
 	ctx, cancel := context.WithTimeout(ctx, 8*time.Second)
 	defer cancel()
-	out, err := exec.CommandContext(ctx, "wpa_cli", append([]string{"-p", ctrlDir, "-i", iface}, args...)...).CombinedOutput()
+	out, err := exec.CommandContext(ctx, "wpa_cli", append([]string{"-p", ctrlDir, "-i", iface()}, args...)...).CombinedOutput()
 	if err != nil {
 		return "", fmt.Errorf("wpa_cli %s: %w: %s", args[0], err, strings.TrimSpace(string(out)))
 	}
@@ -108,7 +112,7 @@ func Current(ctx context.Context) Status {
 
 // address is the interface's IPv4 address, empty without one.
 func address() string {
-	i, err := net.InterfaceByName(iface)
+	i, err := net.InterfaceByName(iface())
 	if err != nil {
 		return ""
 	}
