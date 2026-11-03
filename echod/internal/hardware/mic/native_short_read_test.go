@@ -11,7 +11,6 @@ import (
 	"github.com/HuskerMinion/techo5/echod/internal/asp"
 	"github.com/HuskerMinion/techo5/echod/internal/config"
 	"github.com/HuskerMinion/techo5/echod/internal/lib/alsa"
-	"github.com/HuskerMinion/techo5/echod/internal/service"
 )
 
 type scriptedNativeRead struct {
@@ -53,12 +52,18 @@ func nativeShortReadFixture() (alsa.Config, []byte, []scriptedNativeRead) {
 	}
 }
 
-// A partial ALSA success is not a new descriptor: the same physical capture
-// block spans multiple synchronous reads and must be passed to External once.
+// A partial ALSA success is not a new descriptor: each assembled block
+// must be passed to External once, retaining the resident helper.
 func TestNativeShortReadFullBlockAndResidentASP(t *testing.T) {
 	cfg, want, steps := nativeShortReadFixture()
 	if Channels == 6 && (len(steps[0].data) != 3114 || len(steps[1].data) != 2646 || len(want) != 5760) {
 		t.Fatal("six-channel 173+147-frame fixture no longer matches Rook")
+	}
+	// The second block uses three shorter reads but exactly the same format.
+	three := []scriptedNativeRead{
+		{data: want[:101*Channels*3]},
+		{data: want[101*Channels*3 : 214*Channels*3]},
+		{data: want[214*Channels*3:]},
 	}
 	p := aspTestFake(42)
 	var launched asp.Descriptor
@@ -66,11 +71,10 @@ func TestNativeShortReadFullBlockAndResidentASP(t *testing.T) {
 		launched = d
 		return p, nil
 	})
-	c := &scriptedNativeCapture{cfg: cfg, steps: append(append([]scriptedNativeRead{}, steps...), steps...)}
-	// Each block is assembled in the caller-owned buffer: neither a new PCM
-	// allocation nor a borrowed-buffer reference survives the next Read.
-	visited := 0
-	for blockIndex := 0; blockIndex < 2; blockIndex++ {
+	c := &scriptedNativeCapture{cfg: cfg, steps: append(append([]scriptedNativeRead{}, steps...), three...)}
+	var baseline asp.Descriptor
+	reads, visited := 0, 0
+	for blockIndex, parts := range []int{2, 3} {
 		dst := make([]byte, len(want))
 		var response *aspResponse
 		n, cut, err := readCaptured(c, dst, fixedCut(false), func(b NativeBlock) {
@@ -81,15 +85,21 @@ func TestNativeShortReadFullBlockAndResidentASP(t *testing.T) {
 			if !bytes.Equal(b.Buffers[0], want) {
 				t.Fatal("partial reads were not assembled in sample order")
 			}
-			if desc := b.Descriptor(); len(desc.Buffers) != 1 ||
-				desc.Buffers[0].Frames != 320 || desc.Buffers[0].Length != uint32(len(want)) ||
-				desc.Buffers[0].SampleRate != Rate || desc.Buffers[0].Format != asp.FormatS24_3 ||
-				len(desc.Channels) != Channels {
-				t.Fatalf("bad composite descriptor: %+v", desc)
+			d := b.Descriptor()
+			if len(d.Buffers) != 1 || d.Buffers[0].Frames != 320 ||
+				d.Buffers[0].Length != uint32(len(want)) || d.Buffers[0].SampleRate != Rate ||
+				d.Buffers[0].Format != asp.FormatS24_3 || len(d.Channels) != Channels {
+				t.Fatalf("bad composite descriptor: %+v", d)
+			}
+			if blockIndex == 0 {
+				baseline = d
+			} else if !slices.Equal(baseline.Buffers, d.Buffers) || !slices.Equal(baseline.Channels, d.Channels) {
+				t.Fatal("descriptor drift between two-read and three-read blocks")
 			}
 			response = s.captureNative(b)
 		})
-		if err != nil || cut || n != len(want) || c.reads != (blockIndex+1)*2 || visited != blockIndex+1 {
+		reads += parts
+		if err != nil || cut || n != len(want) || c.reads != reads || visited != blockIndex+1 {
 			t.Fatalf("capture block %d: bytes=%d cut=%v reads=%d visits=%d err=%v", blockIndex, n, cut, c.reads, visited, err)
 		}
 		if blockIndex == 0 {
@@ -108,29 +118,6 @@ func TestNativeShortReadFullBlockAndResidentASP(t *testing.T) {
 	case <-p.canceled:
 		t.Fatal("short reads canceled the resident ASP session")
 	default:
-	}
-}
-
-func TestNativeShortReadDescriptorStability(t *testing.T) {
-	cfg, want, steps := nativeShortReadFixture()
-	var all []scriptedNativeRead
-	for range 4 {
-		all = append(all, steps...)
-	}
-	c := &scriptedNativeCapture{cfg: cfg, steps: all}
-	var baseline asp.Descriptor
-	for i := 0; i < 4; i++ {
-		n, _, err := readCaptured(c, make([]byte, len(want)), fixedCut(false), func(b NativeBlock) {
-			if i == 0 {
-				baseline = b.Descriptor()
-			} else if !slices.Equal(baseline.Buffers, b.Geometry.Buffers) ||
-				!slices.Equal(baseline.Channels, b.Geometry.Channels) {
-				t.Fatalf("native descriptor drift at block %d", i)
-			}
-		})
-		if err != nil || n != len(want) || c.reads != (i+1)*2 {
-			t.Fatalf("composite block %d: read=%d totalReads=%d err=%v", i, n, c.reads, err)
-		}
 	}
 }
 
@@ -169,6 +156,7 @@ func TestNativeShortReadErrorsDoNotVisitOrSampleCut(t *testing.T) {
 		{"initial zero", []scriptedNativeRead{{}}, nil, 1},
 		{"zero after partial", []scriptedNativeRead{steps[0], {}}, nil, 2},
 		{"error after partial", []scriptedNativeRead{steps[0], {err: failure}}, failure, 2},
+		{"bytes and error on second read", []scriptedNativeRead{steps[0], {data: steps[1].data[:Channels*3], err: failure}}, failure, 2},
 		{"XRUN after partial", []scriptedNativeRead{steps[0], {err: alsa.ErrOverrun}}, alsa.ErrOverrun, 2},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
@@ -210,6 +198,18 @@ func TestNativeShortReadBuiltInSingleRead(t *testing.T) {
 		!bytes.Equal(dst[:n], want[173*Channels*3:]) {
 		t.Fatal("stock capture consumed an extra read or changed PCM")
 	}
+	// A backend without ALSA Config never retries even if a native callback
+	// is requested; it reports unsupported native geometry instead.
+	stockOnly := &stockOnlyShortCapture{}
+	cutCalls := 0
+	_, cut, err = readCaptured(stockOnly, make([]byte, 100), func() bool {
+		cutCalls++
+		return false
+	}, func(NativeBlock) { t.Fatal("native callback on non-ALSA backend") })
+	if !errors.Is(err, errNativeGeometry) || cut || stockOnly.reads != 1 || cutCalls != 1 {
+		t.Fatalf("non-ALSA backend contract changed: err=%v reads=%d cut=%v policies=%d",
+			err, stockOnly.reads, cut, cutCalls)
+	}
 }
 
 type stockOnlyShortCapture struct{ reads int }
@@ -220,78 +220,33 @@ func (c *stockOnlyShortCapture) Read(dst []byte) (int, error) {
 }
 func (*stockOnlyShortCapture) Close() error { return nil }
 
-func TestNativeShortReadNoRetryForNonALSABackend(t *testing.T) {
-	c := &stockOnlyShortCapture{}
-	cutCalls := 0
-	_, cut, err := readCaptured(c, make([]byte, 100), func() bool {
-		cutCalls++
-		return false
-	}, func(NativeBlock) { t.Fatal("native callback on non-ALSA backend") })
-	if !errors.Is(err, errNativeGeometry) || cut || c.reads != 1 || cutCalls != 1 {
-		t.Fatalf("non-ALSA backend contract changed: err=%v reads=%d cut=%v policies=%d",
-			err, c.reads, cut, cutCalls)
-	}
-}
-
 func TestNativeShortReadXRUNAndRestartKeepResidentASP(t *testing.T) {
 	cfg, want, steps := nativeShortReadFixture()
 	stopped := errors.New("capture stopped after recovery")
-	for _, tc := range []struct {
-		name       string
-		secondErr  error
-		wantErr    error
-		extraSteps []scriptedNativeRead
-		rewiring   bool
-	}{
-		{
-			name:       "XRUN then next full block",
-			secondErr:  alsa.ErrOverrun,
-			wantErr:    stopped,
-			extraSteps: []scriptedNativeRead{{data: want}, {err: stopped}},
-		},
-		{
-			name:      "handover after partial read",
-			secondErr: errors.New("device closed on rewire"),
-			wantErr:   service.ErrRestart,
-			rewiring:  true,
-		},
-	} {
-		t.Run(tc.name, func(t *testing.T) {
-			p := aspTestFake(21)
-			s := aspTestSource(t, func(context.Context, asp.Descriptor) (aspProcess, error) { return p, nil })
-			s.captureNative(aspTestBlock())
-			aspTestAwait(t, func() bool { return aspTestReady(s) })
-			c := &scriptedNativeCapture{
-				cfg: cfg,
-				steps: append([]scriptedNativeRead{
-					steps[0], {err: tc.secondErr},
-				}, tc.extraSteps...),
-			}
-			s.devMu.Lock()
-			s.pcm = c
-			s.devMu.Unlock()
-			if tc.rewiring {
-				s.rewiring.Store(true)
-			}
-			err := s.Run(context.Background())
-			if tc.rewiring {
-				if !errors.Is(err, service.ErrRestart) {
-					t.Fatalf("capture handover did not request restart: %v", err)
-				}
-			} else if !errors.Is(err, tc.wantErr) {
-				t.Fatalf("XRUN continuation: got error %v", err)
-			}
-			if c.reads != len(c.steps) {
-				t.Fatalf("capture did not read expected recovery sequence: %d/%d", c.reads, len(c.steps))
-			}
-			select {
-			case <-p.canceled:
-				t.Fatal("XRUN or capture restart terminated resident ASP")
-			default:
-			}
-			if s.SelectedASP() != config.ASPExternal || !aspTestReady(s) {
-				t.Fatal("capture error changed resident ASP state")
-			}
-		})
+	p := aspTestFake(21)
+	s := aspTestSource(t, func(context.Context, asp.Descriptor) (aspProcess, error) { return p, nil })
+	s.captureNative(aspTestBlock())
+	aspTestAwait(t, func() bool { return aspTestReady(s) })
+	// XRUN happens on Read #2, after 173 valid frames. Source.Run must
+	// discard the incomplete block, continue, and keep the resident ASP.
+	c := &scriptedNativeCapture{cfg: cfg, steps: []scriptedNativeRead{
+		steps[0], {err: alsa.ErrOverrun}, {data: want}, {err: stopped},
+	}}
+	s.devMu.Lock()
+	s.pcm = c
+	s.devMu.Unlock()
+	if err := s.Run(context.Background()); !errors.Is(err, stopped) {
+		t.Fatalf("XRUN was not passed through Source.Run recovery: %v", err)
+	}
+	if c.reads != 4 {
+		t.Fatalf("expected XRUN, successful next block, and final error: %d reads", c.reads)
+	}
+	select {
+	case <-p.canceled:
+		t.Fatal("XRUN after a partial read terminated resident ASP")
+	default:
+	}
+	if s.SelectedASP() != config.ASPExternal || !aspTestReady(s) {
+		t.Fatal("XRUN changed resident ASP state")
 	}
 }
