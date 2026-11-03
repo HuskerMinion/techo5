@@ -83,8 +83,9 @@ Each device has its own settings, so the kitchen and a bedroom can show differen
 
 - **Tap** a tile or a row to do what it says: lights, switches and fans toggle, covers open or close,
   players play or pause, scenes and scripts run, a card's own tap action does what it is set to.
-- **Slide** a finger along a light, cover, thermostat or media player to set its brightness,
-  position, temperature or volume. The tile fills as you slide, and it is set when you let go. A tile
+- **Slide** a finger along a light, cover, thermostat, fan or media player to set its brightness,
+  position, temperature, speed or volume. A fan slides only when it can set its speed, and it moves in
+  the steps the fan takes. The tile fills as you slide, and it is set when you let go. A tile
   you can slide has a track along its foot, with a bar on it up to the level; a light that is off keeps
   the empty track.
 - **Tap a thermostat** whose card sets no tap of its own:
@@ -96,6 +97,10 @@ Each device has its own settings, so the kitchen and a bedroom can show differen
     or keeps a range has no one temperature to step.
 - **Long press** (Show only; on the Spot a long press is the ring menu):
   - on a light that has whites or colors, for a sheet of them. The light follows your finger.
+  - on a fan, for a sheet with an on/off switch, its speed (a slider, in the steps the fan takes), its
+    direction (forward or reverse) when it can turn either way, and its preset modes when it has any.
+    Each control is there only when the fan has it. A fan tile whose card sets a tap of its own keeps
+    that tap on a long press.
   - on a media player, for a sheet with its controls, its volume, the speakers it can be grouped
     with, and, with Music Assistant, your favorite playlists and radio stations. The favorites need
     the device's token to belong to a Home Assistant administrator; with any other token the sheet
@@ -108,7 +113,7 @@ Each device has its own settings, so the kitchen and a bedroom can show differen
 
 | Home Assistant card | On the device |
 |---|---|
-| Tile, button, entity, light, thermostat, and the Mushroom entity cards | A tile: icon, name, state, tap; a slider for lights, covers, thermostats and media players. A name too long for its tile is drawn smaller, then on two lines, and only what still does not fit is cut short with …. Under a heading (or a Glance or Entities card with a title, for its own tiles or rows), a name Home Assistant gives the entity is shown without the heading in front of it: under *Master Bedroom*, "Master Bedroom ceiling light" is "Ceiling light". A name the card gives is shown as it is |
+| Tile, button, entity, light, thermostat, and the Mushroom entity cards | A tile: icon, name, state, tap; a slider for lights, covers, thermostats, fans and media players. A name too long for its tile is drawn smaller, then on two lines, and only what still does not fit is cut short with …. Under a heading (or a Glance or Entities card with a title, for its own tiles or rows), a name Home Assistant gives the entity is shown without the heading in front of it: under *Master Bedroom*, "Master Bedroom ceiling light" is "Ceiling light". A name the card gives is shown as it is |
 | Entities | A card of rows, with a switch for anything on or off |
 | Glance, Mushroom chips | Tiles |
 | Heading, Mushroom title | A heading |
@@ -158,7 +163,7 @@ A `color` on the card fills the whole page with it, with white or black words, w
 A heading and a markdown card take `color` the same way (Home Assistant doesn't define one for them;
 the device reads it). With no color, the page uses the theme's. A view with anything more than that one
 card, or any other **Dashboard tiles** setting, is laid out as usual. A single tile that has a slider
-(a light's brightness, a cover's position, a thermostat) or a switch keeps its usual full-screen tile, so
+(a light's brightness, a cover's position, a thermostat, a fan's speed) or a switch keeps its usual full-screen tile, so
 the slider and switch still work; only a tile without controls gets the full page.
 
 This takes the place of a separate "drawn text size": the page's words are fitted to the screen's size,
@@ -271,7 +276,7 @@ On the page:
   same way: a tap on a closed one, or on its open key, turns the tile red and says *Tap again to open*.
   Tap again within 4 seconds to open it. Closing one takes a single tap.
 - Press and hold a tile to open the same sheets the drawn dashboard has: a light's whites and colors,
-  a thermostat's controls, a media player's controls, volume, Music Assistant favorites and speakers.
+  a thermostat's or a fan's controls, a media player's controls, volume, Music Assistant favorites and speakers.
   The favorites and speakers are read with the device's Home Assistant token, as on the drawn
   dashboard, and the favorites need it to belong to an administrator.
 - Slide a finger along a light to set its brightness, along a fan to set its speed, along a cover to

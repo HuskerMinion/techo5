@@ -69,6 +69,9 @@ func (d *Display) longPress(t *dashTile) {
 	if strings.HasPrefix(t.entity, "climate.") && t.action == nil && d.openClimate(t.entity) {
 		return
 	}
+	if strings.HasPrefix(t.entity, "fan.") && fanOwnTap(t) && d.openFan(t.entity) {
+		return
+	}
 	if t.adjust != nil && t.adjust.Kind == "brightness" {
 		if c, ok := dashboard.Get().LightColor(t.adjust.Entity); ok {
 			slog.Info("dashboard color sheet", "entity", c.Entity, "whites", c.Kelvin, "colors", c.Colors)
@@ -85,11 +88,11 @@ func (d *Display) longPress(t *dashTile) {
 }
 
 // colorOpen is whether a sheet is up over the page: the color sheet, the media sheet, or the
-// thermostat sheet.
+// thermostat sheet, or the fan sheet.
 func (d *Display) colorOpen() bool {
 	d.mu.Lock()
 	defer d.mu.Unlock()
-	return d.dashColor != nil || d.dashMedia != nil || d.dashClimate != nil
+	return d.dashColor != nil || d.dashMedia != nil || d.dashClimate != nil || d.dashFan != nil
 }
 
 // onColorSheet is whether x, y is on the sheet that is up: the color sheet, or the media sheet.
@@ -100,7 +103,8 @@ func (d *Display) onColorSheet(x, y int) bool {
 	_, in := d.r.colorAt(x, y)
 	_, _, onMedia := d.r.mediaAt(x, y)
 	_, onClimate := d.r.climateAt(x, y)
-	return in || onMedia || onClimate
+	_, onFan := d.r.fanAt(x, y)
+	return in || onMedia || onClimate || onFan
 }
 
 // sliderAt is the slider of the sheet that is up under x, y: the color sheet's whites or colors, the
@@ -124,6 +128,16 @@ func (d *Display) sliderAt(x, y int) (sheetSlider, bool) {
 			sp := m.lists.Speakers[z.index]
 			if v := m.speakerVolume(sp.Entity); m.grouped[sp.Entity] && v >= 0 {
 				return sheetSlider{kind: mediaPartSpeaker, r: z.r, lo: 0, hi: 1, entity: sp.Entity, from: x, base: v}, true
+			}
+		}
+	}
+	if z, in := d.r.fanAt(x, y); in && z.kind == fanPartSpeed {
+		d.mu.Lock()
+		f := d.dashFan
+		d.mu.Unlock()
+		if f != nil {
+			if now, ok := fanNow(f.entity); ok {
+				return sheetSlider{kind: fanPartSpeed, r: z.r, lo: 0, hi: 100, entity: f.entity, step: now.Step}, true
 			}
 		}
 	}
@@ -160,6 +174,11 @@ func (d *Display) samePartOnSheet(a, b image.Point) bool {
 	cb, inb := d.r.climateAt(b.X, b.Y)
 	if ina || inb {
 		return ina == inb && ca.kind == cb.kind && ca.index == cb.index
+	}
+	fa, ina := d.r.fanAt(a.X, a.Y)
+	fb, inb := d.r.fanAt(b.X, b.Y)
+	if ina || inb {
+		return ina == inb && fa.kind == fb.kind && fa.index == fb.index
 	}
 	return true
 }
@@ -212,6 +231,9 @@ func (d *Display) slideSheet(s sheetSlider, x int, final bool) {
 				n.speakerVol[e] = groupShift(base, n.mainBase, v)
 			}
 		})
+	case fanPartSpeed:
+		v = float64(dashboard.FanNow{Step: s.step}.Speed(v))
+		d.editFan(s.entity, func(n *fanSheet) { n.speed, n.setSpeed, n.setOn = v, true, false })
 	case mediaPartSpeaker:
 		v = s.base + float64(x-s.from)/float64(max(s.r.Dx(), 1))
 		v = math.Round(min(max(v, 0), 1)*100) / 100
@@ -310,30 +332,31 @@ func (d *Display) slide(s sheetSlider, value float64, final, late bool, gen uint
 		*st = sliderSent{gen: st.gen} // the next finger starts afresh
 	}
 	gen = st.gen
-	c, m := d.dashColor, d.dashMedia
+	c, m, fn := d.dashColor, d.dashMedia, d.dashFan
 	d.mu.Unlock()
 	if repeat {
 		return
 	}
-	d.sendSheet(s, value, final, c, m)
+	d.sendSheet(s, value, final, c, m, fn)
 	if final && recent {
 		sliderSettle(sheetSettle, func() {
 			d.mu.Lock()
 			// No finger since, and the same light's or player's sheet still up (the media sheet is copied
 			// on each change, so it is known by its player).
 			same := c != nil && d.dashColor != nil && d.dashColor.Entity == c.Entity ||
-				m != nil && d.dashMedia != nil && d.dashMedia.entity == m.entity
+				m != nil && d.dashMedia != nil && d.dashMedia.entity == m.entity ||
+				fn != nil && d.dashFan != nil && d.dashFan.entity == fn.entity
 			again := same && d.sheetSent.gen == gen && !d.sheetSent.sent
 			d.mu.Unlock()
 			if again {
-				d.sendSheet(s, value, true, c, m)
+				d.sendSheet(s, value, true, c, m, fn)
 			}
 		})
 	}
 }
 
-// sendSheet sends value to the light or speakers of slider s on sheet c or m.
-func (d *Display) sendSheet(s sheetSlider, value float64, final bool, c *dashboard.LightColor, m *mediaSheet) {
+// sendSheet sends value to the light, speakers or fan of slider s on sheet c, m or fn.
+func (d *Display) sendSheet(s sheetSlider, value float64, final bool, c *dashboard.LightColor, m *mediaSheet, fn *fanSheet) {
 	kind := s.kind
 	log := slog.Debug
 	if final {
@@ -372,6 +395,10 @@ func (d *Display) sendSheet(s sheetSlider, value float64, final bool, c *dashboa
 			sliderTap(dashboard.Action{Entity: e, Service: "media_player.volume_set",
 				Data: map[string]any{"volume_level": groupShift(m.groupBase[e], m.mainBase, value)}})
 		}
+	case kind == fanPartSpeed && fn != nil:
+		log("dashboard fan", "entity", fn.entity, "speed", value)
+		sliderTap(dashboard.Action{Entity: fn.entity, Service: "fan.set_percentage",
+			Data: map[string]any{"percentage": int(value + 0.5)}})
 	case kind == mediaPartSpeaker && m != nil:
 		log("dashboard media", "entity", s.entity, "volume", value)
 		sliderTap(dashboard.Action{Entity: s.entity, Service: "media_player.volume_set",
@@ -382,7 +409,7 @@ func (d *Display) sendSheet(s sheetSlider, value float64, final bool, c *dashboa
 // colorTap is a finger lifted at x, y while the color sheet is up, which the sheet always takes: the
 // page under it is not tapped. It says whether the sheet was up.
 func (d *Display) colorTap(x, y int) bool {
-	if d.mediaTap(x, y) || d.climateTap(x, y) {
+	if d.mediaTap(x, y) || d.climateTap(x, y) || d.fanTap(x, y) {
 		return true
 	}
 	d.mu.Lock()

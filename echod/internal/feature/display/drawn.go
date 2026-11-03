@@ -70,10 +70,11 @@ type mediaZone struct {
 // colors, the media sheet's volume, or a grouped speaker's volume along its button, from lo at its
 // left end to hi at its right.
 type sheetSlider struct {
-	kind   int // colorPartWhite, colorPartHue, mediaPartVolume or mediaPartSpeaker
+	kind   int // colorPartWhite, colorPartHue, mediaPartVolume, mediaPartSpeaker or fanPartSpeed
 	r      image.Rectangle
 	lo, hi float64
-	entity string // the speaker, for mediaPartSpeaker
+	entity string  // the speaker, for mediaPartSpeaker; the fan, for fanPartSpeed
+	step   float64 // the steps a fan's speed takes, for fanPartSpeed
 	// from and base are, on a speaker's button, where the finger came down and the volume it had: the
 	// button is no bar to aim at, so the volume moves by as much as the finger does, as a tile's level.
 	from int

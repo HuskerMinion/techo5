@@ -176,6 +176,7 @@ func (d *Display) dashScene(s *scene, sheetOrDrawer bool) {
 		d.mu.Unlock()
 		s.dashMedia = d.mediaViewNow()
 		s.dashClimate = d.climateViewNow()
+		s.dashFan = d.fanViewNow()
 	}
 
 	over := d.overDashboard(s)
@@ -196,7 +197,7 @@ func (d *Display) dashScene(s *scene, sheetOrDrawer bool) {
 	holdsChanged := holds != d.dashHolds
 	d.dashHolds = holds
 	if !sheeted {
-		d.dashColor, d.dashMedia, d.dashClimate = nil, nil, nil
+		d.dashColor, d.dashMedia, d.dashClimate, d.dashFan = nil, nil, nil, nil
 	}
 	d.mu.Unlock()
 	if changed {
@@ -359,6 +360,7 @@ func (r *renderer) drawnDashboard(s scene) {
 	r.colorSheet(s.dashColor, s.drawn.Theme)
 	r.mediaSheet(s.dashMedia, s.drawn.Theme)
 	r.climateSheet(s.dashClimate, s.drawn.Theme)
+	r.fanSheet(s.dashFan, s.drawn.Theme)
 }
 
 // dashboardPage draws the dashboard over the whole panel.
@@ -372,6 +374,7 @@ func (r *renderer) dashboardPage(s scene) {
 		r.colorSheet(s.dashColor, dashboard.Theme{})
 		r.mediaSheet(s.dashMedia, dashboard.Theme{})
 		r.climateSheet(s.dashClimate, dashboard.Theme{})
+		r.fanSheet(s.dashFan, dashboard.Theme{})
 		return
 	}
 	v := s.dash
