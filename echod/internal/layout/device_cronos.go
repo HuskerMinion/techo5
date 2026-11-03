@@ -105,7 +105,11 @@ func Skylight() bool { return Board == boardSkylight }
 // SoundCard is the id of the sound card the speaker and the microphones are on (as /proc/asound/cards
 // lists it), on a board whose codec is not card 0; empty on every Echo, whose one card is 0. Read by
 // speaker.Card and mic.Card through alsa.CardByID.
-func SoundCard() string { return "" }
+func SoundCard() string { return soundCard }
+
+// soundCard is SoundCard: empty here, and set by a board of this build whose codec is on another
+// card. Read when speaker and mic load, so it is set before then (from this package's own init).
+var soundCard string
 
 // HasMicrophone is whether the device can hear: every Show but the Skylight, which was built
 // without microphones.
