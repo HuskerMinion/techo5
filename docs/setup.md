@@ -1559,6 +1559,11 @@ What to know before turning them on:
   engine), the device goes back to listening for itself and tries Home Assistant again later.
 - Confirm does nothing while Wake word on Home Assistant is on, since Home Assistant is already
   listening.
+- **If Home Assistant never confirms a wake**, check the wake word in each voice assistant (**Settings →
+  Voice assistants**). One saved with an older version of the engine can have an ID the engine no
+  longer lists, such as `hey_jarvis_v0.1` where it now lists `hey_jarvis`. Home Assistant shows no
+  error for it and answers no to every check. Pick the wake word again from the list. After 10 checks
+  in a row that Home Assistant didn't hear, the device's log says so.
 
 ### The nearest device answers
 
@@ -1573,6 +1578,7 @@ phrase, 16 characters or more: anything on the network that hears the devices ca
 fits. The house word is case-sensitive: it has to match exactly, capitals included. When another device refuses this one's
 announcements for having a different word, the setup page names it next to the house word for an
 hour, and the log says so.
+With the switch on and no house word, the setup page and the device's log say it is doing nothing.
 
 How clearly is how far the wake word stood out from that device's own room, so a device with hotter
 microphones or in a louder room does not win for that alone. Nothing you say during the wait is

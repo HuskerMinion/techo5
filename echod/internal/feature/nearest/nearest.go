@@ -223,6 +223,9 @@ func (n *Nearest) Restore(c config.Config) {
 func (n *Nearest) set(on bool) {
 	if on {
 		warm(config.Get().Home.HouseWord)
+		if config.Get().Home.HouseWord == "" {
+			slog.Warn("nearest device answers is on, but does nothing until this device has a house word")
+		}
 	}
 	n.on.Set(on)
 	mic.Get().SetStandout(on)

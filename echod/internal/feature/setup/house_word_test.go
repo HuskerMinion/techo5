@@ -28,3 +28,13 @@ func TestDevicesWithAnotherWordAreNamed(t *testing.T) {
 		t.Error("one device is not named as one")
 	}
 }
+
+// Nearest device answers on with no house word is warned of, since it does nothing then.
+func TestNearestWithNoWordIsWarnedOf(t *testing.T) {
+	if !strings.Contains(nearestWordNote("", true), "does nothing") {
+		t.Error("no warning with the switch on and no word")
+	}
+	if nearestWordNote("", false) != "" || nearestWordNote("a long phrase for this house", true) != "" {
+		t.Error("a warning with the switch off or a word set")
+	}
+}

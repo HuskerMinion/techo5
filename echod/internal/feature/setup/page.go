@@ -836,7 +836,19 @@ func houseSection(w http.ResponseWriter, token string) {
 	 <p class="note">Make it a long phrase, %d characters or more. What the devices send each other is
 	  signed with it, and anything on the network that hears them can try words until one fits.</p>%s
 	 <p><button type="submit">Save</button></p></form></fieldset>`,
-		html.EscapeString(word), otherWordNote(announce.OtherWords()), longHouseWord, shortWordNote(word))
+		html.EscapeString(word), otherWordNote(announce.OtherWords()), longHouseWord,
+		shortWordNote(word)+nearestWordNote(word, config.Get().Nearest.Enabled()))
+}
+
+// nearestWordNote is the warning for Nearest device answers switched on with no house word, which
+// leaves it doing nothing: the claims the devices send each other are signed with the word.
+func nearestWordNote(word string, nearest bool) string {
+	if word != "" || !nearest {
+		return ""
+	}
+	return `
+	 <p class="note"><strong>Nearest device answers is on, but it does nothing until this device has a
+	  house word.</strong> Set the same word here as on the other devices.</p>`
 }
 
 // otherWordNote names the devices here that refused this one's announcements in the last hour, for

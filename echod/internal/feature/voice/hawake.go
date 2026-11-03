@@ -81,6 +81,12 @@ const (
 	confirmGapMax = time.Minute
 )
 
+// unheardWarn is how many wakes in a row Home Assistant can be asked about and hear none of before the
+// log says so. A check that cannot work looks the same as a real no from here: a voice assistant whose
+// wake word is one the engine no longer lists answers no to every ask, and nothing on Home Assistant's
+// side says why. Steady noise near the word can reach it too, so it is a hint, not an error.
+const unheardWarn = 10
+
 // later is the later of two times.
 func later(a, b time.Time) time.Time {
 	if a.After(b) {
@@ -195,6 +201,11 @@ func (c *conversation) watchEvent(e event) bool {
 			c.nextConfirm = c.now().Add(c.confirmGap)
 			slog.Info("home assistant did not hear the wake word", "slot", w.slot+1, "peak", w.peak,
 				"next_ask_after", c.confirmGap)
+			if c.unheard++; c.unheard == unheardWarn {
+				slog.Warn("home assistant has heard none of the last wakes it was asked about; if real ones "+
+					"were among them, check that the voice assistant's wake word is one its engine still lists",
+					"asked", c.unheard)
+			}
 			c.closeWatch()
 		}
 		return true
@@ -325,7 +336,7 @@ func (c *conversation) heardOnHA() {
 		slog.Info("wake word over a ring, silencing it")
 	}
 	if w.mode == watchConfirm {
-		c.confirmGap = 0
+		c.confirmGap, c.unheard = 0, 0
 	}
 	if !c.start(nextTurn{slot: w.slot, woke: true, at: c.now(), continued: true}) {
 		c.closeRun()

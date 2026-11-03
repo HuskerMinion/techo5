@@ -286,6 +286,8 @@ type conversation struct {
 	// not asked about every couple of seconds, and starts again from a wake that was real.
 	nextConfirm time.Time
 	confirmGap  time.Duration
+	// unheard is how many wakes in a row Home Assistant was asked about and did not hear (unheardWarn).
+	unheard int
 
 	// busyAt is the last time the microphones were seen to be somebody else's, while confirming is on.
 	// What is asked about includes the two seconds before the wake, which must not be a call's.

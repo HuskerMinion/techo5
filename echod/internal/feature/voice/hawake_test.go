@@ -510,3 +510,28 @@ func TestARealtimeTurnAlwaysEndsListening(t *testing.T) {
 		t.Fatalf("at the listening limit: %s, want thinking", w.phase)
 	}
 }
+
+// Wakes Home Assistant hears none of are counted, for the log's hint, and one it hears starts the count
+// again.
+func TestUnheardWakesAreCounted(t *testing.T) {
+	w := newWatcher(t, config.OnHA{Confirm: true})
+	w.handle(event{kind: evWatch})
+	for range unheardWarn {
+		w.at = w.at.Add(confirmGapMax + time.Second)
+		w.handle(event{kind: evCandidate, slot: 0, peak: 0.74})
+		if w.watch == nil {
+			t.Fatal("a candidate was not asked about")
+		}
+		w.handle(event{kind: evUnconfirmed})
+		w.handle(event{kind: evRunEnd})
+	}
+	if w.unheard != unheardWarn {
+		t.Fatalf("unheard %d, want %d", w.unheard, unheardWarn)
+	}
+	w.at = w.at.Add(confirmGapMax + time.Second)
+	w.handle(event{kind: evCandidate, slot: 0, peak: 0.8})
+	w.handle(event{kind: evWakeEnd})
+	if w.unheard != 0 {
+		t.Errorf("a wake Home Assistant heard left unheard at %d", w.unheard)
+	}
+}
