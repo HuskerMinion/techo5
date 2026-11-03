@@ -162,6 +162,21 @@ if grep -q 'amazon,cronos' /proc/device-tree/compatible 2>/dev/null &&
 	echo 10000 > /sys/devices/system/cpu/cpufreq/policy0/schedutil/rate_limit_us ||
 		log "cpufreq: schedutil rate limit not set"
 fi
+# The 2nd gen Show 8 on mainline (mtk-cpufreq): ondemand with up_threshold 80 on both clusters, in
+# place of schedutil. Idle on the clock, 10 minutes each, back to back: the same temperature (36.9
+# against 36.9-37.2 °C), but the wake word took 0.8 ms a frame with a worst of 4 ms, against 1.4 ms
+# and 10-20 ms, and the cores were 6-8% busy against 9.5%: schedutil kept the work on the LITTLE
+# cores at 793 MHz and ramped late, and its sugov threads alone took 9% of a core. A 10 ms rate limit
+# made schedutil worse (the big cores at 1989 MHz 22% of the time, against 15%). The Show 5 stays on
+# schedutil: ondemand halved its time at 1300 MHz, at the same temperature, with worse wake frames.
+if grep -q 'amzn,athena' /proc/device-tree/compatible 2>/dev/null &&
+	[ "$(cat /sys/devices/system/cpu/cpufreq/policy0/scaling_driver 2>/dev/null)" = mtk-cpufreq ]; then
+	for p in /sys/devices/system/cpu/cpufreq/policy*; do
+		{ grep -qw ondemand $p/scaling_available_governors 2>/dev/null &&
+			echo ondemand > $p/scaling_governor && echo 80 > $p/ondemand/up_threshold; } ||
+			log "cpufreq: ondemand not set on ${p##*/}"
+	done
+fi
 # The 2nd gen Show 5 on mainline (mediatek-drm): on about one boot in twenty the bootloader times out
 # (its boot takes over 10 s rather than 4.2) and leaves the display engine unstarted, which the kernel
 # cannot recover: the panel gets no frames and the screen is drawn on the cores. Such a boot says so
