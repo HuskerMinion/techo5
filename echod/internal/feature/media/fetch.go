@@ -72,21 +72,27 @@ func Fetch(ctx context.Context, url string) ([]int16, error) {
 	if len(body) > mostAudio {
 		return nil, fmt.Errorf("%s: more than %d bytes of audio for one announcement", url, mostAudio)
 	}
+	return decode(body, resp.Header.Get("Content-Type"), url)
+}
+
+// decode is a whole body as mono speech at speaker.VoiceRate. url is only for the errors and the log.
+func decode(body []byte, contentType, url string) ([]int16, error) {
 	var (
 		samples []int16
 		f       wavFormat
+		err     error
 	)
 	switch {
 	case len(body) >= 12 && string(body[0:4]) == "RIFF":
 		samples, f, err = monoPCM(body)
-	case isMP3(body, resp.Header.Get("Content-Type")):
+	case isMP3(body, contentType):
 		samples, f, err = monoMP3(body)
 	default:
 		head := body
 		if len(head) > 4 {
 			head = head[:4]
 		}
-		err = fmt.Errorf("unrecognised audio: %d bytes, content-type %q, starts %q", len(body), resp.Header.Get("Content-Type"), string(head))
+		err = fmt.Errorf("unrecognised audio: %d bytes, content-type %q, starts %q", len(body), contentType, string(head))
 	}
 	if err != nil {
 		return nil, fmt.Errorf("%w (from %s)", err, url)

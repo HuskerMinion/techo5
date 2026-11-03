@@ -448,6 +448,12 @@ const (
 	// DeliveryStream takes the reply over the API as it is generated. It starts sooner and it can gap:
 	// the chunks arrive at about the rate they play, so any hiccup splices silence into a word.
 	DeliveryStream Delivery = "stream"
+
+	// DeliveryEarly fetches the reply from its url as soon as Home Assistant says it can be, while the
+	// agent is still writing it, and plays it as it arrives. It starts soonest, and it can pause where
+	// the agent is slower than the speech, mostly between sentences, since that is where text to
+	// speech cuts it.
+	DeliveryEarly Delivery = "early"
 )
 
 // Label is how the setting is shown.
@@ -457,6 +463,8 @@ func (d Delivery) Label() string {
 		return "Whole file"
 	case DeliveryStream:
 		return "Streamed"
+	case DeliveryEarly:
+		return "Early"
 	}
 	return string(d)
 }

@@ -100,7 +100,8 @@ const (
 	evUnconfirmed                  // a wake asked about was not heard in time
 	evCandidate                    // a wake the device was not sure of (event.slot, event.peak)
 	evWatch                        // something a stream to Home Assistant depends on may have changed
-	evRunStart                     // Home Assistant opened a run
+	evRunStart                     // Home Assistant opened a run (event.url: where its reply will be)
+	evEarlyReply                   // the reply can be fetched while the agent is still writing it
 	evAnnouncing                   // an announcement that asks for an answer is being said (event.text)
 	evAnnounced                    // and was cut off, so no answer follows
 	evScored                       // the peak a wake word reached (event.slot, event.peak)
@@ -248,6 +249,10 @@ type conversation struct {
 	// or grace runs out, a new turn waits in pending.
 	draining bool
 
+	// runURL is where the open run's reply will be served, from its start; fetched early when the
+	// slot's delivery is Early and Home Assistant says it can be.
+	runURL string
+
 	reply reply
 
 	// replies counts the replies spoken, to give each its id.
@@ -336,6 +341,10 @@ type nextTurn struct {
 type reply struct {
 	url    string
 	stream *stream
+
+	// early is a reply fetched from url as it is written (DeliveryEarly): the url sent again at the
+	// end is the same reply.
+	early bool
 
 	// id tells this reply's evPlaying from a stopped one's. Zero is no reply.
 	id uint64
@@ -643,6 +652,14 @@ func (c *conversation) turnEvent(e event) {
 			c.speak("")
 		}
 
+	case evEarlyReply:
+		if c.phase == phaseIdle || c.phase == phaseReplying || c.runURL == "" ||
+			wakeword.Delivery(c.slot) != config.DeliveryEarly || replyPlayer() != "" {
+			return
+		}
+		slog.Info("reply fetched early", "slot", c.slot+1)
+		c.speakEarly(c.runURL)
+
 	case evReplyURL:
 		// Home Assistant serves the reply whole as well as streaming it over the API, and this
 		// arrives before the first streamed byte. Fetching cannot gap: the streamed copy arrives at
@@ -656,6 +673,14 @@ func (c *conversation) turnEvent(e event) {
 		}
 		// A player chosen for replies needs the url, whatever the slot's setting is.
 		if wakeword.Delivery(c.slot) == config.DeliveryStream && replyPlayer() == "" {
+			return
+		}
+		// Already playing as it is written; without the offer (an agent that does not stream), it is
+		// still fetched as it arrives rather than whole.
+		if wakeword.Delivery(c.slot) == config.DeliveryEarly && replyPlayer() == "" {
+			if c.phase != phaseReplying || !c.reply.early {
+				c.speakEarly(e.url)
+			}
 			return
 		}
 		c.speak(e.url)
@@ -1050,12 +1075,18 @@ func (c *conversation) think() {
 // Either way it becomes one claim on the speaker, so silencing it stops the whole errand: a fetch
 // still downloading is abandoned rather than arriving to play into a canceled turn, and a stream
 // still receiving stops taking chunks.
-func (c *conversation) speak(url string) {
+func (c *conversation) speak(url string) { c.speakReply(url, false) }
+
+// speakEarly moves to playing a reply fetched from url while Home Assistant is still writing it,
+// played as it arrives through the same cushion as a streamed one.
+func (c *conversation) speakEarly(url string) { c.speakReply(url, true) }
+
+func (c *conversation) speakReply(url string, early bool) {
 	c.stopStreaming()
 	c.enter(phaseReplying)
 	c.replies++
 	id := c.replies
-	c.reply = reply{url: url, id: id}
+	c.reply = reply{url: url, id: id, early: early}
 	playing := func() { c.post(event{kind: evPlaying, reply: id}) }
 
 	c.showPhase(wakeword.ReplyingEffect(c.slot))
@@ -1070,7 +1101,14 @@ func (c *conversation) speak(url string) {
 		}
 		return c.play(ctx, url, playing, phone.RepliesIntoCall())
 	}
-	if url == "" {
+	switch {
+	case early:
+		s := newStream(c.speaker.Splices(), c.speaker.Underruns(), wakeword.Buffer(c.slot))
+		c.reply.stream = s
+		errand = func(ctx context.Context, p *speaker.Player) error {
+			return s.fetch(ctx, p, url, playing)
+		}
+	case url == "":
 		s := newStream(c.speaker.Splices(), c.speaker.Underruns(), wakeword.Buffer(c.slot))
 		c.reply.stream = s
 		errand = func(ctx context.Context, p *speaker.Player) error {
@@ -1313,6 +1351,7 @@ func (c *conversation) pipeline(e esphome.PipelineEvent) {
 	case api.VoiceAssistantEvent_VOICE_ASSISTANT_INTENT_PROGRESS:
 		if e.Data["tts_start_streaming"] == "1" {
 			slog.Info("early tts streaming offered", "slot", c.slot+1)
+			c.post(event{kind: evEarlyReply})
 		}
 
 	case api.VoiceAssistantEvent_VOICE_ASSISTANT_INTENT_END:
@@ -1333,7 +1372,7 @@ func (c *conversation) pipeline(e esphome.PipelineEvent) {
 	case api.VoiceAssistantEvent_VOICE_ASSISTANT_TTS_STREAM_END:
 		c.post(event{kind: evStreamEnd})
 	case api.VoiceAssistantEvent_VOICE_ASSISTANT_RUN_START:
-		c.post(event{kind: evRunStart})
+		c.post(event{kind: evRunStart, url: e.Data["url"]})
 	case api.VoiceAssistantEvent_VOICE_ASSISTANT_RUN_END:
 		c.post(event{kind: evRunEnd})
 	case api.VoiceAssistantEvent_VOICE_ASSISTANT_WAKE_WORD_START:

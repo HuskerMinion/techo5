@@ -395,7 +395,10 @@ pipeline rather than the device: Home Assistant is replying in text only.
    plays it, *Streamed* plays it as it arrives. Whole file is the default because it survives a slow
    network better, but it needs to be able to reach the address Home Assistant gives it for the audio.
    Where it cannot, the device falls back to the streamed copy on its own (releases from 2026-09-20
-   on), and setting Reply delivery to **Streamed** makes that permanent.
+   on), and setting Reply delivery to **Streamed** makes that permanent. *Early* fetches the reply
+   while the agent is still writing it, when Home Assistant offers that (an agent that streams its
+   answer): long answers start sooner, at the cost of a possible pause where the agent is slower
+   than the speech.
 5. **Home Assistant on HTTPS with its own certificate.** If Home Assistant's address is `https://` with
    a self-signed certificate, or one issued for a different name than the one the device is given,
    the device refuses the download and the log says `x509: certificate`. The fix that keeps checking
