@@ -355,6 +355,26 @@ func (f *Feature) Note(title, message string) {
 	}, how{silent: true, hushed: f.hushed()})
 }
 
+// Alert puts up news of this device's own: words in a card, as a notification's are, with its chime
+// unless silent, for something one of its features watches for and the owner wants to hear about (a
+// meeting about to start on a calendar it watches). Unlike a note it is news, so it chimes, and it
+// takes the place of whatever is up, as a notification Home Assistant sent would; like a note it fires
+// no events, since Home Assistant did not send it. Night and quiet hours keep it to the screen, and at
+// night the screen holds it back until a touch, as every notification. It stays for d, a minute at
+// least.
+func (f *Feature) Alert(title, message string, d time.Duration, silent bool) {
+	message = clean(message, maxMessage)
+	if message == "" {
+		return
+	}
+	f.order.Lock()
+	defer f.order.Unlock()
+	f.put(Notification{
+		ID: f.nextID(), Kind: Text, Title: clean(title, maxTitle), Message: message,
+		Until: f.now().Add(min(max(d, time.Minute), longest)), Own: true,
+	}, how{silent: silent, hushed: f.hushed()})
+}
+
 // how is what a notification is put up with.
 type how struct {
 	silent bool // the caller asked for no chime

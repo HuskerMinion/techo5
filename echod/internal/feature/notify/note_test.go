@@ -66,3 +66,32 @@ func TestANoteGivesWayToANotification(t *testing.T) {
 		t.Errorf("events %v", got)
 	}
 }
+
+// An alert of the device's own chimes and takes the place of what is up, a notification Home Assistant
+// sent as well, which hears it replaced; the alert itself is reported to nobody. Hushed, it is a card
+// alone.
+func TestAnAlertChimesAndTellsHomeAssistantNothing(t *testing.T) {
+	r := newRig(t, true)
+	if err := r.f.Notify("The washing machine is done", "Washer", "", "off", "", "", 0); err != nil {
+		t.Fatal(err)
+	}
+	r.f.Alert("Meeting in 5 min", "Stand-up · 10:00", 7*time.Minute, false)
+	n, up := r.f.Card()
+	if !up || !n.Own || n.Title != "Meeting in 5 min" || !n.Until.Equal(r.now.Add(7*time.Minute)) {
+		t.Fatalf("card %+v, up %v", n, up)
+	}
+	waitFor(t, "the chime", func() bool { return r.chimes.Load() == 1 })
+	if got := r.fired(); !same(got, []string{"shown", "replaced"}) {
+		t.Errorf("events %v, want the notification's shown and replaced alone", got)
+	}
+	r.f.Alert("Meeting moved", "Stand-up · 10:30", 0, true)
+	r.hushed.Store(true)
+	r.f.Alert("Meeting cancelled", "Stand-up", 0, false)
+	if n, _ := r.f.Card(); n.Title != "Meeting cancelled" || !n.Until.Equal(r.now.Add(time.Minute)) {
+		t.Errorf("card %+v, want the last alert, up a minute", n)
+	}
+	time.Sleep(50 * time.Millisecond)
+	if r.chimes.Load() != 1 {
+		t.Errorf("chimed %d times; a silent and a hushed alert chime not", r.chimes.Load())
+	}
+}
