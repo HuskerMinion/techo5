@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
+	"slices"
+	"strconv"
 
 	"github.com/HuskerMinion/techo5/echod/internal/config"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/dlna"
@@ -31,6 +33,21 @@ func streamingSection(w http.ResponseWriter, token string) {
 	 <p><label><input type="checkbox" name="airplay" value="yes" style="width:auto"%s> AirPlay: from an iPhone, iPad or Mac</label></p>
 	 <p><label><input type="checkbox" name="spotify" value="yes" style="width:auto"%s> Spotify Connect: from the Spotify app (needs Spotify Premium)</label></p>`,
 			checked(c.AirPlay), checked(c.Spotify))
+		fmt.Fprint(w, `
+	 <p><label for="spotifybitrate">Spotify Connect quality</label><select id="spotifybitrate" name="spotifybitrate">`)
+		for _, b := range []int{96, 160, 320} {
+			sel := ""
+			if b == c.SpotifyKbps() {
+				sel = " selected"
+			}
+			fmt.Fprintf(w, `<option value="%d"%s>%s</option>`, b, sel, spotifyQuality(b))
+		}
+		fmt.Fprintf(w, `</select></p>
+	 <p><label><input type="checkbox" name="spotifynormalize" value="yes" style="width:auto"%s> Spotify Connect evens
+	  out the volume between songs</label></p>
+	 <p class="note">As the Spotify app's own Normalize volume: quiet and loud songs play at about the same loudness,
+	  and an album played in order keeps its own. Changing either starts Spotify Connect again for a moment.</p>`,
+			checked(c.SpotifyNormalize))
 		if streaming.Has2() {
 			fmt.Fprintf(w, `
 	 <p><label><input type="checkbox" name="airplay2" value="yes" style="width:auto"%s> AirPlay 2: group it with
@@ -55,6 +72,17 @@ func streamingSection(w http.ResponseWriter, token string) {
 	 <p><button type="submit">Save</button></p></form></fieldset>`)
 }
 
+// spotifyQuality names a Spotify Connect quality as the Spotify app does.
+func spotifyQuality(kbps int) string {
+	switch kbps {
+	case 96:
+		return "Normal (96 kbit/s)"
+	case 320:
+		return "Very high (320 kbit/s)"
+	}
+	return "High (160 kbit/s, as it comes)"
+}
+
 func saveStreaming(r *http.Request) string {
 	on := func(name string) bool { return r.PostFormValue(name) == "yes" }
 	if streaming.Here {
@@ -63,6 +91,16 @@ func saveStreaming(r *http.Request) string {
 		}
 		if on("spotify") != config.Get().Streaming.Spotify {
 			streaming.Get().SetSpotify(on("spotify"))
+		}
+		kbps, _ := strconv.Atoi(r.PostFormValue("spotifybitrate"))
+		if !slices.Contains(config.SpotifyBitrates, kbps) {
+			kbps = config.Get().Streaming.SpotifyKbps()
+		}
+		if s := config.Get().Streaming; kbps != s.SpotifyKbps() || on("spotifynormalize") != s.SpotifyNormalize {
+			if err := streaming.Get().SetSpotifyChoices(kbps, on("spotifynormalize")); err != nil {
+				slog.Error("setup page: saving Spotify Connect's choices failed", "err", err)
+				return "could not save it"
+			}
 		}
 		if streaming.Has2() && on("airplay2") == config.Get().Streaming.AirPlayClassic {
 			streaming.Get().SetAirPlay2(on("airplay2"))

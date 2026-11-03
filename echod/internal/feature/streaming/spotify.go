@@ -18,6 +18,7 @@ import (
 
 	"golang.org/x/sys/unix"
 
+	"github.com/HuskerMinion/techo5/echod/internal/config"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/home"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/media"
 	"github.com/HuskerMinion/techo5/echod/internal/layout"
@@ -416,7 +417,7 @@ func runSpotifyReceiver(ctx context.Context, name string) {
 	_ = os.MkdirAll(cache, 0o700)
 	_ = os.Chmod(cache, 0o700)
 	handTo(cred, cache)
-	args, level := spotifyArgs(name, cache, script, volume)
+	args, level := spotifyArgs(name, cache, script, volume, config.Get().Streaming)
 	safe.Go("spotify audio", func() { pump(ctx, home.SpotifyName, r, level, nil) })
 	supervise(ctx, program{
 		name:   "librespot",
@@ -456,17 +457,22 @@ func spotifyVolumePipe(dir string, cred *syscall.Credential) string {
 // spotifyArgs are librespot's arguments, and the level the pump undoes its scaling by (nil for none).
 // With a volume pipe librespot takes the device's volume from it and sends the audio unscaled, so
 // there is nothing to undo; without one, it starts at full and scales linearly, which the pump undoes.
-func spotifyArgs(name, cache, script, volume string) ([]string, *level) {
+// The quality and the normalization are the setup page's (c).
+func spotifyArgs(name, cache, script, volume string, c config.Streaming) ([]string, *level) {
 	args := []string{
 		"--name", layout.CutName(name, layout.LabelMax), // its mDNS instance name, one DNS label
 		"--backend", "pipe",
 		"--format", "S16",
-		"--bitrate", "160",
+		"--bitrate", strconv.Itoa(c.SpotifyKbps()),
 		"--device-type", "speaker",
 		"--disable-audio-cache",
 		"--cache", cache,
 		"--zeroconf-port", spotifyPort,
 		"--onevent", script,
+	}
+	if c.SpotifyNormalize {
+		// Auto: a whole album keeps its own loudness from song to song, other songs are evened out.
+		args = append(args, "--enable-volume-normalisation", "--normalisation-gain-type", "auto")
 	}
 	if volume != "" {
 		return append(args, "--volume-fifo", volume), nil
