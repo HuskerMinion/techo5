@@ -127,17 +127,27 @@ def download(url, out):
 
 
 def download_checked(url, out, sha256):
-    """Keeps a download only once its sha256 is the one expected; one already there and right stays."""
+    """Keeps a download only once its sha256 is the one expected; one already there and right stays.
+    A download that comes out wrong is tried once more: a connection that dropped partway is the
+    likeliest cause. The error says how much arrived, which tells a cut-off download from one that
+    something on the way (antivirus that scans downloads, a proxy) changed."""
     if os.path.exists(out) and hash_file(out) == sha256:
         return
     partial = out + '.partial'
-    with _open(url) as r, open(partial, 'wb') as f:
-        shutil.copyfileobj(r, f, 1 << 20)
-    got = hash_file(partial)
-    if got != sha256:
+    for attempt in (1, 2):
+        with _open(url) as r, open(partial, 'wb') as f:
+            shutil.copyfileobj(r, f, 1 << 20)
+        got = hash_file(partial)
+        if got == sha256:
+            os.replace(partial, out)
+            return
+        size = os.path.getsize(partial)
         os.remove(partial)
-        fail('%s does not match its checksum (%s, wanted %s)' % (url, got, sha256))
-    os.replace(partial, out)
+        if attempt == 1:
+            print('   %s did not match its checksum (%d bytes arrived); downloading it again' % (url, size))
+    fail('%s does not match its checksum (%s, wanted %s; %d bytes arrived). Compare the size with the '
+         'one on the release page: fewer bytes is a connection that dropped, the same number is something '
+         'on the way changing the file, such as antivirus that scans downloads or a proxy' % (url, got, sha256, size))
 
 
 # ------------------------------------------------------------------------------------------ signatures

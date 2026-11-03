@@ -7,6 +7,7 @@ The unlock check before the flash (#168) and what the wait for the rescue consol
 the unit is (#166), with adb and fastboot stood in for.
 """
 import contextlib
+import hashlib
 import importlib.util
 import io
 import os
@@ -327,6 +328,30 @@ class FirstBoot(unittest.TestCase):
                 return 'slot=a- daemon=-'
         with self.assertRaises(lib.Fail), contextlib.redirect_stdout(io.StringIO()):
             inst.first_boot(Stuck([]), NoFastboot, [False], seconds=1, every=0)
+
+
+class DownloadChecked(unittest.TestCase):
+    """A download that comes out wrong is tried once more, and the error says how much arrived (#393)."""
+
+    def fetch_with(self, bodies, want):
+        served = list(bodies)
+        old = lib._open
+        lib._open = lambda url: contextlib.closing(io.BytesIO(served.pop(0)))
+        self.addCleanup(setattr, lib, '_open', old)
+        out = os.path.join(tempfile.mkdtemp(), 'image.gz')
+        with contextlib.redirect_stdout(io.StringIO()):
+            lib.download_checked('https://example.invalid/image.gz', out, hashlib.sha256(want).hexdigest())
+        return out
+
+    def test_a_second_try_that_comes_out_right_is_kept(self):
+        out = self.fetch_with([b'cut', b'whole image'], b'whole image')
+        with open(out, 'rb') as f:
+            self.assertEqual(f.read(), b'whole image')
+
+    def test_two_wrong_says_how_much_arrived(self):
+        with self.assertRaises(lib.Fail) as e:
+            self.fetch_with([b'cut', b'cut'], b'whole image')
+        self.assertIn('3 bytes arrived', str(e.exception))
 
 
 if __name__ == '__main__':
