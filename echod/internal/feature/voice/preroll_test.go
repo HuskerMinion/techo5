@@ -154,12 +154,44 @@ func TestRequestInsideTheWakeSoundEndsAfterIt(t *testing.T) {
 	if _, ended := run(t, config.ToneHA, true, nil, frames...); ended {
 		t.Fatal("the turn ended inside the wake sound")
 	}
-	// the same, with the quiet after the sound
+	// the same, with quiet after the request that is still short of saidQuiet
+	for len(frames) < 4+saidQuiet-1 {
+		frames = append(frames, voiceAt(1, 20))
+	}
+	if _, ended := run(t, config.ToneHA, true, nil, frames...); ended {
+		t.Fatal("the turn ended before saidQuiet of quiet after the request")
+	}
+	// and with all of it
+	frames = append(frames, voiceAt(1, 20))
+	if _, ended := run(t, config.ToneHA, true, nil, frames...); !ended {
+		t.Fatal("a request spoken inside the wake sound did not end the turn on the quiet after it")
+	}
+}
+
+// The end of the wake word and the sound itself count as speech inside the sound. Someone who waits for
+// the sound and a second more before asking is not cut off in that pause, and the turn ends on the
+// quiet after what they asked.
+func TestWaitingAfterTheWakeSoundIsNotCutOff(t *testing.T) {
+	n := stepping(t)
+	var frames [][]int16
+	frames = append(frames, voiceAt(1, 1100), voiceAt(1, 1100), voiceAt(1, 1100))
+	for len(frames) < n+10 {
+		frames = append(frames, voiceAt(1, 20))
+	}
+	if _, ended := run(t, config.ToneHA, true, nil, frames...); ended {
+		t.Fatal("the wake word and the sound ended the turn in the pause before the request")
+	}
+	for range 10 {
+		frames = append(frames, voiceAt(1, 1500))
+	}
+	if _, ended := run(t, config.ToneHA, true, nil, frames...); ended {
+		t.Fatal("the turn ended while the request was being said")
+	}
 	for range 8 {
 		frames = append(frames, voiceAt(1, 20))
 	}
 	if _, ended := run(t, config.ToneHA, true, nil, frames...); !ended {
-		t.Fatal("a request spoken inside the wake sound did not end the turn on the quiet after it")
+		t.Fatal("the quiet after the request did not end the turn")
 	}
 }
 

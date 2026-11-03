@@ -1441,6 +1441,48 @@ func holdsForTone(slot int, followUp bool) bool {
 // clock is the time the turn's wake sound is measured by; a test replaces it.
 var clock = time.Now
 
+// saidQuiet is how long nothing near the speaker's level has to be heard, after the wake sound, before
+// a request heard inside the sound is taken as the whole of it, in windows: longer than the pause of
+// someone who waited for the sound and then thought what to ask.
+const saidQuiet = 25
+
+// saidCheck ends a turn whose request was said inside the wake sound (pump). Off is the level a window
+// after the sound has to reach to count as someone talking, from what was heard inside it; zero when
+// nothing was, and it never ends anything.
+type saidCheck struct {
+	off, peak float64
+
+	sum   float64 // squares in the window being filled
+	n     int
+	quiet int // windows in a row below off
+}
+
+// watch takes what follows the sound and reports whether the request was already said.
+func (s *saidCheck) watch(frame []int16) bool {
+	if s.off == 0 {
+		return false
+	}
+	for _, v := range frame {
+		s.sum += float64(v) * float64(v)
+		s.n++
+		if s.n < endpoint.Window {
+			continue
+		}
+		rms := math.Sqrt(s.sum / endpoint.Window)
+		s.sum, s.n = 0, 0
+		if rms >= s.off {
+			s.quiet = 0
+			continue
+		}
+		if s.quiet++; s.quiet >= saidQuiet {
+			slog.Info("turn: request heard inside the wake sound", "peak", math.Round(s.peak))
+			s.off = 0
+			return true
+		}
+	}
+	return false
+}
+
 // toneEnds is how long after a turn opens its wake sound is loud enough to matter to the microphones.
 func toneEnds(slot int, followUp bool) time.Duration {
 	return wakeword.ChimeLength(slot, followUp) + speaker.HardwareTail
@@ -1485,26 +1527,32 @@ func (c *conversation) pump(ctx context.Context, be backend, slot int, followUp,
 	// and what is sent before then is only for speech recognition.
 	//
 	// A request said in one breath fits inside that time, though, so the detector still watches until
-	// then, counting speech but unable to end the turn. When the sound is over, a detector that saw
-	// no speech starts afresh, so the sound's level sets nothing; one that did keeps its peak and ends
-	// the turn on the first pause of quiet after the sound.
+	// then, counting speech but unable to end the turn. When the sound is over a fresh one takes over
+	// either way: the end of the wake word and the sound alone count as speech, and keeping them would
+	// end the turn in the pause of someone waiting for the sound. If the watching one heard speech, the
+	// turn also ends once nothing near it has been heard for saidQuiet: a request said inside the
+	// sound, or running just past it, that the fresh detector heard too little of to decide on.
 	var deafUntil time.Time
 	if tone := wakeword.Tones(slot, followUp); tone && !hold {
 		deafUntil = clock().Add(toneEnds(slot, followUp))
 		ep.Hold(true)
 	}
 	watching := !deafUntil.IsZero()
+	var said saidCheck
 	see := func(frame []int16) {
 		sent += len(frame)
 		if watching && !clock().Before(deafUntil) {
 			watching = false
-			if _, _, speech := ep.Heard(); speech < ep.Settings().Speech {
-				ep = endpoint.New(endpointSettings())
-			} else {
-				ep.Hold(false)
+			if peak, off, speech := ep.Heard(); speech >= ep.Settings().Speech {
+				said = saidCheck{off: off, peak: peak}
 			}
+			ep = endpoint.New(endpointSettings())
 		}
-		if endpointAt == 0 && ep.Feed(frame) {
+		ended := ep.Feed(frame)
+		if !watching && said.watch(frame) {
+			ended = true
+		}
+		if endpointAt == 0 && ended {
 			endpointAt = float64(sent) / float64(mic.Rate)
 			// What the decision was made on, not just that it was made: the loudest window of the
 			// turn (usually the wake word), the level a window had to fall below to count as quiet,
