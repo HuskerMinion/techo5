@@ -22,6 +22,7 @@ import (
 	"github.com/HuskerMinion/techo5/echod/internal/config"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/bluetooth"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/wakeword"
+	"github.com/HuskerMinion/techo5/echod/internal/hardware/cpuboost"
 	"github.com/HuskerMinion/techo5/echod/internal/hardware/metrics"
 	"github.com/HuskerMinion/techo5/echod/internal/hardware/mic"
 	"github.com/HuskerMinion/techo5/echod/internal/hardware/speaker"
@@ -94,6 +95,11 @@ type Diag struct {
 	interval *esphome.Number
 	minCores *esphome.Number
 
+	// touchBoost is the Touch boost switch (hardware/cpuboost), where this device has one.
+	touchBoost *esphome.Switch
+	// fastCores is Touch boost: fast cores, which matters only while the boost itself is on.
+	fastCores *esphome.Switch
+
 	// wake restarts the collector's wait when the interval changes, so a shorter one takes effect now
 	// rather than after the wait already running. Buffered: a change while nothing is waiting is not
 	// worth blocking on.
@@ -160,6 +166,9 @@ func (d *Diag) Entities() []esphome.Entity {
 	if bluetooth.Here {
 		out = append(out, d.ads)
 	}
+	if d.touchBoost != nil {
+		out = append(out, d.touchBoost, d.fastCores)
+	}
 	// adbd is Android's. On the Linux image there is none to reach, and the saved setting is read by
 	// the Android daemon the unit falls back to, where it would open root adb to the network. A panel
 	// has no firewall of its own to open it in (adbHere).
@@ -204,6 +213,40 @@ func (d *Diag) collector() {
 		},
 		Min: 1, Max: float64(setup.Present()), Step: 1,
 		Mode: esphome.NumberBox,
+	}
+
+	// The clocks and cores held up while the screen is touched are the 2nd gen Show 8's own (cpuboost).
+	if layout.AthenaMainline() {
+		d.touchBoost = &esphome.Switch{
+			Base: esphome.Base{
+				ObjectID: "touch_boost",
+				Name:     "Touch boost",
+				Icon:     "mdi:gesture-swipe",
+				Category: esphome.CategoryConfig,
+			},
+		}
+		d.touchBoost.OnCommand = func(on bool) {
+			cpuboost.SetEnabled(on)
+			d.touchBoost.Set(on)
+			if err := config.Set().Diag().TouchBoostOff(!on); err != nil {
+				slog.Error("saving a setting failed", "setting", d.touchBoost.ObjectID, "err", err)
+			}
+		}
+		d.fastCores = &esphome.Switch{
+			Base: esphome.Base{
+				ObjectID: "touch_boost_fast_cores",
+				Name:     "Touch boost: fast cores (experimental)",
+				Icon:     "mdi:speedometer",
+				Category: esphome.CategoryConfig,
+			},
+		}
+		d.fastCores.OnCommand = func(on bool) {
+			cpuboost.SetFastCores(on)
+			d.fastCores.Set(on)
+			if err := config.Set().Diag().TouchBoostSlowCores(!on); err != nil {
+				slog.Error("saving a setting failed", "setting", d.fastCores.ObjectID, "err", err)
+			}
+		}
 	}
 
 	d.minCores.OnCommand = func(v float32) {
@@ -718,6 +761,15 @@ func (d *Diag) Restore(c config.Config) {
 	insecureTLS(c.Diag.InsecureTLS)
 	d.tls.Set(c.Diag.InsecureTLS)
 	slog.Info("restored", "what", d.tls.ObjectID, "using", c.Diag.InsecureTLS)
+
+	if d.touchBoost != nil {
+		cpuboost.SetEnabled(!c.Diag.TouchBoostOff)
+		d.touchBoost.Set(!c.Diag.TouchBoostOff)
+		slog.Info("restored", "what", d.touchBoost.ObjectID, "using", !c.Diag.TouchBoostOff)
+		cpuboost.SetFastCores(!c.Diag.TouchBoostSlowCores)
+		d.fastCores.Set(!c.Diag.TouchBoostSlowCores)
+		slog.Info("restored", "what", d.fastCores.ObjectID, "using", !c.Diag.TouchBoostSlowCores)
+	}
 
 	if !coresHere {
 		return

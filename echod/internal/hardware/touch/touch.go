@@ -91,6 +91,11 @@ type Screen struct {
 	// Gestures fires as they happen, on the reader's goroutine: listeners must not block.
 	Gestures hook.Hook[Gesture]
 
+	// Down fires as the finger the screen follows lands (true) and lifts (false), on the reader's
+	// goroutine: listeners must not block. That is the first finger down, and a second one that lands
+	// while it is followed does not fire it. A listener that wants the current state reads Touched.
+	Down hook.Hook[bool]
+
 	dev  *input.Device
 	rawW int // panel x range, exclusive
 	rawH int // panel y range, exclusive
@@ -351,8 +356,12 @@ func (s *Screen) track(ctx context.Context, path string, read func() (input.Even
 
 func (s *Screen) setDown(v bool) {
 	s.mu.Lock()
+	changed := s.down != v
 	s.down = v
 	s.mu.Unlock()
+	if changed {
+		s.Down.Emit(v)
+	}
 }
 
 // landscape turns a raw panel point into the frame the screen draws in (device_*.go).
