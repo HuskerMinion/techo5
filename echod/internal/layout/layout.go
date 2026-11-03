@@ -211,12 +211,19 @@ func readIDME(name string, readFile func(string) ([]byte, error)) ([]byte, error
 // Color is the device's shell, worked out from two idme fields: productid2 is 0 on a black unit and a
 // nonzero code on a white one, and the serial runs G090LF… on black against G090L9… on white. They
 // confirm each other; a disagreement, or nothing to read, is left unknown rather than guessed.
+//
+// That holds only for the model whose serials start G090L, which it was read from. Other models break
+// it: a white Dot 3 reads 0 and a black Dot 2 2020, and their serials say nothing either way.
 func Color(productID2, serial string) string {
 	const (
 		black   = "black"
 		white   = "white"
 		unknown = "unknown"
 	)
+
+	if !strings.HasPrefix(strings.TrimSpace(serial), "G090L") {
+		return unknown
+	}
 
 	prod := unknown
 	if n, err := strconv.Atoi(strings.TrimSpace(productID2)); err == nil {

@@ -44,9 +44,11 @@ func TestColor(t *testing.T) {
 
 		{"fields disagree", "0", whiteSerial, "unknown"},
 		{"nothing to read", "", "", "unknown"},
-		{"productid2 only", "0", "", "black"},
+		{"productid2 only", "0", "", "unknown"},
 		{"serial only", "", whiteSerial, "white"},
 		{"serial too short", "", "G090L", "unknown"},
+		{"another model, productid2 0", "0", "G0000600000000000", "unknown"},
+		{"another model, productid2 set", "2020", "G0000300000000000", "unknown"},
 	}
 	for _, tt := range tests {
 		if got := Color(tt.productID2, tt.serial); got != tt.want {
