@@ -437,6 +437,37 @@ func TestARestoreKeepsWhatIsOnByDefaultOff(t *testing.T) {
 	}
 }
 
+// Where replies play is the device's own: a file from another device does not move this one's replies.
+func TestARestoreKeepsWhereRepliesPlay(t *testing.T) {
+	here := Defaults()
+	from := Defaults()
+	from.Brain.ReplyPlayer = "media_player.kitchen"
+	file, _ := Export(from, "m", "v0")
+	r, err := Restored(here, file, "m")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := r.Config.Brain.ReplyPlayer; got != "" {
+		t.Errorf("a restore set the reply player to %q", got)
+	}
+}
+
+// The to-do lists a device shows are its own: a restore keeps them.
+func TestARestoreKeepsTheToDoLists(t *testing.T) {
+	here := Defaults()
+	here.Todo.Lists = []string{"todo.chores"}
+	from := Defaults()
+	from.Todo.Lists = []string{"todo.shopping_list"}
+	file, _ := Export(from, "m", "v0")
+	r, err := Restored(here, file, "m")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := r.Config.Todo.Lists; len(got) != 1 || got[0] != "todo.chores" {
+		t.Errorf("a restore changed the to-do lists to %v", got)
+	}
+}
+
 // Secure Connections is this device's own both ways (#183): a file never carries it, a restore keeps
 // this device's whichever way the file's device had it, and clearing what is a device's own leaves it on.
 func TestSecureConnectionsAreTheDevicesOwn(t *testing.T) {

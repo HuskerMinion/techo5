@@ -133,11 +133,12 @@ command or an automation.
 
 The dashboard above shows each device's main controls. If you have several devices and want to change
 their settings in one place, a script makes a bigger dashboard for you: pick a device from a list, see
-all its settings grouped by section, and change them. It also has:
+its settings grouped by section, and change them. It also has:
 
 - **All devices.** Turn it on and each change you make to the selected device is copied to every other
-  device that has that setting. Settings that belong to one device (microphone mute, screen power, LED
-  ring, Bluetooth, SSH and web access) are never copied.
+  device that has that setting. Settings that belong to one device are never copied: microphone mute,
+  screen power, the LED ring, Bluetooth, SSH and web access, Drop In and talking through cameras,
+  AirPlay, Spotify Connect and DLNA, and the update channel and automatic updates.
 - **Copy all to others.** Copies every copyable setting from the selected device to the rest.
 - **Update all** and **Check all for updates.**
 - A **Compare** page with one table per section that marks the settings that differ between devices.
