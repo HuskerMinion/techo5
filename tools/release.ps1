@@ -134,8 +134,9 @@ if (($AthenaImage -and -not $AthenaBoot) -or ($AthenaBoot -and -not $AthenaImage
 foreach ($t in @($Rootfs, $AthenaRootfs, $SkylightRootfs) | Where-Object { $_ }) {
     if (& tar -tzf $t | Where-Object { $_ -match '^(\./)?vendor/.' } | Select-Object -First 1) { throw "$t carries a vendor tree; build it without VENDOR_TGZ" }
     # Nor a development kernel's modules and firmware (mkrootfs.sh's inputs/kernel.tar.gz): a released
-    # rootfs has an empty lib/firmware and no lib/modules.
-    if (& tar -tzf $t | Where-Object { $_ -match '^(\./)?lib/(modules|firmware)/.' } | Select-Object -First 1) { throw "$t carries kernel modules or firmware; build it without inputs/kernel.tar.gz" }
+    # rootfs has no lib/modules, and lib/firmware holds only wireless-regdb's regulatory database, which
+    # the mainline kernels read from there.
+    if (& tar -tzf $t | Where-Object { $_ -match '^(\./)?lib/(modules|firmware)/.' -and $_ -notmatch '^(\./)?lib/firmware/regulatory\.db(\.p7s)?$' } | Select-Object -First 1) { throw "$t carries kernel modules or firmware; build it without inputs/kernel.tar.gz" }
 }
 # The plain -Rootfs is the one every Show without a rootfs of its own updates from: a board's own
 # (T5_BOARD in its device.conf, from the athena or Skylight overlay), or one carrying a kernel for the
