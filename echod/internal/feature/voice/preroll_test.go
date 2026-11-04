@@ -73,12 +73,19 @@ func TestHistoryLeavesTheWakeWordOutWhenASoundPlays(t *testing.T) {
 	} {
 		config.Use(filepath.Join(t.TempDir(), "state.json"))
 		_ = config.Set().Wake(0).Tone(l.tone)
-		if got := historyFor(0, false, waited); got != l.want {
+		if got := historyFor(0, false, waited, waited); got != l.want {
 			t.Errorf("tone %v: history %v, want %v", l.tone, got, l.want)
 		}
-		if got := historyFor(0, false, 0); l.tone != config.ToneNone && got != 0 {
-			t.Errorf("tone %v, heard just now: history %v, want none", l.tone, got)
-		}
+	}
+	// The moment between the word being heard and the turn opening is kept, never more than the reach
+	// without a sound.
+	config.Use(filepath.Join(t.TempDir(), "state.json"))
+	_ = config.Set().Wake(0).Tone(config.ToneHA)
+	if got := historyFor(0, false, 0, 30*time.Millisecond); got != 30*time.Millisecond {
+		t.Errorf("heard 30 ms ago: history %v, want 30ms", got)
+	}
+	if got := historyFor(0, false, 0, time.Minute); got != mic.History {
+		t.Errorf("heard a minute ago: history %v, want at most %v", got, mic.History)
 	}
 }
 

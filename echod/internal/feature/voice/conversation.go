@@ -1004,7 +1004,13 @@ func (c *conversation) start(n nextTurn) bool {
 	}
 
 	c.arm(c.listenFor(n))
-	c.startAudio(slot, n.followUp, n.continued, n.waited)
+	// A wake word's turn opens a moment after the word was heard (the mute check, the ducking, the
+	// sound queued): the history covers that too.
+	var heard time.Duration
+	if n.woke && !n.at.IsZero() {
+		heard = time.Since(n.at)
+	}
+	c.startAudio(slot, n.followUp, n.continued, n.waited, heard)
 	// The phrase is logged for a follow-up too, because it is what chose the pipeline — not because
 	// anyone said it.
 	slog.Info("turn started", "slot", slot+1, "phrase", phrase, "follow_up", n.followUp, "on_ha", n.continued)
@@ -1436,7 +1442,7 @@ func audioSettings() *api.VoiceAssistantAudioSettings {
 
 // startAudio begins sending microphone frames. The streamer only reads, so it needs no coordination
 // beyond being told to stop. continued is a run that has had the audio up to now already.
-func (c *conversation) startAudio(slot int, followUp, continued bool, waited time.Duration) {
+func (c *conversation) startAudio(slot int, followUp, continued bool, waited, heard time.Duration) {
 	ctx, cancel := context.WithCancel(context.Background())
 	c.stopAudio = cancel
 
@@ -1452,7 +1458,7 @@ func (c *conversation) startAudio(slot int, followUp, continued bool, waited tim
 	safe.Go("turn audio", func() {
 		defer streams.Done()
 		defer listened()
-		c.stream(ctx, be, slot, followUp, continued, id, waited)
+		c.stream(ctx, be, slot, followUp, continued, id, waited, heard)
 	})
 }
 
@@ -1471,8 +1477,8 @@ func (c *conversation) stopStreaming() {
 }
 
 // stream sends microphone frames until it is told to stop.
-func (c *conversation) stream(ctx context.Context, be backend, slot int, followUp, continued bool, id string, waited time.Duration) {
-	frames, pre, unlisten := c.source.ListenHistory("turn", historyFor(slot, followUp, waited))
+func (c *conversation) stream(ctx context.Context, be backend, slot int, followUp, continued bool, id string, waited, heard time.Duration) {
+	frames, pre, unlisten := c.source.ListenHistory("turn", historyFor(slot, followUp, waited, heard))
 	defer unlisten()
 	hold := holdsForTone(slot, followUp)
 	slog.Info("turn: wake sound", "tone", wakeword.Tones(slot, followUp), "held", hold, "history_ms", len(pre)*1000/mic.Rate)
@@ -1484,9 +1490,10 @@ func (c *conversation) stream(ctx context.Context, be backend, slot int, followU
 // costs a little of the word's tail. With a sound they wait for it, those 250 ms are the end of the
 // wake word itself ("Google. What time is it?", #445), and it reaches back only to the moment the
 // word was heard: what was said after it, while the sound played or while the wake was confirmed.
-func historyFor(slot int, followUp bool, waited time.Duration) time.Duration {
+// heard is how long ago that was, for a wake word's turn; never more than the reach without a sound.
+func historyFor(slot int, followUp bool, waited, heard time.Duration) time.Duration {
 	if wakeword.Tones(slot, followUp) {
-		return waited
+		return min(max(waited, heard), mic.History+waited)
 	}
 	return mic.History + waited
 }
@@ -1568,7 +1575,7 @@ func (c *conversation) pump(ctx context.Context, be backend, slot int, followUp,
 	// With a tone and no echo canceller it is not sent: whoever is talking waits for the tone, so the
 	// history holds the wake word rather than the request, and the tone itself is louder at the array
 	// than they are (holdsForTone). With the canceller the tone is taken out of what is sent, and the
-	// history reaches back to the end of the wake word whether or not there is one.
+	// history reaches back to where the wake word was heard (historyFor).
 	if hold {
 		pre = nil
 	}
