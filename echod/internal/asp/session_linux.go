@@ -18,7 +18,8 @@ import (
 const (
 	// The installation path is a deployment contract, not user configuration.
 	startupLimit  = 10 * time.Second
-	exchangeLimit = 5 * time.Second
+	exchangeLimit = 80 * time.Millisecond
+	debtLimit     = 100 * time.Millisecond
 )
 
 var components = [...]string{"data", "techo5-linux", "external-asp", "bin", "external-asp"}
@@ -132,6 +133,7 @@ type Session struct {
 	in, out     *os.File
 	lengths     []uint32
 	gate        chan struct{}
+	debt        time.Duration // protected by gate; only a new session starts at zero
 	stopped     chan struct{}
 	done        chan struct{}
 	stopOnce    sync.Once
@@ -315,7 +317,8 @@ func writeFull(w io.Writer, b []byte) error {
 
 // Exchange sends borrowed native buffers, then returns a fresh owned 640-byte
 // mono S16LE frame. Input is never retained past the call; the returned output
-// never aliases future exchanges. One 5s deadline spans ALL writes and the read.
+// never aliases future exchanges. One 80ms deadline spans the gate, ALL writes
+// and the read, including the first frame after READY.
 // Cancellation is terminal for the session, including when blocked on an OS pipe.
 func (s *Session) Exchange(ctx context.Context, buffers [][]byte) (_ []byte, retErr error) {
 	if s == nil {
@@ -331,15 +334,28 @@ func (s *Session) Exchange(ctx context.Context, buffers [][]byte) (_ []byte, ret
 	if ctx == nil {
 		return nil, errors.New("nil exchange context")
 	}
-	ex, cancel := context.WithTimeout(ctx, exchangeLimit)
+	began := time.Now()
+	ex, cancel := context.WithDeadline(ctx, began.Add(exchangeLimit))
 	defer cancel()
 	select {
 	case s.gate <- struct{}{}:
-		defer func() { <-s.gate }()
+		defer func() {
+			if retErr != nil {
+				s.stop()
+			}
+			<-s.gate
+		}()
 	case <-ex.Done():
 		return nil, ex.Err()
 	case <-s.stopped:
 		return nil, errors.New("session closed")
+	}
+	if err := ex.Err(); err != nil {
+		return nil, err
+	}
+	deadline, _ := ex.Deadline()
+	if !time.Now().Before(deadline) {
+		return nil, context.DeadlineExceeded
 	}
 	select {
 	case <-s.stopped:
@@ -374,8 +390,9 @@ func (s *Session) Exchange(ctx context.Context, buffers [][]byte) (_ []byte, ret
 		}
 		return nil, fmt.Errorf("read PCM: %w", err)
 	}
-	if err := ex.Err(); err != nil {
-		s.stop()
+	// Disarm before canceling ex on return. A callback that already won makes
+	// this result terminal even if it has not closed the pipes yet.
+	if err := disarmExchange(ex, cancelExchangeStop); err != nil {
 		return nil, err
 	}
 	select {
@@ -383,5 +400,35 @@ func (s *Session) Exchange(ctx context.Context, buffers [][]byte) (_ []byte, ret
 		return nil, errors.New("session closed")
 	default:
 	}
+	finished := time.Now()
+	// A delayed context timer must not admit PCM past the absolute deadline.
+	if !finished.Before(deadline) {
+		return nil, context.DeadlineExceeded
+	}
+	next, err := exchangeDebt(s.debt, finished.Sub(began))
+	if err != nil {
+		return nil, err
+	}
+	s.debt = next
 	return owned, nil
+}
+
+// exchangeDebt accounts only completed exchanges, including time at the gate.
+// Fast replies repay excess processing time without an idle reset.
+func exchangeDebt(debt, elapsed time.Duration) (time.Duration, error) {
+	if elapsed >= exchangeLimit {
+		return debt, context.DeadlineExceeded
+	}
+	next := max(0, debt+elapsed-20*time.Millisecond)
+	if next >= debtLimit {
+		return next, errors.New("External ASP processing debt exceeded")
+	}
+	return next, nil
+}
+
+func disarmExchange(ctx context.Context, stop func() bool) error {
+	if !stop() {
+		return errors.New("exchange cancellation started")
+	}
+	return ctx.Err()
 }

@@ -374,7 +374,7 @@ func TestProcessFailureAndCancellation(t *testing.T) {
 		}
 		result := make(chan error, 1)
 		go func() { _, e := s.Exchange(context.Background(), pcm()); result <- e }()
-		time.Sleep(100 * time.Millisecond)
+		time.Sleep(10 * time.Millisecond)
 		then := time.Now()
 		s.Cancel()
 		if time.Since(then) > time.Second {
@@ -411,22 +411,27 @@ func TestProcessFailureAndCancellation(t *testing.T) {
 }
 
 func TestGlobalExchangeTimeout(t *testing.T) {
-	if testing.Short() {
-		t.Skip("real 5 second OS-pipe deadlines")
-	}
 	program := selfExecutable(t)
 	t.Run("blocked-read", func(t *testing.T) {
-		s, e := stubSession(t, program, "sleep", supported(), context.Background())
+		// A two-byte input fits in the pipe even though this child never
+		// reads it, so the blocked operation is the output read.
+		d := Descriptor{Buffers: []Buffer{{Length: 2, SampleRate: 16000, Frames: 1, Stride: 2, Format: FormatS16, ValidBits: 16, Channels: 1}}, Channels: []Channel{{Role: RoleMIC}}}
+		s, e := stubSession(t, program, "sleep", d, context.Background())
 		if e != nil {
 			t.Fatal(e)
 		}
 		defer s.Close()
 		start := time.Now()
-		_, e = s.Exchange(context.Background(), pcm())
+		out, err := s.Exchange(context.Background(), [][]byte{{0, 0}})
+		e = err
 		dt := time.Since(start)
-		if !errors.Is(e, context.DeadlineExceeded) || dt < exchangeLimit-400*time.Millisecond || dt > exchangeLimit+2*time.Second {
+		if out != nil {
+			t.Fatal("expired first PCM returned")
+		}
+		if !errors.Is(e, context.DeadlineExceeded) || dt < exchangeLimit || dt > exchangeLimit+time.Second {
 			t.Fatalf("read shared deadline: %v after %s", e, dt)
 		}
+		assertExchangeStopped(t, s)
 	})
 	t.Run("blocked-write", func(t *testing.T) {
 		d := Descriptor{Buffers: []Buffer{{Length: 8 * 1024 * 1024, SampleRate: 16000, Frames: 1, Stride: 2, Format: FormatS16, ValidBits: 16, Channels: 1}}, Channels: []Channel{{Role: RoleMIC}}}
@@ -438,27 +443,36 @@ func TestGlobalExchangeTimeout(t *testing.T) {
 		start := time.Now()
 		_, e = s.Exchange(context.Background(), [][]byte{make([]byte, d.Buffers[0].Length)})
 		dt := time.Since(start)
-		if !errors.Is(e, context.DeadlineExceeded) || dt < exchangeLimit-400*time.Millisecond || dt > exchangeLimit+2*time.Second {
+		if !errors.Is(e, context.DeadlineExceeded) || dt < exchangeLimit || dt > exchangeLimit+time.Second {
 			t.Fatalf("write shared deadline: %v after %s", e, dt)
 		}
+		assertExchangeStopped(t, s)
 	})
 }
 
 func TestSharedDeadlineAcrossPartialRead(t *testing.T) {
-	if testing.Short() {
-		t.Skip("real 3+3 second partial response")
-	}
-	p := selfExecutable(t)
-	s, e := stubSession(t, p, "stagger", supported(), context.Background())
-	if e != nil {
-		t.Fatal(e)
-	}
-	defer s.Close()
+	s, in, out := exchangePipes(t)
+	result := make(chan error, 1)
 	then := time.Now()
-	_, e = s.Exchange(context.Background(), pcm())
-	elapsed := time.Since(then)
-	if !errors.Is(e, context.DeadlineExceeded) || elapsed < exchangeLimit-400*time.Millisecond || elapsed > exchangeLimit+2*time.Second {
-		t.Fatalf("deadline restarted after partial read: %v (%s)", e, elapsed)
+	go func() { _, err := s.Exchange(context.Background(), [][]byte{{1}}); result <- err }()
+	var input [1]byte
+	if _, err := io.ReadFull(in, input[:]); err != nil {
+		t.Fatal(err)
+	}
+	// Deliver part of the response late in the original window. Restarting
+	// an 80ms timer here would exceed the 120ms allowance below.
+	time.Sleep(3 * exchangeLimit / 4)
+	if _, err := out.Write(make([]byte, OutputBytes/2)); err != nil {
+		t.Fatal(err)
+	}
+	select {
+	case err := <-result:
+		elapsed := time.Since(then)
+		if !errors.Is(err, context.DeadlineExceeded) || elapsed < exchangeLimit || elapsed > exchangeLimit+exchangeLimit/2 {
+			t.Fatalf("deadline restarted after partial read: %v (%s)", err, elapsed)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("partial response blocked past the shared deadline")
 	}
 }
 
@@ -734,4 +748,292 @@ func itoa(i int) string {
 		i /= 10
 	}
 	return string(a[n:])
+}
+
+func TestExchangeDebt(t *testing.T) {
+	ms := time.Millisecond
+	repeat := func(n int, d time.Duration) []time.Duration {
+		out := make([]time.Duration, n)
+		for i := range out {
+			out[i] = d
+		}
+		return out
+	}
+	for _, tc := range []struct {
+		name    string
+		initial time.Duration
+		elapsed []time.Duration
+		want    time.Duration
+		failAt  int
+	}{
+		{"zero floor", 0, []time.Duration{ms}, 0, 0},
+		{"gradual repayment", 50 * ms, []time.Duration{10 * ms, 10 * ms}, 30 * ms, 0},
+		{"repayment floor", ms, []time.Duration{10 * ms}, 0, 0},
+		{"below debt boundary", debtLimit - time.Nanosecond, []time.Duration{20 * ms}, debtLimit - time.Nanosecond, 0},
+		{"at debt boundary", debtLimit - time.Nanosecond, []time.Duration{20*ms + time.Nanosecond}, debtLimit, 1},
+		{"five 40ms", 0, repeat(5, 40*ms), debtLimit, 5},
+		{"ten 30ms", 0, repeat(10, 30*ms), debtLimit, 10},
+		{"five 25ms", 0, repeat(5, 25*ms), 25 * ms, 0},
+		{"historical pair", 0, []time.Duration{77478 * time.Microsecond, 40056 * time.Microsecond}, 77534 * time.Microsecond, 0},
+		{"historical pair repaid", 0, append([]time.Duration{77478 * time.Microsecond, 40056 * time.Microsecond}, repeat(8, 10*ms)...), 0, 0},
+		{"delayed candidate with debt", 42522 * time.Microsecond, []time.Duration{77478 * time.Microsecond}, debtLimit, 1},
+		{"below timeout boundary", 0, []time.Duration{exchangeLimit - time.Nanosecond}, 60*ms - time.Nanosecond, 0},
+		{"at timeout boundary", 0, []time.Duration{exchangeLimit}, 0, 1},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			debt := tc.initial
+			failed := 0
+			for i, elapsed := range tc.elapsed {
+				var err error
+				debt, err = exchangeDebt(debt, elapsed)
+				if err != nil {
+					failed = i + 1
+					if elapsed >= exchangeLimit && !errors.Is(err, context.DeadlineExceeded) {
+						t.Fatalf("wrong timeout error: %v", err)
+					}
+					break
+				}
+			}
+			if failed != tc.failAt || debt != tc.want {
+				t.Fatalf("debt=%s failure=%d, want %s/%d", debt, failed, tc.want, tc.failAt)
+			}
+		})
+	}
+}
+
+// These are real OS pipes with a test-controlled peer, without a child process.
+// Tests of kill and the sole reaper use startFixture instead.
+func exchangePipes(t *testing.T) (*Session, *os.File, *os.File) {
+	t.Helper()
+	in, inW, err := os.Pipe()
+	if err != nil {
+		t.Fatal(err)
+	}
+	outR, out, err := os.Pipe()
+	if err != nil {
+		in.Close()
+		inW.Close()
+		t.Fatal(err)
+	}
+	s := &Session{in: inW, out: outR, lengths: []uint32{1}, gate: make(chan struct{}, 1), stopped: make(chan struct{}), done: make(chan struct{})}
+	close(s.done) // There is no process to reap in this fixture.
+	t.Cleanup(func() { s.Close(); in.Close(); out.Close() })
+	return s, in, out
+}
+
+func assertExchangeStopped(t *testing.T, s *Session) {
+	t.Helper()
+	select {
+	case <-s.stopped:
+	default:
+		t.Fatal("failed exchange did not stop the session")
+	}
+	if out, err := s.Exchange(context.Background(), nil); out != nil || err == nil {
+		t.Fatal("terminal session accepted another exchange")
+	}
+	closed := make(chan struct{})
+	go func() { s.Close(); close(closed) }()
+	select {
+	case <-closed:
+	case <-time.After(time.Second):
+		t.Fatal("Close did not join the reaper")
+	}
+	if s.cmd != nil && s.cmd.ProcessState == nil {
+		t.Fatal("child was not reaped")
+	}
+}
+
+// An expired parent whose timer has not run yet: Err/Done deliberately lag
+// behind the fixed absolute deadline, as during a scheduler stall.
+type laggingDeadline struct {
+	context.Context
+	deadline time.Time
+}
+
+func (c laggingDeadline) Deadline() (time.Time, bool) { return c.deadline, true }
+
+func TestExchangeGateDeadline(t *testing.T) {
+	for _, mode := range []string{"waiting", "canceled", "expired without timer"} {
+		t.Run(mode, func(t *testing.T) {
+			s, in, _ := exchangePipes(t)
+			ctx := context.Background()
+			switch mode {
+			case "waiting":
+				s.gate <- struct{}{}
+				defer func() { <-s.gate }()
+			case "canceled":
+				c, cancel := context.WithCancel(ctx)
+				cancel()
+				ctx = c // Both the gate and Done are ready.
+			case "expired without timer":
+				ctx = laggingDeadline{ctx, time.Now().Add(-time.Second)}
+			}
+			out, err := s.Exchange(ctx, [][]byte{{1}})
+			if err == nil || out != nil {
+				t.Fatal("gate admitted canceled/expired PCM")
+			}
+			if mode != "canceled" && !errors.Is(err, context.DeadlineExceeded) {
+				t.Fatal(err)
+			}
+			var input [1]byte
+			if n, err := in.Read(input[:]); n != 0 || err != io.EOF {
+				t.Fatalf("IPC touched before gate validation: %d/%v", n, err)
+			}
+			assertExchangeStopped(t, s) // Cleanup must not need the gate.
+		})
+	}
+}
+
+func TestExchangeCompletionBoundary(t *testing.T) {
+	for _, mode := range []string{"disarm wins", "cancel wins", "deadline without timer", "debt rejects PCM"} {
+		t.Run(mode, func(t *testing.T) {
+			s, in, out := exchangePipes(t)
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+			var exchangeCtx context.Context = ctx
+			deadline := time.Now().Add(exchangeLimit / 2)
+			if mode == "deadline without timer" {
+				exchangeCtx = laggingDeadline{context.Background(), deadline}
+			}
+			if mode == "debt rejects PCM" {
+				s.debt = debtLimit - time.Millisecond
+			}
+			type reply struct {
+				pcm []byte
+				err error
+			}
+			result := make(chan reply, 1)
+			go func() { b, err := s.Exchange(exchangeCtx, [][]byte{{1}}); result <- reply{b, err} }()
+			var input [1]byte
+			if _, err := io.ReadFull(in, input[:]); err != nil {
+				t.Fatal(err)
+			}
+			if mode == "cancel wins" {
+				cancel()
+				select {
+				case <-s.stopped:
+				case <-time.After(time.Second):
+					t.Fatal("cancel callback did not stop pipes")
+				}
+			} else {
+				if mode == "deadline without timer" {
+					time.Sleep(time.Until(deadline))
+				}
+				if mode == "debt rejects PCM" {
+					// Start below the budget; the completed reply must cross it.
+					time.Sleep(30 * time.Millisecond)
+				}
+				if _, err := out.Write(make([]byte, OutputBytes)); err != nil {
+					t.Fatal(err)
+				}
+			}
+			var r reply
+			select {
+			case r = <-result:
+			case <-time.After(time.Second):
+				t.Fatal("completion blocked")
+			}
+			if mode == "disarm wins" {
+				if r.err != nil || len(r.pcm) != OutputBytes {
+					t.Fatalf("success rejected: %v", r.err)
+				}
+				cancel() // The completed call must no longer own a stop callback.
+				select {
+				case <-s.stopped:
+					t.Fatal("accepted exchange killed session")
+				default:
+				}
+			} else {
+				if r.err == nil || r.pcm != nil {
+					t.Fatal("rejected PCM returned")
+				}
+				if mode == "deadline without timer" && !errors.Is(r.err, context.DeadlineExceeded) {
+					t.Fatal(r.err)
+				}
+				if mode == "debt rejects PCM" && !strings.Contains(r.err.Error(), "processing debt") {
+					t.Fatalf("completed reply was not rejected by debt: %v", r.err)
+				}
+				assertExchangeStopped(t, s)
+			}
+		})
+	}
+}
+
+func TestNewSessionDebtAndCompletedCallCancellation(t *testing.T) {
+	root, _, env := fixture(t, selfExecutable(t))
+	defer root.Close()
+	s, err := startFixture(t, context.Background(), root, supported(), env)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.Close()
+	if s.debt != 0 {
+		t.Fatal("new session inherited debt")
+	}
+	s.debt = 50 * time.Millisecond
+	ctx, cancel := context.WithCancel(context.Background())
+	if _, err := s.Exchange(ctx, pcm()); err != nil {
+		cancel()
+		t.Fatal(err)
+	}
+	cancel()
+	if s.debt < 30*time.Millisecond {
+		t.Fatal("successful exchange reset debt instead of repaying it")
+	}
+	if _, err := s.Exchange(context.Background(), pcm()); err != nil {
+		t.Fatalf("completed call's cancel stopped live session: %v", err)
+	}
+}
+
+// Exercise the cancellation/disarm race without depending on timer scheduling.
+// The started callback stays blocked, proving that disarm does not join it.
+func TestExchangeAfterFuncDisarm(t *testing.T) {
+	for _, callbackWins := range []bool{false, true} {
+		ctx, cancel := context.WithCancel(context.Background())
+		started, release, done := make(chan struct{}), make(chan struct{}), make(chan struct{})
+		stop := context.AfterFunc(ctx, func() {
+			close(started)
+			<-release
+			close(done)
+		})
+		if callbackWins {
+			cancel()
+			<-started
+		}
+		err := disarmExchange(ctx, stop)
+		if (err != nil) != callbackWins {
+			t.Fatalf("callbackWins=%v, disarm error=%v", callbackWins, err)
+		}
+		cancel()
+		close(release)
+		if callbackWins {
+			<-done
+		} else {
+			select {
+			case <-started:
+				t.Fatal("disarmed callback ran after cancellation")
+			default:
+			}
+		}
+	}
+}
+
+func TestExchangeCancelAfterDisarm(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	called := make(chan struct{})
+	stop := context.AfterFunc(ctx, func() { close(called) })
+	err := disarmExchange(ctx, func() bool {
+		stopped := stop()
+		cancel() // Cancellation wins after disarm, before the Err check.
+		return stopped
+	})
+	if !errors.Is(err, context.Canceled) {
+		t.Fatalf("cancellation after disarm accepted: %v", err)
+	}
+	select {
+	case <-called:
+		t.Fatal("disarmed callback ran")
+	default:
+	}
 }
