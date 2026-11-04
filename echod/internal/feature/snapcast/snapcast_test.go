@@ -6,6 +6,7 @@ import (
 	"encoding/binary"
 	"encoding/json"
 	"net"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -174,6 +175,9 @@ type fakeServer struct {
 	ln     net.Listener
 	offset int64
 	hello  chan hello
+	// deaf stops answering Time after the stream has started, as a server that vanished without closing
+	// the connection.
+	deaf bool
 }
 
 func (f *fakeServer) now() int64 { return time.Now().UnixMicro() + f.offset }
@@ -206,6 +210,9 @@ func (f *fakeServer) serve(conn net.Conn, chunks func(send func(typ uint16, p []
 			ch := append(sizedPayload([]byte("pcm")), sizedPayload(wave(48000, 2, 16))...)
 			send(msgCodecHeader, 0, ch)
 		case msgTime:
+			if started && f.deaf {
+				continue
+			}
 			// latency is the server's receipt less the client's sent, as Snapserver answers.
 			lat := make([]byte, 8)
 			sec, usec := split(m.received - m.sent)
@@ -232,10 +239,15 @@ func chunkAt(at int64, samples []int16) []byte {
 	return append(p, sizedPayload(audio)...)
 }
 
-func TestSessionPlaysThenGoesIdle(t *testing.T) {
-	defer func(a, b, c time.Duration) { idleAfter, readTick, syncFirst = a, b, c }(idleAfter, readTick, syncFirst)
-	idleAfter, readTick, syncFirst = 300*time.Millisecond, 50*time.Millisecond, 5*time.Millisecond
+// fast is a session's timing shortened for a test.
+func fast(s *session) *session {
+	s.timing.idleAfter = 300 * time.Millisecond
+	s.timing.readTick = 20 * time.Millisecond
+	s.timing.syncFirst = 5 * time.Millisecond
+	return s
+}
 
+func TestSessionPlaysThenGoesIdle(t *testing.T) {
 	ln, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
 		t.Fatal(err)
@@ -278,14 +290,15 @@ func TestSessionPlaysThenGoesIdle(t *testing.T) {
 	rec := &recorder{}
 	var states []string
 	var smu sync.Mutex
-	s := newSession(ln.Addr().String(), "Kitchen", "02:00:00:00:00:01", rec, rec, func(st string) {
+	s := fast(newSession(ln.Addr().String(), "Kitchen", "02:00:00:00:00:01", rec, rec, func(st string) {
 		smu.Lock()
 		states = append(states, st)
 		smu.Unlock()
-	})
+	}))
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
-	defer cancel()
-	go s.run(ctx)
+	ran := make(chan struct{})
+	defer func() { cancel(); <-ran }()
+	go func() { s.run(ctx); close(ran) }()
 
 	h := <-srv.hello
 	if h.ID != "02:00:00:00:00:01" || h.HostName != "Kitchen" || h.SnapStreamProtocolVersion != 2 {
@@ -326,6 +339,88 @@ func TestSessionPlaysThenGoesIdle(t *testing.T) {
 	defer smu.Unlock()
 	if len(states) < 3 || states[0] != stateConnected || states[1] != statePlaying {
 		t.Errorf("states %v", states)
+	}
+}
+
+// rawChunk is a chunk of whatever bytes, decodable or not.
+func rawChunk(at int64, audio []byte) []byte {
+	p := make([]byte, 8)
+	sec, usec := split(at)
+	binary.LittleEndian.PutUint32(p, uint32(sec))
+	binary.LittleEndian.PutUint32(p[4:], uint32(usec))
+	return append(p, sizedPayload(audio)...)
+}
+
+// serveOnce runs srv on the first connection to a new listener, and is the listener's address.
+func serveOnce(t *testing.T, srv *fakeServer, chunks func(send func(uint16, []byte))) string {
+	t.Helper()
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { ln.Close() })
+	go func() {
+		conn, err := ln.Accept()
+		if err != nil {
+			return
+		}
+		srv.serve(conn, chunks)
+	}()
+	return ln.Addr().String()
+}
+
+// A server that stops answering without closing the connection is given up on, rather than leaving
+// the state on connected for as long as TCP takes to notice.
+func TestSessionGivesUpOnASilentServer(t *testing.T) {
+	srv := &fakeServer{t: t, hello: make(chan hello, 1), deaf: true}
+	addr := serveOnce(t, srv, func(func(uint16, []byte)) {})
+
+	rec := &recorder{}
+	s := fast(newSession(addr, "Kitchen", "02:00:00:00:00:01", rec, rec, func(string) {}))
+	s.timing.deadAfter = 300 * time.Millisecond
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+
+	start := time.Now()
+	err := s.run(ctx)
+	if err == nil || !strings.Contains(err.Error(), "nothing from the server") {
+		t.Fatalf("run ended with %v, want it to give up on the server", err)
+	}
+	if took := time.Since(start); took > 2*time.Second {
+		t.Errorf("gave up after %s, want about deadAfter", took)
+	}
+}
+
+// One chunk that does not decode costs that chunk; the next plays on a fresh decoder. A run of them
+// ends the connection.
+func TestSessionGetsOverABadChunk(t *testing.T) {
+	tone := make([]byte, 4*960)
+	for i := 0; i < len(tone); i += 2 {
+		binary.LittleEndian.PutUint16(tone[i:], 3000)
+	}
+	odd := []byte{1, 2, 3} // not whole 16-bit samples
+
+	srv := &fakeServer{t: t, hello: make(chan hello, 1)}
+	addr := serveOnce(t, srv, func(send func(uint16, []byte)) {
+		time.Sleep(300 * time.Millisecond)
+		for _, audio := range [][]byte{tone, odd, tone, odd, odd, odd, tone} {
+			send(msgWireChunk, rawChunk(srv.now(), audio))
+			time.Sleep(20 * time.Millisecond)
+		}
+	})
+
+	rec := &recorder{}
+	s := fast(newSession(addr, "Kitchen", "02:00:00:00:00:01", rec, rec, func(string) {}))
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+
+	err := s.run(ctx)
+	if err == nil || !strings.Contains(err.Error(), "did not decode") {
+		t.Fatalf("run ended with %v, want three bad chunks in a row to end it", err)
+	}
+	// The tone before the bad chunk and the one after it; the last never arrives.
+	if n := len(rec.snapshot().writes); n != 2 {
+		t.Errorf("%d chunks played, want 2", n)
 	}
 }
 

@@ -19,25 +19,47 @@ import (
 	"github.com/HuskerMinion/techo5/echod/internal/lib/safe"
 )
 
-// Timing.
-//
-// syncFirst and syncEvery are how often the clock is asked: quickly at first, so the filter has
-// something to go on before the first chunk is due, then once a second, well inside the five seconds
-// after which ClockSync calls itself lost.
-//
-// idleAfter is how long the stream may be silent before the room gives the speaker back. A stream that
-// has stopped can arrive as chunks of zeros or as no chunks at all, so it is the sound that counts, not
-// the wire; a pause between two tracks is shorter than this.
-//
-// readTick is how often the session looks for silence when nothing arrives at all.
-var (
-	syncFirst  = 50 * time.Millisecond
-	syncBurst  = 20
-	syncEvery  = time.Second
-	idleAfter  = 3 * time.Second
-	readTick   = 500 * time.Millisecond
-	dialTimout = 5 * time.Second
-)
+// timing is a session's clocks and limits, a session's own so a test can shorten them without racing
+// another session still winding down.
+type timing struct {
+	// syncFirst and syncEvery are how often the clock is asked: quickly at first (syncBurst times), so
+	// the filter has something to go on before the first chunk is due, then once a second, well inside
+	// the five seconds after which ClockSync calls itself lost.
+	syncFirst, syncEvery time.Duration
+	syncBurst            int
+
+	// idleAfter is how long the stream may be silent before the room gives the speaker back. A stream
+	// that has stopped can arrive as chunks of zeros or as no chunks at all, so it is the sound that
+	// counts, not the wire; a pause between two tracks is shorter than this.
+	idleAfter time.Duration
+
+	// readTick is how often the session looks for silence when nothing arrives at all.
+	readTick time.Duration
+
+	dial time.Duration
+
+	// deadAfter is how long the server may say nothing before the connection counts as gone. It answers
+	// a Time request every second, so ten seconds of nothing is a server that vanished without closing
+	// the connection (unplugged, rebooted, the Wi-Fi gone), which TCP alone would not notice for many
+	// minutes. write bounds a send for the same reason: one to a vanished server would block instead.
+	deadAfter, write time.Duration
+
+	// badFrames is how many chunks in a row may fail to decode, each followed by a fresh decoder, before
+	// the session gives up and connects again for a clean stream.
+	badFrames int
+}
+
+var defaultTiming = timing{
+	syncFirst: 50 * time.Millisecond,
+	syncEvery: time.Second,
+	syncBurst: 20,
+	idleAfter: 3 * time.Second,
+	readTick:  500 * time.Millisecond,
+	dial:      5 * time.Second,
+	deadAfter: 10 * time.Second,
+	write:     5 * time.Second,
+	badFrames: 3,
+}
 
 // quiet is the largest sample a silent chunk holds: dither and a resampler's noise are not music.
 const quiet = 8
@@ -90,6 +112,7 @@ type session struct {
 	out    output
 	bg     backgrounds
 	report func(state string)
+	timing timing
 
 	clock *ssync.ClockSync
 	now   func() int64 // the client's clock, Unix microseconds
@@ -104,7 +127,9 @@ type session struct {
 	set      settings
 	dec      sendspin.Decoder
 	fmt      format
-	open     bool // out is attached and the room has the speaker
+	header   []byte // the codec header, for a fresh decoder after a bad chunk
+	bad      int    // chunks in a row that did not decode
+	open     bool   // out is attached and the room has the speaker
 	audible  time.Time
 	unplayed bool // a stream the speaker cannot take, said once
 }
@@ -112,17 +137,18 @@ type session struct {
 func newSession(addr, name, mac string, out output, bg backgrounds, report func(string)) *session {
 	return &session{
 		addr: addr, name: name, mac: mac, out: out, bg: bg, report: report,
-		clock: ssync.NewClockSync(),
-		now:   func() int64 { return time.Now().UnixMicro() },
-		asks:  map[uint16]int64{},
-		set:   settings{BufferMs: 1000, Volume: 100},
+		timing: defaultTiming,
+		clock:  ssync.NewClockSync(),
+		now:    func() int64 { return time.Now().UnixMicro() },
+		asks:   map[uint16]int64{},
+		set:    settings{BufferMs: 1000, Volume: 100},
 	}
 }
 
 // run connects and plays until ctx ends or the connection does. It always leaves the speaker as it
 // found it.
 func (s *session) run(ctx context.Context) error {
-	d := net.Dialer{Timeout: dialTimout}
+	d := net.Dialer{Timeout: s.timing.dial}
 	conn, err := d.DialContext(ctx, "tcp", s.addr)
 	if err != nil {
 		return err
@@ -153,7 +179,13 @@ func (s *session) send(typ uint16, payload []byte) error {
 	s.wmu.Lock()
 	defer s.wmu.Unlock()
 	s.next++
-	_, err := s.conn.Write(encode(typ, s.next, s.now(), payload))
+	return s.write(encode(typ, s.next, s.now(), payload))
+}
+
+// write sends b within timing.write. Wants wmu.
+func (s *session) write(b []byte) error {
+	_ = s.conn.SetWriteDeadline(time.Now().Add(s.timing.write))
+	_, err := s.conn.Write(b)
 	return err
 }
 
@@ -182,9 +214,9 @@ func (s *session) syncLoop(ctx context.Context) {
 		if err := s.askTime(); err != nil {
 			return
 		}
-		wait := syncEvery
-		if i < syncBurst {
-			wait = syncFirst
+		wait := s.timing.syncEvery
+		if i < s.timing.syncBurst {
+			wait = s.timing.syncFirst
 		}
 		select {
 		case <-ctx.Done():
@@ -209,8 +241,7 @@ func (s *session) askTime() error {
 	}
 	s.tmu.Unlock()
 
-	_, err := s.conn.Write(encode(msgTime, id, sent, timePayload()))
-	return err
+	return s.write(encode(msgTime, id, sent, timePayload()))
 }
 
 // timed takes a Time reply. The request went at t1 by our clock; the server says it arrived latency
@@ -239,17 +270,22 @@ type message struct {
 	err error
 }
 
-// readLoop handles what the server sends, and looks for silence between messages. Reading is a
-// goroutine of its own rather than a read deadline: a deadline that fires halfway through a message
-// leaves the stream out of step for good, and a stream gone idle sends nothing to wake the loop.
+// readLoop handles what the server sends, looks for silence between messages, and gives up on a server
+// that has said nothing for timing.deadAfter. Reading is a goroutine of its own rather than a read deadline: a
+// deadline that fires halfway through a message leaves the stream out of step for good, and a stream
+// gone idle sends nothing to wake the loop.
 func (s *session) readLoop(ctx context.Context) error {
 	msgs := make(chan message, 64)
+	done := make(chan struct{})
+	defer close(done)
 	safe.Go("snapcast read", func() {
 		for {
 			m, p, err := readMessage(s.conn, s.now)
 			select {
 			case msgs <- message{m, p, err}:
-			case <-ctx.Done():
+			case <-done:
+				// The loop has gone (ctx, a dead server, an error); run closes the connection, which
+				// ends the read this would otherwise be waiting in.
 				return
 			}
 			if err != nil {
@@ -258,14 +294,18 @@ func (s *session) readLoop(ctx context.Context) error {
 		}
 	})
 
-	tick := time.NewTicker(readTick)
+	tick := time.NewTicker(s.timing.readTick)
 	defer tick.Stop()
+	heard := time.Now()
 	for {
 		var msg message
 		select {
 		case <-ctx.Done():
 			return nil
 		case <-tick.C:
+			if time.Since(heard) > s.timing.deadAfter {
+				return fmt.Errorf("snapcast: nothing from the server for %s", s.timing.deadAfter)
+			}
 			s.idleCheck()
 			continue
 		case msg = <-msgs:
@@ -276,6 +316,7 @@ func (s *session) readLoop(ctx context.Context) error {
 			}
 			return msg.err
 		}
+		heard = time.Now()
 
 		m, p := msg.m, msg.p
 		switch m.typ {
@@ -286,7 +327,9 @@ func (s *session) readLoop(ctx context.Context) error {
 		case msgCodecHeader:
 			s.codecHeader(p)
 		case msgWireChunk:
-			s.chunk(p)
+			if err := s.chunk(p); err != nil {
+				return err
+			}
 		case msgError:
 			return fmt.Errorf("snapcast: server says %s", parseError(p))
 		}
@@ -333,16 +376,24 @@ func (s *session) codecHeader(p []byte) {
 		s.closeDecoder()
 		return
 	}
-	dec, err := sendspin.NewDecoder(codec, f.rate, f.channels, f.bits, header)
-	if err != nil {
+	s.closeDecoder()
+	s.fmt, s.header, s.unplayed, s.bad = f, header, false, 0
+	if err := s.newDecoder(); err != nil {
 		slog.Error("snapcast decoder", "codec", codec, "err", err)
-		s.closeDecoder()
 		return
 	}
-	s.closeDecoder()
-	s.dec, s.fmt, s.unplayed = dec, f, false
 	s.out.Flush()
 	slog.Info("snapcast stream", "codec", f.codec, "rate", f.rate, "ch", f.channels, "bits", f.bits)
+}
+
+// newDecoder starts decoding the stream the last codec header described, from its next chunk.
+func (s *session) newDecoder() error {
+	dec, err := sendspin.NewDecoder(s.fmt.codec, s.fmt.rate, s.fmt.channels, s.fmt.bits, s.header)
+	if err != nil {
+		return err
+	}
+	s.dec = dec
+	return nil
 }
 
 func (s *session) closeDecoder() {
@@ -355,34 +406,48 @@ func (s *session) closeDecoder() {
 // chunk decodes a span of the stream and places it where the server says it is heard: its timestamp
 // plus the buffer every client plays behind, less this client's latency, which the server lets a user
 // set for a speaker that is slow to sound. The card's own latency is the output's business.
-func (s *session) chunk(p []byte) {
+//
+// A chunk that does not decode costs that chunk, not the stream: a decoder that has failed stays failed,
+// so the next chunk goes to a fresh one, made from the codec header as at the stream's start (a Snapcast
+// chunk holds whole frames, so the next one decodes on its own). A run of timing.badFrames failures is a stream
+// out of step rather than a bad frame, and the error ends the connection for a clean one.
+func (s *session) chunk(p []byte) error {
 	if s.dec == nil {
-		return
+		return nil
 	}
 	at, audio, err := parseWireChunk(p)
 	if err != nil {
-		return
+		return nil
 	}
 	pcm, err := s.dec.Decode(audio)
 	if err != nil {
-		slog.Warn("snapcast decode", "err", err)
 		s.closeDecoder()
-		return
+		s.bad++
+		if s.bad >= s.timing.badFrames {
+			return fmt.Errorf("snapcast: %d chunks in a row did not decode: %w", s.bad, err)
+		}
+		slog.Warn("snapcast decode, starting the decoder again", "err", err, "in_a_row", s.bad)
+		if err := s.newDecoder(); err != nil {
+			return fmt.Errorf("snapcast: decoder: %w", err)
+		}
+		return nil
 	}
+	s.bad = 0
 	if len(pcm) == 0 {
-		return
+		return nil
 	}
 
 	if !silent(pcm) {
 		s.audible = time.Now()
 		if !s.open && !s.start() {
-			return
+			return nil
 		}
 	}
 	if !s.open {
-		return
+		return nil
 	}
 	s.out.Write(at+int64(s.set.BufferMs-s.set.Latency)*1000, pcm)
+	return nil
 }
 
 // start takes the speaker for an audible stream, once the clock can be believed: a chunk placed by a
@@ -405,9 +470,9 @@ func (s *session) start() bool {
 	return true
 }
 
-// idleCheck gives the speaker back once the stream has been silent for idleAfter.
+// idleCheck gives the speaker back once the stream has been silent for timing.idleAfter.
 func (s *session) idleCheck() {
-	if s.open && time.Since(s.audible) > idleAfter {
+	if s.open && time.Since(s.audible) > s.timing.idleAfter {
 		slog.Info("snapcast idle")
 		s.stop()
 		s.report(stateConnected)

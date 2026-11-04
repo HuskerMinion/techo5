@@ -129,7 +129,8 @@ func (o *out) open(sampleRate, channels, bitDepth int) error {
 }
 
 func (o *out) close() {
-	o.p.Attach(nil)
+	// Only this output: another (Snapcast's, Sendspin's) may have taken the speaker since.
+	o.p.Detach(o)
 
 	o.mu.Lock()
 	defer o.mu.Unlock()

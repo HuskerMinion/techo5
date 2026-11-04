@@ -437,6 +437,31 @@ func TestARestoreKeepsWhatIsOnByDefaultOff(t *testing.T) {
 	}
 }
 
+// Snapcast and its server are the device's own: a file can neither turn it on nor point it elsewhere,
+// nor turn off or move one this device has.
+func TestARestoreKeepsSnapcast(t *testing.T) {
+	here := Defaults()
+	from := Defaults()
+	from.Snapcast = Snapcast{Enabled: true, Server: "192.168.1.30"}
+	file, _ := Export(from, "m", "v0")
+	r, err := Restored(here, file, "m")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if r.Config.Snapcast != here.Snapcast {
+		t.Errorf("a restore set snapcast to %+v", r.Config.Snapcast)
+	}
+
+	here.Snapcast = Snapcast{Enabled: true, Server: "192.168.1.20"}
+	file, _ = Export(Defaults(), "m", "v0")
+	if r, err = Restored(here, file, "m"); err != nil {
+		t.Fatal(err)
+	}
+	if r.Config.Snapcast != here.Snapcast {
+		t.Errorf("a restore changed this device's snapcast to %+v", r.Config.Snapcast)
+	}
+}
+
 // Where replies play is the device's own: a file from another device does not move this one's replies.
 func TestARestoreKeepsWhereRepliesPlay(t *testing.T) {
 	here := Defaults()

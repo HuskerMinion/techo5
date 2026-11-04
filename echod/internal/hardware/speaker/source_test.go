@@ -39,6 +39,24 @@ func newTestPlayer() *Player {
 	return p
 }
 
+// A source letting go leaves the one that took the speaker after it in place.
+func TestDetachLeavesAnotherSource(t *testing.T) {
+	p := newTestPlayer()
+	first, second := &recorder{fill: 10}, &recorder{fill: 20}
+	p.Attach(first)
+	p.Attach(second)
+	p.Detach(first)
+
+	if got := played(t, p); got[0] != 20 {
+		t.Errorf("after the first let go = %d, want the second source's 20", got[0])
+	}
+
+	p.Detach(second)
+	if got := played(t, p); got[0] != 0 {
+		t.Errorf("after both let go = %d, want silence", got[0])
+	}
+}
+
 func TestNothingAttachedPlaysTheQueueAlone(t *testing.T) {
 	p := newTestPlayer()
 	p.pending = []int16{100, 200, 300}
