@@ -1472,11 +1472,23 @@ func (c *conversation) stopStreaming() {
 
 // stream sends microphone frames until it is told to stop.
 func (c *conversation) stream(ctx context.Context, be backend, slot int, followUp, continued bool, id string, waited time.Duration) {
-	frames, pre, unlisten := c.source.ListenHistory("turn", mic.History+waited)
+	frames, pre, unlisten := c.source.ListenHistory("turn", historyFor(slot, followUp, waited))
 	defer unlisten()
 	hold := holdsForTone(slot, followUp)
 	slog.Info("turn: wake sound", "tone", wakeword.Tones(slot, followUp), "held", hold, "history_ms", len(pre)*1000/mic.Rate)
 	c.pump(ctx, be, slot, followUp, continued, hold, id, pre, frames)
+}
+
+// historyFor is how far back a turn's history reaches. Without a wake sound people run straight on
+// into the request, so it takes mic.History from before the word was heard, the compromise that
+// costs a little of the word's tail. With a sound they wait for it, those 250 ms are the end of the
+// wake word itself ("Google. What time is it?", #445), and it reaches back only to the moment the
+// word was heard: what was said after it, while the sound played or while the wake was confirmed.
+func historyFor(slot int, followUp bool, waited time.Duration) time.Duration {
+	if wakeword.Tones(slot, followUp) {
+		return waited
+	}
+	return mic.History + waited
 }
 
 // holdsForTone is whether a turn keeps the microphones from its wake sound, as it did before the

@@ -60,6 +60,28 @@ func run(t *testing.T, tone config.Tone, cancel bool, pre []int16, frames ...[]i
 	return be, ended
 }
 
+// With a wake sound the history reaches back only to the moment the word was heard: the 250 ms before
+// it are the end of the wake word, which speech-to-text took for the start of the request (#445).
+func TestHistoryLeavesTheWakeWordOutWhenASoundPlays(t *testing.T) {
+	waited := 400 * time.Millisecond
+	for _, l := range []struct {
+		tone config.Tone
+		want time.Duration
+	}{
+		{config.ToneHA, waited},
+		{config.ToneNone, mic.History + waited},
+	} {
+		config.Use(filepath.Join(t.TempDir(), "state.json"))
+		_ = config.Set().Wake(0).Tone(l.tone)
+		if got := historyFor(0, false, waited); got != l.want {
+			t.Errorf("tone %v: history %v, want %v", l.tone, got, l.want)
+		}
+		if got := historyFor(0, false, 0); l.tone != config.ToneNone && got != 0 {
+			t.Errorf("tone %v, heard just now: history %v, want none", l.tone, got)
+		}
+	}
+}
+
 func TestHoldsForToneOnlyWithoutTheCanceller(t *testing.T) {
 	for _, l := range []struct {
 		tone   config.Tone
