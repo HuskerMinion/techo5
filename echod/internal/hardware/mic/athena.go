@@ -240,6 +240,10 @@ var athenaMainlineKernel = athenaKernel{
 	controls:    athenaMainlineControls,
 	gainControl: "Analog CH%d Mic Gain Volume",
 	softRef:     true,
+	// Mainline allocates each ALSA DMA ring dynamically; protect both streams from
+	// CPU scheduling stalls. Amazon's fixed DMA blocks keep their old 3/4 periods.
+	micPeriods: 8,
+	refPeriods: 8,
 	// The microphones at 96 kHz, with the reference and without it: without it the software
 	// reference is used, as before the card had one.
 	micRates: []int{athenaMicRate},

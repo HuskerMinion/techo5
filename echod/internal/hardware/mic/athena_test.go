@@ -174,6 +174,28 @@ func TestAthenaRingsFitTheDriver(t *testing.T) {
 	}
 }
 
+// Mainline's per-stream DMA allocation permits larger rings than Amazon's fixed blocks.
+func TestAthenaKernelRingPeriods(t *testing.T) {
+	for _, tc := range []struct {
+		name       string
+		kernel     athenaKernel
+		micPeriods int
+		refPeriods int
+	}{
+		{"Amazon", athenaAmazonKernel, 3, 4},
+		{"mainline", athenaMainlineKernel, 8, 8},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := periodsOr(tc.kernel.micPeriods, athenaMicPeriods); got != tc.micPeriods {
+				t.Errorf("MIC periods = %d, want %d", got, tc.micPeriods)
+			}
+			if got := periodsOr(tc.kernel.refPeriods, athenaRefPeriods); got != tc.refPeriods {
+				t.Errorf("REF periods = %d, want %d", got, tc.refPeriods)
+			}
+		})
+	}
+}
+
 // The PMIC path is Fire OS's builtin_Mic_SingleMic (audio_device_tas5805m.xml) after its mic type,
 // and every name has to fit a control id.
 func TestAthenaPmicPath(t *testing.T) {
