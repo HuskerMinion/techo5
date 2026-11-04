@@ -2,6 +2,8 @@
 
 package memx
 
+const asm = true
+
 // copyBlocks copies len(src) bytes, a multiple of 32, both word-aligned and apart.
 func copyBlocks(dst, src []byte) {
 	if len(src) > 0 {
