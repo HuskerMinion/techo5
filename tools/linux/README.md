@@ -265,7 +265,13 @@ the misc partition, picks the slot, counts its tries, starts that slot's own ker
 The OS side, in this tree:
 
 - `bootctl` (a copy of the boot layer's own) reads and changes the record. Without a record it
-  changes nothing and exits 3.
+  changes nothing and exits 3. On a board whose bootloader is systemd-boot (the Surface RT,
+  `surface-rt/`), its systemd-boot backend keeps the same record as the ESP's loader entries and
+  their boot counters (`slot-x.conf` good, `slot-x+N.conf` on trial, `+0` bad; loader.conf's
+  `preferred` and `default`), the way systemd's own bootctl does, with the same commands and
+  output. The board's entries carry `ab.slot=<x> ab.kernel=<x>`, so `boot.sh` and `slotctl` need
+  not know which bootloader runs. Chosen by `BACKEND=systemd-boot` in `/etc/bootctl.conf`, or where
+  no misc partition holds a record and the ESP has such entries.
 - `slotctl` keeps its files as before and tells the record the same through bootctl: install,
   commit, switch and rollback. Where there is a record, install also puts the slot's kernel at
   `slots/<x>/boot/boot.img` (a hard link) and a label at `slots/<x>/boot/label`. A rootfs with no
