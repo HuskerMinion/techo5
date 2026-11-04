@@ -368,10 +368,6 @@ t5_wifi_up() {
 	# Power save is on in the kernel's default: the radio sleeps between beacons and the access point holds
 	# what it is sent until the next one, which adds delay and jitter that received audio can stall on.
 	# device.conf WIFI_POWER_SAVE=off (athena on mainline) turns it off.
-	# A mainline kernel's radio starts on the world domain (country 00), where most 5 GHz channels are
-	# passive only; the country goes in before the supplicant starts (t5_wifi_country). The vendor 4.9
-	# drivers keep their own.
-	[ "$mod" = builtin ] && t5_wifi_country
 	if [ "${WIFI_POWER_SAVE:-}" = off ]; then
 		ps_err=$(iw dev wlan0 set power_save off 2>&1) || log "wifi: power save not turned off: $ps_err"
 	fi
@@ -395,6 +391,10 @@ t5_wifi_up() {
 		log "wifi: not associated ($(wpa_cli -p /run/wpa -i wlan0 status 2>/dev/null | grep wpa_state))"
 		return 1
 	fi
+	# A mainline kernel's radio starts on the world domain (country 00), where 5 GHz is passive scan only
+	# and at low power; the country goes in once joined, from the network (t5_wifi_country). The vendor
+	# 4.9 drivers keep their own.
+	[ "$mod" = builtin ] && t5_wifi_country
 	# The address: fixed when the setting says so (techo5-net, which falls back to DHCP if the fixed
 	# one does not work), else a lease.
 	if [ -x /usr/local/sbin/techo5-net ]; then
@@ -455,20 +455,25 @@ t5_ip() { ip -4 addr show wlan0 2>/dev/null | sed -n 's/.*inet \([0-9.]*\).*/\1/
 # stays on wlan0 after the link is lost, until it runs out.
 t5_wifi_joined() { wpa_cli -p /run/wpa -i wlan0 status 2>/dev/null | grep -q '^wpa_state=COMPLETED'; }
 
-# t5_wifi_country: set the Wi-Fi regulatory country from the device's time zone, the country zone.tab
-# gives it (America/Chicago is US), so a mainline kernel allows that country's 5 GHz channels rather than
-# the world domain's. A zone with no country (UTC) leaves the world domain, as before. A change of zone
-# takes effect at the next start of the Wi-Fi.
+# t5_wifi_country: set the Wi-Fi regulatory country once joined: the one the access point announces in
+# its beacons, which is the rule where the radio is, or else the one zone.tab gives the device's time zone
+# when it is a zone name (America/Chicago is US). Home Assistant mostly sends its zone as a rule
+# (CST6CDT,...), which no country can be read from. With neither the radio stays on the world domain, as
+# before. Setting it while joined keeps the link: the network's own channel is allowed in its country.
 #
 # A built-in cfg80211 asks for regulatory.db once, at boot, while the root is still the ramdisk, which
 # does not have it; the failure is kept, and a country set after it falls back to CRDA, which is not
 # here. reload reads the database again from the real root first.
 t5_wifi_country() {
-	zone=$(cat /data/misc/techo5/timezone 2>/dev/null)
-	[ -n "$zone" ] || return 0
-	cc=$(awk -v z="$zone" '!/^#/ && $3 == z { print $1; exit }' /usr/share/zoneinfo/zone.tab 2>/dev/null)
+	cc=$(iw dev wlan0 scan dump 2>/dev/null | awk '/^BSS / { joined = /associated/ } joined && /Country:/ { print $2; exit }')
+	from="the network"
+	if [ -z "$cc" ] || [ "$cc" = XX ]; then
+		zone=$(cat /data/misc/techo5/timezone 2>/dev/null)
+		cc=$(awk -v z="$zone" '!/^#/ && $3 == z { print $1; exit }' /usr/share/zoneinfo/zone.tab 2>/dev/null)
+		from="the time zone $zone"
+	fi
 	if [ -z "$cc" ]; then
-		log "wifi: no country for the time zone $zone; the radio stays on the world domain"
+		log "wifi: no country from the network or the time zone; the radio stays on the world domain"
 		return 0
 	fi
 	err=$(iw reg reload 2>&1) || log "wifi: the regulatory database did not load: $err"
@@ -478,7 +483,7 @@ t5_wifi_country() {
 	fi
 	# The kernel takes the request whatever comes of it: say what is in force.
 	now=$(iw reg get 2>/dev/null | awk '/^country / { sub(":", "", $2); print $2; exit }')
-	log "wifi: country $cc asked, from the time zone $zone; in force: ${now:-unknown}"
+	log "wifi: country $cc asked, from $from; in force: ${now:-unknown}"
 }
 
 # t5_wifi_unpin: take off the channel pin t5_wifi_prefer5 made, for the keeper once Prefer 5 GHz is off
