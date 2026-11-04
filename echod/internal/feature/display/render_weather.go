@@ -127,7 +127,7 @@ func (r *renderer) weatherToggle(label string) {
 // marked in the middle.
 func (r *renderer) radarPage(s scene) {
 	v := s.radar
-	draw.Draw(r.dst, r.dst.Bounds(), image.NewUniform(walnut), image.Point{}, draw.Src)
+	fillCanvas(r.dst, walnut)
 	if len(v.Frames) == 0 {
 		r.text(r.small, tr("ui_radar"), r.margin, r.margin+r.s(26), amber)
 		msg := tr("loading_the_rain_map")

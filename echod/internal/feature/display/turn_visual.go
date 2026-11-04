@@ -128,7 +128,7 @@ func drawVU(dst *image.RGBA, band image.Rectangle, v *eqView, ground color.RGBA)
 	key := [4]int{band.Dx(), band.Dy(), night, 0}
 	if vuKept.img == nil || vuKept.key != key || vuKept.ground != ground {
 		img := image.NewRGBA(image.Rect(0, 0, band.Dx(), band.Dy()))
-		draw.Draw(img, img.Rect, image.NewUniform(ground), image.Point{}, draw.Src)
+		fillCanvas(img, ground)
 		for _, b := range meters {
 			drawMeterFace(img, b, face, ink, ground)
 		}

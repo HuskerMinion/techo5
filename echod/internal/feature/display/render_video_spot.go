@@ -5,6 +5,7 @@ package display
 import (
 	"fmt"
 	"image"
+	"image/color"
 	"image/draw"
 
 	"github.com/HuskerMinion/techo5/echod/internal/feature/media"
@@ -43,9 +44,9 @@ func (r *roundRenderer) videoFace(s roundScene) (over image.Rectangle) {
 	r.videoZones = nil
 	r.zmu.Unlock()
 	if s.videoLive {
-		draw.Draw(r.dst, r.dst.Rect, image.Transparent, image.Point{}, draw.Src)
+		fillCanvas(r.dst, color.Transparent)
 	} else {
-		draw.Draw(r.dst, r.dst.Rect, image.Black, image.Point{}, draw.Src)
+		fillCanvas(r.dst, color.Black)
 		r.videoWordsSpot(s)
 	}
 	if s.videoControls && s.video.Active() {

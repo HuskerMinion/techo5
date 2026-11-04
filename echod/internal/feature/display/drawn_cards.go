@@ -61,7 +61,7 @@ func (r *paint) dashPage(v dashboard.Drawn, scroll int, adj dashAdjusting, area 
 	pal := r.palette(v.Theme)
 	r.bigTiles = size == "large" || size == "fill"
 	r.nameBelow = layout == "below"
-	draw.Draw(r.dst, r.dst.Rect, image.NewUniform(pal.bg), image.Point{}, draw.Src)
+	fillCanvas(r.dst, pal.bg)
 	fc := r.faces()
 	if len(v.Sections) == 0 {
 		msg := v.Problem

@@ -584,7 +584,7 @@ func (r *renderer) draw(s scene) {
 		r.redClockPage(s)
 		return
 	}
-	draw.Draw(r.dst, r.dst.Rect, image.NewUniform(walnut), image.Point{}, draw.Src)
+	fillCanvas(r.dst, walnut)
 
 	// Registered first so it runs last: the header goes over every page, including the ones below
 	// that return early.

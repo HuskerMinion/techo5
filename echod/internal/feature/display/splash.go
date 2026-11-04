@@ -116,7 +116,7 @@ func newSplash(w, h int) *splash {
 
 // draw paints the splash for the moment t into the elapsed animation.
 func (r *renderer) drawSplash(s *splash, elapsed time.Duration) {
-	draw.Draw(r.dst, r.dst.Rect, image.NewUniform(navy), image.Point{}, draw.Src)
+	fillCanvas(r.dst, navy)
 	if s == nil {
 		r.text(r.title, "TECHO5", (r.w-r.width(r.title, "TECHO5"))/2, r.h/2, amber)
 		return

@@ -4,6 +4,7 @@ package display
 
 import (
 	"image"
+	"image/color"
 	"image/draw"
 
 	"github.com/HuskerMinion/techo5/echod/internal/feature/video"
@@ -39,9 +40,9 @@ func (r *renderer) videoPage(s scene) (over image.Rectangle) {
 	r.videoZones = nil
 	r.zmu.Unlock()
 	if s.videoLive {
-		draw.Draw(r.dst, r.dst.Rect, image.Transparent, image.Point{}, draw.Src)
+		fillCanvas(r.dst, color.Transparent)
 	} else {
-		draw.Draw(r.dst, r.dst.Rect, image.Black, image.Point{}, draw.Src)
+		fillCanvas(r.dst, color.Black)
 		r.videoWords(s)
 	}
 	if s.videoControls && s.video.Active() {
