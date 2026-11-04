@@ -15,6 +15,18 @@ network over plain HTTP or RTSP, as most home devices' do: they are made for a h
 trust. Somebody on it who records a login can try passwords against it, so give each a long password
 you use nowhere else.
 
+### The setup page
+
+Many steps here mention the setup page. It's the device's own web page, at
+`http://<device address>:8181/setup` in a browser on the same network. It's off until you open it:
+turn on the device's **Setup page** switch in Home Assistant, open it from the device's settings
+screen, or on a Dot hold the action button. It turns itself off again after seven minutes with nothing
+asked of it, or an hour after it opened. To let a browser in, press the action button on the device
+when the page asks: there's no password, the press is what proves you are at the device.
+
+SSH works only with a key: the device's **SSH** switch turns the server on, and the
+[ssh_keys action](actions.md#set-the-ssh-authorized-keys) puts your public key on it. Log in as `root`.
+
 ## 1. Give the device access to Home Assistant
 
 Do this first. Photos, cameras, weather and the radio lists all need it. The device fetches them from
