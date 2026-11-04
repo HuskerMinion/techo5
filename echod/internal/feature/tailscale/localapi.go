@@ -86,21 +86,48 @@ func (l *localAPI) status(ctx context.Context) (status, error) {
 	return st, err
 }
 
-// login joins the tailnet with an auth key, under hostname. Only what this device needs is asked
-// for: it does not take the tailnet's DNS (its own resolver stays as it is), does not route to other
-// networks, and is nobody's exit node.
+// DefaultControl is Tailscale's own control server, for a device joined without one of its own.
+const DefaultControl = "https://controlplane.tailscale.com"
+
+// prefs is the part of tailscaled's settings this reads.
+type prefs struct {
+	ControlURL string
+}
+
+// controlURL is the control server tailscaled is set to: Tailscale's own when it names none.
+func (l *localAPI) controlURL(ctx context.Context) (string, error) {
+	var p prefs
+	if err := l.do(ctx, http.MethodGet, "prefs", nil, &p); err != nil {
+		return "", err
+	}
+	return cmpOr(p.ControlURL, DefaultControl), nil
+}
+
+// login joins the tailnet at control (Tailscale's own, or the owner's Headscale) with an auth key,
+// under hostname. Only what this device needs is asked for: it does not take the tailnet's DNS (its own
+// resolver stays as it is), does not route to other networks, and is nobody's exit node.
 //
 // As Tailscale's own "tailscale up" does it: start hands over the key and the settings, and a device
-// that has never joined is then told to log in, which with a key given needs no browser.
-func (l *localAPI) login(ctx context.Context, authKey, hostname string) error {
+// that has never joined is then told to log in, which with a key given needs no browser. A device on
+// another control server is logged out of it first: its identity there means nothing to the new one.
+func (l *localAPI) login(ctx context.Context, authKey, hostname, control string) error {
 	before, err := l.status(ctx)
 	if err != nil {
 		return err
 	}
+	moving := false
+	if before.HaveNodeKey {
+		if was, err := l.controlURL(ctx); err == nil && was != control {
+			if err := l.do(ctx, http.MethodPost, "logout", nil, nil); err != nil {
+				return err
+			}
+			moving = true
+		}
+	}
 	if err := l.do(ctx, http.MethodPost, "start", map[string]any{
 		"AuthKey": authKey,
 		"UpdatePrefs": map[string]any{
-			"ControlURL":  "https://controlplane.tailscale.com",
+			"ControlURL":  control,
 			"WantRunning": true,
 			"Hostname":    hostname,
 			"CorpDNS":     false,
@@ -110,8 +137,9 @@ func (l *localAPI) login(ctx context.Context, authKey, hostname string) error {
 		return err
 	}
 	// Joined before and still in: the new key and settings are all. Removed from the tailnet since
-	// (it says it needs a login again), it logs in with the new key like a new device.
-	if before.HaveNodeKey && before.BackendState != "NeedsLogin" {
+	// (it says it needs a login again), or moved to another control server, it logs in with the new key
+	// like a new device.
+	if before.HaveNodeKey && before.BackendState != "NeedsLogin" && !moving {
 		return nil
 	}
 	return l.do(ctx, http.MethodPost, "login-interactive", nil, nil)

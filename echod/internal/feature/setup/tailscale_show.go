@@ -26,6 +26,9 @@ func tailscaleSection(w http.ResponseWriter, token string) {
 	st := tailscale.Get().State()
 	where := "Not on a tailnet."
 	switch {
+	case st.State == "Running" && st.Name != "" && st.Control != "":
+		where = "On the tailnet as <strong>" + html.EscapeString(st.Name) + "</strong> (" + html.EscapeString(st.IP) +
+			"), through the Headscale at " + html.EscapeString(st.Control) + "."
 	case st.State == "Running" && st.Name != "":
 		where = "On the tailnet as <strong>" + html.EscapeString(st.Name) + "</strong> (" + html.EscapeString(st.IP) + ")."
 	case st.On && st.Problem != "":
@@ -38,14 +41,18 @@ func tailscaleSection(w http.ResponseWriter, token string) {
 	fmt.Fprintf(w, `<p class="note">%s</p>
 	 <label for="tskey">Auth key</label>
 	 <input id="tskey" name="key" type="password" autocomplete="off" placeholder="tskey-auth-...">
+	 <label for="tscontrol">Headscale server</label>
+	 <input id="tscontrol" name="control" autocomplete="off" maxlength="253" placeholder="https://headscale.example.com">
 	 <p class="note">An auth key from the Tailscale admin console, tagged <strong>tag:techo5</strong>. It joins
 	  the device to your tailnet once and is not kept; after that the device rejoins by itself. Over the
 	  tailnet, Home Assistant reaches the device on its encrypted link, and nothing else answers but the
 	  setup page while Remote setup is on.</p>
+	 <p class="note">With your own Headscale, give its address and a pre-auth key from it
+	  (<code>headscale preauthkeys create</code>); leave the server empty for Tailscale's.</p>
 	 <p><button type="submit">Join</button></p></form></fieldset>`, where)
 }
 
-// saveTailscale joins the tailnet with the key typed.
+// saveTailscale joins the tailnet with the key typed, at the Headscale typed if one is.
 func saveTailscale(r *http.Request) string {
 	key := strings.TrimSpace(r.PostFormValue("key"))
 	if key == "" {
@@ -53,7 +60,7 @@ func saveTailscale(r *http.Request) string {
 	}
 	ctx, cancel := context.WithTimeout(r.Context(), 30*time.Second)
 	defer cancel()
-	if err := tailscale.Get().Login(ctx, key); err != nil {
+	if err := tailscale.Get().Login(ctx, key, r.PostFormValue("control")); err != nil {
 		return "could not join: " + err.Error()
 	}
 	return ""

@@ -2699,6 +2699,40 @@ data:
   auth_key: tskey-auth-example
 ```
 
+## Join a Headscale tailnet
+
+In YAML, refer to this action as `esphome.<node>_headscale_login`.
+
+Joins the device to the tailnet of your own Headscale server with a pre-auth key, and turns its
+**Tailscale** switch on. A device that was on Tailscale's tailnet leaves it first. Otherwise it works
+as [`tailscale_login`](#join-a-tailnet) does: the key isn't kept, and it waits up to 30 seconds to see
+the device connect. Echo Shows, the Echo Spot and the Skylight only. See
+[Your own Headscale](tailscale.md#your-own-headscale).
+
+> **Good to know**
+>
+> This needs an API encryption key: it's refused unless Home Assistant's *ESPHome* link to the device
+> already has a real encryption key set, since otherwise the key would cross the network in the clear.
+
+### auth_key (Required)
+
+*string*
+
+A pre-auth key from your Headscale server (`headscale preauthkeys create`).
+
+### server_url (Required)
+
+*string*
+
+Your Headscale server's address, as its `server_url` says, such as `https://headscale.example.com`.
+
+```yaml
+action: esphome.office_headscale_login
+data:
+  auth_key: hskey-auth-example
+  server_url: https://headscale.example.com
+```
+
 ## Join a NetBird network
 
 In YAML, refer to this action as `esphome.<node>_netbird_login`.

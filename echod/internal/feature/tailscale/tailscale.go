@@ -5,8 +5,9 @@
 //
 // It runs Tailscale's own daemon, tailscaled, shipped in the image, and speaks to it over the local
 // API tailscaled serves on a unix socket. Tailscale keeps the device's identity on the tailnet in its
-// state directory, so a device joined once rejoins by itself after every restart; the only thing
-// kept here is whether it runs. A device that has never been given a key runs nothing.
+// state directory, so a device joined once rejoins by itself after every restart; what is kept here is
+// whether it runs, and the control server it was joined to: Tailscale's own, or the owner's Headscale.
+// A device that has never been given a key runs nothing.
 package tailscale
 
 import (
@@ -15,6 +16,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -22,6 +24,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"syscall"
 	"time"
 
@@ -40,10 +43,11 @@ import (
 func init() {
 	component.Register(component.Network, Get(), component.Order(55),
 		component.Supervise(service.Restart(5*time.Second, 5*time.Minute)))
-	// A diagnostics bundle names neither this device's tailnet name nor its address there.
+	// A diagnostics bundle names neither this device's tailnet name nor its address there, nor the
+	// owner's Headscale.
 	diag.TailnetNames = func() []string {
 		s := Get().State()
-		return []string{s.Name, s.IP}
+		return []string{s.Name, s.IP, s.Control}
 	}
 	// Connected, a tailnet address is from away whatever the interface is called (web.Away).
 	web.TailscaleUp = func() bool { s := Get().State(); return s.Running && s.State == "Running" }
@@ -67,6 +71,7 @@ type Status struct {
 	State   string // tailscaled's own: NeedsLogin, Running, and so on
 	Name    string // this device's name on the tailnet
 	IP      string // its tailnet IPv4 address
+	Control string // the owner's Headscale's host name; empty for Tailscale's own control server
 	Problem string // why it is not on the tailnet, when it is not
 }
 
@@ -130,7 +135,7 @@ var Available = sync.OnceValue(func() bool {
 })
 
 func (f *Feature) Restore(c config.Config) {
-	f.set(func(s *Status) { s.On = c.Tailscale.On })
+	f.set(func(s *Status) { s.On, s.Control = c.Tailscale.On, controlHost(c.Tailscale.ControlURL) })
 }
 
 // State is a copy of where the device stands.
@@ -163,12 +168,17 @@ func (f *Feature) SetOn(on bool) error {
 	return nil
 }
 
-// Login joins the tailnet with an auth key, turning Tailscale on first if it was off. The key is
-// handed to tailscaled and not kept anywhere here: what tailscaled keeps is the device's own identity.
-func (f *Feature) Login(ctx context.Context, authKey string) error {
+// Login joins the tailnet with an auth key, at a control server (Tailscale's own when empty, else the
+// owner's Headscale), turning Tailscale on first if it was off. The key is handed to tailscaled and not
+// kept anywhere here: what tailscaled keeps is the device's own identity.
+func (f *Feature) Login(ctx context.Context, authKey, control string) error {
 	authKey = strings.TrimSpace(authKey)
-	if !strings.HasPrefix(authKey, "tskey-") {
-		return errors.New("tailscale: that is not an auth key (they start tskey-auth-)")
+	control, err := controlURL(control)
+	if err != nil {
+		return err
+	}
+	if err := checkKey(authKey, control); err != nil {
+		return err
 	}
 	if !encrypted() {
 		return errors.New("tailscale: set an API encryption key first; over the tailnet the device's Home Assistant link would otherwise be open in the clear")
@@ -194,16 +204,27 @@ func (f *Feature) Login(ctx context.Context, authKey string) error {
 		case <-time.After(500 * time.Millisecond):
 		}
 	}
-	if err := f.api.login(ctx, authKey, hostname(config.Get().Device.Name)); err != nil {
+	logKey.Store(authKey)
+	defer logKey.Store("")
+	if err := f.api.login(ctx, authKey, hostname(config.Get().Device.Name), control); err != nil {
 		return err
 	}
-	slog.Info("tailscale: joining the tailnet", "name", hostname(config.Get().Device.Name))
+	saved := controlSaved(control)
+	if err := config.Set().Tailscale().Joined(saved); err != nil {
+		return err
+	}
+	f.set(func(s *Status) { s.Control = controlHost(saved) })
+	slog.Info("tailscale: joining the tailnet", "name", hostname(config.Get().Device.Name), "headscale", saved != "")
 	f.poke()
 	// tailscaled takes the key without saying whether the tailnet will: wait to see it connect, so a key
 	// that is used up or expired is an answer here rather than a device that quietly never joins.
 	for {
 		st, err := f.api.status(ctx)
 		if err == nil && st.BackendState == "Running" {
+			if st.Self != nil && !inRange(st.Self.TailscaleIPs) {
+				f.outOfRange(st.Self.TailscaleIPs)
+				return errors.New(outOfRangeMsg)
+			}
 			return nil
 		}
 		select {
@@ -217,6 +238,77 @@ func (f *Feature) Login(ctx context.Context, authKey string) error {
 	}
 }
 
+// controlURL is a control server's URL as tailscaled takes it: Tailscale's own for none, and only http
+// or https to a host.
+func controlURL(s string) (string, error) {
+	s = strings.TrimRight(strings.TrimSpace(s), "/")
+	if s == "" {
+		return DefaultControl, nil
+	}
+	u, err := url.Parse(s)
+	if err != nil || (u.Scheme != "https" && u.Scheme != "http") || u.Host == "" || u.User != nil {
+		return "", errors.New("tailscale: the control server is a URL, such as https://headscale.example.com")
+	}
+	return u.String(), nil
+}
+
+// controlSaved is what config keeps: nothing for Tailscale's own.
+func controlSaved(control string) string {
+	if control == DefaultControl {
+		return ""
+	}
+	return control
+}
+
+// controlHost is a saved control server's host name, for the setup page: empty for Tailscale's own.
+func controlHost(saved string) string {
+	if u, err := url.Parse(saved); err == nil {
+		return u.Hostname()
+	}
+	return ""
+}
+
+// checkKey turns down what cannot be a key before anything is started. Tailscale's start tskey-;
+// Headscale's start hskey-auth- (0.28 and later) or are a run of hex digits (before).
+func checkKey(key, control string) error {
+	if control == DefaultControl {
+		if !strings.HasPrefix(key, "tskey-") {
+			return errors.New("tailscale: that is not an auth key (they start tskey-auth-)")
+		}
+		return nil
+	}
+	if strings.HasPrefix(key, "hskey-auth-") || strings.HasPrefix(key, "tskey-") {
+		return nil
+	}
+	if len(key) < 32 || strings.Trim(key, "0123456789abcdefABCDEF") != "" {
+		return errors.New("tailscale: that is not a Headscale pre-auth key (they start hskey-auth-)")
+	}
+	return nil
+}
+
+// outOfRangeMsg is why a tailnet numbered outside Tailscale's ranges is left. What the device lets in
+// from away goes by those ranges (web.FromTailnet): on a Headscale numbered elsewhere, a node on the
+// tailnet would be taken for one in the house.
+const outOfRangeMsg = "tailscale: this tailnet's addresses are outside 100.64.0.0/10 and fd7a:115c:a1e0::/48, which this device needs: keep Headscale's default prefixes"
+
+// inRange is whether every address the device has on the tailnet is in Tailscale's ranges.
+func inRange(ips []string) bool {
+	for _, ip := range ips {
+		if !web.FromTailnet(ip) {
+			return false
+		}
+	}
+	return true
+}
+
+// outOfRange turns Tailscale off on a tailnet numbered outside its ranges, and says why.
+func (f *Feature) outOfRange(ips []string) {
+	slog.Warn(outOfRangeMsg, "addresses", len(ips))
+	if err := f.SetOn(false); err != nil {
+		slog.Warn("tailscale: turning off", "err", err)
+	}
+}
+
 func cmpOr(a, b string) string {
 	if a != "" {
 		return a
@@ -224,23 +316,34 @@ func cmpOr(a, b string) string {
 	return b
 }
 
-// Actions: tailscale_login joins the tailnet with a key. Only over an encrypted Home Assistant link,
-// since the key would otherwise cross the network in the clear.
-// None where Tailscale can't run (Available).
+// Actions: tailscale_login joins Tailscale's tailnet with a key, and headscale_login the owner's
+// Headscale's (a separate action, so that scripts calling tailscale_login with its one key keep
+// working). Only over an encrypted Home Assistant link, since the key would otherwise cross the network
+// in the clear. None where Tailscale can't run (Available).
 func (f *Feature) Actions() []*esphome.Action {
 	if !Available() {
 		return nil
 	}
+	login := func(key, control string) error {
+		if !encrypted() {
+			return errors.New("tailscale: set an API encryption key first; the auth key would otherwise cross the network in the clear")
+		}
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancel()
+		return f.Login(ctx, key, control)
+	}
 	return []*esphome.Action{{
 		Name: "tailscale_login",
 		Args: []esphome.Arg{{Name: "auth_key", Type: esphome.ArgString}},
+		Run:  func(c esphome.Call) (any, error) { return nil, login(c.String("auth_key"), "") },
+	}, {
+		Name: "headscale_login",
+		Args: []esphome.Arg{{Name: "auth_key", Type: esphome.ArgString}, {Name: "server_url", Type: esphome.ArgString}},
 		Run: func(c esphome.Call) (any, error) {
-			if !encrypted() {
-				return nil, errors.New("tailscale: set an API encryption key first; the auth key would otherwise cross the network in the clear")
+			if strings.TrimSpace(c.String("server_url")) == "" {
+				return nil, errors.New("tailscale: give the Headscale server's URL, such as https://headscale.example.com")
 			}
-			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-			defer cancel()
-			return nil, f.Login(ctx, c.String("auth_key"))
+			return nil, login(c.String("auth_key"), c.String("server_url"))
 		},
 	}}
 }
@@ -403,6 +506,10 @@ func (f *Feature) poll(ctx context.Context) {
 			s.Problem = "needs a key: the tailscale_login action, or the setup page"
 		}
 	})
+	// A Headscale renumbered since the device joined.
+	if st.BackendState == "Running" && st.Self != nil && !inRange(st.Self.TailscaleIPs) {
+		f.outOfRange(st.Self.TailscaleIPs)
+	}
 }
 
 func firstIPv4(ips []string) string {
@@ -517,13 +624,23 @@ var encrypted = func() bool {
 	return err == nil && !k.IsZero()
 }
 
+// logKey is the key being joined with, while it is: a Headscale key from before 0.28 says nothing of
+// what it is, so the lines that would carry it are known by the key itself.
+var logKey atomic.Value
+
+func hasLogKey(line string) bool {
+	k, _ := logKey.Load().(string)
+	return k != "" && strings.Contains(line, k)
+}
+
 // logWriter puts tailscaled's own output in the daemon's log at Debug: it is chatty, and what matters
 // of it reaches the status sensor.
 type logWriter struct{}
 
 func (logWriter) Write(b []byte) (int, error) {
 	for _, line := range strings.Split(strings.TrimSpace(string(b)), "\n") {
-		if line = strings.TrimSpace(line); line != "" && !strings.Contains(line, "tskey-") {
+		if line = strings.TrimSpace(line); line != "" && !strings.Contains(line, "tskey-") &&
+			!strings.Contains(line, "hskey-") && !hasLogKey(line) {
 			slog.Debug("tailscaled", "said", line)
 		}
 	}

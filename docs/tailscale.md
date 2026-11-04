@@ -5,8 +5,9 @@ a device in another house, a relative's or a vacation home, stay in your own Hom
 once by its tailnet name, it keeps working wherever it is plugged in, with no ports opened on
 anybody's router.
 
-Every Echo Show, Echo Spot and Skylight image carries Tailscale, off until you give it a key. If you use
-NetBird instead, see [NetBird](netbird.md). It needs
+Every Echo Show, Echo Spot and Skylight image carries Tailscale, off until you give it a key. If you run
+your own [Headscale](https://headscale.net) server, the device can join that instead: see
+[Your own Headscale](#your-own-headscale). If you use NetBird, see [NetBird](netbird.md). It needs
 the device's 64-bit kernel: an Echo Show 8 2nd gen still on Amazon's kernel doesn't offer it. The Echo
 Dots don't carry it: they stay in the house.
 
@@ -60,6 +61,38 @@ Do this while the device is still at home, where you can stand at it.
 The **Tailscale** switch, in Home Assistant and on the screen, stops it and starts it again; stopped,
 the device keeps its place on the tailnet and rejoins when turned back on.
 
+## Your own Headscale
+
+[Headscale](https://headscale.net) is a control server you run yourself in place of Tailscale's. The
+device runs the same Tailscale client either way; only where it joins changes. Everything above holds,
+with these differences:
+
+1. **Keep Headscale's default address ranges** (`prefixes` in its `config.yaml`: `100.64.0.0/10` and
+   `fd7a:115c:a1e0::/48`). The device goes by those ranges to tell a request from away from one in the
+   house. On a Headscale numbered anywhere else it won't stay connected: it turns Tailscale off, and
+   its log says why.
+2. **Make a pre-auth key** on the Headscale server, single-use with a short expiry:
+
+   ```sh
+   headscale preauthkeys create --user <user> --expiration 1h
+   ```
+
+   Keys from Headscale 0.28 and later start `hskey-auth-`; older ones are a long run of letters and
+   digits. Both work.
+3. **Give the device the key and the server's address.** Either:
+   - the setup page: **Connections → Tailscale**, paste the key, type the server's address
+     (`https://headscale.example.com`) in **Headscale server**, **Join**; or
+   - Home Assistant: the [`headscale_login` action](actions.md#join-a-headscale-tailnet).
+
+   A device that was on Tailscale's tailnet leaves it and joins the Headscale like a new device. Joining
+   again with **Headscale server** left empty moves it back to Tailscale's.
+4. **Access rules** go in Headscale's own policy file. Write the same limits as under
+   [Access rules](#access-rules): only Home Assistant reaches port 6053, and only your own devices
+   reach 8181 and 22.
+
+The **Tailscale status** sensor and the screen read the same as with Tailscale's server. The setup
+page also names the Headscale the device is on.
+
 ## Remote setup
 
 The setup page normally needs a press on the device. For a device nobody can stand at:
@@ -101,7 +134,8 @@ nothing. Then adjust to taste:
   memory while it runs. Off, nothing runs.
 - **Voice from away goes through your Home Assistant,** so if your internet or Home Assistant is down,
   the device far away can't answer. Its clock, alarms and timers keep working.
-- **A diagnostics bundle leaves out** the device's tailnet name and address.
+- **A diagnostics bundle leaves out** the device's tailnet name and address, and your Headscale's
+  address.
 - **Turning Tailscale off** in Home Assistant from far away cuts your only way to it. Turning it back
   on then needs somebody there: the switch on the screen.
 - **A device that goes missing** stays on your tailnet until you remove it in the admin console's

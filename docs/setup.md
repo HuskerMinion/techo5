@@ -2063,8 +2063,9 @@ except that a public IPv6 address is counted with the rest of its /64.
 
 An Echo Show, Echo Spot or Skylight can join your Tailscale network, so a device in another house
 stays in your own Home Assistant, and its setup page can be opened from afar with **Remote setup**.
-Off until you give it a key: see [Tailscale: reaching a device from away](tailscale.md). Or use
-NetBird, NetBird's own service or one you run: see [NetBird: reaching a device from away](netbird.md).
+Off until you give it a key: see [Tailscale: reaching a device from away](tailscale.md). It can also
+join your own Headscale server instead of Tailscale's. Or use NetBird, NetBird's own service or one you
+run: see [NetBird: reaching a device from away](netbird.md).
 
 ## More
 

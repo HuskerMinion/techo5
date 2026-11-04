@@ -18,8 +18,10 @@ import (
 type fakeTailscaled struct {
 	started     map[string]any
 	status      string
+	control     string // the control server its settings name
 	loginAsked  bool
 	loginBefore bool // whether login-interactive came before start, which it must not
+	loggedOut   bool
 }
 
 func (f *fakeTailscaled) serve(t *testing.T) string {
@@ -39,6 +41,11 @@ func (f *fakeTailscaled) serve(t *testing.T) string {
 			_, _ = w.Write([]byte(f.status))
 		case "/localapi/v0/start":
 			_ = json.NewDecoder(r.Body).Decode(&f.started)
+			w.WriteHeader(http.StatusNoContent)
+		case "/localapi/v0/prefs":
+			_ = json.NewEncoder(w).Encode(map[string]string{"ControlURL": f.control})
+		case "/localapi/v0/logout":
+			f.loggedOut = true
 			w.WriteHeader(http.StatusNoContent)
 		case "/localapi/v0/login-interactive":
 			f.loginAsked, f.loginBefore = true, f.started == nil
@@ -73,7 +80,7 @@ func TestTheStatusIsRead(t *testing.T) {
 func TestLoginAsksOnlyForWhatItNeeds(t *testing.T) {
 	f := &fakeTailscaled{status: `{"BackendState":"NeedsLogin"}`}
 	api := newLocalAPI(f.serve(t))
-	if err := api.login(context.Background(), "tskey-auth-test", "guest-bedroom"); err != nil {
+	if err := api.login(context.Background(), "tskey-auth-test", "guest-bedroom", DefaultControl); err != nil {
 		t.Fatal(err)
 	}
 	prefs, _ := f.started["UpdatePrefs"].(map[string]any)
@@ -89,7 +96,7 @@ func TestLoginAsksOnlyForWhatItNeeds(t *testing.T) {
 // A device that has joined before only gets the new key and settings, as "tailscale up" does.
 func TestLoginAgainDoesNotStartOver(t *testing.T) {
 	f := &fakeTailscaled{status: `{"BackendState":"Running","HaveNodeKey":true}`}
-	if err := newLocalAPI(f.serve(t)).login(context.Background(), "tskey-auth-test", "kitchen"); err != nil {
+	if err := newLocalAPI(f.serve(t)).login(context.Background(), "tskey-auth-test", "kitchen", DefaultControl); err != nil {
 		t.Fatal(err)
 	}
 	if f.started == nil || f.loginAsked {
@@ -99,7 +106,7 @@ func TestLoginAgainDoesNotStartOver(t *testing.T) {
 
 // A key that is not a key is refused before anything is started.
 func TestLoginRefusesWhatIsNotAKey(t *testing.T) {
-	if err := Get().Login(context.Background(), "hunter2"); err == nil || !strings.Contains(err.Error(), "not an auth key") {
+	if err := Get().Login(context.Background(), "hunter2", ""); err == nil || !strings.Contains(err.Error(), "not an auth key") {
 		t.Errorf("a non-key was taken: %v", err)
 	}
 }
@@ -160,7 +167,7 @@ func TestOnNeedsAnEncryptedLink(t *testing.T) {
 	if err := Get().SetOn(true); err == nil || !strings.Contains(err.Error(), "encryption key") || config.Get().Tailscale.On {
 		t.Errorf("turned on with no key on the link: %v", err)
 	}
-	if err := Get().Login(context.Background(), "tskey-auth-test"); err == nil || !strings.Contains(err.Error(), "encryption key") {
+	if err := Get().Login(context.Background(), "tskey-auth-test", ""); err == nil || !strings.Contains(err.Error(), "encryption key") {
 		t.Errorf("joined with no key on the link: %v", err)
 	}
 	if err := Get().SetOn(false); err != nil {
