@@ -2519,6 +2519,11 @@ func (d *Display) frame() (next time.Duration) {
 	d.mu.Unlock()
 	busy := updateVisible || view.Phase != "idle" || call.Phase != phone.Idle || ring.any() || reminding || sheetUp || pinIsOpen() ||
 		d.wakeLight(now) > 0 || d.popupUp() != nil || asksAtDevice() || wifiUp || camUp || video.Get().State().Active()
+	if d.coverTick(on) {
+		d.mu.Lock()
+		on = d.on
+		d.mu.Unlock()
+	}
 	if d.awayTick(now, on, busy, night) {
 		d.mu.Lock()
 		on = d.on
