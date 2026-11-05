@@ -159,6 +159,7 @@ type scene struct {
 
 	// showDeck is the deck page, deck what it shows (render_deck.go).
 	showDeck bool
+	custom   customView // a custom screen, when custom.name is set (custom_screens.go)
 	deck     deckView
 
 	// alerts are the weather alerts at home and nearby (the clock's badge, the rain map's pills and
@@ -358,6 +359,14 @@ type renderer struct {
 	rainbowPageOK bool
 	rainbowReused bool
 
+	// customCache is each custom screen's own state between frames, by its id (customCache): a page
+	// kept while it does not change, so a frame draws only what moved.
+	customCache map[string]any
+	// customAlone is the custom screen whose page alone the last frame left on the canvas, nothing
+	// over it, and customKept that it is still there for this frame to draw on (customScreen.keeps).
+	customAlone string
+	customKept  bool
+
 	// weatherAt is where the home screen's weather was drawn in the frame last drawn, for a tap there
 	// to open the forecast; empty when it was not drawn. Written while drawing, read by the touch
 	// goroutine, so under its own lock.
@@ -530,6 +539,7 @@ func (r *renderer) draw(s scene) {
 	// drawn (publishSkip, registered before the overlays' own defers so it runs after them).
 	r.skipDrawn, r.skipDrawnOffer = image.Rectangle{}, skipOffer{}
 	defer r.publishSkip(s)
+	r.customKept = r.keptCustom(s)
 	defer r.streamingDot(s)  // over everything, the update overlay included: deferred first, drawn last
 	defer r.updateOverlay(s) // Draw update overlay at the end of frame using defer
 
@@ -584,7 +594,9 @@ func (r *renderer) draw(s scene) {
 		r.redClockPage(s)
 		return
 	}
-	fillCanvas(r.dst, walnut)
+	if !r.customKept {
+		fillCanvas(r.dst, walnut)
+	}
 
 	// Registered first so it runs last: the header goes over every page, including the ones below
 	// that return early.
@@ -685,6 +697,13 @@ func (r *renderer) draw(s scene) {
 	}
 	if s.showCalendar {
 		r.calendarPage(s)
+		if s.showVolume {
+			r.volumeBar(s)
+		}
+		return
+	}
+	if s.custom.name != "" {
+		r.customPage(s)
 		if s.showVolume {
 			r.volumeBar(s)
 		}
