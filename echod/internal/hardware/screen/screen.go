@@ -133,6 +133,9 @@ type Device struct {
 	tintWarned bool
 	// filter is laid over every row on its way to the panel (SetFilter, filter.go).
 	filter rowFilter
+
+	// out is the board's own way to the pages (output.go); nil on the framebuffer.
+	out output
 }
 
 // SetFilter lays f over every row of the canvas on its way to the panel, a row of four-byte RGBA
@@ -146,6 +149,9 @@ func (d *Device) source() *image.RGBA { return d.filter.over(d.canvas) }
 
 // Open maps the framebuffer and reads its geometry.
 func Open() (*Device, error) {
+	if d := openOutput(); d != nil {
+		return d, nil
+	}
 	f, err := os.OpenFile(devPath, os.O_RDWR, 0)
 	if err != nil {
 		if f, err = os.OpenFile(altPath, os.O_RDWR, 0); err != nil {
@@ -240,6 +246,9 @@ func (d *Device) Canvas() *image.RGBA { return d.canvas }
 
 // String describes the framebuffer, for the log.
 func (d *Device) String() string {
+	if d.out != nil {
+		return fmt.Sprintf("%s, %dx%d panel, %d pages, %d bytes/line", d.out, d.panelW, d.panelH, d.pages, d.line)
+	}
 	return fmt.Sprintf("%dx%d panel, %d pages, %d bytes/line, rgba at %d/%d/%d/%d",
 		d.panelW, d.panelH, d.pages, d.line, d.shift[0], d.shift[1], d.shift[2], d.shift[3])
 }
@@ -307,7 +316,13 @@ func (d *Device) present(img *image.RGBA) error {
 	if d.pages > 1 {
 		next = (d.page + 1) % d.pages
 	}
-	dst := d.mem[next*d.pageBytes : (next+1)*d.pageBytes]
+	dst, err := d.pageFor(next)
+	if err != nil {
+		return err
+	}
+	if d.out != nil && d.out.present(d, img, dst, next) {
+		return d.pan(next)
+	}
 
 	w, h := img.Rect.Dx(), img.Rect.Dy()
 	sr, sg, sb, sa := d.shift[0], d.shift[1], d.shift[2], d.shift[3]
@@ -498,6 +513,13 @@ func words(b []byte) []uint32 {
 // On the Echo Show 5's mainline kernel that emulation has a single page, where a pan to the page on
 // show is only a wasted commit, and so it is on a board that sets singlePage.
 func (d *Device) pan(next int) error {
+	if d.out != nil {
+		if err := d.out.show(next); err != nil {
+			return err
+		}
+		d.page = next
+		return nil
+	}
 	if d.pages <= 1 && (layout.AthenaMainline() || layout.CronosMainline() || singlePage) {
 		d.page = 0
 		return nil
@@ -523,6 +545,10 @@ func (d *Device) Close() error {
 	if d.gpuPath.disp != nil {
 		d.gpuPath.disp.Release(errors.New("screen: closed"))
 		d.gpu = nil
+	}
+	if d.out != nil {
+		d.out.leave(d)
+		d.out = nil
 	}
 	if d.mem != nil {
 		_ = unix.Munmap(d.mem)
