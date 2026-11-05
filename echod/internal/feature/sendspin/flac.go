@@ -231,6 +231,30 @@ func (d *flacDecoder) decode(chunk []byte) ([]int16, error) {
 	return d.pop(), nil
 }
 
+// decodeAll hands back every frame the chunk finished, one after the other: for a protocol whose chunk
+// is a span of the stream starting at its timestamp, frames and all (Snapcast), rather than one frame.
+func (d *flacDecoder) decodeAll(chunk []byte) ([]int16, error) {
+	if err := d.failure(); err != nil {
+		return nil, err
+	}
+
+	if err := d.feed.feed(chunk); err != nil {
+		if perr := d.failure(); perr != nil {
+			return nil, perr
+		}
+		return nil, io.EOF
+	}
+
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	var pcm []int16
+	for _, f := range d.queue {
+		pcm = append(pcm, f...)
+	}
+	d.queue = d.queue[:0]
+	return pcm, nil
+}
+
 // close stops the parser and waits for it, so a track change does not leave a goroutine behind.
 func (d *flacDecoder) close() error {
 	d.feed.stop()

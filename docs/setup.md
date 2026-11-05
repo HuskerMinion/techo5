@@ -380,6 +380,17 @@ captured login to the same page for a few minutes, and could see the pictures an
   finds it on the network with nothing to set up. Several devices can play in sync as a group.
   Read [what this trusts](getting-started.md#after-installing-every-device) first if your Wi-Fi has
   guests on it. **Music Assistant player** under Settings → Sound turns it off.
+- **Snapcast.** The device can also be a client of a [Snapcast](https://github.com/snapcast/snapcast)
+  server, in step with the house's other Snapcast clients. In Home Assistant, set **Snapcast server**
+  (Playback, Configuration) to the server's address, `192.168.1.20` or `192.168.1.20:1704` (1704
+  when no port is given), and turn on **Snapcast**. The server then lists the device as a client
+  under its Wi-Fi MAC address, and its group, stream, volume and latency are set there, as for any
+  other client. **Snapcast state** says `connected`, or `playing` while the stream has sound. The
+  device takes the speaker only while it hears something and lets it go after three seconds of
+  silence, so the assistant, timers and announcements carry on as usual and duck it like any music.
+  FLAC, Opus and PCM streams at 48 kHz play; a stream at another rate is refused, as Sendspin's is.
+  Sendspin and Snapcast share the speaker's timed output, so use one of them at a time: turn the
+  Sendspin switch off on a device that plays Snapcast.
 - **Music by voice, and any station.** With a Music Assistant set up on the device (setup page →
   Sound → Music Assistant), "play some Eagles" plays from it, and a station in a format the device
   cannot play itself (most commercial radio streams) is played through it instead. The setup page

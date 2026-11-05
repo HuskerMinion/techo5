@@ -264,6 +264,18 @@ func (p *Player) Attach(s Source) {
 	p.srcQuiet.Store(0)
 }
 
+// Detach clears the Source only if it is still s. An output letting go must not take another's place
+// with it: Snapcast's stream going quiet while Sendspin plays would otherwise leave Sendspin silent.
+func (p *Player) Detach(s Source) {
+	p.srcMu.Lock()
+	defer p.srcMu.Unlock()
+	if p.src != s {
+		return
+	}
+	p.src = nil
+	p.srcQuiet.Store(0)
+}
+
 // Written is the output frame index of the next frame to be handed to the card.
 func (p *Player) Written() uint64 { return p.written.Load() }
 

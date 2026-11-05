@@ -359,7 +359,8 @@ is built on, runs on the unlocked Dot's Fire OS 6 with its own installer, and is
 
    Inbound, a device takes nothing on Wi-Fi but what it serves: the Home Assistant API, mDNS, SSH
    (only while its switch is on), Sendspin, the setup page and its views, and AirPlay and Spotify
-   Connect (only while theirs are).
+   Connect (only while theirs are). The Snapcast client listens on nothing: it dials the server it is
+   given, only while its switch is on.
 
 Next: **[Setting it up](setup.md)**, for photos, weather, cameras, music and the night settings.
 

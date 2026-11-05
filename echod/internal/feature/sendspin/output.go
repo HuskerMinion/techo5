@@ -65,6 +65,9 @@ type out struct {
 	ready bool
 	held  bool
 	gain  float32
+	// level is the stream's own volume on top of gain, for a protocol whose server sets a client's
+	// volume without it being the device's (Snapcast); 1 for Sendspin, which moves the device's.
+	level float32
 
 	// pcm holds frames from base onward. played is where the card has got to, which is what decides
 	// whether a chunk is late — base only says what we happen to be holding.
@@ -100,7 +103,7 @@ var (
 	_ speaker.Source   = (*out)(nil)
 )
 
-func newOut(p *speaker.Player) *out { return &out{p: p, gain: 1} }
+func newOut(p *speaker.Player) *out { return &out{p: p, gain: 1, level: 1} }
 
 // use points the renderer at this session's clock. One server at a time, so it changes only between
 // sessions.
@@ -126,7 +129,8 @@ func (o *out) open(sampleRate, channels, bitDepth int) error {
 }
 
 func (o *out) close() {
-	o.p.Attach(nil)
+	// Only this output: another (Snapcast's, Sendspin's) may have taken the speaker since.
+	o.p.Detach(o)
 
 	o.mu.Lock()
 	defer o.mu.Unlock()
@@ -235,8 +239,9 @@ func (o *out) Render(from uint64, buf []int16) {
 		return
 	}
 	o.correct(from)
+	gain := o.gain * o.level
 	for i := range min(len(buf), len(o.pcm)) {
-		buf[i] = scale(o.pcm[i], o.gain)
+		buf[i] = scale(o.pcm[i], gain)
 	}
 }
 

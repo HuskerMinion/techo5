@@ -55,6 +55,7 @@ import (
 	_ "github.com/HuskerMinion/techo5/echod/internal/feature/sendspin"
 	_ "github.com/HuskerMinion/techo5/echod/internal/feature/setup"
 	_ "github.com/HuskerMinion/techo5/echod/internal/feature/share"
+	_ "github.com/HuskerMinion/techo5/echod/internal/feature/snapcast"
 	_ "github.com/HuskerMinion/techo5/echod/internal/feature/tailscale"
 	_ "github.com/HuskerMinion/techo5/echod/internal/feature/tessera"
 	_ "github.com/HuskerMinion/techo5/echod/internal/feature/timer"
