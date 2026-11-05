@@ -53,6 +53,8 @@ func (d *Display) openDashboard() bool {
 	d.mu.Lock()
 	d.dash, d.dashHeld, d.dashTouched, d.dashNight = true, false, time.Now(), false
 	d.drawer, d.sheet, d.deckUp = false, false, false
+	// A custom screen opened by hand gives way too: the dashboard, asked for or opened, comes first.
+	d.customs.up = ""
 	d.mu.Unlock()
 	slog.Info("dashboard up", "mode", dashboard.Get().Mode())
 	d.wake()

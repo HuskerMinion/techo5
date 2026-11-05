@@ -232,6 +232,10 @@ func (d *Display) customShowing() bool {
 // customScene fills in the custom screen, when one is up or is the idle screen and nothing that comes
 // before it has the screen.
 func (d *Display) customScene(s *scene, now time.Time) {
+	// On a device with no custom screen nothing here applies: not even the config is read, each frame.
+	if len(customScreens) == 0 {
+		return
+	}
 	over := s.showSheet || s.showDrawer || s.showCamera || s.showWifi || s.showAlert || s.showCalendar ||
 		s.showWeather || s.showRadar || s.bt.Pairing || s.showDeck || s.redClock
 	idle := idleScreen()

@@ -129,3 +129,38 @@ func TestCustomScreenDraws(t *testing.T) {
 		}
 	}
 }
+
+// With no custom screen registered, a frame's scene is left as it was: nothing is shown, nothing read.
+func TestNoCustomScreenNoScene(t *testing.T) {
+	was := customScreens
+	t.Cleanup(func() { customScreens = was })
+	customScreens = nil
+	d := &Display{poke: make(chan struct{}, 1)}
+	s := scene{now: time.Now(), phase: "idle"}
+	d.customScene(&s, s.now)
+	if s.custom.name != "" {
+		t.Fatalf("%q shown with no screen registered", s.custom.name)
+	}
+}
+
+// The dashboard, asked for by Home Assistant while a custom screen is open by hand, comes first: the
+// screen is put away, not left over it until it times out.
+func TestTheDashboardComesFirst(t *testing.T) {
+	config.Use(filepath.Join(t.TempDir(), "state.json"))
+	if err := config.Set().Dashboard().Mode(config.DashboardDrawn); err != nil {
+		t.Fatal(err)
+	}
+	fakeScreens(t)
+	d := &Display{poke: make(chan struct{}, 1)}
+	if !d.openCustom("maps") {
+		t.Fatal("maps did not open")
+	}
+	if !d.OpenSheet("dashboard") {
+		t.Fatal("the dashboard did not open")
+	}
+	s := scene{now: time.Now(), phase: "idle"}
+	d.customScene(&s, s.now)
+	if s.custom.name != "" {
+		t.Fatalf("%q still over the dashboard", s.custom.name)
+	}
+}
