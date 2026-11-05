@@ -16,6 +16,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"net"
 	"net/url"
 	"os"
 	"os/exec"
@@ -248,6 +249,16 @@ func controlURL(s string) (string, error) {
 	u, err := url.Parse(s)
 	if err != nil || (u.Scheme != "https" && u.Scheme != "http") || u.Host == "" || u.User != nil {
 		return "", errors.New("tailscale: the control server is a URL, such as https://headscale.example.com")
+	}
+	// One server, however it is typed: a rejoin compares this with what tailscaled has, and a
+	// difference logs the device out and joins it again as a new node.
+	host, port := strings.ToLower(u.Hostname()), u.Port()
+	if (u.Scheme == "https" && port == "443") || (u.Scheme == "http" && port == "80") {
+		port = ""
+	}
+	u.Host = host
+	if port != "" {
+		u.Host = net.JoinHostPort(host, port)
 	}
 	return u.String(), nil
 }

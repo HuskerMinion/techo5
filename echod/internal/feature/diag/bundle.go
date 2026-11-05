@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"context"
 	"fmt"
+	"net"
 	"net/url"
 	"os"
 	"os/exec"
@@ -83,6 +84,11 @@ func Redactor() *redact.Redactor {
 		if strings.TrimSpace(name) != "" {
 			r.Known("tailnet", name)
 		}
+	}
+	// A Snapcast server named on the home network (feature/snapcast logs it): the address pattern
+	// catches only a numeric one.
+	if host := snapcastHost(c.Snapcast.Server); host != "" {
+		r.Known("host", host)
 	}
 	// The phone book's names are often people's, and a turn's transcript in the log can carry one.
 	for _, c := range phone.Get().Contacts() {
@@ -400,4 +406,13 @@ func serial() string {
 // wherever the bundle says them.
 func phonePlaying(receiving string) (string, bool) {
 	return strings.CutPrefix(receiving, media.BluetoothPrefix)
+}
+
+// snapcastHost is the host of a Snapcast server setting, with any port taken off.
+func snapcastHost(server string) string {
+	server = strings.TrimSpace(server)
+	if host, _, err := net.SplitHostPort(server); err == nil {
+		return host
+	}
+	return server
 }

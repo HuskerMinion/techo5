@@ -41,12 +41,14 @@ func TestLoginAtTheSameControlServerStaysJoined(t *testing.T) {
 
 func TestControlURL(t *testing.T) {
 	for in, want := range map[string]string{
-		"":                                DefaultControl,
-		" https://headscale.example.com/": "https://headscale.example.com",
-		"http://headscale.lan:8080":       "http://headscale.lan:8080",
-		"headscale.example.com":           "",
-		"ftp://headscale.example.com":     "",
-		"https://me:pw@headscale.example": "",
+		"":                                  DefaultControl,
+		" https://headscale.example.com/":   "https://headscale.example.com",
+		"http://headscale.lan:8080":         "http://headscale.lan:8080",
+		"https://HeadScale.Example.com:443": "https://headscale.example.com",
+		"http://headscale.lan:80/":          "http://headscale.lan",
+		"headscale.example.com":             "",
+		"ftp://headscale.example.com":       "",
+		"https://me:pw@headscale.example":   "",
 	} {
 		got, err := controlURL(in)
 		if (want == "") != (err != nil) || got != want {
