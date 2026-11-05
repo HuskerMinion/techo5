@@ -1354,6 +1354,28 @@ func (p *Player) Pause() {
 	p.stream.Pause()
 }
 
+// Audible reports whether music is what the room is hearing: this player's own track playing, or a
+// remote's track (Music Assistant over Sendspin) that this player carries and that says it is playing.
+// The stop word and the action button ask this, and Playing alone missed a remote's track: its audio
+// never goes through this player's stream, so "stop" over Music Assistant found nothing to stop.
+func (p *Player) Audible() bool {
+	if playing, _ := p.stream.Playing(); playing {
+		return true
+	}
+	playing, _ := p.RemotePlaying()
+	return playing && p.Carried()
+}
+
+// PauseAudible pauses what Audible found. A remote's track is the remote's to pause, so it is asked, as
+// the screen's own controls ask it (Transport); this player's own track is paused here (Pause).
+func (p *Player) PauseAudible() {
+	if p.remoteIsTheTrack() {
+		p.Transport(TransportPause)
+		return
+	}
+	p.Pause()
+}
+
 // stopOnPause holds the received sources that a pause here cannot reach (StopOnPause).
 var stopOnPause sync.Map
 

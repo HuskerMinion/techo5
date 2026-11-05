@@ -342,8 +342,8 @@ func (v *Voice) Action() {
 // What Stop and Interrupt ask of the music, and what lets go of the wake light a ring left on; here
 // so tests can stand in for them.
 var (
-	musicPlaying = func() bool { playing, _ := media.Get().Playing(); return playing }
-	pauseMusic   = func() { media.Get().Pause() }
+	musicPlaying = func() bool { return media.Get().Audible() }
+	pauseMusic   = func() { media.Get().PauseAudible() }
 	releaseRing  = ring.Release
 )
 
