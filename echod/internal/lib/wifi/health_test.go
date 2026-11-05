@@ -4,6 +4,9 @@ import "testing"
 
 // The addresses are from 192.0.2.0/24, the range set aside for documentation.
 func TestTheGatewayIsReadFromTheRouteTable(t *testing.T) {
+	// The machine running the tests may have Wi-Fi of its own under another name.
+	defer func(was func() string) { iface = was }(iface)
+	iface = func() string { return "wlan0" }
 	table := `Iface	Destination	Gateway 	Flags	RefCnt	Use	Metric	Mask		MTU	Window	IRTT
 wlan0	000200C0	00000000	0001	0	0	0	00FFFFFF	0	0	0
 wlan0	00000000	010200C0	0003	0	0	0	00000000	0	0	0
