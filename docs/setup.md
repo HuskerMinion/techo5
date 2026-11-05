@@ -1138,6 +1138,7 @@ call volume of -30 makes calls inaudible, so keep it above that where calls matt
 a restart, are in a settings file, and are not shared between devices, since how loud a room wants them
 depends on the room. Music stays on the volume itself. Alarms and
 timers keep their own **Ring volume**.
+
 ### External microphone processing
 
 Home Assistant has two entities under the device's microphone settings:

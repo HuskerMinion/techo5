@@ -164,7 +164,7 @@ without a separate per-frame header or length prefix. Each buffer must have the 
 descriptor record.
 
 For each input exchange, the helper must write exactly 640 bytes of mono signed S16LE PCM to standard
-output: 320 samples at 16 kHz, representing 20 ms of audio.
+output: 320 samples at 16 kHz, representing 20 milliseconds of audio.
 
 The helper is responsible for any channel combination, reference handling, resampling, echo cancellation
 or other processing needed to produce that output.
