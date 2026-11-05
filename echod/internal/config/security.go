@@ -22,6 +22,11 @@ type Security struct {
 	Baby    bool   `json:"baby,omitempty"`
 	BabyKey string `json:"baby_key,omitempty"`
 
+	// BabyLight is how the device shows that somebody is listening to the baby monitor: "" as it always
+	// did, BabyLightDim at the least light that still shows it, or BabyLightOff not at all, for a
+	// nursery kept dark. The device's own, like Baby: a settings file neither carries nor changes it.
+	BabyLight string `json:"baby_light,omitempty"`
+
 	// WordsKept keeps the words of a voice request on the device: Last heard and Last reply stay empty,
 	// and the voice events leave out what was heard and the reply (feature/activity). Off, as it always
 	// was, since dashboards show Last heard.
@@ -73,6 +78,17 @@ func (w SecurityWriter) Takes(v bool) error {
 
 func (w SecurityWriter) Baby(v bool) error {
 	return w.st.Update(func(c *Config) { c.Security.Baby = v })
+}
+
+// What BabyLight may be.
+const (
+	BabyLightNormal = ""
+	BabyLightDim    = "dim"
+	BabyLightOff    = "off"
+)
+
+func (w SecurityWriter) BabyLight(v string) error {
+	return w.st.Update(func(c *Config) { c.Security.BabyLight = v })
 }
 
 func (w SecurityWriter) BabyKey(v string) error {

@@ -12,7 +12,10 @@ import (
 	"github.com/HuskerMinion/techo5/echod/internal/layout"
 )
 
-func init() { saves["babylink"] = saveBabyLink }
+func init() {
+	saves["babylink"] = saveBabyLink
+	saves["babylight"] = saveBabyLight
+}
 
 // babySection is the baby monitor (feature/babymon), on the Privacy & Security tab of a device with
 // microphones: whether it is on, the link to listen with, and a new link. The switch itself is on the
@@ -40,8 +43,38 @@ func babySection(w http.ResponseWriter, token string) {
 	 a browser: the same sound the wake word hears, after echo cancellation. Keep the link private, as you
 	 would a password. It is not encrypted on the way, as this page is not. Up to three can listen at once. A Show
 	 or a Spot draws an amber dot on its screen and a Dot pulses its ring in amber while anyone listens,
-	 Home Assistant has a Listening now sensor, and the mute button stops the sound at once. A new link ends
-	 every listener and stops the old link working. Voice keeps working while someone listens.</p></fieldset>`)
+	 unless <strong>Baby monitor light</strong> below says otherwise. Home Assistant has a Listening now
+	 sensor, and the mute button stops the sound at once. A new link ends every listener and stops the old
+	 link working. Voice keeps working while someone listens.</p>`)
+	babyLightForm(w, token, s.BabyLight)
+	fmt.Fprint(w, `</fieldset>`)
+}
+
+// babyLightForm is the Baby monitor light choice, with what Dimmest and Off give up.
+func babyLightForm(w http.ResponseWriter, token, now string) {
+	fmt.Fprint(w, `<form method="post" action="/setup/save">`)
+	hidden(w, token, "babylight", "privacy")
+	fmt.Fprint(w, `<label for="babylight">Baby monitor light</label><select id="babylight" name="babylight">`)
+	for _, name := range babymon.LightNames() {
+		fmt.Fprintf(w, `<option%s>%s</option>`, selected(name == babymon.LightName(now)), html.EscapeString(name))
+	}
+	fmt.Fprint(w, `</select>
+	 <p class="note"><strong>Warning:</strong> this is how the room can tell that someone is listening.
+	 <strong>Dimmest</strong> keeps the mark at its least light: a dark amber dot on a Show's or a Spot's
+	 screen, which stays at its dimmest backlight, or one dim segment of a Dot's ring, steady.
+	 <strong>Off</strong> shows nothing at all, and a dark screen stays dark, so nobody in the room can see
+	 that the microphones are being heard. Use them only in a room where everyone knows the monitor is
+	 there, such as a sleeping baby's. It changes only the baby monitor's light: the camera's and every
+	 other light stay as they are. Home Assistant's Listening now sensor still says when someone listens.</p>
+	 <p><button type="submit">Save</button></p></form>`)
+}
+
+func saveBabyLight(r *http.Request) string {
+	if err := babymon.Get().SetLight(r.PostFormValue("babylight")); err != nil {
+		return err.Error()
+	}
+	slog.Info("setup page: baby monitor light", "value", babymon.LightName(config.Get().Security.BabyLight))
+	return ""
 }
 
 func saveBabyLink(r *http.Request) string {

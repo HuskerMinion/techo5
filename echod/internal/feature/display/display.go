@@ -2699,7 +2699,7 @@ func (d *Display) frame() (next time.Duration) {
 		}
 		d.mu.Unlock()
 	}
-	s.streaming, s.listening = camstream.Watching(), babymon.Listening()
+	s.streaming, s.listening = camstream.Watching(), babymon.Shown()
 	s.camera, s.showCamera = home.Get().Camera()
 	s.camera, s.showCamera = d.gateCamera(s.camera, s.showCamera, nightNow(now))
 	s.cameraSound, s.cameraSoundLive = home.Get().CameraSoundOn(), home.Get().CameraSoundLive()

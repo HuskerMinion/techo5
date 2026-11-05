@@ -33,6 +33,7 @@ var registered = []string{
 	"ambient_noise_sensor",
 	"baby_monitor",
 	"baby_monitor_listening",
+	"baby_monitor_light",
 	"bass",
 	"ble_advertisements",
 	"bluetooth_audio",

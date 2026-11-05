@@ -21,6 +21,7 @@ package babymon
 import (
 	"crypto/subtle"
 	"errors"
+	"log/slog"
 	"sync"
 	"time"
 
@@ -57,6 +58,8 @@ var (
 	ErrMuted  = errors.New("The microphones are muted")
 	ErrFull   = errors.New("Too many are listening already")
 	ErrNewKey = errors.New("The link was replaced")
+
+	errUnknownLight = errors.New("Not a Baby monitor light choice")
 )
 
 // device is everything the monitor asks of the rest of the device, so a test can stand in for it.
@@ -81,11 +84,13 @@ var thisDevice = device{
 type Feature struct {
 	dev    device
 	sensor *esphome.BinarySensor
+	light  *esphome.Select // Baby monitor light (light.go)
 
 	mu sync.Mutex
 	n  int
 
-	// Changed fires when somebody starts or stops listening. Listeners must not block.
+	// Changed fires when somebody starts or stops listening, and when the light choice changes.
+	// Listeners must not block.
 	Changed hook.Hook[struct{}]
 }
 
@@ -103,9 +108,15 @@ func Get() *Feature {
 }
 
 func build(d device) *Feature {
-	return &Feature{dev: d, sensor: &esphome.BinarySensor{
+	f := &Feature{dev: d, sensor: &esphome.BinarySensor{
 		Base: esphome.Base{ObjectID: "baby_monitor_listening", Name: "Baby monitor listening now", Icon: "mdi:ear-hearing"},
 	}}
+	f.light = newLightSelect(func(v string) {
+		if err := f.SetLight(v); err != nil {
+			slog.Error("baby monitor light", "err", err)
+		}
+	})
+	return f
 }
 
 func (f *Feature) Name() string { return "baby monitor" }
@@ -114,10 +125,13 @@ func (f *Feature) Entities() []esphome.Entity {
 	if !layout.HasMicrophone() {
 		return nil
 	}
-	return []esphome.Entity{f.sensor}
+	return []esphome.Entity{f.sensor, f.light}
 }
 
-func (f *Feature) Restore(config.Config) { f.sensor.Set(false) }
+func (f *Feature) Restore(c config.Config) {
+	f.sensor.Set(false)
+	f.light.Set(LightName(c.Security.BabyLight))
+}
 
 // Listening is whether anybody is listening now, for the screen and the ring.
 func Listening() bool { return Get().Count() > 0 }

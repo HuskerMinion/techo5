@@ -1833,6 +1833,20 @@ Assistant has a **Baby monitor listening now** sensor, so an automation can tell
 stops the sound at once, ends the listeners, and the page says the microphones are muted; an open
 page starts again by itself a few seconds after you unmute. Voice keeps working while someone listens.
 
+**A dark nursery.** **Baby monitor light** (on the setup page under Privacy & Security, with the
+link, and in Home Assistant) sets how the device shows a listener:
+
+- **Normal**, as above.
+- **Dimmest**: a Show or a Spot draws the dot in a dark amber, and a dark screen stays at its dimmest
+  backlight; a Dot lights one segment of its ring, steady, at the least amber it can show.
+- **Off**: nothing shows, and a dark screen stays dark.
+
+Dimmest and Off make it harder, or impossible, for anyone in the room to see that the microphones are
+being heard. Use them only in a room where everyone knows the monitor is there, such as a sleeping
+baby's. They change only the baby monitor's light: the camera's dot and every other light stay as they
+are. The **Baby monitor listening now** sensor works the same whatever you pick. Like the switch, the
+remote API can read it but not change it, and a settings file or settings sharing never carries it.
+
 **The sound.** It is what the wake word hears, after echo cancellation and leveling, at 16 kHz mono,
 a fraction of a second behind the room (the page keeps about a fifth of a second in hand). On an
 iPhone, turn the ringer switch on and the volume up, or the browser plays nothing. The remote API cannot see or change the switch, and a saved settings file,

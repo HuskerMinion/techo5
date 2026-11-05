@@ -1577,7 +1577,7 @@ func (d *Display) frame() (next time.Duration) {
 	s.muted, _ = mute.Get().Muted()
 	s.mutedSubtle = muteRingSubtle.Load()
 	s.noIdleRing = idleRingHidden.Load()
-	s.listening = babymon.Listening()
+	s.listening = babymon.Shown()
 	// A stream this player is carrying is the room's when it is what is being heard: the face names it,
 	// and says what it is doing, though the audio never passes through this player's own stream. Both,
 	// not just playing: the face tests paused first, so a station left paused underneath would label
