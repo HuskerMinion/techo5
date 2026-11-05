@@ -22,6 +22,8 @@ func init() {
 // sub-device as a device of its own, which would put a bare "Microphone" device in the list for
 // every satellite in the house.
 type Microphone struct {
+	aspSelected *esphome.Select
+	aspActive   *esphome.TextSensor
 	mixing      *esphome.Select
 	gain        *esphome.Number
 	leveling    *esphome.Switch
@@ -45,6 +47,14 @@ func Get() *Microphone {
 
 func build() *Microphone {
 	m := &Microphone{
+		aspSelected: &esphome.Select{Base: esphome.Base{
+			ObjectID: "microphone_asp_selected", Name: "Microphone ASP selected",
+			Icon: "mdi:microphone-settings", Category: esphome.CategoryConfig,
+		}},
+		aspActive: &esphome.TextSensor{Base: esphome.Base{
+			ObjectID: "microphone_asp_active", Name: "Microphone ASP active",
+			Icon: "mdi:microphone", Category: esphome.CategoryDiagnostic,
+		}},
 		mixing: &esphome.Select{
 			Base: esphome.Base{
 				ObjectID: "microphone_mixing",
@@ -126,6 +136,7 @@ func build() *Microphone {
 	}
 
 	for _, b := range []*esphome.Base{
+		&m.aspSelected.Base, &m.aspActive.Base,
 		&m.mixing.Base, &m.gain.Base, &m.leveling.Base, &m.cancel.Base, &m.engine.Base, &m.denoise.Base,
 		&m.ends.Base, &m.pause.Base, &m.sensitivity.Base,
 	} {
@@ -133,6 +144,19 @@ func build() *Microphone {
 	}
 
 	source := mic.Get()
+	m.aspSelected.Options = config.Labels(config.ASPModes())
+	m.aspSelected.OnCommand = func(label string) {
+		want, ok := config.ByLabel(config.ASPModes(), label)
+		if !ok {
+			return
+		}
+		// Persistence is immediate and independent of launch/READY/PCM outcome.
+		if err := config.Set().Microphone().ASP(want); err != nil {
+			slog.Error("saving ASP selection failed", "err", err)
+		}
+		m.aspSelected.Set(source.SetASP(want).Label())
+	}
+	source.SetASPActiveObserver(func(v config.ASPMode) { m.aspActive.Set(v.Label()) })
 	component.Bind(m.mixing, mic.Mixings(), source.SetMixing, config.Set().Microphone().Mixing)
 	engines := config.CancelEngines()
 	if !mic.HaveWebRTC() {
@@ -201,7 +225,7 @@ func build() *Microphone {
 func (m *Microphone) Name() string { return "microphone settings" }
 
 func (m *Microphone) Entities() []esphome.Entity {
-	return append([]esphome.Entity{m.mixing, m.gain, m.leveling, m.cancel, m.engine, m.denoise, m.ends, m.pause,
+	return append([]esphome.Entity{m.aspSelected, m.aspActive, m.mixing, m.gain, m.leveling, m.cancel, m.engine, m.denoise, m.ends, m.pause,
 		m.sensitivity},
 		buildEntities()...)
 }
@@ -219,7 +243,7 @@ func setEngine(e config.CancelEngine) config.CancelEngine {
 // it when it opens the device, which is the only moment it can be set.
 func (m *Microphone) Restore(c config.Config) {
 	source := mic.Get()
-
+	m.aspSelected.Set(source.SetASP(c.Microphone.ASP).Label())
 	component.Restore(m.mixing, c.Microphone.Mixing, source.SetMixing)
 
 	m.leveling.Set(c.Microphone.Leveling)

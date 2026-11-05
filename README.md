@@ -580,8 +580,11 @@ way with microWakeWord's own tools for a language other than English.
 On my Show 5 it hears me fine from across the room without raising my voice. With music playing I
 have to raise my voice, and sometimes still need to tap the screen or a button to get it to hear me.
 
-Amazon's own voice processing chip isn't used, so it's not going to match Alexa at its best. It's a
-lot better than it was a month ago though, and still getting better.
+The standard Built-in microphone pipeline does not use Amazon's factory voice processing, so it's not
+going to match Alexa at its best. An optional [External ASP interface](docs/external-asp.md) allows a
+separately installed, compatible helper to process microphone audio instead. The standard installation
+needs no such helper. The built-in processing is a lot better than it was a month ago though, and still
+getting better.
 
 ## Install
 

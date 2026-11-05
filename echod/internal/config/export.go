@@ -428,6 +428,7 @@ func KeepOwn(c *Config, from Config) {
 	// Measuring the room, listening for claps and serving the camera: new uses of the microphones and
 	// the camera, each this device's to turn on. The camera's login goes with it (its password is also
 	// a secret, kept by KeepSecrets). The remote API's switch too: a restore never opens a door.
+	c.Microphone.ASP = from.Microphone.ASP
 	c.Microphone.Noise = from.Microphone.Noise
 	c.Microphone.Claps = from.Microphone.Claps
 	c.Microphone.ClapSense = from.Microphone.ClapSense

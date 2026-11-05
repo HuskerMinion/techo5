@@ -189,6 +189,10 @@ image goes on with `fastboot flash boot` (with the Show in fastboot, docs/instal
 [tools/linux/build-aec.sh](../tools/linux/build-aec.sh) compiles the WebRTC echo canceller helper for
 armv7 (Linux or WSL). `deploy-rootfs.sh` includes `bin/techo5-aec-arm` when it exists.
 
+The `techo5-aec` WebRTC echo canceller is separate from the optional
+[External microphone ASP interface](external-asp.md). Building or installing one does not install or
+enable the other.
+
 ## Optional: the GPU helper (Show 8 2nd gen)
 
 [tools/gpu/build.sh](../tools/gpu/build.sh) builds `bin/techo5-gpu-arm`, the helper that draws the

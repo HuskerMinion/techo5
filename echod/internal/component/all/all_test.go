@@ -122,6 +122,8 @@ var registered = []string{
 	"memory_available",
 	"metrics_interval",
 	"mic_mute",
+	"microphone_asp_active",
+	"microphone_asp_selected",
 	"microphone_cancel_echo",
 	"microphone_echo_canceller",
 	"microphone_end_of_speech",

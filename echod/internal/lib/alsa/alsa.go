@@ -254,6 +254,10 @@ func (c *Capture) Rewind() error {
 	return nil
 }
 
+// Config reports the exact PCM parameters accepted by hw_params, without a new ioctl.
+// It does not read from or mutate the device.
+func (c *Capture) Config() Config { return c.cfg }
+
 // FrameBytes is the size of one interleaved frame across all channels.
 func (c *Capture) FrameBytes() int { return c.frameBytes }
 

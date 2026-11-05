@@ -1138,6 +1138,45 @@ call volume of -30 makes calls inaudible, so keep it above that where calls matt
 a restart, are in a settings file, and are not shared between devices, since how loud a room wants them
 depends on the room. Music stays on the volume itself. Alarms and
 timers keep their own **Ring volume**.
+### External microphone processing
+
+Home Assistant has two entities under the device's microphone settings:
+
+- **Microphone ASP selected** (configuration select): chooses **Built-in** or **External** microphone
+  processing. **Built-in** is the default. The choice is saved and restored after a restart.
+- **Microphone ASP active** (diagnostic text sensor): shows which processor is actually supplying audio
+  to wake word detection, speech recognition and other microphone listeners.
+
+**Built-in** uses TECHO5's normal microphone processing. **External** requests a separately installed,
+compatible audio processing helper. Choosing External does not install a helper, and a standard TECHO5
+installation works without one. The helper runs as root with no sandbox isolation.
+
+With Built-in selected, External ASP is dormant: no external helper is launched, no PCM is exchanged with
+an external process, and no external audio processing is performed. The normal TECHO5 audio pipeline and
+sensors continue unchanged.
+
+When External is selected, TECHO5 starts the helper in the background. **Microphone ASP active** stays at
+Built-in during startup and changes to External only after the helper is ready and has successfully
+processed its first PCM frame.
+
+Selecting External does not stop TECHO5's built-in audio processing. The normal processing pipeline
+continues to run, supporting features such as the ambient noise sensor, sound direction detection and
+room sensitivity measurements. Double-clap detection also continues to use the raw microphone capture
+independently of the selected processor.
+
+Only the final mono audio supplied to wake word detection, speech recognition and microphone history is
+switched to External. Keeping Built-in processing running also allows TECHO5 to fall back immediately if
+the external helper fails.
+
+A malfunctioning or stuck helper can briefly interrupt listening before TECHO5 falls back to Built-in.
+
+If the helper is missing, incompatible, fails to start or stops processing correctly, TECHO5 falls back
+to Built-in. The selected value remains External, so the two entities can show different values. TECHO5
+does not automatically retry a failed External attempt while the daemon continues running.
+
+To retry manually, change **Microphone ASP selected** to Built-in, then back to External.
+
+See [External microphone ASP](external-asp.md) for the helper interface, requirements and limitations.
 
 ### Two wake words, two assistants
 

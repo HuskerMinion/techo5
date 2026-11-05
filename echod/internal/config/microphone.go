@@ -2,8 +2,10 @@ package config
 
 // Microphone is the array: whether it is cut, how it is combined, and how hard it is driven.
 type Microphone struct {
-	Muted     bool `json:"muted"`
-	LEDBright bool `json:"led_bright"`
+	// ASP is the persisted user selection; fallback never overwrites it.
+	ASP       ASPMode `json:"asp,omitempty"`
+	Muted     bool    `json:"muted"`
+	LEDBright bool    `json:"led_bright"`
 
 	// Gain is the analog gain on the array's converters, in dB.
 	Gain int `json:"gain"`
@@ -89,6 +91,7 @@ const (
 
 func defaultMicrophone() Microphone {
 	return Microphone{
+		ASP:          ASPBuiltin,
 		Muted:        DefaultMuted,
 		LEDBright:    DefaultLEDBright,
 		Gain:         DefaultMicGain,
@@ -102,6 +105,25 @@ func defaultMicrophone() Microphone {
 }
 
 type MicrophoneWriter struct{ st *Store }
+
+// ASPMode is exactly the selected/active source, not a status framework.
+type ASPMode string
+
+const (
+	ASPBuiltin  ASPMode = "builtin"
+	ASPExternal ASPMode = "external"
+)
+
+func (v ASPMode) Label() string {
+	if v == ASPExternal {
+		return "External"
+	}
+	return "Built-in"
+}
+func ASPModes() []ASPMode { return []ASPMode{ASPBuiltin, ASPExternal} }
+func (w MicrophoneWriter) ASP(v ASPMode) error {
+	return w.st.Update(func(c *Config) { c.Microphone.ASP = v })
+}
 
 func (w MicrophoneWriter) Muted(v bool) error {
 	return w.st.Update(func(c *Config) { c.Microphone.Muted = v })

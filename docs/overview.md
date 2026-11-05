@@ -112,6 +112,11 @@ project started on:
 | Home Assistant | ESPHome device API (go-esphome-device), state subscription, device actions, REST with a long-lived token for weather and camera proxies | `feature/api`, `feature/hastate`, `feature/home`, `lib/hass` |
 | Updates | Manifest with binaries and a rootfs; slot devices install through `slotctl` | `echod/internal/update`, `tools/release.ps1`, `echod/cmd/mkmanifest` |
 
+The normal microphone path uses TECHO5's built-in processing. An optional
+[External microphone ASP interface](external-asp.md) allows a separately installed, compatible helper to
+process native capture PCM before the downstream mono stream is selected. The standard configuration
+needs no external helper.
+
 ## Working on it
 
 - **Build the daemon**: `GOOS=linux GOARCH=arm GOARM=7 CGO_ENABLED=0 go build ./cmd/echod` in
