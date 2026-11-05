@@ -241,7 +241,9 @@ func (r *renderer) timerCorner(s scene, on bool) {
 	r.roundRect(b, h/2, surface(5))
 	cx := float64(b.Min.X + r.s(14) + d/2)
 	r.timerArc(cx, float64(b.Min.Y+h/2), float64(d)/2-1, float64(r.s(4)), timerFrac(first))
-	r.text(r.body, label, b.Min.X+r.s(14)+d+r.s(10), b.Max.Y-r.s(9), amber)
+	// Centered in the pill by the cap height, as the ring is by its circle: a baseline a fixed few
+	// pixels above the foot left the digits against the top.
+	r.text(r.body, label, b.Min.X+r.s(14)+d+r.s(10), b.Min.Y+(b.Dy()+capHeight(r.body))/2, amber)
 }
 
 // bigTimer is the soonest timer in place of the clock: its name, its time as large as the screen
