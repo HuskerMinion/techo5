@@ -528,7 +528,8 @@ func TestManyAddressesAreQuick(t *testing.T) {
 	s := strings.Repeat("a://", 1<<18)
 	start := time.Now()
 	scrubAddress(s)
-	if d := time.Since(start); d > 2*time.Second {
+	// Quadratic work would take minutes; linear takes well under a second, or a few under -race.
+	if d := time.Since(start); d > 2*time.Second*raceSlowdown {
 		t.Errorf("a megabyte of addresses took %v", d)
 	}
 }
