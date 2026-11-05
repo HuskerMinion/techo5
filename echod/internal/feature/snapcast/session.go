@@ -156,6 +156,7 @@ func (s *session) run(ctx context.Context) error {
 	s.conn = conn
 	defer conn.Close()
 	defer s.stop()
+	defer s.closeDecoder() // a FLAC decoder runs a goroutine of its own, so every session end closes it
 
 	// The read loop below blocks in Read; closing the connection is what gets it out when ctx ends.
 	stopClose := context.AfterFunc(ctx, func() { conn.Close() })
