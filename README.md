@@ -79,6 +79,13 @@ How it compares with EchoLocal, EchoMuse, echo-dot-assist, Kiosk Satellite and V
 
 The bigger changes of September to November 2026. Every release lists the rest.
 
+- 🎶 **Snapcast, your own Headscale and a dark nursery** (v1.6.26). Every device can be a
+  [Snapcast](https://github.com/snapcast/snapcast) client, in step with the house's other Snapcast
+  speakers ([#406](https://github.com/HuskerMinion/techo5/pull/406)). Tailscale can join a
+  [Headscale](https://headscale.net) server you run instead of Tailscale's, from the setup page or the
+  `headscale_login` action ([docs/tailscale.md](docs/tailscale.md#your-own-headscale)). **Baby monitor
+  light** turns the listening mark down to its dimmest or off, for a nursery kept dark
+  ([#448](https://github.com/HuskerMinion/techo5/issues/448)).
 - 📝 **To-do lists, a baby monitor and your own sounds** (v1.6.23). With echo cancellation on, you can
   speak right after the wake word, without waiting for the sound. A **To-do** tab in the drawer shows
   Home Assistant's to-do and shopping lists on the Show, the Skylight and the Panel. A private link

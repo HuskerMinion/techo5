@@ -658,6 +658,9 @@ Released features that no row covers, as each project's reviewer picked them.
 - Clearer speech: less bass boom on replies and announcements, music keeps full tuning (v1.6.23)
 - Night clock can keep Next up and notifications (Show, v1.6.23)
 - Echo Settings: a script that builds an HA settings dashboard for all your devices (v1.6.23)
+- Snapcast client: plays in step with a Snapcast server's other clients (v1.6.26)
+- Headscale: Tailscale can join your own Headscale server instead of Tailscale's (v1.6.26)
+- Baby monitor light: the listening mark at its dimmest, or off, for a dark nursery (v1.6.26)
 
 **View Assist**
 
