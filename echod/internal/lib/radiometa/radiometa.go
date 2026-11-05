@@ -342,8 +342,8 @@ func sameName(a, b string) bool {
 }
 
 // score counts how many words of the query a candidate carries, call letters weighing most:
-// "98.7 WZZZ" must pick WZZZ over another 97.3. An exact name wins outright, so "Absolute Radio"
-// does not lose to "Absolute Radio 90s" because the longer name came first.
+// "98.7 WZZZ" must pick WZZZ over another 97.3. An exact name wins outright, whatever else the
+// candidates carry, so the one that names the station beats one that merely repeats more words.
 func score(query, candidate string) int {
 	c := strings.ToLower(candidate)
 	n := 0
