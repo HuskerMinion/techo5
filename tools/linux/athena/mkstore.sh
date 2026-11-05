@@ -29,6 +29,8 @@
 # <rootfs.tar.gz> comes from tools/linux/deploy-rootfs.sh --out, with
 # DEVICE_OVERLAY=tools/linux/athena/overlay EXTRA_PACKAGES=busybox-extras.
 set -euo pipefail
+# Modes come from the repo, not from the host's umask (Ubuntu's default 002 gives group write).
+umask 022
 
 HERE=$(cd "$(dirname "$0")" && pwd)
 LINUX=$(cd "$HERE/.." && pwd)
