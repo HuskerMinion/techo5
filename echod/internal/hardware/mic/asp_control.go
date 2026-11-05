@@ -53,19 +53,43 @@ func (s *Source) ActiveASP() config.ASPMode {
 func (s *Source) SetASPActiveObserver(f func(config.ASPMode)) {
 	s.mu.Lock()
 	s.aspActiveChanged = f
-	if f != nil {
-		f(s.aspActive)
-	}
+	v := s.aspActive
 	s.mu.Unlock()
+	if f != nil {
+		f(v)
+	}
 }
 
+// activeASPLocked records which processor is supplying audio. The observer (Home Assistant's sensor,
+// which writes to every connection) is told from a goroutine of its own, never under s.mu: a slow
+// connection must not hold up capture. It is always handed the latest value, so changes in quick
+// succession cannot arrive out of order.
 func (s *Source) activeASPLocked(v config.ASPMode) {
 	if s.aspActive == v {
 		return
 	}
 	s.aspActive = v
-	if s.aspActiveChanged != nil {
-		s.aspActiveChanged(v)
+	if s.aspActiveChanged == nil {
+		return
+	}
+	if s.aspNotify == nil {
+		s.aspNotify = make(chan struct{}, 1)
+		go s.notifyASPActive(s.aspNotify)
+	}
+	select {
+	case s.aspNotify <- struct{}{}:
+	default: // one is already waiting, and it will read the latest value
+	}
+}
+
+func (s *Source) notifyASPActive(kick <-chan struct{}) {
+	for range kick {
+		s.mu.Lock()
+		f, v := s.aspActiveChanged, s.aspActive
+		s.mu.Unlock()
+		if f != nil {
+			f(v)
+		}
 	}
 }
 

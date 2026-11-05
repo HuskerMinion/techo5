@@ -65,6 +65,7 @@ type Source struct {
 	aspJobs          sync.WaitGroup
 	aspOpen          func(context.Context, asp.Descriptor) (aspProcess, error)
 	aspActiveChanged func(config.ASPMode)
+	aspNotify        chan struct{} // wakes notifyASPActive; made with the first change
 	listeners        map[int]*listener
 	raw              map[int]chan []byte
 	next             int
