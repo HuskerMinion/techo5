@@ -18,7 +18,8 @@
 # Assistant sets it; UTC), GO (go binary), WSL_DISTRO (Ubuntu), PREBUILT_DAEMON (the echod-arm or
 # echod-arm-spot the "Build release binaries" GitHub Actions workflow built from this release's tag,
 # vX.Y.Z or spot-vX.Y.Z with --version vX.Y.Z; skips building it here, so the rootfs carries exactly what
-# CI attested instead of a local rebuild; needs gh).
+# CI attested instead of a local rebuild; needs gh), TECHO5_BUILD_DIR (on Linux, where the rootfs is built;
+# ~/techo5-build; give each build its own to run them side by side).
 set -euo pipefail
 
 HOST=${HOST:-}
@@ -241,7 +242,7 @@ fi
 if [ "$host_build" = linux ]; then
 	echo "== building the rootfs here"
 	bash "$ROOT/tools/linux/wsl-build.sh" "$STAGE" "$VERSION" "$TZ_NAME" >/dev/null
-	tarball=$HOME/techo5-build/rootfs.tar.gz
+	tarball=${TECHO5_BUILD_DIR:-$HOME/techo5-build}/rootfs.tar.gz
 	[ -s "$tarball" ] || { echo "the build failed" >&2; exit 1; }
 	if [ -n "$KEEP" ]; then
 		mkdir -p "$(dirname "$KEEP")"; cp "$tarball" "$KEEP"; echo "built: $KEEP"; exit 0

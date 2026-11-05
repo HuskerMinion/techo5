@@ -7,10 +7,13 @@
 #
 # Needs qemu-user-static + binfmt-support (apt), Alpine's static apk at
 # ~/apk/apk.static, and a user namespace with a subuid range (Ubuntu's default)
-# so the build owns files as root without sudo.
+# so the build owns files as root without sudo. TECHO5_BUILD_DIR (default ~/techo5-build) is where it
+# works, so builds can run side by side, each in its own.
 set -euo pipefail
+# A file's mode comes from the repo, not from the host: Ubuntu's default umask (002) gave group write.
+umask 022
 STAGE=$1; VERSION=$2; TZNAME=$3
-W=$HOME/techo5-build
+W=${TECHO5_BUILD_DIR:-$HOME/techo5-build}
 APK=$HOME/apk/apk.static
 [ -e /proc/sys/fs/binfmt_misc/qemu-arm ] || { echo "wsl-build: no qemu-arm binfmt (apt install qemu-user-static binfmt-support)" >&2; exit 1; }
 [ -x "$APK" ] || { echo "wsl-build: no $APK" >&2; exit 1; }
