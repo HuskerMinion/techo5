@@ -135,9 +135,11 @@ type scene struct {
 	showWeather bool
 	forecast    forecastDays
 	// showRadar is the rain map in place of the forecast.
-	showRadar  bool
-	radar      home.RadarView
-	nowPlaying bool
+	showRadar     bool
+	radar         home.RadarView
+	nowPlaying    bool
+	modernMusic   bool
+	musicPosition media.Position
 
 	// showDrawer is Cameras and Radio, in from the right over the idle page: drawerTab is which,
 	// drawerScroll how far its list is scrolled, drawerPick a list of choices open over it, and

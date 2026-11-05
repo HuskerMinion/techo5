@@ -46,3 +46,31 @@ func TestTheTransportButtonsFitTheirPanel(t *testing.T) {
 		})
 	}
 }
+
+func TestModernMusicControlsFitBesideTheCover(t *testing.T) {
+	for _, panel := range []image.Point{{X: 960, Y: 480}, {X: 1280, Y: 800}, {X: 1920, Y: 1080}} {
+		t.Run(fmt.Sprintf("%dx%d", panel.X, panel.Y), func(t *testing.T) {
+			screen := image.Rectangle{Max: panel}
+			r := newRenderer(image.NewRGBA(screen))
+			cover, details := r.modernMusicLayout()
+			back, play, next := r.musicButtons(true)
+			if !cover.In(screen) || cover.Dx() != cover.Dy() || cover.Max.X >= details.Min.X {
+				t.Fatalf("cover %v does not fit beside details %v", cover, details)
+			}
+			if cover.Overlaps(r.doneButton()) || cover.Overlaps(r.favButton()) {
+				t.Errorf("cover %v obscures the footer", cover)
+			}
+			for _, b := range []image.Rectangle{back, play, next} {
+				if !b.In(screen) || b.Min.X < details.Min.X || b.Max.X > details.Max.X {
+					t.Errorf("button %v does not fit in the details column %v", b, details)
+				}
+				if b.Overlaps(r.doneButton()) || b.Overlaps(r.favButton()) {
+					t.Errorf("button %v overlaps the footer", b)
+				}
+			}
+			if back.Max.X > play.Min.X || play.Max.X > next.Min.X {
+				t.Errorf("transport buttons overlap or are out of order: %v %v %v", back, play, next)
+			}
+		})
+	}
+}

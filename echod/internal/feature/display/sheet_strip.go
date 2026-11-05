@@ -71,3 +71,14 @@ func stripOptionText() string { return stripOptions[stripIndex()] }
 // stripChoices and stripIndexShared are the settings list's.
 func stripChoices() []string { return stripOptions }
 func stripIndexShared() int  { return stripIndex() }
+
+func musicLayoutChoices() []string {
+	return []string{tr("now_playing_classic"), tr("now_playing_modern")}
+}
+
+func musicLayoutIndex() int {
+	if config.Get().Screen.ModernNowPlaying {
+		return 1
+	}
+	return 0
+}

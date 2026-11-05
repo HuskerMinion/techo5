@@ -154,6 +154,7 @@ func categoryRows(sv sheetView) (rows []settingRow, note string) {
 		}
 		rows = append(rows,
 			settingRow{id: "musicstrip", label: tr("now_playing"), sub: tr("full_page_or_a_strip_over_the_clock"), kind: ctlChoice, value: stripOptionText()},
+			settingRow{id: "musiclayout", label: tr("now_playing_layout"), kind: ctlChoice, value: musicLayoutChoices()[musicLayoutIndex()]},
 			settingRow{id: "follow", label: tr("now_playing_follows"), sub: tr("another_speaker_s_music_while_this_one_is_quiet"), kind: ctlChoice, value: followText(st.demo)},
 			settingRow{id: "lyrics", label: tr("lyrics"), sub: tr("the_words_in_time_looked_up_at_lrclib"), kind: ctlToggle, on: home.LyricsOn()},
 		)
@@ -781,6 +782,8 @@ func pickerForRaw(id string, sv sheetView) (pickerView, bool) {
 		return popupCalendarsPicker(), true
 	case "musicstrip":
 		return pickerView{title: tr("now_playing"), opts: stripChoices(), cur: stripIndexShared()}, true
+	case "musiclayout":
+		return pickerView{title: tr("now_playing_layout"), opts: musicLayoutChoices(), cur: musicLayoutIndex()}, true
 	case "awayoff":
 		return pickerView{title: tr("screen_off_when_nobody_is_near"), opts: awayLabels(), cur: awayIndex()}, true
 	case "follow":
@@ -884,6 +887,12 @@ func (d *Display) choose(id string, i int) {
 		d.nightHoursChanged()
 	case "musicstrip":
 		d.setMusicStrip(i)
+	case "musiclayout":
+		if i == 0 || i == 1 {
+			if err := config.Set().Screen().ModernNowPlaying(i == 1); err != nil {
+				slog.Warn("saving the now playing layout failed", "err", err)
+			}
+		}
 	case "clockstyle":
 		d.setClockStyle(i)
 	case "font":
@@ -1376,7 +1385,7 @@ func (d *Display) rowTap(id string, p part, opt int) {
 	case "immichfav":
 		home.Get().SetImmichFavorites(!home.Get().ImmichFavorites())
 	case "night", "atnight", "nightstyle", "clock", "clockstyle", "font", "textsize", "skin", "clockpos", "weatherpos", "datecolor", "glancesize", "glancemusic", "camtime", "camfit", "cambands", "camshade", "answertime", "idledim", "callring", "turnstyle", "timerstyle", "radarsrc", "calendars", "calpopwhen", "calpopallday", "calpopcals", "musicstrip", "follow", "awayoff", "slideshow", "photoevery", "screenlang", "newtimer", "sleep", "sunrise",
-		"timezone", "wakeword", "waketone", "ttsvoice", "quiet", "output", "clocktap", "callscreen":
+		"timezone", "wakeword", "waketone", "ttsvoice", "quiet", "output", "clocktap", "callscreen", "musiclayout":
 		d.openPicker(id)
 	}
 }

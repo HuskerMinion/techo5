@@ -796,6 +796,11 @@ other Shows don't have the switches.
 - **Answer time** (Settings > Display > Pop-ups, or **Answer time on screen** in Home Assistant): how
   long a voice turn's words stay on the screen once it is over: 5 seconds (the default), 10 or
   20 seconds, or until tapped. A tap clears them at any length.
+- **Now playing layout** (Display → Home screen). **Classic** is the default. **Modern** puts
+  square artwork beside the track details and transport controls on rectangular screens with room
+  for the layout. It takes effect immediately and is saved across restarts. Elapsed time and duration
+  appear when the source reports both, as Music Assistant over Sendspin can. This setting applies
+  to the full page.
 - **Now playing** (the full page, or a strip over the clock). Once the music is
   paused or stopped for 30 seconds, the full page goes by itself: to the strip when the setting uses
   one, otherwise back to the clock, or to the dashboard when **Dashboard when idle** is on (the Spot

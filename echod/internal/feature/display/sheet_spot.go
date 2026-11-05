@@ -151,6 +151,8 @@ func adaptRows(rows []settingRow, sv sheetView) []settingRow {
 			row.sub = tr("ui_not_the_music_s")
 		case row.id == "musicstrip":
 			continue // the strip is the Show's; the round face has no clock page under it to share
+		case row.id == "musiclayout":
+			continue // the layout is for the rectangular page
 		case row.id == "lyrics":
 			continue // the words need the Show's page; the round face has room for the song alone
 		case row.id == "wakesens":

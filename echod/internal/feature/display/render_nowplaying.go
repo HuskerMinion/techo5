@@ -16,6 +16,10 @@ import (
 // talk. Over it: the weather top left, the time top right, the station, the song and who plays
 // it across the middle, and what a tap does at the bottom.
 func (r *renderer) nowPlaying(s scene) {
+	if s.modernMusic {
+		r.modernNowPlaying(s)
+		return
+	}
 	rd := s.radio
 	r.background(rd)
 
@@ -118,7 +122,10 @@ func (r *renderer) transportRow(s scene) {
 		r.transportButton(play, "pause", true)
 	}
 	r.transportButton(next, "skip-next", false)
+	r.musicFooter(s)
+}
 
+func (r *renderer) musicFooter(s scene) {
 	// Done, in the corner the buttons leave: the music ends and the screen goes back to the clock. A
 	// pause keeps this page up with play on it, and so does a stop from Music Assistant, which looks
 	// the same from here, so the page needs its own way out.
