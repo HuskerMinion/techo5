@@ -47,17 +47,32 @@ var (
 	resolved = map[string]Station{} // by list name; a failed lookup is not cached
 )
 
-// service splits "name on Service" into the two.
-func service(name string) (query, svc string) {
-	for _, s := range []string{"iHeartRadio", "TuneIn"} {
-		if i := strings.LastIndex(strings.ToLower(name), " on "+strings.ToLower(s)); i > 0 {
-			return strings.TrimSpace(name[:i]), s
+// SplitName splits a list label such as "101.1 WXYZ on iHeartRadio" into the station's name and the
+// service the label names, or "" when it names none. The labels come from outside the device (they
+// are what Alexa was told), so the tails are matched without regard to case and in the spellings the
+// lists use.
+func SplitName(label string) (name, svc string) {
+	l := strings.TrimSpace(label)
+	low := strings.ToLower(l)
+	for _, tail := range []struct{ words, service string }{
+		{" on iheartradio", "iHeartRadio"},
+		{" on iheart", "iHeartRadio"},
+		{" on tunein", "TuneIn"},
+		{" on tune in", "TuneIn"},
+	} {
+		if strings.HasSuffix(low, tail.words) {
+			return strings.TrimSpace(l[:len(l)-len(tail.words)]), tail.service
 		}
 	}
-	return strings.TrimSpace(name), ""
+	return l, ""
 }
 
 // Resolve finds the station behind a list name.
+//
+// A label that names a BBC network is answered from the BBC's catalogue first: the directories do
+// not carry those networks, and a search for one can answer a station in another country that
+// happens to share the letters. A label that names a service goes to that service; a bare name is
+// tried on iHeartRadio, then TuneIn.
 func Resolve(ctx context.Context, name string) (Station, error) {
 	mu.Lock()
 	st, ok := resolved[name]
@@ -65,18 +80,22 @@ func Resolve(ctx context.Context, name string) (Station, error) {
 	if ok {
 		return st, nil
 	}
-	query, svc := service(name)
+	query, svc := SplitName(name)
 	var err error
-	switch svc {
-	case "iHeartRadio":
-		st, err = iheartFind(ctx, query)
-	case "TuneIn":
-		st, err = tuneinFind(ctx, query)
-	default:
-		if n, ok := bbcNetworkFor(query); ok {
-			st = Station{Service: "BBC", ID: n.service, Logo: n.logo, Music: n.music}
-		} else if st, err = iheartFind(ctx, query); err != nil {
+	if n, ok := bbcNetworkFor(query); ok {
+		st = Station{Service: "BBC", ID: n.service, Logo: n.logo, Music: n.music}
+	} else {
+		switch svc {
+		case "iHeartRadio":
+			st, err = iheartFind(ctx, query)
+		case "TuneIn":
 			st, err = tuneinFind(ctx, query)
+		case "":
+			if st, err = iheartFind(ctx, query); err != nil {
+				st, err = tuneinFind(ctx, query)
+			}
+		default:
+			return Station{}, fmt.Errorf("radiometa: unknown service %q", svc)
 		}
 	}
 	if err != nil {
@@ -132,39 +151,199 @@ const maxReply = 1 << 20
 
 var word = regexp.MustCompile(`[A-Za-z0-9.]+`)
 
-// matchEnough reports whether a candidate carries enough of the query to be it: two of its words,
-// or the only one when the query is a single word. A candidate that shares only "BBC" is another
-// station — "BBC Radio 6 Music" is not "BBC KUT 90.5 HD2" — and its logo and song are worse than
-// none at all.
-func matchEnough(query, candidate string) bool {
-	want := wordSet(query)
-	if len(want) == 0 {
-		return false
-	}
-	got := wordSet(candidate)
-	n := 0
-	for w := range want {
-		if got[w] {
-			n++
-		}
-	}
-	if len(want) == 1 {
-		return n == 1
-	}
-	return n >= 2
+// noiseWords are the words a list adds around a station's name that say nothing about which
+// station it is. "BBC" is among them: it is a broadcaster, not a station, and sharing it is how a
+// BBC search came to answer a US station called KUT.
+var noiseWords = map[string]bool{
+	"radio": true, "fm": true, "am": true, "the": true, "station": true, "uk": true, "bbc": true,
 }
 
-// wordSet is the words of a name, compared whole: "1" is not "1xtra".
-func wordSet(s string) map[string]bool {
-	set := map[string]bool{}
-	for _, w := range word.FindAllString(strings.ToLower(s), -1) {
-		set[w] = true
+var (
+	// tagline is what a list puts after a station's name: a description after a dash or colon. An
+	// en or em dash separates without spaces often enough to be worth taking either way.
+	tagline = regexp.MustCompile(`\s*[:|]\s*|\s+-\s+|\s*[–—]\s*`)
+	// brackets is what a list puts around a quality or a description.
+	brackets = regexp.MustCompile(`\s*[\(\[][^\)\]]*[\)\]]`)
+)
+
+// cutTagline drops a list's description of a station.
+func cutTagline(s string) string {
+	if loc := tagline.FindStringIndex(s); loc != nil {
+		return s[:loc[0]]
 	}
-	return set
+	return s
+}
+
+// wordList is a name's words, lowercased and with sentence punctuation taken off their ends.
+func wordList(s string) []string {
+	var out []string
+	for _, w := range word.FindAllString(strings.ToLower(s), -1) {
+		if w = strings.Trim(w, "."); w != "" {
+			out = append(out, w)
+		}
+	}
+	return out
+}
+
+// nameWords are the words that say which station a name is: a tagline and a bracketed quality
+// dropped, the words every list adds dropped, and a bare frequency dropped when there is a name
+// beside it. "Magic 105.4" and "Magic Radio" both come to "magic"; "98.7 WZZZ" to "wzzz".
+func nameWords(s string) []string {
+	s = brackets.ReplaceAllString(cutTagline(strings.ToLower(s)), " ")
+	var words, frequencies []string
+	for _, w := range wordList(s) {
+		switch {
+		case noiseWords[w], formatWord(w):
+		case frequencyWord(w):
+			frequencies = append(frequencies, w)
+		default:
+			words = append(words, w)
+		}
+	}
+	if len(words) == 0 {
+		return frequencies
+	}
+	return words
+}
+
+// frequencyWord reports whether a word is a dial position rather than part of a name.
+func frequencyWord(w string) bool {
+	return strings.Contains(w, ".") && strings.Trim(w, "0123456789.") == ""
+}
+
+// dialWords are the dial positions a name gives, tagline and brackets aside.
+func dialWords(s string) []string {
+	s = brackets.ReplaceAllString(cutTagline(strings.ToLower(s)), " ")
+	var out []string
+	for _, w := range wordList(s) {
+		if frequencyWord(w) {
+			out = append(out, w)
+		}
+	}
+	return out
+}
+
+// dialsAgree reports whether two names can be the same station as far as their dial positions go.
+// One with no position is compatible with any; two different positions are different stations, so
+// "Magic 105.4" is not "Magic 96.5".
+func dialsAgree(a, b string) bool {
+	ad, bd := dialWords(a), dialWords(b)
+	return len(ad) == 0 || len(bd) == 0 || sharesAny(ad, bd)
+}
+
+// formatWord reports whether a word says how a stream is encoded rather than which station it is.
+func formatWord(w string) bool {
+	switch w {
+	case "hd", "hls", "aac", "mp3", "ogg":
+		return true
+	}
+	if strings.HasPrefix(w, "hd") && strings.Trim(w[2:], "0123456789") == "" {
+		return true // HD2, HD3: an iHeart subchannel, not part of the name
+	}
+	if len(w) < 3 {
+		return false
+	}
+	unit := w[len(w)-1]
+	return (unit == 'k' || unit == 'p') && strings.Trim(w[:len(w)-1], "0123456789") == ""
+}
+
+// strongWords are the words of a name long enough to identify a station, rather than a number that
+// many stations share.
+func strongWords(words []string) []string {
+	var out []string
+	for _, w := range words {
+		if len(w) >= 3 && strings.Trim(w, "0123456789.") != "" {
+			out = append(out, w)
+		}
+	}
+	return out
+}
+
+// brandWord reports whether a word is a station's own brand — a call sign written in capitals, or
+// a name with a number in it such as "Z100".
+func brandWord(query, w string) bool {
+	if strings.ContainsAny(w, "0123456789") {
+		return true
+	}
+	for _, raw := range word.FindAllString(query, -1) {
+		raw = strings.Trim(raw, ".")
+		if strings.EqualFold(raw, w) && len(raw) >= 3 && len(raw) <= 5 &&
+			raw == strings.ToUpper(raw) && strings.Trim(raw, "ABCDEFGHIJKLMNOPQRSTUVWXYZ") == "" {
+			return true
+		}
+	}
+	return false
+}
+
+// matchEnough reports whether a candidate is the station the query names. An exact name is that
+// station, as is one with a detail left out when what it keeps is the station's own brand: "Z100
+// New York" is "Z100 WHTZ-FM". A candidate that adds words of its own is a different station more
+// often than not ("Absolute Classic Hits" is not "Absolute Radio", and "The Bay's Greatest Hits" is
+// not "Greatest Hits Radio"), so it is not taken. Sharing a word every list has — "BBC", "radio",
+// "FM" — is never enough.
+func matchEnough(query, candidate string) bool {
+	if !dialsAgree(query, candidate) {
+		return false
+	}
+	if sameName(query, candidate) {
+		return true
+	}
+	strong := strongWords(nameWords(query))
+	if len(strong) == 0 || !contains(nameWords(candidate), strong[0]) {
+		return false
+	}
+	return brandWord(query, strong[0])
+}
+
+func contains(words []string, want string) bool {
+	for _, w := range words {
+		if w == want {
+			return true
+		}
+	}
+	return false
+}
+
+func sharesAny(words, want []string) bool {
+	for _, w := range want {
+		if contains(words, w) {
+			return true
+		}
+	}
+	return false
+}
+
+// sameName reports whether two names say the same station, ignoring the words a list adds around it
+// and a call sign repeated after the name. Two different dial positions are never the same name.
+func sameName(a, b string) bool {
+	if !dialsAgree(a, b) {
+		return false
+	}
+	aw, bw := nameWords(a), nameWords(b)
+	if len(aw) == 0 || len(bw) == 0 {
+		return false
+	}
+	as, bs := map[string]bool{}, map[string]bool{}
+	for _, w := range aw {
+		as[w] = true
+	}
+	for _, w := range bw {
+		bs[w] = true
+	}
+	if len(as) != len(bs) {
+		return false
+	}
+	for w := range as {
+		if !bs[w] {
+			return false
+		}
+	}
+	return true
 }
 
 // score counts how many words of the query a candidate carries, call letters weighing most:
-// "98.7 WZZZ" must pick WZZZ over another 97.3.
+// "98.7 WZZZ" must pick WZZZ over another 97.3. An exact name wins outright, so "Absolute Radio"
+// does not lose to "Absolute Radio 90s" because the longer name came first.
 func score(query, candidate string) int {
 	c := strings.ToLower(candidate)
 	n := 0
@@ -177,6 +356,9 @@ func score(query, candidate string) int {
 		} else {
 			n++
 		}
+	}
+	if sameName(query, candidate) {
+		n += 100
 	}
 	return n
 }
@@ -197,7 +379,9 @@ var bbcNetworks = map[string]bbcNetwork{
 	"1":   {"bbc_radio_one", "https://cdn-profiles.tunein.com/s24939/images/logog.png", true},
 	"one": {"bbc_radio_one", "https://cdn-profiles.tunein.com/s24939/images/logog.png", true},
 
-	"1xtra": {"bbc_1xtra", "https://cdn-profiles.tunein.com/s20277/images/logog.png", true},
+	"1xtra":    {"bbc_1xtra", "https://cdn-profiles.tunein.com/s20277/images/logog.png", true},
+	"1 xtra":   {"bbc_1xtra", "https://cdn-profiles.tunein.com/s20277/images/logog.png", true},
+	"one xtra": {"bbc_1xtra", "https://cdn-profiles.tunein.com/s20277/images/logog.png", true},
 
 	"2":   {"bbc_radio_two", "https://cdn-profiles.tunein.com/s24940/images/logog.png", true},
 	"two": {"bbc_radio_two", "https://cdn-profiles.tunein.com/s24940/images/logog.png", true},
@@ -214,26 +398,28 @@ var bbcNetworks = map[string]bbcNetwork{
 	"5 live":    {"bbc_radio_five_live", "https://cdn-profiles.tunein.com/s24943/images/logog.png", false},
 	"five live": {"bbc_radio_five_live", "https://cdn-profiles.tunein.com/s24943/images/logog.png", false},
 
+	"5 sports extra":    {"bbc_radio_five_live_sports_extra", "https://ichef.bbci.co.uk/images/ic/raw/p0mw75dn.png", false},
+	"five sports extra": {"bbc_radio_five_live_sports_extra", "https://ichef.bbci.co.uk/images/ic/raw/p0mw75dn.png", false},
+
+	"5 live sports extra":    {"bbc_radio_five_live_sports_extra", "https://ichef.bbci.co.uk/images/ic/raw/p0mw75dn.png", false},
+	"five live sports extra": {"bbc_radio_five_live_sports_extra", "https://ichef.bbci.co.uk/images/ic/raw/p0mw75dn.png", false},
+
 	"6 music":   {"bbc_6music", "https://cdn-profiles.tunein.com/s44491/images/logog.png", true},
 	"6music":    {"bbc_6music", "https://cdn-profiles.tunein.com/s44491/images/logog.png", true},
 	"six music": {"bbc_6music", "https://cdn-profiles.tunein.com/s44491/images/logog.png", true},
 
 	"asian network": {"bbc_asian_network", "https://cdn-profiles.tunein.com/s44490/images/logog.png", true},
+	"world service": {"bbc_world_service", "https://cdn-profiles.tunein.com/s24948/images/logog.jpg", false},
+	"worldservice":  {"bbc_world_service", "https://cdn-profiles.tunein.com/s24948/images/logog.jpg", false},
 }
 
-// bbcNetworkFor is the BBC network a list name is, if it is one. The name must say BBC: "Radio 4"
-// alone could be a station anywhere, and a false match would be a wrong logo and a wrong song.
-func bbcNetworkFor(query string) (bbcNetwork, bool) {
-	q := strings.ToLower(query)
-	// A list often adds a tagline after a dash or colon, and a stream its quality in brackets:
-	// "BBC RADIO 1 - The biggest new pop" and "BBC Radio 4 (128k)" are Radio 1 and Radio 4.
-	if i := strings.IndexAny(q, ":|"); i >= 0 {
-		q = q[:i]
-	}
-	if i := strings.Index(q, " - "); i >= 0 {
-		q = q[:i]
-	}
-	q = bbcBrackets.ReplaceAllString(q, " ")
+// bbcNetworkName is the table key a list name normalises to, or "" when the name does not say BBC.
+// The name must say BBC: "Radio 4" alone could be a station anywhere, and a false match would be a
+// wrong logo and a wrong song. A list often adds a tagline after a dash or colon, and a stream its
+// quality in brackets: "BBC RADIO 1 - The biggest new pop" and "BBC Radio 4 (128k)" are Radio 1 and
+// Radio 4.
+func bbcNetworkName(query string) string {
+	q := brackets.ReplaceAllString(cutTagline(strings.ToLower(query)), " ")
 	words := strings.FieldsFunc(q, func(r rune) bool {
 		return !unicode.IsLetter(r) && !unicode.IsDigit(r)
 	})
@@ -244,32 +430,21 @@ func bbcNetworkFor(query string) (bbcNetwork, bool) {
 		case w == "bbc":
 			bbc = true
 		case w == "radio", w == "fm", w == "uk", w == "the":
-		case bbcQuality(w):
+		case formatWord(w):
 		default:
 			rest = append(rest, w)
 		}
 	}
 	if !bbc {
-		return bbcNetwork{}, false
+		return ""
 	}
-	n, ok := bbcNetworks[strings.Join(rest, " ")]
-	return n, ok
+	return strings.Join(rest, " ")
 }
 
-// bbcBrackets is what a list puts around a quality or a description.
-var bbcBrackets = regexp.MustCompile(`\s*[\(\[][^\)\]]*[\)\]]`)
-
-// bbcQuality reports whether a word says how a stream is encoded rather than which network it is.
-func bbcQuality(w string) bool {
-	switch w {
-	case "hd", "hls", "aac", "mp3", "ogg":
-		return true
-	}
-	if len(w) < 3 {
-		return false
-	}
-	unit := w[len(w)-1]
-	return (unit == 'k' || unit == 'p') && strings.Trim(w[:len(w)-1], "0123456789") == ""
+// bbcNetworkFor is the BBC network a list name is, if it is one.
+func bbcNetworkFor(query string) (bbcNetwork, bool) {
+	n, ok := bbcNetworks[bbcNetworkName(query)]
+	return n, ok
 }
 
 const (
@@ -307,7 +482,7 @@ func bbcNow(ctx context.Context, service string) (Now, error) {
 		}
 		title, artist := strings.TrimSpace(s.Titles.Secondary), strings.TrimSpace(s.Titles.Primary)
 		if title == "" && artist == "" {
-			return Now{}, nil
+			continue // the next segment along may still be the one on
 		}
 		art := ""
 		if s.ImageURL != "" && !strings.Contains(s.ImageURL, bbcNoArt) {

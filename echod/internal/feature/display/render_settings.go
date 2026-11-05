@@ -3,7 +3,7 @@
 package display
 
 import (
-	"strings"
+	"github.com/HuskerMinion/techo5/echod/internal/lib/radiometa"
 )
 
 const (
@@ -21,10 +21,6 @@ const (
 // stationLabel drops the service a station list names in each entry ("101.1 WXYZ on iHeartRadio"): on a
 // list of them it is the same words on every row.
 func stationLabel(name string) string {
-	for _, tail := range []string{" on iHeartRadio", " on iHeart", " on TuneIn", " on Tune In"} {
-		if t, ok := strings.CutSuffix(name, tail); ok {
-			return t
-		}
-	}
-	return name
+	label, _ := radiometa.SplitName(name)
+	return label
 }
