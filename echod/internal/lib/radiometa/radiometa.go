@@ -413,7 +413,7 @@ var bbcNetworks = map[string]bbcNetwork{
 	"worldservice":  {"bbc_world_service", "https://cdn-profiles.tunein.com/s24948/images/logog.jpg", false},
 }
 
-// bbcNetworkName is the table key a list name normalises to, or "" when the name does not say BBC.
+// bbcNetworkName is the table key a list name normalizes to, or "" when the name does not say BBC.
 // The name must say BBC: "Radio 4" alone could be a station anywhere, and a false match would be a
 // wrong logo and a wrong song. A list often adds a tagline after a dash or colon, and a stream its
 // quality in brackets: "BBC RADIO 1 - The biggest new pop" and "BBC Radio 4 (128k)" are Radio 1 and
