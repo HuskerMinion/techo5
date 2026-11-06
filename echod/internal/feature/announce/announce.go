@@ -61,7 +61,6 @@ const (
 	chimeLevel = 0.4
 )
 
-
 // Message is an announcement as it arrives: who it came from, what was said, and the saying of it.
 //
 // Audio is the point and text is the trimming. A device with a screen shows the words when there are
