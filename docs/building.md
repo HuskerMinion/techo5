@@ -299,6 +299,20 @@ pin is a two-line edit at the top of `tools/fetch-inputs.py`; the script prints 
 to when it does not match, and techo5-dot's `tools/install-dot.py` carries the same pins for the models
 it puts on a Dot.
 
+## Custom screens (other boards)
+
+A board of your own can add full-screen pages of its own. Each one registers itself from its own file
+in `echod/internal/feature/display` with `registerScreen`: whether the device offers it, what a frame
+shows, how it is drawn, what a finger does and how often it moves. `custom_screens.go` and
+`render_custom.go` keep what the screens share: their tabs and the ×, the edge swipes, "go home" and
+the voice assistant's pages. A screen may keep its page between frames and has a cache of its own.
+
+Once a build has a custom screen, Home Assistant gets an **Idle screen** select: the clock, or one of
+the screens shown in its place whenever the clock would be. Music, a dashboard and everything else that
+takes the screen still come first, and the × or a swipe from the left edge puts the screen away for two
+minutes. With no screen registered, as in TECHO5's own builds, nothing changes and there is no Idle
+screen select.
+
 ## Releases (maintainer)
 
 `tools/release.ps1` (Show 5), techo5-dot's `tools/release-dot.ps1` and techo5-spot's

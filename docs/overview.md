@@ -62,7 +62,7 @@ project started on:
   token, Local stations (within 100 km of home) and Popular worldwide come from Home Assistant's
   Radio Browser integration and play through `media_player.play_media` on the device's own player,
   with no setup. Stations play on the device's own speaker or on Bluetooth earbuds; song, artist and
-  cover come from iHeartRadio or TuneIn behind the page.
+  cover come from iHeartRadio or TuneIn behind the page, and for the BBC's own networks from the BBC.
 - **Camera**: the front camera as a Home Assistant camera entity (plus JPEG and MJPEG over HTTP
   when switched on). Auto-exposure meters a center-weighted zone grid, so a window behind somebody
   no longer sets it, and the tone curve finds black and lifts the middle of a backlit frame. Off
