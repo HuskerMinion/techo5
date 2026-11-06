@@ -27,6 +27,7 @@ import (
 	"github.com/HuskerMinion/techo5/echod/internal/lib/hook"
 	"github.com/HuskerMinion/techo5/echod/internal/lib/locale"
 	"github.com/HuskerMinion/techo5/echod/internal/lib/openmeteo"
+	"github.com/HuskerMinion/techo5/echod/internal/lib/radiometa"
 	"github.com/HuskerMinion/techo5/echod/internal/lib/safe"
 )
 
@@ -895,15 +896,11 @@ func (f *Feature) play(station string, gen *uint64) {
 }
 
 // askFor is the station name to hand the finder: a list label like "101.1 WXYZ on iHeartRadio"
-// was written for Alexa, which took the whole phrase; a search wants just "101.1 WXYZ".
+// was written for Alexa, which took the whole phrase; a search wants just "101.1 WXYZ". The same
+// splitter resolves the label, so the two cannot drift apart.
 func askFor(label string) string {
-	l := strings.TrimSpace(label)
-	for _, tail := range []string{" on iHeartRadio", " on iHeart", " on TuneIn", " on Tune In"} {
-		if strings.HasSuffix(strings.ToLower(l), strings.ToLower(tail)) {
-			return strings.TrimSpace(l[:len(l)-len(tail)])
-		}
-	}
-	return l
+	name, _ := radiometa.SplitName(label)
+	return name
 }
 
 // Stop ends whatever is playing, whoever is playing it.
