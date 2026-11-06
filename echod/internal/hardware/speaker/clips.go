@@ -87,12 +87,15 @@ var (
 	// The quick sounds below have no stock recording either: they stay the notes in tones.go until the
 	// owner sends one, and a recording may be two seconds at most (shortOwn), since each plays in a
 	// moment's notice. ClipListenEnd is new: the device is silent as listening ends until there is one.
-	// ClipDropIn is the chime that warns a room's microphones are about to open.
+	// ClipDropIn is the chime that warns a room's microphones are about to open, and ClipAnnounce the
+	// one an announcement arrives with.
 	ClipListenEnd = &Clip{file: "listening_ended", most: shortOwn}
 	ClipButton    = &Clip{file: "button_press", most: shortOwn}
 	ClipVolume    = &Clip{file: "volume_change", most: shortOwn}
 	ClipBTConnect = &Clip{file: "bluetooth_connected", most: shortOwn}
 	ClipDropIn    = &Clip{file: "drop_in", most: shortOwn}
+	// ClipAnnounce is the chime an announcement arrives with (#465).
+	ClipAnnounce = &Clip{file: "announcement", most: shortOwn}
 )
 
 // limit is the most samples this clip's recording may hold.

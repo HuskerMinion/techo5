@@ -1731,6 +1731,7 @@ Or copy a WAVE file named for the sound into the device's sounds folder over SSH
 | `volume_change.wav` | each press of volume up or down |
 | `bluetooth_connected.wav` | a Bluetooth device connecting |
 | `drop_in.wav` | the chime before a Drop In opens a room's microphones |
+| `announcement.wav` | the chime before an announcement, spoken or recorded |
 
 The timer and mute files play where **Home Assistant sounds** is on, and an alarm set to the
 Home Assistant sound plays `timer_finished.wav` either way. A file has to be 16-bit, at
@@ -1748,7 +1749,7 @@ sound plays and for a moment after, so the device does not take its own sound fo
 ffmpeg -i chime.flac -ac 1 -ar 48000 -c:a pcm_s16le wake_word_triggered.wav
 ```
 
-The volume, button, Bluetooth, listening-ended and Drop In sounds are quick, so they may be at most
+The volume, button, Bluetooth, listening-ended, Drop In and announcement sounds are quick, so they may be at most
 2 seconds long; the others keep 10 seconds. A sound that is too long is refused with the reason.
 The wake sound is the one for **Wake sound: Home Assistant** on each assistant; the built-in tones
 (chirp, ding, rise) stay as they are.

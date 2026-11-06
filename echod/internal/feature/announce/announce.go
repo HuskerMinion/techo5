@@ -61,8 +61,6 @@ const (
 	chimeLevel = 0.4
 )
 
-// announceTone is what an announcement arrives with: two notes rising, distinct from the alarm's.
-var announceTone = []speaker.Note{{Freq: 659, Ms: 90}, {Freq: 988, Ms: 160}}
 
 // Message is an announcement as it arrives: who it came from, what was said, and the saying of it.
 //
@@ -252,7 +250,7 @@ func (f *Feature) show(m Message) {
 // announcement stops all of it, and so that whatever was playing is put back afterwards.
 func (f *Feature) sound(m Message) {
 	claim := speaker.Sound().ClaimSpeech("announcement", func(ctx context.Context, p *speaker.Player) error {
-		p.Chime(chimeLevel, announceTone...)
+		p.Chime(chimeLevel, speaker.AnnounceSound()...)
 		if len(m.Voice) == 0 {
 			return nil
 		}

@@ -168,6 +168,13 @@ func DropInSound() []Note {
 	return ownOr(ClipDropIn, []Note{{Freq: 880, Ms: 160}, {Freq: 0, Ms: 70}, {Freq: 1100, Ms: 220}})
 }
 
+// ToneAnnounce is what an announcement arrives with: two notes rising, distinct from the alarm's.
+var ToneAnnounce = []Note{{Freq: 659, Ms: 90}, {Freq: 988, Ms: 160}}
+
+// AnnounceSound is the chime before an announcement: the owner's recording where there is one, else
+// ToneAnnounce.
+func AnnounceSound() []Note { return ownOr(ClipAnnounce, ToneAnnounce) }
+
 func ownOr(c *Clip, notes []Note) []Note {
 	if n, ok := c.ownNote(); ok {
 		return []Note{n}
