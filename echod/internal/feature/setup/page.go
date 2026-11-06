@@ -449,6 +449,7 @@ func (f *Feature) settingsPage(ctx context.Context, w http.ResponseWriter, token
 			listeningSection(w, token)
 			houseSection(w, token)
 			phoneBookSection(w, token)
+			wakeCallSection(w, token)
 			wakeWordsSection(w, token)
 			scoresSection(w)
 			takesSection(w, token)

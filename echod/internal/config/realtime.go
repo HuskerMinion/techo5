@@ -104,8 +104,11 @@ func (w WakeWriter) Realtime(on bool) error {
 		return errSlot(w.slot)
 	}
 	none := false
+	conflict := false
 	err := w.st.Update(func(c *Config) {
 		switch {
+		case on && w.slot < len(c.Wake.Words) && c.Wake.Words[w.slot].CallContact != "":
+			conflict = true
 		case w.slot > 0 && w.slot < len(c.Wake.Words) && on && c.Wake.Words[w.slot].ID == "":
 			none = true // a slot with no word in it: nothing would wake it
 		case w.slot < len(c.Wake.Words):
@@ -117,6 +120,9 @@ func (w WakeWriter) Realtime(on bool) error {
 			none = true
 		}
 	})
+	if err == nil && conflict {
+		return errWakeMode
+	}
 	if err == nil && none {
 		err = errSlot(w.slot)
 	}

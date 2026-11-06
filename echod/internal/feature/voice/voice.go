@@ -262,10 +262,15 @@ func (v *Voice) WokeAt(slot int, at time.Time) { v.open(slot, true, at) }
 // else (a talk through a camera, takes being recorded), and the slot has a wake word Home Assistant
 // knows it by. A slot chosen for realtime voice is
 // answered by it alone (backendFor): set up and with minutes left today, whatever Home Assistant is
-// doing. A device that could not answer must not claim a wake word over the others (feature/nearest).
+// doing. A slot chosen to call a contact, with the phone idle, can when the call can be placed
+// (wakecall.go). A device that could not answer must not claim a wake word over the others
+// (feature/nearest).
 func (v *Voice) CanAnswer(slot int) bool {
 	if micTaken() {
 		return false
+	}
+	if wakeCallApplies(slot) {
+		return v.wakeCallReady(slot)
 	}
 	if w := config.Get().Wake.Words; slot >= 0 && slot < len(w) && w[slot].Realtime {
 		return v.turn != nil && v.turn.realtime.Ready()
@@ -284,8 +289,16 @@ func (v *Voice) open(slot int, woke bool, at time.Time) {
 		slog.Info("wake word ignored: the microphones are taken", "by", heldBy())
 		return
 	}
-	if ring.IsSounding() && ring.Silence() {
+	silencedRing := ring.IsSounding() && ring.Silence()
+	if silencedRing {
 		slog.Info("wake word over a ring, silencing it")
+	}
+	if woke && wakeCallApplies(slot) {
+		// The first wake over a ringing alarm only quiets it. A second can call.
+		if !silencedRing {
+			v.callOnWake(slot)
+		}
+		return
 	}
 	if woke {
 		if at.IsZero() {

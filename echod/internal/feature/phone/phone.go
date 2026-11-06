@@ -446,6 +446,10 @@ func statusText(s State) string {
 	return "Ready"
 }
 
+// NotPlaced tells Home Assistant of a call that was asked for and never placed, and why: a wake word
+// chosen to call a contact while the phone could not (feature/voice).
+func NotPlaced(name, reason string) { fire("not_placed", State{Peer: name}, "reason", reason) }
+
 func fire(event string, st State, extra ...string) {
 	// device names which one this was: every device's events arrive on the one bus under one name.
 	data := map[string]string{"event": event, "peer": st.Peer, "device": config.Get().Device.Name}

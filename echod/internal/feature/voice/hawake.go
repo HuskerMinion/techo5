@@ -446,14 +446,15 @@ func (c *conversation) mayStream() bool {
 }
 
 // haAnswers is whether a slot's wake word is answered by Home Assistant's pipeline: not when the direct
-// brain answers, nor for a word chosen for realtime voice (backendFor). Home Assistant hearing a word is
-// a turn on its pipeline, so it is never asked to listen for one of those.
+// brain answers, nor for a word chosen for realtime voice (backendFor) or to call a contact
+// (wakecall.go). Home Assistant hearing a word is a turn on its pipeline, so it is never asked to listen
+// for one of those.
 func haAnswers(slot int) bool {
 	if config.Get().Brain.Direct() {
 		return false
 	}
 	w := config.Get().Wake.Words
-	return !(slot >= 0 && slot < len(w) && w[slot].Realtime)
+	return !(slot >= 0 && slot < len(w) && (w[slot].Realtime || w[slot].CallContact != ""))
 }
 
 // micBusy is the microphones being cut or somebody else's: a call, a talk through a camera, or takes
