@@ -626,6 +626,13 @@ automations answer those sentences on the TECHO5 device that heard them. Add eac
 Automations & scenes > Create automation > Edit in YAML. The time can come from speech-to-text as
 digits or as words ("6:30" or "six thirty"); both work.
 
+To make the alarm repeat, say the days too: "set an alarm for 7:30 am on weekdays", "Monday to Friday",
+"on weekends", "every day", "Mondays and Thursdays". Days can also be left out ("every day except
+Sunday"). A named day repeats every week, because a device alarm has no way to hold a one-off date.
+The importable [set an alarm by voice](../blueprints/automation/techo5/set_alarm_by_voice.yaml)
+blueprint is the maintained version of the first automation and reads all of these; the shorter copy
+below sets a one-time alarm.
+
 ```yaml
 alias: TECHO5 - set an alarm by voice
 triggers:
