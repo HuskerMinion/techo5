@@ -6,6 +6,7 @@ import (
 	"context"
 	"encoding/binary"
 	"errors"
+	"fmt"
 	"log/slog"
 	"net"
 	"os"
@@ -341,7 +342,9 @@ type offerer interface {
 	Offer(advertisement, scanResponse []byte) error
 }
 
-// ErrCannotOffer is a radio that cannot advertise for someone else.
+// ErrCannotOffer is a radio that cannot advertise for someone else, and will not while echod runs: no
+// Offer at all, or no kernel stack on hci0 to take the connection. Any other error from Offer is a
+// one-off (the radio busy, a hold gone stale) and worth trying again.
 var ErrCannotOffer = errors.New("bluetooth: this radio cannot advertise a service")
 
 // Offer lends the radio, while held, to advertise a GATT service bluetoothd serves but cannot advertise
@@ -369,6 +372,9 @@ func (b *Proxy) Offer(advertisement, scanResponse []byte) (done func(), err erro
 		b.mu.Lock()
 		b.lent = false
 		b.mu.Unlock()
+		if errors.Is(err, ble.ErrNoKernelStack) {
+			return nil, fmt.Errorf("%w: %w", ErrCannotOffer, err)
+		}
 		return nil, err
 	}
 	slog.Info("ble: advertising a service for bluetoothd")

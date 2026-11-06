@@ -149,6 +149,10 @@ func (r *Radio) Start(scan, active bool, advertisement []byte, found func(Advert
 	return nil
 }
 
+// ErrNoKernelStack is Offer on a device whose kernel's Bluetooth stack does not own the controller:
+// there is no hci0 for bluetoothd to take the connection on, and that does not change while it runs.
+var ErrNoKernelStack = errors.New("ble: offering a service needs the kernel's Bluetooth stack on hci0")
+
 // Offer advertises a GATT service that bluetoothd serves, for something nearby to connect to:
 // connectable advertising (ADV_IND) with advertisement as its data and scanResponse as the scan
 // response, both raw AD structures of at most 31 bytes. It is for a bluetoothd whose kernel is too old
@@ -167,7 +171,7 @@ func (r *Radio) Offer(advertisement, scanResponse []byte) error {
 		return errors.New("ble: the radio is in use")
 	}
 	if !viaKernel() {
-		return errors.New("ble: offering a service needs the kernel's Bluetooth stack on hci0")
+		return ErrNoKernelStack
 	}
 	fd, err := r.openController()
 	if err != nil {
