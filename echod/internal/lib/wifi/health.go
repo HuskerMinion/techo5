@@ -71,6 +71,10 @@ type Group struct {
 	// never the device itself, so any rise is the network heard.
 	Router uint64
 
+	// McastIn and McastOut are the multicast part of In and Out alone, without broadcasts: a radio
+	// can lose its multicast filter while broadcasts still arrive (TECHO5 #458).
+	McastIn, McastOut uint64
+
 	// From is which files the counts were read from, FromIPv4 and FromIPv6: two readings from different
 	// files cannot be compared, since the one that was missed would read as a jump.
 	From uint8
@@ -88,11 +92,13 @@ func GroupPackets() (g Group, ok bool) {
 	if b, err := os.ReadFile("/proc/net/netstat"); err == nil {
 		if g4, found := group4(string(b)); found {
 			g.In, g.Out, g.From, ok = g.In+g4.In, g.Out+g4.Out, g.From|FromIPv4, true
+			g.McastIn, g.McastOut = g.McastIn+g4.McastIn, g.McastOut+g4.McastOut
 		}
 	}
 	if b, err := os.ReadFile("/proc/net/snmp6"); err == nil {
 		if g6, found := group6(string(b)); found {
 			g.In, g.Out, g.Router, g.From, ok = g.In+g6.In, g.Out+g6.Out, g.Router+g6.Router, g.From|FromIPv6, true
+			g.McastIn, g.McastOut = g.McastIn+g6.McastIn, g.McastOut+g6.McastOut
 		}
 	}
 	return g, ok
@@ -121,6 +127,12 @@ func group4(netstat string) (g Group, ok bool) {
 			case "OutMcastPkts", "OutBcastPkts":
 				g.Out += v
 			}
+			switch names[i] {
+			case "InMcastPkts":
+				g.McastIn += v
+			case "OutMcastPkts":
+				g.McastOut += v
+			}
 		}
 		break
 	}
@@ -140,9 +152,9 @@ func group6(snmp6 string) (g Group, ok bool) {
 		}
 		switch f[0] {
 		case "Ip6InMcastPkts":
-			g.In, ok = v, true
+			g.In, g.McastIn, ok = v, v, true
 		case "Ip6OutMcastPkts":
-			g.Out = v
+			g.Out, g.McastOut = v, v
 		case "Icmp6InRouterAdvertisements", "Icmp6InGroupMembQueries":
 			g.Router += v
 		}

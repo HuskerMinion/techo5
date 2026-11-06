@@ -98,6 +98,8 @@ type Watch struct {
 	tried time.Time
 
 	ssid string // the network joined at the last look, empty before one was
+
+	mc *multicast // multicast that stops while the link is up (multicast.go)
 }
 
 // settle is how long after a reassociation the sign has to be back before it is said that it is not:
@@ -123,6 +125,7 @@ func New() *Watch {
 		},
 		renew: wifi.RenewLease,
 		wait:  firstWait,
+		mc:    newMulticast(),
 	}
 }
 
@@ -151,6 +154,9 @@ func (w *Watch) Run(ctx context.Context) error {
 		case <-t.C:
 			w.moved(ctx)
 			w.look(ctx)
+			if w.mc != nil {
+				w.mc.look(ctx)
+			}
 		}
 	}
 }
