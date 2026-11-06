@@ -112,6 +112,16 @@ func TestMatchEnough(t *testing.T) {
 		{"Absolute Radio", "Absolute Radio 90s", false},
 		{"Absolute Radio", "Absolute Radio", true},
 
+		// A directory's name for the same station adds a call sign, a city or a slogan word.
+		{"Hot 97", "HOT 97 WQHT", true},
+		{"Power 106 FM", "Power 106 KPWR", true},
+		{"Kiss FM", "KISS 100 London", true},
+		{"Capital FM", "Capital London", true},
+		{"Heart", "Heart London", true},
+		{"The Beat 100.3", "100.3 The Beat WBEAT", true},
+		{"Greatest Hits Radio", "The Bay's Greatest Hits", false},
+		{"Heart", "Heart 80s", false},
+
 		// Sharing the words every list has is not enough.
 		{"BBC Radio 6 Music", "BBC KUT 90.5 HD2 KUT-HD2", false},
 		{"BBC Radio 4", "BBC KUT 90.5 HD2 KUT-HD2", false},

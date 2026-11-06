@@ -277,9 +277,12 @@ func brandWord(query, w string) bool {
 
 // matchEnough reports whether a candidate is the station the query names. An exact name is that
 // station, as is one with a detail left out when what it keeps is the station's own brand: "Z100
-// New York" is "Z100 WHTZ-FM". A candidate that adds words of its own is a different station more
-// often than not ("Absolute Classic Hits" is not "Absolute Radio", and "The Bay's Greatest Hits" is
-// not "Greatest Hits Radio"), so it is not taken. Sharing a word every list has — "BBC", "radio",
+// New York" is "Z100 WHTZ-FM". Otherwise a candidate may add to the query's name only what a
+// directory adds around the same station: a call sign ("HOT 97 WQHT") or one more word, such as its
+// city ("Capital London"), and only when it leads with the query's own name. Two or more words of
+// its own make it another station ("Absolute Radio" is not "Absolute Classic Hits"), as does a word
+// with a number in it ("Absolute Radio 90s"), and so does leading with another name ("The Bay's
+// Greatest Hits" is not "Greatest Hits Radio"). Sharing a word every list has — "BBC", "radio",
 // "FM" — is never enough.
 func matchEnough(query, candidate string) bool {
 	if !dialsAgree(query, candidate) {
@@ -289,10 +292,46 @@ func matchEnough(query, candidate string) bool {
 		return true
 	}
 	strong := strongWords(nameWords(query))
-	if len(strong) == 0 || !contains(nameWords(candidate), strong[0]) {
+	cwords := nameWords(candidate)
+	if len(strong) == 0 || !contains(cwords, strong[0]) {
 		return false
 	}
-	return brandWord(query, strong[0])
+	if brandWord(query, strong[0]) {
+		return true
+	}
+	cstrong := strongWords(cwords)
+	if len(cstrong) == 0 || cstrong[0] != strong[0] {
+		return false
+	}
+	for _, w := range strong {
+		if !contains(cwords, w) {
+			return false
+		}
+	}
+	extra := 0
+	for _, w := range cstrong {
+		switch {
+		case contains(strong, w), callSign(candidate, w):
+		case strings.ContainsAny(w, "0123456789"):
+			return false
+		default:
+			extra++
+		}
+	}
+	return extra <= 1
+}
+
+// callSign reports whether a word of a name is a North American call sign as the name writes it:
+// four letters in capitals starting with K or W, such as "WQHT" or "KPWR", or five in "WBEAT".
+func callSign(name, w string) bool {
+	for _, raw := range word.FindAllString(name, -1) {
+		raw = strings.Trim(raw, ".")
+		if strings.EqualFold(raw, w) && len(raw) >= 4 && len(raw) <= 5 && (raw[0] == 'K' || raw[0] == 'W') &&
+			strings.Trim(raw, "ABCDEFGHIJKLMNOPQRSTUVWXYZ") == "" {
+			return true
+		}
+	}
+	return false
 }
 
 func contains(words []string, want string) bool {
