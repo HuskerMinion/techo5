@@ -79,6 +79,10 @@ How it compares with EchoLocal, EchoMuse, echo-dot-assist, Kiosk Satellite and V
 
 The bigger changes of September to November 2026. Every release lists the rest.
 
+- 📞 **Call by wake word, Hang up bar, repeating alarms** (v1.6.28). A wake word can call a phone book
+  contact ([#463](https://github.com/HuskerMinion/techo5/pull/463)), calls can keep the page on screen
+  with a Hang up bar ([#459](https://github.com/HuskerMinion/techo5/pull/459)), and the Set an alarm
+  blueprint understands repeating days ([#461](https://github.com/HuskerMinion/techo5/pull/461)).
 - 🎙️ **External microphone processing and custom screens** (v1.6.27). An interface for a separately
   installed audio processing helper, off unless you choose External
   ([#407](https://github.com/HuskerMinion/techo5/pull/407), [docs/external-asp.md](docs/external-asp.md)).
