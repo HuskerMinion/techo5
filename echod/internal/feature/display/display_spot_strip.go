@@ -28,11 +28,11 @@ func onStar(x, y int) bool {
 
 // favoriteSpot saves what is playing to favorites, and fills the star in once it is saved.
 func (d *Display) favoriteSpot() {
-	rd := home.Get().Radio()
 	if err := home.Get().FavoriteNow(); err != nil {
 		slog.Warn("saving to favorites failed", "err", err)
 		return
 	}
+	rd := home.Get().Radio()
 	spotFaved.Store(rd.Title + "\x00" + rd.Now)
 	d.wake()
 }

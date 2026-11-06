@@ -1713,11 +1713,11 @@ func (d *Display) styleSwipe() bool {
 
 // favorite saves what is playing to favorites, and marks the star once it is saved.
 func (d *Display) favorite() {
-	rd := home.Get().Radio()
 	if err := home.Get().FavoriteNow(); err != nil {
 		slog.Warn("saving to favorites failed", "err", err)
 		return
 	}
+	rd := home.Get().Radio()
 	d.mu.Lock()
 	d.favedKey = rd.Title + "\x00" + rd.Now
 	d.mu.Unlock()

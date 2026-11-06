@@ -78,3 +78,21 @@ func TestHomeRadioKeepsTheDevicesOwnStations(t *testing.T) {
 		t.Errorf("own stations after home_radio: %+v, want %+v", got, own)
 	}
 }
+
+// Pressing the star while a direct stream plays, with no Home Assistant radio favorites wired, keeps
+// the station on the device (including the first one, before any radio list is configured).
+func TestStarKeepsDirectStreamOnDeviceWithoutHomeRadio(t *testing.T) {
+	config.Use(filepath.Join(t.TempDir(), "state.json"))
+	f := &Feature{}
+	f.playingOwn("Jazz FM", "https://stream.example/jazz")
+	if got := f.Radio().Now; got != "Jazz FM" {
+		t.Fatalf("Radio().Now before any list is configured = %q, want Jazz FM", got)
+	}
+	if err := f.FavoriteNow(); err != nil {
+		t.Fatalf("FavoriteNow: %v", err)
+	}
+	got := OwnStations()
+	if len(got) != 1 || got[0].Name != "Jazz FM" || got[0].URL != "https://stream.example/jazz" {
+		t.Fatalf("OwnStations = %+v, want Jazz FM", got)
+	}
+}
