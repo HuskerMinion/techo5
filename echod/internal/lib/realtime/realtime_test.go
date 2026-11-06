@@ -239,11 +239,56 @@ func TestAddresses(t *testing.T) {
 	if _, h, _ := (openAI{base: "x"}).address(Config{Key: "k", Endpoint: "wss://relay.home.arpa/rt"}); h.Get("Authorization") != "Bearer k" {
 		t.Error("a wss:// endpoint given with a key did not get it")
 	}
-	if _, _, err := (gemini{}).address(Config{Key: "k", Endpoint: "http://relay"}); err == nil {
+	if _, _, err := (&gemini{}).address(Config{Key: "k", Endpoint: "http://relay"}); err == nil {
 		t.Error("an endpoint that is not ws took")
 	}
 	if _, err := Dial(context.Background(), Config{Provider: "nobody"}); err == nil {
 		t.Error("a provider that is not one")
+	}
+}
+
+func TestGeminiTurnCompleteAfterToolCallWaitsForSpokenAnswer(t *testing.T) {
+	answer := pcmBase64([]int16{10, 20, 30, 40})
+	f := &fakeServer{}
+	f.script = func(m map[string]any) []string {
+		if _, ok := m["setup"]; ok {
+			return []string{`{"setupComplete":{}}`}
+		}
+		if ri, ok := m["realtimeInput"].(map[string]any); ok {
+			if _, end := ri["activityEnd"]; end {
+				return []string{
+					`{"serverContent":{"inputTranscription":{"text":"weather tomorrow"}}}`,
+					`{"toolCall":{"functionCalls":[{"id":"c1","name":"weather","args":{}}]}}`,
+					`{"serverContent":{"turnComplete":true}}`,
+				}
+			}
+		}
+		if _, ok := m["toolResponse"]; ok {
+			return []string{
+				`{"serverContent":{"modelTurn":{"parts":[{"inlineData":{"mimeType":"audio/pcm;rate=24000","data":"` + answer + `"}}]}}}`,
+				`{"serverContent":{"outputTranscription":{"text":"Cloudy, 14 degrees."}}}`,
+				`{"serverContent":{"turnComplete":true}}`,
+			}
+		}
+		return nil
+	}
+	addr := f.start(t)
+	s, err := Dial(context.Background(), Config{Provider: Gemini, Key: "g-key", Endpoint: addr,
+		Functions: []Function{{Name: "weather", Description: "the forecast"}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.Close()
+	_ = s.Audio(make([]int16, 160))
+	_ = s.EndOfSpeech()
+	evs := collect(t, s, Calls)
+	if kinds(evs) != "call,calls" || evs[0].Name != "weather" {
+		t.Fatalf("%+v", evs)
+	}
+	_ = s.ToolResult("c1", "weather", "Cloudy, 14°")
+	evs = collect(t, s, Done)
+	if kinds(evs) != "audio,saying,heard,done" || evs[1].Text != "Cloudy, 14 degrees." || evs[2].Text != "weather tomorrow" {
+		t.Fatalf("%+v", evs)
 	}
 }
 
