@@ -286,6 +286,8 @@ var registered = []string{
 	"volume_up_word_threshold",
 	"wake_assistant_1",
 	"wake_assistant_2",
+	"wake_call_1",
+	"wake_call_2",
 	"wake_clips",
 	"wake_clips_by_kind",
 	"wake_effect_1",
