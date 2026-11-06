@@ -48,9 +48,10 @@ const Features = esphome.DefaultVoiceFeatures |
 	esphome.FeatureTimers
 
 type Voice struct {
-	vs     *esphome.VoiceSatellite
-	turn   *conversation
-	effect *esphome.Action
+	vs        *esphome.VoiceSatellite
+	turn      *conversation
+	effect    *esphome.Action
+	wakeCalls wakeCallSelects // Call on wake word (wakecall_select.go)
 }
 
 var (

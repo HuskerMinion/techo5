@@ -1205,6 +1205,8 @@ Each wake word's own settings are on a sub-device of its own in Home Assistant, 
   request may listen, and how long it waits for an answer.
 - **Recordings kept**: how many of the last requests are kept as audio
   ([actions.md](actions.md#list-saved-voice-recordings)).
+- **Call on wake word**: **Off**, or a contact in the phone book the wake word calls instead of
+  starting the assistant ([phone.md](phone.md#calling-a-contact-on-a-wake-word)).
 
 Either wake word can also be answered by [realtime voice](#realtime-voice) instead. The
 [voice request events](actions.md#voice-request-events) say which one was heard (`slot` is `1` or

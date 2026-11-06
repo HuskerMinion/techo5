@@ -42,6 +42,8 @@ var readOnly = []string{
 	// Calls, and what may end one or listen during one.
 	"phone", "phone_answer", "phone_hangup", "phone_peer", "wake_word_during_calls", "assistant_replies_into_calls",
 	"hear_call_under_assistant", "hangup_word", "hangup_word_threshold", "call_contacts_by_voice",
+	// Which contact a wake word calls: the room is heard in the call as soon as it is answered.
+	"wake_call_1", "wake_call_2",
 	// And whether a call is encrypted at all.
 	"phone_plain_sip",
 	// Who can get in, and what it is paired with.

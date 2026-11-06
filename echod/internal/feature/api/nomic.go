@@ -66,7 +66,7 @@ var listeningActions = map[string]bool{
 var listeningPrefixes = []string{
 	"wake_assistant_", "wake_threshold_", "wake_playing_threshold_", "wake_tone_", "wake_effect_", "thinking_effect_",
 	"replying_effect_", "reply_delivery_", "reply_buffer_", "keep_recordings_",
-	"follow_up_", "follow_ups_", "follow_up_tone_", "max_listen_", "max_think_",
+	"follow_up_", "follow_ups_", "follow_up_tone_", "max_listen_", "max_think_", "wake_call_",
 }
 
 // listening is whether an entity is about listening.

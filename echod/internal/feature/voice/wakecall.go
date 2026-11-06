@@ -123,7 +123,8 @@ const MaxCallContactLen = 128
 
 // SetWakeCall chooses the contact a wake word slot (1 or 2, as Home Assistant counts them) calls, by
 // one of its names in the phone book, or none with an empty name. The contact's first name is what is
-// kept. A slot with no word, or one set for realtime voice, cannot be chosen.
+// kept. A slot with no word, or one set for realtime voice, cannot be chosen. The slot's select shows
+// the choice saved, wherever it was made.
 func SetWakeCall(slot int, contact string) error {
 	if slot < 1 || slot > wakeword.Slots {
 		return errors.New("wake call: the slot is 1 or 2")
@@ -144,5 +145,9 @@ func SetWakeCall(slot int, contact string) error {
 		}
 		contact = c.Name
 	}
-	return config.Set().Wake(slot - 1).CallContact(contact)
+	if err := config.Set().Wake(slot - 1).CallContact(contact); err != nil {
+		return err
+	}
+	wakeCallChanged.Emit(struct{}{})
+	return nil
 }

@@ -175,7 +175,10 @@ the Spot's screen and pulses the Dot's ring green.
 A wake word can call a contact in the phone book instead of starting the assistant: say it, and the
 call is placed at once, with no sentence after it and nothing asked of Home Assistant. One use is a
 voice service or an intercom reached by a SIP extension. Choose it on the setup page, **Sound &
-Voice**, **Call on a wake word**: one contact for each wake word, or **Off**. It is off until chosen.
+Voice**, **Call on a wake word**, or in Home Assistant with **Call on wake word** on the wake word's
+assistant sub-device: one contact for each wake word, or **Off**. It is off until chosen. Home
+Assistant is offered the contacts' names, never their numbers, and a phone book with other names
+reconnects it so its list follows.
 
 **The room is heard in the call from the moment it is answered**, as in any call. The call's page, its
 sound, the encryption setting and **Hang up** are the same as for any other call.
@@ -197,7 +200,8 @@ sound, the encryption setting and **Hang up** are the same as for any other call
 - A wake word chosen for realtime voice can't call, and one chosen to call can't be chosen for realtime
   voice: clear one first.
 - The choice is the device's own, as realtime voice is: a settings file never carries it, and
-  restoring one leaves each wake word's choice as it was on the device.
+  restoring one leaves each wake word's choice as it was on the device. The device's remote API can
+  read it but not change it.
 
 ### A hang-up word
 
