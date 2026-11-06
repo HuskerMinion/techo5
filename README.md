@@ -79,6 +79,12 @@ How it compares with EchoLocal, EchoMuse, echo-dot-assist, Kiosk Satellite and V
 
 The bigger changes of September to November 2026. Every release lists the rest.
 
+- 🎙️ **External microphone processing and custom screens** (v1.6.27). An interface for a separately
+  installed audio processing helper, off unless you choose External
+  ([#407](https://github.com/HuskerMinion/techo5/pull/407), [docs/external-asp.md](docs/external-asp.md)).
+  Other boards can add their own full-screen pages and show one when idle
+  ([#447](https://github.com/HuskerMinion/techo5/pull/447)). AirPlay 2 works on the Show 8 2nd gen
+  ([techo5-athena #5](https://github.com/HuskerMinion/techo5-athena/issues/5)).
 - 🎶 **Snapcast, your own Headscale and a dark nursery** (v1.6.26). Every device can be a
   [Snapcast](https://github.com/snapcast/snapcast) client, in step with the house's other Snapcast
   speakers ([#406](https://github.com/HuskerMinion/techo5/pull/406)). Tailscale can join a
