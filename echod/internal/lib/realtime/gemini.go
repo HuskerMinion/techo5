@@ -13,16 +13,18 @@ import (
 type gemini struct {
 	// heard is what was heard of the question so far (hear); it is read on one goroutine at a time.
 	heard *strings.Builder
+	// called is whether the current turn segment made function calls and is yielding for toolResponse.
+	called bool
 }
 
 const (
 	geminiBase  = "wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1beta.GenerativeService.BidiGenerateContent"
-	geminiModel = "gemini-2.5-flash-native-audio-preview-09-2025"
+	geminiModel = "gemini-2.5-flash-native-audio-latest"
 	geminiVoice = "Puck"
 	geminiRate  = 24000
 )
 
-func (g gemini) address(c Config) (string, http.Header, error) {
+func (g *gemini) address(c Config) (string, http.Header, error) {
 	addr, keyOK, err := endpoint(c, geminiBase)
 	if err != nil {
 		return "", nil, err
@@ -42,7 +44,7 @@ func (g gemini) address(c Config) (string, http.Header, error) {
 	return u.String(), h, nil
 }
 
-func (g gemini) setup(c Config) []any {
+func (g *gemini) setup(c Config) []any {
 	model := c.Model
 	if model == "" {
 		model = geminiModel
@@ -87,30 +89,30 @@ func (g gemini) setup(c Config) []any {
 	}
 }
 
-func (g gemini) audio(pcm16k []int16) any {
+func (g *gemini) audio(pcm16k []int16) any {
 	return map[string]any{"realtimeInput": map[string]any{
 		"audio": map[string]any{"data": pcmBase64(pcm16k), "mimeType": "audio/pcm;rate=16000"},
 	}}
 }
 
-func (g gemini) endOfSpeech() []any {
+func (g *gemini) endOfSpeech() []any {
 	return []any{map[string]any{"realtimeInput": map[string]any{"activityEnd": map[string]any{}}}}
 }
 
 // goOn is nothing: Gemini goes on by itself once a call is answered.
-func (g gemini) goOn() []any { return nil }
+func (g *gemini) goOn() []any { return nil }
 
 // ready is the setupComplete that answers the setup: until then nothing else is sent.
-func (g gemini) ready(msg []byte) bool {
+func (g *gemini) ready(msg []byte) bool {
 	var m struct {
 		SetupComplete *struct{} `json:"setupComplete"`
 	}
 	return json.Unmarshal(msg, &m) == nil && m.SetupComplete != nil
 }
 
-func (g gemini) readyFirst() bool { return false }
+func (g *gemini) readyFirst() bool { return false }
 
-func (g gemini) toolResult(callID, name, output string) []any {
+func (g *gemini) toolResult(callID, name, output string) []any {
 	return []any{map[string]any{"toolResponse": map[string]any{"functionResponses": []any{
 		map[string]any{"id": callID, "name": name, "response": map[string]any{"result": output}},
 	}}}}
@@ -119,14 +121,14 @@ func (g gemini) toolResult(callID, name, output string) []any {
 // hear keeps a piece of what was heard. Gemini sends the words as they are made out, a few letters at a
 // time ("Ho", "w", " are"), and can go on after its answer has begun: they are said as one Heard at the
 // end of the turn (flush), so nothing takes a piece for the whole question.
-func (g gemini) hear(s string) {
+func (g *gemini) hear(s string) {
 	if g.heard != nil {
 		g.heard.WriteString(s)
 	}
 }
 
 // flush says what was heard so far, if anything, as one Heard.
-func (g gemini) flush(emit func(Event)) {
+func (g *gemini) flush(emit func(Event)) {
 	if g.heard == nil || g.heard.Len() == 0 {
 		return
 	}
@@ -137,7 +139,7 @@ func (g gemini) flush(emit func(Event)) {
 	}
 }
 
-func (g gemini) read(msg []byte, emit func(Event)) {
+func (g *gemini) read(msg []byte, emit func(Event)) {
 	var m struct {
 		ServerContent *struct {
 			ModelTurn *struct {
@@ -176,6 +178,7 @@ func (g gemini) read(msg []byte, emit func(Event)) {
 			g.hear(sc.InputTranscription.Text)
 		}
 		if sc.OutputTranscription != nil && sc.OutputTranscription.Text != "" {
+			g.called = false
 			emit(Event{Kind: Saying, Text: sc.OutputTranscription.Text})
 		}
 		if sc.ModelTurn != nil {
@@ -184,26 +187,37 @@ func (g gemini) read(msg []byte, emit func(Event)) {
 					continue
 				}
 				if pcm := pcmFrom(p.InlineData.Data); len(pcm) > 0 {
+					g.called = false
 					emit(Event{Kind: Audio, PCM: pcm, Rate: rateOf(p.InlineData.MimeType)})
 				}
 			}
 		}
-		if sc.Interrupted {
-			g.flush(emit)
-			emit(Event{Kind: Interrupt})
-		}
-		if sc.TurnComplete {
-			g.flush(emit)
-			emit(Event{Kind: Done})
-		}
 	}
-	if tc := m.ToolCall; tc != nil {
+	if tc := m.ToolCall; tc != nil && len(tc.FunctionCalls) > 0 {
+		g.called = true
 		for _, f := range tc.FunctionCalls {
 			args := string(f.Args)
 			if args == "" || args == "null" {
 				args = "{}"
 			}
 			emit(Event{Kind: Call, CallID: f.ID, Name: f.Name, Args: args})
+		}
+	}
+	if sc := m.ServerContent; sc != nil {
+		if sc.Interrupted {
+			g.called = false
+			g.flush(emit)
+			emit(Event{Kind: Interrupt})
+		}
+		if sc.TurnComplete {
+			// A turn segment that called functions is yielding for toolResponse, not ending the answer.
+			if g.called {
+				g.called = false
+				emit(Event{Kind: Calls})
+			} else {
+				g.flush(emit)
+				emit(Event{Kind: Done})
+			}
 		}
 	}
 }

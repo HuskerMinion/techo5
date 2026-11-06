@@ -188,7 +188,7 @@ func codecFor(provider string) (codec, error) {
 	case XAI:
 		return openAI{base: "wss://api.x.ai/v1/realtime", defaultModel: "grok-voice", defaultVoice: "Ara"}, nil
 	case Gemini:
-		return gemini{heard: new(strings.Builder)}, nil
+		return &gemini{heard: new(strings.Builder)}, nil
 	}
 	return nil, fmt.Errorf("realtime: not a provider: %q", provider)
 }
