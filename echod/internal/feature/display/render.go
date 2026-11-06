@@ -103,8 +103,10 @@ type scene struct {
 
 	// call is the phone: while one rings, is placed or is up, its page is over everything. atDoor is
 	// the doorbell pressed during it, which the call's page says rather than ringing (feature/doorbell).
-	call   phone.State
-	atDoor bool
+	// callBar is how the call is drawn over the page instead, by Call screen (render_callbar.go).
+	call    phone.State
+	atDoor  bool
+	callBar callBarStyle
 
 	// ring is a timer or an alarm sounding: the ringing page is over everything. snooze is its length.
 	ring   ringState
@@ -325,6 +327,10 @@ type renderer struct {
 	videoZones []image.Rectangle
 	videoOver  image.Rectangle
 
+	// callBarAt and hangAt are the call over the page and its Hang up where they were last drawn, under
+	// zmu, and empty when the frame drew none (render_callbar.go).
+	callBarAt, hangAt image.Rectangle
+
 	// styleFaces are the clock styles' faces, made as they are first needed (render_styles.go).
 	styleFaces map[styleFaceKey]font.Face
 
@@ -542,6 +548,8 @@ func (r *renderer) draw(s scene) {
 	// drawn (publishSkip, registered before the overlays' own defers so it runs after them).
 	r.skipDrawn, r.skipDrawnOffer = image.Rectangle{}, skipOffer{}
 	defer r.publishSkip(s)
+	// The call over the page the same way: a frame that does not draw it leaves nothing of it to tap.
+	r.setCallBarAt(image.Rectangle{}, image.Rectangle{})
 	r.customKept = r.keptCustom(s)
 	defer r.streamingDot(s)  // over everything, the update overlay included: deferred first, drawn last
 	defer r.updateOverlay(s) // Draw update overlay at the end of frame using defer
@@ -602,10 +610,11 @@ func (r *renderer) draw(s scene) {
 	}
 
 	// Registered first so it runs last: the header goes over every page, including the ones below
-	// that return early.
+	// that return early. The call over the page before it, so it is drawn after it.
+	defer r.callBarDraw(s)
 	defer r.header(s)
 
-	if s.call.Phase != phone.Idle {
+	if s.callPageUp() {
 		r.callPage(s)
 		return
 	}

@@ -175,6 +175,13 @@ type Screen struct {
 	// and phone contacts to call. Off until somebody wants it, so an update changes nobody's screen.
 	CallButton bool `json:"call_button,omitempty"`
 
+	// CallScreen is how a call being placed or up is drawn on the Show: empty for a page of its own
+	// over everything, as it always was, so an update changes nobody's screen; "button" for a red Hang
+	// up button where the Call button is, over whatever page is showing; "details" for that button with
+	// who the call is with and how long it has lasted beside it. A call ringing keeps its page, and so
+	// does a Drop In.
+	CallScreen string `json:"call_screen,omitempty"`
+
 	// WeatherStill keeps the weather page's sky still: no rain or snow falling across it. The
 	// animation is on unless somebody turns it off, so a saved file without this is animated.
 	WeatherStill bool `json:"weather_still,omitempty"`
@@ -497,6 +504,10 @@ func (w ScreenWriter) NoVolumeSwipe(v bool) error {
 
 func (w ScreenWriter) CallButton(v bool) error {
 	return w.st.Update(func(c *Config) { c.Screen.CallButton = v })
+}
+
+func (w ScreenWriter) CallScreen(v string) error {
+	return w.st.Update(func(c *Config) { c.Screen.CallScreen = v })
 }
 
 func (w ScreenWriter) MusicStrip(seconds int) error {

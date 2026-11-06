@@ -84,6 +84,26 @@ box.
 | **Decline or hang up** | The same button again, a sideways swipe on the Spot, **Decline** / **Hang up** on the Show, the **Hang up** button, `esphome.<device>_phone_hangup`, the hang-up word, or by voice with **Wake word during calls** on (below). |
 | **Say something into a call** | `assist_satellite.announce` on the same device while a call is up: the message plays in the room and goes into the call. |
 
+### The call on the screen
+
+On a Show, a call has a page of its own over everything while it rings, is placed or is up: who it is
+with, how long it has lasted, and **Decline** / **Answer** or **Hang up**. **Call screen** in Settings,
+Display (or the **Call screen** select in Home Assistant) keeps the page that was showing instead, for a
+call being placed or up:
+
+- **Full screen**: the call's page, as before. The default.
+- **Hang-up button**: a red round button with a handset in the bottom left corner, where the home
+  screen's green **Call button** is. A tap on it hangs up.
+- **Hang-up button and details**: the same button, with who the call is with and how long it has lasted
+  beside it ("Someone's at the door" in place of the time when the doorbell is pressed).
+
+Everything else is the page as it would be without the call, and is used as usual: a dashboard, the
+clock and its photos, a notification's card. A call ringing keeps its page, so answering and declining
+stay where they are, and so does a Drop In, which says on the whole screen that somebody is listening.
+While a timer or an alarm rings, a browser or a video asks to be let in, or the settings lock asks for
+its PIN, the call's page comes back, since their answers are where the button is. The Spot keeps its
+call page.
+
 ### Echo on a call
 
 If the other party hears themselves faintly, set **Microphone echo canceller in calls** (the device's

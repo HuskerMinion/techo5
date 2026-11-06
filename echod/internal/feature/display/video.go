@@ -41,7 +41,7 @@ func (d *Display) videoScene(s *scene, now time.Time) {
 	}
 	// What draw() puts over the question (render.go) leaves it undrawn, and so unanswerable.
 	drawnAsk := uint64(0)
-	if s.showVideoAsk && s.call.Phase == phone.Idle && !s.ring.any() && !s.pin.open && !s.setupAsking {
+	if s.showVideoAsk && !s.callPageUp() && !s.ring.any() && !s.pin.open && !s.setupAsking {
 		drawnAsk = s.videoAsk.id
 	}
 	d.vask.drawn(drawnAsk, now)

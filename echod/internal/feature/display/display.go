@@ -164,6 +164,8 @@ type Display struct {
 	clockTap   *esphome.Select // what a tap on the clock does (clock_tap.go)
 	// callBtn is the home screen's Call button, on or off (callbutton.go).
 	callBtn *esphome.Switch
+	// callScreenSel is how a call is drawn: its page, or Hang up over the page (callscreen.go).
+	callScreenSel *esphome.Select
 	// styleSwipeSw is Swipe between clock styles (style_swipe.go).
 	styleSwipeSw *esphome.Switch
 	// volumeSwipeSw is Swipe for volume (volume_swipe.go).
@@ -520,6 +522,7 @@ func build() *Display {
 	d.skinSl = skinSelect(d.wake)
 	d.clockTap = clockTapSelect()
 	d.callBtn = callButtonSwitch(d.wake)
+	d.callScreenSel = callScreenSelect(d.wake)
 	d.styleSwipeSw = styleSwipeSwitch()
 	d.volumeSwipeSw = volumeSwipeSwitch()
 	d.nightTapSw = nightTapSwitch(d)
@@ -614,7 +617,7 @@ func (d *Display) Name() string { return "screen" }
 // turnShown is whether the turn's picture is the page: nothing drawn before it in render.draw has the
 // screen. Only then does it need its fast frames.
 func turnShown(s scene) bool {
-	return s.eq != nil && s.call.Phase == phone.Idle && !s.ring.any() && !s.setupAsking && !s.bt.Pairing &&
+	return s.eq != nil && !s.callPageUp() && !s.ring.any() && !s.setupAsking && !s.bt.Pairing &&
 		!s.showWifi && !s.showSheet && !s.showCamera && !s.showAlert && !s.showCalendar && !s.showRadar &&
 		!s.showWeather && !s.showDash && !s.showDeck
 }
@@ -632,7 +635,7 @@ func (d *Display) skinSel() *esphome.Select { return d.skinSl }
 func (d *Display) clockTapSel() *esphome.Select { return d.clockTap }
 
 func (d *Display) Entities() []esphome.Entity {
-	ents := append([]esphome.Entity{d.light, d.power, d.roomSw, d.auto, d.clock, d.clockStyleSel, d.clockPos, d.dateCol, d.weatherPos, d.glanceSz, d.glanceMus, d.camTime, cameraFitSel, cameraBandsSel, cameraShadeSel, d.answerTime, d.turnStyle, d.timerStyle, d.skinSl, d.callBtn, d.weatherFx, d.warmthSw, d.lang, d.strip, d.themeSel, d.lightThemeSel, d.themeModeSel, d.nightHours, d.nightStart, d.nightEnd, d.weekendStart, d.weekendEnd, d.nightMode, d.atNight, d.nightStyle, d.glowLevel, d.dimmestNum, d.idleDimSel,
+	ents := append([]esphome.Entity{d.light, d.power, d.roomSw, d.auto, d.clock, d.clockStyleSel, d.clockPos, d.dateCol, d.weatherPos, d.glanceSz, d.glanceMus, d.camTime, cameraFitSel, cameraBandsSel, cameraShadeSel, d.answerTime, d.turnStyle, d.timerStyle, d.skinSl, d.callBtn, d.callScreenSel, d.weatherFx, d.warmthSw, d.lang, d.strip, d.themeSel, d.lightThemeSel, d.themeModeSel, d.nightHours, d.nightStart, d.nightEnd, d.weekendStart, d.weekendEnd, d.nightMode, d.atNight, d.nightStyle, d.glowLevel, d.dimmestNum, d.idleDimSel,
 		d.pop.on, d.pop.lead, d.pop.chime, d.pop.allDay, d.pop.shown, d.pop.popping, d.clockTap, d.styleSwipeSw, d.volumeSwipeSw, d.nightTapSw, d.nightInfoSw, d.fontSel, d.textSizeSel}, d.lookEnts...)
 	if !screen.CanTint {
 		// Night warmth tints the frame on its way to the panel, which a tablet's screen does not take.
@@ -673,6 +676,7 @@ func (d *Display) Restore(c config.Config) {
 	d.skinSl.Set(skins[skinIndex()].label)
 	d.clockTap.Set(clockTapChoices()[clockTapIndex()].label)
 	setCallButton(d.callBtn, c.Screen.CallButton)
+	showCallScreen(d.callScreenSel, callScreenIndex())
 	d.styleSwipeSw.Set(!c.Screen.NoStyleSwipe)
 	d.volumeSwipeSw.Set(!c.Screen.NoVolumeSwipe)
 	d.nightTapSw.Set(c.Screen.NightTapLifts)
@@ -1157,8 +1161,19 @@ func (d *Display) gesture(g touch.Gesture) {
 		}
 		return
 	}
-	// A call: its page takes every tap.
-	if st := phone.Get().State(); st.Phase != phone.Idle {
+	// A call: its page takes every tap. Drawn over the page instead (Call screen), as the frame last
+	// drawn shows it, Hang up takes the taps on it, its details the touches on them, and the page under
+	// them is used as it would be without the call. Never for a call ringing: a button left from the
+	// call before it is not how that one is answered or declined.
+	if st := phone.Get().State(); st.Phase != phone.Idle && st.Phase != phone.Ringing && d.r != nil && d.r.callBarDrawn() {
+		if on, hang := d.r.callBarTapped(image.Pt(g.X, g.Y)); on {
+			if g.Kind == touch.Tap && hang {
+				phone.Get().Hangup()
+			}
+			d.wake()
+			return
+		}
+	} else if st.Phase != phone.Idle {
 		if g.Kind == touch.Tap {
 			// Unless something is ringing behind it. The call keeps its buttons; the rest of the
 			// page stops the ring. Taps outside the buttons did nothing on this page before, so
@@ -2633,6 +2648,7 @@ func (d *Display) frame() (next time.Duration) {
 
 	s := scene{now: now, phase: view.Phase, heard: view.Heard, reply: view.Reply, since: at, ring: ring, call: call}
 	s.atDoor = call.Phase != phone.Idle && doorbell.Get().AtDoor(now)
+	s.callBar = callBarOn(call)
 	s.snooze = config.Get().Alarms.Snooze()
 	s.alarms = alarm.Get().View(now)
 	s.timers = timer.Get().List(now)
@@ -2802,8 +2818,10 @@ func (d *Display) frame() (next time.Duration) {
 	// has held for the configured wait, tracked by how long it has run continuously.
 	d.deckScene(&s, now)
 	d.customScene(&s, now)
-	d.dashScene(&s, s.showSheet || s.showDrawer || ring.any() || call.Phase != phone.Idle)
-	boring := s.phase == "idle" && call.Phase == phone.Idle && !ring.any() && !s.bt.Pairing &&
+	// A call drawn over the page leaves the page as it was: the dashboard, the photos, the
+	// screensaver.
+	d.dashScene(&s, s.showSheet || s.showDrawer || ring.any() || s.callPageUp())
+	boring := s.phase == "idle" && !s.callPageUp() && !ring.any() && !s.bt.Pairing &&
 		!s.showWifi && !s.showSheet && !s.showCamera && !s.showRadar && !s.showWeather && !s.showCalendar && !s.showAlert && !s.nowPlaying &&
 		!s.showDash && !s.showDeck && s.custom.name == ""
 	// A browser waiting to be let in is a page of its own, over whatever is on the screen: asking for
@@ -2819,7 +2837,7 @@ func (d *Display) frame() (next time.Duration) {
 	}
 	// What draw() puts over the page (a call, a ring, the PIN pad) leaves it undrawn, and so unanswerable.
 	drawnPage := uint64(0)
-	if s.setupAsking && s.call.Phase == phone.Idle && !s.ring.any() && !s.pin.open {
+	if s.setupAsking && !s.callPageUp() && !s.ring.any() && !s.pin.open {
 		drawnPage = pageKey(s.takes)
 	}
 	d.pask.drawn(drawnPage, now)
@@ -2896,7 +2914,7 @@ func (d *Display) frame() (next time.Duration) {
 
 	// The Call button is on the clock itself and only there: on any other page a tap where it would be
 	// still does what that page does.
-	s.callButton = callButton.Load() && hasMicrophone() && s.phase == "idle" && !s.nowPlaying && !s.strip && !s.showWeather && !s.showCalendar && !s.showDeck && s.custom.name == "" &&
+	s.callButton = callButton.Load() && hasMicrophone() && s.call.Phase == phone.Idle && s.phase == "idle" && !s.nowPlaying && !s.strip && !s.showWeather && !s.showCalendar && !s.showDeck && s.custom.name == "" &&
 		s.sunrise == 0 && s.slideshowScreensaver == nil && !s.showDrawer && !s.showSheet
 	d.mu.Lock()
 	d.callShown = s.callButton
