@@ -5,15 +5,16 @@ import (
 	"log/slog"
 	"strings"
 
+	"github.com/HuskerMinion/techo5/echod/internal/config"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/media"
 	"github.com/HuskerMinion/techo5/echod/internal/lib/hass"
 )
 
 // FavoriteNow saves what this device is playing to the favorites it belongs in: a Music Assistant
 // track to Music Assistant's, by pressing its "favorite current song" button for this speaker; a
-// station of the house's radio to Radio Favorites, by name, through the script that finds its stream.
-// The same two the favorite-by-voice automation uses, but it knows which station this speaker is
-// playing, where Home Assistant only knows the last one started anywhere in the house.
+// station of the house's radio to Radio Favorites, by name, through the script that finds its stream;
+// or, when radio favorites are not wired in Home Assistant, a stream this device is playing itself to
+// the stations kept on the device.
 func (f *Feature) FavoriteNow() error {
 	if Following() {
 		// Another player's song: its own favorite button, when it is one of Music Assistant's.
@@ -31,7 +32,22 @@ func (f *Feature) FavoriteNow() error {
 	}
 	station := f.Radio().Now
 	if station == "" {
+		station, _ = f.NowPlaying()
+	}
+	if station == "" {
 		return errors.New("nothing playing to save")
+	}
+	if !config.Get().Home.Radio.Configured() {
+		f.mu.Lock()
+		addr := f.ownURL
+		f.mu.Unlock()
+		if addr == "" {
+			addr, _ = f.StreamOf(station)
+		}
+		if addr != "" {
+			slog.Info("favorite: keeping station on this device", "station", station)
+			return SaveStation(station, addr)
+		}
 	}
 	slog.Info("favorite: radio station", "station", station)
 	if err := addFavorite(station); err != nil {
