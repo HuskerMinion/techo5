@@ -359,7 +359,7 @@ func TestNoMicrophoneRows(t *testing.T) {
 		}
 		return m
 	}
-	needMic := []string{"callbutton", "turnstyle", "mic", "wakeword", "wakesens", "waketone", "dnd"}
+	needMic := []string{"callbutton", "callscreen", "turnstyle", "mic", "wakeword", "wakesens", "waketone", "dnd"}
 	hasMicrophone = func() bool { return true }
 	with := ids()
 	for _, id := range append(needMic, "clocktap", "hasounds") {

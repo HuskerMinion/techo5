@@ -160,6 +160,9 @@ func categoryRows(sv sheetView) (rows []settingRow, note string) {
 		// Calls, Assist and the turn screen need a microphone: a screen without one leaves them out.
 		if hasMicrophone() {
 			rows = append(rows, settingRow{id: "callbutton", label: tr("call_button"), sub: tr("on_the_home_screen_devices_and_contacts"), kind: ctlToggle, on: callButton.Load()})
+			if hasCallScreen {
+				rows = append(rows, settingRow{id: "callscreen", label: tr("call_screen"), sub: tr("page_or_hang_up_button"), kind: ctlChoice, value: callScreenOptions()[callScreenIndex()]})
+			}
 		}
 		if hasClockTap {
 			sub := tr("ui_start_assist_open_the_dashboard_or_the_deck_or_nothing")
@@ -764,6 +767,8 @@ func pickerForRaw(id string, sv sheetView) (pickerView, bool) {
 		return pickerView{title: tr("turn_screen"), opts: turnStyleOptions(), cur: turnStyleIndex()}, true
 	case "clocktap":
 		return pickerView{title: tr("tap_on_the_clock"), opts: clockTapOptions(), cur: clockTapIndex()}, true
+	case "callscreen":
+		return pickerView{title: tr("call_screen"), opts: callScreenOptions(), cur: callScreenIndex()}, true
 	case "radarsrc":
 		return pickerView{title: tr("radar_source"), opts: home.RadarSourceOptions(), cur: home.RadarSourceIndex()}, true
 	case "calendars":
@@ -918,6 +923,8 @@ func (d *Display) choose(id string, i int) {
 		setTimerStyle(d.timerStyleSel(), i)
 	case "clocktap":
 		setClockTap(d.clockTapSel(), i)
+	case "callscreen":
+		d.chooseCallScreen(i)
 	case "radarsrc":
 		go home.Get().SetRadarSource(i)
 	case "calendars":
@@ -1369,7 +1376,7 @@ func (d *Display) rowTap(id string, p part, opt int) {
 	case "immichfav":
 		home.Get().SetImmichFavorites(!home.Get().ImmichFavorites())
 	case "night", "atnight", "nightstyle", "clock", "clockstyle", "font", "textsize", "skin", "clockpos", "weatherpos", "datecolor", "glancesize", "glancemusic", "camtime", "camfit", "cambands", "camshade", "answertime", "idledim", "callring", "turnstyle", "timerstyle", "radarsrc", "calendars", "calpopwhen", "calpopallday", "calpopcals", "musicstrip", "follow", "awayoff", "slideshow", "photoevery", "screenlang", "newtimer", "sleep", "sunrise",
-		"timezone", "wakeword", "waketone", "ttsvoice", "quiet", "output", "clocktap":
+		"timezone", "wakeword", "waketone", "ttsvoice", "quiet", "output", "clocktap", "callscreen":
 		d.openPicker(id)
 	}
 }

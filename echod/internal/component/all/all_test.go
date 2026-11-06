@@ -186,6 +186,7 @@ var registered = []string{
 	"screen_auto_brightness",
 	"screen_auto_brightness_dimmest",
 	"screen_call_button",
+	"screen_call_screen",
 	"screen_camera_time",
 	"screen_clock_format",
 	"screen_clock_position",
