@@ -380,8 +380,11 @@ type renderer struct {
 	// weatherRight is this frame having drawn the weather at the top right (Weather position): the alert
 	// badge goes beside it, from the middle to weatherLeft (under it, from weatherFoot, when there is no
 	// room), and a Corner timer in the row under that, so together they take no more of the corner than
-	// the badge and the timer did. The drawing goroutine's alone.
+	// the badge and the timer did. weatherDrawn is this frame having drawn the weather at all, in either
+	// corner, so the Corner timer can level with it where it is at the top left. The drawing
+	// goroutine's alone.
 	weatherRight bool
+	weatherDrawn bool
 	weatherLeft  int
 	weatherFoot  int
 
@@ -575,7 +578,7 @@ func (r *renderer) draw(s scene) {
 	}
 	defer r.turnCue(s)
 	r.artDrawn, r.c64Drawn = false, false
-	r.weatherRight = false
+	r.weatherRight, r.weatherDrawn = false, false
 	r.setWeatherAt(image.Rectangle{})
 	r.setTempAt(image.Rectangle{})
 	r.setDateAt(image.Rectangle{})
@@ -984,6 +987,10 @@ func (r *renderer) weatherCorner(s scene) {
 	r.weatherCornerAt(s, weatherOnRight())
 }
 
+// weatherMid is the middle of the corner weather's line: its icon is centered on it and its words
+// hang from it, so the Corner timer can put its middle there too.
+func (r *renderer) weatherMid() int { return r.margin + r.s(15) }
+
 // weatherCornerAt is the weather in a top corner, with the drawing of it that the forecast page has
 // had all along. The icon is read before the words are: a glance at the corner of a clock is not
 // reading, and the screen already knew how to draw it. On the right the icon takes the outer edge,
@@ -996,7 +1003,7 @@ func (r *renderer) weatherCornerAt(s scene, right bool) {
 	// At the top right with an alert, the temperature alone, so the alert's badge fits beside it: the
 	// icon still says what the sky is doing.
 	short := right && len(s.alerts.Here) > 0 && w.Temp != ""
-	mark, mid := r.s(weatherMark), r.margin+r.s(15)
+	mark, mid := r.s(weatherMark), r.weatherMid()
 	if right {
 		// On the badges' row, so the Corner timer's row under it stays clear of the icon.
 		mid = min(mid, r.badgeTop()+r.s(20))
@@ -1047,6 +1054,7 @@ func (r *renderer) weatherCornerAt(s scene, right bool) {
 	// A tap on it opens the forecast: the icon and the words, with a finger's room around them.
 	r.setWeatherAt(image.Rect(left, mid-mark/2, left+width, mid+mark/2).Inset(-r.s(14)))
 	r.weatherRight = right
+	r.weatherDrawn = true
 	r.weatherLeft, r.weatherFoot = left, mid+mark/2+r.s(10)
 }
 
