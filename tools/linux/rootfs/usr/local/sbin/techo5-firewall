@@ -9,7 +9,9 @@
 # feature/camstream) and DLNA's SSDP searches (1900/udp, IPv4), and AirPlay 2 (7000/tcp, 319-320/udp, and
 # its senders' own ports, from a chain of its own below),
 # which nothing listens on unless their switches are on; DHCP replies, ping,
-# IPv6 neighbor discovery, and anything answering a connection the device made (calls included).
+# IPv6 neighbor discovery, and anything answering a connection the device made (calls included). A TCP
+# segment for a connection that is no longer there is answered with a reset rather than dropped; a new
+# connection to anything else is dropped.
 # Out: everything, as before.
 #
 # Only wlan0 is filtered, from a chain of its own: loopback and any other interface are left as they
@@ -57,6 +59,13 @@ if [ -n "$ok" ]; then
 		iptables-legacy -A $CHAIN -p icmp -j ACCEPT &&
 		ip6tables-legacy -A $CHAIN -p ipv6-icmp -j ACCEPT &&
 		ip6tables-legacy -A $CHAIN -p udp --sport 547 --dport 546 -j ACCEPT &&
+		# What is left of a connection the device has already closed: a FIN lost while the network was
+		# down leaves the peer sending into it, and dropped, its retries go unanswered for as long as TCP
+		# keeps trying. A Snapserver holding such a connection sends the client's volume to it rather than
+		# to the one the client made since (feature/snapcast). A reset ends it at the peer's next send. Only
+		# a segment without SYN: a new connection to a port nobody serves is still dropped unanswered.
+		iptables-legacy -A $CHAIN -p tcp ! --syn -j REJECT --reject-with tcp-reset &&
+		ip6tables-legacy -A $CHAIN -p tcp ! --syn -j REJECT --reject-with tcp-reset &&
 		iptables-legacy -A $CHAIN -j DROP &&
 		ip6tables-legacy -A $CHAIN -j DROP || ok=
 fi
