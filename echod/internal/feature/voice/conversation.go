@@ -249,6 +249,12 @@ type conversation struct {
 	// or grace runs out, a new turn waits in pending.
 	draining bool
 
+	// staleStream is Home Assistant's streamed copy of a reply played from its url. It sends one all
+	// the same, in real time from TTS_END, and stops it only when the next run starts: an early reply
+	// is heard out first, and what is left of the copy, its end included, arrived in the follow-up and
+	// was taken for that turn's own reply. Dropped until its TTS_STREAM_END.
+	staleStream bool
+
 	// runURL is where the open run's reply will be served, from its start; fetched early when the
 	// slot's delivery is Early and Home Assistant says it can be.
 	runURL string
@@ -645,6 +651,10 @@ func (c *conversation) turnEvent(e event) {
 		c.player.Sounding(true)
 
 	case evStreamStart:
+		c.staleStream = c.reply.url != ""
+		if c.staleStream {
+			return
+		}
 		// The turn has to be claimed before the audio arrives: Home Assistant closes the run as soon
 		// as it has handed over the text, and a turn still only thinking would take that as the end
 		// and go idle, discarding everything that followed.
@@ -687,7 +697,7 @@ func (c *conversation) turnEvent(e event) {
 
 	case evStreamAudio:
 		// Retired as soon as a url arrives.
-		if c.phase == phaseIdle || c.reply.url != "" {
+		if c.phase == phaseIdle || c.reply.url != "" || c.staleStream {
 			return
 		}
 		if c.phase != phaseReplying {
@@ -698,6 +708,10 @@ func (c *conversation) turnEvent(e event) {
 	case evStreamEnd:
 		// Everything Home Assistant is going to send has been sent. What the errand is still holding
 		// back for the cushion plays, and it finishes once that has been heard.
+		if c.staleStream {
+			c.staleStream = false
+			return
+		}
 		if c.phase == phaseReplying && c.reply.stream != nil {
 			c.reply.stream.done()
 		}
