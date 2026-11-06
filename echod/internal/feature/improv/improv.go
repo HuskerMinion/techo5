@@ -4,6 +4,7 @@ package improv
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"os"
@@ -76,8 +77,9 @@ type Improv struct {
 	mu   sync.Mutex
 	open bool
 
-	// cannot is set once neither bluetoothd nor the proxy's radio could advertise: that does not
-	// change while the kernel stays the same, so it is said once and not tried again.
+	// cannot is set once neither bluetoothd nor the proxy's radio can advertise (ErrCannotOffer):
+	// that does not change while the kernel stays the same, so it is said once and not tried again.
+	// A one-off failure leaves it unset, for the next offer to try again.
 	cannot bool
 }
 
@@ -169,6 +171,10 @@ func (m *Improv) Run(ctx context.Context) error {
 // session is one offer, from the advertisement going up to it coming down.
 func (m *Improv) session(ctx context.Context, w why) {
 	if m.cannot {
+		// Held for: say it did not start, as a failed bluetoothd does below.
+		if w == asked {
+			chime(speaker.FailureSound())
+		}
 		return
 	}
 	m.mu.Lock()
@@ -233,8 +239,15 @@ func (m *Improv) session(ctx context.Context, w why) {
 	if !p.Advertising() {
 		done, err := offer(proto.Advertisement(state, caps), proto.ScanResponse(name))
 		if err != nil {
-			slog.Info("improv: this device's Bluetooth cannot advertise, Wi-Fi setup over Bluetooth is off", "err", err)
-			m.cannot = true
+			if errors.Is(err, bluetooth.ErrCannotOffer) {
+				slog.Info("improv: this device's Bluetooth cannot advertise, Wi-Fi setup over Bluetooth is off", "err", err)
+				m.cannot = true
+			} else {
+				slog.Warn("improv: could not advertise Wi-Fi setup over Bluetooth, will try again next time", "err", err)
+			}
+			if w == asked {
+				chime(speaker.FailureSound())
+			}
 			return
 		}
 		defer done()

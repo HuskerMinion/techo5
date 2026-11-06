@@ -73,9 +73,13 @@ func TestAHoldTakesTheRadioOffUntilReleased(t *testing.T) {
 type offerRadio struct {
 	holdRadio
 	offered []byte
+	fail    error
 }
 
 func (r *offerRadio) Offer(advertisement, _ []byte) error {
+	if r.fail != nil {
+		return r.fail
+	}
 	r.running, r.offered = true, advertisement
 	return nil
 }
@@ -130,5 +134,24 @@ func TestARadioWithoutOfferSaysSo(t *testing.T) {
 	b.held = 1
 	if _, err := b.Offer([]byte{1}, nil); !errors.Is(err, ErrCannotOffer) {
 		t.Fatalf("got %v", err)
+	}
+}
+
+// Only a kernel with no stack on hci0 is ErrCannotOffer, for Improv to stop trying; a one-off failure
+// is not, and leaves the radio free to be lent again.
+func TestOnlyAMissingKernelStackIsForGood(t *testing.T) {
+	radio := &offerRadio{fail: ble.ErrNoKernelStack}
+	b := &Proxy{proxy: &esphome.BluetoothProxy{}, radio: radio, wanted: make(chan struct{}, 1)}
+	b.held = 1
+	if _, err := b.Offer([]byte{1}, nil); !errors.Is(err, ErrCannotOffer) {
+		t.Fatalf("no kernel stack: got %v", err)
+	}
+	radio.fail = errors.New("ble: the radio is in use")
+	if _, err := b.Offer([]byte{1}, nil); err == nil || errors.Is(err, ErrCannotOffer) {
+		t.Fatalf("one-off: got %v", err)
+	}
+	radio.fail = nil
+	if _, err := b.Offer([]byte{1}, nil); err != nil {
+		t.Fatalf("not lent again after a failure: %v", err)
 	}
 }
