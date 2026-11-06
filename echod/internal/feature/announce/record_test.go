@@ -39,8 +39,8 @@ func TestTheTailIsTrimmed(t *testing.T) {
 	if len(got) > mic.Rate*5/2 {
 		t.Errorf("kept %.1f s, which is most of the silence after it", float64(len(got))/mic.Rate)
 	}
-	if len(got) < mic.Rate*2 {
-		t.Errorf("kept %.1f s, which is less than what was said", float64(len(got))/mic.Rate)
+	if len(got) < mic.Rate*2+mic.Rate/5 {
+		t.Errorf("kept %.2f s, which leaves no fade after the last word (#464)", float64(len(got))/mic.Rate)
 	}
 }
 

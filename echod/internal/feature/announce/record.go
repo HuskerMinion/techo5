@@ -113,6 +113,9 @@ func loud(frame []int16) bool {
 // at all when what is left is too short to be anybody speaking.
 func trim(said []int16) []int16 {
 	const shortest = mic.Rate / 2 // half a second
+	// tail is kept after the last loud block: the fade of the last word is below the floor, and
+	// cutting it there clips the word in the other rooms (#464).
+	const tail = mic.Rate / 4 // a quarter of a second
 
 	end := len(said)
 	for end > 0 && !loud(said[max(0, end-mic.Rate/20):end]) {
@@ -121,7 +124,7 @@ func trim(said []int16) []int16 {
 	if end < shortest {
 		return nil
 	}
-	return said[:end]
+	return said[:min(len(said), end+tail)]
 }
 
 // How a recording is leveled before it is sent.
