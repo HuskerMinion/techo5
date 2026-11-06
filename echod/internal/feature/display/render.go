@@ -330,6 +330,8 @@ type renderer struct {
 	// callBarAt and hangAt are the call over the page and its Hang up where they were last drawn, under
 	// zmu, and empty when the frame drew none (render_callbar.go).
 	callBarAt, hangAt image.Rectangle
+	// callBarNext and hangNext are the same for the frame being drawn, published when it is done.
+	callBarNext, hangNext image.Rectangle
 
 	// styleFaces are the clock styles' faces, made as they are first needed (render_styles.go).
 	styleFaces map[styleFaceKey]font.Face
@@ -549,7 +551,10 @@ func (r *renderer) draw(s scene) {
 	r.skipDrawn, r.skipDrawnOffer = image.Rectangle{}, skipOffer{}
 	defer r.publishSkip(s)
 	// The call over the page the same way: a frame that does not draw it leaves nothing of it to tap.
-	r.setCallBarAt(image.Rectangle{}, image.Rectangle{})
+	// What a frame draws is published only once it is done, so a tap while the next frame is drawn
+	// still finds the bar the screen shows, never the call page's hang-up below it.
+	r.callBarNext, r.hangNext = image.Rectangle{}, image.Rectangle{}
+	defer r.publishCallBar()
 	r.customKept = r.keptCustom(s)
 	defer r.streamingDot(s)  // over everything, the update overlay included: deferred first, drawn last
 	defer r.updateOverlay(s) // Draw update overlay at the end of frame using defer
@@ -580,6 +585,7 @@ func (r *renderer) draw(s scene) {
 		r.rainbowBegin(s)
 		if r.rainbowKept(s) {
 			// The page as it was, its taps as they were: only Rainbow is drawn again.
+			r.keepCallBar()
 			r.turnCue(s)
 			return
 		}

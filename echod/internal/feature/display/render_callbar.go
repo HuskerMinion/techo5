@@ -113,7 +113,17 @@ func (r *renderer) callBarDraw(s scene) {
 			all = all.Union(d)
 		}
 	}
-	r.setCallBarAt(all, hang)
+	r.callBarNext, r.hangNext = all, hang
+}
+
+// publishCallBar makes the finished frame's call over the page what a tap acts on.
+func (r *renderer) publishCallBar() { r.setCallBarAt(r.callBarNext, r.hangNext) }
+
+// keepCallBar is for a frame that keeps the page as it was drawn: the bar it showed is still there.
+func (r *renderer) keepCallBar() {
+	r.zmu.Lock()
+	r.callBarNext, r.hangNext = r.callBarAt, r.hangAt
+	r.zmu.Unlock()
 }
 
 // callDetailsDraw draws the pill beside Hang up: what the call is doing, who it is with, and how long

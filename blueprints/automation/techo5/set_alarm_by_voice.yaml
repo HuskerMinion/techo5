@@ -14,7 +14,7 @@ blueprint:
 
     <details><summary>Good to know</summary>
 
-    Times are read however they are spoken: 9:38 pm, 938pm, nine thirty five, half past six, quarter to 7, noon or midnight, 6 in the morning, 10 tonight, 18:45, in 20 minutes, in an hour and a half. With no AM or PM it picks the next time that comes around ("tomorrow" picks a morning hour). A day makes the alarm repeat: "on weekdays", "Monday to Friday", "Saturday and Sunday", "every day", "Mondays and Thursdays", and days can be left out: "every day except Sunday". A device alarm cannot hold a one-off date, so "on Monday" repeats every Monday rather than ringing once. The action name comes from the device's name in Home Assistant.
+    Times are read however they are spoken: 9:38 pm, 938pm, nine thirty five, half past six, quarter to 7, noon or midnight, 6 in the morning, 10 tonight, 18:45, in 20 minutes, in an hour and a half. With no AM or PM it picks the next time that comes around ("tomorrow" and a repeating alarm pick a morning hour from 4 to 11). A day makes the alarm repeat: "on weekdays", "Monday to Friday", "Saturday and Sunday", "every day", "Mondays and Thursdays", and days can be left out: "every day except Sunday". A device alarm cannot hold a one-off date, so "on Monday" repeats every Monday rather than ringing once. The action name comes from the device's name in Home Assistant.
 
     </details>
 
@@ -198,7 +198,7 @@ actions:
           {%- else -%}
             {%- set a = h % 12 -%}
             {%- set nowm = now().hour * 60 + now().minute -%}
-            {%- if ' tomorrow ' in s -%}{%- set hh = a if 4 <= h <= 11 else a + 12 -%}
+            {%- if ' tomorrow ' in s or day.days != 'once' -%}{%- set hh = a if 4 <= h <= 11 else a + 12 -%}
             {%- elif a * 60 + mm > nowm -%}{%- set hh = a -%}
             {%- elif (a + 12) * 60 + mm > nowm -%}{%- set hh = a + 12 -%}
             {%- else -%}{%- set hh = a -%}{%- endif -%}
