@@ -160,8 +160,12 @@ type Player struct {
 	// first is the volume curve to apply in front of the tuning, where this tuning has one
 	// (firstCurves); nil turns down what the tuning produced instead.
 	first *[VolumeSteps + 1]float64
-	on    atomic.Bool
-	stale atomic.Bool
+	// lifted is first with Louder top volume's lift (louder_top.go), where this tuning has one, and
+	// louderTop whether the switch is on.
+	lifted    *[VolumeSteps + 1]float64
+	louderTop atomic.Bool
+	on        atomic.Bool
+	stale     atomic.Bool
 
 	// tone is the listener's own shelves, waiting to be picked up: the chain belongs to the write
 	// loop, so a setting changed from anywhere else is left here and applied there. applied is what
@@ -371,6 +375,10 @@ func New() *Player {
 	p.tuning = t
 	if curve, ok := firstCurves[t.Name()]; ok {
 		p.first = &curve
+		if db, ok := topLifts[t.Name()]; ok {
+			l := liftTop(curve, db)
+			p.lifted = &l
+		}
 	}
 	return p
 }
@@ -1032,10 +1040,12 @@ func (p *Player) fill(buf []byte) {
 	p.followRing(needOn, need)
 	gain, step := p.Volume(), mainStep
 	mediaK, bellK, queueK, underK := float32(1), float32(0), float32(1), float32(1)
+	// Read once, so a period goes out on one curve even when Louder top volume changes during it.
+	curve := p.inFront()
 	if ringing || queueStep != mainStep || underStep != mainStep {
 		var first *[VolumeSteps + 1]float64
 		if tuned {
-			first = p.first
+			first = curve
 		}
 		bs := int(p.bellStep.Load())
 		var k [nLanes]float32
@@ -1051,8 +1061,8 @@ func (p *Player) fill(buf []byte) {
 	// Where the tuning has a curve of its own the volume goes in front of it, as the vendor's chain
 	// has it, scaled from the gain worked out above so a bell over the music keeps its balance.
 	pre, post := float32(1), gain
-	if tuned && p.first != nil {
-		pre, post = gain*firstRatio(p.first, out, step), 1
+	if tuned && curve != nil {
+		pre, post = gain*firstRatio(curve, out, step), 1
 	}
 
 	// The vendor tunes by volume: each bucket has a filter of its own, and on the Show the quiet ones

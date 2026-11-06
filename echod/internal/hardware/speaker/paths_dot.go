@@ -266,12 +266,6 @@ var tuningSet = onRadar(&asp.Radar, nil)
 // evenly instead, to the same top. The gain itself drops at 22, 25 and 28, where the vendor's EQ
 // moves to a louder filter: the loudness still rises there.
 //
-// On top of that the Dot's steps above 16 go in up to 8 dB hotter, rising evenly to the full 8 at 30
-// (step s gains 8*(s-16)/14 dB): at full volume the old curve fed the tuning at -18.2 dB and music stayed
-// well short of stock (#304), with Speaker gain unable to make up for it. The tuning's compressor and
-// limiter take the extra peaks; steps up to 16, where replies usually play, are unchanged. Listened
-// to on a Dot 2nd gen with radio at step 30: clearly louder, no audible distortion.
-//
 // The Echo 2nd gen's played untuned until its tuning was read, on radarCurves, so its steps are as loud
 // as radarCurves' were with no tuning at all, rising evenly from 16 to the same top as the Dot's do.
 // Worked out from a unit's own files on three stations' worth of music (TestVolumeInFrontKeepsTheLoudness,
@@ -286,8 +280,8 @@ var firstCurves = map[string][VolumeSteps + 1]float64{
 	},
 	"dot": {
 		-90, -42.1, -38.9, -34.7, -33.6, -31.6, -29.5, -27.5, -25.5, -24.4,
-		-22.3, -21.3, -20.2, -18, -16.9, -15.8, -14.5, -13.4, -12.3, -11.1,
-		-9.9, -8.7, -11.1, -9.8, -8.5, -11.3, -9.8, -8.3, -13.7, -12.1, -10.2,
+		-22.3, -21.3, -20.2, -18, -16.9, -15.8, -14.5, -14, -13.4, -12.8,
+		-12.2, -11.6, -14.5, -13.8, -13.1, -16.4, -15.5, -14.6, -20.6, -19.5, -18.2,
 	},
 }
 

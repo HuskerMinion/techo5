@@ -23,7 +23,8 @@ var notOnThisDevice = []string{
 
 // speaker_gain is the codec's driver gain on the Dot (hardware/speaker/paths_dot.go), always there:
 // all_test.go's stand-in for a missing TAS5805M comes too late for the media player, built before it.
-var deviceSpecific = []string{"airplay", "airplay_sets_volume", "audio_output", "speaker_gain", "spotify_connect"}
+// louder_top_volume is put up where a tuning set has a lift for it (hardware/speaker/louder_top.go).
+var deviceSpecific = []string{"airplay", "airplay_sets_volume", "audio_output", "louder_top_volume", "speaker_gain", "spotify_connect"}
 
 // actionsNotOnThisDevice is what the Echo Dot must never offer, and which component would: the fixed
 // network address, since the Dot's image has a techo5-net of its own that joins Wi-Fi when run and

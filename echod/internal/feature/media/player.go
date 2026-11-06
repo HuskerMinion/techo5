@@ -95,6 +95,9 @@ type Player struct {
 	louder *esphome.Switch
 	// clearer is the Clearer speech switch (speaker.Player.SetClearerSpeech, techo5-dot#25).
 	clearer *esphome.Switch
+	// top is the Louder top volume switch (speaker.Player.SetLouderTop, #304), nil where no tuning
+	// this build plays has a lift for it.
+	top *esphome.Switch
 
 	// sleep stops what is playing after a while, the way a clock radio does.
 	sleep *sleeper
@@ -384,6 +387,14 @@ func build() *Player {
 		p.gainApply = speaker.Get().SetSpeakerGain
 		p.gain.OnCommand = p.commandSpeakerGain
 	}
+	if speaker.LouderTopPossible() {
+		p.top = &esphome.Switch{
+			Base: esphome.Base{ObjectID: "louder_top_volume", Name: "Louder top volume",
+				Icon: "mdi:volume-high", Category: esphome.CategoryConfig,
+				DeviceID: component.DevicePlayback},
+		}
+		p.top.OnCommand = p.SetLouderTop
+	}
 
 	// The player itself stays on the device: it is what people reach for. These are how it behaves.
 	bases := []*esphome.Base{&p.resampling.Base, &p.onTurn.Base, &p.duck.Base, &p.jack.Base, &p.asp.Base,
@@ -576,6 +587,26 @@ func (p *Player) SetClearerSpeech(on bool) {
 	slog.Info("setting changed", "setting", p.clearer.ObjectID, "using", on)
 }
 
+// SetLouderTop turns Louder top volume on or off, from Home Assistant or the setup page.
+func (p *Player) SetLouderTop(on bool) {
+	if p.top == nil {
+		return
+	}
+	if err := config.Set().Speaker().LouderTop(on); err != nil {
+		slog.Error("saving a setting failed", "setting", p.top.ObjectID, "err", err)
+		return
+	}
+	speaker.Get().SetLouderTop(on)
+	p.top.Set(on)
+	slog.Info("setting changed", "setting", p.top.ObjectID, "using", on)
+}
+
+// LouderTopAvailable is whether the Louder top volume switch is put up on this build.
+func (p *Player) LouderTopAvailable() bool { return p.top != nil }
+
+// LouderTop is whether Louder top volume is on.
+func (p *Player) LouderTop() bool { return p.top != nil && p.top.Get() }
+
 // SetLouderSpeech turns Louder speech on or off, from Home Assistant, the setup page or the screen.
 func (p *Player) SetLouderSpeech(on bool) {
 	if err := config.Set().Speaker().LouderSpeech(on); err != nil {
@@ -593,6 +624,9 @@ func (p *Player) Entities() []esphome.Entity {
 	// which leaves out a board that turned out not to have the amplifier, or still may have it.
 	if p.gain != nil && (speaker.GainAvailable() || speaker.GainPossible()) {
 		out = append(out, p.gain)
+	}
+	if p.top != nil {
+		out = append(out, p.top)
 	}
 	if speaker.HasJack {
 		out = append(out, p.output)
@@ -687,6 +721,11 @@ func (p *Player) Restore(c config.Config) {
 	p.clearer.Set(c.Speaker.ClearerSpeech)
 	speaker.Get().SetClearerSpeech(c.Speaker.ClearerSpeech)
 	slog.Info("restored", "what", p.clearer.ObjectID, "using", c.Speaker.ClearerSpeech)
+	if p.top != nil {
+		p.top.Set(c.Speaker.LouderTop)
+		speaker.Get().SetLouderTop(c.Speaker.LouderTop)
+		slog.Info("restored", "what", p.top.ObjectID, "using", c.Speaker.LouderTop)
+	}
 
 	p.duck.Set(float32(c.Media.DuckDB))
 	slog.Info("restored", "what", p.duck.ObjectID, "using", c.Media.DuckDB)
