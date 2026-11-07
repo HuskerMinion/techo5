@@ -140,6 +140,16 @@ What happens:
 
 The first start grows TECHO5's partitions to their full size. That takes a minute.
 
+### Giving it to someone else
+
+Add `--for-someone-else` to install a Skylight that is going to another person:
+
+```
+python3 tools/install-skylight.py --for-someone-else
+```
+
+It asks for no Wi-Fi network, name or key, and writes none. The Skylight starts its own setup the next time it is powered on, and the new owner's Home Assistant can add it with nothing typed. Everything else (backups, image, first boot) is the same. It cannot be used with `--name`, `--wifi` or `--key-file`. The installer image has to be one that carries the marker, so use a release made after this option was added.
+
 ### Add it to Home Assistant
 
 Settings → Devices & services: the unit appears under Discovered as an ESPHome device with the name

@@ -300,7 +300,7 @@ class FakeTWRP:
         return [int(m.group(1)) for c in self.log for m in [re.search(r'of=/dev/block/mmcblk\dp(\d+)', c)] if m]
 
 
-def run_installer(unit, args, tmp):
+def run_installer(unit, args, tmp, name=True):
     """install-athena.py's main against the simulated unit. Returns (output, error or None)."""
     inst.Adb = lambda serial, exe='adb': unit
     inst.need = lambda *a, **k: None
@@ -309,7 +309,8 @@ def run_installer(unit, args, tmp):
     with redirect_stdout(out), redirect_stderr(err):
         try:
             inst.main(['--serial', 'SIMULATED', '--backups', os.path.join(tmp, 'backups'),
-                       '--work', os.path.join(tmp, 'work'), '--name', 'Kitchen', '--force', '--no-watch'] + args)
+                       '--work', os.path.join(tmp, 'work')] + (['--name', 'Kitchen'] if name else [])
+                      + ['--force', '--no-watch'] + args)
         except Fail as e:
             error = str(e)
     return out.getvalue(), error
@@ -528,8 +529,8 @@ class SimulatedTWRP(unittest.TestCase):
         kw.setdefault('boot', stock_boot())
         return FakeTWRP(os.path.join(self.tmp, 'unit'), **kw)
 
-    def install(self, unit, *extra):
-        return run_installer(unit, list(extra), self.tmp)
+    def install(self, unit, *extra, name=True):
+        return run_installer(unit, list(extra), self.tmp, name=name)
 
     def mainline_args(self):
         return ['--image', self.store, '--boot', self.boot]
@@ -547,6 +548,37 @@ class SimulatedTWRP(unittest.TestCase):
         # The simulated partition holds no real ext4: the grow is not done, and that is said.
         self.assertIn('the store was not grown here', out)
         self.assertTrue(u.rebooted)
+
+    def has(self, u, rel):
+        return os.path.exists(os.path.join(u.root, rel))
+
+    def test_gift_install_writes_only_the_marker(self):
+        u = self.unit()
+        out, err = self.install(u, '--for-someone-else', *self.mainline_args(), name=False)
+        self.assertIsNone(err, out)
+        self.assertEqual(u.writes(), [21, 20])
+        # echod's layout.StateDir is userdata/techo5/misc/techo5 here: an empty firstrun, and no name, key or Wi-Fi.
+        self.assertEqual(u.get('data/techo5/misc/techo5/firstrun'), b'')
+        self.assertFalse(self.has(u, 'data/techo5/misc/techo5/name'))
+        self.assertFalse(self.has(u, 'data/techo5/misc/techo5/psk'))
+        self.assertFalse(self.has(u, 'data/techo5/techo5-linux/wpa_supplicant.conf'))
+        self.assertFalse(os.path.exists(os.path.join(self.tmp, 'backups', 'SIMULATED', 'home-assistant.key')))
+        self.assertNotIn('encryption key', out)
+        self.assertIn('start its own setup when it is next powered on', out)
+        self.assertIn('with nothing typed', out)
+
+    def test_usual_install_leaves_no_marker(self):
+        u = self.unit()
+        out, err = self.install(u, *self.mainline_args())
+        self.assertIsNone(err, out)
+        self.assertFalse(self.has(u, 'data/techo5/misc/techo5/firstrun'))
+
+    def test_gift_cannot_be_combined_with_name_wifi_or_key(self):
+        for extra in (['--name', 'Kitchen'], ['--wifi', 'Net'], ['--wifi-passphrase-file', 'p.txt'],
+                      ['--key-file', 'k.key']):
+            out, err = self.install(self.unit(), '--for-someone-else', *self.mainline_args(), *extra, name=False)
+            self.assertIn('--for-someone-else', err or '', extra)
+            self.assertIn(extra[0], err, extra)
 
     def test_mainline_install(self):
         u = self.unit()

@@ -671,6 +671,31 @@ class Install(Scaled):
         self.assertIsNone(err, out)
         return u, out
 
+    def test_gift_install_stages_only_the_marker(self):
+        u, out = self.gift()
+        staged = sorted(k[len(inst.STAGE) + 1:] for k in u.files if k.startswith(inst.STAGE + '/settings/'))
+        self.assertEqual(staged, ['settings/firstrun'])
+        self.assertEqual(u.files[inst.STAGE + '/settings/firstrun'], b'')
+        self.assertFalse(os.path.exists(os.path.join(self.folder(), 'home-assistant.key')))
+        self.assertNotIn('encryption key', out)
+        self.assertIn('start its own setup when it is next powered on', out)
+        self.assertIn('with nothing typed', out)
+
+    def gift(self):
+        u = FakeSkylight()
+        out, err = self.run_installer(u, '--for-someone-else', name=False)
+        self.assertIsNone(err, out)
+        return u, out
+
+    def test_gift_cannot_be_combined_with_name_wifi_or_key(self):
+        for extra in (['--name', 'Kitchen'], ['--wifi', 'Net'], ['--wifi-passphrase-file', 'p.txt'],
+                      ['--key-file', 'k.key']):
+            u = FakeSkylight()
+            out, err = self.run_installer(u, '--for-someone-else', *extra, name=False)
+            self.assertIn('--for-someone-else', err or '', extra)
+            self.assertIn(extra[0], err, extra)
+            self.assert_nothing_written(u)
+
     def test_install(self):
         u, out = self.full()
         folder = self.folder()
@@ -1185,6 +1210,21 @@ class InstallSh(Scaled):
         self.assertEqual(rc, 0, out)
         self.assertIn('already (partly) the new one', out)
         self.assertEqual(self.read(self.disk), disk)
+
+    def test_gift_settings_are_only_the_marker(self):
+        # The set a gift install stages: settings/firstrun alone.
+        settings = os.path.join(self.root, 'set', 'settings')
+        for n in os.listdir(settings):
+            os.remove(os.path.join(settings, n))
+        with open(os.path.join(settings, 'firstrun'), 'wb') as f:
+            f.write(b'')
+        rc, out = self.install_sh()
+        self.assertEqual(rc, 0, out)
+        state = os.path.join(self.root, 'mnt', 'data', 'techo5', 'misc', 'techo5')
+        self.assertEqual(os.listdir(state), ['firstrun'])
+        self.assertEqual(self.read(os.path.join(state, 'firstrun')), b'')
+        self.assertFalse(os.path.exists(os.path.join(self.root, 'mnt', 'data', 'techo5', 'techo5-linux',
+                                                      'wpa_supplicant.conf')))
 
     def test_other_table_stops_before_writing(self):
         with open(self.disk, 'r+b') as f:

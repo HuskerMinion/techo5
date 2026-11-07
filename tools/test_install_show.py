@@ -354,5 +354,42 @@ class DownloadChecked(unittest.TestCase):
         self.assertIn('3 bytes arrived', str(e.exception))
 
 
+class GiftInstall(unittest.TestCase):
+    def run_main(self, *argv):
+        old = sys.argv
+        sys.argv = ['install-show.py'] + list(argv)
+        try:
+            inst.main()
+        except lib.Fail as e:
+            return str(e)
+        finally:
+            sys.argv = old
+
+    def test_cannot_be_combined_with_name_wifi_or_key(self):
+        for extra in (['--name', 'Kitchen'], ['--wifi', 'Net'], ['--wifi-passphrase-file', 'p.txt'],
+                      ['--key-file', 'k.key']):
+            err = self.run_main('--for-someone-else', *extra)
+            self.assertIn('--for-someone-else', err or '', extra)
+            self.assertIn(extra[0], err, extra)
+
+    def test_gift_writes_the_marker_and_no_name_key_or_wifi(self):
+        cmd = inst.provision_command(True, None, None, None, None)
+        self.assertIn('/data/misc/techo5/firstrun', cmd)   # echod's layout.StateDir on the Shows
+        self.assertNotIn('/name', cmd)
+        self.assertNotIn('psk', cmd)
+        self.assertNotIn('wpa_supplicant', cmd)
+
+    def test_usual_install_writes_name_and_key_and_no_marker(self):
+        cmd = inst.provision_command(False, 'Kitchen', 'KEY', None, None)
+        self.assertIn('/data/misc/techo5/name', cmd)
+        self.assertIn('/data/misc/techo5/psk', cmd)
+        self.assertNotIn('firstrun', cmd)
+
+    def test_gift_still_takes_an_ssh_key(self):
+        cmd = inst.provision_command(True, None, None, 'ssh-ed25519 AAAA', None)
+        self.assertIn('firstrun', cmd)
+        self.assertIn('authorized_keys', cmd)
+
+
 if __name__ == '__main__':
     unittest.main(verbosity=2)

@@ -9,6 +9,7 @@ makes the stock U-Boot start it on every boot. See tools/linux/skylight/README.m
 
     python3 tools/install-skylight.py --name Kitchen
     python3 tools/install-skylight.py --name Kitchen --wifi MyNetwork
+    python3 tools/install-skylight.py --for-someone-else
     python3 tools/install-skylight.py --dry-run
     python3 tools/install-skylight.py --installer i.img --boot b.img --store s.img.gz --dry-run
 
@@ -40,6 +41,12 @@ table. Anything else stops it before anything is written. Each step is checked b
                last, boot-recovery into misc; each read back. Done, it restarts into TECHO5. Stopped
                before writing, it restarts into Android, and this says why
 
+--for-someone-else is for a Skylight you are giving away. It asks for no Wi-Fi network, name or key, writes
+none, and marks the Skylight to start its own setup when it is next powered on; the new owner's Home
+Assistant can then add it with nothing typed. It cannot be used with --name, --wifi,
+--wifi-passphrase-file or --key-file. The installer image must be one that copies the marker
+(settings/firstrun): the release's, from the one after this change.
+
 Written from Android: only /cache/techo5-install and the recovery partition. Everything else is
 install.sh's, on the unit, after the confirm.
 
@@ -63,7 +70,7 @@ import sys
 import time
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from techo5lib import (CONSOLE_TECHO5, Adb, Release, adb_devices, ask_name, ask_wifi, confirm,  # noqa: E402
+from techo5lib import (CONSOLE_TECHO5, Adb, Release, adb_devices, ask_name, ask_wifi, check_gift, confirm,  # noqa: E402
                        default_dir, fail, list_consoles, need, new_api_key, note, pick_unit, run_main, step,
                        valid_api_key, wifi_conf, write_private)
 
@@ -746,6 +753,18 @@ def came_back(adb):
 
 # ------------------------------------------------------------------------------------------ main
 
+def settings_files(gift, name, psk, wifi):
+    """What install.sh puts into the unit's state directory (techo5-data's techo5/misc/techo5, which is
+    echod's layout.StateDir /data/misc/techo5 on TECHO5), as name -> text. A gift install stages an
+    empty "firstrun" instead of a name and key, and no Wi-Fi, so the Skylight starts its own setup."""
+    if gift:
+        return {'firstrun': ''}
+    files = {'name': name + '\n', 'psk': psk + '\n'}
+    if wifi:
+        files['wpa_supplicant.conf'] = wifi
+    return files
+
+
 def main(argv=None):
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument('--serial', help="the unit's adb serial (adb devices); found when only one is connected")
@@ -761,6 +780,8 @@ def main(argv=None):
     ap.add_argument('--wifi', help='a Wi-Fi network to join (its passphrase is asked for); otherwise pick one '
                     'on the screen')
     ap.add_argument('--wifi-passphrase-file', help='a file holding the --wifi passphrase, for running from a script')
+    ap.add_argument('--for-someone-else', action='store_true',
+                    help='a gift install: no Wi-Fi, name or key is asked for or written; the Skylight starts its own setup when next powered on')
     ap.add_argument('--dry-run', action='store_true',
                     help='run every check, print every command that would write; write nothing')
     ap.add_argument('--resume', action='store_true', help='use the set staged on the unit before')
@@ -770,6 +791,9 @@ def main(argv=None):
     ap.add_argument('--work', default=default_dir('TECHO5_WORK', 'build'))
     ap.add_argument('--adb', default='adb')
     a = ap.parse_args(argv)
+    check_gift(a, **{'--name': a.name, '--wifi': a.wifi, '--wifi-passphrase-file': a.wifi_passphrase_file,
+                     '--key-file': a.key_file})
+    gift = a.for_someone_else
 
     # ------------------------------------------------------------------------------------ 1. checks
     step('checks')
@@ -812,7 +836,11 @@ def main(argv=None):
         kv = dict(line.split('=', 1) for line in wifi.strip().split('\n'))
         wifi = WIFI_CONF % (kv['ssid'], kv['psk'])
         note("Wi-Fi: '%s' (only its key goes to the unit)" % a.wifi)
-    a.name = ask_name(a.name, DEFAULT_NAME)
+    if gift:
+        note('gift install: no name, Wi-Fi network or Home Assistant key is asked for or written')
+    else:
+        a.name = ask_name(a.name, DEFAULT_NAME)
+    as_name = "as '%s'" % a.name if a.name else 'as a gift'
     status = staged_status(adb)
     if status:
         note('a set is staged on the unit already (status: %s)' % status)
@@ -907,22 +935,22 @@ def main(argv=None):
         write_bytes(os.path.join(setdir, 'install.conf'), install_conf(geo, first, last, store_bytes, store_sha))
         write_bytes(os.path.join(setdir, 'gpt-primary.bin'), prim)
         write_bytes(os.path.join(setdir, 'gpt-backup.bin'), back)
-        if os.path.exists(key_file):
+        if gift:
+            pass
+        elif os.path.exists(key_file):
             psk = read_file(key_file).decode('ascii', 'replace').strip()
             if not valid_api_key(psk):
                 fail('the key in %s is not 32 bytes of base64' % key_file)
         else:
             psk = new_api_key()
-        write_bytes(os.path.join(setdir, 'settings', 'name'), a.name + '\n')
-        write_bytes(os.path.join(setdir, 'settings', 'psk'), psk + '\n')
-        if wifi:
-            write_bytes(os.path.join(setdir, 'settings', 'wpa_supplicant.conf'), wifi)
+        for n, text in settings_files(gift, a.name, psk, wifi).items():
+            write_bytes(os.path.join(setdir, 'settings', n), text)
     fwdir = os.path.join(folder, 'firmware')
     plain = [(os.path.join(setdir, n), n) for n in ('install.conf', 'gpt-primary.bin', 'gpt-backup.bin')]
     plain += [(store_gz, 'store.img.gz'), (boot, 'boot.img')]
     plain += [(os.path.join(fwdir, f), 'firmware/' + f) for f in FIRMWARE]
     settings = [(os.path.join(setdir, 'settings', n), 'settings/' + n)
-                for n in ('name', 'psk', 'wpa_supplicant.conf') if wifi or n != 'wpa_supplicant.conf']
+                for n in settings_files(gift, a.name or '', psk or '', wifi)]
     sums = os.path.join(setdir, 'SHA256SUMS')
     if not a.dry_run:
         write_bytes(sums, ''.join('%s  %s\n' % (sha256_file(p), n) for p, n in plain))
@@ -946,8 +974,8 @@ def main(argv=None):
     # ------------------------------------------------------------------------------------ 5. confirm
     mib = lambda n: (n + 1) >> 11  # noqa: E731
     confirm(a.force, [
-        "About to install TECHO5 (%s) on %s (%s, firmware %s) as '%s'."
-        % (version, a.serial, BOARD_NAME, fw_name, a.name),
+        "About to install TECHO5 (%s) on %s (%s, firmware %s) %s."
+        % (version, a.serial, BOARD_NAME, fw_name, as_name),
         'This ERASES Android\'s userdata: the Skylight app, its account, calendars, photos and settings on',
         'the unit. On the eMMC it changes:',
         '  - the partition table: userdata (p%d, %d MiB) becomes techo5-store (%d MiB) and techo5-data (%d MiB)'
@@ -967,7 +995,9 @@ def main(argv=None):
     # ------------------------------------------------------------------------------------ 6. stage
     step('stage')
     w = Writer(adb, False)
-    if not os.path.exists(key_file):
+    if gift:
+        pass
+    elif not os.path.exists(key_file):
         os.makedirs(os.path.dirname(key_file) or '.', exist_ok=True)
         write_private(key_file, psk)
         note('Home Assistant key: new, in %s' % key_file)
@@ -1018,12 +1048,17 @@ def main(argv=None):
             note('no word from the unit within 15 minutes. That may only be this computer not seeing its console: if the\n'
                  "   unit has started TECHO5 it has finished, so check Home Assistant (a discovered ESPHome device named\n"
                  "   '%s') or the unit's setup page. Its screen says what happened; see \"If the install stops\" in\n"
-                 '   docs/install-skylight.md if it shows the installer.' % a.name)
-    print("\nTECHO5 starts as '%s'. On the first boot it grows its partitions; that takes a minute." % a.name)
-    if not wifi:
-        print('Pick the Wi-Fi network on the unit\'s screen.')
-    print('Home Assistant finds it as an ESPHome device (Settings, Devices & services, Discovered). When it\n'
-          'asks for the encryption key, paste:\n\n    %s\n\n(kept in %s)' % (psk, key_file))
+                 '   docs/install-skylight.md if it shows the installer.' % (a.name or 'the Skylight'))
+    if gift:
+        print("\nTECHO5 is installed. On the first boot it grows its partitions; that takes a minute.")
+        print("This Skylight will start its own setup when it is next powered on.")
+        print("Its owner's Home Assistant can add it with nothing typed.")
+    else:
+        print("\nTECHO5 starts as '%s'. On the first boot it grows its partitions; that takes a minute." % a.name)
+        if not wifi:
+            print('Pick the Wi-Fi network on the unit\'s screen.')
+        print('Home Assistant finds it as an ESPHome device (Settings, Devices & services, Discovered). When it\n'
+              'asks for the encryption key, paste:\n\n    %s\n\n(kept in %s)' % (psk, key_file))
     print('\nThe way back to Android is in %s\n(restore/RESTORE.txt) and in docs/install-skylight.md.' % folder)
 
 

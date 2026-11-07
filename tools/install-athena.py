@@ -9,10 +9,15 @@ one folder on userdata (userdata/techo5); nothing else of Fire OS's data is touc
 
     python3 tools/install-athena.py --release v1.4.0
     python3 tools/install-athena.py --release v1.4.0 --name Kitchen --wifi MyNetwork
+    python3 tools/install-athena.py --release v1.4.0 --for-someone-else
     python3 tools/install-athena.py --image system.img --boot boot.img --dry-run
     python3 tools/install-athena.py --kernel amazon --image system.img
     python3 tools/install-athena.py --boot-layer --release v1.4.0
     python3 tools/install-athena.py --boot-layer-off
+
+--for-someone-else is for a Show you are giving away. It asks for no Wi-Fi network, name or key, writes none,
+and marks the Show to start its own setup when it is next powered on; the new owner's Home Assistant can then
+add it with nothing typed. It cannot be used with --name, --wifi, --wifi-passphrase-file or --key-file.
 
 The kernel's speaker amp needs Amazon's tuning for it (a TI TAS5805M register sequence). TECHO5
 doesn't ship it: Amazon's kernel on the unit's own `boot` partition carries it. The installer reads it
@@ -83,7 +88,7 @@ import time
 import zlib
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from techo5lib import (CONSOLE_TECHO5, Adb, Console, Fail, Release, ask_name, ask_wifi, confirm,  # noqa: E402
+from techo5lib import (CONSOLE_TECHO5, Adb, Console, Fail, Release, ask_name, ask_wifi, check_gift, confirm,  # noqa: E402
                        default_dir, fail, need, new_api_key, note, pick_unit, run_main, step, valid_api_key,
                        wifi_conf, write_private)
 
@@ -1610,6 +1615,8 @@ def main(argv=None):
     ap.add_argument('--wifi', help="a Wi-Fi network to join (its passphrase is asked for); otherwise Fire OS's "
                     'saved one, or the Show\'s screen')
     ap.add_argument('--wifi-passphrase-file', help='a file holding the --wifi passphrase, for running from a script')
+    ap.add_argument('--for-someone-else', action='store_true',
+                    help='a gift install: no Wi-Fi, name or key is asked for or written; the Show starts its own setup when next powered on')
     ap.add_argument('--dry-run', action='store_true', help='check the unit and the images; write nothing')
     ap.add_argument('--force', action='store_true', help='do not ask before writing')
     ap.add_argument('--replace-uboot', action='store_true',
@@ -1628,6 +1635,9 @@ def main(argv=None):
     ap.add_argument('--work', default=default_dir('TECHO5_WORK', 'build'))
     ap.add_argument('--adb', default='adb')
     a = ap.parse_args(argv)
+    check_gift(a, **{'--name': a.name, '--wifi': a.wifi, '--wifi-passphrase-file': a.wifi_passphrase_file,
+                     '--key-file': a.key_file})
+    gift = a.for_someone_else
     global MMC
     mainline = a.kernel == 'mainline'
 
@@ -1645,6 +1655,8 @@ def main(argv=None):
     if a.boot and not mainline:
         fail('--boot is for the mainline kernel; --kernel amazon leaves boot as it is')
     layer = a.boot_layer or a.boot_layer_off
+    if gift and layer:
+        fail('--for-someone-else is for a full install; --boot-layer and --boot-layer-off change only the boot layer')
     if a.boot_layer and a.boot_layer_off:
         fail('--boot-layer or --boot-layer-off, not both')
     if layer and (a.image or not mainline or a.stock_boot or a.replace_uboot):
@@ -1720,7 +1732,9 @@ def main(argv=None):
     state_dir = ud + '/techo5/misc/techo5' if ud else None
     unit_name = unit_file(adb, state_dir + '/name') if ud else None
     unit_psk = unit_file(adb, state_dir + '/psk') if ud else None
-    if a.name is not None:
+    if gift:
+        note('gift install: no name, Wi-Fi network or Home Assistant key is asked for or written')
+    elif a.name is not None:
         a.name = ask_name(a.name, '')
     elif unit_name:
         a.name = unit_name
@@ -1830,7 +1844,8 @@ def main(argv=None):
         print('\nDry run: the unit and the images check out; nothing was written to the unit.')
         return
 
-    lines = ["About to install TECHO5 (%s) on %s (%s) as '%s', from TWRP." % (version, a.serial, BOARD_NAME, a.name),
+    as_name = "as '%s'" % a.name if a.name else 'as a gift'
+    lines = ["About to install TECHO5 (%s) on %s (%s) %s, from TWRP." % (version, a.serial, BOARD_NAME, as_name),
              'This writes the system partition (%s), which replaces Fire OS (or the TECHO5 there now).' % dev(SYSTEM)]
     if mainline:
         lines += ["It also writes the boot partition (%s) with TECHO5's mainline kernel." % dev(BOOT),
@@ -1861,36 +1876,44 @@ def main(argv=None):
 
     # ------------------------------------------------------------------------------------ 6. settings
     step('settings')
-    os.makedirs(os.path.dirname(key_file) or '.', exist_ok=True)
-    local_psk = None
-    if os.path.exists(key_file):
-        with open(key_file) as f:
-            local_psk = f.read().strip()
-        if not valid_api_key(local_psk):
-            fail('the key in %s is not 32 bytes of base64' % key_file)
-    if unit_psk and valid_api_key(unit_psk):
-        # Home Assistant knows this unit by the key it has; keep that one.
-        psk = unit_psk
-        if local_psk != psk:
-            if local_psk:
-                os.replace(key_file, key_file + '.old')
-                note('the key in %s differed from the unit\'s; kept as %s.old' % (key_file, key_file))
+    psk = None
+    if not gift:
+        os.makedirs(os.path.dirname(key_file) or '.', exist_ok=True)
+        local_psk = None
+        if os.path.exists(key_file):
+            with open(key_file) as f:
+                local_psk = f.read().strip()
+            if not valid_api_key(local_psk):
+                fail('the key in %s is not 32 bytes of base64' % key_file)
+        if unit_psk and valid_api_key(unit_psk):
+            # Home Assistant knows this unit by the key it has; keep that one.
+            psk = unit_psk
+            if local_psk != psk:
+                if local_psk:
+                    os.replace(key_file, key_file + '.old')
+                    note('the key in %s differed from the unit\'s; kept as %s.old' % (key_file, key_file))
+                write_private(key_file, psk)
+            note('Home Assistant key: the one already on the unit (copy in %s)' % key_file)
+        elif local_psk:
+            psk = local_psk
+            note('Home Assistant key: the existing one in %s' % key_file)
+        else:
+            psk = new_api_key()
             write_private(key_file, psk)
-        note('Home Assistant key: the one already on the unit (copy in %s)' % key_file)
-    elif local_psk:
-        psk = local_psk
-        note('Home Assistant key: the existing one in %s' % key_file)
-    else:
-        psk = new_api_key()
-        write_private(key_file, psk)
-        note('Home Assistant key: new, in %s' % key_file)
+            note('Home Assistant key: new, in %s' % key_file)
     userdata_writable(adb, ud)
     ready = userdata_ready(adb, ud)
     linux_dir = ud + '/techo5/techo5-linux'
     adb.sh('mkdir -p %s %s && chmod 700 %s' % (quote(state_dir), quote(linux_dir), quote(state_dir)))
-    put_file(adb, a.work, a.name + '\n', state_dir + '/name', '644', ready)
-    put_file(adb, a.work, psk + '\n', state_dir + '/psk', '600', ready)
-    done = ['name', 'Home Assistant key']
+    if gift:
+        # An empty file in the state directory (userdata/techo5/misc/techo5, echod's layout.StateDir):
+        # the Show starts its own setup (first run).
+        put_file(adb, a.work, '', state_dir + '/firstrun', '644', ready)
+        done = ['first-run marker']
+    else:
+        put_file(adb, a.work, a.name + '\n', state_dir + '/name', '644', ready)
+        put_file(adb, a.work, psk + '\n', state_dir + '/psk', '600', ready)
+        done = ['name', 'Home Assistant key']
     if pub:
         adb.sh('mkdir -p %s/ssh && chmod 700 %s/ssh' % (quote(state_dir), quote(state_dir)))
         put_file(adb, a.work, pub + '\n', state_dir + '/ssh/authorized_keys', '600', ready)
@@ -1935,15 +1958,20 @@ def main(argv=None):
             note('the unit started slot a, and then its console went away, as it does once TECHO5 is up. The\n'
                  "   install is probably done: check Home Assistant (a discovered ESPHome device named '%s') or\n"
                  "   the unit's setup page. If the screen says RESCUE instead, /data/techo5-linux/ on the unit has\n"
-                 '   the boot logs.' % a.name)
+                 '   the boot logs.' % (a.name or 'this Show'))
         else:
             note('the USB serial console did not show slot a with the daemon within 5 minutes. That may only be\n'
                  '   this computer not seeing the console: the Show\'s screen says what it is doing (RESCUE if\n'
                  '   no slot started). /data/techo5-linux/ on the unit has the boot logs.')
 
-    print("\nDone. '%s' runs TECHO5 from slot a; the slot commits itself after five healthy minutes." % a.name)
-    print('Home Assistant finds it as an ESPHome device. When it asks for the encryption key, paste:\n\n    %s\n\n'
-          '(kept in %s)' % (psk, key_file))
+    if gift:
+        print('\nDone. TECHO5 is on slot a; the slot commits itself after five healthy minutes.')
+        print("\nThis Show will start its own setup when it is next powered on.")
+        print("Its owner's Home Assistant can add it with nothing typed.")
+    else:
+        print("\nDone. '%s' runs TECHO5 from slot a; the slot commits itself after five healthy minutes." % a.name)
+        print('Home Assistant finds it as an ESPHome device. When it asks for the encryption key, paste:\n\n    %s\n\n'
+              '(kept in %s)' % (psk, key_file))
     if backup_not_fire_os:
         print('\nWARNING: the backup in %s is NOT a Fire OS backup. It was made with TECHO5 already\n'
               'installed, so writing it back does not return the unit to Fire OS. The way back is the backup\n'

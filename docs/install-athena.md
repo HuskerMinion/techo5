@@ -99,6 +99,16 @@ What it does, each step checked before the next:
 `--dry-run` does all the checks, reads the speaker tuning and fills the boot image on the computer,
 and writes nothing to the unit.
 
+### Giving it to someone else
+
+Add `--for-someone-else` to install a Show that is going to another person:
+
+```
+python3 tools/install-athena.py --for-someone-else
+```
+
+It asks for no Wi-Fi network, name or key, and writes none. The Show starts its own setup the next time it is powered on, and the new owner's Home Assistant can add it with nothing typed. Everything else (backups, image, first boot) is the same. It cannot be used with `--name`, `--wifi` or `--key-file`.
+
 ### Wi-Fi
 
 Without `--wifi`, the unit takes the network Fire OS saved. If there is none, pick one on the Show's

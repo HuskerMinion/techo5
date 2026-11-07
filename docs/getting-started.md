@@ -316,6 +316,14 @@ is built on, runs on the unlocked Dot's Fire OS 6 with its own installer, and is
    *Check:* the round screen shows the TECHO5 clock.
 7. **Add it to Home Assistant**: see below.
 
+## Giving a device to someone else
+
+Every installer (`install-show.py`, `install-athena.py`, `install-skylight.py`, `install-dot.py`, `install-spot.py`) takes `--for-someone-else`. It asks for no Wi-Fi network, name or key, and writes none. It leaves a small marker on the device, which then starts its own setup the next time it is powered on. The new owner's Home Assistant can add it with nothing typed. Backups, the image and the first boot are the same as usual. It cannot be used with `--name`, `--wifi` or `--key-file`.
+
+```
+python3 tools/install-show.py --for-someone-else
+```
+
 ## After installing (every device)
 
 1. **Add it.** Home Assistant discovers it as an ESPHome device (Settings → Devices & services).

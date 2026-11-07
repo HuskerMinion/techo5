@@ -543,6 +543,18 @@ def ask_name(given, default):
         print('   One line of at most 31 characters, please.')
 
 
+def check_gift(a, **given):
+    """--for-someone-else leaves the Wi-Fi, the Home Assistant key and the name to the device's own
+    first-run routine, so it cannot be combined with a switch that sets any of them. given maps each
+    switch to what it was given, e.g. check_gift(a, **{'--name': a.name})."""
+    if not a.for_someone_else:
+        return
+    clash = sorted(sw for sw, v in given.items() if v)
+    if clash:
+        fail("--for-someone-else leaves the name, Wi-Fi and key to the device's own setup, so it cannot be used with %s"
+             % ', '.join(clash))
+
+
 def confirm(force, lines, word='ERASE'):
     """Asks once before something that cannot be undone from here, after saying what it is. --force
     answers for somebody who is not there to; without it and without a person, it stops."""

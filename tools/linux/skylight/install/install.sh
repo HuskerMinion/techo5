@@ -15,7 +15,8 @@
 #   store.img.gz    techo5-store (mkstore.sh -k none, no unit firmware)
 #   boot.img        TECHO5's boot image, for recovery
 #   firmware/       the unit's own Wi-Fi and Bluetooth files, from its vendor partition
-#   settings/       optional: name, psk, wpa_supplicant.conf for techo5-data
+#   settings/       optional: name, psk, wpa_supplicant.conf for techo5-data; or firstrun alone (a gift
+#                   install: an empty marker, the unit starts its own setup)
 #   data.img.gz, data.img.info   techo5-data as the first boot finds it ("BYTES SHA256"), from the
 #                   installer image
 #
@@ -159,6 +160,7 @@ if [ -d settings ]; then
 	ok=1
 	[ -f settings/name ] && { cp settings/name $S/name && chmod 644 $S/name || ok=; }
 	[ -f settings/psk ] && { cp settings/psk $S/psk && chmod 600 $S/psk || ok=; }
+	[ -f settings/firstrun ] && { : > $S/firstrun && chmod 644 $S/firstrun || ok=; }
 	[ -f settings/wpa_supplicant.conf ] && { cp settings/wpa_supplicant.conf $R/mnt/data/techo5/techo5-linux/ &&
 		chmod 600 $R/mnt/data/techo5/techo5-linux/wpa_supplicant.conf || ok=; }
 	sync

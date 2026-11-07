@@ -10,11 +10,16 @@ the release, since the kernel configuration and the device trees differ.
     python3 tools/install-show.py
     python3 tools/install-show.py --serial <serial> --name Kitchen --dry-run
     python3 tools/install-show.py --serial <serial> --name Kitchen --force
+    python3 tools/install-show.py --serial <serial> --for-someone-else
     python3 tools/install-show.py --lineage-zip lineage-18.1-...-cronos.zip --wifi MyNetwork
 
 From TWRP (--lineage-zip), a unit fresh from its unlock never has to start LineageOS: the installer
 formats userdata, installs the LineageOS zip from TWRP only for the drivers on its system partition, and
 goes on from there. Wi-Fi is then given with --wifi, or chosen on the Show's own screen afterward.
+
+--for-someone-else is for a Show you are giving away. It asks for no Wi-Fi network, name or key, writes none,
+and marks the Show to start its own setup when it is next powered on; the new owner's Home Assistant can then
+add it with nothing typed. It cannot be used with --name, --wifi, --wifi-passphrase-file or --key-file.
 
 Run with nothing, it finds the unit (asking which, when there are several), asks for a name, and asks
 once before anything is erased. Every question has a switch, for running it from a script.
@@ -53,7 +58,7 @@ import sys
 import zipfile
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from techo5lib import (CONSOLE_TECHO5, Adb, Console, Fail, Fastboot, Release, ask_name, ask_wifi,  # noqa: E402
+from techo5lib import (CONSOLE_TECHO5, Adb, Console, Fail, Fastboot, Release, ask_name, ask_wifi, check_gift,  # noqa: E402
                        check_serial_access, collect_evidence, confirm, console_hint, default_dir, fail, fetch_json, list_consoles, md5,
                        need, new_api_key, note, pick_unit, run_main, step, valid_api_key, wait_for, wifi_conf,
                        write_private)
@@ -557,6 +562,25 @@ def unit_whereabouts(adb, fastboot, ids):
     return ''
 
 
+def provision_command(gift, name, psk, pub, wifi):
+    """The shell line that writes the unit's own files over the USB console. A gift install leaves an empty
+    "firstrun" in the state directory (layout.StateDir, /data/misc/techo5) instead of a name and key, and
+    no Wi-Fi, so the Show starts its own setup when it is next powered on."""
+    if gift:
+        prov = "mkdir -p /data/misc/techo5 && : > /data/misc/techo5/firstrun"
+    else:
+        prov = ("mkdir -p /data/misc/techo5 && printf '%%s\\n' %s > /data/misc/techo5/name && "
+                "(umask 077; printf '%%s\\n' %s > /data/misc/techo5/psk)" % (quote(name), quote(psk)))
+    if pub:
+        prov += (" && mkdir -p -m 700 /data/misc/techo5/ssh && (umask 077; printf '%%s\\n' %s > /data/misc/techo5/ssh/authorized_keys)"
+                 " && { [ -e /data/misc/techo5/state.json ] || printf '{\"security\":{\"ssh\":true}}\\n' > /data/misc/techo5/state.json; }"
+                 % quote(pub))
+    if wifi:
+        prov += (" && mkdir -p /data/techo5-linux && (umask 077; printf '%s' %s %s > /data/techo5-linux/wpa_supplicant.conf)"
+                 % (WIFI_CONF_FORMAT, wifi[0], wifi[1]))
+    return prov
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument('--serial', help="the unit's adb serial (adb devices); found, or asked for, when missing")
@@ -571,6 +595,8 @@ def main():
     ap.add_argument('--wifi-passphrase-file', help='a file holding the --wifi passphrase, for running from a script')
     ap.add_argument('--amazon-logo', action='store_true',
                     help="from TWRP on a Show 5 2nd gen or a Show 8: keep Amazon's logo at boot rather than put TECHO5's in")
+    ap.add_argument('--for-someone-else', action='store_true',
+                    help='a gift install: no Wi-Fi, name or key is asked for or written; the Show starts its own setup when next powered on')
     ap.add_argument('--dry-run', action='store_true', help='download and check the release; write nothing')
     ap.add_argument('--force', action='store_true', help='do not ask before erasing LineageOS')
     ap.add_argument('--any-unlock', action='store_true',
@@ -580,6 +606,10 @@ def main():
     ap.add_argument('--adb', default='adb')
     ap.add_argument('--fastboot', default='fastboot')
     a = ap.parse_args()
+
+    check_gift(a, **{'--name': a.name, '--wifi': a.wifi, '--wifi-passphrase-file': a.wifi_passphrase_file,
+                     '--key-file': a.key_file})
+    gift = a.for_someone_else
 
     # ------------------------------------------------------------------------------------ 1. checks
     step('checks')
@@ -640,8 +670,12 @@ def main():
         else:
             wifi = wifi_keys(ask_wifi(a.wifi))
         note("Wi-Fi: '%s' (only its key goes to the unit)" % a.wifi)
-    a.name = ask_name(a.name, BOARDS[dev])
-    note("name in Home Assistant: '%s'" % a.name)
+    if gift:
+        note('gift install: no name, Wi-Fi network or Home Assistant key is asked for or written')
+    else:
+        a.name = ask_name(a.name, BOARDS[dev])
+        note("name in Home Assistant: '%s'" % a.name)
+    as_name = "as '%s'" % a.name if a.name else 'as a gift'
     if not a.dry_run:
         check_serial_access()
 
@@ -675,7 +709,7 @@ def main():
             os.replace(los_boot + '.partial', los_boot)
             note('LineageOS boot image: %s' % los_boot)
             saved = adb.sh('grep -c SSID /data/misc/apexdata/com.android.wifi/WifiConfigStore.xml 2>/dev/null')
-            if saved in ('', '0') and not wifi:
+            if saved in ('', '0') and not wifi and not gift:
                 fail('LineageOS has no saved Wi-Fi network: join one first (TECHO5 uses it), or give one with --wifi')
             note('a saved Wi-Fi network' if saved not in ('', '0') else 'no saved Wi-Fi network; --wifi is used')
         else:
@@ -705,7 +739,7 @@ def main():
     if twrp:
         # From TWRP the first thing written is userdata, so the one question comes before it.
         confirm(a.force, [
-            "About to install TECHO5 %s on %s (%s) as '%s', from TWRP." % (version, a.serial, BOARDS[dev], a.name),
+            "About to install TECHO5 %s on %s (%s) %s, from TWRP." % (version, a.serial, BOARDS[dev], as_name),
             "This formats userdata (Fire OS's data), installs LineageOS for its drivers without starting it,",
             "flashes TECHO5's boot image, then erases the system partition (mmcblk0p12) to make the slot store.",
         ])
@@ -743,14 +777,17 @@ def main():
     if adb.sh('md5sum ' + remote).split(' ')[0] != md5(rootfs):
         fail('md5 mismatch after pushing ' + name)
     note('%s ok' % remote)
-    os.makedirs(os.path.dirname(key_file) or '.', exist_ok=True)
-    if os.path.exists(key_file):
+    psk = None
+    if gift:
+        pass
+    elif os.path.exists(key_file):
         with open(key_file) as f:
             psk = f.read().strip()
         if not valid_api_key(psk):
             fail('the key in %s is not 32 bytes of base64' % key_file)
         note('Home Assistant key: the existing one in %s' % key_file)
     else:
+        os.makedirs(os.path.dirname(key_file) or '.', exist_ok=True)
         psk = new_api_key()
         write_private(key_file, psk)
         note('Home Assistant key: new, in %s' % key_file)
@@ -760,7 +797,7 @@ def main():
     # a LineageOS unit, so this is the last moment a "no" leaves it as it was.
     if not twrp:
         confirm(a.force, [
-            "About to install TECHO5 %s on %s (%s) as '%s'." % (version, a.serial, BOARDS[dev], a.name),
+            "About to install TECHO5 %s on %s (%s) %s." % (version, a.serial, BOARDS[dev], as_name),
             "This flashes TECHO5's boot image, then erases LineageOS's system partition (mmcblk0p12) to",
             'make the slot store. The way back is in docs/install.md.',
         ])
@@ -868,19 +905,14 @@ def main():
     for line in o.split('\n'):
         if line.startswith('slot a'):
             note(line)
-    prov = ("mkdir -p /data/misc/techo5 && printf '%%s\\n' %s > /data/misc/techo5/name && "
-            "(umask 077; printf '%%s\\n' %s > /data/misc/techo5/psk)" % (quote(a.name), quote(psk)))
-    if pub:
-        prov += (" && mkdir -p -m 700 /data/misc/techo5/ssh && (umask 077; printf '%%s\\n' %s > /data/misc/techo5/ssh/authorized_keys)"
-                 " && { [ -e /data/misc/techo5/state.json ] || printf '{\"security\":{\"ssh\":true}}\\n' > /data/misc/techo5/state.json; }"
-                 % quote(pub))
-    if wifi:
-        prov += (" && mkdir -p /data/techo5-linux && (umask 077; printf '%s' %s %s > /data/techo5-linux/wpa_supplicant.conf)"
-                 % (WIFI_CONF_FORMAT, wifi[0], wifi[1]))
+    prov = provision_command(gift, a.name, psk, pub, wifi)
     o = console.run(prov + ' && sync && echo PROV-OK', 15)
     if 'PROV-OK' not in (o or ''):
         store_step("writing the unit's name and Home Assistant key", o, 'yes')
-    note("name '%s' and Home Assistant key%s%s written" % (a.name, ', SSH key' if pub else '', ', Wi-Fi' if wifi else ''))
+    if gift:
+        note('first-run marker%s written' % (' and SSH key' if pub else ''))
+    else:
+        note("name '%s' and Home Assistant key%s%s written" % (a.name, ', SSH key' if pub else '', ', Wi-Fi' if wifi else ''))
     console.run('sync; (sleep 2; /bin/busybox.static reboot -f) >/dev/null 2>&1 &', 3)
 
     # ------------------------------------------------------------------------------------ 7. watch
@@ -894,13 +926,20 @@ def main():
 
     if probably_up:
         print("\nProbably done. The unit started slot a, and then its console went away, as it does once TECHO5 is up.")
-        print("Check Home Assistant (it should list '%s' as a discovered ESPHome device) or the unit's setup page" % a.name)
+        if not gift:
+            print("Check Home Assistant (it should list '%s' as a discovered ESPHome device) or the unit's setup page" % a.name)
         print('before looking for a fault. If its screen says RESCUE instead, see "If the install stops at the slot')
         print('store" in docs/install.md: ' + BY_HAND)
+    elif gift:
+        print("\nDone. TECHO5 %s runs from slot a; the slot commits itself after five healthy minutes." % version)
     else:
         print("\nDone. '%s' runs TECHO5 %s from slot a; the slot commits itself after five healthy minutes." % (a.name, version))
-    print('Home Assistant finds it as an ESPHome device. When it asks for the encryption key, paste:\n\n    %s\n\n(kept in %s)' % (psk, key_file))
-    if twrp and not wifi:
+    if gift:
+        print("\nThis Show will start its own setup when it is next powered on.")
+        print("Its owner's Home Assistant can add it with nothing typed.")
+    else:
+        print('Home Assistant finds it as an ESPHome device. When it asks for the encryption key, paste:\n\n    %s\n\n(kept in %s)' % (psk, key_file))
+    if twrp and not wifi and not gift:
         print('It has no Wi-Fi yet: on the Show, swipe down for Settings, then Connections, then Wi-Fi.')
     print("Later versions arrive through Home Assistant's update card.")
 
