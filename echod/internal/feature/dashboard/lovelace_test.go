@@ -411,3 +411,33 @@ func TestTileGridOptions(t *testing.T) {
 		}
 	}
 }
+
+// A picture card whose grid_options give it fewer than 12 columns sits in the tile grid, as a tile
+// with its picture. Without columns, or at the full width, it stays a picture across the section.
+func TestPictureInTheTileGrid(t *testing.T) {
+	var cards []any
+	if err := json.Unmarshal([]byte(`[
+		{"type": "tile", "entity": "light.a"},
+		{"type": "picture", "image": "/local/a.png", "grid_options": {"columns": 6, "rows": 2}},
+		{"type": "picture", "image": "/local/b.png", "grid_options": {"columns": 12}},
+		{"type": "picture", "image": "/local/c.png"}
+	]`), &cards); err != nil {
+		t.Fatal(err)
+	}
+	c := &compiler{seen: map[string]bool{}, need: needs{graphs: map[string]int{}}}
+	l := &lovelaceSource{sects: [][]node{c.cards(cards)}}
+	if len(c.need.pictures) != 3 {
+		t.Fatalf("%d pictures fetched, want 3", len(c.need.pictures))
+	}
+	secs := l.sections(look{states: map[string]hass.LiveEntity{}, pictures: map[string]shot{}})
+	b := secs[0].Blocks
+	if len(b) != 3 || len(b[0].Tiles) != 2 || b[1].Picture == nil || b[2].Picture == nil {
+		t.Fatalf("blocks %+v", b)
+	}
+	if p := b[0].Tiles[1]; p.Picture == nil || p.High != 2 || p.Wide {
+		t.Errorf("picture in the grid: %+v", p)
+	}
+	if b[0].Tiles[0].Picture != nil {
+		t.Errorf("the light's tile has a picture")
+	}
+}

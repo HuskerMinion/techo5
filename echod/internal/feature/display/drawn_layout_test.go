@@ -4,6 +4,7 @@ package display
 
 import (
 	"image"
+	"image/color"
 	"image/png"
 	"os"
 	"path/filepath"
@@ -177,6 +178,55 @@ func TestDashboardWideAndHighTiles(t *testing.T) {
 	}
 	if dir := os.Getenv("SHOW_PREVIEW"); dir != "" {
 		f, err := os.Create(filepath.Join(dir, "dash-wide-high.png"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer f.Close()
+		if err := png.Encode(f, img); err != nil {
+			t.Fatal(err)
+		}
+	}
+}
+
+// A picture card in the tile grid takes the next tile's place and is drawn whole on the tile's card:
+// a transparent picture leaves the card showing at its corners rather than going dark.
+func TestDashboardPictureTile(t *testing.T) {
+	at := time.Date(2026, 11, 7, 18, 0, 0, 0, time.Local)
+	disc := image.NewRGBA(image.Rect(0, 0, 100, 100))
+	for y := 0; y < 100; y++ {
+		for x := 0; x < 100; x++ {
+			if (x-50)*(x-50)+(y-50)*(y-50) < 40*40 {
+				disc.Set(x, y, color.RGBA{240, 100, 40, 255})
+			}
+		}
+	}
+	tile := dashboard.Tile{Entity: "light.porch", Name: "Porch", Icon: "lightbulb", Value: "On", On: true,
+		Tap: &dashboard.Action{Entity: "light.porch", Service: "light.toggle"}}
+	view := dashboard.Drawn{Sections: []dashboard.Section{{Blocks: []dashboard.Block{
+		{Heading: "Lights"},
+		{Tiles: []dashboard.Tile{tile, {Name: "", Picture: &dashboard.Picture{Image: disc}}}},
+	}}}}
+	img := image.NewRGBA(image.Rect(0, 0, showWide, showHigh))
+	r := newRenderer(img)
+	r.draw(scene{now: at, phase: "idle", showDash: true, dashMode: config.DashboardDrawn, drawn: view})
+	zones, _ := r.dash()
+	if len(zones) != 1 {
+		t.Fatalf("%d places to tap, want only the light (the picture has no tap)", len(zones))
+	}
+	porch := zones[0].r
+	gap := r.s(dashGap)
+	slot := image.Rect(porch.Max.X+gap, porch.Min.Y, porch.Max.X+gap+porch.Dx(), porch.Max.Y)
+	center := img.RGBAAt((slot.Min.X+slot.Max.X)/2, (slot.Min.Y+slot.Max.Y)/2)
+	if center.R < 200 || center.G > 140 {
+		t.Errorf("the slot beside the light is %v at its center, want the picture's orange", center)
+	}
+	card := img.RGBAAt(slot.Min.X+r.s(14), slot.Min.Y+r.s(14))
+	edge := img.RGBAAt(porch.Min.X+r.s(14), porch.Max.Y-r.s(4))
+	if card != edge {
+		t.Errorf("the picture tile's corner is %v, want the card %v showing through", card, edge)
+	}
+	if dir := os.Getenv("SHOW_PREVIEW"); dir != "" {
+		f, err := os.Create(filepath.Join(dir, "dash-picture-tile.png"))
 		if err != nil {
 			t.Fatal(err)
 		}

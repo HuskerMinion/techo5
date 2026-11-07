@@ -208,7 +208,7 @@ func (r *paint) block(b dashboard.Block, x, y, w int, pal dashPal, adj dashAdjus
 			left := x + col*(tw+gap)
 			box := image.Rect(left, top, left+span*tw+(span-1)*gap, top+n*th+(n-1)*gap)
 			if r.visible(box.Min.Y, box.Max.Y) {
-				r.tile(box, t, pal, adj)
+				r.gridTile(box, t, pal, adj)
 				r.zone(tiles, box, t)
 			}
 			lineH = max(lineH, box.Dy())
@@ -687,6 +687,35 @@ func (r *paint) gaugeCard(b image.Rectangle, g dashboard.Gauge, pal dashPal) {
 	r.text(fc.header, g.Value, int(cx)-vw/2, int(cy)-r.s(4), pal.text)
 	name := r.fit(fc.label, g.Name, b.Dx()-2*r.s(cardPad))
 	r.text(fc.label, name, int(cx)-r.width(fc.label, name)/2, b.Max.Y-r.s(18), pal.sub)
+}
+
+// gridTile draws one tile of a grid: a picture card that sits in the grid, or an ordinary tile.
+func (r *paint) gridTile(b image.Rectangle, t dashboard.Tile, pal dashPal, adj dashAdjusting) {
+	if t.Picture != nil {
+		r.pictureTile(b, *t.Picture, pal)
+		return
+	}
+	r.tile(b, t, pal, adj)
+}
+
+// pictureTile draws a picture card that sits in the tile grid. Unlike a picture across the section it
+// isn't cropped to fill: the whole picture is shown, centered on the tile's card, and a transparent one
+// (an avatar, a logo) lets the card show through.
+func (r *paint) pictureTile(b image.Rectangle, p dashboard.Picture, pal dashPal) {
+	fc := r.faces()
+	r.roundFill(b, pal.rad, pal.card, pal.card)
+	if msg, ok := pictureNote(p); ok {
+		msg = r.fit(fc.sub, msg, b.Dx()-2*r.s(cardPad))
+		r.text(fc.sub, msg, b.Min.X+(b.Dx()-r.width(fc.sub, msg))/2, b.Min.Y+b.Dy()/2, pal.sub)
+		return
+	}
+	pic := fit(p.Image.Bounds(), b.Inset(r.s(6)))
+	picscale.CatmullRom.Scale(r.dst, pic, p.Image, p.Image.Bounds(), draw.Over)
+	if p.Name != "" {
+		band := image.Rect(b.Min.X, b.Max.Y-r.s(32), b.Max.X, b.Max.Y)
+		washOver(r.dst, band, color.RGBA{0, 0, 0, 140})
+		r.text(fc.label, r.fit(fc.label, p.Name, b.Dx()-2*r.s(cardPad)), b.Min.X+r.s(cardPad), b.Max.Y-r.s(9), color.RGBA{255, 255, 255, 255})
+	}
 }
 
 // pictureCard draws a camera's snapshot or a picture, filling the card, with its name along the foot.

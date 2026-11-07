@@ -46,6 +46,9 @@ type Tile struct {
 	// sitting next to another tile; High is the height in tiles (0 and 1 both mean one).
 	Wide bool
 	High int
+	// Picture is set for a picture card sitting in the tile grid (its grid_options give it less than
+	// the whole width). It's drawn in place of the badge and words.
+	Picture *Picture
 }
 
 // Adjust is a tile's level: what it is now and how far it goes.

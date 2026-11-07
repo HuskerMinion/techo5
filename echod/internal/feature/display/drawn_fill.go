@@ -61,7 +61,7 @@ func (r *paint) fillGrid(tiles []dashboard.Tile, area image.Rectangle, pal dashP
 		x := inner.Min.X + (i%cols)*(tw+gap)
 		y := inner.Min.Y + (i/cols)*(th+gap)
 		box := image.Rect(x, y, x+tw, y+th)
-		r.tile(box, t, pal, adj)
+		r.gridTile(box, t, pal, adj)
 		r.zone(&zones, box, t)
 	}
 	r.setDash(zones, area.Dy())

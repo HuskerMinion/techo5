@@ -375,7 +375,8 @@ func (c *compiler) cardItself(card raw) node {
 		if name == "" {
 			name = str(card, "name")
 		}
-		return pictureNode{want: w, name: name, tap: pictureTap(card, e)}
+		slot, high := tileSlot(card)
+		return pictureNode{want: w, name: name, tap: pictureTap(card, e), tile: slot, high: high}
 
 	case entityCards[kind]:
 		e := str(card, "entity")
@@ -473,6 +474,19 @@ func (c *compiler) item(m raw, entity string) tileItem {
 	wide, high := gridOf(m)
 	return tileItem{entity: entity, name: str(m, "name"), icon: str(m, "icon"), action: actionOf(m, entity), color: cardColorOf(m),
 		wide: wide, high: high}
+}
+
+// tileSlot says whether a picture card sits in the tile grid: its grid_options give it a number of
+// columns short of the whole width, as Home Assistant would put it beside a tile. Without columns it
+// stays a picture across the section, as before.
+func tileSlot(card raw) (bool, int) {
+	g, _ := card["grid_options"].(raw)
+	cols, ok := g["columns"].(float64)
+	if !ok || cols >= 12 {
+		return false, 0
+	}
+	_, high := gridOf(card)
+	return true, high
 }
 
 // gridOf reads a card's grid_options. A section is 12 columns wide and a tile normally takes 6, so 12
@@ -816,6 +830,8 @@ type pictureNode struct {
 	name     string
 	tap      *Action
 	elements []element // a picture-elements card's
+	tile     bool      // sits in the tile grid instead of across the section (tileSlot)
+	high     int       // its height in tiles, when it sits in the grid
 }
 
 func (p pictureNode) picture(l look) Picture {
@@ -834,6 +850,9 @@ func (p pictureNode) picture(l look) Picture {
 
 func (p pictureNode) blocks(l look) []Block {
 	pic := p.picture(l)
+	if p.tile {
+		return []Block{{Tiles: []Tile{{Name: p.name, Tap: p.tap, High: p.high, Picture: &pic}}}}
+	}
 	return []Block{{Picture: &pic}}
 }
 
