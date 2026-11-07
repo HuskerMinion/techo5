@@ -7,6 +7,7 @@ import (
 	"image/png"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -119,5 +120,69 @@ func TestDashboardNameBelowTileIsCentered(t *testing.T) {
 	spare := box.Dy() - r.s(tileBelowH)
 	if above < spare/3 || below < spare/3 {
 		t.Errorf("room above the words %d, below %d: not about the middle", above, below)
+	}
+}
+
+// A full-width, two-row tile takes the whole section and two tile heights, and the tiles after it go
+// back to two abreast underneath, as in Home Assistant's sections view. A wide tile after an odd one
+// starts its own line instead of overlapping it. Set SHOW_PREVIEW to write the result out as a PNG.
+func TestDashboardWideAndHighTiles(t *testing.T) {
+	at := time.Date(2026, 11, 7, 18, 0, 0, 0, time.Local)
+	tile := func(name string, wide bool, high int) dashboard.Tile {
+		return dashboard.Tile{Entity: "light." + name, Name: name, Icon: "lightbulb", Value: "On · 60%", On: true,
+			Tap: &dashboard.Action{Entity: "light." + name, Service: "light.toggle"}, Wide: wide, High: high}
+	}
+	view := dashboard.Drawn{Sections: []dashboard.Section{
+		{Blocks: []dashboard.Block{
+			{Heading: "Lights"},
+			{Tiles: []dashboard.Tile{
+				tile("All lights", true, 2),
+				tile("Porch", false, 0), tile("Kitchen", false, 0), tile("Study", false, 0),
+				tile("Garden", true, 0),
+			}},
+		}},
+		{Blocks: []dashboard.Block{
+			{Heading: "Climate"},
+			{Tiles: []dashboard.Tile{tile("Heating", false, 0), tile("Temperature", false, 0)}},
+		}},
+	}}
+	img := image.NewRGBA(image.Rect(0, 0, showWide, showHigh))
+	r := newRenderer(img)
+	r.draw(scene{now: at, phase: "idle", showDash: true, dashMode: config.DashboardDrawn, drawn: view})
+	zones, _ := r.dash()
+	byName := map[string]image.Rectangle{}
+	for _, z := range zones {
+		byName[strings.TrimPrefix(z.entity, "light.")] = z.r
+	}
+	all, porch, kitchen, study, garden := byName["All lights"], byName["Porch"], byName["Kitchen"], byName["Study"], byName["Garden"]
+	if all.Empty() || porch.Empty() || kitchen.Empty() || study.Empty() || garden.Empty() {
+		t.Fatalf("tiles to tap: %v", byName)
+	}
+	one := porch.Dy()
+	gap := kitchen.Min.X - porch.Max.X
+	if all.Min.X != porch.Min.X || all.Max.X != kitchen.Max.X {
+		t.Errorf("All lights spans x %d..%d, the two below %d..%d", all.Min.X, all.Max.X, porch.Min.X, kitchen.Max.X)
+	}
+	if all.Dy() != 2*one+gap {
+		t.Errorf("All lights is %d tall, want two tiles and a gap, %d", all.Dy(), 2*one+gap)
+	}
+	if porch.Min.Y != all.Max.Y+gap || kitchen.Min.Y != porch.Min.Y {
+		t.Errorf("the next tiles start at %d and %d, want under All lights at %d", porch.Min.Y, kitchen.Min.Y, all.Max.Y+gap)
+	}
+	if study.Min.X != porch.Min.X || study.Min.Y != porch.Max.Y+gap {
+		t.Errorf("Study at %v, want the start of the next line", study)
+	}
+	if garden.Min.Y != study.Max.Y+gap || garden.Min.X != porch.Min.X || garden.Max.X != kitchen.Max.X {
+		t.Errorf("Garden at %v, want a line of its own under Study, as wide as the section", garden)
+	}
+	if dir := os.Getenv("SHOW_PREVIEW"); dir != "" {
+		f, err := os.Create(filepath.Join(dir, "dash-wide-high.png"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer f.Close()
+		if err := png.Encode(f, img); err != nil {
+			t.Fatal(err)
+		}
 	}
 }

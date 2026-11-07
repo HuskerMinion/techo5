@@ -192,15 +192,34 @@ func (r *paint) block(b dashboard.Block, x, y, w int, pal dashPal, adj dashAdjus
 		if r.bigTiles {
 			th = th * 3 / 2
 		}
-		rows := (len(b.Tiles) + per - 1) / per
-		for i, t := range b.Tiles {
-			box := image.Rect(x+(i%per)*(tw+gap), y+(i/per)*(th+gap), x+(i%per)*(tw+gap)+tw, y+(i/per)*(th+gap)+th)
+		// Tiles fill lines of per. A wide tile (grid_options) gets a line to itself, so it starts a
+		// new line if the current one already has a tile on it. A tall tile is that many tile heights,
+		// and a line is as tall as its tallest tile.
+		col, top, lineH := 0, y, 0
+		for _, t := range b.Tiles {
+			span := 1
+			if t.Wide {
+				span = per
+			}
+			if col > 0 && col+span > per {
+				col, top, lineH = 0, top+lineH+gap, 0
+			}
+			n := max(t.High, 1)
+			left := x + col*(tw+gap)
+			box := image.Rect(left, top, left+span*tw+(span-1)*gap, top+n*th+(n-1)*gap)
 			if r.visible(box.Min.Y, box.Max.Y) {
 				r.tile(box, t, pal, adj)
 				r.zone(tiles, box, t)
 			}
+			lineH = max(lineH, box.Dy())
+			if col += span; col >= per {
+				col, top, lineH = 0, top+lineH+gap, 0
+			}
 		}
-		return rows*th + (rows-1)*gap
+		if col > 0 {
+			top += lineH + gap
+		}
+		return top - gap - y
 
 	case len(b.Pictures) > 0:
 		// A gallery: as many abreast as the grid asks, up to three, one in a narrow column. Each

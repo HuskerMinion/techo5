@@ -42,6 +42,10 @@ type Tile struct {
 	// Color is the card's color, as Home Assistant's tile card takes it: the badge, and the whole
 	// page when the tile is alone on it. Zero (no alpha) for the theme's.
 	Color color.RGBA
+	// Wide and High come from the card's grid_options. Wide spans the whole section instead of
+	// sitting next to another tile; High is the height in tiles (0 and 1 both mean one).
+	Wide bool
+	High int
 }
 
 // Adjust is a tile's level: what it is now and how far it goes.

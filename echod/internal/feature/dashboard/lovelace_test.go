@@ -375,3 +375,39 @@ func TestATapThatAsksFirstDoesNothing(t *testing.T) {
 		t.Errorf("%q, with confirmation false, lost its tap: %+v", tl.Name, tl.Tap)
 	}
 }
+
+// grid_options on a tile card: 12 columns (or "full") is the whole width and rows is the height in
+// tiles. Anything narrower, or no grid_options at all, is a normal tile.
+func TestTileGridOptions(t *testing.T) {
+	var cards []any
+	if err := json.Unmarshal([]byte(`[
+		{"type": "tile", "entity": "light.all", "grid_options": {"columns": 12, "rows": 2}},
+		{"type": "tile", "entity": "light.a", "grid_options": {"columns": "full"}},
+		{"type": "tile", "entity": "light.b", "grid_options": {"columns": 6, "rows": 1}},
+		{"type": "tile", "entity": "light.c", "grid_options": {"rows": 9}},
+		{"type": "tile", "entity": "light.d"},
+		{"type": "button", "name": "Go", "tap_action": {"action": "navigate", "navigation_path": "/x/y"},
+		 "grid_options": {"columns": 12}}
+	]`), &cards); err != nil {
+		t.Fatal(err)
+	}
+	c := &compiler{seen: map[string]bool{}, need: needs{graphs: map[string]int{}}}
+	l := &lovelaceSource{sects: [][]node{c.cards(cards)}}
+	secs := l.sections(look{states: map[string]hass.LiveEntity{}})
+	if len(secs) != 1 || len(secs[0].Blocks) != 1 {
+		t.Fatalf("sections %+v", secs)
+	}
+	tiles := secs[0].Blocks[0].Tiles
+	want := []struct {
+		wide bool
+		high int
+	}{{true, 2}, {true, 0}, {false, 0}, {false, 4}, {false, 0}, {true, 0}}
+	if len(tiles) != len(want) {
+		t.Fatalf("%d tiles, want %d", len(tiles), len(want))
+	}
+	for i, w := range want {
+		if tiles[i].Wide != w.wide || tiles[i].High != w.high {
+			t.Errorf("tile %d (%s): wide %v high %d, want %v %d", i, tiles[i].Name, tiles[i].Wide, tiles[i].High, w.wide, w.high)
+		}
+	}
+}
