@@ -2118,6 +2118,29 @@ run: see [NetBird: reaching a device from away](netbird.md).
 - [Phone calls](phone.md) through your own SIP provider.
 - [Actions](actions.md): everything Home Assistant can ask the device to do, with examples.
 
+### Running something of your own at boot
+
+An update replaces the root filesystem, so anything added to it is gone afterwards; userdata is what
+outlives an update. A script at `/data/techo5-linux/rc.local` that is executable is started once at
+the end of every boot, in the background, and its output is kept in
+`/data/techo5-linux/rc.local.log`. One previous boot's output is kept beside it as
+`rc.local.log.1`, so a helper that prints a lot cannot fill userdata:
+
+```sh
+ssh root@<address>
+cat > /data/techo5-linux/rc.local <<'EOF'
+#!/bin/sh
+# started at every boot, and left running
+exec /data/somewhere/helper
+EOF
+chmod 755 /data/techo5-linux/rc.local
+```
+
+Keep what it runs on userdata too, for the same reason. It is not restarted if it exits, and nothing
+stops it at shutdown: write it to run for as long as the device is up, or to handle its own
+supervision. A script that does not exit is not waited for, and one that fails cannot hold up the
+daemon.
+
 ## Questions and problems
 
 Open an [issue on GitHub](https://github.com/HuskerMinion/techo5/issues). Say which device and
