@@ -2048,14 +2048,17 @@ finds it on its own (it shows up under **Settings → Devices & services** as an
 Home Assistant has Bluetooth), and so does [improv-wifi.com](https://www.improv-wifi.com) in Chrome or
 Edge on a phone or a computer with Bluetooth.
 
-- **Hold the mute button for five seconds.** The Dot plays the pairing tone and is ready for a
-  network at once. Hold it again to stop. The mute button is the hardware mute, so holding it also
+- **Hold the mute button for five seconds.** The Dot plays the pairing tone, its ring pulses teal,
+  and it is ready for a network at once: let go then. Holding the button on to 20 seconds switches
+  the Dot off (the mute button is its power key). The hold also turns the microphones the other way,
+  as any long press of the mute button does; a tap turns them back. Hold it again to stop. The mute button is the hardware mute, so holding it also
   mutes the microphones: press it once more afterwards to unmute them.
 - **Or let it start by itself.** A Dot that still has no address 45 seconds after starting offers
   Improv once, by itself. Then it takes a network only after a press of any of its buttons, so
   nobody else in Bluetooth range can move it onto a network of theirs.
 
-Send the network's name and passphrase. The Dot joins it, keeps the networks it knew as well, and
+The ring pulses teal for as long as Improv is offered, and stays teal for the moment after a network
+was joined. Send the network's name and passphrase. The Dot joins it, keeps the networks it knew as well, and
 hands back its address. A passphrase it cannot join with leaves it on the network it
 had, and it says so with the failure tone. It stops offering Improv after five minutes with nothing
 sent, after fifteen minutes in any case, and ten seconds after a network was joined. Improv itself is

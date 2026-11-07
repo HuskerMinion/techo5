@@ -20,6 +20,7 @@ import (
 	"github.com/HuskerMinion/techo5/echod/internal/feature/bluetooth"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/web"
 	"github.com/HuskerMinion/techo5/echod/internal/hardware/buttons"
+	"github.com/HuskerMinion/techo5/echod/internal/hardware/led"
 	"github.com/HuskerMinion/techo5/echod/internal/hardware/speaker"
 	"github.com/HuskerMinion/techo5/echod/internal/layout"
 	"github.com/HuskerMinion/techo5/echod/internal/lib/bluez"
@@ -45,11 +46,22 @@ const (
 	// doneHold is how long it stays up after a network was joined, so the phone can read the address.
 	doneHold = 10 * time.Second
 
+	// bootRetry and bootRetries are how often, and how many more times, the offer at boot is tried
+	// when it did not get up.
+	bootRetry   = time.Minute
+	bootRetries = 3
+
+	// leaseWait is how long after a join it waits for the address to hand back.
+	leaseWait = 30 * time.Second
+
 	// joinFor is how long a join may take: wifi.Join waits a minute for the association itself.
 	joinFor = 80 * time.Second
 
 	root = dbus.ObjectPath("/org/techo5/improv")
 )
+
+// ringColor is the ring while Improv is offered: teal, apart from the blue of Bluetooth pairing.
+var ringColor = led.Color{R: 0x00, G: 0xB4, B: 0xA0}
 
 // Why it opened, which decides whether a network is taken at once.
 type why int
@@ -154,13 +166,20 @@ func (m *Improv) Run(ctx context.Context) error {
 	}
 	boot := time.NewTimer(bootGrace)
 	defer boot.Stop()
+	retries := bootRetries
 	for {
 		select {
 		case <-ctx.Done():
 			return nil
 		case <-boot.C:
-			if wifi.Current(ctx).Address == "" {
-				m.session(ctx, offline)
+			if !offlineAfterBoot(ctx) {
+				continue
+			}
+			// One that did not get up (bluetoothd later than the rest, the radio busy) is tried
+			// again a few times: this is the only way a Dot with no network is reached.
+			if !m.session(ctx, offline) && !m.cannot && retries > 0 {
+				retries--
+				boot.Reset(bootRetry)
 			}
 		case w := <-m.asks:
 			m.session(ctx, w)
@@ -168,14 +187,42 @@ func (m *Improv) Run(ctx context.Context) error {
 	}
 }
 
-// session is one offer, from the advertisement going up to it coming down.
-func (m *Improv) session(ctx context.Context, w why) {
+// offlineAfterBoot is whether the device is still without an address once bootGrace is up. One that
+// is on a network but has no address (it joined after techo5-net gave up, as when the router starts
+// after the Dot) is given the chance to get one first: that is a lease missing, not a network.
+func offlineAfterBoot(ctx context.Context) bool {
+	st := wifi.Current(ctx)
+	if st.Address != "" {
+		return false
+	}
+	if !st.Connected {
+		return true
+	}
+	slog.Info("improv: on a network with no address, asking for one before offering setup", "ssid", st.SSID)
+	wifi.RenewLease()
+	deadline := time.Now().Add(leaseWait)
+	for time.Now().Before(deadline) {
+		select {
+		case <-ctx.Done():
+			return false
+		case <-time.After(time.Second):
+		}
+		if wifi.Current(ctx).Address != "" {
+			return false
+		}
+	}
+	return true
+}
+
+// session is one offer, from the advertisement going up to it coming down. It reports whether the
+// offer went up at all.
+func (m *Improv) session(ctx context.Context, w why) bool {
 	if m.cannot {
 		// Held for: say it did not start, as a failed bluetoothd does below.
 		if w == asked {
 			chime(speaker.FailureSound())
 		}
-		return
+		return false
 	}
 	m.mu.Lock()
 	m.open = true
@@ -231,7 +278,7 @@ func (m *Improv) session(ctx context.Context, w why) {
 	if err != nil {
 		slog.Warn("improv: could not offer Wi-Fi setup over Bluetooth", "err", err)
 		chime(speaker.FailureSound())
-		return
+		return false
 	}
 	defer p.Close()
 	// bluetoothd serves the service but cannot advertise it on a kernel before Add Advertising (the
@@ -248,7 +295,7 @@ func (m *Improv) session(ctx context.Context, w why) {
 			if w == asked {
 				chime(speaker.FailureSound())
 			}
-			return
+			return false
 		}
 		defer done()
 	}
@@ -257,6 +304,13 @@ func (m *Improv) session(ctx context.Context, w why) {
 	defer wifi.SettingUp(false)
 	slog.Info("improv: offering Wi-Fi setup over Bluetooth", "why", w, "name", name, "state", state)
 	chime(speaker.TonePairing)
+	// The ring pulses for as long as it is offered, so the mute button held for it is let go when
+	// the ring answers: the tone alone was missed, and the red of the mute light is no sign, as the
+	// hold only turns the microphones the other way. Held on to 20 s, the Dot's power key (which the
+	// mute button is) switches the Dot off in the PMIC.
+	ring := led.Get().Claim(led.PriorityBusy)
+	defer ring.Release()
+	ring.Play(led.EffectPulse, ringColor)
 
 	s := &run{p: p, state: state, scan: wifi.Scan}
 	idleT := time.NewTimer(idle)
@@ -269,21 +323,21 @@ func (m *Improv) session(ctx context.Context, w why) {
 	for {
 		select {
 		case <-ctx.Done():
-			return
+			return true
 		case <-idleT.C:
 			slog.Info("improv: nothing sent, closing")
 			chime(speaker.TonePairingOff)
-			return
+			return true
 		case <-mostT.C:
 			slog.Info("improv: open long enough, closing")
 			chime(speaker.TonePairingOff)
-			return
+			return true
 		case <-doneC:
-			return
+			return true
 		case <-m.stop:
 			slog.Info("improv: closed with the mute button")
 			chime(speaker.TonePairingOff)
-			return
+			return true
 		case <-m.pressed:
 			if s.state == proto.AuthorizationRequired {
 				slog.Info("improv: allowed by a button press")
@@ -298,7 +352,11 @@ func (m *Improv) session(ctx context.Context, w why) {
 					jctx, cancel := context.WithTimeout(ctx, joinFor)
 					defer cancel()
 					err := wifi.Join(jctx, wf.SSID, wf.Passphrase)
-					joined <- joinResult{err: err}
+					r := joinResult{err: err}
+					if err == nil {
+						r.url = setupURL(ctx)
+					}
+					joined <- r
 				}()
 			}
 		case r := <-joined:
@@ -310,11 +368,12 @@ func (m *Improv) session(ctx context.Context, w why) {
 				resetTimer(idleT, idle)
 				continue
 			}
-			url := setupURL(ctx)
+			url := r.url
 			slog.Info("improv: joined", "setup", url)
 			s.setState(proto.Provisioned)
 			s.result(proto.Result(proto.CmdWiFiSettings, url))
 			chime(speaker.TonePaired)
+			ring.Paint(led.Solid(ringColor))
 			idleT.Stop()
 			doneC = time.After(doneHold)
 		}
@@ -329,7 +388,10 @@ func offer(advertisement, scanResponse []byte) (done func(), err error) {
 	return bluetooth.Get().Offer(advertisement, scanResponse)
 }
 
-type joinResult struct{ err error }
+type joinResult struct {
+	err error
+	url string // the setup page, once there is an address for it
+}
 
 // chars is where a session's values go: the Peripheral, or a test's record of them.
 type chars interface {
@@ -410,12 +472,24 @@ func (s *run) command(ctx context.Context, b []byte) (proto.WiFi, bool) {
 }
 
 // setupURL is the setup page at the address the device now has: where the phone is sent next.
+// A join is done once the network is associated, and the lease comes after: it waits up to leaseWait
+// for the address, which is what the phone is to be handed. With none by then (a DHCP server that is
+// slow or down) it hands back none, as Improv allows.
 func setupURL(ctx context.Context) string {
-	addr := wifi.Current(ctx).Address
-	if addr == "" {
-		return ""
+	deadline := time.Now().Add(leaseWait)
+	for {
+		if addr := wifi.Current(ctx).Address; addr != "" {
+			return fmt.Sprintf("http://%s:%d/", addr, web.Port)
+		}
+		if time.Now().After(deadline) || ctx.Err() != nil {
+			return ""
+		}
+		select {
+		case <-ctx.Done():
+			return ""
+		case <-time.After(time.Second):
+		}
 	}
-	return fmt.Sprintf("http://%s:%d/", addr, web.Port)
 }
 
 // deviceName is the name the device was given, or its host name before it has one.
