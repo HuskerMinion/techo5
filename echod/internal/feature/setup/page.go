@@ -492,6 +492,7 @@ func (f *Feature) settingsPage(ctx context.Context, w http.ResponseWriter, token
 			 is not one this page can change.</p></fieldset>`)
 		}
 		bluetoothSection(w, token)
+		wallClockSection(w, token)
 		haCamerasSection(w, token)
 		reolinkSection(w, token)
 		go2rtcSection(w, token)

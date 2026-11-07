@@ -59,3 +59,23 @@ func TestAgentAllowsProxyPairing(t *testing.T) {
 		t.Error("still accepting after the pairing ended")
 	}
 }
+
+// A feature pairing one device of its own — the wall clock — gets that device through and nothing
+// else, until the window it opened closes.
+func TestAgentAllowsOneDevicePairing(t *testing.T) {
+	g := agent{pairing: func() bool { return false }}
+	done := AllowPairing("/dev_clock")
+
+	if g.RequestConfirmation("/dev_clock", 123456) != nil || g.RequestAuthorization("/dev_clock") != nil {
+		t.Error("refused the device the window was opened for")
+	}
+	if g.RequestAuthorization("/dev_phone") == nil {
+		t.Error("accepted another device")
+	}
+
+	done()
+	if g.RequestConfirmation("/dev_clock", 123456) == nil {
+		t.Error("still accepting after the window closed")
+	}
+	done() // idempotent: a caller may both defer it and call it early
+}

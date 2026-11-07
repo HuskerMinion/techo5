@@ -40,6 +40,12 @@ project started on:
   (9 minutes unless changed); the alarm sound (Home Assistant, Beeps, Chimes, Bells, Gentle, Pulse or a recording of your own), whether it
   starts quiet and gets louder, and the snooze length are set on the Alarms card or in Home Assistant; the stop word, the action button and Home Assistant's Stop/Snooze buttons work too.
   Home Assistant can see one ringing: `binary_sensor.sounding` is on while any ring is active (including one a button silenced and not yet answered), `alarm_sounding` and `timer_sounding` say which kind, and the `sounding_what` text sensor names them (`alarm "Wake up", timer "Pasta"`). They are on every device.
+- **Echo Wall Clock**: the original wall clock's LED ring shows this device's running timers, the
+  soonest as a filled run from twelve and every other one as a bright segment at its minute; a
+  timer that ends pulses the ring. Off until paired from the setup page's Connections tab or Home
+  Assistant. The timers come from the device itself, not Home Assistant, so they keep counting
+  while it is away. Tested on the Show 8 (1st gen, crown); it should work on checkers, cronos,
+  crown, athena and the Dot, and not on the Panel, whose Bluetooth is Android's.
 - **Weather**: a new device shows Home Assistant's own forecast (`weather.forecast_home`), or, when
   Home Assistant has none, the first weather entity it lists; any other
   weather entity is chosen on the settings screen (General, Weather), with the "Weather source"
