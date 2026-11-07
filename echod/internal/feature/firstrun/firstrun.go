@@ -116,7 +116,9 @@ func Finish() {
 // then its ring breathes orange (led.Splash) and its network comes from the installer.
 func Settle() {
 	defer startOnWifi()
-	if _, err := os.Stat(resetPath()); err == nil {
+	_, err := os.Stat(resetPath())
+	reset := err == nil
+	if reset {
 		wipe() // a reset for someone else asked for at the last run (reset.go)
 	}
 	c := config.Get()
@@ -126,7 +128,7 @@ func Settle() {
 			// A gift install over a device that was in use leaves the marker but wipes nothing of the
 			// giver's: Home Assistant's access, the logins, the phone book. The reset's wipe does that,
 			// once, the first time the marker is seen (a reset has done it just above).
-			if _, err := os.Stat(resetPath()); err != nil {
+			if !reset {
 				wipe()
 			}
 			if err := config.Set().FirstRun().Marked(); err != nil {
