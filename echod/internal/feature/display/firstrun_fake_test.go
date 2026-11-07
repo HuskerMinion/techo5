@@ -45,6 +45,8 @@ func stubFirstRun(t *testing.T, joined, home bool) (*frFake, wifi.Status) {
 	au, ao, sa, rn := firstrun.AdoptUntil, firstrun.OpenAdoption, firstrun.SetArea, firstrun.Rename
 	uc, of, ai, sai := firstrun.CheckUpdates, firstrun.Offered, firstrun.AutoInstall, firstrun.SetAutoInstall
 	t.Cleanup(func() {
+		frBackground.Wait() // what the screen started reads these
+		firstrun.ResetForTests()
 		firstrun.WifiStatus, firstrun.HomeConnected, firstrun.Key, firstrun.Chime = w, h, k, c
 		firstrun.AdoptUntil, firstrun.OpenAdoption, firstrun.SetArea, firstrun.Rename = au, ao, sa, rn
 		firstrun.CheckUpdates, firstrun.Offered, firstrun.AutoInstall, firstrun.SetAutoInstall = uc, of, ai, sai

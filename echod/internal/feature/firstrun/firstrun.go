@@ -229,7 +229,9 @@ func ArriveAtUpdates(done func()) {
 	if !AutoInstall() {
 		SetAutoInstall(true)
 	}
+	background.Add(1)
 	go func() {
+		defer background.Done()
 		CheckUpdates()
 		updatesChecked.Store(true)
 		if done != nil {
@@ -243,7 +245,15 @@ func ArriveAtUpdates(done func()) {
 func UpdatesChecked() bool { return updatesChecked.Load() }
 
 // ResetForTests forgets what arriving at the updates step did.
-func ResetForTests() { updatesArrived.Store(false); updatesChecked.Store(false) }
+func ResetForTests() {
+	background.Wait()
+	updatesArrived.Store(false)
+	updatesChecked.Store(false)
+}
+
+// background is the updates step's look for an update, which a test waits for (ResetForTests) before it
+// puts back what the look calls.
+var background sync.WaitGroup
 
 // startOnWifi moves a first run at its start to the Wi-Fi step when no network is saved, on a device
 // whose first run has one (not a Panel's, whose tablet has the Wi-Fi).

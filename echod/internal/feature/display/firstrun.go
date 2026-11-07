@@ -3,6 +3,7 @@
 package display
 
 import (
+	"sync"
 	"time"
 
 	"github.com/HuskerMinion/techo5/echod/internal/config"
@@ -140,16 +141,22 @@ func (d *Display) firstRunView(now time.Time) firstRunView {
 		v.checked, v.offered, v.auto = firstrun.UpdatesChecked(), firstrun.Offered(), firstrun.AutoInstall()
 	}
 	if read {
-		go d.firstRunReadWifi()
+		frBackground.Add(1)
+		go func() { defer frBackground.Done(); d.firstRunReadWifi() }()
 	}
 	if chime {
-		go firstrun.Chime()
+		frBackground.Add(1)
+		go func() { defer frBackground.Done(); firstrun.Chime() }()
 	}
 	if advance {
 		d.firstRunGo(stepAfter(frHome))
 	}
 	return v
 }
+
+// frBackground is first run's work off the frame's goroutine, which a test waits for before it puts
+// back what that work calls.
+var frBackground sync.WaitGroup
 
 // firstRunReadWifi reads the network status off the frame's goroutine: wpa_cli can take a moment.
 func (d *Display) firstRunReadWifi() {
