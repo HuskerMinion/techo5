@@ -12,5 +12,5 @@ const addressBuild = true
 const joinStartsDHCP = false
 
 // keptByDate is whether techo5-net keeps the supplicant's file only while it is newer than the
-// network set on the unit (keepOverOwn): the Dot's does.
+// network set on the unit (keptDate): the Dot's does.
 const keptByDate = false

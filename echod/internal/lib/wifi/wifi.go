@@ -227,7 +227,6 @@ func Join(ctx context.Context, ssid, passphrase string) error {
 			if _, err := cli(ctx, "enable_network", "all"); err != nil {
 				slog.Warn("wifi: the other saved networks are disabled until the next restart", "err", err)
 			}
-			keepOverOwn()
 			renewLease()
 			for i := 0; i < 20 && address() == ""; i++ {
 				time.Sleep(time.Second)
@@ -243,7 +242,6 @@ func Join(ctx context.Context, ssid, passphrase string) error {
 	// Back to what worked. The reconfigure re-reads the file, which undoes the select above with it.
 	if len(old) > 0 {
 		_ = writeFile(Conf, string(old))
-		keepOverOwn()
 	}
 	_, _ = cli(ctx, "reconfigure")
 	return fmt.Errorf("wifi: could not join %q (%s)", ssid, Current(ctx).State)
@@ -356,30 +354,24 @@ var udhcpcLog = "/data/techo5-linux/udhcpc.log"
 // ownConf is the network the installer or wifi-set wrote on the Dot (techo5-net's OWN).
 var ownConf = "/data/techo5-linux/wifi.conf"
 
-// keepOverOwn keeps the supplicant's file, just written, the one the Dot boots with. techo5-net keeps
-// it only while it is newer than ownConf, and rebuilds it from ownConf otherwise: a Dot that booted
-// with no network has no time from NTP, so a join stamped it with a clock years behind the installer's
-// ownConf, and the next boot threw the network joined away for the one it could not join. So the file
-// is dated after ownConf whatever the clock says.
-func keepOverOwn() {
+// keptDate is the time the supplicant's file is to carry when it is written, for it to stay the one
+// the Dot boots with, and whether that is not simply now. techo5-net keeps the file only while it is
+// newer than ownConf (`test -nt`, whole seconds), and rebuilds it from ownConf otherwise: a Dot that
+// booted with no network has no time from NTP, so a join stamped it with a clock years behind the
+// installer's ownConf, and the next boot threw the network joined away for the one it could not join.
+// So it is dated a second past ownConf whenever the clock is not already past it.
+func keptDate() (time.Time, bool) {
 	if !keptByDate {
-		return
+		return time.Time{}, false
 	}
 	own, err := os.Stat(ownConf)
 	if err != nil {
-		return
+		return time.Time{}, false
 	}
-	kept, err := os.Stat(Conf)
-	if err != nil || kept.ModTime().After(own.ModTime()) {
-		return
+	if time.Now().Unix() > own.ModTime().Unix() {
+		return time.Time{}, false
 	}
-	t := time.Now()
-	if !t.After(own.ModTime()) {
-		t = own.ModTime().Add(time.Second)
-	}
-	if err := os.Chtimes(Conf, t, t); err != nil {
-		slog.Warn("wifi: the network joined may not outlast a restart", "err", err)
-	}
+	return time.Unix(own.ModTime().Unix()+1, 0), true
 }
 
 // udhcpcScript is where techo5-net puts the hook busybox's udhcpc hands a lease to.
