@@ -545,7 +545,8 @@ def ask_name(given, default):
 
 def check_gift(a, **given):
     """--for-someone-else leaves the Wi-Fi, the Home Assistant key and the name to the device's own
-    first-run routine, so it cannot be combined with a switch that sets any of them. given maps each
+    first-run routine, so it cannot be combined with a switch that sets any of them. Nor with an SSH key:
+    the device's first start wipes what an earlier owner left, SSH keys included. given maps each
     switch to what it was given, e.g. check_gift(a, **{'--name': a.name})."""
     if not a.for_someone_else:
         return

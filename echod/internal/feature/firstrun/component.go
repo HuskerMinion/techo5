@@ -32,6 +32,9 @@ func (*Feature) Name() string { return "firstrun" }
 const resetWord = "reset"
 
 func (*Feature) Actions() []*esphome.Action {
+	if !CanReset() {
+		return nil
+	}
 	return []*esphome.Action{{
 		Name: "reset_for_someone_else",
 		Args: []esphome.Arg{{Name: "confirm", Type: esphome.ArgString}},
@@ -62,7 +65,7 @@ const homeLook = 5 * time.Second
 // looks at both being down: the hold each one is also reporting (the setup page, Bluetooth pairing,
 // the volume going down) happens on the way, as it would for either alone.
 func (f *Feature) Run(ctx context.Context) error {
-	combo := buttons.Has(buttons.Action) && buttons.Has(buttons.VolumeDown)
+	combo := CanReset() && buttons.Has(buttons.Action) && buttons.Has(buttons.VolumeDown)
 	t := time.NewTicker(comboLook)
 	defer t.Stop()
 	var looked time.Time

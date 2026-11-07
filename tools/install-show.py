@@ -613,7 +613,7 @@ def main():
     a = ap.parse_args()
 
     check_gift(a, **{'--name': a.name, '--wifi': a.wifi, '--wifi-passphrase-file': a.wifi_passphrase_file,
-                     '--key-file': a.key_file})
+                     '--key-file': a.key_file, '--ssh-key': a.ssh_key})
     gift = a.for_someone_else
 
     # ------------------------------------------------------------------------------------ 1. checks

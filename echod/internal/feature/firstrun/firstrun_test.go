@@ -63,6 +63,12 @@ func TestTheGiftMarkerMeansFirstRun(t *testing.T) {
 	_ = config.Set().FirstRun().Step(Sound)
 	_ = config.Set().Screen().Welcomed(true)
 	_ = config.Set().Home().Area("Kitchen")
+	// And the giver's own files, which the first start wipes as a reset would.
+	for _, f := range []string{"hass.json", "phone.json"} {
+		if err := os.WriteFile(filepath.Join(dir, f), []byte("{}"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
 	if err := os.WriteFile(filepath.Join(dir, "firstrun"), nil, 0o600); err != nil {
 		t.Fatal(err)
 	}
@@ -70,10 +76,19 @@ func TestTheGiftMarkerMeansFirstRun(t *testing.T) {
 	if !Pending() || Step() != Hello || config.Get().Home.Area != "" {
 		t.Fatalf("with the marker: pending %v, step %q, room %q", Pending(), Step(), config.Get().Home.Area)
 	}
+	for _, f := range []string{"hass.json", "phone.json"} {
+		if _, err := os.Stat(filepath.Join(dir, f)); err == nil {
+			t.Errorf("a gift install kept the giver's %s", f)
+		}
+	}
+	_ = os.WriteFile(filepath.Join(dir, "phone.json"), []byte("{}"), 0o600) // set up during first run
 	Go(Name)
-	Settle() // a restart partway through keeps its step
+	Settle() // a restart partway through keeps its step, and wipes nothing again
 	if Step() != Name {
 		t.Fatalf("a restart moved first run to %q", Step())
+	}
+	if _, err := os.Stat(filepath.Join(dir, "phone.json")); err != nil {
+		t.Error("a restart during first run wiped again")
 	}
 	Finish()
 	if Pending() {
@@ -106,6 +121,9 @@ func TestStepsInOrder(t *testing.T) {
 
 // Reset clears the old home's things, keeps the device's own, and leaves first run to do.
 func TestResetClearsForSomeoneElse(t *testing.T) {
+	noScreen := screenless // the reset as a device with a screen does it (a Dot has none yet)
+	screenless = false
+	t.Cleanup(func() { screenless = noScreen })
 	dir := fresh(t)
 	restarted := make(chan struct{}, 1)
 	was := restart
@@ -163,9 +181,8 @@ func TestResetClearsForSomeoneElse(t *testing.T) {
 	}
 }
 
-// A device with no screen, installed the usual way and added to Home Assistant, is set up once Home
-// Assistant has it with a key and it has a name; a screen keeps its own first run; a gift install
-// with no name waits for one.
+// A device with no screen, installed the usual way or for someone else, is set up once Home Assistant
+// has it with a key; a screen keeps its own first run.
 func TestHomeAssistantFinishesFirstRunWithNoScreen(t *testing.T) {
 	dir := fresh(t)
 	was, hc, k := screenless, HomeConnected, Key
@@ -191,13 +208,9 @@ func TestHomeAssistantFinishesFirstRunWithNoScreen(t *testing.T) {
 		t.Fatal("finished on a Home Assistant with no key")
 	}
 	key = "a key"
-	_ = os.Remove(filepath.Join(dir, "name"))
-	if doneByHome() {
-		t.Fatal("finished with no name (a gift install)")
-	}
-	_ = os.WriteFile(filepath.Join(dir, "name"), []byte("Kitchen Dot\n"), 0o600)
+	_ = os.Remove(filepath.Join(dir, "name")) // a gift install: the name from its MAC
 	if !doneByHome() || Pending() {
-		t.Fatal("Home Assistant with a key and a name did not finish it")
+		t.Fatal("Home Assistant with a key did not finish it")
 	}
 }
 
@@ -219,5 +232,19 @@ func TestTheButtonsHeldTogether(t *testing.T) {
 	}
 	if !comboHeld(now.Add(5 * time.Second)) {
 		t.Error("ten seconds of both did not")
+	}
+}
+
+// A device with no screen cannot be reset for someone else until it can be given Wi-Fi without one.
+func TestNoResetWithNoScreen(t *testing.T) {
+	fresh(t)
+	was := screenless
+	t.Cleanup(func() { screenless = was })
+	screenless = true
+	if CanReset() || Reset() == nil || len(Get().Actions()) != 0 {
+		t.Fatal("a device with no screen offered a reset")
+	}
+	if _, err := os.Stat(resetPath()); err == nil {
+		t.Fatal("a refused reset left its marker")
 	}
 }

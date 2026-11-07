@@ -12,7 +12,6 @@ import (
 	"context"
 	"log/slog"
 	"os"
-	"path/filepath"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -124,6 +123,12 @@ func Settle() {
 	if marked() {
 		// Once for each marker: a restart partway through (a rename restarts the daemon) keeps its step.
 		if !c.FirstRun.Marked {
+			// A gift install over a device that was in use leaves the marker but wipes nothing of the
+			// giver's: Home Assistant's access, the logins, the phone book. The reset's wipe does that,
+			// once, the first time the marker is seen (a reset has done it just above).
+			if _, err := os.Stat(resetPath()); err != nil {
+				wipe()
+			}
 			if err := config.Set().FirstRun().Marked(); err != nil {
 				slog.Warn("saving first run to do failed", "err", err)
 			}
@@ -185,23 +190,17 @@ var (
 var screenless = false
 
 // doneByHome finishes first run on a device with no screen once Home Assistant has connected with a
-// key and the device has a name: one installed the usual way and added to Home Assistant is set up,
-// whether or not anybody opened the setup page. A gift install has no name until the setup page's
-// first run or Home Assistant gives it one, so it finishes then. A screen shows its own first run
-// until it is finished there. It reports whether it finished it.
+// key: one installed the usual way and added to Home Assistant is set up, whether or not anybody opened
+// the setup page, and so is a gift install a Home Assistant has added (it keeps the name from its MAC
+// until somebody gives it another). A screen shows its own first run until it is finished there. It
+// reports whether it finished it.
 func doneByHome() bool {
-	if !screenless || !Pending() || !HomeConnected() || Key() == "" || !named() {
+	if !screenless || !Pending() || !HomeConnected() || Key() == "" {
 		return false
 	}
 	slog.Info("first run: done by Home Assistant, which has the device with a key and a name")
 	Finish()
 	return true
-}
-
-// named is whether the device has a name of its own written down (an install's, or a rename's).
-func named() bool {
-	fi, err := os.Stat(filepath.Join(stateDir, "name"))
-	return err == nil && fi.Size() > 0
 }
 
 // renamer is the setup page's rename (setup.Rename), handed over by it: it imports this package, so

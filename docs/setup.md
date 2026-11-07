@@ -58,17 +58,16 @@ was put away, or any device Home Assistant has had.
 ### Giving a device to someone else
 
 Install it with the installer's `--for-someone-else`: no Wi-Fi, no Home Assistant key and no name go
-on it, and it starts in first run from the beginning, whatever it was before. A Show, a Spot or a
-Panel with no Wi-Fi starts on the **Wi-Fi** step (a Panel's tablet joins the network itself). A Dot
-with no Wi-Fi is to get its network over Bluetooth (Improv, not in yet), with its ring breathing
-orange; until then a Dot's network comes from the installer.
+on it, and it starts in first run from the beginning, whatever it was before: its first start clears
+everything an earlier owner left, as a reset does (the list below). A Show, a Spot or a Panel with no
+Wi-Fi starts on the **Wi-Fi** step (a Panel's tablet joins the network itself). A Dot or an Echo 2nd
+gen cannot be installed or reset for someone else yet: with no screen, it needs to get its network
+over Bluetooth (Improv), which is not in yet.
 
 To pass on a device that is already set up, use **Reset for someone else**: on the setup page under
 **General**, on a screen under **Settings → General** (tap it twice), from Home Assistant with the
-`reset_for_someone_else` action (`confirm: reset`), or on a Dot or an Echo 2nd gen by holding the
-action button and volume down together for 10 seconds (the ring turns orange). Holding them also
-does what each does alone on the way: the setup page opens, Bluetooth pairing starts and the volume
-goes down. The device then restarts into first run. A reset clears:
+`reset_for_someone_else` action (`confirm: reset`). Not on a Dot or an Echo 2nd gen yet (above). The
+device then restarts into first run. A reset clears:
 
 - every Wi-Fi network it knows, so it leaves the network at once
 - its name (it is named from its MAC address again) and its room
