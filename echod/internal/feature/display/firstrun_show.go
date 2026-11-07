@@ -52,7 +52,7 @@ func firstRunButtons(v firstRunView) []frButton {
 		case v.home:
 			return []frButton{{"Next", "next"}}
 		case !v.adopt.IsZero() || v.unkeyed:
-			return []frButton{{"Use it on its own", "next"}}
+			return []frButton{{"Skip for now", "next"}}
 		case v.showKey || v.wifi.Address == "":
 			if v.wifi.Address == "" {
 				return []frButton{{"Use it on its own", "next"}}

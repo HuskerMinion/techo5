@@ -179,7 +179,7 @@ func TestFirstRunGoesOnOnceHomeAssistantConnects(t *testing.T) {
 }
 
 // Add it opens the window for a Home Assistant to add the device, with nothing typed; Type the key
-// shows the key; the window shown leaves only "Use it on its own".
+// shows the key; the window shown leaves only "Skip for now".
 func TestFirstRunHomeAssistantPaths(t *testing.T) {
 	d, f := firstRunDisplay(t, true, false)
 	setStep(t, frHome)

@@ -201,3 +201,20 @@ func TestAFirstRunPressOpensThePageOnlyOnline(t *testing.T) {
 		t.Fatal("the page did not open on the network")
 	}
 }
+
+// With no key, adding it in Home Assistant is what the step says first, with Skip for now under it;
+// once Home Assistant has it, the page says so.
+func TestTheHomeAssistantStepWithNoKey(t *testing.T) {
+	f, c, _ := firstRunIn(t)
+	firstrun.Go(firstrun.Home)
+	firstrun.Key = func() string { return "" }
+	body := get(f, firstRunPath, c).Body.String()
+	if !strings.Contains(body, `<div class="banner ok"><strong>Add it in Home Assistant now:`) ||
+		!strings.Contains(body, ">Skip for now<") || strings.Contains(body, "Use it on its own") {
+		t.Fatalf("the step with no key: %s", body)
+	}
+	firstrun.HomeConnected = func() bool { return true }
+	if body := get(f, firstRunPath, c).Body.String(); !strings.Contains(body, "Home Assistant has added it.") {
+		t.Fatalf("once added: %s", body)
+	}
+}

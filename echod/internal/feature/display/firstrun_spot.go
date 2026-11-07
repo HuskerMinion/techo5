@@ -47,8 +47,10 @@ func spotFirstRunButtons(v firstRunView) []frButton {
 			return nil // a tap anywhere puts the key away
 		case v.home:
 			return []frButton{{"Next", "next"}}
-		case !v.adopt.IsZero() || v.unkeyed || v.wifi.Address == "":
+		case v.wifi.Address == "":
 			return []frButton{{"Use it on its own", "next"}}
+		case !v.adopt.IsZero() || v.unkeyed:
+			return []frButton{{"Skip for now", "next"}}
 		}
 		return []frButton{{"On its own", "next"}, {"Show the key", "key"}, {"Add it", "adopt"}}
 	case frUpdates:
@@ -220,9 +222,9 @@ func spotFirstRunText(v firstRunView, now time.Time) (string, []string) {
 	case frHome:
 		switch {
 		case v.homeJust:
-			return "Home Assistant", []string{"Connected.", "Going on…"}
+			return "Home Assistant", []string{"Home Assistant has added it.", "Going on…"}
 		case v.home:
-			return "Home Assistant", []string{"Connected."}
+			return "Home Assistant", []string{"Home Assistant has added it."}
 		case v.wifi.Address == "":
 			return "Home Assistant", []string{"Not on a network yet."}
 		case v.unkeyed:

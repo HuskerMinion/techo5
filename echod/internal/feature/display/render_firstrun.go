@@ -177,9 +177,9 @@ func firstRunText(v firstRunView, now time.Time) (string, []string, string) {
 	case frHome:
 		switch {
 		case v.homeJust:
-			return "Home Assistant", []string{"Home Assistant is connected. Going on…"}, ""
+			return "Home Assistant", []string{"Home Assistant has added it. Going on…"}, ""
 		case v.home:
-			return "Home Assistant", []string{"Home Assistant is connected."}, ""
+			return "Home Assistant", []string{"Home Assistant has added it."}, ""
 		case v.wifi.Address == "":
 			return "Home Assistant", []string{"Not on a network yet, so Home Assistant cannot reach it."}, ""
 		case v.unkeyed:

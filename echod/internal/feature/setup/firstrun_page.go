@@ -247,7 +247,7 @@ func firstRunHome(w http.ResponseWriter, form func(what, label string, primary b
 	st := firstrun.WifiStatus()
 	switch {
 	case firstrun.HomeConnected():
-		fmt.Fprint(w, `<p>Home Assistant is connected.</p>`)
+		fmt.Fprint(w, `<p><strong>Home Assistant has added it.</strong></p>`)
 		next("Next")
 		return
 	case st.Address == "":
@@ -259,20 +259,24 @@ func firstRunHome(w http.ResponseWriter, form func(what, label string, primary b
 	fmt.Fprint(w, `<script>setTimeout(()=>location.reload(),5000)</script>`)
 	if until := firstrun.AdoptUntil(); !until.IsZero() {
 		left := max(1, int(time.Until(until).Minutes()+0.999))
-		fmt.Fprintf(w, `<p><strong>Add it in Home Assistant:</strong> it appears under <strong>Settings →
-		 Devices &amp; services</strong>, under Discovered. Nothing to type. Open for %d more minutes.</p>
-		 <p class="note">Home Assistant sends the device its new key over your network unencrypted, so do
-		  this only on a network you trust. Needs Home Assistant 2026.9 or later.</p>`, left)
-		form("next", "Use it on its own", false, "")
+		fmt.Fprintf(w, `<div class="banner ok"><strong>Add it in Home Assistant now:</strong> it appears under
+		 <strong>Settings → Devices &amp; services</strong>, under <strong>Discovered</strong>. Choose
+		 <strong>Add</strong>; there is nothing to type. Open for %d more minutes.</div>
+		 <p class="note">This page says so once Home Assistant has added it. Home Assistant sends the device
+		  its new key over your network unencrypted, so do this only on a network you trust. Needs Home
+		  Assistant 2026.9 or later.</p>`, left)
+		form("next", "Skip for now", false, "")
 		return
 	}
 	if firstrun.Key() == "" {
 		// No key at all (a gift install, a reset): any Home Assistant can add it, for as long as that lasts.
-		fmt.Fprint(w, `<p><strong>Add it in Home Assistant:</strong> it appears under <strong>Settings →
-		 Devices &amp; services</strong>, under Discovered. Nothing to type.</p>
-		 <p class="note">Home Assistant sends the device its key over your network unencrypted, so add it
-		  on a network you trust. Needs Home Assistant 2026.9 or later.</p>`)
-		form("next", "Use it on its own", false, "")
+		fmt.Fprint(w, `<div class="banner ok"><strong>Add it in Home Assistant now:</strong> it appears under
+		 <strong>Settings → Devices &amp; services</strong>, under <strong>Discovered</strong>. Choose
+		 <strong>Add</strong>; there is nothing to type.</div>
+		 <p class="note">This page says so once Home Assistant has added it. Without Home Assistant, alarms,
+		  timers, the radio and the clock still work. Home Assistant sends the device its key over your
+		  network unencrypted, so add it on a network you trust. Needs Home Assistant 2026.9 or later.</p>`)
+		form("next", "Skip for now", false, "")
 		return
 	}
 	fmt.Fprint(w, `<p>Add it to Home Assistant with nothing to type, or type its key. Or use it on its own:
