@@ -18,6 +18,7 @@ import (
 	"github.com/HuskerMinion/techo5/echod/internal/component"
 	"github.com/HuskerMinion/techo5/echod/internal/config"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/bluetooth"
+	"github.com/HuskerMinion/techo5/echod/internal/feature/mute"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/web"
 	"github.com/HuskerMinion/techo5/echod/internal/hardware/buttons"
 	"github.com/HuskerMinion/techo5/echod/internal/hardware/led"
@@ -125,6 +126,9 @@ func (m *Improv) Start(context.Context) error {
 // press while it is open, which is the authorization an offer made by itself waits for.
 func (m *Improv) button(e buttons.Event) {
 	if e.Name == buttons.Mute && e.Kind == buttons.LongHold {
+		// The hold is for Improv, not the microphones, which the Dot's hardware moves on a hold all
+		// the same: they are put back where they were once the button is up.
+		mute.Get().KeepThroughHold("a hold for Improv")
 		ch := m.asks
 		if m.isOpen() {
 			ch = nil
@@ -312,13 +316,31 @@ func (m *Improv) session(ctx context.Context, w why) bool {
 	defer ring.Release()
 	ring.Play(led.EffectPulse, ringColor)
 
-	s := &run{p: p, state: state, scan: wifi.Scan}
+	s := &run{p: p, state: state, scan: wifi.Scan, join: wifi.Join}
 	idleT := time.NewTimer(idle)
 	defer idleT.Stop()
 	mostT := time.NewTimer(most)
 	defer mostT.Stop()
 	var doneC <-chan time.Time
 	joined := make(chan joinResult, 1)
+	joining := false
+	// A session closed while a join runs waits for it, so the join is not left working on the
+	// network after Wi-Fi setup was said to be over (wifi.SettingUp), and how it ended is told. On
+	// shutdown the join's context is done as well, and it ends at once.
+	defer func() {
+		if !joining {
+			return
+		}
+		// The ring goes out now, not once the join has ended: closed is what the press asked for, and
+		// a ring still pulsing for the minute a join can take looked like it had not been heard.
+		ring.Release()
+		slog.Info("improv: closing once the join sent has ended")
+		if r := <-joined; r.err != nil {
+			slog.Warn("improv: the join sent as it closed did not get through", "err", r.err)
+		} else {
+			slog.Info("improv: the join sent as it closed got through", "setup", r.url)
+		}
+	}()
 
 	for {
 		select {
@@ -348,10 +370,9 @@ func (m *Improv) session(ctx context.Context, w why) bool {
 		case b := <-commands:
 			resetTimer(idleT, idle)
 			if wf, ok := s.command(ctx, b); ok {
+				joining = true
 				go func() {
-					jctx, cancel := context.WithTimeout(ctx, joinFor)
-					defer cancel()
-					err := wifi.Join(jctx, wf.SSID, wf.Passphrase)
+					err := s.joinSent(ctx, wf)
 					r := joinResult{err: err}
 					if err == nil {
 						r.url = setupURL(ctx)
@@ -360,6 +381,7 @@ func (m *Improv) session(ctx context.Context, w why) bool {
 				}()
 			}
 		case r := <-joined:
+			joining = false
 			if r.err != nil {
 				slog.Warn("improv: could not join the network sent", "err", r.err)
 				s.setError(proto.ErrUnableToConnect)
@@ -403,6 +425,43 @@ type run struct {
 	p     chars
 	state proto.State
 	scan  func(context.Context) ([]wifi.Network, error)
+	join  func(ctx context.Context, ssid, passphrase string) error
+}
+
+// joinSent joins the network sent, forgiving spaces at the ends that a phone's keyboard adds: a name
+// no network around has, when one has it trimmed, is taken trimmed; and a passphrase with spaces at
+// its ends that does not join is tried once more trimmed. Each try has joinFor.
+func (s *run) joinSent(ctx context.Context, w proto.WiFi) error {
+	ssid := w.SSID
+	if t := strings.TrimSpace(ssid); t != ssid && t != "" {
+		if nets, err := s.scan(ctx); err == nil && !seen(nets, ssid) && seen(nets, t) {
+			slog.Info("improv: no network has the name sent, one has it without its spaces at the ends; taking that",
+				"sent", ssid, "taken", t)
+			ssid = t
+		}
+	}
+	try := func(pass string) error {
+		jctx, cancel := context.WithTimeout(ctx, joinFor)
+		defer cancel()
+		return s.join(jctx, ssid, pass)
+	}
+	err := try(w.Passphrase)
+	if t := strings.TrimSpace(w.Passphrase); err != nil && t != w.Passphrase && ctx.Err() == nil {
+		slog.Info("improv: the passphrase sent did not join; trying it again without its spaces at the ends",
+			"ssid", ssid, "err", err)
+		err = try(t)
+	}
+	return err
+}
+
+// seen is whether a network named ssid is among nets.
+func seen(nets []wifi.Network, ssid string) bool {
+	for _, n := range nets {
+		if n.SSID == ssid {
+			return true
+		}
+	}
+	return false
 }
 
 func (s *run) setState(st proto.State) {

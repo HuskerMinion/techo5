@@ -6,6 +6,7 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"fmt"
 	"path/filepath"
 	"testing"
 
@@ -182,5 +183,62 @@ func TestNoSecondNetworkOnceProvisioned(t *testing.T) {
 	}
 	if got := r.last(proto.ErrorUUID); !bytes.Equal(got, []byte{byte(proto.ErrNotAuthorized)}) {
 		t.Fatalf("error % x", got)
+	}
+}
+
+// joins records what joinSent asked to join, and fails every passphrase but ok.
+type joins struct {
+	ok    string
+	asked [][2]string
+}
+
+func (j *joins) join(_ context.Context, ssid, pass string) error {
+	j.asked = append(j.asked, [2]string{ssid, pass})
+	if pass != j.ok {
+		return errors.New("wrong passphrase")
+	}
+	return nil
+}
+
+// Spaces at the ends of what was sent, which a phone's keyboard adds, are forgiven: a name only
+// found trimmed is taken trimmed, and a passphrase that fails with them is tried once without.
+func TestSpacesAtTheEndsAreForgiven(t *testing.T) {
+	nets := func(names ...string) func(context.Context) ([]wifi.Network, error) {
+		return func(context.Context) ([]wifi.Network, error) {
+			var out []wifi.Network
+			for _, n := range names {
+				out = append(out, wifi.Network{SSID: n})
+			}
+			return out, nil
+		}
+	}
+	for _, tc := range []struct {
+		name    string
+		around  []string
+		sent    proto.WiFi
+		ok      string
+		want    [][2]string
+		wantErr bool
+	}{
+		{"a name found only trimmed is taken trimmed", []string{"Home"}, proto.WiFi{SSID: "Home ", Passphrase: "secret12"}, "secret12",
+			[][2]string{{"Home", "secret12"}}, false},
+		{"a name that is around as sent is kept", []string{"Home ", "Home"}, proto.WiFi{SSID: "Home ", Passphrase: "secret12"}, "secret12",
+			[][2]string{{"Home ", "secret12"}}, false},
+		{"a passphrase that fails with spaces is tried once trimmed", []string{"Home"}, proto.WiFi{SSID: "Home", Passphrase: "secret12 "}, "secret12",
+			[][2]string{{"Home", "secret12 "}, {"Home", "secret12"}}, false},
+		{"a passphrase with no spaces at its ends is tried once", []string{"Home"}, proto.WiFi{SSID: "Home", Passphrase: "wrongone"}, "secret12",
+			[][2]string{{"Home", "wrongone"}}, true},
+		{"trimmed and still wrong fails", []string{"Home"}, proto.WiFi{SSID: "Home", Passphrase: " wrongone "}, "secret12",
+			[][2]string{{"Home", " wrongone "}, {"Home", "wrongone"}}, true},
+	} {
+		j := &joins{ok: tc.ok}
+		s := &run{scan: nets(tc.around...), join: j.join}
+		err := s.joinSent(context.Background(), tc.sent)
+		if (err != nil) != tc.wantErr {
+			t.Errorf("%s: err %v", tc.name, err)
+		}
+		if fmt.Sprint(j.asked) != fmt.Sprint(tc.want) {
+			t.Errorf("%s: joined %q, want %q", tc.name, j.asked, tc.want)
+		}
 	}
 }
