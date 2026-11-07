@@ -146,8 +146,8 @@ grid_options:
   rows: 2
 ```
 
-Any other width is drawn as a normal tile. **Fill the screen** keeps its even grid and ignores
-grid_options.
+Any other width is drawn as a normal tile. On a view with only a few tiles, **Fill the screen** keeps its even grid and
+ignores grid_options; larger views still follow them.
 
 A change you save in Home Assistant's dashboard editor shows on the device within a second or two.
 
