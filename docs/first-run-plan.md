@@ -107,3 +107,9 @@ name and key and runs the routine again, for passing a device on a second time.
 - **The update is installed after setup.** Step 6 looks for one and downloads it in the background;
   it goes on at the next quiet time once setup is done, and the done step says so ("I'll update
   myself tonight" on a Dot). Setup never reboots the device.
+- **No setup hotspot for now; the Dot uses Improv.** A hotspot (an open "TECHO5-Setup" network with
+  the setup page behind it, the way a new Echo sets up) was built and tried on a Dot. The Dot's Wi-Fi
+  driver starts the access point, but the whole device freezes as soon as a phone joins it, and the
+  watchdog restarts it about 30 seconds later. That happened with home Wi-Fi on beside it and with it
+  fully off. The kernel logs nothing, so the freeze is in the driver. The code is kept on a local
+  branch (`hotspot`) in case another device's driver takes it.
