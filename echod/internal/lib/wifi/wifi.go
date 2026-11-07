@@ -276,7 +276,10 @@ func renewLease() {
 		}
 		return
 	}
-	pid, err := os.ReadFile("/run/udhcpc.pid")
+	if startDHCP() {
+		return // a client just started asks for its lease by itself
+	}
+	pid, err := os.ReadFile(dhcpPid)
 	if err != nil {
 		return
 	}
