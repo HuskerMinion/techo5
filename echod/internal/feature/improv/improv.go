@@ -45,6 +45,11 @@ const (
 	// doneHold is how long it stays up after a network was joined, so the phone can read the address.
 	doneHold = 10 * time.Second
 
+	// bootRetry and bootRetries are how often, and how many more times, the offer at boot is tried
+	// when it did not get up.
+	bootRetry   = time.Minute
+	bootRetries = 3
+
 	// leaseWait is how long after a join it waits for the address to hand back.
 	leaseWait = 30 * time.Second
 
@@ -157,13 +162,20 @@ func (m *Improv) Run(ctx context.Context) error {
 	}
 	boot := time.NewTimer(bootGrace)
 	defer boot.Stop()
+	retries := bootRetries
 	for {
 		select {
 		case <-ctx.Done():
 			return nil
 		case <-boot.C:
-			if wifi.Current(ctx).Address == "" {
-				m.session(ctx, offline)
+			if !offlineAfterBoot(ctx) {
+				continue
+			}
+			// One that did not get up (bluetoothd later than the rest, the radio busy) is tried
+			// again a few times: this is the only way a Dot with no network is reached.
+			if !m.session(ctx, offline) && !m.cannot && retries > 0 {
+				retries--
+				boot.Reset(bootRetry)
 			}
 		case w := <-m.asks:
 			m.session(ctx, w)
@@ -171,14 +183,42 @@ func (m *Improv) Run(ctx context.Context) error {
 	}
 }
 
-// session is one offer, from the advertisement going up to it coming down.
-func (m *Improv) session(ctx context.Context, w why) {
+// offlineAfterBoot is whether the device is still without an address once bootGrace is up. One that
+// is on a network but has no address (it joined after techo5-net gave up, as when the router starts
+// after the Dot) is given the chance to get one first: that is a lease missing, not a network.
+func offlineAfterBoot(ctx context.Context) bool {
+	st := wifi.Current(ctx)
+	if st.Address != "" {
+		return false
+	}
+	if !st.Connected {
+		return true
+	}
+	slog.Info("improv: on a network with no address, asking for one before offering setup", "ssid", st.SSID)
+	wifi.RenewLease()
+	deadline := time.Now().Add(leaseWait)
+	for time.Now().Before(deadline) {
+		select {
+		case <-ctx.Done():
+			return false
+		case <-time.After(time.Second):
+		}
+		if wifi.Current(ctx).Address != "" {
+			return false
+		}
+	}
+	return true
+}
+
+// session is one offer, from the advertisement going up to it coming down. It reports whether the
+// offer went up at all.
+func (m *Improv) session(ctx context.Context, w why) bool {
 	if m.cannot {
 		// Held for: say it did not start, as a failed bluetoothd does below.
 		if w == asked {
 			chime(speaker.FailureSound())
 		}
-		return
+		return false
 	}
 	m.mu.Lock()
 	m.open = true
@@ -234,7 +274,7 @@ func (m *Improv) session(ctx context.Context, w why) {
 	if err != nil {
 		slog.Warn("improv: could not offer Wi-Fi setup over Bluetooth", "err", err)
 		chime(speaker.FailureSound())
-		return
+		return false
 	}
 	defer p.Close()
 	// bluetoothd serves the service but cannot advertise it on a kernel before Add Advertising (the
@@ -251,7 +291,7 @@ func (m *Improv) session(ctx context.Context, w why) {
 			if w == asked {
 				chime(speaker.FailureSound())
 			}
-			return
+			return false
 		}
 		defer done()
 	}
@@ -272,21 +312,21 @@ func (m *Improv) session(ctx context.Context, w why) {
 	for {
 		select {
 		case <-ctx.Done():
-			return
+			return true
 		case <-idleT.C:
 			slog.Info("improv: nothing sent, closing")
 			chime(speaker.TonePairingOff)
-			return
+			return true
 		case <-mostT.C:
 			slog.Info("improv: open long enough, closing")
 			chime(speaker.TonePairingOff)
-			return
+			return true
 		case <-doneC:
-			return
+			return true
 		case <-m.stop:
 			slog.Info("improv: closed with the mute button")
 			chime(speaker.TonePairingOff)
-			return
+			return true
 		case <-m.pressed:
 			if s.state == proto.AuthorizationRequired {
 				slog.Info("improv: allowed by a button press")

@@ -10,3 +10,7 @@ const addressBuild = true
 // joinStartsDHCP is whether a join starts the DHCP client when none runs: only on the Dot
 // (address_dot.go); elsewhere techo5-net keeps one running.
 const joinStartsDHCP = false
+
+// keptByDate is whether techo5-net keeps the supplicant's file only while it is newer than the
+// network set on the unit (keepOverOwn): the Dot's does.
+const keptByDate = false

@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"testing"
+	"time"
 )
 
 // A pid file is only a DHCP client while its process is there: one left behind by a client that is
@@ -44,8 +45,8 @@ func TestDHCPClientIsOnlyARunningOne(t *testing.T) {
 // never got as far), and not a second one once it runs.
 func TestStartDHCPStartsUdhcpcOnly(t *testing.T) {
 	dir := t.TempDir()
-	wasPID, wasScript := udhcpcPID, udhcpcScript
-	t.Cleanup(func() { udhcpcPID, udhcpcScript = wasPID, wasScript })
+	wasPID, wasScript, wasLog := udhcpcPID, udhcpcScript, udhcpcLog
+	t.Cleanup(func() { udhcpcPID, udhcpcScript, udhcpcLog = wasPID, wasScript, wasLog })
 	udhcpcPID = filepath.Join(dir, "udhcpc.pid")
 	udhcpcScript = filepath.Join(dir, "udhcpc.sh")
 
@@ -55,14 +56,22 @@ func TestStartDHCPStartsUdhcpcOnly(t *testing.T) {
 	}
 	calls := filepath.Join(dir, "calls")
 	// The stub writes the test's own pid as the client's: a process that is there, as -b leaves one.
-	stub := "#!/bin/sh\necho \"$*\" >> " + calls + "\necho " + strconv.Itoa(os.Getpid()) + " > " + udhcpcPID + "\n"
+	// It also leaves a child running on its stdout and stderr, as -b does: startDHCP must not wait for
+	// that one.
+	stub := "#!/bin/sh\necho \"$*\" >> " + calls + "\necho " + strconv.Itoa(os.Getpid()) + " > " + udhcpcPID +
+		"\nsleep 30 &\n"
 	if err := os.WriteFile(filepath.Join(bin, "udhcpc"), []byte(stub), 0o755); err != nil {
 		t.Fatal(err)
 	}
 	t.Setenv("PATH", bin+":"+os.Getenv("PATH"))
 
+	udhcpcLog = filepath.Join(dir, "udhcpc.log")
+	start := time.Now()
 	startDHCP()
 	startDHCP()
+	if d := time.Since(start); d > 10*time.Second {
+		t.Fatalf("waited %v on the client left running", d)
+	}
 
 	b, err := os.ReadFile(calls)
 	if err != nil {

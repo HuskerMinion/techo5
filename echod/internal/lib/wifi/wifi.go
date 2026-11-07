@@ -227,6 +227,7 @@ func Join(ctx context.Context, ssid, passphrase string) error {
 			if _, err := cli(ctx, "enable_network", "all"); err != nil {
 				slog.Warn("wifi: the other saved networks are disabled until the next restart", "err", err)
 			}
+			keepOverOwn()
 			renewLease()
 			for i := 0; i < 20 && address() == ""; i++ {
 				time.Sleep(time.Second)
@@ -242,6 +243,7 @@ func Join(ctx context.Context, ssid, passphrase string) error {
 	// Back to what worked. The reconfigure re-reads the file, which undoes the select above with it.
 	if len(old) > 0 {
 		_ = writeFile(Conf, string(old))
+		keepOverOwn()
 	}
 	_, _ = cli(ctx, "reconfigure")
 	return fmt.Errorf("wifi: could not join %q (%s)", ssid, Current(ctx).State)
@@ -328,14 +330,18 @@ func startDHCP() {
 			return
 		}
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
-	defer cancel()
-	// -b: into the background once started, so it stays to renew the lease, as techo5-net's does.
-	out, err := exec.CommandContext(ctx, "udhcpc", "-i", "wlan0", "-s", udhcpcScript, "-b", "-t", "8",
-		"-p", udhcpcPID).CombinedOutput()
-	if err != nil {
-		slog.Warn("wifi: no DHCP client was running, and starting one failed", "err", err,
-			"out", strings.TrimSpace(string(out)))
+	// -b: into the background once it has a lease or has tried, so it stays to renew the lease, as
+	// techo5-net's does. Its output goes to the log techo5-net's goes to, a file and not a pipe: the
+	// client it leaves running keeps its stdout and stderr, and a pipe would hold Wait (and dhcpMu)
+	// for as long as the client lives. No deadline: killed before -b takes effect, there would be no
+	// client at all; on its own it is in the foreground for at most -t 8 tries of 3 s.
+	cmd := exec.Command("udhcpc", "-i", "wlan0", "-s", udhcpcScript, "-b", "-t", "8", "-p", udhcpcPID)
+	if f, err := os.OpenFile(udhcpcLog, os.O_WRONLY|os.O_APPEND|os.O_CREATE, 0o644); err == nil {
+		defer f.Close()
+		cmd.Stdout, cmd.Stderr = f, f
+	}
+	if err := cmd.Run(); err != nil {
+		slog.Warn("wifi: no DHCP client was running, and starting one failed", "err", err)
 		return
 	}
 	slog.Info("wifi: no DHCP client was running, started one")
@@ -343,6 +349,38 @@ func startDHCP() {
 
 // dhcpMu keeps two joins close together from starting two clients.
 var dhcpMu sync.Mutex
+
+// udhcpcLog is where techo5-net's udhcpc writes.
+var udhcpcLog = "/data/techo5-linux/udhcpc.log"
+
+// ownConf is the network the installer or wifi-set wrote on the Dot (techo5-net's OWN).
+var ownConf = "/data/techo5-linux/wifi.conf"
+
+// keepOverOwn keeps the supplicant's file, just written, the one the Dot boots with. techo5-net keeps
+// it only while it is newer than ownConf, and rebuilds it from ownConf otherwise: a Dot that booted
+// with no network has no time from NTP, so a join stamped it with a clock years behind the installer's
+// ownConf, and the next boot threw the network joined away for the one it could not join. So the file
+// is dated after ownConf whatever the clock says.
+func keepOverOwn() {
+	if !keptByDate {
+		return
+	}
+	own, err := os.Stat(ownConf)
+	if err != nil {
+		return
+	}
+	kept, err := os.Stat(Conf)
+	if err != nil || kept.ModTime().After(own.ModTime()) {
+		return
+	}
+	t := time.Now()
+	if !t.After(own.ModTime()) {
+		t = own.ModTime().Add(time.Second)
+	}
+	if err := os.Chtimes(Conf, t, t); err != nil {
+		slog.Warn("wifi: the network joined may not outlast a restart", "err", err)
+	}
+}
 
 // udhcpcScript is where techo5-net puts the hook busybox's udhcpc hands a lease to.
 var udhcpcScript = "/run/udhcpc.sh"
