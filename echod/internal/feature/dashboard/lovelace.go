@@ -382,7 +382,9 @@ func (c *compiler) cardItself(card raw) node {
 		if e == "" {
 			// A button that only runs something: its name, its icon, what it runs.
 			if a := actionOf(card, ""); a != nil {
-				return listNode{items: []tileItem{{name: str(card, "name"), icon: str(card, "icon"), action: a, fixed: true}}}
+				wide, high := gridOf(card)
+				return listNode{items: []tileItem{{name: str(card, "name"), icon: str(card, "icon"), action: a, fixed: true,
+					wide: wide, high: high}}}
 			}
 			return nil
 		}
@@ -468,7 +470,28 @@ func (c *compiler) items(v any) []tileItem {
 // item is an entity as a card or a row presents it: its own name and icon if it gives them, and its
 // tap.
 func (c *compiler) item(m raw, entity string) tileItem {
-	return tileItem{entity: entity, name: str(m, "name"), icon: str(m, "icon"), action: actionOf(m, entity), color: cardColorOf(m)}
+	wide, high := gridOf(m)
+	return tileItem{entity: entity, name: str(m, "name"), icon: str(m, "icon"), action: actionOf(m, entity), color: cardColorOf(m),
+		wide: wide, high: high}
+}
+
+// gridOf reads a card's grid_options. A section is 12 columns wide and a tile normally takes 6, so 12
+// (or "full") means the whole width. rows is the height in tiles, capped at four.
+func gridOf(m raw) (wide bool, high int) {
+	g, _ := m["grid_options"].(raw)
+	if g == nil {
+		return false, 0
+	}
+	switch v := g["columns"].(type) {
+	case float64:
+		wide = v >= 12
+	case string:
+		wide = v == "full"
+	}
+	if r, ok := g["rows"].(float64); ok && r > 1 {
+		high = min(int(r), 4)
+	}
+	return wide, high
 }
 
 func hoursOf(card raw, fallback int) int {
@@ -600,6 +623,8 @@ type tileItem struct {
 	action                    *Action
 	color                     color.RGBA // the card's color; zero for none
 	fixed                     bool       // not an entity's: drawn as given
+	wide                      bool       // spans the whole section (gridOf)
+	high                      int        // height in tiles; 0 and 1 both mean one (gridOf)
 }
 
 // listNode is tiles.
@@ -617,7 +642,9 @@ func (n listNode) blocks(l look) []Block {
 	}
 	var tiles []Tile
 	for _, it := range n.items {
-		tiles = append(tiles, it.tile(l.states, room))
+		t := it.tile(l.states, room)
+		t.Wide, t.High = it.wide, it.high
+		tiles = append(tiles, t)
 	}
 	if len(tiles) > 0 {
 		out = append(out, Block{Tiles: tiles})

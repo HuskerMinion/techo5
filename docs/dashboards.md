@@ -133,6 +133,22 @@ one on the Spot. A dashboard Home Assistant generates by itself (the default *Ov
 take control of it) is drawn as the Rooms dashboard: every area, with its lights, switches,
 thermostats, covers, players, locks, doors and windows.
 
+Within a section, tiles sit two abreast on a Show. A tile card's **grid_options** (the Layout tab in
+Home Assistant's card editor) change that for one tile: `columns: 12` (or `full`) puts it on a line
+of its own across the whole section, and `rows: 2` makes it twice as tall (up to four), with a bigger
+badge and text to match. For a big "All lights" tile above the rest:
+
+```yaml
+type: tile
+entity: light.all_lights
+grid_options:
+  columns: 12
+  rows: 2
+```
+
+Any other width is drawn as a normal tile. **Fill the screen** keeps its even grid and ignores
+grid_options.
+
 A change you save in Home Assistant's dashboard editor shows on the device within a second or two.
 
 A tap that opens another view keeps the page you tapped on up until the new view and its
