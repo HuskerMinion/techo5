@@ -545,5 +545,16 @@ if [ -n "${KERNEL_UPDATE:-}" ]; then
 	) &
 fi
 
+# Anything of the owner's, kept on userdata because the root filesystem is replaced by an update: a
+# helper that has to be running all the time, a mount, a tunnel. Executable, or it is not started, and
+# in the background with its output captured, so a script that fails cannot hold up the daemon or
+# hide why. It has to come before the log is copied to userdata, or its line is lost on the next
+# boot. One previous boot's output is kept, so a helper that chatters cannot grow the file forever.
+if [ -x $LOGDIR/rc.local ]; then
+	mv -f $LOGDIR/rc.local.log $LOGDIR/rc.local.log.1 2>/dev/null
+	($LOGDIR/rc.local > $LOGDIR/rc.local.log 2>&1) &
+	log "rc.local started"
+fi
+
 cp /run/boot.log $LOGDIR/boot.log 2>/dev/null
 log "boot script done"
