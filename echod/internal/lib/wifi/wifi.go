@@ -15,6 +15,8 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
+	"syscall"
 	"time"
 
 	"github.com/HuskerMinion/techo5/echod/internal/layout"
@@ -276,18 +278,122 @@ func renewLease() {
 		}
 		return
 	}
-	pid, err := os.ReadFile("/run/udhcpc.pid")
-	if err != nil {
-		return
-	}
-	p, err := strconv.Atoi(strings.TrimSpace(string(pid)))
-	if err != nil {
-		return
-	}
-	if proc, err := os.FindProcess(p); err == nil {
+	if proc := dhcpClient(); proc != nil {
 		_ = proc.Signal(sigRenew)
+		return
+	}
+	if joinStartsDHCP {
+		go startDHCP()
 	}
 }
+
+// dhcpClient is the udhcpc running for wlan0, or nil when there is none.
+func dhcpClient() *os.Process {
+	pid, err := os.ReadFile(udhcpcPID)
+	if err != nil {
+		return nil
+	}
+	p, err := strconv.Atoi(strings.TrimSpace(string(pid)))
+	if err != nil || p <= 0 {
+		return nil
+	}
+	proc, err := os.FindProcess(p)
+	if err != nil || proc.Signal(sigAlive) != nil {
+		return nil
+	}
+	return proc
+}
+
+// sigAlive asks whether a process is there without doing anything to it.
+var sigAlive = syscall.Signal(0)
+
+// udhcpcPID is where techo5-net's udhcpc keeps its pid.
+var udhcpcPID = "/run/udhcpc.pid"
+
+// startDHCP starts the Echo Dot's DHCP client when none is running. techo5-net starts it at boot only
+// once a network was joined, so a Dot that booted with no network it could join (the case Improv is
+// for) had no one to ask for an address when it joined one later, and sat on it with IPv6 alone. This
+// starts udhcpc only, the way techo5-net does: never techo5-net itself, which starts a supplicant of
+// its own and so knocks the running one, and the network with it, off wlan0.
+func startDHCP() {
+	dhcpMu.Lock()
+	defer dhcpMu.Unlock()
+	if dhcpClient() != nil {
+		return
+	}
+	// techo5-net's hook, when it wrote one; otherwise the same, written here.
+	if _, err := os.Stat(udhcpcScript); err != nil {
+		if err := os.WriteFile(udhcpcScript, []byte(udhcpcHook), 0o755); err != nil {
+			slog.Warn("wifi: no DHCP client was running, and its script could not be written", "err", err)
+			return
+		}
+	}
+	// -b: into the background once it has a lease or has tried, so it stays to renew the lease, as
+	// techo5-net's does. Its output goes to the log techo5-net's goes to, a file and not a pipe: the
+	// client it leaves running keeps its stdout and stderr, and a pipe would hold Wait (and dhcpMu)
+	// for as long as the client lives. No deadline: killed before -b takes effect, there would be no
+	// client at all; on its own it is in the foreground for at most -t 8 tries of 3 s.
+	cmd := exec.Command("udhcpc", "-i", "wlan0", "-s", udhcpcScript, "-b", "-t", "8", "-p", udhcpcPID)
+	if f, err := os.OpenFile(udhcpcLog, os.O_WRONLY|os.O_APPEND|os.O_CREATE, 0o644); err == nil {
+		defer f.Close()
+		cmd.Stdout, cmd.Stderr = f, f
+	}
+	if err := cmd.Run(); err != nil {
+		slog.Warn("wifi: no DHCP client was running, and starting one failed", "err", err)
+		return
+	}
+	slog.Info("wifi: no DHCP client was running, started one")
+}
+
+// dhcpMu keeps two joins close together from starting two clients.
+var dhcpMu sync.Mutex
+
+// udhcpcLog is where techo5-net's udhcpc writes.
+var udhcpcLog = "/data/techo5-linux/udhcpc.log"
+
+// ownConf is the network the installer or wifi-set wrote on the Dot (techo5-net's OWN).
+var ownConf = "/data/techo5-linux/wifi.conf"
+
+// keptDate is the time the supplicant's file is to carry when it is written, for it to stay the one
+// the Dot boots with, and whether that is not simply now. techo5-net keeps the file only while it is
+// newer than ownConf (`test -nt`, whole seconds), and rebuilds it from ownConf otherwise: a Dot that
+// booted with no network has no time from NTP, so a join stamped it with a clock years behind the
+// installer's ownConf, and the next boot threw the network joined away for the one it could not join.
+// So it is dated a second past ownConf whenever the clock is not already past it.
+func keptDate() (time.Time, bool) {
+	if !keptByDate {
+		return time.Time{}, false
+	}
+	own, err := os.Stat(ownConf)
+	if err != nil {
+		return time.Time{}, false
+	}
+	if time.Now().Unix() > own.ModTime().Unix() {
+		return time.Time{}, false
+	}
+	return time.Unix(own.ModTime().Unix()+1, 0), true
+}
+
+// udhcpcScript is where techo5-net puts the hook busybox's udhcpc hands a lease to.
+var udhcpcScript = "/run/udhcpc.sh"
+
+// udhcpcHook is techo5-net's hook (techo5-dot tools/linux/rootfs/usr/local/sbin/techo5-net), for when
+// it never got as far as writing it: busybox's client hands a lease to a script or throws it away.
+const udhcpcHook = `#!/bin/sh
+case "$1" in
+deconfig)
+	ifconfig "$interface" 0.0.0.0
+	;;
+bound | renew)
+	ifconfig "$interface" "$ip" netmask "$subnet"
+	if [ -n "$router" ]; then
+		while route del default gw 0.0.0.0 dev "$interface" 2>/dev/null; do :; done
+		route add default gw "${router%% *}" dev "$interface"
+	fi
+	[ -n "$dns" ] && { for s in $dns; do echo "nameserver $s"; done > /etc/resolv.conf; }
+	;;
+esac
+`
 
 // decodeName undoes the escaping wpa_cli puts on a network name on the way out. The supplicant prints
 // a name through printf_encode, which spells a backslash, a quote, the whitespace characters and
