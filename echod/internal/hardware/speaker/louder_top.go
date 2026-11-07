@@ -4,10 +4,12 @@ package speaker
 // paths_dot.go), and music stays well short of what the stock firmware plays, with Speaker gain unable
 // to make up for it. The switch takes the steps above 16 in hotter, rising evenly to the set's lift at
 // 30 (step s gains lift*(s-16)/14 dB), and leaves the steps up to 16, where replies usually play, as
-// they are. The tuning's compressor and limiter take the extra peaks. Off by default: the curve stays
-// the one TestVolumeInFrontKeepsTheLoudness holds it to unless someone wants more.
+// they are. The tuning's compressor and limiter take the extra peaks. Off by default, so a Dot plays as
+// it did unless someone wants more; TestVolumeInFrontKeepsTheLoudness holds both, off and on.
 //
-// Listened to on a Dot with radio at step 30 and 8 dB: clearly louder, no audible distortion.
+// Listened to on a Dot with radio at step 30 and 8 dB: clearly louder, no audible distortion; and
+// with Speaker gain at its top (config.SpeakerGainMax) and bass-heavy music at step 30: no audible
+// clipping.
 
 // topLifts is how many dB hotter Louder top volume takes a tuning set's top step. A set with none
 // (the Echo 2nd gen's radar, every other board's) leaves the switch doing nothing.

@@ -171,48 +171,90 @@ func untunedLevel(src []float32, db float64) float64 {
 // behind it, so nobody's dial changes, and every step is louder than the one below. The Dot's and the
 // Spot's steps above 16 rise evenly to the same top instead (paths_dot.go), so they are held to that.
 // The Echo 2nd gen played untuned before its tuning was read, so its steps are held to that instead.
-// Needs a copy of the unit's tuning and some music:
+//
+// Louder top volume (louder_top.go) is held both ways. Off, the steps are as above. On, the steps up to
+// 16 are exactly as they are off, and each step above 16 is louder than off by no more than its lift
+// (up to the full lift at the top), still each louder than the one below. How much of the lift is heard
+// is for the tuning's compressor and limiter to say, so it is logged rather than held to. Needs a copy
+// of the unit's tuning and some music:
 //
 //	ECHOLOCAL_VENDOR_DIR=/tmp/coefs ECHOLOCAL_MUSIC_DIR=/tmp/music go test ./internal/hardware/speaker/ -run VolumeInFront -v
 func TestVolumeInFrontKeepsTheLoudness(t *testing.T) {
 	tun, curve := vendorTuning(t)
 	songs := leveledMusic(t)
-	behind := func(step int) float64 {
-		var sum float64
-		for _, s := range songs {
-			r, _ := levels(t, tun, s, step, 1, gainForStep(OutputSpeaker, step)*untunedTrim)
-			if c, ok := untunedCurves[tun.Name()]; ok {
-				r = untunedLevel(s, c[step])
+
+	// level is each step's level with c in front of the tuning.
+	level := func(t *testing.T, c *[VolumeSteps + 1]float64) (out [VolumeSteps + 1]float64) {
+		for step := 1; step <= VolumeSteps; step++ {
+			for _, s := range songs {
+				n, _ := levels(t, tun, s, step, gainForStep(OutputSpeaker, step)*firstRatio(c, OutputSpeaker, step), 1)
+				out[step] += n / float64(len(songs))
 			}
-			sum += r
 		}
-		return sum / float64(len(songs))
+		return out
 	}
-	var from, top float64
-	if evenTop(tun.Name()) {
-		from, top = behind(16), behind(VolumeSteps)
+	rising := func(t *testing.T, l [VolumeSteps + 1]float64) {
+		for step := 2; step <= VolumeSteps; step++ {
+			if l[step] <= l[step-1] {
+				t.Errorf("step %d: %.1f dB, no louder than the step below (%.1f dB)", step, l[step], l[step-1])
+			}
+		}
 	}
-	last := math.Inf(-1)
-	for step := 1; step <= VolumeSteps; step++ {
-		g := gainForStep(OutputSpeaker, step)
-		was := behind(step)
-		if evenTop(tun.Name()) && step > 16 {
-			was = from + (top-from)*float64(step-16)/float64(VolumeSteps-16)
+
+	var off [VolumeSteps + 1]float64
+	t.Run("off", func(t *testing.T) {
+		behind := func(step int) float64 {
+			var sum float64
+			for _, s := range songs {
+				r, _ := levels(t, tun, s, step, 1, gainForStep(OutputSpeaker, step)*untunedTrim)
+				if c, ok := untunedCurves[tun.Name()]; ok {
+					r = untunedLevel(s, c[step])
+				}
+				sum += r
+			}
+			return sum / float64(len(songs))
 		}
-		var now float64
-		for _, s := range songs {
-			n, _ := levels(t, tun, s, step, g*firstRatio(&curve, OutputSpeaker, step), 1)
-			now += n / float64(len(songs))
+		var from, top float64
+		if evenTop(tun.Name()) {
+			from, top = behind(16), behind(VolumeSteps)
 		}
-		if math.Abs(now-was) > 1.5 {
-			t.Errorf("step %d: %.1f dB, was %.1f dB", step, now, was)
+		off = level(t, &curve)
+		for step := 1; step <= VolumeSteps; step++ {
+			was := behind(step)
+			if evenTop(tun.Name()) && step > 16 {
+				was = from + (top-from)*float64(step-16)/float64(VolumeSteps-16)
+			}
+			if math.Abs(off[step]-was) > 1.5 {
+				t.Errorf("step %d: %.1f dB, was %.1f dB", step, off[step], was)
+			}
+			t.Logf("step %2d: %.1f dB (was %.1f)", step, off[step], was)
 		}
-		if now <= last {
-			t.Errorf("step %d: %.1f dB, no louder than the step below (%.1f dB)", step, now, last)
+		rising(t, off)
+	})
+
+	t.Run("on", func(t *testing.T) {
+		lift, ok := topLifts[tun.Name()]
+		if !ok {
+			t.Skipf("Louder top volume has no lift for the %s tuning", tun.Name())
 		}
-		last = now
-		t.Logf("step %2d: %.1f dB (was %.1f)", step, now, was)
-	}
+		if off[VolumeSteps] == 0 {
+			off = level(t, &curve)
+		}
+		lifted := liftTop(curve, lift)
+		on := level(t, &lifted)
+		for step := 1; step <= VolumeSteps; step++ {
+			most := lifted[step] - curve[step]
+			switch d := on[step] - off[step]; {
+			case step <= liftedFrom && math.Abs(d) > 0.01:
+				t.Errorf("step %d: %.1f dB, %.1f dB with the switch off", step, on[step], off[step])
+			case step > liftedFrom && (d <= 0 || d > most+0.05):
+				t.Errorf("step %d: %.1f dB, %+.1f dB on %.1f dB with the switch off, want louder by at most %.1f dB",
+					step, on[step], d, off[step], most)
+			}
+			t.Logf("step %2d: %.1f dB (%.1f off, %+.1f of at most %+.1f)", step, on[step], off[step], on[step]-off[step], most)
+		}
+		rising(t, on)
+	})
 }
 
 // punchyCrest is peaks over the average, in dB, that still sound like music rather than a flattened
