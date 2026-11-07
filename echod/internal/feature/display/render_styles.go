@@ -470,6 +470,7 @@ func (r *renderer) dashboardStyle(s scene, box image.Rectangle) {
 	// up; without the row, the weather line under the date has it. Beside the time, the icon over the
 	// degrees, where that always fits; otherwise at the end of the events' heading. A tap on it opens the
 	// forecast, as one on the row does.
+	tempShown := false
 	if t := s.weather.Temp; t != "" && showRow {
 		if tempX+tempW <= col-r.s(40) {
 			cx := tempX + tempW/2
@@ -478,7 +479,9 @@ func (r *renderer) dashboardStyle(s scene, box image.Rectangle) {
 			}
 			r.text(hf, t, cx-r.width(hf, t)/2, base, cream)
 			r.setTempAt(image.Rect(tempX, top+r.s(14), tempX+tempW, base).Inset(-r.s(10)))
-		} else {
+			tempShown = true
+		} else if len(s.alerts.Here) == 0 {
+			// Not with an alert up: its badge is at this corner, and the weather line under the date has it.
 			hf, mark = r.styleFace(true, 30), r.s(40)
 			x := r.w - r.margin - r.width(hf, t)
 			r.text(hf, t, x, top+r.s(24), cream)
@@ -487,6 +490,7 @@ func (r *renderer) dashboardStyle(s scene, box image.Rectangle) {
 			}
 			wide := max(r.width(hf, "-88°"), r.width(hf, "888°"))
 			r.setTempAt(image.Rect(r.w-r.margin-wide-r.s(10)-mark, top, r.w-r.margin, top+r.s(34)))
+			tempShown = true
 		}
 	}
 	r.styleDateIn(r.small, s, box.Min.X, base+r.s(50), -1, col-r.s(50)-box.Min.X)
@@ -561,7 +565,7 @@ func (r *renderer) dashboardStyle(s scene, box image.Rectangle) {
 
 	// Without room for the row, today's weather on a line, so the style that leaves out the weather
 	// corner still says what it is outside and still opens the forecast.
-	if !showRow {
+	if !showRow || (s.weather.Temp != "" && !tempShown) {
 		if line := weatherText(s); line != "" {
 			y := min(base+r.s(100), box.Max.Y)
 			ix := box.Min.X
@@ -574,9 +578,13 @@ func (r *renderer) dashboardStyle(s scene, box image.Rectangle) {
 			// events, which go further down without the row.
 			line = r.clipTo(r.small, line, col-r.s(50)-ix)
 			r.text(r.small, line, ix, y, dim)
-			r.setWeatherAt(image.Rect(box.Min.X, y-r.s(40), ix+r.width(r.small, line), y+r.s(14)))
+			if !showRow {
+				r.setWeatherAt(image.Rect(box.Min.X, y-r.s(40), ix+r.width(r.small, line), y+r.s(14)))
+			}
 		}
-		return
+		if !showRow {
+			return
+		}
 	}
 	days = days[:min(len(days), 5)]
 	left, right := r.dashRowSpan(days, box, row, s.callButton)
