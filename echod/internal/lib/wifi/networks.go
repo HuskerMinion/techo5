@@ -5,6 +5,7 @@ import (
 	"crypto/pbkdf2"
 	"crypto/sha1"
 	"encoding/hex"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"strings"
@@ -76,6 +77,14 @@ func writeFile(path, body string) error {
 		f.Close()
 		os.Remove(tmp)
 		return err
+	}
+	// Dated before the sync, which then carries the date to the disk with the rest (keptDate).
+	if path == Conf {
+		if t, ok := keptDate(); ok {
+			if err := os.Chtimes(tmp, t, t); err != nil {
+				slog.Warn("wifi: the networks saved may not outlast a restart", "err", err)
+			}
+		}
 	}
 	if err := f.Sync(); err != nil {
 		f.Close()
