@@ -56,6 +56,12 @@ const lostAfter = 10 * time.Second
 // ResumeWithin, and for the same reasons. Not imported: alarm imports this package.
 const resumeWithin = 2 * time.Minute
 
+// ForgetGrace is how long Home Assistant's timers are kept after it stops listening, in case the
+// link is only reconnecting: they are still Home Assistant's, and dropping them at once takes the
+// countdown off the screen and off the wall clock for a blink. A link that is back within it carries
+// on as if nothing happened; one that is not leaves a countdown this device can no longer follow.
+const ForgetGrace = time.Minute
+
 // Timers is every timer Home Assistant has told this device about.
 type Timers struct {
 	countdown *led.Claim
@@ -67,6 +73,10 @@ type Timers struct {
 
 	// woke is how a new timer restarts the redraw, which stops while there is nothing counting down.
 	woke chan struct{}
+
+	// forgetWait is a ForgetAfter waiting out its grace, closed to call it off if Home Assistant
+	// listens again before the grace runs out.
+	forgetWait chan struct{}
 
 	mu   sync.Mutex
 	held map[string]*timer
@@ -586,6 +596,49 @@ func (t *Timers) Forget() {
 	}
 	t.mu.Unlock()
 	t.end(gone, time.Now())
+}
+
+// ForgetAfter drops Home Assistant's timers once the grace has passed, unless Keep comes first: a
+// link that is only reconnecting is back in a moment, and the countdown it still holds must not go
+// with it. One that stays away leaves timers this device can no longer follow, which are dropped
+// when the grace runs out.
+func (t *Timers) ForgetAfter(grace time.Duration) {
+	t.mu.Lock()
+	if t.forgetWait != nil {
+		close(t.forgetWait)
+	}
+	wait := make(chan struct{})
+	t.forgetWait = wait
+	t.mu.Unlock()
+
+	safe.Go("timers waiting for home assistant", func() {
+		timer := time.NewTimer(grace)
+		defer timer.Stop()
+		select {
+		case <-timer.C:
+			t.mu.Lock()
+			still := t.forgetWait == wait
+			if still {
+				t.forgetWait = nil
+			}
+			t.mu.Unlock()
+			if still {
+				t.Forget()
+			}
+		case <-wait:
+		}
+	})
+}
+
+// Keep calls off a pending ForgetAfter: Home Assistant is listening again, so its timers are still
+// its own.
+func (t *Timers) Keep() {
+	t.mu.Lock()
+	if t.forgetWait != nil {
+		close(t.forgetWait)
+		t.forgetWait = nil
+	}
+	t.mu.Unlock()
 }
 
 // Ringing reports whether a finished timer is sounding, which is one of the things that makes the

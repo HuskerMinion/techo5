@@ -112,8 +112,10 @@ func build() *Voice {
 
 	v.vs.OnTimer = timer.Get().Event
 	v.vs.OnSubscribed = func(subscribed bool) {
-		if !subscribed {
-			timer.Get().Forget()
+		if subscribed {
+			timer.Get().Keep()
+		} else {
+			timer.Get().ForgetAfter(timer.ForgetGrace)
 		}
 		v.turn.post(event{kind: evWatch})
 	}
