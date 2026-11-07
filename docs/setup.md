@@ -2223,6 +2223,10 @@ stops it at shutdown: write it to run for as long as the device is up, or to han
 supervision. A script that does not exit is not waited for, and one that fails cannot hold up the
 daemon.
 
+This is on the Echo Show builds (Show 8 2nd gen included) and the Skylight; the Dot, Echo and Spot
+builds do not run it yet. Anyone with SSH or a root shell can leave a script here that runs at every
+boot, so only put something here you trust.
+
 ## Questions and problems
 
 Open an [issue on GitHub](https://github.com/HuskerMinion/techo5/issues). Say which device and
