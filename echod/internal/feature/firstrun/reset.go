@@ -69,8 +69,9 @@ var restart = func() { update.Restart("reset for someone else") }
 func resetPath() string { return filepath.Join(stateDir, "reset") }
 
 // Reset clears the device for somebody else and restarts it into first run. Now it only forgets the
-// Wi-Fi networks (wpa_supplicant keeps that itself) and leaves the reset and first-run markers; the
-// next start wipes the rest (wipe) before anything else runs.
+// Wi-Fi networks, from the running supplicant and from every file a boot could bring one back from
+// (wipeWifi), and leaves the reset and first-run markers; the next start wipes the rest (wipe) before
+// anything else runs.
 func Reset() error {
 	if err := os.WriteFile(markerPath(), nil, 0o600); err != nil {
 		return err
@@ -85,6 +86,7 @@ func Reset() error {
 			slog.Warn("reset: forgetting a network failed", "err", err)
 		}
 	}
+	wipeWifi()
 	slog.Warn("reset for someone else: restarting to wipe the device")
 	safe.Go("reset for someone else", func() {
 		time.Sleep(2 * time.Second) // the answer reaches whoever asked first
@@ -107,6 +109,7 @@ func wipe() {
 		slog.Error("reset: putting the settings back failed", "err", err)
 		return
 	}
+	wipeWifi() // again: a wipe after a reset that stopped short of it
 	for _, p := range personal {
 		if err := os.RemoveAll(filepath.Join(stateDir, p)); err != nil {
 			slog.Warn("reset: removing failed", "what", p, "err", err)

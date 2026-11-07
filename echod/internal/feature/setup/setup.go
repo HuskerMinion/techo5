@@ -13,6 +13,7 @@
 package setup
 
 import (
+	"context"
 	"crypto/rand"
 	"encoding/base64"
 	"log/slog"
@@ -26,6 +27,7 @@ import (
 	"github.com/HuskerMinion/techo5/echod/internal/feature/web"
 	"github.com/HuskerMinion/techo5/echod/internal/hardware/buttons"
 	"github.com/HuskerMinion/techo5/echod/internal/lib/hook"
+	"github.com/HuskerMinion/techo5/echod/internal/lib/wifi"
 )
 
 func init() {
@@ -293,11 +295,13 @@ func (f *Feature) button(e buttons.Event) {
 			return
 		}
 		if firstRunTakesPress() {
-			// First run still to do, with nothing connected: the press is setup's, as the ring's
-			// orange says (led.Splash), and it opens the page the way a hold does.
+			// First run still to do, with nothing connected: the press is first run's, as the ring's
+			// orange says (led.Splash), and nothing that would answer it otherwise does (TookPress). It
+			// opens the page the way a hold does, once the device is on a network: before that the page
+			// cannot be reached, and the press is Improv's, which hears every press itself while it is
+			// offering (feature/improv), to let the phone in.
 			if !f.On() {
-				slog.Info("setup page opened by a press during first run")
-				f.Open()
+				go f.openWhenOnline()
 			}
 			return
 		}
@@ -451,4 +455,22 @@ func newToken() string {
 		return ""
 	}
 	return base64.RawURLEncoding.EncodeToString(b)
+}
+
+// online is whether the device has an address to be reached at (a variable for the tests).
+var online = func() bool {
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+	return wifi.Current(ctx).Address != ""
+}
+
+// openWhenOnline opens the page for a press during first run if the device is on a network. Off the
+// button's goroutine: reading the address asks the supplicant.
+func (f *Feature) openWhenOnline() {
+	if !online() {
+		slog.Info("a press during first run, with no network: left to Improv")
+		return
+	}
+	slog.Info("setup page opened by a press during first run")
+	f.Open()
 }

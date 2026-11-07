@@ -176,3 +176,28 @@ func TestAPressDuringFirstRunIsSetups(t *testing.T) {
 		t.Fatal("a press was setup's with Home Assistant connected")
 	}
 }
+
+// A press during first run opens the page only once the device is on a network; offline it is left to
+// Improv, which hears the press itself.
+func TestAFirstRunPressOpensThePageOnlyOnline(t *testing.T) {
+	config.Use(t.TempDir() + "/state.json")
+	hc, on := firstrun.HomeConnected, online
+	t.Cleanup(func() { firstrun.HomeConnected, online = hc, on })
+	firstrun.HomeConnected = func() bool { return false }
+	if err := config.Set().FirstRun().Settle(false); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = config.Set().FirstRun().Finish() })
+	f := build()
+	up := false
+	online = func() bool { return up }
+	f.openWhenOnline()
+	if f.On() {
+		t.Fatal("the page opened with no network")
+	}
+	up = true
+	f.openWhenOnline()
+	if !f.On() {
+		t.Fatal("the page did not open on the network")
+	}
+}
