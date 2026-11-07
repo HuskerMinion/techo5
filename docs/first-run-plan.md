@@ -38,7 +38,7 @@ where it stopped; each step that is done stays done.
      later from the setup page (standalone-plan.md).
 5. **A quick check.** A short sound at a sensible volume ("can you hear this?"), then "say the wake
    word" with a pass or a retry, so a bad speaker or microphone shows up now and not a week later.
-6. **Updates.** Install the latest release now, and turn automatic updates on, since the person it
+6. **Updates.** Look for the latest release and fetch it in the background (see Decided), and turn automatic updates on, since the person it
    was given to will not be watching the release page.
 7. **Done.** What to say to it, how to open setup again, and how to reset it.
 
@@ -66,10 +66,15 @@ name and key and runs the routine again, for passing a device on a second time.
 3. The gift install and the reset.
 4. The Dot's spoken prompts.
 
-## Open questions
+## Decided
 
-- Where the key is shown on a Dot: the setup page is the only place, and it needs the network from
-  step 1 first. That order works, but the page has to be opened without a press on the device the
-  first time, or the press has to be part of the said instructions.
-- Whether step 6 should wait for the update before going on, or run it in the background. A Dot on a
-  slow network takes minutes.
+- **A Dot hands over its key through Improv.** Once it has joined the network, Improv's result is an
+  address the phone opens: the setup page, with a one-time code in it, good for first run only and
+  for about ten minutes. Whoever gave the Dot its Wi-Fi was in Bluetooth range moments before, which
+  is the trust a press on the device gives, so this first visit needs no press. The page shows the
+  key with a copy button, and the name and room. After first run the page opens the usual way, with
+  a press, and can show the key again. A gift install can also print a card with a QR code for the
+  key and the page, for the box.
+- **The update is installed after setup.** Step 6 looks for one and downloads it in the background;
+  it goes on at the next quiet time once setup is done, and the done step says so ("I'll update
+  myself tonight" on a Dot). Setup never reboots the device.
