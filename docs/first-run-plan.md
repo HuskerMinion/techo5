@@ -66,6 +66,35 @@ name and key and runs the routine again, for passing a device on a second time.
 3. The gift install and the reset.
 4. The Dot's spoken prompts.
 
+## Built so far
+
+- **Improv for the Dot** (#355): works on a Dot 2nd gen, tested 2026-11-07; three fixes asked for
+  (a second session after a failed join, spaces at the ends of a name or passphrase, closing during
+  a join).
+- **The routine, on every device** (feature/firstrun holds the steps, where they are saved, and what
+  they do; each face draws them): Wi-Fi, time zone, name and room (the room as Home Assistant's
+  suggested area), Home Assistant (added with nothing typed, or the key with a QR code, or on its
+  own), updates (automatic updates on; an update installs that night), a sound check and the done
+  card. Faces: a Show's screen (tried on a Show 8 2nd gen), the Spot's round screen, a Panel's screen
+  (no Wi-Fi or Updates step), and the setup page, which is the Dot's and works on any device. In
+  English only so far.
+- **One done flag for every device**, set by finishing first run anywhere. A device in use before
+  first run (a Show whose welcome card was put away, or one Home Assistant has had) is done from the
+  start. Overnight automatic updates wait until first run is done.
+- **The Dot's ring** breathes orange while first run is to do and nothing is connected, and a short
+  press of the action button then opens the setup page. No spoken prompts: the Dot has no speech of
+  its own yet, so its steps are the setup page's.
+- **The gift install, device side**: the installers' `--for-someone-else` leaves a `firstrun` marker
+  in the state directory, no network and no key. The device starts first run from the beginning,
+  whatever its settings say, on the Wi-Fi step when no network is saved, and any Home Assistant can
+  add it with nothing typed until one does. The marker goes when first run finishes.
+- **Reset for someone else**: the setup page, Settings → General on a screen, Home Assistant's
+  `reset_for_someone_else` action, and holding action and volume down for 10 seconds on a Dot. What it
+  clears is listed in setup.md.
+- **The one-time code**: the setup page takes `/setup?code=...`, a code the daemon mints (setup's
+  `MintCode`), good for one browser for 10 minutes while first run is to do. Improv (#355) is to hand
+  it to the phone; nothing mints one until then.
+
 ## Decided
 
 - **A Dot hands over its key through Improv.** Once it has joined the network, Improv's result is an

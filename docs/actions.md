@@ -95,6 +95,31 @@ data:
   confirm: leave
 ```
 
+## Reset the device for someone else
+
+In YAML, refer to this action as `esphome.<node>_reset_for_someone_else`.
+
+For a device you're giving to someone else, who will set it up from the start. The device forgets its
+Wi-Fi networks, name, room, Home Assistant's encryption key and its access to Home Assistant, puts
+every setting back to how a new install has it (alarms, timers and the phone book go too), deletes the
+old home's files, and restarts into first run. [setup.md](setup.md#giving-a-device-to-someone-else)
+lists everything it clears. It leaves your network at once, and it cannot be undone.
+
+Afterward, delete the device from **Settings → Devices & services → ESPHome** in your Home Assistant.
+With no key, the next Home Assistant can add it with nothing typed.
+
+### confirm (Required)
+
+*string*
+
+Must be `reset`. Anything else changes nothing.
+
+```yaml
+action: esphome.office_reset_for_someone_else
+data:
+  confirm: reset
+```
+
 ## Set the network address
 
 In YAML, refer to this action as `esphome.<node>_network_address`.

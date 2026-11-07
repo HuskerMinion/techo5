@@ -15,6 +15,77 @@ network over plain HTTP or RTSP, as most home devices' do: they are made for a h
 trust. Somebody on it who records a login can try passwords against it, so give each a long password
 you use nowhere else.
 
+### First run
+
+The first time a TECHO5 device starts, it walks whoever plugged it in through six steps: **Wi-Fi**,
+**Time zone**, **Name and room**, **Home Assistant**, **Updates** and a **Sound check**. A step that is
+already done, such as Wi-Fi set by the installer, just shows what is set, with Next. Each step is kept
+as it is finished, so a restart picks up where it stopped, and finishing it on any face (the screen or
+the setup page) finishes it everywhere.
+
+- **On a Show** (and the Skylight Calendar), the screen shows a card a step, starting and ending with
+  the welcome card.
+- **On a Spot**, the round screen shows the same steps, with the buttons stacked. What needs typing
+  (another network, a name, a zone not in the clock's list) is done on a phone: **On a phone** opens
+  the setup page, and the Spot asks for the tap that lets the phone in.
+- **On a TECHO5 Panel**, the screen shows the same cards without **Wi-Fi** and **Updates**: the
+  tablet's own settings join the network, and the app updates itself.
+- **On a Dot, an Echo 2nd gen or a Dot 3rd gen**, there is no screen, so first run is on the
+  [setup page](#the-setup-page). While it is still to do and nothing is connected, the light ring
+  breathes **orange**, and a short press of the action button opens the setup page (as holding it does
+  at any time). The page opens on first run, a form a step. Any device's setup page does the same
+  while first run is still to do; **All settings** at its foot goes past it.
+
+The steps:
+
+- **Name and room:** the room goes to Home Assistant as the device's suggested area, so it lands in
+  that room when it is added. Once Home Assistant has the device, rooms are changed there. Renaming
+  restarts the device's software, and first run comes back on the same step.
+- **Home Assistant:** **Add it** lets Home Assistant add the device with nothing typed, for 15
+  minutes (Home Assistant 2026.9 or later). It sets a new encryption key, so the one the installer
+  printed stops working. **Type the key** shows the address, port and key, with a QR code to scan
+  it from a phone. **On its own** skips Home Assistant: alarms, timers, the radio and the clock work
+  without it. A device installed for someone else has no key at all, so any Home Assistant can add it
+  with nothing typed until one does. Home Assistant sends the key unencrypted, so add a device on a
+  network you trust.
+- **Updates:** turns **Install updates automatically** on, or leaves it off. An update that is
+  waiting installs that night, between 2 and 5 AM, and nothing installs by itself until first run is
+  finished.
+
+A device that was already set up before first run came in never shows it: a Show whose welcome card
+was put away, or any device Home Assistant has had.
+
+### Giving a device to someone else
+
+Install it with the installer's `--for-someone-else`: no Wi-Fi, no Home Assistant key and no name go
+on it, and it starts in first run from the beginning, whatever it was before. A Show, a Spot or a
+Panel with no Wi-Fi starts on the **Wi-Fi** step (a Panel's tablet joins the network itself). A Dot
+with no Wi-Fi is to get its network over Bluetooth (Improv, not in yet), with its ring breathing
+orange; until then a Dot's network comes from the installer.
+
+To pass on a device that is already set up, use **Reset for someone else**: on the setup page under
+**General**, on a screen under **Settings → General** (tap it twice), from Home Assistant with the
+`reset_for_someone_else` action (`confirm: reset`), or on a Dot or an Echo 2nd gen by holding the
+action button and volume down together for 10 seconds (the ring turns orange). Holding them also
+does what each does alone on the way: the setup page opens, Bluetooth pairing starts and the volume
+goes down. The device then restarts into first run. A reset clears:
+
+- every Wi-Fi network it knows, so it leaves the network at once
+- its name (it is named from its MAC address again) and its room
+- Home Assistant's encryption key (none, so the next Home Assistant can add it with nothing typed),
+  the device's access to Home Assistant (address and token), and realtime voice's key
+- every setting, back to how a new install has it: alarms, timers, the house word, the radio
+  stations, the dashboard, calendars, Music Assistant, the assistant's servers and keys, the theme,
+  and automatic updates (off)
+- the SIP account and the phone book
+- the slideshow's photos, sounds and fonts of its own, wake word recordings and clips
+- SSH keys, Tailscale's and NetBird's logins, Spotify's login
+- the Tessera dashboard's layout, the time server, and the time zone chosen on the device
+- crash reports and logs, which can hold names and addresses
+
+It keeps the wake word models, the device's own MAC address and serial, and what the hardware has
+measured of itself. It cannot be undone.
+
 ### The setup page
 
 Many steps here mention the setup page. It's the device's own web page, at
