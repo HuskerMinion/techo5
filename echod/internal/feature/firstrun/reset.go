@@ -87,6 +87,9 @@ func Reset() error {
 		}
 	}
 	wipeWifi()
+	if wifiAvailable() {
+		dropNetwork(ctx)
+	}
 	slog.Warn("reset for someone else: restarting to wipe the device")
 	safe.Go("reset for someone else", func() {
 		time.Sleep(2 * time.Second) // the answer reaches whoever asked first
@@ -102,12 +105,33 @@ func Reset() error {
 // than replaced, so the next Home Assistant can add the device with nothing typed. The reset marker
 // goes last, so a wipe cut short is done again at the next start.
 func wipe() {
-	if err := os.Remove(hass.Path); err != nil && !errors.Is(err, fs.ErrNotExist) {
-		slog.Warn("reset: removing Home Assistant's access failed", "err", err)
-	}
+	wipeFiles()
 	if err := config.Set().FirstRun().ForSomeoneElse(); err != nil {
 		slog.Error("reset: putting the settings back failed", "err", err)
 		return
+	}
+	if err := os.Remove(resetPath()); err != nil && !errors.Is(err, fs.ErrNotExist) {
+		slog.Warn("reset: removing its marker failed", "err", err)
+	}
+	slog.Warn("reset for someone else: wiped; first run from the start")
+}
+
+// BeforeConfig is the part of a reset's wipe that has to come before the daemon reads who it is
+// (boot, before config.Started): the name file above all, which the name the device announces is read
+// from once at the start, so wiped any later the old name is announced until the next restart. The
+// settings are Settle's, once they are loaded.
+func BeforeConfig() {
+	if _, err := os.Stat(resetPath()); err == nil {
+		wipeFiles()
+	}
+}
+
+// wipeFiles deletes the old home's files: Home Assistant's access first, the networks a boot could
+// bring back, then the rest (personal). Done twice after a reset, harmlessly: before the settings are
+// read and with them.
+func wipeFiles() {
+	if err := os.Remove(hass.Path); err != nil && !errors.Is(err, fs.ErrNotExist) {
+		slog.Warn("reset: removing Home Assistant's access failed", "err", err)
 	}
 	wipeWifi() // again: a wipe after a reset that stopped short of it
 	for _, p := range personal {
@@ -118,8 +142,12 @@ func wipe() {
 	if err := os.RemoveAll(filepath.Join(filepath.Dir(stateDir), "techo5-spotify")); err != nil {
 		slog.Warn("reset: removing Spotify's login failed", "err", err)
 	}
-	if err := os.Remove(resetPath()); err != nil && !errors.Is(err, fs.ErrNotExist) {
-		slog.Warn("reset: removing its marker failed", "err", err)
-	}
-	slog.Warn("reset for someone else: wiped; first run from the start")
 }
+
+// dropNetwork takes the device off the network after the networks are forgotten (a variable for the
+// tests): a restart of the daemon keeps the interface's address, and a device that still has one looks
+// online to everything that asks, Improv's offer at boot among them.
+var (
+	dropNetwork   = wifi.Drop
+	wifiAvailable = wifi.Available
+)

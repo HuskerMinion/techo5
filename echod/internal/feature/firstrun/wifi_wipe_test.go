@@ -1,6 +1,7 @@
 package firstrun
 
 import (
+	"context"
 	"os"
 	"path/filepath"
 	"strings"
@@ -44,6 +45,11 @@ func TestResetLeavesNoNetworkToComeBack(t *testing.T) {
 	addressWifi = filepath.Join(linux, "network.conf")
 	restarted := make(chan struct{}, 1)
 	restart = func() { restarted <- struct{}{} }
+	dropped := 0
+	wasDrop, wasAvail := dropNetwork, wifiAvailable
+	t.Cleanup(func() { dropNetwork, wifiAvailable = wasDrop, wasAvail })
+	dropNetwork = func(context.Context) { dropped++ }
+	wifiAvailable = func() bool { return true }
 
 	if err := Reset(); err != nil {
 		t.Fatal(err)
@@ -59,6 +65,9 @@ func TestResetLeavesNoNetworkToComeBack(t *testing.T) {
 			t.Errorf("%s still has the old network", p)
 		}
 	}
+	if dropped != 1 {
+		t.Errorf("the reset took the device off the network %d times, want once", dropped)
+	}
 	b, err := os.ReadFile(conf)
 	if err != nil || string(b) != emptyWifi {
 		t.Errorf("the configuration is %q (%v), want one with no network", b, err)
@@ -70,5 +79,26 @@ func TestResetLeavesNoNetworkToComeBack(t *testing.T) {
 	Settle()
 	if b, _ := os.ReadFile(conf); string(b) != emptyWifi {
 		t.Errorf("after the start the configuration is %q", b)
+	}
+}
+
+// The name the device announces is read once at the start: a reset's wipe takes the name file away
+// before that (BeforeConfig), so the device comes back named from its MAC, not the old home's name.
+func TestTheNameGoesBeforeItIsRead(t *testing.T) {
+	dir := fresh(t)
+	name := filepath.Join(dir, "name")
+	if err := os.WriteFile(name, []byte("Extra Dot 2\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	BeforeConfig()
+	if _, err := os.Stat(name); err != nil {
+		t.Fatal("the name went with no reset asked for")
+	}
+	if err := os.WriteFile(filepath.Join(dir, "reset"), nil, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	BeforeConfig()
+	if _, err := os.Stat(name); !os.IsNotExist(err) {
+		t.Fatalf("the name is still there before the settings are read: %v", err)
 	}
 }

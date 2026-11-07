@@ -43,6 +43,9 @@ func Run(ctx context.Context) error {
 	// What this process was told, put where everything else reads its settings from, so nothing has to
 	// be handed a struct to find out what the device is called or where it listens. Before anything
 	// else: the components were built during init and read this the moment they are asked to restore.
+	// A reset for someone else asked for at the last run wipes the name first, so the device comes
+	// back named from its MAC rather than announcing the old home's name until the next restart.
+	firstrun.BeforeConfig()
 	config.Started(config.Device{
 		Name: name(),
 		Addr: listenAddr(),
