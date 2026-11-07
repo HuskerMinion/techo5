@@ -1,0 +1,75 @@
+# First run: a device that sets itself up
+
+A plan, not built. The goal: TECHO5 goes onto a device, the device goes to someone else, and they plug
+it in and are walked through the rest, the way a new Echo is. Wi-Fi is the bare minimum. Everything
+after it is there to make the device right for that home without a computer or the installer.
+
+## What there is today
+
+- **Shows and the Spot** can join a network from their own screen.
+- **The setup page** (setup-page-design.md) sets the time zone and Wi-Fi, opened from Privacy on the
+  screen, from Home Assistant, or by holding a Dot's action button. A press on the device lets one
+  browser in. It needs the device on a network already.
+- **A Dot** gets its first network from the installer over USB, and from nowhere else. PR #355 (Improv
+  Wi-Fi over Bluetooth) is the piece for that. It is open: the review found that the Dot 2 and Echo
+  2nd gen kernels (3.18) cannot advertise through bluetoothd, so it needs another path there.
+- **Home Assistant** is assumed from the start. The installer writes an encryption key to the
+  computer it ran on, and whoever adds the device needs that key.
+- **Nothing runs on first boot.** The device comes up as if it were already set up.
+
+## The flow
+
+One routine, run on first boot and again after a reset. It can be left at any step and picked up
+where it stopped; each step that is done stays done.
+
+1. **Wi-Fi.**
+   - Show and Spot: the network list on the screen, a keyboard for the password, and a check that it
+     joined before going on.
+   - Dot and Echo 2nd gen: Improv from a phone (Home Assistant's app finds it, or improv-wifi.com in
+     Chrome). The ring says where it is: a slow color while it waits, a spin while it joins, green
+     when it is on.
+2. **Time zone and language.** A guess from the network it joined, shown to confirm or change.
+3. **Name and room.** A short list of rooms to pick from, or typed.
+4. **Home Assistant, or on its own.**
+   - Home Assistant: the device shows its own encryption key (on the screen, or on the setup page
+     for a Dot), so nobody needs the file from the installer. It waits for Home Assistant to add it
+     and says when that happened.
+   - On its own: alarms, timers, radio and the clock, with no key. Home Assistant can still be added
+     later from the setup page (standalone-plan.md).
+5. **A quick check.** A short sound at a sensible volume ("can you hear this?"), then "say the wake
+   word" with a pass or a retry, so a bad speaker or microphone shows up now and not a week later.
+6. **Updates.** Install the latest release now, and turn automatic updates on, since the person it
+   was given to will not be watching the release page.
+7. **Done.** What to say to it, how to open setup again, and how to reset it.
+
+## The Dot without a screen
+
+The flow is the same, said instead of shown. The Dot has no speech of its own today, so the prompts
+are clips in the image, one per step and per language: "Open the Home Assistant app on your phone to
+give me your Wi-Fi", "I'm on your Wi-Fi", "Say the wake word". The action button answers yes, a long
+press goes back a step, and the ring shows which step it is on.
+
+## On the installer's side
+
+A **gift install**: `--for-someone-else` (Dot, Spot and Show installers alike) skips the Wi-Fi and the
+key, leaves no network saved, and marks the device for the first-run routine. A device installed the
+usual way skips the routine, as it does today.
+
+A **reset** from the device (a long hold on a Dot's buttons, a page on a Show) clears the network,
+name and key and runs the routine again, for passing a device on a second time.
+
+## Order
+
+1. Improv for the Dot (#355), with a path that works on the 3.18 kernels. Nothing else helps a Dot.
+2. The routine on the Shows and the Spot, which have most of the pieces: the Wi-Fi page, the time
+   zone, the setup page. New: the steps joined up, the key on screen, the check, and the done screen.
+3. The gift install and the reset.
+4. The Dot's spoken prompts.
+
+## Open questions
+
+- Where the key is shown on a Dot: the setup page is the only place, and it needs the network from
+  step 1 first. That order works, but the page has to be opened without a press on the device the
+  first time, or the press has to be part of the said instructions.
+- Whether step 6 should wait for the update before going on, or run it in the background. A Dot on a
+  slow network takes minutes.
