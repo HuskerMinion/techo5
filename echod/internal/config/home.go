@@ -11,6 +11,11 @@ import (
 // stations, the text that names what is playing, and the script that plays one. All of it is
 // set from Home Assistant through the device's actions, so nothing here is baked in.
 type Home struct {
+	// Area is the room the device is in, as first run (display/firstrun.go) chose it: told to Home
+	// Assistant as the device's suggested area, which it puts the device in when it adds it. Empty
+	// suggests none.
+	Area string `json:"area,omitempty"`
+
 	// Weather is a weather.* entity shown on the idle screen. Empty is DefaultWeather, the forecast
 	// every Home Assistant sets up on its own, or, when Home Assistant listed weather entities and
 	// that is not among them, the first it listed; WeatherOff shows none.
@@ -323,6 +328,10 @@ func defaultHome() Home {
 func (r Radio) Configured() bool { return len(r.Stations) > 0 && r.Service != "" }
 
 type HomeWriter struct{ st *Store }
+
+func (w HomeWriter) Area(a string) error {
+	return w.st.Update(func(c *Config) { c.Home.Area = a })
+}
 
 func (w HomeWriter) Place(p Place) error {
 	return w.st.Update(func(c *Config) { c.Home.Place = p })

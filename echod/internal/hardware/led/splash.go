@@ -23,9 +23,21 @@ const (
 //
 // ctx cancellation ends it wherever it has got to, so a device Home Assistant never talks to does
 // not step around forever.
-func Splash(ctx context.Context, r *Ring, ready func() bool) error {
+//
+// setup, when it reports true, is first run still to do (feature/firstrun): while it is, the ring
+// breathes orange instead, the color an Echo is set up in, so a device nobody has set up yet does not
+// look like one waiting for its Home Assistant. A short press of the action button then opens the
+// setup page (feature/setup). A nil setup never does.
+func Splash(ctx context.Context, r *Ring, ready, setup func() bool) error {
 	if ready != nil {
-		if err := until(ctx, r, walk(HomeAssistant), ready); err != nil {
+		waiting, needs := walk(HomeAssistant), breathe(Palette{Setup})
+		frame := func(elapsed time.Duration) []Color {
+			if setup != nil && setup() {
+				return needs(elapsed)
+			}
+			return waiting(elapsed)
+		}
+		if err := until(ctx, r, frame, ready); err != nil {
 			return err
 		}
 	}

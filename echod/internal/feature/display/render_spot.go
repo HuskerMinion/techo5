@@ -73,6 +73,10 @@ func (r *roundRenderer) timeLine(now time.Time, baseline int) {
 const ampmEdge = 48
 
 type roundScene struct {
+	// firstRunUp is first run still to do (firstrun_spot.go), and firstRun the step it shows.
+	firstRunUp bool
+	firstRun   firstRunView
+
 	pin pinView // the settings lock's PIN pad (pin.go), over everything but a call or a ring
 	// The dashboard face: whether it is up, how it is shown, and what it shows.
 	showDash   bool
@@ -398,6 +402,10 @@ func (r *roundRenderer) draw(s roundScene) {
 	}
 	if s.showVideoAsk {
 		r.videoAskFace(s)
+		return
+	}
+	if s.firstRunUp {
+		r.firstRunFaceSpot(s.firstRun, s.now)
 		return
 	}
 	// This device taking an announcement, then one that arrived: both take the face, since a circle

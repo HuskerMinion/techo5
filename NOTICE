@@ -479,3 +479,9 @@ echod (dependency)
   Finding other TECHO5 devices and the deck's computers, and being found by Music Assistant, over
   mDNS (feature/announce, feature/deck, feature/sendspin). The MIT License's text is as above, under
   EchoLocal.
+
+echod (dependency)
+  rsc.io/qr — BSD 3-Clause License
+  Copyright (c) 2009 The Go Authors. All rights reserved.
+  The QR code first run shows beside the Home Assistant key (feature/display). The BSD 3-Clause
+  License's text is as above, under github.com/miekg/dns.

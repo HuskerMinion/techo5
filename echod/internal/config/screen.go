@@ -84,7 +84,8 @@ type Screen struct {
 	// modes; "light" for LightTheme; "auto" for the room's light to choose (display/theme_mode.go).
 	ThemeMode string `json:"theme_mode,omitempty"`
 
-	// Welcomed is the first-run card having been seen and put away.
+	// Welcomed is the welcome card having been put away: on a Show from before first run (config.FirstRun)
+	// it says that Show is set up, and finishing first run sets it too.
 	Welcomed bool `json:"welcomed,omitempty"`
 
 	// Clock24 shows times on the screen as 15:04 instead of 3:04 PM.

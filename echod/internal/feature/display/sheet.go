@@ -19,6 +19,7 @@ import (
 	"github.com/HuskerMinion/techo5/echod/internal/feature/btaudio"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/dlna"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/firmware"
+	"github.com/HuskerMinion/techo5/echod/internal/feature/firstrun"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/home"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/media"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/mute"
@@ -393,7 +394,44 @@ func generalRows(sv sheetView) []settingRow {
 		updates,
 		settingRow{label: tr("about"), kind: ctlValue, value: deviceModel + " · slot " + st.slot},
 		restart,
+		giftResetRow(st.now),
 	)
+}
+
+// giftArm is the first tap on Reset for someone else, which wants a second within restartWindow.
+var giftArm struct {
+	sync.Mutex
+	at time.Time
+}
+
+// giftResetRow clears the device for somebody else and starts first run (firstrun.Reset), asking twice.
+func giftResetRow(now time.Time) settingRow {
+	row := settingRow{id: "giftreset", label: "Reset for someone else", sub: "Clears it and starts setting it up again",
+		kind: ctlDanger, button: "Reset"}
+	giftArm.Lock()
+	armed := !giftArm.at.IsZero() && now.Sub(giftArm.at) < restartWindow
+	giftArm.Unlock()
+	if armed {
+		row.sub, row.button = "Wi-Fi, name, Home Assistant, alarms, everything: tap again", tr("ui_confirm")
+	}
+	return row
+}
+
+// giftResetTap is a tap on that row: the second, in time, resets.
+func giftResetTap() {
+	giftArm.Lock()
+	armed := !giftArm.at.IsZero() && time.Since(giftArm.at) < restartWindow
+	giftArm.at = time.Now()
+	if armed {
+		giftArm.at = time.Time{}
+	}
+	giftArm.Unlock()
+	if armed {
+		slog.Warn("reset for someone else asked for from the screen")
+		if err := firstrun.Reset(); err != nil {
+			slog.Error("reset for someone else failed", "err", err)
+		}
+	}
 }
 
 // forgetRow is Forget for the earbuds or speaker the device plays to, under its row: it asks twice,
@@ -1326,6 +1364,8 @@ func (d *Display) rowTap(id string, p part, opt int) {
 		default:
 			d.checkUpdates()
 		}
+	case "giftreset":
+		giftResetTap()
 	case "restart":
 		d.mu.Lock()
 		armed := !d.restartArm.IsZero() && time.Since(d.restartArm) < restartWindow

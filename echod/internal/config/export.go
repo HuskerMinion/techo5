@@ -360,6 +360,10 @@ func KeepOwn(c *Config, from Config) {
 
 	c.Diag = from.Diag
 
+	// Where this device is and whether it has been set up are its own, not a household's settings.
+	c.FirstRun = from.FirstRun
+	c.Home.Area = from.Home.Area
+
 	// What has the microphones or the camera take in the room: listening in, sending it to Home
 	// Assistant, keeping clips of it, watching for people.
 	c.Home.DropIn = from.Home.DropIn

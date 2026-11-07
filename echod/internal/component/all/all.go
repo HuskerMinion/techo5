@@ -33,6 +33,7 @@ import (
 	_ "github.com/HuskerMinion/techo5/echod/internal/feature/doorbell"
 	_ "github.com/HuskerMinion/techo5/echod/internal/feature/feedback"
 	_ "github.com/HuskerMinion/techo5/echod/internal/feature/firmware"
+	_ "github.com/HuskerMinion/techo5/echod/internal/feature/firstrun"
 	_ "github.com/HuskerMinion/techo5/echod/internal/feature/hastate"
 	_ "github.com/HuskerMinion/techo5/echod/internal/feature/home"
 	_ "github.com/HuskerMinion/techo5/echod/internal/feature/light"

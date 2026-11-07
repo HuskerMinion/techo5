@@ -246,7 +246,7 @@ func (f *Feature) Waiting() bool {
 // listeners run in no fixed order and this may be asked either side of the page answering. A recording
 // of takes asked for on the page waits for a press the same way, and says the same (feature/takes).
 func (f *Feature) TookPress() bool {
-	if takesTookPress() {
+	if takesTookPress() || firstRunTakesPress() {
 		return true
 	}
 	now := time.Now()
@@ -289,9 +289,19 @@ func (f *Feature) button(e buttons.Event) {
 			f.Close()
 		}
 	case buttons.Tap:
-		if !f.press() {
-			takesPressed()
+		if f.press() {
+			return
 		}
+		if firstRunTakesPress() {
+			// First run still to do, with nothing connected: the press is setup's, as the ring's
+			// orange says (led.Splash), and it opens the page the way a hold does.
+			if !f.On() {
+				slog.Info("setup page opened by a press during first run")
+				f.Open()
+			}
+			return
+		}
+		takesPressed()
 	}
 }
 

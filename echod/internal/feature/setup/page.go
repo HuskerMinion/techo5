@@ -5,6 +5,7 @@ import (
 	"crypto/subtle"
 	"fmt"
 	"html"
+	"io"
 	"log/slog"
 	"net"
 	"net/http"
@@ -17,6 +18,7 @@ import (
 	"github.com/HuskerMinion/techo5/echod/internal/feature/announce"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/api"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/diag"
+	"github.com/HuskerMinion/techo5/echod/internal/feature/firstrun"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/home"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/media"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/timezone"
@@ -152,11 +154,23 @@ func (f *Feature) index(w http.ResponseWriter, r *http.Request) {
 	token, in := f.session(r)
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.Header().Set("Cache-Control", "no-store")
+	// A one-time code from first run's Bluetooth setup lets this browser in with no press
+	// (firstrun_code.go).
+	if !in && f.enterWithCode(w, r) {
+		http.Redirect(w, r, firstRunPath, http.StatusSeeOther)
+		return
+	}
 	if !in {
 		f.lockedPage(w)
 		return
 	}
 	q := r.URL.Query()
+	// First run still to do opens on its own page (firstrun_page.go); "all" is the way past it to
+	// every setting.
+	if firstrun.Pending() && q.Get("all") == "" && q.Get("tab") == "" {
+		http.Redirect(w, r, firstRunPath, http.StatusSeeOther)
+		return
+	}
 	f.settingsPage(r.Context(), w, token, tabOf(q.Get("tab")), q.Get("saved"), q.Get("renamed"), q.Get("problem"), q.Get("scan") != "")
 }
 
@@ -251,6 +265,14 @@ func (f *Feature) save(w http.ResponseWriter, r *http.Request) {
 			problem = "could not forget " + ssid + ": " + err.Error()
 		} else {
 			slog.Info("setup page: a network was forgotten", "ssid", ssid)
+		}
+	case "giftreset":
+		if r.PostFormValue("understood") != "yes" {
+			problem = "tick the box to say you know everything on the device is cleared"
+		} else if err := firstrun.Reset(); err != nil {
+			problem = "the reset did not finish: " + err.Error()
+		} else {
+			renamed = true // the same banner: the device is restarting
 		}
 	case "name":
 		problem = rename(r.PostFormValue("name"), r.PostFormValue("understood") == "yes")
@@ -508,6 +530,7 @@ func (f *Feature) settingsPage(ctx context.Context, w http.ResponseWriter, token
 		timezoneSection(w, token)
 		timeServerSection(w, token)
 		homeAssistantSection(w, token)
+		resetSection(w, token)
 		settingsFileSection(w, token)
 		shareSection(w, token)
 		diagnosticsSection(w)
@@ -517,9 +540,16 @@ func (f *Feature) settingsPage(ctx context.Context, w http.ResponseWriter, token
 
 // timezoneSection is which zone the clock shows.
 func timezoneSection(w http.ResponseWriter, token string) {
-	cur := timezone.Get().Current()
 	fmt.Fprint(w, `<form method="post" action="/setup/save"><fieldset><legend>Time zone</legend>`)
 	hidden(w, token, "timezone", "general")
+	zoneSelect(w)
+	fmt.Fprint(w, `<p class="note">The device's clock keeps time on its own; this is only
+	 which zone it shows.</p><p><button type="submit">Save</button></p></fieldset></form>`)
+}
+
+// zoneSelect is the list of zones, the one in force chosen: the General tab's and first run's.
+func zoneSelect(w io.Writer) {
+	cur := timezone.Get().Current()
 	fmt.Fprint(w, `<label for="zone">Zone</label><select id="zone" name="zone">`)
 	fmt.Fprintf(w, `<option value=""%s>Follow Home Assistant</option>`, selected(!timezone.Get().SetHere()))
 	if !timezone.HasDatabase() {
@@ -540,8 +570,7 @@ func timezoneSection(w http.ResponseWriter, token string) {
 		}
 		fmt.Fprint(w, `</optgroup>`)
 	}
-	fmt.Fprint(w, `</select><p class="note">The device's clock keeps time on its own; this is only
-	 which zone it shows.</p><p><button type="submit">Save</button></p></fieldset></form>`)
+	fmt.Fprint(w, `</select>`)
 }
 
 // timeServerSection is a time server of the home's own, asked before the internet's.

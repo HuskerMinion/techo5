@@ -5,6 +5,9 @@ import "math"
 // HomeAssistant is Home Assistant's brand blue.
 var HomeAssistant = Color{R: 0x18, G: 0xBC, B: 0xF2}
 
+// Setup is the orange an Echo shows while it waits to be set up: first run still to do (Splash).
+var Setup = Color{R: 0xFF, G: 0x8C, B: 0x00}
+
 // Solid is every segment in one color.
 func Solid(c Color) []Color {
 	out := make([]Color, Segments)

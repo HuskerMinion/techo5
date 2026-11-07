@@ -319,6 +319,9 @@ type Display struct {
 	wifiOpen bool
 	wifiAt   time.Time
 
+	// firstRun is what the first-run steps keep between frames (firstrun.go).
+	firstRun firstRunState
+
 	// camtest is the camera test page (camtest_page.go), while it is up.
 	camtest *camTest
 
@@ -1298,14 +1301,10 @@ func (d *Display) gesture(g touch.Gesture) {
 		return
 	}
 
-	// The first-run card: any tap puts it away for good.
-	if !config.Get().Screen.Welcomed {
+	// First run (firstrun.go) takes every touch, but for the Wi-Fi page and the settings it opens.
+	if d.firstRunActive() {
 		if g.Kind == touch.Tap {
-			if err := config.Set().Screen().Welcomed(true); err != nil {
-				slog.Warn("saving the welcome failed", "err", err)
-			}
-			slog.Info("first-run card put away")
-			d.wake()
+			d.firstRunTap(g.X, g.Y)
 		}
 		return
 	}
@@ -2543,11 +2542,12 @@ func (d *Display) frame() (next time.Duration) {
 		d.mu.Unlock()
 	}
 	d.idleDimTick(now, on, busy, night)
-	if !config.Get().Screen.Welcomed {
-		// The welcome card ignores a stale deck and draws its own frame; the update dialog still goes
-		// over it, or the screen would look normal while every tap was taken by an invisible dialog.
+	if d.firstRunActive() {
+		// First run ignores a stale deck and draws its own frame; the update dialog still goes over it,
+		// or the screen would look normal while every tap was taken by an invisible dialog. The Wi-Fi
+		// page and the settings it opens are drawn the usual way below.
 		sc := scene{now: now}
-		d.r.welcome(sc)
+		d.r.firstRun(sc, d.firstRunView(now))
 		d.mu.Lock()
 		sc.updateActive = d.updateShown(now)
 		sc.updateProgress = d.updateProgress

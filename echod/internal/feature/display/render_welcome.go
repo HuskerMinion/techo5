@@ -15,8 +15,11 @@ import (
 var hasMicrophone = func() bool { return !layout.Skylight() }
 
 // welcome is the first-run card: what to say, where the settings are, and that a tap begins.
-// It shows until it is tapped once, then never again.
-func (r *renderer) welcome(s scene) {
+// First run (firstrun.go) begins with it and ends with it, with another line at its foot.
+func (r *renderer) welcome(s scene) { r.welcomeCard("Tap anywhere to begin") }
+
+// welcomeCard is the welcome card with hint at its foot.
+func (r *renderer) welcomeCard(hint string) {
 	r.useFont()
 	name := config.Get().Device.Name
 	if name == "" {
@@ -52,6 +55,5 @@ func (r *renderer) welcome(s scene) {
 			y += r.s(44)
 		}
 	}
-	hint := "Tap anywhere to begin"
 	r.text(r.body, hint, (r.w-r.width(r.body, hint))/2, r.h-r.s(78), amber)
 }

@@ -241,23 +241,30 @@ func bars(dbm int) string {
 
 func (r *renderer) keyboardPage(s scene) {
 	w := s.wifi
-	keyTop, keyH, keyGap, keyW, keyMargin := r.keyTop(), r.keyH(), r.keyGap(), r.keyW(), r.keyMargin()
-	title := fmt.Sprintf(tr("ui_password_for_s"), w.pick.SSID)
-	r.text(r.small, title, r.margin, r.s(46), amber)
-	// The field.
-	field := image.Rect(r.margin, r.s(66), r.w-r.margin, r.s(126))
-	r.bevel(field, shift(walnut, 8), false)
 	shown := w.text
 	if w.busy != "" {
 		shown = w.busy
 	} else if w.err != "" {
 		shown = w.err
 	}
+	r.keyboard(fmt.Sprintf(tr("ui_password_for_s"), w.pick.SSID), shown, w.busy != "" || w.err != "",
+		w.shift, w.symbols, tr("connect"))
+}
+
+// keyboard draws a title, the field with shown in it (dimmed, with no cursor, when it is a message
+// rather than what was typed) and the keys under it, the last one labeled with what it does. keyAt
+// reads taps on it. The Wi-Fi passphrase and first run's name both type on it.
+func (r *renderer) keyboard(title, shown string, message, shifted, symbols bool, goLabel string) {
+	keyTop, keyH, keyGap, keyW, keyMargin := r.keyTop(), r.keyH(), r.keyGap(), r.keyW(), r.keyMargin()
+	r.text(r.small, title, r.margin, r.s(46), amber)
+	// The field.
+	field := image.Rect(r.margin, r.s(66), r.w-r.margin, r.s(126))
+	r.bevel(field, shift(walnut, 8), false)
 	for r.width(r.small, shown+"|") > field.Dx()-r.s(30) && len(shown) > 1 {
 		shown = shown[1:]
 	}
 	c := cream
-	if w.busy != "" || w.err != "" {
+	if message {
 		c = dim
 	} else {
 		shown += "|"
@@ -267,34 +274,34 @@ func (r *renderer) keyboardPage(s scene) {
 	pitch := keyW + keyGap
 	for row := 0; row < 3; row++ {
 		letters := keyRowsLetters[row]
-		if w.symbols {
+		if symbols {
 			letters = keyRowsSymbols[row]
 		}
 		x0 := keyMargin + (10-len(letters))*pitch/2
 		y0 := keyTop + row*(keyH+keyGap)
 		for i, ch := range letters {
 			label := string(ch)
-			if w.shift && !w.symbols {
+			if shifted && !symbols {
 				label = strings.ToUpper(label)
 			}
 			r.key(image.Rect(x0+i*pitch, y0, x0+i*pitch+keyW, y0+keyH), label, false)
 		}
 		if row == 2 {
-			if !w.symbols {
-				r.key(image.Rect(keyMargin, y0, x0-keyGap, y0+keyH), "Shift", w.shift)
+			if !symbols {
+				r.key(image.Rect(keyMargin, y0, x0-keyGap, y0+keyH), "Shift", shifted)
 			}
 			r.key(image.Rect(x0+len(letters)*pitch, y0, r.w-keyMargin, y0+keyH), "Del", false)
 		}
 	}
 	y0 := keyTop + 3*(keyH+keyGap)
 	sym := "123"
-	if w.symbols {
+	if symbols {
 		sym = "abc"
 	}
-	r.key(image.Rect(keyMargin, y0, keyMargin+pitch*2-keyGap, y0+keyH), sym, w.symbols)
+	r.key(image.Rect(keyMargin, y0, keyMargin+pitch*2-keyGap, y0+keyH), sym, symbols)
 	r.key(image.Rect(keyMargin+pitch*2, y0, keyMargin+pitch*6-keyGap, y0+keyH), "space", false)
 	r.key(image.Rect(keyMargin+pitch*6, y0, keyMargin+pitch*8-keyGap, y0+keyH), tr("cancel"), false)
-	r.key(image.Rect(keyMargin+pitch*8, y0, r.w-keyMargin, y0+keyH), tr("connect"), true)
+	r.key(image.Rect(keyMargin+pitch*8, y0, r.w-keyMargin, y0+keyH), goLabel, true)
 }
 
 // key draws one key.
@@ -310,6 +317,29 @@ func (r *renderer) key(rect image.Rectangle, label string, lit bool) {
 		face = r.tiny
 	}
 	r.text(face, label, rect.Min.X+(rect.Dx()-r.width(face, label))/2, rect.Min.Y+rect.Dy()/2+r.s(12), ink)
+}
+
+// keyRow draws keys of one size: every label in the smaller type when any one of them needs it, so a
+// row of choices does not mix two sizes.
+func (r *renderer) keyRow(rects []image.Rectangle, labels []string, lit func(i int) bool) {
+	small := true
+	for i, b := range rects {
+		if r.width(r.small, labels[i]) > b.Dx()-r.s(10) {
+			small = false
+		}
+	}
+	for i, b := range rects {
+		fill, ink := shift(ember, 14), cream
+		if lit(i) {
+			fill, ink = amber, walnut
+		}
+		r.bevel(b, fill, true)
+		face := r.tiny
+		if small {
+			face = r.small
+		}
+		r.text(face, labels[i], b.Min.X+(b.Dx()-r.width(face, labels[i]))/2, b.Min.Y+b.Dy()/2+r.s(12), ink)
+	}
 }
 
 // wifiSummary is a line for the connection.

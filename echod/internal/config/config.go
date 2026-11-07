@@ -60,6 +60,7 @@ type Config struct {
 	Tessera        Tessera        `json:"tessera,omitempty"`
 	WifiQuiet      WifiQuiet      `json:"wifi_quiet,omitempty"`
 	WifiBand       WifiBand       `json:"wifi_band,omitempty"`
+	FirstRun       FirstRun       `json:"first_run,omitempty"`
 }
 
 // Defaults is a device nobody has set anything on.
