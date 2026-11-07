@@ -5,6 +5,8 @@ package display
 import (
 	"fmt"
 	"image"
+	"image/color"
+	"image/draw"
 	"image/png"
 	"os"
 	"path/filepath"
@@ -16,6 +18,7 @@ import (
 	"github.com/HuskerMinion/techo5/echod/internal/feature/announce"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/btaudio"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/home"
+	"github.com/HuskerMinion/techo5/echod/internal/feature/media"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/notify"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/phone"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/remind"
@@ -70,6 +73,11 @@ func TestShowScenesDraw(t *testing.T) {
 			radio: home.Radio{Playing: true, Now: "Music Assistant", Title: "Some Jazz", Artist: "The Quartet", Music: true}},
 		"nowplaying-music-assistant-paused": {now: at, phase: "idle", nowPlaying: true, paused: true, weather: sky,
 			radio: home.Radio{Now: "Music Assistant", Title: "Some Jazz", Artist: "The Quartet", Music: true}},
+		"nowplaying-modern": {now: at, phase: "idle", nowPlaying: true, modernMusic: true, playing: true, weather: sky,
+			radio:         home.Radio{Now: "Music Assistant", Title: "After the Rain", Artist: "The Glass Hours", Thumb: previewMusicCover()},
+			musicPosition: media.Position{At: at, Pos: 86 * time.Second, Dur: 222 * time.Second, Rate: 1}},
+		"nowplaying-modern-paused": {now: at, phase: "idle", nowPlaying: true, modernMusic: true, paused: true, weather: sky,
+			radio: home.Radio{Now: "AirPlay", Title: "A Very Long Track Title That Wraps Across the Screen", Artist: "The Glass Hours"}},
 		"weather":              {now: at, phase: "idle", weather: sky, forecast: week, showWeather: true},
 		"weather-rain":         {now: at, phase: "idle", weather: home.Weather{Condition: "rainy", Temp: "54°"}, forecast: week, showWeather: true, sky: fxRain},
 		"weather-pouring":      {now: at, phase: "idle", weather: home.Weather{Condition: "pouring", Temp: "54°"}, forecast: week, showWeather: true, sky: fxPour},
@@ -275,7 +283,13 @@ func TestShowScenesDraw(t *testing.T) {
 	} {
 		for name, s := range scenes {
 			img := image.NewRGBA(image.Rect(0, 0, panel.wide, panel.high))
-			newRenderer(img).draw(s)
+			r := newRenderer(img)
+			if s.modernMusic {
+				cover, _ := r.modernMusicLayout()
+				var sized screenSized
+				s.radio.Thumb = sized.of(s.radio.Thumb, cover.Dx(), cover.Dy())
+			}
+			r.draw(s)
 			if dir == "" {
 				continue
 			}
@@ -291,6 +305,17 @@ func TestShowScenesDraw(t *testing.T) {
 			}
 		}
 	}
+}
+
+// previewMusicCover is made-up artwork for the renderer preview.
+func previewMusicCover() *image.RGBA {
+	img := image.NewRGBA(image.Rect(0, 0, 240, 240))
+	draw.Draw(img, img.Bounds(), image.NewUniform(color.RGBA{25, 41, 65, 255}), image.Point{}, draw.Src)
+	r := newRenderer(img)
+	r.disc(120, 108, 76, color.RGBA{59, 104, 125, 255})
+	r.disc(120, 108, 53, color.RGBA{117, 169, 165, 255})
+	r.disc(120, 108, 29, color.RGBA{242, 191, 141, 255})
+	return img
 }
 
 // A size written as a literal in this package is in the Show 5's pixels, and the Show 8 scales them.

@@ -363,6 +363,7 @@ type Display struct {
 	// The slideshow's photo and the now-playing picture, scaled to the screen when home made them at
 	// another size (screen_sized.go).
 	bgSized, saverSized, artSized screenSized
+	musicCoverSized               screenSized
 
 	// The deck page (deck.go): up while deckUp, on deckPage, with deckPress the press being shown.
 	deckUp    bool
@@ -436,8 +437,9 @@ type Display struct {
 	// page was on it, and whether the footer was drawing the word for the music. The touch handler acts
 	// on what is on the screen, rather than working the same thing out a second way and drifting from
 	// it — which is how a tap out of an empty corner came to send a play/pause.
-	showingPlaying bool
-	showingWord    bool
+	showingPlaying     bool
+	showingModernMusic bool
+	showingWord        bool
 
 	// ringPreview shows the ringing page silently until then.
 	ringPreview time.Time
@@ -1537,6 +1539,7 @@ func (d *Display) gesture(g touch.Gesture) {
 		// page's own button, and a tap made to look at the song should not stop it.
 		d.mu.Lock()
 		showing, away, inStrip, word := d.showingPlaying, d.away, d.showingStrip, d.showingWord
+		modernMusic := d.showingModernMusic
 		d.mu.Unlock()
 		// Only while the word is really drawn, and only when the page is really away: this is the way back
 		// to it, so taking a tap out of the bottom-right corner of the clock is worth it only when there
@@ -1592,7 +1595,7 @@ func (d *Display) gesture(g touch.Gesture) {
 			// The now-playing screen: each button does what it says, and a tap anywhere else is
 			// play/pause, because that is what a hand put on a screen like this means.
 			if d.r != nil {
-				back, _, next := d.r.transportButtons()
+				back, _, next := d.r.musicButtons(modernMusic)
 				at := image.Pt(g.X, g.Y)
 				switch {
 				case at.In(d.r.doneButton()):
@@ -2773,7 +2776,6 @@ func (d *Display) frame() (next time.Duration) {
 	}
 	if (s.showDrawer && s.drawerTab == drawerRadio) || wants {
 		s.radio = home.Get().Radio()
-		s.radio.Art = d.artSized.of(s.radio.Art, d.r.w, d.r.h)
 		if s.radio.Followed {
 			s.playing, s.paused = s.radio.Playing, s.radio.Paused
 		}
@@ -2788,9 +2790,24 @@ func (d *Display) frame() (next time.Duration) {
 	s.faved = d.favedKey != "" && d.favedKey == s.radio.Title+"\x00"+s.radio.Now
 	if s.nowPlaying {
 		s.lyric, s.hasLyric = home.Get().LyricNow(s.radio, now)
+		s.modernMusic = config.Get().Screen.ModernNowPlaying && d.r.h >= d.r.s(380)
+		if s.modernMusic {
+			s.musicPosition, _ = home.TrackPosition(s.radio)
+			if !s.playing || s.paused {
+				s.musicPosition.Rate = 0
+			}
+		}
 	}
 	d.showingPlaying, d.showingStrip, d.showingWord = s.nowPlaying, s.strip, playingWord(s) != ""
+	d.showingModernMusic = s.modernMusic
 	d.mu.Unlock()
+	if s.modernMusic {
+		cover, _ := d.r.modernMusicLayout()
+		s.radio.Thumb = d.musicCoverSized.of(s.radio.Thumb, cover.Dx(), cover.Dy())
+	}
+	if !s.modernMusic || s.showDrawer {
+		s.radio.Art = d.artSized.of(s.radio.Art, d.r.w, d.r.h)
+	}
 	s.weather = home.Get().Weather()
 	s.style = styleFactsFor(clockStyle(), now)
 	s.style.named = d.styleName(now)
