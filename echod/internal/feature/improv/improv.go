@@ -45,6 +45,9 @@ const (
 	// doneHold is how long it stays up after a network was joined, so the phone can read the address.
 	doneHold = 10 * time.Second
 
+	// leaseWait is how long after a join it waits for the address to hand back.
+	leaseWait = 30 * time.Second
+
 	// joinFor is how long a join may take: wifi.Join waits a minute for the association itself.
 	joinFor = 80 * time.Second
 
@@ -298,7 +301,11 @@ func (m *Improv) session(ctx context.Context, w why) {
 					jctx, cancel := context.WithTimeout(ctx, joinFor)
 					defer cancel()
 					err := wifi.Join(jctx, wf.SSID, wf.Passphrase)
-					joined <- joinResult{err: err}
+					r := joinResult{err: err}
+					if err == nil {
+						r.url = setupURL(ctx)
+					}
+					joined <- r
 				}()
 			}
 		case r := <-joined:
@@ -310,7 +317,7 @@ func (m *Improv) session(ctx context.Context, w why) {
 				resetTimer(idleT, idle)
 				continue
 			}
-			url := setupURL(ctx)
+			url := r.url
 			slog.Info("improv: joined", "setup", url)
 			s.setState(proto.Provisioned)
 			s.result(proto.Result(proto.CmdWiFiSettings, url))
@@ -329,7 +336,10 @@ func offer(advertisement, scanResponse []byte) (done func(), err error) {
 	return bluetooth.Get().Offer(advertisement, scanResponse)
 }
 
-type joinResult struct{ err error }
+type joinResult struct {
+	err error
+	url string // the setup page, once there is an address for it
+}
 
 // chars is where a session's values go: the Peripheral, or a test's record of them.
 type chars interface {
@@ -410,12 +420,24 @@ func (s *run) command(ctx context.Context, b []byte) (proto.WiFi, bool) {
 }
 
 // setupURL is the setup page at the address the device now has: where the phone is sent next.
+// A join is done once the network is associated, and the lease comes after: it waits up to leaseWait
+// for the address, which is what the phone is to be handed. With none by then (a DHCP server that is
+// slow or down) it hands back none, as Improv allows.
 func setupURL(ctx context.Context) string {
-	addr := wifi.Current(ctx).Address
-	if addr == "" {
-		return ""
+	deadline := time.Now().Add(leaseWait)
+	for {
+		if addr := wifi.Current(ctx).Address; addr != "" {
+			return fmt.Sprintf("http://%s:%d/", addr, web.Port)
+		}
+		if time.Now().After(deadline) || ctx.Err() != nil {
+			return ""
+		}
+		select {
+		case <-ctx.Done():
+			return ""
+		case <-time.After(time.Second):
+		}
 	}
-	return fmt.Sprintf("http://%s:%d/", addr, web.Port)
 }
 
 // deviceName is the name the device was given, or its host name before it has one.
