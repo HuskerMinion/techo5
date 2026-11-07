@@ -20,6 +20,7 @@ import (
 	"github.com/HuskerMinion/techo5/echod/internal/feature/bluetooth"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/web"
 	"github.com/HuskerMinion/techo5/echod/internal/hardware/buttons"
+	"github.com/HuskerMinion/techo5/echod/internal/hardware/led"
 	"github.com/HuskerMinion/techo5/echod/internal/hardware/speaker"
 	"github.com/HuskerMinion/techo5/echod/internal/layout"
 	"github.com/HuskerMinion/techo5/echod/internal/lib/bluez"
@@ -58,6 +59,9 @@ const (
 
 	root = dbus.ObjectPath("/org/techo5/improv")
 )
+
+// ringColor is the ring while Improv is offered: teal, apart from the blue of Bluetooth pairing.
+var ringColor = led.Color{R: 0x00, G: 0xB4, B: 0xA0}
 
 // Why it opened, which decides whether a network is taken at once.
 type why int
@@ -300,6 +304,13 @@ func (m *Improv) session(ctx context.Context, w why) bool {
 	defer wifi.SettingUp(false)
 	slog.Info("improv: offering Wi-Fi setup over Bluetooth", "why", w, "name", name, "state", state)
 	chime(speaker.TonePairing)
+	// The ring pulses for as long as it is offered, so the mute button held for it is let go when
+	// the ring answers: the tone alone was missed, and the red of the mute light is no sign, as the
+	// hold only turns the microphones the other way. Held on to 20 s, the Dot's power key (which the
+	// mute button is) switches the Dot off in the PMIC.
+	ring := led.Get().Claim(led.PriorityBusy)
+	defer ring.Release()
+	ring.Play(led.EffectPulse, ringColor)
 
 	s := &run{p: p, state: state, scan: wifi.Scan}
 	idleT := time.NewTimer(idle)
@@ -362,6 +373,7 @@ func (m *Improv) session(ctx context.Context, w why) bool {
 			s.setState(proto.Provisioned)
 			s.result(proto.Result(proto.CmdWiFiSettings, url))
 			chime(speaker.TonePaired)
+			ring.Paint(led.Solid(ringColor))
 			idleT.Stop()
 			doneC = time.After(doneHold)
 		}
