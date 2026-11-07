@@ -66,6 +66,10 @@ type Speaker struct {
 	// (speaker.Player.SetClearerSpeech, techo5-dot#25). Off by default.
 	ClearerSpeech bool `json:"clearer_speech,omitempty"`
 
+	// LouderTop takes the top volume steps into the tuning hotter, where the tuning has a lift for
+	// them (speaker.Player.SetLouderTop, #304). Off by default.
+	LouderTop bool `json:"louder_top,omitempty"`
+
 	// SoundsMoved is whether the wake sounds have been moved to Home Assistant's: once, for a device
 	// saved when Chirp was the default, and only for a word still on it (config.Load).
 	SoundsMoved bool `json:"sounds_moved,omitempty"`
@@ -184,6 +188,10 @@ func (w SpeakerWriter) LouderSpeech(v bool) error {
 
 func (w SpeakerWriter) ClearerSpeech(v bool) error {
 	return w.st.Update(func(c *Config) { c.Speaker.ClearerSpeech = v })
+}
+
+func (w SpeakerWriter) LouderTop(v bool) error {
+	return w.st.Update(func(c *Config) { c.Speaker.LouderTop = v })
 }
 
 func (w SpeakerWriter) ClassicSounds(v bool) error {

@@ -38,6 +38,11 @@ func speakerSection(w http.ResponseWriter, token string) {
 	 <p>Boosts can distort, especially at high volume or with raised bass or treble, and make the wake word harder to catch over loud music. Set 0 dB to restore normal gain.</p>`,
 			config.SpeakerGainMax, gain, gain)
 	}
+	if p.LouderTopAvailable() {
+		top := p.LouderTop()
+		fmt.Fprintf(w, `<p><label><input type="checkbox" name="top" value="yes" style="width:auto"%s> Louder top volume:
+	  the steps above 16 go up to 8 dB hotter into the tuning, for music that stays too quiet at full volume; can distort with Speaker gain raised</label><input type="hidden" name="was_top" value="%t"></p>`, checkedIf(top), top)
+	}
 	louder := c.Speaker.LouderSpeech
 	fmt.Fprintf(w, `<p><label><input type="checkbox" name="louder" value="yes" style="width:auto"%s> Louder speech:
 	  replies and announcements compressed so the quiet parts of words are heard; music is not changed</label><input type="hidden" name="was_louder" value="%t"></p>`, checkedIf(louder), louder)
@@ -214,6 +219,11 @@ func saveSpeaker(r *http.Request) string {
 	if was := r.PostFormValue("was_stereo"); was != "" && speaker.Get().CanStereo() {
 		if on := r.PostFormValue("stereo") == "yes"; strconv.FormatBool(on) != was {
 			p.SetStereo(on)
+		}
+	}
+	if was := r.PostFormValue("was_top"); was != "" && p.LouderTopAvailable() {
+		if on := r.PostFormValue("top") == "yes"; strconv.FormatBool(on) != was {
+			p.SetLouderTop(on)
 		}
 	}
 	if was := r.PostFormValue("was_louder"); was != "" {
