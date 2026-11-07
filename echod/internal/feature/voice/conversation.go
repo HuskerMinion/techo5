@@ -340,6 +340,10 @@ type nextTurn struct {
 	// continued is a turn on a run that is already open: Home Assistant's wake word engine heard the
 	// word, and the run went on to listening by itself (hawake.go).
 	continued bool
+
+	// confirmed is a wake the device was not sure of that Home Assistant confirmed (hawake.go): at is
+	// then when the device's own engine scored it, and the turn reaches back to there (historyFor).
+	confirmed bool
 }
 
 // reply is which answer is being spoken, and how. Only one of them is set: a url means it is being
@@ -1024,7 +1028,7 @@ func (c *conversation) start(n nextTurn) bool {
 	if n.woke && !n.at.IsZero() {
 		heard = time.Since(n.at)
 	}
-	c.startAudio(slot, n.followUp, n.continued, n.waited, heard)
+	c.startAudio(slot, n.followUp, n.continued, historyFor(slot, n.followUp, n.confirmed, n.waited, heard))
 	// The phrase is logged for a follow-up too, because it is what chose the pipeline — not because
 	// anyone said it.
 	slog.Info("turn started", "slot", slot+1, "phrase", phrase, "follow_up", n.followUp, "on_ha", n.continued)
@@ -1456,7 +1460,7 @@ func audioSettings() *api.VoiceAssistantAudioSettings {
 
 // startAudio begins sending microphone frames. The streamer only reads, so it needs no coordination
 // beyond being told to stop. continued is a run that has had the audio up to now already.
-func (c *conversation) startAudio(slot int, followUp, continued bool, waited, heard time.Duration) {
+func (c *conversation) startAudio(slot int, followUp, continued bool, history time.Duration) {
 	ctx, cancel := context.WithCancel(context.Background())
 	c.stopAudio = cancel
 
@@ -1472,7 +1476,7 @@ func (c *conversation) startAudio(slot int, followUp, continued bool, waited, he
 	safe.Go("turn audio", func() {
 		defer streams.Done()
 		defer listened()
-		c.stream(ctx, be, slot, followUp, continued, id, waited, heard)
+		c.stream(ctx, be, slot, followUp, continued, id, history)
 	})
 }
 
@@ -1491,8 +1495,8 @@ func (c *conversation) stopStreaming() {
 }
 
 // stream sends microphone frames until it is told to stop.
-func (c *conversation) stream(ctx context.Context, be backend, slot int, followUp, continued bool, id string, waited, heard time.Duration) {
-	frames, pre, unlisten := c.source.ListenHistory("turn", historyFor(slot, followUp, waited, heard))
+func (c *conversation) stream(ctx context.Context, be backend, slot int, followUp, continued bool, id string, history time.Duration) {
+	frames, pre, unlisten := c.source.ListenHistory("turn", history)
 	defer unlisten()
 	hold := holdsForTone(slot, followUp)
 	slog.Info("turn: wake sound", "tone", wakeword.Tones(slot, followUp), "held", hold, "history_ms", len(pre)*1000/mic.Rate)
@@ -1505,7 +1509,15 @@ func (c *conversation) stream(ctx context.Context, be backend, slot int, followU
 // wake word itself ("Google. What time is it?", #445), and it reaches back only to the moment the
 // word was heard: what was said after it, while the sound played or while the wake was confirmed.
 // heard is how long ago that was, for a wake word's turn; never more than the reach without a sound.
-func historyFor(slot int, followUp bool, waited, heard time.Duration) time.Duration {
+//
+// A wake Home Assistant confirmed is the exception (#477): the turn opens most of a second after the
+// device's engine scored the word, and the request said straight after it went to Home Assistant's wake
+// word stage, not to speech-to-text. With or without a sound it reaches back to the score (heard), and
+// the usual 250 ms before it, as far as the microphones' history goes.
+func historyFor(slot int, followUp, confirmed bool, waited, heard time.Duration) time.Duration {
+	if confirmed {
+		return min(max(heard+mic.History, mic.History+waited), mic.Confirming)
+	}
 	if wakeword.Tones(slot, followUp) {
 		return min(max(waited, heard), mic.History+waited)
 	}

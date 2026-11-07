@@ -339,7 +339,13 @@ func (c *conversation) heardOnHA() {
 	if w.mode == watchConfirm {
 		c.confirmGap, c.unheard = 0, 0
 	}
-	if !c.start(nextTurn{slot: w.slot, woke: true, at: c.now(), continued: true}) {
+	n := nextTurn{slot: w.slot, woke: true, at: c.now(), continued: true}
+	if w.mode == watchConfirm {
+		// The request went on from the word while Home Assistant was asked: the turn reaches back to
+		// when the device scored it (historyFor, #477).
+		n.at, n.confirmed = w.at, true
+	}
+	if !c.start(n) {
 		c.closeRun()
 		return
 	}
