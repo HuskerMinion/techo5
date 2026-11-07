@@ -567,7 +567,12 @@ def provision_command(gift, name, psk, pub, wifi):
     "firstrun" in the state directory (layout.StateDir, /data/misc/techo5) instead of a name and key, and
     no Wi-Fi, so the Show starts its own setup when it is next powered on."""
     if gift:
-        prov = "mkdir -p /data/misc/techo5 && : > /data/misc/techo5/firstrun"
+        # Nothing of the giver's stays: no name or key from an earlier install, and a configuration with no
+        # network in it, which the first boot's import of LineageOS's saved networks leaves alone.
+        prov = ("mkdir -p /data/misc/techo5 /data/techo5-linux && "
+                "rm -f /data/misc/techo5/name /data/misc/techo5/psk /data/techo5-linux/wifi.conf && "
+                ": > /data/misc/techo5/firstrun && "
+                "(umask 077; printf '%s\\n' ctrl_interface=/run/wpa update_config=0 > /data/techo5-linux/wpa_supplicant.conf)")
     else:
         prov = ("mkdir -p /data/misc/techo5 && printf '%%s\\n' %s > /data/misc/techo5/name && "
                 "(umask 077; printf '%%s\\n' %s > /data/misc/techo5/psk)" % (quote(name), quote(psk)))
@@ -910,7 +915,7 @@ def main():
     if 'PROV-OK' not in (o or ''):
         store_step("writing the unit's name and Home Assistant key", o, 'yes')
     if gift:
-        note('first-run marker%s written' % (' and SSH key' if pub else ''))
+        note('first-run marker%s written; the name, key and any saved network are cleared' % (' and SSH key' if pub else ''))
     else:
         note("name '%s' and Home Assistant key%s%s written" % (a.name, ', SSH key' if pub else '', ', Wi-Fi' if wifi else ''))
     console.run('sync; (sleep 2; /bin/busybox.static reboot -f) >/dev/null 2>&1 &', 3)
@@ -935,7 +940,7 @@ def main():
     else:
         print("\nDone. '%s' runs TECHO5 %s from slot a; the slot commits itself after five healthy minutes." % (a.name, version))
     if gift:
-        print("\nThis Show will start its own setup when it is next powered on.")
+        print("\nThe Show's screen is now showing its own setup. It can be unplugged and given away as it is.")
         print("Its owner's Home Assistant can add it with nothing typed.")
     else:
         print('Home Assistant finds it as an ESPHome device. When it asks for the encryption key, paste:\n\n    %s\n\n(kept in %s)' % (psk, key_file))

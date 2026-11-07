@@ -1908,8 +1908,13 @@ def main(argv=None):
     if gift:
         # An empty file in the state directory (userdata/techo5/misc/techo5, echod's layout.StateDir):
         # the Show starts its own setup (first run).
+        # Nothing of the giver's stays: no name or key from an earlier install, and a configuration with no
+        # network in it plus .wifi-imported, so the first boot does not import Fire OS's saved networks.
+        adb.sh('rm -f %s %s %s' % (quote(state_dir + '/name'), quote(state_dir + '/psk'), quote(linux_dir + '/wifi.conf')))
         put_file(adb, a.work, '', state_dir + '/firstrun', '644', ready)
-        done = ['first-run marker']
+        put_file(adb, a.work, 'ctrl_interface=/run/wpa\nupdate_config=0\n', linux_dir + '/wpa_supplicant.conf', '600', ready)
+        put_file(adb, a.work, '', linux_dir + '/.wifi-imported', '600', ready)
+        done = ['first-run marker', 'name, key and Wi-Fi cleared']
     else:
         put_file(adb, a.work, a.name + '\n', state_dir + '/name', '644', ready)
         put_file(adb, a.work, psk + '\n', state_dir + '/psk', '600', ready)
@@ -1966,7 +1971,7 @@ def main(argv=None):
 
     if gift:
         print('\nDone. TECHO5 is on slot a; the slot commits itself after five healthy minutes.')
-        print("\nThis Show will start its own setup when it is next powered on.")
+        print("\nThe Show's screen is now showing its own setup. It can be unplugged and given away as it is.")
         print("Its owner's Home Assistant can add it with nothing typed.")
     else:
         print("\nDone. '%s' runs TECHO5 from slot a; the slot commits itself after five healthy minutes." % a.name)

@@ -375,9 +375,13 @@ class GiftInstall(unittest.TestCase):
     def test_gift_writes_the_marker_and_no_name_key_or_wifi(self):
         cmd = inst.provision_command(True, None, None, None, None)
         self.assertIn('/data/misc/techo5/firstrun', cmd)   # echod's layout.StateDir on the Shows
-        self.assertNotIn('/name', cmd)
-        self.assertNotIn('psk', cmd)
-        self.assertNotIn('wpa_supplicant', cmd)
+        # an earlier install's name, key and networks are removed; the configuration holds no network
+        self.assertIn('rm -f /data/misc/techo5/name /data/misc/techo5/psk /data/techo5-linux/wifi.conf', cmd)
+        self.assertIn('/data/techo5-linux/wpa_supplicant.conf', cmd)
+        self.assertIn('ctrl_interface=/run/wpa update_config=0', cmd)
+        self.assertNotIn('network={', cmd)
+        self.assertNotIn('> /data/misc/techo5/name', cmd)
+        self.assertNotIn('> /data/misc/techo5/psk', cmd)
 
     def test_usual_install_writes_name_and_key_and_no_marker(self):
         cmd = inst.provision_command(False, 'Kitchen', 'KEY', None, None)

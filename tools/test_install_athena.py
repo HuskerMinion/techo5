@@ -561,11 +561,24 @@ class SimulatedTWRP(unittest.TestCase):
         self.assertEqual(u.get('data/techo5/misc/techo5/firstrun'), b'')
         self.assertFalse(self.has(u, 'data/techo5/misc/techo5/name'))
         self.assertFalse(self.has(u, 'data/techo5/misc/techo5/psk'))
-        self.assertFalse(self.has(u, 'data/techo5/techo5-linux/wpa_supplicant.conf'))
+        # a configuration with no network, and .wifi-imported so Fire OS's saved networks are not imported
+        self.assertEqual(u.get('data/techo5/techo5-linux/wpa_supplicant.conf'), b'ctrl_interface=/run/wpa\nupdate_config=0\n')
+        self.assertEqual(u.get('data/techo5/techo5-linux/.wifi-imported'), b'')
         self.assertFalse(os.path.exists(os.path.join(self.tmp, 'backups', 'SIMULATED', 'home-assistant.key')))
         self.assertNotIn('encryption key', out)
-        self.assertIn('start its own setup when it is next powered on', out)
+        self.assertIn('can be unplugged and given away as it is', out)
         self.assertIn('with nothing typed', out)
+
+    def test_gift_install_clears_an_earlier_identity_and_networks(self):
+        u = self.unit()
+        out, err = self.install(u, *self.mainline_args())
+        self.assertIsNone(err, out)
+        self.assertTrue(self.has(u, 'data/techo5/misc/techo5/name'))
+        out, err = self.install(u, '--for-someone-else', *self.mainline_args(), name=False)
+        self.assertIsNone(err, out)
+        self.assertFalse(self.has(u, 'data/techo5/misc/techo5/name'))
+        self.assertFalse(self.has(u, 'data/techo5/misc/techo5/psk'))
+        self.assertEqual(u.get('data/techo5/misc/techo5/firstrun'), b'')
 
     def test_usual_install_leaves_no_marker(self):
         u = self.unit()
