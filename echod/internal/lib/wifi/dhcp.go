@@ -19,7 +19,13 @@ var (
 	dhcpOwn  = "/run/udhcpc.sh"
 	startDHC = func(args ...string) error {
 		cmd := exec.Command("udhcpc", args...)
-		return cmd.Start()
+		if err := cmd.Start(); err != nil {
+			return err
+		}
+		// With -b the first process exits once the client has gone to the background: reaped here,
+		// so it is not left behind as a zombie.
+		go func() { _ = cmd.Wait() }()
+		return nil
 	}
 )
 
