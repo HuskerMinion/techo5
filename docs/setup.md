@@ -1056,6 +1056,12 @@ alarms; the usual volume and night volume still work. Higher gain can distort or
 especially at high volume or with raised bass or treble. Start low and reduce the boost if
 that happens; +6 dB is a setting limit, not a guarantee of clean output on every track.
 
+**Louder top volume** (Echo Dot 2nd gen only; off by default; the setup page under **Speaker and
+voice**, and the **Louder top volume** switch in Home Assistant) makes the top of the volume range
+louder: steps 0 to 16 are unchanged, and the steps above go into the speaker's tuning hotter, up to
+8 dB at step 30. Like Speaker gain, it can distort on some music at the top steps; turn it off if it
+does.
+
 **Louder speech** (off by default; Settings → **Sound**, the setup page under **Speaker and
 voice**, and the **Louder speech** switch in Home Assistant) compresses replies and announcements on
 their way to the speaker: the quiet parts of words come up by 8 dB and the loud ones by less, about
