@@ -433,8 +433,11 @@ it is read. The camera pages (`/camera.jpg` and `/camera.mjpeg`, there while Cam
 ask for that login too, so set a camera password before you use them; a browser the setup page has let
 in needs none. **Since v1.2.24:** a Home Assistant Generic Camera, MJPEG camera or recorder that read
 `/camera.jpg` or `/camera.mjpeg` with no login gets "401" until you set a camera password and give it the
-user and password with **Digest** authentication (Basic is not taken). Changing the password ends the
-pages' open streams, and so does closing the lens cover. The device is not found by ONVIF discovery
+user and password with **Digest** authentication (Basic is not taken). On the first-generation
+Echo Show 5, `/camera.mjpeg?size=full` asks for the 1280×720 native camera stream instead of the
+default 640×360 preview; it uses the same camera password and access controls. Full resolution
+costs more CPU and network bandwidth. Other devices ignore this query parameter. Changing the
+password ends the pages' open streams, and so does closing the lens cover. The device is not found by ONVIF discovery
 unless you turn on **Camera discovery (ONVIF)**, a switch of the device's in Home Assistant, under its
 configuration: then, while the stream is on, it answers WS-Discovery searches (3702/udp), so Home
 Assistant's ONVIF integration lists it among the discovered devices. The answer tells anyone on your

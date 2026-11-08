@@ -151,3 +151,6 @@ func dotBoard(typeID, product string) (board string, ok bool) {
 
 // cleanID is an id as read, without the NUL and the white space it can end in.
 func cleanID(s string) string { return strings.Trim(s, "\x00 \t\r\n") }
+
+// Checkers is not a Dot board; its native-resolution camera path is unavailable.
+func Checkers() bool { return false }
