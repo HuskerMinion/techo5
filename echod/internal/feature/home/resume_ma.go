@@ -96,6 +96,13 @@ var resumeDirect = func(c musicassistant.Client) error {
 	return c.Resume(ctx, p.ID)
 }
 
+// MusicAssistantPlayer is Music Assistant's own player for this device (musicAssistantPlayer), for the
+// screen's music library to play on when no player of the same name is found; empty when there is none.
+func MusicAssistantPlayer() string {
+	id, _ := musicAssistantPlayer()
+	return id
+}
+
 // musicAssistantPlayer is Music Assistant's own player for this device, empty when there is none. It is
 // found by the name this device calls itself, which is the name it announces to Music Assistant over
 // Sendspin and so the name Music Assistant gives its player; see hass.Client.MusicAssistantFor.

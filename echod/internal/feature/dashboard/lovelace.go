@@ -544,7 +544,12 @@ func actionOf(m raw, entity string) *Action {
 		}
 		return &Action{Entity: entity, Service: service, Data: out}
 	case "navigate":
-		return &Action{View: strings.Trim(str(tap, "navigation_path"), "/")}
+		a := &Action{View: strings.Trim(str(tap, "navigation_path"), "/")}
+		if a.View == LibraryPath {
+			// Not a view: the screen's music library, which plays on the card's player when it has one.
+			a.Entity = entity
+		}
+		return a
 	}
 	return nil
 }

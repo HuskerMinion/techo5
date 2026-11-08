@@ -37,6 +37,10 @@ var speaker struct {
 	at      time.Time
 }
 
+// SpeakerEntity is this device's media player in Home Assistant, for the screen's music library to
+// find Music Assistant's player for it. It may ask Home Assistant, so it is for a goroutine of its own.
+func SpeakerEntity() string { return speakerEntity() }
+
 // speakerEntity is this device's media player in Home Assistant.
 func speakerEntity() string {
 	if s := config.Get().Home.Radio.Speaker; s != "" {

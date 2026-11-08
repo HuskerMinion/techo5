@@ -434,6 +434,20 @@ func maFavorites() ([]MediaChoice, error) {
 	return out, nil
 }
 
+// LibraryPath is the navigation path of a card that opens the screen's music library: a card with
+// tap_action {action: navigate, navigation_path: "#techo5-library"}. Its entity, a media player, is the
+// player the library plays on.
+const LibraryPath = "#techo5-library"
+
+// MusicTarget is the player music for entity is put on, as its media sheet puts it there: entity itself
+// when it is one of Music Assistant's, else Music Assistant's player of the same name; empty when there
+// is none or Home Assistant cannot say. It takes a look at Home Assistant, so it is for a goroutine of
+// its own.
+func MusicTarget(entity string) string { return maPlayerFor(entity) }
+
+// CleanName is a library name the screen's font can draw (cleanName), for the screen's music library.
+func CleanName(s string) string { return cleanName(s) }
+
 // cleanName is a library name the screen's font can draw: emoji and other symbols out, and the
 // spaces they leave closed up.
 func cleanName(s string) string {
