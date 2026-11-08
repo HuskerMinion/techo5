@@ -69,7 +69,8 @@ name and key and runs the routine again, for passing a device on a second time.
 ## Built so far
 
 - **Improv for the Dot** (#355): merged 2026-11-08. Tested on a Dot 2nd gen, last on a start with no
-  network (offered by itself, joined, DHCP started, IPv4). Not yet tried on an Echo 2nd gen or a Dot 3.
+  network (offered by itself, joined, DHCP started, IPv4), and on a Dot 3rd gen with dot-v1.0.58 the same
+  way (2026-11-08). Not yet tried on an Echo 2nd gen.
 - **The routine, on every device** (feature/firstrun holds the steps, where they are saved, and what
   they do; each face draws them): Wi-Fi, time zone, name and room (the room as Home Assistant's
   suggested area), Home Assistant (added with nothing typed, or the key with a QR code, or on its
