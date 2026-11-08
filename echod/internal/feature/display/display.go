@@ -2077,8 +2077,9 @@ func (d *Display) closeWifi() {
 
 func (d *Display) refreshWifi() {
 	st := wifi.Current(context.Background())
+	mac := wifi.MAC()
 	d.mu.Lock()
-	d.wifi.status = st
+	d.wifi.status, d.wifi.mac = st, mac
 	d.mu.Unlock()
 	d.wake()
 }
@@ -2138,6 +2139,7 @@ func (d *Display) wifiTap(x, y int) {
 		}
 		d.mu.Lock()
 		d.wifi.pick, d.wifi.text, d.wifi.shift, d.wifi.symbols, d.wifi.err = &n, "", false, false, ""
+		d.wifi.step, d.wifi.login = loginUser, wifi.Login{}
 		d.mu.Unlock()
 	}
 }
@@ -2162,10 +2164,35 @@ func (d *Display) wifiKey(k string) {
 			d.wifi.text = d.wifi.text[:n-1]
 		}
 	case "cancel":
-		d.wifi.pick, d.wifi.text = nil, ""
+		d.wifi.pick, d.wifi.text, d.wifi.login = nil, "", wifi.Login{}
 	case "join":
 		n := *d.wifi.pick
 		text := d.wifi.text
+		if n.Enterprise {
+			switch d.wifi.step {
+			case loginUser:
+				if strings.TrimSpace(text) == "" {
+					return
+				}
+				d.wifi.login.Identity, d.wifi.text, d.wifi.step, d.wifi.err = text, "", loginPass, ""
+				return
+			case loginPass:
+				if text == "" {
+					return
+				}
+				d.wifi.login.Password, d.wifi.text, d.wifi.step, d.wifi.err = text, "", loginServer, ""
+				return
+			}
+			// The server's name, or none: the title says an empty one is not checked. PEAP, the usual
+			// one; another method is on the setup page.
+			l := d.wifi.login
+			l.Server = strings.TrimSpace(text)
+			l.NoCheck = l.Server == ""
+			d.mu.Unlock()
+			d.wifiJoinLogin(n, l)
+			d.mu.Lock()
+			return
+		}
 		d.mu.Unlock()
 		d.wifiJoin(n, text)
 		d.mu.Lock()
@@ -2178,21 +2205,41 @@ func (d *Display) wifiKey(k string) {
 	}
 }
 
+// loginUser, loginPass and loginServer are the steps of typing a school or work network's login.
+const (
+	loginUser = iota
+	loginPass
+	loginServer
+)
+
 // wifiJoin joins a network in the background and shows how it went.
 func (d *Display) wifiJoin(n wifi.Network, passphrase string) {
+	d.wifiJoining(n, func() error { return wifi.Join(context.Background(), n.SSID, passphrase) })
+}
+
+// wifiJoinLogin is wifiJoin for a school or work network. A failed join starts its login again from
+// the username, all of it shown as typed for another go.
+func (d *Display) wifiJoinLogin(n wifi.Network, l wifi.Login) {
+	d.wifiJoining(n, func() error { return wifi.JoinLogin(context.Background(), n.SSID, l) })
+}
+
+func (d *Display) wifiJoining(n wifi.Network, join func() error) {
 	d.mu.Lock()
 	d.wifi.busy, d.wifi.err = "Connecting to "+n.SSID+"…", ""
 	d.mu.Unlock()
 	d.wake()
 	go func() {
-		err := wifi.Join(context.Background(), n.SSID, passphrase)
+		err := join()
 		d.mu.Lock()
 		d.wifi.busy = ""
 		if err != nil {
 			d.wifi.err = err.Error()
+			if n.Enterprise {
+				d.wifi.step, d.wifi.text = loginUser, d.wifi.login.Identity
+			}
 			slog.Warn("wifi: join failed", "ssid", n.SSID, "err", err)
 		} else {
-			d.wifi.pick, d.wifi.text = nil, ""
+			d.wifi.pick, d.wifi.text, d.wifi.login = nil, "", wifi.Login{}
 			slog.Info("wifi: joined", "ssid", n.SSID)
 		}
 		d.mu.Unlock()

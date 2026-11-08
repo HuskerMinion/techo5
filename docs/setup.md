@@ -2043,6 +2043,31 @@ picks a band when it joins, and the network can still move the device itself; to
 do that in the router or the mesh app (pin the device, or give it a 2.4 GHz-only network). It is saved on the
 device and is not copied by a settings file from another.
 
+### School, college or work Wi-Fi
+
+Some networks sign each person in with a username and a password (WPA2 Enterprise, 802.1X),
+such as eduroam and many school and workplace networks. Get the settings from the network's own Wi-Fi
+instructions:
+
+- **On the setup page:** under **Connections → Wi-Fi**, pick the network (a scan marks it "username
+  and password"), put the password in **Passphrase**, and open **School or work network**. Fill in
+  the **Username**, the **Sign-in method** (PEAP with MSCHAPv2 is the most common; TTLS with PAP or
+  MSCHAPv2 are there too), and the **Server name**: the domain the instructions give for the
+  sign-in server or its certificate, such as `school.edu`. The device sends the password only to a
+  server whose certificate comes from a known authority and carries that name, so a look-alike
+  network can't collect it. **Don't check the server** is for networks whose instructions say not to
+  validate the certificate. **Anonymous identity** is only for networks that give one.
+- **On an Echo Show's screen:** a network marked "login" asks for the username, then the password,
+  then the server name, and uses PEAP with MSCHAPv2. An empty server name joins without checking the
+  server. For another method, use the setup page.
+
+The password is kept on the device, readable only by it, as Wi-Fi passphrases are.
+
+Networks that ask you to sign in on a web page, as hotels and some guest networks do, aren't
+supported: the device has no browser to sign in with. Many schools have a page for registering a
+device like this one by its Wi-Fi address (MAC) instead. The setup page shows the address under
+**Connections → Wi-Fi**, and an Echo Show shows it on its Wi-Fi page.
+
 ### Another Wi-Fi on an Echo Dot
 
 An Echo Dot or an Echo 2nd gen has no screen to pick a network on, so it takes one over Bluetooth

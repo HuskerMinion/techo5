@@ -68,7 +68,7 @@ func (f *Feature) firstRunSave(w http.ResponseWriter, r *http.Request, token str
 		return
 	case "wifi":
 		ssid := strings.TrimSpace(r.PostFormValue("ssid"))
-		problem = joinWifi(r.Context(), ssid, r.PostFormValue("passphrase"))
+		problem = joinWifiFrom(r, ssid)
 	case "zone":
 		zone := strings.TrimSpace(r.PostFormValue("zone"))
 		var err error
@@ -166,7 +166,9 @@ func firstRunForm(w http.ResponseWriter, token, problem string, showKey bool) {
 		 kept. If it moves to the network you add, this page goes with it, at the device's new address.</p>`)
 		form("wifi", "Add network", false, `<label for="ssid">Network name</label>
 		 <input id="ssid" name="ssid" autocomplete="off">
-		 <label for="passphrase">Passphrase</label><input id="passphrase" name="passphrase" type="password" autocomplete="new-password"><br>`)
+		 <label for="passphrase">Passphrase</label><input id="passphrase" name="passphrase" type="password" autocomplete="new-password">`+
+			loginFieldsHTML()+`<br>`)
+		macNote(w)
 		fmt.Fprint(w, `</fieldset><p>`)
 		next("Next")
 		fmt.Fprint(w, `</p>`)

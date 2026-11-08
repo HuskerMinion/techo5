@@ -253,7 +253,7 @@ func (f *Feature) save(w http.ResponseWriter, r *http.Request) {
 		if other := strings.TrimSpace(r.PostFormValue("other")); other != "" {
 			ssid = other
 		}
-		problem = joinWifi(r.Context(), ssid, r.PostFormValue("passphrase"))
+		problem = joinWifiFrom(r, ssid)
 	case "address":
 		var handled bool
 		if problem, handled = saveAddress(w, r); handled {
@@ -646,6 +646,7 @@ func (f *Feature) wifiSection(w http.ResponseWriter, token string, scan bool) {
 	default:
 		fmt.Fprintf(w, `<p class="bad">Not on a network (%s).</p>`, html.EscapeString(st.State))
 	}
+	macNote(w)
 
 	if saved := wifi.Saved(); len(saved) > 0 {
 		fmt.Fprint(w, `<p class="note">Remembered, in the order it tries them:</p><ul>`)
@@ -667,8 +668,12 @@ func (f *Feature) wifiSection(w http.ResponseWriter, token string, scan bool) {
 			fmt.Fprint(w, `<option value="">(the scan failed)</option>`)
 		}
 		for _, n := range nets {
-			fmt.Fprintf(w, `<option value="%s">%s%s</option>`,
-				html.EscapeString(n.SSID), html.EscapeString(n.SSID), lock(n.Secured))
+			login := ""
+			if n.Enterprise {
+				login = " (username and password)"
+			}
+			fmt.Fprintf(w, `<option value="%s">%s%s%s</option>`,
+				html.EscapeString(n.SSID), html.EscapeString(n.SSID), lock(n.Secured), login)
 		}
 	} else {
 		fmt.Fprint(w, `<option value="">(not scanned yet)</option>`)
@@ -680,7 +685,9 @@ func (f *Feature) wifiSection(w http.ResponseWriter, token string, scan bool) {
 	fmt.Fprint(w, `<label for="other">…or a name it did not find</label>
 	 <input id="other" name="other" autocomplete="off" placeholder="Network name">
 	 <label for="passphrase">Passphrase</label>
-	 <input id="passphrase" name="passphrase" type="password" autocomplete="new-password">
+	 <input id="passphrase" name="passphrase" type="password" autocomplete="new-password">`)
+	loginFields(w)
+	fmt.Fprint(w, `
 	 <p class="note">The networks it already remembers are kept. If the one you add is somewhere else,
 	  nothing changes here until the device is taken there. If it is a network in range, the device
 	  moves to it — and this page goes with it, so you will have to find it again at its new address.</p>
@@ -940,6 +947,28 @@ func lock(secured bool) string {
 // joinWifi adds a network and reports what went wrong, if anything. The library puts the old
 // configuration back when the new network never comes up, so a wrong passphrase does not strand it.
 func joinWifi(ctx context.Context, ssid, passphrase string) string {
+	return joinWifiWith(ctx, ssid, passphrase, nil)
+}
+
+// joinWifiFrom is joinWifi for a posted form: a username filled in makes it a school or work login
+// (loginFields), with the passphrase field as its password.
+func joinWifiFrom(r *http.Request, ssid string) string {
+	pass := r.PostFormValue("passphrase")
+	id := strings.TrimSpace(r.PostFormValue("identity"))
+	if id == "" {
+		return joinWifiWith(r.Context(), ssid, pass, nil)
+	}
+	return joinWifiWith(r.Context(), ssid, "", &wifi.Login{
+		Method:    r.PostFormValue("eap"),
+		Identity:  id,
+		Password:  pass,
+		Anonymous: r.PostFormValue("anonymous"),
+		Server:    r.PostFormValue("server"),
+		NoCheck:   r.PostFormValue("nocheck") != "",
+	})
+}
+
+func joinWifiWith(ctx context.Context, ssid, passphrase string, login *wifi.Login) string {
 	if ssid == "" {
 		return "no network was named"
 	}
@@ -947,11 +976,55 @@ func joinWifi(ctx context.Context, ssid, passphrase string) string {
 	defer wifi.SettingUp(false)
 	ctx, cancel := context.WithTimeout(ctx, 70*time.Second)
 	defer cancel()
-	if err := wifi.Join(ctx, ssid, passphrase); err != nil {
+	var err error
+	if login != nil {
+		err = wifi.JoinLogin(ctx, ssid, *login)
+	} else {
+		err = wifi.Join(ctx, ssid, passphrase)
+	}
+	if err != nil {
 		return err.Error()
 	}
-	slog.Info("setup page: a network was added", "ssid", ssid)
+	slog.Info("setup page: a network was added", "ssid", ssid, "login", login != nil)
 	return ""
+}
+
+// loginFields are the extra fields for a network that signs each person in (a school's, a college's,
+// a workplace's), folded away under the passphrase, which is their password.
+func loginFields(w io.Writer) { io.WriteString(w, loginFieldsHTML()) }
+
+func loginFieldsHTML() string {
+	var w strings.Builder
+	fmt.Fprint(&w, `<details><summary>School or work network (a username as well as a password)</summary>
+	 <p class="note">Fill these in from the network's own Wi-Fi instructions, and put the password in the
+	  Passphrase field above. Leave the username empty for a network with only a passphrase.</p>
+	 <label for="identity">Username</label>
+	 <input id="identity" name="identity" autocomplete="off" placeholder="name@school.edu">
+	 <label for="eap">Sign-in method</label><select id="eap" name="eap">`)
+	for _, m := range wifi.Methods {
+		fmt.Fprintf(&w, `<option value="%s">%s</option>`, m.Name, html.EscapeString(m.Label))
+	}
+	fmt.Fprint(&w, `</select>
+	 <label for="server">Server name (domain)</label>
+	 <input id="server" name="server" autocomplete="off" placeholder="school.edu">
+	 <p class="note">The name the instructions give for the sign-in server or its certificate. The device
+	  sends the password only to a server that proves it has that name, so a look-alike network can't
+	  collect it.</p>
+	 <label><input type="checkbox" name="nocheck" value="1"> Don't check the server (only when the
+	  instructions say not to)</label>
+	 <label for="anonymous">Anonymous identity (only if the instructions give one)</label>
+	 <input id="anonymous" name="anonymous" autocomplete="off" placeholder="anonymous@school.edu">
+	 </details>`)
+	return w.String()
+}
+
+// macNote is the device's Wi-Fi hardware address, which many school networks ask for to register a
+// device that has no web browser to sign in with.
+func macNote(w io.Writer) {
+	if mac := wifi.MAC(); mac != "" {
+		fmt.Fprintf(w, `<p class="note">This device's Wi-Fi address (MAC) is <strong>%s</strong>. Some school
+		 and dorm networks ask for it to register a device.</p>`, html.EscapeString(mac))
+	}
 }
 
 func selected(on bool) string {

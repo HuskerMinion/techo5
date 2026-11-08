@@ -23,11 +23,16 @@ type wifiState struct {
 	page     int
 	pick     *wifi.Network // the network being joined; nil is the list
 	text     string        // the passphrase so far
-	shift    bool
-	symbols  bool
-	busy     string    // "Connecting to X…" while a join runs
-	err      string    // why the last join failed
-	addr     *addrForm // the network address page (address_page.go), when it is the one open
+	// A school or work network (pick.Enterprise) is typed in three goes: the username, the password,
+	// then the sign-in server's name. step is which, and login holds the ones done.
+	step    int
+	login   wifi.Login
+	mac     string // the Wi-Fi hardware address, which school networks ask for to register a device
+	shift   bool
+	symbols bool
+	busy    string    // "Connecting to X…" while a join runs
+	err     string    // why the last join failed
+	addr    *addrForm // the network address page (address_page.go), when it is the one open
 }
 
 // The sizes below are the ones this page was drawn at on a Show 5. Everything that is a length goes
@@ -158,6 +163,9 @@ func (r *renderer) wifiPage(s scene) {
 	} else if w.status.SSID != "" {
 		line = w.status.SSID + ": " + w.status.State
 	}
+	if w.mac != "" {
+		line += "  ·  MAC " + w.mac
+	}
 	if w.busy != "" {
 		line = w.busy
 	} else if w.err != "" {
@@ -184,7 +192,9 @@ func (r *renderer) wifiPage(s scene) {
 		}
 		r.text(r.small, n.SSID, r.margin, top+r.s(31), c)
 		info := bars(n.Signal)
-		if n.Secured {
+		if n.Enterprise {
+			info += "  ·  login"
+		} else if n.Secured {
 			info += "  ·  locked"
 		}
 		r.text(r.tiny, info, r.w-r.margin-btnW-btnGap-r.width(r.tiny, info), top+r.s(29), dim)
@@ -247,8 +257,19 @@ func (r *renderer) keyboardPage(s scene) {
 	} else if w.err != "" {
 		shown = w.err
 	}
-	r.keyboard(fmt.Sprintf(tr("ui_password_for_s"), w.pick.SSID), shown, w.busy != "" || w.err != "",
-		w.shift, w.symbols, tr("connect"))
+	title, goLabel := tr("ui_password_for_s"), tr("connect")
+	if w.pick.Enterprise {
+		switch w.step {
+		case loginUser:
+			title, goLabel = tr("ui_username_for_s"), tr("next")
+		case loginPass:
+			goLabel = tr("next")
+		case loginServer:
+			title = tr("ui_server_for_s")
+		}
+	}
+	r.keyboard(fmt.Sprintf(title, w.pick.SSID), shown, w.busy != "" || w.err != "",
+		w.shift, w.symbols, goLabel)
 }
 
 // keyboard draws a title, the field with shown in it (dimmed, with no cursor, when it is a message
