@@ -136,21 +136,25 @@ tap_action:
 
 Home Assistant itself has no view of that name, so the same card does nothing in a browser. If no
 Music Assistant player can be found, the library still opens for browsing, Play and Shuffle are
-grayed out, and a line at the foot says so.
+grayed out, and a line at the top says so.
 
 **What it shows**
 
-- Tabs for **Artists**, **Albums**, **Playlists**, **Tracks**, **Radio** and **Search**. Artists,
-  albums, playlists and radio stations are a grid of pictures with their names; tracks are rows with
-  the artist and the album.
-- Swipe left and right to turn the pages; the dots under them say where you are. More of the
-  library is loaded as you get near the end.
-- Tap an artist for its albums and top tracks, an album or a playlist for its tracks. **Back** goes
-  back to where you were, and **Done** closes the library.
-- An artist, album or playlist page has **Play** and **Shuffle**. A tap on a track or a radio
-  station plays it. Whatever plays replaces what was queued.
-- **Search** opens the on-screen keyboard, and finds artists, albums, playlists, tracks and radio
-  stations, in the library and in your music services.
+- Tabs along the top for **Artists**, **Albums**, **Playlists**, **Tracks**, **Radio** and search
+  (the magnifier). Each tab is a grid of large covers with names under them; artists are round.
+  Drag up and down to scroll. More of the library is loaded as you near the end.
+- If Music Assistant's library has saved tracks but no artists or albums of its own, the Artists and
+  Albums tabs are made from those tracks, and say "From your saved tracks". An empty tab says so,
+  with a button to the search.
+- Tap an artist for its picture, its albums in a row you drag sideways, and its top tracks. Tap an
+  album or a playlist for its cover, **Play** and **Shuffle**, and its tracks with their lengths.
+  **Back** goes back to where you were, and **Done** closes the library.
+- A tap on a track or a radio station plays it, and **Play** and **Shuffle** play the whole album,
+  playlist or artist. Whatever plays replaces what was queued. What you tapped lights up, and then
+  the library closes: to this device's Now Playing screen when it plays here, or to the media sheet
+  of the speaker it plays on when you opened the library from one.
+- Search opens the on-screen keyboard. It finds artists, albums, playlists, tracks and radio
+  stations, in the library and in your music services, each kind in a row of its own.
 
 **What it needs**
 
