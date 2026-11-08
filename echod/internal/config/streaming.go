@@ -6,6 +6,9 @@ package config
 type Streaming struct {
 	AirPlay bool `json:"airplay,omitempty"`
 	Spotify bool `json:"spotify,omitempty"`
+	// SpotifySoloist opts into the experimental private-runtime receiver. Off keeps the recoverable
+	// librespot baseline. Credentials live outside the exported settings file.
+	SpotifySoloist bool `json:"spotify_soloist,omitempty"`
 
 	// AirPlayClassic keeps AirPlay to the classic receiver where the image also carries AirPlay 2
 	// (feature/streaming): for somebody whose group it will not play in step with. Off, so AirPlay 2, on a
@@ -73,6 +76,10 @@ func (w StreamingWriter) DLNA(v bool) error {
 
 func (w StreamingWriter) Spotify(v bool) error {
 	return w.st.Update(func(c *Config) { c.Streaming.Spotify = v })
+}
+
+func (w StreamingWriter) SpotifySoloist(v bool) error {
+	return w.st.Update(func(c *Config) { c.Streaming.SpotifySoloist = v })
 }
 
 func (w StreamingWriter) SpotifyBitrate(v int) error {

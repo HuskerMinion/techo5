@@ -1,0 +1,7 @@
+// Test fixture only, never ship this as the client: simulate Soloist's documented build-expiry exit.
+// Copy to a temporary expired.go and build for the sidecar architecture with -buildmode=pie.
+package main
+
+import "os"
+
+func main() { os.Exit(10) }

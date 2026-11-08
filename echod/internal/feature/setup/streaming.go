@@ -2,6 +2,7 @@ package setup
 
 import (
 	"fmt"
+	"html"
 	"log/slog"
 	"net/http"
 	"slices"
@@ -33,6 +34,19 @@ func streamingSection(w http.ResponseWriter, token string) {
 	 <p><label><input type="checkbox" name="airplay" value="yes" style="width:auto"%s> AirPlay: from an iPhone, iPad or Mac</label></p>
 	 <p><label><input type="checkbox" name="spotify" value="yes" style="width:auto"%s> Spotify Connect: from the Spotify app (needs Spotify Premium)</label></p>`,
 			checked(c.AirPlay), checked(c.Spotify))
+		fmt.Fprintf(w, `<p><label><input type="checkbox" name="soloist" value="yes" style="width:auto"%s>
+	 Use Spotify Soloist (experimental; off restores librespot)</label></p>
+	 <p class="note">Soloist status: %s. Private runtime installed: %t. API key saved: %t.</p>
+	 <p><label for="soloistkey">Personal Spotify Soloist API key</label>
+	 <input id="soloistkey" name="soloistkey" type="password" autocomplete="new-password" maxlength="4096"
+	 placeholder="Leave blank to keep the saved key"></p>
+	 <p><label><input type="checkbox" name="soloistremove" value="yes" style="width:auto">Remove saved API key</label></p>
+	 <p class="note">Generate your own key at <a href="https://developer.spotify.com/dashboard/soloist" target="_blank" rel="noopener noreferrer">Spotify for Developers</a>
+	 (Premium required). Enable Spotify Connect and Soloist, enter the key and Save. Then select this device in Spotify on the same Wi-Fi.
+	 The saved key is never displayed. Removing the key stops Soloist; disabling retains key and pairing.
+	 Legacy quality and normalization choices below apply only to librespot.
+	 Spotify volume follows TECHO5's device volume, including its volume limits.</p>`,
+			checked(c.SpotifySoloist), html.EscapeString(streaming.SoloistStatus()), streaming.HasSoloist(), streaming.SoloistKeyConfigured())
 		fmt.Fprint(w, `
 	 <p><label for="spotifybitrate">Spotify Connect quality</label><select id="spotifybitrate" name="spotifybitrate">`)
 		for _, b := range []int{96, 160, 320} {
@@ -86,6 +100,14 @@ func spotifyQuality(kbps int) string {
 func saveStreaming(r *http.Request) string {
 	on := func(name string) bool { return r.PostFormValue(name) == "yes" }
 	if streaming.Here {
+		if err := streaming.SaveSoloistKey(r.PostFormValue("soloistkey"), on("soloistremove")); err != nil {
+			return err.Error()
+		}
+		if on("soloist") != config.Get().Streaming.SpotifySoloist {
+			if err := streaming.SetSoloist(on("soloist")); err != nil {
+				return err.Error()
+			}
+		}
 		if on("airplay") != config.Get().Streaming.AirPlay {
 			streaming.Get().SetAirPlay(on("airplay"))
 		}

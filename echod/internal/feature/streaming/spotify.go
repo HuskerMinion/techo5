@@ -382,6 +382,10 @@ func forgetSpotify() {
 // runSpotifyReceiver runs librespot under the device's name until ctx ends, playing what it sends and
 // showing what it says is playing.
 func runSpotifyReceiver(ctx context.Context, name string) {
+	if config.Get().Streaming.SpotifySoloist {
+		runSoloistReceiver(ctx, name)
+		return
+	}
 	r, w, err := os.Pipe()
 	if err != nil {
 		slog.Error("streaming: Spotify's audio pipe failed", "err", err)

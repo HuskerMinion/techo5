@@ -371,6 +371,13 @@ nqptp, https://github.com/mikebrady/nqptp (GPL-2.0)
   Its license files are in tools/linux/licenses/nqptp and in every root filesystem,
   /usr/share/licenses/nqptp.
 
+Optional Spotify Soloist proof of concept (developer-installed, not part of normal release images)
+  soloistd, https://github.com/MopigamesYT/soloistd (MPL-2.0), built from commit
+  ccf073a24d682249de8e74b8f81ab5de169457a6 with the execution adaptation in tools/linux/.
+  Its license and source revision accompany the generated development bundle. The private Ubuntu
+  runtime retains its packages' copyright files and a package/version/checksum manifest. Spotify
+  Soloist itself is not bundled: it is downloaded directly from Spotify for the individual user.
+
 librespot, https://github.com/librespot-org/librespot (MIT)
   The Echo Spot's root filesystem carries librespot 0.8.0, the Spotify Connect receiver, as
   /usr/local/bin/techo5-librespot (armv7, statically linked). Copyright (c) 2015 Paul Lietar. Changes:

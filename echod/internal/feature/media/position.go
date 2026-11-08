@@ -10,11 +10,12 @@ import (
 // Music Assistant over Sendspin does, a station never does. What is shown with the music in time (the
 // lyrics) asks for it and goes without when there is none for the track on the page.
 type Position struct {
-	Title string
-	At    time.Time
-	Pos   time.Duration
-	Dur   time.Duration
-	Rate  float64
+	Source string // optional owner, so a receiver can clear its own timing without clearing another's
+	Title  string
+	At     time.Time
+	Pos    time.Duration
+	Dur    time.Duration
+	Rate   float64
 }
 
 // Now is where the track is at t.
@@ -46,6 +47,16 @@ func SetPosition(p Position) {
 func ClearPosition() {
 	position.mu.Lock()
 	position.set = false
+	position.mu.Unlock()
+}
+
+// ClearSourcePosition forgets only timing published by this source. A receiver ending while another
+// source is playing must not erase that source's progress.
+func ClearSourcePosition(source string) {
+	position.mu.Lock()
+	if position.p.Source == source {
+		position.set = false
+	}
 	position.mu.Unlock()
 }
 

@@ -139,9 +139,13 @@ func waitForBus(within time.Duration) bool {
 // not start beside the first. Called with none of this daemon's own running.
 func killLeftovers() {
 	ours := map[string]bool{avahiPath: true, shairportPath: true, shairport2Path: true, nqptpPath: true, librespotPath: true}
+	libs, loader := soloistLibraries()
+	for _, path := range []string{soloistdPath, filepath.Join(soloistHome(), "data/soloistd/bin/soloist"), filepath.Join(libs, loader)} {
+		ours[path] = true
+	}
 	isOurs := func(pid int) bool {
 		exe, err := os.Readlink(filepath.Join("/proc", strconv.Itoa(pid), "exe"))
-		return err == nil && ours[exe]
+		return err == nil && ours[strings.TrimSuffix(exe, " (deleted)")]
 	}
 	dirs, _ := os.ReadDir("/proc")
 	var found []int

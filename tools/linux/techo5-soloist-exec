@@ -1,0 +1,28 @@
+#!/bin/sh
+# Run a private glibc executable without changing Alpine's loader or libraries.
+set -eu
+runtime=${TECHO5_SOLOIST_RUNTIME:-/data/techo5-soloist/runtime}
+triple=arm-linux-gnueabihf
+loadername=ld-linux-armhf.so.3
+if [ -f "$runtime/usr/lib/aarch64-linux-gnu/ld-linux-aarch64.so.1" ]; then
+    triple=aarch64-linux-gnu
+    loadername=ld-linux-aarch64.so.1
+fi
+libs=$runtime/usr/lib/$triple
+modules=
+for path in "$runtime"/usr/lib/pulse-*/modules; do modules=$path; done
+search=$libs:$libs/pulseaudio:$modules:$runtime/lib/$triple
+loader=$libs/$loadername
+case "$1" in
+*/soloist)
+    # Direct loader execution changes /proc/self/exe. Patch each fresh download before validation,
+    # then execute the real binary, preserving self-exec/crash-handler behavior. Never patch an
+    # already running installation again (ctl also passes through this launcher).
+    interpreter=$("$loader" --library-path "$search" "$runtime/usr/bin/patchelf" --print-interpreter "$1")
+    if [ "$interpreter" != "$loader" ]; then
+        "$loader" --library-path "$search" "$runtime/usr/bin/patchelf" --set-interpreter "$loader" --force-rpath --set-rpath "$search" "$1"
+    fi
+    exec "$@"
+    ;;
+*) exec "$loader" --library-path "$search" "$@" ;;
+esac

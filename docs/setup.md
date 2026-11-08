@@ -496,6 +496,10 @@ captured login to the same page for a few minutes, and could see the pictures an
   plugin's **Spotify App volume behavior** to **Synchronize Spotify App volume** for the phone's volume
   slider to work.
 
+  An experimental [direct Soloist integration](spotify-soloist-poc.md) is available in the development
+  build. It uses a private runtime and audio bridge; it is not included in normal release images.
+  When installed, the setup page accepts your personal Soloist API key without SSH or file editing.
+
   Every image from v1.6.8 and dot-v1.0.35 carries the AirPlay 2 receiver, so an iPhone can group the
   device with other AirPlay 2 speakers (a HomePod, a Sonos) and play to all of them at once. Where it
   can't run (it won't start, or the kernel can't take the firewall's AirPlay 2 rules, which the

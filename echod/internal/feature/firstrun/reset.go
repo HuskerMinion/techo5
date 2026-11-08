@@ -147,6 +147,9 @@ func wipeFiles() {
 			slog.Warn("reset: removing failed", "what", p, "err", err)
 		}
 	}
+	if err := os.RemoveAll(filepath.Join(filepath.Dir(stateDir), "techo5-soloist")); err != nil {
+		slog.Warn("reset: removing Soloist's private state failed", "err", err)
+	}
 	if err := os.RemoveAll(filepath.Join(filepath.Dir(stateDir), "techo5-spotify")); err != nil {
 		slog.Warn("reset: removing Spotify's login failed", "err", err)
 	}

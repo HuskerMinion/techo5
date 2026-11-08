@@ -44,6 +44,7 @@ func init() {
 		media.ReceiverControl(home.AirPlayName, airplayRemote.control)
 		media.TellPending(home.AirPlayName, airplayPending)
 		media.StopOnPause(home.SpotifyName)
+		media.ReceiverControl(home.SpotifyName, soloistControl)
 	}
 }
 
@@ -184,7 +185,7 @@ func (f *Feature) set(s *esphome.Switch, on bool, save func(bool) error) {
 func Installed() (airplay, spotify bool) {
 	have := func(p string) bool { _, err := os.Stat(p); return err == nil }
 	return have(avahiPath) && (have(shairportPath) || have(shairport2Path) && have(nqptpPath)),
-		have(avahiPath) && have(librespotPath)
+		have(avahiPath) && (have(librespotPath) || HasSoloist())
 }
 
 // Run keeps what runs matching the switches.
@@ -209,6 +210,8 @@ type wanted struct {
 	airplay, spotify, airplayClassic, airplaySetsVolume bool
 	spotifyKbps                                         int
 	spotifyNormalize                                    bool
+	soloist                                             bool
+	soloistRevision                                     uint64
 }
 
 // settle starts or stops the receivers, and avahi with them, to match the switches. Any change stops
@@ -216,7 +219,8 @@ type wanted struct {
 // order (avahi first) simple.
 func (f *Feature) settle(parent context.Context) {
 	c := config.Get().Streaming
-	want := wanted{c.AirPlay, c.Spotify, c.AirPlayClassic, c.AirPlaySetsVolume, c.SpotifyKbps(), c.SpotifyNormalize}
+	want := wanted{c.AirPlay, c.Spotify, c.AirPlayClassic, c.AirPlaySetsVolume, c.SpotifyKbps(), c.SpotifyNormalize,
+		c.SpotifySoloist, soloistRevision.Load()}
 	f.mu.Lock()
 	same := want == f.wanted && (f.running != nil || (!want.airplay && !want.spotify))
 	f.mu.Unlock()

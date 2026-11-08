@@ -58,6 +58,9 @@ func TestReceivedArtShowsTheSongsCover(t *testing.T) {
 	if !waitFor(func() bool { a, _ := receivedArt(SpotifyName); return a != nil }) {
 		t.Fatal("the cover never came")
 	}
+	if _, thumb := receivedArt(SpotifyName); thumb == nil || thumb.Bounds().Dx() != 640 {
+		t.Fatal("Spotify cover was reduced to a small thumbnail")
+	}
 	if a, _ := receivedArt(AirPlayName); a != nil {
 		t.Error("Spotify's cover shown for AirPlay")
 	}

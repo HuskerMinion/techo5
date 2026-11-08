@@ -37,7 +37,11 @@ func ReceivedArt(from, u string) {
 	if !strings.HasPrefix(u, "https://") {
 		u = ""
 	}
-	receive(from, u, func(ctx context.Context) (*image.RGBA, *image.RGBA, error) { return fetchArt(ctx, u, false) })
+	side := thumbSide
+	if from == SpotifyName {
+		side = 640
+	} // Modern Show layouts draw a cover larger than the old 240px thumbnail.
+	receive(from, u, func(ctx context.Context) (*image.RGBA, *image.RGBA, error) { return fetchArtSized(ctx, u, false, side) })
 }
 
 // ReceivedPicture takes the cover a receiver sent for its song as the encoded picture itself, as

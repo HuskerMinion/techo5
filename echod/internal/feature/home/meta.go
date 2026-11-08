@@ -173,6 +173,10 @@ func (f *Feature) refreshMeta(ctx context.Context) {
 // panel and cropped; a logo is scaled to fit and centered, since a cropped logo is no logo. The square
 // thumbnail follows the same rule.
 func fetchArt(ctx context.Context, u string, logo bool) (*image.RGBA, *image.RGBA, error) {
+	return fetchArtSized(ctx, u, logo, thumbSide)
+}
+
+func fetchArtSized(ctx context.Context, u string, logo bool, side int) (*image.RGBA, *image.RGBA, error) {
 	if u == "" {
 		return nil, nil, nil
 	}
@@ -189,14 +193,19 @@ func fetchArt(ctx context.Context, u string, logo bool) (*image.RGBA, *image.RGB
 	if _, err := buf.ReadFrom(http.MaxBytesReader(nil, res.Body, 4<<20)); err != nil {
 		return nil, nil, err
 	}
-	return layoutArt(buf.Bytes(), logo, "cover art from "+u)
+	return layoutArtSized(buf.Bytes(), logo, "cover art from "+u, side)
 }
 
 // layoutArt decodes a picture and lays it out for the panel, by fetchArt's rule. It is the half that
 // does not care where the bytes came from: a URL here, or Music Assistant sending the picture itself.
 func layoutArt(b []byte, logo bool, what string) (*image.RGBA, *image.RGBA, error) {
+	return layoutArtSized(b, logo, what, thumbSide)
+}
+
+func layoutArtSized(b []byte, logo bool, what string, side int) (*image.RGBA, *image.RGBA, error) {
+	side = max(thumbSide, min(side, 640))
 	artW, artH := artSize()
-	src, err := decodeWithin(b, maxArtPixels, what, artW, artH)
+	src, err := decodeWithin(b, maxArtPixels, what, max(artW, side), max(artH, side))
 	if err != nil {
 		return nil, nil, err
 	}
@@ -230,13 +239,13 @@ func layoutArt(b []byte, logo bool, what string) (*image.RGBA, *image.RGBA, erro
 	}
 	picscale.CatmullRom.Scale(dst, target, src, sb, draw.Src)
 
-	thumb := image.NewRGBA(image.Rect(0, 0, thumbSide, thumbSide))
-	w, h := thumbSide, thumbSide
+	thumb := image.NewRGBA(image.Rect(0, 0, side, side))
+	w, h := side, side
 	if (sw > sh) == logo {
-		h = sh * thumbSide / sw // fit the longer side (a logo), or fill with the shorter (a cover)
+		h = sh * side / sw // fit the longer side (a logo), or fill with the shorter (a cover)
 	} else {
-		w = sw * thumbSide / sh
+		w = sw * side / sh
 	}
-	picscale.CatmullRom.Scale(thumb, image.Rect((thumbSide-w)/2, (thumbSide-h)/2, (thumbSide-w)/2+w, (thumbSide-h)/2+h), src, sb, draw.Src)
+	picscale.CatmullRom.Scale(thumb, image.Rect((side-w)/2, (side-h)/2, (side-w)/2+w, (side-h)/2+h), src, sb, draw.Src)
 	return dst, thumb, nil
 }
