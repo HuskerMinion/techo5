@@ -1028,7 +1028,7 @@ func (c *conversation) start(n nextTurn) bool {
 	if n.woke && !n.at.IsZero() {
 		heard = time.Since(n.at)
 	}
-	c.startAudio(slot, n.followUp, n.continued, historyFor(slot, n.followUp, n.confirmed, n.waited, heard))
+	c.startAudio(slot, n.followUp, hadAudio(n), historyFor(slot, n.followUp, n.confirmed, n.waited, heard))
 	// The phrase is logged for a follow-up too, because it is what chose the pipeline — not because
 	// anyone said it.
 	slog.Info("turn started", "slot", slot+1, "phrase", phrase, "follow_up", n.followUp, "on_ha", n.continued)
@@ -1493,6 +1493,11 @@ func (c *conversation) stopStreaming() {
 
 	c.send("end of audio", c.be.End)
 }
+
+// hadAudio is whether the turn's run has had the audio up to now already, so its history is not sent
+// again: a run Home Assistant's engine heard the word in. Not one it confirmed (#477): what was said while
+// it was asked went to its wake word stage, not to speech-to-text, so the history is sent after all.
+func hadAudio(n nextTurn) bool { return n.continued && !n.confirmed }
 
 // stream sends microphone frames until it is told to stop.
 func (c *conversation) stream(ctx context.Context, be backend, slot int, followUp, continued bool, id string, history time.Duration) {

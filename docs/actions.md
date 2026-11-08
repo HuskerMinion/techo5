@@ -104,7 +104,8 @@ Wi-Fi networks, name, room, Home Assistant's encryption key and its access to Ho
 every setting back to how a new install has it (alarms, timers and the phone book go too), deletes the
 old home's files, and restarts into first run. [setup.md](setup.md#giving-a-device-to-someone-else)
 lists everything it clears. It leaves your network at once, and it cannot be undone. A Dot or an
-Echo 2nd gen is given its new network over Bluetooth with Improv afterward.
+Echo 2nd gen is given its new network over Bluetooth with Improv afterward. An Echo Dot 3rd gen doesn't
+have this action yet, since Improv hasn't been tried on it.
 
 Afterward, delete the device from **Settings → Devices & services → ESPHome** in your Home Assistant.
 With no key, the next Home Assistant can add it with nothing typed.

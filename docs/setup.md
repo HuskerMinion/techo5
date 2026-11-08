@@ -71,7 +71,8 @@ To pass on a device that is already set up, use **Reset for someone else**: on t
 `reset_for_someone_else` action (`confirm: reset`), or on a Dot or an Echo 2nd gen by holding the
 action button and volume down together for 10 seconds (the ring turns orange). Holding them also
 does what each does alone on the way: the setup page opens, Bluetooth pairing starts and the volume
-goes down. The device then restarts into first run. A reset clears:
+goes down. Not on an Echo Dot 3rd gen yet: Improv hasn't been tried on it, and a reset Dot 3 with no
+way to get a network would need a reinstall over USB. The device then restarts into first run. A reset clears:
 
 - every Wi-Fi network it knows, so it leaves the network at once
 - its name (it is named from its MAC address again) and its room

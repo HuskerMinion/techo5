@@ -242,3 +242,17 @@ func TestResetWithNoScreen(t *testing.T) {
 		t.Fatal("a device with no screen, which Improv gives a network, offered no reset")
 	}
 }
+
+// A board Improv has not been tried on yet offers no reset, and refuses one asked for.
+func TestNoResetWhereImprovIsUntried(t *testing.T) {
+	fresh(t)
+	was := improvUntried
+	t.Cleanup(func() { improvUntried = was })
+	improvUntried = func() bool { return true }
+	if CanReset() || Reset() == nil || len(Get().Actions()) != 0 {
+		t.Fatal("a board Improv is untried on offered a reset")
+	}
+	if _, err := os.Stat(resetPath()); err == nil {
+		t.Fatal("a refused reset left its marker")
+	}
+}

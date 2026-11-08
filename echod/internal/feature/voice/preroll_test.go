@@ -91,6 +91,20 @@ func TestHistoryLeavesTheWakeWordOutWhenASoundPlays(t *testing.T) {
 
 // A wake Home Assistant confirmed reaches back to when the device scored the word, with or without a
 // wake sound, as far as the microphones' history goes (#477).
+// A turn on a run Home Assistant heard the word in sends no history, its run has had it; one it
+// confirmed does, since that audio went to its wake word stage (#477).
+func TestAConfirmedTurnSendsItsHistory(t *testing.T) {
+	if hadAudio(nextTurn{continued: true, confirmed: true}) {
+		t.Error("a confirmed turn counted as having had its audio")
+	}
+	if !hadAudio(nextTurn{continued: true}) {
+		t.Error("a turn Home Assistant heard the word in did not count as having had its audio")
+	}
+	if hadAudio(nextTurn{}) {
+		t.Error("a turn of the device's own counted as having had its audio")
+	}
+}
+
 func TestAConfirmedWakeReachesBackToTheScore(t *testing.T) {
 	for _, tone := range []config.Tone{config.ToneNone, config.ToneHA} {
 		config.Use(filepath.Join(t.TempDir(), "state.json"))

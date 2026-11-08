@@ -530,7 +530,9 @@ func (f *Feature) settingsPage(ctx context.Context, w http.ResponseWriter, token
 		timezoneSection(w, token)
 		timeServerSection(w, token)
 		homeAssistantSection(w, token)
-		resetSection(w, token)
+		if firstrun.CanReset() {
+			resetSection(w, token)
+		}
 		settingsFileSection(w, token)
 		shareSection(w, token)
 		diagnosticsSection(w)
