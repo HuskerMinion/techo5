@@ -256,6 +256,20 @@ func (c Client) Stop(ctx context.Context, id string) error {
 	return c.do(ctx, "players/cmd/stop", map[string]any{"player_id": id}, nil)
 }
 
+// Resume plays the queue of the player id (as Player gives it; a player's queue has its id) again from
+// where it stopped: a pause ends Music Assistant's stream to a Sendspin player, so there is nothing left
+// to unpause. A server that has no resume for it is asked to play instead.
+func (c Client) Resume(ctx context.Context, id string) error {
+	err := c.do(ctx, "player_queues/resume", map[string]any{"queue_id": id}, nil)
+	if err == nil {
+		return nil
+	}
+	if perr := c.do(ctx, "players/cmd/play", map[string]any{"player_id": id}, nil); perr != nil {
+		return fmt.Errorf("%w; and play: %v", err, perr)
+	}
+	return nil
+}
+
 // ErrOvertaken is a play that something asked for since has made unwanted.
 var ErrOvertaken = errors.New("something else was asked for meanwhile")
 
