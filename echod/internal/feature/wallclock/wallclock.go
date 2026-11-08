@@ -21,9 +21,9 @@ import (
 	"github.com/HuskerMinion/techo5/echod/internal/lib/safe"
 )
 
-// Here is whether this device has the Bluetooth stack the clock needs: BlueZ over BR/EDR. Not a
-// panel, whose Bluetooth is Android's.
-func Here() bool { return !layout.OnAndroid() }
+// Here is whether this device has the Bluetooth stack the clock needs: BlueZ over BR/EDR, and a
+// kernel with RFCOMM (boardHasRFCOMM). Not a panel, whose Bluetooth is Android's.
+func Here() bool { return !layout.OnAndroid() && boardHasRFCOMM() }
 
 func init() {
 	if !Here() {

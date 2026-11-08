@@ -2287,8 +2287,9 @@ has the radio lent out: **Pair the clock** says the radio is busy rather than se
 the setup connection; try again once Wi-Fi setup has finished.
 
 Tested on a Show 8 (1st gen, crown). It should work on the other boards whose Bluetooth is the
-daemon's — checkers, cronos, crown, athena and the Dot — but not on the Panel, whose Bluetooth is
-Android's. The Skylight has not been tried.
+daemon's — checkers, cronos, crown, athena and the Dot 3rd gen — but not on the Panel, whose Bluetooth is
+Android's, nor on the Echo Dot 2nd gen or the Echo 2nd gen, whose kernels have no RFCOMM: the clock isn't
+offered there. The Skylight has not been tried.
 
 ## More
 

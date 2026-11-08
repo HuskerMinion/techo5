@@ -1,11 +1,12 @@
 TECHO5 echod
-Copyright 2026 Rob Lee and contributors
+
+internal/lib/agt (the Echo Wall Clock's wire protocol): Copyright 2026 Rob Lee.
 
 This product includes protocol work derived from the echo-wall-clock project
 (https://github.com/mpjanofsky/echo-wall-clock), licensed under the Apache
 License, Version 2.0. The code in internal/lib/agt is distributed under the
 Apache License, Version 2.0; the rest of echod remains under the MIT License in
-LICENSE.
+LICENSE. The Apache License's text is in internal/lib/agt/LICENSE-APACHE-2.0.txt.
 
 The Alexa Gadgets wire protocol is documented by that project and implemented in
 Amazon's Alexa Gadgets Toolkit sample code (agt.py), licensed under the Apache

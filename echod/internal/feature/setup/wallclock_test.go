@@ -55,7 +55,7 @@ func useFakeWallClock(t *testing.T) *fakeWallClock {
 // address back.
 func TestWallClockSection(t *testing.T) {
 	wc := useFakeWallClock(t)
-	wc.on, wc.address, wc.status = true, "88:6B:0F:12:34:56", "Connected"
+	wc.on, wc.address, wc.status = true, "AA:BB:CC:12:34:56", "Connected"
 
 	rec := httptest.NewRecorder()
 	wallClockSection(rec, "tok")
@@ -63,7 +63,7 @@ func TestWallClockSection(t *testing.T) {
 	for _, want := range []string{
 		"Echo Wall Clock",
 		`name="on" value="yes" style="width:auto" checked`,
-		`value="88:6B:0F:12:34:56"`,
+		`value="AA:BB:CC:12:34:56"`,
 		"Pair the clock",
 		"Now: Connected",
 		"pulses amber",
@@ -98,10 +98,10 @@ func TestWallClockSave(t *testing.T) {
 		return saveWallClock(r)
 	}
 
-	if problem := post(url.Values{"on": {"yes"}, "address": {" 88:6B:0F:12:34:56 "}}); problem != "" {
+	if problem := post(url.Values{"on": {"yes"}, "address": {" AA:BB:CC:12:34:56 "}}); problem != "" {
 		t.Fatal(problem)
 	}
-	if !wc.on || wc.gotAddr != "88:6B:0F:12:34:56" || wc.pairs != 0 {
+	if !wc.on || wc.gotAddr != "AA:BB:CC:12:34:56" || wc.pairs != 0 {
 		t.Fatalf("saved on=%v address=%q, pairs=%d", wc.on, wc.gotAddr, wc.pairs)
 	}
 

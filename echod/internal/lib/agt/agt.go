@@ -241,7 +241,9 @@ func ParseFields(data []byte) ([]Field, error) {
 				return nil, err
 			}
 			i = n
-			if i+int(ln) > len(data) {
+			// Compared as the unsigned length it is: converted first, a length near 2^64 comes out
+			// negative, passes the check and panics in the slice below.
+			if ln > uint64(len(data)-i) {
 				return nil, errors.New("protobuf: truncated length-delimited field")
 			}
 			f.Bytes = data[i : i+int(ln)]
@@ -356,8 +358,15 @@ type Message struct {
 }
 
 // DecodeMessage decodes Message{Event{Header, payload}} from the clock into its
-// header fields. Unknown or malformed input yields a zero Message.
-func DecodeMessage(payload []byte) Message {
+// header fields. Unknown or malformed input yields a zero Message. It is what
+// comes off the radio, so a panic in it is a malformed message too, never the
+// daemon's end.
+func DecodeMessage(payload []byte) (decoded Message) {
+	defer func() {
+		if recover() != nil {
+			decoded = Message{}
+		}
+	}()
 	fields, err := ParseFields(payload)
 	if err != nil || len(fields) == 0 {
 		return Message{}
