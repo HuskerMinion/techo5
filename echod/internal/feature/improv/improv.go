@@ -18,6 +18,7 @@ import (
 	"github.com/HuskerMinion/techo5/echod/internal/component"
 	"github.com/HuskerMinion/techo5/echod/internal/config"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/bluetooth"
+	"github.com/HuskerMinion/techo5/echod/internal/feature/firstrun"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/mute"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/web"
 	"github.com/HuskerMinion/techo5/echod/internal/hardware/buttons"
@@ -307,7 +308,11 @@ func (m *Improv) session(ctx context.Context, w why) bool {
 	wifi.SettingUp(true)
 	defer wifi.SettingUp(false)
 	slog.Info("improv: offering Wi-Fi setup over Bluetooth", "why", w, "name", name, "state", state)
-	chime(speaker.TonePairing)
+	if state == proto.AuthorizationRequired {
+		chimeSaying(speaker.TonePairing, "offer_press")
+	} else {
+		chimeSaying(speaker.TonePairing, "offer")
+	}
 	// The ring pulses for as long as it is offered, so the mute button held for it is let go when
 	// the ring answers: the tone alone was missed, and the red of the mute light is no sign, as the
 	// hold only turns the microphones the other way. Held on to 20 s, the Dot's power key (which the
@@ -386,7 +391,7 @@ func (m *Improv) session(ctx context.Context, w why) bool {
 				slog.Warn("improv: could not join the network sent", "err", r.err)
 				s.setError(proto.ErrUnableToConnect)
 				s.setState(proto.Authorized)
-				chime(speaker.FailureSound())
+				chimeSaying(speaker.FailureSound(), "failed")
 				resetTimer(idleT, idle)
 				continue
 			}
@@ -394,7 +399,7 @@ func (m *Improv) session(ctx context.Context, w why) bool {
 			slog.Info("improv: joined", "setup", url)
 			s.setState(proto.Provisioned)
 			s.result(proto.Result(proto.CmdWiFiSettings, url))
-			chime(speaker.TonePaired)
+			chimeSaying(speaker.TonePaired, "joined_setup")
 			ring.Paint(led.Solid(ringColor))
 			idleT.Stop()
 			doneC = time.After(doneHold)
@@ -584,6 +589,19 @@ func chime(notes []speaker.Note) {
 	}
 	speaker.Sound().Chime(notes)
 }
+
+// chimeSaying is chime with a spoken prompt after the tone (said), while the device is being set up:
+// in first run, before a Home Assistant has it. Someone setting up a device with no screen has only
+// its ring and its sounds to go by; one already set up knows the tones.
+func chimeSaying(notes []speaker.Note, line string) {
+	if settingUp() {
+		notes = append(append([]speaker.Note{}, notes...), said(line)...)
+	}
+	chime(notes)
+}
+
+// settingUp is whether the prompts are said (a variable for the tests).
+var settingUp = func() bool { return firstrun.Pending() && !firstrun.HomeConnected() }
 
 func resetTimer(t *time.Timer, d time.Duration) {
 	if !t.Stop() {
