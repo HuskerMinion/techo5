@@ -194,6 +194,7 @@ func (d *Display) tessSheetViews(s *scene) {
 	s.dashMedia = d.mediaViewNow()
 	s.dashClimate = d.climateViewNow()
 	s.dashFan = d.fanViewNow()
+	s.dashLibrary = d.libraryViewNow()
 }
 
 // tesseraPage draws the Tessera page over the whole panel.

@@ -201,7 +201,7 @@ func (d *Display) drawnTap(x, y int) {
 	case t == nil:
 	case t.action != nil:
 		slog.Info("dashboard tap", "entity", t.action.Entity, "service", t.action.Service, "view", t.action.View)
-		dashboard.Get().Tap(*t.action)
+		d.tileAction(t)
 	case strings.HasPrefix(t.entity, "climate."):
 		// A thermostat whose card sets no tap of its own (more-info, Home Assistant's default for it):
 		// its controls (climatePress).

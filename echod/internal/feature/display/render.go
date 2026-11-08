@@ -86,6 +86,7 @@ type scene struct {
 	dashMedia   *mediaView            // the media sheet over the page, while it is up
 	dashClimate *climateView          // the thermostat sheet over the page, while it is up
 	dashFan     *fanView              // the fan sheet over the page, while it is up
+	dashLibrary *libraryView          // the music library over the page, while it is up
 	// The Tessera layout, when that is the dashboard: whether Tessera screen is on, and the page shown.
 	tessera  tessera.View
 	tessOn   bool
@@ -302,6 +303,7 @@ type renderer struct {
 	paint                    // the canvas, its size, and the settings screen's tap zones
 	climateParts             // the thermostat sheet's, where it was last drawn (climate_sheet.go)
 	fanParts                 // the fan sheet's, where it was last drawn (fan_sheet.go)
+	libParts                 // the music library's, where it was last drawn (library_sheet.go)
 	// glow is the Glow style's images, kept between frames (glow.go).
 	glow glowBuffers
 	// nixie is the Nixie style's tubes, kept between frames (nixie.go).

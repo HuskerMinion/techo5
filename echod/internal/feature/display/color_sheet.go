@@ -83,16 +83,16 @@ func (d *Display) longPress(t *dashTile) {
 		}
 	}
 	if t.action != nil {
-		dashboard.Get().Tap(*t.action)
+		d.tileAction(t)
 	}
 }
 
-// colorOpen is whether a sheet is up over the page: the color sheet, the media sheet, or the
-// thermostat sheet, or the fan sheet.
+// colorOpen is whether a sheet is up over the page: the color sheet, the media sheet, the
+// thermostat sheet, the fan sheet, or the music library.
 func (d *Display) colorOpen() bool {
 	d.mu.Lock()
 	defer d.mu.Unlock()
-	return d.dashColor != nil || d.dashMedia != nil || d.dashClimate != nil || d.dashFan != nil
+	return d.dashColor != nil || d.dashMedia != nil || d.dashClimate != nil || d.dashFan != nil || d.dashLibrary != nil
 }
 
 // onColorSheet is whether x, y is on the sheet that is up: the color sheet, or the media sheet.
@@ -104,7 +104,8 @@ func (d *Display) onColorSheet(x, y int) bool {
 	_, _, onMedia := d.r.mediaAt(x, y)
 	_, onClimate := d.r.climateAt(x, y)
 	_, onFan := d.r.fanAt(x, y)
-	return in || onMedia || onClimate || onFan
+	_, _, onLibrary := d.r.libraryAt(x, y)
+	return in || onMedia || onClimate || onFan || onLibrary
 }
 
 // sliderAt is the slider of the sheet that is up under x, y: the color sheet's whites or colors, the
@@ -149,9 +150,9 @@ func (d *Display) sliderAt(x, y int) (sheetSlider, bool) {
 func (s sheetSlider) slides(moved bool) bool { return s.kind != mediaPartSpeaker || moved }
 
 // pageSwipeOnSheet is a finger that came down on a sheet at from and lifted at x, y after moving: a
-// swipe along the media sheet's favorites turns their page.
+// swipe along the media sheet's favorites, or along the music library's items, turns their page.
 func (d *Display) pageSwipeOnSheet(from image.Point, x, y int) bool {
-	return d.mediaPageSwipe(from, x, y)
+	return d.libraryPageSwipe(from, x, y) || d.mediaPageSwipe(from, x, y)
 }
 
 // samePartOnSheet is whether a and b are on the same part of the sheet that is up: a finger that came
@@ -159,6 +160,11 @@ func (d *Display) pageSwipeOnSheet(from image.Point, x, y int) bool {
 func (d *Display) samePartOnSheet(a, b image.Point) bool {
 	if d.r == nil {
 		return true
+	}
+	la, _, ina := d.r.libraryAt(a.X, a.Y)
+	lb, _, inb := d.r.libraryAt(b.X, b.Y)
+	if ina || inb {
+		return ina == inb && la.kind == lb.kind && la.index == lb.index
 	}
 	za, ina := d.r.colorAt(a.X, a.Y)
 	zb, inb := d.r.colorAt(b.X, b.Y)
@@ -409,7 +415,7 @@ func (d *Display) sendSheet(s sheetSlider, value float64, final bool, c *dashboa
 // colorTap is a finger lifted at x, y while the color sheet is up, which the sheet always takes: the
 // page under it is not tapped. It says whether the sheet was up.
 func (d *Display) colorTap(x, y int) bool {
-	if d.mediaTap(x, y) || d.climateTap(x, y) || d.fanTap(x, y) {
+	if d.libraryTap(x, y) || d.mediaTap(x, y) || d.climateTap(x, y) || d.fanTap(x, y) {
 		return true
 	}
 	d.mu.Lock()

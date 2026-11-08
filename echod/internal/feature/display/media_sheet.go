@@ -35,6 +35,7 @@ const (
 	mediaPartSpeaker
 	mediaPartPage        // the favorites' block, where a finger swipes to the next page or back
 	mediaPartSpeakerPage // the speakers' block, likewise
+	mediaPartLibrary     // the music library, to browse for more than the favorites
 )
 
 // mediaSheet is the sheet while it is up: the player, and what Home Assistant has said it offers.
@@ -219,6 +220,8 @@ func (d *Display) mediaTap(x, y int) bool {
 			d.sliderBegins(s)
 			d.slideSheet(s, x, true)
 		}
+	case z.kind == mediaPartLibrary && m.lists.Target != "":
+		d.openLibrary(m.lists.Target, "", false)
 	case z.kind == mediaPartFavorite && z.index < len(m.lists.Favorites):
 		f := m.lists.Favorites[z.index]
 		tap(m.lists.Target, "music_assistant.play_media", map[string]any{"media_id": f.URI, "media_type": f.Kind, "enqueue": "replace"})
@@ -503,6 +506,19 @@ func (r *renderer) mediaSheet(v *mediaView, th dashboard.Theme) {
 	r.roundFill(btn, pal.rad, pal.accent, pal.accent)
 	r.text(fc.button, done, btn.Min.X+(bw-r.width(fc.button, done))/2, btn.Min.Y+btnH/2+r.s(9), pal.bg)
 	zones = append(zones, mediaZone{r: btn, kind: mediaPartDone})
+	// The music library, beside Done, wherever Music Assistant plays: the favorites are its few, and
+	// it has the rest.
+	if m.lists.MusicAssistant && m.lists.Target != "" {
+		word := libWord(libWordLibrary)
+		lw := max(r.width(fc.button, word)+2*r.s(22)+r.s(30), r.s(140))
+		lb := image.Rect(btn.Min.X-gap-lw, btn.Min.Y, btn.Min.X-gap, btn.Max.Y)
+		fill := lerp(pal.card, pal.text, 0.12)
+		r.roundFill(lb, pal.rad, fill, fill)
+		tx := lb.Min.X + (lw-r.width(fc.button, word)-r.s(30))/2
+		r.mdiIcon("bookshelf", tx, lb.Min.Y+(btnH-r.s(24))/2, 24, pal.text)
+		r.text(fc.button, word, tx+r.s(30), lb.Min.Y+btnH/2+r.s(9), pal.text)
+		zones = append(zones, mediaZone{r: lb, kind: mediaPartLibrary})
+	}
 	r.setMedia(zones, card)
 	r.zmu.Lock()
 	r.mediaPages, r.mediaSpeakerPages = pages, speakerPages
