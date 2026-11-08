@@ -458,6 +458,18 @@ const LibraryPath = "#techo5-library"
 // its own.
 func MusicTarget(entity string) string { return maPlayerFor(entity) }
 
+// MusicQueue is the queue Music Assistant's player entity plays from (its active_queue attribute),
+// whose shuffle Music Assistant's own API sets; empty when Home Assistant does not say. It asks Home
+// Assistant, so it is for a goroutine of its own.
+func MusicQueue(entity string) string {
+	st, err := hass.Get().State(entity)
+	if err != nil {
+		return ""
+	}
+	q, _ := st.Attributes["active_queue"].(string)
+	return q
+}
+
 // CleanName is a library name the screen's font can draw (cleanName), for the screen's music library.
 func CleanName(s string) string { return cleanName(s) }
 

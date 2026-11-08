@@ -546,7 +546,7 @@ func (s *session) callVia(entity, domain, service string, data map[string]any, p
 		if route != nil {
 			data["entity_id"] = route()
 		}
-		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		ctx, cancel := context.WithTimeout(context.Background(), tapWait(domain, service))
 		defer cancel()
 		if err := callService(live, ctx, domain, service, data); err != nil {
 			slog.Warn("dashboard: a tap failed", "service", domain+"."+service, "err", err)
@@ -558,7 +558,18 @@ func (s *session) callVia(entity, domain, service string, data map[string]any, p
 	}()
 }
 
+// tapWait is how long a tap's call is given. Music Assistant answers a play only once its provider
+// has found the music and the player has taken it, which from a streaming service on a slow day takes
+// longer than any switch or light; a shuffle set from the music library goes with its play.
+func tapWait(domain, service string) time.Duration {
+	if domain == "music_assistant" || (domain == "media_player" && service == "shuffle_set") {
+		return 20 * time.Second
+	}
+	return 10 * time.Second
+}
+
 func (s *session) close() {
+
 	s.mu.Lock()
 	s.stopped = true
 	live := s.live
