@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/binary"
 	"encoding/json"
+	"math"
 	"net"
 	"strings"
 	"sync"
@@ -103,8 +104,11 @@ func TestLevel(t *testing.T) {
 	if level(100, false) != 1 || level(0, false) != 0 || level(100, true) != 0 {
 		t.Error("ends wrong")
 	}
-	if l := level(50, false); l < 0.12 || l > 0.13 {
-		t.Errorf("half is %v, want 0.125", l)
+	// snapclient's default software mixer at the same volumes (exp, base 10).
+	for volume, want := range map[int]float64{16: 0.0495, 50: 0.2403, 80: 0.5900} {
+		if l := float64(level(volume, false)); math.Abs(l-want) > 0.0005 {
+			t.Errorf("%d%% is %.4f, want snapclient's %.4f", volume, l, want)
+		}
 	}
 }
 
@@ -313,7 +317,7 @@ func TestSessionPlaysThenGoesIdle(t *testing.T) {
 	if got.gave != 1 || got.closed != 1 {
 		t.Errorf("gave %d closed %d, want the speaker back once the stream went silent", got.gave, got.closed)
 	}
-	if got.level < 0.12 || got.level > 0.13 {
+	if got.level < 0.235 || got.level > 0.245 {
 		t.Errorf("level %v for volume 50", got.level)
 	}
 	if len(got.writes) < 10 {
