@@ -245,6 +245,9 @@ func (d *Display) drawnHold(x, y int) {
 	if slider != nil {
 		d.sliderBegins(*slider)
 	}
+	if onSheet {
+		d.libDragStart(x, y) // the music library scrolls under a finger (library_draw.go)
+	}
 }
 
 // slideStart is how far a finger moves before it counts as a scroll or a slide rather than a tap
@@ -266,8 +269,11 @@ func (d *Display) drawnMove(x, y int) {
 	if sheet {
 		// The sheet is over the page: nothing under it scrolls or slides. That the finger moved is
 		// kept, for where it lifts (drawnRelease), and a slider it came down on follows it.
-		slider, moved := dr.slider, dr.moved
+		slider, moved, onSheet := dr.slider, dr.moved, dr.onSheet
 		d.mu.Unlock()
+		if onSheet && d.libDragMove(x, y) {
+			return
+		}
 		if slider != nil && slider.slides(moved) {
 			d.slideSheet(*slider, x, false)
 		}

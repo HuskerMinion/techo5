@@ -221,7 +221,7 @@ func (d *Display) mediaTap(x, y int) bool {
 			d.slideSheet(s, x, true)
 		}
 	case z.kind == mediaPartLibrary && m.lists.Target != "":
-		d.openLibrary(m.lists.Target, "", false)
+		d.openLibrary(m.lists.Target, m.entity, false)
 	case z.kind == mediaPartFavorite && z.index < len(m.lists.Favorites):
 		f := m.lists.Favorites[z.index]
 		tap(m.lists.Target, "music_assistant.play_media", map[string]any{"media_id": f.URI, "media_type": f.Kind, "enqueue": "replace"})

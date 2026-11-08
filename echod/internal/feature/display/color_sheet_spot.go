@@ -33,3 +33,7 @@ func (s sheetSlider) slides(bool) bool { return true }
 func (d *Display) pageSwipeOnSheet(image.Point, int, int) bool { return false }
 
 func (d *Display) samePartOnSheet(image.Point, image.Point) bool { return true }
+
+func (d *Display) libDragStart(int, int) {}
+
+func (d *Display) libDragMove(int, int) bool { return false }
