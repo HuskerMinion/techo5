@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/hex"
 	"errors"
+	"fmt"
 	"os"
 	"strings"
 )
@@ -52,7 +53,15 @@ func JoinLogin(ctx context.Context, ssid string, l Login) error {
 	if err != nil {
 		return err
 	}
-	return join(ctx, ssid, stanza)
+	if err := join(ctx, ssid, stanza); err != nil {
+		if strings.TrimSpace(l.Server) != "" && !l.NoCheck {
+			// Many schools sign their sign-in server with a certificate of their own, which no known
+			// authority vouches for: the join then simply never completes, and says nothing of why.
+			return fmt.Errorf("%w. Check the username and password; if they are right, the network may use a certificate of its own: try again with the server not checked", err)
+		}
+		return err
+	}
+	return nil
 }
 
 // loginBlock is the network= stanza for a Login. Every value the person typed goes in as hex, for the

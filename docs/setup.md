@@ -2060,7 +2060,8 @@ instructions:
   sign-in server or its certificate, such as `school.edu`. The device sends the password only to a
   server whose certificate comes from a known authority and carries that name, so a look-alike
   network can't collect it. **Don't check the server** is for networks whose instructions say not to
-  validate the certificate. **Anonymous identity** is only for networks that give one.
+  validate the certificate. Some schools sign their server with a certificate of their own; a join that fails with the right
+  username and password there needs it too. **Anonymous identity** is only for networks that give one.
 - **On an Echo Show's screen:** a network marked "login" asks for the username, then the password,
   then the server name, and uses PEAP with MSCHAPv2. An empty server name joins without checking the
   server. For another method, use the setup page.

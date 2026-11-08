@@ -954,7 +954,9 @@ func joinWifi(ctx context.Context, ssid, passphrase string) string {
 // (loginFields), with the passphrase field as its password.
 func joinWifiFrom(r *http.Request, ssid string) string {
 	pass := r.PostFormValue("passphrase")
-	id := strings.TrimSpace(r.PostFormValue("identity"))
+	// Not "username": a password manager fills a field by that name next to a password one, and an
+	// ordinary passphrase join would turn into a login.
+	id := strings.TrimSpace(r.PostFormValue("eap_identity"))
 	if id == "" {
 		return joinWifiWith(r.Context(), ssid, pass, nil)
 	}
@@ -999,7 +1001,7 @@ func loginFieldsHTML() string {
 	 <p class="note">Fill these in from the network's own Wi-Fi instructions, and put the password in the
 	  Passphrase field above. Leave the username empty for a network with only a passphrase.</p>
 	 <label for="identity">Username</label>
-	 <input id="identity" name="identity" autocomplete="off" placeholder="name@school.edu">
+	 <input id="identity" name="eap_identity" autocomplete="off" data-lpignore="true" data-1p-ignore data-bwignore placeholder="name@school.edu">
 	 <label for="eap">Sign-in method</label><select id="eap" name="eap">`)
 	for _, m := range wifi.Methods {
 		fmt.Fprintf(&w, `<option value="%s">%s</option>`, m.Name, html.EscapeString(m.Label))

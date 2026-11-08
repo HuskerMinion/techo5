@@ -485,3 +485,14 @@ echod (dependency)
   Copyright (c) 2009 The Go Authors. All rights reserved.
   The QR code first run shows beside the Home Assistant key (feature/display). The BSD 3-Clause
   License's text is as above, under github.com/miekg/dns.
+
+echod (dependency)
+  github.com/go-text/typesetting — the Unlicense or the BSD 3-Clause License, at the user's choice
+  Copyright the go-text authors.
+  Shaping Khmer, Thai, Lao, Myanmar and the Indic scripts in a font of one's own (lib/fonts). Used
+  here under the BSD 3-Clause License, whose text is as above, under github.com/miekg/dns.
+
+echod (spoken prompts)
+  The prompts a device with no screen says while it is set up (feature/improv/say) were spoken by
+  Piper with its LJSpeech voice (rhasspy/piper-voices, en_US ljspeech), made from the LJ Speech
+  Dataset, which is in the public domain; so are the prompts. tools/make-dot-prompts.py makes them.
