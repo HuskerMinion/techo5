@@ -2073,6 +2073,14 @@ supported: the device has no browser to sign in with. Many schools have a page f
 device like this one by its Wi-Fi address (MAC) instead. The setup page shows the address under
 **Connections → Wi-Fi**, and an Echo Show shows it on its Wi-Fi page.
 
+### The ring while a Dot starts
+
+After a start, the ring of a Dot or an Echo 2nd gen walks around in cyan while it waits for Home Assistant:
+it is running, but can't answer a wake word yet. When Home Assistant connects, a comet runs once and the ring
+goes dark. With no Home Assistant, the walk stops by itself after five minutes. For a Dot used without Home
+Assistant, such as an AirPlay speaker, turn the walk off on the setup page under **General → Ring while
+starting**. While first run is still to do, the ring breathes orange instead, for as long as it takes.
+
 ### Another Wi-Fi on an Echo Dot
 
 An Echo Dot or an Echo 2nd gen has no screen to pick a network on, so it takes one over Bluetooth

@@ -2,10 +2,25 @@ package boot
 
 import (
 	"context"
+	"time"
 
+	"github.com/HuskerMinion/techo5/echod/internal/config"
 	"github.com/HuskerMinion/techo5/echod/internal/hardware/led"
 	"github.com/HuskerMinion/techo5/echod/internal/lib/safe"
 )
+
+// waitWalk is how long the ring walks after a start while Home Assistant has not connected: long
+// enough to say "starting, not connected yet", not so long that a device used without Home Assistant
+// walks for as long as it is on (techo5-dot#39).
+const waitWalk = 5 * time.Minute
+
+// walkFor is waitWalk, or none at all when the setup page's switch has left it out.
+func walkFor() time.Duration {
+	if config.Get().Ring.NoWaitWalk {
+		return 0
+	}
+	return waitWalk
+}
 
 // startSplash runs the boot animation and lets go of the ring once the device can actually answer.
 //
@@ -20,7 +35,7 @@ func startSplash(ctx context.Context, leds *led.Driver, ready, setup func() bool
 		// Buffered and sent to without blocking, so finishing cannot wedge the driver.
 		done := make(chan struct{}, 1)
 		claim.Show(led.Content{Animate: func(actx context.Context, r *led.Ring) error {
-			err := led.Splash(actx, r, ready, setup)
+			err := led.Splash(actx, r, ready, setup, walkFor())
 			select {
 			case done <- struct{}{}:
 			default:

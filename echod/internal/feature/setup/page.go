@@ -23,6 +23,7 @@ import (
 	"github.com/HuskerMinion/techo5/echod/internal/feature/media"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/timezone"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/web"
+	"github.com/HuskerMinion/techo5/echod/internal/hardware/led"
 	"github.com/HuskerMinion/techo5/echod/internal/hardware/speaker"
 	"github.com/HuskerMinion/techo5/echod/internal/layout"
 	"github.com/HuskerMinion/techo5/echod/internal/lib/wifi"
@@ -354,6 +355,10 @@ func (f *Feature) save(w http.ResponseWriter, r *http.Request) {
 		problem = saveCalendarLook(r)
 	case "todo":
 		problem = saveTodo(r)
+	case "ringwait":
+		if err := config.Set().Ring().NoWaitWalk(r.PostFormValue("walk") == ""); err != nil {
+			problem = "could not save it: " + err.Error()
+		}
 	case "adopt":
 		if _, err := api.Get().OpenAdoption(); err != nil {
 			problem = "could not open the device to a Home Assistant: " + err.Error()
@@ -530,6 +535,9 @@ func (f *Feature) settingsPage(ctx context.Context, w http.ResponseWriter, token
 		timezoneSection(w, token)
 		timeServerSection(w, token)
 		homeAssistantSection(w, token)
+		if led.HasRing {
+			ringWaitSection(w, token)
+		}
 		if firstrun.CanReset() {
 			resetSection(w, token)
 		}
@@ -851,6 +859,22 @@ func homeAssistantSection(w http.ResponseWriter, token string) {
 	 it sets one.</p>
 	 <p class="bad"><strong>A Home Assistant that has this device now loses it.</strong></p>
 	 <p><button type="submit">Let a Home Assistant add this device</button></p></form></fieldset>`)
+}
+
+// ringWaitSection is whether the ring walks after a start while Home Assistant has not connected, for
+// a device used without one, such as an AirPlay speaker (techo5-dot#39).
+func ringWaitSection(w http.ResponseWriter, token string) {
+	fmt.Fprint(w, `<fieldset><legend>Ring while starting</legend><form method="post" action="/setup/save">`)
+	hidden(w, token, "ringwait", "general")
+	checked := ""
+	if !config.Get().Ring.NoWaitWalk {
+		checked = " checked"
+	}
+	fmt.Fprintf(w, `<p><label><input type="checkbox" name="walk" value="1" style="width:auto"%s>
+	  Walk around the ring after a start until Home Assistant connects</label></p>
+	 <p class="note">It stops by itself after five minutes. Turn it off for a device used without Home Assistant,
+	  such as an AirPlay speaker.</p>
+	 <p><button type="submit">Save</button></p></form></fieldset>`, checked)
 }
 
 // houseSection is the word the devices in one house share.

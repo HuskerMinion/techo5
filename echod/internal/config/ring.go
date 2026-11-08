@@ -8,6 +8,11 @@ type Ring struct {
 	Trouble  string `json:"trouble"`
 	Muted    string `json:"muted"`
 
+	// NoWaitWalk leaves out the walk around the ring after a start while Home Assistant has not
+	// connected yet (led.Splash): for a device used without Home Assistant, such as an AirPlay
+	// speaker, where it would only ever say "not connected" (techo5-dot#39).
+	NoWaitWalk bool `json:"no_wait_walk,omitempty"`
+
 	// Light is the appearance Home Assistant last set, so a restart comes back the way it was left.
 	Light Light `json:"light"`
 }
@@ -67,6 +72,10 @@ func (w RingWriter) Trouble(v string) error {
 
 func (w RingWriter) Muted(v string) error {
 	return w.st.Update(func(c *Config) { c.Ring.Muted = v })
+}
+
+func (w RingWriter) NoWaitWalk(v bool) error {
+	return w.st.Update(func(c *Config) { c.Ring.NoWaitWalk = v })
 }
 
 // Light saves the whole appearance at once, since that is how it is set.
