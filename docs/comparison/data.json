@@ -4879,7 +4879,7 @@
     "https://github.com/HuskerMinion/techo5/blob/v1.6.31/docs/overview.md"
    ],
    "install": [
-    "Unlock (amonet; saiyaku for Show 8 gen 2; kamakiri-donut kit for Dot gen 3); Show 5 and Show 8 gen 1 need LineageOS 18.1 drivers; USB; Python installer on Windows/Linux/macOS (--for-someone-else on every installer, not yet for a Dot gen 3); Echo gen 2 and Dot gen 3 need soldering to pads; Skylight: no unlock, adb on stock firmware; tablets and Portal: no unlock, adb install of the Panel app",
+    "Unlock (amonet; saiyaku for Show 8 gen 2; kamakiri-donut kit for Dot gen 3); Show 5 and Show 8 gen 1 need LineageOS 18.1 drivers; USB; Python installer on Windows/Linux/macOS (--for-someone-else on every installer); Echo gen 2 and Dot gen 3 need soldering to pads; Skylight: no unlock, adb on stock firmware; tablets and Portal: no unlock, adb install of the Panel app",
     "",
     "https://github.com/HuskerMinion/techo5/blob/v1.6.31/docs/getting-started.md"
    ],
