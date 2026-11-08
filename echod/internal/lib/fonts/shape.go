@@ -285,9 +285,30 @@ func glyphMask(f *sfnt.Font, g sfnt.GlyphIndex, ppem fixed.Int26_6) (*image.Alph
 	}
 	masks.mu.Unlock()
 
+	m := rasterize(f, g, ppem)
+	masks.mu.Lock()
+	if len(masks.m) > 2048 {
+		clear(masks.m)
+	}
+	if masks.m == nil {
+		masks.m = map[maskKey]maskEntry{}
+	}
+	masks.m[k] = m
+	masks.mu.Unlock()
+	return m.mask, m.at
+}
+
+// rasterize draws glyph g of f at ppem into a mask. A font of one's own that panics here, past the
+// recover around its parsing and shaping, leaves that glyph out rather than taking the daemon down.
+func rasterize(f *sfnt.Font, g sfnt.GlyphIndex, ppem fixed.Int26_6) (m maskEntry) {
+	defer func() {
+		if p := recover(); p != nil {
+			slog.Warn("a font of one's own could not draw a glyph", "glyph", g, "err", p)
+			m = maskEntry{}
+		}
+	}()
 	var buf sfnt.Buffer
 	segs, err := f.LoadGlyph(&buf, g, ppem, nil)
-	var m maskEntry
 	if err == nil && len(segs) > 0 {
 		b := segs.Bounds()
 		r := image.Rect(b.Min.X.Floor(), b.Min.Y.Floor(), b.Max.X.Ceil(), b.Max.Y.Ceil())
@@ -318,16 +339,7 @@ func glyphMask(f *sfnt.Font, g sfnt.GlyphIndex, ppem fixed.Int26_6) (*image.Alph
 			m = maskEntry{mask, r.Min}
 		}
 	}
-	masks.mu.Lock()
-	if len(masks.m) > 2048 {
-		clear(masks.m)
-	}
-	if masks.m == nil {
-		masks.m = map[maskKey]maskEntry{}
-	}
-	masks.m[k] = m
-	masks.mu.Unlock()
-	return m.mask, m.at
+	return m
 }
 
 type maskKey struct {
