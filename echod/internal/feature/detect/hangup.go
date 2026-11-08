@@ -12,6 +12,7 @@ import (
 	"github.com/HuskerMinion/techo5/echod/internal/feature/detect/assets"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/phone"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/talkback"
+	"github.com/HuskerMinion/techo5/echod/internal/hardware/mic"
 	"github.com/HuskerMinion/techo5/echod/internal/hardware/speaker"
 	"github.com/HuskerMinion/techo5/echod/internal/lib/wake"
 )
@@ -25,16 +26,33 @@ const hangupNone = "None"
 // hangUp is the hang-up word, or the stop word standing in for it, heard: it hangs up if hangupHeard
 // says so, and reports whether it did. what names which, for the log.
 func hangUp(what string) bool {
-	phase, farEnd, replying := phone.Get().State().Phase, phone.Get().FarEndTalking(), phone.Get().Replying()
+	phase, talking, replying := phone.Get().State().Phase, phone.Get().FarEndTalking(), phone.Get().Replying()
+	canceling, erle := mic.Get().Canceling(), mic.Get().ERLE()
+	farEnd := farEndHolds(talking, canceling, erle)
 	own := ownSound(speaker.Sound().Holder(), speaker.Get().Overlaying())
 	if !hangupHeard(phase, talkback.Get().Busy(), farEnd, replying, own) {
-		slog.Info(what+" ignored", "phase", phase, "far_end_talking", farEnd, "reply_playing", replying,
-			"own_sound", own)
+		slog.Info(what+" ignored", "phase", phase, "far_end_talking", talking, "erle_db", erle,
+			"reply_playing", replying, "own_sound", own)
 		return false
+	}
+	if talking {
+		slog.Info(what+" heard over the far end", "erle_db", erle)
 	}
 	slog.Info(what + ", hanging up")
 	phone.Get().Hangup()
 	return true
+}
+
+// weakCancelDB is how much echo the canceller has to be taking off for the far end's talking to keep the
+// hang-up word out. Below it, the word is someone in the room: either the canceller is not removing much
+// (a device it is not tuned for yet, #484), so the far end's flag is mostly our own voice coming back
+// from them, or someone here is talking over the far end, which pulls the measure down too.
+const weakCancelDB = 6
+
+// farEndHolds reports whether the far end's talking still keeps the hang-up word out: only while the
+// canceller is running and taking off at least weakCancelDB. With no canceller running it holds as before.
+func farEndHolds(talking, canceling bool, erleDB float64) bool {
+	return talking && !(canceling && erleDB < weakCancelDB)
 }
 
 // ownSound reports whether the device is making a sound of its own that could have said the word: any

@@ -38,6 +38,27 @@ func TestHangupHeard(t *testing.T) {
 	}
 }
 
+// The far end's talking keeps the hang-up word out only while the canceller is running and taking off
+// enough: with it hardly cancelling, as on the Dot 3 in #484, that flag is our own voice coming back.
+func TestFarEndHolds(t *testing.T) {
+	for _, c := range []struct {
+		name               string
+		talking, canceling bool
+		erle               float64
+		want               bool
+	}{
+		{"the far end quiet", false, true, 0.2, false},
+		{"no canceller running", true, false, 0, true},
+		{"cancelling well", true, true, 15, true},
+		{"hardly cancelling", true, true, 0.2, false},
+		{"just under", true, true, weakCancelDB - 0.1, false},
+	} {
+		if got := farEndHolds(c.talking, c.canceling, c.erle); got != c.want {
+			t.Errorf("%s: got %v, want %v", c.name, got, c.want)
+		}
+	}
+}
+
 // Our own sound is anything holding the speaker but the call and its ring, or a chime or beep mixed in.
 func TestOwnSound(t *testing.T) {
 	for _, c := range []struct {
