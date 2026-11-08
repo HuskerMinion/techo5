@@ -29,9 +29,6 @@ func resumeMusicAssistant() {
 			return
 		}
 		slog.Warn("resume: asking Music Assistant to play failed", "err", err)
-		if !hass.Get().Ready() {
-			return
-		}
 	}
 	if !hass.Get().Ready() {
 		resumeOverAPI()
