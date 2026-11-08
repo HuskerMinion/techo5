@@ -2268,6 +2268,11 @@ as a filled run from twelve, and every other running timer as a bright segment a
 timer that ends pulses the ring; one that is canceled or paused puts its marker out. The clock's
 time comes from the device, so its time zone has to be right.
 
+Pairing uses the same Bluetooth radio as the Bluetooth proxy, so the proxy's scan pauses while the
+clock is looked for and starts again afterwards. A Dot that is being set up over Bluetooth (Improv)
+has the radio lent out: **Pair the clock** says the radio is busy rather than searching underneath
+the setup connection; try again once Wi-Fi setup has finished.
+
 Tested on a Show 8 (1st gen, crown). It should work on the other boards whose Bluetooth is the
 daemon's — checkers, cronos, crown, athena and the Dot — but not on the Panel, whose Bluetooth is
 Android's. The Skylight has not been tried.

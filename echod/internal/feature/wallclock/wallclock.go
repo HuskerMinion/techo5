@@ -14,6 +14,7 @@ import (
 
 	"github.com/HuskerMinion/techo5/echod/internal/component"
 	"github.com/HuskerMinion/techo5/echod/internal/config"
+	"github.com/HuskerMinion/techo5/echod/internal/feature/bluetooth"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/timer"
 	"github.com/HuskerMinion/techo5/echod/internal/layout"
 	"github.com/HuskerMinion/techo5/echod/internal/lib/bluez"
@@ -68,8 +69,14 @@ type Feature struct {
 	// from wake so a timer change cannot be mistaken for a config change by a live link.
 	timerWake chan struct{}
 
+	// gate is the radio: held by the loop while it dials and looks after a link, and by a pairing
+	// attempt while it searches. One at a time, so a reconnect cannot take the adapter from a
+	// pairing and a pairing cannot search with a live link up.
+	gate sync.Mutex
+
 	mu      sync.Mutex
 	pairing bool
+	live    *conn // the link the loop is serving, while it holds the gate
 	shown   string
 }
 
@@ -189,12 +196,32 @@ func (f *Feature) Pair() error {
 		return errors.New("already looking for a clock")
 	}
 	f.pairing = true
+	live := f.live
 	f.mu.Unlock()
 
 	f.setStatus("Pairing")
-	safe.Go("wall clock pairing", func() { f.pair(f.Address()) })
+
+	// Let go of the clock first: a live link is the loop's, and searching with it up would leave the
+	// clock connected while bluetoothd is asked to pair it again. Closing it ends serve, and the gate
+	// below waits for the loop to let go of the adapter.
+	if live != nil {
+		live.close()
+	}
+
+	safe.Go("wall clock pairing", func() {
+		defer f.wakeLoop()
+		f.gate.Lock()
+		defer f.gate.Unlock()
+		pairClock(f)
+	})
 	return nil
 }
+
+// pairClock is Pair's search. A variable for the tests, which have no Bluetooth adapter.
+var pairClock = func(f *Feature) { f.pair(f.Address()) }
+
+// dialClock connects to the clock. A variable for the tests, which have no Bluetooth adapter.
+var dialClock = dial
 
 // pair is Pair's search, on its own goroutine.
 func (f *Feature) pair(known string) {
@@ -221,6 +248,18 @@ func (f *Feature) pair(known string) {
 			return
 		}
 	}
+
+	// The Bluetooth proxy scans through this adapter as well. Take the radio off for the search and
+	// put it back afterwards, so its scan stops and starts with ours rather than being stopped
+	// underneath it by the Discover(false) below.
+	release, free := holdRadio()
+	if !free {
+		slog.Warn("wall clock: pairing while Wi-Fi setup has the Bluetooth radio")
+		f.failed("Pairing failed: Bluetooth is busy with Wi-Fi setup")
+		return
+	}
+	defer release()
+
 	if err := a.Discover(true); err != nil {
 		slog.Warn("wall clock: could not start discovery", "err", err)
 		f.failed("Pairing failed: could not search")
@@ -277,6 +316,33 @@ func (f *Feature) pair(known string) {
 	} else {
 		f.setStatus("Off")
 	}
+}
+
+// holdRadio takes the radio off the Bluetooth proxy until the returned release, and reports whether
+// it got it. A pairing search uses the same adapter, and the proxy's scan must stop and start with it
+// rather than have its own discovery stopped by the search's Discover(false). On the Dot the proxy's
+// radio is the controller itself; on a Show it is bluetoothd's LE discovery.
+//
+// False means the radio is lent to an advertisement the proxy cannot stop, such as Improv's Wi-Fi
+// setup on a Dot: a search must not start discovery while that is up, since this controller refuses a
+// scan that comes after advertising.
+func holdRadio() (func(), bool) {
+	if !bluetooth.Here {
+		return func() {}, true
+	}
+	b := bluetooth.Get()
+	// Ask before holding: Hold waits for a lent radio to stop and it never does, so a search would
+	// stall for that wait only to refuse anyway.
+	if b.Offering() {
+		return func() {}, false
+	}
+	release := b.Hold()
+	// And again after: an offer may have started while the radio was stopping.
+	if b.Offering() {
+		release()
+		return func() {}, false
+	}
+	return release, true
 }
 
 // findClock waits for the clock to answer discovery: the address saved before, or the name a clock
@@ -384,8 +450,30 @@ func (f *Feature) Run(ctx context.Context) error {
 		}
 
 		f.setStatus("Connecting")
-		c, err := dial(ctx, cfg.Address, connectTimeout, handshakeTimeout)
+
+		// Pairing owns the radio while it searches. Wait for it rather than page a clock it may be
+		// about to pair with, and take the gate before dialing so a search that starts now waits for
+		// this attempt instead of overlapping with it.
+		if f.Pairing() {
+			f.wait(ctx, idleWait)
+			continue
+		}
+		f.gate.Lock()
+		if f.Pairing() {
+			f.gate.Unlock()
+			f.wait(ctx, idleWait)
+			continue
+		}
+		// The config may have changed while the gate was held by a pairing.
+		cfg = config.Get().WallClock
+		if !cfg.Enabled || cfg.Address == "" {
+			f.gate.Unlock()
+			continue
+		}
+
+		c, err := dialClock(ctx, cfg.Address, connectTimeout, handshakeTimeout)
 		if err != nil {
+			f.gate.Unlock()
 			if ctx.Err() != nil {
 				return nil
 			}
@@ -394,11 +482,21 @@ func (f *Feature) Run(ctx context.Context) error {
 			f.wait(ctx, reconnectDelay)
 			continue
 		}
+		// A pairing that began while this dial was in flight had no live link to close. Hand the
+		// link over only if it did not: otherwise let it go and let the pairing have the adapter.
+		if !f.setLive(c) {
+			c.close()
+			f.gate.Unlock()
+			f.wait(ctx, idleWait)
+			continue
+		}
 
 		b := New(Config{Timezone: time.Local}, ClockOutput{Sink: c})
 		if err := b.OnConnect(time.Now()); err != nil {
 			slog.Warn("wall clock: the link failed at once", "err", err)
+			f.clearLive(c)
 			c.close()
+			f.gate.Unlock()
 			f.wait(ctx, reconnectDelay)
 			continue
 		}
@@ -406,13 +504,37 @@ func (f *Feature) Run(ctx context.Context) error {
 		slog.Info("wall clock: connected", "address", cfg.Address)
 
 		f.serve(ctx, c, b, cfg.Address)
+		f.clearLive(c)
 		c.close()
+		f.gate.Unlock()
 		if ctx.Err() != nil {
 			return nil
 		}
 		slog.Info("wall clock: link ended", "err", c.Err())
 		f.setStatus("Disconnected")
 		f.wait(ctx, reconnectDelay)
+	}
+}
+
+// setLive records the link the loop is serving, unless a pairing started first. It returns whether
+// the link was taken: a false answer means the caller must close it and give the radio back.
+func (f *Feature) setLive(c *conn) bool {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if f.pairing {
+		return false
+	}
+	f.live = c
+	return true
+}
+
+// clearLive forgets a link once it has ended. It only clears the link it was given, so a pairing
+// cannot have a later connection's entry taken away by an earlier one.
+func (f *Feature) clearLive(c *conn) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if f.live == c {
+		f.live = nil
 	}
 }
 
