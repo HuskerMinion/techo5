@@ -27,8 +27,9 @@ func picture(w, h int) *image.RGBA {
 }
 
 // Every board but the 2nd gen Show 5 on a mainline kernel and the 2nd gen Show 8 with its JPEG encoder
-// keeps the camera pages as they were: the stream is the half-size picture and the still the full-size
-// one, each a single encode at quality 85.
+// keeps the camera's half-size live picture and full-size still at quality 85.
+// The preview now uses parallel JPEG stripes; it must decode to identical pixels
+// while the full-size still must retain its exact original encoding.
 func TestOtherBoardsKeepHalfSizePagesAt85(t *testing.T) {
 	if fullPagesOn(false, false) {
 		t.Fatal("a board with neither the Show 5's mainline kernel nor the Show 8's JPEG encoder sends full-size pages")
@@ -62,8 +63,23 @@ func TestOtherBoardsKeepHalfSizePagesAt85(t *testing.T) {
 		if err := jpeg.Encode(&want, c.img, &jpeg.Options{Quality: 85}); err != nil {
 			t.Fatal(err)
 		}
-		if !bytes.Equal(got, want.Bytes()) {
-			t.Errorf("%s: not the single encode at 85 of the %v picture", c.name, c.img.Bounds().Size())
+		if c.name == "still" {
+			if !bytes.Equal(got, want.Bytes()) {
+				t.Error("still: encoded bytes changed at quality 85")
+			}
+			continue
+		}
+		parallel, err := jpeg.Decode(bytes.NewReader(got))
+		if err != nil {
+			t.Fatalf("preview: cannot decode parallel JPEG: %v", err)
+		}
+		single, err := jpeg.Decode(bytes.NewReader(want.Bytes()))
+		if err != nil {
+			t.Fatal(err)
+		}
+		pa, sa := parallel.(*image.YCbCr), single.(*image.YCbCr)
+		if !bytes.Equal(pa.Y, sa.Y) || !bytes.Equal(pa.Cb, sa.Cb) || !bytes.Equal(pa.Cr, sa.Cr) {
+			t.Error("preview: decoded pixels differ from the original at quality 85")
 		}
 	}
 }

@@ -410,7 +410,31 @@ var (
 	aeMaxShut = sensor.maxShut
 )
 
+// previewShutterLimit keeps a viewed Checkers camera responsive in dim rooms.
+// Its original five-frame shutter is preserved for slow users and other boards;
+// live previews use one sensor frame period, prioritizing smoother motion.
+func previewShutterLimit(maxShut, frameLines int, checkers, live bool) int {
+	if checkers && live {
+		return min(maxShut, frameLines)
+	}
+	return maxShut
+}
+
+// gainForShorterShutter trades exposure duration for gain where possible.
+// On Checkers the usual long exposure (4000 lines, 6x) fits in two periods
+// (1596 lines) at 15x, within the sensor's 15.5x gain ceiling.
+func gainForShorterShutter(shutter, gain, limit int) int {
+	return min(aeMaxGain, max(aeMinGain, (shutter*gain+limit/2)/limit))
+}
+
 func (d *device) autoExpose(bayer []byte) {
+	maxShut := previewShutterLimit(aeMaxShut, aeFrame, layout.Checkers(), liveUsers.Load() > 0)
+	if d.shutter > maxShut {
+		// An already-open camera may have settled on a long low-light shutter.
+		// Apply the preview cap immediately, even during the settle delay.
+		d.setExposure(maxShut, gainForShorterShutter(d.shutter, d.gain, maxShut), -1)
+		return
+	}
 	if d.settle > 0 {
 		d.settle--
 		return
@@ -438,12 +462,12 @@ func (d *device) autoExpose(bayer []byte) {
 		shutter, gain = int(want/aeMinGain), aeMinGain
 	case want <= float64(aeFrame*aeMidGain):
 		shutter, gain = aeFrame, int(want)/aeFrame
-	case want <= float64(aeMaxShut*aeMidGain):
+	case want <= float64(maxShut*aeMidGain):
 		shutter, gain = int(want/aeMidGain), aeMidGain
 	default:
-		shutter, gain = aeMaxShut, int(want/float64(aeMaxShut))
+		shutter, gain = maxShut, int(want/float64(maxShut))
 	}
-	d.setExposure(min(max(shutter, aeMinShut), aeMaxShut), min(max(gain, aeMinGain), aeMaxGain), mean)
+	d.setExposure(min(max(shutter, aeMinShut), maxShut), min(max(gain, aeMinGain), aeMaxGain), mean)
 }
 
 // setExposure asks the sensor for shutter lines and gain, if they changed (mean: the frame's, logged).
@@ -849,12 +873,43 @@ func sampleWith(raw []byte, step int, geo geometry, unpack bool) tone {
 }
 
 // render paints the half-size picture: one pixel per Bayer cell, the two greens summed.
+// Checkers spreads independent rows across four cores, because its live preview
+// would otherwise spend much of each frame unpacking Bayer pixels on one core.
 func render(raw []byte, t tone) *image.RGBA {
+	workers := 1
+	if layout.Checkers() {
+		workers = min(4, runtime.GOMAXPROCS(0))
+	}
+	return renderWithWorkers(raw, t, workers)
+}
+
+// renderWithWorkers builds an identical frame whether rows are painted serially or
+// in parallel. Each worker owns separate row scratch and disjoint output rows.
+func renderWithWorkers(raw []byte, t tone, workers int) *image.RGBA {
 	img := image.NewRGBA(image.Rect(0, 0, Width, Height))
 	lut := t.tables()
+	if workers < 2 || Height < 64 {
+		renderRows(img, raw, lut, 0, Height)
+		return img
+	}
+	workers = min(workers, Height)
+	var wg sync.WaitGroup
+	wg.Add(workers)
+	for i := 0; i < workers; i++ {
+		from, to := i*Height/workers, (i+1)*Height/workers
+		go func() {
+			defer wg.Done()
+			renderRows(img, raw, lut, from, to)
+		}()
+	}
+	wg.Wait()
+	return img
+}
+
+func renderRows(img *image.RGBA, raw []byte, lut *[3][2048]uint8, from, to int) {
 	row0 := make([]uint16, sensorW)
 	row1 := make([]uint16, sensorW)
-	for y := 0; y < Height; y++ {
+	for y := from; y < to; y++ {
 		unpackLine(raw[(2*y)*bytesPerLine:(2*y+1)*bytesPerLine], row0)
 		unpackLine(raw[(2*y+1)*bytesPerLine:(2*y+2)*bytesPerLine], row1)
 		pix := img.Pix[y*img.Stride:]
@@ -872,7 +927,6 @@ func render(raw []byte, t tone) *image.RGBA {
 			pix[j+3] = 255
 		}
 	}
-	return img
 }
 
 // tables are per-channel lookups from an 11-bit level to an 8-bit output: gain, scale to white,
