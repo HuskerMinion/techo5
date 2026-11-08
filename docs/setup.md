@@ -2039,6 +2039,36 @@ picks a band when it joins, and the network can still move the device itself; to
 do that in the router or the mesh app (pin the device, or give it a 2.4 GHz-only network). It is saved on the
 device and is not copied by a settings file from another.
 
+### Another Wi-Fi on an Echo Dot
+
+An Echo Dot or an Echo 2nd gen has no screen to pick a network on, so it takes one over Bluetooth
+with [Improv Wi-Fi](https://www.improv-wifi.com), the way an ESPHome device does. Home Assistant
+finds it on its own (it shows up under **Settings → Devices & services** as an Improv device, if
+Home Assistant has Bluetooth), and so does [improv-wifi.com](https://www.improv-wifi.com) in Chrome or
+Edge on a phone or a computer with Bluetooth.
+
+- **Hold the mute button for five seconds.** The Dot plays the pairing tone, its ring pulses teal,
+  and it is ready for a network at once: let go then. Holding the button on to 20 seconds switches
+  the Dot off (the mute button is its power key). The microphones stay as they were: the hold is
+  for Improv, not for muting. Hold it again to stop.
+- **Or let it start by itself.** A Dot that still has no address 45 seconds after starting offers
+  Improv once, by itself. Then it takes a network only after a press of any of its buttons, so
+  nobody else in Bluetooth range can move it onto a network of theirs.
+
+The ring pulses teal for as long as Improv is offered, and stays teal for the moment after a network
+was joined. Send the network's name and passphrase. Spaces a phone's keyboard adds at the ends are
+forgiven: a name no network around has is taken without them if one has it that way, and a
+passphrase that does not join with them is tried once without. The Dot joins it, keeps the networks
+it knew as well, and hands back its address. A passphrase it cannot join with leaves it on the network it
+had, and it says so with the failure tone. It stops offering Improv after five minutes with nothing
+sent, after fifteen minutes in any case, and ten seconds after a network was joined. Improv itself is
+not encrypted, which is why it is only offered this briefly. While it is offered, the Bluetooth proxy
+pauses, and Home Assistant sees its scanner stopped; it carries on by itself afterwards.
+
+On the stock 3.18 kernel of the Echo Dot 2nd gen and the Echo 2nd gen, bluetoothd cannot advertise
+by itself. The Dot then advertises Improv through the same radio the Bluetooth proxy uses, and
+bluetoothd still serves it, so it works the same.
+
 ## 10. Saving the settings
 
 On the setup page, **General**, **Download settings** saves everything the device is set to as a

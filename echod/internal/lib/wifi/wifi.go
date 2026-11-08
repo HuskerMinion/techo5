@@ -292,6 +292,29 @@ func renewLease() {
 	}
 }
 
+// ownConf is the network the installer or wifi-set wrote on the Dot (techo5-net's OWN).
+var ownConf = "/data/techo5-linux/wifi.conf"
+
+// keptDate is the time the supplicant's file is to carry when it is written, for it to stay the one
+// the Dot boots with, and whether that is not simply now. techo5-net keeps the file only while it is
+// newer than ownConf (`test -nt`, whole seconds), and rebuilds it from ownConf otherwise: a Dot that
+// booted with no network has no time from NTP, so a join stamped it with a clock years behind the
+// installer's ownConf, and the next boot threw the network joined away for the one it could not join.
+// So it is dated a second past ownConf whenever the clock is not already past it.
+func keptDate() (time.Time, bool) {
+	if !keptByDate {
+		return time.Time{}, false
+	}
+	own, err := os.Stat(ownConf)
+	if err != nil {
+		return time.Time{}, false
+	}
+	if time.Now().Unix() > own.ModTime().Unix() {
+		return time.Time{}, false
+	}
+	return time.Unix(own.ModTime().Unix()+1, 0), true
+}
+
 // decodeName undoes the escaping wpa_cli puts on a network name on the way out. The supplicant prints
 // a name through printf_encode, which spells a backslash, a quote, the whitespace characters and
 // anything unprintable as an escape, while the name this code holds is the plain text: the two have to

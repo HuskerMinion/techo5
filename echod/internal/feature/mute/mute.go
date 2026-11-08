@@ -423,7 +423,43 @@ func (m *Mute) keep() {
 	}
 	m.mu.Lock()
 	defer m.mu.Unlock()
+	m.keepAs(m.sw.Get(), "a press that went to a ring")
+}
+
+// KeepThroughHold leaves the microphones as they are through a hold of the mute button that went to
+// something else (Improv on the Dot, feature/improv): the Dot's hardware moves the latch on a hold
+// all the same. Called on the long hold, while the switch still says where the microphones were
+// before the press (follow publishes nothing with the button down); the latch is put back once the
+// button is up.
+func (m *Mute) KeepThroughHold(what string) {
+	if m.line == nil {
+		return
+	}
+	m.mu.Lock()
 	was := m.sw.Get()
+	m.mu.Unlock()
+	safe.Go("mute kept through a hold", func() {
+		for deadline := time.Now().Add(keepHoldFor); time.Now().Before(deadline); time.Sleep(followPoll) {
+			if down, _ := m.pressedState(); !down {
+				break
+			}
+		}
+		m.mu.Lock()
+		defer m.mu.Unlock()
+		m.keepAs(was, what)
+		// The hold's own watch may have published the latch moved before it was put back.
+		if is, err := m.line.Get(); err == nil && is != m.sw.Get() {
+			m.settled(false)
+		}
+	})
+}
+
+// keepHoldFor is how long KeepThroughHold waits for the button to come up: the PMIC switches the Dot
+// off at 20 s of holding.
+var keepHoldFor = 25 * time.Second
+
+// keepAs puts the latch back to was if the hardware moved it, and publishes that. Held with mu.
+func (m *Mute) keepAs(was bool, what string) {
 	if !m.line.HardwareActs(was) {
 		return
 	}
@@ -437,7 +473,7 @@ func (m *Mute) keep() {
 		return
 	}
 	if err := m.line.Set(was); err != nil {
-		slog.Error("putting the mute back after a ring failed", "muted", was, "err", err)
+		slog.Error("putting the mute back failed", "after", what, "muted", was, "err", err)
 	}
 	if now, err := m.line.Get(); err == nil && now != was {
 		m.settled(true)
@@ -447,7 +483,7 @@ func (m *Mute) keep() {
 	if !was {
 		mic.Rewire()
 	}
-	slog.Info("microphone mute left as it was after a press that went to a ring", "muted", was)
+	slog.Info("microphone mute left as it was", "after", what, "muted", was)
 }
 
 // settled publishes what the line now reads — not what was asked for, so a line that did not move
