@@ -69,6 +69,28 @@ func CanReset() bool { return !improvUntried() }
 // improvUntried is whether this board has no screen and Improv has not been tried on it yet (screen_dot.go).
 var improvUntried = func() bool { return false }
 
+// forgetHome deletes the giver's Home Assistant entry for this device, when the device was given a token
+// for that Home Assistant (lib/hass): after the reset it holds a key the device no longer has, and fails
+// until someone deletes it. Without a token, or with one that may not delete it, the setup page and the
+// docs say to delete it by hand. A variable for the tests.
+var forgetHome = func(ctx context.Context) {
+	if !hass.Get().Ready() {
+		return
+	}
+	mac, err := layout.FactoryMAC()
+	if err != nil || mac == "" {
+		return
+	}
+	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
+	defer cancel()
+	n, err := hass.Get().RemoveOwnEntry(ctx, mac)
+	if err != nil {
+		slog.Warn("reset: could not delete this device from Home Assistant; delete it there by hand", "err", err)
+		return
+	}
+	slog.Info("reset: deleted this device from Home Assistant", "entries", n)
+}
+
 // restart is the daemon restarting into first run (a variable for the tests).
 var restart = func() { update.Restart("reset for someone else") }
 
@@ -76,10 +98,10 @@ var restart = func() { update.Restart("reset for someone else") }
 // feature has started: done now, a feature's state written back on the way down would survive it.
 func resetPath() string { return filepath.Join(stateDir, "reset") }
 
-// Reset clears the device for somebody else and restarts it into first run. Now it only forgets the
-// Wi-Fi networks, from the running supplicant and from every file a boot could bring one back from
-// (wipeWifi), and leaves the reset and first-run markers; the next start wipes the rest (wipe) before
-// anything else runs.
+// Reset clears the device for somebody else and restarts it into first run. Now it leaves the reset and
+// first-run markers and, once its answer is away, deletes its Home Assistant entry where it can
+// (forgetHome) and forgets the Wi-Fi networks, from the running supplicant and from every file a boot
+// could bring one back from (wipeWifi); the next start wipes the rest (wipe) before anything else runs.
 func Reset() error {
 	if !CanReset() {
 		return errors.New("this device cannot be reset for someone else yet: it might not be given a new Wi-Fi network afterwards")
@@ -90,20 +112,25 @@ func Reset() error {
 	if err := os.WriteFile(resetPath(), nil, 0o600); err != nil {
 		return err
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
-	defer cancel()
-	for _, ssid := range wifi.Saved() {
-		if err := wifi.Forget(ctx, ssid); err != nil {
-			slog.Warn("reset: forgetting a network failed", "err", err)
-		}
-	}
-	wipeWifi()
-	if wifiAvailable() {
-		dropNetwork(ctx)
-	}
 	slog.Warn("reset for someone else: restarting to wipe the device")
 	safe.Go("reset for someone else", func() {
-		time.Sleep(2 * time.Second) // the answer reaches whoever asked first
+		// The answer reaches whoever asked first: Home Assistant, when it was its action, would report
+		// the action failed with its entry deleted or the network gone before then. A restart in these
+		// moments is no loss, since the markers are written and the wipe at the next start does it all.
+		time.Sleep(2 * time.Second)
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancel()
+		// While it is still on the network: Home Assistant's entry for it would only fail from now on.
+		forgetHome(ctx)
+		for _, ssid := range wifi.Saved() {
+			if err := wifi.Forget(ctx, ssid); err != nil {
+				slog.Warn("reset: forgetting a network failed", "err", err)
+			}
+		}
+		wipeWifi()
+		if wifiAvailable() {
+			dropNetwork(ctx)
+		}
 		restart()
 	})
 	return nil

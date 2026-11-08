@@ -15,6 +15,7 @@ import (
 	"github.com/HuskerMinion/techo5/echod/internal/config"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/firstrun"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/timezone"
+	"github.com/HuskerMinion/techo5/echod/internal/lib/hass"
 )
 
 // First run on the setup page (feature/firstrun): the same steps as a Show's screen, as forms, one
@@ -333,7 +334,16 @@ func resetSection(w http.ResponseWriter, token string) {
 	fmt.Fprint(w, `<p style="margin:0">Clears this device for whoever has it next, and starts first run:
 	 the Wi-Fi networks, the name and room, Home Assistant's key and access, alarms, timers, the phone book,
 	 photos, sounds and every setting. The list is in the setup guide.</p>
-	 <p class="bad"><strong>It leaves the network and Home Assistant at once, and cannot be undone.</strong></p>
+	 <p class="bad"><strong>It leaves the network and Home Assistant at once, and cannot be undone.</strong></p>`)
+	if hass.Get().Ready() {
+		fmt.Fprint(w, `<p class="note">It deletes its own entry from your Home Assistant first, if the token it
+		 was given is an administrator's. If it's still there afterward, delete it under Settings, Devices &amp;
+		 services, ESPHome.</p>`)
+	} else {
+		fmt.Fprint(w, `<p class="note">Afterward, delete it from your Home Assistant under Settings, Devices &amp;
+		 services, ESPHome.</p>`)
+	}
+	fmt.Fprint(w, `
 	 <p><label><input type="checkbox" name="understood" value="yes" style="width:auto">
 	  I know everything on the device is cleared</label></p>
 	 <p><button type="submit">Reset and restart</button></p></form></fieldset>`)

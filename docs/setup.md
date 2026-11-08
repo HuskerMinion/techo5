@@ -89,6 +89,10 @@ goes down. The device then restarts into first run. A reset clears:
 It keeps the wake word models, the device's own MAC address and serial, and what the hardware has
 measured of itself. It cannot be undone.
 
+Your Home Assistant's entry for the device would only fail afterward, since the key it holds is gone.
+A device that was given access to your Home Assistant with an administrator's token deletes its own
+ESPHome entry there first. Otherwise, delete it from **Settings → Devices & services → ESPHome**.
+
 ### The setup page
 
 Many steps here mention the setup page. It's the device's own web page, at

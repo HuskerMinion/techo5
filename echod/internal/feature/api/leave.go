@@ -1,6 +1,7 @@
 package api
 
 import (
+	"context"
 	"crypto/rand"
 	"errors"
 	"io/fs"
@@ -48,11 +49,32 @@ func (a *API) Actions() []*esphome.Action {
 			slog.Warn("left Home Assistant: its access forgotten and a new key made; restarting")
 			safe.Go("leave home assistant", func() {
 				time.Sleep(leaveDelay)
+				leaveEntry()
 				update.Restart("left Home Assistant")
 			})
 			return nil, nil
 		},
 	}}
+}
+
+// leaveEntry deletes Home Assistant's entry for this device, which holds a key the device no longer
+// has, when the access just forgotten was an administrator's (the client still holds it until the
+// restart). Without one it stays, for deleting by hand, as the docs say.
+var leaveEntry = func() {
+	if !hass.Get().Ready() {
+		return
+	}
+	mac, err := layout.FactoryMAC()
+	if err != nil || mac == "" {
+		return
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	if n, err := hass.Get().RemoveOwnEntry(ctx, mac); err != nil {
+		slog.Warn("left Home Assistant, but could not delete its entry there; delete it by hand", "err", err)
+	} else {
+		slog.Info("left Home Assistant and deleted its entry there", "entries", n)
+	}
 }
 
 // leave forgets the access first and changes the key second: stopped between the two, the device
