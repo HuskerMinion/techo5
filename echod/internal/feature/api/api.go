@@ -290,8 +290,11 @@ func (a *API) Run(ctx context.Context) error {
 
 	for {
 		srv := a.server()
-		ln, err := net.Listen("tcp", srv.Addr)
+		ln, err := listen(ctx, srv.Addr)
 		if err != nil {
+			if ctx.Err() != nil {
+				return nil
+			}
 			return fmt.Errorf("api: listen %s: %w", srv.Addr, err)
 		}
 
