@@ -2449,36 +2449,12 @@ func (d *Display) Run(ctx context.Context) error {
 	}
 }
 
-// frame draws what the moment calls for and says how long until the next one is due.
-func (d *Display) frame() (next time.Duration) {
-	began := time.Now()
-	d.videoPainting, d.vp.dark = false, false
-	d.mu.Lock()
-	on, view, at := d.on, d.view, d.viewAt
-	volume, volAt := d.volume, d.volAt
-	touched := d.touchedAt
-	d.mu.Unlock()
-
-	now := time.Now()
-	d.boost.update(on && (view.Phase != "idle" || now.Sub(touched) < boostLinger))
-
-	d.mu.Lock()
-	d.expireUpdateLocked(now)
-	d.mu.Unlock()
-
-	d.popupTick(now)
-	ring := d.ringing(now)
-	call := phone.Get().State()
-	_, reminding := remind.Get().Showing()
-	night := nightNow(now)
-	if d.dev != nil {
-		// The tint is laid on in Present, so a deck kept as it was would keep the old one: a change
-		// draws it again.
-		if t := d.nightTint(now, night); t != d.tintShown {
-			d.tintShown, d.deckDrawn = t, ""
-			d.dev.SetTint(t)
-		}
-		d.dev.SetLift(config.Get().Screen.AdaptiveBacklight && liftOffered())
+// lightForEvents lights a dark panel for what wants to be seen (a call, a ring or a reminder by day, a
+// pop-up, a notice, a video starting), and says whether the panel is lit. Not under a closed cover
+// (cover.go): what it shows waits there until the cover opens.
+func (d *Display) lightForEvents(now time.Time, on, night bool, call phone.State, ring ringState, reminding bool) bool {
+	if coverClosed() {
+		return on
 	}
 	if !on && (call.Phase != phone.Idle || (!night && (ring.any() || reminding))) {
 		// A call lights a dark panel, at night to half brightness (relight): its page is how it is
@@ -2511,8 +2487,50 @@ func (d *Display) frame() (next time.Duration) {
 			on = true
 		}
 	}
+	return on
+}
+
+// frame draws what the moment calls for and says how long until the next one is due.
+func (d *Display) frame() (next time.Duration) {
+	began := time.Now()
+	d.videoPainting, d.vp.dark = false, false
+	d.mu.Lock()
+	on, view, at := d.on, d.view, d.viewAt
+	volume, volAt := d.volume, d.volAt
+	touched := d.touchedAt
+	d.mu.Unlock()
+
+	now := time.Now()
+	d.boost.update(on && (view.Phase != "idle" || now.Sub(touched) < boostLinger))
+
+	d.mu.Lock()
+	d.expireUpdateLocked(now)
+	d.mu.Unlock()
+
+	d.popupTick(now)
+	ring := d.ringing(now)
+	call := phone.Get().State()
+	_, reminding := remind.Get().Showing()
+	night := nightNow(now)
+	if d.dev != nil {
+		// The tint is laid on in Present, so a deck kept as it was would keep the old one: a change
+		// draws it again.
+		if t := d.nightTint(now, night); t != d.tintShown {
+			d.tintShown, d.deckDrawn = t, ""
+			d.dev.SetTint(t)
+		}
+		d.dev.SetLift(config.Get().Screen.AdaptiveBacklight && liftOffered())
+	}
+	// A closed cover puts the screen out first, so nothing below lights it under the cover only for this
+	// to put it out again, frame after frame (cover.go).
+	if d.coverTick(on) {
+		d.mu.Lock()
+		on = d.on
+		d.mu.Unlock()
+	}
+	on = d.lightForEvents(now, on, night, call, ring, reminding)
 	d.lightOffOver(now, ring.alarm != nil)
-	if !on && d.wakeLight(now) > 0 {
+	if !on && !coverClosed() && d.wakeLight(now) > 0 {
 		// The light before an alarm: the panel comes on dim and rises, so the room is lit before the
 		// sound starts. relight decides how much of the screen's brightness it is using. Not once
 		// somebody turned the screen off while it was held after an alarm (lightOff).
@@ -2536,6 +2554,11 @@ func (d *Display) frame() (next time.Duration) {
 	d.mu.Unlock()
 	busy := updateVisible || view.Phase != "idle" || call.Phase != phone.Idle || ring.any() || reminding || sheetUp || pinIsOpen() ||
 		d.wakeLight(now) > 0 || d.popupUp() != nil || asksAtDevice() || wifiUp || camUp || video.Get().State().Active()
+	if d.coverTick(on) { // the night may have lit the panel under a closed cover
+		d.mu.Lock()
+		on = d.on
+		d.mu.Unlock()
+	}
 	if d.awayTick(now, on, busy, night) {
 		d.mu.Lock()
 		on = d.on

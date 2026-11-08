@@ -29,7 +29,7 @@ func (d *Display) listenPowerKey() {
 }
 
 // powerKey is one press: off if the screen is lit, on if it is dark, whatever put it out (the key, Screen
-// power, the night). Under a closed cover it comes on only until the next frame's lidTick.
+// power, the night). Under a closed cover (cover.go) it comes on only until the next frame puts it out again.
 func (d *Display) powerKey(now time.Time) {
 	d.mu.Lock()
 	on := d.on
