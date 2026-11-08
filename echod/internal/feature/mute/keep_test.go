@@ -70,24 +70,24 @@ func TestKeepThroughAHold(t *testing.T) {
 		w.press(true)
 
 		w.KeepThroughHold("an Improv hold")
-		w.mu.Lock()
+		w.Mute.mu.Lock()
 		line.muted = !tc.was // the hardware's own move
-		w.mu.Unlock()
+		w.Mute.mu.Unlock()
 		w.press(false)
 
 		deadline := time.Now().Add(2 * time.Second)
 		for {
-			w.mu.Lock()
+			w.Mute.mu.Lock()
 			done := len(line.sets) > 0
-			w.mu.Unlock()
+			w.Mute.mu.Unlock()
 			if done || time.Now().After(deadline) {
 				break
 			}
 			time.Sleep(10 * time.Millisecond)
 		}
-		w.mu.Lock()
+		w.Mute.mu.Lock()
 		muted, sets := line.muted, append([]bool(nil), line.sets...)
-		w.mu.Unlock()
+		w.Mute.mu.Unlock()
 		if muted != tc.was || len(sets) != 1 {
 			t.Errorf("%s: line muted=%v after sets %v, want %v put back once", tc.name, muted, sets, tc.was)
 		}

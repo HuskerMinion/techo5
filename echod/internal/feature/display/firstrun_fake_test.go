@@ -32,6 +32,8 @@ func (f *frFake) get(read func()) { f.mu.Lock(); read(); f.mu.Unlock() }
 // run reads and does (feature/firstrun), until the test ends.
 func stubFirstRun(t *testing.T, joined, home bool) (*frFake, wifi.Status) {
 	t.Helper()
+	// A screen an earlier call drew in this same test may still be reading the hooks replaced below.
+	frBackground.Wait()
 	if err := config.Set().FirstRun().Settle(false); err != nil {
 		t.Fatal(err)
 	}
