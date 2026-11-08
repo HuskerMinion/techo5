@@ -288,3 +288,12 @@ The interface should not be taken as a claim of hardware-tested External ASP sup
 device. Hardware compatibility and testing must be established for each particular helper and platform.
 
 The standard TECHO5 configuration remains independent of External ASP and its associated projects.
+
+## Add-ons others have made
+
+These are made and kept by their authors, not by TECHO5, and TECHO5 does not test them. Read each one's own
+instructions and notes before you install it.
+
+- [techo5-sound-ai](https://github.com/calin2k/techo5-sound-ai) by calin2k: an on-device room sound classifier
+  (Google's YAMNet) with an activity alarm, run from `/data` through `rc.local` and this interface, so it
+  outlasts updates. Its sound classes are for information only; it is not a life-safety device.
