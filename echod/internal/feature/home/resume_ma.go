@@ -3,8 +3,10 @@ package home
 import (
 	"context"
 	"log/slog"
+	"strings"
 	"time"
 
+	"github.com/HuskerMinion/techo5/echod/internal/component"
 	"github.com/HuskerMinion/techo5/echod/internal/config"
 	"github.com/HuskerMinion/techo5/echod/internal/layout"
 	"github.com/HuskerMinion/techo5/echod/internal/lib/hass"
@@ -31,6 +33,10 @@ func resumeMusicAssistant() {
 			return
 		}
 	}
+	if !hass.Get().Ready() {
+		resumeOverAPI()
+		return
+	}
 	ma, err := musicAssistantPlayer()
 	if err != nil || ma == "" {
 		slog.Warn("resume: no Music Assistant player found for this device", "err", err)
@@ -41,6 +47,40 @@ func resumeMusicAssistant() {
 		return
 	}
 	slog.Info("resume: asked Music Assistant to play", "player", ma)
+}
+
+// resumeOverAPI asks Home Assistant to play Music Assistant's player for this device over the
+// device's own connection to it, which needs no token: what most devices have (#485). Home Assistant
+// finds the player itself, with a template doing what hass.Client.MusicAssistantFor does. It runs only
+// when the device is allowed to perform Home Assistant actions (the ESPHome integration's option for
+// it); otherwise Home Assistant says so in its own log and repairs.
+func resumeOverAPI() {
+	unheard := false
+	component.CallService.Emit(component.Call{
+		Service:   "media_player.media_play",
+		Templates: map[string]string{"entity_id": maPlayerTemplate(speakerEntity(), config.Get().Device.Name)},
+		Unheard:   func() { unheard = true },
+	})
+	if unheard {
+		slog.Warn("resume: no Music Assistant token or Home Assistant access on this device, and Home Assistant is not connected")
+		return
+	}
+	slog.Info("resume: asked Home Assistant to have Music Assistant play, over this device's connection")
+}
+
+// maPlayerTemplate is a Home Assistant template naming Music Assistant's player for the device whose
+// own media player is own and whose name is name: the one whose active queue is own, or else the
+// player of that name (a queue of that name only when nothing else is).
+func maPlayerTemplate(own, name string) string {
+	q := func(s string) string { return "'" + strings.NewReplacer(`\`, `\\`, `'`, `\'`).Replace(s) + "'" }
+	return "{%- set own = " + q(own) + " -%}{%- set name = " + q(strings.ToLower(strings.TrimSpace(name))) + " -%}" +
+		"{%- set ns = namespace(q='', p='', n='') -%}" +
+		"{%- for s in states.media_player if s.entity_id != own and s.attributes.app_id == 'music_assistant' -%}" +
+		"{%- if s.attributes.active_queue == own -%}{%- set ns.q = s.entity_id -%}" +
+		"{%- elif name != '' and (s.name | lower | trim) == name -%}" +
+		"{%- if s.attributes.mass_player_type == 'player' -%}{%- set ns.p = s.entity_id -%}" +
+		"{%- elif s.attributes.mass_player_type != 'queue' -%}{%- set ns.n = s.entity_id -%}{%- endif -%}" +
+		"{%- endif -%}{%- endfor -%}{{ ns.q or ns.p or ns.n }}"
 }
 
 // resumeDirect resumes this device's own player at the server, found by its id there (the factory MAC,
