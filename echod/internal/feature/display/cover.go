@@ -25,6 +25,12 @@ var screenLid struct {
 	dark bool // the screen was put out by the cover
 }
 
+// coverClosed is whether a cover is there and closed over the screen.
+func coverClosed() bool {
+	c := screenLid.c
+	return c != nil && c.Here() && c.Closed()
+}
+
 // setCover registers the board's cover, before the display starts.
 func setCover(c screenCover) { screenLid.c = c }
 

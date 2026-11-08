@@ -5,8 +5,10 @@ package display
 import (
 	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/HuskerMinion/techo5/echod/internal/config"
+	"github.com/HuskerMinion/techo5/echod/internal/feature/phone"
 )
 
 // fakeCover is a cover a test opens and closes.
@@ -71,5 +73,37 @@ func TestTheCoverPutsTheScreenOutAndBack(t *testing.T) {
 	c.closed = false
 	if d.coverTick(false) || d.on {
 		t.Fatal("a screen put out by hand was lit when the cover opened")
+	}
+}
+
+// A ring by day under a closed cover leaves the screen out, frame after frame, rather than lighting
+// it for the cover to put it out again; once the cover opens, the screen is lit as before.
+func TestARingUnderAClosedCoverStaysDark(t *testing.T) {
+	config.Use(filepath.Join(t.TempDir(), "state.json"))
+	d := roomLightsDisplay()
+	d.apply(true, 40, true)
+	c := &fakeCover{here: true, closed: true}
+	useCover(t, c)
+	ring := ringState{timer: "Pasta"}
+	now := time.Now()
+
+	on := true
+	for frame := range 3 {
+		if d.coverTick(on) {
+			on = d.on
+		}
+		on = d.lightForEvents(now, on, false, phone.State{}, ring, false)
+		if on || d.on {
+			t.Fatalf("frame %d: the ring lit the screen under the closed cover", frame)
+		}
+	}
+
+	c.closed = false
+	if !d.coverTick(on) || !d.on {
+		t.Fatal("the cover opened and the screen stayed out")
+	}
+	d.apply(false, 40, false)
+	if !d.lightForEvents(now, false, false, phone.State{}, ring, false) || !d.on {
+		t.Fatal("with the cover open, the ring did not light the screen")
 	}
 }
