@@ -156,24 +156,37 @@ func maPlayers(states []hass.LiveEntity) []player {
 
 // mediaTarget is the player music for entity is put on: entity itself when it is one of Music
 // Assistant's, else Music Assistant's player of the same name. Empty when there is none.
+//
+// Failing the same name, the player whose name the entity's begins with, the longest of them: an
+// ESPHome device's media player is named for the device and then the entity ("Echo Show 1A2B3C
+// Speaker"), while Music Assistant names its player for the device alone ("Echo Show 1A2B3C").
 func mediaTarget(entity, name string, players []player) string {
 	for _, p := range players {
 		if p.entity == entity {
 			return entity
 		}
 	}
-	var found string
-	for _, p := range players {
-		if p.mass != "player" || !p.available || !strings.EqualFold(strings.TrimSpace(p.name), strings.TrimSpace(name)) {
-			continue
+	name = strings.ToLower(strings.TrimSpace(name))
+	pick := func(match func(string) bool) string {
+		var found string
+		longest := 0
+		for _, p := range players {
+			pn := strings.ToLower(strings.TrimSpace(p.name))
+			if p.mass != "player" || !p.available || pn == "" || !match(pn) {
+				continue
+			}
+			// The longest name, then the one that can be grouped when there are two of a name: an
+			// older provider's entry lingers beside the current one.
+			if len(pn) > longest || (len(pn) == longest && p.features&groupingFeature != 0) {
+				found, longest = p.entity, len(pn)
+			}
 		}
-		// The one that can be grouped, when there are two of a name: an older provider's entry
-		// lingers beside the current one.
-		if found == "" || p.features&groupingFeature != 0 {
-			found = p.entity
-		}
+		return found
 	}
-	return found
+	if found := pick(func(pn string) bool { return pn == name }); found != "" {
+		return found
+	}
+	return pick(func(pn string) bool { return strings.HasPrefix(name, pn+" ") })
 }
 
 // groupable is the players target can be grouped with: Music Assistant's own, there, able to join,
