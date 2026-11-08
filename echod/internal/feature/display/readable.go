@@ -11,7 +11,9 @@ import (
 	"slices"
 	"strings"
 
+	"github.com/HuskerMinion/techo5/echod/internal/lib/fonts"
 	"golang.org/x/image/font"
+	"golang.org/x/image/math/fixed"
 )
 
 // Text over a photo. The wash laid over a slideshow picture calms it, but a wash light enough to
@@ -142,7 +144,7 @@ func (p *paint) readableOver(photo *image.RGBA, ground color.RGBA, wash uint8, p
 
 // noteText is text for pass one: where it would be drawn.
 func (o *overPhoto) noteText(face font.Face, s string, x, baseline int) {
-	b, _ := font.BoundString(face, s)
+	b, _ := fonts.BoundString(face, s)
 	r := image.Rect(b.Min.X.Floor(), b.Min.Y.Floor(), b.Max.X.Ceil(), b.Max.Y.Ceil()).Add(image.Pt(x, baseline))
 	if !r.Empty() {
 		o.boxes = append(o.boxes, r)
@@ -184,10 +186,10 @@ func (o *overPhoto) haloFor(face font.Face, s string) *image.Alpha {
 		o.halos = map[haloKey]*image.Alpha{}
 	}
 	reach := max(1, face.Metrics().Height.Round()/haloReach)
-	b, _ := font.BoundString(face, s)
+	b, _ := fonts.BoundString(face, s)
 	r := image.Rect(b.Min.X.Floor(), b.Min.Y.Floor(), b.Max.X.Ceil(), b.Max.Y.Ceil()).Inset(-reach)
 	glyphs := image.NewAlpha(r)
-	(&font.Drawer{Dst: glyphs, Src: image.Opaque, Face: face}).DrawString(s)
+	fonts.DrawString(glyphs, image.Opaque, face, fixed.Point26_6{}, s)
 	grown := image.NewAlpha(r)
 	for y := r.Min.Y; y < r.Max.Y; y++ {
 		for x := r.Min.X; x < r.Max.X; x++ {

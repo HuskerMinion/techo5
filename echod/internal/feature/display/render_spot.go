@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/HuskerMinion/techo5/echod/internal/lib/fonts"
 	"golang.org/x/image/font"
 
 	"github.com/HuskerMinion/techo5/echod/internal/config"
@@ -766,7 +767,7 @@ func (r *roundRenderer) text(face font.Face, s string, x, baseline int, c color.
 }
 
 func (r *roundRenderer) width(face font.Face, s string) int {
-	return font.MeasureString(face, s).Round()
+	return fonts.MeasureString(face, s).Round()
 }
 
 // centered2 is centered about x rather than the middle of the panel.

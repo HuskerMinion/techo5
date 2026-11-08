@@ -6,6 +6,7 @@ import (
 	"image"
 	"image/color"
 
+	"github.com/HuskerMinion/techo5/echod/internal/lib/fonts"
 	"golang.org/x/image/font"
 	"golang.org/x/image/math/fixed"
 
@@ -35,7 +36,7 @@ func drawPlaces(dst *image.RGBA, face font.Face, places []home.RadarPlace, keepO
 		if len(placed) == max {
 			return
 		}
-		w := font.MeasureString(face, p.Name).Ceil()
+		w := fonts.MeasureString(face, p.Name).Ceil()
 		base := p.At.Y + asc/2 - 1
 		// The name to the right of its dot, or to the left where the right is taken.
 		right := image.Rect(p.At.X-4, base-asc-2, p.At.X+6+w+3, base+desc+2)
@@ -86,6 +87,5 @@ func dot(dst *image.RGBA, c image.Point, radius int) {
 }
 
 func textAt(dst *image.RGBA, face font.Face, s string, x, baseline int, c color.Color) {
-	d := font.Drawer{Dst: dst, Src: image.NewUniform(c), Face: face, Dot: fixed.P(x, baseline)}
-	d.DrawString(s)
+	fonts.DrawString(dst, image.NewUniform(c), face, fixed.P(x, baseline), s)
 }

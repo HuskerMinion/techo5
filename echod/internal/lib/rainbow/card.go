@@ -9,6 +9,7 @@ import (
 	"unicode"
 	"unicode/utf8"
 
+	"github.com/HuskerMinion/techo5/echod/internal/lib/fonts"
 	"golang.org/x/image/font"
 	"golang.org/x/image/math/fixed"
 )
@@ -203,8 +204,7 @@ func newCardWords(g *geometry, f Faces, heard, reply string, isReply bool, key s
 	y := edge
 	for i, l := range lines {
 		y += float64(l.face.Metrics().Ascent.Ceil())
-		d := font.Drawer{Dst: img, Src: image.NewUniform(l.ink), Face: l.face, Dot: fixed.P(int(pad), int(y))}
-		d.DrawString(l.text)
+		fonts.DrawString(img, image.NewUniform(l.ink), l.face, fixed.P(int(pad), int(y)), l.text)
 		y += lineOf(l.face) - float64(l.face.Metrics().Ascent.Ceil())
 		if i == title-1 {
 			y += gap
@@ -237,7 +237,7 @@ func wrapLines(face font.Face, text string, w, n int) []string {
 		if line != "" {
 			try = line + " " + word
 		}
-		if line != "" && font.MeasureString(face, try).Ceil() > w {
+		if line != "" && fonts.MeasureString(face, try).Ceil() > w {
 			out = append(out, line)
 			if len(out) == n {
 				out[n-1] = clipLine(face, out[n-1]+" "+strings.Join(words[i:], " "), w)
@@ -256,11 +256,11 @@ func wrapLines(face font.Face, text string, w, n int) []string {
 
 // clipLine is text cut to fit w, ending in an ellipsis when it was cut.
 func clipLine(face font.Face, text string, w int) string {
-	if font.MeasureString(face, text).Ceil() <= w {
+	if fonts.MeasureString(face, text).Ceil() <= w {
 		return text
 	}
 	r := []rune(text)
-	for len(r) > 0 && font.MeasureString(face, string(r)+"…").Ceil() > w {
+	for len(r) > 0 && fonts.MeasureString(face, string(r)+"…").Ceil() > w {
 		r = r[:len(r)-1]
 	}
 	return strings.TrimRight(string(r), " ") + "…"

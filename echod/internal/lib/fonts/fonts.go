@@ -222,12 +222,15 @@ func Face(value string, bold bool, size float64) (font.Face, error) {
 			continue
 		}
 		f := e.font
-		layers = append(layers, Layer{Face: face, Font: f, Broke: func(why string) { markBad(f, why) }})
+		layers = append(layers, Layer{Face: face, Font: f, Broke: func(why string) { markBad(f, why) },
+			shaper: shaperFor(e)})
 	}
 	if len(layers) == 1 {
 		return goFace, nil
 	}
-	return NewStack(goFace, layers...), nil
+	s := NewStack(goFace, layers...)
+	s.size = size
+	return s, nil
 }
 
 // ownFace is a face of one of the owner's own fonts at size; should making it panic (a broken file),
