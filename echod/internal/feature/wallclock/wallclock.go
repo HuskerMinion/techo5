@@ -260,6 +260,16 @@ func (f *Feature) pair(known string) {
 	}
 	defer release()
 
+	// The clock may still be connected at the link level after the loop's RFCOMM socket was closed:
+	// bluetoothd keeps a paired device's ACL up, and a channel the clock has not acknowledged
+	// disconnecting stays busy for the next connect. Drop the link here, before discovery, so the
+	// clock is free and the loop's next connect starts cleanly.
+	if known != "" {
+		if err := a.Disconnect(ctx, known); err != nil {
+			slog.Debug("wall clock: no link to drop before pairing", "address", known, "err", err)
+		}
+	}
+
 	if err := a.Discover(true); err != nil {
 		slog.Warn("wall clock: could not start discovery", "err", err)
 		f.failed("Pairing failed: could not search")
