@@ -2,6 +2,7 @@ package musicassistant
 
 import (
 	"context"
+	"encoding/json"
 	"net/url"
 	"strconv"
 	"strings"
@@ -11,35 +12,147 @@ import (
 // and top tracks, an album's or a playlist's tracks, and the pictures of them all.
 
 // Entry is one thing a library page lists: an artist, album, track, playlist or radio station.
+//
+// It is read leniently (UnmarshalJSON): the server passes on what each music service says, and they do
+// not agree on types. A year comes as 2001 from one and "2001" from another, a track's album as an
+// object, a bare name or null. A field that is only shown never fails the whole answer: what cannot be
+// read is left empty, and an item that is not an object at all is an empty Entry (Usable says so).
 type Entry struct {
-	ItemID    string `json:"item_id"`
-	Provider  string `json:"provider"`
-	URI       string `json:"uri"`
-	Name      string `json:"name"`
-	MediaType string `json:"media_type"`
-	Version   string `json:"version"`
-	Year      int    `json:"year"`
-	Artists   []struct {
-		Name string `json:"name"`
-	} `json:"artists"`
-	Album *struct {
-		Name string `json:"name"`
-	} `json:"album"`
+	ItemID    string
+	Provider  string
+	URI       string
+	Name      string
+	MediaType string
+	Version   string
+	Year      int
+	// Duration is a track's length in seconds, TrackNumber and DiscNumber its place on its album, and
+	// Owner a playlist's owner; zero or empty when the server does not say.
+	Duration    int
+	TrackNumber int
+	DiscNumber  int
+	Owner       string
+	// Artists and Album are the items a track or an album names, as short as the server sends them:
+	// their id, provider, name, URI and perhaps a picture, or a bare name.
+	Artists  []Entry
+	Album    *Entry
 	Metadata struct {
-		Images []Image `json:"images"`
-	} `json:"metadata"`
+		Images []Image
+	}
 	// Image is a short item's picture (an album named on a track, an artist on an album): the server
 	// sends those with one picture of their own rather than the full metadata.
-	Image *Image `json:"image"`
+	Image *Image
 }
 
 // Image is one of an item's pictures as the server describes it.
 type Image struct {
-	Type     string `json:"type"` // "thumb", "fanart", ...
-	Path     string `json:"path"`
-	Provider string `json:"provider"`
-	Remote   bool   `json:"remotely_accessible"`
-	ProxyID  string `json:"proxy_id"` // filled in by the server; what its image proxy serves it by
+	Type     string // "thumb", "fanart", ...
+	Path     string
+	Provider string
+	Remote   bool   // remotely_accessible
+	ProxyID  string // filled in by the server; what its image proxy serves it by
+}
+
+// UnmarshalJSON reads an entry field by field, each as leniently as it can be (see Entry).
+func (e *Entry) UnmarshalJSON(b []byte) error {
+	*e = Entry{}
+	var m map[string]json.RawMessage
+	if json.Unmarshal(b, &m) != nil || m == nil {
+		return nil // not an item: nothing of it to show, and the rest of the list still is
+	}
+	*e = Entry{
+		ItemID: looseText(m["item_id"]), Provider: looseText(m["provider"]), URI: looseText(m["uri"]),
+		Name: looseText(m["name"]), MediaType: looseText(m["media_type"]), Version: looseText(m["version"]),
+		Owner: looseText(m["owner"]), Year: looseInt(m["year"]), Duration: looseInt(m["duration"]),
+		TrackNumber: looseInt(m["track_number"]), DiscNumber: looseInt(m["disc_number"]),
+		Artists: looseNames(m["artists"]), Album: looseNamed(m["album"]),
+	}
+	var meta struct {
+		Images []json.RawMessage `json:"images"`
+	}
+	if json.Unmarshal(m["metadata"], &meta) == nil {
+		for _, raw := range meta.Images {
+			if img, ok := looseImage(raw); ok {
+				e.Metadata.Images = append(e.Metadata.Images, img)
+			}
+		}
+	}
+	if img, ok := looseImage(m["image"]); ok {
+		e.Image = &img
+	}
+	return nil
+}
+
+// Usable is whether the entry names something: one the server sent as something other than an item
+// does not.
+func (e Entry) Usable() bool { return e.URI != "" || e.Name != "" }
+
+// looseText is a string, a number written out, or empty for anything else.
+func looseText(raw json.RawMessage) string {
+	var s string
+	if json.Unmarshal(raw, &s) == nil {
+		return s
+	}
+	var n json.Number
+	if json.Unmarshal(raw, &n) == nil {
+		return n.String()
+	}
+	return ""
+}
+
+// looseInt is a number, or the number a string begins with ("2001", "2001-05-04"), or 0.
+func looseInt(raw json.RawMessage) int {
+	var f float64
+	if json.Unmarshal(raw, &f) == nil {
+		return int(f)
+	}
+	s := strings.TrimSpace(looseText(raw))
+	end := 0
+	for end < len(s) && s[end] >= '0' && s[end] <= '9' {
+		end++
+	}
+	n, _ := strconv.Atoi(s[:end])
+	return n
+}
+
+// looseNamed is an item named on another, read as an entry, or a bare name; nil for null or anything
+// else.
+func looseNamed(raw json.RawMessage) *Entry {
+	var e Entry
+	if json.Unmarshal(raw, &e) == nil && e.Usable() {
+		return &e
+	}
+	if s := looseText(raw); s != "" {
+		return &Entry{Name: s}
+	}
+	return nil
+}
+
+// looseNames is a list of named items, or one alone; what cannot be read is left out.
+func looseNames(raw json.RawMessage) []Entry {
+	var list []json.RawMessage
+	if json.Unmarshal(raw, &list) != nil {
+		list = []json.RawMessage{raw}
+	}
+	var out []Entry
+	for _, x := range list {
+		if n := looseNamed(x); n != nil && n.Name != "" {
+			out = append(out, *n)
+		}
+	}
+	return out
+}
+
+// looseImage is a picture's description, if raw is one.
+func looseImage(raw json.RawMessage) (Image, bool) {
+	var m map[string]json.RawMessage
+	if json.Unmarshal(raw, &m) != nil || m == nil {
+		return Image{}, false
+	}
+	var remote bool
+	_ = json.Unmarshal(m["remotely_accessible"], &remote)
+	img := Image{Type: looseText(m["type"]), Path: looseText(m["path"]), Provider: looseText(m["provider"]),
+		Remote: remote, ProxyID: looseText(m["proxy_id"])}
+	return img, img.Path != "" || img.ProxyID != ""
 }
 
 // By is who it is by: the artists' names, or nothing.
@@ -122,7 +235,14 @@ type Found struct {
 	Radio     []Entry `json:"radio"`
 }
 
+// SetShuffle turns the shuffle of the queue queueID on or off. Some players refuse Home Assistant's
+// shuffle_set on Music Assistant's entity ("Invalid or unsupported command"); the queue's own takes.
+func (c Client) SetShuffle(ctx context.Context, queueID string, on bool) error {
+	return c.do(ctx, "player_queues/shuffle", map[string]any{"queue_id": queueID, "shuffle_enabled": on}, nil)
+}
+
 func itemArgs(e Entry) map[string]any {
+
 	return map[string]any{"item_id": e.ItemID, "provider_instance_id_or_domain": e.Provider}
 }
 

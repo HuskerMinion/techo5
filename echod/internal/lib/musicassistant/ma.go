@@ -10,6 +10,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log/slog"
 	"net/http"
 	"strings"
 	"time"
@@ -56,8 +57,18 @@ func (c Client) do(ctx context.Context, command string, args map[string]any, out
 	if out == nil {
 		return nil
 	}
-	return json.Unmarshal(raw, out)
+	if err := json.Unmarshal(raw, out); err != nil {
+		// What did not fit is for the log; a screen says only that it could not be read.
+		slog.Warn("music assistant: an answer that could not be read", "command", command, "err", err)
+		return ErrUnreadable
+	}
+	return nil
 }
+
+// ErrUnreadable is an answer from the server that this device could not read.
+//
+//lint:ignore ST1005 it starts with a name, and the screen shows it as it is
+var ErrUnreadable = errors.New("Music Assistant sent something this device couldn't read")
 
 // errForbidden is the server refusing this token: a user limited to some players asking about or
 // playing on another, or a role without the right.
