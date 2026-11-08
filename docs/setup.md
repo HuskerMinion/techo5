@@ -62,8 +62,9 @@ on it, and it starts in first run from the beginning, whatever it was before: it
 everything an earlier owner left, as a reset does (the list below). A Show, a Spot or a Panel with no
 Wi-Fi starts on the **Wi-Fi** step (a Panel's tablet joins the network itself). A Dot or an Echo 2nd
 gen with no Wi-Fi gets its network over Bluetooth with Improv
-([Another Wi-Fi on an Echo Dot](#another-wi-fi-on-an-echo-dot)), with its ring breathing orange
-while it waits.
+([Another Wi-Fi on an Echo Dot](#another-wi-fi-on-an-echo-dot)): its ring breathes orange while it
+waits and pulses teal once it offers Improv, 45 seconds after it starts. Press any of its buttons
+then, and send it the network.
 
 To pass on a device that is already set up, use **Reset for someone else**: on the setup page under
 **General**, on a screen under **Settings → General** (tap it twice), from Home Assistant with the

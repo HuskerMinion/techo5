@@ -60,7 +60,7 @@ name and key and runs the routine again, for passing a device on a second time.
 
 ## Order
 
-1. Improv for the Dot (#355), with a path that works on the 3.18 kernels. Nothing else helps a Dot.
+1. Improv for the Dot (#355), with a path that works on the 3.18 kernels. Done, merged 2026-11-08.
 2. The routine on the Shows and the Spot, which have most of the pieces: the Wi-Fi page, the time
    zone, the setup page. New: the steps joined up, the key on screen, the check, and the done screen.
 3. The gift install and the reset.
