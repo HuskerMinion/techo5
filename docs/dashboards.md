@@ -104,10 +104,59 @@ Each device has its own settings, so the kitchen and a bedroom can show differen
   - on a media player, for a sheet with its controls, its volume, the speakers it can be grouped
     with, and, with Music Assistant, your favorite playlists and radio stations. The favorites need
     the device's token to belong to a Home Assistant administrator; with any other token the sheet
-    says so and shows the rest.
+    says so and shows the rest. Its **Library** button opens the whole music library (see
+    [Music library](#music-library)).
 - **Drag** up and down to scroll.
 
 **Streamed dashboards** work as the page itself does: tap, and drag to scroll.
+
+## Music library
+
+On the Echo Show (and the Skylight and Panel builds), a drawn dashboard can open Music Assistant's
+whole library over the page, to browse it and play from it. The Echo Dot and the Echo Spot don't
+have it.
+
+**Opening it**
+
+- Long press a media player for its sheet, and tap **Library**. The button is there when Music
+  Assistant plays to that player, and the library plays on it.
+- Or give any card a tap action that navigates to `#techo5-library`. With an `entity` (a media
+  player), the library plays on Music Assistant's player for it, found the way the media sheet finds
+  it. Without one, it plays on this device.
+
+```yaml
+type: button
+name: Music
+icon: mdi:bookshelf
+entity: media_player.kitchen
+tap_action:
+  action: navigate
+  navigation_path: "#techo5-library"
+```
+
+Home Assistant itself has no view of that name, so the same card does nothing in a browser. If no
+Music Assistant player can be found, the library still opens for browsing, Play and Shuffle are
+grayed out, and a line at the foot says so.
+
+**What it shows**
+
+- Tabs for **Artists**, **Albums**, **Playlists**, **Tracks**, **Radio** and **Search**. Artists,
+  albums, playlists and radio stations are a grid of pictures with their names; tracks are rows with
+  the artist and the album.
+- Swipe left and right to turn the pages; the dots under them say where you are. More of the
+  library is loaded as you get near the end.
+- Tap an artist for its albums and top tracks, an album or a playlist for its tracks. **Back** goes
+  back to where you were, and **Done** closes the library.
+- An artist, album or playlist page has **Play** and **Shuffle**. A tap on a track or a radio
+  station plays it. Whatever plays replaces what was queued.
+- **Search** opens the on-screen keyboard, and finds artists, albums, playlists, tracks and radio
+  stations, in the library and in your music services.
+
+**What it needs**
+
+The library is read from Music Assistant directly, with the address and token set on the setup page
+(**Sound & Voice**, under **Music Assistant**). Without them, the library says so and shows nothing
+else. The music plays through Home Assistant, as the media sheet's favorites do.
 
 ## What drawn mode draws
 
