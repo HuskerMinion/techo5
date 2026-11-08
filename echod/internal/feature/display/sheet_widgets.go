@@ -10,6 +10,7 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/HuskerMinion/techo5/echod/internal/lib/fonts"
 	"golang.org/x/image/font"
 	"golang.org/x/image/math/fixed"
 )
@@ -183,15 +184,14 @@ func (r *paint) text(face font.Face, s string, x, baseline int, c color.Color) {
 			c = overPhotoColor(c)
 		}
 	}
-	d := &font.Drawer{Dst: r.dst, Src: image.NewUniform(c), Face: face, Dot: fixed.P(x, baseline)}
-	d.DrawString(s)
+	fonts.DrawString(r.dst, image.NewUniform(c), face, fixed.P(x, baseline), s)
 }
 
 func (r *paint) width(face font.Face, s string) int {
 	if face == nil {
 		return 0
 	}
-	return (&font.Drawer{Face: face}).MeasureString(s).Ceil()
+	return fonts.MeasureString(face, s).Ceil()
 }
 
 // wrap breaks text into lines no wider than maxW, on spaces; a single word wider than the line is

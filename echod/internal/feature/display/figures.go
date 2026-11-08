@@ -7,6 +7,7 @@ import (
 	"image/color"
 	"image/draw"
 
+	"github.com/HuskerMinion/techo5/echod/internal/lib/fonts"
 	xdraw "golang.org/x/image/draw"
 	"golang.org/x/image/font"
 	"golang.org/x/image/math/fixed"
@@ -43,14 +44,14 @@ type figureShapes struct {
 // inkOf is where s's ink is in face, about its origin on the baseline. Read from the face's metrics,
 // so a style can measure in a face it will not draw in.
 func inkOf(face font.Face, s string) image.Rectangle {
-	b, _ := font.BoundString(face, s)
+	b, _ := fonts.BoundString(face, s)
 	return image.Rect(b.Min.X.Floor(), b.Min.Y.Floor(), b.Max.X.Ceil(), b.Max.Y.Ceil())
 }
 
 // glyphMask is s drawn in face, about its origin on the baseline.
 func glyphMask(face font.Face, s string) *image.Alpha {
 	m := image.NewAlpha(inkOf(face, s))
-	(&font.Drawer{Dst: m, Src: image.Opaque, Face: face, Dot: fixed.P(0, 0)}).DrawString(s)
+	fonts.DrawString(m, image.Opaque, face, fixed.P(0, 0), s)
 	return m
 }
 

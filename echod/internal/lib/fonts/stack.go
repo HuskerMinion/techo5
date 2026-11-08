@@ -21,6 +21,9 @@ type Layer struct {
 	// Broke, when set, is told when the layer panicked and was dropped (a font file of one's own
 	// broken in a way the checks before use did not find), with what the panic said.
 	Broke func(why string)
+	// shaper, when set, shapes runs of a complex script (Khmer, Thai, the Indic scripts...) in this
+	// layer's font: a font of one's own (shape.go).
+	shaper *shapeSource
 }
 
 // Stack is a face drawn from several: each character from the first layer that has a glyph for it.
@@ -43,6 +46,9 @@ type Stack struct {
 	buf     sfnt.Buffer
 	layers  []Layer
 	metrics font.Face
+	// size is the pixel size the layers were made at, 0 when not known: what complex-script runs
+	// are shaped at (shape.go).
+	size float64
 }
 
 // NewStack makes a Stack of layers, in the order they are tried, with metrics' line metrics (nil for
