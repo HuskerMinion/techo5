@@ -1,0 +1,14 @@
+TECHO5 echod
+Copyright 2026 Rob Lee and contributors
+
+This product includes protocol work derived from the echo-wall-clock project
+(https://github.com/mpjanofsky/echo-wall-clock), licensed under the Apache
+License, Version 2.0. The code in internal/lib/agt is distributed under the
+Apache License, Version 2.0; the rest of echod remains under the MIT License in
+LICENSE.
+
+The Alexa Gadgets wire protocol is documented by that project and implemented in
+Amazon's Alexa Gadgets Toolkit sample code (agt.py), licensed under the Apache
+License, Version 2.0. This project is unofficial and is not affiliated with or
+endorsed by Amazon. Echo, Echo Show and Echo Wall Clock are trademarks of
+Amazon.com, Inc.

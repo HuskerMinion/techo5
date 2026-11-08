@@ -2263,6 +2263,33 @@ Off until you give it a key: see [Tailscale: reaching a device from away](tailsc
 join your own Headscale server instead of Tailscale's. Or use NetBird, NetBird's own service or one you
 run: see [NetBird: reaching a device from away](netbird.md).
 
+## 13. An Echo Wall Clock
+
+The original Echo Wall Clock — the round one with the LED ring and a sixty-minute dial — can show
+this device's timers. It is off until turned on. Turn on **Wall clock** (the setup page's
+Connections tab, or Home Assistant), put the clock in pairing mode (hold its center button until
+the middle LED pulses amber), and choose **Pair the clock** on the setup page, or press the **Pair
+wall clock** button in Home Assistant. The device
+looks for a clock for two minutes, pairs with it, trusts it and remembers its address; the **Wall
+clock status** sensor says what it is doing, from Connecting to Connected or Waiting for the clock.
+A clock that was paired to an Echo must be unpaired from Alexa first, since it stays paired to one
+controller. If you know the clock's address, type it under **Clock address** instead and Save.
+
+The clock is a display and the timers are this device's own: a timer set by voice or on the screen
+shows the same, and keeps counting while Home Assistant is away. The soonest-ending timer is drawn
+as a filled run from twelve, and every other running timer as a bright segment at its minute. A
+timer that ends pulses the ring; one that is canceled or paused puts its marker out. The clock's
+time comes from the device, so its time zone has to be right.
+
+Pairing uses the same Bluetooth radio as the Bluetooth proxy, so the proxy's scan pauses while the
+clock is looked for and starts again afterwards. A Dot that is being set up over Bluetooth (Improv)
+has the radio lent out: **Pair the clock** says the radio is busy rather than searching underneath
+the setup connection; try again once Wi-Fi setup has finished.
+
+Tested on a Show 8 (1st gen, crown). It should work on the other boards whose Bluetooth is the
+daemon's — checkers, cronos, crown, athena and the Dot — but not on the Panel, whose Bluetooth is
+Android's. The Skylight has not been tried.
+
 ## More
 
 - [Dashboards](dashboards.md): Home Assistant dashboards on the screen.

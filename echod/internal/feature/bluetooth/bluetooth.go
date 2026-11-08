@@ -391,6 +391,12 @@ func (b *Proxy) Offer(advertisement, scanResponse []byte) (done func(), err erro
 	}, nil
 }
 
+// Offering reports whether the radio is lent out to advertise a service of bluetoothd's (Offer), as
+// Improv does on a Dot. That advertisement, not the proxy's own scan, is what keeps the radio up
+// through a hold: something that needs the adapter itself, such as the wall clock pairing starting
+// discovery, must stay off it until the offer is given back.
+func (b *Proxy) Offering() bool { return b.isLent() }
+
 // holdWait is how long Hold waits for the radio to stop: a stop is a couple of HCI commands. A
 // variable for tests, which have no settle goroutine to stop it.
 var holdWait = 3 * time.Second

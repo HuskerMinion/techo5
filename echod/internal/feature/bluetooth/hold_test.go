@@ -108,6 +108,9 @@ func TestAHeldRadioIsLentUntilGivenBack(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	if !b.Offering() {
+		t.Fatal("not reported as offering while lent")
+	}
 	if _, err := b.Offer([]byte{2}, nil); err == nil {
 		t.Fatal("lent twice")
 	}
@@ -118,6 +121,9 @@ func TestAHeldRadioIsLentUntilGivenBack(t *testing.T) {
 
 	done()
 	done()
+	if b.Offering() {
+		t.Fatal("still reported as offering once given back")
+	}
 	if radio.running {
 		t.Fatal("still running once given back")
 	}
