@@ -10,9 +10,9 @@ after it is there to make the device right for that home without a computer or t
 - **The setup page** (setup-page-design.md) sets the time zone and Wi-Fi, opened from Privacy on the
   screen, from Home Assistant, or by holding a Dot's action button. A press on the device lets one
   browser in. It needs the device on a network already.
-- **A Dot** gets its first network from the installer over USB, and from nowhere else. PR #355 (Improv
-  Wi-Fi over Bluetooth) is the piece for that. It is open: the review found that the Dot 2 and Echo
-  2nd gen kernels (3.18) cannot advertise through bluetoothd, so it needs another path there.
+- **A Dot** gets its first network from the installer over USB, or over Bluetooth with Improv (#355,
+  merged 2026-11-08; it advertises through the Bluetooth proxy's radio, since the 3.18 kernels cannot
+  through bluetoothd).
 - **Home Assistant** is assumed from the start. The installer writes an encryption key to the
   computer it ran on, and whoever adds the device needs that key.
 - **Nothing runs on first boot.** The device comes up as if it were already set up.
@@ -68,9 +68,8 @@ name and key and runs the routine again, for passing a device on a second time.
 
 ## Built so far
 
-- **Improv for the Dot** (#355): works on a Dot 2nd gen, tested 2026-11-07; three fixes asked for
-  (a second session after a failed join, spaces at the ends of a name or passphrase, closing during
-  a join).
+- **Improv for the Dot** (#355): merged 2026-11-08. Tested on a Dot 2nd gen, last on a start with no
+  network (offered by itself, joined, DHCP started, IPv4). Not yet tried on an Echo 2nd gen or a Dot 3.
 - **The routine, on every device** (feature/firstrun holds the steps, where they are saved, and what
   they do; each face draws them): Wi-Fi, time zone, name and room (the room as Home Assistant's
   suggested area), Home Assistant (added with nothing typed, or the key with a QR code, or on its
@@ -89,10 +88,9 @@ name and key and runs the routine again, for passing a device on a second time.
   whatever its settings say, on the Wi-Fi step when no network is saved, and any Home Assistant can
   add it with nothing typed until one does. The marker goes when first run finishes.
 - **Reset for someone else**: the setup page, Settings → General on a screen, Home Assistant's
-  `reset_for_someone_else` action. What it clears is listed in setup.md. Not on a Dot or an Echo yet:
-  the action, the setup page section and the action plus volume down hold come back with Improv,
-  since a Dot reset now could not be given a network again without a PC. A gift install's first
-  start wipes what an earlier owner left, as a reset does.
+  `reset_for_someone_else` action, and holding action and volume down for 10 seconds on a Dot (back
+  since Improv is in). What it clears is listed in setup.md. A gift install's first start wipes what
+  an earlier owner left, as a reset does.
 - **The one-time code**: the setup page takes `/setup?code=...`, a code the daemon mints (setup's
   `MintCode`), good for one browser for 10 minutes while first run is to do. Improv (#355) is to hand
   it to the phone; nothing mints one until then.

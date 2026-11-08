@@ -121,9 +121,6 @@ func TestStepsInOrder(t *testing.T) {
 
 // Reset clears the old home's things, keeps the device's own, and leaves first run to do.
 func TestResetClearsForSomeoneElse(t *testing.T) {
-	noScreen := screenless // the reset as a device with a screen does it (a Dot has none yet)
-	screenless = false
-	t.Cleanup(func() { screenless = noScreen })
 	dir := fresh(t)
 	restarted := make(chan struct{}, 1)
 	was := restart
@@ -235,16 +232,13 @@ func TestTheButtonsHeldTogether(t *testing.T) {
 	}
 }
 
-// A device with no screen cannot be reset for someone else until it can be given Wi-Fi without one.
-func TestNoResetWithNoScreen(t *testing.T) {
+// A device with no screen can be reset for someone else too: Improv gives it its new network.
+func TestResetWithNoScreen(t *testing.T) {
 	fresh(t)
 	was := screenless
 	t.Cleanup(func() { screenless = was })
 	screenless = true
-	if CanReset() || Reset() == nil || len(Get().Actions()) != 0 {
-		t.Fatal("a device with no screen offered a reset")
-	}
-	if _, err := os.Stat(resetPath()); err == nil {
-		t.Fatal("a refused reset left its marker")
+	if len(Get().Actions()) != 1 {
+		t.Fatal("a device with no screen, which Improv gives a network, offered no reset")
 	}
 }

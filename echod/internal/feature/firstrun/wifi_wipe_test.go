@@ -13,9 +13,6 @@ import (
 // has none (and is not empty, so no boot imports into it), the Dot's installer network and Fire OS's
 // are gone, and athena's import is marked done.
 func TestResetLeavesNoNetworkToComeBack(t *testing.T) {
-	noScreen := screenless // the reset as a device with a screen does it (a Dot has none yet)
-	screenless = false
-	t.Cleanup(func() { screenless = noScreen })
 	fresh(t)
 	dir := t.TempDir()
 	linux := filepath.Join(dir, "techo5-linux")

@@ -112,8 +112,8 @@ func Finish() {
 // a device already in use never sees first run. Anything else, a device just installed, has it.
 //
 // First run still to do on a screen with no Wi-Fi network saved starts on the Wi-Fi step. A Dot with
-// none is waiting for Improv (#355): when that is in, it is where the Dot offers it, by itself; until
-// then its ring breathes orange (led.Splash) and its network comes from the installer.
+// none gets one over Bluetooth: it offers Improv by itself 45 seconds after starting (feature/improv),
+// and its ring breathes orange (led.Splash) while first run waits.
 func Settle() {
 	defer startOnWifi()
 	_, err := os.Stat(resetPath())

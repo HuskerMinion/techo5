@@ -61,11 +61,6 @@ var personal = []string{
 	"techo5.log", "boot.log", // logs, the same
 }
 
-// CanReset is whether this device can be reset for someone else. A device with no screen (a Dot, an
-// Echo) cannot until it can be given a Wi-Fi network without one, by Improv over Bluetooth (#355): reset,
-// it would be left off the network with only a reinstall over USB to bring it back.
-func CanReset() bool { return !screenless }
-
 // restart is the daemon restarting into first run (a variable for the tests).
 var restart = func() { update.Restart("reset for someone else") }
 
@@ -78,9 +73,6 @@ func resetPath() string { return filepath.Join(stateDir, "reset") }
 // (wipeWifi), and leaves the reset and first-run markers; the next start wipes the rest (wipe) before
 // anything else runs.
 func Reset() error {
-	if !CanReset() {
-		return errors.New("a device with no screen cannot be reset for someone else yet: it could not be given a new Wi-Fi network afterwards")
-	}
 	if err := os.WriteFile(markerPath(), nil, 0o600); err != nil {
 		return err
 	}
