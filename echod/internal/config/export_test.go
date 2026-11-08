@@ -538,7 +538,8 @@ func TestManyAddressesAreQuick(t *testing.T) {
 // with their secrets; go2rtc's login stays only with its own server.
 func TestARestoreKeepsTheNewSwitchesAndLogins(t *testing.T) {
 	from := Defaults()
-	from.Microphone.Noise, from.Microphone.Claps = true, true
+	from.Microphone.Noise, from.Microphone.Claps, from.Microphone.RoomSound = true, true, true
+	from.Microphone.Sound = RoomSoundConfig{MQTTBroker: "192.0.2.5:1883", MQTTUser: "mqtt", MQTTPass: "their-mqtt"}
 	from.Screen.ClockHold = true
 	from.Update.Channel, from.Update.AutoInstall = "dev", true
 	from.CamStream = CamStream{On: true, User: "them", Pass: "their-password"}
@@ -555,7 +556,7 @@ func TestARestoreKeepsTheNewSwitchesAndLogins(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, leak := range []string{"their-password", "theirs"} {
+	for _, leak := range []string{"their-password", "theirs", "their-mqtt"} {
 		if strings.Contains(string(file), leak) {
 			t.Errorf("the file carries %q", leak)
 		}
@@ -565,7 +566,7 @@ func TestARestoreKeepsTheNewSwitchesAndLogins(t *testing.T) {
 		t.Fatal(err)
 	}
 	c := got.Config
-	if c.Microphone.Noise || c.Microphone.Claps || c.CamStream.On || c.Remote.On || c.Nearest.Enabled() || c.Screen.ClockHold {
+	if c.Microphone.Noise || c.Microphone.Claps || c.Microphone.RoomSound || c.CamStream.On || c.Remote.On || c.Nearest.Enabled() || c.Screen.ClockHold {
 		t.Errorf("a restore turned on what the device had off: %+v %+v %+v %+v", c.Microphone, c.CamStream, c.Remote, c.Nearest)
 	}
 	if c.Update.Channel != here.Update.Channel || c.Update.AutoInstall {

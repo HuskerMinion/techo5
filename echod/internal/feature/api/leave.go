@@ -72,6 +72,9 @@ func leave(keyPath, hassPath string) error {
 	if err := config.Set().Realtime().SetMCPToken(""); err != nil {
 		return err
 	}
+	if err := config.Set().Microphone().SoundMQTTPass(""); err != nil {
+		return err
+	}
 	if err := os.Remove(hassPath); err != nil && !errors.Is(err, fs.ErrNotExist) {
 		return err
 	}

@@ -286,6 +286,7 @@ func ClearSecrets(c *Config) {
 	c.CamStream.Pass = ""
 	c.Realtime.Key = ""
 	c.Realtime.MCPToken = ""
+	c.Microphone.Sound.MQTTPass = ""
 	for i := range c.Deck.Computers {
 		c.Deck.Computers[i].Key = ""
 	}
@@ -325,6 +326,9 @@ func KeepSecrets(c *Config, from Config) (reenter []string) {
 		c.Realtime.Provider == from.Realtime.Provider && c.Realtime.Endpoint == from.Realtime.Endpoint, "realtime voice's key")
 	// The token is for this device's Home Assistant, which a settings file does not name: kept whole.
 	c.Realtime.MCPToken = from.Realtime.MCPToken
+	keep(&c.Microphone.Sound.MQTTPass, from.Microphone.Sound.MQTTPass,
+		c.Microphone.Sound.MQTTBroker == from.Microphone.Sound.MQTTBroker &&
+			c.Microphone.Sound.MQTTUser == from.Microphone.Sound.MQTTUser, "the room sound MQTT password")
 	// go2rtc's login is in its address: the device's is kept only for the same server (scheme, host and
 	// port), and a file naming another server gets that server with no login.
 	if mine := from.Home.Go2RTC.Base; mine != "" && withoutLogin(mine) == withoutLogin(c.Home.Go2RTC.Base) {
@@ -441,6 +445,8 @@ func KeepOwn(c *Config, from Config) {
 	c.Microphone.Noise = from.Microphone.Noise
 	c.Microphone.Claps = from.Microphone.Claps
 	c.Microphone.ClapSense = from.Microphone.ClapSense
+	c.Microphone.RoomSound = from.Microphone.RoomSound
+	c.Microphone.Sound.AlarmSiren = from.Microphone.Sound.AlarmSiren
 	c.CamStream = from.CamStream
 	c.Remote.On = from.Remote.On
 	// Being on a tailnet is this device's: a restore never turns Tailscale or NetBird on or off.

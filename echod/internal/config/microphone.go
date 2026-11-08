@@ -55,6 +55,62 @@ type Microphone struct {
 	// ClapSense is how much it takes to be a double clap: Normal, or Strict for a room where a phone set
 	// down or a knock on a hard desk passes for one (#373).
 	ClapSense ClapSense `json:"clap_sense,omitempty"`
+
+	// RoomSound classifies room sounds locally on the device (feature/sound). Off unless somebody turns it
+	// on: no model is fetched or loaded and nothing reads the microphones until then.
+	RoomSound bool `json:"room_sound,omitempty"`
+
+	// Sound holds thresholds, alert categories, Home Assistant notification service, and optional MQTT
+	// broker settings for feature/sound.
+	Sound RoomSoundConfig `json:"sound,omitempty"`
+}
+
+// RoomSoundConfig configures local room sound classification alerts and publishing.
+type RoomSoundConfig struct {
+	MinConfidence int      `json:"min_confidence,omitempty"` // %, 0 means DefaultSoundConfidence (25)
+	Cooldown      int      `json:"cooldown,omitempty"`       // seconds, 0 means DefaultSoundCooldown (4)
+	Alerts        []string `json:"alerts,omitempty"`         // nil means DefaultSoundAlerts; ["none"] means none
+	AlarmSiren    bool     `json:"alarm_siren,omitempty"`    // sound the device's alarm chime when an alert fires
+	HAService     string   `json:"ha_service,omitempty"`     // e.g. persistent_notification.create or notify.notify
+	MQTTBroker    string   `json:"mqtt_broker,omitempty"`    // host:port
+	MQTTUser      string   `json:"mqtt_user,omitempty"`
+	MQTTPass      string   `json:"mqtt_pass,omitempty"`
+	MQTTTopic     string   `json:"mqtt_topic,omitempty"`
+	MQTTDiscovery bool     `json:"mqtt_discovery,omitempty"`
+}
+
+const (
+	DefaultSoundConfidence = 25
+	MinSoundConfidence     = 15
+	MaxSoundConfidence     = 85
+
+	DefaultSoundCooldown = 4
+	MinSoundCooldown     = 1
+	MaxSoundCooldown     = 60
+)
+
+func (sc RoomSoundConfig) ConfidencePct() int {
+	switch {
+	case sc.MinConfidence == 0:
+		return DefaultSoundConfidence
+	case sc.MinConfidence < MinSoundConfidence:
+		return MinSoundConfidence
+	case sc.MinConfidence > MaxSoundConfidence:
+		return MaxSoundConfidence
+	}
+	return sc.MinConfidence
+}
+
+func (sc RoomSoundConfig) CooldownSec() int {
+	switch {
+	case sc.Cooldown == 0:
+		return DefaultSoundCooldown
+	case sc.Cooldown < MinSoundCooldown:
+		return MinSoundCooldown
+	case sc.Cooldown > MaxSoundCooldown:
+		return MaxSoundCooldown
+	}
+	return sc.Cooldown
 }
 
 const (
@@ -246,6 +302,24 @@ func (w MicrophoneWriter) Claps(v bool) error {
 // ClapSense is how much it takes to be a double clap.
 func (w MicrophoneWriter) ClapSense(v ClapSense) error {
 	return w.st.Update(func(c *Config) { c.Microphone.ClapSense = v })
+}
+
+// RoomSound is whether the local YAMNet room sound classifier is enabled.
+func (w MicrophoneWriter) RoomSound(v bool) error {
+	return w.st.Update(func(c *Config) { c.Microphone.RoomSound = v })
+}
+
+// SoundSettings updates the non-secret room sound configuration (leaving MQTTPass untouched).
+func (w MicrophoneWriter) SoundSettings(cfg RoomSoundConfig) error {
+	return w.st.Update(func(c *Config) {
+		cfg.MQTTPass = c.Microphone.Sound.MQTTPass
+		c.Microphone.Sound = cfg
+	})
+}
+
+// SoundMQTTPass sets or clears the room sound MQTT password.
+func (w MicrophoneWriter) SoundMQTTPass(pass string) error {
+	return w.st.Update(func(c *Config) { c.Microphone.Sound.MQTTPass = pass })
 }
 
 // ClapSense is how much it takes to be a double clap.

@@ -244,6 +244,20 @@ func Present() bool {
 	return f.watching && f.present
 }
 
+// Available reports whether this board has a camera; replaceable in tests.
+var Available = camera.Available
+
+// HasCamera reports whether this board has a camera for presence and person detection.
+func HasCamera() bool { return Available() }
+
+// SetMotion turns camera presence (motion) detection on or off.
+func SetMotion(on bool) { Get().SetOn(on) }
+
+// OnMotion registers fn to be called whenever Present() changes.
+func OnMotion(fn func(present bool)) func() {
+	return Get().Changed.Listen(func(struct{}) { fn(Present()) })
+}
+
 // EmptyFor is how long nobody has been near: 0 while somebody is, or while the camera is not
 // watching, since then nothing is known.
 func EmptyFor(now time.Time) time.Duration {

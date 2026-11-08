@@ -30,6 +30,7 @@ import (
 	"github.com/HuskerMinion/techo5/echod/internal/config"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/presence"
 	"github.com/HuskerMinion/techo5/echod/internal/hardware/camera"
+	"github.com/HuskerMinion/techo5/echod/internal/lib/hook"
 	"github.com/HuskerMinion/techo5/echod/internal/lib/tflite"
 )
 
@@ -62,6 +63,9 @@ type Feature struct {
 	sw         *esphome.Switch
 	sensor     *esphome.BinarySensor
 	confidence *esphome.Sensor
+
+	// Seen fires with the confidence (0..1) when a person sighting starts.
+	Seen hook.Hook[float32]
 
 	wake chan struct{}
 
@@ -283,11 +287,34 @@ var gamma = func() (t [256]uint8) {
 func (f *Feature) update(now time.Time) {
 	f.mu.Lock()
 	seen := f.judge.seen(now)
+	mean := f.judge.mean()
 	f.mu.Unlock()
-	if f.sensor.Get() != seen {
-		slog.Info("person detection", "person", seen)
-	}
+	was := f.sensor.Get()
 	f.sensor.Set(seen)
+	if was != seen {
+		slog.Info("person detection", "person", seen)
+		if seen {
+			f.Seen.Emit(mean)
+		}
+	}
+}
+
+// State reports whether a person is currently seen and the latest confidence percentage.
+func State() (seen bool, confidence int) {
+	f := Get()
+	c := f.confidence.Get()
+	if math.IsNaN(float64(c)) {
+		return f.sensor.Get(), 0
+	}
+	return f.sensor.Get(), int(math.Round(float64(c)))
+}
+
+// SetPerson turns camera person detection on or off.
+func SetPerson(on bool) { Get().SetOn(on) }
+
+// OnPerson registers fn to be called with confidence (0..1) whenever a person sighting begins.
+func OnPerson(fn func(conf float64)) func() {
+	return Get().Seen.Listen(func(c float32) { fn(float64(c)) })
 }
 
 // judge turns the model's scores into a sighting: the mean of the last few looks over threshold, held

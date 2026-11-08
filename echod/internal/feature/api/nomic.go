@@ -40,9 +40,10 @@ var listeningObjects = map[string]bool{
 	"baby_monitor": true, "baby_monitor_listening": true, "baby_monitor_light": true,
 	// feature/activity
 	"last_heard": true, "last_reply": true, "last_wake_word": true, "send_voice_text": true,
-	// feature/room and diag's room readings; feature/noise, feature/clap
+	// feature/room and diag's room readings; feature/noise, feature/clap, feature/sound
 	"room_reaction": true, "room_level": true, "room_floor": true,
 	"ambient_noise": true, "ambient_noise_sensor": true, "clap_gesture": true, "clap_sensitivity": true,
+	"room_sound_classifier": true, "room_sound": true, "room_sound_confidence": true,
 	// feature/nearest: which device answers a wake word heard by several
 	"nearest_device_answers": true, "nearest_device_offset": true, "nearest_device_window": true,
 	// feature/media: the music during a turn, and after a near miss

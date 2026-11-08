@@ -20,6 +20,7 @@ import (
 	_ "github.com/HuskerMinion/techo5/echod/internal/feature/noise"
 	_ "github.com/HuskerMinion/techo5/echod/internal/feature/recording"
 	_ "github.com/HuskerMinion/techo5/echod/internal/feature/room"
+	_ "github.com/HuskerMinion/techo5/echod/internal/feature/sound"
 	_ "github.com/HuskerMinion/techo5/echod/internal/feature/wakeword"
 )
 
@@ -41,7 +42,7 @@ func TestNoListeningEntityOnABoardWithoutMicrophones(t *testing.T) {
 	onlyListen := map[string]bool{
 		"activity": true, "clap gesture": true, "wake": true, "microphone settings": true,
 		"microphone mute": true, "nearest device": true, "ambient noise": true, "recording": true,
-		"room reaction": true, "wake word settings": true,
+		"room reaction": true, "room sound": true, "wake word settings": true,
 	}
 	found := map[string]bool{}
 	for _, c := range component.Default().All() {

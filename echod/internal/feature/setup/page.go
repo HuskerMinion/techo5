@@ -474,6 +474,7 @@ func (f *Feature) settingsPage(ctx context.Context, w http.ResponseWriter, token
 			wakeCallSection(w, token)
 			wakeWordsSection(w, token)
 			scoresSection(w)
+			roomSoundSection(w, token)
 			takesSection(w, token)
 			historySection(w, token)
 		} else {
