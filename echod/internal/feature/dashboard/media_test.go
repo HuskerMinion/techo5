@@ -39,6 +39,8 @@ func TestTheMediaSheetPlaysThroughMusicAssistant(t *testing.T) {
 		// A TECHO5 device's own player, named for the device and then the entity.
 		{"media_player.kitchen_speaker", "Kitchen Speaker", "media_player.ma_kitchen"},
 		{"media_player.kitchenette_speaker", "Kitchenette Speaker", ""},
+		// Another thing in the same room is not that room's speaker.
+		{"media_player.kitchen_tv", "Kitchen TV", ""},
 	} {
 		if got := mediaTarget(c.entity, c.name, players); got != c.want {
 			t.Errorf("%s: plays through %q, want %q", c.entity, got, c.want)

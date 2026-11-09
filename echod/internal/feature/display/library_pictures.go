@@ -23,6 +23,7 @@ import (
 	_ "golang.org/x/image/webp" // a service's own covers, as the image proxy passes them on
 
 	"github.com/HuskerMinion/techo5/echod/internal/lib/fastjpeg"
+	"github.com/HuskerMinion/techo5/echod/internal/lib/netguard"
 	"github.com/HuskerMinion/techo5/echod/internal/lib/picscale"
 )
 
@@ -84,7 +85,15 @@ var libFetch = func(ctx context.Context, u string) ([]byte, int, error) {
 	return b, resp.StatusCode, err
 }
 
-var libPicClient = &http.Client{Timeout: 20 * time.Second}
+// libPicClient fetches covers, through the network guard as the device's other picture fetches are:
+// a picture's address comes from Music Assistant or a music service, and must not reach the device
+// itself or its other addresses.
+var libPicClient = &http.Client{Timeout: 20 * time.Second, Transport: &http.Transport{
+	DialContext:         netguard.Dialer(10 * time.Second).DialContext,
+	TLSHandshakeTimeout: 10 * time.Second,
+	MaxIdleConnsPerHost: 3,
+	IdleConnTimeout:     30 * time.Second,
+}}
 
 // picture is u's picture side pixels square, round for an artist, if it is kept; otherwise nil, and it
 // is fetched. It is kept at the size and in the shape it is drawn, so a frame only copies it.
@@ -124,7 +133,7 @@ func (p *libPictures) fetch(key, u string, side int, round bool) {
 	if err != nil {
 		p.failed[key] = time.Now()
 		p.mu.Unlock()
-		slog.Debug("music library picture", "url", u, "err", err)
+		slog.Debug("music library picture", "host", picHost(u), "err", err)
 		return
 	}
 	delete(p.failed, key)
@@ -268,4 +277,13 @@ func (p *libPictures) setChanged(f func()) {
 	p.mu.Lock()
 	p.changed = f
 	p.mu.Unlock()
+}
+
+// picHost is the host of a picture's address, for the log: a service's address can carry a signed
+// query that is nobody's business.
+func picHost(u string) string {
+	if p, err := url.Parse(u); err == nil {
+		return p.Host
+	}
+	return ""
 }

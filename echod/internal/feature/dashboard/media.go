@@ -157,9 +157,10 @@ func maPlayers(states []hass.LiveEntity) []player {
 // mediaTarget is the player music for entity is put on: entity itself when it is one of Music
 // Assistant's, else Music Assistant's player of the same name. Empty when there is none.
 //
-// Failing the same name, the player whose name the entity's begins with, the longest of them: an
-// ESPHome device's media player is named for the device and then the entity ("Echo Show 1A2B3C
-// Speaker"), while Music Assistant names its player for the device alone ("Echo Show 1A2B3C").
+// Failing the same name, the player named for the entity's name without its " Speaker": a TECHO5
+// device's media player is named for the device and then the entity ("Echo Show 1A2B3C Speaker"),
+// while Music Assistant names its player for the device alone ("Echo Show 1A2B3C"). Only that word:
+// any other ending is a different thing in the same room ("Living Room TV" is not "Living Room").
 func mediaTarget(entity, name string, players []player) string {
 	for _, p := range players {
 		if p.entity == entity {
@@ -186,7 +187,11 @@ func mediaTarget(entity, name string, players []player) string {
 	if found := pick(func(pn string) bool { return pn == name }); found != "" {
 		return found
 	}
-	return pick(func(pn string) bool { return strings.HasPrefix(name, pn+" ") })
+	device, ok := strings.CutSuffix(name, " speaker")
+	if !ok {
+		return ""
+	}
+	return pick(func(pn string) bool { return pn == strings.TrimSpace(device) })
 }
 
 // groupable is the players target can be grouped with: Music Assistant's own, there, able to join,
