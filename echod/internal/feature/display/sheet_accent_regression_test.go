@@ -5,6 +5,7 @@ package display
 import (
 	"image"
 	"image/color"
+	"strconv"
 	"testing"
 )
 
@@ -68,6 +69,37 @@ func TestSettingsSelectedLabelIsPainted(t *testing.T) {
 			}
 			if painted < 12 {
 				t.Errorf("selected label has only %d legible ink pixels", painted)
+			}
+		})
+	}
+}
+
+// A neutral mid-gray accent puts both black and white near the contrast
+// crossover. Even a small palette shift must select the stronger fallback,
+// and a repeated draw must not change the foreground unexpectedly.
+func TestSettingsMidGrayAccentChoosesStableForeground(t *testing.T) {
+	saved := [roles]color.RGBA{walnut, amber, cream, dim, ember}
+	t.Cleanup(func() { walnut, amber, cream, dim, ember = saved[0], saved[1], saved[2], saved[3], saved[4] })
+	black := color.RGBA{0, 0, 0, 255}
+	white := color.RGBA{255, 255, 255, 255}
+	for _, gray := range []uint8{104, 112, 120, 128, 136, 144} {
+		t.Run(strconv.Itoa(int(gray)), func(t *testing.T) {
+			// Keep both theme inks nearly identical to the accent so the
+			// accessibility fallback has to choose black or white.
+			grayInk := color.RGBA{gray, gray, gray, 255}
+			walnut, amber, cream = grayInk, grayInk, grayInk
+			got := onAccent()
+			want := white
+			if contrastOnAccent(black) >= contrastOnAccent(white) {
+				want = black
+			}
+			if got != want {
+				t.Errorf("accent %d: selected %v, want strongest fallback %v", gray, got, want)
+			}
+			for i := 0; i < 5; i++ {
+				if repeat := onAccent(); repeat != got {
+					t.Errorf("accent %d: unstable ink %v after original %v", gray, repeat, got)
+				}
 			}
 		})
 	}
