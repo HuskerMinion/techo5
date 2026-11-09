@@ -3,6 +3,8 @@
 * text=auto
 *.sh text eol=lf
 *.py text eol=lf
+# Read by run.sh inside WSL; a CRLF checkout would put \r into the paths it reads.
+tools/golden/screens.txt text eol=lf
 tools/linux/init text eol=lf
 tools/linux/slotctl text eol=lf
 tools/linux/bootctl text eol=lf
