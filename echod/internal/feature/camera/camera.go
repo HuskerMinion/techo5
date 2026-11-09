@@ -163,6 +163,8 @@ var nativeEncoded struct {
 }
 
 func encodeNative(f *camera.Frame) ([]byte, error) {
+	// Keep lookup and encode under one lock: different viewers asking for the
+	// same frame share the cached JPEG, while concurrent new frames serialize.
 	nativeEncoded.mu.Lock()
 	defer nativeEncoded.mu.Unlock()
 	if nativeEncoded.frame == f {
