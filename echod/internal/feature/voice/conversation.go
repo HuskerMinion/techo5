@@ -344,6 +344,11 @@ type nextTurn struct {
 	// confirmed is a wake the device was not sure of that Home Assistant confirmed (hawake.go): at is
 	// then when the device's own engine scored it, and the turn reaches back to there (historyFor).
 	confirmed bool
+
+	// rtResume is a realtime follow-up that keeps the session the last turn opened, rather than opening
+	// one of its own, so the provider still has the conversation (#487). idle keeps the session for it
+	// instead of closing it, and start reuses it rather than dialing.
+	rtResume bool
 }
 
 // reply is which answer is being spoken, and how. Only one of them is set: a url means it is being
@@ -724,16 +729,24 @@ func (c *conversation) turnEvent(e event) {
 		c.reported(e.at)
 		if c.phase == phaseReplying {
 			slot := c.slot
-			// Realtime voice answers each turn in a session of its own, which would not know what was
-			// said before: no listening again after it.
 			_, rt := c.be.(*rtBackend)
-			c.idle("spoken", activity.Answered)
 
-			// Continual conversation: the slot keeps listening after every reply, not only the ones
-			// Home Assistant asked to continue - as many times in a row as the slot allows.
+			// Continual conversation: the slot keeps listening after every reply, not only the ones Home
+			// Assistant asked to continue - as many times in a row as the slot allows. Realtime voice used to
+			// be left out, each of its turns a session of its own with no memory of the last; it now keeps
+			// that session open across the follow-up (#487, rtResume), so the provider still has the
+			// conversation. Its pending turn is set before idle, which then keeps the session rather than
+			// closing it; every other pipeline's is set after, opening a turn of its own as before.
 			limit := wakeword.FollowUps(slot)
-			if !rt && c.pending == nil && !c.lookHere && wakeword.FollowUp(slot) > 0 && (limit == 0 || c.followUps < limit) {
+			willFollow := c.pending == nil && !c.lookHere && wakeword.FollowUp(slot) > 0 && (limit == 0 || c.followUps < limit)
+			if willFollow {
 				slog.Info("listening again after the reply", "slot", slot+1, "for", wakeword.FollowUp(slot))
+			}
+			if rt && willFollow {
+				c.pending = &nextTurn{slot: slot, followUp: true, rtResume: true}
+			}
+			c.idle("spoken", activity.Answered)
+			if willFollow && c.pending == nil {
 				c.pending = &nextTurn{slot: slot, followUp: true}
 			}
 			c.startPending()
@@ -863,8 +876,21 @@ func (c *conversation) turnEvent(e event) {
 func (c *conversation) muted() (bool, error) { return mute.Get().Muted() }
 
 // start opens a turn on the pipeline paired with a slot, and reports whether it did.
-func (c *conversation) start(n nextTurn) bool {
+func (c *conversation) start(n nextTurn) (started bool) {
 	slot := n.slot
+
+	// A realtime follow-up keeps the last turn's session open (#487). If the turn cannot open after all -
+	// the microphones muted or taken, the day's minutes gone - that session must not be left open and
+	// billing: stop it. c.be is still the realtime backend here, kept across idle.
+	if n.rtResume {
+		defer func() {
+			if !started {
+				if rt, ok := c.be.(*rtBackend); ok {
+					_ = rt.Stop()
+				}
+			}
+		}()
+	}
 
 	// A wake the device's own engine was sure of: the word is being said the way it hears it, so what
 	// is asked about next is not held back by the ones Home Assistant did not hear before.
@@ -1001,9 +1027,16 @@ func (c *conversation) start(n nextTurn) bool {
 			asked = ""
 		}
 		if rt, ok := be.(*rtBackend); ok {
-			// Stopped at once, not through the queue: a start still queued when the turn ends is refused.
-			gen := rt.generation()
-			c.send("start", func() error { return rt.startFrom(gen) })
+			if n.rtResume {
+				// Reuse the session kept open from the last turn (#487): its context, tools and lockout carry
+				// over, and the day's minutes go on counting from when it opened. A fresh session opens only
+				// where that one is gone (resumeOrOpen).
+				c.send("resume", rt.resumeOrOpen)
+			} else {
+				// Stopped at once, not through the queue: a start still queued when the turn ends is refused.
+				gen := rt.generation()
+				c.send("start", func() error { return rt.startFrom(gen) })
+			}
 		} else {
 			c.send("start", func() error { return be.Start(asked) })
 		}
@@ -1184,9 +1217,15 @@ func (c *conversation) idle(why string, how activity.Ending) {
 
 	if was != phaseIdle {
 		if rt, ok := c.be.(*rtBackend); ok {
-			// Stopped here and now, never dropped with a full queue: a session left open goes on, and is
-			// billed, until its limit.
-			_ = rt.Stop()
+			if c.pending != nil && c.pending.rtResume {
+				// Kept open for the follow-up (#487): the session goes on with the conversation in it,
+				// billed from when it opened, until the follow-up turn reuses it, or nothing is said and it
+				// is stopped then (start stops it where the follow-up cannot open).
+			} else {
+				// Stopped here and now, never dropped with a full queue: a session left open goes on, and is
+				// billed, until its limit.
+				_ = rt.Stop()
+			}
 		} else {
 			c.send("stop", c.be.Stop)
 		}

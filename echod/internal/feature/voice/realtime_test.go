@@ -224,6 +224,41 @@ func TestARealtimeTurn(t *testing.T) {
 	}
 }
 
+// A realtime follow-up keeps the session open (#487): resumeOrOpen reuses the open one, dialing nothing,
+// and opens a fresh session only where none is open (its time, the day's minutes, or a failure took it).
+func TestRealtimeFollowUpKeepsTheSession(t *testing.T) {
+	g := newRTRig(t)
+	_ = g.r.Start("")
+	s := g.waitDial(t)
+	waitUntilT(t, func() bool { g.r.mu.Lock(); defer g.r.mu.Unlock(); return g.r.turn != nil })
+
+	// The follow-up reuses the open session: nothing new is dialed, and the same session is kept.
+	if err := g.r.resumeOrOpen(); err != nil {
+		t.Fatal(err)
+	}
+	select {
+	case <-g.dialed:
+		t.Fatal("a fresh session was dialed for a follow-up with one open")
+	case <-time.After(100 * time.Millisecond):
+	}
+	g.r.mu.Lock()
+	kept := g.r.turn != nil && g.r.turn.sess == s
+	g.r.mu.Unlock()
+	if !kept {
+		t.Fatal("the open session was not kept for the follow-up")
+	}
+
+	// With the session gone, resumeOrOpen opens a fresh one, as a first turn does.
+	_ = g.r.Stop()
+	g.r.counting.Wait()
+	if err := g.r.resumeOrOpen(); err != nil {
+		t.Fatal(err)
+	}
+	if s2 := g.waitDial(t); s2 == s {
+		t.Fatal("the closed session was reused")
+	}
+}
+
 // Calls made together are each answered, and the model told once to go on.
 func TestRealtimeCallsTogether(t *testing.T) {
 	g := newRTRig(t)

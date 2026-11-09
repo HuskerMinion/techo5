@@ -199,6 +199,22 @@ func (r *rtBackend) startFrom(gen int) error {
 	return nil
 }
 
+// resumeOrOpen keeps the session the last turn opened, for a follow-up that carries the conversation
+// (#487): its context, tools and lockout stay, and the day's minutes go on counting from when it opened.
+// It opens a fresh session, as a first turn does, only where none is open - the last one reached its time,
+// the day's minutes, or failed between the turns.
+func (r *rtBackend) resumeOrOpen() error {
+	r.mu.Lock()
+	if r.turn != nil {
+		r.mu.Unlock()
+		slog.Info("realtime: keeping the session open for the follow-up")
+		return nil
+	}
+	gen := r.gen
+	r.mu.Unlock()
+	return r.startFrom(gen)
+}
+
 // open dials turn gen's session, gathering its tools first, and holds it to the turn's time.
 func (r *rtBackend) open(gen int) {
 	rc := config.Get().Realtime
