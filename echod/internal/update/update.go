@@ -11,6 +11,7 @@ import (
 	"log/slog"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/HuskerMinion/techo5/echod/internal/android/prop"
 	"github.com/HuskerMinion/techo5/echod/internal/layout"
@@ -77,6 +78,26 @@ func Restart(why string) {
 
 // Wanted is how the supervisor hears about it.
 func Wanted() <-chan string { return wanted }
+
+// CallWait caps how long WaitWhile holds, and CallPoll is how often it looks; variables so a test need
+// not wait real minutes.
+var (
+	CallWait = 10 * time.Minute
+	CallPoll = time.Second
+)
+
+// WaitWhile holds until busy reports false, or until CallWait is up. A reset or a leave calls it before
+// it tears the network down and restarts, with busy reporting a call or a camera talk in progress, so a
+// reset accepted mid-call does not cut it off; a call that never ends still lets the reset through once
+// the wait is up. A nil busy, or one already false, returns at once.
+func WaitWhile(busy func() bool) {
+	if busy == nil {
+		return
+	}
+	for end := time.Now().Add(CallWait); busy() && time.Now().Before(end); {
+		time.Sleep(CallPoll)
+	}
+}
 
 // Remount makes the system partition writable, or puts it back. Nothing on the device can express the
 // second from a shell — the kernel names the root filesystem's source /dev/root and there is no such

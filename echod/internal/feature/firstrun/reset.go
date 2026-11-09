@@ -10,6 +10,8 @@ import (
 	"time"
 
 	"github.com/HuskerMinion/techo5/echod/internal/config"
+	"github.com/HuskerMinion/techo5/echod/internal/feature/phone"
+	"github.com/HuskerMinion/techo5/echod/internal/feature/talkback"
 	"github.com/HuskerMinion/techo5/echod/internal/layout"
 	"github.com/HuskerMinion/techo5/echod/internal/lib/hass"
 	"github.com/HuskerMinion/techo5/echod/internal/lib/safe"
@@ -94,6 +96,14 @@ var forgetHome = func(ctx context.Context) {
 // restart is the daemon restarting into first run (a variable for the tests).
 var restart = func() { update.Restart("reset for someone else") }
 
+// inCall reports a call or a camera talk in progress. A reset waits it out before it tears the network
+// down and restarts, so it does not cut one off (a variable for the tests).
+var inCall = func() bool { return phone.Get().Busy() || talkback.Get().Busy() }
+
+// answerDelay lets the action's answer reach whoever asked before the teardown takes the network (a
+// variable for the tests).
+var answerDelay = 2 * time.Second
+
 // resetPath is the marker a reset leaves for the next start, which does the wipe (wipe) before any
 // feature has started: done now, a feature's state written back on the way down would survive it.
 func resetPath() string { return filepath.Join(stateDir, "reset") }
@@ -117,7 +127,11 @@ func Reset() error {
 		// The answer reaches whoever asked first: Home Assistant, when it was its action, would report
 		// the action failed with its entry deleted or the network gone before then. A restart in these
 		// moments is no loss, since the markers are written and the wipe at the next start does it all.
-		time.Sleep(2 * time.Second)
+		time.Sleep(answerDelay)
+		// A call or a camera talk runs over the network this is about to drop: hold the teardown and the
+		// restart until it ends, so a reset accepted mid-call does not cut it off. A call that never ends
+		// still lets the reset through once the wait is up (update.CallWait).
+		update.WaitWhile(inCall)
 		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 		defer cancel()
 		// While it is still on the network: Home Assistant's entry for it would only fail from now on.

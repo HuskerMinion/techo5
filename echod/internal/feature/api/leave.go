@@ -13,6 +13,8 @@ import (
 	esphome "github.com/ygelfand/go-esphome-device"
 
 	"github.com/HuskerMinion/techo5/echod/internal/config"
+	"github.com/HuskerMinion/techo5/echod/internal/feature/phone"
+	"github.com/HuskerMinion/techo5/echod/internal/feature/talkback"
 	"github.com/HuskerMinion/techo5/echod/internal/layout"
 	"github.com/HuskerMinion/techo5/echod/internal/lib/hass"
 	"github.com/HuskerMinion/techo5/echod/internal/lib/safe"
@@ -49,6 +51,9 @@ func (a *API) Actions() []*esphome.Action {
 			slog.Warn("left Home Assistant: its access forgotten and a new key made; restarting")
 			safe.Go("leave home assistant", func() {
 				time.Sleep(leaveDelay)
+				// Hold the restart while a call or a camera talk is going on, so leaving accepted mid-call
+				// does not cut it off; a call that never ends still lets it through once the wait is up.
+				update.WaitWhile(inCall)
 				leaveEntry()
 				update.Restart("left Home Assistant")
 			})
@@ -56,6 +61,10 @@ func (a *API) Actions() []*esphome.Action {
 		},
 	}}
 }
+
+// inCall reports a call or a camera talk in progress. Leaving waits it out before the restart, so it
+// does not cut one off (a variable for the tests).
+var inCall = func() bool { return phone.Get().Busy() || talkback.Get().Busy() }
 
 // leaveEntry deletes Home Assistant's entry for this device, which holds a key the device no longer
 // has, when the access just forgotten was an administrator's (the client still holds it until the
