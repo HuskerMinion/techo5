@@ -95,4 +95,35 @@ func TestTheMusicAssistantPlayerIsFoundByName(t *testing.T) {
 		got != "" {
 		t.Errorf("MusicAssistantFor = %q %v for a queue alone, want empty", got, err)
 	}
+
+	// Home Assistant gave the clean entity id to Music Assistant's player and the device's own ESPHome
+	// entity a "_speaker" one, so own is itself the Music Assistant player to resume (#485). It is the
+	// last resort, so a differently-named player's queue or a non-own player of the name still comes first.
+	srv5 := fakeStates(t, []map[string]any{
+		{"entity_id": "media_player.show8",
+			"attributes": map[string]any{"friendly_name": "Show8",
+				"app_id": "music_assistant", "mass_player_type": "player", "active_queue": "up2222abcd"}},
+	})
+	defer srv5.Close()
+	c5 := &Client{acc: access{URL: srv5.URL, Token: "secret"}, http: &http.Client{}}
+	if got, err := c5.MusicAssistantFor("media_player.show8", "Show8"); err != nil ||
+		got != "media_player.show8" {
+		t.Errorf("MusicAssistantFor = %q %v when own is the Music Assistant player, want it as the last resort", got, err)
+	}
+
+	// A non-own player of the name is still preferred over own.
+	srv6 := fakeStates(t, []map[string]any{
+		{"entity_id": "media_player.show8",
+			"attributes": map[string]any{"friendly_name": "Show8",
+				"app_id": "music_assistant", "mass_player_type": "player"}},
+		{"entity_id": "media_player.show8_2",
+			"attributes": map[string]any{"friendly_name": "Show8",
+				"app_id": "music_assistant", "mass_player_type": "player"}},
+	})
+	defer srv6.Close()
+	c6 := &Client{acc: access{URL: srv6.URL, Token: "secret"}, http: &http.Client{}}
+	if got, err := c6.MusicAssistantFor("media_player.show8", "Show8"); err != nil ||
+		got != "media_player.show8_2" {
+		t.Errorf("MusicAssistantFor = %q %v, want the non-own player preferred over own", got, err)
+	}
 }

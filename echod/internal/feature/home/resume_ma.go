@@ -68,16 +68,25 @@ func resumeOverAPI() {
 // maPlayerTemplate is a Home Assistant template naming Music Assistant's player for the device whose
 // own media player is own and whose name is name: the one whose active queue is own, or else the
 // player of that name (a queue of that name only when nothing else is).
+//
+// own is skipped in the search, so a device whose own player is named for itself is not mistaken for
+// Music Assistant's player of the same name. But where Home Assistant has given the clean entity id to
+// Music Assistant's player and the device's own ESPHome entity a "_speaker" one, own is that Music
+// Assistant player, and skipping it alone left nothing to resume (#485); so own stands as the last
+// resort when it is itself a Music Assistant player of this name. An empty answer renders as 'none', a
+// media_player target Home Assistant takes as nothing rather than rejecting the call.
 func maPlayerTemplate(own, name string) string {
 	q := func(s string) string { return "'" + strings.NewReplacer(`\`, `\\`, `'`, `\'`).Replace(s) + "'" }
 	return "{%- set own = " + q(own) + " -%}{%- set name = " + q(strings.ToLower(strings.TrimSpace(name))) + " -%}" +
-		"{%- set ns = namespace(q='', p='', n='') -%}" +
-		"{%- for s in states.media_player if s.entity_id != own and s.attributes.app_id == 'music_assistant' -%}" +
-		"{%- if s.attributes.active_queue == own -%}{%- set ns.q = s.entity_id -%}" +
+		"{%- set ns = namespace(q='', p='', n='', o='') -%}" +
+		"{%- for s in states.media_player if s.attributes.app_id == 'music_assistant' -%}" +
+		"{%- if s.entity_id == own -%}" +
+		"{%- if name != '' and (s.name | lower | trim) == name and s.attributes.mass_player_type == 'player' -%}{%- set ns.o = s.entity_id -%}{%- endif -%}" +
+		"{%- elif s.attributes.active_queue == own -%}{%- set ns.q = s.entity_id -%}" +
 		"{%- elif name != '' and (s.name | lower | trim) == name -%}" +
 		"{%- if s.attributes.mass_player_type == 'player' -%}{%- set ns.p = s.entity_id -%}" +
 		"{%- elif s.attributes.mass_player_type != 'queue' -%}{%- set ns.n = s.entity_id -%}{%- endif -%}" +
-		"{%- endif -%}{%- endfor -%}{{ ns.q or ns.p or ns.n }}"
+		"{%- endif -%}{%- endfor -%}{{ ns.q or ns.p or ns.n or ns.o or 'none' }}"
 }
 
 // resumeDirect resumes this device's own player at the server, found by its id there (the factory MAC,

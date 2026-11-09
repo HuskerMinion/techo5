@@ -495,16 +495,23 @@ func (c *Client) MusicAssistantFor(own, name string) (string, error) {
 	if err := json.Unmarshal(out, &states); err != nil {
 		return "", err
 	}
-	named := ""
+	// own is skipped in the search, so a device's own player named for itself is not taken for Music
+	// Assistant's. But where Home Assistant gave the clean entity id to Music Assistant's player and the
+	// device's own ESPHome entity a "_speaker" one, own is that Music Assistant player; skipping it alone
+	// left nothing (#485), so it stands as the last resort when it is a Music Assistant player of this name.
+	named, ownMatch := "", ""
 	for _, s := range states {
-		if !strings.HasPrefix(s.EntityID, "media_player.") || s.EntityID == own {
+		if !strings.HasPrefix(s.EntityID, "media_player.") {
 			continue
 		}
 		if app, _ := s.Attributes["app_id"].(string); app != "music_assistant" {
 			continue
 		}
-		if queue, _ := s.Attributes["active_queue"].(string); queue == own {
-			return s.EntityID, nil
+		isOwn := s.EntityID == own
+		if !isOwn {
+			if queue, _ := s.Attributes["active_queue"].(string); queue == own {
+				return s.EntityID, nil
+			}
 		}
 		if name == "" {
 			continue
@@ -515,14 +522,25 @@ func (c *Client) MusicAssistantFor(own, name string) (string, error) {
 		}
 		// A queue named for the device as well is not the thing to resume or unjoin, so it is not the
 		// answer of last resort either: only a player is, whatever the server calls it.
-		if kind, _ := s.Attributes["mass_player_type"].(string); kind == "player" {
-			return s.EntityID, nil
-		} else if kind == "queue" {
+		kind, _ := s.Attributes["mass_player_type"].(string)
+		if kind == "queue" {
 			continue
+		}
+		if isOwn {
+			if kind == "player" && ownMatch == "" {
+				ownMatch = s.EntityID
+			}
+			continue
+		}
+		if kind == "player" {
+			return s.EntityID, nil
 		}
 		named = s.EntityID
 	}
-	return named, nil
+	if named != "" {
+		return named, nil
+	}
+	return ownMatch, nil
 }
 
 // RemoveOwnEntry deletes Home Assistant's ESPHome entry for the device whose Wi-Fi address is mac
