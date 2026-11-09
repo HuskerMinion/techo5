@@ -43,6 +43,10 @@ var outputs []outputOpener
 // errNoOutput is an output this device does not have: Open goes on to the next without a word.
 var errNoOutput = errors.New("screen: no such output here")
 
+// registerOutput adds a board's output, called from an init in the board's own file. No board in this tree
+// registers one, so the panel is the framebuffer as ever; the hook is the seam a board build adds its own to.
+//
+//lint:ignore U1000 the extension point boards register their output through; unused in this tree by design.
 func registerOutput(o outputOpener) { outputs = append(outputs, o) }
 
 // openOutput is the first registered output that opens, nil for the framebuffer.

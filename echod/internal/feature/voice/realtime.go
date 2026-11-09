@@ -199,18 +199,24 @@ func (r *rtBackend) startFrom(gen int) error {
 	return nil
 }
 
-// resumeOrOpen keeps the session the last turn opened, for a follow-up that carries the conversation
-// (#487): its context, tools and lockout stay, and the day's minutes go on counting from when it opened.
-// It opens a fresh session, as a first turn does, only where none is open - the last one reached its time,
-// the day's minutes, or failed between the turns.
-func (r *rtBackend) resumeOrOpen() error {
+// resume keeps the session the last turn opened, for a follow-up that carries the conversation (#487): its
+// context, tools and lockout stay, and the day's minutes go on counting from when it opened. gen is the
+// turn's generation when the conversation queued the resume; a Stop since (a cancel, another wake, the cap
+// or a failure) has moved it on, and then this opens nothing, as a stale startFrom does, rather than dial a
+// session with no turn behind it. It opens a fresh one only where the turn still stands but its session is
+// gone - a branch the cap and failure paths, which end the turn, leave all but unreachable.
+func (r *rtBackend) resume(gen int) error {
 	r.mu.Lock()
+	if gen != r.gen {
+		r.mu.Unlock()
+		slog.Debug("realtime: a resume for a turn already over, not opened")
+		return nil
+	}
 	if r.turn != nil {
 		r.mu.Unlock()
 		slog.Info("realtime: keeping the session open for the follow-up")
 		return nil
 	}
-	gen := r.gen
 	r.mu.Unlock()
 	return r.startFrom(gen)
 }

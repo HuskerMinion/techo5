@@ -966,6 +966,14 @@ func (c *conversation) start(n nextTurn) (started bool) {
 	if n.continued {
 		c.be = c.ha
 	}
+	// A realtime follow-up that idle kept the session open for, on a slot no longer answered by realtime (a
+	// config reload between the reply and the follow-up): nothing reuses that session now, so stop it rather
+	// than leave it open and billing until its cap (#487).
+	if n.rtResume {
+		if _, ok := c.be.(*rtBackend); !ok && c.realtime != nil {
+			_ = c.realtime.Stop()
+		}
+	}
 	if !c.be.Ready() {
 		slog.Warn("no voice pipeline ready, ignoring wake", "slot", slot+1, "backend", c.be.Name())
 		wakeword.Chime(slot, n.followUp)
@@ -1029,9 +1037,11 @@ func (c *conversation) start(n nextTurn) (started bool) {
 		if rt, ok := be.(*rtBackend); ok {
 			if n.rtResume {
 				// Reuse the session kept open from the last turn (#487): its context, tools and lockout carry
-				// over, and the day's minutes go on counting from when it opened. A fresh session opens only
-				// where that one is gone (resumeOrOpen).
-				c.send("resume", rt.resumeOrOpen)
+				// over, and the day's minutes go on counting from when it opened. The generation is captured
+				// now, as the start path does, so a Stop before the queued resume runs makes it a no-op
+				// rather than dialing a session with no turn behind it.
+				gen := rt.generation()
+				c.send("resume", func() error { return rt.resume(gen) })
 			} else {
 				// Stopped at once, not through the queue: a start still queued when the turn ends is refused.
 				gen := rt.generation()
