@@ -7,10 +7,10 @@ committed PNGs in `images/`. The renderer is deterministic, so a byte difference
 means a screen's look changed.
 
 The screens checked are listed in `screens.txt` (one `show/...` or `spot/...`
-path per line) — about 75 of them, picked for breadth across the clock, calendar,
-music library, now playing, calls, cameras, announcements, settings, first run and
-the Spot. It is a curated subset, not every render: the full catalog is ~2,000
-images, far too large to keep as baselines.
+path per line) — about 140 of them, picked for breadth across the clock faces,
+calendar, music library, now playing, calls, cameras, announcements, dashboards,
+weather, settings, first run and the Spot. It is a curated subset, not every
+render: the full catalog is ~2,000 images, far too large to keep as baselines.
 
 ## Running it
 
