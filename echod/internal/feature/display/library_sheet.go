@@ -319,7 +319,9 @@ func libWord(i int) string {
 // player, or for this device when the card names none.
 func (d *Display) openLibrary(target, entity string, fromCard bool) {
 	c, set := libClient()
-	slog.Info("dashboard music library", "target", target, "entity", entity, "set", set)
+	// The player and the sheet's entity are Home Assistant entity ids (they can carry a room or a name),
+	// kept out of the log and so out of a diagnostics bundle.
+	slog.Info("dashboard music library", "set", set)
 	l := &librarySheet{opening: libOpenings.Add(1), target: target, finding: fromCard, set: set, base: c.URL, from: entity, lit: -1}
 	for i := range l.roots {
 		l.roots[i] = newLibPage(i, musicassistant.Entry{})
@@ -673,7 +675,7 @@ func (d *Display) libLeave(target, from string) {
 		d.musicQuiet.reopened(time.Now())
 	}
 	d.mu.Unlock()
-	slog.Info("dashboard music library leaves", "target", target, "own", own, "from", from)
+	slog.Info("dashboard music library leaves", "own", own)
 	switch {
 	case own:
 		// The dashboard goes, and the idle screen is Now Playing as the stream comes.
@@ -694,7 +696,7 @@ func (d *Display) libPlay(target string, e musicassistant.Entry, kind string, sh
 	if target == "" || e.URI == "" {
 		return
 	}
-	slog.Info("dashboard music library play", "target", target, "uri", e.URI, "type", kind, "shuffle", shuffle)
+	slog.Info("dashboard music library play", "uri", e.URI, "type", kind, "shuffle", shuffle)
 	play := func() {
 		libTap(dashboard.Action{Entity: target, Service: "music_assistant.play_media",
 			Data: map[string]any{"media_id": e.URI, "media_type": kind, "enqueue": "replace"}})

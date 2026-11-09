@@ -315,7 +315,9 @@ func (f *Feature) pair(known string) {
 		f.failed("Paired, but the address could not be saved")
 		return
 	}
-	slog.Info("wall clock: paired", "address", d.Address, "name", d.Name)
+	// The address is redacted in a diagnostics bundle by its shape; the clock's name is free text and is
+	// not, so it is kept out of the log.
+	slog.Info("wall clock: paired", "address", d.Address)
 
 	f.mu.Lock()
 	f.pairing = false
