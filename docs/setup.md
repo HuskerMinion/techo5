@@ -436,7 +436,12 @@ in needs none. **Since v1.2.24:** a Home Assistant Generic Camera, MJPEG camera 
 user and password with **Digest** authentication (Basic is not taken). On the first-generation
 Echo Show 5, `/camera.mjpeg?size=full` asks for the 1280×720 native camera stream instead of the
 default 640×360 preview; it uses the same camera password and access controls. Full resolution
-costs more CPU and network bandwidth. Other devices ignore this query parameter. Changing the
+costs more CPU and network bandwidth. Other devices ignore this query parameter. On 32-bit ARM Linux cgo builds, the optional accelerated
+encoder requires **libjpeg-turbo development headers and library**, including
+its `JCS_EXT_RGBA` extension; `-ljpeg` alone does not guarantee that stock IJG
+libjpeg provides this API. Use libjpeg-turbo for the device build, or disable
+cgo to use the portable Go encoder. A native ARM cgo regression test covers
+JPEG decoding, color channels, cropped strides and MCU-band boundaries. Changing the
 password ends the pages' open streams, and so does closing the lens cover. The device is not found by ONVIF discovery
 unless you turn on **Camera discovery (ONVIF)**, a switch of the device's in Home Assistant, under its
 configuration: then, while the stream is on, it answers WS-Discovery searches (3702/udp), so Home
