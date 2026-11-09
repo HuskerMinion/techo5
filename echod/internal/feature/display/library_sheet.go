@@ -124,6 +124,9 @@ const (
 
 // librarySheet is the library while it is up.
 type librarySheet struct {
+	// opening tells one opening of the library from the next: a player looked up for one is not set
+	// on another opened while the lookup took its time.
+	opening uint64
 	// target is the player music goes to, Music Assistant's; empty when there is none, or while
 	// finding says it is still being looked for.
 	target  string
@@ -317,7 +320,7 @@ func libWord(i int) string {
 func (d *Display) openLibrary(target, entity string, fromCard bool) {
 	c, set := libClient()
 	slog.Info("dashboard music library", "target", target, "entity", entity, "set", set)
-	l := &librarySheet{target: target, finding: fromCard, set: set, base: c.URL, from: entity, lit: -1}
+	l := &librarySheet{opening: libOpenings.Add(1), target: target, finding: fromCard, set: set, base: c.URL, from: entity, lit: -1}
 	for i := range l.roots {
 		l.roots[i] = newLibPage(i, musicassistant.Entry{})
 	}
@@ -328,9 +331,14 @@ func (d *Display) openLibrary(target, entity string, fromCard bool) {
 	d.mu.Unlock()
 	d.wake()
 	if fromCard {
+		opening := l.opening
 		go func() {
 			t := libFindPlayer(entity)
-			d.editLibrary(func(n *librarySheet) { n.target, n.finding = t, false })
+			d.editLibrary(func(n *librarySheet) {
+				if n.opening == opening {
+					n.target, n.finding = t, false
+				}
+			})
 			d.wake()
 		}()
 	}
@@ -793,3 +801,6 @@ func (d *Display) libraryUp() bool {
 	defer d.mu.Unlock()
 	return d.dashLibrary != nil
 }
+
+// libOpenings counts the library's openings, for librarySheet.opening.
+var libOpenings atomic.Uint64
