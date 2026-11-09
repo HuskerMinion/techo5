@@ -195,11 +195,31 @@ func (r *paint) width(face font.Face, s string) int {
 }
 
 // wrap breaks text into lines no wider than maxW, on spaces; a single word wider than the line is
-// left to overflow rather than split.
+// left to overflow rather than split, except Japanese and Khmer (written without spaces between
+// words), which break between characters or syllables (characterLines).
 func (r *paint) wrap(face font.Face, s string, maxW int) []string {
 	var lines []string
 	var line string
 	for _, word := range strings.Fields(s) {
+		if line != "" && fonts.HasLineBreaks(word) && r.width(face, line+" "+word) > maxW {
+			// A Khmer run starts on the line in progress, as far as the room left there goes.
+			measure := func(s string) int { return r.width(face, s) }
+			room := maxW - r.width(face, line+" ")
+			if parts := fonts.SplitToWidths(word, room, maxW, measure); len(parts) > 1 && measure(parts[0]) <= room {
+				lines = append(lines, line+" "+parts[0])
+				lines = append(lines, parts[1:len(parts)-1]...)
+				line = parts[len(parts)-1]
+				continue
+			}
+		}
+		if parts := r.characterLines(face, word, maxW); len(parts) > 0 {
+			if line != "" {
+				lines = append(lines, line)
+			}
+			lines = append(lines, parts[:len(parts)-1]...)
+			line = parts[len(parts)-1]
+			continue
+		}
 		try := word
 		if line != "" {
 			try = line + " " + word

@@ -231,7 +231,7 @@ func capital(s string) string {
 func wrapLines(face font.Face, text string, w, n int) []string {
 	var out []string
 	line := ""
-	words := strings.Fields(text)
+	words := splitKhmer(face, strings.Fields(text), w)
 	for i, word := range words {
 		try := word
 		if line != "" {
@@ -250,6 +250,23 @@ func wrapLines(face font.Face, text string, w, n int) []string {
 	}
 	if line != "" {
 		out = append(out, clipLine(face, line, w))
+	}
+	return out
+}
+
+// splitKhmer cuts each word wider than w that Khmer can break inside (it is written without spaces
+// between words) into pieces between syllables that fit, so a Khmer reply wraps instead of running off
+// the card. Every piece but the last fills a line on its own, so the wrap never joins two pieces of
+// one word with a space.
+func splitKhmer(face font.Face, words []string, w int) []string {
+	measure := func(s string) int { return fonts.MeasureString(face, s).Ceil() }
+	var out []string
+	for _, word := range words {
+		if parts := fonts.SplitToWidth(word, w, measure); len(parts) > 0 {
+			out = append(out, parts...)
+			continue
+		}
+		out = append(out, word)
 	}
 	return out
 }
