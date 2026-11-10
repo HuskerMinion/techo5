@@ -150,7 +150,29 @@ type librarySheet struct {
 	lit      int
 	litUntil time.Time
 	drag     libDrag
+	// menu is the action sheet held open over an item by a long press: play it now, next, or at the
+	// end of the queue. While it is up it takes every tap.
+	menu libMenu
 }
+
+// libMenu is the action sheet over an item a finger held: the item, its media type, and its index on
+// the page (section*libSecStride + i), which is drawn lit while the sheet is up.
+type libMenu struct {
+	open  bool
+	entry musicassistant.Entry
+	kind  string
+	item  int
+}
+
+// The action sheet's choices, in the order they are drawn, and the enqueue mode each plays with.
+const (
+	libMenuPlay = iota
+	libMenuNext
+	libMenuAdd
+	libMenuChoices
+)
+
+var libMenuEnqueue = [libMenuChoices]string{libMenuPlay: libEnqueueReplace, libMenuNext: libEnqueueNext, libMenuAdd: libEnqueueAdd}
 
 // Play and Shuffle as lit, beside the items' own indexes.
 const (
@@ -182,7 +204,9 @@ func (l *librarySheet) byID(id int64) *libPage {
 }
 
 // isLit is whether which was tapped just now.
-func (l *librarySheet) isLit(which int) bool { return l.lit == which && time.Now().Before(l.litUntil) }
+func (l *librarySheet) isLit(which int) bool {
+	return l.lit == which && time.Now().Before(l.litUntil) || l.menu.open && l.menu.item == which
+}
 
 // libraryView is the sheet as one frame draws it.
 type libraryView struct {
@@ -240,49 +264,57 @@ var libWords = map[string][]string{
 		"Set up the music library on the setup page (Sound & Voice, Music Assistant) to browse it here.",
 		"No player found: browse only", "Top tracks", "Tap to search",
 		"Search the music library", "No results", "Library",
-		"From your saved tracks", "No stations saved in Music Assistant", "Search stations", "Save music in Music Assistant, or search for it here."},
+		"From your saved tracks", "No stations saved in Music Assistant", "Search stations", "Save music in Music Assistant, or search for it here.",
+		"Play next", "Add to queue"},
 	"ja": {"アーティスト", "アルバム", "プレイリスト", "曲", "ラジオ", "検索", "戻る", "再生", "シャッフル", "完了",
 		"読み込み中…", "まだ何もありません",
 		"ここで閲覧するには、設定ページ（Sound & Voice、Music Assistant）で音楽ライブラリを設定してください。",
 		"Music Assistantのプレーヤーがありません（閲覧のみ）", "人気曲", "タップして検索",
 		"音楽ライブラリを検索", "見つかりません", "ライブラリ",
-		"保存した曲から", "Music Assistantに保存された局はありません", "局を検索", "Music Assistantに音楽を保存するか、ここで検索してください。"},
+		"保存した曲から", "Music Assistantに保存された局はありません", "局を検索", "Music Assistantに音楽を保存するか、ここで検索してください。",
+		"次に再生", "キューに追加"},
 	"de": {"Interpreten", "Alben", "Playlists", "Titel", "Radio", "Suche", "Zurück", "Abspielen", "Zufall", "Fertig",
 		"Lädt …", "Hier ist noch nichts",
 		"Richte die Musikbibliothek auf der Einrichtungsseite ein (Sound & Voice, Music Assistant), um sie hier zu durchsuchen.",
 		"Kein Music-Assistant-Player zum Abspielen: nur ansehen", "Top-Titel", "Tippen zum Suchen",
 		"Musikbibliothek durchsuchen", "Keine Treffer", "Bibliothek",
-		"Aus deinen gespeicherten Titeln", "Keine Sender in Music Assistant gespeichert", "Sender suchen", "Speichere Musik in Music Assistant oder suche sie hier."},
+		"Aus deinen gespeicherten Titeln", "Keine Sender in Music Assistant gespeichert", "Sender suchen", "Speichere Musik in Music Assistant oder suche sie hier.",
+		"Als Nächstes abspielen", "Zur Warteschlange hinzufügen"},
 	"es": {"Artistas", "Álbumes", "Listas", "Canciones", "Radio", "Buscar", "Atrás", "Reproducir", "Aleatorio", "Listo",
 		"Cargando…", "Aún no hay nada",
 		"Configura la biblioteca de música en la página de configuración (Sound & Voice, Music Assistant) para explorarla aquí.",
 		"No hay reproductor de Music Assistant: solo explorar", "Canciones populares", "Toca para buscar",
 		"Buscar en la biblioteca", "Sin resultados", "Biblioteca",
-		"De tus canciones guardadas", "No hay emisoras guardadas en Music Assistant", "Buscar emisoras", "Guarda música en Music Assistant o búscala aquí."},
+		"De tus canciones guardadas", "No hay emisoras guardadas en Music Assistant", "Buscar emisoras", "Guarda música en Music Assistant o búscala aquí.",
+		"Reproducir a continuación", "Añadir a la cola"},
 	"fr": {"Artistes", "Albums", "Playlists", "Titres", "Radio", "Recherche", "Retour", "Écouter", "Aléatoire", "OK",
 		"Chargement…", "Rien pour l'instant",
 		"Configurez la bibliothèque musicale sur la page de configuration (Sound & Voice, Music Assistant) pour la parcourir ici.",
 		"Aucun lecteur Music Assistant : consultation seulement", "Titres populaires", "Touchez pour chercher",
 		"Chercher dans la bibliothèque", "Aucun résultat", "Bibliothèque",
-		"D'après vos titres enregistrés", "Aucune station enregistrée dans Music Assistant", "Chercher des stations", "Enregistrez de la musique dans Music Assistant, ou cherchez-la ici."},
+		"D'après vos titres enregistrés", "Aucune station enregistrée dans Music Assistant", "Chercher des stations", "Enregistrez de la musique dans Music Assistant, ou cherchez-la ici.",
+		"Écouter ensuite", "Ajouter à la file d'attente"},
 	"it": {"Artisti", "Album", "Playlist", "Brani", "Radio", "Cerca", "Indietro", "Riproduci", "Casuale", "Fatto",
 		"Caricamento…", "Ancora niente qui",
 		"Configura la libreria musicale nella pagina di configurazione (Sound & Voice, Music Assistant) per sfogliarla qui.",
 		"Nessun lettore Music Assistant: solo consultazione", "Brani più ascoltati", "Tocca per cercare",
 		"Cerca nella libreria", "Nessun risultato", "Libreria",
-		"Dai tuoi brani salvati", "Nessuna stazione salvata in Music Assistant", "Cerca stazioni", "Salva musica in Music Assistant o cercala qui."},
+		"Dai tuoi brani salvati", "Nessuna stazione salvata in Music Assistant", "Cerca stazioni", "Salva musica in Music Assistant o cercala qui.",
+		"Riproduci dopo", "Aggiungi alla coda"},
 	"pt": {"Artistas", "Álbuns", "Playlists", "Faixas", "Rádio", "Buscar", "Voltar", "Tocar", "Aleatório", "Pronto",
 		"Carregando…", "Nada aqui ainda",
 		"Configure a biblioteca de música na página de configuração (Sound & Voice, Music Assistant) para navegar nela aqui.",
 		"Nenhum player do Music Assistant: só navegar", "Mais tocadas", "Toque para buscar",
 		"Buscar na biblioteca", "Nenhum resultado", "Biblioteca",
-		"Das suas faixas salvas", "Nenhuma estação salva no Music Assistant", "Buscar estações", "Salve música no Music Assistant ou busque aqui."},
+		"Das suas faixas salvas", "Nenhuma estação salva no Music Assistant", "Buscar estações", "Salve música no Music Assistant ou busque aqui.",
+		"Tocar em seguida", "Adicionar à fila"},
 	"ru": {"Исполнители", "Альбомы", "Плейлисты", "Треки", "Радио", "Поиск", "Назад", "Играть", "Вперемешку", "Готово",
 		"Загрузка…", "Здесь пока пусто",
 		"Настройте музыкальную библиотеку на странице настройки (Sound & Voice, Music Assistant), чтобы просматривать её здесь.",
 		"Нет плеера Music Assistant: только просмотр", "Популярные треки", "Нажмите для поиска",
 		"Поиск в библиотеке", "Ничего не найдено", "Библиотека",
-		"Из сохранённых треков", "В Music Assistant нет сохранённых станций", "Найти станции", "Сохраните музыку в Music Assistant или найдите её здесь."},
+		"Из сохранённых треков", "В Music Assistant нет сохранённых станций", "Найти станции", "Сохраните музыку в Music Assistant или найдите её здесь.",
+		"Играть следующим", "Добавить в очередь"},
 }
 
 // The words by what they say; the tabs' are their own numbers.
@@ -304,6 +336,8 @@ const (
 	libWordNoStations
 	libWordSearchStations
 	libWordEmptyHint
+	libWordPlayNext
+	libWordAddToQueue
 )
 
 func libWord(i int) string {
@@ -543,6 +577,16 @@ func (d *Display) libraryTap(x, y int) bool {
 		return true
 	}
 	z, _, _ := d.r.libraryAt(x, y)
+	if l.menu.open {
+		// The action sheet takes every tap: a choice plays the item so, and anywhere else puts it away.
+		m := l.menu
+		d.editLibrary(func(n *librarySheet) { n.menu = libMenu{} })
+		if z.kind == libPartMenu && z.index >= 0 && z.index < libMenuChoices {
+			d.libPlayTapped(l, m.entry, m.kind, false, m.item, libMenuEnqueue[z.index])
+		}
+		d.wake()
+		return true
+	}
 	p := l.current()
 	switch z.kind {
 	case libPartDone:
@@ -597,6 +641,42 @@ func (d *Display) libraryTap(x, y int) bool {
 			d.libPlayTapped(l, e, kind, false, z.index, libEnqueueReplace)
 		}
 	}
+	d.wake()
+	return true
+}
+
+// libraryHold is a finger held still on the library and lifted at x, y. On a track, an album, a
+// playlist or an artist it opens the action sheet of what to do with it: play it now, next, or at the
+// end of the queue. It says whether it did; anything else (a station, which only plays; a part that
+// is not an item; no player to play on) is left to be the tap it was before.
+func (d *Display) libraryHold(x, y int) bool {
+	d.mu.Lock()
+	l := d.dashLibrary
+	d.mu.Unlock()
+	if l == nil || d.r == nil || l.typing || l.menu.open || l.target == "" {
+		return false
+	}
+	z, _, _ := d.r.libraryAt(x, y)
+	if z.kind != libPartItem {
+		return false
+	}
+	p := l.current()
+	sec, i := z.index/libSecStride, z.index%libSecStride
+	if sec >= len(p.sections) || i >= len(p.sections[sec].entries) {
+		return false
+	}
+	e := p.sections[sec].entries[i]
+	kind := libEntryType(e, p.sections[sec].kind)
+	switch kind {
+	case "track", "album", "playlist", "artist":
+	default:
+		return false
+	}
+	if e.URI == "" {
+		return false
+	}
+	slog.Info("dashboard music library hold", "type", kind)
+	d.editLibrary(func(n *librarySheet) { n.menu = libMenu{open: true, entry: e, kind: kind, item: z.index} })
 	d.wake()
 	return true
 }

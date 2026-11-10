@@ -37,3 +37,5 @@ func (d *Display) samePartOnSheet(image.Point, image.Point) bool { return true }
 func (d *Display) libDragStart(int, int) {}
 
 func (d *Display) libDragMove(int, int) bool { return false }
+
+func (d *Display) libraryHold(int, int) bool { return false }

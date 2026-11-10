@@ -230,6 +230,8 @@ func TestTheLibraryPageLaysOutItsParts(t *testing.T) {
 	emptyRadio.roots[libRadio].sections = []libSection{{word: -1, show: libShowGrid, kind: "radio"}}
 	derived := libSheetWith(libAlbums, libEntries("album", 12), "media_player.ma_kitchen")
 	derived.roots[libAlbums].sections[0].derived = true
+	held := libSheetWith(libAlbums, libEntries("album", 40), "media_player.ma_kitchen")
+	held.menu = libMenu{open: true, entry: libEntries("album", 3)[2], kind: "album", item: 2}
 
 	for _, size := range []image.Point{{showWide, showHigh}, {show8Wide, show8High}} {
 		for _, c := range []struct {
@@ -251,6 +253,7 @@ func TestTheLibraryPageLaysOutItsParts(t *testing.T) {
 			{"albums-from-tracks", derived, map[int]int{libPartItem: 4}},
 			{"not-set-up", librarySheet{}, map[int]int{libPartDone: 1}},
 			{"keyboard", typing, map[int]int{}},
+			{"menu", held, map[int]int{libPartMenu: libMenuChoices, libPartMenuOut: 1}},
 		} {
 			img := image.NewRGBA(image.Rect(0, 0, size.X, size.Y))
 			r := newRenderer(img)
@@ -549,6 +552,108 @@ func TestQueueingFromTheLibraryOnlyAppends(t *testing.T) {
 	}
 	if left != 1 {
 		t.Errorf("Play did not leave the library (left %d)", left)
+	}
+}
+
+// Every language has every library word: a word added to one and missed in another would end a
+// library drawn in that language with an index out of range.
+func TestEveryLanguageHasEveryLibraryWord(t *testing.T) {
+	want := len(libWords[""])
+	if want != libWordAddToQueue+1 {
+		t.Errorf("English has %d words, but the last word is number %d", want, libWordAddToQueue)
+	}
+	for lang, w := range libWords {
+		if len(w) != want {
+			t.Errorf("%q has %d library words, English %d", lang, len(w), want)
+		}
+	}
+}
+
+// A finger held on an album opens its action sheet over the page: the album lit under it, the sheet's
+// three choices and the rest of the screen the only parts. Play next from it puts the album after
+// what is playing and leaves the library up. A tap off the choices puts the sheet away, playing nothing.
+func TestAHeldItemOpensItsActionSheet(t *testing.T) {
+	noLibrary(t)
+	asked := recordTaps(t)
+	r := newRenderer(image.NewRGBA(image.Rect(0, 0, showWide, showHigh)))
+	d := &Display{r: r, poke: make(chan struct{}, 1)}
+	albums := libEntries("album", 12)
+	sheet := libSheetWith(libAlbums, albums, "media_player.ma_kitchen")
+	d.dashLibrary = &sheet
+	zones, _ := libDraw(r, sheet)
+	if !d.libraryHold(libMiddle(libFind(t, zones, libPartItem, 2))) {
+		t.Fatal("a held album did not open its action sheet")
+	}
+	m := d.dashLibrary.menu
+	if !m.open || m.entry.URI != albums[2].URI || m.kind != "album" || m.item != 2 {
+		t.Fatalf("the sheet is for %+v, want album 2", m)
+	}
+	if !d.dashLibrary.isLit(2) {
+		t.Error("the held album is not drawn lit under its sheet")
+	}
+
+	zones, _ = libDraw(r, *d.dashLibrary)
+	count := libCount(zones)
+	if count[libPartMenu] != libMenuChoices || count[libPartMenuOut] != 1 || len(zones) != libMenuChoices+1 {
+		t.Fatalf("with the sheet up the parts are %v, want only its %d choices and the rest", count, libMenuChoices)
+	}
+	// Where Done is, and the corners, are off the sheet while it is up.
+	for _, pt := range []image.Point{{r.w - r.s(20), r.s(20)}, {r.s(10), r.h - r.s(10)}} {
+		if z, _, _ := r.libraryAt(pt.X, pt.Y); z.kind != libPartMenuOut {
+			t.Errorf("%v is %+v, want off the sheet", pt, z)
+		}
+	}
+
+	d.libraryTap(libMiddle(libFind(t, zones, libPartMenu, libMenuNext)))
+	got := asked()
+	if len(got) != 1 || got[0].Service != "music_assistant.play_media" || got[0].Data["enqueue"] != libEnqueueNext ||
+		got[0].Data["media_id"] != albums[2].URI {
+		t.Errorf("Play next asked %+v, want the album played next", got)
+	}
+	if d.dashLibrary == nil || d.dashLibrary.menu.open {
+		t.Error("after Play next the library should still be up, with the sheet put away")
+	}
+
+	// Held again, then a tap off the choices: put away, nothing played.
+	zones, _ = libDraw(r, *d.dashLibrary)
+	if !d.libraryHold(libMiddle(libFind(t, zones, libPartItem, 2))) {
+		t.Fatal("the album held again did not open its sheet")
+	}
+	libDraw(r, *d.dashLibrary)
+	d.libraryTap(r.s(10), r.h-r.s(10))
+	if n := len(asked()); n != 1 {
+		t.Errorf("a tap off the sheet played something: %+v", asked())
+	}
+	if d.dashLibrary.menu.open {
+		t.Error("a tap off the sheet left it up")
+	}
+}
+
+// A held station only plays, as a tap on it does; a held part that is not an item (a tab) is left to
+// its tap; and with no player there is nothing to queue on. None of them opens the sheet.
+func TestOnlyPlayableItemsOpenTheActionSheet(t *testing.T) {
+	noLibrary(t)
+	r := newRenderer(image.NewRGBA(image.Rect(0, 0, showWide, showHigh)))
+	d := &Display{r: r, poke: make(chan struct{}, 1)}
+
+	radio := libSheetWith(libRadio, libEntries("radio", 6), "media_player.ma_kitchen")
+	d.dashLibrary = &radio
+	zones, _ := libDraw(r, radio)
+	if d.libraryHold(libMiddle(libFind(t, zones, libPartItem, 0))) {
+		t.Error("a held station opened the sheet")
+	}
+	if d.libraryHold(libMiddle(libFind(t, zones, libPartTab, libAlbums))) {
+		t.Error("a held tab opened the sheet")
+	}
+
+	noPlayer := libSheetWith(libAlbums, libEntries("album", 6), "")
+	d.dashLibrary = &noPlayer
+	zones, _ = libDraw(r, noPlayer)
+	if d.libraryHold(libMiddle(libFind(t, zones, libPartItem, 0))) {
+		t.Error("with no player the sheet opened")
+	}
+	if d.dashLibrary.menu.open {
+		t.Error("the sheet is open")
 	}
 }
 

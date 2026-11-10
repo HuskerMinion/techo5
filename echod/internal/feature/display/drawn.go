@@ -323,6 +323,10 @@ func (d *Display) drawnRelease(x, y int) {
 		d.slideSheet(*dr.slider, x, true) // where it lifted, wherever it went on the way
 		return
 	}
+	// A finger held still on an item in the music library is its action sheet, not a tap.
+	if dr.down && !dr.moved && dr.onSheet && dr.slider == nil && d.libraryHold(x, y) {
+		return
+	}
 	if d.colorTap(x, y) {
 		return
 	}
