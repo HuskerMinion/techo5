@@ -443,7 +443,7 @@ pipeline rather than the device: Home Assistant is replying in text only.
 | Step | Windows | Linux | macOS |
 |---|---|---|---|
 | Unlock: Show 5 (amonet-cronos) | Yes (fastbrick) | Yes | Use a Linux live USB |
-| Unlock: Dot (amonet-biscuit) | Yes (`fastbrick.bat`/`fastbrick.ps1`, in the release ZIP) | Yes | Use a Linux live USB |
+| Unlock: Dot (amonet-biscuit) | Yes (`fastbrick.bat`/`fastbrick.ps1`, in the release ZIP) | Yes | Yes (`fastbrick.sh`, with the ZIP's own `bin/fastboot-macos`) |
 | Unlock: Spot (amonet-rook) | Yes (fastbrick, as on the bench unit) | Yes | A Linux live USB, or `fastboot -S 1G` (below) |
 | LineageOS (Show 5, Spot) | Yes | Yes | Yes (TWRP and `adb` only) |
 | Install TECHO5 on the Show 5 (`install-show.py`) | **Yes** | **Yes** | **Yes** |
@@ -463,6 +463,10 @@ pipeline rather than the device: Home Assistant is replying in text only.
 - `screen` is built in, for working on a unit by hand: `screen /dev/cu.usbmodem* 115200`.
 - The amonet BootROM steps need Linux. A live USB (Ubuntu) is more reliable than a virtual machine:
   the exploit re-enumerates USB mid-way, and VM USB passthrough often loses the device.
+- The Dot's unlock runs straight from a Mac: amonet-biscuit's `fastbrick.sh` works in the Dot's
+  fastboot mode, never the BootROM, and on macOS it uses the `bin/fastboot-macos` that comes in the
+  release ZIP (a universal build, Apple Silicon and Intel). The first time, macOS may hold that file
+  in quarantine; the script clears it.
 - The Spot's unlock also works straight from a Mac with Apple Silicon, tested on one unit
   ([#394](https://github.com/HuskerMinion/techo5/issues/394)). Its `fastbrick.img` is 32 bytes over the
   download size the Spot reports, so current `fastboot` refuses it; `-S 1G` makes it send the image
