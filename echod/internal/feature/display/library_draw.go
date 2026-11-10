@@ -194,7 +194,7 @@ func (r *renderer) libGeometry() libGeom {
 	g.bar = image.Rect(g.card.Min.X+g.pad, g.card.Min.Y+g.pad, g.card.Max.X-g.pad, g.card.Min.Y+g.pad+r.s(46))
 	// The second row of tabs (podcasts, audiobooks) sits under the bar on the library's own tabs; on a
 	// page opened from one, draw leaves that row out and the view moves up into its place.
-	g.row2 = image.Rect(g.bar.Min.X, g.bar.Max.Y+r.s(8), g.bar.Max.X, g.bar.Max.Y+r.s(8)+r.s(40))
+	g.row2 = image.Rect(g.bar.Min.X, g.bar.Max.Y+r.s(8), g.bar.Max.X, g.bar.Max.Y+r.s(8)+r.s(46))
 	g.view = image.Rect(g.card.Min.X, g.row2.Max.Y+r.s(10), g.card.Max.X, g.card.Max.Y-r.s(6))
 	g.x0, g.x1 = g.card.Min.X+g.pad, g.card.Max.X-g.pad
 	g.inner = g.x1 - g.x0
@@ -422,7 +422,7 @@ func (r *renderer) librarySheet(v *libraryView, th dashboard.Theme) {
 		// On the audiobooks tab, the order it is in, at the row's right end; a tap moves it to the next.
 		if l.tab == libAudiobooks {
 			word := libWord(libWordSortAuthor + l.audiobookSort)
-			w := pillW(word, false)
+			w := pillW(word, true) // room for the icon too, so the word is not cut short
 			pill(image.Rect(row.Max.X-w, row.Min.Y, row.Max.X, row.Max.Y), "swap-vertical", word, plain, pal.text, false, libPartSort, 0)
 		}
 	}
