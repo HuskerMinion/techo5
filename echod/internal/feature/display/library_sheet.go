@@ -15,7 +15,6 @@ import (
 	"github.com/HuskerMinion/techo5/echod/internal/config"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/dashboard"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/home"
-	"github.com/HuskerMinion/techo5/echod/internal/feature/tessera"
 	"github.com/HuskerMinion/techo5/echod/internal/lib/musicassistant"
 )
 
@@ -283,56 +282,56 @@ var libWords = map[string][]string{
 		"No player found: browse only", "Top tracks", "Tap to search",
 		"Search the music library", "No results", "Library",
 		"From your saved tracks", "No stations saved in Music Assistant", "Search stations", "Save music in Music Assistant, or search for it here.",
-		"Play next", "Add to queue", "By author", "By title", "Newest"},
+		"Play next", "Add to queue", "By author", "By title", "Newest", "Resume at %s", "Start over"},
 	"ja": {"アーティスト", "アルバム", "プレイリスト", "曲", "ラジオ", "検索", "ポッドキャスト", "オーディオブック", "戻る", "再生", "シャッフル", "完了",
 		"読み込み中…", "まだ何もありません",
 		"ここで閲覧するには、設定ページ（Sound & Voice、Music Assistant）で音楽ライブラリを設定してください。",
 		"Music Assistantのプレーヤーがありません（閲覧のみ）", "人気曲", "タップして検索",
 		"音楽ライブラリを検索", "見つかりません", "ライブラリ",
 		"保存した曲から", "Music Assistantに保存された局はありません", "局を検索", "Music Assistantに音楽を保存するか、ここで検索してください。",
-		"次に再生", "キューに追加", "作者順", "タイトル順", "新着順"},
+		"次に再生", "キューに追加", "作者順", "タイトル順", "新着順", "%s から再開", "最初から"},
 	"de": {"Interpreten", "Alben", "Playlists", "Titel", "Radio", "Suche", "Podcasts", "Hörbücher", "Zurück", "Abspielen", "Zufall", "Fertig",
 		"Lädt …", "Hier ist noch nichts",
 		"Richte die Musikbibliothek auf der Einrichtungsseite ein (Sound & Voice, Music Assistant), um sie hier zu durchsuchen.",
 		"Kein Music-Assistant-Player zum Abspielen: nur ansehen", "Top-Titel", "Tippen zum Suchen",
 		"Musikbibliothek durchsuchen", "Keine Treffer", "Bibliothek",
 		"Aus deinen gespeicherten Titeln", "Keine Sender in Music Assistant gespeichert", "Sender suchen", "Speichere Musik in Music Assistant oder suche sie hier.",
-		"Als Nächstes abspielen", "Zur Warteschlange hinzufügen", "Nach Autor", "Nach Titel", "Neueste"},
+		"Als Nächstes abspielen", "Zur Warteschlange hinzufügen", "Nach Autor", "Nach Titel", "Neueste", "Weiter bei %s", "Von vorn"},
 	"es": {"Artistas", "Álbumes", "Listas", "Canciones", "Radio", "Buscar", "Podcasts", "Audiolibros", "Atrás", "Reproducir", "Aleatorio", "Listo",
 		"Cargando…", "Aún no hay nada",
 		"Configura la biblioteca de música en la página de configuración (Sound & Voice, Music Assistant) para explorarla aquí.",
 		"No hay reproductor de Music Assistant: solo explorar", "Canciones populares", "Toca para buscar",
 		"Buscar en la biblioteca", "Sin resultados", "Biblioteca",
 		"De tus canciones guardadas", "No hay emisoras guardadas en Music Assistant", "Buscar emisoras", "Guarda música en Music Assistant o búscala aquí.",
-		"Reproducir a continuación", "Añadir a la cola", "Por autor", "Por título", "Recientes"},
+		"Reproducir a continuación", "Añadir a la cola", "Por autor", "Por título", "Recientes", "Reanudar en %s", "Desde el principio"},
 	"fr": {"Artistes", "Albums", "Playlists", "Titres", "Radio", "Recherche", "Podcasts", "Livres audio", "Retour", "Écouter", "Aléatoire", "OK",
 		"Chargement…", "Rien pour l'instant",
 		"Configurez la bibliothèque musicale sur la page de configuration (Sound & Voice, Music Assistant) pour la parcourir ici.",
 		"Aucun lecteur Music Assistant : consultation seulement", "Titres populaires", "Touchez pour chercher",
 		"Chercher dans la bibliothèque", "Aucun résultat", "Bibliothèque",
 		"D'après vos titres enregistrés", "Aucune station enregistrée dans Music Assistant", "Chercher des stations", "Enregistrez de la musique dans Music Assistant, ou cherchez-la ici.",
-		"Écouter ensuite", "Ajouter à la file d'attente", "Par auteur", "Par titre", "Récents"},
+		"Écouter ensuite", "Ajouter à la file d'attente", "Par auteur", "Par titre", "Récents", "Reprendre à %s", "Depuis le début"},
 	"it": {"Artisti", "Album", "Playlist", "Brani", "Radio", "Cerca", "Podcast", "Audiolibri", "Indietro", "Riproduci", "Casuale", "Fatto",
 		"Caricamento…", "Ancora niente qui",
 		"Configura la libreria musicale nella pagina di configurazione (Sound & Voice, Music Assistant) per sfogliarla qui.",
 		"Nessun lettore Music Assistant: solo consultazione", "Brani più ascoltati", "Tocca per cercare",
 		"Cerca nella libreria", "Nessun risultato", "Libreria",
 		"Dai tuoi brani salvati", "Nessuna stazione salvata in Music Assistant", "Cerca stazioni", "Salva musica in Music Assistant o cercala qui.",
-		"Riproduci dopo", "Aggiungi alla coda", "Per autore", "Per titolo", "Recenti"},
+		"Riproduci dopo", "Aggiungi alla coda", "Per autore", "Per titolo", "Recenti", "Riprendi da %s", "Dall'inizio"},
 	"pt": {"Artistas", "Álbuns", "Playlists", "Faixas", "Rádio", "Buscar", "Podcasts", "Audiolivros", "Voltar", "Tocar", "Aleatório", "Pronto",
 		"Carregando…", "Nada aqui ainda",
 		"Configure a biblioteca de música na página de configuração (Sound & Voice, Music Assistant) para navegar nela aqui.",
 		"Nenhum player do Music Assistant: só navegar", "Mais tocadas", "Toque para buscar",
 		"Buscar na biblioteca", "Nenhum resultado", "Biblioteca",
 		"Das suas faixas salvas", "Nenhuma estação salva no Music Assistant", "Buscar estações", "Salve música no Music Assistant ou busque aqui.",
-		"Tocar em seguida", "Adicionar à fila", "Por autor", "Por título", "Recentes"},
+		"Tocar em seguida", "Adicionar à fila", "Por autor", "Por título", "Recentes", "Retomar em %s", "Do início"},
 	"ru": {"Исполнители", "Альбомы", "Плейлисты", "Треки", "Радио", "Поиск", "Подкасты", "Аудиокниги", "Назад", "Играть", "Вперемешку", "Готово",
 		"Загрузка…", "Здесь пока пусто",
 		"Настройте музыкальную библиотеку на странице настройки (Sound & Voice, Music Assistant), чтобы просматривать её здесь.",
 		"Нет плеера Music Assistant: только просмотр", "Популярные треки", "Нажмите для поиска",
 		"Поиск в библиотеке", "Ничего не найдено", "Библиотека",
 		"Из сохранённых треков", "В Music Assistant нет сохранённых станций", "Найти станции", "Сохраните музыку в Music Assistant или найдите её здесь.",
-		"Играть следующим", "Добавить в очередь", "По автору", "По названию", "Новые"},
+		"Играть следующим", "Добавить в очередь", "По автору", "По названию", "Новые", "Продолжить с %s", "С начала"},
 }
 
 // The words by what they say; the tabs' are their own numbers.
@@ -359,6 +358,8 @@ const (
 	libWordSortAuthor // the audiobooks' three orders, in turn: author, title, newest
 	libWordSortTitle
 	libWordSortRecent
+	libWordResumeAt // "Resume at 1:02:03", with the time put in
+	libWordStartOver
 )
 
 func libWord(i int) string {
@@ -680,6 +681,16 @@ func (d *Display) libraryTap(x, y int) bool {
 		if z.kind == libPartShuffle {
 			lit = libLitShuffle
 		}
+		if spot, ok := libResumeOffer(p); ok {
+			// The book was left part way: Play goes on from there, and the other button starts it over.
+			if z.kind == libPartPlay {
+				d.libPlayFrom(l, p.entry, float64(spot), lit)
+			} else {
+				libForgetSpot(p.entry.URI)
+				d.libPlayFrom(l, p.entry, 0, lit)
+			}
+			break
+		}
 		d.libPlayTapped(l, p.entry, libEntryType(p.entry, libPageType(p.what)), z.kind == libPartShuffle, lit, libEnqueueReplace)
 	case libPartItem:
 		sec, i := z.index/libSecStride, z.index%libSecStride
@@ -777,6 +788,9 @@ func (d *Display) libPlayTapped(l *librarySheet, e musicassistant.Entry, kind st
 		return
 	}
 	d.libPlay(l.target, e, kind, shuffle, enqueue)
+	if kind == "audiobook" && enqueue == libEnqueueReplace {
+		libWatchBook(l.target, e.URI, e.Duration)
+	}
 	d.editLibrary(func(n *librarySheet) { n.lit, n.litUntil = lit, time.Now().Add(tapLit) })
 	// Play replaces the queue and leaves the library for what is now playing; queueing more (next, add)
 	// keeps the library up so the owner can go on adding.
@@ -970,34 +984,7 @@ func (d *Display) libraryUp() bool {
 // libOpenings counts the library's openings, for librarySheet.opening.
 var libOpenings atomic.Uint64
 
-// The chapter's move waits a second, so a player still playing the last book is not taken for this one,
-// then looks for the player to report it is playing for a few seconds. It moves the book either way: a
-// player that does not report it is still moved, rather than left at the book's start. Variables for
-// the tests.
-var (
-	libChapterFirst = time.Second
-	libChapterPoll  = 250 * time.Millisecond
-	libChapterTries = 24 // about six seconds
-)
-
-// libPlayChapter plays the book from its first chapter, then moves it to chapter's start as soon as its
-// player reports it is playing, through Home Assistant's seek. Music Assistant's own seek needs a token
-// with more rights than the device's, so Home Assistant is asked instead. The book keeps its own place
-// for the rest of the book; this only moves it to where the chapter starts.
+// libPlayChapter plays the book from where chapter starts (see libPlayFrom).
 func (d *Display) libPlayChapter(l *librarySheet, book, chapter musicassistant.Entry, lit int) {
-	if l.target == "" || book.URI == "" {
-		return
-	}
-	target, start := l.target, chapter.Start
-	d.libPlayTapped(l, book, "audiobook", false, lit, libEnqueueReplace)
-	go func() {
-		time.Sleep(libChapterFirst)
-		for range libChapterTries {
-			if state, _, ok := tessera.Entity(target); ok && state == "playing" {
-				break
-			}
-			time.Sleep(libChapterPoll)
-		}
-		libTap(dashboard.Action{Entity: target, Service: "media_player.media_seek", Data: map[string]any{"seek_position": start}})
-	}()
+	d.libPlayFrom(l, book, chapter.Start, lit)
 }

@@ -738,8 +738,15 @@ func (r *renderer) libHero(l *librarySheet, p *libPage, g libGeom, pal dashPal, 
 		off := l.target == ""
 		ph := r.s(54)
 		py := cover.Max.Y - ph
-		pw := max(r.width(fc.navBold, libWord(libWordPlay))+r.s(80), r.s(150))
-		sw := max(r.width(fc.navBold, libWord(libWordShuffle))+r.s(80), r.s(170))
+		// An audiobook left part way offers to go on from there, or to start over, in their place.
+		playWord, playIcon := libWord(libWordPlay), "play"
+		shufWord, shufIcon := libWord(libWordShuffle), "shuffle-variant"
+		if spot, ok := libResumeOffer(p); ok {
+			playWord = fmt.Sprintf(libWord(libWordResumeAt), libClock(spot))
+			shufWord, shufIcon = libWord(libWordStartOver), "restart"
+		}
+		pw := max(r.width(fc.navBold, playWord)+r.s(80), r.s(150))
+		sw := max(r.width(fc.navBold, shufWord)+r.s(80), r.s(170))
 		playFill, playFg := pal.accent, pal.bg
 		if l.isLit(libLitPlay) {
 			playFill = lerp(pal.accent, pal.text, 0.4) // pressed
@@ -750,8 +757,8 @@ func (r *renderer) libHero(l *librarySheet, p *libPage, g libGeom, pal dashPal, 
 		}
 		pb := image.Rect(tx, py, tx+pw, py+ph)
 		sb := image.Rect(pb.Max.X+r.s(14), py, pb.Max.X+r.s(14)+sw, py+ph)
-		pill(pb, "play", libWord(libWordPlay), playFill, playFg, off, libPartPlay, 0)
-		pill(sb, "shuffle-variant", libWord(libWordShuffle), shufFill, shufFg, off, libPartShuffle, 0)
+		pill(pb, playIcon, playWord, playFill, playFg, off, libPartPlay, 0)
+		pill(sb, shufIcon, shufWord, shufFill, shufFg, off, libPartShuffle, 0)
 	})
 }
 
