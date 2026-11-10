@@ -1145,9 +1145,9 @@ orange.
 
 In YAML, refer to this action as `esphome.<node>_timer_cancel`.
 
-Cancels one of the device's own timers, the ones started with `timer_start` or on its screen.
-Timers set by voice through Home Assistant's Assist are canceled by voice, the same way they were
-set, and this action refuses them with a message saying so.
+Cancels one of the device's own timers, the ones started with `timer_start`, `timer_start_silent`
+or on its screen. Timers set by voice through Home Assistant's Assist are canceled by voice, the same
+way they were set, and this action refuses them with a message saying so.
 
 To silence a timer that is already ringing, press the device's **Stop alarm or timer** button entity
 instead; it stops alarms and timers alike.
@@ -1157,7 +1157,9 @@ instead; it stops alarms and timers alike.
 *string*
 
 A timer's `id`, from `timer_start`'s answer or `alarms_list`'s `timers`, or `all` to cancel every
-timer of the device's own.
+timer of the device's own. Its `label` works too, for a caller that kept the label and not the id,
+as long as only one of the device's own timers has it; two with the same label are refused with
+their ids.
 
 ```yaml
 action: esphome.office_timer_cancel

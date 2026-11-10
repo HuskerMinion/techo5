@@ -260,13 +260,38 @@ func (t *Timers) cancelFromHA(id string) error {
 		return nil
 	}
 	if id != "" && !strings.HasPrefix(id, localPrefix) {
-		return fmt.Errorf("timers: %q was set through Home Assistant; cancel it there", id)
+		named, err := t.localNamed(id)
+		if err != nil {
+			return err
+		}
+		id = named
 	}
 	if !t.Cancel(id) {
 		return fmt.Errorf("timers: no timer %q on this device", id)
 	}
 	slog.Info("timer canceled from home assistant", "id", id)
 	return nil
+}
+
+// localNamed is the id of the one timer of the device's own with this label, for a caller that has the
+// label and not the id: an assistant that started it and was not given the answer, say. Two with the same
+// label are named by their ids rather than guessed between, and a label none of the device's own timers
+// has is taken for one of Home Assistant's, which are canceled where they were set.
+func (t *Timers) localNamed(label string) (string, error) {
+	var ids []string
+	for _, c := range t.List(time.Now()) {
+		if c.Local && strings.EqualFold(strings.TrimSpace(c.Name), label) {
+			ids = append(ids, c.ID)
+		}
+	}
+	switch len(ids) {
+	case 0:
+		return "", fmt.Errorf("timers: %q was set through Home Assistant; cancel it there", label)
+	case 1:
+		return ids[0], nil
+	}
+	slices.Sort(ids)
+	return "", fmt.Errorf("timers: %d timers are called %q; give one of their ids: %s", len(ids), label, strings.Join(ids, ", "))
 }
 
 // Run redraws the countdown while there is one, and waits to be woken while there is not.
