@@ -260,6 +260,28 @@ func (v *Voice) Woke(slot int) { v.open(slot, true, time.Time{}) }
 // which answers (feature/nearest). The turn sends what was said in between, from the history.
 func (v *Voice) WokeAt(slot int, at time.Time) { v.open(slot, true, at) }
 
+// CanVerifyWake limits verified wakes to idle Assist turns.
+func (v *Voice) CanVerifyWake(slot int) bool {
+	return !v.Busy() && haAnswers(slot) && v.HomeAssistant() && !v.turn.micBusy()
+}
+
+// VerifiedWake sounds an approved wake and opens Assist when the audible cue ends.
+func (v *Voice) VerifiedWake(ctx context.Context, slot int) {
+	if ctx.Err() != nil || !config.Get().Wake.OnHA.VerifySTT || !v.CanVerifyWake(slot) {
+		return
+	}
+	cue := &verifiedCue{ctx: ctx, slot: slot, done: make(chan struct{})}
+	select {
+	case v.turn.events <- event{kind: evVerifiedCue, cue: cue}:
+	case <-ctx.Done():
+		return
+	}
+	select {
+	case <-cue.done:
+	case <-ctx.Done():
+	}
+}
+
 // CanAnswer is whether a wake word in slot would open a turn here now: an assistant is there to take it
 // (Home Assistant, or the device's own direct pipeline), the microphones are not taken by something
 // else (a talk through a camera, takes being recorded), and the slot has a wake word Home Assistant

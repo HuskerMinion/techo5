@@ -6,8 +6,9 @@ import "github.com/HuskerMinion/techo5/echod/internal/lib/hook"
 // what a screen shows — "Listening…", then what was heard, then the answer — and it is a hook
 // rather than a query because a screen wants to redraw the moment something changes, not poll.
 //
-// Phase is the conversation's own name for it: idle, listening, thinking, replying. Heard and Reply
-// are kept through the idle that follows a turn, so whoever shows them can let them linger.
+// Phase is the displayed state: idle, listening, thinking, replying. An approved wake displays
+// listening during its cue, before the command stream opens. Heard and Reply are kept through
+// the idle that follows a turn, so whoever shows them can let them linger.
 type State struct {
 	Phase string
 	Heard string

@@ -14,13 +14,28 @@ import (
 // it, confirming with it, and the lowest score worth confirming. Both switches start off: either one
 // sends the room's audio to Home Assistant, and that is the owner's choice to make.
 type onHAEntities struct {
+	verify    *esphome.Switch
 	stream    *esphome.Switch
 	confirm   *esphome.Switch
 	threshold *esphome.Number
+	sttSent   *esphome.Sensor
+	sttAllow  *esphome.Sensor
+	sttBlock  *esphome.Sensor
 }
 
-func newOnHAEntities() onHAEntities {
+func newOnHAEntities(cancelVerification func()) onHAEntities {
 	o := onHAEntities{
+		sttSent:  newSTTWakeCounter("wake_stt_requests_sent", "Wake STT requests sent", "mdi:microphone-message"),
+		sttAllow: newSTTWakeCounter("wake_stt_allowed", "Wake STT allowed", "mdi:check-circle-outline"),
+		sttBlock: newSTTWakeCounter("wake_stt_blocked", "Wake STT blocked", "mdi:close-circle-outline"),
+		verify: &esphome.Switch{
+			Base: esphome.Base{
+				ObjectID: "always_verify_with_stt",
+				Name:     "Always Verify with STT",
+				Icon:     "mdi:account-check",
+				Category: esphome.CategoryConfig,
+			},
+		},
 		stream: &esphome.Switch{
 			Base: esphome.Base{
 				ObjectID: "wake_word_on_home_assistant",
@@ -52,6 +67,18 @@ func newOnHAEntities() onHAEntities {
 		},
 	}
 
+	o.verify.OnCommand = func(on bool) {
+		if err := config.Set().OnHA().VerifySTT(on); err != nil {
+			slog.Error("saving STT wake verification failed", "err", err)
+			o.verify.Set(config.Get().Wake.OnHA.VerifySTT)
+			return
+		}
+		if !on {
+			cancelVerification()
+		}
+		o.verify.Set(on)
+		voice.Get().WakeOnHAChanged()
+	}
 	o.stream.OnCommand = func(on bool) {
 		o.stream.Set(on)
 		if err := config.Set().OnHA().Stream(on); err != nil {
@@ -78,9 +105,24 @@ func newOnHAEntities() onHAEntities {
 }
 
 func (o onHAEntities) restore(c config.OnHA) {
+	o.verify.Set(c.VerifySTT)
+	o.publishSTTWakes(c.STTWakes)
 	o.stream.Set(c.Stream)
 	o.confirm.Set(c.Confirm)
 	o.threshold.Set(float32(c.ConfirmAt()))
 	slog.Info("restored", "what", "wake word on home assistant", "stream", c.Stream, "confirm", c.Confirm,
 		"confirm_threshold", c.ConfirmAt())
+}
+
+func newSTTWakeCounter(id, name, icon string) *esphome.Sensor {
+	return &esphome.Sensor{
+		Base:       esphome.Base{ObjectID: id, Name: name, Icon: icon},
+		StateClass: esphome.StateClassTotalIncreasing,
+	}
+}
+
+func (o onHAEntities) publishSTTWakes(counts config.STTWakeCounts) {
+	o.sttSent.Set(float32(counts.Sent))
+	o.sttAllow.Set(float32(counts.Allowed))
+	o.sttBlock.Set(float32(counts.Blocked))
 }

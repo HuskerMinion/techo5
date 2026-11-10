@@ -41,6 +41,9 @@ type Detect struct {
 	busy   *wakeBusy
 	stop   *esphome.Number
 
+	verifyMu     sync.Mutex
+	verifyCancel context.CancelFunc
+
 	// base is each slot's own threshold, the stop word's apart (thresholdFor), as the scores view
 	// shows it (scores.go).
 	base func(slot int) float64
@@ -199,6 +202,9 @@ func newDetect() *Detect {
 		return wakeword.Threshold(slot)
 	}
 	e.Threshold = func(slot int) float64 {
+		if isWakeSlot(slot) && config.Get().Wake.OnHA.VerifySTT {
+			return base(slot)
+		}
 		// A call still waiting to be dialed has no far end in the speaker, only "Calling Mom.", so the
 		// stop word keeps the slack it has over any announcement.
 		onCall := phone.Get().Busy() && !phone.Get().State().Waiting
@@ -249,6 +255,10 @@ func newDetect() *Detect {
 		case routeFarEnd:
 			slog.Info("wake word during a call ignored, the far end was talking", "slot", slot+1)
 		case routeTurn:
+			if c.Wake.OnHA.VerifySTT {
+				d.verifyWake(slot)
+				return
+			}
 			if h.phase != phone.Idle {
 				slog.Info("wake word during a call", "slot", slot+1)
 			}
@@ -273,7 +283,7 @@ func newDetect() *Detect {
 			return 0
 		}
 		on := config.Get().Wake.OnHA
-		if !on.Confirm {
+		if !on.Confirm || on.VerifySTT {
 			return 0
 		}
 		return on.ConfirmAt()
@@ -296,7 +306,7 @@ func newDetect() *Detect {
 		d.commands = append(d.commands, c)
 	}
 	d.score = newScoreEntity()
-	d.onHA = newOnHAEntities()
+	d.onHA = newOnHAEntities(d.cancelVerification)
 	e.OnScored = func(slot int, peak, _ float64) { d.scored(slot, peak) }
 	d.frames = newFrameEntities()
 	e.OnFrames = d.frames.set
@@ -319,6 +329,9 @@ func newDetect() *Detect {
 	// What decides is whether the device cut the microphones (CutHere), and the engines' own state says
 	// whether they are coming back.
 	mute.Get().Changed.Listen(func(muted bool) {
+		if muted {
+			d.cancelVerification()
+		}
 		cut := muted && mute.Get().CutHere()
 		was := e.Quieted()
 		e.Quiet(cut)
@@ -376,6 +389,7 @@ func newDetect() *Detect {
 // the command words are kept apart from, looked at here rather than from load, which runs before the
 // save.
 func (d *Detect) selected() {
+	d.cancelVerification()
 	diag.Get().Measure()
 	for _, c := range d.commands {
 		c.follow()
@@ -388,7 +402,10 @@ func (d *Detect) Start(ctx context.Context) error { return d.engine.Start(ctx) }
 
 func (d *Detect) Run(ctx context.Context) error { return d.engine.Run(ctx) }
 
-func (d *Detect) Close() error { return d.engine.Close() }
+func (d *Detect) Close() error {
+	d.cancelVerification()
+	return d.engine.Close()
+}
 
 // Actions are the wake clips' (clips.go).
 func (d *Detect) Actions() []*esphome.Action { return d.clips.actions() }
@@ -504,7 +521,7 @@ func (d *Detect) loadLocked(ids []string) []string {
 // the turn the word opened, are only Home Assistant's wake words: the stop word, and any other word listened for past them, has its own threshold
 // and says nothing about theirs. A command word's peak is for the vote between them (command.go).
 func (d *Detect) scored(slot int, peak float64) {
-	if slot < wakeword.Slots {
+	if slot < wakeword.Slots && !config.Get().Wake.OnHA.VerifySTT {
 		d.score.Set(float32(peak))
 		voice.Get().WakeScored(slot, peak)
 	}

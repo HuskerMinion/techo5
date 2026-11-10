@@ -8,6 +8,27 @@ import (
 	"time"
 )
 
+func TestSTTWakeTotalsSurviveReload(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "state.json")
+	st, err := Load(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	writer := st.Set().OnHA()
+	for _, verdict := range [][2]bool{{true, false}, {false, true}, {false, false}} {
+		if _, err := writer.RecordSTTWake(verdict[0], verdict[1]); err != nil {
+			t.Fatal(err)
+		}
+	}
+	reloaded, err := Load(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got, want := reloaded.Get().Wake.OnHA.STTWakes, (STTWakeCounts{Sent: 3, Allowed: 1, Blocked: 1}); got != want {
+		t.Fatalf("saved wake totals = %+v, want %+v", got, want)
+	}
+}
+
 // A checked change is written before it reports success, and comes back after a load: an occurrence
 // somebody was told is left out must not live only in memory.
 func TestACheckedChangeIsSavedBeforeItIsReported(t *testing.T) {

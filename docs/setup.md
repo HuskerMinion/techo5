@@ -1175,6 +1175,15 @@ Under Settings → **Sound**, or on the device's Assist satellite in Home Assist
 - **Wake word on Home Assistant** and **Confirm wake with Home Assistant** (both off by default):
   let Home Assistant's own wake word engine listen as well as the device, or check a wake the device
   wasn't sure of. See [Wake word on Home Assistant](#wake-word-on-home-assistant) below.
+- **Always Verify with STT** (off by default): send a short clip from an idle local Assist wake to
+  the satellite's selected Assist speech-to-text provider. It uses the normal wake threshold and
+  needs the [wake verification setup](wake-verification-setup.md).
+  An approved phrase shows the listening display as the chime starts. Command capture begins
+  after the chime. A mismatch or an unavailable verifier leaves the device idle. The two acoustic
+  Home Assistant wake modes above are suspended while this switch is on.
+- **Wake STT requests sent**, **Wake STT allowed**, and **Wake STT blocked** show this satellite's
+  persistent verification totals in Home Assistant. A request that fails before a verdict only
+  increases the sent count.
 - **Wake**, a button for each wake word, and **Cancel request**, in Home Assistant. Wake starts
   listening for that assistant, as its wake word would. Cancel request ends a request that is
   running, listening, thinking or replying, as a tap on the action button does, and with it

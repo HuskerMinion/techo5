@@ -173,6 +173,9 @@ func (d *ducker) restore() {
 // watch wires the ducker to an engine.
 func (d *ducker) watch(e *Engine) {
 	e.OnNearMiss = func(slot int, peak float64) {
+		if isWakeSlot(slot) && config.Get().Wake.OnHA.VerifySTT {
+			return
+		}
 		safe.Go("near miss duck", func() { d.heard(slot, peak) })
 	}
 }

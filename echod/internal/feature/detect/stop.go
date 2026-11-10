@@ -101,8 +101,8 @@ func (d *Detect) Entities() []esphome.Entity {
 		out = append(out, c.word, c.threshold)
 	}
 	out = append(out, d.frames.busy, d.frames.rate, d.frames.worst)
-	return append(out, d.score, d.onHA.stream, d.onHA.confirm, d.onHA.threshold, d.clipsTotal, d.clipsKinds,
-		d.keepClips)
+	return append(out, d.score, d.onHA.verify, d.onHA.stream, d.onHA.confirm, d.onHA.threshold,
+		d.onHA.sttSent, d.onHA.sttAllow, d.onHA.sttBlock, d.clipsTotal, d.clipsKinds, d.keepClips)
 }
 
 // newScoreEntity is the highest score the last wake reached. Set beside what was heard, it is how a

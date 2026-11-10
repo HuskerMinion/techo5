@@ -1420,9 +1420,13 @@ func (p *Player) overlaid(n int) { p.overlay = max(p.overlay, n) }
 // short by draining it (a call that has fallen behind) drops its own audio instead while this is so, or
 // the chime or the beep would go with it.
 func (p *Player) Overlaying() bool {
+	return p.overlaySamples() > 0
+}
+
+func (p *Player) overlaySamples() int {
 	p.mu.Lock()
 	defer p.mu.Unlock()
-	return p.overlay > 0
+	return p.overlay
 }
 
 // mix sums add into the front of into, extending it if add outlasts it.

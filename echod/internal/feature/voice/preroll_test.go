@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/HuskerMinion/techo5/echod/internal/config"
+	"github.com/HuskerMinion/techo5/echod/internal/feature/wakeword"
 	"github.com/HuskerMinion/techo5/echod/internal/hardware/mic"
 	"github.com/HuskerMinion/techo5/echod/internal/lib/endpoint"
 )
@@ -48,7 +49,7 @@ func run(t *testing.T, tone config.Tone, cancel bool, pre []int16, frames ...[]i
 		ch <- f
 	}
 	close(ch)
-	c.pump(context.Background(), be, 0, false, false, holdsForTone(0, false), "turn", pre, ch)
+	c.pump(context.Background(), be, 0, false, false, holdsForTone(0, false), "turn", pre, ch, wakeword.Tones(0, false))
 	for len(c.out) > 0 {
 		_ = (<-c.out)()
 	}

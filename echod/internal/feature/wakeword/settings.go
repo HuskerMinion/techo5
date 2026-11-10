@@ -1,6 +1,7 @@
 package wakeword
 
 import (
+	"context"
 	"time"
 
 	"github.com/HuskerMinion/techo5/echod/internal/component"
@@ -36,6 +37,13 @@ func Chime(slot int, followUp bool) {
 	if Tones(slot, followUp) {
 		speaker.Sound().Chime(speaker.WakeTone(toneFor(slot, followUp)))
 	}
+}
+
+func VerifiedChime(ctx context.Context, slot int) (time.Time, bool) {
+	if !Tones(slot, false) {
+		return time.Now(), ctx.Err() == nil
+	}
+	return speaker.Sound().ChimeAudible(ctx, speaker.WakeTone(toneFor(slot, false)), !config.Get().Microphone.Cancel)
 }
 
 // ThinkingEffect and ReplyingEffect are what those phases show, empty to leave them to Effect.

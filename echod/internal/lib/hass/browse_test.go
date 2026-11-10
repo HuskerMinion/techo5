@@ -1,10 +1,13 @@
 package hass
 
 import (
+	"bytes"
 	"context"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 
 	"github.com/gorilla/websocket"
 )
@@ -13,6 +16,14 @@ import (
 func fakeHA(t *testing.T, token string) *httptest.Server {
 	up := websocket.Upgrader{}
 	return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/api/states/select.spot_assistant" {
+			if r.Header.Get("Authorization") != "Bearer "+token {
+				http.Error(w, "invalid access token", http.StatusUnauthorized)
+				return
+			}
+			_, _ = w.Write([]byte(`{"state":"Spot Voice"}`))
+			return
+		}
 		if r.URL.Path != "/api/websocket" {
 			http.NotFound(w, r)
 			return
@@ -42,6 +53,56 @@ func fakeHA(t *testing.T, token string) *httptest.Server {
 				"error": map[string]string{"code": "browse_media_failed", "message": "unknown"}})
 		}
 		switch {
+		case cmd["type"] == "config/entity_registry/list":
+			_ = c.WriteJSON(map[string]any{"id": cmd["id"], "type": "result", "success": true,
+				"result": []map[string]string{
+					{"entity_id": "select.other_assistant", "platform": "esphome", "unique_id": "001122334456-pipeline"},
+					{"entity_id": "select.spot_assistant", "platform": "esphome", "unique_id": "001122334455-pipeline"},
+				}})
+			if err := c.ReadJSON(&cmd); err != nil {
+				t.Error(err)
+				return
+			}
+			if cmd["type"] != "assist_pipeline/pipeline/list" {
+				t.Errorf("unexpected command %v", cmd["type"])
+				return
+			}
+			_ = c.WriteJSON(map[string]any{"id": cmd["id"], "type": "result", "success": true,
+				"result": map[string]any{"preferred_pipeline": "preferred-id", "pipelines": []map[string]string{
+					{"id": "preferred-id", "name": "Preferred"},
+					{"id": "spot-id", "name": "Spot Voice"},
+				}}})
+		case cmd["type"] == "assist_pipeline/run" &&
+			(cmd["pipeline"] == "wake-test" || cmd["pipeline"] == "no-text") &&
+			cmd["start_stage"] == "stt" && cmd["end_stage"] == "stt":
+			event := func(kind string, data map[string]any) error {
+				return c.WriteJSON(map[string]any{"id": cmd["id"], "type": "event",
+					"event": map[string]any{"type": kind, "data": data}})
+			}
+			if err := c.WriteJSON(map[string]any{"id": cmd["id"], "type": "result", "success": true}); err != nil {
+				t.Error(err)
+				return
+			}
+			if err := event("run-start", map[string]any{"runner_data": map[string]int{"stt_binary_handler_id": 7}}); err != nil {
+				t.Error(err)
+				return
+			}
+			for _, want := range [][]byte{{7, 1, 0, 2, 0}, {7}} {
+				kind, got, err := c.ReadMessage()
+				if err != nil || kind != websocket.BinaryMessage || !bytes.Equal(got, want) {
+					t.Errorf("STT audio frame = %v, %v, %v; want %v", kind, got, err, want)
+					return
+				}
+			}
+			if cmd["pipeline"] == "no-text" {
+				if err := event("error", map[string]any{"code": "stt-no-text-recognized"}); err != nil {
+					t.Error(err)
+				}
+				return
+			}
+			if err := event("stt-end", map[string]any{"stt_output": map[string]string{"text": "Alexa"}}); err != nil {
+				t.Error(err)
+			}
 		case cmd["type"] == "media_source/browse_media" && cmd["media_content_id"] == "media-source://radio_browser/local":
 			_ = c.WriteJSON(map[string]any{"type": "event", "id": 99})
 			_ = c.WriteJSON(map[string]any{"id": cmd["id"], "type": "result", "success": true, "result": map[string]any{
@@ -59,6 +120,43 @@ func fakeHA(t *testing.T, token string) *httptest.Server {
 			fail()
 		}
 	}))
+}
+
+func TestTranscribeOnly(t *testing.T) {
+	srv := fakeHA(t, "secret")
+	defer srv.Close()
+
+	c := &Client{acc: access{URL: srv.URL, Token: "secret"}}
+	ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
+	defer cancel()
+
+	got, sent, err := c.Transcribe(ctx, "wake-test", 16000, []byte{1, 0, 2, 0})
+	if err != nil || !sent || got != "Alexa" {
+		t.Fatalf("Transcribe = %q, %v, %v; want Alexa and a sent request", got, sent, err)
+	}
+	if _, sent, err := c.Transcribe(ctx, "no-text", 16000, []byte{1, 0, 2, 0}); !sent || !errors.Is(err, ErrSTTNoText) {
+		t.Errorf("no-text result = sent %v, err %v", sent, err)
+	}
+	if _, sent, err := c.Transcribe(ctx, "wrong-pipeline", 16000, []byte{1, 0}); !sent || err == nil || errors.Is(err, ErrSTTNoText) {
+		t.Errorf("rejected pipeline request = sent %v, err %v", sent, err)
+	}
+	bad := &Client{acc: access{URL: srv.URL, Token: "wrong"}}
+	if _, sent, err := bad.Transcribe(ctx, "wake-test", 16000, []byte{1, 0}); sent || err == nil {
+		t.Errorf("unauthenticated pipeline request = sent %v, err %v", sent, err)
+	}
+}
+
+func TestWakePipelineUsesSatelliteSelection(t *testing.T) {
+	srv := fakeHA(t, "secret")
+	defer srv.Close()
+
+	c := newClient(srv.URL, "secret")
+	ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
+	defer cancel()
+	got, err := c.WakePipeline(ctx, "00:11:22:33:44:55", 0)
+	if err != nil || got != "spot-id" {
+		t.Fatalf("WakePipeline = %q, %v; want spot-id", got, err)
+	}
 }
 
 func TestBrowse(t *testing.T) {

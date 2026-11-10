@@ -1,6 +1,7 @@
 package speaker
 
 import (
+	"context"
 	"time"
 
 	"github.com/HuskerMinion/techo5/echod/internal/config"
@@ -212,4 +213,39 @@ func (d *Driver) Chime(notes []Note) {
 		return
 	}
 	d.Interject(func(p *Player) { p.Chime(toneLevel, notes...) })
+}
+
+// ChimeAudible plays the full chime and returns at the end of its audible part.
+// The quiet tail stays queued so the recording still plays as authored.
+func (d *Driver) ChimeAudible(ctx context.Context, notes []Note, uncanceled bool) (time.Time, bool) {
+	if d == nil || d.p == nil || ctx.Err() != nil {
+		return time.Time{}, false
+	}
+	if len(notes) == 0 {
+		return time.Now(), true
+	}
+	if playback, _ := d.p.device(); playback == nil {
+		return time.Time{}, false
+	}
+	tail := max(Length(notes)-Audible(notes, uncanceled), 0)
+	tailSamples := int(tail * time.Duration(Rate*Channels) / time.Second)
+	d.Chime(notes)
+	tick := time.NewTicker(5 * time.Millisecond)
+	defer tick.Stop()
+	for d.p.overlaySamples() > tailSamples {
+		select {
+		case <-ctx.Done():
+			return time.Time{}, false
+		case <-tick.C:
+		}
+	}
+	completed := time.Now().Add(OutputLatency)
+	timer := time.NewTimer(time.Until(completed))
+	defer timer.Stop()
+	select {
+	case <-ctx.Done():
+		return time.Time{}, false
+	case <-timer.C:
+		return completed, ctx.Err() == nil
+	}
 }
