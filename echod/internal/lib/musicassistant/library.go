@@ -168,12 +168,49 @@ func (e Entry) By() string {
 
 // Kinds a library holds, as the API names them in its commands (music/<kind>/library_items).
 const (
-	KindArtists   = "artists"
-	KindAlbums    = "albums"
-	KindTracks    = "tracks"
-	KindPlaylists = "playlists"
-	KindRadios    = "radios"
+	KindArtists    = "artists"
+	KindAlbums     = "albums"
+	KindTracks     = "tracks"
+	KindPlaylists  = "playlists"
+	KindRadios     = "radios"
+	KindPodcasts   = "podcasts"
+	KindAudiobooks = "audiobooks"
 )
+
+// Chapter is one part of an audiobook, in order: its name, and where it starts and ends in seconds.
+type Chapter struct {
+	Position int     `json:"position"`
+	Name     string  `json:"name"`
+	Start    float64 `json:"start"`
+	End      float64 `json:"end"`
+}
+
+// Audiobook is an audiobook read in full: its entry, and its chapters in order when the server sends
+// them. A list of audiobooks does not carry the chapters, so they come from here.
+func (c Client) Audiobook(ctx context.Context, book Entry) (Entry, []Chapter, error) {
+	var raw json.RawMessage
+	if err := c.do(ctx, "music/audiobooks/get", itemArgs(book), &raw); err != nil {
+		return Entry{}, nil, err
+	}
+	var e Entry
+	if err := e.UnmarshalJSON(raw); err != nil {
+		return Entry{}, nil, err
+	}
+	var withChapters struct {
+		Chapters []Chapter `json:"chapters"`
+	}
+	if err := json.Unmarshal(raw, &withChapters); err != nil {
+		return e, nil, nil // the entry is usable without its chapters
+	}
+	return e, withChapters.Chapters, nil
+}
+
+// PodcastEpisodes are a podcast's episodes, newest first as the server lists them.
+func (c Client) PodcastEpisodes(ctx context.Context, podcast Entry) ([]Entry, error) {
+	var out []Entry
+	err := c.do(ctx, "music/podcasts/podcast_episodes", itemArgs(podcast), &out)
+	return out, err
+}
 
 // Library is a page of the library's items of kind (KindArtists ...), by name, starting at offset.
 // With search set, only the ones whose name has it in it.
