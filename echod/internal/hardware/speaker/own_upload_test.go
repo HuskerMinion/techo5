@@ -91,7 +91,7 @@ func TestARecordingThatCannotPlaySaysWhy(t *testing.T) {
 	if !has || !strings.Contains(problem, "22050") {
 		t.Errorf("has %v, problem %q", has, problem)
 	}
-	if len(OwnSounds()) != 13 || OwnSounds()[0] != "wake_word_triggered" {
+	if len(OwnSounds()) != 14 || OwnSounds()[0] != "wake_word_triggered" {
 		t.Errorf("sounds %v", OwnSounds())
 	}
 }

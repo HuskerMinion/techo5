@@ -197,6 +197,9 @@ func TestIntercomDropInAnswersItself(t *testing.T) {
 	if err := config.Set().Home().DropIn(true); err != nil {
 		t.Fatal(err)
 	}
+	if err := config.Set().Home().IntercomRingDisabled(true); err != nil {
+		t.Fatal(err)
+	}
 	known := knownDevice
 	knownDevice = func(name, from string) bool { return from == peer.Address }
 	t.Cleanup(func() { knownDevice = known })
@@ -215,6 +218,54 @@ func TestIntercomDropInAnswersItself(t *testing.T) {
 	}
 	p.Hangup()
 	waitFor(t, "idle", func() bool { return p.State().Phase == Idle })
+}
+
+// An enabled ringtone takes priority over immediate Drop In.
+// With automatic answering disabled, the call waits for manual answering.
+func TestIntercomRingtoneTakesPriorityOverDropIn(t *testing.T) {
+	p, peer := house(t)
+
+	if err := config.Set().Home().DropIn(true); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := config.Set().Home().IntercomRingDisabled(false); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := config.Set().Home().IntercomAutoAnswerDelay(0); err != nil {
+		t.Fatal(err)
+	}
+
+	known := knownDevice
+	knownDevice = func(name, from string) bool {
+		return from == peer.Address
+	}
+	t.Cleanup(func() { knownDevice = known })
+
+	got, l := firstAnswer(t, peer)
+	if got != msgRinging {
+		t.Fatalf("first answer %q", got)
+	}
+
+	waitFor(t, "ringing", func() bool {
+		return p.State().Phase == Ringing
+	})
+
+	if p.State().DropIn {
+		t.Fatal("Drop In started despite the ringtone being enabled")
+	}
+
+	select {
+	case got := <-l.control:
+		t.Fatalf("call answered automatically: %q", got)
+	case <-time.After(1500 * time.Millisecond):
+	}
+
+	p.Hangup()
+	waitFor(t, "idle", func() bool {
+		return p.State().Phase == Idle
+	})
 }
 
 // Drop In answers by itself only for a device this one knows, calling from that device's address.

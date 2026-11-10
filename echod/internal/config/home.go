@@ -1,6 +1,7 @@
 package config
 
 import (
+	"fmt"
 	"maps"
 	"slices"
 	"strings"
@@ -99,6 +100,14 @@ type Home struct {
 	// DropIn lets an intercom call from another device in the house connect by itself after a chime,
 	// with nobody answering. Off unless somebody turns it on: it is a way to listen in on a room.
 	DropIn bool `json:"drop_in,omitempty"`
+
+	// IntercomAutoAnswerDelay définit le délai de décrochage automatique en secondes.
+	// Une valeur de 0 désactive le décrochage automatique.
+	IntercomAutoAnswerDelay int `json:"intercom_auto_answer_delay,omitempty"`
+
+	// IntercomRingDisabled skips the ringtone before automatic intercom answering.
+	// Off by default, so normal intercom calls continue to ring.
+	IntercomRingDisabled bool `json:"intercom_ring_disabled,omitempty"`
 
 	// RingSound is how a call rings here, one of the phone's ring sounds; empty is the first of them.
 	RingSound string `json:"ring_sound,omitempty"`
@@ -369,9 +378,28 @@ func (w HomeWriter) HouseWord(v string) error {
 }
 
 func (w HomeWriter) DropIn(v bool) error {
-	return w.st.Update(func(c *Config) { c.Home.DropIn = v })
+	return w.st.Update(func(c *Config) {
+		c.Home.DropIn = v
+	})
 }
 
+func (w HomeWriter) IntercomAutoAnswerDelay(v int) error {
+	switch v {
+	case 0, 2, 3, 5, 10, 15:
+		// Valeur autorisée.
+	default:
+		return fmt.Errorf("delai de decrochage invalide : %d", v)
+	}
+
+	return w.st.Update(func(c *Config) {
+		c.Home.IntercomAutoAnswerDelay = v
+	})
+}
+func (w HomeWriter) IntercomRingDisabled(v bool) error {
+	return w.st.Update(func(c *Config) {
+		c.Home.IntercomRingDisabled = v
+	})
+}
 func (w HomeWriter) RingSound(v string) error {
 	return w.st.Update(func(c *Config) { c.Home.RingSound = v })
 }

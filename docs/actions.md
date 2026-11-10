@@ -2948,6 +2948,33 @@ fires the same `esphome.techo5_phone` events, with `kind: intercom`.
 > in Home Assistant and settings on a screen (Sound & Voice, and Privacy & Security). After a call is
 > declined, the same device cannot ring it again for 30 seconds.
 
+### Intercom ringtone and automatic answering
+
+Incoming intercom calls can use a custom WAV ringtone. The ringtone is
+enabled by default, and a standard ringtone is used if no custom WAV
+has been uploaded.
+
+**Intercom ringtone** controls whether an incoming intercom call rings.
+**Intercom auto-answer delay** can be set to Disabled, 2, 3, 5, 10 or
+15 seconds. Automatic answering is disabled by default.
+
+With the ringtone enabled and automatic answering configured, the
+device rings before answering automatically after the selected delay.
+Someone in the room may answer manually before that delay expires.
+If automatic answering is disabled, a normal ringing call must be
+answered manually.
+
+When the ringtone is disabled, an authorized Drop In can connect
+immediately, preserving the direct-answer behavior.
+
+An incoming call that has ended or been declined must not be answered
+later by a pending automatic-answer timer.
+
+Automatic answering opens the device's microphone. Enable this option
+only where the people using the room expect calls to be answered
+automatically.
+
+
 ### device (Required)
 
 *string*

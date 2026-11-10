@@ -1819,6 +1819,7 @@ Or copy a WAVE file named for the sound into the device's sounds folder over SSH
 | `button_press.wav` | a button held (the mute button's hold) |
 | `volume_change.wav` | each press of volume up or down |
 | `bluetooth_connected.wav` | a Bluetooth device connecting |
+| `intercom_ring.wav` | the optional ringtone for incoming intercom calls |
 | `drop_in.wav` | the chime before a Drop In opens a room's microphones |
 | `announcement.wav` | the chime before an announcement, spoken or recorded |
 

@@ -89,11 +89,12 @@ var (
 	// moment's notice. ClipListenEnd is new: the device is silent as listening ends until there is one.
 	// ClipDropIn is the chime that warns a room's microphones are about to open, and ClipAnnounce the
 	// one an announcement arrives with.
-	ClipListenEnd = &Clip{file: "listening_ended", most: shortOwn}
-	ClipButton    = &Clip{file: "button_press", most: shortOwn}
-	ClipVolume    = &Clip{file: "volume_change", most: shortOwn}
-	ClipBTConnect = &Clip{file: "bluetooth_connected", most: shortOwn}
-	ClipDropIn    = &Clip{file: "drop_in", most: shortOwn}
+	ClipListenEnd    = &Clip{file: "listening_ended", most: shortOwn}
+	ClipButton       = &Clip{file: "button_press", most: shortOwn}
+	ClipVolume       = &Clip{file: "volume_change", most: shortOwn}
+	ClipBTConnect    = &Clip{file: "bluetooth_connected", most: shortOwn}
+	ClipDropIn       = &Clip{file: "drop_in", most: shortOwn}
+	ClipIntercomRing = &Clip{file: "intercom_ring"}
 	// ClipAnnounce is the chime an announcement arrives with (#465).
 	ClipAnnounce = &Clip{file: "announcement", most: shortOwn}
 )
@@ -297,6 +298,21 @@ func (c *Clip) Own() bool {
 	defer c.mu.Unlock()
 	c.load()
 	return c.own
+}
+
+// OwnSamples returns a copy of the owner's recording, or nil if unavailable.
+// Samples are mono at Rate (48 kHz).
+func (c *Clip) OwnSamples() []int16 {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	c.load()
+
+	if !c.own {
+		return nil
+	}
+
+	return append([]int16(nil), c.samples...)
 }
 
 // Note is the clip as a note, so it goes wherever notes go: a chime, a ring, one round of an alarm.
