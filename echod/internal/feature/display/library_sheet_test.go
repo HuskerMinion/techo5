@@ -464,7 +464,7 @@ func TestTheLibraryShufflesThroughMusicAssistant(t *testing.T) {
 
 	d := &Display{poke: make(chan struct{}, 1)}
 	album := libEntries("album", 1)[0]
-	d.libPlay("media_player.ma_kitchen", album, "album", true)
+	d.libPlay("media_player.ma_kitchen", album, "album", true, libEnqueueReplace)
 	waitUntil(t, "a play", func() bool { return strings.Contains(got(), "play_media") })
 	if want := "ma player_queues/shuffle up0a1b2c3d true; ha music_assistant.play_media"; got() != want {
 		t.Errorf("asked %q, want %q", got(), want)
@@ -473,10 +473,82 @@ func TestTheLibraryShufflesThroughMusicAssistant(t *testing.T) {
 	mu.Lock()
 	events, refuse = nil, true
 	mu.Unlock()
-	d.libPlay("media_player.ma_kitchen", album, "album", false)
+	d.libPlay("media_player.ma_kitchen", album, "album", false, libEnqueueReplace)
 	waitUntil(t, "a play", func() bool { return strings.Contains(got(), "play_media") })
 	if want := "ma player_queues/shuffle up0a1b2c3d false; ha media_player.shuffle_set; ha music_assistant.play_media"; got() != want {
 		t.Errorf("refused, asked %q, want %q", got(), want)
+	}
+}
+
+// Play next and Add to queue only append to what is queued: the play goes out with that enqueue mode,
+// no shuffle is asked for even for a whole album, what is now playing is not marked as replaced, and
+// the library stays up so more can be added. Play still replaces and leaves.
+func TestQueueingFromTheLibraryOnlyAppends(t *testing.T) {
+	noLibrary(t)
+	var mu sync.Mutex
+	var plays []map[string]any
+	var services []string
+	prev, prevLeave := sheetTap, libLeaveAfter
+	sheetTap = func(a dashboard.Action) {
+		mu.Lock()
+		defer mu.Unlock()
+		services = append(services, a.Service)
+		if a.Service == "music_assistant.play_media" {
+			plays = append(plays, a.Data)
+		}
+	}
+	left := 0
+	libLeaveAfter = func(_ time.Duration, f func()) *time.Timer { left++; return nil }
+	t.Cleanup(func() { sheetTap, libLeaveAfter = prev, prevLeave })
+
+	const target = "media_player.ma_kitchen"
+	for _, mode := range []string{libEnqueueNext, libEnqueueAdd} {
+		mu.Lock()
+		plays, services = nil, nil
+		mu.Unlock()
+		putOn.Delete(target)
+		left = 0
+
+		d := &Display{poke: make(chan struct{}, 1)}
+		sheet := libSheetWith(libAlbums, nil, target)
+		d.dashLibrary = &sheet
+		album := libEntries("album", 1)[0]
+		d.libPlayTapped(&sheet, album, "album", true, 0, mode)
+
+		mu.Lock()
+		if len(plays) != 1 || plays[0]["enqueue"] != mode {
+			t.Errorf("%s: plays %v, want one with enqueue %q", mode, plays, mode)
+		}
+		for _, s := range services {
+			if s == "media_player.shuffle_set" {
+				t.Errorf("%s: a shuffle was asked for while only queueing", mode)
+			}
+		}
+		mu.Unlock()
+		if _, on := putOn.Load(target); on {
+			t.Errorf("%s: what is playing was marked as replaced", mode)
+		}
+		if left != 0 {
+			t.Errorf("%s: the library left after queueing", mode)
+		}
+		if d.dashLibrary == nil {
+			t.Errorf("%s: the library was put away", mode)
+		}
+	}
+
+	// Play replaces: it marks what is on and leaves.
+	putOn.Delete(target)
+	left = 0
+	d := &Display{poke: make(chan struct{}, 1)}
+	sheet := libSheetWith(libTracks, nil, target)
+	d.dashLibrary = &sheet
+	track := libEntries("track", 1)[0]
+	d.libPlayTapped(&sheet, track, "track", false, 0, libEnqueueReplace)
+	if on, _ := putOn.Load(target); on != track.URI {
+		t.Errorf("Play did not mark %q as on (got %v)", track.URI, on)
+	}
+	if left != 1 {
+		t.Errorf("Play did not leave the library (left %d)", left)
 	}
 }
 

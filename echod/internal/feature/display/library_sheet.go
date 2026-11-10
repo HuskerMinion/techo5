@@ -580,7 +580,7 @@ func (d *Display) libraryTap(x, y int) bool {
 		if z.kind == libPartShuffle {
 			lit = libLitShuffle
 		}
-		d.libPlayTapped(l, p.entry, libEntryType(p.entry, libPageType(p.what)), z.kind == libPartShuffle, lit)
+		d.libPlayTapped(l, p.entry, libEntryType(p.entry, libPageType(p.what)), z.kind == libPartShuffle, lit, libEnqueueReplace)
 	case libPartItem:
 		sec, i := z.index/libSecStride, z.index%libSecStride
 		if sec >= len(p.sections) || i >= len(p.sections[sec].entries) {
@@ -594,7 +594,7 @@ func (d *Display) libraryTap(x, y int) bool {
 			d.editLibrary(func(n *librarySheet) { n.stack = append(n.stack, np) })
 			d.libLoad(np.id)
 		default:
-			d.libPlayTapped(l, e, kind, false, z.index)
+			d.libPlayTapped(l, e, kind, false, z.index, libEnqueueReplace)
 		}
 	}
 	d.wake()
@@ -629,12 +629,17 @@ var libLeaveAfter = time.AfterFunc
 // libPlayTapped plays e from a tap, lights what was tapped (lit), and then leaves the library for what
 // is playing (libLeave). A tap that showed nothing was tapped again, and when Music Assistant was slow
 // both plays went through, the first heard for a few seconds before the second replaced it.
-func (d *Display) libPlayTapped(l *librarySheet, e musicassistant.Entry, kind string, shuffle bool, lit int) {
+func (d *Display) libPlayTapped(l *librarySheet, e musicassistant.Entry, kind string, shuffle bool, lit int, enqueue string) {
 	if l.target == "" || e.URI == "" {
 		return
 	}
-	d.libPlay(l.target, e, kind, shuffle)
+	d.libPlay(l.target, e, kind, shuffle, enqueue)
 	d.editLibrary(func(n *librarySheet) { n.lit, n.litUntil = lit, time.Now().Add(tapLit) })
+	// Play replaces the queue and leaves the library for what is now playing; queueing more (next, add)
+	// keeps the library up so the owner can go on adding.
+	if enqueue != libEnqueueReplace {
+		return
+	}
 	target, from := l.target, l.from
 	libLeaveAfter(tapLit, func() { d.libLeave(target, from) })
 }
@@ -689,23 +694,38 @@ func (d *Display) libLeave(target, from string) {
 // libQueueOf is the Music Assistant queue target plays from; a variable for the tests.
 var libQueueOf = dashboard.MusicQueue
 
-// libPlay plays e on target through Home Assistant, as the media sheet plays a favorite, replacing what
-// was queued. An artist, album or playlist played from its page sets the queue's shuffle first, on or
-// off, so that Play plays it in order after a Shuffle.
-func (d *Display) libPlay(target string, e musicassistant.Entry, kind string, shuffle bool) {
+// Music Assistant's play_media enqueue modes: replace the queue and play now, play after the current
+// track, or add to the end of the queue.
+const (
+	libEnqueueReplace = "replace"
+	libEnqueueNext    = "next"
+	libEnqueueAdd     = "add"
+)
+
+// libPlay plays e on target through Home Assistant, as the media sheet plays a favorite. With
+// libEnqueueReplace it replaces what was queued and plays now; libEnqueueNext and libEnqueueAdd leave
+// what is playing and only add to the queue. An artist, album or playlist replacing the queue sets its
+// shuffle first, on or off, so that Play plays it in order after a Shuffle.
+func (d *Display) libPlay(target string, e musicassistant.Entry, kind string, shuffle bool, enqueue string) {
 	if target == "" || e.URI == "" {
 		return
 	}
-	slog.Info("dashboard music library play", "uri", e.URI, "type", kind, "shuffle", shuffle)
+	slog.Info("dashboard music library play", "uri", e.URI, "type", kind, "shuffle", shuffle, "enqueue", enqueue)
 	play := func() {
 		libTap(dashboard.Action{Entity: target, Service: "music_assistant.play_media",
-			Data: map[string]any{"media_id": e.URI, "media_type": kind, "enqueue": "replace"}})
+			Data: map[string]any{"media_id": e.URI, "media_type": kind, "enqueue": enqueue}})
 	}
-	putOn.Store(target, e.URI)
-	if kind != "artist" && kind != "album" && kind != "playlist" {
+	container := kind == "artist" || kind == "album" || kind == "playlist"
+	// Next and add only append: the queue, and so what is playing, is left as it is, so no putOn and no
+	// shuffle. Only replacing the queue marks what is now on and may shuffle a container first.
+	if enqueue != libEnqueueReplace || !container {
+		if enqueue == libEnqueueReplace {
+			putOn.Store(target, e.URI)
+		}
 		play()
 		return
 	}
+	putOn.Store(target, e.URI)
 	go func() {
 		if libQueueShuffle(target, shuffle) {
 			play() // Music Assistant has answered, so the shuffle is set before the play is asked for
