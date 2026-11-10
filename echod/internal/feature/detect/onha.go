@@ -8,6 +8,7 @@ import (
 	"github.com/HuskerMinion/techo5/echod/internal/component"
 	"github.com/HuskerMinion/techo5/echod/internal/config"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/voice"
+	"github.com/HuskerMinion/techo5/echod/internal/layout"
 )
 
 // onHAEntities are the settings for Home Assistant's own wake word engine (config.OnHA): streaming to
@@ -23,7 +24,7 @@ type onHAEntities struct {
 	sttBlock  *esphome.Sensor
 }
 
-func newOnHAEntities(cancelVerification func()) onHAEntities {
+func newOnHAEntities(cancelVerification func(), hasHAAccess func() bool) onHAEntities {
 	o := onHAEntities{
 		sttSent:  newSTTWakeCounter("wake_stt_requests_sent", "Wake STT requests sent", "mdi:microphone-message"),
 		sttAllow: newSTTWakeCounter("wake_stt_allowed", "Wake STT allowed", "mdi:check-circle-outline"),
@@ -68,6 +69,14 @@ func newOnHAEntities(cancelVerification func()) onHAEntities {
 	}
 
 	o.verify.OnCommand = func(on bool) {
+		if on && !hasHAAccess() {
+			on = false
+			notifyMissingSTTAccess()
+			if !config.Get().Wake.OnHA.VerifySTT {
+				o.verify.Set(false)
+				return
+			}
+		}
 		if err := config.Set().OnHA().VerifySTT(on); err != nil {
 			slog.Error("saving STT wake verification failed", "err", err)
 			o.verify.Set(config.Get().Wake.OnHA.VerifySTT)
@@ -102,6 +111,31 @@ func newOnHAEntities(cancelVerification func()) onHAEntities {
 		}
 	}
 	return o
+}
+
+const wakeVerificationSetupURL = "https://github.com/HuskerMinion/techo5/blob/main/docs/wake-verification-setup.md"
+
+func notifyMissingSTTAccess() {
+	name := config.Get().Device.Name
+	mac, _ := layout.FactoryMAC()
+	deviceID := layout.Slug(mac)
+	if deviceID == "" {
+		deviceID = layout.NodeName(name, "")
+	}
+	title := "Wake verification needs Home Assistant setup"
+	if name != "" {
+		title += " on " + name
+	}
+	slog.Warn("wake verification cannot be enabled without a Home Assistant URL and token",
+		"setup_guide", wakeVerificationSetupURL)
+	component.CallService.Emit(component.Call{
+		Service: "persistent_notification.create",
+		Data: map[string]string{
+			"title":           title,
+			"message":         "Set up the Home Assistant URL and long-lived access token on this satellite, then try again. [Wake verification setup guide](" + wakeVerificationSetupURL + ")",
+			"notification_id": "techo5_wake_stt_setup_" + deviceID,
+		},
+	})
 }
 
 func (o onHAEntities) restore(c config.OnHA) {

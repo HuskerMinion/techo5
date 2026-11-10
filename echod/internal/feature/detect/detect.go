@@ -23,6 +23,7 @@ import (
 	"github.com/HuskerMinion/techo5/echod/internal/hardware/led"
 	"github.com/HuskerMinion/techo5/echod/internal/hardware/mic"
 	"github.com/HuskerMinion/techo5/echod/internal/hardware/speaker"
+	"github.com/HuskerMinion/techo5/echod/internal/lib/hass"
 	"github.com/HuskerMinion/techo5/echod/internal/lib/wake"
 	"github.com/HuskerMinion/techo5/echod/internal/service"
 )
@@ -306,7 +307,7 @@ func newDetect() *Detect {
 		d.commands = append(d.commands, c)
 	}
 	d.score = newScoreEntity()
-	d.onHA = newOnHAEntities(d.cancelVerification)
+	d.onHA = newOnHAEntities(d.cancelVerification, func() bool { return hass.Get().Ready() })
 	e.OnScored = func(slot int, peak, _ float64) { d.scored(slot, peak) }
 	d.frames = newFrameEntities()
 	e.OnFrames = d.frames.set

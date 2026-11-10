@@ -30,3 +30,9 @@ Open the satellite's device page under **Settings → Devices & services → ESP
 - Turn **Always Verify with STT** off to restore normal local wake handling while you check the setup.
 - Confirm that you ran the action for this satellite and used a reachable Home Assistant URL and a valid token. If you replaced the token, run the same action again.
 - Check that the microphone is unmuted, that the intended wake word is selected, and that its Assist pipeline can transcribe a spoken command. Then turn verification back on and try again.
+
+## If the verification switch stays off
+
+Firmware with the setup check refuses to enable verification until the satellite has a saved Home Assistant URL and token. If the ESPHome integration allows the device to perform Home Assistant actions, the satellite also sends a Home Assistant notification with a link to this guide.
+
+To receive the notification, open **Settings → Devices & services → ESPHome**, select **Configure** for the satellite, and enable **Allow the device to perform Home Assistant actions**. The switch still refuses to turn on when credentials are missing even if notifications are disabled.
