@@ -1040,12 +1040,45 @@ func shadowAlpha() float64 {
 	return 0.22
 }
 
-// onAccent is text that reads on the accent: the ground on a light accent, the text color on a dark one.
-func onAccent() color.RGBA {
-	if 0.299*float64(amber.R)+0.587*float64(amber.G)+0.114*float64(amber.B) > 128 {
-		return shift(walnut, -8)
+// contrastOnAccent measures the weakest contrast across the accent's shaded
+// and lit edges. The settings rail uses a 16-step gradient.
+func contrastOnAccent(ink color.RGBA) float64 {
+	return min(colorContrast(ink, shift(amber, 16)), colorContrast(ink, shift(amber, -16)))
+}
+
+// colorContrast is the WCAG contrast ratio of two opaque sRGB colors.
+func colorContrast(a, b color.RGBA) float64 {
+	channel := func(v uint8) float64 {
+		c := float64(v) / 255
+		if c <= 0.04045 {
+			return c / 12.92
+		}
+		return math.Pow((c+0.055)/1.055, 2.4)
 	}
-	return cream
+	light := func(c color.RGBA) float64 {
+		return 0.2126*channel(c.R) + 0.7152*channel(c.G) + 0.0722*channel(c.B)
+	}
+	la, lb := light(a), light(b)
+	return (max(la, lb) + 0.05) / (min(la, lb) + 0.05)
+}
+
+// onAccent chooses legible ink from the actual theme palette. A custom Light
+// theme may have dark text AND a dark accent. Prefer palette ink with at least
+// 4.5:1 contrast across the gradient, else use the clearer black/white ink.
+func onAccent() color.RGBA {
+	ink := shift(walnut, -8)
+	if contrastOnAccent(cream) > contrastOnAccent(ink) {
+		ink = cream
+	}
+	if contrastOnAccent(ink) >= 4.5 {
+		return ink
+	}
+	black := color.RGBA{0, 0, 0, 255}
+	white := color.RGBA{255, 255, 255, 255}
+	if contrastOnAccent(black) >= contrastOnAccent(white) {
+		return black
+	}
+	return white
 }
 
 // ---- anti-aliased drawing ------------------------------------------------------------------------
