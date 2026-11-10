@@ -238,6 +238,9 @@ func libImageURL(base string, e musicassistant.Entry) string {
 }
 
 // libIcon is the icon drawn for an item without a picture of its own, or until its own has come.
+// libTabIcon is the icon a second-row icon tab shows: its kind's.
+func libTabIcon(tab int) string { return libIcon(libTypes[tab]) }
+
 func libIcon(kind string) string {
 	switch kind {
 	case "artist":
@@ -252,6 +255,12 @@ func libIcon(kind string) string {
 		return "podcast"
 	case "audiobook":
 		return "book-open-variant"
+	case "favorite":
+		return "heart"
+	case "recent":
+		return "history"
+	case "queue":
+		return "playlist-play"
 	}
 	return "music-note"
 }
@@ -407,10 +416,21 @@ func (r *renderer) librarySheet(v *libraryView, th dashboard.Theme) {
 			pill(image.Rect(x, bar.Min.Y, x+w, bar.Max.Y), icon, word, fill, fg, false, libPartTab, i)
 			x += w + tabGap
 		}
-		// The second row: podcasts and audiobooks, as wide as their words, from the left.
+		// The second row: podcasts and audiobooks, as wide as their words, from the left; favorites,
+		// recently played and the queue as icons at the right end.
 		row := g.row2
+		iconW := r.s(64)
+		iconsX := row.Max.X - (libTabs-libFavorites)*iconW - (libTabs-libFavorites-1)*tabGap
+		for i := libFavorites; i < libTabs; i++ {
+			fill, fg := plain, pal.text
+			if i == l.tab {
+				fill, fg = lit, pal.bg
+			}
+			ix := iconsX + (i-libFavorites)*(iconW+tabGap)
+			pill(image.Rect(ix, row.Min.Y, ix+iconW, row.Max.Y), libTabIcon(i), "", fill, fg, false, libPartTab, i)
+		}
 		x = row.Min.X
-		for i := libRowTabs; i < libTabs; i++ {
+		for i := libRowTabs; i < libFavorites; i++ {
 			w := pillW(libWord(i), false)
 			fill, fg := plain, pal.text
 			if i == l.tab {
@@ -423,7 +443,8 @@ func (r *renderer) librarySheet(v *libraryView, th dashboard.Theme) {
 		if l.tab == libAudiobooks {
 			word := libWord(libWordSortAuthor + l.audiobookSort)
 			w := pillW(word, true) // room for the icon too, so the word is not cut short
-			pill(image.Rect(row.Max.X-w, row.Min.Y, row.Max.X, row.Max.Y), "swap-vertical", word, plain, pal.text, false, libPartSort, 0)
+			right := iconsX - tabGap
+			pill(image.Rect(right-w, row.Min.Y, right, row.Max.Y), "swap-vertical", word, plain, pal.text, false, libPartSort, 0)
 		}
 	}
 

@@ -69,6 +69,18 @@ var (
 // libBookWatch is the watch in force: a new one ends the last, which saves its place as it goes.
 var libBookWatch atomic.Uint64
 
+// libBookLookNow asks the watch to look at the player now rather than at its next turn: an audiobook's
+// page just opened, and a book paused a moment ago should offer to resume at once.
+var libBookLookNow = make(chan struct{}, 1)
+
+// libCheckBookNow asks the watch, if there is one, to look now.
+func libCheckBookNow() {
+	select {
+	case libBookLookNow <- struct{}{}:
+	default:
+	}
+}
+
 // libPlayFrom plays the book from its start, then moves it to start seconds in through Home
 // Assistant's seek on the same player. Music Assistant's own seek needs a token with more rights than
 // the device's, so Home Assistant is asked instead.
@@ -150,7 +162,10 @@ func libWatchBook(target, uri string, duration int) {
 				keep()
 				return
 			}
-			time.Sleep(libWatchEvery)
+			select {
+			case <-time.After(libWatchEvery):
+			case <-libBookLookNow:
+			}
 		}
 	}()
 }
