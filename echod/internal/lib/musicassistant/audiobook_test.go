@@ -29,8 +29,8 @@ func TestAudiobookAndPodcastCalls(t *testing.T) {
 		case "music/audiobooks/get":
 			io.WriteString(w, `{"item_id":"41","provider":"library","name":"01 Convergence","media_type":"audiobook",
 				"uri":"library://audiobook/41","duration":61017,
-				"chapters":[{"position":0,"name":"Chapter 1","start":0.0,"end":15.2},
-				            {"position":1,"name":"Chapter 2","start":15.2,"end":1376.4}]}`)
+				"metadata":{"chapters":[{"position":0,"name":"Chapter 1","start":0.0,"end":15.2},
+				            {"position":1,"name":"Chapter 2","start":15.2,"end":1376.4}]}}`)
 		case "music/podcasts/podcast_episodes":
 			io.WriteString(w, `[{"item_id":"ep1","provider":"ytmusic","name":"Episode 7","media_type":"podcast_episode"}]`)
 		default:

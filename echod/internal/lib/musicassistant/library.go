@@ -198,13 +198,16 @@ func (c Client) Audiobook(ctx context.Context, book Entry) (Entry, []Chapter, er
 	if err := e.UnmarshalJSON(raw); err != nil {
 		return Entry{}, nil, err
 	}
+	// The server keeps an audiobook's chapters in its metadata, not at the top of the item.
 	var withChapters struct {
-		Chapters []Chapter `json:"chapters"`
+		Metadata struct {
+			Chapters []Chapter `json:"chapters"`
+		} `json:"metadata"`
 	}
 	if err := json.Unmarshal(raw, &withChapters); err != nil {
 		return e, nil, nil // the entry is usable without its chapters
 	}
-	return e, withChapters.Chapters, nil
+	return e, withChapters.Metadata.Chapters, nil
 }
 
 // ChapterEntry is one chapter of an audiobook as a library entry: its name, its place in the book, and
