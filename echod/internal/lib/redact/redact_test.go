@@ -229,3 +229,53 @@ func TestALoginInAnyAddressGoes(t *testing.T) {
 		}
 	}
 }
+
+// A Home Assistant entity id names a room or a person in its object id, so it goes wherever the
+// patterns find one, whatever the domain.
+func TestEntityIdsGo(t *testing.T) {
+	r := New()
+	out := r.Text(strings.Join([]string{
+		`I dashboard tap entity=media_player.guest_room service=media_player.play_media`,
+		`I dashboard thermostat entity=climate.master_bedroom to=21`,
+		`I dashboard color entity=light.kids_lamp kelvin=2700`,
+		`I camera button camera=front entity=binary_sensor.side_door_motion`,
+		`I zone.home person.a_householder sun.sun`,
+	}, "\n"))
+	for _, leak := range []string{
+		"media_player.guest_room", "media_player.play_media", "climate.master_bedroom",
+		"light.kids_lamp", "binary_sensor.side_door_motion", "zone.home", "person.a_householder", "sun.sun",
+	} {
+		if strings.Contains(out, leak) {
+			t.Errorf("%q is still in the text:\n%s", leak, out)
+		}
+	}
+	if !strings.Contains(out, "<entity-1>") {
+		t.Errorf("no entity placeholder went in:\n%s", out)
+	}
+}
+
+// The same entity reads the same twice, so a log about one device still makes sense.
+func TestAnEntityReadsTheSameTwice(t *testing.T) {
+	out := New().Text("play on media_player.den, then stop media_player.den")
+	if strings.Count(out, "<entity-1>") != 2 {
+		t.Errorf("the repeated entity did not come back the same:\n%s", out)
+	}
+}
+
+// What only looks like an entity id stays: a source file whose base is a domain, a package selector,
+// a config file, a dotted name whose base is no domain. A stack trace has to still read.
+func TestThingsThatOnlyLookLikeEntities(t *testing.T) {
+	for _, line := range []string{
+		"panic at internal/feature/display/timer.go:42",
+		"source=update.go:128 msg=restarting",
+		"gofmt -l person.go camera.go text.go",
+		"built from climate_sheet.go and color_sheet.go",
+		"calls fmt.Println and strings.Cut and image.NewRGBA",
+		"read config.yaml and names.txt",
+		"host.local reached",
+	} {
+		if got := New().Text(line); got != line {
+			t.Errorf("a non-entity was redacted:\n in:  %s\n out: %s", line, got)
+		}
+	}
+}

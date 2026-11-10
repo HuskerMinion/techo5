@@ -18,6 +18,53 @@ import (
 	"strings"
 )
 
+// haDomains are the Home Assistant entity-id domains worth recognizing: a value "climate.den" or
+// "media_player.guest_room" is an entity id, and an object id is often a room or a person. The domain
+// is one of a known set so the shape cannot eat an ordinary dotted token (a Go pkg.Func, a config
+// key), and the object id that follows is checked against file extensions so a stack trace's
+// timer.go or a source=... attribute stays. A domain with an underscore after it (climate_sheet.go)
+// never starts the shape at all, because the dot must come right after the domain.
+var haDomains = []string{
+	"alarm_control_panel", "air_quality", "assist_satellite", "automation", "binary_sensor", "button",
+	"calendar", "camera", "climate", "conversation", "counter", "cover", "date", "datetime",
+	"device_tracker", "event", "fan", "geo_location", "group", "humidifier", "image", "input_boolean",
+	"input_button", "input_datetime", "input_number", "input_select", "input_text", "lawn_mower",
+	"light", "lock", "media_player", "notify", "number", "person", "remote", "scene", "schedule",
+	"script", "select", "sensor", "siren", "stt", "sun", "switch", "text", "time", "timer", "todo",
+	"tts", "update", "vacuum", "valve", "wake_word", "water_heater", "weather", "zone",
+}
+
+// entityRE matches a known domain, a dot, and an object id. The domains go in longest first so
+// binary_sensor is tried before sensor and input_number before number.
+var entityRE = buildEntityRE(haDomains)
+
+func buildEntityRE(domains []string) *regexp.Regexp {
+	d := append([]string(nil), domains...)
+	sort.Slice(d, func(i, j int) bool { return len(d[i]) > len(d[j]) })
+	return regexp.MustCompile(`\b(?:` + strings.Join(d, "|") + `)\.[a-z0-9_]+\b`)
+}
+
+// notEntityTail are object-id tails that mean the dotted token is a file name, not an entity id: a
+// log's stack trace and source=... attributes name timer.go, person.go, update.go and the like,
+// whose base is also a domain. These are put back untouched.
+var notEntityTail = map[string]bool{
+	"go": true, "py": true, "sh": true, "ps1": true, "c": true, "h": true, "cc": true, "cpp": true,
+	"rs": true, "js": true, "ts": true, "mod": true, "sum": true, "md": true, "txt": true, "log": true,
+	"json": true, "yaml": true, "yml": true, "toml": true, "ini": true, "cfg": true, "conf": true,
+	"xml": true, "html": true, "htm": true, "css": true, "csv": true, "sql": true, "proto": true,
+	"png": true, "jpg": true, "jpeg": true, "gif": true, "webp": true, "svg": true, "ico": true,
+	"ttf": true, "otf": true, "bin": true, "pcm": true, "tflite": true, "pb": true, "gz": true,
+	"tar": true, "zip": true, "so": true, "dll": true, "exe": true, "out": true, "tmp": true,
+	"bak": true, "patch": true, "diff": true, "lock": true,
+}
+
+// isEntity is whether id is a Home Assistant entity id rather than a file name: its object-id tail
+// (after the one dot) is not a known file extension.
+func isEntity(id string) bool {
+	_, object, ok := strings.Cut(id, ".")
+	return ok && !notEntityTail[object]
+}
+
 // The shapes worth taking out wherever they appear. Order matters: the longer, more specific ones
 // go first so a MAC address is not eaten by the shorter patterns inside it.
 var patterns = []struct {
@@ -56,6 +103,9 @@ var patterns = []struct {
 	// also swallows the next number's neighbor, so of two numbers a character apart only the first went.
 	{"phone", regexp.MustCompile(`\d+`), false},
 	{"url", regexp.MustCompile(`\b(?:https?)://[^\s"'<>]+`), false},
+	// A Home Assistant entity id, after the URLs so one inside an address goes with the address. The
+	// shape is confirmed in Text, which puts back a file name that only looks like one.
+	{"entity", entityRE, false},
 }
 
 // Redactor takes text and gives it back with the private parts replaced. Values it is told about —
@@ -125,6 +175,11 @@ func (r *Redactor) Text(s string) string {
 			// The loose address shape also fits a timestamp, a duration, a version number and a line of
 			// hex, so what is not an address is put back the way it came.
 			if (p.name == "ipv6" && !isIP(value, 6)) || (p.name == "ip" && !isIP(value, 4)) {
+				return match
+			}
+			// A dotted token that starts with a domain is a file name, not an entity id, when its tail
+			// is a file extension; it stays so a stack trace still reads.
+			if p.name == "entity" && !isEntity(value) {
 				return match
 			}
 			return before + r.placeholder(p.name, value) + after
