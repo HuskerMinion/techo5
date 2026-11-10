@@ -36,7 +36,9 @@ type Entry struct {
 	// Artists and Album are the items a track or an album names, as short as the server sends them:
 	// their id, provider, name, URI and perhaps a picture, or a bare name.
 	Artists  []Entry
-	Album    *Entry
+	// Authors are an audiobook's authors' names, as the server gives them.
+	Authors []string
+	Album   *Entry
 	Metadata struct {
 		Images []Image
 	}
@@ -66,7 +68,7 @@ func (e *Entry) UnmarshalJSON(b []byte) error {
 		Name: looseText(m["name"]), MediaType: looseText(m["media_type"]), Version: looseText(m["version"]),
 		Owner: looseText(m["owner"]), Year: looseInt(m["year"]), Duration: looseInt(m["duration"]),
 		TrackNumber: looseInt(m["track_number"]), DiscNumber: looseInt(m["disc_number"]),
-		Artists: looseNames(m["artists"]), Album: looseNamed(m["album"]),
+		Artists: looseNames(m["artists"]), Authors: looseStrings(m["authors"]), Album: looseNamed(m["album"]),
 	}
 	var meta struct {
 		Images []json.RawMessage `json:"images"`
@@ -139,6 +141,21 @@ func looseNames(raw json.RawMessage) []Entry {
 	for _, x := range list {
 		if n := looseNamed(x); n != nil && n.Name != "" {
 			out = append(out, *n)
+		}
+	}
+	return out
+}
+
+// looseStrings is a list of names, or one name alone; what is not a name is left out.
+func looseStrings(raw json.RawMessage) []string {
+	var list []json.RawMessage
+	if json.Unmarshal(raw, &list) != nil {
+		list = []json.RawMessage{raw}
+	}
+	var out []string
+	for _, x := range list {
+		if s := looseText(x); s != "" {
+			out = append(out, s)
 		}
 	}
 	return out

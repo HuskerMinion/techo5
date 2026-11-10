@@ -15,6 +15,7 @@ import (
 	"github.com/HuskerMinion/techo5/echod/internal/config"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/dashboard"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/home"
+	"github.com/HuskerMinion/techo5/echod/internal/feature/tessera"
 	"github.com/HuskerMinion/techo5/echod/internal/lib/musicassistant"
 )
 
@@ -47,6 +48,12 @@ const (
 	libPlaylist
 	libPodcast   // a podcast, opened for its episodes
 	libAudiobook // an audiobook, opened for its chapters
+)
+
+// The audiobooks are read this many at a time, up to libAudiobookMax of them.
+const (
+	libAudiobookPage = 200
+	libAudiobookMax  = 5000
 )
 
 // libKinds are the tabs' kinds, as Music Assistant's commands name them.
@@ -505,7 +512,22 @@ func (d *Display) libLoad(id int64) {
 // What came of an artist's two asks is kept when only one of them failed.
 func fetchLibPage(ctx context.Context, c musicassistant.Client, p libPage, limit int) ([]libSection, bool, error) {
 	switch p.what {
-	case libArtists, libAlbums, libPlaylists, libTracks, libRadio, libPodcasts, libAudiobooks:
+	case libAudiobooks:
+		// The whole list at once, so it can be put in order by author and series; a library of a few
+		// thousand books is still a few reads of the server.
+		var all []musicassistant.Entry
+		for offset := 0; offset < libAudiobookMax; offset += libAudiobookPage {
+			got, err := c.Library(ctx, libKinds[libAudiobooks], offset, libAudiobookPage, "")
+			if err != nil {
+				return nil, false, err
+			}
+			all = append(all, got...)
+			if len(got) < libAudiobookPage {
+				break
+			}
+		}
+		return []libSection{{word: -1, show: libShowGrid, kind: libTypes[libAudiobooks], entries: usable(musicassistant.AudiobookOrder(all))}}, false, nil
+	case libArtists, libAlbums, libPlaylists, libTracks, libRadio, libPodcasts:
 		offset := 0
 		if len(p.sections) > 0 {
 			offset = len(p.sections[0].entries)
@@ -936,26 +958,34 @@ func (d *Display) libraryUp() bool {
 // libOpenings counts the library's openings, for librarySheet.opening.
 var libOpenings atomic.Uint64
 
-// libChapterSeek is when, after a chapter's book is asked to play, its queue is moved to where the
-// chapter starts; a variable for the tests. Music Assistant needs a moment to start the book.
-var libChapterSeek = 3 * time.Second
+// The chapter's move waits a second, so a player still playing the last book is not taken for this one,
+// then looks for the player to report it is playing for a few seconds. It moves the book either way: a
+// player that does not report it is still moved, rather than left at the book's start. Variables for
+// the tests.
+var (
+	libChapterFirst = time.Second
+	libChapterPoll  = 250 * time.Millisecond
+	libChapterTries = 24 // about six seconds
+)
 
-// libPlayChapter plays the book from its first chapter and then moves its queue to chapter's start.
-// The book keeps its own resume place for the rest of the book, so this is only the chapter's start.
+// libPlayChapter plays the book from its first chapter, then moves it to chapter's start as soon as its
+// player reports it is playing, through Home Assistant's seek. Music Assistant's own seek needs a token
+// with more rights than the device's, so Home Assistant is asked instead. The book keeps its own place
+// for the rest of the book; this only moves it to where the chapter starts.
 func (d *Display) libPlayChapter(l *librarySheet, book, chapter musicassistant.Entry, lit int) {
 	if l.target == "" || book.URI == "" {
 		return
 	}
 	target, start := l.target, chapter.Start
 	d.libPlayTapped(l, book, "audiobook", false, lit, libEnqueueReplace)
-	libAfter(libChapterSeek, func() {
-		c, set := libClient()
-		q := libQueueOf(target)
-		if !set || q == "" {
-			return
+	go func() {
+		time.Sleep(libChapterFirst)
+		for range libChapterTries {
+			if state, _, ok := tessera.Entity(target); ok && state == "playing" {
+				break
+			}
+			time.Sleep(libChapterPoll)
 		}
-		if err := c.Seek(context.Background(), q, start); err != nil {
-			slog.Warn("dashboard music library chapter seek", "err", err)
-		}
-	})
+		libTap(dashboard.Action{Entity: target, Service: "media_player.media_seek", Data: map[string]any{"seek_position": start}})
+	}()
 }
