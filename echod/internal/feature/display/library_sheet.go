@@ -732,7 +732,7 @@ func libQueueShuffle(target string, on bool) bool {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	if err := c.SetShuffle(ctx, q, on); err != nil {
-		slog.Warn("dashboard music library shuffle", "queue", q, "err", err)
+		slog.Warn("dashboard music library shuffle", "err", err)
 		return false
 	}
 	return true
