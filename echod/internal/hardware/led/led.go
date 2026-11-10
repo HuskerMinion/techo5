@@ -1,4 +1,5 @@
-// Package led drives the Echo Dot's ring through the is31fl3236 driver's sysfs attributes.
+// Package led drives the Echo Dot's ring through the is31fl3236 driver's sysfs attributes, and the Echo
+// Input's single LED through the LP5562's LED class devices.
 //
 // This deliberately bypasses Amazon's LedController service. A direct frame write works even
 // when that service has brightness set to 0, and keeps working once the Amazon stack is
@@ -17,6 +18,14 @@ import (
 
 // DefaultPath is the is31fl3236 i2c device directory.
 const DefaultPath = "/sys/bus/i2c/devices/0-003f"
+
+// SinglePath is the Echo Input's LED: one RGB LED on a TI LP5562 at 0-0030, whose three channels are LED
+// class devices of their own (R, G and B, each with brightness and max_brightness), as Amazon's
+// libled_hal.so drives it (echo-dot-assist, docs/re-cupcake.md).
+const SinglePath = "/sys/bus/i2c/devices/0-0030/leds"
+
+// singleChannels are the Echo Input LED's class devices under SinglePath, in R, G, B order.
+var singleChannels = [3]string{"R", "G", "B"}
 
 // Channels is the number of PWM outputs: 12 ring segments x RGB.
 const Channels = 36
@@ -83,14 +92,58 @@ type Ring struct {
 	// absent is a device with no ring at all, such as the Echo Show 5. Frames are remembered and
 	// nothing is written, so everything that draws keeps working and the hardware is simply not there.
 	absent bool
+
+	// single is a device with one RGB LED in place of the ring, the Echo Input: everything still draws
+	// twelve segments, and the LED shows them mixed into one color (mixSegments). Path is then the LED
+	// class directory (SinglePath), and singleMax each channel's max_brightness.
+	single    bool
+	singleMax [3]int
 }
 
 func New() *Ring {
 	r := &Ring{Path: DefaultPath}
-	if _, err := os.Stat(r.path()); err != nil {
-		r.absent = true
+	if _, err := os.Stat(r.path()); err == nil {
+		return r
 	}
+	if s, ok := newSingle(SinglePath); ok {
+		return s
+	}
+	r.absent = true
 	return r
+}
+
+// newSingle is the Echo Input's one LED at dir, when its three channels are there.
+func newSingle(dir string) (*Ring, bool) {
+	r := &Ring{Path: dir, single: true}
+	for i, ch := range singleChannels {
+		if _, err := os.Stat(dir + "/" + ch + "/brightness"); err != nil {
+			return nil, false
+		}
+		r.singleMax[i] = 255
+		if b, err := os.ReadFile(dir + "/" + ch + "/max_brightness"); err == nil {
+			if v, err := strconv.Atoi(strings.TrimSpace(string(b))); err == nil && v > 0 {
+				r.singleMax[i] = v
+			}
+		}
+	}
+	return r, true
+}
+
+// Single reports whether the ring is one LED (the Echo Input's) rather than twelve.
+func (r *Ring) Single() bool { return r.single }
+
+// mixSegments is the one color a single LED shows for a frame of twelve segments: each channel at the
+// brightest any segment has it. An average would leave a spinner or a chaser, which light one or two
+// segments of twelve, at a twelfth of their brightness; the brightest keeps every state's color as
+// bright as it is on a ring, and what moves around a ring stands still on one LED.
+func mixSegments(vals []byte) [3]byte {
+	var c [3]byte
+	for i, v := range vals {
+		if v > c[i%3] {
+			c[i%3] = v
+		}
+	}
+	return c
 }
 
 // Present reports whether there is a ring to drive.
@@ -122,6 +175,17 @@ func (r *Ring) SetFrame(vals []byte) error {
 		r.last = append(r.last[:0], vals...)
 		return nil
 	}
+	if r.single {
+		mixed := mixSegments(vals)
+		for i, ch := range singleChannels {
+			v := int(mixed[i]) * r.singleMax[i] / 255
+			if err := os.WriteFile(r.attr(ch+"/brightness"), []byte(strconv.Itoa(v)), 0o644); err != nil {
+				return err
+			}
+		}
+		r.last = append(r.last[:0], vals...)
+		return nil
+	}
 	if err := os.WriteFile(r.attr("frame"), []byte(hex.EncodeToString(vals)+"\n"), 0o644); err != nil {
 		return err
 	}
@@ -141,7 +205,7 @@ func (r *Ring) Forget() {
 
 // Frame reads back the current frame.
 func (r *Ring) Frame() ([]byte, error) {
-	if r.absent {
+	if r.absent || r.single {
 		r.mu.Lock()
 		defer r.mu.Unlock()
 		return append(make([]byte, 0, Channels), r.last...), nil
@@ -189,13 +253,16 @@ func (r *Ring) SetCurrent(v int) error {
 // does; the is31fl32xx driver of the Echo 2nd gen's Linux 6.1 kernel writes frame at full current
 // already, so there is nothing to set.
 func (r *Ring) hasCurrent() bool {
+	if r.single {
+		return false
+	}
 	_, err := os.Stat(r.attr("led_current"))
 	return err == nil
 }
 
 // SetBootAnimation toggles the driver's built-in boot animation.
 func (r *Ring) SetBootAnimation(on bool) error {
-	if r.absent {
+	if r.absent || r.single {
 		return nil
 	}
 	v := "0"

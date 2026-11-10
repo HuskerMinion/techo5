@@ -28,9 +28,15 @@ const (
 
 // order is the buttons as Home Assistant lists them, since a map has none. The power key is listed
 // only where there is one: every Echo has the other four's entities, but a power key on a device
-// without one would sit at unknown for good.
+// without one would sit at unknown for good. The same goes for a key a board is known to lack
+// (buttons.Missing: the Echo Input's volume keys).
 var order = func() []buttons.Name {
-	o := []buttons.Name{buttons.Action, buttons.Mute, buttons.VolumeDown, buttons.VolumeUp}
+	var o []buttons.Name
+	for _, n := range []buttons.Name{buttons.Action, buttons.Mute, buttons.VolumeDown, buttons.VolumeUp} {
+		if !buttons.Missing(n) {
+			o = append(o, n)
+		}
+	}
 	if buttons.Has(buttons.Power) {
 		o = append(o, buttons.Power)
 	}

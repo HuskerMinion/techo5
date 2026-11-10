@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/HuskerMinion/techo5/echod/internal/config"
+	"github.com/HuskerMinion/techo5/echod/internal/layout"
 	"github.com/HuskerMinion/techo5/echod/internal/lib/asp"
 )
 
@@ -55,7 +56,10 @@ var initSequence = []kctl{
 	// would join a stream already open at the speaker's 96 kHz, which its codec refuses.
 }
 
-var pathSequence = map[Output][]kctl{
+var pathSequence = boardPaths(layout.Cupcake())
+
+// dotPaths are the Echo Dot 3's two outputs, the speaker and the jack.
+var dotPaths = map[Output][]kctl{
 	OutputSpeaker: {
 		{name: "Audio Amp Playback Volume", level: 0},
 		{name: "PCM Playback Volume", level: 255},
@@ -69,6 +73,32 @@ var pathSequence = map[Output][]kctl{
 		{name: "LINEOUT Mux", value: "OPEN"},
 		{name: "HPOUT Mux", value: "AUDIO_AMP"},
 	},
+}
+
+// The Echo Input (cupcake) is this board with no speaker and no amplifier: its only wired output is the
+// MT8167 codec's 3.5 mm line out, which Amazon sells as a line out for a speaker of your own. So on
+// the Echo Input the line out stands where the speaker is in everything else: one output, called
+// OutputSpeaker, with no Audio output choice (HasJack), no Speaker gain (gainOnPath) and no jack
+// switch to follow (DetectOutput). Its path is the Dot 3's jack path with the amplifier's controls left
+// to the board that has them (ifPresent), and both of the codec's output muxes open: the jack is the
+// codec's HPOUT on the Dot 3, and which of HPOUT and LINEOUT carries the Echo Input's socket has not
+// been read off a unit yet (echo-dot-assist, devices/cupcake: "no amplifier in the DTB").
+var cupcakeLineOut = []kctl{
+	{name: "Audio Amp Playback Volume", level: 3},
+	{name: "PCM Playback Volume", level: 0, ifPresent: true},
+	{name: "LINEOUT Mux", value: "VOICE_AMP"},
+	{name: "HPOUT Mux", value: "AUDIO_AMP"},
+}
+
+// boardPaths is the board's paths: the Dot 3's, or on the Echo Input its line out as the one output.
+func boardPaths(cupcake bool) map[Output][]kctl {
+	if !cupcake {
+		return dotPaths
+	}
+	return map[Output][]kctl{
+		OutputSpeaker:   cupcakeLineOut,
+		OutputHeadphone: cupcakeLineOut,
+	}
 }
 
 // headphoneOff takes the jack's path down when it is left.
@@ -85,8 +115,10 @@ const (
 )
 
 // gainOnPath is whether the Speaker gain setting is written with the speaker's path: here it is the
-// amplifier's own level, raised from ampUnity by up to 2 dB, which is all the control has above it.
-const gainOnPath = true
+// amplifier's own level, raised from ampUnity by up to 2 dB, which is all the control has above it. The
+// Echo Input has no amplifier, so no Speaker gain: its volume is the line out's, and the speaker that
+// is plugged into it has its own.
+var gainOnPath = !layout.Cupcake()
 
 // withSpeakerGain is seq, out's path, with the Speaker gain in it.
 func withSpeakerGain(seq []kctl, out Output, db int) []kctl {
@@ -120,8 +152,11 @@ const jackState = "/sys/class/switch/h2w/state"
 const jackPoll = 500 * time.Millisecond
 
 // DetectOutput picks the output to use. A missing switch means no jack detection, so assume the
-// speaker.
+// speaker. The Echo Input has one output, its line out, played as the speaker (boardPaths).
 func DetectOutput() Output {
+	if layout.Cupcake() {
+		return OutputSpeaker
+	}
 	b, err := os.ReadFile(jackState)
 	if err != nil || strings.TrimSpace(string(b)) == "0" {
 		return OutputSpeaker
@@ -139,7 +174,13 @@ const VolumeSteps = config.VolumeSteps
 // dot-v1.0.33). Fire OS's files carry no curve to read: Amazon set the volume in its own audio service.
 // So the first step is -55 dB, and the low steps come up 3 to 4 dB at a time to meet the Dot 2's
 // curve at step 12; from there up it is the Dot 2's, smoothed where that one repeats a value.
-var volumeCurves = map[Output][VolumeSteps + 1]float64{
+//
+// The Echo Input's line out takes the jack's curve for both: it is the same codec output, and a line
+// out drives a speaker that has its own volume, not a speaker of the Echo's own.
+var volumeCurves = boardCurves(layout.Cupcake())
+
+// dotCurves are the Echo Dot 3's curves.
+var dotCurves = map[Output][VolumeSteps + 1]float64{
 	OutputSpeaker: {
 		-90, -55, -51, -47, -43, -39, -35, -31, -27, -23,
 		-20, -17, -14, -12, -10, -9, -8, -7, -6, -5,
@@ -150,6 +191,17 @@ var volumeCurves = map[Output][VolumeSteps + 1]float64{
 		-25, -24, -23, -21, -20, -19, -18, -17, -15, -14,
 		-13, -12, -11, -9, -8, -7, -6, -4, -3, -2, 0,
 	},
+}
+
+// boardCurves is the board's volume curves: the Dot 3's, or the jack's for both outputs on the Echo Input.
+func boardCurves(cupcake bool) map[Output][VolumeSteps + 1]float64 {
+	if !cupcake {
+		return dotCurves
+	}
+	return map[Output][VolumeSteps + 1]float64{
+		OutputSpeaker:   dotCurves[OutputHeadphone],
+		OutputHeadphone: dotCurves[OutputHeadphone],
+	}
 }
 
 // mute is the attenuation the curves use for step 0.
@@ -216,7 +268,8 @@ var (
 		{name: "I2S O03_O04 Switch", level: 1},
 	}}
 	jackFormat = cardFormat{rate: Rate, bits: 32, open: []kctl{
-		{name: "PCM Playback Volume", level: 0},
+		// The amplifier's, which the Echo Input does not have.
+		{name: "PCM Playback Volume", level: 0, ifPresent: true},
 		{name: "O03 I05 Switch", level: 1},
 		{name: "O04 I06 Switch", level: 1},
 		{name: "INT ADDA O03_O04 Switch", level: 1},
@@ -224,9 +277,10 @@ var (
 	}}
 )
 
-// formatFor is the speaker's format on the speaker and the jack's on the jack.
+// formatFor is the speaker's format on the speaker and the jack's on the jack. The Echo Input plays
+// its line out, the jack's codec, in the jack's format whatever the output is called.
 func formatFor(out Output) cardFormat {
-	if out == OutputSpeaker {
+	if out == OutputSpeaker && !layout.Cupcake() {
 		return speakerFormat
 	}
 	return jackFormat
@@ -261,8 +315,10 @@ var tuningSet *asp.Set
 // firstCurves is empty: without the tuning, the volume is volumeCurves as they are.
 var firstCurves = map[string][VolumeSteps + 1]float64{}
 
-// HasJack is whether the device has a headphone jack: the Dot 3 has one, on the SoC codec.
-const HasJack = true
+// HasJack is whether the device has a headphone jack beside its speaker, and so the Audio output
+// choice: the Dot 3 has one, on the SoC codec. The Echo Input's line out is its only output, so there
+// is nothing to choose (boardPaths).
+var HasJack = !layout.Cupcake()
 
 // HasBoth is whether the speaker and the jack can play at once: not tried, so not offered.
 const HasBoth = false

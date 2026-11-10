@@ -60,12 +60,17 @@ var AnimationScripts = []string{StartAnimation, StopAnimation}
 // The Echo Dot 3rd gen (donut) is built apart (-tags dot,donut): another SoC (MT8516), another sound
 // card and four microphones in place of seven, so its capture and speaker files are its own, but
 // everything that makes a speaker without a screen is the Dot's.
+//
+// The Echo Input (2018, cupcake) runs the Dot 3's build: the same MT8516 board, kernel, sound card
+// and four microphones, with no speaker (the 3.5 mm line out and Bluetooth are its outputs), one RGB
+// LED in place of the ring and no volume keys. What differs is asked of Cupcake.
 var Board, Model, DefaultName = boardInfo(detectBoard())
 
 const (
 	boardBiscuit = "biscuit"
 	boardRadar   = "radar"
 	boardDonut   = "donut"
+	boardCupcake = "cupcake"
 
 	// deviceTypePath is the factory's product id, which Amazon's kernel serves from idme on Fire OS and
 	// on the Linux image alike. It can end in a NUL.
@@ -74,13 +79,19 @@ const (
 	biscuitTypeID = "A3S5BH2HU6VAYF"
 	radarTypeID   = "A7WXQPH584YP"
 	donutTypeID   = "A32DOYMUN6DTXA"
+	cupcakeTypeID = "A1JJ0KFC4ZPNJ3"
 )
 
 // Radar is whether this is the Echo 2nd gen.
 func Radar() bool { return Board == boardRadar }
 
-// Donut is whether this is the Echo Dot 3rd gen.
-func Donut() bool { return Board == boardDonut }
+// Donut is whether this is the Echo Dot 3rd gen's platform (MT8516): the Echo Dot 3rd gen itself, or the
+// Echo Input, which is the same board without a speaker. Cupcake tells the two apart.
+func Donut() bool { return Board == boardDonut || Board == boardCupcake }
+
+// Cupcake is whether this is the Echo Input: the Dot 3's board with a line out in place of the speaker,
+// one LED in place of the ring and no volume keys.
+func Cupcake() bool { return Board == boardCupcake }
 
 func boardInfo(board string) (string, string, string) {
 	switch board {
@@ -88,6 +99,8 @@ func boardInfo(board string) (string, string, string) {
 		return boardRadar, "Echo 2nd gen (radar)", "Echo"
 	case boardDonut:
 		return boardDonut, "Echo Dot 3 (donut)", "Echo Dot"
+	case boardCupcake:
+		return boardCupcake, "Echo Input (cupcake)", "Echo Input"
 	}
 	return boardBiscuit, "Echo Dot 2 (biscuit)", "Echo Dot"
 }
@@ -127,8 +140,8 @@ func boardDoubt(typeID string, readErr error, product string, android bool) stri
 }
 
 // dotBoard names the board from idme's product id or, failing that, Fire OS's product name
-// (biscuit_puffin, radar_puffin). ok is false where neither is one we know, and the board is then the
-// Dot's.
+// (biscuit_puffin, radar_puffin, donut_puffin; the Echo Input's is plain cupcake). ok is false where
+// neither is one we know, and the board is then the Dot's.
 func dotBoard(typeID, product string) (board string, ok bool) {
 	switch cleanID(typeID) {
 	case radarTypeID:
@@ -137,6 +150,8 @@ func dotBoard(typeID, product string) (board string, ok bool) {
 		return boardBiscuit, true
 	case donutTypeID:
 		return boardDonut, true
+	case cupcakeTypeID:
+		return boardCupcake, true
 	}
 	switch name, _, _ := strings.Cut(cleanID(product), "_"); name {
 	case boardRadar:
@@ -145,6 +160,8 @@ func dotBoard(typeID, product string) (board string, ok bool) {
 		return boardBiscuit, true
 	case boardDonut:
 		return boardDonut, true
+	case boardCupcake:
+		return boardCupcake, true
 	}
 	return boardBiscuit, false
 }
