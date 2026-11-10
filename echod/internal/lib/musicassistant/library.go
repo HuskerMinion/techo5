@@ -27,7 +27,9 @@ type Entry struct {
 	Year      int
 	// Duration is a track's length in seconds, TrackNumber and DiscNumber its place on its album, and
 	// Owner a playlist's owner; zero or empty when the server does not say.
-	Duration    int
+	Duration int
+	// Start is where a chapter of an audiobook begins, in seconds; set from the chapters, not the server.
+	Start       float64
 	TrackNumber int
 	DiscNumber  int
 	Owner       string
@@ -203,6 +205,15 @@ func (c Client) Audiobook(ctx context.Context, book Entry) (Entry, []Chapter, er
 		return e, nil, nil // the entry is usable without its chapters
 	}
 	return e, withChapters.Chapters, nil
+}
+
+// ChapterEntry is one chapter of an audiobook as a library entry: its name, its place in the book, and
+// where it starts, with the book's own address to play it from.
+func ChapterEntry(book Entry, ch Chapter) Entry {
+	return Entry{
+		Name: ch.Name, MediaType: "chapter", URI: book.URI, Provider: book.Provider, ItemID: book.ItemID,
+		TrackNumber: ch.Position + 1, Duration: int(ch.End - ch.Start), Start: ch.Start,
+	}
 }
 
 // PodcastEpisodes are a podcast's episodes, newest first as the server lists them.

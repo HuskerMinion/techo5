@@ -45,7 +45,8 @@ const (
 	libArtist
 	libAlbum
 	libPlaylist
-	libPodcast // a podcast, opened for its episodes
+	libPodcast   // a podcast, opened for its episodes
+	libAudiobook // an audiobook, opened for its chapters
 )
 
 // libKinds are the tabs' kinds, as Music Assistant's commands name them.
@@ -561,6 +562,16 @@ func fetchLibPage(ctx context.Context, c musicassistant.Client, p libPage, limit
 	case libPodcast:
 		got, err := c.PodcastEpisodes(ctx, p.entry)
 		return []libSection{{word: -1, show: libShowTracks, kind: "podcast_episode", entries: usable(got)}}, false, err
+	case libAudiobook:
+		_, chapters, err := c.Audiobook(ctx, p.entry)
+		if err != nil {
+			return nil, false, err
+		}
+		var got []musicassistant.Entry
+		for _, ch := range chapters {
+			got = append(got, musicassistant.ChapterEntry(p.entry, ch))
+		}
+		return []libSection{{word: -1, show: libShowTracks, kind: "chapter", entries: usable(got)}}, false, nil
 	}
 	return nil, false, nil
 }
@@ -643,11 +654,14 @@ func (d *Display) libraryTap(x, y int) bool {
 		}
 		e := p.sections[sec].entries[i]
 		switch kind := libEntryType(e, p.sections[sec].kind); kind {
-		case "artist", "album", "playlist", "podcast":
-			what := map[string]int{"artist": libArtist, "album": libAlbum, "playlist": libPlaylist, "podcast": libPodcast}[kind]
+		case "artist", "album", "playlist", "podcast", "audiobook":
+			what := map[string]int{"artist": libArtist, "album": libAlbum, "playlist": libPlaylist, "podcast": libPodcast, "audiobook": libAudiobook}[kind]
 			np := newLibPage(what, e)
 			d.editLibrary(func(n *librarySheet) { n.stack = append(n.stack, np) })
 			d.libLoad(np.id)
+		case "chapter":
+			// A chapter plays its book from the top and is then moved to where the chapter starts.
+			d.libPlayChapter(l, p.entry, e, z.index)
 		default:
 			d.libPlayTapped(l, e, kind, false, z.index, libEnqueueReplace)
 		}
@@ -703,6 +717,8 @@ func libPageType(what int) string {
 		return "playlist"
 	case libPodcast:
 		return "podcast"
+	case libAudiobook:
+		return "audiobook"
 	}
 	return ""
 }
@@ -919,3 +935,27 @@ func (d *Display) libraryUp() bool {
 
 // libOpenings counts the library's openings, for librarySheet.opening.
 var libOpenings atomic.Uint64
+
+// libChapterSeek is when, after a chapter's book is asked to play, its queue is moved to where the
+// chapter starts; a variable for the tests. Music Assistant needs a moment to start the book.
+var libChapterSeek = 3 * time.Second
+
+// libPlayChapter plays the book from its first chapter and then moves its queue to chapter's start.
+// The book keeps its own resume place for the rest of the book, so this is only the chapter's start.
+func (d *Display) libPlayChapter(l *librarySheet, book, chapter musicassistant.Entry, lit int) {
+	if l.target == "" || book.URI == "" {
+		return
+	}
+	target, start := l.target, chapter.Start
+	d.libPlayTapped(l, book, "audiobook", false, lit, libEnqueueReplace)
+	libAfter(libChapterSeek, func() {
+		c, set := libClient()
+		q := libQueueOf(target)
+		if !set || q == "" {
+			return
+		}
+		if err := c.Seek(context.Background(), q, start); err != nil {
+			slog.Warn("dashboard music library chapter seek", "err", err)
+		}
+	})
+}

@@ -229,6 +229,11 @@ func (c Client) Play(ctx context.Context, queueID, uri string) error {
 	return c.do(ctx, "player_queues/play_media", map[string]any{"queue_id": queueID, "media": uri, "option": "replace"}, nil)
 }
 
+// Seek moves the queue queueID to seconds into what it plays.
+func (c Client) Seek(ctx context.Context, queueID string, seconds float64) error {
+	return c.do(ctx, "player_queues/seek", map[string]any{"queue_id": queueID, "position": int(seconds)}, nil)
+}
+
 // PlayerState is a player as the server sees it: its id there, whether it is connected and what it
 // is doing ("playing", "paused", "idle").
 type PlayerState struct {

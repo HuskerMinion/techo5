@@ -75,3 +75,16 @@ func TestPodcastAndAudiobookKinds(t *testing.T) {
 		t.Errorf("kinds = %q, %q; want podcasts, audiobooks", KindPodcasts, KindAudiobooks)
 	}
 }
+
+// A chapter is an entry of its book: numbered from one, its length from its start and end, and it
+// plays from the book's own address and starts where the chapter does.
+func TestChapterEntryNumbersAndPlaysFromTheBook(t *testing.T) {
+	book := Entry{ItemID: "41", Provider: "library", URI: "library://audiobook/41"}
+	got := ChapterEntry(book, Chapter{Position: 2, Name: "Chapter 3", Start: 1376.4, End: 3016.1})
+	if got.Name != "Chapter 3" || got.TrackNumber != 3 || got.Duration != 1639 || got.Start != 1376.4 {
+		t.Errorf("chapter = %+v; want chapter 3, 1639 seconds, starting at 1376.4", got)
+	}
+	if got.URI != book.URI || got.MediaType != "chapter" {
+		t.Errorf("chapter plays %q as %q; want the book's address as a chapter", got.URI, got.MediaType)
+	}
+}

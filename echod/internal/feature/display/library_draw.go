@@ -574,7 +574,7 @@ func (r *renderer) libBlocks(l *librarySheet, p *libPage, g libGeom, pal dashPal
 				zone(image.Rect(g.view.Min.X, y, g.view.Max.X, y+g.tileH), libPartRow, si)
 			})
 		default:
-			numbered := p.what == libAlbum || p.what == libPlaylist
+			numbered := p.what == libAlbum || p.what == libPlaylist || p.what == libAudiobook
 			h := g.trackRow
 			if p.what == libAlbum {
 				h = g.albumRow
