@@ -16,6 +16,10 @@ import (
 // with no reference device the software reference (lib/echoref).
 //
 // Which physical microphone each channel is has not been mapped yet (a tap test).
+//
+// The Echo Input (cupcake) captures the same way: Fire OS's AFE.cfg there has the same four
+// microphones at 16 kHz on the same two converters (i2c 0-0018 and 0-001a), on the same kernel
+// (echo-dot-assist, docs/re-cupcake.md).
 const (
 	Channels      = 6
 	CaptureDevice = donutMicDevice

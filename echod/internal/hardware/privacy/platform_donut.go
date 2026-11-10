@@ -11,7 +11,9 @@ import (
 // hardware that cuts the microphones, its state is in sysfs, and the key (113) arrives on the
 // "gpio-privacy" input device. Software can set the latch through enable but cannot clear it: only the
 // button lets the microphones back (echo-dot-assist, devices/donut/README.md; the sysfs files read on
-// unit 1, 2026-10-23).
+// unit 1, 2026-10-23). The Echo Input (cupcake) has the same driver and the same files: its device
+// trees put the latch on another GPIO by board revision, which the kernel hides from sysfs
+// (echo-dot-assist, docs/re-cupcake.md).
 const (
 	gpioDir   = "/sys/devices/platform/gpio-privacy"
 	gpioState = gpioDir + "/state"
@@ -19,7 +21,7 @@ const (
 )
 
 // errButtonOnly is Set asked to release a mute that only the button can release.
-var errButtonOnly = errors.New("privacy: the Echo Dot 3 releases its mute only with the button")
+var errButtonOnly = errors.New("privacy: this Echo releases its mute only with the button")
 
 // latch is the gpio-privacy mute.
 type latch struct{}
@@ -55,7 +57,8 @@ func (l latch) Toggle() (bool, error) {
 	return !is, l.Set(!is)
 }
 
-// noLED stands in for a mute light the Dot 3 does not have: its ring shows the mute.
+// noLED stands in for a mute light the Dot 3 does not have: its ring shows the mute (the Echo Input's
+// one LED, there).
 type noLED struct{}
 
 func (noLED) SetBright(bool) error  { return nil }

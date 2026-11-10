@@ -22,6 +22,11 @@ func TestDotBoard(t *testing.T) {
 		{"A3S5BH2HU6VAYF\x00\n", "radar_puffin", boardBiscuit, true},
 		{"", "radar_puffin\n", boardRadar, true},
 		{"", "biscuit_puffin\n", boardBiscuit, true},
+		{"A32DOYMUN6DTXA\x00", "", boardDonut, true},
+		{"", "donut_puffin\n", boardDonut, true},
+		// The Echo Input: idme's id with the space and NUL it ends in, or Fire OS's plain "cupcake".
+		{"A1JJ0KFC4ZPNJ3 \x00", "", boardCupcake, true},
+		{"", "cupcake\n", boardCupcake, true},
 		{"AXXXXXXXXXXX", "", boardBiscuit, false},
 		{"", "rook\n", boardBiscuit, false},
 		{"", "", boardBiscuit, false},
@@ -41,6 +46,8 @@ func TestBoardInfo(t *testing.T) {
 	cases := []struct{ board, wantBoard, model, name string }{
 		{boardRadar, "radar", "Echo 2nd gen (radar)", "Echo"},
 		{boardBiscuit, "biscuit", "Echo Dot 2 (biscuit)", "Echo Dot"},
+		{boardDonut, "donut", "Echo Dot 3 (donut)", "Echo Dot"},
+		{boardCupcake, "cupcake", "Echo Input (cupcake)", "Echo Input"},
 		{"", "biscuit", "Echo Dot 2 (biscuit)", "Echo Dot"},
 	}
 	for _, c := range cases {
@@ -81,5 +88,24 @@ func TestBoardFromTheDeviceTree(t *testing.T) {
 	}
 	if board, ok := dotBoard(string(raw), ""); !ok || board != boardRadar {
 		t.Errorf("board %q (%v)", board, ok)
+	}
+}
+
+// The Echo Input is the Dot 3's platform (Donut) and tells itself apart from it (Cupcake).
+func TestTheEchoInputIsTheDot3sPlatform(t *testing.T) {
+	defer func(b string) { Board = b }(Board)
+	for _, c := range []struct {
+		board          string
+		donut, cupcake bool
+	}{
+		{boardDonut, true, false},
+		{boardCupcake, true, true},
+		{boardBiscuit, false, false},
+		{boardRadar, false, false},
+	} {
+		Board = c.board
+		if Donut() != c.donut || Cupcake() != c.cupcake {
+			t.Errorf("%s: Donut() %v, Cupcake() %v; want %v, %v", c.board, Donut(), Cupcake(), c.donut, c.cupcake)
+		}
 	}
 }

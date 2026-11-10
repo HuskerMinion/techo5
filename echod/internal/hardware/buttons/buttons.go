@@ -82,6 +82,13 @@ const doubleTap = 400 * time.Millisecond
 // LongHolds reports whether this device reports LongHold at all.
 func LongHolds() bool { return longHoldAfter > 0 }
 
+// missing are the buttons a board is known not to have, though the build's others have them: set by
+// the board's codes file (codes_dot.go: the Echo Input's volume keys). Nil elsewhere.
+var missing map[Name]bool
+
+// Missing is whether this board is known to lack n, so nothing should be offered for it.
+func Missing(n Name) bool { return missing[n] }
+
 // Has reports whether this device has the button at all, for listing only the buttons it has.
 func Has(n Name) bool {
 	for _, c := range codes {
