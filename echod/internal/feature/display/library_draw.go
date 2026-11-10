@@ -173,7 +173,7 @@ func libAlong(p *libPage, sec int) int {
 // libGeom is where the library's parts go on this panel: the page, the bar along its top, the view
 // under it that scrolls, and the size of a cover in a grid, cols abreast, with the names under it.
 type libGeom struct {
-	card, bar, view              image.Rectangle
+	card, bar, view, row2        image.Rectangle
 	pad, gap, inner, cols        int
 	tile, tileH, hero, x0, x1    int
 	albumRow, trackRow, headingH int
@@ -189,7 +189,10 @@ func (r *renderer) libGeometry() libGeom {
 	g.card = r.dst.Rect.Inset(r.s(8))
 	g.pad, g.gap = r.s(16), r.s(20)
 	g.bar = image.Rect(g.card.Min.X+g.pad, g.card.Min.Y+g.pad, g.card.Max.X-g.pad, g.card.Min.Y+g.pad+r.s(46))
-	g.view = image.Rect(g.card.Min.X, g.bar.Max.Y+r.s(10), g.card.Max.X, g.card.Max.Y-r.s(6))
+	// The second row of tabs (podcasts, audiobooks) sits under the bar on the library's own tabs; on a
+	// page opened from one, draw leaves that row out and the view moves up into its place.
+	g.row2 = image.Rect(g.bar.Min.X, g.bar.Max.Y+r.s(8), g.bar.Max.X, g.bar.Max.Y+r.s(8)+r.s(40))
+	g.view = image.Rect(g.card.Min.X, g.row2.Max.Y+r.s(10), g.card.Max.X, g.card.Max.Y-r.s(6))
 	g.x0, g.x1 = g.card.Min.X+g.pad, g.card.Max.X-g.pad
 	g.inner = g.x1 - g.x0
 	g.cols = max(2, (g.inner+libTileAbout/2)/libTileAbout)
@@ -242,6 +245,10 @@ func libIcon(kind string) string {
 		return "playlist-music"
 	case "radio":
 		return "radio"
+	case "podcast":
+		return "podcast"
+	case "audiobook":
+		return "book-open-variant"
 	}
 	return "music-note"
 }
@@ -313,6 +320,9 @@ func (r *renderer) librarySheet(v *libraryView, th dashboard.Theme) {
 	pal := r.palette(th)
 	fc := r.faces()
 	g := r.libGeometry()
+	if !l.set || len(l.stack) > 0 {
+		g.view.Min.Y = g.bar.Max.Y + r.s(10)
+	}
 	washOver(r.dst, whole, color.RGBA{0, 0, 0, 150})
 	r.roundFill(g.card, pal.rad, pal.card, pal.card)
 	var zones []mediaZone
@@ -367,7 +377,7 @@ func (r *renderer) librarySheet(v *libraryView, th dashboard.Theme) {
 	default:
 		// As wide as their words, or shared out evenly when they will not all fit so.
 		tabGap := r.s(10)
-		widths := make([]int, libTabs)
+		widths := make([]int, libRowTabs)
 		sum := 0
 		for i := range widths {
 			widths[i] = pillW(libWord(i), false)
@@ -376,7 +386,7 @@ func (r *renderer) librarySheet(v *libraryView, th dashboard.Theme) {
 			}
 			sum += widths[i]
 		}
-		if room := right - bar.Min.X - tabGap*(libTabs-1); sum > room {
+		if room := right - bar.Min.X - tabGap*(libRowTabs-1); sum > room {
 			for i := range widths[:libSearch] {
 				widths[i] = (room - widths[libSearch]) / libSearch
 			}
@@ -392,6 +402,18 @@ func (r *renderer) librarySheet(v *libraryView, th dashboard.Theme) {
 				fill, fg = lit, pal.bg
 			}
 			pill(image.Rect(x, bar.Min.Y, x+w, bar.Max.Y), icon, word, fill, fg, false, libPartTab, i)
+			x += w + tabGap
+		}
+		// The second row: podcasts and audiobooks, as wide as their words, from the left.
+		row := g.row2
+		x = row.Min.X
+		for i := libRowTabs; i < libTabs; i++ {
+			w := pillW(libWord(i), false)
+			fill, fg := plain, pal.text
+			if i == l.tab {
+				fill, fg = lit, pal.bg
+			}
+			pill(image.Rect(x, row.Min.Y, x+w, row.Max.Y), "", libWord(i), fill, fg, false, libPartTab, i)
 			x += w + tabGap
 		}
 	}
