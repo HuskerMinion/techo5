@@ -1086,6 +1086,61 @@ data:
 response_variable: started
 ```
 
+## Start a silent timer
+
+In YAML, refer to this action as `esphome.<node>_timer_start_silent`.
+
+A timer that only shows: it counts down on the ring and the screen like `timer_start`'s, in a color
+of its own, and at zero it is gone without ringing. It is for showing a wait that Home Assistant
+keeps, such as a device joining the home: the automation waits for the device itself, cancels the
+timer with `timer_cancel` when it arrives, and says what went wrong when it does not. A silent timer
+is not kept over a restart. Answers with the new timer's `id`, as `timer_start` does.
+
+### duration (Required)
+
+*string*
+
+How long, written the way `timer_start` takes it.
+
+### label (Can be empty)
+
+*string*
+
+A name shown on the screen while it counts down.
+
+### color (Can be empty)
+
+*string*
+
+The ring's color while it counts down: `#00a0ff`, `#0af`, or `0, 160, 255`. Empty is the usual
+orange.
+
+```yaml
+- action: esphome.office_timer_start_silent
+  data:
+    duration: "2 minutes"
+    label: Pairing
+    color: "#00a0ff"
+  response_variable: countdown
+- wait_for_trigger:
+    - trigger: event
+      event_type: device_registry_updated
+      event_data:
+        action: create
+  timeout: "00:02:00"
+- if: "{{ wait.trigger is none }}"
+  then:
+    - action: assist_satellite.start_conversation
+      target:
+        entity_id: assist_satellite.office_assistant_1
+      data:
+        start_message: "That didn't work. Shall I try again?"
+  else:
+    - action: esphome.office_timer_cancel
+      data:
+        id: "{{ countdown.id }}"
+```
+
 ## Cancel a timer
 
 In YAML, refer to this action as `esphome.<node>_timer_cancel`.
