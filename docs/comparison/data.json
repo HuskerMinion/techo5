@@ -1,5 +1,5 @@
 {
- "checked": "2026-11-09",
+ "checked": "2026-11-10",
  "sections": [
   "Basics",
   "Voice",
@@ -1515,7 +1515,7 @@
     "https://github.com/Gamer92000/echo-dot-assist/commits/main"
    ],
    "releases": [
-    "v2026.10.17.151309, 2026-10-17; 92 GitHub releases: 4 stable, 88 pre-releases (\"beta\" from main, latest v2026.11.09.011107-beta, 2026-11-09)",
+    "v2026.10.17.151309, 2026-10-17; 97 GitHub releases: 4 stable, 93 pre-releases (\"beta\" from main, latest v2026.11.10.172357-beta, 2026-11-10)",
     "",
     "https://github.com/Gamer92000/echo-dot-assist/releases"
    ],
@@ -2352,7 +2352,7 @@
     "https://github.com/ygelfand/echolocal/commits/main"
    ],
    "releases": [
-    "echolocal 0.0.13, 2026-11-03: 13 releases plus 14 pre-releases (latest pre-release 0.0.14-dev.1794187714, 2026-11-09). echolocal-hacs v0.0.18, 2026-11-06: 18 releases. libcountertop: 2 pre-releases (kroko-en-1, 2026-10-29; engine-full-1, 2026-10-24; engine binaries)",
+    "echolocal 0.0.13, 2026-11-03: 13 releases plus 15 pre-releases (latest pre-release 0.0.14-dev.1794250939, 2026-11-09). echolocal-hacs v0.0.18, 2026-11-06: 18 releases. libcountertop: 2 pre-releases (kroko-en-1, 2026-10-29; engine-full-1, 2026-10-24; engine binaries)",
     "",
     "https://github.com/ygelfand/echolocal/releases"
    ],
@@ -4026,9 +4026,9 @@
     "https://github.com/jxlarrea/lineageos-echo-kiosk-satellite/commits/main"
    ],
    "releases": [
-    "App 2026.11.13, 2026-11-08; 327 GitHub releases, 0 marked pre-release (63 early v0.x-beta tags). Echo image repo: Echo Show 5 cronos-2026.11.3 and Echo Show 8 crown-2026.11.3 (2026-11-07), Echo Dot biscuit-2026.11.2 (2026-11-07); 34 releases",
+    "App 2026.11.15, 2026-11-10; 329 GitHub releases, 0 marked pre-release (63 early v0.x-beta tags). Echo image repo: Echo Show 5 2nd gen cronos-2026.11.4 and Echo Show 8 crown-2026.11.4 (2026-11-09), Echo Dot biscuit-2026.11.3 (2026-11-09), Echo Show 5 1st gen checkers-2026.11.1 (2026-11-10); 38 releases",
     "",
-    "https://github.com/jxlarrea/kiosk-satellite/releases/tag/2026.11.13"
+    "https://github.com/jxlarrea/kiosk-satellite/releases/tag/2026.11.15"
    ],
    "license": [
     "App: CC BY-NC-ND 4.0 plus plugin exception; plugin SDK and plugins repo: Apache-2.0; Echo image repo: none stated",
@@ -4873,9 +4873,9 @@
     "https://github.com/HuskerMinion/techo5-athena/blob/cfe228f0c8cd177faae87fc2efcb6d69a803c7de/README.md#L182-L185"
    ],
    "devices": [
-    "Echo Show 5 gen 1/2, Show 8 gen 1/2, Spot gen 1, Dot gen 2, Dot gen 3 2018 (two units), Echo gen 2 (one unit), Skylight Calendar 15 (no microphone: screen and speaker only); with the TECHO5 Panel app: Fire HD 8 (10th gen), Galaxy Tab S6 Lite, Meta Portal (2nd gen); in progress: Fire HD 8 8th gen (Panel issue #1)",
+    "Echo Show 5 gen 1/2, Show 8 gen 1/2, Spot gen 1, Dot gen 2, Dot gen 3 2018 (two units), Echo gen 2 (one unit), Skylight Calendar 15 (no microphone: screen and speaker only); with the TECHO5 Panel app: Fire HD 8 (10th gen), Galaxy Tab S6 Lite, Meta Portal (2nd gen); in progress: the Echo Input (cupcake, not yet tried on a unit), Fire HD 8 8th gen (Panel issue #1)",
     "",
-    "https://github.com/HuskerMinion/techo5/blob/v1.6.34/README.md"
+    "https://github.com/HuskerMinion/techo5/blob/714411de4810068b2151690a1ce9b8bca76f8ade/README.md"
    ],
    "on-device": [
     "Echos and Skylight: no Android/Fire OS, Alpine Linux with the echod daemon; tablets and Portal: Android app with echod inside; no separate server needed (dashcast optional for streamed dashboards)",
@@ -5700,7 +5700,7 @@
     "https://github.com/dinki/View-Assist/commits/main"
    ],
    "releases": [
-    "VACA v0.14.0 (2026-10-27), 27 + 1 pre-releases; integration 2026.7.0 (2026-07-08), 19 + 2 pre-releases; app source repo 2; View-Assist none",
+    "VACA v0.14.1 (2026-11-09), 28 + 1 pre-releases; integration 2026.7.0 (2026-07-08), 19 + 2 pre-releases; app source repo 2; View-Assist none",
     "",
     "https://github.com/msp1974/ViewAssist_Companion_App/releases"
    ],
@@ -6537,8 +6537,8 @@
     "https://github.com/aslater3/LibreEcho/commits/main"
    ],
    "releases": [
-    "radar-puffin-v0.14.5, 2026-10-30: 19 releases plus 132 pre-releases (dev builds), all in the LibreEcho repo; the other four repos publish none",
-    "The oldest release is from 2026-08-21; latest dev build 2026-10-30",
+    "radar-puffin-v0.14.5, 2026-10-30: 19 releases plus 134 pre-releases (dev builds), all in the LibreEcho repo; the other four repos publish none",
+    "The oldest release is from 2026-08-21; latest dev build 2026-11-10",
     "https://github.com/aslater3/LibreEcho/releases"
    ],
    "license": [
@@ -7642,7 +7642,7 @@
    "kiosk-satellite": {
     "echo-dot-2": [
      "lineage",
-     "Own Kiosk Satellite Edition LineageOS 18.1 image, ready; headless, no screen. CM14.1 image archived; latest biscuit-2026.11.2",
+     "Own Kiosk Satellite Edition LineageOS 18.1 image, ready; headless, no screen. CM14.1 image archived; latest biscuit-2026.11.3",
      "https://github.com/jxlarrea/kiosk-satellite/blob/2026.10.44/docs/echo-dot.md"
     ],
     "echo-dot-3": [
@@ -7662,18 +7662,18 @@
     ],
     "echo-show-5-1": [
      "lineage",
-     "Needs LineageOS (Android 11); no guide; project does not name the generation, users report 1st gen (issues 82, 214); its own image repo lists it (checkers) as work in progress",
-     "https://github.com/jxlarrea/lineageos-echo-kiosk-satellite/blob/da7fd17530d1fff1d4710ce61867f194e1bfb31c/README.md"
+     "Project's own image (checkers) released 2026-11-10 (checkers-2026.11.1); Show 5 1st-gen guide added; also community LineageOS 18.1 per user reports (issues 82, 214)",
+     "https://github.com/jxlarrea/lineageos-echo-kiosk-satellite/releases/tag/checkers-2026.11.1"
     ],
     "echo-show-5-2": [
      "lineage",
-     "Project's own image (cronos) released 2026-10-26; latest cronos-2026.11.3 (2026-11-07); also named in bug reports on community LineageOS 18.1",
-     "https://github.com/jxlarrea/lineageos-echo-kiosk-satellite/releases/tag/cronos-2026.11.3"
+     "Project's own image (cronos) released 2026-10-26; latest cronos-2026.11.4 (2026-11-09); also named in bug reports on community LineageOS 18.1",
+     "https://github.com/jxlarrea/lineageos-echo-kiosk-satellite/releases/tag/cronos-2026.11.4"
     ],
     "echo-show-8-1": [
      "lineage",
-     "Project's own image (crown) released 2026-10-27 (release crown-2026.10.2; latest crown-2026.11.3, 2026-11-07) with system updates; Amazon wake word engine removed in 2026.11.3; also runs on community LineageOS 18.1 per user reports (issues 49, 416)",
-     "https://github.com/jxlarrea/lineageos-echo-kiosk-satellite/releases/tag/crown-2026.11.3"
+     "Project's own image (crown) released 2026-10-27 (release crown-2026.10.2; latest crown-2026.11.4, 2026-11-09) with system updates; Amazon wake word engine removed in 2026.11.3; also runs on community LineageOS 18.1 per user reports (issues 49, 416)",
+     "https://github.com/jxlarrea/lineageos-echo-kiosk-satellite/releases/tag/crown-2026.11.4"
     ],
     "echo-show-8-2": [
      "lineage",
