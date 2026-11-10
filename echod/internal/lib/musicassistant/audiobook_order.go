@@ -60,6 +60,38 @@ func AudiobookOrder(books []Entry) []Entry {
 	return out
 }
 
+// The orders an audiobooks page can be put in.
+const (
+	AudiobookByAuthor = iota // the author, then series and book (AudiobookOrder)
+	AudiobookByTitle         // by title
+	AudiobookByRecent        // newest added first
+	AudiobookOrders          // how many orders there are
+)
+
+// SortAudiobooks puts books in the order mode names. The list is not changed.
+func SortAudiobooks(books []Entry, mode int) []Entry {
+	switch mode {
+	case AudiobookByTitle:
+		out := append([]Entry(nil), books...)
+		sort.SliceStable(out, func(i, j int) bool {
+			return strings.ToLower(out[i].Name) < strings.ToLower(out[j].Name)
+		})
+		return out
+	case AudiobookByRecent:
+		out := append([]Entry(nil), books...)
+		// ISO times sort as text; a book with no date goes last.
+		sort.SliceStable(out, func(i, j int) bool {
+			a, b := out[i].DateAdded, out[j].DateAdded
+			if (a == "") != (b == "") {
+				return a != ""
+			}
+			return a > b
+		})
+		return out
+	}
+	return AudiobookOrder(books)
+}
+
 // authorKey sorts by the author's surname, then their name: "B. V. Larson" as "larson b. v.". A book with
 // no author sorts after the others.
 func authorKey(b Entry) string {

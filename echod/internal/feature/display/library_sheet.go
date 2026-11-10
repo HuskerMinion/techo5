@@ -153,6 +153,8 @@ type librarySheet struct {
 	// from is the media player the library was opened for, a media sheet's or a card's; empty for none.
 	from string
 	tab  int
+	// audiobookSort is the audiobooks' order: by author, title or newest (musicassistant.AudiobookByAuthor ...).
+	audiobookSort int
 	// roots are the tabs as they were left, and stack the pages opened from the one shown, the last on
 	// top.
 	roots [libTabs]libPage
@@ -281,56 +283,56 @@ var libWords = map[string][]string{
 		"No player found: browse only", "Top tracks", "Tap to search",
 		"Search the music library", "No results", "Library",
 		"From your saved tracks", "No stations saved in Music Assistant", "Search stations", "Save music in Music Assistant, or search for it here.",
-		"Play next", "Add to queue"},
+		"Play next", "Add to queue", "By author", "By title", "Newest"},
 	"ja": {"アーティスト", "アルバム", "プレイリスト", "曲", "ラジオ", "検索", "ポッドキャスト", "オーディオブック", "戻る", "再生", "シャッフル", "完了",
 		"読み込み中…", "まだ何もありません",
 		"ここで閲覧するには、設定ページ（Sound & Voice、Music Assistant）で音楽ライブラリを設定してください。",
 		"Music Assistantのプレーヤーがありません（閲覧のみ）", "人気曲", "タップして検索",
 		"音楽ライブラリを検索", "見つかりません", "ライブラリ",
 		"保存した曲から", "Music Assistantに保存された局はありません", "局を検索", "Music Assistantに音楽を保存するか、ここで検索してください。",
-		"次に再生", "キューに追加"},
+		"次に再生", "キューに追加", "作者順", "タイトル順", "新着順"},
 	"de": {"Interpreten", "Alben", "Playlists", "Titel", "Radio", "Suche", "Podcasts", "Hörbücher", "Zurück", "Abspielen", "Zufall", "Fertig",
 		"Lädt …", "Hier ist noch nichts",
 		"Richte die Musikbibliothek auf der Einrichtungsseite ein (Sound & Voice, Music Assistant), um sie hier zu durchsuchen.",
 		"Kein Music-Assistant-Player zum Abspielen: nur ansehen", "Top-Titel", "Tippen zum Suchen",
 		"Musikbibliothek durchsuchen", "Keine Treffer", "Bibliothek",
 		"Aus deinen gespeicherten Titeln", "Keine Sender in Music Assistant gespeichert", "Sender suchen", "Speichere Musik in Music Assistant oder suche sie hier.",
-		"Als Nächstes abspielen", "Zur Warteschlange hinzufügen"},
+		"Als Nächstes abspielen", "Zur Warteschlange hinzufügen", "Nach Autor", "Nach Titel", "Neueste"},
 	"es": {"Artistas", "Álbumes", "Listas", "Canciones", "Radio", "Buscar", "Podcasts", "Audiolibros", "Atrás", "Reproducir", "Aleatorio", "Listo",
 		"Cargando…", "Aún no hay nada",
 		"Configura la biblioteca de música en la página de configuración (Sound & Voice, Music Assistant) para explorarla aquí.",
 		"No hay reproductor de Music Assistant: solo explorar", "Canciones populares", "Toca para buscar",
 		"Buscar en la biblioteca", "Sin resultados", "Biblioteca",
 		"De tus canciones guardadas", "No hay emisoras guardadas en Music Assistant", "Buscar emisoras", "Guarda música en Music Assistant o búscala aquí.",
-		"Reproducir a continuación", "Añadir a la cola"},
+		"Reproducir a continuación", "Añadir a la cola", "Por autor", "Por título", "Recientes"},
 	"fr": {"Artistes", "Albums", "Playlists", "Titres", "Radio", "Recherche", "Podcasts", "Livres audio", "Retour", "Écouter", "Aléatoire", "OK",
 		"Chargement…", "Rien pour l'instant",
 		"Configurez la bibliothèque musicale sur la page de configuration (Sound & Voice, Music Assistant) pour la parcourir ici.",
 		"Aucun lecteur Music Assistant : consultation seulement", "Titres populaires", "Touchez pour chercher",
 		"Chercher dans la bibliothèque", "Aucun résultat", "Bibliothèque",
 		"D'après vos titres enregistrés", "Aucune station enregistrée dans Music Assistant", "Chercher des stations", "Enregistrez de la musique dans Music Assistant, ou cherchez-la ici.",
-		"Écouter ensuite", "Ajouter à la file d'attente"},
+		"Écouter ensuite", "Ajouter à la file d'attente", "Par auteur", "Par titre", "Récents"},
 	"it": {"Artisti", "Album", "Playlist", "Brani", "Radio", "Cerca", "Podcast", "Audiolibri", "Indietro", "Riproduci", "Casuale", "Fatto",
 		"Caricamento…", "Ancora niente qui",
 		"Configura la libreria musicale nella pagina di configurazione (Sound & Voice, Music Assistant) per sfogliarla qui.",
 		"Nessun lettore Music Assistant: solo consultazione", "Brani più ascoltati", "Tocca per cercare",
 		"Cerca nella libreria", "Nessun risultato", "Libreria",
 		"Dai tuoi brani salvati", "Nessuna stazione salvata in Music Assistant", "Cerca stazioni", "Salva musica in Music Assistant o cercala qui.",
-		"Riproduci dopo", "Aggiungi alla coda"},
+		"Riproduci dopo", "Aggiungi alla coda", "Per autore", "Per titolo", "Recenti"},
 	"pt": {"Artistas", "Álbuns", "Playlists", "Faixas", "Rádio", "Buscar", "Podcasts", "Audiolivros", "Voltar", "Tocar", "Aleatório", "Pronto",
 		"Carregando…", "Nada aqui ainda",
 		"Configure a biblioteca de música na página de configuração (Sound & Voice, Music Assistant) para navegar nela aqui.",
 		"Nenhum player do Music Assistant: só navegar", "Mais tocadas", "Toque para buscar",
 		"Buscar na biblioteca", "Nenhum resultado", "Biblioteca",
 		"Das suas faixas salvas", "Nenhuma estação salva no Music Assistant", "Buscar estações", "Salve música no Music Assistant ou busque aqui.",
-		"Tocar em seguida", "Adicionar à fila"},
+		"Tocar em seguida", "Adicionar à fila", "Por autor", "Por título", "Recentes"},
 	"ru": {"Исполнители", "Альбомы", "Плейлисты", "Треки", "Радио", "Поиск", "Подкасты", "Аудиокниги", "Назад", "Играть", "Вперемешку", "Готово",
 		"Загрузка…", "Здесь пока пусто",
 		"Настройте музыкальную библиотеку на странице настройки (Sound & Voice, Music Assistant), чтобы просматривать её здесь.",
 		"Нет плеера Music Assistant: только просмотр", "Популярные треки", "Нажмите для поиска",
 		"Поиск в библиотеке", "Ничего не найдено", "Библиотека",
 		"Из сохранённых треков", "В Music Assistant нет сохранённых станций", "Найти станции", "Сохраните музыку в Music Assistant или найдите её здесь.",
-		"Играть следующим", "Добавить в очередь"},
+		"Играть следующим", "Добавить в очередь", "По автору", "По названию", "Новые"},
 }
 
 // The words by what they say; the tabs' are their own numbers.
@@ -354,6 +356,9 @@ const (
 	libWordEmptyHint
 	libWordPlayNext
 	libWordAddToQueue
+	libWordSortAuthor // the audiobooks' three orders, in turn: author, title, newest
+	libWordSortTitle
+	libWordSortRecent
 )
 
 func libWord(i int) string {
@@ -657,6 +662,13 @@ func (d *Display) libraryTap(x, y int) bool {
 		if ask {
 			d.libLoad(id)
 		}
+	case libPartSort:
+		d.editLibrary(func(n *librarySheet) {
+			n.audiobookSort = (n.audiobookSort + 1) % musicassistant.AudiobookOrders
+			if sec := n.roots[libAudiobooks].sections; len(sec) > 0 {
+				sec[0].entries = musicassistant.SortAudiobooks(sec[0].entries, n.audiobookSort)
+			}
+		})
 	case libPartGoSearch:
 		d.editLibrary(func(n *librarySheet) { n.tab, n.stack = libSearch, nil })
 	case libPartField:

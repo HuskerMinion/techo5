@@ -46,3 +46,26 @@ func TestAuthorKeyIsTheSurname(t *testing.T) {
 		t.Errorf("a book with no author did not sort last")
 	}
 }
+
+// The title order ignores the author, and the newest order puts the latest added first, with no date last.
+func TestSortAudiobooksByTitleAndRecent(t *testing.T) {
+	books := []Entry{
+		{Name: "Zeta", DateAdded: "2026-01-02T00:00:00"},
+		{Name: "alpha", DateAdded: "2026-03-05T00:00:00"},
+		{Name: "Mid"},
+	}
+	var titles []string
+	for _, b := range SortAudiobooks(books, AudiobookByTitle) {
+		titles = append(titles, b.Name)
+	}
+	if !reflect.DeepEqual(titles, []string{"alpha", "Mid", "Zeta"}) {
+		t.Errorf("by title = %q", titles)
+	}
+	var recent []string
+	for _, b := range SortAudiobooks(books, AudiobookByRecent) {
+		recent = append(recent, b.Name)
+	}
+	if !reflect.DeepEqual(recent, []string{"alpha", "Zeta", "Mid"}) {
+		t.Errorf("newest = %q", recent)
+	}
+}

@@ -26,6 +26,9 @@ import (
 // libPartGoSearch is a part of an empty tab: its button to the search.
 const libPartGoSearch = libPartRow + 1
 
+// libPartSort is the audiobooks' order on their row, which a tap moves to the next.
+const libPartSort = libPartRow + 2
+
 // libPartMenu is a choice on the action sheet (index: libMenuPlay, libMenuNext, libMenuAdd), and
 // libPartMenuOut is anywhere else while the sheet is up, which puts it away.
 const (
@@ -415,6 +418,12 @@ func (r *renderer) librarySheet(v *libraryView, th dashboard.Theme) {
 			}
 			pill(image.Rect(x, row.Min.Y, x+w, row.Max.Y), "", libWord(i), fill, fg, false, libPartTab, i)
 			x += w + tabGap
+		}
+		// On the audiobooks tab, the order it is in, at the row's right end; a tap moves it to the next.
+		if l.tab == libAudiobooks {
+			word := libWord(libWordSortAuthor + l.audiobookSort)
+			w := pillW(word, false)
+			pill(image.Rect(row.Max.X-w, row.Min.Y, row.Max.X, row.Max.Y), "swap-vertical", word, plain, pal.text, false, libPartSort, 0)
 		}
 	}
 

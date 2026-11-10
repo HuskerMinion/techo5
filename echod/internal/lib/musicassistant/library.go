@@ -38,7 +38,9 @@ type Entry struct {
 	Artists  []Entry
 	// Authors are an audiobook's authors' names, as the server gives them.
 	Authors []string
-	Album   *Entry
+	// DateAdded is when the server added the item to the library, as it sends it (an ISO time), if it does.
+	DateAdded string
+	Album     *Entry
 	Metadata struct {
 		Images []Image
 	}
@@ -68,7 +70,7 @@ func (e *Entry) UnmarshalJSON(b []byte) error {
 		Name: looseText(m["name"]), MediaType: looseText(m["media_type"]), Version: looseText(m["version"]),
 		Owner: looseText(m["owner"]), Year: looseInt(m["year"]), Duration: looseInt(m["duration"]),
 		TrackNumber: looseInt(m["track_number"]), DiscNumber: looseInt(m["disc_number"]),
-		Artists: looseNames(m["artists"]), Authors: looseStrings(m["authors"]), Album: looseNamed(m["album"]),
+		Artists: looseNames(m["artists"]), Authors: looseStrings(m["authors"]), DateAdded: looseText(m["date_added"]), Album: looseNamed(m["album"]),
 	}
 	var meta struct {
 		Images []json.RawMessage `json:"images"`
