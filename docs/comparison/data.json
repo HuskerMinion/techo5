@@ -4087,7 +4087,7 @@
    ],
    "wake-word": [
     "Yes",
-    "",
+    "Amazon's wake-word engine can be reselected from user-supplied pryon files (2026.11.14)",
     "https://github.com/jxlarrea/kiosk-satellite/blob/2026.10.42/docs/voice-satellite.md#settings"
    ],
    "custom-wake": [
@@ -4827,7 +4827,7 @@
    ],
    "kiosk-lock": [
     "Yes",
-    "",
+    "unlock automatically after 1-10 minutes when locked from the kiosk menu (2026.11.14)",
     "https://github.com/jxlarrea/kiosk-satellite/blob/2026.10.42/docs/kiosk.md"
    ],
    "custom-pages": [
@@ -4837,7 +4837,7 @@
    ],
    "plugins": [
     "Yes",
-    "",
+    "players, number entities and view overlays added in app 2026.11.14",
     "https://github.com/jxlarrea/kiosk-satellite-plugins"
    ],
    "wake-training": [
@@ -5786,7 +5786,7 @@
    ],
    "cancel-turn": [
     "Partly",
-    "wake word or \"stop\" interrupts the reply",
+    "wake word or \"stop\" interrupts the reply; v0.14.1 adds an HA button to interrupt the response",
     "https://github.com/msp1974/ViewAssistCompanionApp/blob/3c9517c49af97794d3ae950c123a20400d2bb078/app/src/main/java/com/msp1974/vacompanion/satellite/Satellite.kt"
    ],
    "stop-word": [
@@ -5796,7 +5796,7 @@
    ],
    "arbitration": [
     "Yes",
-    "devices in the same area elect one to answer over UDP (VACA v0.14.0)",
+    "devices in the same area elect one to answer over UDP; v0.14.1 picks the closest by audio level (experimental)",
     "https://github.com/msp1974/ViewAssistCompanionApp/blob/6fa8fd5e94a760c9259fe54064285acdffd2a98b/app/src/main/java/com/msp1974/vacompanion/broadcasts/VacaUdpBroadcast.kt"
    ],
    "echo-cancel": [
@@ -5811,7 +5811,7 @@
    ],
    "mic-gain": [
     "Yes",
-    "",
+    "adjustable gain; WebRTC AGC added in v0.14.1",
     "https://github.com/msp1974/ViewAssist_Companion_App/wiki/Configuration-Options"
    ],
    "mic-array": [
@@ -5831,7 +5831,7 @@
    ],
    "no-wake-gap": [
     "Yes",
-    "mic stays open, gain lowered during wake sound",
+    "mic stays open, gain lowered during wake sound; mic buffering shortens the gap (v0.14.1)",
     "https://github.com/msp1974/ViewAssistCompanionApp/blob/3c9517c49af97794d3ae950c123a20400d2bb078/app/src/main/java/com/msp1974/vacompanion/audio/MicrophoneInput.kt"
    ],
    "streaming-replies": [
@@ -5901,7 +5901,7 @@
    ],
    "ducking": [
     "Yes",
-    "",
+    "group ducking by area or zone (experimental, v0.14.1)",
     "https://github.com/dinki/view_assist_integration/blob/2026.7.0/custom_components/view_assist/devices/entity_listeners.py"
    ],
    "sendspin": [
@@ -6226,7 +6226,7 @@
    ],
    "ble-proxy": [
     "Yes",
-    "ESPHome-style proxy with active GATT connections (VACA v0.14.0); plaintext API",
+    "ESPHome-style proxy with active GATT connections (v0.14.0); plaintext API; remote caching added in v0.14.1",
     "https://github.com/msp1974/ViewAssistCompanionApp/blob/6fa8fd5e94a760c9259fe54064285acdffd2a98b/app/src/main/java/com/msp1974/vacompanion/btproxy/GattManager.kt"
    ],
    "led-ring": [
