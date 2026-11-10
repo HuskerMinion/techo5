@@ -26,6 +26,13 @@ import (
 // libPartGoSearch is a part of an empty tab: its button to the search.
 const libPartGoSearch = libPartRow + 1
 
+// libPartMenu is a choice on the action sheet (index: libMenuPlay, libMenuNext, libMenuAdd), and
+// libPartMenuOut is anywhere else while the sheet is up, which puts it away.
+const (
+	libPartMenu    = libPartRow + 2
+	libPartMenuOut = libPartRow + 3
+)
+
 // libParts are the library page's parts where they were last drawn, under zmu, for the touch
 // goroutine: its zones and the page itself; how high what scrolls is, the view it scrolls in and how
 // far it was scrolled; about how many covers a screen holds; and how far each row can scroll along.
@@ -94,6 +101,9 @@ func (d *Display) libDragMove(x, y int) bool {
 	d.mu.Unlock()
 	if l == nil || l.typing || d.r == nil {
 		return false
+	}
+	if l.menu.open {
+		return true // the action sheet is up: the page under it does not scroll
 	}
 	d.r.zmu.Lock()
 	most := max(d.r.libContentH-d.r.libViewH, 0)
@@ -409,8 +419,41 @@ func (r *renderer) librarySheet(v *libraryView, th dashboard.Theme) {
 	// What scrolls, after its parts, so a tap on one finds the part.
 	zones = append(zones, mediaZone{r: g.view, kind: libPartContent})
 	visible := g.cols * (viewH/max(g.tileH, 1) + 1)
+	if l.menu.open {
+		// The action sheet is over the page and takes every tap: its choices, then anywhere else, which
+		// puts it away. Nothing under it is a part while it is up.
+		zones, clip = nil, whole
+		r.libMenuSheet(&l, g, pal, fc, pill)
+		zones = append(zones, mediaZone{r: whole, kind: libPartMenuOut})
+	}
 	r.setLibrary(zones, whole)
 	r.setLibraryScroll(contentH, viewH, scroll, visible, rowMax)
+}
+
+// libMenuSheet draws the action sheet of the item a finger held, over the page dimmed under it: the
+// item's name, then Play, Play next and Add to queue as wide pills, Play lit as the library's Play is.
+func (r *renderer) libMenuSheet(l *librarySheet, g libGeom, pal dashPal, fc sheetFaces,
+	pill func(image.Rectangle, string, string, color.RGBA, color.RGBA, bool, int, int)) {
+	washOver(r.dst, r.dst.Rect, color.RGBA{0, 0, 0, 110})
+	pad, rowH, gap, titleH := r.s(24), r.s(64), r.s(12), r.s(56)
+	w := min(g.card.Dx()-2*r.s(40), r.s(560))
+	h := pad + titleH + libMenuChoices*rowH + (libMenuChoices-1)*gap + pad
+	x0 := g.card.Min.X + (g.card.Dx()-w)/2
+	y0 := g.card.Min.Y + max((g.card.Dy()-h)/2, 0)
+	r.roundFill(image.Rect(x0, y0, x0+w, y0+h), pal.rad, pal.card, pal.card)
+	r.text(fc.labelBold, r.fit(fc.labelBold, l.menu.entry.Name, w-2*pad), x0+pad, y0+pad+r.s(36), pal.text)
+	words := [libMenuChoices]string{libWord(libWordPlay), libWord(libWordPlayNext), libWord(libWordAddToQueue)}
+	icons := [libMenuChoices]string{"play", "playlist-play", "playlist-plus"}
+	plain := lerp(pal.card, pal.text, 0.1)
+	y := y0 + pad + titleH
+	for i := range libMenuChoices {
+		fill, fg := plain, pal.text
+		if i == libMenuPlay {
+			fill, fg = pal.accent, pal.bg
+		}
+		pill(image.Rect(x0+pad, y, x0+w-pad, y+rowH), icons[i], words[i], fill, fg, false, libPartMenu, i)
+		y += rowH + gap
+	}
 }
 
 // libBlocks lays page p out as strips that scroll: the notes over it, the search's field, an opened
