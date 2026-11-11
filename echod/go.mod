@@ -7,11 +7,13 @@ require (
 	github.com/emiago/diago v0.32.0
 	github.com/emiago/sipgo v1.4.3
 	github.com/flynn/noise v1.1.0
+	github.com/go-text/typesetting v0.3.5
 	github.com/godbus/dbus/v5 v5.2.2
 	github.com/google/uuid v1.6.0
 	github.com/gorilla/websocket v1.5.3
 	github.com/hajimehoshi/go-mp3 v0.3.4
 	github.com/libp2p/zeroconf/v2 v2.2.0
+	github.com/makiuchi-d/gozxing v0.1.1
 	github.com/mewkiz/flac v1.0.13
 	github.com/miekg/dns v1.1.72
 	github.com/pion/opus v0.1.1-0.20260806214105-56fe97fcac80
@@ -31,7 +33,6 @@ require (
 	github.com/emiago/dtls/v3 v3.0.0-20260122183559-8b8d23e359c0 // indirect
 	github.com/fsnotify/fsnotify v1.9.0 // indirect
 	github.com/go-audio/riff v1.0.0 // indirect
-	github.com/go-text/typesetting v0.3.5
 	github.com/go-viper/mapstructure/v2 v2.4.0 // indirect
 	github.com/gobwas/httphead v0.1.0 // indirect
 	github.com/gobwas/pool v0.2.1 // indirect
@@ -62,6 +63,7 @@ require (
 	golang.org/x/mod v0.41.0 // indirect
 	golang.org/x/sync v0.23.0 // indirect
 	golang.org/x/tools v0.49.0 // indirect
+	golang.org/x/xerrors v0.0.0-20200804184101-5ec99f83aff1 // indirect
 	gopkg.in/hraban/opus.v2 v2.0.0-20230925203106-0188a62cb302 // indirect
 )
 

@@ -1450,6 +1450,43 @@ data:
   buttons: ""
 ```
 
+## Scan a QR code
+
+In YAML, refer to this action as `esphome.<node>_qr_scan`. On devices with a screen and a camera:
+the Show, not the Dot or the Spot.
+
+Opens a page with the camera's picture on it, reads the first QR code held up to the camera, and
+answers with its text as `code`. It is meant for codes printed on things, such as the setup code on
+a Matter device. The page says what it read for a moment and closes. It also closes when the time
+runs out or **Cancel** is tapped; then the action fails with `no code was read`.
+
+> **Good to know**
+>
+> The camera is on only while the page is up, and it shows on the screen. Only the code's text
+> leaves the device, not the picture. While the privacy mute is on, the action fails at once.
+>
+> Call it with a `response_variable`: the answer is the point of it, and a call without one fails
+> after 30 seconds.
+
+### seconds (Required)
+
+*int*
+
+How long the page waits for a code, at most 25 seconds (Home Assistant gives up on an answer after
+30). `0` is 20 seconds.
+
+```yaml
+# Add a Matter device by the code on its label.
+sequence:
+  - action: esphome.office_qr_scan
+    data:
+      seconds: 25
+    response_variable: scan
+  - action: matter.commission
+    data:
+      code: "{{ scan.code }}"
+```
+
 ## Show a notification
 
 In YAML, refer to this action as `esphome.<node>_notify`.

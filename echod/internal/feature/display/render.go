@@ -127,6 +127,9 @@ type scene struct {
 	// everything under them.
 	camtest *camTestView
 
+	// qrscan is the QR scan while it is up (qrscan_page.go), over everything but a call.
+	qrscan *qrScanView
+
 	// radio feeds the drawer's Radio side and the now-playing screen; weather is on the clock when known.
 	radio   home.Radio
 	weather home.Weather
@@ -614,7 +617,7 @@ func (r *renderer) draw(s scene) {
 	// and it stays up while an alarm or a timer rings (a tap on it stops the ring). A call has lifted
 	// the night light and takes the screen; a turn, a camera, an announcement or a reminder is shown in
 	// its place at the night light's level.
-	if s.redClockFace() && s.camtest == nil {
+	if s.redClockFace() && s.camtest == nil && s.qrscan == nil {
 		r.redClockPage(s)
 		return
 	}
@@ -690,6 +693,13 @@ func (r *renderer) draw(s scene) {
 		}
 	}()
 
+	if s.qrscan != nil {
+		r.qrScanPage(s)
+		if s.showVolume {
+			r.volumeBar(s)
+		}
+		return
+	}
 	if s.camtest != nil {
 		r.cameraTestPage(s)
 		if s.showVolume {
