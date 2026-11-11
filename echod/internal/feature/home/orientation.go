@@ -11,25 +11,36 @@ import (
 
 // exifOrientation is a JPEG's EXIF orientation, 1 to 8, or 1 (as it is) when it has none.
 func exifOrientation(b []byte) int {
+	if t := exifTIFF(b); t != nil {
+		return tiffOrientation(t)
+	}
+	return 1
+}
+
+// exifTIFF is a JPEG's EXIF data, the TIFF header on, or nil when it has none.
+func exifTIFF(b []byte) []byte {
 	if len(b) < 4 || b[0] != 0xFF || b[1] != 0xD8 {
-		return 1
+		return nil
 	}
 	for i := 2; i+4 <= len(b); {
 		if b[i] != 0xFF {
-			return 1
+			return nil
 		}
 		marker := b[i+1]
 		if marker == 0xDA || marker == 0xD9 { // image data or end: no EXIF before it
-			return 1
+			return nil
 		}
 		size := int(binary.BigEndian.Uint16(b[i+2:]))
+		if size < 2 {
+			return nil
+		}
 		seg := b[i+4 : min(i+2+size, len(b))]
 		if marker == 0xE1 && len(seg) > 6 && string(seg[:6]) == "Exif\x00\x00" {
-			return tiffOrientation(seg[6:])
+			return seg[6:]
 		}
 		i += 2 + size
 	}
-	return 1
+	return nil
 }
 
 // tiffOrientation reads tag 0x0112 from a TIFF header's first directory.

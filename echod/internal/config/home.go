@@ -169,9 +169,13 @@ type Slideshow struct {
 	Mode string `json:"mode,omitempty"`
 
 	// Overlay is the clock/date shown over a Screensaver photo: SlideshowOverlayOff,
-	// SlideshowOverlaySmall, or empty for the normal, full-size clock. Unused in Background mode,
-	// which always shows the ordinary idle page's own clock.
+	// SlideshowOverlaySmall, SlideshowOverlayMedium, or empty for the normal, full-size clock. Unused in
+	// Background mode, which always shows the ordinary idle page's own clock.
 	Overlay string `json:"overlay,omitempty"`
+
+	// Weather shows the sky's icon and the temperature with the Screensaver's clock (#502). Not with
+	// the clock off: a photo alone stays a photo alone.
+	Weather bool `json:"weather,omitempty"`
 
 	// IdleMinutes is how long Screensaver mode waits for, zero for the default
 	// (SlideshowIdleDefault). Unused in Background mode.
@@ -193,7 +197,9 @@ type Slideshow struct {
 	// blurred sides. The Show only: a round screen has no halves.
 	Pairs bool `json:"pairs,omitempty"`
 
-	// Caption shows when and where an Immich photo was taken, over it in Screensaver mode.
+	// Caption shows when and where a photo was taken, over it in Screensaver mode: from Immich, which
+	// knows both, and from the photo itself or its file's name for any other source, which give the
+	// day alone (#502).
 	Caption bool `json:"caption,omitempty"`
 
 	// ImmichFavorites, ImmichFrom, ImmichTo and ImmichPerson narrow an Immich source: to its favorites;
@@ -316,8 +322,9 @@ const (
 
 // The screensaver's clock/date overlay. Empty is the normal, full-size clock.
 const (
-	SlideshowOverlayOff   = "off"
-	SlideshowOverlaySmall = "small"
+	SlideshowOverlayOff    = "off"
+	SlideshowOverlaySmall  = "small"
+	SlideshowOverlayMedium = "medium" // between the two: readable across a room, the photo still seen (#502)
 )
 
 func defaultHome() Home {

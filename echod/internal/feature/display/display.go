@@ -147,6 +147,9 @@ type Display struct {
 	// before an alarm, the screensaver, the night clock or another page. A swipe turns the style only
 	// on it.
 	clockUp bool
+	// saverUp is the last frame having been the screensaver's photos, where a swipe turns to the next
+	// photo or the one before (#502).
+	saverUp bool
 	// camTime is how long a camera opened from the screen stays up, and answerTime how long a turn's
 	// words do once it is over.
 	camTime    *esphome.Select
@@ -1656,6 +1659,9 @@ func (d *Display) gesture(g touch.Gesture) {
 			d.openDrawer(tab)
 			return
 		}
+		if d.saverSwipe(+1) {
+			return
+		}
 		if d.styleSwipe() {
 			d.stepClockStyle(+1)
 		}
@@ -1681,6 +1687,9 @@ func (d *Display) gesture(g touch.Gesture) {
 		// From the left edge it brings the dashboard up, the drawer's gesture mirrored; with no
 		// dashboard set up, the custom screens (custom_screens.go).
 		if d.r != nil && g.X < d.r.drawerEdge() && (d.openDashboard() || d.openCustom("")) {
+			return
+		}
+		if d.saverSwipe(-1) {
 			return
 		}
 		// Across the clock it is the clock style before.
@@ -2978,7 +2987,8 @@ func (d *Display) frame() (next time.Duration) {
 	}
 	wait := home.Get().SlideshowIdleTimeout()
 	d.mu.Lock()
-	d.clockUp = boring && s.sunrise == 0 && s.slideshowScreensaver == nil && !s.redClock
+	// Whether the screensaver is up is only known further down; clockUp is finished there.
+	d.clockUp = boring && s.sunrise == 0 && !s.redClock
 	if !boring {
 		d.slideshowIdleSince = time.Time{}
 	} else if d.slideshowIdleSince.IsZero() || (s.cue != "" && now.Sub(d.slideshowIdleSince) < wait) {
@@ -3004,10 +3014,17 @@ func (d *Display) frame() (next time.Duration) {
 			}
 		}
 		s.slideshowOverlay = home.Get().SlideshowOverlay()
+		s.saverWeather = home.Get().SlideshowWeather()
 		if s.slideshowScreensaver != nil && !home.Get().SlideshowArt() {
 			s.slideshowCaptions = home.Get().SlideshowCaptions()
 		}
 	}
+	// Under the screensaver the clock is not up, and a swipe is for its photos (#502). clockUp used to be
+	// settled before the screensaver was looked for, so a swipe over the photos turned the clock style.
+	d.mu.Lock()
+	d.saverUp = s.slideshowScreensaver != nil && !home.Get().SlideshowArt()
+	d.clockUp = d.clockUp && s.slideshowScreensaver == nil
+	d.mu.Unlock()
 	// Holds go to Home Assistant only on the plain clock: not over the screensaver, the light before an
 	// alarm, the night clock, a card, an answer, an announcement or any page of its own.
 	d.clockHoldScene(plainClock(&s, boring) && !d.overDashboard(&s) && !d.answerUp(now) && d.wakeLight(now) == 0)

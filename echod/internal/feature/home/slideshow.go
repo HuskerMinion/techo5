@@ -100,6 +100,7 @@ const (
 const (
 	slideshowOverlayOffLabel    = "Off"
 	slideshowOverlaySmallLabel  = "Small"
+	slideshowOverlayMediumLabel = "Medium"
 	slideshowOverlayNormalLabel = "Normal"
 )
 
@@ -130,7 +131,30 @@ type slideshowState struct {
 	// rushAsked from the re-read until the look it made due shows a photo, rushShown while that photo is
 	// up, and rushNone once a photo takes over at its own time.
 	rush int
+
+	// hist is the last photos put up, oldest first, for a swipe back to reach (#502); pos is the one up
+	// now in it. holdUntil keeps a photo a swipe turned to up for a while, past its own time.
+	hist      []shownPhoto
+	pos       int
+	holdUntil time.Time
 }
+
+// shownPhoto is one look of the slideshow: a photo, or a pair, and what their captions said.
+type shownPhoto struct {
+	ids  []string
+	caps []PhotoCaption
+}
+
+// slideshowHistory is how many photos back a swipe can go, and slideshowSwipeHold how long a photo a
+// swipe turned to stays up before the slideshow carries on.
+const (
+	slideshowHistory   = 20
+	slideshowSwipeHold = 5 * time.Minute
+)
+
+// slideshowStep keeps a swipe's step and the slideshow's own advance from fetching at the same time:
+// two photos fetched at once would land in either order.
+var slideshowStep sync.Mutex
 
 // The states of slideshowState.rush.
 const (
@@ -166,7 +190,7 @@ func (f *Feature) buildSlideshowSelect() {
 			Icon:     "mdi:clock-outline",
 			Category: esphome.CategoryConfig,
 		},
-		Options:   []string{slideshowOverlayOffLabel, slideshowOverlaySmallLabel, slideshowOverlayNormalLabel},
+		Options:   []string{slideshowOverlayOffLabel, slideshowOverlaySmallLabel, slideshowOverlayMediumLabel, slideshowOverlayNormalLabel},
 		OnCommand: func(v string) { f.ChooseSlideshowOverlay(slideshowOverlayFor(v)) },
 	}
 	f.slideshowIdleNum = &esphome.Number{
@@ -240,6 +264,15 @@ func (f *Feature) buildSlideshowSelect() {
 			Category: esphome.CategoryConfig,
 		},
 		OnCommand: func(on bool) { f.SetSlideshowCaption(on) },
+	}
+	f.slideshowWeatherSw = &esphome.Switch{
+		Base: esphome.Base{
+			ObjectID: "slideshow_screensaver_weather",
+			Name:     "Screensaver weather",
+			Icon:     "mdi:weather-partly-cloudy",
+			Category: esphome.CategoryConfig,
+		},
+		OnCommand: func(on bool) { f.SetSlideshowWeather(on) },
 	}
 	f.immichFavoritesSw = &esphome.Switch{
 		Base: esphome.Base{
@@ -329,6 +362,8 @@ func slideshowOverlayFor(v string) string {
 		return config.SlideshowOverlayOff
 	case slideshowOverlaySmallLabel:
 		return config.SlideshowOverlaySmall
+	case slideshowOverlayMediumLabel:
+		return config.SlideshowOverlayMedium
 	}
 	return ""
 }
@@ -339,6 +374,8 @@ func slideshowOverlayLabelFor(overlay string) string {
 		return slideshowOverlayOffLabel
 	case config.SlideshowOverlaySmall:
 		return slideshowOverlaySmallLabel
+	case config.SlideshowOverlayMedium:
+		return slideshowOverlayMediumLabel
 	}
 	return slideshowOverlayNormalLabel
 }
@@ -525,6 +562,7 @@ func (f *Feature) ResetImmich() {
 	f.slideshowGen++
 	f.slideshow.children, f.slideshow.browsed, f.slideshow.idx, f.slideshow.ahead = nil, time.Time{}, 0, nil
 	f.slideshow.trouble, f.slideshow.fails, f.slideshow.waitUntil = "", 0, time.Time{}
+	f.slideshow.hist, f.slideshow.pos = nil, 0 // the server before's photos: not this one's to go back to
 	f.mu.Unlock()
 	if source, _, _ := f.SlideshowSettings(); strings.HasPrefix(source, ImmichAlbumPrefix) {
 		f.SetSlideshowSource(ImmichAll)
@@ -624,8 +662,27 @@ func (f *Feature) SetSlideshowCaption(on bool) {
 	f.slideshowCaptionSw.Set(on)
 }
 
-// SlideshowCaption is whether Immich photos say when and where they were taken.
+// SlideshowCaption is whether photos say when and where they were taken.
 func (f *Feature) SlideshowCaption() bool { return config.Get().Home.Slideshow.Caption }
+
+// SetSlideshowWeather shows the weather with the screensaver's clock, or not (#502). Only how the
+// screensaver is drawn changes, so the photos are not gathered again for it.
+func (f *Feature) SetSlideshowWeather(on bool) {
+	f.slideshowWeatherSw.Set(on)
+	s := config.Get().Home.Slideshow
+	if s.Weather == on {
+		return
+	}
+	s.Weather = on
+	if err := config.Set().Home().Slideshow(s); err != nil {
+		slog.Warn("home: saving the screensaver weather failed", "err", err)
+		return
+	}
+	f.Changed.Emit(struct{}{})
+}
+
+// SlideshowWeather is whether the screensaver's clock has the weather with it.
+func (f *Feature) SlideshowWeather() bool { return config.Get().Home.Slideshow.Weather }
 
 // SetImmichFavorites shows only Immich's favorites, or every photo the source has.
 func (f *Feature) SetImmichFavorites(on bool) {
@@ -772,15 +829,32 @@ func (f *Feature) slideshowLoop(ctx context.Context) {
 // isn't one yet. Nothing to do with the slideshow off, without a source, or before Home Assistant
 // access is set.
 func (f *Feature) advanceSlideshow() {
+	slideshowStep.Lock()
+	defer slideshowStep.Unlock()
+	f.advance(false)
+}
+
+// advance is advanceSlideshow with slideshowStep held. Forced (a swipe to the next photo), a new photo
+// is fetched whatever the time; otherwise only once the one up has had its time, and a swipe's hold is
+// over. A slideshow a swipe has taken back carries on from there through the photos already seen
+// before it fetches new ones.
+func (f *Feature) advance(force bool) {
 	h := config.Get().Home.Slideshow
 	if (h.Mode != config.SlideshowBackground && h.Mode != config.SlideshowScreensaver) || h.Source == "" || h.Art ||
 		(h.Source != LocalPhotos && !IsImmich(h.Source) && !hass.Get().Ready()) {
 		return
 	}
 	f.mu.Lock()
-	due := f.slideshow.image == nil || time.Since(f.slideshow.at) >= slideshowInterval(h)
+	now := time.Now()
+	due := force || f.slideshow.image == nil ||
+		(now.Sub(f.slideshow.at) >= slideshowInterval(h) && !now.Before(f.slideshow.holdUntil))
+	behind := f.slideshow.pos < len(f.slideshow.hist)-1
 	f.mu.Unlock()
 	if !due {
+		return
+	}
+	if behind && !force {
+		f.showSeen(+1)
 		return
 	}
 	var last error
@@ -815,6 +889,7 @@ func (f *Feature) advanceSlideshow() {
 			}
 			f.slideshow.prev, f.slideshow.image, f.slideshow.at = f.slideshow.image, img, time.Now()
 			f.slideshow.shown, f.slideshow.captions = ids, caps
+			f.remember(shownPhoto{ids: ids, caps: caps})
 			if f.slideshow.rush == rushAsked {
 				f.slideshow.rush = rushShown // the photo a re-read brought forward gets its whole time
 			} else {
@@ -835,6 +910,89 @@ func (f *Feature) advanceSlideshow() {
 		f.mu.Unlock()
 		f.slideshowNothing(slideshowUnreadable)
 	}
+}
+
+// remember adds a look just put up to the history, after the one that was up: what a swipe back had
+// passed is let go, as a browser's forward pages are. Called with f.mu held.
+func (f *Feature) remember(p shownPhoto) {
+	keep := f.slideshow.hist
+	if f.slideshow.pos+1 < len(keep) {
+		keep = keep[:f.slideshow.pos+1]
+	}
+	keep = append(keep, p)
+	if len(keep) > slideshowHistory {
+		keep = slices.Clone(keep[len(keep)-slideshowHistory:])
+	}
+	f.slideshow.hist, f.slideshow.pos = keep, len(keep)-1
+}
+
+// StepSlideshow is a swipe across the screensaver (#502): the next photo (+1) or the one before (-1).
+// The photo it turns to stays up for slideshowSwipeHold before the slideshow carries on by itself.
+// False when there is nothing to step to: no photos showing, or back past the first one kept.
+func (f *Feature) StepSlideshow(dir int) bool {
+	h := config.Get().Home.Slideshow
+	if h.Mode != config.SlideshowScreensaver || h.Source == "" || h.Art {
+		return false
+	}
+	f.mu.Lock()
+	ok := f.slideshow.image != nil && (dir > 0 || f.slideshow.pos > 0)
+	if ok {
+		f.slideshow.holdUntil = time.Now().Add(slideshowSwipeHold)
+	}
+	f.mu.Unlock()
+	if !ok {
+		return false
+	}
+	slog.Info("home: slideshow swiped", "step", dir)
+	safe.Go("slideshow step", func() { f.step(dir) })
+	return true
+}
+
+// step is StepSlideshow's work, done while the swipe's caller gets on: the next photo fetched new, or
+// one already seen fetched again.
+func (f *Feature) step(dir int) {
+	slideshowStep.Lock()
+	defer slideshowStep.Unlock()
+	f.mu.Lock()
+	latest := f.slideshow.pos >= len(f.slideshow.hist)-1
+	f.mu.Unlock()
+	if dir > 0 && latest {
+		f.advance(true)
+	} else {
+		f.showSeen(dir)
+	}
+	// The hold runs from when the photo is up, not from the swipe: fetching it can take a while.
+	f.mu.Lock()
+	f.slideshow.holdUntil = time.Now().Add(slideshowSwipeHold)
+	f.mu.Unlock()
+}
+
+// showSeen puts up a photo already seen, dir steps from the one up in the history, fetched again. Called
+// with slideshowStep held.
+func (f *Feature) showSeen(dir int) {
+	f.mu.Lock()
+	i, gen := f.slideshow.pos+dir, f.slideshowGen
+	if i < 0 || i >= len(f.slideshow.hist) {
+		f.mu.Unlock()
+		return
+	}
+	p := f.slideshow.hist[i]
+	f.mu.Unlock()
+	whole := config.Get().Home.Slideshow.WholePhoto
+	img, err := fetchShown(p.ids, whole)
+	if err != nil {
+		slog.Warn("home: slideshow photo seen before", "id", p.ids[0], "err", err)
+		return
+	}
+	f.mu.Lock()
+	if f.slideshowGen != gen || img.Rect.Size() != image.Pt(slideshowSize()) {
+		f.mu.Unlock()
+		return // the source changed, or the screen's size, while it was fetched
+	}
+	f.slideshow.prev, f.slideshow.image, f.slideshow.at = f.slideshow.image, img, time.Now()
+	f.slideshow.shown, f.slideshow.captions, f.slideshow.pos = p.ids, p.caps, i
+	f.mu.Unlock()
+	f.Changed.Emit(struct{}{})
 }
 
 // pairLooks is how many photos are looked at for a tall photo's partner before it is shown alone.
@@ -875,8 +1033,10 @@ func tall(img image.Image) bool {
 	return b.Dy() > b.Dx()
 }
 
-// slideshowCaptions asks Immich when and where each photo up was taken, when captions are on and there
-// is a screensaver to show them. A photo it cannot say for has none; the other of a pair still does.
+// slideshowCaptions is when and where each photo up was taken, when captions are on and there is a
+// screensaver to show them: asked of Immich for its photos, and for any other read from the photo or its
+// file's name when it was fetched, the day alone (#502). A photo that cannot be said for has none; the
+// other of a pair still does.
 func slideshowCaptions(h config.Slideshow, ids []string) []PhotoCaption {
 	if !h.Caption || h.Mode != config.SlideshowScreensaver {
 		return nil
@@ -884,6 +1044,9 @@ func slideshowCaptions(h config.Slideshow, ids []string) []PhotoCaption {
 	var out []PhotoCaption
 	for i, id := range ids {
 		if !strings.HasPrefix(id, immichAssetPrefix) {
+			if when := takenOf(id); !when.IsZero() {
+				out = append(out, PhotoCaption{When: when, Right: i == 1, Pair: len(ids) == 2})
+			}
 			continue
 		}
 		ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
@@ -1144,6 +1307,9 @@ func fetchSlideshowSource(id string) (image.Image, error) {
 	}
 	if err != nil {
 		return nil, err
+	}
+	if !strings.HasPrefix(id, immichAssetPrefix) {
+		noteTaken(id, b) // Immich is asked when and where instead (slideshowCaptions)
 	}
 	// Decoded no smaller than covers the panel once it is turned upright: a photo stored on its side is
 	// turned after it is decoded, so its width is the panel's height. A pair's half is smaller still.

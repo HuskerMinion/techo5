@@ -54,14 +54,14 @@ func (f *Feature) entities() []esphome.Entity {
 	if hasScreen && !hasLyrics {
 		return []esphome.Entity{f.weatherSel, f.followSel, f.radarSel, f.alertsSw, f.cameraSoundSw, f.cameraLiveSw, f.slideshowSel, f.slideshowOverlaySel, f.slideshowIdleNum,
 			f.slideshowEveryNum, f.slideshowShuffleSw, f.slideshowSubfoldersSw, f.slideshowArtSw, f.slideshowWholeSw, f.slideshowFolderTxt,
-			f.slideshowCaptionSw, f.immichFavoritesSw, f.immichPersonTxt, f.immichFromTxt, f.immichToTxt,
+			f.slideshowCaptionSw, f.slideshowWeatherSw, f.immichFavoritesSw, f.immichPersonTxt, f.immichFromTxt, f.immichToTxt,
 			f.radioStationTxt, f.radioArtistTxt, f.radioTitleTxt,
 			f.nowSourceTxt, f.nowTitleTxt, f.nowArtistTxt, f.nowAlbumTxt, f.nowStateTxt}
 	}
 	if hasScreen {
 		return []esphome.Entity{f.weatherSel, f.followSel, f.lyricsSw, f.radarSel, f.alertsSw, f.cameraSoundSw, f.cameraLiveSw, f.slideshowSel, f.slideshowOverlaySel, f.slideshowIdleNum,
 			f.slideshowEveryNum, f.slideshowShuffleSw, f.slideshowSubfoldersSw, f.slideshowArtSw, f.slideshowWholeSw, f.slideshowFolderTxt,
-			f.slideshowPairsSw, f.slideshowCaptionSw, f.immichFavoritesSw, f.immichPersonTxt, f.immichFromTxt, f.immichToTxt,
+			f.slideshowPairsSw, f.slideshowCaptionSw, f.slideshowWeatherSw, f.immichFavoritesSw, f.immichPersonTxt, f.immichFromTxt, f.immichToTxt,
 			f.radioStationTxt, f.radioArtistTxt, f.radioTitleTxt,
 			f.nowSourceTxt, f.nowTitleTxt, f.nowArtistTxt, f.nowAlbumTxt, f.nowStateTxt}
 	}

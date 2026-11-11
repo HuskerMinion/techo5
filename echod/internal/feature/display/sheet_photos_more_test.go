@@ -10,8 +10,8 @@ import (
 	"github.com/HuskerMinion/techo5/echod/internal/feature/home"
 )
 
-// The photos' rows offer pairs where the screen has halves, and Immich's own rows only for an Immich
-// source.
+// The photos' rows offer pairs where the screen has halves, the date for every source (#502), and
+// Immich's own rows only for an Immich source.
 func TestImmichPhotoRows(t *testing.T) {
 	config.Use(filepath.Join(t.TempDir(), "state.json"))
 	ids := func() map[string]bool {
@@ -25,8 +25,8 @@ func TestImmichPhotoRows(t *testing.T) {
 		t.Fatal(err)
 	}
 	got := ids()
-	if got["photocaption"] || got["immichfav"] {
-		t.Errorf("Immich's rows for photos on the device: %v", got)
+	if !got["photocaption"] || got["immichfav"] {
+		t.Errorf("photos on the device: %v, want the date and none of Immich's rows", got)
 	}
 	if got["photopairs"] != home.PairsHere() {
 		t.Errorf("photo pairs offered %v on a screen where they are %v", got["photopairs"], home.PairsHere())

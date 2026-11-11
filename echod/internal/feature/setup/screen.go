@@ -104,6 +104,14 @@ var slideshowModes = []struct{ label, value string }{
 	{"Screensaver, after a while", config.SlideshowScreensaver},
 }
 
+// saverClocks are the screensaver clock's sizes as the page names them, with what the config keeps.
+var saverClocks = []struct{ label, value string }{
+	{"Off", config.SlideshowOverlayOff},
+	{"Small", config.SlideshowOverlaySmall},
+	{"Medium", config.SlideshowOverlayMedium},
+	{"Normal", ""},
+}
+
 func screenSection(w http.ResponseWriter, token string) {
 	s := screen.Load()
 	if s == nil {
@@ -182,8 +190,18 @@ func screenSection(w http.ResponseWriter, token string) {
 	fmt.Fprintf(w, `</select>
 	 <p><label><input type="checkbox" name="art" value="yes" style="width:auto"%s> Weather art in place of photos</label></p>
 	 <p class="note">Weather art is a landscape the device draws for the weather and the time of day, with rain,
-	  snow and clouds moving over it. It needs no photos and no Home Assistant.</p>
-	 <p><button type="submit">Save</button></p></form></fieldset>`, art)
+	  snow and clouds moving over it. It needs no photos and no Home Assistant.</p>`, art)
+	fmt.Fprint(w, `<label for="saverclock">Screensaver clock</label><select id="saverclock" name="saverclock">`)
+	overlay := home.Get().SlideshowOverlay()
+	for _, c := range saverClocks {
+		fmt.Fprintf(w, `<option value="%s"%s>%s</option>`, c.value, selected(c.value == overlay), c.label)
+	}
+	fmt.Fprintf(w, `</select>
+	 <p><label><input type="checkbox" name="saverweather" value="yes" style="width:auto"%s> Weather with the
+	  screensaver clock</label></p>
+	 <p class="note">On the screensaver, a swipe left or right goes to the next photo or the one before, and that
+	  photo stays up for five minutes.</p>
+	 <p><button type="submit">Save</button></p></form></fieldset>`, checked(home.Get().SlideshowWeather()))
 }
 
 func saveScreen(r *http.Request) string {
@@ -202,6 +220,17 @@ func saveScreen(r *http.Request) string {
 	}
 	if !known {
 		return "that is not a slideshow this device has"
+	}
+	// Only when the page sent it: a form from before it had the row leaves the screensaver as it is.
+	saverClock, sentClock := r.PostForm["saverclock"]
+	if sentClock {
+		known = false
+		for _, c := range saverClocks {
+			known = known || c.value == saverClock[0]
+		}
+		if !known {
+			return "that is not a screensaver clock this device has"
+		}
 	}
 	fnt := -1
 	if len(s.Fonts) > 0 {
@@ -266,6 +295,10 @@ func saveScreen(r *http.Request) string {
 	// clock (SetSlideshowArt), and choosing Off with the art already ticked turns the slideshow off.
 	if on := r.PostFormValue("art") == "yes"; on != h.SlideshowArt() {
 		h.SetSlideshowArt(on)
+	}
+	if sentClock {
+		h.ChooseSlideshowOverlay(saverClock[0])
+		h.SetSlideshowWeather(r.PostFormValue("saverweather") == "yes")
 	}
 	slog.Info("setup page: screen set", "clock style", strings.ToLower(s.Styles[i]), "slideshow", mode, "art", h.SlideshowArt())
 	return ""

@@ -146,3 +146,12 @@ spot/style-Analog.png
 spot/style-Binary.png
 spot/style-Nixie.png
 spot/style-Words.png
+show/saver-small-weather.png
+show/saver-medium-show8.png
+show/saver-medium-weather-show8.png
+show/saver-medium-weather.png
+show/saver-clock-weather-show8.png
+spot/saver-spot-small-weather.png
+spot/saver-spot-medium.png
+spot/saver-spot-medium-weather.png
+spot/saver-spot-clock-weather.png
