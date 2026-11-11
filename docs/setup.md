@@ -1315,6 +1315,11 @@ limit) how many times. At 0 seconds it listens again only when the assistant ask
 it always does. **Follow-up tone** is the sound it makes as it listens again. For the first wake
 word, the setup page has the same under **Sound & Voice**, **Listening after an answer**.
 
+To end the conversation sooner, say only "thank you", "that's all", "never mind" or "goodbye" (or the
+same in the screen's other languages). The answer to it is the last thing said, and the device stops
+listening, even after a question. Said with more, like "thanks, and what time is it?", it's an
+ordinary turn.
+
 **The stop word.** Say "stop", with no wake word, while the device is making a sound: it stops a
 ringing alarm or timer, an answer, an announcement or the music. After an alarm it also lets go of a
 wake light held on. With nothing playing it does nothing, so "stop the timer" said to Home Assistant
