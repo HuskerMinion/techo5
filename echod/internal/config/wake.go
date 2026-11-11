@@ -52,6 +52,26 @@ type OnHA struct {
 
 	// ConfirmThreshold is the lowest score that is worth asking about. Zero is the default.
 	ConfirmThreshold float64 `json:"confirm_threshold,omitempty"`
+
+	// ConfirmBelowScore asks about a wake over the wake word threshold too, when this device won the
+	// nearest-device decision for it with a score under this (#503): a TV across the room scores as
+	// highly on the model as somebody at the device, and much lower on how clearly it stood out. Zero,
+	// the default, is off; it needs Confirm, and other devices to compare with.
+	ConfirmBelowScore int `json:"confirm_below_score,omitempty"`
+}
+
+// The range of ConfirmBelowScore, in the nearest-device score's dB.
+const (
+	MinConfirmBelowScore = 0
+	MaxConfirmBelowScore = 30
+)
+
+// FaintBelow is the nearest-device score under which a wake is asked about, zero when none is.
+func (o OnHA) FaintBelow() float64 {
+	if !o.Confirm || o.ConfirmBelowScore <= 0 {
+		return 0
+	}
+	return float64(min(o.ConfirmBelowScore, MaxConfirmBelowScore))
 }
 
 // DefaultConfirmThreshold is where asking starts: under the default wake word threshold by enough to
@@ -313,6 +333,11 @@ func (w OnHAWriter) Confirm(v bool) error {
 
 func (w OnHAWriter) ConfirmThreshold(v float64) error {
 	return w.st.Update(func(c *Config) { c.Wake.OnHA.ConfirmThreshold = v })
+}
+
+func (w OnHAWriter) ConfirmBelowScore(v int) error {
+	v = min(max(v, MinConfirmBelowScore), MaxConfirmBelowScore)
+	return w.st.Update(func(c *Config) { c.Wake.OnHA.ConfirmBelowScore = v })
 }
 
 // StopWriter is the stop word, which belongs to no slot.

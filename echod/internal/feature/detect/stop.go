@@ -101,7 +101,7 @@ func (d *Detect) Entities() []esphome.Entity {
 		out = append(out, c.word, c.threshold)
 	}
 	out = append(out, d.frames.busy, d.frames.rate, d.frames.worst)
-	return append(out, d.score, d.onHA.stream, d.onHA.confirm, d.onHA.threshold, d.clipsTotal, d.clipsKinds,
+	return append(out, d.score, d.onHA.stream, d.onHA.confirm, d.onHA.threshold, d.onHA.faint, d.clipsTotal, d.clipsKinds,
 		d.keepClips)
 }
 

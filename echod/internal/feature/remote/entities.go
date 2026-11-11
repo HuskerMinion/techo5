@@ -31,7 +31,7 @@ var readOnly = []string{
 	"send_voice_text",
 	// When the microphones open: a press that starts listening, and how readily a word or a sound does.
 	"wake_assistant_1", "wake_assistant_2", "wake_threshold_1", "wake_threshold_2",
-	"wake_playing_threshold_1", "wake_playing_threshold_2", "confirm_threshold",
+	"wake_playing_threshold_1", "wake_playing_threshold_2", "confirm_threshold", "confirm_below_nearest_score",
 	"max_listen_1", "max_listen_2",
 	// New uses of the microphones and the camera: measuring the room, listening for claps, a finger held
 	// on the clock, serving the camera, and which device answers a wake word.

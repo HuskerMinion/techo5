@@ -17,6 +17,8 @@ type onHAEntities struct {
 	stream    *esphome.Switch
 	confirm   *esphome.Switch
 	threshold *esphome.Number
+	// faint is the nearest-device score under which a sure wake is asked about as well (#503).
+	faint *esphome.Number
 }
 
 func newOnHAEntities() onHAEntities {
@@ -50,6 +52,17 @@ func newOnHAEntities() onHAEntities {
 			Min: 0.5, Max: 0.95, Step: 0.01,
 			Mode: esphome.NumberBox,
 		},
+		faint: &esphome.Number{
+			Base: esphome.Base{
+				ObjectID: "confirm_below_nearest_score",
+				DeviceID: component.DeviceMicrophone,
+				Name:     "Confirm below nearest-device score",
+				Icon:     "mdi:account-question",
+				Category: esphome.CategoryConfig,
+			},
+			Min: config.MinConfirmBelowScore, Max: config.MaxConfirmBelowScore, Step: 1, Unit: "dB",
+			Mode: esphome.NumberBox,
+		},
 	}
 
 	o.stream.OnCommand = func(on bool) {
@@ -74,6 +87,14 @@ func newOnHAEntities() onHAEntities {
 			slog.Error("saving the confirm threshold failed", "err", err)
 		}
 	}
+	o.faint.OnCommand = func(v float32) {
+		n := min(max(int(v+0.5), config.MinConfirmBelowScore), config.MaxConfirmBelowScore)
+		o.faint.Set(float32(n))
+		if err := config.Set().OnHA().ConfirmBelowScore(n); err != nil {
+			slog.Error("saving confirm below nearest-device score failed", "err", err)
+		}
+		slog.Info("confirm below nearest-device score", "score", n)
+	}
 	return o
 }
 
@@ -81,6 +102,7 @@ func (o onHAEntities) restore(c config.OnHA) {
 	o.stream.Set(c.Stream)
 	o.confirm.Set(c.Confirm)
 	o.threshold.Set(float32(c.ConfirmAt()))
+	o.faint.Set(float32(c.ConfirmBelowScore))
 	slog.Info("restored", "what", "wake word on home assistant", "stream", c.Stream, "confirm", c.Confirm,
-		"confirm_threshold", c.ConfirmAt())
+		"confirm_threshold", c.ConfirmAt(), "confirm_below_score", c.ConfirmBelowScore)
 }

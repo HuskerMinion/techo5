@@ -1754,6 +1754,17 @@ Voice assistants). Home Assistant listens for one wake word per voice assistant.
   hear, up to a minute. A wake the device or Home Assistant does hear starts that over. Nothing is asked
   about for a few seconds after a call or a talk through a camera, so none of it is sent.
 
+  **Confirm below nearest-device score** (0 to 30 dB, 0 = off) checks wakes over the Wake word
+  threshold too, in a house with **Nearest device answers** on. A TV across the room can score as
+  high on the wake word model as someone at the device, but it doesn't stand out as clearly. When
+  this device answers a wake with a nearest-device score under this number (the `score` in the
+  log's "nearest device: answering" line), it asks Home Assistant first, as above. A score of 8 is a
+  good start: real wakes at the device usually score well over 10. A wake that can't be checked, for
+  example because Home Assistant is restarting, is answered as usual, so a real request is never
+  dropped, and the 5-second spacing doesn't hold these back. A device that's the only one to hear a
+  word has no score, so nothing changes there. It needs Confirm wake with Home Assistant on, and it
+  checks the first wake word only.
+
 What to know before turning them on:
 
 - **Privacy.** With Wake word on Home Assistant, everything said in the room goes to Home Assistant

@@ -130,6 +130,12 @@ type watching struct {
 	stop    func()
 	timeout *time.Timer
 
+	// faint is a wake over the threshold that this device won with a low nearest-device score (#503),
+	// asked about all the same; from is when it was heard, which the turn reaches back to. A wake under
+	// the threshold is asked about as it is scored, so its from is at.
+	faint bool
+	from  time.Time
+
 	// started is Home Assistant having said its engine is listening (WAKE_WORD_START).
 	started bool
 
@@ -213,6 +219,12 @@ func (c *conversation) watchEvent(e event) bool {
 
 	case evCandidate:
 		c.confirm(e.slot, e.peak)
+		return true
+
+	case evFaint:
+		if !c.confirmFaint(e.slot, e.at) && e.then != nil {
+			safe.Go("faint wake", e.then)
+		}
 		return true
 
 	case evRunEnd:
@@ -343,13 +355,17 @@ func (c *conversation) heardOnHA() {
 	if w.mode == watchConfirm {
 		// The request went on from the word while Home Assistant was asked: the turn reaches back to
 		// when the device scored it (historyFor, #477).
-		n.at, n.confirmed = w.at, true
+		n.at, n.confirmed = w.from, true
 	}
 	if !c.start(n) {
 		c.closeRun()
 		return
 	}
-	if w.mode == watchConfirm {
+	switch {
+	case w.faint:
+		// Over the threshold: its score is the device's own wake score, as for any wake (wakescore.go).
+		c.wakeOpened(w.slot, w.from)
+	case w.mode == watchConfirm:
 		c.turn.Scored(w.peak)
 		Confirmed.Emit(Confirmation{Slot: w.slot, Peak: w.peak})
 	}
@@ -393,6 +409,32 @@ func (c *conversation) confirm(slot int, peak float64) {
 	}
 	c.nextConfirm = c.now().Add(c.confirmGap)
 	c.openWatch(watchConfirm, slot, peak)
+}
+
+// confirmFaint asks Home Assistant about a wake over the threshold that this device won with a low
+// nearest-device score (#503), heard at at, and reports whether it did. One that can't be asked opens as
+// any wake does, so nothing said to the device is lost to the setting: unlike confirm, the spacing between
+// questions doesn't hold it back, since a wake over the threshold is not a steady sound near the word.
+func (c *conversation) confirmFaint(slot int, at time.Time) bool {
+	switch {
+	case slot != 0 || config.Get().Wake.OnHA.FaintBelow() <= 0:
+		return false
+	case c.phase != phaseIdle || c.watch != nil || c.pending != nil || c.draining || c.grace != nil:
+		slog.Info("faint wake not asked about, busy; answering it", "phase", c.phase)
+		return false
+	case !c.ha.Ready() || !haAnswers(slot) || c.micBusy() || c.now().Before(c.retryAt):
+		slog.Info("faint wake not asked about, home assistant can't be; answering it")
+		return false
+	case !c.busyAt.IsZero() && c.now().Sub(c.busyAt) < mic.Confirming+time.Second:
+		return false
+	}
+	if c.confirmGap == 0 {
+		c.confirmGap = confirmGapMin
+	}
+	c.nextConfirm = later(c.nextConfirm, c.now().Add(c.confirmGap))
+	c.openWatch(watchConfirm, slot, 0)
+	c.watch.faint, c.watch.from = true, at
+	return true
 }
 
 // consider opens a streaming run when one should be open and none is, closes one that should not be,
@@ -488,6 +530,7 @@ func (c *conversation) openWatch(mode watchMode, slot int, peak float64) {
 	c.runOpen = true
 
 	w := &watching{mode: mode, slot: slot, peak: peak, at: c.now()}
+	w.from = w.at
 	var history time.Duration
 	if mode == watchConfirm {
 		history = mic.Confirming
@@ -596,6 +639,17 @@ func (v *Voice) Candidate(slot int, peak float64) {
 		return
 	}
 	v.turn.post(event{kind: evCandidate, slot: slot, peak: peak})
+}
+
+// WokeFaint is WokeAt for a wake word this device won with a low nearest-device score (feature/nearest,
+// #503): Home Assistant is asked to hear it too before the turn opens, and when it can't be, the turn
+// opens as WokeAt's does.
+func (v *Voice) WokeFaint(slot int, at time.Time) {
+	if micTaken() || slot != 0 || wakeCallApplies(slot) {
+		v.WokeAt(slot, at)
+		return
+	}
+	v.turn.post(event{kind: evFaint, slot: slot, at: at, then: func() { v.WokeAt(slot, at) }})
 }
 
 // WakeOnHAChanged says a Home Assistant wake word setting changed, so a stream starts or stops now
