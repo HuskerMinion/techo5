@@ -187,7 +187,17 @@ usual one, and the steps below start with it.
      Off, photos fill the screen, which crops tall ones.
    - **Photo pairs** (the Show) puts two tall photos side by side, each filling half the screen,
      in place of one with blurred sides. A tall photo with no other near it in the list shows alone.
-   - With an Immich source, **Date and place** and **Favorites only** are here too.
+   - **Date and place** writes the day each photo was taken at its foot on the screensaver. Immich
+     says the place too. For any other source the day comes from the photo's own EXIF data, or else
+     from a date in its file name (like `20260818_111018.jpg`); a photo with neither has no caption.
+   - With an Immich source, **Favorites only** is here too.
+
+**The screensaver.** **Screensaver clock** (in Home Assistant, or on the setup page under **Screen &
+Photos**) is Off, Small, Medium or Normal. Medium is readable across a room without covering the
+middle of the photo. **Screensaver weather** adds the sky's icon and the temperature to the clock.
+While the photos are up, a swipe left goes to the next photo and a swipe right to the one before,
+back through the last 20; the photo swiped to stays up for five minutes before the slideshow carries
+on. Swipes there never change the clock style.
 
 The same settings are entities in Home Assistant, and the folder can be set with the
 [`home_slideshow` action](actions.md#set-the-slideshows-photo-source). Given the folder that is

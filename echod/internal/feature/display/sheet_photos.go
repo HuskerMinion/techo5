@@ -55,11 +55,12 @@ func slideshowRows(demo bool) []settingRow {
 	if home.PairsHere() {
 		rows = append(rows, settingRow{id: "photopairs", label: tr("ui_photo_pairs"), sub: tr("ui_two_tall_photos_side_by_side"), kind: ctlToggle, on: home.Get().SlideshowPairs()})
 	}
+	// The day each photo was taken, from any source (#502): Immich says where too.
+	rows = append(rows, settingRow{id: "photocaption", label: tr("ui_date_and_place"), sub: tr("ui_on_the_screensaver_under_each_photo"), kind: ctlToggle, on: home.Get().SlideshowCaption()})
 	if home.IsImmich(source) {
-		// Immich's own: the day and place it knows, and its favorites. A person and the days to show are
-		// set on the setup page or in Home Assistant, which have a keyboard.
+		// Immich's own: its favorites. A person and the days to show are set on the setup page or in Home
+		// Assistant, which have a keyboard.
 		rows = append(rows,
-			settingRow{id: "photocaption", label: tr("ui_date_and_place"), sub: tr("ui_on_the_screensaver_under_each_photo"), kind: ctlToggle, on: home.Get().SlideshowCaption()},
 			settingRow{id: "immichfav", label: tr("ui_favorites_only"), sub: tr("ui_the_photos_marked_as_favorites_in_immich"), kind: ctlToggle, on: home.Get().ImmichFavorites()},
 		)
 	}

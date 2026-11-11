@@ -47,12 +47,60 @@ func (r *renderer) slideshowScreensaverPage(s scene) {
 	r.artWeather(s)
 	r.readableOver(s.slideshowScreensaver, walnut, slideshowWash, func() {
 		r.photoCaptions(s.slideshowCaptions)
-		if s.slideshowOverlay == config.SlideshowOverlaySmall {
+		switch s.slideshowOverlay {
+		case config.SlideshowOverlaySmall:
 			r.cornerClock(s)
-			return
+			if s.saverWeather {
+				// On the corner clock's line, just before it.
+				t := clockText(s.now)
+				r.saverWeather(s.weather, r.w-r.margin-r.width(r.small, t)-r.s(24), r.margin+r.s(26), 1)
+			}
+		case config.SlideshowOverlayMedium:
+			// The compact clock the corner styles use, in the top right: the time at the size of the
+			// weather's reading, the date under it, readable across a room and off the middle of the photo.
+			d := r.timeAndDateAt(s.now, r.margin+r.s(84), "", 1, 0, true)
+			if s.saverWeather {
+				r.saverWeather(s.weather, r.w-r.margin, d.Max.Y+r.s(44), 1)
+			}
+		default:
+			d := r.timeAndDate(s.now, r.h/2+r.s(60), "")
+			if s.saverWeather {
+				r.saverWeather(s.weather, r.w/2, d.Max.Y+r.s(50), 0)
+			}
 		}
-		r.timeAndDate(s.now, r.h/2+r.s(60), "")
 	})
+}
+
+// saverWeather is the weather with the screensaver's clock (#502): the sky's icon and the temperature,
+// nothing more, the words' baseline at base. align lines it up on x: -1 starting there, 0 centered on
+// it, 1 ending there.
+func (r *renderer) saverWeather(w home.Weather, x, base, align int) {
+	icon := w.Condition != "" && conditionWords(w.Condition) != ""
+	if w.Temp == "" && !icon {
+		return
+	}
+	mark, gap := r.s(weatherMark), r.s(12)
+	width := r.width(r.small, w.Temp)
+	if icon {
+		width += mark
+		if w.Temp != "" {
+			width += gap
+		}
+	}
+	left := x
+	switch align {
+	case 0:
+		left = x - width/2
+	case 1:
+		left = x - width
+	}
+	if icon {
+		mid := base - r.s(11)
+		r.weatherIcon(w.Condition, left+mark/2, mid, mark)
+		r.over.note(image.Rect(left, mid-mark/2, left+mark, mid+mark/2))
+		left += mark + gap
+	}
+	r.text(r.small, w.Temp, left, base, cream)
 }
 
 // photoCaptions writes when and where each photo up was taken in its bottom left corner: the place,

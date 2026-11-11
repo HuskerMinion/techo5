@@ -239,6 +239,8 @@ type Feature struct {
 	// Immich photo was taken over it.
 	slideshowPairsSw   *esphome.Switch
 	slideshowCaptionSw *esphome.Switch
+	// slideshowWeatherSw puts the weather beside the screensaver's clock (#502).
+	slideshowWeatherSw *esphome.Switch
 	// immichFavoritesSw, immichPersonTxt, immichFromTxt and immichToTxt narrow an Immich source.
 	immichFavoritesSw *esphome.Switch
 	immichPersonTxt   *esphome.Text
@@ -484,6 +486,7 @@ func (f *Feature) Restore(c config.Config) {
 		f.slideshowWholeSw.Set(c.Home.Slideshow.WholePhoto)
 		f.slideshowPairsSw.Set(c.Home.Slideshow.Pairs && PairsHere())
 		f.slideshowCaptionSw.Set(c.Home.Slideshow.Caption)
+		f.slideshowWeatherSw.Set(c.Home.Slideshow.Weather)
 		f.immichFavoritesSw.Set(c.Home.Slideshow.ImmichFavorites)
 		f.immichPersonTxt.Set(c.Home.Slideshow.ImmichPerson)
 		f.immichFromTxt.Set(c.Home.Slideshow.ImmichFrom)

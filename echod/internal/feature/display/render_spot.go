@@ -177,6 +177,8 @@ type roundScene struct {
 	slideshowOverlay     string
 	// slideshowCaptions are when and where the screensaver's photo was taken, to write over it.
 	slideshowCaptions []home.PhotoCaption
+	// saverWeather puts the weather with the screensaver's clock (#502).
+	saverWeather bool
 
 	// slideshowTrouble is why the slideshow has no photo, once it has given up looking.
 	slideshowTrouble string
@@ -257,6 +259,7 @@ type roundRenderer struct {
 	callDrawn                        bool        // the frame last drawn has the Call button on it; for taps
 	clock, title, body, small, label font.Face
 	tiny                             font.Face
+	mid                              font.Face // the screensaver's Medium clock, between small and clock
 
 	// reminderMax is how far a reminder's words could scroll in the frame last drawn; under zmu.
 	reminderMax int
@@ -322,6 +325,7 @@ func (r *roundRenderer) makeFaces(k fontKey) {
 	}
 	r.font, r.fontGen, r.textSize, r.fc, r.styleFaces = k.name, k.gen, k.size, spotFaces(k), nil
 	r.clock = face(true, 104)
+	r.mid = face(true, 64)
 	r.title = face(true, 34)
 	r.body = face(false, 26)
 	r.small = face(false, 24)

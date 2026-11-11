@@ -158,6 +158,9 @@ type Display struct {
 	// before an alarm, the screensaver, the night clock or another page. A swipe turns the style only
 	// on it.
 	clockUp bool
+	// saverUp is the last frame having been the screensaver's photos, where a swipe turns to the next
+	// photo or the one before (#502).
+	saverUp bool
 	// camTime is how long a camera opened from the screen stays up, and answerTime how long a turn's
 	// words do once it is over.
 	camTime    *esphome.Select
@@ -1004,6 +1007,14 @@ func (d *Display) gesture(g touch.Gesture) {
 	case touch.SwipeDown:
 		swipeVolume(-1)
 	case touch.SwipeLeft, touch.SwipeRight:
+		// Over the screensaver, the next photo or the one before (#502).
+		dir := +1
+		if g.Kind == touch.SwipeRight {
+			dir = -1
+		}
+		if d.saverSwipe(dir) {
+			return
+		}
 		// Across the clock face, the next clock style or the one before: only on the face itself, not
 		// while a turn is on or its words are up, nor over the screensaver or the light before an alarm.
 		d.mu.Lock()
@@ -1737,7 +1748,8 @@ func (d *Display) frame() (next time.Duration) {
 	}
 	wait := home.Get().SlideshowIdleTimeout()
 	d.mu.Lock()
-	d.clockUp = boring && s.sunrise == 0 && s.slideshowScreensaver == nil && !s.redClock
+	// Whether the screensaver is up is only known further down; clockUp is finished there.
+	d.clockUp = boring && s.sunrise == 0 && !s.redClock
 	if !boring {
 		d.slideshowIdleSince = time.Time{}
 	} else if d.slideshowIdleSince.IsZero() || (s.cue != "" && now.Sub(d.slideshowIdleSince) < wait) {
@@ -1755,10 +1767,17 @@ func (d *Display) frame() (next time.Duration) {
 			}
 		}
 		s.slideshowOverlay = home.Get().SlideshowOverlay()
+		s.saverWeather = home.Get().SlideshowWeather()
 		if s.slideshowScreensaver != nil && !home.Get().SlideshowArt() {
 			s.slideshowCaptions = home.Get().SlideshowCaptions()
 		}
 	}
+	// Under the screensaver the face is not the clock, and a swipe is for its photos (#502). clockUp used
+	// to be settled before the screensaver was looked for, so a swipe over the photos turned the style.
+	d.mu.Lock()
+	d.saverUp = s.slideshowScreensaver != nil && !home.Get().SlideshowArt()
+	d.clockUp = d.clockUp && s.slideshowScreensaver == nil
+	d.mu.Unlock()
 
 	d.dashSceneSpot(&s)
 	s.callButton = callButton.Load()
