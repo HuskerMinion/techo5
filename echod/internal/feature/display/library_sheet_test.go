@@ -559,8 +559,8 @@ func TestQueueingFromTheLibraryOnlyAppends(t *testing.T) {
 // library drawn in that language with an index out of range.
 func TestEveryLanguageHasEveryLibraryWord(t *testing.T) {
 	want := len(libWords[""])
-	if want != libWordAddToQueue+1 {
-		t.Errorf("English has %d words, but the last word is number %d", want, libWordAddToQueue)
+	if want != libWordStartRadio+1 {
+		t.Errorf("English has %d words, but the last word is number %d", want, libWordStartRadio)
 	}
 	for lang, w := range libWords {
 		if len(w) != want {

@@ -27,15 +27,24 @@ type Entry struct {
 	Year      int
 	// Duration is a track's length in seconds, TrackNumber and DiscNumber its place on its album, and
 	// Owner a playlist's owner; zero or empty when the server does not say.
-	Duration    int
+	Duration int
+	// Start is where a chapter of an audiobook begins, in seconds; set from the chapters, not the server.
+	Start       float64
 	TrackNumber int
 	DiscNumber  int
 	Owner       string
 	// Artists and Album are the items a track or an album names, as short as the server sends them:
 	// their id, provider, name, URI and perhaps a picture, or a bare name.
-	Artists  []Entry
-	Album    *Entry
-	Metadata struct {
+	Artists []Entry
+	// Authors are an audiobook's authors' names, as the server gives them.
+	Authors []string
+	// Path is where a folder is in the server's browse tree ("filesystem_local--x://Artist/Album"),
+	// for opening it; empty for anything that is not a folder there.
+	Path string
+	// DateAdded is when the server added the item to the library, as it sends it (an ISO time), if it does.
+	DateAdded string
+	Album     *Entry
+	Metadata  struct {
 		Images []Image
 	}
 	// Image is a short item's picture (an album named on a track, an artist on an album): the server
@@ -64,7 +73,7 @@ func (e *Entry) UnmarshalJSON(b []byte) error {
 		Name: looseText(m["name"]), MediaType: looseText(m["media_type"]), Version: looseText(m["version"]),
 		Owner: looseText(m["owner"]), Year: looseInt(m["year"]), Duration: looseInt(m["duration"]),
 		TrackNumber: looseInt(m["track_number"]), DiscNumber: looseInt(m["disc_number"]),
-		Artists: looseNames(m["artists"]), Album: looseNamed(m["album"]),
+		Artists: looseNames(m["artists"]), Authors: looseStrings(m["authors"]), DateAdded: looseText(m["date_added"]), Path: looseText(m["path"]), Album: looseNamed(m["album"]),
 	}
 	var meta struct {
 		Images []json.RawMessage `json:"images"`
@@ -142,6 +151,21 @@ func looseNames(raw json.RawMessage) []Entry {
 	return out
 }
 
+// looseStrings is a list of names, or one name alone; what is not a name is left out.
+func looseStrings(raw json.RawMessage) []string {
+	var list []json.RawMessage
+	if json.Unmarshal(raw, &list) != nil {
+		list = []json.RawMessage{raw}
+	}
+	var out []string
+	for _, x := range list {
+		if s := looseText(x); s != "" {
+			out = append(out, s)
+		}
+	}
+	return out
+}
+
 // looseImage is a picture's description, if raw is one.
 func looseImage(raw json.RawMessage) (Image, bool) {
 	var m map[string]json.RawMessage
@@ -168,12 +192,61 @@ func (e Entry) By() string {
 
 // Kinds a library holds, as the API names them in its commands (music/<kind>/library_items).
 const (
-	KindArtists   = "artists"
-	KindAlbums    = "albums"
-	KindTracks    = "tracks"
-	KindPlaylists = "playlists"
-	KindRadios    = "radios"
+	KindArtists    = "artists"
+	KindAlbums     = "albums"
+	KindTracks     = "tracks"
+	KindPlaylists  = "playlists"
+	KindRadios     = "radios"
+	KindPodcasts   = "podcasts"
+	KindAudiobooks = "audiobooks"
 )
+
+// Chapter is one part of an audiobook, in order: its name, and where it starts and ends in seconds.
+type Chapter struct {
+	Position int     `json:"position"`
+	Name     string  `json:"name"`
+	Start    float64 `json:"start"`
+	End      float64 `json:"end"`
+}
+
+// Audiobook is an audiobook read in full: its entry, and its chapters in order when the server sends
+// them. A list of audiobooks does not carry the chapters, so they come from here.
+func (c Client) Audiobook(ctx context.Context, book Entry) (Entry, []Chapter, error) {
+	var raw json.RawMessage
+	if err := c.do(ctx, "music/audiobooks/get", itemArgs(book), &raw); err != nil {
+		return Entry{}, nil, err
+	}
+	var e Entry
+	if err := e.UnmarshalJSON(raw); err != nil {
+		return Entry{}, nil, err
+	}
+	// The server keeps an audiobook's chapters in its metadata, not at the top of the item.
+	var withChapters struct {
+		Metadata struct {
+			Chapters []Chapter `json:"chapters"`
+		} `json:"metadata"`
+	}
+	if err := json.Unmarshal(raw, &withChapters); err != nil {
+		return e, nil, nil // the entry is usable without its chapters
+	}
+	return e, withChapters.Metadata.Chapters, nil
+}
+
+// ChapterEntry is one chapter of an audiobook as a library entry: its name, its place in the book, and
+// where it starts, with the book's own address to play it from.
+func ChapterEntry(book Entry, ch Chapter) Entry {
+	return Entry{
+		Name: ch.Name, MediaType: "chapter", URI: book.URI, Provider: book.Provider, ItemID: book.ItemID,
+		TrackNumber: ch.Position + 1, Duration: int(ch.End - ch.Start), Start: ch.Start,
+	}
+}
+
+// PodcastEpisodes are a podcast's episodes, newest first as the server lists them.
+func (c Client) PodcastEpisodes(ctx context.Context, podcast Entry) ([]Entry, error) {
+	var out []Entry
+	err := c.do(ctx, "music/podcasts/podcast_episodes", itemArgs(podcast), &out)
+	return out, err
+}
 
 // Library is a page of the library's items of kind (KindArtists ...), by name, starting at offset.
 // With search set, only the ones whose name has it in it.
@@ -228,11 +301,13 @@ func (c Client) SearchAll(ctx context.Context, query string, limit int) (Found, 
 
 // Found is a search's findings by kind, as library entries.
 type Found struct {
-	Artists   []Entry `json:"artists"`
-	Albums    []Entry `json:"albums"`
-	Tracks    []Entry `json:"tracks"`
-	Playlists []Entry `json:"playlists"`
-	Radio     []Entry `json:"radio"`
+	Artists    []Entry `json:"artists"`
+	Albums     []Entry `json:"albums"`
+	Tracks     []Entry `json:"tracks"`
+	Playlists  []Entry `json:"playlists"`
+	Radio      []Entry `json:"radio"`
+	Podcasts   []Entry `json:"podcasts"`
+	Audiobooks []Entry `json:"audiobooks"`
 }
 
 // SetShuffle turns the shuffle of the queue queueID on or off. Some players refuse Home Assistant's

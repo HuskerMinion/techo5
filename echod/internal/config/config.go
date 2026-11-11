@@ -35,6 +35,7 @@ type Config struct {
 	Sendspin       Sendspin       `json:"sendspin"`
 	Snapcast       Snapcast       `json:"snapcast,omitempty"`
 	MusicAssistant MusicAssistant `json:"music_assistant,omitempty"`
+	BookPlaces     BookPlaces     `json:"book_places,omitempty"`
 	TalkBack       TalkBack       `json:"talk_back,omitempty"`
 	Doorbell       Doorbell       `json:"doorbell,omitempty"`
 	Streaming      Streaming      `json:"streaming,omitempty"`
