@@ -64,7 +64,9 @@ type out struct {
 	mu    sync.Mutex
 	ready bool
 	held  bool
-	gain  float32
+	// gain is what frames are multiplied by now and target what a duck has asked for: gain moves toward
+	// it over duckRamp, as media's stream does, since a jump of 15 dB either way is heard as a step (#509).
+	gain, target float32
 	// level is the stream's own volume on top of gain, for a protocol whose server sets a client's
 	// volume without it being the device's (Snapcast); 1 for Sendspin, which moves the device's.
 	level float32
@@ -103,7 +105,11 @@ var (
 	_ speaker.Source   = (*out)(nil)
 )
 
-func newOut(p *speaker.Player) *out { return &out{p: p, gain: 1, level: 1} }
+func newOut(p *speaker.Player) *out { return &out{p: p, gain: 1, target: 1, level: 1} }
+
+// duckFrames is how many frames a full move between silence and full level takes: 60 ms, as media's
+// stream ramps a duck.
+const duckFrames = speaker.Rate * 60 / 1000
 
 // use points the renderer at this session's clock. One server at a time, so it changes only between
 // sessions.
@@ -239,9 +245,26 @@ func (o *out) Render(from uint64, buf []int16) {
 		return
 	}
 	o.correct(from)
-	gain := o.gain * o.level
-	for i := range min(len(buf), len(o.pcm)) {
-		buf[i] = scale(o.pcm[i], gain)
+	n := min(len(buf), len(o.pcm))
+	if o.gain == o.target {
+		gain := o.gain * o.level
+		for i := range n {
+			buf[i] = scale(o.pcm[i], gain)
+		}
+		return
+	}
+	// A duck or its release under way: a step toward the target each frame, both channels alike.
+	const step = 1.0 / duckFrames
+	for f := 0; f+speaker.Channels <= n; f += speaker.Channels {
+		if o.gain < o.target {
+			o.gain = min(o.gain+step, o.target)
+		} else {
+			o.gain = max(o.gain-step, o.target)
+		}
+		gain := o.gain * o.level
+		for c := range speaker.Channels {
+			buf[f+c] = scale(o.pcm[f+c], gain)
+		}
 	}
 }
 
@@ -408,7 +431,7 @@ func (o *out) Duck(db int) {
 	}
 
 	o.mu.Lock()
-	o.gain = gain
+	o.target = gain
 	o.mu.Unlock()
 }
 

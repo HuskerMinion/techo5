@@ -1,6 +1,7 @@
 package sendspin
 
 import (
+	"math"
 	"testing"
 
 	"github.com/HuskerMinion/techo5/echod/internal/hardware/speaker"
@@ -137,11 +138,50 @@ func TestAbsurdlyDistantAudioIsRefused(t *testing.T) {
 func TestDuckingAppliesAsFramesAreRendered(t *testing.T) {
 	o := anchored(t)
 	o.write(microsFor(0), tone(10, 1000))
-	o.gain = 0.5
+	o.gain, o.target = 0.5, 0.5
 
 	if got := rendered(o, 1000, 10)[0]; got != 500 {
 		t.Errorf("ducked = %d, want 500", got)
 	}
+}
+
+// A duck, and coming back up from one, move over duckFrames rather than in one step (#509): the first
+// frame after either is barely changed, every frame is a little nearer the target than the one before,
+// and the level arrives there and stays.
+func TestADuckAndItsReleaseRamp(t *testing.T) {
+	o := anchored(t)
+	const n = 3 * duckFrames
+	o.write(microsFor(0), tone(n, 10000))
+	want := scale(10000, float32(math.Pow(10, -15.0/20)))
+
+	check := func(name string, from uint64, down bool, end int16) {
+		t.Helper()
+		buf := rendered(o, from, duckFrames+100)
+		first, prev := buf[0], buf[0]
+		start := want // where the level was before this move
+		if down {
+			start = 10000
+		}
+		if d := int(first) - int(start); d > 10 || d < -10 {
+			t.Errorf("%s: the first frame is %d, a step rather than the start of a ramp", name, first)
+		}
+		for f := speaker.Channels; f < len(buf); f += speaker.Channels {
+			if buf[f] != buf[f+1] {
+				t.Fatalf("%s: frame %d's channels differ: %d, %d", name, f/2, buf[f], buf[f+1])
+			}
+			if (down && buf[f] > prev) || (!down && buf[f] < prev) {
+				t.Fatalf("%s: frame %d went the wrong way: %d after %d", name, f/2, buf[f], prev)
+			}
+			prev = buf[f]
+		}
+		if last := buf[len(buf)-1]; last < end-1 || last > end+1 {
+			t.Errorf("%s: ended at %d, want %d", name, last, end)
+		}
+	}
+	o.Duck(-15)
+	check("duck", 1000, true, want)
+	o.Duck(0)
+	check("release", 1000+duckFrames+100, false, 10000)
 }
 
 func TestSuspendedPlaysNothing(t *testing.T) {
