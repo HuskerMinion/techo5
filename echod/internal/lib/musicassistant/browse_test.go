@@ -68,3 +68,34 @@ func TestFavoritesRecentAndQueueCalls(t *testing.T) {
 		t.Errorf("calls = %+v\nwant  %+v", got, want)
 	}
 }
+
+// Browsing asks for the top with no path and a folder by its path, and leaves out the way back up.
+func TestBrowseLeavesOutTheWayUp(t *testing.T) {
+	var paths []any
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		body, _ := io.ReadAll(r.Body)
+		var c struct {
+			Args map[string]any `json:"args"`
+		}
+		_ = json.Unmarshal(body, &c)
+		paths = append(paths, c.Args["path"])
+		io.WriteString(w, `[{"name":"..","path":"root","media_type":"folder"},
+			{"name":"Albums","path":"fs://Artist/Albums","media_type":"folder","uri":"fs://folder/Artist/Albums"},
+			{"name":"Song","media_type":"track","uri":"library://track/3"}]`)
+	}))
+	defer srv.Close()
+	c := Client{URL: srv.URL}
+	top, err := c.Browse(context.Background(), "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(top) != 2 || top[0].Name != "Albums" || top[0].Path != "fs://Artist/Albums" || top[1].MediaType != "track" {
+		t.Fatalf("browse = %+v", top)
+	}
+	if _, err := c.Browse(context.Background(), "fs://Artist"); err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(paths, []any{nil, "fs://Artist"}) {
+		t.Errorf("paths asked = %v; want none at the top, then the folder's", paths)
+	}
+}

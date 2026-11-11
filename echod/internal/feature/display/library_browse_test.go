@@ -79,3 +79,51 @@ func TestSecondRowIconTabsHaveIcons(t *testing.T) {
 		seen[ic] = true
 	}
 }
+
+// The browse tab reads the top of the tree; a folder page reads its own path.
+func TestBrowsePagesReadTheirPath(t *testing.T) {
+	var paths []any
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		body, _ := io.ReadAll(r.Body)
+		var c struct {
+			Args map[string]any `json:"args"`
+		}
+		_ = json.Unmarshal(body, &c)
+		paths = append(paths, c.Args["path"])
+		io.WriteString(w, `[{"name":"..","path":"root","media_type":"folder"},{"name":"Rock","path":"fs://Rock","media_type":"folder"}]`)
+	}))
+	defer srv.Close()
+	c := musicassistant.Client{URL: srv.URL}
+	top, _, err := fetchLibPage(context.Background(), c, newLibPage(libBrowse, musicassistant.Entry{}), 48)
+	if err != nil || len(top) != 1 || len(top[0].entries) != 1 || top[0].entries[0].Path != "fs://Rock" {
+		t.Fatalf("browse = %+v, %v", top, err)
+	}
+	folder := newLibPage(libFolder, top[0].entries[0])
+	folder.path = top[0].entries[0].Path
+	if _, _, err := fetchLibPage(context.Background(), c, folder, 48); err != nil {
+		t.Fatal(err)
+	}
+	if len(paths) != 2 || paths[0] != nil || paths[1] != "fs://Rock" {
+		t.Errorf("paths asked = %v; want the top, then fs://Rock", paths)
+	}
+}
+
+// Start radio plays the item now, replacing the queue, with Music Assistant's radio mode on; the other
+// choices never turn it on.
+func TestStartRadioPlaysWithRadioMode(t *testing.T) {
+	taps := recordTaps(t)
+	d := &Display{poke: make(chan struct{}, 1)}
+	track := musicassistant.Entry{Name: "Song", URI: "library://track/1", MediaType: "track"}
+	d.libPlay("media_player.ma_kitchen", track, "track", false, libMenuEnqueue[libMenuRadio])
+	d.libPlay("media_player.ma_kitchen", track, "track", false, libMenuEnqueue[libMenuNext])
+	got := taps()
+	if len(got) != 2 {
+		t.Fatalf("asked %d times, want 2: %+v", len(got), got)
+	}
+	if got[0].Data["radio_mode"] != true || got[0].Data["enqueue"] != libEnqueueReplace {
+		t.Errorf("start radio sent %v; want radio_mode on and the queue replaced", got[0].Data)
+	}
+	if _, on := got[1].Data["radio_mode"]; on || got[1].Data["enqueue"] != libEnqueueNext {
+		t.Errorf("play next sent %v; want no radio mode, enqueue next", got[1].Data)
+	}
+}

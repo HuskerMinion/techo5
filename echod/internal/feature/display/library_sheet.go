@@ -44,12 +44,14 @@ const (
 	libFavorites // the second row's icons, at its right end
 	libRecent
 	libQueue
+	libBrowse
 	libTabs // how many tabs there are
 	libArtist
 	libAlbum
 	libPlaylist
 	libPodcast   // a podcast, opened for its episodes
 	libAudiobook // an audiobook, opened for its chapters
+	libFolder    // a folder of the browse tree
 )
 
 // How many favorites of each kind, recently played items and queued items a page shows.
@@ -69,12 +71,12 @@ const (
 var libKinds = [...]string{libArtists: musicassistant.KindArtists, libAlbums: musicassistant.KindAlbums,
 	libPlaylists: musicassistant.KindPlaylists, libTracks: musicassistant.KindTracks, libRadio: musicassistant.KindRadios,
 	libPodcasts: musicassistant.KindPodcasts, libAudiobooks: musicassistant.KindAudiobooks,
-	libFavorites: "", libRecent: "", libQueue: ""}
+	libFavorites: "", libRecent: "", libQueue: "", libBrowse: ""}
 
 // libTypes are the tabs' items' media types, for an item that does not say its own.
 var libTypes = [...]string{libArtists: "artist", libAlbums: "album", libPlaylists: "playlist", libTracks: "track", libRadio: "radio",
 	libPodcasts: "podcast", libAudiobooks: "audiobook",
-	libFavorites: "favorite", libRecent: "recent", libQueue: "queue"}
+	libFavorites: "favorite", libRecent: "recent", libQueue: "queue", libBrowse: "browse"}
 
 // libRowTabs is how many tabs the top row holds (artists to search); the rest sit on the row under it.
 const libRowTabs = libSearch + 1
@@ -122,6 +124,7 @@ type libPage struct {
 	what     int
 	entry    musicassistant.Entry // the artist, album or playlist the page is of
 	queue    string               // the queue tab's Music Assistant queue, looked up as it loads
+	path     string               // a folder's place in the browse tree; empty for its top
 	sections []libSection
 	loading  bool
 	loaded   bool
@@ -199,10 +202,12 @@ const (
 	libMenuPlay = iota
 	libMenuNext
 	libMenuAdd
+	libMenuRadio // Music Assistant's radio mode: the item, then more like it, without end
 	libMenuChoices
 )
 
-var libMenuEnqueue = [libMenuChoices]string{libMenuPlay: libEnqueueReplace, libMenuNext: libEnqueueNext, libMenuAdd: libEnqueueAdd}
+var libMenuEnqueue = [libMenuChoices]string{libMenuPlay: libEnqueueReplace, libMenuNext: libEnqueueNext, libMenuAdd: libEnqueueAdd,
+	libMenuRadio: libEnqueueRadio}
 
 // Play and Shuffle as lit, beside the items' own indexes.
 const (
@@ -289,62 +294,62 @@ const libSearchLimit = 12
 
 // libWords are the library's words, in the screen's language.
 var libWords = map[string][]string{
-	"": {"Artists", "Albums", "Playlists", "Tracks", "Radio", "Search", "Podcasts", "Audiobooks", "Favorites", "Recent", "Queue", "Back", "Play", "Shuffle", "Done",
+	"": {"Artists", "Albums", "Playlists", "Tracks", "Radio", "Search", "Podcasts", "Audiobooks", "Favorites", "Recent", "Queue", "Browse", "Back", "Play", "Shuffle", "Done",
 		"Loading…", "Nothing here yet",
 		"Set up the music library on the setup page (Sound & Voice, Music Assistant) to browse it here.",
 		"No player found: browse only", "Top tracks", "Tap to search",
 		"Search the music library", "No results", "Library",
 		"From your saved tracks", "No stations saved in Music Assistant", "Search stations", "Save music in Music Assistant, or search for it here.",
-		"Play next", "Add to queue", "By author", "By title", "Newest", "Resume at %s", "Start over"},
-	"ja": {"アーティスト", "アルバム", "プレイリスト", "曲", "ラジオ", "検索", "ポッドキャスト", "オーディオブック", "お気に入り", "最近再生", "キュー", "戻る", "再生", "シャッフル", "完了",
+		"Play next", "Add to queue", "By author", "By title", "Newest", "Resume at %s", "Start over", "Start radio"},
+	"ja": {"アーティスト", "アルバム", "プレイリスト", "曲", "ラジオ", "検索", "ポッドキャスト", "オーディオブック", "お気に入り", "最近再生", "キュー", "フォルダ", "戻る", "再生", "シャッフル", "完了",
 		"読み込み中…", "まだ何もありません",
 		"ここで閲覧するには、設定ページ（Sound & Voice、Music Assistant）で音楽ライブラリを設定してください。",
 		"Music Assistantのプレーヤーがありません（閲覧のみ）", "人気曲", "タップして検索",
 		"音楽ライブラリを検索", "見つかりません", "ライブラリ",
 		"保存した曲から", "Music Assistantに保存された局はありません", "局を検索", "Music Assistantに音楽を保存するか、ここで検索してください。",
-		"次に再生", "キューに追加", "作者順", "タイトル順", "新着順", "%s から再開", "最初から"},
-	"de": {"Interpreten", "Alben", "Playlists", "Titel", "Radio", "Suche", "Podcasts", "Hörbücher", "Favoriten", "Zuletzt gehört", "Warteschlange", "Zurück", "Abspielen", "Zufall", "Fertig",
+		"次に再生", "キューに追加", "作者順", "タイトル順", "新着順", "%s から再開", "最初から", "ラジオを開始"},
+	"de": {"Interpreten", "Alben", "Playlists", "Titel", "Radio", "Suche", "Podcasts", "Hörbücher", "Favoriten", "Zuletzt gehört", "Warteschlange", "Ordner", "Zurück", "Abspielen", "Zufall", "Fertig",
 		"Lädt …", "Hier ist noch nichts",
 		"Richte die Musikbibliothek auf der Einrichtungsseite ein (Sound & Voice, Music Assistant), um sie hier zu durchsuchen.",
 		"Kein Music-Assistant-Player zum Abspielen: nur ansehen", "Top-Titel", "Tippen zum Suchen",
 		"Musikbibliothek durchsuchen", "Keine Treffer", "Bibliothek",
 		"Aus deinen gespeicherten Titeln", "Keine Sender in Music Assistant gespeichert", "Sender suchen", "Speichere Musik in Music Assistant oder suche sie hier.",
-		"Als Nächstes abspielen", "Zur Warteschlange hinzufügen", "Nach Autor", "Nach Titel", "Neueste", "Weiter bei %s", "Von vorn"},
-	"es": {"Artistas", "Álbumes", "Listas", "Canciones", "Radio", "Buscar", "Podcasts", "Audiolibros", "Favoritos", "Recientes", "Cola", "Atrás", "Reproducir", "Aleatorio", "Listo",
+		"Als Nächstes abspielen", "Zur Warteschlange hinzufügen", "Nach Autor", "Nach Titel", "Neueste", "Weiter bei %s", "Von vorn", "Radio starten"},
+	"es": {"Artistas", "Álbumes", "Listas", "Canciones", "Radio", "Buscar", "Podcasts", "Audiolibros", "Favoritos", "Recientes", "Cola", "Carpetas", "Atrás", "Reproducir", "Aleatorio", "Listo",
 		"Cargando…", "Aún no hay nada",
 		"Configura la biblioteca de música en la página de configuración (Sound & Voice, Music Assistant) para explorarla aquí.",
 		"No hay reproductor de Music Assistant: solo explorar", "Canciones populares", "Toca para buscar",
 		"Buscar en la biblioteca", "Sin resultados", "Biblioteca",
 		"De tus canciones guardadas", "No hay emisoras guardadas en Music Assistant", "Buscar emisoras", "Guarda música en Music Assistant o búscala aquí.",
-		"Reproducir a continuación", "Añadir a la cola", "Por autor", "Por título", "Recientes", "Reanudar en %s", "Desde el principio"},
-	"fr": {"Artistes", "Albums", "Playlists", "Titres", "Radio", "Recherche", "Podcasts", "Livres audio", "Favoris", "Récents", "File d'attente", "Retour", "Écouter", "Aléatoire", "OK",
+		"Reproducir a continuación", "Añadir a la cola", "Por autor", "Por título", "Recientes", "Reanudar en %s", "Desde el principio", "Iniciar radio"},
+	"fr": {"Artistes", "Albums", "Playlists", "Titres", "Radio", "Recherche", "Podcasts", "Livres audio", "Favoris", "Récents", "File d'attente", "Dossiers", "Retour", "Écouter", "Aléatoire", "OK",
 		"Chargement…", "Rien pour l'instant",
 		"Configurez la bibliothèque musicale sur la page de configuration (Sound & Voice, Music Assistant) pour la parcourir ici.",
 		"Aucun lecteur Music Assistant : consultation seulement", "Titres populaires", "Touchez pour chercher",
 		"Chercher dans la bibliothèque", "Aucun résultat", "Bibliothèque",
 		"D'après vos titres enregistrés", "Aucune station enregistrée dans Music Assistant", "Chercher des stations", "Enregistrez de la musique dans Music Assistant, ou cherchez-la ici.",
-		"Écouter ensuite", "Ajouter à la file d'attente", "Par auteur", "Par titre", "Récents", "Reprendre à %s", "Depuis le début"},
-	"it": {"Artisti", "Album", "Playlist", "Brani", "Radio", "Cerca", "Podcast", "Audiolibri", "Preferiti", "Recenti", "Coda", "Indietro", "Riproduci", "Casuale", "Fatto",
+		"Écouter ensuite", "Ajouter à la file d'attente", "Par auteur", "Par titre", "Récents", "Reprendre à %s", "Depuis le début", "Lancer la radio"},
+	"it": {"Artisti", "Album", "Playlist", "Brani", "Radio", "Cerca", "Podcast", "Audiolibri", "Preferiti", "Recenti", "Coda", "Cartelle", "Indietro", "Riproduci", "Casuale", "Fatto",
 		"Caricamento…", "Ancora niente qui",
 		"Configura la libreria musicale nella pagina di configurazione (Sound & Voice, Music Assistant) per sfogliarla qui.",
 		"Nessun lettore Music Assistant: solo consultazione", "Brani più ascoltati", "Tocca per cercare",
 		"Cerca nella libreria", "Nessun risultato", "Libreria",
 		"Dai tuoi brani salvati", "Nessuna stazione salvata in Music Assistant", "Cerca stazioni", "Salva musica in Music Assistant o cercala qui.",
-		"Riproduci dopo", "Aggiungi alla coda", "Per autore", "Per titolo", "Recenti", "Riprendi da %s", "Dall'inizio"},
-	"pt": {"Artistas", "Álbuns", "Playlists", "Faixas", "Rádio", "Buscar", "Podcasts", "Audiolivros", "Favoritos", "Recentes", "Fila", "Voltar", "Tocar", "Aleatório", "Pronto",
+		"Riproduci dopo", "Aggiungi alla coda", "Per autore", "Per titolo", "Recenti", "Riprendi da %s", "Dall'inizio", "Avvia radio"},
+	"pt": {"Artistas", "Álbuns", "Playlists", "Faixas", "Rádio", "Buscar", "Podcasts", "Audiolivros", "Favoritos", "Recentes", "Fila", "Pastas", "Voltar", "Tocar", "Aleatório", "Pronto",
 		"Carregando…", "Nada aqui ainda",
 		"Configure a biblioteca de música na página de configuração (Sound & Voice, Music Assistant) para navegar nela aqui.",
 		"Nenhum player do Music Assistant: só navegar", "Mais tocadas", "Toque para buscar",
 		"Buscar na biblioteca", "Nenhum resultado", "Biblioteca",
 		"Das suas faixas salvas", "Nenhuma estação salva no Music Assistant", "Buscar estações", "Salve música no Music Assistant ou busque aqui.",
-		"Tocar em seguida", "Adicionar à fila", "Por autor", "Por título", "Recentes", "Retomar em %s", "Do início"},
-	"ru": {"Исполнители", "Альбомы", "Плейлисты", "Треки", "Радио", "Поиск", "Подкасты", "Аудиокниги", "Избранное", "Недавние", "Очередь", "Назад", "Играть", "Вперемешку", "Готово",
+		"Tocar em seguida", "Adicionar à fila", "Por autor", "Por título", "Recentes", "Retomar em %s", "Do início", "Iniciar rádio"},
+	"ru": {"Исполнители", "Альбомы", "Плейлисты", "Треки", "Радио", "Поиск", "Подкасты", "Аудиокниги", "Избранное", "Недавние", "Очередь", "Папки", "Назад", "Играть", "Вперемешку", "Готово",
 		"Загрузка…", "Здесь пока пусто",
 		"Настройте музыкальную библиотеку на странице настройки (Sound & Voice, Music Assistant), чтобы просматривать её здесь.",
 		"Нет плеера Music Assistant: только просмотр", "Популярные треки", "Нажмите для поиска",
 		"Поиск в библиотеке", "Ничего не найдено", "Библиотека",
 		"Из сохранённых треков", "В Music Assistant нет сохранённых станций", "Найти станции", "Сохраните музыку в Music Assistant или найдите её здесь.",
-		"Играть следующим", "Добавить в очередь", "По автору", "По названию", "Новые", "Продолжить с %s", "С начала"},
+		"Играть следующим", "Добавить в очередь", "По автору", "По названию", "Новые", "Продолжить с %s", "С начала", "Запустить радио"},
 }
 
 // The words by what they say; the tabs' are their own numbers.
@@ -373,6 +378,7 @@ const (
 	libWordSortRecent
 	libWordResumeAt // "Resume at 1:02:03", with the time put in
 	libWordStartOver
+	libWordStartRadio
 )
 
 func libWord(i int) string {
@@ -577,6 +583,9 @@ func fetchLibPage(ctx context.Context, c musicassistant.Client, p libPage, limit
 		}
 		got, err := c.Queue(ctx, p.queue, libQueueLimit)
 		return []libSection{{word: -1, show: libShowTracks, kind: "track", entries: usable(got)}}, false, err
+	case libBrowse, libFolder:
+		got, err := c.Browse(ctx, p.path)
+		return []libSection{{word: -1, show: libShowTracks, kind: "", entries: usable(got)}}, false, err
 	case libAudiobooks:
 		// The whole list at once, so it can be put in order by author and series; a library of a few
 		// thousand books is still a few reads of the server.
@@ -627,6 +636,8 @@ func fetchLibPage(ctx context.Context, c musicassistant.Client, p libPage, limit
 			{word: libPlaylists, show: libShowRow, kind: "playlist", entries: usable(f.Playlists)},
 			{word: libTracks, show: libShowTracks, kind: "track", entries: usable(f.Tracks)},
 			{word: libRadio, show: libShowRow, kind: "radio", entries: usable(f.Radio)},
+			{word: libPodcasts, show: libShowRow, kind: "podcast", entries: usable(f.Podcasts)},
+			{word: libAudiobooks, show: libShowRow, kind: "audiobook", entries: usable(f.Audiobooks)},
 		}, false, nil
 	case libArtist:
 		albums, aerr := c.ArtistAlbums(ctx, p.entry)
@@ -766,6 +777,11 @@ func (d *Display) libraryTap(x, y int) bool {
 		}
 		e := p.sections[sec].entries[i]
 		switch kind := libEntryType(e, p.sections[sec].kind); kind {
+		case "folder":
+			np := newLibPage(libFolder, e)
+			np.path = e.Path
+			d.editLibrary(func(n *librarySheet) { n.stack = append(n.stack, np) })
+			d.libLoad(np.id)
 		case "artist", "album", "playlist", "podcast", "audiobook":
 			what := map[string]int{"artist": libArtist, "album": libAlbum, "playlist": libPlaylist, "podcast": libPodcast, "audiobook": libAudiobook}[kind]
 			np := newLibPage(what, e)
@@ -864,7 +880,7 @@ func (d *Display) libPlayTapped(l *librarySheet, e musicassistant.Entry, kind st
 	d.editLibrary(func(n *librarySheet) { n.lit, n.litUntil = lit, time.Now().Add(tapLit) })
 	// Play replaces the queue and leaves the library for what is now playing; queueing more (next, add)
 	// keeps the library up so the owner can go on adding.
-	if enqueue != libEnqueueReplace {
+	if enqueue != libEnqueueReplace && enqueue != libEnqueueRadio {
 		return
 	}
 	target, from := l.target, l.from
@@ -927,6 +943,9 @@ const (
 	libEnqueueReplace = "replace"
 	libEnqueueNext    = "next"
 	libEnqueueAdd     = "add"
+	// libEnqueueRadio is not one of Music Assistant's modes but the library's own: replace the queue
+	// and play now, as libEnqueueReplace, with radio mode on, so more like it follows without end.
+	libEnqueueRadio = "radio"
 )
 
 // libPlay plays e on target through Home Assistant, as the media sheet plays a favorite. With
@@ -939,14 +958,17 @@ func (d *Display) libPlay(target string, e musicassistant.Entry, kind string, sh
 	}
 	slog.Info("dashboard music library play", "uri", e.URI, "type", kind, "shuffle", shuffle, "enqueue", enqueue)
 	play := func() {
-		libTap(dashboard.Action{Entity: target, Service: "music_assistant.play_media",
-			Data: map[string]any{"media_id": e.URI, "media_type": kind, "enqueue": enqueue}})
+		data := map[string]any{"media_id": e.URI, "media_type": kind, "enqueue": enqueue}
+		if enqueue == libEnqueueRadio {
+			data["enqueue"], data["radio_mode"] = libEnqueueReplace, true
+		}
+		libTap(dashboard.Action{Entity: target, Service: "music_assistant.play_media", Data: data})
 	}
 	container := kind == "artist" || kind == "album" || kind == "playlist"
 	// Next and add only append: the queue, and so what is playing, is left as it is, so no putOn and no
 	// shuffle. Only replacing the queue marks what is now on and may shuffle a container first.
 	if enqueue != libEnqueueReplace || !container {
-		if enqueue == libEnqueueReplace {
+		if enqueue == libEnqueueReplace || enqueue == libEnqueueRadio {
 			putOn.Store(target, e.URI)
 		}
 		play()

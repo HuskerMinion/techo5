@@ -60,3 +60,25 @@ func (c Client) Queue(ctx context.Context, queueID string, limit int) ([]Entry, 
 	}
 	return out, nil
 }
+
+// Browse is what the folder at path holds in the server's browse tree: its folders, each with the path
+// to open it by, and its playable items. The empty path is the top, one folder for each provider. The
+// tree's own way back up ("..") is left out: the page has a Back of its own.
+func (c Client) Browse(ctx context.Context, path string) ([]Entry, error) {
+	args := map[string]any{}
+	if path != "" {
+		args["path"] = path
+	}
+	var got []Entry
+	if err := c.do(ctx, "music/browse", args, &got); err != nil {
+		return nil, err
+	}
+	out := got[:0]
+	for _, e := range got {
+		if e.Name == ".." {
+			continue
+		}
+		out = append(out, e)
+	}
+	return out, nil
+}

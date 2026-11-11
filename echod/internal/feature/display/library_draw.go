@@ -261,6 +261,10 @@ func libIcon(kind string) string {
 		return "history"
 	case "queue":
 		return "playlist-play"
+	case "browse":
+		return "folder-music"
+	case "folder":
+		return "folder"
 	}
 	return "music-note"
 }
@@ -494,8 +498,8 @@ func (r *renderer) libMenuSheet(l *librarySheet, g libGeom, pal dashPal, fc shee
 	y0 := g.card.Min.Y + max((g.card.Dy()-h)/2, 0)
 	r.roundFill(image.Rect(x0, y0, x0+w, y0+h), pal.rad, pal.card, pal.card)
 	r.text(fc.labelBold, r.fit(fc.labelBold, l.menu.entry.Name, w-2*pad), x0+pad, y0+pad+r.s(36), pal.text)
-	words := [libMenuChoices]string{libWord(libWordPlay), libWord(libWordPlayNext), libWord(libWordAddToQueue)}
-	icons := [libMenuChoices]string{"play", "playlist-play", "playlist-plus"}
+	words := [libMenuChoices]string{libWord(libWordPlay), libWord(libWordPlayNext), libWord(libWordAddToQueue), libWord(libWordStartRadio)}
+	icons := [libMenuChoices]string{"play", "playlist-play", "playlist-plus", "radio-tower"}
 	plain := lerp(pal.card, pal.text, 0.1)
 	y := y0 + pad + titleH
 	for i := range libMenuChoices {
@@ -554,7 +558,12 @@ func (r *renderer) libBlocks(l *librarySheet, p *libPage, g libGeom, pal dashPal
 			zone(field, libPartField, 0)
 		})
 	}
-	if len(l.stack) > 0 {
+	if len(l.stack) > 0 && p.what == libFolder {
+		// A folder has no cover to show or anything to play as a whole: its name is its heading.
+		add(r.s(56), func(y int) {
+			r.text(fc.labelBold, r.fit(fc.labelBold, dashboard.CleanName(p.entry.Name), g.inner), g.x0, y+r.s(38), pal.text)
+		})
+	} else if len(l.stack) > 0 {
 		r.libHero(l, p, g, pal, fc, pill, add, zone)
 	}
 

@@ -35,13 +35,16 @@ type Entry struct {
 	Owner       string
 	// Artists and Album are the items a track or an album names, as short as the server sends them:
 	// their id, provider, name, URI and perhaps a picture, or a bare name.
-	Artists  []Entry
+	Artists []Entry
 	// Authors are an audiobook's authors' names, as the server gives them.
 	Authors []string
+	// Path is where a folder is in the server's browse tree ("filesystem_local--x://Artist/Album"),
+	// for opening it; empty for anything that is not a folder there.
+	Path string
 	// DateAdded is when the server added the item to the library, as it sends it (an ISO time), if it does.
 	DateAdded string
 	Album     *Entry
-	Metadata struct {
+	Metadata  struct {
 		Images []Image
 	}
 	// Image is a short item's picture (an album named on a track, an artist on an album): the server
@@ -70,7 +73,7 @@ func (e *Entry) UnmarshalJSON(b []byte) error {
 		Name: looseText(m["name"]), MediaType: looseText(m["media_type"]), Version: looseText(m["version"]),
 		Owner: looseText(m["owner"]), Year: looseInt(m["year"]), Duration: looseInt(m["duration"]),
 		TrackNumber: looseInt(m["track_number"]), DiscNumber: looseInt(m["disc_number"]),
-		Artists: looseNames(m["artists"]), Authors: looseStrings(m["authors"]), DateAdded: looseText(m["date_added"]), Album: looseNamed(m["album"]),
+		Artists: looseNames(m["artists"]), Authors: looseStrings(m["authors"]), DateAdded: looseText(m["date_added"]), Path: looseText(m["path"]), Album: looseNamed(m["album"]),
 	}
 	var meta struct {
 		Images []json.RawMessage `json:"images"`
@@ -298,11 +301,13 @@ func (c Client) SearchAll(ctx context.Context, query string, limit int) (Found, 
 
 // Found is a search's findings by kind, as library entries.
 type Found struct {
-	Artists   []Entry `json:"artists"`
-	Albums    []Entry `json:"albums"`
-	Tracks    []Entry `json:"tracks"`
-	Playlists []Entry `json:"playlists"`
-	Radio     []Entry `json:"radio"`
+	Artists    []Entry `json:"artists"`
+	Albums     []Entry `json:"albums"`
+	Tracks     []Entry `json:"tracks"`
+	Playlists  []Entry `json:"playlists"`
+	Radio      []Entry `json:"radio"`
+	Podcasts   []Entry `json:"podcasts"`
+	Audiobooks []Entry `json:"audiobooks"`
 }
 
 // SetShuffle turns the shuffle of the queue queueID on or off. Some players refuse Home Assistant's
