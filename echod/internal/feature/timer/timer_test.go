@@ -33,14 +33,14 @@ func TestTheRingEmptiesAsATimerRunsDown(t *testing.T) {
 		{5 * time.Second, 1},
 		{0, 0},
 	} {
-		if got := lit(frame(c.left, total)); got != c.want {
+		if got := lit(frame(c.left, total, countdownColor)); got != c.want {
 			t.Errorf("%s left of %s: %d segments, want %d", c.left, total, got, c.want)
 		}
 	}
 }
 
 func TestTheLeadingSegmentCarriesThePartOfItStillToRun(t *testing.T) {
-	f := frame(32*time.Second, time.Minute)
+	f := frame(32*time.Second, time.Minute, countdownColor)
 
 	if f[6] == (led.Color{}) || f[6] == countdownColor {
 		t.Errorf("the leading segment is %v, want it dimmed between black and %v", f[6], countdownColor)
@@ -56,7 +56,7 @@ func TestTheLeadingSegmentCarriesThePartOfItStillToRun(t *testing.T) {
 // A total of zero would divide by it, and a timer that has already finished is drawn as a full ring
 // rather than as whatever that arithmetic produced.
 func TestATimerWithNoTotalDoesNotDivideByIt(t *testing.T) {
-	if got := lit(frame(time.Second, 0)); got != 12 {
+	if got := lit(frame(time.Second, 0, countdownColor)); got != 12 {
 		t.Errorf("%d segments, want 12", got)
 	}
 }

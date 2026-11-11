@@ -146,6 +146,12 @@ type timer struct {
 	// local is a timer set on the device rather than by Home Assistant: it finishes here, from this
 	// clock, so it runs with Home Assistant away.
 	local bool
+
+	// silent is a timer that only shows (timer_start_silent): it runs out without ringing, and is not
+	// saved, since what it shows is a wait in Home Assistant that a restart has ended anyway. color is
+	// the ring's, countdownColor when it is unset.
+	silent bool
+	color  led.Color
 }
 
 // due is when this timer runs out, as well as the device can tell: from when it was started and how long
@@ -216,6 +222,28 @@ func (t *Timers) Actions() []*esphome.Action {
 				return nil, t.cancelFromHA(strings.TrimSpace(c.String("id")))
 			},
 		},
+		{
+			// timer_start that never rings, in a color of its own. Home Assistant requires every argument on
+			// every call, so these could not be added to timer_start: this is its own action.
+			Name: "timer_start_silent",
+			Args: []esphome.Arg{
+				{Name: "duration", Type: esphome.ArgString},
+				{Name: "label", Type: esphome.ArgString},
+				{Name: "color", Type: esphome.ArgString},
+			},
+			Answers: true,
+			Run: func(c esphome.Call) (any, error) {
+				d, err := ParseDuration(c.String("duration"))
+				if err != nil {
+					return nil, err
+				}
+				col, err := parseColor(c.String("color"))
+				if err != nil {
+					return nil, err
+				}
+				return map[string]string{"id": t.StartSilent(strings.TrimSpace(c.String("label")), d, col)}, nil
+			},
+		},
 	}, t.controlActions()...)
 }
 
@@ -232,13 +260,38 @@ func (t *Timers) cancelFromHA(id string) error {
 		return nil
 	}
 	if id != "" && !strings.HasPrefix(id, localPrefix) {
-		return fmt.Errorf("timers: %q was set through Home Assistant; cancel it there", id)
+		named, err := t.localNamed(id)
+		if err != nil {
+			return err
+		}
+		id = named
 	}
 	if !t.Cancel(id) {
 		return fmt.Errorf("timers: no timer %q on this device", id)
 	}
 	slog.Info("timer canceled from home assistant", "id", id)
 	return nil
+}
+
+// localNamed is the id of the one timer of the device's own with this label, for a caller that has the
+// label and not the id: an assistant that started it and was not given the answer, say. Two with the same
+// label are named by their ids rather than guessed between, and a label none of the device's own timers
+// has is taken for one of Home Assistant's, which are canceled where they were set.
+func (t *Timers) localNamed(label string) (string, error) {
+	var ids []string
+	for _, c := range t.List(time.Now()) {
+		if c.Local && strings.EqualFold(strings.TrimSpace(c.Name), label) {
+			ids = append(ids, c.ID)
+		}
+	}
+	switch len(ids) {
+	case 0:
+		return "", fmt.Errorf("timers: %q was set through Home Assistant; cancel it there", label)
+	case 1:
+		return ids[0], nil
+	}
+	slices.Sort(ids)
+	return "", fmt.Errorf("timers: %d timers are called %q; give one of their ids: %s", len(ids), label, strings.Join(ids, ", "))
 }
 
 // Run redraws the countdown while there is one, and waits to be woken while there is not.
@@ -279,7 +332,7 @@ const localPrefix = "local:"
 func localList(held map[string]*timer, now time.Time) []config.LocalTimer {
 	var out []config.LocalTimer
 	for id, c := range held {
-		if !c.local {
+		if !c.local || c.silent {
 			continue
 		}
 		saved := config.LocalTimer{ID: id, Name: c.name, Total: c.total}
@@ -393,18 +446,32 @@ func (t *Timers) restore(list []config.LocalTimer, now time.Time) {
 // Start sets a timer of the device's own and returns its id. It counts down, shows and rings exactly
 // as one from Home Assistant does, because from here on it is the same timer.
 func (t *Timers) Start(name string, d time.Duration) string {
+	return t.start(&timer{name: name, total: d}, d)
+}
+
+// StartSilent sets a timer of the device's own that only shows, in c (countdownColor when it is unset):
+// at zero it leaves the ring without ringing. Home Assistant's wait for something, a device joining the
+// home say, shown on the ring; what happens when the wait runs out is Home Assistant's to say.
+func (t *Timers) StartSilent(name string, d time.Duration, c led.Color) string {
+	return t.start(&timer{name: name, total: d, silent: true, color: c}, d)
+}
+
+func (t *Timers) start(c *timer, d time.Duration) string {
 	if d <= 0 {
 		return ""
 	}
 	id := localPrefix + strconv.FormatInt(time.Now().UnixNano(), 36)
 	t.mu.Lock()
 	now := time.Now()
-	t.held[id] = &timer{name: name, total: d, left: d, at: now, active: true, local: true}
+	c.left, c.at, c.active, c.local = d, now, true, true
+	t.held[id] = c
 	saved := t.saved(now)
 	t.mu.Unlock()
 
-	saveLocal(saved)
-	slog.Info("timer set here", "name", name, "for", d)
+	if !c.silent {
+		saveLocal(saved)
+	}
+	slog.Info("timer set here", "name", c.name, "for", d, "silent", c.silent)
 
 	select {
 	case t.woke <- struct{}{}:
@@ -480,7 +547,7 @@ func (t *Timers) end(ids []string, now time.Time) {
 			t.mu.Unlock()
 			continue
 		}
-		name, due, local := c.name, c.due(), c.local
+		name, due, local, silent := c.name, c.due(), c.local, c.silent
 		dropped := !local && (!c.active || now.Before(due))
 		delete(t.held, id)
 		t.pruneEnded(now)
@@ -494,6 +561,8 @@ func (t *Timers) end(ids []string, now time.Time) {
 		t.mu.Unlock()
 
 		switch {
+		case silent:
+			slog.Info("a silent timer ran out", "name", name)
 		case local:
 			saveLocal(saved)
 			slog.Info("timer finished here", "name", name)
@@ -749,7 +818,7 @@ func (t *Timers) show() {
 	now := time.Now()
 	var next []led.Color
 	if soon := t.soonest(now); soon != nil {
-		next = frame(soon.remaining(now), soon.total)
+		next = frame(soon.remaining(now), soon.total, cmp.Or(soon.color, countdownColor))
 	}
 	if slices.Equal(t.shown, next) {
 		return
@@ -781,16 +850,16 @@ func (t *Timers) soonest(now time.Time) *timer {
 
 // frame is how much is left, drawn as a fraction of the ring: whole segments for the part still to
 // run and the leading one dimmed by the fraction it holds, the same shape Voice PE draws.
-func frame(left, total time.Duration) []led.Color {
+func frame(left, total time.Duration, c led.Color) []led.Color {
 	lit := float64(led.Segments) * left.Seconds() / math.Max(total.Seconds(), 1)
 
 	out := make([]led.Color, led.Segments)
 	for i := range out {
 		switch part := lit - float64(i); {
 		case part >= 1:
-			out[i] = countdownColor
+			out[i] = c
 		case part > 0:
-			out[i] = dim(countdownColor, part)
+			out[i] = dim(c, part)
 		}
 	}
 	return out
