@@ -43,8 +43,13 @@ type Entry struct {
 	Path string
 	// DateAdded is when the server added the item to the library, as it sends it (an ISO time), if it does.
 	DateAdded string
-	Album     *Entry
-	Metadata  struct {
+	// Favorite is whether the item is one of the library's favorites, as the server says.
+	Favorite bool
+	// QueueItemID is the item's id in a player's queue, for an entry read from one (Queue); empty
+	// otherwise.
+	QueueItemID string
+	Album       *Entry
+	Metadata    struct {
 		Images []Image
 	}
 	// Image is a short item's picture (an album named on a track, an artist on an album): the server
@@ -75,6 +80,7 @@ func (e *Entry) UnmarshalJSON(b []byte) error {
 		TrackNumber: looseInt(m["track_number"]), DiscNumber: looseInt(m["disc_number"]),
 		Artists: looseNames(m["artists"]), Authors: looseStrings(m["authors"]), DateAdded: looseText(m["date_added"]), Path: looseText(m["path"]), Album: looseNamed(m["album"]),
 	}
+	_ = json.Unmarshal(m["favorite"], &e.Favorite) // anything but true or false leaves it false
 	var meta struct {
 		Images []json.RawMessage `json:"images"`
 	}

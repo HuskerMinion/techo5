@@ -29,7 +29,7 @@ const libPartGoSearch = libPartRow + 1
 // libPartSort is the audiobooks' order on their row, which a tap moves to the next.
 const libPartSort = libPartRow + 2
 
-// libPartMenu is a choice on the action sheet (index: libMenuPlay, libMenuNext, libMenuAdd), and
+// libPartMenu is a choice on the action sheet (index: its place among the sheet's choices), and
 // libPartMenuOut is anywhere else while the sheet is up, which puts it away.
 const (
 	libPartMenu    = libPartRow + 2
@@ -487,30 +487,46 @@ func (r *renderer) librarySheet(v *libraryView, th dashboard.Theme) {
 }
 
 // libMenuSheet draws the action sheet of the item a finger held, over the page dimmed under it: the
-// item's name, then Play, Play next and Add to queue as wide pills, Play lit as the library's Play is.
+// item's name, then its choices (libMenuFor) as wide pills, a first Play lit as the library's Play is.
 func (r *renderer) libMenuSheet(l *librarySheet, g libGeom, pal dashPal, fc sheetFaces,
 	pill func(image.Rectangle, string, string, color.RGBA, color.RGBA, bool, int, int)) {
 	washOver(r.dst, r.dst.Rect, color.RGBA{0, 0, 0, 110})
+	choices := l.menu.choices
+	n := len(choices)
 	pad, rowH, gap, titleH := r.s(24), r.s(64), r.s(12), r.s(56)
 	w := min(g.card.Dx()-2*r.s(40), r.s(560))
-	h := pad + titleH + libMenuChoices*rowH + (libMenuChoices-1)*gap + pad
+	h := pad + titleH + n*rowH + max(n-1, 0)*gap + pad
+	if room := g.card.Dy() - r.s(16); h > room && n > 0 {
+		// More choices than fit at full height (a short screen): the rows and the gaps between them give.
+		gap = r.s(8)
+		rowH = max((room-2*pad-titleH-(n-1)*gap)/n, r.s(44))
+		h = pad + titleH + n*rowH + (n-1)*gap + pad
+	}
 	x0 := g.card.Min.X + (g.card.Dx()-w)/2
 	y0 := g.card.Min.Y + max((g.card.Dy()-h)/2, 0)
 	r.roundFill(image.Rect(x0, y0, x0+w, y0+h), pal.rad, pal.card, pal.card)
 	r.text(fc.labelBold, r.fit(fc.labelBold, l.menu.entry.Name, w-2*pad), x0+pad, y0+pad+r.s(36), pal.text)
-	words := [libMenuChoices]string{libWord(libWordPlay), libWord(libWordPlayNext), libWord(libWordAddToQueue), libWord(libWordStartRadio)}
-	icons := [libMenuChoices]string{"play", "playlist-play", "playlist-plus", "radio-tower"}
 	plain := lerp(pal.card, pal.text, 0.1)
 	y := y0 + pad + titleH
-	for i := range libMenuChoices {
+	for i, c := range choices {
 		fill, fg := plain, pal.text
-		if i == libMenuPlay {
+		if i == 0 && (c == libMenuPlay || c == libMenuPlayFrom) {
 			fill, fg = pal.accent, pal.bg
 		}
-		pill(image.Rect(x0+pad, y, x0+w-pad, y+rowH), icons[i], words[i], fill, fg, false, libPartMenu, i)
+		pill(image.Rect(x0+pad, y, x0+w-pad, y+rowH), libMenuIcons[c], libWord(libMenuWords[c]), fill, fg, false, libPartMenu, i)
 		y += rowH + gap
 	}
 }
+
+// Each of the action sheet's choices' word and icon.
+var (
+	libMenuWords = [libMenuKinds]int{libMenuPlay: libWordPlay, libMenuNext: libWordPlayNext, libMenuAdd: libWordAddToQueue,
+		libMenuRadio: libWordStartRadio, libMenuFavorite: libWordAddFavorite, libMenuUnfavorite: libWordRemoveFavorite,
+		libMenuPlayFrom: libWordPlayFrom, libMenuMoveNext: libWordPlayNext, libMenuRemove: libWordRemoveFromQueue}
+	libMenuIcons = [libMenuKinds]string{libMenuPlay: "play", libMenuNext: "playlist-play", libMenuAdd: "playlist-plus",
+		libMenuRadio: "radio-tower", libMenuFavorite: "heart-outline", libMenuUnfavorite: "heart-off",
+		libMenuPlayFrom: "play", libMenuMoveNext: "playlist-play", libMenuRemove: "playlist-remove"}
+)
 
 // libBlocks lays page p out as strips that scroll: the notes over it, the search's field, an opened
 // page's header, its sections, or what stands in for them. rowMax is how far each section shown as a

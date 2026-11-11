@@ -34,10 +34,15 @@ show/library-radio-1280x800.png
 show/library-keyboard-1280x800.png
 show/library-not-set-up-1280x800.png
 show/library-menu-1280x800.png
+show/library-queue-1280x800.png
+show/library-queue-menu-1280x800.png
 show/nowplaying-show8.png
 show/nowplaying-modern-show8.png
 show/nowplaying-music-assistant-show8.png
 show/nowplaying-lyrics-show8.png
+show/nowplaying-library-show8.png
+show/nowplaying-modern-library-show8.png
+show/clock-music-strip-library-show8.png
 show/media-sheet-full.png
 show/media-sheet-controls-only.png
 show/settings-display-show8.png

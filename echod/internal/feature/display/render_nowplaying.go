@@ -148,6 +148,29 @@ func (r *renderer) musicFooter(s scene) {
 		starIcon, starColor = "star", amber
 	}
 	r.iconIn(fav, starIcon, transportIcon, starColor)
+
+	// Library: back to the music library, as it was left.
+	if s.libraryWord != "" {
+		b := r.libraryButton(s.libraryWord, s.modernMusic)
+		col := r.buttonFace(b, float64(b.Dy())/2, btnSecondary)
+		icon, gap := r.s(24), r.s(8)
+		x := b.Min.X + (b.Dx()-icon-gap-r.width(doneFace, s.libraryWord))/2
+		r.mdiIcon("bookshelf", x, b.Min.Y+(b.Dy()-icon)/2, 24, col)
+		r.text(doneFace, s.libraryWord, x+icon+gap, b.Min.Y+b.Dy()/2+r.s(8), col)
+	}
+}
+
+// libraryButton is the Library button with word on it, level with Done and as wide as its word needs:
+// at the right end of the foot, or beside the star on the modern page, whose three buttons sit low
+// enough on a Show 5 to meet one at the right end.
+func (r *renderer) libraryButton(word string, modern bool) image.Rectangle {
+	done := r.doneButton()
+	w := max(r.width(r.faces().button, word)+r.s(24)+r.s(8)+2*r.s(20), done.Dx())
+	if modern {
+		x := r.favButton().Max.X + r.s(12)
+		return image.Rect(x, done.Min.Y, x+w, done.Max.Y)
+	}
+	return image.Rect(r.w-r.margin-w, done.Min.Y, r.w-r.margin, done.Max.Y)
 }
 
 // favButton is the star, beside Done.
