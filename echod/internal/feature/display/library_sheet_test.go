@@ -192,6 +192,11 @@ func TestTheLibraryPageLaysOutItsParts(t *testing.T) {
 			t.Errorf("no icon %q", icon)
 		}
 	}
+	for _, icon := range libMenuIcons {
+		if _, ok := mdi.Rune(icon); !ok {
+			t.Errorf("no icon %q", icon)
+		}
+	}
 	dir := os.Getenv("SHOW_PREVIEW")
 	if dir != "" {
 		libFakeCovers(t)
@@ -231,7 +236,18 @@ func TestTheLibraryPageLaysOutItsParts(t *testing.T) {
 	derived := libSheetWith(libAlbums, libEntries("album", 12), "media_player.ma_kitchen")
 	derived.roots[libAlbums].sections[0].derived = true
 	held := libSheetWith(libAlbums, libEntries("album", 40), "media_player.ma_kitchen")
-	held.menu = libMenu{open: true, entry: libEntries("album", 3)[2], kind: "album", item: 2}
+	heldAlbum := libEntries("album", 3)[2]
+	held.menu = libMenu{open: true, entry: heldAlbum, kind: "album", item: 2, choices: libMenuFor(heldAlbum, "album", false, 0)}
+	// The queue tab, with a track three after the one playing held: play from it, move it up, take it
+	// out, and unmark it as a favorite.
+	queued := libQueueTracks(8)
+	queued[3].Favorite = true
+	queue := libSheetWith(libQueue, nil, "media_player.ma_kitchen")
+	queue.roots[libQueue].queue = "up0a1b2c3d"
+	queue.roots[libQueue].sections = []libSection{{word: -1, show: libShowTracks, kind: "track", entries: queued}}
+	queueHeld := queue
+	queueHeld.menu = libMenu{open: true, entry: queued[3], kind: "track", item: 3, choices: libMenuFor(queued[3], "track", true, 3),
+		queue: "up0a1b2c3d", page: queue.roots[libQueue].id, pos: 3}
 
 	for _, size := range []image.Point{{showWide, showHigh}, {show8Wide, show8High}} {
 		for _, c := range []struct {
@@ -254,6 +270,8 @@ func TestTheLibraryPageLaysOutItsParts(t *testing.T) {
 			{"not-set-up", librarySheet{}, map[int]int{libPartDone: 1}},
 			{"keyboard", typing, map[int]int{}},
 			{"menu", held, map[int]int{libPartMenu: libMenuChoices, libPartMenuOut: 1}},
+			{"queue", queue, map[int]int{libPartTab: libTabs, libPartItem: 4}},
+			{"queue-menu", queueHeld, map[int]int{libPartMenu: 4, libPartMenuOut: 1}},
 		} {
 			img := image.NewRGBA(image.Rect(0, 0, size.X, size.Y))
 			r := newRenderer(img)
@@ -559,8 +577,8 @@ func TestQueueingFromTheLibraryOnlyAppends(t *testing.T) {
 // library drawn in that language with an index out of range.
 func TestEveryLanguageHasEveryLibraryWord(t *testing.T) {
 	want := len(libWords[""])
-	if want != libWordStartRadio+1 {
-		t.Errorf("English has %d words, but the last word is number %d", want, libWordStartRadio)
+	if want != libWordRemoveFromQueue+1 {
+		t.Errorf("English has %d words, but the last word is number %d", want, libWordRemoveFromQueue)
 	}
 	for lang, w := range libWords {
 		if len(w) != want {

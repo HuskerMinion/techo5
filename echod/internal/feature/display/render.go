@@ -241,6 +241,9 @@ type scene struct {
 	// is the star having been pressed for what is playing.
 	strip bool
 	faved bool
+	// libraryWord is the word on the Now Playing page's Library button, back to the music library;
+	// empty for no button (no Music Assistant set up).
+	libraryWord string
 
 	// pin is the settings lock's PIN pad (pin.go), drawn over everything but a call or a ring while open.
 	pin pinView
@@ -1342,6 +1345,11 @@ func (r *renderer) footer(s scene) {
 		r.text(r.tiny, s.slideshowTrouble, r.margin, y, dim)
 	}
 	right := playingWord(s)
+	if s.nowPlaying && s.libraryWord != "" && !s.modernMusic {
+		// The Library button has this corner; the page says itself what is playing. (The modern page has
+		// it beside the star instead.)
+		return
+	}
 	if s.bt.Connected != "" {
 		if right != "" {
 			right += "  ·  "

@@ -71,6 +71,13 @@ func TestShowScenesDraw(t *testing.T) {
 		// Music Assistant's track, carried over Sendspin: named, with the three buttons.
 		"nowplaying-music-assistant": {now: at, phase: "idle", nowPlaying: true, playing: true, weather: sky,
 			radio: home.Radio{Playing: true, Now: "Music Assistant", Title: "Some Jazz", Artist: "The Quartet", Music: true}},
+		// With Music Assistant set up: the Library button at the right end of the foot, back to the library.
+		"nowplaying-library": {now: at, phase: "idle", nowPlaying: true, playing: true, weather: sky, libraryWord: "Library",
+			bt:    btaudio.State{Connected: "Phone"},
+			radio: home.Radio{Playing: true, Now: "Music Assistant", Title: "Some Jazz", Artist: "The Quartet", Music: true}},
+		"nowplaying-modern-library": {now: at, phase: "idle", nowPlaying: true, modernMusic: true, playing: true, weather: sky, libraryWord: "Bibliothèque",
+			radio:         home.Radio{Now: "Music Assistant", Title: "After the Rain", Artist: "The Glass Hours", Thumb: previewMusicCover()},
+			musicPosition: media.Position{At: at, Pos: 86 * time.Second, Dur: 222 * time.Second, Rate: 1}},
 		"nowplaying-music-assistant-paused": {now: at, phase: "idle", nowPlaying: true, paused: true, weather: sky,
 			radio: home.Radio{Now: "Music Assistant", Title: "Some Jazz", Artist: "The Quartet", Music: true}},
 		"nowplaying-modern": {now: at, phase: "idle", nowPlaying: true, modernMusic: true, playing: true, weather: sky,
@@ -200,6 +207,9 @@ func TestShowScenesDraw(t *testing.T) {
 		"settings-display-end": {now: at, phase: "idle", showSheet: true,
 			sheet: settings{cat: catDisplay, brightness: 70, cardScroll: 2000}},
 		"clock-music-strip": {now: at, phase: "idle", weather: sky, strip: true, playing: true,
+			radio: home.Radio{Now: "Music Assistant", Title: "Reason That I Sing", Artist: "Release", Music: true}},
+		// With Music Assistant set up: the Library button after forward, clear of the X.
+		"clock-music-strip-library": {now: at, phase: "idle", weather: sky, strip: true, playing: true, libraryWord: "Library",
 			radio: home.Radio{Now: "Music Assistant", Title: "Reason That I Sing", Artist: "Release", Music: true}},
 		"clock-music-strip-paused": {now: at, phase: "idle", weather: sky, strip: true, paused: true,
 			radio: home.Radio{Now: "Music Assistant", Title: "A Very Long Song Title That Has To Be Cut Short", Artist: "Somebody", Music: true}},
