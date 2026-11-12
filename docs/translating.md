@@ -25,8 +25,9 @@ can be complete and still never have been looked at on a real screen.
 <!-- status:end -->
 
 Portuguese and Russian write the clock's day and date, the forecast and the weather's words;
-the rest of their screen is English, and neither has a catalog of its own yet. Dutch has one now,
-but only its labels and buttons: the sentences, the camera and the calendar are still English.
+the rest of their screen is English, and neither has a catalog of its own yet. Dutch covers the whole
+catalog now, in a first pass that has not been read by a native speaker; its settings screens have
+also been looked at on a Show, the dialogs and the drawer less so. Corrections are welcome in #365.
 
 ## What stays the same in every language
 
