@@ -35,7 +35,7 @@ func weatherRain(rain int) string {
 // page is most of a frame's cost (its faded icon is a whole panel blended), and a moving sky asks for a
 // frame every 83 ms. What it shows is the reading, the forecast, the corner clock and the colors.
 func (r *renderer) weatherPageKept(s scene) {
-	key := fmt.Sprint(clockText(s.now), s.weather, s.forecast, r.w, r.h, walnut, cream, amber, dim, ember)
+	key := fmt.Sprint(clockText(s.now), s.weather, s.forecast, r.w, r.h, walnut, cream, amber, dim, ember, screenLang())
 	if key == r.weatherKey && len(r.weatherKept) == len(r.dst.Pix) {
 		copy(r.dst.Pix, r.weatherKept)
 		return
