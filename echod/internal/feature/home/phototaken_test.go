@@ -54,6 +54,57 @@ func exifJPEG(written, original string) []byte {
 	return append(b, 0xFF, 0xD9)
 }
 
+// tiffJPEG wraps a hand-made TIFF header and its data as a JPEG's EXIF segment.
+func tiffJPEG(t []byte) []byte {
+	seg := append([]byte("Exif\x00\x00"), t...)
+	b := []byte{0xFF, 0xD8, 0xFF, 0xE1}
+	b = binary.BigEndian.AppendUint16(b, uint16(len(seg)+2))
+	b = append(b, seg...)
+	return append(b, 0xFF, 0xD9)
+}
+
+// Offsets out of a crafted file near the top of a 32-bit int, or past it, are refused rather than
+// wrapping negative when added to and slicing out of range: the devices are 32-bit, and a photo in a
+// shared folder is anybody's. Run with GOARCH=arm this is the case that panicked.
+func TestCraftedEXIFOffsetsAreRefused(t *testing.T) {
+	le := binary.LittleEndian
+	for _, off := range []uint32{0x7FFFFFF0, 0x7FFFFFFF, 0x80000000, 0xFFFFFFF0, 0xFFFFFFFF} {
+		// The first directory's offset itself.
+		bad := le.AppendUint32([]byte("II*\x00"), off)
+		bad = append(bad, make([]byte, 32)...)
+		if got := exifTaken(tiffJPEG(bad)); !got.IsZero() {
+			t.Errorf("directory at %#x: %v", off, got)
+		}
+		if got := exifOrientation(tiffJPEG(bad)); got != 1 {
+			t.Errorf("directory at %#x: orientation %d", off, got)
+		}
+
+		// A DateTime entry whose text is at off.
+		d := le.AppendUint32([]byte("II*\x00"), 8)
+		d = le.AppendUint16(d, 1)
+		d = le.AppendUint16(d, 0x0132)
+		d = le.AppendUint16(d, 2)
+		d = le.AppendUint32(d, 20)
+		d = le.AppendUint32(d, off)
+		d = le.AppendUint32(d, 0)
+		if got := exifTaken(tiffJPEG(d)); !got.IsZero() {
+			t.Errorf("date at %#x: %v", off, got)
+		}
+
+		// The EXIF directory's pointer.
+		p := le.AppendUint32([]byte("II*\x00"), 8)
+		p = le.AppendUint16(p, 1)
+		p = le.AppendUint16(p, 0x8769)
+		p = le.AppendUint16(p, 4)
+		p = le.AppendUint32(p, 1)
+		p = le.AppendUint32(p, off)
+		p = le.AppendUint32(p, 0)
+		if got := exifTaken(tiffJPEG(p)); !got.IsZero() {
+			t.Errorf("EXIF directory at %#x: %v", off, got)
+		}
+	}
+}
+
 func day(y int, m time.Month, d int) time.Time { return time.Date(y, m, d, 0, 0, 0, 0, time.Local) }
 
 func sameDay(a, b time.Time) bool {

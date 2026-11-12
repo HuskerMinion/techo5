@@ -196,7 +196,7 @@ func fetchArt(ctx context.Context, u string, logo bool) (*image.RGBA, *image.RGB
 // does not care where the bytes came from: a URL here, or Music Assistant sending the picture itself.
 func layoutArt(b []byte, logo bool, what string) (*image.RGBA, *image.RGBA, error) {
 	artW, artH := artSize()
-	src, err := decodeWithin(b, maxArtPixels, what, artW, artH)
+	src, err := decodeWithin(b, artPixels(b), what, artW, artH)
 	if err != nil {
 		return nil, nil, err
 	}

@@ -32,13 +32,30 @@ const (
 	// times a second.
 	maxFramePixels = 12 << 20
 
-	// maxArtPixels bounds cover art, station logos and map tiles, from services nobody here controls.
-	// Most are a few hundred pixels square, but a media server sends a show's poster or fanart as it
-	// has it: Plex's posters are 2000×3000 and its fanart 3840×2160, and a four megapixel bound left
-	// those blank (#516). Twelve is the camera's bound, which is decoded far more often than art; a
-	// large JPEG decodes at a half or a quarter of its size anyway.
+	// maxArtPixels bounds cover art and station logos in JPEG, from services nobody here controls. Most
+	// are a few hundred pixels square, but a media server sends a show's poster or fanart as it has it:
+	// Plex's posters are 2000×3000 and its fanart 3840×2160, and a four megapixel bound left those blank
+	// (#516). Twelve is the camera's bound, and a large JPEG decodes at a half or a quarter of its size.
 	maxArtPixels = 12 << 20
+
+	// maxWholeArtPixels bounds art in any other format, which is decoded whole: a 12 megapixel PNG is
+	// 48 MB unpacked, 96 at sixteen bits, and fits easily under the download cap. Four megapixels is a
+	// 2048×2048 picture, which covers every logo and cover seen in anything but JPEG.
+	maxWholeArtPixels = 4 << 20
+
+	// maxTilePixels bounds a map tile: 256 or 512 pixels square by nature, so four megapixels is
+	// already far past anything a tile server sends.
+	maxTilePixels = 4 << 20
 )
+
+// artPixels is the budget for a piece of art: maxArtPixels for a JPEG, which decodes at a fraction of
+// its size, and maxWholeArtPixels for anything decoded whole.
+func artPixels(b []byte) int64 {
+	if _, format, err := image.DecodeConfig(bytes.NewReader(b)); err == nil && format != "jpeg" {
+		return maxWholeArtPixels
+	}
+	return maxArtPixels
+}
 
 // decodeWithin decodes an image only if its header declares something this screen could use. what
 // names the picture in the error, since every caller here logs the failure and carries on with the

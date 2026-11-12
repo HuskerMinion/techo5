@@ -48,7 +48,7 @@ func TestAnAbsurdlyLargeImageIsRefusedBeforeItIsDecoded(t *testing.T) {
 		max  int64
 	}{
 		"camera frame": {8000, 6000, maxFramePixels},
-		"map tile":     {4000, 4000, maxArtPixels},
+		"map tile":     {4000, 4000, maxTilePixels},
 	} {
 		if _, err := decodeWithin(hugePNG(tc.w, tc.h), tc.max, name, 0, 0); err == nil {
 			t.Errorf("%s: %d×%d was decoded", name, tc.w, tc.h)
@@ -58,13 +58,27 @@ func TestAnAbsurdlyLargeImageIsRefusedBeforeItIsDecoded(t *testing.T) {
 
 // A media server's poster or fanart is within the art budget (#516): Plex sends 2000×3000 posters and
 // 3840×2160 fanart, and the old four megapixel bound refused both and left Now Playing blank. These
-// headers declare more than follows, so the decode itself fails, but not on the budget.
+// JPEGs, which is what both are, so they are measured against the JPEG budget.
 func TestAPostersSizeIsWithinTheArtBudget(t *testing.T) {
-	for _, s := range [][2]uint32{{2000, 3000}, {3840, 2160}} {
-		_, err := decodeWithin(hugePNG(s[0], s[1]), maxArtPixels, "cover art", 960, 480)
-		if err != nil && strings.Contains(err.Error(), "pixels") {
-			t.Errorf("%d×%d: %v", s[0], s[1], err)
+	for _, s := range [][2]int64{{2000, 3000}, {3840, 2160}} {
+		if s[0]*s[1] > maxArtPixels {
+			t.Errorf("%d×%d is over the %d pixel art budget", s[0], s[1], maxArtPixels)
 		}
+	}
+}
+
+// Art in a format decoded whole keeps the tighter bound: only JPEG decodes at a fraction of its size, and
+// a 12 megapixel PNG is 48 MB unpacked.
+func TestArtDecodedWholeKeepsTheTighterBound(t *testing.T) {
+	if got := artPixels(hugePNG(3840, 2160)); got != maxWholeArtPixels {
+		t.Fatalf("a PNG's budget is %d, want %d", got, maxWholeArtPixels)
+	}
+	if _, err := decodeWithin(hugePNG(3840, 2160), artPixels(hugePNG(3840, 2160)), "cover art", 960, 480); err == nil ||
+		!strings.Contains(err.Error(), "pixels") {
+		t.Errorf("a 3840×2160 PNG cover: %v, want refused on its size", err)
+	}
+	if got := artPixels([]byte("not a picture")); got != maxArtPixels {
+		t.Errorf("an unreadable header's budget is %d; decodeWithin refuses it anyway", got)
 	}
 }
 

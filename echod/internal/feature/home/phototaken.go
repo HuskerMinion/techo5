@@ -58,8 +58,12 @@ func exifTaken(b []byte) time.Time {
 }
 
 // tiffTag is where tag's entry is in the directory at ifd, if it has one.
+//
+// Every bound on an offset out of the file is a subtraction from len(t), never an addition to the offset:
+// the devices are 32-bit, where an offset near the top of an int wraps negative when added to and passes
+// the bound it was meant to fail.
 func tiffTag(t []byte, order binary.ByteOrder, ifd int, tag uint16) (int, bool) {
-	if ifd <= 0 || ifd+2 > len(t) {
+	if ifd <= 0 || ifd > len(t)-2 {
 		return 0, false
 	}
 	n := int(order.Uint16(t[ifd:]))
@@ -85,7 +89,7 @@ func tiffDate(t []byte, order binary.ByteOrder, e int) time.Time {
 		return time.Time{}
 	}
 	count, off := int(order.Uint32(t[e+4:])), int(order.Uint32(t[e+8:]))
-	if count < len(exifDateForm) || off < 0 || off+len(exifDateForm) > len(t) {
+	if count < len(exifDateForm) || off < 0 || off > len(t)-len(exifDateForm) {
 		return time.Time{}
 	}
 	when, err := time.ParseInLocation(exifDateForm, string(t[off:off+len(exifDateForm)]), time.Local)

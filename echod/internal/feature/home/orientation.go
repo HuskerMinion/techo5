@@ -57,8 +57,10 @@ func tiffOrientation(t []byte) int {
 	default:
 		return 1
 	}
+	// As tiffTag's bounds: subtracted from len(t), since on the 32-bit devices an offset out of the file
+	// can be negative here, or wrap negative when added to.
 	ifd := int(order.Uint32(t[4:]))
-	if ifd+2 > len(t) {
+	if ifd < 0 || ifd > len(t)-2 {
 		return 1
 	}
 	n := int(order.Uint16(t[ifd:]))
