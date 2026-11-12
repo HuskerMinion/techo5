@@ -147,4 +147,9 @@ func TestSizesFollowTheGrid(t *testing.T) {
 	if caps := capabilities(gridFor(false, false)); strings.Join(caps.TileSizes, " ") != "single wide full tall square 3x1 3x2 4x1" {
 		t.Errorf("the Show 5 says it takes %v", caps.TileSizes)
 	}
+	// A layout with an entity on two tiles is refused by the add-on before it sends anything, unless the
+	// screen says it takes one (#387).
+	if !capabilities(gridFor(false, false)).TileRepeats {
+		t.Error("the screen does not say it takes an entity on more than one tile")
+	}
 }

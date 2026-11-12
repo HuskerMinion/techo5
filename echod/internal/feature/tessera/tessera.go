@@ -124,7 +124,10 @@ func build() *Tessera {
 }
 
 // capabilities is what this screen tells the add-on it takes on a grid of g: every size of tile the grid
-// has room for, eight pages, and none of the newer options, until something here draws them.
+// has room for, eight pages, one entity on more than one tile, and none of the other newer options,
+// until something here draws them. Tiles are found by their place in the layout, never by entity, so a
+// repeated one is drawn and tapped like any other; without saying so, the add-on sends nothing at all
+// for a layout that repeats one (#387).
 func capabilities(g grid) Capabilities {
 	return Capabilities{
 		MaxTiles:    64,
@@ -132,6 +135,7 @@ func capabilities(g grid) Capabilities {
 		MaxBarItems: 6,
 		TileSizes:   sizes(g),
 		FreePages:   true,
+		TileRepeats: true,
 		Features:    []string{"plugins"},
 		PluginAPI:   pluginAPI,
 		Plugins:     slices.Clone(builtInPlugins),
