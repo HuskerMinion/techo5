@@ -402,7 +402,7 @@ func (st *stats) level(sq *atomic.Uint64, n *atomic.Int64) string {
 
 // RingSounds are the ways a call can ring, in the order the screen and Home Assistant offer them;
 // the first is the one a device starts with.
-var RingSounds = []string{"Old phone", "Chime"}
+var RingSounds = []string{"Old phone", "Chime", "Your own"}
 
 // RingSoundIndex is the saved call ring's place in RingSounds; one no longer offered reads as the first.
 func RingSoundIndex() int {
@@ -486,9 +486,24 @@ func buildBellRing() []int16 {
 // announcement) has it until it is done, and then the ring takes it back, as a call's audio does
 // (receive): a call left ringing in silence is one nobody knows is there.
 func ring(ctx context.Context, tone []int16) {
+	var custom []int16
+	if RingSounds[RingSoundIndex()] == "Your own" {
+		mono := speaker.ClipIntercomRing.OwnSamples()
+		if len(mono) > 0 {
+			custom = make([]int16, len(mono)*speaker.Channels)
+			for i, sample := range mono {
+				for ch := 0; ch < speaker.Channels; ch++ {
+					custom[i*speaker.Channels+ch] = sample
+				}
+			}
+		}
+	}
 	sound := speaker.Sound()
 	for ctx.Err() == nil {
 		claim := sound.ClaimCall("ringing", func(cctx context.Context, p *speaker.Player) error {
+			if len(custom) > 0 {
+				return ringCyclesCustom(ctx, cctx, p, custom)
+			}
 			return ringCycles(ctx, cctx, p, tone)
 		})
 		select {
@@ -528,6 +543,36 @@ func ringCycles(ctx, cctx context.Context, p *speaker.Player, tone []int16) erro
 			case <-time.After(50 * time.Millisecond):
 			}
 			if p.Queued() == 0 && (!idle || !time.Now().Before(next)) {
+				break
+			}
+		}
+	}
+}
+
+// customRingCycleDuration repeats a 48 kHz clip after one second of silence.
+// The ring stops independently when the call or the Drop In delay ends.
+func customRingCycleDuration(samples []int16) time.Duration {
+	play := time.Duration(len(samples)/speaker.Channels) * time.Second / speaker.Rate
+	return play + time.Second
+}
+
+// ringCyclesCustom plays native 48 kHz stereo PCM.
+func ringCyclesCustom(ctx, cctx context.Context, p *speaker.Player, samples []int16) error {
+	cycle := customRingCycleDuration(samples)
+	for {
+		p.Play(samples)
+		next := time.Now().Add(cycle)
+		for {
+			select {
+			case <-cctx.Done():
+				p.Drain()
+				return nil
+			case <-ctx.Done():
+				p.Drain()
+				return nil
+			case <-time.After(50 * time.Millisecond):
+			}
+			if p.Queued() == 0 && !time.Now().Before(next) {
 				break
 			}
 		}

@@ -17,8 +17,8 @@ func TestAutoAnswerEnabled(t *testing.T) {
 		attendu bool
 	}{
 		{"Desactive", false, 0, false},
-		{"Apres5Secondes", false, 5, true},
-		{"DropIn", true, 5, false},
+		{"NoDropIn", false, 5, false},
+		{"AuthorizedDropIn", true, 5, true},
 	}
 
 	for _, test := range tests {
@@ -31,10 +31,10 @@ func TestAutoAnswerEnabled(t *testing.T) {
 	}
 }
 
-func TestIntercomSansDecrochageAuto(t *testing.T) {
+func TestIntercomWithoutAutoAnswer(t *testing.T) {
 	p, peer := house(t)
 
-	// Le délai 0 désactive le décrochage automatique.
+	// A zero delay preserves the default behavior.
 	if err := config.Set().Home().IntercomAutoAnswerDelay(0); err != nil {
 		t.Fatal(err)
 	}
@@ -49,23 +49,29 @@ func TestIntercomSansDecrochageAuto(t *testing.T) {
 	defer l.close()
 
 	if got := <-l.control; got != msgRinging {
-		t.Fatalf("Attendu : sonnerie, obtenu : %q", got)
+		t.Fatalf("Expected ringing, got : %q", got)
 	}
 
 	select {
 	case got := <-l.control:
-		t.Errorf("Décrochage inattendu : %q", got)
+		t.Errorf("Unexpected automatic answer : %q", got)
 	case <-time.After(200 * time.Millisecond):
-		// L'appel doit continuer à sonner.
+		// The call must continue ringing.
 	}
 
 	p.Hangup()
 }
 
-func TestIntercomDecrochageAutomatique(t *testing.T) {
+func TestIntercomDelayedAutoAnswer(t *testing.T) {
 	p, peer := house(t)
+	if err := config.Set().Home().DropIn(true); err != nil {
+		t.Fatal(err)
+	}
+	known := knownDevice
+	knownDevice = func(name, from string) bool { return from == peer.Address }
+	t.Cleanup(func() { knownDevice = known })
 
-	// Activer le décrochage automatique après 2 secondes.
+	// Enable delayed Drop In answering after two seconds.
 	if err := config.Set().Home().IntercomAutoAnswerDelay(2); err != nil {
 		t.Fatal(err)
 	}
@@ -79,26 +85,32 @@ func TestIntercomDecrochageAutomatique(t *testing.T) {
 	}
 	defer l.close()
 
-	// Vérifier que l'appel commence par sonner.
+	// Verify that the call starts by ringing.
 	if got := <-l.control; got != msgRinging {
-		t.Fatalf("Attendu : sonnerie, obtenu : %q", got)
+		t.Fatalf("Expected ringing, got : %q", got)
 	}
 
-	// Attendre le décrochage automatique.
+	// Wait for automatic answering.
 	select {
 	case got := <-l.control:
 		if got != msgAnswer {
-			t.Errorf("Attendu : décrochage, obtenu : %q", got)
+			t.Errorf("Expected answer, got : %q", got)
 		}
 	case <-time.After(4 * time.Second):
-		t.Error("Aucun décrochage automatique après 2 secondes")
+		t.Error("No automatic answer after the delay")
 	}
 
 	p.Hangup()
 }
 
-func TestIntercomRaccrochageAvantDecrochage(t *testing.T) {
+func TestIntercomHangupBeforeAutoAnswer(t *testing.T) {
 	p, peer := house(t)
+	if err := config.Set().Home().DropIn(true); err != nil {
+		t.Fatal(err)
+	}
+	known := knownDevice
+	knownDevice = func(name, from string) bool { return from == peer.Address }
+	t.Cleanup(func() { knownDevice = known })
 
 	if err := config.Set().Home().IntercomAutoAnswerDelay(2); err != nil {
 		t.Fatal(err)
@@ -114,27 +126,27 @@ func TestIntercomRaccrochageAvantDecrochage(t *testing.T) {
 	defer l.close()
 
 	if got := <-l.control; got != msgRinging {
-		t.Fatalf("Attendu : sonnerie, obtenu : %q", got)
+		t.Fatalf("Expected ringing, got : %q", got)
 	}
 
-	// L'appelant raccroche avant les 2 secondes.
+	// The caller hangs up before the delay expires.
 	time.Sleep(200 * time.Millisecond)
 	l.close()
 
-	// Vérifier que l'appareil revient au repos.
-	waitFor(t, "retour au repos", func() bool {
+	// Verify that the device returns to idle.
+	waitFor(t, "return to idle", func() bool {
 		return p.State().Phase == Idle
 	})
 
-	// Attendre au-delà du délai initial.
+	// Wait beyond the original delay.
 	time.Sleep(2200 * time.Millisecond)
 
 	if p.State().Phase != Idle {
-		t.Error("L'interphone n'est pas resté au repos")
+		t.Error("The intercom did not remain idle")
 	}
 }
 
-func TestIntercomPasDeReponseApresRaccrochage(t *testing.T) {
+func TestIntercomNoAnswerAfterHangup(t *testing.T) {
 	p, peer := house(t)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
@@ -147,40 +159,46 @@ func TestIntercomPasDeReponseApresRaccrochage(t *testing.T) {
 	defer l.close()
 
 	if got := <-l.control; got != msgRinging {
-		t.Fatalf("Attendu : sonnerie, obtenu : %q", got)
+		t.Fatalf("Expected ringing, got : %q", got)
 	}
 
-	waitFor(t, "sonnerie", func() bool {
+	waitFor(t, "ringing", func() bool {
 		return p.State().Phase == Ringing
 	})
 
-	// Conserver la référence de cet appel.
+	// Keep the answer channel for this call.
 	p.mu.Lock()
 	answered := p.answered
 	p.mu.Unlock()
 
-	// Annuler l'appel.
+	// Cancel the call.
 	p.Hangup()
 
-	// Attendre que l'appareil soit réellement au repos.
-	waitFor(t, "retour au repos", func() bool {
+	// Wait until the device is idle.
+	waitFor(t, "return to idle", func() bool {
 		return p.State().Phase == Idle
 	})
 
-	// Simuler une tentative de décrochage tardive.
+	// Simulate a late automatic answer attempt.
 	p.answerIf(answered)
 
-	// Vérifier que la demande de réponse n'a pas été activée.
+	// Verify that the call was not answered.
 	select {
 	case <-answered:
-		t.Fatal("Un appel annulé a été décroché")
+		t.Fatal("A canceled call was answered")
 	default:
-		// Aucun décrochage : comportement attendu.
+		// No automatic answer is expected.
 	}
 }
 
-func TestIntercomRaccrochagePendantAvertissement(t *testing.T) {
+func TestIntercomHangupDuringWarning(t *testing.T) {
 	p, peer := house(t)
+	if err := config.Set().Home().DropIn(true); err != nil {
+		t.Fatal(err)
+	}
+	known := knownDevice
+	knownDevice = func(name, from string) bool { return from == peer.Address }
+	t.Cleanup(func() { knownDevice = known })
 
 	// Activer le decrochage automatique apres 2 secondes.
 	if err := config.Set().Home().IntercomAutoAnswerDelay(2); err != nil {
@@ -197,11 +215,11 @@ func TestIntercomRaccrochagePendantAvertissement(t *testing.T) {
 	defer l.close()
 
 	if got := <-l.control; got != msgRinging {
-		t.Fatalf("Attendu : sonnerie, obtenu : %q", got)
+		t.Fatalf("Expected ringing, got : %q", got)
 	}
 
 	// Attendre que l'avertissement prenne le haut-parleur.
-	waitFor(t, "debut de l'avertissement", func() bool {
+	waitFor(t, "warning started", func() bool {
 		return speaker.Sound().Holder() == "drop in"
 	})
 
@@ -214,33 +232,33 @@ func TestIntercomRaccrochagePendantAvertissement(t *testing.T) {
 		t.Fatal("Le canal de reponse a deja ete supprime")
 	}
 
-	// L'appelant raccroche pendant l'avertissement.
+	// The caller hangs up during the warning.
 	l.close()
 
-	// L'appareil doit revenir au repos.
-	waitFor(t, "retour au repos", func() bool {
+	// The device must return to idle.
+	waitFor(t, "return to idle", func() bool {
 		return p.State().Phase == Idle
 	})
 
 	// Verifier qu'aucun decrochage n'a ete declenche.
 	select {
 	case <-answered:
-		t.Fatal("L'appel a ete decroche apres le raccrochage")
+		t.Fatal("The call was answered after hangup")
 	default:
 		// Aucun decrochage : resultat attendu.
 	}
 
 	if p.State().Phase != Idle {
-		t.Fatal("L'interphone devrait etre au repos")
+		t.Fatal("The intercom should be idle")
 	}
 }
-func TestIntercomNouvelAppelApresRaccrochage(t *testing.T) {
+func TestIntercomNewCallAfterHangup(t *testing.T) {
 	p, peer := house(t)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	// Premier appel.
+	// First call.
 	premier, err := dialDevice(ctx, peer, intercomKey())
 	if err != nil {
 		t.Fatal(err)
@@ -250,14 +268,14 @@ func TestIntercomNouvelAppelApresRaccrochage(t *testing.T) {
 		t.Fatalf("Premier appel : obtenu %q", got)
 	}
 
-	// Le premier appelant raccroche.
+	// The first caller hangs up.
 	premier.close()
 
-	waitFor(t, "repos apres premier appel", func() bool {
+	waitFor(t, "idle after first call", func() bool {
 		return p.State().Phase == Idle
 	})
 
-	// Deuxieme appel.
+	// Second call.
 	second, err := dialDevice(ctx, peer, intercomKey())
 	if err != nil {
 		t.Fatal(err)
@@ -267,54 +285,24 @@ func TestIntercomNouvelAppelApresRaccrochage(t *testing.T) {
 	select {
 	case got := <-second.control:
 		if got != msgRinging {
-			t.Fatalf("Deuxieme appel : attendu sonnerie, obtenu %q", got)
+			t.Fatalf("Deuxieme appel : attendu ringing, obtenu %q", got)
 		}
 	case <-ctx.Done():
-		t.Fatal("Le deuxieme appel ne sonne pas")
+		t.Fatal("The second call did not ring")
 	}
 
 	p.Hangup()
 }
 
-func TestIntercomAncienAppelNeModifiePasNouvelAppel(t *testing.T) {
-	p, _ := house(t)
-
-	ancien := make(chan struct{})
-	nouveau := make(chan struct{})
-
-	// Simuler un nouvel appel actif.
-	p.mu.Lock()
-	p.intercomCall = nouveau
-	p.claim(Ringing, "Nouvel appel", true)
-	p.state.Intercom = true
-	p.mu.Unlock()
-
-	// Simuler le nettoyage d'un ancien appel.
-	p.setIf(func(s *State) bool {
-		if p.intercomCall != ancien {
-			return false
-		}
-
-		s.Phase, s.Peer = Idle, ""
-		return true
-	})
-
-	// Le nouvel appel doit toujours sonner.
-	if p.State().Phase != Ringing {
-		t.Fatal("Le nouvel appel a ete interrompu")
-	}
-
-	if p.State().Peer != "Nouvel appel" {
-		t.Fatal("Le nouvel appel a perdu son correspondant")
-	}
-}
-
 func TestIntercomManualAnswerDuringChime(t *testing.T) {
 	p, peer := house(t)
-
-	if err := config.Set().Home().IntercomRingDisabled(false); err != nil {
+	if err := config.Set().Home().DropIn(true); err != nil {
 		t.Fatal(err)
 	}
+	known := knownDevice
+	knownDevice = func(name, from string) bool { return from == peer.Address }
+	t.Cleanup(func() { knownDevice = known })
+
 	if err := config.Set().Home().IntercomAutoAnswerDelay(2); err != nil {
 		t.Fatal(err)
 	}
@@ -386,10 +374,13 @@ func TestIntercomChimeInterrupted(t *testing.T) {
 // An interrupted auto-answer warning resumes ringing without answering.
 func TestIntercomNoAnswerAfterInterruptedChime(t *testing.T) {
 	p, peer := house(t)
-
-	if err := config.Set().Home().IntercomRingDisabled(false); err != nil {
+	if err := config.Set().Home().DropIn(true); err != nil {
 		t.Fatal(err)
 	}
+	known := knownDevice
+	knownDevice = func(name, from string) bool { return from == peer.Address }
+	t.Cleanup(func() { knownDevice = known })
+
 	if err := config.Set().Home().IntercomAutoAnswerDelay(2); err != nil {
 		t.Fatal(err)
 	}
@@ -415,12 +406,10 @@ func TestIntercomNoAnswerAfterInterruptedChime(t *testing.T) {
 	// Interrupt the warning.
 	speaker.Sound().Silence()
 
-	// The ringtone must not resume after the warning was interrupted.
-	time.Sleep(100 * time.Millisecond)
-
-	if speaker.Sound().Holder() == "ringing" {
-		t.Fatal("ringtone resumed after the warning")
-	}
+	// An interrupted warning must resume ringing, without automatically answering.
+	waitFor(t, "ringing resumed", func() bool {
+		return speaker.Sound().Holder() == "ringing"
+	})
 
 	// The interrupted warning must not answer the call.
 	select {

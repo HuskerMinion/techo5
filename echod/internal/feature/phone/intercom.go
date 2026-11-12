@@ -69,9 +69,9 @@ const (
 	msgBye     = 'X' // hung up
 )
 
-// autoAnswerEnabled indique si le décrochage automatique est autorisé.
-func autoAnswerEnabled(dropIn bool, delai int) bool {
-	return !dropIn && delai > 0
+// autoAnswerEnabled allows the delay only for an authorized Drop In.
+func autoAnswerEnabled(dropIn bool, delay int) bool {
+	return dropIn && delay > 0
 }
 
 // A device without microphones (the Skylight Calendar) neither takes nor makes intercom calls: it could
@@ -343,21 +343,18 @@ func (p *Phone) intercomIn(w http.ResponseWriter, r *http.Request) {
 	// where that device is. The house word proves the caller is in on the house, but a device on an
 	// older release still sends it in announcements; a caller that only claims a device's name, from
 	// somewhere else, rings.
-	ringEnabled := !home.IntercomRingDisabled
-	dropIn := home.DropIn && knownDevice(caller, from) && !ringEnabled
+	dropIn := home.DropIn && knownDevice(caller, from)
 	if home.DropIn && !dropIn {
 		slog.Info("intercom: not dropping in for a caller this device does not know there; ringing", "from", caller, "address", from)
 	}
 
 	answered := make(chan struct{})
-	intercomCall := make(chan struct{})
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	p.mu.Lock()
 	busy := p.state.Phase != Idle
 	if !busy {
 		p.answered, p.end = answered, cancel
-		p.intercomCall = intercomCall
 		p.claim(Ringing, caller, true)
 		p.state.Intercom, p.state.DropIn = true, dropIn
 	}
@@ -367,27 +364,6 @@ func (p *Phone) intercomIn(w http.ResponseWriter, r *http.Request) {
 		_ = writeMsg(c, msgBusy, nil)
 		return
 	}
-	// Nettoyer uniquement cet appel interphone.
-	cleanup := func() {
-		p.setIf(func(s *State) bool {
-			if p.intercomCall != intercomCall {
-				return false
-			}
-
-			p.intercomCall = nil
-			p.answered = nil
-			p.end = nil
-
-			if s.Phase == Idle {
-				return false
-			}
-
-			s.Phase, s.Peer = Idle, ""
-			return true
-		})
-	}
-	defer cleanup()
-
 	l := newLink(c)
 	defer l.close()
 	_ = l.say(msgRinging)
@@ -397,111 +373,72 @@ func (p *Phone) intercomIn(w http.ResponseWriter, r *http.Request) {
 
 	rctx, stopRing := context.WithCancel(ctx)
 	tone := ringTone()
-	if !dropIn {
-		tone = intercomRingTone()
-	}
-	ringDone := make(chan struct{})
-	// Check whether this call is still waiting to be answered.
 
 	if dropIn {
-		// Drop In: a chime rather than a ring, and then it is answered by itself. The call page says
-		// who is listening, and hanging up or declining still ends it. A chime that did not play to
-		// its end - cut off by something else taking the speaker - is no warning, so the call rings
-		// instead. And only this call is answered: a hangup in the meantime lets the line go, and
-		// whatever claims it next is not picked up by this chime.
-		slog.Info("intercom: drop in", "from", caller)
-		safe.Go("intercom: chime", func() {
+		// Only a known peer at its verified address can use the Drop In path.
+		// With no delay, retain the existing immediate warning chime.
+		safe.Go("intercom: drop in", func() {
+			delay := home.IntercomAutoAnswerDelay
+			if autoAnswerEnabled(dropIn, delay) {
+				// Ring before the Drop In warning; do not answer while ringing.
+				ringCtx, endRing := context.WithCancel(rctx)
+				ringFinished := make(chan struct{})
+				safe.Go("intercom: ring before drop in", func() {
+					defer close(ringFinished)
+					ring(ringCtx, tone)
+				})
+				timer := time.NewTimer(time.Duration(delay) * time.Second)
+				select {
+				case <-timer.C:
+				case <-rctx.Done():
+					timer.Stop()
+					endRing()
+					<-ringFinished
+					return
+				case <-l.gone:
+					timer.Stop()
+					endRing()
+					<-ringFinished
+					return
+				case <-answered:
+					timer.Stop()
+					endRing()
+					<-ringFinished
+					return
+				}
+				endRing()
+				<-ringFinished
+			}
+			select {
+			case <-rctx.Done():
+				return
+			case <-l.gone:
+				return
+			case <-answered:
+				return
+			default:
+			}
+			// An interrupted warning is not consent to listen: ring instead.
 			if chime(rctx) {
 				p.answerIf(answered)
 				return
 			}
 			if rctx.Err() == nil {
+				select {
+				case <-l.gone:
+					return
+				case <-answered:
+					return
+				default:
+				}
 				ring(rctx, tone)
 			}
 		})
 	} else {
-		safe.Go("intercom: ring", func() {
-			defer close(ringDone)
-			ring(rctx, tone)
-		})
+		safe.Go("intercom: ring", func() { ring(rctx, tone) })
 	}
 	timeout := time.NewTimer(intercomRingFor)
 	defer timeout.Stop()
-	delai := config.Get().Home.IntercomAutoAnswerDelay
-
-	if autoAnswerEnabled(dropIn, delai) {
-		autoAnswerTimer := time.NewTimer(time.Duration(delai) * time.Second)
-		defer autoAnswerTimer.Stop()
-
-		safe.Go("intercom: auto answer", func() {
-			select {
-			case <-autoAnswerTimer.C:
-				// Ne pas décrocher si l'appel est déjà annulé.
-				if ctx.Err() != nil {
-					return
-				}
-
-				select {
-				case <-l.gone:
-					return
-				default:
-				}
-
-				// Arreter la sonnerie a la fin du delai.
-				stopRing()
-
-				// Attendre que la sonnerie libere le haut-parleur.
-				select {
-				case <-ringDone:
-				case <-ctx.Done():
-					return
-				case <-l.gone:
-					return
-				}
-
-				// Cancel the warning if the call is answered manually.
-				chimeCtx, cancelChime := context.WithCancel(ctx)
-
-				safe.Go("intercom: stop auto-answer chime", func() {
-					select {
-					case <-answered:
-						cancelChime()
-					case <-chimeCtx.Done():
-					}
-				})
-
-				// Play the warning before automatic answering.
-				played := chime(chimeCtx)
-				cancelChime()
-
-				if !played {
-					return
-				}
-
-				// L'avertissement est termine.
-				// Verifier que l'appel n'a pas ete annule.
-				if ctx.Err() != nil {
-					return
-				}
-
-				// Verifier que l'appelant est toujours connecte.
-				select {
-				case <-l.gone:
-					return
-				default:
-				}
-
-				// Decrocher uniquement cet appel.
-				p.answerIf(answered)
-
-			case <-ctx.Done():
-				return
-			case <-l.gone:
-				return
-			}
-		})
-	}
-
 	select {
 
 	case <-answered:
@@ -509,25 +446,30 @@ func (p *Phone) intercomIn(w http.ResponseWriter, r *http.Request) {
 
 		// Ne pas commencer la communication si l'appel est termine.
 		if ctx.Err() != nil {
+			p.set(func(s *State) { s.Phase, s.Peer = Idle, "" })
 			return
 		}
 
 		select {
 		case <-l.gone:
+			p.set(func(s *State) { s.Phase, s.Peer = Idle, "" })
 			return
 		default:
 		}
 		if err := l.say(msgAnswer); err != nil {
 			fire("ended", p.State(), "reason", "answer failed")
+			p.set(func(s *State) { s.Phase, s.Peer = Idle, "" })
 			return
 		}
 		// Verifier une derniere fois que l'appel est actif.
 		if ctx.Err() != nil {
+			p.set(func(s *State) { s.Phase, s.Peer = Idle, "" })
 			return
 		}
 
 		select {
 		case <-l.gone:
+			p.set(func(s *State) { s.Phase, s.Peer = Idle, "" })
 			return
 		default:
 		}
@@ -549,15 +491,18 @@ func (p *Phone) intercomIn(w http.ResponseWriter, r *http.Request) {
 		p.declined[from] = time.Now()
 		p.mu.Unlock()
 		fire("declined", p.State())
+		p.set(func(s *State) { s.Phase, s.Peer = Idle, "" })
 	case <-l.gone:
 		stopRing()
 		slog.Info("intercom: missed call", "from", caller)
 		fire("missed", p.State())
+		p.set(func(s *State) { s.Phase, s.Peer = Idle, "" })
 	case <-timeout.C:
 		stopRing()
 		_ = l.say(msgDecline)
 		slog.Info("intercom: missed call", "from", caller)
 		fire("missed", p.State())
+		p.set(func(s *State) { s.Phase, s.Peer = Idle, "" })
 	}
 }
 

@@ -462,6 +462,26 @@ crosses the network. Devices from before that change still send it as it is, so 
 together: a device on the older release also turns away announcements from an updated one. On a Dot,
 which has no screen, both are the Home Assistant switches, and the action button answers and hangs up.
 
+### Ring before Drop In
+
+**Intercom auto-answer delay** offers Disabled, 2, 3, 5, 10 or
+15 seconds. Disabled preserves the existing Drop In behavior:
+an authorized call plays its warning chime and connects automatically.
+
+With a delay selected, an authorized Drop In rings first, then plays
+the warning chime before answering. The room can answer or decline
+manually during the delay. An interrupted warning returns to ringing
+without opening the microphones.
+
+Automatic answering requires **Allow Drop In** and a recognized
+TECHO5 caller connecting from its known address. Other calls ring
+normally and require manual answering.
+
+**Call ring** also offers **Your own**, which uses an uploaded
+48 kHz WAV recording named `intercom_ring.wav`. If no valid
+recording is present, the standard ringtone is used.
+The same Call ring selection applies to incoming calls.
+
 To listen to a room from a phone's browser instead, without a call, there is the baby monitor
 ([setup.md](setup.md#the-baby-monitor)): a switch, off by default, and a private link; the device shows
 on its screen, or its ring, while anyone listens.

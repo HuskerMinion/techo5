@@ -99,7 +99,6 @@ type Phone struct {
 	status, peer   *esphome.TextSensor
 	answer, hangup *esphome.Button
 	dropIn, dnd    *esphome.Switch
-	intercomRing   *esphome.Switch
 	// callWake, callReplies and callUnderlay are what a turn during a call may do: config.Home's
 	// CallWake, CallReplies and CallUnderlay.
 	callWake, callReplies, callUnderlay *esphome.Switch
@@ -121,10 +120,9 @@ type Phone struct {
 	state State
 	line  *line
 	// answered is closed to answer the call that is ringing; end cancels the call in progress.
-	answered     chan struct{}
-	end          context.CancelFunc
-	say          chan []int16
-	intercomCall chan struct{}
+	answered chan struct{}
+	end      context.CancelFunc
+	say      chan []int16
 
 	// declined is when each device's last intercom call here was turned down, so it cannot ring
 	// again straight away.
@@ -154,15 +152,6 @@ func build() *Phone {
 	p.dropIn = &esphome.Switch{Base: esphome.Base{ObjectID: "intercom_drop_in", Name: "Allow Drop In", Icon: "mdi:phone-in-talk", Category: esphome.CategoryConfig}}
 	p.dnd = &esphome.Switch{Base: esphome.Base{ObjectID: "intercom_do_not_disturb", Name: "Intercom do not disturb", Icon: "mdi:phone-cancel", Category: esphome.CategoryConfig}}
 	p.dropIn.OnCommand = p.SetDropIn
-	p.intercomRing = &esphome.Switch{
-		Base: esphome.Base{
-			ObjectID: "intercom_ringtone",
-			Name:     "Intercom ringtone",
-			Icon:     "mdi:bell-ring",
-			Category: esphome.CategoryConfig,
-		},
-	}
-	p.intercomRing.OnCommand = p.SetIntercomRing
 	p.ringSound = &esphome.Select{
 		Base:      esphome.Base{ObjectID: "phone_ring_sound", Name: "Call ring", Icon: "mdi:phone-ring", Category: esphome.CategoryConfig},
 		Options:   RingSounds,
@@ -218,7 +207,7 @@ func build() *Phone {
 func (p *Phone) Name() string { return "phone" }
 
 func (p *Phone) Entities() []esphome.Entity {
-	list := []esphome.Entity{p.status, p.peer, p.answer, p.hangup, p.dropIn, p.intercomRing, p.dnd, p.ringSound,
+	list := []esphome.Entity{p.status, p.peer, p.answer, p.hangup, p.dropIn, p.dnd, p.ringSound,
 		p.autoAnswerDelay, p.callWake, p.callReplies, p.callUnderlay, p.plainSIP}
 	// Calling by voice needs something to hear the words.
 	if layout.HasMicrophone() {
@@ -244,7 +233,6 @@ func autoAnswerDelayLabel(seconds int) string {
 // call's echo canceller, calling contacts by voice and the phone without encryption back the way they were left.
 func (p *Phone) Restore(c config.Config) {
 	p.dropIn.Set(c.Home.DropIn)
-	p.intercomRing.Set(!c.Home.IntercomRingDisabled)
 	p.ringSound.Set(RingSounds[RingSoundIndex()])
 	p.autoAnswerDelay.Set(autoAnswerDelayLabel(c.Home.IntercomAutoAnswerDelay))
 	p.dnd.Set(c.Home.DoNotDisturb)
@@ -353,17 +341,6 @@ func (p *Phone) SetDropIn(on bool) {
 	p.dropIn.Set(on)
 	slog.Info("intercom: drop in", "allowed", on)
 	p.Changed.Emit(p.State())
-}
-
-// SetIntercomRing enables or disables the intercom ringtone.
-func (p *Phone) SetIntercomRing(on bool) {
-	if err := config.Set().Home().IntercomRingDisabled(!on); err != nil {
-		slog.Error("phone: saving intercom ringtone", "err", err)
-		return
-	}
-
-	p.intercomRing.Set(on)
-	slog.Info("intercom: ringtone", "enabled", on)
 }
 
 // SetCallByVoice lets "call Mom" said to the device call a contact in the phone book, or leaves such
@@ -485,29 +462,10 @@ func (p *Phone) claim(phase Phase, peer string, incoming bool) {
 }
 
 func (p *Phone) set(f func(s *State)) {
-	p.setIf(func(s *State) bool {
-		f(s)
-		return true
-	})
-}
-
-func (p *Phone) setIf(f func(s *State) bool) {
 	p.mu.Lock()
 	before := p.state
-
-	if !f(&p.state) {
-		p.mu.Unlock()
-		return
-	}
+	f(&p.state)
 	if p.state.Phase == Idle {
-		// Liberer les references de l'appel interphone entrant
-		// avant qu'un nouvel appel puisse prendre la ligne.
-		if p.state.Intercom && p.state.Incoming {
-			p.intercomCall = nil
-			p.answered = nil
-			p.end = nil
-		}
-
 		p.state.Intercom, p.state.DropIn, p.state.Waiting = false, false, false
 	}
 	if p.state.Phase != before.Phase {
