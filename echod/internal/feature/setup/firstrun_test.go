@@ -28,9 +28,11 @@ func firstRunIn(t *testing.T) (*Feature, *http.Cookie, *int) {
 	ws, hc, k, au, ao, ch, cu := firstrun.WifiStatus, firstrun.HomeConnected, firstrun.Key, firstrun.AdoptUntil,
 		firstrun.OpenAdoption, firstrun.Chime, firstrun.CheckUpdates
 	t.Cleanup(func() {
+		// The updates step's look runs on its own and reads CheckUpdates: waited for before it is put back,
+		// or a look the scheduler has not got to yet races the put back and calls the real one.
+		firstrun.ResetForTests()
 		firstrun.WifiStatus, firstrun.HomeConnected, firstrun.Key, firstrun.AdoptUntil = ws, hc, k, au
 		firstrun.OpenAdoption, firstrun.Chime, firstrun.CheckUpdates = ao, ch, cu
-		firstrun.ResetForTests()
 	})
 	firstrun.WifiStatus = func() wifi.Status {
 		return wifi.Status{Connected: true, SSID: "Example Network", Address: "192.168.1.20"}
