@@ -28,7 +28,11 @@ func useSpoken(t *testing.T, answer func(command string, args map[string]any) (i
 		for { // an answer still on its way is let land before the next test starts afresh
 			spoken.mu.Lock()
 			asking := spoken.s.asking
-			spoken.s = spokenState{}
+			if !asking {
+				// Cleared only once nothing is asking: clearing asking itself let the wait end with a
+				// question still reading spokenFind as it was put back.
+				spoken.s = spokenState{}
+			}
 			spoken.mu.Unlock()
 			if !asking {
 				break
