@@ -20,7 +20,7 @@ can be complete and still never have been looked at on a real screen.
 | German (de) | 779 | 100% | christianschmidt (#322) | Echo Show 5 1st gen, v1.6.12 (#322) |
 | Italian (it) | 779 | 100% | angelor87 (#310, #353) | Echo Show 5 1st gen (#353) |
 | Japanese (ja) | 779 | 100% | lem0njuice0 (#270) | Echo Show 5 2nd gen (#270) |
-| Spanish (es) | 298 | 38% | KOPYk4T (#327) | Echo Show 5 2nd gen, v1.6.12 (#327) |
+| Spanish (es) | 301 | 38% | KOPYk4T (#327) | Echo Show 5 2nd gen, v1.6.12 (#327) |
 | Turkish (tr) | 779 | 100% | senolsun (#349) | Not yet |
 <!-- status:end -->
 

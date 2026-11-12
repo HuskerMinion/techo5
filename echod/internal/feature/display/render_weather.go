@@ -19,12 +19,23 @@ import (
 // weatherShow is how long the weather page stays after the question that brought it up.
 const weatherShow = 30 * time.Second
 
+// weatherRange is today's high and low, in the screen's language. The Spot has drawn these words
+// from the catalog for a while; the Show had them hardcoded, which left them English everywhere.
+func weatherRange(high, low float64) string {
+	return fmt.Sprintf("%s %.0f°   %s %.0f°", tr("weather_high"), high, tr("weather_low"), low)
+}
+
+// weatherRain is today's chance of rain, in the screen's language.
+func weatherRain(rain int) string {
+	return fmt.Sprintf("%s %d%%", tr("weather_rain_probability"), rain)
+}
+
 // weatherPage is today large on the left and the next days as columns on the right.
 // weatherPageKept is weatherPage, drawn only when what it shows has changed and copied otherwise: the
 // page is most of a frame's cost (its faded icon is a whole panel blended), and a moving sky asks for a
 // frame every 83 ms. What it shows is the reading, the forecast, the corner clock and the colors.
 func (r *renderer) weatherPageKept(s scene) {
-	key := fmt.Sprint(clockText(s.now), s.weather, s.forecast, r.w, r.h, walnut, cream, amber, dim, ember)
+	key := fmt.Sprint(clockText(s.now), s.weather, s.forecast, r.w, r.h, walnut, cream, amber, dim, ember, screenLang())
 	if key == r.weatherKey && len(r.weatherKept) == len(r.dst.Pix) {
 		copy(r.dst.Pix, r.weatherKept)
 		return
@@ -61,9 +72,9 @@ func (r *renderer) weatherPage(s scene) {
 	}
 	r.text(r.body, conditionWords(cond), r.margin, r.s(300), words)
 	if len(days) > 0 {
-		r.text(r.small, fmt.Sprintf("High %.0f°   Low %.0f°", days[0].High, days[0].Low), r.margin, r.s(345), dim)
+		r.text(r.small, weatherRange(days[0].High, days[0].Low), r.margin, r.s(345), dim)
 		if days[0].Rain >= 0 {
-			r.text(r.small, fmt.Sprintf("Rain %d%%", days[0].Rain), r.margin, r.s(385), rainBlue)
+			r.text(r.small, weatherRain(days[0].Rain), r.margin, r.s(385), rainBlue)
 		}
 	}
 
