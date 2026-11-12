@@ -1234,7 +1234,7 @@ func gatherSlideshow(h config.Slideshow) ([]hass.Media, error) {
 	var photos []hass.Media
 	err := hass.Get().BrowseTree(ctx, h.Source, folders, func(m hass.Media) bool {
 		for _, c := range m.Children {
-			if c.CanPlay && isPhoto(c) {
+			if SlideshowPhoto(c) {
 				photos = append(photos, c)
 			}
 		}
@@ -1243,7 +1243,13 @@ func gatherSlideshow(h config.Slideshow) ([]hass.Media, error) {
 	return photos, err
 }
 
-// isPhoto is whether a playable entry is a picture the device can show, going by the type Home
+// SlideshowPhoto is whether a folder's entry is a photo the slideshow shows. Whether Home Assistant
+// calls it playable is not asked: its Immich source marks every photo can_play false, only so that its
+// own media browser draws no play button over a picture (#523). Not being a folder, and being a
+// picture by its type or name, is what counts.
+func SlideshowPhoto(m hass.Media) bool { return !m.CanExpand && isPhoto(m) }
+
+// isPhoto is whether an entry is a picture the device can show, going by the type Home
 // Assistant gives it, or failing that its name. Only JPEG and PNG: those are the decoders built in,
 // and a GIF or a WebP would only be fetched to be skipped.
 func isPhoto(m hass.Media) bool {

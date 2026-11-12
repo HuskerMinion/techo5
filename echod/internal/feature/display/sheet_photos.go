@@ -189,7 +189,7 @@ func (d *Display) openFolder(id string, stack []string) {
 				switch {
 				case c.CanExpand:
 					d.folder.folders = append(d.folder.folders, c)
-				case c.CanPlay:
+				case home.SlideshowPhoto(c):
 					d.folder.photos++
 				}
 			}
