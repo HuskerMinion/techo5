@@ -3645,22 +3645,178 @@ var uiTranslations = map[string]map[string]string{
 		"done": "Gereed",
 		// Down to Dimmest until touched, spoken to or somebody near
 		"down_to_dimmest_until_touched_spoken_to_or_somebody_near": "Tot de donkerste stand, tot je tikt, ertegen praat of iemand in de buurt is",
+		// All cameras
+		"drawer_all_cameras": "Alle camera's",
+		// Announce
+		"drawer_announce": "Aankondigen",
+		// Announcements need a house word — the same word on every device here, set on each one's setup page. Until then this device neither sends them nor takes them.
+		"drawer_announce_setup": "Aankondigingen hebben een huiswoord nodig: hetzelfde woord op elk apparaat hier, ingesteld op de installatiepagina van elk. Tot dan verstuurt en ontvangt dit apparaat ze niet.",
 		// ANNOUNCEMENT
 		"drawer_announcement": "AANKONDIGING",
+		// Another room
+		"drawer_another_room": "Andere kamer",
+		// It sends when you stop talking
+		"drawer_auto_send": "Verstuurt zodra je stopt met praten",
+		// back to the clock
+		"drawer_back_to_the_clock": "terug naar de klok",
 		// Call
 		"drawer_call": "Bellen",
+		// %s ringing · tap here to stop
+		"drawer_call_alarm": "%s gaat af · tik om te stoppen",
+		// tap to close
+		"drawer_camera_close": "tik om te sluiten",
+		// Connecting to %s…
+		"drawer_camera_connect": "Verbinden met %s…",
+		// Up to six at once; tap one to see it alone
+		"drawer_camera_grid_hint": "Maximaal zes tegelijk; tik er één aan om die alleen te zien",
+		// off while muted
+		"drawer_camera_off_while_muted": "uit zolang gedempt",
+		// showing now
+		"drawer_camera_showing_now": "wordt nu getoond",
+		// tap to show
+		"drawer_camera_tap_to_show": "tik om te tonen",
+		// Connecting…
+		"drawer_connecting": "Verbinden…",
+		// %d to call
+		"drawer_d_contacts_to_call": "%d om te bellen",
+		// %d · tap, then turn
+		"drawer_d_tap_then_turn": "%d · tik, dan draaien",
+		// from Home Assistant
+		"drawer_dashboard_from_home_assistant": "vanuit Home Assistant",
+		// %d other devices
+		"drawer_device_count": "%d andere apparaten",
+		// TAP TO DISMISS
+		"drawer_dismiss": "TIK OM TE SLUITEN",
+		// No stations in this list yet
+		"drawer_empty_stations": "Nog geen zenders in deze lijst",
+		// End talk  %d:%02d
+		"drawer_end_talk": "Gesprek beëindigen  %d:%02d",
 		// Favorites
 		"drawer_favorites": "Favorieten",
+		// forecast
+		"drawer_forecast": "voorspelling",
+		// Go ahead
+		"drawer_go_ahead": "Zeg het maar",
+		// Goes to %s
+		"drawer_goes_to": "Gaat naar %s",
+		// tap a camera to see it alone  ·  tap here to close
+		"drawer_grid_close": "tik een camera aan om die alleen te zien  ·  tik hier om te sluiten",
+		// all rooms in the group
+		"drawer_group_stop": "alle kamers in de groep",
+		// Heard on %s
+		"drawer_heard_on": "Gehoord op %s",
+		// Intercom, in the house
+		"drawer_intercom": "Intercom, in huis",
+		// Asking Home Assistant for stations…
+		"drawer_loading_stations": "Zenders bij Home Assistant opvragen…",
+		// Local stations
+		"drawer_local": "Zenders in de buurt",
+		// microphone is off
+		"drawer_microphone_is_off": "microfoon is uit",
+		// microphone is on
+		"drawer_microphone_is_on": "microfoon is aan",
 		// Mute
 		"drawer_mute": "Geluid uit",
+		// needs a house word
+		"drawer_needs_a_house_word": "heeft een huiswoord nodig",
+		// Nobody to call yet. Give every device the same house word on its setup page to call between rooms, or sign the phone in (the phone_account action) for your contacts.
+		"drawer_no_calls": "Nog niemand om te bellen. Geef elk apparaat hetzelfde huiswoord op zijn installatiepagina om tussen kamers te bellen, of meld de telefoon aan (de phone_account-actie) voor je contacten.",
+		// No cameras yet. Set a Home Assistant token to list them all, or pick some with the home_cameras action.
+		"drawer_no_cameras": "Nog geen camera's. Stel een Home Assistant-token in om ze allemaal te tonen, of kies er een paar met de home_cameras-actie.",
+		// No cameras: None is chosen for Home Assistant's cameras, on the setup page or with the home_cameras action.
+		"drawer_no_cameras_disabled": "Geen camera's: voor de camera's van Home Assistant is Geen gekozen, op de installatiepagina of met de home_cameras-actie.",
+		// No stations within 100 km
+		"drawer_no_local": "Geen zenders binnen 100 km",
+		// no other devices found
+		"drawer_no_other_devices": "geen andere apparaten gevonden",
+		// No other devices found yet
+		"drawer_no_peers": "Nog geen andere apparaten gevonden",
+		// No picture
+		"drawer_no_picture": "Geen beeld",
+		// No stations yet. Give the device a Home Assistant token (the home_assistant action) for local and popular stations, or add your own with home_radio.
+		"drawer_no_radio": "Nog geen zenders. Geef het apparaat een Home Assistant-token (de home_assistant-actie) voor lokale en populaire zenders, of voeg je eigen toe met home_radio.",
+		// No to-do lists are chosen. Choose them on the setup page.
+		"drawer_no_todo": "Geen takenlijsten gekozen. Kies ze op de installatiepagina.",
+		// nobody to call yet
+		"drawer_nobody_to_call_yet": "nog niemand om te bellen",
+		// 1 other device
+		"drawer_one_device": "1 ander apparaat",
 		// Paused
 		"drawer_paused": "Gepauzeerd",
+		// paused · pick a station
+		"drawer_paused_pick_a_station": "gepauzeerd · kies een zender",
 		// Phone
 		"drawer_phone": "Telefoon",
+		// Playing
+		"drawer_playing": "Speelt",
+		// Playing now
+		"drawer_playing_now": "Speelt nu",
+		// playing · pick a station
+		"drawer_playing_pick_a_station": "speelt · kies een zender",
+		// Popular worldwide
+		"drawer_popular": "Wereldwijd populair",
 		// Radio
 		"drawer_radio": "Radio",
+		// radio stations
+		"drawer_radio_stations": "radiozenders",
+		// Listening
+		"drawer_recording": "Luistert",
+		// Say something
+		"drawer_say_something": "Zeg iets",
+		// TAP TO SEND  ·  HOLD TO CANCEL
+		"drawer_send_hint": "TIK OM TE VERSTUREN  ·  HOUD VAST OM TE ANNULEREN",
+		// display, sound, alarms
+		"drawer_settings_display_sound_alarms": "scherm, geluid, wekkers",
+		// Or say \"show %s\"
+		"drawer_show_camera": "Of zeg \"laat %s zien\"",
+		// tap the screen to wake
+		"drawer_sleep_tap_the_screen_to_wake": "tik op het scherm om het te wekken",
 		// Speak
 		"drawer_speak": "Spreken",
+		// Speak now
+		"drawer_speak_now": "Spreek nu",
+		// SPEAKING TO THE HOUSE
+		"drawer_speaking_house": "SPREEKT HET HELE HUIS TOE",
+		// Could not list the stations
+		"drawer_station_error": "Kon de zenders niet laden",
+		// Stop the music
+		"drawer_stop_music": "Stop de muziek",
+		// Stop the radio
+		"drawer_stop_radio": "Stop de radio",
+		// Talk
+		"drawer_talk": "Spreken",
+		// Talk: %s
+		"drawer_talk_error": "Spreken: %s",
+		// tap to ask
+		"drawer_talk_tap_to_ask": "tik om te vragen",
+		// this Spot · hold for the list
+		"drawer_this_spot_hold_for_the_list": "deze Spot · houd vast voor de lijst",
+		// none running
+		"drawer_timer_none_running": "geen actieve timer",
+		// ringing · tap to stop
+		"drawer_timer_ringing_tap_to_stop": "gaat af · tik om te stoppen",
+		// %s left
+		"drawer_timer_s_left": "nog %s",
+		// %s left · %d timers
+		"drawer_timer_s_left_d_timers": "nog %s · %d timers",
+		// To-do
+		"drawer_todo": "Taken",
+		// Nothing to do
+		"drawer_todo_empty": "Niets te doen",
+		// Try again
+		"drawer_try_again": "Opnieuw proberen",
+		// Try Popular worldwide
+		"drawer_try_popular": "Probeer Wereldwijd populair",
+		// turn on in Home Assistant
+		"drawer_turn_on_in_home_assistant": "aanzetten in Home Assistant",
+		// turn · tap to play
+		"drawer_turn_tap_to_play": "draaien · tik om af te spelen",
+		// turn · tap to stop
+		"drawer_turn_tap_to_stop": "draaien · tik om te stoppen",
+		// turn · tap to stop all rooms
+		"drawer_turn_tap_to_stop_all_rooms": "draaien · tik stopt alles",
+		// turn the ring · tap when done
+		"drawer_turn_the_ring_tap_when_done": "draai aan de ring · tik als je klaar bent",
 		// Unmute
 		"drawer_unmute": "Geluid aan",
 		// Encrypted with this device's key
@@ -3717,6 +3873,8 @@ var uiTranslations = map[string]map[string]string{
 		"lets_home_assistant_hear_nearby_devices": "Laat Home Assistant apparaten in de buurt waarnemen",
 		// %d of %d
 		"level_of": "%d van %d",
+		// Loading the rain map…
+		"loading_the_rain_map": "Regenradar laden…",
 		// Look
 		"look": "Uiterlijk",
 		// Louder speech
@@ -3761,6 +3919,8 @@ var uiTranslations = map[string]map[string]string{
 		"night_hours": "Nachturen",
 		// No login
 		"no_login": "Geen aanmelding",
+		// No rain map:
+		"no_rain_map": "Geen regenradar: ",
 		// Not available on this build
 		"not_available_on_this_build": "Niet beschikbaar in deze build",
 		// Not connected
@@ -4002,8 +4162,24 @@ var uiTranslations = map[string]map[string]string{
 		"ssh_keys": "SSH-sleutels",
 		// Stop
 		"stop": "Stoppen",
+		// On until the %s alarm
+		"sunrise_alarm": "Aan tot de wekker van %s",
 		// Before alarms that don't choose their own
 		"sunrise_default_description": "Voor wekkers die er zelf geen kiezen",
+		// On while the alarm rings
+		"sunrise_ringing": "Aan terwijl de wekker afgaat",
+		// The light is coming up now
+		"sunrise_rising": "Het licht komt nu op",
+		// Skip
+		"sunrise_skip_action": "Overslaan",
+		// Skipped: the alarm at %s
+		"sunrise_skip_done": "Overgeslagen: de wekker van %s",
+		// Not skipped: the alarm at %s
+		"sunrise_skip_refused": "Niet overgeslagen: de wekker van %s",
+		// On until the %s snooze
+		"sunrise_snooze": "Aan tot het sluimeren om %s",
+		// On until %s
+		"sunrise_until": "Aan tot %s",
 		// Talk on the camera page
 		"talk_on_the_camera_page": "Spreken op de camerapagina",
 		// Talk through cameras
@@ -4362,6 +4538,12 @@ var uiTranslations = map[string]map[string]string{
 		"ui_privacy": "Privacy",
 		// Privacy & Security
 		"ui_privacy_security": "Privacy en beveiliging",
+		// Radar
+		"ui_radar": "Radar",
+		// latest
+		"ui_radar_latest": "nieuwste",
+		// RADAR
+		"ui_radar_variant": "RADAR",
 		// Reach this device from away: off
 		"ui_reach_this_device_from_away_off": "Dit apparaat op afstand bereiken: uit",
 		// Remote access and how this device is reached
@@ -4442,6 +4624,8 @@ var uiTranslations = map[string]map[string]string{
 		"ui_starting": "Starten…",
 		// Starting
 		"ui_starting_variant": "Starten",
+		// Stations
+		"ui_stations": "Zenders",
 		// Steps from the volume
 		"ui_steps_from_the_volume": "Stappen vanaf het volume",
 		// Stopping…
@@ -4450,6 +4634,10 @@ var uiTranslations = map[string]map[string]string{
 		"ui_stops_the_music_after_a_while": "Stopt de muziek na een tijdje",
 		// Sun with a face
 		"ui_sun_with_a_face": "Zon met een gezicht",
+		// Sun up %s · down %s
+		"ui_sunrise_sunset_times": "Zon op %s · onder %s",
+		// swipe for the forecast
+		"ui_swipe_for_the_forecast": "veeg voor de voorspelling",
 		// Tap a color for each part; the theme becomes Custom
 		"ui_tap_a_color_for_each_part_the_theme_becomes_custom": "Tik een kleur voor elk onderdeel; het thema wordt Custom",
 		// Tap again to delete it
@@ -4542,8 +4730,22 @@ var uiTranslations = map[string]map[string]string{
 		"weather_alerts": "Weerwaarschuwingen",
 		// Weather animation
 		"weather_animation": "Weeranimatie",
+		// Forecast needs a Home Assistant token
+		"weather_forecast_needs_a_home_assistant_token": "Voorspelling vereist een Home Assistant-token",
+		// Home Assistant forecast
+		"weather_ha_forecast": "Home Assistant-voorspelling",
+		// High
+		"weather_high": "Max",
+		// Low
+		"weather_low": "Min",
+		// Home Assistant has not sent a reading
+		"weather_no_reading_from_home_assistant": "Home Assistant heeft nog geen meting gestuurd",
+		// No weather yet
+		"weather_no_weather_yet": "Nog geen weer",
 		// Weather %d
 		"weather_number": "Weer %d",
+		// Rain
+		"weather_rain_probability": "Regen",
 		// S M T W T F S
 		"weekday_initials": "Z M D W D V Z",
 		// Weekdays
