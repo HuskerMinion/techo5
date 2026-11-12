@@ -54,6 +54,12 @@ func one(t *testing.T, body []byte) Binary {
 }
 
 func TestDownloadChecksWhatArrived(t *testing.T) {
+	// Nothing listens on 127.0.0.1:1, but not every network says so: WSL's mirrored networking drops
+	// the connection attempt rather than refusing it, and then only the watchdog ends each try. These
+	// keep that to one short try instead of five of two minutes each.
+	set(t, &stallTimeout, 2*time.Second)
+	set(t, &tries, 1)
+
 	dir := t.TempDir()
 	b := one(t, []byte("a new echod"))
 
