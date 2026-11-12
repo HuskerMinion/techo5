@@ -19,6 +19,7 @@ func TestWeatherLabelsInTheScreensLanguage(t *testing.T) {
 		{"en", "High 10°   Low 6°", "Rain 23%"},
 		{"de", "Max 10°   Min 6°", "Regen 23%"},
 		{"fr", "Max 10°   Min 6°", "Pluie 23%"},
+		{"es", "Máx 10°   Mín 6°", "Lluvia 23%"},
 	}
 	for _, c := range cases {
 		if err := config.Set().Screen().Language(c.lang); err != nil {
