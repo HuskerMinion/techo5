@@ -341,7 +341,7 @@ func TestTheLibrarysTaps(t *testing.T) {
 	d := &Display{r: r, poke: make(chan struct{}, 1)}
 	sheet := libSheetWith(libAlbums, libEntries("album", 40), "media_player.ma_kitchen")
 	sheet.roots[libAlbums].scroll = 150
-	d.dashLibrary = &sheet
+	setLibUp(d, &sheet)
 	draw := func() []mediaZone {
 		zones, _ := libDraw(r, d.libraryViewNow().sheet)
 		return zones
@@ -427,7 +427,7 @@ func TestTheLibraryLeavesAfterAPlay(t *testing.T) {
 		d.dash, d.away = true, true
 		sheet := libSheetWith(libTracks, libEntries("track", 8), c.target)
 		sheet.from = c.from
-		d.dashLibrary = &sheet
+		setLibUp(d, &sheet)
 		zones, _ := libDraw(r, sheet)
 		d.libraryTap(libMiddle(libFind(t, zones, libPartItem, 0)))
 		if d.libraryViewNow() == nil || leave == nil {
@@ -532,7 +532,7 @@ func TestQueueingFromTheLibraryOnlyAppends(t *testing.T) {
 
 		d := &Display{poke: make(chan struct{}, 1)}
 		sheet := libSheetWith(libAlbums, nil, target)
-		d.dashLibrary = &sheet
+		setLibUp(d, &sheet)
 		album := libEntries("album", 1)[0]
 		d.libPlayTapped(&sheet, album, "album", true, 0, mode)
 
@@ -552,7 +552,7 @@ func TestQueueingFromTheLibraryOnlyAppends(t *testing.T) {
 		if left != 0 {
 			t.Errorf("%s: the library left after queueing", mode)
 		}
-		if d.dashLibrary == nil {
+		if libUp(d) == nil {
 			t.Errorf("%s: the library was put away", mode)
 		}
 	}
@@ -562,7 +562,7 @@ func TestQueueingFromTheLibraryOnlyAppends(t *testing.T) {
 	left = 0
 	d := &Display{poke: make(chan struct{}, 1)}
 	sheet := libSheetWith(libTracks, nil, target)
-	d.dashLibrary = &sheet
+	setLibUp(d, &sheet)
 	track := libEntries("track", 1)[0]
 	d.libPlayTapped(&sheet, track, "track", false, 0, libEnqueueReplace)
 	if on, _ := putOn.Load(target); on != track.URI {
@@ -597,20 +597,20 @@ func TestAHeldItemOpensItsActionSheet(t *testing.T) {
 	d := &Display{r: r, poke: make(chan struct{}, 1)}
 	albums := libEntries("album", 12)
 	sheet := libSheetWith(libAlbums, albums, "media_player.ma_kitchen")
-	d.dashLibrary = &sheet
+	setLibUp(d, &sheet)
 	zones, _ := libDraw(r, sheet)
 	if !d.libraryHold(libMiddle(libFind(t, zones, libPartItem, 2))) {
 		t.Fatal("a held album did not open its action sheet")
 	}
-	m := d.dashLibrary.menu
+	m := libUp(d).menu
 	if !m.open || m.entry.URI != albums[2].URI || m.kind != "album" || m.item != 2 {
 		t.Fatalf("the sheet is for %+v, want album 2", m)
 	}
-	if !d.dashLibrary.isLit(2) {
+	if !libUp(d).isLit(2) {
 		t.Error("the held album is not drawn lit under its sheet")
 	}
 
-	zones, _ = libDraw(r, *d.dashLibrary)
+	zones, _ = libDraw(r, *libUp(d))
 	count := libCount(zones)
 	if count[libPartMenu] != libMenuChoices || count[libPartMenuOut] != 1 || len(zones) != libMenuChoices+1 {
 		t.Fatalf("with the sheet up the parts are %v, want only its %d choices and the rest", count, libMenuChoices)
@@ -628,21 +628,21 @@ func TestAHeldItemOpensItsActionSheet(t *testing.T) {
 		got[0].Data["media_id"] != albums[2].URI {
 		t.Errorf("Play next asked %+v, want the album played next", got)
 	}
-	if d.dashLibrary == nil || d.dashLibrary.menu.open {
+	if libUp(d) == nil || libUp(d).menu.open {
 		t.Error("after Play next the library should still be up, with the sheet put away")
 	}
 
 	// Held again, then a tap off the choices: put away, nothing played.
-	zones, _ = libDraw(r, *d.dashLibrary)
+	zones, _ = libDraw(r, *libUp(d))
 	if !d.libraryHold(libMiddle(libFind(t, zones, libPartItem, 2))) {
 		t.Fatal("the album held again did not open its sheet")
 	}
-	libDraw(r, *d.dashLibrary)
+	libDraw(r, *libUp(d))
 	d.libraryTap(r.s(10), r.h-r.s(10))
 	if n := len(asked()); n != 1 {
 		t.Errorf("a tap off the sheet played something: %+v", asked())
 	}
-	if d.dashLibrary.menu.open {
+	if libUp(d).menu.open {
 		t.Error("a tap off the sheet left it up")
 	}
 }
@@ -655,7 +655,7 @@ func TestOnlyPlayableItemsOpenTheActionSheet(t *testing.T) {
 	d := &Display{r: r, poke: make(chan struct{}, 1)}
 
 	radio := libSheetWith(libRadio, libEntries("radio", 6), "media_player.ma_kitchen")
-	d.dashLibrary = &radio
+	setLibUp(d, &radio)
 	zones, _ := libDraw(r, radio)
 	if d.libraryHold(libMiddle(libFind(t, zones, libPartItem, 0))) {
 		t.Error("a held station opened the sheet")
@@ -665,12 +665,12 @@ func TestOnlyPlayableItemsOpenTheActionSheet(t *testing.T) {
 	}
 
 	noPlayer := libSheetWith(libAlbums, libEntries("album", 6), "")
-	d.dashLibrary = &noPlayer
+	setLibUp(d, &noPlayer)
 	zones, _ = libDraw(r, noPlayer)
 	if d.libraryHold(libMiddle(libFind(t, zones, libPartItem, 0))) {
 		t.Error("with no player the sheet opened")
 	}
-	if d.dashLibrary.menu.open {
+	if libUp(d).menu.open {
 		t.Error("the sheet is open")
 	}
 }
@@ -682,7 +682,7 @@ func TestTheLibrarysSearchTypes(t *testing.T) {
 	r := newRenderer(image.NewRGBA(image.Rect(0, 0, showWide, showHigh)))
 	d := &Display{r: r, poke: make(chan struct{}, 1)}
 	sheet := libSheetWith(libSearch, nil, "media_player.ma_kitchen")
-	d.dashLibrary = &sheet
+	setLibUp(d, &sheet)
 	zones, _ := libDraw(r, sheet)
 	d.libraryTap(libMiddle(libFind(t, zones, libPartField, -1)))
 	if !d.libraryViewNow().sheet.typing {
@@ -821,7 +821,7 @@ func TestAnArtistsAlbumsScrollAlong(t *testing.T) {
 	artist.sections = []libSection{{word: libAlbums, show: libShowRow, kind: "album", entries: libEntries("album", 12)},
 		{word: libWordTopTracks, show: libShowTracks, kind: "track", entries: libEntries("track", 5)}}
 	sheet.stack = []libPage{artist}
-	d.dashLibrary = &sheet
+	setLibUp(d, &sheet)
 	zones, _ := libDraw(r, sheet)
 	row := libFind(t, zones, libPartRow, 0)
 	at := image.Pt(row.r.Min.X+r.s(40), row.r.Min.Y+r.s(40))
@@ -855,7 +855,7 @@ func TestAnEmptyTabOffersTheSearch(t *testing.T) {
 	d := &Display{r: r, poke: make(chan struct{}, 1)}
 	for _, tab := range []int{libRadio, libPlaylists} {
 		sheet := libSheetWith(tab, nil, "media_player.ma_kitchen")
-		d.dashLibrary = &sheet
+		setLibUp(d, &sheet)
 		zones, _ := libDraw(r, sheet)
 		d.libraryTap(libMiddle(libFind(t, zones, libPartGoSearch, -1)))
 		if l := d.libraryViewNow().sheet; l.tab != libSearch {

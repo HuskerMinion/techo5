@@ -853,9 +853,9 @@ func (f *Feature) advance(force bool) {
 	if !due {
 		return
 	}
-	// Behind after a swipe back: the slideshow carries on through what was seen. One that can't be
-	// fetched again is let go of (showSeen), and a new photo comes up instead, so a deleted one doesn't
-	// hold the slideshow where it is.
+	// Behind after a swipe back: the slideshow carries on through what was seen. When the next one can't
+	// be fetched again, a new photo comes up instead (showSeen), so a deleted one doesn't hold the
+	// slideshow where it is.
 	if behind && !force && f.showSeen(+1) {
 		return
 	}
@@ -978,8 +978,11 @@ func (f *Feature) step(dir int) {
 }
 
 // showSeen puts up a photo already seen, dir steps from the one up in the history, fetched again, and
-// reports whether it did. One that can't be fetched again (deleted since, or its source gone) is taken out
-// of the history, so it isn't tried again. Called with slideshowStep held.
+// reports whether it did. Going forward, a caller that gets false fetches a new photo instead, which lets
+// go of what was ahead as a browser's forward pages go (remember), so nothing is taken out here: a source
+// that is only down for a while must not wear the history away a photo a tick. Going back, the swipe is
+// somebody's, one at a time, and a photo that can't be fetched again (deleted since) is taken out, or the
+// way back past it would be shut. Called with slideshowStep held.
 func (f *Feature) showSeen(dir int) bool {
 	f.mu.Lock()
 	i, gen := f.slideshow.pos+dir, f.slideshowGen
@@ -994,7 +997,7 @@ func (f *Feature) showSeen(dir int) bool {
 	if err != nil {
 		slog.Warn("home: slideshow photo seen before", "id", p.ids[0], "err", err)
 		f.mu.Lock()
-		if f.slideshowGen == gen && i < len(f.slideshow.hist) {
+		if dir < 0 && f.slideshowGen == gen && i < len(f.slideshow.hist) {
 			f.slideshow.hist = slices.Delete(slices.Clone(f.slideshow.hist), i, i+1)
 			if i < f.slideshow.pos {
 				f.slideshow.pos--

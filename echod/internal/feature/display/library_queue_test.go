@@ -126,7 +126,7 @@ func TestATappedQueueItemPlaysFromIt(t *testing.T) {
 	sheet := libSheetWith(libQueue, nil, "media_player.ma_kitchen")
 	sheet.roots[libQueue].queue = "up0a1b2c3d"
 	sheet.roots[libQueue].sections = []libSection{{word: -1, show: libShowTracks, kind: "track", entries: libQueueTracks(8)}}
-	d.dashLibrary = &sheet
+	setLibUp(d, &sheet)
 	zones, _ := libDraw(r, sheet)
 
 	d.libraryTap(libMiddle(libFind(t, zones, libPartItem, 0)))
@@ -163,7 +163,7 @@ func TestATappedQueueItemPlaysFromItWhenAllowed(t *testing.T) {
 	sheet := libSheetWith(libQueue, nil, "media_player.ma_kitchen")
 	sheet.roots[libQueue].queue = "up0a1b2c3d"
 	sheet.roots[libQueue].sections = []libSection{{word: -1, show: libShowTracks, kind: "track", entries: libQueueTracks(8)}}
-	d.dashLibrary = &sheet
+	setLibUp(d, &sheet)
 	zones, _ := libDraw(r, sheet)
 	d.libraryTap(libMiddle(libFind(t, zones, libPartItem, 5)))
 	waitUntil(t, "play_index", func() bool { return len(sent()) == 1 })
@@ -184,7 +184,7 @@ func TestAHeldQueueItemIsMovedOrRemoved(t *testing.T) {
 	sheet := libSheetWith(libQueue, nil, "media_player.ma_kitchen")
 	sheet.roots[libQueue].loaded = false
 	libQueueOf = func(string) string { return "up0a1b2c3d" }
-	d.dashLibrary = &sheet
+	setLibUp(d, &sheet)
 	d.libLoad(sheet.roots[libQueue].id)
 	waitUntil(t, "the queue read", func() bool {
 		p := d.libraryViewNow().sheet.roots[libQueue]
@@ -199,16 +199,16 @@ func TestAHeldQueueItemIsMovedOrRemoved(t *testing.T) {
 		{libMenuRemove, `player_queues/delete_item {"item_id_or_index":"q4","queue_id":"up0a1b2c3d"}`},
 		{libMenuMoveNext, `player_queues/move_item {"pos_shift":0,"queue_id":"up0a1b2c3d","queue_item_id":"q4"}`},
 	} {
-		zones, _ := libDraw(r, *d.dashLibrary)
+		zones, _ := libDraw(r, *libUp(d))
 		if !d.libraryHold(libMiddle(libFind(t, zones, libPartItem, 4))) {
 			t.Fatal("a held queue item did not open its sheet")
 		}
-		m := d.dashLibrary.menu
+		m := libUp(d).menu
 		if m.queue != "up0a1b2c3d" || m.pos != 4 || m.entry.QueueItemID != "q4" {
 			t.Fatalf("the sheet is %+v", m)
 		}
 		before := len(sent())
-		zones, _ = libDraw(r, *d.dashLibrary)
+		zones, _ = libDraw(r, *libUp(d))
 		d.libraryTap(libMiddle(libFind(t, zones, libPartMenu, slices.Index(m.choices, c.choice))))
 		waitUntil(t, "the queue read again", func() bool {
 			return asked(sent()[before:], c.want, "player_queues/get", "player_queues/items")
@@ -216,12 +216,12 @@ func TestAHeldQueueItemIsMovedOrRemoved(t *testing.T) {
 	}
 
 	// The one playing can only be marked a favorite.
-	zones, _ := libDraw(r, *d.dashLibrary)
+	zones, _ := libDraw(r, *libUp(d))
 	waitUntil(t, "the queue shown again", func() bool { return !d.libraryViewNow().sheet.roots[libQueue].loading })
 	if !d.libraryHold(libMiddle(libFind(t, zones, libPartItem, 0))) {
 		t.Fatal("the playing item held did not open its sheet")
 	}
-	if got := d.dashLibrary.menu.choices; !slices.Equal(got, []int{libMenuFavorite}) {
+	if got := libUp(d).menu.choices; !slices.Equal(got, []int{libMenuFavorite}) {
 		t.Errorf("the playing item offers %v", got)
 	}
 }
@@ -248,8 +248,8 @@ func TestNowPlayingGoesBackToTheLibrary(t *testing.T) {
 
 	d := &Display{poke: make(chan struct{}, 1)}
 	d.reopenLibrary()
-	if d.dashLibrary == nil || d.dashLibrary.tab != libArtists || !d.dash {
-		t.Fatalf("with none left, the button opened %+v (dashboard up %v)", d.dashLibrary, d.dash)
+	if libUp(d) == nil || libUp(d).tab != libArtists || !d.dash {
+		t.Fatalf("with none left, the button opened %+v (dashboard up %v)", libUp(d), d.dash)
 	}
 	waitUntil(t, "the new library's artists asked for", func() bool { return len(sent()) > 0 })
 
@@ -260,14 +260,14 @@ func TestNowPlayingGoesBackToTheLibrary(t *testing.T) {
 	opened.sections = []libSection{{word: -1, show: libShowTracks, kind: "track", entries: libEntries("track", 12)}}
 	sheet.stack = []libPage{opened}
 	sheet.menu = libMenu{open: true}
-	d.dashLibrary = &sheet
+	setLibUp(d, &sheet)
 	d.libLeave(target, "")
-	if d.dashLibrary != nil {
+	if libUp(d) != nil {
 		t.Fatal("the play did not put the library away")
 	}
 	before := len(sent())
 	d.reopenLibrary()
-	l := d.dashLibrary
+	l := libUp(d)
 	if l == nil || !d.dash {
 		t.Fatal("the button did not bring the library back")
 	}
@@ -285,7 +285,7 @@ func TestNowPlayingGoesBackToTheLibrary(t *testing.T) {
 	libQueueOf = func(string) string { return "up0a1b2c3d" }
 	queue := libSheetWith(libQueue, nil, target)
 	queue.roots[libQueue].sections = []libSection{{word: -1, show: libShowTracks, kind: "track", entries: libQueueTracks(2)}}
-	d.dashLibrary = &queue
+	setLibUp(d, &queue)
 	d.libLeave(target, "")
 	before = len(sent())
 	d.reopenLibrary()
@@ -301,19 +301,19 @@ func TestTheSheetMarksFavorites(t *testing.T) {
 	d := &Display{r: r, poke: make(chan struct{}, 1)}
 	albums := libEntries("album", 6)
 	sheet := libSheetWith(libAlbums, albums, "media_player.ma_kitchen")
-	d.dashLibrary = &sheet
+	setLibUp(d, &sheet)
 
 	choose := func(choice int) {
 		t.Helper()
-		zones, _ := libDraw(r, *d.dashLibrary)
+		zones, _ := libDraw(r, *libUp(d))
 		if !d.libraryHold(libMiddle(libFind(t, zones, libPartItem, 2))) {
 			t.Fatal("the album held did not open its sheet")
 		}
-		i := slices.Index(d.dashLibrary.menu.choices, choice)
+		i := slices.Index(libUp(d).menu.choices, choice)
 		if i < 0 {
-			t.Fatalf("the sheet offers %v, not %d", d.dashLibrary.menu.choices, choice)
+			t.Fatalf("the sheet offers %v, not %d", libUp(d).menu.choices, choice)
 		}
-		zones, _ = libDraw(r, *d.dashLibrary)
+		zones, _ = libDraw(r, *libUp(d))
 		d.libraryTap(libMiddle(libFind(t, zones, libPartMenu, i)))
 	}
 	choose(libMenuFavorite)
@@ -334,4 +334,18 @@ func TestTheSheetMarksFavorites(t *testing.T) {
 	if got := sent(); !asked(got, `music/favorites/add_item`, `music/favorites/remove_item {"library_item_id":"2","media_type":"album"}`) {
 		t.Errorf("sent %v", got)
 	}
+}
+
+// libUp is the library up now, and setLibUp puts one up, under the display's lock as the frames read
+// it: the library's own work (finding the player, loading a tab) edits it from goroutines meanwhile.
+func libUp(d *Display) *librarySheet {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	return d.dashLibrary
+}
+
+func setLibUp(d *Display, l *librarySheet) {
+	d.mu.Lock()
+	d.dashLibrary = l
+	d.mu.Unlock()
 }

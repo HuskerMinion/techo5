@@ -93,21 +93,55 @@ func TestAPhotoGoneSinceDoesNotStallTheSlideshow(t *testing.T) {
 	f.mu.Lock()
 	for _, p := range f.slideshow.hist {
 		if p.ids[0] == wide2 {
-			t.Error("the photo that's gone is still in the history")
+			t.Error("the photo that's gone is still ahead in the history")
 		}
 	}
 	f.mu.Unlock()
 
-	// A swipe back onto a photo that's gone puts nothing up, and holds nothing.
+	// A swipe back onto a photo that's gone puts nothing up, holds nothing, and takes it out, so the
+	// next swipe back isn't stopped by it again.
 	m.mu.Lock()
 	m.gone[wide1] = true
 	m.mu.Unlock()
+	f.mu.Lock()
+	n := len(f.slideshow.hist)
+	f.mu.Unlock()
 	f.step(-1)
 	f.mu.Lock()
-	held := !f.slideshow.holdUntil.IsZero()
+	held, after := !f.slideshow.holdUntil.IsZero(), len(f.slideshow.hist)
 	f.mu.Unlock()
 	if held {
 		t.Error("a swipe that put nothing up held the photo there")
+	}
+	if after != n-1 {
+		t.Errorf("history %d after a swipe back onto a photo that's gone, want %d", after, n-1)
+	}
+}
+
+// A source that is only down for a while doesn't wear the history away: the slideshow going on by
+// itself takes nothing out when the next photo seen can't be fetched.
+func TestAnOutageKeepsTheHistory(t *testing.T) {
+	m := &moreImmich{}
+	f := slideshowFeature(t, m, screensaver, wide1, wide2, wide3)
+	f.advanceSlideshow()
+	due(f)
+	f.advanceSlideshow()
+	f.step(-1)
+	m.mu.Lock()
+	m.gone = map[string]bool{wide1: true, wide2: true, wide3: true}
+	m.mu.Unlock()
+	f.mu.Lock()
+	f.slideshow.holdUntil = time.Time{}
+	f.mu.Unlock()
+	for range 3 {
+		due(f)
+		f.advanceSlideshow()
+	}
+	f.mu.Lock()
+	n := len(f.slideshow.hist)
+	f.mu.Unlock()
+	if n != 2 {
+		t.Errorf("history %d photos after an outage, want the 2 seen kept", n)
 	}
 }
 
