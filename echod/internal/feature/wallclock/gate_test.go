@@ -25,20 +25,17 @@ func TestPairingDropsTheLiveLinkBeforeItSearches(t *testing.T) {
 		dialsMu sync.Mutex
 		dials   int
 	)
-	oldDial := dialClock
-	dialClock = func(context.Context, string, time.Duration, time.Duration) (*conn, error) {
+	put(t, &dialClock, func(context.Context, string, time.Duration, time.Duration) (*conn, error) {
 		_, link := socketPair(t)
 		dialsMu.Lock()
 		dials++
 		dialsMu.Unlock()
 		return newConn(link), nil
-	}
-	defer func() { dialClock = oldDial }()
+	})
 
 	searched := make(chan struct{})
 	release := make(chan struct{})
-	oldPair := pairClock
-	pairClock = func(f *Feature) {
+	put(t, &pairClock, func(f *Feature) {
 		defer f.failed("No clock found in pairing mode")
 		f.mu.Lock()
 		live := f.live
@@ -48,8 +45,7 @@ func TestPairingDropsTheLiveLinkBeforeItSearches(t *testing.T) {
 		}
 		close(searched)
 		<-release
-	}
-	defer func() { pairClock = oldPair }()
+	})
 
 	ctx, cancel := context.WithCancel(context.Background())
 	done := make(chan error, 1)

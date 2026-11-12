@@ -462,6 +462,20 @@ func (f *Feature) Run(ctx context.Context) error {
 
 	delay := reconnectDelay
 	fails := 0
+	// failed counts a try that did not reach the clock and waits before the next. A wake (a pairing,
+	// a newly saved address, the switch) starts the back-off over, so a clock just paired is tried
+	// again soon if its first try misses, not after the wait the clock before it had reached.
+	failed := func() {
+		fails++
+		if fails >= statusAfterFails {
+			f.setStatus("Waiting for the clock")
+		}
+		if f.waitWoken(ctx, delay) {
+			delay, fails = reconnectDelay, 0
+		} else {
+			delay = nextDelay(delay)
+		}
+	}
 
 	for {
 		if ctx.Err() != nil {
@@ -513,12 +527,7 @@ func (f *Feature) Run(ctx context.Context) error {
 				return nil
 			}
 			slog.Warn("wall clock: could not connect", "address", cfg.Address, "err", err)
-			fails++
-			if fails >= statusAfterFails {
-				f.setStatus("Waiting for the clock")
-			}
-			f.wait(ctx, delay)
-			delay = nextDelay(delay)
+			failed()
 			continue
 		}
 		// A pairing that began while this dial was in flight had no live link to close. Hand the
@@ -536,12 +545,7 @@ func (f *Feature) Run(ctx context.Context) error {
 			f.clearLive(c)
 			c.close()
 			f.gate.Unlock()
-			fails++
-			if fails >= statusAfterFails {
-				f.setStatus("Waiting for the clock")
-			}
-			f.wait(ctx, delay)
-			delay = nextDelay(delay)
+			failed()
 			continue
 		}
 		fails = 0
@@ -659,5 +663,20 @@ func (f *Feature) wait(ctx context.Context, d time.Duration) bool {
 		return true
 	case <-t.C:
 		return true
+	}
+}
+
+// waitWoken is wait that says whether it was the config changing that ended it, rather than the time
+// running out or the context ending.
+func (f *Feature) waitWoken(ctx context.Context, d time.Duration) bool {
+	t := time.NewTimer(d)
+	defer t.Stop()
+	select {
+	case <-ctx.Done():
+		return false
+	case <-f.wake:
+		return true
+	case <-t.C:
+		return false
 	}
 }

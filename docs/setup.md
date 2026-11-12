@@ -2303,7 +2303,7 @@ looks for a clock for two minutes, pairs with it, trusts it and remembers its ad
 clock status** sensor says what it is doing, from Connecting to Connected or Waiting for the clock.
 A clock that cannot be reached is retried less and less often — ten seconds, then twenty, doubling
 to fifteen minutes — so a clock that is out of range, or out of batteries, is not paged thousands of
-times a day and is not kept awake by the attempts. It reconnects on its own within fifteen minutes
+times a day and is not kept awake by the attempts. It reconnects on its own within about fifteen minutes
 of coming back, and turning **Wall clock** off and on, or pairing, tries again at once.
 A clock that was paired to an Echo must be unpaired from Alexa first, since it stays paired to one
 controller. If you know the clock's address, type it under **Clock address** instead and Save.
