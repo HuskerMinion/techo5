@@ -464,6 +464,40 @@ star saves:
       data: { value: "{{ station }}" }
 ```
 
+**A station of your own.** The song and the cover come from iHeartRadio or TuneIn, looked up by the
+station's name, so a station on neither shows only its name. If yours publishes what it plays (a
+now-playing address, say), make `now` a template sensor whose state is the station's name and whose
+attributes carry the song, named as a media player's: `media_title`, `media_artist`,
+`media_album_name` and `entity_picture` (an address, or a path on Home Assistant such as
+`/local/cover.jpg`). While the sensor names the station that plays, the device shows those instead of
+asking a service, and follows them as they change. The device takes them for whichever station the
+sensor names, so leave them empty for every other station, as below. With all of them empty, the
+services are asked as before.
+
+```yaml
+rest:
+  - resource: https://radio.example.org/api/nowplaying
+    scan_interval: 20
+    sensor:
+      - name: My station song
+        value_template: "{{ value_json.title }}"
+        json_attributes: [title, artist, cover]
+
+template:
+  - sensor:
+      - name: Radio now
+        state: "{{ states('input_text.radio_now') }}"
+        attributes:
+          media_title: >-
+            {{ state_attr('sensor.my_station_song', 'title') if states('input_text.radio_now') == 'My Station' else '' }}
+          media_artist: >-
+            {{ state_attr('sensor.my_station_song', 'artist') if states('input_text.radio_now') == 'My Station' else '' }}
+          entity_picture: >-
+            {{ state_attr('sensor.my_station_song', 'cover') if states('input_text.radio_now') == 'My Station' else '' }}
+```
+
+Then pass `sensor.radio_now` as `now` in `home_radio`.
+
 **The star on the player.** Tapping the star while a station plays saves it to your favorites. The
 device does that by calling a script named exactly `script.radio_favorite_add_station`, with one
 field, `station` (the station's name), using the Home Assistant token. Nothing creates the script;
