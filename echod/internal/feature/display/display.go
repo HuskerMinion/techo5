@@ -2910,7 +2910,7 @@ func (d *Display) frame() (next time.Duration) {
 	if s.nowPlaying || s.strip {
 		// The Library button, on the page and in the strip both.
 		s.libraryWord = nowPlayingLibraryWord()
-		s.spoken, s.speed = d.spokenWord(s.radio, now)
+		s.spoken, s.speed = d.spokenWord(s.radio, s.paused, now)
 	}
 	if s.nowPlaying {
 		s.lyric, s.hasLyric = home.Get().LyricNow(s.radio, now)

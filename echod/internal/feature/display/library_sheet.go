@@ -8,6 +8,7 @@ import (
 	"log/slog"
 	"slices"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"time"
 	"unicode/utf8"
@@ -847,7 +848,37 @@ func libWithInProgress(ctx context.Context, c musicassistant.Client, kind string
 	if len(row) == 0 {
 		return []libSection{grid}
 	}
+	if kind == "podcast_episode" {
+		libFillEpisodes(ctx, c, row)
+	}
 	return []libSection{{word: libWordContinue, show: libShowRow, kind: kind, entries: row, resume: true}, grid}
+}
+
+// libEpisodeWait is how long the Continue listening row waits for its episodes read in full.
+const libEpisodeWait = 5 * time.Second
+
+// libFillEpisodes reads each episode of row in full, all at once, for its length and where it was
+// left: the server's list of what is in progress names them only. One not read in time, or at all,
+// stays as it was.
+func libFillEpisodes(ctx context.Context, c musicassistant.Client, row []musicassistant.Entry) {
+	ctx, cancel := context.WithTimeout(ctx, libEpisodeWait)
+	defer cancel()
+	var wg sync.WaitGroup
+	for i := range row {
+		wg.Add(1)
+		go func(e *musicassistant.Entry) {
+			defer wg.Done()
+			full, err := c.PodcastEpisode(ctx, *e)
+			if err != nil || !full.Usable() {
+				return
+			}
+			e.Duration, e.ResumeMS, e.FullyPlayed = full.Duration, full.ResumeMS, full.FullyPlayed
+			if e.Image == nil && len(e.Metadata.Images) == 0 {
+				e.Image, e.Metadata = full.Image, full.Metadata
+			}
+		}(&row[i])
+	}
+	wg.Wait()
 }
 
 func firstErr(errs ...error) error {

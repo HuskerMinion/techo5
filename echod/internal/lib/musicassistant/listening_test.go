@@ -7,7 +7,9 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"reflect"
+	"strings"
 	"testing"
+	"unicode/utf8"
 )
 
 type listenCall struct {
@@ -132,7 +134,8 @@ func TestTheQueuesListeningCalls(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !now.Active || now.State != "playing" || now.Speed != 1.25 || now.URI != "library://audiobook/5" || !now.SpokenWord() {
+	if !now.Active || now.State != "playing" || now.Speed != 1.25 || now.URI != "library://audiobook/5" || !now.SpokenWord() ||
+		now.Name != "Book" || now.ItemName != "Book" {
 		t.Errorf("now = %+v", now)
 	}
 	want := []listenCall{
@@ -168,12 +171,27 @@ func TestAnAudiobooksDetails(t *testing.T) {
 	}
 }
 
+// A description is kept to a few kilobytes, cut at a character's start.
+func TestALongDescriptionIsCut(t *testing.T) {
+	long := strings.Repeat("é", maxDescription)
+	var e Entry
+	if err := json.Unmarshal([]byte(`{"name":"x","metadata":{"description":"`+long+`"}}`), &e); err != nil {
+		t.Fatal(err)
+	}
+	if len(e.Description) > maxDescription+len("…") || !utf8.ValidString(e.Description) || !strings.HasSuffix(e.Description, "…") {
+		t.Errorf("description of %d bytes, valid %v", len(e.Description), utf8.ValidString(e.Description))
+	}
+}
+
 func TestPlainText(t *testing.T) {
 	for in, want := range map[string]string{
 		"Just words.":                          "Just words.",
 		"<b>Bold</b> and&nbsp;more":            "Bold and more",
 		"<div>One</div>\n\n<div>Two</div>":     "One\nTwo",
 		"Line one<br/>Line  two &quot;x&quot;": "Line one\nLine two \"x\"",
+		"<style>p { color: red }</style><p>Shown</p><script>var a = 1 < 2;</script>": "Shown",
+		"<!-- a note --><b>a < b and c > d</b>":                                      "a < b and c > d",
+		"if x <3 and y>2 &amp; done":                                                 "if x <3 and y>2 & done",
 	} {
 		if got := PlainText(in); got != want {
 			t.Errorf("PlainText(%q) = %q, want %q", in, got, want)

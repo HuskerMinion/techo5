@@ -45,10 +45,13 @@ func libResumeOffer(p *libPage) (int, bool) {
 }
 
 // libStartOver plays the book or episode of page p (of media type kind) from its beginning: a book from
-// its first chapter, when its page has them, an episode from its start.
+// its first chapter (the one its page lists first, or else the server's chapter 0, which is the first
+// when it numbers them from 0; a book without one is refused and so played and moved to its start), an
+// episode from its start.
 func (d *Display) libStartOver(l *librarySheet, p *libPage, kind string, lit int) {
 	chapter := -1
-	if kind == "audiobook" && p.what == libAudiobook {
+	if kind == "audiobook" {
+		chapter = 0
 		for _, s := range p.sections {
 			if s.kind == "chapter" && len(s.entries) > 0 && s.entries[0].TrackNumber > 0 {
 				chapter = s.entries[0].TrackNumber - 1

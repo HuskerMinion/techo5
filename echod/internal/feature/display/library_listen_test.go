@@ -174,6 +174,43 @@ func TestThePodcastsTabContinuesAndPages(t *testing.T) {
 	}
 }
 
+// The episodes of the Continue listening row are read in full, for their length and place: the list
+// of what is in progress names them only.
+func TestContinueListeningReadsEpisodesInFull(t *testing.T) {
+	c, asked := listenFakeMA(t, func(command string, args map[string]any) (int, string) {
+		switch command {
+		case "music/podcasts/library_items":
+			return 200, `[]`
+		case "music/in_progress_items":
+			return 200, `[{"item_id":"e1","provider":"rss","name":"Ep","media_type":"podcast_episode","uri":"rss://podcast_episode/e1"},
+				{"item_id":"e2","provider":"rss","name":"Ep 2","media_type":"podcast_episode","uri":"rss://podcast_episode/e2"}]`
+		case "music/podcasts/podcast_episode":
+			if args["item_id"] == "e2" {
+				return 500, ""
+			}
+			return 200, `{"item_id":"e1","provider":"rss","name":"Ep","media_type":"podcast_episode","uri":"rss://podcast_episode/e1",
+				"duration":1800,"resume_position_ms":900000}`
+		}
+		return 500, ""
+	})
+	secs, _, err := fetchLibPage(context.Background(), c, newLibPage(libPodcasts, musicassistant.Entry{}), 48)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(secs) != 2 || len(secs[0].entries) != 2 {
+		t.Fatalf("sections = %+v; want both episodes in the row", secs)
+	}
+	if e := secs[0].entries[0]; e.Duration != 1800 || e.ResumeMS != 900000 {
+		t.Errorf("episode = %+v; want its length and place", e)
+	}
+	if e := secs[0].entries[1]; e.Name != "Ep 2" || e.Duration != 0 {
+		t.Errorf("an episode that could not be read became %+v", e)
+	}
+	if n := len(asked()["music/podcasts/podcast_episode"]); n != 2 {
+		t.Errorf("episodes read %d times; want each once", n)
+	}
+}
+
 // A series' tile opens its parts, in order, with nothing to ask for; a book in the Continue listening
 // row plays at a tap rather than opening its page.
 func TestASeriesOpensAndContinueListeningPlays(t *testing.T) {

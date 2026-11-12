@@ -7,6 +7,7 @@ import (
 	"image"
 	"log/slog"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -32,8 +33,12 @@ var spokenSpeeds = []float64{0.75, 1, 1.25, 1.5, 2}
 
 // spokenState is what Music Assistant last said this device's queue plays, for the track key.
 type spokenState struct {
-	key           string
-	at            time.Time
+	key string
+	at  time.Time
+	// answered is the track key the answer in now was for, and named whether the page's title named
+	// its item then.
+	answered      string
+	named         bool
 	asking        bool
 	target, queue string
 	now           musicassistant.QueueNow
@@ -58,7 +63,13 @@ var spokenFind = func() (target, queue string) {
 // said, and how fast. It does not wait for an answer: one is asked for when the track (rd) has changed
 // or the last is old, and the screen is woken when it comes. A player followed from another room, and
 // a device without Music Assistant, never have one.
-func (d *Display) spokenWord(rd home.Radio, now time.Time) (bool, float64) {
+//
+// What Music Assistant says must be what the page shows: its queue playing while the page says playing
+// (paused while paused), and its item the one named. A book left paused on the queue while the device
+// plays a station of its own is not the station. Until the answer for a new title comes, the last one
+// stands, as far as the title goes: a book's title can change at a chapter's start, and a tap on back
+// meanwhile must not jump to another book.
+func (d *Display) spokenWord(rd home.Radio, paused bool, now time.Time) (bool, float64) {
 	c, set := libClient()
 	if !set || rd.Followed || rd.Title == "" {
 		return false, 1
@@ -68,7 +79,7 @@ func (d *Display) spokenWord(rd home.Radio, now time.Time) (bool, float64) {
 	defer spoken.mu.Unlock()
 	s := &spoken.s
 	if s.key != key {
-		*s = spokenState{key: key, asking: s.asking}
+		s.key, s.at = key, time.Time{} // asked again at once; the last answer stands until then
 	}
 	if !s.asking && now.Sub(s.at) >= spokenEvery {
 		s.asking = true
@@ -88,6 +99,7 @@ func (d *Display) spokenWord(rd home.Radio, now time.Time) (bool, float64) {
 			if spoken.s.key == key {
 				// An answer for a track gone since is not this one's: the next frame asks again.
 				spoken.s.target, spoken.s.queue, spoken.s.now, spoken.s.at = target, queue, n, time.Now()
+				spoken.s.answered = key
 			}
 			spoken.s.asking = false
 			spoken.mu.Unlock()
@@ -95,8 +107,31 @@ func (d *Display) spokenWord(rd home.Radio, now time.Time) (bool, float64) {
 		}()
 	}
 	q := s.now
-	on := q.SpokenWord() && q.Active && (q.State == "playing" || q.State == "paused")
+	if s.answered == key {
+		s.named = spokenNames(q, rd.Title)
+	}
+	want := "playing"
+	if paused {
+		want = "paused"
+	}
+	on := q.SpokenWord() && q.Active && q.State == want && s.named
 	return on, max(q.Speed, 0.5)
+}
+
+// spokenNames is whether title, what the page shows playing, names the queue's item: its name or the
+// queue's name for it, either holding the other (a chapter's title can carry the book's, or the other
+// way round), ignoring case.
+func spokenNames(q musicassistant.QueueNow, title string) bool {
+	t := strings.ToLower(strings.TrimSpace(title))
+	if t == "" {
+		return false
+	}
+	for _, n := range []string{q.Name, q.ItemName} {
+		if n = strings.ToLower(strings.TrimSpace(n)); n != "" && (strings.Contains(n, t) || strings.Contains(t, n)) {
+			return true
+		}
+	}
+	return false
 }
 
 // spokenWhere is the player and queue the last answer was for.
@@ -107,8 +142,10 @@ func spokenWhere() (target, queue string) {
 }
 
 // spokenSkipBy moves the book or episode playing on by seconds, or back for a negative number, through
-// Music Assistant's queue. When the token may not (the queue's controls need the queues' control
-// scope), Home Assistant is asked to seek from where the player says it is.
+// Music Assistant's queue. Only when the token may not (the queue's controls need the queues' control
+// scope) is Home Assistant asked to seek from where the player says it is: any other failure (a skip
+// past the end, a queue no longer playing, an answer that came too late for a skip that was made) is
+// left alone, as a seek then could go past the end, move something else, or skip twice.
 func spokenSkipBy(seconds int) {
 	c, set := libClient()
 	target, queue := spokenWhere()
@@ -123,7 +160,11 @@ func spokenSkipBy(seconds int) {
 		if err == nil {
 			return
 		}
-		slog.Warn("now playing: skip through Home Assistant instead", "forbidden", musicassistant.IsForbidden(err), "err", err)
+		if !musicassistant.IsForbidden(err) {
+			slog.Warn("now playing: skip", "err", err)
+			return
+		}
+		slog.Warn("now playing: skip through Home Assistant instead", "err", err)
 		st, serr := libPlayerState(target)
 		if serr != nil {
 			return

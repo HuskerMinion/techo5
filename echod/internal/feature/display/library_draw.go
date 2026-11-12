@@ -888,7 +888,11 @@ func (r *renderer) libDetails(e musicassistant.Entry, g libGeom, pal dashPal, fc
 		factLines = append(factLines[:1], r.fit(fc.value, factLines[1]+"…", g.inner))
 	}
 	var about []string
+	// Laid out every frame, so only as far as is shown: one line past most, to know to end on "…".
 	for _, para := range strings.Split(e.Description, "\n") {
+		if len(about) > most {
+			break
+		}
 		if para = strings.TrimSpace(para); para != "" {
 			about = append(about, r.wrapLines(fc.sub, para, g.inner)...)
 		}

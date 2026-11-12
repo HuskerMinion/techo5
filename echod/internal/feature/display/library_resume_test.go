@@ -131,6 +131,27 @@ func TestStartOverAndChaptersPlayThroughMusicAssistant(t *testing.T) {
 	}
 }
 
+// Start over from a held book's sheet, whose page (and so its chapters) was never opened, asks Music
+// Assistant for the book from chapter 0, rather than playing it on from its place and seeking after.
+func TestStartOverFromTheSheetAsksForChapterZero(t *testing.T) {
+	noLibrary(t)
+	taps := recordTaps(t)
+	ma := libListenMA(t, false)
+	d := &Display{poke: make(chan struct{}, 1)}
+	sheet := libSheetWith(libAudiobooks, nil, "media_player.ma_kitchen")
+	setLibUp(d, &sheet)
+	book := musicassistant.Entry{URI: "library://audiobook/5", ResumeMS: 120_000, MediaType: "audiobook"}
+	d.libMenuChose(&sheet, libMenu{open: true, entry: book, kind: "audiobook"}, libMenuStartOver)
+	waitUntil(t, "the play", func() bool { return len(ma()) == 1 })
+	if got := ma()[0]; got != "player_queues/play_media library://audiobook/5 0 <nil>" {
+		t.Errorf("asked %q; want the book from chapter 0", got)
+	}
+	time.Sleep(20 * time.Millisecond)
+	if len(taps()) != 0 {
+		t.Errorf("Home Assistant was asked %v as well", taps())
+	}
+}
+
 // When Music Assistant will not play on the player itself, or a book has no chapters to start from,
 // Home Assistant plays it and then seeks to the place asked for.
 func TestStartOverFallsBackToHomeAssistant(t *testing.T) {
@@ -148,7 +169,7 @@ func TestStartOverFallsBackToHomeAssistant(t *testing.T) {
 	setLibUp(d, &sheet)
 	book := musicassistant.Entry{URI: "library://audiobook/5", ResumeMS: 120_000}
 
-	// No chapters: Music Assistant is not asked (it would go on from where it was left).
+	// No chapters listed, and Music Assistant refuses: Home Assistant plays, then seeks to the start.
 	d.libStartOver(&sheet, &libPage{what: libAudiobook, entry: book}, "audiobook", libLitShuffle)
 	waitUntil(t, "a play and a seek", func() bool { return len(taps()) == 2 })
 	if a := taps(); a[0].Service != "music_assistant.play_media" || a[1].Service != "media_player.media_seek" || a[1].Data["seek_position"] != 0.0 {

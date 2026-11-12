@@ -7,6 +7,7 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"unicode/utf8"
 )
 
 // Listening to audiobooks and podcasts: the books folded by series, what this token's user is part way
@@ -107,8 +108,9 @@ type QueueNow struct {
 	// ("playing", "paused", "idle").
 	Active bool
 	State  string
-	// MediaType is the media type of the item playing (or left paused), URI its address.
-	MediaType, URI string
+	// MediaType is the media type of the item playing (or left paused), URI its address, Name its
+	// name, and ItemName the name the queue gives it.
+	MediaType, URI, Name, ItemName string
 	// Speed is how fast it plays, 1 for as recorded.
 	Speed float64
 }
@@ -125,6 +127,7 @@ func (c Client) Now(ctx context.Context, queueID string) (QueueNow, error) {
 		State   string  `json:"state"`
 		Speed   float64 `json:"playback_speed"`
 		Current *struct {
+			Name      string          `json:"name"`
 			MediaType string          `json:"media_type"`
 			MediaItem json.RawMessage `json:"media_item"`
 		} `json:"current_item"`
@@ -139,7 +142,7 @@ func (c Client) Now(ctx context.Context, queueID string) (QueueNow, error) {
 	if q.Current != nil {
 		var e Entry
 		_ = e.UnmarshalJSON(q.Current.MediaItem)
-		out.MediaType, out.URI = e.MediaType, e.URI
+		out.MediaType, out.URI, out.Name, out.ItemName = e.MediaType, e.URI, e.Name, q.Current.Name
 		if out.MediaType == "" {
 			out.MediaType = q.Current.MediaType
 		}
@@ -148,17 +151,42 @@ func (c Client) Now(ctx context.Context, queueID string) (QueueNow, error) {
 }
 
 var (
-	breakTags = regexp.MustCompile(`(?i)<\s*(br|/p|/div|/li|p|li)\b[^>]*>`)
-	anyTag    = regexp.MustCompile(`<[^>]*>`)
+	// Go's regexp has no back references, so each of the two blocks has its own.
+	scriptBlock = regexp.MustCompile(`(?is)<script\b.*?(</script\s*>|$)`)
+	styleBlock  = regexp.MustCompile(`(?is)<style\b.*?(</style\s*>|$)`)
+	comment     = regexp.MustCompile(`(?s)<!--.*?(-->|$)`)
+	breakTags   = regexp.MustCompile(`(?i)<(br|/p|/div|/li|p|li)\b[^>]*>`)
+	// anyTag is a tag only where one looks like one: a letter or a slash and a letter after the <, so
+	// "a < b and c > d" stays as it is.
+	anyTag = regexp.MustCompile(`</?[A-Za-z][^<>]*>`)
 )
 
-// PlainText is a description that can carry HTML as text to show: line breaks for breaks and
-// paragraphs, other tags left out, entities written as what they stand for, and runs of spaces and
-// blank lines closed up.
+// maxDescription is how much of a description an entry keeps, in bytes: a podcast's show notes can run
+// to tens of kilobytes, and a page shows a few lines of it.
+const maxDescription = 4 << 10
+
+// shortDescription is s cut to maxDescription at a character's start, with "…" where it was cut.
+func shortDescription(s string) string {
+	if len(s) <= maxDescription {
+		return s
+	}
+	cut := maxDescription
+	for cut > 0 && !utf8.RuneStart(s[cut]) {
+		cut--
+	}
+	return s[:cut] + "…"
+}
+
+// PlainText is a description that can carry HTML as text to show: scripts, styles and comments left
+// out with what is in them, line breaks for breaks and paragraphs, other tags left out, entities
+// written as what they stand for, and runs of spaces and blank lines closed up.
 func PlainText(s string) string {
 	if !strings.ContainsAny(s, "<&") {
 		return strings.TrimSpace(s)
 	}
+	s = scriptBlock.ReplaceAllString(s, "")
+	s = styleBlock.ReplaceAllString(s, "")
+	s = comment.ReplaceAllString(s, "")
 	s = breakTags.ReplaceAllString(s, "\n")
 	s = html.UnescapeString(anyTag.ReplaceAllString(s, ""))
 	var lines []string

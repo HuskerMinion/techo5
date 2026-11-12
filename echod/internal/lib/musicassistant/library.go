@@ -106,7 +106,7 @@ func (e *Entry) UnmarshalJSON(b []byte) error {
 				e.Metadata.Images = append(e.Metadata.Images, img)
 			}
 		}
-		e.Description = PlainText(looseText(meta.Description))
+		e.Description = shortDescription(PlainText(looseText(meta.Description)))
 		if e.Year == 0 {
 			e.Year = looseInt(meta.ReleaseDate) // an audiobook or an episode has its year only here
 		}
