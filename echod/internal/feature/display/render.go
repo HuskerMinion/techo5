@@ -249,6 +249,10 @@ type scene struct {
 	// libraryWord is the word on the Now Playing page's Library button, back to the music library;
 	// empty for no button (no Music Assistant set up).
 	libraryWord string
+	// spoken is an audiobook or a podcast episode playing, as Music Assistant says (listening.go): the
+	// page's back and forward go 30 seconds, and Now Playing has its speed, as fast as speed.
+	spoken bool
+	speed  float64
 
 	// pin is the settings lock's PIN pad (pin.go), drawn over everything but a call or a ring while open.
 	pin pinView
@@ -1357,9 +1361,9 @@ func (r *renderer) footer(s scene) {
 		r.text(r.tiny, s.slideshowTrouble, r.margin, y, dim)
 	}
 	right := playingWord(s)
-	if s.nowPlaying && s.libraryWord != "" && !s.modernMusic {
-		// The Library button has this corner; the page says itself what is playing. (The modern page has
-		// it beside the star instead.)
+	if s.nowPlaying && (s.libraryWord != "" && !s.modernMusic || s.spoken) {
+		// The Library button has this corner, or the speed button; the page says itself what is playing.
+		// (The modern page has the Library button beside the star instead.)
 		return
 	}
 	if s.bt.Connected != "" {
