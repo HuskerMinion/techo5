@@ -3,6 +3,7 @@
 package display
 
 import (
+	"bytes"
 	"cmp"
 	"context"
 	"errors"
@@ -10,12 +11,14 @@ import (
 	"image/color"
 	"image/draw"
 	"image/png"
+	"math/rand/v2"
 	"os"
 	"path/filepath"
 	"sync"
 	"testing"
 	"time"
 
+	"github.com/makiuchi-d/gozxing"
 	"rsc.io/qr"
 
 	"github.com/HuskerMinion/techo5/echod/internal/config"
@@ -175,6 +178,28 @@ func TestTheQRScanPageDraws(t *testing.T) {
 				t.Fatal(err)
 			}
 			f.Close()
+		}
+	}
+}
+
+// The levels read straight off a picture's pixels are gozxing's own, level for level, for a whole
+// picture and for a part of one, so a code is read on the same frames as before.
+func TestQRLuminanceMatchesGozxings(t *testing.T) {
+	pic := image.NewRGBA(image.Rect(0, 0, 64, 48))
+	rng := rand.New(rand.NewPCG(1, 2))
+	for i := range pic.Pix {
+		pic.Pix[i] = uint8(rng.UintN(256))
+		if i%4 == 3 {
+			pic.Pix[i] = 255
+		}
+	}
+	for name, img := range map[string]*image.RGBA{
+		"whole": pic,
+		"part":  pic.SubImage(image.Rect(5, 7, 50, 40)).(*image.RGBA),
+	} {
+		got, want := luminance(img).GetMatrix(), gozxing.NewLuminanceSourceFromImage(img).GetMatrix()
+		if !bytes.Equal(got, want) {
+			t.Errorf("%s: the levels differ from gozxing's", name)
 		}
 	}
 }

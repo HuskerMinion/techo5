@@ -27,9 +27,9 @@ import (
 // after a moment saying so. It holds the camera only while it is up, and Cancel takes it down.
 
 var (
-	// qrScanEvery is how often a frame is developed, shown and read. Reading a full-size frame is the
-	// cores' work, so a few a second, one at a time.
-	qrScanEvery = 300 * time.Millisecond
+	// qrScanEvery is how often a frame is developed, shown and read, one at a time. A full-size frame
+	// takes about 140 ms on a Show 5 from the sensor to an answer, so this leaves a core free.
+	qrScanEvery = 150 * time.Millisecond
 
 	// qrFoundFor is how long the page says what it read before it closes.
 	qrFoundFor = 1500 * time.Millisecond
@@ -132,7 +132,7 @@ func (q *qrScan) view(now time.Time) qrScanView {
 
 // readQR is the text of the QR code in img, if it has one.
 func readQR(img image.Image) (string, bool) {
-	bmp, err := gozxing.NewBinaryBitmapFromImage(img)
+	bmp, err := gozxing.NewBinaryBitmap(gozxing.NewHybridBinarizer(luminance(img)))
 	if err != nil {
 		return "", false
 	}
@@ -142,6 +142,31 @@ func readQR(img image.Image) (string, bool) {
 		return "", false
 	}
 	return res.GetText(), true
+}
+
+// luminance is img in the gray levels the reader works on. gozxing's own conversion reads a picture
+// one pixel at a time through image.Image's At, about 280 ms for a full-size frame on a Show 5; for the
+// camera's RGBA pictures the same levels come straight off the pixels in under 20.
+func luminance(img image.Image) gozxing.LuminanceSource {
+	rgba, ok := img.(*image.RGBA)
+	if !ok {
+		return gozxing.NewLuminanceSourceFromImage(img)
+	}
+	b := rgba.Bounds()
+	w, h := b.Dx(), b.Dy()
+	gray := make([]byte, w*h)
+	for y := range h {
+		row := rgba.Pix[y*rgba.Stride : y*rgba.Stride+w*4]
+		for x := range w {
+			p := row[x*4 : x*4+3]
+			gray[y*w+x] = byte((uint32(p[0]) + 2*uint32(p[1]) + uint32(p[2])) / 4)
+		}
+	}
+	src, err := gozxing.NewPlanarYUVLuminanceSource(gray, w, h, 0, 0, w, h, false)
+	if err != nil {
+		return gozxing.NewLuminanceSourceFromImage(img)
+	}
+	return src
 }
 
 // ScanQR puts the page up and answers with the first QR code the camera reads within the time given.
