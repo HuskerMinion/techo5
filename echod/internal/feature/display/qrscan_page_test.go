@@ -144,7 +144,6 @@ func TestAQRScanEndsWithNothingReadOrCanceled(t *testing.T) {
 	}
 }
 
-// The page draws with and without a picture, and with a code read.
 // The page in each of its states, in English and German. With SHOW_PREVIEW set, each is written there
 // to look at.
 func TestTheQRScanPageDraws(t *testing.T) {

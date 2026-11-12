@@ -64,10 +64,9 @@ type qrScan struct {
 	read    func(image.Image) (string, bool)
 
 	mu      sync.Mutex
-	started bool   // a frame has come
-	err     string // why the camera would not start
-	empty   bool   // the last frame had nothing in it: the camera is held off
-	reading bool   // a frame is being read
+	started bool // a frame has come
+	empty   bool // the last frame had nothing in it: the camera is held off
+	reading bool // a frame is being read
 	readAt  time.Time
 	w, h    int
 	preview *image.RGBA
@@ -78,7 +77,6 @@ type qrScan struct {
 type qrScanView struct {
 	left    time.Duration
 	started bool
-	err     string
 	empty   bool
 	w, h    int
 	preview *image.RGBA
@@ -127,7 +125,7 @@ func (q *qrScan) view(now time.Time) qrScanView {
 	q.mu.Lock()
 	defer q.mu.Unlock()
 	return qrScanView{
-		left: q.until.Sub(now), started: q.started, err: q.err, empty: q.empty,
+		left: q.until.Sub(now), started: q.started, empty: q.empty,
 		w: q.w, h: q.h, preview: q.preview, code: q.code,
 	}
 }
@@ -271,8 +269,6 @@ func (r *renderer) qrScanPage(s scene) {
 	switch {
 	case v.code != "":
 		msg = fmt.Sprintf(tr("qr_scan_read"), v.code)
-	case v.err != "":
-		msg = v.err
 	case v.empty:
 		msg = tr("qr_scan_muted")
 	case v.preview == nil:

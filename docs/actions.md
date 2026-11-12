@@ -1452,8 +1452,8 @@ data:
 
 ## Scan a QR code
 
-In YAML, refer to this action as `esphome.<node>_qr_scan`. On devices with a screen and a camera:
-the Show, not the Dot or the Spot.
+In YAML, refer to this action as `esphome.<node>_qr_scan`. On the Show and the Panel app, which
+have a screen and a camera; not on the Dot or the Spot.
 
 Opens a page with the camera's picture on it, reads the first QR code held up to the camera, and
 answers with its text as `code`. It is meant for codes printed on things, such as the setup code on
