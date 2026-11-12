@@ -487,6 +487,13 @@ echod (dependency)
   License's text is as above, under github.com/miekg/dns.
 
 echod (dependency)
+  github.com/makiuchi-d/gozxing — MIT License
+  Copyright (c) 2018 Daisuke MAKIUCHI
+  Reading a QR code held up to the camera (feature/display, the qr_scan action). A port to Go of
+  ZXing, https://github.com/zxing/zxing, Apache License 2.0. The MIT License's text is as above,
+  under EchoLocal.
+
+echod (dependency)
   github.com/go-text/typesetting — the Unlicense or the BSD 3-Clause License, at the user's choice
   Copyright the go-text authors.
   Shaping Khmer, Thai, Lao, Myanmar and the Indic scripts in a font of one's own (lib/fonts). Used

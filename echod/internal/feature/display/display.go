@@ -329,6 +329,9 @@ type Display struct {
 	// camtest is the camera test page (camtest_page.go), while it is up.
 	camtest *camTest
 
+	// qrscan is the QR scan Home Assistant asked for (qrscan_page.go), while it is up.
+	qrscan *qrScan
+
 	// quiet is a turn that was a screen command ("go home", "show the deck"): its words and reply
 	// are not shown, so the screen moves at once. radioCue is when Home Assistant last named a
 	// station as playing, which comes seconds before the stream does.
@@ -1338,6 +1341,15 @@ func (d *Display) gesture(g touch.Gesture) {
 			swipeVolume(-1)
 		case touch.SwipeRight:
 			bt.SetPairing(false)
+		}
+		d.wake()
+		return
+	}
+
+	// A QR scan takes every finger while it is up; only Cancel means anything.
+	if d.qrScanUp() {
+		if g.Kind == touch.Tap && d.r != nil {
+			d.qrScanTap(g.X, g.Y)
 		}
 		d.wake()
 		return
@@ -2614,7 +2626,7 @@ func (d *Display) frame() (next time.Duration) {
 		on = lit // the night may have just turned the panel back on: this frame is its first
 	}
 	d.mu.Lock()
-	sheetUp, wifiUp, camUp := d.sheet, d.wifiOpen, d.camtest != nil
+	sheetUp, wifiUp, camUp := d.sheet, d.wifiOpen, d.camtest != nil || d.qrscan != nil
 	updateVisible := d.updateShown(now)
 	d.mu.Unlock()
 	busy := updateVisible || view.Phase != "idle" || call.Phase != phone.Idle || ring.any() || reminding || sheetUp || pinIsOpen() ||
@@ -2853,6 +2865,7 @@ func (d *Display) frame() (next time.Duration) {
 	s.nightDim = d.nightGlow
 	d.mu.Unlock()
 	s.camtest = d.cameraTestView(now)
+	s.qrscan = d.qrScanView(now)
 	if s.showDrawer && s.drawerTab == drawerCameras {
 		s.cameras = home.Get().Cameras()
 	}

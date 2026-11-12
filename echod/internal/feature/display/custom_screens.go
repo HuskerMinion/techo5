@@ -324,7 +324,7 @@ func customCache[T any](r *renderer, id string, mk func() *T) *T {
 // customAlonePage is a frame of a custom screen with nothing drawn over it: no card, strip, cue or
 // pill, nor any page that takes its place.
 func customAlonePage(s scene) bool {
-	return customFrameKey(s, s.ring.any(), s.call.Phase != phone.Idle) != "" && !s.muted && s.camtest == nil
+	return customFrameKey(s, s.ring.any(), s.call.Phase != phone.Idle) != "" && !s.muted && s.camtest == nil && s.qrscan == nil
 }
 
 // keptCustom is whether the canvas holds the page the custom screen up drew in the frame before, alone,
