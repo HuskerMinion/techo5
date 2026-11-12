@@ -187,7 +187,8 @@ func libWaitCovers() {
 // that scroll along. With SHOW_PREVIEW set, each is written there, with made-up covers.
 func TestTheLibraryPageLaysOutItsParts(t *testing.T) {
 	for _, icon := range []string{"chevron-left", "shuffle-variant", "magnify", "account-music", "album",
-		"playlist-music", "radio", "music-note", "bookshelf", "play", "alert-circle-outline"} {
+		"playlist-music", "radio", "music-note", "bookshelf", "play", "alert-circle-outline", "check", "check-circle",
+		"book-multiple", "book-open-variant", "podcast", "rewind-30", "fast-forward-30"} {
 		if _, ok := mdi.Rune(icon); !ok {
 			t.Errorf("no icon %q", icon)
 		}
@@ -248,6 +249,43 @@ func TestTheLibraryPageLaysOutItsParts(t *testing.T) {
 	queueHeld := queue
 	queueHeld.menu = libMenu{open: true, entry: queued[3], kind: "track", item: 3, choices: libMenuFor(queued[3], "track", true, 3),
 		queue: "up0a1b2c3d", page: queue.roots[libQueue].id, pos: 3}
+	// The audiobooks: a book part way and one finished in the Continue listening row, over a grid with a
+	// series folded into one tile; a book's page with where it was left and its details over its
+	// chapters; a podcast's episodes, one started and one played; an episode's page and its sheet.
+	books := libBooks(9)
+	listening := libSheetWith(libAudiobooks, nil, "media_player.ma_kitchen")
+	listening.roots[libAudiobooks].sections = []libSection{
+		{word: libWordContinue, show: libShowRow, kind: "audiobook", entries: books[:1], resume: true},
+		{word: -1, show: libShowGrid, kind: "audiobook", entries: append([]musicassistant.Entry{libSeriesOf("The Long Road", books[4:8])}, books[:4]...)}}
+	bookPage := newLibPage(libAudiobook, books[0])
+	bookPage.entry.Narrators, bookPage.entry.Publisher, bookPage.entry.Year = []string{"Ned Reader"}, "Harbor House", 2021
+	bookPage.entry.Description = "A lighthouse keeper finds a map in the lamp room and follows it down the coast.\nThe second book of the series."
+	bookPage.loaded = true
+	var chapters []musicassistant.Entry
+	for i := range 8 {
+		chapters = append(chapters, musicassistant.ChapterEntry(books[0], musicassistant.Chapter{Position: i, Name: fmt.Sprintf("Chapter %d", i+1), Start: float64(i * 450), End: float64(i*450 + 450)}))
+	}
+	bookPage.sections = []libSection{{word: -1, show: libShowTracks, kind: "chapter", entries: chapters}}
+	bookSheet := libSheetWith(libAudiobooks, books, "media_player.ma_kitchen")
+	bookSheet.stack = []libPage{bookPage}
+	episodes := libEntries("podcast_episode", 6)
+	for i := range episodes {
+		episodes[i].Artists, episodes[i].Duration = nil, 1800+i*120
+	}
+	episodes[0].ResumeMS, episodes[1].FullyPlayed = 600_000, true
+	podPage := newLibPage(libPodcast, libEntries("podcast", 1)[0])
+	podPage.loaded = true
+	podPage.sections = []libSection{{word: -1, show: libShowTracks, kind: "podcast_episode", entries: episodes}}
+	podSheet := libSheetWith(libPodcasts, libEntries("podcast", 6), "media_player.ma_kitchen")
+	podSheet.stack = []libPage{podPage}
+	epPage := newLibPage(libEpisode, episodes[0])
+	epPage.loaded = true
+	epPage.entry.Publisher, epPage.entry.Year = "Harbor Radio", 2026
+	epPage.entry.Description = "This week: how a harbor town keeps its lights on through the winter storms, and a visit to the last ferry pilot on the coast."
+	epSheet := podSheet
+	epSheet.stack = []libPage{podPage, epPage}
+	epHeld := podSheet
+	epHeld.menu = libMenu{open: true, entry: episodes[0], kind: "podcast_episode", item: 0, choices: libMenuFor(episodes[0], "podcast_episode", false, 0)}
 
 	for _, size := range []image.Point{{showWide, showHigh}, {show8Wide, show8High}} {
 		for _, c := range []struct {
@@ -272,6 +310,11 @@ func TestTheLibraryPageLaysOutItsParts(t *testing.T) {
 			{"menu", held, map[int]int{libPartMenu: libMenuChoices, libPartMenuOut: 1}},
 			{"queue", queue, map[int]int{libPartTab: libTabs, libPartItem: 4}},
 			{"queue-menu", queueHeld, map[int]int{libPartMenu: 4, libPartMenuOut: 1}},
+			{"audiobooks", listening, map[int]int{libPartTab: libTabs, libPartRow: 1, libPartItem: 1, libPartSort: 1}},
+			{"audiobook-page", bookSheet, map[int]int{libPartBack: 1, libPartPlay: 1, libPartShuffle: 1, libPartItem: 1}},
+			{"podcast-page", podSheet, map[int]int{libPartBack: 1, libPartPlay: 1, libPartItem: 3}},
+			{"episode-page", epSheet, map[int]int{libPartBack: 1, libPartPlay: 1, libPartShuffle: 1}},
+			{"episode-menu", epHeld, map[int]int{libPartMenu: 5, libPartMenuOut: 1}},
 		} {
 			img := image.NewRGBA(image.Rect(0, 0, size.X, size.Y))
 			r := newRenderer(img)
@@ -577,8 +620,8 @@ func TestQueueingFromTheLibraryOnlyAppends(t *testing.T) {
 // library drawn in that language with an index out of range.
 func TestEveryLanguageHasEveryLibraryWord(t *testing.T) {
 	want := len(libWords[""])
-	if want != libWordRemoveFromQueue+1 {
-		t.Errorf("English has %d words, but the last word is number %d", want, libWordRemoveFromQueue)
+	if want != libWordLast+1 {
+		t.Errorf("English has %d words, but the last word is number %d", want, libWordLast)
 	}
 	for lang, w := range libWords {
 		if len(w) != want {

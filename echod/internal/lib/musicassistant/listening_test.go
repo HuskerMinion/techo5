@@ -170,9 +170,9 @@ func TestAnAudiobooksDetails(t *testing.T) {
 
 func TestPlainText(t *testing.T) {
 	for in, want := range map[string]string{
-		"Just words.":                       "Just words.",
-		"<b>Bold</b> and&nbsp;more":         "Bold and more",
-		"<div>One</div>\n\n<div>Two</div>":  "One\nTwo",
+		"Just words.":                          "Just words.",
+		"<b>Bold</b> and&nbsp;more":            "Bold and more",
+		"<div>One</div>\n\n<div>Two</div>":     "One\nTwo",
 		"Line one<br/>Line  two &quot;x&quot;": "Line one\nLine two \"x\"",
 	} {
 		if got := PlainText(in); got != want {
