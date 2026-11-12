@@ -3473,14 +3473,34 @@ var uiTranslations = map[string]map[string]string{
 		"ui_match_all_languages":                        "Riconosci tutte le lingue",
 	},
 	"nl": {
+		// 0 dB is normal; boosts can distort, especially with more bass
+		"0_db_is_normal_boosts_can_distort_especially_with_more_bass": "0 dB is normaal; versterking kan vervormen, vooral met meer bas",
+		// A camera's own audio, while its view is up
+		"a_camera_s_own_audio_while_its_view_is_up": "Het eigen geluid van een camera, terwijl het beeld open is",
 		// A tap brings the screen back until the room is quiet
 		"a_tap_brings_the_screen_back_until_the_room_is_quiet": "Een tik brengt het scherm terug tot het rustig is in de kamer",
 		// A whole look over the theme and font
 		"a_whole_look_over_the_theme_and_font": "Een compleet uiterlijk voor thema en lettertype",
+		// AirPlay sets the volume
+		"airplay_sets_the_volume": "AirPlay regelt het volume",
+		// Alarm
+		"alarm": "Wekker",
+		// Lights the room, no sound, at %s, %s
+		"alarm_lights_at": "Verlicht de kamer, zonder geluid, om %s, %s",
+		// Lights the room, no sound, once, at %s
+		"alarm_lights_once": "Verlicht de kamer, zonder geluid, eenmalig, om %s",
+		// Rings at %s, %s
+		"alarm_rings_at": "Gaat af om %s, %s",
+		// Rings once, at %s
+		"alarm_rings_once": "Gaat eenmalig af, om %s",
+		// Alarm sound
+		"alarm_sound": "Wekkergeluid",
 		// Another speaker's music, while this one is quiet
 		"another_speaker_s_music_while_this_one_is_quiet": "Muziek van een andere luidspreker, terwijl deze stil is",
 		// Answer time
 		"answer_time": "Antwoordduur",
+		// Asks twice
+		"asks_twice": "Vraagt twee keer",
 		// At night
 		"at_night": "'s Nachts",
 		// Audio output
@@ -3553,8 +3573,12 @@ var uiTranslations = map[string]map[string]string{
 		"call_button": "Belknop",
 		// Call screen
 		"call_screen": "Oproepscherm",
+		// Camera sound
+		"camera_sound": "Camerageluid",
 		// Camera time
 		"camera_time": "Cameraduur",
+		// Cameras
+		"cameras": "Camera's",
 		// Cancel
 		"cancel": "Annuleren",
 		// Classic, or a picture that moves with the voice
@@ -3573,6 +3597,14 @@ var uiTranslations = map[string]map[string]string{
 		"connect": "Verbinden",
 		// Day
 		"day": "Dag",
+		// every day
+		"days_every_day": "elke dag",
+		// once
+		"days_once": "eenmalig",
+		// weekdays
+		"days_weekdays": "werkdagen",
+		// weekends
+		"days_weekends": "weekend",
 		// Default
 		"default_option": "Standaard",
 		// Dim after idle
@@ -3605,16 +3637,26 @@ var uiTranslations = map[string]map[string]string{
 		"drawer_speak": "Spreken",
 		// Unmute
 		"drawer_unmute": "Geluid aan",
+		// Every day
+		"every_day": "Elke dag",
 		// Follows the room's light
 		"follows_the_room_s_light": "Volgt het licht in de kamer",
 		// For all the screen's words
 		"font_description": "Voor alle woorden op het scherm",
 		// Font
 		"font_label": "Lettertype",
+		// For muting and timers
+		"for_muting_and_timers": "Voor dempen en timers",
+		// For timers
+		"for_timers": "Voor timers",
 		// Full page, or a strip over the clock
 		"full_page_or_a_strip_over_the_clock": "Hele pagina, of een strook boven de klok",
 		// Hang up
 		"hang_up": "Ophangen",
+		// Higher wakes by mistake less often
+		"higher_wakes_by_mistake_less_often": "Hoger: minder valse activeringen",
+		// Home Assistant sounds
+		"home_assistant_sounds": "Home Assistant-geluiden",
 		// Home screen
 		"home_screen": "Beginscherm",
 		// How dark auto-brightness goes in a dark room
@@ -3629,10 +3671,14 @@ var uiTranslations = map[string]map[string]string{
 		"how_the_night_clock_looks": "Hoe de nachtklok eruitziet",
 		// Ignore room lights
 		"ignore_room_lights": "Kamerlicht negeren",
+		// Intercom calls from other rooms are turned away
+		"intercom_calls_from_other_rooms_are_turned_away": "Intercomoproepen uit andere kamers worden geweigerd",
 		// %d of %d
 		"level_of": "%d van %d",
 		// Look
 		"look": "Uiterlijk",
+		// Louder speech
+		"louder_speech": "Hardere spraak",
 		// Lyrics
 		"lyrics": "Songtekst",
 		// Playback
@@ -3643,10 +3689,14 @@ var uiTranslations = map[string]map[string]string{
 		"month": "Maand",
 		// Music
 		"music": "Muziek",
+		// Music Assistant player
+		"music_assistant_player": "Music Assistant-speler",
 		// Name
 		"name": "Naam",
 		// Network address
 		"network_address": "Netwerkadres",
+		// New timer
+		"new_timer": "Nieuwe timer",
 		// Next
 		"next": "Volgende",
 		// Controlled by Home Assistant
@@ -3676,6 +3726,10 @@ var uiTranslations = map[string]map[string]string{
 		"ok": "OK",
 		// On the home screen: devices and contacts
 		"on_the_home_screen_devices_and_contacts": "Op het beginscherm: apparaten en contacten",
+		// Once
+		"once": "Eenmalig",
+		// 1 hour
+		"one_hour": "1 uur",
 		// 1 minute
 		"one_minute": "1 minuut",
 		// 10 minutes
@@ -3758,6 +3812,8 @@ var uiTranslations = map[string]map[string]string{
 		"option_night_light": "Nachtlamp",
 		// Normal
 		"option_normal": "Normaal",
+		// Once
+		"option_once": "Eenmalig",
 		// Red
 		"option_red": "Rood",
 		// Red LED
@@ -3812,6 +3868,12 @@ var uiTranslations = map[string]map[string]string{
 		"photos_from_home_assistant": "Foto's van Home Assistant",
 		// Play
 		"play": "Afspelen",
+		// Play music in sync with other rooms
+		"play_music_in_sync_with_other_rooms": "Muziek synchroon met andere kamers afspelen",
+		// Play to it from an iPhone, iPad or Mac
+		"play_to_it_from_an_iphone_ipad_or_mac": "Vanaf een iPhone, iPad of Mac afspelen",
+		// Play to it from the Spotify app (Premium)
+		"play_to_it_from_the_spotify_app_premium": "Vanuit de Spotify-app afspelen (Premium)",
 		// Pop-ups
 		"pop_ups": "Pop-ups",
 		// The camera notices somebody near; nothing is kept
@@ -3832,8 +3894,12 @@ var uiTranslations = map[string]map[string]string{
 		"rain_snow_and_storms_move_on_the_forecast": "Regen, sneeuw en onweer trekken over de voorspelling",
 		// Repeat
 		"repeat": "Herhalen",
+		// Replies and announcements
+		"replies_and_announcements": "Antwoorden en aankondigingen",
 		// Restart
 		"restart": "Opnieuw opstarten",
+		// Said as it rings
+		"said_as_it_rings": "Wordt gezegd bij het afgaan",
 		// Screen language
 		"screen_language": "Schermtaal",
 		// Screen off when nobody is near
@@ -3848,12 +3914,20 @@ var uiTranslations = map[string]map[string]string{
 		"skin": "Skin",
 		// Kept for when the skin is off
 		"skin_keeps": "Bewaard voor als de skin uit staat",
+		// Sleep timer
+		"sleep_timer": "Slaaptimer",
 		// Slideshow
 		"slideshow": "Diavoorstelling",
+		// Sounds
+		"sounds": "Geluiden",
+		// Speaker gain
+		"speaker_gain": "Luidsprekerversterking",
 		// Threshold
 		"spot_threshold": "Drempelwaarde",
 		// Stop
 		"stop": "Stoppen",
+		// Before alarms that don't choose their own
+		"sunrise_default_description": "Voor wekkers die er zelf geen kiezen",
 		// Tap lifts the night light
 		"tap_lifts_the_night_light": "Tik zet het nachtlampje hoger",
 		// Tap on the clock
@@ -3862,6 +3936,8 @@ var uiTranslations = map[string]map[string]string{
 		"text_size_description": "Hoe groot elk woord op het scherm is",
 		// Text size
 		"text_size_label": "Tekstgrootte",
+		// The mute button does this too
+		"the_mute_button_does_this_too": "De dempknop doet dit ook",
 		// The NWS's alerts for home, in the U.S.
 		"the_nws_s_alerts_for_home_in_the_u_s": "De NWS-waarschuwingen voor thuis, in de VS",
 		// The words in time, looked up at LRCLIB
@@ -3880,16 +3956,46 @@ var uiTranslations = map[string]map[string]string{
 		"timers": "Timers",
 		// Today
 		"today": "Vandaag",
+		// Tomorrow
+		"tomorrow": "Morgen",
+		// Treble
+		"treble": "Hoge tonen",
 		// Turn screen
 		"turn_screen": "Spraakscherm",
+		// 1 hour
+		"ui_1_hour": "1 uur",
+		// 1 hour %d minutes
+		"ui_1_hour_d_minutes": "1 uur %d minuten",
+		// A face on it, for whoever has to look at it
+		"ui_a_face_on_it_for_whoever_has_to_look_at_it": "Een gezicht erop, voor wie ernaar moet kijken",
 		// A landscape for the weather, in place of photos
 		"ui_a_landscape_for_the_weather_in_place_of_photos": "Een landschap voor het weer, in plaats van foto's",
+		// + Add alarm
+		"ui_add_alarm": "+ Wekker toevoegen",
+		// Add one here, or from Home Assistant
+		"ui_add_one_here_or_from_home_assistant": "Hier een toevoegen, of vanuit Home Assistant",
 		// Gateway
 		"ui_address_field_gateway": "Gateway",
+		// Adjusts the speaker tuning to the room
+		"ui_adjusts_the_speaker_tuning_to_the_room": "Stemt de luidspreker af op de kamer",
 		// Alarms
 		"ui_alarms": "Wekkers",
+		// Alarms and timers always sound
+		"ui_alarms_and_timers_always_sound": "Wekkers en timers gaan altijd af",
+		// Alarms and timers, not the music
+		"ui_alarms_and_timers_not_the_music": "Wekkers en timers, niet de muziek",
+		// Alarms and timers will make no sound
+		"ui_alarms_and_timers_will_make_no_sound": "Wekkers en timers maken geen geluid",
+		// Alarms on this device and how they ring
+		"ui_alarms_on_this_device_and_how_they_ring": "Wekkers op dit apparaat en hoe ze afgaan",
 		// Alarms & Timers
 		"ui_alarms_timers": "Wekkers en timers",
+		// Alarms on
+		"ui_all_alarms": "Wekkers aan",
+		// All off: none ring until this is back on
+		"ui_all_alarms_off_sub": "Alles uit: er gaat niets af tot dit weer aan staat",
+		// Every alarm at once, for a trip
+		"ui_all_alarms_on_sub": "Alle wekkers tegelijk, bijvoorbeeld voor een reis",
 		// All of it, with blurred sides; off fills the screen
 		"ui_all_of_it_with_blurred_sides_off_fills_the_screen": "Alles, met vervaagde zijkanten; uit vult het scherm",
 		// All photos
@@ -3904,6 +4010,8 @@ var uiTranslations = map[string]map[string]string{
 		"ui_brightness_night_theme_home_screen_and_weather": "Helderheid, nacht, thema, beginscherm en weer",
 		// Calendar
 		"ui_calendar": "Agenda",
+		// Call volume
+		"ui_call_volume": "Oproepvolume",
 		// Camera picture
 		"ui_camera_picture": "Camerabeeld",
 		// Camera strips
@@ -3924,8 +4032,18 @@ var uiTranslations = map[string]map[string]string{
 		"ui_confirm": "Bevestigen",
 		// Connections
 		"ui_connections": "Verbindingen",
+		// Custom
+		"ui_custom": "Aangepast",
 		// Custom colors
 		"ui_custom_colors": "Eigen kleuren",
+		// %d:%02d left
+		"ui_d_02d_left": "%d:%02d over",
+		// %d hours
+		"ui_d_hours": "%d uur",
+		// %d min
+		"ui_d_min": "%d min",
+		// %d min left
+		"ui_d_min_left": "%d min over",
 		// %d minutes
 		"ui_d_minutes": "%d minuten",
 		// Dark theme
@@ -3940,32 +4058,56 @@ var uiTranslations = map[string]map[string]string{
 		"ui_decline": "Weigeren",
 		// Delete
 		"ui_delete": "Verwijderen",
+		// Delete alarm
+		"ui_delete_alarm": "Wekker verwijderen",
 		// Disconnect
 		"ui_disconnect": "Ontkoppelen",
 		// Display
 		"ui_display": "Scherm",
 		// Edit
 		"ui_edit": "Bewerken",
+		// Edit alarm
+		"ui_edit_alarm": "Wekker bewerken",
 		// Every folder inside the one chosen
 		"ui_every_folder_inside_the_one_chosen": "Elke map in de gekozen map",
 		// Favorites only
 		"ui_favorites_only": "Alleen favorieten",
+		// Flat
+		"ui_flat": "Neutraal",
 		// For all the screen's words
 		"ui_for_all_the_screen_s_words": "Voor alle woorden op het scherm",
+		// From Home Assistant
+		"ui_from_home_assistant": "Vanuit Home Assistant",
+		// From Home Assistant · %s
+		"ui_from_home_assistant_s": "Vanuit Home Assistant · %s",
+		// From quiet up to the ring volume
+		"ui_from_quiet_up_to_the_ring_volume": "Van zacht tot het belvolume",
 		// General
 		"ui_general": "Algemeen",
+		// Gets louder
+		"ui_gets_louder": "Wordt luider",
 		// Glance chip size
 		"ui_glance_chip_size": "Chipgrootte",
+		// Group it with other AirPlay 2 speakers
+		"ui_group_it_with_other_airplay_2_speakers": "Groepeer het met andere AirPlay 2-luidsprekers",
+		// Home Assistant: Settings, Voice assistants
+		"ui_home_assistant_settings_voice_assistants": "Home Assistant: Instellingen, Spraakassistenten",
 		// Hour
 		"ui_hour": "Uur",
+		// How answers sound
+		"ui_how_answers_sound": "Hoe antwoorden klinken",
 		// How dark those strips are
 		"ui_how_dark_those_strips_are": "Hoe donker die stroken zijn",
+		// In Home Assistant
+		"ui_in_home_assistant": "In Home Assistant",
 		// Include subfolders
 		"ui_include_subfolders": "Submappen meenemen",
 		// Incoming call
 		"ui_incoming_call": "Inkomende oproep",
 		// Install
 		"ui_install": "Installeren",
+		// Light only
+		"ui_light_only": "Alleen licht",
 		// Light theme
 		"ui_light_theme": "Licht thema",
 		// Listening
@@ -3976,8 +4118,12 @@ var uiTranslations = map[string]map[string]string{
 		"ui_more": "Meer",
 		// Muted
 		"ui_muted": "Gedempt",
+		// Needs Speaker EQ, which is off
+		"ui_needs_speaker_eq_which_is_off": "Vereist luidspreker-EQ, die uit staat",
 		// Never
 		"ui_never": "Nooit",
+		// New alarm
+		"ui_new_alarm": "Nieuwe wekker",
 		// Night ends
 		"ui_night_ends": "Nacht eindigt",
 		// Night ends at
@@ -3986,10 +4132,18 @@ var uiTranslations = map[string]map[string]string{
 		"ui_night_starts": "Nacht begint",
 		// Night starts at
 		"ui_night_starts_at": "Nacht begint om",
+		// No alarms yet
+		"ui_no_alarms_yet": "Nog geen wekkers",
+		// No sound: the light, then the night ends
+		"ui_no_sound_the_light_then_the_night_ends": "Geen geluid: het licht, dan eindigt de nacht",
 		// None chosen
 		"ui_none_chosen": "Geen map gekozen",
 		// Not for Dashboard, Agenda or World
 		"ui_not_for_dashboard_agenda_or_world": "Niet voor Dashboard, Agenda of World",
+		// Not set
+		"ui_not_set": "Niet ingesteld",
+		// Off
+		"ui_off": "Uit",
 		// On the screensaver, under each photo
 		"ui_on_the_screensaver_under_each_photo": "Op de schermbeveiliging, onder elke foto",
 		// On this device
@@ -4018,16 +4172,32 @@ var uiTranslations = map[string]map[string]string{
 		"ui_photo_picker_photos": "%d foto's",
 		// Use this folder
 		"ui_photo_picker_use_folder": "Deze map gebruiken",
+		// Plays once when you choose it
+		"ui_plays_once_when_you_choose_it": "Speelt één keer als je het kiest",
 		// Privacy
 		"ui_privacy": "Privacy",
 		// Privacy & Security
 		"ui_privacy_security": "Privacy en beveiliging",
 		// Rescan
 		"ui_rescan": "Opnieuw scannen",
+		// Ring volume
+		"ui_ring_volume": "Belvolume",
+		// Rings from this device itself
+		"ui_rings_from_this_device_itself": "Gaat af via dit apparaat zelf",
 		// Running
 		"ui_running": "Actief",
+		// Same as volume
+		"ui_same_as_volume": "Zelfde als volume",
 		// Save
 		"ui_save": "Opslaan",
+		// Server default
+		"ui_server_default": "Serverstandaard",
+		// Set
+		"ui_set": "Instellen",
+		// Set here
+		"ui_set_here": "Hier ingesteld",
+		// Set there
+		"ui_set_there": "Daar instellen",
 		// Show
 		"ui_show": "Weergeven",
 		// Show whole photo
@@ -4038,16 +4208,38 @@ var uiTranslations = map[string]map[string]string{
 		"ui_silent": "Stil",
 		// Small
 		"ui_small": "Klein",
+		// Snooze length
+		"ui_snooze_length": "Sluimerduur",
+		// Snoozed until %s
+		"ui_snoozed_until_s": "Sluimeren tot %s",
 		// Sound
 		"ui_sound": "Geluid",
 		// Sound & Voice
 		"ui_sound_voice": "Geluid en stem",
+		// Speaking voice
+		"ui_speaking_voice": "Spreekstem",
+		// Spoken by Home Assistant
+		"ui_spoken_by_home_assistant": "Uitgesproken door Home Assistant",
 		// Start Assist, open the dashboard or the deck, or nothing
 		"ui_start_assist_open_the_dashboard_or_the_deck_or_nothing": "Assist starten, dashboard of deck openen, of niets",
+		// Steps from the volume
+		"ui_steps_from_the_volume": "Stappen vanaf het volume",
+		// Stops the music after a while
+		"ui_stops_the_music_after_a_while": "Stopt de muziek na een tijdje",
+		// Sun with a face
+		"ui_sun_with_a_face": "Zon met een gezicht",
 		// Tap a color for each part; the theme becomes Custom
 		"ui_tap_a_color_for_each_part_the_theme_becomes_custom": "Tik een kleur voor elk onderdeel; het thema wordt Custom",
+		// Tap again to delete it
+		"ui_tap_again_to_delete_it": "Tik nogmaals om te verwijderen",
 		// The date and AM/PM
 		"ui_the_date_and_am_pm": "De datum en AM/PM",
+		// The device's own tones only; alarms still sound
+		"ui_the_device_s_own_tones_only_alarms_still_sound": "Alleen de eigen tonen van het apparaat; wekkers gaan nog af",
+		// The iPhone's volume slider moves the device's volume
+		"ui_the_iphone_slider_is_the_device_s_volume": "De volumeschuif van de iPhone regelt het volume van het apparaat",
+		// The music stops on its own; nothing rings
+		"ui_the_music_stops_on_its_own_nothing_rings": "De muziek stopt vanzelf; er gaat niets af",
 		// The photos marked as favorites in Immich
 		"ui_the_photos_marked_as_favorites_in_immich": "De foto's die in Immich als favoriet zijn gemarkeerd",
 		// The size of the text under the clock
@@ -4076,6 +4268,10 @@ var uiTranslations = map[string]map[string]string{
 		"ui_under_its_name_and_at_its_foot_solid_or_fading_into_it": "Onder de naam en aan de voet: effen, of erin vervagend",
 		// Unknown
 		"ui_unknown": "Onbekend",
+		// Voice volume
+		"ui_voice_volume": "Spraakvolume",
+		// Volume, voice, quiet hours and music
+		"ui_volume_voice_quiet_hours_and_music": "Volume, spraak, stille uren en muziek",
 		// Weather art
 		"ui_weather_art": "Weerbeeld",
 		// Weather position
@@ -4090,12 +4286,30 @@ var uiTranslations = map[string]map[string]string{
 		"voice": "Stem",
 		// Volume
 		"volume": "Volume",
+		// Wake sound
+		"wake_sound": "Wekgeluid",
+		// Wake with light
+		"wake_with_light": "Wekken met licht",
+		// Wake word
+		"wake_word": "Wekwoord",
+		// Wake word threshold
+		"wake_word_threshold": "Drempelwaarde wekwoord",
+		// Wake word threshold (playing)
+		"wake_word_threshold_playing": "Drempelwaarde wekwoord (afspelen)",
 		// Weather
 		"weather": "Weer",
 		// Weather alerts
 		"weather_alerts": "Weerwaarschuwingen",
 		// Weather animation
 		"weather_animation": "Weeranimatie",
+		// S M T W T F S
+		"weekday_initials": "Z M D W D V Z",
+		// Weekdays
+		"weekdays": "Werkdagen",
+		// Weekends
+		"weekends": "Weekend",
+		// Where the sound goes with headphones in
+		"where_the_sound_goes_with_headphones_in": "Waar het geluid heen gaat met een koptelefoon",
 		// Wi-Fi
 		"wi_fi": "Wifi",
 	},
