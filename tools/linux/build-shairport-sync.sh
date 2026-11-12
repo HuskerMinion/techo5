@@ -26,10 +26,17 @@
 # nqptp and shairport-sync talk through shared memory whose layout each names by a version (smi11 here),
 # so the two are only ever moved on together.
 #
-# One change is made to shairport-sync: shairport-sync-stdout-delay.patch, beside this script, gives its
-# stdout backend a delay(), which it has none of. The daemon says in a file (SPS_STDOUT_DELAY_FILE) how much of
-# what it read is still to be heard; with that and what waits unread in the pipe, shairport-sync keeps in step
-# with the other speakers on its own, as with a sound card, rather than by a fixed offset.
+# Two changes are made to shairport-sync, both beside this script and applied in this order:
+#
+# shairport-sync-stdout-delay.patch gives its stdout backend a delay(), which it has none of. The daemon says in
+# a file (SPS_STDOUT_DELAY_FILE) how much of what it read is still to be heard; with that and what waits unread
+# in the pipe, shairport-sync keeps in step with the other speakers on its own, as with a sound card, rather
+# than by a fixed offset.
+#
+# shairport-sync-ssrc0-fallback.patch (iVolt1's, from issue #468) plays Music Assistant's buffered AirPlay 2
+# stream, whose sender sends SSRC 0 on every packet and 16-bit sequence numbers: while a session has sent no
+# real SSRC, the format comes from SETUP's audioFormat and flushes are compared in 16 bits. The first real SSRC
+# turns that off, so Apple senders are handled as before. It goes once Music Assistant's sender is fixed.
 #
 # One change is made to nqptp: nqptp-run-as-user.patch, beside this script, adds -u <user>. nqptp needs
 # root only to bind PTP's ports (319 and 320); with -u it then becomes that user, with its groups, before it
@@ -49,8 +56,8 @@ APK=${APK:-$HOME/apk/apk.static}
 WORK=${WORK:-$HOME/shairport-sync-build}
 J=${J:-$(nproc)}
 OUT=$ROOT/bin
-SPS_VERSION=5.6.1
-SPS_SHA256=48d2ac1afa52d86766bc328694fa5d2d5f13a674f3e980f00d95d957453e5ee1
+SPS_VERSION=5.6.3
+SPS_SHA256=670f9cefdb9c2d70f7df71890e63ab0a31d08a815dd0734245d935bfd01e766e
 NQPTP_VERSION=1.2.9
 NQPTP_SHA256=6aa1d73b8ee760bf19378c319db0d0537a867ff961764b150e19f87d96a02210
 FF_VERSION=8.1.2
@@ -129,7 +136,9 @@ unpack nqptp-$NQPTP_VERSION.tar.gz nqptp
 
 echo "== shairport-sync $SPS_VERSION with AirPlay 2"
 unpack shairport-sync-$SPS_VERSION.tar.gz shairport-sync
-(cd "$WORK/shairport-sync" && patch -p1 --forward --no-backup-if-mismatch < "$ROOT/tools/linux/shairport-sync-stdout-delay.patch")
+for p in shairport-sync-stdout-delay shairport-sync-ssrc0-fallback; do
+	(cd "$WORK/shairport-sync" && patch -p1 --forward --no-backup-if-mismatch < "$ROOT/tools/linux/$p.patch")
+done
 # The small FFmpeg is found before anything in the Alpine root, which has none.
 export PKG_CONFIG_SYSROOT_DIR= PKG_CONFIG_LIBDIR="$FF/lib/pkgconfig:$SYS/usr/lib/pkgconfig:$SYS/usr/share/pkgconfig"
 (cd "$WORK/shairport-sync" && autoreconf -fi >/dev/null 2>&1 && ./configure $HOSTS --prefix=/usr --sysconfdir=/etc \

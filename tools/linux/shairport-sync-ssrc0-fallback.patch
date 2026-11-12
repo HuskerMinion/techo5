@@ -1,0 +1,261 @@
+shairport-sync-ssrc0-fallback.patch: let shairport-sync play Music Assistant's buffered AirPlay 2 stream.
+
+Music Assistant's AirPlay 2 sender (cliairplay) sends SSRC 0 on every buffered audio packet, where an
+Apple sender names the packet's format there (ALAC 48 kHz/24-bit, AAC and so on). shairport-sync takes
+SSRC 0 for a filler block and plays silence. cliairplay also numbers its packets with a 16-bit RTP
+sequence number (the payload type, 103, is in the byte above it) and sends 16-bit flushUntilSeq values,
+where shairport-sync compares 23-bit ones, so the flush on a track change never finishes.
+
+While a session has never sent a nonzero SSRC, this patch:
+  - takes the packet format from the audioFormat SETUP announced (ssrc_from_audio_format),
+  - compares sequence numbers and flush points in 16 bits (seq_diff),
+  - and adds ALAC 44.1 kHz/24-bit (ALAC_44100_S24_2, a made-up SSRC like ALAC_44100_S16_2), which
+    Music Assistant sends and Apple senders don't.
+The first nonzero SSRC turns all of it off for the rest of the session (a TECHO5 change to the original),
+so an Apple sender that opens with an SSRC 0 filler block is handled exactly as without the patch.
+
+Written by iVolt1 (https://github.com/iVolt1) in https://github.com/HuskerMinion/techo5/issues/468.
+Upstream, https://github.com/mikebrady/shairport-sync/issues/2319, leaves it to the sender to fix, so
+TECHO5 carries it. Drop this patch once Music Assistant's sender sends real SSRCs and 23-bit sequence
+numbers. Applied after shairport-sync-stdout-delay.patch, against shairport-sync 5.6.3.
+
+--- a/ap2_buffered_audio_processor.c
++++ b/ap2_buffered_audio_processor.c
+@@ -99,6 +99,16 @@
+   debug(2, "Connection %d: rtp_buffered_audio_processor exit.", conn->connection_number);
+ }
+ 
++// Local patch: SSRC-0 senders (Music Assistant's cliairplay) put a standard 16-bit RTP
++// sequence number in bytes 2-3 and the payload type (103) in byte 1, and send 16-bit
++// flushUntilSeq values. Apple senders use a 23-bit sequence number. Compare in the
++// sender's own space so that FLUSHBUFFERED can complete.
++static int32_t seq_diff(uint32_t a, uint32_t b, int sixteen_bit) {
++  if (sixteen_bit)
++    return (int16_t)((a - b) & 0xFFFF);
++  return a_minus_b_mod23(a, b);
++}
++
+ void *rtp_buffered_audio_processor(void *arg) {
+   rtsp_conn_info *conn = (rtsp_conn_info *)arg;
+ 
+@@ -180,6 +190,8 @@
+   uint32_t payload_ssrc =
+       SSRC_NONE; // this is the SSRC of the payload
+   uint32_t previous_ssrc = SSRC_NONE;
++  int real_ssrc_seen = 0; // local patch: SSRC-0 sender fallback
++  int ssrc0_sender = 0;   // local patch: set once the fallback is in use
+ 
+   uint32_t seq_no =
+       0; // audio packet number. Initialised to avoid a "possibly uninitialised" warning.
+@@ -288,7 +300,31 @@
+             if (payload_ssrc != SSRC_NONE) // ignore intervening SSRC blocks
+               previous_ssrc = payload_ssrc;
+             payload_ssrc = nctohl(&packet[8]);
++            // Local patch: if this sender has never sent a real SSRC, treat SSRC 0 as the
++            // format announced in SETUP (audioFormat). Senders that do send real SSRCs
++            // (e.g. Apple devices) are unaffected, including their SSRC_NONE filler blocks.
++            if (payload_ssrc != SSRC_NONE) {
++              real_ssrc_seen = 1;
++              ssrc0_sender = 0; // a real SSRC: this is not an SSRC-0 sender after all
++            } else if (real_ssrc_seen == 0) {
++              ssrc_t fallback = ssrc_from_audio_format(conn->audio_format);
++              if (fallback != SSRC_NONE) {
++                if (blocks_read == 1)
++                  debug(1, "Connection %d: sender uses SSRC 0; using \"%s\" from SETUP audioFormat 0x%" PRIx64 ".",
++                        conn->connection_number, get_ssrc_name(fallback), conn->audio_format);
++                payload_ssrc = fallback;
++                ssrc0_sender = 1;
++              } else if (blocks_read == 1) {
++                debug(1, "Connection %d: sender uses SSRC 0 and SETUP audioFormat 0x%" PRIx64 " is not mapped.",
++                      conn->connection_number, conn->audio_format);
++              }
++            }
+             
++            if (ssrc0_sender) {
++              // keep only the 16-bit RTP sequence number (byte 1 holds the payload type)
++              seq_no &= 0xFFFF;
++              previous_seqno &= 0xFFFF;
++            }
+             if ((payload_ssrc != previous_ssrc) && (payload_ssrc != SSRC_NONE)) {
+ #ifdef CONFIG_METADATA
+               pthread_mutex_lock_and_cleanup_push(&conn->flush_mutex);
+@@ -407,7 +443,7 @@
+           }
+           
+           if (conn->ap2_immediate_flush_until_sequence_number != 0) {
+-            if (a_minus_b_mod23(seq_no, conn->ap2_immediate_flush_until_sequence_number) > 0) {
++            if (seq_diff(seq_no, conn->ap2_immediate_flush_until_sequence_number, ssrc0_sender) > 0) {
+               if (payload_ssrc == SSRC_NONE) {
+                 debug(3,
+                       "immediate flush endpoint followed by a SSRC_NONE packet. Seq_no is %u, "
+@@ -423,7 +459,7 @@
+               flush_finished = 1;
+             }
+   
+-            if (a_minus_b_mod23(seq_no, conn->ap2_immediate_flush_until_sequence_number) >= 0) {
++            if (seq_diff(seq_no, conn->ap2_immediate_flush_until_sequence_number, ssrc0_sender) >= 0) {
+               debug(3,
+                     "immediate flush completed at seq_no: %u, "
+                     "conn->ap2_immediate_flush_until_sequence_number: %u.",
+@@ -510,7 +546,7 @@
+                   conn->ap2_deferred_flush_requests[f].flushUntilSeq, timestamp);
+             conn->ap2_deferred_flush_requests[f].active = 0;
+             conn->ap2_deferred_flush_requests[f].inUse = 0;
+-          } else if (a_minus_b_mod23(seq_no, conn->ap2_deferred_flush_requests[f].flushUntilSeq) >
++          } else if (seq_diff(seq_no, conn->ap2_deferred_flush_requests[f].flushUntilSeq, ssrc0_sender) >
+                      0) {
+             // now, do a modulo 2^23 unsigned int calculation to see if we may have overshot the
+             // flushUntilSeq
+--- a/player.c
++++ b/player.c
+@@ -438,6 +438,7 @@
+   int response = 0;
+   switch (ssrc) {
+   case ALAC_44100_S16_2:
++  case ALAC_44100_S24_2:
+   case ALAC_48000_S24_2:
+   case AAC_44100_F24_2:
+   case AAC_48000_F24_2:
+@@ -451,6 +452,22 @@
+   return response;
+ }
+ 
++// Senders such as Music Assistant's cliairplay send SSRC 0 on every buffered packet.
++// Map the audioFormat announced in the stream SETUP to an equivalent SSRC.
++// Values per https://emanuelecozzi.net/docs/airplay2/audio/
++ssrc_t ssrc_from_audio_format(uint64_t audio_format) {
++  switch (audio_format) {
++  case 0x40000:
++    return ALAC_44100_S16_2;
++  case 0x80000:
++    return ALAC_44100_S24_2;
++  case 0x200000:
++    return ALAC_48000_S24_2;
++  default:
++    return SSRC_NONE;
++  }
++}
++
+ int ssrc_is_aac(ssrc_t ssrc) {
+   int response = 0;
+   switch (ssrc) {
+@@ -473,6 +490,9 @@
+   case ALAC_44100_S16_2:
+     response = "ALAC/44100/S16_LE/2";
+     break;
++  case ALAC_44100_S24_2:
++    response = "ALAC/44100/S24_LE/2";
++    break;
+   case ALAC_48000_S24_2:
+     response = "ALAC/48000/S24_LE/2";
+     break;
+@@ -503,6 +523,7 @@
+   uint32_t response = 0;
+   switch (ssrc) {
+   case ALAC_44100_S16_2:
++  case ALAC_44100_S24_2:
+   case AAC_44100_F24_2:
+     response = 44100;
+     break;
+@@ -522,6 +543,7 @@
+   size_t response = 0;
+   switch (ssrc) {
+   case ALAC_44100_S16_2:
++  case ALAC_44100_S24_2:
+   case ALAC_48000_S24_2:
+     response = 352;
+     break;
+@@ -570,6 +592,11 @@
+     conn->frames_per_packet = 352;
+     suggested_output_format = SPS_FORMAT_S24;
+     break;
++  case ALAC_44100_S24_2: // local patch
++    conn->input_rate = 44100;
++    conn->frames_per_packet = 352;
++    suggested_output_format = SPS_FORMAT_S24;
++    break;
+   case AAC_44100_F24_2:
+     conn->input_rate = 44100;
+     break;
+@@ -649,6 +676,7 @@
+ 
+     switch (ssrc) {
+     case ALAC_44100_S16_2:
++    case ALAC_44100_S24_2: // local patch
+     case ALAC_48000_S24_2: {
+       // seems as if the codec_context is correctly set up for ALAC but not for AAC-LC
+       input_format = conn->codec_context->sample_fmt;
+@@ -761,7 +789,7 @@
+       // this is important when it comes to deciding on dither
+       // AFAIK 24-bit ALAC comes out in 32-bit format but is actually 24 bit
+       // so don't dither if it is truncated from 32 to 24 bit
+-      if (ssrc == ALAC_48000_S24_2)
++      if ((ssrc == ALAC_48000_S24_2) || (ssrc == ALAC_44100_S24_2))
+         conn->input_effective_bit_depth = 24;
+       else
+         conn->input_effective_bit_depth = 32;
+@@ -1092,6 +1120,7 @@
+       int uncompressed_pcm = (conn->stream.type == ast_uncompressed);
+       switch (ssrc) {
+       case ALAC_44100_S16_2:
++      case ALAC_44100_S24_2:
+       case ALAC_48000_S24_2:
+         // a classic stream announced as L16 (e.g. from pyatv/Home Assistant) carries
+         // big-endian 16-bit PCM in the same 352-frame packets rather than ALAC
+@@ -1131,7 +1160,8 @@
+           conn->codec_context->channel_layout = AV_CH_LAYOUT_STEREO;
+ #endif
+           conn->codec_context->sample_rate = 44100;
+-        } else if ((ssrc == ALAC_48000_S24_2) || (ssrc == ALAC_44100_S16_2)) {
++        } else if ((ssrc == ALAC_48000_S24_2) || (ssrc == ALAC_44100_S16_2) ||
++                   (ssrc == ALAC_44100_S24_2)) {
+           alac_ffmpeg_magic_cookie *extradata =
+               malloc(sizeof(alac_ffmpeg_magic_cookie)); // might not use it
+           if (extradata == NULL)
+@@ -1145,6 +1175,9 @@
+           if (ssrc == ALAC_48000_S24_2) {
+             extradata->alac_config.bitDepth = 24; // Seems to be S24
+             extradata->alac_config.sampleRate = htonl(48000);
++          } else if (ssrc == ALAC_44100_S24_2) {
++            extradata->alac_config.bitDepth = 24;
++            extradata->alac_config.sampleRate = htonl(44100);
+           } else {
+             extradata->alac_config.bitDepth = 16; // Seems to be S16
+             extradata->alac_config.sampleRate = htonl(44100);
+@@ -1174,7 +1207,8 @@
+       conn->input_rate = get_ssrc_rate(ssrc);
+       debug(2, "Connection %d: set conn->input_rate: %u.", conn->connection_number,
+             conn->input_rate);
+-      if ((ssrc == ALAC_48000_S24_2) || (ssrc == ALAC_44100_S16_2)) {
++      if ((ssrc == ALAC_48000_S24_2) || (ssrc == ALAC_44100_S16_2) ||
++          (ssrc == ALAC_44100_S24_2)) {
+         conn->frames_per_packet = 352;
+       } else {
+         conn->frames_per_packet = 1024;
+@@ -1512,7 +1546,7 @@
+   uint64_t bitrate_generation = 0;
+   int measure_bitrate = config.metadata_enabled && conn->stream.type != ast_uncompressed &&
+                         (ssrc_is_aac(ssrc) || ssrc == ALAC_44100_S16_2 ||
+-                         ssrc == ALAC_48000_S24_2);
++                         ssrc == ALAC_44100_S24_2 || ssrc == ALAC_48000_S24_2);
+ #endif
+ 
+   // ignore a request to flush that has been made before the first packet...
+--- a/player.h
++++ b/player.h
+@@ -153,6 +153,7 @@
+   SSRC_NONE = 0,
+   ALAC_44100_S16_2 = 0x0000FACE, // this is made up
+   ALAC_48000_S24_2 = 0x15000000,
++  ALAC_44100_S24_2 = 0x0000FAC4, // made up: buffered ALAC 44.1k/24 from SSRC-0 senders
+   AAC_44100_F24_2 = 0x16000000,
+   AAC_48000_F24_2 = 0x17000000,
+   AAC_48000_F24_5P1 = 0x27000000,
+@@ -672,6 +673,7 @@
+ const char *get_category_string(airplay_stream_c cat);
+ 
+ int ssrc_is_recognised(ssrc_t ssrc);
++ssrc_t ssrc_from_audio_format(uint64_t audio_format); // for senders that send SSRC 0
+ int ssrc_is_aac(ssrc_t ssrc); // used to decide if a mute might be needed (AAC only)
+ void prepare_decoding_chain(rtsp_conn_info *conn, ssrc_t ssrc); // also sets up timing stuff
+ void clear_decoding_chain(rtsp_conn_info *conn);                // tear down the decoding chain

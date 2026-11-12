@@ -353,14 +353,16 @@ FFmpeg, https://ffmpeg.org (LGPL-2.1-or-later)
   Its license files are in every root filesystem, /usr/share/licenses/ffmpeg.
 
 Shairport Sync, https://github.com/mikebrady/shairport-sync (MIT, with parts under BSD and ISC licenses)
-  Every root filesystem carries Shairport Sync 5.6.1, the AirPlay 2 receiver, as
+  Every root filesystem carries Shairport Sync 5.6.3, the AirPlay 2 receiver, as
   /usr/local/bin/techo5-shairport-sync (armv7). Copyright (c) 2014-2026 Mike Brady,
   Copyright (c) 2011-2013 James Laird and the other authors its LICENSES file names. FFmpeg's ALAC
   and AAC decoders and swresample (above, LGPL-2.1-or-later) are linked into it statically; the
   source of both and tools/linux/build-shairport-sync.sh rebuild or relink it. Its license files are
   in tools/linux/licenses/shairport-sync and in every root filesystem, /usr/share/licenses/shairport-sync.
-  Changes: one, tools/linux/shairport-sync-stdout-delay.patch, gives its stdout output a delay() (how
+  Changes: two. tools/linux/shairport-sync-stdout-delay.patch gives its stdout output a delay() (how
   much is still to be heard, which the daemon reports), so it keeps in step with a group; MIT too.
+  tools/linux/shairport-sync-ssrc0-fallback.patch, by iVolt1 (https://github.com/iVolt1, TECHO5 issue
+  #468), lets it play Music Assistant's buffered AirPlay 2 stream, whose sender sends SSRC 0.
 
 nqptp, https://github.com/mikebrady/nqptp (GPL-2.0)
   Every root filesystem carries nqptp 1.2.9, the clock AirPlay 2 needs, as /usr/local/bin/techo5-nqptp

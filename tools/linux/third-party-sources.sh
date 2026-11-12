@@ -39,7 +39,7 @@ fetch "nqptp-$NQ.tar.gz" "https://github.com/mikebrady/nqptp/archive/refs/tags/$
 fetch "librespot-$LR.crate" "https://crates.io/api/v1/crates/librespot/$LR/download" "$LR_SHA"
 fetch "mesa-$MESA.tar.xz" "https://mesa.freedesktop.org/archive/mesa-$MESA.tar.xz" "$MESA_SHA" sha512sum
 fetch "libjpeg-turbo-$JT.tar.gz" "https://github.com/libjpeg-turbo/libjpeg-turbo/releases/download/$JT/libjpeg-turbo-$JT.tar.gz" "$JT_SHA" sha512sum
-cp "$L/shairport-sync-stdout-delay.patch" "$L/nqptp-run-as-user.patch" "$L/librespot-volume-fifo.patch" "$STAGE/patches/"
+cp "$L/shairport-sync-stdout-delay.patch" "$L/shairport-sync-ssrc0-fallback.patch" "$L/nqptp-run-as-user.patch" "$L/librespot-volume-fifo.patch" "$STAGE/patches/"
 cp "$L/build-ffmpeg.sh" "$L/build-ffmpeg-arm64.sh" "$L/build-shairport-sync.sh" "$L/build-librespot.sh" "$L/build-mesa.sh" "$STAGE/build-scripts/"
 cp "$ROOT/tools/jpeg/build.sh" "$STAGE/build-scripts/build-jpeg.sh"
 cp -r "$L/licenses" "$STAGE/licenses"
@@ -53,7 +53,8 @@ build script names and checks by SHA-256. Their licenses are in licenses/.
 
 - techo5-shairport-sync (/usr/local/bin): Shairport Sync $SPS, the AirPlay receiver. MIT; see
   licenses/shairport-sync (its files name their own licenses). Built with FFmpeg $FF's libraries.
-  Changed by patches/shairport-sync-stdout-delay.patch (a delay() for its stdout output).
+  Changed by patches/shairport-sync-stdout-delay.patch (a delay() for its stdout output) and then
+  patches/shairport-sync-ssrc0-fallback.patch (plays Music Assistant's buffered AirPlay 2 stream).
 - techo5-nqptp (/usr/local/bin): nqptp $NQ, the clock AirPlay 2 needs. GPL-2.0; see
   licenses/nqptp. Changed by patches/nqptp-run-as-user.patch (adds -u <user>), which is GPL-2.0 too.
 - techo5-librespot (/usr/local/bin): librespot $LR, the Spotify Connect receiver. MIT; see
