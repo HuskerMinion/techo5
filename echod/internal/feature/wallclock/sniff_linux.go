@@ -16,7 +16,7 @@ import (
 // The clock holds a Bluetooth Classic link for as long as it is connected. Left alone that link
 // stays in active mode, with the clock's radio listening in every slot, which is most of its
 // battery drain. The kernel never asks for sniff mode by itself, so this does: one HCI command
-// after the link is up and again after any traffic takes it out.
+// after the link is up and again shortly after any traffic takes it out.
 const (
 	hciCommandPkt  = 0x01
 	hciEventPkt    = 0x04
@@ -49,9 +49,9 @@ const (
 	// hciConnMax is how many ACL links the connection list can hold on one controller.
 	hciConnMax = 16
 
-	// hciLMMaster is the link-mode bit that says this device initiated the ACL and may ask for
-	// sniff mode. A slave cannot, and Command Disallowed would otherwise look like success.
-	hciLMMaster = 0x0001
+	// hciLinkTypeACL is the connection-list type of a Bluetooth Classic ACL link. SCO and eSCO
+	// links can carry the same address and must not be mistaken for it.
+	hciLinkTypeACL = 0x01
 
 	// hciEventType is the HCI filter's bit for event packets; the command complete and status
 	// event bits are the only events wanted. A raw socket otherwise passes ACL and LE traffic,
@@ -78,7 +78,8 @@ type hciConnList struct {
 
 // sniffClock asks the controller for sniff mode on the ACL link to address, if there is one. Command
 // Disallowed is the usual answer when the link is already in sniff mode and is treated as success.
-// A link this device is not master of is reported, so the first failure is visible in the log.
+// Either side of a link may ask, so the controller's answer decides whether this device's role
+// permits it.
 func sniffClock(ctx context.Context, address string) error {
 	if err := ctx.Err(); err != nil {
 		return err
@@ -150,7 +151,9 @@ func openHCI() (int, error) {
 	return fd, nil
 }
 
-// handleFor is the ACL handle of the link to want, from the controller's connection list.
+// handleFor is the handle of the ACL link to want, from the controller's connection list. The type
+// matters: SCO or eSCO links can share the clock's address, and sniff mode on one of those is not
+// what the clock needs.
 func handleFor(fd int, want [6]byte) (uint16, error) {
 	req := hciConnList{Dev: 0, ConnNum: hciConnMax}
 	if _, _, errno := unix.Syscall(unix.SYS_IOCTL, uintptr(fd), hciGetConnList,
@@ -161,15 +164,19 @@ func handleFor(fd int, want [6]byte) (uint16, error) {
 	if n > len(req.Conn) {
 		n = len(req.Conn)
 	}
-	for _, c := range req.Conn[:n] {
-		if c.Addr == want {
-			if c.LinkMode&hciLMMaster == 0 {
-				return 0, fmt.Errorf("the clock's link is not master")
-			}
+	return findHandle(req.Conn[:n], want)
+}
+
+// findHandle picks the ACL link to want out of a connection list. Role and link mode are left to the
+// controller: either side of a link can ask for sniff mode, so refusing here would keep a link awake
+// if the clock ever became master.
+func findHandle(list []hciConnInfo, want [6]byte) (uint16, error) {
+	for _, c := range list {
+		if c.Addr == want && c.Type == hciLinkTypeACL {
 			return c.Handle, nil
 		}
 	}
-	return 0, fmt.Errorf("no Bluetooth link to %s", addressString(want))
+	return 0, fmt.Errorf("no Bluetooth ACL link to %s", addressString(want))
 }
 
 // sniffParams is HCI_Sniff_Mode's parameters: handle, max interval, min interval, attempt, timeout.

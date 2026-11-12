@@ -38,6 +38,10 @@ type conn struct {
 	deframer agt.Deframer
 	frames   chan agt.Frame
 
+	// sent is a one-deep signal that a frame has gone out. Sniff mode is left by the kernel for
+	// every write, so the wall clock feature uses this to ask for it again soon after the last one.
+	sent chan struct{}
+
 	done     chan struct{}
 	closeOne sync.Once
 	errMu    sync.Mutex
@@ -50,6 +54,7 @@ func newConn(file *os.File) *conn {
 		file:   file,
 		framer: agt.NewFramer(1),
 		frames: make(chan agt.Frame, 32),
+		sent:   make(chan struct{}, 1),
 		done:   make(chan struct{}),
 	}
 	go c.readLoop()
@@ -116,8 +121,16 @@ func (c *conn) Send(payload []byte) error {
 		}
 		written += n
 	}
+	select {
+	case c.sent <- struct{}{}:
+	default:
+	}
 	return nil
 }
+
+// Sent signals once for each burst of writes, so the wall clock feature can ask for sniff mode again
+// after traffic has taken the link out of it.
+func (c *conn) Sent() <-chan struct{} { return c.sent }
 
 // Frames delivers decoded frames from the clock.
 func (c *conn) Frames() <-chan agt.Frame { return c.frames }

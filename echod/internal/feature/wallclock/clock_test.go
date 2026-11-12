@@ -118,6 +118,21 @@ func TestHandshakeAndSendOverLink(t *testing.T) {
 	}
 }
 
+func TestSendSignalsTraffic(t *testing.T) {
+	_, linkFile := socketPair(t)
+	link := newConn(linkFile)
+	defer link.close()
+
+	if err := link.Send(agt.Discover()); err != nil {
+		t.Fatalf("send: %v", err)
+	}
+	select {
+	case <-link.Sent():
+	case <-time.After(time.Second):
+		t.Fatal("a write did not signal traffic")
+	}
+}
+
 func TestHandshakeTimesOutWithoutReply(t *testing.T) {
 	_, linkFile := socketPair(t)
 	link := newConn(linkFile)

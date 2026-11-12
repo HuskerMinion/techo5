@@ -79,6 +79,30 @@ func TestDecodeCommandReply(t *testing.T) {
 	}
 }
 
+// TestFindHandlePicksTheACLLink checks the address alone is not enough: a SCO link to the same
+// address must not be picked, and the device's role must not veto a link either side can sleep.
+func TestFindHandlePicksTheACLLink(t *testing.T) {
+	want := [6]byte{0x61, 0xD1, 0xBD, 0x66, 0xD5, 0x7C}
+	other := [6]byte{0x01, 0x02, 0x03, 0x04, 0x05, 0x06}
+	list := []hciConnInfo{
+		{Handle: 1, Addr: want, Type: 0x00},                        // SCO to the clock
+		{Handle: 2, Addr: other, Type: hciLinkTypeACL},             // ACL to something else
+		{Handle: 3, Addr: want, Type: hciLinkTypeACL},              // the one
+		{Handle: 4, Addr: want, Type: hciLinkTypeACL, LinkMode: 0}, // still the one: no role check
+	}
+	got, err := findHandle(list, want)
+	if err != nil {
+		t.Fatalf("findHandle: %v", err)
+	}
+	if got != 3 {
+		t.Fatalf("findHandle = %d, want 3 (the ACL link)", got)
+	}
+
+	if _, err := findHandle(list[:2], want); err == nil {
+		t.Fatal("findHandle accepted a link with no ACL to the clock")
+	}
+}
+
 // TestHCILayout pins the C struct sizes the ioctl writes into; a Go field change would otherwise
 // shift every connection's handle without a compile error.
 func TestHCILayout(t *testing.T) {
@@ -94,7 +118,7 @@ func TestHCILayout(t *testing.T) {
 	if hciGetConnList != 0x800448D4 {
 		t.Fatalf("hciGetConnList = 0x%08X, want 0x800448D4", hciGetConnList)
 	}
-	if hciLMMaster != 0x0001 {
-		t.Fatalf("hciLMMaster = 0x%04X, want 0x0001", hciLMMaster)
+	if hciLinkTypeACL != 0x01 {
+		t.Fatalf("hciLinkTypeACL = 0x%02X, want 0x01", hciLinkTypeACL)
 	}
 }
