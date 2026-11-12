@@ -3479,12 +3479,16 @@ var uiTranslations = map[string]map[string]string{
 		"a_whole_look_over_the_theme_and_font": "Een compleet uiterlijk voor thema en lettertype",
 		// Another speaker's music, while this one is quiet
 		"another_speaker_s_music_while_this_one_is_quiet": "Muziek van een andere luidspreker, terwijl deze stil is",
+		// Answer time
+		"answer_time": "Antwoordduur",
 		// At night
 		"at_night": "'s Nachts",
 		// Audio output
 		"audio_output": "Geluidsuitgang",
 		// Auto-brightness
 		"auto_brightness": "Automatische helderheid",
+		// Automatic uses the NWS in the lower 48
+		"automatic_uses_the_nws_in_the_lower_48": "Automatisch gebruikt de NWS in de 48 aaneengesloten staten",
 		// Back
 		"back": "Terug",
 		// Background
@@ -3493,6 +3497,64 @@ var uiTranslations = map[string]map[string]string{
 		"bass": "Bass",
 		// Brightness
 		"brightness": "Helderheid",
+		// Calendar chips
+		"calendar_look_chip_size_label": "Kalenderchips",
+		// The calendars' names over the month
+		"calendar_look_chip_size_sub": "De namen van de agenda's boven de maand",
+		// Coming up, one line each
+		"calendar_look_coming_up_refined_label": "Binnenkort, één regel per afspraak",
+		// With each day's weather
+		"calendar_look_coming_up_refined_sub": "Met het weer van elke dag",
+		// Countdowns
+		"calendar_look_countdowns_label": "Aftellingen",
+		// \"in 25 min\" on today's events
+		"calendar_look_countdowns_sub": "\"in 25 min\" bij de afspraken van vandaag",
+		// Dashboard events
+		"calendar_look_dashboard_events_label": "Dashboard-afspraken",
+		// Which events the Dashboard clock style lists
+		"calendar_look_dashboard_events_sub": "Welke afspraken de klokstijl Dashboard toont",
+		// Day timeline
+		"calendar_look_day_timeline_label": "Dagtijdlijn",
+		// A day's events on its hours
+		"calendar_look_day_timeline_sub": "De afspraken van een dag per uur",
+		// Event icons
+		"calendar_look_event_icons_label": "Pictogrammen",
+		// A small picture for a birthday, trash day, a flight…
+		"calendar_look_event_icons_sub": "Een klein plaatje voor een verjaardag, ophaaldag, vlucht…",
+		// Month details
+		"calendar_look_month_details_label": "Maanddetails",
+		// Full: times, icons and weather on the days
+		"calendar_look_month_details_sub": "Volledig: tijden, pictogrammen en weer per dag",
+		// Next up on the clock
+		"calendar_look_next_up_label": "Volgende op de klok",
+		// Today's next event at the foot of the clock
+		"calendar_look_next_up_sub": "De volgende afspraak van vandaag onderaan de klok",
+		// Next up within
+		"calendar_look_next_up_within_label": "Tijdvenster",
+		// How far ahead the clock's next event looks
+		"calendar_look_next_up_within_sub": "Hoe ver de klok vooruitkijkt",
+		// Opens on
+		"calendar_look_opens_on_label": "Opent met",
+		// The view a tap on the date opens
+		"calendar_look_opens_on_sub": "De weergave die opent als je op de datum tikt",
+		// Weather in the calendar
+		"calendar_look_weather_label": "Weer in de agenda",
+		// The forecast on each day
+		"calendar_look_weather_sub": "De voorspelling per dag",
+		// Week starts Monday
+		"calendar_look_week_starts_monday_label": "Week begint op maandag",
+		// Rather than Sunday
+		"calendar_look_week_starts_monday_sub": "In plaats van zondag",
+		// Week view
+		"calendar_look_week_view_label": "Weekweergave",
+		// Seven days on their hours
+		"calendar_look_week_view_sub": "Zeven dagen met hun uren",
+		// Call button
+		"call_button": "Belknop",
+		// Call screen
+		"call_screen": "Oproepscherm",
+		// Camera time
+		"camera_time": "Cameraduur",
 		// Cancel
 		"cancel": "Annuleren",
 		// Classic, or a picture that moves with the voice
@@ -3557,6 +3619,10 @@ var uiTranslations = map[string]map[string]string{
 		"home_screen": "Beginscherm",
 		// How dark auto-brightness goes in a dark room
 		"how_dark_auto_brightness_goes_in_a_dark_room": "Hoe donker de automatische helderheid in een donkere kamer wordt",
+		// How long a camera opened here stays up
+		"how_long_a_camera_opened_here_stays_up": "Hoe lang een hier geopende camera in beeld blijft",
+		// How long an answer stays up; a tap clears it
+		"how_long_an_answer_stays_up_a_tap_clears_it": "Hoe lang een antwoord blijft staan; tik om het te wissen",
 		// How running timers show on the clock
 		"how_running_timers_show_on_the_clock": "Hoe lopende timers op de klok verschijnen",
 		// How the night clock looks
@@ -3608,10 +3674,18 @@ var uiTranslations = map[string]map[string]string{
 		"now_playing_modern":  "Modern",
 		// OK
 		"ok": "OK",
+		// On the home screen: devices and contacts
+		"on_the_home_screen_devices_and_contacts": "Op het beginscherm: apparaten en contacten",
+		// 1 minute
+		"one_minute": "1 minuut",
 		// 10 minutes
 		"option_10_minutes": "10 minuten",
+		// 10 seconds
+		"option_10_seconds": "10 seconden",
 		// 12-hour
 		"option_12_hour": "12-uurs",
+		// 12 hours
+		"option_12_hours": "12 uur",
 		// 15 seconds
 		"option_15_seconds": "15 seconden",
 		// 1 hour
@@ -3624,8 +3698,14 @@ var uiTranslations = map[string]map[string]string{
 		"option_2_minutes": "2 minuten",
 		// 30 seconds
 		"option_30_seconds": "30 seconden",
+		// 3 hours
+		"option_3_hours": "3 uur",
 		// 5 minutes
 		"option_5_minutes": "5 minuten",
+		// 5 seconds
+		"option_5_seconds": "5 seconden",
+		// 6 hours
+		"option_6_hours": "6 uur",
 		// Above the strip
 		"option_above_the_strip": "Boven de strook",
 		// Always
@@ -3638,8 +3718,14 @@ var uiTranslations = map[string]map[string]string{
 		"option_bottom_left": "Linksonder",
 		// Bottom right
 		"option_bottom_right": "Rechtsonder",
+		// Camera's own size
+		"option_camera_s_own_size": "Eigen formaat van de camera",
 		// Center
 		"option_center": "Midden",
+		// Coming up
+		"option_coming_up": "Binnenkort",
+		// Coming week
+		"option_coming_week": "Komende week",
 		// Day
 		"option_day": "Dag",
 		// Default
@@ -3648,6 +3734,8 @@ var uiTranslations = map[string]map[string]string{
 		"option_dim": "Gedimd",
 		// Fade
 		"option_fade": "Vervaging",
+		// Fill the screen
+		"option_fill_the_screen": "Scherm vullen",
 		// Full page
 		"option_full_page": "Hele pagina",
 		// Gold
@@ -3655,7 +3743,7 @@ var uiTranslations = map[string]map[string]string{
 		// Hide
 		"option_hide": "Verbergen",
 		// Light
-		"option_light": "Licht",
+		"option_light": "Zwak",
 		// Medium
 		"option_medium": "Gemiddeld",
 		// Mint
@@ -3668,6 +3756,8 @@ var uiTranslations = map[string]map[string]string{
 		"option_night_clock": "Nachtklok",
 		// Night light
 		"option_night_light": "Nachtlamp",
+		// Normal
+		"option_normal": "Normaal",
 		// Red
 		"option_red": "Rood",
 		// Red LED
@@ -3696,32 +3786,58 @@ var uiTranslations = map[string]map[string]string{
 		"option_strip_after_30_s": "Strook na 30 s",
 		// Strip at once
 		"option_strip_at_once": "Strook meteen",
+		// Strong
+		"option_strong": "Sterk",
+		// Today only
+		"option_today_only": "Alleen vandaag",
+		// Today or 12 hours
+		"option_today_or_12_hours": "Vandaag of 12 uur",
 		// Top left
 		"option_top_left": "Linksboven",
 		// Top right
 		"option_top_right": "Rechtsboven",
 		// Until tapped
 		"option_until_tapped": "Tot je tikt",
+		// Week
+		"option_week": "Week",
 		// White
 		"option_white": "Wit",
+		// Whole picture
+		"option_whole_picture": "Hele beeld",
 		// Out of area targets in Home Assistant
 		"out_of_area_targets_in_home_assistant": "Doelen buiten het gebied in Home Assistant",
+		// Its own page, or Hang up over the page
+		"page_or_hang_up_button": "Eigen pagina, of Ophangen boven de pagina",
 		// Photos from Home Assistant
 		"photos_from_home_assistant": "Foto's van Home Assistant",
 		// Play
 		"play": "Afspelen",
+		// Pop-ups
+		"pop_ups": "Pop-ups",
+		// The camera notices somebody near; nothing is kept
+		"presence_description": "De camera merkt dat er iemand in de buurt is; er wordt niets bewaard",
 		// Presence
 		"presence_heading": "Aanwezigheid",
+		// Presence detection
+		"presence_label": "Aanwezigheidsdetectie",
+		// Lights again when somebody comes near
+		"presence_return": "Licht weer op als er iemand in de buurt komt",
 		// Quiet
 		"quiet": "Rustig",
 		// Quiet hours
 		"quiet_hours": "Stille uren",
+		// Radar source
+		"radar_source": "Radarbron",
+		// Rain, snow and storms move on the forecast
+		"rain_snow_and_storms_move_on_the_forecast": "Regen, sneeuw en onweer trekken over de voorspelling",
 		// Repeat
 		"repeat": "Herhalen",
 		// Restart
 		"restart": "Opnieuw opstarten",
 		// Screen language
 		"screen_language": "Schermtaal",
+		// Screen off when nobody is near
+		"screen_off_when_nobody_is_near": "Scherm uit als er niemand in de buurt is",
 		// Screensaver
 		"screensaver": "Schermbeveiliging",
 		// Settings
@@ -3740,10 +3856,14 @@ var uiTranslations = map[string]map[string]string{
 		"stop": "Stoppen",
 		// Tap lifts the night light
 		"tap_lifts_the_night_light": "Tik zet het nachtlampje hoger",
+		// Tap on the clock
+		"tap_on_the_clock": "Tikken op de klok",
 		// How large every word on the screen is
 		"text_size_description": "Hoe groot elk woord op het scherm is",
 		// Text size
 		"text_size_label": "Tekstgrootte",
+		// The NWS's alerts for home, in the U.S.
+		"the_nws_s_alerts_for_home_in_the_u_s": "De NWS-waarschuwingen voor thuis, in de VS",
 		// The words in time, looked up at LRCLIB
 		"the_words_in_time_looked_up_at_lrclib": "De songtekst op de maat, opgezocht bij LRCLIB",
 		// Make the theme your own
@@ -3784,6 +3904,12 @@ var uiTranslations = map[string]map[string]string{
 		"ui_brightness_night_theme_home_screen_and_weather": "Helderheid, nacht, thema, beginscherm en weer",
 		// Calendar
 		"ui_calendar": "Agenda",
+		// Camera picture
+		"ui_camera_picture": "Camerabeeld",
+		// Camera strips
+		"ui_camera_strips": "Camerastroken",
+		// Camera strips shade
+		"ui_camera_strips_shade": "Donkerte van de camerastroken",
 		// Change
 		"ui_change": "Wijzigen",
 		// Chips while music plays
@@ -3800,6 +3926,8 @@ var uiTranslations = map[string]map[string]string{
 		"ui_connections": "Verbindingen",
 		// Custom colors
 		"ui_custom_colors": "Eigen kleuren",
+		// %d minutes
+		"ui_d_minutes": "%d minuten",
 		// Dark theme
 		"ui_dark_theme": "Donker thema",
 		// Date and place
@@ -3830,6 +3958,8 @@ var uiTranslations = map[string]map[string]string{
 		"ui_glance_chip_size": "Chipgrootte",
 		// Hour
 		"ui_hour": "Uur",
+		// How dark those strips are
+		"ui_how_dark_those_strips_are": "Hoe donker die stroken zijn",
 		// Include subfolders
 		"ui_include_subfolders": "Submappen meenemen",
 		// Incoming call
@@ -3864,6 +3994,8 @@ var uiTranslations = map[string]map[string]string{
 		"ui_on_the_screensaver_under_each_photo": "Op de schermbeveiliging, onder elke foto",
 		// On this device
 		"ui_on_this_device": "Op dit apparaat",
+		// Open the dashboard or the deck, or nothing
+		"ui_open_the_dashboard_or_the_deck_or_nothing": "Dashboard of deck openen, of niets",
 		// Pair
 		"ui_pair": "Koppelen",
 		// PAUSED
@@ -3910,6 +4042,8 @@ var uiTranslations = map[string]map[string]string{
 		"ui_sound": "Geluid",
 		// Sound & Voice
 		"ui_sound_voice": "Geluid en stem",
+		// Start Assist, open the dashboard or the deck, or nothing
+		"ui_start_assist_open_the_dashboard_or_the_deck_or_nothing": "Assist starten, dashboard of deck openen, of niets",
 		// Tap a color for each part; the theme becomes Custom
 		"ui_tap_a_color_for_each_part_the_theme_becomes_custom": "Tik een kleur voor elk onderdeel; het thema wordt Custom",
 		// The date and AM/PM
@@ -3938,12 +4072,16 @@ var uiTranslations = map[string]map[string]string{
 		"ui_tiny": "Mini",
 		// Two tall photos side by side
 		"ui_two_tall_photos_side_by_side": "Twee staande foto's naast elkaar",
+		// Under its name and at its foot: solid, or fading into it
+		"ui_under_its_name_and_at_its_foot_solid_or_fading_into_it": "Onder de naam en aan de voet: effen, of erin vervagend",
 		// Unknown
 		"ui_unknown": "Onbekend",
 		// Weather art
 		"ui_weather_art": "Weerbeeld",
 		// Weather position
 		"ui_weather_position": "Positie van het weer",
+		// Whole, filling the screen, or the camera's own size
+		"ui_whole_filling_the_screen_or_the_camera_s_own_size": "Heel beeld, scherm vullend, of het eigen formaat van de camera",
 		// Update channel
 		"update_channel": "Updatekanaal",
 		// Updates
@@ -3954,6 +4092,10 @@ var uiTranslations = map[string]map[string]string{
 		"volume": "Volume",
 		// Weather
 		"weather": "Weer",
+		// Weather alerts
+		"weather_alerts": "Weerwaarschuwingen",
+		// Weather animation
+		"weather_animation": "Weeranimatie",
 		// Wi-Fi
 		"wi_fi": "Wifi",
 	},
