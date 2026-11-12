@@ -26,6 +26,7 @@ type house struct {
 	now    time.Time
 	later  []func()
 	opened []time.Time
+	faint  []time.Time
 	at0    int
 	sent   []claim
 	mine   *pending
@@ -58,6 +59,7 @@ func newHouse(t *testing.T) *house {
 	n.after = func(_ time.Duration, f func()) { h.later = append(h.later, f) }
 	n.woke = func(_ int, at time.Time) { h.opened = append(h.opened, at) }
 	n.wokeNow = func(int) { h.at0++ }
+	n.faint = func(_ int, at time.Time) { h.faint = append(h.faint, at) }
 	h.n = n
 	return h
 }

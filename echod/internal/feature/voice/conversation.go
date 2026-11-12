@@ -99,6 +99,7 @@ const (
 	evWakeEnd                      // and has heard the word
 	evUnconfirmed                  // a wake asked about was not heard in time
 	evCandidate                    // a wake the device was not sure of (event.slot, event.peak)
+	evFaint                        // a wake won with a low nearest-device score (event.slot, event.at, event.then)
 	evWatch                        // something a stream to Home Assistant depends on may have changed
 	evRunStart                     // Home Assistant opened a run (event.url: where its reply will be)
 	evEarlyReply                   // the reply can be fetched while the agent is still writing it
@@ -138,6 +139,10 @@ type event struct {
 	// spoken is an evReplyText whose words have already been said: realtime voice has them only once
 	// the answer is over.
 	spoken bool
+
+	// then is what an evFaint does instead when Home Assistant can't be asked: open the turn as any
+	// wake would. It runs off the conversation's goroutine.
+	then func()
 }
 
 // conversation runs one turn at a time: microphone audio up, pipeline events back, spoken reply out.

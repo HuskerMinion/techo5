@@ -31,7 +31,7 @@ var listeningObjects = map[string]bool{
 	"microphone_cancel_echo": true, "microphone_echo_canceller": true, "microphone_end_of_speech": true,
 	"microphone_gain": true, "microphone_sensitivity": true, "microphone_end_of_speech_pause": true,
 	// feature/detect
-	"confirm_threshold": true, "confirm_wake_with_home_assistant": true, "wake_word_on_home_assistant": true,
+	"confirm_threshold": true, "confirm_below_nearest_score": true, "confirm_wake_with_home_assistant": true, "wake_word_on_home_assistant": true,
 	"keep_wake_clips": true, "last_wake_score": true, "stop_word_sensitivity": true,
 	"wake_clips": true, "wake_clips_by_kind": true, "wake_word_load": true, "wake_frames": true, "worst_wake_frame": true,
 	// feature/security: recording takes of a word from the setup page (feature/takes)
