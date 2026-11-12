@@ -5096,7 +5096,7 @@
    ],
    "airplay": [
     "Partly",
-    "every device but the Panel app; off by default; AirPlay 2 grouping, kept in step with other AirPlay 2 speakers since v1.6.9; the AirPlay slider can set the device volume (v1.6.12)",
+    "every device but the Panel app; off by default; AirPlay 2 grouping, kept in step with other AirPlay 2 speakers since v1.6.9; the AirPlay slider can set the device volume (v1.6.12); Music Assistant's buffered AirPlay stream plays since v1.6.36",
     "https://github.com/HuskerMinion/techo5/blob/v1.6.36/docs/setup.md#5-music"
    ],
    "dlna": [
@@ -5241,7 +5241,7 @@
    ],
    "immich": [
     "Yes",
-    "",
+    "also albums through Home Assistant's own Immich integration (v1.6.36)",
     "https://github.com/HuskerMinion/techo5/blob/v1.6.36/docs/setup.md#2-photos"
    ],
    "glance-chips": [
