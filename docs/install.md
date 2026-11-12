@@ -472,7 +472,8 @@ attributes carry the song, named as a media player's: `media_title`, `media_arti
 `/local/cover.jpg`). While the sensor names the station that plays, the device shows those instead of
 asking a service, and follows them as they change. The device takes them for whichever station the
 sensor names, so leave them empty for every other station, as below. With all of them empty, the
-services are asked as before.
+services are asked as before; once they have given a station a song, they stay its source while it
+plays, so a moment between songs shows no song rather than a lookup.
 
 ```yaml
 rest:

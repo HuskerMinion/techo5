@@ -155,6 +155,16 @@ grayed out, and a line at the top says so.
   of the speaker it plays on when you opened the library from one.
 - Search opens the on-screen keyboard. It finds artists, albums, playlists, tracks and radio
   stations, in the library and in your music services, each kind in a row of its own.
+- A second row of tabs has **Podcasts** and **Audiobooks**, with icon tabs for favorites, recently
+  played, the queue and browsing. A series of audiobooks is one tile that opens its parts in order.
+  Both tabs start with **Continue listening**, what you have started, a tap away. A started book or
+  episode has a bar along its cover, and a finished one a check.
+- A book's page has its authors, narrators, publisher, year, length and description above its
+  chapters, and **Resume at** the place Music Assistant kept (the same on every device and in Music
+  Assistant's own app, for the user the device's token belongs to) or **Start over**. Hold a book or
+  an episode for the same, its details, Play next and Add to queue.
+- While an audiobook or a podcast episode plays, Now Playing and the music strip have back and
+  forward 30 seconds in place of previous and next, and a speed button (0.75× to 2×).
 
 **What it needs**
 

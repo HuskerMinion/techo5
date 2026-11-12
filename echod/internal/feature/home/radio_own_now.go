@@ -44,6 +44,13 @@ func entityNow(station string) (n radiometa.Now, ok bool) {
 	return n, n != radiometa.Now{}
 }
 
+// entityNames is whether the "now" entity names station as the one playing.
+func entityNames(station string) bool {
+	entity := config.Get().Home.Radio.Now
+	return entity != "" && station != "" &&
+		strings.EqualFold(strings.TrimSpace(hastate.Get().State(entity)), strings.TrimSpace(station))
+}
+
 // fetchEntityArt fetches the "now" entity's picture: a path on Home Assistant (with the token, as a
 // media player's entity_picture is) or an address anywhere. A cover, so it fills the panel.
 func fetchEntityArt(ctx context.Context, u string) (*image.RGBA, *image.RGBA, error) {

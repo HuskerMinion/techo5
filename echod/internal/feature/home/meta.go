@@ -113,7 +113,10 @@ func (f *Feature) refreshMeta(ctx context.Context) {
 	}
 	ctx, cancel := context.WithTimeout(ctx, 20*time.Second)
 	defer cancel()
-	if own, ok := entityNow(station); ok {
+	if own, ok := entityNow(station); ok || (cur.fromEntity && cur.station == station && entityNames(station)) {
+		// Once the entity has given this station a song, it stays the station's source while it plays:
+		// a moment between songs with the attributes empty is no song, not a lookup that could bring a
+		// similarly named station's logo.
 		f.refreshFromEntity(ctx, cur, station, own)
 		return
 	}
@@ -181,7 +184,8 @@ func (f *Feature) refreshMeta(ctx context.Context) {
 func (f *Feature) refreshFromEntity(ctx context.Context, cur meta, station string, own radiometa.Now) {
 	next := cur
 	if cur.station != station || !cur.fromEntity {
-		next = meta{station: station, fromEntity: true}
+		// A station that carries its songs plays music: the page draws a song's picture, not talk's.
+		next = meta{station: station, fromEntity: true, st: radiometa.Station{Name: station, Music: true}}
 	}
 	next.now = own
 	if own.Art != next.artURL {

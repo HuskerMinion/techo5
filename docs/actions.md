@@ -1524,6 +1524,9 @@ runs out or **Cancel** is tapped; then the action fails with `no code was read`.
 >
 > Call it with a `response_variable`: the answer is the point of it, and a call without one fails
 > after 30 seconds.
+>
+> While the page is up, the device answers nothing else Home Assistant sends it: an announcement,
+> a switch or a voice request waits until the scan ends, at most 25 seconds. Keep `seconds` short.
 
 ### seconds (Required)
 

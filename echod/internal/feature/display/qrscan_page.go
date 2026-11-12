@@ -98,13 +98,18 @@ func (q *qrScan) frame(fr *camera.Frame, wake func()) {
 	}
 	q.reading, q.readAt = true, now
 	safe.Go("qr scan read", func() {
+		// A read that panics (safe.Go recovers it) must still let the next frame be read.
+		defer func() {
+			q.mu.Lock()
+			q.reading = false
+			q.mu.Unlock()
+		}()
 		img := q.picture(fr)
 		code := ""
 		if img != nil {
 			code, _ = q.read(img)
 		}
 		q.mu.Lock()
-		q.reading = false
 		if img != nil {
 			q.preview = img
 			q.w, q.h = img.Bounds().Dx(), img.Bounds().Dy()
@@ -280,6 +285,11 @@ func (r *renderer) qrScanPage(s scene) {
 		r.bevel(pic, shift(walnut, 8), false)
 	}
 	lines := r.wrap(r.small, msg, pic.Dx()-r.s(32))
+	if len(lines) > 3 {
+		// A long code (a QR code can hold a few thousand characters) is cut to three lines, so the band
+		// stays on the picture; the whole of it goes to Home Assistant.
+		lines = append(lines[:2:2], lines[2]+"…")
+	}
 	lh := r.small.Metrics().Height.Ceil()
 	band := image.Rect(pic.Min.X, pic.Max.Y-len(lines)*lh-r.s(20), pic.Max.X, pic.Max.Y)
 	draw.Draw(r.dst, band, image.NewUniform(shift(walnut, 4)), image.Point{}, draw.Src)

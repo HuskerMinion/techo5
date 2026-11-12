@@ -82,3 +82,23 @@ func TestANewSongOnTheNowEntityPokesTheRadio(t *testing.T) {
 		t.Fatal("a new song did not poke the radio")
 	}
 }
+
+// The entity names a station whether or not it carries a song at the moment, so a station it has given
+// a song stays with it between songs.
+func TestTheNowEntityNamesItsStationBetweenSongs(t *testing.T) {
+	config.Use(filepath.Join(t.TempDir(), "state.json"))
+	const entity = "sensor.own_now_test_between"
+	if err := config.Set().Home().Radio(config.Radio{Now: entity}); err != nil {
+		t.Fatal(err)
+	}
+	if err := hastate.Get().Handle(context.Background(), nil,
+		&api.HomeAssistantStateResponse{EntityId: entity, State: "SUB/WAVE"}); err != nil {
+		t.Fatal(err)
+	}
+	if !entityNames("sub/wave") || entityNames("KXYZ") || entityNames("") {
+		t.Error("the entity's station named wrongly")
+	}
+	if _, ok := entityNow("SUB/WAVE"); ok {
+		t.Error("a song with no song attributes")
+	}
+}

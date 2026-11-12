@@ -504,13 +504,17 @@ func (f *Feature) Run(ctx context.Context) error {
 		// about to pair with, and take the gate before dialing so a search that starts now waits for
 		// this attempt instead of overlapping with it.
 		if f.Pairing() {
+			// A pairing is a new clock, or the same one again: its try starts the back-off over, whatever
+			// wait the clock before it had reached.
 			f.wait(ctx, idleWait)
+			delay, fails = reconnectDelay, 0
 			continue
 		}
 		f.gate.Lock()
 		if f.Pairing() {
 			f.gate.Unlock()
 			f.wait(ctx, idleWait)
+			delay, fails = reconnectDelay, 0
 			continue
 		}
 		// The config may have changed while the gate was held by a pairing.
