@@ -3473,8 +3473,18 @@ var uiTranslations = map[string]map[string]string{
 		"ui_match_all_languages":                        "Riconosci tutte le lingue",
 	},
 	"nl": {
+		// A tap brings the screen back until the room is quiet
+		"a_tap_brings_the_screen_back_until_the_room_is_quiet": "Een tik brengt het scherm terug tot het rustig is in de kamer",
+		// A whole look over the theme and font
+		"a_whole_look_over_the_theme_and_font": "Een compleet uiterlijk voor thema en lettertype",
+		// Another speaker's music, while this one is quiet
+		"another_speaker_s_music_while_this_one_is_quiet": "Muziek van een andere luidspreker, terwijl deze stil is",
+		// At night
+		"at_night": "'s Nachts",
 		// Audio output
 		"audio_output": "Geluidsuitgang",
+		// Auto-brightness
+		"auto_brightness": "Automatische helderheid",
 		// Back
 		"back": "Terug",
 		// Background
@@ -3485,8 +3495,16 @@ var uiTranslations = map[string]map[string]string{
 		"brightness": "Helderheid",
 		// Cancel
 		"cancel": "Annuleren",
+		// Classic, or a picture that moves with the voice
+		"classic_or_a_picture_that_moves_with_the_voice": "Klassiek, of een beeld dat meebeweegt met de stem",
 		// Clear
 		"clear": "Wissen",
+		// Clock format
+		"clock_format": "Tijdnotatie",
+		// How the clock looks all day
+		"clock_style_description": "Hoe de klok er de hele dag uitziet",
+		// Clock style
+		"clock_style_label": "Klokstijl",
 		// Close
 		"close": "Sluiten",
 		// Connect
@@ -3495,10 +3513,18 @@ var uiTranslations = map[string]map[string]string{
 		"day": "Dag",
 		// Default
 		"default_option": "Standaard",
+		// Dim after idle
+		"dim_after_idle": "Dimmen na inactiviteit",
+		// Drawn in dim red; the screen gets no brighter
+		"dim_red_and_no_brighter": "In gedimd rood; het scherm wordt niet helderder",
+		// Dimmest
+		"dimmest": "Donkerste stand",
 		// Do not disturb
 		"do_not_disturb": "Niet storen",
 		// Done
 		"done": "Gereed",
+		// Down to Dimmest until touched, spoken to or somebody near
+		"down_to_dimmest_until_touched_spoken_to_or_somebody_near": "Tot de donkerste stand, tot je tikt, ertegen praat of iemand in de buurt is",
 		// ANNOUNCEMENT
 		"drawer_announcement": "AANKONDIGING",
 		// Call
@@ -3517,12 +3543,32 @@ var uiTranslations = map[string]map[string]string{
 		"drawer_speak": "Spreken",
 		// Unmute
 		"drawer_unmute": "Geluid aan",
+		// Follows the room's light
+		"follows_the_room_s_light": "Volgt het licht in de kamer",
+		// For all the screen's words
+		"font_description": "Voor alle woorden op het scherm",
 		// Font
 		"font_label": "Lettertype",
+		// Full page, or a strip over the clock
+		"full_page_or_a_strip_over_the_clock": "Hele pagina, of een strook boven de klok",
 		// Hang up
 		"hang_up": "Ophangen",
 		// Home screen
 		"home_screen": "Beginscherm",
+		// How dark auto-brightness goes in a dark room
+		"how_dark_auto_brightness_goes_in_a_dark_room": "Hoe donker de automatische helderheid in een donkere kamer wordt",
+		// How running timers show on the clock
+		"how_running_timers_show_on_the_clock": "Hoe lopende timers op de klok verschijnen",
+		// How the night clock looks
+		"how_the_night_clock_looks": "Hoe de nachtklok eruitziet",
+		// Ignore room lights
+		"ignore_room_lights": "Kamerlicht negeren",
+		// %d of %d
+		"level_of": "%d van %d",
+		// Look
+		"look": "Uiterlijk",
+		// Lyrics
+		"lyrics": "Songtekst",
 		// Playback
 		"media_playback": "Weergave",
 		// Microphone
@@ -3537,43 +3583,131 @@ var uiTranslations = map[string]map[string]string{
 		"network_address": "Netwerkadres",
 		// Next
 		"next": "Volgende",
+		// Controlled by Home Assistant
+		"night_by_ha": "Bestuurd door Home Assistant",
+		// Night clock
+		"night_clock": "Nachtklok",
+		// Night clock brightness
+		"night_clock_brightness": "Helderheid van de nachtklok",
+		// Night clock shows Next up and notifications
+		"night_clock_next_up_and_alerts": "Nachtklok toont Volgende en meldingen",
+		// Custom…
+		"night_custom": "Aangepast…",
+		// Dark, a faint glow, or a clock alone until touched
+		"night_description_show": "Donker, een zwakke gloed, of alleen een klok tot je tikt",
+		// Dim, a red clock, or dark
+		"night_description_spot": "Gedimd, een rode klok, of donker",
+		// Night hours
+		"night_hours": "Nachturen",
 		// Now playing
 		"now_playing":         "Speelt nu",
-		"now_playing_layout":  "Indeling voor afspelen",
 		"now_playing_classic": "Klassiek",
+		// Now playing follows
+		"now_playing_follows": "Volgt wat nu speelt",
+		"now_playing_layout":  "Indeling voor afspelen",
 		"now_playing_modern":  "Modern",
 		// OK
 		"ok": "OK",
+		// 10 minutes
+		"option_10_minutes": "10 minuten",
+		// 12-hour
+		"option_12_hour": "12-uurs",
+		// 15 seconds
+		"option_15_seconds": "15 seconden",
+		// 1 hour
+		"option_1_hour": "1 uur",
+		// 1 minute
+		"option_1_minute": "1 minuut",
+		// 24-hour
+		"option_24_hour": "24-uurs",
+		// 2 minutes
+		"option_2_minutes": "2 minuten",
+		// 30 seconds
+		"option_30_seconds": "30 seconden",
+		// 5 minutes
+		"option_5_minutes": "5 minuten",
+		// Above the strip
+		"option_above_the_strip": "Boven de strook",
+		// Always
+		"option_always": "Altijd",
 		// Automatic
 		"option_automatic": "Automatisch",
+		// Bottom center
+		"option_bottom_center": "Middenonder",
+		// Bottom left
+		"option_bottom_left": "Linksonder",
+		// Bottom right
+		"option_bottom_right": "Rechtsonder",
 		// Center
 		"option_center": "Midden",
 		// Day
 		"option_day": "Dag",
 		// Default
 		"option_default": "Standaard",
+		// Dim
+		"option_dim": "Gedimd",
 		// Fade
 		"option_fade": "Vervaging",
+		// Full page
+		"option_full_page": "Hele pagina",
 		// Gold
 		"option_gold": "Goud",
 		// Hide
 		"option_hide": "Verbergen",
+		// Light
+		"option_light": "Licht",
+		// Medium
+		"option_medium": "Gemiddeld",
+		// Mint
+		"option_mint": "Mint",
 		// Month
 		"option_month": "Maand",
+		// Never
+		"option_never": "Nooit",
+		// Night clock
+		"option_night_clock": "Nachtklok",
 		// Night light
 		"option_night_light": "Nachtlamp",
 		// Red
 		"option_red": "Rood",
+		// Red LED
+		"option_red_led": "Rode led",
+		// Rose
+		"option_rose": "Rosé",
+		// Screen off
+		"option_screen_off": "Scherm uit",
 		// Show
 		"option_show": "Weergeven",
 		// Silent
 		"option_silent": "Stil",
 		// Simple
 		"option_simple": "Eenvoudig",
+		// Sky
+		"option_sky": "Hemelblauw",
 		// Solid
 		"option_solid": "Effen",
 		// Speaker
 		"option_speaker": "Luidspreker",
+		// Strip
+		"option_strip": "Strook",
+		// Strip after 10 s
+		"option_strip_after_10_s": "Strook na 10 s",
+		// Strip after 30 s
+		"option_strip_after_30_s": "Strook na 30 s",
+		// Strip at once
+		"option_strip_at_once": "Strook meteen",
+		// Top left
+		"option_top_left": "Linksboven",
+		// Top right
+		"option_top_right": "Rechtsboven",
+		// Until tapped
+		"option_until_tapped": "Tot je tikt",
+		// White
+		"option_white": "Wit",
+		// Out of area targets in Home Assistant
+		"out_of_area_targets_in_home_assistant": "Doelen buiten het gebied in Home Assistant",
+		// Photos from Home Assistant
+		"photos_from_home_assistant": "Foto's van Home Assistant",
 		// Play
 		"play": "Afspelen",
 		// Presence
@@ -3588,38 +3722,90 @@ var uiTranslations = map[string]map[string]string{
 		"restart": "Opnieuw opstarten",
 		// Screen language
 		"screen_language": "Schermtaal",
+		// Screensaver
+		"screensaver": "Schermbeveiliging",
 		// Settings
 		"settings": "Instellingen",
+		// Shown as you change it, at night
+		"shown_as_you_change_it_at_night": "Te zien terwijl je het wijzigt, 's nachts",
+		// Skin
+		"skin": "Skin",
+		// Kept for when the skin is off
+		"skin_keeps": "Bewaard voor als de skin uit staat",
 		// Slideshow
 		"slideshow": "Diavoorstelling",
 		// Threshold
 		"spot_threshold": "Drempelwaarde",
 		// Stop
 		"stop": "Stoppen",
+		// Tap lifts the night light
+		"tap_lifts_the_night_light": "Tik zet het nachtlampje hoger",
+		// How large every word on the screen is
+		"text_size_description": "Hoe groot elk woord op het scherm is",
+		// Text size
+		"text_size_label": "Tekstgrootte",
+		// The words in time, looked up at LRCLIB
+		"the_words_in_time_looked_up_at_lrclib": "De songtekst op de maat, opgezocht bij LRCLIB",
+		// Make the theme your own
+		"theme_personalize": "Pas het thema aan",
+		// Time per photo
+		"time_per_photo": "Tijd per foto",
 		// Time zone
 		"time_zone": "Tijdzone",
 		// Timer
 		"timer": "Timer",
 		//  timer
 		"timer_suffix": " timer",
+		// Timers
+		"timers": "Timers",
 		// Today
 		"today": "Vandaag",
+		// Turn screen
+		"turn_screen": "Spraakscherm",
+		// A landscape for the weather, in place of photos
+		"ui_a_landscape_for_the_weather_in_place_of_photos": "Een landschap voor het weer, in plaats van foto's",
 		// Gateway
 		"ui_address_field_gateway": "Gateway",
 		// Alarms
 		"ui_alarms": "Wekkers",
+		// Alarms & Timers
+		"ui_alarms_timers": "Wekkers en timers",
+		// All of it, with blurred sides; off fills the screen
+		"ui_all_of_it_with_blurred_sides_off_fills_the_screen": "Alles, met vervaagde zijkanten; uit vult het scherm",
+		// All photos
+		"ui_all_photos": "Alle foto's",
 		// Allow
 		"ui_allow": "Toestaan",
 		// Answer
 		"ui_answer": "Opnemen",
+		// Brightness, night, clock and photos
+		"ui_brightness_night_clock_and_photos": "Helderheid, nacht, klok en foto's",
+		// Brightness, night, theme, home screen and weather
+		"ui_brightness_night_theme_home_screen_and_weather": "Helderheid, nacht, thema, beginscherm en weer",
 		// Calendar
 		"ui_calendar": "Agenda",
 		// Change
 		"ui_change": "Wijzigen",
+		// Chips while music plays
+		"ui_chips_while_music_plays": "Chips tijdens muziek",
+		// Where the glance chips go while the music strip is up
+		"ui_chips_while_music_plays_sub": "Waar de chips staan als de muziekstrook in beeld is",
+		// Clock position
+		"ui_clock_position": "Positie van de klok",
 		// Closed
 		"ui_closed": "Gesloten",
 		// Confirm
 		"ui_confirm": "Bevestigen",
+		// Connections
+		"ui_connections": "Verbindingen",
+		// Custom colors
+		"ui_custom_colors": "Eigen kleuren",
+		// Dark theme
+		"ui_dark_theme": "Donker thema",
+		// Date and place
+		"ui_date_and_place": "Datum en plaats",
+		// Date color
+		"ui_date_color": "Datumkleur",
 		// Days
 		"ui_days": "Dagen",
 		// Decline
@@ -3632,12 +3818,26 @@ var uiTranslations = map[string]map[string]string{
 		"ui_display": "Scherm",
 		// Edit
 		"ui_edit": "Bewerken",
+		// Every folder inside the one chosen
+		"ui_every_folder_inside_the_one_chosen": "Elke map in de gekozen map",
+		// Favorites only
+		"ui_favorites_only": "Alleen favorieten",
+		// For all the screen's words
+		"ui_for_all_the_screen_s_words": "Voor alle woorden op het scherm",
+		// General
+		"ui_general": "Algemeen",
+		// Glance chip size
+		"ui_glance_chip_size": "Chipgrootte",
 		// Hour
 		"ui_hour": "Uur",
+		// Include subfolders
+		"ui_include_subfolders": "Submappen meenemen",
 		// Incoming call
 		"ui_incoming_call": "Inkomende oproep",
 		// Install
 		"ui_install": "Installeren",
+		// Light theme
+		"ui_light_theme": "Licht thema",
 		// Listening
 		"ui_listening": "Luistert",
 		// Minute
@@ -3646,12 +3846,50 @@ var uiTranslations = map[string]map[string]string{
 		"ui_more": "Meer",
 		// Muted
 		"ui_muted": "Gedempt",
+		// Never
+		"ui_never": "Nooit",
+		// Night ends
+		"ui_night_ends": "Nacht eindigt",
+		// Night ends at
+		"ui_night_ends_at": "Nacht eindigt om",
+		// Night starts
+		"ui_night_starts": "Nacht begint",
+		// Night starts at
+		"ui_night_starts_at": "Nacht begint om",
+		// None chosen
+		"ui_none_chosen": "Geen map gekozen",
+		// Not for Dashboard, Agenda or World
+		"ui_not_for_dashboard_agenda_or_world": "Niet voor Dashboard, Agenda of World",
+		// On the screensaver, under each photo
+		"ui_on_the_screensaver_under_each_photo": "Op de schermbeveiliging, onder elke foto",
+		// On this device
+		"ui_on_this_device": "Op dit apparaat",
 		// Pair
 		"ui_pair": "Koppelen",
 		// PAUSED
 		"ui_paused": "GEPAUZEERD",
+		// Photo folder
+		"ui_photo_folder": "Fotomap",
+		// Photo pairs
+		"ui_photo_pairs": "Fotoparen",
+		// %d folder
+		"ui_photo_picker_folder_one": "%d map",
+		// %d folders
+		"ui_photo_picker_folders": "%d mappen",
+		// Couldn't open this folder
+		"ui_photo_picker_open_failed": "Kon deze map niet openen",
+		// Opening…
+		"ui_photo_picker_opening": "Openen…",
+		// %d photo
+		"ui_photo_picker_photo_one": "%d foto",
+		// %d photos
+		"ui_photo_picker_photos": "%d foto's",
+		// Use this folder
+		"ui_photo_picker_use_folder": "Deze map gebruiken",
 		// Privacy
 		"ui_privacy": "Privacy",
+		// Privacy & Security
+		"ui_privacy_security": "Privacy en beveiliging",
 		// Rescan
 		"ui_rescan": "Opnieuw scannen",
 		// Running
@@ -3660,18 +3898,52 @@ var uiTranslations = map[string]map[string]string{
 		"ui_save": "Opslaan",
 		// Show
 		"ui_show": "Weergeven",
+		// Show whole photo
+		"ui_show_whole_photo": "Hele foto tonen",
+		// Shuffle photos
+		"ui_shuffle_photos": "Willekeurige volgorde",
 		// Silent
 		"ui_silent": "Stil",
+		// Small
+		"ui_small": "Klein",
 		// Sound
 		"ui_sound": "Geluid",
+		// Sound & Voice
+		"ui_sound_voice": "Geluid en stem",
+		// Tap a color for each part; the theme becomes Custom
+		"ui_tap_a_color_for_each_part_the_theme_becomes_custom": "Tik een kleur voor elk onderdeel; het thema wordt Custom",
+		// The date and AM/PM
+		"ui_the_date_and_am_pm": "De datum en AM/PM",
+		// The photos marked as favorites in Immich
+		"ui_the_photos_marked_as_favorites_in_immich": "De foto's die in Immich als favoriet zijn gemarkeerd",
+		// The size of the text under the clock
+		"ui_the_text_under_the_clock": "De grootte van de tekst onder de klok",
+		// The weather's corner over the clock
+		"ui_the_weather_s_corner_over_the_clock": "De hoek van het weer boven de klok",
 		// Theme
 		"ui_theme": "Thema",
 		// Thinking
 		"ui_thinking": "Denkt na",
+		// Banner
+		"ui_timer_style_banner": "Banner",
+		// Big
+		"ui_timer_style_big": "Groot",
+		// Corner
+		"ui_timer_style_corner": "Hoek",
 		// Line
 		"ui_timer_style_line": "Regel",
+		// Ring
+		"ui_timer_style_ring": "Ring",
+		// Tiny
+		"ui_tiny": "Mini",
+		// Two tall photos side by side
+		"ui_two_tall_photos_side_by_side": "Twee staande foto's naast elkaar",
 		// Unknown
 		"ui_unknown": "Onbekend",
+		// Weather art
+		"ui_weather_art": "Weerbeeld",
+		// Weather position
+		"ui_weather_position": "Positie van het weer",
 		// Update channel
 		"update_channel": "Updatekanaal",
 		// Updates
