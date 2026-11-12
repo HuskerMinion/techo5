@@ -186,7 +186,7 @@ func fetchArt(ctx context.Context, u string, logo bool) (*image.RGBA, *image.RGB
 	}
 	defer res.Body.Close()
 	var buf bytes.Buffer
-	if _, err := buf.ReadFrom(http.MaxBytesReader(nil, res.Body, 4<<20)); err != nil {
+	if _, err := buf.ReadFrom(http.MaxBytesReader(nil, res.Body, 8<<20)); err != nil {
 		return nil, nil, err
 	}
 	return layoutArt(buf.Bytes(), logo, "cover art from "+u)

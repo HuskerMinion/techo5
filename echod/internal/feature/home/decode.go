@@ -32,10 +32,12 @@ const (
 	// times a second.
 	maxFramePixels = 12 << 20
 
-	// maxArtPixels bounds cover art, station logos and map tiles: pictures that are a few hundred
-	// pixels square by nature, from services nobody here controls. Four megapixels is a 2048×2048
-	// image, which none of them have ever sent.
-	maxArtPixels = 4 << 20
+	// maxArtPixels bounds cover art, station logos and map tiles, from services nobody here controls.
+	// Most are a few hundred pixels square, but a media server sends a show's poster or fanart as it
+	// has it: Plex's posters are 2000×3000 and its fanart 3840×2160, and a four megapixel bound left
+	// those blank (#516). Twelve is the camera's bound, which is decoded far more often than art; a
+	// large JPEG decodes at a half or a quarter of its size anyway.
+	maxArtPixels = 12 << 20
 )
 
 // decodeWithin decodes an image only if its header declares something this screen could use. what

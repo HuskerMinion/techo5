@@ -56,6 +56,18 @@ func TestAnAbsurdlyLargeImageIsRefusedBeforeItIsDecoded(t *testing.T) {
 	}
 }
 
+// A media server's poster or fanart is within the art budget (#516): Plex sends 2000×3000 posters and
+// 3840×2160 fanart, and the old four megapixel bound refused both and left Now Playing blank. These
+// headers declare more than follows, so the decode itself fails, but not on the budget.
+func TestAPostersSizeIsWithinTheArtBudget(t *testing.T) {
+	for _, s := range [][2]uint32{{2000, 3000}, {3840, 2160}} {
+		_, err := decodeWithin(hugePNG(s[0], s[1]), maxArtPixels, "cover art", 960, 480)
+		if err != nil && strings.Contains(err.Error(), "pixels") {
+			t.Errorf("%d×%d: %v", s[0], s[1], err)
+		}
+	}
+}
+
 // And a picture the screen could actually show still comes through, whole.
 func TestAPictureThePanelCanUseIsDecoded(t *testing.T) {
 	src := image.NewRGBA(image.Rect(0, 0, slideshowW, slideshowH))
