@@ -65,6 +65,52 @@ func TestSwipingThroughTheScreensaver(t *testing.T) {
 	}
 }
 
+// A photo seen before that can't be fetched again (deleted since) is let go of: after a swipe back the
+// slideshow carries on with a new photo rather than trying the dead one every tick for good, and a swipe
+// that put nothing new up holds nothing.
+func TestAPhotoGoneSinceDoesNotStallTheSlideshow(t *testing.T) {
+	m := &moreImmich{}
+	f := slideshowFeature(t, m, screensaver, wide1, wide2, wide3)
+	f.advanceSlideshow()
+	due(f)
+	f.advanceSlideshow()
+	f.step(-1)
+	if got := shownNow(f); !slices.Equal(got, []string{wide1}) {
+		t.Fatalf("after a swipe back, shown %v", got)
+	}
+	m.mu.Lock()
+	m.gone = map[string]bool{wide2: true}
+	m.mu.Unlock()
+
+	f.mu.Lock()
+	f.slideshow.holdUntil = time.Time{}
+	f.mu.Unlock()
+	due(f)
+	f.advanceSlideshow()
+	if got := shownNow(f); slices.Equal(got, []string{wide1}) || slices.Equal(got, []string{wide2}) {
+		t.Fatalf("with the next photo seen gone, shown %v, want a new one", got)
+	}
+	f.mu.Lock()
+	for _, p := range f.slideshow.hist {
+		if p.ids[0] == wide2 {
+			t.Error("the photo that's gone is still in the history")
+		}
+	}
+	f.mu.Unlock()
+
+	// A swipe back onto a photo that's gone puts nothing up, and holds nothing.
+	m.mu.Lock()
+	m.gone[wide1] = true
+	m.mu.Unlock()
+	f.step(-1)
+	f.mu.Lock()
+	held := !f.slideshow.holdUntil.IsZero()
+	f.mu.Unlock()
+	if held {
+		t.Error("a swipe that put nothing up held the photo there")
+	}
+}
+
 // Swipes are for the screensaver: in Background mode the swipe is the clock's.
 func TestNoSwipingTheBackground(t *testing.T) {
 	f := slideshowFeature(t, &moreImmich{}, func(*config.Slideshow) {}, wide1, wide2)

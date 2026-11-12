@@ -45,6 +45,12 @@ func TestAFaintWakeHomeAssistantDoesNotHearOpensNothing(t *testing.T) {
 	if w.watch != nil || w.phase != phaseIdle {
 		t.Fatalf("not heard: watch %+v, phase %s", w.watch, w.phase)
 	}
+	// The setting doing its job: no longer wait before the next ordinary question, and no step towards
+	// the warning about a wake word the engine doesn't list.
+	if w.confirmGap != 0 || w.unheard != 0 || w.nextConfirm.After(w.at) {
+		t.Errorf("a faint wake not heard held back the ordinary ones: gap %v, unheard %d, next %v",
+			w.confirmGap, w.unheard, w.nextConfirm.Sub(w.at))
+	}
 }
 
 // One that can't be asked is answered as any wake is, so the setting never loses a request: Home

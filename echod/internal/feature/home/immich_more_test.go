@@ -51,6 +51,8 @@ type moreImmich struct {
 	fetched  []string
 	// found is the photos a search answers, in order; none is tallA alone.
 	found []string
+	// gone is photos deleted since: their fetch is a 404.
+	gone map[string]bool
 }
 
 var (
@@ -94,8 +96,9 @@ func (m *moreImmich) serve(t *testing.T) *httptest.Server {
 			id := strings.TrimSuffix(strings.TrimPrefix(r.URL.Path, "/api/assets/"), "/thumbnail")
 			m.mu.Lock()
 			m.fetched = append(m.fetched, id)
+			gone := m.gone[id]
 			m.mu.Unlock()
-			if b, ok := photos[id]; ok {
+			if b, ok := photos[id]; ok && !gone {
 				_, _ = w.Write(b)
 				return
 			}

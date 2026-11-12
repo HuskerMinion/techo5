@@ -2608,6 +2608,7 @@ func (d *Display) frame() (next time.Duration) {
 		lit := d.on
 		d.mu.Unlock()
 		if !lit {
+			d.saverDown()
 			return time.Minute
 		}
 		on = lit // the night may have just turned the panel back on: this frame is its first
@@ -2629,6 +2630,9 @@ func (d *Display) frame() (next time.Duration) {
 		d.mu.Unlock()
 	}
 	d.idleDimTick(now, on, busy, night)
+	if !on || d.firstRunActive() {
+		d.saverDown() // the frames below that draw no screensaver return before it is looked for
+	}
 	if d.firstRunActive() {
 		// First run ignores a stale deck and draws its own frame; the update dialog still goes over it,
 		// or the screen would look normal while every tap was taken by an invisible dialog. The Wi-Fi

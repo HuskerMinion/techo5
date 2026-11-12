@@ -598,8 +598,10 @@ func (c *conversation) turnEvent(e event) {
 		if pageAsked(e.text) {
 			c.lookHere = true
 		}
-		if closingPhrase(e.text) {
-			c.closing = true
+		// The last words heard decide (#510): realtime voice can hear more than once in a turn, and
+		// "thanks... and turn on the lights" is not a goodbye.
+		if e.text != "" {
+			c.closing = closingPhrase(e.text)
 		}
 		if e.text != "" {
 			slog.Info("heard", "slot", c.slot+1, "text", activity.Said(e.text))

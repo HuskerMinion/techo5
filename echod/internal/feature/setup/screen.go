@@ -192,7 +192,12 @@ func screenSection(w http.ResponseWriter, token string) {
 	 <p class="note">Weather art is a landscape the device draws for the weather and the time of day, with rain,
 	  snow and clouds moving over it. It needs no photos and no Home Assistant.</p>`, art)
 	fmt.Fprint(w, `<label for="saverclock">Screensaver clock</label><select id="saverclock" name="saverclock">`)
+	// A stored size this page doesn't name draws as Normal on the device, so it shows as Normal here:
+	// matching no option, the browser would show Off, and Save would turn the clock off.
 	overlay := home.Get().SlideshowOverlay()
+	if !slices.ContainsFunc(saverClocks, func(c struct{ label, value string }) bool { return c.value == overlay }) {
+		overlay = ""
+	}
 	for _, c := range saverClocks {
 		fmt.Fprintf(w, `<option value="%s"%s>%s</option>`, c.value, selected(c.value == overlay), c.label)
 	}

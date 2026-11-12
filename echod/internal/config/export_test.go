@@ -147,6 +147,8 @@ func TestARestoreKeepsTheDevicesOwn(t *testing.T) {
 	here.Security.Camera = true
 	here.Bluetooth.Audio = "speaker"
 	here.Timers.Local = []LocalTimer{{ID: "local:x", Total: time.Minute}}
+	here.BookPlaces.List = []BookSpot{{URI: "library://audiobook/here", Seconds: 60}}
+	from.BookPlaces.List = []BookSpot{{URI: "library://audiobook/there", Seconds: 90}}
 	from.Brain.LLM = here.Brain.LLM
 
 	file, err := Export(from, "Echo Show 5 2nd gen (cronos)", "v0")
@@ -173,6 +175,12 @@ func TestARestoreKeepsTheDevicesOwn(t *testing.T) {
 	}
 	if got.Bluetooth.Audio != "speaker" || len(got.Timers.Local) != 1 || got.Device.Name != "Kitchen" {
 		t.Errorf("this device's own were not kept: %+v %+v %+v", got.Bluetooth, got.Timers.Local, got.Device)
+	}
+	if len(got.BookPlaces.List) != 1 || got.BookPlaces.List[0].URI != "library://audiobook/here" {
+		t.Errorf("audiobook places came from the file: %+v", got.BookPlaces.List)
+	}
+	if strings.Contains(string(file), "audiobook/there") {
+		t.Error("the export carries where this device's audiobooks were left")
 	}
 	if len(r.Reenter) != 0 || r.FromModel != "" {
 		t.Errorf("reenter %v, from %q; want nothing", r.Reenter, r.FromModel)

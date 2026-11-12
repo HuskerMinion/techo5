@@ -57,6 +57,10 @@ var (
 	libWatchPausedFor = time.Hour // a book paused this long is let be; its place is already saved
 )
 
+// libWatchNotYet is how many looks may find something else on before the book has been seen playing at
+// all: Music Assistant takes a moment to turn the player to it.
+const libWatchNotYet = 3
+
 // The move to a spot in a book: it waits a moment, so a player still playing the last thing is not
 // taken for this one, looks for the player to say it is playing for a few seconds, and moves the book
 // either way. Variables for the tests.
@@ -115,7 +119,7 @@ func libWatchBook(target, uri string, duration int) {
 		last, saved := -1.0, -1.0
 		lastSave := time.Now()
 		var pausedSince time.Time
-		quiet := 0
+		quiet, notYet := 0, 0
 		keep := func() {
 			if last >= 0 && last != saved {
 				libKeepPlace(uri, last, duration)
@@ -134,6 +138,12 @@ func libWatchBook(target, uri string, duration int) {
 				quiet++
 			case st.State == "playing" || st.State == "paused" || st.State == "buffering":
 				if !libSameLength(st.Attributes, duration) {
+					// Until the book has been seen playing, the player may still report what was on
+					// before it: a few looks go by before that counts as something else being on.
+					if last < 0 && notYet < libWatchNotYet {
+						notYet++
+						break
+					}
 					keep() // something else is on now: this book's place is where it was left
 					return
 				}

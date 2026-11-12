@@ -1548,6 +1548,9 @@ func (d *Display) frame() (next time.Duration) {
 	s.redClock, s.redStyle = d.nightGlow && nightClockOn(), config.Get().Screen.NightClockStyle
 	s.nightInfo = s.redClock && config.Get().Screen.NightInfo
 	d.mu.Unlock()
+	if !on {
+		d.saverDown() // a dark face returns below before the screensaver is looked for
+	}
 	if !on && !video.Get().State().Active() {
 		d.vp.drop() // a video that ended while the panel was dark: its frame goes with it
 	}

@@ -90,6 +90,11 @@ type pending struct {
 	at     time.Time // when the word was heard
 	window time.Duration
 
+	// clarity is how clearly this device heard it, before the offset and a call's lead: what Confirm
+	// below nearest-device score is measured against (#503), so an offset set to lean the decision
+	// doesn't make every wake faint, or none.
+	clarity float64
+
 	// answered is set once the turn opened here; elsewhere when a device that already answered said so.
 	answered, elsewhere bool
 }
@@ -283,7 +288,7 @@ func (n *Nearest) WokeGated(slot int, at time.Time, gate func(open func())) {
 		func() { gate(func() { n.woke(slot, at) }) })
 }
 
-// won is a wake word this device won with score. One it won with a score under Confirm below
+// won is a wake word this device won, having heard it with score (pending.clarity). One under Confirm below
 // nearest-device score is asked about first (#503): a TV across the room can score as highly on the
 // model as somebody at the device, and far lower on how clearly it stood out here, while a person in
 // another room scores low here too, so it is asked about rather than dropped. Only the first wake word's:
@@ -322,11 +327,13 @@ func (n *Nearest) contend(word string, at time.Time, can func() bool, open func(
 
 	c := config.Get()
 	window := c.Nearest.Window()
+	clarity := n.score()
 	mine := &pending{
 		claim: claim{From: c.Device.Name, Turn: newTurn(), Word: word,
-			Score: n.score() + float64(c.Nearest.Offset) + n.callBonus()},
-		at:     at,
-		window: window,
+			Score: clarity + float64(c.Nearest.Offset) + n.callBonus()},
+		at:      at,
+		window:  window,
+		clarity: clarity,
 	}
 	n.mu.Lock()
 	n.mine = mine
@@ -347,7 +354,7 @@ func (n *Nearest) decide(word string, mine *pending, can func() bool, open func(
 		// Whatever went wrong here, the wake word is still somebody talking to a device.
 		if r := recover(); r != nil {
 			slog.Error("nearest device: deciding failed, answering", "panic", r)
-			open(mine.at, mine.Score)
+			open(mine.at, mine.clarity)
 		}
 	}()
 
@@ -376,11 +383,11 @@ func (n *Nearest) decide(word string, mine *pending, can func() bool, open func(
 			"theirs", round(best.Score), "by", best.From)
 	case !able:
 		slog.Info("nearest device: could not answer after all, passing it on", "word", word)
-		open(mine.at, mine.Score)
+		open(mine.at, mine.clarity)
 	default:
-		slog.Info("nearest device: answering", "word", word, "score", round(mine.Score),
+		slog.Info("nearest device: answering", "word", word, "score", round(mine.Score), "clarity", round(mine.clarity),
 			"waited", n.now().Sub(mine.at).Round(time.Millisecond))
-		open(mine.at, mine.Score)
+		open(mine.at, mine.clarity)
 	}
 }
 

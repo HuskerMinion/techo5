@@ -21,3 +21,12 @@ func (d *Display) saverSwipe(dir int) bool {
 	home.Get().StepSlideshow(dir)
 	return true
 }
+
+// saverDown says the screensaver is not up, for a frame that returns before it would be looked for: a
+// dark panel, or first run. Otherwise saverUp kept the last drawn frame's value, and the first swipe on a
+// relit screen turned a photo nobody could see.
+func (d *Display) saverDown() {
+	d.mu.Lock()
+	d.saverUp = false
+	d.mu.Unlock()
+}

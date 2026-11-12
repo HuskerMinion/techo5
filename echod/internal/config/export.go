@@ -480,6 +480,9 @@ func KeepOwn(c *Config, from Config) {
 	}
 	c.Alarms.HeldDark = from.Alarms.HeldDark
 	c.Timers.Local = slices.Clone(from.Timers.Local)
+	// Where this device's audiobooks were left is its own listening, not a household setting: a restore
+	// keeps it, and an export carries none of it.
+	c.BookPlaces.List = slices.Clone(from.BookPlaces.List)
 	c.Calendar.PopupShown = slices.Clone(from.Calendar.PopupShown)
 	// The calendars hidden with the calendar page's chips are this screen's: a file from a screen in
 	// another room does not hide any here, and a restore keeps what was hidden.

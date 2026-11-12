@@ -1757,13 +1757,16 @@ Voice assistants). Home Assistant listens for one wake word per voice assistant.
   **Confirm below nearest-device score** (0 to 30 dB, 0 = off) checks wakes over the Wake word
   threshold too, in a house with **Nearest device answers** on. A TV across the room can score as
   high on the wake word model as someone at the device, but it doesn't stand out as clearly. When
-  this device answers a wake with a nearest-device score under this number (the `score` in the
-  log's "nearest device: answering" line), it asks Home Assistant first, as above. A score of 8 is a
-  good start: real wakes at the device usually score well over 10. A wake that can't be checked, for
-  example because Home Assistant is restarting, is answered as usual, so a real request is never
-  dropped, and the 5-second spacing doesn't hold these back. A device that's the only one to hear a
-  word has no score, so nothing changes there. It needs Confirm wake with Home Assistant on, and it
-  checks the first wake word only.
+  this device answers a wake that it heard less clearly than this number (the `clarity` in the
+  log's "nearest device: answering" line, before any **Nearest device offset**), it asks Home
+  Assistant first, as above, and answers only if Home Assistant hears the word too. A value of 8 is a
+  good start: real wakes at the device usually score well over 10. A wake that can't be checked (Home
+  Assistant restarting, the device busy, or an alarm or timer ringing, which a wake word silences at
+  once as always) is answered as usual, and the 5-second spacing doesn't hold these back, so the
+  setting only drops a wake Home Assistant's engine didn't hear. With no other TECHO5 device in the
+  house to compare with, there's no score and nothing changes. With a slow Home Assistant (over a
+  second to answer), the first moment of a request said straight after the wake word can be cut off.
+  It needs Confirm wake with Home Assistant on, and it checks the first wake word only.
 
 What to know before turning them on:
 

@@ -145,10 +145,10 @@ type shownPhoto struct {
 	caps []PhotoCaption
 }
 
-// slideshowHistory is how many photos back a swipe can go, and slideshowSwipeHold how long a photo a
-// swipe turned to stays up before the slideshow carries on.
+// slideshowHistory is how many photos are kept, the one up included, so a swipe goes 20 back; and
+// slideshowSwipeHold how long a photo a swipe turned to stays up before the slideshow carries on.
 const (
-	slideshowHistory   = 20
+	slideshowHistory   = 21
 	slideshowSwipeHold = 5 * time.Minute
 )
 
@@ -853,8 +853,10 @@ func (f *Feature) advance(force bool) {
 	if !due {
 		return
 	}
-	if behind && !force {
-		f.showSeen(+1)
+	// Behind after a swipe back: the slideshow carries on through what was seen. One that can't be
+	// fetched again is let go of (showSeen), and a new photo comes up instead, so a deleted one doesn't
+	// hold the slideshow where it is.
+	if behind && !force && f.showSeen(+1) {
 		return
 	}
 	var last error
@@ -956,25 +958,34 @@ func (f *Feature) step(dir int) {
 	f.mu.Lock()
 	latest := f.slideshow.pos >= len(f.slideshow.hist)-1
 	f.mu.Unlock()
-	if dir > 0 && latest {
-		f.advance(true)
-	} else {
+	f.mu.Lock()
+	before := f.slideshow.at
+	f.mu.Unlock()
+	if dir > 0 && (latest || !f.showSeen(dir)) {
+		f.advance(true) // the newest, or the next seen one is gone: a new photo
+	} else if dir < 0 {
 		f.showSeen(dir)
 	}
-	// The hold runs from when the photo is up, not from the swipe: fetching it can take a while.
+	// The hold runs from when the photo is up, not from the swipe: fetching it can take a while. A swipe
+	// that put nothing new up holds nothing: the photo there keeps its own time.
 	f.mu.Lock()
-	f.slideshow.holdUntil = time.Now().Add(slideshowSwipeHold)
+	if f.slideshow.at.After(before) {
+		f.slideshow.holdUntil = time.Now().Add(slideshowSwipeHold)
+	} else {
+		f.slideshow.holdUntil = time.Time{}
+	}
 	f.mu.Unlock()
 }
 
-// showSeen puts up a photo already seen, dir steps from the one up in the history, fetched again. Called
-// with slideshowStep held.
-func (f *Feature) showSeen(dir int) {
+// showSeen puts up a photo already seen, dir steps from the one up in the history, fetched again, and
+// reports whether it did. One that can't be fetched again (deleted since, or its source gone) is taken out
+// of the history, so it isn't tried again. Called with slideshowStep held.
+func (f *Feature) showSeen(dir int) bool {
 	f.mu.Lock()
 	i, gen := f.slideshow.pos+dir, f.slideshowGen
 	if i < 0 || i >= len(f.slideshow.hist) {
 		f.mu.Unlock()
-		return
+		return false
 	}
 	p := f.slideshow.hist[i]
 	f.mu.Unlock()
@@ -982,17 +993,26 @@ func (f *Feature) showSeen(dir int) {
 	img, err := fetchShown(p.ids, whole)
 	if err != nil {
 		slog.Warn("home: slideshow photo seen before", "id", p.ids[0], "err", err)
-		return
+		f.mu.Lock()
+		if f.slideshowGen == gen && i < len(f.slideshow.hist) {
+			f.slideshow.hist = slices.Delete(slices.Clone(f.slideshow.hist), i, i+1)
+			if i < f.slideshow.pos {
+				f.slideshow.pos--
+			}
+		}
+		f.mu.Unlock()
+		return false
 	}
 	f.mu.Lock()
 	if f.slideshowGen != gen || img.Rect.Size() != image.Pt(slideshowSize()) {
 		f.mu.Unlock()
-		return // the source changed, or the screen's size, while it was fetched
+		return false // the source changed, or the screen's size, while it was fetched
 	}
 	f.slideshow.prev, f.slideshow.image, f.slideshow.at = f.slideshow.image, img, time.Now()
 	f.slideshow.shown, f.slideshow.captions, f.slideshow.pos = p.ids, p.caps, i
 	f.mu.Unlock()
 	f.Changed.Emit(struct{}{})
+	return true
 }
 
 // pairLooks is how many photos are looked at for a tall photo's partner before it is shown alone.

@@ -203,7 +203,13 @@ func (c *conversation) watchEvent(e event) bool {
 		return true
 
 	case evUnconfirmed:
-		if w := c.watch; w != nil && !w.closing && w.mode == watchConfirm {
+		if w := c.watch; w != nil && !w.closing && w.mode == watchConfirm && w.faint {
+			// A faint wake not heard is the setting doing its job, a TV turned down (#503): it holds
+			// back no question about a wake under the threshold, and is no sign of a wake word the
+			// engine doesn't list.
+			slog.Info("home assistant did not hear the faint wake", "slot", w.slot+1)
+			c.closeWatch()
+		} else if w != nil && !w.closing && w.mode == watchConfirm {
 			c.confirmGap = min(2*c.confirmGap, confirmGapMax)
 			c.nextConfirm = c.now().Add(c.confirmGap)
 			slog.Info("home assistant did not hear the wake word", "slot", w.slot+1, "peak", w.peak,
@@ -428,10 +434,7 @@ func (c *conversation) confirmFaint(slot int, at time.Time) bool {
 	case !c.busyAt.IsZero() && c.now().Sub(c.busyAt) < mic.Confirming+time.Second:
 		return false
 	}
-	if c.confirmGap == 0 {
-		c.confirmGap = confirmGapMin
-	}
-	c.nextConfirm = later(c.nextConfirm, c.now().Add(c.confirmGap))
+	// The spacing between questions is the ordinary candidates' own: a faint ask leaves it as it was.
 	c.openWatch(watchConfirm, slot, 0)
 	c.watch.faint, c.watch.from = true, at
 	return true
@@ -644,8 +647,11 @@ func (v *Voice) Candidate(slot int, peak float64) {
 // WokeFaint is WokeAt for a wake word this device won with a low nearest-device score (feature/nearest,
 // #503): Home Assistant is asked to hear it too before the turn opens, and when it can't be, the turn
 // opens as WokeAt's does.
+//
+// Not over a ringing alarm or timer: the ring is what made the word sound faint, Home Assistant may not
+// hear it over the ring either, and a wake word over a ring has always silenced it.
 func (v *Voice) WokeFaint(slot int, at time.Time) {
-	if micTaken() || slot != 0 || wakeCallApplies(slot) {
+	if micTaken() || slot != 0 || wakeCallApplies(slot) || ring.IsSounding() {
 		v.WokeAt(slot, at)
 		return
 	}

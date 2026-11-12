@@ -62,18 +62,25 @@ func TestAFaintWinIsAskedAbout(t *testing.T) {
 	}
 }
 
-// The offset counts, as it does against the other devices: the score asked about is the one claimed.
-func TestAFaintWinCountsTheOffset(t *testing.T) {
-	h := newHouse(t)
-	confirmBelow(t, true, 8)
-	if err := config.Set().Nearest().Offset(6); err != nil {
-		t.Fatal(err)
-	}
-	h.n.score = func() float64 { return 4 }
-	h.n.Woke(0)
-	h.wait(300 * time.Millisecond)
-	if len(h.faint) != 0 || len(h.opened) != 1 {
-		t.Fatalf("4 + 6 dB against 8: asked %v, opened %v", h.faint, h.opened)
+// The offset leans the decision between devices, not how clearly this one heard the word: a device with
+// +6 dB that heard it at 4 is still faint, and one with -6 that heard it at 12 is not.
+func TestAFaintWinIgnoresTheOffset(t *testing.T) {
+	for _, tc := range []struct {
+		offset int
+		clear  float64
+		asked  bool
+	}{{6, 4, true}, {-6, 12, false}} {
+		h := newHouse(t)
+		confirmBelow(t, true, 8)
+		if err := config.Set().Nearest().Offset(tc.offset); err != nil {
+			t.Fatal(err)
+		}
+		h.n.score = func() float64 { return tc.clear }
+		h.n.Woke(0)
+		h.wait(300 * time.Millisecond)
+		if asked := len(h.faint) == 1; asked != tc.asked || len(h.faint)+len(h.opened) != 1 {
+			t.Errorf("heard at %v with %+d dB against 8: asked %v, opened %v", tc.clear, tc.offset, h.faint, h.opened)
+		}
 	}
 }
 
