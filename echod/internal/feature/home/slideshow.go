@@ -805,10 +805,34 @@ func (f *Feature) BrowseFolder(ctx context.Context, id string) (hass.Media, erro
 			Children: []hass.Media{{ID: ImmichAll, Title: "Immich", CanExpand: true}}}, nil
 	}
 	m, err := hass.Get().Browse(ctx, id)
+	if err == nil && id == mediaRoot {
+		// Home Assistant's own Immich integration is a media source beside My media, not inside it, so
+		// the top of the list offers it as a folder of its own (#523). Without it, or when Home
+		// Assistant's list of sources can't be had, the list is as it was.
+		if all, err := hass.Get().Browse(ctx, "media-source://"); err == nil {
+			m.Children = append(photoSources(all), m.Children...)
+		}
+	}
 	if err == nil && immich {
 		m.Children = append([]hass.Media{{ID: ImmichAll, Title: "Immich", CanExpand: true}}, m.Children...)
 	}
 	return m, err
+}
+
+// photoSources are the media sources from Home Assistant's top level that hold photos and are not My
+// media itself, which the list already is: its Immich integration's. Cameras, text to speech and
+// radio are left out.
+func photoSources(top hass.Media) []hass.Media {
+	var out []hass.Media
+	for _, c := range top.Children {
+		if c.CanExpand && (c.ID == "media-source://immich" || strings.HasPrefix(c.ID, "media-source://immich/")) {
+			if c.Title == "" || c.Title == "Immich" {
+				c.Title = "Immich (Home Assistant)" // beside the device's own Immich folder, if that is set up too
+			}
+			out = append(out, c)
+		}
+	}
+	return out
 }
 
 // slideshowLoop advances the slideshow while Background mode is on. Run from Feature.Run.

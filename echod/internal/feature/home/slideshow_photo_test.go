@@ -26,3 +26,22 @@ func TestAPhotoNeedNotBePlayable(t *testing.T) {
 		}
 	}
 }
+
+// Home Assistant's Immich integration is a source beside My media, and the folder list offers it at
+// the top; cameras, speech and radio are not photo folders (#523).
+func TestHomeAssistantsImmichIsAPhotoFolder(t *testing.T) {
+	top := hass.Media{Children: []hass.Media{
+		{ID: "media-source://media_source", Title: "My media", CanExpand: true},
+		{ID: "media-source://immich", Title: "Immich", CanExpand: true},
+		{ID: "media-source://camera", Title: "Camera", CanExpand: true},
+		{ID: "media-source://tts", Title: "Text-to-speech", CanExpand: true},
+		{ID: "media-source://radio_browser", Title: "Radio Browser", CanExpand: true},
+	}}
+	got := photoSources(top)
+	if len(got) != 1 || got[0].ID != "media-source://immich" || got[0].Title != "Immich (Home Assistant)" {
+		t.Errorf("photo sources %+v, want Home Assistant's Immich alone", got)
+	}
+	if got := photoSources(hass.Media{}); len(got) != 0 {
+		t.Errorf("no sources gave %+v", got)
+	}
+}
