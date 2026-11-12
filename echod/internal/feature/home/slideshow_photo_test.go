@@ -18,6 +18,11 @@ func TestAPhotoNeedNotBePlayable(t *testing.T) {
 		{hass.Media{ID: "media-source://media_source/local/b.JPG", CanPlay: true}, true},
 		{hass.Media{ID: "media-source://media_source/local/trip", Kind: "directory", CanExpand: true}, false},
 		{hass.Media{ID: "media-source://immich/a|b", Kind: "image/jpeg", CanExpand: true}, false},
+		// Home Assistant's Immich serves its own rendering of a raw picture, a JPEG (#530).
+		{hass.Media{ID: "media-source://immich/a|b|c/y.dng", Kind: "image/dng"}, true},
+		{hass.Media{ID: "media-source://immich/a|b|c/z.heic", Kind: "image/heic"}, true},
+		{hass.Media{ID: "media-source://immich/a|b|c/v.mp4", Kind: "video/mp4"}, false},
+		{hass.Media{ID: "media-source://media_source/local/e.dng", Kind: "image/dng", CanPlay: true}, false},
 		{hass.Media{ID: "media-source://media_source/local/c.webp", Kind: "image/webp", CanPlay: true}, false},
 		{hass.Media{ID: "media-source://media_source/local/d.mp4", Kind: "video/mp4", CanPlay: true}, false},
 	} {

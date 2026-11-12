@@ -1271,7 +1271,20 @@ func gatherSlideshow(h config.Slideshow) ([]hass.Media, error) {
 // calls it playable is not asked: its Immich source marks every photo can_play false, only so that its
 // own media browser draws no play button over a picture (#523). Not being a folder, and being a
 // picture by its type or name, is what counts.
-func SlideshowPhoto(m hass.Media) bool { return !m.CanExpand && isPhoto(m) }
+//
+// That source names each picture by the type it was taken in, but serves Immich's own rendering of it:
+// a DNG from it comes as a JPEG and is shown like any other (#530). Any picture of it is let through,
+// and one that comes as something the device can't decode fails to fetch, so the slideshow goes on to
+// the next.
+func SlideshowPhoto(m hass.Media) bool {
+	if m.CanExpand {
+		return false
+	}
+	if strings.HasPrefix(m.ID, "media-source://immich/") && strings.HasPrefix(strings.ToLower(m.Kind), "image/") {
+		return true
+	}
+	return isPhoto(m)
+}
 
 // isPhoto is whether an entry is a picture the device can show, going by the type Home
 // Assistant gives it, or failing that its name. Only JPEG and PNG: those are the decoders built in,
