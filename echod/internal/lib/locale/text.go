@@ -4222,6 +4222,14 @@ var uiTranslations = map[string]map[string]string{
 		"press_again_to_snooze_d_min": "druk nogmaals om %d min te sluimeren",
 		// Put it in pairing mode first
 		"put_it_in_pairing_mode_first": "Zet het eerst in de koppelmodus",
+		// Hold the code up to the camera, about a hand's width away.
+		"qr_scan_hint": "Houd de code ongeveer een handbreedte voor de camera.",
+		// The privacy mute holds the camera off.
+		"qr_scan_muted": "De privacyschakelaar houdt de camera uit.",
+		// Read: %s
+		"qr_scan_read": "Gelezen: %s",
+		// Scan a QR code
+		"qr_scan_title": "QR-code scannen",
 		// Quiet
 		"quiet": "Rustig",
 		// Quiet hours
