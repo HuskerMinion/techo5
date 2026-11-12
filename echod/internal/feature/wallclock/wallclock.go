@@ -69,6 +69,21 @@ var (
 	// otherwise be paged about four thousand times a day for nothing — which also keeps waking a
 	// clock that is trying to sleep.
 	reconnectDelayMax = 15 * time.Minute
+
+	// sniffAfter is how long to let the link settle after connecting before asking for sniff
+	// mode: the Discover handshake and the first timeinfo are traffic, and the kernel leaves
+	// sniff for each of them.
+	sniffAfter = 2 * time.Second
+
+	// sniffEvery is how often to ask again. The kernel exits sniff by itself whenever there is
+	// data to send or receive, and does not return to it, so a packet would otherwise leave the
+	// clock's radio listening in every slot until the link dropped. One request a minute is
+	// negligible and keeps the link asleep between the periodic timeinfo and the odd timer update.
+	sniffEvery = 60 * time.Second
+
+	// requestSniff asks the controller for sniff mode on the link to an address. A variable so
+	// the tests do not need a Bluetooth adapter.
+	requestSniff = sniffClock
 )
 
 // Feature is the wall clock bridge.
@@ -621,6 +636,13 @@ func (f *Feature) serve(ctx context.Context, c *conn, b *Bridge, address string)
 		return
 	}
 
+	// The clock's radio is left listening in every slot unless somebody asks for sniff mode, and
+	// the kernel drops back to active mode for every packet. Keep asking, quietly, for as long as
+	// this link lives.
+	sniffCtx, stopSniff := context.WithCancel(ctx)
+	defer stopSniff()
+	safe.Go("wall clock sniff", func() { f.keepSniffing(sniffCtx, address) })
+
 	for {
 		select {
 		case <-ctx.Done():
@@ -640,6 +662,59 @@ func (f *Feature) serve(ctx context.Context, c *conn, b *Bridge, address string)
 			return
 		}
 	}
+}
+
+// keepSniffing asks for sniff mode after the link has settled, then once a minute until the link
+// goes away. The first failure on a link is logged at info level: a device without a usable raw HCI
+// socket, or a link this device is not master of, would otherwise stay in active mode silently.
+// Repeats are debug-level, because a link that is already sniffing answers Command Disallowed and
+// the clock must keep working either way.
+func (f *Feature) keepSniffing(ctx context.Context, address string) {
+	warned := false
+	sniff := func() {
+		err := requestSniff(ctx, address)
+		if err == nil {
+			return
+		}
+		if ctx.Err() != nil {
+			return
+		}
+		if warned {
+			slog.Debug("wall clock: could not ask for sniff mode", "address", address, "err", err)
+			return
+		}
+		slog.Info("wall clock: could not ask for sniff mode", "address", address, "err", err)
+		warned = true
+	}
+
+	timer := time.NewTimer(sniffAfter)
+	defer timer.Stop()
+	select {
+	case <-ctx.Done():
+		return
+	case <-timer.C:
+	}
+	sniff()
+
+	ticker := time.NewTicker(sniffEvery)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			sniff()
+		}
+	}
+}
+
+// sniffResult turns an HCI status into an error. Zero is success, and Command Disallowed (0x0C) is
+// the controller saying the link is already in sniff mode or somebody else is its master.
+func sniffResult(status uint8) error {
+	if status == 0 || status == 0x0C {
+		return nil
+	}
+	return fmt.Errorf("sniff mode: HCI status 0x%02X", status)
 }
 
 // timers is the timer feature's list as the clock wants it: running timers only, each with the
