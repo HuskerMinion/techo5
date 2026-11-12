@@ -328,6 +328,7 @@ func Get() *Feature {
 		hastate.Get().Changed.Listen(shared.stateChanged)
 		hastate.Get().Changed.Listen(shared.stationStarted)
 		hastate.Get().Changed.Listen(shared.todoChanged)
+		hastate.Get().Changed.Listen(shared.nowChanged)
 		media.Get().OnPlay.Listen(shared.played)
 		// Stopped anywhere (the voice assistant, the setup page, the action button, Home Assistant):
 		// the station is over, and a put-back on its way is not made.
@@ -509,6 +510,10 @@ func (f *Feature) want(h config.Home) {
 	}
 	if h.Radio.Now != "" {
 		keys = append(keys, hastate.Key{Entity: h.Radio.Now})
+		// The song, for a station of one's own that no service knows (radio_own_now.go).
+		for _, a := range nowAttributes {
+			keys = append(keys, hastate.Key{Entity: h.Radio.Now, Attribute: a})
+		}
 	}
 	// The script that plays a station: it turns on whenever a station is started with it, from here
 	// or anywhere in the house (stationStarted), the same station again too, which changes no text.

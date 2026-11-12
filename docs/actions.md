@@ -2439,7 +2439,9 @@ Radio page. Up to 20.
 *string*
 
 An entity whose state names whatever is currently playing, shown on the Radio page and the idle
-screen while it's live.
+screen while it's live. For a station no service knows, its `media_title`, `media_artist`,
+`media_album_name` and `entity_picture` attributes can carry the song and cover: see
+[A station of your own](install.md#radio) in the install guide.
 
 ### service (Can be empty)
 
