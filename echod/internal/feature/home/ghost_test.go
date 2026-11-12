@@ -44,6 +44,7 @@ type slowHA struct {
 	release chan struct{}
 	open    *sync.Once // lets release be closed by the test and by the cleanup
 	started atomic.Int32
+	dropped atomic.Int32 // requests the server saw given up on before the release
 	hits    atomic.Int32
 	live    atomic.Int32
 	most    atomic.Int32
@@ -105,6 +106,7 @@ func newSlowHA(t *testing.T) *slowHA {
 		select {
 		case <-s.release:
 		case <-r.Context().Done():
+			s.dropped.Add(1)
 			return
 		}
 		s.hits.Add(1)
@@ -198,24 +200,39 @@ func TestABurstOfStillsIsFetchedOneAtATime(t *testing.T) {
 	ha := newSlowHA(t)
 	f := newFeature(t)
 	decoded := stillsDecoded.Load()
-	for i := 1; i <= 5; i++ {
-		if i == 2 {
-			// The first is on its way when the rest replace it, so it is the one whose bytes arrive
-			// for a view that is gone.
-			eventually(t, "the first fetch to start", func() bool { return ha.started.Load() == 1 })
-		}
-		if err := f.ShowPicture("/local/door.png", Caption{ID: strconv.Itoa(i), Message: "x"}, time.Minute, ""); err != nil {
-			t.Fatal(err)
-		}
+	const src = "/local/door.png"
+	if err := f.ShowPicture(src, Caption{ID: "1", Message: "x"}, time.Minute, ""); err != nil {
+		t.Fatal(err)
 	}
+	// The first is on its way when the rest replace it, so it is the fetch given up on for a view that
+	// is gone.
+	eventually(t, "the first fetch to start", func() bool { return ha.started.Load() == 1 })
+	// The rest come at once, each put up under the one hold of the lock that ShowPicture takes for it.
+	// Shown by ShowPicture one call after another, a fetch could take its turn between two of them, its
+	// view rightly still up, and be made: a busy machine stretches that gap enough for it to happen.
+	_, path, err := pictureSource(src)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var shown []func()
+	f.mu.Lock()
+	for i := 2; i <= 5; i++ {
+		shown = append(shown, f.stillLocked(src, path, Caption{ID: strconv.Itoa(i), Message: "x"}, time.Minute))
+	}
+	f.mu.Unlock()
+	for _, show := range shown {
+		show()
+	}
+	// The server lets go of the first fetch before the release, so it cannot be served beside the last.
+	eventually(t, "the first fetch to be given up", func() bool { return ha.dropped.Load() == 1 })
 	ha.open.Do(func() { close(ha.release) })
 	eventually(t, "the last picture", func() bool { v, _ := f.Camera(); return v.Frame != nil && v.Caption.ID == "5" })
-	time.Sleep(200 * time.Millisecond) // long enough for a stale fetch to start, were one going to
+	f.loops.Wait() // every fetch has had its turn, so a stale one would have started by now
 	if m := ha.mostServed(); m != 1 {
 		t.Errorf("%d fetches in flight at once, want 1", m)
 	}
-	if n := ha.started.Load(); n > 2 {
-		t.Errorf("%d pictures fetched, want at most 2: the one already on its way and the last", n)
+	if n := ha.started.Load(); n != 2 {
+		t.Errorf("%d pictures fetched, want 2: the one already on its way and the last", n)
 	}
 	if n := stillsDecoded.Load() - decoded; n != 1 {
 		t.Errorf("%d pictures decoded, want only the last one's", n)
