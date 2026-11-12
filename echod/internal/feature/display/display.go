@@ -453,6 +453,10 @@ type Display struct {
 	// showingLibraryWord is the Now Playing page's Library button as last drawn: its word, or empty
 	// for none.
 	showingLibraryWord string
+	// showingSpoken is an audiobook or a podcast episode on the page or the strip as last drawn, with
+	// back and forward 30 seconds, and showingSpeed the speed button's word.
+	showingSpoken bool
+	showingSpeed  string
 
 	// ringPreview shows the ringing page silently until then.
 	ringPreview time.Time
@@ -1558,6 +1562,7 @@ func (d *Display) gesture(g touch.Gesture) {
 		d.mu.Lock()
 		showing, away, inStrip, word := d.showingPlaying, d.away, d.showingStrip, d.showingWord
 		modernMusic, libraryWord := d.showingModernMusic, d.showingLibraryWord
+		spokenOn, speedShown := d.showingSpoken, d.showingSpeed
 		d.mu.Unlock()
 		// Only while the word is really drawn, and only when the page is really away: this is the way back
 		// to it, so taking a tap out of the bottom-right corner of the clock is worth it only when there
@@ -1595,6 +1600,10 @@ func (d *Display) gesture(g touch.Gesture) {
 				go d.endMusic()
 			case libraryWord != "" && at.In(d.r.stripLibrary()):
 				d.reopenLibrary()
+			case spokenOn && at.In(back):
+				spokenSkipBy(-spokenSkip)
+			case spokenOn && at.In(next):
+				spokenSkipBy(spokenSkip)
 			case at.In(back):
 				transport(media.TransportPrevious)
 			case at.In(play):
@@ -1624,6 +1633,12 @@ func (d *Display) gesture(g touch.Gesture) {
 					go d.favorite()
 				case libraryWord != "" && at.In(d.r.libraryButton(libraryWord, modernMusic)):
 					d.reopenLibrary()
+				case spokenOn && at.In(d.r.speedButton(speedShown, libraryWord, modernMusic)):
+					d.spokenSpeedUp()
+				case spokenOn && at.In(back):
+					spokenSkipBy(-spokenSkip)
+				case spokenOn && at.In(next):
+					spokenSkipBy(spokenSkip)
 				case at.In(back):
 					transport(media.TransportPrevious)
 				case at.In(next):
@@ -2895,6 +2910,7 @@ func (d *Display) frame() (next time.Duration) {
 	if s.nowPlaying || s.strip {
 		// The Library button, on the page and in the strip both.
 		s.libraryWord = nowPlayingLibraryWord()
+		s.spoken, s.speed = d.spokenWord(s.radio, s.paused, now)
 	}
 	if s.nowPlaying {
 		s.lyric, s.hasLyric = home.Get().LyricNow(s.radio, now)
@@ -2909,6 +2925,7 @@ func (d *Display) frame() (next time.Duration) {
 	d.showingPlaying, d.showingStrip, d.showingWord = s.nowPlaying, s.strip, playingWord(s) != ""
 	d.showingModernMusic = s.modernMusic
 	d.showingLibraryWord = s.libraryWord
+	d.showingSpoken, d.showingSpeed = s.spoken, speedWord(s.speed)
 	d.mu.Unlock()
 	if s.modernMusic {
 		cover, _ := d.r.modernMusicLayout()

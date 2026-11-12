@@ -125,13 +125,14 @@ func (r *renderer) musicStrip(s scene) {
 
 	// The controls are the buttons the rest of the program draws, icons and all: the strip had a look of
 	// its own, the way the Show's square answers did.
-	r.transportButton(back, "skip-previous", false)
+	backIcon, nextIcon := skipIcons(s.spoken)
+	r.transportButton(back, backIcon, false)
 	if s.paused {
 		r.transportButton(play, "play", true)
 	} else {
 		r.transportButton(play, "pause", true)
 	}
-	r.transportButton(next, "skip-next", false)
+	r.transportButton(next, nextIcon, false)
 	if s.libraryWord != "" {
 		r.transportButton(r.stripLibrary(), "bookshelf", false)
 	}

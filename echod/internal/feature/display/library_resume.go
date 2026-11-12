@@ -3,193 +3,109 @@
 package display
 
 import (
+	"context"
 	"fmt"
 	"log/slog"
 	"math"
-	"sync/atomic"
 	"time"
 
-	"github.com/HuskerMinion/techo5/echod/internal/config"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/dashboard"
 	"github.com/HuskerMinion/techo5/echod/internal/lib/hass"
 	"github.com/HuskerMinion/techo5/echod/internal/lib/musicassistant"
 )
 
-// Where an audiobook was left, so the library can offer to go on from there.
+// Where an audiobook or a podcast episode was left, and playing one from a place of its own.
 //
-// Music Assistant keeps no place for a book played through Home Assistant, so the device keeps its own:
-// while a book the library started plays, its player is asked now and then where it is, and the place
-// is saved when it pauses, stops, gives way to something else, and every few minutes in between (a
-// power cut loses no more than that). The saved places live in the device's settings, which are
-// written whole, so they are not saved on every look. A book played to within a couple of minutes of
-// its end is done, and its place goes.
+// Music Assistant keeps the place for each of its users (the device's token's user is whose it is), on
+// every device and in its own web page alike, and a play of a book or an episode goes on from there by
+// itself: Play is a play as any other. The pages only show the place (Resume at), from the item as the
+// server sends it, and offer to start over or to play from a chapter, which Music Assistant is asked to
+// do itself. The device kept places of its own until #524; config.BookPlaces is no longer read.
 
 // libPlayerState is a player's state and attributes from Home Assistant; a variable for the tests.
 var libPlayerState = func(entity string) (hass.State, error) { return hass.Get().State(entity) }
 
-// libResumeSpot is where the book uri was left, if it was; a variable for the tests.
-var libResumeSpot = func(uri string) (int, bool) { return config.Get().BookPlaces.Spot(uri) }
-
-// libSaveSpot and libForgetSpot keep and let go of a book's place; variables for the tests.
-var (
-	libSaveSpot = func(uri string, seconds int) {
-		if err := config.Set().BookPlaces().Save(uri, seconds, time.Now()); err != nil {
-			slog.Warn("dashboard music library resume save", "err", err)
-		}
-	}
-	libForgetSpot = func(uri string) {
-		if err := config.Set().BookPlaces().Forget(uri); err != nil {
-			slog.Warn("dashboard music library resume forget", "err", err)
-		}
-	}
-)
-
-const (
-	libResumeMin    = 60  // seconds in: less is not worth offering to go on from
-	libFinishedNear = 120 // seconds from the end: a book played this far is done
-)
-
-// How a playing book is watched; variables for the tests.
-var (
-	libWatchFirst     = 5 * time.Second
-	libWatchEvery     = 15 * time.Second
-	libWatchSaveEvery = 5 * time.Minute
-	libWatchPausedFor = time.Hour // a book paused this long is let be; its place is already saved
-)
-
-// libWatchNotYet is how many looks may find something else on before the book has been seen playing at
-// all: Music Assistant takes a moment to turn the player to it.
-const libWatchNotYet = 3
-
-// The move to a spot in a book: it waits a moment, so a player still playing the last thing is not
-// taken for this one, looks for the player to say it is playing for a few seconds, and moves the book
-// either way. Variables for the tests.
+// The move to a spot through Home Assistant, when Music Assistant would not start there itself: it
+// waits a moment, so a player still playing the last thing is not taken for this one, looks for the
+// player to say it is playing for a few seconds, and moves either way. Variables for the tests.
 var (
 	libSeekFirst = time.Second
 	libSeekPoll  = 250 * time.Millisecond
 	libSeekTries = 24 // about six seconds
 )
 
-// libBookWatch is the watch in force: a new one ends the last, which saves its place as it goes.
-var libBookWatch atomic.Uint64
-
-// libBookLookNow asks the watch to look at the player now rather than at its next turn: an audiobook's
-// page just opened, and a book paused a moment ago should offer to resume at once.
-var libBookLookNow = make(chan struct{}, 1)
-
-// libCheckBookNow asks the watch, if there is one, to look now.
-func libCheckBookNow() {
-	select {
-	case libBookLookNow <- struct{}{}:
-	default:
+// libResumeOffer is where an audiobook's or an episode's page offers to go on from, in seconds, if it
+// was left part way.
+func libResumeOffer(p *libPage) (int, bool) {
+	if p == nil || (p.what != libAudiobook && p.what != libEpisode) || p.entry.URI == "" || p.entry.FullyPlayed {
+		return 0, false
 	}
+	s := p.entry.ResumeMS / 1000
+	return s, s > 0
 }
 
-// libPlayFrom plays the book from its start, then moves it to start seconds in through Home
-// Assistant's seek on the same player. Music Assistant's own seek needs a token with more rights than
-// the device's, so Home Assistant is asked instead.
-func (d *Display) libPlayFrom(l *librarySheet, book musicassistant.Entry, start float64, lit int) {
-	if l.target == "" || book.URI == "" {
-		return
-	}
-	target := l.target
-	d.libPlayTapped(l, book, "audiobook", false, lit, libEnqueueReplace)
-	if start <= 0 {
-		return
-	}
-	go func() {
-		time.Sleep(libSeekFirst)
-		for range libSeekTries {
-			if st, err := libPlayerState(target); err == nil && st.State == "playing" {
-				break
+// libStartOver plays the book or episode of page p (of media type kind) from its beginning: a book from
+// its first chapter (the one its page lists first, or else the server's chapter 0, which is the first
+// when it numbers them from 0; a book without one is refused and so played and moved to its start), an
+// episode from its start.
+func (d *Display) libStartOver(l *librarySheet, p *libPage, kind string, lit int) {
+	chapter := -1
+	if kind == "audiobook" {
+		chapter = 0
+		for _, s := range p.sections {
+			if s.kind == "chapter" && len(s.entries) > 0 && s.entries[0].TrackNumber > 0 {
+				chapter = s.entries[0].TrackNumber - 1
 			}
-			time.Sleep(libSeekPoll)
 		}
-		libTap(dashboard.Action{Entity: target, Service: "media_player.media_seek", Data: map[string]any{"seek_position": math.Floor(start)}})
-	}()
+	}
+	d.libPlayAt(l, p.entry, kind, chapter, 0, lit)
 }
 
-// libWatchBook watches the book uri, duration seconds long (0 when not known), play on target, and
-// keeps its place as it goes. It ends when another book is started, when the player stops or turns
-// to something else, or when it has been paused a long while.
-func libWatchBook(target, uri string, duration int) {
-	gen := libBookWatch.Add(1)
+// libPlayAt plays e (an audiobook or a podcast episode, of media type kind) start seconds in, rather
+// than from where it was left: from the start of its chapter at position chapter (a book's, from 0), or
+// from its beginning. It lights what was tapped (lit) and leaves the library, as a play does.
+//
+// Music Assistant is asked to start it there itself, on the library's player's queue. When it cannot
+// (a book with no chapters to start from, no queue to name, or a token whose user may not use the
+// player: play_media asks for the player itself), Home Assistant plays it, which goes on from where it
+// was left, and then moves it to start seconds in.
+func (d *Display) libPlayAt(l *librarySheet, e musicassistant.Entry, kind string, chapter int, start float64, lit int) {
+	if l.target == "" || e.URI == "" {
+		return
+	}
+	target, from := l.target, l.from
+	slog.Info("dashboard music library play at", "type", kind, "chapter", chapter, "at", int(start))
+	putOn.Store(target, e.URI)
 	go func() {
-		time.Sleep(libWatchFirst)
-		last, saved := -1.0, -1.0
-		lastSave := time.Now()
-		var pausedSince time.Time
-		quiet, notYet := 0, 0
-		keep := func() {
-			if last >= 0 && last != saved {
-				libKeepPlace(uri, last, duration)
-				saved, lastSave = last, time.Now()
-			}
-		}
-		for {
-			if libBookWatch.Load() != gen {
-				keep()
-				return
-			}
-			st, err := libPlayerState(target)
-			now := time.Now()
-			switch {
-			case err != nil:
-				quiet++
-			case st.State == "playing" || st.State == "paused" || st.State == "buffering":
-				if !libSameLength(st.Attributes, duration) {
-					// Until the book has been seen playing, the player may still report what was on
-					// before it: a few looks go by before that counts as something else being on.
-					if last < 0 && notYet < libWatchNotYet {
-						notYet++
-						break
-					}
-					keep() // something else is on now: this book's place is where it was left
+		if c, set := libClient(); set && (chapter >= 0 || kind == "podcast_episode") {
+			if q := libQueueOf(target); q != "" {
+				ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+				err := c.PlayFrom(ctx, q, e.URI, chapter, chapter < 0)
+				cancel()
+				if err == nil {
 					return
 				}
-				if pos, ok := libPositionOf(st.Attributes, st.State, now); ok {
-					last = pos
-				}
-				quiet = 0
-				if st.State == "paused" {
-					if pausedSince.IsZero() {
-						pausedSince = now
-					}
-					keep()
-					if now.Sub(pausedSince) >= libWatchPausedFor {
-						return
-					}
-				} else {
-					pausedSince = time.Time{}
-					if now.Sub(lastSave) >= libWatchSaveEvery {
-						keep()
-					}
-				}
-			default:
-				quiet++
-			}
-			if quiet >= 2 {
-				keep()
-				return
-			}
-			select {
-			case <-time.After(libWatchEvery):
-			case <-libBookLookNow:
+				slog.Warn("dashboard music library play at: through Home Assistant instead", "forbidden", musicassistant.IsForbidden(err), "err", err)
 			}
 		}
+		d.libPlay(target, e, kind, false, libEnqueueReplace)
+		libSeekTo(target, start)
 	}()
+	d.editLibrary(func(n *librarySheet) { n.lit, n.litUntil = lit, time.Now().Add(tapLit) })
+	libLeaveAfter(tapLit, func() { d.libLeave(target, from) })
 }
 
-// libKeepPlace saves where the book was left, or lets its place go when it was played to the end.
-func libKeepPlace(uri string, seconds float64, duration int) {
-	if duration > 0 && int(seconds) >= duration-libFinishedNear {
-		libForgetSpot(uri)
-		return
+// libSeekTo moves what target has just been asked to play to seconds in, through Home Assistant's seek,
+// once the player says it plays it (or after a few seconds either way).
+func libSeekTo(target string, seconds float64) {
+	time.Sleep(libSeekFirst)
+	for range libSeekTries {
+		if st, err := libPlayerState(target); err == nil && st.State == "playing" {
+			break
+		}
+		time.Sleep(libSeekPoll)
 	}
-	if seconds < libResumeMin {
-		return // too early to be worth offering; an older place, if there is one, stands
-	}
-	libSaveSpot(uri, int(seconds))
+	libTap(dashboard.Action{Entity: target, Service: "media_player.media_seek", Data: map[string]any{"seek_position": math.Floor(seconds)}})
 }
 
 // libPositionOf is where a player is in what it plays, in seconds: Home Assistant's media_position,
@@ -209,16 +125,6 @@ func libPositionOf(a map[string]any, state string, now time.Time) (float64, bool
 	return pos, true
 }
 
-// libSameLength is whether what the player has on is as long as the book, give or take, when both are
-// known: something else put on by voice or another screen is not. Not knowing is taken as the same.
-func libSameLength(a map[string]any, duration int) bool {
-	d, ok := a["media_duration"].(float64)
-	if !ok || d <= 0 || duration <= 0 {
-		return true
-	}
-	return math.Abs(d-float64(duration)) <= 5
-}
-
 // libClock is seconds as a time into a book: 1:02:03, or 4:05 under an hour.
 func libClock(seconds int) string {
 	h, m, s := seconds/3600, seconds/60%60, seconds%60
@@ -228,11 +134,14 @@ func libClock(seconds int) string {
 	return fmt.Sprintf("%d:%02d", m, s)
 }
 
-// libResumeOffer is where an audiobook page offers to go on from, if it does.
-func libResumeOffer(p *libPage) (int, bool) {
-	if p == nil || p.what != libAudiobook || p.entry.URI == "" {
+// libProgress is how far into e this token's user is, from 0 to 1, for the bar on its cover, and
+// whether they finished it. Nothing started, or no length to measure it by, is 0.
+func libProgress(e musicassistant.Entry) (float64, bool) {
+	if e.FullyPlayed {
+		return 1, true
+	}
+	if e.ResumeMS <= 0 || e.Duration <= 0 {
 		return 0, false
 	}
-	s, ok := libResumeSpot(p.entry.URI)
-	return s, ok && s >= libResumeMin
+	return min(float64(e.ResumeMS)/1000/float64(e.Duration), 1), false
 }

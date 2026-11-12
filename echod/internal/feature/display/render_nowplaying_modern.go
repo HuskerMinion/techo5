@@ -115,9 +115,10 @@ func (r *renderer) modernNowPlaying(s scene) {
 	if s.playing && !s.paused {
 		toggle = "pause"
 	}
-	r.iconIn(back, "skip-previous", transportIcon, ink)
+	backIcon, nextIcon := skipIcons(s.spoken)
+	r.iconIn(back, backIcon, transportIcon, ink)
 	r.iconIn(play, toggle, transportIcon, ground)
-	r.iconIn(next, "skip-next", transportIcon, ink)
+	r.iconIn(next, nextIcon, transportIcon, ink)
 	r.footControls(r.doneButton().Min.Y - r.s(10))
 	onPhoto(func() {
 		r.cornerClockDated(s)

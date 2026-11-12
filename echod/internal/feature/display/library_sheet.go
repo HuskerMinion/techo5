@@ -8,6 +8,7 @@ import (
 	"log/slog"
 	"slices"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"time"
 	"unicode/utf8"
@@ -52,7 +53,12 @@ const (
 	libPodcast   // a podcast, opened for its episodes
 	libAudiobook // an audiobook, opened for its chapters
 	libFolder    // a folder of the browse tree
+	libSeries    // a series of audiobooks, opened for its parts
+	libEpisode   // a podcast episode, opened for its details
 )
+
+// How many items the Continue listening row shows.
+const libInProgressLimit = 20
 
 // How many favorites of each kind, recently played items and queued items a page shows.
 const (
@@ -115,6 +121,9 @@ type libSection struct {
 	// derived is a tab made from the saved tracks' albums or artists, the library having none of its
 	// own (libFromTracks).
 	derived bool
+	// resume is the Continue listening row: a tap on a book there plays it on from where it was left,
+	// rather than opening its page.
+	resume bool
 }
 
 // libPage is one page of the library: a tab, or an artist, album or playlist opened from one, and how
@@ -204,8 +213,9 @@ type libMenu struct {
 }
 
 // What the action sheet can offer. The first four play the item (with the enqueue mode in
-// libMenuEnqueue); the favorites ones mark it or unmark it; the last three are for an item of the queue:
-// play the queue from it, move it to play next, or take it out.
+// libMenuEnqueue); the favorites ones mark it or unmark it; the next three are for an item of the queue:
+// play the queue from it, move it to play next, or take it out. The last two are an audiobook's or an
+// episode's: play it from its beginning, or open its page of details.
 const (
 	libMenuPlay = iota
 	libMenuNext
@@ -216,6 +226,8 @@ const (
 	libMenuPlayFrom
 	libMenuMoveNext
 	libMenuRemove
+	libMenuStartOver
+	libMenuDetails
 	libMenuKinds
 )
 
@@ -227,11 +239,19 @@ var libMenuEnqueue = [...]string{libMenuPlay: libEnqueueReplace, libMenuNext: li
 	libMenuRadio: libEnqueueRadio}
 
 // libMenuFor is what the sheet offers for e, of media type kind: on the queue tab (onQueue), at pos
-// from what is playing, its queue's choices; elsewhere the ways to play it. Either way, a kind that can
-// be a favorite can be marked so, or unmarked when the library has it.
+// from what is playing, its queue's choices; elsewhere the ways to play it, which for an audiobook or a
+// podcast episode are to play it on from where it was left or, once started, from its beginning, and
+// its details. Either way, a kind that can be a favorite can be marked so, or unmarked when the library
+// has it.
 func libMenuFor(e musicassistant.Entry, kind string, onQueue bool, pos int) []int {
 	var out []int
 	switch {
+	case !onQueue && libSpoken(kind):
+		out = []int{libMenuPlay}
+		if e.ResumeMS > 0 || e.FullyPlayed {
+			out = append(out, libMenuStartOver)
+		}
+		out = append(out, libMenuDetails, libMenuNext, libMenuAdd)
 	case !onQueue:
 		out = []int{libMenuPlay, libMenuNext, libMenuAdd, libMenuRadio}
 	case pos > 0:
@@ -344,7 +364,8 @@ var libWords = map[string][]string{
 		"Search the music library", "No results", "Library",
 		"From your saved tracks", "No stations saved in Music Assistant", "Search stations", "Save music in Music Assistant, or search for it here.",
 		"Play next", "Add to queue", "By author", "By title", "Newest", "Resume at %s", "Start over", "Start radio",
-		"Add to favorites", "Remove from favorites", "Play from here", "Remove from queue"},
+		"Add to favorites", "Remove from favorites", "Play from here", "Remove from queue",
+		"Continue listening", "%d parts", "Read by %s", "Details"},
 	"ja": {"アーティスト", "アルバム", "プレイリスト", "曲", "ラジオ", "検索", "ポッドキャスト", "オーディオブック", "お気に入り", "最近再生", "キュー", "フォルダ", "戻る", "再生", "シャッフル", "完了",
 		"読み込み中…", "まだ何もありません",
 		"ここで閲覧するには、設定ページ（Sound & Voice、Music Assistant）で音楽ライブラリを設定してください。",
@@ -352,7 +373,8 @@ var libWords = map[string][]string{
 		"音楽ライブラリを検索", "見つかりません", "ライブラリ",
 		"保存した曲から", "Music Assistantに保存された局はありません", "局を検索", "Music Assistantに音楽を保存するか、ここで検索してください。",
 		"次に再生", "キューに追加", "作者順", "タイトル順", "新着順", "%s から再開", "最初から", "ラジオを開始",
-		"お気に入りに追加", "お気に入りから削除", "ここから再生", "キューから削除"},
+		"お気に入りに追加", "お気に入りから削除", "ここから再生", "キューから削除",
+		"続きを聴く", "%d 部", "朗読：%s", "詳細"},
 	"de": {"Interpreten", "Alben", "Playlists", "Titel", "Radio", "Suche", "Podcasts", "Hörbücher", "Favoriten", "Zuletzt gehört", "Warteschlange", "Ordner", "Zurück", "Abspielen", "Zufall", "Fertig",
 		"Lädt …", "Hier ist noch nichts",
 		"Richte die Musikbibliothek auf der Einrichtungsseite ein (Sound & Voice, Music Assistant), um sie hier zu durchsuchen.",
@@ -360,7 +382,8 @@ var libWords = map[string][]string{
 		"Musikbibliothek durchsuchen", "Keine Treffer", "Bibliothek",
 		"Aus deinen gespeicherten Titeln", "Keine Sender in Music Assistant gespeichert", "Sender suchen", "Speichere Musik in Music Assistant oder suche sie hier.",
 		"Als Nächstes abspielen", "Zur Warteschlange hinzufügen", "Nach Autor", "Nach Titel", "Neueste", "Weiter bei %s", "Von vorn", "Radio starten",
-		"Zu Favoriten hinzufügen", "Aus Favoriten entfernen", "Ab hier abspielen", "Aus der Warteschlange entfernen"},
+		"Zu Favoriten hinzufügen", "Aus Favoriten entfernen", "Ab hier abspielen", "Aus der Warteschlange entfernen",
+		"Weiterhören", "%d Teile", "Gelesen von %s", "Details"},
 	"es": {"Artistas", "Álbumes", "Listas", "Canciones", "Radio", "Buscar", "Podcasts", "Audiolibros", "Favoritos", "Recientes", "Cola", "Carpetas", "Atrás", "Reproducir", "Aleatorio", "Listo",
 		"Cargando…", "Aún no hay nada",
 		"Configura la biblioteca de música en la página de configuración (Sound & Voice, Music Assistant) para explorarla aquí.",
@@ -368,7 +391,8 @@ var libWords = map[string][]string{
 		"Buscar en la biblioteca", "Sin resultados", "Biblioteca",
 		"De tus canciones guardadas", "No hay emisoras guardadas en Music Assistant", "Buscar emisoras", "Guarda música en Music Assistant o búscala aquí.",
 		"Reproducir a continuación", "Añadir a la cola", "Por autor", "Por título", "Recientes", "Reanudar en %s", "Desde el principio", "Iniciar radio",
-		"Añadir a favoritos", "Quitar de favoritos", "Reproducir desde aquí", "Quitar de la cola"},
+		"Añadir a favoritos", "Quitar de favoritos", "Reproducir desde aquí", "Quitar de la cola",
+		"Seguir escuchando", "%d partes", "Narrado por %s", "Detalles"},
 	"fr": {"Artistes", "Albums", "Playlists", "Titres", "Radio", "Recherche", "Podcasts", "Livres audio", "Favoris", "Récents", "File d'attente", "Dossiers", "Retour", "Écouter", "Aléatoire", "OK",
 		"Chargement…", "Rien pour l'instant",
 		"Configurez la bibliothèque musicale sur la page de configuration (Sound & Voice, Music Assistant) pour la parcourir ici.",
@@ -376,7 +400,8 @@ var libWords = map[string][]string{
 		"Chercher dans la bibliothèque", "Aucun résultat", "Bibliothèque",
 		"D'après vos titres enregistrés", "Aucune station enregistrée dans Music Assistant", "Chercher des stations", "Enregistrez de la musique dans Music Assistant, ou cherchez-la ici.",
 		"Écouter ensuite", "Ajouter à la file d'attente", "Par auteur", "Par titre", "Récents", "Reprendre à %s", "Depuis le début", "Lancer la radio",
-		"Ajouter aux favoris", "Retirer des favoris", "Écouter à partir d'ici", "Retirer de la file d'attente"},
+		"Ajouter aux favoris", "Retirer des favoris", "Écouter à partir d'ici", "Retirer de la file d'attente",
+		"Reprendre l'écoute", "%d parties", "Lu par %s", "Détails"},
 	"it": {"Artisti", "Album", "Playlist", "Brani", "Radio", "Cerca", "Podcast", "Audiolibri", "Preferiti", "Recenti", "Coda", "Cartelle", "Indietro", "Riproduci", "Casuale", "Fatto",
 		"Caricamento…", "Ancora niente qui",
 		"Configura la libreria musicale nella pagina di configurazione (Sound & Voice, Music Assistant) per sfogliarla qui.",
@@ -384,7 +409,8 @@ var libWords = map[string][]string{
 		"Cerca nella libreria", "Nessun risultato", "Libreria",
 		"Dai tuoi brani salvati", "Nessuna stazione salvata in Music Assistant", "Cerca stazioni", "Salva musica in Music Assistant o cercala qui.",
 		"Riproduci dopo", "Aggiungi alla coda", "Per autore", "Per titolo", "Recenti", "Riprendi da %s", "Dall'inizio", "Avvia radio",
-		"Aggiungi ai preferiti", "Rimuovi dai preferiti", "Riproduci da qui", "Rimuovi dalla coda"},
+		"Aggiungi ai preferiti", "Rimuovi dai preferiti", "Riproduci da qui", "Rimuovi dalla coda",
+		"Continua ad ascoltare", "%d parti", "Letto da %s", "Dettagli"},
 	"pt": {"Artistas", "Álbuns", "Playlists", "Faixas", "Rádio", "Buscar", "Podcasts", "Audiolivros", "Favoritos", "Recentes", "Fila", "Pastas", "Voltar", "Tocar", "Aleatório", "Pronto",
 		"Carregando…", "Nada aqui ainda",
 		"Configure a biblioteca de música na página de configuração (Sound & Voice, Music Assistant) para navegar nela aqui.",
@@ -392,7 +418,8 @@ var libWords = map[string][]string{
 		"Buscar na biblioteca", "Nenhum resultado", "Biblioteca",
 		"Das suas faixas salvas", "Nenhuma estação salva no Music Assistant", "Buscar estações", "Salve música no Music Assistant ou busque aqui.",
 		"Tocar em seguida", "Adicionar à fila", "Por autor", "Por título", "Recentes", "Retomar em %s", "Do início", "Iniciar rádio",
-		"Adicionar aos favoritos", "Remover dos favoritos", "Tocar a partir daqui", "Remover da fila"},
+		"Adicionar aos favoritos", "Remover dos favoritos", "Tocar a partir daqui", "Remover da fila",
+		"Continuar ouvindo", "%d partes", "Narrado por %s", "Detalhes"},
 	"ru": {"Исполнители", "Альбомы", "Плейлисты", "Треки", "Радио", "Поиск", "Подкасты", "Аудиокниги", "Избранное", "Недавние", "Очередь", "Папки", "Назад", "Играть", "Вперемешку", "Готово",
 		"Загрузка…", "Здесь пока пусто",
 		"Настройте музыкальную библиотеку на странице настройки (Sound & Voice, Music Assistant), чтобы просматривать её здесь.",
@@ -400,7 +427,8 @@ var libWords = map[string][]string{
 		"Поиск в библиотеке", "Ничего не найдено", "Библиотека",
 		"Из сохранённых треков", "В Music Assistant нет сохранённых станций", "Найти станции", "Сохраните музыку в Music Assistant или найдите её здесь.",
 		"Играть следующим", "Добавить в очередь", "По автору", "По названию", "Новые", "Продолжить с %s", "С начала", "Запустить радио",
-		"Добавить в избранное", "Убрать из избранного", "Играть отсюда", "Убрать из очереди"},
+		"Добавить в избранное", "Убрать из избранного", "Играть отсюда", "Убрать из очереди",
+		"Продолжить слушать", "Частей: %d", "Читает %s", "Подробнее"},
 }
 
 // The words by what they say; the tabs' are their own numbers.
@@ -434,6 +462,11 @@ const (
 	libWordRemoveFavorite
 	libWordPlayFrom // play the queue from this item on
 	libWordRemoveFromQueue
+	libWordContinue // the row of the audiobooks and episodes part way through
+	libWordParts    // "12 parts": a series' number of books
+	libWordReadBy   // "Read by Ned Reader": an audiobook's narrators
+	libWordDetails
+	libWordLast = libWordDetails // the last word, for the test that every language has them all
 )
 
 func libWord(i int) string {
@@ -562,15 +595,17 @@ func (d *Display) libLoad(id int64) {
 		if p.what == libQueue {
 			p.queue = libQueueOf(target)
 		}
-		sections, more, err := fetchLibPage(ctx, c, p, libLimit(visible))
+		next := p.loaded && len(p.sections) > 0 && libPaged(p.what) // the next of a tab, after what it has
+		sections, more, err := fetchLibPageInto(ctx, c, &p, libLimit(visible))
 		d.editLibrary(func(n *librarySheet) {
 			pg := n.byID(id)
 			if pg == nil {
 				return
 			}
 			pg.loading, pg.loaded = false, true
-			// The queue the page was read from, for a tap or a hold on one of its items.
-			pg.queue = p.queue
+			// The queue the page was read from, for a tap or a hold on one of its items, and the book or
+			// episode as read in full, for its details and where it was left.
+			pg.queue, pg.entry = p.queue, p.entry
 			if err != nil {
 				pg.problem = err.Error()
 				slog.Warn("dashboard music library", "what", pg.what, "err", err)
@@ -581,12 +616,18 @@ func (d *Display) libLoad(id int64) {
 				return
 			}
 			pg.more = more
-			if pg.what < libSearch && len(pg.sections) == 1 {
-				// The next of a tab, after what it has.
-				s := pg.sections[0]
-				s.entries = slices.Concat(s.entries, sections[0].entries)
-				pg.sections = []libSection{s}
+			if next && len(pg.sections) > 0 && len(sections) > 0 {
+				// The next of a tab goes after what its grid, the last of its sections, has.
+				secs := slices.Clone(pg.sections)
+				last := &secs[len(secs)-1]
+				last.entries = slices.Concat(last.entries, sections[len(sections)-1].entries)
+				pg.sections = secs
 				return
+			}
+			if pg.what == libAudiobooks && len(sections) > 0 {
+				// Read again, the books keep the order they were put in.
+				g := &sections[len(sections)-1]
+				g.entries = musicassistant.SortAudiobooks(g.entries, n.audiobookSort)
 			}
 			pg.sections = sections
 		})
@@ -594,10 +635,21 @@ func (d *Display) libLoad(id int64) {
 	}()
 }
 
+// libPaged is whether a tab of what is read a part at a time, the next part as it is scrolled to.
+func libPaged(what int) bool {
+	return what < libSearch || what == libPodcasts
+}
+
 // fetchLibPage asks for page p's items: the next limit of a tab, a search's findings, an artist's
 // albums and top tracks, an album's or a playlist's tracks. more is whether a tab has more after them.
 // What came of an artist's two asks is kept when only one of them failed.
 func fetchLibPage(ctx context.Context, c musicassistant.Client, p libPage, limit int) ([]libSection, bool, error) {
+	return fetchLibPageInto(ctx, c, &p, limit)
+}
+
+// fetchLibPageInto is fetchLibPage, with an audiobook or an episode read in full into p.entry, for its
+// details and where it was left.
+func fetchLibPageInto(ctx context.Context, c musicassistant.Client, p *libPage, limit int) ([]libSection, bool, error) {
 	switch p.what {
 	case libFavorites:
 		// Each kind's favorites, as a search shows what it found: a row of each, the tracks as tracks.
@@ -645,10 +697,23 @@ func fetchLibPage(ctx context.Context, c musicassistant.Client, p libPage, limit
 		return []libSection{{word: -1, show: libShowTracks, kind: "", entries: usable(got)}}, false, err
 	case libAudiobooks:
 		// The whole list at once, so it can be put in order by author and series; a library of a few
-		// thousand books is still a few reads of the server.
+		// thousand books is still a few reads of the server. Each series is one entry, its parts in it.
 		var all []musicassistant.Entry
+		bySeries := true
 		for offset := 0; offset < libAudiobookMax; offset += libAudiobookPage {
-			got, err := c.Library(ctx, libKinds[libAudiobooks], offset, libAudiobookPage, "")
+			var got []musicassistant.Entry
+			var err error
+			if bySeries {
+				got, err = c.AudiobooksBySeries(ctx, offset, libAudiobookPage)
+				if err != nil && offset == 0 {
+					// A server that cannot fold them lists the books one by one.
+					slog.Warn("dashboard music library audiobooks by series", "err", err)
+					bySeries = false
+				}
+			}
+			if !bySeries {
+				got, err = c.Library(ctx, libKinds[libAudiobooks], offset, libAudiobookPage, "")
+			}
 			if err != nil {
 				return nil, false, err
 			}
@@ -657,11 +722,24 @@ func fetchLibPage(ctx context.Context, c musicassistant.Client, p libPage, limit
 				break
 			}
 		}
-		return []libSection{{word: -1, show: libShowGrid, kind: libTypes[libAudiobooks], entries: usable(musicassistant.AudiobookOrder(all))}}, false, nil
+		grid := libSection{word: -1, show: libShowGrid, kind: libTypes[libAudiobooks], entries: usable(musicassistant.AudiobookOrder(all))}
+		return libWithInProgress(ctx, c, "audiobook", grid), false, nil
+	case libSeries:
+		// The parts came with the series, in order.
+		return []libSection{{word: -1, show: libShowGrid, kind: "audiobook", entries: usable(p.entry.Items)}}, false, nil
+	case libEpisode:
+		got, err := c.PodcastEpisode(ctx, p.entry)
+		if err != nil {
+			return nil, false, err
+		}
+		if got.Usable() {
+			p.entry = got
+		}
+		return nil, false, nil
 	case libArtists, libAlbums, libPlaylists, libTracks, libRadio, libPodcasts:
 		offset := 0
-		if len(p.sections) > 0 {
-			offset = len(p.sections[0].entries)
+		if p.loaded && len(p.sections) > 0 {
+			offset = len(p.sections[len(p.sections)-1].entries)
 		}
 		got, err := c.Library(ctx, libKinds[p.what], offset, limit, "")
 		if err != nil {
@@ -669,6 +747,10 @@ func fetchLibPage(ctx context.Context, c musicassistant.Client, p libPage, limit
 		}
 		full := len(got) >= limit
 		got = usable(got)
+		if p.what == libPodcasts && offset == 0 {
+			grid := libSection{word: -1, show: libShowGrid, kind: libTypes[p.what], entries: got}
+			return libWithInProgress(ctx, c, "podcast_episode", grid), full, nil
+		}
 		if offset == 0 && len(got) == 0 && (p.what == libArtists || p.what == libAlbums) {
 			// A library of saved tracks alone has no artists or albums of its own: theirs stand in.
 			artists, albums, err := libFromTracks(ctx, c)
@@ -718,9 +800,12 @@ func fetchLibPage(ctx context.Context, c musicassistant.Client, p libPage, limit
 		got, err := c.PodcastEpisodes(ctx, p.entry)
 		return []libSection{{word: -1, show: libShowTracks, kind: "podcast_episode", entries: usable(got)}}, false, err
 	case libAudiobook:
-		_, chapters, err := c.Audiobook(ctx, p.entry)
+		book, chapters, err := c.Audiobook(ctx, p.entry)
 		if err != nil {
 			return nil, false, err
+		}
+		if book.Usable() {
+			p.entry = book
 		}
 		var got []musicassistant.Entry
 		for _, ch := range chapters {
@@ -729,6 +814,71 @@ func fetchLibPage(ctx context.Context, c musicassistant.Client, p libPage, limit
 		return []libSection{{word: -1, show: libShowTracks, kind: "chapter", entries: usable(got)}}, false, nil
 	}
 	return nil, false, nil
+}
+
+// libWithInProgress is a tab's grid with, over it, a Continue listening row of what this token's user
+// is part way through of media type kind. The server sends those short, so each takes its length and
+// place from the grid's own copy (a series' parts too) when the grid has it. Without any, or when the
+// server will not say, the grid is shown alone.
+func libWithInProgress(ctx context.Context, c musicassistant.Client, kind string, grid libSection) []libSection {
+	got, err := c.InProgress(ctx, libInProgressLimit)
+	if err != nil {
+		slog.Warn("dashboard music library in progress", "err", err)
+	}
+	full := map[string]musicassistant.Entry{}
+	for _, e := range grid.entries {
+		full[e.URI] = e
+		for _, part := range e.Items {
+			full[part.URI] = part
+		}
+	}
+	var row []musicassistant.Entry
+	for _, e := range usable(got) {
+		if e.MediaType != kind {
+			continue
+		}
+		if f, ok := full[e.URI]; ok {
+			e.Duration, e.ResumeMS, e.Authors = f.Duration, f.ResumeMS, f.Authors
+			if e.Image == nil && len(e.Metadata.Images) == 0 {
+				e.Image, e.Metadata = f.Image, f.Metadata
+			}
+		}
+		row = append(row, e)
+	}
+	if len(row) == 0 {
+		return []libSection{grid}
+	}
+	if kind == "podcast_episode" {
+		libFillEpisodes(ctx, c, row)
+	}
+	return []libSection{{word: libWordContinue, show: libShowRow, kind: kind, entries: row, resume: true}, grid}
+}
+
+// libEpisodeWait is how long the Continue listening row waits for its episodes read in full.
+const libEpisodeWait = 5 * time.Second
+
+// libFillEpisodes reads each episode of row in full, all at once, for its length and where it was
+// left: the server's list of what is in progress names them only. One not read in time, or at all,
+// stays as it was.
+func libFillEpisodes(ctx context.Context, c musicassistant.Client, row []musicassistant.Entry) {
+	ctx, cancel := context.WithTimeout(ctx, libEpisodeWait)
+	defer cancel()
+	var wg sync.WaitGroup
+	for i := range row {
+		wg.Add(1)
+		go func(e *musicassistant.Entry) {
+			defer wg.Done()
+			full, err := c.PodcastEpisode(ctx, *e)
+			if err != nil || !full.Usable() {
+				return
+			}
+			e.Duration, e.ResumeMS, e.FullyPlayed = full.Duration, full.ResumeMS, full.FullyPlayed
+			if e.Image == nil && len(e.Metadata.Images) == 0 {
+				e.Image, e.Metadata = full.Image, full.Metadata
+			}
+		}(&row[i])
+	}
+	wg.Wait()
 }
 
 func firstErr(errs ...error) error {
@@ -771,15 +921,23 @@ func (d *Display) libraryTap(x, y int) bool {
 		d.dashLibrary = nil
 		d.mu.Unlock()
 	case libPartBack:
+		var back int64
 		d.editLibrary(func(n *librarySheet) {
 			if len(n.stack) > 0 {
 				n.stack = n.stack[:len(n.stack)-1]
+				if p := n.current(); libListening(p.what) && p.loaded {
+					back = p.id
+				}
 			}
 		})
+		if back != 0 {
+			// What was listened to from the page just left shows on the one come back to.
+			d.libReload(back)
+		}
 	case libPartTab:
 		tab := z.index
 		var id int64
-		ask := false
+		ask, again := false, false
 		d.editLibrary(func(n *librarySheet) {
 			n.tab, n.stack = tab, nil
 			// A tab not yet read, or one that could not be, is asked for; one read is shown as it was
@@ -791,15 +949,25 @@ func (d *Display) libraryTap(x, y int) bool {
 			}
 			p := n.roots[tab]
 			id, ask = p.id, tab != libSearch && (!p.loaded || p.problem != "")
+			// The audiobooks and podcasts show how far each was listened to, which moves on as they
+			// play: each look reads them again, keeping what they show until the answer comes.
+			again = !ask && libListening(tab) && !p.loading
 		})
-		if ask {
+		switch {
+		case ask:
 			d.libLoad(id)
+		case again:
+			d.libReload(id)
 		}
 	case libPartSort:
 		d.editLibrary(func(n *librarySheet) {
 			n.audiobookSort = (n.audiobookSort + 1) % musicassistant.AudiobookOrders
-			if sec := n.roots[libAudiobooks].sections; len(sec) > 0 {
-				sec[0].entries = musicassistant.SortAudiobooks(sec[0].entries, n.audiobookSort)
+			r := &n.roots[libAudiobooks]
+			if len(r.sections) > 0 {
+				secs := slices.Clone(r.sections)
+				g := &secs[len(secs)-1]
+				g.entries = musicassistant.SortAudiobooks(g.entries, n.audiobookSort)
+				r.sections = secs
 			}
 		})
 	case libPartGoSearch:
@@ -813,17 +981,14 @@ func (d *Display) libraryTap(x, y int) bool {
 		if z.kind == libPartShuffle {
 			lit = libLitShuffle
 		}
-		if spot, ok := libResumeOffer(p); ok {
-			// The book was left part way: Play goes on from there, and the other button starts it over.
-			if z.kind == libPartPlay {
-				d.libPlayFrom(l, p.entry, float64(spot), lit)
-			} else {
-				libForgetSpot(p.entry.URI)
-				d.libPlayFrom(l, p.entry, 0, lit)
-			}
+		kind := libEntryType(p.entry, libPageType(p.what))
+		if _, ok := libResumeOffer(p); ok && z.kind == libPartShuffle {
+			// The book or episode was left part way: Play goes on from there, as Music Assistant plays
+			// one, and the other button starts it over.
+			d.libStartOver(l, p, kind, lit)
 			break
 		}
-		d.libPlayTapped(l, p.entry, libEntryType(p.entry, libPageType(p.what)), z.kind == libPartShuffle, lit, libEnqueueReplace)
+		d.libPlayTapped(l, p.entry, kind, z.kind == libPartShuffle, lit, libEnqueueReplace)
 	case libPartItem:
 		sec, i := z.index/libSecStride, z.index%libSecStride
 		if sec >= len(p.sections) || i >= len(p.sections[sec].entries) {
@@ -837,20 +1002,26 @@ func (d *Display) libraryTap(x, y int) bool {
 			break
 		}
 		e := p.sections[sec].entries[i]
-		switch kind := libEntryType(e, p.sections[sec].kind); kind {
+		kind := libEntryType(e, p.sections[sec].kind)
+		if p.sections[sec].resume {
+			// Continue listening is the way back into a book: a tap plays it on from where it was left.
+			d.libPlayTapped(l, e, kind, false, z.index, libEnqueueReplace)
+			break
+		}
+		switch kind {
 		case "folder":
 			np := newLibPage(libFolder, e)
 			np.path = e.Path
 			d.editLibrary(func(n *librarySheet) { n.stack = append(n.stack, np) })
 			d.libLoad(np.id)
-		case "artist", "album", "playlist", "podcast", "audiobook":
-			what := map[string]int{"artist": libArtist, "album": libAlbum, "playlist": libPlaylist, "podcast": libPodcast, "audiobook": libAudiobook}[kind]
-			np := newLibPage(what, e)
-			if what == libAudiobook {
-				libCheckBookNow() // a book just paused offers to resume as its page opens
-			}
+		case "collection":
+			// A series opens on its parts, which came with it: there is nothing to ask for.
+			np := newLibPage(libSeries, e)
+			np.loaded = true
+			np.sections = []libSection{{word: -1, show: libShowGrid, kind: "audiobook", entries: usable(e.Items)}}
 			d.editLibrary(func(n *librarySheet) { n.stack = append(n.stack, np) })
-			d.libLoad(np.id)
+		case "artist", "album", "playlist", "podcast", "audiobook":
+			d.libOpen(map[string]int{"artist": libArtist, "album": libAlbum, "playlist": libPlaylist, "podcast": libPodcast, "audiobook": libAudiobook}[kind], e)
 		case "chapter":
 			// A chapter plays its book from the top and is then moved to where the chapter starts.
 			d.libPlayChapter(l, p.entry, e, z.index)
@@ -860,6 +1031,13 @@ func (d *Display) libraryTap(x, y int) bool {
 	}
 	d.wake()
 	return true
+}
+
+// libOpen opens a page of what, of e, over the one shown, and asks for what it lists.
+func (d *Display) libOpen(what int, e musicassistant.Entry) {
+	np := newLibPage(what, e)
+	d.editLibrary(func(n *librarySheet) { n.stack = append(n.stack, np) })
+	d.libLoad(np.id)
 }
 
 // libraryHold is a finger held still on the library and lifted at x, y. On a track, an album, a
@@ -894,7 +1072,7 @@ func (d *Display) libraryHold(x, y int) bool {
 		m.choices = libMenuFor(e, kind, true, i)
 	} else {
 		switch kind {
-		case "track", "album", "playlist", "artist":
+		case "track", "album", "playlist", "artist", "audiobook", "podcast_episode":
 		default:
 			return false
 		}
@@ -923,7 +1101,29 @@ func (d *Display) libMenuChose(l *librarySheet, m libMenu, choice int) {
 		d.libPlayFromQueue(l, m.queue, m.entry, m.pos, m.item)
 	case libMenuMoveNext, libMenuRemove:
 		d.libEditQueue(m.queue, m.page, m.entry, choice == libMenuRemove)
+	case libMenuStartOver:
+		d.libStartOver(l, &libPage{what: libSpokenPage(m.kind), entry: m.entry}, m.kind, m.item)
+	case libMenuDetails:
+		d.libOpen(libSpokenPage(m.kind), m.entry)
 	}
+}
+
+// libSpoken is whether media type kind is spoken word: an audiobook or a podcast episode, which are
+// played on from where they were left.
+func libSpoken(kind string) bool { return kind == "audiobook" || kind == "podcast_episode" }
+
+// libSpokenPage is the page of an audiobook or a podcast episode, of media type kind.
+func libSpokenPage(kind string) int {
+	if kind == "podcast_episode" {
+		return libEpisode
+	}
+	return libAudiobook
+}
+
+// libListening is whether a page of what shows how far its books or episodes were listened to, which
+// moves on as they play, so it is read again when it is come back to.
+func libListening(what int) bool {
+	return what == libAudiobooks || what == libPodcasts || what == libPodcast || what == libAudiobook || what == libEpisode
 }
 
 // libNextTrack is Home Assistant's next track on target; a variable for the tests.
@@ -1067,6 +1267,8 @@ func libPageType(what int) string {
 		return "podcast"
 	case libAudiobook:
 		return "audiobook"
+	case libEpisode:
+		return "podcast_episode"
 	}
 	return ""
 }
@@ -1091,9 +1293,6 @@ func (d *Display) libPlayTapped(l *librarySheet, e musicassistant.Entry, kind st
 		return
 	}
 	d.libPlay(l.target, e, kind, shuffle, enqueue)
-	if kind == "audiobook" && enqueue == libEnqueueReplace {
-		libWatchBook(l.target, e.URI, e.Duration)
-	}
 	d.editLibrary(func(n *librarySheet) { n.lit, n.litUntil = lit, time.Now().Add(tapLit) })
 	// Play replaces the queue and leaves the library for what is now playing; queueing more (next, add)
 	// keeps the library up so the owner can go on adding.
@@ -1202,7 +1401,8 @@ func (d *Display) reopenLibrary() {
 		unstick(&l.stack[i])
 	}
 	cur := l.current()
-	id, fresh := cur.id, len(l.stack) == 0 && (l.tab == libFavorites || l.tab == libRecent || l.tab == libQueue)
+	// How far a book or an episode was listened to has moved on too.
+	id, fresh := cur.id, len(l.stack) == 0 && (l.tab == libFavorites || l.tab == libRecent || l.tab == libQueue) || libListening(cur.what) && cur.loaded
 	ask := !cur.loaded && (len(l.stack) > 0 || l.tab != libSearch) // a search not yet typed waits
 	libPics.setChanged(d.wake)
 	d.mu.Lock()
@@ -1360,7 +1560,7 @@ func (d *Display) libraryUp() bool {
 // libOpenings counts the library's openings, for librarySheet.opening.
 var libOpenings atomic.Uint64
 
-// libPlayChapter plays the book from where chapter starts (see libPlayFrom).
+// libPlayChapter plays the book from where chapter starts (see libPlayAt).
 func (d *Display) libPlayChapter(l *librarySheet, book, chapter musicassistant.Entry, lit int) {
-	d.libPlayFrom(l, book, chapter.Start, lit)
+	d.libPlayAt(l, book, "audiobook", chapter.TrackNumber-1, chapter.Start, lit)
 }

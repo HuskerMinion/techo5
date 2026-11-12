@@ -155,3 +155,11 @@ spot/saver-spot-small-weather.png
 spot/saver-spot-medium.png
 spot/saver-spot-medium-weather.png
 spot/saver-spot-clock-weather.png
+show/library-audiobooks-1280x800.png
+show/library-audiobook-page-1280x800.png
+show/library-podcast-page-1280x800.png
+show/library-episode-page-1280x800.png
+show/library-episode-menu-1280x800.png
+show/nowplaying-book-show8.png
+show/nowplaying-modern-book-show8.png
+show/clock-music-strip-book-show8.png

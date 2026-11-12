@@ -3,7 +3,12 @@
 package display
 
 import (
-	"errors"
+	"encoding/json"
+	"fmt"
+	"image"
+	"net/http"
+	"net/http/httptest"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -35,168 +40,182 @@ func TestLibClock(t *testing.T) {
 	}
 }
 
-// fakeSpots stands in for the saved places.
-type fakeSpots struct {
-	mu    sync.Mutex
-	spots map[string]int
-}
-
-func useFakeSpots(t *testing.T) *fakeSpots {
-	f := &fakeSpots{spots: map[string]int{}}
-	saveWas, forgetWas, spotWas := libSaveSpot, libForgetSpot, libResumeSpot
-	libSaveSpot = func(uri string, s int) { f.mu.Lock(); f.spots[uri] = s; f.mu.Unlock() }
-	libForgetSpot = func(uri string) { f.mu.Lock(); delete(f.spots, uri); f.mu.Unlock() }
-	libResumeSpot = func(uri string) (int, bool) { f.mu.Lock(); defer f.mu.Unlock(); s, ok := f.spots[uri]; return s, ok }
-	t.Cleanup(func() { libSaveSpot, libForgetSpot, libResumeSpot = saveWas, forgetWas, spotWas })
-	return f
-}
-
-func (f *fakeSpots) get(uri string) (int, bool) {
-	f.mu.Lock()
-	defer f.mu.Unlock()
-	s, ok := f.spots[uri]
-	return s, ok
-}
-
-// A place is kept only once it is worth going back to, and a book played to its end lets its place go.
-func TestLibKeepPlace(t *testing.T) {
-	f := useFakeSpots(t)
-	libKeepPlace("b", 30, 3600)
-	if _, ok := f.get("b"); ok {
-		t.Errorf("a place half a minute in was kept")
-	}
-	libKeepPlace("b", 1800, 3600)
-	if s, _ := f.get("b"); s != 1800 {
-		t.Errorf("place = %d, want 1800", s)
-	}
-	libKeepPlace("b", 3550, 3600)
-	if _, ok := f.get("b"); ok {
-		t.Errorf("a book played to its end kept its place")
-	}
-}
-
-// A different length on the player is something else; a length not known is taken as the book.
-func TestLibSameLength(t *testing.T) {
-	if !libSameLength(map[string]any{"media_duration": 3602.0}, 3600) {
-		t.Errorf("the book's own length was taken for something else")
-	}
-	if libSameLength(map[string]any{"media_duration": 240.0}, 3600) {
-		t.Errorf("a four-minute song was taken for the book")
-	}
-	if !libSameLength(map[string]any{}, 3600) || !libSameLength(map[string]any{"media_duration": 240.0}, 0) {
-		t.Errorf("not knowing a length stopped the watch")
-	}
-}
-
-// Watching a book: its place is kept when it pauses, and the watch ends, keeping the last place, when
-// the player stops.
-func TestLibWatchBookKeepsThePlaceWhenPausedAndStopped(t *testing.T) {
-	f := useFakeSpots(t)
-	firstWas, everyWas, stateWas := libWatchFirst, libWatchEvery, libPlayerState
-	t.Cleanup(func() { libWatchFirst, libWatchEvery, libPlayerState = firstWas, everyWas, stateWas })
-	libWatchFirst, libWatchEvery = time.Millisecond, time.Millisecond
-
-	var mu sync.Mutex
-	steps := []hass.State{
-		{State: "playing", Attributes: map[string]any{"media_position": 600.0, "media_duration": 3600.0}},
-		{State: "paused", Attributes: map[string]any{"media_position": 900.0, "media_duration": 3600.0}},
-		{State: "playing", Attributes: map[string]any{"media_position": 1200.0, "media_duration": 3600.0}},
-		{State: "idle"}, {State: "idle"},
-	}
-	done := make(chan struct{})
-	libPlayerState = func(string) (hass.State, error) {
-		mu.Lock()
-		defer mu.Unlock()
-		if len(steps) == 0 {
-			select {
-			case <-done:
-			default:
-				close(done)
-			}
-			return hass.State{}, errors.New("gone")
-		}
-		s := steps[0]
-		steps = steps[1:]
-		return s, nil
-	}
-	libWatchBook("media_player.x", "library://audiobook/1", 3600)
-	deadline := time.After(2 * time.Second)
-	for {
-		if s, ok := f.get("library://audiobook/1"); ok && s == 1200 {
-			return
-		}
-		select {
-		case <-deadline:
-			s, ok := f.get("library://audiobook/1")
-			t.Fatalf("place = %d (%v); want 1200 kept when the player stopped", s, ok)
-		case <-time.After(time.Millisecond):
-		}
-	}
-}
-
-// The first looks can still find what was on before the book: the watch waits for the book rather than
-// ending before it has kept a place.
-func TestLibWatchBookWaitsForTheBookToComeOn(t *testing.T) {
-	f := useFakeSpots(t)
-	firstWas, everyWas, stateWas := libWatchFirst, libWatchEvery, libPlayerState
-	t.Cleanup(func() { libWatchFirst, libWatchEvery, libPlayerState = firstWas, everyWas, stateWas })
-	libWatchFirst, libWatchEvery = time.Millisecond, time.Millisecond
-
-	var mu sync.Mutex
-	before := hass.State{State: "playing", Attributes: map[string]any{"media_position": 30.0, "media_duration": 200.0}}
-	steps := []hass.State{before, before,
-		{State: "paused", Attributes: map[string]any{"media_position": 700.0, "media_duration": 3600.0}},
-	}
-	// The watch's last look is its second with nothing to see: it ends there, so the test waits for it
-	// before the cleanup puts the watch's settings back under it.
-	ended, gone := make(chan struct{}), 0
-	libPlayerState = func(string) (hass.State, error) {
-		mu.Lock()
-		defer mu.Unlock()
-		if len(steps) == 0 {
-			if gone++; gone == 2 {
-				close(ended)
-			}
-			return hass.State{}, errors.New("gone")
-		}
-		s := steps[0]
-		steps = steps[1:]
-		return s, nil
-	}
-	libWatchBook("media_player.x", "library://audiobook/2", 3600)
-	deadline := time.After(2 * time.Second)
-	for {
-		if s, ok := f.get("library://audiobook/2"); ok && s == 700 {
-			select {
-			case <-ended:
-			case <-deadline:
-				t.Fatal("the watch did not end")
-			}
-			return
-		}
-		select {
-		case <-deadline:
-			s, ok := f.get("library://audiobook/2")
-			t.Fatalf("place = %d (%v); want 700, kept once the book came on", s, ok)
-		case <-time.After(time.Millisecond):
-		}
-	}
-}
-
-// An audiobook page offers to go on only from a place worth going back to.
+// A book's or an episode's page offers to go on from where Music Assistant says it was left, and not
+// once it was finished; nothing else offers to.
 func TestLibResumeOffer(t *testing.T) {
-	f := useFakeSpots(t)
-	p := &libPage{what: libAudiobook, entry: musicassistant.Entry{URI: "library://audiobook/7"}}
-	if _, ok := libResumeOffer(p); ok {
-		t.Errorf("a book never played offered to resume")
-	}
-	f.mu.Lock()
-	f.spots["library://audiobook/7"] = 4000
-	f.mu.Unlock()
-	if s, ok := libResumeOffer(p); !ok || s != 4000 {
+	book := musicassistant.Entry{URI: "library://audiobook/7", ResumeMS: 4_000_500}
+	if s, ok := libResumeOffer(&libPage{what: libAudiobook, entry: book}); !ok || s != 4000 {
 		t.Errorf("offer = %d (%v); want 4000", s, ok)
 	}
-	if _, ok := libResumeOffer(&libPage{what: libAlbum, entry: p.entry}); ok {
-		t.Errorf("an album page offered to resume")
+	ep := musicassistant.Entry{URI: "rss://podcast_episode/1", ResumeMS: 61_000}
+	if s, ok := libResumeOffer(&libPage{what: libEpisode, entry: ep}); !ok || s != 61 {
+		t.Errorf("episode offer = %d (%v); want 61", s, ok)
+	}
+	for name, p := range map[string]*libPage{
+		"a book never played": {what: libAudiobook, entry: musicassistant.Entry{URI: "library://audiobook/8"}},
+		"a finished book":     {what: libAudiobook, entry: musicassistant.Entry{URI: "library://audiobook/9", ResumeMS: 9000, FullyPlayed: true}},
+		"an album":            {what: libAlbum, entry: book},
+	} {
+		if _, ok := libResumeOffer(p); ok {
+			t.Errorf("%s offered to resume", name)
+		}
+	}
+}
+
+// How far a book was listened to is its place over its length; a finished one is all of it.
+func TestLibProgress(t *testing.T) {
+	if f, played := libProgress(musicassistant.Entry{ResumeMS: 900_000, Duration: 3600}); played || f != 0.25 {
+		t.Errorf("progress = %v (%v); want a quarter", f, played)
+	}
+	if f, played := libProgress(musicassistant.Entry{FullyPlayed: true}); !played || f != 1 {
+		t.Errorf("finished = %v (%v)", f, played)
+	}
+	if f, _ := libProgress(musicassistant.Entry{ResumeMS: 900_000}); f != 0 {
+		t.Errorf("a place with no length to measure it by gave %v", f)
+	}
+}
+
+// libListenMA is a Music Assistant that keeps the commands asked of it, and refuses them all when told.
+func libListenMA(t *testing.T, refuse bool) func() []string {
+	var mu sync.Mutex
+	var asked []string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var body struct {
+			Command string         `json:"command"`
+			Args    map[string]any `json:"args"`
+		}
+		json.NewDecoder(r.Body).Decode(&body)
+		mu.Lock()
+		asked = append(asked, fmt.Sprintf("%s %v %v %v", body.Command, body.Args["media"], body.Args["start_item"], body.Args["start_from_beginning"]))
+		mu.Unlock()
+		if refuse {
+			w.WriteHeader(http.StatusForbidden)
+			return
+		}
+		w.Write([]byte(`null`))
+	}))
+	t.Cleanup(srv.Close)
+	libClient = func() (musicassistant.Client, bool) { return musicassistant.Client{URL: srv.URL, Token: "tok"}, true }
+	libQueueOf = func(string) string { return "up0a1b2c3d" }
+	return func() []string { mu.Lock(); defer mu.Unlock(); return append([]string(nil), asked...) }
+}
+
+// Start over asks Music Assistant to play the book from its first chapter, an episode from its
+// beginning, and a chapter from where it starts; Home Assistant is not asked to play or seek at all.
+func TestStartOverAndChaptersPlayThroughMusicAssistant(t *testing.T) {
+	noLibrary(t)
+	taps := recordTaps(t)
+	ma := libListenMA(t, false)
+	d := &Display{poke: make(chan struct{}, 1)}
+	sheet := libSheetWith(libAudiobooks, nil, "media_player.ma_kitchen")
+	setLibUp(d, &sheet)
+	book := musicassistant.Entry{URI: "library://audiobook/5", ResumeMS: 120_000}
+	chapters := []musicassistant.Entry{musicassistant.ChapterEntry(book, musicassistant.Chapter{Position: 0, Name: "One", End: 10}),
+		musicassistant.ChapterEntry(book, musicassistant.Chapter{Position: 1, Name: "Two", Start: 10, End: 20})}
+	page := &libPage{what: libAudiobook, entry: book, sections: []libSection{{show: libShowTracks, kind: "chapter", entries: chapters}}}
+
+	d.libStartOver(&sheet, page, "audiobook", libLitShuffle)
+	d.libPlayChapter(&sheet, book, chapters[1], 1)
+	d.libStartOver(&sheet, &libPage{what: libEpisode, entry: musicassistant.Entry{URI: "rss://podcast_episode/e1"}}, "podcast_episode", libLitShuffle)
+	waitUntil(t, "three plays", func() bool { return len(ma()) == 3 })
+	got := strings.Join(ma(), "; ")
+	for _, want := range []string{"player_queues/play_media library://audiobook/5 0 <nil>", "player_queues/play_media library://audiobook/5 1 <nil>",
+		"player_queues/play_media rss://podcast_episode/e1 <nil> true"} {
+		if !strings.Contains(got, want) {
+			t.Errorf("asked %q, want %q among them", got, want)
+		}
+	}
+	time.Sleep(20 * time.Millisecond)
+	if len(taps()) != 0 {
+		t.Errorf("Home Assistant was asked %v as well", taps())
+	}
+}
+
+// Start over from a held book's sheet, whose page (and so its chapters) was never opened, asks Music
+// Assistant for the book from chapter 0, rather than playing it on from its place and seeking after.
+func TestStartOverFromTheSheetAsksForChapterZero(t *testing.T) {
+	noLibrary(t)
+	taps := recordTaps(t)
+	ma := libListenMA(t, false)
+	d := &Display{poke: make(chan struct{}, 1)}
+	sheet := libSheetWith(libAudiobooks, nil, "media_player.ma_kitchen")
+	setLibUp(d, &sheet)
+	book := musicassistant.Entry{URI: "library://audiobook/5", ResumeMS: 120_000, MediaType: "audiobook"}
+	d.libMenuChose(&sheet, libMenu{open: true, entry: book, kind: "audiobook"}, libMenuStartOver)
+	waitUntil(t, "the play", func() bool { return len(ma()) == 1 })
+	if got := ma()[0]; got != "player_queues/play_media library://audiobook/5 0 <nil>" {
+		t.Errorf("asked %q; want the book from chapter 0", got)
+	}
+	time.Sleep(20 * time.Millisecond)
+	if len(taps()) != 0 {
+		t.Errorf("Home Assistant was asked %v as well", taps())
+	}
+}
+
+// When Music Assistant will not play on the player itself, or a book has no chapters to start from,
+// Home Assistant plays it and then seeks to the place asked for.
+func TestStartOverFallsBackToHomeAssistant(t *testing.T) {
+	noLibrary(t)
+	taps := recordTaps(t)
+	libListenMA(t, true)
+	firstWas, pollWas, triesWas, stateWas := libSeekFirst, libSeekPoll, libSeekTries, libPlayerState
+	t.Cleanup(func() {
+		libSeekFirst, libSeekPoll, libSeekTries, libPlayerState = firstWas, pollWas, triesWas, stateWas
+	})
+	libSeekFirst, libSeekPoll, libSeekTries = 0, time.Millisecond, 2
+	libPlayerState = func(string) (hass.State, error) { return hass.State{State: "playing"}, nil }
+	d := &Display{poke: make(chan struct{}, 1)}
+	sheet := libSheetWith(libAudiobooks, nil, "media_player.ma_kitchen")
+	setLibUp(d, &sheet)
+	book := musicassistant.Entry{URI: "library://audiobook/5", ResumeMS: 120_000}
+
+	// No chapters listed, and Music Assistant refuses: Home Assistant plays, then seeks to the start.
+	d.libStartOver(&sheet, &libPage{what: libAudiobook, entry: book}, "audiobook", libLitShuffle)
+	waitUntil(t, "a play and a seek", func() bool { return len(taps()) == 2 })
+	if a := taps(); a[0].Service != "music_assistant.play_media" || a[1].Service != "media_player.media_seek" || a[1].Data["seek_position"] != 0.0 {
+		t.Errorf("asked %v; want a play, then a seek to the start", a)
+	}
+	// A chapter, refused by Music Assistant: Home Assistant plays and seeks to where it starts.
+	d.libPlayChapter(&sheet, book, musicassistant.ChapterEntry(book, musicassistant.Chapter{Position: 1, Start: 75.6, End: 200}), 1)
+	waitUntil(t, "a second play and seek", func() bool { return len(taps()) == 4 })
+	if a := taps(); a[3].Service != "media_player.media_seek" || a[3].Data["seek_position"] != 75.0 {
+		t.Errorf("asked %v; want a seek to 75", a)
+	}
+}
+
+// Held, an audiobook or an episode offers Play, Start over once started, its details and the queueing
+// choices, but no radio; Details opens its page, which reads it in full.
+func TestAHeldEpisodeOffersStartOverAndDetails(t *testing.T) {
+	noLibrary(t)
+	recordTaps(t)
+	ep := musicassistant.Entry{ItemID: "e1", Provider: "rss", URI: "rss://podcast_episode/e1", Name: "Episode", MediaType: "podcast_episode", ResumeMS: 5000}
+	if got, want := fmt.Sprint(libMenuFor(ep, "podcast_episode", false, 0)), fmt.Sprint([]int{libMenuPlay, libMenuStartOver, libMenuDetails, libMenuNext, libMenuAdd}); got != want {
+		t.Errorf("an episode started offers %s, want %s", got, want)
+	}
+	ep.ResumeMS = 0
+	if got := libMenuFor(ep, "podcast_episode", false, 0); len(got) != 4 || got[1] != libMenuDetails {
+		t.Errorf("an episode not started offers %v", got)
+	}
+	book := musicassistant.Entry{URI: "library://audiobook/2", ResumeMS: 1}
+	if got := libMenuFor(book, "audiobook", false, 0); got[len(got)-1] != libMenuFavorite {
+		t.Errorf("a book offers %v; want it to end with Add to favorites", got)
+	}
+
+	r := newRenderer(image.NewRGBA(image.Rect(0, 0, showWide, showHigh)))
+	d := &Display{r: r, poke: make(chan struct{}, 1)}
+	sheet := libSheetWith(libPodcasts, nil, "media_player.ma_kitchen")
+	pod := newLibPage(libPodcast, musicassistant.Entry{Name: "A podcast", URI: "library://podcast/1"})
+	pod.loaded = true
+	pod.sections = []libSection{{word: -1, show: libShowTracks, kind: "podcast_episode", entries: []musicassistant.Entry{ep}}}
+	sheet.stack = []libPage{pod}
+	setLibUp(d, &sheet)
+	zones, _ := libDraw(r, sheet)
+	if !d.libraryHold(libMiddle(libFind(t, zones, libPartItem, 0))) {
+		t.Fatal("holding an episode did not open its sheet")
+	}
+	zones, _ = libDraw(r, d.libraryViewNow().sheet)
+	d.libraryTap(libMiddle(libFind(t, zones, libPartMenu, 1))) // Details, after Play
+	if l := d.libraryViewNow().sheet; len(l.stack) != 2 || l.stack[1].what != libEpisode || l.stack[1].entry.URI != ep.URI {
+		t.Errorf("Details opened %+v", l.stack)
 	}
 }

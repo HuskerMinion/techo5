@@ -115,13 +115,14 @@ func (r *renderer) transportRow(s scene) {
 	// here as well; the buttons' own rim and shadow separate the footer now, and it read as clutter.
 	back, play, next := r.transportButtons()
 	r.footControls(play.Min.Y - r.s(10))
-	r.transportButton(back, "skip-previous", false)
+	backIcon, nextIcon := skipIcons(s.spoken)
+	r.transportButton(back, backIcon, false)
 	if s.paused {
 		r.transportButton(play, "play", true)
 	} else {
 		r.transportButton(play, "pause", true)
 	}
-	r.transportButton(next, "skip-next", false)
+	r.transportButton(next, nextIcon, false)
 	r.musicFooter(s)
 }
 
@@ -158,6 +159,8 @@ func (r *renderer) musicFooter(s scene) {
 		r.mdiIcon("bookshelf", x, b.Min.Y+(b.Dy()-icon)/2, 24, col)
 		r.text(doneFace, s.libraryWord, x+icon+gap, b.Min.Y+b.Dy()/2+r.s(8), col)
 	}
+	// An audiobook's or an episode's playback speed, which a tap steps on.
+	r.drawSpeed(s)
 }
 
 // libraryButton is the Library button with word on it, level with Done and as wide as its word needs:

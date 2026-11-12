@@ -36,8 +36,20 @@ type Entry struct {
 	// Artists and Album are the items a track or an album names, as short as the server sends them:
 	// their id, provider, name, URI and perhaps a picture, or a bare name.
 	Artists []Entry
-	// Authors are an audiobook's authors' names, as the server gives them.
-	Authors []string
+	// Authors and Narrators are an audiobook's authors' and readers' names, as the server gives them
+	// (a name alone or an artist with one), and Publisher who published it or a podcast.
+	Authors   []string
+	Narrators []string
+	Publisher string
+	// Description is what the item says about itself (its metadata's description), as plain text.
+	Description string
+	// ResumeMS is where this token's user left an audiobook or a podcast episode, in milliseconds, and
+	// FullyPlayed whether they finished it; zero and false when the server does not say.
+	ResumeMS    int
+	FullyPlayed bool
+	// Items are a series' parts in order, for an entry of media type "collection": the audiobooks a
+	// library listing folds into one row.
+	Items []Entry
 	// Path is where a folder is in the server's browse tree ("filesystem_local--x://Artist/Album"),
 	// for opening it; empty for anything that is not a folder there.
 	Path string
@@ -79,10 +91,14 @@ func (e *Entry) UnmarshalJSON(b []byte) error {
 		Owner: looseText(m["owner"]), Year: looseInt(m["year"]), Duration: looseInt(m["duration"]),
 		TrackNumber: looseInt(m["track_number"]), DiscNumber: looseInt(m["disc_number"]),
 		Artists: looseNames(m["artists"]), Authors: looseStrings(m["authors"]), DateAdded: looseText(m["date_added"]), Path: looseText(m["path"]), Album: looseNamed(m["album"]),
+		Narrators: looseStrings(m["narrators"]), Publisher: looseText(m["publisher"]), ResumeMS: looseInt(m["resume_position_ms"]),
 	}
-	_ = json.Unmarshal(m["favorite"], &e.Favorite) // anything but true or false leaves it false
+	_ = json.Unmarshal(m["favorite"], &e.Favorite)        // anything but true or false leaves it false
+	_ = json.Unmarshal(m["fully_played"], &e.FullyPlayed) // null, for not known, too
 	var meta struct {
-		Images []json.RawMessage `json:"images"`
+		Images      []json.RawMessage `json:"images"`
+		Description json.RawMessage   `json:"description"`
+		ReleaseDate json.RawMessage   `json:"release_date"`
 	}
 	if json.Unmarshal(m["metadata"], &meta) == nil {
 		for _, raw := range meta.Images {
@@ -90,6 +106,14 @@ func (e *Entry) UnmarshalJSON(b []byte) error {
 				e.Metadata.Images = append(e.Metadata.Images, img)
 			}
 		}
+		e.Description = shortDescription(PlainText(looseText(meta.Description)))
+		if e.Year == 0 {
+			e.Year = looseInt(meta.ReleaseDate) // an audiobook or an episode has its year only here
+		}
+	}
+	var items []Entry
+	if json.Unmarshal(m["items"], &items) == nil {
+		e.Items = usableOnly(items)
 	}
 	if img, ok := looseImage(m["image"]); ok {
 		e.Image = &img
@@ -157,7 +181,8 @@ func looseNames(raw json.RawMessage) []Entry {
 	return out
 }
 
-// looseStrings is a list of names, or one name alone; what is not a name is left out.
+// looseStrings is a list of names, or one name alone; a name may come as an item with a name (Music
+// Assistant 2.10 sends an audiobook's authors as artists). What is not a name is left out.
 func looseStrings(raw json.RawMessage) []string {
 	var list []json.RawMessage
 	if json.Unmarshal(raw, &list) != nil {
@@ -165,8 +190,27 @@ func looseStrings(raw json.RawMessage) []string {
 	}
 	var out []string
 	for _, x := range list {
-		if s := looseText(x); s != "" {
+		s := looseText(x)
+		if s == "" {
+			var named struct {
+				Name json.RawMessage `json:"name"`
+			}
+			if json.Unmarshal(x, &named) == nil {
+				s = looseText(named.Name)
+			}
+		}
+		if s != "" {
 			out = append(out, s)
+		}
+	}
+	return out
+}
+
+func usableOnly(list []Entry) []Entry {
+	out := list[:0]
+	for _, e := range list {
+		if e.Usable() {
+			out = append(out, e)
 		}
 	}
 	return out
