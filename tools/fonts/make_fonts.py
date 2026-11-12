@@ -43,12 +43,13 @@ FONTS = [
     ("opensans", ["OpenSans[wdth,wght].ttf"], {"wdth": 100}),
     ("googlesansflex", ["GoogleSansFlex[ROND,opsz,slnt,wdth,wght].ttf"], {"opsz": 18, "wdth": 100, "ROND": 0, "slnt": 0}),
     ("antonio", ["Antonio[wght].ttf"], {}),
+    ("notosanshebrew", ["NotoSansHebrew[wdth,wght].ttf"], {"wdth": 100}),
 ]
 
 # What each is called, as its own name table says it.
 NAMES = {"inter": "Inter", "museomoderno": "MuseoModerno", "exo": "Exo", "overpass": "Overpass", "saira": "Saira",
          "comicneue": "Comic Neue", "opensans": "Open Sans", "googlesansflex": "Google Sans Flex",
-         "antonio": "Antonio"}
+         "antonio": "Antonio", "notosanshebrew": "Noto Sans Hebrew"}
 
 # The characters kept, as ranges of code points (both ends included). The font keeps those it has.
 KEEP = [
@@ -56,6 +57,8 @@ KEEP = [
     (0x00A0, 0x024F),  # Latin-1 Supplement, Latin Extended-A and -B
     (0x02C6, 0x02DD),  # spacing accents (ˆ ˇ ˘ ˙ ˚ ˛ ˜ ˝)
     (0x03C0, 0x03C0),  # π
+    (0x0590, 0x05FF),  # Hebrew & cantillation marks
+    (0xFB1D, 0xFB4F),  # Hebrew Presentation Forms
     (0x1E9E, 0x1E9E),  # ẞ
     (0x2000, 0x206F),  # General Punctuation
     (0x20A0, 0x20CF),  # currency

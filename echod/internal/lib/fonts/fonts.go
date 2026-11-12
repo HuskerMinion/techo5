@@ -53,6 +53,7 @@ var families = []Family{
 	{"Comic Neue", "comicneue", 1.06},
 	{"Open Sans", "opensans", 0.98},
 	{"Google Sans Flex", "googlesansflex", 1},
+	{"Noto Sans Hebrew", "notosanshebrew", 0.96},
 	{"Go Mono", GoMono, 0.755},
 }
 
