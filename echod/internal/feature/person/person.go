@@ -67,6 +67,9 @@ type Feature struct {
 
 	// score runs the model on a picture: the chance it shows a person. Replaced in tests.
 	score func(gray []uint8) (float32, error)
+	// idle is told the time every second while looking, and lets an accelerator go (accel.go).
+	// Replaced in tests.
+	idle func(now time.Time)
 
 	mu    sync.Mutex
 	judge judge
@@ -160,7 +163,7 @@ const loadAgain = time.Hour
 
 // look runs the model on the camera's frames while it is wanted, and lets the model go after.
 func (f *Feature) look(ctx context.Context) {
-	score := f.score
+	score, idle := f.score, f.idle
 	if score == nil {
 		if !f.failedAt.IsZero() && time.Since(f.failedAt) < loadAgain {
 			return // said once, and tried again later rather than every few seconds
@@ -172,7 +175,8 @@ func (f *Feature) look(ctx context.Context) {
 			return
 		}
 		f.failedAt = time.Time{}
-		score = m.score
+		defer m.close()
+		score, idle = m.score, m.idle
 	}
 	frames := make(chan *camera.Frame, 1)
 	stop := camera.Get().Frames.Listen(func(fr *camera.Frame) {
@@ -208,6 +212,9 @@ func (f *Feature) look(ctx context.Context) {
 				return
 			}
 			f.update(now)
+			if idle != nil {
+				idle(now)
+			}
 		case fr := <-frames:
 			now := time.Now()
 			// A frame a little early is taken: frames come about every so often, and one just short
@@ -334,6 +341,8 @@ var errSize = errors.New("the picture or the model's answer is not the size expe
 // detector is the model, loaded, with the buffers it runs in.
 type detector struct {
 	in *tflite.Interpreter
+
+	acc accelerator // the model off the cores (accel.go); nil where there is none, or once it failed
 }
 
 func load() (*detector, error) {
@@ -350,7 +359,7 @@ func load() (*detector, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &detector{in: in}, nil
+	return &detector{in: in, acc: openAccel(m, in)}, nil
 }
 
 // score is the chance a 96x96 gray picture shows a person. The model takes each pixel as it was
@@ -359,6 +368,12 @@ func (d *detector) score(gray []uint8) (float32, error) {
 	x := d.in.Input(0)
 	if len(gray) != len(x.F32) {
 		return 0, errSize
+	}
+	if d.acc != nil {
+		if p, ok := d.acc.score(gray, time.Now()); ok {
+			return p, nil
+		}
+		d.acc = nil // failed, said, and not tried again
 	}
 	for i, p := range gray {
 		x.F32[i] = float32(int64(p)-128-x.ZeroPoint) * x.Scale
