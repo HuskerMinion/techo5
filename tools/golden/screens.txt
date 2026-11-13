@@ -32,6 +32,9 @@ show/library-tracks-1280x800.png
 show/library-search-1280x800.png
 show/library-radio-1280x800.png
 show/library-keyboard-1280x800.png
+show/dash-keyboard-search-960x480.png
+show/dash-keyboard-search-1280x800.png
+show/dash-keyboard-password-960x480.png
 show/library-not-set-up-1280x800.png
 show/library-menu-1280x800.png
 show/library-queue-1280x800.png

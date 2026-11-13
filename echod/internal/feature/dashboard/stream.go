@@ -17,6 +17,7 @@ import (
 	"strings"
 	"sync"
 	"time"
+	"unicode/utf8"
 
 	"github.com/HuskerMinion/techo5/echod/internal/config"
 	"github.com/HuskerMinion/techo5/echod/internal/lib/fastjpeg"
@@ -24,14 +25,32 @@ import (
 )
 
 // The dashcast protocol, as dashcast/serve.go describes it, inside the encrypted connection secure.go
-// makes: a hello line of JSON, then a JSON line per touch; back come length-framed messages, a
-// picture to draw at a place or a problem to show.
+// makes: a hello line of JSON, then a JSON line per touch or per key typed; back come length-framed
+// messages, a picture to draw at a place, a problem to show, or a text field on the page that got or
+// lost focus.
 const (
-	kindPicture = 1
-	kindProblem = 2
-	kindHalf    = 3 // a picture at half size, drawn doubled: sent while most of the page is moving
-	kindPages   = 4 // the web pages' names, the answer to a hello asking for them (Pages)
+	kindPicture  = 1
+	kindProblem  = 2
+	kindHalf     = 3 // a picture at half size, drawn doubled: sent while most of the page is moving
+	kindPages    = 4 // the web pages' names, the answer to a hello asking for them (Pages)
+	kindKeyboard = 5 // a text field on the page got focus or lost it (Field)
 )
+
+// Field is the text field on the streamed page that has focus, for the screen's own keyboard (#493):
+// the page is a picture here, so the dashcast server says when a field is tapped. Up while one has
+// focus, with its kind (text, search, password, number…), the text already in it (never a
+// password's) and its label.
+type Field struct {
+	Up    bool   `json:"up"`
+	Kind  string `json:"kind"`
+	Value string `json:"value"`
+	Label string `json:"label"`
+	// Seq counts what servers have said, so a field tapped again is told from the one before.
+	Seq uint64 `json:"-"`
+}
+
+// fieldMax bounds the text and label taken from the server, in characters.
+const fieldMax = 500
 
 // webPath starts the path of one of the dashcast server's own web pages, by its name ("web:Status"):
 // a page the server's owner listed, which the device asks for by name and never by address.
@@ -46,6 +65,7 @@ type View struct {
 	Ready   bool   // a picture has arrived
 	Problem string // a sentence for the screen, empty when all is well
 	Version uint64 // counts pictures, so a drawer can tell a new one from the last
+	Field   Field  // the page's text field with focus, if one has it
 }
 
 // stream is one connection's worth of dashboard, kept going while the page is up.
@@ -112,6 +132,24 @@ func (f *Feature) Close() {
 
 // Touch passes a touch on to the streamed page: kind is tap, down, move or up.
 func (f *Feature) Touch(kind string, x, y int) {
+	f.send(map[string]any{"t": kind, "x": x, "y": y})
+}
+
+// Type types text into the streamed page's field with focus.
+func (f *Feature) Type(text string) {
+	if text != "" {
+		f.send(map[string]any{"t": "text", "s": text})
+	}
+}
+
+// Key presses a key in the streamed page's field with focus: Backspace or Enter, or "done", which
+// lets go of the field.
+func (f *Feature) Key(k string) {
+	f.send(map[string]any{"t": "key", "k": k})
+}
+
+// send writes a line to the server: a touch or a key.
+func (f *Feature) send(line map[string]any) {
 	f.mu.Lock()
 	s := f.stream
 	f.mu.Unlock()
@@ -127,7 +165,34 @@ func (f *Feature) Touch(kind string, x, y int) {
 		return
 	}
 	_ = c.SetWriteDeadline(time.Now().Add(2 * time.Second))
-	_ = enc.Encode(map[string]any{"t": kind, "x": x, "y": y})
+	_ = enc.Encode(line)
+}
+
+// setField takes what the server said about the page's field: down when the connection goes, as the
+// page it was in is not this screen's any more.
+func (s *stream) setField(fl Field) {
+	s.mu.Lock()
+	if !fl.Up && !s.view.Field.Up {
+		s.mu.Unlock()
+		return
+	}
+	if !fl.Up {
+		fl = Field{}
+	}
+	fl.Value, fl.Label = cutRunes(fl.Value, fieldMax), cutRunes(fl.Label, fieldMax)
+	fl.Seq = s.f.fieldSeq.Add(1) // counted for the Feature: a new stream must not start the count over
+	s.view.Field = fl
+	s.mu.Unlock()
+	s.f.Changed.Emit(struct{}{})
+}
+
+// cutRunes is s in at most n characters, and valid UTF-8.
+func cutRunes(s string, n int) string {
+	s = strings.ToValidUTF8(s, "")
+	if utf8.RuneCountInString(s) <= n {
+		return s
+	}
+	return string([]rune(s)[:n])
 }
 
 func (s *stream) close() {
@@ -227,6 +292,7 @@ func (s *stream) once() error {
 		s.mu.Lock()
 		s.conn, s.enc = nil, nil
 		s.mu.Unlock()
+		s.setField(Field{})
 	}()
 	slog.Info("dashboard stream connected", "server", d.Server, "path", path)
 
@@ -257,6 +323,11 @@ func (s *stream) once() error {
 			s.paintDoubled(at, img)
 		case kindProblem:
 			s.problem(string(msg[1:]))
+		case kindKeyboard:
+			var fl Field
+			if json.Unmarshal(msg[1:], &fl) == nil {
+				s.setField(fl)
+			}
 		case kindPicture:
 			if len(msg) < 5 {
 				continue

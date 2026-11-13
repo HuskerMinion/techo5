@@ -227,12 +227,14 @@ type Display struct {
 	dashFollow    bool
 	dashEdge      int // edgeNone, or the edge the finger on it started at
 	dashEdgeAt    image.Point
-	dashAwayUntil time.Time // the idle dashboard put away, the clock up until then
-	dashScroll    int       // how far down the drawn dashboard is scrolled
-	tessPage      int       // the Tessera page's page shown (tessera.go)
-	tessRev       string    // the revision of the Tessera layout it was shown on
-	dashScrollFor string    // the dashboard it is scrolled on
-	dashDrag      drawnDrag // a finger moving on the drawn dashboard
+	dashKbd       dashKeyboard // the keyboard over a streamed page (dash_keyboard.go)
+	dashKbdWake   *time.Timer  // to look again when that keyboard has been left long enough
+	dashAwayUntil time.Time    // the idle dashboard put away, the clock up until then
+	dashScroll    int          // how far down the drawn dashboard is scrolled
+	tessPage      int          // the Tessera page's page shown (tessera.go)
+	tessRev       string       // the revision of the Tessera layout it was shown on
+	dashScrollFor string       // the dashboard it is scrolled on
+	dashDrag      drawnDrag    // a finger moving on the drawn dashboard
 	dashAdjust    dashAdjusting
 	dashColor     *dashboard.LightColor // the color sheet, while it is up
 	dashMedia     *mediaSheet           // the media sheet, while it is up

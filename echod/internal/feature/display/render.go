@@ -77,6 +77,7 @@ type scene struct {
 	dashAsked   bool // the dashboard a tap on the night screen opened (dashNight): shown over the night clock
 	dashMode    config.DashboardMode
 	dash        dashboard.View
+	dashKbd     dashKeyboard // the keyboard over the streamed page, while a field on it has focus
 	drawn       dashboard.Drawn
 	dashScroll  int
 	dashAdjust  dashAdjusting         // a level a finger is sliding

@@ -50,6 +50,11 @@ device, **Configuration** card):
 On an Echo Show, swipe in from the left edge of the clock to open it; on the Spot, pick Dashboard
 in the ring menu. More in [docs/dashboards.md](../docs/dashboards.md).
 
+Tapping a text field on the page brings up the Show's own keyboard: dashcast tells the device when a
+field gets focus, and types what comes back into it as a keyboard would. It needs the device's
+firmware from the same release or newer; an older one shows no keyboard and is otherwise unchanged.
+A password field's text is never sent to the device.
+
 ## Security
 
 The browser dashcast runs is signed in to Home Assistant with the token, and a device drives it by

@@ -108,7 +108,13 @@ Each device has its own settings, so the kitchen and a bedroom can show differen
     [Music library](#music-library)).
 - **Drag** up and down to scroll.
 
-**Streamed dashboards** work as the page itself does: tap, and drag to scroll.
+**Streamed dashboards** work as the page itself does: tap, and drag to scroll. On the Echo Show (and the
+Skylight and Panel builds), tapping a text field on the page (a search box, a text helper, Assist's text box) brings up the
+device's keyboard, starting from what's already in the field. Each key goes to the page as you type,
+so a card's search follows along. **Done** presses Enter and puts the keyboard away; **Cancel** puts
+it away. A password shows as stars, and in a text area Done doesn't add a new line. This needs a dashcast
+server from this release or newer; an older one shows no keyboard. The keyboard has English letters
+and symbols only, and a field in a frame from another site on the page doesn't bring it up.
 
 ## Music library
 

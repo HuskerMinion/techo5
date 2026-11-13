@@ -8,6 +8,7 @@ import (
 
 	"github.com/chromedp/cdproto/emulation"
 	"github.com/chromedp/cdproto/page"
+	"github.com/chromedp/cdproto/runtime"
 	"github.com/chromedp/chromedp"
 )
 
@@ -32,6 +33,7 @@ type warmTab struct {
 
 	mu      sync.Mutex
 	onFrame func(*page.EventScreencastFrame)
+	onField func(field) // a field got or lost focus (field.go)
 	key     string
 	expiry  *time.Timer
 	stuck   bool // it stopped answering (serve.go): closed when the session ends, not parked
@@ -40,15 +42,25 @@ type warmTab struct {
 func newWarmTab(tab context.Context, closeTab func(), key string) *warmTab {
 	w := &warmTab{ctx: tab, close: closeTab, key: key}
 	chromedp.ListenTarget(tab, func(ev any) {
-		f, ok := ev.(*page.EventScreencastFrame)
-		if !ok {
-			return
-		}
-		w.mu.Lock()
-		on := w.onFrame
-		w.mu.Unlock()
-		if on != nil {
-			on(f)
+		switch e := ev.(type) {
+		case *page.EventScreencastFrame:
+			w.mu.Lock()
+			on := w.onFrame
+			w.mu.Unlock()
+			if on != nil {
+				on(e)
+			}
+		case *runtime.EventBindingCalled:
+			if e.Name != fieldBinding {
+				return
+			}
+			f, ok := parseField(e.Payload)
+			w.mu.Lock()
+			on := w.onField
+			w.mu.Unlock()
+			if ok && on != nil {
+				on(f)
+			}
 		}
 	})
 	return w
@@ -64,6 +76,13 @@ func (w *warmTab) markStuck() {
 func (w *warmTab) watch(on func(*page.EventScreencastFrame)) {
 	w.mu.Lock()
 	w.onFrame = on
+	w.mu.Unlock()
+}
+
+// watchField has on told when a field in the tab gets or loses focus; nil for nobody.
+func (w *warmTab) watchField(on func(field)) {
+	w.mu.Lock()
+	w.onField = on
 	w.mu.Unlock()
 }
 
@@ -113,6 +132,7 @@ const tabAnswer = 10 * time.Second
 // park stops a tab's stream, freezes it, and keeps it for warmFor.
 func (p *warmPool) park(w *warmTab) {
 	w.watch(nil)
+	w.watchField(nil)
 	w.mu.Lock()
 	stuck := w.stuck
 	w.mu.Unlock()
@@ -120,6 +140,9 @@ func (p *warmPool) park(w *warmTab) {
 		w.close()
 		return
 	}
+	// A field left with focus would not take it again when tapped on the screen's return, and the
+	// keyboard would not come up for it.
+	blur(w.ctx)
 	ctx, cancel := context.WithTimeout(w.ctx, tabAnswer)
 	defer cancel()
 	if err := chromedp.Run(ctx, page.StopScreencast(),

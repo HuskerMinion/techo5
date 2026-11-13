@@ -7,6 +7,7 @@ import (
 	"image"
 	"image/draw"
 	"strings"
+	"unicode/utf8"
 
 	"github.com/HuskerMinion/techo5/echod/internal/lib/wifi"
 )
@@ -281,8 +282,9 @@ func (r *renderer) keyboard(title, shown string, message, shifted, symbols bool,
 	// The field.
 	field := image.Rect(r.margin, r.s(66), r.w-r.margin, r.s(126))
 	r.bevel(field, shift(walnut, 8), false)
-	for r.width(r.small, shown+"|") > field.Dx()-r.s(30) && len(shown) > 1 {
-		shown = shown[1:]
+	for r.width(r.small, shown+"|") > field.Dx()-r.s(30) && utf8.RuneCountInString(shown) > 1 {
+		_, size := utf8.DecodeRuneInString(shown) // a whole character, as a page's text can have any
+		shown = shown[size:]
 	}
 	c := cream
 	if message {

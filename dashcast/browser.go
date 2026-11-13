@@ -194,8 +194,10 @@ func (b *browser) open(ctx context.Context, path string, w, h int, allowed map[s
 	script := initScript(origin, quoted, list, kiosk)
 	err := chromedp.Run(tab,
 		chromedp.ActionFunc(func(ctx context.Context) error {
-			_, err := page.AddScriptToEvaluateOnNewDocument(script).Do(ctx)
-			return err
+			if _, err := page.AddScriptToEvaluateOnNewDocument(script).Do(ctx); err != nil {
+				return err
+			}
+			return watchFields(ctx) // a field tapped brings up the device's keyboard (field.go)
 		}),
 		emulation.SetDeviceMetricsOverride(int64(w), int64(h), 1, false),
 		emulation.SetTouchEmulationEnabled(true).WithMaxTouchPoints(1),

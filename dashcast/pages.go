@@ -217,6 +217,9 @@ func (b *browser) openPage(ctx context.Context, p webPage, w, h int) (context.Co
 			if _, err := page.AddScriptToEvaluateOnNewDocument(pageScript).Do(ctx); err != nil {
 				return err
 			}
+			if err := watchFields(ctx); err != nil { // as a dashboard's: see field.go
+				return err
+			}
 			// Every document the page loads is looked at before it is fetched (keepTopLevel).
 			pattern := []*fetch.RequestPattern{{URLPattern: "*", ResourceType: network.ResourceTypeDocument}}
 			if err := fetch.Enable().WithPatterns(pattern).Do(ctx); err != nil {

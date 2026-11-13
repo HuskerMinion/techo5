@@ -17,6 +17,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	esphome "github.com/ygelfand/go-esphome-device"
@@ -84,6 +85,8 @@ type Feature struct {
 	// When the page last asked for each: a session nobody has asked for in a while is closed, however
 	// the page went away - a turn, the screen going dark, the night.
 	streamUsed, drawnUsed time.Time
+	// fieldSeq counts what dashcast servers have said about the streamed page's field (Field.Seq).
+	fieldSeq atomic.Uint64
 
 	// look asks Run to list Home Assistant's dashboards now; relist is a changed list whose reconnect
 	// is waiting for the device to be idle, and relisted when the last one was asked for (relistDue).
