@@ -43,8 +43,7 @@ const (
 
 	// intercomRingFor is how long a call from another room rings: someone in the house is either
 	// there or not, and half a minute is long enough to walk to it.
-	intercomRingFor         = 30 * time.Second
-	intercomAutoAnswerDelay = 5 * time.Second
+	intercomRingFor = 30 * time.Second
 
 	// handshakeFor bounds the part of a call before it rings, so a connection that says nothing
 	// does not hold the line.
@@ -375,12 +374,27 @@ func (p *Phone) intercomIn(w http.ResponseWriter, r *http.Request) {
 	tone := ringTone()
 
 	if dropIn {
-		// Only a known peer at its verified address can use the Drop In path.
-		// With no delay, retain the existing immediate warning chime.
-		safe.Go("intercom: drop in", func() {
-			delay := home.IntercomAutoAnswerDelay
-			if autoAnswerEnabled(dropIn, delay) {
-				// Ring before the Drop In warning; do not answer while ringing.
+		// Drop In: a chime rather than a ring, and then it is answered by itself. The call page says
+		// who is listening, and hanging up or declining still ends it. A chime that did not play to
+		// its end - cut off by something else taking the speaker - is no warning, so the call rings
+		// instead. And only this call is answered: a hangup in the meantime lets the line go, and
+		// whatever claims it next is not picked up by this chime.
+		slog.Info("intercom: drop in", "from", caller)
+		delay := home.IntercomAutoAnswerDelay
+		if delay == 0 {
+			// Preserve main's immediate Drop In behavior and goroutine name exactly.
+			safe.Go("intercom: chime", func() {
+				if chime(rctx) {
+					p.answerIf(answered)
+					return
+				}
+				if rctx.Err() == nil {
+					ring(rctx, tone)
+				}
+			})
+		} else {
+			safe.Go("intercom: delayed drop in", func() {
+				// Ring while waiting; the delay starts with the incoming call, not the WAV.
 				ringCtx, endRing := context.WithCancel(rctx)
 				ringFinished := make(chan struct{})
 				safe.Go("intercom: ring before drop in", func() {
@@ -408,32 +422,31 @@ func (p *Phone) intercomIn(w http.ResponseWriter, r *http.Request) {
 				}
 				endRing()
 				<-ringFinished
-			}
-			select {
-			case <-rctx.Done():
-				return
-			case <-l.gone:
-				return
-			case <-answered:
-				return
-			default:
-			}
-			// An interrupted warning is not consent to listen: ring instead.
-			if chime(rctx) {
-				p.answerIf(answered)
-				return
-			}
-			if rctx.Err() == nil {
 				select {
+				case <-rctx.Done():
+					return
 				case <-l.gone:
 					return
 				case <-answered:
 					return
 				default:
 				}
-				ring(rctx, tone)
-			}
-		})
+				// Permissions may have changed while the call was ringing.
+				current := config.Get().Home
+				if !current.DropIn || current.DoNotDisturb || !knownDevice(caller, from) {
+					ring(rctx, tone)
+					return
+				}
+				// An interrupted warning is not permission to listen.
+				if chime(rctx) {
+					p.answerIf(answered)
+					return
+				}
+				if rctx.Err() == nil {
+					ring(rctx, tone)
+				}
+			})
+		}
 	} else {
 		safe.Go("intercom: ring", func() { ring(rctx, tone) })
 	}
@@ -443,35 +456,10 @@ func (p *Phone) intercomIn(w http.ResponseWriter, r *http.Request) {
 
 	case <-answered:
 		stopRing()
-
-		// Ne pas commencer la communication si l'appel est termine.
-		if ctx.Err() != nil {
-			p.set(func(s *State) { s.Phase, s.Peer = Idle, "" })
-			return
-		}
-
-		select {
-		case <-l.gone:
-			p.set(func(s *State) { s.Phase, s.Peer = Idle, "" })
-			return
-		default:
-		}
 		if err := l.say(msgAnswer); err != nil {
 			fire("ended", p.State(), "reason", "answer failed")
 			p.set(func(s *State) { s.Phase, s.Peer = Idle, "" })
 			return
-		}
-		// Verifier une derniere fois que l'appel est actif.
-		if ctx.Err() != nil {
-			p.set(func(s *State) { s.Phase, s.Peer = Idle, "" })
-			return
-		}
-
-		select {
-		case <-l.gone:
-			p.set(func(s *State) { s.Phase, s.Peer = Idle, "" })
-			return
-		default:
 		}
 		l.talk()
 		p.talk(ctx, l.goneContext(), func(tctx context.Context) error { return carry(tctx, l, l, true, p.say) },

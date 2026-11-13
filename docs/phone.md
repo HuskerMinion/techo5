@@ -464,23 +464,24 @@ which has no screen, both are the Home Assistant switches, and the action button
 
 ### Ring before Drop In
 
-**Intercom auto-answer delay** offers Disabled, 2, 3, 5, 10 or
-15 seconds. Disabled preserves the existing Drop In behavior:
-an authorized call plays its warning chime and connects automatically.
+**Drop In ring delay** offers Disabled, 2, 3, 5, 10 or 15 seconds. This setting affects
+**only authorized Drop In intercom calls**, not regular intercom calls or SIP phone calls.
+Disabled preserves the existing behavior: a recognized device at its known address plays a
+warning chime, then connects automatically. No extra ringing delay is added.
 
-With a delay selected, an authorized Drop In rings first, then plays
-the warning chime before answering. The room can answer or decline
-manually during the delay. An interrupted warning returns to ringing
-without opening the microphones.
+When a delay is selected, an authorized Drop In rings for the selected number of seconds,
+then plays the warning chime **before** connecting and opening the microphones. The delay
+starts when the call arrives, independent of the length of the ringtone. Manual answering
+or declining is still possible. The device checks Allow Drop In, Do Not Disturb, and the
+caller's recognized device and address again after the delay. If automatic answering is no
+longer permitted, the call keeps ringing and requires a manual answer. An interrupted warning
+also returns to ringing without automatically answering.
 
-Automatic answering requires **Allow Drop In** and a recognized
-TECHO5 caller connecting from its known address. Other calls ring
-normally and require manual answering.
-
-**Call ring** also offers **Your own**, which uses an uploaded
-48 kHz WAV recording named `intercom_ring.wav`. If no valid
-recording is present, the standard ringtone is used.
-The same Call ring selection applies to incoming calls.
+**Call ring** is a separate setting and applies to **all incoming calls**, including SIP
+phone calls and intercom calls. **Your own** plays the uploaded 48 kHz mono WAV
+`intercom_ring.wav`; despite the file name, it is not restricted to intercom calls. The file
+plays for its full duration, then repeats with a one-second silence between plays for as
+long as the call rings. If no valid custom recording is available, the standard ring is used.
 
 To listen to a room from a phone's browser instead, without a call, there is the baby monitor
 ([setup.md](setup.md#the-baby-monitor)): a switch, off by default, and a private link; the device shows

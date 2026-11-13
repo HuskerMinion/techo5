@@ -160,7 +160,7 @@ func build() *Phone {
 	p.autoAnswerDelay = &esphome.Select{
 		Base: esphome.Base{
 			ObjectID: "intercom_auto_answer_delay",
-			Name:     "Intercom auto-answer delay",
+			Name:     "Drop In ring delay",
 			Icon:     "mdi:timer-outline",
 			Category: esphome.CategoryConfig,
 		},

@@ -2,75 +2,29 @@ package config
 
 import "testing"
 
-func TestIntercomAutoAnswerDelay(t *testing.T) {
+func TestIntercomAutoAnswerDelayAcceptedValues(t *testing.T) {
 	st := load(t)
-
-	valeurs := []int{0, 2, 3, 5, 10, 15}
-
-	for _, valeur := range valeurs {
-		err := st.Set().Home().IntercomAutoAnswerDelay(valeur)
-		if err != nil {
-			t.Errorf("Le délai %d devrait être accepté : %v", valeur, err)
-			continue
+	for _, seconds := range []int{0, 2, 3, 5, 10, 15} {
+		if err := st.Set().Home().IntercomAutoAnswerDelay(seconds); err != nil {
+			t.Fatalf("delay %d should be accepted: %v", seconds, err)
 		}
-
-		obtenu := st.Get().Home.IntercomAutoAnswerDelay
-		if obtenu != valeur {
-			t.Errorf("Délai obtenu : %d, attendu : %d", obtenu, valeur)
+		if got := st.Get().Home.IntercomAutoAnswerDelay; got != seconds {
+			t.Fatalf("got delay %d, want %d", got, seconds)
 		}
 	}
 }
 
-func TestDelaiInvalide(t *testing.T) {
+func TestIntercomAutoAnswerDelayRejectsInvalidValues(t *testing.T) {
 	st := load(t)
-
-	valeurs := []int{-1, 1, 4, 7, 20}
-
-	for _, valeur := range valeurs {
-		err := st.Set().Home().IntercomAutoAnswerDelay(valeur)
-
-		if err == nil {
-			t.Errorf("Le délai %d aurait dû être refusé", valeur)
-		}
-	}
-}
-
-func TestEnregistrementDelai(t *testing.T) {
-	st := load(t)
-
-	err := st.Set().Home().IntercomAutoAnswerDelay(5)
-
-	if err != nil {
-		t.Fatalf("Impossible d'enregistrer le délai : %v", err)
-	}
-
-	delai := st.Get().Home.IntercomAutoAnswerDelay
-
-	if delai != 5 {
-		t.Errorf("Délai obtenu : %d, attendu : 5", delai)
-	}
-}
-
-func TestRefusDelaiInvalide(t *testing.T) {
-	st := load(t)
-
-	// Enregistrer d'abord un délai valide.
-	err := st.Set().Home().IntercomAutoAnswerDelay(5)
-	if err != nil {
+	if err := st.Set().Home().IntercomAutoAnswerDelay(5); err != nil {
 		t.Fatal(err)
 	}
-
-	// Essayer ensuite d'enregistrer une valeur interdite.
-	err = st.Set().Home().IntercomAutoAnswerDelay(7)
-
-	if err == nil {
-		t.Error("Le délai 7 aurait dû être refusé")
-	}
-
-	// Vérifier que le délai initial est conservé.
-	delai := st.Get().Home.IntercomAutoAnswerDelay
-
-	if delai != 5 {
-		t.Errorf("Délai modifié : %d, attendu : 5", delai)
+	for _, seconds := range []int{-1, 1, 4, 7, 20} {
+		if err := st.Set().Home().IntercomAutoAnswerDelay(seconds); err == nil {
+			t.Errorf("delay %d should be rejected", seconds)
+		}
+		if got := st.Get().Home.IntercomAutoAnswerDelay; got != 5 {
+			t.Fatalf("invalid delay %d changed setting to %d", seconds, got)
+		}
 	}
 }
