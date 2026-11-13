@@ -1147,7 +1147,7 @@ func (d *Display) rowTap(id string, p part, opt int) {
 	if d.alarmRowTap(id, p, opt) {
 		return
 	}
-	if d.deviceRowTap(id, p, opt) {
+	if d.deviceRowTap(id, p, opt) || d.boardRowTap(id, p, opt) {
 		return
 	}
 	switch id {

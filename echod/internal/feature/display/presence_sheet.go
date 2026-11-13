@@ -48,5 +48,8 @@ func withPresence(rows []settingRow) []settingRow {
 		rows = append(rows, settingRow{id: "awayoff", label: tr("screen_off_when_nobody_is_near"),
 			sub: tr("presence_return"), kind: ctlChoice, value: awayLabel(p.PresenceScreenOff())})
 	}
+	for _, more := range presenceRows {
+		rows = append(rows, more(p)...)
+	}
 	return rows
 }

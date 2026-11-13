@@ -71,6 +71,7 @@ type camTest struct {
 	empty      bool        // the last frame had nothing in it: the camera is held off
 	w, h       int         // the sensor's frame
 	preview    *image.RGBA
+	notes      []string // a board's own words on the last frame shown (frameNotes)
 	path       []string // how the board makes its pictures, a paragraph a line
 }
 
@@ -84,6 +85,7 @@ type camTestView struct {
 	shownFPS   float64
 	w, h       int
 	preview    *image.RGBA
+	notes      []string
 	board      string
 	path       []string
 	network    bool   // the camera is streamed (Camera streaming on, with a password)
@@ -120,12 +122,12 @@ func (t *camTest) frame(fr *camera.Frame, wake func()) {
 	}
 	t.developing, t.devAt = true, now
 	safe.Go("camera test picture", func() {
-		img := fr.Image()
+		img, notes := fr.Image(), frameNotes(fr)
 		t.mu.Lock()
 		t.developing = false
 		if img != nil {
 			done := time.Now()
-			t.preview = img
+			t.preview, t.notes = img, notes
 			t.shown = since(append(t.shown, done), done.Add(-camTestWindow))
 		}
 		t.mu.Unlock()
@@ -162,7 +164,7 @@ func (t *camTest) view(now time.Time) camTestView {
 	v := camTestView{
 		left: t.opened.Add(camTestFor).Sub(now), started: t.started, err: t.err, empty: t.empty,
 		sensorFPS: rate(t.frames, now), shownFPS: rate(t.shown, now), w: t.w, h: t.h,
-		preview: t.preview, path: t.path,
+		preview: t.preview, notes: t.notes, path: t.path,
 	}
 	t.mu.Unlock()
 	v.board = layout.Model
@@ -401,6 +403,9 @@ func (r *renderer) cameraTestPage(s scene) int {
 			size += fmt.Sprintf("  ·  picture %dx%d", b.Dx(), b.Dy())
 		}
 		line(r.tiny, size, cream)
+	}
+	for _, n := range v.notes {
+		line(r.micro, n, dim)
 	}
 	gap()
 	if v.board != "" {

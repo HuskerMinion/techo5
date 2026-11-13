@@ -18,6 +18,9 @@ const (
 // camTestPath is how this board makes its camera's pictures, as the camera test says it: the sensor and
 // what develops its frames, and what makes the pages' JPEGs, a paragraph each.
 func camTestPath() []string {
+	if p := boardCamTestPath(); p != nil {
+		return p
+	}
 	var path []string
 	switch {
 	case layout.AthenaMainline():
