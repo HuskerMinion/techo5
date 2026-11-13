@@ -443,7 +443,7 @@ pipeline rather than the device: Home Assistant is replying in text only.
 | Step | Windows | Linux | macOS |
 |---|---|---|---|
 | Unlock: Show 5 (amonet-cronos) | Yes (fastbrick) | Yes | Use a Linux live USB |
-| Unlock: Dot (amonet-biscuit) | Yes (`fastbrick.bat`/`fastbrick.ps1`, in the release ZIP) | Yes | Use a Linux live USB |
+| Unlock: Dot (amonet-biscuit) | Yes (`fastbrick.bat`/`fastbrick.ps1`, in the release ZIP) | Yes | Yes (`fastbrick.sh`, with `bin/fastboot-macos` from the v2.0.1 release ZIP) |
 | Unlock: Spot (amonet-rook) | Yes (fastbrick, as on the bench unit) | Yes | A Linux live USB, or `fastboot -S 1G` (below) |
 | LineageOS (Show 5, Spot) | Yes | Yes | Yes (TWRP and `adb` only) |
 | Install TECHO5 on the Show 5 (`install-show.py`) | **Yes** | **Yes** | **Yes** |
@@ -463,6 +463,12 @@ pipeline rather than the device: Home Assistant is replying in text only.
 - `screen` is built in, for working on a unit by hand: `screen /dev/cu.usbmodem* 115200`.
 - The amonet BootROM steps need Linux. A live USB (Ubuntu) is more reliable than a virtual machine:
   the exploit re-enumerates USB mid-way, and VM USB passthrough often loses the device.
+- The Dot's unlock runs straight from a Mac: amonet-biscuit's `fastbrick.sh` works in the Dot's
+  fastboot mode, never the BootROM. This needs `amonet-biscuit-v2.0.1.zip`, the release attached to
+  the [XDA thread](https://xdaforums.com/t/unlock-root-twrp-unbrick-amazon-echo-dot-2nd-gen-2016-biscuit.4761416/): its `fastbrick.sh` picks `bin/fastboot-macos` on macOS (a universal build, Apple
+  Silicon and Intel), clears the quarantine flag macOS puts on it, and runs on macOS's own bash 3.2
+  without `timeout`. The `mt8163-biscuit` branch on GitHub is still v2.0.0, which has none of this
+  and ships only Linux and Windows `fastboot`; with that one, use a Linux live USB.
 - The Spot's unlock also works straight from a Mac with Apple Silicon, tested on one unit
   ([#394](https://github.com/HuskerMinion/techo5/issues/394)). Its `fastbrick.img` is 32 bytes over the
   download size the Spot reports, so current `fastboot` refuses it; `-S 1G` makes it send the image
