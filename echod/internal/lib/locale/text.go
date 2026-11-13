@@ -3502,7 +3502,7 @@ var uiTranslations = map[string]map[string]string{
 		// All day
 		"all_day": "Hele dag",
 		// All-day events
-		"all_day_events": "Hele-dagafspraken",
+		"all_day_events": "Afspraken voor de hele dag",
 		// Allow Drop In
 		"allow_drop_in": "Drop In toestaan",
 		// Another speaker's music, while this one is quiet
@@ -3528,7 +3528,7 @@ var uiTranslations = map[string]map[string]string{
 		// Background
 		"background": "Achtergrond",
 		// Bass
-		"bass": "Bass",
+		"bass": "Bas",
 		// Bluetooth audio
 		"bluetooth_audio": "Bluetooth-audio",
 		// BLUETOOTH PAIRING
@@ -3574,7 +3574,7 @@ var uiTranslations = map[string]map[string]string{
 		// Today's next event at the foot of the clock
 		"calendar_look_next_up_sub": "De volgende afspraak van vandaag onderaan de klok",
 		// Next up within
-		"calendar_look_next_up_within_label": "Tijdvenster",
+		"calendar_look_next_up_within_label": "Volgende binnen",
 		// How far ahead the clock's next event looks
 		"calendar_look_next_up_within_sub": "Hoe ver de klok vooruitkijkt",
 		// Opens on
@@ -3592,7 +3592,7 @@ var uiTranslations = map[string]map[string]string{
 		// Week view
 		"calendar_look_week_view_label": "Weekweergave",
 		// Seven days on their hours
-		"calendar_look_week_view_sub": "Zeven dagen met hun uren",
+		"calendar_look_week_view_sub": "Zeven dagen per uur",
 		// Nothing coming up
 		"calendar_nothing_coming_up": "Niets op komst",
 		// Now, until %s
@@ -3918,7 +3918,7 @@ var uiTranslations = map[string]map[string]string{
 		// Lyrics
 		"lyrics": "Songtekst",
 		// Playback
-		"media_playback": "Weergave",
+		"media_playback": "Afspelen",
 		// Microphone
 		"microphone": "Microfoon",
 		// MICROPHONE OFF
@@ -4167,11 +4167,11 @@ var uiTranslations = map[string]map[string]string{
 		// White
 		"option_white": "Wit",
 		// Whole picture
-		"option_whole_picture": "Hele beeld",
+		"option_whole_picture": "Heel beeld",
 		// Out of area targets in Home Assistant
 		"out_of_area_targets_in_home_assistant": "Doelen buiten het gebied in Home Assistant",
 		// Its own page, or Hang up over the page
-		"page_or_hang_up_button": "Eigen pagina, of Ophangen boven de pagina",
+		"page_or_hang_up_button": "Eigen pagina, of Ophangen over de pagina",
 		// Pair a new device
 		"pair_a_new_device": "Een nieuw apparaat koppelen",
 		// Photos from Home Assistant
@@ -4331,7 +4331,7 @@ var uiTranslations = map[string]map[string]string{
 		// Talk through cameras
 		"talk_through_cameras": "Spreken via camera's",
 		// Tap lifts the night light
-		"tap_lifts_the_night_light": "Tik zet het nachtlampje hoger",
+		"tap_lifts_the_night_light": "Tik maakt het nachtlampje feller",
 		// Tap on the clock
 		"tap_on_the_clock": "Tikken op de klok",
 		// Tap to go back
@@ -4483,7 +4483,7 @@ var uiTranslations = map[string]map[string]string{
 		// Calendars
 		"ui_calendars": "Agenda's",
 		// Chime
-		"ui_call_ring_chime": "Klok",
+		"ui_call_ring_chime": "Bel",
 		// Old phone
 		"ui_call_ring_old_phone": "Oude telefoon",
 		// Call volume
@@ -4577,7 +4577,7 @@ var uiTranslations = map[string]map[string]string{
 		// Encrypted
 		"ui_encrypted": "Versleuteld",
 		// Event pop-ups
-		"ui_event_pop_ups": "Agenda-pop-ups",
+		"ui_event_pop_ups": "Afspraak-pop-ups",
 		// Every folder inside the one chosen
 		"ui_every_folder_inside_the_one_chosen": "Elke map in de gekozen map",
 		// Favorites only
@@ -4645,7 +4645,7 @@ var uiTranslations = map[string]map[string]string{
 		// Muted
 		"ui_muted": "Gedempt",
 		// Name, weather, updates and restart
-		"ui_name_weather_updates_and_restart": "Naam, weer, updates en herstart",
+		"ui_name_weather_updates_and_restart": "Naam, weer, updates en opnieuw opstarten",
 		// Needs a key: the setup page, Connections
 		"ui_needs_a_key_the_setup_page_connections": "Vereist een sleutel: installatiepagina, Verbindingen",
 		// Needs a setup key: the setup page, Connections
@@ -4959,7 +4959,7 @@ var uiTranslations = map[string]map[string]string{
 		// Voice volume
 		"ui_voice_volume": "Spraakvolume",
 		// Volume, voice, quiet hours and music
-		"ui_volume_voice_quiet_hours_and_music": "Volume, spraak, stille uren en muziek",
+		"ui_volume_voice_quiet_hours_and_music": "Volume, stem, stille uren en muziek",
 		// Waiting for Home Assistant
 		"ui_waiting_for_home_assistant": "Wachten op Home Assistant",
 		// Weather art
