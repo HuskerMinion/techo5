@@ -58,8 +58,14 @@ func (d *Display) toggleDashboard() {
 	d.wake()
 }
 
-// listenDashboard takes Home Assistant's dashboard_show and dashboard_hide.
-func (d *Display) listenDashboard() { dashboard.Get().Asked.Listen(d.dashboardAsked) }
+// listenDashboard takes Home Assistant's dashboard_show and dashboard_hide, and wakes the loop for
+// each picture a streamed dashboard sends, as on the Show: the loop's own tick is a second while the
+// dashboard is up (techo5#549).
+func (d *Display) listenDashboard() {
+	f := dashboard.Get()
+	f.Asked.Listen(d.dashboardAsked)
+	f.Changed.Listen(func(struct{}) { d.wake() })
+}
 
 // dashboardAsked is dashboard_show and dashboard_hide, as on the Show: shown, the dashboard stays
 // until it is hidden or put away from the menu; the settings, a camera or a call keep the face until
