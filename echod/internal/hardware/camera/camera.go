@@ -277,7 +277,7 @@ type device struct {
 	mva            uint32
 	mclk           [3]uint32
 	sensorOpen     bool
-	v              *v4l2Cam // the mainline kernel's chain (athena); none of the above is used then
+	v              chain // the mainline kernel's chain (athena), or a capture's (capture.go); none of the above is used then
 
 	// Exposure control: what is set on the sensor now, and frames to wait before judging it.
 	shutter, gain int
@@ -285,6 +285,9 @@ type device struct {
 }
 
 func open() (*device, error) {
+	if c := activeCapture(); c != nil {
+		return c.open()
+	}
 	d := &device{isp: -1, sens: -1, ion: -1}
 	var err error
 	if sensor.v4l2 {
@@ -413,6 +416,10 @@ var (
 func (d *device) autoExpose(bayer []byte) {
 	if d.settle > 0 {
 		d.settle--
+		return
+	}
+	if aePinGain > 0 {
+		d.setExposure(aeFrame, aePinGain, -1)
 		return
 	}
 	mean := int(meter(bayer))
@@ -918,7 +925,7 @@ func (f *Frame) Full() *image.RGBA {
 	if f.developed != nil {
 		return f.developed
 	}
-	g := streamed()
+	g := f.geometry()
 	w, h := g.w, g.h
 	luts := f.level().tables()
 	img := image.NewRGBA(image.Rect(0, 0, w, h))
@@ -1005,7 +1012,7 @@ func developRow(out []uint8, px []uint16, lo, w, h, y int, luts *[3][2048]uint8)
 func (f *Frame) FullYUYV(dst []byte) bool {
 	f.mu.Lock()
 	defer f.mu.Unlock()
-	g := streamed()
+	g := f.geometry()
 	w, h := g.w, g.h
 	if f.raw == nil || len(dst) < w*h*2 || w%2 != 0 {
 		return false
@@ -1057,7 +1064,7 @@ func (f *Frame) GPUYUYV() (fd, stride, w, h int, ok bool) {
 	if f.raw == nil || !gpuDevelops || !gpu.Available() {
 		return -1, 0, 0, 0, false
 	}
-	g := streamed()
+	g := f.geometry()
 	fd, stride, err := gpu.DevelopDMABuf(f.raw, g.w, g.h, g.bpl, f.level().tables(), sensor.blueFirst)
 	if err != nil {
 		slog.Debug("camera: gpu development", "err", err)
@@ -1142,5 +1149,6 @@ func (f *Frame) Dims() (w, h int) {
 	if f.raw == nil {
 		return 0, 0
 	}
-	return sensorW, sensorH
+	g := f.geometry()
+	return g.w, g.h
 }
