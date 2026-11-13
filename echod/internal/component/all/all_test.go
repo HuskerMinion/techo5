@@ -93,6 +93,7 @@ var registered = []string{
 	"call_volume",
 	"home_assistant_sounds",
 	"insecure_tls",
+	"intercom_auto_answer_delay",
 	"intercom_do_not_disturb",
 	"intercom_drop_in",
 	"ip_address",

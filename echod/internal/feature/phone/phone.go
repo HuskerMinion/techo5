@@ -108,6 +108,7 @@ type Phone struct {
 	callCanceller    *esphome.Select // the echo canceller for the length of a call (callCanceller)
 	plainSIP         *esphome.Switch // the account without TLS and SRTP, for a SIP server at home
 	ringSound        *esphome.Select
+	autoAnswerDelay  *esphome.Select
 	ringLED, callLED *led.Claim
 
 	// Changed fires when State does; listeners must not block.
@@ -156,6 +157,23 @@ func build() *Phone {
 		Options:   RingSounds,
 		OnCommand: p.SetRingSound,
 	}
+	p.autoAnswerDelay = &esphome.Select{
+		Base: esphome.Base{
+			ObjectID: "intercom_auto_answer_delay",
+			Name:     "Drop In ring delay",
+			Icon:     "mdi:timer-outline",
+			Category: esphome.CategoryConfig,
+		},
+		Options: []string{
+			"Disabled",
+			"2 seconds",
+			"3 seconds",
+			"5 seconds",
+			"10 seconds",
+			"15 seconds",
+		},
+	}
+	p.autoAnswerDelay.OnCommand = p.SetAutoAnswerDelay
 	p.dnd.OnCommand = p.SetDoNotDisturb
 	p.callWake = callSwitch("wake_word_during_calls", "Wake word during calls", "mdi:account-voice",
 		config.Set().Home().CallWake)
@@ -190,7 +208,7 @@ func (p *Phone) Name() string { return "phone" }
 
 func (p *Phone) Entities() []esphome.Entity {
 	list := []esphome.Entity{p.status, p.peer, p.answer, p.hangup, p.dropIn, p.dnd, p.ringSound,
-		p.callWake, p.callReplies, p.callUnderlay, p.plainSIP}
+		p.autoAnswerDelay, p.callWake, p.callReplies, p.callUnderlay, p.plainSIP}
 	// Calling by voice needs something to hear the words.
 	if layout.HasMicrophone() {
 		list = append(list, p.callByVoice)
@@ -202,11 +220,21 @@ func (p *Phone) Entities() []esphome.Entity {
 	return list
 }
 
+func autoAnswerDelayLabel(seconds int) string {
+	switch seconds {
+	case 2, 3, 5, 10, 15:
+		return fmt.Sprintf("%d seconds", seconds)
+	default:
+		return "Disabled"
+	}
+}
+
 // Restore puts the intercom's two switches, the call ring, what a turn during a call may do, the
 // call's echo canceller, calling contacts by voice and the phone without encryption back the way they were left.
 func (p *Phone) Restore(c config.Config) {
 	p.dropIn.Set(c.Home.DropIn)
 	p.ringSound.Set(RingSounds[RingSoundIndex()])
+	p.autoAnswerDelay.Set(autoAnswerDelayLabel(c.Home.IntercomAutoAnswerDelay))
 	p.dnd.Set(c.Home.DoNotDisturb)
 	p.callWake.Set(c.Home.CallWake)
 	p.callReplies.Set(c.Home.CallReplies)
@@ -328,6 +356,38 @@ func (p *Phone) SetCallByVoice(on bool) {
 
 // CallByVoice reports whether "call Mom" said to the device calls a contact.
 func CallByVoice() bool { return !config.Get().Home.CallByVoiceOff }
+
+// SetAutoAnswerDelay sets the delay before automatically answering a normal intercom call.
+// Disabled leaves automatic answering off.
+func (p *Phone) SetAutoAnswerDelay(value string) {
+	var seconds int
+
+	switch value {
+	case "Disabled":
+		seconds = 0
+	case "2 seconds":
+		seconds = 2
+	case "3 seconds":
+		seconds = 3
+	case "5 seconds":
+		seconds = 5
+	case "10 seconds":
+		seconds = 10
+	case "15 seconds":
+		seconds = 15
+	default:
+		slog.Warn("intercom: invalid auto-answer delay", "value", value)
+		return
+	}
+
+	if err := config.Set().Home().IntercomAutoAnswerDelay(seconds); err != nil {
+		slog.Error("intercom: saving auto-answer delay", "err", err)
+		return
+	}
+
+	p.autoAnswerDelay.Set(value)
+	slog.Info("intercom: auto-answer delay changed", "seconds", seconds)
+}
 
 // SetRingSound chooses how a call rings here, from RingSounds.
 func (p *Phone) SetRingSound(v string) {

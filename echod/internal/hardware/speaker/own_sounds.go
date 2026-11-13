@@ -16,7 +16,7 @@ import (
 // ownable are the clips a recording of the owner's own can stand in for, in the order the setup page
 // lists them.
 var ownable = []*Clip{ClipWake, ClipFailure, ClipCanceled, ClipTimer, ClipAlarm, ClipMuteOn, ClipMuteOff,
-	ClipListenEnd, ClipButton, ClipVolume, ClipBTConnect, ClipDropIn, ClipAnnounce}
+	ClipListenEnd, ClipButton, ClipVolume, ClipBTConnect, ClipIntercomRing, ClipDropIn, ClipAnnounce}
 
 // MaxOwnUpload is the most a recording sent from the setup page may be: ten seconds of 16-bit stereo
 // at Rate, and room for the header and the extra chunks a converter writes. Anything longer cannot be
@@ -171,6 +171,9 @@ func PreviewOwn(name string) error {
 	c := ownClip(name)
 	if c == nil {
 		return fmt.Errorf("%q is not one of the sounds", name)
+	}
+	if c == ClipIntercomRing && !c.Own() {
+		return fmt.Errorf("no valid custom intercom ringtone has been uploaded")
 	}
 	notes := []Note{c.Note()}
 	switch c {

@@ -55,3 +55,39 @@ func TestTheCallRingIsTheOneChosen(t *testing.T) {
 		t.Fatal("a saved ring no longer offered should read as the old phone")
 	}
 }
+
+func TestIntercomAutoAnswerDelaySelection(t *testing.T) {
+	p, _ := house(t)
+
+	tests := []struct {
+		label   string
+		seconds int
+	}{
+		{"Disabled", 0},
+		{"2 seconds", 2},
+		{"3 seconds", 3},
+		{"5 seconds", 5},
+		{"10 seconds", 10},
+		{"15 seconds", 15},
+	}
+
+	for _, tt := range tests {
+		p.SetAutoAnswerDelay(tt.label)
+
+		if got := config.Get().Home.IntercomAutoAnswerDelay; got != tt.seconds {
+			t.Errorf("%q: got %d seconds, want %d", tt.label, got, tt.seconds)
+		}
+
+		if got := autoAnswerDelayLabel(tt.seconds); got != tt.label {
+			t.Errorf("label for %d seconds: got %q, want %q", tt.seconds, got, tt.label)
+		}
+	}
+
+	p.SetAutoAnswerDelay("25 seconds")
+
+	if got := config.Get().Home.IntercomAutoAnswerDelay; got != 15 {
+		t.Errorf("invalid option changed the delay to %d seconds", got)
+	}
+
+	p.SetAutoAnswerDelay("Disabled")
+}

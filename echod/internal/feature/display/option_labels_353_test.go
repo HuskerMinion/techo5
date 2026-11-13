@@ -38,7 +38,12 @@ func TestTimerStyleAndRingLabelsFollowTheScreenLanguage(t *testing.T) {
 		if p, ok := pickerFor("timerstyle", sheetView{}); !ok || !reflect.DeepEqual(p.opts, c.styles) {
 			t.Errorf("%s: timer styles %v", c.lang, p.opts)
 		}
-		if p, ok := pickerFor("callring", sheetView{}); !ok || !reflect.DeepEqual(p.opts, c.rings) {
+		if p, ok := pickerFor("callring", sheetView{}); !ok {
+			t.Errorf("%s: call ring picker missing", c.lang)
+		} else if len(p.opts) != 3 || !reflect.DeepEqual(p.opts[:2], c.rings) ||
+			p.opts[2] == "" ||
+			(c.lang == "en" && p.opts[2] != "Your own") ||
+			(c.lang != "en" && p.opts[2] == "Your own") {
 			t.Errorf("%s: call rings %v", c.lang, p.opts)
 		}
 		p, ok := pickerFor("alarmsound", sheetView{})
@@ -58,7 +63,7 @@ func TestTimerStyleAndRingLabelsFollowTheScreenLanguage(t *testing.T) {
 	if !reflect.DeepEqual(timerStyleOptions(), []string{"Line", "Ring", "Corner", "Banner", "Big"}) {
 		t.Errorf("timer style options changed: %v", timerStyleOptions())
 	}
-	if !reflect.DeepEqual(phone.RingSounds, []string{"Old phone", "Chime"}) {
+	if !reflect.DeepEqual(phone.RingSounds, []string{"Old phone", "Chime", "Your own"}) {
 		t.Errorf("call rings changed: %v", phone.RingSounds)
 	}
 	if got := speaker.AlarmSounds()[2]; got != "Chimes" {

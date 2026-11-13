@@ -217,6 +217,52 @@ func TestIntercomDropInAnswersItself(t *testing.T) {
 	waitFor(t, "idle", func() bool { return p.State().Phase == Idle })
 }
 
+// The call ring setting must never disable the existing immediate Drop In behavior.
+func TestIntercomRingtonePreservesDefaultDropIn(t *testing.T) {
+	p, peer := house(t)
+
+	if err := config.Set().Home().DropIn(true); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := config.Set().Home().IntercomAutoAnswerDelay(0); err != nil {
+		t.Fatal(err)
+	}
+
+	known := knownDevice
+	knownDevice = func(name, from string) bool {
+		return from == peer.Address
+	}
+	t.Cleanup(func() { knownDevice = known })
+
+	got, l := firstAnswer(t, peer)
+	if got != msgRinging {
+		t.Fatalf("first answer %q", got)
+	}
+
+	waitFor(t, "ringing", func() bool {
+		return p.State().Phase == Ringing
+	})
+
+	if !p.State().DropIn {
+		t.Fatal("Drop In was disabled by the ringtone setting")
+	}
+
+	select {
+	case got := <-l.control:
+		if got != msgAnswer {
+			t.Fatalf("expected Drop In answer, got %q", got)
+		}
+	case <-time.After(3 * time.Second):
+		t.Fatal("native Drop In did not answer")
+	}
+
+	p.Hangup()
+	waitFor(t, "idle", func() bool {
+		return p.State().Phase == Idle
+	})
+}
+
 // Drop In answers by itself only for a device this one knows, calling from that device's address.
 // Anyone else who has the house word - it also travels in announcements - rings like any call.
 func TestIntercomDropInOnlyForAKnownDevice(t *testing.T) {

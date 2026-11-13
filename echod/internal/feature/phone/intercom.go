@@ -68,6 +68,11 @@ const (
 	msgBye     = 'X' // hung up
 )
 
+// autoAnswerEnabled allows the delay only for an authorized Drop In.
+func autoAnswerEnabled(dropIn bool, delay int) bool {
+	return dropIn && delay > 0
+}
+
 // A device without microphones (the Skylight Calendar) neither takes nor makes intercom calls: it could
 // not talk back.
 func intercomOpen() bool { return hasMicrophone() && config.Get().Home.HouseWord != "" }
@@ -358,7 +363,6 @@ func (p *Phone) intercomIn(w http.ResponseWriter, r *http.Request) {
 		_ = writeMsg(c, msgBusy, nil)
 		return
 	}
-
 	l := newLink(c)
 	defer l.close()
 	_ = l.say(msgRinging)
@@ -368,6 +372,7 @@ func (p *Phone) intercomIn(w http.ResponseWriter, r *http.Request) {
 
 	rctx, stopRing := context.WithCancel(ctx)
 	tone := ringTone()
+
 	if dropIn {
 		// Drop In: a chime rather than a ring, and then it is answered by itself. The call page says
 		// who is listening, and hanging up or declining still ends it. A chime that did not play to
@@ -375,21 +380,80 @@ func (p *Phone) intercomIn(w http.ResponseWriter, r *http.Request) {
 		// instead. And only this call is answered: a hangup in the meantime lets the line go, and
 		// whatever claims it next is not picked up by this chime.
 		slog.Info("intercom: drop in", "from", caller)
-		safe.Go("intercom: chime", func() {
-			if chime(rctx) {
-				p.answerIf(answered)
-				return
-			}
-			if rctx.Err() == nil {
-				ring(rctx, tone)
-			}
-		})
+		delay := home.IntercomAutoAnswerDelay
+		if delay == 0 {
+			// Preserve main's immediate Drop In behavior and goroutine name exactly.
+			safe.Go("intercom: chime", func() {
+				if chime(rctx) {
+					p.answerIf(answered)
+					return
+				}
+				if rctx.Err() == nil {
+					ring(rctx, tone)
+				}
+			})
+		} else {
+			safe.Go("intercom: delayed drop in", func() {
+				// Ring while waiting; the delay starts with the incoming call, not the WAV.
+				ringCtx, endRing := context.WithCancel(rctx)
+				ringFinished := make(chan struct{})
+				safe.Go("intercom: ring before drop in", func() {
+					defer close(ringFinished)
+					ring(ringCtx, tone)
+				})
+				timer := time.NewTimer(time.Duration(delay) * time.Second)
+				select {
+				case <-timer.C:
+				case <-rctx.Done():
+					timer.Stop()
+					endRing()
+					<-ringFinished
+					return
+				case <-l.gone:
+					timer.Stop()
+					endRing()
+					<-ringFinished
+					return
+				case <-answered:
+					timer.Stop()
+					endRing()
+					<-ringFinished
+					return
+				}
+				endRing()
+				<-ringFinished
+				select {
+				case <-rctx.Done():
+					return
+				case <-l.gone:
+					return
+				case <-answered:
+					return
+				default:
+				}
+				// Permissions may have changed while the call was ringing.
+				current := config.Get().Home
+				if !current.DropIn || current.DoNotDisturb || !knownDevice(caller, from) {
+					ring(rctx, tone)
+					return
+				}
+				// An interrupted warning is not permission to listen.
+				if chime(rctx) {
+					p.answerIf(answered)
+					return
+				}
+				if rctx.Err() == nil {
+					ring(rctx, tone)
+				}
+			})
+		}
 	} else {
 		safe.Go("intercom: ring", func() { ring(rctx, tone) })
 	}
 	timeout := time.NewTimer(intercomRingFor)
 	defer timeout.Stop()
 	select {
+
 	case <-answered:
 		stopRing()
 		if err := l.say(msgAnswer); err != nil {
