@@ -1521,7 +1521,7 @@ func (d *Display) frame() (next time.Duration) {
 	vs := video.Get().State()
 	busy := view.Phase != "idle" || sheetOpen || ringingNow(now).any() || phone.Get().Busy() || pinIsOpen() ||
 		sunriseProgress(now) > 0 || asksAtDevice() || reminding || vs.Active()
-	if d.awayTick(now, on, busy, nightNow(now)) {
+	if d.awayTick(now, on, busy, view.Phase != "idle", nightNow(now)) {
 		d.mu.Lock()
 		on = d.on
 		d.mu.Unlock()

@@ -2653,7 +2653,7 @@ func (d *Display) frame() (next time.Duration) {
 		on = d.on
 		d.mu.Unlock()
 	}
-	if d.awayTick(now, on, busy, night) {
+	if d.awayTick(now, on, busy, view.Phase != "idle", night) {
 		d.mu.Lock()
 		on = d.on
 		d.mu.Unlock()

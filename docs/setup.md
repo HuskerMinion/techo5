@@ -1079,7 +1079,8 @@ device's fonts folder over SSH ([Set the SSH authorized keys](actions.md#set-the
   a device already set up its entity ID still ends in `_presence`, so automations keep working.
   **Screen off when nobody is near** (5 minutes to start with, or Never) puts the screen out once the
   room has been empty that long and lights it again when somebody comes near. Never at night, and never during a conversation,
-  a call, an alarm or with the settings open. Nothing the camera sees is kept or sent: a couple of
+  a call, an alarm or with the settings open. The wake word lights it too, even when the camera can't
+  see who said it, and it goes out again after the same wait once nobody is seen. Nothing the camera sees is kept or sent: a couple of
   times a second the newest frame is compared with the last as a small grid of brightness, on the
   device. The mute button and the lens shutter stop it, and then the screen is left as it is. On a
   Show 8 or 1st gen Show 5 with a boot image older than v1.0.1, a quick tap of the mute button to

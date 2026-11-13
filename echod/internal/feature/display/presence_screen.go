@@ -15,6 +15,9 @@ import (
 // goes dark once nobody has been near for that long, and lights again when somebody comes near. Never
 // at night (the night has its own rules), never while something is going on (a turn, a call, a ring,
 // the settings open), and never while the camera cannot see, since then an empty room is not known.
+// Being spoken to lights it too: whoever said the wake word may be out of the camera's sight, across
+// the room or off to one side, and wants to see the answer (techo5-spot#12). Once the turn is over it
+// gets its full wait again before the empty room puts it out.
 
 var awayDark struct {
 	mu    sync.Mutex
@@ -23,8 +26,9 @@ var awayDark struct {
 	litAt time.Time // when it was last lit, by anything: it stays lit at least the wait from then
 }
 
-// awayTick puts the screen out or lights it for the room, and reports whether it changed it.
-func (d *Display) awayTick(now time.Time, on, busy, night bool) bool {
+// awayTick puts the screen out or lights it for the room, and reports whether it changed it. spoken
+// is a turn going on (the wake word heard, an answer being given).
+func (d *Display) awayTick(now time.Time, on, busy, spoken, night bool) bool {
 	after := presence.ScreenOffAfter()
 	awayDark.mu.Lock()
 	dark := awayDark.dark
@@ -46,6 +50,11 @@ func (d *Display) awayTick(now time.Time, on, busy, night bool) bool {
 	case dark && !on && presence.Blind():
 		// The camera stopped (the mute button, the shutter) with the screen out for an empty room: it
 		// is left as it is, for a touch or the camera's return to light.
+	case dark && !on && !night && spoken:
+		slog.Info("screen: spoken to, on again")
+		set(false)
+		d.apply(true, d.ceilingOrDefault(), false)
+		return true
 	case dark && !on && !night && (after == 0 || presence.Present()):
 		slog.Info("screen: somebody near, on again")
 		set(false)
