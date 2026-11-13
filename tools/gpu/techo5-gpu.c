@@ -57,6 +57,12 @@ enum {
 				// place: on these SoCs the CPU reads GPU memory uncached, about 160 MB/s, so a
 				// picture read back costs more than developing it.
 	OP_BLANK = 6,		// a[0]: 1 off, 0 on
+	OP_PRESENT_YUV = 7,	// a video frame as the decoder made it, drawn into its place on the canvas and
+				// turned onto the panel with it: a[0..1] its w, h (even), a[2] its place's x | y << 16
+				// and a[3] w | h << 16 in canvas coordinates, a[4] x0 | y0 << 16 and a[5] x1 | y1 << 16
+				// the canvas's rectangle to blend over it, a[6] bit 0 full range, bit 1 BT.709 (else
+				// BT.601); fd: the frame, NV12 (w*h*3/2), passed when it changes. Around its place the
+				// panel is black.
 	OP_COLOR = 8,		// the display pipeline's own color blocks (CCORR and GAMMA, as the CRTC's CTM and
 				// GAMMA_LUT): a[0] bit 0 a matrix is given, else the identity; bit 1 curves are given,
 				// else none (the identity, should a curve have been set before); fd: struct color,
@@ -256,6 +262,35 @@ static const char *fs_frame =
 	"  gl_FragColor = vec4(lift(bgra > 0.5 ? c.bgr : c, p), 1.0);\n"
 	"}\n";
 
+// A video frame in NV12, where it goes on the canvas: the panel pixel's canvas point, as fs_canvas
+// finds it, then its place in the frame. Y is a LUMINANCE texture of w x h, the interleaved CbCr a
+// LUMINANCE_ALPHA one of w/2 x h/2 (Cb in .r, Cr in .a); the color matrix and range are the stream's.
+static const char *fs_yuv =
+	"precision highp float;\n"
+	"varying highp vec2 uv;\n"
+	"uniform sampler2D ytex;\n"
+	"uniform sampler2D ctex;\n"
+	"uniform float panelw;\n"
+	"uniform float panelh;\n"
+	"uniform float rotated;\n"
+	"uniform vec4 place;\n"		// canvas x, y, w, h
+	"uniform float full;\n"		// 1: full range
+	"uniform float bt709;\n"
+	LIFT_GLSL
+	"void main() {\n"
+	"  vec2 p = vec2(uv.x * panelw, (1.0 - uv.y) * panelh);\n"
+	"  vec2 c = rotated > 0.5 ? vec2(p.y, panelw - p.x) : p;\n"
+	"  vec2 t = (c - place.xy) / place.zw;\n"
+	"  if (t.x < 0.0 || t.y < 0.0 || t.x >= 1.0 || t.y >= 1.0) { gl_FragColor = vec4(0.0, 0.0, 0.0, 1.0); return; }\n"
+	"  float y = texture2D(ytex, t).r;\n"
+	"  vec2 cc = texture2D(ctex, t).ra - 0.5;\n"
+	"  if (full < 0.5) { y = (y - 16.0 / 255.0) * (255.0 / 219.0); cc *= 255.0 / 224.0; }\n"
+	"  vec3 rgb = bt709 > 0.5 ?\n"
+	"    vec3(y + 1.5748 * cc.y, y - 0.1873 * cc.x - 0.4681 * cc.y, y + 1.8556 * cc.x) :\n"
+	"    vec3(y + 1.402 * cc.y, y - 0.344136 * cc.x - 0.714136 * cc.y, y + 1.772 * cc.x);\n"
+	"  gl_FragColor = vec4(lift(clamp(rgb, 0.0, 1.0), p), 1.0);\n"
+	"}\n";
+
 // The camera, in two passes. Unpack: the raw frame is a LUMINANCE texture of its bytes, bpl wide, four
 // 10-bit samples in five bytes, least significant bits first, so sample k of a group is made of bytes k
 // and k+1 of it: floor(lo / 4^k) + mod(hi, 4^(k+1)) * 256 / 4^k, with no branch on k. Each sample is
@@ -388,10 +423,13 @@ static struct {
 	struct shm canvas;
 	GLuint canvas_tex;
 	uint32_t cw, ch, rotated;
-	GLuint p_canvas, p_frame;
+	GLuint p_canvas, p_frame, p_yuv;
 	struct shm frame;
 	GLuint frame_tex;
 	uint32_t fw, fh;
+	struct shm yuv;
+	GLuint y_tex, c_tex;
+	uint32_t yw, yh;
 	// the CRTC's color properties (0 when it has none), and whether either was ever set
 	uint32_t ctm_prop, lut_prop, lut_size;
 	int ctm_set, lut_set;
@@ -413,7 +451,7 @@ static struct {
 	GLuint dma_tex, dma_fbo;
 	uint32_t dma_w, dma_h;
 	uint32_t dw, dh, dbpl;
-} g = { .drm = -1, .canvas.fd = -1, .frame.fd = -1, .raw.fd = -1, .tables.fd = -1, .out.fd = -1,
+} g = { .drm = -1, .canvas.fd = -1, .frame.fd = -1, .yuv.fd = -1, .raw.fd = -1, .tables.fd = -1, .out.fd = -1,
 	.color.fd = -1, .gain = 1 };
 
 static GLuint texture(void)
@@ -780,6 +818,73 @@ static int present_frame(struct req *r, int *fd)
 	return show();
 }
 
+static int present_yuv(struct req *r, int *fd)
+{
+	if (!g.open)
+		return -ENODEV;
+	uint32_t w = r->a[0], h = r->a[1];
+	if (!side_ok(w) || !side_ok(h) || w % 2 || h % 2)
+		return -EINVAL;
+	int err = shm_take(&g.yuv, fd, (uint64_t)w * h * 3 / 2);
+	if (err)
+		return err;
+	if (!eglMakeCurrent(g.dpy, g.esurf, g.esurf, g.ctx))
+		return -EIO;
+	if (!g.p_yuv && !(g.p_yuv = program(vs_quad, fs_yuv)))
+		return -EIO;
+	if (!g.y_tex) {
+		// scaled to its place: filtered, unlike the canvas, which is drawn pixel for pixel
+		GLuint *t[] = { &g.y_tex, &g.c_tex };
+		for (int i = 0; i < 2; i++) {
+			*t[i] = texture();
+			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+		}
+	}
+	glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
+	glActiveTexture(GL_TEXTURE1);
+	glBindTexture(GL_TEXTURE_2D, g.c_tex);
+	if (w != g.yw || h != g.yh)
+		glTexImage2D(GL_TEXTURE_2D, 0, GL_LUMINANCE_ALPHA, w / 2, h / 2, 0, GL_LUMINANCE_ALPHA,
+			     GL_UNSIGNED_BYTE, NULL);
+	glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, w / 2, h / 2, GL_LUMINANCE_ALPHA, GL_UNSIGNED_BYTE,
+			(uint8_t *)g.yuv.p + (size_t)w * h);
+	glActiveTexture(GL_TEXTURE0);
+	glBindTexture(GL_TEXTURE_2D, g.y_tex);
+	if (w != g.yw || h != g.yh) {
+		glTexImage2D(GL_TEXTURE_2D, 0, GL_LUMINANCE, w, h, 0, GL_LUMINANCE, GL_UNSIGNED_BYTE, NULL);
+		g.yw = w, g.yh = h;
+	}
+	glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, w, h, GL_LUMINANCE, GL_UNSIGNED_BYTE, g.yuv.p);
+	glPixelStorei(GL_UNPACK_ALIGNMENT, 4);
+	glBindFramebuffer(GL_FRAMEBUFFER, 0);
+	glViewport(0, 0, g.mode.hdisplay, g.mode.vdisplay);
+	glDisable(GL_BLEND);
+	glUseProgram(g.p_yuv);
+	glUniform1i(glGetUniformLocation(g.p_yuv, "ytex"), 0);
+	glUniform1i(glGetUniformLocation(g.p_yuv, "ctex"), 1);
+	glUniform1f(glGetUniformLocation(g.p_yuv, "panelw"), g.mode.hdisplay);
+	glUniform1f(glGetUniformLocation(g.p_yuv, "panelh"), g.mode.vdisplay);
+	glUniform1f(glGetUniformLocation(g.p_yuv, "rotated"), g.rotated);
+	glUniform4f(glGetUniformLocation(g.p_yuv, "place"), r->a[2] & 0xffff, r->a[2] >> 16,
+		    r->a[3] & 0xffff, r->a[3] >> 16);
+	glUniform1f(glGetUniformLocation(g.p_yuv, "full"), r->a[6] & 1);
+	glUniform1f(glGetUniformLocation(g.p_yuv, "bt709"), (r->a[6] >> 1) & 1);
+	glUniform1f(glGetUniformLocation(g.p_yuv, "gain"), g.gain);
+	g.canvas_shown = 0;
+	quad();
+	uint32_t x0 = r->a[4] & 0xffff, y0 = r->a[4] >> 16, x1 = r->a[5] & 0xffff, y1 = r->a[5] >> 16;
+	if (x1 > x0 && y1 > y0) {
+		// The controls: the canvas's rectangle, premultiplied, over the frame.
+		glBindTexture(GL_TEXTURE_2D, g.canvas_tex);
+		glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, g.cw, g.ch, GL_RGBA, GL_UNSIGNED_BYTE, g.canvas.p);
+		glEnable(GL_BLEND);
+		glBlendFunc(GL_ONE, GL_ONE_MINUS_SRC_ALPHA);
+		draw_canvas(1, x0, y0, x1, y1);
+		glDisable(GL_BLEND);
+	}
+	return show();
+}
 
 static int blank(int off)
 {
@@ -1183,6 +1288,9 @@ int main(int argc, char **argv)
 				break;
 			case OP_PRESENT_FRAME:
 				out.status = present_frame(&r, &fds[0]);
+				break;
+			case OP_PRESENT_YUV:
+				out.status = present_yuv(&r, &fds[0]);
 				break;
 			case OP_DEVELOP:
 				out.status = develop(&r, fds, &out, &out_fd);

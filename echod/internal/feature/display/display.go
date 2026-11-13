@@ -2492,7 +2492,7 @@ func (d *Display) Start(context.Context) error {
 	d.lookChanged()
 	d.logo = newSplash(w, h)
 	fw, fh := dev.FrameSize()
-	video.Get().UseScreen(video.Screen{W: w, H: h, Rotated: dev.Rotated(), PixFmt: dev.PixFmt()}, fw, fh)
+	video.Get().UseScreen(video.Screen{W: w, H: h, Rotated: dev.Rotated(), PixFmt: dev.PixFmt(), GPU: dev.GPUDrawn()}, fw, fh)
 	d.mu.Lock()
 	d.booting, d.started = true, time.Now()
 	d.mu.Unlock()

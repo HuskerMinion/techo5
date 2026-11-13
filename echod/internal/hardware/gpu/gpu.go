@@ -397,6 +397,7 @@ type Display struct {
 	canvas  *buffer
 	staging *buffer
 	frame   *buffer
+	extra   map[string]*buffer // the buffers of calls kept in files of their own, released with the rest
 	w, h    int
 	rotated bool
 	panel   image.Point
@@ -461,6 +462,9 @@ func (d *Display) Release(reason error) {
 			b.sent = nil
 		}
 	}
+	for _, b := range d.extra {
+		b.sent = nil
+	}
 }
 
 // Close releases the panel and frees the display's buffers, the canvas too: nothing may draw on it after.
@@ -471,7 +475,10 @@ func (d *Display) Close() {
 			b.close()
 		}
 	}
-	d.canvas, d.staging, d.frame, d.colorBuf = nil, nil, nil, nil
+	for _, b := range d.extra {
+		b.close()
+	}
+	d.canvas, d.staging, d.frame, d.colorBuf, d.extra = nil, nil, nil, nil, nil
 }
 
 // Staging is a picture of the canvas's size in memory the helper can share, for a copy of the canvas

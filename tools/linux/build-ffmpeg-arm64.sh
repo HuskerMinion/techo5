@@ -49,6 +49,9 @@ FLAGS=$(sed -n '/^FLAGS="/,/"$/p' "$B" | tr -d '\\\n\t"' | sed -e 's/^FLAGS=//' 
 	-e 's/--arch=arm --cpu=cortex-a53 --enable-neon/--arch=aarch64 --cpu=cortex-a53/')
 # ...and the 64-bit build's own (above); configure adds each list to the ones before it.
 FLAGS="$FLAGS --enable-decoder=hevc,vp8,vp9 --enable-parser=hevc,vp8,vp9 --enable-muxer=matroska --enable-bsf=extract_extradata"
+# ...and for a hardware decoder that takes the stream as it is: the picture's H.264 or H.265 copied out
+# untouched as Annex-B, through the raw muxers and the mp4toannexb filters.
+FLAGS="$FLAGS --enable-muxer=h264,hevc --enable-bsf=h264_mp4toannexb,hevc_mp4toannexb"
 case $FLAGS in *--arch=aarch64*) ;; *) echo "build-ffmpeg.sh's flags are not the ones expected" >&2; exit 1;; esac
 # The cross build: clang for aarch64 against /sysroot, everything static.
 FLAGS="$FLAGS --enable-cross-compile --target-os=linux --sysroot=/sysroot --cc=aarch64-cc --ld=aarch64-cc --host-cc=gcc \

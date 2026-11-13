@@ -14,6 +14,9 @@ type Screen struct {
 	W, H    int
 	Rotated bool
 	PixFmt  string
+	// GPU is the GPU drawing the panel, which can then take a hardware decoder's own frames
+	// (hwdecode.go).
+	GPU bool
 }
 
 // Fit is where the picture goes on the canvas: W×H at X, Y, the rest black. All even, which the

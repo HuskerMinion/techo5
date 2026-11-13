@@ -34,6 +34,8 @@ type Camera struct {
 	frame *image.RGBA
 	// release lets go of its hold on the decoder's proxy (holdGuard); nil for one read over RTSP.
 	release func()
+	// via reads the frames of a hardware decoder (hwdecode.go); nil on the cores.
+	via cameraReader
 }
 
 // cameraArgs runs the decoder on a camera's stream at its own pace (-re: a playlist's parts arrive
@@ -102,13 +104,14 @@ func openCamera(ctx context.Context, url string, w, h int, filter string) (*Came
 		release()
 		return nil, err
 	}
-	d, err := start(ctx, cameraArgs(url, w, h, config.Get().Diag.InsecureTLS, proxy, filter), true, false)
+	c, err := startCamera(ctx, cameraArgs(url, w, h, config.Get().Diag.InsecureTLS, proxy, filter), w, h, filter)
 	if err != nil {
 		release()
 		return nil, err
 	}
-	releaseWhenDone(d, release)
-	return &Camera{d: d, w: w, h: h, release: release}, nil
+	releaseWhenDone(c.d, release)
+	c.release = release
+	return c, nil
 }
 
 // Next is the next frame, waiting up to wait for it. A stream that ended, or failed, says why. The
@@ -118,8 +121,17 @@ func (c *Camera) Next(wait time.Duration) (*image.RGBA, error) {
 		c.frame = image.NewRGBA(image.Rect(0, 0, c.w, c.h))
 	}
 	img := c.frame
-	_ = c.d.video.SetReadDeadline(time.Now().Add(wait))
-	if _, err := io.ReadFull(c.d.video, img.Pix); err != nil {
+	var err error
+	if c.via != nil {
+		var final bool
+		if final, err = c.via.next(c, img, wait); final {
+			return nil, err
+		}
+	} else {
+		_ = c.d.video.SetReadDeadline(time.Now().Add(wait))
+		_, err = io.ReadFull(c.d.video, img.Pix)
+	}
+	if err != nil {
 		select {
 		case <-c.d.done:
 			if why := c.d.stderr.last(); why != "" {
@@ -398,11 +410,7 @@ func openCameraRTSP(ctx context.Context, addr, user, pass string, w, h int, filt
 	if err != nil {
 		return nil, err
 	}
-	d, err := start(ctx, cameraRTSPArgs(u, w, h, filter), true, false)
-	if err != nil {
-		return nil, err
-	}
-	return &Camera{d: d, w: w, h: h}, nil
+	return startCamera(ctx, cameraRTSPArgs(u, w, h, filter), w, h, filter)
 }
 
 // OpenCameraSoundRTSP starts decoding a camera's sound from its RTSP address, for the speaker, where the

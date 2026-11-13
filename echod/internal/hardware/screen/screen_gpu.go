@@ -180,6 +180,10 @@ func (d *Device) presentFrameGPU(frame []byte, over image.Rectangle) bool {
 	return true
 }
 
+// GPUDrawn is whether the GPU draws the panel, so that video frames can go to it as a hardware
+// decoder makes them.
+func (d *Device) GPUDrawn() bool { return d.gpu != nil }
+
 // leaveGPU goes back to the framebuffer: the helper is stopped, which gives the panel back to the
 // kernel, everything on the framebuffer is written afresh, and the GPU is tried again after a wait.
 func (d *Device) leaveGPU(err error) {
