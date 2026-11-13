@@ -19,6 +19,7 @@ type Presence struct {
 
 	// Person: a model looks for a person in the camera's picture (feature/person).
 	Person bool `json:"person,omitempty"`
+	Faces  bool `json:"faces,omitempty"` // a face detector looks too, where the board has one (a looker, feature/presence)
 }
 
 // PresenceSensitivity is the sensitivity in force.
