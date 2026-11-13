@@ -68,11 +68,6 @@ const (
 	msgBye     = 'X' // hung up
 )
 
-// autoAnswerEnabled allows the delay only for an authorized Drop In.
-func autoAnswerEnabled(dropIn bool, delay int) bool {
-	return dropIn && delay > 0
-}
-
 // A device without microphones (the Skylight Calendar) neither takes nor makes intercom calls: it could
 // not talk back.
 func intercomOpen() bool { return hasMicrophone() && config.Get().Home.HouseWord != "" }
@@ -363,6 +358,7 @@ func (p *Phone) intercomIn(w http.ResponseWriter, r *http.Request) {
 		_ = writeMsg(c, msgBusy, nil)
 		return
 	}
+
 	l := newLink(c)
 	defer l.close()
 	_ = l.say(msgRinging)
@@ -372,7 +368,6 @@ func (p *Phone) intercomIn(w http.ResponseWriter, r *http.Request) {
 
 	rctx, stopRing := context.WithCancel(ctx)
 	tone := ringTone()
-
 	if dropIn {
 		// Drop In: a chime rather than a ring, and then it is answered by itself. The call page says
 		// who is listening, and hanging up or declining still ends it. A chime that did not play to
@@ -382,7 +377,6 @@ func (p *Phone) intercomIn(w http.ResponseWriter, r *http.Request) {
 		slog.Info("intercom: drop in", "from", caller)
 		delay := home.IntercomAutoAnswerDelay
 		if delay == 0 {
-			// Preserve main's immediate Drop In behavior and goroutine name exactly.
 			safe.Go("intercom: chime", func() {
 				if chime(rctx) {
 					p.answerIf(answered)
@@ -453,7 +447,6 @@ func (p *Phone) intercomIn(w http.ResponseWriter, r *http.Request) {
 	timeout := time.NewTimer(intercomRingFor)
 	defer timeout.Stop()
 	select {
-
 	case <-answered:
 		stopRing()
 		if err := l.say(msgAnswer); err != nil {

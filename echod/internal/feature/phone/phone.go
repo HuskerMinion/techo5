@@ -357,8 +357,8 @@ func (p *Phone) SetCallByVoice(on bool) {
 // CallByVoice reports whether "call Mom" said to the device calls a contact.
 func CallByVoice() bool { return !config.Get().Home.CallByVoiceOff }
 
-// SetAutoAnswerDelay sets the delay before automatically answering a normal intercom call.
-// Disabled leaves automatic answering off.
+// SetAutoAnswerDelay sets how long an authorized Drop In rings before its warning chime and answer.
+// Disabled answers it at once, after the chime, as before.
 func (p *Phone) SetAutoAnswerDelay(value string) {
 	var seconds int
 

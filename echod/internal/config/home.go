@@ -381,9 +381,7 @@ func (w HomeWriter) HouseWord(v string) error {
 }
 
 func (w HomeWriter) DropIn(v bool) error {
-	return w.st.Update(func(c *Config) {
-		c.Home.DropIn = v
-	})
+	return w.st.Update(func(c *Config) { c.Home.DropIn = v })
 }
 
 func (w HomeWriter) IntercomAutoAnswerDelay(v int) error {
@@ -398,6 +396,7 @@ func (w HomeWriter) IntercomAutoAnswerDelay(v int) error {
 		c.Home.IntercomAutoAnswerDelay = v
 	})
 }
+
 func (w HomeWriter) RingSound(v string) error {
 	return w.st.Update(func(c *Config) { c.Home.RingSound = v })
 }
