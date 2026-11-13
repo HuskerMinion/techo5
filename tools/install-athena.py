@@ -161,6 +161,10 @@ SPEAKER_CONFIG_TABLE = {0: 'A', 1: 'B'}
 PREBOOT_START = ((0x00, 0x00), (0x7f, 0x00), (0x03, 0x02), (0xfe, 0x02), (0x01, 0x11))
 PREBOOT_END = (0x02, 0x02)
 MIN_TABLE = 100
+# A table last in its run ends only where the entries stop looking like entries, and some kernels (an
+# athena that ran a LineageOS-era kernel, #535) put a few more {reg, val, 0}-shaped words after it. A
+# table is also tried with up to this many trailing entries left off; only a known hash is taken.
+MAX_TRAILING = 8
 
 # TECHO5's boot image reserves this slot for the tuning: magic, u32 N, sha256 of the data, the data,
 # zeros to the end of the slot. It ships with N = 0.
@@ -570,6 +574,23 @@ def split_run(entries, base):
     return out
 
 
+def known_table(entries, want=None):
+    """(blob, (letter, description), entries left off) for the longest form of a table that is a known
+    tuning (of table want, if given), trying up to MAX_TRAILING trailing entries left off; else None."""
+    for cut in range(0, MAX_TRAILING + 1):
+        if len(entries) - cut < MIN_TABLE:
+            break
+        blob = mainline_table(entries[:len(entries) - cut])
+        known = KNOWN_AMP_TABLES.get(hashlib.sha256(blob).hexdigest())
+        if known and (want is None or known[0] == want):
+            return blob, known, cut
+    return None
+
+
+def left_off(cut):
+    return ' (%d trailing entries after the table left off)' % cut if cut else ''
+
+
 def mainline_table(entries):
     """A main table as mainline's tas5805m loads it: reg,val byte pairs, the 0xfe delays left out."""
     return bytes(b for reg, val in entries if reg != 0xfe for b in (reg, val))
@@ -592,12 +613,11 @@ def stock_amp_tuning(boot_data, live_compatible=None, what="Fire OS's boot image
     want = SPEAKER_CONFIG_TABLE[cfg]
     found = []
     for _, entries in amp_tables(raw):
-        blob = mainline_table(entries)
-        h = hashlib.sha256(blob).hexdigest()
-        found.append(h)
-        known = KNOWN_AMP_TABLES.get(h)
-        if known and known[0] == want:
-            return blob, want, known[1], cfg, source
+        found.append(hashlib.sha256(mainline_table(entries)).hexdigest())
+        match = known_table(entries, want)
+        if match:
+            blob, known, cut = match
+            return blob, want, known[1] + left_off(cut), cfg, source
     fail('this unit uses amp table %s (speaker-config %d, from %s), and its Fire OS kernel holds no table\n'
          '   this installer knows (found: %s). That Fire OS version is not known yet, so TECHO5\'s kernel\n'
          '   cannot be given its speaker tuning. Use --kernel amazon, or see "A Fire OS version the installer\n'
@@ -619,10 +639,12 @@ def show_amp_tables(path):
     for off, entries in amp_tables(raw):
         blob = mainline_table(entries)
         h = hashlib.sha256(blob).hexdigest()
-        known = KNOWN_AMP_TABLES.get(h)
+        match = known_table(entries)
         print('table at 0x%x: %d entries, %d delays, %d bytes for mainline, sha256 %s %s'
               % (off, len(entries), sum(1 for r, _ in entries if r == 0xfe), len(blob), h,
-                 '(%s)' % known[1] if known else '(not known)'))
+                 '(%s%s)' % (match[1][1], left_off(match[2])) if match else '(not known)'))
+        if match and match[2]:
+            print('   left off: %s' % ' '.join('%02x=%02x' % e for e in entries[len(entries) - match[2]:]))
 
 
 # ------------------------------------------------------------------------------------------ the unit

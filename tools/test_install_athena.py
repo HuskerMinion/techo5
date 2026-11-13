@@ -149,10 +149,14 @@ def entries_bytes(t):
 def stock_boot(cfgs=((['amzn,athena-pvt', 'amzn,athena-dvt', 'amzn,athena'], 1),
                      (['amzn,athena-evt', 'amzn,athena'], 1),
                      (['amzn,theia-proto', 'amzn,theia'], 0)),
-               tables=(TABLE_A, TABLE_B)):
+               tables=(TABLE_A, TABLE_B), last=None):
     """A made-up Fire OS boot image: a 32-bit zImage-like kernel with a gzip payload holding the tables
-    as Amazon's kernel lays them out (A, preboot, B, preboot), then one DTB per board revision."""
-    raw = b'\xff' * (1 << 20) + b''.join(entries_bytes(t) + entries_bytes(PREBOOT) for t in tables) + b'\xff' * 4096
+    as Amazon's kernel lays them out (A, preboot, B, preboot), then one DTB per board revision. With last,
+    the last table is followed by those entries instead of its preboot (#535)."""
+    runs = [entries_bytes(t) + entries_bytes(PREBOOT) for t in tables]
+    if last is not None:
+        runs[-1] = entries_bytes(tables[-1]) + entries_bytes(last)
+    raw = b'\xff' * (1 << 20) + b''.join(runs) + b'\xff' * 4096
     z = io.BytesIO()
     with gzip.GzipFile(fileobj=z, mode='wb', mtime=0) as g:
         g.write(raw)
@@ -433,6 +437,23 @@ class MadeUpStock(unittest.TestCase):
             inst.stock_amp_tuning(img, ['amzn,athena-xyz', 'amzn,athena'])
         _, letter, _, _, _ = inst.stock_amp_tuning(img, ['amzn,athena-evt', 'amzn,athena'])
         self.assertEqual(letter, 'B')
+
+    def test_entries_after_the_last_table_are_left_off(self):
+        # #535: a LineageOS-era kernel puts six entry-like words after table B, where Fire OS has none.
+        extra = [(0x10 + i, i) for i in range(6)]
+        blob, letter, desc, _, _ = inst.stock_amp_tuning(stock_boot(last=extra), None)
+        self.assertEqual((letter, blob), ('B', inst.mainline_table(TABLE_B)))
+        self.assertIn('6 trailing entries', desc)
+
+    def test_too_many_entries_after_the_table_are_not_left_off(self):
+        extra = [(0x10 + i, i) for i in range(inst.MAX_TRAILING + 1)]
+        with self.assertRaisesRegex(Fail, 'not known yet'):
+            inst.stock_amp_tuning(stock_boot(last=extra), None)
+
+    def test_a_known_table_is_taken_whole(self):
+        blob, _, desc, _, _ = inst.stock_amp_tuning(stock_boot(), None)
+        self.assertEqual(blob, inst.mainline_table(TABLE_B))
+        self.assertNotIn('left off', desc)
 
     def test_unknown_table(self):
         inst.KNOWN_AMP_TABLES.clear()

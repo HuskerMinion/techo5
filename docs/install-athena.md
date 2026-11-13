@@ -206,6 +206,12 @@ letter. Only do that after checking the tables: the speaker-config 0 table must 
 driver uses for 0 (table A), the other for 1. Please open an issue with the Fire OS version and the
 hashes so the next release knows them.
 
+A table that comes last in the kernel ends only where the entries stop looking like entries, and some
+kernels (one that a unit ran with LineageOS before TECHO5, [#535](https://github.com/HuskerMinion/techo5/issues/535))
+have a few entry-like words after it. The installer also tries each table with up to 8 trailing entries
+left off, and takes one only when the shortened table is a known tuning. It says how many it left off,
+and `--show-amp-tables` lists them.
+
 ## Stereo speakers
 
 The Show 8 2nd gen has two speakers. TECHO5 plays them in mono by default: left and right are mixed
