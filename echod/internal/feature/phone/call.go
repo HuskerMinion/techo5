@@ -480,24 +480,36 @@ func buildBellRing() []int16 {
 }
 
 // ring sounds one cycle of a call ring, from ringTone, over and over until ctx ends. The caller picks
-// the tone where the call comes in, so the setting is not read from the ring's own goroutine.
+// the tone where the call comes in; a Call ring of Your own is read here, once, and its recording
+// (intercom_ring) rings instead when there is a valid one.
 //
 // Anything that takes the speaker meanwhile (a turn's chime and reply over a ringing call, an
 // announcement) has it until it is done, and then the ring takes it back, as a call's audio does
 // (receive): a call left ringing in silence is one nobody knows is there.
-func ring(ctx context.Context, tone []int16) {
-	var custom []int16
-	if RingSounds[RingSoundIndex()] == "Your own" {
-		mono := speaker.ClipIntercomRing.OwnSamples()
-		if len(mono) > 0 {
-			custom = make([]int16, len(mono)*speaker.Channels)
-			for i, sample := range mono {
-				for ch := 0; ch < speaker.Channels; ch++ {
-					custom[i*speaker.Channels+ch] = sample
-				}
-			}
+func ring(ctx context.Context, tone []int16) { ringWith(ctx, tone, ownRing()) }
+
+// ownRing is the owner's recording as stereo, when Call ring is Your own and there is a valid one;
+// else nil, and the tone rings.
+func ownRing() []int16 {
+	if RingSounds[RingSoundIndex()] != "Your own" {
+		return nil
+	}
+	mono := speaker.ClipIntercomRing.OwnSamples()
+	if len(mono) == 0 {
+		return nil
+	}
+	custom := make([]int16, len(mono)*speaker.Channels)
+	for i, sample := range mono {
+		for ch := 0; ch < speaker.Channels; ch++ {
+			custom[i*speaker.Channels+ch] = sample
 		}
 	}
+	return custom
+}
+
+// ringWith is ring with the recording, if any, chosen by the caller: a call coming in rings with the
+// owner's own, the ringback of a call going out never does.
+func ringWith(ctx context.Context, tone, custom []int16) {
 	sound := speaker.Sound()
 	for ctx.Err() == nil {
 		claim := sound.ClaimCall("ringing", func(cctx context.Context, p *speaker.Player) error {

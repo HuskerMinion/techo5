@@ -36,7 +36,7 @@ var soundTitles = map[string][2]string{
 	"bluetooth_connected": {"Bluetooth connected", "a Bluetooth device connecting"},
 	"drop_in":             {"Drop In", "the chime before a Drop In opens the microphones"},
 	"announcement":        {"Announcement", "the chime before an announcement"},
-	"intercom_ring":       {"Intercom ringtone", "the ringtone for normal intercom calls"},
+	"intercom_ring":       {"Intercom ringtone", "the ring for any incoming call when Call ring is Your own"},
 }
 
 // soundsSection lists the sounds, whether each is the device's own or one sent here, and takes a file

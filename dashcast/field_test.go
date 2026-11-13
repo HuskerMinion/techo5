@@ -15,7 +15,8 @@ import (
 // A text field inside a component's shadow root, as Home Assistant's are, tapped on the screen, says
 // so with its text and label; the device's typing goes into it as a keyboard's would, Enter included;
 // Done lets go of it and says that too. A checkbox brings up nothing. Moving from one field to another
-// keeps the keyboard up, and a password's text is never sent.
+// keeps the keyboard up, and a password's text is never sent, nor a one-time code's. A field the page
+// focuses by itself brings up nothing until it is tapped.
 //
 // It needs a real browser, as TestOpenATabInTheRunningBrowser does; CHROME names one on a PC.
 func TestTypingIntoAFieldOnThePage(t *testing.T) {
@@ -34,7 +35,7 @@ func TestTypingIntoAFieldOnThePage(t *testing.T) {
 <search-card style="display:block;height:60px"></search-card>
 <input id=pass type=password value=secret style="position:absolute;top:100px;left:0;width:200px;height:40px">
 <input id=box type=checkbox style="position:absolute;top:160px;left:0;width:40px;height:40px">
-<p id=said style="position:absolute;top:220px"></p>
+<input id=code autocomplete=one-time-code value=123456 style="position:absolute;top:220px;left:0;width:200px;height:40px">
 <script>
 customElements.define("search-card", class extends HTMLElement {
   constructor() {
@@ -137,6 +138,21 @@ customElements.define("search-card", class extends HTMLElement {
 	}
 	run("the tap on the checkbox", tap(20, 180))
 	quiet("a checkbox")
+
+	// Well after the last touch, as a page loading by itself is.
+	time.Sleep(3100 * time.Millisecond)
+	var none any
+	run("the page focusing a field itself", chromedp.Evaluate(`document.getElementById("code").focus()`, &none))
+	quiet("a field the page focused")
+	run("the tap on the focused field", tap(50, 240))
+	if f := next("the one-time code"); !f.Up || f.Value != "" {
+		t.Errorf("the one-time code: %+v, want it up with no text", f)
+	}
+	run("Done again", chromedp.ActionFunc(func(ctx context.Context) error { return touch(ctx, touchMsg{T: "key", K: "done"}) }))
+	if f := next("Done again"); f.Up {
+		t.Errorf("Done again: %+v", f)
+	}
+	quiet("after Done") // and a moment between taps, as a finger takes
 
 	// A screen that leaves with a field in use and comes back to its parked tab gets the keyboard
 	// again for a tap on that field: parking let go of it, so the tap gives it focus anew.

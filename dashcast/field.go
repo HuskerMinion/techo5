@@ -33,7 +33,10 @@ const (
 // shadow roots, but focus events are composed: they reach the window with the real <input> first in
 // their path. Only fields a keyboard types into count: text, search and the like, and a textarea.
 // Losing focus is said a moment later, and only if no other field took it, so moving from one field to
-// the next keeps the keyboard up, into a frame on the page included. A password's text is never sent.
+// the next keeps the keyboard up, into a frame on the page included. A password's text is never sent,
+// nor that of a field the page marks as a password, a one-time code or a card. Only focus that follows a
+// touch counts: a field focused by the page itself (autofocus, a sign-in page) does not put a keyboard
+// over a dashboard nobody touched.
 const fieldScript = `(() => {
   const kinds = new Set(["text", "search", "email", "url", "tel", "password", "number"]);
   const fieldOf = (e) => {
@@ -44,10 +47,14 @@ const fieldScript = `(() => {
     return null;
   };
   const say = (o) => { try { if (typeof window.` + fieldBinding + ` === "function") window.` + fieldBinding + `(JSON.stringify(o)); } catch (e) {} };
-  let current = null;
-  addEventListener("focusin", (e) => {
-    const f = fieldOf(e);
-    if (!f) return;
+  let current = null, touched = 0;
+  const secret = (f) => /password|one-time-code|cc-/.test(String(f.autocomplete || f.getAttribute("autocomplete") || "").toLowerCase());
+  const active = () => {
+    let a = document.activeElement;
+    while (a && a.shadowRoot && a.shadowRoot.activeElement) a = a.shadowRoot.activeElement;
+    return a;
+  };
+  const up = (f) => {
     current = f;
     const kind = f.tagName === "TEXTAREA" ? "textarea" : (f.type || "text").toLowerCase();
     const host = f.getRootNode && f.getRootNode().host;
@@ -55,7 +62,19 @@ const fieldScript = `(() => {
     if (!label && host) label = host.label || (host.getAttribute && host.getAttribute("label")) || "";
     // Typing goes on at the end of what is there, as the device's own field shows it.
     try { const n = f.value.length; f.setSelectionRange(n, n); } catch (e) {}
-    say({up: true, kind, value: kind === "password" ? "" : String(f.value || "").slice(0, 500), label: String(label).slice(0, 80)});
+    say({up: true, kind, value: kind === "password" || secret(f) ? "" : String(f.value || "").slice(0, 500), label: String(label).slice(0, 80)});
+  };
+  // A touch on a field the page focused by itself gives no focusin: the touch brings the keyboard then.
+  const touch = (e) => {
+    touched = Date.now();
+    const f = fieldOf(e);
+    if (f && f !== current && f === active()) up(f);
+  };
+  addEventListener("pointerdown", touch, true);
+  addEventListener("touchstart", touch, true);
+  addEventListener("focusin", (e) => {
+    const f = fieldOf(e);
+    if (f && Date.now() - touched <= 3000) up(f); // focus can follow a tap by a second or more
   }, true);
   addEventListener("focusout", (e) => {
     const f = fieldOf(e);

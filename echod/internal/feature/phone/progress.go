@@ -34,7 +34,7 @@ type progress struct {
 
 // Seams for the tests: what plays the ringing tone, and the network's audio, until ctx ends.
 var (
-	playRingback = func(ctx context.Context) { ring(ctx, ringbackTone()) }
+	playRingback = func(ctx context.Context) { ringWith(ctx, ringbackTone(), nil) }
 	playEarly    = playEarlyMedia
 )
 

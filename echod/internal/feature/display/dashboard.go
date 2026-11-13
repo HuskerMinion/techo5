@@ -264,7 +264,8 @@ func (d *Display) dashGesture(g touch.Gesture) {
 	streamed := f.Mode() == config.DashboardStreamed
 	tess := f.Mode() == config.DashboardTessera
 	// While the keyboard is over the streamed page, only its taps count: a finger moving on it is not
-	// the page's, which is under the keyboard. The screen's edges still work.
+	// the page's, which is under the keyboard. Swipes from the edges wait too, as over the device's other
+	// keyboards: Done or Cancel, or the keyboard left alone (dashKeyboardIdle), lets go of the screen.
 	keys := streamed && d.dashKeyboardUp()
 
 	switch g.Kind {

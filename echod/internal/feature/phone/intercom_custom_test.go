@@ -48,22 +48,25 @@ func TestDelayedDropInAnswers(t *testing.T) {
 	p.Hangup()
 }
 
-// Revoking Drop In or enabling Do Not Disturb during the delay must prevent automatic answering.
+// Revoking Drop In or enabling Do Not Disturb during the delay must prevent automatic answering:
+// Drop In turned off leaves an ordinary call ringing, no longer shown as a Drop In; Do Not Disturb
+// turns the call away, as it would have from the start.
 func TestDelayedDropInRechecksPermissions(t *testing.T) {
 	cases := []struct {
-		name   string
-		revoke func(*testing.T)
+		name     string
+		revoke   func(*testing.T)
+		declined bool
 	}{
 		{"drop in disabled", func(t *testing.T) {
 			if err := config.Set().Home().DropIn(false); err != nil {
 				t.Fatal(err)
 			}
-		}},
+		}, false},
 		{"do not disturb enabled", func(t *testing.T) {
 			if err := config.Set().Home().DoNotDisturb(true); err != nil {
 				t.Fatal(err)
 			}
-		}},
+		}, true},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -88,13 +91,24 @@ func TestDelayedDropInRechecksPermissions(t *testing.T) {
 				t.Fatalf("expected ringing, got %q", got)
 			}
 			tc.revoke(t)
+			if tc.declined {
+				select {
+				case got := <-l.control:
+					if got != msgDecline {
+						t.Fatalf("under Do Not Disturb the call said %q, want it declined", got)
+					}
+				case <-time.After(4 * time.Second):
+					t.Fatal("under Do Not Disturb the call was not turned away")
+				}
+				return
+			}
 			select {
 			case got := <-l.control:
 				t.Fatalf("answered after permission changed: %q", got)
 			case <-time.After(2700 * time.Millisecond):
 			}
-			if p.State().Phase != Ringing {
-				t.Fatalf("expected continuing ringing, got %v", p.State().Phase)
+			if st := p.State(); st.Phase != Ringing || st.DropIn {
+				t.Fatalf("expected an ordinary call ringing, got %v drop in %v", st.Phase, st.DropIn)
 			}
 			p.Hangup()
 		})

@@ -32,8 +32,8 @@ func (d *Display) awayTick(now time.Time, on, busy, spoken, night bool) bool {
 	after := presence.ScreenOffAfter()
 	awayDark.mu.Lock()
 	dark := awayDark.dark
-	if on && !awayDark.wasOn {
-		awayDark.litAt = now
+	if on && (!awayDark.wasOn || spoken) {
+		awayDark.litAt = now // a turn keeps it lit: the wait starts again when the turn is over
 	}
 	awayDark.wasOn = on
 	litFor := now.Sub(awayDark.litAt)
@@ -47,14 +47,15 @@ func (d *Display) awayTick(now time.Time, on, busy, spoken, night bool) bool {
 	case dark && on:
 		// Lit by something else since: a touch, a ring, Home Assistant. The room no longer owns it.
 		set(false)
-	case dark && !on && presence.Blind():
-		// The camera stopped (the mute button, the shutter) with the screen out for an empty room: it
-		// is left as it is, for a touch or the camera's return to light.
 	case dark && !on && !night && spoken:
+		// Ahead of a blind camera too: the shutter closed leaves the microphones listening.
 		slog.Info("screen: spoken to, on again")
 		set(false)
 		d.apply(true, d.ceilingOrDefault(), false)
 		return true
+	case dark && !on && presence.Blind():
+		// The camera stopped (the mute button, the shutter) with the screen out for an empty room: it
+		// is left as it is, for a touch or the camera's return to light.
 	case dark && !on && !night && (after == 0 || presence.Present()):
 		slog.Info("screen: somebody near, on again")
 		set(false)
