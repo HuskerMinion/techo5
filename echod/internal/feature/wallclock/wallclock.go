@@ -303,6 +303,13 @@ func (f *Feature) pair(known string) {
 	}
 	f.setStatus("Pairing with " + displayName(d))
 
+	// Stop searching before pairing. The pairing ends with bluetoothd asking the clock for its services,
+	// and an inquiry still running beside it shares the radio: a clock pairing for the first time
+	// answered too slowly and the pairing was dropped when the search timed out (techo5#511).
+	if err := a.Discover(false); err != nil {
+		slog.Debug("wall clock: stopping discovery before pairing", "err", err)
+	}
+
 	// The agent says no to pairings outside pairing mode; this is the one device it should say yes
 	// to for the length of this attempt.
 	done := bluez.AllowPairing(d.Path)
