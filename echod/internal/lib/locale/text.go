@@ -943,6 +943,10 @@ var uiTranslations = map[string]map[string]string{
 		"quiet_hours":                   "Horas de silencio",
 		"reading_the_calendar":          "Leyendo el calendario…",
 		"repeat":                        "Repetir",
+		"reset":                         "Restablecer",
+		"reset_for_someone_else":        "Restablecer para otra persona",
+		"clears_it_and_start_setting_it_up_again": "Borra todo y permite volver a configurarlo",
+		"wifi_name_home_assistant_alarm_everything_tap_again": "Wi-Fi, nombre, Home Assistant, alarmas, todo: toca otra vez",
 		"restart":                       "Reiniciar",
 		"screen_language":               "Idioma de pantalla",
 		"screensaver":                   "Protector de pantalla",
@@ -2234,6 +2238,10 @@ var uiTranslations = map[string]map[string]string{
 		"reading_the_calendar":                      "Lendo o calendario…",
 		"remote_api":                                "API remota",
 		"repeat":                                    "Repetir",
+		"reset":                                     "Redefinir",
+		"reset_for_someone_else":                    "Redefinir para outra pessoa",
+		"clears_it_and_start_setting_it_up_again":   "Apaga tudo e permite configurá-lo novamente",
+		"wifi_name_home_assistant_alarm_everything_tap_again": "Wi-Fi, nome, Home Assistant, alarmes, tudo: toque novamente",
 		"restart":                                   "Reiniciar",
 		"said_as_it_rings":                          "Dito mentres soa",
 		"same_as_default":                           "Igual que o predeterminado (%s)",
@@ -3017,6 +3025,10 @@ var uiTranslations = map[string]map[string]string{
 		"reading_the_calendar":                      "Lettura del calendario…",
 		"remote_api":                                "API per script",
 		"repeat":                                    "Ripeti",
+		"reset":                                     "Ripristina",
+		"reset_for_someone_else":                    "Ripristina per qualcun altro",
+		"clears_it_and_start_setting_it_up_again":   "Cancella tutto e avvia di nuovo la configurazione",
+		"wifi_name_home_assistant_alarm_everything_tap_again": "Wi-Fi, nome, Home Assistant, sveglie, tutto: tocca di nuovo",
 		"restart":                                   "Riavvia",
 		"said_as_it_rings":                          "Pronunciato mentre la sveglia suona",
 		"same_as_default":                           "Come il valore predefinito (%s)",
@@ -3592,6 +3604,14 @@ var uiTranslations = map[string]map[string]string{
 		"quiet_hours": "Stille uren",
 		// Repeat
 		"repeat": "Herhalen",
+		// Reset
+		"reset": "Opnieuw instellen",
+		// Reset for someone else 
+		"reset_for_someone_else": "Opnieuw instellen voor iemand anders",
+		// Clears it and starts setting it up again
+		"clears_it_and_start_setting_it_up_again": "Wist alles en begint de installatie opnieuw",
+		// Wi-Fi, name, Home Assistant, alarms, everything: tap again
+		"wifi_name_home_assistant_alarm_everything_tap_again": "Wi-Fi, naam, Home Assistant, alarmen, alles: tik nogmaals",
 		// Restart
 		"restart": "Opnieuw opstarten",
 		// Screen language
@@ -4017,6 +4037,10 @@ var uiTranslations = map[string]map[string]string{
 		"reading_the_calendar":                      "カレンダーを読み込み中…",
 		"remote_api":                                "リモートAPI",
 		"repeat":                                    "繰り返し",
+		"reset":                                     "リセット",
+		"reset_for_someone_else":                    "別の人のためにリセット",
+		"clears_it_and_start_setting_it_up_again":   "すべて消去してセットアップをやり直します",
+		"wifi_name_home_assistant_alarm_everything_tap_again": "Wi-Fi、名前、Home Assistant、アラームなどすべてが消去されます。もう一度タップしてください",
 		"restart":                                   "再起動",
 		"said_as_it_rings":                          "鳴動中に読み上げ",
 		"same_as_default":                           "既定の設定（%s）",
@@ -5107,6 +5131,14 @@ var uiTranslations = map[string]map[string]string{
 		"remote_api": "Remote-API",
 		// Repeat
 		"repeat": "Wiederholen",
+		// Reset
+		"reset": "Zurücksetzen",
+		// Reset for someone else 
+		"reset_for_someone_else": "Für jemand anderen zurücksetzen",
+		// Clears it and starts setting it up again
+		"clears_it_and_start_setting_it_up_again": "Löscht alles und startet die Einrichtung erneut",
+		// Wi-Fi, name, Home Assistant, alarms, everything: tap again
+		"wifi_name_home_assistant_alarm_everything_tap_again": "WLAN-Name, Home Assistant, Alarme, alles: erneut tippen",
 		// Restart
 		"restart": "Neu starten",
 		// Said as it rings
@@ -6209,6 +6241,10 @@ var uiTranslations = map[string]map[string]string{
 		"reading_the_calendar":                      "Takvim okunuyor…",
 		"remote_api":                                "Uzak API",
 		"repeat":                                    "Tekrarla",
+		"reset":                                     "Sıfırla",
+		"reset_for_someone_else":                    "Başkası için sıfırla",
+		"clears_it_and_start_setting_it_up_again":   "Her şeyi siler ve kurulumu yeniden başlatır",
+		"wifi_name_home_assistant_alarm_everything_tap_again": "Wi-Fi, ad, Home Assistant, alarmlar, her şey: tekrar dokunun",
 		"restart":                                   "Yeniden başlat",
 		"said_as_it_rings":                          "Çalarken söylenen",
 		"same_as_default":                           "Varsayılanla aynı (%s)",
