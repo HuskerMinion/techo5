@@ -837,6 +837,7 @@ var uiEnglish = map[string]string{
 
 var uiTranslations = map[string]map[string]string{
 	"es": {
+		"clock":                         "Reloj",
 		"sunrise_skip_action":           "Omitir",
 		"sunrise_skip_done":             "Omitida la alarma de las %s",
 		"sunrise_skip_refused":          "No se pudo omitir la alarma de las %s",
@@ -3614,6 +3615,18 @@ var uiTranslations = map[string]map[string]string{
 		"silenced_press_a_button_to_snooze_d_min": "Silenziato · premi un tasto del volume o del microfono per posticipare di %d min",
 	},
 	"nl": {
+		// The header pill and the voice failure line (link_status.go, voice)
+		"microphone_off":     "MICROFOON UIT",
+		"no_wifi":            "GEEN WIFI",
+		"no_home_assistant":  "GEEN HOME ASSISTANT",
+		"voice_no_home":      "Home Assistant is niet bereikbaar",
+		"voice_no_assistant": "Geen spraakassistent ingesteld",
+		"voice_timeout":      "Geen antwoord op tijd",
+		"voice_failed":       "De assistent kon niet antwoorden",
+		"silenced_press_a_button_to_snooze_d_min": "Gedempt · druk op een volume- of microfoonknop om %d min te sluimeren",
+		"card_reminder": "HERINNERING",
+		"tap_again_s":   "Tik nogmaals: %s",
+		"deck_pc_key":   "De sleutel voor %s klopt niet",
 		// Audio output
 		"audio_output": "Geluidsuitgang",
 		// Back

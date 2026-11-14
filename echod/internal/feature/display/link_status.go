@@ -3,7 +3,6 @@
 package display
 
 import (
-	"context"
 	"sync"
 	"time"
 
@@ -46,18 +45,51 @@ type linkWatch struct {
 // Home Assistant is a working Wi-Fi), and only where the device runs its own (not a tablet's).
 var (
 	linkHome = func() bool { return firstrun.HomeConnected() }
-	linkWifi = func() bool {
-		return !wifi.Available() || wifi.Current(context.Background()).Address != ""
-	}
+	// The address from the interface, not through the supplicant (wifi.Current): a supplicant slow to
+	// answer is not a Wi-Fi gone.
+	linkWifi      = func() bool { return !wifi.Available() || wifi.HasAddress() }
 	linkHomeKnown = func() bool { return hass.Get().Ready() }
+
+	// linkLookMu guards the three looks above and is held while one is taken: the display's watch
+	// takes them every few seconds, while a test may be swapping them (setLinkLooks) or what they read
+	// (firstrun's, in the first run tests).
+	linkLookMu sync.Mutex
 )
+
+// linkLook takes one of the three looks, under their lock. Each is quick: nothing waits on the network.
+func linkLook(which *func() bool) bool {
+	linkLookMu.Lock()
+	defer linkLookMu.Unlock()
+	return (*which)()
+}
+
+// setLinkLooks puts in the three looks (nil keeps one) and gives a func that puts the old ones back.
+func setLinkLooks(home, wifiUp, homeKnown func() bool) (restore func()) {
+	linkLookMu.Lock()
+	defer linkLookMu.Unlock()
+	h, w, k := linkHome, linkWifi, linkHomeKnown
+	if home != nil {
+		linkHome = home
+	}
+	if wifiUp != nil {
+		linkWifi = wifiUp
+	}
+	if homeKnown != nil {
+		linkHomeKnown = homeKnown
+	}
+	return func() {
+		linkLookMu.Lock()
+		defer linkLookMu.Unlock()
+		linkHome, linkWifi, linkHomeKnown = h, w, k
+	}
+}
 
 // look takes one reading at now, and says whether what the header says has changed since the last one.
 func (l *linkWatch) look(now time.Time) bool {
-	home := linkHome()
+	home := linkLook(&linkHome)
 	wifiUp := true
 	if !home {
-		wifiUp = linkWifi()
+		wifiUp = linkLook(&linkWifi)
 	}
 	l.mu.Lock()
 	defer l.mu.Unlock()
@@ -87,7 +119,7 @@ func (l *linkWatch) downLocked(now time.Time) string {
 		return linkUp
 	case l.noWifi:
 		return linkNoWifi
-	case l.homeSeen || linkHomeKnown():
+	case l.homeSeen || homeKnownNow():
 		return linkNoHome
 	}
 	return linkUp
@@ -102,3 +134,6 @@ func (d *Display) watchLink() {
 		}
 	}
 }
+
+// homeKnownNow is whether the device holds a Home Assistant it can reach, by the look of the moment.
+func homeKnownNow() bool { return linkLook(&linkHomeKnown) }

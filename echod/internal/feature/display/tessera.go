@@ -950,6 +950,9 @@ func (d *Display) tessMove(x, y int) {
 		} else {
 			dr.scrolling = true // a swipe across the page
 		}
+		// A hold that opened no sheet is a slide or a swipe now: its lift acts, and nothing is pressed.
+		dr.held = false
+		d.press = pressState{}
 	}
 	if dr.sliding {
 		a := dr.tile.adjust

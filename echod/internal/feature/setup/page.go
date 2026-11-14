@@ -163,7 +163,7 @@ func (f *Feature) index(w http.ResponseWriter, r *http.Request) {
 	}
 	q := r.URL.Query()
 	if !in {
-		f.lockedPage(w, f.asking(token), f.lockedSaid(q))
+		f.lockedPage(w, f.asking(token), f.lockedSaid(q, token))
 		return
 	}
 	// First run still to do opens on its own page (firstrun_page.go); "all" is the way past it to
@@ -276,14 +276,24 @@ func (f *Feature) save(w http.ResponseWriter, r *http.Request) {
 		}
 	case "forget":
 		ssid := strings.TrimSpace(r.PostFormValue("ssid"))
+		ticked := r.PostFormValue("understood") == "yes"
 		// The network the device is on is the one this page is being read over: forgetting it is asked
 		// for twice, here as on the page, so a form sent without the box does not take the device off it.
-		if ssid != "" && ssid == onNetwork(r.Context()) && r.PostFormValue("understood") != "yes" {
-			problem = "tick the box to say you know " + ssid + " is the network this device is on now"
-		} else if err := wifi.Forget(r.Context(), ssid); err != nil {
-			problem = "could not forget " + ssid + ": " + err.Error()
-		} else {
-			slog.Info("setup page: a network was forgotten", "ssid", ssid)
+		// A Wi-Fi that cannot say which network it is on may be on this one, and is treated so.
+		on, known := onNetwork(r.Context())
+		switch {
+		case ssid == "":
+			problem = "no network was named to forget"
+		case !known && !ticked:
+			problem = "the device cannot tell which network it is on just now; try again in a moment"
+		case ssid == on && !ticked:
+			problem = "tick the box to say you know this is the network the device is on now"
+		default:
+			if err := wifi.Forget(r.Context(), ssid); err != nil {
+				problem = "could not forget " + ssid + ": " + err.Error()
+			} else {
+				slog.Info("setup page: a network was forgotten", "ssid", ssid)
+			}
 		}
 	case "giftreset":
 		if r.PostFormValue("understood") != "yes" {
@@ -771,7 +781,7 @@ func (f *Feature) wifiSection(w http.ResponseWriter, token string, scan bool) {
 			fmt.Fprintf(w, `<li>%s <form method="post" action="/setup/save" style="display:inline">`, html.EscapeString(ssid))
 			hidden(w, token, "forget")
 			fmt.Fprintf(w, `<input type="hidden" name="ssid" value="%s">`, html.EscapeString(ssid))
-			if st.Connected && ssid == st.SSID {
+			if st.Connected && strings.TrimSpace(ssid) == strings.TrimSpace(st.SSID) {
 				// The one it is on, and so the one this page came over (save's "forget").
 				fmt.Fprint(w, `<label><input type="checkbox" name="understood" value="yes"> I know the device
 				 is on this network now: forgetting it takes the device off it, and this page with it</label>`)
@@ -1089,18 +1099,23 @@ func saveHouse(v string) string {
 	return ""
 }
 
-// onNetwork is the name of the Wi-Fi network the device is on now, or nothing when it is on none or
-// cannot say; a variable for the tests.
-var onNetwork = func(ctx context.Context) string {
+// onNetwork is the name of the Wi-Fi network the device is on now (nothing when it is on none), and
+// whether the Wi-Fi could say: a supplicant that did not answer in time leaves it unknown. The name is
+// trimmed as the forms' names are. A variable for the tests.
+var onNetwork = func(ctx context.Context) (string, bool) {
 	if !wifi.Available() {
-		return ""
+		return "", true
 	}
 	ctx, cancel := context.WithTimeout(ctx, 8*time.Second)
 	defer cancel()
-	if st := wifi.Current(ctx); st.Connected {
-		return st.SSID
+	st := wifi.Current(ctx)
+	if st.State == "no supplicant" {
+		return "", false
 	}
-	return ""
+	if st.Connected {
+		return strings.TrimSpace(st.SSID), true
+	}
+	return "", true
 }
 
 // passphraseField is the Wi-Fi passphrase, on the Connections tab and in first run: used to join and

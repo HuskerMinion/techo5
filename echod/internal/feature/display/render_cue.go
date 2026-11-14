@@ -128,9 +128,15 @@ func (r *renderer) cueLight(s scene) {
 	default:
 		draw.Draw(r.dst, band, image.NewUniform(c), image.Point{}, draw.Src)
 	}
-	// The header's "microphone off" pill goes back over the band: it says more than the band does.
-	if s.muted && !s.redClockFace() {
+	// The header's pill goes back over the band: it says more than the band does. Muted, it is in the
+	// middle where the device draws no microphone tab; with only a lost link to say, it hangs below the
+	// tab, since a turn started then is about to fail for want of what the pill names.
+	switch {
+	case s.redClockFace():
+	case s.muted:
 		r.header(s)
+	case s.linkDown != linkUp:
+		r.headerAt(s, band.Max.Y+r.s(36)+r.s(8))
 	}
 }
 

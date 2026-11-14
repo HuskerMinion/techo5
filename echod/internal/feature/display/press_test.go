@@ -162,8 +162,8 @@ func TestAControlUnderAFingerShowsIt(t *testing.T) {
 }
 
 // A ringing alarm stops on a tap anywhere but Snooze, so a finger anywhere but Snooze shows on Stop; a
-// call's buttons answer only in their band, across it, so a finger between the two shows on the one its
-// tap would be.
+// call's buttons answer only over their own width (callButtonAt), so a finger just inside Answer shows
+// on Answer, and one in the gap between the two, where a tap answers nothing, shows on neither.
 func TestAPressShowsOnTheButtonItsTapWouldBe(t *testing.T) {
 	at := time.Date(2026, 9, 16, 14, 7, 0, 0, time.Local)
 	for name, c := range map[string]struct {
@@ -173,8 +173,8 @@ func TestAPressShowsOnTheButtonItsTapWouldBe(t *testing.T) {
 	}{
 		"the ringing page's clock": {scene{now: at, phase: "idle", ring: ringState{alarm: &alarm.Ring{Label: "Wake up"}, snoozable: true}, snooze: 9},
 			image.Pt(700, 200), func(r *renderer) image.Rectangle { left, _ := r.actionHalves(); return left }},
-		"just left of Answer": {scene{now: at, phase: "idle", call: phone.State{Phase: phone.Ringing, Peer: "104"}},
-			image.Pt(482, 400), func(r *renderer) image.Rectangle { _, right := r.actionHalves(); return right }},
+		"just inside Answer": {scene{now: at, phase: "idle", call: phone.State{Phase: phone.Ringing, Peer: "104"}},
+			image.Pt(500, 400), func(r *renderer) image.Rectangle { _, right := r.actionHalves(); return right }},
 	} {
 		plain, pressed := testRenderer(), testRenderer()
 		plain.draw(c.scene)
@@ -185,6 +185,14 @@ func TestAPressShowsOnTheButtonItsTapWouldBe(t *testing.T) {
 		if box, differs := diffBox(pressed, plain); !differs || !box.In(b.Inset(-plain.s(8))) {
 			t.Errorf("%s: the press shows over %v (%v), want on %v", name, box, differs, b)
 		}
+	}
+	gap := scene{now: at, phase: "idle", call: phone.State{Phase: phone.Ringing, Peer: "104"}}
+	plain, pressed := testRenderer(), testRenderer()
+	plain.draw(gap)
+	gap.press = pressView{on: true, at: image.Pt(482, 400)}
+	pressed.draw(gap)
+	if box, differs := diffBox(pressed, plain); differs {
+		t.Errorf("a finger in the gap between Decline and Answer shows over %v, where a tap does nothing", box)
 	}
 }
 

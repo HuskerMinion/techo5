@@ -89,21 +89,22 @@ func (r *renderer) callPage(s scene) {
 	decline, answer := r.actionHalves()
 	rad := float64(r.s(actionRadius))
 	mid := (decline.Min.Y + decline.Max.Y) / 2
-	// A finger shows on the button its tap would be (callTap): the right half answers a call that is
-	// ringing, the rest of the band declines or hangs up, and above the band is no answer. Not with
-	// something ringing behind the call either, when a tap off the buttons' band stops that.
+	// A finger shows on the button its tap would be (callTap, by callButtonAt): a margin, or the gap
+	// between Decline and Answer, is no button and shows none.
 	white := color.RGBA{0xff, 0xff, 0xff, 0xff}
-	held := r.press.on && r.actionDecided(r.press.at.Y)
-	answering := held && st.Phase == phone.Ringing && r.press.at.X >= r.w/2
+	var hanging, answering bool
+	if r.press.on {
+		hanging, answering = r.callButtonAt(r.press.at, st.Phase == phone.Ringing)
+	}
 	if st.Phase == phone.Ringing {
-		r.roundButton(decline, rad, r.pressTinted(held && !answering, declineRed, white))
+		r.roundButton(decline, rad, r.pressTinted(hanging, declineRed, white))
 		r.roundButton(answer, rad, r.pressTinted(answering, answerGreen, white))
 		r.text(r.title, tr("ui_decline"), decline.Min.X+(decline.Dx()-r.width(r.title, tr("ui_decline")))/2, mid+r.s(16), color.White)
 		r.text(r.title, tr("ui_answer"), answer.Min.X+(answer.Dx()-r.width(r.title, tr("ui_answer")))/2, mid+r.s(16), color.White)
 		return
 	}
 	hang := image.Rect(decline.Min.X, decline.Min.Y, answer.Max.X, decline.Max.Y)
-	r.roundButton(hang, rad, r.pressTinted(held, declineRed, white))
+	r.roundButton(hang, rad, r.pressTinted(hanging, declineRed, white))
 	r.text(r.title, tr("hang_up"), hang.Min.X+(hang.Dx()-r.width(r.title, tr("hang_up")))/2, mid+r.s(16), color.White)
 }
 
@@ -122,6 +123,12 @@ func (r *renderer) callButtonAt(p image.Point, ringing bool) (hang, answer bool)
 		return across(decline.Union(accept)), false
 	}
 	return across(decline), across(accept)
+}
+
+// onCallButton is whether a tap at x, y on the call page is on one of its buttons.
+func (d *Display) onCallButton(x, y int, st phone.State) bool {
+	hang, answer := d.r.callButtonAt(image.Pt(x, y), st.Phase == phone.Ringing)
+	return hang || answer
 }
 
 // callTap is a finger on the call page: Decline or Hang up on its button, Answer on its own while

@@ -134,10 +134,14 @@ func (r *roundRenderer) statusWord(s roundScene, baseline int) {
 		if lost != "" {
 			r.centered(r.label, lost, baseline-statusLineH, colTimer)
 		}
+	case s.btPairing:
+		// Pairing is what a hand at the Spot is doing now, so it keeps the line; a loss goes over it.
+		r.centered(r.label, tr("bluetooth_pairing"), baseline, colBluetooth)
+		if lost != "" {
+			r.centered(r.label, lost, baseline-statusLineH, colTimer)
+		}
 	case lost != "":
 		r.centered(r.label, lost, baseline, colTimer)
-	case s.btPairing:
-		r.centered(r.label, tr("bluetooth_pairing"), baseline, colBluetooth)
 	case s.playing:
 		r.centered(r.label, tr("ui_playing"), baseline, colDim)
 	case s.paused:

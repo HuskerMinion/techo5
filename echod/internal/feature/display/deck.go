@@ -86,8 +86,13 @@ func (d *Display) openDeck() bool {
 	d.mu.Lock()
 	// On the screen from now, not from the next frame: the swipe that opened it is still sending its
 	// steps up, and they are the deck's to ignore, not the volume's.
-	// The count of presses goes on: one still going out from before must not be taken for the next.
-	d.deckUp, d.deckOnScreen, d.deckPress = true, true, deckPress{seq: d.deckPress.seq}
+	// A press still going out from before stays what it is, its page and button with it: its answer is
+	// that button's (a failure lights it, not the first one on the page the deck opens on), and the same
+	// button takes no second press behind it. Otherwise the look of the last one is over.
+	d.deckUp, d.deckOnScreen = true, true
+	if !d.deckPress.going {
+		d.deckPress = deckPress{seq: d.deckPress.seq + 1}
+	}
 	d.closeAlert()
 	d.calUntil, d.weatherUntil = time.Time{}, time.Time{}
 	d.sheet, d.dash, d.drawer = false, false, false
@@ -173,7 +178,7 @@ func (d *Display) deckScene(s *scene, now time.Time) {
 	pcs := deck.Get().Computers()
 	v := deckView{cols: cols, rows: rows, page: page, pages: pages,
 		connected: st.Connected, problem: st.Problem, obsSet: cfg.OBS.Addr != "", away: deck.Away(cfg, page, pcs)}
-	if press.failedAt(now) {
+	if press.failedAt(now) && press.page == page {
 		v.reason = press.reason
 	}
 	for i := range cols * rows {

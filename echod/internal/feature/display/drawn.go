@@ -215,7 +215,12 @@ func (d *Display) drawnTap(x, y int) {
 	if d.colorTap(x, y) {
 		return
 	}
-	t := d.tileAt(x, y)
+	d.tileTap(d.tileAt(x, y), x)
+}
+
+// tileTap does what tile t says to a tap at x across it. A tap that wandered names its tile as it was
+// when the finger came down: the page may have scrolled under it since (drawnRelease).
+func (d *Display) tileTap(t *dashTile, x int) {
 	switch {
 	case t == nil:
 	case t.action != nil:
@@ -308,6 +313,12 @@ func (d *Display) drawnMove(x, y int) {
 		case abs(dy) > d.r.s(slideStart):
 			dr.scrolling = true
 		}
+		if dr.sliding || dr.scrolling {
+			// A hold that opened no sheet (one did, and this would be the sheet's) is a slide or a
+			// scroll now, and its lift sets the level or ends the scroll; nor is the tile pressed.
+			dr.held = false
+			d.dropPressLocked()
+		}
 	}
 	switch {
 	case dr.scrolling:
@@ -363,7 +374,9 @@ func (d *Display) drawnRelease(x, y int) {
 			d.dashScroll = dr.startScroll
 			d.mu.Unlock()
 		}
-		d.drawnTap(dr.at.X, dr.at.Y)
+		// The tile it came down on, not what is under that point now: the last frame was drawn
+		// scrolled, and a press near a tile's edge would land on its neighbor.
+		d.tileTap(dr.tile, dr.at.X)
 	}
 }
 

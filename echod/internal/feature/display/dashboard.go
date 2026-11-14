@@ -278,7 +278,7 @@ func (d *Display) dashGesture(g touch.Gesture) {
 		switch {
 		case keys:
 			d.dashKey(d.r.keyAt(g.X, g.Y, d.dashKeyboardSymbols()))
-		case d.r.dashHandleAt(g.X, g.Y) && !d.colorOpen() && !d.libraryUp():
+		case d.handleTapped(g.X, g.Y, streamed) && !d.colorOpen() && !d.libraryUp():
 			d.closeDashboard()
 		case streamed:
 			f.Touch("tap", g.X, g.Y)
@@ -448,6 +448,20 @@ func (s *scene) dashSheetUp() bool {
 // dashHandleAt is whether x, y is on the handle: the edge strip beside it, taller than the bar.
 func (r *renderer) dashHandleAt(x, y int) bool {
 	return x < r.s(dashHandleTap) && abs(y-r.h/2) <= r.s(dashHandleLong)
+}
+
+// handleTapped is whether a tap at x, y is the handle's, which closes the dashboard. Not where the page
+// has something of its own to tap: a tile or a picture reaching the edge (a lone tile's page is all
+// tile), whose press shows and must not close the page instead; on a streamed page, Home Assistant's
+// own sidebar is there, so only the outer half of the strip is the handle's.
+func (d *Display) handleTapped(x, y int, streamed bool) bool {
+	if !d.r.dashHandleAt(x, y) {
+		return false
+	}
+	if streamed {
+		return x < d.r.s(dashHandleTap)/2
+	}
+	return d.tileAt(x, y) == nil
 }
 
 // drawnDashboard is the drawn dashboard over the whole panel.

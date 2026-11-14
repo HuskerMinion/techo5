@@ -36,14 +36,14 @@ type pressState struct {
 // pageID is which page a frame draws, as far as a press cares: a press made on one page is not shown on
 // another, where something else is under the same point.
 type pageID struct {
-	phase                                                   string
-	call, ring, pin, ask, videoAsk, video, pairing, wifi    bool
-	qr, camTest, sheet, picker, camera, alert, calendar     bool
-	deck, radar, weather, dash, dashSheet, playing, strip   bool
-	drawer, drawerPick, saver, sunrise, redClock, dashboard bool
-	cat                                                     category
-	custom                                                  string
-	tessPage, drawerTab                                     int
+	phase                                                 string
+	call, ring, pin, ask, videoAsk, video, pairing, wifi  bool
+	qr, camTest, sheet, picker, camera, alert, calendar   bool
+	deck, radar, weather, dash, dashSheet, playing, strip bool
+	drawer, drawerPick, saver, sunrise, redClock          bool
+	cat                                                   category
+	custom                                                string
+	tessPage, drawerTab                                   int
 }
 
 // pageOf is the page s draws.
@@ -64,7 +64,12 @@ func pageOf(s *scene) pageID {
 // panel, where nothing is drawn, nor on a card over the page, which is not the control under it.
 func (d *Display) fingerLanded(p touch.Point) {
 	at := image.Pt(p.X, p.Y)
-	if d.cardAt(at) {
+	d.mu.Lock()
+	shown := d.pageShown
+	d.mu.Unlock()
+	// A card waiting under the call or ringing page is not drawn there, and the finger is on that
+	// page's buttons, which show the press.
+	if !shown.call && !shown.ring && d.cardAt(at) {
 		return
 	}
 	now := time.Now()
@@ -150,3 +155,7 @@ func (d *Display) pressScene(s *scene, now time.Time) {
 	}
 	s.press = pressView{on: true, at: p.at}
 }
+
+// dropPressLocked ends the press without a frame of its own, for a finger that has become a slide or a
+// scroll. d.mu is held.
+func (d *Display) dropPressLocked() { d.press = pressState{} }

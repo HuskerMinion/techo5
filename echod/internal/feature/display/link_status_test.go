@@ -9,21 +9,17 @@ import (
 	"time"
 )
 
-// linkLooks swaps the three looks for the test.
-func linkLooks(t *testing.T, home, wifiUp, known *bool) {
+// swapLinkLooks swaps the three looks for the test.
+func swapLinkLooks(t *testing.T, home, wifiUp, known *bool) {
 	t.Helper()
-	wasHome, wasWifi, wasKnown := linkHome, linkWifi, linkHomeKnown
-	linkHome = func() bool { return *home }
-	linkWifi = func() bool { return *wifiUp }
-	linkHomeKnown = func() bool { return *known }
-	t.Cleanup(func() { linkHome, linkWifi, linkHomeKnown = wasHome, wasWifi, wasKnown })
+	t.Cleanup(setLinkLooks(func() bool { return *home }, func() bool { return *wifiUp }, func() bool { return *known }))
 }
 
 // Home Assistant gone is said once it has lasted, and no longer once it is back; a short absence, a
 // restart for an update, is never said.
 func TestALostHomeAssistantIsSaidOnceItLasts(t *testing.T) {
 	home, wifiUp, known := true, true, false
-	linkLooks(t, &home, &wifiUp, &known)
+	swapLinkLooks(t, &home, &wifiUp, &known)
 	var l linkWatch
 	t0 := time.Unix(1_700_000_000, 0)
 	l.look(t0)
@@ -48,7 +44,7 @@ func TestALostHomeAssistantIsSaidOnceItLasts(t *testing.T) {
 // With no address it is the Wi-Fi that is named, whatever Home Assistant's part in it.
 func TestALostWifiIsNamedAsThat(t *testing.T) {
 	home, wifiUp, known := false, false, true
-	linkLooks(t, &home, &wifiUp, &known)
+	swapLinkLooks(t, &home, &wifiUp, &known)
 	var l linkWatch
 	t0 := time.Unix(1_700_000_000, 0)
 	l.look(t0)
@@ -66,7 +62,7 @@ func TestALostWifiIsNamedAsThat(t *testing.T) {
 // A device that has never had a Home Assistant is not told it has lost one.
 func TestNoHomeAssistantEverIsNotALoss(t *testing.T) {
 	home, wifiUp, known := false, true, false
-	linkLooks(t, &home, &wifiUp, &known)
+	swapLinkLooks(t, &home, &wifiUp, &known)
 	var l linkWatch
 	t0 := time.Unix(1_700_000_000, 0)
 	l.look(t0)

@@ -49,14 +49,18 @@ func stubFirstRun(t *testing.T, joined, home bool) (*frFake, wifi.Status) {
 	t.Cleanup(func() {
 		frBackground.Wait() // what the screen started reads these
 		firstrun.ResetForTests()
+		linkLookMu.Lock() // the display's watch reads HomeConnected through its look (link_status.go)
 		firstrun.WifiStatus, firstrun.HomeConnected, firstrun.Key, firstrun.Chime = w, h, k, c
+		linkLookMu.Unlock()
 		firstrun.AdoptUntil, firstrun.OpenAdoption, firstrun.SetArea, firstrun.Rename = au, ao, sa, rn
 		firstrun.CheckUpdates, firstrun.Offered, firstrun.AutoInstall, firstrun.SetAutoInstall = uc, of, ai, sai
 		firstrun.ResetForTests()
 		_ = config.Set().FirstRun().Finish() // the next test's config may be this one
 	})
 	firstrun.WifiStatus = func() wifi.Status { return st }
+	linkLookMu.Lock()
 	firstrun.HomeConnected = func() bool { f.mu.Lock(); defer f.mu.Unlock(); return f.home }
+	linkLookMu.Unlock()
 	firstrun.Key = func() string { return "Zm9yIHRoZSBmaXJzdCBydW4gdGVzdHMgb25seSEhIQ==" }
 	firstrun.Chime = func() { f.mu.Lock(); f.chimes++; f.mu.Unlock() }
 	firstrun.AdoptUntil = func() time.Time { f.mu.Lock(); defer f.mu.Unlock(); return f.adopt }

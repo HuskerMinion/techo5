@@ -1226,10 +1226,10 @@ func (d *Display) gesture(g touch.Gesture) {
 	} else if st.Phase != phone.Idle {
 		if g.Kind == touch.Tap {
 			// Unless something is ringing behind it. The call keeps its buttons; the rest of the
-			// page stops the ring. Taps outside the buttons did nothing on this page before, so
-			// answering and hanging up are untouched — and a timer that finishes mid-call used to
-			// have no way out at all, since this page took every tap and the stop word was off.
-			if rs := d.ringing(time.Now()); rs.any() && d.r != nil && !d.r.actionDecided(g.Y) {
+			// page, the margins and the gap between the buttons included (callButtonAt), stops the
+			// ring. Answering and hanging up are untouched — and a timer that finishes mid-call used
+			// to have no way out at all, since this page took every tap and the stop word was off.
+			if rs := d.ringing(time.Now()); rs.any() && d.r != nil && !d.onCallButton(g.X, g.Y, st) {
 				d.stopRing()
 			} else {
 				d.callTap(g.X, g.Y, st)

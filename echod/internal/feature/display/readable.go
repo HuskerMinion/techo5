@@ -35,7 +35,7 @@ import (
 
 const (
 	// scrimTarget is how bright the picture may be behind words, in 8-bit luma after the wash. Well
-	// above where plain text would be comfortable: the dark edge round the letters carries the rest,
+	// above where plain text would be comfortable: the dark edge around the letters carries the rest,
 	// and on a real Show anything darker read as a dark blot rather than a shade.
 	scrimTarget = 115.0
 
@@ -63,19 +63,19 @@ const (
 
 	// haloAlpha is the dark edge around the letters: the ground color at this opacity, reaching a
 	// haloReach-th of their height out (at least a pixel). Round small words it stays a pixel: the
-	// patch does the work there. Round the time, which has no patch to speak of, it is some six pixels
+	// patch does the work there. Around the time, which has no patch to speak of, it is some six pixels
 	// on a Show 5: at a 110th it was two or three, which is gone from across a kitchen.
 	haloAlpha = 190
 	haloReach = 45
 
 	// From haloSoft pixels of reach the edge is a shade that fades out rather than an outline: six
-	// hard pixels round the time made a sticker of it.
+	// hard pixels around the time made a sticker of it.
 	haloSoft = 3
 )
 
 // overPhotoColor is a small line's color over a photo: its own, the theme's, except the theme's dim
 // text, which is made for a plain ground and sinks into a picture; that takes the theme's text color.
-// The patch under the words and the halo round them keep either readable. Every small word used to turn
+// The patch under the words and the halo around them keep either readable. Every small word used to turn
 // one gold whatever the theme or skin was (#258).
 func overPhotoColor(c color.Color) color.Color {
 	if rc, ok := c.(color.RGBA); ok && rc == dim {
@@ -116,7 +116,7 @@ type overPhoto struct {
 
 // patchShape is how dark to make the pixels under the words, as one small part per patch, or per
 // group of patches that touch: in each, 0 untouched and 255 the ground color. Parts, not one area
-// round them all: the weather in a top corner and the date near the bottom spanned most of a Show 8,
+// around them all: the weather in a top corner and the date near the bottom spanned most of a Show 8,
 // half a megabyte to fill and walk every frame for two lines of words.
 type patchShape struct {
 	parts []patchPart
@@ -333,7 +333,7 @@ func (p *paint) shape(wash uint8) *patchShape {
 	}
 
 	// Each patch's area, joined with any it touches until none do, so that where two fades overlap
-	// the darker wins exactly as it did in one area round them all.
+	// the darker wins exactly as it did in one area around them all.
 	var areas []image.Rectangle
 	for _, pt := range patches {
 		if a := pt.core.Inset(-pt.feather).Intersect(p.dst.Rect); !a.Empty() {

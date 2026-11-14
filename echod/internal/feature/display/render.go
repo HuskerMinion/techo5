@@ -1324,7 +1324,10 @@ const headerH = 36
 //
 // The strip is filled before the words are drawn, so the line stays readable over a photo, a camera
 // view or a sunrise. On an ordinary page that fill is the background and nothing shows but the words.
-func (r *renderer) header(s scene) {
+func (r *renderer) header(s scene) { r.headerAt(s, r.s(4)) }
+
+// headerAt is the header's pill with its top at y.
+func (r *renderer) headerAt(s scene, y int) {
 	// The settings sheet is the one page that says this better itself: it has a Microphone row,
 	// reading "Muted" or "Listening", with the switch that changes it. A strip over the top of the
 	// sheet would say the same thing worse and cut the top off its card.
@@ -1345,8 +1348,8 @@ func (r *renderer) header(s scene) {
 	w := r.width(r.tiny, line)
 	pad := r.s(14)
 	x := (r.w - w) / 2
-	r.roundButton(image.Rect(x-pad, r.s(4), x+w+pad, r.s(32)), float64(r.s(14)), walnut)
-	r.text(r.tiny, line, x, r.s(25), amber)
+	r.roundButton(image.Rect(x-pad, y, x+w+pad, y+r.s(28)), float64(r.s(14)), walnut)
+	r.text(r.tiny, line, x, y+r.s(21), amber)
 	r.marked = true
 }
 

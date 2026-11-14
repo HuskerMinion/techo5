@@ -20,12 +20,24 @@ func TestForgettingTheNetworkInUseNeedsTheBox(t *testing.T) {
 	f, c := in(t)
 	was := onNetwork
 	t.Cleanup(func() { onNetwork = was })
-	onNetwork = func(context.Context) string { return "Home network" }
+	onNetwork = func(context.Context) (string, bool) { return "Home network", true }
 
 	to := post(t, f, c, url.Values{"what": {"forget"}, "ssid": {"Home network"}})
-	if p := to.Query().Get("problem"); !strings.Contains(p, "tick the box") || !strings.Contains(p, "Home network") {
+	// The refusal names no network: it goes to the log and the address, and a network's name can be
+	// the street's.
+	if p := to.Query().Get("problem"); !strings.Contains(p, "tick the box") || strings.Contains(p, "Home network") {
 		t.Errorf("forgetting the network in use without the box: %q", p)
 	}
+	// A name sent with a space around it is still the network in use.
+	if p := post(t, f, c, url.Values{"what": {"forget"}, "ssid": {" Home network "}}).Query().Get("problem"); !strings.Contains(p, "tick the box") {
+		t.Errorf("the network in use, sent with spaces, was not asked about: %q", p)
+	}
+	// A Wi-Fi that cannot say which network it is on may be on this one: nothing is forgotten unasked.
+	onNetwork = func(context.Context) (string, bool) { return "", false }
+	if p := post(t, f, c, url.Values{"what": {"forget"}, "ssid": {"Home network"}}).Query().Get("problem"); !strings.Contains(p, "cannot tell") {
+		t.Errorf("forgetting while the Wi-Fi could not say where it is: %q", p)
+	}
+	onNetwork = func(context.Context) (string, bool) { return "Home network", true }
 	if to.Query().Get("at") != "wifi" {
 		t.Errorf("the refusal came back to %s, not to the Wi-Fi section", to)
 	}

@@ -51,3 +51,13 @@ func (r *paint) pressTile(pal dashPal) {
 		return
 	}
 }
+
+// buttonFacePressed is buttonFace for such a button: drawn pressed or not as on says, wherever the
+// finger is.
+func (r *paint) buttonFacePressed(b image.Rectangle, rad float64, style buttonStyle, on bool) color.RGBA {
+	was := r.press
+	r.press.on, r.press.at = on, b.Min
+	fg := r.buttonFace(b, rad, style)
+	r.press.on, r.press.at = was.on, was.at
+	return fg
+}

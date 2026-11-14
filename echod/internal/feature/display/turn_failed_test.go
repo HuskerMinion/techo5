@@ -14,9 +14,7 @@ import (
 // homeLook swaps the look at whether Home Assistant is connected for the test.
 func homeLook(t *testing.T, up bool) {
 	t.Helper()
-	was := linkHome
-	linkHome = func() bool { return up }
-	t.Cleanup(func() { linkHome = was })
+	t.Cleanup(setLinkLooks(func() bool { return up }, nil, nil))
 }
 
 // A pipeline that was not ready is Home Assistant away when it is not connected, and no assistant set

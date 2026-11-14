@@ -56,12 +56,13 @@ const (
 
 // lockedSaid is the line for what brought a browser to the locked page, from the address it came by.
 // Only these lines are ever shown, whatever the address says, and one about a wait that ended is not
-// shown to a browser the device is still asking about.
-func (f *Feature) lockedSaid(q url.Values) string {
+// shown to a browser the device is still asking about: this browser, by its token, and not another
+// that started to wait as this one's minute ran out.
+func (f *Feature) lockedSaid(q url.Values, token string) string {
 	switch {
 	case q.Get("closed") != "":
 		return saidClosed
-	case q.Get("waited") != "" && !f.Waiting():
+	case q.Get("waited") != "" && !f.asking(token):
 		return saidNoAnswer
 	}
 	return ""

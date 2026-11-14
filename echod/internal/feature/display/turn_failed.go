@@ -16,7 +16,7 @@ func failedShown(why string) string {
 	if why != voice.FailedNotReady {
 		return why
 	}
-	if linkHome() {
+	if linkLook(&linkHome) {
 		return voice.FailedNoAssistant
 	}
 	return voice.FailedNoHome
