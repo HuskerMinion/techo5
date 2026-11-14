@@ -356,7 +356,7 @@ func (r *paint) zoneAt(x, y int) (zone, bool) {
 			return r.zones[i], true
 		}
 	}
-	const slop = 12
+	slop := r.s(12) // the same reach in millimeters on every panel
 	for i := len(r.zones) - 1; i >= 0; i-- {
 		z := r.zones[i]
 		if z.kind != zoneDismiss && p.In(z.r.Inset(-slop)) {

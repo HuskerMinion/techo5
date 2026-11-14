@@ -985,6 +985,8 @@ func (d *Display) tessRelease(x, y int) {
 		if next, ok := turnPage(v, page, step); ok {
 			d.tessGo(next)
 		}
+	case d.wanderedTap(dr, x, y):
+		d.tessTap(dr.at.X, dr.at.Y)
 	case dr.down && !dr.moved && !dr.sliding && !dr.scrolling && dr.tile != nil && dr.tile.tess > 0:
 		d.tessSheet(dr.tile.entity)
 	}

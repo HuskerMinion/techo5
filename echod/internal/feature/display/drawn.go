@@ -92,6 +92,22 @@ func (s sheetSlider) at(x int) float64 {
 // a slow press that drifted between the two as neither a long press nor a tap.
 const holdStill = 12
 
+// tapWander is how far a finger may travel on a tile and still have tapped it, in the Show 5's pixels:
+// the touchscreen's own allowance for a tap everywhere else (tapMove). On a dashboard a finger is
+// followed as soon as it moves (followMove), and one that rolled a little further than that as it
+// pressed was neither a tap nor a long press, and did nothing.
+const tapWander = 24
+
+// wanderedTap is whether the finger of dr, lifting at x, y, was a tap that wandered: it moved, but not
+// far, slid nothing, and lifted on the tile it came down on.
+func (d *Display) wanderedTap(dr drawnDrag, x, y int) bool {
+	if !dr.moved || dr.sliding || dr.tile == nil || d.r == nil {
+		return false
+	}
+	w := d.r.s(tapWander)
+	return abs(x-dr.at.X) <= w && abs(y-dr.at.Y) <= w && image.Pt(x, y).In(dr.tile.r)
+}
+
 // dashAdjusting is the level a finger is sliding, for the tile to draw it.
 type dashAdjusting struct {
 	entity string
@@ -334,6 +350,14 @@ func (d *Display) drawnRelease(x, y int) {
 	case dr.sliding && dr.tile != nil && dr.tile.adjust != nil:
 		slog.Info("dashboard slide", "entity", dr.tile.adjust.Entity, "to", dr.value)
 		dashboard.Get().SetLevel(*dr.tile.adjust, dr.value)
+	case d.wanderedTap(dr, x, y):
+		// The little it scrolled on the way is put back: it was a tap.
+		if dr.scrolling {
+			d.mu.Lock()
+			d.dashScroll = dr.startScroll
+			d.mu.Unlock()
+		}
+		d.drawnTap(dr.at.X, dr.at.Y)
 	case dr.down && !dr.moved && !dr.scrolling && dr.tile != nil:
 		d.longPress(dr.tile)
 	}

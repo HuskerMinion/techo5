@@ -56,9 +56,9 @@ func (d *Display) drawerGesture(g touch.Gesture) {
 	case touch.SwipeRight:
 		d.closeDrawer()
 	case touch.SwipeUp, touch.SwipeDown:
-		by := notchPx
+		by := d.r.s(notchPx)
 		if g.Kind == touch.SwipeDown {
-			by = -notchPx
+			by = -by
 		}
 		cardMax, pickMax := d.r.scrollLimits()
 		d.mu.Lock()
