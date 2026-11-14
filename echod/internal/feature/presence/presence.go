@@ -66,6 +66,7 @@ type Feature struct {
 	watching  bool // the camera is being read now
 	present   bool
 	lastSeen  time.Time
+	seenAt    time.Time // the last time a looker saw somebody (lookers.go): the screen's, not Motion's
 	watchFrom time.Time // when the current watch began: an empty room is only an empty room after hold
 	stoppedAt time.Time // when the last watch ended: a short break (the camera restarted) changes nothing
 	det       detector
@@ -119,7 +120,7 @@ func Get() *Feature {
 func (f *Feature) Name() string { return "presence" }
 
 func (f *Feature) Entities() []esphome.Entity {
-	return []esphome.Entity{f.sw, f.offNum, f.sensNum, f.gestSw, f.sensor}
+	return append([]esphome.Entity{f.sw, f.offNum, f.sensNum, f.gestSw, f.sensor}, lookerEntities()...)
 }
 
 func (f *Feature) Restore(c config.Config) {
@@ -128,12 +129,13 @@ func (f *Feature) Restore(c config.Config) {
 	f.sensNum.Set(float32(c.Presence.PresenceSensitivity()))
 	f.gestSw.Set(c.Presence.Gestures)
 	f.sensor.Set(false)
+	restoreLookers(c)
 }
 
 // On is whether the camera watches the room at all: for somebody near, or for gestures.
 func On() bool {
 	p := config.Get().Presence
-	return (p.On || p.Gestures) && camera.Available()
+	return (p.On || p.Gestures || lookersOn()) && camera.Available()
 }
 
 // GestureEvent is the event a gesture puts on Home Assistant's bus, with the gesture's name and the
@@ -241,7 +243,7 @@ func Present() bool {
 	f := Get()
 	f.mu.Lock()
 	defer f.mu.Unlock()
-	return f.watching && f.present
+	return f.watching && (f.present || f.seenNear(time.Now()))
 }
 
 // EmptyFor is how long nobody has been near: 0 while somebody is, or while the camera is not
@@ -250,10 +252,13 @@ func EmptyFor(now time.Time) time.Duration {
 	f := Get()
 	f.mu.Lock()
 	defer f.mu.Unlock()
-	if !f.watching || f.present {
+	if !f.watching || f.present || f.seenNear(now) {
 		return 0
 	}
 	since := f.lastSeen
+	if f.seenAt.After(since) {
+		since = f.seenAt
+	}
 	if since.Before(f.watchFrom) {
 		since = f.watchFrom
 	}
@@ -341,15 +346,18 @@ func (f *Feature) watchFor(ctx context.Context, release func()) {
 	slog.Info("presence: watching")
 	defer func() {
 		f.mu.Lock()
-		f.watching, f.present, f.stoppedAt = false, false, time.Now()
+		f.watching, f.present, f.stoppedAt, f.seenAt = false, false, time.Now(), time.Time{}
 		f.mu.Unlock()
 		f.sensor.Set(false)
+		lookersEnded()
 		f.Changed.Emit(struct{}{})
 		slog.Info("presence: not watching")
 	}()
 
 	f.camRate()
 	defer camera.SetGestureExposure(false)
+	look, done := startLookers()
+	defer done()
 	tick := time.NewTicker(time.Second)
 	defer tick.Stop()
 	quiet := time.Now()
@@ -371,6 +379,7 @@ func (f *Feature) watchFor(ctx context.Context, release func()) {
 			}
 			quiet = time.Now()
 			f.take(g, fr.At)
+			look(fr)
 		case now := <-tick.C:
 			if now.Sub(quiet) > 15*time.Second {
 				slog.Info("presence: the camera stopped sending frames")
