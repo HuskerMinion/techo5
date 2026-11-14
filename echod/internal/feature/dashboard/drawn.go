@@ -46,6 +46,9 @@ type Tile struct {
 	// sitting next to another tile; High is the height in tiles (0 and 1 both mean one).
 	Wide bool
 	High int
+	// Picture is set for a picture card sitting in the tile grid (its grid_options give it less than
+	// the whole width). It's drawn in place of the badge and words.
+	Picture *Picture
 }
 
 // Adjust is a tile's level: what it is now and how far it goes.
@@ -80,6 +83,10 @@ type Action struct {
 	Service string         // "light.toggle"; empty for none
 	Data    map[string]any // the service's data, with entity_id added when it has none (serviceData)
 	View    string         // a dashboard view to go to instead, as a path: "home-refresh/climate"
+	// Assist starts a voice request on the device, as Home Assistant's assist action opens its Assist
+	// dialog. Pipeline is the action's pipeline_id: which of the device's assistants takes it (assist.go).
+	Assist   bool
+	Pipeline string
 }
 
 // Block is one piece of a section: one of a heading, tiles, a card of rows, text, a graph, a gauge
@@ -402,6 +409,11 @@ func (f *Feature) CloseDrawn() {
 
 // Tap does what a tile's action says.
 func (f *Feature) Tap(a Action) {
+	if a.Assist {
+		// Which assistant takes it takes a look at Home Assistant, so not on the finger's goroutine.
+		safe.Go("dashboard assist", func() { startAssist(a.Pipeline) })
+		return
+	}
 	if strings.HasPrefix(a.View, "#") {
 		// A hash names something of the screen's own (LibraryPath), which the screen opens itself; on
 		// a screen without it, it is nowhere to go rather than a view of that name.
