@@ -2309,6 +2309,15 @@ of coming back, and turning **Wall clock** off and on, or pairing, tries again a
 A clock that was paired to an Echo must be unpaired from Alexa first, since it stays paired to one
 controller. If you know the clock's address, type it under **Clock address** instead and Save.
 
+Once connected, the device asks the Bluetooth controller to put the clock's link into **sniff
+mode**, where the clock's radio listens only at 1.28-second anchors instead of in every slot. The
+kernel leaves sniff whenever there is a packet to send or receive, and the device asks again a few
+seconds after it has sent something — and at least once a minute — so the clock sleeps between the
+periodic time update and the odd timer change. This is not a setting: there is no useful reason to
+choose the more power-hungry mode. It depends on the controller; where the controller refuses, the
+clock still works and stays in active mode. A timer rings from the clock's own copy of its end time,
+so sniff mode does not delay the ring.
+
 The clock is a display and the timers are this device's own: a timer set by voice or on the screen
 shows the same, and keeps counting while Home Assistant is away. The soonest-ending timer is drawn
 as a filled run from twelve, and every other running timer as a bright segment at its minute. A
