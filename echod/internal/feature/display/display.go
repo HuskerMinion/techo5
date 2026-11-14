@@ -244,6 +244,7 @@ type Display struct {
 	sheetSent     sliderSent            // what a sheet's slider last sent, while a finger moves it
 	dashHolds     bool                  // the drawn dashboard is up, and wants a finger held still reported
 	clockHolds    bool                  // the plain clock is up and Hold on the clock is on (gesture_hold.go)
+	recordHolds   bool                  // an announcement is being recorded: a hold on its strip throws it away
 
 	poke chan struct{}
 
@@ -3063,6 +3064,7 @@ func (d *Display) frame() (next time.Duration) {
 	d.mu.Unlock()
 	// Holds go to Home Assistant only on the plain clock: not over the screensaver, the light before an
 	// alarm, the night clock, a card, an answer, an announcement or any page of its own.
+	d.recordHoldScene(s.announceRecording)
 	d.clockHoldScene(plainClock(&s, boring) && !d.overDashboard(&s) && !d.answerUp(now) && d.wakeLight(now) == 0)
 
 	// The Call button is on the clock itself and only there: on any other page a tap where it would be

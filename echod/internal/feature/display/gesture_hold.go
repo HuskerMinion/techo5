@@ -79,6 +79,18 @@ func (d *Display) clockHoldScene(plainClock bool) {
 	}
 }
 
+// recordHoldScene says whether an announcement is being recorded, and so whether holds are wanted for
+// its strip: a tap there sends it and a hold throws it away (gesture).
+func (d *Display) recordHoldScene(recording bool) {
+	d.mu.Lock()
+	changed := recording != d.recordHolds
+	d.recordHolds = recording
+	d.mu.Unlock()
+	if changed {
+		d.applyHolds()
+	}
+}
+
 // fireGesture tells Home Assistant of a gesture made on the screen; a variable for the tests.
 var fireGesture = func(name string) {
 	component.Fire.Emit(component.Event{Name: presence.GestureEvent, Data: map[string]string{

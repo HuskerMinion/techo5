@@ -65,3 +65,25 @@ func TestOnlyThePlainClockTakesHolds(t *testing.T) {
 		t.Error("a page of its own takes holds")
 	}
 }
+
+// While an announcement is recorded the strip's hold throws it away, so holds are reported: without
+// them a long press lifted as a tap, and sent it.
+func TestRecordingAnAnnouncementAsksForHolds(t *testing.T) {
+	d := &Display{on: true}
+	wanted := func() bool {
+		d.mu.Lock()
+		defer d.mu.Unlock()
+		return d.holdsWanted()
+	}
+	if wanted() {
+		t.Fatal("holds wanted with nothing up")
+	}
+	d.recordHoldScene(true)
+	if !wanted() {
+		t.Error("recording an announcement does not ask for holds")
+	}
+	d.recordHoldScene(false)
+	if wanted() {
+		t.Error("holds still wanted after the recording ended")
+	}
+}
