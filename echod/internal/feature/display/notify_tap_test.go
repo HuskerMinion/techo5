@@ -37,3 +37,25 @@ func TestANotificationPutsTheDeckAway(t *testing.T) {
 		t.Error("the deck is drawn as itself with a notification over it")
 	}
 }
+
+// A large or huge card is most of the screen, and all of it puts the notification away: the box a tap is
+// tried against is the box that was drawn, not the usual card's in the middle of it.
+func TestATapAnywhereOnALargeCardEndsIt(t *testing.T) {
+	for _, panel := range showPanels() {
+		r := newRenderer(image.NewRGBA(image.Rect(0, 0, panel.wide, panel.high)))
+		for _, size := range []notify.Size{notify.SizeLarge, notify.SizeHuge} {
+			n := notify.Notification{Kind: notify.Text, Message: "m", Size: size}
+			drawn, tapped := r.sizedBox(size), r.notifyBoxFor(n)
+			if drawn != tapped {
+				t.Errorf("%s size %v: drawn in %v, tapped in %v", panel.name, size, drawn, tapped)
+			}
+			corner := image.Pt(drawn.Min.X+8, drawn.Min.Y+8)
+			if !corner.In(tapped) || corner.In(r.notifyBox()) {
+				t.Errorf("%s size %v: %v is on the large card alone, and must end it", panel.name, size, corner)
+			}
+		}
+		if got := r.notifyBoxFor(notify.Notification{Kind: notify.Text, Message: "m"}); got != r.notifyBox() {
+			t.Errorf("%s: a usual card is tapped in %v, drawn in %v", panel.name, got, r.notifyBox())
+		}
+	}
+}

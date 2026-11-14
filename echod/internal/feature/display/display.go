@@ -1154,7 +1154,7 @@ func (d *Display) gesture(g touch.Gesture) {
 			// comes back; without this it stayed until the notification ended. A text card only by its
 			// own box; a camera view (a picture notification's, or one somebody asked for) as by day, where
 			// Talk and the sound's control keep the view up and anywhere else takes it down.
-			if n, up := notify.Get().Card(); up && d.r != nil && image.Pt(g.X, g.Y).In(d.r.notifyBox()) {
+			if n, up := notify.Get().Card(); up && d.r != nil && image.Pt(g.X, g.Y).In(d.r.notifyBoxFor(n)) {
 				go notify.Get().DismissID(n.ID)
 				d.wake()
 				return
@@ -1265,7 +1265,7 @@ func (d *Display) gesture(g touch.Gesture) {
 	// The microphone open for an announcement: the strip along the bottom is the way to end it, a tap
 	// sending what was said and a hold throwing it away. Only the strip — the rest of the screen is
 	// the clock and the music, which an announcement deliberately does not take over.
-	if announce.Get().Recording() && d.r != nil && onAnnounceStrip(g.X, g.Y, d.r.w, d.r.h) {
+	if announce.Get().Recording() && d.r != nil && onAnnounceStrip(g.X, g.Y, d.r.w, d.r.h) && !d.cardAt(image.Pt(g.X, g.Y)) {
 		switch g.Kind {
 		case touch.Tap:
 			go announce.Get().Finish()
@@ -1280,7 +1280,7 @@ func (d *Display) gesture(g touch.Gesture) {
 	// have to be put away here — the clock and the music are carrying on behind it and it goes by
 	// itself — but having to wait out something already heard is the same annoyance on any screen.
 	if _, showing := announce.Get().Showing(); showing && g.Kind == touch.Tap &&
-		d.r != nil && onAnnounceStrip(g.X, g.Y, d.r.w, d.r.h) {
+		d.r != nil && onAnnounceStrip(g.X, g.Y, d.r.w, d.r.h) && !d.cardAt(image.Pt(g.X, g.Y)) {
 		go announce.Get().Dismiss()
 		d.wake()
 		return
@@ -1312,7 +1312,7 @@ func (d *Display) gesture(g touch.Gesture) {
 
 	// A notification's card, the same way: a tap on the card puts it away and tells Home Assistant;
 	// anywhere else is a tap on what is behind it. Under the reminder, which is drawn over it.
-	if n, up := notify.Get().Card(); up && g.Kind == touch.Tap && d.r != nil && image.Pt(g.X, g.Y).In(d.r.notifyBox()) {
+	if n, up := notify.Get().Card(); up && g.Kind == touch.Tap && d.r != nil && image.Pt(g.X, g.Y).In(d.r.notifyBoxFor(n)) {
 		go notify.Get().DismissID(n.ID)
 		d.wake()
 		return
