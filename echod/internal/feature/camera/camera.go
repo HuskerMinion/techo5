@@ -137,8 +137,9 @@ func encodeHalf(f interface{ Image() *image.RGBA }) ([]byte, error) {
 	return encodeWhole(f.Image(), quality)
 }
 
-// stillFrame is a frame for a still: the next frame.
-func stillFrame(ctx context.Context) (*camera.Frame, error) {
+// stillFrame is a frame for a still: the next frame, or one a board's sensor takes for stills (a file
+// of its own replaces it).
+var stillFrame = func(ctx context.Context) (*camera.Frame, error) {
 	return camera.Get().Snapshot(ctx)
 }
 

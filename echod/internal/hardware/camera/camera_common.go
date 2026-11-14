@@ -37,6 +37,7 @@ type Frame struct {
 	rgba      *image.RGBA
 	tone      tone
 	toned     bool
+	gain      int // the sensor's gain it was asked for with (SensorGain)
 }
 
 // Image is the frame as a Width x Height picture, developed once however many ask for it.
@@ -162,6 +163,9 @@ var muteSwitch = privacy.Microphone
 
 // Available reports whether this device has the camera nodes.
 func Available() bool {
+	if activeCapture() != nil {
+		return true
+	}
 	if is, there := v4l2Board(); is {
 		return there
 	}
@@ -474,7 +478,7 @@ func (c *Camera) run(stop, stopped chan struct{}) {
 			if d.skip() || !c.wanted(time.Now()) {
 				return
 			}
-			f := &Frame{At: time.Now(), raw: make([]byte, len(bayer))}
+			f := &Frame{At: time.Now(), raw: make([]byte, len(bayer)), gain: d.gain}
 			copy(f.raw, bayer)
 			c.emit(f)
 		})
