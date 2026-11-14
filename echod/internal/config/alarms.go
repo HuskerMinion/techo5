@@ -248,6 +248,11 @@ func ParseDays(s string) (uint8, error) {
 	}
 	var days uint8
 	for _, part := range strings.FieldsFunc(s, func(r rune) bool { return r == ',' || r == ' ' }) {
+		// A period or semicolon a sentence left behind it ("Mon, Wed, Fri.") is not part of the name.
+		part = strings.TrimRight(part, ".;")
+		if part == "" {
+			continue
+		}
 		// A name and its longer forms ("tue", "tues", "tuesday"), or its first two letters ("tu"), which
 		// are enough to tell the seven apart: Home Assistant's own day lists are written that way (#38).
 		i := slices.IndexFunc(dayNames[:], func(d string) bool {

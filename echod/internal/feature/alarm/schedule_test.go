@@ -123,6 +123,7 @@ func TestDays(t *testing.T) {
 		"": config.DaysOnce, "daily": config.DaysEvery, "weekdays": config.DaysWeekdays, "Weekends": config.DaysWeekends,
 		"mon,wed,fri": 0b0101010, "tuesday thursday": 0b0010100,
 		"Mo,We,Fr": 0b0101010, "tu th": 0b0010100, "sa,su": config.DaysWeekends, "Mo,Tue,Wed": 0b0001110,
+		"Mon, Wed, Fri.": 0b0101010, "tu; th;": 0b0010100,
 	} {
 		if got, err := config.ParseDays(in); err != nil || got != want {
 			t.Errorf("ParseDays(%q) = %07b %v, want %07b", in, got, err, want)

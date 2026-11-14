@@ -96,9 +96,10 @@ func (p *Player) jackAwake() {
 
 // WakeDelay is how much later than it is queued a sound queued now starts, because the headphone path
 // is asleep or still coming back: what times a sound by its length (the wake tone and the microphones)
-// adds it. The mixer writes ahead of the settle are not counted.
+// adds it. The mixer writes ahead of the settle are not counted. Sound going to a sink (a Bluetooth
+// speaker) is not held, and leaves the jack asleep.
 func (p *Player) WakeDelay() time.Duration {
-	if p == nil || !HasJack || !p.jackSleep.Load() || p.jackIdle.is(ampAwake) {
+	if p == nil || !HasJack || !p.jackSleep.Load() || p.sink.Load() != nil || p.jackIdle.is(ampAwake) {
 		return 0
 	}
 	return jackSettle
