@@ -1,6 +1,7 @@
 package voice
 
 import (
+	"slices"
 	"strings"
 	"unicode"
 )
@@ -29,15 +30,40 @@ var closings = map[string]bool{
 	"大丈夫": true, "さようなら": true,
 }
 
+// closingFillers are said in front of a closing phrase without changing it: "ok, thank you", "great,
+// that's all" (#532). English for now; "ok" is said that way in most languages.
+var closingFillers = [][]string{
+	{"ok"}, {"okay"}, {"alright"}, {"all", "right"}, {"great"}, {"perfect"}, {"cool"}, {"awesome"},
+	{"got", "it"}, {"sounds", "good"}, {"yes"}, {"yep"}, {"no"},
+}
+
 // closingPhrase is whether text is nothing but a way of ending the conversation: case, spacing and
-// punctuation aside, one of the phrases above.
+// punctuation aside, one of the phrases above. One filler may come before it, and one word after it,
+// which is the name it is said to: "thank you Emily", "ok thanks Jarvis". The assistant's name is
+// Home Assistant's and not known here, so any one word counts; more than one is a new request.
 func closingPhrase(text string) bool {
 	text = strings.ReplaceAll(strings.ToLower(text), "’", "'")
 	words := strings.FieldsFunc(text, func(r rune) bool {
 		return !unicode.IsLetter(r) && !unicode.IsDigit(r) && r != '\''
 	})
+	if closingWords(words) {
+		return true
+	}
+	for _, f := range closingFillers {
+		if len(words) > len(f) && slices.Equal(words[:len(f)], f) && closingWords(words[len(f):]) {
+			return true
+		}
+	}
+	return false
+}
+
+// closingWords is whether words are a closing phrase, or one followed by a name.
+func closingWords(words []string) bool {
 	if len(words) == 0 {
 		return false
 	}
-	return closings[strings.Join(words, " ")]
+	if closings[strings.Join(words, " ")] {
+		return true
+	}
+	return len(words) > 1 && closings[strings.Join(words[:len(words)-1], " ")]
 }

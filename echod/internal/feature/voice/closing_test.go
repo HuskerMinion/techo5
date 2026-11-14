@@ -13,6 +13,11 @@ func TestClosingPhrase(t *testing.T) {
 		"以上です。": true,
 		"":      false, "Thanks, and what's the weather?": false, "Thank you, turn off the lights.": false,
 		"What time is it?": false, "Good": false,
+		// A filler before it and a name after it (#532).
+		"Ok, thank you.": true, "Okay thanks": true, "Great, that's all.": true, "Perfect, thank you!": true,
+		"Thank you, Emily.": true, "Ok thanks Emily": true, "Got it, thanks.": true, "All right, bye.": true,
+		"Ok.": false, "Ok, what time is it?": false, "Thanks and turn off the lights.": false,
+		"Ok ok thanks": false, "Thanks Emily and Jarvis": false, "Emily": false,
 	} {
 		if got := closingPhrase(text); got != want {
 			t.Errorf("closingPhrase(%q) = %v, want %v", text, got, want)
