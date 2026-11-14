@@ -39,6 +39,7 @@ const statsEvery = 10 * time.Second
 type Frame struct {
 	Pix []byte
 	N   int
+	YUV *YUVFrames // a hardware decoder's own picture instead of panel pixels (hwdecode.go)
 
 	owner *session
 }
@@ -75,6 +76,10 @@ type session struct {
 	shown   int
 	dropped int
 	playing bool // started (the first frame has arrived)
+	// place and yuv are the frames' form when a hardware decoder makes them (hwdecode.go): only
+	// the picture's place on the panel, or the decoder's own layout; both nil for the whole panel.
+	place *Fit
+	yuv   *YUVFrames
 
 	// The clock. With sound, it is how far the room has heard (media.Player.Heard) until the sound runs
 	// out, and the wall clock from there; without, the wall clock alone. wallBase is where the wall
@@ -190,12 +195,13 @@ func (s *session) play(insecure bool) (error, bool) {
 		"probed in", time.Since(began).Round(time.Millisecond))
 	s.changed()
 
-	dec, err := start(s.ctx, DecodeArgs(Decoding{URL: s.u.String(), Info: info, Screen: s.screen, CAFile: caFileIf(), Insecure: insecure, Proxy: proxy}), true, s.sound)
+	dec, form, err := s.startDecoder(Decoding{URL: s.u.String(), Info: info, Screen: s.screen, CAFile: caFileIf(), Insecure: insecure, Proxy: proxy})
 	if err != nil {
 		return err, false
 	}
 	s.mu.Lock()
 	s.dec = dec
+	s.useForm(form, fit)
 	s.mu.Unlock()
 
 	if s.sound {
@@ -245,7 +251,7 @@ func (s *session) play(insecure bool) (error, bool) {
 
 // readFrames reads the picture off its pipe until it ends.
 func (s *session) readFrames(r *os.File) error {
-	size := FrameBytes(s.panelW, s.panelH)
+	read := s.frameReader(r)
 	stats := time.NewTicker(statsEvery)
 	defer stats.Stop()
 	shown, dropped := 0, 0
@@ -254,7 +260,7 @@ func (s *session) readFrames(r *os.File) error {
 		if fr == nil {
 			return nil // stopped
 		}
-		if _, err := io.ReadFull(r, fr.Pix[:size]); err != nil {
+		if err := read(fr.Pix); err != nil {
 			s.mu.Lock()
 			s.free = append(s.free, fr)
 			s.videoIn = true
@@ -263,6 +269,7 @@ func (s *session) readFrames(r *os.File) error {
 		}
 		s.mu.Lock()
 		fr.N = s.read
+		fr.YUV = s.yuv
 		s.read++
 		s.ready = append(s.ready, fr)
 		first := !s.playing
@@ -306,7 +313,7 @@ func (s *session) buffer() *Frame {
 		}
 		if s.made < s.most {
 			s.made++
-			return &Frame{Pix: make([]byte, FrameBytes(s.panelW, s.panelH))}
+			return s.newFrame()
 		}
 		// Full. Waiting is right while the clock moves or the video is paused; full with the clock
 		// standing still, the decoder is waiting on these frames to make the sound that would move

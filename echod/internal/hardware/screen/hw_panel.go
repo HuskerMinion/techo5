@@ -23,3 +23,6 @@ func (d *Device) SetLift(bool) {}
 
 // DrawnByGPU is false on a panel: there is no GPU helper.
 func DrawnByGPU() bool { return false }
+
+// GPUDrawn is false on a panel: it has no GPU helper.
+func (d *Device) GPUDrawn() bool { return false }

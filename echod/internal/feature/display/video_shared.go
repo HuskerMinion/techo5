@@ -134,7 +134,7 @@ func (p *videoPainter) paint(ctx context.Context, dev *screen.Device, poke <-cha
 			video.Get().Done(fr)
 			continue
 		case fr != nil:
-			if err := dev.PresentFrame(fr.Pix, over); err != nil {
+			if err := presentFrame(dev, fr, over); err != nil {
 				slog.Warn("presenting a video frame failed", "err", err)
 			}
 			video.Get().Done(p.last)
@@ -143,11 +143,11 @@ func (p *videoPainter) paint(ctx context.Context, dev *screen.Device, poke <-cha
 		case redraw && !p.dark:
 			// The frame on the panel again, with the controls as they are now; black under them when
 			// there is none to hand (the page has just been uncovered), never the page that was over it.
-			pix := p.blackFrame(dev)
+			fr := &video.Frame{Pix: p.blackFrame(dev)}
 			if p.last != nil {
-				pix = p.last.Pix
+				fr = p.last
 			}
-			if err := dev.PresentFrame(pix, over); err != nil {
+			if err := presentFrame(dev, fr, over); err != nil {
 				slog.Warn("presenting a video frame failed", "err", err)
 			}
 			redraw = false
@@ -174,7 +174,9 @@ func (p *videoPainter) paint(ctx context.Context, dev *screen.Device, poke <-cha
 // way up, with the canvas (the controls) over it.
 func (p *videoPainter) shot(dev *screen.Device, canvas *image.RGBA) *image.RGBA {
 	img := image.NewRGBA(canvas.Rect)
-	if fr := p.last; fr != nil && dev != nil {
+	if fr := p.last; fr != nil && fr.YUV != nil && shotYUV != nil {
+		shotYUV(img, fr)
+	} else if fr != nil && dev != nil {
 		pw, ph := dev.FrameSize()
 		bgra := dev.PixFmt() == "bgra"
 		w, h := img.Rect.Dx(), img.Rect.Dy()

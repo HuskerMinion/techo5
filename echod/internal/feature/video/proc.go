@@ -183,6 +183,8 @@ type decoder struct {
 	stderr *tail
 	done   chan struct{}
 	err    error
+
+	helper *exec.Cmd // a hardware decoder's process behind ffmpeg (hwdecode.go); nil for most
 }
 
 // start runs ffmpeg with args: for a probe, only its standard error is wanted; for decoding, the
@@ -267,8 +269,10 @@ func (d *decoder) closeReads() {
 
 // stop ends the run at once and waits for it.
 func (d *decoder) stop() {
-	if d.cmd != nil && d.cmd.Process != nil {
-		_ = syscall.Kill(-d.cmd.Process.Pid, syscall.SIGKILL)
+	for _, c := range []*exec.Cmd{d.cmd, d.helper} {
+		if c != nil && c.Process != nil {
+			_ = syscall.Kill(-c.Process.Pid, syscall.SIGKILL)
+		}
 	}
 	d.closeReads()
 	<-d.done
