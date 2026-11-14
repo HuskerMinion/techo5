@@ -88,8 +88,10 @@ type Feature struct {
 	// frames starts the camera and hands its pictures over until release, each still to be developed, so
 	// one skipped costs nothing; replaced in tests.
 	frames func() (<-chan frame, func(), error)
-	// available is whether the device has a camera to stream; replaced in tests.
+	// available is whether the device has a camera to stream; encoder the board's video encoder that
+	// makes the stream, nil for JPEGs (encoder.go); both replaced in tests.
 	available func() bool
+	encoder   func() *streamEncoder
 
 	// Changed fires when somebody starts or stops watching.
 	Changed hook.Hook[struct{}]
@@ -108,7 +110,8 @@ type Feature struct {
 	pending int                 // connections that have not logged in
 	waiting map[string]int      // the same, by address
 	since   map[net.Conn]waiter // each connection not logged in yet, and when it came
-	subs    map[chan rtpjpeg.Frame]struct{}
+	subs    map[chan sendable]struct{}
+	lost    map[chan sendable]bool
 	stopPic func() // ends the pictures, while anybody watches
 	pages   int    // camera web pages being sent (webpages.go)
 	toHA    int    // Home Assistant's camera entity being sent pictures (HomeAssistantWatching)
@@ -133,11 +136,13 @@ func build() *Feature {
 		}},
 		frames:    cameraFrames,
 		available: offered,
+		encoder:   activeEncoder,
 		wake:      make(chan struct{}, 1),
 		conns:     map[net.Conn]struct{}{},
 		waiting:   map[string]int{},
 		since:     map[net.Conn]waiter{},
-		subs:      map[chan rtpjpeg.Frame]struct{}{},
+		subs:      map[chan sendable]struct{}{},
+		lost:      map[chan sendable]bool{},
 	}
 	f.discovery = &esphome.Switch{
 		Base: esphome.Base{ObjectID: "camera_discovery", Name: "Camera discovery (ONVIF)", Icon: "mdi:access-point-network",
@@ -179,7 +184,7 @@ func (f *Feature) Entities() []esphome.Entity {
 	if !f.available() {
 		return nil
 	}
-	return []esphome.Entity{f.on, f.discovery, f.loginFromHA}
+	return append([]esphome.Entity{f.on, f.discovery, f.loginFromHA}, f.encoderEntities()...)
 }
 
 // Actions: camera_credentials sets the stream's login from Home Assistant, by the setup page's rules
@@ -221,6 +226,7 @@ func (f *Feature) Restore(c config.Config) {
 	panelCameraSwitch(c.CamStream.On)
 	f.discovery.Set(c.CamStream.Discovery)
 	f.loginFromHA.Set(c.CamStream.LoginFromHA)
+	f.restoreEncoder(c)
 }
 
 // poke has the listener looked at again, for a change to the switch.
@@ -441,7 +447,7 @@ func (f *Feature) unwait(conn net.Conn) {
 }
 
 // subscribe hands a viewer the pictures, starting the camera for the first one.
-func (f *Feature) subscribe() (<-chan rtpjpeg.Frame, func(), error) {
+func (f *Feature) subscribe() (<-chan sendable, func(), error) {
 	f.startMu.Lock()
 	defer f.startMu.Unlock()
 	f.mu.Lock()
@@ -450,7 +456,12 @@ func (f *Feature) subscribe() (<-chan rtpjpeg.Frame, func(), error) {
 	if n >= maxViewers {
 		return nil, nil, errFull
 	}
-	if n == 0 {
+	enc := f.encoder()
+	if n == 0 && enc != nil {
+		if err := f.startEncoder(enc); err != nil {
+			return nil, nil, err
+		}
+	} else if n == 0 {
 		frames, release, err := f.frames()
 		if err != nil {
 			return nil, nil, err
@@ -462,16 +473,19 @@ func (f *Feature) subscribe() (<-chan rtpjpeg.Frame, func(), error) {
 		f.mu.Unlock()
 		go f.pump(frames, stop)
 	}
-	ch := make(chan rtpjpeg.Frame, 1)
+	ch := make(chan sendable, f.queueFor(enc))
 	f.mu.Lock()
 	f.subs[ch] = struct{}{}
 	f.mu.Unlock()
+	if enc != nil {
+		enc.keyframe() // for the new viewer to start at
+	}
 	f.Changed.Emit(struct{}{})
 	return ch, func() { f.unsubscribe(ch) }, nil
 }
 
 // unsubscribe lets a viewer go, and the camera with the last one.
-func (f *Feature) unsubscribe(ch chan rtpjpeg.Frame) {
+func (f *Feature) unsubscribe(ch chan sendable) {
 	f.startMu.Lock()
 	defer f.startMu.Unlock()
 	f.mu.Lock()
@@ -480,6 +494,7 @@ func (f *Feature) unsubscribe(ch chan rtpjpeg.Frame) {
 		return
 	}
 	delete(f.subs, ch)
+	delete(f.lost, ch)
 	close(ch)
 	var stop func()
 	if len(f.subs) == 0 {
@@ -519,7 +534,7 @@ func (f *Feature) pump(frames <-chan frame, stop <-chan struct{}) {
 		case next, ok := <-frames:
 			if !ok {
 				f.mu.Lock()
-				subs := make([]chan rtpjpeg.Frame, 0, len(f.subs))
+				subs := make([]chan sendable, 0, len(f.subs))
 				for ch := range f.subs {
 					subs = append(subs, ch)
 				}

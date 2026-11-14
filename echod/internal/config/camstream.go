@@ -7,6 +7,8 @@ type CamStream struct {
 	User string `json:"user,omitempty"`
 	Pass string `json:"pass,omitempty"`
 
+	Crop bool `json:"crop,omitempty"` // the middle of the sensor's frame at full size, not the whole view scaled, where a board's encoder can
+
 	// Discovery answers ONVIF's WS-Discovery while the stream is served (feature/camstream
 	// discovery.go): anyone on the network who asks is told the device's name, model and MAC address,
 	// so it is off until turned on.
