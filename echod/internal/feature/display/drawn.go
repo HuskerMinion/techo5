@@ -200,7 +200,7 @@ func (d *Display) drawnTap(x, y int) {
 	switch {
 	case t == nil:
 	case t.action != nil:
-		slog.Info("dashboard tap", "entity", t.action.Entity, "service", t.action.Service, "view", t.action.View)
+		slog.Info("dashboard tap", "entity", t.action.Entity, "service", t.action.Service, "view", t.action.View, "assist", t.action.Assist)
 		d.tileAction(t)
 	case strings.HasPrefix(t.entity, "climate."):
 		// A thermostat whose card sets no tap of its own (more-info, Home Assistant's default for it):

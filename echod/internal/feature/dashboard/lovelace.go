@@ -360,7 +360,8 @@ func (c *compiler) cardItself(card raw) node {
 		if w.camera == "" && w.url == "" && strings.HasPrefix(e, "camera.") {
 			w.camera = e
 		}
-		if w.camera == "" && w.url == "" {
+		states := stateImages(card, e)
+		if w.camera == "" && w.url == "" && len(states) == 0 {
 			return nil
 		}
 		if kind == "picture-elements" {
@@ -370,13 +371,22 @@ func (c *compiler) cardItself(card raw) node {
 			c.need.pictures = append(c.need.pictures, w)
 			return pictureNode{want: w, tap: pictureTap(card, e), elements: c.elements(card["elements"], nil)}
 		}
-		c.need.pictures = append(c.need.pictures, w)
+		if w.camera != "" || w.url != "" {
+			c.need.pictures = append(c.need.pictures, w)
+		}
+		for _, sw := range states {
+			c.need.pictures = append(c.need.pictures, sw)
+		}
+		if len(states) > 0 {
+			c.follow(e)
+		}
 		name := str(card, "title")
 		if name == "" {
 			name = str(card, "name")
 		}
 		slot, high := tileSlot(card)
-		return pictureNode{want: w, name: name, tap: pictureTap(card, e), tile: slot, high: high}
+		return pictureNode{want: w, name: name, tap: pictureTap(card, e), tile: slot, high: high,
+			entity: e, states: states}
 
 	case entityCards[kind]:
 		e := str(card, "entity")
@@ -557,6 +567,10 @@ func actionOf(m raw, entity string) *Action {
 			}
 		}
 		return &Action{Entity: entity, Service: service, Data: out}
+	case "assist":
+		// On a browser this opens the Assist dialog; here it is the request itself, listening at once,
+		// whatever start_listening says: there is no dialog to wait in.
+		return &Action{Assist: true, Pipeline: str(tap, "pipeline_id")}
 	case "navigate":
 		a := &Action{View: strings.Trim(str(tap, "navigation_path"), "/")}
 		if a.View == LibraryPath {
@@ -832,10 +846,52 @@ type pictureNode struct {
 	elements []element // a picture-elements card's
 	tile     bool      // sits in the tile grid instead of across the section (tileSlot)
 	high     int       // its height in tiles, when it sits in the grid
+	// states is a picture-entity card's state_image: the picture to show while entity is in that
+	// state, in place of want.
+	entity string
+	states map[string]wanted
+}
+
+// stateImages is a picture-entity card's state_image, a picture for each state of its entity. Home
+// Assistant shows the one for the state the entity is in, and the card's own image otherwise.
+func stateImages(card raw, entity string) map[string]wanted {
+	m, _ := card["state_image"].(raw)
+	if entity == "" || len(m) == 0 {
+		return nil
+	}
+	out := map[string]wanted{}
+	for state, v := range m {
+		if url, ok := v.(string); ok && url != "" {
+			out[state] = wanted{url: url}
+		}
+	}
+	return out
+}
+
+// shown is the picture to draw now: the state's own from state_image, else the card's image. With no
+// image of its own and a state that has none, the first state's picture by name, so the card is never
+// blank while its entity is in a state nobody drew.
+func (p pictureNode) shown(l look) wanted {
+	if len(p.states) == 0 {
+		return p.want
+	}
+	if w, ok := p.states[l.states[p.entity].State]; ok {
+		return w
+	}
+	if p.want.camera != "" || p.want.url != "" {
+		return p.want
+	}
+	first := ""
+	for s := range p.states {
+		if first == "" || s < first {
+			first = s
+		}
+	}
+	return p.states[first]
 }
 
 func (p pictureNode) picture(l look) Picture {
-	sh := l.pictures[p.want.key()]
+	sh := l.pictures[p.shown(l).key()]
 	pic := Picture{Name: p.name, Image: sh.img, TooLarge: sh.tooLarge, Failed: sh.failed, Tap: p.tap}
 	if sh.img == nil {
 		pic.Shape = sh.size
@@ -860,7 +916,7 @@ func (p pictureNode) blocks(l look) []Block {
 // Without one, or with "none" or "more-info", a picture stays something to look at, as before.
 func pictureTap(card raw, entity string) *Action {
 	a := actionOf(card, entity)
-	if a == nil || (a.Service == "" && a.View == "") {
+	if a == nil || (a.Service == "" && a.View == "" && !a.Assist) {
 		return nil
 	}
 	return a

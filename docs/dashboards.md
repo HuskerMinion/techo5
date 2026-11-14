@@ -190,7 +190,7 @@ else. The music plays through Home Assistant, as the media sheet's favorites do.
 | Mushroom template | A tile, with its templates rendered by Home Assistant |
 | Sensor, history graph, statistics graph, mini-graph-card, apexcharts-card | A graph of the recent history |
 | Gauge | A gauge, with its severity colors |
-| Picture entity (a camera), picture glance, picture | The picture; a camera updates every few seconds. A tap does what its `tap_action` says, such as opening a room's view. The only card of a view fills the screen, the whole picture shown, kept as sharp as the screen. A picture that won't load says so on its card and is tried again in 30 seconds, then less often; an image picked in Home Assistant's media browser (`media-source://`) is fetched through Home Assistant |
+| Picture entity (a camera), picture glance, picture | The picture; a camera updates every few seconds. A tap does what its `tap_action` says, such as opening a room's view. The only card of a view fills the screen, the whole picture shown, kept as sharp as the screen. A picture that won't load says so on its card and is tried again in 30 seconds, then less often; an image picked in Home Assistant's media browser (`media-source://`) is fetched through Home Assistant. With `grid_options` `columns` under 12 a picture takes a tile's place in the grid, drawn whole and centered on the tile's card, so a transparent one (an avatar, a logo) shows the card through it. A picture entity's `state_image` shows the picture for the state its entity is in, and its `image` for any other. A `tap_action` of `assist` starts a voice request at once, as a wake word would: by the assistant whose pipeline is the action's `pipeline_id`, or the first assistant without one (see [An agent tile](#an-agent-tile)) |
 | Picture elements | Its picture (`image` or `camera_image`) drawn whole, at its own shape; as the only card of a view it fills the screen. Each element is a tap where its `style` puts it, with `left` and `top` in % as the element's center, the way Home Assistant places it, and `width` and `height` in % when given. A `transform` replaces that centering, as in Home Assistant: `translate(x, y)`, `translateX(x)` and `translateY(y)` in % move it on their own axes, and a move in pixels counts as none. A tap does what the element's `tap_action` says; a service button runs its own `action` (or `service`) with its `data` and `target`. An icon shows its icon, in the style's `color` when it gives one; a state icon and a state label show their entity, the label's words on a see-through pill so they read on any picture; a service button shows its title. An image and a state badge are only their tap, the picture being what shows them. An element whose style makes it invisible (`opacity: 0`, a transparent `color` such as `transparent`, `#00000000` or `rgba(0, 0, 0, 0)`) is drawn as nothing and is still a tap; one with `display: none` or `visibility: hidden` is neither drawn nor a tap, as in Home Assistant. Conditional elements follow their conditions; custom elements, and ones placed in pixels or with `right` or `bottom` rather than `left` and `top`, are left out. A picture up to 4096 by 4096 is shown (a 16-bit PNG up to about 2900 by 2900); one larger, or one that won't load, says so, and its elements are still placed and tapped |
 | Any card whose `tap_action` has a `confirmation` | Shown, but a tap does nothing: there is no way to ask first on the device, so it is not done on one tap |
 | Grid, vertical and horizontal stack, layout-card | Their cards, in place. A grid of pictures with `columns` set is a gallery, up to three across, one per row in a narrow column; a grid without `columns` stays one under another here, where Home Assistant would put three across |
@@ -270,6 +270,34 @@ The simplest way to get a good drawn dashboard is to make one for it: in Home As
 → Dashboards → Add dashboard → New dashboard from scratch**. Use a sections view, and the cards
 from the table above. Then pick it in **Dashboard to show**. A card's visibility can hide it on
 narrow screens, so one dashboard can show more on a phone than on the Show.
+
+### An agent tile
+
+A face for an assistant that sits among the tiles, changes as it listens and answers, and starts a
+request when tapped: one picture entity card on the device's assist satellite.
+
+```yaml
+type: picture-entity
+entity: assist_satellite.desk_assist_satellite
+image: /local/agent/idle.png
+state_image:
+  listening: /local/agent/listening.png
+  processing: /local/agent/thinking.png
+  responding: /local/agent/speaking.png
+show_name: false
+show_state: false
+grid_options:
+  columns: 6
+tap_action:
+  action: assist
+  pipeline_id: 01hx0example0pipeline0id00
+```
+
+The tap starts the request with the assistant (first or second wake word) whose pipeline is
+`pipeline_id`, as Home Assistant's selects for the device have it; with no `pipeline_id`, with
+`preferred` or `last_used`, or with a pipeline neither assistant runs, it is the first assistant.
+Pick the pipeline in the card editor's tap action (**Assist**). For the tile to stay in view during
+the request, set **Turn screen** to **Cue and captions**.
 
 ## Setting up Streamed
 
