@@ -128,7 +128,7 @@ func TestDays(t *testing.T) {
 			t.Errorf("ParseDays(%q) = %07b %v, want %07b", in, got, err, want)
 		}
 	}
-	for _, bad := range []string{"someday", "t", "s", "mo,x"} {
+	for _, bad := range []string{"someday", "t", "s", "mo,x", "1", "12", "1,3,5", "mo-fr", "mon-fri", "mon1"} {
 		if _, err := config.ParseDays(bad); err == nil {
 			t.Errorf("ParseDays accepted %q", bad)
 		}

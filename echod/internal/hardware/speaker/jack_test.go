@@ -1,6 +1,7 @@
 package speaker
 
 import (
+	"reflect"
 	"testing"
 	"time"
 )
@@ -62,6 +63,85 @@ func TestJackDownOvertaken(t *testing.T) {
 		if !p.jackIdle.is(ampAwake) {
 			t.Errorf("out %s, draining %v: the jack went to sleep", p.out, p.draining)
 		}
+	}
+	// So does a sound that came to want the speaker, and a wake that got there first.
+	p := &Player{out: OutputHeadphone, bell: []int16{1}}
+	p.SetJackSleep(true)
+	p.jackIdle.state = ampSleeping
+	p.jackDown()
+	if !p.jackIdle.is(ampAwake) {
+		t.Error("the jack went to sleep under a sound")
+	}
+	p = &Player{out: OutputHeadphone}
+	p.SetJackSleep(true)
+	p.jackIdle.state = ampWaking
+	p.jackDown()
+	if !p.jackIdle.is(ampAwake) {
+		t.Error("a sleep overtaken by a wake took the jack down")
+	}
+}
+
+// Going down writes the headphone path's off sequence, and coming back writes the path itself.
+func TestJackWritesItsOwnSequences(t *testing.T) {
+	var wrote [][]kctl
+	was := gateWrite
+	gateWrite = func(_ *Player, seq []kctl) bool { wrote = append(wrote, seq); return true }
+	t.Cleanup(func() { gateWrite = was })
+	p := &Player{out: OutputHeadphone}
+	p.SetJackSleep(true)
+	p.jackIdle.state = ampSleeping
+	p.jackDown()
+	if !p.jackIdle.is(ampAsleep) {
+		t.Fatal("the jack did not go to sleep")
+	}
+	p.jackUp()
+	if len(wrote) != 2 || !reflect.DeepEqual(wrote[0], headphoneOff) || !reflect.DeepEqual(wrote[1], p.path(OutputHeadphone)) {
+		t.Errorf("wrote %v, want the off sequence and then the headphone path", wrote)
+	}
+}
+
+// A sleep whose writes fail counts as asleep, so the next sound's wake writes the whole path back. A
+// wake whose writes fail leaves the jack asleep and the sound held, to be tried again; after
+// wakeTries in a row the sound is let out anyway.
+func TestJackWritesThatFail(t *testing.T) {
+	writesWork(t, false)
+	p := &Player{out: OutputHeadphone}
+	p.SetJackSleep(true)
+	p.jackIdle.state = ampSleeping
+	p.jackDown()
+	if !p.jackIdle.is(ampAsleep) {
+		t.Fatal("a sleep whose writes failed does not count as asleep")
+	}
+	for i := 1; i < wakeTries; i++ {
+		p.jackUp()
+		if !p.jackIdle.is(ampAsleep) {
+			t.Fatalf("failed wake %d let the sound out", i)
+		}
+	}
+	p.jackUp()
+	if !p.jackIdle.is(ampAwake) || p.jackWakeFails.Load() != 0 {
+		t.Errorf("after %d failed wakes the sound is still held (fails %d)", wakeTries, p.jackWakeFails.Load())
+	}
+}
+
+// A sound queued for a jack asleep or coming back starts jackSettle late, and one for a jack that is
+// up, or with the switch off, does not.
+func TestWakeDelay(t *testing.T) {
+	if !HasJack {
+		t.Skip("no jack on this build")
+	}
+	p := &Player{out: OutputHeadphone}
+	p.SetJackSleep(true)
+	if d := p.WakeDelay(); d != 0 {
+		t.Errorf("a jack that is up delays a sound by %v", d)
+	}
+	p.jackIdle.settled(ampAsleep)
+	if d := p.WakeDelay(); d != jackSettle {
+		t.Errorf("a sleeping jack delays a sound by %v, want %v", d, jackSettle)
+	}
+	p.SetJackSleep(false)
+	if d := p.WakeDelay(); d != 0 {
+		t.Errorf("with the switch off a sound is delayed by %v", d)
 	}
 }
 

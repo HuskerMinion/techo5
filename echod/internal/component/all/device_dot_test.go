@@ -27,7 +27,15 @@ var notOnThisDevice = []string{
 // all_test.go's stand-in for a missing TAS5805M comes too late for the media player, built before it.
 // louder_top_volume is put up where a tuning set has a lift for it (hardware/speaker/louder_top.go):
 // the Dot 2nd gen's, not the Dot 3rd gen's (donut), which plays untuned.
-var deviceSpecific = append([]string{"airplay", "airplay_sets_volume", "audio_output", "speaker_gain", "spotify_connect"}, louderTop()...)
+var deviceSpecific = append(append([]string{"airplay", "airplay_sets_volume", "audio_output", "speaker_gain", "spotify_connect"}, louderTop()...), jackSleep()...)
+
+// headphone_jack_sleep is put up where there is a jack (hardware/speaker/jack.go): not on the Echo Input.
+func jackSleep() []string {
+	if speaker.JackSleepPossible() {
+		return []string{"headphone_jack_sleep"}
+	}
+	return nil
+}
 
 func louderTop() []string {
 	if speaker.LouderTopPossible() {

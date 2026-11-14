@@ -5,6 +5,7 @@ import (
 	"slices"
 	"strings"
 	"time"
+	"unicode"
 )
 
 // Alarms are the device's own alarms, and the Home Assistant helpers it follows as alarms.
@@ -252,6 +253,10 @@ func ParseDays(s string) (uint8, error) {
 		i := slices.IndexFunc(dayNames[:], func(d string) bool {
 			return strings.HasPrefix(part, d) || (len(part) == 2 && strings.HasPrefix(d, part))
 		})
+		// Letters only: "mon-fri" is not Monday, and a range is not something this reads.
+		if strings.ContainsFunc(part, func(r rune) bool { return !unicode.IsLetter(r) }) {
+			i = -1
+		}
 		if i < 0 {
 			return 0, fmt.Errorf("alarms: %q is not a day", part)
 		}

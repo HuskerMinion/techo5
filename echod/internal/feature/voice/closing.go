@@ -35,17 +35,20 @@ var closings = map[string]bool{
 var closingFillers = [][]string{
 	{"ok"}, {"okay"}, {"alright"}, {"all", "right"}, {"great"}, {"perfect"}, {"cool"}, {"awesome"},
 	{"got", "it"}, {"sounds", "good"}, {"yes"}, {"yep"}, {"no"},
+	// "O.K." comes apart at its periods.
+	{"o", "k"},
 }
 
 // closingPhrase is whether text is nothing but a way of ending the conversation: case, spacing and
 // punctuation aside, one of the phrases above. One filler may come before it, and one word after it,
 // which is the name it is said to: "thank you Emily", "ok thanks Jarvis". The assistant's name is
 // Home Assistant's and not known here, so any one word counts; more than one is a new request.
+//
+// That makes the longer forms a guess: "yes, thank you" and "thanks, next" read as closings too. So
+// they end a conversation only where nothing was asked; a question Home Assistant asked back is given
+// up for a phrase alone (closingExact), and is otherwise still listened for.
 func closingPhrase(text string) bool {
-	text = strings.ReplaceAll(strings.ToLower(text), "’", "'")
-	words := strings.FieldsFunc(text, func(r rune) bool {
-		return !unicode.IsLetter(r) && !unicode.IsDigit(r) && r != '\''
-	})
+	words := closingSplit(text)
 	if closingWords(words) {
 		return true
 	}
@@ -55,6 +58,19 @@ func closingPhrase(text string) bool {
 		}
 	}
 	return false
+}
+
+// closingExact is whether text is one of the closing phrases and nothing else: no filler, no name.
+func closingExact(text string) bool {
+	return closings[strings.Join(closingSplit(text), " ")]
+}
+
+// closingSplit is text's words, case and punctuation aside.
+func closingSplit(text string) []string {
+	text = strings.ReplaceAll(strings.ToLower(text), "’", "'")
+	return strings.FieldsFunc(text, func(r rune) bool {
+		return !unicode.IsLetter(r) && !unicode.IsDigit(r) && r != '\''
+	})
 }
 
 // closingWords is whether words are a closing phrase, or one followed by a name.

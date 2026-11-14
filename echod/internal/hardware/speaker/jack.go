@@ -66,20 +66,40 @@ func (p *Player) jackDown() {
 
 // jackUp puts the headphone path back and gives it jackSettle before the held sound goes out. Where
 // the jack is no longer the output, whatever moved it wrote its own path, and there is nothing to put
-// back. A wake whose writes fail lets the sound out anyway rather than hold it for good: on the jack
-// nothing like an alarm depends on it, and the next idle sleep and wake try again.
+// back. A wake whose writes fail leaves the jack asleep, as the amplifier's does (ampWake): an alarm or
+// a ring would play into a path still down, so the next period tries again with the sound held, and
+// after wakeTries in a row it is let out anyway rather than held for good.
 func (p *Player) jackUp() {
 	p.pathMu.Lock()
 	defer p.pathMu.Unlock()
 	if p.out == OutputHeadphone && !p.draining {
 		if !gateWrite(p, p.path(OutputHeadphone)) {
-			slog.Warn("speaker: putting the headphone path back failed")
+			if p.jackWakeFails.Add(1) < wakeTries {
+				slog.Warn("speaker: putting the headphone path back failed; trying again")
+				p.jackIdle.settled(ampAsleep)
+				return
+			}
+			slog.Error("speaker: the headphone path would not come back; playing anyway", "tries", wakeTries)
 		}
 		time.Sleep(jackSettle)
 	}
+	p.jackWakeFails.Store(0)
 	p.jackIdle.settled(ampAwake)
 }
 
 // jackAwake records that a path was just written whole (a start, a change of output), which leaves the
 // jack as awake as its output says. Called with pathMu held.
-func (p *Player) jackAwake() { p.jackIdle.settled(ampAwake) }
+func (p *Player) jackAwake() {
+	p.jackWakeFails.Store(0)
+	p.jackIdle.settled(ampAwake)
+}
+
+// WakeDelay is how much later than it is queued a sound queued now starts, because the headphone path
+// is asleep or still coming back: what times a sound by its length (the wake tone and the microphones)
+// adds it. The mixer writes ahead of the settle are not counted.
+func (p *Player) WakeDelay() time.Duration {
+	if p == nil || !HasJack || !p.jackSleep.Load() || p.jackIdle.is(ampAwake) {
+		return 0
+	}
+	return jackSettle
+}

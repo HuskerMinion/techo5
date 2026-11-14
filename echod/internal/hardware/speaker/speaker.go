@@ -195,6 +195,8 @@ type Player struct {
 	// jackSleep is whether the headphone path comes down while idle, and jackIdle when (jack.go).
 	jackSleep atomic.Bool
 	jackIdle  idleAmp
+	// jackWakeFails is the jack's wakes that failed in a row (jackUp).
+	jackWakeFails atomic.Int32
 
 	// underruns is the card running out while we were away. Write blocks against the whole ring, so
 	// each one means the loop was starved for as long as the ring is deep.

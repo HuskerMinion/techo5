@@ -18,9 +18,19 @@ func TestClosingPhrase(t *testing.T) {
 		"Thank you, Emily.": true, "Ok thanks Emily": true, "Got it, thanks.": true, "All right, bye.": true,
 		"Ok.": false, "Ok, what time is it?": false, "Thanks and turn off the lights.": false,
 		"Ok ok thanks": false, "Thanks Emily and Jarvis": false, "Emily": false,
+		"O.K., thank you.": true, "Yes, thank you.": true, "No, thanks.": true, "Sounds good, bye!": true,
 	} {
 		if got := closingPhrase(text); got != want {
 			t.Errorf("closingPhrase(%q) = %v, want %v", text, got, want)
+		}
+	}
+	// The phrase alone, which is what gives up a question Home Assistant asked.
+	for text, want := range map[string]bool{
+		"Thank you.": true, "Never mind.": true, "No thanks": true, "Спасибо.": true,
+		"Ok, thank you.": false, "Thank you, Emily.": false, "Yes, thank you.": false, "Thanks, next": false, "": false,
+	} {
+		if got := closingExact(text); got != want {
+			t.Errorf("closingExact(%q) = %v, want %v", text, got, want)
 		}
 	}
 }
@@ -58,6 +68,20 @@ func TestAClosingPhraseEndsAQuestionToo(t *testing.T) {
 	}
 	if c.followsReply(0) || c.pending != nil {
 		t.Errorf("after \"never mind\" to a question: pending %+v", c.pending)
+	}
+}
+
+// With a filler before the phrase or a word after it, it may have been an answer: with nothing asked
+// the conversation ends, and a question Home Assistant asked back is still listened for (#532).
+func TestALooseClosingPhraseLeavesAQuestionOpen(t *testing.T) {
+	for _, heard := range []string{"Yes, thank you.", "Thanks, next.", "Ok, thank you.", "Thank you, Emily."} {
+		if c := followUpHeard(t, heard, false); c.followsReply(0) {
+			t.Errorf("listening again after %q with nothing asked", heard)
+		}
+		c := followUpHeard(t, heard, true)
+		if c.followsReply(0) || c.pending == nil {
+			t.Errorf("after %q to a question: pending %+v", heard, c.pending)
+		}
 	}
 }
 

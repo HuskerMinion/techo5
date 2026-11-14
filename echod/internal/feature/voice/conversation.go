@@ -236,7 +236,9 @@ type conversation struct {
 
 	// closing says what was heard was only a way of ending the conversation ("thank you", "that's
 	// all"), so the reply to it is the last thing said: no follow-up listens after it (#510).
-	closing bool
+	// closingExact is that it was the phrase alone, with no filler before it or name after it (#532).
+	closing      bool
+	closingExact bool
 
 	// turn measures the one that is open and reports it when it closes. Nil while idle, and every
 	// method on it tolerates that, so the phases do not each have to check.
@@ -601,7 +603,7 @@ func (c *conversation) turnEvent(e event) {
 		// The last words heard decide (#510): realtime voice can hear more than once in a turn, and
 		// "thanks... and turn on the lights" is not a goodbye.
 		if e.text != "" {
-			c.closing = closingPhrase(e.text)
+			c.closing, c.closingExact = closingPhrase(e.text), closingExact(e.text)
 		}
 		if e.text != "" {
 			slog.Info("heard", "slot", c.slot+1, "text", activity.Said(e.text))
@@ -1011,7 +1013,7 @@ func (c *conversation) start(n nextTurn) (started bool) {
 		c.opened = time.Now()
 	}
 	c.lookHere = false
-	c.closing = false
+	c.closing, c.closingExact = false, false
 	// Counted from the wake word: a turn it opens starts again, a follow-up is one more in a row.
 	if n.followUp {
 		c.followUps++
@@ -1127,10 +1129,12 @@ func endpointSettings() endpoint.Settings {
 // slot's follow-ups allow it, unless a turn is already owed or the answer put a page on the screen.
 //
 // A closing phrase ("thank you", "that's all") ends it, even a question Home Assistant asked: "never
-// mind" is the answer to that too (#510).
+// mind" is the answer to that too (#510). With a filler before it or a word after it (#532) it may
+// have been an answer ("yes, thank you"), so a question asked back is still listened for.
 func (c *conversation) followsReply(slot int) bool {
-	if c.closing {
-		if c.pending != nil && c.pending.followUp {
+	asked := c.pending != nil && c.pending.followUp
+	if c.closing && (c.closingExact || !asked) {
+		if asked {
 			c.pending = nil
 		}
 		slog.Info("heard a closing phrase; not listening again", "slot", slot+1)
@@ -1256,7 +1260,7 @@ func (c *conversation) idle(why string, how activity.Ending) {
 	was := c.phase
 	c.stopStreaming()
 	c.disarm()
-	c.closing = false
+	c.closing, c.closingExact = false, false
 
 	if was != phaseIdle {
 		if rt, ok := c.be.(*rtBackend); ok {
@@ -1672,8 +1676,9 @@ func (s *saidCheck) watch(frame []int16) bool {
 }
 
 // toneEnds is how long after a turn opens its wake sound is loud enough to matter to the microphones.
+// A headphone jack asleep when the turn opens plays it that much later (#537).
 func toneEnds(slot int, followUp bool) time.Duration {
-	return wakeword.ChimeLength(slot, followUp) + speaker.HardwareTail
+	return wakeword.ChimeLength(slot, followUp) + speaker.HardwareTail + speaker.Get().WakeDelay()
 }
 
 // pump sends the history and then the frames to the backend until it is told to stop. hold is

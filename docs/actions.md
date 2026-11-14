@@ -203,8 +203,8 @@ A time of day: `7:30`, `07:30`, `19:30:00`, `7:30 pm`, `7:30pm`, `3 pm`, or `3pm
 
 Which days it repeats on. One of `once` (the default — rings once and turns itself off), `daily`
 (or `every day`, `everyday`), `weekdays`, `weekends`, or a comma- or space-separated list of days,
-matched by prefix: `mon,wed,fri`, `tue thu`. Two-letter names work too: `Mo,We,Fr`. Numbers are not
-days.
+matched by prefix: `mon,wed,fri`, `tue thu`. The English two-letter names work too: `Mo,We,Fr`.
+Numbers and ranges (`mon-fri`) are not days.
 
 ### label (Can be empty)
 

@@ -18,7 +18,7 @@ var notOnThisDevice = append(ringOnly, "calendar_popup_all_day", "calendar_popup
 // deviceSpecific: the audio output, and the subtle muted ring, since only the Spot draws its mute on
 // the screen; the video player (feature/video), which the Show has too and the Dot does not; and the
 // AirPlay and Spotify Connect receivers (feature/streaming), as on the Show and the Dot.
-var deviceSpecific = []string{"audio_output", "screen_mute_ring_subtle", "screen_camera_dot", "screen_idle_ring", "video", "dlna_video", "video_state", "video_title", "video_error", "airplay", "airplay_sets_volume", "spotify_connect"}
+var deviceSpecific = []string{"audio_output", "screen_mute_ring_subtle", "screen_camera_dot", "screen_idle_ring", "video", "dlna_video", "video_state", "video_title", "video_error", "airplay", "airplay_sets_volume", "spotify_connect", "headphone_jack_sleep"}
 
 // actionsNotOnThisDevice: the Spot offers every action the shared code has.
 var actionsNotOnThisDevice = map[string]string{}
