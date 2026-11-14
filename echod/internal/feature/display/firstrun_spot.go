@@ -202,7 +202,7 @@ func spotFirstRunText(v firstRunView, now time.Time) (string, []string) {
 	case frHello:
 		return "Hello", []string{"This is " + v.name + ".", "A few steps set it up.", "Tap to begin."}
 	case frDone:
-		return "All set", []string{v.name + " is set up.", "Swipe down for settings.", "Tap to finish."}
+		return "All set", []string{v.name + " is set up.", "Hold the screen for the menu.", "Tap to finish."}
 	case frWifi:
 		if v.wifi.Connected {
 			return "Wi-Fi", []string{"On " + v.wifi.SSID + ".", "At " + v.wifi.Address + "."}

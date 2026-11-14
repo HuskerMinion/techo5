@@ -1221,6 +1221,10 @@ func (d *Display) menuGesture(g touch.Gesture) {
 				d.act(id)
 				d.wake()
 				return
+			default:
+				// A tap on nothing, between the middle and the ring or outside it, puts the menu away:
+				// otherwise the only way out of one opened by mistake was to wait, or to pick something.
+				d.closeMenu()
 			}
 		case touch.SwipeLeft:
 			d.menuSel = (d.menuSel + 1) % n
