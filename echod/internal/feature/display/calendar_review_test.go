@@ -607,3 +607,33 @@ func TestTheNextUpCardOverAPhotoIsTheCard(t *testing.T) {
 		}
 	}
 }
+
+// One finger turns one page of the Coming up list however far it travels: a swipe reports a notch for
+// every stretch of its way, each from where the finger came down. The next finger turns the next.
+func TestOneFingerTurnsOnePage(t *testing.T) {
+	was := calFingerDown
+	calFingerDown = func() bool { return true }
+	t.Cleanup(func() { calFingerDown = was })
+
+	d, v := calTestDisplay(t)
+	d.calAgenda, v.agenda = true, true
+	for i := range 60 {
+		v.events = append(v.events, hass.Event{Calendar: "calendar.family", Summary: fmt.Sprint("Event ", i),
+			Start: v.now.AddDate(0, 0, i/2+1), End: v.now.AddDate(0, 0, i/2+1).Add(time.Hour)})
+	}
+	d.r.draw(scene{now: v.now, phase: "idle", showCalendar: true, cal: v})
+	step := d.r.calendarAgendaStep()
+	if d.r.calendarAgendaMax() < 2*step {
+		t.Fatalf("the list scrolls %d rows, too few for two pages of %d", d.r.calendarAgendaMax(), step)
+	}
+	for range 4 {
+		d.calendarGesture(touch.Gesture{Kind: touch.SwipeUp, X: 500, Y: 300})
+	}
+	if d.calScroll != step {
+		t.Errorf("four notches of one finger moved %d rows, want one page of %d", d.calScroll, step)
+	}
+	d.calendarGesture(touch.Gesture{Kind: touch.SwipeUp, X: 520, Y: 310})
+	if d.calScroll != 2*step {
+		t.Errorf("the next finger left the list at %d rows, want %d", d.calScroll, 2*step)
+	}
+}

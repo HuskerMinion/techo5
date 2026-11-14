@@ -360,6 +360,10 @@ type Display struct {
 	calAgenda bool
 	calDetail *hass.Event
 	calScroll int // the day's list or the agenda, scrolled this many rows; the day's hours, this many hours
+	// calPagedFrom is where the finger that last turned a page of it came down, and calPagedAt when its
+	// last notch was: that finger's further notches turn no more (calendarGesture).
+	calPagedFrom image.Point
+	calPagedAt   time.Time
 	calKept   int // the agenda's scroll while one of its days is open, for Done to return to
 	// calWeek is the week view, of the week holding calDay; calFromWeek is a day opened from it, which its
 	// Done goes back to.

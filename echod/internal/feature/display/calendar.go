@@ -173,6 +173,13 @@ func (d *Display) calendarViewLocked() (day, week, agenda bool) {
 	return !d.calDay.IsZero() && !d.calWeek, !d.calDay.IsZero() && d.calWeek, d.calDay.IsZero() && d.calAgenda
 }
 
+// calSameFinger is how long after a notch the next one from the same place is still the same finger's.
+const calSameFinger = 1500 * time.Millisecond
+
+// calFingerDown is whether a finger is on the screen, which is when a swipe's further notches arrive; a
+// variable for the tests, which have no touchscreen.
+var calFingerDown = func() bool { return touch.Get().Touched() }
+
 // calendarGesture is a touch on the calendar page. Every touch keeps it up a while longer.
 func (d *Display) calendarGesture(g touch.Gesture) {
 	// A calendar's chip saves the setting once the display's lock is let go, and draws the page again.
@@ -211,6 +218,15 @@ func (d *Display) calendarGesture(g touch.Gesture) {
 		// A long day's list, the day's hours or the agenda: up shows the later ones, down the earlier.
 		if d.calDetail != nil || d.r == nil {
 			return
+		}
+		// One page for one finger. A swipe reports a notch for every stretch the finger travels, each
+		// from where it came down, and a page for each threw a short drag several pages on and one
+		// across a Skylight to the end of the list.
+		if from := image.Pt(g.X, g.Y); calFingerDown() && from == d.calPagedFrom && time.Since(d.calPagedAt) < calSameFinger {
+			d.calPagedAt = time.Now()
+			return
+		} else {
+			d.calPagedFrom, d.calPagedAt = from, time.Now()
 		}
 		switch {
 		case day && timelineOn:
