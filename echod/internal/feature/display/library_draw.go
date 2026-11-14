@@ -70,7 +70,7 @@ func (r *renderer) libraryAt(x, y int) (mediaZone, float64, bool) {
 	r.zmu.Lock()
 	zones, card := slices.Clone(r.libZones), r.libCard
 	r.zmu.Unlock()
-	return mediaHit(zones, card, x, y)
+	return mediaHit(zones, card, x, y, r.s(sheetSlop))
 }
 
 // libRowAt is the section shown as a row under x, y, or -1.

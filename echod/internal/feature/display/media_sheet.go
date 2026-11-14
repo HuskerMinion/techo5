@@ -591,20 +591,41 @@ func (p *paint) mediaAt(x, y int) (mediaZone, float64, bool) {
 	p.zmu.Lock()
 	zones, card := slices.Clone(p.mediaZones), p.mediaCard
 	p.zmu.Unlock()
-	return mediaHit(zones, card, x, y)
+	return mediaHit(zones, card, x, y, p.s(sheetSlop))
 }
 
 // mediaHit is the part of a sheet drawn as zones and card under x, y.
-func mediaHit(zones []mediaZone, card image.Rectangle, x, y int) (mediaZone, float64, bool) {
+//
+// A finger that lands just off a part, within slop of it, is on it: the nearest such part, so of two
+// chips with a gap between them neither takes the other's. The chips and pills are under 6 mm tall on a
+// Show 5, and a tap in the gap beside one did nothing.
+func mediaHit(zones []mediaZone, card image.Rectangle, x, y, slop int) (mediaZone, float64, bool) {
 	pt := image.Pt(x, y)
 	if !pt.In(card) {
 		return mediaZone{}, 0, false
 	}
+	frac := func(z mediaZone) float64 {
+		return min(max(float64(x-z.r.Min.X)/float64(max(z.r.Dx()-1, 1)), 0), 1)
+	}
 	for _, z := range zones {
 		if pt.In(z.r) {
-			frac := float64(x-z.r.Min.X) / float64(max(z.r.Dx()-1, 1))
-			return z, min(max(frac, 0), 1), true
+			return z, frac(z), true
 		}
+	}
+	best, bestD := -1, slop+1
+	for i, z := range zones {
+		dx := max(z.r.Min.X-x, x-(z.r.Max.X-1), 0)
+		dy := max(z.r.Min.Y-y, y-(z.r.Max.Y-1), 0)
+		if d := max(dx, dy); d < bestD {
+			best, bestD = i, d
+		}
+	}
+	if best >= 0 {
+		return zones[best], frac(zones[best]), true
 	}
 	return mediaZone{kind: mediaPartNone}, 0, true
 }
+
+// sheetSlop is how far off a sheet's part a finger may land and still be on it, in the Show 5's pixels:
+// half the gap the chips are laid out with.
+const sheetSlop = 5

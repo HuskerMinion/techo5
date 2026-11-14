@@ -176,6 +176,13 @@ func (r *renderer) libraryButton(word string, modern bool) image.Rectangle {
 	return image.Rect(r.w-r.margin-w, done.Min.Y, r.w-r.margin, done.Max.Y)
 }
 
+// buttonReach is one of the now-playing page's buttons grown to what a finger on it hits: a little to
+// each side, less than half the least gap between two of them, and more above and below. A tap that
+// misses every button plays or pauses, so a near miss of Done used to pause the music.
+func (r *renderer) buttonReach(b image.Rectangle) image.Rectangle {
+	return image.Rect(b.Min.X-r.s(5), b.Min.Y-r.s(12), b.Max.X+r.s(5), b.Max.Y+r.s(12))
+}
+
 // favButton is the star, beside Done.
 func (r *renderer) favButton() image.Rectangle {
 	done := r.doneButton()

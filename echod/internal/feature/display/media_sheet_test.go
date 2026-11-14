@@ -80,11 +80,11 @@ func TestTheMediaSheetOffersWhatThePlayerCanDo(t *testing.T) {
 				continue
 			}
 			mid := (z.r.Min.Y + z.r.Max.Y) / 2
-			if hit, f, _ := mediaHit(zones, card, z.r.Max.X-1, mid); hit.kind != mediaPartVolume || f != 1 {
+			if hit, f, _ := mediaHit(zones, card, z.r.Max.X-1, mid, 0); hit.kind != mediaPartVolume || f != 1 {
 				t.Errorf("%s: the volume's end is %v", c.name, f)
 			}
 		}
-		if _, _, in := mediaHit(zones, card, card.Min.X-5, card.Min.Y-5); in {
+		if _, _, in := mediaHit(zones, card, card.Min.X-5, card.Min.Y-5, 0); in {
 			t.Errorf("%s: a tap beside the sheet was on it", c.name)
 		}
 		if dir != "" {

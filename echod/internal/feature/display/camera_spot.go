@@ -161,12 +161,13 @@ func (r *roundRenderer) cameraButtons(s roundScene) {
 }
 
 // cameraButtonTapped is which of the action buttons drawn in the frame last drawn a tap at x, y is on,
-// or -1. Each is grown a little, as Talk is, less than half the gap between them.
+// or -1. Each is grown by a finger's slop, less than half the gap between them (talkGap) and, with the
+// sound's own 10 below the lowest, less than that gap too: the bars are 34 px, 4.5 mm, and open gates.
 func (r *roundRenderer) cameraButtonTapped(x, y int) int {
 	r.zmu.Lock()
 	defer r.zmu.Unlock()
 	for i, b := range r.cameraButtonsAt {
-		if !b.Empty() && image.Pt(x, y).In(b.Inset(-4)) {
+		if !b.Empty() && image.Pt(x, y).In(b.Inset(-7)) {
 			return i
 		}
 	}

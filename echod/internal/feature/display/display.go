@@ -364,7 +364,7 @@ type Display struct {
 	// last notch was: that finger's further notches turn no more (calendarGesture).
 	calPagedFrom image.Point
 	calPagedAt   time.Time
-	calKept   int // the agenda's scroll while one of its days is open, for Done to return to
+	calKept      int // the agenda's scroll while one of its days is open, for Done to return to
 	// calWeek is the week view, of the week holding calDay; calFromWeek is a day opened from it, which its
 	// Done goes back to.
 	calWeek, calFromWeek bool
@@ -1600,10 +1600,10 @@ func (d *Display) gesture(g touch.Gesture) {
 			// The strip: its buttons do what they say, the X ends the music, and the song brings the
 			// full page back for a while. Anywhere else on the strip is nothing, so a thumb that
 			// misses a button does not start a turn under it.
-			back, play, next, closeX := d.r.stripButtons()
+			back, play, next, _ := d.r.stripButtons()
 			at := image.Pt(g.X, g.Y)
 			switch {
-			case at.In(closeX):
+			case at.In(d.r.stripCloseHit()):
 				go d.endMusic()
 			case libraryWord != "" && at.In(d.r.stripLibrary()):
 				d.reopenLibrary()
@@ -1632,15 +1632,16 @@ func (d *Display) gesture(g touch.Gesture) {
 			// play/pause, because that is what a hand put on a screen like this means.
 			if d.r != nil {
 				back, _, next := d.r.musicButtons(modernMusic)
+				back, next = d.r.buttonReach(back), d.r.buttonReach(next)
 				at := image.Pt(g.X, g.Y)
 				switch {
-				case at.In(d.r.doneButton()):
+				case at.In(d.r.buttonReach(d.r.doneButton())):
 					go d.endMusic()
-				case at.In(d.r.favButton()):
+				case at.In(d.r.buttonReach(d.r.favButton())):
 					go d.favorite()
-				case libraryWord != "" && at.In(d.r.libraryButton(libraryWord, modernMusic)):
+				case libraryWord != "" && at.In(d.r.buttonReach(d.r.libraryButton(libraryWord, modernMusic))):
 					d.reopenLibrary()
-				case spokenOn && at.In(d.r.speedButton(speedShown, libraryWord, modernMusic)):
+				case spokenOn && at.In(d.r.buttonReach(d.r.speedButton(speedShown, libraryWord, modernMusic))):
 					d.spokenSpeedUp()
 				case spokenOn && at.In(back):
 					spokenSkipBy(-spokenSkip)

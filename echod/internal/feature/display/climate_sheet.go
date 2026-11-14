@@ -322,6 +322,6 @@ func (r *renderer) climateAt(x, y int) (mediaZone, bool) {
 	r.zmu.Lock()
 	zones, card := slices.Clone(r.climateZones), r.climateCard
 	r.zmu.Unlock()
-	z, _, in := mediaHit(zones, card, x, y)
+	z, _, in := mediaHit(zones, card, x, y, r.s(sheetSlop))
 	return z, in
 }
