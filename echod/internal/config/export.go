@@ -107,6 +107,7 @@ func servers(c Config) []ServerChange {
 		{What: "The assistant's page reader", New: c.Brain.Reader},
 		{What: "The dashboard server", New: c.Dashboard.Server},
 		{What: "Music Assistant", New: c.MusicAssistant.URL},
+		{What: "Mealie", New: c.Mealie.URL},
 		{What: "Immich", New: c.Home.Immich.Server},
 		{What: "The doorbell recorder", New: c.Home.Reolink.Base},
 		{What: "OBS", New: c.Deck.OBS.Addr},
@@ -275,6 +276,7 @@ func ClearSecrets(c *Config) {
 	c.Brain.Key = ""
 	c.Dashboard.Key = ""
 	c.MusicAssistant.Token = ""
+	c.Mealie.Token = ""
 	c.Home.HouseWord = ""
 	c.Home.Immich.Key = ""
 	c.Home.Reolink.Pass = ""
@@ -316,6 +318,7 @@ func KeepSecrets(c *Config, from Config) (reenter []string) {
 	keep(&c.Brain.Key, from.Brain.Key, c.Brain.LLM == from.Brain.LLM, "the assistant's key")
 	keep(&c.Dashboard.Key, from.Dashboard.Key, c.Dashboard.Server == from.Dashboard.Server, "the dashboard server's key")
 	keep(&c.MusicAssistant.Token, from.MusicAssistant.Token, c.MusicAssistant.URL == from.MusicAssistant.URL, "Music Assistant's token")
+	keep(&c.Mealie.Token, from.Mealie.Token, c.Mealie.URL == from.Mealie.URL, "Mealie token")
 	keep(&c.Home.Immich.Key, from.Home.Immich.Key, c.Home.Immich.Server == from.Home.Immich.Server, "Immich's key")
 	keep(&c.Home.Reolink.Pass, from.Home.Reolink.Pass,
 		c.Home.Reolink.Base == from.Home.Reolink.Base && c.Home.Reolink.User == from.Home.Reolink.User &&

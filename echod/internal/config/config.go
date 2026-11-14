@@ -35,6 +35,7 @@ type Config struct {
 	Sendspin       Sendspin       `json:"sendspin"`
 	Snapcast       Snapcast       `json:"snapcast,omitempty"`
 	MusicAssistant MusicAssistant `json:"music_assistant,omitempty"`
+	Mealie         Mealie         `json:"mealie,omitempty"`
 	BookPlaces     BookPlaces     `json:"book_places,omitempty"` // unused since #524; kept so an old state.json loads
 	TalkBack       TalkBack       `json:"talk_back,omitempty"`
 	Doorbell       Doorbell       `json:"doorbell,omitempty"`
@@ -116,6 +117,7 @@ func (w Writer) Timers() TimersWriter                 { return TimersWriter(w) }
 func (w Writer) Sendspin() SendspinWriter             { return SendspinWriter(w) }
 func (w Writer) Snapcast() SnapcastWriter             { return SnapcastWriter(w) }
 func (w Writer) MusicAssistant() MusicAssistantWriter { return MusicAssistantWriter(w) }
+func (w Writer) Mealie() MealieWriter                 { return MealieWriter(w) }
 func (w Writer) Home() HomeWriter                     { return HomeWriter(w) }
 func (w Writer) Dashboard() DashboardWriter           { return DashboardWriter(w) }
 func (w Writer) Calendar() CalendarWriter             { return CalendarWriter(w) }

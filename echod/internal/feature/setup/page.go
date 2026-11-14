@@ -301,6 +301,8 @@ func (f *Feature) save(w http.ResponseWriter, r *http.Request) {
 		problem = saveBrain(r)
 	case "music":
 		problem = saveMusic(r)
+	case "mealie":
+		problem = saveMealie(r)
 	case "streaming":
 		problem = saveStreaming(r)
 	case "bluetooth":
@@ -510,6 +512,7 @@ func (f *Feature) settingsPage(ctx context.Context, w http.ResponseWriter, token
 			talkBackSection(w, token) // the microphones to a camera's speaker
 		}
 		dashboardSection(w, token)
+		mealieSection(w, token)
 	case "photos":
 		screenSection(w, token)
 		themeSection(w, token)
