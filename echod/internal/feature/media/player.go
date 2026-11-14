@@ -98,6 +98,9 @@ type Player struct {
 	// top is the Louder top volume switch (speaker.Player.SetLouderTop, #304), nil where no tuning
 	// this build plays has a lift for it.
 	top *esphome.Switch
+	// jackSleep is the Headphone jack sleeps when idle switch (speaker.Player.SetJackSleep, #537), nil
+	// where the build has no jack.
+	jackSleep *esphome.Switch
 
 	// sleep stops what is playing after a while, the way a clock radio does.
 	sleep *sleeper
@@ -395,6 +398,14 @@ func build() *Player {
 		}
 		p.top.OnCommand = p.SetLouderTop
 	}
+	if speaker.JackSleepPossible() {
+		p.jackSleep = &esphome.Switch{
+			Base: esphome.Base{ObjectID: "headphone_jack_sleep", Name: "Headphone jack sleeps when idle",
+				Icon: "mdi:power-sleep", Category: esphome.CategoryConfig,
+				DeviceID: component.DevicePlayback},
+		}
+		p.jackSleep.OnCommand = p.SetJackSleep
+	}
 
 	// The player itself stays on the device: it is what people reach for. These are how it behaves.
 	bases := []*esphome.Base{&p.resampling.Base, &p.onTurn.Base, &p.duck.Base, &p.jack.Base, &p.asp.Base,
@@ -601,6 +612,26 @@ func (p *Player) SetLouderTop(on bool) {
 	slog.Info("setting changed", "setting", p.top.ObjectID, "using", on)
 }
 
+// SetJackSleep turns the headphone jack's idle sleep on or off, from Home Assistant or the setup page.
+func (p *Player) SetJackSleep(on bool) {
+	if p.jackSleep == nil {
+		return
+	}
+	if err := config.Set().Speaker().JackSleep(on); err != nil {
+		slog.Error("saving a setting failed", "setting", p.jackSleep.ObjectID, "err", err)
+		return
+	}
+	speaker.Get().SetJackSleep(on)
+	p.jackSleep.Set(on)
+	slog.Info("setting changed", "setting", p.jackSleep.ObjectID, "using", on)
+}
+
+// JackSleepAvailable is whether the headphone jack sleep switch is put up on this build.
+func (p *Player) JackSleepAvailable() bool { return p.jackSleep != nil }
+
+// JackSleep is whether the headphone jack sleeps when idle.
+func (p *Player) JackSleep() bool { return p.jackSleep != nil && p.jackSleep.Get() }
+
 // LouderTopAvailable is whether the Louder top volume switch is put up on this build.
 func (p *Player) LouderTopAvailable() bool { return p.top != nil }
 
@@ -624,6 +655,9 @@ func (p *Player) Entities() []esphome.Entity {
 	// which leaves out a board that turned out not to have the amplifier, or still may have it.
 	if p.gain != nil && (speaker.GainAvailable() || speaker.GainPossible()) {
 		out = append(out, p.gain)
+	}
+	if p.jackSleep != nil {
+		out = append(out, p.jackSleep)
 	}
 	if p.top != nil {
 		out = append(out, p.top)
@@ -725,6 +759,11 @@ func (p *Player) Restore(c config.Config) {
 		p.top.Set(c.Speaker.LouderTop)
 		speaker.Get().SetLouderTop(c.Speaker.LouderTop)
 		slog.Info("restored", "what", p.top.ObjectID, "using", c.Speaker.LouderTop)
+	}
+	if p.jackSleep != nil {
+		p.jackSleep.Set(c.Speaker.JackSleep)
+		speaker.Get().SetJackSleep(c.Speaker.JackSleep)
+		slog.Info("restored", "what", p.jackSleep.ObjectID, "using", c.Speaker.JackSleep)
 	}
 
 	p.duck.Set(float32(c.Media.DuckDB))

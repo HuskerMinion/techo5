@@ -1151,6 +1151,14 @@ louder: steps 0 to 16 are unchanged, and the steps above go into the speaker's t
 8 dB at step 30. Like Speaker gain, it can distort on some music at the top steps; turn it off if it
 does.
 
+**Headphone jack sleeps when idle** (devices with a headphone jack; off by default; the setup page
+under **Speaker and voice**, and the switch in Home Assistant's **Playback** configuration) switches
+the jack's output off after 10 seconds of silence and back on before the next sound. Powered
+speakers on the jack then stay quiet between sounds instead of hissing. The cost is a small pop each
+time the output switches off and on, and the first sound after a quiet spell starts about a quarter
+of a second later. It acts only when **Headphones** is the output, not with **Speaker and
+headphones**.
+
 **Louder speech** (off by default; Settings → **Sound**, the setup page under **Speaker and
 voice**, and the **Louder speech** switch in Home Assistant) compresses replies and announcements on
 their way to the speaker: the quiet parts of words come up by 8 dB and the loud ones by less, about

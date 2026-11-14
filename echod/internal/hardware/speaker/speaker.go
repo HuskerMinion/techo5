@@ -192,6 +192,9 @@ type Player struct {
 	claimed atomic.Bool
 	// wakeFails is the gated amplifier's wakes that failed in a row (ampWake).
 	wakeFails atomic.Int32
+	// jackSleep is whether the headphone path comes down while idle, and jackIdle when (jack.go).
+	jackSleep atomic.Bool
+	jackIdle  idleAmp
 
 	// underruns is the card running out while we were away. Write blocks against the whole ring, so
 	// each one means the loop was starved for as long as the ring is deep.
@@ -457,6 +460,7 @@ func (p *Player) route() {
 		p.apply(headphoneOff)
 	}
 	p.apply(p.path(p.out))
+	p.jackAwake()
 }
 
 // path is out's sequence, with the Speaker gain in it where the board writes that with the path
@@ -597,6 +601,7 @@ func (p *Player) setOutput(out Output) {
 		p.apply(headphoneOff)
 	}
 	p.apply(p.path(out))
+	p.jackAwake()
 	p.pathMu.Unlock()
 
 	p.SetVolume(int(p.step.Load()))
@@ -650,6 +655,7 @@ func (p *Player) Reopen() {
 	p.apply(initSequence)
 	p.apply(headphoneOff)
 	p.apply(p.path(OutputSpeaker))
+	p.jackAwake()
 	p.pathMu.Unlock()
 
 	p.SetVolume(int(p.step.Load()))
@@ -805,7 +811,12 @@ func (p *Player) Run(ctx context.Context) error {
 
 		// An amplifier waking from its idle sleep (idle.go) is not ready for what is queued: the queue
 		// waits, and the card gets silence, until it is.
-		if p.gate != nil && p.idleStep() {
+		// Nor is a headphone path coming back from its own idle sleep (jack.go).
+		hold := p.gate != nil && p.idleStep()
+		if HasJack && p.jackStep() {
+			hold = true
+		}
+		if hold {
 			clear(buf)
 		} else {
 			p.fill(buf)

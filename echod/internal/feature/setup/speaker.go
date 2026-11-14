@@ -43,6 +43,11 @@ func speakerSection(w http.ResponseWriter, token string) {
 		fmt.Fprintf(w, `<p><label><input type="checkbox" name="top" value="yes" style="width:auto"%s> Louder top volume:
 	  the steps above 16 go up to 8 dB hotter into the tuning, for music that stays too quiet at full volume; can distort with Speaker gain raised</label><input type="hidden" name="was_top" value="%t"></p>`, checkedIf(top), top)
 	}
+	if p.JackSleepAvailable() {
+		js := p.JackSleep()
+		fmt.Fprintf(w, `<p><label><input type="checkbox" name="jack_sleep" value="yes" style="width:auto"%s> Headphone jack sleeps when idle:
+	  the jack's output switches off after 10 seconds of silence, so powered speakers on it don't hiss; a small pop when it switches off and on</label><input type="hidden" name="was_jack_sleep" value="%t"></p>`, checkedIf(js), js)
+	}
 	louder := c.Speaker.LouderSpeech
 	fmt.Fprintf(w, `<p><label><input type="checkbox" name="louder" value="yes" style="width:auto"%s> Louder speech:
 	  replies and announcements compressed so the quiet parts of words are heard; music is not changed</label><input type="hidden" name="was_louder" value="%t"></p>`, checkedIf(louder), louder)
@@ -224,6 +229,11 @@ func saveSpeaker(r *http.Request) string {
 	if was := r.PostFormValue("was_top"); was != "" && p.LouderTopAvailable() {
 		if on := r.PostFormValue("top") == "yes"; strconv.FormatBool(on) != was {
 			p.SetLouderTop(on)
+		}
+	}
+	if was := r.PostFormValue("was_jack_sleep"); was != "" && p.JackSleepAvailable() {
+		if on := r.PostFormValue("jack_sleep") == "yes"; strconv.FormatBool(on) != was {
+			p.SetJackSleep(on)
 		}
 	}
 	if was := r.PostFormValue("was_louder"); was != "" {
