@@ -62,7 +62,7 @@ func TestTheCameraControlsSitOnTheirButtons(t *testing.T) {
 			func(rr *renderer) { rr.cameraControl(b, c.name, c.live) },
 			func(rr *renderer) {
 				if c.live {
-					rr.roundButton(b, float64(b.Dy())/2, talkLive)
+					rr.roundButton(b, float64(b.Dy())/2, declineRed)
 					return
 				}
 				rr.buttonFace(b, float64(b.Dy())/2, btnSecondary)

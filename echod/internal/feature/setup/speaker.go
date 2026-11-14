@@ -25,8 +25,9 @@ import (
 func speakerSection(w http.ResponseWriter, token string) {
 	c := config.Get()
 	p := media.Get()
-	fmt.Fprint(w, `<fieldset><legend>Speaker and voice</legend><form method="post" action="/setup/save">`)
-	hidden(w, token, "speaker", "sound")
+	fieldsetOpen(w, "speaker", "Speaker and voice")
+	fmt.Fprint(w, `<form method="post" action="/setup/save">`)
+	hidden(w, token, "speaker")
 	vol := p.Volume()
 	fmt.Fprintf(w, `<label for="volume">Volume, 0 to %d</label>
 	 <input id="volume" name="volume" type="number" min="0" max="%d" value="%d"><input type="hidden" name="was_volume" value="%d">`,

@@ -210,6 +210,13 @@ func (d *Display) popupUp() *hass.Event {
 	return d.popup
 }
 
+// popupsWaiting is how many events are due and waiting for the pop-up that is up to go.
+func (d *Display) popupsWaiting() int {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	return len(d.popupQueue)
+}
+
 // popupCandidates is the events that may pop up: not those of a calendar hidden on this screen's
 // calendar page, which are hidden here everywhere, pop-ups as well.
 func popupCandidates(events []hass.Event, c config.Calendar) []hass.Event {

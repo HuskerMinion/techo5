@@ -201,7 +201,8 @@ func stationsOf(m hass.Media, source string) []station {
 }
 
 // playListed plays a Radio Browser station by its name in the list shown; false when it is not one.
-func (f *Feature) playListed(source, name string) bool {
+// asked is whether somebody asked for it: one the device puts back on by itself fails without a note.
+func (f *Feature) playListed(source, name string, asked bool) bool {
 	f.mu.Lock()
 	l := f.list(source)
 	var st station
@@ -232,6 +233,9 @@ func (f *Feature) playListed(source, name string) bool {
 			}
 			f.mu.Unlock()
 			f.Changed.Emit(struct{}{})
+			if asked {
+				f.startFailed(PlayFailedHint)
+			}
 			return
 		}
 		slog.Info("radio: station asked for", "station", name, "list", source)
@@ -274,8 +278,9 @@ func (f *Feature) callFavorite(h config.Radio, station string, watch bool) {
 			Unheard: func() { unheard = true },
 		})
 		if unheard {
-			// No Home Assistant was connected to take it: nothing about its settings to point at, so no
-			// note, and the station is not left starting.
+			// No Home Assistant was connected to take it: nothing about its settings to point at, so the
+			// note says that instead (for a station somebody asked for), and the station is not left
+			// starting.
 			slog.Warn("radio: Home Assistant is not connected to this device; the station was not asked for", "station", station)
 			f.unask(station)
 			f.mu.Lock()
@@ -284,6 +289,9 @@ func (f *Feature) callFavorite(h config.Radio, station string, watch bool) {
 			}
 			f.mu.Unlock()
 			f.Changed.Emit(struct{}{})
+			if watch {
+				f.startFailed(NoHomeHint)
+			}
 			return
 		}
 		if !watch {

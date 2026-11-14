@@ -129,6 +129,9 @@ func TestPopupsWaitTheirTurn(t *testing.T) {
 	if first == nil {
 		t.Fatal("nothing came up from the queue")
 	}
+	if n := d.popupsWaiting(); n != 1 {
+		t.Errorf("%d waiting under the first, want the other one", n)
+	}
 	if got := duePopups(events, now, config.Get().Calendar, popupShownNow()); len(got) != 1 || got[0].Summary == first.Summary {
 		t.Fatalf("still due after the first came up: %v", got)
 	}

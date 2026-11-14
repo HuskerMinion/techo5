@@ -21,8 +21,8 @@ import (
 func deckSection(w http.ResponseWriter, token string) {
 	d := config.Get().Deck
 	st := deck.Get().OBS()
-	fmt.Fprint(w, `<fieldset><legend>Deck</legend>
-	 <p class="note" style="margin-top:0">Buttons for OBS Studio on this screen. Swipe up from the bottom
+	fieldsetOpen(w, "deck", "Deck")
+	fmt.Fprint(w, `<p class="note" style="margin-top:0">Buttons for OBS Studio on this screen. Swipe up from the bottom
 	  edge of the clock to open it, swipe down to put it away; swipe left and right for the pages.</p>`)
 
 	// OBS.
@@ -36,28 +36,23 @@ func deckSection(w http.ResponseWriter, token string) {
 	default:
 		status = "Connecting…"
 	}
-	pwNote := "No password saved."
-	if d.OBS.Password != "" {
-		pwNote = "A password is saved. Leave this empty to keep it."
-	}
 	fmt.Fprint(w, `<form method="post" action="/setup/save">`)
-	hidden(w, token, "deckobs", "photos")
+	hidden(w, token, "deckobs")
 	fmt.Fprintf(w, `<label for="obsaddr">OBS address</label>
 	 <input id="obsaddr" name="address" value="%s" placeholder="192.168.1.20" autocomplete="off">
-	 <label for="obspw">OBS WebSocket password</label>
-	 <input id="obspw" name="password" type="password" autocomplete="off">
-	 <p class="note">%s <label><input type="checkbox" name="nopassword" value="yes" style="width:auto"> OBS has
-	  authentication turned off</label></p>
+	 %s
+	 <p class="secret"><label><input type="checkbox" name="nopassword" value="yes"> OBS has authentication turned off</label></p>
 	 <p class="note"><strong>%s</strong> In OBS: Tools → WebSocket Server Settings → Enable WebSocket server;
 	  the port is 4455 unless you changed it (then add it: 192.168.1.20:4456). OBS's WebSocket isn't
 	  encrypted: the password is never sent, but scene names are readable on your network.</p>
 	 <p><button type="submit">Save</button></p></form>`,
-		html.EscapeString(d.OBS.Addr), html.EscapeString(pwNote), html.EscapeString(status))
+		html.EscapeString(d.OBS.Addr), secretField("obspw", "OBS WebSocket password", "password", d.OBS.Password != "", ""),
+		html.EscapeString(status))
 
 	// The grid.
 	cols, rows := d.Grid()
 	fmt.Fprint(w, `<form method="post" action="/setup/save">`)
-	hidden(w, token, "deckgrid", "photos")
+	hidden(w, token, "deckgrid")
 	fmt.Fprint(w, `<label for="deckcols">Buttons across</label><select id="deckcols" name="cols">`)
 	for n := config.DeckColsMin; n <= config.DeckColsMax; n++ {
 		fmt.Fprintf(w, `<option%s>%d</option>`, selected(n == cols), n)
@@ -89,7 +84,7 @@ func deckSection(w http.ResponseWriter, token string) {
 			open = " open"
 		}
 		fmt.Fprintf(w, `<details%s><summary>Page %d</summary><form method="post" action="/setup/save?big=deck">`, open, p+1)
-		hidden(w, token, "deckpage", "photos")
+		hidden(w, token, "deckpage")
 		fmt.Fprintf(w, `<input type="hidden" name="page" value="%d">`, p)
 		for i := range cols * rows {
 			deckButtonRow(w, i, cols, d.Button(p, i), d.Computers)
@@ -99,7 +94,7 @@ func deckSection(w http.ResponseWriter, token string) {
 			fmt.Fprint(w, ` <button type="submit" name="op" value="add">Add a page</button>`)
 		}
 		if pages > 1 {
-			fmt.Fprint(w, ` <button type="submit" name="op" value="remove">Remove this page</button>`)
+			fmt.Fprint(w, ` <button type="submit" name="op" value="remove" class="danger">Remove this page</button>`)
 		}
 		fmt.Fprint(w, `</p></form></details>`)
 	}
@@ -306,13 +301,13 @@ func deckComputersPart(w http.ResponseWriter, token string, d config.Deck) {
 			status = st.Err
 		}
 		fmt.Fprint(w, `<form method="post" action="/setup/save">`)
-		hidden(w, token, "deckpc", "photos")
+		hidden(w, token, "deckpc")
 		fmt.Fprintf(w, `<input type="hidden" name="name" value="%s"><p style="margin:.4rem 0"><strong>%s</strong> <span class="note">%s · %s</span>
-		 <button class="quiet" type="submit" name="op" value="forget">Forget</button></p></form>`,
+		 <button class="quiet danger" type="submit" name="op" value="forget">Forget</button></p></form>`,
 			html.EscapeString(c.Name), html.EscapeString(c.Name), html.EscapeString(c.Addr), html.EscapeString(status))
 	}
 	fmt.Fprint(w, `<form method="post" action="/setup/save">`)
-	hidden(w, token, "deckpc", "photos")
+	hidden(w, token, "deckpc")
 	fmt.Fprint(w, `<p><button class="quiet" type="submit" name="op" value="look">Look for computers</button>`)
 	if len(d.Computers) > 0 {
 		fmt.Fprint(w, ` <button class="quiet" type="submit" name="op" value="refresh">Refresh</button>`)
@@ -320,7 +315,7 @@ func deckComputersPart(w http.ResponseWriter, token string, d config.Deck) {
 	fmt.Fprint(w, `</p></form>`)
 
 	fmt.Fprint(w, `<form method="post" action="/setup/save">`)
-	hidden(w, token, "deckpc", "photos")
+	hidden(w, token, "deckpc")
 	fmt.Fprint(w, `<input type="hidden" name="op" value="pair"><label for="pcaddr">Pair a computer</label>`)
 	found := deck.Get().LastFound()
 	if len(found) > 0 {
@@ -332,7 +327,7 @@ func deckComputersPart(w http.ResponseWriter, token string, d config.Deck) {
 	} else {
 		fmt.Fprint(w, `<input id="pcaddr" name="addr" placeholder="The computer's address, like 192.168.1.30" autocomplete="off">`)
 	}
-	fmt.Fprint(w, `<input name="key" type="password" placeholder="The key the agent shows" aria-label="Key" autocomplete="off">
+	fmt.Fprint(w, onceField("pckey", "The key the agent shows", "key", "")+`
 	 <p><button type="submit">Pair</button></p></form>`)
 }
 

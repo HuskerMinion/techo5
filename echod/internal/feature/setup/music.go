@@ -22,16 +22,13 @@ import (
 // playlists (config.MusicAssistant). The token is never shown: it is written, or left alone.
 func musicSection(ctx context.Context, w http.ResponseWriter, token string) {
 	m := config.Get().MusicAssistant
-	held := "a long-lived token"
-	if m.Token != "" {
-		held = "saved: leave empty to keep it"
-	}
 	var addrs []string
 	for _, ip := range metrics.Addresses() {
 		addrs = append(addrs, ip.String())
 	}
-	fmt.Fprint(w, `<fieldset><legend>Music Assistant</legend><form method="post" action="/setup/save">`)
-	hidden(w, token, "music", "sound")
+	fieldsetOpen(w, "music", "Music Assistant")
+	fmt.Fprint(w, `<form method="post" action="/setup/save">`)
+	hidden(w, token, "music")
 	answered := false
 	if m.Set() {
 		status, ok := musicStatus(ctx, m)
@@ -44,11 +41,10 @@ func musicSection(ctx context.Context, w http.ResponseWriter, token string) {
 	  one of this device's addresses (%s) in Music Assistant's Sendspin settings, under the manual discovery
 	  IP addresses. Make the token for a Music Assistant user allowed only this device's player.</p>
 	 <label for="maurl">Address</label>
-	 <input id="maurl" name="url" value="%s" placeholder="http://192.168.1.20:8095" autocomplete="off">
-	 <label for="matoken">Token</label>
-	 <input id="matoken" name="matoken" type="password" value="" placeholder="%s" autocomplete="off">
-	 <p><label><input type="checkbox" name="notoken" value="yes" style="width:auto"> Remove the token</label></p>`,
-		html.EscapeString(strings.Join(addrs, ", ")), html.EscapeString(m.URL), html.EscapeString(held))
+	 <input id="maurl" name="url" type="url" inputmode="url" value="%s" placeholder="http://192.168.1.20:8095" autocomplete="off">
+	 %s`,
+		html.EscapeString(strings.Join(addrs, ", ")), html.EscapeString(m.URL),
+		secretField("matoken", "Token (a long-lived one)", "matoken", m.Token != "", "notoken"))
 	if m.Set() {
 		sourceField(ctx, w, m, answered)
 	}

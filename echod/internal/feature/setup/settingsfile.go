@@ -51,8 +51,8 @@ func forgetWaiting() {
 
 // settingsFileSection offers the file and takes one back.
 func settingsFileSection(w http.ResponseWriter, token string) {
-	fmt.Fprint(w, `<fieldset><legend>Settings</legend>
-	 <p><a href="/setup/settings.json">Download settings</a> — everything this device is set to, as a file.</p>
+	fieldsetOpen(w, "settingsfile", "Settings")
+	fmt.Fprint(w, `<p><a href="/setup/settings.json">Download settings</a> — everything this device is set to, as a file.</p>
 	 <p class="note">Keys, passwords, the settings lock's PIN, the house word, calendars' private addresses
 	  and cameras' addresses are left out of it, and so are this device's privacy switches, what it lets in
 	  over the network (Sendspin, AirPlay, Spotify Connect, DLNA, video, the Bluetooth proxy), what its
@@ -72,7 +72,7 @@ func settingsFileSection(w http.ResponseWriter, token string) {
 // settingsFile hands over the settings as a file.
 func (f *Feature) settingsFile(w http.ResponseWriter, r *http.Request) {
 	if _, in := f.session(r); !in {
-		http.Error(w, "not let in", http.StatusForbidden)
+		notLetIn(w)
 		return
 	}
 	b, err := config.Export(config.Get(), layout.Model, layout.Version)
@@ -91,7 +91,7 @@ func (f *Feature) settingsFile(w http.ResponseWriter, r *http.Request) {
 func (f *Feature) restore(w http.ResponseWriter, r *http.Request) {
 	token, in := f.session(r)
 	if !in {
-		web.Refuse(w, "not let in", http.StatusForbidden)
+		notLetIn(w)
 		return
 	}
 	if r.Method != http.MethodPost {
@@ -123,22 +123,22 @@ func (f *Feature) restore(w http.ResponseWriter, r *http.Request) {
 
 	file, _, err := r.FormFile("file")
 	if err != nil {
-		http.Redirect(w, r, back("general", "problem", "choose a settings file first"), http.StatusSeeOther)
+		http.Redirect(w, r, back("settingsfile", "problem", "choose a settings file first"), http.StatusSeeOther)
 		return
 	}
 	defer file.Close()
 	b, err := io.ReadAll(io.LimitReader(file, maxSettings))
 	if err != nil {
-		http.Redirect(w, r, back("general", "problem", "the file did not arrive whole"), http.StatusSeeOther)
+		http.Redirect(w, r, back("settingsfile", "problem", "the file did not arrive whole"), http.StatusSeeOther)
 		return
 	}
 	rs, err := config.Restored(config.Get(), b, layout.Model)
 	if err != nil {
-		http.Redirect(w, r, back("general", "problem", err.Error()), http.StatusSeeOther)
+		http.Redirect(w, r, back("settingsfile", "problem", err.Error()), http.StatusSeeOther)
 		return
 	}
 	if len(rs.Changed) == 0 {
-		http.Redirect(w, r, back("general", "problem", "that file is this device's settings already; nothing to change"), http.StatusSeeOther)
+		http.Redirect(w, r, back("settingsfile", "problem", "that file is this device's settings already; nothing to change"), http.StatusSeeOther)
 		return
 	}
 	waiting.Lock()
@@ -196,12 +196,12 @@ func (f *Feature) applyRestore(w http.ResponseWriter, r *http.Request, token str
 	waiting.Unlock()
 	forgetWaiting()
 	if !ok {
-		http.Redirect(w, r, back("general", "problem", "that file was not looked at here, or it was too long ago; send it again"), http.StatusSeeOther)
+		http.Redirect(w, r, back("settingsfile", "problem", "that file was not looked at here, or it was too long ago; send it again"), http.StatusSeeOther)
 		return
 	}
 	rs, err := config.Set().Restore(file, layout.Model)
 	if err != nil {
-		http.Redirect(w, r, back("general", "problem", "the settings could not be restored: "+err.Error()), http.StatusSeeOther)
+		http.Redirect(w, r, back("settingsfile", "problem", "the settings could not be restored: "+err.Error()), http.StatusSeeOther)
 		return
 	}
 	slog.Warn("settings restored from a file on the setup page; restarting to use them", "changes", rs.Changed, "reenter", rs.Reenter)

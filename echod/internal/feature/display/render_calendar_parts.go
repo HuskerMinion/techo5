@@ -43,12 +43,13 @@ func calFade(c color.RGBA, t float64) color.RGBA { return lerp(c, walnut, t) }
 // evSub is the second line's color on an event's box: the text color, a little toward the box.
 func evSub(c color.RGBA) color.RGBA { return lerp(cream, evFill(c), 0.3) }
 
-// timeInk is the start time of an event in the month, in its calendar's color: deeper on a light theme.
+// timeInk is the start time of an event in the month, in its calendar's color: deeper on a light
+// theme, by half, where the amber, the green and the teal were 3.4:1 on a day's box at 18 pixels.
 func timeInk(c color.RGBA) color.RGBA {
 	if dark() {
 		return c
 	}
-	return lerp(c, color.RGBA{0, 0, 0, 255}, 0.3)
+	return lerp(c, color.RGBA{0, 0, 0, 255}, 0.5)
 }
 
 // mdiAt draws an icon with its middle at cx, cy, size tall in the Show 5's pixels as mdiIcon takes it.
@@ -58,7 +59,9 @@ func (r *renderer) mdiAt(name string, cx, cy, size int, c color.RGBA) {
 }
 
 // countChip draws a countdown chip with its right edge at right, around cy, in f: filled in the accent
-// for the next event, a box of the page's shade for the rest. It says where its left edge is.
+// for the next event, a box of the page's shade for the rest. It says where its left edge is. On the
+// accent its words are onAccent's, as every pill's on the calendar are: the ground color read on a
+// preset's accent, and a custom theme's accent can be as pale as its ground.
 func (r *renderer) countChip(text string, right, cy int, filled bool, f font.Face) int {
 	w := r.width(f, text) + r.s(20)
 	h := r.s(26)
@@ -68,7 +71,7 @@ func (r *renderer) countChip(text string, right, cy int, filled bool, f font.Fac
 	b := image.Rect(right-w, cy-h/2, right, cy-h/2+h)
 	fill, ink := calWash(22), cream
 	if filled {
-		fill, ink = amber, walnut
+		fill, ink = amber, onAccent()
 	}
 	r.roundRect(b, h/2, fill)
 	r.text(f, text, b.Min.X+r.s(10), cy+capHeight(f)/2, ink)
@@ -100,6 +103,9 @@ func (r *renderer) calSegmented(sel calHitKind, right int, week bool) int {
 			ink = r.buttonFace(in, float64(in.Dy())/2, btnPrimary)
 		} else {
 			r.calHitAdd(calHit{r: seg.Inset(-r.s(2)), kind: kinds[i]})
+			if in := seg.Inset(r.s(4)); r.pressed(in) {
+				r.pressOver(in, float64(in.Dy())/2, cream)
+			}
 		}
 		r.text(f, l, seg.Min.X+(seg.Dx()-r.width(f, l))/2, seg.Min.Y+seg.Dy()/2+r.s(9), ink)
 		x += w

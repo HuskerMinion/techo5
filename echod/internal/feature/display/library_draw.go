@@ -520,7 +520,7 @@ func (r *renderer) librarySheet(v *libraryView, th dashboard.Theme) {
 // item's name, then its choices (libMenuFor) as wide pills, a first Play lit as the library's Play is.
 func (r *renderer) libMenuSheet(l *librarySheet, g libGeom, pal dashPal, fc sheetFaces,
 	pill func(image.Rectangle, string, string, color.RGBA, color.RGBA, bool, int, int)) {
-	washOver(r.dst, r.dst.Rect, color.RGBA{0, 0, 0, 110})
+	washOver(r.dst, r.dst.Rect, color.RGBA{0, 0, 0, 150})
 	choices := l.menu.choices
 	n := len(choices)
 	pad, rowH, gap, titleH := r.s(24), r.s(64), r.s(12), r.s(56)

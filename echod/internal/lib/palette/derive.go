@@ -8,8 +8,15 @@ import "math"
 // the same the other way around. The saturation is the accent's, held down for each part, so a gray
 // accent makes a gray theme and a vivid one only tints the rest. It is a starting point the custom
 // colors editor offers (setup page, "Match the accent"); every color can still be changed after.
+//
+// A lightness that suits one hue does not suit them all: a blue's mid tone is darker to the eye than
+// a yellow's, and the dim text came out 4.1:1 on its own ground for a blue accent. So the dim text is
+// then moved toward the text until it reads on a card, which is where most of it is drawn. And on a
+// light theme an accent picked for how it looks on its own, a yellow, an amber, a green, was 1.2 to
+// 1.9:1 on the pale ground made from it: it is darkened, its hue and saturation kept, until it reads
+// there too. An accent that already does is the accent given.
 func Derive(accent uint32, light bool) Preset {
-	h, s, _ := toHSL(accent)
+	h, s, l := toHSL(accent)
 	tint := func(most, part, l float64) uint32 { return fromHSL(h, math.Min(s*part, most), l) }
 	p := Preset{Name: "Custom", Accent: accent & 0xffffff}
 	if light {
@@ -23,7 +30,36 @@ func Derive(accent uint32, light bool) Preset {
 		p.Dim = tint(0.15, 0.3, 0.50)
 		p.Text = tint(0.35, 0.5, 0.88)
 	}
+	for dim, t := p.Dim, 0.05; Contrast(p.Dim, p.Card()) < readable && t <= 1; t += 0.05 {
+		p.Dim = mix(dim, p.Text, t)
+	}
+	for ; light && Contrast(p.Accent, p.Ground) < readable && l > 0; l -= 0.01 {
+		p.Accent = fromHSL(h, s, max(l-0.01, 0))
+	}
 	return p
+}
+
+// readable is the contrast small text needs on what is behind it, as the web's accessibility
+// guidelines have it.
+const readable = 4.5
+
+// Card is the surface the screen draws its tiles and rows on, a step off the ground (the display's
+// surface(3)): 18 a channel lighter on a dark theme, 12 darker on a light one.
+func (p Preset) Card() uint32 {
+	by := 18
+	if p.Light() {
+		by = -12
+	}
+	ch := func(v uint32) uint32 { return uint32(min(max(int(v&0xff)+by, 0), 255)) }
+	return ch(p.Ground>>16)<<16 | ch(p.Ground>>8)<<8 | ch(p.Ground)
+}
+
+// mix is a moved t of the way to b, a channel at a time.
+func mix(a, b uint32, t float64) uint32 {
+	ch := func(x, y uint32) uint32 {
+		return uint32(math.Round(float64(x&0xff) + (float64(y&0xff)-float64(x&0xff))*t))
+	}
+	return ch(a>>16, b>>16)<<16 | ch(a>>8, b>>8)<<8 | ch(a, b)
 }
 
 // Contrast is the contrast ratio of two colors, from 1 (the same) to 21 (black on white), as the web's

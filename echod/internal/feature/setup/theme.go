@@ -91,8 +91,9 @@ func themeSection(w http.ResponseWriter, token string) {
 		return
 	}
 	sc := config.Get().Screen
-	fmt.Fprint(w, `<fieldset><legend>Themes</legend><form method="post" action="/setup/save">`)
-	hidden(w, token, "themes", "photos")
+	fieldsetOpen(w, "themes", "Themes")
+	fmt.Fprint(w, `<form method="post" action="/setup/save">`)
+	hidden(w, token, "themes")
 	fmt.Fprint(w, `<label for="darktheme">Dark theme</label><select id="darktheme" name="dark">`)
 	themeOptions(w, themeNames(false), sc.ThemeFor(false))
 	fmt.Fprint(w, `</select><label for="lighttheme">Light theme</label><select id="lighttheme" name="light">`)
@@ -116,7 +117,7 @@ func themeSection(w http.ResponseWriter, token string) {
 	start := pageColors()
 	forLight := tc.LightNow != nil && tc.LightNow()
 	fmt.Fprint(w, `<h3>Custom colors</h3><form method="post" action="/setup/save">`)
-	hidden(w, token, "theme-colors", "photos")
+	hidden(w, token, "theme-colors")
 	for i, c := range start.Hex() {
 		k := colorRoles[i].key
 		fmt.Fprintf(w, `<label for="hex-%s">%s</label>
@@ -153,10 +154,13 @@ func themeSection(w http.ResponseWriter, token string) {
 	       const r = await fetch('/setup/theme-match?accent=' + encodeURIComponent(accent) + '&light=' + light);
 	       if (!r.ok) { say.textContent = await r.text(); return; }
 	       const c = await r.json();
+	       const deeper = hex.test(c.accent || '') && c.accent.toLowerCase() !== accent.toLowerCase();
 	       for (const k of keys) {
-	         if (k !== 'accent' && hex.test(c[k] || '')) { el('hex-' + k).value = c[k]; el('pick-' + k).value = c[k]; }
+	         if (hex.test(c[k] || '')) { el('hex-' + k).value = c[k]; el('pick-' + k).value = c[k]; }
 	       }
-	       say.textContent = 'Filled in from the accent. Use these colors to keep them.';
+	       say.textContent = deeper
+	         ? 'Filled in from the accent, which was made deeper so it can be read on a light ground. Use these colors to keep them.'
+	         : 'Filled in from the accent. Use these colors to keep them.';
 	     } catch (e) { say.textContent = 'The colors could not be worked out.'; }
 	   });
 	 })();

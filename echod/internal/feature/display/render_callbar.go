@@ -153,6 +153,21 @@ func (r *renderer) callDetailsDraw(s scene, hang image.Rectangle) image.Rectangl
 	if room < r.width(face, what) {
 		return image.Rectangle{}
 	}
+	// The microphone off, as the call's page says it: before the time or the doorbell and in the
+	// accent, or in their place where the pill has no room for both.
+	if s.muted {
+		muted := tr("ui_muted")
+		both := muted + "  ·  " + when
+		switch {
+		case when == "":
+			when = muted
+		case room-gap-r.width(face, both) >= r.width(face, what):
+			when = both
+		case !s.atDoor:
+			when = muted
+		}
+		whenColor = amber
+	}
 	label, when := r.callBarLine(face, what, who, when, room, gap)
 	inner := r.width(face, label)
 	if when != "" {

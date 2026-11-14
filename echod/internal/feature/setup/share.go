@@ -56,7 +56,7 @@ func shareDevices() []string {
 func shareSection(w http.ResponseWriter, token string) {
 	c := config.Get()
 	s := c.Share
-	fmt.Fprint(w, `<fieldset><legend>Shared settings</legend>`)
+	fieldsetOpen(w, "share", "Shared settings")
 	devices := shareDevices()
 	// Requests first, each a form of its own, ahead of the settings' form.
 	if s.On && len(s.Requests) > 0 {
@@ -159,7 +159,7 @@ func checked(b bool) string {
 func (f *Feature) shareForm(w http.ResponseWriter, r *http.Request) bool {
 	token, in := f.session(r)
 	if !in {
-		http.Error(w, "not let in", http.StatusForbidden)
+		notLetIn(w)
 		return false
 	}
 	if r.Method != http.MethodPost {
@@ -183,7 +183,7 @@ func (f *Feature) saveShare(w http.ResponseWriter, r *http.Request) {
 	}
 	on := r.PostFormValue("on") == "1"
 	if err := config.Set().Share().On(on); err != nil {
-		http.Redirect(w, r, back("general", "problem", "could not be saved: "+err.Error()), http.StatusSeeOther)
+		http.Redirect(w, r, back("share", "problem", "could not be saved: "+err.Error()), http.StatusSeeOther)
 		return
 	}
 	share.Get().Restore(config.Get())
@@ -250,9 +250,9 @@ func (f *Feature) saveShare(w http.ResponseWriter, r *http.Request) {
 		sort.Strings(problems)
 	}
 	slog.Info("setup page: shared settings saved", "on", on)
-	to := back("general", "saved", "1")
+	to := back("share", "saved", "1")
 	if len(problems) > 0 {
-		to = back("general", "problem", strings.Join(problems, "; "))
+		to = back("share", "problem", strings.Join(problems, "; "))
 	}
 	http.Redirect(w, r, to, http.StatusSeeOther)
 }
@@ -283,12 +283,12 @@ func (f *Feature) copyShare(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if !config.Get().Share.On {
-		http.Redirect(w, r, back("general", "problem", "turn settings sharing on first"), http.StatusSeeOther)
+		http.Redirect(w, r, back("share", "problem", "turn settings sharing on first"), http.StatusSeeOther)
 		return
 	}
 	ids, devices := r.PostForm["copy"], r.PostForm["to"]
 	if len(ids) == 0 || len(devices) == 0 {
-		http.Redirect(w, r, back("general", "problem", "tick the settings to copy and the devices to copy them to"), http.StatusSeeOther)
+		http.Redirect(w, r, back("share", "problem", "tick the settings to copy and the devices to copy them to"), http.StatusSeeOther)
 		return
 	}
 	results := share.Get().Copy(context.WithoutCancel(r.Context()), ids, devices)
@@ -336,22 +336,22 @@ func (f *Feature) answerShare(w http.ResponseWriter, r *http.Request) {
 	if !slices.ContainsFunc(config.Get().Share.Requests, func(q config.ShareRequest) bool {
 		return q.ID == id && strings.EqualFold(q.Device, device)
 	}) {
-		http.Redirect(w, r, back("general", "problem", "that request is not waiting any more"), http.StatusSeeOther)
+		http.Redirect(w, r, back("share", "problem", "that request is not waiting any more"), http.StatusSeeOther)
 		return
 	}
 	ctx := context.WithoutCancel(r.Context())
-	to := back("general", "saved", "1")
+	to := back("share", "saved", "1")
 	switch r.PostFormValue("op") {
 	case "accept":
 		if outcome, err := share.Get().Accept(ctx, id, device); err != nil {
-			to = back("general", "problem", err.Error())
+			to = back("share", "problem", err.Error())
 		} else if outcome != share.Linked {
-			to = back("general", "problem", fmt.Sprintf("linked here; %s answered %s", device, orUnreachable(outcome)))
+			to = back("share", "problem", fmt.Sprintf("linked here; %s answered %s", device, orUnreachable(outcome)))
 		}
 	case "decline":
 		share.Get().Decline(ctx, id, device)
 	default:
-		to = back("general", "problem", "accept or decline")
+		to = back("share", "problem", "accept or decline")
 	}
 	http.Redirect(w, r, to, http.StatusSeeOther)
 }

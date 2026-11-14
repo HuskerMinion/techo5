@@ -71,6 +71,12 @@ func (r *renderer) modernNowPlaying(s scene) {
 	} else if label == "" {
 		label = tr("now_playing")
 	}
+	artist, starting := rd.Artist, radioStarting(rd)
+	if starting != "" {
+		// A station asked for and not playing yet (render_nowplaying.go): the song before's name, who
+		// played it and its words are left off.
+		headline, label, artist = starting, tr("ui_starting"), ""
+	}
 	x, width, middle := details.Min.X, details.Dx(), r.h/2
 	r.text(r.small, r.clipTo(r.small, label, width), x, middle-r.s(113), accent)
 	y := middle - r.s(69)
@@ -83,8 +89,8 @@ func (r *renderer) modernNowPlaying(s scene) {
 		r.text(r.title, r.clipTo(r.title, line, width), x, y, ink)
 		y += r.s(47)
 	}
-	r.text(r.small, r.clipTo(r.small, rd.Artist, width), x, y-r.s(8), quiet)
-	if s.hasLyric {
+	r.text(r.small, r.clipTo(r.small, artist, width), x, y-r.s(8), quiet)
+	if s.hasLyric && starting == "" {
 		line := s.lyric.Line
 		if line == "" {
 			line = "· · ·"
@@ -108,9 +114,9 @@ func (r *renderer) modernNowPlaying(s scene) {
 	}
 
 	back, play, next := r.musicButtons(true)
-	r.roundRect(back, back.Dy()/2, surface)
-	r.roundRect(play, play.Dy()/2, accent)
-	r.roundRect(next, next.Dy()/2, surface)
+	r.roundRect(back, back.Dy()/2, r.pressFill(back, surface, ink))
+	r.roundRect(play, play.Dy()/2, r.pressFill(play, accent, ground))
+	r.roundRect(next, next.Dy()/2, r.pressFill(next, surface, ink))
 	toggle := "play"
 	if s.playing && !s.paused {
 		toggle = "pause"

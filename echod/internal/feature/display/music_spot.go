@@ -77,8 +77,10 @@ func stopMusic() {
 	home.Get().Stop()
 }
 
-// doneAt is the face's Done: left of play and pause, at the same height, where a thumb finds it.
-const doneX, doneY, doneR = center - 88.0, 420.0, 25.0
+// doneAt is the face's Done: left of play and pause and a little higher, where a thumb finds it and the
+// circle still has room for it. Level with play it reached 234 px from the center, into the ring at the
+// rim (222 to 236) that shows a timer or the microphone off, and hid some 15 degrees of it.
+const doneX, doneY, doneR = center - 84.0, 408.0, 25.0
 
 // onDone reports whether a tap at x, y is on Done.
 func onDone(x, y int) bool {
@@ -217,7 +219,7 @@ func (r *roundRenderer) nowPlayingFace(s roundScene) {
 	r.discAt(doneX-18, doneY, doneR, color.RGBA{36, 42, 52, 255})
 	r.discAt(doneX+18, doneY, doneR, color.RGBA{36, 42, 52, 255})
 	r.line(doneX-18, doneY, doneX+18, doneY, 2*doneR, color.RGBA{36, 42, 52, 255})
-	r.centered2(r.small, tr("done"), int(doneX), int(doneY)+6, colText)
+	r.centered2(r.small, clip(r.small, r, musicEndWord(), 2*18+2*doneR-12), int(doneX), int(doneY)+6, colText)
 	// The star on the right saves what is playing to favorites, and fills in once it has.
 	r.discAt(starX, starY, starR, color.RGBA{36, 42, 52, 255})
 	starColor := color.RGBA{150, 158, 170, 255}

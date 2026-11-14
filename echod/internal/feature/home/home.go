@@ -876,7 +876,7 @@ func (f *Feature) play(station string, gen *uint64) {
 		return
 	}
 	if source != config.RadioFavorites {
-		if f.playListed(source, station) {
+		if f.playListed(source, station, gen == nil) {
 			f.Changed.Emit(struct{}{})
 			f.pokeMeta()
 		} else {

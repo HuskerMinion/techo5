@@ -209,6 +209,20 @@ var uiEnglish = map[string]string{
 	"lyrics":                        "Lyrics",
 	"microphone":                    "Microphone",
 	"microphone_off":                "MICROPHONE OFF",
+	"no_wifi":                       "NO WI-FI",
+	"no_home_assistant":             "NO HOME ASSISTANT",
+	"voice_no_home":                 "Can't reach Home Assistant",
+	"voice_no_assistant":            "No voice assistant set up",
+	"voice_timeout":                 "No answer in time",
+	"voice_failed":                  "The assistant couldn't answer",
+	"not_live":                      "NOT LIVE",
+	"deck_failed":                   "That didn't work",
+	"deck_obs_away":                 "OBS isn't connected",
+	"deck_obs_refused":              "OBS refused that",
+	"deck_obs_silent":               "OBS didn't answer",
+	"deck_pc_silent":                "%s is not answering",
+	"deck_pc_unpaired":              "%s isn't paired",
+	"deck_pc_key":                   "The key for %s doesn't match",
 	"minutes_before":                "%d minutes before",
 	"month":                         "Month",
 	"music":                         "Music",
@@ -357,7 +371,6 @@ var uiEnglish = map[string]string{
 	"shown_as_you_change_it_at_night":           "Shown as you change it, at night",
 	"shown_with_the_clock":                      "Shown with the clock",
 	"silenced":                                  "Silenced",
-	"silenced_press_again_to_snooze_d_min":      "Silenced · press again to snooze %d min",
 	"skin":                                      "Skin",
 	"skin_keeps":                                "Kept for when the skin is off",
 	"sleep_timer":                               "Sleep timer",
@@ -805,6 +818,21 @@ var uiEnglish = map[string]string{
 	"wifi_connected":                                "Connected",
 	"ui_clock_position_styles":                      "For the Classic, Flip, LED, Sun and Glow styles",
 	"ui_match_all_languages":                        "Match all",
+
+	// Words on cards and overlays that were written into the drawing code.
+	"card_reminder":                   "REMINDER",
+	"card_notification":               "NOTIFICATION",
+	"card_drag_for_more":              "DRAG FOR MORE",
+	"tap_again":                       "Tap again",
+	"tap_again_s":                     "Tap again: %s",
+	"camera_button_sent":              "Sent",
+	"camera_button_no_home_assistant": "No Home Assistant",
+	"connecting_to_the_dashboard":     "Connecting to the dashboard…",
+	"loading_the_dashboard":           "Loading the dashboard…",
+	"obs_is_not_set_up":               "OBS isn't set up: setup page → Screen & Photos → Deck",
+
+	// The ringing page's note under a silenced alarm: which buttons snooze it.
+	"silenced_press_a_button_to_snooze_d_min": "Silenced · press a volume or microphone button to snooze %d min",
 }
 
 var uiTranslations = map[string]map[string]string{
@@ -899,6 +927,20 @@ var uiTranslations = map[string]map[string]string{
 		"lyrics":                        "Letra",
 		"microphone":                    "Micrófono",
 		"microphone_off":                "MICRÓFONO APAGADO",
+		"no_wifi":                       "SIN WI-FI",
+		"no_home_assistant":             "SIN HOME ASSISTANT",
+		"voice_no_home":                 "No se puede conectar con Home Assistant",
+		"voice_no_assistant":            "Ningún asistente de voz configurado",
+		"voice_timeout":                 "Sin respuesta a tiempo",
+		"voice_failed":                  "El asistente no pudo responder",
+		"not_live":                      "NO EN DIRECTO",
+		"deck_failed":                   "No funcionó",
+		"deck_obs_away":                 "OBS no está conectado",
+		"deck_obs_refused":              "OBS lo rechazó",
+		"deck_obs_silent":               "OBS no respondió",
+		"deck_pc_silent":                "%s no responde",
+		"deck_pc_unpaired":              "%s no está emparejado",
+		"deck_pc_key":                   "La clave de %s no coincide",
 		"minutes_before":                "%d minutos antes",
 		"month":                         "Mes",
 		"music":                         "Música",
@@ -1114,6 +1156,21 @@ var uiTranslations = map[string]map[string]string{
 		"calendar_look_chip_size_label": "Etiquetas de calendarios",
 		"calendar_look_chip_size_sub":   "Los nombres de los calendarios sobre el mes",
 		"option_normal":                 "Normal",
+
+		// Words on cards and overlays that were written into the drawing code.
+		"card_reminder":                   "RECORDATORIO",
+		"card_notification":               "NOTIFICACIÓN",
+		"card_drag_for_more":              "ARRASTRA PARA VER MÁS",
+		"tap_again":                       "Toca de nuevo",
+		"tap_again_s":                     "Toca de nuevo: %s",
+		"camera_button_sent":              "Enviado",
+		"camera_button_no_home_assistant": "Sin Home Assistant",
+		"connecting_to_the_dashboard":     "Conectando con el panel…",
+		"loading_the_dashboard":           "Cargando el panel…",
+		"obs_is_not_set_up":               "OBS no está configurado: página de configuración → Screen & Photos → Deck",
+
+		// The ringing page's note under a silenced alarm: which buttons snooze it.
+		"silenced_press_a_button_to_snooze_d_min": "Silenciada · pulsa un botón de volumen o de micrófono para posponer %d min",
 	},
 	"fr": {
 		"drawer_recording":              "Écoute en cours",
@@ -1209,6 +1266,20 @@ var uiTranslations = map[string]map[string]string{
 		"media_playback":                "Lecture",
 		"microphone":                    "Microphone",
 		"microphone_off":                "MICROPHONE DÉSACTIVÉ",
+		"no_wifi":                       "PAS DE WI-FI",
+		"no_home_assistant":             "PAS DE HOME ASSISTANT",
+		"voice_no_home":                 "Home Assistant est injoignable",
+		"voice_no_assistant":            "Aucun assistant vocal configuré",
+		"voice_timeout":                 "Pas de réponse à temps",
+		"voice_failed":                  "L'assistant n'a pas pu répondre",
+		"not_live":                      "PAS EN DIRECT",
+		"deck_failed":                   "Cela n'a pas fonctionné",
+		"deck_obs_away":                 "OBS n'est pas connecté",
+		"deck_obs_refused":              "OBS a refusé",
+		"deck_obs_silent":               "OBS n'a pas répondu",
+		"deck_pc_silent":                "%s ne répond pas",
+		"deck_pc_unpaired":              "%s n'est pas appairé",
+		"deck_pc_key":                   "La clé de %s ne correspond pas",
 		"minutes_before":                "%d minutes avant",
 		"month":                         "Mois",
 		"music":                         "Musique",
@@ -1472,7 +1543,6 @@ var uiTranslations = map[string]map[string]string{
 		"settings_lock":                             "Verrouillage des paramètres",
 		"shown_as_you_change_it_at_night":           "Aperçu pendant le réglage, la nuit",
 		"shown_with_the_clock":                      "Affiché avec l'horloge",
-		"silenced_press_again_to_snooze_d_min":      "Son coupé ; appuyez à nouveau pour répéter dans %d min",
 		"skin":                                      "Thème",
 		"skin_keeps":                                "Conservé lorsque le thème est désactivé",
 		"sleep_timer":                               "Minuteur de veille",
@@ -1901,6 +1971,21 @@ var uiTranslations = map[string]map[string]string{
 		"wifi_connected":                                "Connecté",
 		"ui_clock_position_styles":                      "Pour les styles Classic, Flip, LED, Sun et Glow",
 		"ui_match_all_languages":                        "Reconnaître toutes les langues",
+
+		// Words on cards and overlays that were written into the drawing code.
+		"card_reminder":                   "RAPPEL",
+		"card_notification":               "NOTIFICATION",
+		"card_drag_for_more":              "GLISSER POUR LA SUITE",
+		"tap_again":                       "Touchez à nouveau",
+		"tap_again_s":                     "Touchez à nouveau : %s",
+		"camera_button_sent":              "Envoyé",
+		"camera_button_no_home_assistant": "Pas de Home Assistant",
+		"connecting_to_the_dashboard":     "Connexion au tableau de bord…",
+		"loading_the_dashboard":           "Chargement du tableau de bord…",
+		"obs_is_not_set_up":               "OBS n'est pas configuré : page de configuration → Screen & Photos → Deck",
+
+		// The ringing page's note under a silenced alarm: which buttons snooze it.
+		"silenced_press_a_button_to_snooze_d_min": "Son coupé ; bouton de volume ou de micro pour répéter dans %d min",
 	},
 	"gl": {
 		"drawer_recording":           "Escoitando",
@@ -2092,6 +2177,20 @@ var uiTranslations = map[string]map[string]string{
 		"lyrics":                        "Letra",
 		"microphone":                    "Micrófono",
 		"microphone_off":                "MICRÓFONO APAGADO",
+		"no_wifi":                       "SEN WIFI",
+		"no_home_assistant":             "SEN HOME ASSISTANT",
+		"voice_no_home":                 "Non se pode conectar con Home Assistant",
+		"voice_no_assistant":            "Ningún asistente de voz configurado",
+		"voice_timeout":                 "Sen resposta a tempo",
+		"voice_failed":                  "O asistente non puido responder",
+		"not_live":                      "NON EN DIRECTO",
+		"deck_failed":                   "Non funcionou",
+		"deck_obs_away":                 "OBS non está conectado",
+		"deck_obs_refused":              "OBS rexeitouno",
+		"deck_obs_silent":               "OBS non respondeu",
+		"deck_pc_silent":                "%s non responde",
+		"deck_pc_unpaired":              "%s non está emparellado",
+		"deck_pc_key":                   "A clave de %s non coincide",
 		"minutes_before":                "%d minutos antes",
 		"month":                         "Mes",
 		"music":                         "Música",
@@ -2240,7 +2339,6 @@ var uiTranslations = map[string]map[string]string{
 		"shown_as_you_change_it_at_night":           "Amósase mentres o cambias, de noite",
 		"shown_with_the_clock":                      "Amósase co reloxo",
 		"silenced":                                  "Silenciado",
-		"silenced_press_again_to_snooze_d_min":      "Silenciado · preme de novo para adiar %d min",
 		"skin":                                      "Aparencia",
 		"skin_keeps":                                "Gárdase para cando a aparencia estea desactivada",
 		"sleep_timer":                               "Temporizador de apagado",
@@ -2684,6 +2782,21 @@ var uiTranslations = map[string]map[string]string{
 		"wifi_connected":                                "Conectado",
 		"ui_clock_position_styles":                      "Para os estilos Classic, Flip, LED, Sun e Glow",
 		"ui_match_all_languages":                        "Recoñecer todas as linguas",
+
+		// Words on cards and overlays that were written into the drawing code.
+		"card_reminder":                   "RECORDATORIO",
+		"card_notification":               "NOTIFICACIÓN",
+		"card_drag_for_more":              "ARRASTRA PARA VER MÁIS",
+		"tap_again":                       "Toca de novo",
+		"tap_again_s":                     "Toca de novo: %s",
+		"camera_button_sent":              "Enviado",
+		"camera_button_no_home_assistant": "Sen Home Assistant",
+		"connecting_to_the_dashboard":     "Conectando co panel…",
+		"loading_the_dashboard":           "Cargando o panel…",
+		"obs_is_not_set_up":               "OBS non está configurado: páxina de configuración → Screen & Photos → Deck",
+
+		// The ringing page's note under a silenced alarm: which buttons snooze it.
+		"silenced_press_a_button_to_snooze_d_min": "Silenciado · preme un botón de volume ou de micrófono para adiar %d min",
 	},
 	"it": {
 		"drawer_recording":           "In ascolto",
@@ -2875,6 +2988,20 @@ var uiTranslations = map[string]map[string]string{
 		"lyrics":                        "Testo",
 		"microphone":                    "Microfono",
 		"microphone_off":                "MICROFONO DISATTIVATO",
+		"no_wifi":                       "NESSUN WI-FI",
+		"no_home_assistant":             "NESSUN HOME ASSISTANT",
+		"voice_no_home":                 "Home Assistant non è raggiungibile",
+		"voice_no_assistant":            "Nessun assistente vocale configurato",
+		"voice_timeout":                 "Nessuna risposta in tempo",
+		"voice_failed":                  "L'assistente non ha potuto rispondere",
+		"not_live":                      "NON IN DIRETTA",
+		"deck_failed":                   "Non ha funzionato",
+		"deck_obs_away":                 "OBS non è connesso",
+		"deck_obs_refused":              "OBS ha rifiutato",
+		"deck_obs_silent":               "OBS non ha risposto",
+		"deck_pc_silent":                "%s non risponde",
+		"deck_pc_unpaired":              "%s non è associato",
+		"deck_pc_key":                   "La chiave di %s non corrisponde",
 		"minutes_before":                "%d minuti prima",
 		"month":                         "Mese",
 		"music":                         "Musica",
@@ -3023,7 +3150,6 @@ var uiTranslations = map[string]map[string]string{
 		"shown_as_you_change_it_at_night":           "Le modifiche vengono mostrate anche di notte",
 		"shown_with_the_clock":                      "Mostrato insieme all'orologio",
 		"silenced":                                  "Silenziato",
-		"silenced_press_again_to_snooze_d_min":      "Silenziato · premi di nuovo per posticipare di %d min",
 		"skin":                                      "Aspetto grafico",
 		"skin_keeps":                                "Mantenuto quando l'aspetto grafico è disattivato",
 		"sleep_timer":                               "Timer di spegnimento",
@@ -3471,6 +3597,21 @@ var uiTranslations = map[string]map[string]string{
 		"wifi_connected":                                "Connesso",
 		"ui_clock_position_styles":                      "Disponibile con gli stili Classic, Flip, LED, Sun e Glow",
 		"ui_match_all_languages":                        "Riconosci tutte le lingue",
+
+		// Words on cards and overlays that were written into the drawing code.
+		"card_reminder":                   "PROMEMORIA",
+		"card_notification":               "NOTIFICA",
+		"card_drag_for_more":              "TRASCINA PER IL RESTO",
+		"tap_again":                       "Tocca di nuovo",
+		"tap_again_s":                     "Tocca di nuovo: %s",
+		"camera_button_sent":              "Inviato",
+		"camera_button_no_home_assistant": "Nessun Home Assistant",
+		"connecting_to_the_dashboard":     "Connessione alla dashboard…",
+		"loading_the_dashboard":           "Caricamento della dashboard…",
+		"obs_is_not_set_up":               "OBS non è configurato: pagina di configurazione → Screen & Photos → Deck",
+
+		// The ringing page's note under a silenced alarm: which buttons snooze it.
+		"silenced_press_a_button_to_snooze_d_min": "Silenziato · premi un tasto del volume o del microfono per posticipare di %d min",
 	},
 	"nl": {
 		// Audio output
@@ -3875,6 +4016,20 @@ var uiTranslations = map[string]map[string]string{
 		"lyrics":                        "歌詞",
 		"microphone":                    "マイク",
 		"microphone_off":                "マイクはオフです",
+		"no_wifi":                       "Wi-Fiなし",
+		"no_home_assistant":             "Home Assistantなし",
+		"voice_no_home":                 "Home Assistantに接続できません",
+		"voice_no_assistant":            "音声アシスタントが設定されていません",
+		"voice_timeout":                 "時間内に応答がありませんでした",
+		"voice_failed":                  "アシスタントが応答できませんでした",
+		"not_live":                      "ライブではありません",
+		"deck_failed":                   "うまくいきませんでした",
+		"deck_obs_away":                 "OBSに接続されていません",
+		"deck_obs_refused":              "OBSに拒否されました",
+		"deck_obs_silent":               "OBSから応答がありません",
+		"deck_pc_silent":                "%s から応答がありません",
+		"deck_pc_unpaired":              "%s はペアリングされていません",
+		"deck_pc_key":                   "%s のキーが一致しません",
 		"minutes_before":                "%d分前",
 		"month":                         "月表示",
 		"music":                         "音楽",
@@ -4023,7 +4178,6 @@ var uiTranslations = map[string]map[string]string{
 		"shown_as_you_change_it_at_night":           "夜間に変更を反映して表示",
 		"shown_with_the_clock":                      "時計と一緒に表示",
 		"silenced":                                  "消音中",
-		"silenced_press_again_to_snooze_d_min":      "消音中・もう一度押すと%d分スヌーズ",
 		"skin":                                      "画面スタイル",
 		"skin_keeps":                                "スタイル解除後に適用",
 		"sleep_timer":                               "スリープタイマー",
@@ -4471,6 +4625,21 @@ var uiTranslations = map[string]map[string]string{
 		"wifi_connected":                                "接続済み",
 		"ui_clock_position_styles":                      "Classic、Flip、LED、Sun、Glowスタイル用",
 		"ui_match_all_languages":                        "すべての言語を認識",
+
+		// Words on cards and overlays that were written into the drawing code.
+		"card_reminder":                   "リマインダー",
+		"card_notification":               "通知",
+		"card_drag_for_more":              "ドラッグで続きを表示",
+		"tap_again":                       "もう一度タップ",
+		"tap_again_s":                     "もう一度タップ：%s",
+		"camera_button_sent":              "送信しました",
+		"camera_button_no_home_assistant": "Home Assistantに未接続",
+		"connecting_to_the_dashboard":     "ダッシュボードに接続中…",
+		"loading_the_dashboard":           "ダッシュボードを読み込み中…",
+		"obs_is_not_set_up":               "OBSが未設定です：セットアップ画面 → Screen & Photos → Deck",
+
+		// The ringing page's note under a silenced alarm: which buttons snooze it.
+		"silenced_press_a_button_to_snooze_d_min": "消音中・音量またはマイクのボタンを押すと%d分スヌーズ",
 	},
 
 	// de is the German catalog. The English of every entry is above it, so a
@@ -4833,7 +5002,21 @@ var uiTranslations = map[string]map[string]string{
 		// Microphone
 		"microphone": "Mikrofon",
 		// MICROPHONE OFF
-		"microphone_off": "MIKROFON AUS",
+		"microphone_off":     "MIKROFON AUS",
+		"no_wifi":            "KEIN WLAN",
+		"no_home_assistant":  "KEIN HOME ASSISTANT",
+		"voice_no_home":      "Home Assistant ist nicht erreichbar",
+		"voice_no_assistant": "Kein Sprachassistent eingerichtet",
+		"voice_timeout":      "Keine rechtzeitige Antwort",
+		"voice_failed":       "Der Assistent konnte nicht antworten",
+		"not_live":           "NICHT LIVE",
+		"deck_failed":        "Das hat nicht geklappt",
+		"deck_obs_away":      "OBS ist nicht verbunden",
+		"deck_obs_refused":   "OBS hat das abgelehnt",
+		"deck_obs_silent":    "OBS hat nicht geantwortet",
+		"deck_pc_silent":     "%s antwortet nicht",
+		"deck_pc_unpaired":   "%s ist nicht gekoppelt",
+		"deck_pc_key":        "Der Schlüssel für %s passt nicht",
 		// %d minutes before
 		"minutes_before": "%d Minuten vorher",
 		// Month
@@ -5127,8 +5310,6 @@ var uiTranslations = map[string]map[string]string{
 		"shown_with_the_clock": "Wird mit der Uhr angezeigt",
 		// Silenced
 		"silenced": "Stummgeschaltet",
-		// Silenced · press again to snooze %d min
-		"silenced_press_again_to_snooze_d_min": "Stumm · erneut drücken für %d min Schlummern",
 		// Skin
 		"skin": "Skin",
 		// Kept for when the skin is off
@@ -5873,6 +6054,32 @@ var uiTranslations = map[string]map[string]string{
 		"wifi_connected":                                "Verbunden",
 		"ui_clock_position_styles":                      "Für die Stile Classic, Flip, LED, Sun und Glow",
 		"ui_match_all_languages":                        "Alle Sprachen erkennen",
+
+		// Words on cards and overlays that were written into the drawing code.
+		// REMINDER
+		"card_reminder": "ERINNERUNG",
+		// NOTIFICATION
+		"card_notification": "BENACHRICHTIGUNG",
+		// DRAG FOR MORE
+		"card_drag_for_more": "FÜR MEHR ZIEHEN",
+		// Tap again
+		"tap_again": "Erneut tippen",
+		// Tap again: %s
+		"tap_again_s": "Erneut tippen: %s",
+		// Sent
+		"camera_button_sent": "Gesendet",
+		// No Home Assistant
+		"camera_button_no_home_assistant": "Kein Home Assistant",
+		// Connecting to the dashboard…
+		"connecting_to_the_dashboard": "Verbinde mit dem Dashboard…",
+		// Loading the dashboard…
+		"loading_the_dashboard": "Dashboard wird geladen…",
+		// OBS isn't set up: setup page → Screen & Photos → Deck
+		"obs_is_not_set_up": "OBS ist nicht eingerichtet: Einrichtungsseite → Screen & Photos → Deck",
+
+		// The ringing page's note under a silenced alarm: which buttons snooze it.
+		// Silenced · press a volume or microphone button to snooze %d min
+		"silenced_press_a_button_to_snooze_d_min": "Stumm · Lautstärke- oder Mikrofontaste drücken für %d min Schlummern",
 	},
 	"tr": {
 		"ui_listening_turn":          "Dinleniyor…",
@@ -6067,6 +6274,20 @@ var uiTranslations = map[string]map[string]string{
 		"lyrics":                        "Şarkı sözleri",
 		"microphone":                    "Mikrofon",
 		"microphone_off":                "MİKROFON KAPALI",
+		"no_wifi":                       "WI-FI YOK",
+		"no_home_assistant":             "HOME ASSISTANT YOK",
+		"voice_no_home":                 "Home Assistant'a ulaşılamıyor",
+		"voice_no_assistant":            "Sesli asistan kurulu değil",
+		"voice_timeout":                 "Zamanında yanıt gelmedi",
+		"voice_failed":                  "Asistan yanıt veremedi",
+		"not_live":                      "CANLI DEĞİL",
+		"deck_failed":                   "İşe yaramadı",
+		"deck_obs_away":                 "OBS bağlı değil",
+		"deck_obs_refused":              "OBS bunu reddetti",
+		"deck_obs_silent":               "OBS yanıt vermedi",
+		"deck_pc_silent":                "%s yanıt vermiyor",
+		"deck_pc_unpaired":              "%s eşleştirilmemiş",
+		"deck_pc_key":                   "%s anahtarı eşleşmiyor",
 		"minutes_before":                "%d dakika önce",
 		"month":                         "Ay",
 		"music":                         "Müzik",
@@ -6215,7 +6436,6 @@ var uiTranslations = map[string]map[string]string{
 		"shown_as_you_change_it_at_night":           "Gece değiştirirken gösterilir",
 		"shown_with_the_clock":                      "Saatle birlikte gösterilir",
 		"silenced":                                  "Susturuldu",
-		"silenced_press_again_to_snooze_d_min":      "Susturuldu · ertele için tekrar bas %d dk",
 		"skin":                                      "Kaplama",
 		"skin_keeps":                                "Kaplama kapalıyken saklanır",
 		"sleep_timer":                               "Uyku zamanlayıcısı",
@@ -6661,5 +6881,20 @@ var uiTranslations = map[string]map[string]string{
 		"wifi_connected":                                "Bağlı",
 		"ui_clock_position_styles":                      "Classic, Flip, LED, Sun ve Glow stilleri için",
 		"ui_match_all_languages":                        "Tüm dilleri tanı",
+
+		// Words on cards and overlays that were written into the drawing code.
+		"card_reminder":                   "HATIRLATICI",
+		"card_notification":               "BİLDİRİM",
+		"card_drag_for_more":              "DEVAMI İÇİN SÜRÜKLE",
+		"tap_again":                       "Tekrar dokunun",
+		"tap_again_s":                     "Tekrar dokunun: %s",
+		"camera_button_sent":              "Gönderildi",
+		"camera_button_no_home_assistant": "Home Assistant yok",
+		"connecting_to_the_dashboard":     "Dashboard'a bağlanılıyor…",
+		"loading_the_dashboard":           "Dashboard yükleniyor…",
+		"obs_is_not_set_up":               "OBS kurulmamış: kurulum sayfası → Screen & Photos → Deck",
+
+		// The ringing page's note under a silenced alarm: which buttons snooze it.
+		"silenced_press_a_button_to_snooze_d_min": "Susturuldu · %d dk ertelemek için ses veya mikrofon düğmesine bas",
 	},
 }

@@ -25,6 +25,39 @@ var (
 	moonPale  = color.RGBA{0xd8, 0xdc, 0xe4, 0xff}
 )
 
+// The same on a light theme. The colors above are made for a dark ground: on Paper's or Linen's the
+// sun and the cloud were 1.5:1, the rain 2.1:1 and the snow no more than the ground itself. Each has
+// a deeper one of its own hue, 3:1 or better on either ground, and the rain, which is also the
+// color of words, 4.5:1.
+var (
+	sunGoldDeep   = color.RGBA{0xa8, 0x70, 0x08, 0xff}
+	sunRayDeep    = color.RGBA{0xb0, 0x7a, 0x10, 0xff}
+	cloudGrayDeep = color.RGBA{0x78, 0x83, 0x8d, 0xff}
+	cloudDarkDeep = color.RGBA{0x5a, 0x64, 0x6e, 0xff}
+	rainBlueDeep  = color.RGBA{0x2c, 0x69, 0xa2, 0xff}
+	snowDeep      = color.RGBA{0x5a, 0x8a, 0xb4, 0xff}
+	boltDeep      = color.RGBA{0xa9, 0x7a, 0x00, 0xff}
+	moonDeep      = color.RGBA{0x76, 0x7c, 0x8e, 0xff}
+)
+
+// skyInk is one of the weather's colors as the theme in force needs it: pale on a dark ground, deep on
+// a light one. Over a photo a light theme is drawn as a dark one (onPhoto), and takes the pale ones.
+func skyInk(pale, deep color.RGBA) color.RGBA {
+	if dark() {
+		return pale
+	}
+	return deep
+}
+
+func sunInk() color.RGBA       { return skyInk(sunGold, sunGoldDeep) }
+func sunRayInk() color.RGBA    { return skyInk(sunPale, sunRayDeep) }
+func cloudInk() color.RGBA     { return skyInk(cloudGray, cloudGrayDeep) }
+func cloudDarkInk() color.RGBA { return skyInk(cloudDark, cloudDarkDeep) }
+func rainInk() color.RGBA      { return skyInk(rainBlue, rainBlueDeep) }
+func snowInk() color.RGBA      { return skyInk(snowWhite, snowDeep) }
+func boltInk() color.RGBA      { return skyInk(boltGold, boltDeep) }
+func moonInk() color.RGBA      { return skyInk(moonPale, moonDeep) }
+
 // box strokes a rectangle's outline, thick pixels wide.
 func (r *renderer) box(rect image.Rectangle, c color.Color, thick int) {
 	src := image.NewUniform(c)
@@ -83,13 +116,13 @@ func (r *renderer) sun(cx, cy, rad int) {
 		y0 := cy + int(float64(rad)*1.35*math.Sin(a))
 		x1 := cx + int(float64(rad)*1.8*math.Cos(a))
 		y1 := cy + int(float64(rad)*1.8*math.Sin(a))
-		r.stroke(x0, y0, x1, y1, max(rad/5, 2), sunPale)
+		r.stroke(x0, y0, x1, y1, max(rad/5, 2), sunRayInk())
 	}
-	r.disc(cx, cy, rad, sunGold)
+	r.disc(cx, cy, rad, sunInk())
 }
 
 func (r *renderer) moon(cx, cy, rad int) {
-	r.disc(cx, cy, rad, moonPale)
+	r.disc(cx, cy, rad, moonInk())
 	r.disc(cx+rad/2, cy-rad/3, rad*4/5, walnut)
 }
 
@@ -103,21 +136,21 @@ func (r *renderer) drops(cx, y, w int, c color.Color, n int) {
 func (r *renderer) flakes(cx, y, w int) {
 	for i := 0; i < 3; i++ {
 		x := cx - w/3 + i*(w/3)
-		r.disc(x, y+w/8+(i%2)*w/12, max(w/14, 2), snowWhite)
+		r.disc(x, y+w/8+(i%2)*w/12, max(w/14, 2), snowInk())
 	}
 }
 
 func (r *renderer) bolt(cx, y, w int) {
 	s := w / 5
-	r.stroke(cx+s/2, y-s/2, cx-s/2, y+s, max(s/3, 2), boltGold)
-	r.stroke(cx-s/2, y+s, cx+s/2, y+s, max(s/3, 2), boltGold)
-	r.stroke(cx+s/2, y+s, cx-s/3, y+s*5/2, max(s/3, 2), boltGold)
+	r.stroke(cx+s/2, y-s/2, cx-s/2, y+s, max(s/3, 2), boltInk())
+	r.stroke(cx-s/2, y+s, cx+s/2, y+s, max(s/3, 2), boltInk())
+	r.stroke(cx+s/2, y+s, cx-s/3, y+s*5/2, max(s/3, 2), boltInk())
 }
 
 func (r *renderer) fog(cx, y, w int) {
 	for i := 0; i < 3; i++ {
 		yy := y - w/6 + i*(w/8)
-		r.stroke(cx-w/2, yy, cx+w/2, yy, max(w/18, 2), cloudGray)
+		r.stroke(cx-w/2, yy, cx+w/2, yy, max(w/18, 2), cloudInk())
 	}
 }
 
@@ -131,42 +164,42 @@ func (r *renderer) weatherIcon(cond string, cx, cy, size int) {
 		r.moon(cx, cy, w/4)
 	case "partlycloudy":
 		r.sun(cx-w/6, cy-w/6, w/6)
-		r.cloud(cx+w/12, cy+w/4, w*3/4, cloudGray)
+		r.cloud(cx+w/12, cy+w/4, w*3/4, cloudInk())
 	case home.PartlyCloudyNight:
 		r.moon(cx-w/6, cy-w/6, w/5)
-		r.cloud(cx+w/12, cy+w/4, w*3/4, cloudGray)
+		r.cloud(cx+w/12, cy+w/4, w*3/4, cloudInk())
 	case "cloudy":
-		r.cloud(cx, cy+w/4, w, cloudGray)
+		r.cloud(cx, cy+w/4, w, cloudInk())
 	case "rainy":
-		r.cloud(cx, cy+w/8, w*4/5, cloudGray)
-		r.drops(cx, cy+w/6, w*4/5, rainBlue, 3)
+		r.cloud(cx, cy+w/8, w*4/5, cloudInk())
+		r.drops(cx, cy+w/6, w*4/5, rainInk(), 3)
 	case "pouring":
-		r.cloud(cx, cy+w/8, w*4/5, cloudDark)
-		r.drops(cx, cy+w/6, w*4/5, rainBlue, 5)
+		r.cloud(cx, cy+w/8, w*4/5, cloudDarkInk())
+		r.drops(cx, cy+w/6, w*4/5, rainInk(), 5)
 	case "lightning", "lightning-rainy":
-		r.cloud(cx, cy+w/8, w*4/5, cloudDark)
+		r.cloud(cx, cy+w/8, w*4/5, cloudDarkInk())
 		r.bolt(cx, cy+w/5, w)
 		if cond == "lightning-rainy" {
-			r.drops(cx+w/4, cy+w/6, w/2, rainBlue, 2)
+			r.drops(cx+w/4, cy+w/6, w/2, rainInk(), 2)
 		}
 	case "snowy", "snowy-rainy":
-		r.cloud(cx, cy+w/8, w*4/5, cloudGray)
+		r.cloud(cx, cy+w/8, w*4/5, cloudInk())
 		r.flakes(cx, cy+w/6, w*4/5)
 		if cond == "snowy-rainy" {
-			r.drops(cx+w/4, cy+w/6, w/3, rainBlue, 2)
+			r.drops(cx+w/4, cy+w/6, w/3, rainInk(), 2)
 		}
 	case "fog":
-		r.cloud(cx, cy, w*3/4, cloudGray)
+		r.cloud(cx, cy, w*3/4, cloudInk())
 		r.fog(cx, cy+w/4, w)
 	case "hail":
-		r.cloud(cx, cy+w/8, w*4/5, cloudDark)
+		r.cloud(cx, cy+w/8, w*4/5, cloudDarkInk())
 		r.flakes(cx, cy+w/6, w*4/5)
 	case "windy", "windy-variant":
-		r.cloud(cx, cy+w/8, w*3/4, cloudGray)
+		r.cloud(cx, cy+w/8, w*3/4, cloudInk())
 		r.fog(cx+w/6, cy+w/3, w*3/4)
 	case "exceptional":
-		r.disc(cx, cy, w/4, boltGold)
+		r.disc(cx, cy, w/4, boltInk())
 	default:
-		r.cloud(cx, cy+w/4, w, cloudGray)
+		r.cloud(cx, cy+w/4, w, cloudInk())
 	}
 }

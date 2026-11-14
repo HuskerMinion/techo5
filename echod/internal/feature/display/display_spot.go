@@ -208,6 +208,7 @@ type Display struct {
 	settled       bool // level has reached the target; settle steps it there between readings
 	view          voice.State
 	viewAt        time.Time
+	link          linkWatch // whether Home Assistant and the Wi-Fi are there, for the clock faces to say
 	volume        int
 	volAt         time.Time
 
@@ -423,6 +424,7 @@ func build() *Display {
 	d.nightMode = nightModeSwitch(d)
 	d.lang = langSelect()
 	voice.Changed.Listen(d.changed)
+	go d.watchLink()
 	media.Get().OnVolume.Listen(d.volumeMoved)
 	ambient.Get().Lux.Listen(d.lux)
 	touch.Get().Gestures.Listen(d.gesture)
@@ -653,7 +655,8 @@ func (d *Display) lux(float64) {
 func (d *Display) changed(s voice.State) {
 	d.mu.Lock()
 	newHeard := s.Heard != "" && s.Heard != d.view.Heard
-	if s.Phase == "listening" && d.view.Phase != "listening" {
+	if (s.Phase == "listening" && d.view.Phase != "listening") || s.Failed != "" {
+		// A request that failed is said whatever was put away before it: it is a new thing to say.
 		d.quiet = false
 	}
 	d.view = s
@@ -1587,15 +1590,16 @@ func (d *Display) frame() (next time.Duration) {
 		}
 		return time.Hour
 	}
-	if view.Phase == "idle" && (view.Heard != "" || view.Reply != "") && now.Sub(at) < linger() {
+	if view.Phase == "idle" && (view.Heard != "" || view.Reply != "" || view.Failed != "") && now.Sub(at) < linger() {
 		s.phase = "lingering"
+		s.failed = failedShown(view.Failed)
 	}
 	if quiet && (s.phase == "thinking" || s.phase == "replying" || s.phase == "lingering") {
 		// A screen command: the screen it asked for is the answer, not the words.
-		s.phase, s.heard, s.reply = "idle", "", ""
+		s.phase, s.heard, s.reply, s.failed = "idle", "", "", ""
 	}
 	if cueOn() {
-		s.cue, s.phase, s.heard, s.reply = cueTurn(s.phase, s.heard, s.reply, captionsOn())
+		s.cue, s.phase, s.heard, s.reply = cueFailed(s.phase, s.heard, s.reply, s.failed, captionsOn())
 	}
 	s.said = voice.Spoken(s.reply, now)
 	if equalizerOn() && (s.phase == "listening" || s.phase == "thinking" || s.phase == "replying" || s.phase == "lingering") {
@@ -1604,6 +1608,7 @@ func (d *Display) frame() (next time.Duration) {
 	}
 	s.muted, _ = mute.Get().Muted()
 	s.mutedSubtle = muteRingSubtle.Load()
+	s.linkDown = d.link.down(now)
 	s.noIdleRing = idleRingHidden.Load()
 	s.listening = babymon.Shown()
 	// A stream this player is carrying is the room's when it is what is being heard: the face names it,

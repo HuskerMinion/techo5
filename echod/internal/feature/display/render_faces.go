@@ -140,7 +140,7 @@ func (r *renderer) agendaStyle(s scene, box image.Rectangle) {
 		// suffix by its own height. The step alone let a taller font's AM or PM reach up into the time;
 		// the screen's own font fits the step exactly, so with it nothing moves.
 		step := max(r.s(48), r.s(6)+capHeight(r.ampm))
-		r.text(r.ampm, suffix, box.Min.X, base+step, dateColor(amber))
+		r.text(r.ampm, suffix, box.Min.X, base+step, r.ampmInk())
 		base += step
 	}
 	day := r.styleFace(true, 34)
@@ -311,7 +311,7 @@ func (r *renderer) overlapStyle(s scene, box image.Rectangle) {
 	}
 	at := r.overlapClock(&r.figures, f, digits, box.Min.X+(box.Dx()-w-aw)/2, top+h, amber, cream, dim)
 	if ampm != "" {
-		r.text(af, ampm, at.Max.X+r.s(14), top+capHeight(af), dateColor(amber))
+		r.text(af, ampm, at.Max.X+r.s(14), top+capHeight(af), r.ampmInk())
 	}
 	// The whole time opens the calendar, as the date does under the classic face.
 	r.setDateAt(image.Rect(at.Min.X, at.Min.Y, at.Max.X+aw, at.Max.Y).Inset(-r.s(8)))
@@ -329,7 +329,8 @@ func (r *renderer) glowGround(s scene) {
 	r.glow.stretch(r.dst, field, nil)
 }
 
-// styleNameTag is the name of the style a swipe turned to, in the middle of the clock for a moment.
+// styleNameTag is the name of the style a swipe turned to, in the middle of the clock for a moment;
+// the word that answers a hold on the clock is said the same way.
 func (r *renderer) styleNameTag(s scene) {
 	name := s.style.named
 	if name == "" {

@@ -32,7 +32,7 @@ func (f *Feature) firstRunPage(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.Header().Set("Cache-Control", "no-store")
 	if !in {
-		f.lockedPage(w)
+		f.lockedPage(w, f.asking(token), "")
 		return
 	}
 	if r.Method == http.MethodPost {
@@ -135,6 +135,8 @@ func firstRunForm(w http.ResponseWriter, token, problem string, showKey bool) {
 	} else {
 		fmt.Fprint(w, `<p class="sub">Setting up</p>`)
 	}
+	// The page's script comes last, after the foot: the Wi-Fi step's passphrase has a Show box.
+	defer pageScript(w)
 	defer fmt.Fprint(w, `<p class="note"><a href="/setup?all=1">All settings</a></p></div>`)
 	if problem != "" {
 		fmt.Fprintf(w, `<div class="banner bad">%s</div>`, html.EscapeString(problem))
@@ -167,8 +169,7 @@ func firstRunForm(w http.ResponseWriter, token, problem string, showKey bool) {
 		 kept. If it moves to the network you add, this page goes with it, at the device's new address.</p>`)
 		form("wifi", "Add network", false, `<label for="ssid">Network name</label>
 		 <input id="ssid" name="ssid" autocomplete="off">
-		 <label for="passphrase">Passphrase</label><input id="passphrase" name="passphrase" type="password" autocomplete="new-password">`+
-			loginFieldsHTML()+`<br>`)
+		 `+passphraseField()+loginFieldsHTML()+`<br>`)
 		macNote(w)
 		fmt.Fprint(w, `</fieldset><p>`)
 		next("Next")
@@ -238,7 +239,8 @@ func firstRunForm(w http.ResponseWriter, token, problem string, showKey bool) {
 		next("I heard it")
 	case firstrun.Done:
 		fmt.Fprintf(w, `<h2>All set</h2><p>%s is set up. Every setting is on this page from now on, behind
-		 the same press on the device.</p>`, html.EscapeString(deviceName()))
+		 the same %s.</p>`, html.EscapeString(deviceName()),
+			onThisDevice("tap on Allow on the device's screen", "press of the action button on the device"))
 		form("finish", "Finish", true, "")
 	}
 }
@@ -329,8 +331,9 @@ func isRoom(room string) bool {
 
 // resetSection clears the device for somebody else and starts first run (firstrun.Reset).
 func resetSection(w http.ResponseWriter, token string) {
-	fmt.Fprint(w, `<fieldset><legend>Reset for someone else</legend><form method="post" action="/setup/save">`)
-	hidden(w, token, "giftreset", "general")
+	fieldsetOpen(w, "giftreset", "Reset for someone else")
+	fmt.Fprint(w, `<form method="post" action="/setup/save">`)
+	hidden(w, token, "giftreset")
 	fmt.Fprint(w, `<p style="margin:0">Clears this device for whoever has it next, and starts first run:
 	 the Wi-Fi networks, the name and room, Home Assistant's key and access, alarms, timers, the phone book,
 	 photos, sounds and every setting. The list is in the setup guide.</p>

@@ -28,29 +28,26 @@ const immichListAsk = 3 * time.Second
 
 func immichSection(w http.ResponseWriter, token string) {
 	srv := config.Get().Home.Immich
-	fmt.Fprint(w, `<fieldset><legend>Photos from Immich</legend>
-	 <p style="margin:0">Show photos from your own Immich server, with no Home Assistant needed.</p>
+	fieldsetOpen(w, "immich", "Photos from Immich")
+	fmt.Fprint(w, `<p style="margin:0">Show photos from your own Immich server, with no Home Assistant needed.</p>
 	 <form method="post" action="/setup/save">`)
-	hidden(w, token, "immich", "photos")
+	hidden(w, token, "immich")
 	keyNote := `In Immich: your account, <strong>Account Settings</strong>, <strong>API Keys</strong>, <strong>New API Key</strong>. It needs to read albums and photos.`
-	keyHolder := ""
 	if srv.Key != "" {
-		keyNote = `A key is kept. Leave this empty to keep it, or paste a new one to replace it.`
-		keyHolder = "Kept"
+		keyNote = `Paste a new one to replace it.`
 	}
 	fmt.Fprintf(w, `<label for="immichsrv">Server address</label>
 	 <input id="immichsrv" name="server" value="%s" placeholder="http://192.168.1.20:2283" autocomplete="off">
-	 <label for="immichkey">API key</label>
-	 <input id="immichkey" name="key" type="password" placeholder="%s" autocomplete="new-password">
+	 %s
 	 <p class="note">%s The key stays on this device and this page never shows it again.</p>
 	 <p><button type="submit">Save</button></p></form>`,
-		html.EscapeString(srv.Server), keyHolder, keyNote)
+		html.EscapeString(srv.Server), secretField("immichkey", "API key", "key", srv.Key != "", ""), keyNote)
 	if srv.Set() {
 		immichAlbumForm(w, token, srv)
 		immichShowForm(w, token)
 		fmt.Fprint(w, `<form method="post" action="/setup/save">`)
-		hidden(w, token, "immich-forget", "photos")
-		fmt.Fprint(w, `<p><button type="submit">Forget this server</button></p></form>`)
+		hidden(w, token, "immich-forget")
+		fmt.Fprint(w, `<p><button type="submit" class="danger">Forget this server</button></p></form>`)
 	}
 	fmt.Fprint(w, `</fieldset>`)
 }
@@ -68,7 +65,7 @@ func immichAlbumForm(w http.ResponseWriter, token string, srv config.Immich) {
 	}
 	source, _, _ := home.Get().SlideshowSettings()
 	fmt.Fprint(w, `<form method="post" action="/setup/save">`)
-	hidden(w, token, "immich-album", "photos")
+	hidden(w, token, "immich-album")
 	fmt.Fprint(w, `<label for="immichalbum">Photos to show</label><select id="immichalbum" name="source">`)
 	option := func(value, label string) {
 		sel := ""
@@ -98,7 +95,7 @@ func immichShowForm(w http.ResponseWriter, token string) {
 		return ""
 	}
 	fmt.Fprint(w, `<form method="post" action="/setup/save">`)
-	hidden(w, token, "immich-show", "photos")
+	hidden(w, token, "immich-show")
 	fmt.Fprintf(w, `<p><label><input type="checkbox" name="favorites" value="yes" style="width:auto"%s> Favorites only</label></p>
 	 <label for="immichfrom">Taken from</label><input id="immichfrom" name="from" type="date" value="%s">
 	 <label for="immichto">Taken through</label><input id="immichto" name="to" type="date" value="%s">

@@ -40,8 +40,11 @@ type drawnDrag struct {
 	scrolling   bool
 	value       float64 // the slid level, while sliding
 	// down is a finger that came down on the page; moved is one that has gone further than a hold
-	// allows, so lifting it is not a long press.
+	// allows, so it is not a long press.
 	down, moved bool
+	// held is a finger that stayed put until it was a long press, which acted then (tileHeld): where it
+	// lifts does nothing more.
+	held bool
 	// onSheet is a finger that came down on the color sheet: only one of those that moves chooses
 	// where it lifts, so a drag from the page under the sheet does not set what it ends over.
 	onSheet bool
@@ -87,9 +90,9 @@ func (s sheetSlider) at(x int) float64 {
 	return s.lo + min(max(f, 0), 1)*(s.hi-s.lo)
 }
 
-// holdStill is how far a finger may wander and still be a long press when it lifts: the touchscreen's
-// own followMove, so a finger it began to follow never is, and one it did not always is. Any less left
-// a slow press that drifted between the two as neither a long press nor a tap.
+// holdStill is how far a finger may wander and still be a long press: the touchscreen's own
+// followMove, so a finger it began to follow never is, and one it did not always is. Any less left a
+// slow press that drifted between the two as neither a long press nor a tap.
 const holdStill = 12
 
 // tapWander is how far a finger may travel on a tile and still have tapped it, in the Show 5's pixels:
@@ -318,14 +321,17 @@ func (d *Display) drawnMove(x, y int) {
 	}
 }
 
-// drawnRelease is the finger lifting at x, y: a slide sets its level, and a finger that stayed put
-// until it was a hold is a long press (longPress). With the color sheet up, it is the sheet's.
+// drawnRelease is the finger lifting at x, y: a slide sets its level. A finger that stayed put until
+// it was a long press has acted already (tileHeld). With the color sheet up, it is the sheet's.
 func (d *Display) drawnRelease(x, y int) {
 	d.mu.Lock()
 	dr := d.dashDrag
 	d.dashDrag = drawnDrag{}
 	d.dashAdjust = dashAdjusting{}
 	d.mu.Unlock()
+	if dr.held {
+		return // the long press opened what it opens: the lift is not a tap on that, nor beside it
+	}
 	if dr.moved && !dr.onSheet && d.colorOpen() {
 		return // a drag from the page under the sheet: nothing on the sheet was chosen
 	}
@@ -358,8 +364,6 @@ func (d *Display) drawnRelease(x, y int) {
 			d.mu.Unlock()
 		}
 		d.drawnTap(dr.at.X, dr.at.Y)
-	case dr.down && !dr.moved && !dr.scrolling && dr.tile != nil:
-		d.longPress(dr.tile)
 	}
 }
 

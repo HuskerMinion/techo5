@@ -40,7 +40,11 @@ func (r *renderer) weatherPageKept(s scene) {
 		copy(r.dst.Pix, r.weatherKept)
 		return
 	}
+	// Kept with no finger on it, or a press on its button would stay in the copy: the page shows none.
+	press := r.press
+	r.press.on = false
 	r.weatherPage(s)
+	r.press = press
 	r.weatherKept = append(r.weatherKept[:0], r.dst.Pix...)
 	r.weatherKey = key
 }
@@ -70,11 +74,13 @@ func (r *renderer) weatherPage(s scene) {
 	if !dark() {
 		words = sunDeep
 	}
-	r.text(r.body, conditionWords(cond), r.margin, r.s(300), words)
+	// Under the icon with room to spare: a storm's bolt hangs below its cloud, and at 300 it crossed
+	// the first letters of "Thunderstorms".
+	r.text(r.body, conditionWords(cond), r.margin, r.s(326), words)
 	if len(days) > 0 {
-		r.text(r.small, weatherRange(days[0].High, days[0].Low), r.margin, r.s(345), dim)
+		r.text(r.small, weatherRange(days[0].High, days[0].Low), r.margin, r.s(367), dim)
 		if days[0].Rain >= 0 {
-			r.text(r.small, weatherRain(days[0].Rain), r.margin, r.s(385), rainBlue)
+			r.text(r.small, weatherRain(days[0].Rain), r.margin, r.s(404), rainInk())
 		}
 	}
 
@@ -100,7 +106,7 @@ func (r *renderer) weatherPage(s scene) {
 			r.text(r.small, lo, x+(colW-r.width(r.small, lo))/2, r.s(300), dim)
 			if d.Rain > 0 {
 				p := fmt.Sprintf("%d%%", d.Rain)
-				r.text(r.tiny, p, x+(colW-r.width(r.tiny, p))/2, r.s(338), rainBlue)
+				r.text(r.tiny, p, x+(colW-r.width(r.tiny, p))/2, r.s(338), rainInk())
 			}
 		}
 	} else if len(days) == 0 {

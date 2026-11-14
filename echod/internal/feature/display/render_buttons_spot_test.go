@@ -50,7 +50,7 @@ func TestTheRoundCameraControlsSitOnTheirButtons(t *testing.T) {
 		with.cameraControl(b, c.name, c.live)
 		without := newRoundRenderer(image.NewRGBA(image.Rect(0, 0, side, side)))
 		if c.live {
-			without.roundButton(b, float64(b.Dy())/2, talkLive)
+			without.roundButton(b, float64(b.Dy())/2, declineRed)
 		} else {
 			without.buttonFace(b, float64(b.Dy())/2, btnSecondary)
 		}

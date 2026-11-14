@@ -33,8 +33,9 @@ func wallClockSection(w http.ResponseWriter, token string) {
 	if !wc.Here() {
 		return
 	}
-	fmt.Fprint(w, `<fieldset><legend>Echo Wall Clock</legend><form method="post" action="/setup/save">`)
-	hidden(w, token, "wallclock", "connections")
+	fieldsetOpen(w, "wallclock", "Echo Wall Clock")
+	fmt.Fprint(w, `<form method="post" action="/setup/save">`)
+	hidden(w, token, "wallclock")
 	fmt.Fprintf(w, `
 	 <p><label><input type="checkbox" name="on" value="yes" style="width:auto"%s> Show this device's timers
 	  on an Echo Wall Clock</label></p>

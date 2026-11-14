@@ -228,9 +228,10 @@ func (r *renderer) pillTapped(p image.Point) int {
 	return -1
 }
 
-// micPillRight is where the header's "microphone off" pill ends, in the middle of the top row.
-func (r *renderer) micPillRight() int {
-	return (r.w+r.width(r.tiny, tr("microphone_off")))/2 + r.s(14)
+// micPillRight is where the header's pill ("microphone off", or what the device has lost) ends, in the
+// middle of the top row.
+func (r *renderer) micPillRight(s scene) int {
+	return (r.w+r.width(r.tiny, headerLine(s)))/2 + r.s(14)
 }
 
 // alertBadge is the clock's word that something is in force: the most severe alert's name, and how
@@ -250,8 +251,8 @@ func (r *renderer) alertBadge(s scene) {
 	h, mark := r.s(40), r.s(30)
 	right := r.w - r.margin
 	left := r.w / 2 // never past the middle
-	if s.muted {
-		left = r.micPillRight() + r.s(12)
+	if headerLine(s) != "" {
+		left = r.micPillRight(s) + r.s(12)
 	}
 	top := r.badgeTop()
 	if r.weatherRight {

@@ -99,8 +99,16 @@ Many steps here mention the setup page. It's the device's own web page, at
 `http://<device address>:8181/setup` in a browser on the same network. It's off until you open it:
 turn on the device's **Setup page** switch in Home Assistant, open it from the device's settings
 screen, or on a Dot hold the action button. It turns itself off again after seven minutes with nothing
-asked of it, or an hour after it opened. To let a browser in, press the action button on the device
-when the page asks: there's no password, the press is what proves you are at the device.
+asked of it, or an hour after it opened. To let a browser in, choose **Ask to be let in** on the page,
+then answer at the device within a minute: tap **Allow** on a device with a screen, or press the action
+button on one without. There's no password, the answer at the device is what proves you are there. If
+nobody answers, the page says so and offers to ask again.
+**Done**, at the top of the page, lets go of that browser at once, without waiting for the page to close.
+
+Passwords, keys and tokens all work one way on the page. A saved one is never shown: its field is
+empty, and the page says whether one is saved. Leave the field empty to keep it, type a new one to
+replace it, and tick **Show** to see what you are typing. Where one can be taken away on its own,
+**Remove the saved one** does that.
 
 SSH works only with a key: the device's **SSH** switch turns the server on, and the
 [ssh_keys action](actions.md#set-the-ssh-authorized-keys) puts your public key on it. Log in as `root`.
@@ -647,7 +655,8 @@ captured login to the same page for a few minutes, and could see the pictures an
   screen; the select in Home Assistant picks one and shows the first one ticked. While this device
   plays nothing of its own, Now Playing shows a followed player's song and cover, and its buttons
   control it. With several playing, it shows the one that started last, and when that one stops,
-  another that is still playing. **Done** puts it away until the next song without stopping it. Needs
+  another that is still playing. **Done** puts it away until the next song without stopping it (over
+  this device's own music the same button says **Stop**, and ends the music). Needs
   the home_assistant action (address and token).
   On the Spot, a swipe across a followed player's page skips to the next or previous song. **Stop**
   on a followed page puts it away and leaves the other player playing.
@@ -1128,7 +1137,8 @@ device's fonts folder over SSH ([Set the SSH authorized keys](actions.md#set-the
   a finger held on the clock for half a second sends the same event with `gesture: hold`. Only on
   the clock itself, with nothing else on the screen (not over the screensaver, a card or the night
   clock): every other page keeps its taps as they are. With it on, a slow tap on the clock is a
-  hold, so tap quickly to open what a tap opens.
+  hold, so tap quickly to open what a tap opens. The clock shows **OK** in its middle for a moment
+  when a hold has been sent.
 
 ## 7. Voice
 
@@ -1459,7 +1469,7 @@ To set it up, open the setup page, **Sound & Voice**, **Voice assistant**:
    (like `en_US-lessac-medium`; empty is the server's own), and **Language** what you speak (empty
    is English).
 3. **Chat model endpoint**, and **Model** and **Key** if the server needs them. The key is never
-   shown again; **Remove the key** clears it.
+   shown again; **Remove the saved one** clears it.
 4. **Web search**, if you want it: the SearXNG server's address. **Page reader**, if you want that
    too: a [page reader](../tools/page-reader/README.md)'s address. A page is read through it when it
    has almost no text as it comes (it fills itself in with scripts, like a store's hours) or the site
@@ -2037,7 +2047,8 @@ PIN is right. Once the PIN is in, the rest stay open until the settings close or
 two minutes. Set it under Settings → Privacy & Security, on the setup page (Privacy), or with the
 [settings_lock_pin action](actions.md#set-the-settings-locks-pin). Five wrong tries in a row make
 the device wait before it takes another. The **Settings lock** switch in Home Assistant shows
-whether it is on; turning it off removes the PIN.
+whether it is on; turning it off removes the PIN. The setup page turns it off too, after a box is
+ticked to say the settings are then open to anyone at the screen.
 
 While the lock is on, the PIN is also asked for when **Allow** is pressed on the setup page.
 

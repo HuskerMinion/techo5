@@ -167,6 +167,11 @@ func (d *Display) drawerRowTap(id string) {
 			home.Get().Stop()
 			return
 		}
+		// And the page for a station is the one it will play on, at once: the clock used to stay up
+		// until the sound came, with nothing to say the tap was taken (radioStarting).
+		d.mu.Lock()
+		d.radioTapped, d.away = time.Now(), false
+		d.mu.Unlock()
 		home.Get().Play(rows[i])
 	}
 }

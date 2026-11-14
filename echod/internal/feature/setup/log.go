@@ -58,7 +58,7 @@ type logEntry struct {
 
 func (f *Feature) logPage(w http.ResponseWriter, r *http.Request) {
 	if _, in := f.session(r); !in {
-		http.Error(w, "not let in", http.StatusForbidden)
+		notLetIn(w)
 		return
 	}
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")

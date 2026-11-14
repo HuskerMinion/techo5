@@ -19,8 +19,8 @@ const maxPhoto = 8 << 20
 
 func photosSection(w http.ResponseWriter, token string) {
 	n := home.LocalPhotoCount()
-	fmt.Fprintf(w, `<fieldset><legend>Photos on this device</legend>
-	 <p style="margin:0"><strong>%d</strong> kept, of at most %d. The slideshow shows them when it has no Home
+	fieldsetOpen(w, "photos", "Photos on this device")
+	fmt.Fprintf(w, `<p style="margin:0"><strong>%d</strong> kept, of at most %d. The slideshow shows them when it has no Home
 	  Assistant photos to show; turn it on above, or on the device under Settings, Display, Slideshow.</p>
 	 <label for="pics">Add photos</label>
 	 <input id="pics" type="file" accept="image/*" multiple>
@@ -50,9 +50,9 @@ func photosSection(w http.ResponseWriter, token string) {
 	 </script>`, n, home.MaxLocalPhotos, token)
 	if n > 0 {
 		fmt.Fprint(w, `<form method="post" action="/setup/save">`)
-		hidden(w, token, "photos-remove", "photos")
+		hidden(w, token, "photos-remove")
 		fmt.Fprint(w, `<p><label><input type="checkbox" name="sure" value="yes" style="width:auto"> Yes, remove them all</label></p>
-		 <p><button type="submit">Remove all photos</button></p></form>`)
+		 <p><button type="submit" class="danger">Remove all photos</button></p></form>`)
 	}
 	fmt.Fprint(w, `</fieldset>`)
 }

@@ -245,6 +245,17 @@ func MonthYear(t time.Time, lang string) string {
 	return t.Format("January 2006")
 }
 
+// ShortMonthYear is MonthYear where there is less room: "Oct 2026", "Okt. 2026".
+func ShortMonthYear(t time.Time, lang string) string {
+	if lang == "ja" {
+		return t.Format("2006年1月")
+	}
+	if w, ok := langs[lang]; ok {
+		return up(w.shortMonths[t.Month()-1]) + " " + strconv.Itoa(t.Year())
+	}
+	return t.Format("Jan 2006")
+}
+
 // LongDate is the clock's date: "Monday, January 2", "Montag, 2. Januar", "Lunes, 2 de enero",
 // "Lundi 2 janvier", "Lunedì 2 gennaio", "Maandag 2 januari", "Понедельник, 2 января",
 // "Segunda-feira, 2 de janeiro".

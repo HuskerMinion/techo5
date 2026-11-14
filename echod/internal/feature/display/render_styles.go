@@ -209,7 +209,7 @@ func (r *renderer) bigStyle(s scene, box image.Rectangle) {
 	base := box.Min.Y + (box.Dy()+h)/2
 	r.text(f, hm, x, base, cream)
 	if ampm != "" {
-		r.text(r.ampm, ampm, x+w+r.s(16), base-h+capHeight(r.ampm), dateColor(amber))
+		r.text(r.ampm, ampm, x+w+r.s(16), base-h+capHeight(r.ampm), r.ampmInk())
 	}
 	// The whole time opens the calendar, as the date does under the classic face.
 	r.setDateAt(image.Rect(x, base-h, x+w+aw, base))

@@ -27,7 +27,7 @@ const (
 // a wider, taller band for the words, set as large as the band takes them, and no icon on a huge one.
 func (r *roundRenderer) sizedNotifyFace(n notify.Notification) {
 	huge := n.Size == notify.SizeHuge
-	head := "NOTIFICATION"
+	head := tr("card_notification")
 	if n.Title != "" {
 		head = upper(n.Title)
 	}
@@ -49,7 +49,7 @@ func (r *roundRenderer) sizedNotifyFace(n notify.Notification) {
 			y += lineH
 		}
 	}
-	r.centered(r.small, "tap to dismiss", top+high+34, colDim)
+	r.centered(r.small, tr("drawer_dismiss"), top+high+34, colDim)
 }
 
 func (r *roundRenderer) notifyFace(s roundScene) {
@@ -64,7 +64,7 @@ func (r *roundRenderer) notifyFace(s roundScene) {
 		r.mdiIcon(n.Icon, center-r.s(size)/2, y-r.s(size)-8, size, colAccent)
 		y += 10
 	}
-	head := "NOTIFICATION"
+	head := tr("card_notification")
 	if n.Title != "" {
 		head = upper(n.Title)
 	}
@@ -83,7 +83,7 @@ func (r *roundRenderer) notifyFace(s roundScene) {
 		r.centered(face, line, y, colText)
 		y += step
 	}
-	r.centered(r.small, "tap to dismiss", y+16, colDim)
+	r.centered(r.small, tr("drawer_dismiss"), y+16, colDim)
 }
 
 // notifyLights puts the menu away for a notification of words and lights a dark face for either kind,

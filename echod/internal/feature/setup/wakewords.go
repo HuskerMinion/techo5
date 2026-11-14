@@ -27,18 +27,18 @@ var models = wake.Lib
 // wakeWordsSection lists the wake words on the device, with Remove for the ones sent from here, and
 // takes a new one.
 func wakeWordsSection(w http.ResponseWriter, token string) {
-	fmt.Fprint(w, `<fieldset><legend>Wake words of your own</legend>`)
+	fieldsetOpen(w, "wakewords", "Wake words of your own")
 	ours := models().Ours()
 	if len(ours) == 0 {
 		fmt.Fprint(w, `<p style="margin-top:0">None on the device yet.</p>`)
 	}
 	for _, m := range ours {
 		fmt.Fprint(w, `<form method="post" action="/setup/save" style="margin:0">`)
-		hidden(w, token, "wakeword-remove", "sound")
+		hidden(w, token, "wakeword-remove")
 		fmt.Fprintf(w, `<input type="hidden" name="id" value="%s"><p style="margin:.3em 0"><strong>%s</strong>
 		 <span class="note">(%s)</span>`, html.EscapeString(m.ID), html.EscapeString(m.Phrase), html.EscapeString(m.ID))
 		if m.Uploaded {
-			fmt.Fprint(w, ` sent from this page <button type="submit" class="quiet" style="margin-left:.5em">Remove</button>`)
+			fmt.Fprint(w, ` sent from this page <button type="submit" class="quiet danger" style="margin-left:.5em">Remove</button>`)
 		} else {
 			fmt.Fprint(w, ` <span class="note">came with the device or from Home Assistant</span>`)
 		}

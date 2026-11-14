@@ -105,13 +105,37 @@ func (r *roundRenderer) footLine(s roundScene, baseline int, otherwise string) {
 	}
 }
 
-// statusWord is the word the classic face puts over the time.
+// linkWord is what the status word says of a lost Wi-Fi or Home Assistant, as the Show's header does.
+func linkWord(down string) string {
+	switch down {
+	case linkNoWifi:
+		return tr("no_wifi")
+	case linkNoHome:
+		return tr("no_home_assistant")
+	}
+	return ""
+}
+
+// statusLineH is the step up from the status word to a second one over it.
+const statusLineH = 26
+
+// statusWord is the word a clock face puts over the time: what is true of the device now.
+//
+// What the device has lost is said here in the timer's amber and never in the mute's red, which with
+// the red rim means one thing only. Muted as well, the mute keeps its line and its rim and the loss
+// goes on a line of its own over it: neither is a reason to stop saying the other.
 func (r *roundRenderer) statusWord(s roundScene, baseline int) {
+	lost := linkWord(s.linkDown)
 	switch {
 	case s.setupAsking:
 		r.centered(r.label, tr("a_browser_is_asking"), baseline, colMuted)
 	case s.muted:
 		r.centered(r.label, tr("microphone_off"), baseline, colMuted)
+		if lost != "" {
+			r.centered(r.label, lost, baseline-statusLineH, colTimer)
+		}
+	case lost != "":
+		r.centered(r.label, lost, baseline, colTimer)
 	case s.btPairing:
 		r.centered(r.label, tr("bluetooth_pairing"), baseline, colBluetooth)
 	case s.playing:

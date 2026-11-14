@@ -830,6 +830,7 @@ func (c *conversation) turnEvent(e event) {
 
 		slog.Error("pipeline error", "slot", c.slot+1, "code", e.code, "message", e.msg)
 		c.clearPending()
+		c.fails(failureFor(e.code))
 		c.turn.Fails(e.code)
 		c.idle("failed", activity.Failed)
 		c.trouble()
@@ -878,6 +879,7 @@ func (c *conversation) turnEvent(e event) {
 		case phaseThinking:
 			slog.Warn("gave up waiting for an answer", "slot", c.slot+1, "after", wakeword.MaxThink(c.slot))
 		}
+		c.fails(FailedTimeout)
 		c.turn.TimesOut()
 		c.idle("timed out", activity.Failed)
 		c.trouble()
@@ -989,6 +991,11 @@ func (c *conversation) start(n nextTurn) (started bool) {
 	if !c.be.Ready() {
 		slog.Warn("no voice pipeline ready, ignoring wake", "slot", slot+1, "backend", c.be.Name())
 		wakeword.Chime(slot, n.followUp)
+		why := FailedNoAssistant
+		if _, home := c.be.(ha); home {
+			why = FailedNotReady
+		}
+		c.refuses(n, why)
 		c.trouble()
 		return false
 	}
@@ -1000,6 +1007,7 @@ func (c *conversation) start(n nextTurn) (started bool) {
 	phrase, ok := c.phraseFor(slot)
 	if slot > 0 && !ok {
 		slog.Warn("no wake word in that slot, nothing to reach its pipeline with", "slot", slot+1)
+		c.refuses(n, FailedNoAssistant)
 		c.trouble()
 		return false
 	}
@@ -1365,6 +1373,28 @@ func (c *conversation) enter(p phase) {
 	c.visible.Store(int32(p))
 	c.shown.Phase = p.String()
 	Changed.Emit(c.shown)
+	// Said once, with the idle that ends the request: the state is told again for other reasons (a
+	// sound canceled with no turn open), and that is not the request failing again.
+	c.shown.Failed = ""
+}
+
+// fails notes why the open turn is about to end with nothing, for the idle that ends it to say. With
+// no turn open there is no request to have failed: an error that arrives late is only logged.
+func (c *conversation) fails(why string) {
+	if c.phase != phaseIdle {
+		c.shown.Failed = why
+	}
+}
+
+// refuses says a turn somebody asked for could not open at all. Not one nobody asked for: a follow-up
+// that cannot open leaves the answer before it on the screen.
+func (c *conversation) refuses(n nextTurn, why string) {
+	if n.followUp {
+		return
+	}
+	c.shown = State{Phase: phaseIdle.String(), Failed: why}
+	Changed.Emit(c.shown)
+	c.shown.Failed = ""
 }
 
 // startPending opens the turn that was held back, if there is one.

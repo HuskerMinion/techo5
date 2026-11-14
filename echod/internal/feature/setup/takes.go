@@ -47,7 +47,7 @@ const takesWait = 2 * time.Minute
 func (f *Feature) takes(w http.ResponseWriter, r *http.Request) {
 	token, in := f.session(r)
 	if !in {
-		http.Error(w, "not let in", http.StatusForbidden)
+		notLetIn(w)
 		return
 	}
 	if r.Method != http.MethodPost {
@@ -91,11 +91,11 @@ func (f *Feature) takes(w http.ResponseWriter, r *http.Request) {
 	default:
 		problem = "that is not something this section does"
 	}
-	to := back("sound", "", "")
+	to := back("takes", "", "")
 	if problem != "" {
-		to = back("sound", "problem", problem)
+		to = back("takes", "problem", problem)
 	}
-	http.Redirect(w, r, to+"#takes", http.StatusSeeOther)
+	http.Redirect(w, r, to, http.StatusSeeOther)
 }
 
 // takesState is what the section polls while a recording waits or runs. It is not the page being used
@@ -121,7 +121,7 @@ func (f *Feature) takesState(w http.ResponseWriter, r *http.Request) {
 func (f *Feature) takesZip(w http.ResponseWriter, r *http.Request) {
 	token, in := f.session(r)
 	if !in {
-		http.Error(w, "not let in", http.StatusForbidden)
+		notLetIn(w)
 		return
 	}
 	name, write, ok := recorder().Zip(token)
@@ -201,11 +201,11 @@ func takesSection(w http.ResponseWriter, token string) {
 	if !layout.HasMicrophone() {
 		return
 	}
-	fmt.Fprint(w, `<fieldset id="takes"><legend>Record takes of a word</legend>`)
-	fmt.Fprint(w, `<p class="note" style="margin-top:0">For training a wake word, or a command word, on what this
+	fieldsetOpen(w, "takes", "Record takes of a word")
+	fmt.Fprintf(w, `<p class="note" style="margin-top:0">For training a wake word, or a command word, on what this
 	  device really hears: it records up to two minutes from its own microphones, exactly as the wake word
-	  hears them, and cuts it into one take each time the word is said. Each recording starts with a press on
-	  the device: the action button, or Start on the screen.</p>`)
+	  hears them, and cuts it into one take each time the word is said. Each recording starts %s.</p>`,
+		onThisDevice("at the device, with a tap on Start on its screen", "with a press of the action button on the device"))
 	if !config.Get().Security.Takes {
 		fmt.Fprint(w, `<p class="note">It is off. Turn on <strong>Record takes of a word</strong> under Privacy &amp;
 		  Security, on the device's screen or in Home Assistant.</p></fieldset>`)
@@ -324,7 +324,7 @@ func takesButtons(w http.ResponseWriter, token string, pairs ...string) {
 // takesPoll keeps the line up to date while a recording waits or runs, and reloads the section when it
 // has moved on from shown, the phase the page was drawn in. Without script, Check again does the same.
 func takesPoll(w http.ResponseWriter, shown takes.Phase) {
-	fmt.Fprintf(w, `<p class="note"><a href="/setup?tab=sound#takes">Check again</a></p>
+	fmt.Fprintf(w, `<p class="note"><a href="/setup?tab=sound#sec-takes">Check again</a></p>
 	 <script>(()=>{const time=document.getElementById('takestime'),about=document.getElementById('takesabout');
 	 const t=s=>Math.floor(s/60)+':'+String(Math.floor(s%%60)).padStart(2,'0');const shown=%q;
 	 const tick=async()=>{try{const r=await fetch('/setup/takes/state',{cache:'no-store'});if(!r.ok){location.reload();return}

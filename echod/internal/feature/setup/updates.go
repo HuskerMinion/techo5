@@ -17,12 +17,13 @@ import (
 // installing by itself overnight - for a device with no Home Assistant to offer updates on.
 func updatesSection(w http.ResponseWriter, token string) {
 	fw := firmware.Get()
-	fmt.Fprintf(w, `<fieldset><legend>Updates</legend><p style="margin:0">Running <strong>%s</strong>.`,
+	fieldsetOpen(w, "updates", "Updates")
+	fmt.Fprintf(w, `<p style="margin:0">Running <strong>%s</strong>.`,
 		html.EscapeString(layout.Version))
 	if on, at := fw.Installing(); on {
 		fmt.Fprintf(w, ` Installing <strong>%s</strong>: <span id="upat">%d%%</span> downloaded.</p>
 		 <p class="note">The device restarts into it when the download is done, and is back in about a
-		  minute. This page checks by itself; after the restart, press the action button again to come back in.</p>
+		  minute. This page checks by itself; after the restart, ask to be let in again.</p>
 		 <script>setTimeout(()=>location.reload(),3000)</script></fieldset>`, html.EscapeString(fw.Offered()), int(at*100))
 		return
 	}
@@ -31,19 +32,19 @@ func updatesSection(w http.ResponseWriter, token string) {
 	}
 	if v := fw.Offered(); v != "" {
 		fmt.Fprintf(w, ` <strong>%s</strong> is ready.</p>`, html.EscapeString(v))
-		fmt.Fprint(w, `<form method="post" action="/setup/save">`)
-		hidden(w, token, "update-install", "general")
+		fmt.Fprintf(w, `<form method="post" action="/setup/save"%s>`, busy(busyInstall))
+		hidden(w, token, "update-install")
 		fmt.Fprint(w, `<p><button type="submit">Install now</button></p>
 		 <p class="note">The device restarts into it, back in about a minute, and this page with it. If it
 		  does not start properly it goes back to the version it had.</p></form>`)
 	} else {
 		fmt.Fprint(w, ` Nothing newer is waiting.</p>`)
-		fmt.Fprint(w, `<form method="post" action="/setup/save">`)
-		hidden(w, token, "update-check", "general")
+		fmt.Fprintf(w, `<form method="post" action="/setup/save"%s>`, busy(busyCheck))
+		hidden(w, token, "update-check")
 		fmt.Fprint(w, `<p><button type="submit">Check now</button></p></form>`)
 	}
 	fmt.Fprint(w, `<form method="post" action="/setup/save">`)
-	hidden(w, token, "update-auto", "general")
+	hidden(w, token, "update-auto")
 	checked := ""
 	if fw.AutoInstall() {
 		checked = " checked"

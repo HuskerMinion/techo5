@@ -85,7 +85,7 @@ func (r *renderer) calendarTimeline(v calendarView, l calLook) {
 		if tx+tw < x {
 			cy := r.margin + r.s(17)
 			r.roundRect(image.Rect(tx, cy-r.s(16), tx+tw, cy+r.s(16)), r.s(16), amber)
-			r.text(r.tiny, tr("today"), tx+r.s(12), cy+r.s(9), walnut)
+			r.text(r.tiny, tr("today"), tx+r.s(12), cy+r.s(9), onAccent())
 		}
 	}
 
@@ -154,7 +154,10 @@ func (r *renderer) calendarTimeline(v calendarView, l calLook) {
 			r.fillRect(image.Rect(gx, yh, right, yh+max(r.s(1), 1)), half)
 		}
 		r.fillRect(image.Rect(gx, y, right, y+max(r.s(1), 1)), ember)
-		if h < 24 && !(today && abs(nowY-y) < r.s(16)) {
+		// An hour's name gives way to the now line's time when the two would crowd: within a line and
+		// a little of each other. Half an hour is 17 to 21 of these, and at 16 the line's time at half
+		// past was squeezed between two hours' names.
+		if h < 24 && !(today && abs(nowY-y) < r.grownForText(r.s(22))) {
 			lab := hourLabel(h)
 			r.text(r.micro, lab, gx-r.s(10)-r.width(r.micro, lab), y+r.s(6), dim)
 		}
@@ -356,14 +359,20 @@ func (r *renderer) timeBlock(v calendarView, l calLook, e hass.Event, b image.Re
 	}
 	tx := b.Min.X + r.s(20)
 	tw := b.Max.X - tx - r.s(8)
-	if b.Dy() >= r.s(46) {
+	// Two lines where the second one, down to its tails, is inside the box with a little under it: an
+	// hour and a half on a Show 8 is 48 of these tall, and its second line, written at 48, hung out of
+	// the foot of the box. The lines are at 27 and 48, and only as much lower as larger words need to
+	// stay clear of the box's top and of each other, so two hours keep both lines at 125%.
+	first := max(r.s(27), r.s(5)+capHeight(r.tiny))
+	second := first + max(r.s(21), capHeight(r.micro)+r.tiny.Metrics().Descent.Ceil()+r.s(1))
+	if b.Dy() >= second+r.micro.Metrics().Descent.Ceil()+r.s(3) {
 		if icon != "" {
-			r.mdiAt(icon, tx+r.s(9), b.Min.Y+r.s(19), 20, cream)
+			r.mdiAt(icon, tx+r.s(9), b.Min.Y+first-r.s(8), 20, cream)
 			tx += r.s(24)
 			tw -= r.s(24)
 		}
-		r.text(r.tiny, clipText(r, r.tiny, e.Summary, tw), tx, b.Min.Y+r.s(27), cream)
-		r.text(r.micro, clipText(r, r.micro, when, b.Max.X-r.s(28)-b.Min.X), b.Min.X+r.s(20), b.Min.Y+r.s(48), sub)
+		r.text(r.tiny, clipText(r, r.tiny, e.Summary, tw), tx, b.Min.Y+first, cream)
+		r.text(r.micro, clipText(r, r.micro, when, b.Max.X-r.s(28)-b.Min.X), b.Min.X+r.s(20), b.Min.Y+second, sub)
 		return
 	}
 	base := (b.Min.Y+b.Max.Y)/2 + capHeight(r.micro)/2
@@ -506,7 +515,7 @@ func (r *renderer) calendarWeek(v calendarView, l calLook) {
 		if today {
 			nw := r.width(bold, num)
 			r.roundRect(image.Rect(nx-r.s(6), hy+r.s(4), nx+nw+r.s(6), hy+r.s(34)), r.s(15), amber)
-			r.text(bold, num, nx, hy+r.s(28), walnut)
+			r.text(bold, num, nx, hy+r.s(28), onAccent())
 		} else {
 			r.text(r.tiny, num, nx, hy+r.s(26), cream)
 		}

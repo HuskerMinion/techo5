@@ -86,7 +86,7 @@ func TestTheImmichSection(t *testing.T) {
 	if strings.Contains(page, pageKey) {
 		t.Fatal("the page shows the key")
 	}
-	for _, want := range []string{"A key is kept", "The whole library", home.ImmichAlbumPrefix + pageAlbum, "Garden &lt;b&gt; (7 photos)", "Forget this server"} {
+	for _, want := range []string{secretSaved, "The whole library", home.ImmichAlbumPrefix + pageAlbum, "Garden &lt;b&gt; (7 photos)", "Forget this server"} {
 		if !strings.Contains(page, want) {
 			t.Errorf("the section lacks %q", want)
 		}

@@ -34,7 +34,18 @@ const (
 	kindHalf     = 3 // a picture at half size, drawn doubled: sent while most of the page is moving
 	kindPages    = 4 // the web pages' names, the answer to a hello asking for them (Pages)
 	kindKeyboard = 5 // a text field on the page got focus or lost it (Field)
+	kindAlive    = 6 // nothing to draw: the server is still there (aliveWithin)
 )
+
+// aliveWithin is how long a server that says it is there (kindAlive) may then say nothing at all
+// before its connection is taken for lost and another is made, as after one that dropped.
+//
+// A page that does not change sends no pictures, for hours, so silence alone means nothing; and a
+// connection that died with its socket open looked the same, the last picture left up and taking taps
+// that went nowhere. A server that sends kindAlive sends it every few seconds, so three of them missed
+// is a connection gone. One from before it knew kindAlive never sends it, and is waited on as it always
+// was. A variable for the tests.
+var aliveWithin = 15 * time.Second
 
 // Field is the text field on the streamed page that has focus, for the screen's own keyboard (#493):
 // the page is a picture here, so the dashcast server says when a field is tapped. Up while one has
@@ -66,6 +77,9 @@ type View struct {
 	Problem string // a sentence for the screen, empty when all is well
 	Version uint64 // counts pictures, so a drawer can tell a new one from the last
 	Field   Field  // the page's text field with focus, if one has it
+	// Lost is when the connection went with a picture still up: what is drawn since is the last one
+	// that came, and nothing on it answers a touch. Zero while a connection is feeding the picture.
+	Lost time.Time
 }
 
 // stream is one connection's worth of dashboard, kept going while the page is up.
@@ -212,6 +226,20 @@ func (s *stream) problem(text string) {
 	s.f.Changed.Emit(struct{}{})
 }
 
+// lost notes that the picture on the screen has no connection behind it any more, from the first
+// moment that was known. The next picture to arrive takes the note away (paint).
+func (s *stream) lost() {
+	s.mu.Lock()
+	first := s.view.Ready && s.view.Lost.IsZero()
+	if first {
+		s.view.Lost = time.Now()
+	}
+	s.mu.Unlock()
+	if first {
+		s.f.Changed.Emit(struct{}{})
+	}
+}
+
 // run connects and reconnects until closed, waiting longer each time it fails. A connection that
 // lasted is not a failure: the server ending a stuck session (#112) is answered within a second, not
 // after the longest wait of failures long past.
@@ -238,6 +266,7 @@ func (s *stream) run() {
 		if err != nil {
 			slog.Info("dashboard stream", "err", err)
 		}
+		s.lost()
 		time.Sleep(wait)
 		wait = min(wait*2, 30*time.Second)
 	}
@@ -298,7 +327,13 @@ func (s *stream) once() error {
 
 	r := bufio.NewReaderSize(c, 256<<10)
 	var hdr [4]byte
+	alive := false // the server has said it sends kindAlive: its silence now means something
 	for {
+		if alive {
+			// Anything it sends counts, a picture as much as kindAlive. A read that runs out ends the
+			// connection as a drop does, and run makes another.
+			_ = raw.SetReadDeadline(time.Now().Add(aliveWithin))
+		}
 		if _, err := io.ReadFull(r, hdr[:]); err != nil {
 			return err
 		}
@@ -311,6 +346,8 @@ func (s *stream) once() error {
 			return err
 		}
 		switch msg[0] {
+		case kindAlive:
+			alive = true
 		case kindHalf:
 			if len(msg) < 5 {
 				continue
@@ -432,6 +469,7 @@ func (s *stream) paint(at image.Point, img image.Image) {
 	}
 	draw.Draw(s.frame, image.Rectangle{Min: at, Max: at.Add(b.Size())}, img, b.Min, draw.Src)
 	s.view.Ready = true
+	s.view.Lost = time.Time{}
 	s.view.Version++
 	s.mu.Unlock()
 	s.f.Changed.Emit(struct{}{})
@@ -477,6 +515,7 @@ func (s *stream) paintDoubled(at image.Point, img image.Image) {
 		}
 	}
 	s.view.Ready = true
+	s.view.Lost = time.Time{}
 	s.view.Version++
 	s.mu.Unlock()
 	s.f.Changed.Emit(struct{}{})

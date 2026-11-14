@@ -17,8 +17,9 @@ import (
 // listeningSection is how long the device listens again after an answer, and how many times in a row:
 // Home Assistant's two settings for the first wake word, here for a device that has none.
 func listeningSection(w http.ResponseWriter, token string) {
-	fmt.Fprint(w, `<fieldset><legend>Listening after an answer</legend><form method="post" action="/setup/save">`)
-	hidden(w, token, "listening", "sound")
+	fieldsetOpen(w, "listening", "Listening after an answer")
+	fmt.Fprint(w, `<form method="post" action="/setup/save">`)
+	hidden(w, token, "listening")
 	fmt.Fprintf(w, `<label for="fu">Keep listening for (seconds, 0 for only when asked a question)</label>
 	 <input id="fu" name="followup" type="number" min="0" max="30" value="%d">
 	 <label for="fus">Times in a row (0 for no limit)</label>
@@ -42,10 +43,15 @@ func saveListening(r *http.Request) string {
 
 // brainSection is where the voice answers come from: Home Assistant's Assist pipeline, or speech and a
 // chat model reached directly (config.Brain). The key is never shown: it is written, or left alone.
+//
+// The servers, the model and its key are only for answering directly, and the page leaves them out
+// while Home Assistant is chosen (.directonly, tabs.go). The search server, the page reader, the news
+// and what the assistant should know stay: realtime voice uses them whichever is chosen here.
 func brainSection(w http.ResponseWriter, token string) {
 	b := config.Get().Brain
-	fmt.Fprint(w, `<fieldset><legend>Voice assistant</legend><form method="post" action="/setup/save">`)
-	hidden(w, token, "brain", "sound")
+	fieldsetOpen(w, "brain", "Voice assistant")
+	fmt.Fprint(w, `<form method="post" action="/setup/save">`)
+	hidden(w, token, "brain")
 	fmt.Fprintf(w, `<label for="mode">Answered by</label>
 	 <select id="mode" name="mode">
 	  <option value=""%s>Home Assistant (its Assist pipeline)</option>
@@ -55,6 +61,7 @@ func brainSection(w http.ResponseWriter, token string) {
 	  server, the words to a chat model that can set timers and alarms, play the radio and call other
 	  devices, and the answer to a text-to-speech server. The servers are Wyoming ones, as Home Assistant
 	  uses (faster-whisper, Piper), and any chat model with an OpenAI-style endpoint (llama.cpp, Ollama).</p>
+	 <div class="directonly">
 	 <label for="stt">Speech to text (host:port)</label>
 	 <input id="stt" name="stt" value="%s" placeholder="192.168.1.20:10300" autocomplete="off">
 	 <label for="tts">Text to speech (host:port)</label>
@@ -67,15 +74,14 @@ func brainSection(w http.ResponseWriter, token string) {
 	 <input id="llm" name="llm" value="%s" placeholder="http://192.168.1.20:8080/v1" autocomplete="off">
 	 <label for="model">Model</label>
 	 <input id="model" name="model" value="%s" placeholder="only if the server has several" autocomplete="off">
-	 <label for="key">Key</label>
-	 <input id="key" name="key" type="password" value="" placeholder="%s" autocomplete="off">
-	 <p><label><input type="checkbox" name="nokey" value="yes" style="width:auto"> Remove the key</label></p>
+	 %s
+	 </div>
 	 <label for="search">Web search (a SearXNG server)</label>
-	 <input id="search" name="search" value="%s" placeholder="http://192.168.1.20:8888" autocomplete="off">
+	 <input id="search" name="search" type="url" inputmode="url" value="%s" placeholder="http://192.168.1.20:8888" autocomplete="off">
 	 <p class="note">To look up what the chat model cannot know: games, news, opening hours. SearXNG needs
 	  its JSON format turned on (search.formats in its settings.yml). Empty: no looking things up.</p>
 	 <label for="reader">Page reader</label>
-	 <input id="reader" name="reader" value="%s" placeholder="http://192.168.1.20:8891" autocomplete="off">
+	 <input id="reader" name="reader" type="url" inputmode="url" value="%s" placeholder="http://192.168.1.20:8891" autocomplete="off">
 	 <p class="note">Optional: a browser that reads pages that fill themselves in with scripts, like a
 	  store's hours (TECHO5's tools/page-reader). Used only when a page has almost no text as it comes,
 	  or the site turns the device away with an error.</p>
@@ -90,15 +96,8 @@ func brainSection(w http.ResponseWriter, token string) {
 	 <p><button type="submit">Save</button></p></form></fieldset>`,
 		selected(b.Mode == config.BrainHomeAssistant), selected(b.Mode == config.BrainDirect),
 		html.EscapeString(b.STT), html.EscapeString(b.TTS), html.EscapeString(b.Voice), html.EscapeString(b.Language),
-		html.EscapeString(b.LLM), html.EscapeString(b.Model), keyHint(b.Key != ""), html.EscapeString(b.Search),
+		html.EscapeString(b.LLM), html.EscapeString(b.Model), secretField("key", "Key", "key", b.Key != "", "nokey"), html.EscapeString(b.Search),
 		html.EscapeString(b.Reader), html.EscapeString(b.News), html.EscapeString(b.Prompt))
-}
-
-func keyHint(set bool) string {
-	if set {
-		return "set; leave empty to keep it"
-	}
-	return "none"
 }
 
 // saveBrain keeps the form, refusing what could not work rather than keeping it to fail at the next

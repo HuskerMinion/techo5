@@ -17,9 +17,7 @@ import (
 
 // The call face: over everything while a call rings, is placed or is up. The rim pulses green; a tap
 // answers or hangs up (the same as anywhere else on the face, through the action), and a sideways
-// swipe declines a call that is ringing.
-
-var colCall = color.RGBA{46, 204, 113, 255}
+// swipe declines a call that is ringing. The green is the Show's call green (answerGreen).
 
 // callGesture is a finger on the call face, and reports whether it was one.
 func (d *Display) callGesture(g touch.Gesture) bool {
@@ -60,7 +58,7 @@ func (r *roundRenderer) callFace(s roundScene) {
 	if st.Phase == phone.Talking {
 		pulse = 1
 	}
-	r.arc(rimIn, rimOut, 0, 2*math.Pi, fade(colCall, pulse))
+	r.arc(rimIn, rimOut, 0, 2*math.Pi, fade(answerGreen, pulse))
 
 	title := upper(tr("ui_calling_variant"))
 	switch st.Phase {
@@ -72,7 +70,7 @@ func (r *roundRenderer) callFace(s roundScene) {
 	if st.DropIn {
 		title = upper(tr("ui_drop_in"))
 	}
-	r.centered(r.label, title, 150, colCall)
+	r.centered(r.label, title, 150, answerGreen)
 	if s.atDoor { // the doorbell, pressed during the call: said here instead of rung (feature/doorbell)
 		r.centered(r.small, tr("ui_someone_s_at_the_door"), 192, colText)
 	}
@@ -136,7 +134,7 @@ func (r *roundRenderer) callButtonFace() {
 	box := image.Rect(b.x-b.r, b.y-b.r, b.x+b.r, b.y+b.r)
 	rad := float64(b.r)
 	r.roundShadow(box, rad, 8, 2, shadowAlpha())
-	r.roundFill(box, rad, shift(colCall, 10), shift(colCall, -20))
+	r.roundFill(box, rad, shift(answerGreen, 10), shift(answerGreen, -20))
 	r.mdiIcon("phone", b.x-17, b.y-17, 34, colText)
 }
 
@@ -147,7 +145,7 @@ func contactTopFor(top, n int) int { return min(max(top, 0), max(n-contactRows, 
 // calls them.
 func (r *roundRenderer) contactList(s roundScene) {
 	r.clear()
-	r.centered(r.label, upper(tr("drawer_call")), 84, colCall)
+	r.centered(r.label, upper(tr("drawer_call")), 84, answerGreen)
 	if len(s.contacts) == 0 {
 		msg := tr("ui_no_contacts_yet")
 		switch {
@@ -175,10 +173,10 @@ func (r *roundRenderer) contactList(s roundScene) {
 		r.centered(r.title, clip(r.title, r, c.Name, w-30), y, colText)
 	}
 	if top > 0 {
-		r.triangle(center-16, 112, center+16, 112, center, 96, colCall)
+		r.triangle(center-16, 112, center+16, 112, center, 96, answerGreen)
 	}
 	if top+contactRows < len(s.contacts) {
-		r.triangle(center-16, 438, center+16, 438, center, 454, colCall)
+		r.triangle(center-16, 438, center+16, 438, center, 454, answerGreen)
 	}
 	if len(s.contacts) > contactRows {
 		r.centered(r.tiny, tr("ui_swipe_for_more"), 426, colDim)

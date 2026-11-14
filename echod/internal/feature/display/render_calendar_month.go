@@ -25,7 +25,6 @@ import (
 // events as bars of their color. A day with more than fits says how many more.
 func (r *renderer) calendarMonth(v calendarView, l calLook) {
 	title := locale.MonthYear(v.month, screenLang())
-	r.text(r.title, title, r.margin, r.margin+r.s(34), cream)
 	x := r.calButton(tr("done"), r.w-r.margin, calDone)
 	if v.month.Year() != v.now.Year() || v.month.Month() != v.now.Month() {
 		x = r.calButton(tr("today"), x, calToday)
@@ -35,6 +34,18 @@ func (r *renderer) calendarMonth(v calendarView, l calLook) {
 	if l.week {
 		x = r.calSegmented(calMonthView, x, true)
 	}
+	// The title, short of the buttons: at a larger text size, or in a language with long months, it
+	// ran on under them.
+	if room := x - r.margin - r.s(14); r.width(r.title, title) > room {
+		// The short month, then this year's month without its year, then whatever of it fits.
+		title = locale.ShortMonthYear(v.month, screenLang())
+		if month, _, cut := strings.Cut(locale.MonthYear(v.month, screenLang()), " "); r.width(r.title, title) > room &&
+			cut && v.month.Year() == v.now.Year() {
+			title = month
+		}
+		title = clipText(r, r.title, title, room)
+	}
+	r.text(r.title, title, r.margin, r.margin+r.s(34), cream)
 
 	top := r.margin + r.s(58)
 	if len(v.order) > 1 {
@@ -104,9 +115,9 @@ func (r *renderer) monthRoomy(l calLook) bool { return l.wide && r.h*10 >= r.w*6
 // the Show 5, where the cells are short.
 func (r *renderer) monthNumber(l calLook) (face numFaces, base int) {
 	if r.monthRoomy(l) {
-		return numFaces{r.tiny, r.textFace(true, 26)}, r.s(25)
+		return numFaces{r.tiny, r.textFace(true, 26)}, r.grownForText(r.s(25))
 	}
-	return numFaces{r.textFace(false, 22), r.textFace(true, 22)}, r.s(20)
+	return numFaces{r.textFace(false, 22), r.textFace(true, 22)}, r.grownForText(r.s(20))
 }
 
 // monthCell is one day's box, its number and, in full, its weather.
@@ -135,7 +146,7 @@ func (r *renderer) monthCell(v calendarView, l calLook, day time.Time, in image.
 		cy := base - capHeight(nf.bold)/2
 		pill := image.Rect(nx-r.s(5), cy-hh, nx+w+r.s(5), cy+hh)
 		r.roundRect(pill, hh, amber)
-		r.text(nf.bold, num, nx, base, walnut)
+		r.text(nf.bold, num, nx, base, onAccent())
 	} else {
 		ink := cream
 		if past || !inMonth {
@@ -164,9 +175,12 @@ type numFaces struct{ face, bold font.Face }
 // across them. Each bar keeps its lane across the week; a day's own events come under the lanes it
 // has, as many as fit, and "+2 more" for the rest.
 func (r *renderer) monthWeekEvents(v calendarView, l calLook, row time.Time, cells []image.Rectangle, today time.Time) {
-	lh, ev0 := r.s(19), r.s(33)
+	// A line's height and where the first starts under the day's number, both grown with the text size:
+	// at 125% the words sat on the lane below. The short cells start two pixels lower than they did,
+	// the number's descender having touched the first bar.
+	lh, ev0 := r.grownForText(r.s(19)), r.grownForText(r.s(33))
 	if !r.monthRoomy(l) {
-		lh, ev0 = r.s(18), r.s(24)
+		lh, ev0 = r.grownForText(r.s(18)), r.grownForText(r.s(26))
 	}
 	spans := weekSpans(v.events, row, 7)
 	lines := make([]int, 7)        // how many lines a day has room for
@@ -234,11 +248,21 @@ func (r *renderer) monthWeekEvents(v calendarView, l calLook, row time.Time, cel
 	}
 }
 
+// pastInk is how far the words of an event gone by fade toward the page: less than its bar's half, at
+// which they were under 3:1 against it and could not be read.
+const pastInk = 0.28
+
 // monthBar draws a bar of several days, or an all-day event's bar on its day.
 func (r *renderer) monthBar(v calendarView, l calLook, sp span, cells []image.Rectangle, ev0, lh int, past bool) {
 	fade := func(c color.RGBA) color.RGBA {
 		if past {
 			return calFade(c, 0.5)
+		}
+		return c
+	}
+	ink := func(c color.RGBA) color.RGBA { // the words of a day gone by: faded less than their bar
+		if past {
+			return calFade(c, pastInk)
 		}
 		return c
 	}
@@ -263,14 +287,14 @@ func (r *renderer) monthBar(v calendarView, l calLook, sp span, cells []image.Re
 			z.LineTo(0, h)
 			z.ClosePath()
 		})
-		r.mdiAt("chevron-right", b.Max.X-r.s(6), mid, 18, fade(cream))
+		r.mdiAt("chevron-right", b.Max.X-r.s(6), mid, 18, ink(cream))
 	}
 	if !sp.before {
 		r.fillRect(image.Rect(b.Min.X, b.Min.Y+r.s(3), b.Min.X+r.s(4), b.Max.Y-r.s(3)), fade(c))
 	}
 	tx := b.Min.X + r.s(9)
 	if icon := keywordIcon(sp.ev.Summary); icon != "" && l.icons && l.monthFull && l.wide {
-		r.mdiAt(icon, tx+r.s(7), (b.Min.Y+b.Max.Y)/2, 15, fade(cream))
+		r.mdiAt(icon, tx+r.s(7), (b.Min.Y+b.Max.Y)/2, 15, ink(cream))
 		tx += r.s(18)
 	}
 	room := b.Max.X - tx - r.s(6)
@@ -278,7 +302,7 @@ func (r *renderer) monthBar(v calendarView, l calLook, sp span, cells []image.Re
 		room -= r.s(20)
 	}
 	label := clipText(r, r.micro, sp.ev.Summary, room)
-	r.text(r.micro, label, tx, b.Max.Y-r.s(4), fade(cream))
+	r.text(r.micro, label, tx, b.Max.Y-r.s(4), ink(cream))
 	if sp.after && multiDay(sp.ev) {
 		extra := "  until " + lastDay(sp.ev).Format("Jan 2")
 		if lw := r.width(r.micro, label); label == sp.ev.Summary && lw+r.width(r.micro, extra) < room {
@@ -298,12 +322,18 @@ func (r *renderer) monthTimed(v calendarView, l calLook, e hass.Event, in image.
 		}
 		return c
 	}
+	ink := func(c color.RGBA) color.RGBA { // the words of a day gone by: faded less than their bar
+		if past {
+			return calFade(c, pastInk)
+		}
+		return c
+	}
 	c := v.color(e.Calendar)
 	if !l.monthFull {
 		bar := image.Rect(in.Min.X+r.s(4), y, in.Max.X-r.s(4), y+lh-r.s(2))
 		r.roundRect(bar, r.s(5), fade(evFill(c)))
 		r.fillRect(image.Rect(bar.Min.X, bar.Min.Y+r.s(3), bar.Min.X+r.s(4), bar.Max.Y-r.s(3)), fade(c))
-		r.text(r.micro, clipText(r, r.micro, e.Summary, bar.Dx()-r.s(12)), bar.Min.X+r.s(8), bar.Max.Y-r.s(4), fade(cream))
+		r.text(r.micro, clipText(r, r.micro, e.Summary, bar.Dx()-r.s(12)), bar.Min.X+r.s(8), bar.Max.Y-r.s(4), ink(cream))
 		r.calHitAdd(calHit{r: bar, kind: calEvent, ev: e})
 		return 1
 	}
@@ -336,13 +366,13 @@ func (r *renderer) monthTimed(v calendarView, l calLook, e hass.Event, in image.
 	if len(words) > 1 && spare && l.wide {
 		rest := e.Summary
 		if r.width(r.micro, words[0]) <= room {
-			r.text(r.micro, words[0], tx, base, fade(cream))
+			r.text(r.micro, words[0], tx, base, ink(cream))
 			rest = restOf(strings.Join(strings.Fields(e.Summary), " "), words[:1])
 		}
 		used = 2
-		r.text(r.micro, clipText(r, r.micro, rest, in.Max.X-r.s(4)-left), left, base+lh, fade(cream))
+		r.text(r.micro, clipText(r, r.micro, rest, in.Max.X-r.s(4)-left), left, base+lh, ink(cream))
 	} else {
-		r.text(r.micro, clipText(r, r.micro, e.Summary, room), tx, base, fade(cream))
+		r.text(r.micro, clipText(r, r.micro, e.Summary, room), tx, base, ink(cream))
 	}
 	r.calHitAdd(calHit{r: image.Rect(in.Min.X, y, in.Max.X, y+used*lh), kind: calEvent, ev: e})
 	return used

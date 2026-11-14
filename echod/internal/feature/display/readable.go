@@ -23,9 +23,10 @@ import (
 // thin dark edge for a picture that is light and dark in the same place. A dark photo is left almost
 // as it was; a bright one gets dark just where the words are.
 //
-// Only small words get a patch: the weather, the date, the timers. The time and its AM/PM are large
-// and bold enough to stand on the edge alone, and a patch the size of the clock is a smudge across
-// the picture rather than a shadow under some words. Each line gets its own, hugging it.
+// Small words get the patch in full: the weather, the date, the timers, each line its own, hugging
+// it. The time and its AM/PM are large and bold, and a patch that dark the size of the clock is a
+// smudge across the picture rather than a shadow under some words: they get a faint one, faded out a
+// long way, and a wider, softer edge to stand on.
 //
 // It is done in two passes. The first draws the page to a spare canvas, only to learn where its words
 // go; the patches are laid under all of them; the second draws the page for real on top. One pass
@@ -41,10 +42,17 @@ const (
 	// scrimMost is the darkest a patch gets, so even a white photo shows through it.
 	scrimMost = 0.45
 
-	// scrimTallest is the tallest line that gets a patch, as the face's height in the Show 5's pixels
-	// at 100% text size: the title size (59) and below do, the AM/PM (70) and the time do not, at any
-	// text size.
+	// scrimTallest is the tallest line that gets the patch in full, as the face's height in the Show
+	// 5's pixels at 100% text size: the title size (59) and below do, the AM/PM (70) and the time do
+	// not, at any text size.
 	scrimTallest = 64
+
+	// A taller line's patch is tallMost at its darkest, which over a washed white photo takes the
+	// time from 1.7:1 to 2.7:1 and still leaves the picture a picture. It reaches tallPad of the
+	// line's height past it and fades over tallFeather of it, so it has no edge to see.
+	tallMost    = 0.25
+	tallPad     = 0.1
+	tallFeather = 0.6
 
 	// A patch reaches scrimPad of its line's height past the words at full strength, then fades out
 	// over scrimFeather of it. Its ends are rounded by scrimRound of its height, so it is a small
@@ -54,10 +62,15 @@ const (
 	scrimRound   = 0.5
 
 	// haloAlpha is the dark edge around the letters: the ground color at this opacity, reaching a
-	// haloReach-th of their height out (at least a pixel). Thin: the patch does the work, and the edge
-	// is only for a picture light and dark in the same place.
+	// haloReach-th of their height out (at least a pixel). Round small words it stays a pixel: the
+	// patch does the work there. Round the time, which has no patch to speak of, it is some six pixels
+	// on a Show 5: at a 110th it was two or three, which is gone from across a kitchen.
 	haloAlpha = 190
-	haloReach = 110
+	haloReach = 45
+
+	// From haloSoft pixels of reach the edge is a shade that fades out rather than an outline: six
+	// hard pixels round the time made a sticker of it.
+	haloSoft = 3
 )
 
 // overPhotoColor is a small line's color over a photo: its own, the theme's, except the theme's dim
@@ -83,7 +96,8 @@ type overPhoto struct {
 	ground color.RGBA  // the wash's color, which the patches and the halo are made of
 
 	record bool              // the first pass: note where words go, draw none
-	boxes  []image.Rectangle // where they went
+	boxes  []image.Rectangle // where the small ones went
+	tall   []image.Rectangle // and the time and its AM/PM, too tall for a patch in full
 
 	spare *image.RGBA // the first pass's canvas, kept between frames
 
@@ -131,7 +145,7 @@ func (p *paint) readableOver(photo *image.RGBA, ground color.RGBA, wash uint8, p
 		o.spare = image.NewRGBA(p.dst.Rect)
 	}
 	dst, zones := p.dst, len(p.pending)
-	p.dst, o.record, o.boxes = o.spare, true, o.boxes[:0]
+	p.dst, o.record, o.boxes, o.tall = o.spare, true, o.boxes[:0], o.tall[:0]
 	page()
 	p.dst, o.record = dst, false
 	p.pending = p.pending[:zones] // the real pass adds its own tap zones
@@ -142,11 +156,15 @@ func (p *paint) readableOver(photo *image.RGBA, ground color.RGBA, wash uint8, p
 	o.photo = nil
 }
 
-// noteText is text for pass one: where it would be drawn.
-func (o *overPhoto) noteText(face font.Face, s string, x, baseline int) {
+// noteText is text for pass one: where it would be drawn, with the small lines or the tall ones.
+func (o *overPhoto) noteText(face font.Face, s string, x, baseline int, tall bool) {
 	b, _ := fonts.BoundString(face, s)
 	r := image.Rect(b.Min.X.Floor(), b.Min.Y.Floor(), b.Max.X.Ceil(), b.Max.Y.Ceil()).Add(image.Pt(x, baseline))
-	if !r.Empty() {
+	switch {
+	case r.Empty():
+	case tall:
+		o.tall = append(o.tall, r)
+	default:
 		o.boxes = append(o.boxes, r)
 	}
 }
@@ -172,8 +190,9 @@ type haloKey struct {
 }
 
 // haloFor is the edge around s: its letters grown by a haloReach-th of the face's height (at least a
-// pixel) in every direction, as a mask placed from the text's origin. Kept, since the same few lines
-// are drawn every second and change once a minute.
+// pixel) in every direction, as a mask placed from the text's origin; round tall letters, grown by
+// half of it and faded out over the rest (softEdge). Kept, since the same few lines are drawn every
+// second and change once a minute.
 func (o *overPhoto) haloFor(face font.Face, s string) *image.Alpha {
 	k := haloKey{face, s}
 	if m, ok := o.halos[k]; ok {
@@ -187,7 +206,16 @@ func (o *overPhoto) haloFor(face font.Face, s string) *image.Alpha {
 	}
 	reach := max(1, face.Metrics().Height.Round()/haloReach)
 	b, _ := fonts.BoundString(face, s)
-	r := image.Rect(b.Min.X.Floor(), b.Min.Y.Floor(), b.Max.X.Ceil(), b.Max.Y.Ceil()).Inset(-reach)
+	r := image.Rect(b.Min.X.Floor(), b.Min.Y.Floor(), b.Max.X.Ceil(), b.Max.Y.Ceil())
+	if reach >= haloSoft {
+		grow, blur := softReach(reach)
+		soft := image.NewAlpha(r.Inset(-grow - 2*blur))
+		fonts.DrawString(soft, image.Opaque, face, fixed.Point26_6{}, s)
+		softEdge(soft, grow, blur)
+		o.halos[k] = soft
+		return soft
+	}
+	r = r.Inset(-reach)
 	glyphs := image.NewAlpha(r)
 	fonts.DrawString(glyphs, image.Opaque, face, fixed.Point26_6{}, s)
 	grown := image.NewAlpha(r)
@@ -208,13 +236,64 @@ func (o *overPhoto) haloFor(face font.Face, s string) *image.Alpha {
 	return grown
 }
 
+// softReach is how a soft edge of reach pixels is made: the letters grown by grow, then blurred
+// twice over blur either side, which fades it to nothing grow+2*blur out, a little past reach.
+func softReach(reach int) (grow, blur int) { return (reach + 1) / 2, max(1, reach/3) }
+
+// softEdge turns the letters in m into their soft edge, in place: each pixel the most of those
+// within grow of it across and down, and that averaged twice over blur either side, which rounds
+// the corners the growing left square and fades the edge out with no line where it ends.
+func softEdge(m *image.Alpha, grow, blur int) {
+	w, h := m.Rect.Dx(), m.Rect.Dy()
+	line := make([]uint8, max(w, h))
+	// pass runs one filter along every row, then along every column.
+	pass := func(filter func(src []uint8, at func(i int) *uint8)) {
+		for y := range h {
+			copy(line, m.Pix[y*m.Stride:y*m.Stride+w])
+			filter(line[:w], func(i int) *uint8 { return &m.Pix[y*m.Stride+i] })
+		}
+		for x := range w {
+			for y := range h {
+				line[y] = m.Pix[y*m.Stride+x]
+			}
+			filter(line[:h], func(i int) *uint8 { return &m.Pix[i*m.Stride+x] })
+		}
+	}
+	pass(func(src []uint8, at func(int) *uint8) {
+		for i := range src {
+			var most uint8
+			for _, v := range src[max(i-grow, 0):min(i+grow+1, len(src))] {
+				most = max(most, v)
+			}
+			*at(i) = most
+		}
+	})
+	mean := func(src []uint8, at func(int) *uint8) {
+		sum := 0
+		for _, v := range src[:min(blur+1, len(src))] {
+			sum += int(v)
+		}
+		for i := range src {
+			*at(i) = uint8(sum / (2*blur + 1))
+			if j := i + blur + 1; j < len(src) {
+				sum += int(src[j])
+			}
+			if j := i - blur; j >= 0 {
+				sum -= int(src[j])
+			}
+		}
+	}
+	pass(mean)
+	pass(mean)
+}
+
 // shape is the patch for the words pass one found: under each group of them, as dark as the picture
 // there needs.
 func (p *paint) shape(wash uint8) *patchShape {
 	o := &p.over
-	groups := merged(o.boxes)
+	groups, tall := merged(o.boxes), merged(o.tall)
 	var key strings.Builder
-	fmt.Fprint(&key, wash, o.ground, p.dst.Rect, groups)
+	fmt.Fprint(&key, wash, o.ground, p.dst.Rect, groups, tall)
 	// The weather art is one picture whose clouds move each second: a frame composed since the shapes
 	// were measured is a different picture under the words, though it is the same image.
 	gen, _ := artVersion(o.photo)
@@ -234,17 +313,23 @@ func (p *paint) shape(wash uint8) *patchShape {
 		a       float64
 	}
 	var patches []patch
-	for _, b := range groups {
-		core := b.Inset(-int(scrimPad*float64(b.Dy()) + 0.5))
-		feather := max(2, int(scrimFeather*float64(b.Dy())+0.5))
+	add := func(b image.Rectangle, pad, fade, most float64) {
+		core := b.Inset(-int(pad*float64(b.Dy()) + 0.5))
+		feather := max(2, int(fade*float64(b.Dy())+0.5))
 		// The picture was drawn with its corner at the panel's; how bright it is under the words, as
 		// the wash already left it, and how much more ground brings it down to scrimTarget.
 		bright := brightness(o.photo, core.Add(o.photo.Rect.Min.Sub(p.dst.Rect.Min)))
 		washed := bright*(1-w) + ground*w
 		if washed <= scrimTarget {
-			continue
+			return
 		}
-		patches = append(patches, patch{core, feather, min((washed-scrimTarget)/(washed-ground), scrimMost)})
+		patches = append(patches, patch{core, feather, min((washed-scrimTarget)/(washed-ground), most)})
+	}
+	for _, b := range groups {
+		add(b, scrimPad, scrimFeather, scrimMost)
+	}
+	for _, b := range tall {
+		add(b, tallPad, tallFeather, tallMost)
 	}
 
 	// Each patch's area, joined with any it touches until none do, so that where two fades overlap

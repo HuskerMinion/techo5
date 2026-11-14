@@ -34,18 +34,21 @@ func (r *renderer) sizedNoticeCard(box image.Rectangle, s notify.Size, icon, hea
 	in := r.rowIn()
 	x := box.Min.X + in
 	y := box.Min.Y + r.s(14)
+	hf := r.textFace(true, 30)
+	if s == notify.SizeHuge {
+		hf = r.textFace(true, 38)
+	}
+	headed := icon != "" || heading != ""
+	hintBase := y + r.tiny.Metrics().Ascent.Ceil()
+	if headed {
+		hintBase = y + hf.Metrics().Ascent.Ceil()
+	}
 	// The way out, said on the card as the usual one says it: this card is most of the screen, and
 	// nothing else on it says a tap puts it away.
-	hintW := r.width(r.tiny, dismissHint)
-	hintBase := y + r.tiny.Metrics().Ascent.Ceil()
-	if icon != "" || heading != "" {
-		hf := r.textFace(true, 30)
-		if s == notify.SizeHuge {
-			hf = r.textFace(true, 38)
-		}
+	hintW := r.cardHint(box.Max.X-in, hintBase)
+	if headed {
 		m := hf.Metrics()
-		base := y + m.Ascent.Ceil()
-		hintBase = base
+		base := hintBase
 		if _, ok := mdi.Rune(icon); ok {
 			sz := m.Height.Ceil() * 9 / 10
 			r.mdiIcon(icon, x, base-sz+r.s(4), sz, amber)
@@ -58,7 +61,6 @@ func (r *renderer) sizedNoticeCard(box image.Rectangle, s notify.Size, icon, hea
 	} else {
 		y += r.tiny.Metrics().Height.Ceil() + r.s(4)
 	}
-	r.rightText(r.tiny, dismissHint, box.Max.X-in, hintBase, dim)
 	area := image.Rect(box.Min.X+in, y, box.Max.X-in, box.Max.Y-r.s(16))
 	lines, face, lineH := r.fitWords(true, text, area.Dx(), area.Dy(), popupSizes(s))
 	if face == nil {

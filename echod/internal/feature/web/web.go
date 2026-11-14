@@ -41,6 +41,8 @@ type page struct {
 	label string // what the index calls it, empty to leave it out
 	open  func() bool
 	h     http.HandlerFunc
+	// closed answers in place of the plain 404 while the switch is off, for a page that has one (Closed).
+	closed http.HandlerFunc
 }
 
 type Feature struct {
@@ -68,6 +70,22 @@ func Handle(path, label string, open func() bool, h http.HandlerFunc) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.pages = append(f.pages, page{path: path, label: label, open: open, h: h})
+}
+
+// Closed hands in what a path answers with while its switch is off, in place of the plain 404: the
+// setup page's, which closes itself under a browser that was using it and has something better to
+// tell that browser than "page not found". The handler answers before anything of the request's body
+// is read, so it ends the read as Refuse does (EndRead), and it is its own business to give a
+// stranger no more than the 404 the port gives for a page that was never there.
+func Closed(path string, h http.HandlerFunc) {
+	f := Get()
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	for i := range f.pages {
+		if f.pages[i].path == path {
+			f.pages[i].closed = h
+		}
+	}
 }
 
 // letIn answers whether a request carries a session the setup page has let in, which is the only
@@ -116,7 +134,7 @@ func (f *Feature) mux() *http.ServeMux {
 
 	m := http.NewServeMux()
 	for _, p := range pages {
-		m.HandleFunc(p.path, allowed(p.open, p.h))
+		m.HandleFunc(p.path, allowed(p.open, p.h, p.closed))
 	}
 	m.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/" {
@@ -163,18 +181,29 @@ func (f *Feature) mux() *http.ServeMux {
 // time would hold the connection and its goroutine for good. The read is ended now and the connection
 // closed instead. For any answer given before the body has been read, by anything on this port.
 func Refuse(w http.ResponseWriter, msg string, code int) {
+	EndRead(w)
+	http.Error(w, msg, code)
+}
+
+// EndRead is the half of Refuse that is not the answer: the read of the request ended now, and the
+// connection closed once it has been answered. For a refusal that is a page rather than a line of text.
+func EndRead(w http.ResponseWriter) {
 	_ = http.NewResponseController(w).SetReadDeadline(time.Now())
 	w.Header().Set("Connection", "close")
-	http.Error(w, msg, code)
 }
 
 // notFound is Refuse for a page that is not there, or not switched on.
 func notFound(w http.ResponseWriter) { Refuse(w, "404 page not found", http.StatusNotFound) }
 
-// allowed serves a page only while its switch is on; otherwise the page is not there.
-func allowed(open func() bool, h http.HandlerFunc) http.HandlerFunc {
+// allowed serves a page only while its switch is on; otherwise the page is not there, which a page
+// with an answer of its own for that says in its own words (Closed).
+func allowed(open func() bool, h, closed http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if !open() {
+			if closed != nil {
+				closed(w, r)
+				return
+			}
 			notFound(w)
 			return
 		}

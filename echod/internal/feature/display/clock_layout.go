@@ -202,6 +202,16 @@ func dateColor(fallback color.RGBA) color.Color {
 	return fallback
 }
 
+// ampmInk is the AM/PM's color: the accent, or a chosen date color, which takes the AM/PM with it.
+// Over a photo it is the text color: the accent is a mid tone, and on a bright picture it was the
+// picture's own brightness, 1.04:1 on a washed white one.
+func (r *renderer) ampmInk() color.Color {
+	if r.over.photo != nil {
+		return dateColor(cream)
+	}
+	return dateColor(amber)
+}
+
 func setDateColor(s *esphome.Select, i int) {
 	if i < 0 || i >= len(dateColors) {
 		return

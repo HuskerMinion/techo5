@@ -340,10 +340,31 @@ func (r *roundRenderer) cardButtons(actions []headerAction) {
 	}
 	fc := r.faces()
 	const gap = 10
-	total := -gap
-	for _, b := range buttons {
-		total += r.paint.width(fc.button, b.label) + 44 + gap
+	width := func() int {
+		total := -gap
+		for _, b := range buttons {
+			total += r.paint.width(fc.button, b.label) + 44 + gap
+		}
+		return total
 	}
+	// The row has to fit the circle where it sits: the glass is 285 px across at the buttons' middle.
+	// Back and Add alarm fit; a longer pair in another language ran off both sides of it. The longest
+	// label gives way, cut short, until the row is inside.
+	room := chord(spotButtonsY) - 12
+	for total := width(); total > room; total = width() {
+		longest := 0
+		for i := range buttons {
+			if r.paint.width(fc.button, buttons[i].label) > r.paint.width(fc.button, buttons[longest].label) {
+				longest = i
+			}
+		}
+		was := buttons[longest].label
+		buttons[longest].label = r.paint.fit(fc.button, was, r.paint.width(fc.button, was)-(total-room))
+		if buttons[longest].label == was || buttons[longest].label == "" {
+			break // nothing more to give
+		}
+	}
+	total := width()
 	right := center + total/2
 	for i := len(buttons) - 1; i >= 0; i-- {
 		b := buttons[i]

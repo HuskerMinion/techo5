@@ -39,15 +39,21 @@ func (r *renderer) nowPlaying(s scene) {
 	} else if s.playing {
 		label = tr("drawer_playing")
 	}
+	// A station asked for and not playing yet: the page is its own from the tap, and says it is on its
+	// way. The song still named is the one before's, so it is left off until the station's own comes.
+	starting := radioStarting(rd)
+	if starting != "" {
+		station, label = starting, tr("ui_starting")
+	}
 
 	headline, sub := station, ""
-	if rd.Title != "" {
+	if rd.Title != "" && starting == "" {
 		// A song: the station joins the label, the song takes the middle.
 		label += "  ·  " + station
 		headline, sub = rd.Title, rd.Artist
 	}
 	r.text(r.small, label, r.margin, r.s(150), amber)
-	if s.hasLyric && rd.Title != "" {
+	if s.hasLyric && rd.Title != "" && starting == "" {
 		r.lyricLines(s.lyric, rd)
 	} else {
 		r.songLines(headline, sub)
@@ -127,7 +133,9 @@ func (r *renderer) transportRow(s scene) {
 }
 
 func (r *renderer) musicFooter(s scene) {
-	// Done, in the corner the buttons leave: the music ends and the screen goes back to the clock. A
+	// Stop, in the corner the buttons leave: the music ends and the screen goes back to the clock. It
+	// said Done, which reads as putting the page away, and what it does is end the music; it still says
+	// Done over another room's player, which it only puts away (musicEndWord). A
 	// pause keeps this page up with play on it, and so does a stop from Music Assistant, which looks
 	// the same from here, so the page needs its own way out.
 	done := r.doneButton()
@@ -136,7 +144,8 @@ func (r *renderer) musicFooter(s scene) {
 	// labeled from one place, or the same control is two sizes on two screens. The baseline is the
 	// sheet's too, from pillButton.
 	doneFace := r.faces().button
-	r.text(doneFace, tr("done"), done.Min.X+(done.Dx()-r.width(doneFace, tr("done")))/2, done.Min.Y+done.Dy()/2+r.s(8), doneCol)
+	word := r.fit(doneFace, musicEndWord(), done.Dx()-r.s(16))
+	r.text(doneFace, word, done.Min.X+(done.Dx()-r.width(doneFace, word))/2, done.Min.Y+done.Dy()/2+r.s(8), doneCol)
 
 	// The star saves what is playing to favorites, and fills in once it has.
 	fav := r.favButton()

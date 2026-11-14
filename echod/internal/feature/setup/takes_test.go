@@ -65,7 +65,7 @@ func TestRecordingTakesSaysWhenItIsOff(t *testing.T) {
 		t.Fatalf("asking: %d", w.Code)
 	}
 	to, _ := url.Parse(w.Header().Get("Location"))
-	if !strings.Contains(to.Query().Get("problem"), "Privacy & Security") || to.Fragment != "takes" {
+	if !strings.Contains(to.Query().Get("problem"), "Privacy & Security") || to.Fragment != "sec-takes" {
 		t.Errorf("sent back to %s", to)
 	}
 	if err := config.Set().Security().Takes(true); err != nil {

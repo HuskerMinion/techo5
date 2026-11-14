@@ -17,14 +17,14 @@ import (
 func doorbellSection(w http.ResponseWriter, token string) {
 	c := config.Get()
 	r := c.Home.Reolink
-	fmt.Fprint(w, `<fieldset><legend>Doorbell</legend>`)
+	fieldsetOpen(w, "doorbell", "Doorbell")
 	if r.Base == "" {
 		fmt.Fprint(w, `<p class="note" style="margin:0">Set up a Reolink Home Hub or NVR above first: a press of a
 		 Reolink doorbell reaches the device through it.</p></fieldset>`)
 		return
 	}
 	fmt.Fprint(w, `<form method="post" action="/setup/save">`)
-	hidden(w, token, "doorbell", "connections")
+	hidden(w, token, "doorbell")
 	if c.Doorbell.Camera != "" {
 		s := doorbell.Get().Status()
 		state := "Starting."
@@ -61,7 +61,7 @@ func doorbellSection(w http.ResponseWriter, token string) {
 	  Reolink battery doorbell does not report its button.</p>
 	 <p><button type="submit">Save</button></p></form>`, c.Doorbell.ONVIFPort(), does)
 	fmt.Fprint(w, `<form method="post" action="/setup/save">`)
-	hidden(w, token, "doorbell-chime", "connections")
+	hidden(w, token, "doorbell-chime")
 	fmt.Fprint(w, `<p><button type="submit">Play the chime</button></p></form></fieldset>`)
 }
 

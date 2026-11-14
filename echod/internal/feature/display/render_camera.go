@@ -76,6 +76,14 @@ func (r *renderer) cameraView(s scene, v home.CameraView) {
 		t := clockHM(s.now)
 		r.text(r.small, t, r.w-side-r.width(r.small, t), nameBase, captionDim)
 	}
+	if cameraStale(v) {
+		// The picture is the last that came: under the name, or in its corner on a picture with no words.
+		top := r.s(12)
+		if !wordless {
+			top = nameBase + r.s(24)
+		}
+		r.staleChip(image.Pt(side, top), false)
+	}
 	left := time.Until(v.Until).Round(time.Second)
 	hint := tr("drawer_camera_close")
 	talking := s.talk.Entity == v.Entity && s.talk.Phase != talkback.Idle // the view is held: no countdown

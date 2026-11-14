@@ -6,11 +6,13 @@ import (
 	"image"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/HuskerMinion/techo5/echod/internal/config"
 )
 
-// A finger held on the plain clock tells Home Assistant while the switch is on, and only then.
+// A finger held on the plain clock tells Home Assistant while the switch is on, and only then; and the
+// clock says so for a moment, where a hold that is not told leaves it as it was.
 func TestAHoldOnTheClockIsTold(t *testing.T) {
 	config.Use(filepath.Join(t.TempDir(), "state.json"))
 	var told []string
@@ -33,6 +35,9 @@ func TestAHoldOnTheClockIsTold(t *testing.T) {
 	if len(told) != 0 {
 		t.Errorf("told %v with a page over the clock", told)
 	}
+	if got := d.styleName(time.Now()); got != "" {
+		t.Errorf("the clock says %q for a hold that was not told", got)
+	}
 	d.clockHoldScene(true)
 	if !d.clockHolds {
 		t.Error("the plain clock with the switch on does not ask for holds")
@@ -40,6 +45,30 @@ func TestAHoldOnTheClockIsTold(t *testing.T) {
 	d.clockHeld()
 	if len(told) != 1 || told[0] != "hold" {
 		t.Errorf("told %v, want one hold", told)
+	}
+	if got := d.styleName(time.Now()); got == "" {
+		t.Error("the clock says nothing for the hold it told")
+	}
+	if got := d.styleName(time.Now().Add(clockHeldFor + time.Millisecond)); got != "" {
+		t.Errorf("the clock still says %q after its moment", got)
+	}
+}
+
+// The word is drawn on the clock, in its middle, and nowhere on a clock that took no hold.
+func TestTheClockShowsAHoldWasTaken(t *testing.T) {
+	at := time.Date(2026, 9, 16, 14, 7, 0, 0, time.Local)
+	plain, said := testRenderer(), testRenderer()
+	plain.draw(scene{now: at, phase: "idle"})
+	s := scene{now: at, phase: "idle"}
+	s.style.named = tr("ok")
+	said.draw(s)
+	box, differs := diffBox(said, plain)
+	if !differs {
+		t.Fatal("the clock looks the same with the word as without")
+	}
+	mid := image.Pt(said.w/2, said.h/2)
+	if !mid.In(box) || box.Dy() > said.h/3 {
+		t.Errorf("the word is drawn over %v, want a tag around the middle %v", box, mid)
 	}
 }
 

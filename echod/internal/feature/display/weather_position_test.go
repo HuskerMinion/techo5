@@ -81,8 +81,8 @@ func TestWeatherTopRightClearsTheMicrophonePill(t *testing.T) {
 		}{{"show5", showWide, showHigh}, {"show8", show8Wide, show8High}, {"skylight", skylightWide, skylightHigh}} {
 			r := newRenderer(image.NewRGBA(image.Rect(0, 0, panel.wide, panel.high)))
 			r.draw(scene{now: at, phase: "idle", muted: true, weather: home.Weather{Condition: "partlycloudy", Temp: "72°"}})
-			if w := r.weatherAt.Inset(r.s(14)); w.Empty() || w.Min.X < r.micPillRight() {
-				t.Errorf("%s %s: the weather at %v runs under the pill, which ends at %d", panel.name, st, w, r.micPillRight())
+			if w := r.weatherAt.Inset(r.s(14)); w.Empty() || w.Min.X < r.micPillRight(scene{muted: true}) {
+				t.Errorf("%s %s: the weather at %v runs under the pill, which ends at %d", panel.name, st, w, r.micPillRight(scene{muted: true}))
 			}
 		}
 	}

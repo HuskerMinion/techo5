@@ -139,9 +139,9 @@ func TestNoNoteWhereItWouldBeWrong(t *testing.T) {
 			c.Unheard()
 		}
 	})
-	r.ask(t, "Example FM")
+	r.askWatched(t, "Example FM", false)
+	quiet(t, r, "a put-back with no Home Assistant connected")
 	stop()
-	quiet(t, r, "no Home Assistant connected")
 	if c := r.chosen(); c != "" {
 		t.Errorf("no Home Assistant connected: still shown as starting %q", c)
 	}

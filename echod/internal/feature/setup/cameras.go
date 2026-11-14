@@ -34,8 +34,9 @@ func haCamerasSection(w http.ResponseWriter, token string) {
 	for _, c := range list {
 		names = append(names, html.EscapeString(c.Name))
 	}
-	fmt.Fprint(w, `<fieldset><legend>Home Assistant cameras</legend><form method="post" action="/setup/save">`)
-	hidden(w, token, "hacameras", "connections")
+	fieldsetOpen(w, "hacameras", "Home Assistant cameras")
+	fmt.Fprint(w, `<form method="post" action="/setup/save">`)
+	hidden(w, token, "hacameras")
 	var now string
 	switch {
 	case mode == "none":
@@ -57,7 +58,7 @@ func haCamerasSection(w http.ResponseWriter, token string) {
 	 <label><input type="radio" name="mode" value="all"%s> All of Home Assistant's cameras</label>
 	 <label><input type="radio" name="mode" value="these"%s> These:</label></p>
 	 <input type="hidden" name="was_mode" value="%s">
-	 <textarea id="hacams" name="list" rows="4" maxlength="4000" placeholder="camera.front_door=Front door">%s</textarea>
+	 <div class="theseonly"><textarea id="hacams" name="list" rows="4" maxlength="4000" placeholder="camera.front_door=Front door">%s</textarea></div>
 	 <input type="hidden" name="was_list" value="%s">
 	 <p class="note">One camera a line, its entity and the name to say for it: camera.front_door=Front door.
 	  The name can be left off. A device that shares a Home Assistant with other homes is best set to None
@@ -114,8 +115,9 @@ func saveHACameras(r *http.Request) string {
 // password is never shown: it is written, or left alone.
 func reolinkSection(w http.ResponseWriter, token string) {
 	r := config.Get().Home.Reolink
-	fmt.Fprint(w, `<fieldset><legend>Reolink cameras</legend><form method="post" action="/setup/save">`)
-	hidden(w, token, "reolink", "connections")
+	fieldsetOpen(w, "reolink", "Reolink cameras")
+	fmt.Fprint(w, `<form method="post" action="/setup/save">`)
+	hidden(w, token, "reolink")
 	if r.Base != "" {
 		var names []string
 		for _, c := range r.Cameras {
@@ -125,21 +127,18 @@ func reolinkSection(w http.ResponseWriter, token string) {
 		 swipe in from the right edge.</p>`, len(r.Cameras), strings.Join(names, ", "))
 	}
 	host := strings.TrimPrefix(strings.TrimPrefix(r.Base, "https://"), "http://")
-	hint := "the recorder's password"
-	if r.Pass != "" {
-		hint = "set; leave empty to keep it"
-	}
 	fmt.Fprintf(w, `<label for="rlhost">NVR, Home Hub or camera address</label>
 	 <input id="rlhost" name="host" value="%s" placeholder="192.168.1.30" autocomplete="off">
 	 <label for="rluser">User</label>
 	 <input id="rluser" name="user" value="%s" placeholder="admin" autocomplete="off">
-	 <label for="rlpass">Password</label>
-	 <input id="rlpass" name="pass" type="password" value="" placeholder="%s" autocomplete="off">
+	 %s
 	 <p class="note">The device logs in to the recorder and lists its cameras by the names they have in the
 	  Reolink app. A user of its own with only "view" rights is the tidy way. Clear the address and save
-	  to take the cameras away.</p>
+	  to take the cameras away. Removing the saved password leaves the cameras on the list, but they
+	  cannot be read until one is typed again.</p>
 	 <p><button type="submit">Save</button></p></form></fieldset>`,
-		html.EscapeString(host), html.EscapeString(r.User), hint)
+		html.EscapeString(host), html.EscapeString(r.User),
+		secretField("rlpass", "Password", "pass", r.Pass != "", "nopass"))
 }
 
 func saveReolink(r *http.Request) string {
@@ -151,11 +150,33 @@ func saveReolink(r *http.Request) string {
 	if host != "" && user == "" {
 		user = "admin"
 	}
+	if r.PostFormValue("nopass") == "yes" {
+		return removeReolinkPassword()
+	}
 	n, err := home.SetReolink(host, user, r.PostFormValue("pass"))
 	if err != nil {
 		return "could not set up the cameras: " + err.Error()
 	}
 	doorbell.Get().Poke() // its address and login are the recorder's
 	slog.Info("setup page: Reolink cameras set", "cameras", n)
+	return ""
+}
+
+// removeReolinkPassword takes the recorder's saved password away and leaves the rest as it is saved:
+// the address, the user and the cameras found. Nothing else on the form is taken with it, since a new
+// address or user is only kept once the recorder has answered to it, and it will not answer to no
+// password. The box wins over a password typed beside it, as it does for the other secrets.
+func removeReolinkPassword() string {
+	cur := config.Get().Home.Reolink
+	if cur.Pass == "" {
+		return ""
+	}
+	cur.Pass = ""
+	if err := config.Set().Home().Reolink(cur); err != nil {
+		return "could not remove the password: " + err.Error()
+	}
+	home.Get().Changed.Emit(struct{}{})
+	doorbell.Get().Poke()
+	slog.Info("setup page: the Reolink password was removed")
 	return ""
 }

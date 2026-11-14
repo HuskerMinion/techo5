@@ -3,6 +3,7 @@
 package display
 
 import (
+	"fmt"
 	"image"
 	"image/color"
 )
@@ -18,6 +19,29 @@ type deckView struct {
 	connected bool
 	problem   string
 	obsSet    bool
+	// away is a computer this page's buttons are for that is not answering, by name, and reason why
+	// the press just made failed: each a line at the foot too (footLine).
+	away   string
+	reason string
+}
+
+// footLine is the line at the foot's left, and whether it is a failure's: why the press just made
+// failed, while its button is red; else why the buttons are gray, OBS before a computer; else that OBS
+// was never set up, which a deck of computer buttons with one of them away is not about.
+func (v deckView) footLine() (line string, failure bool) {
+	switch {
+	case v.reason != "":
+		return v.reason, true
+	case v.obsSet && !v.connected && v.problem != "":
+		return v.problem, false
+	case v.obsSet && !v.connected:
+		return tr("connecting_to_obs"), false
+	case v.away != "":
+		return fmt.Sprintf(tr("deck_pc_silent"), v.away), false
+	case !v.obsSet:
+		return tr("obs_is_not_set_up"), false
+	}
+	return "", false
 }
 
 type deckButtonView struct {
@@ -33,7 +57,7 @@ type deckButtonView struct {
 const (
 	deckMargin = 14
 	deckGap    = 12
-	deckFoot   = 30 // the strip for the page dots and the OBS line
+	deckFoot   = 44 // the strip for the page dots, the OBS line and the way back to the clock
 	deckRadius = 18
 )
 
@@ -56,8 +80,8 @@ func deckColor(name string) color.RGBA {
 	return amber
 }
 
-// deckPage draws the deck: the grid of buttons, the page dots under it, and a line about OBS when
-// it isn't connected.
+// deckPage draws the deck: the grid of buttons, the page dots under it, and a line at the foot when
+// something is not there or a press failed (footLine).
 func (r *renderer) deckPage(s scene) {
 	// (The zones are cleared in draw on every frame that doesn't draw the deck.)
 	v := s.deck
@@ -76,15 +100,32 @@ func (r *renderer) deckPage(s scene) {
 		zones = append(zones, box)
 		r.deckButton(box, b)
 	}
+	// The way back to the clock, at the foot's right: the swipe down that also does it is nowhere on
+	// the screen, and a panel with no microphone has no other way to say so. The whole corner of the
+	// foot takes the tap, the pill being short.
+	fc := r.faces()
+	word := tr("clock")
+	icon := r.s(20)
+	pw := icon + r.s(6) + r.width(fc.sub, word) + 2*r.s(14)
+	ph := foot - r.s(10)
+	pill := image.Rect(r.w-m-pw, r.h-foot/2-ph/2, r.w-m, r.h-foot/2+ph/2)
+	r.roundFill(pill, float64(ph)/2, surface(4), surface(2))
+	r.mdiIconIn("chevron-down", image.Rect(pill.Min.X+r.s(14), pill.Min.Y, pill.Min.X+r.s(14)+icon, pill.Max.Y), 20, dim)
+	r.text(fc.sub, word, pill.Min.X+r.s(14)+icon+r.s(6), pill.Min.Y+ph/2+r.s(7), cream)
+
 	r.zmu.Lock()
 	r.deckZones = zones
+	r.deckClose = image.Rect(pill.Min.X-r.s(16), r.h-foot, r.w, r.h)
 	r.zmu.Unlock()
 
-	// The page dots, centered in the foot, when there is more than one page.
+	// The page dots, centered in the foot, when there is more than one page. room is what they leave
+	// the line at the foot's left.
 	fy := r.h - foot/2
+	room := r.w/2 - 2*m
 	if v.pages > 1 {
 		dot, step := r.s(8), r.s(18)
 		x := r.w/2 - (v.pages-1)*step/2
+		room = min(room, x-dot/2-r.s(10)-m)
 		for p := range v.pages {
 			col := lerp(walnut, dim, 0.6)
 			if p == v.page {
@@ -96,19 +137,14 @@ func (r *renderer) deckPage(s scene) {
 		}
 	}
 
-	// Why the buttons are gray, at the foot's left.
-	var line string
-	switch {
-	case !v.obsSet:
-		line = "OBS isn't set up: setup page → Screen & Photos → Deck"
-	case !v.connected && v.problem != "":
-		line = v.problem
-	case !v.connected:
-		line = tr("connecting_to_obs")
-	}
-	if line != "" {
-		fc := r.faces()
-		r.text(fc.sub, r.fit(fc.sub, line, r.w/2-2*m), m, fy+r.s(7), dim)
+	// Why the buttons are gray, or why the press just made failed, at the foot's left: cut to what
+	// the page dots leave of that half of the foot, the way back to the clock being in the other.
+	if line, failure := v.footLine(); line != "" {
+		ink := dim
+		if failure {
+			ink = amber
+		}
+		r.text(fc.sub, r.fit(fc.sub, line, room), m, fy+r.s(7), ink)
 	}
 }
 
@@ -190,6 +226,13 @@ func (r *paint) sNumOr1() int { return max(r.sNum, 1) }
 func (r *paint) sDenOr1() int { return max(r.sDen, 1) }
 
 // deckHit is the button a tap at p landed on, in the deck last drawn.
+// deckCloseHit is whether p is on the deck's way back to the clock, as last drawn.
+func (r *renderer) deckCloseHit(p image.Point) bool {
+	r.zmu.Lock()
+	defer r.zmu.Unlock()
+	return p.In(r.deckClose)
+}
+
 func (r *renderer) deckHit(p image.Point) (int, bool) {
 	r.zmu.Lock()
 	defer r.zmu.Unlock()

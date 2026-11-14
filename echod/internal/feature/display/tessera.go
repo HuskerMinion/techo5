@@ -554,7 +554,7 @@ func (r *paint) tessTile(b image.Rectangle, t tessera.Placed, pal dashPal, adj d
 		return zones
 	}
 	if pill && r.width(sub, value) > room {
-		value = "Tap again" // the button beside the badge says what for
+		value = tr("tap_again") // the button beside the badge says what for
 	}
 	r.text(sub, r.fit(sub, value, room), b.Min.X+pad, foot, pal.sub)
 	lines := r.wrapLines(name, t.Name, room)
@@ -958,9 +958,9 @@ func (d *Display) tessMove(x, y int) {
 	}
 }
 
-// tessRelease is the finger lifting: a slide sets its level, a swipe far enough turns to the next page
-// or the one before, of those the dots show, and a finger that stayed put until it was a hold opens the
-// tile's sheet.
+// tessRelease is the finger lifting: a slide sets its level, and a swipe far enough turns to the next
+// page or the one before, of those the dots show. A finger that stayed put until it was a long press
+// opened the tile's sheet then (tileHeld), and lifts on nothing.
 func (d *Display) tessRelease(x, y int) {
 	if d.colorOpen() {
 		d.drawnRelease(x, y)
@@ -973,6 +973,7 @@ func (d *Display) tessRelease(x, y int) {
 	page := d.tessPage
 	d.mu.Unlock()
 	switch {
+	case dr.held:
 	case dr.sliding && dr.tile != nil && dr.tile.adjust != nil && dr.tile.tess > 0:
 		slog.Info("tessera slide", "entity", dr.tile.adjust.Entity, "to", dr.value)
 		tessera.SetLevel(dr.tile.tess-1, dr.tile.entity, dr.value)
@@ -987,8 +988,6 @@ func (d *Display) tessRelease(x, y int) {
 		}
 	case d.wanderedTap(dr, x, y):
 		d.tessTap(dr.at.X, dr.at.Y)
-	case dr.down && !dr.moved && !dr.sliding && !dr.scrolling && dr.tile != nil && dr.tile.tess > 0:
-		d.tessSheet(dr.tile.entity)
 	}
 	d.wake()
 }

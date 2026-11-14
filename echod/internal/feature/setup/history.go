@@ -25,7 +25,7 @@ var clearTurns = activity.ClearHistory
 func (f *Feature) historyClear(w http.ResponseWriter, r *http.Request) {
 	token, in := f.session(r)
 	if !in {
-		http.Error(w, "not let in", http.StatusForbidden)
+		notLetIn(w)
 		return
 	}
 	if r.Method != http.MethodPost {
@@ -42,7 +42,7 @@ func (f *Feature) historyClear(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	clearTurns()
-	http.Redirect(w, r, back("sound", "", "")+"#history", http.StatusSeeOther)
+	http.Redirect(w, r, back("history", "", ""), http.StatusSeeOther)
 }
 
 // historySection lists the last voice requests, newest first, on a device with microphones.
@@ -50,8 +50,8 @@ func historySection(w http.ResponseWriter, token string) {
 	if !layout.HasMicrophone() {
 		return
 	}
-	fmt.Fprint(w, `<fieldset id="history"><legend>Recent voice requests</legend>
-	 <p class="note" style="margin-top:0">The last 10 voice requests this device took, newest first: when, which
+	fieldsetOpen(w, "history", "Recent voice requests")
+	fmt.Fprint(w, `<p class="note" style="margin-top:0">The last 10 voice requests this device took, newest first: when, which
 	  assistant, the wake word's score, what was heard, the reply, how it ended and how long each part took. Kept
 	  in memory only: never saved, never in the diagnostics download, and gone when the device restarts. Like
 	  Send voice text, the words are left out while that is off.</p>`)
@@ -78,7 +78,7 @@ func historySection(w http.ResponseWriter, token string) {
 	}
 	// Refresh differs from the page's own address in more than its fragment, so following it reloads.
 	fmt.Fprintf(w, `<form method="post" action="/setup/history/clear" class="btns"><input type="hidden" name="token" value="%s">
-	 <a href="/setup?tab=sound&amp;history=1#history">Refresh</a>
+	 <a href="/setup?tab=sound&amp;history=1#sec-history">Refresh</a>
 	 <button type="submit">Clear</button></form></fieldset>`, html.EscapeString(token))
 }
 

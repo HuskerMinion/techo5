@@ -1547,8 +1547,11 @@ func (d *Display) tileAction(t *dashTile) {
 		d.openLibrary("", entity, true)
 		return
 	}
-	dashboard.Get().Tap(a)
+	tileTap(a)
 }
+
+// tileTap sends a tile's action; a variable for the tests.
+var tileTap = func(a dashboard.Action) { dashboard.Get().Tap(a) }
 
 // libraryUp is whether the music library is up.
 func (d *Display) libraryUp() bool {

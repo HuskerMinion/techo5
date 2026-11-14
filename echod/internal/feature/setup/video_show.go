@@ -23,8 +23,9 @@ func videoSection(w http.ResponseWriter, token string) {
 		}
 		return ""
 	}
-	fmt.Fprint(w, `<fieldset><legend>Video</legend><form method="post" action="/setup/save">`)
-	hidden(w, token, "video", "photos")
+	fieldsetOpen(w, "video", "Video")
+	fmt.Fprint(w, `<form method="post" action="/setup/save">`)
+	hidden(w, token, "video")
 	fmt.Fprint(w, `<p class="note" style="margin-top:0">Play a video full screen, with its sound, from an
 	  address on your network or the internet. Home Assistant sends one with the play_video action.
 	  H.264 at 720p or less plays best.</p>`)

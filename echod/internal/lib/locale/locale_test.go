@@ -113,3 +113,13 @@ func TestPhotoDate(t *testing.T) {
 		}
 	}
 }
+
+// The month heading has a short form for where the long one does not fit.
+func TestShortMonthYear(t *testing.T) {
+	at := time.Date(2026, 10, 1, 0, 0, 0, 0, time.UTC)
+	for lang, want := range map[string]string{"": "Oct 2026", "en": "Oct 2026", "de": "Okt. 2026", "ja": "2026年10月"} {
+		if got := ShortMonthYear(at, lang); got != want {
+			t.Errorf("ShortMonthYear(%q) = %q, want %q", lang, got, want)
+		}
+	}
+}

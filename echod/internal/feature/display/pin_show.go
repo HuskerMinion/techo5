@@ -15,7 +15,7 @@ import (
 func (r *renderer) pinKeyRects() []image.Rectangle {
 	w, h, gap := r.s(96), r.s(70), r.s(12)
 	x0 := r.w - r.margin - 3*w - 2*gap
-	y0 := r.s(78)
+	y0 := r.s(78) + r.tallerBy()/2 // in the middle of a panel taller than the Show 5's shape
 	out := make([]image.Rectangle, 0, len(pinKeys))
 	for i := range pinKeys {
 		col, row := i%3, i/3

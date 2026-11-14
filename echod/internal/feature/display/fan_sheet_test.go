@@ -93,7 +93,7 @@ func TestTheFanSheetOffersWhatTheFanCanDo(t *testing.T) {
 }
 
 // A long press on a fan whose card sets no tap of its own, or the plain toggle, opens its sheet; one
-// whose card sets another tap does what it says. On the sheet the switch, the direction and a preset
+// whose card sets another tap opens nothing. On the sheet the switch, the direction and a preset
 // call their services, and Done puts it away.
 func TestALongPressOnAFanOpensItsSheet(t *testing.T) {
 	calls := fakeFan(t)
@@ -109,7 +109,7 @@ func TestALongPressOnAFanOpensItsSheet(t *testing.T) {
 	if byEntity["fan.custom"] == nil || fanOwnTap(byEntity["fan.custom"]) {
 		t.Fatal("a card with a tap of its own counts as the plain toggle")
 	}
-	d.longPress(byEntity["fan.custom"]) // runs its own tap: no Home Assistant, so nothing
+	d.longPress(byEntity["fan.custom"]) // its tap is its own, and a long press is not a tap
 	if d.colorOpen() {
 		t.Error("a card whose tap is its own opened the sheet")
 	}

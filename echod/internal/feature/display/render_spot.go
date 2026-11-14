@@ -90,13 +90,15 @@ type roundScene struct {
 	now          time.Time
 	phase        string // idle, listening, thinking, replying, lingering
 	heard, reply string
+	failed       string  // why the request failed, while its line lingers in the answer's place (turn_failed.go)
 	said         float64 // how much of the reply the voice has said, 0 to 1 (voice.Spoken)
 	eq           *eqView // a turn's picture, when turns are drawn as the wave or the bars
 	cue          string  // a turn's phase, when turns are a cue over the face and phase is idle (turn_cue.go)
 	muted        bool
-	mutedSubtle  bool // the muted ring drawn thin and dim (mutering_spot.go)
-	noIdleRing   bool // no gray track while nothing else is on the rim (rimdot_spot.go)
-	listening    bool // the room is being listened to in a browser (feature/babymon)
+	mutedSubtle  bool   // the muted ring drawn thin and dim (mutering_spot.go)
+	linkDown     string // what the device has lost, its Wi-Fi or Home Assistant, for the clock faces to say (link_status.go)
+	noIdleRing   bool   // no gray track while nothing else is on the rim (rimdot_spot.go)
+	listening    bool   // the room is being listened to in a browser (feature/babymon)
 	playing      bool
 	paused       bool
 	volume       int
@@ -519,6 +521,10 @@ func (r *roundRenderer) rim(s roundScene) {
 	switch {
 	case s.muted:
 		r.mutedRim(s.mutedSubtle)
+	case s.failed != "":
+		// A request that failed: the whole rim in the mute's red, the one color on it that says
+		// something is wrong, around the line that says what (failedWords).
+		r.arc(rimIn, rimOut, 0, 2*math.Pi, colMuted)
 	case phase == "listening":
 		pulse := 0.55 + 0.45*math.Sin(float64(s.now.UnixMilli())/180)
 		r.arc(rimIn, rimOut, 0, 2*math.Pi, fade(colListening, pulse))
@@ -581,18 +587,7 @@ func (r *roundRenderer) classicClockFace(s roundScene) {
 	if s.slideshowTrouble != "" {
 		r.centered(r.small, s.slideshowTrouble, line, colDim)
 	}
-	switch {
-	case s.setupAsking:
-		r.centered(r.label, tr("a_browser_is_asking"), 118, colMuted)
-	case s.muted:
-		r.centered(r.label, tr("microphone_off"), 118, colMuted)
-	case s.btPairing:
-		r.centered(r.label, tr("bluetooth_pairing"), 118, colBluetooth)
-	case s.playing:
-		r.centered(r.label, tr("ui_playing"), 118, colDim)
-	case s.paused:
-		r.centered(r.label, tr("ui_paused"), 118, colDim)
-	}
+	r.statusWord(s, 118)
 }
 
 func (r *roundRenderer) conversation(s roundScene) {
@@ -612,9 +607,22 @@ func (r *roundRenderer) conversation(s roundScene) {
 		y = r.paragraph(r.body, s.heard, y, colDim, 3)
 		y += 12
 	}
+	if s.failed != "" {
+		if s.heard == "" {
+			y = 226 // alone on the face: in its middle
+		}
+		r.failedWords(s, y)
+		return
+	}
 	if s.reply != "" && (s.phase == "replying" || s.phase == "lingering") {
 		r.replyParagraph(r.body, s.reply, y, colText, 5, s.said)
 	}
+}
+
+// failedWords is why a request failed, in the answer's place from baseline y down: in the timer's
+// amber, as what the device has lost is said on the clock (statusWord), and two lines at the most.
+func (r *roundRenderer) failedWords(s roundScene, y int) {
+	r.paragraph(r.body, failedLine(s.failed), y, colTimer, 2)
 }
 
 func (r *roundRenderer) volume(s roundScene) {

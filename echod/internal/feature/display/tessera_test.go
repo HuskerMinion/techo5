@@ -193,6 +193,10 @@ func TestTesseraSheetsAndTheLock(t *testing.T) {
 
 	p := at["light.desk"]
 	d.tessHold(p.X, p.Y)
+	d.tileHeld()
+	if !d.colorOpen() {
+		t.Fatal("the long press opened nothing until the finger lifted")
+	}
 	d.tessRelease(p.X, p.Y)
 	d.mu.Lock()
 	c := d.dashColor

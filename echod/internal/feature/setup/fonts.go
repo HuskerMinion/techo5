@@ -27,8 +27,8 @@ func ownFontsSection(w http.ResponseWriter, token string) {
 	if s == nil || s.OwnFonts == nil {
 		return
 	}
-	fmt.Fprint(w, `<fieldset><legend>Fonts of your own</legend>
-	 <p class="note" style="margin-top:0">For characters the screen's fonts do not have, such as Korean, Chinese
+	fieldsetOpen(w, "fonts", "Fonts of your own")
+	fmt.Fprint(w, `<p class="note" style="margin-top:0">For characters the screen's fonts do not have, such as Korean, Chinese
 	  and Japanese: the screen draws any character its font and Go lack from these, in the order of their
 	  file names. They are never the font for everything; that is Font, above.</p>`)
 	own := s.OwnFonts()
@@ -41,10 +41,10 @@ func ownFontsSection(w http.ResponseWriter, token string) {
 			about = "not used: " + o.Problem
 		}
 		fmt.Fprintf(w, `<form method="post" action="/setup/save" style="margin:0">`)
-		hidden(w, token, "font-remove", "photos")
+		hidden(w, token, "font-remove")
 		fmt.Fprintf(w, `<input type="hidden" name="file" value="%s">
 		 <p style="margin:.3em 0"><strong>%s</strong>, %.1f MB<br><span class="note">%s</span>
-		 <button type="submit" style="width:auto;margin-left:.5em">Remove</button></p></form>`,
+		 <button type="submit" class="quiet danger" style="margin-left:.5em">Remove</button></p></form>`,
 			html.EscapeString(o.File), html.EscapeString(o.File), float64(o.Size)/(1<<20), html.EscapeString(about))
 	}
 	fmt.Fprintf(w, `<label for="fontfile">Add a font</label>

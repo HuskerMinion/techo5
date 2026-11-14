@@ -16,7 +16,12 @@ import (
 func (r *renderer) settingsPage(sel category, v cardView, pick *pickerView, pickScroll int) {
 	fc := r.faces()
 	r.pending = r.pending[:0]
+	// The part kept between frames is drawn with no finger on it, or a press would stay in the copy;
+	// and under an open list the card's buttons are not what a finger is on.
+	press := r.press
+	r.press.on = false
 	r.settingsBase(sel, v.title, v.blurb)
+	r.press.on = press.on && pick == nil
 	for c := category(0); c < categories; c++ {
 		top := r.navTop() + int(c)*(r.navH()+r.navGap())
 		r.addZone(zone{r: image.Rect(0, top-r.navGap()/2, r.railW(), top+r.navH()+r.navGap()/2), kind: zoneCat, cat: c})
@@ -45,6 +50,8 @@ func (r *renderer) settingsPage(sel category, v cardView, pick *pickerView, pick
 	if pick != nil {
 		pickMax = r.picker(*pick, pickScroll)
 	}
+	r.press.on = press.on
+	r.pressZone()
 
 	r.zmu.Lock()
 	r.zones, r.pending = r.pending, r.zones

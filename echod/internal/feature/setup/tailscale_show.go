@@ -36,20 +36,27 @@ func tailscaleSection(w http.ResponseWriter, token string) {
 	case st.On:
 		where = "Starting."
 	}
-	fmt.Fprint(w, `<fieldset><legend>Tailscale</legend><form method="post" action="/setup/save">`)
-	hidden(w, token, "tailscale", "connections")
+	tailscaleForm(w, token, where)
+}
+
+// tailscaleForm is the section's form, with where the device stands said above it (as HTML). Joining
+// holds the request until the tailnet has answered, so the form says it is at work (script.go).
+func tailscaleForm(w http.ResponseWriter, token, where string) {
+	fieldsetOpen(w, "tailscale", "Tailscale")
+	fmt.Fprintf(w, `<form method="post" action="/setup/save"%s>`, busy(busyTailscale))
+	hidden(w, token, "tailscale")
 	fmt.Fprintf(w, `<p class="note">%s</p>
-	 <label for="tskey">Auth key</label>
-	 <input id="tskey" name="key" type="password" autocomplete="off" placeholder="tskey-auth-...">
+	 %s
 	 <label for="tscontrol">Headscale server</label>
-	 <input id="tscontrol" name="control" autocomplete="off" maxlength="253" placeholder="https://headscale.example.com">
+	 <input id="tscontrol" name="control" type="url" inputmode="url" autocomplete="off" maxlength="253" placeholder="https://headscale.example.com">
 	 <p class="note">An auth key from the Tailscale admin console, tagged <strong>tag:techo5</strong>. It joins
 	  the device to your tailnet once and is not kept; after that the device rejoins by itself. Over the
 	  tailnet, Home Assistant reaches the device on its encrypted link, and nothing else answers but the
 	  setup page while Remote setup is on.</p>
 	 <p class="note">With your own Headscale, give its address and a pre-auth key from it
 	  (<code>headscale preauthkeys create</code>); leave the server empty for Tailscale's.</p>
-	 <p><button type="submit">Join</button></p></form></fieldset>`, where)
+	 <p><button type="submit">Join</button></p></form></fieldset>`, where,
+		onceField("tskey", "Auth key", "key", `required placeholder="tskey-auth-..."`))
 }
 
 // saveTailscale joins the tailnet with the key typed, at the Headscale typed if one is.

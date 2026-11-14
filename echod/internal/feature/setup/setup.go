@@ -117,6 +117,9 @@ func Get() *Feature {
 		voice.OwnsPress(shared.TookPress)
 		web.Handle("/setup", "Setup", shared.On, shared.serve)
 		web.Handle("/setup/", "", shared.On, shared.serve)
+		// A page that closed itself under a browser says so to that browser (locked.go).
+		web.Closed("/setup", shared.closedPage)
+		web.Closed("/setup/", shared.closedPage)
 		// The press is the whole port's authorization, not only this page's: a screenshot is one
 		// thing to let the network have and driving the screen from it is another.
 		web.Guard(shared.letInRequest)
@@ -217,6 +220,15 @@ func (f *Feature) Close() {
 	f.sw.Set(false)
 	web.Wake()
 	f.Changed.Emit(struct{}{})
+}
+
+// leave ends one browser's session, at its own asking (done.go). The page stays up for anybody else who
+// was let in, and closes by itself as ever.
+func (f *Feature) leave(token string) {
+	f.mu.Lock()
+	delete(f.live, token)
+	delete(f.remote.sessions, token)
+	f.mu.Unlock()
 }
 
 // used puts the idle time back to the start: typing on the page keeps it open.
@@ -370,6 +382,11 @@ func (f *Feature) Asking() string {
 		return ""
 	}
 	return f.waiting
+}
+
+// asking is whether this cookie is the browser the device is asking about now.
+func (f *Feature) asking(token string) bool {
+	return token != "" && sameToken(token, f.Asking())
 }
 
 // AllowAsking lets in the browser Asking named, if it is still the one asking.

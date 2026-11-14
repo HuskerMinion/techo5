@@ -42,8 +42,8 @@ var soundTitles = map[string][2]string{
 // soundsSection lists the sounds, whether each is the device's own or one sent here, and takes a file
 // for any of them.
 func soundsSection(w http.ResponseWriter, token string) {
-	fmt.Fprint(w, `<fieldset><legend>Sounds of your own</legend>
-	 <p class="note" style="margin-top:0">A recording of your own plays in place of the device's sound. Play
+	fieldsetOpen(w, "sounds", "Sounds of your own")
+	fmt.Fprint(w, `<p class="note" style="margin-top:0">A recording of your own plays in place of the device's sound. Play
 	  tries what plays now, quietly. To change one, choose a file beside it and press Upload.</p>`)
 	for _, name := range speaker.OwnSounds() {
 		title := soundTitles[name]
@@ -58,22 +58,22 @@ func soundsSection(w http.ResponseWriter, token string) {
 		fmt.Fprintf(w, `<p style="margin:1rem 0 0"><strong>%s</strong>, %s. Now: %s</p><div class="btns" style="margin-top:.4rem">`,
 			html.EscapeString(title[0]), html.EscapeString(title[1]), state)
 		fmt.Fprint(w, `<form method="post" action="/setup/save" style="margin:0">`)
-		hidden(w, token, "sound-play", "sound")
+		hidden(w, token, "sound-play")
 		fmt.Fprintf(w, `<input type="hidden" name="sound" value="%s"><button type="submit" class="quiet">Play</button></form>`,
 			html.EscapeString(name))
 		// The token comes first and the sound's name next, ahead of the file: the order the fields are in
 		// is the order the browser sends them, and the order the device reads them in.
-		fmt.Fprintf(w, `<form method="post" action="/setup/sound" enctype="multipart/form-data"
+		fmt.Fprintf(w, `<form method="post" action="/setup/sound" enctype="multipart/form-data"%s
 		 style="margin:0;display:flex;gap:.5rem;flex:1;flex-wrap:wrap;align-items:center">
 		 <input type="hidden" name="token" value="%s"><input type="hidden" name="sound" value="%s">
 		 <input type="file" name="file" accept=".wav,audio/wav" required style="width:auto;flex:1;min-width:12rem"
 		  aria-label="A recording for %s">
 		 <button type="submit" class="quiet">Upload</button></form>`,
-			html.EscapeString(token), html.EscapeString(name), html.EscapeString(title[0]))
+			busy(busySound), html.EscapeString(token), html.EscapeString(name), html.EscapeString(title[0]))
 		if has {
 			fmt.Fprint(w, `<form method="post" action="/setup/save" style="margin:0">`)
-			hidden(w, token, "sound-remove", "sound")
-			fmt.Fprintf(w, `<input type="hidden" name="sound" value="%s"><button type="submit" class="quiet">Use the device's own</button></form>`,
+			hidden(w, token, "sound-remove")
+			fmt.Fprintf(w, `<input type="hidden" name="sound" value="%s"><button type="submit" class="quiet danger">Use the device's own</button></form>`,
 				html.EscapeString(name))
 		}
 		fmt.Fprint(w, `</div>`)
@@ -92,7 +92,7 @@ func soundsSection(w http.ResponseWriter, token string) {
 func (f *Feature) sound(w http.ResponseWriter, r *http.Request) {
 	token, in := f.session(r)
 	if !in {
-		http.Error(w, "not let in", http.StatusForbidden)
+		notLetIn(w)
 		return
 	}
 	if r.Method != http.MethodPost {
@@ -120,11 +120,11 @@ func (f *Feature) sound(w http.ResponseWriter, r *http.Request) {
 	problem := receiveSound(mr)
 	if problem == "" {
 		f.used()
-		http.Redirect(w, r, back("sound", "saved", "1"), http.StatusSeeOther)
+		http.Redirect(w, r, back("sounds", "saved", "1"), http.StatusSeeOther)
 		return
 	}
 	slog.Warn("setup page: a sound was refused", "problem", problem)
-	http.Redirect(w, r, back("sound", "problem", problem), http.StatusSeeOther)
+	http.Redirect(w, r, back("sounds", "problem", problem), http.StatusSeeOther)
 }
 
 // receiveSound reads which sound, then the file, and keeps it; what went wrong, or "". Which sound is
@@ -204,13 +204,13 @@ func soundPackSection(w http.ResponseWriter, token string) {
 	 use on another device. Loading one replaces the sounds it holds and leaves the others as they are.</p>
 	 <div class="btns" style="margin-top:.4rem">
 	 <a href="/setup/soundpack" download>Save sound pack</a>
-	 <form method="post" action="/setup/soundpack" enctype="multipart/form-data"
+	 <form method="post" action="/setup/soundpack" enctype="multipart/form-data"%s
 	  style="margin:0;display:flex;gap:.5rem;flex:1;flex-wrap:wrap;align-items:center">
 	  <input type="hidden" name="token" value="%s">
 	  <input type="file" name="file" accept="%s" required style="width:auto;flex:1;min-width:12rem"
 	   aria-label="A sound pack">
 	  <button type="submit" class="quiet">Load sound pack</button></form></div>`,
-		html.EscapeString(token), speaker.PackExt)
+		busy(busyPack), html.EscapeString(token), speaker.PackExt)
 }
 
 // soundPack is the pack for download (GET) and for loading (POST). Both need a browser let in, and a
@@ -218,13 +218,13 @@ func soundPackSection(w http.ResponseWriter, token string) {
 func (f *Feature) soundPack(w http.ResponseWriter, r *http.Request) {
 	token, in := f.session(r)
 	if !in {
-		http.Error(w, "not let in", http.StatusForbidden)
+		notLetIn(w)
 		return
 	}
 	if r.Method == http.MethodGet {
 		var buf bytes.Buffer
 		if err := speaker.PackSounds(&buf); err != nil {
-			http.Redirect(w, r, back("sound", "problem", err.Error()), http.StatusSeeOther)
+			http.Redirect(w, r, back("sounds", "problem", err.Error()), http.StatusSeeOther)
 			return
 		}
 		w.Header().Set("Content-Type", "application/zip")
@@ -271,9 +271,9 @@ func (f *Feature) soundPack(w http.ResponseWriter, r *http.Request) {
 	}
 	if problem != "" {
 		slog.Warn("setup page: a sound pack was refused", "problem", problem)
-		http.Redirect(w, r, back("sound", "problem", problem), http.StatusSeeOther)
+		http.Redirect(w, r, back("sounds", "problem", problem), http.StatusSeeOther)
 		return
 	}
 	f.used()
-	http.Redirect(w, r, back("sound", "saved", "1"), http.StatusSeeOther)
+	http.Redirect(w, r, back("sounds", "saved", "1"), http.StatusSeeOther)
 }

@@ -25,9 +25,14 @@ import (
 // stops the stream: one that arrives after the note plays as any other does, and takes the note down.
 //
 // Only a station somebody asked for is watched: one the device puts back on by itself after its stream
-// dropped (putBack) is not, since a note would be about nothing anybody did. And a call that went to no
-// Home Assistant at all, none being connected, is only logged (callFavorite): the note's question
-// about its settings would be the wrong one.
+// dropped (putBack) is not, since a note would be about nothing anybody did. A call that went to no
+// Home Assistant at all, none being connected, has a note of its own (NoHomeHint): the question about
+// its settings would be the wrong one.
+//
+// The other ways a station comes to nothing are said the same way, each in its own words: Home
+// Assistant refusing to play one from a list (PlayFailedHint), and a stream left off after it kept
+// ending (DroppingHint). They were lines in the log, and the screen went back to the clock, or stayed
+// on the song before, with nothing to say a station had been asked for at all.
 
 // Hint is a short note for the screen about something this device asked for that went nowhere. The
 // screen puts it up as a card, the way it shows a notification (feature/notify), but quietly and
@@ -45,6 +50,13 @@ const (
 	// FavoriteHint is the star's script call refused.
 	FavoriteHint = "Couldn't save the station. Home Assistant needs a script named " +
 		"script.radio_favorite_add_station."
+	// NoHomeHint is a station asked for with no Home Assistant connected to ask it of.
+	NoHomeHint = "Home Assistant isn't connected to this device, so the station wasn't started."
+	// PlayFailedHint is a station from a list that Home Assistant would not play. The error behind it
+	// stays in the log: it can carry an address.
+	PlayFailedHint = "Home Assistant couldn't play that station."
+	// DroppingHint is a station left off after its stream ended by itself too many times.
+	DroppingHint = "The stream keeps dropping, so the station was left off."
 )
 
 // startWait is how long a station started through the radio script has to show a sign that Home
@@ -124,6 +136,15 @@ func (f *Feature) streamArrived() {
 		slog.Info("radio: a stream arrived after all")
 		f.Hint.Emit(Hint{})
 	}
+}
+
+// startFailed is a station that came to nothing for a reason the device knows: the note says which, and
+// a stream that arrives after all takes it down, as it does the note for a start nothing came of.
+func (f *Feature) startFailed(message string) {
+	f.mu.Lock()
+	f.hinted = true
+	f.mu.Unlock()
+	f.Hint.Emit(Hint{Title: "Radio", Message: message})
 }
 
 // favoriteFailed is the star's script call refused: the note names the script it needs, since a 400 is

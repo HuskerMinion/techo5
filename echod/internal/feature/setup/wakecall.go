@@ -26,8 +26,9 @@ var (
 func wakeCallSection(w http.ResponseWriter, token string) {
 	c := config.Get()
 	book := wakeCallBook()
-	fmt.Fprint(w, `<fieldset><legend>Call on a wake word</legend><form method="post" action="/setup/save">`)
-	hidden(w, token, "wakecall", "sound")
+	fieldsetOpen(w, "wakecall", "Call on a wake word")
+	fmt.Fprint(w, `<form method="post" action="/setup/save">`)
+	hidden(w, token, "wakecall")
 	fmt.Fprint(w, `<p class="note"><strong>A wake word chosen here calls that contact as soon as it is heard,
 	 in place of the assistant, and the room is heard in the call from the moment it is answered.</strong>
 	 Only while the phone is free: during a call the wake word does what it always does. The button that

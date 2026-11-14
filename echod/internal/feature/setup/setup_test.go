@@ -51,7 +51,7 @@ func TestNobodyIsLetInWithoutAPress(t *testing.T) {
 	}
 
 	c := ask(t, f)
-	if body := get(f, "/setup", c).Body.String(); !strings.Contains(body, "Press the action button") {
+	if body := get(f, "/setup", c).Body.String(); !strings.Contains(body, letInNow) {
 		t.Errorf("a browser waiting for the press is not told to make it: %q", first(body))
 	}
 	// The settings' tabs are the sign of being in: every tab has them, and the locked page has none.

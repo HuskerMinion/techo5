@@ -48,7 +48,7 @@ func TestTheRoundCameraTalkControl(t *testing.T) {
 			if s.cameraSound {
 				snd := r.cameraSoundAt
 				smid := snd.Min.Add(image.Pt(snd.Dx()/2, snd.Dy()/2))
-				if talk.Inset(-4).Overlaps(snd.Inset(-10)) && r.cameraTalkTapped(smid.X, smid.Y) {
+				if talk.Inset(-cameraBarReach).Overlaps(snd.Inset(-cameraBarReach)) && r.cameraTalkTapped(smid.X, smid.Y) {
 					t.Errorf("%s: a tap on the sound's bar was taken for Talk", name)
 				}
 			}

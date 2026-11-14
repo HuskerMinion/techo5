@@ -82,7 +82,7 @@ func TestLostEventsForgetTheFinger(t *testing.T) {
 // comes up under it.
 func TestAShowHoldOnlyWhenAskedFor(t *testing.T) {
 	defer func(w, h int) { Width, Height = w, h }(Width, Height)
-	press := func(holds bool) []Kind {
+	press := func(holds bool) []Gesture {
 		abs := func(code uint16, v int32) input.Event { return input.Event{Type: input.EvAbs, Code: code, Value: v} }
 		syn := input.Event{Type: input.EvSyn, Code: synReport}
 		events := []input.Event{
@@ -93,8 +93,8 @@ func TestAShowHoldOnlyWhenAskedFor(t *testing.T) {
 		s.SetHolds(holds)
 		// The Hold comes from the hold timer's goroutine.
 		var mu sync.Mutex
-		var got []Kind
-		s.Gestures.Listen(func(g Gesture) { mu.Lock(); got = append(got, g.Kind); mu.Unlock() })
+		var got []Gesture
+		s.Gestures.Listen(func(g Gesture) { mu.Lock(); got = append(got, g); mu.Unlock() })
 		read := func() (input.Event, error) {
 			if len(events) == 0 {
 				return input.Event{}, io.EOF
@@ -111,10 +111,59 @@ func TestAShowHoldOnlyWhenAskedFor(t *testing.T) {
 		defer mu.Unlock()
 		return got
 	}
-	if got := press(false); len(got) != 1 || got[0] != Tap {
+	if got := press(false); len(got) != 1 || got[0].Kind != Tap {
 		t.Errorf("a long press without holds gave %v, want a tap", got)
 	}
-	if got := press(true); len(got) != 2 || got[0] != Hold || got[1] != Release {
+	// A hold that came of staying put does not say it moved.
+	if got := press(true); len(got) != 2 || got[0].Kind != Hold || got[0].Moved || got[1].Kind != Release {
 		t.Errorf("a long press with holds gave %v, want hold, release", got)
+	}
+}
+
+// A finger coming down says where, once and before anything it does: the display shows a press under
+// it. In follow mode a finger that moves is a Hold marked as moved, so a page that opens something on a
+// long press does not take a slide for one.
+func TestAFingerSaysWhereItLanded(t *testing.T) {
+	defer func(w, h int) { Width, Height = w, h }(Width, Height)
+	abs := func(code uint16, v int32) input.Event { return input.Event{Type: input.EvAbs, Code: code, Value: v} }
+	syn := input.Event{Type: input.EvSyn, Code: synReport}
+	events := []input.Event{
+		abs(absMTSlot, 0), abs(absMTTrackingID, 1), abs(absMTPositionX, 400), abs(absMTPositionY, 600), syn,
+		abs(absMTPositionY, 600+followMove+8), syn,
+		abs(absMTTrackingID, -1), syn,
+	}
+	s := &Screen{rawW: 800, rawH: 1280}
+	s.SetFollow(true)
+	var got []Gesture
+	var landed []Point
+	var order []string
+	s.Gestures.Listen(func(g Gesture) { got = append(got, g); order = append(order, string(g.Kind)) })
+	s.Landed.Listen(func(p Point) { landed = append(landed, p); order = append(order, "landed") })
+	s.Down.Listen(func(v bool) {
+		if !v {
+			order = append(order, "up")
+		}
+	})
+	read := func() (input.Event, error) {
+		if len(events) == 0 {
+			return input.Event{}, io.EOF
+		}
+		e := events[0]
+		events = events[1:]
+		return e, nil
+	}
+	_ = s.track(context.Background(), "test", read)
+	wantX, wantY := s.landscape(400, 600)
+	if len(landed) != 1 || landed[0] != (Point{X: wantX, Y: wantY}) {
+		t.Fatalf("the finger landed at %v, want once at (%d,%d)", landed, wantX, wantY)
+	}
+	if len(got) != 3 || got[0].Kind != Hold || !got[0].Moved || got[1].Kind != Drag || got[2].Kind != Release {
+		t.Fatalf("a finger that moved in follow mode gave %v, want a moved hold, a drag and a release", got)
+	}
+	if got[1].Moved || got[2].Moved {
+		t.Errorf("only the hold says it moved: %v", got)
+	}
+	if len(order) != 5 || order[0] != "landed" || order[4] != "up" {
+		t.Errorf("the order was %v, want landed first and the lift last", order)
 	}
 }

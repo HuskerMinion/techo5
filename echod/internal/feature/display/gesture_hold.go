@@ -99,8 +99,15 @@ var fireGesture = func(name string) {
 	}})
 }
 
+// clockHeldFor is how long the clock says a hold was taken.
+const clockHeldFor = 900 * time.Millisecond
+
 // clockHeld is a finger held on the clock: told to Home Assistant, while the clock asked for holds and
 // nothing a tap would go to is on it: an answer's words, a wake light held at full, the weather.
+//
+// The clock answers it too, with a word in its middle for a moment, where a swipe's new style says its
+// name (styleNameTag). What Home Assistant does with a hold is often in another room, and without the
+// word a finger held on the clock looked like one the screen had not felt.
 func (d *Display) clockHeld() {
 	now := time.Now()
 	d.mu.Lock()
@@ -111,4 +118,10 @@ func (d *Display) clockHeld() {
 	}
 	slog.Info("screen: a finger held on the clock")
 	fireGesture("hold")
+	d.mu.Lock()
+	d.styleNamed, d.styleNamedUntil = tr("ok"), now.Add(clockHeldFor)
+	d.mu.Unlock()
+	d.wake()
+	// Once more when the word is due to go, as the clock's next frame might be the second after.
+	time.AfterFunc(clockHeldFor+50*time.Millisecond, d.wake)
 }

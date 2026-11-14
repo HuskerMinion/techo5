@@ -333,39 +333,36 @@ func highLow(d hass.Day) string { return fmt.Sprintf("%.0f° / %.0f°", d.High, 
 // sun's gold for sun, the rain's blue for rain and snow, gray clouds for the rest, darker on a light
 // theme so they read on its ground.
 func weatherGlyph(cond string) (string, color.RGBA) {
-	cloud := cloudGray
-	if !dark() {
-		cloud = cloudDark
-	}
+	cloud, sun, rain := cloudInk(), sunInk(), rainInk()
 	switch cond {
 	case "sunny":
-		return "weather-sunny", sunGold
+		return "weather-sunny", sun
 	case "clear-night":
-		return "weather-night", sunGold
+		return "weather-night", sun
 	case "partlycloudy":
 		return "weather-partly-cloudy", cloud
 	case home.PartlyCloudyNight:
 		return "weather-night-partly-cloudy", cloud
 	case "rainy":
-		return "weather-rainy", rainBlue
+		return "weather-rainy", rain
 	case "pouring":
-		return "weather-pouring", rainBlue
+		return "weather-pouring", rain
 	case "lightning":
 		return "weather-lightning", cloud
 	case "lightning-rainy":
-		return "weather-lightning-rainy", rainBlue
+		return "weather-lightning-rainy", rain
 	case "snowy":
-		return "weather-snowy", rainBlue
+		return "weather-snowy", rain
 	case "snowy-rainy":
-		return "weather-snowy-rainy", rainBlue
+		return "weather-snowy-rainy", rain
 	case "hail":
-		return "weather-hail", rainBlue
+		return "weather-hail", rain
 	case "fog":
 		return "weather-fog", cloud
 	case "windy", "windy-variant":
 		return "weather-windy", cloud
 	case "exceptional":
-		return "alert-circle-outline", sunGold
+		return "alert-circle-outline", sun
 	}
 	return "weather-cloudy", cloud
 }

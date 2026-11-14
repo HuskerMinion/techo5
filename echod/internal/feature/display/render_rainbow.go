@@ -38,7 +38,8 @@ func (r *renderer) rainbowBegin(s scene) {
 	var t rainbow.Turn
 	if light {
 		t = rainbow.Turn{Phase: s.cue, Heard: s.heard, Reply: s.reply}
-		if !words {
+		if !words || s.failed != "" {
+			// A failed request's line is the plain captions' (turnCue): the card has no words then.
 			t.Heard, t.Reply = "", ""
 		}
 		if t.Phase == "listening" || t.Phase == "replying" {
@@ -62,7 +63,8 @@ func rainbowKeyOf(s scene) (rainbowPageKey, bool) {
 	// Nor a page the light before an alarm, an answer to a press on that page's button, or anything
 	// skipOccluded names is laid over: those come and go by themselves, and a kept copy of one carries
 	// a button, a line or a card from a frame that is no longer on the screen (skipCacheable).
-	quiet := !s.showCamera && !s.showRadar && !s.showVolume && skipCacheable(s)
+	// Nor a page with a finger's press on it, which is gone a moment later.
+	quiet := !s.showCamera && !s.showRadar && !s.showVolume && skipCacheable(s) && !s.press.on
 	return rainbowPageKey{
 		second: s.now.Unix(), dash: s.showDash, sheet: s.showSheet, weather: s.showWeather, drawer: s.showDrawer,
 		calendar: s.showCalendar, deck: s.showDeck, alert: s.showAlert, strip: s.strip, tess: s.tessPage,

@@ -55,6 +55,11 @@ field gets focus, and types what comes back into it as a keyboard would. It need
 firmware from the same release or newer; an older one shows no keyboard and is otherwise unchanged.
 A password field's text is never sent to the device.
 
+dashcast tells each device every few seconds that it is still there. A device that then hears nothing
+for about fifteen seconds takes the connection for lost, says so over the last picture ("NOT LIVE") and
+connects again, rather than leaving a picture up that no longer answers a touch. A device or a dashcast
+from before this is unchanged: neither waits on the other.
+
 ## Security
 
 The browser dashcast runs is signed in to Home Assistant with the token, and a device drives it by

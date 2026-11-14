@@ -30,8 +30,9 @@ func todoSection(w http.ResponseWriter, token string) {
 			offered = append(offered, hass.Entity{ID: id})
 		}
 	}
-	fmt.Fprint(w, `<fieldset><legend>To-do lists</legend><form method="post" action="/setup/save">`)
-	hidden(w, token, "todo", "weather")
+	fieldsetOpen(w, "todo", "To-do lists")
+	fmt.Fprint(w, `<form method="post" action="/setup/save">`)
+	hidden(w, token, "todo")
 	if len(offered) == 0 {
 		fmt.Fprint(w, `<p style="margin:0">Home Assistant has no to-do lists yet, or this device cannot reach it.</p>`)
 	}

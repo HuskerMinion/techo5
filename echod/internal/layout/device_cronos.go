@@ -98,6 +98,15 @@ func Crown() bool { return Board == boardCrown }
 // Athena is whether this is the 2nd gen Echo Show 8.
 func Athena() bool { return Board == boardAthena }
 
+// The Skylight hangs on a wall and is read from across a hall: at the layout's own size only its clock
+// could be, the calendar's words coming out about 5 mm tall. Its words start a step larger; the size
+// chosen on the device or in Home Assistant still decides.
+func init() {
+	if Board == boardSkylight {
+		defaultTextSize = 125
+	}
+}
+
 // Skylight is whether this is the Skylight Calendar 15 (150-CAL): a 1920 by 1080 landscape screen,
 // no microphone, a speaker on the RK809's headphone outputs.
 func Skylight() bool { return Board == boardSkylight }

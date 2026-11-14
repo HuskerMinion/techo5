@@ -29,7 +29,7 @@ func (r *renderer) updateOverlay(s scene) {
 	draw.Draw(
 		r.dst,
 		r.dst.Rect,
-		image.NewUniform(color.RGBA{R: 0, G: 0, B: 0, A: 155}),
+		image.NewUniform(color.RGBA{R: 0, G: 0, B: 0, A: 150}),
 		image.Point{},
 		draw.Over,
 	)
@@ -50,9 +50,11 @@ func (r *renderer) updateOverlay(s scene) {
 	left := (r.w - cardW) / 2
 	top := (r.h - cardH) / 2
 	card := image.Rect(left, top, left+cardW, top+cardH)
-	radius := float64(r.s(28))
+	// The cards' corner and the strip's shadow, which goes by the theme: the dialog is one more card
+	// over a page, and it looked like another program's with a corner and a shadow of its own.
+	radius := r.cardRad()
 
-	r.roundShadow(card, radius, float64(r.s(16)), r.s(6), 0.55)
+	r.roundShadow(card, radius, r.sf(26), r.s(8), shadowAlpha()*1.2)
 	r.roundFill(card, radius, walnut, walnut)
 	r.roundStroke(card, radius, float64(r.s(2)), ember)
 

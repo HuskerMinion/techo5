@@ -23,26 +23,26 @@ func remoteSection(w http.ResponseWriter, token string) {
 		state = "<strong>on</strong>"
 	}
 	key := "No key has been made."
-	button := "Make a key"
+	button, class := "Make a key", ""
 	if remote.HasKey() {
 		key = "A key has been made. Making another stops the old one working."
-		button = "Make a new key"
+		button, class = "Make a new key", ` class="danger"` // it ends the key every script here holds
 	}
-	fmt.Fprintf(w, `<fieldset><legend>Remote API</legend>
-	 <p style="margin:0">Remote API: %s. %s</p>
+	fieldsetOpen(w, "remote", "Remote API")
+	fmt.Fprintf(w, `<p style="margin:0">Remote API: %s. %s</p>
 	 <p class="note">For scripts and tools that are not Home Assistant: they read the device and change its
 	  everyday settings, never its privacy switches, updates or restarts. Every request is signed with the
 	  key, which is shown once. Turn it on in Home Assistant, or on the screen (Show and Spot, Privacy & Security).</p>
 	 <form method="post" action="/setup/remote-key"><input type="hidden" name="token" value="%s">
-	  <div class="btns"><button type="submit">%s</button></div></form></fieldset>`,
-		state, key, html.EscapeString(token), button)
+	  <div class="btns"><button type="submit"%s>%s</button></div></form></fieldset>`,
+		state, key, html.EscapeString(token), class, button)
 }
 
 // remoteKey makes a key and shows it, once.
 func (f *Feature) remoteKey(w http.ResponseWriter, r *http.Request) {
 	token, in := f.session(r)
 	if !in {
-		http.Error(w, "not let in", http.StatusForbidden)
+		notLetIn(w)
 		return
 	}
 	if r.Method != http.MethodPost {
@@ -57,7 +57,7 @@ func (f *Feature) remoteKey(w http.ResponseWriter, r *http.Request) {
 	f.used()
 	key, err := remote.Get().NewKey()
 	if err != nil {
-		http.Redirect(w, r, back("privacy", "problem", "the key could not be saved: "+err.Error()), http.StatusSeeOther)
+		http.Redirect(w, r, back("remote", "problem", "the key could not be saved: "+err.Error()), http.StatusSeeOther)
 		return
 	}
 	slog.Info("setup page: a remote api key was made")

@@ -124,7 +124,7 @@ var watching = map[string]bool{"/setup/scores": true, "/setup/takes/state": true
 // reading it line by line first. Behind the press, like everything else here.
 func (f *Feature) diagnostics(w http.ResponseWriter, r *http.Request) {
 	if _, in := f.session(r); !in {
-		http.Error(w, "not let in", http.StatusForbidden)
+		notLetIn(w)
 		return
 	}
 	slog.Info("setup page: diagnostics collected")
@@ -161,18 +161,19 @@ func (f *Feature) index(w http.ResponseWriter, r *http.Request) {
 		http.Redirect(w, r, firstRunPath, http.StatusSeeOther)
 		return
 	}
+	q := r.URL.Query()
 	if !in {
-		f.lockedPage(w)
+		f.lockedPage(w, f.asking(token), f.lockedSaid(q))
 		return
 	}
-	q := r.URL.Query()
 	// First run still to do opens on its own page (firstrun_page.go); "all" is the way past it to
 	// every setting.
 	if firstrun.Pending() && q.Get("all") == "" && q.Get("tab") == "" {
 		http.Redirect(w, r, firstRunPath, http.StatusSeeOther)
 		return
 	}
-	f.settingsPage(r.Context(), w, token, tabOf(q.Get("tab")), q.Get("saved"), q.Get("renamed"), q.Get("problem"), q.Get("scan") != "")
+	f.settingsPage(r.Context(), w, token, tabOf(q.Get("tab")), q.Get("saved"), q.Get("renamed"), q.Get("problem"),
+		sectionNamed(q.Get("at")), q.Get("scan") != "")
 }
 
 // wait starts this browser waiting for a press and gives it the cookie the press will let in.
@@ -188,11 +189,14 @@ func (f *Feature) wait(w http.ResponseWriter, r *http.Request) {
 	token, ok := f.awaitFrom(from, web.AwayRequest(r)) // for Home Assistant's let in (remote.go)
 	if !ok {
 		if f.ShutOut() {
-			http.Error(w, "too many tries without a press on the device; try again in a few minutes",
-				http.StatusTooManyRequests)
+			refusalPage(w, http.StatusTooManyRequests, "Too many tries",
+				"This device was asked to let a browser in several times and nobody at it answered, so it has "+
+					"stopped asking for a few minutes. Try again then, with somebody at the device.")
 			return
 		}
-		http.Error(w, "another browser is already waiting for a press; try again in a minute", http.StatusConflict)
+		refusalPage(w, http.StatusConflict, "Another browser is waiting",
+			"Another browser is already waiting to be let in, and the device answers one at a time, so that "+
+				"whoever is at it knows which browser they are letting in. Try again in a minute.")
 		return
 	}
 	// The cookie covers the whole port, not just this page: the screenshot page asks the same
@@ -209,12 +213,22 @@ func (f *Feature) wait(w http.ResponseWriter, r *http.Request) {
 	http.Redirect(w, r, "/setup", http.StatusSeeOther)
 }
 
-// state is what the waiting page polls: whether the press has happened yet.
+// state is what the waiting page polls: whether the press has happened yet, and whether the device is
+// still waiting for it, so the page can say when the wait ended with nobody answering.
+//
+// Waiting is this browser's own wait, not anybody's: a page whose minute ran out would otherwise go on
+// saying it was waiting for as long as some other browser was. It is read before whether the browser is
+// in, because a press makes it in and ends the wait in one step: read the other way round, a press
+// between the two could look like a wait that ended with nobody let in.
 func (f *Feature) state(w http.ResponseWriter, r *http.Request) {
+	waiting := false
+	if c, err := r.Cookie(cookieName); err == nil {
+		waiting = f.asking(c.Value)
+	}
 	_, in := f.session(r)
 	w.Header().Set("Content-Type", "application/json")
 	w.Header().Set("Cache-Control", "no-store")
-	fmt.Fprintf(w, `{"in":%t,"waiting":%t}`+"\n", in, f.Waiting())
+	fmt.Fprintf(w, `{"in":%t,"waiting":%t}`+"\n", in, waiting)
 }
 
 // save takes the forms. Every write names the setting it changes; nothing here touches keys, runs a
@@ -222,7 +236,7 @@ func (f *Feature) state(w http.ResponseWriter, r *http.Request) {
 func (f *Feature) save(w http.ResponseWriter, r *http.Request) {
 	token, in := f.session(r)
 	if !in {
-		http.Error(w, "not let in", http.StatusForbidden)
+		notLetIn(w)
 		return
 	}
 	if r.Method != http.MethodPost {
@@ -262,7 +276,11 @@ func (f *Feature) save(w http.ResponseWriter, r *http.Request) {
 		}
 	case "forget":
 		ssid := strings.TrimSpace(r.PostFormValue("ssid"))
-		if err := wifi.Forget(r.Context(), ssid); err != nil {
+		// The network the device is on is the one this page is being read over: forgetting it is asked
+		// for twice, here as on the page, so a form sent without the box does not take the device off it.
+		if ssid != "" && ssid == onNetwork(r.Context()) && r.PostFormValue("understood") != "yes" {
+			problem = "tick the box to say you know " + ssid + " is the network this device is on now"
+		} else if err := wifi.Forget(r.Context(), ssid); err != nil {
 			problem = "could not forget " + ssid + ": " + err.Error()
 		} else {
 			slog.Info("setup page: a network was forgotten", "ssid", ssid)
@@ -360,7 +378,9 @@ func (f *Feature) save(w http.ResponseWriter, r *http.Request) {
 			problem = "could not save it: " + err.Error()
 		}
 	case "adopt":
-		if _, err := api.Get().OpenAdoption(); err != nil {
+		if r.PostFormValue("understood") != "yes" {
+			problem = "tick the box to say you know a Home Assistant that has this device now loses it"
+		} else if _, err := api.Get().OpenAdoption(); err != nil {
 			problem = "could not open the device to a Home Assistant: " + err.Error()
 		}
 	case "dashboard":
@@ -401,45 +421,116 @@ func (f *Feature) save(w http.ResponseWriter, r *http.Request) {
 		if save, ok := saves[what]; ok {
 			problem = save(r)
 		} else if !alarmSave(r, what, &problem) {
-			problem = "nothing to save"
+			problem = "this page has no such form to save; open the page again and try once more"
 		}
 	}
 
-	tab := r.PostFormValue("tab")
-	to := back(tab, "saved", "1")
+	what := r.PostFormValue("what")
+	to := back(what, "saved", doneCode(what, r))
 	if renamed {
-		to = back(tab, "renamed", "1")
+		to = back(what, "renamed", "1")
 	}
 	if problem != "" {
 		slog.Warn("setup page: a change was refused", "problem", problem)
-		to = back(tab, "problem", problem)
+		to = back(what, "problem", problem)
 	}
 	http.Redirect(w, r, to, http.StatusSeeOther)
 }
 
-func (f *Feature) lockedPage(w http.ResponseWriter) {
+// What the page says was done. Most forms save something, and "Saved." is right for them. Some only do
+// something - play a sound, look for an update, forget a network - and the page said "Saved." for
+// those too. The redirect carries a short code for which, and only the codes here are ever shown.
+var doneSaid = map[string]string{
+	"1":          "Saved.",
+	"playing":    "Playing.",
+	"stopped":    "Stopped.",
+	"chimed":     "The chime is playing.",
+	"checked":    "Checked for an update.",
+	"installing": "Installing the update.",
+	"forgotten":  "Forgotten.",
+	"removed":    "Removed.",
+}
+
+// doneWords is what the page says for a redirect's code; anything else is a save.
+func doneWords(code string) string {
+	if s, ok := doneSaid[code]; ok {
+		return s
+	}
+	return doneSaid["1"]
+}
+
+// doneCode is the code for what a form that went through did.
+func doneCode(what string, r *http.Request) string {
+	switch what {
+	case "sound-play":
+		return "playing"
+	case "stations":
+		switch {
+		case r.PostFormValue("stop") != "":
+			return "stopped"
+		case r.PostFormValue("play") != "":
+			return "playing"
+		}
+	case "doorbell-chime":
+		return "chimed"
+	case "update-check":
+		return "checked"
+	case "update-install":
+		return "installing"
+	case "forget", "immich-forget":
+		return "forgotten"
+	case "font-remove", "sound-remove", "wakeword-remove":
+		return "removed"
+	}
+	return "1"
+}
+
+// lockedPage is what a browser that has not been let in gets: the way to ask, or what to do at the
+// device once it has asked. mine is whether this browser is the one the device is asking about, and
+// said is a line about what just happened to it (lockedSaid), or nothing.
+//
+// The waiting page polls, and stops when the wait is over: it used to say "Waiting for the press" for
+// as long as it was left open, a minute after the device had stopped waiting for one.
+func (f *Feature) lockedPage(w http.ResponseWriter, mine bool, said string) {
 	waiting := f.Waiting()
 	head(w)
 	fmt.Fprintf(w, `<div class="wrap"><h1>%s</h1><p class="sub">Setup</p>`, html.EscapeString(deviceName()))
 	defer fmt.Fprint(w, `</div>`)
-	if !waiting {
-		fmt.Fprint(w, `<form method="post" action="/setup/wait"><p>To change anything here, press the
-		 action button on the device. That is what proves you are standing in front of it.</p>
-		 <p><button type="submit">Ask to be let in</button></p></form>`)
-	} else {
-		fmt.Fprint(w, `<p><strong>Press the action button on the device now.</strong></p>
-		 <p class="note">Waiting for the press. The device is showing that a browser is asking.</p>
+	ask := "Ask to be let in"
+	if said != "" {
+		fmt.Fprintf(w, `<div class="banner" role="status">%s</div>`, html.EscapeString(said))
+		if said == saidNoAnswer {
+			ask = "Ask again"
+		}
+	}
+	switch {
+	case !waiting:
+		fmt.Fprintf(w, `<form method="post" action="/setup/wait"><p>To change anything here, ask to be let
+		 in, then %s. That is what proves you are standing in front of it.</p>
+		 <p><button type="submit">%s</button></p></form>`, letInBy, ask)
+	case mine:
+		fmt.Fprintf(w, `<p><strong>%s</strong></p>
+		 <p class="note">The device is showing that a browser is asking, and waits %d seconds for the answer.</p>
 		 <p><a href="/setup">Check again</a></p>
-		 <script>setInterval(async()=>{try{const r=await fetch('/setup/state');const s=await r.json();
-		 if(s.in)location.href='/setup';}catch(e){}},2000)</script>`)
+		 <script>setInterval(async()=>{try{const r=await fetch('/setup/state');
+		 if(!r.ok){location.href='/setup';return}const s=await r.json();
+		 if(s.in)location.href='/setup';else if(!s.waiting)location.href='/setup?waited=1';}catch(e){}},2000)</script>`,
+			letInNow, int(pressWait/time.Second))
+	default:
+		// The device is asking about some other browser. Telling this one to press would have its owner
+		// let that one in.
+		fmt.Fprint(w, `<p>Another browser is asking to be let in just now, and the device answers one at a
+		 time. Ask from this one once that is over, in a minute at most.</p>
+		 <p><a href="/setup">Check again</a></p>`)
 	}
 	fmt.Fprint(w, `<p class="note">This page is on your own network, without encryption, and closes
 	 itself when it is left alone.</p>`)
 }
 
-func (f *Feature) settingsPage(ctx context.Context, w http.ResponseWriter, token, tab, saved, renamed, problem string, scan bool) {
+func (f *Feature) settingsPage(ctx context.Context, w http.ResponseWriter, token, tab, saved, renamed, problem, at string, scan bool) {
 	head(w)
-	fmt.Fprintf(w, `<div class="wrap"><h1>%s</h1><p class="sub">Setup</p><div class="layout">`, html.EscapeString(deviceName()))
+	pageTop(w, token)
+	fmt.Fprint(w, `<div class="layout">`)
 	nav(w, tab)
 	fmt.Fprint(w, `<section>`)
 	for _, t := range shownTabs() {
@@ -447,18 +538,27 @@ func (f *Feature) settingsPage(ctx context.Context, w http.ResponseWriter, token
 			fmt.Fprintf(w, `<h2>%s</h2>`, html.EscapeString(t.title))
 		}
 	}
-	if saved != "" {
-		fmt.Fprint(w, `<div class="banner ok">Saved.</div>`)
-	}
 	if renamed != "" {
 		fmt.Fprint(w, `<div class="banner ok">Renamed. The device is restarting and will be back in a minute or
 		 so. Home Assistant keeps it as the same device, under its old entity ids.</div>`)
 	}
-	if problem != "" {
-		fmt.Fprintf(w, `<div class="banner bad">%s</div>`, html.EscapeString(problem))
-	}
+	// What the last save did is said in the section it was made in (section.go). The sections are
+	// drawn first and sent after, so that when none of them is that section it can still be said here,
+	// above them.
+	page, sections := w, &sectionWriter{ResponseWriter: w, saved: saved, problem: problem, at: at}
+	w = sections
+	defer func() {
+		if !sections.said {
+			banner(page, saved, problem)
+		}
+		_, _ = page.Write(sections.body.Bytes())
+		fmt.Fprint(page, `</section></div></div>`)
+		pageScript(page) // last, after everything it reaches for (script.go)
+	}()
 
 	switch tab {
+	case "status":
+		statusSection(w)
 	// Within a tab, what is changed most comes first; a long tab is split under group headings.
 	case "sound":
 		speakerSection(w, token)
@@ -498,11 +598,18 @@ func (f *Feature) settingsPage(ctx context.Context, w http.ResponseWriter, token
 		}
 		bluetoothSection(w, token)
 		wallClockSection(w, token)
-		haCamerasSection(w, token)
+		// Which cameras the screen shows, where their pictures come from and the buttons on their
+		// page are a screen's: a Dot has none, and showed all four. The cameras it does use, to hear
+		// the doorbell's button and to talk through, stay.
+		if hasScreen {
+			haCamerasSection(w, token)
+		}
 		reolinkSection(w, token)
-		go2rtcSection(w, token)
-		cameraListSection(w, token)
-		cameraButtonsSection(w, token)
+		if hasScreen {
+			go2rtcSection(w, token)
+			cameraListSection(w, token)
+			cameraButtonsSection(w, token)
+		}
 		doorbellSection(w, token)
 		tailscaleSection(w, token)
 		netbirdSection(w, token)
@@ -546,13 +653,13 @@ func (f *Feature) settingsPage(ctx context.Context, w http.ResponseWriter, token
 		shareSection(w, token)
 		diagnosticsSection(w)
 	}
-	fmt.Fprint(w, `</section></div></div>`)
 }
 
 // timezoneSection is which zone the clock shows.
 func timezoneSection(w http.ResponseWriter, token string) {
-	fmt.Fprint(w, `<form method="post" action="/setup/save"><fieldset><legend>Time zone</legend>`)
-	hidden(w, token, "timezone", "general")
+	fmt.Fprint(w, `<form method="post" action="/setup/save">`)
+	fieldsetOpen(w, "timezone", "Time zone")
+	hidden(w, token, "timezone")
 	zoneSelect(w)
 	fmt.Fprint(w, `<p class="note">The device's clock keeps time on its own; this is only
 	 which zone it shows.</p><p><button type="submit">Save</button></p></fieldset></form>`)
@@ -589,8 +696,9 @@ func timeServerSection(w http.ResponseWriter, token string) {
 	if !timezone.ServerSettable {
 		return
 	}
-	fmt.Fprint(w, `<form method="post" action="/setup/save"><fieldset><legend>Time server</legend>`)
-	hidden(w, token, "timeserver", "general")
+	fmt.Fprint(w, `<form method="post" action="/setup/save">`)
+	fieldsetOpen(w, "timeserver", "Time server")
+	hidden(w, token, "timeserver")
 	fmt.Fprintf(w, `<label for="ntp">Your own time server (optional)</label>
 	 <input id="ntp" name="server" value="%s" placeholder="192.168.1.1" maxlength="253" autocomplete="off">
 	 <p class="note">The device sets its clock from time servers on the internet. A device that cannot
@@ -648,7 +756,7 @@ func (f *Feature) wifiSection(w http.ResponseWriter, token string, scan bool) {
 	defer cancel()
 	st := wifi.Current(ctx)
 
-	fmt.Fprint(w, `<fieldset><legend>Wi-Fi</legend>`)
+	fieldsetOpen(w, "wifi", "Wi-Fi")
 	switch {
 	case st.Connected:
 		fmt.Fprintf(w, `<p>On <strong>%s</strong>, at %s.</p>`, html.EscapeString(st.SSID), html.EscapeString(st.Address))
@@ -661,15 +769,27 @@ func (f *Feature) wifiSection(w http.ResponseWriter, token string, scan bool) {
 		fmt.Fprint(w, `<p class="note">Remembered, in the order it tries them:</p><ul>`)
 		for _, ssid := range saved {
 			fmt.Fprintf(w, `<li>%s <form method="post" action="/setup/save" style="display:inline">`, html.EscapeString(ssid))
-			hidden(w, token, "forget", "connections")
-			fmt.Fprintf(w, `<input type="hidden" name="ssid" value="%s">
-			 <button type="submit" class="quiet">Forget</button></form></li>`, html.EscapeString(ssid))
+			hidden(w, token, "forget")
+			fmt.Fprintf(w, `<input type="hidden" name="ssid" value="%s">`, html.EscapeString(ssid))
+			if st.Connected && ssid == st.SSID {
+				// The one it is on, and so the one this page came over (save's "forget").
+				fmt.Fprint(w, `<label><input type="checkbox" name="understood" value="yes"> I know the device
+				 is on this network now: forgetting it takes the device off it, and this page with it</label>`)
+			}
+			fmt.Fprint(w, ` <button type="submit" class="quiet danger">Forget</button></form></li>`)
 		}
 		fmt.Fprint(w, `</ul>`)
 	}
 
-	fmt.Fprint(w, `<form method="post" action="/setup/save">`)
-	hidden(w, token, "wifi", "connections")
+	wifiJoinForm(ctx, w, token, scan)
+	fmt.Fprint(w, `</fieldset>`)
+}
+
+// wifiJoinForm is the form that adds a network. Joining holds the request until the network is up or
+// has been given up on, which can be over a minute, so the form says it is at work (script.go).
+func wifiJoinForm(ctx context.Context, w http.ResponseWriter, token string, scan bool) {
+	fmt.Fprintf(w, `<form method="post" action="/setup/save"%s>`, busy(busyWifi))
+	hidden(w, token, "wifi")
 	fmt.Fprint(w, `<label for="ssid">Network</label><select id="ssid" name="ssid">`)
 	if scan {
 		nets, err := wifi.Scan(ctx)
@@ -691,16 +811,17 @@ func (f *Feature) wifiSection(w http.ResponseWriter, token string, scan bool) {
 	if !scan {
 		fmt.Fprint(w, `<p><a href="/setup?tab=connections&amp;scan=1">Scan for networks</a> — it takes a few seconds.</p>`)
 	}
+	// A passphrase typed wrong is only found out after the join has been waited for, so it can be
+	// looked at before it is sent (secret.go).
 	fmt.Fprint(w, `<label for="other">…or a name it did not find</label>
 	 <input id="other" name="other" autocomplete="off" placeholder="Network name">
-	 <label for="passphrase">Passphrase</label>
-	 <input id="passphrase" name="passphrase" type="password" autocomplete="new-password">`)
+	 `+passphraseField())
 	loginFields(w)
 	fmt.Fprint(w, `
 	 <p class="note">The networks it already remembers are kept. If the one you add is somewhere else,
 	  nothing changes here until the device is taken there. If it is a network in range, the device
 	  moves to it — and this page goes with it, so you will have to find it again at its new address.</p>
-	 <p><button type="submit">Add network</button></p></form></fieldset>`)
+	 <p><button type="submit">Add network</button></p></form>`)
 }
 
 // diagnosticsSection offers the bundle. It is first because somebody who came here to ask for help
@@ -720,8 +841,9 @@ func diagnosticsSection(w http.ResponseWriter) {
 // its place. They play without Home Assistant, which is the only radio a device on its own has.
 func stationsSection(w http.ResponseWriter, token string) {
 	list := home.OwnStations()
-	fmt.Fprint(w, `<fieldset><legend>Radio stations on this device</legend><form method="post" action="/setup/save">`)
-	hidden(w, token, "stations", "sound")
+	fieldsetOpen(w, "stations", "Radio stations on this device")
+	fmt.Fprint(w, `<form method="post" action="/setup/save">`)
+	hidden(w, token, "stations")
 	// One more row than there are stations, so there is always somewhere to add one; clearing a
 	// name takes that station out.
 	for i := 0; i <= len(list) && i < config.MaxOwnStations; i++ {
@@ -732,7 +854,7 @@ func stationsSection(w http.ResponseWriter, token string) {
 		fmt.Fprintf(w, `<label for="n%d">Name</label>
 		 <input id="n%d" name="name" value="%s" maxlength="40" autocomplete="off" placeholder="Station name">
 		 <label for="u%d">Stream address</label>
-		 <input id="u%d" name="url" value="%s" autocomplete="off" placeholder="https://…">
+		 <input id="u%d" name="url" type="url" inputmode="url" value="%s" autocomplete="off" placeholder="https://…">
 		 <p><button type="submit" name="play" value="%d" class="quiet">Play this one</button></p>`,
 			i, i, html.EscapeString(st.Name), i, i, html.EscapeString(st.URL), i)
 	}
@@ -822,8 +944,9 @@ func saveStations(r *http.Request) string {
 // which is confusing enough to warn about, and reason to rename in Home Assistant as well.
 func nameSection(w http.ResponseWriter, token string) {
 	name := deviceName()
-	fmt.Fprint(w, `<fieldset><legend>Name</legend><form method="post" action="/setup/save">`)
-	hidden(w, token, "name", "general")
+	fieldsetOpen(w, "name", "Name")
+	fmt.Fprint(w, `<form method="post" action="/setup/save">`)
+	hidden(w, token, "name")
 	fmt.Fprintf(w, `<label for="name">This device is called</label>
 	 <input id="name" name="name" value="%s" maxlength="31" autocomplete="off">
 	 <p class="bad"><strong>Home Assistant keeps the entity ids it already gave this device.</strong>
@@ -842,7 +965,7 @@ func nameSection(w http.ResponseWriter, token string) {
 // homeAssistantSection lets a Home Assistant add the device: for a device that left the Home
 // Assistant it had, or came from somebody else's, so its key is one nobody here holds (api/adopt.go).
 func homeAssistantSection(w http.ResponseWriter, token string) {
-	fmt.Fprint(w, `<fieldset><legend>Home Assistant</legend>`)
+	fieldsetOpen(w, "adopt", "Home Assistant")
 	if until := api.Get().AdoptionOpenUntil(); !until.IsZero() {
 		fmt.Fprintf(w, `<p style="margin:0"><strong>Open until %s.</strong> In Home Assistant, go to
 		 <strong>Settings → Devices &amp; services</strong>. This device shows up under
@@ -854,19 +977,22 @@ func homeAssistantSection(w http.ResponseWriter, token string) {
 		return
 	}
 	fmt.Fprint(w, `<form method="post" action="/setup/save">`)
-	hidden(w, token, "adopt", "general")
+	hidden(w, token, "adopt")
 	fmt.Fprint(w, `<p style="margin:0">To add this device to your own Home Assistant when it came from
 	 somebody else's, or left one: for 15 minutes the device has no key, and the Home Assistant that adds
 	 it sets one.</p>
 	 <p class="bad"><strong>A Home Assistant that has this device now loses it.</strong></p>
-	 <p><button type="submit">Let a Home Assistant add this device</button></p></form></fieldset>`)
+	 <p><label><input type="checkbox" name="understood" value="yes">
+	  I know a Home Assistant that has this device now loses it</label></p>
+	 <p><button type="submit" class="danger">Let a Home Assistant add this device</button></p></form></fieldset>`)
 }
 
 // ringWaitSection is whether the ring walks after a start while Home Assistant has not connected, for
 // a device used without one, such as an AirPlay speaker (techo5-dot#39).
 func ringWaitSection(w http.ResponseWriter, token string) {
-	fmt.Fprint(w, `<fieldset><legend>Ring while starting</legend><form method="post" action="/setup/save">`)
-	hidden(w, token, "ringwait", "general")
+	fieldsetOpen(w, "ringwait", "Ring while starting")
+	fmt.Fprint(w, `<form method="post" action="/setup/save">`)
+	hidden(w, token, "ringwait")
 	checked := ""
 	if !config.Get().Ring.NoWaitWalk {
 		checked = " checked"
@@ -886,8 +1012,9 @@ func ringWaitSection(w http.ResponseWriter, token string) {
 // than leaving as something guessable, and it means the same word has to go on every device here.
 func houseSection(w http.ResponseWriter, token string) {
 	word := config.Get().Home.HouseWord
-	fmt.Fprint(w, `<fieldset><legend>Announcements</legend><form method="post" action="/setup/save">`)
-	hidden(w, token, "house", "sound")
+	fieldsetOpen(w, "house", "Announcements")
+	fmt.Fprint(w, `<form method="post" action="/setup/save">`)
+	hidden(w, token, "house")
 	fmt.Fprintf(w, `<label for="word">House word</label>
 	 <input id="word" name="word" value="%s" maxlength="63" autocomplete="off">
 	 <p class="note">Type the <strong>same word on every device in this house</strong>. They then find
@@ -960,6 +1087,26 @@ func saveHouse(v string) string {
 	slog.Info("setup page: the house word was set", "set", word != "")
 	web.Wake()
 	return ""
+}
+
+// onNetwork is the name of the Wi-Fi network the device is on now, or nothing when it is on none or
+// cannot say; a variable for the tests.
+var onNetwork = func(ctx context.Context) string {
+	if !wifi.Available() {
+		return ""
+	}
+	ctx, cancel := context.WithTimeout(ctx, 8*time.Second)
+	defer cancel()
+	if st := wifi.Current(ctx); st.Connected {
+		return st.SSID
+	}
+	return ""
+}
+
+// passphraseField is the Wi-Fi passphrase, on the Connections tab and in first run: used to join and
+// handed to the Wi-Fi, never kept by the page.
+func passphraseField() string {
+	return onceField("passphrase", "Passphrase", "passphrase", "")
 }
 
 func lock(secured bool) string {

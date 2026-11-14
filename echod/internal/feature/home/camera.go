@@ -51,7 +51,9 @@ type CameraView struct {
 	Name   string
 	Until  time.Time
 	Frame  *image.RGBA // the latest frame, scaled to fit; nil until the first arrives
-	Error  string      // why there is no frame, when there is none
+	// Error is why the last frame asked for did not come. With no Frame it is why there is none; with
+	// one, the picture is the last that came and no longer live, until the next clears it.
+	Error string
 	// Caption is a notification's words over the view (feature/notify); nil for a plain camera.
 	Caption *Caption
 	// Grid is the cameras of the camera grid, while the grid is up (Entity is GridEntity); nil otherwise.

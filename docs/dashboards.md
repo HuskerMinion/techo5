@@ -99,13 +99,15 @@ Each device has its own settings, so the kitchen and a bedroom can show differen
   - on a light that has whites or colors, for a sheet of them. The light follows your finger.
   - on a fan, for a sheet with an on/off switch, its speed (a slider, in the steps the fan takes), its
     direction (forward or reverse) when it can turn either way, and its preset modes when it has any.
-    Each control is there only when the fan has it. A fan tile whose card sets a tap of its own keeps
-    that tap on a long press.
+    Each control is there only when the fan has it. A fan tile whose card sets a tap of its own has
+    no sheet.
   - on a media player, for a sheet with its controls, its volume, the speakers it can be grouped
     with, and, with Music Assistant, your favorite playlists and radio stations. The favorites need
     the device's token to belong to a Home Assistant administrator; with any other token the sheet
     says so and shows the rest. Its **Library** button opens the whole music library (see
     [Music library](#music-library)).
+  - The sheet opens while your finger is still down. On a tile that has no sheet (a lock, a cover, a
+    switch) a long press does nothing: only a tap works the tile.
 - **Drag** up and down to scroll.
 
 **Streamed dashboards** work as the page itself does: tap, and drag to scroll. On the Echo Show (and the

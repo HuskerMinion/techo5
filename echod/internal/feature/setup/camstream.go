@@ -28,25 +28,23 @@ func camStreamSection(w http.ResponseWriter, token string) {
 	case c.On:
 		state = "on, but waiting for a password"
 	}
-	hint := fmt.Sprintf("at least %d characters", camstream.MinPass)
-	if c.Pass != "" {
-		hint = "set; leave empty to keep it"
-	}
-	fmt.Fprint(w, `<fieldset><legend>Camera streaming</legend><form method="post" action="/setup/save">`)
-	hidden(w, token, "camstream", "privacy")
+	fieldsetOpen(w, "camstream", "Camera streaming")
+	fmt.Fprint(w, `<form method="post" action="/setup/save">`)
+	hidden(w, token, "camstream")
 	fmt.Fprintf(w, `<p style="margin:0">Camera streaming is %s. Turn it on or off with the Camera streaming
 	 switch in Home Assistant.</p>
 	 <label for="csuser">User</label>
 	 <input id="csuser" name="user" value="%s" placeholder="%s" autocomplete="off">
-	 <label for="cspass">Password</label>
-	 <input id="cspass" name="pass" type="password" value="" placeholder="%s" autocomplete="new-password">
+	 %s
 	 <p class="note">With it on, a recorder (Frigate, go2rtc, an NVR) can record this device's camera at
 	  rtsp://<em>this device's address</em>:%s%s, with this login, over TCP. It never runs without a password;
 	  turning it off, a new login and the lens cover cut viewers off, and the mute button stops the
 	  picture. A Show shows a green dot while it is watched. Use a long password of its own. The picture
 	  is a series of JPEGs, not H.264: a recorder that wants H.264 re-encodes it.</p>
 	 <p><button type="submit">Save</button></p></form></fieldset>`,
-		html.EscapeString(state), html.EscapeString(user), config.DefaultCamStreamUser, hint, camstream.Port, camstream.Path)
+		html.EscapeString(state), html.EscapeString(user), config.DefaultCamStreamUser,
+		secretField("cspass", fmt.Sprintf("Password (at least %d characters)", camstream.MinPass), "pass", c.Pass != "", ""),
+		camstream.Port, camstream.Path)
 }
 
 func saveCamStream(r *http.Request) string {

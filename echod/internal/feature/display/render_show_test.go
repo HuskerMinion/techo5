@@ -22,6 +22,7 @@ import (
 	"github.com/HuskerMinion/techo5/echod/internal/feature/notify"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/phone"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/remind"
+	"github.com/HuskerMinion/techo5/echod/internal/feature/voice"
 	"github.com/HuskerMinion/techo5/echod/internal/lib/hass"
 )
 
@@ -87,6 +88,9 @@ func TestShowScenesDraw(t *testing.T) {
 			musicPosition: media.Position{At: at, Pos: 1500 * time.Second, Dur: 3600 * time.Second, Rate: 1}},
 		"nowplaying-music-assistant-paused": {now: at, phase: "idle", nowPlaying: true, paused: true, weather: sky,
 			radio: home.Radio{Now: "Music Assistant", Title: "Some Jazz", Artist: "The Quartet", Music: true}},
+		// A station tapped and not playing yet: the page is up at once and says so.
+		"nowplaying-starting":        {now: at, phase: "idle", nowPlaying: true, weather: sky, radio: home.Radio{Chosen: "KXYZ 101.1"}},
+		"nowplaying-modern-starting": {now: at, phase: "idle", nowPlaying: true, modernMusic: true, weather: sky, radio: home.Radio{Chosen: "KXYZ 101.1"}},
 		"nowplaying-modern": {now: at, phase: "idle", nowPlaying: true, modernMusic: true, playing: true, weather: sky,
 			radio:         home.Radio{Now: "Music Assistant", Title: "After the Rain", Artist: "The Glass Hours", Thumb: previewMusicCover()},
 			musicPosition: media.Position{At: at, Pos: 86 * time.Second, Dur: 222 * time.Second, Rate: 1}},
@@ -138,6 +142,9 @@ func TestShowScenesDraw(t *testing.T) {
 			Start:   at.Add(3 * time.Hour), End: at.Add(4 * time.Hour)}},
 		"popup-all-day": {now: at, phase: "idle", weather: sky, popup: &hass.Event{Summary: "Trash day", AllDay: true,
 			Start: at, End: at.Add(24 * time.Hour)}},
+		// The update dialog over the clock, part-way through its download.
+		"update-dialog": {now: at, phase: "idle", weather: sky, updateActive: true, updatePhase: "downloading",
+			updateProgress: 0.42, updateTarget: "1.6.35"},
 		"notification-under-reminder": {now: at, phase: "idle", weather: sky, showReminder: true,
 			reminder: remind.Reminder{Label: "Take the trash out"}, showNotification: true,
 			notification: notify.Notification{Kind: notify.Text, Message: "hidden under the reminder"}},
@@ -177,7 +184,15 @@ func TestShowScenesDraw(t *testing.T) {
 		// Muted, on the pages the header has to carry it onto. The ringing one is why the header
 		// exists: an alarm sounding on a device that cannot hear "stop" used to look exactly like one
 		// that could.
-		"muted-clock": {now: at, phase: "idle", weather: sky, muted: true},
+		"muted-clock":           {now: at, phase: "idle", weather: sky, muted: true},
+		"lost-home-clock":       {now: at, phase: "idle", weather: sky, linkDown: linkNoHome},
+		"lost-wifi-muted-clock": {now: at, phase: "idle", weather: sky, muted: true, linkDown: linkNoWifi},
+		// A request that failed, in each kind of turn screen: one line where the answer would be.
+		"turn-failed-classic":       {now: at, phase: "lingering", heard: "Turn off the porch light", failed: voice.FailedNoHome},
+		"turn-failed-classic-alone": {now: at, phase: "lingering", failed: voice.FailedNoAssistant},
+		"turn-failed-bars": {now: at, phase: "lingering", heard: "Turn off the porch light", failed: voice.FailedTimeout,
+			eq: &eqView{level: make([]float64, eqBands), peak: make([]float64, eqBands), quiet: true}},
+		"turn-failed-captions": {now: at, phase: "idle", weather: sky, cue: "lingering", failed: voice.FailedError},
 		"muted-ringing-alarm": {now: at, phase: "idle", muted: true,
 			ring: ringState{alarm: &alarm.Ring{Label: "Wake up"}, snoozable: true}, snooze: 9},
 		"muted-call": {now: at, phase: "idle", muted: true,

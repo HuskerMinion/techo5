@@ -24,7 +24,7 @@ func babySection(w http.ResponseWriter, token string) {
 	if !layout.HasMicrophone() {
 		return
 	}
-	fmt.Fprint(w, `<fieldset id="baby"><legend>Baby monitor</legend>`)
+	fieldsetOpen(w, "baby", "Baby monitor")
 	s := config.Get().Security
 	if !s.Baby || s.BabyKey == "" {
 		fmt.Fprint(w, `<p style="margin:0">The baby monitor is off. Turn on <strong>Baby monitor</strong> under
@@ -36,8 +36,8 @@ func babySection(w http.ResponseWriter, token string) {
 		 <p><a id="babylink" href="/baby?k=%s" style="word-break:break-all">/baby?k=%s</a></p>
 		 <script>var a=document.getElementById('babylink');a.textContent=location.origin+a.getAttribute('href');</script>
 		 <form method="post" action="/setup/save">`, n, babymon.Max, html.EscapeString(s.BabyKey), html.EscapeString(s.BabyKey))
-		hidden(w, token, "babylink", "privacy")
-		fmt.Fprint(w, `<p><button type="submit">New link</button></p></form>`)
+		hidden(w, token, "babylink")
+		fmt.Fprint(w, `<p><button type="submit" class="danger">New link</button></p></form>`)
 	}
 	fmt.Fprint(w, `<p class="note">With it on, anyone on your home network who has the link can hear this room, live, in
 	 a browser: the same sound the wake word hears, after echo cancellation. Keep the link private, as you
@@ -53,7 +53,7 @@ func babySection(w http.ResponseWriter, token string) {
 // babyLightForm is the Baby monitor light choice, with what Dimmest and Off give up.
 func babyLightForm(w http.ResponseWriter, token, now string) {
 	fmt.Fprint(w, `<form method="post" action="/setup/save">`)
-	hidden(w, token, "babylight", "privacy")
+	hidden(w, token, "babylight")
 	fmt.Fprint(w, `<label for="babylight">Baby monitor light</label><select id="babylight" name="babylight">`)
 	for _, name := range babymon.LightNames() {
 		fmt.Fprintf(w, `<option%s>%s</option>`, selected(name == babymon.LightName(now)), html.EscapeString(name))

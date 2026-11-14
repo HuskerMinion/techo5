@@ -20,22 +20,17 @@ import (
 // an action by hand. The key once saved is never shown again, only whether there is one.
 func dashboardSection(w http.ResponseWriter, token string) {
 	d := config.Get().Dashboard
-	keyNote := "No key saved yet."
-	if d.Key != "" {
-		keyNote = "A key is saved. Leave this empty to keep it."
-	}
-	fmt.Fprint(w, `<fieldset><legend>Dashboard server</legend><form method="post" action="/setup/save">`)
-	hidden(w, token, "dashboard", "connections")
+	fieldsetOpen(w, "dashboard", "Dashboard server")
+	fmt.Fprint(w, `<form method="post" action="/setup/save">`)
+	hidden(w, token, "dashboard")
 	fmt.Fprintf(w, `<label for="dashaddr">Address</label>
 	 <input id="dashaddr" name="address" value="%s" placeholder="192.168.1.20:9555" autocomplete="off">
-	 <label for="dashkey">Key</label>
-	 <input id="dashkey" name="key" type="password" autocomplete="off">
-	 <p class="note">%s</p>%s
+	 %s%s
 	 <p class="note">Only for a <strong>streamed</strong> dashboard, which a dashcast server draws: set
 	  <strong>Dashboard</strong> to <strong>Streamed</strong> under Screen &amp; Photos or in Home Assistant.
 	  A dashboard drawn on the device needs no server.</p>
 	 <p><button type="submit">Save</button></p></form></fieldset>`,
-		html.EscapeString(d.Server), html.EscapeString(keyNote), checkNote(d.Server))
+		html.EscapeString(d.Server), secretField("dashkey", "Key", "key", d.Key != "", ""), checkNote(d.Server))
 }
 
 // serverCheck is the dashboard server as the last save found it (dashboard.Check).
@@ -69,8 +64,9 @@ func checkNote(server string) string {
 // which dashboard to show is there too, where the list of them is.
 func dashboardPanelSection(w http.ResponseWriter, token string) {
 	d := config.Get().Dashboard
-	fmt.Fprint(w, `<fieldset><legend>Dashboard</legend><form method="post" action="/setup/save">`)
-	hidden(w, token, "dashpanel", "photos")
+	fieldsetOpen(w, "dashpanel", "Dashboard")
+	fmt.Fprint(w, `<form method="post" action="/setup/save">`)
+	hidden(w, token, "dashpanel")
 	fmt.Fprint(w, `<label for="dashmode">Dashboard</label><select id="dashmode" name="mode">`)
 	for _, m := range dashboard.Modes() {
 		// The mode in force, as the dashboard reads it: one this device does not have is Off here too.

@@ -47,6 +47,8 @@ func (r *roundRenderer) turnCue(s roundScene) {
 		return
 	}
 	switch {
+	case s.failed != "" && !s.nightClockFace():
+		r.rim(s) // the failed request's red, over a face that painted the rim out
 	case !cueLit(s.cue):
 	case s.nightClockFace():
 		if !s.muted {
@@ -61,11 +63,14 @@ func (r *roundRenderer) turnCue(s roundScene) {
 		}
 		r.rim(s)
 	}
-	text := cueWords(s.cue, s.heard, s.reply)
+	text, c := cueWords(s.cue, s.heard, s.reply), colText
+	if line := failedLine(s.failed); line != "" {
+		// A request that failed: why, in the captions' place (turn_failed.go).
+		text, c = line, colTimer
+	}
 	if text == "" {
 		return
 	}
-	c := colText
 	if s.nightClockFace() {
 		c = nightRed
 	}

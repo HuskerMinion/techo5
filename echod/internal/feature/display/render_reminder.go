@@ -21,7 +21,7 @@ func (r *renderer) reminderBox() image.Rectangle {
 }
 
 func (r *renderer) reminderCard(s scene) {
-	heading := "REMINDER"
+	heading := tr("card_reminder")
 	if s.reminderFrom != "" {
 		heading += "  ·  " + s.reminderFrom
 	}

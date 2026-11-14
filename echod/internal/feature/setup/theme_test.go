@@ -162,7 +162,7 @@ func TestMatchTheAccent(t *testing.T) {
 		t.Fatalf("%d %s: %v", w.Code, w.Body.String(), err)
 	}
 	want := palette.Derive(0xf05a3c, true).Hex()
-	if got["ground"] != want[0] || got["text"] != want[2] || got["accent"] != "#f05a3c" {
+	if got["ground"] != want[0] || got["text"] != want[2] || got["accent"] != want[1] {
 		t.Errorf("matched %v, want %v", got, want)
 	}
 	if config.Get().Screen.Palette != (config.Palette{}) {

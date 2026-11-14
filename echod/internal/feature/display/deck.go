@@ -3,6 +3,7 @@
 package display
 
 import (
+	"errors"
 	"fmt"
 	"image"
 	"image/color"
@@ -16,21 +17,60 @@ import (
 )
 
 // TECHO5 Deck's page (render_deck.go): opened by a swipe up from the bottom edge of the clock, once a
-// deck is set up, or by Tap on the clock set to Deck. It stays until a swipe down puts it away.
+// deck is set up, or by Tap on the clock set to Deck. It stays until a swipe down, or a tap on Clock at
+// its foot, puts it away.
 
 // bottomEdge is the strip along the bottom of the clock a swipe up has to start in to open the deck,
 // in the layout's sizes; above it a swipe up is the volume, as it always was. Thinner than the top
 // edge's band, so the volume keeps most of the screen.
 const bottomEdge = 90
 
-// deckFlash is how long a press shows on its button: dimmed while it goes out, red when it failed.
-const deckFlash = 600 * time.Millisecond
+// A press shows on its button for as long as it is going out, and what came of it after: the pressed
+// look until the press is answered, which with a computer that is slow or gone can be seconds, and at
+// least deckPressMin so one answered at once is still seen; then, failed, the red look for deckFailedFor
+// with the reason at the foot of the page. The look used to last a fixed six tenths of a second
+// whatever the press was doing, and a failure was six tenths of a second of red with no word why.
+const (
+	deckPressMin  = 200 * time.Millisecond
+	deckFailedFor = 2 * time.Second
+)
 
 // deckPress is a press being shown on its button.
 type deckPress struct {
 	page, button int
-	until        time.Time
+	seq          uint64    // which press it is: the answer to an earlier one is not this one's
+	going        bool      // sent, and not answered yet
+	shown        time.Time // the pressed look stays until then at least
+	until        time.Time // failed: the red look and the reason stay until then
 	failed       bool
+	reason       string // failed: why, for the foot of the page
+}
+
+// pressed and failedAt are the two looks at now.
+func (p deckPress) pressed(now time.Time) bool  { return p.going || (!p.failed && now.Before(p.shown)) }
+func (p deckPress) failedAt(now time.Time) bool { return !p.going && p.failed && now.Before(p.until) }
+
+// deckDo sends a press; a variable for the tests.
+var deckDo = func(page, i int) error { return deck.Get().Press(page, i) }
+
+// deckReason is why a press of b failed, in a line for the foot of the page: the kind of failure and
+// whose it was, never the error's own words.
+func deckReason(b config.DeckButton, err error) string {
+	switch deck.Why(b, err) {
+	case deck.FailedOBSAway:
+		return tr("deck_obs_away")
+	case deck.FailedOBSRefused:
+		return tr("deck_obs_refused")
+	case deck.FailedOBSSilent:
+		return tr("deck_obs_silent")
+	case deck.FailedComputerSilent:
+		return fmt.Sprintf(tr("deck_pc_silent"), b.Computer)
+	case deck.FailedComputerUnpaired:
+		return fmt.Sprintf(tr("deck_pc_unpaired"), b.Computer)
+	case deck.FailedComputerKey:
+		return fmt.Sprintf(tr("deck_pc_key"), b.Computer)
+	}
+	return tr("deck_failed")
 }
 
 // fromBottomEdge is whether a swipe up starting at y starts in the deck's strip.
@@ -46,7 +86,8 @@ func (d *Display) openDeck() bool {
 	d.mu.Lock()
 	// On the screen from now, not from the next frame: the swipe that opened it is still sending its
 	// steps up, and they are the deck's to ignore, not the volume's.
-	d.deckUp, d.deckOnScreen, d.deckPress = true, true, deckPress{}
+	// The count of presses goes on: one still going out from before must not be taken for the next.
+	d.deckUp, d.deckOnScreen, d.deckPress = true, true, deckPress{seq: d.deckPress.seq}
 	d.closeAlert()
 	d.calUntil, d.weatherUntil = time.Time{}, time.Time{}
 	d.sheet, d.dash, d.drawer = false, false, false
@@ -96,7 +137,7 @@ func deckFrameKey(s scene, ringing, calling bool) string {
 	// The colors too: the deck is drawn in the theme's, and a change from the setup page (a custom
 	// palette's included) should show. So should a change of font, of the owner's own fonts, or of
 	// the text size.
-	return fmt.Sprintf("%+v|%v|%v|%s|%d|%d", s.deck, s.muted, [5]color.RGBA{walnut, amber, cream, dim, ember},
+	return fmt.Sprintf("%+v|%v|%s|%v|%s|%d|%d", s.deck, s.muted, s.linkDown, [5]color.RGBA{walnut, amber, cream, dim, ember},
 		drawnFont(), fonts.Generation(), textSize())
 }
 
@@ -131,14 +172,17 @@ func (d *Display) deckScene(s *scene, now time.Time) {
 	st := deck.Get().OBS()
 	pcs := deck.Get().Computers()
 	v := deckView{cols: cols, rows: rows, page: page, pages: pages,
-		connected: st.Connected, problem: st.Problem, obsSet: cfg.OBS.Addr != ""}
+		connected: st.Connected, problem: st.Problem, obsSet: cfg.OBS.Addr != "", away: deck.Away(cfg, page, pcs)}
+	if press.failedAt(now) {
+		v.reason = press.reason
+	}
 	for i := range cols * rows {
 		b := cfg.Button(page, i)
 		lit, known := deck.Lit(b, st, pcs)
 		bv := deckButtonView{empty: b.Action == config.DeckNone, label: deck.Label(b), icon: deck.Icon(b, lit),
 			color: b.Color, lit: lit, known: known}
-		if press.page == page && press.button == i && now.Before(press.until) {
-			bv.pressed, bv.failed = !press.failed, press.failed
+		if press.page == page && press.button == i {
+			bv.pressed, bv.failed = press.pressed(now), press.failedAt(now)
 		}
 		v.buttons = append(v.buttons, bv)
 	}
@@ -154,27 +198,15 @@ func (d *Display) deckGesture(g touch.Gesture) {
 		if d.r == nil {
 			return
 		}
+		if d.r.deckCloseHit(image.Pt(g.X, g.Y)) {
+			d.closeDeck()
+			return
+		}
 		i, ok := d.r.deckHit(image.Pt(g.X, g.Y))
 		if !ok {
 			return
 		}
-		d.mu.Lock()
-		page := d.deckPage
-		d.deckPress = deckPress{page: page, button: i, until: time.Now().Add(deckFlash)}
-		d.mu.Unlock()
-		go func() {
-			err := deck.Get().Press(page, i)
-			if err != nil {
-				d.mu.Lock()
-				if d.deckPress.page == page && d.deckPress.button == i {
-					d.deckPress.failed, d.deckPress.until = true, time.Now().Add(deckFlash)
-				}
-				d.mu.Unlock()
-			}
-			d.wake()
-			// Once more after the flash, so the button is drawn plain again.
-			time.AfterFunc(deckFlash+50*time.Millisecond, d.wake)
-		}()
+		d.pressDeck(i)
 	case touch.SwipeLeft, touch.SwipeRight:
 		pages := max(len(config.Get().Deck.Pages), 1)
 		d.mu.Lock()
@@ -187,6 +219,54 @@ func (d *Display) deckGesture(g touch.Gesture) {
 	case touch.SwipeDown:
 		d.closeDeck()
 	}
+}
+
+// pressDeck sends a press of button i on the page that is up, and shows it on the button until it is
+// answered. A button whose press is still going out takes no second one: it would be sent behind the
+// first, and a toggle pressed twice by an impatient finger ends where it began.
+func (d *Display) pressDeck(i int) {
+	now := time.Now()
+	d.mu.Lock()
+	page := d.deckPage
+	if p := d.deckPress; p.going && p.page == page && p.button == i {
+		d.mu.Unlock()
+		return
+	}
+	seq := d.deckPress.seq + 1
+	d.deckPress = deckPress{page: page, button: i, seq: seq, going: true, shown: now.Add(deckPressMin)}
+	d.mu.Unlock()
+	d.wake()
+	go func() {
+		err := deckDo(page, i)
+		failed := err != nil && !errors.Is(err, deck.ErrEmpty)
+		var reason string
+		if failed {
+			reason = deckReason(config.Get().Deck.Button(page, i), err)
+		}
+		answered := time.Now()
+		d.mu.Lock()
+		// Only the press the button is showing: one tapped since has the button's look now.
+		ours := d.deckPress.seq == seq
+		if ours {
+			d.deckPress.going = false
+			if failed {
+				d.deckPress.failed, d.deckPress.until, d.deckPress.reason = true, answered.Add(deckFailedFor), reason
+			}
+		}
+		left := d.deckPress.shown.Sub(answered)
+		d.mu.Unlock()
+		if !ours {
+			return
+		}
+		d.wake()
+		// And once more when the look is over, so the button is drawn plain again.
+		switch {
+		case failed:
+			time.AfterFunc(deckFailedFor+50*time.Millisecond, d.wake)
+		case left > 0:
+			time.AfterFunc(left+50*time.Millisecond, d.wake)
+		}
+	}()
 }
 
 // deckChanged redraws the page when OBS's state changes under it.

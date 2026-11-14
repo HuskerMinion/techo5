@@ -140,7 +140,8 @@ type Display struct {
 	fontSel *esphome.Select
 	// textSizeSel is Screen text size, how large those words are drawn (text_size.go).
 	textSizeSel *esphome.Select
-	// styleNamed is the clock style a swipe turned to, said on the clock until styleNamedUntil.
+	// styleNamed is the clock style a swipe turned to, said on the clock until styleNamedUntil; or the
+	// word that answers a hold on the clock (clockHeld).
 	styleNamed      string
 	styleNamedUntil time.Time
 	// clockUp is the last frame having been the clock page itself, in whatever style: not the light
@@ -245,6 +246,7 @@ type Display struct {
 	dashHolds     bool                  // the drawn dashboard is up, and wants a finger held still reported
 	clockHolds    bool                  // the plain clock is up and Hold on the clock is on (gesture_hold.go)
 	recordHolds   bool                  // an announcement is being recorded: a hold on its strip throws it away
+	link          linkWatch             // whether Home Assistant and the Wi-Fi are there, for the header
 
 	poke chan struct{}
 
@@ -340,6 +342,9 @@ type Display struct {
 	// station as playing, which comes seconds before the stream does.
 	quiet    bool
 	radioCue time.Time
+	// radioTapped is when a station was last tapped on the list: the now-playing page is up from then
+	// while the station is starting (radioStarting), for radioCueFor at the most.
+	radioTapped time.Time
 
 	// weatherArmed is a weather question in progress; weatherUntil is how long the forecast page
 	// stays once the turn is over.
@@ -381,6 +386,12 @@ type Display struct {
 	// another size (screen_sized.go).
 	bgSized, saverSized, artSized screenSized
 	musicCoverSized               screenSized
+
+	// press is the finger a press is shown under, pageShown the page the last frame drew, which a
+	// finger lands on, and pressSeq counts the presses (press.go).
+	press     pressState
+	pageShown pageID
+	pressSeq  uint64
 
 	// The deck page (deck.go): up while deckUp, on deckPage, with deckPress the press being shown.
 	deckUp    bool
@@ -575,7 +586,10 @@ func build() *Display {
 	media.Get().OnVolume.Listen(d.volumeMoved)
 	ambient.Get().Lux.Listen(d.lux)
 	touch.Get().Gestures.Listen(d.gesture)
+	touch.Get().Landed.Listen(d.fingerLanded)
+	touch.Get().Down.Listen(d.fingerDown)
 	d.listenPowerKey()
+	go d.watchLink()
 	// A device with no address a while after boot gets the Wi-Fi page without being asked: a
 	// fresh unit, or one carried to another house. The page ends the splash (frame), which would
 	// otherwise wait for Home Assistant forever on a device that cannot reach it.
@@ -937,7 +951,8 @@ func (d *Display) lux(float64) {
 func (d *Display) changed(s voice.State) {
 	d.mu.Lock()
 	newHeard := s.Heard != "" && s.Heard != d.view.Heard
-	if s.Phase == "listening" && d.view.Phase != "listening" {
+	if (s.Phase == "listening" && d.view.Phase != "listening") || s.Failed != "" {
+		// A request that failed is said whatever was put away before it: it is a new thing to say.
 		d.quiet = false
 	}
 	d.view = s
@@ -1093,6 +1108,15 @@ func (d *Display) gesture(g touch.Gesture) {
 	if g.Kind != touch.Drag {
 		// Not each step of a finger dragging the map or a dashboard: those come many a second.
 		slog.Info("touch", "gesture", g.String())
+	}
+	// A finger that swipes or drags is not pressing what it came down on (press.go).
+	switch g.Kind {
+	case touch.SwipeUp, touch.SwipeDown, touch.SwipeLeft, touch.SwipeRight:
+		if d.pressClear() {
+			d.wake()
+		}
+	case touch.Drag:
+		d.pressMoved(g.X, g.Y)
 	}
 	// A notification that came up at night waits for a touch (releaseNotice), but not for one that
 	// stops a ring: that one is for the alarm. The touch that releases it only releases: whoever
@@ -1856,18 +1880,31 @@ func (d *Display) nowPlaying() bool {
 	if _, _, _, ok := media.Get().Held(); ok {
 		return true
 	}
-	if !home.Get().Radio().Configured {
+	rd := home.Get().Radio()
+	if !rd.Configured {
 		return false
 	}
 	playing, paused := media.Get().Playing()
 	if playing || paused {
 		return true
 	}
-	// Home Assistant named a station a moment ago: the stream is on its way, show the page now.
+	// Home Assistant named a station a moment ago: the stream is on its way, show the page now. And a
+	// station tapped here, while it is still starting: the page says so, and when the start comes to
+	// nothing the clock is back with a note that says why (home.Hint).
 	d.mu.Lock()
 	cued := time.Since(d.radioCue) < radioCueFor
+	tapped := time.Since(d.radioTapped) < radioCueFor
 	d.mu.Unlock()
-	return cued
+	return cued || (tapped && radioStarting(rd) != "")
+}
+
+// radioStarting is the station that was asked for and is not playing yet, the one the station list
+// marks "Starting…"; empty when there is none.
+func radioStarting(rd home.Radio) string {
+	if rd.Chosen != rd.Now {
+		return rd.Chosen
+	}
+	return ""
 }
 
 // radioCueFor is how long the now-playing page is shown on Home Assistant's word alone, before
@@ -2782,18 +2819,19 @@ func (d *Display) frame() (next time.Duration) {
 	s.alarms = alarm.Get().View(now)
 	s.timers = timer.Get().List(now)
 	s.glance = home.Get().Glance()
-	if view.Phase == "idle" && (view.Heard != "" || view.Reply != "") && now.Sub(at) < linger() {
+	if view.Phase == "idle" && (view.Heard != "" || view.Reply != "" || view.Failed != "") && now.Sub(at) < linger() {
 		s.phase = "lingering"
+		s.failed = failedShown(view.Failed)
 	}
 	d.mu.Lock()
 	quiet := d.quiet
 	d.mu.Unlock()
 	if quiet && (s.phase == "thinking" || s.phase == "replying" || s.phase == "lingering") {
 		// A screen command: the screen it asked for is the answer, not the words.
-		s.phase, s.heard, s.reply = "idle", "", ""
+		s.phase, s.heard, s.reply, s.failed = "idle", "", "", ""
 	}
 	if cueOn() {
-		s.cue, s.phase, s.heard, s.reply = cueTurn(s.phase, s.heard, s.reply, captionsOn())
+		s.cue, s.phase, s.heard, s.reply = cueFailed(s.phase, s.heard, s.reply, s.failed, captionsOn())
 	}
 	s.said = voice.Spoken(s.reply, now)
 	if equalizerOn() && (s.phase == "listening" || s.phase == "thinking" || s.phase == "replying" || s.phase == "lingering") {
@@ -2808,6 +2846,7 @@ func (d *Display) frame() (next time.Duration) {
 	// here and since let go is shown paused too (see media.Player.Held).
 	s.playing, s.paused = media.Get().ScreenState()
 	s.muted, _ = mute.Get().Muted()
+	s.linkDown = d.link.down(now)
 	if !volAt.IsZero() && now.Sub(volAt) < volumeShow {
 		s.volume, s.showVolume = volume, true
 	}
@@ -3006,7 +3045,7 @@ func (d *Display) frame() (next time.Duration) {
 	s.reminder, s.showReminder = remind.Get().Showing()
 	s.notification, s.showNotification = notify.Get().Card()
 	d.gateNotice(&s, nightNow(now))
-	s.popup = d.popupUp()
+	s.popup, s.popupWaiting = d.popupUp(), d.popupsWaiting()
 	if s.reminder.From != config.Get().Device.Name {
 		s.reminderFrom = s.reminder.From
 	}
@@ -3092,6 +3131,7 @@ func (d *Display) frame() (next time.Duration) {
 		// Kept while the video is only covered: uncovered, paused, the frame it stopped on is put back.
 		d.dropVideoFrame()
 	}
+	d.pressScene(&s, now)
 	key := deckFrameKey(s, ring.any(), call.Phase != phone.Idle)
 	if key == "" {
 		key = customFrameKey(s, ring.any(), call.Phase != phone.Idle)

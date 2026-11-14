@@ -24,8 +24,9 @@ func init() { saves["phonebook"] = savePhoneBook }
 func phoneBookSection(w http.ResponseWriter, token string) {
 	book := phone.FormatContacts(phone.Get().Contacts())
 	byVoice := phone.CallByVoice()
-	fmt.Fprint(w, `<fieldset><legend>Phone book</legend><form method="post" action="/setup/save">`)
-	hidden(w, token, "phonebook", "sound")
+	fieldsetOpen(w, "phonebook", "Phone book")
+	fmt.Fprint(w, `<form method="post" action="/setup/save">`)
+	hidden(w, token, "phonebook")
 	fmt.Fprintf(w, `<label for="contacts">Contacts, one to a line</label>
 	 <textarea id="contacts" name="contacts" rows="6" autocomplete="off" spellcheck="false" placeholder="Mom|Mother = 15551234567">%s</textarea>
 	 <input type="hidden" name="was_contacts" value="%s">

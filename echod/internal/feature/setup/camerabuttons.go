@@ -28,8 +28,9 @@ func cameraButtonsSection(w http.ResponseWriter, token string) {
 	for _, c := range cams {
 		names = append(names, html.EscapeString(c.Name)+" <code>"+html.EscapeString(c.Entity)+"</code>")
 	}
-	fmt.Fprint(w, `<fieldset><legend>Camera buttons</legend><form method="post" action="/setup/save">`)
-	hidden(w, token, "camerabuttons", "connections")
+	fieldsetOpen(w, "camerabuttons", "Camera buttons")
+	fmt.Fprint(w, `<form method="post" action="/setup/save">`)
+	hidden(w, token, "camerabuttons")
 	fmt.Fprintf(w, `<label for="cambuttons">Buttons</label>
 	 <textarea id="cambuttons" name="buttons" rows="%d" maxlength="4000" placeholder="camera.front_door: Open gate=script.open_gate, Unlock=lock.unlock:lock.front_door">%s</textarea>
 	 <input type="hidden" name="was_buttons" value="%s">

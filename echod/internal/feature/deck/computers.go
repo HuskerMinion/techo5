@@ -239,7 +239,7 @@ func closeQuietly(ch chan *zeroconf.ServiceEntry) {
 func (f *Feature) pcDo(b config.DeckButton) error {
 	c, ok := config.Get().Deck.Computer(b.Computer)
 	if !ok {
-		return fmt.Errorf("deck: no computer called %q is paired", b.Computer)
+		return unpairedError{b.Computer}
 	}
 	op := map[config.DeckAction]string{config.DeckPCKeys: deckwire.OpKeys, config.DeckPCType: deckwire.OpType,
 		config.DeckPCOpen: deckwire.OpOpen, config.DeckPCRun: deckwire.OpRun}[b.Action]

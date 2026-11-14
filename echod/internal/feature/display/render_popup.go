@@ -11,13 +11,16 @@ import (
 	"github.com/HuskerMinion/techo5/echod/internal/lib/hass"
 )
 
-// popupBox is where an event's pop-up sits: the middle of the screen, a little smaller than a reminder.
-func (r *renderer) popupBox() image.Rectangle {
-	w, h := r.s(680), r.s(250)
-	return image.Rect((r.w-w)/2, (r.h-h)/2, (r.w-w)/2+w, (r.h-h)/2+h)
-}
+// popupBox is where an event's pop-up sits: the reminder's box, so that the three cards are one card
+// in one place and the one under another is covered whole.
+func (r *renderer) popupBox() image.Rectangle { return r.reminderBox() }
 
-// popupCard is an event coming up: its calendar and how soon, its title, and its time.
+// popupLines is as many lines as the card gives an event's title, over the line that says when.
+const popupLines = 2
+
+// popupCard is an event coming up: its calendar and how soon, its title, and its time. A title that
+// fits one line sits lower with its time, so the pair is in the middle of the card under the heading
+// instead of leaving the foot of it empty.
 func (r *renderer) popupCard(s scene, e hass.Event) {
 	box := r.popupBox()
 	r.setPopupAt(box)
@@ -25,9 +28,13 @@ func (r *renderer) popupCard(s scene, e hass.Event) {
 	if name := popupCalendarName(e.Calendar); name != "" {
 		heading += "  ·  " + name
 	}
-	r.noticeCard(box, 52, 124, "", heading, e.Summary, 1)
 	in := r.rowIn()
-	r.text(r.small, clipText(r, r.small, eventWhen(e, s.now), box.Dx()-2*in), box.Min.X+in, box.Min.Y+r.s(180), dim)
+	top, when := 158, 224
+	if len(r.wrap(r.title, e.Summary, box.Dx()-2*in)) > 1 {
+		top, when = 126, 126+cardLineH+62
+	}
+	r.noticeCard(box, 56, top, "", heading, e.Summary, popupLines)
+	r.text(r.small, clipText(r, r.small, eventWhen(e, s.now), box.Dx()-2*in), box.Min.X+in, box.Min.Y+r.s(when), dim)
 }
 
 func (r *renderer) setPopupAt(b image.Rectangle) {

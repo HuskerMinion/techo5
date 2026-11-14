@@ -53,11 +53,15 @@ func (r *roundRenderer) turnFace(s roundScene) {
 	answer := s.reply != "" && (s.phase == "replying" || s.phase == "lingering")
 	if s.heard != "" {
 		lines := 2
-		if answer {
+		if answer || s.failed != "" {
 			lines = 1
 		}
 		y = r.paragraph(r.small, "“"+s.heard+"”", y, colDim, lines)
 		y += 6
+	}
+	if s.failed != "" {
+		r.failedWords(s, y)
+		return
 	}
 	if answer {
 		r.replyParagraph(r.body, s.reply, y, colText, 3, s.said)

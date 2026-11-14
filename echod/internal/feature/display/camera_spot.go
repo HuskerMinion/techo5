@@ -78,11 +78,16 @@ func (r *roundRenderer) cameraView(s roundScene) {
 		r.centered(r.label, name, 69, colText)
 	}
 	if c := v.Caption; c != nil && c.Message != "" {
-		lines := r.wrap(r.small, c.Message, 290)
-		if len(lines) > 2 {
-			lines = append(lines[:1], clip(r.small, r, strings.Join(lines[1:], " "), 290))
-		}
 		const lineH, top = 26, 112
+		// Two lines, or one where the bars stacked up from the foot reach the second.
+		most := 2
+		if cameraBarsTop(s) < top+lineH+12 {
+			most = 1
+		}
+		lines := r.wrap(r.small, c.Message, 290)
+		if len(lines) > most {
+			lines = append(lines[:most-1], clip(r.small, r, strings.Join(lines[most-1:], " "), 290))
+		}
 		mid := float64(top + (len(lines)-1)*lineH/2 - 8)
 		r.line(float64(center-150), mid, float64(center+150), mid, float64(len(lines)*lineH+12), color.RGBA{0, 0, 0, 160})
 		for i, line := range lines {
@@ -95,7 +100,7 @@ func (r *roundRenderer) cameraView(s roundScene) {
 	r.setCameraTalkAt(image.Rectangle{})
 	if s.talkOffered {
 		label := talkLabel(s.talk, v.Entity)
-		b := cameraSoundBox(r.width(r.label, label) + 24).Sub(image.Pt(0, 34+talkGap))
+		b := cameraSoundBox(r.width(r.label, label) + 24).Sub(image.Pt(0, cameraBarH+talkGap))
 		live := s.talk.Entity == v.Entity && s.talk.Phase != talkback.Idle
 		r.cameraControl(b, label, live)
 		r.setCameraTalkAt(b)
@@ -140,7 +145,7 @@ func (r *roundRenderer) cameraButtons(s roundScene) {
 	if len(s.camButtons) == 0 {
 		return
 	}
-	const barH, barMin, barMax = 34, 96, 300
+	const barH, barMin, barMax = cameraBarH, 96, 300
 	top := cameraSoundBox(0).Max.Y + talkGap // nothing at the foot: the first goes in the sound's place
 	if s.cameraSound || s.camera.Caption != nil {
 		top = cameraSoundBox(0).Min.Y // the sound's bar, or the "tap to close" in its place
@@ -160,28 +165,55 @@ func (r *roundRenderer) cameraButtons(s roundScene) {
 	r.drawnButtons = at
 }
 
+// cameraBarsTop is how far up the face the bars stacked from its foot reach in a frame of s: the
+// sound's bar or the "tap to close" in its place, Talk, and the action buttons, the top of the
+// highest. With none it is the foot of the sound's place.
+func cameraBarsTop(s roundScene) int {
+	bars := len(s.camButtons)
+	if s.talkOffered {
+		bars++
+	}
+	// The sound's place is kept under Talk and under a captioned picture's buttons, used or not.
+	if s.cameraSound || s.camera.Caption != nil || s.talkOffered {
+		bars++
+	}
+	if bars == 0 {
+		return cameraSoundBox(0).Max.Y
+	}
+	return cameraSoundBox(0).Max.Y - bars*cameraBarH - (bars-1)*talkGap
+}
+
 // cameraButtonTapped is which of the action buttons drawn in the frame last drawn a tap at x, y is on,
-// or -1. Each is grown by a finger's slop, less than half the gap between them (talkGap) and, with the
-// sound's own 10 below the lowest, less than that gap too: the bars are 34 px, 4.5 mm, and open gates.
+// or -1. Each is grown by a finger's slop, half the gap between two bars (cameraBarReach), as Talk's
+// and the sound's are: the bars open gates, and a tap between two of them is the nearer one's and
+// never both's.
 func (r *roundRenderer) cameraButtonTapped(x, y int) int {
 	r.zmu.Lock()
 	defer r.zmu.Unlock()
 	for i, b := range r.cameraButtonsAt {
-		if !b.Empty() && image.Pt(x, y).In(b.Inset(-7)) {
+		if !b.Empty() && image.Pt(x, y).In(b.Inset(-cameraBarReach)) {
 			return i
 		}
 	}
 	return -1
 }
 
-// talkGap is between the Talk bar and the sound's below it: more than the two taps' margins together
-// (cameraTalkTapped's 4 and cameraSoundTapped's 10), so no tap is taken for both.
-const talkGap = 18
+// The bars at the foot of the round camera page, the sound's, Talk and the action buttons, are one
+// stack with one rhythm. cameraBarH is how tall each is: 40 px is 5.3 mm on this glass, where 34 was
+// 4.5 mm for a button that opens a gate. talkGap is between one bar and the next, and cameraBarReach
+// how far around a bar a tap is still its own: half the gap, so the bars' targets meet between them,
+// 54 px (7.2 mm) each, and no tap is taken for two. Four buttons over Talk and the sound, the most
+// there are, reach up to 126 of the face's 480.
+const (
+	cameraBarH     = 40
+	talkGap        = 14
+	cameraBarReach = talkGap / 2
+)
 
 // cameraSoundBox is where the round camera page's sound control is drawn, and so where a tap on it has to
 // land: a bar across the bottom of the face, inside the rim, and as wide as what it says.
 func cameraSoundBox(w int) image.Rectangle {
-	const barH, barMin = 34, 96
+	const barH, barMin = cameraBarH, 96
 	const bottom = side - 44
 	if w < barMin {
 		w = barMin
@@ -204,7 +236,7 @@ func (r *roundRenderer) setCameraTalkAt(b image.Rectangle) { r.drawnTalk = b }
 func (r *roundRenderer) cameraTalkTapped(x, y int) bool {
 	r.zmu.Lock()
 	defer r.zmu.Unlock()
-	return !r.cameraTalkAt.Empty() && image.Pt(x, y).In(r.cameraTalkAt.Inset(-4))
+	return !r.cameraTalkAt.Empty() && image.Pt(x, y).In(r.cameraTalkAt.Inset(-cameraBarReach))
 }
 
 // clearCameraSoundTap forgets where the controls were in the frame being drawn: a face that does not
@@ -220,7 +252,7 @@ func (r *roundRenderer) clearCameraSoundTap() {
 func (r *roundRenderer) cameraSoundTapped(x, y int) bool {
 	r.zmu.Lock()
 	defer r.zmu.Unlock()
-	return !r.cameraSoundAt.Empty() && image.Pt(x, y).In(r.cameraSoundAt.Inset(-10))
+	return !r.cameraSoundAt.Empty() && image.Pt(x, y).In(r.cameraSoundAt.Inset(-cameraBarReach))
 }
 
 // coverCircle draws img scaled to cover the panel, cropped from the middle, inside the rim.
