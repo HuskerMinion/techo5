@@ -122,13 +122,16 @@ func TestDays(t *testing.T) {
 	for in, want := range map[string]uint8{
 		"": config.DaysOnce, "daily": config.DaysEvery, "weekdays": config.DaysWeekdays, "Weekends": config.DaysWeekends,
 		"mon,wed,fri": 0b0101010, "tuesday thursday": 0b0010100,
+		"Mo,We,Fr": 0b0101010, "tu th": 0b0010100, "sa,su": config.DaysWeekends, "Mo,Tue,Wed": 0b0001110,
 	} {
 		if got, err := config.ParseDays(in); err != nil || got != want {
 			t.Errorf("ParseDays(%q) = %07b %v, want %07b", in, got, err, want)
 		}
 	}
-	if _, err := config.ParseDays("someday"); err == nil {
-		t.Error("ParseDays accepted someday")
+	for _, bad := range []string{"someday", "t", "s", "mo,x"} {
+		if _, err := config.ParseDays(bad); err == nil {
+			t.Errorf("ParseDays accepted %q", bad)
+		}
 	}
 	if got := config.DaysLabel(0b0101010); got != "Mon Wed Fri" {
 		t.Errorf("DaysLabel = %q", got)
