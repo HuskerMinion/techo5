@@ -3473,217 +3473,1561 @@ var uiTranslations = map[string]map[string]string{
 		"ui_match_all_languages":                        "Riconosci tutte le lingue",
 	},
 	"nl": {
+		// 0 dB is normal; boosts can distort, especially with more bass
+		"0_db_is_normal_boosts_can_distort_especially_with_more_bass": "0 dB is normaal; versterking kan vervormen, vooral met meer bas",
+		// A BROWSER IS ASKING
+		"a_browser_is_asking": "EEN BROWSER VRAAGT",
+		// A camera's own audio, while its view is up
+		"a_camera_s_own_audio_while_its_view_is_up": "Het eigen geluid van een camera, terwijl het beeld open is",
+		// A tap brings the screen back until the room is quiet
+		"a_tap_brings_the_screen_back_until_the_room_is_quiet": "Een tik brengt het scherm terug tot het rustig is in de kamer",
+		// A whole look over the theme and font
+		"a_whole_look_over_the_theme_and_font": "Een compleet uiterlijk voor thema en lettertype",
+		// About
+		"about": "Over",
+		// AirPlay sets the volume
+		"airplay_sets_the_volume": "AirPlay regelt het volume",
+		// Alarm
+		"alarm": "Wekker",
+		// Lights the room, no sound, at %s, %s
+		"alarm_lights_at": "Verlicht de kamer, zonder geluid, om %s, %s",
+		// Lights the room, no sound, once, at %s
+		"alarm_lights_once": "Verlicht de kamer, zonder geluid, eenmalig, om %s",
+		// Rings at %s, %s
+		"alarm_rings_at": "Gaat af om %s, %s",
+		// Rings once, at %s
+		"alarm_rings_once": "Gaat eenmalig af, om %s",
+		// Alarm sound
+		"alarm_sound": "Wekkergeluid",
+		// All day
+		"all_day": "Hele dag",
+		// All-day events
+		"all_day_events": "Afspraken voor de hele dag",
+		// Allow Drop In
+		"allow_drop_in": "Drop In toestaan",
+		// Another speaker's music, while this one is quiet
+		"another_speaker_s_music_while_this_one_is_quiet": "Muziek van een andere luidspreker, terwijl deze stil is",
+		// Answer time
+		"answer_time": "Antwoordduur",
+		// Asks twice
+		"asks_twice": "Vraagt twee keer",
+		// At night
+		"at_night": "'s Nachts",
 		// Audio output
 		"audio_output": "Geluidsuitgang",
+		// Auto-brightness
+		"auto_brightness": "Automatische helderheid",
+		// Automatic uses the NWS in the lower 48
+		"automatic_uses_the_nws_in_the_lower_48": "Automatisch gebruikt de NWS in de 48 aaneengesloten staten",
+		// Baby monitor
+		"baby_monitor": "Babyfoon",
 		// Back
 		"back": "Terug",
+		// Back in about a minute
+		"back_in_about_a_minute": "Over ongeveer een minuut terug",
 		// Background
 		"background": "Achtergrond",
 		// Bass
-		"bass": "Bass",
+		"bass": "Bas",
+		// Bluetooth audio
+		"bluetooth_audio": "Bluetooth-audio",
+		// BLUETOOTH PAIRING
+		"bluetooth_pairing": "BLUETOOTH KOPPELEN",
+		// Bluetooth proxy
+		"bluetooth_proxy": "Bluetooth-proxy",
+		// Bluetooth Secure Connections
+		"bluetooth_secure_connections": "Beveiligde Bluetooth-verbindingen",
 		// Brightness
 		"brightness": "Helderheid",
+		// and %d more today
+		"calendar_and_d_more_today": "en nog %d meer vandaag",
+		// Calendar chips
+		"calendar_look_chip_size_label": "Kalenderchips",
+		// The calendars' names over the month
+		"calendar_look_chip_size_sub": "De namen van de agenda's boven de maand",
+		// Coming up, one line each
+		"calendar_look_coming_up_refined_label": "Binnenkort, één regel per afspraak",
+		// With each day's weather
+		"calendar_look_coming_up_refined_sub": "Met het weer van elke dag",
+		// Countdowns
+		"calendar_look_countdowns_label": "Aftellingen",
+		// \"in 25 min\" on today's events
+		"calendar_look_countdowns_sub": "\"in 25 min\" bij de afspraken van vandaag",
+		// Dashboard events
+		"calendar_look_dashboard_events_label": "Dashboard-afspraken",
+		// Which events the Dashboard clock style lists
+		"calendar_look_dashboard_events_sub": "Welke afspraken de klokstijl Dashboard toont",
+		// Day timeline
+		"calendar_look_day_timeline_label": "Dagtijdlijn",
+		// A day's events on its hours
+		"calendar_look_day_timeline_sub": "De afspraken van een dag per uur",
+		// Event icons
+		"calendar_look_event_icons_label": "Pictogrammen",
+		// A small picture for a birthday, trash day, a flight…
+		"calendar_look_event_icons_sub": "Een klein plaatje voor een verjaardag, ophaaldag, vlucht…",
+		// Month details
+		"calendar_look_month_details_label": "Maanddetails",
+		// Full: times, icons and weather on the days
+		"calendar_look_month_details_sub": "Volledig: tijden, pictogrammen en weer per dag",
+		// Next up on the clock
+		"calendar_look_next_up_label": "Volgende op de klok",
+		// Today's next event at the foot of the clock
+		"calendar_look_next_up_sub": "De volgende afspraak van vandaag onderaan de klok",
+		// Next up within
+		"calendar_look_next_up_within_label": "Volgende binnen",
+		// How far ahead the clock's next event looks
+		"calendar_look_next_up_within_sub": "Hoe ver de klok vooruitkijkt",
+		// Opens on
+		"calendar_look_opens_on_label": "Opent met",
+		// The view a tap on the date opens
+		"calendar_look_opens_on_sub": "De weergave die opent als je op de datum tikt",
+		// Weather in the calendar
+		"calendar_look_weather_label": "Weer in de agenda",
+		// The forecast on each day
+		"calendar_look_weather_sub": "De voorspelling per dag",
+		// Week starts Monday
+		"calendar_look_week_starts_monday_label": "Week begint op maandag",
+		// Rather than Sunday
+		"calendar_look_week_starts_monday_sub": "In plaats van zondag",
+		// Week view
+		"calendar_look_week_view_label": "Weekweergave",
+		// Seven days on their hours
+		"calendar_look_week_view_sub": "Zeven dagen per uur",
+		// Nothing coming up
+		"calendar_nothing_coming_up": "Niets op komst",
+		// Now, until %s
+		"calendar_now_until": "Nu, tot %s",
+		// Call button
+		"call_button": "Belknop",
+		// Call ring
+		"call_ring": "Beltoon",
+		// Call screen
+		"call_screen": "Oproepscherm",
+		// Camera
+		"camera": "Camera",
+		// Camera on network
+		"camera_on_network": "Camera op het netwerk",
+		// Camera on the network
+		"camera_on_the_network": "Camera op het netwerk",
+		// Camera sound
+		"camera_sound": "Camerageluid",
+		// Camera test
+		"camera_test_setting": "Cameratest",
+		// Camera time
+		"camera_time": "Cameraduur",
+		// Cameras
+		"cameras": "Camera's",
 		// Cancel
 		"cancel": "Annuleren",
+		// Certificate checks
+		"certificate_checks": "Certificaatcontrole",
+		// Change it on the setup page
+		"change_it_on_the_setup_page": "Wijzig het op de installatiepagina",
+		// Classic, or a picture that moves with the voice
+		"classic_or_a_picture_that_moves_with_the_voice": "Klassiek, of een beeld dat meebeweegt met de stem",
 		// Clear
 		"clear": "Wissen",
+		// Clock
+		"clock": "Klok",
+		// Clock format
+		"clock_format": "Tijdnotatie",
+		// How the clock looks all day
+		"clock_style_description": "Hoe de klok er de hele dag uitziet",
+		// Clock style
+		"clock_style_label": "Klokstijl",
 		// Close
 		"close": "Sluiten",
+		// Coming up
+		"coming_up": "Binnenkort",
 		// Connect
 		"connect": "Verbinden",
+		// Connected as %s
+		"connected_as": "Verbonden als %s",
+		// Connecting to OBS…
+		"connecting_to_obs": "Verbinden met OBS…",
+		//    +%d more
+		"d_more": "   +%d meer",
+		// Dashboard
+		"dashboard": "Dashboard",
 		// Day
 		"day": "Dag",
+		// every day
+		"days_every_day": "elke dag",
+		// once
+		"days_once": "eenmalig",
+		// weekdays
+		"days_weekdays": "werkdagen",
+		// weekends
+		"days_weekends": "weekend",
+		// off
+		"default_off": "uit",
 		// Default
 		"default_option": "Standaard",
+		// Del
+		"del": "Wis",
+		// Dim after idle
+		"dim_after_idle": "Dimmen na inactiviteit",
+		// Drawn in dim red; the screen gets no brighter
+		"dim_red_and_no_brighter": "In gedimd rood; het scherm wordt niet helderder",
+		// Dimmest
+		"dimmest": "Donkerste stand",
 		// Do not disturb
 		"do_not_disturb": "Niet storen",
 		// Done
 		"done": "Gereed",
+		// Down to Dimmest until touched, spoken to or somebody near
+		"down_to_dimmest_until_touched_spoken_to_or_somebody_near": "Tot de donkerste stand, tot je tikt, ertegen praat of iemand in de buurt is",
+		// All cameras
+		"drawer_all_cameras": "Alle camera's",
+		// Announce
+		"drawer_announce": "Aankondigen",
+		// Announcements need a house word — the same word on every device here, set on each one's setup page. Until then this device neither sends them nor takes them.
+		"drawer_announce_setup": "Aankondigingen hebben een huiswoord nodig: hetzelfde woord op elk apparaat hier, ingesteld op de installatiepagina van elk. Tot dan verstuurt en ontvangt dit apparaat ze niet.",
 		// ANNOUNCEMENT
 		"drawer_announcement": "AANKONDIGING",
+		// Another room
+		"drawer_another_room": "Andere kamer",
+		// It sends when you stop talking
+		"drawer_auto_send": "Verstuurt zodra je stopt met praten",
+		// back to the clock
+		"drawer_back_to_the_clock": "terug naar de klok",
 		// Call
 		"drawer_call": "Bellen",
+		// %s ringing · tap here to stop
+		"drawer_call_alarm": "%s gaat af · tik om te stoppen",
+		// tap to close
+		"drawer_camera_close": "tik om te sluiten",
+		// Connecting to %s…
+		"drawer_camera_connect": "Verbinden met %s…",
+		// Up to six at once; tap one to see it alone
+		"drawer_camera_grid_hint": "Maximaal zes tegelijk; tik er één aan om die alleen te zien",
+		// off while muted
+		"drawer_camera_off_while_muted": "uit zolang gedempt",
+		// showing now
+		"drawer_camera_showing_now": "wordt nu getoond",
+		// tap to show
+		"drawer_camera_tap_to_show": "tik om te tonen",
+		// Connecting…
+		"drawer_connecting": "Verbinden…",
+		// %d to call
+		"drawer_d_contacts_to_call": "%d om te bellen",
+		// %d · tap, then turn
+		"drawer_d_tap_then_turn": "%d · tik, dan draaien",
+		// from Home Assistant
+		"drawer_dashboard_from_home_assistant": "vanuit Home Assistant",
+		// %d other devices
+		"drawer_device_count": "%d andere apparaten",
+		// TAP TO DISMISS
+		"drawer_dismiss": "TIK OM TE SLUITEN",
+		// No stations in this list yet
+		"drawer_empty_stations": "Nog geen zenders in deze lijst",
+		// End talk  %d:%02d
+		"drawer_end_talk": "Gesprek beëindigen  %d:%02d",
 		// Favorites
 		"drawer_favorites": "Favorieten",
+		// forecast
+		"drawer_forecast": "voorspelling",
+		// Go ahead
+		"drawer_go_ahead": "Zeg het maar",
+		// Goes to %s
+		"drawer_goes_to": "Gaat naar %s",
+		// tap a camera to see it alone  ·  tap here to close
+		"drawer_grid_close": "tik een camera aan om die alleen te zien  ·  tik hier om te sluiten",
+		// all rooms in the group
+		"drawer_group_stop": "alle kamers in de groep",
+		// Heard on %s
+		"drawer_heard_on": "Gehoord op %s",
+		// Intercom, in the house
+		"drawer_intercom": "Intercom, in huis",
+		// Asking Home Assistant for stations…
+		"drawer_loading_stations": "Zenders bij Home Assistant opvragen…",
+		// Local stations
+		"drawer_local": "Zenders in de buurt",
+		// microphone is off
+		"drawer_microphone_is_off": "microfoon is uit",
+		// microphone is on
+		"drawer_microphone_is_on": "microfoon is aan",
 		// Mute
 		"drawer_mute": "Geluid uit",
+		// needs a house word
+		"drawer_needs_a_house_word": "heeft een huiswoord nodig",
+		// Nobody to call yet. Give every device the same house word on its setup page to call between rooms, or sign the phone in (the phone_account action) for your contacts.
+		"drawer_no_calls": "Nog niemand om te bellen. Geef elk apparaat hetzelfde huiswoord op zijn installatiepagina om tussen kamers te bellen, of meld de telefoon aan (de phone_account-actie) voor je contacten.",
+		// No cameras yet. Set a Home Assistant token to list them all, or pick some with the home_cameras action.
+		"drawer_no_cameras": "Nog geen camera's. Stel een Home Assistant-token in om ze allemaal te tonen, of kies er een paar met de home_cameras-actie.",
+		// No cameras: None is chosen for Home Assistant's cameras, on the setup page or with the home_cameras action.
+		"drawer_no_cameras_disabled": "Geen camera's: voor de camera's van Home Assistant is Geen gekozen, op de installatiepagina of met de home_cameras-actie.",
+		// No stations within 100 km
+		"drawer_no_local": "Geen zenders binnen 100 km",
+		// no other devices found
+		"drawer_no_other_devices": "geen andere apparaten gevonden",
+		// No other devices found yet
+		"drawer_no_peers": "Nog geen andere apparaten gevonden",
+		// No picture
+		"drawer_no_picture": "Geen beeld",
+		// No stations yet. Give the device a Home Assistant token (the home_assistant action) for local and popular stations, or add your own with home_radio.
+		"drawer_no_radio": "Nog geen zenders. Geef het apparaat een Home Assistant-token (de home_assistant-actie) voor lokale en populaire zenders, of voeg je eigen toe met home_radio.",
+		// No to-do lists are chosen. Choose them on the setup page.
+		"drawer_no_todo": "Geen takenlijsten gekozen. Kies ze op de installatiepagina.",
+		// nobody to call yet
+		"drawer_nobody_to_call_yet": "nog niemand om te bellen",
+		// 1 other device
+		"drawer_one_device": "1 ander apparaat",
 		// Paused
 		"drawer_paused": "Gepauzeerd",
+		// paused · pick a station
+		"drawer_paused_pick_a_station": "gepauzeerd · kies een zender",
 		// Phone
 		"drawer_phone": "Telefoon",
+		// Playing
+		"drawer_playing": "Speelt",
+		// Playing now
+		"drawer_playing_now": "Speelt nu",
+		// playing · pick a station
+		"drawer_playing_pick_a_station": "speelt · kies een zender",
+		// Popular worldwide
+		"drawer_popular": "Wereldwijd populair",
 		// Radio
 		"drawer_radio": "Radio",
+		// radio stations
+		"drawer_radio_stations": "radiozenders",
+		// Listening
+		"drawer_recording": "Luistert",
+		// Say something
+		"drawer_say_something": "Zeg iets",
+		// TAP TO SEND  ·  HOLD TO CANCEL
+		"drawer_send_hint": "TIK OM TE VERSTUREN  ·  HOUD VAST OM TE ANNULEREN",
+		// display, sound, alarms
+		"drawer_settings_display_sound_alarms": "scherm, geluid, wekkers",
+		// Or say \"show %s\"
+		"drawer_show_camera": "Of zeg \"laat %s zien\"",
+		// tap the screen to wake
+		"drawer_sleep_tap_the_screen_to_wake": "tik op het scherm om het te wekken",
 		// Speak
 		"drawer_speak": "Spreken",
+		// Speak now
+		"drawer_speak_now": "Spreek nu",
+		// SPEAKING TO THE HOUSE
+		"drawer_speaking_house": "SPREEKT HET HELE HUIS TOE",
+		// Could not list the stations
+		"drawer_station_error": "Kon de zenders niet laden",
+		// Stop the music
+		"drawer_stop_music": "Stop de muziek",
+		// Stop the radio
+		"drawer_stop_radio": "Stop de radio",
+		// Talk
+		"drawer_talk": "Spreken",
+		// Talk: %s
+		"drawer_talk_error": "Spreken: %s",
+		// tap to ask
+		"drawer_talk_tap_to_ask": "tik om te vragen",
+		// this Spot · hold for the list
+		"drawer_this_spot_hold_for_the_list": "deze Spot · houd vast voor de lijst",
+		// none running
+		"drawer_timer_none_running": "geen actieve timer",
+		// ringing · tap to stop
+		"drawer_timer_ringing_tap_to_stop": "gaat af · tik om te stoppen",
+		// %s left
+		"drawer_timer_s_left": "nog %s",
+		// %s left · %d timers
+		"drawer_timer_s_left_d_timers": "nog %s · %d timers",
+		// To-do
+		"drawer_todo": "Taken",
+		// Nothing to do
+		"drawer_todo_empty": "Niets te doen",
+		// Try again
+		"drawer_try_again": "Opnieuw proberen",
+		// Try Popular worldwide
+		"drawer_try_popular": "Probeer Wereldwijd populair",
+		// turn on in Home Assistant
+		"drawer_turn_on_in_home_assistant": "aanzetten in Home Assistant",
+		// turn · tap to play
+		"drawer_turn_tap_to_play": "draaien · tik om af te spelen",
+		// turn · tap to stop
+		"drawer_turn_tap_to_stop": "draaien · tik om te stoppen",
+		// turn · tap to stop all rooms
+		"drawer_turn_tap_to_stop_all_rooms": "draaien · tik stopt alles",
+		// turn the ring · tap when done
+		"drawer_turn_the_ring_tap_when_done": "draai aan de ring · tik als je klaar bent",
 		// Unmute
 		"drawer_unmute": "Geluid aan",
+		// Encrypted with this device's key
+		"encrypted_with_this_device_s_key": "Versleuteld met de sleutel van dit apparaat",
+		// Every day
+		"every_day": "Elke dag",
+		// Follows the room's light
+		"follows_the_room_s_light": "Volgt het licht in de kamer",
+		// For all the screen's words
+		"font_description": "Voor alle woorden op het scherm",
 		// Font
 		"font_label": "Lettertype",
+		// For downloads; updates always check
+		"for_downloads_updates_always_check": "Voor downloads; updates worden altijd gecontroleerd",
+		// For muting and timers
+		"for_muting_and_timers": "Voor dempen en timers",
+		// For timers
+		"for_timers": "Voor timers",
+		// Forget %s
+		"forget_device": "%s vergeten",
+		// Full page, or a strip over the clock
+		"full_page_or_a_strip_over_the_clock": "Hele pagina, of een strook boven de klok",
 		// Hang up
 		"hang_up": "Ophangen",
+		// Higher wakes by mistake less often
+		"higher_wakes_by_mistake_less_often": "Hoger: minder valse activeringen",
+		// Home Assistant link
+		"home_assistant_link": "Home Assistant-koppeling",
+		// Home Assistant sounds
+		"home_assistant_sounds": "Home Assistant-geluiden",
 		// Home screen
 		"home_screen": "Beginscherm",
+		// How a call rings here
+		"how_a_call_rings_here": "Hoe een oproep hier klinkt",
+		// How dark auto-brightness goes in a dark room
+		"how_dark_auto_brightness_goes_in_a_dark_room": "Hoe donker de automatische helderheid in een donkere kamer wordt",
+		// How long a camera opened here stays up
+		"how_long_a_camera_opened_here_stays_up": "Hoe lang een hier geopende camera in beeld blijft",
+		// How long an answer stays up; a tap clears it
+		"how_long_an_answer_stays_up_a_tap_clears_it": "Hoe lang een antwoord blijft staan; tik om het te wissen",
+		// How running timers show on the clock
+		"how_running_timers_show_on_the_clock": "Hoe lopende timers op de klok verschijnen",
+		// How the night clock looks
+		"how_the_night_clock_looks": "Hoe de nachtklok eruitziet",
+		// Ignore room lights
+		"ignore_room_lights": "Kamerlicht negeren",
+		// Intercom calls connect by themselves, after a chime
+		"intercom_calls_connect_by_themselves_after_a_chime": "Na een signaaltoon verbinden intercom-oproepen vanzelf.",
+		// Intercom calls from other rooms are turned away
+		"intercom_calls_from_other_rooms_are_turned_away": "Intercomoproepen uit andere kamers worden geweigerd",
+		//  is done
+		"is_done": " is klaar",
+		// Its dates, its weather, and what it listens for
+		"its_dates_its_weather_and_what_it_listens_for": "Datums, weer en waar het op reageert",
+		// Lets Home Assistant hear nearby devices
+		"lets_home_assistant_hear_nearby_devices": "Laat Home Assistant apparaten in de buurt waarnemen",
+		// %d of %d
+		"level_of": "%d van %d",
+		// Loading the rain map…
+		"loading_the_rain_map": "Regenradar laden…",
+		// Loading video…
+		"loading_video": "Video laden…",
+		// Look
+		"look": "Uiterlijk",
+		// Louder speech
+		"louder_speech": "Hardere spraak",
+		// Lyrics
+		"lyrics": "Songtekst",
 		// Playback
-		"media_playback": "Weergave",
+		"media_playback": "Afspelen",
 		// Microphone
 		"microphone": "Microfoon",
+		// MICROPHONE OFF
+		"microphone_off": "MICROFOON UIT",
+		// %d minutes before
+		"minutes_before": "%d minuten vooraf",
 		// Month
 		"month": "Maand",
 		// Music
 		"music": "Muziek",
+		// Music Assistant player
+		"music_assistant_player": "Music Assistant-speler",
 		// Name
 		"name": "Naam",
+		// Downloading NetBird, %d%%
+		"netbird_downloading": "NetBird wordt gedownload, %d%%",
 		// Network address
 		"network_address": "Netwerkadres",
+		// New timer
+		"new_timer": "Nieuwe timer",
 		// Next
 		"next": "Volgende",
+		// Controlled by Home Assistant
+		"night_by_ha": "Bestuurd door Home Assistant",
+		// Night clock
+		"night_clock": "Nachtklok",
+		// Night clock brightness
+		"night_clock_brightness": "Helderheid van de nachtklok",
+		// Night clock shows Next up and notifications
+		"night_clock_next_up_and_alerts": "Nachtklok toont Volgende en meldingen",
+		// Custom…
+		"night_custom": "Aangepast…",
+		// Dark, a faint glow, or a clock alone until touched
+		"night_description_show": "Donker, een zwakke gloed, of alleen een klok tot je tikt",
+		// Dim, a red clock, or dark
+		"night_description_spot": "Gedimd, een rode klok, of donker",
+		// Night hours
+		"night_hours": "Nachturen",
+		// No login
+		"no_login": "Geen aanmelding",
+		// No networks heard yet
+		"no_networks_heard_yet": "Nog geen netwerken gevonden",
+		// No rain map:
+		"no_rain_map": "Geen regenradar: ",
+		// Not available on this build
+		"not_available_on_this_build": "Niet beschikbaar in deze build",
+		// Not connected
+		"not_connected": "Niet verbonden",
+		// Not now
+		"not_now": "Niet nu",
+		// Nothing in the next two weeks
+		"nothing_in_the_next_two_weeks": "Niets in de komende twee weken",
 		// Now playing
 		"now_playing":         "Speelt nu",
-		"now_playing_layout":  "Indeling voor afspelen",
 		"now_playing_classic": "Klassiek",
+		// Now playing follows
+		"now_playing_follows": "Volgt wat nu speelt",
+		"now_playing_layout":  "Indeling voor afspelen",
 		"now_playing_modern":  "Modern",
+		// Off if a phone pairs, then drops. Drops devices briefly
+		"off_if_a_phone_pairs_then_drops_drops_devices_briefly": "Uit als een telefoon koppelt en daarna wegvalt. Apparaten vallen kort weg",
 		// OK
 		"ok": "OK",
+		// On the home screen: devices and contacts
+		"on_the_home_screen_devices_and_contacts": "Op het beginscherm: apparaten en contacten",
+		// Asked on the setup page, started here
+		"on_the_setup_page_started_here": "Aangevraagd op de installatiepagina, hier gestart",
+		// Once
+		"once": "Eenmalig",
+		// 1 hour
+		"one_hour": "1 uur",
+		// 1 minute
+		"one_minute": "1 minuut",
+		// 10 minutes
+		"option_10_minutes": "10 minuten",
+		// 10 seconds
+		"option_10_seconds": "10 seconden",
+		// 12-hour
+		"option_12_hour": "12-uurs",
+		// 12 hours
+		"option_12_hours": "12 uur",
+		// 15 seconds
+		"option_15_seconds": "15 seconden",
+		// 1 hour
+		"option_1_hour": "1 uur",
+		// 1 hour before
+		"option_1_hour_before": "1 uur vooraf",
+		// 1 minute
+		"option_1_minute": "1 minuut",
+		// 24-hour
+		"option_24_hour": "24-uurs",
+		// 2 minutes
+		"option_2_minutes": "2 minuten",
+		// 30 seconds
+		"option_30_seconds": "30 seconden",
+		// 3 hours
+		"option_3_hours": "3 uur",
+		// 5 minutes
+		"option_5_minutes": "5 minuten",
+		// 5 seconds
+		"option_5_seconds": "5 seconden",
+		// 6 hours
+		"option_6_hours": "6 uur",
+		// Above the strip
+		"option_above_the_strip": "Boven de strook",
+		// Always
+		"option_always": "Altijd",
+		// As it starts
+		"option_as_it_starts": "Bij de start",
 		// Automatic
 		"option_automatic": "Automatisch",
+		// Both
+		"option_both": "Beide",
+		// Bottom
+		"option_bottom": "Onder",
+		// Bottom center
+		"option_bottom_center": "Middenonder",
+		// Bottom left
+		"option_bottom_left": "Linksonder",
+		// Bottom right
+		"option_bottom_right": "Rechtsonder",
+		// Camera's own size
+		"option_camera_s_own_size": "Eigen formaat van de camera",
 		// Center
 		"option_center": "Midden",
+		// Coming up
+		"option_coming_up": "Binnenkort",
+		// Coming week
+		"option_coming_week": "Komende week",
 		// Day
 		"option_day": "Dag",
 		// Default
 		"option_default": "Standaard",
+		// Dim
+		"option_dim": "Gedimd",
+		// Every day
+		"option_every_day": "Elke dag",
 		// Fade
 		"option_fade": "Vervaging",
+		// Fill the screen
+		"option_fill_the_screen": "Scherm vullen",
+		// Full
+		"option_full": "Volledig",
+		// Full at once
+		"option_full_at_once": "Meteen volledig",
+		// Full page
+		"option_full_page": "Hele pagina",
 		// Gold
 		"option_gold": "Goud",
+		// Headphones
+		"option_headphones": "Koptelefoon",
+		// Headphones / AUX
+		"option_headphones_aux": "Koptelefoon / AUX",
 		// Hide
 		"option_hide": "Verbergen",
+		// In the morning
+		"option_in_the_morning": "In de ochtend",
+		// Internal speaker
+		"option_internal_speaker": "Interne luidspreker",
+		// Its words
+		"option_its_words": "Alleen de songtekst",
+		// Light
+		"option_light": "Zwak",
+		// Medium
+		"option_medium": "Gemiddeld",
+		// Mint
+		"option_mint": "Mint",
 		// Month
 		"option_month": "Maand",
+		// Never
+		"option_never": "Nooit",
+		// Night clock
+		"option_night_clock": "Nachtklok",
 		// Night light
 		"option_night_light": "Nachtlamp",
+		// None
+		"option_none": "Geen",
+		// Normal
+		"option_normal": "Normaal",
+		// Nothing
+		"option_nothing": "Niets",
+		// Off
+		"option_off": "Uit",
+		// On
+		"option_on": "Aan",
+		// Once
+		"option_once": "Eenmalig",
+		// Over 1 minute
+		"option_over_1_minute": "Meer dan 1 minuut",
+		// Over 2 minutes
+		"option_over_2_minutes": "Meer dan 2 minuten",
+		// Over 30 seconds
+		"option_over_30_seconds": "Meer dan 30 seconden",
+		// Over 5 minutes
+		"option_over_5_minutes": "Meer dan 5 minuten",
 		// Red
 		"option_red": "Rood",
+		// Red LED
+		"option_red_led": "Rode led",
+		// Rose
+		"option_rose": "Rosé",
+		// Screen off
+		"option_screen_off": "Scherm uit",
 		// Show
 		"option_show": "Weergeven",
 		// Silent
 		"option_silent": "Stil",
 		// Simple
 		"option_simple": "Eenvoudig",
+		// Sky
+		"option_sky": "Hemelblauw",
 		// Solid
 		"option_solid": "Effen",
 		// Speaker
 		"option_speaker": "Luidspreker",
+		// Speaker and headphones
+		"option_speaker_and_headphones": "Luidspreker en koptelefoon",
+		// Strip
+		"option_strip": "Strook",
+		// Strip after 10 s
+		"option_strip_after_10_s": "Strook na 10 s",
+		// Strip after 30 s
+		"option_strip_after_30_s": "Strook na 30 s",
+		// Strip at once
+		"option_strip_at_once": "Strook meteen",
+		// Strong
+		"option_strong": "Sterk",
+		// The time and its words
+		"option_the_time_and_its_words": "De tijd en de songtekst",
+		// Today only
+		"option_today_only": "Alleen vandaag",
+		// Today or 12 hours
+		"option_today_or_12_hours": "Vandaag of 12 uur",
+		// Top left
+		"option_top_left": "Linksboven",
+		// Top right
+		"option_top_right": "Rechtsboven",
+		// Until tapped
+		"option_until_tapped": "Tot je tikt",
+		// Week
+		"option_week": "Week",
+		// Weekdays
+		"option_weekdays": "Werkdagen",
+		// Weekends
+		"option_weekends": "Weekend",
+		// White
+		"option_white": "Wit",
+		// Whole picture
+		"option_whole_picture": "Heel beeld",
+		// Out of area targets in Home Assistant
+		"out_of_area_targets_in_home_assistant": "Doelen buiten het gebied in Home Assistant",
+		// Its own page, or Hang up over the page
+		"page_or_hang_up_button": "Eigen pagina, of Ophangen over de pagina",
+		// Pair a new device
+		"pair_a_new_device": "Een nieuw apparaat koppelen",
+		// Photos from Home Assistant
+		"photos_from_home_assistant": "Foto's van Home Assistant",
+		// The same PIN again
+		"pin_again": "Dezelfde pincode nog eens",
+		// Enter the PIN
+		"pin_enter": "Voer de pincode in",
+		// A new PIN, 4 to 8 digits
+		"pin_new": "Een nieuwe pincode, 4 tot 8 cijfers",
+		// They did not match
+		"pin_no_match": "Ze komen niet overeen",
+		// Could not save it
+		"pin_not_saved": "Kon het niet opslaan",
+		// At least 4 digits
+		"pin_too_short": "Minstens 4 cijfers",
+		// Try again in %s
+		"pin_try_again_in": "Probeer het over %s opnieuw",
+		// %d min
+		"pin_wait_minutes": "%d min",
+		// %d s
+		"pin_wait_seconds": "%d s",
+		// Wrong PIN
+		"pin_wrong": "Verkeerde pincode",
 		// Play
 		"play": "Afspelen",
+		// Play music in sync with other rooms
+		"play_music_in_sync_with_other_rooms": "Muziek synchroon met andere kamers afspelen",
+		// Play to it from an iPhone, iPad or Mac
+		"play_to_it_from_an_iphone_ipad_or_mac": "Vanaf een iPhone, iPad of Mac afspelen",
+		// Play to it from music apps and servers
+		"play_to_it_from_music_apps_and_servers": "Vanuit muziekapps en -servers erop afspelen",
+		// Play to it from the Spotify app (Premium)
+		"play_to_it_from_the_spotify_app_premium": "Vanuit de Spotify-app afspelen (Premium)",
+		// Pop up
+		"pop_up": "Pop-up",
+		// Pop-ups
+		"pop_ups": "Pop-ups",
+		// The camera notices somebody near; nothing is kept
+		"presence_description": "De camera merkt dat er iemand in de buurt is; er wordt niets bewaard",
 		// Presence
 		"presence_heading": "Aanwezigheid",
+		// Presence detection
+		"presence_label": "Aanwezigheidsdetectie",
+		// Lights again when somebody comes near
+		"presence_return": "Licht weer op als er iemand in de buurt komt",
+		// press again to snooze %d min
+		"press_again_to_snooze_d_min": "druk nogmaals om %d min te sluimeren",
+		// Put it in pairing mode first
+		"put_it_in_pairing_mode_first": "Zet het eerst in de koppelmodus",
+		// Hold the code up to the camera, about a hand's width away.
+		"qr_scan_hint": "Houd de code ongeveer een handbreedte voor de camera.",
+		// The privacy mute holds the camera off.
+		"qr_scan_muted": "De privacyschakelaar houdt de camera uit.",
+		// Read: %s
+		"qr_scan_read": "Gelezen: %s",
+		// Scan a QR code
+		"qr_scan_title": "QR-code scannen",
 		// Quiet
 		"quiet": "Rustig",
 		// Quiet hours
 		"quiet_hours": "Stille uren",
+		// Radar source
+		"radar_source": "Radarbron",
+		// Rain, snow and storms move on the forecast
+		"rain_snow_and_storms_move_on_the_forecast": "Regen, sneeuw en onweer trekken over de voorspelling",
+		// Reading the calendar…
+		"reading_the_calendar": "Agenda lezen…",
+		// Record takes of a word
+		"record_takes_of_a_word": "Opnamen van een woord maken",
+		// Remote API
+		"remote_api": "Remote-API",
 		// Repeat
 		"repeat": "Herhalen",
+		// Replies and announcements
+		"replies_and_announcements": "Antwoorden en aankondigingen",
 		// Restart
 		"restart": "Opnieuw opstarten",
+		// The room's sound in a browser with the link
+		"room_sound_in_a_browser_with_the_link": "Kamergeluid in de browser, via de link",
+		// Said as it rings
+		"said_as_it_rings": "Wordt gezegd bij het afgaan",
+		// Same as the default (%s)
+		"same_as_default": "Zelfde als standaard (%s)",
 		// Screen language
 		"screen_language": "Schermtaal",
+		// Screen off when nobody is near
+		"screen_off_when_nobody_is_near": "Scherm uit als er niemand in de buurt is",
+		// Screen on network
+		"screen_on_network": "Scherm op het netwerk",
+		// Screen on the network
+		"screen_on_the_network": "Scherm op het netwerk",
+		// Screensaver
+		"screensaver": "Schermbeveiliging",
+		// %d seconds
+		"seconds_option": "%d seconden",
+		// Sent from Home Assistant
+		"sent_from_home_assistant": "Verzonden vanuit Home Assistant",
 		// Settings
 		"settings": "Instellingen",
+		// Settings lock
+		"settings_lock": "Instellingenslot",
+		// Shown as you change it, at night
+		"shown_as_you_change_it_at_night": "Te zien terwijl je het wijzigt, 's nachts",
+		// Shown with the clock
+		"shown_with_the_clock": "Getoond bij de klok",
+		// Silenced
+		"silenced": "Gedempt",
+		// Silenced · press again to snooze %d min
+		"silenced_press_again_to_snooze_d_min": "Gedempt · druk nogmaals om %d min te sluimeren",
+		// Skin
+		"skin": "Skin",
+		// Kept for when the skin is off
+		"skin_keeps": "Bewaard voor als de skin uit staat",
+		// Sleep
+		"sleep": "Slaapstand",
+		// Sleep timer
+		"sleep_timer": "Slaaptimer",
 		// Slideshow
 		"slideshow": "Diavoorstelling",
+		// Snooze %d min
+		"snooze_d_min": "Sluimer %d min",
+		// Sounds
+		"sounds": "Geluiden",
+		// Speaker gain
+		"speaker_gain": "Luidsprekerversterking",
+		// Speakers
+		"speakers": "Luidsprekers",
 		// Threshold
 		"spot_threshold": "Drempelwaarde",
+		// SSH keys
+		"ssh_keys": "SSH-sleutels",
 		// Stop
 		"stop": "Stoppen",
+		// On until the %s alarm
+		"sunrise_alarm": "Aan tot de wekker van %s",
+		// Before alarms that don't choose their own
+		"sunrise_default_description": "Voor wekkers die er zelf geen kiezen",
+		// On while the alarm rings
+		"sunrise_ringing": "Aan terwijl de wekker afgaat",
+		// The light is coming up now
+		"sunrise_rising": "Het licht komt nu op",
+		// Skip
+		"sunrise_skip_action": "Overslaan",
+		// Skipped: the alarm at %s
+		"sunrise_skip_done": "Overgeslagen: de wekker van %s",
+		// Not skipped: the alarm at %s
+		"sunrise_skip_refused": "Niet overgeslagen: de wekker van %s",
+		// On until the %s snooze
+		"sunrise_snooze": "Aan tot het sluimeren om %s",
+		// On until %s
+		"sunrise_until": "Aan tot %s",
+		// swipe to snooze %d min
+		"swipe_to_snooze_d_min": "veeg om %d min te sluimeren",
+		// Talk on the camera page
+		"talk_on_the_camera_page": "Spreken op de camerapagina",
+		// Talk through cameras
+		"talk_through_cameras": "Spreken via camera's",
+		// Tap lifts the night light
+		"tap_lifts_the_night_light": "Tik maakt het nachtlampje feller",
+		// Tap on the clock
+		"tap_on_the_clock": "Tikken op de klok",
+		// Tap to go back
+		"tap_to_go_back": "Tik om terug te gaan",
+		// Tap to stop
+		"tap_to_stop": "Tik om te stoppen",
+		// How large every word on the screen is
+		"text_size_description": "Hoe groot elk woord op het scherm is",
+		// Text size
+		"text_size_label": "Tekstgrootte",
+		// The mute button does this too
+		"the_mute_button_does_this_too": "De dempknop doet dit ook",
+		// The NWS's alerts for home, in the U.S.
+		"the_nws_s_alerts_for_home_in_the_u_s": "De NWS-waarschuwingen voor thuis, in de VS",
+		// The words in time, looked up at LRCLIB
+		"the_words_in_time_looked_up_at_lrclib": "De songtekst op de maat, opgezocht bij LRCLIB",
+		// Make the theme your own
+		"theme_personalize": "Pas het thema aan",
+		// This is %s
+		"this_version": "Dit is %s",
+		// Time per photo
+		"time_per_photo": "Tijd per foto",
 		// Time zone
 		"time_zone": "Tijdzone",
 		// Timer
 		"timer": "Timer",
+		// Timer and alarm
+		"timer_and_alarm": "Timer en wekker",
+		// Timer done
+		"timer_done": "Timer klaar",
+		// %s done
+		"timer_name_done": "%s klaar",
+		// %s timer done
+		"timer_named_done": "%s-timer klaar",
 		//  timer
 		"timer_suffix": " timer",
+		// Timers
+		"timers": "Timers",
 		// Today
 		"today": "Vandaag",
+		// Tomorrow
+		"tomorrow": "Morgen",
+		// Treble
+		"treble": "Hoge tonen",
+		// Turn screen
+		"turn_screen": "Spraakscherm",
+		// 1 hour
+		"ui_1_hour": "1 uur",
+		// 1 hour %d minutes
+		"ui_1_hour_d_minutes": "1 uur %d minuten",
+		// A face on it, for whoever has to look at it
+		"ui_a_face_on_it_for_whoever_has_to_look_at_it": "Een gezicht erop, voor wie ernaar moet kijken",
+		// A landscape for the weather, in place of photos
+		"ui_a_landscape_for_the_weather_in_place_of_photos": "Een landschap voor het weer, in plaats van foto's",
+		// A PIN before most settings change
+		"ui_a_pin_before_most_settings_change": "Een pincode voor je de meeste instellingen wijzigt",
+		// + Add alarm
+		"ui_add_alarm": "+ Wekker toevoegen",
+		// Add one here, or from Home Assistant
+		"ui_add_one_here_or_from_home_assistant": "Hier een toevoegen, of vanuit Home Assistant",
+		// Add the device in Home Assistant to encrypt it
+		"ui_add_the_device_in_home_assistant_to_encrypt_it": "Voeg het apparaat toe aan Home Assistant om het te versleutelen",
+		// Could not be applied: %s
+		"ui_address_could_not_apply": "Kon niet worden toegepast: %s",
+		// Type the address, or choose Automatic.
+		"ui_address_enter_or_automatic": "Typ het adres, of kies Automatisch.",
+		// Address
+		"ui_address_field_address": "Adres",
 		// Gateway
 		"ui_address_field_gateway": "Gateway",
+		// the gateway
+		"ui_address_gateway_placeholder": "de gateway",
+		// Automatic (DHCP)
+		"ui_address_mode_automatic": "Automatisch (DHCP)",
+		// Fixed
+		"ui_address_mode_fixed": "Vast",
+		// No prefix means /24. Up to three DNS servers, with commas.
+		"ui_address_no_prefix_help": "Geen prefix betekent /24. Maximaal drie DNS-servers, gescheiden door komma's.",
+		// Address not found: use its IP
+		"ui_address_not_found_use_its_ip": "Adres niet gevonden: gebruik het IP-adres",
+		// Not kept: %s
+		"ui_address_not_kept": "Niet overgenomen: %s",
+		// Nothing changed: that is the setting in use.
+		"ui_address_nothing_changed": "Niets gewijzigd: dat is de huidige instelling.",
+		// Now at %s. Home Assistant follows within about two minutes.
+		"ui_address_now_at": "Nu op %s. Home Assistant volgt binnen ongeveer twee minuten.",
+		// The router hands out the address.
+		"ui_address_router_assigns": "De router deelt het adres uit.",
+		// Saved. The address is %s.
+		"ui_address_saved_at": "Opgeslagen. Het adres is %s.",
+		// Trying %s…
+		"ui_address_trying": "%s wordt geprobeerd…",
+		// Adjusts the speaker tuning to the room
+		"ui_adjusts_the_speaker_tuning_to_the_room": "Stemt de luidspreker af op de kamer",
+		// Beeps
+		"ui_alarm_sound_beeps": "Piepjes",
+		// Bells
+		"ui_alarm_sound_bells": "Klokken",
+		// Chimes
+		"ui_alarm_sound_chimes": "Klokkenspel",
+		// Gentle
+		"ui_alarm_sound_gentle": "Zacht",
+		// Your own
+		"ui_alarm_sound_own": "Je eigen",
+		// Pulse
+		"ui_alarm_sound_pulse": "Puls",
 		// Alarms
 		"ui_alarms": "Wekkers",
+		// Alarms and timers always sound
+		"ui_alarms_and_timers_always_sound": "Wekkers en timers gaan altijd af",
+		// Alarms and timers, not the music
+		"ui_alarms_and_timers_not_the_music": "Wekkers en timers, niet de muziek",
+		// Alarms and timers will make no sound
+		"ui_alarms_and_timers_will_make_no_sound": "Wekkers en timers maken geen geluid",
+		// Alarms on this device and how they ring
+		"ui_alarms_on_this_device_and_how_they_ring": "Wekkers op dit apparaat en hoe ze afgaan",
+		// Alarms & Timers
+		"ui_alarms_timers": "Wekkers en timers",
+		// All
+		"ui_all": "Alle",
+		// Alarms on
+		"ui_all_alarms": "Wekkers aan",
+		// All off: none ring until this is back on
+		"ui_all_alarms_off_sub": "Alles uit: er gaat niets af tot dit weer aan staat",
+		// Every alarm at once, for a trip
+		"ui_all_alarms_on_sub": "Alle wekkers tegelijk, bijvoorbeeld voor een reis",
+		// All calendars shown
+		"ui_all_calendars_shown": "Alle agenda's getoond",
+		// All of it, with blurred sides; off fills the screen
+		"ui_all_of_it_with_blurred_sides_off_fills_the_screen": "Alles, met vervaagde zijkanten; uit vult het scherm",
+		// All photos
+		"ui_all_photos": "Alle foto's",
 		// Allow
 		"ui_allow": "Toestaan",
+		// An event coming up, over the screen
+		"ui_an_event_coming_up_over_the_screen": "Een aankomende afspraak over het scherm",
 		// Answer
 		"ui_answer": "Opnemen",
+		// ‹  Back
+		"ui_back": "‹  Terug",
+		// Bluetooth audio · Connected
+		"ui_bluetooth_audio_connected": "Bluetooth-audio · Verbonden",
+		// Brightness, night, clock and photos
+		"ui_brightness_night_clock_and_photos": "Helderheid, nacht, klok en foto's",
+		// Brightness, night, theme, home screen and weather
+		"ui_brightness_night_theme_home_screen_and_weather": "Helderheid, nacht, thema, beginscherm en weer",
 		// Calendar
 		"ui_calendar": "Agenda",
+		// Calendars
+		"ui_calendars": "Agenda's",
+		// Chime
+		"ui_call_ring_chime": "Bel",
+		// Old phone
+		"ui_call_ring_old_phone": "Oude telefoon",
+		// Call volume
+		"ui_call_volume": "Oproepvolume",
+		// Calling…
+		"ui_calling": "Bellen…",
+		// Calling
+		"ui_calling_variant": "Bellen",
+		// Camera picture
+		"ui_camera_picture": "Camerabeeld",
+		// Camera strips
+		"ui_camera_strips": "Camerastroken",
+		// Camera strips shade
+		"ui_camera_strips_shade": "Donkerte van de camerastroken",
+		// Can't play it
+		"ui_can_t_play_it": "Kan het niet afspelen",
+		// Can't reach Home Assistant
+		"ui_can_t_reach_home_assistant": "Kan Home Assistant niet bereiken",
+		// Off
+		"ui_certificate_checks_off": "Uit",
+		// On
+		"ui_certificate_checks_on": "Aan",
 		// Change
 		"ui_change": "Wijzigen",
+		// Check for updates
+		"ui_check_for_updates": "Controleren op updates",
+		// Check now
+		"ui_check_now": "Nu controleren",
+		// Checking…
+		"ui_checking": "Controleren…",
+		// Chips while music plays
+		"ui_chips_while_music_plays": "Chips tijdens muziek",
+		// Where the glance chips go while the music strip is up
+		"ui_chips_while_music_plays_sub": "Waar de chips staan als de muziekstrook in beeld is",
+		// Chosen here
+		"ui_chosen_here": "Hier gekozen",
+		// Clock position
+		"ui_clock_position": "Positie van de klok",
+		// For the Classic, Flip, LED, Sun and Glow styles
+		"ui_clock_position_styles": "Voor de stijlen Classic, Flip, LED, Sun en Glow",
 		// Closed
 		"ui_closed": "Gesloten",
 		// Confirm
 		"ui_confirm": "Bevestigen",
+		// Connected to %s
+		"ui_connected_to_s": "Verbonden met %s",
+		// Connections
+		"ui_connections": "Verbindingen",
+		// Custom
+		"ui_custom": "Aangepast",
+		// Custom colors
+		"ui_custom_colors": "Eigen kleuren",
+		// %d:%02d left
+		"ui_d_02d_left": "%d:%02d over",
+		// %d calendars
+		"ui_d_calendars": "%d agenda's",
+		// %d hours
+		"ui_d_hours": "%d uur",
+		// %d min
+		"ui_d_min": "%d min",
+		// %d min left
+		"ui_d_min_left": "%d min over",
+		// %d minutes
+		"ui_d_minutes": "%d minuten",
+		// Dark theme
+		"ui_dark_theme": "Donker thema",
+		// Date and place
+		"ui_date_and_place": "Datum en plaats",
+		// Date color
+		"ui_date_color": "Datumkleur",
 		// Days
 		"ui_days": "Dagen",
 		// Decline
 		"ui_decline": "Weigeren",
 		// Delete
 		"ui_delete": "Verwijderen",
+		// Delete alarm
+		"ui_delete_alarm": "Wekker verwijderen",
 		// Disconnect
 		"ui_disconnect": "Ontkoppelen",
 		// Display
 		"ui_display": "Scherm",
+		// Drop In
+		"ui_drop_in": "Drop In",
+		// Earbuds or a speaker
+		"ui_earbuds_or_a_speaker": "Oordopjes of een luidspreker",
 		// Edit
 		"ui_edit": "Bewerken",
+		// Edit alarm
+		"ui_edit_alarm": "Wekker bewerken",
+		// Encrypted
+		"ui_encrypted": "Versleuteld",
+		// Event pop-ups
+		"ui_event_pop_ups": "Afspraak-pop-ups",
+		// Every folder inside the one chosen
+		"ui_every_folder_inside_the_one_chosen": "Elke map in de gekozen map",
+		// Favorites only
+		"ui_favorites_only": "Alleen favorieten",
+		// Flat
+		"ui_flat": "Neutraal",
+		// For all the screen's words
+		"ui_for_all_the_screen_s_words": "Voor alle woorden op het scherm",
+		// Forget
+		"ui_forget": "Vergeten",
+		// From Home Assistant
+		"ui_from_home_assistant": "Vanuit Home Assistant",
+		// From Home Assistant · %s
+		"ui_from_home_assistant_s": "Vanuit Home Assistant · %s",
+		// From quiet up to the ring volume
+		"ui_from_quiet_up_to_the_ring_volume": "Van zacht tot het belvolume",
+		// General
+		"ui_general": "Algemeen",
+		// Gets louder
+		"ui_gets_louder": "Wordt luider",
+		// Glance chip size
+		"ui_glance_chip_size": "Chipgrootte",
+		// Group it with other AirPlay 2 speakers
+		"ui_group_it_with_other_airplay_2_speakers": "Groepeer het met andere AirPlay 2-luidsprekers",
+		// Home Assistant isn't set up here
+		"ui_home_assistant_isn_t_set_up_here": "Home Assistant is hier niet ingesteld",
+		// Home Assistant refused the token
+		"ui_home_assistant_refused_the_token": "Home Assistant weigerde het token",
+		// Home Assistant: Settings, Voice assistants
+		"ui_home_assistant_settings_voice_assistants": "Home Assistant: Instellingen, Spraakassistenten",
 		// Hour
 		"ui_hour": "Uur",
+		// How answers sound
+		"ui_how_answers_sound": "Hoe antwoorden klinken",
+		// How dark those strips are
+		"ui_how_dark_those_strips_are": "Hoe donker die stroken zijn",
+		// In Home Assistant
+		"ui_in_home_assistant": "In Home Assistant",
+		// Include subfolders
+		"ui_include_subfolders": "Submappen meenemen",
 		// Incoming call
 		"ui_incoming_call": "Inkomende oproep",
 		// Install
 		"ui_install": "Installeren",
+		// Light only
+		"ui_light_only": "Alleen licht",
+		// Light theme
+		"ui_light_theme": "Licht thema",
 		// Listening
 		"ui_listening": "Luistert",
+		// Listening…
+		"ui_listening_turn": "Luistert…",
+		// Loading…
+		"ui_loading": "Laden…",
+		// Local
+		"ui_local": "Lokaal",
+		// Make a key on the setup page first
+		"ui_make_a_key_on_the_setup_page_first": "Maak eerst een sleutel aan op de installatiepagina",
+		// Match all
+		"ui_match_all_languages": "Alle talen herkennen",
 		// Minute
 		"ui_minute": "Minuut",
 		// More
 		"ui_more": "Meer",
 		// Muted
 		"ui_muted": "Gedempt",
+		// Name, weather, updates and restart
+		"ui_name_weather_updates_and_restart": "Naam, weer, updates en opnieuw opstarten",
+		// Needs a key: the setup page, Connections
+		"ui_needs_a_key_the_setup_page_connections": "Vereist een sleutel: installatiepagina, Verbindingen",
+		// Needs a setup key: the setup page, Connections
+		"ui_needs_a_setup_key_the_setup_page_connections": "Vereist een installatiesleutel: installatiepagina, Verbindingen",
+		// Needs Speaker EQ, which is off
+		"ui_needs_speaker_eq_which_is_off": "Vereist luidspreker-EQ, die uit staat",
+		// Never
+		"ui_never": "Nooit",
+		// New alarm
+		"ui_new_alarm": "Nieuwe wekker",
+		// Night ends
+		"ui_night_ends": "Nacht eindigt",
+		// Night ends at
+		"ui_night_ends_at": "Nacht eindigt om",
+		// Night starts
+		"ui_night_starts": "Nacht begint",
+		// Night starts at
+		"ui_night_starts_at": "Nacht begint om",
+		// No address yet
+		"ui_no_address_yet": "Nog geen adres",
+		// No alarms yet
+		"ui_no_alarms_yet": "Nog geen wekkers",
+		// No contacts yet: Home Assistant's phone_contacts action sets them
+		"ui_no_contacts_yet": "Nog geen contacten: de phone_contacts-actie van Home Assistant stelt ze in",
+		// No sound at all
+		"ui_no_sound_at_all": "Helemaal geen geluid",
+		// No sound: the light, then the night ends
+		"ui_no_sound_the_light_then_the_night_ends": "Geen geluid: het licht, dan eindigt de nacht",
+		// No stations
+		"ui_no_stations": "Geen zenders",
+		// None
+		"ui_none": "Geen",
+		// None chosen
+		"ui_none_chosen": "Geen map gekozen",
+		// None in Home Assistant yet
+		"ui_none_in_home_assistant_yet": "Nog geen enkele in Home Assistant",
+		// None yet
+		"ui_none_yet": "Nog geen",
+		// Not encrypted
+		"ui_not_encrypted": "Niet versleuteld",
+		// Not for Dashboard, Agenda or World
+		"ui_not_for_dashboard_agenda_or_world": "Niet voor Dashboard, Agenda of World",
+		// Not managed here
+		"ui_not_managed_here": "Niet hier beheerd",
+		// Not set
+		"ui_not_set": "Niet ingesteld",
+		// Not the music's
+		"ui_not_the_music_s": "Geldt niet voor muziek",
+		// Nothing on this day
+		"ui_nothing_on_this_day": "Niets op deze dag",
+		// Off
+		"ui_off": "Uit",
+		// Off if a phone pairs, then drops
+		"ui_off_if_a_phone_pairs_then_drops": "Uit als een telefoon koppelt en daarna wegvalt",
+		// On
+		"ui_on": "Aan",
+		// On a call
+		"ui_on_a_call": "In gesprek",
+		// On, but no key yet, so nothing listens
+		"ui_on_but_no_key_yet_so_nothing_listens": "Aan, maar nog geen sleutel, dus er luistert niets",
+		// On the screensaver, under each photo
+		"ui_on_the_screensaver_under_each_photo": "Op de schermbeveiliging, onder elke foto",
+		// On this device
+		"ui_on_this_device": "Op dit apparaat",
+		// On: turn off to remove the PIN
+		"ui_on_turn_off_to_remove_the_pin": "Aan: zet uit om de pincode te verwijderen",
+		// Open the dashboard or the deck, or nothing
+		"ui_open_the_dashboard_or_the_deck_or_nothing": "Dashboard of deck openen, of niets",
 		// Pair
 		"ui_pair": "Koppelen",
+		// Password for %s
+		"ui_password_for_s": "Wachtwoord voor %s",
 		// PAUSED
 		"ui_paused": "GEPAUZEERD",
+		// Photo folder
+		"ui_photo_folder": "Fotomap",
+		// Photo pairs
+		"ui_photo_pairs": "Fotoparen",
+		// %d folder
+		"ui_photo_picker_folder_one": "%d map",
+		// %d folders
+		"ui_photo_picker_folders": "%d mappen",
+		// Couldn't open this folder
+		"ui_photo_picker_open_failed": "Kon deze map niet openen",
+		// Opening…
+		"ui_photo_picker_opening": "Openen…",
+		// %d photo
+		"ui_photo_picker_photo_one": "%d foto",
+		// %d photos
+		"ui_photo_picker_photos": "%d foto's",
+		// Use this folder
+		"ui_photo_picker_use_folder": "Deze map gebruiken",
+		// PLAYING
+		"ui_playing": "SPEELT",
+		// Plays once when you choose it
+		"ui_plays_once_when_you_choose_it": "Speelt één keer als je het kiest",
+		// Pop-up calendars
+		"ui_pop_up_calendars": "Agenda-pop-ups",
+		// Pop-up chime
+		"ui_pop_up_chime": "Pop-up-signaal",
+		// Popular
+		"ui_popular": "Populair",
+		// Port 22, keys only
+		"ui_port_22_keys_only": "Poort 22, alleen sleutels",
 		// Privacy
 		"ui_privacy": "Privacy",
+		// Privacy & Security
+		"ui_privacy_security": "Privacy en beveiliging",
+		// Radar
+		"ui_radar": "Radar",
+		// latest
+		"ui_radar_latest": "nieuwste",
+		// RADAR
+		"ui_radar_variant": "RADAR",
+		// Radio needs a Home Assistant token
+		"ui_radio_needs_a_home_assistant_token": "Radio vereist een Home Assistant-token",
+		// Reach this device from away: off
+		"ui_reach_this_device_from_away_off": "Dit apparaat op afstand bereiken: uit",
+		// Recording
+		"ui_recording": "Opname loopt",
+		// Recording takes
+		"ui_recording_takes": "Opnamen maken",
+		// Remote access and how this device is reached
+		"ui_remote_access_and_how_this_device_is_reached": "Toegang op afstand en hoe dit apparaat bereikbaar is",
+		// Remote access and security
+		"ui_remote_access_and_security": "Toegang op afstand en beveiliging",
 		// Rescan
 		"ui_rescan": "Opnieuw scannen",
+		// Ring volume
+		"ui_ring_volume": "Belvolume",
+		// Rings from this device itself
+		"ui_rings_from_this_device_itself": "Gaat af via dit apparaat zelf",
 		// Running
 		"ui_running": "Actief",
+		// Same as volume
+		"ui_same_as_volume": "Zelfde als volume",
+		// Same word in both slots: only one answers
+		"ui_same_wake_word_twice": "Hetzelfde woord in beide vakken: maar één antwoordt",
 		// Save
 		"ui_save": "Opslaan",
+		// Scanning
+		"ui_scanning": "Scannen",
+		// Scripts signed with this device's key
+		"ui_scripts_signed_with_this_device_s_key": "Scripts ondertekend met de sleutel van dit apparaat",
+		// Secure Connections
+		"ui_secure_connections": "Beveiligde verbindingen",
+		// Server default
+		"ui_server_default": "Serverstandaard",
+		// Server name for %s (empty: not checked)
+		"ui_server_for_s": "Servernaam voor %s (leeg: niet gecontroleerd)",
+		// Set
+		"ui_set": "Instellen",
+		// Set here
+		"ui_set_here": "Hier ingesteld",
+		// Set a house word on the setup page to call the other devices
+		"ui_set_house_word_to_call_other_devices": "Stel een huiswoord in op de installatiepagina om de andere apparaten te bellen",
+		// Set there
+		"ui_set_there": "Daar instellen",
+		// this device's address, port %d
+		"ui_setup_address_fallback": "het adres van dit apparaat, poort %d",
+		// Allow it only if that browser is yours.
+		"ui_setup_ask_hint": "Sta het alleen toe als die browser van jou is.",
+		// A browser is asking
+		"ui_setup_ask_spot_1": "Een browser vraagt",
+		// to be let in
+		"ui_setup_ask_spot_2": "om toegang",
+		// A browser is asking to be let in
+		"ui_setup_ask_title": "Een browser vraagt om toegang",
+		// A browser is asking: press the action button
+		"ui_setup_browser_waiting": "Een browser vraagt: druk op de actieknop",
+		// setup: a browser is asking to be let in
+		"ui_setup_footer_asking": "installatie: een browser vraagt om toegang",
+		// Open %s
+		"ui_setup_open_url": "Open %s",
+		// Setup page
+		"ui_setup_page": "Installatiepagina",
 		// Show
 		"ui_show": "Weergeven",
+		// Show whole photo
+		"ui_show_whole_photo": "Hele foto tonen",
+		// Shown on the calendar page, from Home Assistant
+		"ui_shown_on_the_calendar_page_from_home_assistant": "Getoond op de agendapagina, vanuit Home Assistant",
+		// Shuffle photos
+		"ui_shuffle_photos": "Willekeurige volgorde",
 		// Silent
 		"ui_silent": "Stil",
+		// Silent at night and in quiet hours
+		"ui_silent_at_night_and_in_quiet_hours": "Stil 's nachts en in stille uren",
+		// Small
+		"ui_small": "Klein",
+		// Snooze length
+		"ui_snooze_length": "Sluimerduur",
+		// Snoozed until %s
+		"ui_snoozed_until_s": "Sluimeren tot %s",
+		// Someone's at the door
+		"ui_someone_s_at_the_door": "Er is iemand aan de deur",
 		// Sound
 		"ui_sound": "Geluid",
+		// Sound & Voice
+		"ui_sound_voice": "Geluid en stem",
+		// Speaking voice
+		"ui_speaking_voice": "Spreekstem",
+		// Spoken by Home Assistant
+		"ui_spoken_by_home_assistant": "Uitgesproken door Home Assistant",
+		// Start
+		"ui_start": "Start",
+		// Start Assist, open the dashboard or the deck, or nothing
+		"ui_start_assist_open_the_dashboard_or_the_deck_or_nothing": "Assist starten, dashboard of deck openen, of niets",
+		// Starting…
+		"ui_starting": "Starten…",
+		// Starting
+		"ui_starting_variant": "Starten",
+		// Stations
+		"ui_stations": "Zenders",
+		// Steps from the volume
+		"ui_steps_from_the_volume": "Stappen vanaf het volume",
+		// Stopping…
+		"ui_stopping": "Stoppen…",
+		// Stops the music after a while
+		"ui_stops_the_music_after_a_while": "Stopt de muziek na een tijdje",
+		// Sun with a face
+		"ui_sun_with_a_face": "Zon met een gezicht",
+		// Sun up %s · down %s
+		"ui_sunrise_sunset_times": "Zon op %s · onder %s",
+		// swipe for more
+		"ui_swipe_for_more": "veeg voor meer",
+		// swipe for the forecast
+		"ui_swipe_for_the_forecast": "veeg voor de voorspelling",
+		// Swipe to decline
+		"ui_swipe_to_decline": "Veeg om te weigeren",
+		// like “%s”
+		"ui_takes_like_word": "zoals “%s”",
+		// of “%s”
+		"ui_takes_of_word": "van “%s”",
+		// Say it, wait a second, and say it again.
+		"ui_takes_repeat_instructions": "Zeg het, wacht een seconde en zeg het nog eens.",
+		// The setup page asked. Up to two minutes.
+		"ui_takes_setup_request_limit": "De installatiepagina vroeg erom. Maximaal twee minuten.",
+		// the setup page asked
+		"ui_takes_setup_requested": "gevraagd op de installatiepagina",
+		// %d:%02d of %d:%02d
+		"ui_takes_time_progress": "%d:%02d van %d:%02d",
+		// Talk on camera page
+		"ui_talk_on_camera_page": "Spreken op de camerapagina",
+		// Talk to cameras
+		"ui_talk_to_cameras": "Spreken via camera's",
+		// Tap a color for each part; the theme becomes Custom
+		"ui_tap_a_color_for_each_part_the_theme_becomes_custom": "Tik een kleur voor elk onderdeel; het thema wordt Custom",
+		// Tap again to delete it
+		"ui_tap_again_to_delete_it": "Tik nogmaals om te verwijderen",
+		// Tap again to forget it
+		"ui_tap_again_to_forget_it": "Tik nogmaals om het te vergeten",
+		// Tap again to restart now
+		"ui_tap_again_to_restart_now": "Tik nogmaals om nu opnieuw op te starten",
+		// Tap to answer
+		"ui_tap_to_answer": "Tik om op te nemen",
+		// Tap to hang up
+		"ui_tap_to_hang_up": "Tik om op te hangen",
+		// The date and AM/PM
+		"ui_the_date_and_am_pm": "De datum en AM/PM",
+		// The device's own tones only; alarms still sound
+		"ui_the_device_s_own_tones_only_alarms_still_sound": "Alleen de eigen tonen van het apparaat; wekkers gaan nog af",
+		// The iPhone's volume slider moves the device's volume
+		"ui_the_iphone_slider_is_the_device_s_volume": "De volumeschuif van de iPhone regelt het volume van het apparaat",
+		// The music stops on its own; nothing rings
+		"ui_the_music_stops_on_its_own_nothing_rings": "De muziek stopt vanzelf; er gaat niets af",
+		// The photos marked as favorites in Immich
+		"ui_the_photos_marked_as_favorites_in_immich": "De foto's die in Immich als favoriet zijn gemarkeerd",
+		// The size of the text under the clock
+		"ui_the_text_under_the_clock": "De grootte van de tekst onder de klok",
+		// The weather's corner over the clock
+		"ui_the_weather_s_corner_over_the_clock": "De hoek van het weer boven de klok",
 		// Theme
 		"ui_theme": "Thema",
 		// Thinking
 		"ui_thinking": "Denkt na",
+		// Thinking…
+		"ui_thinking_turn": "Denkt na…",
+		// This video can't be played
+		"ui_this_video_can_t_be_played": "Deze video kan niet worden afgespeeld",
+		// Banner
+		"ui_timer_style_banner": "Banner",
+		// Big
+		"ui_timer_style_big": "Groot",
+		// Corner
+		"ui_timer_style_corner": "Hoek",
 		// Line
 		"ui_timer_style_line": "Regel",
+		// Ring
+		"ui_timer_style_ring": "Ring",
+		// Tiny
+		"ui_tiny": "Mini",
+		// Turned off in Home Assistant
+		"ui_turned_off_in_home_assistant": "Uitgeschakeld in Home Assistant",
+		// Two tall photos side by side
+		"ui_two_tall_photos_side_by_side": "Twee staande foto's naast elkaar",
+		// Common
+		"ui_tz_common": "Veelgebruikt",
+		// Follow Home Assistant
+		"ui_tz_follow_ha": "Home Assistant volgen",
+		// Under its name and at its foot: solid, or fading into it
+		"ui_under_its_name_and_at_its_foot_solid_or_fading_into_it": "Onder de naam en aan de voet: effen, of erin vervagend",
 		// Unknown
 		"ui_unknown": "Onbekend",
+		// Username for %s
+		"ui_username_for_s": "Gebruikersnaam voor %s",
+		// Video
+		"ui_video": "Video",
+		// Show a video from
+		"ui_video_request_prompt": "Toon een video van",
+		// Voice volume
+		"ui_voice_volume": "Spraakvolume",
+		// Volume, voice, quiet hours and music
+		"ui_volume_voice_quiet_hours_and_music": "Volume, stem, stille uren en muziek",
+		// Waiting for Home Assistant
+		"ui_waiting_for_home_assistant": "Wachten op Home Assistant",
+		// Weather art
+		"ui_weather_art": "Weerbeeld",
+		// Weather position
+		"ui_weather_position": "Positie van het weer",
+		// Whole, filling the screen, or the camera's own size
+		"ui_whole_filling_the_screen_or_the_camera_s_own_size": "Heel beeld, scherm vullend, of het eigen formaat van de camera",
+		// Wi-Fi, Bluetooth and the Bluetooth proxy
+		"ui_wi_fi_bluetooth_and_the_bluetooth_proxy": "Wifi, Bluetooth en de Bluetooth-proxy",
+		// With headphones in
+		"ui_with_headphones_in": "Met koptelefoon",
 		// Update channel
 		"update_channel": "Updatekanaal",
+		// %s is ready · this is %s
+		"update_ready": "%s is klaar · dit is %s",
 		// Updates
 		"updates": "Updates",
 		// Voice
 		"voice": "Stem",
 		// Volume
 		"volume": "Volume",
+		// Wake sound
+		"wake_sound": "Wekgeluid",
+		// Wake with light
+		"wake_with_light": "Wekken met licht",
+		// Wake word
+		"wake_word": "Wekwoord",
+		// Wake word threshold
+		"wake_word_threshold": "Drempelwaarde wekwoord",
+		// Wake word threshold (playing)
+		"wake_word_threshold_playing": "Drempelwaarde wekwoord (afspelen)",
 		// Weather
 		"weather": "Weer",
+		// Weather alerts
+		"weather_alerts": "Weerwaarschuwingen",
+		// Weather animation
+		"weather_animation": "Weeranimatie",
+		// Forecast needs a Home Assistant token
+		"weather_forecast_needs_a_home_assistant_token": "Voorspelling vereist een Home Assistant-token",
+		// Home Assistant forecast
+		"weather_ha_forecast": "Home Assistant-voorspelling",
+		// High
+		"weather_high": "Max",
+		// Low
+		"weather_low": "Min",
+		// Home Assistant has not sent a reading
+		"weather_no_reading_from_home_assistant": "Home Assistant heeft nog geen meting gestuurd",
+		// No weather yet
+		"weather_no_weather_yet": "Nog geen weer",
+		// Weather %d
+		"weather_number": "Weer %d",
+		// Rain
+		"weather_rain_probability": "Regen",
+		// Week
+		"week": "Week",
+		// S M T W T F S
+		"weekday_initials": "Z M D W D V Z",
+		// Weekdays
+		"weekdays": "Werkdagen",
+		// Weekends
+		"weekends": "Weekend",
+		// Where the sound goes with headphones in
+		"where_the_sound_goes_with_headphones_in": "Waar het geluid heen gaat met een koptelefoon",
 		// Wi-Fi
 		"wi_fi": "Wifi",
+		// Connected
+		"wifi_connected": "Verbonden",
 	},
 	"ja": {
 		"drawer_recording":           "録音中",
