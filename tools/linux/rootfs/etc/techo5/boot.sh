@@ -150,6 +150,12 @@ mdev -s
 chmod 666 /dev/null /dev/zero /dev/full /dev/random /dev/urandom /dev/tty 2>/dev/null
 mkdir -p /dev/graphics
 [ -e /dev/fb0 ] && ln -sf /dev/fb0 /dev/graphics/fb0
+# A board's own device setup, in files of its own: /etc/techo5/boot.d/*.sh, sourced here in name
+# order (this tree has none). One that watches the display's start itself sets DISPLAY_WATCHED=1, and
+# the restart for a display left unstarted (below) is then its business.
+for f in /etc/techo5/boot.d/*.sh; do
+	[ -r "$f" ] && . "$f"
+done
 # The 2nd gen Show 5 on mainline (mtk-cpufreq, schedutil): let schedutil change the CPU frequency at
 # most every 10 ms rather than every 1 ms. The driver gives no transition latency, so the default is
 # 1 ms, and every change costs I2C to the sym827 (cpufreq's Vproc): the switch runs the cores on the
@@ -186,7 +192,7 @@ fi
 # restarted at once, at most twice in a row (the count in /data is cleared by any good boot) so a
 # unit that always boots this way still comes up. Amazon's and LineageOS's kernels are left alone.
 if grep -q 'amazon,cronos' /proc/device-tree/compatible 2>/dev/null &&
-	[ -d /sys/bus/platform/drivers/mediatek-drm ]; then
+	[ -d /sys/bus/platform/drivers/mediatek-drm ] && [ -z "${DISPLAY_WATCHED:-}" ]; then
 	stalls=/data/techo5-linux/display-stall-reboots
 	if grep -qw 'fps=6000' /proc/cmdline; then
 		n=$(cat "$stalls" 2>/dev/null || echo 0)

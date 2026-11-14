@@ -166,6 +166,10 @@ if [ -e "$IN/bin/techo5-ffmpeg" ]; then
 	grep -q '^techo5-video:' "$R/etc/passwd" || echo 'techo5-video:x:89:89:techo5-video:/var/empty:/sbin/nologin' >> "$R/etc/passwd"
 	grep -q '^inet:' "$R/etc/group" || echo 'inet:x:3003:' >> "$R/etc/group"
 	grep -Eq "^inet:.*[:,]techo5-video(,|\$)" "$R/etc/group" || sed -i -E "/^inet:/{s/:\$/:techo5-video/;t;s/\$/,techo5-video/}" "$R/etc/group"
+	# ...and in the video group, for a hardware decoder's devices where the board has one (a board's
+	# own boot setup, etc/techo5/boot.d, gives the group those and nothing else).
+	grep -q '^video:' "$R/etc/group" || echo 'video:x:27:' >> "$R/etc/group"
+	grep -Eq "^video:.*[:,]techo5-video(,|\$)" "$R/etc/group" || sed -i -E "/^video:/{s/:\$/:techo5-video/;t;s/\$/,techo5-video/}" "$R/etc/group"
 fi
 install -m 755 "$IN/tools/slotctl" "$R/usr/local/sbin/slotctl"
 # The boot layer's A/B record tool: slotctl and boot.sh use it, and it changes nothing without one.
