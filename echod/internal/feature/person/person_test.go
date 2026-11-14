@@ -15,6 +15,7 @@ func TestModelLoadsAndScores(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	d = cpuOnly(d)
 	gray := make([]uint8, side*side)
 	for i := range gray {
 		gray[i] = uint8(i % 251)
@@ -130,6 +131,7 @@ func BenchmarkScore(b *testing.B) {
 	if err != nil {
 		b.Fatal(err)
 	}
+	d = cpuOnly(d)
 	gray := make([]uint8, side*side)
 	for b.Loop() {
 		if _, err := d.score(gray); err != nil {
