@@ -6,13 +6,18 @@ import (
 	"strings"
 	"unicode"
 
+	"github.com/HuskerMinion/techo5/echod/internal/lib/fonts"
 	"golang.org/x/image/font"
 )
 
-// characterLines supplies break opportunities for an oversized Japanese token.
+// characterLines supplies break opportunities for an oversized Japanese or Khmer token.
 // Latin words keep their existing space/hyphen wrapping. Combining marks stay
-// with their base character, including decomposed Japanese dakuten.
+// with their base character, including decomposed Japanese dakuten; Khmer breaks
+// only between syllables (fonts.LineBreaks).
 func (r *paint) characterLines(face font.Face, word string, width int) []string {
+	if fonts.HasLineBreaks(word) {
+		return fonts.SplitToWidth(word, width, func(s string) int { return r.width(face, s) })
+	}
 	japanese := false
 	for _, c := range word {
 		if unicode.In(c, unicode.Han, unicode.Hiragana, unicode.Katakana) {
