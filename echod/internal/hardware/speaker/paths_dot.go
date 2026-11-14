@@ -238,8 +238,12 @@ const AmpSwitch = "Ext_Speaker_Amp_Switch"
 // whenever the speaker is not playing. The Dot has none.
 var MuteSwitch = onRadar(radarMute, "")
 
-// idleGate is none: the amplifier is AmpSwitch's to gate (idle.go).
-var idleGate *ampGate
+// idleGate is the Echo 2nd gen's amplifier mute (radarMute), held while nothing has wanted the speaker
+// for idleAfter (idle.go) and let go before the next sound. Its amplifier, left unmuted, makes an
+// audible hiss in a quiet room at any volume; with MFP Gpio Mute On by hand on a unit (2026-11-14,
+// TECHO5 Dot #44) the room was quiet. Ext_Speaker_Amp_Switch is left on: the mute alone ends the hiss.
+// The Dot has no hiss reported and keeps its amplifier as AmpSwitch leaves it.
+var idleGate = onRadar(&ampGate{mute: radarMute, muted: "On", unmuted: "Off"}, nil)
 
 // mayHaveTAS5805M is whether a board of this build can carry the TAS5805M amplifier (GainAvailable):
 // the Dot plays through its TLV320AIC32x4 and an external amplifier gated by AmpSwitch.

@@ -35,28 +35,51 @@ const wakeSettle = muteSettle
 // on and off, and the codec's mute in front of it, a switch at 1 when it plays. The values are kept
 // apart from the control's name because on checkers they are the reverse of what they say (active
 // low): "Off" is the amplifier on.
+//
+// control may be empty: on the Echo 2nd gen (radar) the gate is the amplifier's own mute alone (MFP Gpio
+// Mute), an enumerated control whose values are muted and unmuted ("On" mutes it). Where muted is
+// empty, mute is a switch at 1 when it plays.
 type ampGate struct {
 	control string
 	on, off string
 	mute    string
+	muted   string
+	unmuted string
+}
+
+// muteKctl is the gate's mute set to hold (true) or let go (false).
+func (g *ampGate) muteKctl(hold bool) kctl {
+	switch {
+	case g.muted == "" && hold:
+		return kctl{name: g.mute, level: 0}
+	case g.muted == "":
+		return kctl{name: g.mute, level: 1}
+	case hold:
+		return kctl{name: g.mute, value: g.muted}
+	default:
+		return kctl{name: g.mute, value: g.unmuted}
+	}
 }
 
 // sleep is the order that does not pop going down: the line-out muted first, so the amplifier is
 // switched off with nothing reaching it, then the amplifier.
 func (g *ampGate) sleep() []kctl {
-	return []kctl{
-		{name: g.mute, level: 0},
-		{name: g.control, value: g.off},
+	seq := []kctl{g.muteKctl(true)}
+	if g.control != "" {
+		seq = append(seq, kctl{name: g.control, value: g.off})
 	}
+	return seq
 }
 
 // wake is sleep the other way round: the amplifier on, and the line-out let go wakeSettle later
 // (unmute). Only where the speaker is the output does the mute belong to the amplifier; on the jack
 // the headphone path has the line-out muted on purpose, and the amplifier only comes back on.
 func (g *ampGate) wake(speaker bool) (on, unmute []kctl) {
-	on = []kctl{{name: g.control, value: g.on}}
+	if g.control != "" {
+		on = []kctl{{name: g.control, value: g.on}}
+	}
 	if speaker {
-		unmute = []kctl{{name: g.mute, level: 1}}
+		unmute = []kctl{g.muteKctl(false)}
 	}
 	return on, unmute
 }
