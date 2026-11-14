@@ -180,6 +180,7 @@ type Tuning struct {
 	filters [][]float32 // one filter per bucket, in Set.EQ order
 	peq     []peqFilter
 	mbcl    mbcl
+	dir     string // where its files are, for what else a unit's files say
 }
 
 // Load reads the tuning a directory holds, normally VendorDir: whichever set it is, with a filter
@@ -209,7 +210,7 @@ func VendorSet(dir, name string) (*Tuning, error) {
 // LoadSet reads one named set, for a test that has files of its own, or for a board whose files do
 // not say which they are.
 func LoadSet(dir string, set Set) (*Tuning, error) {
-	t := &Tuning{set: set}
+	t := &Tuning{set: set, dir: dir}
 	for _, e := range set.EQ {
 		h, err := readFloats(filepath.Join(dir, e.Name), set.Taps)
 		if err != nil {
