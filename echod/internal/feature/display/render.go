@@ -942,6 +942,7 @@ func (r *renderer) timeAndDateAt(now time.Time, base int, dateSuffix string, ali
 	}
 	hour := clockHM(now)
 	ampm := clockSuffix(now)
+	drift := r.clockDrift(now) // a few pixels, against the panel keeping a shadow of the digits (clock_drift.go)
 	if !compact {
 		room := base // no roof: as high as the panel
 		if roof > 0 {
@@ -971,6 +972,7 @@ func (r *renderer) timeAndDateAt(now time.Time, base int, dateSuffix string, ali
 	if align == 0 {
 		x = r.clockLeft(hw, gap, aw)
 	}
+	x, base = x+drift.X, base+drift.Y
 	r.text(clock, hour, x, base, cream)
 	r.text(ampmFace, ampm, x+hw+gap, base, r.ampmInk())
 
@@ -980,7 +982,7 @@ func (r *renderer) timeAndDateAt(now time.Time, base int, dateSuffix string, ali
 		// short first, so the alarm still fits, and cut only if that is not enough.
 		date = r.clipTo(r.small, locale.ShortDate(now, screenLang())+dateSuffix, room)
 	}
-	x = across(r.width(r.small, date))
+	x = across(r.width(r.small, date)) + drift.X
 	r.text(r.small, date, x, base+dateGap, dateColor(dim))
 	return image.Rect(x, base+dateGap-r.s(30), x+r.width(r.small, date), base+dateGap+r.s(10))
 }
