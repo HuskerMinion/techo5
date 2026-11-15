@@ -287,7 +287,7 @@ func (d *Display) dashGesture(g touch.Gesture) {
 		// a finger that lands on a tile is the tile's even there: sliding a light on the right-hand
 		// side is not opening the drawer.
 		edge = min(edge, d.r.margin)
-		// The music library and recipe pages reaches nearly to the edges, and a key or a picture there is its.
+		// The music library and the recipe sheet reach nearly to the edges, and a key or a picture there is theirs.
 		onTile := !streamed && (d.tileAt(g.X, g.Y) != nil || d.libraryUp() || d.mealieUp())
 		switch {
 		case onTile:

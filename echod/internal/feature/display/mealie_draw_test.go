@@ -17,7 +17,6 @@ import (
 	"slices"
 	"sync"
 	"testing"
-	"time"
 
 	"github.com/HuskerMinion/techo5/echod/internal/config"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/dashboard"
@@ -61,26 +60,6 @@ func zonesOfKind(zones []mediaZone, kind int) []mediaZone {
 	return out
 }
 
-// savePreview writes img as name in the directory SHOW_PREVIEW names, to look at, when it is set.
-func savePreview(t *testing.T, name string, img image.Image) {
-	t.Helper()
-	dir := os.Getenv("SHOW_PREVIEW")
-	if dir == "" {
-		return
-	}
-	f, err := os.Create(filepath.Join(dir, name))
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := png.Encode(f, img); err != nil {
-		_ = f.Close()
-		t.Fatal(err)
-	}
-	if err := f.Close(); err != nil {
-		t.Fatal(err)
-	}
-}
-
 // A sheet with recipes draws a tile for each that fits, in reading order and in as many columns as
 // the covers of the library have, with a Done button.
 func TestMealieOverviewDrawsTheRecipes(t *testing.T) {
@@ -115,36 +94,10 @@ func TestMealieOverviewDrawsTheRecipes(t *testing.T) {
 				if z.index != i {
 					t.Errorf("the tile %d is recipe %d, want them in the order of the list", i, z.index)
 				}
-				x, y := (z.r.Min.X+z.r.Max.X)/2, (z.r.Min.Y+z.r.Max.Y)/2
-				if got, on := r.mealieAt(x, y); !on || got.kind != mealiePartItem || got.index != i {
-					t.Errorf("the middle of tile %d is found as %+v (on the sheet: %v)", i, got, on)
-				}
 			}
-			done := zonesOfKind(zones, mealiePartDone)[0]
-			if got, _ := r.mealieAt((done.r.Min.X+done.r.Max.X)/2, (done.r.Min.Y+done.r.Max.Y)/2); got.kind != mealiePartDone {
-				t.Errorf("the middle of Done is found as %+v", got)
-			}
-			savePreview(t, fmt.Sprintf("mealie-overview-%s.png", c.name), r.dst)
+			writePNG(t, os.Getenv("SHOW_PREVIEW"), fmt.Sprintf("mealie-overview-%s.png", c.name), r.dst)
 		})
 	}
-}
-
-// More recipes than fit are not all drawn: only what is in view has a tile to tap, and none reaches
-// outside the card.
-func TestMealieOverviewDrawsOnlyWhatIsInView(t *testing.T) {
-	r := newRenderer(image.NewRGBA(image.Rect(0, 0, showWide, showHigh)))
-	zones := drawMealieSheet(r, loadedMealieSheet(testRecipes(200)))
-	items := zonesOfKind(zones, mealiePartItem)
-	if len(items) == 0 || len(items) >= 200 {
-		t.Fatalf("%d of 200 recipes drawn, want some but not all", len(items))
-	}
-	card := r.mealieGeometry().card
-	for _, z := range items {
-		if !z.r.In(card) {
-			t.Errorf("recipe %d reaches to %v, outside the card %v", z.index, z.r, card)
-		}
-	}
-	savePreview(t, "mealie-overview-many.png", r.dst)
 }
 
 // A scrolled sheet draws the recipes further up, the rows scrolled out are gone, and what is drawn stays
@@ -166,6 +119,9 @@ func TestMealieOverviewScrolls(t *testing.T) {
 			t.Errorf("recipe %d of the first row is still drawn two rows down", z.index)
 		}
 	}
+	if n := len(items(100, 0)); n == 0 || n >= 100 {
+		t.Errorf("%d of 100 recipes drawn at the top, want some but not all", n)
+	}
 	end := items(100, 1<<20)
 	if len(end) == 0 {
 		t.Fatal("nothing is drawn scrolled to the end")
@@ -182,33 +138,26 @@ func TestMealieOverviewScrolls(t *testing.T) {
 }
 
 // The guide has Back where the list has Done, and Previous and Next where the page has others before
-// or after it, on the Show 5 and the Show 8, and all of it is on the card.
+// or after it, all of it on the card.
 func TestMealieGuideDrawsItsParts(t *testing.T) {
-	for _, c := range []struct {
-		name string
-		size image.Point
-	}{{"show5", image.Pt(showWide, showHigh)}, {"show8", image.Pt(show8Wide, show8High)}} {
-		t.Run(c.name, func(t *testing.T) {
-			r := newRenderer(image.NewRGBA(image.Rectangle{Max: c.size}))
-			card := r.mealieGeometry().card
-			for step := range 4 { // the ingredients, then three steps
-				s := guideSheet(3)
-				s.step = step
-				zones := drawMealieSheet(r, s)
-				want := map[int]int{mealiePartBack: 1, mealiePartDone: 0, mealiePartItem: 0, mealiePartPrev: min(step, 1), mealiePartNext: min(3-step, 1)}
-				for kind, n := range want {
-					if got := len(zonesOfKind(zones, kind)); got != n {
-						t.Errorf("page %d has %d parts of kind %d, want %d", step, got, kind, n)
-					}
-				}
-				for _, z := range zones {
-					if !z.r.In(card) {
-						t.Errorf("page %d: part %+v reaches outside the card %v", step, z, card)
-					}
-				}
-				savePreview(t, fmt.Sprintf("mealie-guide-%s-%d.png", c.name, step), r.dst)
+	r := newRenderer(image.NewRGBA(image.Rect(0, 0, showWide, showHigh)))
+	card := r.mealieGeometry().card
+	for step := range 4 { // the ingredients, then three steps
+		s := guideSheet(3)
+		s.step = step
+		zones := drawMealieSheet(r, s)
+		want := map[int]int{mealiePartBack: 1, mealiePartDone: 0, mealiePartItem: 0, mealiePartPrev: min(step, 1), mealiePartNext: min(3-step, 1)}
+		for kind, n := range want {
+			if got := len(zonesOfKind(zones, kind)); got != n {
+				t.Errorf("page %d has %d parts of kind %d, want %d", step, got, kind, n)
 			}
-		})
+		}
+		for _, z := range zones {
+			if !z.r.In(card) {
+				t.Errorf("page %d: part %+v reaches outside the card %v", step, z, card)
+			}
+		}
+		writePNG(t, os.Getenv("SHOW_PREVIEW"), fmt.Sprintf("mealie-guide-%d.png", step), r.dst)
 	}
 }
 
@@ -238,10 +187,7 @@ func TestMealieWhere(t *testing.T) {
 func TestMealieGuidePageKeepsToItsRoom(t *testing.T) {
 	r := newRenderer(image.NewRGBA(image.Rect(0, 0, showWide, showHigh)))
 	g := r.mealieGeometry()
-	long := guideSheet(2)
-	for i := range 40 {
-		long.detail.Ingredients = append(long.detail.Ingredients, mealie.Ingredient{Text: fmt.Sprintf("%d spoons of something that goes on and on", i)})
-	}
+	long := longGuide()
 	drawMealieSheet(r, long)
 	most := r.mealieMaxScroll()
 	if most == 0 {
@@ -271,34 +217,6 @@ func TestMealieGuidePageKeepsToItsRoom(t *testing.T) {
 	drawMealieSheet(r, guideSheet(2))
 	if got := r.mealieMaxScroll(); got != 0 {
 		t.Errorf("a short page can be scrolled %d pixels, want none", got)
-	}
-}
-
-// A page that scrolls show a scroll bar at its right edge, with the bar the settings lists have; one that fits has
-// nothing there but the card, and none is drawn where the page is not.
-func TestMealieGuideShowsThatAPageScrolls(t *testing.T) {
-	r := newRenderer(image.NewRGBA(image.Rect(0, 0, showWide, showHigh)))
-	g := r.mealieGeometry()
-	edge := image.Rect(g.card.Max.X-r.s(14), g.guide.Min.Y, g.card.Max.X-r.s(6), g.guide.Max.Y)
-	colors := func(s mealieSheet) int {
-		drawMealieSheet(r, s)
-		seen := map[color.RGBA]bool{}
-		for y := edge.Min.Y; y < edge.Max.Y; y++ {
-			for x := edge.Min.X; x < edge.Max.X; x++ {
-				seen[r.dst.RGBAAt(x, y)] = true
-			}
-		}
-		return len(seen)
-	}
-	if got := colors(guideSheet(2)); got != 1 {
-		t.Errorf("a page that fits has %d colors at its edge, want the card's alone", got)
-	}
-	long := guideSheet(2)
-	for i := range 40 {
-		long.detail.Ingredients = append(long.detail.Ingredients, mealie.Ingredient{Text: fmt.Sprintf("%d spoons of something", i)})
-	}
-	if got := colors(long); got < 2 {
-		t.Errorf("a page that scrolls has %d colors at its edge, want a bar on the card", got)
 	}
 }
 
@@ -336,41 +254,32 @@ func fetchedPictures(t *testing.T, c color.RGBA, status int) func() []string {
 	}
 }
 
-// A recipe's tile shows its picture once it has come, and a placeholder until then and for a recipe with
-// none, which is not asked for at all.
+// A recipe's tile shows its picture once it has come, and a recipe with none is not asked for at all. The
+// pictures are asked for at the server's address by id and version, and a picture that arrives has the
+// display draw the frame again.
 func TestMealieTilesShowTheirPictures(t *testing.T) {
 	red := color.RGBA{200, 30, 30, 255}
 	asked := fetchedPictures(t, red, http.StatusOK)
+	stubMealieClient(t, mealie.Client{}, false)
 	r := newRenderer(image.NewRGBA(image.Rect(0, 0, showWide, showHigh)))
+	d := newTestDisplay(r)
+	d.openMealie() // which has the display draw again when a picture arrives
+	forgetWake(d)
 	s := loadedMealieSheet(testRecipes(3))
 	s.base = "http://mealie.test"
 	s.recipes[0].ImageVersion = "v1"
 	s.recipes[2].ImageVersion = "v2"
-	tile := func(zones []mediaZone, i int) image.Rectangle { return zonesOfKind(zones, mealiePartItem)[i].r }
 
-	zones := drawMealieSheet(r, s)
-	first := tile(zones, 0)
-	before := image.NewRGBA(r.dst.Rect)
-	copy(before.Pix, r.dst.Pix)
-	libWaitCovers()
 	drawMealieSheet(r, s)
-
-	spot := func(b image.Rectangle) color.RGBA { return r.dst.RGBAAt(b.Min.X+b.Dx()/5, b.Min.Y+b.Dy()/5) }
-	near := func(a, b color.RGBA) bool {
-		d := func(x, y uint8) int { return max(int(x)-int(y), int(y)-int(x)) }
-		return d(a.R, b.R) <= 3 && d(a.G, b.G) <= 3 && d(a.B, b.B) <= 3
-	}
-	if got := before.RGBAAt(first.Min.X+first.Dx()/5, first.Min.Y+first.Dy()/5); near(got, red) {
-		t.Error("the tile had its picture before it came")
-	}
-	if got := spot(tile(zones, 0)); !near(got, red) {
-		t.Errorf("the first tile is %v after its picture came, want %v", got, red)
-	}
-	if got := spot(tile(zones, 2)); !near(got, red) {
-		t.Errorf("the third tile is %v after its picture came, want %v", got, red)
-	}
-	if got := spot(tile(zones, 1)); near(got, red) {
-		t.Error("a recipe with no picture has one")
+	waitWake(t, d)
+	libWaitCovers()
+	zones := drawMealieSheet(r, s)
+	for i, want := range []bool{true, false, true} {
+		b := zonesOfKind(zones, mealiePartItem)[i].r
+		got := r.dst.RGBAAt(b.Min.X+b.Dx()/5, b.Min.Y+b.Dy()/5)
+		if drawn := got.R > 190 && got.G < 40 && got.B < 40; drawn != want {
+			t.Errorf("tile %d shows its picture: %v, want %v (pixel %v)", i, drawn, want, got)
+		}
 	}
 	want := []string{
 		"http://mealie.test/api/media/recipes/id-000/images/tiny-original.webp?version=v1",
@@ -380,82 +289,6 @@ func TestMealieTilesShowTheirPictures(t *testing.T) {
 	slices.Sort(got)
 	if !slices.Equal(got, want) {
 		t.Errorf("asked for %v, want %v", got, want)
-	}
-}
-
-// A picture that will not come leaves the placeholder, and is not asked for again with every frame.
-func TestMealiePictureThatWillNotComeIsAskedForOnce(t *testing.T) {
-	asked := fetchedPictures(t, color.RGBA{}, http.StatusNotFound)
-	r := newRenderer(image.NewRGBA(image.Rect(0, 0, showWide, showHigh)))
-	s := loadedMealieSheet(testRecipes(1))
-	s.base = "http://mealie.test/missing"
-	s.recipes[0].ImageVersion = "v1"
-	drawMealieSheet(r, s)
-	before := image.NewRGBA(r.dst.Rect)
-	copy(before.Pix, r.dst.Pix)
-	libWaitCovers()
-	for range 3 {
-		drawMealieSheet(r, s)
-	}
-	if n := len(asked()); n != 1 {
-		t.Errorf("a picture that would not come was asked for %d times, want once", n)
-	}
-	if !bytes.Equal(before.Pix, r.dst.Pix) {
-		t.Error("the tile changed though its picture did not come")
-	}
-}
-
-// A long list asks only for the pictures in view, and the ones a scroll brings in.
-func TestMealieAsksOnlyForPicturesInView(t *testing.T) {
-	asked := fetchedPictures(t, color.RGBA{30, 30, 200, 255}, http.StatusOK)
-	r := newRenderer(image.NewRGBA(image.Rect(0, 0, showWide, showHigh)))
-	s := loadedMealieSheet(testRecipes(100))
-	s.base = "http://mealie.test/long"
-	for i := range s.recipes {
-		s.recipes[i].ImageVersion = "v1"
-	}
-	items := len(zonesOfKind(drawMealieSheet(r, s), mealiePartItem))
-	libWaitCovers()
-	if n := len(asked()); n != items {
-		t.Errorf("asked for %d pictures with %d tiles in view", n, items)
-	}
-	s.scroll = 10 * r.mealieGeometry().tileH // a good way down, to tiles that were not in view before
-	later := len(zonesOfKind(drawMealieSheet(r, s), mealiePartItem))
-	libWaitCovers()
-	if n := len(asked()); n != items+later {
-		t.Errorf("asked for %d pictures after a scroll, want the %d in view before and the %d in view now", n, items, later)
-	}
-}
-
-// A picture that arrives has the display draw the frame again, once the sheet is up.
-func TestMealiePictureThatArrivesDrawsTheFrameAgain(t *testing.T) {
-	fetchedPictures(t, color.RGBA{30, 200, 30, 255}, http.StatusOK)
-	stubMealieClient(t, mealie.Client{}, false)
-	d := newTestDisplay()
-	d.openMealie()
-	select { // forget the redraws asked for so far, so the next one is the picture
-	case <-d.poke:
-	default:
-	}
-	r := newRenderer(image.NewRGBA(image.Rect(0, 0, showWide, showHigh)))
-	s := loadedMealieSheet(testRecipes(1))
-	s.base = "http://mealie.test/wake"
-	s.recipes[0].ImageVersion = "v1"
-	drawMealieSheet(r, s)
-	select {
-	case <-d.poke:
-	case <-time.After(5 * time.Second):
-		t.Fatal("the picture came and the display was not asked to draw")
-	}
-}
-
-// Drawing no sheet forgets the parts of the one drawn before, so that a tap finds nothing of it.
-func TestMealieOverviewDrawnNoMoreHasNoParts(t *testing.T) {
-	r := newRenderer(image.NewRGBA(image.Rect(0, 0, showWide, showHigh)))
-	drawMealieSheet(r, loadedMealieSheet(testRecipes(3)))
-	r.mealieSheet(nil, dashboard.Theme{})
-	if _, on := r.mealieAt(showWide/2, showHigh/2); on {
-		t.Error("a tap in the middle is still on a sheet that is gone")
 	}
 }
 

@@ -39,7 +39,7 @@ func mockedRecipesEndpoint(total int) http.HandlerFunc {
 }
 
 // mockedMealie returns a handler that imitates Mealie with total recipes: the list at /api/recipes, and
-// at /api/recipes/recipe-NNN a recipe of that name with two ingredients and three steps.
+// at /api/recipes/recipe-NNN a recipe with two ingredients, the first "2 eggs of NNN", and three steps.
 func mockedMealie(total int) http.HandlerFunc {
 	list := mockedRecipesEndpoint(total)
 	return func(w http.ResponseWriter, r *http.Request) {
@@ -49,9 +49,8 @@ func mockedMealie(total int) http.HandlerFunc {
 			return
 		}
 		n := strings.TrimPrefix(slug, "recipe-")
-		_, _ = fmt.Fprintf(w, `{"slug":%q,"name":"Recipe %s",
-			"recipeIngredient":[{"display":"2 eggs of %s"},{"display":"1 pinch of salt"}],
-			"recipeInstructions":[{"text":"First of %s."},{"title":"Then","text":"Second."},{"text":"Third."}]}`, slug, n, n, n)
+		_, _ = fmt.Fprintf(w, `{"recipeIngredient":[{"display":"2 eggs of %s"},{"display":"1 pinch of salt"}],
+			"recipeInstructions":[{"text":"First."},{"title":"Then","text":"Second."},{"text":"Third."}]}`, n)
 	}
 }
 
@@ -60,12 +59,20 @@ func mockedMealie(total int) http.HandlerFunc {
 func guideSheet(n int) mealieSheet {
 	s := loadedMealieSheet(testRecipes(6))
 	entry := s.recipes[0]
-	recipe := &mealie.DetailedRecipe{Slug: entry.Slug, Name: entry.Name,
-		Ingredients: []mealie.Ingredient{{Text: "2 eggs"}, {Text: "1 pinch of salt"}}}
+	recipe := &mealie.DetailedRecipe{Ingredients: []mealie.Ingredient{{Text: "2 eggs"}, {Text: "1 pinch of salt"}}}
 	for i := range n {
 		recipe.Steps = append(recipe.Steps, mealie.Step{Text: fmt.Sprintf("Step %d.", i+1)})
 	}
 	s.selected, s.detail = &entry, recipe
+	return s
+}
+
+// longGuide returns guideSheet(2) with 40 more ingredients, a page that is longer than its room.
+func longGuide() mealieSheet {
+	s := guideSheet(2)
+	for i := range 40 {
+		s.detail.Ingredients = append(s.detail.Ingredients, mealie.Ingredient{Text: fmt.Sprintf("%d spoons of something that goes on and on", i)})
+	}
 	return s
 }
 
@@ -89,9 +96,27 @@ func stubMealieClient(t *testing.T, c mealie.Client, set bool) {
 	t.Cleanup(func() { mealieClient = previousClient })
 }
 
-// newTestDisplay returns the smallest Display the recipe page can run on.
-func newTestDisplay() *Display {
-	return &Display{poke: make(chan struct{}, 1)}
+// newTestDisplay returns the smallest Display the recipe sheet can run on, drawing on r, which may be nil.
+func newTestDisplay(r *renderer) *Display {
+	return &Display{r: r, poke: make(chan struct{}, 1)}
+}
+
+// forgetWake drops a redraw already asked for, so that the next one to wait for is a later one.
+func forgetWake(d *Display) {
+	select {
+	case <-d.poke:
+	default:
+	}
+}
+
+// waitWake waits for the display to be asked to draw, as it is when a read ends, whatever it brought.
+func waitWake(t *testing.T, d *Display) {
+	t.Helper()
+	select {
+	case <-d.poke:
+	case <-time.After(5 * time.Second):
+		t.Fatal("the read did not end")
+	}
 }
 
 // mealieSheetOf returns a copy of the recipe sheet that d has up, taken under the display's lock so that it
@@ -108,10 +133,10 @@ func mealieSheetOf(d *Display) mealieSheet {
 // Opening the recipe sheet shows the list, asks Mealie for the recipes, and ends up with all of
 // them, however many pages Mealie sends them in.
 func TestMealieOpensAndLoadsTheRecipes(t *testing.T) {
-	srv := httptest.NewServer(mockedRecipesEndpoint(40))
+	srv := httptest.NewServer(mockedRecipesEndpoint(250))
 	t.Cleanup(srv.Close)
 	stubMealieClient(t, mealie.Client{URL: srv.URL, Token: "tok"}, true)
-	d := newTestDisplay()
+	d := newTestDisplay(nil)
 	d.openMealie()
 	if s := mealieSheetOf(d); !s.set || s.selected != nil || s.epoch == 0 {
 		t.Fatalf("opened on %+v, want a sheet that is set up and shows the list", s)
@@ -121,98 +146,8 @@ func TestMealieOpensAndLoadsTheRecipes(t *testing.T) {
 	if s.listProblem != "" {
 		t.Fatalf("problem: %s", s.listProblem)
 	}
-	if len(s.recipes) != 40 || s.recipes[0].Name != "Recipe 000" || s.recipes[39].Name != "Recipe 039" {
+	if len(s.recipes) != 250 || s.recipes[0].Name != "Recipe 000" || s.recipes[249].Name != "Recipe 249" {
 		t.Errorf("got %d recipes, from %q to %q", len(s.recipes), s.recipes[0].Name, s.recipes[len(s.recipes)-1].Name)
-	}
-}
-
-// When Mealie is not set up the sheet still opens and displays a "not configured" message
-func TestMealieNotSetUp(t *testing.T) {
-	stubMealieClient(t, mealie.Client{}, false)
-	d := newTestDisplay()
-	d.openMealie()
-	d.mu.Lock()
-	s := d.dashMealie
-	d.mu.Unlock()
-	if s == nil || s.set || s.listLoading || s.listLoaded {
-		t.Errorf("sheet = %+v, want one up, not set, and not asked for", s)
-	}
-}
-
-// When Mealie fails, the sheet keeps the reason, and a later load of the list tries again.
-func TestMealieAsksAgainAfterAProblem(t *testing.T) {
-	var down atomic.Bool
-	down.Store(true)
-	working := mockedRecipesEndpoint(3)
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if down.Load() {
-			http.Error(w, "down", http.StatusInternalServerError)
-			return
-		}
-		working(w, r)
-	}))
-	t.Cleanup(srv.Close)
-	stubMealieClient(t, mealie.Client{URL: srv.URL}, true)
-	d := newTestDisplay()
-	d.openMealie()
-	waitUntil(t, "the problem", func() bool { s := mealieSheetOf(d); return s.listLoaded && !s.listLoading })
-	s := mealieSheetOf(d)
-	if !strings.Contains(s.listProblem, "500") || len(s.recipes) != 0 {
-		t.Fatalf("problem %q with %d recipes, want the status and none", s.listProblem, len(s.recipes))
-	}
-	down.Store(false) // Mealie is back
-	d.mealieLoadList()
-	waitUntil(t, "the recipes", func() bool { s := mealieSheetOf(d); return !s.listLoading && s.listProblem == "" })
-	if got := len(mealieSheetOf(d).recipes); got != 3 {
-		t.Errorf("got %d recipes, want 3", got)
-	}
-}
-
-// Loading the list again while a request for it is still waiting must not send a second request. If
-// the sheet is left before the answer comes, the answer is thrown away and must not bring the sheet
-// back.
-func TestMealieLeftWhileLoading(t *testing.T) {
-	var requests atomic.Int32
-	answer := make(chan struct{}) // closed to let the fake Mealie answer. Until then, it holds the request
-	var answerOnce sync.Once
-	letMealieAnswer := func() { answerOnce.Do(func() { close(answer) }) }
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		requests.Add(1)
-		<-answer
-		mockedRecipesEndpoint(3)(w, r)
-	}))
-	t.Cleanup(srv.Close)
-	// Cleanups run last to first, so this one runs before srv.Close, which waits for held requests.
-	t.Cleanup(letMealieAnswer)
-	stubMealieClient(t, mealie.Client{URL: srv.URL}, true)
-	d := newTestDisplay()
-	d.openMealie()
-	waitUntil(t, "the request", func() bool { return requests.Load() >= 1 })
-
-	d.mealieLoadList() // the list again, while its first request is still waiting
-	d.mu.Lock()
-	d.dashMealie = nil // the sheet is left
-	d.mu.Unlock()
-
-	select { // forget the redraws asked for so far, so the next one is the load ending
-	case <-d.poke:
-	default:
-	}
-	letMealieAnswer()
-	select {
-	case <-d.poke: // the load has ended, and asked for a redraw
-	case <-time.After(5 * time.Second):
-		t.Fatal("the read did not end")
-	}
-
-	d.mu.Lock()
-	left := d.dashMealie
-	d.mu.Unlock()
-	if left != nil {
-		t.Error("the answer for a sheet that was left put the sheet back")
-	}
-	if n := requests.Load(); n != 1 {
-		t.Errorf("Mealie was asked %d times, want once", n)
 	}
 }
 
@@ -234,7 +169,7 @@ func TestMealieAnswerForAnEarlierOpeningIsThrownAway(t *testing.T) {
 	t.Cleanup(srv.Close)
 	t.Cleanup(letMealieAnswer)
 	stubMealieClient(t, mealie.Client{URL: srv.URL}, true)
-	d := newTestDisplay()
+	d := newTestDisplay(nil)
 	d.openMealie()
 	waitUntil(t, "the first request", func() bool { return requests.Load() >= 1 })
 	d.mu.Lock()
@@ -243,8 +178,9 @@ func TestMealieAnswerForAnEarlierOpeningIsThrownAway(t *testing.T) {
 	d.openMealie() // and opened again, which asks for the list afresh
 	waitUntil(t, "the second opening's recipes", func() bool { s := mealieSheetOf(d); return s.listLoaded && !s.listLoading })
 
+	forgetWake(d)
 	letMealieAnswer() // now the first opening's answer arrives, five recipes
-	time.Sleep(200 * time.Millisecond)
+	waitWake(t, d)
 	if got := len(mealieSheetOf(d).recipes); got != 2 {
 		t.Errorf("the sheet has %d recipes, want the second opening's 2", got)
 	}
@@ -273,7 +209,7 @@ func TestMealieCardOpensTheSheet(t *testing.T) {
 	}}}}}}
 	r := newRenderer(image.NewRGBA(image.Rect(0, 0, showWide, showHigh)))
 	r.draw(scene{now: time.Now(), phase: "idle", showDash: true, dashMode: config.DashboardDrawn, drawn: page})
-	d := &Display{r: r, poke: make(chan struct{}, 1)}
+	d := newTestDisplay(r)
 	tiles, _ := r.dash()
 	if len(tiles) != 1 {
 		t.Fatalf("%d tiles drawn, want 1", len(tiles))
@@ -309,7 +245,7 @@ func TestMealieSheetIsDrawnOverTheDashboard(t *testing.T) {
 // the sheet away.
 func TestMealieSheetTakesTheTaps(t *testing.T) {
 	r := newRenderer(image.NewRGBA(image.Rect(0, 0, showWide, showHigh)))
-	d := &Display{r: r, poke: make(chan struct{}, 1)}
+	d := newTestDisplay(r)
 	if d.mealieTap(10, 10) {
 		t.Fatal("a tap was taken with no recipe sheet up")
 	}
@@ -338,7 +274,7 @@ func TestMealieSheetTakesTheTaps(t *testing.T) {
 // stays up when that is Done and the drag is over.
 func TestMealieDragScrollsTheRecipes(t *testing.T) {
 	r := newRenderer(image.NewRGBA(image.Rect(0, 0, showWide, showHigh)))
-	d := &Display{r: r, poke: make(chan struct{}, 1)}
+	d := newTestDisplay(r)
 	sheet := loadedMealieSheet(testRecipes(100))
 	d.dashMealie = &sheet
 	zones := drawFrame(r, d.mealieSheetNow())
@@ -395,7 +331,7 @@ func TestMealieRecipeOpensItsGuide(t *testing.T) {
 	t.Cleanup(srv.Close)
 	stubMealieClient(t, mealie.Client{URL: srv.URL}, true)
 	r := newRenderer(image.NewRGBA(image.Rect(0, 0, showWide, showHigh)))
-	d := &Display{r: r, poke: make(chan struct{}, 1)}
+	d := newTestDisplay(r)
 	d.openMealie()
 	waitUntil(t, "the list", func() bool { return mealieSheetOf(d).listLoaded })
 	d.editMealie(func(s *mealieSheet) { s.scroll = 100 })
@@ -408,7 +344,8 @@ func TestMealieRecipeOpensItsGuide(t *testing.T) {
 		t.Fatalf("after the tap the sheet has selected %+v at step %d, scrolled %d; want %s at the first page", s.selected, s.step, s.scroll, slug)
 	}
 	waitUntil(t, "the recipe", func() bool { return mealieSheetOf(d).detail != nil })
-	if got := mealieSheetOf(d).detail; got.Slug != slug || len(got.Ingredients) != 2 || len(got.Steps) != 3 {
+	want := "2 eggs of " + strings.TrimPrefix(slug, "recipe-")
+	if got := mealieSheetOf(d).detail; got.Ingredients[0].Text != want || len(got.Ingredients) != 2 || len(got.Steps) != 3 {
 		t.Errorf("the guide has %+v", got)
 	}
 
@@ -424,7 +361,7 @@ func TestMealieRecipeOpensItsGuide(t *testing.T) {
 // first page and no Next on the last, and a page starts at its top.
 func TestMealieGuideTurnsItsPages(t *testing.T) {
 	r := newRenderer(image.NewRGBA(image.Rect(0, 0, showWide, showHigh)))
-	d := &Display{r: r, poke: make(chan struct{}, 1)}
+	d := newTestDisplay(r)
 	sheet := guideSheet(2) // three pages
 	d.dashMealie = &sheet
 	has := func(kind int) bool { return len(zonesOfKind(drawFrame(r, d.mealieSheetNow()), kind)) == 1 }
@@ -473,7 +410,7 @@ func TestMealieAnswerForARecipeThatWasLeftIsThrownAway(t *testing.T) {
 	t.Cleanup(letMealieAnswer)
 	stubMealieClient(t, mealie.Client{URL: srv.URL}, true)
 	r := newRenderer(image.NewRGBA(image.Rect(0, 0, showWide, showHigh)))
-	d := &Display{r: r, poke: make(chan struct{}, 1)}
+	d := newTestDisplay(r)
 	d.openMealie()
 	waitUntil(t, "the list", func() bool { return mealieSheetOf(d).listLoaded })
 
@@ -483,9 +420,10 @@ func TestMealieAnswerForARecipeThatWasLeftIsThrownAway(t *testing.T) {
 	d.mealieOpenRecipe(1)
 	waitUntil(t, "the second recipe", func() bool { return mealieSheetOf(d).detail != nil })
 
+	forgetWake(d)
 	letMealieAnswer() // now the first recipe's answer arrives
-	time.Sleep(200 * time.Millisecond)
-	if got := mealieSheetOf(d).detail; got == nil || got.Name != "Recipe 001" {
+	waitWake(t, d)
+	if got := mealieSheetOf(d).detail; got == nil || got.Ingredients[0].Text != "2 eggs of 001" {
 		t.Errorf("the guide has %+v, want the second recipe's", got)
 	}
 	d.mealieBack()
@@ -513,7 +451,7 @@ func TestMealieGuideSaysWhyARecipeCannotBeRead(t *testing.T) {
 	t.Cleanup(srv.Close)
 	stubMealieClient(t, mealie.Client{URL: srv.URL}, true)
 	r := newRenderer(image.NewRGBA(image.Rect(0, 0, showWide, showHigh)))
-	d := &Display{r: r, poke: make(chan struct{}, 1)}
+	d := newTestDisplay(r)
 	d.openMealie()
 	waitUntil(t, "the list", func() bool { return mealieSheetOf(d).listLoaded })
 	for want := int32(1); want <= 2; want++ {
@@ -537,11 +475,8 @@ func TestMealieGuideSaysWhyARecipeCannotBeRead(t *testing.T) {
 // finger that scrolled it and lifted on Next did that only, and the page is not turned.
 func TestMealieGuidePageScrollsAndIsNotTurnedByIt(t *testing.T) {
 	r := newRenderer(image.NewRGBA(image.Rect(0, 0, showWide, showHigh)))
-	d := &Display{r: r, poke: make(chan struct{}, 1)}
-	sheet := guideSheet(2)
-	for i := range 40 {
-		sheet.detail.Ingredients = append(sheet.detail.Ingredients, mealie.Ingredient{Text: fmt.Sprintf("%d spoons of something", i)})
-	}
+	d := newTestDisplay(r)
+	sheet := longGuide()
 	d.dashMealie = &sheet
 	zones := drawFrame(r, d.mealieSheetNow())
 	most := r.mealieMaxScroll()

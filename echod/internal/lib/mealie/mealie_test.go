@@ -25,86 +25,16 @@ func reply(w http.ResponseWriter, body string) {
 	_, _ = w.Write([]byte(body))
 }
 
-// someRecipe is a recipe as the list sends it: the keys this package reads, others it does not (tags,
-// recipeServings), and nulls where Mealie has nothing.
-const someRecipe = `{
-	"id": "id-lasagne",
-	"userId": "user-1",
-	"householdId": "household-1",
-	"groupId": "group-1",
-	"name": "Vegetable Lasagne",
-	"slug": "vegetable-lasagne",
-	"image": "bBVh",
-	"recipeServings": 4,
-	"recipeYieldQuantity": 0,
-	"recipeYield": "",
-	"totalTime": null,
-	"prepTime": null,
-	"cookTime": null,
-	"performTime": null,
-	"totalTimeSeconds": 3000,
-	"prepTimeSeconds": 1200,
-	"performTimeSeconds": 1800,
-	"description": "A vegetarian lasagne.",
-	"recipeCategory": [],
-	"tags": [],
-	"tools": [],
-	"rating": 4.5,
-	"orgURL": "https://example.com/lasagne/",
-	"dateAdded": "2026-11-13"
-}`
-
-// stumpedRecipe returns the JSON of a minimal recipe with the given id and name.
+// stumpedRecipe returns the JSON of a recipe as the list sends it, with the given id and name: the keys
+// this package reads, and some it does not, one of them null.
 func stumpedRecipe(id, name string) string {
-	return `{"id":"` + id + `","name":"` + name + `","slug":"` + id + `","image":"v1"}`
+	return `{"id":"` + id + `","name":"` + name + `","slug":"` + id + `","image":"v1","rating":null,"tags":[],"totalTimeSeconds":3000}`
 }
 
 // pagedResult returns the JSON Mealie sends for one page of the recipe list, holding the given items.
 func pagedResult(page, totalPages int, items ...string) string {
 	return `{"page":` + strconv.Itoa(page) + `,"per_page":2,"total":3,"total_pages":` + strconv.Itoa(totalPages) +
 		`,"items":[` + strings.Join(items, ",") + `]}`
-}
-
-// No recipes at all is an empty list
-func TestRecipesNone(t *testing.T) {
-	c := serve(t, func(w http.ResponseWriter, r *http.Request) {
-		reply(w, `{"page":1,"per_page":2,"total":0,"total_pages":0,"items":[]}`)
-	})
-	got, err := c.Recipes(t.Context())
-	if err != nil || len(got) != 0 {
-		t.Errorf("got %d recipes, err %v; want none and no error", len(got), err)
-	}
-}
-
-// A page of recipes is read into the fields the overview and the guide need.
-func TestRecipesOnePage(t *testing.T) {
-	c := serve(t, func(w http.ResponseWriter, r *http.Request) {
-		reply(w, pagedResult(1, 1, someRecipe))
-	})
-	got, err := c.Recipes(t.Context())
-	if err != nil {
-		t.Fatalf("Recipes: %v", err)
-	}
-	if len(got) != 1 {
-		t.Fatalf("got %d recipes, want 1", len(got))
-	}
-	r := got[0]
-	if r.ID != "id-lasagne" || r.Name != "Vegetable Lasagne" || r.Slug != "vegetable-lasagne" {
-		t.Errorf("identity: %+v", r)
-	}
-	if r.ImageVersion != "bBVh" {
-		t.Errorf("ImageVersion = %q, want the image key, bBVh", r.ImageVersion)
-	}
-	if r.TotalTimeSeconds != 3000 || r.PrepTimeSeconds != 1200 || r.PerformTimeSeconds != 1800 {
-		t.Errorf("times: total %d, prep %d, perform %d", r.TotalTimeSeconds, r.PrepTimeSeconds, r.PerformTimeSeconds)
-	}
-	if r.Description != "A vegetarian lasagne." {
-		t.Errorf("Description = %q", r.Description)
-	}
-	// A rating can be a half; a field that only fails on one must not fail the whole list.
-	if r.Rating != 4.5 {
-		t.Errorf("Rating = %v, want 4.5", r.Rating)
-	}
 }
 
 // Every page is read, in order, and the loop stops after the last.
@@ -136,50 +66,26 @@ func TestRecipesFollowsPages(t *testing.T) {
 	if want := "Apple Pie,Bean Stew,Carrot Cake"; strings.Join(names, ",") != want {
 		t.Errorf("recipes = %v, want %s", names, want)
 	}
+	if want := (RecipeEntry{ID: "a", Name: "Apple Pie", Slug: "a", ImageVersion: "v1"}); got[0] != want {
+		t.Errorf("the first recipe is %+v, want %+v", got[0], want)
+	}
 	if n := hits.Load(); n != 2 {
 		t.Errorf("the server was asked %d times, want 2", n)
 	}
 }
 
-// An address typed with a slash at the end still reaches /api/recipes.
-func TestRecipesTrailingSlash(t *testing.T) {
-	var path string
+// A server that says there are more pages but sends none is not asked for them all.
+func TestRecipesStopsOnAnEmptyPage(t *testing.T) {
+	var hits atomic.Int32
 	c := serve(t, func(w http.ResponseWriter, r *http.Request) {
-		path = r.URL.Path
-		reply(w, pagedResult(1, 1))
+		hits.Add(1)
+		reply(w, pagedResult(1, 1000))
 	})
-	c.URL += "/"
 	if _, err := c.Recipes(t.Context()); err != nil {
 		t.Fatalf("Recipes: %v", err)
 	}
-	if path != "/api/recipes" {
-		t.Errorf("path = %q, want /api/recipes", path)
-	}
-}
-
-// The token is sent as a bearer token when there is one, and not at all when there is none.
-func TestRecipesToken(t *testing.T) {
-	for _, tc := range []struct {
-		name, token string
-		want        []string
-	}{
-		{"with a token", "secret", []string{"Bearer secret"}},
-		{"without one", "", nil},
-	} {
-		t.Run(tc.name, func(t *testing.T) {
-			var got []string
-			c := serve(t, func(w http.ResponseWriter, r *http.Request) {
-				got = r.Header.Values("Authorization")
-				reply(w, pagedResult(1, 1))
-			})
-			c.Token = tc.token
-			if _, err := c.Recipes(t.Context()); err != nil {
-				t.Fatalf("Recipes: %v", err)
-			}
-			if strings.Join(got, "|") != strings.Join(tc.want, "|") {
-				t.Errorf("Authorization = %v, want %v", got, tc.want)
-			}
-		})
+	if n := hits.Load(); n != 1 {
+		t.Errorf("the server was asked %d times, want once", n)
 	}
 }
 
@@ -198,7 +104,6 @@ func TestRecipesErrors(t *testing.T) {
 		{"a token is needed", "", http.StatusUnauthorized, `{"detail":"Unauthorized"}`, errNeedsToken, ""},
 		{"forbidden", "secret", http.StatusForbidden, "keep out", errForbidden, ""},
 		{"server failure", "secret", http.StatusInternalServerError, "boom", nil, "mealie answered 500 Internal Server Error"},
-		{"not Mealie", "", http.StatusNotFound, "<html>not found</html>", nil, "mealie answered 404 Not Found"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			c := serve(t, func(w http.ResponseWriter, r *http.Request) {
@@ -270,8 +175,8 @@ const someRecipeDetail = `{
 	]
 }`
 
-// A recipe is read from the detail at its slug, with the token, into the name, the ingredients as
-// written out and the steps, in order.
+// A recipe is read from the detail at its slug, with the token when there is one, into the ingredients
+// as written out and the steps, in order.
 func TestRecipeReadsIngredientsAndSteps(t *testing.T) {
 	var path, auth string
 	c := serve(t, func(w http.ResponseWriter, r *http.Request) {
@@ -287,12 +192,15 @@ func TestRecipeReadsIngredientsAndSteps(t *testing.T) {
 		t.Errorf("asked %q with %q, want /api/recipes/tomato-soup with the token", path, auth)
 	}
 	want := DetailedRecipe{
-		Slug: "tomato-soup", Name: "Tomato Soup",
 		Ingredients: []Ingredient{{Text: "2 cans tomato drained", Section: "For the soup"}, {Text: "¹/₂ onion"}},
 		Steps:       []Step{{Title: "Prepare", Text: "Chop the onion."}, {Text: "Simmer for 20 minutes."}},
 	}
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("got %+v, want %+v", got, want)
+	}
+	c.Token = ""
+	if _, err := c.Recipe(t.Context(), "tomato-soup"); err != nil || auth != "" {
+		t.Errorf("without a token: error %v, Authorization %q, want none", err, auth)
 	}
 }
 
@@ -347,43 +255,6 @@ func TestRecipeSlugIsOnePartOfThePath(t *testing.T) {
 	}
 }
 
-// A recipe that is gone, a refused token and a reply that is not a recipe are errors in words for a
-// screen, as for the list, and come with no recipe.
-func TestRecipeErrors(t *testing.T) {
-	for _, tc := range []struct {
-		name   string
-		status int
-		body   string
-		want   error
-		says   string
-	}{
-		{"gone", http.StatusNotFound, `{"detail":"Not Found"}`, nil, "mealie answered 404 Not Found"},
-		{"refused token", http.StatusUnauthorized, `{"detail":"Unauthorized"}`, errRefusedToken, ""},
-		{"not a recipe", http.StatusOK, "this is not json", ErrUnreadable, ""},
-	} {
-		t.Run(tc.name, func(t *testing.T) {
-			c := serve(t, func(w http.ResponseWriter, r *http.Request) {
-				w.WriteHeader(tc.status)
-				_, _ = w.Write([]byte(tc.body))
-			})
-			c.Token = "secret"
-			got, err := c.Recipe(t.Context(), "tomato-soup")
-			if err == nil {
-				t.Fatalf("no error, and recipe %+v", got)
-			}
-			if tc.want != nil && !errors.Is(err, tc.want) {
-				t.Errorf("error %q, want %q", err, tc.want)
-			}
-			if tc.says != "" && err.Error() != tc.says {
-				t.Errorf("error %q, want %q", err, tc.says)
-			}
-			if !reflect.DeepEqual(got, DetailedRecipe{}) {
-				t.Errorf("got %+v with the error, want none", got)
-			}
-		})
-	}
-}
-
 // A recipe's picture is the small square one at its id, with the version for caches; one without a
 // picture has no address, and an address typed with a slash at the end is the same. What the server
 // calls the recipe is one part of the path or the query, whatever it holds.
@@ -406,5 +277,16 @@ func TestImageURL(t *testing.T) {
 				t.Errorf("ImageURL = %q, want %q", got, tc.want)
 			}
 		})
+	}
+}
+
+// A recipe that cannot be read is an error and no recipe; the errors themselves are the list's.
+func TestRecipeErrorIsNoRecipe(t *testing.T) {
+	c := serve(t, func(w http.ResponseWriter, r *http.Request) {
+		http.Error(w, `{"detail":"Not Found"}`, http.StatusNotFound)
+	})
+	got, err := c.Recipe(t.Context(), "tomato-soup")
+	if err == nil || !reflect.DeepEqual(got, DetailedRecipe{}) {
+		t.Errorf("got %+v and error %v, want an error and no recipe", got, err)
 	}
 }

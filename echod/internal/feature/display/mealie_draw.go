@@ -12,8 +12,8 @@ import (
 	"github.com/HuskerMinion/techo5/echod/internal/lib/mealie"
 )
 
-// The recipe sheet as it is drawn: "Recipe" as a title and a Done button  along its top, and under them either a grid of the recipes,
-// or a message saying why there is none.
+// The recipe sheet as drawn: a title and Done along the top, and under them a grid of recipes or a
+// message saying why there are none.
 
 // What a part of the recipe sheet is, for a tap. Zero is none, so that a zone that was not found is no part.
 const (
@@ -30,9 +30,8 @@ const (
 // themselves are as wide as the room left by that many columns allows.
 const mealieTargetTileWidth = 235
 
-// mealieParts are the recipe sheet's parts where they were last drawn, under zmu, for the touch
-// goroutine: its zones, and the card they are on, and how high the recipes are and how high the view
-// they scroll in is, for how far they can be scrolled.
+// mealieParts are the sheet's parts as last drawn, kept under zmu for the touch goroutine: its zones, the
+// card, and the content and view heights that bound scrolling.
 type mealieParts struct {
 	mealieZones    []mediaZone
 	mealieCard     image.Rectangle
@@ -111,8 +110,7 @@ func (r *renderer) mealieSheet(s *mealieSheet, th dashboard.Theme) {
 	} else {
 		// The bar: the sheet's name at the left, and Done at the right.
 		word := libWord(libWordDone)
-		doneW := max(r.width(fc.navBold, word)+2*r.s(20), r.s(84))
-		done := image.Rect(g.bar.Max.X-doneW, g.bar.Min.Y, g.bar.Max.X, g.bar.Max.Y)
+		done := image.Rect(g.bar.Max.X-r.mealiePillW(word, fc), g.bar.Min.Y, g.bar.Max.X, g.bar.Max.Y)
 		r.mealiePill(done, word, pal.accent, pal.bg, fc)
 		r.text(fc.labelBold, tr("ui_mealie_recipes"), g.bar.Min.X, g.bar.Min.Y+r.s(33), pal.text)
 
@@ -125,8 +123,8 @@ func (r *renderer) mealieSheet(s *mealieSheet, th dashboard.Theme) {
 }
 
 // mealieNotice returns what stands in for the recipes, or for the guide's page, when the sheet has none
-// to show: an icon, a message and a hint under it, any of which may be empty. With no message there is
-// none to say, and the recipes or the page are shown.
+// to show: an icon, a message and a hint under it, any of which may be empty. An empty message means
+// there is nothing to say: draw the recipes or the page.
 func mealieNotice(s *mealieSheet) (icon, msg, hint string) {
 	switch {
 	case s.selected != nil && s.detailProblem != "":
@@ -206,6 +204,11 @@ func (r *renderer) mealieTile(recipe mealie.RecipeEntry, base string, x, y int, 
 	}
 	label := r.fit(fc.navBold, dashboard.CleanName(name), g.tile-r.s(4))
 	r.text(fc.navBold, label, x+r.s(2), pic.Max.Y+r.s(30), pal.text)
+}
+
+// mealiePillW returns how wide the bar's button for word is.
+func (r *renderer) mealiePillW(word string, fc sheetFaces) int {
+	return max(r.width(fc.navBold, word)+2*r.s(20), r.s(84))
 }
 
 // mealiePill draws a button as a pill with word in the middle of it.

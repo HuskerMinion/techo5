@@ -2706,7 +2706,7 @@ var uiTranslations = map[string]map[string]string{
 		"ui_mealie_ingredients": "Ingredientes",
 		"ui_mealie_step_of":     "Paso %d de %d",
 		"ui_mealie_previous":    "Anterior",
-		"ui_mealie_no_steps":    "Cette recette ne comporte ni ingrédients ni étapes.",
+		"ui_mealie_no_steps":    "Esta receita non ten ingredientes nin pasos.",
 	},
 	"it": {
 		"drawer_recording":           "In ascolto",
@@ -5917,7 +5917,7 @@ var uiTranslations = map[string]map[string]string{
 		"ui_mealie_empty_hint":                          "Füge in Mealie Rezepte hinzu.",
 		"ui_mealie_ingredients":                         "Zutaten",
 		"ui_mealie_step_of":                             "Schritt %d von %d",
-		"ui_mealie_previous":                            "Zurück",
+		"ui_mealie_previous":                            "Vorheriger Schritt",
 		"ui_mealie_no_steps":                            "Dieses Rezept hat keine Schritte oder Zutaten.",
 	},
 	"tr": {

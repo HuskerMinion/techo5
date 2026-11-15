@@ -21,51 +21,39 @@ var client = &http.Client{Timeout: 15 * time.Second}
 // fetchedPerPage is how many recipes each request for the list asks for.
 const fetchedPerPage = 100
 
-// recipesBaseUrl and recipeImageBaseUrl are where Mealie keeps its recipes and their pictures, below
+// recipesBaseURL and recipeImageBaseURL are where Mealie keeps its recipes and their pictures, below
 // its address.
-const recipesBaseUrl = "/api/recipes"
-const recipeImageBaseUrl = "/api/media/recipes"
+const recipesBaseURL = "/api/recipes"
+const recipeImageBaseURL = "/api/media/recipes"
 
 // recipeImageSize is the picture of a recipe that Mealie makes for a small view: the middle square of
 // the original, about 600 pixels across.
 const recipeImageSize = "tiny-original.webp"
 
-// Client is one Mealie server: its address and an API token, which Mealie asks for to list recipes. The
-// token may be empty for some server configurations.
+// Client is one Mealie server: its address and an API token. Mealie asks for the token to list recipes,
+// so it is empty only for a server that needs none.
 type Client struct {
 	URL, Token string
 }
 
-// RecipeFetchResult is one page of Mealie's list of recipes: which page it is, how many pages there are,
-// and the recipes on it.
-type RecipeFetchResult struct {
-	Page       int           `json:"page"`
+// recipePage is one page of Mealie's list of recipes: how many pages there are, and the recipes on it.
+type recipePage struct {
 	TotalPages int           `json:"total_pages"`
 	Items      []RecipeEntry `json:"items"`
 }
 
-// RecipeEntry is a recipe as Mealie's list has it.
+// RecipeEntry is a recipe as Mealie's list has it: what the overview shows, and what to ask for its
+// guide and its picture.
 type RecipeEntry struct {
-	ID                 string  `json:"id"`
-	UserID             string  `json:"userId"`
-	HouseholdID        string  `json:"householdId"`
-	GroupID            string  `json:"groupId"`
-	Name               string  `json:"name"`
-	Slug               string  `json:"slug"`
-	ImageVersion       string  `json:"image"`
-	TotalTimeSeconds   int     `json:"totalTimeSeconds"`
-	PrepTimeSeconds    int     `json:"prepTimeSeconds"`
-	PerformTimeSeconds int     `json:"performTimeSeconds"`
-	Description        string  `json:"description"`
-	Rating             float32 `json:"rating"`
-	// ISO time
-	DateAdded string `json:"dateAdded"`
+	ID   string `json:"id"`
+	Name string `json:"name"`
+	Slug string `json:"slug"`
+	// ImageVersion is Mealie's version of the recipe's picture, empty for a recipe with none.
+	ImageVersion string `json:"image"`
 }
 
 // DetailedRecipe is one recipe as Mealie's detail has it: what the step-by-step guide shows.
 type DetailedRecipe struct {
-	Slug        string       `json:"slug"`
-	Name        string       `json:"name"`
 	Ingredients []Ingredient `json:"recipeIngredient"`
 	Steps       []Step       `json:"recipeInstructions"`
 }
@@ -86,18 +74,18 @@ type Step struct {
 	Text  string `json:"text"`
 }
 
-// get sends an HTTP request to the url and returns its answer as mapped to into. What goes wrong is told
-// in words for a screen. The actual error goes to the log.
-func (c Client) get(ctx context.Context, url string, into any) error {
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+// get fetches the given endpoint and decodes the JSON answer into into. What goes wrong is told in words for a
+// screen, without the address that was asked; what the server said goes to the log.
+func (c Client) get(ctx context.Context, endpoint string, into any) error {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, nil)
 	if err != nil {
-		return err
+		return didNotAnswer(err)
 	}
 	req.Header.Set("User-Agent", "TECHO5 (github.com/HuskerMinion/techo5)")
 	if c.Token != "" {
-		req.Header.Add("Authorization", "Bearer "+c.Token)
+		req.Header.Set("Authorization", "Bearer "+c.Token)
 	}
-	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Accept", "application/json")
 	resp, err := client.Do(req)
 	if err != nil {
 		return didNotAnswer(err)
@@ -117,7 +105,7 @@ func (c Client) get(ctx context.Context, url string, into any) error {
 	case http.StatusForbidden:
 		return errForbidden
 	default:
-		slog.Warn("mealie: an answer that was not wanted", "status", resp.Status, "said", strings.TrimSpace(string(b[:min(len(b), 200)])))
+		slog.Debug("mealie: an answer that was not wanted", "status", resp.Status, "said", strings.TrimSpace(string(b[:min(len(b), 200)])))
 		return fmt.Errorf("mealie answered %s", resp.Status)
 	}
 	if err := json.Unmarshal(b, into); err != nil {
@@ -127,7 +115,7 @@ func (c Client) get(ctx context.Context, url string, into any) error {
 	return nil
 }
 
-// didNotAnswer is err as a Mealie that did not answer
+// didNotAnswer returns err as a Mealie that did not answer, without the address that was asked.
 func didNotAnswer(err error) error {
 	if asked, ok := errors.AsType[*url.Error](err); ok {
 		err = asked.Err
@@ -150,29 +138,22 @@ var ErrUnreadable = errors.New("Mealie sent something this device couldn't read"
 // Recipes returns all the recipes in name order, reading the list a page at a time. An error on any page
 // is an error for the whole list.
 func (c Client) Recipes(ctx context.Context) ([]RecipeEntry, error) {
-	page := 1
 	var recipes []RecipeEntry
-	for {
-		var out RecipeFetchResult
-
-		err := c.get(ctx, c.RecipeFetchURL(page), &out)
-		if err != nil {
+	for page := 1; ; page++ {
+		var out recipePage
+		if err := c.get(ctx, c.pageURL(page), &out); err != nil {
 			return nil, err
 		}
 		recipes = append(recipes, out.Items...)
-
-		if page >= out.TotalPages {
+		if page >= out.TotalPages || len(out.Items) == 0 {
 			return recipes, nil
 		}
-
-		page = page + 1
 	}
 }
 
-// RecipeFetchURL returns the URL of the given page of the list of recipes, by name. The first page
-// is 1.
-func (c Client) RecipeFetchURL(page int) string {
-	return strings.TrimRight(c.URL, "/") + recipesBaseUrl + "?page=" + strconv.Itoa(page) + "&perPage=" + strconv.Itoa(fetchedPerPage) + "&orderBy=name&orderDirection=asc"
+// pageURL returns the URL of the given page of the list of recipes, by name. The first page is 1.
+func (c Client) pageURL(page int) string {
+	return strings.TrimRight(c.URL, "/") + recipesBaseURL + "?page=" + strconv.Itoa(page) + "&perPage=" + strconv.Itoa(fetchedPerPage) + "&orderBy=name&orderDirection=asc"
 }
 
 // ImageURL returns the URL of the recipe's small picture, which Mealie makes square from the middle of
@@ -182,19 +163,19 @@ func (c Client) ImageURL(recipe RecipeEntry) string {
 	if recipe.ImageVersion == "" {
 		return ""
 	}
-	return strings.TrimRight(c.URL, "/") + recipeImageBaseUrl + "/" + url.PathEscape(recipe.ID) + "/images/" + recipeImageSize + "?version=" + url.QueryEscape(recipe.ImageVersion)
+	return strings.TrimRight(c.URL, "/") + recipeImageBaseURL + "/" + url.PathEscape(recipe.ID) + "/images/" + recipeImageSize + "?version=" + url.QueryEscape(recipe.ImageVersion)
 }
 
-// RecipeURL returns the URL of the recipe with the given slug.
-func (c Client) RecipeURL(slug string) string {
-	return strings.TrimRight(c.URL, "/") + recipesBaseUrl + "/" + url.PathEscape(slug)
+// recipeURL returns the URL of the recipe with the given slug.
+func (c Client) recipeURL(slug string) string {
+	return strings.TrimRight(c.URL, "/") + recipesBaseURL + "/" + url.PathEscape(slug)
 }
 
-// Recipe returns the recipe with the given slug, its ingredients and steps. An ingredient with no text
-// and a step with neither text nor title are left out. The heading of a left out ingredient goes on to the next one that stays.
+// Recipe returns the recipe with the given slug. Ingredients with no text and steps with neither text nor
+// title are dropped; a dropped ingredient's section heading moves to the next one kept.
 func (c Client) Recipe(ctx context.Context, slug string) (DetailedRecipe, error) {
 	var recipe DetailedRecipe
-	if err := c.get(ctx, c.RecipeURL(slug), &recipe); err != nil {
+	if err := c.get(ctx, c.recipeURL(slug), &recipe); err != nil {
 		return DetailedRecipe{}, err
 	}
 	var ingredients []Ingredient

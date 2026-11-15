@@ -14,10 +14,10 @@ import (
 	"github.com/HuskerMinion/techo5/echod/internal/lib/mealie"
 )
 
-// The recipe sheet's guide as it is drawn: the recipe's name along the top with Back, under it a page,
-// and along the bottom Previous, where in the recipe the page is, and Next. The first page lists the
-// ingredients, as the To-do tab lists its items, and each of the others is a step. A page too long for
-// the room scrolls, and says so with the fades and the bar the settings lists have (scrollHints).
+// The recipe sheet's guide as drawn: the recipe's name and a Back button along the top, a page under them, and a
+// Previous and Next button along the bottom. The first page lists the ingredients, as the
+// To-do tab lists its items; every other page is a step. A page too long for its room scrolls, and shows
+// it with scrollHints.
 
 // mealieLine is a piece of a guide's page: a line of text, or a rule, at its place on the page, which
 // is counted from the page's top whatever the page is scrolled to.
@@ -34,8 +34,7 @@ type mealieLine struct {
 func (r *renderer) mealieGuide(s *mealieSheet, g mealieGeom, pal dashPal, fc sheetFaces) ([]mediaZone, int, int) {
 	// The bar: the recipe's name at the left, and Back at the right.
 	word := tr("back")
-	backW := max(r.width(fc.navBold, word)+2*r.s(20), r.s(84))
-	back := image.Rect(g.bar.Max.X-backW, g.bar.Min.Y, g.bar.Max.X, g.bar.Max.Y)
+	back := image.Rect(g.bar.Max.X-r.mealiePillW(word, fc), g.bar.Min.Y, g.bar.Max.X, g.bar.Max.Y)
 	r.mealiePill(back, word, pal.accent, pal.bg, fc)
 	name := r.fit(fc.labelBold, dashboard.CleanName(s.selected.Name), back.Min.X-r.s(16)-g.bar.Min.X)
 	r.text(fc.labelBold, name, g.bar.Min.X, g.bar.Min.Y+r.s(33), pal.text)
