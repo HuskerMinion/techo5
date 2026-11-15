@@ -18,7 +18,7 @@ import (
 
 // The screen's own settings that a device far from its owner still needs set from a phone: how the
 // clock looks, the font of the screen's words, what a tap on it does, the slideshow, and weather art in place of its photos. On the
-// Screen & Photos tab, over the dashboard and the photos; the rest of what the screen shows is still
+// Screen tab, over the dashboard and the photos; the rest of what the screen shows is still
 // set on the screen, where it can be seen.
 
 // ScreenChoices is the clock's look as the screen offers it, handed in by the display, which imports
@@ -59,11 +59,11 @@ type ScreenChoices struct {
 	// leaves the box off the page.
 	IgnoreRoomLights func(bool)
 	// Calendar is how the calendar page looks, where the screen has one of its own (the Show): on the
-	// Weather & Calendar tab, under the calendars.
+	// Screen tab, by the clock's other looks.
 	Calendar []CalendarChoice
 
 	// Todo is whether the screen has a To-do tab in its drawer (the Show), which the to-do lists section
-	// of the Weather & Calendar tab chooses the lists for (todo.go).
+	// of the Screen tab chooses the lists for (todo.go).
 	Todo bool
 
 	// Themes is the screen's themes and light and dark mode, where it has them (the Show); nil leaves

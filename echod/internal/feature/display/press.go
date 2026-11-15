@@ -1,4 +1,4 @@
-//go:build !dot && !spot
+//go:build !dot
 
 package display
 
@@ -33,33 +33,6 @@ type pressState struct {
 	seq   uint64    // which press this is, for the timer that ends a long one
 }
 
-// pageID is which page a frame draws, as far as a press cares: a press made on one page is not shown on
-// another, where something else is under the same point.
-type pageID struct {
-	phase                                                 string
-	call, ring, pin, ask, videoAsk, video, pairing, wifi  bool
-	qr, camTest, sheet, picker, camera, alert, calendar   bool
-	deck, radar, weather, dash, dashSheet, playing, strip bool
-	drawer, drawerPick, saver, sunrise, redClock          bool
-	cat                                                   category
-	custom                                                string
-	tessPage, drawerTab                                   int
-}
-
-// pageOf is the page s draws.
-func pageOf(s *scene) pageID {
-	return pageID{
-		phase: s.phase, call: s.callPageUp(), ring: s.ring.any(), pin: s.pin.open, ask: s.setupAsking,
-		videoAsk: s.showVideoAsk, video: s.showVideo, pairing: s.bt.Pairing, wifi: s.showWifi,
-		qr: s.qrscan != nil, camTest: s.camtest != nil, sheet: s.showSheet, picker: s.showSheet && s.sheet.picker != "",
-		camera: s.showCamera, alert: s.showAlert, calendar: s.showCalendar, deck: s.showDeck, radar: s.showRadar,
-		weather: s.showWeather, dash: s.showDash, dashSheet: s.showDash && s.dashSheetUp(), playing: s.nowPlaying,
-		strip: s.strip, drawer: s.showDrawer, drawerPick: s.showDrawer && s.drawerPick != "",
-		saver: s.slideshowScreensaver != nil, sunrise: s.sunrise > 0, redClock: s.redClock,
-		cat: s.sheet.cat, custom: s.custom.name, tessPage: s.tessPage, drawerTab: s.drawerTab,
-	}
-}
-
 // fingerLanded is a finger coming down at p: the press to show, from the next frame. Not on a dark
 // panel, where nothing is drawn, nor on a card over the page, which is not the control under it.
 func (d *Display) fingerLanded(p touch.Point) {
@@ -67,9 +40,7 @@ func (d *Display) fingerLanded(p touch.Point) {
 	d.mu.Lock()
 	shown := d.pageShown
 	d.mu.Unlock()
-	// A card waiting under the call or ringing page is not drawn there, and the finger is on that
-	// page's buttons, which show the press.
-	if !shown.call && !shown.ring && d.cardAt(at) {
+	if d.pressRefused(at, shown) {
 		return
 	}
 	now := time.Now()
@@ -138,22 +109,21 @@ func (d *Display) pressMoved(x, y int) {
 	d.mu.Unlock()
 }
 
-// pressScene puts the press on the frame, while there is one to show and the frame is still the page it
-// was made on, and notes the page for the next finger to land on.
-func (d *Display) pressScene(s *scene, now time.Time) {
-	page := pageOf(s)
+// pressNow is the press a frame of page shows at now, while there is one to show and the frame is
+// still the page it was made on, and it notes the page for the next finger to land on.
+func (d *Display) pressNow(page pageID, now time.Time) pressView {
 	d.mu.Lock()
 	defer d.mu.Unlock()
 	d.pageShown = page
 	p := &d.press
 	if !p.set {
-		return
+		return pressView{}
 	}
 	if p.page != page || (p.down && now.Sub(p.since) >= pressMax) || (!p.down && !now.Before(p.until)) {
 		*p = pressState{}
-		return
+		return pressView{}
 	}
-	s.press = pressView{on: true, at: p.at}
+	return pressView{on: true, at: p.at}
 }
 
 // dropPressLocked ends the press without a frame of its own, for a finger that has become a slide or a

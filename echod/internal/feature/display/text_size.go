@@ -22,8 +22,18 @@ import (
 // Chosen under Display beside the font, or as Screen text size in Home Assistant, and shown at once
 // the same way: a new size is a new fontKey, and each renderer makes its faces again (useFont).
 
-// textSteps are the sizes offered, in percent.
-var textSteps = []int{70, 80, 90, 100, 110, 125}
+// textSteps are the sizes the screen can be set to, in percent; a board offers those up to its most
+// (offeredSteps).
+var textSteps = []int{70, 80, 90, 100, 110, 125, 150}
+
+// offeredSteps are the text sizes this board offers: textSteps up to layout.MostTextSize.
+func offeredSteps() []int {
+	n := len(textSteps)
+	for n > 1 && textSteps[n-1] > layout.MostTextSize() {
+		n--
+	}
+	return textSteps[:n]
+}
 
 // textSize is the text size in force: the one chosen, or the device's own (layout.DefaultTextSize).
 func textSize() int {
@@ -36,9 +46,9 @@ func textSize() int {
 // textSizeIndex is the step nearest the size in force, which is the step itself unless the size came
 // from elsewhere (a hand-edited file, a newer build).
 func textSizeIndex() int {
-	v, best := textSize(), 0
-	for i, s := range textSteps {
-		if abs(s-v) < abs(textSteps[best]-v) {
+	v, best, steps := textSize(), 0, offeredSteps()
+	for i, s := range steps {
+		if abs(s-v) < abs(steps[best]-v) {
 			best = i
 		}
 	}
@@ -47,8 +57,9 @@ func textSizeIndex() int {
 
 // textSizeOptions are the steps as the picker and Home Assistant show them.
 func textSizeOptions() []string {
-	out := make([]string, len(textSteps))
-	for i, s := range textSteps {
+	steps := offeredSteps()
+	out := make([]string, len(steps))
+	for i, s := range steps {
 		out[i] = fmt.Sprintf("%d%%", s)
 	}
 	return out
@@ -78,14 +89,15 @@ func textSizePicker() (pickerView, bool) {
 
 // setTextSize saves the text size at step i and shows it at once, so it can be chosen while looking.
 func (d *Display) setTextSize(i int) {
-	if i < 0 || i >= len(textSteps) {
+	steps := offeredSteps()
+	if i < 0 || i >= len(steps) {
 		return
 	}
-	if err := config.Set().Screen().TextSize(textSteps[i]); err != nil {
+	if err := config.Set().Screen().TextSize(steps[i]); err != nil {
 		slog.Error("saving the text size failed", "err", err)
 		return
 	}
-	slog.Info("screen: text size", "percent", textSteps[i])
+	slog.Info("screen: text size", "percent", steps[i])
 	if d.textSizeSel != nil {
 		d.textSizeSel.Set(textSizeOptions()[i])
 	}

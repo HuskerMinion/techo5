@@ -2949,6 +2949,7 @@ func (d *Display) frame() (next time.Duration) {
 	d.quietAway(now, s.radio, music, wants, s.playing)
 	s.nowPlaying = wants && !d.putAway(s.radio, wants, s.playing)
 	d.mu.Lock()
+	s.musicAway = d.away
 	// Not under the sunrise light, which draws no strip: taps on a strip nobody can see would still act.
 	if wants && d.stripDue(now, s.radio, s.nowPlaying) && d.wakeLight(now) == 0 {
 		s.nowPlaying, s.strip = false, true

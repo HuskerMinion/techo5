@@ -26,7 +26,7 @@ func TestHistorySectionEscapesAndWithholds(t *testing.T) {
 		{At: time.Now(), Slot: 0, End: "stopped", Withheld: true},
 	})
 	f, c := in(t)
-	page := get(f, "/setup?tab=sound", c).Body.String()
+	page := get(f, "/setup?tab=voice", c).Body.String()
 	for _, want := range []string{"<legend>Recent voice requests</legend>", "&lt;script&gt;alert(1)&lt;/script&gt;", "ok &amp; done",
 		"listen 1.2 seconds, think 0.8 seconds", "(not kept: Send voice text is off)", "<td>0.91</td>", "<td>stopped</td>"} {
 		if !strings.Contains(page, want) {

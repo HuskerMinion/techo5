@@ -32,7 +32,13 @@ type styleFaceKey struct {
 // handful of faces rather than one per fraction of a pixel. A new font or text size empties the set
 // (useFont).
 func (r *renderer) styleFace(bold bool, size int) font.Face {
-	px := max(r.atTextSize(r.s(size))/4*4, 8)
+	return r.pxFace(bold, r.atTextSize(r.s(size)))
+}
+
+// pxFace is a face px of this panel's pixels in the screen font, rounded down to a few pixels and
+// kept with styleFace's.
+func (r *renderer) pxFace(bold bool, px int) font.Face {
+	px = max(px/4*4, 8)
 	k := styleFaceKey{bold, px}
 	if f, ok := r.styleFaces[k]; ok {
 		return f

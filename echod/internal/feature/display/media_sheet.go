@@ -243,6 +243,22 @@ func (d *Display) mediaTap(x, y int) bool {
 	return true
 }
 
+// mediaPartActs is whether a tap on z does something on the sheet m (mediaTap): the volume is a slider,
+// whose level follows the finger, and the blocks of favorites and speakers are only swiped.
+func mediaPartActs(z mediaZone, m mediaSheet) bool {
+	switch z.kind {
+	case mediaPartDone, mediaPartPrev, mediaPartPlay, mediaPartNext:
+		return true
+	case mediaPartLibrary:
+		return m.lists.Target != ""
+	case mediaPartFavorite:
+		return z.index < len(m.lists.Favorites)
+	case mediaPartSpeaker:
+		return z.index < len(m.lists.Speakers)
+	}
+	return false
+}
+
 // editMedia changes the sheet up now, if it is still up, without changing the one a frame is drawing.
 func (d *Display) editMedia(change func(*mediaSheet)) {
 	d.mu.Lock()
@@ -518,6 +534,9 @@ func (r *renderer) mediaSheet(v *mediaView, th dashboard.Theme) {
 		r.mdiIcon("bookshelf", tx, lb.Min.Y+(btnH-r.s(24))/2, 24, pal.text)
 		r.text(fc.button, word, tx+r.s(30), lb.Min.Y+btnH/2+r.s(9), pal.text)
 		zones = append(zones, mediaZone{r: lb, kind: mediaPartLibrary})
+	}
+	if z, ok := r.pressPart(zones, card); ok && mediaPartActs(z, m) {
+		r.pressOnPart(z.r, pal)
 	}
 	r.setMedia(zones, card)
 	r.zmu.Lock()

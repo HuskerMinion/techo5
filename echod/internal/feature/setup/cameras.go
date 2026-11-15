@@ -116,7 +116,8 @@ func saveHACameras(r *http.Request) string {
 func reolinkSection(w http.ResponseWriter, token string) {
 	r := config.Get().Home.Reolink
 	fieldsetOpen(w, "reolink", "Reolink cameras")
-	fmt.Fprint(w, `<form method="post" action="/setup/save">`)
+	// Saving logs in to the recorder and lists its cameras before it answers (home.SetReolink).
+	fmt.Fprintf(w, `<form method="post" action="/setup/save"%s>`, busy(busyReolink))
 	hidden(w, token, "reolink")
 	if r.Base != "" {
 		var names []string

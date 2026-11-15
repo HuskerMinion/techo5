@@ -143,6 +143,8 @@ func (r *renderer) monthCell(v calendarView, l calLook, day time.Time, in image.
 		if !r.monthRoomy(l) {
 			hh = r.s(23) / 2
 		}
+		// Round the figures however large they are drawn: at 150% they stood out of the pill.
+		hh = max(hh, (capHeight(nf.bold)+r.s(8))/2)
 		cy := base - capHeight(nf.bold)/2
 		pill := image.Rect(nx-r.s(5), cy-hh, nx+w+r.s(5), cy+hh)
 		r.roundRect(pill, hh, amber)

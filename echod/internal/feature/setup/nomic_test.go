@@ -11,16 +11,17 @@ import (
 
 // A device without microphones (the Skylight Calendar) has no voice to set up on this page: no voice
 // assistant, realtime voice, listening after an answer, wake words or talk through cameras, and the
-// Sound tab does not say Voice. What it plays is still there.
+// page has no Voice tab. What it plays is still there.
 func TestNoVoiceSectionsWithoutAMicrophone(t *testing.T) {
 	f, c := in(t)
 	voice := []string{"<legend>Voice assistant</legend>", "<legend>Realtime voice</legend>",
 		"<legend>Listening after an answer</legend>", "<legend>Wake words of your own</legend>",
 		"<legend>Wake word scores</legend>",
 		"<legend>Record takes of a word</legend>",
-		"<legend>Talk through cameras</legend>", "Sound &amp; Voice"}
+		"<legend>Talk through cameras</legend>", `href="/setup?tab=voice"`}
 	page := func() string {
-		return get(f, "/setup?tab=sound", c).Body.String() + get(f, "/setup?tab=connections", c).Body.String()
+		return get(f, "/setup?tab=sound", c).Body.String() + get(f, "/setup?tab=voice", c).Body.String() +
+			get(f, "/setup?tab=cameras", c).Body.String()
 	}
 	with := page()
 	for _, s := range voice {

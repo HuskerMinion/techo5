@@ -186,6 +186,12 @@ type Display struct {
 	on      bool
 	ceiling int
 
+	// press is the finger a press is shown under, pageShown the face the last frame drew, which a
+	// finger lands on, and pressSeq counts the presses (press.go).
+	press     pressState
+	pageShown pageID
+	pressSeq  uint64
+
 	// The dashboard face (dashboard_spot.go): asked for, when last touched, whether the last frame
 	// drew it, whether the touch screen follows fingers for it, where it is scrolled and on which
 	// dashboard, a finger moving on it, a level being slid, the idle one put away until, and a finger
@@ -428,6 +434,8 @@ func build() *Display {
 	media.Get().OnVolume.Listen(d.volumeMoved)
 	ambient.Get().Lux.Listen(d.lux)
 	touch.Get().Gestures.Listen(d.gesture)
+	touch.Get().Landed.Listen(d.fingerLanded)
+	touch.Get().Down.Listen(d.fingerDown)
 	timer.Get().Changed.Listen(func(struct{}) { d.ringLights() })
 	alarm.Get().Changed.Listen(func(struct{}) { d.ringLights() })
 	remind.Get().Changed.Listen(func(struct{}) { d.reminderLights() })
@@ -723,6 +731,17 @@ func (d *Display) gesture(g touch.Gesture) {
 	// face has not seen the card yet, so it is not a tap on anything.
 	held := d.noticeHeld()
 	ringTap := g.Kind == touch.Tap && ringingNow(time.Now()).any()
+	// A finger that swipes, drags or is held is not pressing what it came down on (press.go).
+	switch g.Kind {
+	case touch.SwipeUp, touch.SwipeDown, touch.SwipeLeft, touch.SwipeRight:
+		if d.pressClear() {
+			d.wake()
+		}
+	case touch.Hold:
+		d.pressHeld(g.Moved)
+	case touch.Drag:
+		d.pressMoved(g.X, g.Y)
+	}
 
 	if !on {
 		// A dark panel only lights; nothing under the finger is acted on. A long press on a face the
@@ -1802,6 +1821,7 @@ func (d *Display) frame() (next time.Duration) {
 	}
 	d.redShown = s.nightClockFace()
 	d.mu.Unlock()
+	d.pressScene(&s, now)
 	if s.showVideo && s.videoLive {
 		// The picture's own frames go to the panel; the canvas holds only the controls.
 		d.r.draw(s)

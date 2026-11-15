@@ -17,7 +17,7 @@ import (
 	"github.com/HuskerMinion/techo5/echod/internal/update"
 )
 
-// The settings as a file, from the General tab: saved, and given back to this device after a reinstall,
+// The settings as a file, from the System tab: saved, and given back to this device after a reinstall,
 // or to another to start it off the same way (config.Export, config.Restored). Restoring asks first,
 // with what it would change, and then restarts the daemon, since everything reads its settings as it
 // starts.
@@ -59,14 +59,14 @@ func settingsFileSection(w http.ResponseWriter, token string) {
 	  microphones and camera may do (drop-in, sending the room to Home Assistant, keeping clips, presence,
 	  no wake word), its paired speaker and what it is in the middle of. It still says where the device is and holds addresses on
 	  your network: keep it, don't post it.</p>`)
-	fmt.Fprintf(w, `<form method="post" action="/setup/restore" enctype="multipart/form-data">
+	fmt.Fprintf(w, `<form method="post" action="/setup/restore" enctype="multipart/form-data"%s>
 	 <input type="hidden" name="token" value="%s">
 	 <label for="settingsfile">Restore settings from a file</label>
 	 <input id="settingsfile" name="file" type="file" accept=".json,application/json" required>
 	 <p class="note">You are shown what would change before anything does. Restoring keeps this device's
 	  own keys, passwords and privacy switches, then restarts it.</p>
 	 <div class="btns"><button type="submit">Look at this file</button></div></form></fieldset>`,
-		html.EscapeString(token))
+		busy(busyLook), html.EscapeString(token))
 }
 
 // settingsFile hands over the settings as a file.
@@ -182,10 +182,11 @@ func restorePage(w http.ResponseWriter, token string, rs config.Restoration) {
 	 <p class="note">Everything in those parts is replaced with what the file says. This device keeps its own
 	  keys, passwords, house word, privacy switches and paired speaker, and restarts to use the rest: back
 	  in about a minute.</p>
-	 <form method="post" action="/setup/restore"><input type="hidden" name="token" value="%s">
+	 <form method="post" action="/setup/restore"%s><input type="hidden" name="token" value="%s">
 	  <input type="hidden" name="apply" value="yes">
 	  <div class="btns"><button type="submit">Restore and restart</button>
-	  <a href="/setup?tab=general">Cancel</a></div></form></fieldset></div>`, html.EscapeString(token))
+	  <a href="/setup?tab=system">Cancel</a></div></form></fieldset></div>`, busy(busyRestore), html.EscapeString(token))
+	pageScript(w) // the busy line above (script.go)
 }
 
 // applyRestore applies the file this browser looked at, and restarts.
@@ -211,7 +212,7 @@ func (f *Feature) applyRestore(w http.ResponseWriter, r *http.Request, token str
 	head(w)
 	fmt.Fprintf(w, `<div class="wrap"><h1>%s</h1><p class="sub">Restore settings</p>
 	 <div class="banner ok">Restored. The device is restarting to use them and will be back in about a minute.</div>
-	 <p><a href="/setup?tab=general">Back to the setup page</a></p></div>`, html.EscapeString(deviceName()))
+	 <p><a href="/setup?tab=system">Back to the setup page</a></p></div>`, html.EscapeString(deviceName()))
 
 	restartAfterRestore()
 }

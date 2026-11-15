@@ -123,9 +123,9 @@ func TestShowScenesDraw(t *testing.T) {
 				Message: "The washing machine is done"}},
 		// The device's own notes (home/hint.go): a station Home Assistant never started, the star refused.
 		"notification-radio-hint": {now: at, phase: "idle", weather: sky, showNotification: true,
-			notification: notify.Notification{Kind: notify.Text, Title: "Radio", Message: home.NoStartHint, Own: true}},
+			notification: notify.Notification{Kind: notify.Text, Title: "Radio", Message: home.HintText(home.NoStartHint), Own: true}},
 		"notification-favorite-hint": {now: at, phase: "idle", weather: sky, showNotification: true,
-			notification: notify.Notification{Kind: notify.Text, Title: "Favorites", Message: home.FavoriteHint, Own: true}},
+			notification: notify.Notification{Kind: notify.Text, Title: "Favorites", Message: home.HintText(home.FavoriteHint), Own: true}},
 		"notification-no-title": {now: at, phase: "idle", weather: sky, showNotification: true,
 			notification: notify.Notification{Kind: notify.Text, Message: "The washing machine is done"}},
 		"notification-unknown-icon": {now: at, phase: "idle", weather: sky, showNotification: true,

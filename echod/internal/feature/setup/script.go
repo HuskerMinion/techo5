@@ -26,6 +26,10 @@ const (
 	busyPack      = "Loading the pack…"
 	busyInstall   = "Starting the install…"
 	busyCheck     = "Checking, up to half a minute…"
+	busyReolink   = "Looking for the cameras, up to half a minute…"
+	busyImmich    = "Asking Immich, a few seconds…"
+	busyLook      = "Reading the file…"
+	busyRestore   = "Restoring, then restarting…"
 )
 
 // pageScript is the script. On the submit of a form marked busy it puts the form's words beside the
@@ -37,8 +41,39 @@ const (
 // typed. The boxes are drawn hidden and brought out here, so there is none where it would do nothing.
 // A field being shown is put back before its form is sent, so that the browser, which remembers what
 // was typed into an ordinary field to offer it again, is not handed a password as one.
+//
+// And it puts a refused form back as it was typed (stash.go): the form that saves what the kept one
+// did, and whose hidden fields (which alarm, which page) match it, gets its fields' values again. A box
+// that was not ticked is not sent, so a box missing from what was kept is not ticked. A secret, a file
+// and a hidden field are never touched: secrets are not kept, and the hidden fields are the page's.
 func pageScript(w io.Writer) {
 	_, _ = io.WriteString(w, `<script>
+(function(){
+ var d=document.getElementById('refill');if(!d)return;
+ var k;try{k=JSON.parse(d.textContent)}catch(e){return}
+ var v=k.fields||{},form=null;
+ document.querySelectorAll('form').forEach(function(f){
+  if(form)return;
+  var w=f.querySelector('input[type=hidden][name=what]');if(!w||w.value!==k.what)return;
+  var same=true;
+  f.querySelectorAll('input[type=hidden]').forEach(function(h){
+   if(h.name&&h.name!=='token'&&h.name!=='what'&&v[h.name]&&v[h.name].indexOf(h.value)<0)same=false;
+  });
+  if(same)form=f;
+ });
+ if(!form)return;
+ var n={};
+ Array.prototype.forEach.call(form.elements,function(e){
+  var t=(e.type||'').toLowerCase();
+  if(!e.name||t==='hidden'||t==='password'||t==='file'||t==='submit'||t==='button'||e.tagName==='BUTTON')return;
+  var x=v[e.name];
+  if(t==='checkbox'||t==='radio'){e.checked=!!x&&x.indexOf(e.value)>=0;return}
+  if(!x)return;
+  if(e.tagName==='SELECT'&&e.multiple){Array.prototype.forEach.call(e.options,function(o){o.selected=x.indexOf(o.value)>=0});return}
+  var i=n[e.name]||0;n[e.name]=i+1;
+  if(i<x.length)e.value=x[i];
+ });
+})();
 function secretOf(c){return document.getElementById(c.getAttribute('data-show'))}
 document.querySelectorAll('input[data-show]').forEach(function(c){
  var i=secretOf(c);if(!i)return;

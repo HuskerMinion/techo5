@@ -27,7 +27,7 @@ func dashboardSection(w http.ResponseWriter, token string) {
 	 <input id="dashaddr" name="address" value="%s" placeholder="192.168.1.20:9555" autocomplete="off">
 	 %s%s
 	 <p class="note">Only for a <strong>streamed</strong> dashboard, which a dashcast server draws: set
-	  <strong>Dashboard</strong> to <strong>Streamed</strong> under Screen &amp; Photos or in Home Assistant.
+	  <strong>Dashboard</strong> to <strong>Streamed</strong> above, or in Home Assistant.
 	  A dashboard drawn on the device needs no server.</p>
 	 <p><button type="submit">Save</button></p></form></fieldset>`,
 		html.EscapeString(d.Server), secretField("dashkey", "Key", "key", d.Key != "", ""), checkNote(d.Server))
@@ -58,7 +58,7 @@ func checkNote(server string) string {
 	 <p class="note"><strong>%s</strong> (checked at %s, on Save): %s</p>`, mark, c.at.Format("3:04 PM"), html.EscapeString(c.said))
 }
 
-// dashboardPanelSection is the dashboard as a panel by a door wants it, on the Screen & Photos tab:
+// dashboardPanelSection is the dashboard as a panel by a door wants it, on the Screen tab:
 // whether there is one and how it is shown, whether it stands in for the clock, how big its tiles are
 // and how they are laid out on the Show, and how long one opened by hand stays up. The same settings are in Home Assistant;
 // which dashboard to show is there too, where the list of them is.
@@ -104,7 +104,7 @@ func dashboardPanelSection(w http.ResponseWriter, token string) {
 	fmt.Fprintf(w, `</select>
 	 <p><label><input type="checkbox" name="idle" value="yes" style="width:auto"%s> Show it in place of the clock when idle</label></p>
 	 <p class="note"><strong>Drawn on the device</strong> needs nothing else. <strong>Streamed</strong> needs a
-	  dashcast server, set under Connections.%s <strong>Back to the clock after</strong> is for a dashboard
+	  dashcast server, set below.%s <strong>Back to the clock after</strong> is for a dashboard
 	  opened by hand; one Home Assistant shows stays until it is hidden.</p>
 	 <p><button type="submit">Save</button></p></form></fieldset>`, idle, tesseraNote)
 }

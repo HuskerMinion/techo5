@@ -7,7 +7,7 @@ import (
 	"testing"
 )
 
-// The calendar's look is a choice per switch on the Weather & Calendar tab. A save changes only what
+// The calendar's look is a choice per switch on the Screen tab. A save changes only what
 // was changed, so a default shown on the form is not kept as chosen; a choice the switch does not have
 // is refused, and a device without a calendar page shows none of it.
 func TestTheCalendarLookSection(t *testing.T) {

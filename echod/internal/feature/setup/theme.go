@@ -13,7 +13,7 @@ import (
 	"github.com/HuskerMinion/techo5/echod/internal/lib/palette"
 )
 
-// The screen's themes, on Screen & Photos where the screen has them (the Show): the dark mode's theme
+// The screen's themes, on Screen where the screen has them (the Show): the dark mode's theme
 // and the light mode's, which of the two the screen wears, and the custom colors, each a color picker
 // with its #rrggbb beside it. The colors start from the theme the screen wears now, and Match the accent
 // fills the other four in from the accent (palette.Derive), to be changed after as anybody likes.

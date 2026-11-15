@@ -240,3 +240,30 @@ func TestTheTalkBackPasswordCanBeRemoved(t *testing.T) {
 		t.Errorf("after removing the password: user %q, password %q", got.User, got.Pass)
 	}
 }
+
+// The settings lock's PIN is drawn as the other secrets are: an empty field, closed to a password
+// manager, with a Show box; and with a PIN set, neither the PIN nor what is kept of it is in the page.
+func TestTheLockPINIsASecretField(t *testing.T) {
+	if !hasScreen {
+		t.Skip("the settings lock is a screen's")
+	}
+	f, c := in(t)
+	if p := post(t, f, c, url.Values{"what": {"lock"}, "do": {"set"}, "pin": {"80417"}}).Query().Get("problem"); p != "" {
+		t.Fatal(p)
+	}
+	w := httptest.NewRecorder()
+	lockSection(w, c.Value)
+	page := w.Body.String()
+	for _, want := range []string{`id="lockpin" name="pin" type="password" value="" autocomplete="new-password"`,
+		`inputmode="numeric" pattern="[0-9]{4,8}" required`, `data-show="lockpin"`} {
+		if !strings.Contains(page, want) {
+			t.Errorf("the PIN field lacks %q:\n%s", want, page)
+		}
+	}
+	if kept := config.Get().Security.LockPIN; strings.Contains(page, "80417") || (kept != "" && strings.Contains(page, kept)) {
+		t.Error("the page shows the PIN")
+	}
+	if page := get(f, "/setup?tab=privacy", c).Body.String(); !strings.Contains(page, `data-show="lockpin"`) {
+		t.Error("the privacy tab's PIN field has no Show box")
+	}
+}

@@ -17,7 +17,7 @@ func init() {
 	saves["babylight"] = saveBabyLight
 }
 
-// babySection is the baby monitor (feature/babymon), on the Privacy & Security tab of a device with
+// babySection is the baby monitor (feature/babymon), on the Privacy tab of a device with
 // microphones: whether it is on, the link to listen with, and a new link. The switch itself is on the
 // device's screen and in Home Assistant, not here: this page never turns a microphone on.
 func babySection(w http.ResponseWriter, token string) {

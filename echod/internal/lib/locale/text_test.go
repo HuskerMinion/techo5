@@ -274,3 +274,33 @@ func TestSkipWords(t *testing.T) {
 		t.Errorf("de done is %q", got)
 	}
 }
+
+// Words that were once written into the drawing code: in every catalog, the partial ones too, so no
+// screen shows them in English.
+func TestOnceHardcodedWordsAreInEveryCatalog(t *testing.T) {
+	keys := []string{"popup_started", "popup_in_a_minute", "popup_in_d_minutes", "popup_in_an_hour", "popup_at_s",
+		"reminder_untitled", "hint_no_start", "hint_favorite", "hint_no_home", "hint_play_failed", "hint_dropping",
+		"call_muted", "silenced", "press_again_to_snooze_d_min"}
+	for key := range uiEnglish {
+		if strings.HasPrefix(key, "clock_style_") && key != "clock_style_label" && key != "clock_style_description" {
+			keys = append(keys, key)
+		}
+	}
+	for lang, catalog := range uiTranslations {
+		for _, key := range keys {
+			if catalog[key] == "" {
+				t.Errorf("%s: no %s", lang, key)
+			}
+		}
+	}
+}
+
+// A muted call is its microphone off, not the sound: French and Italian say so (ui_muted there reads
+// as the sound off).
+func TestAMutedCallSaysTheMicrophone(t *testing.T) {
+	for _, lang := range []string{"fr", "it"} {
+		if got := Text(lang, "call_muted"); !strings.HasPrefix(got, "Micro") || got == Text(lang, "ui_muted") {
+			t.Errorf("%s: a muted call says %q", lang, got)
+		}
+	}
+}

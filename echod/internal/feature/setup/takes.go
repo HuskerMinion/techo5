@@ -196,7 +196,7 @@ func (f *Feature) takesTake(w http.ResponseWriter, r *http.Request) {
 	http.ServeContent(w, r, "take.wav", at, bytes.NewReader(wav))
 }
 
-// takesSection is Record takes of a word, on the Sound & Voice tab of a device with microphones.
+// takesSection is Record takes of a word, on the Voice tab of a device with microphones.
 func takesSection(w http.ResponseWriter, token string) {
 	if !layout.HasMicrophone() {
 		return
@@ -324,7 +324,7 @@ func takesButtons(w http.ResponseWriter, token string, pairs ...string) {
 // takesPoll keeps the line up to date while a recording waits or runs, and reloads the section when it
 // has moved on from shown, the phase the page was drawn in. Without script, Check again does the same.
 func takesPoll(w http.ResponseWriter, shown takes.Phase) {
-	fmt.Fprintf(w, `<p class="note"><a href="/setup?tab=sound#sec-takes">Check again</a></p>
+	fmt.Fprintf(w, `<p class="note"><a href="/setup?tab=voice#sec-takes">Check again</a></p>
 	 <script>(()=>{const time=document.getElementById('takestime'),about=document.getElementById('takesabout');
 	 const t=s=>Math.floor(s/60)+':'+String(Math.floor(s%%60)).padStart(2,'0');const shown=%q;
 	 const tick=async()=>{try{const r=await fetch('/setup/takes/state',{cache:'no-store'});if(!r.ok){location.reload();return}

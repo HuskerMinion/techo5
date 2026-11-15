@@ -60,10 +60,9 @@ func (r *roundRenderer) cameraView(s roundScene) {
 		if v.Error != "" {
 			msg = tr("drawer_no_picture")
 		}
+		// The words only: an error can name the address it failed at, with a token in its query. The log
+		// has what went wrong (home.cameraTrouble).
 		r.centered(r.title, msg, 250, colDim)
-		if v.Error != "" {
-			r.paragraph(r.small, v.Error, 290, colDim, 2)
-		}
 	}
 	// The name on a dark band near the top, readable over any picture; a notification's title in its
 	// place, and its words on a band under it. A picture sent with no words has neither: it is the

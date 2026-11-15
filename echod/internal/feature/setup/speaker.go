@@ -17,7 +17,7 @@ import (
 	"github.com/HuskerMinion/techo5/echod/internal/lib/wake"
 )
 
-// speakerSection is what is changed most on Sound & Voice: the volume, the wake word, quiet hours, do
+// speakerSection is what is changed most on Sound: the volume, the wake word, quiet hours, do
 // not disturb, and on a device with a jack where the sound goes. The Dot has no screen to set these on.
 //
 // Each field carries what the page showed beside it, and a save changes only what was changed on the

@@ -75,6 +75,8 @@ func clockStyleIndex() int {
 // clockStyle is the style in force; an unknown one, from a newer build, is the classic face.
 func clockStyle() string { return clockStyles[clockStyleIndex()].value }
 
+// clockStyleOptions are the styles' names for Home Assistant and the setup page, which stay in English
+// whatever the screen's language: Home Assistant chooses one by its name.
 func clockStyleOptions() []string {
 	out := make([]string, len(clockStyles))
 	for i, s := range clockStyles {
@@ -83,14 +85,60 @@ func clockStyleOptions() []string {
 	return out
 }
 
+// clockStyleName is a style's name as the screen says it, in the screen's language.
+func clockStyleName(i int) string {
+	switch clockStyles[i].value {
+	case styleClassic:
+		return tr("clock_style_classic")
+	case styleBig:
+		return tr("clock_style_big")
+	case styleFlip:
+		return tr("clock_style_flip")
+	case styleLED:
+		return tr("clock_style_led")
+	case styleAnalog:
+		return tr("clock_style_analog")
+	case styleWords:
+		return tr("clock_style_words")
+	case styleSun:
+		return tr("clock_style_sun")
+	case styleDashboard:
+		return tr("clock_style_dashboard")
+	case styleBinary:
+		return tr("clock_style_binary")
+	case styleWorld:
+		return tr("clock_style_world")
+	case styleAgenda:
+		return tr("clock_style_agenda")
+	case styleGlow:
+		return tr("clock_style_glow")
+	case styleNixie:
+		return tr("clock_style_nixie")
+	case styleStack:
+		return tr("clock_style_stack")
+	case styleOverlap:
+		return tr("clock_style_overlap")
+	}
+	return clockStyles[i].label
+}
+
+// clockStyleNames are the styles' names for the screen's picker.
+func clockStyleNames() []string {
+	out := make([]string, len(clockStyles))
+	for i := range clockStyles {
+		out[i] = clockStyleName(i)
+	}
+	return out
+}
+
 // clockStyleRow is the setting on the screen, under Display.
 func clockStyleRow() settingRow {
 	return settingRow{id: "clockstyle", label: tr("clock_style_label"), sub: tr("clock_style_description"), kind: ctlChoice,
-		value: clockStyles[clockStyleIndex()].label}
+		value: clockStyleName(clockStyleIndex())}
 }
 
 func clockStylePicker() (pickerView, bool) {
-	return pickerView{title: tr("clock_style_label"), opts: clockStyleOptions(), cur: clockStyleIndex()}, true
+	return pickerView{title: tr("clock_style_label"), opts: clockStyleNames(), cur: clockStyleIndex()}, true
 }
 
 // setClockStyle saves the clock's look and shows it at once, so it can be chosen while looking.
@@ -117,7 +165,7 @@ func (d *Display) stepClockStyle(step int) {
 	n := len(clockStyles)
 	i := ((clockStyleIndex()+step)%n + n) % n
 	d.mu.Lock()
-	d.styleNamed, d.styleNamedUntil = clockStyles[i].label, time.Now().Add(styleNameFor)
+	d.styleNamed, d.styleNamedUntil = clockStyleName(i), time.Now().Add(styleNameFor)
 	d.mu.Unlock()
 	slog.Info("screen: clock style by a swipe", "style", clockStyles[i].label)
 	d.setClockStyle(i)

@@ -78,7 +78,7 @@ func historySection(w http.ResponseWriter, token string) {
 	}
 	// Refresh differs from the page's own address in more than its fragment, so following it reloads.
 	fmt.Fprintf(w, `<form method="post" action="/setup/history/clear" class="btns"><input type="hidden" name="token" value="%s">
-	 <a href="/setup?tab=sound&amp;history=1#sec-history">Refresh</a>
+	 <a href="/setup?tab=voice&amp;history=1#sec-history">Refresh</a>
 	 <button type="submit">Clear</button></form></fieldset>`, html.EscapeString(token))
 }
 

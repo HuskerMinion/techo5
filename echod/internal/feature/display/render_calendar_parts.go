@@ -68,6 +68,8 @@ func (r *renderer) countChip(text string, right, cy int, filled bool, f font.Fac
 	if f != r.micro {
 		h = r.s(30)
 	}
+	// Taller with larger words, so they stay inside it: at 150% the figures stood out of a chip of 26.
+	h = max(h, capHeight(f)+r.s(10))
 	b := image.Rect(right-w, cy-h/2, right, cy-h/2+h)
 	fill, ink := calWash(22), cream
 	if filled {
@@ -99,13 +101,11 @@ func (r *renderer) calSegmented(sel calHitKind, right int, week bool) int {
 		seg := image.Rect(x, b.Min.Y, x+w, b.Max.Y)
 		ink := dim
 		if kinds[i] == sel {
+			// The view shown is no button: a tap on it does nothing, and it shows no press.
 			in := seg.Inset(r.s(4))
-			ink = r.buttonFace(in, float64(in.Dy())/2, btnPrimary)
+			ink = r.buttonFacePressed(in, float64(in.Dy())/2, btnPrimary, false)
 		} else {
-			r.calHitAdd(calHit{r: seg.Inset(-r.s(2)), kind: kinds[i]})
-			if in := seg.Inset(r.s(4)); r.pressed(in) {
-				r.pressOver(in, float64(in.Dy())/2, cream)
-			}
+			r.calHitAdd(calHit{r: seg.Inset(-r.s(2)), kind: kinds[i]}) // pressed in pressCalendar
 		}
 		r.text(f, l, seg.Min.X+(seg.Dx()-r.width(f, l))/2, seg.Min.Y+seg.Dy()/2+r.s(9), ink)
 		x += w

@@ -28,8 +28,8 @@ func TestDerivedTextReadsOnItsGround(t *testing.T) {
 			if p.Light() != light {
 				t.Errorf("%s: the ground %06x is not the side asked for", name, p.Ground)
 			}
-			// The accent is the one given, unless a light ground could not show it.
-			if p.Accent != a && !(light && Contrast(a, p.Ground) < readable) {
+			// The accent is the one given, unless the ground could not show it.
+			if p.Accent != a && Contrast(a, p.Ground) >= readable {
 				t.Errorf("%s: the accent became %06x", name, p.Accent)
 			}
 		}
@@ -78,8 +78,9 @@ func TestHSLRoundTrips(t *testing.T) {
 }
 
 // Whatever the accent, the theme made from it can be read: the dim text 4.5:1 on a card and still
-// plainly dimmer than the text, the text 7:1 there, and on a light theme the accent 4.5:1 on the
-// ground, darker if it had to be but the hue it was. Every hue, gray to vivid, dark to pale, both ways.
+// plainly dimmer than the text, the text 7:1 there, and the accent 4.5:1 on the ground, darker on a
+// light theme or lighter on a dark one if it had to be, but the hue it was. Every hue, gray to vivid,
+// dark to pale, both ways.
 func TestDerivedThemesReadWhateverTheAccent(t *testing.T) {
 	worst := map[string]float64{}
 	note := func(what string, light bool, c float64) {
@@ -106,12 +107,6 @@ func TestDerivedThemesReadWhateverTheAccent(t *testing.T) {
 					}
 					if d, x := Contrast(p.Dim, p.Ground), Contrast(p.Text, p.Ground); d > 0.62*x {
 						t.Errorf("%s: dim text is nearly as strong as the text (%.1f against %.1f)", name, d, x)
-					}
-					if !light {
-						if p.Accent != a {
-							t.Errorf("%s: a dark theme's accent became %06x", name, p.Accent)
-						}
-						continue
 					}
 					on := Contrast(p.Accent, p.Ground)
 					note("accent on the ground", light, on)

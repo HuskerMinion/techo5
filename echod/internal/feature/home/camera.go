@@ -17,6 +17,7 @@ import (
 	"github.com/HuskerMinion/techo5/echod/internal/hardware/camera"
 	"github.com/HuskerMinion/techo5/echod/internal/lib/hass"
 	"github.com/HuskerMinion/techo5/echod/internal/lib/picscale"
+	"github.com/HuskerMinion/techo5/echod/internal/lib/redact"
 	"github.com/HuskerMinion/techo5/echod/internal/lib/triggers"
 )
 
@@ -539,7 +540,7 @@ func (f *Feature) showFrame(entity string, gen uint64, frame *image.RGBA, err er
 	f.mu.Lock()
 	if f.viewIsUp(entity) && f.cam.gen == gen {
 		if err != nil {
-			f.cam.Error = err.Error()
+			f.cam.Error = cameraTrouble(entity, f.cam.Error, err)
 		} else {
 			// The time on screen counts from the first picture, not from the request: some
 			// cameras take a while to start a stream, and a view that closes as it opens
@@ -556,6 +557,17 @@ func (f *Feature) showFrame(entity string, gen uint64, frame *image.RGBA, err er
 	f.Changed.Emit(struct{}{})
 }
 
+// cameraTrouble is why entity has no picture, as the view keeps it: the error with its addresses'
+// logins, queries and fragments taken off, where a camera's password or a token is. It is logged when
+// it is new (was is the one kept before); the screen says only that there is no picture.
+func cameraTrouble(entity, was string, err error) string {
+	why := redact.URLSecrets(err.Error())
+	if why != was {
+		slog.Warn("camera: no picture", "entity", entity, "err", why)
+	}
+	return why
+}
+
 // localFrames shows the device's own camera while the view is up: every frame the sensor
 // produces, scaled to the panel.
 func (f *Feature) localFrames() {
@@ -563,7 +575,7 @@ func (f *Feature) localFrames() {
 	if err != nil {
 		f.mu.Lock()
 		if f.viewIsUp(LocalCamera) {
-			f.cam.Error = err.Error()
+			f.cam.Error = cameraTrouble(LocalCamera, f.cam.Error, err)
 		}
 		f.mu.Unlock()
 		f.Changed.Emit(struct{}{})

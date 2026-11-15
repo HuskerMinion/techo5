@@ -134,7 +134,8 @@ func (r *roundRenderer) callButtonFace() {
 	box := image.Rect(b.x-b.r, b.y-b.r, b.x+b.r, b.y+b.r)
 	rad := float64(b.r)
 	r.roundShadow(box, rad, 8, 2, shadowAlpha())
-	r.roundFill(box, rad, shift(answerGreen, 10), shift(answerGreen, -20))
+	on := r.press.on && onCallButton(r.press.at.X, r.press.at.Y)
+	r.roundFill(box, rad, r.pressTinted(on, shift(answerGreen, 10), colText), r.pressTinted(on, shift(answerGreen, -20), colText))
 	r.mdiIcon("phone", b.x-17, b.y-17, 34, colText)
 }
 
@@ -169,6 +170,8 @@ func (r *roundRenderer) contactList(s roundScene) {
 		if c.Device {
 			bar = color.RGBA{24, 48, 36, 255} // a device in the house: a green cast, where a contact is gray
 		}
+		// The row a tap at the finger calls (contactRowAt), as the list is drawn.
+		bar = r.pressTinted(r.press.on && contactRowAt(r.press.at.Y, top, len(s.contacts)) == top+i, bar, colText)
 		r.line(float64(center-w/2), float64(y-12), float64(center+w/2), float64(y-12), float64(contactRowH-10), bar)
 		r.centered(r.title, clip(r.title, r, c.Name, w-30), y, colText)
 	}

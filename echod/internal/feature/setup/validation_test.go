@@ -3,8 +3,12 @@ package setup
 import (
 	"net/url"
 	"regexp"
+	"strconv"
 	"strings"
 	"testing"
+
+	"github.com/HuskerMinion/techo5/echod/internal/config"
+	"github.com/HuskerMinion/techo5/echod/internal/feature/alarm"
 )
 
 // What the device refuses when a form arrives, the browser says first where it can: a box that has to
@@ -109,5 +113,42 @@ func TestARefusalNamesItsBox(t *testing.T) {
 		if !strings.Contains(got, said) {
 			t.Errorf("the refusal %q does not say %q", got, said)
 		}
+	}
+}
+
+// A form refused for one box keeps none of the others. The form for every alarm kept the snooze, the
+// ring volume and the sound and then refused a later box, so a page that said "refused" had half saved.
+func TestARefusedSaveKeepsNothing(t *testing.T) {
+	f, c := in(t)
+	was := config.Get().Alarms.Snooze()
+	for _, v := range []url.Values{
+		{"say": {"something else"}},
+		{"rise": {"faster than light"}},
+		{"sound": {"no such sound"}},
+		{"sunrise": {"7"}},
+	} {
+		form := url.Values{"what": {"alarm_prefs"}, "snooze": {strconv.Itoa(was + 5)}, "ringvol": {"2"}, "sunrise": {"0"},
+			"sound": {alarm.Get().Sound()}, "say": {string(alarm.Get().Say())}, "rise": {string(alarm.Get().Rise())}}
+		for k, x := range v {
+			form[k] = x
+		}
+		if post(t, f, c, form).Query().Get("problem") == "" {
+			t.Fatalf("%v was accepted", v)
+		}
+		if got := config.Get().Alarms.Snooze(); got != was {
+			t.Errorf("%v was refused, but the snooze length was kept: %d, was %d", v, got, was)
+		}
+		if config.Get().Alarms.RingVolume != nil {
+			t.Errorf("%v was refused, but the ring volume was kept", v)
+		}
+	}
+	// And the same form with nothing wrong in it is kept whole.
+	form := url.Values{"what": {"alarm_prefs"}, "snooze": {strconv.Itoa(was + 5)}, "ringvol": {"2"}, "sunrise": {"0"},
+		"sound": {alarm.Get().Sound()}, "say": {string(alarm.Get().Say())}, "rise": {string(alarm.Get().Rise())}}
+	if p := post(t, f, c, form).Query().Get("problem"); p != "" {
+		t.Fatal(p)
+	}
+	if got := config.Get().Alarms.Snooze(); got != was+5 {
+		t.Errorf("the snooze length is %d, not %d", got, was+5)
 	}
 }

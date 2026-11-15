@@ -3,6 +3,7 @@
 package display
 
 import (
+	"fmt"
 	"image"
 	"math"
 	"strconv"
@@ -77,15 +78,28 @@ func (r *renderer) calendarTimeline(v calendarView, l calLook) {
 	x := r.calButton(tr("done"), r.w-r.margin, calBack)
 	x = r.calIconButton("chevron-right", "›", x, calNext)
 	x = r.calIconButton("chevron-left", "‹", x, calPrev)
-	title := clipText(r, r.title, locale.LongDate(v.day, screenLang()), x-r.margin-r.s(10))
+	// Today's pill after the date. Where the long date leaves it no room the date is said short:
+	// at 125% on the Skylight the long one took the line and the pill was dropped, on the day it is for.
+	room := x - r.margin - r.s(10)
+	tw := r.width(r.tiny, tr("today")) + r.s(24)
+	date := locale.LongDate(v.day, screenLang())
+	pill := 0
+	if today {
+		pill = r.s(16) + tw
+	}
+	// And on any day, the short date rather than the long one cut to its first word.
+	if short := locale.ShortDate(v.day, screenLang()); r.width(r.title, date)+pill > room && r.width(r.title, short)+pill <= room {
+		date = short
+	}
+	title := clipText(r, r.title, date, room)
 	r.text(r.title, title, r.margin, r.margin+r.s(34), cream)
 	if today {
 		tx := r.margin + r.width(r.title, title) + r.s(16)
-		tw := r.width(r.tiny, tr("today")) + r.s(24)
 		if tx+tw < x {
 			cy := r.margin + r.s(17)
-			r.roundRect(image.Rect(tx, cy-r.s(16), tx+tw, cy+r.s(16)), r.s(16), amber)
-			r.text(r.tiny, tr("today"), tx+r.s(12), cy+r.s(9), onAccent())
+			half := max(r.s(16), (capHeight(r.tiny)+r.s(14))/2)
+			r.roundRect(image.Rect(tx, cy-half, tx+tw, cy+half), half, amber)
+			r.text(r.tiny, tr("today"), tx+r.s(12), cy+capHeight(r.tiny)/2, onAccent())
 		}
 	}
 
@@ -97,7 +111,8 @@ func (r *renderer) calendarTimeline(v calendarView, l calLook) {
 	sy0, sy1 := r.margin+r.s(58), r.margin+r.s(92)
 	r.text(r.micro, tr("all_day"), r.margin, sy0+r.s(23), dim)
 	wx := r.dayWeather(v.forecast, v.day, right, sy0+r.s(25), r.tiny, 28, true)
-	ax := gx + r.s(6)
+	// Past the "All day" label, however large its words are drawn: at 150% the dash met the word.
+	ax := max(gx+r.s(6), r.margin+r.width(r.micro, tr("all_day"))+r.s(14))
 	var allDay []hass.Event
 	for _, e := range evs {
 		if e.AllDay {
@@ -166,7 +181,7 @@ func (r *renderer) calendarTimeline(v calendarView, l calLook) {
 	var later []placed
 	inner := right - r.s(14) - (gx + r.s(6))
 	// Laid out as drawn: a box is at least a line tall, with a little room under it.
-	least := float64(r.s(minBlockPx)+r.s(3)) / float64(hourH)
+	least := float64(r.minBlock()+r.s(3)) / float64(hourH)
 	for _, p := range layoutDay(evs, v.day, least) {
 		s0, s1 := p.s0, p.s1
 		if s0 >= end {
@@ -181,7 +196,7 @@ func (r *renderer) calendarTimeline(v calendarView, l calLook) {
 		if p.cols > 1 && p.col < p.cols-1 {
 			b.Max.X -= r.s(4)
 		}
-		r.timeBlock(v, l, p.ev, minBlockRect(b, r.s(minBlockPx), top, bottom), false)
+		r.timeBlock(v, l, p.ev, minBlockRect(b, r.minBlock(), top, bottom), false)
 	}
 
 	if today && nowH >= start && nowH <= end {
@@ -210,6 +225,14 @@ func (r *renderer) calendarTimeline(v calendarView, l calLook) {
 // minBlockPx is the least an event is drawn on the hours, in the Show 5's pixels: a line's height, so
 // a short event, or one in a week of many hours, is still there to read and to tap.
 const minBlockPx = 18
+
+// minBlock is the least an event is drawn on the hours on this panel: minBlockPx, or a line of the
+// small words where the text size makes that taller. From 110% the 18 was shorter than the line it
+// holds, and the words' tails hung under the box.
+func (r *renderer) minBlock() int {
+	m := r.micro.Metrics()
+	return max(r.s(minBlockPx), m.Ascent.Ceil()+m.Descent.Ceil())
+}
 
 // minBlockRect is b at least least tall, kept between top and bottom.
 func minBlockRect(b image.Rectangle, least, top, bottom int) image.Rectangle {
@@ -307,8 +330,8 @@ func (r *renderer) timeBlock(v calendarView, l calLook, e hass.Event, b image.Re
 	if week {
 		tx := b.Min.X + r.s(13)
 		tw := b.Max.X - tx - r.s(4)
-		lh := r.s(19)
-		if b.Dy() < r.s(30) {
+		lh := r.weekLine()
+		if b.Dy() < r.s(30)*max(r.textSize, 125)/125 {
 			base := (b.Min.Y+b.Max.Y)/2 + capHeight(r.micro)/2
 			if icon != "" && tw > r.s(60) {
 				r.mdiAt(icon, tx+r.s(7), (b.Min.Y+b.Max.Y)/2, 15, cream)
@@ -322,7 +345,7 @@ func (r *renderer) timeBlock(v calendarView, l calLook, e hass.Event, b image.Re
 		title := strings.Join(strings.Fields(e.Summary), " ")
 		firstW := tw
 		if icon != "" && tw > r.s(60) {
-			r.mdiAt(icon, tx+r.s(7), b.Min.Y+r.s(13), 15, cream)
+			r.mdiAt(icon, tx+r.s(7), b.Min.Y+lh*13/19, 15, cream)
 			firstW -= r.s(18)
 		}
 		lines := r.calWrap(r.micro, title, firstW)
@@ -334,7 +357,7 @@ func (r *renderer) timeBlock(v calendarView, l calLook, e hass.Event, b image.Re
 			}
 			shown[room-1] = clipText(r, r.micro, restOf(title, shown[:room-1]), w)
 		}
-		y := b.Min.Y + r.s(19)
+		y := b.Min.Y + lh
 		for i, ln := range shown {
 			lx := tx
 			w := tw
@@ -387,6 +410,13 @@ func (r *renderer) timeBlock(v calendarView, l calLook, e hass.Event, b image.Re
 	if rest := tw - r.width(r.micro, title) - r.s(12); rest > r.s(40) {
 		r.text(r.micro, clipText(r, r.micro, when, rest), tx+r.width(r.micro, title)+r.s(12), base, sub)
 	}
+}
+
+// weekLine is how far apart a week's box puts the lines of its words: 19 of the Show 5's pixels, which
+// keeps a two-hour box's two lines at the sizes up to 125% (their tails and tops close, not on each
+// other), and more past it, where the lines' words would run into each other.
+func (r *renderer) weekLine() int {
+	return r.s(19) * max(r.textSize, 125) / 125
 }
 
 // restOf is what is left of title after its first lines, as calWrap broke them: each line is the
@@ -475,7 +505,7 @@ func (r *renderer) calendarWeek(v calendarView, l calLook) {
 	// top or the foot of its day, which opens that day.
 	startH, endH := weekHours(v.events, first)
 	// The markers have bands of their own, above the hours and under them, so none covers an event's box.
-	band := r.s(minBlockPx) + r.s(4)
+	band := r.minBlock() + r.s(4)
 	hoursTop, hoursBottom := top, bottom
 	for i := range 7 {
 		for _, p := range layoutDay(v.events, first.AddDate(0, 0, i), 0) {
@@ -504,14 +534,28 @@ func (r *renderer) calendarWeek(v calendarView, l calLook) {
 		if today {
 			nf = bold
 		}
-		w1 := r.width(r.tiny, wd) + r.s(10) + r.width(nf, num)
+		// The day's name in the next face down where the two are wider than the column, and left out
+		// where even that is: at 150% the names ran into each other.
+		wf := r.tiny
+		w1 := r.width(wf, wd) + r.s(10) + r.width(nf, num)
+		if w1 > colW-r.s(8) {
+			wf = r.micro
+			w1 = r.width(wf, wd) + r.s(10) + r.width(nf, num)
+		}
+		if w1 > colW-r.s(8) {
+			wd = ""
+			w1 = r.width(nf, num) // the number alone, centered: no gap before it
+		}
 		lx := mid - w1/2
 		ink := dim
 		if today {
 			ink = amber
 		}
-		r.text(r.tiny, wd, lx, hy+r.s(26), ink)
-		nx := lx + r.width(r.tiny, wd) + r.s(10)
+		r.text(wf, wd, lx, hy+r.s(26), ink)
+		nx := lx
+		if wd != "" {
+			nx += r.width(wf, wd) + r.s(10)
+		}
 		if today {
 			nw := r.width(bold, num)
 			r.roundRect(image.Rect(nx-r.s(6), hy+r.s(4), nx+nw+r.s(6), hy+r.s(34)), r.s(15), amber)
@@ -520,17 +564,32 @@ func (r *renderer) calendarWeek(v calendarView, l calLook) {
 			r.text(r.tiny, num, nx, hy+r.s(26), cream)
 		}
 		if d, ok := dayForecast(v.forecast, day); ok {
+			// The icon gives way where the column is too narrow for both, then the low.
 			t := highLow(d)
-			w2 := r.s(24) + r.width(r.micro, t)
+			icon := true
+			if r.s(24)+r.width(r.micro, t) > colW-r.s(6) {
+				icon = false
+			}
+			if r.width(r.micro, t) > colW-r.s(6) {
+				t = fmt.Sprintf("%.0f°", d.High)
+			}
+			w2 := r.width(r.micro, t)
+			if icon {
+				w2 += r.s(24)
+			}
 			lx := mid - w2/2
-			name, c := weatherGlyph(d.Condition)
-			r.mdiAt(name, lx+r.s(9), hy+r.s(46), 20, c)
-			r.text(r.micro, t, lx+r.s(24), hy+r.s(52), dim)
+			if icon {
+				name, c := weatherGlyph(d.Condition)
+				r.mdiAt(name, lx+r.s(9), hy+r.s(46), 20, c)
+				lx += r.s(24)
+			}
+			r.text(r.micro, t, lx, hy+r.s(52), dim)
 		}
 		r.calHitAdd(calHit{r: image.Rect(cx0, hy-r.s(4), cx0+colW, hy+hdrH), kind: calDay, day: day})
 	}
 
-	r.text(r.micro, tr("all_day"), r.margin, allTop+r.s(19), dim)
+	// Cut to the room left of the hours, which at 150% its words were wider than.
+	r.text(r.micro, clipText(r, r.micro, tr("all_day"), gx-r.s(6)-r.margin), r.margin, allTop+r.s(19), dim)
 	half := lerp(walnut, ember, 0.4)
 	line := max(r.s(1), 1)
 	for h := startH; h <= endH; h++ {
@@ -541,7 +600,7 @@ func (r *renderer) calendarWeek(v calendarView, l calLook) {
 			r.fillRect(image.Rect(gx, yh, right, yh+line), half)
 		}
 		// Every hour's name where an hour is taller than a line of them, else every other hour's.
-		if hourH >= float64(r.s(22)) || (h-startH)%2 == 0 {
+		if hourH >= float64(r.s(22)*max(r.textSize, 125)/125) || (h-startH)%2 == 0 {
 			lab := hourLabel(h)
 			r.text(r.micro, lab, gx-r.s(8)-r.width(r.micro, lab), y+r.s(6), dim)
 		}
@@ -583,7 +642,7 @@ func (r *renderer) calendarWeek(v calendarView, l calLook) {
 		day := first.AddDate(0, 0, i)
 		cx0 := gx + i*colW
 		var earlier, later []hass.Event
-		least := float64(r.s(minBlockPx)+r.s(3)) / hourH
+		least := float64(r.minBlock()+r.s(3)) / hourH
 		for _, p := range layoutDay(v.events, day, least) {
 			s0, s1 := p.s0, p.s1
 			switch {
@@ -600,10 +659,10 @@ func (r *renderer) calendarWeek(v calendarView, l calLook) {
 			if p.cols > 1 && p.col < p.cols-1 {
 				b.Max.X -= r.s(2)
 			}
-			r.timeBlock(v, l, p.ev, minBlockRect(b, r.s(minBlockPx), hoursTop, hoursBottom), true)
+			r.timeBlock(v, l, p.ev, minBlockRect(b, r.minBlock(), hoursTop, hoursBottom), true)
 		}
-		r.weekMarker(earlier, day, image.Rect(cx0+r.s(4), top+r.s(1), cx0+colW-r.s(4), top+r.s(1)+r.s(minBlockPx)), "▲")
-		r.weekMarker(later, day, image.Rect(cx0+r.s(4), bottom-r.s(1)-r.s(minBlockPx), cx0+colW-r.s(4), bottom-r.s(1)), "▼")
+		r.weekMarker(earlier, day, image.Rect(cx0+r.s(4), top+r.s(1), cx0+colW-r.s(4), top+r.s(1)+r.minBlock()), "▲")
+		r.weekMarker(later, day, image.Rect(cx0+r.s(4), bottom-r.s(1)-r.minBlock(), cx0+colW-r.s(4), bottom-r.s(1)), "▼")
 	}
 
 	// The now line: faint across the week, strong across today.

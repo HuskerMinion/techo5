@@ -99,11 +99,11 @@ func Crown() bool { return Board == boardCrown }
 func Athena() bool { return Board == boardAthena }
 
 // The Skylight hangs on a wall and is read from across a hall: at the layout's own size only its clock
-// could be, the calendar's words coming out about 5 mm tall. Its words start a step larger; the size
-// chosen on the device or in Home Assistant still decides.
+// could be, the calendar's words coming out about 5 mm tall. Its words start a step larger, and a step
+// larger again is offered; the size chosen on the device or in Home Assistant still decides.
 func init() {
 	if Board == boardSkylight {
-		defaultTextSize = 125
+		defaultTextSize, mostTextSize = 125, 150
 	}
 }
 

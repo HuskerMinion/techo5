@@ -73,6 +73,23 @@ func TestAReminderForHereIsShownAndSaidAndGoesNowhereElse(t *testing.T) {
 	}
 }
 
+// A reminder with no words says "Reminder" in the screen's language, on the card and aloud.
+func TestAReminderWithNoWordsSaysReminderInTheScreensLanguage(t *testing.T) {
+	for lang, want := range map[string]string{"": "Reminder", "de": "Erinnerung", "fr": "Rappel"} {
+		f, said, _ := fake(t)
+		if err := config.Set().Screen().Language(lang); err != nil {
+			t.Fatal(err)
+		}
+		f.Fire("  ", nil)
+		if r, ok := f.Showing(); !ok || r.Label != want {
+			t.Errorf("%q: showing %+v, want %q", lang, r, want)
+		}
+		if got := next(t, said); got != want {
+			t.Errorf("%q: said %q, want %q", lang, got, want)
+		}
+	}
+}
+
 func TestAReminderGoesToTheDevicesNamedAndIsStoppedThere(t *testing.T) {
 	f, _, out := fake(t)
 	self := config.Get().Device.Name

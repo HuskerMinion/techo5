@@ -58,8 +58,8 @@ func TestFormsThatTakeAWhileAreMarked(t *testing.T) {
 		t.Error("an ordinary save on Sound is marked as taking a while")
 	}
 
-	general := get(f, "/setup?tab=general", c).Body.String()
-	if got := busyForms(t, general)["/setup/save"]; got != busyCheck {
+	system := get(f, "/setup?tab=system", c).Body.String()
+	if got := busyForms(t, system)["/setup/save"]; got != busyCheck {
 		t.Errorf("looking for an update says %q", got)
 	}
 }
@@ -98,5 +98,41 @@ func TestThePagesScriptIsOnEveryTabOnce(t *testing.T) {
 func TestBusyEscapesItsWords(t *testing.T) {
 	if got := busy(`a "b" <c>`); got != ` data-busy="a &#34;b&#34; &lt;c&gt;"` {
 		t.Errorf("busy wrote %s", got)
+	}
+}
+
+// The other forms that wait on something before they answer are marked as well: a Reolink recorder
+// logged in to and asked for its cameras, an Immich server asked for its albums, a settings file read
+// and then restored.
+func TestTheSlowSavesAreMarked(t *testing.T) {
+	f, c := in(t)
+	for name, draw := range map[string]func(*httptest.ResponseRecorder){
+		"Reolink": func(w *httptest.ResponseRecorder) { reolinkSection(w, c.Value) },
+		"Immich":  func(w *httptest.ResponseRecorder) { immichSection(w, c.Value) },
+		"restore": func(w *httptest.ResponseRecorder) { settingsFileSection(w, c.Value) },
+	} {
+		w := httptest.NewRecorder()
+		draw(w)
+		marks := busyForms(t, w.Body.String())
+		want := map[string]string{"Reolink": busyReolink, "Immich": busyImmich, "restore": busyLook}[name]
+		got := marks["/setup/save"]
+		if name == "restore" {
+			got = marks["/setup/restore"]
+		}
+		if got != want {
+			t.Errorf("%s says %q", name, got)
+		}
+	}
+
+	// The page that asks before a restore carries the script, and its button says it is at work.
+	file := `{"format":"techo5-settings","version":1,"settings":{"screen":{"clock_24":true}}}`
+	w := httptest.NewRecorder()
+	f.serve(w, multipartPost("/setup/restore", [][2]string{{"token", c.Value}, {"file", file}}, map[string]bool{"file": true}, "s.json", c))
+	body := w.Body.String()
+	if got := busyForms(t, body)["/setup/restore"]; got != busyRestore {
+		t.Errorf("restoring says %q", got)
+	}
+	if strings.Count(body, "getAttribute('data-busy')") != 1 {
+		t.Error("the restore page does not carry the script once")
 	}
 }

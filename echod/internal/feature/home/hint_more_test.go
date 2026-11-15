@@ -4,8 +4,10 @@ import (
 	"strings"
 	"testing"
 	"time"
+	"unicode/utf8"
 
 	"github.com/HuskerMinion/techo5/echod/internal/component"
+	"github.com/HuskerMinion/techo5/echod/internal/lib/locale"
 )
 
 // note waits for the next note the rig's feature puts up.
@@ -32,7 +34,7 @@ func TestAStationWithNoHomeAssistantSaysSo(t *testing.T) {
 	})
 	defer stop()
 	r.ask(t, "Example FM")
-	if h := r.note(t, "no Home Assistant connected"); h.Title != "Radio" || h.Message != NoHomeHint {
+	if h := r.note(t, "no Home Assistant connected"); h.Title != "Radio" || h.Message != HintText(NoHomeHint) {
 		t.Errorf("no Home Assistant connected: the note is %+v", h)
 	}
 	if c := r.chosen(); c != "" {
@@ -56,16 +58,27 @@ func TestAStreamLeftOffSaysSo(t *testing.T) {
 	f.url, f.asked, f.askedAt, f.stationURL = "http://p/1", "KXYZ", time.Now(), "http://p/1"
 	f.resumed, f.resumedAt = resumeTries, time.Now()
 	f.ended("http://p/1")
-	if h := r.note(t, "the stream left off"); h.Title != "Radio" || h.Message != DroppingHint {
+	if h := r.note(t, "the stream left off"); h.Title != "Radio" || h.Message != HintText(DroppingHint) {
 		t.Errorf("the stream left off: the note is %+v", h)
 	}
 }
 
-// What the notes say is the kind of failure, in a card's three lines, and nothing of an address.
+// What the notes say is the kind of failure, in a card's three lines, and nothing of an address: in
+// every language the screen has.
 func TestTheRadioNotesAreShortAndPlain(t *testing.T) {
-	for _, m := range []string{NoHomeHint, PlayFailedHint, DroppingHint} {
-		if len(m) > 110 {
-			t.Errorf("%q is %d characters, long for a card", m, len(m))
+	var notes []string
+	for _, lang := range []string{"", "de", "es", "fr", "gl", "it", "ja", "nl", "tr"} {
+		for _, key := range []string{NoHomeHint, PlayFailedHint, DroppingHint} {
+			m := locale.Text(lang, key)
+			if m == key {
+				t.Errorf("%s: no words for %s", lang, key)
+			}
+			notes = append(notes, m)
+		}
+	}
+	for _, m := range notes {
+		if n := utf8.RuneCountInString(m); n > 110 {
+			t.Errorf("%q is %d characters, long for a card", m, n)
 		}
 		for _, bad := range []string{"http", "://", "err"} {
 			if strings.Contains(m, bad) {

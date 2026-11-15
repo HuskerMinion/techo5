@@ -396,40 +396,43 @@ func editFromPage(r *http.Request) string {
 	return ""
 }
 
+// prefsFromPage keeps the form for every alarm whole or not at all. Every box is read and checked
+// before any is kept: it used to keep the snooze, the ring volume and the sound and then refuse a
+// later box, and the page said the save was refused when half of it had gone through.
 func prefsFromPage(r *http.Request) string {
 	snooze, err1 := strconv.Atoi(strings.TrimSpace(r.PostFormValue("snooze")))
 	vol, err2 := strconv.Atoi(strings.TrimSpace(r.PostFormValue("ringvol")))
 	sunrise, err3 := strconv.Atoi(r.PostFormValue("sunrise"))
+	sound := r.PostFormValue("sound")
+	say, rise := config.AlarmSay(r.PostFormValue("say")), config.AlarmRise(r.PostFormValue("rise"))
 	switch {
 	case err1 != nil:
 		return "the snooze length is a number of minutes"
 	case err2 != nil:
 		return fmt.Sprintf("the ring volume is a number, 0 to %d", config.VolumeSteps)
-	case err3 != nil:
+	case err3 != nil, sunrise != 0 && !contains(wakeLights, sunrise):
 		return "that is not one of the wake light choices"
+	case sound != alarm.Get().Sound() && !slices.Contains(speaker.AlarmSounds(), sound):
+		return "that is not one of the alarm sounds"
+	case say != alarm.Get().Say() && !slices.Contains(config.AlarmSays(), say):
+		return "that is not one of the choices for what an alarm says"
+	case rise != alarm.Get().Rise() && !slices.Contains(config.AlarmRises(), rise):
+		return "that is not one of the choices for how an alarm gets louder"
+	}
+	// The one write that can fail goes first: a failure then has changed nothing, as the page says.
+	if err := config.Set().Alarms().SunriseMinutes(sunrise); err != nil {
+		return err.Error()
 	}
 	alarm.Get().SetSnooze(snooze)
 	alarm.Get().SetRingVolume(vol, false)
-	if s := r.PostFormValue("sound"); s != alarm.Get().Sound() {
-		alarm.Get().SetSound(s, false)
+	if sound != alarm.Get().Sound() {
+		alarm.Get().SetSound(sound, false)
 	}
-	if v := config.AlarmSay(r.PostFormValue("say")); v != alarm.Get().Say() {
-		if !slices.Contains(config.AlarmSays(), v) {
-			return "that is not one of the choices for what an alarm says"
-		}
-		alarm.Get().SetSay(v)
+	if say != alarm.Get().Say() {
+		alarm.Get().SetSay(say)
 	}
-	if v := config.AlarmRise(r.PostFormValue("rise")); v != alarm.Get().Rise() {
-		if !slices.Contains(config.AlarmRises(), v) {
-			return "that is not one of the choices for how an alarm gets louder"
-		}
-		alarm.Get().SetRise(v)
-	}
-	if sunrise != 0 && !contains(wakeLights, sunrise) {
-		return "that is not one of the wake light choices"
-	}
-	if err := config.Set().Alarms().SunriseMinutes(sunrise); err != nil {
-		return err.Error()
+	if rise != alarm.Get().Rise() {
+		alarm.Get().SetRise(rise)
 	}
 	return ""
 }

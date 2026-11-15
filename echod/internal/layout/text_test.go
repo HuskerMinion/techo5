@@ -17,3 +17,10 @@ func TestABoardSetsItsTextSize(t *testing.T) {
 		t.Errorf("DefaultTextSize() = %d, want the board's 80", v)
 	}
 }
+
+// A board offers at least the size it starts at, and no more than the screen can draw.
+func TestMostTextSize(t *testing.T) {
+	if v := MostTextSize(); v < DefaultTextSize() || v > 200 {
+		t.Errorf("MostTextSize() = %d, starting at %d", v, DefaultTextSize())
+	}
+}

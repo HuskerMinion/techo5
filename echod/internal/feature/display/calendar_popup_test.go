@@ -86,6 +86,32 @@ func TestPopupSoon(t *testing.T) {
 	if popupSoon(hass.Event{AllDay: true}, now) != "Today" {
 		t.Error("all day")
 	}
+	if got := popupSoon(e, now.Add(80*time.Minute)); got != "Started" {
+		t.Errorf("over: %q", got)
+	}
+}
+
+// The heading is in the screen's language, as the rest of the card is.
+func TestPopupSoonIsTranslated(t *testing.T) {
+	config.Use(filepath.Join(t.TempDir(), "state.json"))
+	t.Cleanup(func() { _ = config.Set().Screen().Language("") })
+	if err := config.Set().Screen().Language("fr"); err != nil {
+		t.Fatal(err)
+	}
+	now := time.Date(2026, 9, 26, 14, 45, 0, 0, time.Local)
+	e := hass.Event{Start: now.Add(15 * time.Minute), End: now.Add(75 * time.Minute)}
+	for _, c := range []struct {
+		at   time.Time
+		want string
+	}{{now, "Dans 15 minutes"}, {now.Add(14 * time.Minute), "Dans une minute"}, {now.Add(-45 * time.Minute), "Dans une heure"},
+		{now.Add(80 * time.Minute), "Commencé"}} {
+		if got := popupSoon(e, c.at); got != c.want {
+			t.Errorf("at %s: %q, want %q", c.at.Format("15:04"), got, c.want)
+		}
+	}
+	if got := popupSoon(hass.Event{AllDay: true}, now); got != "Aujourd'hui" {
+		t.Errorf("all day: %q", got)
+	}
 }
 
 // popupTestDisplay is a Show with pop-ups on, and events kept in its month.

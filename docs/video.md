@@ -29,7 +29,7 @@ transcoding or quality setting for the client.
 
 ## Turn it on
 
-Videos are off on a new device. On the device's setup page, **Screen & Photos → Video**:
+Videos are off on a new device. On the device's setup page, **Screen → Video**:
 
 1. Tick **Play videos** and **Save**. Home Assistant can now send videos.
 2. For DLNA apps too, tick **DLNA video** as well. DLNA itself has to be on

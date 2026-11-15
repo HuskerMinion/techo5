@@ -14,7 +14,8 @@ import "math"
 // then moved toward the text until it reads on a card, which is where most of it is drawn. And on a
 // light theme an accent picked for how it looks on its own, a yellow, an amber, a green, was 1.2 to
 // 1.9:1 on the pale ground made from it: it is darkened, its hue and saturation kept, until it reads
-// there too. An accent that already does is the accent given.
+// there too; on a dark theme a dark accent is lightened the same way. An accent that already reads is
+// the accent given.
 func Derive(accent uint32, light bool) Preset {
 	h, s, l := toHSL(accent)
 	tint := func(most, part, l float64) uint32 { return fromHSL(h, math.Min(s*part, most), l) }
@@ -35,6 +36,11 @@ func Derive(accent uint32, light bool) Preset {
 	}
 	for ; light && Contrast(p.Accent, p.Ground) < readable && l > 0; l -= 0.01 {
 		p.Accent = fromHSL(h, s, max(l-0.01, 0))
+	}
+	// And on a dark theme a dark accent, a navy, a maroon, a forest green, was as dark as the ground
+	// made from it: it is lightened the same way until it reads there.
+	for ; !light && Contrast(p.Accent, p.Ground) < readable && l < 1; l += 0.01 {
+		p.Accent = fromHSL(h, s, min(l+0.01, 1))
 	}
 	return p
 }

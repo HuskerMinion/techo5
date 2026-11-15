@@ -22,7 +22,7 @@ Streamed.
 
 Everything is on the device's page in Home Assistant: **Settings → Devices & services → Devices →**
 your device. In the **Configuration** card (expand it if it ends in "+ N entities not shown"). The
-setup page's **Screen & Photos** tab has the same settings, except which dashboard to show:
+setup page's **Screen** tab has the same settings, except which dashboard to show:
 
 - **Dashboard**: *Off*, *Drawn on the device* or *Streamed*, and on the Show, the Skylight and the Panel app *Tessera*
   ([Tessera screens](#tessera-screens-preview)).
@@ -177,7 +177,7 @@ grayed out, and a line at the top says so.
 **What it needs**
 
 The library is read from Music Assistant directly, with the address and token set on the setup page
-(**Sound & Voice**, under **Music Assistant**). Without them, the library says so and shows nothing
+(**Sound**, under **Music Assistant**). Without them, the library says so and shows nothing
 else. The music plays through Home Assistant, as the media sheet's favorites do.
 
 ## What drawn mode draws
@@ -285,7 +285,7 @@ admin pages are refused. See
 
 Then tell the device where it is, either:
 
-- on the device's **setup page**, **Connections** tab, **Dashboard server**: the address
+- on the device's **setup page**, **Screen** tab, **Dashboard server**: the address
   (`host:9555`) and the key; or
 - with the action **`esphome.<node>_dashboard_server`**, `address` and `key`.
 

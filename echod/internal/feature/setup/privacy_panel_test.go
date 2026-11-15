@@ -16,7 +16,7 @@ import (
 func TestAPanelSaysSSHIsNotHere(t *testing.T) {
 	config.Use(filepath.Join(t.TempDir(), "state.json"))
 	rec := httptest.NewRecorder()
-	privacySection(rec)
+	switchedOnSection(rec)
 	got := rec.Body.String()
 	for _, want := range []string{"SSH: not available on this device", "Camera on the network: not available on this device", notHereWhy} {
 		if !strings.Contains(got, want) {

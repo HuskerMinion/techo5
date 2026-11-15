@@ -52,8 +52,11 @@ func (d *Display) OpenCalendarDay(day time.Time) bool {
 	return true
 }
 
+// calendarsShown is whether this device shows any calendar, without which there is no calendar to open.
+func calendarsShown() bool { return len(home.Get().CalendarSources()) > 0 }
+
 func (d *Display) openCalendar(agenda bool) bool {
-	if len(home.Get().CalendarSources()) == 0 {
+	if !calendarsShown() {
 		return false
 	}
 	now := time.Now()

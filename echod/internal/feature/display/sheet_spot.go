@@ -255,6 +255,7 @@ func (r *roundRenderer) sheetFace(s roundScene) {
 	default:
 		cardMax = r.roundCard(categoryCard(sv))
 	}
+	r.pressZone() // the zone under the finger, as a tap finds it, when no button of it showed it
 	r.zmu.Lock()
 	r.zones, r.pending = r.pending, r.zones
 	r.cardMax, r.pickMax = cardMax, pickMax

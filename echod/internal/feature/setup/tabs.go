@@ -9,42 +9,51 @@ import (
 	"github.com/HuskerMinion/techo5/echod/internal/layout"
 )
 
-// The page's tabs: the device's own settings sections, in the order its screen lists them, so what is
-// learned on one is where it is on the other. Each is a plain link (?tab=), and only the tab asked for
+// The page's tabs. They follow the screen's own settings sections where they can, so what is learned on
+// one is near where it is on the other, and split where a page with every setting on it needs more
+// tabs than a screen does. Each is a plain link (?tab=), and only the tab asked for
 // is drawn: no script, and a save comes back to the tab it was made on.
 //
 // There is no Display tab. What the screen shows is set on the screen, which is where it can be seen
 // changing - except the clock's look, what a tap on it does, the themes, the dashboard and the slideshow,
-// which a device far from its owner or on a wall still needs set from a phone, and which are on Screen &
-// Photos.
+// which a device far from its owner or on a wall still needs set from a phone, and which are on Screen.
+//
+// The tabs were seven, and two of them held half the page: Sound & Voice had sixteen sections, from the
+// volume to the wake word scores, and Connections had the Wi-Fi, Bluetooth, eight sections of cameras
+// and the tailnets. Voice and Cameras are tabs of their own now, Connections is Network, and General,
+// with the place and the calendars' links from what was Weather & Calendar, is System.
 
 type tab struct{ id, title, blurb string }
 
 var tabs = []tab{
 	{"status", "Status", "What is connected and running"},
-	{"sound", "Sound & Voice", "Music, radio, voice assistant"},
 	{"alarms", "Alarms & Timers", "Alarms, timers and reminders"},
-	{"connections", "Connections", "Wi-Fi, Bluetooth and cameras"},
-	{"weather", "Weather & Calendar", "Where it is, units, calendars"},
-	{"photos", "Screen & Photos", "Clock, dashboard, slideshow, pictures"},
-	{"privacy", "Privacy & Security", "What this device shares"},
-	{"general", "General", "Name, updates, time zone, help"},
+	{"sound", "Sound", "Speaker, music, radio, Bluetooth"},
+	{"voice", "Voice", "Voice assistant, wake words, calls"},
+	{"screen", "Screen", "Clock, themes, dashboard, photos"},
+	{"cameras", "Cameras", "Cameras, doorbell, streaming"},
+	{"network", "Network", "Wi-Fi, Home Assistant, away from home"},
+	{"privacy", "Privacy", "Lock, baby monitor, remote access"},
+	{"system", "System", "Name, place, time, updates, backup"},
 }
 
-// shownTabs are the tabs this device has: Screen & Photos only where there is a screen, and no voice
-// in the Sound tab's name where there is no microphone (layout.HasMicrophone).
+// shownTabs are the tabs this device has: Screen only where there is a screen, and Voice only where
+// there are microphones (layout.HasMicrophone).
 func shownTabs() []tab {
 	out := make([]tab, 0, len(tabs))
 	for _, t := range tabs {
-		if t.id == "photos" && !hasScreen {
+		if t.id == "screen" && !hasScreen || t.id == "voice" && !layout.HasMicrophone() {
 			continue
-		}
-		if t.id == "sound" && !layout.HasMicrophone() {
-			t.title, t.blurb = "Sound", "Music, radio, the speaker"
 		}
 		out = append(out, t)
 	}
 	return out
+}
+
+// movedTabs are the tabs before they were regrouped, and where what was on each is now, for a link or
+// a bookmark made before: it opens where most of that tab went rather than on Status.
+var movedTabs = map[string]string{
+	"connections": "network", "general": "system", "photos": "screen", "weather": "system",
 }
 
 // defaultTab is where the page opens: what the device is connected to and running (status.go), with
@@ -54,6 +63,9 @@ const defaultTab = "status"
 
 // tabOf is the tab a request names, or the default for none or one that is not a tab here.
 func tabOf(id string) string {
+	if to, ok := movedTabs[id]; ok {
+		id = to
+	}
 	for _, t := range shownTabs() {
 		if t.id == id {
 			return id
@@ -175,35 +187,44 @@ func nav(w http.ResponseWriter, on string) {
 // uploads, the settings file, sharing, the takes, the history, the remote key), and the ones several
 // forms share (sectionFor).
 var tabFor = map[string]string{
-	"speaker": "sound", "stations": "sound", "music": "sound", "streaming": "sound",
-	"brain": "sound", "replyplayer": "sound", "realtime": "sound", "listening": "sound",
-	"house": "sound", "phonebook": "sound", "wakecall": "sound", "wakeword-remove": "sound",
-	"sound-play": "sound", "sound-remove": "sound", "sounds": "sound", "takes": "sound", "history": "sound",
-	"wakewords": "sound",
+	"speaker": "sound", "stations": "sound", "music": "sound", "streaming": "sound", "bluetooth": "sound",
+	"sound-play": "sound", "sound-remove": "sound", "sounds": "sound",
+
+	"brain": "voice", "replyplayer": "voice", "realtime": "voice", "listening": "voice",
+	"house": "voice", "phonebook": "voice", "wakecall": "voice", "wakeword-remove": "voice",
+	"wakewords": "voice", "takes": "voice", "history": "voice",
 
 	"alarm_add": "alarms", "alarm_edit": "alarms", "alarm_prefs": "alarms",
 	"timer_cancel": "alarms", "snoozes_cancel": "alarms",
 
-	"wifi": "connections", "forget": "connections", "address": "connections", "bluetooth": "connections",
-	"wallclock": "connections", "hacameras": "connections", "reolink": "connections", "go2rtc": "connections",
-	"cameralist": "connections", "camerabuttons": "connections", "doorbell": "connections",
-	"doorbell-chime": "connections", "tailscale": "connections", "netbird": "connections",
-	"talkback": "connections", "dashboard": "connections",
+	"screen": "screen", "themes": "screen", "theme-colors": "screen", "font-remove": "screen", "fonts": "screen",
+	"dashpanel": "screen", "dashboard": "screen", "calendar-look": "screen", "todo": "screen",
+	"immich": "screen", "immich-album": "screen", "immich-show": "screen", "immich-forget": "screen",
+	"photos-remove": "screen", "photos": "screen", "video": "screen",
+	"deckobs": "screen", "deckgrid": "screen", "deckpage": "screen", "deckpc": "screen", "deck": "screen",
 
-	"place": "weather", "calendar": "weather", "calendar-remove": "weather", "calendar-look": "weather",
-	"todo": "weather",
+	"reolink": "cameras", "doorbell": "cameras", "doorbell-chime": "cameras", "hacameras": "cameras",
+	"go2rtc": "cameras", "cameralist": "cameras", "camerabuttons": "cameras", "talkback": "cameras",
+	"camstream": "cameras",
 
-	"screen": "photos", "themes": "photos", "theme-colors": "photos", "font-remove": "photos",
-	"dashpanel": "photos", "deckobs": "photos", "deckgrid": "photos", "deckpage": "photos", "deckpc": "photos",
-	"video": "photos", "immich": "photos", "immich-album": "photos", "immich-show": "photos",
-	"immich-forget": "photos", "photos-remove": "photos", "fonts": "photos", "deck": "photos", "photos": "photos",
+	"wifi": "network", "forget": "network", "address": "network", "adopt": "network", "timeserver": "network",
+	"tailscale": "network", "netbird": "network", "wallclock": "network",
 
-	"lock": "privacy", "camstream": "privacy", "babylink": "privacy", "babylight": "privacy", "remote": "privacy",
-	"baby": "privacy",
+	"lock": "privacy", "baby": "privacy", "babylink": "privacy", "babylight": "privacy", "remote": "privacy",
 
-	"name": "general", "update-install": "general", "update-check": "general", "update-auto": "general",
-	"timezone": "general", "timeserver": "general", "adopt": "general", "ringwait": "general",
-	"giftreset": "general", "settingsfile": "general", "share": "general", "updates": "general",
+	"name": "system", "place": "system", "timezone": "system", "calendar": "system", "calendar-remove": "system",
+	"updates": "system", "update-install": "system", "update-check": "system", "update-auto": "system",
+	"ringwait": "system", "settingsfile": "system", "share": "system", "giftreset": "system",
+}
+
+// formTab is the tab a form is on here: its tabFor, except on a device with no microphones, which has no
+// Voice tab and keeps the one form of it it has, the house word, on Sound (settingsPage).
+func formTab(what string) string {
+	t := tabFor[what]
+	if t == "voice" && !layout.HasMicrophone() {
+		t = "sound"
+	}
+	return tabOf(t)
 }
 
 // hidden is the fields every form carries: the session it came from and what it saves. Where the
@@ -218,7 +239,7 @@ func hidden(w http.ResponseWriter, token, what string) {
 // not a form here comes back to the tab the page opens on. A rename comes back to the top: the device
 // is restarting, and that is said above everything.
 func back(what, key, value string) string {
-	q := url.Values{"tab": {tabOf(tabFor[what])}}
+	q := url.Values{"tab": {formTab(what)}}
 	if key != "" {
 		q.Set(key, value)
 	}

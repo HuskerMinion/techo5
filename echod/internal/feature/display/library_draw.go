@@ -85,6 +85,27 @@ func (r *renderer) libRowAt(x, y int) int {
 	return -1
 }
 
+// libPartActs is whether a tap on z does something on the library l (libraryTap): a choice of the action
+// sheet while it is up; else a button, a tab, or an item that opens or plays, which the playing first
+// of the queue does not. What scrolls, and a row that scrolls along, are only dragged.
+func libPartActs(l *librarySheet, z mediaZone) bool {
+	if l.menu.open {
+		return z.kind == libPartMenu && z.index >= 0 && z.index < len(l.menu.choices)
+	}
+	switch z.kind {
+	case libPartDone, libPartBack, libPartTab, libPartSort, libPartGoSearch, libPartField, libPartPlay, libPartShuffle:
+		return true
+	case libPartItem:
+		p := l.current()
+		sec, i := z.index/libSecStride, z.index%libSecStride
+		if sec >= len(p.sections) || i >= len(p.sections[sec].entries) {
+			return false
+		}
+		return p.what != libQueue || i > 0 && p.sections[sec].entries[i].QueueItemID != ""
+	}
+	return false
+}
+
 // libDragStart is a finger coming down on the library: where, and on which row.
 func (d *Display) libDragStart(x, y int) {
 	if d.r == nil {
@@ -511,6 +532,9 @@ func (r *renderer) librarySheet(v *libraryView, th dashboard.Theme) {
 		zones, clip = nil, whole
 		r.libMenuSheet(&l, g, pal, fc, pill)
 		zones = append(zones, mediaZone{r: whole, kind: libPartMenuOut})
+	}
+	if z, ok := r.pressPart(zones, whole); ok && libPartActs(&l, z) {
+		r.pressOnPart(z.r, pal)
 	}
 	r.setLibrary(zones, whole)
 	r.setLibraryScroll(contentH, viewH, scroll, visible, rowMax)

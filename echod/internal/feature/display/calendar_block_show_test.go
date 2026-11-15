@@ -17,8 +17,9 @@ import (
 // An event's box on the day's hours keeps its words inside it, however tall the box is, on every
 // panel and at every text size: an hour and a half on a Show 8 is 48 of the Show 5's pixels tall, and
 // the second of its two lines, written 48 down, hung out of the foot of the box. A box of two hours
-// still has both lines. Boxes are tried from a line of the small words up: the least an event is drawn
-// (minBlockPx) is shorter than that at the larger text sizes, and a tail shows under it.
+// still has both lines. Boxes are tried from the least an event is drawn (minBlock) up, which is a line of
+// the small words at every size: from 110% the Show 5's 18 pixels were shorter than that, and a tail
+// showed under the box.
 func TestADaysEventKeepsItsWordsInItsBox(t *testing.T) {
 	config.Use(filepath.Join(t.TempDir(), "state.json"))
 	start := time.Date(2026, 10, 18, 17, 30, 0, 0, time.Local)
@@ -33,7 +34,10 @@ func TestADaysEventKeepsItsWordsInItsBox(t *testing.T) {
 			draw.Draw(img, img.Rect, paper, image.Point{}, draw.Src)
 			top, room := r.s(40), r.s(30)
 			line := r.micro.Metrics().Ascent.Ceil() + r.micro.Metrics().Descent.Ceil()
-			for h := max(r.s(minBlockPx), line); h <= r.s(100); h++ {
+			if r.minBlock() < line {
+				t.Errorf("%d%% on the %s: the least box is %d tall, a line is %d", size, panel.name, r.minBlock(), line)
+			}
+			for h := r.minBlock(); h <= r.s(100); h++ {
 				b := image.Rect(r.s(80), top, r.w-r.s(80), top+h)
 				r.timeBlock(v, r.look(), ev, b, false)
 				out := 0
@@ -113,6 +117,32 @@ func TestComingUpsHeadingsClearTheirRule(t *testing.T) {
 			}
 			if heads < 2 {
 				t.Errorf("%d%% on the %s: %d headings were drawn", size, panel.name, heads)
+			}
+		}
+	}
+}
+
+// Today's day page says so with its pill at every text size on every panel: where the long date
+// leaves the pill no room, the date is said short. At 125% on the Skylight the pill was dropped.
+func TestTodaysDayKeepsItsPill(t *testing.T) {
+	config.Use(filepath.Join(t.TempDir(), "state.json"))
+	t.Cleanup(func() { config.Use(filepath.Join(t.TempDir(), "state.json")) })
+	for _, size := range textSteps {
+		_ = config.Set().Screen().TextSize(size)
+		for _, panel := range showPanels() {
+			img := image.NewRGBA(image.Rect(0, 0, panel.wide, panel.high))
+			r := newRenderer(img)
+			r.draw(calendarScenes()["calendar-day-today"])
+			pill := 0
+			for y := 0; y < r.margin+r.s(40); y++ {
+				for x := r.margin; x < panel.wide*2/3; x++ {
+					if img.RGBAAt(x, y) == amber {
+						pill++
+					}
+				}
+			}
+			if pill < r.s(40)*r.s(20) {
+				t.Errorf("%d%% on the %s: no Today pill (%d pixels in the accent)", size, panel.name, pill)
 			}
 		}
 	}

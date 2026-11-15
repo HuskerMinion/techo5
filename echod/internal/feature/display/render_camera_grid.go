@@ -119,7 +119,7 @@ func (r *renderer) cameraGrid(s scene, v home.CameraView) {
 		} else {
 			msg := tr("drawer_connecting")
 			if c.Error != "" {
-				msg = c.Error
+				msg = tr("drawer_no_picture") // fixed words, as the single camera's (cameraView)
 			}
 			msg = r.clipTo(r.tiny, msg, box.Dx()-2*r.s(8))
 			r.text(r.tiny, msg, box.Min.X+(box.Dx()-r.width(r.tiny, msg))/2, box.Min.Y+box.Dy()/2, dim)

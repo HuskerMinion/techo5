@@ -29,11 +29,15 @@ func musicSection(ctx context.Context, w http.ResponseWriter, token string) {
 	fieldsetOpen(w, "music", "Music Assistant")
 	fmt.Fprint(w, `<form method="post" action="/setup/save">`)
 	hidden(w, token, "music")
-	answered := false
+	var a musicAnswer
 	if m.Set() {
-		status, ok := musicStatus(ctx, m)
-		answered = ok
-		fmt.Fprintf(w, `<p style="margin-top:0"><b>Now:</b> %s</p>`, html.EscapeString(status))
+		// Asked through a lookup (lookup.go), so a Music Assistant that is slow or down does not hold
+		// the tab up on every draw.
+		got, ok := musicLookup.get(ctx, lookupKey(m.URL, m.Token), func(ctx context.Context) musicAnswer { return askMusic(ctx, m) })
+		if a = got; !ok {
+			a = musicAnswer{status: "still being asked; reload the page in a moment for its answer", perr: errors.New("it has not answered yet")}
+		}
+		fmt.Fprintf(w, `<p style="margin-top:0"><b>Now:</b> %s</p>`, html.EscapeString(a.status))
 	}
 	fmt.Fprintf(w, `<p class="note" style="margin-top:0">For "play some Eagles" by voice, when the voice assistant
 	  answers directly: it searches this Music Assistant and plays what it finds here. Music Assistant has to
@@ -46,22 +50,38 @@ func musicSection(ctx context.Context, w http.ResponseWriter, token string) {
 		html.EscapeString(strings.Join(addrs, ", ")), html.EscapeString(m.URL),
 		secretField("matoken", "Token (a long-lived one)", "matoken", m.Token != "", "notoken"))
 	if m.Set() {
-		sourceField(ctx, w, m, answered)
+		sourceField(w, m, a.providers, a.perr)
 	}
 	fmt.Fprint(w, `<p><button type="submit">Save</button></p></form></fieldset>`)
 }
 
-// sourceField is the Music source choice: the services Music Assistant has, asked for as the page is
-// drawn, unless it just did not answer (answered), which would only hold the page up again. One it
-// will not list is said so, and the saved choice is kept.
-func sourceField(ctx context.Context, w http.ResponseWriter, m config.MusicAssistant, answered bool) {
-	var providers []musicassistant.Provider
-	err := errors.New("it did not answer")
+// musicAnswer is what Music Assistant said: how it sees this device (musicStatus), and the services it
+// has, or why it would not list them.
+type musicAnswer struct {
+	status    string
+	providers []musicassistant.Provider
+	perr      error
+}
+
+// musicLookup keeps Music Assistant's answer: two questions of up to 4 seconds each.
+var musicLookup = &lookup[musicAnswer]{ask: 8 * time.Second}
+
+// askMusic asks Music Assistant both: the services only when it answered at all, since asking one that
+// did not would only wait the same time again.
+func askMusic(ctx context.Context, m config.MusicAssistant) musicAnswer {
+	status, answered := musicStatus(ctx, m)
+	a := musicAnswer{status: status, perr: errors.New("it did not answer")}
 	if answered {
 		ctx, cancel := context.WithTimeout(ctx, 4*time.Second)
 		defer cancel()
-		providers, err = musicassistant.Client{URL: m.URL, Token: m.Token}.MusicProviders(ctx)
+		a.providers, a.perr = musicassistant.Client{URL: m.URL, Token: m.Token}.MusicProviders(ctx)
 	}
+	return a
+}
+
+// sourceField is the Music source choice: the services Music Assistant has (askMusic). One it will not
+// list is said so, and the saved choice is kept.
+func sourceField(w http.ResponseWriter, m config.MusicAssistant, providers []musicassistant.Provider, err error) {
 	fmt.Fprint(w, `<label for="masource">Music source</label><select id="masource" name="source">`)
 	option := func(value, label string) {
 		sel := ""
@@ -141,6 +161,7 @@ func saveMusic(r *http.Request) string {
 			return "could not save the music source: " + err.Error()
 		}
 	}
+	musicLookup.forget() // the next draw asks the server as it is now saved
 	slog.Info("setup page: music assistant set", "url", addr, "token", tok != nil, "source", config.Get().MusicAssistant.Source)
 	return ""
 }

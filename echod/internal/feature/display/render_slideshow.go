@@ -58,7 +58,7 @@ func (r *renderer) slideshowScreensaverPage(s scene) {
 		case config.SlideshowOverlayMedium:
 			// The compact clock the corner styles use, in the top right: the time at the size of the
 			// weather's reading, the date under it, readable across a room and off the middle of the photo.
-			d := r.timeAndDateAt(s.now, r.margin+r.s(84), "", 1, 0, true)
+			d := r.timeAndDateAt(s.now, r.margin+r.s(84), "", 1, 0, true, 0)
 			if s.saverWeather {
 				r.saverWeather(s.weather, r.w-r.margin, d.Max.Y+r.s(44), 1)
 			}

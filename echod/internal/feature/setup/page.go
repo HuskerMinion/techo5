@@ -443,6 +443,7 @@ func (f *Feature) save(w http.ResponseWriter, r *http.Request) {
 	if problem != "" {
 		slog.Warn("setup page: a change was refused", "problem", problem)
 		to = back(what, "problem", problem)
+		f.rejected.keep(token, what, r.PostForm) // so it is not all typed again (stash.go)
 	}
 	http.Redirect(w, r, to, http.StatusSeeOther)
 }
@@ -563,105 +564,118 @@ func (f *Feature) settingsPage(ctx context.Context, w http.ResponseWriter, token
 		}
 		_, _ = page.Write(sections.body.Bytes())
 		fmt.Fprint(page, `</section></div></div>`)
+		// A refused form comes back as it was typed, secrets aside (stash.go).
+		if problem != "" {
+			if form, ok := f.rejected.take(token, tab); ok {
+				writeStash(page, form)
+			}
+		}
 		pageScript(page) // last, after everything it reaches for (script.go)
 	}()
 
+	// Within a tab, what is changed most comes first; a long tab is split under group headings, with
+	// what few will need at its foot, under More.
 	switch tab {
 	case "status":
 		statusSection(w)
-	// Within a tab, what is changed most comes first; a long tab is split under group headings.
+		switchedOnSection(w)
+		diagnosticsSection(w) // somebody who came here to ask for help finds it where the page opens
+	case "alarms":
+		alarmsSection(w, token)
 	case "sound":
 		speakerSection(w, token)
 		fmt.Fprint(w, `<h3>Music</h3>`)
 		stationsSection(w, token)
-		musicSection(ctx, w, token)
 		streamingSection(w, token)
-		// A device that cannot hear has no voice assistant, wake words or listening to set up: only the
-		// announcements it plays and its sounds are left of the group.
-		if layout.HasMicrophone() {
-			fmt.Fprint(w, `<h3>Voice</h3>`)
-			brainSection(w, token)
-			replyPlayerSection(w, token)
-			realtimeSection(w, token)
-			listeningSection(w, token)
-			houseSection(w, token)
-			phoneBookSection(w, token)
-			wakeCallSection(w, token)
-			wakeWordsSection(w, token)
-			scoresSection(w)
-			takesSection(w, token)
-			historySection(w, token)
-		} else {
-			fmt.Fprint(w, `<h3>Announcements and sounds</h3>`)
-			houseSection(w, token)
-		}
-		soundsSection(w, token)
-	case "alarms":
-		alarmsSection(w, token)
-	case "connections":
-		if wifi.Available() {
-			f.wifiSection(w, token, scan)
-			addressSection(w, token)
-		} else {
-			fmt.Fprint(w, `<fieldset><legend>Wi-Fi</legend><p class="note" style="margin:0">This device's network
-			 is not one this page can change.</p></fieldset>`)
-		}
 		bluetoothSection(w, token)
-		wallClockSection(w, token)
-		// Which cameras the screen shows, where their pictures come from and the buttons on their
-		// page are a screen's: a Dot has none, and showed all four. The cameras it does use, to hear
-		// the doorbell's button and to talk through, stay.
-		if hasScreen {
-			haCamerasSection(w, token)
+		musicSection(ctx, w, token)
+		// A device that cannot hear has no Voice tab: the announcements it plays are set here.
+		if !layout.HasMicrophone() {
+			fmt.Fprint(w, `<h3>Announcements</h3>`)
+			houseSection(w, token)
 		}
-		reolinkSection(w, token)
-		if hasScreen {
-			go2rtcSection(w, token)
-			cameraListSection(w, token)
-			cameraButtonsSection(w, token)
-		}
-		doorbellSection(w, token)
-		tailscaleSection(w, token)
-		netbirdSection(w, token)
-		if layout.HasMicrophone() {
-			talkBackSection(w, token) // the microphones to a camera's speaker
-		}
-		dashboardSection(w, token)
-	case "photos":
+		fmt.Fprint(w, `<h3>More</h3>`)
+		soundsSection(w, token)
+	case "voice":
+		brainSection(w, token)
+		listeningSection(w, token)
+		replyPlayerSection(w, token)
+		fmt.Fprint(w, `<h3>Calls and announcements</h3>`)
+		houseSection(w, token)
+		phoneBookSection(w, token)
+		wakeCallSection(w, token)
+		fmt.Fprint(w, `<h3>More</h3>`)
+		realtimeSection(w, token)
+		wakeWordsSection(w, token)
+		scoresSection(w)
+		takesSection(w, token)
+		historySection(w, token)
+	case "screen":
 		screenSection(w, token)
 		themeSection(w, token)
 		ownFontsSection(w, token)
 		dashboardPanelSection(w, token)
-		deckSection(w, token)
-		videoSection(w, token)
-		immichSection(w, token)
-		photosSection(w, token)
-	case "weather":
-		placeSection(w, token)
-		calendarLinksSection(w, token)
+		dashboardSection(w, token)
 		calendarLookSection(w, token)
 		todoSection(w, token)
+		fmt.Fprint(w, `<h3>Photos and video</h3>`)
+		immichSection(w, token)
+		photosSection(w, token)
+		videoSection(w, token)
+		fmt.Fprint(w, `<h3>More</h3>`)
+		deckSection(w, token)
+	case "cameras":
+		// Which cameras the screen shows, where their pictures come from and the buttons on their
+		// page are a screen's: a Dot has none, and showed all four. The cameras it does use, to hear
+		// the doorbell's button and to talk through, stay.
+		reolinkSection(w, token)
+		doorbellSection(w, token)
+		if hasScreen {
+			haCamerasSection(w, token)
+			go2rtcSection(w, token)
+			cameraListSection(w, token)
+			cameraButtonsSection(w, token)
+		}
+		if layout.HasMicrophone() {
+			talkBackSection(w, token) // the microphones to a camera's speaker
+		}
+		camStreamSection(w, token)
+	case "network":
+		if wifi.Available() {
+			f.wifiSection(w, token, scan)
+		} else {
+			fmt.Fprint(w, `<fieldset><legend>Wi-Fi</legend><p class="note" style="margin:0">This device's network
+			 is not one this page can change.</p></fieldset>`)
+		}
+		homeAssistantSection(w, token)
+		fmt.Fprint(w, `<h3>Away from home</h3>`)
+		tailscaleSection(w, token)
+		netbirdSection(w, token)
+		fmt.Fprint(w, `<h3>More</h3>`)
+		if wifi.Available() {
+			addressSection(w, token)
+		}
+		timeServerSection(w, token)
+		wallClockSection(w, token)
 	case "privacy":
 		lockSection(w, token)
-		camStreamSection(w, token)
 		babySection(w, token)
-		privacySection(w)
 		remoteSection(w, token)
-	case "general":
+		thisPageSection(w)
+	case "system":
 		nameSection(w, token)
-		updatesSection(w, token)
+		placeSection(w, token)
 		timezoneSection(w, token)
-		timeServerSection(w, token)
-		homeAssistantSection(w, token)
+		calendarLinksSection(w, token)
+		updatesSection(w, token)
 		if led.HasRing {
 			ringWaitSection(w, token)
 		}
+		settingsFileSection(w, token)
+		shareSection(w, token)
 		if firstrun.CanReset() {
 			resetSection(w, token)
 		}
-		settingsFileSection(w, token)
-		shareSection(w, token)
-		diagnosticsSection(w)
 	}
 }
 
@@ -675,7 +689,7 @@ func timezoneSection(w http.ResponseWriter, token string) {
 	 which zone it shows.</p><p><button type="submit">Save</button></p></fieldset></form>`)
 }
 
-// zoneSelect is the list of zones, the one in force chosen: the General tab's and first run's.
+// zoneSelect is the list of zones, the one in force chosen: the System tab's and first run's.
 func zoneSelect(w io.Writer) {
 	cur := timezone.Get().Current()
 	fmt.Fprint(w, `<label for="zone">Zone</label><select id="zone" name="zone">`)
@@ -718,10 +732,10 @@ func timeServerSection(w http.ResponseWriter, token string) {
 	 <p><button type="submit">Save</button></p></fieldset></form>`, html.EscapeString(timezone.Server()), timezone.ServerWhen)
 }
 
-// privacySection says what the device has open, and what this page will never do. It shows and does
-// not change: a web page that could open SSH would be a bigger hole than the convenience is worth, so
-// these stay on the device's own screen and in Home Assistant.
-func privacySection(w http.ResponseWriter) {
+// switchedOnSection says what the device has open. It shows and does not change: a web page that could
+// open SSH would be a bigger hole than the convenience is worth, so these stay on the device's own
+// screen and in Home Assistant.
+func switchedOnSection(w http.ResponseWriter) {
 	s := config.Get().Security
 	onOff := func(on bool) string {
 		if on {
@@ -745,12 +759,16 @@ func privacySection(w http.ResponseWriter) {
 	 <p style="margin:0">SSH: %s · Camera on the network: %s · Screen on the network: %s</p>
 	 <p class="note">Shown here, not changed here. Change them on the device's own screen, or in Home
 	  Assistant.%s</p></fieldset>`, ssh, camera, onOff(s.Screen), missing)
+}
+
+// thisPageSection is what this page will never do, and the few things it can that reach past a setting.
+func thisPageSection(w http.ResponseWriter) {
 	fmt.Fprint(w, `<fieldset><legend>This page</legend>
 	 <p class="note" style="margin:0">It opens only after a press on the device, and closes itself when it
 	  is left alone. It is on your own network, without encryption. It never touches SSH keys or the
 	  software the device runs, and never shows the Home Assistant key. It can let a Home Assistant add
-	  the device for 15 minutes (General), which sets a new key. It can record takes of a word from the
-	  microphones (Sound &amp; Voice) only while Record takes of a word is switched on, and only after a
+	  the device for 15 minutes (Network), which sets a new key. It can record takes of a word from the
+	  microphones (Voice) only while Record takes of a word is switched on, and only after a
 	  press on the device for each recording; the takes stay in memory, and come to you over this page.
 	  It shows the baby monitor's link, and can replace it, but cannot switch the monitor on.</p></fieldset>`)
 }
@@ -819,7 +837,7 @@ func wifiJoinForm(ctx context.Context, w http.ResponseWriter, token string, scan
 	}
 	fmt.Fprint(w, `</select>`)
 	if !scan {
-		fmt.Fprint(w, `<p><a href="/setup?tab=connections&amp;scan=1">Scan for networks</a> — it takes a few seconds.</p>`)
+		fmt.Fprint(w, `<p><a href="/setup?tab=network&amp;scan=1">Scan for networks</a> — it takes a few seconds.</p>`)
 	}
 	// A passphrase typed wrong is only found out after the join has been waited for, so it can be
 	// looked at before it is sent (secret.go).
@@ -834,8 +852,8 @@ func wifiJoinForm(ctx context.Context, w http.ResponseWriter, token string, scan
 	 <p><button type="submit">Add network</button></p></form>`)
 }
 
-// diagnosticsSection offers the bundle. It is first because somebody who came here to ask for help
-// should not have to read past the radio stations to find it.
+// diagnosticsSection offers the bundle. It is on Status, where the page opens, because somebody who
+// came here to ask for help should not have to look through the tabs to find it.
 func diagnosticsSection(w http.ResponseWriter) {
 	fmt.Fprint(w, `<fieldset><legend>Something wrong?</legend>
 	 <p><a href="/setup/diagnostics.txt">Download diagnostics</a> — what this device knows about
@@ -1118,7 +1136,7 @@ var onNetwork = func(ctx context.Context) (string, bool) {
 	return "", true
 }
 
-// passphraseField is the Wi-Fi passphrase, on the Connections tab and in first run: used to join and
+// passphraseField is the Wi-Fi passphrase, on the Network tab and in first run: used to join and
 // handed to the Wi-Fi, never kept by the page.
 func passphraseField() string {
 	return onceField("passphrase", "Passphrase", "passphrase", "")

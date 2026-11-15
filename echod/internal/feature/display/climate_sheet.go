@@ -295,6 +295,9 @@ func (r *renderer) climateSheet(v *climateView, th dashboard.Theme) {
 	r.roundFill(btn, pal.rad, pal.accent, pal.accent)
 	r.text(fc.button, done, btn.Min.X+(bw-r.width(fc.button, done))/2, btn.Min.Y+btnH/2+r.s(9), pal.bg)
 	zones = append(zones, mediaZone{r: btn, kind: climatePartDone})
+	if z, ok := r.pressPart(zones, card); ok { // every part of it is a button (climateTap)
+		r.pressOnPart(z.r, pal)
+	}
 	r.setClimate(zones, card)
 }
 

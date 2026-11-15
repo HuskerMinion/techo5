@@ -63,7 +63,7 @@ func TestOpeningToAHomeAssistantNeedsTheBox(t *testing.T) {
 	if !api.Get().AdoptionOpenUntil().IsZero() {
 		t.Error("the device was opened to a Home Assistant without the box")
 	}
-	body := get(f, "/setup?tab=general", c).Body.String()
+	body := get(f, "/setup?tab=network", c).Body.String()
 	if !strings.Contains(body, `name="understood"`) ||
 		!strings.Contains(body, `class="danger">Let a Home Assistant add this device`) {
 		t.Error("the page does not offer the box, or the button does not look like what it does")

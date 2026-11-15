@@ -10,7 +10,7 @@ import (
 	"github.com/HuskerMinion/techo5/echod/internal/feature/remote"
 )
 
-// The remote API's key, on Privacy & Security. The API is turned on and off on the device's screen or in
+// The remote API's key, on the Privacy tab. The API is turned on and off on the device's screen or in
 // Home Assistant, as the other doors are; the key is made here, behind the press on the device, and shown
 // once.
 

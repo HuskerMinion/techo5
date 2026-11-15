@@ -77,7 +77,7 @@ func TestDoneEndsThatBrowsersSession(t *testing.T) {
 		t.Error("the settings are still there after Done")
 	}
 	// The old cookie is nobody's now: with it, the settings are not shown and a save is refused.
-	if strings.Contains(get(f, "/setup?tab=general", c).Body.String(), `class="rail"`) {
+	if strings.Contains(get(f, "/setup?tab=system", c).Body.String(), `class="rail"`) {
 		t.Error("the cookie Done ended still opens the settings")
 	}
 	if w := done(f, http.MethodPost, c, c.Value); w.Code != http.StatusForbidden {

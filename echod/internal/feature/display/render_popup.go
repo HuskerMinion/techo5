@@ -3,12 +3,13 @@
 package display
 
 import (
+	"fmt"
 	"image"
-	"strconv"
 	"time"
 
 	"github.com/HuskerMinion/techo5/echod/internal/feature/home"
 	"github.com/HuskerMinion/techo5/echod/internal/lib/hass"
+	"github.com/HuskerMinion/techo5/echod/internal/lib/locale"
 )
 
 // popupBox is where an event's pop-up sits: the reminder's box, so that the three cards are one card
@@ -50,24 +51,25 @@ func (r *renderer) popupTapped(p image.Point) bool {
 	return !r.popupAt.Empty() && p.In(r.popupAt)
 }
 
-// popupSoon is how soon an event is, as its pop-up heads it: "In 15 minutes", "Starting now", "Today".
+// popupSoon is how soon an event is, as its pop-up heads it in the screen's language: "In 15 minutes",
+// "Now", "Today".
 func popupSoon(e hass.Event, now time.Time) string {
 	if e.AllDay {
-		return "Today"
+		return tr("today")
 	}
 	switch m := int(e.Start.Sub(now).Round(time.Minute) / time.Minute); {
 	case m <= 0 && now.Before(e.End):
-		return "Now"
+		return locale.Now(screenLang())
 	case m <= 0:
-		return "Started"
+		return tr("popup_started")
 	case m == 1:
-		return "In a minute"
+		return tr("popup_in_a_minute")
 	case m < 60:
-		return "In " + strconv.Itoa(m) + " minutes"
+		return fmt.Sprintf(tr("popup_in_d_minutes"), m)
 	case m == 60:
-		return "In an hour"
+		return tr("popup_in_an_hour")
 	default:
-		return "At " + clockText(e.Start)
+		return fmt.Sprintf(tr("popup_at_s"), clockText(e.Start))
 	}
 }
 

@@ -110,7 +110,7 @@ func scoresSection(w http.ResponseWriter) {
 	}
 	// Refresh differs from the page's own address in more than its fragment, so following it reloads.
 	fmt.Fprintf(w, `</ul>
-	 <div class="btns"><button type="button" id="scwatch">Watch</button><a href="/setup?tab=sound&amp;scores=%d#scores">Refresh</a>
+	 <div class="btns"><button type="button" id="scwatch">Watch</button><a href="/setup?tab=voice&amp;scores=%d#scores">Refresh</a>
 	  <span id="scsays" class="note"></span></div>`, time.Now().Unix())
 	fmt.Fprint(w, scoresScript)
 	fmt.Fprint(w, `</fieldset>`)

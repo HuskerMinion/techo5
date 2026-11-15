@@ -13,7 +13,7 @@ import (
 	"github.com/HuskerMinion/techo5/echod/internal/feature/video"
 )
 
-// videoSection is the video player on the Screen & Photos tab: the two switches, and the addresses
+// videoSection is the video player on the Screen tab: the two switches, and the addresses
 // DLNA videos were allowed from, which can be forgotten.
 func videoSection(w http.ResponseWriter, token string) {
 	c := config.Get().Video

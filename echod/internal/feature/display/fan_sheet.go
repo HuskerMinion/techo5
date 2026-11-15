@@ -332,6 +332,10 @@ func (r *renderer) fanSheet(v *fanView, th dashboard.Theme) {
 	r.roundFill(btn, pal.rad, pal.accent, pal.accent)
 	r.text(fc.button, done, btn.Min.X+(bw-r.width(fc.button, done))/2, btn.Min.Y+btnH/2+r.s(9), pal.bg)
 	zones = append(zones, mediaZone{r: btn, kind: fanPartDone})
+	// Every part but the speed, a slider whose level follows the finger, is a button (fanTap).
+	if z, ok := r.pressPart(zones, card); ok && z.kind != fanPartSpeed {
+		r.pressOnPart(z.r, pal)
+	}
 	r.setFan(zones, card)
 }
 

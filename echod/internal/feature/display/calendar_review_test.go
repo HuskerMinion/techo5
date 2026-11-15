@@ -289,7 +289,7 @@ func TestWeekOvernightAndShortEvents(t *testing.T) {
 			boxes = append(boxes, h.r)
 		case h.kind == calEvent && h.ev.Summary == "Call":
 			short = h.r
-		case h.kind == calDay && h.r.Dy() == r.s(minBlockPx):
+		case h.kind == calDay && h.r.Dy() == r.minBlock():
 			markers++
 		}
 	}
@@ -299,7 +299,7 @@ func TestWeekOvernightAndShortEvents(t *testing.T) {
 	if markers != 2 {
 		t.Errorf("%d markers, want the night shift's early hours and the meteor shower", markers)
 	}
-	if short.Dy() < r.s(minBlockPx) {
+	if short.Dy() < r.minBlock() {
 		t.Errorf("a five-minute call is %v, too small to see or tap", short)
 	}
 }
@@ -390,7 +390,7 @@ func TestWeekMarkersCoverNothing(t *testing.T) {
 		var markers, boxes []image.Rectangle
 		for _, h := range r.calHits {
 			switch {
-			case h.kind == calDay && h.r.Dy() == r.s(minBlockPx):
+			case h.kind == calDay && h.r.Dy() == r.minBlock():
 				markers = append(markers, h.r)
 			case h.kind == calEvent:
 				boxes = append(boxes, h.r)
@@ -428,7 +428,7 @@ func TestWeekShortEventsDoNotOverlap(t *testing.T) {
 		for _, h := range r.calHits {
 			if h.kind == calEvent {
 				boxes = append(boxes, h.r)
-				if h.r.Dy() < r.s(minBlockPx) {
+				if h.r.Dy() < r.minBlock() {
 					t.Errorf("%v: %q is %v, under a line", size, h.ev.Summary, h.r)
 				}
 			}

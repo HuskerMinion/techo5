@@ -43,8 +43,8 @@ func TestTheShowTakesANewTextSizeAtOnce(t *testing.T) {
 }
 
 // At the largest step and the smallest, the words that sit in boxes of a fixed size still fit them:
-// the clock across the screen, and the settings rows, whose labels and values are cut to their room
-// rather than run into each other.
+// the clock across the screen (in the face it falls back to where the text size's is too wide), and
+// the settings rows, whose labels and values are cut to their room rather than run into each other.
 func TestTheLargestTextSizeStillFits(t *testing.T) {
 	config.Use(filepath.Join(t.TempDir(), "state.json"))
 	for _, size := range []int{textSteps[0], textSteps[len(textSteps)-1]} {
@@ -52,7 +52,8 @@ func TestTheLargestTextSizeStillFits(t *testing.T) {
 		for _, panel := range showPanels() {
 			r := newRenderer(image.NewRGBA(image.Rect(0, 0, panel.wide, panel.high)))
 			// The widest time there is, with its AM/PM.
-			if w := r.width(r.clock, "12:48") + r.s(18) + r.width(r.ampm, "PM"); w > r.w-2*r.margin {
+			clock, ampm := r.clockFaces(r.h, "12:48", "PM")
+			if w := r.width(clock, "12:48") + r.s(18) + r.width(ampm, "PM"); w > r.w-2*r.margin {
 				t.Errorf("%d%% on the %s: the clock is %d wide, on a panel %d wide", size, panel.name, w, r.w)
 			}
 			// The Display card's rows: each label and line under it keeps clear of its control, cut
@@ -68,7 +69,9 @@ func TestTheLargestTextSizeStillFits(t *testing.T) {
 				if end+r.s(rowGap)+r.controlWidth(row) > card.Max.X-r.s(26) && row.kind != ctlSwatches && row.kind != ctlDays {
 					t.Errorf("%d%% on the %s: %s runs under its control", size, panel.name, row.id)
 				}
-				if row.id == "textsize" && (label != row.label || sub != row.sub) {
+				// Its name whole, so it can be found to make the words smaller again; past 125% the line
+				// under it may be cut.
+				if row.id == "textsize" && (label != row.label || sub != row.sub && size <= 125) {
 					t.Errorf("%d%% on the %s: the text size row is cut to %q / %q", size, panel.name, label, sub)
 				}
 			}

@@ -564,6 +564,13 @@ func (r *renderer) colorSheet(c *dashboard.LightColor, th dashboard.Theme) {
 	r.roundFill(btn, pal.rad, pal.accent, pal.accent)
 	r.text(fc.button, done, btn.Min.X+(bw-r.width(fc.button, done))/2, btn.Min.Y+btnH/2+r.s(9), pal.bg)
 	zones = append(zones, colorZone{r: btn, kind: colorPartDone})
+	// Done shows a finger on it as its tap finds it (colorHit). The bands do not: the light's mark
+	// follows a finger on them, which is the press there.
+	if r.press.on {
+		if z, in := colorHit(zones, card, r.press.at.X, r.press.at.Y); in && z.kind == colorPartDone {
+			r.pressOnPart(z.r, pal)
+		}
+	}
 	r.setColor(zones, card)
 }
 

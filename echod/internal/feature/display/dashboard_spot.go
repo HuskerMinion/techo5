@@ -212,6 +212,7 @@ func (d *Display) dashGestureSpot(g touch.Gesture) {
 func (r *roundRenderer) dashFace(s roundScene) {
 	if s.dashMode == config.DashboardDrawn {
 		r.dashPage(s.drawn, s.dashScroll, s.dashAdjust, spotDashArea, "", "")
+		r.pressTile(r.palette(s.drawn.Theme))
 		return
 	}
 	v := s.dash

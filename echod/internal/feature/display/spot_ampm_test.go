@@ -16,7 +16,7 @@ import (
 func TestTheSpotsAMPMStaysOnTheFace(t *testing.T) {
 	previewFont(t)
 	config.Use(filepath.Join(t.TempDir(), "state.json"))
-	if err := config.Set().Screen().TextSize(textSteps[len(textSteps)-1]); err != nil {
+	if err := config.Set().Screen().TextSize(offeredSteps()[len(offeredSteps())-1]); err != nil {
 		t.Fatal(err)
 	}
 	img := image.NewRGBA(image.Rect(0, 0, side, side))

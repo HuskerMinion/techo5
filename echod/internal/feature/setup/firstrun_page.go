@@ -222,7 +222,7 @@ func firstRunForm(w http.ResponseWriter, token, problem string, showKey bool) {
 		case firstrun.AutoInstall():
 			fmt.Fprintf(w, `<p>TECHO5 <strong>%s</strong> is ready. It installs tonight, after setup.</p>`, html.EscapeString(v))
 		default:
-			fmt.Fprintf(w, `<p>TECHO5 <strong>%s</strong> is ready, to install from the General tab.</p>`, html.EscapeString(v))
+			fmt.Fprintf(w, `<p>TECHO5 <strong>%s</strong> is ready, to install from the System tab.</p>`, html.EscapeString(v))
 		}
 		checked := ""
 		if firstrun.AutoInstall() {

@@ -253,6 +253,9 @@ type scene struct {
 	// is the star having been pressed for what is playing.
 	strip bool
 	faved bool
+	// musicAway is the music's page put away, so that the footer's word for it is the way back to it
+	// (Display.gesture): a press shows on the word only then.
+	musicAway bool
 	// libraryWord is the word on the Now Playing page's Library button, back to the music library;
 	// empty for no button (no Music Assistant set up).
 	libraryWord string
@@ -364,6 +367,10 @@ type renderer struct {
 
 	// styleFaces are the clock styles' faces, made as they are first needed (render_styles.go).
 	styleFaces map[styleFaceKey]font.Face
+	// calCapped are the faces the month and the week are drawn in above calendarMost, made for the
+	// font calCappedFor (calendar_cap.go).
+	calCapped    *faceSet
+	calCappedFor fontKey
 
 	// washed is the weather art with its wash on, kept for the frames drawn in the same second;
 	// artDrawn is weather moving over the art in the frame last drawn, which wants the next one soon.
@@ -543,17 +550,28 @@ func newRenderer(dst *image.RGBA) *renderer {
 	return r
 }
 
+// headlineMost is the text size the large faces stop growing at, in percent (makeFaces).
+const headlineMost = 125
+
 // makeFaces makes the renderer's faces in the font named (font.go). Sizes are points at 72 DPI, which
 // makes them pixels, so they scale with everything else.
 func (r *renderer) makeFaces(k fontKey) {
 	face := func(bold bool, size int) font.Face { return k.face(bold, float64(r.s(size))) }
 	r.font, r.fontGen, r.textSize, r.styleFaces = k.name, k.gen, k.size, nil
-	r.clock = face(true, 230)
-	r.big = face(true, 100)
-	r.ampm = face(true, 56)
+	// The large faces (the clock, a reading, a page's title) stop growing at 125%: past it they are
+	// already read across a room, and a title as large as 150% makes it was cut to its first letters
+	// beside its page's buttons. The words under them keep growing.
+	headline := k
+	if headline.size > headlineMost {
+		headline.size = headlineMost
+	}
+	head := func(bold bool, size int) font.Face { return headline.face(bold, float64(r.s(size))) }
+	r.clock = head(true, 230)
+	r.big = head(true, 100)
+	r.ampm = head(true, 56)
 	at100 := fontKey{k.name, k.gen, 0}
 	r.ringClock, r.ringAmpm = at100.face(true, float64(r.s(230))), at100.face(true, float64(r.s(56)))
-	r.title = face(true, 48)
+	r.title = head(true, 48)
 	r.body = face(false, 42)
 	r.small = face(false, 34)
 	r.tiny = face(false, 26)
@@ -824,6 +842,7 @@ func (r *renderer) draw(s scene) {
 		r.press.on = false
 	}
 	var behind *image.RGBA // the photo behind the idle page, when it has one
+	clock := false         // the clock's own page, whose places to tap show a press (pressClock)
 	switch s.phase {
 	case "listening":
 		r.status(s, tr("ui_listening_turn"), true)
@@ -863,6 +882,7 @@ func (r *renderer) draw(s scene) {
 			if s.callButton {
 				r.callButtonDraw()
 			}
+			clock = true
 		}
 	}
 	// The footer's words sit on the photo too, when there is one.
@@ -870,6 +890,9 @@ func (r *renderer) draw(s scene) {
 		onPhoto(func() { r.readableOver(behind, walnut, slideshowWash, func() { r.footer(s) }) })
 	} else {
 		r.footer(s)
+	}
+	if clock {
+		r.pressClock(s)
 	}
 	if s.strip && s.phase == "idle" && s.sunrise == 0 {
 		r.musicStrip(s)
@@ -904,20 +927,28 @@ const volumeBarH = 110
 // optional suffix appended to the date line (an alarm note, on the ordinary idle page). Shared by
 // bigClock and the screensaver's normal-size overlay, which wants the clock alone.
 func (r *renderer) timeAndDate(now time.Time, base int, dateSuffix string) image.Rectangle {
-	return r.timeAndDateAt(now, base, dateSuffix, 0, 0, false)
+	return r.timeAndDateAt(now, base, dateSuffix, 0, 0, false, 0)
 }
 
 // timeAndDateAt is timeAndDate lined up across as align says: -1 against left (a left edge), 0
 // centered, 1 against the right margin. Off center it is the compact clock, for a corner: the time at
 // the size of the weather's reading, the date close under it. Centered, it is the digits that are in
-// the middle, over the middle of the date, and the AM/PM hangs off their right (clockLeft).
-func (r *renderer) timeAndDateAt(now time.Time, base int, dateSuffix string, align, left int, compact bool) image.Rectangle {
+// the middle, over the middle of the date, and the AM/PM hangs off their right (clockLeft). roof, when
+// not 0, is as high as the digits may stand: the foot of what is over them (clockFaces).
+func (r *renderer) timeAndDateAt(now time.Time, base int, dateSuffix string, align, left int, compact bool, roof int) image.Rectangle {
 	clock, ampmFace, dateGap := r.clock, r.ampm, r.s(70)
 	if compact {
 		clock, ampmFace, dateGap = r.big, r.small, r.s(48)
 	}
 	hour := clockHM(now)
 	ampm := clockSuffix(now)
+	if !compact {
+		room := base // no roof: as high as the panel
+		if roof > 0 {
+			room = base - roof
+		}
+		clock, ampmFace = r.clockFaces(room, hour, ampm)
+	}
 	hw := r.width(clock, hour)
 	aw := r.width(ampmFace, ampm)
 	gap := r.s(18)
@@ -952,6 +983,38 @@ func (r *renderer) timeAndDateAt(now time.Time, base int, dateSuffix string, ali
 	x = across(r.width(r.small, date))
 	r.text(r.small, date, x, base+dateGap, dateColor(dim))
 	return image.Rect(x, base+dateGap-r.s(30), x+r.width(r.small, date), base+dateGap+r.s(10))
+}
+
+// clockFaces are the classic clock's digits and AM/PM for hour and ampm, as large as the text size
+// makes them where their figures have room (that tall at most, and the panel's width inside its
+// margins); else the size the ringing page keeps (100%); else smaller still, to fit. At 150% the
+// digits stood up into the weather's line, and ran past the panel's sides.
+func (r *renderer) clockFaces(room int, hour, ampm string) (clock, ampmFace font.Face) {
+	fits := func(c, a font.Face) bool {
+		w := r.width(c, hour)
+		if ampm != "" {
+			w += r.s(18) + r.width(a, ampm)
+		}
+		return capHeight(c) <= room && w <= r.w-2*r.margin
+	}
+	if fits(r.clock, r.ampm) {
+		return r.clock, r.ampm
+	}
+	if fits(r.ringClock, r.ringAmpm) {
+		return r.ringClock, r.ringAmpm
+	}
+	k := float64(max(room, 1)) / float64(capHeight(r.ringClock))
+	return r.pxFace(true, int(float64(r.s(230))*k)), r.pxFace(true, int(float64(r.s(56))*k))
+}
+
+// clockRoof is as high as the classic clock's digits may stand: under the weather's line at the top
+// with a little room, or under the top margin where there is none.
+func (r *renderer) clockRoof(s scene) int {
+	if s.weather.Temp == "" && s.weather.Condition == "" {
+		return r.margin
+	}
+	mid := r.weatherMid()
+	return max(mid+r.s(weatherMark)/2, mid+r.s(11)+r.small.Metrics().Descent.Ceil()) + r.s(4)
 }
 
 // clockLeft is where a centered clock's digits start, hw wide with an AM/PM aw wide a gap after them.
@@ -1048,7 +1111,7 @@ func (r *renderer) bigClock(s scene) {
 	if s.callButton && foot && align < 0 {
 		left = r.callButtonRect().Max.X + r.s(24)
 	}
-	r.setDateAt(r.timeAndDateAt(s.now, base, suffix, align, left, foot).Inset(-r.s(16)))
+	r.setDateAt(r.timeAndDateAt(s.now, base, suffix, align, left, foot, r.clockRoof(s)).Inset(-r.s(16)))
 	if timers {
 		r.timersFoot(s, base+timersAt)
 	}
@@ -1249,7 +1312,8 @@ func (r *renderer) cornerClock(s scene) {
 func (r *renderer) cornerClockDated(s scene) {
 	r.cornerClock(s)
 	d := locale.ShortDate(s.now, screenLang())
-	r.text(r.tiny, d, r.w-r.margin-r.width(r.tiny, d), r.margin+r.s(54), dim)
+	// A line of the date's words under the clock's, so larger words keep the two apart.
+	r.text(r.tiny, d, r.w-r.margin-r.width(r.tiny, d), r.margin+r.s(26)+r.grownForText(r.s(28)), dim)
 }
 
 // status is a phase title with an indicator that breathes while the device waits.
@@ -1380,7 +1444,9 @@ func (r *renderer) callButtonDraw() {
 	b := r.callButtonRect()
 	rad := float64(b.Dx()) / 2
 	r.roundShadow(b, rad, r.sf(10), r.s(3), shadowAlpha())
-	r.roundFill(b, rad, shift(answerGreen, 16), shift(answerGreen, -12))
+	// Pressed as far round it as a tap on it reaches (Display.gesture).
+	on := r.press.on && r.press.at.In(b.Inset(-r.s(12)))
+	r.roundFill(b, rad, r.pressTinted(on, shift(answerGreen, 16), cream), r.pressTinted(on, shift(answerGreen, -12), cream))
 	r.roundHighlight(b, rad)
 	icon := r.s(32)
 	r.mdiIcon("phone", b.Min.X+(b.Dx()-icon)/2, b.Min.Y+(b.Dy()-icon)/2, 32, cream)

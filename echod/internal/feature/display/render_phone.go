@@ -77,7 +77,7 @@ func (r *renderer) callPage(s scene) {
 	// and in a corner, and somebody talking to a caller who cannot hear them is looking here.
 	muted := ""
 	if s.muted {
-		muted = tr("ui_muted")
+		muted = tr("call_muted")
 		if line != "" {
 			muted += "  ·  "
 		}

@@ -160,7 +160,7 @@ func (f *Feature) gridFrames(ctx context.Context, gen uint64, i int, entity stri
 		f.mu.Lock()
 		if f.viewIsUp(GridEntity) && f.cam.gen == gen && i < len(f.cam.Grid) {
 			if err != nil {
-				f.cam.Grid[i].Error = err.Error()
+				f.cam.Grid[i].Error = cameraTrouble(entity, f.cam.Grid[i].Error, err)
 			} else {
 				f.cam.Grid[i].Frame, f.cam.Grid[i].Error = frame, ""
 			}

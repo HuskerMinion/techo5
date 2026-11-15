@@ -32,7 +32,7 @@ The same as Tailscale, by the same rules (see [what Tailscale does](tailscale.md
 2. **Make a setup key** in your NetBird dashboard: **Setup Keys → Create Setup Key**. Make it one-off,
    with a short expiry. Give it a group (say `techo5`) so your access policies can name the devices.
 3. **Give the device the key.** Either:
-   - the setup page: **Connections → NetBird**, paste the key, and if you run your own NetBird, put
+   - the setup page: **Network → NetBird**, paste the key, and if you run your own NetBird, put
      your management server's URL (`https://netbird.example.com`). Leave it empty for NetBird's own.
      Then **Join**. The first time, Join starts the client's download and says so: when the page
      shows NetBird needs a setup key, paste the key again and press **Join**. Use an `https://`

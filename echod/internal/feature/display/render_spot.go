@@ -253,6 +253,9 @@ type roundScene struct {
 	videoControls bool
 	showVideoAsk  bool
 	videoAsk      videoAsk
+
+	// press is a finger on the face, shown on what it is on (press.go).
+	press pressView
 }
 
 type roundRenderer struct {
@@ -345,6 +348,7 @@ func (r *roundRenderer) useFont() {
 
 func (r *roundRenderer) draw(s roundScene) {
 	r.useFont()
+	r.press = s.press
 	defer r.listeningDot(s) // over everything, however the frame ends
 	if !(s.menuOpen && s.menuMode == modeWeather && s.radarOn) {
 		r.shapes = alertOverlay{} // kept only while the rain map is up
@@ -447,6 +451,8 @@ func (r *roundRenderer) draw(s roundScene) {
 		r.sheetFace(s)
 		return
 	}
+	// Under the ring menu a finger is on the menu, not on the face it dims.
+	r.press.on = s.press.on && !s.menuOpen
 	r.rim(s)
 	switch {
 	case s.showCamera && !s.showVolume:
@@ -486,6 +492,7 @@ func (r *roundRenderer) draw(s roundScene) {
 		}
 	}
 	if s.menuOpen {
+		r.press.on = s.press.on
 		r.menu(s)
 	}
 	if s.cameraLive {

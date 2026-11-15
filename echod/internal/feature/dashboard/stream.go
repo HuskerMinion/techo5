@@ -21,6 +21,7 @@ import (
 
 	"github.com/HuskerMinion/techo5/echod/internal/config"
 	"github.com/HuskerMinion/techo5/echod/internal/lib/fastjpeg"
+	"github.com/HuskerMinion/techo5/echod/internal/lib/redact"
 	"github.com/HuskerMinion/techo5/echod/internal/lib/safe"
 )
 
@@ -219,6 +220,19 @@ func (s *stream) close() {
 	}
 }
 
+// serverProblem is the server's sentence for the screen, without the error it may end with: "The
+// dashboard would not open: " and then a browser's error, which can name the page's address with a
+// token in its query. The whole of it is logged, those parts of its addresses taken off.
+func serverProblem(text string) string {
+	text = cutRunes(text, 300)
+	head, _, found := strings.Cut(text, ": ")
+	if !found {
+		return text
+	}
+	slog.Warn("dashboard: the server's problem", "said", redact.URLSecrets(text))
+	return strings.TrimRight(head, ".") + "."
+}
+
 func (s *stream) problem(text string) {
 	s.mu.Lock()
 	s.view.Problem = text
@@ -281,7 +295,8 @@ func (s *stream) once() error {
 	}
 	raw, err := net.DialTimeout("tcp", d.Server, 5*time.Second)
 	if err != nil {
-		s.problem("Can't reach the dashboard server at " + d.Server + ".")
+		slog.Warn("dashboard: can't reach the server", "server", redact.URLSecrets(d.Server), "err", redact.URLSecrets(err.Error()))
+		s.problem("Can't reach the dashboard server.")
 		return err
 	}
 	defer raw.Close()
@@ -359,7 +374,7 @@ func (s *stream) once() error {
 			}
 			s.paintDoubled(at, img)
 		case kindProblem:
-			s.problem(string(msg[1:]))
+			s.problem(serverProblem(string(msg[1:])))
 		case kindKeyboard:
 			var fl Field
 			if json.Unmarshal(msg[1:], &fl) == nil {

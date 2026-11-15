@@ -119,9 +119,16 @@ func (r *renderer) calendarPage(s scene) {
 	if !l.weather {
 		v.forecast = nil
 	}
+	// Under an open window a finger is on the window, or beside it, where a tap only closes it: the
+	// page under it shows no press (pressCalendar).
+	chips := v.chipsOpen && len(v.order) > 1
+	press := r.press.on
+	r.press.on = press && !chips && v.detail == nil
 	switch {
 	case !v.day.IsZero() && v.week && l.week:
+		restore := r.calendarFaces()
 		r.calendarWeek(v, l)
+		restore()
 	case !v.day.IsZero() && l.timeline:
 		r.calendarTimeline(v, l)
 	case !v.day.IsZero():
@@ -131,14 +138,20 @@ func (r *renderer) calendarPage(s scene) {
 	case v.agenda:
 		r.calendarAgenda(v)
 	default:
+		restore := r.calendarFaces()
 		r.calendarMonth(v, l)
+		restore()
 	}
-	if v.chipsOpen && len(v.order) > 1 {
+	if chips {
+		r.press.on = press && v.detail == nil
 		r.calChipsList(v)
 	}
 	if v.detail != nil {
+		r.press.on = press
 		r.calendarDetail(v, *v.detail)
 	}
+	r.press.on = press
+	r.pressCalendar()
 }
 
 // calArrowIcon is the size the header's chevrons are drawn at. The program's icon buttons draw the

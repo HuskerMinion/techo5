@@ -68,7 +68,7 @@ catches most of your takes with the false triggers you can live with.
 ### 5. Export it and load it
 
 Export the **microWakeWord** model: a `.json` and a `.tflite`. Add both on the device's setup page,
-**Sound & Voice**, **Wake words of your own**
+**Voice**, **Wake words of your own**
 ([A wake word of your own](setup.md#a-wake-word-of-your-own)); the device checks it can run the model
 before it keeps it. Pick it as the **Wake word**, set the **Wake word threshold** near the cutoff you
 chose, then say it from where you'll use it and watch the setup page's

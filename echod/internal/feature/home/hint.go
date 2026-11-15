@@ -5,7 +5,9 @@ import (
 	"strings"
 	"time"
 
+	"github.com/HuskerMinion/techo5/echod/internal/config"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/media"
+	"github.com/HuskerMinion/techo5/echod/internal/lib/locale"
 )
 
 // A station asked for that Home Assistant never started, and a star with nothing behind it.
@@ -42,22 +44,28 @@ type Hint struct {
 	Title, Message string
 }
 
-// The notes, as the screen shows them: kept short, since a card holds a heading and three lines.
+// The notes, as the screen shows them: kept short, since a card holds a heading and three lines. Each
+// is a key of the screen's catalogs (lib/locale), said in the screen's language when it is put up
+// (hintText).
 const (
 	// NoStartHint is a station Home Assistant did not start.
-	NoStartHint = "Home Assistant didn't start the stream. Is \"Allow the device to perform Home Assistant " +
-		"actions\" on for this device?"
+	NoStartHint = "hint_no_start"
 	// FavoriteHint is the star's script call refused.
-	FavoriteHint = "Couldn't save the station. Home Assistant needs a script named " +
-		"script.radio_favorite_add_station."
+	FavoriteHint = "hint_favorite"
 	// NoHomeHint is a station asked for with no Home Assistant connected to ask it of.
-	NoHomeHint = "Home Assistant isn't connected to this device, so the station wasn't started."
+	NoHomeHint = "hint_no_home"
 	// PlayFailedHint is a station from a list that Home Assistant would not play. The error behind it
 	// stays in the log: it can carry an address.
-	PlayFailedHint = "Home Assistant couldn't play that station."
+	PlayFailedHint = "hint_play_failed"
 	// DroppingHint is a station left off after its stream ended by itself too many times.
-	DroppingHint = "The stream keeps dropping, so the station was left off."
+	DroppingHint = "hint_dropping"
 )
+
+// HintText is a note's words, or its heading's, in the screen's language.
+func HintText(key string) string { return locale.Text(config.Get().Screen.Language, key) }
+
+// radioHint is a note under the radio's heading.
+func radioHint(key string) Hint { return Hint{Title: HintText("drawer_radio"), Message: HintText(key)} }
 
 // startWait is how long a station started through the radio script has to show a sign that Home
 // Assistant took the call. The script turning on comes within a second of the call when it is taken,
@@ -118,7 +126,7 @@ func (f *Feature) noStart(service, station string, seq uint64, at time.Time, wai
 		"station", station, "service", service, "waited", wait)
 	f.Changed.Emit(struct{}{})
 	f.pokeMeta()
-	f.Hint.Emit(Hint{Title: "Radio", Message: NoStartHint})
+	f.Hint.Emit(radioHint(NoStartHint))
 }
 
 // startHeard is Home Assistant at work on a station: the station script turning on, or the house's text
@@ -140,11 +148,11 @@ func (f *Feature) streamArrived() {
 
 // startFailed is a station that came to nothing for a reason the device knows: the note says which, and
 // a stream that arrives after all takes it down, as it does the note for a start nothing came of.
-func (f *Feature) startFailed(message string) {
+func (f *Feature) startFailed(key string) {
 	f.mu.Lock()
 	f.hinted = true
 	f.mu.Unlock()
-	f.Hint.Emit(Hint{Title: "Radio", Message: message})
+	f.Hint.Emit(radioHint(key))
 }
 
 // favoriteFailed is the star's script call refused: the note names the script it needs, since a 400 is
@@ -154,5 +162,5 @@ func (f *Feature) favoriteFailed() {
 	f.mu.Lock()
 	f.hinted = false // a stream arriving is no answer to this one
 	f.mu.Unlock()
-	f.Hint.Emit(Hint{Title: "Favorites", Message: FavoriteHint})
+	f.Hint.Emit(Hint{Title: HintText("drawer_favorites"), Message: HintText(FavoriteHint)})
 }

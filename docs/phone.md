@@ -119,7 +119,7 @@ the WebRTC helper.
 
 Each device keeps a phone book of up to 12 contacts. The screen's **Call** list shows them (the Show's
 drawer, the Spot's dial), and "call Mom" said to the device calls them (below). Set it on the setup
-page (**Sound & Voice**, **Phone book**), one contact to a line:
+page (**Voice**, **Phone book**), one contact to a line:
 
 ```text
 Mom|Mother = 15551234567

@@ -17,7 +17,7 @@ import (
 	"github.com/HuskerMinion/techo5/echod/internal/feature/share"
 )
 
-// Shared settings, on the General tab (feature/share): whether this device takes part, and for each
+// Shared settings, on the System tab (feature/share): whether this device takes part, and for each
 // setting that can be shared, the devices it is kept in step with and whether this device keeps its own.
 // Below it, a copy of chosen settings to chosen devices, once. Both have routes of their own, for a form
 // with a box for every setting and every device.
@@ -80,7 +80,7 @@ func shareSection(w http.ResponseWriter, token string) {
 	  there, a change to that setting on either reaches the other, the latest change winning; another device can
 	  ask, never link this one by itself. Keep mine: nothing another device sends changes it. What opens the
 	  device to the network, uses or shows the use of its microphones or camera, holds a password or says where
-	  its voice goes is never shared. Every device needs the same house word (Connections).</p>`,
+	  its voice goes is never shared. Every device needs the same house word (Voice).</p>`,
 		html.EscapeString(token), checked(s.On))
 	if c.Home.HouseWord == "" {
 		fmt.Fprint(w, `<p class="note"><strong>This device has no house word set</strong>, so it can neither send nor take
@@ -312,7 +312,7 @@ func (f *Feature) copyShare(w http.ResponseWriter, r *http.Request) {
 		}
 		fmt.Fprint(w, `</ul>`)
 	}
-	fmt.Fprint(w, `<p><a href="/setup?tab=general">Back to the setup page</a></p></fieldset></div>`)
+	fmt.Fprint(w, `<p><a href="/setup?tab=system">Back to the setup page</a></p></fieldset></div>`)
 }
 
 // shareName is a setting's name as the page shows it.

@@ -144,9 +144,12 @@ func (r *paint) textFace(bold bool, size int) font.Face {
 		return nil
 	}
 	// The faces of a font no longer in use go: they keep the owner's own font files they were made
-	// from open (lib/fonts), a removed one's space not freed, a replaced one read as it was.
+	// from open (lib/fonts), a removed one's space not freed, a replaced one read as it was. Only the
+	// font's: the same font at another text size stays, since the month and the week are drawn at
+	// 125% in the same frame as a card at the size chosen (calendar_cap.go), and dropping one size to
+	// make the other made both again every frame.
 	textFaces.Range(func(k, _ any) bool {
-		if k.(textKey).font != key.font {
+		if f := k.(textKey).font; f.name != key.font.name || f.gen != key.font.gen {
 			textFaces.Delete(k)
 		}
 		return true

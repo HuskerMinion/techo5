@@ -145,7 +145,7 @@ func TestTheDeckFootLine(t *testing.T) {
 		{"OBS on its way", deckView{obsSet: true}, tr("connecting_to_obs"), false},
 		{"a computer away", deckView{obsSet: true, connected: true, away: "Studio"}, "Studio is not answering", false},
 		{"a computer away and no OBS", deckView{away: "Studio"}, "Studio is not answering", false},
-		{"no OBS", deckView{}, "OBS isn't set up: setup page → Screen & Photos → Deck", false},
+		{"no OBS", deckView{}, "OBS isn't set up: setup page → Screen → Deck", false},
 	} {
 		if got, failure := c.v.footLine(); got != c.want || failure != c.failure {
 			t.Errorf("%s: %q (a failure %v), want %q (%v)", c.what, got, failure, c.want, c.failure)

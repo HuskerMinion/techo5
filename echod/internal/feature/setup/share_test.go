@@ -51,7 +51,7 @@ func TestSharingTurnsOnAndKeeps(t *testing.T) {
 	if s.Kept("sendspin") {
 		t.Error("a setting that is never shared was kept, as though it could be")
 	}
-	if body := get(f, "/setup?tab=general", c).Body.String(); !strings.Contains(body, "Shared settings") ||
+	if body := get(f, "/setup?tab=system", c).Body.String(); !strings.Contains(body, "Shared settings") ||
 		!strings.Contains(body, `name="on" value="1" checked`) {
 		t.Error("General does not show sharing on")
 	}
@@ -73,7 +73,7 @@ func TestCopyNeedsSharingOn(t *testing.T) {
 
 func TestSharingWithoutAHouseWordSaysSo(t *testing.T) {
 	f, c := in(t)
-	if body := get(f, "/setup?tab=general", c).Body.String(); !strings.Contains(body, "no house word set") {
+	if body := get(f, "/setup?tab=system", c).Body.String(); !strings.Contains(body, "no house word set") {
 		t.Error("no word for the house, and the page does not say it cannot share")
 	}
 }
@@ -85,7 +85,7 @@ func TestAnsweringALinkRequest(t *testing.T) {
 		config.AddRequest(s, "bass", "Office", time.Now())
 		config.AddRequest(s, "treble", "Office", time.Now())
 	})
-	if body := get(f, "/setup?tab=general", c).Body.String(); !strings.Contains(body, "Office asks to link") {
+	if body := get(f, "/setup?tab=system", c).Body.String(); !strings.Contains(body, "Office asks to link") {
 		t.Error("the requests are not shown")
 	}
 

@@ -15,7 +15,7 @@ import (
 	"github.com/HuskerMinion/techo5/echod/internal/lib/obsws"
 )
 
-// deckSection is TECHO5 Deck on the Screen & Photos tab: where OBS is, the grid, and every page's
+// deckSection is TECHO5 Deck on the Screen tab: where OBS is, the grid, and every page's
 // buttons, one form a page. The scene and input boxes suggest OBS's own names while it's connected,
 // so nobody has to type them exactly.
 func deckSection(w http.ResponseWriter, token string) {

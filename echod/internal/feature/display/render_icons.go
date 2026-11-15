@@ -58,15 +58,6 @@ func snowInk() color.RGBA      { return skyInk(snowWhite, snowDeep) }
 func boltInk() color.RGBA      { return skyInk(boltGold, boltDeep) }
 func moonInk() color.RGBA      { return skyInk(moonPale, moonDeep) }
 
-// box strokes a rectangle's outline, thick pixels wide.
-func (r *renderer) box(rect image.Rectangle, c color.Color, thick int) {
-	src := image.NewUniform(c)
-	draw.Draw(r.dst, image.Rect(rect.Min.X, rect.Min.Y, rect.Max.X, rect.Min.Y+thick), src, image.Point{}, draw.Over)
-	draw.Draw(r.dst, image.Rect(rect.Min.X, rect.Max.Y-thick, rect.Max.X, rect.Max.Y), src, image.Point{}, draw.Over)
-	draw.Draw(r.dst, image.Rect(rect.Min.X, rect.Min.Y, rect.Min.X+thick, rect.Max.Y), src, image.Point{}, draw.Over)
-	draw.Draw(r.dst, image.Rect(rect.Max.X-thick, rect.Min.Y, rect.Max.X, rect.Max.Y), src, image.Point{}, draw.Over)
-}
-
 // faded runs paint onto a scratch layer and lays it over the canvas at the given opacity (0–255),
 // for a picture that sits behind the page rather than on it.
 func (r *renderer) faded(alpha uint8, paint func()) {

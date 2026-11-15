@@ -100,6 +100,9 @@ type Feature struct {
 
 	// remote is Remote setup (remote.go).
 	remote remoteSetup
+
+	// rejected are the forms the device refused, by session, for the page they come back to (stash.go).
+	rejected rejectedForms
 }
 
 var (
@@ -209,6 +212,7 @@ func (f *Feature) Close() {
 	f.heldOpen = false
 	clear(f.live)
 	f.mu.Unlock()
+	f.rejected.drop("") // what was typed belongs to the sessions, and goes with them
 
 	if was {
 		slog.Info("setup page closed")
@@ -229,6 +233,7 @@ func (f *Feature) leave(token string) {
 	delete(f.live, token)
 	delete(f.remote.sessions, token)
 	f.mu.Unlock()
+	f.rejected.drop(token)
 }
 
 // used puts the idle time back to the start: typing on the page keeps it open.
@@ -353,6 +358,7 @@ func (f *Feature) admit(asking, by string) bool {
 			}
 		}
 		delete(f.live, oldest)
+		f.rejected.drop(oldest) // and what it typed
 	}
 	f.live[f.waiting] = now
 	f.keepRemote(f.waiting)

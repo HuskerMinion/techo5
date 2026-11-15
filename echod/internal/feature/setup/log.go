@@ -177,7 +177,7 @@ func (f *Feature) logStream(w http.ResponseWriter, r *http.Request) {
 
 // logPageHTML is the view. The script only ever sets textContent, so nothing in the log can become markup.
 const logPageHTML = `<div class="wrap"><h1>Log</h1>
-<p class="sub"><a href="/setup?tab=general">Back to setup</a></p>
+<p class="sub"><a href="/setup?tab=status">Back to setup</a></p>
 <style>
  .logbar{display:flex;gap:.6rem;flex-wrap:wrap;align-items:center;margin:0 0 .6rem}
  .logbar select,.logbar input{width:auto}

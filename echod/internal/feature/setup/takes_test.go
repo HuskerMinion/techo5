@@ -56,7 +56,7 @@ func TestRecordingTakesNeedsThePressAndThePagesToken(t *testing.T) {
 // With the switch off the section says where it is, and asking anyway says the same.
 func TestRecordingTakesSaysWhenItIsOff(t *testing.T) {
 	f, c := in(t)
-	if body := get(f, "/setup?tab=sound", c).Body.String(); !strings.Contains(body, "<legend>Record takes of a word</legend>") ||
+	if body := get(f, "/setup?tab=voice", c).Body.String(); !strings.Contains(body, "<legend>Record takes of a word</legend>") ||
 		!strings.Contains(body, "It is off") || strings.Contains(body, `name="do" value="record"`) {
 		t.Error("the section did not say it is off, or offered Record anyway")
 	}
@@ -71,7 +71,7 @@ func TestRecordingTakesSaysWhenItIsOff(t *testing.T) {
 	if err := config.Set().Security().Takes(true); err != nil {
 		t.Fatal(err)
 	}
-	if body := get(f, "/setup?tab=sound", c).Body.String(); !strings.Contains(body, `name="do" value="record"`) {
+	if body := get(f, "/setup?tab=voice", c).Body.String(); !strings.Contains(body, `name="do" value="record"`) {
 		t.Error("the switch on did not offer Record")
 	}
 }

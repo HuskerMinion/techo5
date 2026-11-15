@@ -156,7 +156,7 @@ func (r *renderer) callDetailsDraw(s scene, hang image.Rectangle) image.Rectangl
 	// The microphone off, as the call's page says it: before the time or the doorbell and in the
 	// accent, or in their place where the pill has no room for both.
 	if s.muted {
-		muted := tr("ui_muted")
+		muted := tr("call_muted")
 		both := muted + "  ·  " + when
 		switch {
 		case when == "":

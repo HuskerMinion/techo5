@@ -80,7 +80,7 @@ A device that was given access to your Home Assistant with an administrator's to
 ESPHome entry there first. Otherwise, delete the device from **Settings → Devices & services → ESPHome**
 in your Home Assistant afterward.
 The new key isn't shown anywhere. To add the device to another Home Assistant later, open its setup
-page, go to **General**, and choose **Let a Home Assistant add this device**: for 15 minutes the
+page, go to **Network**, and choose **Let a Home Assistant add this device**: for 15 minutes the
 device has no key, and the Home Assistant that adds it sets one. Home Assistant sends that key over
 your network unencrypted, as it does for ESPHome devices, so open the window only on a network you
 trust. Adding a device with nothing typed needs a recent Home Assistant (tested with 2026.9).
@@ -130,7 +130,7 @@ data:
 In YAML, refer to this action as `esphome.<node>_network_address`.
 
 Sets how the device gets its address on Wi-Fi: from the router (DHCP), or fixed. It is the
-**Connections → Network address** setting of the setup page, explained in
+**Network → Network address** setting of the setup page, explained in
 [Setting it up](setup.md#9-a-fixed-address). The device answers first and changes its address two
 seconds later.
 
@@ -1285,7 +1285,7 @@ In YAML, refer to this action as `esphome.<node>_home_cameras`.
 
 Sets which of Home Assistant's cameras the device offers on its Cameras page, in the camera grid,
 on the setup page's Talk through cameras list and by voice ("show the front door"). There are three
-choices, also on the setup page under Connections → Home Assistant cameras:
+choices, also on the setup page under Cameras → Home Assistant cameras:
 
 - **None**: no Home Assistant camera at all.
 - **All**: every camera entity Home Assistant has, refreshed every 10 minutes. This is the default for
@@ -1462,7 +1462,7 @@ not the Dot.
 
 Puts up to four buttons on one camera's view that each run a Home Assistant action, such as
 **Open gate** or **Unlock**. Each call sets that camera's whole set, in the order given, and replaces
-what it had. The same buttons are on the setup page under Connections → Camera buttons. See
+what it had. The same buttons are on the setup page under Cameras → Camera buttons. See
 [Camera buttons](setup.md#camera-buttons).
 
 > **Good to know**
@@ -2047,7 +2047,7 @@ edge and a tap on the tab do. A tap on the screen outside the drawer, or its clo
 away. At night it lights a screen the night has put out, at the night light's level (or at half
 brightness with no night light), and the drawer shows over the red night clock until it is closed. A
 screen somebody turned off stays off. Fails on a device that has no list chosen (choose them with
-`todo_lists`, or on the setup page's Weather & Calendar tab). No arguments.
+`todo_lists`, or on the setup page's Screen tab). No arguments.
 
 ```yaml
 action: esphome.kitchen_todo_show
