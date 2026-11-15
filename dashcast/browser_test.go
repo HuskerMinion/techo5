@@ -62,6 +62,15 @@ func TestOpenATabInTheRunningBrowser(t *testing.T) {
 		if !guarded {
 			t.Errorf("tab %d (kiosk %v): the script put in before the page did not run", i+1, kiosk)
 		}
+		// With kiosk, a dashboard's root has the header hidden from the moment it makes its shadow
+		// root, before it draws (techo5-spot#12); without, it is left alone.
+		var dressed bool
+		if err := chromedp.Run(tab, chromedp.Evaluate(`!!document.createElement("hui-root").attachShadow({mode: "open"}).getElementById("techo5-kiosk")`, &dressed)); err != nil {
+			t.Fatalf("tab %d: %v", i+1, err)
+		}
+		if dressed != kiosk {
+			t.Errorf("tab %d (kiosk %v): header hidden as the shadow root is made: %v", i+1, kiosk, dressed)
+		}
 		closeTab()
 	}
 }
