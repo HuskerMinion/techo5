@@ -116,7 +116,7 @@ func TestHCILayout(t *testing.T) {
 		t.Fatalf("opSniffMode = 0x%04X, want 0x0803", opSniffMode)
 	}
 	if hciGetConnList != 0x800448D4 {
-		t.Fatalf("hciGetConnList = 0x%08X, want 0x800448D4", hciGetConnList)
+		t.Fatalf("hciGetConnList = 0x%08X, want 0x800448D4", uint32(hciGetConnList)) // past a 32-bit int
 	}
 	if hciLinkTypeACL != 0x01 {
 		t.Fatalf("hciLinkTypeACL = 0x%02X, want 0x01", hciLinkTypeACL)
