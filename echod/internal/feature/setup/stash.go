@@ -33,6 +33,7 @@ var stashSecret = map[string]bool{
 // it, and the page never shows it again once it is saved.
 var stashSecretIn = map[string]map[string]bool{
 	"calendar": {"url": true},
+	"house":    {"word": true}, // the key the house's devices sign with
 }
 
 // stashed is a refused form: what it saves, the fields it sent, and when.
@@ -117,6 +118,9 @@ func hasLogin(values []string) bool {
 		}
 		if strings.Contains(v, "://") {
 			return true // not an address url reads, with an @ after a scheme: taken as one with a login
+		}
+		if at := strings.LastIndex(v, "@"); strings.Contains(v[:at], ":") && !strings.ContainsAny(v[:at], " /") {
+			return true // user:password@host, typed without a scheme
 		}
 	}
 	return false

@@ -40,13 +40,23 @@ const absEvery = 5 * time.Second
 // sinkLevel hands the sink s its own volume (set) or, with nil, takes it back. A test stands in for it.
 var sinkLevel = func(s speaker.Sink, set func(step int)) { speaker.Get().SetSinkLevel(s, set) }
 
-// canAbs asks bluetoothd whether the speaker at device takes absolute volume now.
+// canAbs asks bluetoothd whether the speaker at device takes absolute volume now. A question that
+// gets no answer (the bus busy, bluetoothd restarting) answers what is so already, so a moment's error
+// does not take the volume back into software and hand it over again. It is called by speakerLook with
+// f.spk.mu held, which is what makes reading f.spk.abs here safe.
 func (f *Feature) canAbs(device dbus.ObjectPath) func() bool {
 	return func() bool {
 		f.mu.Lock()
 		a := f.adapter
 		f.mu.Unlock()
-		return a != nil && a.AbsoluteVolume(device)
+		if a == nil {
+			return false
+		}
+		on, err := a.AbsoluteVolume(device)
+		if err != nil {
+			return f.spk.abs
+		}
+		return on
 	}
 }
 
@@ -70,13 +80,16 @@ type speakerVol struct {
 	checked time.Time
 	again   bool
 	said    bool
+	// refused is bluez-alsa having refused to leave this stream's audio unscaled: not asked again
+	// every absEvery for as long as the stream lasts.
+	refused bool
 }
 
 // reset makes v the state for a new stream s, nil for none. Called with v.mu held.
 func (v *speakerVol) reset(s *bluealsa.Stream) {
 	v.stream, v.abs, v.absAt = s, false, time.Time{}
 	v.told, v.level, v.known, v.ours = -1, 0, false, time.Time{}
-	v.checked, v.again, v.said = time.Time{}, false, false
+	v.checked, v.again, v.said, v.refused = time.Time{}, false, false, false
 }
 
 // speakerLook is a look at the stream s plays into, p as bluez-alsa has it now: the speaker's own volume
@@ -100,7 +113,7 @@ func (f *Feature) speakerLook(al pcmSetter, p bluealsa.PCM, s *bluealsa.Stream, 
 		v.checked = now
 		can := canAbs()
 		switch {
-		case can && (!v.abs || force || lost):
+		case can && !v.refused && (!v.abs || force || lost):
 			f.absOn(al, s)
 			v.mu.Unlock()
 			return
@@ -153,6 +166,7 @@ func (f *Feature) absOn(al pcmSetter, s *bluealsa.Stream) {
 	v := &f.spk
 	was := v.abs
 	if err := al.SetSoftVolume(s.PCM, false); err != nil {
+		v.refused = true
 		if !v.said {
 			v.said = true
 			slog.Info("bluetooth: bluez-alsa keeps scaling the speaker's audio; the volume stays in software", "err", err)

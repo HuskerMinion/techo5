@@ -74,3 +74,20 @@ func cutLabel(s string) (string, string, bool) {
 	}
 	return s, "", false
 }
+
+// A decoded name keeps its letters but not control or format characters: a line break, an escape, a
+// right-to-left override or a zero-width space.
+func TestUnescapeLeavesOutWhatMisleads(t *testing.T) {
+	for in, want := range map[string]string{
+		`Kitchen\010Fake`:     "KitchenFake",
+		`Den\027[31m`:         "Den[31m",
+		`K\195\188che`:        "Küche",
+		"Office\u202Etxt.exe": "Officetxt.exe",
+		"Hall\u200Bway":       "Hallway",
+		`Garage\009Two`:       "GarageTwo",
+	} {
+		if got := Unescape(in); got != want {
+			t.Errorf("Unescape(%q) = %q, want %q", in, got, want)
+		}
+	}
+}

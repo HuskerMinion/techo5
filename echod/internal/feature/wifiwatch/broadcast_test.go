@@ -215,3 +215,23 @@ func TestBroadcastCountersThatJumpAreANewStart(t *testing.T) {
 		t.Fatalf("reassociated with no IPv4 counters: %d", bw.reassocs)
 	}
 }
+
+// A link that went down and came back (quiet hours, a router restarting) is not reassociated at the
+// first look for the hours of quiet before it: the network has to be heard steadily again first.
+func TestALinkBackFromDownStartsOver(t *testing.T) {
+	bw := newBcWorld()
+	b := bw.watch()
+	for range 20 {
+		bw.step(b, true)
+	}
+	b.forget() // what moved() does when it finds the link down
+	bw.now = bw.now.Add(6 * time.Hour)
+	for range int(bcQuiet/every) + 2 {
+		bw.step(b, false)
+	}
+	if bw.reassocs != 0 {
+		t.Fatalf("reassociated %d times on a link just back, with nothing heard since", bw.reassocs)
+	}
+	var none *broadcast
+	none.forget() // a device that does not watch broadcasts has none to forget
+}

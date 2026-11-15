@@ -126,7 +126,7 @@ and is easy on eyes adjusted to it.
 ## 6. The calendar's look
 
 Added after the rest, as switches, each on the screen (Settings, Display, Calendar), on the setup
-page (Weather & Calendar) and in Home Assistant. Shared settings can keep them the same on every
+page (Screen) and in Home Assistant. Shared settings can keep them the same on every
 screen. The Spot keeps its own Today and Next.
 
 - **Opens on** (Month): the view the clock's date, a voice request and `calendar_show` open: Month,

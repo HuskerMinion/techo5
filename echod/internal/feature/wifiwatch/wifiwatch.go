@@ -128,11 +128,13 @@ func New() *Watch {
 		renew: wifi.RenewLease,
 		wait:  firstWait,
 		mc:    newMulticast(),
-		bc:    newBroadcast(),
 	}
-	w.bc.record = w.record
-	// Not straight after this watcher has reassociated: what came of that is still to be seen.
-	w.bc.held = func() bool { return !w.tried.IsZero() && w.now().Sub(w.tried) < settle }
+	if watchBroadcasts {
+		w.bc = newBroadcast()
+		w.bc.record = w.record
+		// Not straight after this watcher has reassociated: what came of that is still to be seen.
+		w.bc.held = func() bool { return !w.tried.IsZero() && w.now().Sub(w.tried) < settle }
+	}
 	return w
 }
 

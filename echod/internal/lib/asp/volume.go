@@ -35,6 +35,9 @@ func readVolumeTable(path string) []float64 {
 		}
 		var table []float64
 		if err := json.Unmarshal([]byte(rest[open:end+1]), &table); err == nil && len(table) > 1 {
+			for i, db := range table {
+				table[i] = min(db, 0) // a step is the vendor's chain turned down, never up
+			}
 			return table
 		}
 	}

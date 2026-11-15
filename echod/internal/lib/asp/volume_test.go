@@ -33,3 +33,14 @@ func TestReadVolumeTable(t *testing.T) {
 		t.Errorf("missing file: %v", got)
 	}
 }
+
+// A table step above 0 dB is taken as 0: the table only ever turns the vendor's chain down.
+func TestAVolumeTableNeverTurnsUp(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "AFE.cfg")
+	if err := os.WriteFile(path, []byte(`{ "music_volTab" : [ -200, -6, 3, 12 ] }`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if got := readVolumeTable(path); !slices.Equal(got, []float64{-200, -6, 0, 0}) {
+		t.Errorf("readVolumeTable = %v", got)
+	}
+}

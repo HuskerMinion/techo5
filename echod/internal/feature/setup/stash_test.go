@@ -27,20 +27,21 @@ func refillOf(t *testing.T, page string) map[string]any {
 func TestARefusedFormComesBackAsTyped(t *testing.T) {
 	f, c := in(t)
 	typed := "a word </script><b>bold</b>\nand a second line"
-	to := post(t, f, c, url.Values{"what": {"house"}, "word": {typed}})
+	timer := url.Values{"what": {"alarm_add"}, "kind": {"timer"}, "in": {"banana"}, "label": {typed}}
+	to := post(t, f, c, timer)
 	if to.Query().Get("problem") == "" {
-		t.Fatal("a house word of two lines was taken")
+		t.Fatal("a timer of no length was taken")
 	}
 	if strings.Contains(to.String(), "bold") {
 		t.Error("what was typed is in the address")
 	}
 	page := get(f, to.RequestURI(), c).Body.String()
 	got := refillOf(t, page)
-	if got == nil || got["what"] != "house" {
+	if got == nil || got["what"] != "alarm_add" {
 		t.Fatalf("the page does not carry the refused form: %v", got)
 	}
-	if words := got["fields"].(map[string]any)["word"].([]any); len(words) != 1 || words[0] != typed {
-		t.Errorf("the word came back as %v", words)
+	if words, _ := got["fields"].(map[string]any)["label"].([]any); len(words) != 1 || words[0] != typed {
+		t.Errorf("the label came back as %v", words)
 	}
 	if strings.Contains(page, "</script><b>") {
 		t.Error("what was typed ended the script it is in")
@@ -53,20 +54,35 @@ func TestARefusedFormComesBackAsTyped(t *testing.T) {
 		t.Error("the refused form came back twice")
 	}
 	// Not to another browser, and not on another tab.
-	post(t, f, c, url.Values{"what": {"house"}, "word": {typed}})
-	if _, ok := f.rejected.take("somebody-else", formTab("house")); ok {
+	post(t, f, c, timer)
+	if _, ok := f.rejected.take("somebody-else", formTab("alarm_add")); ok {
 		t.Error("another session was handed the form")
 	}
-	if refillOf(t, get(f, "/setup?tab=alarms&problem=x", c).Body.String()) != nil {
+	if refillOf(t, get(f, "/setup?tab=sound&problem=x", c).Body.String()) != nil {
 		t.Error("the form came back on a tab it is not on")
 	}
 	// A page without a problem to say does not refill, and closing the page forgets it.
-	if refillOf(t, get(f, "/setup?tab=voice", c).Body.String()) != nil {
+	if refillOf(t, get(f, "/setup?tab=alarms", c).Body.String()) != nil {
 		t.Error("a page with no refusal was refilled")
 	}
 	f.Close()
-	if _, ok := f.rejected.take(c.Value, formTab("house")); ok {
+	if _, ok := f.rejected.take(c.Value, formTab("alarm_add")); ok {
 		t.Error("the form outlived the page")
+	}
+}
+
+// The house word is the key the house's devices sign with: a refused house form does not keep it.
+func TestARefusedHouseFormKeepsNoWord(t *testing.T) {
+	f, c := in(t)
+	to := post(t, f, c, url.Values{"what": {"house"}, "word": {"two\nlines"}})
+	if to.Query().Get("problem") == "" {
+		t.Fatal("a house word of two lines was taken")
+	}
+	got := refillOf(t, get(f, to.RequestURI(), c).Body.String())
+	if got != nil {
+		if _, ok := got["fields"].(map[string]any)["word"]; ok {
+			t.Error("the house word was kept with the refused form")
+		}
 	}
 }
 

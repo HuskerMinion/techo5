@@ -442,7 +442,11 @@ func (c *conversation) sendAudio(be backend, b []byte) {
 
 // historyWait is how long a turn's history may wait for room in the queue to Home Assistant. Unlike a
 // frame it is the start of the request, said before the turn opened and nowhere else (#477).
-const historyWait = 500 * time.Millisecond
+//
+// It is kept under what the microphone holds for a listener (eight frames, 160 ms; mic.listenLocked):
+// the turn reads no frames while it waits, and a longer wait would trade the end of the history for
+// the speech right after it.
+const historyWait = 120 * time.Millisecond
 
 // sendHistory queues a turn's history as sendAudio does a frame, but waits up to historyWait for room
 // rather than dropping it at once.

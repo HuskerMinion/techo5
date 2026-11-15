@@ -37,7 +37,7 @@ loaded: nothing is sent while nothing changes.
 ## Pointing a device at it
 
 Tell the device where the server is and what its key is, either on the device's **setup page**
-(**Connections** tab, **Dashboard server**), or with the action **ESPHome: `<device>`_dashboard_server**.
+(**Screen** tab, **Dashboard server**), or with the action **ESPHome: `<device>`_dashboard_server**.
 
 Then, on the device's page in Home Assistant (**Settings → Devices & services → Devices →** the
 device, **Configuration** card):

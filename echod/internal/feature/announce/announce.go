@@ -224,6 +224,12 @@ func (f *Feature) receive(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusNoContent)
 		return
 	case KindPopupDismissed:
+		if legacy {
+			// The old way of proving the house sends the word itself and carries no nonce: kept only
+			// for the kinds devices sent before it was replaced, never for a new one.
+			http.Error(w, "not this house", http.StatusForbidden)
+			return
+		}
 		if m.ID == "" {
 			http.Error(w, "a pop-up names its event", http.StatusBadRequest)
 			return

@@ -366,12 +366,12 @@ func playerOf(objs map[dbus.ObjectPath]map[string]map[string]dbus.Variant, devic
 // volume): one of its audio transports has a Volume. BlueZ shows a transport's Volume only once the
 // remote has said over AVRCP that it takes one, which can be a few seconds after its audio comes up,
 // and never for a speaker that does not.
-func (a *Adapter) AbsoluteVolume(device dbus.ObjectPath) bool {
+func (a *Adapter) AbsoluteVolume(device dbus.ObjectPath) (bool, error) {
 	var objs map[dbus.ObjectPath]map[string]map[string]dbus.Variant
 	if err := a.conn.Object(service, "/").Call(objMgrIfc+".GetManagedObjects", 0).Store(&objs); err != nil {
-		return false
+		return false, err
 	}
-	return transportVolume(objs, device)
+	return transportVolume(objs, device), nil
 }
 
 // transportVolume is whether any of device's MediaTransport1 objects in objs has a Volume.

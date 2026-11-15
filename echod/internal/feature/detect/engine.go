@@ -655,16 +655,6 @@ func (e *Engine) Settle(d time.Duration, spared ...int) {
 	}
 }
 
-// Quiet drops the engines while the microphones are cut, and builds them again when they come back.
-//
-// A cut microphone hands on silence, so nothing can be detected in it — but the models were still
-// being run over that silence, frame after frame, which on a Dot is a third of the time it has.
-// Reported as "muting does not disable wake word detection", and the reporter was right about what
-// the CPU was doing even though nothing could ever have fired.
-//
-// The slots are kept. What is dropped is the engines under them, which is where both the work and
-// the streaming state live, so coming back is the same cold start as a wake word freshly chosen
-// rather than a window holding audio from before the mute and audio from after it, spliced.
 // MarkPeaks starts each slot's highest score over again, the held back ones included, for Peaks.
 func (e *Engine) MarkPeaks() {
 	e.mu.Lock()
@@ -702,6 +692,16 @@ func (e *Engine) Quieted() bool {
 	return e.quiet
 }
 
+// Quiet drops the engines while the microphones are cut, and builds them again when they come back.
+//
+// A cut microphone hands on silence, so nothing can be detected in it — but the models were still
+// being run over that silence, frame after frame, which on a Dot is a third of the time it has.
+// Reported as "muting does not disable wake word detection", and the reporter was right about what
+// the CPU was doing even though nothing could ever have fired.
+//
+// The slots are kept. What is dropped is the engines under them, which is where both the work and
+// the streaming state live, so coming back is the same cold start as a wake word freshly chosen
+// rather than a window holding audio from before the mute and audio from after it, spliced.
 func (e *Engine) Quiet(on bool) {
 	e.mu.Lock()
 	defer e.mu.Unlock()

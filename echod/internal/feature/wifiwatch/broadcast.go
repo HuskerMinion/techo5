@@ -87,6 +87,16 @@ func newBroadcast() *broadcast {
 	}
 }
 
+// forget starts over: the link went down (quiet hours, a router restarting) or joined another network,
+// and the network has to be heard broadcasting steadily again before its quiet counts. Without it the
+// first look after the link came back found hours of quiet and reassociated a link just up.
+func (b *broadcast) forget() {
+	if b == nil {
+		return
+	}
+	b.counted, b.heardAt, b.heard, b.longest = false, time.Time{}, 0, 0
+}
+
 // limit is how long the broadcasts have to have been quiet before the radio counts as deaf to them.
 func (b *broadcast) limit() time.Duration {
 	return max(bcQuiet, bcGapTimes*b.longest)

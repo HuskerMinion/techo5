@@ -391,7 +391,7 @@ func New() *Player {
 	}
 	p.tuning = t
 	curve, ok := firstCurves[t.Name()]
-	if table := t.VolumeTable(); len(table) == VolumeSteps+1 {
+	if table := t.VolumeTable(); ownVolumeTable() && len(table) == VolumeSteps+1 {
 		// The unit's own curve, where its AFE.cfg has one (the 2nd gen Shows): the one Fire OS turns
 		// the music down by in front of the tuning, reaching 0 dB at the top step. firstCurves stop
 		// near -20 dB there.

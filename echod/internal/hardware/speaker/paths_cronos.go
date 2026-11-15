@@ -480,3 +480,8 @@ func exists(path string) bool {
 // drives both from the one mixer (heard on a 1st gen 2026-10-03; the Show 8's codec is the same, but
 // Both has not been listened to on one).
 var HasBoth = HasJack
+
+// ownVolumeTable is whether the unit's AFE.cfg volume table is used in place of firstCurves: on the
+// 2nd gen Shows, whose Fire OS turned the music down by it (#546), and not on a board whose curve was
+// measured here and whose AFE.cfg might carry a table of the same name for something else.
+func ownVolumeTable() bool { return layout.Athena() || layout.Board == "cronos" }

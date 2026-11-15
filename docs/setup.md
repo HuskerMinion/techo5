@@ -1374,7 +1374,7 @@ heard and spoken.** It is off until you choose a wake word for it, on the setup 
 Assistant has no switch for it.
 
 1. Get a key from the provider (an OpenAI or xAI API key, or a Gemini API key from Google AI Studio).
-2. On the setup page, under **Sound**, **Realtime voice**: choose the provider, paste the key, set the
+2. On the setup page, under **Voice**, **Realtime voice**: choose the provider, paste the key, set the
    most minutes a day (30 to start with), and tick the wake word to answer with it. Save.
 
 The key is never shown again; leave the field empty to keep it. Choosing another provider or relay
@@ -1846,8 +1846,8 @@ device, and say it again.
 
 ### Sounds of your own
 
-The sounds a voice request makes can be recordings of your own. On the setup page, go to **Sound &
-Voice**, **Sounds of your own**. Each sound has **Play**, which plays what the device plays now,
+The sounds a voice request makes can be recordings of your own. On the setup page, go to **Sound**,
+**Sounds of your own**. Each sound has **Play**, which plays what the device plays now,
 quietly; a file to choose and **Upload** to send a recording for it; and, once it has one, **Use the
 device's own** to go back to the stock sound. The device checks a file as it arrives and refuses one it can't play, with
 the reason, so the sound before it stays. Nothing is converted on the device: send a WAVE file in the

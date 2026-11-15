@@ -21,7 +21,7 @@ docker run -d --name reader --restart unless-stopped --init --cap-add NET_ADMIN 
 `--init` reaps the browser's leftover processes, and `--cpus` and `--pids-limit` keep a page that
 misbehaves from taking the whole machine.
 
-Then set **Page reader** on the setup page (**Sound & Voice**, **Voice assistant**) to
+Then set **Page reader** on the setup page (**Voice**, **Voice assistant**) to
 `http://<that machine>:8891`. `curl http://<that machine>:8891/health` answers `ok`.
 
 ## Keeping it off your network

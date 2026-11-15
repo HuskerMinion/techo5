@@ -6,6 +6,7 @@ import (
 	"net/http/httptest"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/HuskerMinion/techo5/echod/internal/config"
 )
@@ -102,12 +103,14 @@ func TestAPopupDismissedArrivesWithItsEvent(t *testing.T) {
 	f.PopupDismissed.Listen(func(m Message) { dismissed = append(dismissed, m) })
 
 	post := func(m Message) int {
+		// Signed, as a dismissal only ever is (TestAPopupDismissalIsOnlyTakenSigned).
 		body, headers := encode(m)
+		auth := sign("bluebird", http.MethodPost, "/announce", headers, body, time.Now())
 		r := httptest.NewRequest(http.MethodPost, "/announce", bytes.NewReader(body))
 		for k, v := range headers {
 			r.Header.Set(k, v)
 		}
-		r.Header.Set(header, "bluebird")
+		r.Header.Set(authHeader, auth)
 		w := httptest.NewRecorder()
 		f.receive(w, r)
 		return w.Code
