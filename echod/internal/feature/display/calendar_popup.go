@@ -123,6 +123,7 @@ func (d *Display) popupTick(now time.Time) {
 	// nothing.
 	due := duePopups(popupCandidates(events, c), now, c, popupShownNow())
 	d.mu.Lock()
+	d.loadPopupGone(c.PopupGone)
 	maps.DeleteFunc(d.popupGone, func(_ string, at time.Time) bool { return now.Sub(at) > popupGoneFor })
 	for _, e := range due {
 		if _, gone := d.popupGone[popupMatch(e)]; gone {
@@ -259,10 +260,9 @@ func (d *Display) tapPopupAway() {
 // one waiting its turn, and keeps it from popping up later, as one whose lead time here is shorter
 // would. Nothing is sent on: the device it was tapped on told every one.
 func (d *Display) popupDismissedElsewhere(id string, now time.Time) {
+	kept := config.Get().Calendar.PopupGone // read before the lock, as popupTick does
 	d.mu.Lock()
-	if d.popupGone == nil {
-		d.popupGone = map[string]time.Time{}
-	}
+	d.loadPopupGone(kept)
 	// Forgotten here as well as in popupTick, which does not get that far with pop-ups off.
 	maps.DeleteFunc(d.popupGone, func(_ string, at time.Time) bool { return now.Sub(at) > popupGoneFor })
 	d.popupGone[id] = now
@@ -273,9 +273,28 @@ func (d *Display) popupDismissedElsewhere(id string, now time.Time) {
 	}
 	d.popupQueue = slices.DeleteFunc(d.popupQueue, func(e hass.Event) bool { return popupMatch(e) == id })
 	d.mu.Unlock()
+	// Saved too, after the lock is let go (writing waits on the flash): a restart between hearing of it
+	// and the event coming due here would otherwise pop it up all the same.
+	if err := config.Set().Calendar().PopupGoneAdd(id, now, popupGoneFor); err != nil {
+		slog.Warn("calendar: keeping a pop-up tapped away elsewhere failed", "err", err)
+	}
 	if up {
 		slog.Info("calendar: pop-up tapped away on another device")
 		d.wake()
+	}
+}
+
+// loadPopupGone fills the events tapped away elsewhere from those kept in the config, the first time
+// they are wanted after a start; after that the ones in memory are the same, and newer. kept is read
+// from the config before d.mu is taken, since writing the config waits on the flash. Called with d.mu
+// held.
+func (d *Display) loadPopupGone(kept []config.PopupGone) {
+	if d.popupGone != nil {
+		return
+	}
+	d.popupGone = make(map[string]time.Time, len(kept))
+	for _, g := range kept {
+		d.popupGone[g.ID] = g.At
 	}
 }
 

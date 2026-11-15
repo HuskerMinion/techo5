@@ -410,7 +410,7 @@ type Display struct {
 	popupUntil time.Time
 	popupNext  time.Time
 	popupQueue []hass.Event         // due while another was up: shown next
-	popupGone  map[string]time.Time // events tapped away on another device (popupMatch), and when
+	popupGone  map[string]time.Time // events tapped away on another device (popupMatch), and when; kept in the config too
 	pop        popupEntities        // the pop-ups' settings in Home Assistant
 
 	// The alert page (alerts.go): up until alertUntil, on alertIdx of the alerts at home, scrolled

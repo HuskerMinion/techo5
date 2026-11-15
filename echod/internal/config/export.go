@@ -491,6 +491,7 @@ func KeepOwn(c *Config, from Config) {
 	// keeps it, and an export carries none of it.
 	c.BookPlaces.List = slices.Clone(from.BookPlaces.List)
 	c.Calendar.PopupShown = slices.Clone(from.Calendar.PopupShown)
+	c.Calendar.PopupGone = slices.Clone(from.Calendar.PopupGone)
 	// The calendars hidden with the calendar page's chips are this screen's: a file from a screen in
 	// another room does not hide any here, and a restore keeps what was hidden.
 	c.Calendar.Hidden = slices.Clone(from.Calendar.Hidden)

@@ -3,6 +3,7 @@
 package display
 
 import (
+	"fmt"
 	"image"
 	"path/filepath"
 	"testing"
@@ -322,5 +323,55 @@ func TestAPopupTappedAwayElsewhereComesDown(t *testing.T) {
 	d.popupTick(now.Add(time.Minute))
 	if got := d.popupUp(); got != nil {
 		t.Errorf("%v popped up after it was tapped away elsewhere", got)
+	}
+}
+
+// A pop-up tapped away on another device stays away after this one restarts: what it heard is kept in
+// the config, for a day, and only so many at most (#558).
+func TestAPopupTappedAwayElsewhereIsKeptAcrossARestart(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "state.json")
+	config.Use(path)
+	if err := config.Set().Calendar().Sources([]string{"calendar.family"}); err != nil {
+		t.Fatal(err)
+	}
+	if err := config.Set().Calendar().Popups(true); err != nil {
+		t.Fatal(err)
+	}
+	if err := config.Set().Calendar().PopupSilent(true); err != nil {
+		t.Fatal(err)
+	}
+	at := func(h, m int) time.Time { return time.Date(2026, 9, 26, h, m, 0, 0, time.Local) }
+	school := hass.Event{Calendar: "calendar.family", Summary: "School run", Start: at(15, 5), End: at(15, 30)}
+	now := at(14, 0) // heard of before it is due here
+	(&Display{poke: make(chan struct{}, 1)}).popupDismissedElsewhere(popupMatch(school), now)
+
+	// The restart: the config read again from the file, and a display with nothing in memory.
+	config.Use(path)
+	if got := config.Get().Calendar.PopupGone; len(got) != 1 || got[0].ID != popupMatch(school) || !got[0].At.Equal(now) {
+		t.Fatalf("kept after a reload: %+v", got)
+	}
+	d := &Display{poke: make(chan struct{}, 1)}
+	d.popupQueue = []hass.Event{school}
+	d.popupTick(at(14, 55))
+	if got := d.popupUp(); got != nil {
+		t.Errorf("%v popped up after a restart, tapped away elsewhere before it", got)
+	}
+
+	// A day on it is forgotten, and a flood of them keeps the newest.
+	later := now.Add(popupGoneFor + time.Hour)
+	for i := range config.PopupGoneMax + 5 {
+		d.popupDismissedElsewhere(fmt.Sprintf("popup-%d", i), later.Add(time.Duration(i)*time.Second))
+	}
+	got := config.Get().Calendar.PopupGone
+	if len(got) != config.PopupGoneMax {
+		t.Fatalf("%d kept, want %d", len(got), config.PopupGoneMax)
+	}
+	for _, g := range got {
+		if g.ID == popupMatch(school) || g.ID == "popup-0" {
+			t.Errorf("%s still kept", g.ID)
+		}
+	}
+	if last := got[len(got)-1]; last.ID != fmt.Sprintf("popup-%d", config.PopupGoneMax+4) {
+		t.Errorf("the newest is %s", last.ID)
 	}
 }
