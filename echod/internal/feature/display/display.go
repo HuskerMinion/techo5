@@ -1325,7 +1325,7 @@ func (d *Display) gesture(g touch.Gesture) {
 		return
 	}
 
-	// A reminder: a tap on its card puts it away, here and on every device it went off on. Only the
+	// An event's pop-up: a tap on it puts it away, here and on every other Show in the house. Only the
 	// card, as with the strip, so a finger meant for the music behind it still reaches the music.
 	if g.Kind == touch.Tap && d.r != nil && d.r.popupTapped(image.Pt(g.X, g.Y)) {
 		d.tapPopupAway()

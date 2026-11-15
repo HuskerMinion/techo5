@@ -410,9 +410,9 @@ func (f *Feature) send(m Message) {
 	f.show(m)
 }
 
-// SendTo carries a reminder, its stopping, or a pop-up's dismissal, to the devices named, or to every one for nil. It is
-// not shown here: the sender already has the reminder. Names are matched however they are cased, and
-// one that is not in the house is logged and skipped.
+// SendTo carries a reminder, its stopping, or a pop-up's dismissal to the devices named, or to every
+// one for nil. It is not shown here: the sender already has it. Names are matched however they are
+// cased, and one that is not in the house is logged and skipped.
 func (f *Feature) SendTo(names []string, m Message) {
 	word := config.Get().Home.HouseWord
 	if word == "" {

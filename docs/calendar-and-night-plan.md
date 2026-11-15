@@ -84,9 +84,8 @@ Settings, on the screen, the setup page and in Home Assistant:
 
 A pop-up stays up until tapped or until the event has started and 10 minutes have passed. A tap
 takes it down on the other Shows in the house as well, over the same link reminders use: the one up
-there, or waiting its turn, or still to come where its lead time is shorter. Home
-Assistant gets an event (`esphome.techo5_calendar`) when one shows, for anyone who wants to add to
-it.
+there, or waiting its turn, or still to come where its lead time is shorter. Home Assistant gets an
+event (`esphome.techo5_calendar`) when one shows, for anyone who wants to add to it.
 
 **Optional, off by default:** a "Next:" line under the date on the home screen, with the next event
 of the day.

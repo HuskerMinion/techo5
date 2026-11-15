@@ -17,6 +17,7 @@ import (
 	"github.com/HuskerMinion/techo5/echod/internal/feature/home"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/notify"
 	"github.com/HuskerMinion/techo5/echod/internal/lib/hass"
+	"github.com/HuskerMinion/techo5/echod/internal/lib/safe"
 )
 
 // Event pop-ups (docs/calendar-and-night-plan.md): an event coming up, on the screen over whatever is
@@ -228,24 +229,30 @@ func (d *Display) dismissPopup() {
 }
 
 // sendPopupDismissed tells every other device in the house that the event's pop-up was tapped away
-// here; replaced in tests.
+// here; replaced in tests. A house with no word has nobody to tell, and a Show on its own is not
+// warned about it at every tap.
 var sendPopupDismissed = func(id string) {
+	if config.Get().Home.HouseWord == "" {
+		return
+	}
 	announce.Get().SendTo(nil, announce.Message{Kind: announce.KindPopupDismissed, ID: id})
 }
 
 // tapPopupAway is a tap on the pop-up: it comes down here and on every other device showing it, or
 // about to, since whoever tapped it has seen it. A device without the event, or with its pop-up
-// already gone, has nothing to do.
+// already gone, has nothing to do. It is read and put away under one lock, so one that popupTick
+// puts up in between is neither put away unseen nor named to the house in place of this one.
 func (d *Display) tapPopupAway() {
 	d.mu.Lock()
 	e := d.popup
+	d.popup = nil
+	d.popupNext = time.Time{}
 	d.mu.Unlock()
-	d.dismissPopup()
 	if e == nil {
 		return
 	}
 	id := popupMatch(*e)
-	go sendPopupDismissed(id)
+	safe.Go("pop-up dismissed", func() { sendPopupDismissed(id) })
 }
 
 // popupDismissedElsewhere takes down an event's pop-up tapped away on another device: the one up, or
@@ -256,6 +263,8 @@ func (d *Display) popupDismissedElsewhere(id string, now time.Time) {
 	if d.popupGone == nil {
 		d.popupGone = map[string]time.Time{}
 	}
+	// Forgotten here as well as in popupTick, which does not get that far with pop-ups off.
+	maps.DeleteFunc(d.popupGone, func(_ string, at time.Time) bool { return now.Sub(at) > popupGoneFor })
 	d.popupGone[id] = now
 	up := d.popup != nil && popupMatch(*d.popup) == id
 	if up {
