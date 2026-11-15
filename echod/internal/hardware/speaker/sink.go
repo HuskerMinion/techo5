@@ -4,6 +4,7 @@ import (
 	"encoding/binary"
 	"log/slog"
 	"math"
+	"sync"
 	"sync/atomic"
 	"syscall"
 	"time"
@@ -55,6 +56,124 @@ type sinkState struct {
 	sounding atomic.Int64
 	// onSound is told when sound begins going to the sink after it was quiet (OnSinkSound).
 	onSound func()
+
+	// level is the sink's own volume while it is handed to the sink (SetSinkLevel), nil while the
+	// volume is in software here.
+	level atomic.Pointer[sinkLevel]
+}
+
+// A Bluetooth speaker has a volume of its own, which the device can set over AVRCP (absolute volume).
+// While that volume is handed to the sink (SetSinkLevel), the sink is told the step it plays at: the
+// media volume, or a ring, a reply or a call sounding above it. The audio here is then scaled only
+// against that step, so the media volume plays at unity and is not applied twice, and a ring over quiet
+// music turns the music down here by as much as the speaker was raised for it. A panel plays against
+// Android's volume the same way (paths_panel.go).
+type sinkLevel struct {
+	set func(step int)
+	// at is the step the sink's own volume is at as last worked out, -1 before the first. ring is what
+	// a ring, a reply or a call sounding now asks for, 0 for nothing.
+	at, ring atomic.Int32
+	// mu keeps at to one writer at a time. sendMu keeps the steps going to set in the order they were
+	// worked out: seq counts them, sent is the last one handed over, and a late one is dropped.
+	mu     sync.Mutex
+	seq    uint64
+	sendMu sync.Mutex
+	sent   uint64
+}
+
+// sinkLag is how long a sample takes from the write loop to a Bluetooth speaker's own amplifier, near
+// enough: bluez-alsa's buffer and the A2DP link. A raise of the speaker's volume is sent that much after
+// the samples scaled for it, so the music under a ring that starts is not played out loud for a moment;
+// a drop goes at once.
+const sinkLag = 200 * time.Millisecond
+
+// follow works out the step the sink's own volume goes to for the media step and the ring now, and
+// hands it to the sink when it moves (a raise sinkLag later). It reports that step.
+func (l *sinkLevel) follow(media int) int {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	to := max(0, min(max(media, int(l.ring.Load())), VolumeSteps))
+	was := int(l.at.Swap(int32(to)))
+	if was == to {
+		return to
+	}
+	wait := sinkLag
+	if was < 0 || to < was {
+		wait = 0
+	}
+	l.seq++
+	seq := l.seq
+	time.AfterFunc(wait, func() {
+		l.sendMu.Lock()
+		defer l.sendMu.Unlock()
+		if seq <= l.sent {
+			return
+		}
+		l.sent = seq
+		l.set(to)
+	})
+	return to
+}
+
+// sinkShare is the gain here for step while the sink's own volume is at at: the step's place on the
+// sink's curve against that level, never above unity. The step the sink is at plays at unity.
+func sinkShare(step, at int) float32 {
+	if step <= 0 || at <= 0 {
+		return 0
+	}
+	return min(sinkGain(step)/sinkGain(at), 1)
+}
+
+// gain is the linear gain here for step on this sink: its own curve, or with its own volume handed to
+// it, the share of the level it is at.
+func (s *sinkState) gain(step int) float32 {
+	if l := s.level.Load(); l != nil {
+		return sinkShare(step, int(l.at.Load()))
+	}
+	return sinkGain(step)
+}
+
+// SetSinkLevel hands the attached sink s its own volume: set is told the step to put it at, at once and
+// whenever that moves, and the audio here is no longer scaled by the media volume (sinkLevel). nil puts
+// the volume back in software. Nothing changes if s is not the sink attached. Handed again, the sink
+// is told the step again.
+func (p *Player) SetSinkLevel(s Sink, set func(step int)) {
+	st := p.sink.Load()
+	if st == nil || st.sink != s {
+		return
+	}
+	if set == nil {
+		st.level.Store(nil)
+	} else {
+		l := &sinkLevel{set: set}
+		l.at.Store(-1)
+		st.level.Store(l)
+	}
+	p.SetVolume(p.Step())
+}
+
+// sinkRing is the write loop's word, every period, on whether a ring, a reply or a call sounds above
+// the media volume and at what step, for a sink with its own volume. When that moves the sink's level,
+// the media's gain is worked out again against the new one from this period on.
+func (p *Player) sinkRing(on bool, step int) {
+	st := p.sink.Load()
+	if st == nil {
+		return
+	}
+	l := st.level.Load()
+	if l == nil {
+		return
+	}
+	need := 0
+	if on {
+		need = max(0, min(step, VolumeSteps))
+	}
+	if int(l.ring.Swap(int32(need))) == need {
+		return
+	}
+	media := int(p.step.Load())
+	l.follow(media)
+	p.volume.Store(math.Float32bits(st.gain(media)))
 }
 
 // SetSink routes playback to s until it is cleared with nil. The previous sink, if any, is closed.

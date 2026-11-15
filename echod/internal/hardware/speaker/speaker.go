@@ -1082,6 +1082,7 @@ func (p *Player) fill(buf []byte) {
 		need, needOn = max(need, underStep), true
 	}
 	p.followRing(needOn, need)
+	p.sinkRing(needOn, need)
 	gain, step := p.Volume(), mainStep
 	mediaK, bellK, queueK, underK := float32(1), float32(0), float32(1), float32(1)
 	// Read once, so a period goes out on one curve even when Louder top volume changes during it.
@@ -1525,8 +1526,12 @@ func (p *Player) SetVolume(step int) {
 	step = max(0, min(step, VolumeSteps))
 	p.step.Store(int32(step))
 	volumeChanged(step)
-	if p.sink.Load() != nil {
-		p.volume.Store(math.Float32bits(sinkGain(step)))
+	if st := p.sink.Load(); st != nil {
+		// A sink with its own volume is told the step first, so the gain here is worked out against it.
+		if l := st.level.Load(); l != nil {
+			l.follow(step)
+		}
+		p.volume.Store(math.Float32bits(st.gain(step)))
 		return
 	}
 	p.volume.Store(math.Float32bits(gainForStep(p.Output(), step)))
@@ -1666,8 +1671,8 @@ func (p *Player) laneSteps(media int) (queue, under int) {
 // gainFor is the linear gain for a step on whatever the audio is going to now.
 func (p *Player) gainFor(step int) float32 {
 	step = max(0, min(step, VolumeSteps))
-	if p.sink.Load() != nil {
-		return sinkGain(step)
+	if st := p.sink.Load(); st != nil {
+		return st.gain(step)
 	}
 	return gainForStep(p.Output(), step)
 }
