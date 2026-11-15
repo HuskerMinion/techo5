@@ -12,6 +12,11 @@ import (
 // The stop word, from kahrendt/microWakeWord. Embedded because it is not a choice: nothing selects it,
 // nothing installs it, and a device without it would have no way to be interrupted.
 //
+// Embedded on purpose, against the rule that big data (dictionaries, fonts, word lists, models) is
+// downloaded on demand into the state folder rather than built into the daemon, as the person
+// detection model is (feature/person). Wake detection is the device's core job: it must work out of
+// the box, offline, with nothing downloaded first.
+//
 //go:embed stop.tflite
 var files embed.FS
 

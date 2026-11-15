@@ -270,6 +270,20 @@ everyday kanji, with its license, from google/fonts at a pinned commit, with a p
 (`pip install fonttools==4.65.0`). The same script gives the same bytes; release.ps1 checks them against
 the pin.
 
+## The person detection model
+
+The daemon doesn't carry the person detection model either: a Show or a Spot downloads it (about 300 KB)
+the first time person detection is turned on, into `/data/misc/techo5/person`, from the release that
+first published it, checked against the size and SHA-256 in
+`echod/internal/feature/person/pinned.go`. It is TensorFlow's `person_detect.tflite`, unchanged; the
+source keeps it as `echod/internal/feature/person/testdata/person_detect.tflite`, which the tests run
+and check against the pin, and the release publishes that file as `techo5-person-detect.tflite`.
+release.ps1 checks the pinned release still has it.
+
+The wake word models are the exception, on purpose: openWakeWord's front end (`lib/oww/assets`) and
+the stop word (`feature/detect/assets`) stay in the daemon, since hearing the wake word is the
+device's core job and has to work before, or without, any download.
+
 ## Optional: a CPU profile from a device
 
 To see where the daemon spends its time on a unit, turn SSH on and write the number of seconds to a

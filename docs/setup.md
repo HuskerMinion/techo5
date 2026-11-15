@@ -1109,7 +1109,10 @@ device's fonts folder over SSH ([Set the SSH authorized keys](actions.md#set-the
   off or the camera is not watching. The model is TensorFlow's person detection example: small
   enough for these processors, and a modest judge. It often misses a person far from the camera or
   half out of the picture.
-  Nothing it sees is kept or sent.
+  Nothing it sees is kept or sent. The model isn't built in: the device downloads it (about 300 KB)
+  the first time person detection is turned on, and keeps it. Until it has arrived, the **Person**
+  sensor stays off; the screen goes by presence detection's own motion either way, so it is never
+  put out for want of the model.
 - **Gestures** (Show and Spot, off by default; the **Gestures** switch in Home
   Assistant): cover the camera with your palm, hand on or almost on the lens, for half a second to
   three seconds. It stops a ringing alarm or timer, and Home Assistant gets an `esphome.techo5_gesture`

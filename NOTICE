@@ -182,8 +182,9 @@ Wake word models (embedded in the daemon)
   Torch's melspectrogram, not a trained model. openWakeWord's CC BY-NC-SA 4.0 terms cover its six
   pre-trained wake words, which TECHO5 does not ship — the wake words below come from elsewhere.
 
-Person detection model (embedded in the daemon, Show and Spot)
-  echod/internal/feature/person/assets/person_detect.tflite — Apache License 2.0
+Person detection model (downloaded by the daemon when person detection is turned on, Show and Spot)
+  techo5-person-detect.tflite, published with the v1.6.40 release; in the source as
+  echod/internal/feature/person/testdata/person_detect.tflite — Apache License 2.0
   TensorFlow Lite Micro's person detection example, https://github.com/tensorflow/tflite-micro,
   tensorflow/lite/micro/models/person_detect.tflite at commit
   aeac6f39e5c7475cea20c54e86d41e3a38312546: an int8 MobileNet v1 trained on the Visual Wake Words
