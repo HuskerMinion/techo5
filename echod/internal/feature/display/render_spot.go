@@ -305,6 +305,9 @@ type roundRenderer struct {
 	nixie nixieTubes
 	// figures is the Stack and Overlap styles' figures, likewise (figures.go).
 	figures figureShapes
+	// driftCanvas is the spare canvas a clock face is drawn on to move it a few pixels
+	// (clock_drift_spot.go), kept between frames.
+	driftCanvas *image.RGBA
 	// videoZones are the video face's controls as last drawn, under zmu, and videoOver what of the
 	// canvas goes over the picture (render_video_spot.go).
 	videoZones []image.Rectangle
@@ -485,7 +488,11 @@ func (r *roundRenderer) draw(s roundScene) {
 			r.slideshowBackground(s.slideshow)
 			r.artWeather(s)
 		}
-		r.readableOver(s.slideshow, colBackground, slideshowWash, func() { r.clockFace(s) })
+		// The face wanders a few pixels against image retention (clock_drift_spot.go); the Call button,
+		// drawn after it, stays put.
+		r.drifted(spotClockDrift(s.now, s.callButton && !s.menuOpen && s.phase == "idle"), func() {
+			r.readableOver(s.slideshow, colBackground, slideshowWash, func() { r.clockFace(s) })
+		})
 		if s.callButton && !s.menuOpen && s.phase == "idle" {
 			r.callButtonFace()
 			r.callDrawn = true

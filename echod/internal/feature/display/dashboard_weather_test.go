@@ -32,7 +32,8 @@ func TestDashboardWeatherAtTheFoot(t *testing.T) {
 		r.weatherMu.Lock()
 		row := r.weatherAt
 		r.weatherMu.Unlock()
-		if foot := r.h - r.s(50); row.Max.Y != foot {
+		// At the foot, as far down as the clock has drifted against image retention (clock_drift.go).
+		if foot := r.h - r.s(50) + r.clockDrift(at).Y; row.Max.Y != foot {
 			t.Errorf("%v: the coming days end at %d, not the foot at %d", size, row.Max.Y, foot)
 		}
 		middle := image.Pt(r.w/2, row.Min.Y-r.s(20))
