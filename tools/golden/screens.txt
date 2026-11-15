@@ -182,3 +182,5 @@ show/clock-2560x1600.png
 show/calendar-month-2560x1600.png
 show/weather-2560x1600.png
 show/dash-tiles-normal-2560x1600.png
+show/camera-grid-show8.png
+show/camera-grid-skylight.png
