@@ -246,7 +246,8 @@ func (d *Display) drawnHold(x, y int) {
 		d.sliderBegins(*slider)
 	}
 	if onSheet {
-		d.libDragStart(x, y) // the music library scrolls under a finger (library_draw.go)
+		d.libDragStart(x, y)    // the music library scrolls under a finger (library_draw.go)
+		d.mealieDragStart(x, y) // and so do the recipes (mealie_sheet.go)
 	}
 }
 
@@ -271,7 +272,7 @@ func (d *Display) drawnMove(x, y int) {
 		// kept, for where it lifts (drawnRelease), and a slider it came down on follows it.
 		slider, moved, onSheet := dr.slider, dr.moved, dr.onSheet
 		d.mu.Unlock()
-		if onSheet && d.libDragMove(x, y) {
+		if onSheet && (d.libDragMove(x, y) || d.mealieDragMove(x, y)) {
 			return
 		}
 		if slider != nil && slider.slides(moved) {

@@ -25,7 +25,8 @@ const fetchedPerPage = 100
 const recipesBaseUrl = "/api/recipes"
 const recipeImageBaseUrl = "/api/media/recipes"
 
-// Client is one Mealie server: its address and an optional token.
+// Client is one Mealie server: its address and an API token, which Mealie asks for to list recipes. The
+// token may be empty for some server configurations.
 type Client struct {
 	URL, Token string
 }
@@ -107,7 +108,7 @@ func didNotAnswer(err error) error {
 
 // The ways Mealie refuses, told for a screen.
 var (
-	errNeedsToken   = errors.New("mealie asks for a token: set one on the setup page")
+	errNeedsToken   = errors.New("mealie asks for an API token: add one on the setup page")
 	errRefusedToken = errors.New("mealie refused the token")
 	errForbidden    = errors.New("mealie does not let this token read the recipes")
 )

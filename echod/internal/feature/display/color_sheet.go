@@ -152,9 +152,9 @@ func (s sheetSlider) slides(moved bool) bool { return s.kind != mediaPartSpeaker
 
 // pageSwipeOnSheet is a finger that came down on a sheet at from and lifted at x, y after moving: a
 // swipe along the media sheet's favorites turns their page, and a finger that scrolled the music
-// library did only that.
+// library or the recipes did only that.
 func (d *Display) pageSwipeOnSheet(from image.Point, x, y int) bool {
-	return d.libraryDragEnd() || d.mediaPageSwipe(from, x, y)
+	return d.libraryDragEnd() || d.mealieDragEnd() || d.mediaPageSwipe(from, x, y)
 }
 
 // samePartOnSheet is whether a and b are on the same part of the sheet that is up: a finger that came

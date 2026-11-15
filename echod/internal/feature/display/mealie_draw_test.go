@@ -8,10 +8,12 @@ import (
 	"image/png"
 	"os"
 	"path/filepath"
+	"reflect"
 	"testing"
 
 	"github.com/HuskerMinion/techo5/echod/internal/config"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/dashboard"
+	"github.com/HuskerMinion/techo5/echod/internal/lib/mdi"
 	"github.com/HuskerMinion/techo5/echod/internal/lib/mealie"
 )
 
@@ -137,6 +139,40 @@ func TestMealieOverviewDrawsOnlyWhatIsInView(t *testing.T) {
 	savePreview(t, "mealie-overview-many.png", r.dst)
 }
 
+// A scrolled sheet draws the recipes further up, the rows scrolled out are gone, and what is drawn stays
+// in the view. Scrolled past the end it stops with the last row whole in view, and a list that fits has
+// nothing to scroll.
+func TestMealieOverviewScrolls(t *testing.T) {
+	r := newRenderer(image.NewRGBA(image.Rect(0, 0, showWide, showHigh)))
+	g := r.mealieGeometry()
+	items := func(n, scroll int) []mediaZone {
+		s := loadedMealieSheet(testRecipes(n))
+		s.scroll = scroll
+		return zonesOfKind(drawMealieSheet(r, s), mealiePartItem)
+	}
+	for _, z := range items(100, 2*g.tileH) {
+		if !z.r.In(g.view) {
+			t.Errorf("recipe %d reaches to %v, outside the view %v", z.index, z.r, g.view)
+		}
+		if z.index < g.cols {
+			t.Errorf("recipe %d of the first row is still drawn two rows down", z.index)
+		}
+	}
+	end := items(100, 1<<20)
+	if len(end) == 0 {
+		t.Fatal("nothing is drawn scrolled to the end")
+	}
+	if last := end[len(end)-1]; last.index != 99 || last.r.Dy() != g.tileH {
+		t.Errorf("the last recipe is %d at %v after scrolling to the end, want 99 whole in view", last.index, last.r)
+	}
+	if !reflect.DeepEqual(end, items(100, r.mealieMaxScroll())) {
+		t.Error("scrolling past the end draws something other than scrolling to it")
+	}
+	if !reflect.DeepEqual(items(3, 0), items(3, 500)) {
+		t.Error("a list that fits scrolled")
+	}
+}
+
 // Drawing no sheet forgets the parts of the one drawn before, so that a tap finds nothing of it.
 func TestMealieOverviewDrawnNoMoreHasNoParts(t *testing.T) {
 	r := newRenderer(image.NewRGBA(image.Rect(0, 0, showWide, showHigh)))
@@ -158,8 +194,8 @@ func TestMealieNoticeSaysWhatIsTheMatter(t *testing.T) {
 		sheet           mealieSheet
 		icon, msg, hint string
 	}{
-		{"not set up", mealieSheet{}, "", "Set up Mealie on the setup page to browse your recipes here.", ""},
-		{"not set up, whatever it was asked before", mealieSheet{listLoaded: true, listProblem: "mealie refused the token"}, "", "Set up Mealie on the setup page to browse your recipes here.", ""},
+		{"not set up", mealieSheet{}, "cog-outline", "Set up Mealie on the setup page to browse your recipes here.", ""},
+		{"not set up, whatever it was asked before", mealieSheet{listLoaded: true, listProblem: "mealie refused the token"}, "cog-outline", "Set up Mealie on the setup page to browse your recipes here.", ""},
 		{"loading", mealieSheet{set: true, listLoading: true}, "", "Loading…", ""},
 		{"a problem", mealieSheet{set: true, listLoaded: true, listProblem: "mealie refused the token"},
 			"alert-circle-outline", "mealie refused the token", ""},
@@ -171,6 +207,9 @@ func TestMealieNoticeSaysWhatIsTheMatter(t *testing.T) {
 			icon, msg, hint := mealieNotice(&c.sheet)
 			if icon != c.icon || msg != c.msg || hint != c.hint {
 				t.Errorf("icon %q, message %q, hint %q; want %q, %q, %q", icon, msg, hint, c.icon, c.msg, c.hint)
+			}
+			if _, ok := mdi.Rune(icon); icon != "" && !ok {
+				t.Errorf("icon %q is not in the icon font, so nothing would be drawn", icon)
 			}
 			r := newRenderer(image.NewRGBA(image.Rect(0, 0, showWide, showHigh)))
 			if got := len(zonesOfKind(drawMealieSheet(r, c.sheet), mealiePartDone)); got != 1 {

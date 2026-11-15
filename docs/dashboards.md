@@ -186,8 +186,8 @@ Mealie server. The Echo Dot and the Echo Spot don't have it.
 **Setting it up**
 
 On the setup page, under **Connections**, **Mealie**: the server's address, like
-`http://192.168.1.20:9000`. A token is only needed when the server asks for a sign-in to read
-recipes; make one in Mealie under your user's API tokens. It is never shown again once saved.
+`http://192.168.1.20:9000`, and a long-lived API token. It is never shown again once saved. Leave the token empty
+only if your server accepts requests without one.
 
 **Opening it**
 

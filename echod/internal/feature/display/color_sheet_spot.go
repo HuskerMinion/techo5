@@ -38,4 +38,8 @@ func (d *Display) libDragStart(int, int) {}
 
 func (d *Display) libDragMove(int, int) bool { return false }
 
+func (d *Display) mealieDragStart(int, int) {}
+
+func (d *Display) mealieDragMove(int, int) bool { return false }
+
 func (d *Display) libraryHold(int, int) bool { return false }

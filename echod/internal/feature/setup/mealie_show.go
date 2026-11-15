@@ -18,15 +18,15 @@ import (
 // token is optional and never shown: it is written, or left alone.
 func mealieSection(w http.ResponseWriter, token string) {
 	mealieConfig := config.Get().Mealie
-	held := "optional: a long-lived authorization token"
+	held := "an API token from Mealie, usually needed"
 	if mealieConfig.Token != "" {
 		held = "saved: leave empty to keep it"
 	}
 	fmt.Fprint(w, `<fieldset><legend>Mealie</legend><form method="post" action="/setup/save">`)
 	hidden(w, token, "mealie", "connections")
 	fmt.Fprintf(w, `<p class="note" style="margin-top:0">The recipes this screen shows, with their steps, from your
-	  Mealie server. The token is only needed when the server asks for a sign-in to read recipes: create one in
-	  Mealie under your user's API tokens.</p>
+	  Mealie server. Mealie asks for an API token to list recipes: create one in Mealie under your user
+	  profile's API tokens. Leave it empty only if your server lets requests through without one.</p>
 	 <label for="mealieurl">Address</label>
 	 <input id="mealieurl" name="url" value="%s" placeholder="http://192.168.1.20:9000" autocomplete="off">
 	 <label for="mealietoken">Token</label>

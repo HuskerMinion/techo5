@@ -3,7 +3,8 @@ package config
 // Mealie is a Mealie recipe server this device asks for recipes.
 type Mealie struct {
 	URL string `json:"url,omitempty"`
-	// Token is an optional long-lived access token. Some Mealie setups do not require it for authorization.
+	// Token is a long-lived API token, made in Mealie under the user's profile. Mealie asks for one to list
+	// recipes, so it is left empty only for a server that lets the request through without one.
 	Token string `json:"token,omitempty"`
 }
 

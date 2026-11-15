@@ -27,16 +27,26 @@ const (
 const mealieTargetTileWidth = 235
 
 // mealieParts are the recipe sheet's parts where they were last drawn, under zmu, for the touch
-// goroutine: its zones, and the card they are on.
+// goroutine: its zones, and the card they are on, and how high the recipes are and how high the view
+// they scroll in is, for how far they can be scrolled.
 type mealieParts struct {
-	mealieZones []mediaZone
-	mealieCard  image.Rectangle
+	mealieZones    []mediaZone
+	mealieCard     image.Rectangle
+	mealieContentH int
+	mealieViewH    int
 }
 
-func (r *renderer) setMealie(zones []mediaZone, card image.Rectangle) {
+func (r *renderer) setMealie(zones []mediaZone, card image.Rectangle, contentH, viewH int) {
 	r.zmu.Lock()
-	r.mealieZones, r.mealieCard = zones, card
+	r.mealieZones, r.mealieCard, r.mealieContentH, r.mealieViewH = zones, card, contentH, viewH
 	r.zmu.Unlock()
+}
+
+// mealieMaxScroll returns how far the recipes can be scrolled, in pixels, as they were last drawn.
+func (r *renderer) mealieMaxScroll() int {
+	r.zmu.Lock()
+	defer r.zmu.Unlock()
+	return max(r.mealieContentH-r.mealieViewH, 0)
 }
 
 // mealieAt returns the part of the recipe sheet under x, y, and whether that is on the sheet at all.
@@ -76,7 +86,7 @@ func (r *renderer) mealieGeometry() mealieGeom {
 // mealieAt. With no sheet it draws nothing and keeps no parts.
 func (r *renderer) mealieSheet(s *mealieSheet, th dashboard.Theme) {
 	if s == nil {
-		r.setMealie(nil, image.Rectangle{})
+		r.setMealie(nil, image.Rectangle{}, 0, 0)
 		return
 	}
 	whole := r.dst.Rect
@@ -94,9 +104,10 @@ func (r *renderer) mealieSheet(s *mealieSheet, th dashboard.Theme) {
 	r.text(fc.labelBold, tr("ui_mealie_recipes"), g.bar.Min.X, g.bar.Min.Y+r.s(33), pal.text)
 
 	zones := []mediaZone{{r: done, kind: mealiePartDone}}
-	zones = append(zones, r.mealieContent(s, g, pal, fc)...)
+	content, contentH := r.mealieContent(s, g, pal, fc)
+	zones = append(zones, content...)
 	// The whole screen is the sheet's: a tap beside the card is not a tap on the dashboard under it.
-	r.setMealie(zones, whole)
+	r.setMealie(zones, whole, contentH, g.view.Dy())
 }
 
 // mealieNotice returns what stands in for the recipes when the sheet has none to show: an icon, a
@@ -105,7 +116,7 @@ func (r *renderer) mealieSheet(s *mealieSheet, th dashboard.Theme) {
 func mealieNotice(s *mealieSheet) (icon, msg, hint string) {
 	switch {
 	case !s.set:
-		return "", tr("ui_mealie_set_up_hint"), ""
+		return "cog-outline", tr("ui_mealie_set_up_hint"), ""
 	case s.listProblem != "":
 		return "alert-circle-outline", s.listProblem, ""
 	case !s.listLoaded:
@@ -117,34 +128,38 @@ func mealieNotice(s *mealieSheet) (icon, msg, hint string) {
 }
 
 // mealieContent draws what is under the bar, the recipes or the message that stands in for them, and
-// returns the zones of the recipes it drew.
-func (r *renderer) mealieContent(s *mealieSheet, g mealieGeom, pal dashPal, fc sheetFaces) []mediaZone {
+// returns the zones of the recipes it drew and how high all the recipes are, drawn or not. The recipes
+// are drawn scrolled up by the sheet's scroll, kept to what there is to scroll.
+func (r *renderer) mealieContent(s *mealieSheet, g mealieGeom, pal dashPal, fc sheetFaces) ([]mediaZone, int) {
 	if icon, msg, hint := mealieNotice(s); msg != "" {
-		if !s.set {
-			r.mealieSetUp(g, pal, fc, msg)
-		} else {
-			r.mealieMessage(g, pal, fc, icon, msg, hint)
-		}
-		return nil
+		r.mealieMessage(g, pal, fc, icon, msg, hint)
+		return nil, 0
 	}
 
 	// What is drawn here keeps to the view: every drawing keeps to r.dst.
 	full := r.dst
 	r.dst = full.SubImage(g.view).(*image.RGBA)
 	defer func() { r.dst = full }()
+	top := r.s(6)
+	rows := (len(s.recipes) + g.cols - 1) / g.cols
+	contentH := top + rows*g.tileH
+	scroll := min(s.scroll, max(contentH-g.view.Dy(), 0))
 	var zones []mediaZone
 	for i, recipe := range s.recipes {
 		x := g.x0 + (i%g.cols)*(g.tile+g.gap)
-		y := g.view.Min.Y + r.s(6) + (i/g.cols)*g.tileH
+		y := g.view.Min.Y + top + (i/g.cols)*g.tileH - scroll
 		if y >= g.view.Max.Y {
 			break
+		}
+		if y+g.tileH <= g.view.Min.Y {
+			continue // scrolled out above
 		}
 		r.mealieTile(recipe.Name, x, y, g, pal, fc)
 		if z := image.Rect(x, y, x+g.tile, y+g.tileH).Intersect(g.view); !z.Empty() {
 			zones = append(zones, mediaZone{r: z, kind: mealiePartItem, index: i})
 		}
 	}
-	return zones
+	return zones, contentH
 }
 
 // mealieTile draws one recipe: a square in a color made from its name with its first letter, and its
@@ -188,15 +203,5 @@ func (r *renderer) mealieMessage(g mealieGeom, pal dashPal, fc sheetFaces, icon,
 	for _, line := range r.wrapLines(fc.sub, hint, g.inner*4/5) {
 		y += r.s(28)
 		r.text(fc.sub, line, mid-r.width(fc.sub, line)/2, y, pal.sub)
-	}
-}
-
-// mealieSetUp draws msg, what to do when Mealie is not set up: a
-// sentence from the left, under the bar.
-func (r *renderer) mealieSetUp(g mealieGeom, pal dashPal, fc sheetFaces, msg string) {
-	y := g.view.Min.Y + r.s(40)
-	for _, line := range r.wrapLines(fc.label, msg, g.inner) {
-		r.text(fc.label, line, g.x0, y, pal.sub)
-		y += r.s(38)
 	}
 }

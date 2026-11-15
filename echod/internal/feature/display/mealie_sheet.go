@@ -4,6 +4,7 @@ package display
 
 import (
 	"context"
+	"image"
 	"log/slog"
 	"sync/atomic"
 	"time"
@@ -34,6 +35,18 @@ type mealieSheet struct {
 	listProblem string
 	// selected is set to a recipe when a single one is selected, it is nil while the whole list is shown.
 	selected *mealie.RecipeEntry
+	// scroll is how far the list is scrolled up, in pixels. Drawing keeps it within what there is to
+	// scroll, so it may be too much for a list that has become shorter. drag is a finger on the list.
+	scroll int
+	drag   mealieDrag
+}
+
+// mealieDrag is a finger on the list as it moves: where it came down, how far the list was scrolled
+// then, and whether it has gone far enough to scroll it.
+type mealieDrag struct {
+	at        image.Point
+	base      int
+	scrolling bool
 }
 
 // mealieSheetEpochs hands out the epoch numbers.
@@ -132,4 +145,46 @@ func (d *Display) mealieTap(x, y int) bool {
 	}
 	d.wake()
 	return true
+}
+
+// mealieDragStart is a finger coming down on the sheet: where, and how far the list is scrolled then.
+func (d *Display) mealieDragStart(x, y int) {
+	if d.r == nil {
+		return
+	}
+	most := d.r.mealieMaxScroll()
+	d.editMealie(func(s *mealieSheet) {
+		s.drag = mealieDrag{at: image.Pt(x, y), base: min(s.scroll, most)}
+	})
+}
+
+// mealieDragMove is the finger moving: once it has gone far enough up or down, the list follows it from
+// there, as far as it can go. It says whether the sheet took the finger, which it does whenever it is
+// up.
+func (d *Display) mealieDragMove(_, y int) bool {
+	s := d.mealieSheetNow()
+	if s == nil || d.r == nil {
+		return false
+	}
+	dy := y - s.drag.at.Y
+	if !s.drag.scrolling && abs(dy) < d.r.s(slideStart) {
+		return true
+	}
+	most := d.r.mealieMaxScroll()
+	d.editMealie(func(n *mealieSheet) {
+		n.drag.scrolling = true
+		n.scroll = min(max(n.drag.base-dy, 0), most)
+	})
+	d.wake()
+	return true
+}
+
+// mealieDragEnd is the finger lifting. It says whether it scrolled the list, which is then all it did.
+func (d *Display) mealieDragEnd() bool {
+	scrolled := false
+	d.editMealie(func(s *mealieSheet) {
+		scrolled = s.drag.scrolling
+		s.drag = mealieDrag{}
+	})
+	return scrolled
 }

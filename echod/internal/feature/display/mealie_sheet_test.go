@@ -293,3 +293,58 @@ func TestMealieSheetTakesTheTaps(t *testing.T) {
 		t.Error("Done did not put the sheet away")
 	}
 }
+
+// A finger dragged up or down on the recipes scrolls them as it goes, as far as there is to scroll and
+// no further, and a wobble of a tap does not. It is the sheet's finger to where it lifts, so the sheet
+// stays up when that is Done and the drag is over.
+func TestMealieDragScrollsTheRecipes(t *testing.T) {
+	r := newRenderer(image.NewRGBA(image.Rect(0, 0, showWide, showHigh)))
+	d := &Display{r: r, poke: make(chan struct{}, 1)}
+	sheet := loadedMealieSheet(testRecipes(100))
+	d.dashMealie = &sheet
+	zones := drawFrame(r, d.mealieSheetNow())
+	most := r.mealieMaxScroll()
+	if most == 0 {
+		t.Fatal("100 recipes have nothing to scroll")
+	}
+	x, y := middleOf(zonesOfKind(zones, mealiePartItem)[0])
+	scroll := func() int { return d.mealieSheetNow().scroll }
+
+	d.drawnHold(x, y)
+	d.drawnMove(x, y-3)
+	if got := scroll(); got != 0 {
+		t.Errorf("a wobble scrolled to %d, want 0", got)
+	}
+	for _, c := range []struct {
+		name     string
+		to, want int
+	}{
+		{"a drag up", y - 100, 100},
+		{"a drag up past the end", y - most - 500, most},
+		{"a drag down past the start", y + 500, 0},
+	} {
+		d.drawnMove(x, c.to)
+		if got := scroll(); got != c.want {
+			t.Errorf("%s scrolled to %d, want %d", c.name, got, c.want)
+		}
+	}
+	done := zonesOfKind(zones, mealiePartDone)[0]
+	dx, dy := middleOf(done)
+	d.drawnMove(x, y-100)
+	d.drawnMove(dx, dy)
+	d.drawnRelease(dx, dy)
+	if !d.mealieUp() {
+		t.Error("a scroll that lifted on Done put the sheet away")
+	}
+	if d.mealieSheetNow().drag != (mealieDrag{}) {
+		t.Error("the finger is still on the list after it lifted")
+	}
+
+	// Scrolled further than there is, the list is drawn at its end, and a finger takes it from there.
+	d.editMealie(func(s *mealieSheet) { s.scroll = most + 300 })
+	d.drawnHold(x, y)
+	d.drawnMove(x, y+100)
+	if got := scroll(); got != most-100 {
+		t.Errorf("a drag down from past the end scrolled to %d, want %d", got, most-100)
+	}
+}
