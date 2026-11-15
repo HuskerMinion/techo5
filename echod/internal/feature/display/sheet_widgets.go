@@ -215,7 +215,7 @@ func (r *paint) wrap(face font.Face, s string, maxW int) []string {
 	if line != "" {
 		lines = append(lines, line)
 	}
-	return lines
+	return fonts.KeepDirection(s, lines)
 }
 
 // shift lightens (positive) or darkens (negative) a color by d per channel.

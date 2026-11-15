@@ -12,6 +12,7 @@ import (
 	"golang.org/x/image/font/opentype"
 
 	"github.com/HuskerMinion/techo5/echod/internal/feature/dashboard"
+	"github.com/HuskerMinion/techo5/echod/internal/lib/fonts"
 	"github.com/HuskerMinion/techo5/echod/internal/lib/mdi"
 )
 
@@ -210,7 +211,7 @@ func (r *paint) wrapLines(face font.Face, text string, w int) []string {
 	if line != "" {
 		lines = append(lines, r.fit(face, line, w))
 	}
-	return lines
+	return fonts.KeepDirection(text, lines)
 }
 
 // drawnTap is a tap on the drawn dashboard: on a tile, it does what the tile says.

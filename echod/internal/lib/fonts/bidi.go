@@ -21,11 +21,20 @@ func isRTLRune(r rune) bool {
 
 func isHebrewRune(r rune) bool { return (r >= 0x0590 && r <= 0x05FF) || (r >= 0xFB1D && r <= 0xFB4F) }
 
+// The marks KeepDirection starts a line with: zero width, they set its direction and are not drawn.
+const (
+	lrm = "\u200e"
+	rlm = "\u200f"
+)
+
 // VisualOrder turns logically ordered text into the left-to-right order it is drawn in, running the
 // Unicode bidirectional algorithm on lines that hold right-to-left characters (Hebrew, Arabic).
 // Text with none is returned as is.
 func VisualOrder(s string) string {
 	if !strings.ContainsFunc(s, isRTLRune) {
+		if strings.ContainsAny(s, lrm+rlm) {
+			return dropMarks(s)
+		}
 		return s
 	}
 	if !sawHebrew.Load() && strings.ContainsFunc(s, isHebrewRune) {
@@ -39,6 +48,44 @@ func VisualOrder(s string) string {
 		return strings.Join(lines, "\n")
 	}
 	return visualOrderLine(s)
+}
+
+func dropMarks(s string) string {
+	return strings.NewReplacer(lrm, "", rlm, "").Replace(s)
+}
+
+// rightToLeft is whether a paragraph reads right to left: its first letter is a right-to-left one
+// (UAX #9 rules P2 and P3, as browsers do).
+func rightToLeft(s string) bool {
+	for _, r := range s {
+		if isRTLRune(r) && !unicode.In(r, unicode.Mn, unicode.Me) {
+			return true
+		}
+		if unicode.IsLetter(r) {
+			return false
+		}
+	}
+	return false
+}
+
+// KeepDirection marks the lines s was wrapped into with s's own direction. A paragraph's direction
+// holds for all its lines (UAX #9), but each line is put in visual order on its own when it is drawn:
+// a line of a Hebrew paragraph that starts with an English word would be laid out left to right. Each
+// line gets a zero-width mark, LRM or RLM, which VisualOrder reads and drops.
+func KeepDirection(s string, lines []string) []string {
+	if len(lines) < 2 || !strings.ContainsFunc(s, isRTLRune) {
+		return lines
+	}
+	mark := lrm
+	if rightToLeft(s) {
+		mark = rlm
+	}
+	for i, l := range lines {
+		if l != "" {
+			lines[i] = mark + l
+		}
+	}
+	return lines
 }
 
 // cluster is a character with the marks that follow it (nikud, cantillation), kept together when a
@@ -104,6 +151,9 @@ func visualOrderLine(s string) string {
 	for _, c := range cs {
 		for i := c.start; i < c.end; i++ {
 			r := rs[i]
+			if r == 0x200E || r == 0x200F {
+				continue
+			}
 			if i == c.start && c.level%2 == 1 {
 				r = mirror(r)
 			}

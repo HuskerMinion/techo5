@@ -52,3 +52,28 @@ func TestVisualOrderNotesHebrew(t *testing.T) {
 		t.Fatal("Hebrew not noted")
 	}
 }
+
+// A wrapped paragraph's lines keep its direction: a line of a Hebrew paragraph that starts with an
+// English word is still laid out right to left, and the marks are not drawn.
+func TestKeepDirection(t *testing.T) {
+	s := "שלום 10% סוללה 3. Kitchen: מטבח 3"
+	lines := KeepDirection(s, []string{"שלום 10% סוללה", "3. Kitchen: מטבח 3"})
+	want := []string{"הללוס 10% םולש", "3 חבטמ :Kitchen .3"} // as a browser lays out the RTL line
+	for i, l := range lines {
+		if got := VisualOrder(l); got != want[i] {
+			t.Errorf("line %d: VisualOrder(%q) = %q, want %q", i, l, got, want[i])
+		}
+	}
+	// an English paragraph's line that starts with Hebrew stays left to right
+	lines = KeepDirection("Kitchen is מטבח in Hebrew", []string{"Kitchen is", "מטבח in Hebrew"})
+	if got := VisualOrder(lines[1]); got != "חבטמ in Hebrew" {
+		t.Errorf("VisualOrder(%q) = %q", lines[1], got)
+	}
+	// one line, or no right-to-left letters: nothing added
+	if got := KeepDirection("Kitchen 3", []string{"Kitchen", "3"}); got[0] != "Kitchen" {
+		t.Errorf("marked English: %q", got)
+	}
+	if got := VisualOrder("‎Kitchen"); got != "Kitchen" {
+		t.Errorf("mark drawn: %q", got)
+	}
+}

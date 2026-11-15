@@ -241,7 +241,7 @@ func wrapLines(face font.Face, text string, w, n int) []string {
 			out = append(out, line)
 			if len(out) == n {
 				out[n-1] = clipLine(face, out[n-1]+" "+strings.Join(words[i:], " "), w)
-				return out
+				return fonts.KeepDirection(text, out)
 			}
 			line = word
 			continue
@@ -251,7 +251,7 @@ func wrapLines(face font.Face, text string, w, n int) []string {
 	if line != "" {
 		out = append(out, clipLine(face, line, w))
 	}
-	return out
+	return fonts.KeepDirection(text, out)
 }
 
 // clipLine is text cut to fit w, ending in an ellipsis when it was cut.

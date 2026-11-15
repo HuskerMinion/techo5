@@ -13,6 +13,7 @@ import (
 
 	"golang.org/x/image/font"
 
+	"github.com/HuskerMinion/techo5/echod/internal/lib/fonts"
 	"github.com/HuskerMinion/techo5/echod/internal/lib/hass"
 )
 
@@ -255,7 +256,7 @@ func (r *renderer) calWrap(f font.Face, s string, w int) []string {
 	if line != "" {
 		lines = append(lines, line)
 	}
-	return lines
+	return fonts.KeepDirection(s, lines)
 }
 
 // calChips draws a chip for each of cals from x, around cy: in its color while it is shown, an outline
