@@ -2,18 +2,32 @@ package voice
 
 import (
 	"context"
+	"sync"
 	"testing"
 	"time"
 
 	esphome "github.com/ygelfand/go-esphome-device"
 )
 
+// countingBackend keeps the frames sent, from whichever goroutine sends them.
 type countingBackend struct {
 	ha
+	mu  sync.Mutex
 	got [][]byte
 }
 
-func (b *countingBackend) Audio(frame []byte) error { b.got = append(b.got, frame); return nil }
+func (b *countingBackend) Audio(frame []byte) error {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	b.got = append(b.got, frame)
+	return nil
+}
+
+func (b *countingBackend) last() []byte {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return b.got[len(b.got)-1]
+}
 
 // A turn's history waits for room in a full queue rather than being dropped as a frame is: it is the
 // start of the request (#477). One that never finds room is counted as dropped.
@@ -39,7 +53,7 @@ func TestATurnsHistoryWaitsForRoom(t *testing.T) {
 	for len(c.out) > 0 {
 		_ = (<-c.out)()
 	}
-	if last := be.got[len(be.got)-1]; len(last) != 4 || last[0] != 5 {
+	if last := be.last(); len(last) != 4 || last[0] != 5 {
 		t.Fatalf("the history was not the last thing sent: %v", last)
 	}
 
