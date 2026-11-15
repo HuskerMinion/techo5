@@ -314,6 +314,10 @@ type conversation struct {
 	// busyAt is the last time the microphones were seen to be somebody else's, while confirming is on.
 	// What is asked about includes the two seconds before the wake, which must not be a call's.
 	busyAt time.Time
+
+	// audioDropped counts the audio messages sendAudio dropped because the queue to Home Assistant was
+	// full, for the turn's "sent audio" line. Written by the streamers, read by them.
+	audioDropped atomic.Uint64
 }
 
 // graceStart is how long to wait for a stopped run to close before starting the next one anyway.
@@ -432,7 +436,28 @@ func (c *conversation) sendAudio(be backend, b []byte) {
 	select {
 	case c.out <- func() error { return be.Audio(frame) }:
 	default:
+		c.audioDropped.Add(1)
 	}
+}
+
+// historyWait is how long a turn's history may wait for room in the queue to Home Assistant. Unlike a
+// frame it is the start of the request, said before the turn opened and nowhere else (#477).
+const historyWait = 500 * time.Millisecond
+
+// sendHistory queues a turn's history as sendAudio does a frame, but waits up to historyWait for room
+// rather than dropping it at once.
+func (c *conversation) sendHistory(ctx context.Context, be backend, b []byte) {
+	frame := append([]byte(nil), b...)
+	t := time.NewTimer(historyWait)
+	defer t.Stop()
+	select {
+	case c.out <- func() error { return be.Audio(frame) }:
+		return
+	case <-ctx.Done():
+	case <-t.C:
+	}
+	c.audioDropped.Add(1)
+	slog.Warn("a turn's history was not sent: the queue to home assistant stayed full", "ms", len(b)*1000/(2*mic.Rate))
 }
 
 // sends drains the queue. A failure ends the turn through the same path a pipeline error takes, and
@@ -1805,13 +1830,18 @@ func (c *conversation) pump(ctx context.Context, be backend, slot int, followUp,
 		pre = nil
 	}
 
+	// What went up before the frames, and what the queue dropped from here on, for the log below: the
+	// seconds it gives are the frames' alone, which on a turn with history are fewer than were heard.
+	historyS := float64(len(pre)) / float64(mic.Rate)
+	droppedAt := c.audioDropped.Load()
+
 	if len(pre) > 0 {
 		for _, s := range pre {
 			buf = append(buf, byte(s), byte(s>>8))
 		}
 		recording.Get().Frame(buf)
 
-		c.sendAudio(be, buf)
+		c.sendHistory(ctx, be, buf)
 		slog.Debug("sent audio history", "ms", len(pre)*1000/mic.Rate)
 	}
 
@@ -1836,6 +1866,8 @@ func (c *conversation) pump(ctx context.Context, be backend, slot int, followUp,
 		slog.Info("sent audio",
 			"slot", slot+1,
 			"seconds", float64(samples)/float64(mic.Rate),
+			"history_s", math.Round(historyS*100)/100,
+			"dropped", c.audioDropped.Load()-droppedAt,
 			"endpoint_s", math.Round(endpointAt*10)/10,
 			"peak", peak,
 			"peakdbfs", math.Round(20*math.Log10(max(float64(peak), 1)/32768)*10)/10,
