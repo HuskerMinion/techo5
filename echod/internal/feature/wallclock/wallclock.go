@@ -71,6 +71,22 @@ var (
 	reconnectDelayMax = 15 * time.Minute
 )
 
+const (
+	// sniffAfterDefault is how long to let the link settle after connecting before asking for
+	// sniff mode: the Discover handshake and the first timeinfo are traffic, and the kernel leaves
+	// sniff for each of them.
+	sniffAfterDefault = 2 * time.Second
+
+	// sniffEveryDefault is the safety tick: if a send's signal were missed, the link is asked
+	// again at least this often. Traffic normally triggers a quicker request instead.
+	sniffEveryDefault = 60 * time.Second
+
+	// sniffTrafficDelayDefault is how long to wait after the last write before asking for sniff
+	// mode again. It debounces a burst of directives, and is short enough that the clock sleeps
+	// again a few seconds after a timer change rather than waiting for the next minute.
+	sniffTrafficDelayDefault = 3 * time.Second
+)
+
 // Feature is the wall clock bridge.
 type Feature struct {
 	sw         *esphome.Switch
@@ -83,6 +99,20 @@ type Feature struct {
 	// timerWake is the timer feature saying a timer started, changed, ended or rang. It is separate
 	// from wake so a timer change cannot be mistaken for a config change by a live link.
 	timerWake chan struct{}
+
+	// sniffTrafficDelay is how long to wait after the last write before asking for sniff mode
+	// again. A field rather than a package variable so a test can shorten it without racing a
+	// live feature.
+	sniffTrafficDelay time.Duration
+
+	// sniffAfter and sniffEvery are the settling wait and the safety tick, as fields for the same
+	// reason as sniffTrafficDelay.
+	sniffAfter time.Duration
+	sniffEvery time.Duration
+
+	// requestSniff asks the controller for sniff mode on the link to an address. A field so the
+	// tests do not need a Bluetooth adapter.
+	requestSniff func(context.Context, string) error
 
 	// gate is the radio: held by the loop while it dials and looks after a link, and by a pairing
 	// attempt while it searches. One at a time, so a reconnect cannot take the adapter from a
@@ -108,8 +138,12 @@ func Get() *Feature {
 
 func build() *Feature {
 	f := &Feature{
-		wake:      make(chan struct{}, 1),
-		timerWake: make(chan struct{}, 1),
+		wake:              make(chan struct{}, 1),
+		timerWake:         make(chan struct{}, 1),
+		sniffAfter:        sniffAfterDefault,
+		sniffEvery:        sniffEveryDefault,
+		sniffTrafficDelay: sniffTrafficDelayDefault,
+		requestSniff:      sniffClock,
 		sw: &esphome.Switch{Base: esphome.Base{
 			ObjectID: "wall_clock", Name: "Wall clock", Icon: "mdi:clock-outline",
 			Category: esphome.CategoryConfig,
@@ -628,6 +662,13 @@ func (f *Feature) serve(ctx context.Context, c *conn, b *Bridge, address string)
 		return
 	}
 
+	// The clock's radio is left listening in every slot unless somebody asks for sniff mode, and
+	// the kernel drops back to active mode for every packet. Keep asking, quietly, for as long as
+	// this link lives, with a quicker ask after anything is sent.
+	sniffCtx, stopSniff := context.WithCancel(ctx)
+	defer stopSniff()
+	safe.Go("wall clock sniff", func() { f.keepSniffing(sniffCtx, address, c.Sent()) })
+
 	for {
 		select {
 		case <-ctx.Done():
@@ -647,6 +688,99 @@ func (f *Feature) serve(ctx context.Context, c *conn, b *Bridge, address string)
 			return
 		}
 	}
+}
+
+// keepSniffing asks for sniff mode after the link has settled, again a few seconds after any write,
+// and at least once a minute until the link goes away. The first failure on a link is logged at info
+// level: a device without a usable raw HCI socket would otherwise stay in active mode silently.
+// Repeats are debug-level, because a link that is already sniffing answers Command Disallowed and
+// the clock must keep working either way. sent may be nil, which leaves only the periodic request.
+func (f *Feature) keepSniffing(ctx context.Context, address string, sent <-chan struct{}) {
+	ask := f.requestSniff
+	if ask == nil {
+		ask = sniffClock
+	}
+	warned := false
+	sniff := func() {
+		err := ask(ctx, address)
+		if err == nil {
+			return
+		}
+		if ctx.Err() != nil {
+			return
+		}
+		if warned {
+			slog.Debug("wall clock: could not ask for sniff mode", "address", address, "err", err)
+			return
+		}
+		slog.Info("wall clock: could not ask for sniff mode", "address", address, "err", err)
+		warned = true
+	}
+
+	settle := f.sniffAfter
+	if settle <= 0 {
+		settle = sniffAfterDefault
+	}
+	initial := time.NewTimer(settle)
+	defer initial.Stop()
+
+	// A write takes the link out of sniff; ask again after the burst settles, not on every frame.
+	var after *time.Timer
+	var afterC <-chan time.Time
+	defer func() {
+		if after != nil {
+			after.Stop()
+		}
+	}()
+	arm := func() {
+		delay := f.sniffTrafficDelay
+		if delay <= 0 {
+			delay = sniffTrafficDelayDefault
+		}
+		if after == nil {
+			after = time.NewTimer(delay)
+		} else {
+			if !after.Stop() {
+				select {
+				case <-after.C:
+				default:
+				}
+			}
+			after.Reset(delay)
+		}
+		afterC = after.C
+	}
+
+	every := f.sniffEvery
+	if every <= 0 {
+		every = sniffEveryDefault
+	}
+	ticker := time.NewTicker(every)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-initial.C:
+			sniff()
+		case <-sent:
+			arm()
+		case <-afterC:
+			afterC = nil
+			sniff()
+		case <-ticker.C:
+			sniff()
+		}
+	}
+}
+
+// sniffResult turns an HCI status into an error. Zero is success, and Command Disallowed (0x0C) is
+// the controller declining the request — usually because the link is already in sniff mode.
+func sniffResult(status uint8) error {
+	if status == 0 || status == 0x0C {
+		return nil
+	}
+	return fmt.Errorf("sniff mode: HCI status 0x%02X", status)
 }
 
 // timers is the timer feature's list as the clock wants it: running timers only, each with the
