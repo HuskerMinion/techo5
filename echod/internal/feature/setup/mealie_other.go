@@ -2,14 +2,11 @@
 
 package setup
 
-import (
-	"context"
-	"net/http"
-)
+import "net/http"
 
-// The recipe page is the Show's alone: on the Spot and the Dot there is no section, and a form posted
-// for one is refused.
+// The recipe page only works on the Show. For Spot and the Dot the section writes nothing, and a form
+// posted for it is refused.
 
-func mealieSection(context.Context, http.ResponseWriter, string) {}
+func mealieSection(http.ResponseWriter, string) {}
 
 func saveMealie(*http.Request) string { return "this device has no recipe page" }

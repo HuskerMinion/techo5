@@ -52,12 +52,12 @@ const someRecipe = `{
 	"dateAdded": "2026-11-13"
 }`
 
-// stumpedRecipe creates a minimal recipe with the given id.
+// stumpedRecipe returns the JSON of a minimal recipe with the given id and name.
 func stumpedRecipe(id, name string) string {
 	return `{"id":"` + id + `","name":"` + name + `","slug":"` + id + `","image":"v1"}`
 }
 
-// pagedResult creates the real return value of a GET to the paginated endpoint for the given items
+// pagedResult returns the JSON Mealie sends for one page of the recipe list, holding the given items.
 func pagedResult(page, totalPages int, items ...string) string {
 	return `{"page":` + strconv.Itoa(page) + `,"per_page":2,"total":3,"total_pages":` + strconv.Itoa(totalPages) +
 		`,"items":[` + strings.Join(items, ",") + `]}`

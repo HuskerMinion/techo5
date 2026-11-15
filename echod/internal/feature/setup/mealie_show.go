@@ -14,8 +14,8 @@ import (
 	"github.com/HuskerMinion/techo5/echod/internal/config"
 )
 
-// mealieSection is the Mealie server configuration the recipe page reads (config.Mealie). The token is optional and
-// never shown: it is written, or left alone.
+// mealieSection writes the form for the Mealie server the recipe page reads (config.Mealie) to w. The
+// token is optional and never shown: it is written, or left alone.
 func mealieSection(w http.ResponseWriter, token string) {
 	mealieConfig := config.Get().Mealie
 	held := "optional: a long-lived authorization token"
@@ -37,9 +37,10 @@ func mealieSection(w http.ResponseWriter, token string) {
 }
 
 // saveMealie saves the Mealie form: the address, and the token as the form says (a new one, none, or
-// the saved one left alone). A form that is refused saves none of it.
+// the saved one left alone). A form that is refused saves none of it. It returns what is wrong with the
+// form, or the empty string when it was saved.
 func saveMealie(r *http.Request) string {
-	addr := strings.TrimSpace(r.PostFormValue("url"))
+	addr := strings.TrimRight(strings.TrimSpace(r.PostFormValue("url")), "/")
 	if addr != "" {
 		u, err := url.Parse(addr)
 		if err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" {

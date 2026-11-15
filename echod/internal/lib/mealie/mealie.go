@@ -11,24 +11,31 @@ import (
 	"time"
 )
 
-var (
-	client = &http.Client{Timeout: 15 * time.Second}
-)
+// client is shared by every request to Mealie, so that its connections are reused.
+var client = &http.Client{Timeout: 15 * time.Second}
 
-const fetchedPerPage = 15
+// fetchedPerPage is how many recipes each request for the list asks for.
+const fetchedPerPage = 100
+
+// recipesBaseUrl and recipeImageBaseUrl are where Mealie keeps its recipes and their pictures, below
+// its address.
 const recipesBaseUrl = "/api/recipes"
 const recipeImageBaseUrl = "/api/media/recipes"
 
+// Client is one Mealie server: its address and an optional token.
 type Client struct {
 	URL, Token string
 }
 
+// RecipeFetchResult is one page of Mealie's list of recipes: which page it is, how many pages there are,
+// and the recipes on it.
 type RecipeFetchResult struct {
 	Page       int           `json:"page"`
 	TotalPages int           `json:"total_pages"`
 	Items      []RecipeEntry `json:"items"`
 }
 
+// RecipeEntry is a recipe as Mealie's list has it.
 type RecipeEntry struct {
 	ID                 string  `json:"id"`
 	UserID             string  `json:"userId"`
@@ -46,6 +53,8 @@ type RecipeEntry struct {
 	DateAdded string `json:"dateAdded"`
 }
 
+// get sends an HTTP request to the url and returns its answer as mapped to into. An answer other than 200 is an error that
+// says the status and the start of what the server said.
 func (c Client) get(ctx context.Context, url string, into any) error {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
@@ -71,6 +80,8 @@ func (c Client) get(ctx context.Context, url string, into any) error {
 	return json.Unmarshal(b, into)
 }
 
+// Recipes returns all the recipes in name order, reading the list a page at a time. An error on any page
+// is an error for the whole list.
 func (c Client) Recipes(ctx context.Context) ([]RecipeEntry, error) {
 	page := 1
 	var recipes []RecipeEntry
@@ -91,10 +102,13 @@ func (c Client) Recipes(ctx context.Context) ([]RecipeEntry, error) {
 	}
 }
 
+// RecipeFetchURL returns the URL of the given page of the list of recipes, by name. The first page
+// is 1.
 func (c Client) RecipeFetchURL(page int) string {
 	return strings.TrimRight(c.URL, "/") + recipesBaseUrl + "?page=" + strconv.Itoa(page) + "&perPage=" + strconv.Itoa(fetchedPerPage) + "&orderBy=name&orderDirection=asc"
 }
 
+// ImageURL returns the URL of the recipe's small picture.
 func (c Client) ImageURL(recipe RecipeEntry) string {
 	return strings.TrimRight(c.URL, "/") + recipeImageBaseUrl + "/" + recipe.ID + "/images/min-original.webp?version=" + recipe.ImageVersion
 }
