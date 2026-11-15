@@ -354,14 +354,16 @@ func (s *session) settings(p []byte) {
 		"volume", set.Volume, "muted", set.Muted)
 }
 
-// level is snapclient's software mixer: the volume cubed, which is near enough to how loudness is heard
-// that the slider's middle sounds like the middle.
+// level is snapclient's software mixer as it is by default: (10^v - 1) / 9, its exp mode with base 10
+// (client/player/player.cpp, setVolume_exp). The cube is snapclient's poly mode, which it uses only when
+// asked for, and it is far quieter low down: 16% is 0.4% against snapclient's 4.9%, a room that sounds
+// silent next to the others in its group at the same volume.
 func level(volume int, muted bool) float32 {
 	if muted {
 		return 0
 	}
 	v := float64(max(0, min(volume, 100))) / 100
-	return float32(math.Pow(v, 3))
+	return float32((math.Pow(10, v) - 1) / 9)
 }
 
 // codecHeader starts a new stream: a new decoder, and nothing of the old one left to play.
