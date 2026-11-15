@@ -190,6 +190,16 @@ func (r *paint) wrapLines(face font.Face, text string, w int) []string {
 	for _, word := range strings.Fields(text) {
 		if parts := r.characterLines(face, word, w); len(parts) > 0 {
 			if line != "" {
+				// The Japanese run goes on from the words before it as far as the line has room
+				// ("Home" is not left alone on a line before "Assistantで…").
+				if n := r.runOn(face, line, word, w); n > 0 {
+					line, word = line+" "+word[:n], word[n:]
+					if parts = r.characterLines(face, word, w); len(parts) == 0 {
+						lines = append(lines, line)
+						line = word
+						continue
+					}
+				}
 				lines = append(lines, line)
 			}
 			lines = append(lines, parts[:len(parts)-1]...)
@@ -201,6 +211,10 @@ func (r *paint) wrapLines(face font.Face, text string, w int) []string {
 			try = line + " " + word
 		}
 		if line != "" && r.width(face, try) > w {
+			// A Japanese run is cut between its characters rather than at the space before it.
+			if n := r.runOn(face, line, word, w); n > 0 {
+				line, word = line+" "+word[:n], word[n:]
+			}
 			lines = append(lines, line)
 			line = word
 			continue

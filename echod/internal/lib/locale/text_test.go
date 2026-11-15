@@ -295,6 +295,70 @@ func TestOnceHardcodedWordsAreInEveryCatalog(t *testing.T) {
 	}
 }
 
+// First run's words on the screen (the firstrun_ keys): each one drawn is in uiEnglish, each one in
+// uiEnglish is drawn, and every catalog, the partial ones too, has them all, so a screen in another
+// language never walks somebody through setting it up in English.
+func TestFirstRunWordsAreInEveryCatalog(t *testing.T) {
+	drawn := map[string]bool{}
+	paths, err := filepath.Glob("../../feature/display/*.go")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, path := range paths {
+		f, err := parser.ParseFile(token.NewFileSet(), path, nil, 0)
+		if err != nil {
+			t.Fatal(err)
+		}
+		ast.Inspect(f, func(n ast.Node) bool {
+			call, ok := n.(*ast.CallExpr)
+			if !ok || len(call.Args) != 1 {
+				return true
+			}
+			if name, ok := call.Fun.(*ast.Ident); !ok || name.Name != "tr" {
+				return true
+			}
+			if lit, ok := call.Args[0].(*ast.BasicLit); ok {
+				if key, err := strconv.Unquote(lit.Value); err == nil && strings.HasPrefix(key, "firstrun_") {
+					drawn[key] = true
+				}
+			}
+			return true
+		})
+	}
+	if len(drawn) == 0 {
+		t.Fatal("no firstrun_ key is drawn")
+	}
+	var keys []string
+	for key := range uiEnglish {
+		if strings.HasPrefix(key, "firstrun_") {
+			keys = append(keys, key)
+		}
+	}
+	slices.Sort(keys)
+	for key := range drawn {
+		if _, ok := uiEnglish[key]; !ok {
+			t.Errorf("%s is drawn but not in uiEnglish", key)
+		}
+	}
+	for _, key := range keys {
+		if !drawn[key] {
+			t.Errorf("%s is in uiEnglish but nothing draws it", key)
+		}
+	}
+	for _, lang := range []string{"es", "fr", "gl", "it", "nl", "ja", "de", "tr"} {
+		if _, ok := uiTranslations[lang]; !ok {
+			t.Errorf("%s: no catalog", lang)
+		}
+	}
+	for lang, catalog := range uiTranslations {
+		for _, key := range keys {
+			if catalog[key] == "" {
+				t.Errorf("%s: no %s", lang, key)
+			}
+		}
+	}
+}
+
 // A muted call is its microphone off, not the sound: French and Italian say so (ui_muted there reads
 // as the sound off).
 func TestAMutedCallSaysTheMicrophone(t *testing.T) {
