@@ -614,6 +614,45 @@ class SimulatedTWRP(unittest.TestCase):
             self.assertIn('--for-someone-else', err or '', extra)
             self.assertIn(extra[0], err, extra)
 
+    def test_let_add_writes_the_marker_and_no_key(self):
+        u = self.unit()
+        pub = os.path.join(self.tmp, 'id.pub')
+        with open(pub, 'w') as f:
+            f.write('ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIExample made-up\n')
+        out, err = self.install(u, '--let-home-assistant-add', '--ssh-key', pub, *self.mainline_args())
+        self.assertIsNone(err, out)
+        # The name and SSH key as usual; the marker echod turns into a window, and no key anywhere.
+        self.assertTrue(self.has(u, 'data/techo5/misc/techo5/name'))
+        self.assertTrue(self.has(u, 'data/techo5/misc/techo5/ssh/authorized_keys'))
+        self.assertEqual(u.get('data/techo5/misc/techo5/adopt-on-first-start'), b'')
+        self.assertFalse(self.has(u, 'data/techo5/misc/techo5/psk'))
+        self.assertFalse(self.has(u, 'data/techo5/misc/techo5/firstrun'))
+        self.assertFalse(os.path.exists(os.path.join(self.tmp, 'backups', 'SIMULATED', 'home-assistant.key')))
+        self.assertNotIn('encryption key, paste', out)
+        self.assertIn('within 30 minutes', out)
+
+    def test_let_add_removes_a_key_from_an_earlier_install(self):
+        u = self.unit()
+        out, err = self.install(u, *self.mainline_args())
+        self.assertIsNone(err, out)
+        self.assertTrue(self.has(u, 'data/techo5/misc/techo5/psk'))
+        out, err = self.install(u, '--let-home-assistant-add', *self.mainline_args())
+        self.assertIsNone(err, out)
+        self.assertFalse(self.has(u, 'data/techo5/misc/techo5/psk'))
+        self.assertEqual(u.get('data/techo5/misc/techo5/adopt-on-first-start'), b'')
+
+    def test_usual_install_leaves_no_let_add_marker(self):
+        u = self.unit()
+        out, err = self.install(u, *self.mainline_args())
+        self.assertIsNone(err, out)
+        self.assertFalse(self.has(u, 'data/techo5/misc/techo5/adopt-on-first-start'))
+
+    def test_let_add_cannot_be_combined_with_a_key_or_a_gift(self):
+        for extra, name in ((['--key-file', 'k.key'], True), (['--for-someone-else'], False)):
+            out, err = self.install(self.unit(), '--let-home-assistant-add', *self.mainline_args(), *extra, name=name)
+            self.assertIn('--let-home-assistant-add', err or '', extra)
+            self.assertIn(extra[0], err, extra)
+
     def test_mainline_install(self):
         u = self.unit()
         out, err = self.install(u, *self.mainline_args())

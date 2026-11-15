@@ -696,6 +696,26 @@ class Install(Scaled):
             self.assertIn(extra[0], err, extra)
             self.assert_nothing_written(u)
 
+    def test_let_add_stages_the_name_and_the_marker_and_no_key(self):
+        u, out = self.full('--let-home-assistant-add')
+        staged = sorted(k[len(inst.STAGE) + 1:] for k in u.files if k.startswith(inst.STAGE + '/settings/'))
+        self.assertIn('settings/name', staged)
+        self.assertIn('settings/adopt-on-first-start', staged)
+        self.assertNotIn('settings/psk', staged)
+        self.assertNotIn('settings/firstrun', staged)
+        self.assertEqual(u.files[inst.STAGE + '/settings/adopt-on-first-start'], b'')
+        self.assertFalse(os.path.exists(os.path.join(self.folder(), 'home-assistant.key')))
+        self.assertNotIn('encryption key, paste', out)
+        self.assertIn('within 30 minutes', out)
+
+    def test_let_add_cannot_be_combined_with_a_key_or_a_gift(self):
+        for extra, name in ((['--key-file', 'k.key'], True), (['--for-someone-else'], False)):
+            u = FakeSkylight()
+            out, err = self.run_installer(u, '--let-home-assistant-add', *extra, name=name)
+            self.assertIn('--let-home-assistant-add', err or '', extra)
+            self.assertIn(extra[0], err, extra)
+            self.assert_nothing_written(u)
+
     def test_install(self):
         u, out = self.full()
         folder = self.folder()
@@ -1225,6 +1245,21 @@ class InstallSh(Scaled):
         self.assertEqual(self.read(os.path.join(state, 'firstrun')), b'')
         self.assertFalse(os.path.exists(os.path.join(self.root, 'mnt', 'data', 'techo5', 'techo5-linux',
                                                       'wpa_supplicant.conf')))
+
+    def test_let_add_settings_write_the_marker_and_no_key(self):
+        # The set --let-home-assistant-add stages: the name and the marker, no psk. A key techo5-data
+        # held already goes: echod would ignore the marker with one there.
+        settings = os.path.join(self.root, 'set', 'settings')
+        if os.path.exists(os.path.join(settings, 'psk')):
+            os.remove(os.path.join(settings, 'psk'))
+        with open(os.path.join(settings, 'adopt-on-first-start'), 'wb') as f:
+            f.write(b'')
+        rc, out = self.install_sh()
+        self.assertEqual(rc, 0, out)
+        state = os.path.join(self.root, 'mnt', 'data', 'techo5', 'misc', 'techo5')
+        self.assertEqual(self.read(os.path.join(state, 'name')), b'Kitchen\n')
+        self.assertEqual(self.read(os.path.join(state, 'adopt-on-first-start')), b'')
+        self.assertFalse(os.path.exists(os.path.join(state, 'psk')))
 
     def test_other_table_stops_before_writing(self):
         with open(self.disk, 'r+b') as f:

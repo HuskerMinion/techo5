@@ -36,8 +36,8 @@ var (
 
 // OpenAdoption opens the window, and says when it shuts.
 func (a *API) OpenAdoption() (time.Time, error) {
-	until := time.Now().Add(adoptWindow).Truncate(time.Second)
-	if err := os.WriteFile(adoptPath, []byte(until.UTC().Format(time.RFC3339)+"\n"), 0o600); err != nil {
+	until, err := writeAdoptUntil(adoptWindow)
+	if err != nil {
 		return time.Time{}, err
 	}
 	// Removed rather than written as zeros: a missing key is what loadPSK already reads as not
@@ -160,6 +160,12 @@ func (a *API) keySet(k esphome.PSK) error {
 		})
 	}
 	return nil
+}
+
+// writeAdoptUntil records a window that shuts d from now, for resumeAdoption to find after a restart.
+func writeAdoptUntil(d time.Duration) (time.Time, error) {
+	until := time.Now().Add(d).Truncate(time.Second)
+	return until, os.WriteFile(adoptPath, []byte(until.UTC().Format(time.RFC3339)+"\n"), 0o600)
 }
 
 func readAdopt() (time.Time, bool) {

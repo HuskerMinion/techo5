@@ -150,6 +150,16 @@ python3 tools/install-skylight.py --for-someone-else
 
 It asks for no Wi-Fi network, name or key, and writes none. The Skylight starts its own setup the next time it is powered on, and the new owner's Home Assistant can add it with nothing typed. Everything else (backups, image, first boot) is the same. It cannot be used with `--name`, `--wifi` or `--key-file`. The installer image has to be one that carries the marker, so use a release made after this option was added.
 
+### Letting Home Assistant add it
+
+Add `--let-home-assistant-add` to install a Skylight for yourself that Home Assistant adds with nothing typed:
+
+```
+python3 tools/install-skylight.py --name "Kitchen" --let-home-assistant-add
+```
+
+Name and Wi-Fi are written as usual, but no Home Assistant key, and none is kept in the backup folder. On its first start with a network the Skylight lets a Home Assistant add it for 30 minutes; choose Add under Discovered and Home Assistant sets the key. If nobody does in time, the setup page (Network, Let a Home Assistant add this device) opens another window. Home Assistant sends the key it sets over your network unencrypted, as it does for ESPHome devices, so use it on a network you trust. Adding a device with nothing typed needs a recent Home Assistant (tested with 2026.9). It cannot be used with `--key-file` or `--for-someone-else`. The installer image has to be one that copies the marker, so use a release made after this option was added; an older one leaves the Skylight with no key and no window until the setup page opens one.
+
 ### Add it to Home Assistant
 
 Settings → Devices & services: the unit appears under Discovered as an ESPHome device with the name

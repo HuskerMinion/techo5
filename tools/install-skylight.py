@@ -47,6 +47,14 @@ Assistant can then add it with nothing typed. It cannot be used with --name, --w
 --wifi-passphrase-file or --key-file. The installer image must be one that copies the marker
 (settings/firstrun): the release's, from the one after this change.
 
+--let-home-assistant-add is for a Skylight you install for yourself and want Home Assistant to add with
+nothing typed. Name and Wi-Fi are written as usual, but no Home Assistant key, and none is kept in the
+backup folder. On its first start with a network the Skylight lets a Home Assistant add it for 30
+minutes; that Home Assistant sets the key. It cannot be used with --key-file or --for-someone-else. The
+installer image must be one that copies its marker (settings/adopt-on-first-start): the release's, from
+the one after this change. An older one leaves the Skylight with no key and no window; its setup page
+(Network, Let a Home Assistant add this device) opens one.
+
 Written from Android: only /cache/techo5-install and the recovery partition. Everything else is
 install.sh's, on the unit, after the confirm.
 
@@ -70,9 +78,10 @@ import sys
 import time
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from techo5lib import (CONSOLE_TECHO5, Adb, Release, adb_devices, ask_name, ask_wifi, check_gift, confirm,  # noqa: E402
-                       default_dir, fail, list_consoles, need, new_api_key, note, pick_unit, run_main, step,
-                       valid_api_key, wifi_conf, write_private)
+from techo5lib import (CONSOLE_TECHO5, LET_ADD_HELP, LET_ADD_MARKER, Adb, Release, adb_devices, ask_name,  # noqa: E402
+                       ask_wifi, check_gift, check_let_add, confirm, default_dir, fail, let_add_done, list_consoles,
+                       need, new_api_key, note, pick_unit, run_main, step, valid_api_key, wifi_conf,
+                       write_private)
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 _spec = importlib.util.spec_from_file_location('mkgpt', os.path.join(HERE, 'linux', 'skylight', 'install', 'mkgpt.py'))
@@ -753,13 +762,18 @@ def came_back(adb):
 
 # ------------------------------------------------------------------------------------------ main
 
-def settings_files(gift, name, psk, wifi):
+def settings_files(gift, name, psk, wifi, let_add=False):
     """What install.sh puts into the unit's state directory (techo5-data's techo5/misc/techo5, which is
     echod's layout.StateDir /data/misc/techo5 on TECHO5), as name -> text. A gift install stages an
-    empty "firstrun" instead of a name and key, and no Wi-Fi, so the Skylight starts its own setup."""
+    empty "firstrun" instead of a name and key, and no Wi-Fi, so the Skylight starts its own setup.
+    --let-home-assistant-add stages the marker echod turns into a window for a Home Assistant to add the
+    Skylight (api/adopt_first.go) instead of a key."""
     if gift:
         return {'firstrun': ''}
-    files = {'name': name + '\n', 'psk': psk + '\n'}
+    if let_add:
+        files = {'name': name + '\n', LET_ADD_MARKER: ''}
+    else:
+        files = {'name': name + '\n', 'psk': psk + '\n'}
     if wifi:
         files['wpa_supplicant.conf'] = wifi
     return files
@@ -782,6 +796,7 @@ def main(argv=None):
     ap.add_argument('--wifi-passphrase-file', help='a file holding the --wifi passphrase, for running from a script')
     ap.add_argument('--for-someone-else', action='store_true',
                     help='a gift install: no Wi-Fi, name or key is asked for or written; the Skylight starts its own setup when next powered on')
+    ap.add_argument('--let-home-assistant-add', action='store_true', help=LET_ADD_HELP)
     ap.add_argument('--dry-run', action='store_true',
                     help='run every check, print every command that would write; write nothing')
     ap.add_argument('--resume', action='store_true', help='use the set staged on the unit before')
@@ -793,7 +808,9 @@ def main(argv=None):
     a = ap.parse_args(argv)
     check_gift(a, **{'--name': a.name, '--wifi': a.wifi, '--wifi-passphrase-file': a.wifi_passphrase_file,
                      '--key-file': a.key_file})
+    check_let_add(a, **{'--key-file': a.key_file, '--for-someone-else': a.for_someone_else})
     gift = a.for_someone_else
+    let_add = a.let_home_assistant_add
 
     # ------------------------------------------------------------------------------------ 1. checks
     step('checks')
@@ -935,7 +952,7 @@ def main(argv=None):
         write_bytes(os.path.join(setdir, 'install.conf'), install_conf(geo, first, last, store_bytes, store_sha))
         write_bytes(os.path.join(setdir, 'gpt-primary.bin'), prim)
         write_bytes(os.path.join(setdir, 'gpt-backup.bin'), back)
-        if gift:
+        if gift or let_add:
             pass
         elif os.path.exists(key_file):
             psk = read_file(key_file).decode('ascii', 'replace').strip()
@@ -943,14 +960,14 @@ def main(argv=None):
                 fail('the key in %s is not 32 bytes of base64' % key_file)
         else:
             psk = new_api_key()
-        for n, text in settings_files(gift, a.name, psk, wifi).items():
+        for n, text in settings_files(gift, a.name, psk, wifi, let_add).items():
             write_bytes(os.path.join(setdir, 'settings', n), text)
     fwdir = os.path.join(folder, 'firmware')
     plain = [(os.path.join(setdir, n), n) for n in ('install.conf', 'gpt-primary.bin', 'gpt-backup.bin')]
     plain += [(store_gz, 'store.img.gz'), (boot, 'boot.img')]
     plain += [(os.path.join(fwdir, f), 'firmware/' + f) for f in FIRMWARE]
     settings = [(os.path.join(setdir, 'settings', n), 'settings/' + n)
-                for n in settings_files(gift, a.name or '', psk or '', wifi)]
+                for n in settings_files(gift, a.name or '', psk or '', wifi, let_add)]
     sums = os.path.join(setdir, 'SHA256SUMS')
     if not a.dry_run:
         write_bytes(sums, ''.join('%s  %s\n' % (sha256_file(p), n) for p, n in plain))
@@ -997,6 +1014,8 @@ def main(argv=None):
     w = Writer(adb, False)
     if gift:
         pass
+    elif let_add:
+        note('Home Assistant key: none; Home Assistant sets one when it adds the Skylight')
     elif not os.path.exists(key_file):
         os.makedirs(os.path.dirname(key_file) or '.', exist_ok=True)
         write_private(key_file, psk)
@@ -1053,6 +1072,11 @@ def main(argv=None):
         print("\nTECHO5 is installed. On the first boot it grows its partitions; that takes a minute.")
         print("This Skylight will start its own setup when it is next powered on.")
         print("Its owner's Home Assistant can add it with nothing typed.")
+    elif let_add:
+        print("\nTECHO5 starts as '%s'. On the first boot it grows its partitions; that takes a minute." % a.name)
+        if not wifi:
+            print('Pick the Wi-Fi network on the unit\'s screen.')
+        print(let_add_done(a.name))
     else:
         print("\nTECHO5 starts as '%s'. On the first boot it grows its partitions; that takes a minute." % a.name)
         if not wifi:

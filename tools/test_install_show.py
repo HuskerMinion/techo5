@@ -395,5 +395,30 @@ class GiftInstall(unittest.TestCase):
         self.assertIn('authorized_keys', cmd)
 
 
+
+class LetHomeAssistantAdd(unittest.TestCase):
+    run_main = GiftInstall.run_main
+
+    def test_cannot_be_combined_with_a_key_or_a_gift(self):
+        for extra in (['--key-file', 'k.key'], ['--for-someone-else']):
+            err = self.run_main('--let-home-assistant-add', *extra)
+            self.assertIn('--let-home-assistant-add', err or '', extra)
+            self.assertIn(extra[0], err, extra)
+
+    def test_writes_the_name_and_the_marker_and_no_key(self):
+        cmd = inst.provision_command(False, 'Kitchen', None, 'ssh-ed25519 AAAA', ('6e6574', '00'), let_add=True)
+        self.assertIn('> /data/misc/techo5/name', cmd)
+        self.assertIn(': > /data/misc/techo5/adopt-on-first-start', cmd)   # api/adopt_first.go's marker
+        # a key from an earlier install would make echod ignore the marker
+        self.assertIn('rm -f /data/misc/techo5/psk', cmd)
+        self.assertNotIn('> /data/misc/techo5/psk', cmd)
+        self.assertNotIn('firstrun', cmd)
+        self.assertIn('authorized_keys', cmd)
+        self.assertIn('wpa_supplicant.conf', cmd)
+
+    def test_usual_install_writes_no_marker(self):
+        cmd = inst.provision_command(False, 'Kitchen', 'KEY', None, None)
+        self.assertNotIn('adopt-on-first-start', cmd)
+
 if __name__ == '__main__':
     unittest.main(verbosity=2)
