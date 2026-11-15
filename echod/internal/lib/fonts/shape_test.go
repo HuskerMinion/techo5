@@ -131,3 +131,41 @@ func TestDrawKhmer(t *testing.T) {
 		}
 	}
 }
+
+// TestHebrewMarksSitOnTheirLetters shapes Hebrew with nikud, in visual order, with a Hebrew font of
+// one's own from TECHO5_HEBREW_FONT (tools/fonts/make_hebrew_font.py's, say): drawn a character at a
+// time, a zero-width mark lands beside its letter instead of on it.
+func TestHebrewMarksSitOnTheirLetters(t *testing.T) {
+	path := os.Getenv("TECHO5_HEBREW_FONT")
+	if path == "" {
+		t.Skip("TECHO5_HEBREW_FONT is not set")
+	}
+	b, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	write(t, ownDir(t), "zz-noto-sans-hebrew.ttf", b)
+	Rescan()
+	face, err := Face(families[0].Value, false, 40)
+	if err != nil {
+		t.Fatal(err)
+	}
+	s := VisualOrder("שָׁ") // shin with qamats and the shin dot
+	rs := runs(face, s)
+	if len(rs) != 1 || rs[0].shape == nil {
+		t.Fatalf("runs(%q) = %+v, want one shaped run", s, rs)
+	}
+	gs := rs[0].shape.glyphs
+	if len(gs) != 3 {
+		t.Fatalf("%d glyphs, want the letter and its two marks", len(gs))
+	}
+	var letter fixed.Int26_6
+	for _, g := range gs {
+		letter += g.XAdvance
+	}
+	for _, g := range gs {
+		if g.XAdvance == 0 && (g.XOffset <= 0 || g.XOffset >= letter) {
+			t.Errorf("a mark at %v, not over the letter (0 to %v)", g.XOffset, letter)
+		}
+	}
+}

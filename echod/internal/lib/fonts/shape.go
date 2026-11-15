@@ -36,9 +36,10 @@ import (
 )
 
 // shapedScripts are the scripts drawn by shaping rather than a character at a time: those whose
-// clusters reorder, stack or substitute, and run left to right (right-to-left scripts need the
-// bidirectional algorithm first, which this does not do).
+// clusters reorder, stack or substitute. Hebrew is shaped in the visual order VisualOrder puts it in,
+// left to right, so its nikud and other marks sit on their letters by the font's mark anchors.
 var shapedScripts = map[language.Script]bool{
+	language.Hebrew:      true,
 	language.Khmer:       true,
 	language.Thai:        true,
 	language.Lao:         true,
@@ -156,7 +157,7 @@ func complexRune(r rune) (complex, mark bool) {
 // every other string on the old path.
 func needsShaping(s string) bool {
 	for _, r := range s {
-		if r >= 0x0900 { // nothing below Devanagari is shaped here
+		if r >= 0x0590 { // nothing below Hebrew is shaped here
 			if c, _ := complexRune(r); c {
 				return true
 			}
