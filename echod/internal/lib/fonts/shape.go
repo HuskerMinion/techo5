@@ -377,6 +377,7 @@ func (sh *shaped) each(dot fixed.Point26_6, fn func(mask *image.Alpha, r image.R
 // DrawString draws s in face at dot with src, as font.Drawer's DrawString does, shaping the runs of
 // a complex script a font of one's own draws. It returns the dot after s.
 func DrawString(dst draw.Image, src image.Image, face font.Face, dot fixed.Point26_6, s string) fixed.Point26_6 {
+	s = VisualOrder(s)
 	rs := runs(face, s)
 	if rs == nil {
 		d := font.Drawer{Dst: dst, Src: src, Face: face, Dot: dot}
@@ -401,6 +402,7 @@ func DrawString(dst draw.Image, src image.Image, face font.Face, dot fixed.Point
 // MeasureString is how far s advances in face, as font.MeasureString, with complex-script runs
 // shaped.
 func MeasureString(face font.Face, s string) fixed.Int26_6 {
+	s = VisualOrder(s)
 	rs := runs(face, s)
 	if rs == nil {
 		return font.MeasureString(face, s)
@@ -419,6 +421,7 @@ func MeasureString(face font.Face, s string) fixed.Int26_6 {
 // BoundString is the bounds of s drawn in face from the origin, and its advance, as
 // font.BoundString, with complex-script runs shaped.
 func BoundString(face font.Face, s string) (bounds fixed.Rectangle26_6, advance fixed.Int26_6) {
+	s = VisualOrder(s)
 	rs := runs(face, s)
 	if rs == nil {
 		return font.BoundString(face, s)

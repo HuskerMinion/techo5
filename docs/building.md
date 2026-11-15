@@ -270,6 +270,16 @@ everyday kanji, with its license, from google/fonts at a pinned commit, with a p
 (`pip install fonttools==4.65.0`). The same script gives the same bytes; release.ps1 checks them against
 the pin.
 
+## The Hebrew font
+
+The same goes for Hebrew: the first time a Show or a Spot draws Hebrew text, it downloads Noto Sans
+Hebrew into its fonts folder (`echod/internal/feature/cjkfont`, pinned in `hebrew.go`), unless a font of
+the owner's own there draws Hebrew already. As a fallback in that folder it draws Hebrew under whichever
+screen font is chosen. [tools/fonts/make_hebrew_font.py](../tools/fonts/make_hebrew_font.py) builds
+`bin/techo5-noto-sans-hebrew.tar.gz`, one static weight cut down to the Hebrew block and presentation
+forms, with its license, from google/fonts at a pinned commit, with the same pinned fontTools. The same
+script gives the same bytes; release.ps1 checks them against the pin.
+
 ## Optional: a CPU profile from a device
 
 To see where the daemon spends its time on a unit, turn SSH on and write the number of seconds to a
