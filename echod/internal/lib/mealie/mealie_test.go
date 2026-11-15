@@ -383,3 +383,28 @@ func TestRecipeErrors(t *testing.T) {
 		})
 	}
 }
+
+// A recipe's picture is the small square one at its id, with the version for caches; one without a
+// picture has no address, and an address typed with a slash at the end is the same. What the server
+// calls the recipe is one part of the path or the query, whatever it holds.
+func TestImageURL(t *testing.T) {
+	for _, tc := range []struct {
+		name, base string
+		recipe     RecipeEntry
+		want       string
+	}{
+		{"a picture", "http://mealie:9000", RecipeEntry{ID: "id-1", ImageVersion: "bTDV"},
+			"http://mealie:9000/api/media/recipes/id-1/images/tiny-original.webp?version=bTDV"},
+		{"a slash at the end", "http://mealie:9000/", RecipeEntry{ID: "id-1", ImageVersion: "bTDV"},
+			"http://mealie:9000/api/media/recipes/id-1/images/tiny-original.webp?version=bTDV"},
+		{"odd characters", "http://mealie:9000", RecipeEntry{ID: "a/b c", ImageVersion: "x&y=z"},
+			"http://mealie:9000/api/media/recipes/a%2Fb%20c/images/tiny-original.webp?version=x%26y%3Dz"},
+		{"no picture", "http://mealie:9000", RecipeEntry{ID: "id-1"}, ""},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := (Client{URL: tc.base}).ImageURL(tc.recipe); got != tc.want {
+				t.Errorf("ImageURL = %q, want %q", got, tc.want)
+			}
+		})
+	}
+}

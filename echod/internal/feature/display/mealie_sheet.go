@@ -72,6 +72,7 @@ var mealieClient = func() (mealie.Client, bool) {
 func (d *Display) openMealie() {
 	c, set := mealieClient()
 	slog.Info("dashboard recipes", "set", set)
+	libPics.setChanged(d.wake) // a picture that arrives draws the frame again
 	d.mu.Lock()
 	d.dashMealie = &mealieSheet{epoch: mealieSheetEpochs.Add(1), set: set, base: c.URL}
 	d.mu.Unlock()

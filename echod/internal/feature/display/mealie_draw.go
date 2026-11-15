@@ -9,6 +9,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/HuskerMinion/techo5/echod/internal/feature/dashboard"
+	"github.com/HuskerMinion/techo5/echod/internal/lib/mealie"
 )
 
 // The recipe sheet as it is drawn: "Recipe" as a title and a Done button  along its top, and under them either a grid of the recipes,
@@ -175,7 +176,7 @@ func (r *renderer) mealieContent(s *mealieSheet, g mealieGeom, pal dashPal, fc s
 		if y+g.tileH <= g.view.Min.Y {
 			continue // scrolled out above
 		}
-		r.mealieTile(recipe.Name, x, y, g, pal, fc)
+		r.mealieTile(recipe, s.base, x, y, g, pal, fc)
 		if z := image.Rect(x, y, x+g.tile, y+g.tileH).Intersect(g.view); !z.Empty() {
 			zones = append(zones, mediaZone{r: z, kind: mealiePartItem, index: i})
 		}
@@ -183,18 +184,25 @@ func (r *renderer) mealieContent(s *mealieSheet, g mealieGeom, pal dashPal, fc s
 	return zones, contentH
 }
 
-// mealieTile draws one recipe: a square in a color made from its name with its first letter, and its
-// name under it. The square is tinted.
-func (r *renderer) mealieTile(name string, x, y int, g mealieGeom, pal dashPal, fc sheetFaces) {
+// mealieTile draws one recipe: its picture in a square, and its name under it. A recipe with no picture,
+// or until its own has come has a square in a color made from its name with its first letter. The
+// pictures are the library's (libPics): fetched in the background, so that a frame never waits for one.
+// base is the address of the Mealie server the recipe is from.
+func (r *renderer) mealieTile(recipe mealie.RecipeEntry, base string, x, y int, g mealieGeom, pal dashPal, fc sheetFaces) {
+	name := recipe.Name
 	pic := image.Rect(x, y, x+g.tile, y+g.tile)
-	hue := libHue(name)
-	top, bottom := lerp(pal.card, hue, 0.55), lerp(pal.card, hue, 0.22)
-	r.roundFill(pic, float64(max(pic.Dx()/14, 2)), top, bottom)
-	if first, _ := utf8.DecodeRuneInString(name); first != utf8.RuneError {
-		letter := strings.ToUpper(string(first))
-		m := fc.header.Metrics()
-		base := pic.Min.Y + g.tile/2 + (m.Ascent.Ceil()-m.Descent.Ceil())/2
-		r.text(fc.header, letter, pic.Min.X+(g.tile-r.width(fc.header, letter))/2, base, lerp(bottom, pal.text, 0.6))
+	if img := libPics.picture(mealie.Client{URL: base}.ImageURL(recipe), g.tile, false); img != nil {
+		r.drawLibPicture(img, pic)
+	} else {
+		hue := libHue(name)
+		top, bottom := lerp(pal.card, hue, 0.55), lerp(pal.card, hue, 0.22)
+		r.roundFill(pic, float64(max(pic.Dx()/14, 2)), top, bottom)
+		if first, _ := utf8.DecodeRuneInString(name); first != utf8.RuneError {
+			letter := strings.ToUpper(string(first))
+			m := fc.header.Metrics()
+			baseline := pic.Min.Y + g.tile/2 + (m.Ascent.Ceil()-m.Descent.Ceil())/2
+			r.text(fc.header, letter, pic.Min.X+(g.tile-r.width(fc.header, letter))/2, baseline, lerp(bottom, pal.text, 0.6))
+		}
 	}
 	label := r.fit(fc.navBold, dashboard.CleanName(name), g.tile-r.s(4))
 	r.text(fc.navBold, label, x+r.s(2), pic.Max.Y+r.s(30), pal.text)

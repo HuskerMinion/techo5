@@ -4,14 +4,20 @@ package display
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"image"
 	"image/color"
+	"image/draw"
 	"image/png"
+	"net/http"
 	"os"
 	"path/filepath"
 	"reflect"
+	"slices"
+	"sync"
 	"testing"
+	"time"
 
 	"github.com/HuskerMinion/techo5/echod/internal/config"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/dashboard"
@@ -293,6 +299,153 @@ func TestMealieGuideShowsThatAPageScrolls(t *testing.T) {
 	}
 	if got := colors(long); got < 2 {
 		t.Errorf("a page that scrolls has %d colors at its edge, want a bar on the card", got)
+	}
+}
+
+// fetchedPictures makes the pictures of recipes come from a stand-in for the server, from a new cache,
+// each a plain picture in c, or an answer with status when that is not 200, and returns the addresses asked for, as a
+// function so that it can be read while a fetch is still on its way.
+func fetchedPictures(t *testing.T, c color.RGBA, status int) func() []string {
+	t.Helper()
+	var mu sync.Mutex
+	var asked []string
+	prevPics := libPics
+	libPics = &libPictures{} // none kept from another test
+	t.Cleanup(func() { libPics = prevPics })
+	prev := libFetch
+	libFetch = func(_ context.Context, u string) ([]byte, int, error) {
+		mu.Lock()
+		asked = append(asked, u)
+		mu.Unlock()
+		if status != http.StatusOK {
+			return nil, status, nil
+		}
+		img := image.NewRGBA(image.Rect(0, 0, 64, 64))
+		draw.Draw(img, img.Rect, image.NewUniform(c), image.Point{}, draw.Src)
+		var buf bytes.Buffer
+		if err := png.Encode(&buf, img); err != nil {
+			return nil, 0, err
+		}
+		return buf.Bytes(), http.StatusOK, nil
+	}
+	t.Cleanup(func() { libFetch = prev })
+	return func() []string {
+		mu.Lock()
+		defer mu.Unlock()
+		return slices.Clone(asked)
+	}
+}
+
+// A recipe's tile shows its picture once it has come, and a placeholder until then and for a recipe with
+// none, which is not asked for at all.
+func TestMealieTilesShowTheirPictures(t *testing.T) {
+	red := color.RGBA{200, 30, 30, 255}
+	asked := fetchedPictures(t, red, http.StatusOK)
+	r := newRenderer(image.NewRGBA(image.Rect(0, 0, showWide, showHigh)))
+	s := loadedMealieSheet(testRecipes(3))
+	s.base = "http://mealie.test"
+	s.recipes[0].ImageVersion = "v1"
+	s.recipes[2].ImageVersion = "v2"
+	tile := func(zones []mediaZone, i int) image.Rectangle { return zonesOfKind(zones, mealiePartItem)[i].r }
+
+	zones := drawMealieSheet(r, s)
+	first := tile(zones, 0)
+	before := image.NewRGBA(r.dst.Rect)
+	copy(before.Pix, r.dst.Pix)
+	libWaitCovers()
+	drawMealieSheet(r, s)
+
+	spot := func(b image.Rectangle) color.RGBA { return r.dst.RGBAAt(b.Min.X+b.Dx()/5, b.Min.Y+b.Dy()/5) }
+	near := func(a, b color.RGBA) bool {
+		d := func(x, y uint8) int { return max(int(x)-int(y), int(y)-int(x)) }
+		return d(a.R, b.R) <= 3 && d(a.G, b.G) <= 3 && d(a.B, b.B) <= 3
+	}
+	if got := before.RGBAAt(first.Min.X+first.Dx()/5, first.Min.Y+first.Dy()/5); near(got, red) {
+		t.Error("the tile had its picture before it came")
+	}
+	if got := spot(tile(zones, 0)); !near(got, red) {
+		t.Errorf("the first tile is %v after its picture came, want %v", got, red)
+	}
+	if got := spot(tile(zones, 2)); !near(got, red) {
+		t.Errorf("the third tile is %v after its picture came, want %v", got, red)
+	}
+	if got := spot(tile(zones, 1)); near(got, red) {
+		t.Error("a recipe with no picture has one")
+	}
+	want := []string{
+		"http://mealie.test/api/media/recipes/id-000/images/tiny-original.webp?version=v1",
+		"http://mealie.test/api/media/recipes/id-002/images/tiny-original.webp?version=v2",
+	}
+	got := asked()
+	slices.Sort(got)
+	if !slices.Equal(got, want) {
+		t.Errorf("asked for %v, want %v", got, want)
+	}
+}
+
+// A picture that will not come leaves the placeholder, and is not asked for again with every frame.
+func TestMealiePictureThatWillNotComeIsAskedForOnce(t *testing.T) {
+	asked := fetchedPictures(t, color.RGBA{}, http.StatusNotFound)
+	r := newRenderer(image.NewRGBA(image.Rect(0, 0, showWide, showHigh)))
+	s := loadedMealieSheet(testRecipes(1))
+	s.base = "http://mealie.test/missing"
+	s.recipes[0].ImageVersion = "v1"
+	drawMealieSheet(r, s)
+	before := image.NewRGBA(r.dst.Rect)
+	copy(before.Pix, r.dst.Pix)
+	libWaitCovers()
+	for range 3 {
+		drawMealieSheet(r, s)
+	}
+	if n := len(asked()); n != 1 {
+		t.Errorf("a picture that would not come was asked for %d times, want once", n)
+	}
+	if !bytes.Equal(before.Pix, r.dst.Pix) {
+		t.Error("the tile changed though its picture did not come")
+	}
+}
+
+// A long list asks only for the pictures in view, and the ones a scroll brings in.
+func TestMealieAsksOnlyForPicturesInView(t *testing.T) {
+	asked := fetchedPictures(t, color.RGBA{30, 30, 200, 255}, http.StatusOK)
+	r := newRenderer(image.NewRGBA(image.Rect(0, 0, showWide, showHigh)))
+	s := loadedMealieSheet(testRecipes(100))
+	s.base = "http://mealie.test/long"
+	for i := range s.recipes {
+		s.recipes[i].ImageVersion = "v1"
+	}
+	items := len(zonesOfKind(drawMealieSheet(r, s), mealiePartItem))
+	libWaitCovers()
+	if n := len(asked()); n != items {
+		t.Errorf("asked for %d pictures with %d tiles in view", n, items)
+	}
+	s.scroll = 10 * r.mealieGeometry().tileH // a good way down, to tiles that were not in view before
+	later := len(zonesOfKind(drawMealieSheet(r, s), mealiePartItem))
+	libWaitCovers()
+	if n := len(asked()); n != items+later {
+		t.Errorf("asked for %d pictures after a scroll, want the %d in view before and the %d in view now", n, items, later)
+	}
+}
+
+// A picture that arrives has the display draw the frame again, once the sheet is up.
+func TestMealiePictureThatArrivesDrawsTheFrameAgain(t *testing.T) {
+	fetchedPictures(t, color.RGBA{30, 200, 30, 255}, http.StatusOK)
+	stubMealieClient(t, mealie.Client{}, false)
+	d := newTestDisplay()
+	d.openMealie()
+	select { // forget the redraws asked for so far, so the next one is the picture
+	case <-d.poke:
+	default:
+	}
+	r := newRenderer(image.NewRGBA(image.Rect(0, 0, showWide, showHigh)))
+	s := loadedMealieSheet(testRecipes(1))
+	s.base = "http://mealie.test/wake"
+	s.recipes[0].ImageVersion = "v1"
+	drawMealieSheet(r, s)
+	select {
+	case <-d.poke:
+	case <-time.After(5 * time.Second):
+		t.Fatal("the picture came and the display was not asked to draw")
 	}
 }
 

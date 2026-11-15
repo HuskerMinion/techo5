@@ -26,6 +26,10 @@ const fetchedPerPage = 100
 const recipesBaseUrl = "/api/recipes"
 const recipeImageBaseUrl = "/api/media/recipes"
 
+// recipeImageSize is the picture of a recipe that Mealie makes for a small view: the middle square of
+// the original, about 600 pixels across.
+const recipeImageSize = "tiny-original.webp"
+
 // Client is one Mealie server: its address and an API token, which Mealie asks for to list recipes. The
 // token may be empty for some server configurations.
 type Client struct {
@@ -171,9 +175,14 @@ func (c Client) RecipeFetchURL(page int) string {
 	return strings.TrimRight(c.URL, "/") + recipesBaseUrl + "?page=" + strconv.Itoa(page) + "&perPage=" + strconv.Itoa(fetchedPerPage) + "&orderBy=name&orderDirection=asc"
 }
 
-// ImageURL returns the URL of the recipe's small picture.
+// ImageURL returns the URL of the recipe's small picture, which Mealie makes square from the middle of
+// the original, or an empty string for a recipe that has none. The version is only there so that a
+// picture that was changed is not taken from a cache.
 func (c Client) ImageURL(recipe RecipeEntry) string {
-	return strings.TrimRight(c.URL, "/") + recipeImageBaseUrl + "/" + recipe.ID + "/images/min-original.webp?version=" + recipe.ImageVersion
+	if recipe.ImageVersion == "" {
+		return ""
+	}
+	return strings.TrimRight(c.URL, "/") + recipeImageBaseUrl + "/" + url.PathEscape(recipe.ID) + "/images/" + recipeImageSize + "?version=" + url.QueryEscape(recipe.ImageVersion)
 }
 
 // RecipeURL returns the URL of the recipe with the given slug.
