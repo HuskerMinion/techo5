@@ -14,6 +14,7 @@ import (
 	"github.com/HuskerMinion/techo5/echod/internal/feature/web"
 	"github.com/HuskerMinion/techo5/echod/internal/hardware/metrics"
 	"github.com/HuskerMinion/techo5/echod/internal/layout"
+	"github.com/HuskerMinion/techo5/echod/internal/lib/dnstext"
 )
 
 // Finding the other devices. They advertise themselves the same way they advertise everything else,
@@ -225,13 +226,17 @@ func closeQuietly(ch chan *zeroconf.ServiceEntry) {
 	close(ch)
 }
 
+// nameOf is the device's name as its owner typed it. The record and the instance name arrive escaped
+// the way a DNS zone file writes them (a "ü" as \195\188), so they are decoded first; left as they
+// were, the Call list showed the escapes, and a call or a Drop In asked for by the real name found
+// nobody.
 func nameOf(e *zeroconf.ServiceEntry) string {
 	for _, t := range e.Text {
 		if v, ok := strings.CutPrefix(t, "name="); ok {
-			return v
+			return dnstext.Unescape(v)
 		}
 	}
-	return e.Instance
+	return dnstext.Unescape(e.Instance)
 }
 
 // hearsOf is whether the entry's device has microphones: yes unless its record says "hears=0".
