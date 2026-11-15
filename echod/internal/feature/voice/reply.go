@@ -10,10 +10,6 @@ import (
 	"github.com/HuskerMinion/techo5/echod/internal/hardware/speaker"
 )
 
-// replyResume is how much to hold after a dip, rather than the whole buffer again: rebuilding it every
-// time turns a shortfall of a few milliseconds into a third of a second of silence.
-const replyResume = 80 * time.Millisecond
-
 // chunkQueue is how many chunks may wait for the errand. Home Assistant sends 32 ms at a time, so this
 // is a couple of seconds of slack: enough that the conversation never waits to hand one over, and
 // bounded because audio nobody has played yet is audio arriving faster than it can be heard.
@@ -24,17 +20,10 @@ const chunkQueue = 64
 type stream struct {
 	chunks chan []byte
 
-	// buffer is how much to collect before playing any of it. Home Assistant paces itself to stay 384
+	// speech is the cushion the reply plays through, which an announcement plays through too: its
+	// Buffer is how much to collect before playing any of it. Home Assistant paces itself to stay 384
 	// ms ahead, which is enough when speech arrives faster than it plays and not when it does not.
-	buffer time.Duration
-
-	// held is audio waiting for the cushion to fill, and flowing says the cushion is built and audio
-	// is going straight through.
-	held    []int16
-	flowing bool
-
-	// louder is the reply's compressor while Louder speech is on, kept across flushes.
-	louder media.Louder
+	speech media.SpeechStream
 
 	bytes       int
 	peak        int
@@ -44,22 +33,25 @@ type stream struct {
 	// ended is done called: send and done are the conversation's, on its one goroutine.
 	ended bool
 
-	// energy and samples are the reply's loudness so far, for the speech normalizer in flush.
-	energy  float64
-	samples int
-
 	// playingAt is when playback began, once the cushion had filled. Wall clock from here to the queue
 	// running dry is what measures gapping; a starved buffer is silence the seam count never sees.
 	playingAt time.Time
 }
 
 func newStream(splices, underruns uint64, buffer time.Duration) *stream {
-	return &stream{
+	s := &stream{
 		chunks:      make(chan []byte, chunkQueue),
-		buffer:      buffer,
 		splicesAt:   splices,
 		underrunsAt: underruns,
 	}
+	// The gain follows the reply's loudness so far, and the compressor runs on across flushes. A reply
+	// to a turn during a call goes to the far end too, with Assistant replies go into calls on.
+	s.speech = media.SpeechStream{Buffer: buffer, Gain: true, Louder: true, Say: func(out []int16) {
+		if phone.RepliesIntoCall() {
+			phone.Get().Say(out)
+		}
+	}}
+	return s
 }
 
 // send hands a chunk to whoever is playing it. A queue this deep only fills if audio is arriving
@@ -120,7 +112,7 @@ func (s *stream) fetch(ctx context.Context, p *speaker.Player, url string, start
 
 // finish plays whatever is still held, which will never be joined by more.
 func (s *stream) finish(p *speaker.Player) {
-	s.flush(p)
+	s.speech.Finish(p)
 	if s.bytes > 0 {
 		at := s.playingAt
 		if at.IsZero() {
@@ -131,13 +123,6 @@ func (s *stream) finish(p *speaker.Player) {
 }
 
 func (s *stream) take(data []byte, p *speaker.Player, started func()) {
-	samples := make([]int16, len(data)/2)
-	peak := 0
-	for i := range samples {
-		samples[i] = int16(uint16(data[i*2]) | uint16(data[i*2+1])<<8)
-		peak = max(peak, int(samples[i]), -int(samples[i]))
-	}
-
 	// The first chunk is the pipeline delivering, so its limit is done with.
 	if s.bytes == 0 {
 		slog.Info("reply audio started", "bytes", len(data))
@@ -147,51 +132,10 @@ func (s *stream) take(data []byte, p *speaker.Player, started func()) {
 	// How loud the reply arrives decides whether interpolating it can overflow, and the byte count
 	// against how long it takes to say is how a wrong sample rate would show up.
 	s.bytes += len(data)
-	s.peak = max(s.peak, peak)
-	s.energy += media.SumSquares(samples)
-	s.samples += len(samples)
-
-	s.held = append(s.held, samples...)
-	if p.Queued() == 0 {
-		s.flowing = false
+	queued := s.speech.Take(data, p)
+	s.peak = s.speech.Peak()
+	if queued {
+		s.playingAt = s.speech.PlayingAt()
+		replyPlaying(s.playingAt, replyAudioSeconds(s.bytes), false)
 	}
-
-	want := s.buffer
-	if !s.playingAt.IsZero() {
-		want = replyResume
-	}
-	if !s.flowing && len(s.held) < heldSamples(want) {
-		return
-	}
-
-	if s.playingAt.IsZero() {
-		s.playingAt = time.Now()
-	}
-	s.flowing = true
-	s.flush(p)
-	replyPlaying(s.playingAt, replyAudioSeconds(s.bytes), false)
-}
-
-// flush queues what is held, brought toward the speech loudness target. The gain follows the
-// reply's loudness so far, so the first flush — which waits for a buffer's worth — already has
-// something to measure, and later flushes move it only as the reply's level changes.
-func (s *stream) flush(p *speaker.Player) {
-	out := s.held
-	s.held = nil
-	if len(out) == 0 {
-		return
-	}
-	if gain := media.SpeechGain(s.energy, s.samples); gain > 1 {
-		out = media.Scale(out, gain)
-	}
-	// A reply to a turn during a call goes to the far end too, with Assistant replies go into calls on.
-	if phone.RepliesIntoCall() {
-		phone.Get().Say(out)
-	}
-	p.PlayVoice(media.ForSpeaker(out, &s.louder))
-}
-
-// heldSamples is a duration as a count of 16 kHz samples.
-func heldSamples(d time.Duration) int {
-	return int(d/time.Millisecond) * speaker.VoiceRate / 1000
 }

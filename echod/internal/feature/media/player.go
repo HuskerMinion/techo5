@@ -918,17 +918,12 @@ func (p *Player) command(c esphome.MediaCommand) {
 }
 
 // announce plays a url over whatever is going on, which is what Home Assistant means by one: a
-// doorbell or a spoken alert, not a track.
+// doorbell or a spoken alert, not a track. It plays as it arrives (#559), at the level it arrives at:
+// a chime is not speech, and nothing here has ever made one louder.
 func (p *Player) announce(url string) {
 	p.Sounding(true)
 	claim := speaker.Sound().ClaimSpeech("announce", func(ctx context.Context, spk *speaker.Player) error {
-		samples, err := Fetch(ctx, url)
-		if err != nil {
-			return err
-		}
-		spk.PlayVoice(samples)
-		spk.PlayVoice(make([]int16, speaker.VoiceRate*Tail/1000))
-		return nil
+		return PlaySpeech(ctx, url, &SpeechStream{Buffer: AnnounceBuffer}, spk)
 	})
 
 	// The claim ends once the audio has been heard, not once it has been queued, so this is where
