@@ -932,8 +932,8 @@ func (p *Player) announce(url string) {
 		<-claim.Done()
 		p.Sounding(false)
 
-		if err := claim.Err(); err != nil {
-			slog.Error("playing the announcement failed", "url", url, "err", err)
+		if err := claim.Err(); err != nil && !errors.Is(err, context.Canceled) {
+			slog.Error("playing the announcement failed", "url", url, "err", err) // a stop is not a failure
 		}
 	})
 }

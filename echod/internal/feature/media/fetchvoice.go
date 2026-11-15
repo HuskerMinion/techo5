@@ -97,18 +97,25 @@ func stalled(ctx context.Context, err error, url string) error {
 	return fmt.Errorf("%w (from %s)", err, url)
 }
 
-// stallReader cancels the fetch once its body has gone stall without a byte. The clock starts with
-// the first byte: until then the wait is the engine starting, which voiceTimeout bounds.
+// stallReader cancels the fetch once its body has gone stall without a byte. The clock starts once
+// audio has begun (stallAfter bytes in), not with the first byte: a server can send the WAV header at
+// once and the first sentence only when the engine has made it, and that wait is the engine starting,
+// which voiceTimeout bounds.
 type stallReader struct {
 	r      io.Reader
 	stall  time.Duration
 	cancel context.CancelCauseFunc
 	timer  *time.Timer
+	read   int
 }
+
+// stallAfter is how far into the body the stall clock starts: past any WAV header, into the audio.
+const stallAfter = 1024
 
 func (s *stallReader) Read(b []byte) (int, error) {
 	n, err := s.r.Read(b)
-	if n > 0 {
+	s.read += n
+	if n > 0 && s.read > stallAfter {
 		if s.timer == nil {
 			s.timer = time.AfterFunc(s.stall, func() { s.cancel(errStalled) })
 		} else {

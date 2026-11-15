@@ -230,7 +230,7 @@ func (f *Feature) receive(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, "not this house", http.StatusForbidden)
 			return
 		}
-		if m.ID == "" {
+		if !popupID(m.ID) {
 			http.Error(w, "a pop-up names its event", http.StatusBadRequest)
 			return
 		}

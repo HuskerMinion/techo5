@@ -455,6 +455,22 @@ func (p *Phone) Say(samples []int16) bool {
 	}
 }
 
+// SayWithin is Say for speech that arrives faster than it is spoken, an announcement fetched over the
+// network: it waits up to wait for room rather than dropping the piece, so the far end hears all of it.
+func (p *Phone) SayWithin(samples []int16, wait time.Duration) bool {
+	if p.State().Phase != Talking {
+		return false
+	}
+	t := time.NewTimer(wait)
+	defer t.Stop()
+	select {
+	case p.say <- samples:
+		return true
+	case <-t.C:
+		return false
+	}
+}
+
 // claim takes the line for a call, with p.mu held.
 func (p *Phone) claim(phase Phase, peer string, incoming bool) {
 	p.state.Phase, p.state.Peer, p.state.Incoming = phase, peer, incoming

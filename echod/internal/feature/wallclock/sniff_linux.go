@@ -214,6 +214,9 @@ func hciCommand(ctx context.Context, fd int, opcode uint16, params []byte) (uint
 			return 0, fmt.Errorf("no reply to HCI command 0x%04X", opcode)
 		}
 		n, err := unix.Read(fd, buf)
+		if err == unix.EINTR {
+			continue // a signal on this thread; a read with a receive timeout is not restarted for it
+		}
 		if err != nil {
 			if err == unix.EAGAIN || err == unix.EWOULDBLOCK {
 				return 0, fmt.Errorf("no reply to HCI command 0x%04X", opcode)

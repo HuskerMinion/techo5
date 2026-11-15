@@ -2,6 +2,7 @@ package voice
 
 import (
 	"context"
+	"errors"
 	"log/slog"
 	"time"
 
@@ -42,8 +43,8 @@ func (t *conversation) announce(a esphome.Announce) {
 		<-claim.Done()
 		t.player.Sounding(false)
 
-		if err := claim.Err(); err != nil {
-			slog.Error("playing the announcement failed", "err", err)
+		if err := claim.Err(); err != nil && !errors.Is(err, context.Canceled) {
+			slog.Error("playing the announcement failed", "err", err) // a stop is not a failure
 		}
 		if err := t.vs.AnnounceFinished(claim.Err() == nil && !claim.Stopped()); err != nil {
 			slog.Error("reporting the announcement failed", "err", err)
@@ -73,12 +74,14 @@ func (t *conversation) play(ctx context.Context, url string, playing func(), int
 	if intoCall {
 		said := false
 		s.Say = func(out []int16) {
-			if phone.Get().Say(out) && !said {
+			// Waits for room: the pieces come as fast as the network brings them, faster than the call
+			// sends them, and Say would drop what does not fit.
+			if phone.Get().SayWithin(out, 2*time.Second) && !said {
 				said = true
 				slog.Info("sent into the call", "reply", playing != nil)
 			}
 		}
 	}
-	slog.Info("playing announcement", "url", url, "reply", playing != nil)
+	slog.Info("playing announcement", "reply", playing != nil) // not the address: it carries a token
 	return media.PlaySpeech(ctx, url, s, t.speaker)
 }

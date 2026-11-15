@@ -34,18 +34,18 @@ func TestSniffParams(t *testing.T) {
 
 // TestHCIAddress pins the byte order the kernel uses for bdaddr_t: the text address is reversed.
 func TestHCIAddress(t *testing.T) {
-	got, err := hciAddress("7C:D5:66:BD:D1:61")
+	got, err := hciAddress("12:34:56:78:9A:BC")
 	if err != nil {
 		t.Fatalf("hciAddress: %v", err)
 	}
-	want := [6]byte{0x61, 0xD1, 0xBD, 0x66, 0xD5, 0x7C}
+	want := [6]byte{0xBC, 0x9A, 0x78, 0x56, 0x34, 0x12}
 	if got != want {
 		t.Fatalf("hciAddress = % X, want % X", got, want)
 	}
-	if s := addressString(got); s != "7C:D5:66:BD:D1:61" {
+	if s := addressString(got); s != "12:34:56:78:9A:BC" {
 		t.Fatalf("addressString = %q, want the original address", s)
 	}
-	for _, bad := range []string{"", "7C:D5:66:BD:D1", "not-a-mac"} {
+	for _, bad := range []string{"", "12:34:56:78:9A", "not-a-mac"} {
 		if _, err := hciAddress(bad); err == nil {
 			t.Errorf("hciAddress(%q) accepted a bad address", bad)
 		}
@@ -82,7 +82,7 @@ func TestDecodeCommandReply(t *testing.T) {
 // TestFindHandlePicksTheACLLink checks the address alone is not enough: a SCO link to the same
 // address must not be picked, and the device's role must not veto a link either side can sleep.
 func TestFindHandlePicksTheACLLink(t *testing.T) {
-	want := [6]byte{0x61, 0xD1, 0xBD, 0x66, 0xD5, 0x7C}
+	want := [6]byte{0xBC, 0x9A, 0x78, 0x56, 0x34, 0x12}
 	other := [6]byte{0x01, 0x02, 0x03, 0x04, 0x05, 0x06}
 	list := []hciConnInfo{
 		{Handle: 1, Addr: want, Type: 0x00},                        // SCO to the clock

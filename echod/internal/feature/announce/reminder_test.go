@@ -116,13 +116,13 @@ func TestAPopupDismissedArrivesWithItsEvent(t *testing.T) {
 		return w.Code
 	}
 
-	if code := post(Message{From: "Kitchen", Kind: KindPopupDismissed, ID: "popup-1"}); code != http.StatusNoContent {
+	if code := post(Message{From: "Kitchen", Kind: KindPopupDismissed, ID: "popup-0123456789abcdef01234567"}); code != http.StatusNoContent {
 		t.Fatalf("dismissal answered %d", code)
 	}
 	if code := post(Message{From: "Kitchen", Kind: KindPopupDismissed}); code != http.StatusBadRequest {
 		t.Errorf("a dismissal naming no event answered %d", code)
 	}
-	if len(dismissed) != 1 || dismissed[0].ID != "popup-1" {
+	if len(dismissed) != 1 || dismissed[0].ID != "popup-0123456789abcdef01234567" {
 		t.Errorf("dismissed %+v", dismissed)
 	}
 	if _, showing := f.Showing(); showing {

@@ -579,8 +579,12 @@ try {
             Write-Host "== $($p.Asset): sha256 $got"
             $bootAssets += $file
         } else {
-            $there = @(& gh release view $pinTag --repo $repo --json assets -q '.assets[].name')
-            if ($there -notcontains $p.Asset) { throw "$($p.Pin)'s $($p.Asset) is not in release $pinTag" }
+            # By the checksum GitHub keeps for the file, so a replaced upload is caught as well as a missing one.
+            $there = @(& gh release view $pinTag --repo $repo --json assets -q (".assets[] | select(.name==`"" + $p.Asset + "`") | .digest + `" `" + (.size|tostring)"))
+            if ($there.Count -eq 0) { throw "$($p.Pin)'s $($p.Asset) is not in release $pinTag" }
+            if ($there[0] -ne "sha256:$pinSha $pinSize") {
+                throw "$($p.Pin)'s $($p.Asset) in release $pinTag is not the file it pins ($($there[0]), want sha256:$pinSha $pinSize)"
+            }
         }
     }
 

@@ -139,7 +139,8 @@ func TestTheCushionFillsThenRefillsAfterADip(t *testing.T) {
 }
 
 // A body that stops arriving part way ends the announcement with what came, rather than holding the
-// speaker until the fetch times out; one that stalls before any audio fails.
+// speaker until the fetch times out; one that has sent only its header is still waiting for its first
+// sentence, which is not a stall.
 func TestAStalledAnnouncementEnds(t *testing.T) {
 	was := speechStall
 	speechStall = 200 * time.Millisecond
@@ -165,15 +166,26 @@ func TestAStalledAnnouncementEnds(t *testing.T) {
 			defer srv.Close()
 
 			out := newFakeOut(0)
+			ctx := context.Background()
+			if tc.audio == nil {
+				// Only the header, then a wait longer than speechStall: an engine still making its first
+				// sentence. That is not a stall; the wait is bounded by voiceTimeout, cut short here.
+				var cancel context.CancelFunc
+				ctx, cancel = context.WithTimeout(ctx, 4*speechStall)
+				defer cancel()
+			}
 			start := time.Now()
-			err := PlaySpeech(context.Background(), srv.URL, &SpeechStream{Buffer: AnnounceBuffer}, out)
+			err := PlaySpeech(ctx, srv.URL, &SpeechStream{Buffer: AnnounceBuffer}, out)
 			if took := time.Since(start); took > 3*time.Second {
 				t.Fatalf("took %v to give up on a stalled body", took)
 			}
 			got, _ := out.all()
 			if tc.audio == nil {
-				if !errors.Is(err, errStalled) {
-					t.Fatalf("err = %v, want a stall", err)
+				if errors.Is(err, errStalled) {
+					t.Fatalf("a header and a wait for the first sentence was taken for a stall")
+				}
+				if took := time.Since(start); took < 3*speechStall {
+					t.Fatalf("gave up after %v, before the wait it was given", took)
 				}
 				if len(got) != 0 {
 					t.Fatalf("played %d samples of nothing", len(got))
