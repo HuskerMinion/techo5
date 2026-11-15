@@ -218,3 +218,109 @@ func TestAMergedEventPopsUpForEitherCalendar(t *testing.T) {
 		t.Errorf("%d pop-ups, want the dinner, on the work calendar too", len(due))
 	}
 }
+
+// An event is matched across devices by its start and title, whichever calendar each shows it under.
+func TestPopupMatchIgnoresTheCalendar(t *testing.T) {
+	start := time.Date(2026, 9, 26, 15, 0, 0, 0, time.Local)
+	e := hass.Event{Calendar: "calendar.family", Summary: "Dentist", Start: start}
+	other := e
+	other.Calendar, other.Also = "calendar.work", []string{"calendar.family"}
+	if popupMatch(e) != popupMatch(other) {
+		t.Error("the same event under another calendar did not match")
+	}
+	later := e
+	later.Start = start.Add(time.Hour)
+	renamed := e
+	renamed.Summary = "Dentist again"
+	if popupMatch(e) == popupMatch(later) || popupMatch(e) == popupMatch(renamed) {
+		t.Error("a different event matched")
+	}
+	if n := len(popupMatch(e)); n > 64 {
+		t.Errorf("match is %d long, more than the link between devices carries", n)
+	}
+}
+
+// A tap on a pop-up tells the other devices which event it was.
+func TestTappingAPopupAwayTellsTheHouse(t *testing.T) {
+	d := popupTestDisplay(t)
+	sent := make(chan string, 1)
+	was := sendPopupDismissed
+	sendPopupDismissed = func(id string) { sent <- id }
+	t.Cleanup(func() { sendPopupDismissed = was })
+
+	at := func(h, m int) time.Time { return time.Date(2026, 9, 26, h, m, 0, 0, time.Local) }
+	e := hass.Event{Calendar: "calendar.family", Summary: "Dentist", Start: at(15, 0), End: at(16, 0)}
+	d.popupQueue = []hass.Event{e}
+	d.popupTick(at(14, 50))
+	if d.popupUp() == nil {
+		t.Fatal("nothing came up")
+	}
+	d.tapPopupAway()
+	if d.popupUp() != nil {
+		t.Error("the pop-up stayed up")
+	}
+	select {
+	case id := <-sent:
+		if id != popupMatch(e) {
+			t.Errorf("sent %q, want %q", id, popupMatch(e))
+		}
+	case <-time.After(time.Second):
+		t.Fatal("nothing was sent")
+	}
+
+	// With nothing up, a tap sends nothing.
+	d.tapPopupAway()
+	select {
+	case id := <-sent:
+		t.Errorf("sent %q with no pop-up up", id)
+	case <-time.After(50 * time.Millisecond):
+	}
+}
+
+// A pop-up tapped away on another device comes down here, whether up or waiting its turn, and does
+// not pop up later; another event is left alone.
+func TestAPopupTappedAwayElsewhereComesDown(t *testing.T) {
+	d := popupTestDisplay(t)
+	at := func(h, m int) time.Time { return time.Date(2026, 9, 26, h, m, 0, 0, time.Local) }
+	dentist := hass.Event{Calendar: "calendar.family", Summary: "Dentist", Start: at(15, 0), End: at(16, 0)}
+	call := hass.Event{Calendar: "calendar.family", Summary: "Call Mom", Start: at(15, 0), End: at(15, 30)}
+	school := hass.Event{Calendar: "calendar.family", Summary: "School run", Start: at(15, 5), End: at(15, 30)}
+	now := at(14, 50)
+
+	d.popupQueue = []hass.Event{dentist, call, school}
+	d.popupTick(now)
+	up := d.popupUp()
+	if up == nil {
+		t.Fatal("nothing came up")
+	}
+
+	// The one waiting its turn, tapped away elsewhere, never comes up here.
+	var waiting hass.Event
+	for _, e := range d.popupQueue {
+		if e.Summary != up.Summary {
+			waiting = e
+			break
+		}
+	}
+	d.popupDismissedElsewhere(popupMatch(waiting), now)
+	if d.popupUp() == nil || d.popupUp().Summary != up.Summary {
+		t.Errorf("the pop-up up changed to %v", d.popupUp())
+	}
+
+	// The one up comes down, and the last one comes up in its place.
+	d.popupDismissedElsewhere(popupMatch(*up), now)
+	d.popupTick(now.Add(time.Second))
+	last := d.popupUp()
+	if last == nil || last.Summary == up.Summary || last.Summary == waiting.Summary {
+		t.Fatalf("after both were tapped away elsewhere, %v", last)
+	}
+
+	// An event tapped away elsewhere before it was due here is kept from popping up later.
+	d.dismissPopup()
+	d.popupDismissedElsewhere(popupMatch(school), now)
+	d.popupQueue = []hass.Event{school}
+	d.popupTick(now.Add(time.Minute))
+	if got := d.popupUp(); got != nil {
+		t.Errorf("%v popped up after it was tapped away elsewhere", got)
+	}
+}

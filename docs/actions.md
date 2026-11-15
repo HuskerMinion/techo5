@@ -2083,7 +2083,9 @@ In YAML, refer to this action as `esphome.<node>_calendar_popup_sources`.
 With **Event pop-ups** on, an event coming up shows over the screen: a timed event a while before it
 starts (the **Pop up** select, a quarter hour by default), an all-day event once in the morning, as
 the night hours end. At night and in quiet hours it makes no sound and does not light a dark screen.
-Each pop-up fires an `esphome.techo5_calendar` event with `event: popup`, `summary`, `calendar`,
+A tap takes it down here and on every other Show in the house with the same event up or still to
+come, matched by its start and its title; that needs the same **house word** on each, as reminders
+do. Each pop-up fires an `esphome.techo5_calendar` event with `event: popup`, `summary`, `calendar`,
 `start` and `device`. This action chooses which of the device's calendars pop up. A Show only.
 
 ### calendars (Required)
