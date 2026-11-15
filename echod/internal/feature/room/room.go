@@ -128,6 +128,6 @@ func (r *Reaction) show(name string) {
 }
 
 // wantsMusic is whether a choice follows the music, and so needs the speaker to analyze it.
-func wantsMusic(name string) bool { return name == led.EffectMusic }
+func wantsMusic(name string) bool { return led.HearsMusic(name) }
 
 func (r *Reaction) recolor() { r.show(config.Get().Ring.Reaction) }

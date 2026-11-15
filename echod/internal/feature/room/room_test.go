@@ -10,10 +10,12 @@ import (
 
 func TestWantsMusic(t *testing.T) {
 	for name, want := range map[string]bool{
-		led.EffectMusic:     true,
-		"":                  false,
-		led.EffectRoomGlow:  false,
-		led.EffectRoomMeter: false,
+		led.EffectMusic:      true,
+		led.EffectPartySpin:  true,
+		led.EffectPartyPulse: true,
+		"":                   false,
+		led.EffectRoomGlow:   false,
+		led.EffectRoomMeter:  false,
 	} {
 		if got := wantsMusic(name); got != want {
 			t.Errorf("wantsMusic(%q) = %v, want %v", name, got, want)

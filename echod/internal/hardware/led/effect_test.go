@@ -34,8 +34,9 @@ func built(t *testing.T, e Effect, base Color) Frame {
 			return math.Abs(math.Sin(float64(heard) / 40))
 		},
 		Facing: func() (float64, bool) { return math.Mod(float64(heard)/120, 1), true },
-		// And music that swells and beats, for the one that listens to that.
+		// And music that swells and beats, for the ones that listen to that and not to the room.
 		Music: func() Music {
+			heard++
 			l := math.Abs(math.Sin(float64(heard) / 40))
 			return Music{Playing: true, Level: l, Bass: l, Mid: 1 - l, Treble: l / 2, Beats: uint64(heard / 25)}
 		},

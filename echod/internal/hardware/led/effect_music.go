@@ -73,20 +73,10 @@ func followsMusic(p Palette, r Room) Frame {
 			return out
 		}
 
-		ceiling := 1.0
-		if r.Brightness != nil {
-			ceiling = math.Max(0, math.Min(1, r.Brightness()))
-		}
+		ceiling := ceilingOf(r)
 
-		if m.Beats < seen {
-			seen = m.Beats // the analysis was reset
-		}
-		if m.Beats != seen {
-			// A beat or several since the last frame: one step each, but never more than a handful
-			// at once, which a long gap between frames would otherwise turn into a jump.
-			target += beatShift * float64(min(m.Beats-seen, 3))
-			seen = m.Beats
-		}
+		// A beat or several since the last frame: one step each.
+		target += beatShift * float64(beats(m, &seen))
 		shift += (target - shift) * musicDrift
 
 		// The bass, mid and treble each own a third of the ring, and a segment between two takes both

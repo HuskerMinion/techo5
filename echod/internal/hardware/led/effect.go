@@ -3,6 +3,7 @@ package led
 import (
 	"context"
 	"fmt"
+	"slices"
 	"time"
 )
 
@@ -143,6 +144,8 @@ const (
 	EffectRoomTwinkle = "Room Twinkle"
 	EffectRoomEmbers  = "Room Embers"
 	EffectMusic       = "Follows the Music"
+	EffectPartySpin   = "Party Spin"
+	EffectPartyPulse  = "Party Pulse"
 
 	// Motion, in their own.
 	EffectRainbow         = "Rainbow"
@@ -176,6 +179,7 @@ var catalogue = []struct {
 	{KindLight, motionEffects},
 	{KindLight, alertEffects},
 	{KindRoom, roomEffects},
+	{KindRoom, musicEffects},
 }
 
 func init() {
@@ -206,6 +210,11 @@ func Names(kinds Kinds) []string {
 
 // EffectNames lists what the ring light may be set to.
 func EffectNames() []string { return Names(KindLight) }
+
+// HearsMusic is whether a room reaction follows what the device plays, and so needs it analyzed.
+func HearsMusic(name string) bool {
+	return slices.ContainsFunc(musicEffects, func(e Effect) bool { return e.Name == name })
+}
 
 // effect returns the frame function for a named effect. The room is only needed by an effect that
 // senses it, and asking for one of those without it is an error rather than a dark ring.

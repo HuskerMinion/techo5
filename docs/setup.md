@@ -698,6 +698,17 @@ captured login to the same page for a few minutes, and could see the pictures an
   conversation, a muted microphone, a timer or an error covers it as they cover the other choices,
   and it comes back afterward. The listening takes little of the processor, and **None** stops it.
 
+  For a party, the same select has two in loud colors, as a party speaker's ring:
+  - **Party Spin**: three arms in different colors turn round the ring. Every beat throws them round
+    a few segments, stretches them to fill the ring, flashes them and moves their colors to the next
+    ones. Until the next beat they slow to a stop and shrink to dots. Every 32 beats they turn back
+    the other way.
+  - **Party Pulse**: every beat flashes the whole ring in a new color, far round the color wheel from
+    the last, and the flash fades nearly out until the next.
+
+  They work as **Follows the Music** does: dark when nothing plays, and no brighter than the **LED
+  ring** light's brightness.
+
 ## 6. The screen
 
 These are on the Show under Settings → **Display**, and are entities in Home Assistant. Most are on
