@@ -10,13 +10,39 @@ matches what you want before you set anything up.
 | Custom cards, card-mod, button-card's JavaScript | Not drawn: a placeholder tile says which card it is | All of them |
 | Taps | Instant | About a fifth of a second |
 | Scrolling | Smooth | Soft while moving, sharp when it stops |
-| Needs | Nothing else | A small server, dashcast, running next to Home Assistant |
+| Needs | The device's Home Assistant token ([below](#drawn-the-home-assistant-token)) | A small server, dashcast, running next to Home Assistant |
 | Built-in pages (Energy, History, Logbook…) | No | Yes |
 
 **Drawn is not a copy of your dashboard.** It reads the dashboard's cards and draws the kinds it
 knows. For drawn mode, build a dashboard for the screen out of those cards. Don't expect it to look
 like a dashboard built for a browser. If you want your dashboard exactly as you made it, use
 Streamed.
+
+## Drawn: the Home Assistant token
+
+A drawn dashboard needs no server, but the device reads your dashboards from Home Assistant itself,
+so it needs Home Assistant's address and a long-lived access token. Without them the screen says *A
+drawn dashboard needs a Home Assistant token*. The token is not a field on the setup page or in
+ESPHome: the device's `home_assistant` action gives it, once. If photos, cameras or the forecast
+already work on the device, this is done and there's nothing to do.
+
+1. In Home Assistant, open your profile (bottom left), then **Security**, and under **Long-lived
+   access tokens** create one. Copy it; it is shown only once.
+2. In **Developer Tools → Actions**, switch to YAML mode and run the action, with your device's node
+   name in place of `office` (start typing `home_assistant` and pick yours from the list), Home
+   Assistant's local address, and the token:
+
+   ```yaml
+   action: esphome.office_home_assistant
+   data:
+     url: "http://192.168.1.10:8123"
+     token: "paste the token here"
+   ```
+
+The device keeps both from then on. The setup page's **Screen** tab says whether the device has a
+token, and with none, shows the action with this device's own name in it. More on the address (a
+`.local` name, `https://`) is in [setup step 1](setup.md#1-give-the-device-access-to-home-assistant)
+and under [the action itself](actions.md#connect-the-device-to-home-assistant).
 
 ## Turning it on
 

@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/HuskerMinion/techo5/echod/internal/config"
+	"github.com/HuskerMinion/techo5/echod/internal/layout"
 	"github.com/HuskerMinion/techo5/echod/internal/lib/hass"
 	"github.com/HuskerMinion/techo5/echod/internal/lib/redact"
 	"github.com/HuskerMinion/techo5/echod/internal/lib/safe"
@@ -630,7 +631,7 @@ func (s *session) run() {
 
 func (s *session) once() error {
 	if !hass.Get().Ready() {
-		s.problem("A drawn dashboard needs Home Assistant's address and a token (the home_assistant action).")
+		s.problem(noAccess(config.Get().Device.Name, factoryMAC()))
 		return fmt.Errorf("no home assistant access")
 	}
 	ctx, cancel := context.WithCancel(context.Background())
@@ -830,6 +831,24 @@ func str(m raw, key string) string {
 type onScreen string
 
 func (s onScreen) Error() string { return string(s) }
+
+// noAccess is what a drawn dashboard says before the device has Home Assistant's address and a token.
+// The dashboard is read with the device's own token, which only the home_assistant action gives it;
+// "the home_assistant action" alone left people looking for a token field on the setup page and in
+// ESPHome (#551), so the action is named in full, ready to paste into Developer Tools.
+func noAccess(name, mac string) string {
+	return "A drawn dashboard needs a Home Assistant token. In Home Assistant, run the action " +
+		layout.ActionName(name, mac, "home_assistant") + " once, with url and token."
+}
+
+// factoryMAC is the device's MAC address, which its node name falls back on, or "" when it can't be read.
+func factoryMAC() string {
+	m, err := layout.FactoryMAC()
+	if err != nil {
+		return ""
+	}
+	return m
+}
 
 // unreachable is what a drawn dashboard says when Home Assistant does not answer at addr. The address
 // is the log's, not the screen's, which everyone in the room sees.

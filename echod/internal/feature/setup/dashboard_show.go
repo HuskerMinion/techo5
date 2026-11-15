@@ -13,6 +13,8 @@ import (
 
 	"github.com/HuskerMinion/techo5/echod/internal/config"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/dashboard"
+	"github.com/HuskerMinion/techo5/echod/internal/layout"
+	"github.com/HuskerMinion/techo5/echod/internal/lib/hass"
 )
 
 // dashboardSection is where a streamed dashboard comes from: the dashcast server's address and the key
@@ -103,10 +105,34 @@ func dashboardPanelSection(w http.ResponseWriter, token string) {
 	}
 	fmt.Fprintf(w, `</select>
 	 <p><label><input type="checkbox" name="idle" value="yes" style="width:auto"%s> Show it in place of the clock when idle</label></p>
-	 <p class="note"><strong>Drawn on the device</strong> needs nothing else. <strong>Streamed</strong> needs a
+	 <p class="note"><strong>Drawn on the device</strong> needs no server: it reads your dashboards with this
+	  device's Home Assistant token. <strong>Streamed</strong> needs a
 	  dashcast server, set below.%s <strong>Back to the clock after</strong> is for a dashboard
 	  opened by hand; one Home Assistant shows stays until it is hidden.</p>
-	 <p><button type="submit">Save</button></p></form></fieldset>`, idle, tesseraNote)
+	 %s
+	 <p><button type="submit">Save</button></p></form></fieldset>`, idle, tesseraNote, tokenNote())
+}
+
+// tokenNote says whether the device has the Home Assistant token a drawn dashboard is read with, and
+// if not, how it gets one. The token is not a field on this page: it is given by the home_assistant
+// action, and people who went looking for a field found none (#551), so the action is shown in full,
+// named for this device, ready to paste into Developer Tools.
+func tokenNote() string {
+	if hass.Get().Ready() {
+		return `<p class="note">This device has a Home Assistant token. To change it, run the
+	  <code>home_assistant</code> action again.</p>`
+	}
+	mac, _ := layout.FactoryMAC()
+	action := layout.ActionName(config.Get().Device.Name, mac, "home_assistant")
+	return `<p class="bad"><strong>This device has no Home Assistant token yet</strong>, so a drawn dashboard
+	  can't be shown.</p>
+	 <p class="note">In Home Assistant, open your profile, then <strong>Security</strong>, and create a
+	  <strong>long-lived access token</strong>. Then, in <strong>Developer Tools, Actions</strong>, switch to
+	  YAML mode and run this once, with Home Assistant's local address and the token:</p>
+	 <p><code style="white-space:pre;display:block">action: ` + html.EscapeString(action) + `
+data:
+  url: "http://192.168.1.10:8123"
+  token: "paste the token here"</code></p>`
 }
 
 // saveDashboardPanel keeps what dashboardPanelSection asked, refusing a choice the page did not offer.

@@ -18,6 +18,13 @@ func TestUnreachableSaysWhatToDo(t *testing.T) {
 	}
 }
 
+// A device with no token names the action that gives it one, as Home Assistant lists it (#551).
+func TestNoAccessNamesTheAction(t *testing.T) {
+	if got := noAccess("Living Room", ""); !strings.Contains(got, "esphome.living_room_home_assistant") || !strings.Contains(got, "url and token") {
+		t.Errorf("noAccess = %q", got)
+	}
+}
+
 // The server's sentence is shown without the error it ends with, which can name the page's address with
 // a token in its query; a sentence with no error after it is shown as it is.
 func TestTheServersProblemIsItsSentence(t *testing.T) {
