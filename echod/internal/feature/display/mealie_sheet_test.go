@@ -38,6 +38,48 @@ func mockedRecipesEndpoint(total int) http.HandlerFunc {
 	}
 }
 
+// mockedMealie returns a handler that imitates Mealie with total recipes: the list at /api/recipes, and
+// at /api/recipes/recipe-NNN a recipe of that name with two ingredients and three steps.
+func mockedMealie(total int) http.HandlerFunc {
+	list := mockedRecipesEndpoint(total)
+	return func(w http.ResponseWriter, r *http.Request) {
+		slug, isRecipe := strings.CutPrefix(r.URL.Path, "/api/recipes/")
+		if !isRecipe {
+			list(w, r)
+			return
+		}
+		n := strings.TrimPrefix(slug, "recipe-")
+		_, _ = fmt.Fprintf(w, `{"slug":%q,"name":"Recipe %s",
+			"recipeIngredient":[{"display":"2 eggs of %s"},{"display":"1 pinch of salt"}],
+			"recipeInstructions":[{"text":"First of %s."},{"title":"Then","text":"Second."},{"text":"Third."}]}`, slug, n, n, n)
+	}
+}
+
+// guideSheet returns a loaded sheet with the recipe at index 0 open, its detail read: two ingredients and
+// n steps, so n+1 pages.
+func guideSheet(n int) mealieSheet {
+	s := loadedMealieSheet(testRecipes(6))
+	entry := s.recipes[0]
+	recipe := &mealie.DetailedRecipe{Slug: entry.Slug, Name: entry.Name,
+		Ingredients: []mealie.Ingredient{{Text: "2 eggs"}, {Text: "1 pinch of salt"}}}
+	for i := range n {
+		recipe.Steps = append(recipe.Steps, mealie.Step{Text: fmt.Sprintf("Step %d.", i+1)})
+	}
+	s.selected, s.detail = &entry, recipe
+	return s
+}
+
+// tapPart draws the sheet d has up on r and taps the part of that kind. It says whether there was one.
+func tapPart(r *renderer, d *Display, kind int) bool {
+	zones := zonesOfKind(drawFrame(r, d.mealieSheetNow()), kind)
+	if len(zones) == 0 {
+		return false
+	}
+	x, y := middleOf(zones[0])
+	d.mealieTap(x, y)
+	return true
+}
+
 // stubMealieClient makes the recipe page use c as its Mealie client, and sets whether Mealie is set up
 // (set).
 func stubMealieClient(t *testing.T, c mealie.Client, set bool) {
@@ -263,8 +305,8 @@ func TestMealieSheetIsDrawnOverTheDashboard(t *testing.T) {
 	}
 }
 
-// While the recipe sheet is up it takes every tap: a recipe does nothing yet and the sheet stays, a tap
-// beside the parts stays too, and Done puts the sheet away.
+// While the recipe sheet is up it takes every tap: a tap beside the parts changes nothing, and Done puts
+// the sheet away.
 func TestMealieSheetTakesTheTaps(t *testing.T) {
 	r := newRenderer(image.NewRGBA(image.Rect(0, 0, showWide, showHigh)))
 	d := &Display{r: r, poke: make(chan struct{}, 1)}
@@ -274,17 +316,14 @@ func TestMealieSheetTakesTheTaps(t *testing.T) {
 	sheet := loadedMealieSheet(testRecipes(6))
 	d.dashMealie = &sheet
 	zones := drawFrame(r, d.mealieSheetNow())
-	item, done := zonesOfKind(zones, mealiePartItem)[0], zonesOfKind(zones, mealiePartDone)[0]
+	done := zonesOfKind(zones, mealiePartDone)[0]
 	bx, by := middleOf(mediaZone{r: r.mealieGeometry().bar})
-	ix, iy := middleOf(item)
 	dx, dy := middleOf(done)
-	for name, at := range map[string]image.Point{"a recipe": image.Pt(ix, iy), "beside the parts": image.Pt(bx, by)} {
-		if !d.colorTap(at.X, at.Y) {
-			t.Errorf("a tap on %s was not taken by the sheet", name)
-		}
-		if !d.mealieUp() {
-			t.Errorf("a tap on %s put the sheet away", name)
-		}
+	if !d.colorTap(bx, by) {
+		t.Error("a tap beside the parts was not taken by the sheet")
+	}
+	if !d.mealieUp() {
+		t.Error("a tap beside the parts put the sheet away")
 	}
 	if !d.colorTap(dx, dy) {
 		t.Error("a tap on Done was not taken by the sheet")
@@ -346,5 +385,185 @@ func TestMealieDragScrollsTheRecipes(t *testing.T) {
 	d.drawnMove(x, y+100)
 	if got := scroll(); got != most-100 {
 		t.Errorf("a drag down from past the end scrolled to %d, want %d", got, most-100)
+	}
+}
+
+// A tap on a recipe opens its guide at the first page and asks Mealie for the recipe; Back returns to
+// the list, scrolled where it was.
+func TestMealieRecipeOpensItsGuide(t *testing.T) {
+	srv := httptest.NewServer(mockedMealie(100))
+	t.Cleanup(srv.Close)
+	stubMealieClient(t, mealie.Client{URL: srv.URL}, true)
+	r := newRenderer(image.NewRGBA(image.Rect(0, 0, showWide, showHigh)))
+	d := &Display{r: r, poke: make(chan struct{}, 1)}
+	d.openMealie()
+	waitUntil(t, "the list", func() bool { return mealieSheetOf(d).listLoaded })
+	d.editMealie(func(s *mealieSheet) { s.scroll = 100 })
+
+	items := zonesOfKind(drawFrame(r, d.mealieSheetNow()), mealiePartItem)
+	x, y := middleOf(items[0])
+	d.mealieTap(x, y)
+	slug := fmt.Sprintf("recipe-%03d", items[0].index)
+	if s := mealieSheetOf(d); s.selected == nil || s.selected.Slug != slug || s.step != 0 || s.scroll != 0 {
+		t.Fatalf("after the tap the sheet has selected %+v at step %d, scrolled %d; want %s at the first page", s.selected, s.step, s.scroll, slug)
+	}
+	waitUntil(t, "the recipe", func() bool { return mealieSheetOf(d).detail != nil })
+	if got := mealieSheetOf(d).detail; got.Slug != slug || len(got.Ingredients) != 2 || len(got.Steps) != 3 {
+		t.Errorf("the guide has %+v", got)
+	}
+
+	if !tapPart(r, d, mealiePartBack) {
+		t.Fatal("the guide has no Back")
+	}
+	if s := mealieSheetOf(d); s.selected != nil || s.detail != nil || s.scroll != 100 {
+		t.Errorf("after Back the sheet has selected %v, detail %v, scrolled %d; want the list scrolled to 100", s.selected, s.detail, s.scroll)
+	}
+}
+
+// Next and Previous turn the pages, the ingredients and then each step: there is no Previous on the
+// first page and no Next on the last, and a page starts at its top.
+func TestMealieGuideTurnsItsPages(t *testing.T) {
+	r := newRenderer(image.NewRGBA(image.Rect(0, 0, showWide, showHigh)))
+	d := &Display{r: r, poke: make(chan struct{}, 1)}
+	sheet := guideSheet(2) // three pages
+	d.dashMealie = &sheet
+	has := func(kind int) bool { return len(zonesOfKind(drawFrame(r, d.mealieSheetNow()), kind)) == 1 }
+	for _, c := range []struct {
+		step       int
+		prev, next bool
+	}{{0, false, true}, {1, true, true}, {2, true, false}} {
+		if c.step > 0 {
+			d.editMealie(func(s *mealieSheet) { s.scroll = 50 })
+			if !tapPart(r, d, mealiePartNext) {
+				t.Fatalf("no Next to go to step %d", c.step)
+			}
+			if s := mealieSheetOf(d); s.step != c.step || s.scroll != 0 {
+				t.Fatalf("after Next the guide is at page %d scrolled %d, want %d at the top", s.step, s.scroll, c.step)
+			}
+		}
+		if has(mealiePartPrev) != c.prev || has(mealiePartNext) != c.next {
+			t.Errorf("page %d has Previous %v and Next %v, want %v and %v", c.step, has(mealiePartPrev), has(mealiePartNext), c.prev, c.next)
+		}
+	}
+	for want := 1; want >= 0; want-- {
+		if !tapPart(r, d, mealiePartPrev) || mealieSheetOf(d).step != want {
+			t.Fatalf("Previous did not go to page %d", want)
+		}
+	}
+	d.mealieTurn(5) // a turn that is more than there is stays on the last page
+	if got := mealieSheetOf(d).step; got != 2 {
+		t.Errorf("turned 5 pages on to page %d, want the last, 2", got)
+	}
+}
+
+// An answer for a recipe that was left is thrown away: the first recipe's request is still waiting when
+// Back is tapped and another recipe opened, and what it brings does not replace the second's.
+func TestMealieAnswerForARecipeThatWasLeftIsThrownAway(t *testing.T) {
+	answer := make(chan struct{})
+	var answerOnce sync.Once
+	letMealieAnswer := func() { answerOnce.Do(func() { close(answer) }) }
+	var details atomic.Int32
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if strings.HasPrefix(r.URL.Path, "/api/recipes/") && details.Add(1) == 1 {
+			<-answer // the first recipe's request waits; the second's is answered at once
+		}
+		mockedMealie(5)(w, r)
+	}))
+	t.Cleanup(srv.Close)
+	t.Cleanup(letMealieAnswer)
+	stubMealieClient(t, mealie.Client{URL: srv.URL}, true)
+	r := newRenderer(image.NewRGBA(image.Rect(0, 0, showWide, showHigh)))
+	d := &Display{r: r, poke: make(chan struct{}, 1)}
+	d.openMealie()
+	waitUntil(t, "the list", func() bool { return mealieSheetOf(d).listLoaded })
+
+	d.mealieOpenRecipe(0)
+	waitUntil(t, "the first request", func() bool { return details.Load() >= 1 })
+	d.mealieBack()
+	d.mealieOpenRecipe(1)
+	waitUntil(t, "the second recipe", func() bool { return mealieSheetOf(d).detail != nil })
+
+	letMealieAnswer() // now the first recipe's answer arrives
+	time.Sleep(200 * time.Millisecond)
+	if got := mealieSheetOf(d).detail; got == nil || got.Name != "Recipe 001" {
+		t.Errorf("the guide has %+v, want the second recipe's", got)
+	}
+	d.mealieBack()
+	d.mu.Lock()
+	d.dashMealie = nil // and the sheet closed, while a recipe is on its way, is not brought back
+	d.mu.Unlock()
+	d.mealieOpenRecipe(0)
+	if d.mealieUp() {
+		t.Error("opening a recipe with no sheet up put the sheet up")
+	}
+}
+
+// A recipe that cannot be read says why in the guide, with Back to leave by, and asking for it again is
+// a tap on it again.
+func TestMealieGuideSaysWhyARecipeCannotBeRead(t *testing.T) {
+	var details atomic.Int32
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if strings.HasPrefix(r.URL.Path, "/api/recipes/") {
+			details.Add(1)
+			http.Error(w, "boom", http.StatusInternalServerError)
+			return
+		}
+		mockedMealie(3)(w, r)
+	}))
+	t.Cleanup(srv.Close)
+	stubMealieClient(t, mealie.Client{URL: srv.URL}, true)
+	r := newRenderer(image.NewRGBA(image.Rect(0, 0, showWide, showHigh)))
+	d := &Display{r: r, poke: make(chan struct{}, 1)}
+	d.openMealie()
+	waitUntil(t, "the list", func() bool { return mealieSheetOf(d).listLoaded })
+	for want := int32(1); want <= 2; want++ {
+		if !tapPart(r, d, mealiePartItem) {
+			t.Fatal("the list has no recipe to tap")
+		}
+		waitUntil(t, "the problem", func() bool { return mealieSheetOf(d).detailProblem != "" })
+		if s := mealieSheetOf(d); s.detailProblem != "mealie answered 500 Internal Server Error" || s.detailLoading || s.detail != nil {
+			t.Errorf("the guide has problem %q, loading %v, detail %v", s.detailProblem, s.detailLoading, s.detail)
+		}
+		if details.Load() != want {
+			t.Errorf("Mealie was asked for the recipe %d times, want %d", details.Load(), want)
+		}
+		if !tapPart(r, d, mealiePartBack) {
+			t.Fatal("a guide with a problem has no Back")
+		}
+	}
+}
+
+// A page too long for its room scrolls under a finger, as the list does, to its end and no further; a
+// finger that scrolled it and lifted on Next did that only, and the page is not turned.
+func TestMealieGuidePageScrollsAndIsNotTurnedByIt(t *testing.T) {
+	r := newRenderer(image.NewRGBA(image.Rect(0, 0, showWide, showHigh)))
+	d := &Display{r: r, poke: make(chan struct{}, 1)}
+	sheet := guideSheet(2)
+	for i := range 40 {
+		sheet.detail.Ingredients = append(sheet.detail.Ingredients, mealie.Ingredient{Text: fmt.Sprintf("%d spoons of something", i)})
+	}
+	d.dashMealie = &sheet
+	zones := drawFrame(r, d.mealieSheetNow())
+	most := r.mealieMaxScroll()
+	if most == 0 {
+		t.Fatal("40 ingredients have nothing to scroll")
+	}
+	g := r.mealieGeometry()
+	x, y := middleOf(mediaZone{r: g.guide})
+	nx, ny := middleOf(zonesOfKind(zones, mealiePartNext)[0])
+
+	d.drawnHold(x, y)
+	d.drawnMove(x, y-100)
+	if got := mealieSheetOf(d).scroll; got != 100 {
+		t.Errorf("a drag of 100 up scrolled the page to %d", got)
+	}
+	d.drawnMove(x, y-most-500)
+	if got := mealieSheetOf(d).scroll; got != most {
+		t.Errorf("a drag past the end scrolled the page to %d, want %d", got, most)
+	}
+	d.drawnMove(nx, ny)
+	d.drawnRelease(nx, ny)
+	if got := mealieSheetOf(d).step; got != 0 {
+		t.Errorf("a scroll that lifted on Next turned the page to %d", got)
 	}
 }

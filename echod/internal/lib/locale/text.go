@@ -808,6 +808,10 @@ var uiEnglish = map[string]string{
 	"ui_mealie_recipes":                             "Recipes",
 	"ui_mealie_set_up_hint":                         "Set up Mealie on the setup page to browse your recipes here.",
 	"ui_mealie_empty_hint":                          "Add recipes in Mealie, and they show up here.",
+	"ui_mealie_ingredients":                         "Ingredients",
+	"ui_mealie_step_of":                             "Step %d of %d",
+	"ui_mealie_previous":                            "Previous",
+	"ui_mealie_no_steps":                            "This recipe has no ingredients or steps.",
 }
 
 var uiTranslations = map[string]map[string]string{
@@ -1908,6 +1912,10 @@ var uiTranslations = map[string]map[string]string{
 		"ui_mealie_recipes":     "Recettes",
 		"ui_mealie_set_up_hint": "Configurez Mealie sur la page de configuration pour pouvoir consulter vos recettes ici.",
 		"ui_mealie_empty_hint":  "Ajoutez des recettes dans Mealie, et elles s'afficheront ici.",
+		"ui_mealie_ingredients": "Ingrédients",
+		"ui_mealie_step_of":     "Étape %d sur %d",
+		"ui_mealie_previous":    "Précédent",
+		"ui_mealie_no_steps":    "Cette recette ne comporte ni ingrédients ni étapes.",
 	},
 	"gl": {
 		"drawer_recording":           "Escoitando",
@@ -2695,6 +2703,10 @@ var uiTranslations = map[string]map[string]string{
 		"ui_mealie_recipes":     "Receitas",
 		"ui_mealie_set_up_hint": "Configure Mealie na páxina de configuración para navegar polas túas receitas aquí.",
 		"ui_mealie_empty_hint":  "Engade receitas en Mealie e aparecerán aquí.",
+		"ui_mealie_ingredients": "Ingredientes",
+		"ui_mealie_step_of":     "Paso %d de %d",
+		"ui_mealie_previous":    "Anterior",
+		"ui_mealie_no_steps":    "Cette recette ne comporte ni ingrédients ni étapes.",
 	},
 	"it": {
 		"drawer_recording":           "In ascolto",
@@ -3486,6 +3498,10 @@ var uiTranslations = map[string]map[string]string{
 		"ui_mealie_recipes":     "Ricette",
 		"ui_mealie_set_up_hint": "Configura Mealie nella pagina di configurazione per sfogliare le tue ricette qui.",
 		"ui_mealie_empty_hint":  "Aggiungi le ricette su Mealie e appariranno qui.",
+		"ui_mealie_ingredients": "Ingredienti",
+		"ui_mealie_step_of":     "Passo %d di %d",
+		"ui_mealie_previous":    "Precedente",
+		"ui_mealie_no_steps":    "Questa ricetta non prevede né ingredienti né passaggi.",
 	},
 	"nl": {
 		// Audio output
@@ -4490,6 +4506,10 @@ var uiTranslations = map[string]map[string]string{
 		"ui_mealie_recipes":     "レシピ",
 		"ui_mealie_set_up_hint": "セットアップページでMealieを設定して、ここでレシピを閲覧しましょう。",
 		"ui_mealie_empty_hint":  "Mealieにレシピを追加すると、ここに表示されます。",
+		"ui_mealie_ingredients": "材料",
+		"ui_mealie_step_of":     "%d/%d ステップ目",
+		"ui_mealie_previous":    "前へ",
+		"ui_mealie_no_steps":    "このレシピには材料も手順もありません。",
 	},
 
 	// de is the German catalog. The English of every entry is above it, so a
@@ -5895,6 +5915,10 @@ var uiTranslations = map[string]map[string]string{
 		"ui_mealie_recipes":                             "Rezepte",
 		"ui_mealie_set_up_hint":                         "Richte Mealie auf der Setup-Seite ein um deine Rezepte hier zu sehen.",
 		"ui_mealie_empty_hint":                          "Füge in Mealie Rezepte hinzu.",
+		"ui_mealie_ingredients":                         "Zutaten",
+		"ui_mealie_step_of":                             "Schritt %d von %d",
+		"ui_mealie_previous":                            "Zurück",
+		"ui_mealie_no_steps":                            "Dieses Rezept hat keine Schritte oder Zutaten.",
 	},
 	"tr": {
 		"ui_listening_turn":          "Dinleniyor…",
@@ -6687,5 +6711,9 @@ var uiTranslations = map[string]map[string]string{
 		"ui_mealie_recipes":     "Tarifler",
 		"ui_mealie_set_up_hint": "Tariflerinize buradan göz atabilmek için kurulum sayfasında Mealie’yi ayarlayın.",
 		"ui_mealie_empty_hint":  "Mealie'ye tarifler ekleyin, burada görünsünler.",
+		"ui_mealie_ingredients": "Malzemeler",
+		"ui_mealie_step_of":     "%d'nin %d'si",
+		"ui_mealie_previous":    "Önceki",
+		"ui_mealie_no_steps":    "Bu tarifte ne malzeme ne de adım bulunmaktadır.",
 	},
 }

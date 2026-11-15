@@ -3,8 +3,10 @@
 package display
 
 import (
+	"bytes"
 	"fmt"
 	"image"
+	"image/color"
 	"image/png"
 	"os"
 	"path/filepath"
@@ -173,6 +175,127 @@ func TestMealieOverviewScrolls(t *testing.T) {
 	}
 }
 
+// The guide has Back where the list has Done, and Previous and Next where the page has others before
+// or after it, on the Show 5 and the Show 8, and all of it is on the card.
+func TestMealieGuideDrawsItsParts(t *testing.T) {
+	for _, c := range []struct {
+		name string
+		size image.Point
+	}{{"show5", image.Pt(showWide, showHigh)}, {"show8", image.Pt(show8Wide, show8High)}} {
+		t.Run(c.name, func(t *testing.T) {
+			r := newRenderer(image.NewRGBA(image.Rectangle{Max: c.size}))
+			card := r.mealieGeometry().card
+			for step := range 4 { // the ingredients, then three steps
+				s := guideSheet(3)
+				s.step = step
+				zones := drawMealieSheet(r, s)
+				want := map[int]int{mealiePartBack: 1, mealiePartDone: 0, mealiePartItem: 0, mealiePartPrev: min(step, 1), mealiePartNext: min(3-step, 1)}
+				for kind, n := range want {
+					if got := len(zonesOfKind(zones, kind)); got != n {
+						t.Errorf("page %d has %d parts of kind %d, want %d", step, got, kind, n)
+					}
+				}
+				for _, z := range zones {
+					if !z.r.In(card) {
+						t.Errorf("page %d: part %+v reaches outside the card %v", step, z, card)
+					}
+				}
+				savePreview(t, fmt.Sprintf("mealie-guide-%s-%d.png", c.name, step), r.dst)
+			}
+		})
+	}
+}
+
+// The footer says the ingredients, or which step of how many; with no ingredients the first step is the
+// first page.
+func TestMealieWhere(t *testing.T) {
+	config.Use(filepath.Join(t.TempDir(), "state.json")) // the screen's language is English
+	withIngredients := guideSheet(3).detail
+	without := guideSheet(3).detail
+	without.Ingredients = nil
+	for _, c := range []struct {
+		recipe *mealie.DetailedRecipe
+		step   int
+		want   string
+	}{
+		{withIngredients, 0, "Ingredients"}, {withIngredients, 1, "Step 1 of 3"}, {withIngredients, 3, "Step 3 of 3"},
+		{without, 0, "Step 1 of 3"}, {without, 2, "Step 3 of 3"},
+	} {
+		if got := mealieWhere(c.recipe, c.step); got != c.want {
+			t.Errorf("%d ingredients, page %d: %q, want %q", len(c.recipe.Ingredients), c.step, got, c.want)
+		}
+	}
+}
+
+// A page that is longer than its room scrolls, and keeps to the room: scrolled to the top or to the end,
+// what is above and below it is the same, so that no text reaches into the bar or the footer.
+func TestMealieGuidePageKeepsToItsRoom(t *testing.T) {
+	r := newRenderer(image.NewRGBA(image.Rect(0, 0, showWide, showHigh)))
+	g := r.mealieGeometry()
+	long := guideSheet(2)
+	for i := range 40 {
+		long.detail.Ingredients = append(long.detail.Ingredients, mealie.Ingredient{Text: fmt.Sprintf("%d spoons of something that goes on and on", i)})
+	}
+	drawMealieSheet(r, long)
+	most := r.mealieMaxScroll()
+	if most == 0 {
+		t.Fatal("40 ingredients have nothing to scroll")
+	}
+	top := image.NewRGBA(r.dst.Rect)
+	copy(top.Pix, r.dst.Pix)
+	scrolled := long
+	scrolled.scroll = most
+	drawMealieSheet(r, scrolled)
+	if bytes.Equal(top.Pix, r.dst.Pix) {
+		t.Error("the page looks the same scrolled to its end")
+	}
+	for name, room := range map[string]image.Rectangle{
+		"above the page": image.Rect(g.card.Min.X, g.card.Min.Y, g.card.Max.X, g.guide.Min.Y),
+		"below the page": image.Rect(g.card.Min.X, g.guide.Max.Y, g.card.Max.X, g.card.Max.Y),
+	} {
+		for y := room.Min.Y; y < room.Max.Y; y++ {
+			a, b := top.PixOffset(room.Min.X, y), top.PixOffset(room.Max.X, y)
+			if !bytes.Equal(top.Pix[a:b], r.dst.Pix[a:b]) {
+				t.Errorf("row %d, %s, changed when the page scrolled", y, name)
+				break
+			}
+		}
+	}
+
+	drawMealieSheet(r, guideSheet(2))
+	if got := r.mealieMaxScroll(); got != 0 {
+		t.Errorf("a short page can be scrolled %d pixels, want none", got)
+	}
+}
+
+// A page that scrolls show a scroll bar at its right edge, with the bar the settings lists have; one that fits has
+// nothing there but the card, and none is drawn where the page is not.
+func TestMealieGuideShowsThatAPageScrolls(t *testing.T) {
+	r := newRenderer(image.NewRGBA(image.Rect(0, 0, showWide, showHigh)))
+	g := r.mealieGeometry()
+	edge := image.Rect(g.card.Max.X-r.s(14), g.guide.Min.Y, g.card.Max.X-r.s(6), g.guide.Max.Y)
+	colors := func(s mealieSheet) int {
+		drawMealieSheet(r, s)
+		seen := map[color.RGBA]bool{}
+		for y := edge.Min.Y; y < edge.Max.Y; y++ {
+			for x := edge.Min.X; x < edge.Max.X; x++ {
+				seen[r.dst.RGBAAt(x, y)] = true
+			}
+		}
+		return len(seen)
+	}
+	if got := colors(guideSheet(2)); got != 1 {
+		t.Errorf("a page that fits has %d colors at its edge, want the card's alone", got)
+	}
+	long := guideSheet(2)
+	for i := range 40 {
+		long.detail.Ingredients = append(long.detail.Ingredients, mealie.Ingredient{Text: fmt.Sprintf("%d spoons of something", i)})
+	}
+	if got := colors(long); got < 2 {
+		t.Errorf("a page that scrolls has %d colors at its edge, want a bar on the card", got)
+	}
+}
+
 // Drawing no sheet forgets the parts of the one drawn before, so that a tap finds nothing of it.
 func TestMealieOverviewDrawnNoMoreHasNoParts(t *testing.T) {
 	r := newRenderer(image.NewRGBA(image.Rect(0, 0, showWide, showHigh)))
@@ -183,10 +306,17 @@ func TestMealieOverviewDrawnNoMoreHasNoParts(t *testing.T) {
 	}
 }
 
+// guideWith returns a guide sheet, as guideSheet(2) has it, changed by change.
+func guideWith(change func(*mealieSheet)) mealieSheet {
+	s := guideSheet(2)
+	change(&s)
+	return s
+}
+
 // The sheet says what is the matter in place of the recipes, for each state it can be in: Mealie not
 // set up says what to do about it, being asked says so, a problem says what it was, and no recipes
 // says there are none and what to do. A sheet with recipes has nothing to say, and shows them. Each
-// has its Done to leave by.
+// has its Done to leave by, and the guide of a recipe its Back.
 func TestMealieNoticeSaysWhatIsTheMatter(t *testing.T) {
 	config.Use(filepath.Join(t.TempDir(), "state.json")) // the screen's language is English
 	for _, c := range []struct {
@@ -200,6 +330,12 @@ func TestMealieNoticeSaysWhatIsTheMatter(t *testing.T) {
 		{"a problem", mealieSheet{set: true, listLoaded: true, listProblem: "mealie refused the token"},
 			"alert-circle-outline", "mealie refused the token", ""},
 		{"none", mealieSheet{set: true, listLoaded: true}, "chef-hat", "Nothing here yet", "Add recipes in Mealie, and they show up here."},
+		{"a recipe being read", guideWith(func(s *mealieSheet) { s.detail, s.detailLoading = nil, true }), "", "Loading…", ""},
+		{"a recipe that could not be read", guideWith(func(s *mealieSheet) { s.detail, s.detailProblem = nil, "mealie answered 404 Not Found" }),
+			"alert-circle-outline", "mealie answered 404 Not Found", ""},
+		{"a recipe with nothing in it", guideWith(func(s *mealieSheet) { s.detail.Ingredients = nil; s.detail.Steps = nil }),
+			"chef-hat", "Nothing here yet", "This recipe has no ingredients or steps."},
+		{"a recipe's page", guideSheet(2), "", "", ""},
 		{"recipes", loadedMealieSheet(testRecipes(3)), "", "", ""},
 		{"recipes, asked for again", mealieSheet{set: true, listLoaded: true, listLoading: true, recipes: testRecipes(3)}, "", "", ""},
 	} {
@@ -212,8 +348,9 @@ func TestMealieNoticeSaysWhatIsTheMatter(t *testing.T) {
 				t.Errorf("icon %q is not in the icon font, so nothing would be drawn", icon)
 			}
 			r := newRenderer(image.NewRGBA(image.Rect(0, 0, showWide, showHigh)))
-			if got := len(zonesOfKind(drawMealieSheet(r, c.sheet), mealiePartDone)); got != 1 {
-				t.Errorf("%d Done buttons drawn, want 1", got)
+			zones := drawMealieSheet(r, c.sheet)
+			if got := len(zonesOfKind(zones, mealiePartDone)) + len(zonesOfKind(zones, mealiePartBack)); got != 1 {
+				t.Errorf("%d Done or Back buttons drawn, want 1", got)
 			}
 		})
 	}

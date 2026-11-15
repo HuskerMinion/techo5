@@ -206,8 +206,12 @@ Home Assistant itself has no view of that name, so the same card does nothing in
 
 **What it shows**
 
-All the recipes by name, a tile for each with its name under it. **Done** closes it. If Mealie isn't
-set up, or can't be reached, a line says so.
+All recipes by name, a tile for each with its name under it. Drag up or down to scroll. **Done**
+closes it. If Mealie isn't set up, or can't be reached, a notice says so.
+
+A tap on a recipe opens its detailed step-by-step guide. The first page lists the ingredients. 
+Every other page is one step each, scrollable if its content is too long.
+**Next** and **Previous**, **Back** returns to the list.
 
 ## What drawn mode draws
 

@@ -19,6 +19,9 @@ const (
 	_ = iota
 	mealiePartDone
 	mealiePartItem // index: which recipe, in the order of the list
+	mealiePartBack // the guide's way back to the list
+	mealiePartPrev
+	mealiePartNext
 )
 
 // mealieTargetTileWidth is the width the layout aims for a recipe's tile, in the panel's own pixels: it
@@ -61,13 +64,15 @@ func (r *renderer) mealieAt(x, y int) (mediaZone, bool) {
 // mealieGeom is where the recipe sheet's parts go, for this panel.
 type mealieGeom struct {
 	card, bar, view   image.Rectangle
+	foot, guide       image.Rectangle // the guide's Previous and Next along the bottom, and the page between
 	pad, gap, inner   int
 	cols, tile, tileH int
 	x0, x1            int
 }
 
 // mealieGeometry returns where the recipe sheet's parts go: the card, the bar along its top, the view
-// under it that the recipes fill, and the size of a tile.
+// under it that the recipes fill, and the size of a tile. The guide has the footer along the bottom, and
+// its page in the view between the bar and the footer.
 func (r *renderer) mealieGeometry() mealieGeom {
 	var g mealieGeom
 	g.card = r.dst.Rect.Inset(r.s(8))
@@ -76,6 +81,8 @@ func (r *renderer) mealieGeometry() mealieGeom {
 	g.view = image.Rect(g.card.Min.X, g.bar.Max.Y+r.s(10), g.card.Max.X, g.card.Max.Y-r.s(6))
 	g.x0, g.x1 = g.card.Min.X+g.pad, g.card.Max.X-g.pad
 	g.inner = g.x1 - g.x0
+	g.foot = image.Rect(g.x0, g.card.Max.Y-g.pad-r.s(46), g.x1, g.card.Max.Y-g.pad)
+	g.guide = image.Rect(g.card.Min.X, g.view.Min.Y, g.card.Max.X, g.foot.Min.Y-r.s(10))
 	g.cols = max(2, (g.inner+mealieTargetTileWidth/2)/mealieTargetTileWidth)
 	g.tile = (g.inner - g.gap*(g.cols-1)) / g.cols
 	g.tileH = g.tile + r.s(46)
@@ -96,25 +103,39 @@ func (r *renderer) mealieSheet(s *mealieSheet, th dashboard.Theme) {
 	washOver(r.dst, whole, color.RGBA{0, 0, 0, 150})
 	r.roundFill(g.card, pal.rad, pal.card, pal.card)
 
-	// The bar: the sheet's name at the left, and Done at the right.
-	word := libWord(libWordDone)
-	doneW := max(r.width(fc.navBold, word)+2*r.s(20), r.s(84))
-	done := image.Rect(g.bar.Max.X-doneW, g.bar.Min.Y, g.bar.Max.X, g.bar.Max.Y)
-	r.mealiePill(done, word, pal.accent, pal.bg, fc)
-	r.text(fc.labelBold, tr("ui_mealie_recipes"), g.bar.Min.X, g.bar.Min.Y+r.s(33), pal.text)
+	var zones []mediaZone
+	var contentH, viewH int
+	if s.selected != nil {
+		zones, contentH, viewH = r.mealieGuide(s, g, pal, fc)
+	} else {
+		// The bar: the sheet's name at the left, and Done at the right.
+		word := libWord(libWordDone)
+		doneW := max(r.width(fc.navBold, word)+2*r.s(20), r.s(84))
+		done := image.Rect(g.bar.Max.X-doneW, g.bar.Min.Y, g.bar.Max.X, g.bar.Max.Y)
+		r.mealiePill(done, word, pal.accent, pal.bg, fc)
+		r.text(fc.labelBold, tr("ui_mealie_recipes"), g.bar.Min.X, g.bar.Min.Y+r.s(33), pal.text)
 
-	zones := []mediaZone{{r: done, kind: mealiePartDone}}
-	content, contentH := r.mealieContent(s, g, pal, fc)
-	zones = append(zones, content...)
+		var content []mediaZone
+		content, contentH = r.mealieContent(s, g, pal, fc)
+		zones, viewH = append([]mediaZone{{r: done, kind: mealiePartDone}}, content...), g.view.Dy()
+	}
 	// The whole screen is the sheet's: a tap beside the card is not a tap on the dashboard under it.
-	r.setMealie(zones, whole, contentH, g.view.Dy())
+	r.setMealie(zones, whole, contentH, viewH)
 }
 
-// mealieNotice returns what stands in for the recipes when the sheet has none to show: an icon, a
-// message and a hint under it, any of which may be empty. With no message there is none to say, and the
-// recipes are shown.
+// mealieNotice returns what stands in for the recipes, or for the guide's page, when the sheet has none
+// to show: an icon, a message and a hint under it, any of which may be empty. With no message there is
+// none to say, and the recipes or the page are shown.
 func mealieNotice(s *mealieSheet) (icon, msg, hint string) {
 	switch {
+	case s.selected != nil && s.detailProblem != "":
+		return "alert-circle-outline", s.detailProblem, ""
+	case s.selected != nil && s.detail == nil:
+		return "", libWord(libWordLoading), ""
+	case s.selected != nil && mealiePages(s.detail) == 0:
+		return "chef-hat", libWord(libWordEmpty), tr("ui_mealie_no_steps")
+	case s.selected != nil:
+		return "", "", ""
 	case !s.set:
 		return "cog-outline", tr("ui_mealie_set_up_hint"), ""
 	case s.listProblem != "":

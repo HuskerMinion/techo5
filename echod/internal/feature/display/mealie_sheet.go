@@ -15,7 +15,8 @@ import (
 
 // The recipes of a Mealie server. It is one unfiltered list with all recipes.
 // Tapping a recipe opens the step-by-step guide for it in place of the list, and Back returns to the
-// list.
+// list. The guide has a page for the ingredients, if there are any, and one for each step; Previous and
+// Next turn the pages.
 
 // mealieSheet is the recipe sheet while it is up.
 type mealieSheet struct {
@@ -35,10 +36,19 @@ type mealieSheet struct {
 	listProblem string
 	// selected is set to a recipe when a single one is selected, it is nil while the whole list is shown.
 	selected *mealie.RecipeEntry
-	// scroll is how far the list is scrolled up, in pixels. Drawing keeps it within what there is to
-	// scroll, so it may be too much for a list that has become shorter. drag is a finger on the list.
-	scroll int
-	drag   mealieDrag
+	// detail is the selected recipe's ingredients and steps, nil until they are read. detailLoading is
+	// whether they are being asked for, and detailProblem why they could not be read (if an error occurred).
+	detail        *mealie.DetailedRecipe
+	detailLoading bool
+	detailProblem string
+	// step is the page of the guide that is shown, counted from 0 (see mealiePages).
+	step int
+	// scroll is how far the list, or the guide's page, is scrolled up, in pixels. Drawing keeps it within
+	// what there is to scroll, so it may be too much for a list that has become shorter. listScroll is
+	// where the list was scrolled when a recipe was opened, to put it back. drag is a finger on it.
+	scroll     int
+	listScroll int
+	drag       mealieDrag
 }
 
 // mealieDrag is a finger on the list as it moves: where it came down, how far the list was scrolled
@@ -133,18 +143,107 @@ func (d *Display) mealieSheetNow() *mealieSheet {
 // mealieUp reports whether the recipe sheet is up.
 func (d *Display) mealieUp() bool { return d.mealieSheetNow() != nil }
 
-// mealieTap is a finger lifted at x, y. Done puts the sheet away.
+// mealieTap is a finger lifted at x, y. Done puts the sheet away, a recipe opens its guide, Back returns
+// to the list, and Previous and Next turn the guide's pages. The sheet takes every tap.
 func (d *Display) mealieTap(x, y int) bool {
 	if !d.mealieUp() || d.r == nil {
 		return false
 	}
-	if z, _ := d.r.mealieAt(x, y); z.kind == mealiePartDone {
+	z, _ := d.r.mealieAt(x, y)
+	switch z.kind {
+	case mealiePartDone:
 		d.mu.Lock()
 		d.dashMealie = nil
 		d.mu.Unlock()
+	case mealiePartItem:
+		d.mealieOpenRecipe(z.index)
+	case mealiePartBack:
+		d.mealieBack()
+	case mealiePartPrev:
+		d.mealieTurn(-1)
+	case mealiePartNext:
+		d.mealieTurn(1)
 	}
 	d.wake()
 	return true
+}
+
+// mealieOpenRecipe opens the guide of the recipe at index in the list, and asks Mealie for its
+// ingredients and steps. Checks the epoch and the slug when they come, so that an answer for a recipe
+// that was left, or for a sheet that was closed meanwhile, is thrown away.
+func (d *Display) mealieOpenRecipe(index int) {
+	c, set := mealieClient()
+	var epoch uint64
+	var slug string
+	asking := false
+	d.editMealie(func(s *mealieSheet) {
+		if !set || s.selected != nil || index < 0 || index >= len(s.recipes) {
+			return
+		}
+		entry := s.recipes[index]
+		s.selected = &entry
+		s.detail, s.detailLoading, s.detailProblem, s.step = nil, true, "", 0
+		s.listScroll, s.scroll, s.drag = s.scroll, 0, mealieDrag{}
+		epoch, slug, asking = s.epoch, entry.Slug, true
+	})
+	if !asking {
+		return
+	}
+	d.wake()
+	go func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancel()
+		recipe, err := c.Recipe(ctx, slug)
+		d.editMealie(func(s *mealieSheet) {
+			if s.epoch != epoch || s.selected == nil || s.selected.Slug != slug {
+				return // the sheet was closed, or the recipe left, while it was being read
+			}
+			s.detailLoading = false
+			if err != nil {
+				s.detailProblem = err.Error()
+				slog.Warn("dashboard recipe", "err", err)
+				return
+			}
+			s.detail = &recipe
+		})
+		d.wake()
+	}()
+}
+
+// mealieBack leaves the guide for the list, which is scrolled where it was.
+func (d *Display) mealieBack() {
+	d.editMealie(func(s *mealieSheet) {
+		if s.selected == nil {
+			return
+		}
+		s.selected, s.detail, s.detailLoading, s.detailProblem, s.step = nil, nil, false, "", 0
+		s.scroll, s.listScroll, s.drag = s.listScroll, 0, mealieDrag{}
+	})
+}
+
+// mealieTurn turns the guide by pages-amount pages, forward or back, to the first or last at most. A page
+// starts scrolled to its top.
+func (d *Display) mealieTurn(pages int) {
+	d.editMealie(func(s *mealieSheet) {
+		if s.detail == nil {
+			return
+		}
+		step := min(max(s.step+pages, 0), max(mealiePages(s.detail)-1, 0))
+		if step == s.step {
+			return
+		}
+		s.step, s.scroll, s.drag = step, 0, mealieDrag{}
+	})
+}
+
+// mealiePages returns how many pages the guide of r has: one for the ingredients, if there are any, and
+// one for each step.
+func mealiePages(r *mealie.DetailedRecipe) int {
+	n := len(r.Steps)
+	if len(r.Ingredients) > 0 {
+		n++
+	}
+	return n
 }
 
 // mealieDragStart is a finger coming down on the sheet: where, and how far the list is scrolled then.
