@@ -390,7 +390,15 @@ func New() *Player {
 		p.lanes = append(p.lanes, make([]float32, period))
 	}
 	p.tuning = t
-	if curve, ok := firstCurves[t.Name()]; ok {
+	curve, ok := firstCurves[t.Name()]
+	if table := t.VolumeTable(); len(table) == VolumeSteps+1 {
+		// The unit's own curve, where its AFE.cfg has one (the 2nd gen Shows): the one Fire OS turns
+		// the music down by in front of the tuning, reaching 0 dB at the top step. firstCurves stop
+		// near -20 dB there.
+		copy(curve[:], table)
+		ok = true
+	}
+	if ok {
 		p.first = &curve
 		if db, ok := topLifts[t.Name()]; ok {
 			l := liftTop(curve, db)
