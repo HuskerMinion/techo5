@@ -4,6 +4,7 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"reflect"
 	"strconv"
 	"strings"
 	"sync/atomic"
@@ -243,5 +244,142 @@ func TestRecipesUnreadable(t *testing.T) {
 	got, err := c.Recipes(t.Context())
 	if !errors.Is(err, ErrUnreadable) {
 		t.Errorf("error %v and %d recipes, want ErrUnreadable", err, len(got))
+	}
+}
+
+// someRecipeDetail is a recipe as a server sent one: the keys this package reads,
+// others it does not (times, notes, nutrition), nulls where Mealie has nothing, an ingredient that opens
+// a section, an amount written out with its unit and food, and the structured fields the text is made of.
+const someRecipeDetail = `{
+	"id": "id-soup",
+	"slug": "tomato-soup",
+	"name": "Tomato Soup",
+	"image": null,
+	"totalTimeSeconds": null,
+	"notes": [],
+	"nutrition": {"calories": null},
+	"recipeIngredient": [
+		{"quantity": 2, "unit": {"name": "can"}, "food": {"name": "tomato"}, "note": "drained",
+		 "display": "2 cans tomato drained", "title": "For the soup", "referenceId": "r1"},
+		{"quantity": 0.5, "unit": null, "food": null, "note": "onion",
+		 "display": "¹/₂ onion", "title": null, "referenceId": "r2"}
+	],
+	"recipeInstructions": [
+		{"id": "s1", "title": "Prepare", "summary": null, "text": "Chop the onion.", "ingredientReferences": []},
+		{"id": "s2", "title": null, "summary": "", "text": "Simmer for 20 minutes.", "ingredientReferences": []}
+	]
+}`
+
+// A recipe is read from the detail at its slug, with the token, into the name, the ingredients as
+// written out and the steps, in order.
+func TestRecipeReadsIngredientsAndSteps(t *testing.T) {
+	var path, auth string
+	c := serve(t, func(w http.ResponseWriter, r *http.Request) {
+		path, auth = r.URL.Path, r.Header.Get("Authorization")
+		reply(w, someRecipeDetail)
+	})
+	c.Token = "secret"
+	got, err := c.Recipe(t.Context(), "tomato-soup")
+	if err != nil {
+		t.Fatalf("Recipe: %v", err)
+	}
+	if path != "/api/recipes/tomato-soup" || auth != "Bearer secret" {
+		t.Errorf("asked %q with %q, want /api/recipes/tomato-soup with the token", path, auth)
+	}
+	want := DetailedRecipe{
+		Slug: "tomato-soup", Name: "Tomato Soup",
+		Ingredients: []Ingredient{{Text: "2 cans tomato drained", Section: "For the soup"}, {Text: "¹/₂ onion"}},
+		Steps:       []Step{{Title: "Prepare", Text: "Chop the onion."}, {Text: "Simmer for 20 minutes."}},
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("got %+v, want %+v", got, want)
+	}
+}
+
+// Lines with nothing to show are left out, and the heading of one that goes is kept for the next. A
+// recipe with no ingredients or steps has none, rather than blank ones.
+func TestRecipeLeavesOutWhatIsBlank(t *testing.T) {
+	c := serve(t, func(w http.ResponseWriter, r *http.Request) {
+		reply(w, `{"slug":"x","name":"X","recipeIngredient":[
+			{"display":"","title":"Sauce"},
+			{"display":"  "},
+			{"display":" 1 pinch of salt ","title":null},
+			{"display":"2 eggs"}],
+		"recipeInstructions":[
+			{"title":null,"text":"   "},
+			{"title":"Bake","text":""},
+			{"title":"","text":" Serve. "}]}`)
+	})
+	got, err := c.Recipe(t.Context(), "x")
+	if err != nil {
+		t.Fatalf("Recipe: %v", err)
+	}
+	if want := []Ingredient{{Text: "1 pinch of salt", Section: "Sauce"}, {Text: "2 eggs"}}; !reflect.DeepEqual(got.Ingredients, want) {
+		t.Errorf("ingredients %+v, want %+v", got.Ingredients, want)
+	}
+	if want := []Step{{Title: "Bake"}, {Text: "Serve."}}; !reflect.DeepEqual(got.Steps, want) {
+		t.Errorf("steps %+v, want %+v", got.Steps, want)
+	}
+
+	c = serve(t, func(w http.ResponseWriter, r *http.Request) {
+		reply(w, `{"slug":"y","name":"Y","recipeIngredient":[],"recipeInstructions":null}`)
+	})
+	got, err = c.Recipe(t.Context(), "y")
+	if err != nil || len(got.Ingredients) != 0 || len(got.Steps) != 0 {
+		t.Errorf("an empty recipe came out as %+v (%v)", got, err)
+	}
+}
+
+// A slug is one part of the path, whatever it holds, and an address typed with a slash at the end
+// still reaches /api/recipes.
+func TestRecipeSlugIsOnePartOfThePath(t *testing.T) {
+	var path string
+	c := serve(t, func(w http.ResponseWriter, r *http.Request) {
+		path = r.URL.EscapedPath()
+		reply(w, someRecipeDetail)
+	})
+	c.URL += "/"
+	if _, err := c.Recipe(t.Context(), "a b/c?d"); err != nil {
+		t.Fatalf("Recipe: %v", err)
+	}
+	if path != "/api/recipes/a%20b%2Fc%3Fd" {
+		t.Errorf("path = %q, want /api/recipes/a%%20b%%2Fc%%3Fd", path)
+	}
+}
+
+// A recipe that is gone, a refused token and a reply that is not a recipe are errors in words for a
+// screen, as for the list, and come with no recipe.
+func TestRecipeErrors(t *testing.T) {
+	for _, tc := range []struct {
+		name   string
+		status int
+		body   string
+		want   error
+		says   string
+	}{
+		{"gone", http.StatusNotFound, `{"detail":"Not Found"}`, nil, "mealie answered 404 Not Found"},
+		{"refused token", http.StatusUnauthorized, `{"detail":"Unauthorized"}`, errRefusedToken, ""},
+		{"not a recipe", http.StatusOK, "this is not json", ErrUnreadable, ""},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			c := serve(t, func(w http.ResponseWriter, r *http.Request) {
+				w.WriteHeader(tc.status)
+				_, _ = w.Write([]byte(tc.body))
+			})
+			c.Token = "secret"
+			got, err := c.Recipe(t.Context(), "tomato-soup")
+			if err == nil {
+				t.Fatalf("no error, and recipe %+v", got)
+			}
+			if tc.want != nil && !errors.Is(err, tc.want) {
+				t.Errorf("error %q, want %q", err, tc.want)
+			}
+			if tc.says != "" && err.Error() != tc.says {
+				t.Errorf("error %q, want %q", err, tc.says)
+			}
+			if !reflect.DeepEqual(got, DetailedRecipe{}) {
+				t.Errorf("got %+v with the error, want none", got)
+			}
+		})
 	}
 }

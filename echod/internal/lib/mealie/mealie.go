@@ -1,6 +1,7 @@
 package mealie
 
 import (
+	"cmp"
 	"context"
 	"encoding/json"
 	"errors"
@@ -55,6 +56,30 @@ type RecipeEntry struct {
 	Rating             float32 `json:"rating"`
 	// ISO time
 	DateAdded string `json:"dateAdded"`
+}
+
+// DetailedRecipe is one recipe as Mealie's detail has it: what the step-by-step guide shows.
+type DetailedRecipe struct {
+	Slug        string       `json:"slug"`
+	Name        string       `json:"name"`
+	Ingredients []Ingredient `json:"recipeIngredient"`
+	Steps       []Step       `json:"recipeInstructions"`
+}
+
+// Ingredient is one line of a recipe's ingredients.
+type Ingredient struct {
+	// Text is the line as Mealie writes it out ("2 cans tomatoes, drained"): amount, unit, food and note
+	// together, so that it needs no more work to show.
+	Text string `json:"display"`
+	// Section is the heading this ingredient opens, such as "For the sauce", or empty when it opens none.
+	Section string `json:"title"`
+}
+
+// Step is one step of a recipe's instructions.
+type Step struct {
+	// Title is a heading for the step, which may be empty.
+	Title string `json:"title"`
+	Text  string `json:"text"`
 }
 
 // get sends an HTTP request to the url and returns its answer as mapped to into. What goes wrong is told
@@ -149,4 +174,38 @@ func (c Client) RecipeFetchURL(page int) string {
 // ImageURL returns the URL of the recipe's small picture.
 func (c Client) ImageURL(recipe RecipeEntry) string {
 	return strings.TrimRight(c.URL, "/") + recipeImageBaseUrl + "/" + recipe.ID + "/images/min-original.webp?version=" + recipe.ImageVersion
+}
+
+// RecipeURL returns the URL of the recipe with the given slug.
+func (c Client) RecipeURL(slug string) string {
+	return strings.TrimRight(c.URL, "/") + recipesBaseUrl + "/" + url.PathEscape(slug)
+}
+
+// Recipe returns the recipe with the given slug, its ingredients and steps. An ingredient with no text
+// and a step with neither text nor title are left out. The heading of a left out ingredient goes on to the next one that stays.
+func (c Client) Recipe(ctx context.Context, slug string) (DetailedRecipe, error) {
+	var recipe DetailedRecipe
+	if err := c.get(ctx, c.RecipeURL(slug), &recipe); err != nil {
+		return DetailedRecipe{}, err
+	}
+	var ingredients []Ingredient
+	heading := ""
+	for _, in := range recipe.Ingredients {
+		heading = cmp.Or(strings.TrimSpace(in.Section), heading)
+		text := strings.TrimSpace(in.Text)
+		if text == "" {
+			continue
+		}
+		ingredients = append(ingredients, Ingredient{Text: text, Section: heading})
+		heading = ""
+	}
+	var steps []Step
+	for _, st := range recipe.Steps {
+		step := Step{Title: strings.TrimSpace(st.Title), Text: strings.TrimSpace(st.Text)}
+		if step.Title != "" || step.Text != "" {
+			steps = append(steps, step)
+		}
+	}
+	recipe.Ingredients, recipe.Steps = ingredients, steps
+	return recipe, nil
 }
