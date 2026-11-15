@@ -88,11 +88,11 @@ func (d *Display) longPress(t *dashTile) {
 }
 
 // colorOpen is whether a sheet is up over the page: the color sheet, the media sheet, the
-// thermostat sheet, the fan sheet, or the music library.
+// thermostat sheet, the fan sheet, the music library, or the recipe sheet.
 func (d *Display) colorOpen() bool {
 	d.mu.Lock()
 	defer d.mu.Unlock()
-	return d.dashColor != nil || d.dashMedia != nil || d.dashClimate != nil || d.dashFan != nil || d.dashLibrary != nil
+	return d.dashColor != nil || d.dashMedia != nil || d.dashClimate != nil || d.dashFan != nil || d.dashLibrary != nil || d.dashMealie != nil
 }
 
 // onColorSheet is whether x, y is on the sheet that is up: the color sheet, or the media sheet.
@@ -105,7 +105,8 @@ func (d *Display) onColorSheet(x, y int) bool {
 	_, onClimate := d.r.climateAt(x, y)
 	_, onFan := d.r.fanAt(x, y)
 	_, _, onLibrary := d.r.libraryAt(x, y)
-	return in || onMedia || onClimate || onFan || onLibrary
+	_, onMealie := d.r.mealieAt(x, y)
+	return in || onMedia || onClimate || onFan || onLibrary || onMealie
 }
 
 // sliderAt is the slider of the sheet that is up under x, y: the color sheet's whites or colors, the
@@ -186,6 +187,11 @@ func (d *Display) samePartOnSheet(a, b image.Point) bool {
 	fb, inb := d.r.fanAt(b.X, b.Y)
 	if ina || inb {
 		return ina == inb && fa.kind == fb.kind && fa.index == fb.index
+	}
+	ra, ina := d.r.mealieAt(a.X, a.Y)
+	rb, inb := d.r.mealieAt(b.X, b.Y)
+	if ina || inb {
+		return ina == inb && ra.kind == rb.kind && ra.index == rb.index
 	}
 	return true
 }
@@ -416,7 +422,7 @@ func (d *Display) sendSheet(s sheetSlider, value float64, final bool, c *dashboa
 // colorTap is a finger lifted at x, y while the color sheet is up, which the sheet always takes: the
 // page under it is not tapped. It says whether the sheet was up.
 func (d *Display) colorTap(x, y int) bool {
-	if d.libraryTap(x, y) || d.mediaTap(x, y) || d.climateTap(x, y) || d.fanTap(x, y) {
+	if d.libraryTap(x, y) || d.mealieTap(x, y) || d.mediaTap(x, y) || d.climateTap(x, y) || d.fanTap(x, y) {
 		return true
 	}
 	d.mu.Lock()

@@ -1536,7 +1536,8 @@ func (d *Display) libraryKey(k string) {
 }
 
 // tileAction does what a tile's card says. A card that navigates to dashboard.LibraryPath opens the
-// music library, to play on the card's media player when it names one.
+// music library, to play on the card's media player when it names one, and one that navigates to
+// dashboard.MealiePath opens the recipes.
 func (d *Display) tileAction(t *dashTile) {
 	a := *t.action
 	if a.View == dashboard.LibraryPath {
@@ -1545,6 +1546,10 @@ func (d *Display) tileAction(t *dashTile) {
 			entity = t.entity
 		}
 		d.openLibrary("", entity, true)
+		return
+	}
+	if a.View == dashboard.MealiePath {
+		d.openMealie()
 		return
 	}
 	dashboard.Get().Tap(a)

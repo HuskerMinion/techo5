@@ -181,6 +181,7 @@ func (d *Display) dashScene(s *scene, sheetOrDrawer bool) {
 		s.dashClimate = d.climateViewNow()
 		s.dashFan = d.fanViewNow()
 		s.dashLibrary = d.libraryViewNow()
+		s.dashMealie = d.mealieSheetNow()
 	}
 
 	over := d.overDashboard(s)
@@ -203,7 +204,7 @@ func (d *Display) dashScene(s *scene, sheetOrDrawer bool) {
 	holdsChanged := holds != d.dashHolds
 	d.dashHolds = holds
 	if !sheeted {
-		d.dashColor, d.dashMedia, d.dashClimate, d.dashFan, d.dashLibrary = nil, nil, nil, nil, nil
+		d.dashColor, d.dashMedia, d.dashClimate, d.dashFan, d.dashLibrary, d.dashMealie = nil, nil, nil, nil, nil, nil
 	}
 	d.mu.Unlock()
 	if changed {
@@ -286,8 +287,8 @@ func (d *Display) dashGesture(g touch.Gesture) {
 		// a finger that lands on a tile is the tile's even there: sliding a light on the right-hand
 		// side is not opening the drawer.
 		edge = min(edge, d.r.margin)
-		// The music library's page reaches nearly to the edges, and a key or a picture there is its.
-		onTile := !streamed && (d.tileAt(g.X, g.Y) != nil || d.libraryUp())
+		// The music library and recipe pages reaches nearly to the edges, and a key or a picture there is its.
+		onTile := !streamed && (d.tileAt(g.X, g.Y) != nil || d.libraryUp() || d.mealieUp())
 		switch {
 		case onTile:
 		case g.X < edge:
@@ -378,6 +379,7 @@ func (r *renderer) drawnDashboard(s scene) {
 	r.climateSheet(s.dashClimate, s.drawn.Theme)
 	r.fanSheet(s.dashFan, s.drawn.Theme)
 	r.librarySheet(s.dashLibrary, s.drawn.Theme)
+	r.mealieSheet(s.dashMealie, s.drawn.Theme)
 }
 
 // dashboardPage draws the dashboard over the whole panel.

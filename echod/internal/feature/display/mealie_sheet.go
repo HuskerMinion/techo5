@@ -108,3 +108,28 @@ func (d *Display) mealieLoadList() {
 		d.wake()
 	}()
 }
+
+// mealieSheetNow returns the recipe sheet for a frame or nil when none is up. A sheet is never changed
+// once it is up (editMealie puts a new one in its place), so the frame draws this one as it is.
+func (d *Display) mealieSheetNow() *mealieSheet {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	return d.dashMealie
+}
+
+// mealieUp reports whether the recipe sheet is up.
+func (d *Display) mealieUp() bool { return d.mealieSheetNow() != nil }
+
+// mealieTap is a finger lifted at x, y. Done puts the sheet away.
+func (d *Display) mealieTap(x, y int) bool {
+	if !d.mealieUp() || d.r == nil {
+		return false
+	}
+	if z, _ := d.r.mealieAt(x, y); z.kind == mealiePartDone {
+		d.mu.Lock()
+		d.dashMealie = nil
+		d.mu.Unlock()
+	}
+	d.wake()
+	return true
+}

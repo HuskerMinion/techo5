@@ -1,6 +1,7 @@
 package mealie
 
 import (
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"strconv"
@@ -181,41 +182,66 @@ func TestRecipesToken(t *testing.T) {
 	}
 }
 
-// A server that refuses or fails is an error that says the status, and what the server said.
+// A server that refuses or fails is an error in words for a screen: what went wrong, by its status, and
+// never what the server said about it.
 func TestRecipesErrors(t *testing.T) {
 	for _, tc := range []struct {
 		name   string
+		token  string
 		status int
 		body   string
-		want   []string
+		want   error
+		says   string // for an error that is not one of the package's own: what it says
 	}{
-		{"refused token", http.StatusUnauthorized, `{"detail":"Unauthorized"}`, []string{"401", "Unauthorized"}},
-		{"server failure", http.StatusInternalServerError, "boom", []string{"500", "boom"}},
-		{"not Mealie", http.StatusNotFound, "<html>not found</html>", []string{"404"}},
+		{"refused token", "secret", http.StatusUnauthorized, `{"detail":"Unauthorized"}`, errRefusedToken, ""},
+		{"a token is needed", "", http.StatusUnauthorized, `{"detail":"Unauthorized"}`, errNeedsToken, ""},
+		{"forbidden", "secret", http.StatusForbidden, "keep out", errForbidden, ""},
+		{"server failure", "secret", http.StatusInternalServerError, "boom", nil, "mealie answered 500 Internal Server Error"},
+		{"not Mealie", "", http.StatusNotFound, "<html>not found</html>", nil, "mealie answered 404 Not Found"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			c := serve(t, func(w http.ResponseWriter, r *http.Request) {
 				http.Error(w, tc.body, tc.status)
 			})
+			c.Token = tc.token
 			got, err := c.Recipes(t.Context())
 			if err == nil {
 				t.Fatalf("no error, and %d recipes", len(got))
 			}
-			for _, w := range tc.want {
-				if !strings.Contains(err.Error(), w) {
-					t.Errorf("error %q does not say %q", err, w)
-				}
+			if tc.want != nil && !errors.Is(err, tc.want) {
+				t.Errorf("error %q, want %q", err, tc.want)
+			}
+			if tc.says != "" && err.Error() != tc.says {
+				t.Errorf("error %q, want %q", err, tc.says)
+			}
+			if strings.Contains(err.Error(), tc.body) {
+				t.Errorf("error %q has what the server said, %q", err, tc.body)
 			}
 		})
 	}
 }
 
-// An answer that is not the list is an error, not an empty list.
+// A Mealie that cannot be reached is an error that says so.
+func TestRecipesNobodyAnswers(t *testing.T) {
+	srv := httptest.NewServer(http.NotFoundHandler())
+	c := Client{URL: srv.URL}
+	srv.Close() // the address now answers nobody
+	_, err := c.Recipes(t.Context())
+	if err == nil || !strings.HasPrefix(err.Error(), "mealie did not answer: ") {
+		t.Fatalf("error %v, want one that says Mealie did not answer", err)
+	}
+	if strings.Contains(err.Error(), "/api/recipes") || strings.Contains(err.Error(), "http://") {
+		t.Errorf("error %q has the address that was asked", err)
+	}
+}
+
+// An answer that is not the list is an error that says it could not be read.
 func TestRecipesUnreadable(t *testing.T) {
 	c := serve(t, func(w http.ResponseWriter, r *http.Request) {
 		reply(w, "this is not json")
 	})
-	if got, err := c.Recipes(t.Context()); err == nil {
-		t.Errorf("no error, and %d recipes", len(got))
+	got, err := c.Recipes(t.Context())
+	if !errors.Is(err, ErrUnreadable) {
+		t.Errorf("error %v and %d recipes, want ErrUnreadable", err, len(got))
 	}
 }

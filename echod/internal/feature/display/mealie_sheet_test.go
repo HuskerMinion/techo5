@@ -4,6 +4,7 @@ package display
 
 import (
 	"fmt"
+	"image"
 	"net/http"
 	"net/http/httptest"
 	"strconv"
@@ -13,6 +14,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/HuskerMinion/techo5/echod/internal/config"
+	"github.com/HuskerMinion/techo5/echod/internal/feature/dashboard"
 	"github.com/HuskerMinion/techo5/echod/internal/lib/mealie"
 )
 
@@ -30,7 +33,7 @@ func mockedRecipesEndpoint(total int) http.HandlerFunc {
 		for i := (page - 1) * per; i < min(page*per, total); i++ {
 			items = append(items, fmt.Sprintf(`{"id":"id-%03d","name":"Recipe %03d","slug":"recipe-%03d","image":"v1"}`, i, i, i))
 		}
-		fmt.Fprintf(w, `{"page":%d,"per_page":%d,"total":%d,"total_pages":%d,"items":[%s]}`,
+		_, _ = fmt.Fprintf(w, `{"page":%d,"per_page":%d,"total":%d,"total_pages":%d,"items":[%s]}`,
 			page, per, total, (total+per-1)/per, strings.Join(items, ","))
 	}
 }
@@ -202,5 +205,91 @@ func TestMealieAnswerForAnEarlierOpeningIsThrownAway(t *testing.T) {
 	time.Sleep(200 * time.Millisecond)
 	if got := len(mealieSheetOf(d).recipes); got != 2 {
 		t.Errorf("the sheet has %d recipes, want the second opening's 2", got)
+	}
+}
+
+// drawFrame draws a whole frame of the drawn dashboard on r, with the recipe sheet s over it, or none
+// when s is nil, and returns the zones the recipe sheet kept.
+func drawFrame(r *renderer, s *mealieSheet) []mediaZone {
+	r.draw(scene{now: time.Now(), phase: "idle", showDash: true, dashMode: config.DashboardDrawn,
+		drawn: fourControls(), dashMealie: s})
+	r.zmu.Lock()
+	defer r.zmu.Unlock()
+	return append([]mediaZone(nil), r.mealieZones...)
+}
+
+// middleOf returns the point in the middle of z.
+func middleOf(z mediaZone) (int, int) {
+	return (z.r.Min.X + z.r.Max.X) / 2, (z.r.Min.Y + z.r.Max.Y) / 2
+}
+
+// A card that navigates to dashboard.MealiePath opens the recipe sheet.
+func TestMealieCardOpensTheSheet(t *testing.T) {
+	stubMealieClient(t, mealie.Client{}, false)
+	page := dashboard.Drawn{Sections: []dashboard.Section{{Blocks: []dashboard.Block{{Tiles: []dashboard.Tile{
+		{Name: "Recipes", Icon: "chef-hat", Tap: &dashboard.Action{View: dashboard.MealiePath}},
+	}}}}}}
+	r := newRenderer(image.NewRGBA(image.Rect(0, 0, showWide, showHigh)))
+	r.draw(scene{now: time.Now(), phase: "idle", showDash: true, dashMode: config.DashboardDrawn, drawn: page})
+	d := &Display{r: r, poke: make(chan struct{}, 1)}
+	tiles, _ := r.dash()
+	if len(tiles) != 1 {
+		t.Fatalf("%d tiles drawn, want 1", len(tiles))
+	}
+	if d.mealieUp() {
+		t.Fatal("the recipe sheet is up before the card was tapped")
+	}
+	d.drawnTap((tiles[0].r.Min.X+tiles[0].r.Max.X)/2, (tiles[0].r.Min.Y+tiles[0].r.Max.Y)/2)
+	if !d.mealieUp() {
+		t.Fatal("the card did not open the recipe sheet")
+	}
+}
+
+// A frame with a recipe sheet draws it over the dashboard, so that its parts are there to be tapped;
+// the next frame without one has none.
+func TestMealieSheetIsDrawnOverTheDashboard(t *testing.T) {
+	r := newRenderer(image.NewRGBA(image.Rect(0, 0, showWide, showHigh)))
+	sheet := loadedMealieSheet(testRecipes(6))
+	zones := drawFrame(r, &sheet)
+	if got := len(zonesOfKind(zones, mealiePartDone)); got != 1 {
+		t.Errorf("%d Done buttons in a frame with the sheet, want 1", got)
+	}
+	if len(zonesOfKind(zones, mealiePartItem)) == 0 {
+		t.Error("no recipes in a frame with the sheet")
+	}
+	drawFrame(r, nil)
+	if _, on := r.mealieAt(showWide/2, showHigh/2); on {
+		t.Error("the sheet is still there in a frame without it")
+	}
+}
+
+// While the recipe sheet is up it takes every tap: a recipe does nothing yet and the sheet stays, a tap
+// beside the parts stays too, and Done puts the sheet away.
+func TestMealieSheetTakesTheTaps(t *testing.T) {
+	r := newRenderer(image.NewRGBA(image.Rect(0, 0, showWide, showHigh)))
+	d := &Display{r: r, poke: make(chan struct{}, 1)}
+	if d.mealieTap(10, 10) {
+		t.Fatal("a tap was taken with no recipe sheet up")
+	}
+	sheet := loadedMealieSheet(testRecipes(6))
+	d.dashMealie = &sheet
+	zones := drawFrame(r, d.mealieSheetNow())
+	item, done := zonesOfKind(zones, mealiePartItem)[0], zonesOfKind(zones, mealiePartDone)[0]
+	bx, by := middleOf(mediaZone{r: r.mealieGeometry().bar})
+	ix, iy := middleOf(item)
+	dx, dy := middleOf(done)
+	for name, at := range map[string]image.Point{"a recipe": image.Pt(ix, iy), "beside the parts": image.Pt(bx, by)} {
+		if !d.colorTap(at.X, at.Y) {
+			t.Errorf("a tap on %s was not taken by the sheet", name)
+		}
+		if !d.mealieUp() {
+			t.Errorf("a tap on %s put the sheet away", name)
+		}
+	}
+	if !d.colorTap(dx, dy) {
+		t.Error("a tap on Done was not taken by the sheet")
+	}
+	if d.mealieUp() {
+		t.Error("Done did not put the sheet away")
 	}
 }

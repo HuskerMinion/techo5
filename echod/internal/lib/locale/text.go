@@ -805,6 +805,9 @@ var uiEnglish = map[string]string{
 	"wifi_connected":                                "Connected",
 	"ui_clock_position_styles":                      "For the Classic, Flip, LED, Sun and Glow styles",
 	"ui_match_all_languages":                        "Match all",
+	"ui_mealie_recipes":                             "Recipes",
+	"ui_mealie_set_up_hint":                         "Set up Mealie on the setup page to browse your recipes here.",
+	"ui_mealie_empty_hint":                          "Add recipes in Mealie, and they show up here.",
 }
 
 var uiTranslations = map[string]map[string]string{
@@ -1901,6 +1904,10 @@ var uiTranslations = map[string]map[string]string{
 		"wifi_connected":                                "Connecté",
 		"ui_clock_position_styles":                      "Pour les styles Classic, Flip, LED, Sun et Glow",
 		"ui_match_all_languages":                        "Reconnaître toutes les langues",
+		// TODO(mealie): Native speaker check.
+		"ui_mealie_recipes":     "Recettes",
+		"ui_mealie_set_up_hint": "Configurez Mealie sur la page de configuration pour pouvoir consulter vos recettes ici.",
+		"ui_mealie_empty_hint":  "Ajoutez des recettes dans Mealie, et elles s'afficheront ici.",
 	},
 	"gl": {
 		"drawer_recording":           "Escoitando",
@@ -2684,6 +2691,10 @@ var uiTranslations = map[string]map[string]string{
 		"wifi_connected":                                "Conectado",
 		"ui_clock_position_styles":                      "Para os estilos Classic, Flip, LED, Sun e Glow",
 		"ui_match_all_languages":                        "Recoñecer todas as linguas",
+		// TODO(mealie): Native speaker check.
+		"ui_mealie_recipes":     "Receitas",
+		"ui_mealie_set_up_hint": "Configure Mealie na páxina de configuración para navegar polas túas receitas aquí.",
+		"ui_mealie_empty_hint":  "Engade receitas en Mealie e aparecerán aquí.",
 	},
 	"it": {
 		"drawer_recording":           "In ascolto",
@@ -3471,6 +3482,10 @@ var uiTranslations = map[string]map[string]string{
 		"wifi_connected":                                "Connesso",
 		"ui_clock_position_styles":                      "Disponibile con gli stili Classic, Flip, LED, Sun e Glow",
 		"ui_match_all_languages":                        "Riconosci tutte le lingue",
+		// TODO(mealie): Native speaker check.
+		"ui_mealie_recipes":     "Ricette",
+		"ui_mealie_set_up_hint": "Configura Mealie nella pagina di configurazione per sfogliare le tue ricette qui.",
+		"ui_mealie_empty_hint":  "Aggiungi le ricette su Mealie e appariranno qui.",
 	},
 	"nl": {
 		// Audio output
@@ -4471,6 +4486,10 @@ var uiTranslations = map[string]map[string]string{
 		"wifi_connected":                                "接続済み",
 		"ui_clock_position_styles":                      "Classic、Flip、LED、Sun、Glowスタイル用",
 		"ui_match_all_languages":                        "すべての言語を認識",
+		// TODO(mealie): Native speaker check.
+		"ui_mealie_recipes":     "レシピ",
+		"ui_mealie_set_up_hint": "セットアップページでMealieを設定して、ここでレシピを閲覧しましょう。",
+		"ui_mealie_empty_hint":  "Mealieにレシピを追加すると、ここに表示されます。",
 	},
 
 	// de is the German catalog. The English of every entry is above it, so a
@@ -5873,6 +5892,9 @@ var uiTranslations = map[string]map[string]string{
 		"wifi_connected":                                "Verbunden",
 		"ui_clock_position_styles":                      "Für die Stile Classic, Flip, LED, Sun und Glow",
 		"ui_match_all_languages":                        "Alle Sprachen erkennen",
+		"ui_mealie_recipes":                             "Rezepte",
+		"ui_mealie_set_up_hint":                         "Richte Mealie auf der Setup-Seite ein um deine Rezepte hier zu sehen.",
+		"ui_mealie_empty_hint":                          "Füge in Mealie Rezepte hinzu.",
 	},
 	"tr": {
 		"ui_listening_turn":          "Dinleniyor…",
@@ -6661,5 +6683,9 @@ var uiTranslations = map[string]map[string]string{
 		"wifi_connected":                                "Bağlı",
 		"ui_clock_position_styles":                      "Classic, Flip, LED, Sun ve Glow stilleri için",
 		"ui_match_all_languages":                        "Tüm dilleri tanı",
+		// TODO(mealie): Native speaker check.
+		"ui_mealie_recipes":     "Tarifler",
+		"ui_mealie_set_up_hint": "Tariflerinize buradan göz atabilmek için kurulum sayfasında Mealie’yi ayarlayın.",
+		"ui_mealie_empty_hint":  "Mealie'ye tarifler ekleyin, burada görünsünler.",
 	},
 }

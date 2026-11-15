@@ -178,6 +178,37 @@ The library is read from Music Assistant directly, with the address and token se
 (**Sound & Voice**, under **Music Assistant**). Without them, the library says so and shows nothing
 else. The music plays through Home Assistant, as the media sheet's favorites do.
 
+## Mealie Recipes
+
+On the Echo Show (and the Skylight and Panel builds), a drawn dashboard can open the recipes of a
+Mealie server. The Echo Dot and the Echo Spot don't have it.
+
+**Setting it up**
+
+On the setup page, under **Connections**, **Mealie**: the server's address, like
+`http://192.168.1.20:9000`. A token is only needed when the server asks for a sign-in to read
+recipes; make one in Mealie under your user's API tokens. It is never shown again once saved.
+
+**Opening it**
+
+Give any card a tap action that navigates to `#techo5-mealie`:
+
+```yaml
+type: button
+name: Recipes
+icon: mdi:chef-hat
+tap_action:
+  action: navigate
+  navigation_path: "#techo5-mealie"
+```
+
+Home Assistant itself has no view of that name, so the same card does nothing in a browser.
+
+**What it shows**
+
+All the recipes by name, a tile for each with its name under it. **Done** closes it. If Mealie isn't
+set up, or can't be reached, a line says so.
+
 ## What drawn mode draws
 
 | Home Assistant card | On the device |

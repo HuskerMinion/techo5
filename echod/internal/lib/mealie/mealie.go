@@ -3,9 +3,12 @@ package mealie
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
+	"log/slog"
 	"net/http"
+	"net/url"
 	"strconv"
 	"strings"
 	"time"
@@ -53,8 +56,8 @@ type RecipeEntry struct {
 	DateAdded string `json:"dateAdded"`
 }
 
-// get sends an HTTP request to the url and returns its answer as mapped to into. An answer other than 200 is an error that
-// says the status and the start of what the server said.
+// get sends an HTTP request to the url and returns its answer as mapped to into. What goes wrong is told
+// in words for a screen. The actual error goes to the log.
 func (c Client) get(ctx context.Context, url string, into any) error {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
@@ -67,18 +70,52 @@ func (c Client) get(ctx context.Context, url string, into any) error {
 	req.Header.Set("Content-Type", "application/json")
 	resp, err := client.Do(req)
 	if err != nil {
-		return err
+		return didNotAnswer(err)
 	}
 	defer resp.Body.Close()
 	b, err := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
 	if err != nil {
-		return err
+		return didNotAnswer(err)
 	}
-	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("mealie: %s: %.200s", resp.Status, strings.TrimSpace(string(b)))
+	switch resp.StatusCode {
+	case http.StatusOK:
+	case http.StatusUnauthorized:
+		if c.Token == "" {
+			return errNeedsToken
+		}
+		return errRefusedToken
+	case http.StatusForbidden:
+		return errForbidden
+	default:
+		slog.Warn("mealie: an answer that was not wanted", "status", resp.Status, "said", strings.TrimSpace(string(b[:min(len(b), 200)])))
+		return fmt.Errorf("mealie answered %s", resp.Status)
 	}
-	return json.Unmarshal(b, into)
+	if err := json.Unmarshal(b, into); err != nil {
+		slog.Warn("mealie: an answer that could not be read", "err", err)
+		return ErrUnreadable
+	}
+	return nil
 }
+
+// didNotAnswer is err as a Mealie that did not answer
+func didNotAnswer(err error) error {
+	if asked, ok := errors.AsType[*url.Error](err); ok {
+		err = asked.Err
+	}
+	return fmt.Errorf("mealie did not answer: %w", err)
+}
+
+// The ways Mealie refuses, told for a screen.
+var (
+	errNeedsToken   = errors.New("mealie asks for a token: set one on the setup page")
+	errRefusedToken = errors.New("mealie refused the token")
+	errForbidden    = errors.New("mealie does not let this token read the recipes")
+)
+
+// ErrUnreadable is an answer from Mealie that this device could not read.
+//
+//lint:ignore ST1005 it starts with a name, and the screen shows it as it is
+var ErrUnreadable = errors.New("Mealie sent something this device couldn't read")
 
 // Recipes returns all the recipes in name order, reading the list a page at a time. An error on any page
 // is an error for the whole list.
