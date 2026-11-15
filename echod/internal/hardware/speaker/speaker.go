@@ -480,11 +480,13 @@ func (p *Player) path(out Output) []kctl {
 // AmpSwitch in paths_dot.go and paths_cronos.go. Turning it on also lets go of the amplifier's mute
 // (MuteSwitch) once the stream is playing; before then Run lets go of it itself.
 //
-// A board with an idle gate (idleGate) switches that instead, in its own pop-free order, and on any
-// output: switching on there is also waking it from an idle sleep, which a path written again (a
-// start, a change of output, Reopen) is the moment for.
+// A board with an idle gate (idleGate) and no AmpSwitch or MuteSwitch of its own (the 1st gen Show 5)
+// switches that instead, in its own pop-free order, and on any output: switching on there is also
+// waking it from an idle sleep, which a path written again (a start, a change of output, Reopen) is
+// the moment for. The Echo 2nd gen's gate is its MuteSwitch, so it is switched here as before, and
+// switching it on counts as awake for the idle gate.
 func (p *Player) amp(on bool) {
-	if p.gate != nil {
+	if p.gate != nil && AmpSwitch == "" && MuteSwitch == "" {
 		if on {
 			p.ampWake()
 		} else {
@@ -498,6 +500,11 @@ func (p *Player) amp(on bool) {
 
 	p.pathMu.Lock()
 	defer p.pathMu.Unlock()
+	if on && p.gate != nil {
+		// The mute is let go below: the idle gate must not believe the amplifier still asleep, or it
+		// would hiss until the next sound woke it and the gate's count began again.
+		p.idle.settled(ampAwake)
+	}
 
 	if p.out != OutputSpeaker {
 		return
@@ -524,6 +531,10 @@ func (p *Player) unmute() {
 	defer p.pathMu.Unlock()
 	if p.out != OutputSpeaker || p.draining {
 		return
+	}
+	if p.gate != nil {
+		// A stream started again after an idle sleep: the mute is let go, so the gate is awake.
+		p.idle.settled(ampAwake)
 	}
 	p.apply([]kctl{{name: MuteSwitch, value: "Off"}})
 }
