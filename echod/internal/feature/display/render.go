@@ -340,6 +340,8 @@ type renderer struct {
 	// way; ink is what the LED and flip clocks are drawn in for the frame in hand.
 	flip flipState
 	ink  clockInk
+	// flipPics is the flip clock's card faces and hinges, each drawn once and kept (flipKept).
+	flipPics map[flipKey]*image.RGBA
 	// cornered is whether the day style in hand is drawn small in a corner at the foot (Clock
 	// position), for the frame in hand.
 	cornered bool

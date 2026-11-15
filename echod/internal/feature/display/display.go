@@ -3172,7 +3172,10 @@ func (d *Display) frame() (next time.Duration) {
 		return 250 * time.Millisecond
 	}
 	if d.r.flipBusy(time.Now()) {
-		return flipFrame // a card is flipping: the night's flip clock, or the Flip clock style
+		// A card is flipping: the night's flip clock, or the Flip clock style. Paced from one frame's
+		// start to the next's, as Rainbow is, so a frame that took a while does not also hold back
+		// the next one.
+		return max(flipFrame-time.Since(began), rainbowBreath)
 	}
 	if s.showCamera && stillOnly(s.camera) {
 		return time.Until(time.Now().Truncate(idleFrame).Add(idleFrame)) // its picture arriving wakes the loop itself

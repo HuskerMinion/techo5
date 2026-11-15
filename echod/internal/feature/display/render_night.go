@@ -311,15 +311,65 @@ func (r *renderer) flipCard(card image.Rectangle, i, inset int, now time.Time) {
 		p = min(float64(now.Sub(r.flip.at))/float64(flipFor), 1)
 	}
 	if from == shown || p >= 1 {
-		r.flipFace(card, shown, inset)
+		face := r.flipFaceKept(card, shown, inset)
+		draw.Draw(r.dst, card, face, face.Rect.Min, draw.Over)
 	} else {
 		r.flipTurning(card, from, shown, inset, p)
 	}
-	mid := card.Min.Y + card.Dy()/2
-	r.fillRect(image.Rect(card.Min.X, mid-r.s(2), card.Max.X, mid+r.s(2)), r.ink.split)
-	hw, hh := r.s(6), card.Dy()/9
-	r.roundRect(image.Rect(card.Min.X-hw, mid-hh/2, card.Min.X+r.s(2), mid+hh/2), r.s(3), r.ink.hinge)
-	r.roundRect(image.Rect(card.Max.X-r.s(2), mid-hh/2, card.Max.X+hw, mid+hh/2), r.s(3), r.ink.hinge)
+	hinges := r.flipKept(card, "\x00hinges", 0, func(card image.Rectangle) {
+		mid := card.Min.Y + card.Dy()/2
+		r.fillRect(image.Rect(card.Min.X, mid-r.s(2), card.Max.X, mid+r.s(2)), r.ink.split)
+		hw, hh := r.s(6), card.Dy()/9
+		r.roundRect(image.Rect(card.Min.X-hw, mid-hh/2, card.Min.X+r.s(2), mid+hh/2), r.s(3), r.ink.hinge)
+		r.roundRect(image.Rect(card.Max.X-r.s(2), mid-hh/2, card.Max.X+hw, mid+hh/2), r.s(3), r.ink.hinge)
+	})
+	hw := r.s(6)
+	draw.Draw(r.dst, card.Inset(-hw), hinges, hinges.Rect.Min, draw.Over)
+}
+
+// flipKey is one picture of a flip clock's kept between frames (flipKept): a card's face with its text,
+// or the split and hinges over it, at its size, in the ink and the clock face's figures it was drawn in.
+type flipKey struct {
+	text     string
+	w, h     int
+	inset    int
+	ink      clockInk
+	face     font.Face
+	hingeOut int
+}
+
+// flipKeepMost is how many kept pictures the flip clock holds: every figure, a blank, AM and PM and the
+// hinges, at two card sizes. Past it, they are all drawn afresh as they are next needed.
+const flipKeepMost = 32
+
+// flipKept is paint's picture of a card the size of card, drawn once on a clear ground and kept: a
+// minute's cards stand still, and a flip draws the same two faces thirty times a second, so the
+// figures are rasterized and stretched, and the rounded leaves filled, only when a card shows
+// something new, not on every frame. The picture is a little wider than card, by the hinges, and is
+// placed with its middle on the card's (draw it at card.Inset(-hinge width)).
+func (r *renderer) flipKept(card image.Rectangle, text string, inset int, paint func(card image.Rectangle)) *image.RGBA {
+	out := r.s(6)
+	k := flipKey{text, card.Dx(), card.Dy(), inset, r.ink, r.clock, out}
+	if img, ok := r.flipPics[k]; ok {
+		return img
+	}
+	if r.flipPics == nil || len(r.flipPics) >= flipKeepMost {
+		r.flipPics = map[flipKey]*image.RGBA{}
+	}
+	at := image.Rect(out, 0, out+card.Dx(), card.Dy())
+	img := image.NewRGBA(at.Inset(-out))
+	screen := r.dst
+	r.dst = img
+	paint(at)
+	r.dst = screen
+	r.flipPics[k] = img
+	return img
+}
+
+// flipFaceKept is card's face showing text, kept (flipKept), exactly as wide as the card.
+func (r *renderer) flipFaceKept(card image.Rectangle, text string, inset int) *image.RGBA {
+	img := r.flipKept(card, text, inset, func(card image.Rectangle) { r.flipFace(card, text, inset) })
+	return img.SubImage(img.Rect.Inset(r.s(6))).(*image.RGBA)
 }
 
 // flipFace draws a card's two leaves and text on them, set in from the top and bottom by inset percent
@@ -342,18 +392,25 @@ func (r *renderer) flipFace(card image.Rectangle, text string, inset int) {
 // In the first half the old top leaf folds down toward the split, darkening as it turns away; in the
 // second its back, which carries the new text's lower half, comes down over the old bottom.
 func (r *renderer) flipTurning(card image.Rectangle, from, to string, inset int, p float64) {
-	old := r.offscreen(card, func() { r.flipFace(card, from, inset) })
-	next := r.offscreen(card, func() { r.flipFace(card, to, inset) })
-	mid := card.Min.Y + card.Dy()/2
+	// The two faces are kept (flipKept), on a clear ground, so what is behind the card shows at their
+	// corners as it does on a card standing still. In them a card's top half is from 0 to half its
+	// height, wherever the card is on the screen.
+	old, next := r.flipFaceKept(card, from, inset), r.flipFaceKept(card, to, inset)
+	half := card.Dy() / 2
+	mid := card.Min.Y + half
 	upper := image.Rect(card.Min.X, card.Min.Y, card.Max.X, mid)
 	lower := image.Rect(card.Min.X, mid, card.Max.X, card.Max.Y)
-	draw.Draw(r.dst, upper, next, upper.Min, draw.Over)
-	draw.Draw(r.dst, lower, old, lower.Min, draw.Over)
+	top := image.Rect(old.Rect.Min.X, 0, old.Rect.Max.X, half)
+	bottom := image.Rect(old.Rect.Min.X, half, old.Rect.Max.X, card.Dy())
+	draw.Draw(r.dst, upper, next, top.Min, draw.Over)
+	draw.Draw(r.dst, lower, old, bottom.Min, draw.Over)
+	// The moving leaf is squeezed with the approximate scaler: it is in motion and shaded, and the
+	// exact one takes a buffer the size of the leaf on every frame.
 	if p < 0.5 {
 		fold := math.Cos(p * math.Pi) // 1 standing up, 0 edge on
 		leaf := image.Rect(upper.Min.X, mid-int(fold*float64(upper.Dy())), upper.Max.X, mid)
 		if !leaf.Empty() {
-			xdraw.BiLinear.Scale(r.dst, leaf, old, upper, xdraw.Over, nil)
+			xdraw.ApproxBiLinear.Scale(r.dst, leaf, old, top, xdraw.Over, nil)
 			r.shade(leaf, 1-fold)
 		}
 		return
@@ -361,7 +418,7 @@ func (r *renderer) flipTurning(card image.Rectangle, from, to string, inset int,
 	fold := -math.Cos(p * math.Pi) // 0 edge on, 1 lying flat on the lower leaf
 	leaf := image.Rect(lower.Min.X, mid, lower.Max.X, mid+int(fold*float64(lower.Dy())))
 	if !leaf.Empty() {
-		xdraw.BiLinear.Scale(r.dst, leaf, next, lower, xdraw.Over, nil)
+		xdraw.ApproxBiLinear.Scale(r.dst, leaf, next, bottom, xdraw.Over, nil)
 		r.shade(leaf, 1-fold)
 	}
 }
@@ -370,19 +427,6 @@ func (r *renderer) flipTurning(card image.Rectangle, from, to string, inset int,
 func (r *renderer) shade(b image.Rectangle, by float64) {
 	a := uint8(math.Round(min(max(by, 0), 1) * 190))
 	washOver(r.dst, b, color.RGBA{0, 0, 0, a})
-}
-
-// offscreen is what paint draws, over what the screen already has there, into a picture of just b,
-// not onto the screen: the corners of a card being turned show what is behind the card, black at
-// night, a photo or the weather art by day.
-func (r *renderer) offscreen(b image.Rectangle, paint func()) *image.RGBA {
-	img := image.NewRGBA(b)
-	draw.Draw(img, b, r.dst, b.Min, draw.Src)
-	screen := r.dst
-	r.dst = img
-	paint()
-	r.dst = screen
-	return img
 }
 
 // flipDigits draws s in box the way flip-clock figures look: each character in its own equal share of
