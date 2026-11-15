@@ -2480,10 +2480,10 @@ var uiTranslations = map[string]map[string]string{
 		"reading_the_calendar":                      "Lendo o calendario…",
 		"remote_api":                                "API remota",
 		"repeat":                                    "Repetir",
-		"reset":                                     "Redefinir",
-		"reset_for_someone_else":                    "Redefinir para outra pessoa",
-		"clears_it_and_start_setting_it_up_again":             "Apaga tudo e permite configurá-lo novamente",
-		"wifi_name_home_assistant_alarm_everything_tap_again": "Wi-Fi, nome, Home Assistant, alarmes, tudo: toque novamente",
+		"reset":                                     "Restablecer",
+		"reset_for_someone_else":                    "Restablecer para outra persoa",
+		"clears_it_and_start_setting_it_up_again":             "Borra todo e volve comezar a configuración",
+		"wifi_name_home_assistant_alarm_everything_tap_again": "Wi-Fi, nome, Home Assistant, alarmas, todo: toca de novo",
 		"restart":                               "Reiniciar",
 		"said_as_it_rings":                      "Dito mentres soa",
 		"same_as_default":                       "Igual que o predeterminado (%s)",
@@ -6953,7 +6953,7 @@ var uiTranslations = map[string]map[string]string{
 		// Clears it and starts setting it up again
 		"clears_it_and_start_setting_it_up_again": "Löscht alles und startet die Einrichtung erneut",
 		// Wi-Fi, name, Home Assistant, alarms, everything: tap again
-		"wifi_name_home_assistant_alarm_everything_tap_again": "WLAN-Name, Home Assistant, Alarme, alles: erneut tippen",
+		"wifi_name_home_assistant_alarm_everything_tap_again": "WLAN, Name, Home Assistant, Wecker, alles: erneut tippen",
 		// Restart
 		"restart": "Neu starten",
 		// Said as it rings
