@@ -17,6 +17,7 @@ import (
 
 	"github.com/HuskerMinion/techo5/echod/internal/component"
 	"github.com/HuskerMinion/techo5/echod/internal/config"
+	"github.com/HuskerMinion/techo5/echod/internal/hardware/mic"
 	"github.com/HuskerMinion/techo5/echod/internal/layout"
 	"github.com/HuskerMinion/techo5/echod/internal/lib/alsa"
 	"github.com/HuskerMinion/techo5/echod/internal/lib/asp"
@@ -422,6 +423,9 @@ func init() {
 	// 1st gen Show 5), it is, and the silence goes on under it: see idle.go.
 	component.Register(component.Hardware, Get(), component.Order(6),
 		component.Supervise(service.Restart(time.Second, 30*time.Second)))
+
+	// A speaker on the jack is across the room: its echo needs the canceller's longer filter.
+	mic.LongEchoPath = func() bool { return Get().Output() == OutputHeadphone }
 }
 
 // Get is the speaker. There is one, and everything audible goes through it.
