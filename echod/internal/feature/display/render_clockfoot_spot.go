@@ -3,6 +3,7 @@
 package display
 
 import (
+	"fmt"
 	"image"
 	"image/color"
 	"math"
@@ -77,7 +78,7 @@ func (r *roundRenderer) footLast(s roundScene, baseline int, otherwise string, c
 	w := footRoom(baseline)
 	switch {
 	case len(s.timers) > 0:
-		r.centered(r.small, "Timer "+clockDuration(s.timers[0].Left), baseline, colTimer)
+		r.centered(r.small, fmt.Sprintf(tr("timer_left_s"), clockDuration(s.timers[0].Left)), baseline, colTimer)
 	case s.missed != "":
 		r.centered(r.small, spotClip(r, r.small, s.missed, w), baseline, colTimer)
 	case s.slideshowTrouble != "":

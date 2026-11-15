@@ -331,7 +331,7 @@ func (r *renderer) timeBlock(v calendarView, l calLook, e hass.Event, b image.Re
 		tx := b.Min.X + r.s(13)
 		tw := b.Max.X - tx - r.s(4)
 		lh := r.weekLine()
-		if b.Dy() < r.s(30)*max(r.textSize, 125)/125 {
+		if b.Dy() < r.s(30) {
 			base := (b.Min.Y+b.Max.Y)/2 + capHeight(r.micro)/2
 			if icon != "" && tw > r.s(60) {
 				r.mdiAt(icon, tx+r.s(7), (b.Min.Y+b.Max.Y)/2, 15, cream)
@@ -414,9 +414,9 @@ func (r *renderer) timeBlock(v calendarView, l calLook, e hass.Event, b image.Re
 
 // weekLine is how far apart a week's box puts the lines of its words: 19 of the Show 5's pixels, which
 // keeps a two-hour box's two lines at the sizes up to 125% (their tails and tops close, not on each
-// other), and more past it, where the lines' words would run into each other.
+// other). The week is never drawn larger than 125% (calendarMost), so it need not grow past it.
 func (r *renderer) weekLine() int {
-	return r.s(19) * max(r.textSize, 125) / 125
+	return r.s(19)
 }
 
 // restOf is what is left of title after its first lines, as calWrap broke them: each line is the

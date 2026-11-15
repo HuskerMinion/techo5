@@ -402,3 +402,25 @@ func TestTheOldTabsOpenWhereTheyWent(t *testing.T) {
 		}
 	}
 }
+
+// Status says what goes off next, and with nothing set says so.
+func TestStatusSaysWhatGoesOffNext(t *testing.T) {
+	f, c := in(t)
+	if body := get(f, "/setup?tab=status", c).Body.String(); !strings.Contains(body, "No alarm</strong> is set.") {
+		t.Error("with no alarm set, Status does not say so")
+	}
+	now := time.Date(2026, 11, 15, 9, 0, 0, 0, time.Local)
+	for _, c := range []struct {
+		at   time.Time
+		want string
+	}{
+		{now.Add(2 * time.Hour), "Today"},
+		{time.Date(2026, 11, 16, 6, 30, 0, 0, time.Local), "Tomorrow"},
+		{time.Date(2026, 11, 19, 6, 30, 0, 0, time.Local), "Thursday"},
+		{time.Date(2026, 11, 30, 6, 30, 0, 0, time.Local), "Monday, November 30"},
+	} {
+		if got := dayWord(c.at, now); got != c.want {
+			t.Errorf("dayWord(%v) = %q, want %q", c.at, got, c.want)
+		}
+	}
+}

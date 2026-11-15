@@ -151,7 +151,7 @@ func (r *roundRenderer) alertPill(here []home.Alert, y int) {
 func (r *roundRenderer) alertFace(s roundScene) {
 	a := s.alerts.Here[s.alertIdx]
 	r.ringAt(center, center, rimIn-8, rimIn, 0, 2*math.Pi, a.Color)
-	r.centered(r.label, "WEATHER ALERT", 70, a.Color)
+	r.centered(r.label, clip(r.label, r, tr("weather_alert"), 260), 70, a.Color) // the face is narrow this high
 	r.paragraph(r.title, a.Event, 112, colText, 2)
 	sub := clip(r.small, r, alertWhen(a, s.now), 360)
 	top := 176

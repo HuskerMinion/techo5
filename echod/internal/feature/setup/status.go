@@ -7,14 +7,18 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/HuskerMinion/techo5/echod/internal/config"
+	"github.com/HuskerMinion/techo5/echod/internal/feature/alarm"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/firmware"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/firstrun"
+	"github.com/HuskerMinion/techo5/echod/internal/feature/timer"
 	"github.com/HuskerMinion/techo5/echod/internal/layout"
 	"github.com/HuskerMinion/techo5/echod/internal/lib/wifi"
 )
 
 // The Status tab is where the page opens: whether the device is on its network, whether Home Assistant
-// is connected to it, what software it runs and whether newer is waiting, and when this page closes.
+// is connected to it, what goes off next, whether it is on a tailnet, what software it runs and whether
+// newer is waiting, and when this page closes.
 // A device with no screen has nowhere else to say any of it, and on every device these were spread over
 // three tabs or not said at all (nothing told whether Home Assistant was connected).
 //
@@ -54,6 +58,9 @@ func statusSection(w http.ResponseWriter) {
 		}
 	}
 
+	statusAlarms(w, time.Now())
+	statusTailnet(w)
+
 	fw := firmware.Get()
 	running := fmt.Sprintf(`<strong>%s</strong>.`, html.EscapeString(layout.Version))
 	switch on, _ := fw.Installing(); {
@@ -77,4 +84,52 @@ func statusSection(w http.ResponseWriter) {
 	 after %s at most. To come back in, ask again and %s.`,
 		int(idle/time.Minute), longest, letInBy))
 	fmt.Fprint(w, `</fieldset>`)
+}
+
+// statusAlarms writes what goes off next: the next alarm and the timers running, or that every alarm is
+// off, or that nothing is set.
+func statusAlarms(w http.ResponseWriter, now time.Time) {
+	running := 0
+	for _, t := range timer.Get().List(now) {
+		if t.Active {
+			running++
+		}
+	}
+	timers := ""
+	switch {
+	case running == 1:
+		timers = " A timer is running."
+	case running > 1:
+		timers = fmt.Sprintf(" %d timers are running.", running)
+	}
+	link := ` <a href="/setup?tab=alarms">Alarms &amp; Timers</a> has them.`
+	v := alarm.Get().View(now)
+	switch {
+	case v.Ringing != nil:
+		statusLine(w, "", "Alarm", "is ringing now."+timers)
+	case config.Get().Alarms.AllOff:
+		statusLine(w, "", "Alarms", "are all turned off."+timers+link)
+	case v.Next != nil:
+		statusLine(w, "", "Next alarm", fmt.Sprintf("%s at %s%s.%s",
+			dayWord(v.Next.At, now), clockText(v.Next.At), labelSuffix(v.Next.Label), timers))
+	case running > 0:
+		statusLine(w, "", "No alarm", "is set."+timers)
+	default:
+		statusLine(w, "", "No alarm", "is set."+link)
+	}
+}
+
+// dayWord is the day of at as seen from now: today, tomorrow, the weekday within the week, or the date.
+func dayWord(at, now time.Time) string {
+	day := func(t time.Time) time.Time { y, m, d := t.Date(); return time.Date(y, m, d, 0, 0, 0, 0, t.Location()) }
+	days := int(day(at).Sub(day(now)).Hours()/24 + 0.5)
+	switch {
+	case days <= 0:
+		return "Today"
+	case days == 1:
+		return "Tomorrow"
+	case days < 7:
+		return at.Weekday().String()
+	}
+	return at.Format("Monday, January 2")
 }

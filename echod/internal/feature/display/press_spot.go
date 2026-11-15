@@ -44,6 +44,21 @@ func (d *Display) pressScene(s *roundScene, now time.Time) {
 	s.press = d.pressNow(pageOf(s), now)
 }
 
+// pressUnshown lets go of the press a frame was drawn with when nothing in it took the press: a finger
+// on the clock's face or on a card's words. It would show on nothing in the frames after either (the
+// face is the same face), and letting it go here spares the two frames its lift and its linger would
+// otherwise ask for, for a look that does not change. Only that press: one landed since is kept.
+func (d *Display) pressUnshown(shown pressView, took bool) {
+	if !shown.on || took {
+		return
+	}
+	d.mu.Lock()
+	if d.press.set && d.press.seq == shown.seq {
+		d.press = pressState{}
+	}
+	d.mu.Unlock()
+}
+
 // pressRefused is whether a finger landing at a point is on no control to show it on. The faces that
 // take the whole panel (a card, a reminder) draw no press of their own, so none is turned away here.
 func (d *Display) pressRefused(image.Point, pageID) bool { return false }

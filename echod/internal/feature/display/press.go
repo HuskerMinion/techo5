@@ -123,7 +123,7 @@ func (d *Display) pressNow(page pageID, now time.Time) pressView {
 		*p = pressState{}
 		return pressView{}
 	}
-	return pressView{on: true, at: p.at}
+	return pressView{on: true, at: p.at, seq: p.seq}
 }
 
 // dropPressLocked ends the press without a frame of its own, for a finger that has become a slide or a

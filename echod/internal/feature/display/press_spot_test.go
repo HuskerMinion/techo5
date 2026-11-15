@@ -243,3 +243,27 @@ func TestASpotPressSetsAndClears(t *testing.T) {
 		t.Error("a finger dragged further than a tap wanders is still a press")
 	}
 }
+
+// A frame that showed the press on nothing lets it go, so the finger's lift asks for no frame; one that
+// showed it keeps it; and a press landed since that frame is never the one let go.
+func TestASpotPressOnNothingIsLetGoAfterItsFrame(t *testing.T) {
+	d := &Display{on: true}
+	d.fingerLanded(touch.Point{X: 240, Y: 240})
+	first := d.pressNow(pageID{}, time.Now())
+	if !first.on {
+		t.Fatal("no press after a finger landed")
+	}
+	d.pressUnshown(first, true)
+	if !d.press.set {
+		t.Fatal("a press a control took was let go")
+	}
+	d.pressUnshown(first, false)
+	if d.press.set {
+		t.Fatal("a press nothing took is still kept")
+	}
+	d.fingerLanded(touch.Point{X: 240, Y: 240})
+	d.pressUnshown(first, false) // the frame of the earlier press, drawn late
+	if !d.press.set {
+		t.Error("a later press was let go for an earlier one's frame")
+	}
+}

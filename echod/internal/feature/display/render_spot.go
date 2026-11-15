@@ -584,7 +584,7 @@ func (r *roundRenderer) classicClockFace(s roundScene) {
 	}
 	if len(s.timers) > 0 {
 		t := s.timers[0]
-		r.centered(r.body, "Timer "+clockDuration(t.Left), line, colTimer)
+		r.centered(r.body, fmt.Sprintf(tr("timer_left_s"), clockDuration(t.Left)), line, colTimer)
 		line += 34
 	}
 	if s.missed != "" {
@@ -642,7 +642,7 @@ func (r *roundRenderer) volume(s roundScene) {
 	r.arc(170, 190, from, from+span, colTrack)
 	r.arc(170, 190, from, from+span*frac, colListening)
 	r.centered(r.clock, fmt.Sprintf("%d", s.volume), 270, colText)
-	r.centered(r.small, "VOLUME", 320, colDim)
+	r.centered(r.small, tr("volume_caps"), 320, colDim)
 }
 
 // arc fills the ring between radii r0 and r1 from angle a0 to a1, clockwise from straight up, with

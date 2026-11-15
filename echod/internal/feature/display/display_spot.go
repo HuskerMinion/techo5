@@ -1825,6 +1825,7 @@ func (d *Display) frame() (next time.Duration) {
 	if s.showVideo && s.videoLive {
 		// The picture's own frames go to the panel; the canvas holds only the controls.
 		d.r.draw(s)
+		d.pressUnshown(s.press, d.r.press.shown)
 		d.videoPainting, d.videoOver = true, d.r.videoOver
 		for pending := true; pending; {
 			select {
@@ -1841,6 +1842,7 @@ func (d *Display) frame() (next time.Duration) {
 	}
 	drawn := time.Now()
 	d.r.draw(s)
+	d.pressUnshown(s.press, d.r.press.shown)
 	d.mu.Lock()
 	d.callShown = d.r.callDrawn
 	d.mu.Unlock()

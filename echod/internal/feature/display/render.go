@@ -1423,9 +1423,9 @@ func playingWord(s scene) string {
 	case s.strip:
 		return "" // the strip says it, and the footer is under it
 	case s.playing:
-		return "♪ playing"
+		return tr("music_playing")
 	case s.paused:
-		return "♪ paused"
+		return tr("music_paused")
 	}
 	return ""
 }

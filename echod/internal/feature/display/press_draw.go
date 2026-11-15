@@ -28,6 +28,8 @@ type pressView struct {
 	// shown is a button of the frame in hand having taken the press, so the zone around it does not
 	// show it a second time (pressZone).
 	shown bool
+	// seq is which press this is (pressState.seq), for letting go of it after the frame.
+	seq uint64
 }
 
 // pressed is whether the finger of the frame in hand is on the button drawn in b.
@@ -58,6 +60,7 @@ func (r *paint) pressTinted(on bool, fill, ink color.RGBA) color.RGBA {
 // pressOver shows the press on something already drawn in b, whose words are in ink: for a tile or a
 // row, which is filled in more ways than a button is.
 func (r *paint) pressOver(b image.Rectangle, rad float64, ink color.RGBA) {
+	r.press.shown = true
 	rad = min(rad, float64(min(b.Dx(), b.Dy()))/2)
 	r.glassFill(b, rad, ink, pressTint, pressTint)
 }
