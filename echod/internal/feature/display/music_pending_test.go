@@ -7,6 +7,21 @@ import (
 	"time"
 )
 
+// Play on a paused page holds the page up for the stream coming back; pause does not.
+func TestResumeHoldsNowPlayingUp(t *testing.T) {
+	d := &Display{}
+	d.showingPaused = false
+	d.toggleMusic()
+	if pending, _ := d.musicPending(); pending {
+		t.Error("a pause holds the page up")
+	}
+	d.showingPaused = true
+	d.toggleMusic()
+	if pending, fresh := d.musicPending(); !pending || fresh {
+		t.Errorf("a resume: pending %v, fresh %v; want held and not fresh", pending, fresh)
+	}
+}
+
 // Music asked for here keeps Now Playing up while the stream is on its way, for a while and no longer,
 // and ending the music lets go at once.
 func TestNowPlayingIsHeldForMusicOnItsWay(t *testing.T) {

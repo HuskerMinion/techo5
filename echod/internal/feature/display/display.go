@@ -471,6 +471,7 @@ type Display struct {
 	// on what is on the screen, rather than working the same thing out a second way and drifting from
 	// it — which is how a tap out of an empty corner came to send a play/pause.
 	showingPlaying     bool
+	showingPaused      bool
 	showingModernMusic bool
 	showingWord        bool
 	// showingLibraryWord is the Now Playing page's Library button as last drawn: its word, or empty
@@ -1644,7 +1645,7 @@ func (d *Display) gesture(g touch.Gesture) {
 			case at.In(back):
 				transport(media.TransportPrevious)
 			case at.In(play):
-				transport(media.TransportToggle)
+				d.toggleMusic()
 			case at.In(next):
 				transport(media.TransportNext)
 			case at.In(d.r.stripSong()):
@@ -1682,11 +1683,11 @@ func (d *Display) gesture(g touch.Gesture) {
 				case at.In(next):
 					transport(media.TransportNext)
 				default:
-					transport(media.TransportToggle)
+					d.toggleMusic()
 				}
 				return
 			}
-			transport(media.TransportToggle)
+			d.toggleMusic()
 			return
 		}
 		// The clock itself: a voice turn, unless the Tap on the clock setting says the dashboard, or
@@ -2988,6 +2989,7 @@ func (d *Display) frame() (next time.Duration) {
 		}
 	}
 	d.showingPlaying, d.showingStrip, d.showingWord = s.nowPlaying, s.strip, playingWord(s) != ""
+	d.showingPaused = s.paused
 	d.showingModernMusic = s.modernMusic
 	d.showingLibraryWord = s.libraryWord
 	d.showingSpoken, d.showingSpeed = s.spoken, speedWord(s.speed)

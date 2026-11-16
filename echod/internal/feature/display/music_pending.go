@@ -53,6 +53,18 @@ func musicAudible() bool {
 	return playing || paused
 }
 
+// toggleMusic is the play and pause button. A tap on play while paused holds the page up until the
+// stream is back, which takes a second or two: the clock never shows in between.
+func (d *Display) toggleMusic() {
+	d.mu.Lock()
+	paused := d.showingPaused
+	d.mu.Unlock()
+	if paused {
+		d.musicPendingStart(false)
+	}
+	transport(media.TransportToggle)
+}
+
 // showMusicPage puts away what is over the idle page (the dashboard, the library over it) and brings
 // Now Playing back, even one put away for the track: what the library's Now Playing button and the
 // Music Assistant tile do while something plays.
