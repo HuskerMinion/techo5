@@ -2700,6 +2700,9 @@ answer with an error. Each entry has:
 - `model`: the wake word model's ID.
 - `score`: the highest score the word reached.
 - `cutoff`: the threshold it was judged against.
+- `sent_at`: when it was uploaded to a trainer, in UTC, once it has been (see
+  [Sending clips to a trainer](setup.md#sending-clips-to-a-trainer)).
+- `send_failed`: the status a trainer refused it with for good.
 
 The answer lists 50 clips at a time; `pages` says how many pages there are and `total` how many clips.
 This action answers with data; call it with a `response_variable`.

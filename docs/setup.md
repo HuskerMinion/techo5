@@ -1674,6 +1674,83 @@ same details, and the file name holds the time, the assistant, the score and the
 The clips are what the microphones heard in your room. They stay on the device until you copy them
 off; keep them on your own machine.
 
+#### Sending clips to a trainer
+
+Instead of copying clips off by hand, the device can upload each new one to a wake word trainer on
+your home network. It is off by default. Choose where under **Voice**, **Send wake clips to** on the
+setup page (or with the **Send wake clips to** select in Home Assistant once an address is saved
+there). It only works while **Keep wake clips** is on.
+
+- **Off**: nothing is sent.
+- **Tater Trainer**: run its Docker image
+  ([microWakeWord-Trainer-Nvidia-Docker](https://github.com/TaterTotterson/microWakeWord-Trainer-Nvidia-Docker))
+  somewhere on your network and enter its address, `http://<trainer>:8789`. Clips land in its
+  **Captured Audio** to be reviewed there: a wake as a wake, a near miss as a close miss, and a mistake
+  or noise as a false trigger. Each is filed under the wake word model's name with its version taken
+  off (`hey_jarvis_v2` is `hey_jarvis`) when Tater has a word by that name, and is left unassigned for
+  you to sort otherwise. Tater Trainer asks for no token.
+- **wakesmith**: in [wakesmith](https://github.com/HuskerMinion/wakesmith), create a token under
+  **Device upload**, then paste its address (`http://<host>:8765`, its default port) and the token here.
+- **Custom**: your own receiver, in the format below. The address is its base and the token is sent as a
+  bearer token when there is one.
+
+**Test** asks the saved address whether a trainer is there (Tater Trainer's `/api/session`, or
+`/api/clips/ping` with the token for the others) and says what it found. **Kinds of clip to send**
+(wake, near miss, mistake, noise) are all on to begin with; clear the ones you don't want to send.
+
+What is sent, and when:
+
+- Only clips kept **after** you chose where to send them. The moment is saved when the target is set
+  (or changed), so what the device kept before is never uploaded, and neither is what it kept while
+  sending was off. A device that has sent nothing yet but has clips from last week sends none of them.
+- One clip at a time, the oldest first, no faster than one every two seconds. A clip that has gone is
+  marked in its `.json` with `sent_at`. If the trainer can't be reached or answers with an error that
+  may pass (a 5xx, 408 or 429), the device waits 5 seconds, then 10, doubling up to 10 minutes, and
+  tries again; it starts over once a clip goes through. A clip the trainer refuses for good (any other
+  4xx) is marked `send_failed` with the status and not tried again, so one bad file never holds the
+  rest. If the trainer answers 401, the token was refused: sending stops and says so until you change
+  the settings.
+- The newest 100 clips of each kind are still all the device keeps, so a clip that has not been sent by
+  the time it is pushed out is gone, and sending never uses more disk. **Wake clips unsent** shows how
+  many are waiting, and **Wake clip sending** the last problem.
+- Only to the home network. The address has to be a private one (`192.168.x.y`, `10.x.y.z`,
+  `172.16.x.y` to `172.31.x.y`, a link-local address or `fc00::/7`), or a name, like a `.local` one,
+  that resolves to one. That is checked when you save, and again before every clip, and the connection
+  is made only to such an address. Redirects are not followed. `http` and `https` both work. `https`
+  is checked as usual; a self-signed certificate (wakesmith with `--https`, for example) is refused until
+  you press **Test**, check the SHA-256 fingerprint the page shows against your trainer's, and press
+  **Trust this certificate**. The device then sends only to a trainer showing exactly that certificate,
+  and says "certificate changed" if it ever shows another. Changing the address forgets the trust.
+- The token stays on the device. The setup page never shows it again, a settings file and the
+  diagnostic bundle leave it out, and Home Assistant and the remote API can read where clips go but not
+  change it (the select can be changed from Home Assistant only once an address is saved).
+- **Turning Keep wake clips off deletes every clip on the device, the ones not yet sent with them.**
+
+**The format a custom receiver gets**, for anyone building one. For each clip:
+
+```
+POST {url}/api/clips
+Authorization: Bearer <token>            (only when a token is set)
+Content-Type: multipart/form-data
+```
+
+with two parts:
+
+- `meta`: `application/json`, for example
+  `{"name":"20261012-213301-123-s1-p0.79-c0.90","device":"Office","kind":"wake","at":"2026-10-12T21:33:01Z","slot":1,"model":"hey_jarvis","score":0.79,"cutoff":0.9}`.
+  `name` is the file's name without `.wav`, `device` the device's node name as Home Assistant spells it in its actions (`esphome.living_room_wake_clips` is `living_room`), the same in `X-Source-Device`, `kind` is
+  `wake`, `mistake`, `noise` or `nearmiss`, and `at` is UTC.
+- `audio`: `audio/wav`, 16 kHz mono 16-bit, about four seconds, with the filename `<name>.wav`.
+
+Errors are best answered as JSON, `{"ok": false, "error": "..."}`: the `error` text is shown in **Wake clip sending** and by Test. Answer with any 2xx when you have it (`{"duplicate": true}` for one you already had counts as sent), 401
+for a token you refuse, another 4xx for a clip you will never take, and 5xx, 408 or 429 for a try
+later. The test is `GET {url}/api/clips/ping` with the same header: answer 2xx.
+
+Tater Trainer gets its own format instead: `POST {url}/api/upload_captured_audio_raw` with the WAV as the
+body, and the details in `X-Audio-Format`, `X-Original-Name`, `X-Source-Device`, `X-Wake-Word`,
+`X-Event-Type`, `X-Captured-At`, `X-Max-Probability`, `X-Probability-Cutoff` (these last two in whole
+percent, which is what it reads) and `X-Notes` headers.
+
 ### Watching the wake word scores
 
 The setup page shows what each word the device listens for is scoring, so a threshold can be picked by
