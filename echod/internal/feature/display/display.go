@@ -349,6 +349,7 @@ type Display struct {
 	// the page is held up for it (musicPending); musicPendingFresh is for one just chosen.
 	musicPendingAt    time.Time
 	musicPendingFresh bool
+	musicPendingStops uint64 // media.StopCount when the hold began
 
 	// weatherArmed is a weather question in progress; weatherUntil is how long the forecast page
 	// stays once the turn is over.

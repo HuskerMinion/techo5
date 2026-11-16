@@ -20,6 +20,7 @@ const musicPendingFor = 8 * time.Second
 func (d *Display) musicPendingStart(fresh bool) {
 	d.mu.Lock()
 	d.musicPendingAt, d.musicPendingFresh = time.Now(), fresh
+	d.musicPendingStops = media.Get().StopCount()
 	d.mu.Unlock()
 }
 
@@ -36,6 +37,12 @@ func (d *Display) musicPending() (pending, fresh bool) {
 	d.mu.Lock()
 	defer d.mu.Unlock()
 	if d.musicPendingAt.IsZero() || time.Since(d.musicPendingAt) >= musicPendingFor {
+		return false, false
+	}
+	// A stop since the hold began (the Stop buttons, Home Assistant, a server that stayed stopped)
+	// lets go of it. Playing, or a gap in it, does not: a play that replaces a song looks like both.
+	if media.Get().StopCount() != d.musicPendingStops {
+		d.musicPendingAt, d.musicPendingFresh = time.Time{}, false
 		return false, false
 	}
 	return true, d.musicPendingFresh

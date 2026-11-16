@@ -163,6 +163,11 @@ type Player struct {
 	// play has come since.
 	stoppedAt atomic.Uint64
 
+	// stops counts definite stops of the music in this room (StopCount): the Stop buttons, Home
+	// Assistant's stop, and a server that has stayed stopped. Unlike stoppedAt a play does not move
+	// it, and neither does a gap while a track is switched.
+	stops atomic.Uint64
+
 	// toSender carries what is passed on to a received track's sender, one at a time and in order: a
 	// pause and the play straight after it must reach the phone that way round (tellSender). Only the
 	// latest play or pause, and the latest skip, wait behind the one under way (senderQueue).
@@ -898,6 +903,7 @@ func (p *Player) command(c esphome.MediaCommand) {
 		//
 		// With nothing of its own playing or paused there is nothing to keep, and it is a stop like one
 		// here: what would start something again in a moment (a dropped station's put-back) is told.
+		p.stops.Add(1)
 		if playing, paused := p.stream.Playing(); !playing && !paused {
 			p.OnStop.Emit(struct{}{})
 		}
@@ -1063,6 +1069,9 @@ func (p *Player) SkipReaches() bool {
 }
 
 func (p *Player) Transport(t Transport) {
+	if t == TransportStop {
+		p.stops.Add(1)
+	}
 	// A remote's track paused from here and since let go: play asks for it back, stop forgets it.
 	if _, _, _, ok := p.Held(); ok {
 		switch t {
@@ -1142,6 +1151,15 @@ func (p *Player) RemoteState(state string) {
 	if state == "playing" {
 		p.held.Store(heldTrack{})
 	}
+	if state == "stopped" {
+		// Counted as a stop only once it has stayed stopped: a server ends one track and starts the
+		// next in whichever order it likes, and that gap is not somebody stopping the music.
+		time.AfterFunc(stopSettle, func() {
+			if p.remoteGen.Load() == n {
+				p.stops.Add(1)
+			}
+		})
+	}
 	if state == "paused" {
 		time.AfterFunc(stoppedFor, func() {
 			if p.remoteGen.Load() == n {
@@ -1152,6 +1170,13 @@ func (p *Player) RemoteState(state string) {
 	}
 	p.refresh()
 }
+
+// stopSettle is how long a server's "stopped" has to stand before it counts as a stop (StopCount).
+const stopSettle = 1500 * time.Millisecond
+
+// StopCount is a count of definite stops of the music here, for whatever holds a page up for music on
+// its way and has to know it was stopped instead. It only goes up.
+func (p *Player) StopCount() uint64 { return p.stops.Load() }
 
 // CarriedState is what a carried stream is doing, for whatever has to show or report it: what the
 // remote said, and playing until it has said anything. A remote that said it stopped is not playing,

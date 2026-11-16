@@ -5,6 +5,8 @@ package display
 import (
 	"testing"
 	"time"
+
+	"github.com/HuskerMinion/techo5/echod/internal/feature/media"
 )
 
 // Play on a paused page holds the page up for the stream coming back; pause does not.
@@ -44,5 +46,25 @@ func TestNowPlayingIsHeldForMusicOnItsWay(t *testing.T) {
 	d.musicPendingEnd()
 	if d.nowPlaying() {
 		t.Error("ending the music leaves the page up")
+	}
+}
+
+// The hold lets go when the music is stopped, and not for a play or a gap: a library play that
+// replaces a song is playing at the tap and through the switch.
+func TestMusicHoldEndsOnAStop(t *testing.T) {
+	d := &Display{}
+	d.musicPendingStart(true)
+	media.Get().RemoteState("playing")
+	media.Get().RemoteState("stopped") // a gap in the switch, not yet a stop
+	if pending, _ := d.musicPending(); !pending {
+		t.Error("playing at the tap, or a gap in the switch, ended the hold")
+	}
+	media.Get().Transport(media.TransportStop)
+	if pending, _ := d.musicPending(); pending {
+		t.Error("a Stop tap left the hold up")
+	}
+	d.musicPendingStart(false)
+	if pending, _ := d.musicPending(); !pending {
+		t.Error("a stop before the hold began ended a later hold")
 	}
 }
