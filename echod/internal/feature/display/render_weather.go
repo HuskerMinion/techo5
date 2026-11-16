@@ -176,7 +176,7 @@ func (r *renderer) weatherPage(s scene) {
 		}
 	} else if len(days) == 0 {
 		// Wrapped to the room right of today: in one line it ran off the panel's edge.
-		msg := "No forecast yet: give the device a Home Assistant token, or set where it is on its setup page"
+		msg := tr("ui_weather_no_forecast")
 		x := r.w/2 - r.s(20)
 		for i, line := range r.wrap(r.tiny, msg, r.w-r.margin-x) {
 			r.text(r.tiny, line, x, at.boxTop+r.s(112)+i*r.s(32), dim)
@@ -223,7 +223,7 @@ func (r *renderer) radarPage(s scene) {
 		for i, line := range r.wrap(r.body, msg, r.w-2*r.margin) {
 			r.text(r.body, line, r.margin, r.s(200)+i*r.s(44), dim)
 		}
-		r.weatherToggle("Forecast")
+		r.weatherToggle(tr("ui_forecast"))
 		return
 	}
 
@@ -273,9 +273,9 @@ func (r *renderer) radarPage(s scene) {
 	shade := func(rect image.Rectangle) {
 		washOver(r.dst, rect, color.RGBA{0, 0, 0, 150})
 	}
-	label := "Radar  " + clockText(f.At.Local())
+	label := tr("ui_radar") + "  " + clockText(f.At.Local())
 	if i == n-1 {
-		label += "  (latest)"
+		label += "  (" + tr("ui_radar_latest") + ")"
 	}
 	shade(image.Rect(0, 0, r.w, r.margin+r.s(42)))
 	r.text(r.small, label, r.margin, r.margin+r.s(26), amber)
@@ -292,7 +292,7 @@ func (r *renderer) radarPage(s scene) {
 		shade(image.Rect(0, r.h-r.s(62), r.margin+r.width(r.tiny, note)+r.s(10), r.h-r.s(34)))
 		r.text(r.tiny, note, r.margin, r.h-r.s(40), amber)
 	}
-	r.weatherToggle("Forecast")
+	r.weatherToggle(tr("ui_forecast"))
 }
 
 // ring is a circle outline one pixel wide.
