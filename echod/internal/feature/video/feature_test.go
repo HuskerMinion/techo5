@@ -319,8 +319,11 @@ func TestTheDecoderIsBounded(t *testing.T) {
 			t.Errorf("%s: %q", want, line)
 		}
 	}
-	if !strings.Contains(out, "nice=5") || !strings.Contains(out, "oom=1000") {
-		t.Errorf("not niced: %s", out)
+	// niceness is relative to the daemon, so a test run under nice (a shared build box) expects its own
+	// level plus 5, capped where the kernel caps it.
+	want := "nice=" + strconv.Itoa(min(ownNice(t)+5, 19))
+	if !strings.Contains(out, want) || !strings.Contains(out, "oom=1000") {
+		t.Errorf("not niced (want %s): %s", want, out)
 	}
 }
 
@@ -492,4 +495,20 @@ func TestTheVideoErrorSensor(t *testing.T) {
 	if _, err := f.Play(Request{URL: "file:///etc/passwd"}); err == nil {
 		t.Fatal("a file was played")
 	}
+}
+
+// ownNice is this test process's nice level, the 19th field of /proc/self/stat (after the command in
+// parentheses, which may hold spaces).
+func ownNice(t *testing.T) int {
+	b, err := os.ReadFile("/proc/self/stat")
+	if err != nil {
+		t.Fatal(err)
+	}
+	s := string(b)
+	f := strings.Fields(s[strings.LastIndexByte(s, ')')+1:])
+	n, err := strconv.Atoi(f[16])
+	if err != nil {
+		t.Fatal(err)
+	}
+	return n
 }
