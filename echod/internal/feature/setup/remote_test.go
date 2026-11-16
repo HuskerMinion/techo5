@@ -4,10 +4,12 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/netip"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
 
+	"github.com/HuskerMinion/techo5/echod/internal/config"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/web"
 	"github.com/HuskerMinion/techo5/echod/internal/hardware/buttons"
 )
@@ -255,5 +257,21 @@ func TestRemoteSetupOffDropsTheBrowserAskingFromAnotherHome(t *testing.T) {
 	f.setRemote(false)
 	if f.Asking() == "" {
 		t.Error("a browser asking in the device's home was dropped with Remote setup")
+	}
+}
+
+// The notice of a browser let in is in the screen's language, title and all.
+func TestTheLetInNoticeIsInTheScreensLanguage(t *testing.T) {
+	config.Use(filepath.Join(t.TempDir(), "state.json"))
+	message, title := letInText("100.64.0.7")
+	if message != "Home Assistant let a browser at 100.64.0.7 into the setup page, from away." || title != "Setup page" {
+		t.Errorf("English: %q %q", message, title)
+	}
+	if err := config.Set().Screen().Language("de"); err != nil {
+		t.Fatal(err)
+	}
+	message, title = letInText("100.64.0.7")
+	if message != "Home Assistant hat 100.64.0.7 aus der Ferne eingelassen." || title != "Einrichtung" {
+		t.Errorf("German: %q %q", message, title)
 	}
 }
