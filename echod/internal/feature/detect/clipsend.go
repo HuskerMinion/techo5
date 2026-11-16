@@ -110,6 +110,7 @@ type sender struct {
 	unsent    int
 	status    string
 	cert      string // see Untrusted
+	abort     context.CancelFunc // cancels the upload under way, for turning Keep wake clips off
 }
 
 func newSender(c *clips) *sender {
@@ -395,6 +396,7 @@ type sendOutcome int
 const (
 	outSent   sendOutcome = iota
 	outFailed             // this clip will never be taken: marked, and the rest go on
+	outSkip               // this clip is gone or sending was cut short: nothing is counted or marked
 	outStop               // the address or the settings are wrong: sending stops until they change
 	outRetry
 )
@@ -450,6 +452,8 @@ func (s *sender) drain(ctx context.Context) {
 			if !s.wait(ctx, sendEvery, nil) {
 				return
 			}
+		case outSkip:
+			// Looked at again from the top: the clip is no longer in the queue, or sending is off.
 		case outFailed:
 			failures++
 			slog.Warn("wake clip: the trainer refused it", "clip", item.meta.Kind+"/"+item.name, "why", why)
@@ -647,17 +651,32 @@ func (s *sender) mark(it *sendItem, change func(*clipMeta)) error {
 
 // send uploads one clip and says what came of it, and why when it did not go.
 func (s *sender) send(ctx context.Context, cfg config.WakeSend, it *sendItem) (sendOutcome, string) {
+	// Registered before the clip is opened: turning wake clips off cancels it, or is seen just below.
+	ctx, cancel := context.WithTimeout(ctx, sendAsk)
+	defer cancel()
+	s.mu.Lock()
+	s.abort = cancel
+	s.mu.Unlock()
+	defer func() {
+		s.mu.Lock()
+		s.abort = nil
+		s.mu.Unlock()
+	}()
 	f, err := os.Open(it.wav)
+	if errors.Is(err, fs.ErrNotExist) {
+		return outSkip, "" // pruned or purged between the look and now: not the trainer's refusal
+	}
 	if err != nil {
-		return outFailed, "HTTP 0: the clip is gone" // pruned between the look and now
+		return outRetry, err.Error()
 	}
 	defer f.Close()
+	if !s.c.on.Load() {
+		return outSkip, "" // turned off while it was being opened
+	}
 	st, err := f.Stat()
 	if err != nil {
 		return outRetry, err.Error()
 	}
-	ctx, cancel := context.WithTimeout(ctx, sendAsk)
-	defer cancel()
 
 	var req *http.Request
 	if cfg.Target == config.SendTater {
@@ -674,6 +693,9 @@ func (s *sender) send(ctx context.Context, cfg config.WakeSend, it *sendItem) (s
 	}
 	resp, err := s.clientFor(cfg.URL).Do(req)
 	if err != nil {
+		if errors.Is(ctx.Err(), context.Canceled) {
+			return outSkip, "" // cut short: wake clips were turned off, or the sender is stopping
+		}
 		var ce *CertError
 		if errors.As(err, &ce) {
 			return outRetry, ce.Error()
@@ -734,7 +756,32 @@ func cleanErr(err error) string {
 	if errors.As(err, &ue) {
 		err = ue.Err
 	}
-	return err.Error()
+	var de *net.DNSError
+	if errors.As(err, &de) {
+		return "can't find the trainer: " + de.Err
+	}
+	var oe *net.OpError
+	if errors.As(err, &oe) && oe.Err != nil {
+		why := strings.TrimPrefix(strings.TrimPrefix(oe.Err.Error(), oe.Op+": "), "connect: ")
+		if oe.Op == "dial" {
+			return "can't connect to the trainer: " + why
+		}
+		return "the connection to the trainer failed: " + why
+	}
+	return addrInText.ReplaceAllString(err.Error(), "the trainer")
+}
+
+// addrInText is an IPv4 address, with a port when it has one, in an error's text.
+var addrInText = regexp.MustCompile(`\b\d{1,3}(\.\d{1,3}){3}(:\d+)?\b`)
+
+// abortSend cuts short the upload under way, if any.
+func (s *sender) abortSend() {
+	s.mu.Lock()
+	cancel := s.abort
+	s.mu.Unlock()
+	if cancel != nil {
+		cancel()
+	}
 }
 
 // taterWordSuffix is what a model's id carries after its word: a version.

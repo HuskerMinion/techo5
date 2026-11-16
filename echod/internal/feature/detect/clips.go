@@ -139,6 +139,9 @@ type clips struct {
 	// changed is called when the clips on the device changed (one written, the lot purged): it wakes the
 	// sender (clipsend.go). Nil until wired.
 	changed func()
+	// abortSend cuts short the upload under way, so a purge is not streamed from an open file. Nil until
+	// wired.
+	abortSend func()
 }
 
 // clipKinds are the folders, in the order the sensor lists them.
@@ -237,6 +240,9 @@ func (c *clips) enable(on bool) {
 
 // purge lets go of every clip, kept and pending.
 func (c *clips) purge() {
+	if c.abortSend != nil {
+		c.abortSend() // an upload under way would go on reading a clip that is being deleted
+	}
 	c.mu.Lock()
 	c.pending = nil
 	c.reset()

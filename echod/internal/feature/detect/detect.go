@@ -328,6 +328,7 @@ func newDetect() *Detect {
 	d.sender = newSender(d.clips)
 	d.sender.publish = d.publishSend
 	d.clips.changed = d.sender.wake
+	d.clips.abortSend = d.sender.abortSend
 
 	// A cut microphone hands on silence, and running the models over it is work that cannot find
 	// anything. The engines go down with the microphones and come back with them. Not for a panel's

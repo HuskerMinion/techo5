@@ -139,9 +139,19 @@ func (d *Detect) KeepOn() bool { return d.clips.on.Load() }
 // SetSend saves where clips go, from the setup page: the address is checked as an address and as a home
 // one, and Since, the moment from which clips are sent, is set when the target changes.
 func (d *Detect) SetSend(ctx context.Context, next config.WakeSend) error {
+	return d.setSend(ctx, func(config.WakeSend) (config.WakeSend, error) { return next, nil })
+}
+
+// setSend reads the saved settings, lets change make the new ones from them, and saves those, all under
+// sendMu: a save from the setup page and one from the select cannot revert each other.
+func (d *Detect) setSend(ctx context.Context, change func(cur config.WakeSend) (config.WakeSend, error)) error {
 	d.sendMu.Lock()
 	defer d.sendMu.Unlock()
 	cur := config.Get().Wake.Send
+	next, err := change(cur)
+	if err != nil {
+		return err
+	}
 	if next.Target != config.SendOff {
 		if !slices.Contains(config.SendTargets, next.Target) {
 			return errors.New("that is not a place clips can be sent")
@@ -183,6 +193,12 @@ func (d *Detect) SetSend(ctx context.Context, next config.WakeSend) error {
 	if err := config.Set().SendUpdate(func(w *config.WakeSend) { *w = next }); err != nil {
 		return fmt.Errorf("could not keep it: %w", err)
 	}
+	if next.URL != cur.URL {
+		// The refused certificate belonged to the old address; Trust must not show it for the new one.
+		d.sender.mu.Lock()
+		d.sender.cert = ""
+		d.sender.mu.Unlock()
+	}
 	d.send.to.Set(config.SendLabel(next.Target))
 	d.sender.settingsChanged()
 	slog.Info("wake clip sending set", "target", next.Target, "kinds_skipped", len(next.Skip), "token", next.Token != "")
@@ -192,21 +208,20 @@ func (d *Detect) SetSend(ctx context.Context, next config.WakeSend) error {
 // SetSendTarget changes only where clips go, from the select. It needs an address saved first, on the
 // setup page.
 func (d *Detect) SetSendTarget(ctx context.Context, target string) error {
-	cur := config.Get().Wake.Send
-	fail := func(err error) error {
-		d.send.to.Set(config.SendLabel(cur.Target))
-		return err
+	err := d.setSend(ctx, func(cur config.WakeSend) (config.WakeSend, error) {
+		if target != config.SendOff && cur.URL == "" {
+			return cur, errors.New("save the trainer's address on the setup page first, under Voice")
+		}
+		if target != config.SendOff && !strings.HasPrefix(cur.URL, "http") {
+			return cur, errors.New("the saved address is not one clips can be sent to")
+		}
+		next := cur
+		next.Skip = slices.Clone(cur.Skip) // not the saved slice
+		next.Target = target
+		return next, nil
+	})
+	if err != nil {
+		d.send.to.Set(config.SendLabel(config.Get().Wake.Send.Target))
 	}
-	if target != config.SendOff && cur.URL == "" {
-		return fail(errors.New("save the trainer's address on the setup page first, under Voice"))
-	}
-	if target != config.SendOff && !strings.HasPrefix(cur.URL, "http") {
-		return fail(errors.New("the saved address is not one clips can be sent to"))
-	}
-	next := cur
-	next.Target = target
-	if err := d.SetSend(ctx, next); err != nil {
-		return fail(err)
-	}
-	return nil
+	return err
 }
