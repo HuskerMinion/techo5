@@ -1171,8 +1171,10 @@ func (p *Player) RemoteState(state string) {
 	p.refresh()
 }
 
-// stopSettle is how long a server's "stopped" has to stand before it counts as a stop (StopCount).
-const stopSettle = 1500 * time.Millisecond
+// stopSettle is how long a server's "stopped" has to stand before it counts as a stop (StopCount): longer
+// than the one to two seconds Music Assistant can take between one stream and the next (#521), well
+// under the hold of a page waiting for music (display's musicPendingFor).
+const stopSettle = 4 * time.Second
 
 // StopCount is a count of definite stops of the music here, for whatever holds a page up for music on
 // its way and has to know it was stopped instead. It only goes up.
