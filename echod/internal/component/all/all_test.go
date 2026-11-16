@@ -226,6 +226,7 @@ var registered = []string{
 	"screen_skin",
 	"screen_theme_mode",
 	"screen_timer_style",
+	"screen_touched",
 	"screen_turn_style",
 	"screen_weather_animation",
 	"screen_web_access",

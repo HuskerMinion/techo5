@@ -1168,6 +1168,12 @@ device's fonts folder over SSH ([Set the SSH authorized keys](actions.md#set-the
   clock): every other page keeps its taps as they are. With it on, a slow tap on the clock is a
   hold, so tap quickly to open what a tap opens. The clock shows **OK** in its middle for a moment
   when a hold has been sent.
+- **Touched** (Show, Spot and Panel; always there): a binary sensor in Home Assistant that is on
+  while somebody uses the screen. It comes on as a finger lands, anywhere and for anything, a tap
+  that only lights a dark screen too, stays on while a finger is down, and goes off 30 seconds after
+  the last one lifted, so tapping on keeps it on. An automation that puts the screen out after a
+  while can wait for it: `binary_sensor.<device>_screen_touched` off `for:` 5 minutes. It says only
+  that the screen was touched, not where.
 
 ## 7. Voice
 
