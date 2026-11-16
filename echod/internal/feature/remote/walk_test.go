@@ -25,6 +25,7 @@ var harmless = []string{
 	"microphone_noise_reduction",     // how much the microphones' own noise is taken out
 	"noise_layer_1", "noise_layer_2", // which sound a slot's noise layer plays
 	"nearest_device_window", "nearest_device_offset", // timing and evening out, with the switch read-only
+	"sendspin_delay",                 // how far behind the server this room plays, with Sendspin itself read-only
 }
 
 // Every entity the device has whose name says privacy or security is read-only through the API, so one
