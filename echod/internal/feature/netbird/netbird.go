@@ -93,6 +93,8 @@ type Status struct {
 	Name        string  // this device's name on the network
 	IP          string  // its address there
 	Problem     string  // why it is not on the network, when it is not
+	Joining     bool    // a setup key is held in memory, to join when the download is done
+	JoinProblem string  // why a join that waited for the download did not happen, to give the key again
 }
 
 type Feature struct {
@@ -106,7 +108,36 @@ type Feature struct {
 	pub    sync.Mutex // held while a change is made and published
 	st     Status
 	reload chan struct{}
+
+	// A setup key given during the download, held here only: never on disk, in a log or a status. One
+	// goroutine (waitParked) joins with it when the client answers, and clears it on every way out.
+	pk      sync.Mutex
+	parked  *parkedJoin
+	waiting bool
 }
+
+type parkedJoin struct{ key, mgmt string }
+
+// Parked is what Login answers when the client is still downloading: the key is held and the join is
+// made by itself when the download is done. It is not a failure.
+type Parked struct{ Got float32 }
+
+func (p *Parked) Error() string {
+	return fmt.Sprintf("Downloading NetBird (%d%%). It will join by itself when the download is done.", int(p.Got*100))
+}
+
+// Seams for tests.
+var (
+	parkPoll    = time.Second
+	parkTimeout = 10 * time.Minute
+	joinTimeout = 2 * time.Minute
+)
+
+// pendingMark is a file with no key in it, saying a join was waiting on the download, so a restart can
+// say so.
+func pendingMark() string { return filepath.Join(stateDir, "join-pending") }
+
+const restartedMsg = "the device restarted before NetBird finished downloading; give the key again"
 
 var (
 	once   sync.Once
@@ -148,6 +179,10 @@ var Available = func() bool { return tailscale.Available() }
 
 func (f *Feature) Restore(c config.Config) {
 	f.set(func(s *Status) { s.On = c.Netbird.On })
+	if _, err := os.Stat(pendingMark()); err == nil {
+		_ = os.Remove(pendingMark())
+		f.set(func(s *Status) { s.JoinProblem = restartedMsg })
+	}
 }
 
 // State is a copy of where the device stands.
@@ -175,6 +210,9 @@ func (f *Feature) SetOn(on bool) error {
 	if err := config.Set().Netbird().On(on); err != nil {
 		return err
 	}
+	if !on {
+		f.dropParked("")
+	}
 	f.set(func(s *Status) { s.On = on })
 	slog.Info("netbird: switched", "on", on)
 	f.poke()
@@ -185,6 +223,11 @@ func (f *Feature) SetOn(on bool) error {
 // turning NetBird on first if it was off. The key is handed to the client and not kept anywhere: what
 // the client keeps is the device's own identity.
 func (f *Feature) Login(ctx context.Context, setupKey, management string) error {
+	return f.login(ctx, setupKey, management, false)
+}
+
+// login is Login; again is a join made from the held key, which is not held a second time.
+func (f *Feature) login(ctx context.Context, setupKey, management string, again bool) error {
 	setupKey = strings.TrimSpace(setupKey)
 	if setupKey == "" || strings.ContainsAny(setupKey, " \t\r\n") {
 		return errors.New("netbird: that is not a setup key")
@@ -202,19 +245,21 @@ func (f *Feature) Login(ctx context.Context, setupKey, management string) error 
 		}
 	}
 	// The client may be downloading, or its daemon starting: wait for it to answer. A download is not
-	// waited out: Home Assistant's connection waits on an action, so the answer comes at once and the
-	// status sensor says when the key can be given.
+	// waited out: Home Assistant's connection waits on an action, so the key is held in memory and the
+	// join is made when the download is done (park).
 	for {
 		if _, err := status(ctx); err == nil {
 			break
 		}
-		if st := f.State(); st.Downloading {
-			return fmt.Errorf("netbird: downloading the client (%d%%); give the key again when the status says it needs one", int(st.Got*100))
+		if st := f.State(); st.Downloading && !again {
+			f.park(setupKey, mgmt)
+			return &Parked{Got: st.Got}
 		}
 		select {
 		case <-ctx.Done():
-			if st := f.State(); st.Downloading {
-				return fmt.Errorf("netbird: still downloading the client (%d%%); give the key again when the status says it needs one", int(st.Got*100))
+			if st := f.State(); st.Downloading && !again {
+				f.park(setupKey, mgmt)
+				return &Parked{Got: st.Got}
 			}
 			return errors.New("netbird: the client is not running yet; the NetBird status says why")
 		case <-time.After(time.Second):
@@ -239,6 +284,7 @@ func (f *Feature) Login(ctx context.Context, setupKey, management string) error 
 	if err := config.Set().Netbird().Joined(mgmtSaved(mgmt)); err != nil {
 		return err
 	}
+	f.set(func(s *Status) { s.JoinProblem = "" })
 	f.poke()
 	upAt := time.Now()
 	for {
@@ -259,6 +305,96 @@ func (f *Feature) Login(ctx context.Context, setupKey, management string) error 
 		case <-time.After(time.Second):
 		}
 	}
+}
+
+// park holds the key for the join that waits on the download; a newer key replaces an older one.
+func (f *Feature) park(key, mgmt string) {
+	f.pk.Lock()
+	f.parked = &parkedJoin{key, mgmt}
+	start := !f.waiting
+	f.waiting = true
+	f.pk.Unlock()
+	_ = os.MkdirAll(stateDir, 0o700)
+	_ = os.WriteFile(pendingMark(), nil, 0o600)
+	f.set(func(s *Status) { s.Joining, s.JoinProblem = true, "" })
+	slog.Info("netbird: a join waits for the download")
+	if start {
+		go f.waitParked()
+	}
+}
+
+// dropParked forgets the held key; why, when not empty, is what the page says about it.
+func (f *Feature) dropParked(why string) {
+	f.pk.Lock()
+	f.parked = nil
+	f.pk.Unlock()
+	_ = os.Remove(pendingMark())
+	f.set(func(s *Status) {
+		if s.Joining || why != "" {
+			s.Joining, s.JoinProblem = false, why
+		}
+	})
+}
+
+// takeParked hands over the held key and forgets it.
+func (f *Feature) takeParked() *parkedJoin {
+	f.pk.Lock()
+	defer f.pk.Unlock()
+	p := f.parked
+	f.parked = nil
+	return p
+}
+
+// waitParked waits for the download to finish and the client to answer, joins once with the held key,
+// and lets go of it on every way out: joined, failed, the download failed, ten minutes, NetBird off.
+func (f *Feature) waitParked() {
+	defer func() {
+		f.pk.Lock()
+		f.waiting = false
+		f.pk.Unlock()
+	}()
+	deadline := time.Now().Add(parkTimeout)
+	for {
+		f.pk.Lock()
+		held := f.parked != nil
+		f.pk.Unlock()
+		if !held {
+			return // switched off, or taken
+		}
+		st := f.State()
+		if !st.On {
+			f.dropParked("")
+			return
+		}
+		if !st.Downloading {
+			if _, err := status(context.Background()); err == nil {
+				break
+			}
+			if st.Problem != "" {
+				f.dropParked("NetBird did not download: " + st.Problem + "; give the key again")
+				return
+			}
+		}
+		if time.Now().After(deadline) {
+			f.dropParked("NetBird did not finish downloading in ten minutes; give the key again")
+			return
+		}
+		time.Sleep(parkPoll)
+	}
+	p := f.takeParked()
+	if p == nil {
+		return
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), joinTimeout)
+	defer cancel()
+	err := f.login(ctx, p.key, p.mgmt, true)
+	p.key = ""
+	if err != nil {
+		slog.Warn("netbird: the join that waited for the download failed", "err", err.Error())
+		f.dropParked(err.Error() + "; give the key again")
+		return
+	}
+	f.dropParked("")
 }
 
 // managementURL is a management server's URL as the client takes it: NetBird's own for none, and only
@@ -301,7 +437,14 @@ func (f *Feature) Actions() []*esphome.Action {
 			// download is not waited for (Login).
 			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 			defer cancel()
-			return nil, f.Login(ctx, c.String("setup_key"), c.String("management_url"))
+			err := f.Login(ctx, c.String("setup_key"), c.String("management_url"))
+			var p *Parked
+			if errors.As(err, &p) {
+				// Not a failure: the key is held and the join follows the download.
+				slog.Info("netbird: " + p.Error())
+				return nil, nil
+			}
+			return nil, err
 		},
 	}}
 }
@@ -486,7 +629,8 @@ func env(extra ...string) []string {
 }
 
 // cli runs the client's command line against its daemon, and answers what it said.
-func cli(ctx context.Context, extraEnv []string, args ...string) ([]byte, error) {
+// A variable, for tests.
+var cli = func(ctx context.Context, extraEnv []string, args ...string) ([]byte, error) {
 	cmd := command(ctx, extraEnv, args...)
 	return cmd.CombinedOutput()
 }

@@ -35,8 +35,10 @@ The same as Tailscale, by the same rules (see [what Tailscale does](tailscale.md
 3. **Give the device the key.** Either:
    - the setup page: **Network → NetBird**, paste the key, and if you run your own NetBird, put
      your management server's URL (`https://netbird.example.com`). Leave it empty for NetBird's own.
-     Then **Join**. The first time, Join starts the client's download and says so: when the page
-     shows NetBird needs a setup key, paste the key again and press **Join**. Use an `https://`
+     Then **Join**. One Join is enough. The first time, the client is downloaded first; the device
+     holds the key in memory only, joins by itself when the download is done, and the page shows the
+     download and then the joined state. If the join fails, or the device restarts or the download
+     fails before then, the page says why and you give the key again. Use an `https://`
      address: with `http://` the setup key crosses the network unencrypted.
    - Home Assistant: the [`netbird_login` action](actions.md#join-a-netbird-network).
 

@@ -4,6 +4,7 @@ package setup
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"html"
 	"net/http"
@@ -26,6 +27,16 @@ func netbirdSection(w http.ResponseWriter, token string) {
 	switch {
 	case st.State == "Connected" && st.Name != "":
 		where = "On NetBird as <strong>" + html.EscapeString(st.Name) + "</strong> (" + html.EscapeString(st.IP) + ")."
+	case st.Joining:
+		// The key is held in memory: the page follows the download and the join by reloading.
+		if st.Downloading {
+			where = fmt.Sprintf("Downloading NetBird (%d%%). It will join by itself when the download is done.", int(st.Got*100))
+		} else {
+			where = "Joining NetBird."
+		}
+		where += `<script>setTimeout(()=>location.reload(),3000)</script>`
+	case st.JoinProblem != "":
+		where = "Could not join: " + html.EscapeString(st.JoinProblem) + "."
 	case st.On && st.Downloading:
 		where = fmt.Sprintf("Downloading NetBird (%d%%).", int(st.Got*100))
 	case st.On && st.Problem != "":
@@ -64,6 +75,10 @@ func saveNetbird(r *http.Request) string {
 	ctx, cancel := context.WithTimeout(r.Context(), 2*time.Minute)
 	defer cancel()
 	if err := netbird.Get().Login(ctx, key, r.PostFormValue("management")); err != nil {
+		var parked *netbird.Parked
+		if errors.As(err, &parked) {
+			return "" // held; the section says where the download stands and joins by itself
+		}
 		return "could not join: " + err.Error()
 	}
 	return ""
