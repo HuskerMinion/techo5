@@ -2,6 +2,7 @@ package wifiwatch
 
 import (
 	"context"
+	"sync/atomic"
 	"time"
 )
 
@@ -23,29 +24,42 @@ const (
 	rejoinAgain = 10 * time.Second
 )
 
-// refreshing wraps a reassociation: when it has been made and the link is back, refresh runs. It
-// reports what it did to say. sleep is time.Sleep unless a test is the clock.
+// refreshing wraps a reassociation: when it has been made, a wait for the link to be back and the
+// refresh run on their own (run, a goroutine but for tests), so the watcher that asked is not held for
+// the wait: it marks the time it tried, and the others see it, as they did before. One at a time: a
+// second reassociation while one is still waiting adds no second toggle. It reports what it did to
+// say. sleep is time.Sleep unless a test is the clock.
 func refreshing(reassociate func(context.Context) error, joined func(context.Context) bool,
-	refresh func(context.Context) error, say func(string, ...any), sleep func(time.Duration)) func(context.Context) error {
-	return func(ctx context.Context) error {
-		if err := reassociate(ctx); err != nil {
-			return err
-		}
+	refresh func(context.Context) error, say func(string, ...any), sleep func(time.Duration),
+	run func(func())) func(context.Context) error {
+	var busy atomic.Bool
+	after := func() {
+		defer busy.Store(false)
+		ctx, cancel := context.WithTimeout(context.Background(), rejoinGrace+rejoinMost+rejoinAgain+10*time.Second)
+		defer cancel()
 		sleep(rejoinGrace)
 		for waited := time.Duration(0); !joined(ctx); waited += rejoinPoll {
 			if waited >= rejoinMost || ctx.Err() != nil {
-				return nil // never came back in time: nothing to refresh, the watchers see to the link
+				return // never came back in time: nothing to refresh, the watchers see to the link
 			}
 			sleep(rejoinPoll)
 		}
 		if err := refresh(ctx); err != nil {
 			say("wifi: refreshing the receive filter after reassociating failed", "err", err)
-			return nil
+			return
 		}
 		say("wifi: link is back after reassociating; refreshed the receive filter (multicast)")
 		sleep(rejoinAgain)
 		if ctx.Err() == nil && joined(ctx) {
 			_ = refresh(ctx)
+		}
+	}
+	return func(ctx context.Context) error {
+		if err := reassociate(ctx); err != nil {
+			return err
+		}
+		if busy.CompareAndSwap(false, true) {
+			run(after)
 		}
 		return nil
 	}
@@ -57,5 +71,5 @@ func rejoiner(reassociate func(context.Context) error, joined func(context.Conte
 	if !refreshAfterReassociate {
 		return reassociate
 	}
-	return refreshing(reassociate, joined, refresh, say, time.Sleep)
+	return refreshing(reassociate, joined, refresh, say, time.Sleep, func(f func()) { go f() })
 }
