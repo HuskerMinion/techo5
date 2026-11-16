@@ -16,3 +16,9 @@ func installRootfs(context.Context, Manifest, func(float32), func(string)) error
 func rebootIntoSlot() error {
 	return errors.New("update: slot reboots only work on the device")
 }
+
+func OtherSlot() (Slot, bool) { return Slot{}, false }
+
+func RollBack(func()) error {
+	return errors.New("update: rollbacks only work on a device that boots from slots")
+}
