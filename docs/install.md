@@ -291,10 +291,11 @@ Then:
   network (setup page, Network, Time server), or takes Home Assistant's time when it connects.
 - **Wake word**: the default is "Alexa". Change it on the device (swipe down from the top, Sound,
   Wake word) or in Home Assistant; the other follows.
-- **Home Assistant token** (optional, for the forecast page, local radio stations and the radio's
-  star, the list of weather sources, and cameras): create a long-lived access token on your Home Assistant profile page, then run
-  the `esphome.<device>_home_assistant` action with `url` (like `http://192.168.1.20:8123`) and
-  `token`.
+- **Home Assistant access** (optional, for the forecast page, local radio stations and the radio's
+  star, the list of weather sources, and cameras): on the device's setup page, **Network** tab, choose
+  **Connect to Home Assistant** and sign in. Or create a long-lived access token on your Home Assistant
+  profile page and run the `esphome.<device>_home_assistant` action with `url` (like
+  `http://192.168.1.20:8123`) and `token`.
 - **Weather**: Home Assistant's own forecast by default. To show another weather entity, use the
   settings screen (General, Weather), the "Weather source" select, or `esphome.<device>_home_weather`.
 - **Radio**: three ways to get stations onto the device, none of which needs the others. See

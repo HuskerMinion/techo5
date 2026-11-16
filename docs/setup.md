@@ -116,8 +116,20 @@ SSH works only with a key: the device's **SSH** switch turns the server on, and 
 ## 1. Give the device access to Home Assistant
 
 Do this first. Photos, cameras, weather and the radio lists all need it. The device fetches them from
-Home Assistant itself, so it needs a token of its own. The ESPHome connection Home Assistant uses to
+Home Assistant itself, so it needs access of its own. The ESPHome connection Home Assistant uses to
 talk to the device is not enough for this.
+
+The easy way: open the device's setup page, **Network** tab, **Home Assistant access**. Check the
+address it suggests (it guesses from where Home Assistant connected from; a hostname or IP address on
+your own network, with the port, like `http://192.168.1.10:8123`) and choose **Connect to Home
+Assistant**. Home Assistant's login page opens: sign in and approve, and you come back to the setup
+page. The device now has a sign-in of its own, which renews itself and is listed under your profile in
+Home Assistant (**Security**, **Refresh tokens**) with the device's address, where you can take it
+back. For a device that shouldn't act as an administrator, sign in as a Home Assistant user without
+administrator rights. **Disconnect** on the same page takes the sign-in back. A drawn dashboard with no
+access shows a QR code that opens this page.
+
+Or give it a long-lived access token, once:
 
 1. In Home Assistant, open your profile (bottom left), then **Security**, and under **Long-lived
    access tokens** create one. Copy it; it is shown only once.

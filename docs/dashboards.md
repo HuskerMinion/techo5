@@ -21,10 +21,16 @@ Streamed.
 ## Drawn: the Home Assistant token
 
 A drawn dashboard needs no server, but the device reads your dashboards from Home Assistant itself,
-so it needs Home Assistant's address and a long-lived access token. Without them the screen says *A
-drawn dashboard needs a Home Assistant token*. The token is not a field on the setup page or in
-ESPHome: the device's `home_assistant` action gives it, once. If photos, cameras or the forecast
-already work on the device, this is done and there's nothing to do.
+so it needs access to Home Assistant. Without it the screen shows a QR code to the device's setup page
+and says how to connect it. If photos, cameras or the forecast already work on the device, this is
+done and there's nothing to do.
+
+The easy way: on the device's setup page, **Network** tab, choose **Connect to Home Assistant** and
+sign in with Home Assistant's own login. The device gets its own sign-in, listed in your Home
+Assistant profile under the device's name, where you can take it back. A Home Assistant user without
+administrator rights is fine for this.
+
+Or give it a long-lived access token, once, with the device's `home_assistant` action:
 
 1. In Home Assistant, open your profile (bottom left), then **Security**, and under **Long-lived
    access tokens** create one. Copy it; it is shown only once.
