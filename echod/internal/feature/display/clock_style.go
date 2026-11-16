@@ -401,5 +401,6 @@ func onlyToday(events []hass.Event, now time.Time) []hass.Event {
 	return out
 }
 
-// clockWords is the time as the words style says it, in the screen's language.
-func clockWords(t time.Time) locale.SaidTime { return locale.SayTime(t, screenLang()) }
+// clockWords is the time as the words style says it, in the screen's language and the way its options
+// ask for (words_options.go).
+func clockWords(t time.Time) locale.SaidTime { return locale.SayTime(t, screenLang(), wordsOptions()) }

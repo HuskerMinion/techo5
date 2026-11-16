@@ -171,6 +171,8 @@ type Display struct {
 	callBtn *esphome.Switch
 	// styleSwipeSw is Swipe between clock styles (style_swipe.go).
 	styleSwipeSw *esphome.Switch
+	// wordsSw are the Words style's options (words_options.go).
+	wordsSw []*esphome.Switch
 	// volumeSwipeSw is Swipe for volume (volume_swipe.go).
 	volumeSwipeSw *esphome.Switch
 	// weatherFx is the weather page's sky moving, on or off (weatherfx.go).
@@ -416,6 +418,7 @@ func build() *Display {
 	d.skinSl = skinSelect(d.wake)
 	d.callBtn = callButtonSwitch(d.wake)
 	d.styleSwipeSw = styleSwipeSwitch()
+	d.wordsSw = wordsSwitches(d.wake)
 	d.volumeSwipeSw = volumeSwipeSwitch()
 	d.weatherFx = weatherAnimationSwitch(d.wake)
 	d.muteRing = muteRingSwitch(d.wake)
@@ -495,8 +498,12 @@ func (d *Display) timerStyleSel() *esphome.Select { return nil }
 func (d *Display) skinSel() *esphome.Select { return d.skinSl }
 
 func (d *Display) Entities() []esphome.Entity {
-	return []esphome.Entity{d.light, d.power, d.roomSw, d.auto, d.clock, d.clockStyleSel, d.clockPos, d.camTime, d.answerTime, d.turnStyle, d.skinSl, d.callBtn, d.weatherFx, d.muteRing, d.camDot, d.idleRing, d.lang, d.styleSwipeSw, d.volumeSwipeSw, d.fontSel, d.textSizeSel,
+	ents := []esphome.Entity{d.light, d.power, d.roomSw, d.auto, d.clock, d.clockStyleSel, d.clockPos, d.camTime, d.answerTime, d.turnStyle, d.skinSl, d.callBtn, d.weatherFx, d.muteRing, d.camDot, d.idleRing, d.lang, d.styleSwipeSw, d.volumeSwipeSw, d.fontSel, d.textSizeSel,
 		d.nightHours, d.nightStart, d.nightEnd, d.weekendStart, d.weekendEnd, d.nightMode, d.atNight, d.nightStyle, d.glowLevel, d.nightInfoSw}
+	for _, s := range d.wordsSw {
+		ents = append(ents, s)
+	}
+	return ents
 }
 
 // Restore lights the panel the way it was left.
@@ -514,6 +521,7 @@ func (d *Display) Restore(c config.Config) {
 	d.skinSl.Set(skins[skinIndex()].label)
 	setCallButton(d.callBtn, c.Screen.CallButton)
 	d.styleSwipeSw.Set(!c.Screen.NoStyleSwipe)
+	syncWordsSwitches(d.wordsSw)
 	d.volumeSwipeSw.Set(!c.Screen.NoVolumeSwipe)
 	setWeatherAnimation(d.weatherFx, !c.Screen.WeatherStill)
 	setMuteRingSubtle(d.muteRing, c.Screen.MuteRingSubtle)

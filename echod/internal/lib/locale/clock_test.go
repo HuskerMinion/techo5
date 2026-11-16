@@ -17,24 +17,23 @@ func said(s SaidTime) string {
 	return strings.Join(parts, " ")
 }
 
-func checkSaid(t *testing.T, lang string, cases []struct {
+type sayCase struct {
 	h, m int
 	want string
-}) {
+}
+
+func checkSaid(t *testing.T, lang string, o SayOptions, cases []sayCase) {
 	t.Helper()
 	for _, c := range cases {
-		if got := said(SayTime(time.Date(2026, 9, 16, c.h, c.m, 0, 0, time.Local), lang)); got != c.want {
-			t.Errorf("%q %02d:%02d = %q, want %q", lang, c.h, c.m, got, c.want)
+		if got := said(SayTime(time.Date(2026, 9, 16, c.h, c.m, 0, 0, time.Local), lang, o)); got != c.want {
+			t.Errorf("%q %+v %02d:%02d = %q, want %q", lang, o, c.h, c.m, got, c.want)
 		}
 	}
 }
 
 // English says every minute, and is what a language without its own rules says.
 func TestSayTimeEnglish(t *testing.T) {
-	cases := []struct {
-		h, m int
-		want string
-	}{
+	cases := []sayCase{
 		{14, 7, "it's seven past two in the afternoon"},
 		{14, 0, "it's two o'clock in the afternoon"},
 		{14, 15, "it's quarter past two in the afternoon"},
@@ -51,17 +50,16 @@ func TestSayTimeEnglish(t *testing.T) {
 		{17, 45, "it's quarter to six in the evening"},
 	}
 	for _, lang := range []string{"", "en", "ja", "xx"} {
-		checkSaid(t, lang, cases)
+		checkSaid(t, lang, SayOptions{}, cases)
+		// English says every minute anyway and has no regional way: those two change nothing.
+		checkSaid(t, lang, SayOptions{Regional: true, EveryMinute: true}, cases)
 	}
 }
 
 // German rounds to five minutes and counts from the half hour; a minute or two off is "kurz", unless
 // that would say "nach" or "vor" twice.
 func TestSayTimeGerman(t *testing.T) {
-	checkSaid(t, "de", []struct {
-		h, m int
-		want string
-	}{
+	checkSaid(t, "de", SayOptions{}, []sayCase{
 		// On the hour, and one o'clock is "ein Uhr" but "fünf nach eins".
 		{7, 0, "es ist sieben Uhr morgens"},
 		{1, 0, "es ist ein Uhr nachts"},
@@ -120,5 +118,81 @@ func TestSayTimeGerman(t *testing.T) {
 		{0, 0, "es ist Mitternacht"},
 		{0, 2, "es ist kurz nach Mitternacht"},
 		{0, 15, "es ist Viertel nach zwölf nachts"},
+	})
+}
+
+// The regional way: the quarters count to the next hour, and so does everything from them on.
+func TestSayTimeGermanRegional(t *testing.T) {
+	checkSaid(t, "de", SayOptions{Regional: true}, []sayCase{
+		{7, 0, "es ist sieben Uhr morgens"},
+		{7, 10, "es ist zehn nach sieben morgens"},
+		{7, 15, "es ist viertel acht morgens"},
+		{7, 20, "es ist zehn vor halb acht morgens"},
+		{7, 25, "es ist fünf vor halb acht morgens"},
+		{7, 30, "es ist halb acht morgens"},
+		{7, 35, "es ist fünf nach halb acht morgens"},
+		{7, 40, "es ist zehn nach halb acht morgens"},
+		{7, 45, "es ist dreiviertel acht morgens"},
+		{7, 50, "es ist zehn vor acht morgens"},
+		// The hour changes at the quarter, and "kurz" goes either side of it.
+		{7, 12, "es ist zehn nach sieben morgens"},
+		{7, 13, "es ist kurz vor viertel acht morgens"},
+		{7, 17, "es ist kurz nach viertel acht morgens"},
+		{7, 22, "es ist kurz nach zehn vor halb acht morgens"},
+		{7, 42, "es ist zehn nach halb acht morgens"}, // never "kurz nach zehn nach halb"
+		{7, 47, "es ist kurz nach dreiviertel acht morgens"},
+		{11, 45, "es ist dreiviertel zwölf vormittags"},
+		{23, 15, "es ist viertel zwölf nachts"},
+		{23, 58, "es ist kurz vor Mitternacht"},
+	})
+}
+
+// Every minute: no rounding and no "kurz", each minute counted from the nearest five with a name.
+func TestSayTimeGermanEveryMinute(t *testing.T) {
+	checkSaid(t, "de", SayOptions{EveryMinute: true}, []sayCase{
+		{11, 0, "es ist elf Uhr vormittags"},
+		{11, 1, "es ist eine Minute nach elf vormittags"},
+		{11, 13, "es ist dreizehn nach elf vormittags"},
+		{11, 15, "es ist Viertel nach elf vormittags"},
+		{11, 24, "es ist vierundzwanzig nach elf vormittags"},
+		{11, 25, "es ist fünf vor halb zwölf vormittags"},
+		{11, 27, "es ist drei vor halb zwölf vormittags"},
+		{11, 29, "es ist eine Minute vor halb zwölf vormittags"},
+		{11, 30, "es ist halb zwölf vormittags"},
+		{11, 33, "es ist drei nach halb zwölf vormittags"},
+		{11, 35, "es ist fünf nach halb zwölf vormittags"},
+		{11, 36, "es ist vierundzwanzig vor zwölf vormittags"},
+		{11, 45, "es ist Viertel vor zwölf vormittags"},
+		{11, 59, "es ist eine Minute vor zwölf vormittags"},
+		{12, 0, "es ist zwölf Uhr mittags"},
+		{0, 1, "es ist eine Minute nach zwölf nachts"},
+		{23, 59, "es ist eine Minute vor zwölf nachts"},
+		{0, 0, "es ist Mitternacht"},
+	})
+	checkSaid(t, "de", SayOptions{EveryMinute: true, Regional: true}, []sayCase{
+		{11, 13, "es ist dreizehn nach elf vormittags"},
+		{11, 14, "es ist vierzehn nach elf vormittags"},
+		{11, 15, "es ist viertel zwölf vormittags"},
+		{11, 16, "es ist eine Minute nach viertel zwölf vormittags"},
+		{11, 19, "es ist vier nach viertel zwölf vormittags"},
+		{11, 22, "es ist acht vor halb zwölf vormittags"},
+		{11, 38, "es ist acht nach halb zwölf vormittags"},
+		{11, 40, "es ist zehn nach halb zwölf vormittags"},
+		{11, 42, "es ist drei vor dreiviertel zwölf vormittags"},
+		{11, 47, "es ist dreizehn vor zwölf vormittags"},
+	})
+}
+
+// Without the part of the day, in every language; noon and midnight have none anyway.
+func TestSayTimeNoPeriod(t *testing.T) {
+	o := SayOptions{NoPeriod: true}
+	checkSaid(t, "de", o, []sayCase{
+		{18, 32, "es ist kurz nach halb sieben"},
+		{12, 0, "es ist zwölf Uhr"},
+		{0, 0, "es ist Mitternacht"},
+	})
+	checkSaid(t, "en", o, []sayCase{
+		{19, 20, "it's twenty past seven"},
+		{12, 0, "it's noon"},
 	})
 }

@@ -136,6 +136,15 @@ type Screen struct {
 	// "stack" or "overlap" (display/clock_style.go). The night clock keeps its own look.
 	ClockStyle string `json:"clock_style,omitempty"`
 
+	// How the Words style says the time (locale.SayTime). WordsRegional takes a language's regional way
+	// where it has one (German "viertel drei", "dreiviertel drei"); WordsEveryMinute says every minute
+	// where a language rounds to five ("dreizehn nach elf" rather than "kurz vor Viertel nach elf");
+	// WordsNoPeriod leaves out the part of the day ("abends", "in the evening"). All off until somebody
+	// wants them, so an update changes nobody's screen.
+	WordsRegional    bool `json:"words_regional,omitempty"`
+	WordsEveryMinute bool `json:"words_every_minute,omitempty"`
+	WordsNoPeriod    bool `json:"words_no_period,omitempty"`
+
 	// IdleScreen is the custom screen that stands in for the clock while nothing else is on the
 	// screen: empty for the clock itself, or a custom screen's name (display/custom_screens.go). A name
 	// this device does not have is the clock.
@@ -433,6 +442,18 @@ func (w ScreenWriter) TextSize(v int) error {
 
 func (w ScreenWriter) ClockStyle(v string) error {
 	return w.st.Update(func(c *Config) { c.Screen.ClockStyle = v })
+}
+
+func (w ScreenWriter) WordsRegional(v bool) error {
+	return w.st.Update(func(c *Config) { c.Screen.WordsRegional = v })
+}
+
+func (w ScreenWriter) WordsEveryMinute(v bool) error {
+	return w.st.Update(func(c *Config) { c.Screen.WordsEveryMinute = v })
+}
+
+func (w ScreenWriter) WordsNoPeriod(v bool) error {
+	return w.st.Update(func(c *Config) { c.Screen.WordsNoPeriod = v })
 }
 
 func (w ScreenWriter) IdleScreen(v string) error {

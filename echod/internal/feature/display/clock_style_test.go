@@ -120,3 +120,70 @@ func TestClockWordsFollowTheScreen(t *testing.T) {
 		}
 	}
 }
+
+// The Words style's options: rows only under that style, the German ones only in German; a tap on a
+// row and a switch in Home Assistant both save and change what the style says.
+func TestWordsOptions(t *testing.T) {
+	config.Use(filepath.Join(t.TempDir(), "state.json"))
+	t.Cleanup(func() {
+		_ = config.Set().Screen().Language("")
+		_ = config.Set().Screen().ClockStyle("")
+	})
+	ids := func() (out []string) {
+		for _, r := range wordsRows() {
+			out = append(out, r.id)
+		}
+		return out
+	}
+	set := func(style, lang string) {
+		if err := config.Set().Screen().ClockStyle(style); err != nil {
+			t.Fatal(err)
+		}
+		if err := config.Set().Screen().Language(lang); err != nil {
+			t.Fatal(err)
+		}
+	}
+	set("", "de")
+	if got := ids(); len(got) != 0 {
+		t.Errorf("classic style: rows %v, want none", got)
+	}
+	set("words", "de")
+	if got := strings.Join(ids(), " "); got != "wordsregional wordsminute wordsperiod" {
+		t.Errorf("words in German: rows %q", got)
+	}
+	set("words", "en")
+	if got := strings.Join(ids(), " "); got != "wordsperiod" {
+		t.Errorf("words in English: rows %q", got)
+	}
+
+	set("words", "de")
+	at := time.Date(2026, 9, 16, 7, 13, 0, 0, time.Local)
+	line := func() string {
+		w := clockWords(at)
+		return strings.TrimSpace(strings.Join([]string{w.Lead(), w.Hour, w.Period}, " "))
+	}
+	if got := line(); got != "kurz vor Viertel nach sieben morgens" {
+		t.Errorf("as it was: %q", got)
+	}
+	if !wordsRowTap(nil, "wordsregional", func() {}) || !config.Get().Screen.WordsRegional {
+		t.Fatal("the regional row did not turn the option on")
+	}
+	if got := line(); got != "kurz vor viertel acht morgens" {
+		t.Errorf("regional: %q", got)
+	}
+	sw := wordsSwitches(func() {})
+	sw[1].OnCommand(true)  // every minute
+	sw[2].OnCommand(false) // no part of the day
+	if s := config.Get().Screen; !s.WordsEveryMinute || !s.WordsNoPeriod {
+		t.Fatalf("switches not saved: %+v", s)
+	}
+	if got := line(); got != "dreizehn nach sieben" {
+		t.Errorf("every minute, no period: %q", got)
+	}
+	if wordsRowTap(nil, "clockstyle", func() {}) {
+		t.Error("another row taken for an option")
+	}
+	for _, r := range []func(bool) error{config.Set().Screen().WordsRegional, config.Set().Screen().WordsEveryMinute, config.Set().Screen().WordsNoPeriod} {
+		_ = r(false)
+	}
+}

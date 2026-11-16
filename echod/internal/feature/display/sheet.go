@@ -143,6 +143,9 @@ func categoryRows(sv sheetView) (rows []settingRow, note string) {
 			fontRow(),
 			textSizeRow(),
 			clockStyleRow(),
+		)
+		rows = append(rows, wordsRows()...)
+		rows = append(rows,
 			settingRow{id: "clock", label: tr("clock_format"), kind: ctlChoice, value: clockOptions[clockIndex()]},
 		)
 		rows = append(rows, clockLayoutRows()...)
@@ -1148,6 +1151,9 @@ func (d *Display) rowTap(id string, p part, opt int) {
 		return
 	}
 	if d.deviceRowTap(id, p, opt) {
+		return
+	}
+	if wordsRowTap(d.wordsSw, id, d.wake) {
 		return
 	}
 	switch id {

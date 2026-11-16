@@ -15,18 +15,30 @@ type SaidTime struct {
 // Lead is what comes before the hour: "twenty past", "fünf vor halb"; empty on the hour.
 func (s SaidTime) Lead() string { return strings.TrimSpace(s.Count + " " + s.Link) }
 
+// SayOptions are the Words style's choices. Regional and EveryMinute are a language's own: one
+// without a regional way, or that says every minute anyway (English), ignores them. NoPeriod leaves
+// out the part of the day in every language.
+type SayOptions struct {
+	Regional, EveryMinute, NoPeriod bool
+}
+
 // sayers are the languages that say the time their own way, each with its rules in its own file
 // (clock_de.go). Any other language says it in English.
-var sayers = map[string]func(time.Time) SaidTime{
+var sayers = map[string]func(time.Time, SayOptions) SaidTime{
 	"de": sayGerman,
 }
 
 // SayTime is the time t as it is said in lang.
-func SayTime(t time.Time, lang string) SaidTime {
-	if say, ok := sayers[lang]; ok {
-		return say(t)
+func SayTime(t time.Time, lang string, o SayOptions) SaidTime {
+	say, ok := sayers[lang]
+	if !ok {
+		say = sayEnglish
 	}
-	return sayEnglish(t)
+	s := say(t, o)
+	if o.NoPeriod {
+		s.Period = ""
+	}
+	return s
 }
 
 // englishNumbers are the numbers English says the time with.
@@ -42,7 +54,7 @@ func englishNumber(n int) string {
 
 // sayEnglish says every minute: "seven past", "quarter to", "a minute to"; the hour after half past
 // is the next one's; noon and midnight by name.
-func sayEnglish(t time.Time) SaidTime {
+func sayEnglish(t time.Time, _ SayOptions) SaidTime {
 	s := SaidTime{Intro: "it's"}
 	h, m := t.Hour(), t.Minute()
 	switch {

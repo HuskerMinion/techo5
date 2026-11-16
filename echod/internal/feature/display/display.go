@@ -172,6 +172,8 @@ type Display struct {
 	callScreenSel *esphome.Select
 	// styleSwipeSw is Swipe between clock styles (style_swipe.go).
 	styleSwipeSw *esphome.Switch
+	// wordsSw are the Words style's options (words_options.go).
+	wordsSw []*esphome.Switch
 	// volumeSwipeSw is Swipe for volume (volume_swipe.go).
 	volumeSwipeSw *esphome.Switch
 	// nightTapSw is Tap lifts the night light (night_tap_show.go).
@@ -562,6 +564,7 @@ func build() *Display {
 	d.callBtn = callButtonSwitch(d.wake)
 	d.callScreenSel = callScreenSelect(d.wake)
 	d.styleSwipeSw = styleSwipeSwitch()
+	d.wordsSw = wordsSwitches(d.wake)
 	d.volumeSwipeSw = volumeSwipeSwitch()
 	d.nightTapSw = nightTapSwitch(d)
 	d.nightInfoSw = nightInfoSwitch(d)
@@ -679,6 +682,9 @@ func (d *Display) clockTapSel() *esphome.Select { return d.clockTap }
 func (d *Display) Entities() []esphome.Entity {
 	ents := append([]esphome.Entity{d.light, d.power, d.roomSw, d.auto, d.clock, d.clockStyleSel, d.clockPos, d.dateCol, d.weatherPos, d.glanceSz, d.glanceMus, d.camTime, cameraFitSel, cameraBandsSel, cameraShadeSel, d.answerTime, d.turnStyle, d.timerStyle, d.skinSl, d.callBtn, d.callScreenSel, d.weatherFx, d.warmthSw, d.lang, d.strip, d.themeSel, d.lightThemeSel, d.themeModeSel, d.nightHours, d.nightStart, d.nightEnd, d.weekendStart, d.weekendEnd, d.nightMode, d.atNight, d.nightStyle, d.glowLevel, d.dimmestNum, d.idleDimSel,
 		d.pop.on, d.pop.lead, d.pop.chime, d.pop.allDay, d.pop.shown, d.pop.popping, d.clockTap, d.styleSwipeSw, d.volumeSwipeSw, d.nightTapSw, d.nightInfoSw, d.fontSel, d.textSizeSel}, d.lookEnts...)
+	for _, s := range d.wordsSw {
+		ents = append(ents, s)
+	}
 	if !screen.CanTint {
 		// Night warmth tints the frame on its way to the panel, which a tablet's screen does not take.
 		ents = slices.DeleteFunc(ents, func(e esphome.Entity) bool { return e == esphome.Entity(d.warmthSw) })
@@ -720,6 +726,7 @@ func (d *Display) Restore(c config.Config) {
 	setCallButton(d.callBtn, c.Screen.CallButton)
 	showCallScreen(d.callScreenSel, callScreenIndex())
 	d.styleSwipeSw.Set(!c.Screen.NoStyleSwipe)
+	syncWordsSwitches(d.wordsSw)
 	d.volumeSwipeSw.Set(!c.Screen.NoVolumeSwipe)
 	d.nightTapSw.Set(c.Screen.NightTapLifts)
 	d.nightInfoSw.Set(c.Screen.NightInfo)
