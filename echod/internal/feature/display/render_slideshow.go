@@ -38,7 +38,7 @@ func (r *renderer) slideshowScreensaverPage(s scene) {
 		r.artWeather(s)
 		if len(s.slideshowCaptions) > 0 {
 			// No wash with no clock, and none for the words alone: readable.go darkens just under them.
-			r.readableOver(s.slideshowScreensaver, walnut, 0, func() { r.photoCaptions(s.slideshowCaptions) })
+			r.readableOver(s.slideshowScreensaver, walnut, 0, func() { r.photoCaptions(s.slideshowCaptions, false) })
 		}
 		return
 	}
@@ -46,24 +46,57 @@ func (r *renderer) slideshowScreensaverPage(s scene) {
 	r.washed.lay(r.dst, s.slideshowScreensaver, washOf(walnut, slideshowWash))
 	r.artWeather(s)
 	r.readableOver(s.slideshowScreensaver, walnut, slideshowWash, func() {
-		r.photoCaptions(s.slideshowCaptions)
+		// The date and place on the side the clock is not: the foot unless the clock is there (#573).
+		at := s.slideshowClockAt
+		r.photoCaptions(s.slideshowCaptions, at == config.SlideshowAtBottom)
 		switch s.slideshowOverlay {
 		case config.SlideshowOverlaySmall:
-			r.cornerClock(s)
+			// The time's line: at the top as it was, across the middle, or along the foot.
+			y := r.margin + r.s(26)
+			switch at {
+			case config.SlideshowAtCenter:
+				y = r.h/2 + r.s(10)
+			case config.SlideshowAtBottom:
+				y = r.h - r.margin
+			}
+			r.cornerClockAt(s, y)
 			if s.saverWeather {
 				// On the corner clock's line, just before it.
 				t := clockText(s.now)
-				r.saverWeather(s.weather, r.w-r.margin-r.width(r.small, t)-r.s(24), r.margin+r.s(26), 1)
+				r.saverWeather(s.weather, r.w-r.margin-r.width(r.small, t)-r.s(24), y, 1)
 			}
 		case config.SlideshowOverlayMedium:
-			// The compact clock the corner styles use, in the top right: the time at the size of the
+			// The compact clock the corner styles use, at the right: the time at the size of the
 			// weather's reading, the date under it, readable across a room and off the middle of the photo.
-			d := r.timeAndDateAt(s.now, r.margin+r.s(84), "", 1, 0, true, 0)
+			// Its block runs from the time's baseline to the date's, or the weather's under it.
+			below := r.s(48) // the date's baseline under the time's
+			if s.saverWeather {
+				below = r.s(102) // and the weather's
+			}
+			base := r.margin + r.s(84)
+			switch at {
+			case config.SlideshowAtCenter:
+				base = r.h/2 - below/2 + r.s(24)
+			case config.SlideshowAtBottom:
+				base = r.h - r.margin - below
+			}
+			d := r.timeAndDateAt(s.now, base, "", 1, 0, true, 0)
 			if s.saverWeather {
 				r.saverWeather(s.weather, r.w-r.margin, d.Max.Y+r.s(44), 1)
 			}
 		default:
-			d := r.timeAndDate(s.now, r.h/2+r.s(60), "")
+			// Centered across; down the screen it was in the middle, and stays so unless it is asked for
+			// the foot. The digits keep the size they have in the middle (roof).
+			base, roof := r.h/2+r.s(60), 0
+			if at == config.SlideshowAtBottom {
+				below := r.s(70) // the date's baseline under the time's
+				if s.saverWeather {
+					below = r.s(130) // and the weather's
+				}
+				base = r.h - r.margin - below
+				roof = base - (r.h/2 + r.s(60))
+			}
+			d := r.timeAndDateAt(s.now, base, "", 0, 0, false, roof)
 			if s.saverWeather {
 				r.saverWeather(s.weather, r.w/2, d.Max.Y+r.s(50), 0)
 			}
@@ -104,8 +137,9 @@ func (r *renderer) saverWeather(w home.Weather, x, base, align int) {
 }
 
 // photoCaptions writes when and where each photo up was taken in its bottom left corner: the place,
-// and the day under it. Each of a pair has its own, in its own half.
-func (r *renderer) photoCaptions(caps []home.PhotoCaption) {
+// and the day under it. Each of a pair has its own, in its own half. top has them in the top left corner
+// instead, for a clock along the foot (#573), the place still over the day.
+func (r *renderer) photoCaptions(caps []home.PhotoCaption, top bool) {
 	for _, c := range caps {
 		x, w := r.margin, r.w-2*r.margin
 		if c.Pair {
@@ -113,6 +147,17 @@ func (r *renderer) photoCaptions(caps []home.PhotoCaption) {
 			if c.Right {
 				x += r.w / 2
 			}
+		}
+		if top {
+			y := r.margin + r.s(26)
+			if c.Place != "" {
+				r.text(r.tiny, r.clipTo(r.tiny, c.Place, w), x, y, cream)
+				y += r.s(30)
+			}
+			if !c.When.IsZero() {
+				r.text(r.tiny, r.clipTo(r.tiny, locale.PhotoDate(c.When, screenLang()), w), x, y, cream)
+			}
+			continue
 		}
 		y := r.h - r.margin
 		if !c.When.IsZero() {

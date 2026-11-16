@@ -178,6 +178,12 @@ type Slideshow struct {
 	// Background mode, which always shows the ordinary idle page's own clock.
 	Overlay string `json:"overlay,omitempty"`
 
+	// OverlayAt is where the Screensaver's clock sits: empty for where each size always sat (the top for
+	// Small and Medium, the middle for Normal), SlideshowAtCenter, or
+	// SlideshowAtBottom. The photo's date and place go to the other side of the screen from the clock
+	// (#573).
+	OverlayAt string `json:"overlay_at,omitempty"`
+
 	// Weather shows the sky's icon and the temperature with the Screensaver's clock (#502). Not with
 	// the clock off: a photo alone stays a photo alone.
 	Weather bool `json:"weather,omitempty"`
@@ -330,6 +336,12 @@ const (
 	SlideshowOverlayOff    = "off"
 	SlideshowOverlaySmall  = "small"
 	SlideshowOverlayMedium = "medium" // between the two: readable across a room, the photo still seen (#502)
+)
+
+// Where the screensaver's clock is on the screen (Slideshow.OverlayAt). Empty is the top.
+const (
+	SlideshowAtCenter = "center"
+	SlideshowAtBottom = "bottom"
 )
 
 func defaultHome() Home {

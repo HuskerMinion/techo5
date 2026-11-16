@@ -96,6 +96,13 @@ const (
 	slideshowScreensaverLabel = "Screensaver"
 )
 
+// The clock position select's options (#573).
+const (
+	slideshowAtTopLabel    = "Top"
+	slideshowAtCenterLabel = "Center"
+	slideshowAtBottomLabel = "Bottom"
+)
+
 // The overlay select's options.
 const (
 	slideshowOverlayOffLabel    = "Off"
@@ -192,6 +199,16 @@ func (f *Feature) buildSlideshowSelect() {
 		},
 		Options:   []string{slideshowOverlayOffLabel, slideshowOverlaySmallLabel, slideshowOverlayMediumLabel, slideshowOverlayNormalLabel},
 		OnCommand: func(v string) { f.ChooseSlideshowOverlay(slideshowOverlayFor(v)) },
+	}
+	f.slideshowAtSel = &esphome.Select{
+		Base: esphome.Base{
+			ObjectID: "slideshow_screensaver_position",
+			Name:     "Screensaver clock position",
+			Icon:     "mdi:format-vertical-align-center",
+			Category: esphome.CategoryConfig,
+		},
+		Options:   []string{slideshowAtTopLabel, slideshowAtCenterLabel, slideshowAtBottomLabel},
+		OnCommand: func(v string) { f.ChooseSlideshowClockAt(slideshowAtFor(v)) },
 	}
 	f.slideshowIdleNum = &esphome.Number{
 		Base: esphome.Base{
@@ -380,6 +397,26 @@ func slideshowOverlayLabelFor(overlay string) string {
 	return slideshowOverlayNormalLabel
 }
 
+func slideshowAtFor(v string) string {
+	switch v {
+	case slideshowAtCenterLabel:
+		return config.SlideshowAtCenter
+	case slideshowAtBottomLabel:
+		return config.SlideshowAtBottom
+	}
+	return ""
+}
+
+func slideshowAtLabelFor(at string) string {
+	switch at {
+	case config.SlideshowAtCenter:
+		return slideshowAtCenterLabel
+	case config.SlideshowAtBottom:
+		return slideshowAtBottomLabel
+	}
+	return slideshowAtTopLabel
+}
+
 // ChooseSlideshowMode sets the display mode.
 func (f *Feature) ChooseSlideshowMode(mode string) {
 	s := config.Get().Home.Slideshow
@@ -411,6 +448,28 @@ func (f *Feature) ChooseSlideshowOverlay(overlay string) {
 	f.slideshowOverlaySel.Set(slideshowOverlayLabelFor(overlay))
 	f.Changed.Emit(struct{}{})
 }
+
+// ChooseSlideshowClockAt sets where on the screen the screensaver's clock sits (#573): config.SlideshowAtCenter,
+// config.SlideshowAtBottom, or empty for the top. Only how the screensaver is drawn changes.
+func (f *Feature) ChooseSlideshowClockAt(at string) {
+	s := config.Get().Home.Slideshow
+	if s.OverlayAt == at {
+		f.slideshowAtSel.Set(slideshowAtLabelFor(at))
+		return
+	}
+	s.OverlayAt = at
+	if err := config.Set().Home().Slideshow(s); err != nil {
+		slog.Warn("home: saving the screensaver clock position failed", "err", err)
+		return
+	}
+	slog.Info("home: screensaver clock position", "at", slideshowAtLabelFor(at))
+	f.slideshowAtSel.Set(slideshowAtLabelFor(at))
+	f.Changed.Emit(struct{}{})
+}
+
+// SlideshowClockAt is where the screensaver's clock sits: config.SlideshowAtCenter, config.SlideshowAtBottom, or
+// empty for the top.
+func (f *Feature) SlideshowClockAt() string { return config.Get().Home.Slideshow.OverlayAt }
 
 // SetSlideshowSource sets which media source to show photos from, from the home_slideshow action or
 // the screen's folder list. The source already showing is read again (rereadSlideshow) rather than

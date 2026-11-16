@@ -221,7 +221,9 @@ type Feature struct {
 	// slideshowIdleNum the screensaver's idle wait; slideshow is the fetch state. See slideshow.go.
 	slideshowSel        *esphome.Select
 	slideshowOverlaySel *esphome.Select
-	slideshowIdleNum    *esphome.Number
+	// slideshowAtSel is where on the screen that clock sits (#573).
+	slideshowAtSel   *esphome.Select
+	slideshowIdleNum *esphome.Number
 
 	// slideshowEveryNum is how long one photo stays up; slideshowFolderTxt names the folder the
 	// photos come from, which is picked on the screen or with the home_slideshow action.
@@ -474,6 +476,7 @@ func (f *Feature) Restore(c config.Config) {
 	if hasScreen {
 		f.slideshowSel.Set(slideshowLabelFor(c.Home.Slideshow.Mode))
 		f.slideshowOverlaySel.Set(slideshowOverlayLabelFor(c.Home.Slideshow.Overlay))
+		f.slideshowAtSel.Set(slideshowAtLabelFor(c.Home.Slideshow.OverlayAt))
 		idle := c.Home.Slideshow.IdleMinutes
 		if idle <= 0 {
 			idle = int(slideshowIdleDefault / time.Minute)

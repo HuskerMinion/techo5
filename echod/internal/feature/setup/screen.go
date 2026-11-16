@@ -107,6 +107,13 @@ var slideshowModes = []struct{ label, value string }{
 	{"Screensaver, after a while", config.SlideshowScreensaver},
 }
 
+// saverClockAts are where the screensaver's clock can sit, as the page names them, with what the config keeps.
+var saverClockAts = []struct{ label, value string }{
+	{"Top", ""},
+	{"Center", config.SlideshowAtCenter},
+	{"Bottom", config.SlideshowAtBottom},
+}
+
 // saverClocks are the screensaver clock's sizes as the page names them, with what the config keeps.
 var saverClocks = []struct{ label, value string }{
 	{"Off", config.SlideshowOverlayOff},
@@ -213,7 +220,14 @@ func screenSection(w http.ResponseWriter, token string) {
 	for _, c := range saverClocks {
 		fmt.Fprintf(w, `<option value="%s"%s>%s</option>`, c.value, selected(c.value == overlay), c.label)
 	}
+	fmt.Fprint(w, `</select><label for="saverat">Screensaver clock position</label><select id="saverat" name="saverat">`)
+	at := home.Get().SlideshowClockAt()
+	for _, c := range saverClockAts {
+		fmt.Fprintf(w, `<option value="%s"%s>%s</option>`, c.value, selected(c.value == at), c.label)
+	}
 	fmt.Fprintf(w, `</select>
+	 <p class="note">The photo's date and place go to the other side from the clock: at the bottom for a clock at
+	  the top, at the top for a clock at the bottom.</p>
 	 <p><label><input type="checkbox" name="saverweather" value="yes" style="width:auto"%s> Weather with the
 	  screensaver clock</label></p>
 	 <p class="note">On the screensaver, a swipe left or right goes to the next photo or the one before, and that
@@ -315,6 +329,9 @@ func saveScreen(r *http.Request) string {
 	}
 	if sentClock {
 		h.ChooseSlideshowOverlay(saverClock[0])
+		if at, ok := r.PostForm["saverat"]; ok && len(at) > 0 && slices.ContainsFunc(saverClockAts, func(c struct{ label, value string }) bool { return c.value == at[0] }) {
+			h.ChooseSlideshowClockAt(at[0])
+		}
 		h.SetSlideshowWeather(r.PostFormValue("saverweather") == "yes")
 	}
 	slog.Info("setup page: screen set", "clock style", strings.ToLower(s.Styles[i]), "slideshow", mode, "art", h.SlideshowArt())

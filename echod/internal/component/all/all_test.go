@@ -251,6 +251,7 @@ var registered = []string{
 	"slideshow_mode",
 	"slideshow_screensaver_idle",
 	"slideshow_screensaver_overlay",
+	"slideshow_screensaver_position",
 	"slideshow_screensaver_weather",
 	"slideshow_shuffle",
 	"slideshow_subfolders",

@@ -1797,7 +1797,7 @@ func (d *Display) frame() (next time.Duration) {
 				s.slideshowScreensaver, s.artFx = art, fx
 			}
 		}
-		s.slideshowOverlay = home.Get().SlideshowOverlay()
+		s.slideshowOverlay, s.slideshowClockAt = home.Get().SlideshowOverlay(), home.Get().SlideshowClockAt()
 		s.saverWeather = home.Get().SlideshowWeather()
 		if s.slideshowScreensaver != nil && !home.Get().SlideshowArt() {
 			s.slideshowCaptions = home.Get().SlideshowCaptions()

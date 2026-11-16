@@ -195,6 +195,10 @@ usual one, and the steps below start with it.
      Off, photos fill the screen, which crops tall ones.
    - **Photo pairs** (the Show) puts two tall photos side by side, each filling half the screen,
      in place of one with blurred sides. A tall photo with no other near it in the list shows alone.
+   - **Screensaver clock position** puts the screensaver's clock at the top, in the middle or at the
+     bottom, so it need not cover faces. The photo's date and place go to the other side: along the foot
+     for a clock at the top or in the middle, at the top for a clock at the bottom. Top is where Small
+     and Medium always were; Normal sits mid-screen as before at Top and Center.
    - **Date and place** writes the day each photo was taken at its foot on the screensaver. Immich
      says the place too. For any other source the day comes from the photo's own EXIF data, or else
      from a date in its file name (like `20260818_111018.jpg`); a photo with neither has no caption.

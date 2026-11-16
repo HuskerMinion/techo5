@@ -177,6 +177,9 @@ type roundScene struct {
 	slideshow            *image.RGBA
 	slideshowScreensaver *image.RGBA
 	slideshowOverlay     string
+	// slideshowClockAt is where the clock sits (config.Slideshow.OverlayAt); the photo's date and place go to
+	// the other side (#573).
+	slideshowClockAt string
 	// slideshowCaptions are when and where the screensaver's photo was taken, to write over it.
 	slideshowCaptions []home.PhotoCaption
 	// saverWeather puts the weather with the screensaver's clock (#502).

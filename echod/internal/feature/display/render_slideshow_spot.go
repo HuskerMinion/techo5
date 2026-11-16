@@ -39,7 +39,7 @@ func (r *roundRenderer) slideshowScreensaverFace(s roundScene) {
 		r.artWeather(s)
 		if len(s.slideshowCaptions) > 0 {
 			// No wash with no clock, and none for the words alone: readable.go darkens just under them.
-			r.readableOver(s.slideshowScreensaver, colBackground, 0, func() { r.photoCaption(s.slideshowCaptions) })
+			r.readableOver(s.slideshowScreensaver, colBackground, 0, func() { r.photoCaption(s.slideshowCaptions, false) })
 		}
 		return
 	}
@@ -51,18 +51,31 @@ func (r *roundRenderer) slideshowScreensaverFace(s roundScene) {
 	r.drifted(spotClockDrift(s.now, false), func() {
 		r.readableOver(s.slideshowScreensaver, colBackground, slideshowWash, func() {
 			r.screensaverClock(s)
-			r.photoCaption(s.slideshowCaptions)
+			// The date and place on the side the clock is not (#573).
+			r.photoCaption(s.slideshowCaptions, s.slideshowClockAt == config.SlideshowAtBottom)
 		})
 	})
 }
 
 // photoCaption writes when and where the photo was taken, centered low on the face where the circle
-// is still wide enough for it: the place, and the day under it.
-func (r *roundRenderer) photoCaption(caps []home.PhotoCaption) {
+// is still wide enough for it: the place, and the day under it. top has it high on the face instead,
+// for a clock along the foot (#573), the place still over the day.
+func (r *roundRenderer) photoCaption(caps []home.PhotoCaption, top bool) {
 	if len(caps) == 0 {
 		return
 	}
 	c := caps[0]
+	if top {
+		y := 100
+		if c.Place != "" {
+			r.centered(r.tiny, clip(r.tiny, r, c.Place, side*2/3-2*spotDriftAcross), y, colText)
+			y += 28
+		}
+		if !c.When.IsZero() {
+			r.centered(r.tiny, locale.PhotoDate(c.When, screenLang()), y, colText)
+		}
+		return
+	}
 	y := side - 60
 	if !c.When.IsZero() {
 		r.centered(r.tiny, locale.PhotoDate(c.When, screenLang()), y, colText)
@@ -79,24 +92,51 @@ func (r *roundRenderer) photoCaption(caps []home.PhotoCaption) {
 // weather, when it is asked for, is the sky's icon and the temperature under them.
 func (r *roundRenderer) screensaverClock(s roundScene) {
 	now := s.now
+	at := s.slideshowClockAt
 	switch s.slideshowOverlay {
 	case config.SlideshowOverlaySmall:
-		r.centered(r.small, clockText(now), 60, colText)
+		y := 60 // the time's line: high as it was, across the middle, or low where the circle still holds it
+		switch at {
+		case config.SlideshowAtCenter:
+			y = 250
+		case config.SlideshowAtBottom:
+			y = 392
+		}
+		r.centered(r.small, clockText(now), y, colText)
 		if s.saverWeather {
-			r.saverWeather(s.weather, 94)
+			r.saverWeather(s.weather, y+34)
 		}
 	case config.SlideshowOverlayMedium:
-		// High on the face, where the circle is wide enough for it, and clear of the photo's middle.
-		r.centered(r.mid, clockText(now), 126, colText)
-		r.centered(r.small, locale.LongDate(now, screenLang()), 162, colDim)
+		// High on the face, where the circle is wide enough for it, and clear of the photo's middle; or
+		// the whole block moved down: to the middle, or to where the last line is still inside the circle.
+		dy := 0
+		switch at {
+		case config.SlideshowAtCenter:
+			dy = 120
+			if s.saverWeather {
+				dy = 104
+			}
+		case config.SlideshowAtBottom:
+			dy = 230
+			if s.saverWeather {
+				dy = 212
+			}
+		}
+		r.centered(r.mid, clockText(now), 126+dy, colText)
+		r.centered(r.small, locale.LongDate(now, screenLang()), 162+dy, colDim)
 		if s.saverWeather {
-			r.saverWeather(s.weather, 198)
+			r.saverWeather(s.weather, 198+dy)
 		}
 	default:
-		r.timeLine(now, 240)
-		r.centered(r.small, locale.LongDate(now, screenLang()), 290, colDim)
+		// Mid-face as it was (so is the top, here), or the whole block 70 lower for the bottom.
+		dy := 0
+		if at == config.SlideshowAtBottom {
+			dy = 70
+		}
+		r.timeLine(now, 240+dy)
+		r.centered(r.small, locale.LongDate(now, screenLang()), 290+dy, colDim)
 		if s.saverWeather {
-			r.saverWeather(s.weather, 328)
+			r.saverWeather(s.weather, 328+dy)
 		}
 	}
 }

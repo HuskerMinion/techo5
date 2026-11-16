@@ -238,6 +238,9 @@ type scene struct {
 	// (the idle wait has already been checked); slideshowOverlay is its clock/date size.
 	slideshowScreensaver *image.RGBA
 	slideshowOverlay     string
+	// slideshowClockAt is where the clock sits (config.Slideshow.OverlayAt); the photo's date and place go to
+	// the other side (#573).
+	slideshowClockAt string
 	// slideshowCaptions are when and where the screensaver's photos were taken, to write over them.
 	slideshowCaptions []home.PhotoCaption
 	// saverWeather puts the weather with the screensaver's clock (#502).
@@ -1308,8 +1311,13 @@ func conditionWords(c string) string { return locale.Sky(c, screenLang()) }
 
 // cornerClock keeps the time in view while words have the screen.
 func (r *renderer) cornerClock(s scene) {
+	r.cornerClockAt(s, r.margin+r.s(26))
+}
+
+// cornerClockAt is the corner clock with the time's baseline at y.
+func (r *renderer) cornerClockAt(s scene, y int) {
 	t := clockText(s.now)
-	r.text(r.small, t, r.w-r.margin-r.width(r.small, t), r.margin+r.s(26), dim)
+	r.text(r.small, t, r.w-r.margin-r.width(r.small, t), y, dim)
 }
 
 // cornerClockDated is the corner clock with the day under it, for a screen somebody looks at for

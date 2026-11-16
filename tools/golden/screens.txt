@@ -188,3 +188,11 @@ show/camera-grid-skylight.png
 show/dashboard-handle-show8.png
 show/dashboard-handle-night-show8.png
 show/dashboard-handle-hidden-show8.png
+show/saver-small-bottom.png
+show/saver-medium-bottom-weather-show8.png
+show/saver-medium-center-show8.png
+show/saver-clock-bottom-weather-show8.png
+spot/saver-spot-small-bottom.png
+spot/saver-spot-medium-bottom-weather.png
+spot/saver-spot-medium-center.png
+spot/saver-spot-clock-bottom-weather.png
