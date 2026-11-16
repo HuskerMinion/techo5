@@ -131,6 +131,8 @@ var (
 	parkPoll    = time.Second
 	parkTimeout = 10 * time.Minute
 	joinTimeout = 2 * time.Minute
+	// problemGrace is how long a download Problem must last before the held key is dropped for it.
+	problemGrace = 30 * time.Second
 )
 
 // pendingMark is a file with no key in it, saying a join was waiting on the download, so a restart can
@@ -192,6 +194,8 @@ func (f *Feature) State() Status {
 	return f.st
 }
 
+var errOffAgain = errors.New("netbird: NetBird was switched off before the key could be used")
+
 var errUnkeyed = errors.New("netbird: set an API encryption key first; over NetBird the device's Home Assistant link would otherwise be open in the clear")
 
 // SetOn runs NetBird or stops it. Stopping keeps the device's identity, so on again rejoins by itself.
@@ -240,6 +244,9 @@ func (f *Feature) login(ctx context.Context, setupKey, management string, again 
 		return errUnkeyed
 	}
 	if !f.State().On {
+		if again {
+			return errOffAgain // switched off while the key waited: not turned on behind the owner's back
+		}
 		if err := f.SetOn(true); err != nil {
 			return err
 		}
@@ -264,6 +271,9 @@ func (f *Feature) login(ctx context.Context, setupKey, management string, again 
 			return errors.New("netbird: the client is not running yet; the NetBird status says why")
 		case <-time.After(time.Second):
 		}
+	}
+	if again && !f.State().On {
+		return errOffAgain
 	}
 	name := tailscale.Hostname(config.Get().Device.Name)
 	// Everything the network could give the device is refused, and its firewall left to ours. Each is said
@@ -336,6 +346,23 @@ func (f *Feature) dropParked(why string) {
 	})
 }
 
+// dropParkedIfNone ends the join like dropParked, but only when, under the same lock, no key is held: a
+// key parked meanwhile keeps its mark and its Joining.
+func (f *Feature) dropParkedIfNone(why string) {
+	f.pk.Lock()
+	if f.parked != nil {
+		f.pk.Unlock()
+		return
+	}
+	_ = os.Remove(pendingMark())
+	f.set(func(s *Status) {
+		if s.Joining || why != "" {
+			s.Joining, s.JoinProblem = false, why
+		}
+	})
+	f.pk.Unlock()
+}
+
 // takeParked hands over the held key and forgets it.
 func (f *Feature) takeParked() *parkedJoin {
 	f.pk.Lock()
@@ -358,6 +385,7 @@ func (f *Feature) waitParked() {
 // is held.
 func (f *Feature) joinParked() bool {
 	deadline := time.Now().Add(parkTimeout)
+	var problemSince time.Time
 	for {
 		f.pk.Lock()
 		if f.parked == nil {
@@ -375,10 +403,20 @@ func (f *Feature) joinParked() bool {
 			if _, err := status(context.Background()); err == nil {
 				break
 			}
+			// The supervisor retries a failed download: a Problem is only believed when it lasts.
 			if st.Problem != "" {
-				f.dropParked("NetBird did not download: " + st.Problem + "; give the key again")
-				return true
+				if problemSince.IsZero() {
+					problemSince = time.Now()
+				}
+				if time.Since(problemSince) >= problemGrace {
+					f.dropParked("NetBird did not download: " + st.Problem + "; give the key again")
+					return true
+				}
+			} else {
+				problemSince = time.Time{}
 			}
+		} else {
+			problemSince = time.Time{}
 		}
 		if time.Now().After(deadline) {
 			f.dropParked("NetBird did not finish downloading in ten minutes; give the key again")
@@ -401,11 +439,8 @@ func (f *Feature) joinParked() bool {
 	}
 	// A newer key held while this one joined stays, for the next turn; only with none is the join over.
 	f.pk.Lock()
-	newer := f.parked != nil
 	f.pk.Unlock()
-	if !newer {
-		f.dropParked(why)
-	}
+	f.dropParkedIfNone(why)
 	return true
 }
 

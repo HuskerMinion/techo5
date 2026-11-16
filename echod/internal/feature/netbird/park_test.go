@@ -7,6 +7,7 @@ import (
 	"context"
 	"errors"
 	"log/slog"
+	"os"
 	"path/filepath"
 	"strings"
 	"sync"
@@ -43,17 +44,17 @@ func (w lockedWriter) Write(b []byte) (int, error) {
 func newRig(t *testing.T) *parkRig {
 	r := &parkRig{}
 	wasStatus, wasCli, wasEnc, wasAvail := status, cli, encrypted, Available
-	wasDir, wasPoll, wasTO, wasJoin := stateDir, parkPoll, parkTimeout, joinTimeout
+	wasDir, wasPoll, wasTO, wasJoin, wasGrace := stateDir, parkPoll, parkTimeout, joinTimeout, problemGrace
 	wasLog := slog.Default()
 	t.Cleanup(func() {
 		status, cli, encrypted, Available = wasStatus, wasCli, wasEnc, wasAvail
-		stateDir, parkPoll, parkTimeout, joinTimeout = wasDir, wasPoll, wasTO, wasJoin
+		stateDir, parkPoll, parkTimeout, joinTimeout, problemGrace = wasDir, wasPoll, wasTO, wasJoin, wasGrace
 		slog.SetDefault(wasLog)
 	})
 	dir := t.TempDir()
 	config.Use(filepath.Join(dir, "config.json"))
 	stateDir = dir
-	parkPoll, parkTimeout, joinTimeout = 5*time.Millisecond, 2*time.Second, 2*time.Second
+	parkPoll, parkTimeout, joinTimeout, problemGrace = 5*time.Millisecond, 2*time.Second, 2*time.Second, 100*time.Millisecond
 	encrypted = func() bool { return true }
 	Available = func() bool { return true }
 	slog.SetDefault(slog.New(slog.NewTextHandler(lockedWriter{r}, &slog.HandlerOptions{Level: slog.LevelDebug})))
@@ -254,5 +255,82 @@ func TestKeyNeverLogged(t *testing.T) {
 	}
 	if st := r.f.State(); strings.Contains(statusText(st), keyA) || strings.Contains(st.JoinProblem, keyB) {
 		t.Errorf("key in the status: %+v", st)
+	}
+}
+
+// A key parked while a join ends is not wiped by the end of that join.
+func TestDropParkedIfNoneKeepsNewKey(t *testing.T) {
+	r := newRig(t)
+	r.downloading()
+	r.f.set(func(s *Status) { s.On = true })
+	parkOnce(t, r, keyA)
+	r.f.pk.Lock()
+	r.f.parked = nil // the waiter took it
+	r.f.pk.Unlock()
+	r.f.park(keyB, "")
+	r.f.dropParkedIfNone("late failure")
+	r.f.pk.Lock()
+	held := r.f.parked != nil
+	r.f.pk.Unlock()
+	if !held {
+		t.Error("the newer key was wiped")
+	}
+	if st := r.f.State(); !st.Joining || st.JoinProblem != "" {
+		t.Errorf("%+v", st)
+	}
+	if _, err := os.Stat(pendingMark()); err != nil {
+		t.Errorf("the pending mark is gone: %v", err)
+	}
+	r.f.dropParked("")
+}
+
+// A download that fails and is retried does not cost the key.
+func TestMomentaryDownloadProblemKeepsKey(t *testing.T) {
+	r := newRig(t)
+	r.downloading()
+	r.f.set(func(s *Status) { s.On = true })
+	parkOnce(t, r, keyA)
+	r.f.set(func(s *Status) { s.Downloading, s.Problem = false, "downloading NetBird: blip" })
+	time.Sleep(30 * time.Millisecond)
+	r.downloading()
+	r.f.set(func(s *Status) { s.Problem = "" })
+	time.Sleep(200 * time.Millisecond)
+	if !r.f.State().Joining {
+		t.Fatalf("the key was dropped: %+v", r.f.State())
+	}
+	r.finish()
+	r.wait(t, "joined", func() bool { return len(r.joinedKeys()) > 0 && r.idle() })
+	if k := r.joinedKeys(); len(k) != 1 || k[0] != keyA {
+		t.Errorf("joined with %v", k)
+	}
+}
+
+// Switched off while the waiter has the key, it does not turn NetBird back on or join.
+func TestSwitchOffBeforeJoinAborts(t *testing.T) {
+	r := newRig(t)
+	r.up.Store(true)
+	r.f.set(func(s *Status) { s.On = false })
+	if err := r.f.login(context.Background(), keyA, "", true); !errors.Is(err, errOffAgain) {
+		t.Fatalf("got %v", err)
+	}
+	if r.f.State().On {
+		t.Error("turned on again")
+	}
+	// Off between the first check and the join.
+	r.mu.Lock()
+	r.keys = nil
+	r.mu.Unlock()
+	r.f.set(func(s *Status) { s.On = true })
+	was := status
+	status = func(ctx context.Context) (daemonStatus, error) {
+		r.f.set(func(s *Status) { s.On = false })
+		return was(ctx)
+	}
+	err := r.f.login(context.Background(), keyA, "", true)
+	if !errors.Is(err, errOffAgain) {
+		t.Fatalf("got %v", err)
+	}
+	if k := r.joinedKeys(); len(k) != 0 {
+		t.Errorf("joined: %v", k)
 	}
 }

@@ -34,7 +34,7 @@ func netbirdSection(w http.ResponseWriter, token string) {
 		} else {
 			where = "Joining NetBird."
 		}
-		where += `<script>setTimeout(()=>location.reload(),3000)</script>`
+		where += joiningReload
 	case st.JoinProblem != "":
 		where = "Could not join: " + html.EscapeString(st.JoinProblem) + "."
 	case st.On && st.Downloading:
@@ -46,6 +46,10 @@ func netbirdSection(w http.ResponseWriter, token string) {
 	}
 	netbirdForm(w, token, where)
 }
+
+// joiningReload reloads the page every 3 s while a join is under way, but not once anything on the page
+// has been typed or changed: a reload would lose it.
+const joiningReload = `<script>var nbDirty=false;addEventListener('input',()=>{nbDirty=true});addEventListener('change',()=>{nbDirty=true});setInterval(()=>{if(!nbDirty)location.reload()},3000)</script>`
 
 // netbirdForm is the section's form, with where the device stands said above it (as HTML). Joining
 // holds the request for up to two minutes, so the form says it is at work (script.go).
