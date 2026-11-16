@@ -2103,8 +2103,8 @@ var uiTranslations = map[string]map[string]string{
 		"ui_more":                               "Plus",
 		"ui_muted":                              "Son coupé",
 		"ui_name_weather_updates_and_restart":   "Nom, météo, mises à jour et redémarrage",
-		"ui_needs_a_key_the_setup_page_connections":       "Une clé est nécessaire : page de configuration, Réseau",
-		"ui_needs_a_setup_key_the_setup_page_connections": "Une clé de configuration est nécessaire : page de configuration, Réseau",
+		"ui_needs_a_key_the_setup_page_connections":       "Une clé est nécessaire : page de configuration, Network",
+		"ui_needs_a_setup_key_the_setup_page_connections": "Une clé de configuration est nécessaire : page de configuration, Network",
 		"ui_needs_speaker_eq_which_is_off":                "Nécessite l'égaliseur du haut-parleur, qui est désactivé",
 		"ui_never":                                        "Jamais",
 		"ui_new_alarm":                                    "Nouvelle alarme",
@@ -3052,8 +3052,8 @@ var uiTranslations = map[string]map[string]string{
 		"ui_more":                               "Máis",
 		"ui_muted":                              "Silenciado",
 		"ui_name_weather_updates_and_restart":   "Nome, tempo, actualizacións e reinicio",
-		"ui_needs_a_key_the_setup_page_connections":       "Precisa unha clave: páxina de configuración, Rede",
-		"ui_needs_a_setup_key_the_setup_page_connections": "Precisa unha clave de configuración: páxina de configuración, Rede",
+		"ui_needs_a_key_the_setup_page_connections":       "Precisa unha clave: páxina de configuración, Network",
+		"ui_needs_a_setup_key_the_setup_page_connections": "Precisa unha clave de configuración: páxina de configuración, Network",
 		"ui_needs_speaker_eq_which_is_off":                "Precisa o ecualizador do altofalante, que está desactivado",
 		"ui_never":                                        "Nunca",
 		"ui_new_alarm":                                    "Nova alarma",
@@ -4002,8 +4002,8 @@ var uiTranslations = map[string]map[string]string{
 		"ui_more":                               "Altro",
 		"ui_muted":                              "Audio disattivato",
 		"ui_name_weather_updates_and_restart":   "Nome, meteo, aggiornamenti e riavvio",
-		"ui_needs_a_key_the_setup_page_connections":       "Richiede una chiave: pagina di configurazione, Rete",
-		"ui_needs_a_setup_key_the_setup_page_connections": "Richiede una chiave di configurazione: pagina di configurazione, Rete",
+		"ui_needs_a_key_the_setup_page_connections":       "Richiede una chiave: pagina di configurazione, Network",
+		"ui_needs_a_setup_key_the_setup_page_connections": "Richiede una chiave di configurazione: pagina di configurazione, Network",
 		"ui_needs_speaker_eq_which_is_off":                "Richiede l'equalizzazione dell'altoparlante, attualmente disattivata",
 		"ui_never":                                        "Mai",
 		"ui_new_alarm":                                    "Nuova sveglia",
@@ -5648,9 +5648,9 @@ var uiTranslations = map[string]map[string]string{
 		// Name, weather, updates and restart
 		"ui_name_weather_updates_and_restart": "Naam, weer, updates en opnieuw opstarten",
 		// Needs a key: the setup page, Connections
-		"ui_needs_a_key_the_setup_page_connections": "Vereist een sleutel: installatiepagina, Verbindingen",
+		"ui_needs_a_key_the_setup_page_connections": "Vereist een sleutel: installatiepagina, Network",
 		// Needs a setup key: the setup page, Connections
-		"ui_needs_a_setup_key_the_setup_page_connections": "Vereist een installatiesleutel: installatiepagina, Verbindingen",
+		"ui_needs_a_setup_key_the_setup_page_connections": "Vereist een installatiesleutel: installatiepagina, Network",
 		// Needs Speaker EQ, which is off
 		"ui_needs_speaker_eq_which_is_off": "Vereist luidspreker-EQ, die uit staat",
 		// Never
@@ -8087,9 +8087,9 @@ var uiTranslations = map[string]map[string]string{
 		// Name, weather, updates and restart
 		"ui_name_weather_updates_and_restart": "Name, Wetter, Updates und Neustart",
 		// Needs a key: the setup page, Network
-		"ui_needs_a_key_the_setup_page_connections": "Braucht einen Schlüssel: Einrichtungsseite, Netzwerk",
+		"ui_needs_a_key_the_setup_page_connections": "Braucht einen Schlüssel: Einrichtungsseite, Network",
 		// Needs a setup key: the setup page, Network
-		"ui_needs_a_setup_key_the_setup_page_connections": "Braucht einen Einrichtungsschlüssel: Einrichtungsseite, Netzwerk",
+		"ui_needs_a_setup_key_the_setup_page_connections": "Braucht einen Einrichtungsschlüssel: Einrichtungsseite, Network",
 		// Needs Speaker EQ, which is off
 		"ui_needs_speaker_eq_which_is_off": "Braucht den Lautsprecher-EQ, der aus ist",
 		// Never
@@ -9209,8 +9209,8 @@ var uiTranslations = map[string]map[string]string{
 		"ui_more":                               "Daha fazla",
 		"ui_muted":                              "Sessiz",
 		"ui_name_weather_updates_and_restart":   "Ad, hava durumu, güncellemeler ve yeniden başlatma",
-		"ui_needs_a_key_the_setup_page_connections":       "Anahtar gerekli: kurulum sayfası, Ağ",
-		"ui_needs_a_setup_key_the_setup_page_connections": "Kurulum anahtarı gerekli: kurulum sayfası, Ağ",
+		"ui_needs_a_key_the_setup_page_connections":       "Anahtar gerekli: kurulum sayfası, Network",
+		"ui_needs_a_setup_key_the_setup_page_connections": "Kurulum anahtarı gerekli: kurulum sayfası, Network",
 		"ui_needs_speaker_eq_which_is_off":                "Kapalı olan Hoparlör EQ gerekli",
 		"ui_never":                                        "Asla",
 		"ui_new_alarm":                                    "Yeni alarm",
