@@ -70,6 +70,10 @@ setup page's **Screen** tab has the same settings, except which dashboard to sho
   state; or *Name below*, a smaller icon and the state along the top and the name under them, across
   the tile's whole width. Name below tiles are a little taller, and a long name has more room, which
   suits a large **Text size**. It works with every size of **Dashboard tiles**.
+- **Show dashboard handle** (Show only, on by default): the short bar on the dashboard's left edge that
+  says how to leave it. At night it is drawn in the night light's dim red instead of its day light. Off, it
+  is not drawn and a tap at the edge goes to the page; a swipe in from the left edge still puts the
+  dashboard away.
 - **Dashboard without its header** (streamed only): hides Home Assistant's top bar, which on a small
   screen takes a real slice of it. It works on your dashboards and on the built-in pages (Energy,
   History, Logbook and the rest), with nothing to install and no change to the dashboards themselves,

@@ -174,6 +174,22 @@ func (f *Feature) ChooseIdle(on bool) error {
 	return nil
 }
 
+// ChooseHandle shows the dashboard's edge handle or leaves it off (#564), from Home Assistant or the setup
+// page. The page is drawn again at once.
+func (f *Feature) ChooseHandle(on bool) error {
+	if err := config.Set().Dashboard().HideHandle(!on); err != nil {
+		slog.Error("saving the dashboard handle setting failed", "err", err)
+		f.handle.Set(!config.Get().Dashboard.HideHandle)
+		return err
+	}
+	f.handle.Set(on)
+	f.Changed.Emit(struct{}{})
+	return nil
+}
+
+// Handle is whether the dashboard's edge handle is shown.
+func Handle() bool { return !config.Get().Dashboard.HideHandle }
+
 // SetBack saves how long a dashboard opened by hand stays up, by its label.
 func (f *Feature) SetBack(label string) {
 	for _, c := range backChoices {

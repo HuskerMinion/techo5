@@ -102,14 +102,20 @@ func dashboardPanelSection(w http.ResponseWriter, token string) {
 	if d.Idle {
 		idle = " checked"
 	}
+	handle := ""
+	if dashboard.HasTiles() { // the Show draws the handle; the Spot's dashboard has none
+		handle = `<p><label><input type="checkbox" name="handle" value="yes" style="width:auto"` + checked(dashboard.Handle()) +
+			`> Show the handle on the dashboard's left edge</label> <span class="note">Hidden, a swipe from the edge still leaves it.</span></p>`
+	}
 	fmt.Fprintf(w, `</select>
 	 <p><label><input type="checkbox" name="idle" value="yes" style="width:auto"%s> Show it in place of the clock when idle</label></p>
+	 %s
 	 <p class="note"><strong>Drawn on the device</strong> needs no server: it reads your dashboards with this
 	  device's Home Assistant token. <strong>Streamed</strong> needs a
 	  dashcast server, set below.%s <strong>Back to the clock after</strong> is for a dashboard
 	  opened by hand; one Home Assistant shows stays until it is hidden.</p>
 	 %s
-	 <p><button type="submit">Save</button></p></form></fieldset>`, idle, tesseraNote, tokenNote())
+	 <p><button type="submit">Save</button></p></form></fieldset>`, idle, handle, tesseraNote, tokenNote())
 }
 
 // tokenNote says whether the device has the Home Assistant access a drawn dashboard is read with, and
@@ -159,6 +165,13 @@ func saveDashboardPanel(r *http.Request) string {
 	if on := r.PostFormValue("idle") == "yes"; on != f.Idle() {
 		if err := f.ChooseIdle(on); err != nil {
 			return "could not save it: " + err.Error()
+		}
+	}
+	if dashboard.HasTiles() {
+		if on := r.PostFormValue("handle") == "yes"; on != dashboard.Handle() {
+			if err := f.ChooseHandle(on); err != nil {
+				return "could not save it: " + err.Error()
+			}
 		}
 	}
 	if back != dashboard.Back() {

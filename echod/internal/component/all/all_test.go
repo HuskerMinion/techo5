@@ -324,6 +324,7 @@ var registered = []string{
 	"screen_dashboard_return",
 	"screen_dashboard_tiles",
 	"screen_dashboard_layout",
+	"screen_dashboard_handle",
 	"screen_camera_picture",
 	"screen_camera_strips",
 	"screen_camera_strips_shade",

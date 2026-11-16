@@ -185,3 +185,6 @@ show/weather-2560x1600.png
 show/dash-tiles-normal-2560x1600.png
 show/camera-grid-show8.png
 show/camera-grid-skylight.png
+show/dashboard-handle-show8.png
+show/dashboard-handle-night-show8.png
+show/dashboard-handle-hidden-show8.png

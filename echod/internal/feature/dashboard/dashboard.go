@@ -71,6 +71,8 @@ type Feature struct {
 	back   *esphome.Select
 	tiles  *esphome.Select
 	layout *esphome.Select
+	// handle shows the handle on the drawn page's left edge (#564).
+	handle *esphome.Switch
 
 	mu        sync.Mutex
 	stream    *stream  // while the page is up in streamed mode
@@ -148,6 +150,14 @@ func Get() *Feature {
 					Category: esphome.CategoryConfig,
 				},
 			},
+			handle: &esphome.Switch{
+				Base: esphome.Base{
+					ObjectID: "screen_dashboard_handle",
+					Name:     "Show dashboard handle",
+					Icon:     "mdi:drag-vertical-variant",
+					Category: esphome.CategoryConfig,
+				},
+			},
 			board: &esphome.Select{
 				Base: esphome.Base{
 					ObjectID: "screen_dashboard_view",
@@ -177,6 +187,7 @@ func Get() *Feature {
 			slog.Info("dashboard: header", "hidden", on)
 			f.setMode(f.Mode())
 		}
+		f.handle.OnCommand = func(on bool) { _ = f.ChooseHandle(on) }
 		shared = f
 	})
 	return shared
@@ -187,7 +198,7 @@ func (f *Feature) Name() string { return "dashboard" }
 func (f *Feature) Entities() []esphome.Entity {
 	es := []esphome.Entity{f.mode, f.idle, f.kiosk, f.board, f.back}
 	if hasTiles {
-		es = append(es, f.tiles, f.layout)
+		es = append(es, f.tiles, f.layout, f.handle)
 	}
 	return es
 }
@@ -197,6 +208,7 @@ func (f *Feature) Restore(c config.Config) {
 	f.idle.Set(c.Dashboard.Idle)
 	slog.Info("restored", "what", f.idle.ObjectID, "using", c.Dashboard.Idle)
 	f.kiosk.Set(c.Dashboard.Kiosk)
+	f.handle.Set(!c.Dashboard.HideHandle)
 	opts, chosen := boardOptions(c.Dashboard)
 	f.boardOpts.Restore(opts)
 	f.board.Set(chosen)

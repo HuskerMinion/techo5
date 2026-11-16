@@ -25,6 +25,11 @@ type Dashboard struct {
 	// is a real slice of it. Only dashcast can do it; a drawn dashboard has no bar to hide.
 	Kiosk bool `json:"kiosk,omitempty"`
 
+	// HideHandle leaves the handle off the dashboard's left edge (#564): the bar that says how to leave
+	// it. Kept inverted so that a config from before the setting still shows it. The swipe from the edge
+	// works either way, and a tap there is the page's.
+	HideHandle bool `json:"hide_handle,omitempty"`
+
 	// Known is the dashboards Home Assistant had when last asked, kept so the list of them is there
 	// from the start and not only once Home Assistant has been asked again.
 	Known []DashboardChoice `json:"known,omitempty"`
@@ -96,6 +101,11 @@ func (w DashboardWriter) Server(addr, key string) error {
 
 func (w DashboardWriter) Kiosk(v bool) error {
 	return w.st.Update(func(c *Config) { c.Dashboard.Kiosk = v })
+}
+
+// HideHandle sets whether the dashboard's edge handle is left off.
+func (w DashboardWriter) HideHandle(v bool) error {
+	return w.st.Update(func(c *Config) { c.Dashboard.HideHandle = v })
 }
 
 func (w DashboardWriter) Idle(v bool) error {

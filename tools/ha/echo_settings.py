@@ -146,6 +146,7 @@ SECTIONS = [
         ('0/select/Dashboard to show', 'Dashboard to show (this device only)', False),
         ('0/switch/Dashboard when idle', 'Show dashboard when idle', True),
         ('0/switch/Dashboard without its header', 'Hide dashboard header', True),
+        ('0/switch/Show dashboard handle', 'Show dashboard handle', True),
     ]),
     ('Weather & alarms', 'mdi:alarm', None, [
         ('0/select/Weather source', 'Weather source', True),
