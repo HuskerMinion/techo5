@@ -315,7 +315,8 @@ func (r *renderer) dial(now time.Time, cx, cy, rad float64) {
 // wordsStyle says the time: "it's seven past two in the afternoon". Everything shrinks together when
 // a timer or a strip at the foot leaves it less height than it was drawn for.
 func (r *renderer) wordsStyle(s scene, box image.Rectangle) {
-	lead, hour, period := clockWords(s.now)
+	said := clockWords(s.now)
+	lead, hour, period := said.Lead(), said.Hour, said.Period
 	k := min(1, float64(box.Dy())/float64(r.s(372)))
 	at := func(n int) int { return int(float64(n) * k) }
 	x := box.Min.X + r.s(24)
@@ -336,7 +337,7 @@ func (r *renderer) wordsStyle(s scene, box image.Rectangle) {
 	}
 	small := r.styleFace(false, least(44, 32))
 	y := box.Min.Y + r.s(at(44))
-	r.text(small, "it's", x, y, dim)
+	r.text(small, said.Intro, x, y, dim)
 	if lead != "" {
 		f := fit(true, at(104), lead, room)
 		y += capHeight(f) + r.s(at(34))

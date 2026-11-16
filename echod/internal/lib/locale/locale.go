@@ -1,6 +1,7 @@
 // Package locale writes the dates and weather words the screen shows in the screen's language: the
-// clock's day and date, the forecast's day names, and what the sky is doing. Eight languages, the ones
-// the screen's Language setting offers; anything else, empty included, is English.
+// clock's day and date, the forecast's day names, what the sky is doing, and the time as the words
+// clock style says it (clock.go). Eight languages, the ones the screen's Language setting offers;
+// anything else, empty included, is English.
 //
 // Only those words. The rest of the screen's own text - its settings, its buttons - is English.
 package locale
