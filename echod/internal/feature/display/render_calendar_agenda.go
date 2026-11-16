@@ -3,8 +3,10 @@
 package display
 
 import (
+	"fmt"
 	"image"
-	"strconv"
+
+	"github.com/HuskerMinion/techo5/echod/internal/lib/locale"
 )
 
 // calendarAgendaRefined is Coming up with one line an event: its start, its title and, when it has one,
@@ -74,9 +76,9 @@ func (r *renderer) calendarAgendaRefined(v calendarView, l calLook) {
 				ink = amber
 			}
 			r.text(r.tiny, name, r.margin, hb, ink)
-			extra := "in " + strconv.Itoa(ahead) + " days"
+			extra := fmt.Sprintf(tr("ui_cal_in_days"), ahead)
 			if ahead < 2 {
-				extra = row.day.Format("Mon, Jan 2")
+				extra = locale.ShortDate(row.day, screenLang())
 			}
 			r.text(r.micro, extra, r.margin+r.width(r.tiny, name)+r.s(12), hb, dim)
 			r.dayWeather(v.forecast, row.day, right, hb, r.micro, 22, false)
@@ -97,7 +99,7 @@ func (r *renderer) calendarAgendaRefined(v calendarView, l calLook) {
 		if !e.AllDay {
 			when = clockText(e.Start)
 			if !sameDay(e.Start, row.day) {
-				when = "Until " + clockText(e.End)
+				when = fmt.Sprintf(tr("ui_cal_until_cap_s"), clockText(e.End))
 			}
 		}
 		r.text(r.tiny, when, tx, base, dim)
