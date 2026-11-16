@@ -223,6 +223,14 @@ t5_wifi_conf() {
 	if [ "${n:-0}" -lt 1 ]; then
 		rm -f "$out.tmp"
 		log "wifi: none of Android's saved networks in $xml is one this can join"
+		# The same empty configuration as with no store at all: without a file the supplicant never
+		# starts and the screen's Wi-Fi page (the first-run step too) has nothing to scan with (#575).
+		if [ ! -s "$out" ]; then
+			umask 077
+			printf 'ctrl_interface=/run/wpa\nupdate_config=0\n' > "$out"
+			umask 022
+			log "wifi: no saved network; waiting for one from the screen"
+		fi
 		return 1
 	fi
 	mv -f "$out.tmp" "$out"
