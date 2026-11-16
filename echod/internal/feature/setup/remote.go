@@ -18,6 +18,7 @@ package setup
 //   - Turning it off, or the page closing, lets go of every browser it let in over the tailnet.
 
 import (
+	"fmt"
 	"log/slog"
 	"os"
 	"strings"
@@ -26,9 +27,11 @@ import (
 
 	esphome "github.com/ygelfand/go-esphome-device"
 
+	"github.com/HuskerMinion/techo5/echod/internal/config"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/notify"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/web"
 	"github.com/HuskerMinion/techo5/echod/internal/layout"
+	"github.com/HuskerMinion/techo5/echod/internal/lib/locale"
 )
 
 // remoteSetup is Remote setup's state and its entities. Past on, held with the Feature's mu.
@@ -65,10 +68,16 @@ var keyed = func() bool {
 
 // letInNotice puts up on the screen that Home Assistant let a browser in; a variable for tests.
 var letInNotice = func(from string) {
-	if err := notify.Get().Notify("Home Assistant let a browser at "+from+" into the setup page, from away.",
-		"Setup page", "mdi:tools", "", "", "", 60); err != nil {
+	message, title := letInText(from)
+	if err := notify.Get().Notify(message, title, "mdi:tools", "", "", "", 60); err != nil {
 		slog.Warn("setup page: the notice of a browser let in was not shown", "err", err)
 	}
+}
+
+// letInText is the notice's message and title in the screen's language, read when it goes up.
+func letInText(from string) (message, title string) {
+	lang := config.Get().Screen.Language
+	return fmt.Sprintf(locale.Text(lang, "ui_setup_let_in_s"), from), locale.Text(lang, "ui_setup_notice_title")
 }
 
 // buildRemote makes Remote setup's entities.
