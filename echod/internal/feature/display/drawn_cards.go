@@ -3,6 +3,7 @@
 package display
 
 import (
+	"fmt"
 	"image"
 	"image/color"
 	"image/draw"
@@ -12,6 +13,8 @@ import (
 	"golang.org/x/image/font"
 
 	"github.com/HuskerMinion/techo5/echod/internal/feature/dashboard"
+	"github.com/HuskerMinion/techo5/echod/internal/feature/web"
+	"github.com/HuskerMinion/techo5/echod/internal/hardware/metrics"
 	"github.com/HuskerMinion/techo5/echod/internal/lib/mdi"
 	"github.com/HuskerMinion/techo5/echod/internal/lib/picscale"
 )
@@ -67,6 +70,13 @@ func (r *paint) dashPage(v dashboard.Drawn, scroll int, adj dashAdjusting, area 
 		msg := v.Problem
 		if msg == "" {
 			msg = tr("loading_the_dashboard")
+		}
+		if v.Connect {
+			if at := connectAddress(); at != "" {
+				r.connectPage(msg, at, area, pal)
+				r.setDash(nil, 0)
+				return
+			}
 		}
 		lines := r.wrapLines(fc.label, msg, area.Dx())
 		y := area.Min.Y + area.Dy()/2 - len(lines)*r.s(30)/2
@@ -758,4 +768,40 @@ func cover(src, dst image.Rectangle) image.Rectangle {
 	h := max(1, sw*dh/dw)
 	y := src.Min.Y + (sh-h)/2
 	return image.Rect(src.Min.X, y, src.Max.X, y+h)
+}
+
+// connectPath is where on the setup page Connect to Home Assistant is (setup's ha_signin.go).
+const connectPath = "/setup?tab=network#sec-haaccess"
+
+// connectAddress is the setup page's address on this device for a phone to open, or nothing when the
+// device has no address to give (a variable for the previews, which show a made-up one).
+var connectAddress = func() string {
+	for _, ip := range metrics.Addresses() {
+		if v4 := ip.To4(); v4 != nil {
+			return fmt.Sprintf("http://%s:%d", v4, web.Port)
+		}
+	}
+	return ""
+}
+
+// connectPage is a drawn dashboard's page while the device has no access to Home Assistant: what to
+// do, and a QR code that opens the setup page at Connect to Home Assistant, with the page's address
+// under it for typing into a computer's browser instead, where a password manager fills the sign-in (#567).
+func (r *paint) connectPage(msg, at string, area image.Rectangle, pal dashPal) {
+	fc := r.faces()
+	side := min(area.Dy()*44/100, area.Dx()*40/100)
+	lines := r.wrapLines(fc.label, msg, area.Dx()*86/100)
+	line := r.s(30)
+	total := side + r.s(24) + len(lines)*line + r.s(14) + line
+	y := area.Min.Y + (area.Dy()-total)/2
+	x := area.Min.X + (area.Dx()-side)/2
+	r.qrCode(at+connectPath, image.Rect(x, y, x+side, y+side))
+	y += side + r.s(24)
+	for _, l := range lines {
+		y += line
+		r.text(fc.label, l, area.Min.X+(area.Dx()-r.width(fc.label, l))/2, y, pal.sub)
+	}
+	y += r.s(14) + line
+	typed := at + "/setup" // the words say where on it; a short address is what gets typed right
+	r.text(fc.label, typed, area.Min.X+(area.Dx()-r.width(fc.label, typed))/2, y, pal.text)
 }

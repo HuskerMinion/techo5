@@ -162,7 +162,10 @@ type Drawn struct {
 	Sections []Section
 	Theme    Theme
 	Problem  string
-	Version  uint64
+	// Connect is a Problem that is the device having no access to Home Assistant: the screen offers
+	// the way to the setup page's Connect to Home Assistant with it (#567).
+	Connect bool
+	Version uint64
 }
 
 // needs is what a source asks for once connected: entities to follow, templates to render, histories
@@ -586,9 +589,12 @@ func (s *session) close() {
 	}
 }
 
-func (s *session) problem(text string) {
+func (s *session) problem(text string) { s.say(text, false) }
+
+// say is problem, saying too whether it is the device having no access to Home Assistant (Connect).
+func (s *session) say(text string, connect bool) {
 	s.mu.Lock()
-	s.view.Problem = text
+	s.view.Problem, s.view.Connect = text, connect
 	s.view.Version++
 	s.hold = nil // what went wrong is said now, not after the held page's time is up
 	s.mu.Unlock()
@@ -631,7 +637,7 @@ func (s *session) run() {
 
 func (s *session) once() error {
 	if !hass.Get().Ready() {
-		s.problem(noAccess(config.Get().Device.Name, factoryMAC()))
+		s.say(noAccess(config.Get().Device.Name, factoryMAC()), true)
 		return fmt.Errorf("no home assistant access")
 	}
 	ctx, cancel := context.WithCancel(context.Background())
@@ -678,7 +684,7 @@ func (s *session) once() error {
 		return err
 	}
 	s.mu.Lock()
-	s.view.Problem, s.view.Theme = "", theme
+	s.view.Problem, s.view.Connect, s.view.Theme = "", false, theme
 	s.history, s.graphs = history, need.graphs
 	s.seed(need.pictures)
 	s.mu.Unlock()
