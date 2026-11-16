@@ -7,6 +7,7 @@ import (
 	"image/png"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -100,29 +101,22 @@ func TestShowClockStylesDraw(t *testing.T) {
 	clock24.Store(false)
 }
 
-func TestClockWords(t *testing.T) {
-	for _, c := range []struct {
-		h, m               int
-		lead, hour, period string
-	}{
-		{14, 7, "seven past", "two", "in the afternoon"},
-		{14, 0, "", "two o'clock", "in the afternoon"},
-		{14, 15, "quarter past", "two", "in the afternoon"},
-		{14, 30, "half past", "two", "in the afternoon"},
-		{14, 45, "quarter to", "three", "in the afternoon"},
-		{14, 37, "twenty-three to", "three", "in the afternoon"},
-		{9, 1, "a minute past", "nine", "in the morning"},
-		{11, 59, "a minute to", "twelve", "in the morning"},
-		{12, 0, "", "noon", ""},
-		{0, 0, "", "midnight", ""},
-		{23, 50, "ten to", "twelve", "at night"},
-		{19, 20, "twenty past", "seven", "in the evening"},
-		{4, 45, "quarter to", "five", "in the morning"}, // the part of the day is the hour said
-		{17, 45, "quarter to", "six", "in the evening"},
+// The words style says the time in the screen's language; the rules themselves are locale's.
+func TestClockWordsFollowTheScreen(t *testing.T) {
+	config.Use(filepath.Join(t.TempDir(), "state.json"))
+	t.Cleanup(func() { _ = config.Set().Screen().Language("") })
+	at := time.Date(2026, 9, 16, 18, 28, 0, 0, time.Local)
+	for _, c := range []struct{ lang, said string }{
+		{"", "it's twenty-eight past six in the evening"},
+		{"de", "es ist kurz vor halb sieben abends"},
+		{"ja", "it's twenty-eight past six in the evening"},
 	} {
-		lead, hour, period := clockWords(time.Date(2026, 9, 16, c.h, c.m, 0, 0, time.Local))
-		if lead != c.lead || hour != c.hour || period != c.period {
-			t.Errorf("%02d:%02d = %q %q %q, want %q %q %q", c.h, c.m, lead, hour, period, c.lead, c.hour, c.period)
+		if err := config.Set().Screen().Language(c.lang); err != nil {
+			t.Fatal(err)
+		}
+		w := clockWords(at)
+		if got := strings.Join([]string{w.Intro, w.Lead(), w.Hour, w.Period}, " "); got != c.said {
+			t.Errorf("%q: %q, want %q", c.lang, got, c.said)
 		}
 	}
 }
