@@ -290,7 +290,13 @@ func NodeName(name, mac string) string {
 // node's dashes made underscores. A message that tells someone to run an action names it this way, so
 // it can be pasted into Developer Tools as it is.
 func ActionName(name, mac, action string) string {
-	return "esphome." + strings.ReplaceAll(NodeName(name, mac), "-", "_") + "_" + action
+	return "esphome." + NodeID(name, mac) + "_" + action
+}
+
+// NodeID is the node's name as Home Assistant spells it in the device's entity and action ids: the node
+// name with its dashes made underscores ("living_room").
+func NodeID(name, mac string) string {
+	return strings.ReplaceAll(NodeName(name, mac), "-", "_")
 }
 
 // SlugOr is name's Slug, or, for a name with nothing in it a slug keeps (one in Greek, Cyrillic or

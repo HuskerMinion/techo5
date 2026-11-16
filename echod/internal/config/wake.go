@@ -37,6 +37,9 @@ type Wake struct {
 	// KeepClips keeps short clips of the wake word on the device, for training a model on (feature/
 	// detect, clips.go). Off unless chosen, and turning it off deletes what was kept.
 	KeepClips bool `json:"keep_clips,omitempty"`
+
+	// Send uploads each kept clip to a trainer on the home network (wakesend.go). Off unless chosen.
+	Send WakeSend `json:"send,omitzero"`
 }
 
 // OnHA is what Home Assistant's wake word engine is asked to do. Both are off unless chosen: either one
