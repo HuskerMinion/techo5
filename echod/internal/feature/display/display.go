@@ -1425,10 +1425,16 @@ func (d *Display) gesture(g touch.Gesture) {
 		return
 	}
 
-	// The dashboard: every finger is its, including the one that takes it away.
+	// The dashboard: every finger is its, including the one that takes it away; unless the drawer has
+	// slid in over it, when every finger is the drawer's, as it is over the clock.
 	d.mu.Lock()
-	dashUp := d.dashShowing
+	dashUp, overDash := d.dashShowing, d.dashShowing && d.drawer
 	d.mu.Unlock()
+	if overDash {
+		d.drawerGesture(g)
+		d.wake()
+		return
+	}
 	if dashUp {
 		d.dashGesture(g)
 		d.wake()
