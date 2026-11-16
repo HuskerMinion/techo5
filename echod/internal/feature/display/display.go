@@ -20,6 +20,7 @@ package display
 import (
 	"context"
 	"errors"
+	"fmt"
 	"image"
 	"log/slog"
 	"math"
@@ -2203,7 +2204,7 @@ func (d *Display) wifiScan() {
 	d.mu.Lock()
 	d.wifi.scanning = false
 	if err != nil {
-		d.wifi.err = "scan failed: " + err.Error()
+		d.wifi.err = tr("ui_wifi_scan_failed") + ": " + err.Error()
 	} else {
 		d.wifi.nets, d.wifi.err = nets, ""
 	}
@@ -2337,7 +2338,7 @@ func (d *Display) wifiJoinLogin(n wifi.Network, l wifi.Login) {
 
 func (d *Display) wifiJoining(n wifi.Network, join func() error) {
 	d.mu.Lock()
-	d.wifi.busy, d.wifi.err = "Connecting to "+n.SSID+"…", ""
+	d.wifi.busy, d.wifi.err = fmt.Sprintf(tr("ui_wifi_connecting_s"), n.SSID), ""
 	d.mu.Unlock()
 	d.wake()
 	go func() {

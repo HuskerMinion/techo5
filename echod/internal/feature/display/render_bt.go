@@ -3,9 +3,9 @@
 package display
 
 import (
-	"fmt"
 	"image"
 	"image/draw"
+	"strings"
 )
 
 // The pairing page: a title, a line saying what to do, the devices the scan has found as rows a
@@ -39,9 +39,9 @@ func (r *renderer) pairingPage(s scene) {
 	r.text(r.body, "Bluetooth", r.margin, r.s(52), amber)
 	t := clockHM(s.now)
 	r.text(r.small, t, r.w-r.margin-r.width(r.small, t), r.s(52), dim)
-	hint := s.bt.Status
+	hint := btStatus(s.bt.Status)
 	if hint == "" {
-		hint = "Put your earbuds in pairing mode"
+		hint = tr("ui_bt_pairing_hint")
 	}
 	r.text(r.tiny, hint, r.margin, r.s(92), dim)
 
@@ -49,7 +49,7 @@ func (r *renderer) pairingPage(s scene) {
 	if len(s.bt.Devices) == 0 {
 		// A dot that walks while the scan runs, so a still list reads as searching rather than stuck.
 		n := int(s.now.UnixMilli() / 400 % 4)
-		r.text(r.small, fmt.Sprintf("Searching%s", "..."[:n]), r.margin, rowTop+r.s(38), dim)
+		r.text(r.small, strings.TrimSuffix(tr("ui_scanning"), "…")+"..."[:n], r.margin, rowTop+r.s(38), dim)
 	}
 	for i, d := range s.bt.Devices {
 		if i >= btRows {
@@ -65,13 +65,13 @@ func (r *renderer) pairingPage(s scene) {
 		var right string
 		switch {
 		case d.Busy:
-			right = "working…"
+			right = tr("ui_bt_working")
 		case d.Connected:
-			right = "connected"
+			right = tr("ui_bt_connected")
 		case d.Paired:
-			right = "paired · tap to connect"
+			right = tr("ui_bt_tap_to_connect")
 		default:
-			right = "tap to pair"
+			right = tr("ui_bt_tap_to_pair")
 		}
 		r.text(r.tiny, right, r.w-r.margin-r.width(r.tiny, right), top+r.s(38), dim)
 	}
@@ -79,6 +79,6 @@ func (r *renderer) pairingPage(s scene) {
 	// The bar that ends it.
 	top := r.h - r.s(btDoneBar)
 	draw.Draw(r.dst, image.Rect(0, top, r.w, r.h), image.NewUniform(ember), image.Point{}, draw.Src)
-	label := "Done"
+	label := tr("done")
 	r.text(r.body, label, (r.w-r.width(r.body, label))/2, top+r.s(45), cream)
 }

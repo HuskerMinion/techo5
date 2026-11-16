@@ -177,7 +177,7 @@ func (r *renderer) wifiPage(s scene) {
 	if len(w.nets) == 0 {
 		msg := tr("no_networks_heard_yet")
 		if w.scanning {
-			msg = tr("ui_scanning") + "..."[:int(s.now.UnixMilli()/400%4)]
+			msg = strings.TrimSuffix(tr("ui_scanning"), "…") + "..."[:int(s.now.UnixMilli()/400%4)]
 		}
 		r.text(r.small, msg, r.margin, r.wifiRowTop()+r.s(34), dim)
 	}
@@ -194,17 +194,20 @@ func (r *renderer) wifiPage(s scene) {
 		r.text(r.small, n.SSID, r.margin, top+r.s(31), c)
 		info := bars(n.Signal)
 		if n.Enterprise {
-			info += "  ·  login"
+			info += "  ·  " + tr("ui_wifi_login")
 		} else if n.Secured {
-			info += "  ·  locked"
+			info += "  ·  " + tr("ui_wifi_locked")
 		}
-		r.text(r.tiny, info, r.w-r.margin-btnW-btnGap-r.width(r.tiny, info), top+r.s(29), dim)
 		label := tr("connect")
 		if n.SSID == w.status.SSID && w.status.Connected {
-			label = "Joined"
+			label = tr("ui_wifi_joined")
 		}
-		r.bevel(image.Rect(r.w-r.margin-btnW, top+r.s(7), r.w-r.margin, top+rowH-r.s(7)), shift(ember, 12), true)
-		r.text(r.tiny, label, r.w-r.margin-btnW+(btnW-r.width(r.tiny, label))/2, top+r.s(29), cream)
+		// The button grows for a word longer than Connect, as some languages have, rather than let it
+		// spill out; the row's info moves left with it.
+		bw := max(btnW, r.width(r.tiny, label)+r.s(24))
+		r.text(r.tiny, info, r.w-r.margin-bw-btnGap-r.width(r.tiny, info), top+r.s(29), dim)
+		r.bevel(image.Rect(r.w-r.margin-bw, top+r.s(7), r.w-r.margin, top+rowH-r.s(7)), shift(ember, 12), true)
+		r.text(r.tiny, label, r.w-r.margin-bw+(bw-r.width(r.tiny, label))/2, top+r.s(29), cream)
 	}
 	if more {
 		top := rowTop + (wifiRows-1)*rowH
@@ -241,13 +244,13 @@ func pageWith(n, page, rows int) (start, end int, more bool) {
 func bars(dbm int) string {
 	switch {
 	case dbm >= -55:
-		return "strong"
+		return tr("ui_wifi_strong")
 	case dbm >= -70:
-		return "good"
+		return tr("ui_wifi_good")
 	case dbm >= -80:
-		return "weak"
+		return tr("ui_wifi_weak")
 	}
-	return "faint"
+	return tr("ui_wifi_faint")
 }
 
 func (r *renderer) keyboardPage(s scene) {
@@ -311,9 +314,9 @@ func (r *renderer) keyboard(title, shown string, message, shifted, symbols bool,
 		}
 		if row == 2 {
 			if !symbols {
-				r.key(image.Rect(keyMargin, y0, x0-keyGap, y0+keyH), "Shift", shifted)
+				r.key(image.Rect(keyMargin, y0, x0-keyGap, y0+keyH), tr("ui_key_shift"), shifted)
 			}
-			r.key(image.Rect(x0+len(letters)*pitch, y0, r.w-keyMargin, y0+keyH), "Del", false)
+			r.key(image.Rect(x0+len(letters)*pitch, y0, r.w-keyMargin, y0+keyH), tr("del"), false)
 		}
 	}
 	y0 := keyTop + 3*(keyH+keyGap)
@@ -322,7 +325,7 @@ func (r *renderer) keyboard(title, shown string, message, shifted, symbols bool,
 		sym = "abc"
 	}
 	r.key(image.Rect(keyMargin, y0, keyMargin+pitch*2-keyGap, y0+keyH), sym, symbols)
-	r.key(image.Rect(keyMargin+pitch*2, y0, keyMargin+pitch*6-keyGap, y0+keyH), "space", false)
+	r.key(image.Rect(keyMargin+pitch*2, y0, keyMargin+pitch*6-keyGap, y0+keyH), tr("ui_key_space"), false)
 	r.key(image.Rect(keyMargin+pitch*6, y0, keyMargin+pitch*8-keyGap, y0+keyH), tr("cancel"), false)
 	r.key(image.Rect(keyMargin+pitch*8, y0, r.w-keyMargin, y0+keyH), goLabel, true)
 }
@@ -371,9 +374,9 @@ func wifiSummary(st wifi.Status) string {
 	case st.Connected && st.Address != "":
 		return fmt.Sprintf("%s  ·  %s", st.SSID, st.Address)
 	case st.Connected:
-		return st.SSID + "  ·  no address yet"
+		return st.SSID + "  ·  " + tr("ui_wifi_no_address")
 	case st.SSID != "":
 		return st.SSID + "  ·  " + st.State
 	}
-	return "not connected"
+	return tr("not_connected")
 }
