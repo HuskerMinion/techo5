@@ -696,16 +696,21 @@ func TestPingAsksEachKindOfTrainerInItsOwnWay(t *testing.T) {
 
 func TestSendAddressesAreChecked(t *testing.T) {
 	for raw, want := range map[string]string{
-		"http://192.168.1.20:8789": "http://192.168.1.20:8789",
-		"https://trainer.local/":   "https://trainer.local",
-		" http://nas:8789/base/ ":  "http://nas:8789/base",
-		"ftp://192.168.1.2":        "",
-		"192.168.1.20":             "",
-		"http://":                  "",
-		"http://user:pw@10.0.0.1":  "",
-		"http://10.0.0.1/?a=b":     "",
-		"http://10.0.0.1/#x":       "",
-		"":                         "",
+		"http://192.168.1.20:8789":                "http://192.168.1.20:8789",
+		"https://trainer.local/":                  "https://trainer.local",
+		" http://nas:8789/base/ ":                 "http://nas:8789/base",
+		"ftp://192.168.1.2":                       "",
+		"192.168.1.20":                            "",
+		"http://":                                 "",
+		"http://user:pw@10.0.0.1":                 "",
+		"http://10.0.0.1/?a=b":                    "",
+		"http://10.0.0.1/#x":                      "",
+		"":                                        "",
+		"https://192.168.1.20.:8765":              "https://192.168.1.20:8765",
+		"https://192.168.1.20:8765/api/clips":     "https://192.168.1.20:8765",
+		"https://192.168.1.20:8765/api/clips/":    "https://192.168.1.20:8765",
+		"http://Trainer.LAN.:8765/api/clips/ping": "http://trainer.lan:8765",
+		"http://nas/wake/api/clips":               "http://nas/wake",
 	} {
 		got, err := CheckSendURL(raw)
 		if (err == nil) != (want != "") || got != want {

@@ -178,8 +178,11 @@ func saveWakeSend(r *http.Request) string {
 		next.Token = token
 	case sameAddress(cur.URL, next.URL):
 		// kept
+	case cur.Token != "" && next.Target != config.SendTater && next.Target != config.SendOff:
+		// A kept token goes only to the address it was given for: say so, rather than drop it unseen and
+		// have the trainer refuse every clip.
+		return "the address changed, so paste the token again: a token is only sent to the address it was given for"
 	default:
-		// A kept token goes only to the address it was given for.
 		next.Token = ""
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), wakeSendAsk)

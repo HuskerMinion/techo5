@@ -88,8 +88,22 @@ func TestSavingWhereClipsGo(t *testing.T) {
 	if config.Get().Wake.Send.Token != "walnut-token" {
 		t.Fatal("a saved token was lost by saving the same address again")
 	}
-	// A kept token goes only to the address it was given for.
-	post(t, f, c, form(url.Values{"target": {"wakesmith"}, "url": {"http://other.local"}, "kind": {"wake"}}))
+	// A kept token goes only to the address it was given for: a new address without one is refused, and
+	// says why, rather than dropping the token unseen.
+	to = post(t, f, c, form(url.Values{"target": {"wakesmith"}, "url": {"http://other.local"}, "kind": {"wake"}}))
+	if p := to.Query().Get("problem"); !strings.Contains(p, "paste the token again") {
+		t.Fatalf("a new address without the token: problem %q", p)
+	}
+	if got := config.Get().Wake.Send; got.URL != "http://trainer.local" || got.Token != "walnut-token" {
+		t.Fatalf("a refused save changed what was kept: %+v", got)
+	}
+	// The same address typed with a final dot or the receiver's endpoint is the same address.
+	post(t, f, c, form(url.Values{"target": {"wakesmith"}, "url": {"http://trainer.local./api/clips"}, "kind": {"wake"}}))
+	if config.Get().Wake.Send.Token != "walnut-token" {
+		t.Fatal("the token was lost for the same address typed another way")
+	}
+	// Tater asks for no token, so a new address for it just leaves the token behind.
+	post(t, f, c, form(url.Values{"target": {"tater"}, "url": {"http://other.local:8789"}, "kind": {"wake"}}))
 	if config.Get().Wake.Send.Token != "" {
 		t.Fatal("a token was kept for another address")
 	}

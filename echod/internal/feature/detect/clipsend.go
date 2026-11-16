@@ -321,6 +321,21 @@ func CheckSendURL(raw string) (string, error) {
 	if len(raw) > 300 {
 		return "", errors.New("that address is too long")
 	}
+	// The same address however it was typed: a name's final dot ("192.168.1.20." or "trainer.lan.") and
+	// the endpoint a receiver shows ("/api/clips", "/api/clips/ping") come off, so the address is the
+	// trainer's base, as the sender wants it, and a token kept for it stays.
+	if h := strings.TrimSuffix(u.Hostname(), "."); h != u.Hostname() {
+		if p := u.Port(); p != "" {
+			u.Host = net.JoinHostPort(h, p)
+		} else {
+			u.Host = h
+		}
+	}
+	u.Host = strings.ToLower(u.Host)
+	path := strings.TrimRight(u.Path, "/")
+	path = strings.TrimSuffix(path, "/api/clips/ping")
+	path = strings.TrimSuffix(path, "/api/clips")
+	u.Path, u.RawPath = path, ""
 	return strings.TrimRight(u.String(), "/"), nil
 }
 
