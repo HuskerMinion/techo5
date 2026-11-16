@@ -38,6 +38,8 @@ func firstRunCases(at time.Time) map[string]firstRunView {
 		return out
 	}
 	return map[string]firstRunView{
+		"language":       v(frLanguage, func(v *firstRunView) { v.lang = "en" }),
+		"language-de":    v(frLanguage, func(v *firstRunView) { v.lang = "de" }),
 		"wifi-none":      v(frWifi, func(v *firstRunView) { v.wifi = wifi.Status{} }),
 		"wifi":           v(frWifi, nil),
 		"zone":           v(frZone, func(v *firstRunView) { v.phone = true }),

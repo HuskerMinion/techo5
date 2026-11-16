@@ -68,6 +68,9 @@ func (r *renderer) firstRun(s scene, v firstRunView) {
 		}
 		r.qrCode(v.key, code)
 	}
+	if v.step == frLanguage {
+		r.keyRow(r.frLangRects(), frLangLabels(), func(i int) bool { return frLangs[i].Code == v.lang })
+	}
 	if v.step == frName && !v.home && !v.renaming {
 		r.keyRow(r.frRoomRects(), frRoomLabels(), func(i int) bool {
 			return frRooms[i] == v.room || (frRooms[i] == "Other" && v.room != "" && !isListedRoom(v.room))
@@ -134,10 +137,12 @@ func (r *renderer) frKeyLines(key string, room int) (font.Face, int, []string) {
 	return face, step, parts
 }
 
-// frFloor is the top of what is under a step's lines: the rooms on the name step, else the buttons,
-// else the card's foot.
+// frFloor is the top of what is under a step's lines: the languages or the rooms on their steps, else
+// the buttons, else the card's foot.
 func (r *renderer) frFloor(v firstRunView, buttons []frButton) int {
 	switch {
+	case v.step == frLanguage:
+		return r.frLangRects()[0].Min.Y
 	case v.step == frName && !v.home && !v.renaming:
 		return r.frRoomRects()[0].Min.Y
 	case len(buttons) > 0:
@@ -165,15 +170,56 @@ func isListedRoom(room string) bool {
 }
 
 // frRoomRects are where the name step's rooms go: two rows of four, over the buttons.
-func (r *renderer) frRoomRects() []image.Rectangle {
+func (r *renderer) frRoomRects() []image.Rectangle { return r.frKeyRects(len(frRooms)) }
+
+// frLangRects are where the language step's languages go: two rows over the buttons, six and five,
+// where the rooms' two rows go. Each key is as wide as its name needs, with what the row has left
+// shared out among them: a few names are longer than an even share of the row.
+func (r *renderer) frLangRects() []image.Rectangle {
+	r.useFont()
+	labels := frLangLabels()
+	keys := r.frKeyRects(len(labels))
+	left := r.margin + r.s(40)
+	room := r.w - 2*r.margin - r.s(80)
+	gap := r.s(14)
+	per := (len(labels) + 1) / 2
+	out := make([]image.Rectangle, len(labels))
+	for start := 0; start < len(labels); start += per {
+		row := labels[start:min(len(labels), start+per)]
+		need := 0
+		for _, l := range row {
+			need += r.width(r.tiny, l)
+		}
+		extra := (room - (len(row)-1)*gap - need) / len(row)
+		x := left
+		for i, l := range row {
+			w := r.width(r.tiny, l) + extra
+			out[start+i] = image.Rect(x, keys[start+i].Min.Y, x+w, keys[start+i].Max.Y)
+			x += w + gap
+		}
+	}
+	return out
+}
+
+// frLangLabels are the languages' keys, each in its own words.
+func frLangLabels() []string {
+	out := make([]string, len(frLangs))
+	for i, l := range frLangs {
+		out[i] = frLangLabel(l)
+	}
+	return out
+}
+
+// frKeyRects are where n keys go in two rows over the buttons, the first row the fuller.
+func (r *renderer) frKeyRects(n int) []image.Rectangle {
 	left := r.margin + r.s(40)
 	room := r.w - 2*r.margin - r.s(80)
 	gap, h := r.s(14), r.s(50)
-	per := (len(frRooms) + 1) / 2
+	per := (n + 1) / 2
 	w := (room - (per-1)*gap) / per
 	top := r.h - r.s(64) - r.s(72) - r.s(16) - 2*h - gap
-	out := make([]image.Rectangle, len(frRooms))
-	for i := range frRooms {
+	out := make([]image.Rectangle, n)
+	for i := range n {
 		x, y := left+(i%per)*(w+gap), top+(i/per)*(h+gap)
 		out[i] = image.Rect(x, y, x+w, y+h)
 	}
@@ -201,6 +247,9 @@ func (r *renderer) frButtonRects(buttons []frButton) []image.Rectangle {
 // Names, the network and addresses go into the words as they are.
 func firstRunText(v firstRunView, now time.Time) (string, []string, string) {
 	switch v.step {
+	case frLanguage:
+		// One line: the languages take the rest of the card.
+		return tr("firstrun_title_language"), []string{frClockLine(now)}, ""
 	case frWifi:
 		if !v.wifi.Connected {
 			return tr("firstrun_title_wifi"), []string{

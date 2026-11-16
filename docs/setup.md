@@ -17,8 +17,9 @@ you use nowhere else.
 
 ### First run
 
-The first time a TECHO5 device starts, it walks whoever plugged it in through six steps: **Wi-Fi**,
-**Time zone**, **Name and room**, **Home Assistant**, **Updates** and a **Sound check**. A step that is
+The first time a TECHO5 device starts, it walks whoever plugged it in through seven steps: **Language
+and clock**, **Wi-Fi**, **Time zone**, **Name and room**, **Home Assistant**, **Updates** and a **Sound
+check** (a device with no screen has no **Language and clock**). A step that is
 already done, such as Wi-Fi set by the installer, just shows what is set, with Next. Each step is kept
 as it is finished, so a restart picks up where it stopped, and finishing it on any face (the screen or
 the setup page) finishes it everywhere.
@@ -38,6 +39,11 @@ the setup page) finishes it everywhere.
 
 The steps:
 
+- **Language and clock:** the screen's language, each written in its own words, and a 12- or 24-hour
+  clock. The rest of first run switches to the language chosen at once, and choosing one picks the
+  clock it usually goes with (12 hours for English, 24 for the others), which can be changed right
+  there. It shows what is set now, so Next is one tap when that is right. Both can be changed in
+  Settings later.
 - **Name and room:** the room goes to Home Assistant as the device's suggested area, so it lands in
   that room when it is added. Once Home Assistant has the device, rooms are changed there. Renaming
   restarts the device's software, and first run comes back on the same step.

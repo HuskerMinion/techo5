@@ -54,6 +54,30 @@ func spotFRTap(d *Display, act string) bool {
 	return false
 }
 
+// The Spot's language step: the language button goes round the languages, each picking its clock,
+// and the clock button turns it.
+func TestSpotFirstRunLanguage(t *testing.T) {
+	d, _ := spotFirstRun(t, true, true)
+	was := clock24.Load()
+	t.Cleanup(func() { clock24.Store(was) })
+	setClock24(nil, false)
+	spotSetStep(t, frLanguage)
+	for _, want := range []string{frLangs[1].Code, frLangs[2].Code} {
+		if !spotFRTap(d, "lang") {
+			t.Fatal("no language button")
+		}
+		if c := config.Get().Screen; c.Language != want || !c.Clock24 || !clock24.Load() {
+			t.Fatalf("language %q, 24 hours %v; want %q, 24 hours", c.Language, c.Clock24, want)
+		}
+	}
+	if !spotFRTap(d, "clock") || config.Get().Screen.Clock24 || clock24.Load() {
+		t.Fatal("the clock button left 24 hours")
+	}
+	if !spotFRTap(d, "next") || firstRunStep() != stepAfter(frLanguage) {
+		t.Fatalf("Next went to %q", firstRunStep())
+	}
+}
+
 // The Spot goes through the same steps, a tap a step, and is done at the end.
 func TestSpotFirstRunGoesThrough(t *testing.T) {
 	d, _ := spotFirstRun(t, true, true)
@@ -61,7 +85,7 @@ func TestSpotFirstRunGoesThrough(t *testing.T) {
 		t.Fatal("first run is not up on a fresh Spot")
 	}
 	d.gesture(touch.Gesture{Kind: touch.Tap, X: center, Y: center})
-	for _, want := range []string{frWifi, frZone, frName, frHome, frUpdates, frSound} {
+	for _, want := range []string{frLanguage, frWifi, frZone, frName, frHome, frUpdates, frSound} {
 		if got := firstRunStep(); got != want {
 			t.Fatalf("step %q, want %q", got, want)
 		}
@@ -114,6 +138,7 @@ func TestSpotFirstRunDraws(t *testing.T) {
 		set          func(d *Display, f *frFake)
 	}{
 		{"hello", frHello, true, false, nil},
+		{"language", frLanguage, true, false, nil},
 		{"wifi-none", frWifi, false, false, nil},
 		{"wifi", frWifi, true, false, nil},
 		{"zone", frZone, true, false, func(d *Display, f *frFake) { d.firstRun.phone = true }},

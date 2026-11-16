@@ -42,8 +42,13 @@ func clockSelect(wake func()) *esphome.Select {
 	return s
 }
 
+// setClock24 is the clock between 12 and 24 hours, for every page drawn and Home Assistant's select
+// (none in a test's display).
 func setClock24(s *esphome.Select, on bool) {
 	clock24.Store(on)
+	if s == nil {
+		return
+	}
 	if on {
 		s.Set(clock24Label)
 	} else {

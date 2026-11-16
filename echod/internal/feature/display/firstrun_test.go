@@ -13,6 +13,7 @@ import (
 	"github.com/HuskerMinion/techo5/echod/internal/config"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/firstrun"
 	"github.com/HuskerMinion/techo5/echod/internal/hardware/touch"
+	"github.com/HuskerMinion/techo5/echod/internal/lib/fonts"
 )
 
 // firstRunDisplay is a Display on a fresh config with first run still to do, and first run's view of
@@ -90,6 +91,71 @@ func TestFirstRunGoesThroughItsStepsInOrder(t *testing.T) {
 	}
 }
 
+// The language step: a tap on a language makes it the screen's and picks its clock, the clock button
+// turns it, and Next goes on with both as they are. An unset language shows English chosen.
+func TestFirstRunLanguageStep(t *testing.T) {
+	d, _ := firstRunDisplay(t, true, true)
+	was := clock24.Load()
+	t.Cleanup(func() { clock24.Store(was) })
+	setClock24(nil, false)
+	setStep(t, frLanguage)
+	if v := d.firstRunView(time.Now()); v.lang != "en" {
+		t.Fatalf("an unset language shows %q chosen", v.lang)
+	}
+	de := -1
+	for i, l := range frLangs {
+		if l.Code == "de" {
+			de = i
+		}
+	}
+	frTapIn(d, d.r.frLangRects()[de])
+	if c := config.Get().Screen; c.Language != "de" || !c.Clock24 || !clock24.Load() {
+		t.Fatalf("a tap on Deutsch: language %q, 24 hours %v, drawn %v", c.Language, c.Clock24, clock24.Load())
+	}
+	if v := d.firstRunView(time.Now()); v.lang != "de" {
+		t.Fatalf("Deutsch tapped, %q shown chosen", v.lang)
+	}
+	tapButton(t, d, "clock")
+	if config.Get().Screen.Clock24 || clock24.Load() {
+		t.Fatal("the clock button left 24 hours")
+	}
+	tapButton(t, d, "next")
+	if got, want := firstRunStep(), stepAfter(frLanguage); got != want {
+		t.Fatalf("Next went to %q, want %q", got, want)
+	}
+	if c := config.Get().Screen; c.Language != "de" || c.Clock24 {
+		t.Fatalf("Next changed the language step's choices: %q, %v", c.Language, c.Clock24)
+	}
+}
+
+// Japanese is named in its own script once a font here draws it, and romanized until then, rather
+// than as boxes: its font is fetched only once Japanese is chosen, and maybe not before the Wi-Fi.
+func TestFirstRunNamesJapaneseItCanDraw(t *testing.T) {
+	want := "日本語"
+	if !fonts.OwnDraws('日', "") {
+		want = "Nihongo"
+	}
+	labels := frLangLabels()
+	for i, l := range frLangs {
+		switch {
+		case l.Code == "ja" && labels[i] != want:
+			t.Errorf("Japanese is labeled %q, want %q", labels[i], want)
+		case l.Code != "ja" && labels[i] != l.Name:
+			t.Errorf("%s is labeled %q", l.Code, labels[i])
+		}
+	}
+}
+
+// Next on the language step saves nothing: a screen matching every language's words keeps doing so.
+func TestFirstRunLanguageNextKeepsMatchAll(t *testing.T) {
+	d, _ := firstRunDisplay(t, true, true)
+	setStep(t, frLanguage)
+	tapButton(t, d, "next")
+	if c := config.Get().Screen; c.Language != "" {
+		t.Fatalf("Next set the language to %q", c.Language)
+	}
+}
+
 // The step is saved as it is done, so a restart picks up there; an unknown one starts again.
 func TestFirstRunResumesWhereItStopped(t *testing.T) {
 	firstRunDisplay(t, true, true)
@@ -110,6 +176,7 @@ func TestFirstRunStepsThatAreDoneOfferNext(t *testing.T) {
 		joined, home bool
 		want         []string
 	}{
+		{frLanguage, true, true, []string{"clock", "next"}},
 		{frWifi, true, true, []string{"wifi", "next"}},
 		{frWifi, false, false, []string{"next", "wifi"}}, // "Not now", then Choose Wi-Fi
 		{frZone, true, true, []string{"zone", "next"}},
@@ -316,6 +383,7 @@ func TestFirstRunDrawsAtEverySize(t *testing.T) {
 			set          func(d *Display, f *frFake)
 		}{
 			{"hello", frHello, true, false, nil},
+			{"language", frLanguage, true, false, nil},
 			{"wifi-none", frWifi, false, false, nil},
 			{"wifi", frWifi, true, false, nil},
 			{"zone", frZone, true, false, nil},

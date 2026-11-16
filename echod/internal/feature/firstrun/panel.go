@@ -13,7 +13,7 @@ import (
 // updates, so those two steps are left out, and the address Home Assistant is pointed at is the one the
 // app reports (Android refuses the app the interface list).
 func init() {
-	steps = []string{Hello, Zone, Name, Home, Sound, Done}
+	steps = []string{Hello, Language, Zone, Name, Home, Sound, Done}
 	WifiStatus = func() wifi.Status {
 		for _, ips := range [][]net.IP{metrics.WiFiAddresses(), metrics.Addresses()} {
 			for _, ip := range ips {

@@ -35,6 +35,8 @@ func firstRunButtons(v firstRunView) []frButton {
 		return nil
 	}
 	switch v.step {
+	case frLanguage:
+		return []frButton{frClockButton(), {tr("firstrun_next"), "next"}}
 	case frWifi:
 		if v.wifi.Connected {
 			return []frButton{{tr("firstrun_change"), "wifi"}, {tr("firstrun_next"), "next"}}
@@ -88,6 +90,14 @@ func (d *Display) firstRunTap(x, y int) {
 	if v.typing != "" {
 		d.firstRunKey(d.r.keyAt(x, y, v.symbols))
 		return
+	}
+	if v.step == frLanguage {
+		for i, b := range d.r.frLangRects() {
+			if image.Pt(x, y).In(b) {
+				d.firstRunLanguage(frLangs[i].Code)
+				return
+			}
+		}
 	}
 	if v.step == frName && !v.home && !v.renaming {
 		for i, b := range d.r.frRoomRects() {
@@ -217,6 +227,8 @@ func (d *Display) firstRunDo(step, act string) {
 	switch act {
 	case "next":
 		d.firstRunGo(stepAfter(step))
+	case "clock":
+		d.firstRunClock()
 	case "wifi":
 		d.openWifi()
 	case "zone":

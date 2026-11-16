@@ -3,11 +3,14 @@
 package display
 
 import (
+	"fmt"
+	"log/slog"
 	"sync"
 	"time"
 
 	"github.com/HuskerMinion/techo5/echod/internal/config"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/firstrun"
+	"github.com/HuskerMinion/techo5/echod/internal/lib/fonts"
 	"github.com/HuskerMinion/techo5/echod/internal/lib/wifi"
 )
 
@@ -16,15 +19,19 @@ import (
 // already done (the network joined, Home Assistant connected) still shows, with Next, so a device
 // installed the usual way gets through in a few taps.
 const (
-	frHello   = firstrun.Hello
-	frWifi    = firstrun.Wifi
-	frZone    = firstrun.Zone
-	frName    = firstrun.Name
-	frHome    = firstrun.Home
-	frUpdates = firstrun.Updates
-	frSound   = firstrun.Sound
-	frDone    = firstrun.Done
+	frHello    = firstrun.Hello
+	frLanguage = firstrun.Language
+	frWifi     = firstrun.Wifi
+	frZone     = firstrun.Zone
+	frName     = firstrun.Name
+	frHome     = firstrun.Home
+	frUpdates  = firstrun.Updates
+	frSound    = firstrun.Sound
+	frDone     = firstrun.Done
 )
+
+// frLangs are the languages offered on the language step.
+var frLangs = firstrun.Languages
 
 // frRooms are the rooms offered on the name step.
 var frRooms = firstrun.Rooms
@@ -61,7 +68,8 @@ type firstRunState struct {
 // firstRunView is what one frame of first run shows.
 type firstRunView struct {
 	step     string
-	number   int // the step's place, 1 for the first counted step; 0 for the hello and done cards
+	lang     string // the language step's language chosen (firstrun.LanguageNow)
+	number   int    // the step's place, 1 for the first counted step; 0 for the hello and done cards
 	of       int
 	wifi     wifi.Status
 	home     bool // Home Assistant is connected
@@ -98,6 +106,9 @@ func stepAfter(s string) string { return firstrun.After(s) }
 func (d *Display) firstRunView(now time.Time) firstRunView {
 	v := firstRunView{step: firstRunStep(), name: config.Get().Device.Name, room: config.Get().Home.Area}
 	v.number, v.of = firstrun.Number(v.step)
+	if v.step == frLanguage {
+		v.lang = firstrun.LanguageNow()
+	}
 	if v.name == "" {
 		v.name = "TECHO5"
 	}
@@ -171,6 +182,52 @@ func (d *Display) firstRunReadWifi() {
 func (d *Display) firstRunGo(step string) {
 	firstrun.Go(step)
 	d.wake()
+}
+
+// firstRunLanguage makes lang the screen's language, and its usual clock; the rest of first run is in
+// its words from the next frame.
+func (d *Display) firstRunLanguage(lang string) {
+	if err := firstrun.SetLanguage(lang); err != nil {
+		slog.Warn("saving the screen language failed", "err", err)
+	}
+	setClock24(d.clock, config.Get().Screen.Clock24)
+	d.wake()
+}
+
+// firstRunClock turns the clock between 12 and 24 hours.
+func (d *Display) firstRunClock() {
+	if err := firstrun.SetClock24(!config.Get().Screen.Clock24); err != nil {
+		slog.Warn("saving the clock format failed", "err", err)
+	}
+	setClock24(d.clock, config.Get().Screen.Clock24)
+	d.wake()
+}
+
+// frLangLabel is a language's name on its key, in its own words: Japanese in its own script once a
+// font here draws it, and romanized until then. That font is fetched over the network only once Japanese
+// is the screen's language (feature/cjkfont), and first run asks for the language before the Wi-Fi.
+func frLangLabel(l firstrun.Lang) string {
+	if l.Code == "ja" && !fonts.OwnDraws('日', "") {
+		return "Nihongo"
+	}
+	return l.Name
+}
+
+// frClockLine is the language step's line with the time as the clock shows it now.
+func frClockLine(now time.Time) string {
+	at := now.Format("3:04 PM")
+	if clock24.Load() {
+		at = now.Format("15:04")
+	}
+	return fmt.Sprintf(tr("firstrun_spot_clock"), at)
+}
+
+// frClockButton is the language step's button to the other clock.
+func frClockButton() frButton {
+	if clock24.Load() {
+		return frButton{tr("firstrun_use_12_hours"), "clock"}
+	}
+	return frButton{tr("firstrun_use_24_hours"), "clock"}
 }
 
 // firstRunFinish puts first run away for good.

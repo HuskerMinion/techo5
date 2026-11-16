@@ -9,6 +9,7 @@ import (
 	esphome "github.com/ygelfand/go-esphome-device"
 
 	"github.com/HuskerMinion/techo5/echod/internal/config"
+	"github.com/HuskerMinion/techo5/echod/internal/feature/firstrun"
 	"github.com/HuskerMinion/techo5/echod/internal/lib/triggers"
 )
 
@@ -17,11 +18,17 @@ import (
 // are used is the Screen language setting; unset, every language is matched. The same setting is the
 // language the clock's dates and the weather are written in (lib/locale), English when unset.
 
-// The Screen language row's choices. Match all is first, and is what a device comes up in.
-var (
-	langOptions = []string{"Match all", "English", "Deutsch", "Español", "Français", "Galego", "Italiano", "Nederlands", "Português", "Русский", "Türkçe", "日本語"}
-	langCodes   = []string{triggers.MatchAll, "en", "de", "es", "fr", "gl", "it", "nl", "pt", "ru", "tr", "ja"}
-)
+// The Screen language row's choices: Match all first, which is what a device comes up in, and then the
+// languages first run offers (firstrun.Languages), each in its own words.
+var langOptions, langCodes = langChoices()
+
+func langChoices() (options, codes []string) {
+	options, codes = []string{"Match all"}, []string{triggers.MatchAll}
+	for _, l := range firstrun.Languages {
+		options, codes = append(options, l.Name), append(codes, l.Code)
+	}
+	return options, codes
+}
 
 // langLabels are the choices as the screen shows them: the same names, except the first, which says
 // what it does in the screen's own language. Home Assistant keeps langOptions' English, which is the

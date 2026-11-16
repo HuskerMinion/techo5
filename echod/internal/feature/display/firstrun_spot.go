@@ -25,6 +25,8 @@ func (d *Display) firstRunActive() bool { return firstrun.Pending() }
 // spotFirstRunButtons are a step's buttons, top to bottom, the one to press last.
 func spotFirstRunButtons(v firstRunView) []frButton {
 	switch v.step {
+	case frLanguage:
+		return []frButton{{frLangName(v.lang), "lang"}, frClockButton(), {tr("firstrun_next"), "next"}}
 	case frWifi:
 		return []frButton{{tr("firstrun_next"), "next"}}
 	case frZone:
@@ -113,6 +115,10 @@ func (d *Display) firstRunDoSpot(v firstRunView, act string) {
 		d.mu.Lock()
 		d.firstRun.phone = true // the face says where to go
 		d.mu.Unlock()
+	case "lang":
+		d.firstRunLanguage(nextLang(v.lang))
+	case "clock":
+		d.firstRunClock()
 	case "room":
 		if err := firstrun.SetArea(nextRoom(v.room)); err != nil {
 			slog.Warn("saving the room failed", "err", err)
@@ -142,6 +148,26 @@ func nextRoom(room string) string {
 		}
 	}
 	return listed[0]
+}
+
+// nextLang is the language after lang, round again after the last.
+func nextLang(lang string) string {
+	for i, l := range frLangs {
+		if l.Code == lang {
+			return frLangs[(i+1)%len(frLangs)].Code
+		}
+	}
+	return frLangs[0].Code
+}
+
+// frLangName is lang in its own words.
+func frLangName(lang string) string {
+	for _, l := range frLangs {
+		if l.Code == lang {
+			return frLangLabel(l)
+		}
+	}
+	return lang
 }
 
 // firstRunFaceSpot draws the step.
@@ -208,6 +234,8 @@ func spotFirstRunText(v firstRunView, now time.Time) (string, []string) {
 		return tr("firstrun_title_done"), []string{
 			fmt.Sprintf(tr("firstrun_spot_done"), v.name), tr("firstrun_spot_menu"), tr("firstrun_spot_tap_to_finish"),
 		}
+	case frLanguage:
+		return tr("firstrun_title_language"), []string{tr("firstrun_spot_language"), frClockLine(now)}
 	case frWifi:
 		if v.wifi.Connected {
 			return tr("firstrun_title_wifi"), []string{
