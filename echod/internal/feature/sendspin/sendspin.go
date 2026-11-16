@@ -30,6 +30,10 @@ type Player struct {
 	mu      sync.Mutex
 	running context.CancelCauseFunc
 	wake    chan struct{}
+
+	// delayMu keeps a change of the delay whole: Home Assistant, the setup page and the screen can all
+	// set it, and the saved value and the one playing must be the same.
+	delayMu sync.Mutex
 }
 
 var (
@@ -113,6 +117,8 @@ func (p *Player) SetEnabled(on bool) { p.enabled.OnCommand(on) }
 func (p *Player) Delay() int { return config.SendspinDelay(config.Get().Sendspin.DelayMs) }
 
 func (p *Player) SetDelay(ms int) {
+	p.delayMu.Lock()
+	defer p.delayMu.Unlock()
 	ms = config.SendspinDelay(ms)
 	p.delay.Set(float32(ms))
 	if err := config.Set().Sendspin().DelayMs(ms); err != nil {

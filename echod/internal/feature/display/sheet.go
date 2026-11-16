@@ -1315,6 +1315,11 @@ func (d *Display) rowTap(id string, p part, opt int) {
 	case "tailscale":
 		go func() { _ = tailscale.Get().SetOn(!config.Get().Tailscale.On) }()
 	case "netbird":
+		// Before a first join the row only points to the setup page: switched on here it would start
+		// the client's download with no key to join with.
+		if !config.Get().Netbird.On && !config.Get().Netbird.Joined {
+			break
+		}
 		go func() { _ = netbird.Get().SetOn(!config.Get().Netbird.On) }()
 	case "remoteapi":
 		remote.Get().SetOn(!config.Get().Remote.On)
