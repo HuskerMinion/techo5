@@ -476,7 +476,7 @@ var uiEnglish = map[string]string{
 	"ui_alarms_on_this_device_and_how_they_ring":           "Alarms on this device and how they ring",
 	"ui_alarms_timers":                                     "Alarms & Timers",
 	"ui_all":                                               "All",
-	"ui_all_of_it_with_blurred_sides_off_fills_the_screen": "All of it, with blurred sides; off fills the screen",
+	"ui_all_of_it_with_blurred_sides_off_fills_the_screen": "All of it, with blurred sides; off crops only photos shaped like the screen",
 	"ui_all_photos":                                        "All photos",
 	"ui_allow":                                             "Allow",
 	"ui_an_event_coming_up_over_the_screen":                "An event coming up, over the screen",
@@ -2025,7 +2025,7 @@ var uiTranslations = map[string]map[string]string{
 		"ui_alarms_on_this_device_and_how_they_ring":           "Alarmes de cet appareil et leur mode de sonnerie",
 		"ui_alarms_timers":                                     "Alarmes et minuteurs",
 		"ui_all":                                               "Tout",
-		"ui_all_of_it_with_blurred_sides_off_fills_the_screen": "Image entière avec côtés floutés ; désactivé pour remplir l'écran",
+		"ui_all_of_it_with_blurred_sides_off_fills_the_screen": "Image entière avec côtés floutés ; désactivé : ne recadre que les photos au format de l'écran",
 		"ui_all_photos":                                        "Toutes les photos",
 		"ui_allow":                                             "Autoriser",
 		"ui_an_event_coming_up_over_the_screen":                "Un événement à venir affiché par-dessus l'écran",
@@ -2972,7 +2972,7 @@ var uiTranslations = map[string]map[string]string{
 		"ui_alarms_on_this_device_and_how_they_ring":           "As alarmas deste dispositivo e como soan",
 		"ui_alarms_timers":                                     "Alarmas e temporizadores",
 		"ui_all":                                               "Todo",
-		"ui_all_of_it_with_blurred_sides_off_fills_the_screen": "Enteira, cos lados desenfocados; desactivado enche a pantalla",
+		"ui_all_of_it_with_blurred_sides_off_fills_the_screen": "Enteira, cos lados desenfocados; desactivado só recorta as fotos coa forma da pantalla",
 		"ui_all_photos":                                        "Todas as fotos",
 		"ui_allow":                                             "Permitir",
 		"ui_an_event_coming_up_over_the_screen":                "Un evento próximo, sobre a pantalla",
@@ -3925,7 +3925,7 @@ var uiTranslations = map[string]map[string]string{
 		"ui_alarms_on_this_device_and_how_they_ring":           "Sveglie su questo dispositivo e relativo funzionamento",
 		"ui_alarms_timers":                                     "Sveglie e timer",
 		"ui_all":                                               "Tutto",
-		"ui_all_of_it_with_blurred_sides_off_fills_the_screen": "Mostra la foto intera con i lati sfocati; se disattivi l'opzione, la foto riempie lo schermo",
+		"ui_all_of_it_with_blurred_sides_off_fills_the_screen": "Mostra la foto intera con i lati sfocati; se disattivi l'opzione, ritaglia solo le foto con la forma dello schermo",
 		"ui_all_photos":                                        "Tutte le foto",
 		"ui_allow":                                             "Consenti",
 		"ui_an_event_coming_up_over_the_screen":                "Mostra gli eventi in arrivo in sovrimpressione",
@@ -5470,7 +5470,7 @@ var uiTranslations = map[string]map[string]string{
 		// All calendars shown
 		"ui_all_calendars_shown": "Alle agenda's getoond",
 		// All of it, with blurred sides; off fills the screen
-		"ui_all_of_it_with_blurred_sides_off_fills_the_screen": "Alles, met vervaagde zijkanten; uit vult het scherm",
+		"ui_all_of_it_with_blurred_sides_off_fills_the_screen": "Alles, met vervaagde zijkanten; uit snijdt alleen foto's bij die bij de schermvorm passen",
 		// All photos
 		"ui_all_photos": "Alle foto's",
 		// Allow
@@ -6594,7 +6594,7 @@ var uiTranslations = map[string]map[string]string{
 		"ui_alarms_on_this_device_and_how_they_ring":           "この端末のアラームと鳴動方法",
 		"ui_alarms_timers":                                     "アラームとタイマー",
 		"ui_all":                                               "すべて",
-		"ui_all_of_it_with_blurred_sides_off_fills_the_screen": "全体を表示し余白をぼかす。オフでは拡大表示",
+		"ui_all_of_it_with_blurred_sides_off_fills_the_screen": "全体を表示し余白をぼかす。オフでは画面と同じ向きの写真だけを切り取って表示",
 		"ui_all_photos":                                        "すべての写真",
 		"ui_allow":                                             "許可",
 		"ui_an_event_coming_up_over_the_screen":                "開始前の予定を画面上に表示",
@@ -7931,7 +7931,7 @@ var uiTranslations = map[string]map[string]string{
 		// All
 		"ui_all": "Alle",
 		// All of it, with blurred sides; off fills the screen
-		"ui_all_of_it_with_blurred_sides_off_fills_the_screen": "Alles davon, mit weichgezeichneten Seiten; aus füllt den Bildschirm",
+		"ui_all_of_it_with_blurred_sides_off_fills_the_screen": "Alles davon, mit weichgezeichneten Seiten; aus beschneidet nur Fotos in der Form des Bildschirms",
 		// All photos
 		"ui_all_photos": "Alle Fotos",
 		// Allow
@@ -9140,7 +9140,7 @@ var uiTranslations = map[string]map[string]string{
 		"ui_alarms_on_this_device_and_how_they_ring":           "Bu cihazdaki alarmlar ve nasıl çaldıkları",
 		"ui_alarms_timers":                                     "Alarmlar ve Zamanlayıcılar",
 		"ui_all":                                               "Tümü",
-		"ui_all_of_it_with_blurred_sides_off_fills_the_screen": "Tamamı, bulanık kenarlarla; kapalıyken ekranı doldurur",
+		"ui_all_of_it_with_blurred_sides_off_fills_the_screen": "Tamamı, bulanık kenarlarla; kapalıyken yalnızca ekranla aynı yönlü fotoğraflar kırpılır",
 		"ui_all_photos":                                        "Tüm fotoğraflar",
 		"ui_allow":                                             "İzin ver",
 		"ui_an_event_coming_up_over_the_screen":                "Ekranın üzerinde yaklaşan bir etkinlik",

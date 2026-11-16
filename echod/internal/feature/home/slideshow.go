@@ -1383,16 +1383,20 @@ func fetchShown(ids []string, whole bool) (*image.RGBA, error) {
 // pairGap is the dark line between the two photos of a pair, in pixels.
 const pairGap = 6
 
-// fitShown fits one photo to the panel, cropped to fill it or whole with blurred sides; or two side
-// by side, each the same way in its half.
+// fitShown fits one photo to the panel, whole with blurred sides, or filling it (fitFilled); or two side
+// by side, each cropped to fill its half unless whole is asked for.
 func fitShown(srcs []image.Image, whole bool) *image.RGBA {
+	sw, sh := slideshowSize()
+	if len(srcs) < 2 {
+		if whole {
+			return fitWhole(srcs[0], sw, sh)
+		}
+		return fitFilled(srcs[0], sw, sh)
+	}
+	// A pair is two tall photos, one in each half: the halves are made for them, so they fill them.
 	fit := cropToFill
 	if whole {
 		fit = fitWhole
-	}
-	sw, sh := slideshowSize()
-	if len(srcs) < 2 {
-		return fit(srcs[0], sw, sh)
 	}
 	out := image.NewRGBA(image.Rect(0, 0, sw, sh))
 	draw.Draw(out, out.Rect, image.Black, image.Point{}, draw.Src)
@@ -1400,6 +1404,47 @@ func fitShown(srcs []image.Image, whole bool) *image.RGBA {
 	draw.Draw(out, image.Rect(0, 0, half, sh), fit(srcs[0], half, sh), image.Point{}, draw.Src)
 	draw.Draw(out, image.Rect(sw-half, 0, sw, sh), fit(srcs[1], half, sh), image.Point{}, draw.Src)
 	return out
+}
+
+// The shapes fitFilled tells apart (#581). A screen within squareLow..squareHigh across over down is
+// square-ish (the Spot's); a photo is landscape when it is more than squareHigh times as wide as it is tall, portrait when taller by as much, and
+// a nearly square photo is neither.
+const (
+	squareLow  = 0.87
+	squareHigh = 1.15
+	// roundFills is how far from square a photo may be and still fill a square-ish screen: 3:4 and 4:3,
+	// the shapes a phone and a camera make, lose a quarter of their long side to the crop, and the circle
+	// would have cut their corners anyway. A wider or taller one is shown whole inside it.
+	roundFillsLow, roundFillsHigh = 0.74, 1.34
+)
+
+// shapeFills is whether a photo of sw x sh may be cropped to fill a screen of w x h: its orientation is
+// the screen's. A landscape screen crops landscape photos and shows portrait and square ones whole; a
+// portrait screen the other way round. A square-ish screen (the Spot's) crops photos that are not far
+// from square and shows the rest whole.
+func shapeFills(sw, sh, w, h int) bool {
+	if sw <= 0 || sh <= 0 || w <= 0 || h <= 0 {
+		return true
+	}
+	photo, screen := float64(sw)/float64(sh), float64(w)/float64(h)
+	switch {
+	case screen > squareLow && screen < squareHigh:
+		return photo >= roundFillsLow && photo <= roundFillsHigh
+	case screen >= squareHigh:
+		return photo > squareHigh
+	}
+	return photo < 1/squareHigh
+}
+
+// fitFilled fits a photo to w x h when Show whole photo is off: cropped to fill it if its orientation is
+// the screen's, else whole on its blurred copy, as Show whole photo has it, rather than losing the top
+// of a portrait photo's heads on a wide screen (#581).
+func fitFilled(src image.Image, w, h int) *image.RGBA {
+	b := src.Bounds()
+	if shapeFills(b.Dx(), b.Dy(), w, h) {
+		return cropToFill(src, w, h)
+	}
+	return fitWhole(src, w, h)
 }
 
 // fetchSlideshowImage resolves, fetches and fits one photo to the panel: cropped to fill it, or whole

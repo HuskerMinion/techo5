@@ -192,7 +192,10 @@ usual one, and the steps below start with it.
    - **Photo folder**: pick the folder, then **Use this folder**.
    - **Time per photo**, **Shuffle photos** and **Include subfolders** are optional.
    - **Show whole photo** shows each photo in full, with a blurred copy of it filling the sides.
-     Off, photos fill the screen, which crops tall ones.
+     Off, a photo shaped like the screen (a landscape one on a wide screen) fills it, cropped; a photo
+     of the other shape, such as a portrait one on a wide screen, is still shown whole on its blurred
+     copy, so nobody loses their head. On the round Spot, photos close to square (4:3 and 3:4) fill the
+     face and wider or taller ones are shown whole inside the circle.
    - **Photo pairs** (the Show) puts two tall photos side by side, each filling half the screen,
      in place of one with blurred sides. A tall photo with no other near it in the list shows alone.
    - **Screensaver clock position** puts the screensaver's clock at the top, in the middle or at the
