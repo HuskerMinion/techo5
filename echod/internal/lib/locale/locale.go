@@ -333,6 +333,23 @@ func MonthDay(t time.Time, lang string) string {
 	return day(t) + " " + m
 }
 
+// ShortMonthDay is the date where there is little room, without the day's name: "Jan 2", "2. Jan.",
+// "2 ene".
+func ShortMonthDay(t time.Time, lang string) string {
+	if lang == "ja" {
+		return t.Format("1/2")
+	}
+	w, ok := langs[lang]
+	if !ok {
+		return t.Format("Jan 2")
+	}
+	m := w.shortMonths[t.Month()-1]
+	if lang == "de" {
+		return day(t) + ". " + m
+	}
+	return day(t) + " " + m
+}
+
 // PhotoDate is the day a photo was taken, with its year: "January 2, 2019", "2. Januar 2019",
 // "2 de enero de 2019", "2 января 2019".
 func PhotoDate(t time.Time, lang string) string {

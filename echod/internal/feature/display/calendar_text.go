@@ -13,6 +13,7 @@ import (
 
 	"github.com/HuskerMinion/techo5/echod/internal/feature/home"
 	"github.com/HuskerMinion/techo5/echod/internal/lib/hass"
+	"github.com/HuskerMinion/techo5/echod/internal/lib/locale"
 )
 
 // What the calendar page works out before it draws: the small picture a title earns, how long until an
@@ -76,7 +77,7 @@ func plainWords(s string) string {
 func countdownText(now, start, end time.Time) string {
 	if !start.After(now) {
 		if end.After(now) || end.Equal(start) && now.Sub(start) < time.Minute {
-			return "now"
+			return tr("ui_cal_now")
 		}
 		return ""
 	}
@@ -84,20 +85,20 @@ func countdownText(now, start, end time.Time) string {
 	h, m := m/60, m%60
 	switch {
 	case h > 0 && m > 0:
-		return fmt.Sprintf("in %d h %d min", h, m)
+		return fmt.Sprintf(tr("ui_cal_in_h_min"), h, m)
 	case h > 0:
-		return fmt.Sprintf("in %d h", h)
+		return fmt.Sprintf(tr("ui_cal_in_h"), h)
 	}
-	return fmt.Sprintf("in %d min", m)
+	return fmt.Sprintf(tr("ui_cal_in_min"), m)
 }
 
 // daysCountdown is the countdown to an event starting on another day: "Vacation tomorrow", "Vacation in
 // 11 days". days is how many days away it starts, at least one.
 func daysCountdown(title string, days int) string {
 	if days == 1 {
-		return title + " tomorrow"
+		return fmt.Sprintf(tr("ui_cal_s_tomorrow"), title)
 	}
-	return fmt.Sprintf("%s in %d days", title, days)
+	return fmt.Sprintf(tr("ui_cal_s_in_days"), title, days)
 }
 
 // daysBetween is how many calendar days from a's day to b's, by the dates, whatever the hours.
@@ -442,11 +443,11 @@ func nextWhen(e hass.Event, now time.Time) string {
 		if sameDay(t, now) {
 			return clockText(t)
 		}
-		return t.Format("Mon") + " " + clockText(t)
+		return locale.ShortWeekday(t, screenLang()) + " " + clockText(t)
 	}
 	today := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, time.Local)
 	if e.Start.Before(today) && e.End.After(now) {
-		return "until " + at(e.End)
+		return fmt.Sprintf(tr("ui_cal_until_s"), at(e.End))
 	}
 	return at(e.Start)
 }

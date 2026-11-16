@@ -158,7 +158,7 @@ func (r *renderer) drawNextUp(s scene) {
 		half := box.Min.X + box.Dx()/2
 		thenX := box.Max.X - r.s(20)
 		if c.then != nil {
-			t := "Then: " + c.then.Summary + " · " + nextWhen(*c.then, s.now)
+			t := tr("ui_cal_then") + " " + c.then.Summary + " · " + nextWhen(*c.then, s.now)
 			room := thenX - half
 			if c.big == nil {
 				room = thenX - box.Min.X - r.s(40)
