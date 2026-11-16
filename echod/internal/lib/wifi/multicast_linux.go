@@ -102,9 +102,14 @@ func RefreshRxFilter(context.Context) error {
 	if err := set(f | unix.IFF_PROMISC); err != nil {
 		return err
 	}
-	// Read again: something else may have changed the flags in between.
-	if f, err = flags(); err != nil {
+	// Read again: something else may have changed the flags in between. Should that read fail, the
+	// flags as they were are put back rather than the interface left promiscuous.
+	if g, err := flags(); err == nil {
+		f = g
+	}
+	if err := set(f &^ unix.IFF_PROMISC); err != nil {
+		_ = set(f &^ unix.IFF_PROMISC) // once more: a toggle left on would pass every frame up
 		return err
 	}
-	return set(f &^ unix.IFF_PROMISC)
+	return nil
 }
