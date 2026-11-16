@@ -274,10 +274,14 @@ func categoryRows(sv sheetView) (rows []settingRow, note string) {
 }
 
 // btStatus is what the Bluetooth audio feature says it is doing, in the screen's language when it is
-// the plain "Not connected" it starts out with; its other lines are about a pairing and stay as sent.
+// the plain "Not connected" it starts out with or the pairing hint; its other lines are about a pairing
+// and stay as sent.
 func btStatus(s string) string {
-	if s == "Not connected" {
+	switch s {
+	case "Not connected":
 		return tr("not_connected")
+	case "Put your earbuds in pairing mode":
+		return tr("ui_bt_pairing_hint")
 	}
 	return s
 }
