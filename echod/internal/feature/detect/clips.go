@@ -135,6 +135,10 @@ type clips struct {
 	disk    sync.Mutex
 	counts  map[string]int
 	publish func(total int, kinds string) // the sensors; nil until wired
+
+	// changed is called when the clips on the device changed (one written, the lot purged): it wakes the
+	// sender (clipsend.go). Nil until wired.
+	changed func()
 }
 
 // clipKinds are the folders, in the order the sensor lists them.
@@ -241,6 +245,9 @@ func (c *clips) purge() {
 	}
 	// What is left, which is nothing unless the removal failed.
 	c.recountLocked()
+	if c.changed != nil {
+		c.changed()
+	}
 }
 
 // recount counts what is on the device, once at the start: what an earlier run kept.
@@ -427,6 +434,10 @@ type clipMeta struct {
 	Model  string  `json:"model"`
 	Score  float64 `json:"score"`
 	Cutoff float64 `json:"cutoff"`
+	// SentAt is when the clip reached the trainer (UTC, RFC 3339), and SendFailed the status a trainer
+	// refused it with for good: either takes it out of the queue (clipsend.go).
+	SentAt     string `json:"sent_at,omitempty"`
+	SendFailed int    `json:"send_failed,omitempty"`
 }
 
 // write puts a clip on the device, with its sidecar, and lets the oldest of its kind go. The name
@@ -469,6 +480,9 @@ func (c *clips) write(cl clip) {
 	}
 	slog.Info("wake clip saved", "kind", cl.kind, "slot", cl.slot+1, "peak", cl.peak)
 	c.counted(cl.kind, prune(dir, c.keep))
+	if c.changed != nil {
+		c.changed()
+	}
 }
 
 func round3(v float64) float64 { return math.Round(v*1000) / 1000 }

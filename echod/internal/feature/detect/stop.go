@@ -102,7 +102,7 @@ func (d *Detect) Entities() []esphome.Entity {
 	}
 	out = append(out, d.frames.busy, d.frames.rate, d.frames.worst)
 	return append(out, d.score, d.onHA.stream, d.onHA.confirm, d.onHA.threshold, d.onHA.faint, d.clipsTotal, d.clipsKinds,
-		d.keepClips)
+		d.keepClips, d.send.to, d.send.unsent, d.send.status)
 }
 
 // newScoreEntity is the highest score the last wake reached. Set beside what was heard, it is how a
@@ -134,6 +134,7 @@ func (d *Detect) Restore(c config.Config) {
 	slog.Info("restored", "what", d.keepClips.ObjectID, "using", keep)
 	// Off, anything an earlier run left behind goes too.
 	d.clips.enable(keep)
+	d.restoreSend(c)
 }
 
 // newClipsEntities are how many wake clips the device keeps (clips.go): all of them, and each kind.

@@ -23,6 +23,7 @@ import (
 	"github.com/HuskerMinion/techo5/echod/internal/hardware/led"
 	"github.com/HuskerMinion/techo5/echod/internal/hardware/mic"
 	"github.com/HuskerMinion/techo5/echod/internal/hardware/speaker"
+	"github.com/HuskerMinion/techo5/echod/internal/lib/safe"
 	"github.com/HuskerMinion/techo5/echod/internal/lib/wake"
 	"github.com/HuskerMinion/techo5/echod/internal/service"
 )
@@ -77,6 +78,12 @@ type Detect struct {
 	clipsKinds *esphome.TextSensor
 	keepClips  *esphome.Switch
 	clips      *clips
+
+	// send is where kept clips are uploaded to, and sender does it (clipsend.go). sendMu is held while the
+	// settings are saved.
+	send   sendEntities
+	sender *sender
+	sendMu sync.Mutex
 	// clipsSave is held while Keep wake clips is saved, or an off that was not saved is tried again, so
 	// a retry's look and its save cannot straddle the switch being turned on (clipsoff.go).
 	// clipsOffRetrying is whether that retry runs, and clipsFails and clipsLogged how often it has
@@ -317,6 +324,10 @@ func newDetect() *Detect {
 		d.clipsTotal.Set(float32(total))
 		d.clipsKinds.Set(kinds)
 	})
+	d.send = newSendEntities(d)
+	d.sender = newSender(d.clips)
+	d.sender.publish = d.publishSend
+	d.clips.changed = d.sender.wake
 
 	// A cut microphone hands on silence, and running the models over it is work that cannot find
 	// anything. The engines go down with the microphones and come back with them. Not for a panel's
@@ -392,7 +403,20 @@ func (d *Detect) Name() string { return "wake" }
 
 func (d *Detect) Start(ctx context.Context) error { return d.engine.Start(ctx) }
 
-func (d *Detect) Run(ctx context.Context) error { return d.engine.Run(ctx) }
+func (d *Detect) Run(ctx context.Context) error {
+	// The clip sender runs for as long as the engine does, and is let go of with it.
+	sctx, cancel := context.WithCancel(ctx)
+	done := make(chan struct{})
+	safe.Go("wake clip sender", func() {
+		defer close(done)
+		d.sender.run(sctx)
+	})
+	defer func() {
+		cancel()
+		<-done
+	}()
+	return d.engine.Run(ctx)
+}
 
 func (d *Detect) Close() error { return d.engine.Close() }
 
