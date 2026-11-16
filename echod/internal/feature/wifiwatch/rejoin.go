@@ -18,6 +18,9 @@ const (
 	// rejoinPoll and rejoinMost are how often, and for how long, to wait for the link to be back.
 	rejoinPoll = time.Second
 	rejoinMost = 30 * time.Second
+	// rejoinAgain is when the filter is sent once more: the look after rejoinGrace can still see the
+	// old association if the supplicant was slow to drop it, and a second toggle costs nothing.
+	rejoinAgain = 10 * time.Second
 )
 
 // refreshing wraps a reassociation: when it has been made and the link is back, refresh runs. It
@@ -40,6 +43,10 @@ func refreshing(reassociate func(context.Context) error, joined func(context.Con
 			return nil
 		}
 		say("wifi: link is back after reassociating; refreshed the receive filter (multicast)")
+		sleep(rejoinAgain)
+		if ctx.Err() == nil && joined(ctx) {
+			_ = refresh(ctx)
+		}
 		return nil
 	}
 }

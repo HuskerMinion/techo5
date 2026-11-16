@@ -22,7 +22,7 @@ func TestRefreshWaitsForTheLinkThenRefreshes(t *testing.T) {
 	if err := f(context.Background()); err != nil {
 		t.Fatal(err)
 	}
-	want := []string{"reassociate", "joined?", "joined?", "joined?", "refresh", "say"}
+	want := []string{"reassociate", "joined?", "joined?", "joined?", "refresh", "say", "joined?", "refresh"}
 	if !slices.Equal(events, want) {
 		t.Fatalf("events = %v, want %v", events, want)
 	}
