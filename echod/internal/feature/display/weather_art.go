@@ -112,6 +112,14 @@ type artKey struct {
 	seed uint64
 }
 
+// cloudSlowest and cloudFastest are how fast the clouds drift, in pixels a second. The art is drawn
+// again once a second, so a cloud faster than a pixel a second hopped: two to six pixels at a time,
+// which read as a stutter rather than a drift. At most a pixel a second, they creep across instead.
+const (
+	cloudSlowest = 0.45
+	cloudFastest = 1.0
+)
+
 // artCloud is one cloud: its soft shape, where it started, and how fast it drifts.
 type artCloud struct {
 	mask  *image.Alpha
@@ -390,7 +398,7 @@ func paintLandscape(k artKey) *artLand {
 		}
 		clouds = append(clouds, artCloud{
 			mask: cloudShape(scale), x: rng.Float64() * w, y: h*(0.08+rng.Float64()*0.27) - scale,
-			speed: unit * (0.002 + rng.Float64()*0.003), col: col, alpha: alpha,
+			speed: cloudSlowest + rng.Float64()*(cloudFastest-cloudSlowest), col: col, alpha: alpha,
 		})
 	}
 	return &artLand{key: k, base: img, clouds: clouds, skyline: skyline}

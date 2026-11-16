@@ -114,3 +114,18 @@ func TestWeatherArtMoonPreviews(t *testing.T) {
 		})
 	}
 }
+
+// The art is drawn again once a second, so a cloud drifts at most a pixel a second, on every panel:
+// any faster and it hops several pixels at a time, which reads as a stutter.
+func TestCloudsCreep(t *testing.T) {
+	for cond := range artConds {
+		for _, p := range [][2]int{{showWide, showHigh}, {show8Wide, show8High}} {
+			land := paintLandscape(artKey{cond, artDay, p[0], p[1], 1})
+			for _, c := range land.clouds {
+				if c.speed <= 0 || c.speed > 1 {
+					t.Fatalf("%s on %dx%d: a cloud drifts %.2f pixels a second", artConds[cond], p[0], p[1], c.speed)
+				}
+			}
+		}
+	}
+}

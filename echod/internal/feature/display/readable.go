@@ -132,6 +132,10 @@ type patchPart struct {
 // and go, and older ones are let go rather than kept for the rest of the picture.
 const shapesKept = 4
 
+// shapesFresh is how many of the weather art's frames, a second each, the shapes under the words are
+// kept across: a cloud moves at most a pixel a second (cloudFastest).
+const shapesFresh = 30
+
 // readableOver draws page over photo, which has already been drawn and washed with ground at wash,
 // with its words kept readable.
 func (p *paint) readableOver(photo *image.RGBA, ground color.RGBA, wash uint8, page func()) {
@@ -295,9 +299,12 @@ func (p *paint) shape(wash uint8) *patchShape {
 	var key strings.Builder
 	fmt.Fprint(&key, wash, o.ground, p.dst.Rect, groups, tall)
 	// The weather art is one picture whose clouds move each second: a frame composed since the shapes
-	// were measured is a different picture under the words, though it is the same image.
+	// were measured is a different picture under the words, though it is the same image. Measuring
+	// them again every second made every second's first frame three times the others, a hitch in rain
+	// falling over the art, for clouds that had moved a pixel; they are measured again every
+	// shapesFresh frames of it instead, by when a cloud may have come in under the words.
 	gen, _ := artVersion(o.photo)
-	if o.shaped != o.photo || o.shapedGen != gen || len(o.shapes) >= shapesKept {
+	if o.shaped != o.photo || gen-o.shapedGen >= shapesFresh || gen < o.shapedGen || len(o.shapes) >= shapesKept {
 		o.shapes, o.shaped, o.shapedGen = map[string]*patchShape{}, o.photo, gen
 	}
 	if sh, ok := o.shapes[key.String()]; ok {
