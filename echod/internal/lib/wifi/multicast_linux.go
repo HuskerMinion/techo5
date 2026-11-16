@@ -62,3 +62,49 @@ func RefreshMulticast(ctx context.Context) error {
 	}
 	return set(f &^ unix.IFF_ALLMULTI)
 }
+
+// RefreshRxFilter has the Wi-Fi driver send its receive filter and multicast list to the firmware again,
+// by switching promiscuous mode on and straight off (what `ip link set wlan0 promisc on`, then `off`
+// does): each change calls the driver's ndo_set_rx_mode. After a reassociation the Echo Dot's MediaTek
+// driver leaves most IPv4 multicast (mDNS) out until it is sent again (techo5-dot#45). Unlike
+// RefreshMulticast it does not wait. An interface already promiscuous is left as it is.
+func RefreshRxFilter(context.Context) error {
+	fd, err := unix.Socket(unix.AF_INET, unix.SOCK_DGRAM|unix.SOCK_CLOEXEC, 0)
+	if err != nil {
+		return err
+	}
+	defer unix.Close(fd)
+	flags := func() (uint16, error) {
+		ifr, err := unix.NewIfreq(iface())
+		if err != nil {
+			return 0, err
+		}
+		if err := unix.IoctlIfreq(fd, unix.SIOCGIFFLAGS, ifr); err != nil {
+			return 0, err
+		}
+		return ifr.Uint16(), nil
+	}
+	set := func(f uint16) error {
+		ifr, err := unix.NewIfreq(iface())
+		if err != nil {
+			return err
+		}
+		ifr.SetUint16(f)
+		return unix.IoctlIfreq(fd, unix.SIOCSIFFLAGS, ifr)
+	}
+	f, err := flags()
+	if err != nil {
+		return err
+	}
+	if f&unix.IFF_PROMISC != 0 {
+		return nil
+	}
+	if err := set(f | unix.IFF_PROMISC); err != nil {
+		return err
+	}
+	// Read again: something else may have changed the flags in between.
+	if f, err = flags(); err != nil {
+		return err
+	}
+	return set(f &^ unix.IFF_PROMISC)
+}

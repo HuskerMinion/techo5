@@ -79,7 +79,7 @@ func newBroadcast() *broadcast {
 			gw := wifi.Gateway()
 			return gw != nil && wifi.Answers(ctx, gw)
 		},
-		reassociate: wifi.Reassociate,
+		reassociate: rejoiner(wifi.Reassociate, func(ctx context.Context) bool { return wifi.Current(ctx).Connected }, wifi.RefreshRxFilter, func(msg string, args ...any) { slog.Warn(msg, args...) }),
 		record:      func(context.Context, string) {},
 		say:         func(msg string, args ...any) { slog.Warn(msg, args...) },
 		held:        func() bool { return false },

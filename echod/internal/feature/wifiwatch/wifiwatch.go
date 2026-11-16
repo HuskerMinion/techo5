@@ -118,7 +118,7 @@ func New() *Watch {
 			gw := wifi.Gateway()
 			return gw != nil && wifi.Answers(ctx, gw)
 		},
-		reassociate: wifi.Reassociate,
+		reassociate: rejoiner(wifi.Reassociate, func(ctx context.Context) bool { return wifi.Current(ctx).Connected }, wifi.RefreshRxFilter, func(msg string, args ...any) { slog.Warn(msg, args...) }),
 		evidence:    wifi.Evidence,
 		say:         func(msg string, args ...any) { slog.Warn(msg, args...) },
 		network: func(ctx context.Context) (string, bool) {
