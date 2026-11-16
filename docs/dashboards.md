@@ -219,7 +219,7 @@ only if your server accepts requests without one.
 
 **Opening it**
 
-Give any card a tap action that navigates to `#techo5-mealie`:
+Give any Home Assistant card a tap action that navigates to `#techo5-mealie`:
 
 ```yaml
 type: button
@@ -234,11 +234,11 @@ Home Assistant itself has no view of that name, so the same card does nothing in
 
 **What it shows**
 
-All recipes by name, a tile for each with its name under it. Drag up or down to scroll. **Done**
+All recipes by name and image, a tile for each with its name under it. Drag up or down to scroll. **Done**
 closes it. If Mealie isn't set up, or can't be reached, a notice says so.
 
 A tap on a recipe opens its step-by-step guide. The first page lists the ingredients. Every other page
-is one step, and scrolls if it is too long. Tap **Next** and **Previous** to turn pages. **Back**
+is one recipe step, and scrolls if it is too long. Tap **Next** and **Previous** to turn pages. **Back**
 returns to the list.
 
 ## What drawn mode draws
