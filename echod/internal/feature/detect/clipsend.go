@@ -671,8 +671,9 @@ func headerText(s string) string {
 	}, s)
 }
 
-// percent is a score or a cutoff on Tater's scale: whole percent.
-func percent(v float64) string { return strconv.Itoa(int(v*100 + 0.5)) }
+// byteScale is a score or a cutoff on Tater's scale: ESPHome's microWakeWord one, a whole number from 0
+// to 255 (its probability history is a list of those, and it reads the cutoff as a whole number).
+func byteScale(v float64) string { return strconv.Itoa(int(min(max(v, 0), 1)*255 + 0.5)) }
 
 func (s *sender) taterHeaders(req *http.Request, it *sendItem) {
 	h := req.Header
@@ -685,10 +686,11 @@ func (s *sender) taterHeaders(req *http.Request, it *sendItem) {
 	}
 	h.Set("X-Event-Type", taterEvent(it.meta.Kind))
 	h.Set("X-Captured-At", it.meta.At)
-	// Tater reads the peak as a number and the cutoff as a whole number, so both are percents.
-	h.Set("X-Max-Probability", percent(it.meta.Score))
+	// Tater reads the cutoff as a whole number, on microWakeWord's 0 to 255 scale; the peak goes on the
+	// same scale so the two compare.
+	h.Set("X-Max-Probability", byteScale(it.meta.Score))
 	if it.meta.Cutoff > 0 {
-		h.Set("X-Probability-Cutoff", percent(it.meta.Cutoff))
+		h.Set("X-Probability-Cutoff", byteScale(it.meta.Cutoff))
 	}
 	h.Set("X-Notes", fmt.Sprintf("techo5 %s, score %.3f, cutoff %.3f", it.meta.Kind, it.meta.Score, it.meta.Cutoff))
 }

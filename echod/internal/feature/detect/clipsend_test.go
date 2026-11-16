@@ -107,8 +107,8 @@ func TestATaterUploadHasTheHeadersAndTheClipAsTheBody(t *testing.T) {
 	want := map[string]string{
 		"Content-Type": "audio/wav", "X-Audio-Format": "wav", "X-Original-Name": name + ".wav",
 		"X-Source-Device": "Kitchen", "X-Wake-Word": "hey_jarvis", "X-Event-Type": "close_miss",
-		"X-Captured-At": r.base.Add(time.Second).Format(time.RFC3339), "X-Max-Probability": "79",
-		"X-Probability-Cutoff": "90", "X-Notes": "techo5 nearmiss, score 0.790, cutoff 0.900",
+		"X-Captured-At": r.base.Add(time.Second).Format(time.RFC3339), "X-Max-Probability": "201",
+		"X-Probability-Cutoff": "230", "X-Notes": "techo5 nearmiss, score 0.790, cutoff 0.900",
 	}
 	for k, v := range want {
 		if got.Get(k) != v {
