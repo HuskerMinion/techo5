@@ -5,6 +5,7 @@ package display
 import (
 	"context"
 	"image"
+	"image/color"
 	"log/slog"
 	"strconv"
 	"strings"
@@ -310,6 +311,13 @@ func (r *renderer) drawSeek(s scene) {
 		r    image.Rectangle
 		icon string
 	}{{back, "rewind-15"}, {forward, "fast-forward-30"}} {
+		if s.modernMusic {
+			// The modern page's own look: the dark fill of its previous and next buttons.
+			surface, ink := color.RGBA{32, 42, 54, 255}, color.RGBA{242, 246, 250, 255}
+			r.roundRect(b.r, b.r.Dy()/2, r.pressFill(b.r, surface, ink))
+			r.iconIn(b.r, b.icon, 28, ink)
+			continue
+		}
 		col := r.buttonFace(b.r, float64(b.r.Dy())/2, btnSecondary)
 		r.iconIn(b.r, b.icon, 28, col)
 	}
