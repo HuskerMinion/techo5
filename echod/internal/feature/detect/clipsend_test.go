@@ -276,7 +276,7 @@ func TestATokenThatIsRefusedStopsSendingUntilTheSettingsChange(t *testing.T) {
 }
 
 func TestAnUnreachableOrFailingTrainerIsBackedOffFromAndTheClipKept(t *testing.T) {
-	for _, code := range []int{500, 503, 408, 429} {
+	for _, code := range []int{http.StatusInternalServerError, http.StatusServiceUnavailable, http.StatusRequestTimeout, http.StatusTooManyRequests} {
 		n := 0
 		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, q *http.Request) {
 			io.Copy(io.Discard, q.Body)
@@ -306,7 +306,7 @@ func TestTheBackoffIsCappedAndStartsOverAfterAClipGoes(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, q *http.Request) {
 		io.Copy(io.Discard, q.Body)
 		if down {
-			w.WriteHeader(503)
+			w.WriteHeader(http.StatusServiceUnavailable)
 			return
 		}
 		fmt.Fprint(w, `{"ok":true}`)
@@ -716,7 +716,7 @@ func TestSendAddressesAreChecked(t *testing.T) {
 
 func TestTheTokenIsNeverInTheSendersWords(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, q *http.Request) {
-		http.Error(w, "echo "+q.Header.Get("Authorization"), 503)
+		http.Error(w, "echo "+q.Header.Get("Authorization"), http.StatusServiceUnavailable)
 	}))
 	defer srv.Close()
 	r := newSendRig(t, config.SendCustom, srv.URL)
@@ -847,7 +847,7 @@ func TestEverySentMetaHasWhatWakesmithRequires(t *testing.T) {
 func TestAReceiversErrorTextIsSaidInTheStatusAndTheTest(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, q *http.Request) {
 		io.Copy(io.Discard, q.Body)
-		w.WriteHeader(503)
+		w.WriteHeader(http.StatusServiceUnavailable)
 		fmt.Fprint(w, `{"ok": false, "error": "updating, back in a minute"}`)
 	}))
 	defer srv.Close()
