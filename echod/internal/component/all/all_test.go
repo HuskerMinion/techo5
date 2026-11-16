@@ -240,6 +240,7 @@ var registered = []string{
 	"segment_8",
 	"segment_9",
 	"sendspin",
+	"sendspin_delay",
 	"sendspin_state",
 	"settings_lock",
 	"settings_sharing",

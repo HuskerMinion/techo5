@@ -665,9 +665,11 @@ func (s *session) told(cmd protocol.PlayerCommand) {
 // the newest release, and output_delay_ms since the spec renamed it (spec PR #164, in aiosendspin's
 // main branch but not yet released). A server ignores a field it does not know.
 //
-// The delay is 0 and the command to set it is not offered. It is for a chain beyond the device's own
-// port, which a Show does not have; its own latency is compensated here (out.position), as the spec
-// asks. And it can only move a player earlier, so it could never have fixed a Show playing early.
+// The delay reported is 0 and the command to set it is not offered. It is for a chain beyond the
+// device's own port, which a Show does not have; its own latency is compensated here (out.position), as
+// the spec asks. And it can only move a player earlier, so it could never hold a room back. The room's
+// own Sendspin delay setting does that, locally (out.setDelay): were it reported too, the server would
+// send the audio that much earlier and cancel it.
 //
 // available is false until the clock filter has converged, as the spec requires: a player that says it
 // can play before its clock is good would be scheduled against a wrong offset. The clock loop says it

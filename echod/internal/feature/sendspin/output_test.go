@@ -333,3 +333,55 @@ func TestAStreamThatEndsHeldForgetsTheHold(t *testing.T) {
 		t.Fatal("a closed stream kept the hold on it")
 	}
 }
+
+// A delay places the same timestamp later by exactly that many frames, which is how a room is held
+// back to match a slower player.
+func TestADelayPlacesAudioLater(t *testing.T) {
+	o := anchored(t)
+	o.setDelay(10) // 480 frames
+	o.write(microsFor(0), tone(10, 500))
+
+	if got := rendered(o, 1000, 10)[0]; got != 0 {
+		t.Errorf("at the undelayed frame = %d, want silence", got)
+	}
+	if got := rendered(o, 1480, 10)[0]; got != 500 {
+		t.Errorf("at the delayed frame = %d, want 500", got)
+	}
+}
+
+// Changing the delay in a stream that is playing moves what is already queued, and what arrives next
+// lands against it with no seam.
+func TestChangingTheDelayMovesWhatIsQueued(t *testing.T) {
+	o := anchored(t)
+	o.write(microsFor(0), tone(10, 500))
+	o.setDelay(10)
+	o.write(microsFor(10), tone(10, 600))
+
+	if got := rendered(o, 1480, 10)[0]; got != 500 {
+		t.Errorf("queued audio at the delayed frame = %d, want 500", got)
+	}
+	if got := rendered(o, 1490, 10)[0]; got != 600 {
+		t.Errorf("the next chunk = %d, want 600, right after it", got)
+	}
+
+	// Rendering consumed what was queued, so take the delay off in a fresh stream.
+	o = anchored(t)
+	o.write(microsFor(0), tone(10, 500))
+	o.setDelay(10)
+	o.setDelay(0)
+	if got := rendered(o, 1000, 10)[0]; got != 500 {
+		t.Errorf("after the delay is taken off, queued audio at its own frame = %d, want 500", got)
+	}
+}
+
+func TestADelayIsHeldToTheSettingsRange(t *testing.T) {
+	o := anchored(t)
+	o.setDelay(-5)
+	if o.delay != 0 {
+		t.Errorf("a negative delay = %d frames, want 0", o.delay)
+	}
+	o.setDelay(1 << 20)
+	if want := int64(speaker.Rate); o.delay != want {
+		t.Errorf("a huge delay = %d frames, want %d (one second)", o.delay, want)
+	}
+}

@@ -74,3 +74,27 @@ func TestMusicSourceSaved(t *testing.T) {
 		t.Errorf("a refused form changed the address to %q", config.Get().MusicAssistant.URL)
 	}
 }
+
+// The playback delay is saved from the form that shows it, refused outside 0 to the maximum before
+// anything is saved, and left alone by a form that does not carry it.
+func TestSendspinDelaySaved(t *testing.T) {
+	config.Use(filepath.Join(t.TempDir(), "state.json"))
+	post := func(v url.Values) string {
+		v.Set("token", "the-pages-own-token")
+		return saveMusic(form(v))
+	}
+	if p := post(url.Values{"sendspin_delay": {"250"}}); p != "" || config.Get().Sendspin.DelayMs != 250 {
+		t.Errorf("saved %d (%s), want 250", config.Get().Sendspin.DelayMs, p)
+	}
+	if p := post(url.Values{"url": {"http://192.168.1.20:8095"}}); p != "" || config.Get().Sendspin.DelayMs != 250 {
+		t.Errorf("a form without it changed the delay to %d (%s)", config.Get().Sendspin.DelayMs, p)
+	}
+	for _, bad := range []string{"-1", "1001", "slow", "1.5"} {
+		if post(url.Values{"sendspin_delay": {bad}}) == "" || config.Get().Sendspin.DelayMs != 250 {
+			t.Errorf("%q was saved, delay %d", bad, config.Get().Sendspin.DelayMs)
+		}
+	}
+	if p := post(url.Values{"sendspin_delay": {"0"}}); p != "" || config.Get().Sendspin.DelayMs != 0 {
+		t.Errorf("0 saved %d (%s)", config.Get().Sendspin.DelayMs, p)
+	}
+}

@@ -14,6 +14,7 @@ import (
 
 	ssync "github.com/Sendspin/sendspin-go/pkg/sync"
 
+	"github.com/HuskerMinion/techo5/echod/internal/config"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/media"
 	"github.com/HuskerMinion/techo5/echod/internal/hardware/speaker"
 )
@@ -83,6 +84,12 @@ type out struct {
 	anchored bool
 	frame    uint64
 	at       int64
+
+	// delay is the room's static playback delay in frames: audio is placed that much later than the
+	// server's timestamp asks for, to match a slower player. It is on the placement only. frame and
+	// the drift loop stay in terms of what the server clock says is heard now, which is the card's
+	// position, so the delay never reads as an error to correct.
+	delay int64
 
 	// drift is the smoothed error between the frame being heard and the frame the server clock wants,
 	// in frames, positive when the room is playing early. corrected counts frames repeated (positive)
@@ -157,7 +164,7 @@ func (o *out) write(at int64, samples []int16) {
 		return
 	}
 
-	frame := o.frameFor(at)
+	frame := o.frameFor(at) + uint64(o.delay)
 	if frame > o.played && frame-o.played > holdMax {
 		o.dropped.Add(1)
 		return
@@ -347,6 +354,27 @@ func (o *out) correct(from uint64) {
 		o.drift++
 		o.corrected--
 	}
+}
+
+// setDelay holds the room back by ms against the server's schedule, now: what is queued moves with it.
+// A longer delay puts silence in front of what is queued, a shorter one takes the front off it, which
+// is a skip forward of the difference, and what arrives next is placed at the new delay either way.
+func (o *out) setDelay(ms int) {
+	n := int64(config.SendspinDelay(ms)) * speaker.Rate / 1000
+
+	o.mu.Lock()
+	defer o.mu.Unlock()
+	d := n - o.delay
+	o.delay = n
+	if d == 0 || len(o.pcm) == 0 {
+		return
+	}
+	if d > 0 {
+		o.pcm = append(make([]int16, int(d)*speaker.Channels), o.pcm...)
+		return
+	}
+	drop := min(int(-d), len(o.pcm)/speaker.Channels)
+	o.pcm = append(o.pcm[:0], o.pcm[drop*speaker.Channels:]...)
 }
 
 // position is the next frame to go to the card and how long until it is heard: the card's word for

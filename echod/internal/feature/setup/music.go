@@ -8,11 +8,13 @@ import (
 	"log/slog"
 	"net/http"
 	"net/url"
+	"strconv"
 	"strings"
 	"time"
 	"unicode"
 
 	"github.com/HuskerMinion/techo5/echod/internal/config"
+	"github.com/HuskerMinion/techo5/echod/internal/feature/sendspin"
 	"github.com/HuskerMinion/techo5/echod/internal/hardware/metrics"
 	"github.com/HuskerMinion/techo5/echod/internal/layout"
 	"github.com/HuskerMinion/techo5/echod/internal/lib/musicassistant"
@@ -52,6 +54,11 @@ func musicSection(ctx context.Context, w http.ResponseWriter, token string) {
 	if m.Set() {
 		sourceField(w, m, a.providers, a.perr)
 	}
+	fmt.Fprintf(w, `<label for="sdelay">Playback delay, milliseconds (0 to %d)</label>
+	 <input id="sdelay" name="sendspin_delay" type="number" inputmode="numeric" min="0" max="%d" step="1" value="%d">
+	 <p class="note">Holds this device back against the group, to match a player that is slower than it. 0 plays as
+	 Music Assistant schedules it. It applies as soon as it is saved, even in a song that is playing.</p>`,
+		config.MaxSendspinDelayMs, config.MaxSendspinDelayMs, sendspin.Get().Delay())
 	fmt.Fprint(w, `<p><button type="submit">Save</button></p></form></fieldset>`)
 }
 
@@ -141,6 +148,14 @@ func saveMusic(r *http.Request) string {
 			return "that is not a Music Assistant service"
 		}
 	}
+	delay, hasDelay := 0, false
+	if v := strings.TrimSpace(r.PostFormValue("sendspin_delay")); v != "" { // only the page's own form carries it
+		n, err := strconv.Atoi(v)
+		if err != nil || n < 0 || n > config.MaxSendspinDelayMs {
+			return fmt.Sprintf("the playback delay is a whole number of milliseconds, 0 to %d", config.MaxSendspinDelayMs)
+		}
+		delay, hasDelay = n, true
+	}
 	var tok *string
 	// Not "token": that is the page's own, which every form carries (hidden).
 	switch t := strings.TrimSpace(r.PostFormValue("matoken")); {
@@ -155,6 +170,9 @@ func saveMusic(r *http.Request) string {
 	}
 	if err := config.Set().MusicAssistant().Server(addr, tok); err != nil {
 		return "could not save it: " + err.Error()
+	}
+	if hasDelay && delay != sendspin.Get().Delay() {
+		sendspin.Get().SetDelay(delay)
 	}
 	if hasSource {
 		if err := config.Set().MusicAssistant().SetSource(src); err != nil {

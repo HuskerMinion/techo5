@@ -256,6 +256,8 @@ func categoryRows(sv sheetView) (rows []settingRow, note string) {
 		rows = append(rows, []settingRow{
 			{label: tr("music"), kind: ctlHeading},
 			{id: "sendspin", label: tr("music_assistant_player"), sub: tr("play_music_in_sync_with_other_rooms"), kind: ctlToggle, on: st.sendspin},
+			{id: "sendspindelay", label: tr("ui_playback_delay"), sub: tr("ui_holds_this_room_back_for_slower_players"), kind: ctlStepper,
+				value: fmt.Sprintf("%d ms", sendspin.Get().Delay())},
 		}...)
 		return append(withStreaming(rows),
 			settingRow{label: tr("cameras"), kind: ctlHeading},
@@ -1300,6 +1302,14 @@ func (d *Display) rowTap(id string, p part, opt int) {
 	case "sendspin":
 		sp := sendspin.Get()
 		sp.SetEnabled(!sp.Enabled())
+	case "sendspindelay":
+		sp := sendspin.Get()
+		switch p {
+		case partMinus:
+			sp.SetDelay(sp.Delay() - sendspinDelayStep)
+		case partPlus:
+			sp.SetDelay(sp.Delay() + sendspinDelayStep)
+		}
 	case "ssh":
 		security.Get().SetSSH(!config.Get().Security.SSH)
 	case "tailscale":
@@ -1545,3 +1555,6 @@ func repeatedWordNote() string {
 	}
 	return ""
 }
+
+// sendspinDelayStep is what a tap on the delay's minus or plus moves it by, in milliseconds.
+const sendspinDelayStep = 10

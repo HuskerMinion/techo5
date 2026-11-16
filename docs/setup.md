@@ -476,6 +476,13 @@ captured login to the same page for a few minutes, and could see the pictures an
   finds it on the network with nothing to set up. Several devices can play in sync as a group.
   Read [what this trusts](getting-started.md#after-installing-every-device) first if your Wi-Fi has
   guests on it. **Music Assistant player** under Settings → Sound turns it off.
+  **Playback delay** (Settings → Sound, Home Assistant's **Sendspin delay**, and the setup page's
+  Music Assistant section) holds a device back by 0 to 1000 ms, in 1 ms steps (10 ms on the screen),
+  so it can match a player that is slower than it, such as a speaker on a PC's audio chain. Music
+  Assistant's own **Static playback delay** only delays the player it is set for, and does not list
+  this device's, so the delay is set here: the device places the group's audio that much later, it
+  applies as soon as it is changed, even in a song that is playing, and 0 plays as Music Assistant
+  schedules it.
 - **Snapcast.** The device can also be a client of a [Snapcast](https://github.com/snapcast/snapcast)
   server, in step with the house's other Snapcast clients. In Home Assistant, set **Snapcast server**
   (Playback, Configuration) to the server's address, `192.168.1.20` or `192.168.1.20:1704` (1704

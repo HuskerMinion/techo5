@@ -22,6 +22,7 @@ func init() {
 // advert saying the room is here.
 type Player struct {
 	enabled *esphome.Switch
+	delay   *esphome.Number
 	state   *esphome.TextSensor
 
 	out *out
@@ -64,6 +65,19 @@ func build() *Player {
 		},
 	}
 
+	p.delay = &esphome.Number{
+		Base: esphome.Base{
+			ObjectID: "sendspin_delay",
+			Name:     "Sendspin delay",
+			Icon:     "mdi:timer-sand",
+			Category: esphome.CategoryConfig,
+			DeviceID: component.DevicePlayback,
+		},
+		Min: 0, Max: config.MaxSendspinDelayMs, Step: 1, Unit: "ms",
+		Mode: esphome.NumberBox,
+	}
+	p.delay.OnCommand = func(v float32) { p.SetDelay(int(v)) }
+
 	p.state = &esphome.TextSensor{
 		Base: esphome.Base{
 			ObjectID: "sendspin_state",
@@ -93,12 +107,31 @@ func (p *Player) Enabled() bool { return config.Get().Sendspin.Enabled }
 
 func (p *Player) SetEnabled(on bool) { p.enabled.OnCommand(on) }
 
+// Delay and SetDelay are the room's static playback delay in milliseconds, which holds it back against
+// the server's schedule to match a slower player in the group. It takes effect at once, in a stream
+// that is playing too: the server cannot be asked to do this for a room (see session.reported).
+func (p *Player) Delay() int { return config.SendspinDelay(config.Get().Sendspin.DelayMs) }
+
+func (p *Player) SetDelay(ms int) {
+	ms = config.SendspinDelay(ms)
+	p.delay.Set(float32(ms))
+	if err := config.Set().Sendspin().DelayMs(ms); err != nil {
+		slog.Error("saving a setting failed", "setting", p.delay.ObjectID, "err", err)
+	}
+	p.out.setDelay(ms)
+	slog.Info("sendspin delay", "ms", ms)
+}
+
 func (p *Player) Entities() []esphome.Entity {
-	return []esphome.Entity{p.enabled, p.state}
+	return []esphome.Entity{p.enabled, p.delay, p.state}
 }
 
 // Restore puts the switch back where it was left. Listening waits for Run, once there is a network.
-func (p *Player) Restore(c config.Config) { p.enabled.Set(c.Sendspin.Enabled) }
+func (p *Player) Restore(c config.Config) {
+	p.enabled.Set(c.Sendspin.Enabled)
+	p.delay.Set(float32(config.SendspinDelay(c.Sendspin.DelayMs)))
+	p.out.setDelay(c.Sendspin.DelayMs)
+}
 
 // Run holds the port open for as long as the switch is on.
 func (p *Player) Run(ctx context.Context) error {
