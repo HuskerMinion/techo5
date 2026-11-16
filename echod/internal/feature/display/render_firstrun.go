@@ -249,7 +249,7 @@ func firstRunText(v firstRunView, now time.Time) (string, []string, string) {
 	switch v.step {
 	case frLanguage:
 		// One line: the languages take the rest of the card.
-		return tr("firstrun_title_language"), []string{frClockLine(now)}, ""
+		return tr("firstrun_title_language"), []string{frClockLine(now, v.clock24)}, ""
 	case frWifi:
 		if !v.wifi.Connected {
 			return tr("firstrun_title_wifi"), []string{

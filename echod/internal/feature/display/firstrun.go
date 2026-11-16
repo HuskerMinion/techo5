@@ -63,12 +63,20 @@ type firstRunState struct {
 	renaming         bool // the name was saved and the daemon is restarting to announce it
 
 	phone bool // the Spot's "On a phone" opened the setup page: its face says where it is
+
+	// The Spot's language step goes round the languages on one button, so what it picks is held here
+	// and saved on Next (picking): a language passed on the way is neither saved nor fetched a font for.
+	picking     bool
+	pickLang    string
+	pickClock24 bool
+	pickedClock bool // the clock was chosen, so a language picked after it keeps it
 }
 
 // firstRunView is what one frame of first run shows.
 type firstRunView struct {
 	step     string
 	lang     string // the language step's language chosen (firstrun.LanguageNow)
+	clock24  bool   // and its clock
 	number   int    // the step's place, 1 for the first counted step; 0 for the hello and done cards
 	of       int
 	wifi     wifi.Status
@@ -107,7 +115,7 @@ func (d *Display) firstRunView(now time.Time) firstRunView {
 	v := firstRunView{step: firstRunStep(), name: config.Get().Device.Name, room: config.Get().Home.Area}
 	v.number, v.of = firstrun.Number(v.step)
 	if v.step == frLanguage {
-		v.lang = firstrun.LanguageNow()
+		v.lang, v.clock24 = firstrun.LanguageNow(), clock24.Load()
 	}
 	if v.name == "" {
 		v.name = "TECHO5"
@@ -123,6 +131,9 @@ func (d *Display) firstRunView(now time.Time) firstRunView {
 		fr.reading, read = true, true
 	}
 	v.wifi, v.showKey, v.renaming, v.phone = fr.wifi, fr.showKey, fr.renaming, fr.phone
+	if v.step == frLanguage && fr.picking {
+		v.lang, v.clock24 = fr.pickLang, fr.pickClock24
+	}
 	v.typing, v.text, v.typeErr, v.shifted, v.symbols = fr.typing, fr.text, fr.typeErr, fr.shifted, fr.symbols
 	advance, chime := false, false
 	switch v.step {
@@ -213,18 +224,18 @@ func frLangLabel(l firstrun.Lang) string {
 	return l.Name
 }
 
-// frClockLine is the language step's line with the time as the clock shows it now.
-func frClockLine(now time.Time) string {
+// frClockLine is the language step's line with the time as the clock chosen (on: 24 hours) shows it.
+func frClockLine(now time.Time, on bool) string {
 	at := now.Format("3:04 PM")
-	if clock24.Load() {
+	if on {
 		at = now.Format("15:04")
 	}
 	return fmt.Sprintf(tr("firstrun_spot_clock"), at)
 }
 
-// frClockButton is the language step's button to the other clock.
-func frClockButton() frButton {
-	if clock24.Load() {
+// frClockButton is the language step's button to the other clock than the one chosen (on: 24 hours).
+func frClockButton(on bool) frButton {
+	if on {
 		return frButton{tr("firstrun_use_12_hours"), "clock"}
 	}
 	return frButton{tr("firstrun_use_24_hours"), "clock"}

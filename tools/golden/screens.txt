@@ -59,6 +59,7 @@ show/camera-buttons-show8.png
 show/camera-talk-show8.png
 show/camera-captioned-show8.png
 show/firstrun-hello-show8.png
+show/firstrun-language-show8.png
 show/firstrun-home-show8.png
 show/firstrun-name-show8.png
 show/firstrun-wifi-show8.png
@@ -149,6 +150,7 @@ spot/ringing-alarm.png
 spot/ringing-timer.png
 spot/pin-pad.png
 spot/settings-display.png
+spot/spot-firstrun-language.png
 spot/night-led.png
 spot/photo-sky.png
 spot/video-spot-controls.png

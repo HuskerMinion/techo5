@@ -1,6 +1,7 @@
 package firstrun
 
 import (
+	"fmt"
 	"log/slog"
 
 	"github.com/HuskerMinion/techo5/echod/internal/config"
@@ -45,6 +46,24 @@ func SetLanguage(lang string) error {
 	}
 	slog.Info("first run: screen language", "language", lang)
 	return SetClock24(Clock24For(lang))
+}
+
+// SaveLanguage saves a language and a clock chosen together, each only if it changed: the clock is
+// the one chosen, not lang's usual one, and a language left on English while it is unset (Match all)
+// stays unset.
+func SaveLanguage(lang string, clock24 bool) error {
+	if lang != LanguageNow() {
+		if err := config.Set().Screen().Language(lang); err != nil {
+			return fmt.Errorf("could not save the language: %w", err)
+		}
+		slog.Info("first run: screen language", "language", lang)
+	}
+	if clock24 != config.Get().Screen.Clock24 {
+		if err := SetClock24(clock24); err != nil {
+			return fmt.Errorf("could not save the clock: %w", err)
+		}
+	}
+	return nil
 }
 
 // SetClock24 saves the screen's clock as 24 hours, or 12, and tells the screen, which keeps it to

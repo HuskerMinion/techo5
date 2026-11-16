@@ -54,27 +54,62 @@ func spotFRTap(d *Display, act string) bool {
 	return false
 }
 
-// The Spot's language step: the language button goes round the languages, each picking its clock,
-// and the clock button turns it.
+// The Spot's language step: the language button goes round the languages without saving them (so a
+// language passed on the way fetches no font), the clock follows each language until the clock button
+// picks one, and Next saves what was picked.
 func TestSpotFirstRunLanguage(t *testing.T) {
 	d, _ := spotFirstRun(t, true, true)
 	was := clock24.Load()
 	t.Cleanup(func() { clock24.Store(was) })
 	setClock24(nil, false)
 	spotSetStep(t, frLanguage)
+	before := config.Get().Screen
+	unsaved := func(what string) {
+		t.Helper()
+		if c := config.Get().Screen; c.Language != before.Language || c.Clock24 != before.Clock24 || clock24.Load() {
+			t.Fatalf("%s saved: language %q, 24 hours %v", what, c.Language, c.Clock24)
+		}
+	}
+	tap := func(act string) firstRunView {
+		t.Helper()
+		if !spotFRTap(d, act) {
+			t.Fatalf("no %q button", act)
+		}
+		return d.firstRunView(time.Now())
+	}
 	for _, want := range []string{frLangs[1].Code, frLangs[2].Code} {
-		if !spotFRTap(d, "lang") {
-			t.Fatal("no language button")
+		if v := tap("lang"); v.lang != want || !v.clock24 {
+			t.Fatalf("picked %q, 24 hours %v; want %q, 24 hours", v.lang, v.clock24, want)
 		}
-		if c := config.Get().Screen; c.Language != want || !c.Clock24 || !clock24.Load() {
-			t.Fatalf("language %q, 24 hours %v; want %q, 24 hours", c.Language, c.Clock24, want)
-		}
+		unsaved("a language passed")
 	}
-	if !spotFRTap(d, "clock") || config.Get().Screen.Clock24 || clock24.Load() {
-		t.Fatal("the clock button left 24 hours")
+	if v := tap("clock"); v.lang != frLangs[2].Code || v.clock24 {
+		t.Fatalf("the clock button left %q at 24 hours %v", v.lang, v.clock24)
 	}
+	unsaved("the clock")
+	if v := tap("lang"); v.lang != frLangs[3].Code || v.clock24 {
+		t.Fatalf("the next language %q took its clock (24 hours %v), not the one chosen", v.lang, v.clock24)
+	}
+	unsaved("a language passed")
+	tap("next")
+	if step := firstRunStep(); step != stepAfter(frLanguage) {
+		t.Fatalf("Next went to %q", step)
+	}
+	if c := config.Get().Screen; c.Language != frLangs[3].Code || c.Clock24 || clock24.Load() {
+		t.Fatalf("Next saved language %q, 24 hours %v; want %q, 12 hours", c.Language, c.Clock24, frLangs[3].Code)
+	}
+}
+
+// Next on the Spot's language step with nothing picked saves nothing: a screen on Match all keeps it.
+func TestSpotFirstRunLanguageNextKeepsMatchAll(t *testing.T) {
+	d, _ := spotFirstRun(t, true, true)
+	spotSetStep(t, frLanguage)
+	before := config.Get().Screen
 	if !spotFRTap(d, "next") || firstRunStep() != stepAfter(frLanguage) {
 		t.Fatalf("Next went to %q", firstRunStep())
+	}
+	if c := config.Get().Screen; c.Language != before.Language || c.Clock24 != before.Clock24 {
+		t.Fatalf("Next saved language %q, 24 hours %v", c.Language, c.Clock24)
 	}
 }
 

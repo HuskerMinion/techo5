@@ -291,15 +291,8 @@ func saveLanguage(lang string, clock24 bool) string {
 	if !known {
 		return "choose one of the languages"
 	}
-	if lang != firstrun.LanguageNow() {
-		if err := config.Set().Screen().Language(lang); err != nil {
-			return "could not save the language: " + err.Error()
-		}
-	}
-	if clock24 != config.Get().Screen.Clock24 {
-		if err := firstrun.SetClock24(clock24); err != nil {
-			return "could not save the clock: " + err.Error()
-		}
+	if err := firstrun.SaveLanguage(lang, clock24); err != nil {
+		return err.Error()
 	}
 	return ""
 }

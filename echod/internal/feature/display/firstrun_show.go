@@ -36,7 +36,7 @@ func firstRunButtons(v firstRunView) []frButton {
 	}
 	switch v.step {
 	case frLanguage:
-		return []frButton{frClockButton(), {tr("firstrun_next"), "next"}}
+		return []frButton{frClockButton(v.clock24), {tr("firstrun_next"), "next"}}
 	case frWifi:
 		if v.wifi.Connected {
 			return []frButton{{tr("firstrun_change"), "wifi"}, {tr("firstrun_next"), "next"}}
