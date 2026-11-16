@@ -219,3 +219,24 @@ func TestFirewallOn(t *testing.T) {
 		t.Error("no error for a broken profile")
 	}
 }
+
+// The client's own firewall must stay on: without it, a policy decides which peers see the device but
+// not which ports they reach (#579).
+func TestUpKeepsTheFirewallOn(t *testing.T) {
+	args := upArgs("https://mesh.example:443", "kitchen")
+	if args[0] != "up" {
+		t.Fatalf("args = %q", args)
+	}
+	on := 0
+	for _, a := range args {
+		switch {
+		case a == "--disable-firewall=false":
+			on++
+		case strings.HasPrefix(a, "--disable-firewall"):
+			t.Errorf("%q in the up arguments", a)
+		}
+	}
+	if on != 1 {
+		t.Errorf("--disable-firewall=false %d times in %q", on, args)
+	}
+}

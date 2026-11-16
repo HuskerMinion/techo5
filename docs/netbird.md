@@ -79,8 +79,8 @@ the device under **Peers** in your NetBird dashboard.
 - **Tailscale or NetBird, not both on the same device.** Both number their devices in 100.64.0.0/10, and
   two at once can claim the same addresses.
 - **Cost on the device:** nothing until you join, then about 40 MB of storage, some memory while it
-  runs, and a little CPU: on an Echo Show 8 (2nd gen), about 1.5% of one core when idle, and NetBird's
-  own firewall adds a tenth or so to that under traffic.
+  runs, and a little CPU: on an Echo Show 8 (2nd gen), about 1.5% of one core when idle, and about 4.5%
+  with some 50 packets a second going through, of which NetBird's own firewall takes 0.3 to 0.5 points.
 - **Turning NetBird off** from far away cuts your way to it. Turning it back on then needs somebody
   there: the switch on the screen.
 - **A device that goes missing** stays on your network until you remove it under **Peers** in the

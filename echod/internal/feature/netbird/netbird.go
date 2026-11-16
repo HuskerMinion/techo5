@@ -277,12 +277,7 @@ func (f *Feature) login(ctx context.Context, setupKey, management string, again 
 		return errOffAgain
 	}
 	name := tailscale.Hostname(config.Get().Device.Name)
-	// Everything the network could give the device is refused, and its own firewall kept on for the access
-	// policies (firewallOn). Each is said outright: the client keeps only what it is told.
-	out, err := cli(ctx, []string{"NB_SETUP_KEY=" + setupKey}, "up",
-		"--management-url="+mgmt, "--hostname="+name, "--interface-name="+web.NetbirdTun,
-		"--disable-dns", "--disable-client-routes", "--disable-server-routes", "--disable-firewall=false", "--disable-ipv6",
-		"--allow-server-ssh=false", "--enable-rosenpass=false", "--disable-auto-connect=false")
+	out, err := cli(ctx, []string{"NB_SETUP_KEY=" + setupKey}, upArgs(mgmt, name)...)
 	if err != nil {
 		return fmt.Errorf("netbird: joining: %s", cmpOr(lastLine(scrub(out, setupKey)), err.Error()))
 	}
@@ -441,6 +436,16 @@ func (f *Feature) joinParked() bool {
 	// A newer key held while this one joined stays, for the next turn; only with none is the join over.
 	f.dropParkedIfNone(why)
 	return true
+}
+
+// upArgs joins the device: everything the network could give it is refused, and the client's own
+// firewall kept on for the access policies (firewallOn). Each is said outright: the client keeps only
+// what it is told.
+func upArgs(mgmt, name string) []string {
+	return []string{"up",
+		"--management-url=" + mgmt, "--hostname=" + name, "--interface-name=" + web.NetbirdTun,
+		"--disable-dns", "--disable-client-routes", "--disable-server-routes", "--disable-firewall=false", "--disable-ipv6",
+		"--allow-server-ssh=false", "--enable-rosenpass=false", "--disable-auto-connect=false"}
 }
 
 // managementURL is a management server's URL as the client takes it: NetBird's own for none, and only
