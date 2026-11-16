@@ -52,6 +52,8 @@ func TestNowPlayingIsHeldForMusicOnItsWay(t *testing.T) {
 // The hold lets go when the music is stopped, and not for a play or a gap: a library play that
 // replaces a song is playing at the tap and through the switch.
 func TestMusicHoldEndsOnAStop(t *testing.T) {
+	was := media.SetStopSettle(50 * time.Millisecond)
+	defer media.SetStopSettle(was)
 	d := &Display{}
 	d.musicPendingStart(true)
 	media.Get().RemoteState("playing")
@@ -67,4 +69,6 @@ func TestMusicHoldEndsOnAStop(t *testing.T) {
 	if pending, _ := d.musicPending(); !pending {
 		t.Error("a stop before the hold began ended a later hold")
 	}
+	// The gap's settle timer must not count a stop into other tests later: playing ends it.
+	media.Get().RemoteState("playing")
 }

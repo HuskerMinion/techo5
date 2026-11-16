@@ -235,7 +235,7 @@ func deviceTools() []tool {
 			Parameters: object(map[string]any{})},
 			func(map[string]any) (string, error) {
 				rang := ring.End()
-				media.Get().Stop()
+				media.Get().StopByUser()
 				if rang {
 					return "stopped the ringing and anything playing", nil
 				}

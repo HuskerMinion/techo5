@@ -23,7 +23,7 @@ import (
 func (f *Feature) OwnToggle() (started bool) {
 	if playing, paused := media.Get().Playing(); playing || paused {
 		slog.Info("home: stopping what is playing")
-		media.Get().Stop()
+		media.Get().StopByUser()
 		return false
 	}
 	return f.PlayOwn(f.nextOwn())

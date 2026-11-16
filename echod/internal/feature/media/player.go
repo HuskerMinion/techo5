@@ -168,6 +168,11 @@ type Player struct {
 	// it, and neither does a gap while a track is switched.
 	stops atomic.Uint64
 
+	// settleGen counts the plays asked for here (a play or toggle, anything that starts a track), so a
+	// server's "stopped" that is still settling (RemoteState) is not counted once somebody has since
+	// asked for music: the server may be slow to say "playing".
+	settleGen atomic.Uint64
+
 	// toSender carries what is passed on to a received track's sender, one at a time and in order: a
 	// pause and the play straight after it must reach the phone that way round (tellSender). Only the
 	// latest play or pause, and the latest skip, wait behind the one under way (senderQueue).
@@ -903,7 +908,13 @@ func (p *Player) command(c esphome.MediaCommand) {
 		//
 		// With nothing of its own playing or paused there is nothing to keep, and it is a stop like one
 		// here: what would start something again in a moment (a dropped station's put-back) is told.
-		p.stops.Add(1)
+		//
+		// Counted (StopCount) only when there was music to stop: a stop sent to a room with nothing
+		// playing, as an automation stopping every speaker does, is not somebody stopping the music a page
+		// is waiting for.
+		if p.somethingToStop() {
+			p.stops.Add(1)
+		}
 		if playing, paused := p.stream.Playing(); !playing && !paused {
 			p.OnStop.Emit(struct{}{})
 		}
@@ -1072,6 +1083,9 @@ func (p *Player) Transport(t Transport) {
 	if t == TransportStop {
 		p.stops.Add(1)
 	}
+	if t == TransportPlay || t == TransportToggle {
+		p.settleGen.Add(1)
+	}
 	// A remote's track paused from here and since let go: play asks for it back, stop forgets it.
 	if _, _, _, ok := p.Held(); ok {
 		switch t {
@@ -1148,6 +1162,7 @@ func (p *Player) Transport(t Transport) {
 func (p *Player) RemoteState(state string) {
 	p.remoteState.Store(state)
 	n := p.remoteGen.Add(1)
+	sg := p.settleGen.Load()
 	if state == "playing" {
 		p.held.Store(heldTrack{})
 	}
@@ -1155,7 +1170,7 @@ func (p *Player) RemoteState(state string) {
 		// Counted as a stop only once it has stayed stopped: a server ends one track and starts the
 		// next in whichever order it likes, and that gap is not somebody stopping the music.
 		time.AfterFunc(stopSettle, func() {
-			if p.remoteGen.Load() == n {
+			if p.remoteGen.Load() == n && p.settleGen.Load() == sg {
 				p.stops.Add(1)
 			}
 		})
@@ -1173,8 +1188,29 @@ func (p *Player) RemoteState(state string) {
 
 // stopSettle is how long a server's "stopped" has to stand before it counts as a stop (StopCount): longer
 // than the one to two seconds Music Assistant can take between one stream and the next (#521), well
-// under the hold of a page waiting for music (display's musicPendingFor).
-const stopSettle = 4 * time.Second
+// under the hold of a page waiting for music (display's musicPendingFor). A variable for the tests.
+var stopSettle = 4 * time.Second
+
+// SetStopSettle sets stopSettle and answers what it was, for the tests of what waits on a stop.
+func SetStopSettle(d time.Duration) time.Duration {
+	was := stopSettle
+	stopSettle = d
+	return was
+}
+
+// somethingToStop is whether the room's music is playing, paused or held for a play: what a stop ends.
+func (p *Player) somethingToStop() bool {
+	playing, paused := p.ScreenState()
+	return playing || paused
+}
+
+// StopByUser is Stop for somebody stopping the music (the voice assistant, the action button), which
+// counts as a stop (StopCount) as the Stop buttons do. Stop itself does not: DLNA and a replaced track
+// use it too.
+func (p *Player) StopByUser() {
+	p.stops.Add(1)
+	p.Stop()
+}
 
 // StopCount is a count of definite stops of the music here, for whatever holds a page up for music on
 // its way and has to know it was stopped instead. It only goes up.
@@ -1704,6 +1740,7 @@ func (p *Player) PlayTitledChecked(url string, title Title, within time.Duration
 // one does not come back when this one ends - but it is still holding the room, and a room playing along
 // with the house has to leave the group before anything of its own starts, or the house goes with it.
 func (p *Player) ours() {
+	p.settleGen.Add(1)
 	p.remoteLast.Store(false)
 	// A title is for the next play_media; anything else starting first was not it (title.go).
 	p.nextTitle.Store(nil)
